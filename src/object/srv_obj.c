@@ -235,6 +235,63 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint64_t epoch, bool release_input,
 	}
 }
 
+#define BULK_HANDLE_MIN_SIZE 5
+static int
+obj_bulk_args_insert_hdl_opid(struct obj_bulk_args *arg, crt_bulk_t bulk_hdl,
+			      crt_bulk_opid_t bulk_opid)
+{
+	D_ASSERT(arg->bulk_hdls_size <= arg->bulk_hdls_max_size);
+	if (arg->bulk_hdls_size == arg->bulk_hdls_max_size - 1) {
+		crt_bulk_t *new_hdls;
+		crt_bulk_opid_t *new_opids;
+
+		D_ALLOC_ARRAY(new_hdls, arg->bulk_hdls_size + BULK_HANDLE_MIN_SIZE);
+		if (new_hdls == NULL)
+			return -DER_NOMEM;
+
+		memcpy(new_hdls, arg->bulk_hdls, arg->bulk_hdls_size * sizeof(*arg->bulk_hdls));
+		if (arg->bulk_hdls_size > BULK_HANDLE_MIN_SIZE)
+			D_FREE(arg->bulk_hdls);
+		arg->bulk_hdls = new_hdls;
+
+		D_ALLOC_ARRAY(new_opids, arg->bulk_hdls_size + BULK_HANDLE_MIN_SIZE);
+		if (new_hdls == NULL)
+			return -DER_NOMEM;
+
+		memcpy(new_opids, arg->bulk_opids, arg->bulk_hdls_size * sizeof(*arg->bulk_opids));
+		if (arg->bulk_hdls_size > BULK_HANDLE_MIN_SIZE)
+			D_FREE(arg->bulk_opids);
+
+		arg->bulk_opids = new_opids;
+		arg->bulk_hdls_max_size = arg->bulk_hdls_size + BULK_HANDLE_MIN_SIZE;
+	}
+
+	/* Insert bulk_hdl(key) and bulk_opid(value) to the obj_bulk_args, so if the bulk transfer
+	 * complete, the hdl and opid will be removed, otherwise the bulk will be aborted if the bulk
+	 * transfer can not be finished in time.
+	 */
+	arg->bulk_hdls[arg->bulk_hdls_size] = bulk_hdl;
+	arg->bulk_opids[arg->bulk_hdls_size] = bulk_opid;
+	arg->bulk_hdls_size++;
+
+	return 0;
+}
+
+static void
+obj_bulk_args_delete_hdl_opid(struct obj_bulk_args *arg, crt_bulk_t bulk_hdl)
+{
+	int i;
+
+	D_ASSERT(arg->bulk_hdls_size <= arg->bulk_hdls_max_size);
+	for (i = 0; i < arg->bulk_hdls_size; i++) {
+		if (arg->bulk_hdls[i] == bulk_hdl) {
+			arg->bulk_hdls[i] = NULL;
+			arg->bulk_opids[i] = NULL;
+			return;
+		}
+	}
+}
+
 static int
 obj_bulk_comp_cb(const struct crt_bulk_cb_info *cb_info)
 {
@@ -257,30 +314,53 @@ obj_bulk_comp_cb(const struct crt_bulk_cb_info *cb_info)
 
 	D_ASSERT(arg->bulks_inflight > 0);
 	arg->bulks_inflight--;
-	if (arg->bulks_inflight == 0)
+	if (arg->bulks_inflight == 0 &&
+	    !DAOS_FAIL_CHECK(DAOS_OBJ_FAIL_BULK_TIMEOUT))
 		ABT_eventual_set(arg->eventual, &arg->result,
 				 sizeof(arg->result));
 
+	obj_bulk_args_delete_hdl_opid((struct obj_bulk_args *)cb_info->bci_arg,
+				       bulk_desc->bd_local_hdl);
 	crt_req_decref(rpc);
 	return cb_info->bci_rc;
+}
+
+static void
+obj_bulk_args_bulks_abort(crt_rpc_t *rpc, struct obj_bulk_args *arg)
+{
+	int i;
+
+	D_ASSERT(arg->bulk_hdls_size <= arg->bulk_hdls_max_size);
+	for (i = 0; i < arg->bulk_hdls_size; i++) {
+		if (arg->bulk_opids[i] != NULL) {
+			D_DEBUG(DB_IO, "abort bulk %p/%p\n", arg->bulk_opids[i],
+				arg->bulk_hdls[i]);
+			D_ASSERT(arg->bulk_hdls[i] != NULL);
+			crt_bulk_abort(rpc->cr_ctx, arg->bulk_opids[i]);
+		}
+	}
 }
 
 static inline int
 bulk_cp(const struct crt_bulk_cb_info *cb_info)
 {
 	struct crt_bulk_desc	*bulk_desc;
+	int rc;
+
+	rc = obj_bulk_comp_cb(cb_info);
 
 	bulk_desc = cb_info->bci_bulk_desc;
 	D_ASSERT(bulk_desc->bd_local_hdl != CRT_BULK_NULL);
 	crt_bulk_free(bulk_desc->bd_local_hdl);
 	bulk_desc->bd_local_hdl = CRT_BULK_NULL;
 
-	return obj_bulk_comp_cb(cb_info);
+	return rc;
 }
 
 static inline int
 cached_bulk_cp(const struct crt_bulk_cb_info *cb_info)
 {
+
 	return obj_bulk_comp_cb(cb_info);
 }
 
@@ -444,6 +524,9 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 		D_ASSERT(remote_size > remote_off);
 		if (length > (remote_size - remote_off)) {
 			rc = -DER_OVERFLOW;
+			if (!cached_bulk)
+				crt_bulk_free(local_bulk);
+
 			D_ERROR("Remote bulk isn't large enough. local_sz:%zu, remote_sz:%zu, "
 				"remote_off:%zu, "DF_RC"\n", length, remote_size, remote_off,
 				DP_RC(rc));
@@ -480,6 +563,10 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 		}
 		remote_off += length;
 
+		/* Since there are no progress happening after crt_bulk_transfer, so cached_bulk_cp
+		 * or bulk_cp should not be called yet.
+		 */
+		obj_bulk_args_insert_hdl_opid(p_arg, local_bulk, bulk_opid);
 		/* Give cart progress a chance to complete some in-flight bulk transfers */
 		if (bulk_iovs >= MAX_BULK_IOVS) {
 			bulk_iovs = 0;
@@ -496,10 +583,13 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bul
 		  int sgl_nr, int bulk_nr, struct obj_bulk_args *p_arg, struct ds_cont_hdl *coh)
 {
 	struct obj_bulk_args	arg = { 0 };
+	crt_bulk_t		bulk_hdls[BULK_HANDLE_MIN_SIZE];
+	crt_bulk_opid_t		bulk_opids[BULK_HANDLE_MIN_SIZE];
 	int			i, rc, *status, ret;
 	int			skip_nr = 0;
 	bool			async = true;
 	uint64_t		time = daos_get_ntime();
+	uint32_t		timeout;
 
 	if (unlikely(sgl_nr > bulk_nr)) {
 		D_ERROR("Invalid sgl_nr vs bulk_nr: %d/%d\n", sgl_nr, bulk_nr);
@@ -520,6 +610,10 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bul
 	if (rc != 0)
 		return dss_abterr2der(rc);
 
+	p_arg->bulk_hdls = bulk_hdls;
+	p_arg->bulk_opids = bulk_opids;
+	p_arg->bulk_hdls_max_size = BULK_HANDLE_MIN_SIZE;
+	p_arg->bulk_hdls_size = 0;
 	p_arg->inited = true;
 	D_DEBUG(DB_IO, "bulk_op %d, sgl_nr %d, bulk_nr %d\n", bulk_op, sgl_nr, bulk_nr);
 
@@ -594,9 +688,23 @@ done:
 	if (async)
 		return rc;
 
-	ret = ABT_eventual_wait(p_arg->eventual, (void **)&status);
+	if (DAOS_FAIL_CHECK(DAOS_OBJ_FAIL_BULK_ABORT))
+		timeout = 0;
+	else
+		crt_req_get_timeout(rpc, &timeout);
+
+	ret = dss_eventual_timeout_wait(p_arg->eventual, (void **)&status, timeout, 1);
+	if (ret == -DER_TIMEDOUT) {
+		obj_bulk_args_bulks_abort(rpc, p_arg);
+		while (p_arg->bulks_inflight > 0) {
+			D_INFO("Wait for comp callback to be executed inflight %d\n",
+				p_arg->bulks_inflight);
+			dss_sleep(1);
+		}
+	}
+
 	if (rc == 0)
-		rc = ret ? dss_abterr2der(ret) : *status;
+		rc = ret ? ret : *status;
 
 	ABT_eventual_free(&p_arg->eventual);
 
@@ -625,6 +733,10 @@ done:
 		*fbuffer += 0x2;
 		d_sgl_fini(&fsgl, false);
 	}
+	if (p_arg->bulk_hdls != bulk_hdls)
+		D_FREE(p_arg->bulk_hdls);
+	if (p_arg->bulk_opids != bulk_opids)
+		D_FREE(p_arg->bulk_opids);
 	return rc;
 }
 
