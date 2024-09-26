@@ -359,6 +359,7 @@ pipeline {
                         'Functional Hardware Medium VMD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium VMD',
                             pragma_suffix: '-hw-medium-vmd',
+                            base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw_vmd,medium',
