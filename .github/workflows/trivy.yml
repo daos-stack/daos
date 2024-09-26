@@ -23,6 +23,8 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-20.04
+    permissions:
+      security-events: write
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
