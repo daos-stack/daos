@@ -939,10 +939,9 @@ child_hdlr(void)
 	if (atomic_load_relaxed(&d_daos_inited) == false)
 		return;
 
-	rc = daos_eq_lib_reset_after_fork();
+	rc = daos_reinit();
 	if (rc)
-		DL_WARN(rc, "daos_eq_lib_init() failed in child process");
-	daos_dti_reset();
+		DL_WARN(rc, "daos_reinit() failed in child process");
 	td_eqh = main_eqh = DAOS_HDL_INVAL;
 	context_reset = true;
 }

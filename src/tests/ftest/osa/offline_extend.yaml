@@ -35,7 +35,6 @@ pool:
   scm_size: 6000000000
   nvme_size: 54000000000
   svcn: 2
-  control_method: dmg
   properties: scrub:lazy
 container:
   type: POSIX

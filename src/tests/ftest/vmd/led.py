@@ -76,8 +76,8 @@ class VmdLedStatus(OSAUtils):
     def test_vmd_led_status(self):
         """Jira ID: DAOS-11290
 
-        :avocado: tags=all,manual
-        :avocado: tags=hw,medium
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw_vmd,medium
         :avocado: tags=vmd,vmd_led
         :avocado: tags=VmdLedStatus,test_vmd_led_status
         """
@@ -97,8 +97,8 @@ class VmdLedStatus(OSAUtils):
     def test_vmd_led_faulty(self):
         """Jira ID: DAOS-11290
 
-        :avocado: tags=all,manual
-        :avocado: tags=hw,medium
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw_vmd,medium
         :avocado: tags=vmd,vmd_led
         :avocado: tags=VmdLedStatus,test_vmd_led_faulty
         """
@@ -127,11 +127,12 @@ class VmdLedStatus(OSAUtils):
             uuid_list = sorted(uuid_dict.keys())
             self.log.info("Devices on hosts %s: %s", hosts, uuid_list)
             self.log.info("First device on hosts %s: %s", hosts, uuid_list[0])
-            set_device_faulty(self, self.dmg, hosts.split(':')[0], uuid_list[0])
+            host = hosts.split(':')[0]
+            set_device_faulty(self, self.dmg, host, uuid_list[0])
             self.log.info("Sleeping for 15 seconds ...")
             time.sleep(15)
             self.log.info(self.dmg.result)
-            resp = self.dmg.storage_replace_nvme(old_uuid=uuid_list[0], new_uuid=uuid_list[0])
+            resp = self.dmg.storage_replace_nvme(host, old_uuid=uuid_list[0], new_uuid=uuid_list[0])
             self.log.info("Sleeping for 60 seconds ...")
             time.sleep(60)
             self.log.info(resp)

@@ -1555,9 +1555,9 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	 * - Users who can delete any container in the pool
 	 * - Users who have been given access to delete the specific container
 	 */
-	if (!ds_sec_pool_can_delete_cont(pool_hdl->sph_sec_capas) &&
-	    !ds_sec_cont_can_delete(pool_hdl->sph_flags, &pool_hdl->sph_cred,
-				    &owner, acl)) {
+	if (pool_hdl->sph_pool->sp_immutable ||
+	    (!ds_sec_pool_can_delete_cont(pool_hdl->sph_sec_capas) &&
+	     !ds_sec_cont_can_delete(pool_hdl->sph_flags, &pool_hdl->sph_cred, &owner, acl))) {
 		D_ERROR(DF_CONT": permission denied to delete cont\n",
 			DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid));
 		D_GOTO(out_prop, rc = -DER_NO_PERM);
@@ -1667,7 +1667,7 @@ cont_ec_agg_alloc(struct cont_svc *cont_svc, uuid_t cont_uuid,
 {
 	struct cont_ec_agg	*ec_agg = NULL;
 	struct pool_domain	*doms;
-	int			node_nr;
+	int			rank_nr;
 	int			rc = 0;
 	int			i;
 
@@ -1676,19 +1676,18 @@ cont_ec_agg_alloc(struct cont_svc *cont_svc, uuid_t cont_uuid,
 		return -DER_NOMEM;
 
 	D_ASSERT(cont_svc->cs_pool->sp_map != NULL);
-	node_nr = pool_map_find_nodes(cont_svc->cs_pool->sp_map,
-				      PO_COMP_ID_ALL, &doms);
-	if (node_nr < 0)
-		D_GOTO(out, rc = node_nr);
+	rank_nr = pool_map_find_ranks(cont_svc->cs_pool->sp_map, PO_COMP_ID_ALL, &doms);
+	if (rank_nr < 0)
+		D_GOTO(out, rc = rank_nr);
 
-	D_ALLOC_ARRAY(ec_agg->ea_server_ephs, node_nr);
+	D_ALLOC_ARRAY(ec_agg->ea_server_ephs, rank_nr);
 	if (ec_agg->ea_server_ephs == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	uuid_copy(ec_agg->ea_cont_uuid, cont_uuid);
-	ec_agg->ea_servers_num = node_nr;
+	ec_agg->ea_servers_num = rank_nr;
 	ec_agg->ea_current_eph = 0;
-	for (i = 0; i < node_nr; i++) {
+	for (i = 0; i < rank_nr; i++) {
 		ec_agg->ea_server_ephs[i].rank = doms[i].do_comp.co_rank;
 		ec_agg->ea_server_ephs[i].eph = 0;
 	}
@@ -2254,6 +2253,15 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont, cr
 		goto out;
 	}
 
+	if (pool_hdl->sph_pool->sp_immutable && (flags & DAOS_COO_IO_BASE_MASK) != DAOS_COO_RO) {
+		rc = -DER_NO_PERM;
+		D_ERROR(DF_UUID "/" DF_UUID "/" DF_UUID ": failed to open the immutable "
+			"container with flags " DF_X64 ", sec_capas " DF_X64 ": " DF_RC "\n",
+			DP_UUID(cont->c_svc->cs_pool_uuid), DP_UUID(pool_hdl->sph_uuid),
+			DP_UUID(cont->c_uuid), flags, pool_hdl->sph_sec_capas, DP_RC(rc));
+		goto out;
+	}
+
 	/*
 	 * Need props to check for pool redundancy requirements and access
 	 * control.
@@ -2275,6 +2283,11 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont, cr
 		D_GOTO(out, rc);
 	}
 
+	D_DEBUG(DB_MD, DF_UUID "/" DF_UUID "/" DF_UUID ": opening container with flags "
+		DF_X64", sec_capas " DF_X64 "/" DF_X64 "\n",
+		DP_UUID(cont->c_svc->cs_pool_uuid), DP_UUID(pool_hdl->sph_uuid),
+		DP_UUID(cont->c_uuid), flags, pool_hdl->sph_sec_capas, sec_capas);
+
 	if ((flags & DAOS_COO_EVICT_ALL) && !ds_sec_cont_can_evict_all(sec_capas)) {
 		D_ERROR(DF_CONT": permission denied evicting all handles\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
@@ -2283,11 +2296,15 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont, cr
 		goto out;
 	}
 
-	if ((flags & DAOS_COO_EX) && !ds_sec_cont_can_open_ex(sec_capas)) {
-		D_ERROR(DF_CONT": permission denied opening exclusively\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
-		daos_prop_free(prop);
+	if (((flags & DAOS_COO_EX) && !ds_sec_cont_can_open_ex(sec_capas)) ||
+	    ((flags & DAOS_COO_RW) && !ds_sec_cont_can_modify(sec_capas))) {
 		rc = -DER_NO_PERM;
+		D_ERROR(DF_UUID "/" DF_UUID "/" DF_UUID ": failed to open the container "
+			"with flags " DF_X64 ", capas " DF_X64 "/" DF_X64 ": " DF_RC "\n",
+			DP_UUID(cont->c_svc->cs_pool_uuid), DP_UUID(pool_hdl->sph_uuid),
+			DP_UUID(cont->c_uuid), flags, pool_hdl->sph_sec_capas, sec_capas,
+			DP_RC(rc));
+		daos_prop_free(prop);
 		goto out;
 	}
 

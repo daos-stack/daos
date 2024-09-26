@@ -37,7 +37,6 @@ dmg:
 
 pool:
   size: 96%
-  control_method: dmg
 
 container:
   type: POSIX

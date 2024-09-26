@@ -52,7 +52,7 @@ def set_device_faulty(test, dmg, server, uuid, pool=None, has_sys_xs=False, **kw
         has_sys_xs (bool, optional): the device's has_sys_xs property value. Defaults to False.
         kwargs (dict, optional): named arguments to pass to the DmgCommand.storage_set_faulty.
     """
-    dmg.hostlist = server
+    kwargs['host'] = server
     kwargs['uuid'] = uuid
     try:
         get_dmg_response(dmg.storage_set_faulty, **kwargs)
@@ -69,6 +69,7 @@ def set_device_faulty(test, dmg, server, uuid, pool=None, has_sys_xs=False, **kw
             ranks, server, rank_hosts)
         test.server_managers[-1].update_expected_states(ranks, ["stopped", "excluded"])
         if pool:
+            pool.dmg = pool.dmg.copy()
             pool.dmg.hostlist.remove(server)
             test.log.debug(
                 "Removing %s from the %s dmg.hostlist: %s", server, pool, pool.dmg.hostlist)
