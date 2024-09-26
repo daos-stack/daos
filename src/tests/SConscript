@@ -11,7 +11,7 @@ def build_dts_library(env, dc_credit):
     denv.d_static_library('dts', [dc_credit, 'dts.c'])
 
 
-def build_tests(env):
+def build_tests(env, prereqs):
     """build the tests"""
     Import('libdaos_tgts', 'cmd_parser')
     denv = env.Clone()
@@ -65,7 +65,8 @@ def build_tests(env):
     SConscript('drpc/SConscript')
 
     # Build security_test
-    SConscript('security/SConscript')
+    if prereqs.server_requested():
+        SConscript('security/SConscript')
 
     # ftest
     SConscript('ftest/SConscript')
@@ -100,7 +101,7 @@ def scons():
     # Add runtime paths for daos libraries
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     denv.AppendUnique(CPPPATH=[Dir('../mgmt').srcnode()])
-    build_tests(denv)
+    build_tests(denv, prereqs)
 
     if not base_env_mpi:
         return
