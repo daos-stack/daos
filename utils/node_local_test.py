@@ -1531,19 +1531,9 @@ class DFuse():
         if self.conf.args.client_debug:
             my_env['D_LOG_MASK'] = self.conf.args.client_debug
 
-        if check_fstat:
-            fsu = self.check_usage()['statistics']
-
         ret = subprocess.run(cmd, env=my_env, check=False)
         print(f'Logged il to {log_name}')
         print(ret)
-
-        if check_fstat:
-            fsu2 = self.check_usage()['statistics']
-            print(fsu)
-            print(fsu2)
-            delta = fsu2.get('getattr', 0) - fsu.get('getattr', 0)
-            print(f"Command caused {delta} stat calls")
 
         try:
             log_test(self.conf, log_name, check_read=check_read, check_write=check_write,
@@ -1574,7 +1564,7 @@ class DFuse():
             cmd.extend(['--inode', str(ino)])
         rc = run_daos_cmd(self.conf, cmd, use_json=True)
         print(rc)
-        assert rc.returncode == 0
+        assert rc.returncode == 0, rc
 
         if inodes:
             assert rc.json['response']['inodes'] == inodes, rc
