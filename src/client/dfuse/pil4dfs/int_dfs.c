@@ -6920,9 +6920,9 @@ init_myhook(void)
 	int      rc;
 	uint64_t eq_count_loc = 0;
 
-	/* D_IL_NO_BYPASS is ONLY for testing. It always keeps function interception enabled in current
-	 * process and children processes. This is needed to thoroughly test interception related code
-	 * in CI. The code related to interception disabled is tested by a few tests in
+	/* D_IL_NO_BYPASS is ONLY for testing. It always keeps function interception enabled in
+	 * current process and children processes. This is needed to thoroughly test interception
+	 * related code in CI. The code related to interception disabled is tested by a few tests in
 	 * "test_bashcmd_pil4dfs" and "test_whitelist_pil4dfs". Most tests in CI run with
 	 * "D_IL_NO_BYPASS=1" to test the code with interception enabled.
 	 */
