@@ -1055,15 +1055,6 @@ crt_proc_struct_daos_req_comm_in(crt_proc_t proc, crt_proc_op_t proc_op,
 	int	rc;
 	int	i;
 
-	rc = crt_proc_uint32_t(proc, proc_op, &drci->req_in_uid);
-	if (unlikely(rc))
-		return rc;
-	rc = crt_proc_uint32_t(proc, proc_op, &drci->req_in_gid);
-	if (unlikely(rc))
-		return rc;
-	rc = crt_proc_uint32_t(proc, proc_op, &drci->req_in_projid);
-	if (unlikely(rc))
-		return rc;
 	rc = crt_proc_uint64_t(proc, proc_op, &drci->req_in_enqueue_id);
 	if (unlikely(rc))
 		return rc;
@@ -1072,12 +1063,6 @@ crt_proc_struct_daos_req_comm_in(crt_proc_t proc, crt_proc_op_t proc_op,
 		if (rc)
 			return rc;
 	}
-	rc = crt_proc_d_string_t(proc, proc_op, &drci->req_in_addr);
-	if (unlikely(rc))
-		return rc;
-	rc = crt_proc_d_string_t(proc, proc_op, &drci->req_in_jobid);
-	if (unlikely(rc))
-		return rc;
 
 	return rc;
 }
@@ -1149,11 +1134,8 @@ crt_proc_struct_daos_coll_shard(crt_proc_t proc, crt_proc_op_t proc_op, struct d
 	if (DECODING(proc_op))
 		dcs->dcs_cap = dcs->dcs_nr;
 
-	if (dcs->dcs_nr <= 1) {
-		if (DECODING(proc_op))
-			dcs->dcs_buf = &dcs->dcs_inline;
+	if (dcs->dcs_nr <= 1)
 		return 0;
-	}
 
 	if (DECODING(proc_op)) {
 		D_ALLOC_ARRAY(dcs->dcs_buf, dcs->dcs_nr);
@@ -1176,6 +1158,7 @@ out:
 int
 crt_proc_struct_daos_coll_target(crt_proc_t proc, crt_proc_op_t proc_op, struct daos_coll_target *dct)
 {
+	int	size;
 	int	rc;
 	int	i;
 
@@ -1186,6 +1169,12 @@ crt_proc_struct_daos_coll_target(crt_proc_t proc, crt_proc_op_t proc_op, struct 
 	rc = crt_proc_uint8_t(proc, proc_op, &dct->dct_bitmap_sz);
 	if (unlikely(rc))
 		return rc;
+
+	size = dct->dct_bitmap_sz << 3;
+	if (unlikely(size == 0)) {
+		D_ERROR("Invalid bitmap size (0) for collective operation!\n");
+		return -DER_INVAL;
+	}
 
 	rc = crt_proc_uint8_t(proc, proc_op, &dct->dct_max_shard);
 	if (unlikely(rc))
@@ -1200,14 +1189,23 @@ crt_proc_struct_daos_coll_target(crt_proc_t proc, crt_proc_op_t proc_op, struct 
 		return rc;
 
 	if (DECODING(proc_op)) {
+		if (unlikely(dct->dct_max_shard >= size)) {
+			D_ERROR("Too small bitmap for collective operation: %u vs %u\n",
+				dct->dct_max_shard, size);
+			return -DER_INVAL;
+		}
+
 		D_ALLOC(dct->dct_bitmap, dct->dct_bitmap_sz);
 		if (dct->dct_bitmap == NULL)
 			return -DER_NOMEM;
 
 		/* When decode, allocate enough buffer to avoid some XS accessing invalid DRAM. */
-		D_ALLOC_ARRAY(dct->dct_shards, dct->dct_bitmap_sz << 3);
+		D_ALLOC_ARRAY(dct->dct_shards, size);
 		if (dct->dct_shards == NULL)
-			goto out;
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		for (i = 0; i < size; i++)
+			dct->dct_shards[i].dcs_buf = &dct->dct_shards[i].dcs_inline;
 	}
 
 	rc = crt_proc_memcpy(proc, proc_op, dct->dct_bitmap, dct->dct_bitmap_sz);

@@ -46,6 +46,17 @@ daos_init(void);
 int
 daos_fini(void);
 
+/**
+ * Reinitialize DAOS library after a fork call.
+ * For applications that initialize DAOS and then call fork without exec, some
+ * internal data structures must be reinitialized in the child process.
+ * It is recommended to call this function from a fork handler registered via
+ * pthread_atfork(). If any event queues were created prior to the fork call,
+ * those must be re-created in the child process.
+ */
+int
+daos_reinit(void);
+
 #if defined(__cplusplus)
 }
 #endif

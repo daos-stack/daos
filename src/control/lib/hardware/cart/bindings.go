@@ -7,7 +7,7 @@
 package cart
 
 /*
-#cgo LDFLAGS: -lcart
+#cgo LDFLAGS: -lcart -lgurt
 
 #include <cart/types.h>
 #include <cart/api.h>

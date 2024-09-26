@@ -30,7 +30,6 @@
 /* SPDK blob parameters */
 #define DAOS_BS_CLUSTER_SZ	(1ULL << 25)	/* 32MB */
 /* DMA buffer parameters */
-#define DAOS_DMA_CHUNK_MB	8	/* 8MB DMA chunks */
 #define DAOS_DMA_CHUNK_CNT_INIT	24	/* Per-xstream init chunks, 192MB */
 #define DAOS_DMA_CHUNK_CNT_MAX	128	/* Per-xstream max chunks, 1GB */
 #define DAOS_DMA_CHUNK_CNT_MIN	32	/* Per-xstream min chunks, 256MB */
@@ -60,7 +59,7 @@ bool                bio_vmd_enabled;
 unsigned int bio_spdk_subsys_timeout = 25000;	/* ms */
 /* How many blob unmap calls can be called in a row */
 unsigned int bio_spdk_max_unmap_cnt = 32;
-unsigned int bio_max_async_sz = (1UL << 20) /* 1MB */;
+unsigned int bio_max_async_sz = (1UL << 15) /* 32k */;
 
 struct bio_nvme_data {
 	ABT_mutex		 bd_mutex;
@@ -105,7 +104,7 @@ bio_spdk_conf_read(struct spdk_env_opts *opts)
 		return rc;
 	}
 	nvme_glb.bd_nvme_roles = roles;
-	bio_vmd_enabled        = vmd_enabled;
+	bio_vmd_enabled        = vmd_enabled && (nvme_glb.bd_bdev_class == BDEV_CLASS_NVME);
 
 	rc = bio_set_hotplug_filter(nvme_glb.bd_nvme_conf);
 	if (rc != 0) {
@@ -172,6 +171,9 @@ bio_spdk_env_init(void)
 		}
 	}
 
+	if (geteuid() != 0) {
+		opts.iova_mode = "va"; // workaround for spdk issue #2683 when running as non-root
+	}
 	rc = spdk_env_init(&opts);
 	if (rc != 0) {
 		rc = -DER_INVAL; /* spdk_env_init() returns -1 */
@@ -204,7 +206,7 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 {
 	char		*env;
 	int		 rc, fd;
-	unsigned int	 size_mb = DAOS_DMA_CHUNK_MB;
+	unsigned int	 size_mb = BIO_DMA_CHUNK_MB;
 
 	if (tgt_nr <= 0) {
 		D_ERROR("tgt_nr: %u should be > 0\n", tgt_nr);
@@ -744,9 +746,8 @@ bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 	D_ASSERT(d_bdev->bb_desc != NULL);
 	d_bdev->bb_removed = 1;
 
-	ras_notify_eventf(RAS_DEVICE_UNPLUGGED, RAS_TYPE_INFO,
-			  RAS_SEV_NOTICE, NULL, NULL, NULL, NULL, NULL,
-			  NULL, NULL, NULL, NULL, "Dev: "DF_UUID" unplugged\n",
+	ras_notify_eventf(RAS_DEVICE_UNPLUGGED, RAS_TYPE_INFO, RAS_SEV_NOTICE, NULL, NULL, NULL,
+			  NULL, NULL, NULL, NULL, NULL, NULL, "Device: " DF_UUID " unplugged\n",
 			  DP_UUID(d_bdev->bb_uuid));
 
 	/* The bio_bdev is still under construction */
@@ -1703,6 +1704,18 @@ bio_nvme_ctl(unsigned int cmd, void *arg)
 	return rc;
 }
 
+static inline void
+reset_media_errors(struct bio_blobstore *bbs)
+{
+	struct nvme_stats	*dev_stats = &bbs->bb_dev_health.bdh_health_state;
+
+	dev_stats->bio_read_errs = 0;
+	dev_stats->bio_write_errs = 0;
+	dev_stats->bio_unmap_errs = 0;
+	dev_stats->checksum_errs = 0;
+	bbs->bb_faulty_done = 0;
+}
+
 void
 setup_bio_bdev(void *arg)
 {
@@ -1734,6 +1747,7 @@ setup_bio_bdev(void *arg)
 		goto out;
 	}
 
+	reset_media_errors(bbs);
 	rc = bio_bs_state_set(bbs, BIO_BS_STATE_SETUP);
 	D_ASSERT(rc == 0);
 out:

@@ -198,7 +198,10 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			if err := harness.AddInstance(srv); err != nil {
 				t.Fatal(err)
 			}
-			srv.setDrpcClient(newMockDrpcClient(nil))
+
+			srv.getDrpcClientFn = func(s string) drpc.DomainSocketClient {
+				return newMockDrpcClient(nil)
+			}
 			harness.started.SetTrue()
 
 			db := raft.MockDatabaseWithAddr(t, log, msReplica.Addr)
@@ -294,16 +297,6 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 	}
 }
 
-type eventsDispatched struct {
-	rx     []*events.RASEvent
-	cancel context.CancelFunc
-}
-
-func (d *eventsDispatched) OnEvent(ctx context.Context, e *events.RASEvent) {
-	d.rx = append(d.rx, e)
-	d.cancel()
-}
-
 func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 	eventEngineDied := mockEvtEngineDied(t)
 
@@ -312,7 +305,7 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 		zeroSeq       bool
 		event         *events.RASEvent
 		expResp       *sharedpb.ClusterEventResp
-		expDispatched []*events.RASEvent
+		expDispatched []string
 		expErr        error
 	}{
 		"nil request": {
@@ -324,8 +317,12 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			expResp: &sharedpb.ClusterEventResp{
 				Sequence: 1,
 			},
-			expDispatched: []*events.RASEvent{
-				eventEngineDied.WithForwarded(true),
+			expDispatched: []string{
+				func() string {
+					e := eventEngineDied.WithForwarded(true)
+					e.Timestamp = ""
+					return e.String()
+				}(),
 			},
 		},
 	} {
@@ -339,10 +336,12 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			defer cancel()
 
 			ps := events.NewPubSub(ctx, log)
+			defer ps.Close()
+
 			svc.events = ps
 
-			dispatched := &eventsDispatched{cancel: cancel}
-			svc.events.Subscribe(events.RASTypeStateChange, dispatched)
+			subscriber := newMockSubscriber(1)
+			svc.events.Subscribe(events.RASTypeStateChange, subscriber)
 
 			var pbReq *sharedpb.ClusterEventReq
 			switch {
@@ -374,7 +373,7 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 
-			if diff := cmp.Diff(tc.expDispatched, dispatched.rx, defEvtCmpOpts...); diff != "" {
+			if diff := cmp.Diff(tc.expDispatched, subscriber.getRx(), defEvtCmpOpts...); diff != "" {
 				t.Fatalf("unexpected events dispatched (-want, +got)\n%s\n", diff)
 			}
 		})
@@ -1258,8 +1257,8 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 			defer ps.Close()
 			svc.events = ps
 
-			dispatched := &eventsDispatched{cancel: cancel}
-			svc.events.Subscribe(events.RASTypeStateChange, dispatched)
+			subscriber := newMockSubscriber(1)
+			svc.events.Subscribe(events.RASTypeStateChange, subscriber)
 
 			if !tc.emptyDb {
 				for _, m := range defaultMembers {
@@ -1306,8 +1305,10 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 			Message: &mgmtpb.SystemStartResp{Results: rrs},
 		}
 	}
-	expEventsStartFail := []*events.RASEvent{
-		newSystemStartFailedEvent("failed rank 0"),
+	expEventsStartFail := func(msgErr string) []string {
+		e := newSystemStartFailedEvent(msgErr)
+		e.Timestamp = ""
+		return []string{e.String()}
 	}
 
 	for name, tc := range map[string]struct {
@@ -1319,7 +1320,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 		expAbsentRanks string
 		expAbsentHosts string
 		expAPIErr      error
-		expDispatched  []*events.RASEvent
+		expDispatched  []string
 	}{
 		"nil req": {
 			req:       (*mgmtpb.SystemStartReq)(nil),
@@ -1355,7 +1356,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 				mockMember(t, 2, 2, "ready"),
 				mockMember(t, 3, 2, "ready"),
 			},
-			expDispatched: expEventsStartFail,
+			expDispatched: expEventsStartFail("failed rank 0"),
 		},
 		"filtered and oversubscribed ranks": {
 			req: &mgmtpb.SystemStartReq{Ranks: "0-1,4-9"},
@@ -1379,7 +1380,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 				mockMember(t, 3, 2, "stopped"),
 			},
 			expAbsentRanks: "4-9",
-			expDispatched:  expEventsStartFail,
+			expDispatched:  expEventsStartFail("failed rank 0"),
 		},
 		"filtered and oversubscribed hosts": {
 			req: &mgmtpb.SystemStartReq{Hosts: "10.0.0.[2-5]"},
@@ -1403,9 +1404,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 				mockMember(t, 3, 2, "ready"),
 			},
 			expAbsentHosts: "10.0.0.[3-5]",
-			expDispatched: []*events.RASEvent{
-				newSystemStartFailedEvent("failed rank 2"),
-			},
+			expDispatched:  expEventsStartFail("failed rank 2"),
 		},
 		"filtered hosts": {
 			req: &mgmtpb.SystemStartReq{Hosts: "10.0.0.[1-2]"},
@@ -1445,8 +1444,8 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 			ps := events.NewPubSub(ctx, log)
 			svc.events = ps
 
-			dispatched := &eventsDispatched{cancel: cancel}
-			svc.events.Subscribe(events.RASTypeInfoOnly, dispatched)
+			subscriber := newMockSubscriber(1)
+			svc.events.Subscribe(events.RASTypeInfoOnly, subscriber)
 
 			if tc.req != nil && tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName
@@ -1464,7 +1463,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 
 			<-ctx.Done()
 
-			if diff := cmp.Diff(tc.expDispatched, dispatched.rx, defEvtCmpOpts...); diff != "" {
+			if diff := cmp.Diff(tc.expDispatched, subscriber.getRx(), defEvtCmpOpts...); diff != "" {
 				t.Fatalf("unexpected events dispatched (-want, +got)\n%s\n", diff)
 			}
 		})
@@ -1472,17 +1471,14 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_SystemStop(t *testing.T) {
-	defaultMembers := system.Members{
-		mockMember(t, 0, 1, "joined"),
-		mockMember(t, 1, 1, "joined"),
-		mockMember(t, 3, 2, "joined"),
-	}
-	emf := func(a string) system.Members {
-		return system.Members{
-			// updated to err on prep fail if not forced
-			mockMember(t, 0, 1, "errored").WithInfo(a + " failed"),
-			mockMember(t, 1, 1, act2state(a)),
-			mockMember(t, 3, 2, "errored").WithInfo(a + " failed"),
+	emf := func(a string) func() system.Members {
+		return func() system.Members {
+			return system.Members{
+				// updated to err on prep fail if not forced
+				mockMember(t, 0, 1, "errored").WithInfo(a + " failed"),
+				mockMember(t, 1, 1, act2state(a)),
+				mockMember(t, 3, 2, "errored").WithInfo(a + " failed"),
+			}
 		}
 	}
 	expMembersPrepFail := emf("prep shutdown")
@@ -1523,23 +1519,21 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 	rankResStopSuccess := []*sharedpb.RankResult{
 		mockRankSuccess("stop", 0, 1), mockRankSuccess("stop", 1, 1), mockRankSuccess("stop", 3, 2),
 	}
-	expEventsPrepFail := []*events.RASEvent{
-		newSystemStopFailedEvent("prep shutdown", "failed ranks 0,3"),
-	}
-	expEventsStopFail := []*events.RASEvent{
-		newSystemStopFailedEvent("stop", "failed ranks 0,3"),
+	expEventsStopFail := func(msgErr string) []string {
+		e := newSystemStopFailedEvent(msgErr, "failed ranks 0,3")
+		e.Timestamp = ""
+		return []string{e.String()}
 	}
 
 	for name, tc := range map[string]struct {
 		req            *mgmtpb.SystemStopReq
-		members        system.Members
 		mResps         [][]*control.HostResponse
-		expMembers     system.Members
+		expMembers     func() system.Members
 		expResults     []*sharedpb.RankResult
 		expAbsentRanks string
 		expAbsentHosts string
 		expAPIErr      error
-		expDispatched  []*events.RASEvent
+		expDispatched  []string
 		expInvokeCount int
 	}{
 		"nil req": {
@@ -1554,67 +1548,69 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 		},
 		"prep fail": {
 			req:            &mgmtpb.SystemStopReq{},
-			members:        defaultMembers,
 			mResps:         hostRespFail,
 			expResults:     rankResPrepFail,
 			expMembers:     expMembersPrepFail,
-			expDispatched:  expEventsPrepFail,
+			expDispatched:  expEventsStopFail("prep shutdown"),
 			expInvokeCount: 1,
 		},
 		"prep success stop fail": {
 			req:            &mgmtpb.SystemStopReq{},
-			members:        defaultMembers,
 			mResps:         hostRespStopFail,
 			expResults:     rankResStopFail,
 			expMembers:     expMembersStopFail,
-			expDispatched:  expEventsStopFail,
+			expDispatched:  expEventsStopFail("stop"),
 			expInvokeCount: 2,
 		},
 		"stop some ranks": {
 			req:        &mgmtpb.SystemStopReq{Ranks: "0,1"},
-			members:    defaultMembers,
 			mResps:     [][]*control.HostResponse{{hr(1, mockRankSuccess("stop", 0), mockRankSuccess("stop", 1))}},
 			expResults: []*sharedpb.RankResult{mockRankSuccess("stop", 0, 1), mockRankSuccess("stop", 1, 1)},
-			expMembers: system.Members{
-				mockMember(t, 0, 1, "stopped"),
-				mockMember(t, 1, 1, "stopped"),
-				mockMember(t, 3, 2, "joined"),
+			expMembers: func() system.Members {
+				return system.Members{
+					mockMember(t, 0, 1, "stopped"),
+					mockMember(t, 1, 1, "stopped"),
+					mockMember(t, 3, 2, "joined"),
+				}
 			},
 			expInvokeCount: 1, // prep should not be called
 		},
 		"stop with all ranks (same as full system stop)": {
 			req:        &mgmtpb.SystemStopReq{Ranks: "0,1,3"},
-			members:    defaultMembers,
 			mResps:     hostRespSuccess,
 			expResults: rankResStopSuccess,
-			expMembers: system.Members{
-				mockMember(t, 0, 1, "stopped"),
-				mockMember(t, 1, 1, "stopped"),
-				mockMember(t, 3, 2, "stopped"),
+			expMembers: func() system.Members {
+				return system.Members{
+					mockMember(t, 0, 1, "stopped"),
+					mockMember(t, 1, 1, "stopped"),
+					mockMember(t, 3, 2, "stopped"),
+				}
 			},
 			expInvokeCount: 2, // prep should be called
 		},
 		"full system stop": {
 			req:        &mgmtpb.SystemStopReq{},
-			members:    defaultMembers,
 			mResps:     hostRespSuccess,
 			expResults: rankResStopSuccess,
-			expMembers: system.Members{
-				mockMember(t, 0, 1, "stopped"),
-				mockMember(t, 1, 1, "stopped"),
-				mockMember(t, 3, 2, "stopped"),
+			expMembers: func() system.Members {
+				return system.Members{
+					mockMember(t, 0, 1, "stopped"),
+					mockMember(t, 1, 1, "stopped"),
+					mockMember(t, 3, 2, "stopped"),
+				}
 			},
 			expInvokeCount: 2, // prep should be called
 		},
 		"full system stop (forced)": {
 			req:        &mgmtpb.SystemStopReq{Force: true},
-			members:    defaultMembers,
 			mResps:     hostRespStopSuccess,
 			expResults: rankResStopSuccess,
-			expMembers: system.Members{
-				mockMember(t, 0, 1, "stopped"),
-				mockMember(t, 1, 1, "stopped"),
-				mockMember(t, 3, 2, "stopped"),
+			expMembers: func() system.Members {
+				return system.Members{
+					mockMember(t, 0, 1, "stopped"),
+					mockMember(t, 1, 1, "stopped"),
+					mockMember(t, 3, 2, "stopped"),
+				}
 			},
 			expInvokeCount: 1, // prep should not be called
 		},
@@ -1626,7 +1622,12 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			if tc.mResps == nil {
 				tc.mResps = [][]*control.HostResponse{{}}
 			}
-			svc := mgmtSystemTestSetup(t, log, tc.members, tc.mResps...)
+			members := system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "joined"),
+				mockMember(t, 3, 2, "joined"),
+			}
+			svc := mgmtSystemTestSetup(t, log, members, tc.mResps...)
 
 			ctx, cancel := context.WithTimeout(test.Context(t), 200*time.Millisecond)
 			defer cancel()
@@ -1634,8 +1635,8 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			ps := events.NewPubSub(ctx, log)
 			svc.events = ps
 
-			dispatched := &eventsDispatched{cancel: cancel}
-			svc.events.Subscribe(events.RASTypeInfoOnly, dispatched)
+			subscriber := newMockSubscriber(1)
+			svc.events.Subscribe(events.RASTypeInfoOnly, subscriber)
 
 			if tc.req != nil && tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName
@@ -1647,13 +1648,13 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			}
 
 			checkRankResults(t, tc.expResults, gotResp.Results)
-			checkMembers(t, tc.expMembers, svc.membership)
+			checkMembers(t, tc.expMembers(), svc.membership)
 			test.AssertEqual(t, tc.expAbsentHosts, gotResp.Absenthosts, "absent hosts")
 			test.AssertEqual(t, tc.expAbsentRanks, gotResp.Absentranks, "absent ranks")
 
 			<-ctx.Done()
 
-			if diff := cmp.Diff(tc.expDispatched, dispatched.rx, defEvtCmpOpts...); diff != "" {
+			if diff := cmp.Diff(tc.expDispatched, subscriber.getRx(), defEvtCmpOpts...); diff != "" {
 				t.Fatalf("unexpected events dispatched (-want, +got)\n%s\n", diff)
 			}
 
@@ -1956,6 +1957,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 		},
 		"dupe host same rank diff uuid": {
 			req: &mgmtpb.JoinReq{
+				Addr: curMember.Addr.String(),
 				Rank: curMember.Rank.Uint32(),
 				Uuid: test.MockUUID(5),
 			},
@@ -1963,13 +1965,23 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 		},
 		"dupe host diff rank same uuid": {
 			req: &mgmtpb.JoinReq{
+				Addr: curMember.Addr.String(),
 				Rank: 22,
 				Uuid: curMember.UUID.String(),
 			},
 			expErr: errors.New("already exists"),
 		},
+		"dupe host addr changed": {
+			req: &mgmtpb.JoinReq{
+				Addr: newMember.Addr.String(),
+				Rank: curMember.Rank.Uint32(),
+				Uuid: curMember.UUID.String(),
+			},
+			expErr: errors.New("control address changed"),
+		},
 		"rejoining host": {
 			req: &mgmtpb.JoinReq{
+				Addr:        curMember.Addr.String(),
 				Rank:        curMember.Rank.Uint32(),
 				Uuid:        curMember.UUID.String(),
 				Incarnation: curMember.Incarnation + 1,
@@ -1994,6 +2006,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 		},
 		"rejoining host; NilRank": {
 			req: &mgmtpb.JoinReq{
+				Addr:        curMember.Addr.String(),
 				Rank:        uint32(ranklist.NilRank),
 				Uuid:        curMember.UUID.String(),
 				Incarnation: curMember.Incarnation + 1,
@@ -2019,6 +2032,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 		"provider doesn't match": {
 			pauseGroupUpdate: true,
 			req: &mgmtpb.JoinReq{
+				Addr:        curMember.Addr.String(),
 				Rank:        curMember.Rank.Uint32(),
 				Uuid:        curMember.UUID.String(),
 				Uri:         newProviderMember.PrimaryFabricURI,
@@ -2039,6 +2053,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 		"group update resumed": {
 			pauseGroupUpdate: true,
 			req: &mgmtpb.JoinReq{
+				Addr:        curMember.Addr.String(),
 				Rank:        curMember.Rank.Uint32(),
 				Uuid:        curMember.UUID.String(),
 				Uri:         curMember.PrimaryFabricURI,
@@ -2063,6 +2078,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 		},
 		"new host (non local)": {
 			req: &mgmtpb.JoinReq{
+				Addr:        curMember.Addr.String(),
 				Rank:        uint32(ranklist.NilRank),
 				Incarnation: newMember.Incarnation,
 			},
@@ -2153,7 +2169,8 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 			}
 			peerCtx := peer.NewContext(test.Context(t), &peer.Peer{Addr: peerAddr})
 
-			setupMockDrpcClient(svc, tc.guResp, nil)
+			mdc := getMockDrpcClient(tc.guResp, nil)
+			setupSvcDrpcClient(svc, 0, mdc)
 
 			gotResp, gotErr := svc.Join(peerCtx, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
@@ -2169,8 +2186,6 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 				return
 			}
 
-			ei := svc.harness.instances[0].(*EngineInstance)
-			mdc := ei._drpcClient.(*mockDrpcClient)
 			gotGuReq := new(mgmtpb.GroupUpdateReq)
 			calls := mdc.calls.get()
 			// wait for GroupUpdate
@@ -2301,7 +2316,7 @@ func TestServer_MgmtSvc_doGroupUpdate(t *testing.T) {
 			}
 			svc := tc.getSvc(t, log)
 			mockDrpc := getMockDrpcClient(tc.drpcResp, tc.drpcErr)
-			setMockDrpcClient(svc, mockDrpc)
+			setupSvcDrpcClient(svc, 0, mockDrpc)
 
 			err := svc.doGroupUpdate(test.Context(t), tc.force)
 
@@ -2491,8 +2506,21 @@ func TestMgmtSvc_checkReqFabricProvider(t *testing.T) {
 			joinURI: "tcp://10.10.10.10",
 			expErr:  &system.ErrNotReplica{},
 		},
+		"prop not set": {
+			getSvc: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				ms := mgmtSystemTestSetup(t, l, system.Members{}, []*control.HostResponse{})
+				if err := ms.setFabricProviders(""); err != nil {
+					t.Fatal(err)
+				}
+				return ms
+			},
+			joinProv: "tcp",
+			joinURI:  "tcp://10.10.10.10",
+			expErr:   system.ErrLeaderStepUpInProgress,
+		},
 		"success": {
-			joinURI: "tcp://10.10.10.10",
+			joinProv: "tcp",
+			joinURI:  "tcp://10.10.10.10",
 		},
 		"does not match": {
 			joinProv:     "verbs",

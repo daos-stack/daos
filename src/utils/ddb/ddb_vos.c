@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -379,7 +379,7 @@ vos_iterator_type_to_path_part(vos_iter_type_t type)
 static enum path_parts
 vos_enum_to_path_part(vos_iter_type_t t)
 {
-	enum path_parts map[VOS_ITER_LARGEST];
+	enum path_parts map[VOS_ITER_LARGEST] = {0};
 
 	map[VOS_ITER_OBJ] = PATH_PART_OBJ;
 	map[VOS_ITER_DKEY] = PATH_PART_DKEY;
@@ -393,7 +393,7 @@ vos_enum_to_path_part(vos_iter_type_t t)
 static enum path_parts
 vos_enum_to_parent_path_part(vos_iter_type_t t)
 {
-	int map[VOS_ITER_LARGEST];
+	int map[VOS_ITER_LARGEST] = {0};
 
 	map[VOS_ITER_OBJ] = PATH_PART_CONT;
 	map[VOS_ITER_DKEY] = PATH_PART_OBJ;
@@ -1741,11 +1741,9 @@ sync_cb(struct ddbs_sync_info *info, void *cb_args)
 
 	/* Try to delete the target first */
 	rc = smd_pool_del_tgt(pool_id, info->dsi_hdr->bbh_vos_id, st);
-	if (!SUCCESS(rc)) {
+	if (!SUCCESS(rc))
 		/* Ignore error for now ... might not exist*/
-		D_WARN("delete target failed: "DF_RC"\n", DP_RC(rc));
-		rc = 0;
-	}
+		D_WARN("delete target failed: " DF_RC "\n", DP_RC(rc));
 
 	rc = smd_pool_add_tgt(pool_id, info->dsi_hdr->bbh_vos_id,
 			      info->dsi_hdr->bbh_blob_id, st, blob_size);

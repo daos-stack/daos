@@ -43,7 +43,8 @@ def add_container(test, pool, namespace=CONT_NAMESPACE, create=True, daos=None, 
         container.update_params(**params)
     if create:
         container.create()
-    test.register_cleanup(remove_container, test=test, container=container)
+    if container.register_cleanup.value is True:
+        test.register_cleanup(remove_container, test=test, container=container)
     return container
 
 
@@ -191,7 +192,7 @@ class TestContainerData():
                 "Error writing {}data (dkey={}, akey={}, data={}) to "
                 "container {}: {}".format(
                     "array " if isinstance(data, list) else "", dkey, akey,
-                    data, container.uuid, error)) from error
+                    data, str(container), error)) from error
 
     def write_object(self, container, record_qty, akey_size, dkey_size,
                      data_size, rank=None, obj_class=None, data_array_size=0):
@@ -254,7 +255,6 @@ class TestContainerData():
             "akey": akey,
             "obj": self.obj,
             "txn": txn,
-            "test_hints": test_hints,
         }
         try:
             if data_array_size > 0:
@@ -264,6 +264,7 @@ class TestContainerData():
                 read_data = container.container.read_an_array(**kwargs)
             else:
                 kwargs["size"] = data_size
+                kwargs["test_hints"] = test_hints
                 self._log_method("read_an_obj", kwargs)
                 read_data = container.container.read_an_obj(**kwargs)
         except DaosApiError as error:
@@ -271,7 +272,7 @@ class TestContainerData():
                 "Error reading {}data (dkey={}, akey={}, size={}) from "
                 "container {}: {}".format(
                     "array " if data_array_size > 0 else "", dkey, akey,
-                    data_size, container.uuid, error)) from error
+                    data_size, str(container), error)) from error
         return [data[:-1] for data in read_data] \
             if data_array_size > 0 else read_data.value
 
@@ -370,6 +371,8 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         self.daos_timeout = BasicParameter(None)
         self.label = BasicParameter(None, "TestContainer")
         self.label_generator = label_generator
+
+        self.register_cleanup = BasicParameter(True, True)  # call register_cleanup by default
 
         self.container = None
         self.uuid = None

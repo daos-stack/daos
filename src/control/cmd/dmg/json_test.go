@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -75,13 +75,12 @@ func TestDmg_JsonOutput(t *testing.T) {
 			case "storage nvme-add-device":
 				testArgs = append(testArgs, "-l", "foo.com", "-a",
 					test.MockPCIAddr(), "-e", "0")
-			case "storage query device-health":
-				testArgs = append(testArgs, "-u", test.MockUUID())
 			case "storage set nvme-faulty":
-				testArgs = append(testArgs, "--force", "-u", test.MockUUID())
+				testArgs = append(testArgs, "--host", "foo.com", "--force", "-u",
+					test.MockUUID())
 			case "storage replace nvme":
-				testArgs = append(testArgs, "--old-uuid", test.MockUUID(),
-					"--new-uuid", test.MockUUID())
+				testArgs = append(testArgs, "--host", "foo.com", "--old-uuid",
+					test.MockUUID(), "--new-uuid", test.MockUUID())
 			case "storage led identify", "storage led check", "storage led clear":
 				testArgs = append(testArgs, test.MockUUID())
 			case "pool create":
@@ -103,8 +102,7 @@ func TestDmg_JsonOutput(t *testing.T) {
 			case "pool query-targets":
 				testArgs = append(testArgs, test.MockUUID(), "--rank", "0", "--target-idx", "1,3,5,7")
 			case "container set-owner":
-				testArgs = append(testArgs, "--user", "foo", "--pool", test.MockUUID(),
-					"--cont", test.MockUUID())
+				testArgs = append(testArgs, "--user", "foo", test.MockUUID(), test.MockUUID())
 			case "telemetry metrics list", "telemetry metrics query":
 				return // These commands query via http directly
 			case "system cleanup":

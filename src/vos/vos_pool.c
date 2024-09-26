@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -318,6 +318,11 @@ vos_wal_metrics_init(struct vos_wal_metrics *vw_metrics, const char *path, int t
 	if (rc)
 		D_WARN("Failed to create WAL waiters telemetry: "DF_RC"\n", DP_RC(rc));
 
+	rc = d_tm_add_metric(&vw_metrics->vwm_wal_dur, D_TM_DURATION, "WAL commit duration", NULL,
+			     "%s/%s/wal_dur/tgt_%d", path, VOS_WAL_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create WAL commit duration telemetry: " DF_RC "\n", DP_RC(rc));
+
 	/* Initialize metrics for WAL replay */
 	rc = d_tm_add_metric(&vw_metrics->vwm_replay_count, D_TM_COUNTER, "Number of WAL replays",
 			     NULL, "%s/%s/replay_count/tgt_%u", path, VOS_WAL_DIR, tgt_id);
@@ -383,15 +388,19 @@ reserve:
 static inline int
 vos_wal_commit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_iod)
 {
-	struct bio_wal_info	wal_info;
-	struct vos_pool		*pool;
-	struct bio_wal_stats	ws = { 0 };
-	struct vos_wal_metrics	*vwm;
-	int			rc;
+	struct bio_wal_info     wal_info;
+	struct vos_pool        *pool;
+	struct bio_wal_stats    ws = {0};
+	struct vos_wal_metrics *vwm;
+	int                     rc;
 
 	D_ASSERT(store && store->stor_priv != NULL);
 	vwm = (struct vos_wal_metrics *)store->stor_stats;
+	if (vwm != NULL)
+		d_tm_mark_duration_start(vwm->vwm_wal_dur, D_TM_CLOCK_REALTIME);
 	rc = bio_wal_commit(store->stor_priv, wal_tx, data_iod, (vwm != NULL) ? &ws : NULL);
+	if (vwm != NULL)
+		d_tm_mark_duration_end(vwm->vwm_wal_dur);
 	if (rc) {
 		DL_ERROR(rc, "WAL commit failed.");
 		/*
@@ -1407,6 +1416,8 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 		pool->vp_feats |= VOS_POOL_FEAT_2_4;
 	if (pool_df->pd_version >= VOS_POOL_DF_2_6)
 		pool->vp_feats |= VOS_POOL_FEAT_2_6;
+	if (pool_df->pd_version >= VOS_POOL_DF_2_8)
+		pool->vp_feats |= VOS_POOL_FEAT_2_8;
 
 	if (pool->vp_vea_info == NULL)
 		/** always store on SCM if no bdev */
@@ -1470,7 +1481,7 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 		}
 	}
 
-	rc = bio_xsctxt_health_check(vos_xsctxt_get());
+	rc = bio_xsctxt_health_check(vos_xsctxt_get(), false, false);
 	if (rc) {
 		DL_WARN(rc, DF_UUID": Skip pool open due to faulty NVMe.", DP_UUID(uuid));
 		return rc;
@@ -1578,6 +1589,8 @@ end:
 		pool->vp_feats |= VOS_POOL_FEAT_2_4;
 	if (version >= VOS_POOL_DF_2_6)
 		pool->vp_feats |= VOS_POOL_FEAT_2_6;
+	if (version >= VOS_POOL_DF_2_8)
+		pool->vp_feats |= VOS_POOL_FEAT_2_8;
 
 	return 0;
 }

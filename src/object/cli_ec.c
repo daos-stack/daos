@@ -1408,13 +1408,15 @@ obj_ec_singv_split(daos_unit_oid_t oid, uint16_t layout_ver, struct daos_oclass_
 {
 	uint64_t c_bytes = obj_ec_singv_cell_bytes(iod_size, oca);
 	uint32_t tgt_off = obj_ec_shard_off_by_layout_ver(layout_ver, dkey_hash, oca, oid.id_shard);
+	uint64_t tgt_size = min(c_bytes, iod_size - tgt_off * c_bytes);
 	char	*data = sgl->sg_iovs[0].iov_buf;
 
-	D_ASSERT(iod_size != DAOS_REC_ANY);
+	D_ASSERTF(iod_size != DAOS_REC_ANY && iod_size == sgl->sg_iovs[0].iov_len,
+		  DF_U64 " == %zu\n", iod_size, sgl->sg_iovs[0].iov_len);
 	if (tgt_off > 0)
-		memmove(data, data + tgt_off * c_bytes, c_bytes);
+		memmove(data, data + tgt_off * c_bytes, tgt_size);
 
-	sgl->sg_iovs[0].iov_len = c_bytes;
+	sgl->sg_iovs[0].iov_len = tgt_size;
 	return 0;
 }
 

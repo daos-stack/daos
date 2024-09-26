@@ -13,7 +13,6 @@ server_config:
   system_ram_reserved: 2
 pool:
   size: 2G
-  control_method: dmg
 container:
   type: POSIX
   control_method: daos

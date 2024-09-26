@@ -135,6 +135,14 @@ class FioCommand(ExecutableCommand):
         else:
             self.log.error("Invalid job name: %s", job_name)
 
+    def update_directory(self, directory):
+        """Helper method for setting Fio directory command line option.
+
+        Args:
+            directory (str): fio directory argument value
+        """
+        self.update("global", "directory", directory, "fio --name=global --directory")
+
     @property
     def command_with_params(self):
         """Get the command with all of its defined parameters as a string.
@@ -165,9 +173,7 @@ class FioCommand(ExecutableCommand):
             CommandFailure: if there is an error running the command
 
         Returns:
-            RemoteCommandResult: a grouping of the command results from the same hosts with the
-                same return status
-
+            CommandResult: groups of command results from the same hosts with the same return status
         """
         if not self._hosts:
             raise CommandFailure('No hosts specified for fio command')

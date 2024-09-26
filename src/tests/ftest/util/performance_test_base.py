@@ -282,7 +282,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
             # Try this even if IOR failed because it could give us useful info
             self.verify_system_status(self.pool, self.container)
 
-    def run_performance_ior(self, namespace=None, use_intercept=True):
+    def run_performance_ior(self, namespace=None):
         """Run an IOR performance test.
 
         Write and Read are ran separately.
@@ -290,17 +290,19 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         Args:
             namespace (str, optional): namespace for IOR parameters in the yaml.
                 Defaults to None, which uses default IOR namespace.
-            use_intercept (bool, optional): whether to use the interception library with dfuse.
-                Defaults to True.
 
         """
         if namespace is not None:
             self.ior_cmd.namespace = namespace
             self.ior_cmd.get_params(self)
-            self.set_processes_ppn(namespace)
+            self.set_processes_ppn(self.ior_cmd.namespace)
 
-        if use_intercept and self.ior_cmd.api.value == 'POSIX':
+        if self.ior_cmd.api.value == 'POSIX+IOIL':
             intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
+            self.ior_cmd.api.update('POSIX')
+        elif self.ior_cmd.api.value == 'POSIX+PIL4DFS':
+            intercept = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
+            self.ior_cmd.api.update('POSIX')
         else:
             intercept = None
 
@@ -342,7 +344,9 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         self._run_performance_ior_single(intercept)
 
         # Manually stop dfuse after ior write completes
-        self.stop_dfuse()
+        if self.dfuse:
+            self.dfuse.stop()
+            self.dfuse = None
 
         # Wait between write and read
         self.phase_barrier()
@@ -352,7 +356,9 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         self._run_performance_ior_single(intercept)
 
         # Manually stop dfuse after ior read completes
-        self.stop_dfuse()
+        if self.dfuse:
+            self.dfuse.stop()
+            self.dfuse = None
 
         self._log_daos_metrics()
 
@@ -367,12 +373,14 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         if namespace is not None:
             self.mdtest_cmd.namespace = namespace
             self.mdtest_cmd.get_params(self)
-            self.set_processes_ppn(namespace)
+            self.set_processes_ppn(self.mdtest_cmd.namespace)
 
-        # Performance with POSIX/DFUSE is tricky because we can't just set
-        # dfs_dir_oclass and dfs_oclass. This needs more work to get good results on non-DFS.
-        if self.mdtest_cmd.api.value not in ('DFS', 'POSIX'):
-            self.fail("Only DFS API supported")
+        if self.mdtest_cmd.api.value == 'POSIX+IOIL':
+            self.mdtest_cmd.env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', 'libioil.so')
+            self.mdtest_cmd.api.update('POSIX')
+        elif self.mdtest_cmd.api.value == 'POSIX+PIL4DFS':
+            self.mdtest_cmd.env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
+            self.mdtest_cmd.api.update('POSIX')
 
         self._log_performance_params("MDTEST")
 
@@ -438,6 +446,8 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
             self.verify_system_status(self.pool, self.container)
 
         # Manually stop dfuse after mdtest completes
-        self.stop_dfuse()
+        if self.dfuse:
+            self.dfuse.stop()
+            self.dfuse = None
 
         self._log_daos_metrics()

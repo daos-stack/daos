@@ -98,8 +98,8 @@ command to create them and get the pool UUID and container UUID.
 ```bash
 $ export DAOS_POOL="mypool"
 $ export DAOS_CONT="mycont"
-$ dmg pool create --scm-size=<scm size> --nvme-size=<nvme size> --label $DAOS_POOL
-$ daos cont create --label $DAOS_CONT --type POSIX $DAOS_POOL
+$ dmg pool create --scm-size=<scm size> --nvme-size=<nvme size> $DAOS_POOL
+$ daos cont create --type POSIX $DAOS_POOL $DAOS_CONT
 ```
 
 After that, replace pool label and container label in DAOS URI in
@@ -261,7 +261,7 @@ DAOS UNS method, `DaosUns.create()`. The "\[sub path\]" is optional. You can
 create the UNS path with below command.
 
 ```bash
-$ daos cont create --label $DAOS_CONT --path <your_path> --type POSIX $DAOS_POOL
+$ daos cont create --path <your_path> --type POSIX $DAOS_POOL $DAOS_CONT
 ```
 Or
 

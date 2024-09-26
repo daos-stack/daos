@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2023 Intel Corporation.
+ * (C) Copyright 2023-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -186,6 +186,8 @@ parse_key(const char *key_str, struct dv_indexed_tree_path *itp, enum path_parts
 
 	if (strlen(key_str) == 0)
 		return 0;
+
+	D_ASSERT(key_part < PATH_PART_END);
 
 	/* is an index */
 	if (key_str[0] == '[') {
@@ -512,12 +514,14 @@ itp_unset_cont(struct dv_indexed_tree_path *itp)
 int
 itp_idx(struct dv_indexed_tree_path *itp, enum path_parts part_key)
 {
+	D_ASSERT(part_key < PATH_PART_END);
 	return itp->itp_parts[part_key].itp_part_idx;
 }
 
 bool
 itp_has_complete(struct dv_indexed_tree_path *itp, enum path_parts part_key)
 {
+	D_ASSERT(part_key < PATH_PART_END);
 	return itp->itp_parts[part_key].itp_has_part_value &&
 	       itp->itp_parts[part_key].itp_has_part_idx;
 }
@@ -525,6 +529,7 @@ itp_has_complete(struct dv_indexed_tree_path *itp, enum path_parts part_key)
 bool
 itp_has(struct dv_indexed_tree_path *itp, enum path_parts part_key)
 {
+	D_ASSERT(part_key < PATH_PART_END);
 	return itp->itp_parts[part_key].itp_has_part_value ||
 	       itp->itp_parts[part_key].itp_has_part_idx;
 }
@@ -539,12 +544,14 @@ itp_has_value(struct dv_indexed_tree_path *itp)
 bool
 itp_has_idx(struct dv_indexed_tree_path *itp, enum path_parts part_key)
 {
+	D_ASSERT(part_key < PATH_PART_END);
 	return itp->itp_parts[part_key].itp_has_part_idx;
 }
 
 bool
 itp_has_part_value(struct dv_indexed_tree_path *itp, enum path_parts part_key)
 {
+	D_ASSERT(part_key < PATH_PART_END);
 	return itp->itp_parts[part_key].itp_has_part_value;
 }
 
@@ -633,6 +640,7 @@ itp_verify(struct dv_indexed_tree_path *itp)
 static union itp_part_type *
 itp_value(struct dv_indexed_tree_path *itp, enum path_parts path_key)
 {
+	D_ASSERT(path_key < PATH_PART_END);
 	return &itp->itp_parts[path_key].itp_part_value;
 }
 

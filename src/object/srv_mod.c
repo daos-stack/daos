@@ -186,13 +186,6 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 
 	D_ASSERT(proto_ver == DAOS_OBJ_VERSION || proto_ver == DAOS_OBJ_VERSION - 1);
 
-	/*
-	 * Proto v9 doesn't support hint return cart timeout for retry
-	 * skip RPC rejections for them.
-	 */
-	if (proto_ver == 9)
-		attr->sra_flags |= SCHED_REQ_FL_NO_REJECT;
-
 	/* Extract hint from RPC */
 	attr->sra_enqueue_id = 0;
 
@@ -219,6 +212,13 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 		sched_req_attr_init(attr, SCHED_REQ_MIGRATE, &omi->om_pool_uuid);
 		break;
 	}
+	/*
+	 * To enhance system performance, following RPCs are currently not
+	 * enqueued. Recent benchmarks have indicated a 2%~3% drop in stat
+	 * and removal operations when this is done. It may be worthwhile to
+	 * reassess this decision in the future, especially if Quality of
+	 * Service(QoS) requirements are introduced. (See DAOS-15076)
+	 */
 	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
 	case DAOS_OBJ_RPC_ENUMERATE:
 	case DAOS_OBJ_AKEY_RPC_ENUMERATE:
@@ -230,7 +230,7 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 
 			attr->sra_enqueue_id = oei_v10->oei_comm_in.req_in_enqueue_id;
 		}
-		sched_req_attr_init(attr, SCHED_REQ_FETCH, &oei->oei_pool_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &oei->oei_pool_uuid);
 		break;
 	}
 	case DAOS_OBJ_RPC_PUNCH:
@@ -246,7 +246,7 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 
 			attr->sra_enqueue_id = opi_v10->opi_comm_in.req_in_enqueue_id;
 		}
-		sched_req_attr_init(attr, SCHED_REQ_UPDATE, &opi->opi_pool_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &opi->opi_pool_uuid);
 		break;
 	}
 	case DAOS_OBJ_RPC_QUERY_KEY: {
@@ -257,7 +257,7 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 
 			attr->sra_enqueue_id = okqi_v10->okqi_comm_in.req_in_enqueue_id;
 		}
-		sched_req_attr_init(attr, SCHED_REQ_FETCH, &okqi->okqi_pool_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &okqi->okqi_pool_uuid);
 		break;
 	}
 	case DAOS_OBJ_RPC_SYNC: {
@@ -268,7 +268,7 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 
 			attr->sra_enqueue_id = osi_v10->osi_comm_in.req_in_enqueue_id;
 		}
-		sched_req_attr_init(attr, SCHED_REQ_UPDATE, &osi->osi_pool_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &osi->osi_pool_uuid);
 		break;
 	}
 	case DAOS_OBJ_RPC_KEY2ANCHOR: {
@@ -279,41 +279,41 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 
 			attr->sra_enqueue_id = oki_v10->oki_comm_in.req_in_enqueue_id;
 		}
-		sched_req_attr_init(attr, SCHED_REQ_FETCH, &oki->oki_pool_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &oki->oki_pool_uuid);
 		break;
 	}
 	case DAOS_OBJ_RPC_EC_AGGREGATE: {
 		struct obj_ec_agg_in *ea = crt_req_get(rpc);
 
 		attr->sra_enqueue_id = ea->ea_comm_in.req_in_enqueue_id;
-		sched_req_attr_init(attr, SCHED_REQ_MIGRATE, &ea->ea_pool_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &ea->ea_pool_uuid);
 		break;
 	}
 	case DAOS_OBJ_RPC_EC_REPLICATE: {
 		struct obj_ec_rep_in *er = crt_req_get(rpc);
 
 		attr->sra_enqueue_id = er->er_comm_in.req_in_enqueue_id;
-		sched_req_attr_init(attr, SCHED_REQ_MIGRATE, &er->er_pool_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &er->er_pool_uuid);
 		break;
 	}
 	case DAOS_OBJ_RPC_CPD: {
 		struct obj_cpd_in *oci = crt_req_get(rpc);
 
-		sched_req_attr_init(attr, SCHED_REQ_UPDATE, &oci->oci_pool_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &oci->oci_pool_uuid);
 		break;
 	}
 	case DAOS_OBJ_RPC_COLL_PUNCH: {
 		struct obj_coll_punch_in *ocpi = crt_req_get(rpc);
 
 		attr->sra_enqueue_id = ocpi->ocpi_comm_in.req_in_enqueue_id;
-		sched_req_attr_init(attr, SCHED_REQ_UPDATE, &ocpi->ocpi_po_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &ocpi->ocpi_po_uuid);
 		break;
 	}
 	case DAOS_OBJ_RPC_COLL_QUERY: {
 		struct obj_coll_query_in *ocqi = crt_req_get(rpc);
 
 		attr->sra_enqueue_id = ocqi->ocqi_comm_in.req_in_enqueue_id;
-		sched_req_attr_init(attr, SCHED_REQ_FETCH, &ocqi->ocqi_po_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &ocqi->ocqi_po_uuid);
 		break;
 	}
 	default:
@@ -321,6 +321,13 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 		rc = -DER_NOSYS;
 		break;
 	}
+
+	/*
+	 * Proto v9 doesn't support hint return cart timeout for retry
+	 * skip RPC rejections for them.
+	 */
+	if (proto_ver == 9)
+		attr->sra_flags |= SCHED_REQ_FL_NO_REJECT;
 
 	return rc;
 }

@@ -104,6 +104,7 @@ struct rpc_proto {
 	crt_opcode_t   base_opc;
 	uint32_t      *ver_array;
 	uint32_t       array_size;
+	uint32_t       timeout;
 };
 
 static void
@@ -114,8 +115,9 @@ query_cb(struct crt_proto_query_cb_info *cb_info)
 
 	if (daos_rpc_retryable_rc(cb_info->pq_rc)) {
 		rproto->ep.ep_rank = (rproto->ep.ep_rank + 1) % rproto->nr_ranks;
+		rproto->timeout += 3;
 		rc = crt_proto_query_with_ctx(&rproto->ep, rproto->base_opc, rproto->ver_array,
-					      rproto->array_size, query_cb, rproto,
+					      rproto->array_size, rproto->timeout, query_cb, rproto,
 					      daos_get_crt_ctx());
 		if (rc) {
 			D_ERROR("crt_proto_query_with_ctx() failed: "DF_RC"\n", DP_RC(rc));
@@ -156,9 +158,10 @@ daos_rpc_proto_query(crt_opcode_t base_opc, uint32_t *ver_array, int count, int 
 	rproto->array_size = count;
 	rproto->ep.ep_grp  = sys->sy_group;
 	rproto->base_opc = base_opc;
+	rproto->timeout    = 3;
 
-	rc = crt_proto_query_with_ctx(&rproto->ep, base_opc,
-				      ver_array, count, query_cb, rproto, ctx);
+	rc = crt_proto_query_with_ctx(&rproto->ep, base_opc, ver_array, count, rproto->timeout,
+				      query_cb, rproto, ctx);
 	if (rc) {
 		D_ERROR("crt_proto_query_with_ctx() failed: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_free, rc);

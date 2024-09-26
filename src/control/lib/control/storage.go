@@ -79,6 +79,15 @@ func (hss *HostStorageSet) String() string {
 	return fmt.Sprintf("hosts %s, storage %+v", hss.HostSet, hss.HostStorage)
 }
 
+// Len returns the number of hosts in set with this host storage.
+func (hss *HostStorageSet) Len() int {
+	if hss == nil {
+		return 0
+	}
+
+	return hss.HostSet.Count()
+}
+
 // NewHostStorageSet returns an initialized HostStorageSet for the given
 // host address and HostStorage configuration.
 func NewHostStorageSet(hostAddr string, hs *HostStorage) (*HostStorageSet, error) {
@@ -133,6 +142,15 @@ func (hsm HostStorageMap) Keys() []uint64 {
 		keys[i] = setToKeys[set]
 	}
 	return keys
+}
+
+// HostCount returns a count of hosts in map.
+func (hsm HostStorageMap) HostCount() (nrHosts int) {
+	for _, set := range hsm {
+		nrHosts += set.Len()
+	}
+
+	return nrHosts
 }
 
 type (

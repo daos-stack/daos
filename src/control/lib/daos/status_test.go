@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,6 +7,7 @@
 package daos_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/pkg/errors"
@@ -49,6 +50,20 @@ func TestDaos_Error(t *testing.T) {
 	} {
 		t.Run(expStr, func(t *testing.T) {
 			test.AssertEqual(t, expStr, ds.Error(), "not equal")
+		})
+	}
+}
+
+func TestDaos_ErrorFromRC(t *testing.T) {
+	for rc, expErr := range map[int]error{
+		0:      nil,
+		-1014:  daos.ProtocolError,
+		1013:   daos.TryAgain,
+		424242: daos.Status(-424242),
+	} {
+		t.Run(fmt.Sprintf("%v", expErr), func(t *testing.T) {
+			gotErr := daos.ErrorFromRC(rc)
+			test.AssertEqual(t, expErr, gotErr, "not equal")
 		})
 	}
 }

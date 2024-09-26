@@ -1,8 +1,32 @@
 #!/bin/bash
+#
+#  Copyright 2024 Intel Corporation.
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
 set -eu
 
 . utils/githooks/find_base.sh
 export TARGET
+
+# Common function to keep headers aligned
+function _print_githook_header() {
+    printf "%-17s " "${1}:"
+}
+export -f _print_githook_header
+
+# Get list of staged files, excluding deleted
+# shellcheck disable=SC2086
+function _git_diff_cached_files() {
+    IFS=' ' read -r -a _filter <<< "${1:-}"
+    local args="${2:-}"
+    if [ ${#_filter[@]} -eq 0 ]; then
+        git diff "$TARGET" --cached --name-only --diff-filter=d $args
+    else
+        git diff "$TARGET" --cached --name-only --diff-filter=d $args -- "${_filter[@]}"
+    fi
+}
+export -f _git_diff_cached_files
 
 hook=${0##*/}
 rm -f ".${hook}"

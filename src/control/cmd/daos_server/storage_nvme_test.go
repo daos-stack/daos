@@ -192,34 +192,6 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 			cfg:     new(config.Server).WithDisableVFIO(true),
 			expErr:  errors.New("can not be disabled if running as non-root"),
 		},
-		"config parameters applied; legacy storage": {
-			prepCmd: &prepareNVMeCmd{},
-			cfg: new(config.Server).WithEngines(
-				engine.NewConfig().
-					WithLegacyStorage(engine.LegacyStorage{
-						BdevClass: storage.ClassNvme,
-						BdevConfig: storage.BdevConfig{
-							DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddr(7)),
-						},
-					}),
-				engine.NewConfig().
-					WithLegacyStorage(engine.LegacyStorage{
-						BdevClass: storage.ClassNvme,
-						BdevConfig: storage.BdevConfig{
-							DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddr(8)),
-						},
-					}),
-			).
-				WithBdevExclude(test.MockPCIAddr(9)).
-				WithNrHugepages(1024).
-				WithDisableVMD(true),
-			expPrepCall: &storage.BdevPrepareRequest{
-				HugepageCount: 1024,
-				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(7), storage.BdevPciAddrSep,
-					test.MockPCIAddr(8)),
-				PCIBlockList: test.MockPCIAddr(9),
-			},
-		},
 		"nil config; parameters not applied (simulates effect of --ignore-config)": {
 			prepCmd: &prepareNVMeCmd{},
 			expPrepCall: &storage.BdevPrepareRequest{
@@ -442,39 +414,6 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 			resetCmd: newResetCmd(),
 			cfg:      new(config.Server).WithDisableVFIO(true),
 			expErr:   errors.New("can not be disabled if running as non-root"),
-		},
-		"config parameters applied; legacy storage": {
-			resetCmd: &resetNVMeCmd{},
-			cfg: new(config.Server).WithEngines(
-				engine.NewConfig().
-					WithLegacyStorage(engine.LegacyStorage{
-						BdevClass: storage.ClassNvme,
-						BdevConfig: storage.BdevConfig{
-							DeviceList: storage.MustNewBdevDeviceList(
-								test.MockPCIAddr(7)),
-						},
-					}),
-				engine.NewConfig().
-					WithLegacyStorage(engine.LegacyStorage{
-						BdevClass: storage.ClassNvme,
-						BdevConfig: storage.BdevConfig{
-							DeviceList: storage.MustNewBdevDeviceList(
-								test.MockPCIAddr(8)),
-						},
-					}),
-			).
-				WithBdevExclude(test.MockPCIAddr(9)).
-				WithNrHugepages(1024).
-				WithDisableVMD(true),
-			expResetCalls: []storage.BdevPrepareRequest{
-				{
-					PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(7),
-						storage.BdevPciAddrSep, test.MockPCIAddr(8)),
-					PCIBlockList: test.MockPCIAddr(9),
-					TargetUser:   getCurrentUsername(t),
-					Reset_:       true,
-				},
-			},
 		},
 		"nil config; parameters not applied (simulates effect of --ignore-config)": {
 			resetCmd: &resetNVMeCmd{},

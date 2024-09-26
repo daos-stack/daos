@@ -10,10 +10,12 @@ import re
 from ClusterShell.NodeSet import NodeSet
 from ddb_utils import DdbCommand
 from exception_utils import CommandFailure
-from general_utils import (DaosTestError, create_string_buffer, distribute_files,
-                           get_clush_command, get_random_string, report_errors, run_command)
+from file_utils import distribute_files
+from general_utils import (DaosTestError, create_string_buffer, get_random_string, report_errors,
+                           run_command)
 from pydaos.raw import DaosObjClass, IORequest
 from recovery_test_base import RecoveryTestBase
+from run_utils import get_clush_command
 
 
 def insert_objects(context, container, object_count, dkey_count, akey_count, base_dkey,
@@ -148,10 +150,12 @@ class DdbTest(RecoveryTestBase):
 
         # Find the vos file name. e.g., /mnt/daos0/<pool_uuid>/vos-0.
         scm_mount = self.server_managers[0].get_config_value("scm_mount")
+        vos_file = self.get_vos_file_path(pool=self.pool)
+        if vos_file is None:
+            self.fail("vos file wasn't found in {}/{}".format(scm_mount, self.pool.uuid.lower()))
         ddb_command = DdbCommand(
             server_host=NodeSet(self.hostlist_servers[0]), path=self.bin,
-            mount_point=scm_mount, pool_uuid=self.pool.uuid,
-            vos_file=self.get_vos_file_path(pool=self.pool))
+            mount_point=scm_mount, pool_uuid=self.pool.uuid, vos_file=vos_file)
 
         errors = []
 
@@ -343,9 +347,11 @@ class DdbTest(RecoveryTestBase):
         dmg_command.system_stop()
 
         # 3. Find the vos file name.
-        vos_file = self.get_vos_file_path(pool=self.pool)
-        host = NodeSet(self.hostlist_servers[0])
         scm_mount = self.server_managers[0].get_config_value("scm_mount")
+        vos_file = self.get_vos_file_path(pool=self.pool)
+        if vos_file is None:
+            self.fail("vos file wasn't found in {}/{}".format(scm_mount, self.pool.uuid.lower()))
+        host = NodeSet(self.hostlist_servers[0])
         ddb_command = DdbCommand(
             server_host=host, path=self.bin, mount_point=scm_mount,
             pool_uuid=self.pool.uuid, vos_file=vos_file)
@@ -486,9 +492,11 @@ class DdbTest(RecoveryTestBase):
         dmg_command.system_stop()
 
         # 4. Find the vos file name.
-        vos_file = self.get_vos_file_path(pool=self.pool)
-        host = NodeSet(self.hostlist_servers[0])
         scm_mount = self.server_managers[0].get_config_value("scm_mount")
+        vos_file = self.get_vos_file_path(pool=self.pool)
+        if vos_file is None:
+            self.fail("vos file wasn't found in {}/{}".format(scm_mount, self.pool.uuid.lower()))
+        host = NodeSet(self.hostlist_servers[0])
         ddb_command = DdbCommand(
             server_host=host, path=self.bin, mount_point=scm_mount,
             pool_uuid=self.pool.uuid, vos_file=vos_file)
@@ -501,14 +509,9 @@ class DdbTest(RecoveryTestBase):
             file.write(new_data)
 
         # Copy the created file to server node.
-        try:
-            distribute_files(
-                hosts=host, source=load_file_path, destination=load_file_path,
-                mkdir=False)
-        except DaosTestError as error:
-            raise CommandFailure(
-                "ERROR: Copying new_data.txt to {0}: {1}".format(host, error)) \
-                from error
+        result = distribute_files(self.log, host, load_file_path, load_file_path, False)
+        if not result.passed:
+            raise CommandFailure(f"ERROR: Copying new_data.txt to {result.failed_hosts}")
 
         # The file with the new data is ready. Run ddb load.
         ddb_command.value_load(component_path="[0]/[0]/[0]/[0]", load_file_path=load_file_path)
@@ -575,9 +578,11 @@ class DdbTest(RecoveryTestBase):
         dmg_command.system_stop()
 
         # 4. Find the vos file name.
-        vos_file = self.get_vos_file_path(pool=self.pool)
-        host = NodeSet(self.hostlist_servers[0])
         scm_mount = self.server_managers[0].get_config_value("scm_mount")
+        vos_file = self.get_vos_file_path(pool=self.pool)
+        if vos_file is None:
+            self.fail("vos file wasn't found in {}/{}".format(scm_mount, self.pool.uuid.lower()))
+        host = NodeSet(self.hostlist_servers[0])
         ddb_command = DdbCommand(
             server_host=host, path=self.bin, mount_point=scm_mount,
             pool_uuid=self.pool.uuid, vos_file=vos_file)

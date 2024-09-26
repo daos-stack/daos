@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,27 +18,6 @@ import (
 
 func TestStorageQueryCommands(t *testing.T) {
 	runCmdTests(t, []cmdTest{
-		{
-			"per-server metadata device health query",
-			"storage query device-health --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
-			printRequest(t, &control.SmdQueryReq{
-				Rank:             ranklist.NilRank,
-				OmitPools:        true,
-				IncludeBioHealth: true,
-				UUID:             "842c739b-86b5-462f-a7ba-b4a91b674f3d",
-			}),
-			nil,
-		},
-		{
-			"per-server metadata device health query (missing uuid)",
-			"storage query device-health",
-			printRequest(t, &control.SmdQueryReq{
-				Rank:             ranklist.NilRank,
-				OmitPools:        true,
-				IncludeBioHealth: true,
-			}),
-			nil,
-		},
 		{
 			"per-server metadata query pools",
 			"storage query list-pools",
@@ -77,12 +56,23 @@ func TestStorageQueryCommands(t *testing.T) {
 			nil,
 		},
 		{
-			"per-server metadata query devices (include health)",
+			"per-server metadata device query health",
 			"storage query list-devices --health",
 			printRequest(t, &control.SmdQueryReq{
 				Rank:             ranklist.NilRank,
 				OmitPools:        true,
 				IncludeBioHealth: true,
+			}),
+			nil,
+		},
+		{
+			"per-server metadata device query health (by uuid)",
+			"storage query list-devices --health --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
+			printRequest(t, &control.SmdQueryReq{
+				Rank:             ranklist.NilRank,
+				OmitPools:        true,
+				IncludeBioHealth: true,
+				UUID:             "842c739b-86b5-462f-a7ba-b4a91b674f3d",
 			}),
 			nil,
 		},
@@ -132,64 +122,80 @@ func TestStorageQueryCommands(t *testing.T) {
 			nil,
 		},
 		{
-			"Set FAULTY device status (force)",
+			"Set FAULTY device status (missing host)",
 			"storage set nvme-faulty --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d -f",
-			printRequest(t, &control.SmdManageReq{
-				Operation: control.SetFaultyOp,
-				IDs:       "842c739b-86b5-462f-a7ba-b4a91b674f3d",
-			}),
-			nil,
-		},
-		{
-			"Set FAULTY device status (without force)",
-			"storage set nvme-faulty --uuid abcd",
-			"StorageSetFaulty",
-			errors.New("consent not given"),
+			"",
+			errors.New("not specified"),
 		},
 		{
 			"Set FAULTY device status (with > 1 host)",
 			"storage set nvme-faulty -l host-[1-2] -f --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
-			"StorageSetFaulty",
-			errors.New("> 1 host"),
+			"",
+			errors.New("must specify a single host"),
 		},
 		{
-			"Set FAULTY device status (with > 1 host) with legacy hostlist",
-			"-l host-[1-2] storage set nvme-faulty -f --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
-			"StorageSetFaulty",
-			errors.New("> 1 host"),
+			"Set FAULTY device status (force)",
+			"storage set nvme-faulty --host foo --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d -f",
+			printRequest(t, func() *control.SmdManageReq {
+				req := &control.SmdManageReq{
+					Operation: control.SetFaultyOp,
+					IDs:       "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+				}
+				req.SetHostList([]string{"foo"})
+				return req
+			}()),
+			nil,
+		},
+		{
+			"Set FAULTY device status (without force)",
+			"storage set nvme-faulty --host foo --uuid abcd",
+			"",
+			errors.New("consent not given"),
 		},
 		{
 			"Set FAULTY device status without device specified",
-			"storage set nvme-faulty",
-			"StorageSetFaulty",
+			"storage set nvme-faulty --host foo",
+			"",
 			errors.New("the required flag `-u, --uuid' was not specified"),
 		},
 		{
-			"Reuse a FAULTY device",
+			"Reuse a FAULTY device (missing host)",
 			"storage replace nvme --old-uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d --new-uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
-			printRequest(t, &control.SmdManageReq{
-				Operation:      control.DevReplaceOp,
-				IDs:            "842c739b-86b5-462f-a7ba-b4a91b674f3d",
-				ReplaceUUID:    "842c739b-86b5-462f-a7ba-b4a91b674f3d",
-				ReplaceNoReint: false,
-			}),
+			"",
+			errors.New("not specified"),
+		},
+		{
+			"Reuse a FAULTY device",
+			"storage replace nvme --host foo --old-uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d --new-uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
+			printRequest(t, func() *control.SmdManageReq {
+				req := &control.SmdManageReq{
+					Operation:   control.DevReplaceOp,
+					IDs:         "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+					ReplaceUUID: "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+				}
+				req.SetHostList([]string{"foo"})
+				return req
+			}()),
 			nil,
 		},
 		{
 			"Replace an evicted device with a new device",
-			"storage replace nvme --old-uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d --new-uuid 2ccb8afb-5d32-454e-86e3-762ec5dca7be",
-			printRequest(t, &control.SmdManageReq{
-				Operation:      control.DevReplaceOp,
-				IDs:            "842c739b-86b5-462f-a7ba-b4a91b674f3d",
-				ReplaceUUID:    "2ccb8afb-5d32-454e-86e3-762ec5dca7be",
-				ReplaceNoReint: false,
-			}),
+			"storage replace nvme --host foo --old-uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d --new-uuid 2ccb8afb-5d32-454e-86e3-762ec5dca7be",
+			printRequest(t, func() *control.SmdManageReq {
+				req := &control.SmdManageReq{
+					Operation:   control.DevReplaceOp,
+					IDs:         "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+					ReplaceUUID: "2ccb8afb-5d32-454e-86e3-762ec5dca7be",
+				}
+				req.SetHostList([]string{"foo"})
+				return req
+			}()),
 			nil,
 		},
 		{
 			"Try to replace a device without a new device UUID specified",
-			"storage replace nvme --old-uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
-			"StorageReplaceNvme",
+			"storage replace nvme -l foo --old-uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
+			"",
 			errors.New("the required flag `--new-uuid' was not specified"),
 		},
 		{

@@ -136,6 +136,19 @@ void rpm_test_post(String stage_name, String node) {
     job_status_update()
 }
 
+/**
+ * Update default commit pragmas based on files modified.
+ */
+Map update_default_commit_pragmas() {
+    String default_pragmas_str = sh(script: 'ci/gen_commit_pragmas.py --target origin/' + target_branch,
+                                    returnStdout: true).trim()
+    println("pragmas from gen_commit_pragmas.py:")
+    println(default_pragmas_str)
+    if (default_pragmas_str) {
+        updatePragmas(default_pragmas_str, false)
+    }
+}
+
 pipeline {
     agent { label 'lightweight' }
 
@@ -260,22 +273,22 @@ pipeline {
         booleanParam(name: 'CI_medium_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium test stage')
-        booleanParam(name: 'CI_medium-md-on-ssd_TEST',
+        booleanParam(name: 'CI_medium_md_on_ssd_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium MD on SSD test stage')
-        booleanParam(name: 'CI_medium-verbs-provider_TEST',
+        booleanParam(name: 'CI_medium_verbs_provider_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium Verbs Provider test stage')
-        booleanParam(name: 'CI_medium-verbs-provider-md-on-ssd_TEST',
+        booleanParam(name: 'CI_medium_verbs_provider_md_on_ssd_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium Verbs Provider MD on SSD test stage')
-        booleanParam(name: 'CI_medium-ucx-provider_TEST',
+        booleanParam(name: 'CI_medium_ucx_provider_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium UCX Provider test stage')
         booleanParam(name: 'CI_large_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Large test stage')
-        booleanParam(name: 'CI_large-md-on-ssd_TEST',
+        booleanParam(name: 'CI_large_md_on_ssd_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Large MD on SSD test stage')
         string(name: 'CI_UNIT_VM1_LABEL',
@@ -296,6 +309,9 @@ pipeline {
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
                defaultValue: 'ci_nvme5',
                description: 'Label to use for 5 node Functional Hardware Medium Verbs Provider (MD on SSD) stages')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL',
+               defaultValue: 'ci_vmd5',
+               description: 'Label to use for the Functional Hardware Medium VMD stage')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL',
                defaultValue: 'ci_ofed5',
                description: 'Label to use for 5 node Functional Hardware Medium UCX Provider stage')
@@ -329,6 +345,7 @@ pipeline {
                 stage('Get Commit Message') {
                     steps {
                         pragmasToEnv()
+                        update_default_commit_pragmas()
                     }
                 }
                 stage('Determine Release Branch') {
@@ -1036,7 +1053,8 @@ pipeline {
                             stash name: 'fault-inject-valgrind',
                                   includes: '*.memcheck.xml',
                                   allowEmpty: true
-                            archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/'
+                            archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/',
+                                             allowEmptyArchive: true
                             job_status_update()
                         }
                     }
@@ -1164,6 +1182,19 @@ pipeline {
                             default_tags: startedByTimer() ?
                                 'pr,md_on_ssd daily_regression,md_on_ssd' : 'pr,md_on_ssd',
                             nvme: 'auto_md_on_ssd',
+                            run_if_pr: false,
+                            run_if_landing: false,
+                            job_status: job_status_internal
+                        ),
+                        'Functional Hardware Medium VMD': getFunctionalTestStage(
+                            name: 'Functional Hardware Medium VMD',
+                            pragma_suffix: '-hw-medium-vmd',
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
+                            next_version: next_version,
+                            stage_tags: 'hw_vmd,medium',
+                            /* groovylint-disable-next-line UnnecessaryGetter */
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            nvme: 'auto',
                             run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal

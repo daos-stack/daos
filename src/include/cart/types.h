@@ -136,10 +136,6 @@ typedef struct {
 /** CaRT context handle */
 typedef void *crt_context_t;
 
-/** Physical address string, e.g., "bmi+tcp://localhost:3344". */
-typedef d_string_t crt_phy_addr_t;
-#define CRT_PHY_ADDR_ENV	"CRT_PHY_ADDR_STR"
-
 /**
  * RPC is identified by opcode. All the opcodes with the highest 16 bits as 1
  * are reserved for internal usage, such as group maintenance etc. If user

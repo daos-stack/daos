@@ -143,7 +143,7 @@ func FaultScmUnmanaged(mntPoint string) *fault.Fault {
 	return serverFault(
 		code.ServerScmUnmanaged,
 		fmt.Sprintf("the SCM mountpoint at %s is unavailable and can't be created/mounted", mntPoint),
-		fmt.Sprintf("manually create %s or remove --recreate-superblocks from the server arguments", mntPoint),
+		fmt.Sprintf("manually create %s and retry", mntPoint),
 	)
 }
 

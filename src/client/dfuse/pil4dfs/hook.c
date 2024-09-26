@@ -104,7 +104,8 @@ static char     path_libpil4dfs[PATH_MAX];
 static void
 quit_hook_init(void)
 {
-	D_FATAL("pil4dfs failed to initialize, aborting.");
+	/* print to stdout instead of stderr to avoid fault injection errors */
+	printf("pil4dfs failed to initialize, aborting.\n");
 	exit(1);
 }
 
@@ -217,7 +218,11 @@ determine_lib_path(void)
 	read_size = read_map_file(&read_buff_map);
 
 	/* need to find the offset of lib path in the line */
-	pos = strstr(read_buff_map, "[heap]");
+	pos = strstr(read_buff_map, "[stack]");
+	if (pos == NULL) {
+		D_ERROR("Failed to find section stack.\n");
+		goto err;
+	}
 	/* look back for the first '\n', the end of last line */
 	for(i = 0; i < 128; i++) {
 		if (*(pos - i) == '\n') {
@@ -309,6 +314,11 @@ determine_lib_path(void)
 		goto err_1;
 	}	
 	D_FREE(lib_dir_str);
+
+	if (strstr(read_buff_map, "libioil.so")) {
+		D_FREE(read_buff_map);
+		return;
+	}
 
 	pos = strstr(read_buff_map, "libpil4dfs.so");
 	if (pos == NULL) {

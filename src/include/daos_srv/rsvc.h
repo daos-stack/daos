@@ -136,7 +136,6 @@ int ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, uint
 		  enum ds_rsvc_start_mode mode, size_t size, uint32_t vos_df_version,
 		  d_rank_list_t *replicas, void *arg);
 int ds_rsvc_stop(enum ds_rsvc_class_id class, d_iov_t *id, uint64_t caller_term, bool destroy);
-int ds_rsvc_stop_all(enum ds_rsvc_class_id class);
 int ds_rsvc_stop_leader(enum ds_rsvc_class_id class, d_iov_t *id,
 			struct rsvc_hint *hint);
 int ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id, const uuid_t dbid,

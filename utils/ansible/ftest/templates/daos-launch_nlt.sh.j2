@@ -1,18 +1,20 @@
 #!/bin/bash
 # shellcheck disable=all # Jinja2 template can not be parsed with shellcheck
 
-set -o pipefail
+set -u -o pipefail
 
-VERSION=0.1
-CWD="$(realpath "$(dirname $0)")"
+VERSION=0.2
+CWD="$(realpath "${0%}")"
+CWD="${CWD%/*}"
 
 DAOS_INSTALL_DIR="{{ daos_runtime_dir }}/install"
+DAOS_VENV_DIR="{{ daos_runtime_dir }}/virtualenvs"
 DAOS_SOURCE_DIR="{{ daos_source_dir }}"
 {% if daos_ofi_interface is defined %}
 OFI_INTERFACE="{{ daos_ofi_interface }}"
 {% endif %}
 
-PYTHON_EXE=python3
+PYTHON_EXE=python
 MODULE_EXE=module
 
 ANSI_COLOR_BLACK=30
@@ -37,6 +39,9 @@ TRACE_LEVEL_STANDARD=0
 TRACE_LEVEL_VERBOSE=1
 TRACE_LEVEL_DEBUG=2
 TRACE_LEVEL=$TRACE_LEVEL_STANDARD
+
+START_CLEANUP="false"
+END_CLEANUP="false"
 
 function debug
 {
@@ -118,44 +123,44 @@ function run
 
 function cleanup
 {
-	info "Clean up of servers $SERVERS_LIST"
-	sudo systemctl stop daos_server
-	sudo rm -rf /var/run/daos_server
-	sudo mkdir -p /var/run/daos_server
+	info "Clean up of local server"
+	run sudo systemctl stop daos_server
+	run sudo rm -rf /var/run/daos_server
+	run sudo mkdir -p /var/run/daos_server
 
 	info "Stopping all DAOS related processes"
-	sudo killall -q -9 avocado orterun mpirun orted daos_server daos_io_server daos_agent
+	run sudo killall -q -9 avocado orterun mpirun orted daos_server daos_io_server daos_agent
 
-	info "Cleaning mount points of servers"
+	info "Cleaning mount points of local server"
 	for index in {0..3}
 	do
 		mountpoint="/mnt/daos$index"
-		if mountpoint -q "$mountpoint" ; then
+		if run mountpoint -q "$mountpoint" ; then
 			info "Cleaning mount points $mountpoint of host $host"
-			sudo rm -fr $mountpoint/*
-			sudo umount $mountpoint
+			run sudo rm -fr $mountpoint/*
+			run sudo umount $mountpoint
 		fi
 	done
 
 	for index in {0..1}
 	do
 		bdev="/dev/pmem$index"
-		if test -b "$bdev" ; then
+		if run test -b "$bdev" ; then
 			info "Cleaning persistent memory $bdev of host $host"
-			sudo wipefs -a "$bdev"
+			run sudo wipefs -a "$bdev"
 		fi
 	done
 
 	info "Cleaning huge pages"
-	sudo ipcrm --all=shm
-	sudo /bin/rm -f "/dev/hugepages/spdk_*"
+	run sudo ipcrm --all=shm
+	run sudo /bin/rm -f "/dev/hugepages/spdk_*"
 }
 
 {% raw %}
 opts=()
 args=()
 for item in "$@" ; do
-	if [[ ${#args} -eq 0 && "$item" != "--" ]] ; then
+	if [[ ${#args[@]} -eq 0 && "$item" != "--" ]] ; then
 		[[ ${item::1} == "-" ]] || fatal "unrecognized option \"$item\""
 		opts+=("$item")
 	else
@@ -170,46 +175,58 @@ eval set -- "$OPTIONS"
 while true
 do
 	case "$1" in
-		-s|--start-cleanup) START_CLEANUP=true ; shift 1;;
-		-e|--end-cleanup) END_CLEANUP=true ; shift 1;;
+		-s|--start-cleanup) START_CLEANUP="true" ; shift 1;;
+		-e|--end-cleanup) END_CLEANUP="true" ; shift 1;;
 		-h|--help) usage ; exit 0;;
 		-V|--version) echo "daos-launch.sh version=$VERSION" ; exit 0 ;;
-		-v|--verbose) TRACE_LEVEL=$TRACE_LEVEL_VERBOSE ; shift 1 ;;
-		-D|--debug) TRACE_LEVEL=$TRACE_LEVEL_DEBUG ; set -x ; shift 1 ;;
-		-q|--quiet) TRACE_LEVEL=$TRACE_LEVEL_QUIET ; shift 1 ;;
+		-v|--verbose) TRACE_LEVEL="$TRACE_LEVEL_VERBOSE" ; shift 1 ;;
+		-D|--debug) TRACE_LEVEL="$TRACE_LEVEL_DEBUG" ; set -x ; shift 1 ;;
+		-q|--quiet) TRACE_LEVEL="$TRACE_LEVEL_QUIET" ; shift 1 ;;
 		--) shift ; break ;;
 		*) fatal "unrecognized option" ;;
 	esac
 done
 
-check_cmds $PYTHON_EXE $CLUSH_EXE $MODULE_EXE
+check_cmds $MODULE_EXE
 
-if [[ -n $START_CLEANUP ]] ; then
+if "$START_CLEANUP" ; then
 	cleanup
 
 	info "Cleaning NLT logs"
-	/bin/rm -f "$DAOS_SOURCE_DIR"/dnt.* "$DAOS_SOURCE_DIR"/nlt-* "$DAOS_SOURCE_DIR"/vgcore.*
+	run /bin/rm -f "$DAOS_SOURCE_DIR"/dnt.* "$DAOS_SOURCE_DIR"/nlt-* "$DAOS_SOURCE_DIR"/vgcore.*
 fi
 
-info "Setting simulation environment"
-export PYTHONPATH="$DAOS_INSTALL_DIR/lib64/python3.6/site-packages:$DAOS_INSTALL_DIR/lib/daos/TESTING/ftest/util"
+info "Setting python simulation environment"
+source "$DAOS_VENV_DIR/bin/activate"
+if [[ ${PYTHONPATH:+x} ]] ; then
+	export PYTHONPATH="$DAOS_INSTALL_DIR/lib/daos/TESTING/ftest/util:$PYTHONPATH"
+else
+	export PYTHONPATH="$DAOS_INSTALL_DIR/lib/daos/TESTING/ftest/util"
+fi
 cd "$DAOS_SOURCE_DIR/utils/sl"
 source setup_local.sh
-if $MODULE_EXE is-avail mpi/mpich-x86_64 ; then
-	$MODULE_EXE load mpi/mpich-x86_64
+
+info "Setting MPI simulation environment"
+if run $MODULE_EXE is-avail mpi/mpich-x86_64 ; then
+	run $MODULE_EXE load mpi/mpich-x86_64
 fi
+
+info "Fixing daos_server_helper"
+run sudo -E "$DAOS_SOURCE_DIR/utils/setup_daos_server_helper.sh"
+run chmod -x "$DAOS_INSTALL_DIR/bin/daos_server_helper"
 
 info "Starting NLT tests"
 pushd "$DAOS_SOURCE_DIR" > /dev/null
 {% if daos_ofi_interface is defined %}
-env OFI_INTERFACE=$OFI_INTERFACE $PYTHON_EXE utils/node_local_test.py $common_opts "${args[@]}"
+run env OFI_INTERFACE=$OFI_INTERFACE $PYTHON_EXE utils/node_local_test.py "${args[@]}"
 {% else %}
-$PYTHON_EXE launch.py $common_opts "${args[@]}"
+run $PYTHON_EXE utils/node_local_test.py "${args[@]}"
 {% endif %}
 rc=$?
 popd > /dev/null
+deactivate
 
-if [[ -n $END_CLEANUP ]] ; then
+if "$END_CLEANUP" ; then
 	cleanup
 fi
 

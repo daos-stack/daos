@@ -96,11 +96,6 @@ var (
 		"hugepages cannot be disabled if bdevs have been specified in config",
 		"either set false (or remove) disable_hugepages parameter or remove nvme storage assignment in config and restart the control server",
 	)
-	FaultConfigVMDSettingDuplicate = serverConfigFault(
-		code.ServerConfigVMDSettingDuplicate,
-		"enable_vmd and disable_vmd parameters both specified in config",
-		"remove legacy enable_vmd parameter from config",
-	)
 	FaultConfigControlMetadataNoPath = serverConfigFault(
 		code.ServerConfigControlMetadataNoPath,
 		"using a control_metadata device requires a path to use as the mount point",

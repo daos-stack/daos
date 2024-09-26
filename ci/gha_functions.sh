@@ -199,7 +199,7 @@ provision_cluster() {
         while [ $((SECONDS-START)) -lt $wait_seconds ]; do
             if clush -B -S -l root -w "$nodestring" '[ -d /var/chef/reports ]'; then
                 # shellcheck disable=SC2016
-                clush -B -S -l root -w "$nodestring" --connect_timeout 30 --command_timeout 600 "if [ -e /root/job_info ]; then
+                clush -B -S -l root -w "$nodestring" --connect_timeout 30 --command_timeout 900 "if [ -e /root/job_info ]; then
                         cat /root/job_info
                     fi
                     echo \"Last provisioning run info:

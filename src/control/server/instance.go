@@ -15,9 +15,11 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
@@ -42,6 +44,8 @@ type (
 // be used with EngineHarness to manage and monitor multiple instances
 // per node.
 type EngineInstance struct {
+	events.Publisher
+
 	log             logging.Logger
 	runner          EngineRunner
 	storage         *storage.Provider
@@ -58,27 +62,30 @@ type EngineInstance struct {
 	onStorageReady  []onStorageReadyFn
 	onReady         []onReadyFn
 	onInstanceExit  []onInstanceExitFn
+	getDrpcClientFn func(string) drpc.DomainSocketClient
 
 	sync.RWMutex
 	// these must be protected by a mutex in order to
 	// avoid racy access.
-	_cancelCtx  context.CancelFunc
-	_drpcClient drpc.DomainSocketClient
-	_superblock *Superblock
-	_lastErr    error // populated when harness receives signal
+	_drpcSocket      string
+	_cancelCtx       context.CancelFunc
+	_superblock      *Superblock
+	_lastErr         error // populated when harness receives signal
+	_lastHealthStats map[string]*ctlpb.BioHealthResp
 }
 
-// NewEngineInstance returns an *EngineInstance initialized with
-// its dependencies.
-func NewEngineInstance(l logging.Logger, p *storage.Provider, jf systemJoinFn, r EngineRunner) *EngineInstance {
+// NewEngineInstance returns an *EngineInstance initialized with its dependencies.
+func NewEngineInstance(l logging.Logger, p *storage.Provider, jf systemJoinFn, r EngineRunner, ps *events.PubSub) *EngineInstance {
 	return &EngineInstance{
-		log:            l,
-		runner:         r,
-		storage:        p,
-		joinSystem:     jf,
-		drpcReady:      make(chan *srvpb.NotifyReadyReq),
-		storageReady:   make(chan bool),
-		startRequested: make(chan bool),
+		log:              l,
+		runner:           r,
+		storage:          p,
+		joinSystem:       jf,
+		drpcReady:        make(chan *srvpb.NotifyReadyReq),
+		storageReady:     make(chan bool),
+		startRequested:   make(chan bool),
+		Publisher:        ps,
+		_lastHealthStats: make(map[string]*ctlpb.BioHealthResp),
 	}
 }
 
@@ -168,11 +175,7 @@ func (ei *EngineInstance) SetCheckerMode(enabled bool) {
 func (ei *EngineInstance) removeSocket() error {
 	fMsg := fmt.Sprintf("removing instance %d socket file", ei.Index())
 
-	dc, err := ei.getDrpcClient()
-	if err != nil {
-		return errors.Wrap(err, fMsg)
-	}
-	engineSock := dc.GetSocketPath()
+	engineSock := ei.getDrpcSocket()
 
 	if err := checkDrpcClientSocketPath(engineSock); err != nil {
 		return errors.Wrap(err, fMsg)
@@ -393,4 +396,24 @@ func (ei *EngineInstance) Debugf(format string, args ...interface{}) {
 
 func (ei *EngineInstance) Tracef(format string, args ...interface{}) {
 	ei.log.Tracef(format, args...)
+}
+
+func (ei *EngineInstance) GetLastHealthStats(pciAddr string) *ctlpb.BioHealthResp {
+	ei.RLock()
+	defer ei.RUnlock()
+
+	if ei._lastHealthStats == nil {
+		ei._lastHealthStats = make(map[string]*ctlpb.BioHealthResp)
+	}
+	return ei._lastHealthStats[pciAddr]
+}
+
+func (ei *EngineInstance) SetLastHealthStats(pciAddr string, bhr *ctlpb.BioHealthResp) {
+	ei.Lock()
+	defer ei.Unlock()
+
+	if ei._lastHealthStats == nil {
+		ei._lastHealthStats = make(map[string]*ctlpb.BioHealthResp)
+	}
+	ei._lastHealthStats[pciAddr] = bhr
 }

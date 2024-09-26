@@ -148,6 +148,11 @@ is_sysdb_pool(vos_iter_type_t type, vos_iter_param_t *param)
 	struct vos_pool		*vos_pool;
 	struct vos_container	*vos_cont;
 
+	/* vos_iterate_key() will never be called upon sysdb */
+	if (param->ip_flags == VOS_IT_KEY_TREE)
+		return false;
+
+	D_ASSERT(!(param->ip_flags & VOS_IT_KEY_TREE));
 	if (type == VOS_ITER_COUUID) {
 		vos_pool = vos_hdl2pool(param->ip_hdl);
 		D_ASSERT(vos_pool != NULL);
@@ -764,7 +769,7 @@ vos_iter_cb(vos_iter_cb_t iter_cb, daos_handle_t ih, vos_iter_entry_t *iter_ent,
 		*acts |= VOS_ITER_CB_YIELD;
 		if (rc == 0 && iter->it_parent != NULL &&
 		    (param->ip_flags &
-		     (VOS_IT_RECX_VISIBLE | VOS_IT_FOR_PURGE | VOS_IT_FOR_DISCARD)) == 0) {
+		     (VOS_IT_RECX_VISIBLE | VOS_IT_FOR_AGG | VOS_IT_FOR_DISCARD)) == 0) {
 			/** If scanning the whole tree, we need to revalidate the parent
 			 * chain and possibly jump back to another level to continue */
 			rc = vos_iter_validate_internal(iter->it_parent);

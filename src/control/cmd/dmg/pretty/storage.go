@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/dustin/go-humanize"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
@@ -293,4 +294,35 @@ func PrintSmdInfoMap(omitDevs, omitPools bool, hsm control.HostStorageMap, out i
 	}
 
 	return w.Err
+}
+
+// PrintSmdManageResp generates a human-readable representation of the supplied response.
+func PrintSmdManageResp(op control.SmdManageOpcode, resp *control.SmdResp, out, outErr io.Writer, opts ...PrintConfigOption) error {
+	switch op {
+	case control.SetFaultyOp, control.DevReplaceOp:
+		if resp.ResultCount() > 1 {
+			return errors.Errorf("smd-manage %s: unexpected number of results, "+
+				"want %d got %d", op, 1, resp.ResultCount())
+		}
+
+		hem := resp.GetHostErrors()
+		if len(hem) > 0 {
+			for errStr, hostSet := range hem {
+				fmt.Fprintln(outErr, fmt.Sprintf("%s operation failed on %s: %s",
+					op, hostSet.HostSet, errStr))
+			}
+			return nil
+		}
+
+		return PrintHostStorageSuccesses(fmt.Sprintf("%s operation performed", op),
+			resp.HostStorage, out)
+	case control.LedCheckOp, control.LedBlinkOp, control.LedResetOp:
+		if err := PrintResponseErrors(resp, outErr, opts...); err != nil {
+			return err
+		}
+
+		return PrintSmdInfoMap(false, true, resp.HostStorage, out, opts...)
+	default:
+		return errors.Errorf("unsupported opcode %d", op)
+	}
 }
