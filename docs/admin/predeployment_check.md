@@ -166,7 +166,7 @@ If telemetry is enabled in the server configuration file, the telemetry port (91
 must also be accessible on the DAOS server nodes.
 
 Depending of the provider that is used, ech engine might also listens on a range of ports. This is
-the case for the tcp provider. This range will start at the fabric_iface_port specificed in the
+the case for the tcp provider. This range will start at the fabric_iface_port specified in the
 server yaml file and use 2 ports for management, 1 port per target and helper xstream. For instance,
 with fabric_iface_port set to 20000, 16 targets and 4 helper streams, the engine will listen on port
 range from 20000 to 20021 for a total of 22 ports.
