@@ -274,8 +274,8 @@ func poolCreateReqChkSizes(log debugLogger, getMaxPoolSz maxPoolSizeGetter, req 
 			uint64(float64(nvmeBytes) * availRatio),
 		}
 		if req.TierBytes[0] == 0 {
-			return errors.Errorf("not enough scm storage available with ratio %d%%: "+
-				"scm storage capacity or ratio should be increased",
+			return errors.Errorf("Not enough SCM storage available with ratio %d%%: "+
+				"SCM storage capacity or ratio should be increased",
 				int(availRatio*100))
 		}
 		log.Debugf("auto-percentage-size pool create mode: %+v", req)
@@ -1025,6 +1025,7 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 }
 
 type rankFreeSpaceMap map[ranklist.Rank]uint64
+
 type filterRankFn func(rank ranklist.Rank) bool
 
 func newFilterRankFunc(ranks ranklist.RankList) filterRankFn {
@@ -1033,25 +1034,19 @@ func newFilterRankFunc(ranks ranklist.RankList) filterRankFn {
 	}
 }
 
-type processSpaceReq struct {
-	log               debugLogger
-	rankNVMeFreeSpace rankFreeSpaceMap
-	filterRank        filterRankFn
-}
-
 // Add namespace ranks to rankNVMeFreeSpace map and return minimum free available SCM namespace bytes.
-func processSCMSpaceStats(req processSpaceReq, scmNamespaces storage.ScmNamespaces) (uint64, error) {
+func processSCMSpaceStats(log debugLogger, filterRank filterRankFn, scmNamespaces storage.ScmNamespaces, rankNVMeFreeSpace rankFreeSpaceMap) (uint64, error) {
 	scmBytes := uint64(math.MaxUint64)
 
 	// Realistically there should only be one-per-rank but handle the case for multiple anyway.
 	for _, scmNamespace := range scmNamespaces {
 		if scmNamespace.Mount == nil {
-			return 0, errors.Errorf("scm device %s (bdev %s, name %s) is not mounted",
+			return 0, errors.Errorf("SCM device %s (bdev %s, name %s) is not mounted",
 				scmNamespace.UUID, scmNamespace.BlockDevice, scmNamespace.Name)
 		}
 
-		if !req.filterRank(scmNamespace.Mount.Rank) {
-			req.log.Debugf("skipping scm device %s (bdev %s, name %s, rank %d) not in ranklist",
+		if !filterRank(scmNamespace.Mount.Rank) {
+			log.Debugf("Skipping SCM device %s (bdev %s, name %s, rank %d) not in ranklist",
 				scmNamespace.UUID, scmNamespace.BlockDevice, scmNamespace.Name,
 				scmNamespace.Mount.Rank)
 			continue
@@ -1063,45 +1058,23 @@ func processSCMSpaceStats(req processSpaceReq, scmNamespaces storage.ScmNamespac
 			scmBytes = usableBytes
 		}
 
-		if _, exists := req.rankNVMeFreeSpace[scmNamespace.Mount.Rank]; exists {
-			return 0, errors.Errorf("multiple scm devices found for rank %d",
+		if _, exists := rankNVMeFreeSpace[scmNamespace.Mount.Rank]; exists {
+			return 0, errors.Errorf("Multiple SCM devices found for rank %d",
 				scmNamespace.Mount.Rank)
 		}
 
 		// Initialize entry for rank in NVMe free space map.
-		req.rankNVMeFreeSpace[scmNamespace.Mount.Rank] = 0
+		rankNVMeFreeSpace[scmNamespace.Mount.Rank] = 0
 	}
 
 	return scmBytes, nil
 }
 
-// Check whether controller on a storage server shares both META and DATA roles. If so then META
-// capacity needs to be subtracted from available capacity calculated to store DATA.
-//
-// Assumptions made during this check:
-// - Dual engines on host contain identical bdev tier configurations in storage config
-// - Each role (wal/meta/data) can only be assigned to one bdev tier
-//
-// Extrapolating from these assumptions it can be asserted that if ONE of a host's controllers
-// has been assigned both META and DATA roles then all other host SSDs with DATA role assigned
-// will also hold metadata.
-func areMetaDataRolesShared(nvmeControllers storage.NvmeControllers) bool {
-	for _, controller := range nvmeControllers {
-		for _, smdDevice := range controller.SmdDevices {
-			if smdDevice.Roles.HasMeta() && smdDevice.Roles.HasData() {
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
 // Add NVMe free bytes to rankNVMeFreeSpace map.
-func processNVMeSpaceStats(req processSpaceReq, nvmeControllers storage.NvmeControllers) error {
+func processNVMeSpaceStats(log debugLogger, filterRank filterRankFn, nvmeControllers storage.NvmeControllers, rankNVMeFreeSpace rankFreeSpaceMap) error {
 	for _, controller := range nvmeControllers {
 		for _, smdDevice := range controller.SmdDevices {
-			msgDev := fmt.Sprintf("smd device %s (rank %d, ctrlr %s", smdDevice.UUID,
+			msgDev := fmt.Sprintf("SMD device %s (rank %d, ctrlr %s", smdDevice.UUID,
 				smdDevice.Rank, controller.PciAddr)
 
 			if smdDevice.Roles.IsEmpty() {
@@ -1109,13 +1082,13 @@ func processNVMeSpaceStats(req processSpaceReq, nvmeControllers storage.NvmeCont
 			} else {
 				msgDev += fmt.Sprintf(", roles %q)", smdDevice.Roles.String())
 				if !smdDevice.Roles.HasData() {
-					req.log.Debugf("skipping %s, not used for storing data", msgDev)
+					log.Debugf("skipping %s, not used for storing data", msgDev)
 					continue
 				}
 			}
 
 			if controller.NvmeState == storage.NvmeStateNew {
-				req.log.Debugf("skipping %s, not used as in NEW state", msgDev)
+				log.Debugf("Skipping %s, not used as in NEW state", msgDev)
 				continue
 			}
 			if controller.NvmeState != storage.NvmeStateNormal {
@@ -1123,206 +1096,63 @@ func processNVMeSpaceStats(req processSpaceReq, nvmeControllers storage.NvmeCont
 					controller.NvmeState.String())
 			}
 
-			if !req.filterRank(smdDevice.Rank) {
-				req.log.Debugf("skipping %s, not in ranklist", msgDev)
+			if !filterRank(smdDevice.Rank) {
+				log.Debugf("Skipping %s, not in ranklist", msgDev)
 				continue
 			}
 
-			if _, exists := req.rankNVMeFreeSpace[smdDevice.Rank]; !exists {
-				return errors.Errorf("rank %d without scm device and at least one %s",
+			if _, exists := rankNVMeFreeSpace[smdDevice.Rank]; !exists {
+				return errors.Errorf("Rank %d without SCM device and at least one %s",
 					smdDevice.Rank, msgDev)
 			}
-			req.rankNVMeFreeSpace[smdDevice.Rank] += smdDevice.UsableBytes
 
-			// TODO DAOS-16160: Adjust size to accommodate for WAL requirements.
+			rankNVMeFreeSpace[smdDevice.Rank] += smdDevice.UsableBytes
 
-			req.log.Debugf("added %s as usable: device state=%q, smd-size %s (%d), "+
-				"ctrlr-total-free %s (%d)", msgDev, controller.NvmeState.String(),
-				humanize.Bytes(smdDevice.UsableBytes), smdDevice.UsableBytes,
-				humanize.Bytes(req.rankNVMeFreeSpace[smdDevice.Rank]),
-				req.rankNVMeFreeSpace[smdDevice.Rank])
+			log.Debugf("Added %s as usable: device state=%q, smd-size=%d ctrlr-total-free=%d",
+				msgDev, controller.NvmeState.String(), smdDevice.UsableBytes,
+				rankNVMeFreeSpace[smdDevice.Rank])
 		}
 	}
 
 	return nil
 }
 
-// Derive mem_size and data_size components using percentage of available ramdisk and SSD capacity.
-// The rationale for deriving space usage from ramdisk usage is that this is most likely to be the
-// limiting factor as opposed to SSD usage.
-// - Calculate mem_size as percentage of ramdisk/tmpfs free capacity.
-// - Calculate meta_size as mem_size/mem-ratio.
-// - When calculating data_size in pool…
-//   - Subtract meta_size from free blobstore space if an SSD shares META+DATA roles
-//   - Subtract WAL size from free blobstore space if an SSD shares WAL+DATA roles
-//   - Take percentage of remainder
-func getMaxPoolSizeMdOnSsd(ctx context.Context, rpcClient UnaryInvoker, createReq *PoolCreateReq, scanResp *StorageScanResp) (uint64, uint64, error) {
+// Return the maximal SCM and NVMe size of a pool which could be created with all the storage nodes.
+func getMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker, createReq *PoolCreateReq) (uint64, uint64, error) {
+	isMdOnSsdEnabled := func(log debugLogger, hsm HostStorageMap) bool {
+		for _, hss := range hsm {
+			hs := hss.HostStorage
+			if hs == nil {
+				continue
+			}
+			nvme := hs.NvmeDevices
+			if nvme.Len() > 0 && !nvme[0].Roles().IsEmpty() {
+				log.Debugf("fetch max pool size in md-on-size mode")
+				return true
+			}
+		}
+
+		return false
+	}
+
 	if createReq.MemRatio < 0 {
 		return 0, 0, errors.New("invalid mem-ratio, should be greater than zero")
 	}
 	if createReq.MemRatio > 1 {
 		return 0, 0, errors.New("invalid mem-ratio, should not be greater than one")
 	}
-	ranks := ranklist.RankList(createReq.Ranks)
 
-	// Request parameters used to query and calculate space requirements for pool.
-	spaceReq := processSpaceReq{
-		log:               rpcClient,
-		filterRank:        newFilterRankFunc(ranks),
-		rankNVMeFreeSpace: make(rankFreeSpaceMap),
-	}
-	ramAvailBytes := uint64(math.MaxUint64)
-
-	// Retrieve lowest RAM-disk available capacity across all pool ranks.
-	for _, key := range scanResp.HostStorage.Keys() {
-		hostStorage := scanResp.HostStorage[key].HostStorage
-
-		if hostStorage.ScmNamespaces.Usable() == 0 {
-			return 0, 0, errors.Errorf("host without ram storage: hostname=%s",
-				scanResp.HostStorage[key].HostSet.String())
-		}
-
-		usable, err := processSCMSpaceStats(spaceReq, hostStorage.ScmNamespaces)
-		if err != nil {
-			return 0, 0, err
-		}
-		rpcClient.Debugf("ram-disk: %+v, usable: %s", hostStorage.ScmNamespaces,
-			humanize.Bytes(usable))
-
-		if ramAvailBytes > usable {
-			ramAvailBytes = usable
-		}
-	}
-
-	if ramAvailBytes == math.MaxUint64 {
-		return 0, 0, errors.Errorf("no usable ram space found with rank list %s", ranks)
-	}
-
-	metaDataRolesSharedSet := false
-	metaDataRolesShared := false
-
-	for _, key := range scanResp.HostStorage.Keys() {
-		hostStorage := scanResp.HostStorage[key].HostStorage
-
-		isShared := areMetaDataRolesShared(hostStorage.NvmeDevices)
-		if metaDataRolesSharedSet && metaDataRolesShared != isShared {
-			return 0, 0, errors.Errorf("md-on-ssd role configs differ between hosts")
-		}
-		metaDataRolesShared = isShared
-		metaDataRolesSharedSet = true
-
-		if err := processNVMeSpaceStats(spaceReq, hostStorage.NvmeDevices); err != nil {
-			return 0, 0, err
-		}
-	}
-
-	// Retrieve lowest capacity available for DATA-on-SSD across all pool ranks.
-	dataBytes := uint64(math.MaxUint64)
-	for _, nvmeRankBytes := range spaceReq.rankNVMeFreeSpace {
-		if dataBytes > nvmeRankBytes {
-			dataBytes = nvmeRankBytes
-		}
-	}
-
-	// metaBytes indicates the capacity to be reserved for metadata across SSDs with META role.
-	metaBytes := ramAvailBytes
-	if createReq.MemRatio > 0 {
-		metaBytes = uint64(float64(metaBytes) / float64(createReq.MemRatio))
-	}
-
-	// In the case that META+DATA roles are both assigned to the same bdev_tier, the available
-	// capacity for DATA should be calculated as the total available capacity on all tier SSDs
-	// LESS metaBytes.
-	var msgMeta string
-	if metaDataRolesShared {
-		msgMeta += fmt.Sprintf(" with %s of reserved metadata capacity",
-			humanize.Bytes(metaBytes))
-		if metaBytes > dataBytes {
-			return 0, 0, errors.Errorf("insufficient free nvme space%s", msgMeta)
-		}
-		dataBytes -= metaBytes
-	}
-
-	rpcClient.Debugf("based on minimum available ramdisk capacity of %s and mem-ratio %.2f%s,"+
-		" the maximum per-rank sizes for a pool are META=%s (%d B) and DATA=%s (%d B)",
-		humanize.Bytes(ramAvailBytes), createReq.MemRatio, msgMeta,
-		humanize.Bytes(metaBytes), metaBytes, humanize.Bytes(dataBytes), dataBytes)
-
-	return metaBytes, dataBytes, nil
-}
-
-func getMaxPoolSizePMem(ctx context.Context, rpcClient UnaryInvoker, ranks ranklist.RankList, resp *StorageScanResp) (uint64, uint64, error) {
-	// Request parameters used to query and calculate space requirements for pool.
-	spaceReq := processSpaceReq{
-		log:               rpcClient,
-		filterRank:        newFilterRankFunc(ranks),
-		rankNVMeFreeSpace: make(rankFreeSpaceMap),
-	}
-	scmBytes := uint64(math.MaxUint64)
-
-	for _, key := range resp.HostStorage.Keys() {
-		hostStorage := resp.HostStorage[key].HostStorage
-
-		if hostStorage.ScmNamespaces.Usable() == 0 {
-			return 0, 0, errors.Errorf("host without scm storage: hostname=%s",
-				resp.HostStorage[key].HostSet.String())
-		}
-
-		sb, err := processSCMSpaceStats(spaceReq, hostStorage.ScmNamespaces)
-		if err != nil {
-			return 0, 0, err
-		}
-
-		if scmBytes > sb {
-			scmBytes = sb
-		}
-
-		if err := processNVMeSpaceStats(spaceReq, hostStorage.NvmeDevices); err != nil {
-			return 0, 0, err
-		}
-	}
-
-	if scmBytes == math.MaxUint64 {
-		return 0, 0, errors.Errorf("no scm storage space available with rank list %s", ranks)
-	}
-
-	nvmeBytes := uint64(math.MaxUint64)
-	for _, nvmeRankBytes := range spaceReq.rankNVMeFreeSpace {
-		if nvmeBytes > nvmeRankBytes {
-			nvmeBytes = nvmeRankBytes
-		}
-	}
-
-	rpcClient.Debugf("Maximal size of a pool: scmBytes=%s (%d B) nvmeBytes=%s (%d B)",
-		humanize.Bytes(scmBytes), scmBytes, humanize.Bytes(nvmeBytes), nvmeBytes)
-
-	return scmBytes, nvmeBytes, nil
-}
-
-func isMdOnSsdEnabled(log debugLogger, hsm HostStorageMap) bool {
-	for _, hss := range hsm {
-		hs := hss.HostStorage
-		if hs == nil {
-			continue
-		}
-		nvme := hs.NvmeDevices
-		if nvme.Len() > 0 && !nvme[0].Roles().IsEmpty() {
-			log.Debugf("fetch max pool size in md-on-size mode as roles detected")
-			return true
-		}
-	}
-
-	return false
-}
-
-// Return the maximal SCM and NVMe size of a pool which could be created with all the storage nodes.
-func getMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker, createReq *PoolCreateReq) (uint64, uint64, error) {
 	// Verify that the DAOS system is ready before attempting to query storage.
 	if _, err := SystemQuery(ctx, rpcClient, &SystemQueryReq{}); err != nil {
 		return 0, 0, err
 	}
 
-	scanResp, err := StorageScan(ctx, rpcClient, &StorageScanReq{Usage: true})
+	scanReq := &StorageScanReq{
+		Usage:    true,
+		MemRatio: createReq.MemRatio,
+	}
+
+	scanResp, err := StorageScan(ctx, rpcClient, scanReq)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -1331,9 +1161,65 @@ func getMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker, createReq *Pool
 		return 0, 0, errors.New("Empty host storage response from StorageScan")
 	}
 
-	if isMdOnSsdEnabled(rpcClient, scanResp.HostStorage) {
-		return getMaxPoolSizeMdOnSsd(ctx, rpcClient, createReq, scanResp)
+	// Generate function to verify a rank is in the provided rank slice.
+	filterRank := newFilterRankFunc(ranklist.RankList(createReq.Ranks))
+	rankNVMeFreeSpace := make(rankFreeSpaceMap)
+	scmBytes := uint64(math.MaxUint64)
+	for _, key := range scanResp.HostStorage.Keys() {
+		hostStorage := scanResp.HostStorage[key].HostStorage
+
+		if hostStorage.ScmNamespaces.Usable() == 0 {
+			return 0, 0, errors.Errorf("Host without SCM storage: hostname=%s",
+				scanResp.HostStorage[key].HostSet.String())
+		}
+
+		sb, err := processSCMSpaceStats(rpcClient, filterRank, hostStorage.ScmNamespaces, rankNVMeFreeSpace)
+		if err != nil {
+			return 0, 0, err
+		}
+
+		if scmBytes > sb {
+			scmBytes = sb
+		}
+
+		if err := processNVMeSpaceStats(rpcClient, filterRank, hostStorage.NvmeDevices, rankNVMeFreeSpace); err != nil {
+			return 0, 0, err
+		}
 	}
 
-	return getMaxPoolSizePMem(ctx, rpcClient, ranklist.RankList(createReq.Ranks), scanResp)
+	if scmBytes == math.MaxUint64 {
+		return 0, 0, errors.Errorf("No SCM storage space available with rank list %q",
+			createReq.Ranks)
+	}
+
+	nvmeBytes := uint64(math.MaxUint64)
+	for _, nvmeRankBytes := range rankNVMeFreeSpace {
+		if nvmeBytes > nvmeRankBytes {
+			nvmeBytes = nvmeRankBytes
+		}
+	}
+
+	if !isMdOnSsdEnabled(rpcClient, scanResp.HostStorage) {
+		rpcClient.Debugf("Maximal size of a pool: scmBytes=%s (%d B) nvmeBytes=%s (%d B)",
+			humanize.Bytes(scmBytes), scmBytes, humanize.Bytes(nvmeBytes), nvmeBytes)
+
+		return scmBytes, nvmeBytes, nil
+	}
+
+	// In MD-on-SSD mode calculate metaBytes based on the minimum ramdisk (called scm here)
+	// availability across ranks. NVMe sizes returned in StorageScan response at the beginning
+	// of this function have been adjusted based on SSD bdev roles and MemRatio passed in the
+	// scan request. The rationale behind deriving pool sizes from ramdisk availability is that
+	// this is more likely to be the limiting factor than SSD usage.
+	if createReq.MemRatio == 0 {
+		createReq.MemRatio = 1
+	}
+	metaBytes := uint64(float64(scmBytes) / float64(createReq.MemRatio))
+
+	rpcClient.Debugf("With minimum available ramdisk capacity of %s and mem-ratio %.2f,"+
+		" the maximum per-rank sizes for a pool are META=%s (%d B) and DATA=%s (%d B)",
+		humanize.Bytes(scmBytes), createReq.MemRatio, humanize.Bytes(metaBytes),
+		metaBytes, humanize.Bytes(nvmeBytes), nvmeBytes)
+
+	return metaBytes, nvmeBytes, nil
 }

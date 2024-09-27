@@ -161,7 +161,7 @@ func bdevScanEngines(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvm
 		eReq := new(ctlpb.ScanNvmeReq)
 		*eReq = *req
 		if req.Meta {
-			ms, rs, err := computeMetaRdbSz(cs, engine, nsps)
+			ms, rs, err := computeMetaRdbSz(cs, engine, nsps, req.MemRatio)
 			if err != nil {
 				return nil, errors.Wrap(err, "computing meta and rdb size")
 			}
@@ -169,7 +169,7 @@ func bdevScanEngines(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvm
 		}
 
 		// If partial number of engines return results, indicate errors for non-ready
-		// engines whilst returning successful scanmresults.
+		// engines whilst returning successful scan results.
 		respEng, err := scanEngineBdevs(ctx, engine, eReq)
 		if err != nil {
 			err = errors.Wrapf(err, "instance %d", engine.Index())
@@ -418,8 +418,8 @@ func (cs *ControlService) getRdbSize(engineCfg *engine.Config) (uint64, error) {
 
 // Compute the maximal size of the metadata to allow the engine to fill the WallMeta field
 // response.  The maximal metadata (i.e. VOS index file) size should be equal to the SCM available
-// size divided by the number of targets of the engine.
-func metaRdbComputeSz(cs *ControlService, ei Engine, nsps []*ctlpb.ScmNamespace) (md_size, rdb_size uint64, errOut error) {
+// size divided by the number of targets of the engine. Sizes returned are per-target values.
+func metaRdbComputeSz(cs *ControlService, ei Engine, nsps []*ctlpb.ScmNamespace, memRatio float32) (metaBytes, rdbBytes uint64, errOut error) {
 	for _, nsp := range nsps {
 		mp := nsp.GetMount()
 		if mp == nil {
@@ -429,24 +429,24 @@ func metaRdbComputeSz(cs *ControlService, ei Engine, nsps []*ctlpb.ScmNamespace)
 			continue
 		}
 
-		// NOTE DAOS-14223: This metadata size calculation won't necessarily match
-		//                  the meta blob size on SSD if --meta-size is specified in
-		//                  pool create command.
-		md_size = mp.GetUsableBytes() / uint64(ei.GetTargetCount())
+		metaBytes = mp.GetUsableBytes() / uint64(ei.GetTargetCount())
+		if memRatio > 0 {
+			metaBytes = uint64(float64(metaBytes) / float64(memRatio))
+		}
 
 		engineCfg, err := cs.getEngineCfgFromScmNsp(nsp)
 		if err != nil {
 			errOut = errors.Wrap(err, "Engine with invalid configuration")
 			return
 		}
-		rdb_size, errOut = cs.getRdbSize(engineCfg)
+		rdbBytes, errOut = cs.getRdbSize(engineCfg)
 		if errOut != nil {
 			return
 		}
-		break
+		break // Just use first namespace.
 	}
 
-	if md_size == 0 {
+	if metaBytes == 0 {
 		cs.log.Noticef("instance %d: no SCM space available for metadata", ei.Index)
 	}
 
@@ -485,30 +485,55 @@ func (cs *ControlService) addDeviceToAdjust(devsStat map[uint32]*deviceSizeStat,
 }
 
 // For a given size in bytes, returns the total number of SPDK clusters needed for a given number of targets
-func getClusterCount(sizeBytes uint64, targetNb uint64, clusterSize uint64) uint64 {
+func getClusterCount(sizeBytes uint64, tgtCount int, clusterSize uint64) uint64 {
 	clusterCount := sizeBytes / clusterSize
 	if sizeBytes%clusterSize != 0 {
 		clusterCount += 1
 	}
-	return clusterCount * targetNb
+
+	return clusterCount * uint64(tgtCount)
+}
+
+func getMaxTgtsPerSSD(engineCfg *engine.Config) int {
+	bdevCount := 0
+	for _, bc := range engineCfg.Storage.Tiers.BdevConfigs() {
+		if bc.Bdev.DeviceRoles.HasMeta() {
+			// Assumes only a single tier can have META role.
+			bdevCount = bc.Bdev.DeviceList.Len()
+			break
+		}
+	}
+
+	if bdevCount == 0 {
+		return 0
+	}
+
+	tgtsPerSSD := engineCfg.TargetCount / bdevCount
+
+	if engineCfg.TargetCount%bdevCount != 0 {
+		return tgtsPerSSD + 1
+	}
+
+	return tgtsPerSSD
 }
 
 func (cs *ControlService) getMetaClusterCount(engineCfg *engine.Config, devToAdjust deviceToAdjust) (subtrClusterCount uint64) {
 	dev := devToAdjust.ctlr.GetSmdDevices()[devToAdjust.idx]
 	clusterSize := uint64(dev.GetClusterSize())
-	engineTargetNb := uint64(engineCfg.TargetCount)
 
 	if dev.GetRoleBits()&storage.BdevRoleMeta != 0 {
-		// TODO DAOS-14223: GetMetaSize() should reflect custom values derived from pool
-		//                  create --meta-size or --mem-ratio options.
-		clusterCount := getClusterCount(dev.GetMetaSize(), engineTargetNb, clusterSize)
-		cs.log.Tracef("Removing %d Metadata clusters (cluster size: %d) from the usable size of the SMD device %s (rank %d, ctlr %s): ",
-			clusterCount, clusterSize, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
+		// Calculate clusters based on the maximum possible number of targets per SSD as
+		// MD-blobs will be striped across all META-role-SSDs.
+		nrTgtsPerSSD := getMaxTgtsPerSSD(engineCfg)
+		clusterCount := getClusterCount(dev.GetMetaSize(), nrTgtsPerSSD, clusterSize)
+		cs.log.Tracef("Removing %d Metadata clusters (cluster size: %d, max tgts/SSD: %d) from the usable size of the SMD device %s (rank %d, ctlr %s): ",
+			clusterCount, clusterSize, nrTgtsPerSSD, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
 		subtrClusterCount += clusterCount
 	}
 
 	if dev.GetRoleBits()&storage.BdevRoleWAL != 0 {
-		clusterCount := getClusterCount(dev.GetMetaWalSize(), engineTargetNb, clusterSize)
+		clusterCount := getClusterCount(dev.GetMetaWalSize(), engineCfg.TargetCount,
+			clusterSize)
 		cs.log.Tracef("Removing %d Metadata WAL clusters (cluster size: %d) from the usable size of the SMD device %s (rank %d, ctlr %s): ",
 			clusterCount, clusterSize, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
 		subtrClusterCount += clusterCount

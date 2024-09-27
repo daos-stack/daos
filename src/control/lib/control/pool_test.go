@@ -439,7 +439,7 @@ func TestControl_poolCreateReqChkSizes(t *testing.T) {
 			req: PoolCreateReq{
 				TierRatio: sameTierRatios,
 			},
-			expErr: errors.New("not enough scm"),
+			expErr: errors.New("Not enough SCM"),
 		},
 		"auto-percentage-size; no nvme": {
 			req: PoolCreateReq{
@@ -2442,7 +2442,7 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 					NvmeConfig: []MockNvmeConfig{},
 				},
 			},
-			expError: errors.New("host without scm storage"),
+			expError: errors.New("Host without SCM storage"),
 		},
 		"engine with two SCM storage": {
 			hostsConfigArray: []MockHostStorageConfig{
@@ -2455,7 +2455,7 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 					NvmeConfig: []MockNvmeConfig{},
 				},
 			},
-			expError: errors.New("multiple scm devices found for rank"),
+			expError: errors.New("Multiple SCM devices found for rank"),
 		},
 		"unusable NVMe device": {
 			hostsConfigArray: []MockHostStorageConfig{
@@ -2568,7 +2568,7 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 					NvmeConfig: []MockNvmeConfig{newNvmeCfg(1, 0)},
 				},
 			},
-			expError: errors.New("without scm device and at least one smd device"),
+			expError: errors.New("without SCM device and at least one SMD device"),
 		},
 		"no SCM": {
 			hostsConfigArray: []MockHostStorageConfig{
@@ -2579,7 +2579,7 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 				},
 			},
 			tgtRanks: []ranklist.Rank{1},
-			expError: errors.New("no scm storage space available"),
+			expError: errors.New("No SCM storage space available"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
