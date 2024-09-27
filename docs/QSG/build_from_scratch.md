@@ -81,10 +81,10 @@ the user outside of a virtual environment, in which case `~/.local/bin` will nee
 PATH.
 
  ```bash
- $ python3 -m venv venv
- $ source venv/bin/activate
- $ python3 -m pip --no-cache-dir install --upgrade pip
- $ python3 -m pip install -r requirements-build.txt
+$ python3 -m venv venv
+$ source venv/bin/activate
+$ python3 -m pip --no-cache-dir install --upgrade pip
+$ python3 -m pip install -r requirements-build.txt
  ```
 
 ## Build DAOS
