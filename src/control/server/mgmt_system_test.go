@@ -25,6 +25,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/common/test"
@@ -1953,7 +1954,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 			req: &mgmtpb.JoinReq{
 				SrvFaultDomain: "bad fault domain",
 			},
-			expErr: errors.New("bad fault domain"),
+			expErr: errors.New("invalid fault domain"),
 		},
 		"dupe host same rank diff uuid": {
 			req: &mgmtpb.JoinReq{
@@ -2341,6 +2342,154 @@ func TestServer_MgmtSvc_doGroupUpdate(t *testing.T) {
 					t.Fatalf("want-, got+:\n%s", diff)
 				}
 			}
+		})
+	}
+}
+
+func TestMgmtSvc_verifyFaultDomain(t *testing.T) {
+	testURI := "tcp://localhost:10001"
+	for name, tc := range map[string]struct {
+		getSvc         func(*testing.T, logging.Logger) *mgmtSvc
+		curLabels      []string
+		req            *mgmtpb.JoinReq
+		expFaultDomain *system.FaultDomain
+		expErr         error
+		expLabels      []string
+	}{
+		"no fault domain": {
+			req:    &mgmtpb.JoinReq{},
+			expErr: errors.New("no fault domain"),
+		},
+		"invalid fault domain": {
+			req:    &mgmtpb.JoinReq{SrvFaultDomain: "junk"},
+			expErr: errors.New("invalid fault domain"),
+		},
+		"failed to get system domain labels": {
+			getSvc: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				svc := newTestMgmtSvcMulti(t, log, maxEngines, false)
+				// not a replica
+				svc.sysdb = raft.MockDatabaseWithCfg(t, log, &raft.DatabaseConfig{
+					SystemName: build.DefaultSystemName,
+				})
+
+				return svc
+			},
+			req:    &mgmt.JoinReq{SrvFaultDomain: "/rack=r1/node=n2"},
+			expErr: &system.ErrNotReplica{},
+		},
+		"failed to set system domain labels": {
+			getSvc: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				svc := newTestMgmtSvcMulti(t, log, maxEngines, true)
+				svc.sysdb = raft.MockDatabaseWithCfg(t, log, &raft.DatabaseConfig{
+					SystemName: build.DefaultSystemName,
+					Replicas:   []*net.TCPAddr{common.LocalhostCtrlAddr()},
+				})
+				if err := svc.sysdb.ResignLeadership(errors.New("test")); err != nil {
+					t.Fatal(err)
+				}
+
+				return svc
+			},
+			req:    &mgmt.JoinReq{SrvFaultDomain: "/rack=r1/node=n2"},
+			expErr: &system.ErrNotLeader{},
+		},
+		"first success with labels": {
+			req:            &mgmt.JoinReq{SrvFaultDomain: "/rack=r1/node=n2"},
+			expFaultDomain: system.MustCreateFaultDomainFromString("/rack=r1/node=n2"),
+			expLabels:      []string{"rack", "node"},
+		},
+		"first success with no labels": {
+			req:            &mgmt.JoinReq{SrvFaultDomain: "/r1/n2"},
+			expFaultDomain: system.MustCreateFaultDomainFromString("/r1/n2"),
+			expLabels:      []string{"", ""},
+		},
+		"success with labels": {
+			curLabels:      []string{"rack", "node"},
+			req:            &mgmt.JoinReq{SrvFaultDomain: "/rack=r1/node=n2"},
+			expFaultDomain: system.MustCreateFaultDomainFromString("/rack=r1/node=n2"),
+			expLabels:      []string{"rack", "node"},
+		},
+		"success with no labels": {
+			curLabels:      []string{"", ""},
+			req:            &mgmt.JoinReq{SrvFaultDomain: "/r1/n2"},
+			expFaultDomain: system.MustCreateFaultDomainFromString("/r1/n2"),
+			expLabels:      []string{"", ""},
+		},
+		"labeled request with unlabeled system": {
+			curLabels: []string{"", ""},
+			req: &mgmt.JoinReq{
+				SrvFaultDomain: "/rack=r1/node=n2",
+				Uri:            testURI,
+			},
+			expErr:    FaultBadFaultDomainLabels("/rack=r1/node=n2", testURI, []string{"rack", "node"}, nil),
+			expLabels: []string{"", ""},
+		},
+		"unlabeled request with labeled system": {
+			curLabels: []string{"rack", "node"},
+			req: &mgmt.JoinReq{
+				SrvFaultDomain: "/r1/n2",
+				Uri:            testURI,
+			},
+			expErr:    FaultBadFaultDomainLabels("/r1/n2", testURI, nil, []string{"rack", "node"}),
+			expLabels: []string{"rack", "node"},
+		},
+		"mismatched labels": {
+			curLabels: []string{"rack", "node"},
+			req: &mgmt.JoinReq{
+				SrvFaultDomain: "/rack=r1/host=n2",
+				Uri:            testURI,
+			},
+			expErr:    FaultBadFaultDomainLabels("/rack=r1/host=n2", testURI, []string{"rack", "host"}, []string{"rack", "node"}),
+			expLabels: []string{"rack", "node"},
+		},
+		"mismatched length": {
+			curLabels: []string{"rack"},
+			req: &mgmt.JoinReq{
+				SrvFaultDomain: "/rack=r1/node=n2",
+				Uri:            testURI,
+			},
+			expErr:    FaultBadFaultDomainLabels("/rack=r1/node=n2", testURI, []string{"rack", "node"}, []string{"rack"}),
+			expLabels: []string{"rack"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			if tc.getSvc == nil {
+				tc.getSvc = func(t *testing.T, l logging.Logger) *mgmtSvc {
+					svc := mgmtSystemTestSetup(t, l,
+						system.Members{
+							mockMember(t, 1, 1, "stopped"),
+							mockMember(t, 2, 2, "stopped"),
+						},
+						[]*control.HostResponse{})
+					return svc
+				}
+			}
+			svc := tc.getSvc(t, log)
+			if tc.curLabels != nil {
+				if err := svc.setDomainLabels(tc.curLabels); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			fd, err := svc.verifyFaultDomain(tc.req)
+
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertTrue(t, fd.Equals(tc.expFaultDomain), fmt.Sprintf("want %q, got %q", tc.expFaultDomain, fd))
+
+			if tc.expLabels == nil {
+				return
+			}
+
+			newLabels, labelErr := svc.getDomainLabels()
+			if len(tc.expLabels) == 0 {
+				test.AssertTrue(t, system.IsErrSystemAttrNotFound(labelErr), "")
+			} else if labelErr != nil {
+				t.Fatal(labelErr)
+			}
+			test.CmpAny(t, "", tc.expLabels, newLabels)
 		})
 	}
 }
