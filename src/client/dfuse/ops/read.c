@@ -258,7 +258,6 @@ chunk_cb(struct dfuse_event *ev)
 				DFUSE_REPLY_BUFQ(cd->ohs[i], req, ev->de_iov.iov_buf + (i * K128),
 						 K128);
 			}
-
 			if (atomic_fetch_add_relaxed(&cd->exited, 1) == 7)
 				done = true;
 		}
