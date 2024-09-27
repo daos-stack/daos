@@ -14,8 +14,8 @@
 %endif
 
 Name:          daos
-Version:       2.7.100
-Release:       5%{?relval}%{?dist}
+Version:       2.7.101
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -592,6 +592,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Wed Sep 25 2024 Johann Lombardi <johann.lombardi@gmail.com> 2.7.101-1
+- Tag first 2.8 test build
+
 * Thu Aug 15 2024 Michael MacDonald <mjmac@google.com> 2.7.100-5
 - Add libdaos_self_test.so to client RPM
 
