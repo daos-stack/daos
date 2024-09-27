@@ -14,11 +14,6 @@ set -e
 
 arch=$(uname -i)
 
-# DAOS requires newer golang version than the one available in core ubuntu repo
-apt-get install gpg-agent software-properties-common
-add-apt-repository ppa:longsleep/golang-backports
-apt update
-
 apt-get install \
     autoconf \
     build-essential \
