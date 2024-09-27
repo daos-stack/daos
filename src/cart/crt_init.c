@@ -527,14 +527,14 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 	 * Force specific port range for application when using tcp provider to know what
 	 * ports to open when firewall is used.
 	 */
-	if (crt_is_service() && (prov == CRT_PROV_OFI_TCP || prov = CRT_PROV_OFI_TCP_RXM)) {
+	if (!crt_is_service() && (prov == CRT_PROV_OFI_TCP || prov = CRT_PROV_OFI_TCP_RXM)) {
 		uint32_t port_low_range = UINT32_MAX;
 		uint32_t port_high_range = UINT32_MAX;
 
 		crt_env_get(FI_TCP_PORT_LOW_RANGE, &port_low_range);
 		crt_env_get(FI_TCP_PORT_HIGH_RANGE, &port_high_range);
 
-		if (port_low_range != UINT32_MAX && port_high_range != UINT32_MAX) {
+		if (port_low_range == UINT32_MAX && port_high_range == UINT32_MAX) {
 			d_setenv("FI_TCP_PORT_LOW_RANGE", "20100", 0);
 			d_setenv("FI_TCP_PORT_HIGH_RANGE", "21100", 0);
 		}
