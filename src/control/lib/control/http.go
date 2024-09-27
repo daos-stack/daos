@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +8,8 @@ package control
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -37,12 +39,16 @@ type httpGetter interface {
 	retryer
 	getURL() *url.URL
 	getBody(context.Context) ([]byte, error)
+	getAllowInsecure() *bool
+	getCaCertPath() *string
 }
 
 type httpReq struct {
-	url       *url.URL
-	getFn     httpGetFn
-	getBodyFn func(context.Context, *url.URL, httpGetFn, time.Duration) ([]byte, error)
+	url           *url.URL
+	getFn         httpGetFn
+	allowInsecure *bool
+	cacertpath    *string
+	getBodyFn     func(context.Context, *url.URL, httpGetFn, time.Duration, *bool, *string) ([]byte, error)
 }
 
 func (r *httpReq) canRetry(err error, cur uint) bool {
@@ -77,6 +83,14 @@ func (r *httpReq) getURL() *url.URL {
 	return r.url
 }
 
+func (r *httpReq) getAllowInsecure() *bool {
+	return r.allowInsecure
+}
+
+func (r *httpReq) getCaCertPath() *string {
+	return r.cacertpath
+}
+
 func (r *httpReq) httpGetFunc() httpGetFn {
 	if r.getFn == nil {
 		r.getFn = http.Get
@@ -88,7 +102,8 @@ func (r *httpReq) getBody(ctx context.Context) ([]byte, error) {
 	if r.getBodyFn == nil {
 		r.getBodyFn = httpGetBody
 	}
-	return r.getBodyFn(ctx, r.getURL(), r.httpGetFunc(), r.getRetryTimeout())
+
+	return r.getBodyFn(ctx, r.getURL(), r.httpGetFunc(), r.getRetryTimeout(), r.getAllowInsecure(), r.getCaCertPath())
 }
 
 func httpGetBodyRetry(ctx context.Context, req httpGetter) ([]byte, error) {
@@ -113,9 +128,31 @@ func httpGetBodyRetry(ctx context.Context, req httpGetter) ([]byte, error) {
 	return result, err
 }
 
+// httpsGetFunc will prepare the GET requested using the certificate for secure mode
+// and return the http.Get
+func httpsGetFunc(cert []byte) (httpGetFn, error) {
+	caCertPool := x509.NewCertPool()
+	result := caCertPool.AppendCertsFromPEM(cert)
+	if !result {
+		return nil, errors.New("failed to parse root certificate")
+	}
+
+	tlsConfig := &tls.Config{
+		RootCAs: caCertPool,
+	}
+
+	tr := &http.Transport{
+		TLSClientConfig: tlsConfig,
+	}
+
+	client := &http.Client{Transport: tr}
+
+	return client.Get, nil
+}
+
 // httpGetBody executes a simple HTTP GET request to a given URL and returns the
 // content of the response body.
-func httpGetBody(ctx context.Context, url *url.URL, get httpGetFn, timeout time.Duration) ([]byte, error) {
+func httpGetBody(ctx context.Context, url *url.URL, get httpGetFn, timeout time.Duration, allowInsecure *bool, cacertpath *string) ([]byte, error) {
 	if url == nil {
 		return nil, errors.New("nil URL")
 	}
@@ -126,6 +163,22 @@ func httpGetBody(ctx context.Context, url *url.URL, get httpGetFn, timeout time.
 
 	if get == nil {
 		return nil, errors.New("nil get function")
+	}
+
+	if *allowInsecure == false {
+		if cacertpath == nil {
+			return nil, errors.New("Provide the CA certificate path")
+		}
+
+		cert, err := ioutil.ReadFile(*cacertpath)
+		if err != nil {
+			return nil, errors.Wrap(err, "reading CA cerificate file Error")
+		}
+
+		get, err = httpsGetFunc(cert)
+		if err != nil {
+			return nil, errors.Wrap(err, "https GET request failed")
+		}
 	}
 
 	httpCtx, cancel := context.WithTimeout(ctx, timeout)
@@ -140,7 +193,6 @@ func httpGetBody(ctx context.Context, url *url.URL, get httpGetFn, timeout time.
 			errChan <- err
 			return
 		}
-
 		respChan <- httpResp
 	}()
 

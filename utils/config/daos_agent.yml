@@ -26,26 +26,35 @@
 # default: 10001
 #port: 10001
 
-## Enable HTTP endpoint for remote telemetry collection.
-# Note that enabling the endpoint automatically enables
-# client telemetry collection.
+## Enable Telemetry HTTP/HTTPS endpoint for remote client telemetry collection.
 #
-## default endpoint state: disabled
-## default endpoint port: 9192
-#telemetry_port: 9192
-
-## Enable client telemetry for all DAOS clients.
-# If false, clients will need to optionally enable telemetry by setting
-# the D_CLIENT_METRICS_ENABLE environment variable to true.
+#telemetry_config:
+#  # Set the client telemetry endpoint port number
+#  # default: 9192
+#  port: 9192
 #
-## default: false
-#telemetry_enabled: true
-
-## Retain client telemetry for a period of time after the client
-# process exits.
+#  # Enable client telemetry for all DAOS clients.
+#  # If false, clients will need to optionally enable telemetry by setting
+#  # the D_CLIENT_METRICS_ENABLE environment variable to true.
+#  # default: false
+#  enabled: true
 #
-## default 0 (do not retain telemetry after client exit)
-#telemetry_retain: 1m
+#  # Retain client telemetry for a period of time after the client
+#  # process exits.
+#  # default 0 (do not retain telemetry after client exit)
+#  retain: 1m
+#
+#  # In order to disable transport security, uncomment and set allow_insecure
+#  # to true. Not recommended for production configurations.
+#  allow_insecure: false
+#
+#  # Server certificate for use in TLS handshakes
+#  # DAOS client is the HTTPS server to open secure telemetry endpoint.
+#  server_cert: /etc/daos/certs/telemetryserver.crt
+#
+#  # Key portion of Server Certificate
+#  # DAOS client is the HTTPS server to open secure telemetry endpoint.
+#  server_key: /etc/daos/certs/telemetryserver.key
 
 ## Configuration for user credential management.
 #credential_config:

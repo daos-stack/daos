@@ -104,11 +104,11 @@ func uncommentServerConfig(t *testing.T, outFile string) {
 		}
 		key := fields[0]
 
-		// If we're in a server or a storage tier config, reset the
+		// If we're in a server, a storage tier config, or telemetry config reset the
 		// seen map to allow the same params in different
 		// server configs.
 		lineTmp := strings.TrimLeft(line, " ")
-		if lineTmp == "-" {
+		if lineTmp == "-" || lineTmp == "telemetry_config:" {
 			seenKeys = make(map[string]struct{})
 		}
 		if _, seen := seenKeys[key]; seen && strings.HasSuffix(key, ":") {
@@ -246,7 +246,12 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithControlLogFile("/tmp/daos_server.log").
 		WithHelperLogFile("/tmp/daos_server_helper.log").
 		WithFirmwareHelperLogFile("/tmp/daos_firmware_helper.log").
-		WithTelemetryPort(9191).
+		WithTelemetryConfig(&security.TelemetryConfig{
+			AllowInsecure: true,
+			Port:          9191,
+			ServerCert:    "/etc/daos/certs/telemetryserver.crt",
+			ServerKey:     "/etc/daos/certs/telemetryserver.key",
+			CARootPath:    "/etc/daos/certs/daosTelemetryCA.crt"}).
 		WithSystemName("daos_server").
 		WithSocketDir("./.daos/daos_server").
 		WithFabricProvider("ofi+verbs;ofi_rxm").
@@ -417,7 +422,12 @@ func TestServerConfig_MDonSSD_Constructed(t *testing.T) {
 			Path: "/var/daos/config",
 		}).
 		WithControlLogFile("/tmp/daos_server.log").
-		WithTelemetryPort(9191).
+		WithTelemetryConfig(&security.TelemetryConfig{
+			AllowInsecure: true,
+			Port:          9191,
+			ServerCert:    "/etc/daos/certs/telemetryserver.crt",
+			ServerKey:     "/etc/daos/certs/telemetryserver.key",
+			CARootPath:    "/etc/daos/certs/daosTelemetryCA.crt"}).
 		WithFabricProvider("ofi+tcp").
 		WithAccessPoints("example")
 

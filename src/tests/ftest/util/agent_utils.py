@@ -7,7 +7,8 @@ import os
 import re
 import socket
 
-from agent_utils_params import DaosAgentTransportCredentials, DaosAgentYamlParameters
+from agent_utils_params import (DaosAgentTelemetryCredentials, DaosAgentTransportCredentials,
+                                DaosAgentYamlParameters)
 from ClusterShell.NodeSet import NodeSet
 from command_utils import CommandWithSubCommand, SubprocessManager, YamlCommand
 from command_utils_base import (CommandWithParameters, CommonConfig, EnvironmentVariables,
@@ -53,6 +54,7 @@ def get_agent_command(group, cert_dir, bin_dir, config_file, run_user, config_te
     transport_config = DaosAgentTransportCredentials(cert_dir)
     common_config = CommonConfig(group, transport_config)
     config = DaosAgentYamlParameters(config_file, common_config)
+    config.telemetry_config = DaosAgentTelemetryCredentials(cert_dir)
     command = DaosAgentCommand(bin_dir, config, run_user=run_user)
     if config_temp:
         # Setup the DaosAgentCommand to write the config file data to the
@@ -285,6 +287,9 @@ class DaosAgentManager(SubprocessManager):
         # Copy certificates
         self.manager.job.copy_certificates(
             get_log_file("daosCA/certs"), self._hosts)
+        self.manager.job.copy_telemetry_certificates(
+            get_log_file("daosTelemetryCA"), self._hosts)
+        self.manager.job.generate_telemetry_certificates(self._hosts, "daos_agent")
 
         # Verify the socket directory exists when using a non-systemctl manager
         if self.verify_socket_dir:

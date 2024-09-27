@@ -88,6 +88,62 @@ transport_config:
   allow_insecure: true
 `)
 
+	telemetryRetainWithBadPort := test.CreateTestFile(t, dir, `
+name: shire
+access_points: ["one:10001", "two:10001"]
+port: 4242
+runtime_dir: /tmp/runtime
+log_file: /home/frodo/logfile
+control_log_mask: debug
+transport_config:
+  allow_insecure: true
+telemetry_config:
+  retain: 1
+  port: 0
+`)
+
+	telemetryEnabledWithBadPort := test.CreateTestFile(t, dir, `
+name: shire
+access_points: ["one:10001", "two:10001"]
+port: 4242
+runtime_dir: /tmp/runtime
+log_file: /home/frodo/logfile
+control_log_mask: debug
+transport_config:
+  allow_insecure: true
+telemetry_config:
+  enabled: true
+  port: 0
+`)
+
+	telemetryWithoutServerCert := test.CreateTestFile(t, dir, `
+name: shire
+access_points: ["one:10001", "two:10001"]
+port: 4242
+runtime_dir: /tmp/runtime
+log_file: /home/frodo/logfile
+control_log_mask: debug
+transport_config:
+  allow_insecure: true
+telemetry_config:
+  allow_insecure: false
+  server_cert: ""
+`)
+
+	telemetryWithoutServerKey := test.CreateTestFile(t, dir, `
+name: shire
+access_points: ["one:10001", "two:10001"]
+port: 4242
+runtime_dir: /tmp/runtime
+log_file: /home/frodo/logfile
+control_log_mask: debug
+transport_config:
+  allow_insecure: true
+telemetry_config:
+  allow_insecure: false
+  server_key: ""
+`)
+
 	for name, tc := range map[string]struct {
 		path      string
 		expResult *Config
@@ -108,6 +164,22 @@ transport_config:
 			path:      emptyFile,
 			expResult: DefaultConfig(),
 		},
+		"telemetry retain with no port": {
+			path:   telemetryRetainWithBadPort,
+			expErr: errors.New("telemetry_retain requires telemetry_port"),
+		},
+		"telemetry enabled with no port": {
+			path:   telemetryEnabledWithBadPort,
+			expErr: errors.New("telemetry_enabled requires telemetry_port"),
+		},
+		"telemetry with secure mode with no server certificate": {
+			path:   telemetryWithoutServerCert,
+			expErr: errors.New("For secure mode, server_cert and server_key required under telemetry_config"),
+		},
+		"telemetry with secure mode with no server key": {
+			path:   telemetryWithoutServerKey,
+			expErr: errors.New("For secure mode, server_cert and server_key required under telemetry_config"),
+		},
 		"without optional items": {
 			path: withoutOptCfg,
 			expResult: &Config{
@@ -122,6 +194,7 @@ transport_config:
 					AllowInsecure:     true,
 					CertificateConfig: DefaultConfig().TransportConfig.CertificateConfig,
 				},
+				TelemetryConfig: security.DefaultClientTelemetryConfig(),
 			},
 		},
 		"bad log mask": {
@@ -154,6 +227,7 @@ transport_config:
 					AllowInsecure:     true,
 					CertificateConfig: DefaultConfig().TransportConfig.CertificateConfig,
 				},
+				TelemetryConfig:     security.DefaultClientTelemetryConfig(),
 				ExcludeFabricIfaces: common.NewStringSet("ib3"),
 				FabricInterfaces: []*NUMAFabricConfig{
 					{

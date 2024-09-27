@@ -61,7 +61,7 @@ type Server struct {
 	HelperLogFile     string                    `yaml:"helper_log_file,omitempty"`
 	FWHelperLogFile   string                    `yaml:"firmware_helper_log_file,omitempty"`
 	FaultPath         string                    `yaml:"fault_path,omitempty"`
-	TelemetryPort     int                       `yaml:"telemetry_port,omitempty"`
+	TelemetryConfig   *security.TelemetryConfig `yaml:"telemetry_config"`
 	CoreDumpFilter    uint8                     `yaml:"core_dump_filter,omitempty"`
 	ClientEnvVars     []string                  `yaml:"client_env_vars,omitempty"`
 	SupportConfig     SupportConfig             `yaml:"support_config,omitempty"`
@@ -314,7 +314,13 @@ func (cfg *Server) WithFirmwareHelperLogFile(filePath string) *Server {
 
 // WithTelemetryPort sets the port for the telemetry exporter.
 func (cfg *Server) WithTelemetryPort(port int) *Server {
-	cfg.TelemetryPort = port
+	cfg.TelemetryConfig.Port = port
+	return cfg
+}
+
+// WithTelemetryConfig sets the telemetry configuration.
+func (cfg *Server) WithTelemetryConfig(cfgTelemetry *security.TelemetryConfig) *Server {
+	cfg.TelemetryConfig = cfgTelemetry
 	return cfg
 }
 
@@ -327,6 +333,7 @@ func DefaultServer() *Server {
 		AccessPoints:      []string{fmt.Sprintf("localhost:%d", build.DefaultControlPort)},
 		ControlPort:       build.DefaultControlPort,
 		TransportConfig:   security.DefaultServerTransportConfig(),
+		TelemetryConfig:   security.DefaultClientTelemetryConfig(),
 		Hyperthreads:      false,
 		SystemRamReserved: storage.DefaultSysMemRsvd / humanize.GiByte,
 		Path:              defaultConfigPath,
@@ -700,8 +707,12 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 		return FaultConfigNoProvider
 	case cfg.ControlPort <= 0:
 		return FaultConfigBadControlPort
-	case cfg.TelemetryPort < 0:
-		return FaultConfigBadTelemetryPort
+	}
+
+	if cfg.TelemetryConfig != nil {
+		if cfg.TelemetryConfig.Port < 0 {
+			return FaultConfigBadTelemetryPort
+		}
 	}
 
 	for idx, ec := range cfg.Engines {

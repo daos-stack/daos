@@ -574,6 +574,7 @@ class YamlParameters(ObjectWithParameters):
         self.filename = filename
         self.title = title
         self.other_params = other_params
+        self.telemetry_config = None
 
     def get_params(self, test):
         """Get values for the yaml parameters from the test yaml file.
@@ -588,6 +589,9 @@ class YamlParameters(ObjectWithParameters):
         if self.other_params is not None:
             self.other_params.get_params(test)
 
+        if self.telemetry_config is not None:
+            self.telemetry_config.get_params(test)
+
     def get_yaml_data(self):
         """Convert the parameters into a dictionary to use to write a yaml file.
 
@@ -599,6 +603,12 @@ class YamlParameters(ObjectWithParameters):
             yaml_data = self.other_params.get_yaml_data()
         else:
             yaml_data = {}
+
+        if self.telemetry_config is not None:
+            telemetry_yaml = self.telemetry_config.get_yaml_data()
+            if telemetry_yaml:
+                yaml_data["telemetry_config"] = telemetry_yaml
+
         for name in self.get_param_names():
             value = getattr(self, name).value
             if value is not None:
@@ -787,6 +797,76 @@ class TransportCredentials(YamlParameters):
             TransportCredentials: a new TransportCredentials object
         """
         return TransportCredentials(self.namespace, self.title, self._log_dir)
+
+
+class TelemetryCredentials(YamlParameters):
+    """Telemetry credentials listing certificates for secure communication."""
+
+    def __init__(self, namespace, title, log_dir):
+        """Initialize a TelemetryConfig object.
+
+        Args:
+            namespace (str): yaml namespace (path to parameters)
+            title (str, optional): namespace under which to place the
+                parameters when creating the yaml file. Defaults to None.
+            log_dir (str): location of the certificate files
+        """
+        super().__init__(namespace, None, title)
+        self._log_dir = log_dir
+        default_insecure = str(os.environ.get("DAOS_TEST_INSECURE_MODE", True))
+        default_insecure = default_insecure.lower() == "true"
+        self.allow_insecure = BasicParameter(None, default_insecure)
+        self.port = BasicParameter(None, 9191)
+        self.retain = None
+        self.enabled = None
+
+    def get_yaml_data(self):
+        """Convert the parameters into a dictionary to use to write a yaml file.
+
+        Returns:
+            dict: a dictionary of parameter name keys and values
+
+        """
+        yaml_data = super().get_yaml_data()
+
+        # Convert the boolean value into a string
+        if self.title is not None:
+            yaml_data[self.title]["allow_insecure"] = self.allow_insecure.value
+        else:
+            yaml_data["allow_insecure"] = self.allow_insecure.value
+
+        return yaml_data
+
+    def get_certificate_data(self, name_list):
+        """Get certificate data by name_list.
+
+        Args:
+            name_list (list): list of certificate attribute names.
+
+        Returns:
+            data (dict): a dictionary of parameter directory name keys and
+                value.
+
+        """
+        data = {}
+        if not self.allow_insecure.value:
+            for name in name_list:
+                value = getattr(self, name).value
+                if isinstance(value, str):
+                    dir_name, file_name = os.path.split(value)
+                    if dir_name not in data:
+                        data[dir_name] = [file_name]
+                    else:
+                        data[dir_name].append(file_name)
+        return data
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            TelemetryCredentials: a new TelemetryCredentials object
+        """
+        return TelemetryCredentials(self.namespace, self.title, self._log_dir)
 
 
 class CommonConfig(YamlParameters):
