@@ -2202,6 +2202,8 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 
 	D_ASSERT(rpt->rt_pool->sp_rebuilding > 0);
 	rpt->rt_pool->sp_rebuilding--;
+	D_INFO(DF_UUID": sp_rebuilding dec to %d\n",
+	       DP_UUID(rpt->rt_pool->sp_uuid), rpt->rt_pool->sp_rebuilding);
 
 	ABT_mutex_lock(rpt->rt_lock);
 	ABT_cond_signal(rpt->rt_global_dtx_wait_cond);
