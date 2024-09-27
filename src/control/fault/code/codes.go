@@ -154,6 +154,7 @@ const (
 	ServerNoCompatibilityInsecure
 	ServerPoolHasContainers
 	ServerHugepagesDisabled
+	ServerBadFaultDomainLabels
 )
 
 // server config fault codes
