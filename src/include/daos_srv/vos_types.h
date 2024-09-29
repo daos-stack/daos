@@ -124,6 +124,9 @@ struct vos_pool_space {
 	struct vea_attr		vps_vea_attr;
 	/** NVMe block allocator statistics */
 	struct vea_stat		vps_vea_stat;
+	/** Total & free non-evictable space for md-on-ssd phase2 pool */
+	uint64_t		vps_ne_total;
+	uint64_t		vps_ne_free;
 };
 
 #define SCM_TOTAL(vps)	((vps)->vps_space.s_total[DAOS_MEDIA_SCM])
