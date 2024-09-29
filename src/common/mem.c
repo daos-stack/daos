@@ -3281,7 +3281,8 @@ cache_get_free_page(struct umem_cache *cache, struct umem_page_info **ret_pinfo,
 			return -DER_INVAL;
 		}
 
-		D_DEBUG(DB_TRACE, "Retry get free page, %d times\n", retry_cnt);
+		D_CDEBUG(retry_cnt == 10, DLOG_ERR, DB_TRACE,
+			 "Retry get free page, %d times\n", retry_cnt);
 		retry_cnt++;
 	}
 
@@ -3634,7 +3635,8 @@ umem_cache_reserve(struct umem_store *store)
 			break;
 		}
 
-		D_DEBUG(DB_TRACE, "Retry reserve free page, %d times\n", retry_cnt);
+		D_CDEBUG(retry_cnt == 10, DLOG_ERR, DB_TRACE,
+			 "Retry reserve free page, %d times\n", retry_cnt);
 		retry_cnt++;
 	}
 
