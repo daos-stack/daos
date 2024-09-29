@@ -1984,6 +1984,418 @@ wal_umempobj_mbusage_test(void **state)
 	assert_int_equal(maxsz, MDTEST_MB_SIZE);
 }
 
+static void
+dump_cache_stats(struct vos_pool *pool, char *op_str)
+{
+	struct umem_pool	*umm_pool = vos_pool2umm(pool)->umm_pool;
+	struct umem_cache	*cache = vos_pool2store(pool)->cache;
+	daos_size_t		 scm_used, ne_used, ne_tot;
+	int			 rc;
+
+	rc = umempobj_get_heapusage(umm_pool, &scm_used);
+	assert_rc_equal(rc, 0);
+
+	rc = umempobj_get_mbusage(umm_pool, UMEM_DEFAULT_MBKT_ID, &ne_used, &ne_tot);
+	assert_int_equal(rc, 0);
+
+	print_message("==================== (dump stats %s)\n", op_str);
+	print_message("[Space usage]    Total used:%lu, NE used:%lu, NE total:%lu\n",
+		      scm_used, ne_used, ne_tot);
+
+	print_message("[Page stats]     NE:%u, Pinned:%u, Free:%u\n",
+		      cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE],
+		      cache->ca_pgs_stats[UMEM_PG_STATS_PINNED],
+		      cache->ca_pgs_stats[UMEM_PG_STATS_FREE]);
+
+	print_message("[Swapping stats] Hit:%lu, Miss:%lu, Evict:%lu, Flush:%lu, Load:%lu\n",
+		      cache->ca_cache_stats[UMEM_CACHE_STATS_HIT],
+		      cache->ca_cache_stats[UMEM_CACHE_STATS_MISS],
+		      cache->ca_cache_stats[UMEM_CACHE_STATS_EVICT],
+		      cache->ca_cache_stats[UMEM_CACHE_STATS_FLUSH],
+		      cache->ca_cache_stats[UMEM_CACHE_STATS_LOAD]);
+	print_message("====================\n");
+}
+
+static int
+obj_rw(struct io_test_args *arg, daos_unit_oid_t oid, char *dkey, char *akey,
+       daos_iod_type_t iod_type, daos_epoch_t epoch, int io_size, char *buf, bool update)
+{
+	daos_recx_t	recx = {.rx_idx = 0, .rx_nr = 1};
+	daos_key_t	dkey_iov, akey_iov;
+	daos_iod_t	iod = { 0 };
+	d_sg_list_t	sgl = { 0 };
+	int		rc;
+
+	arg->oid = oid;
+	d_iov_set(&dkey_iov, dkey, strlen(dkey));
+	d_iov_set(&akey_iov, akey, strlen(akey));
+
+	rc = d_sgl_init(&sgl, 1);
+	assert_rc_equal(rc, 0);
+
+	sgl.sg_iovs[0].iov_buf = buf;
+	sgl.sg_iovs[0].iov_buf_len = io_size;
+	sgl.sg_iovs[0].iov_len = io_size;
+
+	iod.iod_name = akey_iov;
+	iod.iod_nr = 1;
+	iod.iod_type = iod_type;
+	iod.iod_size = io_size;
+	iod.iod_recxs = (iod_type == DAOS_IOD_SINGLE) ? NULL : &recx;
+
+	if (update)
+		rc = io_test_obj_update(arg, epoch, 0, &dkey_iov, &iod, &sgl, NULL, true);
+	else
+		rc = io_test_obj_fetch(arg, epoch, 0, &dkey_iov, &iod, &sgl, true);
+
+	d_sgl_fini(&sgl, false);
+
+	return rc;
+}
+
+static inline uint64_t
+verify_space(struct vos_pool *pool, uint32_t bkt_id, uint64_t prev_used, int64_t delta, char *op_str)
+{
+	struct umem_pool	*umm_pool = vos_pool2umm(pool)->umm_pool;
+	daos_size_t		allocated, total;
+	int			rc;
+
+	rc = umempobj_get_mbusage(umm_pool, bkt_id, &allocated, &total);
+	assert_int_equal(rc, 0);
+
+	print_message("[%s] %s %u used space: %lu/%lu\n", op_str,
+		      bkt_id == UMEM_DEFAULT_MBKT_ID ? "Non-evictable" : "Evictable",
+		      bkt_id, allocated, total);
+
+	if (delta == INT64_MAX)
+		return allocated;
+
+	if (delta == 0)
+		assert_true(allocated == prev_used);
+	else if (delta > 0)
+		assert_true(allocated > (prev_used + delta));
+	else if (delta < 0)
+		assert_true(allocated <= (prev_used + delta));
+
+	return allocated;
+}
+
+static void
+reclaim_obj(struct io_test_args *arg, daos_unit_oid_t *oid, int oid_nr, daos_epoch_t *epoch)
+{
+	daos_epoch_range_t	epr;
+	int			i, rc;
+
+	/* Punch object */
+	for (i = 0; i < oid_nr; i++) {
+		rc = vos_obj_punch(arg->ctx.tc_co_hdl, *oid, (*epoch)++, 0, 0, NULL, 0,
+				   NULL, NULL);
+		oid++;
+		assert_rc_equal(rc, 0);
+	}
+
+	/* Aggregate punched object */
+	epr.epr_lo = 0;
+	epr.epr_hi = (*epoch)++;
+	rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, 0);
+	assert_rc_equal(rc, 0);
+
+	/* Wait GC done */
+	gc_wait();
+}
+
+/* Update/punch object, re-open pool, verify space usage and bucket ID */
+static void
+p2_basic_test(void **state)
+{
+	struct io_test_args	*arg = *state;
+	struct vos_pool		*pool = vos_hdl2pool(arg->ctx.tc_po_hdl);
+	struct vos_container	*cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
+	struct umem_cache	*cache;
+	daos_unit_oid_t		oid;
+	char			dkey[UPDATE_DKEY_SIZE] = { 0 };
+	char			akey[UPDATE_AKEY_SIZE] = { 0 };
+	char			*buf;
+	daos_epoch_t		epoch = 1;
+	daos_size_t		io_size = 512;
+	struct vos_object	*obj;
+	uint32_t		bkt_id = 1, missed, loaded;
+	uint64_t		used[2], ne_init;
+	int			rc;
+
+	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
+	dts_key_gen(akey, UPDATE_AKEY_SIZE, UPDATE_AKEY);
+
+	D_ALLOC(buf, io_size);
+	assert_non_null(buf);
+	dts_buf_render(buf, io_size);
+
+	/* Get initial space usage */
+	used[0] = verify_space(pool, UMEM_DEFAULT_MBKT_ID, 0, INT64_MAX, "Init");
+	ne_init = used[0];
+
+	/* Update object1 */
+	oid = dts_unit_oid_gen(0, 0);
+	rc = obj_rw(arg, oid, dkey, akey, DAOS_IOD_SINGLE, epoch++, io_size, buf, true);
+	assert_rc_equal(rc, 0);
+
+	/* Verify object1 bucket ID */
+	rc = vos_obj_acquire(cont, oid, false, &obj);
+	assert_rc_equal(rc, 0);
+
+	assert_int_equal(obj->obj_bkt_ids[0], bkt_id);
+
+	vos_obj_release(obj, 0, true);
+
+	/* Verify space usage */
+	used[0] = verify_space(pool, UMEM_DEFAULT_MBKT_ID, used[0], 1, "Object1");
+	used[1] = verify_space(pool, bkt_id, 0, INT64_MAX, "Object1");
+
+	/* Reclaim object1 */
+	reclaim_obj(arg, &oid, 1, &epoch);
+
+	/* Verify space usage */
+	used[0] = verify_space(pool, UMEM_DEFAULT_MBKT_ID, used[0], -1, "Reclaim object1");
+	used[1] = verify_space(pool, bkt_id, used[1], -used[1], "Reclaim object1");
+
+	/* Update object2 */
+	oid = dts_unit_oid_gen(0, 0);
+	rc = obj_rw(arg, oid, dkey, akey, DAOS_IOD_ARRAY, epoch++, io_size, buf, true);
+	assert_rc_equal(rc, 0);
+
+	/* Verify object2 bucket ID */
+	rc = vos_obj_acquire(cont, oid, false, &obj);
+	assert_rc_equal(rc, 0);
+
+	assert_int_equal(obj->obj_bkt_ids[0], bkt_id);
+
+	/* Verify space usage */
+	used[0] = verify_space(pool, UMEM_DEFAULT_MBKT_ID, used[0], 1, "Object2.1");
+	used[1] = verify_space(pool, bkt_id, used[1], io_size, "Object2.1");
+
+	/* Update object2 again */
+	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
+	dts_key_gen(akey, UPDATE_AKEY_SIZE, UPDATE_AKEY);
+	rc = obj_rw(arg, oid, dkey, akey, DAOS_IOD_SINGLE, epoch++, io_size, buf, true);
+	assert_rc_equal(rc, 0);
+
+	/* Verify object2 bucket ID */
+	assert_int_equal(obj->obj_bkt_ids[0], bkt_id);
+
+	vos_obj_release(obj, 0, true);
+
+	/* Verify space usage */
+	used[0] = verify_space(pool, UMEM_DEFAULT_MBKT_ID, used[0], 0, "Object2.2");
+	used[1] = verify_space(pool, bkt_id, used[1], io_size, "Object2.2");
+
+	/* Re-open pool */
+	arg->checkpoint = true;
+	wal_pool_refill(arg);
+	pool = vos_hdl2pool(arg->ctx.tc_po_hdl);
+	cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
+	cache = vos_pool2store(pool)->cache;
+	arg->checkpoint = false;
+
+	missed = cache->ca_cache_stats[UMEM_CACHE_STATS_MISS];
+	loaded = cache->ca_cache_stats[UMEM_CACHE_STATS_LOAD];
+
+	/* Verify NE space usage */
+	used[0] = verify_space(pool, UMEM_DEFAULT_MBKT_ID, used[0], 0, "Re-open");
+
+	/* Fetch object2 */
+	rc = obj_rw(arg, oid, dkey, akey, DAOS_IOD_SINGLE, DAOS_EPOCH_MAX, io_size, buf, false);
+	assert_rc_equal(rc, 0);
+
+	dump_cache_stats(pool, "after re-open & fetch");
+	/* Verify cache stats */
+	assert_int_equal(cache->ca_cache_stats[UMEM_CACHE_STATS_MISS], missed + 1);
+	assert_int_equal(cache->ca_cache_stats[UMEM_CACHE_STATS_LOAD], loaded + 1);
+
+	/* Verify E space usage */
+	used[1] = verify_space(pool, bkt_id, used[1], 0, "Re-open");
+
+	/* Verify object2 bucket ID */
+	rc = vos_obj_acquire(cont, oid, false, &obj);
+	assert_rc_equal(rc, 0);
+
+	assert_int_equal(obj->obj_bkt_ids[0], bkt_id);
+	vos_obj_release(obj, 0, true);
+
+	/* Reclaim object2 */
+	reclaim_obj(arg, &oid, 1, &epoch);
+
+	/* Verify space usage */
+	used[0] = verify_space(pool, UMEM_DEFAULT_MBKT_ID, used[0], -1, "Reclaim object2");
+	used[1] = verify_space(pool, bkt_id, used[1], -used[1], "Reclaim object2");
+	assert_int_equal(used[0], ne_init);
+
+	D_FREE(buf);
+}
+
+static int
+fill_one(struct io_test_args *arg, daos_unit_oid_t oid, char *dkey, char *akey,
+	 daos_epoch_t *epoch, daos_size_t io_size, char *buf, uint32_t *ret_id)
+{
+	struct vos_object	*obj;
+	struct vos_container	*cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
+	uint32_t		 bkt_id = UMEM_DEFAULT_MBKT_ID;
+	uint64_t		 used, total = 0, prev_used = 0;
+	daos_size_t		 written = 0;
+	int			 rc = 0;
+
+	while (written < MDTEST_MB_SIZE) {
+		rc = obj_rw(arg, oid, dkey, akey, DAOS_IOD_ARRAY, (*epoch)++, io_size, buf, true);
+		if (rc != 0)
+			break;
+		written += io_size;
+
+		if (bkt_id == UMEM_DEFAULT_MBKT_ID) {
+			rc = vos_obj_acquire(cont, oid, false, &obj);
+			assert_rc_equal(rc, 0);
+
+			bkt_id = obj->obj_bkt_ids[0];
+			vos_obj_release(obj, 0, false);
+			/* All evictable buckets are used up */
+			if (bkt_id == UMEM_DEFAULT_MBKT_ID) {
+				rc = 1;
+				break;
+			}
+		}
+
+		rc = umempobj_get_mbusage(vos_cont2umm(cont)->umm_pool, bkt_id, &used, &total);
+		assert_int_equal(rc, 0);
+		assert_int_equal(total, MDTEST_MB_SIZE);
+
+		/* This evictable bucket is filled up */
+		if (used == prev_used)
+			break;
+
+		prev_used = used;
+	}
+
+	print_message("Filled bucket:%u total:%lu, used:%lu/%lu, written:%lu, rc:%d\n",
+		      bkt_id, total, used, prev_used, written, rc);
+	*ret_id = bkt_id;
+
+	return rc;
+}
+
+/* Fill all evictable buckets */
+static void
+p2_fill_test(void **state)
+{
+	struct io_test_args     *arg = *state;
+	struct vos_pool		*pool = vos_hdl2pool(arg->ctx.tc_po_hdl);
+	struct umem_cache	*cache = vos_pool2store(pool)->cache;
+	daos_unit_oid_t		oids[MDTEST_MAX_EMB_CNT];
+	daos_epoch_t		epoch = 1;
+	char			dkey[UPDATE_DKEY_SIZE] = { 0 };
+	char			akey[UPDATE_AKEY_SIZE] = { 0 };
+	char			*buf;
+	uint32_t		missed, loaded, evicted;
+	daos_size_t		io_size = 800;
+	uint32_t		bkt_ids[MDTEST_MAX_EMB_CNT];
+	uint64_t		bkt_used[MDTEST_MAX_EMB_CNT];
+	uint64_t		ne_used, ne_init;
+	int			i, rc, obj_cnt = 0;
+
+	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
+	dts_key_gen(akey, UPDATE_AKEY_SIZE, UPDATE_AKEY);
+
+	D_ALLOC(buf, io_size);
+	assert_non_null(buf);
+	dts_buf_render(buf, io_size);
+
+	/* Get initial space usage */
+	ne_init = verify_space(pool, UMEM_DEFAULT_MBKT_ID, 0, INT64_MAX, "Init");
+
+	/* Fill up pool */
+	while (obj_cnt < MDTEST_MAX_EMB_CNT) {
+		oids[obj_cnt] = dts_unit_oid_gen(0, 0);
+		rc = fill_one(arg, oids[obj_cnt], dkey, akey, &epoch, io_size, buf,
+			      &bkt_ids[obj_cnt]);
+		if (rc)
+			break;
+		bkt_used[obj_cnt] = verify_space(pool, bkt_ids[obj_cnt], 0, INT64_MAX, "Fill");
+
+		obj_cnt++;
+		print_message("%d objects are allocated.\n", obj_cnt);
+
+		if (obj_cnt && (obj_cnt % 4 == 0))
+			checkpoint_fn(&arg->ctx.tc_po_hdl);
+	}
+	assert_true(obj_cnt > 0);
+
+	for (i = 0; i < obj_cnt; i++)
+		bkt_used[i] = verify_space(pool, bkt_ids[i], bkt_used[i], 0, "Filled");
+
+	missed = cache->ca_cache_stats[UMEM_CACHE_STATS_MISS];
+	loaded = cache->ca_cache_stats[UMEM_CACHE_STATS_LOAD];
+	evicted = cache->ca_cache_stats[UMEM_CACHE_STATS_EVICT];
+
+	/* Fetch first object to trigger cache miss and page evict */
+	rc = obj_rw(arg, oids[0], dkey, akey, DAOS_IOD_ARRAY, DAOS_EPOCH_MAX, io_size, buf, false);
+	assert_rc_equal(rc, 0);
+
+	dump_cache_stats(pool, "after fetch");
+	assert_int_equal(cache->ca_cache_stats[UMEM_CACHE_STATS_MISS], missed + 1);
+	assert_int_equal(cache->ca_cache_stats[UMEM_CACHE_STATS_LOAD], loaded + 1);
+	assert_int_equal(cache->ca_cache_stats[UMEM_CACHE_STATS_EVICT], evicted + 1);
+
+	/* Re-open pool */
+	arg->checkpoint = true;
+	wal_pool_refill(arg);
+	pool = vos_hdl2pool(arg->ctx.tc_po_hdl);
+	cache = vos_pool2store(pool)->cache;
+	arg->checkpoint = false;
+
+	missed = cache->ca_cache_stats[UMEM_CACHE_STATS_MISS];
+	loaded = cache->ca_cache_stats[UMEM_CACHE_STATS_LOAD];
+
+	/* Fetch first object to trigger cache miss */
+	rc = obj_rw(arg, oids[0], dkey, akey, DAOS_IOD_ARRAY, DAOS_EPOCH_MAX, io_size, buf, false);
+	assert_rc_equal(rc, 0);
+
+	dump_cache_stats(pool, "after re-open & fetch");
+	assert_int_equal(cache->ca_cache_stats[UMEM_CACHE_STATS_MISS], missed + 1);
+	assert_int_equal(cache->ca_cache_stats[UMEM_CACHE_STATS_LOAD], loaded + 1);
+
+	ne_used = verify_space(pool, UMEM_DEFAULT_MBKT_ID, ne_init, 1, "Re-open");
+	bkt_used[0] = verify_space(pool, bkt_ids[0], bkt_used[0], 0, "Re-open");
+
+	/* Reclaim all objects */
+	reclaim_obj(arg, &oids[0], obj_cnt, &epoch);
+	dump_cache_stats(pool, "after reclaim objs");
+
+	/* Verify used space */
+	ne_used = verify_space(pool, UMEM_DEFAULT_MBKT_ID, ne_used, -1, "Reclaim objs");
+	assert_int_equal(ne_used, ne_init);
+	for (i = 0; i < obj_cnt; i++)
+		bkt_used[i] = verify_space(pool, bkt_ids[i], bkt_used[i], -bkt_used[i],
+					   "Reclaim objs");
+
+	/* Close container */
+	rc = vos_cont_close(arg->ctx.tc_co_hdl);
+	assert_rc_equal(rc, 0);
+	arg->ctx.tc_step = TCX_CO_CREATE;
+
+	/* Destroy container */
+	rc = vos_cont_destroy(arg->ctx.tc_po_hdl, arg->ctx.tc_co_uuid);
+	assert_rc_equal(rc, 0);
+	arg->ctx.tc_step = TCX_PO_CREATE_OPEN;
+
+	gc_wait();
+
+	dump_cache_stats(pool, "after cont destroy");
+
+	ne_used = verify_space(pool, UMEM_DEFAULT_MBKT_ID, ne_used, -1, "Cont destroy");
+	for (i = 0; i < obj_cnt; i++)
+		bkt_used[i] = verify_space(pool, bkt_ids[i], bkt_used[i], -bkt_used[i],
+					   "Cont destroy");
+
+	D_FREE(buf);
+}
+
 static const struct CMUnitTest wal_tests[] = {
     {"WAL01: Basic pool/cont create/destroy test", wal_tst_pool_cont, NULL, NULL},
     {"WAL02: Basic pool/cont create/destroy test with checkpointing", wal_tst_pool_cont,
@@ -2024,6 +2436,8 @@ static const struct CMUnitTest wal_MB_tests[] = {
     {"WAL36: UMEM MB restart replay garbage collection", wal_umempobj_replay_block_reuse,
      setup_mb_io, teardown_mb_io},
     {"WAL37: UMEM MB stats test ", wal_umempobj_mbusage_test, setup_mb_io, teardown_mb_io},
+    {"WAL38: P2 basic", p2_basic_test, setup_mb_io, teardown_mb_io},
+    {"WAL39: P2 fill evictable buckets", p2_fill_test, setup_mb_io, teardown_mb_io},
 };
 
 int
