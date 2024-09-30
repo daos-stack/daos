@@ -498,7 +498,7 @@ static void
 prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 {
 	struct rlimit rlim;
-	int	      rc;
+	int           rc;
 	uint32_t      mrc_enable = 0;
 
 	/* Avoid applying same settings multiple times */
