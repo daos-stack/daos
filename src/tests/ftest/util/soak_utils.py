@@ -454,10 +454,10 @@ def launch_jobscript(
     joblog = job_log1.replace("RHOST", str(rhost))
     errorlog = error_log1.replace("RHOST", str(rhost))
     cmd = ";".join([env, f"{script} {hosts} {job_id} {joblog} {errorlog}"])
-    # job_results = run_remote(
-    #     log, rhost, cmd, verbose=False, timeout=timeout * 60, task_debug=False, stderr=False)
-    job_results = run_local(
-        log, cmd, verbose=False, timeout=timeout * 60, capture_output=False, stderr=False)
+    job_results = run_remote(
+        log, rhost, cmd, verbose=False, timeout=timeout * 60, task_debug=False, stderr=False)
+    # job_results = run_local(
+    #     log, cmd, verbose=False, timeout=timeout * 60, capture_output=False, stderr=False)
     if job_results:
         if job_results.timeout:
             state = "TIMEOUT"
@@ -1644,7 +1644,8 @@ def build_job_script(self, commands, job, nodesperjob, ppn):
     prepend_cmds = ["set +e",
                     "echo Job_Start_Time `date \\+\"%Y-%m-%d %T\"`",
                     "daos pool query {} ".format(self.pool[1].identifier),
-                    "daos pool query {} ".format(self.pool[0].identifier)]
+                    "daos pool query {} ".format(self.pool[0].identifier),
+                    f"{daos_env_str(os.environ)}"]
 
     append_cmds = ["daos pool query {} ".format(self.pool[1].identifier),
                    "daos pool query {} ".format(self.pool[0].identifier),
