@@ -172,7 +172,7 @@ func httpGetBody(ctx context.Context, url *url.URL, get httpGetFn, timeout time.
 
 		cert, err := ioutil.ReadFile(*cacertpath)
 		if err != nil {
-			return nil, errors.Wrap(err, "reading CA cerificate file Error")
+			return nil, errors.Wrap(err, "reading CA certificate file Error")
 		}
 
 		get, err = httpsGetFunc(cert)

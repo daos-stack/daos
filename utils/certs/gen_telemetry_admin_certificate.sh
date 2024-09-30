@@ -19,8 +19,6 @@ function print_usage () {
 DAYS=1095
 
 CA_HOME="${1:-.}/daosTelemetryCA"
-# shellcheck disable=SC2128
-CONFIGS="$(dirname "${BASH_SOURCE}")"
 
 function setup_directories () {
     mkdir -p "${CA_HOME}"

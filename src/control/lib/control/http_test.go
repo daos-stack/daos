@@ -225,7 +225,7 @@ func TestControl_httpGetBody(t *testing.T) {
 					Body:       newMockReadCloser("this is the body of an HTTP response"),
 				}, nil
 			},
-			expErr: errors.New("reading CA cerificate file Error: open wrongpath/notavailable.crt: no such file or directory"),
+			expErr: errors.New("reading CA certificate file Error: open wrongpath/notavailable.crt: no such file or directory"),
 		},
 		"reading body fails": {
 			url:           defaultURL,

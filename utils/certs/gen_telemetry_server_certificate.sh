@@ -13,8 +13,8 @@ Please modify to use in Production environment.
 Usage: gen_telemetry_server_certificate.sh [USER] [DIR]
     USER: DAOS has server and client and the certificate need the specific file permission
           based on system usage.
-          Use "daos_server" if running script on server
-          Use "daos_agent" if running script on client
+          Use daos_server if running script on server
+          Use daos_agent if running script on client
 
     DIR: Generate telemetry certificates for DAOS metrics in the [DIR].
          By default [DIR] is the current directory.
@@ -53,7 +53,7 @@ function generate_server_cert () {
     echo "Generating Server Certificate"
     # Generate Private key and set its permissions
     openssl genrsa -out "${CA_HOME}/telemetryserver.key" 2048
-    [[ $EUID -eq 0 ]] && chown ${USER}.${USER} "${CA_HOME}/telemetryserver.key"
+    [[ $EUID -eq 0 ]] && chown "${USER}"."${USER}" "${CA_HOME}/telemetryserver.key"
     chmod 0400 "${CA_HOME}/telemetryserver.key"
 
     # Generate a Certificate Signing Request (CRS)
@@ -65,7 +65,7 @@ function generate_server_cert () {
         -CAkey "${CA_HOME}/daosTelemetryCA.key" -CAcreateserial -out "${CA_HOME}/telemetryserver.crt" \
         -days ${DAYS} -sha256 -extfile "$CA_HOME/telemetry.cnf" -extensions v3_ext
 
-    [[ $EUID -eq 0 ]] && chown ${USER}.${USER} "${CA_HOME}/telemetryserver.crt"
+    [[ $EUID -eq 0 ]] && chown "${USER}"."${USER}" "${CA_HOME}/telemetryserver.crt"
     chmod 0644 "${CA_HOME}/telemetryserver.crt"
 
     echo "Required Server Certificate Files:
