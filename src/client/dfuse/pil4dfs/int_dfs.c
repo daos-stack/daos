@@ -30,6 +30,8 @@
 #include <sys/user.h>
 #include <linux/binfmts.h>
 
+#include <execinfo.h>
+
 #ifdef __aarch64__
 #ifndef PAGE_SIZE
 #define PAGE_SIZE 0x1000
@@ -243,6 +245,12 @@ static char             cur_dir[DFS_MAX_PATH] = "";
 static bool             segv_handler_inited;
 /* Old segv handler */
 struct sigaction        old_segv;
+
+/* Old segbus handler */
+struct sigaction        old_segbus;
+
+static void sig_handler_sigv(int code, siginfo_t *siginfo, void *ctx);
+static void sig_handler_sigbus(int code, siginfo_t *siginfo, void *ctx);
 
 /* the flag to indicate whether initlization is finished or not */
 bool                    d_hook_enabled;
@@ -520,7 +528,7 @@ static void
 free_map(int idx);
 
 static void
-register_handler(int sig, struct sigaction *old_handler);
+register_handler(int sig, struct sigaction *old_handler, void *sig_func);
 
 static void
 print_summary(void);
@@ -6344,7 +6352,7 @@ new_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 		return (void *)(-1);
 	if (!segv_handler_inited) {
 		D_MUTEX_LOCK(&lock_mmap);
-		register_handler(SIGSEGV, &old_segv);
+		register_handler(SIGSEGV, &old_segv, (void *)sig_handler_sigv);
 		segv_handler_inited = true;
 		D_MUTEX_UNLOCK(&lock_mmap);
 	}
@@ -6628,7 +6636,41 @@ align_to_page_boundary(void *addr)
 }
 
 static void
-sig_handler(int code, siginfo_t *siginfo, void *ctx)
+sig_handler_sigbus(int code, siginfo_t *siginfo, void *ctx)
+{
+	ucontext_t             *context = ctx;
+
+	if (code != SIGBUS)
+		return old_segbus.sa_sigaction(code, siginfo, context);
+
+	void *buffer[100];
+	int size = backtrace(buffer, 100);
+
+	char **strings = backtrace_symbols(buffer, size);
+	if (strings == NULL) {
+		perror("backtrace_symbols");
+		exit(EXIT_FAILURE);
+	}
+
+	for (int i = 0; i < size; i++) {
+		char *func_name = strings[i];
+		char *open_paren = strchr(func_name, '(');
+		if (open_paren != NULL) {
+			*open_paren = '\0'; // Null-terminate the string before the opening parenthesis
+			char *func_start = strrchr(func_name, ' '); // Find the last space
+			if (func_start != NULL) {
+				func_name = func_start + 1; // Move pointer to the start of the function name
+			}
+		}
+		printf("%d: %s\n", i, func_name);
+	}
+
+	free(strings);
+	return old_segbus.sa_sigaction(code, siginfo, context);
+}
+
+static void
+sig_handler_sigv(int code, siginfo_t *siginfo, void *ctx)
 {
 	char                   *addr, err_msg[256];
 	size_t                  bytes_read, length;
@@ -6716,14 +6758,14 @@ sig_handler(int code, siginfo_t *siginfo, void *ctx)
 }
 
 static void
-register_handler(int sig, struct sigaction *old_handler)
+register_handler(int sig, struct sigaction *old_handler, void *sig_func)
 {
 	struct sigaction        action;
 	int                     rc;
 
 	action.sa_flags = SA_RESTART;
 	action.sa_handler = NULL;
-	action.sa_sigaction = sig_handler;
+	action.sa_sigaction = sig_func;
 	action.sa_flags |= SA_SIGINFO;
 	sigemptyset(&action.sa_mask);
 
@@ -7105,6 +7147,7 @@ init_myhook(void)
 	install_hook();
 	d_hook_enabled   = 1;
 	hook_enabled_bak = d_hook_enabled;
+	register_handler(SIGSEGV, &old_segbus, (void *)sig_handler_sigbus);
 }
 
 static void
