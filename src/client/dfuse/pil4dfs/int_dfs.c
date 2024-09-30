@@ -6652,6 +6652,11 @@ sig_handler_sigbus(int code, siginfo_t *siginfo, void *ctx)
 		exit(EXIT_FAILURE);
 	}
 
+	FILE *fout;
+	fout = fopen("/dev/shm/dbg.txt", "a+");
+	if (fout == NULL)
+		goto err;
+	fprintf(fout, "%d\n", getpid());
 	for (int i = 0; i < size; i++) {
 		char *func_name = strings[i];
 		char *open_paren = strchr(func_name, '(');
@@ -6662,9 +6667,16 @@ sig_handler_sigbus(int code, siginfo_t *siginfo, void *ctx)
 				func_name = func_start + 1; // Move pointer to the start of the function name
 			}
 		}
-		printf("%d: %s\n", i, func_name);
+		fprintf(fout, "%d: %s\n", i, func_name);
+	}
+	fclose(fout);
+
+	volatile int  flag = 1;
+	while(flag) {
+		sleep(1);
 	}
 
+err:
 	free(strings);
 	return old_segbus.sa_sigaction(code, siginfo, context);
 }
