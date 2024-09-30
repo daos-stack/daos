@@ -524,7 +524,7 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 
 		if (rlim.rlim_cur < MIN_TCP_FD) {
 			if (rlim.rlim_max < MIN_TCP_FD) {
-				D_ERROR("File descriptor soft limit should be at least %d\n",
+				D_ERROR("File descriptor hard limit should be at least %d\n",
 					MIN_TCP_FD);
 				goto next;
 			}
@@ -534,8 +534,8 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 			if (rc != 0) {
 				DS_ERROR(errno,
 					 "setrlimit() failed. Unable to bump file descriptor"
-					 " limit to suitable value (>= %d)",
-					 MIN_TCP_FD);
+					 " limit to value >= %d, limit is %lu",
+					 MIN_TCP_FD, rlim.rlim_max);
 			}
 			D_INFO("Updated soft file descriptor limit to %lu\n", rlim.rlim_max);
 		}
