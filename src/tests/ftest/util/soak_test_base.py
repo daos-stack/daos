@@ -21,7 +21,7 @@ from ClusterShell.NodeSet import NodeSet
 from exception_utils import CommandFailure
 from general_utils import journalctl_time
 from host_utils import get_local_host
-from run_utils import run_local, run_remote
+from run_utils import daos_env_str, run_local, run_remote
 from soak_utils import (SoakTestError, add_pools, build_job_script, cleanup_dfuse,
                         create_app_cmdline, create_dm_cmdline, create_fio_cmdline,
                         create_ior_cmdline, create_macsio_cmdline, create_mdtest_cmdline,
@@ -313,11 +313,12 @@ class SoakTestBase(TestWithServers):
         jobs_not_done = []
         # remove any nodes marked as DOWN
         node_list.difference_update(self.down_nodes)
-        lib_path = os.getenv("LD_LIBRARY_PATH")
-        path = os.getenv("PATH")
+        # lib_path = os.getenv("LD_LIBRARY_PATH")
+        # path = os.getenv("PATH")
         v_env = os.getenv("VIRTUAL_ENV")
-        env = ";".join([f"export LD_LIBRARY_PATH={lib_path}",
-                        f"export PATH={path}"])
+        env = daos_env_str(os.environ)
+        # env = ";".join([f"export LD_LIBRARY_PATH={lib_path}",
+        #                 f"export PATH={path}"])
         if v_env:
             env = ";".join([env, f"export VIRTUAL_ENV={v_env}"])
         for job_dict in self.joblist:
