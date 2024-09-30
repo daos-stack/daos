@@ -1053,7 +1053,7 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, crt_provider_t provider, int idx,
 		D_GOTO(error, rc = -DER_HG);
 	}
 
-	hg_ctx->chc_diag_pub_ts     = 0;
+	hg_ctx->chc_diag_repub_ts   = d_time_ms(0);
 	hg_ctx->chc_hgcla           = hg_class;
 	hg_ctx->chc_shared_hg_class = sep_mode;
 

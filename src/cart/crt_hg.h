@@ -150,7 +150,7 @@ struct crt_hg_context {
 	struct crt_hg_pool           chc_hg_pool;            /* HG handle pool */
 	int                          chc_provider;           /* provider */
 	bool                         chc_thread_mode_single; /* thread safety */
-	uint64_t                     chc_diag_pub_ts;        /* time of last diagnostics pub */
+	struct timespec              chc_diag_repub_ts;      /* time of last diagnostics pub */
 	struct crt_hg_metrics        chc_metrics;            /* HG metrics */
 	int                          chc_epfd;               /* epoll fd */
 	struct crt_hg_progress_multi chc_progress_multi;     /* multi progress */
