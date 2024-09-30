@@ -536,6 +536,7 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 					 "setrlimit() failed. Unable to bump file descriptor"
 					 " limit to value >= %d, limit is %lu",
 					 MIN_TCP_FD, rlim.rlim_max);
+				goto next;
 			}
 			D_INFO("Updated soft file descriptor limit to %lu\n", rlim.rlim_max);
 		}
