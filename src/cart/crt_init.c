@@ -492,9 +492,13 @@ out:
 	return rc;
 }
 
+#define MIN_TCP_FD 131072
+
 static void
 prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 {
+	struct rlimit rlim;
+	int	 rc;
 	uint32_t mrc_enable = 0;
 
 	/* Avoid applying same settings multiple times */
@@ -509,6 +513,32 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 		if (prov == CRT_PROV_OFI_TCP_RXM && crt_is_service())
 			d_setenv("FI_OFI_RXM_DEF_TCP_WAIT_OBJ", "pollfd", 0);
 	}
+
+	if (prov == CRT_PROV_OFI_TCP || prov == CRT_PROV_OFI_TCP_RXM) {
+		/* Bump file descriptor limit if low and if possible */
+		rc = getrlimit(RLIMIT_NOFILE, &rlim);
+		if (rc != 0) {
+			DS_WARN(errno, "getrlimit() failed. Unable to check file descriptor limit");
+			goto next;
+		}
+
+		if (rlim.rlim_cur < MIN_TCP_FD) {
+			if (rlim.rlim_max < MIN_TCP_FD) {
+				D_ERROR("File descriptor soft limit should be at least %d\n",
+				       MIN_TCP_FD);
+				goto next;
+			}
+
+			rlim.rlim_cur = rlim.rlim_max;
+			rc = setrlimit(RLIMIT_NOFILE, &rlim);
+			if (rc != 0) {
+				DS_ERROR(errno, "setrlimit() failed. Unable to bump file descriptor"
+					 " limit to suitable value (>= %d)", MIN_TCP_FD);
+			}
+			D_INFO("Updated soft file descriptor limit to %lu\n", rlim.rlim_max);
+		}
+	}
+next:
 
 	if (prov == CRT_PROV_OFI_CXI)
 		mrc_enable = 1;
