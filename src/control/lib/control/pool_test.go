@@ -2173,23 +2173,6 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 			expScmBytes:  200 * humanize.GByte, // Double meta-blob-sz due to mem-ratio.
 			expNvmeBytes: humanize.TByte,
 		},
-		"single MD-on-SSD server; phase-2 mode; shared wal+meta+data roles": {
-			hostsConfigArray: []MockHostStorageConfig{
-				{
-					HostName:  "foo",
-					ScmConfig: []MockScmConfig{newScmCfg(0)},
-					NvmeConfig: []MockNvmeConfig{
-						newNvmeCfg(0, storage.BdevRoleAll),
-						newNvmeCfg(0, storage.BdevRoleAll),
-					},
-				},
-			},
-			memRatio:    0.5,
-			expScmBytes: 200 * humanize.GByte,
-			// Expected DATA available capacity is SSD total cap - META required
-			// capacity (ramdisk_avail / mem_ratio).
-			expNvmeBytes: (2 * humanize.TByte) - (200 * humanize.GByte),
-		},
 		"single ephemeral server": {
 			hostsConfigArray: []MockHostStorageConfig{
 				{
@@ -2891,7 +2874,7 @@ func TestControl_PoolCreateAllCmd(t *testing.T) {
 					NvmeConfig: []MockNvmeConfig{newNvmeCfg(0, 0)},
 				},
 			},
-			expError: errors.New("not enough scm storage available with ratio 1%"),
+			expError: errors.New("Not enough SCM storage available with ratio 1%"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

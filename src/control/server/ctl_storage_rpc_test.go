@@ -2310,15 +2310,15 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 		rdbWalSize      uint64 = 512 * humanize.MiByte
 	)
 
-	type StorageCfg struct {
+	type storageCfg struct {
 		targetCount int
 		tierCfgs    storage.TierConfigs
 	}
-	type DataInput struct {
-		storageCfgs  []*StorageCfg
+	type dataInput struct {
+		storageCfgs  []*storageCfg
 		scanNvmeResp *ctlpb.ScanNvmeResp
 	}
-	type ExpectedOutput struct {
+	type expectedOutput struct {
 		totalBytes     []uint64
 		availableBytes []uint64
 		usableBytes    []uint64
@@ -2344,12 +2344,12 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		input  DataInput
-		output ExpectedOutput
+		input  dataInput
+		output expectedOutput
 	}{
 		"homogeneous": {
-			input: DataInput{
-				storageCfgs: []*StorageCfg{
+			input: dataInput{
+				storageCfgs: []*storageCfg{
 					{
 						targetCount: 12,
 						tierCfgs: storage.TierConfigs{
@@ -2444,7 +2444,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 					},
 				},
 			},
-			output: ExpectedOutput{
+			output: expectedOutput{
 				totalBytes: []uint64{
 					10 * hugeClusterSize,
 					10 * hugeClusterSize,
@@ -2469,8 +2469,8 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 			},
 		},
 		"heterogeneous": {
-			input: DataInput{
-				storageCfgs: []*StorageCfg{
+			input: dataInput{
+				storageCfgs: []*storageCfg{
 					{
 						targetCount: 11,
 						tierCfgs: storage.TierConfigs{
@@ -2567,7 +2567,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 					},
 				},
 			},
-			output: ExpectedOutput{
+			output: expectedOutput{
 				totalBytes: []uint64{
 					10 * hugeClusterSize,
 					10 * hugeClusterSize,
@@ -2592,8 +2592,8 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 			},
 		},
 		"new": {
-			input: DataInput{
-				storageCfgs: []*StorageCfg{
+			input: dataInput{
+				storageCfgs: []*storageCfg{
 					{
 						targetCount: 7,
 						tierCfgs: storage.TierConfigs{
@@ -2637,7 +2637,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 					},
 				},
 			},
-			output: ExpectedOutput{
+			output: expectedOutput{
 				totalBytes: []uint64{
 					10 * hugeClusterSize,
 					10 * hugeClusterSize,
@@ -2654,8 +2654,8 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 			},
 		},
 		"evicted": {
-			input: DataInput{
-				storageCfgs: []*StorageCfg{
+			input: dataInput{
+				storageCfgs: []*storageCfg{
 					{
 						targetCount: 7,
 						tierCfgs: storage.TierConfigs{
@@ -2699,7 +2699,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 					},
 				},
 			},
-			output: ExpectedOutput{
+			output: expectedOutput{
 				totalBytes: []uint64{
 					10 * hugeClusterSize,
 					10 * hugeClusterSize,
@@ -2716,8 +2716,8 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 			},
 		},
 		"missing targets": {
-			input: DataInput{
-				storageCfgs: []*StorageCfg{
+			input: dataInput{
+				storageCfgs: []*storageCfg{
 					{
 						targetCount: 4,
 						tierCfgs: storage.TierConfigs{
@@ -2761,7 +2761,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 					},
 				},
 			},
-			output: ExpectedOutput{
+			output: expectedOutput{
 				totalBytes: []uint64{
 					10 * hugeClusterSize,
 					10 * hugeClusterSize,
@@ -2778,8 +2778,8 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 			},
 		},
 		"missing cluster size": {
-			input: DataInput{
-				storageCfgs: []*StorageCfg{
+			input: dataInput{
+				storageCfgs: []*storageCfg{
 					{
 						targetCount: 7,
 						tierCfgs: storage.TierConfigs{
@@ -2822,7 +2822,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 					},
 				},
 			},
-			output: ExpectedOutput{
+			output: expectedOutput{
 				totalBytes: []uint64{
 					10 * hugeClusterSize,
 					10 * hugeClusterSize,
@@ -2839,8 +2839,8 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 			},
 		},
 		"multi bdev tier": {
-			input: DataInput{
-				storageCfgs: []*StorageCfg{
+			input: dataInput{
+				storageCfgs: []*storageCfg{
 					{
 						targetCount: 5,
 						tierCfgs:    storage.TierConfigs{newTierCfg(1)},
@@ -2873,7 +2873,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 							SmdDevices: []*ctlpb.SmdDevice{
 								{
 									Uuid:        "nvme0",
-									TgtIds:      []int32{0, 1, 2, 3},
+									TgtIds:      []int32{0, 1, 2, 3, 4},
 									TotalBytes:  10 * humanize.GiByte,
 									AvailBytes:  10 * humanize.GiByte,
 									ClusterSize: clusterSize,
@@ -2903,7 +2903,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 							SmdDevices: []*ctlpb.SmdDevice{
 								{
 									Uuid:        "nvme2",
-									TgtIds:      []int32{0, 1, 2, 3},
+									TgtIds:      []int32{0, 1, 2, 3, 4, 5},
 									TotalBytes:  10 * humanize.GiByte,
 									AvailBytes:  10 * humanize.GiByte,
 									ClusterSize: clusterSize,
@@ -2933,7 +2933,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 							SmdDevices: []*ctlpb.SmdDevice{
 								{
 									Uuid:        "nvme4",
-									TgtIds:      []int32{0, 1, 2, 3},
+									TgtIds:      []int32{0, 1, 2, 3, 4},
 									TotalBytes:  10 * humanize.GiByte,
 									AvailBytes:  10 * humanize.GiByte,
 									ClusterSize: clusterSize,
@@ -2948,12 +2948,12 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 							SmdDevices: []*ctlpb.SmdDevice{
 								{
 									Uuid:        "nvme5",
-									TgtIds:      []int32{0, 1, 2, 3},
+									TgtIds:      []int32{0, 1, 2, 3, 4, 5},
 									TotalBytes:  10 * humanize.GiByte,
 									AvailBytes:  10 * humanize.GiByte,
 									ClusterSize: clusterSize,
 									Rank:        5,
-									RoleBits:    storage.BdevRoleMeta | storage.BdevRoleMeta,
+									RoleBits:    storage.BdevRoleMeta | storage.BdevRoleWAL,
 								},
 							},
 							DevState: devStateNormal,
@@ -2961,7 +2961,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 					},
 				},
 			},
-			output: ExpectedOutput{
+			output: expectedOutput{
 				totalBytes: []uint64{
 					320 * clusterSize,
 					320 * clusterSize,
@@ -2979,9 +2979,22 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 					0 * humanize.GiByte,
 				},
 				usableBytes: []uint64{
+					// 5tgts * 64mib = 320mib of meta on SSD (10 clusters)
+					// 256mib RDB = 8 clusters
+					// 320-18 = 302 remaining clusters
+					// 302 / 5 = 60 clusters-per-target (rounding diff)
 					300 * clusterSize,
+					// 4tgts * 128mib = 512mib of wal on SSD (16 clusters)
+					// 512mib WAL RDB = 16 clusters
+					// 320-32 = 288 remaining clusters
 					288 * clusterSize,
-					260 * clusterSize,
+					// 6tgts * 64mib = 384mib of meta on SSD (12 clusters)
+					// 6tgts * 128mib = 768mib of wal on SSD (24 clusters)
+					// 256mib RDB = 8 clusters
+					// 512mib WAL RDB = 16 clusters
+					// 320-60 = 260 remaining clusters
+					// 260 / 6 = 43 clusters-per-target (rounding diff)
+					258 * clusterSize,
 					0 * humanize.GiByte,
 					0 * humanize.GiByte,
 					0 * humanize.GiByte,
@@ -3008,14 +3021,14 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 			for idx, ctlr := range tc.input.scanNvmeResp.GetCtrlrs() {
 				dev := ctlr.GetSmdDevices()[0]
 				test.AssertEqual(t, tc.output.totalBytes[idx], dev.GetTotalBytes(),
-					fmt.Sprintf("Invalid total bytes with ctlr %s (index=%d): wait=%d, got=%d",
+					fmt.Sprintf("Invalid total bytes with ctlr %s (index=%d): want=%d, got=%d",
 						ctlr.GetPciAddr(), idx, tc.output.totalBytes[idx], dev.GetTotalBytes()))
 				test.AssertEqual(t, tc.output.availableBytes[idx], dev.GetAvailBytes(),
-					fmt.Sprintf("Invalid available bytes with ctlr %s (index=%d): wait=%d, got=%d",
+					fmt.Sprintf("Invalid available bytes with ctlr %s (index=%d): want=%d, got=%d",
 						ctlr.GetPciAddr(), idx, tc.output.availableBytes[idx], dev.GetAvailBytes()))
 				test.AssertEqual(t, tc.output.usableBytes[idx], dev.GetUsableBytes(),
 					fmt.Sprintf("Invalid usable bytes with ctlr %s (index=%d), "+
-						"wait=%d (%d clusters) got=%d (%d clusters)",
+						"want=%d (%d clusters) got=%d (%d clusters)",
 						ctlr.GetPciAddr(), idx,
 						tc.output.usableBytes[idx], tc.output.usableBytes[idx]/clusterSize,
 						dev.GetUsableBytes(), dev.GetUsableBytes()/clusterSize))
@@ -3030,7 +3043,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 }
 
 func TestServer_getRdbSize(t *testing.T) {
-	type ExpectedOutput struct {
+	type expectedOutput struct {
 		size    uint64
 		message string
 		err     error
@@ -3038,23 +3051,23 @@ func TestServer_getRdbSize(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		rdbSize string
-		output  ExpectedOutput
+		output  expectedOutput
 	}{
 		"simple env var": {
 			rdbSize: "DAOS_MD_CAP=1024",
-			output: ExpectedOutput{
+			output: expectedOutput{
 				size: 1024 * humanize.MiByte,
 			},
 		},
 		"simple default": {
-			output: ExpectedOutput{
+			output: expectedOutput{
 				size:    defaultRdbSize,
 				message: "using default RDB file size",
 			},
 		},
 		"invalid mdcap": {
 			rdbSize: "DAOS_MD_CAP=foo",
-			output: ExpectedOutput{
+			output: expectedOutput{
 				err: errors.New("invalid RDB file size"),
 			},
 		},
@@ -3100,23 +3113,23 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 		mountPoints []string
 	}
 
-	type DataInput struct {
+	type dataInput struct {
 		configs  []*EngineConfig
 		response *ctlpb.ScanScmResp
 	}
 
-	type ExpectedOutput struct {
+	type expectedOutput struct {
 		availableBytes []uint64
 		usableBytes    []uint64
 		message        string
 	}
 
 	for name, tc := range map[string]struct {
-		input  DataInput
-		output ExpectedOutput
+		input  dataInput
+		output expectedOutput
 	}{
 		"single mountPoint": {
-			input: DataInput{
+			input: dataInput{
 				configs: []*EngineConfig{
 					{
 						mountPoints: []string{"/mnt/daos0"},
@@ -3134,13 +3147,13 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 					},
 				},
 			},
-			output: ExpectedOutput{
+			output: expectedOutput{
 				availableBytes: []uint64{uint64(64) * humanize.GiByte},
 				usableBytes:    []uint64{uint64(64)*humanize.GiByte - defaultRdbSize - mdDaosScmBytes - mdFsScmBytes},
 			},
 		},
 		"three mountPoints": {
-			input: DataInput{
+			input: dataInput{
 				configs: []*EngineConfig{
 					{
 						mdCap:       "DAOS_MD_CAP=1024",
@@ -3173,7 +3186,7 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 					},
 				},
 			},
-			output: ExpectedOutput{
+			output: expectedOutput{
 				availableBytes: []uint64{
 					uint64(64) * humanize.GiByte,
 					uint64(32) * humanize.GiByte,
@@ -3187,7 +3200,7 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 			},
 		},
 		"Missing SCM": {
-			input: DataInput{
+			input: dataInput{
 				configs: []*EngineConfig{
 					{
 						mdCap:       "DAOS_MD_CAP=1024",
@@ -3220,7 +3233,7 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 					},
 				},
 			},
-			output: ExpectedOutput{
+			output: expectedOutput{
 				availableBytes: []uint64{
 					uint64(64) * humanize.GiByte,
 					uint64(32) * humanize.GiByte,
@@ -3235,7 +3248,7 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 			},
 		},
 		"No more space": {
-			input: DataInput{
+			input: dataInput{
 				configs: []*EngineConfig{
 					{
 						mountPoints: []string{"/mnt/daos0"},
@@ -3253,14 +3266,14 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 					},
 				},
 			},
-			output: ExpectedOutput{
+			output: expectedOutput{
 				availableBytes: []uint64{uint64(64) * humanize.KiByte},
 				usableBytes:    []uint64{0},
 				message:        "No more usable space in SCM device",
 			},
 		},
 		"Multi bdev Tiers": {
-			input: DataInput{
+			input: dataInput{
 				configs: []*EngineConfig{
 					{
 						mdCap:       "DAOS_MD_CAP=1024",
@@ -3287,7 +3300,7 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 					},
 				},
 			},
-			output: ExpectedOutput{
+			output: expectedOutput{
 				availableBytes: []uint64{
 					uint64(64) * humanize.GiByte,
 					uint64(32) * humanize.GiByte,
@@ -3335,12 +3348,12 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 
 			for index, namespace := range tc.input.response.Namespaces {
 				test.AssertEqual(t, tc.output.availableBytes[index], namespace.GetMount().GetAvailBytes(),
-					fmt.Sprintf("Invalid SCM available bytes: nsp=%s, wait=%s (%d bytes), got=%s (%d bytes)",
+					fmt.Sprintf("Invalid SCM available bytes: nsp=%s, want=%s (%d bytes), got=%s (%d bytes)",
 						namespace.GetMount().GetPath(),
 						humanize.Bytes(tc.output.availableBytes[index]), tc.output.availableBytes[index],
 						humanize.Bytes(namespace.GetMount().GetAvailBytes()), namespace.GetMount().GetAvailBytes()))
 				test.AssertEqual(t, tc.output.usableBytes[index], namespace.GetMount().GetUsableBytes(),
-					fmt.Sprintf("Invalid SCM usable bytes: nsp=%s, wait=%s (%d bytes), got=%s (%d bytes)",
+					fmt.Sprintf("Invalid SCM usable bytes: nsp=%s, want=%s (%d bytes), got=%s (%d bytes)",
 						namespace.GetMount().GetPath(),
 						humanize.Bytes(tc.output.usableBytes[index]), tc.output.usableBytes[index],
 						humanize.Bytes(namespace.GetMount().GetUsableBytes()), namespace.GetMount().GetUsableBytes()))
@@ -3355,11 +3368,11 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 }
 
 func TestServer_CtlSvc_getEngineCfgFromNvmeCtl(t *testing.T) {
-	type DataInput struct {
+	type dataInput struct {
 		tierCfgs storage.TierConfigs
 		nvmeCtlr *ctl.NvmeController
 	}
-	type ExpectedOutput struct {
+	type expectedOutput struct {
 		res bool
 		msg string
 	}
@@ -3376,32 +3389,32 @@ func TestServer_CtlSvc_getEngineCfgFromNvmeCtl(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		input  DataInput
-		output ExpectedOutput
+		input  dataInput
+		output expectedOutput
 	}{
 		"find NVME Ctlr": {
-			input: DataInput{
+			input: dataInput{
 				tierCfgs: newTierCfgs(5),
 				nvmeCtlr: &ctl.NvmeController{
 					PciAddr: test.MockPCIAddr(3),
 				},
 			},
-			output: ExpectedOutput{res: true},
+			output: expectedOutput{res: true},
 		},
 		"not find NVME Ctlr": {
-			input: DataInput{
+			input: dataInput{
 				tierCfgs: newTierCfgs(5),
 				nvmeCtlr: &ctl.NvmeController{
 					PciAddr: test.MockPCIAddr(13),
 				},
 			},
-			output: ExpectedOutput{
+			output: expectedOutput{
 				res: false,
 				msg: "unknown PCI device",
 			},
 		},
 		"find VMD device": {
-			input: DataInput{
+			input: dataInput{
 				tierCfgs: storage.TierConfigs{
 					storage.NewTierConfig().
 						WithStorageClass(storage.ClassNvme.String()).
@@ -3411,10 +3424,10 @@ func TestServer_CtlSvc_getEngineCfgFromNvmeCtl(t *testing.T) {
 					PciAddr: "040603:02:00.0",
 				},
 			},
-			output: ExpectedOutput{res: true},
+			output: expectedOutput{res: true},
 		},
 		"Invalid address": {
-			input: DataInput{
+			input: dataInput{
 				tierCfgs: storage.TierConfigs{
 					storage.NewTierConfig().
 						WithStorageClass(storage.ClassNvme.String()).
@@ -3424,7 +3437,7 @@ func TestServer_CtlSvc_getEngineCfgFromNvmeCtl(t *testing.T) {
 					PciAddr: "666",
 				},
 			},
-			output: ExpectedOutput{
+			output: expectedOutput{
 				res: false,
 				msg: "Invalid PCI address",
 			},
@@ -3442,7 +3455,7 @@ func TestServer_CtlSvc_getEngineCfgFromNvmeCtl(t *testing.T) {
 
 			if tc.output.res {
 				test.AssertEqual(t, engineCfg, ec,
-					fmt.Sprintf("Invalid engine config: wait=%v got=%v", engineCfg, ec))
+					fmt.Sprintf("Invalid engine config: want=%v got=%v", engineCfg, ec))
 				return
 			}
 
@@ -3456,11 +3469,11 @@ func TestServer_CtlSvc_getEngineCfgFromNvmeCtl(t *testing.T) {
 }
 
 func TestServer_CtlSvc_getEngineCfgFromScmNsp(t *testing.T) {
-	type DataInput struct {
+	type dataInput struct {
 		tierCfgs storage.TierConfigs
 		scmNsp   *ctl.ScmNamespace
 	}
-	type ExpectedOutput struct {
+	type expectedOutput struct {
 		res bool
 		msg string
 	}
@@ -3477,11 +3490,11 @@ func TestServer_CtlSvc_getEngineCfgFromScmNsp(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		input  DataInput
-		output ExpectedOutput
+		input  dataInput
+		output expectedOutput
 	}{
 		"find SCM Nsp": {
-			input: DataInput{
+			input: dataInput{
 				tierCfgs: newTierCfgs(5),
 				scmNsp: &ctl.ScmNamespace{
 					Mount: &ctl.ScmNamespace_Mount{
@@ -3489,10 +3502,10 @@ func TestServer_CtlSvc_getEngineCfgFromScmNsp(t *testing.T) {
 					},
 				},
 			},
-			output: ExpectedOutput{res: true},
+			output: expectedOutput{res: true},
 		},
 		"not find SCM Nsp": {
-			input: DataInput{
+			input: dataInput{
 				tierCfgs: newTierCfgs(5),
 				scmNsp: &ctl.ScmNamespace{
 					Mount: &ctl.ScmNamespace_Mount{
@@ -3500,7 +3513,7 @@ func TestServer_CtlSvc_getEngineCfgFromScmNsp(t *testing.T) {
 					},
 				},
 			},
-			output: ExpectedOutput{
+			output: expectedOutput{
 				res: false,
 				msg: "unknown SCM mount point"},
 		},
@@ -3517,7 +3530,7 @@ func TestServer_CtlSvc_getEngineCfgFromScmNsp(t *testing.T) {
 
 			if tc.output.res {
 				test.AssertEqual(t, engineCfg, ec,
-					fmt.Sprintf("Invalid engine config: wait=%v got=%v", engineCfg, ec))
+					fmt.Sprintf("Invalid engine config: want=%v got=%v", engineCfg, ec))
 				return
 			}
 

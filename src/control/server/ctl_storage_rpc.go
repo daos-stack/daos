@@ -473,13 +473,14 @@ func (cs *ControlService) addDeviceToAdjust(devsStat map[uint32]*deviceSizeStat,
 		}
 	}
 	devsStat[devToAdjust.rank].devs = append(devsStat[devToAdjust.rank].devs, devToAdjust)
-	targetCount := uint64(len(dev.GetTgtIds()))
-	clusterPerTarget := dataClusterCount / targetCount
+	devTgtCount := uint64(len(dev.GetTgtIds()))
+	clusterPerTarget := dataClusterCount / devTgtCount
 	cs.log.Tracef("SMD device %s (rank %d, ctlr %s) added to the list of device to adjust",
 		dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
 	if clusterPerTarget < devsStat[devToAdjust.rank].clusterPerTarget {
 		cs.log.Tracef("Updating number of clusters per target of rank %d: old=%d new=%d",
-			devToAdjust.rank, devsStat[devToAdjust.rank].clusterPerTarget, clusterPerTarget)
+			devToAdjust.rank, devsStat[devToAdjust.rank].clusterPerTarget,
+			clusterPerTarget)
 		devsStat[devToAdjust.rank].clusterPerTarget = clusterPerTarget
 	}
 }
@@ -494,48 +495,24 @@ func getClusterCount(sizeBytes uint64, tgtCount int, clusterSize uint64) uint64 
 	return clusterCount * uint64(tgtCount)
 }
 
-func getMaxTgtsPerSSD(engineCfg *engine.Config) int {
-	bdevCount := 0
-	for _, bc := range engineCfg.Storage.Tiers.BdevConfigs() {
-		if bc.Bdev.DeviceRoles.HasMeta() {
-			// Assumes only a single tier can have META role.
-			bdevCount = bc.Bdev.DeviceList.Len()
-			break
-		}
-	}
-
-	if bdevCount == 0 {
-		return 0
-	}
-
-	tgtsPerSSD := engineCfg.TargetCount / bdevCount
-
-	if engineCfg.TargetCount%bdevCount != 0 {
-		return tgtsPerSSD + 1
-	}
-
-	return tgtsPerSSD
-}
-
 func (cs *ControlService) getMetaClusterCount(engineCfg *engine.Config, devToAdjust deviceToAdjust) (subtrClusterCount uint64) {
 	dev := devToAdjust.ctlr.GetSmdDevices()[devToAdjust.idx]
 	clusterSize := uint64(dev.GetClusterSize())
+	// Calculate MD cluster overhead based on the number of targets allocated to the device
+	// as per-target blobs will be striped across all of a given role's SSDs.
+	devTgtCount := len(dev.GetTgtIds())
 
 	if dev.GetRoleBits()&storage.BdevRoleMeta != 0 {
-		// Calculate clusters based on the maximum possible number of targets per SSD as
-		// MD-blobs will be striped across all META-role-SSDs.
-		nrTgtsPerSSD := getMaxTgtsPerSSD(engineCfg)
-		clusterCount := getClusterCount(dev.GetMetaSize(), nrTgtsPerSSD, clusterSize)
-		cs.log.Tracef("Removing %d Metadata clusters (cluster size: %d, max tgts/SSD: %d) from the usable size of the SMD device %s (rank %d, ctlr %s): ",
-			clusterCount, clusterSize, nrTgtsPerSSD, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
+		clusterCount := getClusterCount(dev.GetMetaSize(), devTgtCount, clusterSize)
+		cs.log.Tracef("Removing %d Metadata clusters (cluster size: %d, dev tgts: %d) from the usable size of the SMD device %s (rank %d, ctlr %s): ",
+			clusterCount, clusterSize, devTgtCount, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
 		subtrClusterCount += clusterCount
 	}
 
 	if dev.GetRoleBits()&storage.BdevRoleWAL != 0 {
-		clusterCount := getClusterCount(dev.GetMetaWalSize(), engineCfg.TargetCount,
-			clusterSize)
-		cs.log.Tracef("Removing %d Metadata WAL clusters (cluster size: %d) from the usable size of the SMD device %s (rank %d, ctlr %s): ",
-			clusterCount, clusterSize, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
+		clusterCount := getClusterCount(dev.GetMetaWalSize(), devTgtCount, clusterSize)
+		cs.log.Tracef("Removing %d Metadata WAL clusters (cluster size: %d, dev tgts: %d) from the usable size of the SMD device %s (rank %d, ctlr %s): ",
+			clusterCount, clusterSize, devTgtCount, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
 		subtrClusterCount += clusterCount
 	}
 
@@ -545,7 +522,7 @@ func (cs *ControlService) getMetaClusterCount(engineCfg *engine.Config, devToAdj
 
 	if dev.GetRoleBits()&storage.BdevRoleMeta != 0 {
 		clusterCount := getClusterCount(dev.GetRdbSize(), 1, clusterSize)
-		cs.log.Tracef("Removing %d RDB clusters (cluster size: %d) the usable size of the SMD device %s (rank %d, ctlr %s)",
+		cs.log.Tracef("Removing %d RDB clusters (cluster size: %d) from the usable size of the SMD device %s (rank %d, ctlr %s)",
 			clusterCount, clusterSize, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
 		subtrClusterCount += clusterCount
 	}
@@ -560,7 +537,8 @@ func (cs *ControlService) getMetaClusterCount(engineCfg *engine.Config, devToAdj
 	return
 }
 
-// Adjust the NVME available size to its real usable size.
+// Estimate the NVME size available to store pool data after metadata overheads have been
+// accounted for.
 func (cs *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 	devsStat := make(map[uint32]*deviceSizeStat, 0)
 	for _, ctlr := range resp.GetCtrlrs() {
@@ -604,7 +582,7 @@ func (cs *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 			clusterSize := uint64(dev.GetClusterSize())
 			availBytes := (dev.GetAvailBytes() / clusterSize) * clusterSize
 			if dev.GetAvailBytes() != availBytes {
-				cs.log.Tracef("Adjusting available size of SMD device %s (rank %d, ctlr %s): from %s (%d Bytes) to %s (%d bytes)",
+				cs.log.Tracef("Rounding available size of SMD device %s based on cluster size (rank %d, ctlr %s): from %s (%d Bytes) to %s (%d bytes)",
 					dev.GetUuid(), rank, ctlr.GetPciAddr(),
 					humanize.Bytes(dev.GetAvailBytes()), dev.GetAvailBytes(),
 					humanize.Bytes(availBytes), availBytes)
@@ -639,8 +617,8 @@ func (cs *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 	for rank, item := range devsStat {
 		for _, dev := range item.devs {
 			smdDev := dev.ctlr.GetSmdDevices()[dev.idx]
-			targetCount := uint64(len(smdDev.GetTgtIds()))
-			smdDev.UsableBytes = targetCount * item.clusterPerTarget * smdDev.GetClusterSize()
+			devTgtCount := uint64(len(smdDev.GetTgtIds()))
+			smdDev.UsableBytes = devTgtCount * item.clusterPerTarget * smdDev.GetClusterSize()
 			cs.log.Debugf("Defining usable size of the SMD device %s (rank %d, ctlr %s) as %s (%d bytes)",
 				smdDev.GetUuid(), rank, dev.ctlr.GetPciAddr(),
 				humanize.Bytes(smdDev.GetUsableBytes()), smdDev.GetUsableBytes())
