@@ -1034,8 +1034,8 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, crt_provider_t provider, int idx,
 	hg_ctx->chc_spindown_ms   = crt_gdata.cg_progress_spindown_ms;
 	hg_ctx->chc_spin_flag     = false;
 
-	hg_ctx->chc_diag_pub_ts = 0;
-	hg_ctx->chc_provider    = provider;
+	hg_ctx->chc_diag_repub_ts = (struct timespec){.tv_sec = 0, .tv_nsec = 0};
+	hg_ctx->chc_provider      = provider;
 
 	hg_ctx->chc_shared_hg_class = crt_provider_is_sep(true, provider);
 	hg_ctx->chc_thread_mode_single =

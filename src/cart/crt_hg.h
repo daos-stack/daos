@@ -159,7 +159,7 @@ struct crt_hg_context {
 	hg_class_t                  *chc_hgcla;           /* HG class */
 	hg_context_t                *chc_hgctx;           /* HG context */
 	hg_addr_t                    chc_self_addr;       /* cached self address */
-	uint64_t                     chc_diag_pub_ts;     /* time of last diagnostics pub */
+	struct timespec              chc_diag_repub_ts;   /* time of last diagnostics pub */
 	int                          chc_provider;        /* provider */
 	int                          chc_epfd;            /* epoll fd */
 	struct timespec              chc_spin_deadline;   /* deadline for spin loop */
