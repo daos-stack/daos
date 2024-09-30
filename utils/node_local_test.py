@@ -2318,7 +2318,7 @@ class PosixTests():
 
         # The value of attr-time.  Too slow and the test won't run fast enough and will fail,
         # too long and the wall-clock time will be affected.
-        attr_time = 20
+        attr_time = 30
 
         self.container.set_attrs({'dfuse-attr-time': str(attr_time),
                                   'dfuse-data-cache': '5m',
