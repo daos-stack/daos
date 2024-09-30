@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -12,11 +12,14 @@ import logging
 import sys
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 
-from util.agent_utils_params import DaosAgentTransportCredentials, DaosAgentYamlParameters
+from util.agent_utils_params import (DaosAgentTelemetryCredentials, DaosAgentTransportCredentials,
+                                     DaosAgentYamlParameters)
 from util.command_utils_base import CommonConfig
-from util.dmg_utils_params import DmgTransportCredentials, DmgYamlParameters
+from util.dmg_utils_params import (DmgTelemetryCredentials, DmgTransportCredentials,
+                                   DmgYamlParameters)
 from util.exception_utils import CommandFailure
-from util.server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
+from util.server_utils_params import (DaosServerTelemetryCredentials,
+                                      DaosServerTransportCredentials, DaosServerYamlParameters)
 
 
 def generate_agent_config(args):
@@ -31,6 +34,7 @@ def generate_agent_config(args):
     """
     common_cfg = CommonConfig(args.group_name, DaosAgentTransportCredentials())
     config = DaosAgentYamlParameters(args.agent_file, common_cfg)
+    config.telemetry_config = DaosAgentTelemetryCredentials()
     # Update the configuration file access points
     config.other_params.access_points.value = args.node_list.split(",")
     return create_config(args, config)
@@ -48,6 +52,7 @@ def generate_server_config(args):
     """
     common_cfg = CommonConfig(args.group_name, DaosServerTransportCredentials())
     config = DaosServerYamlParameters(args.server_file, common_cfg)
+    config.telemetry_config = DaosServerTelemetryCredentials()
     config.engine_params[0].storage.storage_tiers[0].storage_class.value = "ram"
     config.engine_params[0].storage.storage_tiers[0].scm_mount.value = "/mnt/daos"
     config.engine_params[0].storage.storage_tiers[0].scm_size.value = 0
@@ -68,6 +73,7 @@ def generate_dmg_config(args):
     """
     config = DmgYamlParameters(
         args.dmg_file, args.group_name, DmgTransportCredentials())
+    config.telemetry_config = DmgTelemetryCredentials()
     # Update the configuration file hostlist
     config.hostlist.value = args.node_list.split(",")
     return create_config(args, config)
