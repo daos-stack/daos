@@ -1013,7 +1013,7 @@ struct dfuse_inode_entry {
 	 *
 	 * Future accesses of the inode should check active, if the value is 0 then there is nothing
 	 * to do.
-	 * If active is positive then it should increate active, wait on the semaphore, decrease
+	 * If active is positive then it should increase active, wait on the semaphore, decrease
 	 * active and then post the semaphore if active != 0;
 	 *
 	 * After active is 0, (or the semaphore has been waited on) then the new stat structure is
