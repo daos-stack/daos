@@ -27,7 +27,7 @@ class DmgTransportCredentials(TransportCredentials):
 
 
 class DmgTelemetryCredentials(TelemetryCredentials):
-    """Transport credentials listing certificates for secure communication."""
+    """Telemetry credentials listing certificates for secure communication."""
 
     def __init__(self, log_dir="/tmp"):
         """Initialize a TelemetryCredentials object."""
@@ -53,6 +53,8 @@ class DmgYamlParameters(YamlParameters):
             filename (str): yaml configuration file name
             name (str): The DAOS system name.
             transport (DmgTransportCredentials): dmg security
+                configuration settings.
+            telemetry (DmgTelemetryCredentials): dmg telemetry
                 configuration settings.
         """
         super().__init__("/run/dmg/*", filename, None, transport)

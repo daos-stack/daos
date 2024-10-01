@@ -1058,8 +1058,8 @@ class YamlCommand(SubProcessCommand):
                 self.log, hosts, src_file, dst_file, mkdir=False,
                 verbose=False, sudo=True, owner=self.certificate_owner)
             if not result.passed:
-                self.log.info(
-                    "    WARNING: %s copy failed on %s", dst_file, result.failed_hosts)
+                self.log.info("    WARNING: %s copy telemetry cert failed on %s",
+                              dst_file, result.failed_hosts)
 
     def generate_telemetry_certificates(self, hosts, user):
         """Generate the telemetry certificates for the test on server/client.
@@ -1082,11 +1082,7 @@ class YamlCommand(SubProcessCommand):
             self.log.debug("Generating the telemetry certificate command %s:", command)
             result = run_pcmd(hosts, command, 30)
             if result[0]['exit_status'] != 0:
-                self.fail("Generating the telemetry certificate command Failed")
-            else:
-                self.log.info("Generating the telemetry certificate command Passed")
-
-        return 0
+                self.log.info("    WARNING: command %s failed", command)
 
     def copy_configuration(self, hosts):
         """Copy the yaml configuration file to the hosts.

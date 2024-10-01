@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,7 +8,8 @@ import os
 import yaml
 from apricot import TestWithServers
 from command_utils_base import CommonConfig
-from server_utils import DaosServerTransportCredentials, DaosServerYamlParameters
+from server_utils import (DaosServerTelemetryCredentials, DaosServerTransportCredentials,
+                          DaosServerYamlParameters)
 
 
 class StorageTiers(TestWithServers):
@@ -67,6 +68,7 @@ class StorageTiers(TestWithServers):
 
         common_config = CommonConfig("daos_server", DaosServerTransportCredentials())
         config = DaosServerYamlParameters(None, common_config)
+        config.telemetry_config = DaosServerTelemetryCredentials()
         config.namespace = self.server_config_namespace
         config.get_params(self)
         data = config.get_yaml_data()

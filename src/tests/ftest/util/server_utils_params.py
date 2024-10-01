@@ -65,6 +65,11 @@ class DaosServerTelemetryCredentials(TelemetryCredentials):
         """Initialize a TelemetryConfig object."""
         super().__init__("/run/server_config/telemetry_config/*", None, log_dir)
 
+        # Additional daos_server telemetry credential parameters:
+        #   - port: <int> : Telemetry endpoint port number
+        #   - server_cert: <str>: Server certificate
+        #   - server_key: <str>: Server Key portion
+        #
         self.port = BasicParameter(None, 9191)
         self.server_cert = LogParameter(self._log_dir, None, "telemetryserver.crt")
         self.server_key = LogParameter(self._log_dir, None, "telemetryserver.key")
