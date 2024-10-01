@@ -454,12 +454,14 @@ def launch_jobscript(
     joblog = job_log1.replace("RHOST", str(rhost))
     errorlog = error_log1.replace("RHOST", str(rhost))
     cmd = ";".join([env, f"{script} {hosts} {job_id} {joblog} {errorlog}"])
-    if "_fio_" in job_log:
-        job_results = run_remote(
-            log, rhost, cmd, verbose=False, timeout=timeout * 60, task_debug=False, stderr=False)
-    else:
-        job_results = run_local(
-            log, cmd, verbose=False, timeout=timeout * 60, capture_output=False, stderr=False)
+    # if "_fio_" in job_log:
+    #     job_results = run_remote(
+    #         log, rhost, cmd, verbose=False, timeout=timeout * 60, task_debug=False, stderr=False)
+    # else:
+    #     job_results = run_local(
+    #         log, cmd, verbose=False, timeout=timeout * 60, capture_output=False, stderr=False)
+    job_results = run_remote(
+        log, rhost, cmd, verbose=False, timeout=timeout * 60, task_debug=False, stderr=False)
     if job_results:
         if job_results.timeout:
             state = "TIMEOUT"
