@@ -169,7 +169,7 @@ Depending on the provider used, each engine might also listen on a range of port
 the case for the tcp provider. This range will start at the fabric_iface_port specified in the
 server YAML file and use two ports for management, one port per target and helper xstream. For instance,
 with fabric_iface_port set to 20000, 16 targets and 4 helper streams, the engine will listen on ports
-range from 20000 to 20021 for a total of 22 ports.
+in the range from 20000 to 20021 for a total of 22 ports.
 
 Moreover, there are cases where an engine might have to initiate a connection to a running application.
 In this case, inbound connection from the storage nodes to the compute nodes must be allowed.
