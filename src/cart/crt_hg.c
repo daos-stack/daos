@@ -1829,7 +1829,8 @@ crt_hg_event_progress_serial(struct crt_hg_context *hg_ctx, const struct timespe
 
 	/* Ensure that only one thread enters progress, other threads will wait until deadline or
 	 * until the current thread has finished progressing. */
-	if (!crt_hg_progress_multi_trylock(&hg_ctx->chc_progress_multi, deadline)) {
+	if (!hg_ctx->chc_thread_mode_single &&
+	    !crt_hg_progress_multi_trylock(&hg_ctx->chc_progress_multi, deadline)) {
 		*trigger_count_p = CRT_HG_TRIGGER_COUNT;
 		return DER_SUCCESS;
 	}
@@ -1865,7 +1866,8 @@ crt_hg_event_progress_serial(struct crt_hg_context *hg_ctx, const struct timespe
 	}
 
 out:
-	crt_hg_progress_multi_unlock(&hg_ctx->chc_progress_multi);
+	if (!hg_ctx->chc_thread_mode_single)
+		crt_hg_progress_multi_unlock(&hg_ctx->chc_progress_multi);
 	return rc;
 }
 
