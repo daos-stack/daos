@@ -14,6 +14,13 @@ set -e
 
 arch=$(uname -i)
 
+# hack to install 24.04's golang-go on 22.04:
+apt-get install -y software-properties-common
+add-apt-repository "deb http://archive.ubuntu.com/ubuntu noble main"
+apt-get update
+apt-get install -y golang-go
+add-apt-repository -r "deb http://archive.ubuntu.com/ubuntu noble main"
+
 apt-get install \
     autoconf \
     build-essential \
@@ -52,6 +59,7 @@ apt-get install \
     pkg-config \
     python3-dev \
     python3-venv \
+    strace \
     uuid-dev \
     valgrind \
     yasm

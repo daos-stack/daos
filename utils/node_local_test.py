@@ -1522,8 +1522,8 @@ class DFuse():
         print(f'Logged il to {log_name}')
         print(ret)
 
-        if self.caching:
-            check_fstat = False
+        check_fstat = check_fstat and not self.caching and \
+            look_for_library_call(self.conf, cmd, '__fxstat')
 
         try:
             log_test(self.conf, log_name, check_read=check_read, check_write=check_write,
@@ -6327,6 +6327,23 @@ def server_fi(args):
         # Turn off fault injection again to assist in server shutdown.
         server.set_fi(probability=0)
         server.set_fi(probability=0)
+
+
+def look_for_library_call(conf, cmd, library_str):
+    # pylint: disable=wrong-spelling-in-docstring
+    """Look for library_str in the strace call stack of running cmd."""
+    with tempfile.NamedTemporaryFile(mode='r',
+                                     prefix='dnt_assess_',
+                                     suffix='.strace',
+                                     dir=conf.tmp_dir) as tmpfile:
+        strace_cmd = ['strace', '--stack-traces', '-v', '-o', tmpfile.name] + cmd
+        subprocess.run(strace_cmd, check=True)
+        lines = tmpfile.readlines()
+    for line in lines:
+        if re.search(library_str, line):
+            return True
+
+    return False
 
 
 def run(wf, args):
