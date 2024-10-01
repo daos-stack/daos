@@ -276,6 +276,9 @@ pipeline {
         booleanParam(name: 'CI_medium_md_on_ssd_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium MD on SSD test stage')
+        booleanParam(name: 'CI_medium_vmd_TEST',
+                     defaultValue: true,
+                     description: 'Run the Functional Hardware Medium VMD test stage')
         booleanParam(name: 'CI_medium_verbs_provider_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium Verbs Provider test stage')
@@ -1053,7 +1056,8 @@ pipeline {
                             stash name: 'fault-inject-valgrind',
                                   includes: '*.memcheck.xml',
                                   allowEmpty: true
-                            archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/'
+                            archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/',
+                                             allowEmptyArchive: true
                             job_status_update()
                         }
                     }

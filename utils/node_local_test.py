@@ -1096,6 +1096,7 @@ class DaosServer():
         if report:
             cmd_env['D_IL_REPORT'] = '1'
         cmd_env['LD_PRELOAD'] = join(self.conf['PREFIX'], 'lib64', 'libpil4dfs.so')
+        cmd_env['D_IL_NO_BYPASS'] = '1'
         if container is not None:
             # Create a temporary directory for the mount point, this will be removed as it goes out
             # scope so keep as a local for the rest of the function.
@@ -5805,6 +5806,7 @@ class AllocFailTest():
             cwd = tmp_dir.name
             cmd_env['DAOS_MOUNT_POINT'] = cwd
             cmd_env['LD_PRELOAD'] = join(self.conf['PREFIX'], 'lib64', 'libpil4dfs.so')
+            cmd_env['D_IL_NO_BYPASS'] = '1'
             cmd_env['DAOS_POOL'] = self._use_pil4dfs.pool.id()
             cmd_env['DAOS_CONTAINER'] = self._use_pil4dfs.id()
 
@@ -6395,7 +6397,17 @@ def run(wf, args):
     # If the perf-check option is given then re-start everything without much
     # debugging enabled and run some micro-benchmarks to give numbers for use
     # as a comparison against other builds.
+    run_fi = False
+
     if args.perf_check or fi_test or fi_test_dfuse:
+        fs = subprocess.run([os.path.join(conf['PREFIX'], 'bin', 'fault_status')], check=False)
+        print(fs)
+        if fs.returncode == 0:
+            run_fi = True
+        else:
+            print("Unable to detect fault injection feature, skipping testing")
+
+    if run_fi:
         args.server_debug = 'INFO'
         args.memcheck = 'no'
         args.dfuse_debug = 'WARN'
