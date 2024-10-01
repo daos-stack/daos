@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2021 Intel Corporation.
+  (C) Copyright 2021-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -90,7 +90,7 @@ class TestHarnessSkipsSkipped(TestHarnessSkipsBase):
 
         :avocado: tags=all
         :avocado: tags=vm
-        :avocado: tags=harness,test_skips
+        :avocado: tags=harness,harness_skips
         :avocado: tags=TestHarnessSkipsSkipped,test_case_1
         """
         if not self.cancelled:
@@ -101,7 +101,7 @@ class TestHarnessSkipsSkipped(TestHarnessSkipsBase):
 
         :avocado: tags=all
         :avocado: tags=vm
-        :avocado: tags=harness,test_skips
+        :avocado: tags=harness,harness_skips
         :avocado: tags=TestHarnessSkipsSkipped,test_case_3
         """
         if not self.cancelled:
@@ -125,7 +125,7 @@ class TestHarnessSkipsRun(TestHarnessSkipsBase):
 
         :avocado: tags=all
         :avocado: tags=vm
-        :avocado: tags=harness,test_skips
+        :avocado: tags=harness,harness_skips
         :avocado: tags=TestHarnessSkipsRun,test_case_2
         """
 
@@ -134,7 +134,7 @@ class TestHarnessSkipsRun(TestHarnessSkipsBase):
 
         :avocado: tags=all
         :avocado: tags=vm
-        :avocado: tags=harness,test_skips
+        :avocado: tags=harness,harness_skips
         :avocado: tags=TestHarnessSkipsRun,test_case_4
         """
 
@@ -143,7 +143,7 @@ class TestHarnessSkipsRun(TestHarnessSkipsBase):
 
         :avocado: tags=all
         :avocado: tags=vm
-        :avocado: tags=harness,test_skips
+        :avocado: tags=harness,harness_skips
         :avocado: tags=TestHarnessSkipsRun,test_case_5
         """
 
@@ -152,6 +152,6 @@ class TestHarnessSkipsRun(TestHarnessSkipsBase):
 
         :avocado: tags=all
         :avocado: tags=vm
-        :avocado: tags=harness,test_skips
+        :avocado: tags=harness,harness_skips
         :avocado: tags=TestHarnessSkipsRun,test_case_6
         """

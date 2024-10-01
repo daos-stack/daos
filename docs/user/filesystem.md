@@ -1021,16 +1021,23 @@ libpil4dfs intercepting summary for ops on DFS:
 [op_sum ]  5003
 ```
 
+### Bypassing function interception in libpil4dfs
+libpil4dfs enhances I/O performance by bypassing the fuse kernel when going over dfuse for I/O intensive workloads. In some scenarios however, for short-running applications (e.g., simple linux commands like cat, mkdir, chmod, etc.), there is no enough incentive to justify initializing the DAOS environment in user space with libpil4dfs, since this is relatively expensive. Such overhead is particularly noticeable for processes that complete within tens or hundreds of milliseconds and run frequently.
+To address this issue, DAOS can disable function interception by libpil4dfs for specific executables/commands listed below:
+
+"arch", "as", "awk", "basename", "bc", "cal", "cat", "chmod", "chown", "clang", "clear", "cmake", "cmake3", "cp", "cpp", "daos", "daos_agent", "daos_engine", "daos_server", "df", "dfuse", "dmg", "expr", "f77", "f90", "f95", "file", "gawk", "gcc", "gfortran", "gmake", "go", "gofmt", "grep", "g++", "head", "link", "ln", "ls", "kill", "m4", "make", "mkdir", "mktemp", "mv", "nasm", "yasm", "nm",  "numactl", "patchelf", "ping", "pkg-config", "ps", "pwd", "ranlib", "readelf", "readlink", "rename", "rm", "rmdir", "rpm", "sed", "seq", "size", "sleep", "sort", "ssh", "stat", "strace", "strip", "su", "sudo", "tail", "tee", "telnet", "time", "top", "touch", "tr", "truncate", "uname", "vi", "vim", "whoami", "yes"
+
+Also some scripting tools for package management, configuration and compiling,
+"autoconf", "configure", "dnf", "dnf-3", "libtool", "libtoolize", "lsb_release", "meson", "scons", scons-3"
+
+In addition, DAOS provides an environment variable (D_IL_BYPASS_LIST) to disable function interception by libpil4dfs for specific applications that are set in that env with the following syntax:
+```
+$ export D_IL_BYPASS_LIST="app_a:app_b:app_c:app_d"
+```
+
 ### Turn on compatible mode in libpil4dfs
 Fake file descriptor (FD) is used in regular mode in libpil4dfs.so for efficiency. open() returns fake fd to applications. In cases of some APIs are not intercepted, applications could crash with the error "Bad File Descriptor". Compatible mode is provided to work around such situations.
 Setting env "D_IL_COMPATIBLE=1" turns on compatible mode. Kernel fd allocated by dfuse instead of fake fd will be returned to applications. This mode provides better compatibility with degraded performance in open, openat, and opendir, etc. Please start dfuse with "--disable-caching" to disable caching before using compatible mode.
-
-### Child Process Inheritance
-
-Normally child processes inherit environmental variables from parent processes. In rare cases, e.g.
-scons, envs are striped off when calling execve().  It might be useful to force pil4dfs related env
-set in child processes by setting env "D_IL_ENFORCE_EXEC_ENV=1". This flag is 0 if not set.
-
 
 ### Directory caching
 

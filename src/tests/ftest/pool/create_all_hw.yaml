@@ -181,6 +181,3 @@ server_configurations: !mux
             1:
               class: nvme
               bdev_list: ["bbbb:bb:bb.b"]
-
-pool:
-  control_method: dmg

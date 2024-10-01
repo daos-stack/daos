@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.7.100
-Release:       6%{?relval}%{?dist}
+Release:       7%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -81,7 +81,7 @@ BuildRequires: libyaml-devel
 BuildRequires: libcmocka-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
-BuildRequires: go >= 1.17
+BuildRequires: go >= 1.21
 BuildRequires: pciutils-devel
 %if (0%{?rhel} >= 8)
 BuildRequires: numactl-devel
@@ -218,7 +218,7 @@ Requires: dbench
 Requires: lbzip2
 Requires: attr
 Requires: ior
-Requires: go >= 1.18
+Requires: go >= 1.21
 %if (0%{?suse_version} >= 1315)
 Requires: lua-lmod
 Requires: libcapstone-devel
@@ -599,7 +599,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Thu Sep 26 2024 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.7.100-6
+* Tue Oct 01 2024 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.7.100-7
 - Add support of the PMDK package 2.1.0 with NDCTL enabled.
   * Increase the default ULT stack size to 20KiB if the engine uses
     the DCPM storage class.
@@ -612,6 +612,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
       Otherwise, a user is supposed to be stopped by an error
       like: "Unsafe shutdown count is not supported for this source".
 
+* Mon Sep 23 2024 Kris Jacque <kris.jacque@intel.com> 2.7.100-6
+- Bump min supported go version to 1.21
+
 * Thu Aug 15 2024 Michael MacDonald <mjmac@google.com> 2.7.100-5
 - Add libdaos_self_test.so to client RPM
 
@@ -621,7 +624,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 * Thu Jul 11 2024 Dalton Bohning <dalton.bohning@intel.com> 2.7.100-3
 - Add pciutils-devel build dep for client-tests package
 
-* Thu Jun 24 2024 Tom Nabarro <tom.nabarro@intel.com> 2.7.100-2
+* Mon Jun 24 2024 Tom Nabarro <tom.nabarro@intel.com> 2.7.100-2
 - Add pciutils runtime dep for daos_server lspci call
 - Add pciutils-devel build dep for pciutils CGO bindings
 

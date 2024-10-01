@@ -250,6 +250,8 @@ func TestDaos_SelfTestResult_MarshalJSON(t *testing.T) {
       "fail_count": 0
     }
   },
+  "rpc_count_per_second": 1500,
+  "rpc_bytes_per_second": 3072000,
   "repetitions": 3000,
   "send_size": 1024,
   "reply_size": 1024,

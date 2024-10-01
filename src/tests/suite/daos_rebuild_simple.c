@@ -224,7 +224,7 @@ rebuild_snap_update_recs(void **state)
 	struct ioreq	req;
 	daos_recx_t	recx;
 	int		tgt = DEFAULT_FAIL_TGT;
-	char		string[100] = { 0 };
+	char		string[100 * SNAP_CNT] = { 0 };
 	daos_epoch_t	snap_epoch[SNAP_CNT];
 	int		i;
 	int		rc;
