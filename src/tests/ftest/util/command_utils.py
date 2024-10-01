@@ -21,7 +21,7 @@ from command_utils_base import (BasicParameter, CommandWithParameters, Environme
 from exception_utils import CommandFailure
 from file_utils import change_file_owner, create_directory, distribute_files
 from general_utils import (DaosTestError, check_file_exists, get_file_listing,
-                           get_job_manager_class, get_subprocess_stdout, run_command, run_pcmd)
+                           get_job_manager_class, get_subprocess_stdout, run_command)
 from run_utils import command_as_user, run_remote
 from user_utils import get_primary_group
 from yaml_utils import get_yaml_data
@@ -1038,7 +1038,7 @@ class YamlCommand(SubProcessCommand):
                 self._command, ", ".join(names))
             get_file_listing(hosts, names, self.run_user).log_output(self.log)
 
-    def copy_telemetry_certificates(self, source, hosts):
+    def copy_telemetry_root_certificates(self, source, hosts):
         """Copy telemetry certificates files from the source to the destination hosts.
 
         Args:
@@ -1061,7 +1061,7 @@ class YamlCommand(SubProcessCommand):
                 self.log.info("    WARNING: %s copy telemetry cert failed on %s",
                               dst_file, result.failed_hosts)
 
-    def generate_telemetry_certificates(self, hosts, user):
+    def generate_telemetry_server_certificates(self, hosts, user):
         """Generate the telemetry certificates for the test on server/client.
 
         Args:
@@ -1080,8 +1080,8 @@ class YamlCommand(SubProcessCommand):
             command = os.path.join(certgen_dir, "gen_telemetry_server_certificate.sh ")
             command = "sudo " + command + user + " " + destination
             self.log.debug("Generating the telemetry certificate command %s:", command)
-            result = run_pcmd(hosts, command, 30)
-            if result[0]['exit_status'] != 0:
+            result = run_remote(self.log, hosts, command, 30)
+            if not result.passed:
                 self.log.info("    WARNING: command %s failed", command)
 
     def copy_configuration(self, hosts):

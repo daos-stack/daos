@@ -803,12 +803,12 @@ class TelemetryCredentials(YamlParameters):
     """Telemetry credentials listing certificates for secure communication."""
 
     def __init__(self, namespace, title, log_dir):
-        """Initialize a TelemetryConfig object.
+        """Initialize a TelemetryCredentials object.
 
         Args:
             namespace (str): yaml namespace (path to parameters)
-            title (str, optional): namespace under which to place the
-                parameters when creating the yaml file. Defaults to None.
+            title (str): namespace under which to place the
+                parameters when creating the yaml file.
             log_dir (str): location of the certificate files
         """
         super().__init__(namespace, None, title)

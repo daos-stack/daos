@@ -47,20 +47,6 @@ class DaosAgentTelemetryCredentials(TelemetryCredentials):
         self.server_cert = LogParameter(self._log_dir, None, "telemetryserver.crt")
         self.server_key = LogParameter(self._log_dir, None, "telemetryserver.key")
 
-    def get_certificate_data(self, name_list):
-        """Get certificate data.
-
-        Args:
-            name_list (list): list of certificate attribute names.
-
-        Returns:
-            data (dict): a dictionary of parameter directory name keys and
-                value.
-
-        """
-        data = super().get_certificate_data(name_list)
-        return data
-
     def _get_new(self):
         """Get a new object based upon this one.
 
