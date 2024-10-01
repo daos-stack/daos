@@ -220,6 +220,8 @@ struct crt_event_cb_priv {
 	ENV(SWIM_PING_TIMEOUT)                                                                     \
 	ENV(SWIM_PROTOCOL_PERIOD_LEN)                                                              \
 	ENV(SWIM_SUSPECT_TIMEOUT)                                                                  \
+	ENV(FI_TCP_PORT_LOW_RANGE)                                                                 \
+	ENV(FI_TCP_PORT_HIGH_RANGE)                                                                \
 	ENV_STR(UCX_IB_FORK_INIT)
 
 /* uint env */
