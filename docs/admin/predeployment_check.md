@@ -172,7 +172,7 @@ with fabric_iface_port set to 20000, 16 targets and 4 helper streams, the engine
 in the range from 20000 to 20021 for a total of 22 ports.
 
 Moreover, there are cases where an engine might have to initiate a connection to a running application.
-In this case, inbound connection from the storage nodes to the compute nodes must be allowed.
+In this case, inbound connections from the storage nodes to the compute nodes must be allowed.
 The default port range used by applications is 20100-21100 with the tcp provider. This can be modified
 by setting the FI_TCP_PORT_LOW_RANGE and FI_TCP_PORT_HIGH_RANGE environment variables before running
 the application.
