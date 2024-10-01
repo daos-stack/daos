@@ -492,14 +492,54 @@ out:
 	return rc;
 }
 
-#define MIN_TCP_FD 131072
+#define CRT_MIN_TCP_FD 131072
+
+/** For some providers, the we require a file descriptor for every connection
+ * and some platforms set the soft limit too low meaning and we run out. We can
+ * set the limit up to the configured max by default to avoid this and warn
+ * when that isn't possible.
+ */
+static void
+file_limit_bump(void)
+{
+	int           rc;
+	struct rlimit rlim;
+
+	/* Bump file descriptor limit if low and if possible */
+	rc = getrlimit(RLIMIT_NOFILE, &rlim);
+	if (rc != 0) {
+		DS_ERROR(errno, "getrlimit() failed. Unable to check file descriptor limit");
+		/** Per the man page, this can only fail if rlim is invalid */
+		D_ASSERT(0);
+		return;
+	}
+
+	if (rlim.rlim_cur < CRT_MIN_TCP_FD) {
+		if (rlim.rlim_max < CRT_MIN_TCP_FD) {
+			D_WARN("File descriptor hard limit should be at least %d\n",
+			       CRT_MIN_TCP_FD);
+			return;
+		}
+
+		rlim.rlim_cur = rlim.rlim_max;
+		rc            = setrlimit(RLIMIT_NOFILE, &rlim);
+		if (rc != 0) {
+			DS_ERROR(errno,
+				 "setrlimit() failed. Unable to bump file descriptor"
+				 " limit to value >= %d, limit is %lu",
+				 CRT_MIN_TCP_FD, rlim.rlim_max);
+			/** Per the man page, this can only fail if rlim is invalid */
+			D_ASSERT(0);
+			return;
+		}
+		D_INFO("Updated soft file descriptor limit to %lu\n", rlim.rlim_max);
+	}
+}
 
 static void
 prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 {
-	struct rlimit rlim;
-	int           rc;
-	uint32_t      mrc_enable = 0;
+	uint32_t mrc_enable = 0;
 
 	/* Avoid applying same settings multiple times */
 	if (g_prov_settings_applied[prov] == true)
@@ -514,34 +554,8 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 			d_setenv("FI_OFI_RXM_DEF_TCP_WAIT_OBJ", "pollfd", 0);
 	}
 
-	if (prov == CRT_PROV_OFI_TCP || prov == CRT_PROV_OFI_TCP_RXM) {
-		/* Bump file descriptor limit if low and if possible */
-		rc = getrlimit(RLIMIT_NOFILE, &rlim);
-		if (rc != 0) {
-			DS_WARN(errno, "getrlimit() failed. Unable to check file descriptor limit");
-			goto next;
-		}
-
-		if (rlim.rlim_cur < MIN_TCP_FD) {
-			if (rlim.rlim_max < MIN_TCP_FD) {
-				D_ERROR("File descriptor hard limit should be at least %d\n",
-					MIN_TCP_FD);
-				goto next;
-			}
-
-			rlim.rlim_cur = rlim.rlim_max;
-			rc            = setrlimit(RLIMIT_NOFILE, &rlim);
-			if (rc != 0) {
-				DS_ERROR(errno,
-					 "setrlimit() failed. Unable to bump file descriptor"
-					 " limit to value >= %d, limit is %lu",
-					 MIN_TCP_FD, rlim.rlim_max);
-				goto next;
-			}
-			D_INFO("Updated soft file descriptor limit to %lu\n", rlim.rlim_max);
-		}
-	}
-next:
+	if (prov == CRT_PROV_OFI_TCP || prov == CRT_PROV_OFI_TCP_RXM)
+		file_limit_bump();
 
 	if (prov == CRT_PROV_OFI_CXI)
 		mrc_enable = 1;
