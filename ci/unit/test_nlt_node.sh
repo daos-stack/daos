@@ -15,8 +15,6 @@ fi
 cd build
 tar -xf opt-daos.tar
 sudo mv opt/daos /opt/
-# set high open file limit in the shell to avoid extra warning
-sudo prlimit --nofile=:131072 --pid $$
 
 # Setup daos admin etc.
 sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_server_helper.sh"
@@ -38,6 +36,10 @@ pip install --upgrade pip
 pip install --requirement requirements-utest.txt
 
 pip install /opt/daos/lib/daos/python/
+
+# set high open file limit in the shell to avoid extra warning
+sudo prlimit --nofile=:131072 --pid $$
+prlimit -n --pid $$
 
 ./utils/node_local_test.py --max-log-size 1700MiB --dfuse-dir /localhome/jenkins/ \
     --log-usage-save nltir.xml --log-usage-export nltr.json all
