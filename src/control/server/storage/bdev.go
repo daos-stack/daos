@@ -395,6 +395,15 @@ func (nc NvmeController) Free() (tb uint64) {
 	return
 }
 
+// Usable returns the cumulative usable bytes of blobstore clusters. This is a projected data
+// capacity calculated whilst taking into account future pool metadata overheads.
+func (nc NvmeController) Usable() (tb uint64) {
+	for _, d := range nc.SmdDevices {
+		tb += d.UsableBytes
+	}
+	return
+}
+
 // Roles returns bdev_roles for NVMe controller being used in MD-on-SSD mode. Assume that all SMD
 // devices on a controller have the same roles.
 func (nc *NvmeController) Roles() *BdevRoles {
@@ -459,9 +468,13 @@ func (ncs NvmeControllers) Free() (tb uint64) {
 	return
 }
 
-// PercentUsage returns the percentage of used storage space.
-func (ncs NvmeControllers) PercentUsage() string {
-	return common.PercentageString(ncs.Total()-ncs.Free(), ncs.Total())
+// Usable returns the cumulative usable bytes of all blobstore clusters. This is a projected data
+// capacity calculated whilst taking into account future pool metadata overheads.
+func (ncs NvmeControllers) Usable() (tb uint64) {
+	for _, c := range ncs {
+		tb += (*NvmeController)(c).Usable()
+	}
+	return
 }
 
 // Summary reports accumulated storage space and the number of controllers.
@@ -501,6 +514,14 @@ func (ncs NvmeControllers) Addresses() (*hardware.PCIAddressSet, error) {
 		}
 	}
 	return pas, nil
+}
+
+// HaveMdOnSsdRoles returns true if bdev MD-on-SSD roles are configured on NVMe SSDs.
+func (ncs NvmeControllers) HaveMdOnSsdRoles() bool {
+	if ncs.Len() > 0 && !ncs[0].Roles().IsEmpty() {
+		return true
+	}
+	return false
 }
 
 // NvmeAioDevice returns struct representing an emulated NVMe AIO device (file or kdev).

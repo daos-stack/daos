@@ -374,6 +374,8 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 		snss := make(storage.ScmNamespaces, 0)
 		for _, i := range []int{0, 1} {
 			sm := storage.MockScmMountPoint(int32(i))
+			sm.AvailBytes = uint64((humanize.TByte/4)*3) * uint64(i)  // 75% available
+			sm.UsableBytes = uint64((humanize.TByte/4)*2) * uint64(i) // 50% usable
 			sns := storage.MockScmNamespace(int32(i))
 			sns.Mount = sm
 			snss = append(snss, sns)
@@ -387,8 +389,8 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 			nc.SocketID = int32(i % 2)
 			sd := storage.MockSmdDevice(nc, int32(i))
 			sd.TotalBytes = uint64(humanize.TByte) * uint64(i)
-			sd.AvailBytes = uint64((humanize.TByte/4)*3) * uint64(i)  // 25% used
-			sd.UsableBytes = uint64((humanize.TByte/4)*3) * uint64(i) // 25% used
+			sd.AvailBytes = uint64((humanize.TByte/4)*3) * uint64(i)  // 75% available
+			sd.UsableBytes = uint64((humanize.TByte/4)*2) * uint64(i) // 50% usable
 			nc.SmdDevices = append(nc.SmdDevices, sd)
 			ncs = append(ncs, nc)
 		}

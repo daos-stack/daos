@@ -14,6 +14,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -44,12 +45,71 @@ func PrintHostStorageUsageMap(hsm control.HostStorageMap, out io.Writer) error {
 		hosts := getPrintHosts(hss.HostSet.RangedString())
 		row := txtfmt.TableRow{hostsTitle: hosts}
 		storage := hss.HostStorage
-		row[scmTitle] = humanize.Bytes(storage.ScmNamespaces.Total())
-		row[scmFreeTitle] = humanize.Bytes(storage.ScmNamespaces.Free())
-		row[scmUsageTitle] = storage.ScmNamespaces.PercentUsage()
-		row[nvmeTitle] = humanize.Bytes(storage.NvmeDevices.Total())
-		row[nvmeFreeTitle] = humanize.Bytes(storage.NvmeDevices.Free())
-		row[nvmeUsageTitle] = storage.NvmeDevices.PercentUsage()
+
+		sns := storage.ScmNamespaces
+		row[scmTitle] = humanize.Bytes(sns.Total())
+		scmFree := sns.Free()
+		row[scmFreeTitle] = humanize.Bytes(scmFree)
+		row[scmUsageTitle] = common.PercentageString(sns.Total()-scmFree, sns.Total())
+
+		ncs := storage.NvmeDevices
+		row[nvmeTitle] = humanize.Bytes(ncs.Total())
+		nvmeFree := ncs.Free()
+		row[nvmeFreeTitle] = humanize.Bytes(nvmeFree)
+		row[nvmeUsageTitle] = common.PercentageString(ncs.Total()-nvmeFree, ncs.Total())
+
+		table = append(table, row)
+	}
+
+	tablePrint.Format(table)
+	return nil
+}
+
+// PrintHostStorageUsageMapMdOnSsd generates a human-readable representation of the supplied
+// HostStorageMap struct and writes utilization info to the supplied io.Writer in a format
+// relevant to MD-on-SSD mode.
+func PrintHostStorageUsageMapMdOnSsd(hsm control.HostStorageMap, out io.Writer, showUsable bool) error {
+	if len(hsm) == 0 {
+		return nil
+	}
+
+	hostsTitle := "Hosts"
+	scmTitle := "SCM-Total"
+	scmFreeTitle := "SCM-Free"
+	scmUsageTitle := "SCM-Used"
+	nvmeTitle := "NVMe-Total"
+	nvmeFreeTitle := "NVMe-Free"
+	nvmeUsageTitle := "NVMe-Used"
+
+	tablePrint := txtfmt.NewTableFormatter(hostsTitle, scmTitle, scmFreeTitle,
+		scmUsageTitle, nvmeTitle, nvmeFreeTitle, nvmeUsageTitle)
+	tablePrint.InitWriter(out)
+	table := []txtfmt.TableRow{}
+
+	for _, key := range hsm.Keys() {
+		hss := hsm[key]
+		hosts := getPrintHosts(hss.HostSet.RangedString())
+		row := txtfmt.TableRow{hostsTitle: hosts}
+		storage := hss.HostStorage
+
+		sns := storage.ScmNamespaces
+		row[scmTitle] = humanize.Bytes(sns.Total())
+		scmFree := sns.Free()
+		if showUsable {
+			scmFree = sns.Usable()
+		}
+		row[scmFreeTitle] = humanize.Bytes(scmFree)
+		row[scmUsageTitle] = common.PercentageString(sns.Total()-scmFree, sns.Total())
+
+		ncs := storage.NvmeDevices
+		row[nvmeTitle] = humanize.Bytes(ncs.Total())
+		nvmeFree := ncs.Free()
+		if showUsable {
+			nvmeFree = ncs.Usable()
+		}
+		row[nvmeFreeTitle] = humanize.Bytes(nvmeFree)
+		row[nvmeUsageTitle] = common.PercentageString(ncs.Total()-nvmeFree, ncs.Total())
+
 		table = append(table, row)
 	}
 

@@ -123,14 +123,28 @@ type usageQueryCmd struct {
 	ctlInvokerCmd
 	hostListCmd
 	cmdutil.JSONOutputCmd
+	ShowUsable bool          `short:"u" long:"show-usable" description:"Set to display potential data capacity of future pools by factoring in a new pool's metadata overhead. This can include the use of MD-on-SSD mem-ratio if specified to calculate meta-blob size when adjusting NVMe free capacity"`
+	MemRatio   tierRatioFlag `long:"mem-ratio" description:"Set the percentage of the pool metadata storage size (on SSD) that should be used as the memory file size (on ram-disk). Used to calculate data size for new MD-on-SSD phase-2 pools. Only valid with --show-usable flag"`
 }
 
 // Execute is run when usageQueryCmd activates.
 //
-// Queries NVMe and SCM usage on hosts.
+// Queries storage usage on hosts.
 func (cmd *usageQueryCmd) Execute(_ []string) error {
 	ctx := cmd.MustLogCtx()
-	req := &control.StorageScanReq{Usage: true}
+	req := &control.StorageScanReq{
+		Usage: true,
+	}
+	if cmd.MemRatio.IsSet() {
+		if !cmd.ShowUsable {
+			return errors.New("--mem-ratio is only supported with --show-usable flag")
+		}
+		f, err := ratiosToSingleFraction(cmd.MemRatio.Ratios())
+		if err != nil {
+			return errors.Wrap(err, "md-on-ssd mode query usage unexpected mem-ratio")
+		}
+		req.MemRatio = f
+	}
 	req.SetHostList(cmd.getHostList())
 	resp, err := control.StorageScan(ctx, cmd.ctlInvoker, req)
 
@@ -142,16 +156,32 @@ func (cmd *usageQueryCmd) Execute(_ []string) error {
 		return err
 	}
 
-	var bld strings.Builder
-	if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
+	var outErr strings.Builder
+	if err := pretty.PrintResponseErrors(resp, &outErr); err != nil {
 		return err
 	}
-	if err := pretty.PrintHostStorageUsageMap(resp.HostStorage, &bld); err != nil {
-		return err
+	if outErr.Len() > 0 {
+		cmd.Error(outErr.String())
 	}
-	// Infof prints raw string and doesn't try to expand "%"
-	// preserving column formatting in txtfmt table
-	cmd.Infof("%s", bld.String())
+
+	var out strings.Builder
+	if resp.HostStorage.IsMdOnSsdEnabled() {
+		if err := pretty.PrintHostStorageUsageMapMdOnSsd(resp.HostStorage, &out, cmd.ShowUsable); err != nil {
+			return err
+		}
+	} else {
+		if cmd.ShowUsable {
+			cmd.Notice("--show-usable flag ignored when MD-on-SSD is not enabled")
+		}
+		if err := pretty.PrintHostStorageUsageMap(resp.HostStorage, &out); err != nil {
+			return err
+		}
+	}
+	if out.Len() > 0 {
+		// Infof prints raw string and doesn't try to expand "%"
+		// preserving column formatting in txtfmt table
+		cmd.Infof("%s", out.String())
+	}
 
 	return resp.Errors()
 }

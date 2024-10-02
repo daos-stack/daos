@@ -295,11 +295,6 @@ func (sns ScmNamespaces) Usable() (tb uint64) {
 	return
 }
 
-// PercentUsage returns the percentage of used storage space.
-func (sns ScmNamespaces) PercentUsage() string {
-	return common.PercentageString(sns.Total()-sns.Free(), sns.Total())
-}
-
 // Summary reports total storage space and the number of namespaces.
 //
 // Capacity given in IEC standard units.
