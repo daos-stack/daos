@@ -482,7 +482,7 @@ restart:
 						drc_prev    = container_of(drc->drc_list.prev,
 									   struct dfuse_readdir_c,
 									   drc_list);
-						drc_prev->drc_next_offset = next_offset
+						drc_prev->drc_next_offset = next_offset;
 						d_list_del(&drc->drc_list);
 						D_FREE(drc);
 					} else if (rc != 0) {
