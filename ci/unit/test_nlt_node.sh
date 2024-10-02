@@ -15,6 +15,8 @@ fi
 cd build
 tar -xf opt-daos.tar
 sudo mv opt/daos /opt/
+# set high open file limit in the shell to avoid extra warning
+sudo prlimit -n=:131072 -p $$
 
 # Setup daos admin etc.
 sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_server_helper.sh"
