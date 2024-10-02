@@ -94,7 +94,7 @@ enum vos_gc_type {
  */
 
 /** Current durable format version */
-#define POOL_DF_VERSION                         VOS_POOL_DF_2_6
+#define POOL_DF_VERSION                         VOS_POOL_DF_2_8
 
 /** 2.2 features.  Until we have an upgrade path for RDB, we need to support more than one old
  *  version.
@@ -106,6 +106,9 @@ enum vos_gc_type {
 
 /** 2.6 features */
 #define VOS_POOL_FEAT_2_6                       (VOS_POOL_FEAT_FLAT_DKEY | VOS_POOL_FEAT_EMBED_FIRST)
+
+/** 2.8 features */
+#define VOS_POOL_FEAT_2_8			(VOS_POOL_FEAT_GANG_SV)
 
 /**
  * Durable format for VOS pool
