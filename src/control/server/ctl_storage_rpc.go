@@ -430,6 +430,9 @@ func metaRdbComputeSz(cs *ControlService, ei Engine, nsps []*ctlpb.ScmNamespace,
 		}
 
 		metaBytes = mp.GetUsableBytes() / uint64(ei.GetTargetCount())
+
+		// Divide VOS index file size by memRatio fraction, if nonzero, to project the
+		// effective meta-blob size. In MD-on-SSD phase-2, meta-blob > VOS-file size.
 		if memRatio > 0 {
 			metaBytes = uint64(float64(metaBytes) / float64(memRatio))
 		}
@@ -478,9 +481,9 @@ func (cs *ControlService) addDeviceToAdjust(devsStat map[uint32]*deviceSizeStat,
 	cs.log.Tracef("SMD device %s (rank %d, ctlr %s) added to the list of device to adjust",
 		dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
 	if clusterPerTarget < devsStat[devToAdjust.rank].clusterPerTarget {
-		cs.log.Tracef("Updating number of clusters per target of rank %d: old=%d new=%d",
-			devToAdjust.rank, devsStat[devToAdjust.rank].clusterPerTarget,
-			clusterPerTarget)
+		cs.log.Tracef("Updating number of clusters per target (%d/%d) of rank %d: old=%d "+
+			"new=%d", dataClusterCount, devTgtCount, devToAdjust.rank,
+			devsStat[devToAdjust.rank].clusterPerTarget, clusterPerTarget)
 		devsStat[devToAdjust.rank].clusterPerTarget = clusterPerTarget
 	}
 }
@@ -609,6 +612,8 @@ func (cs *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 				dev.UsableBytes = 0
 				continue
 			}
+			cs.log.Tracef("Removing %d metadata clusters from %d total",
+				subtrClusterCount, dataClusterCount)
 			dataClusterCount -= subtrClusterCount
 			cs.addDeviceToAdjust(devsStat, &devToAdjust, dataClusterCount)
 		}

@@ -276,6 +276,181 @@ func TestServer_bdevScan(t *testing.T) {
 				State: new(ctlpb.ResponseState),
 			},
 		},
+		"scan remote; bdev with md-on-ssd roles in config; no md info in smd devs": {
+			req: &ctlpb.ScanNvmeReq{
+				Health: true, Meta: true, AdjustMeta: true,
+			},
+			engTierCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(1)).
+						WithBdevDeviceRoles(storage.BdevRoleAll),
+				},
+			},
+			engStopped: []bool{false},
+			engErr:     []error{nil},
+			engRes: []ctlpb.ScanNvmeResp{
+				ctlpb.ScanNvmeResp{
+					Ctrlrs: proto.NvmeControllers{
+						func() *ctlpb.NvmeController {
+							nc := proto.MockNvmeController(1)
+							sd := &ctlpb.SmdDevice{
+								Rank:   uint32(0),
+								TgtIds: []int32{1, 2, 3, 4},
+								// Avoid rounding
+								AvailBytes:  32 * humanize.GByte,
+								ClusterSize: 32 * humanize.MByte,
+								RoleBits:    storage.BdevRoleAll,
+							}
+							nc.SmdDevices = []*ctlpb.SmdDevice{sd}
+							return nc
+						}(),
+					},
+				},
+			},
+			expResp: &ctlpb.ScanNvmeResp{
+				Ctrlrs: proto.NvmeControllers{
+					func() *ctlpb.NvmeController {
+						nc := proto.MockNvmeController(1)
+						sd := &ctlpb.SmdDevice{
+							Rank:        uint32(0),
+							TgtIds:      []int32{1, 2, 3, 4},
+							AvailBytes:  32 * humanize.GByte,
+							ClusterSize: 32 * humanize.MByte,
+							RoleBits:    storage.BdevRoleAll,
+							UsableBytes: 32 * humanize.GByte,
+						}
+						nc.SmdDevices = []*ctlpb.SmdDevice{sd}
+						return nc
+					}(),
+				},
+				State: new(ctlpb.ResponseState),
+			},
+		},
+		"scan remote; bdev with md-on-ssd roles in config; nvme capacity adjusted": {
+			req: &ctlpb.ScanNvmeReq{
+				Health: true, Meta: true, AdjustMeta: true,
+			},
+			engTierCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(1)).
+						WithBdevDeviceRoles(storage.BdevRoleAll),
+				},
+			},
+			engStopped: []bool{false},
+			engErr:     []error{nil},
+			engRes: []ctlpb.ScanNvmeResp{
+				ctlpb.ScanNvmeResp{
+					Ctrlrs: proto.NvmeControllers{
+						func() *ctlpb.NvmeController {
+							nc := proto.MockNvmeController(1)
+							sd := &ctlpb.SmdDevice{
+								Rank:   uint32(0),
+								TgtIds: []int32{1, 2, 3, 4},
+								// Avoid rounding
+								AvailBytes:  32 * humanize.GByte,
+								ClusterSize: 32 * humanize.MByte,
+								RoleBits:    storage.BdevRoleAll,
+								MetaSize:    humanize.GByte,
+								MetaWalSize: humanize.GByte,
+								RdbSize:     humanize.GByte,
+								RdbWalSize:  humanize.GByte,
+							}
+							nc.SmdDevices = []*ctlpb.SmdDevice{sd}
+							return nc
+						}(),
+					},
+				},
+			},
+			expResp: &ctlpb.ScanNvmeResp{
+				Ctrlrs: proto.NvmeControllers{
+					func() *ctlpb.NvmeController {
+						nc := proto.MockNvmeController(1)
+						sd := &ctlpb.SmdDevice{
+							Rank:        uint32(0),
+							TgtIds:      []int32{1, 2, 3, 4},
+							AvailBytes:  32 * humanize.GByte,
+							ClusterSize: 32 * humanize.MByte,
+							RoleBits:    storage.BdevRoleAll,
+							MetaSize:    humanize.GByte,
+							MetaWalSize: humanize.GByte,
+							RdbSize:     humanize.GByte,
+							RdbWalSize:  humanize.GByte,
+							// See TestServer_CtlSvc_adjustNvmeSize
+							// 320 clusters removed from 1000
+							// 680 remainder * 32mb = 2176mb
+							UsableBytes: 680 * (32 * humanize.MByte),
+						}
+						nc.SmdDevices = []*ctlpb.SmdDevice{sd}
+						return nc
+					}(),
+				},
+				State: new(ctlpb.ResponseState),
+			},
+		},
+		"scan remote; bdev with md-on-ssd roles in config; adjust disabled by flag": {
+			req: &ctlpb.ScanNvmeReq{
+				Health: true, Meta: true,
+			},
+			engTierCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(1)).
+						WithBdevDeviceRoles(storage.BdevRoleAll),
+				},
+			},
+			engStopped: []bool{false},
+			engErr:     []error{nil},
+			engRes: []ctlpb.ScanNvmeResp{
+				ctlpb.ScanNvmeResp{
+					Ctrlrs: proto.NvmeControllers{
+						func() *ctlpb.NvmeController {
+							nc := proto.MockNvmeController(1)
+							sd := &ctlpb.SmdDevice{
+								Rank:   uint32(0),
+								TgtIds: []int32{1, 2, 3, 4},
+								// Avoid rounding
+								AvailBytes:  32 * humanize.GByte,
+								ClusterSize: 32 * humanize.MByte,
+								RoleBits:    storage.BdevRoleAll,
+								MetaSize:    humanize.GByte,
+								MetaWalSize: humanize.GByte,
+								RdbSize:     humanize.GByte,
+								RdbWalSize:  humanize.GByte,
+							}
+							nc.SmdDevices = []*ctlpb.SmdDevice{sd}
+							return nc
+						}(),
+					},
+				},
+			},
+			expResp: &ctlpb.ScanNvmeResp{
+				Ctrlrs: proto.NvmeControllers{
+					func() *ctlpb.NvmeController {
+						nc := proto.MockNvmeController(1)
+						sd := &ctlpb.SmdDevice{
+							Rank:        uint32(0),
+							TgtIds:      []int32{1, 2, 3, 4},
+							AvailBytes:  32 * humanize.GByte,
+							ClusterSize: 32 * humanize.MByte,
+							RoleBits:    storage.BdevRoleAll,
+							MetaSize:    humanize.GByte,
+							MetaWalSize: humanize.GByte,
+							RdbSize:     humanize.GByte,
+							RdbWalSize:  humanize.GByte,
+						}
+						nc.SmdDevices = []*ctlpb.SmdDevice{sd}
+						return nc
+					}(),
+				},
+				State: new(ctlpb.ResponseState),
+			},
+		},
+		//		"scan remote; bdev with md-on-ssd roles in config; separate data role": {
 		"scan remote; collate results from multiple engines": {
 			req: &ctlpb.ScanNvmeReq{Health: true, Meta: true},
 			engTierCfgs: []storage.TierConfigs{

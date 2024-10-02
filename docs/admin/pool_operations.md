@@ -171,7 +171,7 @@ on pool size, but also on number of targets, target size, object class,
 storage redundancy factor, etc.
 
 
-#### MD-on-SSD mode specifics
+#### Creating a pool in MD-on-SSD mode
 
 In MD-on-SSD mode, a pool is made up of a single component in memory (RAM-disk
 associated with each engine) and three components on storage (NVMe SSD). The
@@ -180,25 +180,25 @@ assigned to hardware devices in the
 [server configuration file](https://docs.daos.io/v2.6/admin/deployment/#server-configuration-file).
 
 In MD-on-SSD mode pools are by default created with equal allocations for
-metadata in memory and metadata-on-SSD but it is possible to change this. To
+metadata-in-memory and metadata-on-SSD but it is possible to change this. To
 create a pool with a metadata-on-SSD allocation size that is double what is
 allocated in memory, set `dmg pool create --mem-ratio` option to `50%`. This
 implies that the ratio of metadata on memory and on storage should be 0.5 and
 therefore metadata-on-SSD allocation is twice that of metadata-in-memory.
 
-An MD-on-SSD pool created with a `--mem-ratio` between 0 and 100 percent is
+A MD-on-SSD pool created with a `--mem-ratio` between 0 and 100 percent is
 said to be operating in "phase-2" mode.
 
-#### MD-on-SSD phase-2 mode examples
+#### MD-on-SSD phase-2 pool create examples
 
 These examples cover the recommended way to create a pool in MD-on-SSD phase-2
 mode using the `--size` percentage option.
 
-The following is with a single host with dual engines where bdev roles META and
-DATA are not shared. Two pools are created with VOS index file size equal to
-half the meta-blob size (`--mem-ratio 50%`). Both pools use roughly half the
-original capacity available (first using 50% and the second 100% of the
-remainder).
+The following example is run on a single host with dual engines where bdev
+roles META and DATA are not shared. Two pools are created with VOS index file
+size equal to half the meta-blob size (`--mem-ratio 50%`). Both pools use
+roughly half the original capacity available (first using 50% and the second
+100% of the remainder).
 
 Rough calculations: `dmg storage scan` shows that for each rank, one 800GB SSD
 is assigned for each tier (first: WAL+META, second: DATA). `df -h /mnt/daos*`
