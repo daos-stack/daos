@@ -391,6 +391,7 @@ class Pil4dfsDcache(TestWithServers):
         env['D_IL_DCACHE_REC_TIMEOUT'] = '1'
         env['D_IL_DCACHE_GC_PERIOD'] = '2'
         env['D_IL_DCACHE_GC_RECLAIM_MAX'] = '2'
+        env['D_IL_NO_BYPASS'] = '1'
 
         env.update(kwargs)
 
