@@ -39,7 +39,7 @@ pip install /opt/daos/lib/daos/python/
 
 # set high open file limit in the shell to avoid extra warning
 sudo prlimit --nofile=:131072 --pid $$
-prlimit -n --pid $$
+prlimit -n
 
 ./utils/node_local_test.py --max-log-size 1700MiB --dfuse-dir /localhome/jenkins/ \
     --log-usage-save nltir.xml --log-usage-export nltr.json all
