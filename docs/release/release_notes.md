@@ -6,7 +6,7 @@ We are pleased to announce the release of DAOS version 2.6.
 
 The DAOS 2.6.1 release contains the following updates on top of DAOS 2.6.0:
 
-* Mercury update for slingshot 11.0 host stack and other UCX provider fixes
+* Mercury update for slingshot 11.0 host stack and other UCX provider fixes.
 
 ### Bug fixes and improvements
 
@@ -31,13 +31,14 @@ of administrator interface that can improve usability of DAOS system.
 
 * Add daos health check command which allows basic system health checks from client.
 
-* DAOS Version 2.6.0 always excludes unreachable engines reported by SWIM and
-  schedule rebuild for excluded engines, this is an overreaction if massive engines
-  are impacted by power failure or switch reboot because data recovery is impossible
-  in these cases. DAOS 2.6.1 stops changing pool membership if more than two failures
-  are detected before completing in progress rebuild, it will just let all I/O
-  and on-going rebuild block. DAOS system can finish in progress rebuild and be
-  available again after bringing back impacted engines.
+* DAOS Version 2.6.0 always excludes unreachable engines reported by SWIM and schedule rebuild for
+  excluded engines, this is an overreaction if massive engines are impacted by power failure or
+  switch reboot because data recovery is impossible in these cases. DAOS 2.6.1 introduces a new
+  environment variable to set in the server yaml file for each engine (DAOS_POOL_RF) to indicate the
+  number of engine failures seen before stopping the changing of pool membership and completing in
+  progress rebuild. It will just let all I/O and on-going rebuild block. DAOS system can finish in
+  progress rebuild and be available again after bringing back impacted engines. The recommendation
+  is to set this environment variable to 2.
 
 * In DAOS Version 2.6.0, accessing faulty NVMe device returns wrong error code
   to DAOS client which can fail the application. DAOS 2.6.1 returns correct
