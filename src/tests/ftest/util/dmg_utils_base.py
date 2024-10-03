@@ -533,7 +533,6 @@ class DmgCommandBase(YamlCommand):
                 super().__init__("/run/dmg/pool/query/*", "query")
                 self.pool = BasicParameter(None, position=1)
                 self.show_enabled = FormattedParameter("--show-enabled", False)
-                self.show_disabled = FormattedParameter("--show-disabled", False)
 
         class QueryTargetsSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool query-targets command."""

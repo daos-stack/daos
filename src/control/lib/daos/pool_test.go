@@ -130,7 +130,7 @@ func TestDaos_PoolQueryMask(t *testing.T) {
 			testMask: genTestMask(func(pqm *PoolQueryMask) {
 				*pqm = DefaultPoolQueryMask
 			}),
-			expString: genOptsStr(PoolQueryOptionRebuild, PoolQueryOptionSpace),
+			expString: genOptsStr(PoolQueryOptionDisabledEngines, PoolQueryOptionRebuild, PoolQueryOptionSpace),
 		},
 		"health-only query mask": {
 			testMask: genTestMask(func(pqm *PoolQueryMask) {
