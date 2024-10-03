@@ -832,6 +832,7 @@ child_hdlr(void)
 		else
 			ioil_iog.iog_main_eqh = ioil_eqh;
 	}
+	ioil_iog.iog_eq_count = 0;
 }
 
 /* Returns true on success */

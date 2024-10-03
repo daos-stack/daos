@@ -993,7 +993,8 @@ class DaosServerManager(SubprocessManager):
     def kill(self):
         """Forcibly terminate any server process running on hosts."""
         regex = self.manager.job.command_regex
-        detected, running = stop_processes(self.log, self._hosts, regex)
+        detected, running = stop_processes(
+            self.log, self._hosts, regex, user=self.manager.job.run_user)
         if not detected:
             self.log.info(
                 "No remote %s server processes killed on %s (none found), done.",

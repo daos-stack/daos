@@ -92,7 +92,9 @@ class ServerRankFailure(IorTestBase):
             engine_kill_host (str): Hostname to kill engine.
         """
         pattern = self.server_managers[0].manager.job.command_regex
-        detected, running = stop_processes(self.log, NodeSet(engine_kill_host), pattern)
+        detected, running = stop_processes(
+            self.log, NodeSet(engine_kill_host), pattern,
+            user=self.server_managers[0].manager.job.run_user)
         if not detected:
             self.log.info("No daos_engine process killed on %s!", engine_kill_host)
         elif running:
@@ -183,7 +185,7 @@ class ServerRankFailure(IorTestBase):
                 errors.append("Server rank {} state isn't joined!".format(member["rank"]))
 
         # 9. Call dmg pool query -b to find the disabled ranks.
-        output = self.get_dmg_command().pool_query(pool=self.pool.identifier, show_disabled=True)
+        output = self.get_dmg_command().pool_query(pool=self.pool.identifier)
         disabled_ranks = output["response"].get("disabled_ranks")
         self.log.info("Disabled ranks = %s", disabled_ranks)
 

@@ -345,7 +345,8 @@ def log_result_data(log, data):
             log.debug("%s%s", " " * indent, line)
 
 
-def get_clush_command(hosts, args=None, command="", command_env=None, command_sudo=False):
+def get_clush_command(hosts, args=None, command="", command_env=None, command_sudo=False,
+                      timeout=None, fanout=None):
     """Get the clush command with optional sudo arguments.
 
     Args:
@@ -355,14 +356,21 @@ def get_clush_command(hosts, args=None, command="", command_env=None, command_su
         command_env (EnvironmentVariables, optional): environment variables to export with the
             command. Defaults to None.
         sudo (bool, optional): whether to run the command with sudo privileges. Defaults to False.
+        timeout (int, optional): number of seconds to wait for the command to complete.
+            Defaults to None.
+        fanout (int, optional): fanout to use. Default uses the max of the
+            clush default (64) or available cores
 
     Returns:
         str: the clush command
     """
-    cmd_list = ["clush"]
+    if fanout is None:
+        fanout = max(64, len(os.sched_getaffinity(0)))
+    cmd_list = ["clush", "-f", str(fanout), "-w", str(hosts)]
+    if timeout is not None:
+        cmd_list.extend(["-u", str(timeout)])
     if args:
         cmd_list.append(args)
-    cmd_list.extend(["-w", str(hosts)])
     # If ever needed, this is how to disable host key checking:
     # cmd_list.extend(["-o", "-oStrictHostKeyChecking=no"])
     cmd_list.append(command_as_user(command, "root" if command_sudo else "", command_env))
@@ -477,7 +485,7 @@ def command_as_user(command, user, env=None):
 
     Args:
         command (str): the original command
-        user (str): user to run as
+        user (str): user to use to run the command
         env (EnvironmentVariables, optional): environment variables to export with the command.
             Defaults to None.
 
@@ -521,7 +529,8 @@ def find_command(source, pattern, depth, other=None):
     return " ".join(command)
 
 
-def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, force=False):
+def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, force=False,
+                   user="root"):
     """Stop the processes on each hosts that match the pattern.
 
     Args:
@@ -534,6 +543,7 @@ def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, 
         force (bool, optional): if set use the KILL signal to immediately stop any running
             processes. Defaults to False which will attempt to kill w/o a signal, then with the ABRT
             signal, and finally with the KILL signal.
+        user(str, optional): user to use to run commands. Defaults to "root".
 
     Returns:
         tuple: (NodeSet, NodeSet) where the first NodeSet indicates on which hosts processes
@@ -571,7 +581,7 @@ def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, 
         log.debug(
             "Killing%s any processes on %s that match %s and then waiting %s seconds",
             step[0], result.passed_hosts, pattern_match, step[1])
-        kill_command = f"sudo /usr/bin/pkill{step[0]} {pattern}"
+        kill_command = command_as_user(f"/usr/bin/pkill{step[0]} {pattern}", user)
         run_remote(log, result.passed_hosts, kill_command, verbose, timeout)
         time.sleep(step[1])
         result = run_remote(log, result.passed_hosts, command, verbose, timeout)

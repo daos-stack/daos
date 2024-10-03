@@ -143,6 +143,18 @@ class JobManager(ExecutableCommand):
                 and self._job.check_results_list):
             self.check_results_list.extend(self._job.check_results_list)
 
+    @property
+    def command_regex(self):
+        """Get the regular expression to use to search for the command.
+
+        Typical use would include combining with pgrep to verify a subprocess is running.
+
+        Returns:
+            str: regular expression to use to search for the command
+
+        """
+        return "'({})'".format("|".join(self._exe_names + self.job._exe_names))
+
     def __str__(self):
         """Return the command with all of its defined parameters as a string.
 
@@ -297,7 +309,8 @@ class JobManager(ExecutableCommand):
         if not self.job:
             return
         regex = self.job.command_regex
-        detected, running = stop_processes(self.log, self._hosts, regex)
+        user = self.job.run_user or "root"
+        detected, running = stop_processes(self.log, self._hosts, regex, user=user)
         if not detected:
             self.log.info(
                 "No remote %s processes killed on %s (none found), done.", regex, self._hosts)
