@@ -516,8 +516,8 @@ file_limit_bump(void)
 
 	if (rlim.rlim_cur < CRT_MIN_TCP_FD) {
 		if (rlim.rlim_max < CRT_MIN_TCP_FD) {
-			D_WARN("File descriptor hard limit should be at least %d\n",
-			       CRT_MIN_TCP_FD);
+			D_WARN("File descriptor hard limit should be at least %d, limit is %lu\n",
+			       CRT_MIN_TCP_FD, rlim.rlim_max);
 			return;
 		}
 
