@@ -29,10 +29,8 @@ server_config:
 
 pool_size_ratio_80:
   size: 80%
-  control_method: dmg
 pool_size_value:
   size: 100G
-  control_method: dmg
   svcn: 3
 
 container_wo_rf:

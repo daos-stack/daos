@@ -276,6 +276,9 @@ pipeline {
         booleanParam(name: 'CI_medium_md_on_ssd_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium MD on SSD test stage')
+        booleanParam(name: 'CI_medium_vmd_TEST',
+                     defaultValue: true,
+                     description: 'Run the Functional Hardware Medium VMD test stage')
         booleanParam(name: 'CI_medium_verbs_provider_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium Verbs Provider test stage')
@@ -309,6 +312,9 @@ pipeline {
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
                defaultValue: 'ci_nvme5',
                description: 'Label to use for 5 node Functional Hardware Medium Verbs Provider (MD on SSD) stages')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL',
+               defaultValue: 'ci_vmd5',
+               description: 'Label to use for the Functional Hardware Medium VMD stage')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL',
                defaultValue: 'ci_ofed5',
                description: 'Label to use for 5 node Functional Hardware Medium UCX Provider stage')
@@ -1050,7 +1056,8 @@ pipeline {
                             stash name: 'fault-inject-valgrind',
                                   includes: '*.memcheck.xml',
                                   allowEmpty: true
-                            archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/'
+                            archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/',
+                                             allowEmptyArchive: true
                             job_status_update()
                         }
                     }
@@ -1178,6 +1185,19 @@ pipeline {
                             default_tags: startedByTimer() ?
                                 'pr,md_on_ssd daily_regression,md_on_ssd' : 'pr,md_on_ssd',
                             nvme: 'auto_md_on_ssd',
+                            run_if_pr: false,
+                            run_if_landing: false,
+                            job_status: job_status_internal
+                        ),
+                        'Functional Hardware Medium VMD': getFunctionalTestStage(
+                            name: 'Functional Hardware Medium VMD',
+                            pragma_suffix: '-hw-medium-vmd',
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
+                            next_version: next_version,
+                            stage_tags: 'hw_vmd,medium',
+                            /* groovylint-disable-next-line UnnecessaryGetter */
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            nvme: 'auto',
                             run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal

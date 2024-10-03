@@ -28,7 +28,8 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
-	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
+	"github.com/daos-stack/daos/src/control/lib/hardware/defaults/network"
+	"github.com/daos-stack/daos/src/control/lib/hardware/defaults/topology"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -237,7 +238,7 @@ func (srv *server) createServices(ctx context.Context) (err error) {
 	srv.evtLogger = control.NewEventLogger(srv.log)
 
 	srv.ctlSvc = NewControlService(srv.log, srv.harness, srv.cfg, srv.pubSub,
-		hwprov.DefaultFabricScanner(srv.log))
+		network.DefaultFabricScanner(srv.log))
 	srv.mgmtSvc = newMgmtSvc(srv.harness, srv.membership, srv.sysdb, rpcClient, srv.pubSub)
 
 	if err := srv.mgmtSvc.systemProps.UpdateCompPropVal(daos.SystemPropertyDaosSystem, func() string {
@@ -340,7 +341,7 @@ func (srv *server) addEngines(ctx context.Context) error {
 	var allStarted sync.WaitGroup
 	registerTelemetryCallbacks(ctx, srv)
 
-	iommuEnabled, err := hwprov.DefaultIOMMUDetector(srv.log).IsIOMMUEnabled()
+	iommuEnabled, err := topology.DefaultIOMMUDetector(srv.log).IsIOMMUEnabled()
 	if err != nil {
 		return err
 	}
@@ -541,7 +542,7 @@ func waitFabricReady(ctx context.Context, log logging.Logger, cfg *config.Server
 	}
 
 	if err := hardware.WaitFabricReady(ctx, log, hardware.WaitFabricReadyParams{
-		StateProvider:  hwprov.DefaultNetDevStateProvider(log),
+		StateProvider:  network.DefaultNetDevStateProvider(log),
 		FabricIfaces:   ifaces,
 		IterationSleep: time.Second,
 	}); err != nil {
@@ -580,7 +581,7 @@ func Start(log logging.Logger, cfg *config.Server) error {
 		return err
 	}
 
-	scanner := hwprov.DefaultFabricScanner(log)
+	scanner := network.DefaultFabricScanner(log)
 
 	fis, err := scanner.Scan(ctx, providers...)
 	if err != nil {

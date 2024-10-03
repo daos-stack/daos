@@ -227,7 +227,7 @@ class DaosBuild(TestWithServers):
             remote_env['DD_SUBSYS'] = 'all'
             remote_env['D_LOG_MASK'] = 'WARN,IL=WARN'
             if il_lib == 'libpil4dfs.so':
-                remote_env['D_IL_ENFORCE_EXEC_ENV'] = '1'
+                remote_env['D_IL_NO_BYPASS'] = '1'
                 remote_env['D_IL_COMPATIBLE'] = '1'
                 remote_env['D_IL_MAX_EQ'] = '0'
 

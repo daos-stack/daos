@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -617,7 +617,8 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct ds_obj_enum_arg *ar
 	 * enum pack implementation doesn't support yield & re-probe.
 	 */
 	if (arg->inline_thres > 0 && data_size <= arg->inline_thres &&
-	    data_size > 0 && bio_iov2media(&key_ent->ie_biov) != DAOS_MEDIA_NVME) {
+	    data_size > 0 && bio_iov2media(&key_ent->ie_biov) != DAOS_MEDIA_NVME &&
+	    !BIO_ADDR_IS_GANG(&key_ent->ie_biov.bi_addr)) {
 		inline_data = true;
 		size += data_size;
 	}
