@@ -259,18 +259,18 @@
 ## Enable Telemetry HTTP/HTTPS endpoint for remote telemetry collection.
 #
 #telemetry_config:
-#  # In order to disable telemetry security, uncomment and set allow_insecure to false
+#  # In order to enabled telemetry security, uncomment and set allow_insecure to false
 #  allow_insecure: true
 #
 #  # Set the server telemetry endpoint port number
 #  # default: 9191
-#  port: 9191
+#  telemetry_port: 9191
 #
 #  # Server certificate for use in TLS handshakes
-#  server_cert: /etc/daos/certs/telemetryserver.crt
+#  https_cert: /etc/daos/certs/telemetry.crt
 #
 #  # Key portion of Server Certificate
-#  server_key: /etc/daos/certs/telemetryserver.key
+#  https_key: /etc/daos/certs/telemetry.key
 #
 #
 ## If desired, a set of client-side environment variables may be

@@ -28,7 +28,7 @@ control_metadata:
 
 telemetry_config:
   allow_insecure: true
-  port: 9191
+  telemetry_port: 9191
 
 engines:
   -

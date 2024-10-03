@@ -5,7 +5,7 @@
 """
 import os
 
-from command_utils_base import (BasicParameter, LogParameter, TelemetryCredentials,
+from command_utils_base import (BasicParameter, LogParameter, TelemetryConfig,
                                 TransportCredentials, YamlParameters)
 
 
@@ -33,7 +33,7 @@ class DaosAgentTransportCredentials(TransportCredentials):
         return DaosAgentTransportCredentials(self._log_dir)
 
 
-class DaosAgentTelemetryCredentials(TelemetryCredentials):
+class DaosAgentTelemetryConfig(TelemetryConfig):
     # pylint: disable=too-few-public-methods
     """Telemetry credentials listing certificates for secure communication."""
 
@@ -41,19 +41,19 @@ class DaosAgentTelemetryCredentials(TelemetryCredentials):
         """Initialize a TelemetryConfig object."""
         super().__init__("/run/agent_config/telemetry_config/*", None, log_dir)
 
-        self.port = BasicParameter(None, 9192)
-        self.enabled = BasicParameter(None)
-        self.retain = BasicParameter(None)
-        self.server_cert = LogParameter(self._log_dir, None, "telemetryserver.crt")
-        self.server_key = LogParameter(self._log_dir, None, "telemetryserver.key")
+        self.telemetry_port = BasicParameter(None, 9192)
+        self.telemetry_enabled = BasicParameter(None)
+        self.telemetry_retain = BasicParameter(None)
+        self.https_cert = LogParameter(self._log_dir, None, "telemetry.crt")
+        self.https_key = LogParameter(self._log_dir, None, "telemetry.key")
 
     def _get_new(self):
         """Get a new object based upon this one.
 
         Returns:
-            DaosServerTelemetryCredentials: a new DaosServerTelemetryCredentials object
+            DaosServerTelemetryConfig: a new DaosServerTelemetryConfig object
         """
-        return DaosAgentTelemetryCredentials(self._log_dir)
+        return DaosAgentTelemetryConfig(self._log_dir)
 
 
 class DaosAgentYamlParameters(YamlParameters):

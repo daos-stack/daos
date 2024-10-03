@@ -4,7 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from command_utils_base import (BasicParameter, LogParameter, TelemetryCredentials,
+from command_utils_base import (BasicParameter, LogParameter, TelemetryConfig,
                                 TransportCredentials, YamlParameters)
 
 
@@ -26,11 +26,11 @@ class DmgTransportCredentials(TransportCredentials):
         return DmgTransportCredentials(self._log_dir)
 
 
-class DmgTelemetryCredentials(TelemetryCredentials):
+class DmgTelemetryConfig(TelemetryConfig):
     """Telemetry credentials listing certificates for secure communication."""
 
     def __init__(self, log_dir="/tmp"):
-        """Initialize a TelemetryCredentials object."""
+        """Initialize a TelemetryConfig object."""
         super().__init__("/run/dmg/telemetry_config/*", None, log_dir)
         self.ca_cert = LogParameter(self._log_dir, None, "daosTelemetryCA.crt")
 
@@ -38,9 +38,9 @@ class DmgTelemetryCredentials(TelemetryCredentials):
         """Get a new object based upon this one.
 
         Returns:
-            DmgTelemetryCredentials: a new DmgTelemetryCredentials object
+            DmgTelemetryConfig: a new DmgTelemetryConfig object
         """
-        return DmgTelemetryCredentials(self._log_dir)
+        return DmgTelemetryConfig(self._log_dir)
 
 
 class DmgYamlParameters(YamlParameters):
@@ -54,7 +54,7 @@ class DmgYamlParameters(YamlParameters):
             name (str): The DAOS system name.
             transport (DmgTransportCredentials): dmg security
                 configuration settings.
-            telemetry (DmgTelemetryCredentials): dmg telemetry
+            telemetry (DmgTelemetryConfig): dmg telemetry
                 configuration settings.
         """
         super().__init__("/run/dmg/*", filename, None, transport)

@@ -98,8 +98,8 @@ control_log_mask: debug
 transport_config:
   allow_insecure: true
 telemetry_config:
-  retain: 1
-  port: 0
+  telemetry_retain: 1m
+  telemetry_port: 0
 `)
 
 	telemetryEnabledWithBadPort := test.CreateTestFile(t, dir, `
@@ -112,11 +112,11 @@ control_log_mask: debug
 transport_config:
   allow_insecure: true
 telemetry_config:
-  enabled: true
-  port: 0
+  telemetry_enabled: true
+  telemetry_port: 0
 `)
 
-	telemetryWithoutServerCert := test.CreateTestFile(t, dir, `
+	telemetryWithoutHttpsCert := test.CreateTestFile(t, dir, `
 name: shire
 access_points: ["one:10001", "two:10001"]
 port: 4242
@@ -127,10 +127,10 @@ transport_config:
   allow_insecure: true
 telemetry_config:
   allow_insecure: false
-  server_cert: ""
+  https_cert: ""
 `)
 
-	telemetryWithoutServerKey := test.CreateTestFile(t, dir, `
+	telemetryWithoutHttpsKey := test.CreateTestFile(t, dir, `
 name: shire
 access_points: ["one:10001", "two:10001"]
 port: 4242
@@ -141,7 +141,7 @@ transport_config:
   allow_insecure: true
 telemetry_config:
   allow_insecure: false
-  server_key: ""
+  https_key: ""
 `)
 
 	for name, tc := range map[string]struct {
@@ -173,12 +173,12 @@ telemetry_config:
 			expErr: errors.New("telemetry_enabled requires telemetry_port"),
 		},
 		"telemetry with secure mode with no server certificate": {
-			path:   telemetryWithoutServerCert,
-			expErr: errors.New("For secure mode, server_cert and server_key required under telemetry_config"),
+			path:   telemetryWithoutHttpsCert,
+			expErr: errors.New("For secure mode, https_cert and https_key required under telemetry_config"),
 		},
 		"telemetry with secure mode with no server key": {
-			path:   telemetryWithoutServerKey,
-			expErr: errors.New("For secure mode, server_cert and server_key required under telemetry_config"),
+			path:   telemetryWithoutHttpsKey,
+			expErr: errors.New("For secure mode, https_cert and https_key required under telemetry_config"),
 		},
 		"without optional items": {
 			path: withoutOptCfg,

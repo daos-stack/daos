@@ -249,8 +249,8 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithTelemetryConfig(&security.TelemetryConfig{
 			AllowInsecure: true,
 			Port:          9191,
-			ServerCert:    "/etc/daos/certs/telemetryserver.crt",
-			ServerKey:     "/etc/daos/certs/telemetryserver.key",
+			HttpsCert:     "/etc/daos/certs/telemetry.crt",
+			HttpsKey:      "/etc/daos/certs/telemetry.key",
 			CARootPath:    "/etc/daos/certs/daosTelemetryCA.crt"}).
 		WithSystemName("daos_server").
 		WithSocketDir("./.daos/daos_server").
@@ -425,8 +425,8 @@ func TestServerConfig_MDonSSD_Constructed(t *testing.T) {
 		WithTelemetryConfig(&security.TelemetryConfig{
 			AllowInsecure: true,
 			Port:          9191,
-			ServerCert:    "/etc/daos/certs/telemetryserver.crt",
-			ServerKey:     "/etc/daos/certs/telemetryserver.key",
+			HttpsCert:     "/etc/daos/certs/telemetry.crt",
+			HttpsKey:      "/etc/daos/certs/telemetry.key",
 			CARootPath:    "/etc/daos/certs/daosTelemetryCA.crt"}).
 		WithFabricProvider("ofi+tcp").
 		WithAccessPoints("example")

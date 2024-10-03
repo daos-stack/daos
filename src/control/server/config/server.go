@@ -61,6 +61,7 @@ type Server struct {
 	HelperLogFile     string                    `yaml:"helper_log_file,omitempty"`
 	FWHelperLogFile   string                    `yaml:"firmware_helper_log_file,omitempty"`
 	FaultPath         string                    `yaml:"fault_path,omitempty"`
+	TelemetryPort     int                       `yaml:"telemetry_port,omitempty"`
 	TelemetryConfig   *security.TelemetryConfig `yaml:"telemetry_config"`
 	CoreDumpFilter    uint8                     `yaml:"core_dump_filter,omitempty"`
 	ClientEnvVars     []string                  `yaml:"client_env_vars,omitempty"`
@@ -707,6 +708,9 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 		return FaultConfigNoProvider
 	case cfg.ControlPort <= 0:
 		return FaultConfigBadControlPort
+	//Support old configuration option
+	case cfg.TelemetryPort < 0:
+		return FaultConfigBadTelemetryPort
 	}
 
 	if cfg.TelemetryConfig != nil {

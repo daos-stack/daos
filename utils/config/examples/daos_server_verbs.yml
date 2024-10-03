@@ -9,7 +9,7 @@ control_log_file: /tmp/daos_server.log
 
 telemetry_config:
   allow_insecure: true
-  port: 9191
+  telemetry_port: 9191
 
 ## Transport Credentials Specifying certificates to secure communications
 ##

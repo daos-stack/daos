@@ -39,16 +39,16 @@ type httpGetter interface {
 	retryer
 	getURL() *url.URL
 	getBody(context.Context) ([]byte, error)
-	getAllowInsecure() *bool
+	getAllowInsecure() bool
 	getCaCertPath() *string
 }
 
 type httpReq struct {
 	url           *url.URL
 	getFn         httpGetFn
-	allowInsecure *bool
+	allowInsecure bool
 	cacertpath    *string
-	getBodyFn     func(context.Context, *url.URL, httpGetFn, time.Duration, *bool, *string) ([]byte, error)
+	getBodyFn     func(context.Context, *url.URL, httpGetFn, time.Duration, bool, *string) ([]byte, error)
 }
 
 func (r *httpReq) canRetry(err error, cur uint) bool {
@@ -83,7 +83,7 @@ func (r *httpReq) getURL() *url.URL {
 	return r.url
 }
 
-func (r *httpReq) getAllowInsecure() *bool {
+func (r *httpReq) getAllowInsecure() bool {
 	return r.allowInsecure
 }
 
@@ -152,7 +152,7 @@ func httpsGetFunc(cert []byte) (httpGetFn, error) {
 
 // httpGetBody executes a simple HTTP GET request to a given URL and returns the
 // content of the response body.
-func httpGetBody(ctx context.Context, url *url.URL, get httpGetFn, timeout time.Duration, allowInsecure *bool, cacertpath *string) ([]byte, error) {
+func httpGetBody(ctx context.Context, url *url.URL, get httpGetFn, timeout time.Duration, allowInsecure bool, cacertpath *string) ([]byte, error) {
 	if url == nil {
 		return nil, errors.New("nil URL")
 	}
@@ -165,7 +165,7 @@ func httpGetBody(ctx context.Context, url *url.URL, get httpGetFn, timeout time.
 		return nil, errors.New("nil get function")
 	}
 
-	if *allowInsecure == false {
+	if !allowInsecure {
 		if cacertpath == nil {
 			return nil, errors.New("Provide the CA certificate path")
 		}

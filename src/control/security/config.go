@@ -20,20 +20,20 @@ import (
 )
 
 const (
-	certDir                    = "/etc/daos/certs/"
-	defaultCACert              = certDir + "daosCA.crt"
-	defaultServerCert          = certDir + "server.crt"
-	defaultServerKey           = certDir + "server.key"
-	defaultAdminCert           = certDir + "admin.crt"
-	defaultAdminKey            = certDir + "admin.key"
-	defaultAgentCert           = certDir + "agent.crt"
-	defaultAgentKey            = certDir + "agent.key"
-	defaultTelemetryServerCert = certDir + "telemetryserver.crt"
-	defaultTelemetryServerKey  = certDir + "telemetryserver.key"
-	defaultTelemetryCACert     = certDir + "daosTelemetryCA.crt"
-	defaultClientCertDir       = certDir + "clients"
-	defaultServer              = "server"
-	defaultInsecure            = false
+	certDir                = "/etc/daos/certs/"
+	defaultCACert          = certDir + "daosCA.crt"
+	defaultServerCert      = certDir + "server.crt"
+	defaultServerKey       = certDir + "server.key"
+	defaultAdminCert       = certDir + "admin.crt"
+	defaultAdminKey        = certDir + "admin.key"
+	defaultAgentCert       = certDir + "agent.crt"
+	defaultAgentKey        = certDir + "agent.key"
+	defaultTelemetryCert   = certDir + "telemetry.crt"
+	defaultTelemetryKey    = certDir + "telemetry.key"
+	defaultTelemetryCACert = certDir + "daosTelemetryCA.crt"
+	defaultClientCertDir   = certDir + "clients"
+	defaultServer          = "server"
+	defaultInsecure        = false
 )
 
 // MappedClientUser represents a client user that is mapped to a uid.
@@ -111,12 +111,12 @@ type TransportConfig struct {
 // TelemetryConfig contains all the information on whether or not to use
 // secure endpoint for telemetry and their location if their use is specified.
 type TelemetryConfig struct {
-	Port          int           `yaml:"port,omitempty"`
-	AllowInsecure bool          `yaml:"allow_insecure"`
-	Enabled       bool          `yaml:"enabled,omitempty"`
-	Retain        time.Duration `yaml:"retain,omitempty"`
-	ServerCert    string        `yaml:"server_cert,omitempty"`
-	ServerKey     string        `yaml:"server_key,omitempty"`
+	Port          int           `yaml:"telemetry_port,omitempty"`
+	AllowInsecure bool          `yaml:"allow_insecure,omitempty"`
+	Enabled       bool          `yaml:"telemetry_enabled,omitempty"`
+	Retain        time.Duration `yaml:"telemetry_retain,omitempty"`
+	HttpsCert     string        `yaml:"https_cert,omitempty"`
+	HttpsKey      string        `yaml:"https_key,omitempty"`
 	CARootPath    string        `yaml:"ca_cert,omitempty"`
 }
 
@@ -125,9 +125,9 @@ type TelemetryConfig struct {
 func DefaultClientTelemetryConfig() *TelemetryConfig {
 	return &TelemetryConfig{
 		Enabled:       false,
-		AllowInsecure: defaultInsecure,
-		ServerCert:    defaultTelemetryServerCert,
-		ServerKey:     defaultTelemetryServerKey,
+		AllowInsecure: true,
+		HttpsCert:     defaultTelemetryCert,
+		HttpsKey:      defaultTelemetryKey,
 		CARootPath:    defaultTelemetryCACert,
 	}
 }

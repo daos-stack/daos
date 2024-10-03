@@ -5,7 +5,7 @@
 """
 import os
 
-from command_utils_base import (BasicParameter, LogParameter, TelemetryCredentials,
+from command_utils_base import (BasicParameter, LogParameter, TelemetryConfig,
                                 TransportCredentials, YamlParameters)
 
 MAX_STORAGE_TIERS = 5
@@ -57,30 +57,30 @@ class DaosServerTransportCredentials(TransportCredentials):
         return DaosServerTransportCredentials(self._log_dir)
 
 
-class DaosServerTelemetryCredentials(TelemetryCredentials):
+class DaosServerTelemetryConfig(TelemetryConfig):
     # pylint: disable=too-few-public-methods
     """Telemetry credentials listing certificates for secure communication."""
 
     def __init__(self, log_dir=os.path.join(os.sep, "tmp")):
-        """Initialize a DaosServerTelemetryCredentials object."""
+        """Initialize a DaosServerTelemetryConfig object."""
         super().__init__("/run/server_config/telemetry_config/*", None, log_dir)
 
         # Additional daos_server telemetry credential parameters:
         #   - port: <int> : Telemetry endpoint port number
-        #   - server_cert: <str>: Server certificate
-        #   - server_key: <str>: Server Key portion
+        #   - https_cert: <str>: Server certificate
+        #   - https_key: <str>: Server Key portion
         #
-        self.port = BasicParameter(None, 9191)
-        self.server_cert = LogParameter(self._log_dir, None, "telemetryserver.crt")
-        self.server_key = LogParameter(self._log_dir, None, "telemetryserver.key")
+        self.telemetry_port = BasicParameter(None, 9191)
+        self.https_cert = LogParameter(self._log_dir, None, "telemetry.crt")
+        self.https_key = LogParameter(self._log_dir, None, "telemetry.key")
 
     def _get_new(self):
         """Get a new object based upon this one.
 
         Returns:
-            DaosServerTelemetryCredentials: a new DaosServerTelemetryCredentials object
+            DaosServerTelemetryConfig: a new DaosServerTelemetryConfig object
         """
-        return DaosServerTelemetryCredentials(self._log_dir)
+        return DaosServerTelemetryConfig(self._log_dir)
 
 
 class DaosServerYamlParameters(YamlParameters):

@@ -799,11 +799,11 @@ class TransportCredentials(YamlParameters):
         return TransportCredentials(self.namespace, self.title, self._log_dir)
 
 
-class TelemetryCredentials(YamlParameters):
+class TelemetryConfig(YamlParameters):
     """Telemetry credentials listing certificates for secure communication."""
 
     def __init__(self, namespace, title, log_dir):
-        """Initialize a TelemetryCredentials object.
+        """Initialize a TelemetryConfig object.
 
         Args:
             namespace (str): yaml namespace (path to parameters)
@@ -816,9 +816,9 @@ class TelemetryCredentials(YamlParameters):
         default_insecure = str(os.environ.get("DAOS_TEST_INSECURE_MODE", True))
         default_insecure = default_insecure.lower() == "true"
         self.allow_insecure = BasicParameter(None, default_insecure)
-        self.port = BasicParameter(None, 9191)
-        self.retain = None
-        self.enabled = None
+        self.telemetry_port = BasicParameter(None, 9191)
+        self.telemetry_retain = None
+        self.telemetry_enabled = None
 
     def get_yaml_data(self):
         """Convert the parameters into a dictionary to use to write a yaml file.
@@ -864,9 +864,9 @@ class TelemetryCredentials(YamlParameters):
         """Get a new object based upon this one.
 
         Returns:
-            TelemetryCredentials: a new TelemetryCredentials object
+            TelemetryConfig: a new TelemetryConfig object
         """
-        return TelemetryCredentials(self.namespace, self.title, self._log_dir)
+        return TelemetryConfig(self.namespace, self.title, self._log_dir)
 
 
 class CommonConfig(YamlParameters):

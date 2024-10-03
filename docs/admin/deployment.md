@@ -831,16 +831,16 @@ subject=CN = wolf-170
 Getting CA Private Key
 Required Server Certificate Files:
     .//daosTelemetryCA.crt
-    .//telemetryserver.key
-    .//telemetryserver.crt
+    .//telemetry.key
+    .//telemetry.crt
 $ ls -l
 total 20
 -rw-r--r-- 1 root       daos_daemons 1460 Sep 27 17:18 daosTelemetryCA.crt
 -rw-r--r-- 1 root       root           41 Sep 27 17:19 daosTelemetryCA.srl
 -rw-r--r-- 1 root       root            0 Sep 27 17:18 index.txt
 -rw-r--r-- 1 root       root            3 Sep 27 17:18 serial.txt
--rw-r--r-- 1 daos_agent daos_agent   1302 Sep 27 17:19 telemetryserver.crt
--r-------- 1 daos_agent daos_agent   1675 Sep 27 17:19 telemetryserver.key
+-rw-r--r-- 1 daos_agent daos_agent   1302 Sep 27 17:19 telemetry.crt
+-r-------- 1 daos_agent daos_agent   1675 Sep 27 17:19 telemetry.key
 ```
 
 Below example is ran with daos_server user on server node
@@ -858,16 +858,16 @@ subject=CN = wolf-173
 Getting CA Private Key
 Required Server Certificate Files:
     .//daosTelemetryCA.crt
-    .//telemetryserver.key
-    .//telemetryserver.crt
+    .//telemetry.key
+    .//telemetry.crt
 $ ls -l
 total 20
 -rw-r--r-- 1 root        daos_daemons 1460 Sep 27 17:24 daosTelemetryCA.crt
 -rw-r--r-- 1 root        root           41 Sep 27 17:24 daosTelemetryCA.srl
 -rw-r--r-- 1 root        root            0 Sep 27 17:24 index.txt
 -rw-r--r-- 1 root        root            3 Sep 27 17:24 serial.txt
--rw-r--r-- 1 daos_server daos_server  1302 Sep 27 17:24 telemetryserver.crt
--r-------- 1 daos_server daos_server  1679 Sep 27 17:24 telemetryserver.key
+-rw-r--r-- 1 daos_server daos_server  1302 Sep 27 17:24 telemetry.crt
+-r-------- 1 daos_server daos_server  1679 Sep 27 17:24 telemetry.key
 ```
 
 You can copy this certificates on /etc/daos/certs/ or someother secure location
@@ -884,9 +884,9 @@ telemetry_config:
   # Set the server telemetry endpoint port number
   port: 9191
   # Server certificate for use in TLS handshakes
-  server_cert: /etc/daos/certs/telemetryserver.crt
+  https_cert: /etc/daos/certs/telemetry.crt
   # Key portion of Server Certificate
-  server_key: /etc/daos/certs/telemetryserver.key
+  https_key: /etc/daos/certs/telemetry.key
 ```
 
 ```yaml
@@ -901,9 +901,9 @@ telemetry_config:
   # Retain client telemetry for a period of time after the client process exits.
   retain: 30s
   # Server certificate for use in TLS handshakes
-  server_cert: /etc/daos/certs/telemetryserver.crt
+  https_cert: /etc/daos/certs/telemetry.crt
   # Key portion of Server Certificate
-  server_key: /etc/daos/certs/telemetryserver.key
+  https_key: /etc/daos/certs/telemetry.key
 ```
 
 ```yaml

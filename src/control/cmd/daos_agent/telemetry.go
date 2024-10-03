@@ -20,8 +20,8 @@ func startPrometheusExporter(ctx context.Context, log logging.Logger, cs *promex
 		Port:          cfg.TelemetryConfig.Port,
 		Title:         "DAOS Client Telemetry",
 		AllowInsecure: cfg.TelemetryConfig.AllowInsecure,
-		HttpsCert:     cfg.TelemetryConfig.ServerCert,
-		HttpsKey:      cfg.TelemetryConfig.ServerKey,
+		HttpsCert:     cfg.TelemetryConfig.HttpsCert,
+		HttpsKey:      cfg.TelemetryConfig.HttpsKey,
 		Register: func(ctx context.Context, log logging.Logger) error {
 			c, err := promexp.NewClientCollector(ctx, log, cs, &promexp.CollectorOpts{
 				RetainDuration: cfg.TelemetryConfig.Retain,

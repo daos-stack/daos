@@ -39,12 +39,12 @@
 #  # Key portion of Admin Certificate
 #  key: /etc/daos/certs/admin.key
 
-## Enable Telemetry HTTP/HTTPS endpoint for remote client telemetry collection.
+## Configuration for telemetry collection commands.
 #
 #telemetry_config:
-#  # In order to disable transport security, uncomment and set allow_insecure
-#  # to true. Not recommended for production configurations.
-#  allow_insecure: false
+#  # In order to enabled transport security, uncomment and set allow_insecure
+#  # to false.
+#  allow_insecure: true
 #
 #  # Custom CA Root certificate for generated telemetry certs
 #  ca_cert: /etc/daos/certs/daosTelemetryCA.crt

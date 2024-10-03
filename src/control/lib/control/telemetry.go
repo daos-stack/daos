@@ -114,7 +114,7 @@ func MetricsList(ctx context.Context, req *MetricsListReq) (*MetricsListResp, er
 	}
 
 	req.url = getMetricsURL(req.Host, req.Port, req.AllowInsecure)
-	req.allowInsecure = &req.AllowInsecure
+	req.allowInsecure = req.AllowInsecure
 	req.cacertpath = &req.CaCertPath
 
 	scraped, err := scrapeMetrics(ctx, req)
@@ -176,7 +176,7 @@ func MetricsQuery(ctx context.Context, req *MetricsQueryReq) (*MetricsQueryResp,
 	}
 
 	req.url = getMetricsURL(req.Host, req.Port, req.AllowInsecure)
-	req.allowInsecure = &req.AllowInsecure
+	req.allowInsecure = req.AllowInsecure
 	req.cacertpath = &req.CaCertPath
 
 	scraped, err := scrapeMetrics(ctx, req)

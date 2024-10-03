@@ -133,7 +133,7 @@ func TestControl_httpGetBody(t *testing.T) {
 		timeout       time.Duration
 		cancelCtx     bool
 		getFn         httpGetFn
-		allowInsecure *bool
+		allowInsecure bool
 		caCertPath    *string
 		expResult     []byte
 		expErr        error
@@ -143,17 +143,17 @@ func TestControl_httpGetBody(t *testing.T) {
 		},
 		"empty URL": {
 			url:           &url.URL{},
-			allowInsecure: &defaultAllowInsecure,
+			allowInsecure: defaultAllowInsecure,
 			expErr:        errors.New("host address is required"),
 		},
 		"nil getFn": {
 			url:           defaultURL,
-			allowInsecure: &defaultAllowInsecure,
+			allowInsecure: defaultAllowInsecure,
 			expErr:        errors.New("nil get function"),
 		},
 		"getFn error": {
 			url:           defaultURL,
-			allowInsecure: &defaultAllowInsecure,
+			allowInsecure: defaultAllowInsecure,
 			getFn: func(_ string) (*http.Response, error) {
 				return nil, errors.New("mock getFn")
 			},
@@ -161,7 +161,7 @@ func TestControl_httpGetBody(t *testing.T) {
 		},
 		"http.Response error": {
 			url:           defaultURL,
-			allowInsecure: &defaultAllowInsecure,
+			allowInsecure: defaultAllowInsecure,
 			getFn: func(_ string) (*http.Response, error) {
 				return &http.Response{
 					StatusCode: http.StatusNotFound,
@@ -172,7 +172,7 @@ func TestControl_httpGetBody(t *testing.T) {
 		},
 		"empty body": {
 			url:           defaultURL,
-			allowInsecure: &defaultAllowInsecure,
+			allowInsecure: defaultAllowInsecure,
 			getFn: func(_ string) (*http.Response, error) {
 				return &http.Response{
 					StatusCode: http.StatusOK,
@@ -183,7 +183,7 @@ func TestControl_httpGetBody(t *testing.T) {
 		},
 		"success with body": {
 			url:           defaultURL,
-			allowInsecure: &defaultAllowInsecure,
+			allowInsecure: defaultAllowInsecure,
 			getFn: func(_ string) (*http.Response, error) {
 				return &http.Response{
 					StatusCode: http.StatusOK,
@@ -194,7 +194,7 @@ func TestControl_httpGetBody(t *testing.T) {
 		},
 		"failure with body in secure mode without CA certificate path": {
 			url:           defaultURL,
-			allowInsecure: &falseAllowInsecure,
+			allowInsecure: falseAllowInsecure,
 			getFn: func(_ string) (*http.Response, error) {
 				return &http.Response{
 					StatusCode: http.StatusOK,
@@ -205,7 +205,7 @@ func TestControl_httpGetBody(t *testing.T) {
 		},
 		"failure with body in secure mode with bad CA certificate": {
 			url:           defaultURL,
-			allowInsecure: &falseAllowInsecure,
+			allowInsecure: falseAllowInsecure,
 			caCertPath:    &badCertPerm,
 			getFn: func(_ string) (*http.Response, error) {
 				return &http.Response{
@@ -217,7 +217,7 @@ func TestControl_httpGetBody(t *testing.T) {
 		},
 		"failure with body in secure mode with bad CA certificate path": {
 			url:           defaultURL,
-			allowInsecure: &falseAllowInsecure,
+			allowInsecure: falseAllowInsecure,
 			caCertPath:    &badCertPath,
 			getFn: func(_ string) (*http.Response, error) {
 				return &http.Response{
@@ -229,7 +229,7 @@ func TestControl_httpGetBody(t *testing.T) {
 		},
 		"reading body fails": {
 			url:           defaultURL,
-			allowInsecure: &defaultAllowInsecure,
+			allowInsecure: defaultAllowInsecure,
 			getFn: func(_ string) (*http.Response, error) {
 				return &http.Response{
 					StatusCode: http.StatusOK,
@@ -240,7 +240,7 @@ func TestControl_httpGetBody(t *testing.T) {
 		},
 		"request times out": {
 			url:           defaultURL,
-			allowInsecure: &defaultAllowInsecure,
+			allowInsecure: defaultAllowInsecure,
 			timeout:       5 * time.Millisecond,
 			getFn: func(_ string) (*http.Response, error) {
 				time.Sleep(1 * time.Second)
@@ -253,7 +253,7 @@ func TestControl_httpGetBody(t *testing.T) {
 		},
 		"request canceled": {
 			url:           defaultURL,
-			allowInsecure: &defaultAllowInsecure,
+			allowInsecure: defaultAllowInsecure,
 			cancelCtx:     true,
 			getFn: func(_ string) (*http.Response, error) {
 				time.Sleep(1 * time.Second)
@@ -324,9 +324,8 @@ func (r *mockHTTPGetter) getURL() *url.URL {
 	}
 }
 
-func (r *mockHTTPGetter) getAllowInsecure() *bool {
-	allowInsecure := true
-	return &allowInsecure
+func (r *mockHTTPGetter) getAllowInsecure() bool {
+	return true
 }
 
 func (r *mockHTTPGetter) getCaCertPath() *string {

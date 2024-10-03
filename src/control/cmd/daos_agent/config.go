@@ -58,6 +58,10 @@ type Config struct {
 	FabricInterfaces    []*NUMAFabricConfig        `yaml:"fabric_ifaces,omitempty"`
 	ProviderIdx         uint                       // TODO SRS-31: Enable with multiprovider functionality
 	TelemetryConfig     *security.TelemetryConfig  `yaml:"telemetry_config"`
+	// Support Old config options.
+	TelemetryPort    int           `yaml:"telemetry_port,omitempty"`
+	TelemetryEnabled bool          `yaml:"telemetry_enabled,omitempty"`
+	TelemetryRetain  time.Duration `yaml:"telemetry_retain,omitempty"`
 }
 
 // TelemetryExportEnabled returns true if client telemetry export is enabled.
@@ -97,6 +101,19 @@ func LoadConfig(cfgPath string) (*Config, error) {
 		return nil, fmt.Errorf("invalid system name: %s", cfg.SystemName)
 	}
 
+	// Support Old config options and copy it to the underline new structure value.
+	if cfg.TelemetryRetain > 0 {
+		cfg.TelemetryConfig.Retain = cfg.TelemetryRetain
+	}
+
+	if cfg.TelemetryPort != 0 {
+		cfg.TelemetryConfig.Port = cfg.TelemetryPort
+	}
+
+	if cfg.TelemetryEnabled {
+		cfg.TelemetryConfig.Enabled = cfg.TelemetryEnabled
+	}
+
 	if cfg.TelemetryConfig.Retain > 0 && cfg.TelemetryConfig.Port == 0 {
 		return nil, errors.New("telemetry_retain requires telemetry_port")
 	}
@@ -105,9 +122,9 @@ func LoadConfig(cfgPath string) (*Config, error) {
 		return nil, errors.New("telemetry_enabled requires telemetry_port")
 	}
 
-	if cfg.TelemetryConfig.AllowInsecure == false {
-		if cfg.TelemetryConfig.ServerCert == "" || cfg.TelemetryConfig.ServerKey == "" {
-			return nil, errors.New("For secure mode, server_cert and server_key required under telemetry_config")
+	if !cfg.TelemetryConfig.AllowInsecure {
+		if cfg.TelemetryConfig.HttpsCert == "" || cfg.TelemetryConfig.HttpsKey == "" {
+			return nil, errors.New("For secure mode, https_cert and https_key required under telemetry_config")
 		}
 	}
 
