@@ -254,7 +254,7 @@ def get_daos_server_logs(self):
         self (obj): soak obj
     """
     daos_dir = self.outputsoak_dir + "/daos_server_logs"
-    logs_dir = self.test_env.log_dir
+    logs_dir = self.test_env.log_dir + "*log*"
     hosts = self.hostlist_servers
     if not os.path.exists(daos_dir):
         os.mkdir(daos_dir)
@@ -439,8 +439,6 @@ def launch_jobscript(
         results = {"handle": job_id, "state": "CANCELLED", "host_list": host_list}
         debug_logging(log, test.enable_debug_msg, f"DBG: JOB {job_id} EXITED launch_jobscript")
         job_queue.put(results)
-        # give time to update the queue before exiting
-        time.sleep(0.5)
         return
     if isinstance(host_list, str):
         # assume one host in list
@@ -1723,7 +1721,6 @@ def build_job_script(self, commands, job, nodesperjob, ppn):
 
             for cmd in list(job_cmds):
                 script_file.write(cmd + "\n")
-            script_file.close()
         os.chmod(scriptfile, stat.S_IXUSR | stat.S_IRUSR)
         script_list.append([scriptfile, output, error])
     return script_list
