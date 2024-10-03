@@ -4,13 +4,17 @@ inputs:
   condition:
     description: Condition this should run on
     required: true
+  ref:
+    description: DAOS github repository to check out
+    required: false
+    default: ${{ github.event.pull_request.head.sha }}
 runs:
   using: "composite"
   steps:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
-        ref: ${{ github.event.pull_request.head.sha }}
+        ref: ${{ inputs.ref }}
     - name: Request and Provision a Cluster
       if: ${{ inputs.condition }}
       shell: bash
