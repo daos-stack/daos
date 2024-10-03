@@ -1520,6 +1520,12 @@ class DFuse():
         if self.caching:
             check_fstat = False
 
+        # DAOS-16585: Disable fstat checking for non Red Hat systems which appear to use a different
+        # implementation of fstat which isn't yet intercepted.  This allows testing to progress in
+        # the absence of this feature.
+        if not os.path.exists("/etc/redhat-release"):
+            check_fstat = False
+
         my_env = get_base_env()
         prefix = f'dnt_ioil_{cmd[0]}_{get_inc_id()}_'
         with tempfile.NamedTemporaryFile(prefix=prefix, suffix='.log', delete=False) as log_file:
