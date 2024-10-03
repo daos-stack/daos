@@ -213,6 +213,10 @@ class Dfuse(DfuseCommand):
         if rmdir_result.passed:
             return
 
+        # If it failed with "Directory not empty then see what's there"
+        command = f"find {self.mount_dir.value}"
+        rmdir_result = self._run_as_owner(target_nodes, command, timeout=30)
+
         # Try removing as root for good measure
         command = command_as_user(f"rm -rf {self.mount_dir.value}", "root")
         rm_result = run_remote(self.log, rmdir_result.failed_hosts, command, timeout=30)
