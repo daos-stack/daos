@@ -961,6 +961,7 @@ child_hdlr(void)
 		DL_WARN(rc, "daos_reinit() failed in child process");
 	td_eqh = main_eqh = DAOS_HDL_INVAL;
 	context_reset = true;
+	d_eq_count    = 0;
 }
 
 /* only free the reserved low fds when application exits or encounters error */
