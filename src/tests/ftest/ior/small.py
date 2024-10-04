@@ -1,5 +1,5 @@
 """
-(C) Copyright 2018-2023 Intel Corporation.
+(C) Copyright 2018-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -33,12 +33,10 @@ class IorSmall(IorTestBase):
         cncl_tickets = []
         flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         apis = self.params.get("ior_api", '/run/ior/iorflags/*')
-        dfuse_mount_dir = self.params.get("mount_dir", "/run/dfuse/*")
         transfer_block_size = self.params.get("transfer_block_size", '/run/ior/iorflags/*')
         obj_class = self.params.get("obj_class", '/run/ior/iorflags/*')
 
-        results = self.run_ior_multiple_variants(obj_class, apis, transfer_block_size,
-                                                 flags, dfuse_mount_dir)
+        results = self.run_ior_multiple_variants(obj_class, apis, transfer_block_size, flags)
         # Running a variant for ior fpp
         self.ior_cmd.flags.update(flags[1])
         self.ior_cmd.api.update(apis[0])

@@ -157,7 +157,6 @@ mdtest:
     - [DFS, 4096, 4096, 1, 25, 20, '-u']
     - [POSIX, 0, 0, 2, 10, 5, '-u -C -T -r']
 dfuse:
-  mount_dir: "/tmp/daos_dfuse/"
   disable_caching: true
 hdf5_vol:
   plugin_path: /usr/lib64/mpich/lib
