@@ -224,9 +224,8 @@ type poolCmd struct {
 
 type poolQueryCmd struct {
 	poolBaseCmd
-	ShowEnabledRanks  bool `short:"e" long:"show-enabled" description:"Show engine unique identifiers (ranks) which are enabled"`
-	ShowDisabledRanks bool `short:"b" long:"show-disabled" description:"Show engine unique identifiers (ranks) which are disabled"`
-	HealthOnly        bool `short:"t" long:"health-only" description:"Only perform pool health related queries"`
+	ShowEnabledRanks bool `short:"e" long:"show-enabled" description:"Show engine unique identifiers (ranks) which are enabled"`
+	HealthOnly       bool `short:"t" long:"health-only" description:"Only perform pool health related queries"`
 }
 
 func convertPoolSpaceInfo(in *C.struct_daos_pool_space, mt C.uint) *daos.StorageUsageStats {
@@ -340,15 +339,10 @@ func (cmd *poolQueryCmd) Execute(_ []string) error {
 	if cmd.HealthOnly {
 		queryMask = daos.HealthOnlyPoolQueryMask
 	}
-	if cmd.ShowEnabledRanks && cmd.ShowDisabledRanks {
-		return errors.New("show-enabled and show-disabled can't be used at the same time.")
-	}
 	if cmd.ShowEnabledRanks {
 		queryMask.SetOptions(daos.PoolQueryOptionEnabledEngines)
 	}
-	if cmd.ShowDisabledRanks {
-		queryMask.SetOptions(daos.PoolQueryOptionDisabledEngines)
-	}
+	queryMask.SetOptions(daos.PoolQueryOptionDisabledEngines)
 
 	cleanup, err := cmd.resolveAndConnect(C.DAOS_PC_RO, nil)
 	if err != nil {
