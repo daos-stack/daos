@@ -1,8 +1,14 @@
-daos (2.7.100-6) unstable; urgency=medium
+daos (2.7.100-7) unstable; urgency=medium
   [ Tomasz Gromadzki ]
   * pmemobj errors and warnings reported via DAOS logging system
 
- -- Tomasz Gromadzki <tomasz.gromadzki@intel.com>  Tue, 03 Sep 2024 12:00:00 +0200
+ -- Tomasz Gromadzki <tomasz.gromadzki@intel.com>  Fri, 04 Oct 2024 12:00:00 +0200
+
+daos (2.7.100-6) unstable; urgency=medium
+  [ Kris Jacque ]
+  * Bump minimum golang-go version to 1.21
+
+ -- Kris Jacque <kris.jacque@intel.com>  Mon, 23 Sep 2024 11:06:00 -0700
 
 daos (2.7.100-5) unstable; urgency=medium
   [ Michael MacDonald ]

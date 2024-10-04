@@ -42,8 +42,8 @@ func TestPretty_PrintSelfTestConfig(t *testing.T) {
 Client/Server Network Test Parameters
 -------------------------------------
   Servers        : All     
-  Send RPC Size  : 1.00 MiB
-  Reply RPC Size : 1.00 MiB
+  Send RPC Size  : 1.00 KiB
+  Reply RPC Size : 1.00 KiB
   RPCs Per Server: 10000   
 
 `,
@@ -56,8 +56,8 @@ Client/Server Network Test Parameters
 Client/Server Network Test Parameters
 -------------------------------------
   Server         : 1       
-  Send RPC Size  : 1.00 MiB
-  Reply RPC Size : 1.00 MiB
+  Send RPC Size  : 1.00 KiB
+  Reply RPC Size : 1.00 KiB
   RPCs Per Server: 10000   
 
 `,
@@ -85,8 +85,8 @@ Client/Server Network Test Parameters
 Client/Server Network Test Parameters
 -------------------------------------
   Servers           : All        
-  Send RPC Size     : 1.00 MiB   
-  Reply RPC Size    : 1.00 MiB   
+  Send RPC Size     : 1.00 KiB   
+  Reply RPC Size    : 1.00 KiB   
   RPCs Per Server   : 10000      
   System Name       : daos_server
   Tag               : 0          
@@ -143,8 +143,8 @@ Client/Server Network Test Parameters
 Client/Server Network Test Parameters
 -------------------------------------
   Servers           : All           
-  Send RPC Size     : 1.00 MiB      
-  Reply RPC Size    : 1.00 MiB      
+  Send RPC Size     : 1.00 KiB      
+  Reply RPC Size    : 1.00 KiB      
   RPCs Per Server   : 10000         
   System Name       : daos_server   
   Tags              : ERROR (0 tags)
@@ -169,6 +169,8 @@ Client/Server Network Test Parameters
 func genResult(xfrm func(result *daos.SelfTestResult)) *daos.SelfTestResult {
 	cfg := &daos.SelfTestConfig{}
 	cfg.SetDefaults()
+	cfg.SendSizes = []uint64{1 << 20}
+	cfg.ReplySizes = cfg.SendSizes
 	result := &daos.SelfTestResult{
 		MasterEndpoint: daos.SelfTestEndpoint{Rank: 3, Tag: 0},
 		TargetEndpoints: []daos.SelfTestEndpoint{

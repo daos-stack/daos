@@ -16,4 +16,3 @@ server_config:
       storage: auto
 pool:
   size: 90%
-  control_method: dmg

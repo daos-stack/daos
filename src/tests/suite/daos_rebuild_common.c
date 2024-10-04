@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1205,12 +1205,9 @@ rebuild_sub_setup_common(void **state, daos_size_t pool_size, int node_nr, uint3
 	rc = test_setup(state, SETUP_POOL_CONNECT, true,
 			pool_size, node_nr, NULL);
 	if (rc) {
-		/* Let's skip for this case, since it is possible there
-		 * is not enough ranks here.
-		 */
 		print_message("It can not create the pool, probably due"
 			      " to not enough ranks %d\n", rc);
-		return 0;
+		return rc;
 	}
 
 	arg = *state;

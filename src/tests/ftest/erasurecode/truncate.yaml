@@ -33,7 +33,6 @@ server_config:
       storage: auto
 pool:
   size: 50%
-  control_method: dmg
 container:
   type: POSIX
   control_method: daos

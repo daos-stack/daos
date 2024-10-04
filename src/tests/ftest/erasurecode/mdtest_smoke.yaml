@@ -24,7 +24,6 @@ server_config:
       log_mask: ERR
       storage: auto
 pool:
-  control_method: dmg
   size: 53%
 container:
   type: POSIX

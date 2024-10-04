@@ -1344,6 +1344,42 @@ d_hhash_key_type(uint64_t key)
 	return d_hhash_key_isptr(key) ? D_HTYPE_PTR : key & D_HTYPE_MASK;
 }
 
+struct traverse_args {
+	int                   type;
+	d_hhash_traverse_cb_t cb;
+	void                 *arg;
+};
+
+static int
+d_hhash_cb(d_list_t *link, void *args)
+{
+	struct traverse_args *targs = args;
+	struct d_hlink       *hlink = link2hlink(link);
+	uint64_t              key;
+
+	if (hlink == NULL)
+		return 0;
+
+	d_hhash_link_key(hlink, &key);
+
+	if (targs->type != d_hhash_key_type(key))
+		return 0;
+
+	return targs->cb(hlink, targs->arg);
+}
+
+int
+d_hhash_traverse(struct d_hhash *hhash, int type, d_hhash_traverse_cb_t cb, void *arg)
+{
+	struct traverse_args args;
+
+	args.type = type;
+	args.cb   = cb;
+	args.arg  = arg;
+
+	return d_hash_table_traverse(&hhash->ch_htable, d_hhash_cb, &args);
+}
+
 /******************************************************************************
  * UUID Hash Table Wrapper
  * Key: UUID
