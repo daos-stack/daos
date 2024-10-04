@@ -458,6 +458,7 @@ def daos_env_str(env):
                key.startswith('CRT_') or \
                key.startswith('DD_') or \
                key.startswith('MPI') or \
+               key.startswith('PBS_') or \
                key in ('PATH', 'LD_LIBRARY_PATH')
     export_str = ';'.join(
         f'export {key}' if value is None else "export {}='{}'".format(key, value)
