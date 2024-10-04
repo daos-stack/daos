@@ -1,4 +1,4 @@
-name: RPM Build and Test
+name: Code Coverage Test
 
 env:
   # TODO: we really need to define a list of supported versions (ideally it's no more than 2)
@@ -10,6 +10,7 @@ env:
   EL9_VERSION: 9
   LEAP15_VERSION: 15.5
 
+  JENKINS_URL: https://build.hpdd.intel.com/
   # DAOS_REPOSITRY: master
   DAOS_REPOSITRY: pahender/DAOS-16285_master
 
@@ -82,7 +83,6 @@ jobs:
       DISTRO: ${{ matrix.distro }}
       DISTRO_REPOS: disabled
       # DOCKER_BUILDKIT: 0
-      JENKINS_URL: https://build.hpdd.intel.com/
       ARTIFACTS_URL: file:///scratch/job_repos/
       MOCK_OPTIONS: --uniqueext=${{ github.run_id }}
       PR_NUM: ${{ github.event.pull_request.number }}
@@ -148,6 +148,8 @@ jobs:
                           --build-arg REPO_FILE_URL=$REPO_FILE_URL
                           --build-arg UID=$(id -u)
                           --build-arg FVERSION=${{ env.FVERSION }}
+                          --build-arg JENKINS_URL=${{ env.JENKINS_URL }}
+                          --build-arg BULLSEYE_KEY=${{ secrets.BULLSEYE_LICENSE_KEY }}
                           --tag mock-build
                           utils/rpms
       - name: Build RPM
@@ -168,7 +170,7 @@ jobs:
                         -e CHROOT_NAME="$CHROOT_NAME"
                         -e ARTIFACTORY_URL="$ARTIFACTORY_URL"
                         -e REPO_FILE_URL="$REPO_FILE_URL"
-                        -e JENKINS_URL="$JENKINS_URL"
+                        -e JENKINS_URL=${{ env.JENKINS_URL }}
                         -e TARGET="$TARGET"
                         -e COVFN_DISABLED="$COVFN_DISABLED"
                         mock-build ci/rpm/build.sh
@@ -215,6 +217,43 @@ jobs:
           # yamllint disable-line rule:line-length
           name: 'build/Build RPM on ${{ env.DISTRO_NAME }} ${{ env.COMMIT_STATUS_DISTRO_VERSION && env.COMMIT_STATUS_DISTRO_VERSION || env.DISTRO_VERSION }}'
           status: "${{ job.status }}"
+
+  Unit-Test:
+    name: Build and Unit Tests
+    runs-on: [self-hosted, docker]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          ref: ${{ env.DAOS_REPOSITRY }}
+      # - name: Build deps in Docker
+      #   run: docker build . --file utils/docker/Dockerfile.el.8
+      #       --build-arg DAOS_BUILD=no
+      #       --build-arg DEPS_JOBS=50
+      - name: Build daos in Docker
+        run: docker build . --file utils/docker/Dockerfile.el.8
+            --build-arg DAOS_BUILD=no
+            --build-arg DEPS_JOBS=50
+            --build-arg BASE_DISTRO
+            --build-arg DAOS_KEEP_SRC=yes
+            --build-arg JENKINS_URL=${{ env.JENKINS_URL }}
+            --build-arg BULLSEYE_KEY=${{ secrets.BULLSEYE_LICENSE_KEY }}
+            --tag build-image-${{github.run_id}}-${{github.run_attempt}}
+      - name: Run Unit Testing
+        run: docker run --name unit-test build-image-${{github.run_id}}-${{github.run_attempt}}
+            ./daos/utils/ci/run_unit_tests_in_gha.sh
+      - name: Fetch results
+        if: always()
+        run: docker cp build-image-${{github.run_id}}-${{github.run_attempt}}:/home/daos/daos/nlt-junit.xml ./
+      - name: Publish NLT test results
+        if: always()
+        uses: EnricoMi/publish-unit-test-result-action@v1.17
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          files: nlt-junit.xml
+          comment_mode: off  # yamllint disable-line rule:truthy
+          fail_on: nothing
 
   Functional:
     name: Functional Testing
