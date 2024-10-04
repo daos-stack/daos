@@ -52,7 +52,6 @@ fio:
   api: POSIX
   test:
     numjobs: 10
-    directory: "/tmp/daos_dfuse"
     verify: 'crc32'
     verify_pattern: '0xabcdabcd'
     do_verify: 1
@@ -66,5 +65,4 @@ fio:
         rw: 'randrw'
         rw_read: 'randrw'
 dfuse:
-  mount_dir: "/tmp/daos_dfuse"
   disable_caching: True
