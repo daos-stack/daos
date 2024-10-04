@@ -2181,6 +2181,279 @@ func TestSystem_FaultDomain_Subtree(t *testing.T) {
 	}
 }
 
+func TestSystem_FaultDomainTree_SubtreeWithLevels(t *testing.T) {
+	testTreeBasic := NewFaultDomainTree(
+		MustCreateFaultDomainFromString("/one/two/three"),
+		MustCreateFaultDomainFromString("/four/five/six"),
+	)
+
+	testTreeComplex := NewFaultDomainTree(
+		MustCreateFaultDomainFromString("/one/two/three"),
+		MustCreateFaultDomainFromString("/one/two/four"),
+		MustCreateFaultDomainFromString("/one/five/six"),
+		MustCreateFaultDomainFromString("/one/five/seven"),
+		MustCreateFaultDomainFromString("/eight/nine/ten"),
+		MustCreateFaultDomainFromString("/eight/eleven/twelve"),
+	)
+
+	for name, tc := range map[string]struct {
+		tree      *FaultDomainTree
+		levels    []int
+		expResult *FaultDomainTree
+		expErr    error
+	}{
+		"nil": {
+			expErr: errors.New("nil"),
+		},
+		"no levels requested": {
+			tree:   NewFaultDomainTree(),
+			expErr: errors.New("at least one level"),
+		},
+		"zero level": {
+			tree:      testTreeBasic,
+			levels:    []int{0},
+			expResult: NewFaultDomainTree(),
+		},
+		"one level": {
+			tree:   testTreeBasic,
+			levels: []int{2},
+			expResult: &FaultDomainTree{
+				Domain: MustCreateFaultDomain(),
+				ID:     ExpFaultDomainID(0),
+				Children: []*FaultDomainTree{
+					{
+						Domain:   MustCreateFaultDomain("five"),
+						ID:       ExpFaultDomainID(5), // inherits ID from original tree
+						Children: []*FaultDomainTree{},
+					},
+					{
+						Domain:   MustCreateFaultDomain("two"),
+						ID:       ExpFaultDomainID(2), // inherits ID from original tree
+						Children: []*FaultDomainTree{},
+					},
+				},
+			},
+		},
+		"duplicates": {
+			tree:   testTreeBasic,
+			levels: []int{2, 2},
+			expResult: &FaultDomainTree{
+				Domain: MustCreateFaultDomain(),
+				ID:     ExpFaultDomainID(0),
+				Children: []*FaultDomainTree{
+					{
+						Domain:   MustCreateFaultDomain("five"),
+						ID:       ExpFaultDomainID(5), // inherits ID from original tree
+						Children: []*FaultDomainTree{},
+					},
+					{
+						Domain:   MustCreateFaultDomain("two"),
+						ID:       ExpFaultDomainID(2), // inherits ID from original tree
+						Children: []*FaultDomainTree{},
+					},
+				},
+			},
+		},
+		"multi level": {
+			tree:   testTreeBasic,
+			levels: []int{1, 3},
+			expResult: &FaultDomainTree{
+				Domain: MustCreateFaultDomain(),
+				ID:     ExpFaultDomainID(0),
+				Children: []*FaultDomainTree{
+					{
+						Domain: MustCreateFaultDomain("four"),
+						ID:     ExpFaultDomainID(4), // inherits ID from original tree
+						Children: []*FaultDomainTree{
+							{
+								Domain:   MustCreateFaultDomain("four", "six"),
+								ID:       ExpFaultDomainID(6), // inherits ID from original tree
+								Children: []*FaultDomainTree{},
+							},
+						},
+					},
+					{
+						Domain: MustCreateFaultDomain("one"),
+						ID:     ExpFaultDomainID(1), // inherits ID from original tree
+						Children: []*FaultDomainTree{
+							{
+								Domain:   MustCreateFaultDomain("one", "three"),
+								ID:       ExpFaultDomainID(3), // inherits ID from original tree
+								Children: []*FaultDomainTree{},
+							},
+						},
+					},
+				},
+			},
+		},
+		"inverted level order": {
+			tree:   testTreeBasic,
+			levels: []int{3, 1},
+			expResult: &FaultDomainTree{
+				Domain: MustCreateFaultDomain(),
+				ID:     ExpFaultDomainID(0),
+				Children: []*FaultDomainTree{
+					{
+						Domain: MustCreateFaultDomain("four"),
+						ID:     ExpFaultDomainID(4), // inherits ID from original tree
+						Children: []*FaultDomainTree{
+							{
+								Domain:   MustCreateFaultDomain("four", "six"),
+								ID:       ExpFaultDomainID(6), // inherits ID from original tree
+								Children: []*FaultDomainTree{},
+							},
+						},
+					},
+					{
+						Domain: MustCreateFaultDomain("one"),
+						ID:     ExpFaultDomainID(1), // inherits ID from original tree
+						Children: []*FaultDomainTree{
+							{
+								Domain:   MustCreateFaultDomain("one", "three"),
+								ID:       ExpFaultDomainID(3), // inherits ID from original tree
+								Children: []*FaultDomainTree{},
+							},
+						},
+					},
+				},
+			},
+		},
+		"multiple grandchildren": {
+			tree:   testTreeComplex,
+			levels: []int{1, 3},
+			expResult: &FaultDomainTree{
+				Domain: MustCreateFaultDomain(),
+				ID:     ExpFaultDomainID(0),
+				Children: []*FaultDomainTree{
+					{
+						Domain: MustCreateFaultDomain("eight"),
+						ID:     ExpFaultDomainID(8), // inherits ID from original tree
+						Children: []*FaultDomainTree{
+							{
+								Domain:   MustCreateFaultDomain("eight", "ten"),
+								ID:       ExpFaultDomainID(10), // inherits ID from original tree
+								Children: []*FaultDomainTree{},
+							},
+							{
+								Domain:   MustCreateFaultDomain("eight", "twelve"),
+								ID:       ExpFaultDomainID(12), // inherits ID from original tree
+								Children: []*FaultDomainTree{},
+							},
+						},
+					},
+					{
+						Domain: MustCreateFaultDomain("one"),
+						ID:     ExpFaultDomainID(1), // inherits ID from original tree
+						Children: []*FaultDomainTree{
+							{
+								Domain:   MustCreateFaultDomain("one", "four"),
+								ID:       ExpFaultDomainID(4), // inherits ID from original tree
+								Children: []*FaultDomainTree{},
+							},
+							{
+								Domain:   MustCreateFaultDomain("one", "seven"),
+								ID:       ExpFaultDomainID(7), // inherits ID from original tree
+								Children: []*FaultDomainTree{},
+							},
+							{
+								Domain:   MustCreateFaultDomain("one", "six"),
+								ID:       ExpFaultDomainID(6), // inherits ID from original tree
+								Children: []*FaultDomainTree{},
+							},
+							{
+								Domain:   MustCreateFaultDomain("one", "three"),
+								ID:       ExpFaultDomainID(3), // inherits ID from original tree
+								Children: []*FaultDomainTree{},
+							},
+						},
+					},
+				},
+			},
+		},
+		"lower levels": {
+			tree:   testTreeComplex,
+			levels: []int{2, 3},
+			expResult: &FaultDomainTree{
+				Domain: MustCreateFaultDomain(),
+				ID:     ExpFaultDomainID(0),
+				Children: []*FaultDomainTree{
+					{
+						Domain: MustCreateFaultDomain("eleven"),
+						ID:     ExpFaultDomainID(11), // inherits ID from original tree
+						Children: []*FaultDomainTree{
+							{
+								Domain:   MustCreateFaultDomain("eleven", "twelve"),
+								ID:       ExpFaultDomainID(12), // inherits ID from original tree
+								Children: []*FaultDomainTree{},
+							},
+						},
+					},
+					{
+						Domain: MustCreateFaultDomain("five"),
+						ID:     ExpFaultDomainID(5), // inherits ID from original tree
+						Children: []*FaultDomainTree{
+							{
+								Domain:   MustCreateFaultDomain("five", "seven"),
+								ID:       ExpFaultDomainID(7), // inherits ID from original tree
+								Children: []*FaultDomainTree{},
+							},
+							{
+								Domain:   MustCreateFaultDomain("five", "six"),
+								ID:       ExpFaultDomainID(6), // inherits ID from original tree
+								Children: []*FaultDomainTree{},
+							},
+						},
+					},
+					{
+						Domain: MustCreateFaultDomain("nine"),
+						ID:     ExpFaultDomainID(9), // inherits ID from original tree
+						Children: []*FaultDomainTree{
+							{
+								Domain:   MustCreateFaultDomain("nine", "ten"),
+								ID:       ExpFaultDomainID(10), // inherits ID from original tree
+								Children: []*FaultDomainTree{},
+							},
+						},
+					},
+					{
+						Domain: MustCreateFaultDomain("two"),
+						ID:     ExpFaultDomainID(2), // inherits ID from original tree
+						Children: []*FaultDomainTree{
+							{
+								Domain:   MustCreateFaultDomain("two", "four"),
+								ID:       ExpFaultDomainID(4), // inherits ID from original tree
+								Children: []*FaultDomainTree{},
+							},
+							{
+								Domain:   MustCreateFaultDomain("two", "three"),
+								ID:       ExpFaultDomainID(3), // inherits ID from original tree
+								Children: []*FaultDomainTree{},
+							},
+						},
+					},
+				},
+			},
+		},
+		"non-zero level of empty tree": {
+			tree:   NewFaultDomainTree(),
+			levels: []int{1},
+			expErr: errors.New("level 1 does not exist in tree of depth 0"),
+		},
+		"level too big for non-empty tree": {
+			tree:   testTreeBasic,
+			levels: []int{1, 2, 10},
+			expErr: errors.New("level 10 does not exist in tree of depth 3"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			result, err := tc.tree.SubtreeWithLevels(tc.levels...)
+
+			test.CmpErr(t, tc.expErr, err)
+			test.CmpAny(t, "FaultDomainTree", tc.expResult, result)
+		})
+	}
+}
+
 func TestSystem_FaultDomainTree_iterative_building(t *testing.T) {
 	mustAddDomain := func(t *FaultDomainTree, d *FaultDomain) {
 		if err := t.AddDomain(d); err != nil {

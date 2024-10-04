@@ -687,6 +687,63 @@ func (t *FaultDomainTree) findChildWithDomain(domain string) *FaultDomainTree {
 	return nil
 }
 
+// SubtreeWithLevels creates a FaultDomainTree that is a subtree including only the specified levels.
+// NB: Level index 0 is root, but the root is always included.
+func (t *FaultDomainTree) SubtreeWithLevels(levels ...int) (*FaultDomainTree, error) {
+	if t == nil {
+		return nil, errors.New("nil FaultDomainTree")
+	}
+	if len(levels) == 0 {
+		return nil, errors.New("must specify at least one level")
+	}
+	levels = normalizeLevels(levels)
+	newTree := NewFaultDomainTree()
+	if levels[0] == 0 { // level 0 is root, which is included by definition
+		levels = levels[1:]
+	}
+	if err := buildSubtreeWithLevels(newTree, t, 1, levels); err != nil {
+		return nil, err
+	}
+	return newTree, nil
+}
+
+func normalizeLevels(levels []int) []int {
+	sort.Ints(levels)
+	// Remove any duplicates
+	for i := 0; i < len(levels); i++ {
+		if i > 0 && levels[i] == levels[i-1] {
+			levels = append(levels[:i], levels[i+1:]...)
+		}
+	}
+	return levels
+}
+
+func buildSubtreeWithLevels(newTree, curTree *FaultDomainTree, curLevel int, levels []int) error {
+	if len(levels) == 0 {
+		return nil
+	}
+	if len(curTree.Children) == 0 {
+		return errors.Errorf("level %d does not exist in tree of depth %d", levels[0], curLevel-1)
+	}
+	for _, curChild := range curTree.Children {
+		if curLevel == levels[0] {
+			newDomain := newTree.Domain.MustCreateChild(curChild.Domain.BottomLevel())
+			newChild := &FaultDomainTree{
+				Domain:   newDomain,
+				ID:       curChild.ID, // maintain the same ID
+				Children: []*FaultDomainTree{},
+			}
+			newTree.addChild(newChild)
+			if err := buildSubtreeWithLevels(newChild, curChild, curLevel+1, levels[1:]); err != nil {
+				return err
+			}
+		} else if err := buildSubtreeWithLevels(newTree, curChild, curLevel+1, levels); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // NewFaultDomainTree creates a FaultDomainTree including all the
 // passed-in fault domains.
 func NewFaultDomainTree(domains ...*FaultDomain) *FaultDomainTree {
