@@ -44,35 +44,13 @@ class DmgPoolQueryRanks(ControlTestBase):
             data['response'].get('enabled_ranks'),
             "Invalid enabled_ranks field: want=None, got={}".format(
                 data['response'].get('enabled_ranks')))
-        self.assertIsNone(
-            data['response'].get('disabled_ranks'),
-            "Invalid disabled_ranks field: want=None, got={}".format(
-                data['response'].get('disabled_ranks')))
-
-        self.log.debug("Checking enabled ranks state information")
-        data = self.dmg.pool_query(self.pool.identifier, show_enabled=True)
-        self.assertListEqual(
-            data['response'].get('enabled_ranks'), [0, 1, 2],
-            "Invalid enabled_ranks field: want=[0, 1, 2], got={}".format(
-                data['response'].get('enabled_ranks')))
-        self.assertIsNone(
-            data['response'].get('disabled_ranks'),
-            "Invalid disabled_ranks field: want=None, got={}".format(
-                data['response'].get('disabled_ranks')))
-
-        self.log.debug("Checking disabled ranks state information")
-        data = self.dmg.pool_query(self.pool.identifier, show_disabled=True)
-        self.assertIsNone(
-            data['response'].get('enabled_ranks'),
-            "Invalid enabled_ranks field: want=None, got={}".format(
-                data['response'].get('enabled_ranks')))
         self.assertListEqual(
             data['response'].get('disabled_ranks'), [],
             "Invalid disabled_ranks field: want=[], got={}".format(
                 data['response'].get('disabled_ranks')))
 
-        self.log.debug("Checking enabled and disabled ranks state information")
-        data = self.dmg.pool_query(self.pool.identifier, show_enabled=True, show_disabled=True)
+        self.log.debug("Checking enabled ranks state information")
+        data = self.dmg.pool_query(self.pool.identifier, show_enabled=True)
         self.assertListEqual(
             data['response'].get('enabled_ranks'), [0, 1, 2],
             "Invalid enabled_ranks field: want=[0, 1, 2], got={}".format(
@@ -110,8 +88,7 @@ class DmgPoolQueryRanks(ControlTestBase):
             disabled_ranks = sorted(disabled_ranks + [rank])
 
             self.log.debug("Checking enabled ranks state information")
-            data = self.dmg.pool_query(
-                self.pool.identifier, show_enabled=True, show_disabled=True)
+            data = self.dmg.pool_query(self.pool.identifier, show_enabled=True)
             self.assertListEqual(
                 data['response'].get('enabled_ranks'), enabled_ranks,
                 "Invalid enabled_ranks field: want={}, got={}".format(
@@ -145,7 +122,7 @@ class DmgPoolQueryRanks(ControlTestBase):
             disabled_ranks.remove(rank)
 
             self.log.debug("Checking enabled ranks state information")
-            data = self.dmg.pool_query(self.pool.identifier, show_enabled=True, show_disabled=True)
+            data = self.dmg.pool_query(self.pool.identifier, show_enabled=True)
             self.assertListEqual(
                 data['response'].get('enabled_ranks'), enabled_ranks,
                 "Invalid enabled_ranks field: want={}, got={}".format(

@@ -403,7 +403,7 @@ chk_pool_restart_svc(struct chk_pool_rec *cpr)
 		if (cpr->cpr_started)
 			chk_pool_shutdown(cpr, true);
 
-		rc = ds_pool_start_after_check(cpr->cpr_uuid);
+		rc = ds_pool_start_after_check(cpr->cpr_uuid, cpr->cpr_immutable);
 		if (rc != 0) {
 			D_WARN("Cannot start full PS for "DF_UUIDF" after CR check: "DF_RC"\n",
 			       DP_UUID(cpr->cpr_uuid), DP_RC(rc));
