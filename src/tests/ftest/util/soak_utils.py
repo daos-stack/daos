@@ -254,7 +254,7 @@ def get_daos_server_logs(self):
         self (obj): soak obj
     """
     daos_dir = self.outputsoak_dir + "/daos_server_logs"
-    logs_dir = self.test_env.log_dir + "*log*"
+    logs_dir = self.test_env.log_dir + "/*log*"
     hosts = self.hostlist_servers
     if not os.path.exists(daos_dir):
         os.mkdir(daos_dir)
