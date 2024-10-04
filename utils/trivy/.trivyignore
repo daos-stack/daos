@@ -31,6 +31,8 @@ CVE-2023-34453
 CVE-2023-34454
 ## CVE-2024-25638,HIGH,,"dnsjava: Improper response validation allowing DNSSEC bypass","dnsjava:dnsjava","2.1.7","3.6.0",https://avd.aquasec.com/nvd/cve-2024-25638
 CVE-2024-25638
+## CVE-2024-47554,HIGH,,"Apache Commons IO: Possible denial of service attack on untrusted input to XmlStreamReader","commons-io:commons-io","2.8.0","2.14.0",https://avd.aquasec.com/nvd/cve-2024-47554
+CVE-2024-47554
 
 ## Ignore DNSJava-related issues
 ## GHSA-crjg-w57m-rqqf,MEDIUM,,"DNSJava vulnerable to KeyTrap - Denial-of-Service Algorithmic Complexity Attacks","dnsjava:dnsjava","2.1.7","3.6.0",https://github.com/advisories/GHSA-crjg-w57m-rqqf
