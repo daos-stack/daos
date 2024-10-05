@@ -494,7 +494,7 @@ out:
 
 #define CRT_MIN_TCP_FD 131072
 
-/** For some providers, the we require a file descriptor for every connection
+/** For some providers, we require a file descriptor for every connection
  * and some platforms set the soft limit too low meaning and we run out. We can
  * set the limit up to the configured max by default to avoid this and warn
  * when that isn't possible.
