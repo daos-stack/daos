@@ -514,26 +514,31 @@ file_limit_bump(void)
 		return;
 	}
 
-	if (rlim.rlim_cur < CRT_MIN_TCP_FD) {
-		if (rlim.rlim_max < CRT_MIN_TCP_FD) {
-			D_WARN("File descriptor hard limit should be at least %d\n",
-			       CRT_MIN_TCP_FD);
-			return;
-		}
+	if (rlim.rlim_cur >= CRT_MIN_TCP_FD)
+		return;
 
-		rlim.rlim_cur = rlim.rlim_max;
-		rc            = setrlimit(RLIMIT_NOFILE, &rlim);
-		if (rc != 0) {
-			DS_ERROR(errno,
-				 "setrlimit() failed. Unable to bump file descriptor"
-				 " limit to value >= %d, limit is %lu",
-				 CRT_MIN_TCP_FD, rlim.rlim_max);
-			/** Per the man page, this can only fail if rlim is invalid */
-			D_ASSERT(0);
+	if (rlim.rlim_max < CRT_MIN_TCP_FD) {
+		D_WARN("File descriptor hard limit should be at least %d, limit is %lu\n",
+		       CRT_MIN_TCP_FD, rlim.rlim_max);
+
+		if (rlim.rlim_cur >= rlim.rlim_max)
 			return;
-		}
-		D_INFO("Updated soft file descriptor limit to %lu\n", rlim.rlim_max);
+
+		/* May as well bump it as much as we can */
 	}
+
+	rlim.rlim_cur = rlim.rlim_max;
+	rc            = setrlimit(RLIMIT_NOFILE, &rlim);
+	if (rc != 0) {
+		DS_ERROR(errno,
+			 "setrlimit() failed. Unable to bump file descriptor"
+			 " limit to value >= %d, limit is %lu",
+			 CRT_MIN_TCP_FD, rlim.rlim_max);
+		/** Per the man page, this can only fail if rlim is invalid */
+		D_ASSERT(0);
+		return;
+	}
+	D_INFO("Updated soft file descriptor limit to %lu\n", rlim.rlim_max);
 }
 
 static void
