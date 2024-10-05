@@ -524,7 +524,8 @@ file_limit_bump(void)
 		} else {
 			/** root should be able to change it */
 			D_INFO("Super user attempting to update hard file descriptor limit to %d,"
-			       " limit was %lu\n", CRT_MIN_TCP_FD, rlim.rlim_max);
+			       " limit was %lu\n",
+			       CRT_MIN_TCP_FD, rlim.rlim_max);
 			rlim.rlim_max = CRT_MIN_TCP_FD;
 		}
 
