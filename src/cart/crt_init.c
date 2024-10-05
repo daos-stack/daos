@@ -518,8 +518,15 @@ file_limit_bump(void)
 		return;
 
 	if (rlim.rlim_max < CRT_MIN_TCP_FD) {
-		D_WARN("File descriptor hard limit should be at least %d, limit is %lu\n",
-		       CRT_MIN_TCP_FD, rlim.rlim_max);
+		if (getuid() != 0) {
+			D_WARN("File descriptor hard limit should be at least %d, limit is %lu\n",
+			       CRT_MIN_TCP_FD, rlim.rlim_max);
+		} else {
+			/** root should be able to change it */
+			D_INFO("Super user attempting to update hard file descriptor limit to %d,"
+			       " limit was %lu\n", CRT_MIN_TCP_FD, rlim.rlim_max);
+			rlim.rlim_max = CRT_MIN_TCP_FD;
+		}
 
 		if (rlim.rlim_cur >= rlim.rlim_max)
 			return;
@@ -534,8 +541,6 @@ file_limit_bump(void)
 			 "setrlimit() failed. Unable to bump file descriptor"
 			 " limit to value >= %d, limit is %lu",
 			 CRT_MIN_TCP_FD, rlim.rlim_max);
-		/** Per the man page, this can only fail if rlim is invalid */
-		D_ASSERT(0);
 		return;
 	}
 	D_INFO("Updated soft file descriptor limit to %lu\n", rlim.rlim_max);
