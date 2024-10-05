@@ -1064,10 +1064,11 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		tree       *FaultDomainTree
-		inputRanks []uint32
-		expResult  []uint32
-		expErr     error
+		tree         *FaultDomainTree
+		inputRanks   []uint32
+		domainLevels []int
+		expResult    []uint32
+		expErr       error
 	}{
 		"nil tree": {
 			expErr: errors.New("uninitialized fault domain tree"),
@@ -1298,6 +1299,155 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 			inputRanks: []uint32{4, 0, 5, 3, 100},
 			expErr:     errors.New("rank 100 not found"),
 		},
+		"fault domain": {
+			tree: NewFaultDomainTree(
+				rankDomain("/switch0/rack0/pdu0", 0),
+				rankDomain("/switch0/rack0/pdu1", 1),
+				rankDomain("/switch1/rack1/pdu2", 2),
+				rankDomain("/switch1/rack1/pdu3", 3),
+				rankDomain("/switch1/rack1/pdu3", 4),
+				rankDomain("/switch1/rack2/pdu4", 5),
+			),
+			inputRanks:   []uint32{4, 0, 5, 3},
+			domainLevels: []int{3}, // pdu level is fault domain in this case
+			expResult: []uint32{
+				2,
+				ExpFaultDomainID(0), // root
+				3,
+				1,
+				ExpFaultDomainID(3), // pdu0
+				1,
+				1,
+				ExpFaultDomainID(11), // pdu3
+				2,
+				1,
+				ExpFaultDomainID(15), // pdu4
+				1,
+				// ranks
+				0,
+				3,
+				4,
+				5,
+			},
+		},
+		"fault and perf domains": {
+			tree: NewFaultDomainTree(
+				rankDomain("/switch0/rack0/pdu0", 0),
+				rankDomain("/switch0/rack0/pdu1", 1),
+				rankDomain("/switch1/rack1/pdu2", 2),
+				rankDomain("/switch1/rack1/pdu3", 3),
+				rankDomain("/switch1/rack1/pdu3", 4),
+				rankDomain("/switch1/rack2/pdu4", 5),
+			),
+			inputRanks:   []uint32{4, 0, 5, 3},
+			domainLevels: []int{1, 3}, // switch is perf domain and pdu is fault domain
+			expResult: []uint32{
+				3,
+				ExpFaultDomainID(0), // root
+				2,
+				2,
+				ExpFaultDomainID(1), // switch0
+				1,
+				2,
+				ExpFaultDomainID(7), // switch1
+				2,
+				1,
+				ExpFaultDomainID(3), // pdu0
+				1,
+				1,
+				ExpFaultDomainID(11), // pdu3
+				2,
+				1,
+				ExpFaultDomainID(15), // pdu4
+				1,
+				// ranks
+				0,
+				3,
+				4,
+				5,
+			},
+		},
+		"inverted domain level order": {
+			tree: NewFaultDomainTree(
+				rankDomain("/switch0/rack0/pdu0", 0),
+				rankDomain("/switch0/rack0/pdu1", 1),
+				rankDomain("/switch1/rack1/pdu2", 2),
+				rankDomain("/switch1/rack1/pdu3", 3),
+				rankDomain("/switch1/rack1/pdu3", 4),
+				rankDomain("/switch1/rack2/pdu4", 5),
+			),
+			inputRanks:   []uint32{4, 0, 5, 3},
+			domainLevels: []int{3, 1},
+			expResult: []uint32{
+				3,
+				ExpFaultDomainID(0), // root
+				2,
+				2,
+				ExpFaultDomainID(1), // switch0
+				1,
+				2,
+				ExpFaultDomainID(7), // switch1
+				2,
+				1,
+				ExpFaultDomainID(3), // pdu0
+				1,
+				1,
+				ExpFaultDomainID(11), // pdu3
+				2,
+				1,
+				ExpFaultDomainID(15), // pdu4
+				1,
+				// ranks
+				0,
+				3,
+				4,
+				5,
+			},
+		},
+		"invalid level": {
+			tree: NewFaultDomainTree(
+				rankDomain("/switch0/rack0/pdu0", 0),
+				rankDomain("/switch0/rack0/pdu1", 1),
+				rankDomain("/switch1/rack1/pdu2", 2),
+				rankDomain("/switch1/rack1/pdu3", 3),
+				rankDomain("/switch1/rack1/pdu3", 4),
+				rankDomain("/switch1/rack2/pdu4", 5),
+			),
+			inputRanks:   []uint32{4, 0, 5, 3},
+			domainLevels: []int{3, 9},
+			expErr:       errors.New("level 9 does not exist"),
+		},
+		"already includes rank level": {
+			tree: NewFaultDomainTree(
+				rankDomain("/switch0/rack0/pdu0", 0),
+				rankDomain("/switch0/rack0/pdu1", 1),
+				rankDomain("/switch1/rack1/pdu2", 2),
+				rankDomain("/switch1/rack1/pdu3", 3),
+				rankDomain("/switch1/rack1/pdu3", 4),
+				rankDomain("/switch1/rack2/pdu4", 5),
+			),
+			inputRanks:   []uint32{4, 0, 5, 3},
+			domainLevels: []int{3, 4},
+			expResult: []uint32{
+				2,
+				ExpFaultDomainID(0), // root
+				3,
+				1,
+				ExpFaultDomainID(3), // pdu0
+				1,
+				1,
+				ExpFaultDomainID(11), // pdu3
+				2,
+				1,
+				ExpFaultDomainID(15), // pdu4
+				1,
+				// ranks
+				0,
+				3,
+				4,
+				5,
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -1306,7 +1456,7 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 			db := raft.MockDatabaseWithFaultDomainTree(t, log, tc.tree)
 			membership := NewMembership(log, db)
 
-			result, err := membership.CompressedFaultDomainTree(tc.inputRanks...)
+			result, err := membership.CompressedFaultDomainTree(tc.domainLevels, tc.inputRanks...)
 
 			test.CmpErr(t, tc.expErr, err)
 

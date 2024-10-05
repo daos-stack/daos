@@ -614,13 +614,13 @@ func (m *Membership) OnEvent(_ context.Context, evt *events.RASEvent) {
 // Each domain is represented as a tuple: (level, ID, number of children)
 // Except for the rank, which is represented as: (rank)
 // The order of items is a breadth-first traversal of the tree.
-func (m *Membership) CompressedFaultDomainTree(ranks ...uint32) ([]uint32, error) {
+func (m *Membership) CompressedFaultDomainTree(domLevels []int, ranks ...uint32) ([]uint32, error) {
 	tree := m.db.FaultDomainTree()
 	if tree == nil {
 		return nil, errors.New("uninitialized fault domain tree")
 	}
 
-	subtree, err := getFaultDomainSubtree(tree, ranks...)
+	subtree, err := getFaultDomainSubtree(tree, domLevels, ranks...)
 	if err != nil {
 		return nil, err
 	}
@@ -628,7 +628,7 @@ func (m *Membership) CompressedFaultDomainTree(ranks ...uint32) ([]uint32, error
 	return compressTree(subtree), nil
 }
 
-func getFaultDomainSubtree(tree *FaultDomainTree, ranks ...uint32) (*FaultDomainTree, error) {
+func getFaultDomainSubtree(tree *FaultDomainTree, domLevels []int, ranks ...uint32) (*FaultDomainTree, error) {
 	if len(ranks) == 0 {
 		return tree, nil
 	}
@@ -652,7 +652,19 @@ func getFaultDomainSubtree(tree *FaultDomainTree, ranks ...uint32) (*FaultDomain
 		rankDomains = append(rankDomains, d)
 	}
 
-	return tree.Subtree(rankDomains...)
+	subtree, err := tree.Subtree(rankDomains...)
+	if err != nil {
+		// Not possible considering that we validated the rank domains above
+		return nil, errors.Wrapf(err, "creating subtree with ranks %+v", ranks)
+	}
+
+	if len(domLevels) == 0 {
+		return subtree, nil
+	}
+
+	rankLevel := len(rankDomains[0].Domains)
+	domLevels = append(domLevels, rankLevel)
+	return subtree.SubtreeWithLevels(domLevels...)
 }
 
 // RankFaultDomainPrefix is the prefix for rank-level fault domains.
