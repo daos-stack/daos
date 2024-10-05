@@ -345,7 +345,8 @@ def log_result_data(log, data):
             log.debug("%s%s", " " * indent, line)
 
 
-def get_clush_command(hosts, args=None, command="", command_env=None, command_sudo=False):
+def get_clush_command(hosts, args=None, command="", command_env=None, command_sudo=False,
+                      timeout=None, fanout=None):
     """Get the clush command with optional sudo arguments.
 
     Args:
@@ -355,11 +356,21 @@ def get_clush_command(hosts, args=None, command="", command_env=None, command_su
         command_env (EnvironmentVariables, optional): environment variables to export with the
             command. Defaults to None.
         sudo (bool, optional): whether to run the command with sudo privileges. Defaults to False.
+        timeout (int, optional): number of seconds to wait for the command to complete.
+            Defaults to None.
+        fanout (int, optional): fanout to use. Default uses the max of the
+            clush default (64) or available cores
 
     Returns:
         str: the clush command
     """
+    if fanout is None:
+        fanout = max(64, len(os.sched_getaffinity(0)))
     cmd_list = ["clush"]
+    if timeout is not None:
+        cmd_list.extend(["-u", str(timeout)])
+    if fanout is not None:
+        cmd_list.extend(["-f", str(fanout)])
     if args:
         cmd_list.append(args)
     cmd_list.extend(["-w", str(hosts)])
@@ -427,6 +438,35 @@ def run_local(log, command, verbose=True, timeout=None, stderr=False, capture_ou
     return results
 
 
+def daos_env_str(env):
+    """Return a copy of an env including only daos-relevant variables.
+
+    TODO ideally should be under EnvironmentVariables but the imports are broken
+
+    Args:
+        enc (dict): the original env
+
+    Returns:
+        str: a copy of env env including only daos-relevant variables,
+             converted to an export str
+    """
+    def _include(key):
+        return key.startswith('FI_') or \
+               key.startswith('OFI_') or \
+               key.startswith('DAOS_') or \
+               key.startswith('D_') or \
+               key.startswith('CRT_') or \
+               key.startswith('DD_') or \
+               key.startswith('MPI') or \
+               key in ('PATH', 'LD_LIBRARY_PATH')
+    export_str = ';'.join(
+        f'export {key}' if value is None else "export {}='{}'".format(key, value)
+        for key, value in env.items() if _include(key))
+    if export_str:
+        export_str = "".join([export_str, ';'])
+    return export_str
+
+
 def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False, stderr=False,
                fanout=None):
     """Run the command on the remote hosts.
@@ -453,13 +493,16 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False,
     if fanout is None:
         fanout = max(task.info('fanout'), len(os.sched_getaffinity(0)))
     task.set_info('fanout', fanout)
-    # Enable forwarding of the ssh authentication agent connection
-    task.set_info("ssh_options", "-oForwardAgent=yes")
+    # Enable forwarding of the ssh authentication agent connection.
+    # Force pseudo-terminal allocation so timed-out commands are killed remotely.
+    task.set_info("ssh_options", "-oForwardAgent=yes -q -t -t")
     if verbose:
         if timeout is None:
             log.debug("Running on %s without a timeout: %s", hosts, command)
         else:
             log.debug("Running on %s with a %s second timeout: %s", hosts, timeout, command)
+    env_str = daos_env_str(os.environ)
+    command = f'{env_str}{command}'
     task.run(command=command, nodes=hosts, timeout=timeout)
     results = CommandResult(command, task)
     if verbose:
@@ -521,7 +564,8 @@ def find_command(source, pattern, depth, other=None):
     return " ".join(command)
 
 
-def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, force=False):
+def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, force=False,
+                   user="root"):
     """Stop the processes on each hosts that match the pattern.
 
     Args:
@@ -571,7 +615,7 @@ def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, 
         log.debug(
             "Killing%s any processes on %s that match %s and then waiting %s seconds",
             step[0], result.passed_hosts, pattern_match, step[1])
-        kill_command = f"sudo /usr/bin/pkill{step[0]} {pattern}"
+        kill_command = command_as_user(f"/usr/bin/pkill{step[0]} {pattern}", user)
         run_remote(log, result.passed_hosts, kill_command, verbose, timeout)
         time.sleep(step[1])
         result = run_remote(log, result.passed_hosts, command, verbose, timeout)

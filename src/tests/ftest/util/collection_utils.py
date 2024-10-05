@@ -191,23 +191,23 @@ def archive_files(logger, summary, hosts, source, pattern, destination, depth, t
         logger.debug("No %s files found on %s", os.path.join(source, pattern), hosts)
         return return_code
 
-    if "log" in pattern:
-        # Remove any empty files
-        return_code |= remove_empty_files(logger, file_hosts, source, pattern, depth, test_result)
+    # if "log" in pattern:
+    #     # Remove any empty files
+    #     return_code |= remove_empty_files(logger, file_hosts, source, pattern, depth, test_result)
 
-        # Report an error if any files sizes exceed the threshold
-        if threshold is not None:
-            return_code |= check_log_size(
-                logger, file_hosts, source, pattern, depth, threshold, test_result)
+    #     # Report an error if any files sizes exceed the threshold
+    #     if threshold is not None:
+    #         return_code |= check_log_size(
+    #             logger, file_hosts, source, pattern, depth, threshold, test_result)
 
-        # Run cart_logtest on log files
-        return_code |= cart_log_test(logger, file_hosts, source, pattern, depth, test_result)
+    #     # Run cart_logtest on log files
+    #     return_code |= cart_log_test(logger, file_hosts, source, pattern, depth, test_result)
 
     # Remove any empty files
     return_code |= remove_empty_files(logger, file_hosts, source, pattern, depth, test_result)
 
     # Compress any files larger than 1 MB
-    return_code |= compress_files(logger, file_hosts, source, pattern, depth, test_result)
+    #return_code |= compress_files(logger, file_hosts, source, pattern, depth, test_result)
 
     # Move the test files to the test-results directory on this host
     return_code |= move_files(
@@ -445,21 +445,36 @@ def move_files(logger, hosts, source, pattern, destination, depth, timeout, test
         tmp_copy_dir = os.path.join(source, tmp_copy_dir)
         sudo_command = ""
 
-    # Create a temporary remote directory - should already exist, see _setup_test_directory()
-    command = f"mkdir -p '{tmp_copy_dir}'"
-    result = run_remote(logger, hosts, command)
-    if not result.passed:
-        message = (f"Error creating temporary remote copy directory '{tmp_copy_dir}' on "
-                   f"{result.failed_hosts}")
-        test_result.fail_test(logger, "Process", message)
-        return_code = 16
-        hosts = result.passed_hosts.copy()
+    compute_hosts = NodeSet.fromlist(_host for _host in hosts if _host.startswith('x'))
+    if destination.startswith("/lus/") and compute_hosts:
+        # Optimize collection to run a single command and not use clush --rcopy
+        hosts = hosts - compute_hosts
+        commands = []
+
+        # Create the host-specific directory
+        commands.append(f"mkdir -p '{destination}'.$(hostname)")
+
+        # Move all the source files matching the pattern into the host-specific directory
+        other = f"-print0 | xargs -0 -r0 -I '{{}}' {sudo_command}mv '{{}}' " \
+                f"'{destination}'.$(hostname)/"
+        commands.append(find_command(source, pattern, depth, other))
+
+        result = run_remote(logger, compute_hosts, " && ".join(commands), timeout=timeout)
+        if not result.passed:
+            message = f"Error moving files from {source} to {destination}"
+            test_result.fail_test(logger, "Process", message)
+            return_code = 16
+
+    # Continue clush --rcopy archiving if there are remaining hosts
     if not hosts:
         return return_code
 
+    # Create a temporary remote directory - should already exist, see _setup_test_directory()
     # Move all the source files matching the pattern into the temporary remote directory
+    mkdir_command = f"mkdir -p '{tmp_copy_dir}'"
     other = f"-print0 | xargs -0 -r0 -I '{{}}' {sudo_command}mv '{{}}' '{tmp_copy_dir}'/"
-    result = run_remote(logger, hosts, find_command(source, pattern, depth, other))
+    command = f"{mkdir_command} && {find_command(source, pattern, depth, other)}"
+    result = run_remote(logger, hosts, command)
     if not result.passed:
         message = (f"Error moving files to temporary remote copy directory '{tmp_copy_dir}' on "
                    f"{result.failed_hosts}")
@@ -924,14 +939,14 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
             "depth": 1,
             "timeout": 900,
         }
-        remote_files["valgrind log files"] = {
-            "source": test_env.shared_dir,
-            "destination": os.path.join(job_results_dir, "latest", TEST_RESULTS_DIRS[4]),
-            "pattern": "valgrind*",
-            "hosts": test.host_info.servers.hosts,
-            "depth": 1,
-            "timeout": 900,
-        }
+        # remote_files["valgrind log files"] = {
+        #     "source": test_env.shared_dir,
+        #     "destination": os.path.join(job_results_dir, "latest", TEST_RESULTS_DIRS[4]),
+        #     "pattern": "valgrind*",
+        #     "hosts": test.host_info.servers.hosts,
+        #     "depth": 1,
+        #     "timeout": 900,
+        # }
         for index, hosts in enumerate(core_files):
             remote_files[f"core files {index + 1}/{len(core_files)}"] = {
                 "source": core_files[hosts]["path"],

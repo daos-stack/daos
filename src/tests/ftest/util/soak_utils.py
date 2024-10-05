@@ -15,6 +15,7 @@ from itertools import product
 import slurm_utils
 from avocado.core.exceptions import TestFail
 from avocado.utils.distro import detect
+from command_utils import command_as_user
 from command_utils_base import EnvironmentVariables
 from daos_racer_utils import DaosRacerCommand
 from data_mover_utils import DcpCommand, FsCopy
@@ -32,7 +33,7 @@ from macsio_util import MacsioCommand
 from mdtest_utils import MdtestCommand
 from oclass_utils import extract_redundancy_factor
 from pydaos.raw import DaosApiError, DaosSnapshot
-from run_utils import run_remote
+from run_utils import daos_env_str, run_remote
 from test_utils_container import add_container
 
 H_LOCK = threading.Lock()
@@ -497,7 +498,7 @@ def launch_reboot(self, pools, name, results, args):
         self.log.info(
             "<<<PASS %s: %s started on ranks %s at %s >>>\n", self.loop, name, ranks, time.ctime())
         # reboot host in 1 min
-        result = run_remote(self.log, reboot_host, "sudo shutdown -r +1")
+        result = run_remote(self.log, reboot_host, command_as_user("shutdown -r +1", "root"))
         if result.passed:
             status = True
         else:
@@ -536,7 +537,8 @@ def launch_reboot(self, pools, name, results, args):
             # issue a restart
             self.log.info("<<<PASS %s: Issue systemctl restart daos_server on %s at %s>>>\n",
                           self.loop, name, reboot_host, time.ctime())
-            cmd_results = run_remote(self.log, reboot_host, "sudo systemctl restart daos_server")
+            cmd_results = run_remote(
+                self.log, reboot_host, command_as_user("systemctl restart daos_server", "root"))
             if cmd_results.passed:
                 self.dmg_command.system_query()
                 for pool in pools:
@@ -855,7 +857,8 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
         self.soak_log_dir,
         self.test_name + "_" + name + "_`hostname -s`_"
         "" + "${SLURM_JOB_ID}_" + "daos_dfuse.log")
-    dfuse_env = f"export D_LOG_FILE_APPEND_PID=1;export D_LOG_MASK=ERR;export D_LOG_FILE={dfuselog}"
+    dfuse_env = daos_env_str(os.environ) + \
+                f"export D_LOG_FILE_APPEND_PID=1;export D_LOG_MASK=ERR;export D_LOG_FILE={dfuselog}"
     module_load = f"module use {self.mpi_module_use};module load {self.mpi_module}"
 
     dfuse_start_cmds = [
@@ -884,9 +887,10 @@ def stop_dfuse(dfuse, vol=False):
             "do daos container destroy --path={0}/\"$file\" ; done".format(
                 dfuse.mount_dir.value)])
 
+    dfuse_env = daos_env_str(os.environ)
     dfuse_stop_cmds.extend([
-        "clush -S -w $SLURM_JOB_NODELIST \"fusermount3 -uz {0}\"".format(dfuse.mount_dir.value),
-        "clush -S -w $SLURM_JOB_NODELIST \"rm -rf {0}\"".format(dfuse.mount_dir.value)])
+        f'clush -S -w $SLURM_JOB_NODELIST "{dfuse_env}fusermount3 -uz {dfuse.mount_dir.value}"',
+        f'clush -S -w $SLURM_JOB_NODELIST "rm -rf {dfuse.mount_dir.value}"'])
     return dfuse_stop_cmds
 
 
@@ -997,10 +1001,8 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
             mpirun_cmd.get_params(self)
             if api == "POSIX-LIBPIL4DFS":
                 env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
-                env["D_IL_REPORT"] = "1"
             if api == "POSIX-LIBIOIL":
                 env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libioil.so')
-                env["D_IL_REPORT"] = "1"
             # add envs if api is HDF5-VOL
             if api == "HDF5-VOL":
                 vol = True
@@ -1166,10 +1168,8 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                 if self.enable_il and api == "POSIX-LIBPIL4DFS":
                     env["LD_PRELOAD"] = os.path.join(
                         self.prefix, 'lib64', 'libpil4dfs.so')
-                    env["D_IL_REPORT"] = "1"
                 if self.enable_il and api == "POSIX-LIBIOIL":
                     env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libioil.so')
-                    env["D_IL_REPORT"] = "1"
             mpirun_cmd = Mpirun(mdtest_cmd, mpi_type=self.mpi_module)
             mpirun_cmd.get_params(self)
             mpirun_cmd.assign_processes(nodesperjob * ppn)
@@ -1297,10 +1297,8 @@ def create_fio_cmdline(self, job_spec, pool):
         cmds.append(f"cd {dfuse.mount_dir.value};")
         if self.enable_il and api == "POSIX-LIBPIL4DFS":
             cmds.append(f"export LD_PRELOAD={os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')}")
-            cmds.append("export D_IL_REPORT=1")
         if self.enable_il and api == "POSIX-LIBIOIL":
             cmds.append(f"export LD_PRELOAD={os.path.join(self.prefix, 'lib64', 'libioil.so')}")
-            cmds.append("export D_IL_REPORT=1")
         cmds.append(str(fio_cmd))
         cmds.append("status=$?")
         cmds.append("cd -")
@@ -1372,10 +1370,8 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
                 env["DAOS_UNS_PREFIX"] = format_path(pool, self.container[-1])
             if self.enable_il and api == "POSIX-LIBPIL4DFS":
                 env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
-                env["D_IL_REPORT"] = "1"
             if self.enable_il and api == "POSIX-LIBIOIL":
                 env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libioil.so')
-                env["D_IL_REPORT"] = "1"
             mpirun_cmd.assign_environment(env, True)
             mpirun_cmd.assign_processes(nodesperjob * ppn)
             mpirun_cmd.ppn.update(ppn)
