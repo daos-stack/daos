@@ -243,17 +243,15 @@ jobs:
       - name: Run Unit Testing
         run: docker run --name unit-test build-image-${{github.run_id}}-${{github.run_attempt}}
             ./daos/utils/ci/run_unit_tests_in_gha.sh
-      - name: Fetch results
-        if: always()
-        run: docker cp build-image-${{github.run_id}}-${{github.run_attempt}}:/home/daos/daos/nlt-junit.xml ./
-      - name: Publish NLT test results
-        if: always()
-        uses: EnricoMi/publish-unit-test-result-action@v1.17
+      - name: Fetch test results
+        run: docker cp unit-test:/unit_test_logs ./artifacts;
+             docker cp unit-test:/covc_test_logs ./artifacts;
+             docker cp unit-test:/covc_vm_test ./artifacts
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          files: nlt-junit.xml
-          comment_mode: off  # yamllint disable-line rule:truthy
-          fail_on: nothing
+          name: Bullseye Unit Testing test-results
+          path: ./artifacts/
 
   Functional-Test:
     name: Bullseye Functional Testing
