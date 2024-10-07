@@ -1727,7 +1727,8 @@ out:
 
 struct crt_hg_bulk_cbinfo {
 	struct crt_bulk_desc	*bci_desc;
-	crt_bulk_cb_t		bci_cb;
+	crt_bulk_cb_t            bci_complete_cb;
+	crt_bulk_cb_t            bci_verify_cb;
 	void			*bci_arg;
 };
 
@@ -1768,17 +1769,18 @@ crt_hg_bulk_transfer_cb(const struct hg_cb_info *hg_cbinfo)
 		}
 	}
 
-	if (bulk_cbinfo->bci_cb == NULL) {
+	if (bulk_cbinfo->bci_verify_cb == NULL || bulk_cbinfo->bci_complete_cb == NULL) {
 		D_DEBUG(DB_NET, "No bulk completion callback registered.\n");
 		D_GOTO(out, hg_ret);
 	}
 	crt_bulk_cbinfo.bci_arg = bulk_cbinfo->bci_arg;
 	crt_bulk_cbinfo.bci_rc = rc;
 	crt_bulk_cbinfo.bci_bulk_desc = bulk_desc;
+	crt_bulk_cbinfo.bci_complete_cb = bulk_cbinfo->bci_complete_cb;
 
-	rc = bulk_cbinfo->bci_cb(&crt_bulk_cbinfo);
+	rc = bulk_cbinfo->bci_verify_cb(&crt_bulk_cbinfo);
 	if (rc != 0)
-		D_ERROR("bulk_cbinfo->bci_cb failed, rc: %d.\n", rc);
+		D_ERROR("bulk_cbinfo->bci_verify_cb failed, rc: %d.\n", rc);
 
 out:
 	D_FREE(bulk_cbinfo);
@@ -1787,8 +1789,8 @@ out:
 }
 
 int
-crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
-		     void *arg, crt_bulk_opid_t *opid, bool bind)
+crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t verify_cb,
+		     crt_bulk_cb_t complete_cb, void *arg, crt_bulk_opid_t *opid, bool bind)
 {
 	struct crt_context		*ctx;
 	struct crt_hg_context		*hg_ctx;
@@ -1817,9 +1819,10 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 	}
 	crt_bulk_desc_dup(bulk_desc_dup, bulk_desc);
 
-	bulk_cbinfo->bci_desc = bulk_desc_dup;
-	bulk_cbinfo->bci_cb = complete_cb;
-	bulk_cbinfo->bci_arg = arg;
+	bulk_cbinfo->bci_desc        = bulk_desc_dup;
+	bulk_cbinfo->bci_arg         = arg;
+	bulk_cbinfo->bci_verify_cb   = verify_cb;
+	bulk_cbinfo->bci_complete_cb = complete_cb;
 
 	hg_bulk_op = (bulk_desc->bd_bulk_op == CRT_BULK_PUT) ?
 		     HG_BULK_PUSH : HG_BULK_PULL;

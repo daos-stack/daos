@@ -345,6 +345,7 @@ struct crt_bulk_cb_info {
 	struct crt_bulk_desc	*bci_bulk_desc; /**< bulk descriptor */
 	void			*bci_arg; /**< User passed in arg */
 	int			 bci_rc; /**< return code */
+	void                    *bci_complete_cb; /**< completion callback */
 };
 
 /**
