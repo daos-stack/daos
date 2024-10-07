@@ -26,9 +26,10 @@ class DaosErrorCode():
     # pylint: disable=too-few-public-methods
     def __init__(self, err_num):
         self.err = err_num
-        if -err_num in pydaos_shim.errors:
-            (self.name, self.message) = pydaos_shim.errors[-err_num]
-        else:
+
+        try:
+            (self.name, self.message) = pydaos_shim._errors[-err_num]
+        except KeyError:
             self.name = "DER_UNKNOWN"
             self.message = f"Unknown error code {err_num}"
 

@@ -313,8 +313,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         except TestFail:
             self.log.info('Test is expected to fail because of DER_NOSPACE')
         else:
-            self.fail('This test is suppose to FAIL because of DER_NOSPACE'
-                      'but it Passed')
+            self.fail('This test is suppose to FAIL because of DER_NOSPACE but it Passed')
 
         # Display the pool statistics
         self.pool.get_info()

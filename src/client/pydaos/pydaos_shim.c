@@ -1443,7 +1443,7 @@ PyMODINIT_FUNC PyInit_pydaos_shim(void)
 	module = PyModule_Create(&moduledef);
 
 	ders = setup_ders();
-	if (PyModule_AddObject(module, "errors", ders) < 0) {
+	if (PyModule_AddObject(module, "_errors", ders) < 0) {
 		Py_XDECREF(ders);
 	}
 
