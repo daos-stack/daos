@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -120,7 +120,7 @@ class BasicCheckoutDm(DataMoverTestBase):
         self.ior_ppn = self.ppn
 
         # create pool and container
-        pool = self.create_pool()
+        pool = self.get_pool()
         cont = self.get_container(pool, oclass=self.ior_cmd.dfs_oclass.value)
 
         # run datamover

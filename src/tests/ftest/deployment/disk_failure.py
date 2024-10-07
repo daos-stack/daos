@@ -119,7 +119,6 @@ class DiskFailureTest(OSAUtils):
         Test disk failures during the IO operation.
 
         :avocado: tags=all,manual
-        :avocado: tags=hw,medium
         :avocado: tags=deployment,disk_failure
         :avocado: tags=DiskFailureTest,test_disk_failure_w_rf
         """
@@ -131,7 +130,6 @@ class DiskFailureTest(OSAUtils):
         Test a disk inducing faults and resetting is back to normal state.
 
         :avocado: tags=all,manual
-        :avocado: tags=hw,medium
         :avocado: tags=deployment,disk_failure
         :avocado: tags=DiskFailureTest,test_disk_fault_to_normal
         """

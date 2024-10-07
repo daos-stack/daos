@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -46,7 +46,7 @@ class DmvrCopyProcs(DataMoverTestBase):
         :avocado: tags=DmvrCopyProcs,test_copy_procs
         """
         # Create pool and containers
-        pool1 = self.create_pool()
+        pool1 = self.get_pool()
         cont1 = self.get_container(pool1)
         cont2 = self.get_container(pool1)
 

@@ -2,6 +2,57 @@
 
 We are pleased to announce the release of DAOS version 2.6.
 
+## DAOS Version 2.6.1 (2024-10-05)
+
+The DAOS 2.6.1 release contains the following updates on top of DAOS 2.6.0:
+
+* Mercury update for slingshot 11.0 host stack and other UCX provider fixes.
+
+### Bug fixes and improvements
+
+The DAOS 2.6.1 release includes fixes for several defects and a few changes
+of administrator interface that can improve usability of DAOS system.
+
+* Fix a race between MS replica stepping up as leader and engines joining the
+  system, this race may cause engine join to fail.
+
+* Fix a race in concurrent container destroy which may cause engine crash.
+
+* Pool destroy returns explicit error instead of success if there is an
+  in-progress destroy against the same pool.
+
+* EC aggregation may cause inconsistency between data shard and parity shard,
+  this has been fixed in DAOS Version 2.6.1.
+
+* Enable pool list for clients.
+
+* Running "daos|dmg pool query-targets" with rank argument can query all
+  targets on that rank.
+
+* Add daos health check command which allows basic system health checks from client.
+
+* DAOS Version 2.6.0 always excludes unreachable engines reported by SWIM and schedule rebuild for
+  excluded engines, this is an overreaction if massive engines are impacted by power failure or
+  switch reboot because data recovery is impossible in these cases. DAOS 2.6.1 introduces a new
+  environment variable to set in the server yaml file for each engine (DAOS_POOL_RF) to indicate the
+  number of engine failures seen before stopping the changing of pool membership and completing in
+  progress rebuild. It will just let all I/O and on-going rebuild block. DAOS system can finish in
+  progress rebuild and be available again after bringing back impacted engines. The recommendation
+  is to set this environment variable to 2.
+
+* In DAOS Version 2.6.0, accessing faulty NVMe device returns wrong error code
+  to DAOS client which can fail the application. DAOS 2.6.1 returns correct
+  error code to DAOS client so the client can retry and eventually access data
+  in degraded mode instead of failing the I/O.
+
+* Pil4dfs fix to avoid deadlock with level zero library on aurora and support
+  for more libc functions that were not intercepted before
+
+For details, please refer to the Github
+[release/2.6 commit history](https://github.com/daos-stack/daos/commits/release/2.6)
+and the associated [Jira tickets](https://jira.daos.io/) as stated in the commit messages.
+
+
 ## DAOS Version 2.6.0 (2024-07-26)
 
 ### General Support
