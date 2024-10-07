@@ -897,7 +897,7 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 		RPC_ADDREF(rpc_priv);
 
 		if (!(rpc_priv->crp_flags & CRT_RPC_FLAG_DEADLINES_USED)) {
-			/* Support earlier version of a client that doesnt use deadlines */
+			/* Support earlier version of a client that doesn't use deadlines */
 			child_rpc_priv->crp_timeout_sec = rpc_priv->crp_timeout_sec;
 		} else {
 			D_ASSERT(rpc_priv->crp_deadline_sec != 0);
