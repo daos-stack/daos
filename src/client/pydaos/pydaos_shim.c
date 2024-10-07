@@ -124,24 +124,6 @@ __shim_handle__daos_fini(PyObject *self, PyObject *args)
 	return PyLong_FromLong(rc);
 }
 
-static PyObject *
-__shim_handle__err_to_str(PyObject *self, PyObject *args)
-{
-	const char	*str;
-	int		 val;
-
-	/* Parse arguments */
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "i", &val);
-	/* Call C function */
-	str = d_errstr(val);
-	if (str == NULL) {
-		Py_INCREF(Py_None);
-		return Py_None;
-	}
-
-	return PyUnicode_FromString(str);
-}
-
 /**
  * Implementation of container functions
  */
@@ -1400,7 +1382,6 @@ static PyMethodDef daosMethods[] = {
     /** Generic methods */
     EXPORT_PYTHON_METHOD(daos_init),
     EXPORT_PYTHON_METHOD(daos_fini),
-    EXPORT_PYTHON_METHOD(err_to_str),
 
     /** Container operations */
     EXPORT_PYTHON_METHOD(cont_open),
