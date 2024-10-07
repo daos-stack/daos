@@ -32,9 +32,11 @@ void crt_hdlr_memb_sample(crt_rpc_t *rpc_req);
  */
 enum crt_rpc_flags_internal {
 	/* flag of collective RPC (bcast) */
-	CRT_RPC_FLAG_COLL		= (1U << 16),
+	CRT_RPC_FLAG_COLL = (1U << 16),
 	/* flag of targeting primary group */
-	CRT_RPC_FLAG_PRIMARY_GRP	= (1U << 17),
+	CRT_RPC_FLAG_PRIMARY_GRP = (1U << 17),
+	/* flag of using deadlines instead of timeouts in rpc headers */
+	CRT_RPC_FLAG_DEADLINES_USED = (1U << 18),
 };
 
 struct crt_corpc_hdr {

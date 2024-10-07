@@ -122,8 +122,13 @@ crt_corpc_initiate(struct crt_rpc_priv *rpc_priv)
 		}
 	}
 
-	/* Inherit a timeout from a source */
-	if (rpc_priv->crp_req_hdr.cch_src_deadline_sec) {
+	/* Keep backwards compatible with older clients that use timeouts instead of deadlines */
+	if (!(rpc_priv->crp_flags & CRT_RPC_FLAG_DEADLINES_USED)) {
+		src_timeout = rpc_priv->crp_req_hdr.cch_src_deadline_sec;
+		D_INFO("Deprecated client detected, using timeout of %d instead of deadlines\n",
+		       src_timeout);
+	} else if (rpc_priv->crp_req_hdr.cch_src_deadline_sec) {
+		/* Inherit a deadline from a source */
 		src_timeout = crt_deadline_to_timeout(rpc_priv->crp_req_hdr.cch_src_deadline_sec);
 
 		RPC_INFO(rpc_priv, "Converted deadline %d to timeout %d\n",
@@ -891,13 +896,18 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 
 		RPC_ADDREF(rpc_priv);
 
-		D_ASSERT(rpc_priv->crp_deadline_sec != 0);
+		if (!(rpc_priv->crp_flags & CRT_RPC_FLAG_DEADLINES_USED)) {
+			/* Support earlier version of a client that doesnt use deadlines */
+			child_rpc_priv->crp_timeout_sec = rpc_priv->crp_timeout_sec;
+		} else {
+			D_ASSERT(rpc_priv->crp_deadline_sec != 0);
 
-		/* Set child's deadline same as parent and calculate timeout left from it */
-		child_rpc_priv->crp_deadline_sec = rpc_priv->crp_deadline_sec;
-		/* Note: crp_timeout_sec is still used for local rpc expiration for now */
-		child_rpc_priv->crp_timeout_sec =
-		    crt_deadline_to_timeout(rpc_priv->crp_deadline_sec);
+			/* Set child's deadline same as parent and calculate timeout left from it */
+			child_rpc_priv->crp_deadline_sec = rpc_priv->crp_deadline_sec;
+			/* Note: crp_timeout_sec is still used for local rpc expiration for now */
+			child_rpc_priv->crp_timeout_sec =
+			    crt_deadline_to_timeout(rpc_priv->crp_deadline_sec);
+		}
 
 		rc = crt_req_send(child_rpc, crt_corpc_reply_hdlr, rpc_priv);
 		if (rc != 0) {

@@ -1492,15 +1492,17 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 	 * converted from the timeout, however each child rpc will have a deadline set
 	 * based on the parents deadline. see crt_corpc_req_hdlr() where child deadline
 	 * is set
-	 *
 	 */
-	if (rpc_priv->crp_coll && rpc_priv->crp_deadline_sec != 0) {
-		/* TODO: Change this to debug before landing */
-		RPC_INFO(rpc_priv, "Using pre-set deadline=%d for corpc\n",
-			 rpc_priv->crp_deadline_sec);
-	} else {
-		rpc_priv->crp_deadline_sec = crt_timeout_to_deadline(rpc_priv->crp_timeout_sec);
-		RPC_INFO(rpc_priv, "Deadline set to %d\n", rpc_priv->crp_deadline_sec);
+	if (rpc_priv->crp_flags & CRT_RPC_FLAG_DEADLINES_USED) {
+		if (rpc_priv->crp_coll && rpc_priv->crp_deadline_sec != 0) {
+			/* TODO: Change this to debug before landing */
+			RPC_INFO(rpc_priv, "Using pre-set deadline=%d for corpc\n",
+				 rpc_priv->crp_deadline_sec);
+		} else {
+			rpc_priv->crp_deadline_sec =
+			    crt_timeout_to_deadline(rpc_priv->crp_timeout_sec);
+			RPC_INFO(rpc_priv, "Deadline set to %d\n", rpc_priv->crp_deadline_sec);
+		}
 	}
 
 	if (rpc_priv->crp_coll) {
@@ -1734,7 +1736,7 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv
 	rpc_priv->crp_hdl_reuse = NULL;
 	rpc_priv->crp_srv = srv_flag;
 	rpc_priv->crp_ul_retry = 0;
-
+	rpc_priv->crp_flags     = CRT_RPC_FLAG_DEADLINES_USED;
 
 	if (srv_flag) {
 		rpc_priv->crp_src_is_primary = ctx->cc_primary;
