@@ -813,11 +813,6 @@ verify_pil4dfs_env()
 		goto err;
 	}
 
-	p = getenv("D_IL_ENFORCE_EXEC_ENV");
-	if (!p) {
-		printf("Error: D_IL_ENFORCE_EXEC_ENV is unset.\n");
-		goto err;
-	}
 	exit(0);
 
 err:
