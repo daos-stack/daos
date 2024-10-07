@@ -70,9 +70,8 @@ func newResponseState(inErr error, badStatus ctlpb.ResponseStatus, infoMsg strin
 
 // Package-local function variables for mocking in unit tests.
 var (
-	scanBdevs        = bdevScan         // StorageScan() unit tests
-	scanEngineBdevs  = bdevScanEngine   // bdevScan() unit tests
-	computeMetaRdbSz = metaRdbComputeSz // TODO unit tests
+	scanBdevs       = bdevScan       // StorageScan() unit tests
+	scanEngineBdevs = bdevScanEngine // bdevScan() unit tests
 )
 
 type scanBdevsFn func(storage.BdevScanRequest) (*storage.BdevScanResponse, error)
@@ -161,7 +160,7 @@ func bdevScanEngines(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvm
 		eReq := new(ctlpb.ScanNvmeReq)
 		*eReq = *req
 		if req.Meta {
-			ms, rs, err := computeMetaRdbSz(cs, engine, nsps, req.MemRatio)
+			ms, rs, err := metaRdbComputeSz(cs, engine, nsps, req.MemRatio)
 			if err != nil {
 				return nil, errors.Wrap(err, "computing meta and rdb size")
 			}
@@ -244,6 +243,9 @@ func bdevScan(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvmeReq, n
 	if cs.srvCfg != nil && cs.srvCfg.DisableHugepages {
 		return nil, errors.New("cannot scan bdevs if hugepages have been disabled")
 	}
+	if len(nsps) == 0 {
+		return nil, errors.New("cannot scan bdevs; expecting scm namespaces")
+	}
 
 	defer func() {
 		if err == nil && req.Meta {
@@ -287,7 +289,7 @@ func bdevScan(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvmeReq, n
 	// Retry once if harness scan returns unexpected number of controllers in case engines
 	// claimed devices between when started state was checked and scan was executed.
 	if !hasStarted {
-		cs.log.Debugf("retrying harness bdev scan as unexpected nr returned, want %d got %d",
+		cs.log.Debugf("retrying harness bdev scan as unexpected nr ctrlrs returned, want %d got %d",
 			nrCfgBdevs, nrScannedBdevs)
 
 		resp, err = bdevScanAssigned(ctx, cs, req, nsps, &hasStarted, bdevCfgs)
@@ -304,7 +306,7 @@ func bdevScan(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvmeReq, n
 		}
 	}
 
-	cs.log.Noticef("harness bdev scan returned unexpected nr, want %d got %d", nrCfgBdevs,
+	cs.log.Noticef("harness bdev scan returned unexpected nr ctrlrs, want %d got %d", nrCfgBdevs,
 		nrScannedBdevs)
 
 	return bdevScanTrimResults(req, resp), nil
@@ -419,41 +421,64 @@ func (cs *ControlService) getRdbSize(engineCfg *engine.Config) (uint64, error) {
 // Compute the maximal size of the metadata to allow the engine to fill the WallMeta field
 // response.  The maximal metadata (i.e. VOS index file) size should be equal to the SCM available
 // size divided by the number of targets of the engine. Sizes returned are per-target values.
-func metaRdbComputeSz(cs *ControlService, ei Engine, nsps []*ctlpb.ScmNamespace, memRatio float32) (metaBytes, rdbBytes uint64, errOut error) {
+func metaRdbComputeSz(cs *ControlService, ei Engine, nsps []*ctlpb.ScmNamespace, memRatio float32) (uint64, uint64, error) {
+	msg := "computing meta/rdb sizes"
+
+	var metaBytes, rdbBytes uint64
 	for _, nsp := range nsps {
+		msg += fmt.Sprintf(", scm-ns: %+v", nsp)
+
 		mp := nsp.GetMount()
 		if mp == nil {
+			cs.log.Tracef("%s: skip (no mount)", msg)
 			continue
 		}
-		if r, err := ei.GetRank(); err != nil || uint32(r) != mp.GetRank() {
-			continue
-		}
+		msg += fmt.Sprintf(", mount: %+v", mp)
 
+		r, err := ei.GetRank()
+		if err != nil {
+			cs.log.Tracef("%s: skip (get rank err: %s)", msg, err.Error())
+			continue
+		}
+		if uint32(r) != mp.Rank {
+			cs.log.Tracef("%s: skip (wrong rank, want %d got %d)", msg, r, mp.Rank)
+			continue
+		}
+		msg += fmt.Sprintf(", rank %d", r)
+
+		if ei.GetTargetCount() == 0 {
+			return 0, 0, errors.Errorf("%s: engine with zero tgts is invalid", msg)
+		}
 		metaBytes = mp.GetUsableBytes() / uint64(ei.GetTargetCount())
 
 		// Divide VOS index file size by memRatio fraction, if nonzero, to project the
 		// effective meta-blob size. In MD-on-SSD phase-2, meta-blob > VOS-file size.
 		if memRatio > 0 {
+			msg += fmt.Sprintf(", using %.2f mem-ratio", memRatio)
 			metaBytes = uint64(float64(metaBytes) / float64(memRatio))
 		}
 
 		engineCfg, err := cs.getEngineCfgFromScmNsp(nsp)
 		if err != nil {
-			errOut = errors.Wrap(err, "Engine with invalid configuration")
-			return
+			return 0, 0, errors.Wrapf(err, "%s: engine with invalid configuration", msg)
 		}
-		rdbBytes, errOut = cs.getRdbSize(engineCfg)
-		if errOut != nil {
-			return
+		rdbBytes, err = cs.getRdbSize(engineCfg)
+		if err != nil {
+			return 0, 0, errors.Wrapf(err, "%s: get rdb size with engine cfg %+v", msg,
+				engineCfg)
 		}
+
 		break // Just use first namespace.
 	}
 
 	if metaBytes == 0 {
 		cs.log.Noticef("instance %d: no SCM space available for metadata", ei.Index)
+		rdbBytes = 0
 	}
+	cs.log.Tracef("%s: computed meta sz %s and rdb sz %s", msg, humanize.IBytes(metaBytes),
+		humanize.IBytes(rdbBytes))
 
-	return
+	return metaBytes, rdbBytes, nil
 }
 
 type deviceToAdjust struct {
