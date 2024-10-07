@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -43,7 +43,7 @@ class DmvrPosixLargeFile(DataMoverTestBase):
             self.fail("Failed to get ior processes for {}".format(self.tool))
 
         # create pool and cont
-        pool = self.create_pool()
+        pool = self.get_pool()
         cont1 = self.get_container(pool)
 
         # create initial data in cont1
