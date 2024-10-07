@@ -65,7 +65,7 @@ jobs:
                ln -s ${{ github.run_number }} ${REPO_PATH}lastSuccessfulBuild
 
   Build-RPM:
-    name: Build RPM
+    name: Bullseye Build RPM
     permissions:
       statuses: write
     runs-on: [self-hosted, docker]
@@ -219,7 +219,7 @@ jobs:
           status: "${{ job.status }}"
 
   Unit-Test:
-    name: Build and Unit Tests
+    name: Bullseye Unit Testing
     runs-on: [self-hosted, docker]
     steps:
       - name: Checkout code
@@ -227,18 +227,18 @@ jobs:
         with:
           submodules: true
           ref: ${{ env.DAOS_REPOSITRY }}
-      # - name: Build deps in Docker
-      #   run: docker build . --file utils/docker/Dockerfile.el.8
-      #       --build-arg DAOS_BUILD=no
-      #       --build-arg DEPS_JOBS=50
-      - name: Build daos in Docker
+      - name: Build deps in Docker
         run: docker build . --file utils/docker/Dockerfile.el.8
             --build-arg DAOS_BUILD=no
             --build-arg DEPS_JOBS=50
-            --build-arg BASE_DISTRO
+      - name: Build daos in Docker
+        run: docker build . --file utils/docker/Dockerfile.el.8
+            --build-arg DEPS_JOBS=50
             --build-arg DAOS_KEEP_SRC=yes
+            --build-arg DAOS_TARGET_TYPE=debug
+            --build-arg DAOS_JAVA_BUILD=yes
             --build-arg JENKINS_URL=${{ env.JENKINS_URL }}
-            --build-arg BULLSEYE_KEY=${{ secrets.BULLSEYE_LICENSE_KEY }}
+            --build-arg BULLSEYE=${{ secrets.BULLSEYE_LICENSE_KEY }}
             --tag build-image-${{github.run_id}}-${{github.run_attempt}}
       - name: Run Unit Testing
         run: docker run --name unit-test build-image-${{github.run_id}}-${{github.run_attempt}}
@@ -255,8 +255,8 @@ jobs:
           comment_mode: off  # yamllint disable-line rule:truthy
           fail_on: nothing
 
-  Functional:
-    name: Functional Testing
+  Functional-Test:
+    name: Bullseye Functional Testing
     runs-on: [self-hosted, wolf]
     permissions:
       statuses: write
