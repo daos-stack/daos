@@ -700,12 +700,11 @@ class TestPool(TestDaosApiBase):
             self.log.error("self.acl_file isn't defined!")
 
     @fail_on(CommandFailure)
-    def query(self, show_enabled=False, show_disabled=False):
+    def query(self, show_enabled=False):
         """Execute dmg pool query.
 
         Args:
             show_enabled (bool, optional): Display enabled ranks.
-            show_disabled (bool, optional): Display disabled ranks.
 
         Returns:
             dict: the dmg json command output converted to a python dictionary
@@ -720,7 +719,7 @@ class TestPool(TestDaosApiBase):
 
         while True:
             try:
-                return self.dmg.pool_query(self.identifier, show_enabled, show_disabled)
+                return self.dmg.pool_query(self.identifier, show_enabled)
 
             except CommandFailure as error:
                 if end_time is None:
@@ -1119,19 +1118,18 @@ class TestPool(TestDaosApiBase):
         }
         return pool_percent
 
-    def set_query_data(self, show_enabled=False, show_disabled=False):
+    def set_query_data(self, show_enabled=False):
         """Execute dmg pool query and store the results.
 
         Args:
             show_enabled (bool, optional): Display enabled ranks.
-            show_disabled (bool, optional): Display disabled ranks.
 
         Raises:
             TestFail: if the dmg pool query command failed
 
         """
         self.query_data = {}
-        self.query_data = self.query(show_enabled, show_disabled)
+        self.query_data = self.query(show_enabled)
 
     def _get_query_data_keys(self, *keys, refresh=False):
         """Get the pool version from the dmg pool query output.
