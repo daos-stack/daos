@@ -1488,20 +1488,20 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 	rpc_priv->crp_arg = arg;
 
 	/*
-	 * For collective RPCs, the originators deadline is not set and will get
-	 * converted from the timeout, however each child rpc will have a deadline set
-	 * based on the parents deadline. see crt_corpc_req_hdlr() where child deadline
-	 * is set
+	 * For collective RPCs root of the corpc computes the deadline from the timeout
+	 * specified by the user, however each corpc child will inherit this timeout.
+	 * see crt_corpc_req_hdlr()
 	 */
 	if (rpc_priv->crp_flags & CRT_RPC_FLAG_DEADLINES_USED) {
 		if (rpc_priv->crp_coll && rpc_priv->crp_deadline_sec != 0) {
-			/* TODO: Change this to debug before landing */
-			RPC_INFO(rpc_priv, "Using pre-set deadline=%d for corpc\n",
-				 rpc_priv->crp_deadline_sec);
+			/* Keep the existing deadline for the collective rpc if set already */
+			RPC_TRACE(DB_TRACE, rpc_priv, "Using deadline=%d\n",
+				  rpc_priv->crp_deadline_sec);
 		} else {
 			rpc_priv->crp_deadline_sec =
 			    crt_timeout_to_deadline(rpc_priv->crp_timeout_sec);
-			RPC_INFO(rpc_priv, "Deadline set to %d\n", rpc_priv->crp_deadline_sec);
+			RPC_TRACE(DB_TRACE, rpc_priv, "Setting deadline=%d\n",
+				  rpc_priv->crp_deadline_sec);
 		}
 	}
 
@@ -1762,8 +1762,11 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv
 			RPC_INFO(rpc_priv, "Converted deadline %d to timeout %d\n",
 				 rpc_priv->crp_req_hdr.cch_src_deadline_sec, timeout);
 
-			/* Experiment: avoid issues when deadline was determined near the end of the
-			 * second */
+			/*
+			 * TODO: need a better way to handle an edge case where a client can be
+			 * running ahead of the server, but within hlc_epsilon allowed. Also need to
+			 * account for 1 second granularity of deadlines.
+			 */
 			if (timeout == 0)
 				timeout = 1;
 

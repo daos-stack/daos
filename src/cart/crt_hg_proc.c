@@ -582,7 +582,7 @@ crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 			hdr->cch_flags    = rpc_priv->crp_flags;
 			hdr->cch_dst_rank = crt_grp_priv_get_primary_rank(
 			    rpc_priv->crp_grp_priv, rpc_priv->crp_pub.cr_ep.ep_rank);
-			hdr->cch_dst_tag          = rpc_priv->crp_pub.cr_ep.ep_tag;
+			hdr->cch_dst_tag = rpc_priv->crp_pub.cr_ep.ep_tag;
 
 			if (rpc_priv->crp_flags & CRT_RPC_FLAG_DEADLINES_USED) {
 				hdr->cch_src_deadline_sec = rpc_priv->crp_deadline_sec;

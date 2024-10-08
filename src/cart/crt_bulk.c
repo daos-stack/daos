@@ -224,10 +224,8 @@ crt_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 		D_GOTO(out, rc = -DER_DEADLINE_EXPIRED);
 
 	rc = crt_hg_bulk_transfer(bulk_desc, verify_complete_cb, complete_cb, arg, opid, false);
-	if (rc != 0) {
+	if (rc != 0)
 		DL_ERROR(rc, "crt_hg_bulk_transfer() failed");
-	}
-
 out:
 	return rc;
 }
@@ -247,10 +245,8 @@ crt_bulk_bind_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_c
 		D_GOTO(out, rc = -DER_DEADLINE_EXPIRED);
 
 	rc = crt_hg_bulk_transfer(bulk_desc, verify_complete_cb, complete_cb, arg, opid, true);
-	if (rc != 0) {
+	if (rc != 0)
 		DL_ERROR(rc, "crt_hg_bulk_transfer() failed");
-	}
-
 out:
 	return rc;
 }
