@@ -241,7 +241,8 @@ jobs:
                           --build-arg BULLSEYE=${{ secrets.BULLSEYE_LICENSE_KEY }}
                           --tag build-image-${{github.run_id}}-${{github.run_attempt}}
       - name: Run Unit Testing
-        run: docker run --name unit-test-${{github.run_id}}-${{github.run_attempt}}
+        run: docker exec -t build-image-${{github.run_id}}-${{github.run_attempt}} sh -c "ls -al";
+             docker run --name unit-test-${{github.run_id}}-${{github.run_attempt}}
                         -e STAGE_NAME="Unit Test Bullseye"
                         -e BULLSEYE=${{ secrets.BULLSEYE_LICENSE_KEY }}
                         build-image-${{github.run_id}}-${{github.run_attempt}}
