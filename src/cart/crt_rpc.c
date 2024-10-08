@@ -1736,7 +1736,7 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv
 	rpc_priv->crp_hdl_reuse = NULL;
 	rpc_priv->crp_srv = srv_flag;
 	rpc_priv->crp_ul_retry = 0;
-	rpc_priv->crp_flags     = CRT_RPC_FLAG_DEADLINES_USED;
+	rpc_priv->crp_flags |= CRT_RPC_FLAG_DEADLINES_USED;
 
 	if (srv_flag) {
 		rpc_priv->crp_src_is_primary = ctx->cc_primary;

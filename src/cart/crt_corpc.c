@@ -284,7 +284,8 @@ crt_corpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 	struct crt_bulk_desc	 bulk_desc;
 	int			 rc = 0;
 
-	D_ASSERT(rpc_priv != NULL && (rpc_priv->crp_flags & CRT_RPC_FLAG_COLL));
+	D_ASSERT(rpc_priv != NULL);
+	D_ASSERT(rpc_priv->crp_flags & CRT_RPC_FLAG_COLL);
 
 	if (!crt_initialized()) {
 		D_ERROR("CaRT not initialized yet.\n");
