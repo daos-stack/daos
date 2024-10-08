@@ -228,8 +228,9 @@ pool_del_tgt(uuid_t pool_id, uint32_t tgt_id, char *table_name)
 int
 smd_pool_del_tgt(uuid_t pool_id, uint32_t tgt_id, enum smd_dev_type st)
 {
-	struct d_uuid	id;
-	int		rc;
+	struct smd_pool_meta	meta = { 0 };
+	struct d_uuid		id;
+	int			rc;
 
 	smd_db_lock();
 	rc = pool_del_tgt(pool_id, tgt_id, TABLE_POOLS[st]);
@@ -239,10 +240,18 @@ smd_pool_del_tgt(uuid_t pool_id, uint32_t tgt_id, enum smd_dev_type st)
 	rc = 0;
 	if (st == SMD_DEV_TYPE_META) {
 		uuid_copy(id.uuid, pool_id);
-		rc = smd_db_delete(TABLE_POOLS_EX[st], &id, sizeof(id));
-		if (rc == -DER_NONEXIST)
+
+		rc = smd_db_fetch(TABLE_POOLS_EX[st], &id, sizeof(id), &meta, sizeof(meta));
+		if (rc == -DER_NONEXIST) {
 			rc = 0;
-		else if (rc)
+			goto out;
+		} else if (rc) {
+			DL_ERROR(rc, "Fetch pool_meta "DF_UUID" failed.", DP_UUID(&id.uuid));
+			goto out;
+		}
+
+		rc = smd_db_delete(TABLE_POOLS_EX[st], &id, sizeof(id));
+		if (rc)
 			DL_ERROR(rc, "Delete pool_meta "DF_UUID" failed.", DP_UUID(&id.uuid));
 	}
 out:
