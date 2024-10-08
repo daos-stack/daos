@@ -245,7 +245,7 @@ jobs:
                         -e STAGE_NAME="Unit Test Bullseye"
                         -e BULLSEYE=${{ secrets.BULLSEYE_LICENSE_KEY }}
                         build-image-${{github.run_id}}-${{github.run_attempt}}
-                        ./daos/ci/unit/test_main_node.sh
+                        ci/unit/test_main_node.sh
       - name: Fetch test results
         run: docker cp unit-test-${{github.run_id}}-${{github.run_attempt}}:/covc_test_logs ./artifacts;
             docker cp unit-test-${{github.run_id}}-${{github.run_attempt}}:/covc_vm_test ./artifacts
