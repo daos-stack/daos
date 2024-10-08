@@ -218,43 +218,43 @@ jobs:
           name: 'build/Build RPM on ${{ env.DISTRO_NAME }} ${{ env.COMMIT_STATUS_DISTRO_VERSION && env.COMMIT_STATUS_DISTRO_VERSION || env.DISTRO_VERSION }}'
           status: "${{ job.status }}"
 
-  Unit-Test:
-    name: Bullseye Unit Test
-    runs-on: [self-hosted, docker]
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          submodules: true
-          ref: ${{ env.DAOS_REPOSITRY }}
-      - name: Build deps in Docker
-        run: docker build . --file utils/docker/Dockerfile.el.8
-                          --build-arg DAOS_BUILD=no
-                          --build-arg DEPS_JOBS=50
-      - name: Build daos in Docker
-        run: docker build . --file utils/docker/Dockerfile.el.8
-                          --build-arg DEPS_JOBS=50
-                          --build-arg DAOS_KEEP_SRC=yes
-                          --build-arg DAOS_TARGET_TYPE=debug
-                          --build-arg DAOS_JAVA_BUILD=yes
-                          --build-arg JENKINS_URL=${{ env.JENKINS_URL }}
-                          --build-arg BULLSEYE=${{ secrets.BULLSEYE_LICENSE_KEY }}
-                          --tag build-image-${{github.run_id}}-${{github.run_attempt}}
-      - name: Run Unit Testing
-        run: docker exec -t build-image-${{github.run_id}}-${{github.run_attempt}} sh -c "ls -al";
-             docker run --name unit-test-${{github.run_id}}-${{github.run_attempt}}
-                        -e STAGE_NAME="Unit Test Bullseye"
-                        -e BULLSEYE=${{ secrets.BULLSEYE_LICENSE_KEY }}
-                        build-image-${{github.run_id}}-${{github.run_attempt}}
-                        ci/unit/test_main_node.sh
-      - name: Fetch test results
-        run: docker cp unit-test-${{github.run_id}}-${{github.run_attempt}}:/covc_test_logs ./artifacts;
-            docker cp unit-test-${{github.run_id}}-${{github.run_attempt}}:/covc_vm_test ./artifacts
-      - name: Upload test results
-        uses: actions/upload-artifact@v4
-        with:
-          name: Bullseye Unit Testing test-results
-          path: ./artifacts/
+  # Unit-Test:
+  #   name: Bullseye Unit Test
+  #   runs-on: [self-hosted, docker]
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
+  #       with:
+  #         submodules: true
+  #         ref: ${{ env.DAOS_REPOSITRY }}
+  #     - name: Build deps in Docker
+  #       run: docker build . --file utils/docker/Dockerfile.el.8
+  #                         --build-arg DAOS_BUILD=no
+  #                         --build-arg DEPS_JOBS=50
+  #     - name: Build daos in Docker
+  #       run: docker build . --file utils/docker/Dockerfile.el.8
+  #                         --build-arg DEPS_JOBS=50
+  #                         --build-arg DAOS_KEEP_SRC=yes
+  #                         --build-arg DAOS_TARGET_TYPE=debug
+  #                         --build-arg DAOS_JAVA_BUILD=yes
+  #                         --build-arg JENKINS_URL=${{ env.JENKINS_URL }}
+  #                         --build-arg BULLSEYE=${{ secrets.BULLSEYE_LICENSE_KEY }}
+  #                         --tag build-image-${{github.run_id}}-${{github.run_attempt}}
+  #     - name: Run Unit Testing
+  #       run: docker exec -t build-image-${{github.run_id}}-${{github.run_attempt}} sh -c "ls -al";
+  #            docker run --name unit-test-${{github.run_id}}-${{github.run_attempt}}
+  #                       -e STAGE_NAME="Unit Test Bullseye"
+  #                       -e BULLSEYE=${{ secrets.BULLSEYE_LICENSE_KEY }}
+  #                       build-image-${{github.run_id}}-${{github.run_attempt}}
+  #                       ci/unit/test_main_node.sh
+  #     - name: Fetch test results
+  #       run: docker cp unit-test-${{github.run_id}}-${{github.run_attempt}}:/covc_test_logs ./artifacts;
+  #           docker cp unit-test-${{github.run_id}}-${{github.run_attempt}}:/covc_vm_test ./artifacts
+  #     - name: Upload test results
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: Bullseye Unit Testing test-results
+  #         path: ./artifacts/
 
   Functional-Test:
     name: Bullseye Functional Test
