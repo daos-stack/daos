@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -68,8 +68,8 @@ class DmvrPosixTypesTest(DataMoverTestBase):
         start_dfuse(self, dfuse)
 
         # Create 2 pools
-        pool1 = self.create_pool(label='pool1')
-        pool2 = self.create_pool(label='pool2')
+        pool1 = self.get_pool(label='pool1')
+        pool2 = self.get_pool(label='pool2')
 
         # Create a special container to hold UNS entries
         uns_cont = self.get_container(pool1)

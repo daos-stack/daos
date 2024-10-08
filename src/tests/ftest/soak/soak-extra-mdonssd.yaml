@@ -1,0 +1,13 @@
+skip_add_log_msg: True
+soak_stress:
+ior_stress:
+  transfer_size:
+    - '1m'
+    - '4k'
+datamover_stress:
+  ior_write:
+    block_size:
+      - '1M'
+  ior_read:
+    block_size:
+      - '1M'

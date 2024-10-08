@@ -70,7 +70,7 @@ mdtest_easy: &mdtest_easy_base
   write_bytes: 0
   num_of_files_dirs: 100000000
   stonewall_timer: 30
-  stonewall_statusfile: "/var/tmp/daos_testing/stoneWallingStatusFile"
+  stonewall_statusfile: stoneWallingStatusFile
   dfs_destroy: false
 mdtest_dfs_s1:
   <<: *mdtest_easy_base

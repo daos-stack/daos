@@ -1043,7 +1043,61 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 			zeroHpSize: true,
 			expErr:     errors.New("invalid system hugepage size"),
 		},
-		"zero hugepages set in config; bdevs configured; implicit role assignment": {
+		"zero hugepages set in config; bdevs configured; single target count": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithEngines(defaultEngineCfg().
+					WithTargetCount(1).
+					WithStorage(
+						storage.NewTierConfig().
+							WithStorageClass("dcpm").
+							WithScmDeviceList("/dev/pmem1"),
+						storage.NewTierConfig().
+							WithStorageClass("nvme").
+							WithBdevDeviceList("0000:81:00.0"),
+					),
+					defaultEngineCfg().
+						WithTargetCount(1).
+						WithStorage(
+							storage.NewTierConfig().
+								WithStorageClass("dcpm").
+								WithScmDeviceList("/dev/pmem1"),
+							storage.NewTierConfig().
+								WithStorageClass("nvme").
+								WithBdevDeviceList("0000:d0:00.0"),
+						),
+				)
+			},
+			expNrHugepages: 2048,
+		},
+		"zero hugepages set in config; bdevs configured; single target count; md-on-ssd": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithEngines(defaultEngineCfg().
+					WithTargetCount(1).
+					WithStorage(
+						storage.NewTierConfig().
+							WithStorageClass("ram").
+							WithScmMountPoint("/foo"),
+						storage.NewTierConfig().
+							WithStorageClass("nvme").
+							WithBdevDeviceList("0000:81:00.0").
+							WithBdevDeviceRoles(storage.BdevRoleAll),
+					),
+					defaultEngineCfg().
+						WithTargetCount(1).
+						WithStorage(
+							storage.NewTierConfig().
+								WithStorageClass("ram").
+								WithScmMountPoint("/foo"),
+							storage.NewTierConfig().
+								WithStorageClass("nvme").
+								WithBdevDeviceList("0000:d0:00.0").
+								WithBdevDeviceRoles(storage.BdevRoleAll),
+						),
+				)
+			},
+			expNrHugepages: 2048,
+		},
+		"zero hugepages set in config; bdevs configured": {
 			extraConfig: func(c *Server) *Server {
 				return c.WithEngines(defaultEngineCfg().
 					WithStorage(
