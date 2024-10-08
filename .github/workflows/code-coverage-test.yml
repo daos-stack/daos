@@ -241,12 +241,13 @@ jobs:
             --build-arg BULLSEYE=${{ secrets.BULLSEYE_LICENSE_KEY }}
             --tag build-image-${{github.run_id}}-${{github.run_attempt}}
       - name: Run Unit Testing
-        run: docker run --name unit-test build-image-${{github.run_id}}-${{github.run_attempt}}
+        run: docker run --name unit-test-${{github.run_id}}-${{github.run_attempt}}
+            build-image-${{github.run_id}}-${{github.run_attempt}}
             ./daos/utils/ci/run_unit_tests_in_gha.sh
       - name: Fetch test results
-        run: docker cp unit-test:/unit_test_logs ./artifacts;
-             docker cp unit-test:/covc_test_logs ./artifacts;
-             docker cp unit-test:/covc_vm_test ./artifacts
+        run: docker cp unit-test-${{github.run_id}}-${{github.run_attempt}}:/unit_test_logs ./artifacts;
+            docker cp unit-test-${{github.run_id}}-${{github.run_attempt}}:/covc_test_logs ./artifacts;
+            docker cp unit-test-${{github.run_id}}-${{github.run_attempt}}:/covc_vm_test ./artifacts
       - name: Upload test results
         uses: actions/upload-artifact@v4
         with:
