@@ -630,7 +630,7 @@ $ dmg storage set nvme-faulty --host=boro-11 --uuid=5bd91603-d3c7-4fb7-9a71-76bc
 NOTICE: This command will permanently mark the device as unusable!
 Are you sure you want to continue? (yes/no)
 yes
-set-faulty operation performed successfully on the following host: wolf-310:10001
+set-faulty operation performed successfully on the following host: boro-11:10001
 ```
 The device state will transition from "NORMAL" to "EVICTED" (shown above), during which time the
 faulty device reaction will have been triggered (all targets on the SSD will be rebuilt).
