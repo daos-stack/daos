@@ -64,7 +64,7 @@ class DaosClient():
     def _open(self, noeq = 0):
         # Initialize DAOS
         self.connected = False
-	self.noeq = noeq
+        self.noeq = noeq
         _rc = pydaos_shim.daos_init(DAOS_MAGIC, noeq)
         if _rc != pydaos_shim.DER_SUCCESS:
             raise PyDError("Failed to initialize DAOS", _rc)
