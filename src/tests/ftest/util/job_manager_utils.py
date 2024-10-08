@@ -143,6 +143,18 @@ class JobManager(ExecutableCommand):
                 and self._job.check_results_list):
             self.check_results_list.extend(self._job.check_results_list)
 
+    @property
+    def command_regex(self):
+        """Get the regular expression to use to search for the command.
+
+        Typical use would include combining with pgrep to verify a subprocess is running.
+
+        Returns:
+            str: regular expression to use to search for the command
+        """
+        # pylint: disable=protected-access
+        return "'({})'".format("|".join(self._exe_names + self.job._exe_names))
+
     def __str__(self):
         """Return the command with all of its defined parameters as a string.
 

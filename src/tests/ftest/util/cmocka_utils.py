@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -117,6 +117,7 @@ class CmockaUtils():
             test.fail(error_message)
 
         finally:
+            run_remote(test.log, self.hosts, "ps -ejH")
             self._collect_cmocka_results(test)
             if not self._check_cmocka_files():
                 if error_message is None:
