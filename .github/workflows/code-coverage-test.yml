@@ -229,23 +229,23 @@ jobs:
           ref: ${{ env.DAOS_REPOSITRY }}
       - name: Build deps in Docker
         run: docker build . --file utils/docker/Dockerfile.el.8
-            --build-arg DAOS_BUILD=no
-            --build-arg DEPS_JOBS=50
+                          --build-arg DAOS_BUILD=no
+                          --build-arg DEPS_JOBS=50
       - name: Build daos in Docker
         run: docker build . --file utils/docker/Dockerfile.el.8
-            --build-arg DEPS_JOBS=50
-            --build-arg DAOS_KEEP_SRC=yes
-            --build-arg DAOS_TARGET_TYPE=debug
-            --build-arg DAOS_JAVA_BUILD=yes
-            --build-arg JENKINS_URL=${{ env.JENKINS_URL }}
-            --build-arg BULLSEYE=${{ secrets.BULLSEYE_LICENSE_KEY }}
-            --tag build-image-${{github.run_id}}-${{github.run_attempt}}
+                          --build-arg DEPS_JOBS=50
+                          --build-arg DAOS_KEEP_SRC=yes
+                          --build-arg DAOS_TARGET_TYPE=debug
+                          --build-arg DAOS_JAVA_BUILD=yes
+                          --build-arg JENKINS_URL=${{ env.JENKINS_URL }}
+                          --build-arg BULLSEYE=${{ secrets.BULLSEYE_LICENSE_KEY }}
+                          --tag build-image-${{github.run_id}}-${{github.run_attempt}}
       - name: Run Unit Testing
         run: docker run --name unit-test-${{github.run_id}}-${{github.run_attempt}}
-            build-image-${{github.run_id}}-${{github.run_attempt}}
-            ./daos/ci/unit/test_main_node.sh
-            -e STAGE_NAME="Unit Test Bullseye"
-            -e BULLSEYE=${{ secrets.BULLSEYE_LICENSE_KEY }}
+                        -e STAGE_NAME="Unit Test Bullseye"
+                        -e BULLSEYE=${{ secrets.BULLSEYE_LICENSE_KEY }}
+                        build-image-${{github.run_id}}-${{github.run_attempt}}
+                        ./daos/ci/unit/test_main_node.sh
       - name: Fetch test results
         run: docker cp unit-test-${{github.run_id}}-${{github.run_attempt}}:/covc_test_logs ./artifacts;
             docker cp unit-test-${{github.run_id}}-${{github.run_attempt}}:/covc_vm_test ./artifacts
