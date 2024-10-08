@@ -812,6 +812,7 @@ child_hdlr(void)
 		DFUSE_LOG_WARNING("daos_eq_create() failed: "DF_RC, DP_RC(rc));
 	else
 		ioil_iog.iog_main_eqh = ioil_eqh;
+	ioil_iog.iog_eq_count = 0;
 }
 
 /* Returns true on success */
