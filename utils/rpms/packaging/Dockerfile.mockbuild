@@ -32,7 +32,7 @@ RUN dnf -y install mock make                                        \
 # Install bullseye coverage
 ARG JENKINS_URL
 ARG BULLSEYE_KEY
-RUN if [ "x$BULLSEYE" != "x" ]; then                                                \
+RUN set -x; if [ "x$BULLSEYE" != "x" ]; then                                                \
       dnf install xz && dnf clean all &&                                            \
       curl ${JENKINS_URL}job/daos-stack/job/tools/job/master/lastSuccessfulBuild/artifact/bullseyecoverage-linux.tar \
         --retry 10 --retry-max-time 60 --silent --show-error -o bullseye.tar.xz &&  \
