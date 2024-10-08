@@ -922,7 +922,7 @@ pool_connect_cp(tse_task_t *task, void *data)
 	D_DEBUG(DB_MD, DF_UUID ": connected: cookie=" DF_X64 " hdl=" DF_UUID " master\n",
 		DP_UUID(tpriv->pool->dp_pool), arg->hdlp->cookie,
 		DP_UUID(tpriv->pool->dp_pool_hdl));
-
+	D_INFO("POOL CONNECT cookie="DF_X64"\n", arg->hdlp->cookie);
 	warmup(tpriv->pool);
 out:
 	pool_connect_in_get_cred(arg->rpc, &credp);
@@ -1233,7 +1233,7 @@ dc_pool_disconnect(tse_task_t *task)
 		D_DEBUG(DB_MD, DF_UUID": disconnecting: cookie="DF_X64" hdl="
 			DF_UUID" slave\n", DP_UUID(pool->dp_pool),
 			args->poh.cookie, DP_UUID(pool->dp_pool_hdl));
-
+		D_INFO("POOL DISCONNECT cookie="DF_X64"\n", args->poh.cookie);
 		pl_map_disconnect(pool->dp_pool);
 		/* remove pool from hhash */
 		dc_pool_hdl_unlink(pool);
@@ -3670,7 +3670,7 @@ pool_mark_slave(struct d_hlink *link, void *arg)
 
 	pool           = container_of(link, struct dc_pool, dp_hlink);
 	pool->dp_slave = 1;
-
+	D_INFO("POOL MARK SLAVE\n");
 	return 0;
 }
 

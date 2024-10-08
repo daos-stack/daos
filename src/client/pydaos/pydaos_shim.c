@@ -69,12 +69,12 @@ static daos_handle_t eq;
 /**
  * Implementations of baseline shim functions
  */
-
 static void
 child_handler(void)
 {
 	int rc;
 
+	D_INFO("CHILD REINIT\n");
 	rc = daos_reinit();
 	if (rc)
 		D_WARN("daos_reinit() failed in child process %d", rc);
