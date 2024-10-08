@@ -608,7 +608,7 @@ class TestRunner():
         # path cleanup on servers.
         rm_command = f"rm -fr {test_env.log_dir}"
         commands = [
-            f"{rm_command} || {command_as_user(rm_command, 'root')}"
+            f"{rm_command} || {command_as_user(rm_command, 'root')}",
             f"mkdir -p {test_env.log_dir}",
             f"chmod a+wrx {test_env.log_dir}",
         ]
