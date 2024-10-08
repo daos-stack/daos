@@ -113,6 +113,7 @@ oid_iv_ent_refresh(struct ds_iv_entry *iv_entry, struct ds_iv_key *key,
 		oids->oid, oids->num_oids, avail->oid, avail->num_oids);
 
 out:
+	D_INFO("Refresh: release lock for IV entry %p\n", entry);
 	ABT_mutex_unlock(entry->lock);
 	return ref_rc;
 }
@@ -133,8 +134,10 @@ oid_iv_ent_update(struct ds_iv_entry *ns_entry, struct ds_iv_key *iv_key,
 	entry = ns_entry->iv_value.sg_iovs[0].iov_buf;
 	rc = ABT_mutex_trylock(entry->lock);
 	/** For retry requests, from _iv_op(), the lock may not be released in some cases. */
-	if (rc == ABT_ERR_MUTEX_LOCKED && entry->current_req != src)
+	if (rc == ABT_ERR_MUTEX_LOCKED && entry->current_req != src) {
+		D_INFO("Entry %p IV locked, return -DER_BUSY\n", entry);
 		return -DER_BUSY;
+	}
 
 	entry->current_req = src;
 	avail = &entry->rg;
@@ -165,6 +168,7 @@ oid_iv_ent_update(struct ds_iv_entry *ns_entry, struct ds_iv_key *iv_key,
 		oids->num_oids = num_oids;
 		D_DEBUG(DB_MD, "%u: ROOT MAX_OID = %"PRIu64"\n", myrank, avail->oid);
 		priv->num_oids = 0;
+		D_INFO("Root: release lock for IV entry %p\n", entry);
 		ABT_mutex_unlock(entry->lock);
 		return 0;
 	}
@@ -180,6 +184,7 @@ oid_iv_ent_update(struct ds_iv_entry *ns_entry, struct ds_iv_key *iv_key,
 		avail->oid += num_oids;
 
 		priv->num_oids = 0;
+		D_INFO("release lock for IV entry %p\n", entry);
 		ABT_mutex_unlock(entry->lock);
 		return 0;
 	}
