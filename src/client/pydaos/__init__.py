@@ -61,7 +61,7 @@ class DaosClient():
             cls._instance._open()
         return cls._instance
 
-    def _open(self, noeq = 0):
+    def _open(self, noeq=0):
         # Initialize DAOS
         self.connected = False
         self.noeq = noeq
