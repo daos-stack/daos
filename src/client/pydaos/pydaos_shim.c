@@ -89,9 +89,16 @@ static PyObject *
 __shim_handle__daos_init(PyObject *self, PyObject *args)
 {
 	int rc;
+	int eq = 1;
+
+	/** Parse arguments, flags not used for now */
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "p", &eq);
 
 	rc = daos_init();
 	if (rc)
+		return PyLong_FromLong(rc);
+
+	if (eq == 0)
 		return PyLong_FromLong(rc);
 
 	rc = daos_eq_create(&eq);
@@ -114,10 +121,16 @@ static PyObject *
 __shim_handle__daos_fini(PyObject *self, PyObject *args)
 {
 	int rc;
+	int eq = 1;
 
-	rc = daos_eq_destroy(eq, DAOS_EQ_DESTROY_FORCE);
-	if (rc)
-		D_ERROR("Failed to destroy global eq, " DF_RC "\n", DP_RC(rc));
+	/** Parse arguments, flags not used for now */
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "p", &eq);
+
+	if (eq) {
+		rc = daos_eq_destroy(eq, DAOS_EQ_DESTROY_FORCE);
+		if (rc)
+			D_ERROR("Failed to destroy global eq, " DF_RC "\n", DP_RC(rc));
+	}
 
 	rc = daos_fini();
 
