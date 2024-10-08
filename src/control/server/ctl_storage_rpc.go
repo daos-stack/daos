@@ -243,9 +243,6 @@ func bdevScan(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvmeReq, n
 	if cs.srvCfg != nil && cs.srvCfg.DisableHugepages {
 		return nil, errors.New("cannot scan bdevs if hugepages have been disabled")
 	}
-	if len(nsps) == 0 {
-		return nil, errors.New("cannot scan bdevs; expecting scm namespaces")
-	}
 
 	defer func() {
 		if err == nil && req.Meta {
@@ -422,7 +419,7 @@ func (cs *ControlService) getRdbSize(engineCfg *engine.Config) (uint64, error) {
 // response.  The maximal metadata (i.e. VOS index file) size should be equal to the SCM available
 // size divided by the number of targets of the engine. Sizes returned are per-target values.
 func metaRdbComputeSz(cs *ControlService, ei Engine, nsps []*ctlpb.ScmNamespace, memRatio float32) (uint64, uint64, error) {
-	msg := "computing meta/rdb sizes"
+	msg := fmt.Sprintf("computing meta/rdb sizes with %d scm namespaces", len(nsps))
 
 	var metaBytes, rdbBytes uint64
 	for _, nsp := range nsps {

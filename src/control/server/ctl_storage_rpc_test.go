@@ -297,21 +297,6 @@ func TestServer_bdevScan(t *testing.T) {
 			engErr:     []error{nil},
 			expErr:     errors.New("unknown SCM mount point"),
 		},
-		"scan remote; bdevs in config; zero namespaces": {
-			req:           &ctlpb.ScanNvmeReq{Health: true, Meta: true},
-			scmNamespaces: []*ctlpb.ScmNamespace{},
-			engTierCfgs: []storage.TierConfigs{
-				{
-					storage.NewTierConfig().
-						WithStorageClass(storage.ClassNvme.String()).
-						WithBdevDeviceList(test.MockPCIAddr(1),
-							test.MockPCIAddr(2)),
-				},
-			},
-			engStopped: []bool{false},
-			engErr:     []error{nil},
-			expErr:     errors.New("expecting scm namespaces"),
-		},
 		"scan remote; bdevs in config; adjustment skipped as no meta flag in req": {
 			req: &ctlpb.ScanNvmeReq{Health: true},
 			engTierCfgs: []storage.TierConfigs{
@@ -332,6 +317,33 @@ func TestServer_bdevScan(t *testing.T) {
 			},
 			expRemoteScanCalls: []*ctlpb.ScanNvmeReq{
 				{Health: true},
+			},
+		},
+		"scan remote; bdevs in config; zero namespaces": {
+			req:           &ctlpb.ScanNvmeReq{Health: true, Meta: true},
+			scmNamespaces: []*ctlpb.ScmNamespace{},
+			engTierCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()).
+						WithScmDeviceList(defScmDev).
+						WithScmMountPoint(defScmMountPt),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(1),
+							test.MockPCIAddr(2)),
+				},
+			},
+			engStopped: []bool{false},
+			engErr:     []error{nil},
+			expResp: &ctlpb.ScanNvmeResp{
+				Ctrlrs: proto.NvmeControllers{
+					proto.MockNvmeController(2),
+				},
+				State: new(ctlpb.ResponseState),
+			},
+			expRemoteScanCalls: []*ctlpb.ScanNvmeReq{
+				{Health: true, Meta: true},
 			},
 		},
 		"scan remote; bdevs in config": {
