@@ -1,38 +1,4 @@
 {
-   dl init leaks
-   Memcheck:Leak
-   ...
-   fun:_dl_init
-}
-{
-    dl open leaks
-    Memcheck:Leak
-    ...
-    fun:_dl_open
-}
-{
-   FI leak 6
-   Memcheck:Leak
-   match-leak-kinds: possible
-   ...
-   fun:rdma_bind_addr
-   ...
-}
-{
-   FI leak 7
-   Memcheck:Leak
-   ...
-   fun:fi_ini
-   ...
-}
-{
-   access-0
-   Memcheck:Param
-   socketcall.sendto(msg)
-   ...
-   fun:send
-}
-{
    <insert_a_suppression_name_here>
    Memcheck:Leak
    ...
@@ -495,40 +461,6 @@
    fun:HG_Core_init_opt
    fun:HG_Init_opt
    fun:crt_hg_class_init
-}
-{
-   Tcp provider
-   Memcheck:Param
-   sendmsg(msg.msg_iov[1])
-   ...
-   fun:sendmsg
-   fun:ofi_sockapi_sendv_socket
-   fun:ofi_bsock_sendv
-   ...
-   fun:fi_senddata
-   ...
-}
-{
-   Tcp provider with ofi rxm
-   Memcheck:Param
-   sendmsg(msg.msg_iov[1])
-   ...
-   fun:ofi_bsock_sendv
-   ...
-   fun:fi_tsend
-   ...
-}
-{
-   Tcp provider with ofi rxm 2
-   Memcheck:Param
-   sendmsg(msg.msg_iov[2])
-   ...
-   fun:sendmsg
-   fun:ofi_sockapi_sendv_socket
-   fun:ofi_bsock_sendv
-   ...
-   fun:fi_tsend
-   ...
 }
 {
    Go syscall.

@@ -124,11 +124,11 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 	    bool fetch_sym, bool *exists, struct dfs_entry *entry, int xnr, char *xnames[],
 	    void *xvals[], daos_size_t *xsizes)
 {
-	d_sg_list_t  l_sgl, *sgl;
-	d_iov_t      sg_iovs[INODE_AKEYS];
-	daos_iod_t   l_iod, *iod;
-	daos_recx_t  recx;
-	daos_key_t   dkey;
+	d_sg_list_t  l_sgl                = {}, *sgl;
+	d_iov_t      sg_iovs[INODE_AKEYS] = {};
+	daos_iod_t   l_iod                = {}, *iod;
+	daos_recx_t  recx                 = {};
+	daos_key_t   dkey                 = {};
 	unsigned int i;
 	char       **pxnames = NULL;
 	d_iov_t     *sg_iovx = NULL;
@@ -329,9 +329,9 @@ insert_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const cha
 	     uint64_t flags, struct dfs_entry *entry)
 {
 	d_sg_list_t  sgls[2];
-	d_iov_t      sg_iovs[INODE_AKEYS];
+	d_iov_t      sg_iovs[INODE_AKEYS] = {};
 	d_iov_t      sym_iov;
-	daos_iod_t   iods[2];
+	daos_iod_t   iods[2] = {};
 	daos_recx_t  recx;
 	daos_key_t   dkey;
 	unsigned int i;
@@ -777,19 +777,19 @@ int
 open_sb(daos_handle_t coh, bool create, bool punch, int omode, daos_obj_id_t super_oid,
 	dfs_attr_t *attr, daos_handle_t *oh, dfs_layout_ver_t *ver)
 {
-	d_sg_list_t      sgls[SB_AKEYS];
-	d_iov_t          sg_iovs[SB_AKEYS];
-	daos_iod_t       iods[SB_AKEYS];
-	daos_key_t       dkey;
-	dfs_magic_t      magic;
-	dfs_sb_ver_t     sb_ver;
-	dfs_layout_ver_t layout_ver;
+	d_sg_list_t      sgls[SB_AKEYS]                = {};
+	d_iov_t          sg_iovs[SB_AKEYS]             = {};
+	daos_iod_t       iods[SB_AKEYS]                = {};
+	daos_key_t       dkey                          = {};
+	dfs_magic_t      magic                         = 0;
+	dfs_sb_ver_t     sb_ver                        = 0;
+	dfs_layout_ver_t layout_ver                    = 0;
 	daos_size_t      chunk_size  = 0;
 	daos_oclass_id_t oclass      = OC_UNKNOWN;
 	daos_oclass_id_t dir_oclass  = OC_UNKNOWN;
 	daos_oclass_id_t file_oclass = OC_UNKNOWN;
-	uint32_t         mode;
-	char             hints[DAOS_CONT_HINT_MAX_LEN];
+	uint32_t         mode                          = 0;
+	char             hints[DAOS_CONT_HINT_MAX_LEN] = {};
 	int              i, rc;
 
 	D_ASSERT(attr);

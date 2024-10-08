@@ -253,7 +253,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
 	struct dfuse_inode_entry *ie;
 	int                       rc;
-	char                      out[DUNS_MAX_XATTR_LEN];
+	char                      out[DUNS_MAX_XATTR_LEN] = {};
 	char                     *outp     = &out[0];
 	daos_size_t               attr_len = DUNS_MAX_XATTR_LEN;
 
