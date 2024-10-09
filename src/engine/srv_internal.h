@@ -7,7 +7,7 @@
 #define __DAOS_SRV_INTERNAL__
 
 #include <daos_srv/daos_engine.h>
-#include <daos/stack_mmap.h>
+#include <daos/daos_abt.h>
 #include <gurt/telemetry_common.h>
 #include <gurt/heap.h>
 
@@ -105,11 +105,7 @@ struct dss_xstream {
 	bool			dx_comm;	/* true with cart context */
 	bool			dx_iofw;	/* true for DSS_XS_IOFW XS */
 	bool			dx_dsc_started;	/* DSC progress ULT started */
-	struct mem_stats	dx_mem_stats;	/* memory usages stats on this xstream */
-#ifdef ULT_MMAP_STACK
-	/* per-xstream pool/list of free stacks */
-	struct stack_pool	*dx_sp;
-#endif
+	struct mem_stats        dx_mem_stats;   /* memory usages stats on this xstream */
 	bool			dx_progress_started;	/* Network poll started */
 	int                     dx_tag;                 /** tag for xstream */
 	struct dss_chore_queue	dx_chore_queue;
@@ -288,43 +284,14 @@ sched_create_task(struct dss_xstream *dx, void (*func)(void *), void *arg,
 	return dss_abterr2der(rc);
 }
 
-#ifdef ULT_MMAP_STACK
-/* callback to ensure stack will be freed in exiting-ULT/current-XStream pool */
-static inline void
-dss_free_stack_cb(void *arg)
-{
-	mmap_stack_desc_t *desc = (mmap_stack_desc_t *)arg;
-	/* main thread doesn't have TLS and XS */
-	struct dss_xstream *dx = dss_tls_get() ? dss_current_xstream() : NULL;
-
-	/* ensure pool where to free stack is from current-XStream/ULT-exiting */
-	if (dx != NULL)
-		desc->sp = dx->dx_sp;
-
-}
-#else
-#define dss_free_stack_cb NULL
-#endif
-
 static inline int
 sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 		    ABT_thread_attr t_attr, ABT_thread *thread,
 		    unsigned int flags)
 {
-	ABT_pool		 abt_pool = dx->dx_pools[DSS_POOL_GENERIC];
-	struct sched_info	*info = &dx->dx_sched_info;
-	int			 rc;
-#ifdef ULT_MMAP_STACK
-	bool			 tls_set = dss_tls_get() ? true : false;
-	struct dss_xstream	*cur_dx = NULL;
-
-	if (tls_set)
-		cur_dx = dss_current_xstream();
-
-	/* if possible,stack should be allocated from launching XStream pool */
-	if (cur_dx == NULL)
-		cur_dx = dx;
-#endif
+	ABT_pool           abt_pool = dx->dx_pools[DSS_POOL_GENERIC];
+	struct sched_info *info     = &dx->dx_sched_info;
+	int                rc;
 
 	if (sched_xstream_stopping())
 		return -DER_SHUTDOWN;
@@ -334,7 +301,7 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 		/* Atomic integer assignment from different xstream */
 		info->si_stats.ss_busy_ts = info->si_cur_ts;
 
-	rc = daos_abt_thread_create(cur_dx->dx_sp, dss_free_stack_cb, abt_pool, func, arg, t_attr, thread);
+	rc = da_thread_create_on_pool(abt_pool, func, arg, t_attr, thread);
 	return dss_abterr2der(rc);
 }
 
