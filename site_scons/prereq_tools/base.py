@@ -504,19 +504,25 @@ class PreReqComponent():
         self._build_targets = []
 
         build_dir = self.__env['BUILD_DIR']
-        targets = ['test', 'server', 'client']
+        main_targets = ['client', 'server']
+        targets = ['test'] + main_targets
         self.__env.Alias('client', build_dir)
         self.__env.Alias('server', build_dir)
         self.__env.Alias('test', build_dir)
         self._build_targets = []
         check = any(item in BUILD_TARGETS for item in targets)
-        if not check or 'test' in BUILD_TARGETS:
+        if not check:
             self._build_targets.extend(['client', 'server', 'test'])
         else:
             if 'client' in BUILD_TARGETS:
                 self._build_targets.append('client')
             if 'server' in BUILD_TARGETS:
                 self._build_targets.append('server')
+            if 'test' in BUILD_TARGETS:
+                if not any(item in BUILD_TARGETS for item in main_targets):
+                    print("test target requires client or server")
+                    sys.exit(1)
+                self._build_targets.append('test')
         BUILD_TARGETS.append(build_dir)
 
         env.AddMethod(self.require, 'require')

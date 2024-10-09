@@ -17,7 +17,6 @@ server_config:
   system_ram_reserved: 1
 pool:
   name: daos_server
-  control_method: dmg
   scm_size_mux: !mux
     size1gb:
       scm_size: 1G

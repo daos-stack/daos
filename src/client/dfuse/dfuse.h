@@ -405,6 +405,7 @@ struct dfuse_event {
 	union {
 		struct dfuse_obj_hdl     *de_oh;
 		struct dfuse_inode_entry *de_ie;
+		struct read_chunk_data   *de_cd;
 	};
 	off_t  de_req_position; /**< The file position requested by fuse */
 	union {
@@ -1011,6 +1012,8 @@ struct dfuse_inode_entry {
 
 	/* Entry on the evict list */
 	d_list_t                  ie_evict_entry;
+
+	struct read_chunk_core   *ie_chunk;
 };
 
 /* Flush write-back cache writes to a inode.  It does this by waiting for and then releasing an
@@ -1107,6 +1110,13 @@ dfuse_compute_inode(struct dfuse_cont *dfs,
  */
 void
 dfuse_cache_evict_dir(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie);
+
+/* Free any read chunk data for an inode.
+ *
+ * Returns true if feature was used.
+ */
+bool
+read_chunk_close(struct dfuse_inode_entry *ie);
 
 /* Metadata caching functions. */
 

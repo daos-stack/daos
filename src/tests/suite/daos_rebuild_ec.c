@@ -265,13 +265,10 @@ rebuild_ec_setup(void  **state, int number, uint32_t rf)
 	rc = test_setup(state, SETUP_POOL_CONNECT, true,
 			REBUILD_POOL_SIZE, number, NULL);
 	if (rc) {
-		/* Let's skip for this case, since it is possible there
-		 * is not enough ranks here.
-		 */
 		print_message("It can not create the pool with %d ranks"
 			      " probably due to not enough ranks %d\n",
 			      number, rc);
-		return 0;
+		return rc;
 	}
 
 	arg = *state;
