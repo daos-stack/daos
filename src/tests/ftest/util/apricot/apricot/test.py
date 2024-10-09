@@ -771,6 +771,8 @@ class TestWithServers(TestWithoutServers):
         _result = run_remote(self.log, all_hosts, f"df -h {test_dir_parent}")
         _details = NodeSet()
         for _host, _stdout in _result.all_stdout.items():
+            _x = re.findall(r"\s+([\d]+)%\s+", _stdout)
+            self.log.debug("%s: %s %s", _host, _x, int(max(_x + ["0"])))
             if int(max(re.findall(r"\s+([\d]+)%\s+", _stdout) + ["0"])) > 3:
                 _details.add(_host)
         if _details:
