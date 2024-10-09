@@ -255,7 +255,9 @@ void
 daos_lru_ref_release(struct daos_lru_cache *lcache, struct daos_llink *llink)
 {
 	D_ASSERT(lcache != NULL && llink != NULL && llink->ll_ref > 1);
-	D_ASSERT(d_list_empty(&llink->ll_qlink));
+	D_ASSERTF(d_list_empty(&llink->ll_qlink),
+		  "May hit corrupted item in LRU cache %p: llink %p, refs %d, prev %p, next %p\n",
+		  lcache, llink, llink->ll_ref, llink->ll_qlink.prev, llink->ll_qlink.next);
 
 	lru_hop_rec_decref(&lcache->dlc_htable, &llink->ll_link);
 
