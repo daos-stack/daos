@@ -438,7 +438,7 @@ func (cmd *containerCreateCmd) contCreate() (string, error) {
 		}
 	}
 
-	cmd.Infof("Successfully created container %s", contID)
+	cmd.Infof("Successfully created container %s type %s", contID, cmd.Type.String())
 	return contID, nil
 }
 

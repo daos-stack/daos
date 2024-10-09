@@ -58,7 +58,7 @@ class DfuseContainerAttrs(TestWithServers):
             Create a container with DFuse attributes
             Mount a DFuse mount point
             Check the output of the DFuse log
-        :avocado: tags=all,pr
+        :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=dfuse,container
         :avocado: tags=DfuseContainerAttrs,test_dfuse_container_attrs
@@ -87,7 +87,7 @@ class DfuseContainerAttrs(TestWithServers):
             Mount a DFuse mount point
             Create a sub-container with DFuse attributes
             Check the output of the DFuse log
-        :avocado: tags=all,pr
+        :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=dfuse,container
         :avocado: tags=DfuseContainerAttrs,test_dfuse_subcontainer_attrs
