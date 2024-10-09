@@ -1326,8 +1326,14 @@ duns_link_cont(daos_handle_t poh, const char *cont, const char *path)
 
 out_cont:
 	rc2 = daos_cont_close(coh, NULL);
-	if (rc == 0)
-		rc = rc2;
+	if (rc2 != -DER_SUCCESS) {
+		DL_ERROR(rc2, "failed to close container");
+		if (rc2 == -DER_NOMEM)
+			// Second close to properly handle fault injection
+			daos_cont_close(coh, NULL);
+		else if (rc == -DER_SUCCESS)
+			rc = daos_der2errno(rc2);
+	}
 	return rc;
 err_link:
 	if (type == DAOS_PROP_CO_LAYOUT_POSIX)
