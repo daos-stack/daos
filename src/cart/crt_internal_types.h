@@ -42,40 +42,53 @@ struct crt_na_config {
 	char            **noc_domain_str; /* Array of domains */
 };
 
+#define CRT_TRAFFIC_CLASSES                                                                        \
+	X(CRT_TC_UNSPEC, "unspec")           /* Leave it upon plugin to choose */                  \
+	X(CRT_TC_BEST_EFFORT, "best_effort") /* Best effort */                                     \
+	X(CRT_TC_LOW_LATENCY, "low_latency") /* Low latency */                                     \
+	X(CRT_TC_BULK_DATA, "bulk_data")     /* Bulk data */                                       \
+	X(CRT_TC_UNKNOWN, "unknown")         /* Unknown */
+
+#define X(a, b) a,
+enum crt_traffic_class { CRT_TRAFFIC_CLASSES };
+#undef X
+
 struct crt_prov_gdata {
 	/** NA plugin type */
-	int			cpg_provider;
+	int                  cpg_provider;
 
-	struct crt_na_config	cpg_na_config;
+	struct crt_na_config cpg_na_config;
 	/** Context0 URI */
-	char			cpg_addr[CRT_ADDR_STR_MAX_LEN];
+	char                 cpg_addr[CRT_ADDR_STR_MAX_LEN];
 
 	/** CaRT contexts list */
-	d_list_t		cpg_ctx_list;
+	d_list_t             cpg_ctx_list;
 	/** actual number of items in CaRT contexts list */
-	int			cpg_ctx_num;
+	int                  cpg_ctx_num;
 	/** maximum number of contexts user wants to create */
-	uint32_t		cpg_ctx_max_num;
+	uint32_t             cpg_ctx_max_num;
 
 	/** free-list of indices */
-	bool			cpg_used_idx[CRT_SRV_CONTEXT_NUM];
+	bool                 cpg_used_idx[CRT_SRV_CONTEXT_NUM];
 
 	/** Hints to mercury/ofi for max expected/unexp sizes */
-	uint32_t		cpg_max_exp_size;
-	uint32_t		cpg_max_unexp_size;
+	uint32_t             cpg_max_exp_size;
+	uint32_t             cpg_max_unexp_size;
 
 	/** Number of remote tags */
-	uint32_t		cpg_num_remote_tags;
-	uint32_t		cpg_last_remote_tag;
+	uint32_t             cpg_num_remote_tags;
+	uint32_t             cpg_last_remote_tag;
 
 	/** Set of flags */
-	unsigned int		cpg_sep_mode		: 1,
-				cpg_primary		: 1,
-				cpg_contig_ports	: 1,
-				cpg_inited		: 1;
+	unsigned int         cpg_sep_mode     : 1;
+	unsigned int         cpg_primary      : 1;
+	unsigned int         cpg_contig_ports : 1;
+	unsigned int         cpg_inited       : 1;
+
+	bool                 cpg_progress_busy;
 
 	/** Mutext to protect fields above */
-	pthread_mutex_t		cpg_mutex;
+	pthread_mutex_t      cpg_mutex;
 };
 
 #define MAX_NUM_SECONDARY_PROVS 2
@@ -105,6 +118,9 @@ struct crt_gdata {
 	/** cart context index used by SWIM */
 	int32_t                  cg_swim_ctx_idx;
 
+	/** traffic class used by SWIM */
+	enum crt_traffic_class   cg_swim_tc;
+
 	/** credits limitation for #in-flight RPCs per target EP CTX */
 	uint32_t		cg_credit_ep_ctx;
 
@@ -132,6 +148,10 @@ struct crt_gdata {
 	unsigned int             cg_use_sensors         : 1;
 	/** whether we are on a primary provider */
 	unsigned int             cg_provider_is_primary : 1;
+	/** use legacy progress method */
+	bool                     cg_progress_legacy;
+	/** use single thread to access context */
+	bool                     cg_thread_mode_single;
 
 	ATOMIC uint64_t		cg_rpcid; /* rpc id */
 
@@ -156,11 +176,6 @@ struct crt_gdata {
 };
 
 extern struct crt_gdata		crt_gdata;
-
-struct crt_prog_cb_priv {
-	crt_progress_cb		 cpcp_func;
-	void			*cpcp_args;
-};
 
 struct crt_event_cb_priv {
 	crt_event_cb		 cecp_func;
@@ -208,6 +223,9 @@ struct crt_event_cb_priv {
 	ENV(D_POLL_TIMEOUT)                                                                        \
 	ENV_STR(D_PORT)                                                                            \
 	ENV(D_PORT_AUTO_ADJUST)                                                                    \
+	ENV(D_PROGRESS_BUSY)                                                                       \
+	ENV(D_PROGRESS_LEGACY)                                                                     \
+	ENV(D_THREAD_MODE_SINGLE)                                                                  \
 	ENV(D_POST_INCR)                                                                           \
 	ENV(D_POST_INIT)                                                                           \
 	ENV(D_MRECV_BUF)                                                                           \
@@ -220,6 +238,7 @@ struct crt_event_cb_priv {
 	ENV(SWIM_PING_TIMEOUT)                                                                     \
 	ENV(SWIM_PROTOCOL_PERIOD_LEN)                                                              \
 	ENV(SWIM_SUSPECT_TIMEOUT)                                                                  \
+	ENV_STR(SWIM_TRAFFIC_CLASS)                                                                \
 	ENV_STR(UCX_IB_FORK_INIT)
 
 /* uint env */
@@ -332,10 +351,6 @@ crt_env_dump(void)
 
 /* structure of global fault tolerance data */
 struct crt_plugin_gdata {
-	/* list of progress callbacks */
-	size_t				 cpg_prog_size[CRT_SRV_CONTEXT_NUM];
-	struct crt_prog_cb_priv		*cpg_prog_cbs[CRT_SRV_CONTEXT_NUM];
-	struct crt_prog_cb_priv		*cpg_prog_cbs_old[CRT_SRV_CONTEXT_NUM];
 	/* list of event notification callbacks */
 	size_t				 cpg_event_size;
 	struct crt_event_cb_priv	*cpg_event_cbs;
@@ -379,6 +394,14 @@ struct crt_context {
 	void			*cc_rpc_cb_arg;
 	crt_rpc_task_t		 cc_rpc_cb;	/** rpc callback */
 	crt_rpc_task_t		 cc_iv_resp_cb;
+
+	/* main progress */
+	int (*cc_prog_func)(struct crt_context *, int64_t);
+	int (*cc_prog_cond_func)(struct crt_context *, int64_t, crt_progress_cond_cb_t, void *);
+
+	/* progress callback */
+	void                    *cc_prog_cb_arg;
+	crt_progress_cb          cc_prog_cb;
 
 	/** RPC tracking */
 	/** in-flight endpoint tracking hash table */

@@ -102,6 +102,7 @@ daos (2.5.100-12) unstable; urgency=medium
 
  -- Tomasz Gromadzki <tomasz.gromadzki@intel.com>  Fri, 17 Nov 2023 12:52:00 -0400
 
+daos (2.5.100-11) unstable; urgency=medium
   [ Jerome Soumagne ]
   * Bump mercury min version to 2.3.1
 

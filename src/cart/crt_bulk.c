@@ -89,9 +89,8 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 	int			rc = 0;
 
 	if (crt_ctx == CRT_CONTEXT_NULL || !crt_sgl_valid(sgl) ||
-	    /* Now HG treats WO as invalid parameter */
-	    (bulk_perm != CRT_BULK_RW && bulk_perm != CRT_BULK_RO /* &&
-	     bulk_perm != CRT_BULK_WO */) || bulk_hdl == NULL) {
+	    (bulk_perm != CRT_BULK_RW && bulk_perm != CRT_BULK_RO && bulk_perm != CRT_BULK_WO) ||
+	    bulk_hdl == NULL) {
 		D_ERROR("invalid parameter, crt_ctx: %p, "
 			"crt_sgl_valid: %d, bulk_perm: %d, bulk_hdl: %p.\n",
 			crt_ctx, crt_sgl_valid(sgl), bulk_perm, bulk_hdl);

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -22,9 +22,13 @@
 static void
 test_swim(void **state)
 {
+	crt_context_t crt_ctx;
 	int rc;
 
 	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
+	assert_int_equal(rc, 0);
+
+	rc = crt_context_create(&crt_ctx);
 	assert_int_equal(rc, 0);
 
 	rc = crt_swim_init(0);
@@ -46,6 +50,8 @@ test_swim(void **state)
 	assert_int_equal(rc, -DER_ALREADY);
 
 	crt_swim_fini();
+	rc = crt_context_destroy(crt_ctx, 0);
+	assert_int_equal(rc, 0);
 	rc = crt_finalize();
 	assert_int_equal(rc, 0);
 }

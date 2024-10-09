@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -968,5 +968,5 @@ get_ms_between_periods(struct timespec start_time, struct timespec cur_time,
 	if (d_time2us(exp_curr_end) <= d_time2us(cur_time))
 		return 0;
 
-	return d_time2ms(d_timediff(cur_time, exp_curr_end));
+	return d_time2ms(d_timediff(&cur_time, &exp_curr_end));
 }

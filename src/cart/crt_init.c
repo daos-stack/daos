@@ -18,6 +18,10 @@ static volatile int     gdata_init_flag;
 struct crt_plugin_gdata crt_plugin_gdata;
 static bool             g_prov_settings_applied[CRT_PROV_COUNT];
 
+#define X(a, b) b,
+static const char *const crt_tc_name[] = {CRT_TRAFFIC_CLASSES};
+#undef X
+
 static void
 crt_lib_init(void) __attribute__((__constructor__));
 
@@ -192,6 +196,14 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider, bool p
 	prov_data->cpg_max_unexp_size = max_unexpect_size;
 	prov_data->cpg_primary        = primary;
 
+	if (opt && opt->cio_progress_busy) {
+		prov_data->cpg_progress_busy = opt->cio_progress_busy;
+	} else {
+		bool progress_busy = false;
+		crt_env_get(D_PROGRESS_BUSY, &progress_busy);
+		prov_data->cpg_progress_busy = progress_busy;
+	}
+
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
 		prov_data->cpg_used_idx[i] = false;
 
@@ -228,6 +240,17 @@ crt_gdata_dump(void)
 	DUMP_GDATA_FIELD("%d", cg_rpc_quota);
 }
 
+static enum crt_traffic_class
+crt_str_to_tc(const char *str)
+{
+	enum crt_traffic_class i = 0;
+
+	while (str != NULL && strcmp(crt_tc_name[i], str) != 0 && i < CRT_TC_UNKNOWN)
+		i++;
+
+	return i == CRT_TC_UNKNOWN ? CRT_TC_UNSPEC : i;
+}
+
 /* first step init - for initializing crt_gdata */
 static int
 data_init(int server, crt_init_options_t *opt)
@@ -238,9 +261,10 @@ data_init(int server, crt_init_options_t *opt)
 	uint32_t     mem_pin_enable = 0;
 	uint32_t     is_secondary;
 	uint32_t     post_init = CRT_HG_POST_INIT, post_incr = CRT_HG_POST_INCR;
-	unsigned int mrecv_buf      = CRT_HG_MRECV_BUF;
-	unsigned int mrecv_buf_copy = 0; /* buf copy disabled by default */
-	int          rc             = 0;
+	unsigned int mrecv_buf          = CRT_HG_MRECV_BUF;
+	unsigned int mrecv_buf_copy     = 0; /* buf copy disabled by default */
+	char        *swim_traffic_class = NULL;
+	int          rc                 = 0;
 
 	crt_env_dump();
 
@@ -253,6 +277,8 @@ data_init(int server, crt_init_options_t *opt)
 	crt_gdata.cg_mrecv_buf = mrecv_buf;
 	crt_env_get(D_MRECV_BUF_COPY, &mrecv_buf_copy);
 	crt_gdata.cg_mrecv_buf_copy = mrecv_buf_copy;
+	crt_env_get(SWIM_TRAFFIC_CLASS, &swim_traffic_class);
+	crt_gdata.cg_swim_tc = crt_str_to_tc(swim_traffic_class);
 
 	is_secondary = 0;
 	/* Apply CART-890 workaround for server side only */
@@ -337,29 +363,16 @@ data_init(int server, crt_init_options_t *opt)
 static int
 crt_plugin_init(void)
 {
-	struct crt_prog_cb_priv  *cbs_prog;
 	struct crt_event_cb_priv *cbs_event;
 	size_t                    cbs_size = CRT_CALLBACKS_NUM;
-	int                       i, rc;
+	int                       rc;
 
 	D_ASSERT(crt_plugin_gdata.cpg_inited == 0);
-
-	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		crt_plugin_gdata.cpg_prog_cbs_old[i] = NULL;
-		D_ALLOC_ARRAY(cbs_prog, cbs_size);
-		if (cbs_prog == NULL) {
-			for (i--; i >= 0; i--)
-				D_FREE(crt_plugin_gdata.cpg_prog_cbs[i]);
-			D_GOTO(out, rc = -DER_NOMEM);
-		}
-		crt_plugin_gdata.cpg_prog_size[i] = cbs_size;
-		crt_plugin_gdata.cpg_prog_cbs[i]  = cbs_prog;
-	}
 
 	crt_plugin_gdata.cpg_event_cbs_old = NULL;
 	D_ALLOC_ARRAY(cbs_event, cbs_size);
 	if (cbs_event == NULL) {
-		D_GOTO(out_destroy_prog, rc = -DER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 	}
 	crt_plugin_gdata.cpg_event_size = cbs_size;
 	crt_plugin_gdata.cpg_event_cbs  = cbs_event;
@@ -373,9 +386,6 @@ crt_plugin_init(void)
 
 out_destroy_event:
 	D_FREE(crt_plugin_gdata.cpg_event_cbs);
-out_destroy_prog:
-	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
-		D_FREE(crt_plugin_gdata.cpg_prog_cbs[i]);
 out:
 	return rc;
 }
@@ -383,16 +393,9 @@ out:
 static void
 crt_plugin_fini(void)
 {
-	int i;
-
 	D_ASSERT(crt_plugin_gdata.cpg_inited == 1);
 
 	crt_plugin_gdata.cpg_inited = 0;
-
-	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		D_FREE(crt_plugin_gdata.cpg_prog_cbs[i]);
-		D_FREE(crt_plugin_gdata.cpg_prog_cbs_old[i]);
-	}
 
 	D_FREE(crt_plugin_gdata.cpg_event_cbs);
 	D_FREE(crt_plugin_gdata.cpg_event_cbs_old);
@@ -626,6 +629,22 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 					path, rc);
 			else
 				D_DEBUG(DB_ALL, "set group_config_path as %s.\n", path);
+		}
+
+		if (opt && opt->cio_progress_legacy) {
+			crt_gdata.cg_progress_legacy = opt->cio_progress_legacy;
+		} else {
+			bool progress_legacy = false;
+			crt_env_get(D_PROGRESS_LEGACY, &progress_legacy);
+			crt_gdata.cg_progress_legacy = progress_legacy;
+		}
+
+		if (opt && opt->cio_thread_mode_single) {
+			crt_gdata.cg_thread_mode_single = opt->cio_thread_mode_single;
+		} else {
+			bool thread_mode_single = false;
+			crt_env_get(D_THREAD_MODE_SINGLE, &thread_mode_single);
+			crt_gdata.cg_thread_mode_single = thread_mode_single;
 		}
 
 		if (opt && opt->cio_auth_key)
