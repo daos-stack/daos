@@ -1227,7 +1227,7 @@ duns_link_cont(daos_handle_t poh, const char *cont, const char *path)
 		 * to discover the user running dfuse.
 		 */
 		if (fs.f_type == FUSE_SUPER_MAGIC) {
-			int fd;
+			int                     fd;
 			struct dfuse_user_reply dur = {};
 
 			fd = open(dirp, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
@@ -1249,7 +1249,7 @@ duns_link_cont(daos_handle_t poh, const char *cont, const char *path)
 				D_GOTO(err_link, err);
 			}
 
-			rc  = duns_set_fuse_acl(dur.uid, coh);
+			rc = duns_set_fuse_acl(dur.uid, coh);
 			if (rc != -DER_SUCCESS) {
 				DS_ERROR(rc, "Dfuse set acl failed %s", dirp);
 				D_FREE(dir);
