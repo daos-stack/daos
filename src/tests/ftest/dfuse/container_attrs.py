@@ -25,7 +25,7 @@ class DfuseContainerAttrs(TestWithServers):
         # Start the servers and agents
         super().setUp()
 
-    def check_attrs(self, dfuse, container_name):
+    def _check_attrs(self, dfuse, container_name):
         """Check if the DFuse attributes of a container are loaded
 
         Check in the log file of the dfuse instance if it contains the DFuse attributes of a given
@@ -75,7 +75,7 @@ class DfuseContainerAttrs(TestWithServers):
         start_dfuse(self, dfuse, pool, container)
 
         self.log_step("Checking DFuse log file")
-        self.check_attrs(dfuse, "container_01")
+        self._check_attrs(dfuse, "container_01")
 
         self.log_step("Test passed")
 
@@ -108,6 +108,6 @@ class DfuseContainerAttrs(TestWithServers):
         container = self.get_container(pool, namespace="/run/container_03/*", path=sub_dir)
 
         self.log_step("Checking DFuse log file")
-        self.check_attrs(dfuse, "container_03")
+        self._check_attrs(dfuse, "container_03")
 
         self.log_step("Test passed")
