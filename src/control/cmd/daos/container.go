@@ -251,6 +251,7 @@ type containerCreateCmd struct {
 	Mode            ConsModeFlag         `long:"mode" short:"M" description:"DFS consistency mode"`
 	ACLFile         string               `long:"acl-file" short:"A" description:"input file containing ACL"`
 	Group           ui.ACLPrincipalFlag  `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
+	Attrs           ui.SetPropertiesFlag `long:"set-attr" short:"s" description:"user-defined attributes (key:val[,key:val...])"`
 	Args            struct {
 		Label string `positional-arg-name:"label"`
 	} `positional-args:"yes"`
@@ -403,6 +404,25 @@ func (cmd *containerCreateCmd) contCreate() (string, error) {
 		contID = cmd.contLabel
 	} else {
 		contID = cmd.contUUID.String()
+	}
+
+	if len(cmd.Attrs.ParsedProps) != 0 {
+		attrs := make(attrList, 0, len(cmd.Attrs.ParsedProps))
+		for key, val := range cmd.Attrs.ParsedProps {
+			attrs = append(attrs, &attribute{
+				Name:  key,
+				Value: []byte(val),
+			})
+		}
+
+		if err := cmd.openContainer(C.DAOS_COO_RW); err != nil {
+			return "", errors.Wrapf(err, "failed to open new container %s", contID)
+		}
+		defer cmd.closeContainer()
+
+		if err := setDaosAttributes(cmd.cContHandle, contAttr, attrs); err != nil {
+			return "", errors.Wrapf(err, "failed to set user attributes on new container %s", contID)
+		}
 	}
 
 	cmd.Infof("Successfully created container %s", contID)
