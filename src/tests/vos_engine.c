@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021-2022 Intel Corporation.
+ * (C) Copyright 2021-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -33,7 +33,7 @@ engine_pool_init(struct credit_context *tsc)
 	if (tsc_create_pool(tsc)) {
 		/* Use pool size as blob size for this moment. */
 		rc = vos_pool_create(pmem_file, tsc->tsc_pool_uuid, 0, tsc->tsc_nvme_size, 0,
-				     0 /* version */, &poh);
+				     0 /* qlc_size */, 0 /* version */, &poh);
 		if (rc)
 			return rc;
 	} else {

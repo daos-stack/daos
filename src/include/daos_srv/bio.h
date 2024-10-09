@@ -63,7 +63,7 @@ typedef struct {
 	 * Byte offset within SPDK blob for NVMe.
 	 */
 	uint64_t	ba_off;
-	/* DAOS_MEDIA_SCM or DAOS_MEDIA_NVME */
+	/* DAOS_MEDIA_SCM or DAOS_MEDIA_NVME or DAOS_MEDIA_QLC */
 	uint8_t		ba_type;
 	/* Number of addresses when BIO_FLAG_GANG is set */
 	uint8_t		ba_gang_nr;
@@ -584,11 +584,13 @@ int bio_nvme_poll(struct bio_xs_context *ctxt);
  * \param[IN] xs_ctxt	Per-xstream NVMe context
  * \param[IN] uuid	Pool UUID
  * \param[IN] dummy	Create a dummy I/O context
+ * \param[IN] st	The blob type (should only be SMD_DEV_TYPE_DATA or SMD_DEV_TYPE_BULK)
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
-		    uuid_t uuid, bool dummy);
+int
+    bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt, uuid_t uuid,
+		    bool dummy, enum smd_dev_type st);
 
 /*
  * Finalize per VOS instance I/O context.
@@ -633,6 +635,18 @@ int bio_blob_unmap_sgl(struct bio_io_context *ctxt, d_sg_list_t *unmap_sgl, uint
 int bio_write(struct bio_io_context *ctxt, bio_addr_t addr, d_iov_t *iov);
 
 /**
+ * Write to per VOS instance blob for data or bulk_data.
+ *
+ * \param[IN] ctxt	VOS instance I/O context for SMD_DEV_TYPE_DATA or SMD_DEV_TYPE_BULK blob
+ * \param[IN] addr	SPDK blob addr info including byte offset
+ * \param[IN] iov	IO vector containing buffer to be written
+ *
+ * \returns		Zero on success, negative value on error
+ */
+int
+    bio_data_write(struct bio_io_context *ctxt, bio_addr_t addr, d_iov_t *iov);
+
+/**
  * Read from per VOS instance blob.
  *
  * \param[IN] ctxt	VOS instance I/O context
@@ -642,6 +656,18 @@ int bio_write(struct bio_io_context *ctxt, bio_addr_t addr, d_iov_t *iov);
  * \returns		Zero on success, negative value on error
  */
 int bio_read(struct bio_io_context *ctxt, bio_addr_t addr, d_iov_t *iov);
+
+/**
+ * Read from per VOS instance blob for data or bulk_data.
+ *
+ * \param[IN] ctxt	VOS instance I/O context
+ * \param[IN] addr	SPDK blob addr info including byte offset
+ * \param[IN] iov	IO vector containing buffer from read
+ *
+ * \returns		Zero on success, negative value on error
+ */
+int
+    bio_data_read(struct bio_io_context *ctxt, bio_addr_t addr, d_iov_t *iov);
 
 /**
  * Write SGL to per VOS instance blob.
@@ -672,10 +698,12 @@ int bio_readv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl,
  *
  * \param[IN] ctxt	I/O context
  * \param[IN] hdr	VOS blob header struct
+ * \param[IN] st	Blob type (Data or Bulk_data)
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_write_blob_hdr(struct bio_io_context *ctxt, struct bio_blob_hdr *hdr);
+int
+bio_write_blob_hdr(struct bio_io_context *ctxt, struct bio_blob_hdr *hdr, enum smd_dev_type st);
 
 /* Note: Do NOT change the order of these types */
 enum bio_iod_type {
@@ -697,6 +725,22 @@ enum bio_iod_type {
  */
 struct bio_desc *bio_iod_alloc(struct bio_io_context *ctxt, struct umem_instance *umem,
 			       unsigned int sgl_cnt, unsigned int type);
+
+/**
+ * Allocate & initialize an io descriptor for data or bulk_data
+ *
+ * \param ctxt       [IN]	I/O context
+ * \param bulk_ctxt  [IN]	I/O context for SMD_DEV_TYPE_BULK blob
+ * \param umem       [IN]	umem instance
+ * \param sgl_cnt    [IN]	SG list count
+ * \param type       [IN]	IOD type
+ *
+ * \return			Opaque io descriptor or NULL on error
+ */
+struct bio_desc      *
+bio_data_iod_alloc(struct bio_io_context *ctxt, struct bio_io_context *bulk_ctxt,
+			struct umem_instance *umem, unsigned int sgl_cnt, unsigned int type);
+
 /**
  * Free an io descriptor
  *
@@ -895,15 +939,16 @@ int bio_led_manage(struct bio_xs_context *xs_ctxt, char *tr_addr, uuid_t dev_uui
  * if specified.
  *
  * \param ioctxt	[IN]	I/O context
+ * \param bulk_ioctxt [IN]	I/O context for SMD_DEV_TYPE_BULK blob (QLC)
  * \param len		[IN]	Requested buffer length
  * \param bulk_ctxt	[IN]	Bulk context
  * \param bulk_perm	[IN]	Bulk permission
  *
  * \return			Buffer descriptor on success, NULL on error
  */
-struct bio_desc *bio_buf_alloc(struct bio_io_context *ioctxt,
-			       unsigned int len, void *bulk_ctxt,
-			       unsigned int bulk_perm);
+struct bio_desc *
+bio_buf_alloc(struct bio_io_context *ioctxt, struct bio_io_context *bulk_ioctxt, unsigned int len,
+	      void *bulk_ctxt, unsigned int bulk_perm);
 
 /*
  * Free allocated DMA buffer.
@@ -938,6 +983,7 @@ void *bio_buf_addr(struct bio_desc *biod);
  * SGLs. bio_copy_post() must be called after a success bio_copy_prep() call.
  *
  * \param ioctxt	[IN]	BIO io context
+ * \param bulk_ioctxt [IN]	BIO io context for SMD_DEV_TYPE_BULK blob (QLC)
  * \param umem		[IN]	umem instance
  * \param bsgl_src	[IN]	Source BIO SGL
  * \param bsgl_dst	[IN]	Target BIO SGL
@@ -945,9 +991,10 @@ void *bio_buf_addr(struct bio_desc *biod);
  *
  * \return			Zero on success, negative value on error
  */
-int bio_copy_prep(struct bio_io_context *ioctxt, struct umem_instance *umem,
-		  struct bio_sglist *bsgl_src, struct bio_sglist *bsgl_dst,
-		  struct bio_copy_desc **desc);
+int
+bio_copy_prep(struct bio_io_context *ioctxt, struct bio_io_context *bulk_ioctxt,
+	      struct umem_instance *umem, struct bio_sglist *bsgl_src, struct bio_sglist *bsgl_dst,
+	      struct bio_copy_desc **desc);
 
 struct bio_csum_desc {
 	uint8_t		*bmd_csum_buf;
@@ -995,6 +1042,7 @@ struct bio_sglist *bio_copy_get_sgl(struct bio_copy_desc *copy_desc, bool src);
  * Copy data from source BIO SGL to target BIO SGL.
  *
  * \param ioctxt	[IN]	BIO io context
+ * \param bulk_ioctxt [IN]	BIO io context for SMD_DEV_TYPE_BULK blob (QLC)
  * \param umem		[IN]	umem instance
  * \param bsgl_src	[IN]	Source BIO SGL
  * \param bsgl_dst	[IN]	Target BIO SGL
@@ -1004,9 +1052,10 @@ struct bio_sglist *bio_copy_get_sgl(struct bio_copy_desc *copy_desc, bool src);
  *
  * \return			0 on success, negative value on error
  */
-int bio_copy(struct bio_io_context *ioctxt, struct umem_instance *umem,
-	     struct bio_sglist *bsgl_src, struct bio_sglist *bsgl_dst, unsigned int copy_size,
-	     struct bio_csum_desc *csum_desc);
+int
+bio_copy(struct bio_io_context *ioctxt, struct bio_io_context *bulk_ioctxt,
+	 struct umem_instance *umem, struct bio_sglist *bsgl_src, struct bio_sglist *bsgl_dst,
+	 unsigned int copy_size, struct bio_csum_desc *csum_desc);
 
 enum bio_mc_flags {
 	BIO_MC_FL_RDB		= (1UL << 0),	/* for RDB */
@@ -1020,12 +1069,14 @@ enum bio_mc_flags {
  * \param[in]	meta_sz		Meta blob size in bytes
  * \param[in]	wal_sz		WAL blob in bytes
  * \param[in]	data_sz		Data blob in bytes
+ * \param[in]	bulk_sz		Bulk_data blob in bytes
  * \param[in]	flags		bio_mc_flags
  *
  * \return			Zero on success, negative value on error.
  */
-int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_sz,
-		  uint64_t wal_sz, uint64_t data_sz, enum bio_mc_flags flags);
+int
+    bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_sz, uint64_t wal_sz,
+		  uint64_t data_sz, uint64_t bulk_sz, enum bio_mc_flags flags);
 
 /*
  * Destroy Meta/Data/WAL blobs

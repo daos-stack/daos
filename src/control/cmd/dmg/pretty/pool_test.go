@@ -316,7 +316,7 @@ Target: type unknown, state up_in
   Free: 90 GB
 `,
 		},
-		"three tiers; third tier unknown StorageMediaType": {
+		"three tiers; third tier is QLC StorageMediaType": {
 			pqtr: &control.PoolQueryTargetResp{
 				Status: 0,
 				Infos: []*daos.PoolQueryTargetInfo{
@@ -402,7 +402,7 @@ Target: type unknown, state down
 - Storage tier 1 (NVMe):
   Total size: 100 GB
   Free: 90 GB
-- Storage tier 2 (unknown):
+- Storage tier 2 (QLC):
   Total size: 800 GB
   Free: 200 GB
 Target: type unknown, state up_in
@@ -412,7 +412,7 @@ Target: type unknown, state up_in
 - Storage tier 1 (NVMe):
   Total size: 100 GB
   Free: 90 GB
-- Storage tier 2 (unknown):
+- Storage tier 2 (QLC):
   Total size: 800 GB
   Free: 200 GB
 Target: type unknown, state down_out
@@ -422,7 +422,7 @@ Target: type unknown, state down_out
 - Storage tier 1 (NVMe):
   Total size: 100 GB
   Free: 90 GB
-- Storage tier 2 (unknown):
+- Storage tier 2 (QLC):
   Total size: 800 GB
   Free: 200 GB
 Target: type unknown, state up_in
@@ -432,7 +432,156 @@ Target: type unknown, state up_in
 - Storage tier 1 (NVMe):
   Total size: 100 GB
   Free: 90 GB
-- Storage tier 2 (unknown):
+- Storage tier 2 (QLC):
+  Total size: 800 GB
+  Free: 200 GB
+`,
+		},
+		"four tiers; fourth tier is unknown StorageMediaType": {
+			pqtr: &control.PoolQueryTargetResp{
+				Status: 0,
+				Infos: []*daos.PoolQueryTargetInfo{
+					{
+						Type:  0,
+						State: daos.PoolTargetStateDown,
+						Space: []*daos.StorageUsageStats{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+							{
+								Total: 800000000000,
+								Free:  200000000000,
+							},
+							{
+								Total: 800000000000,
+								Free:  200000000000,
+							},
+						},
+					},
+					{
+						Type:  0,
+						State: daos.PoolTargetStateUpIn,
+						Space: []*daos.StorageUsageStats{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+							{
+								Total: 800000000000,
+								Free:  200000000000,
+							},
+							{
+								Total: 800000000000,
+								Free:  200000000000,
+							},
+						},
+					},
+					{
+						Type:  0,
+						State: daos.PoolTargetStateDownOut,
+						Space: []*daos.StorageUsageStats{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+							{
+								Total: 800000000000,
+								Free:  200000000000,
+							},
+							{
+								Total: 800000000000,
+								Free:  200000000000,
+							},
+						},
+					},
+					{
+						Type:  0,
+						State: daos.PoolTargetStateUpIn,
+						Space: []*daos.StorageUsageStats{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+							{
+								Total: 800000000000,
+								Free:  200000000000,
+							},
+							{
+								Total: 800000000000,
+								Free:  200000000000,
+							},
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Target: type unknown, state down
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+- Storage tier 2 (QLC):
+  Total size: 800 GB
+  Free: 200 GB
+- Storage tier 3 (unknown):
+  Total size: 800 GB
+  Free: 200 GB
+Target: type unknown, state up_in
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+- Storage tier 2 (QLC):
+  Total size: 800 GB
+  Free: 200 GB
+- Storage tier 3 (unknown):
+  Total size: 800 GB
+  Free: 200 GB
+Target: type unknown, state down_out
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+- Storage tier 2 (QLC):
+  Total size: 800 GB
+  Free: 200 GB
+- Storage tier 3 (unknown):
+  Total size: 800 GB
+  Free: 200 GB
+Target: type unknown, state up_in
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+- Storage tier 2 (QLC):
+  Total size: 800 GB
+  Free: 200 GB
+- Storage tier 3 (unknown):
   Total size: 800 GB
   Free: 200 GB
 `,

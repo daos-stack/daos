@@ -843,6 +843,9 @@ generate_data_csum(struct bio_meta_context *mc, struct bio_desc *biod_data,
 		D_ASSERT(rg->brr_chk != NULL);
 		D_ASSERT(rg->brr_end > rg->brr_off);
 
+		/* As comment in bio_iod_post_async, will not do async post
+		 * if there is qlc region, so the media type should be only
+		 * DAOS_MEDIA_NVME here, no DAOS_MEDIA_QLC. */
 		if (rg->brr_media != DAOS_MEDIA_NVME)
 			continue;
 
@@ -1282,6 +1285,10 @@ verify_data(struct bio_meta_context *mc, uint64_t off, uint32_t len, uint32_t ex
 	while (tot_read > 0) {
 		biov = &bsgl.bs_iovs[bsgl.bs_nr_out];
 
+		/* As the judgment in bio_iod_post_async, if a biod has
+		 * qlc region then it will not be posted asyncly, so only bio
+		 * to the data blob (common NVMe e.g., TLC) will come
+		 * here. */
 		bio_addr_set(&addr, DAOS_MEDIA_NVME, off);
 		read_sz = min(tot_read, iov_sz);
 		bio_iov_set(biov, addr, read_sz);
@@ -1947,6 +1954,9 @@ load_meta_header(struct bio_meta_context *mc)
 	uint32_t		 csum;
 	int			 rc, csum_len;
 
+	/* Only consider new deployment with new meta_header structure
+	 * now temporally, will try to be compatible with data
+	 * structure stored on SSD in the future with separate change. */
 	bio_addr_set(&addr, DAOS_MEDIA_NVME, 0);
 	d_iov_set(&iov, hdr, sizeof(*hdr));
 
@@ -2061,9 +2071,11 @@ meta_format(struct bio_meta_context *mc, struct meta_fmt_info *fi, bool force)
 	uuid_copy(meta_hdr->mh_meta_devid, fi->fi_meta_devid);
 	uuid_copy(meta_hdr->mh_wal_devid, fi->fi_wal_devid);
 	uuid_copy(meta_hdr->mh_data_devid, fi->fi_data_devid);
+	uuid_copy(meta_hdr->mh_bulk_devid, fi->fi_bulk_devid);
 	meta_hdr->mh_meta_blobid = fi->fi_meta_blobid;
 	meta_hdr->mh_wal_blobid = fi->fi_wal_blobid;
 	meta_hdr->mh_data_blobid = fi->fi_data_blobid;
+	meta_hdr->mh_bulk_blobid = fi->fi_bulk_blobid;
 	meta_hdr->mh_blk_bytes = META_BLK_SZ;
 	meta_hdr->mh_hdr_blks = META_HDR_BLKS;
 	meta_hdr->mh_tot_blks = (fi->fi_meta_size / META_BLK_SZ) - META_HDR_BLKS;

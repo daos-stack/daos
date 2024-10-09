@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -58,7 +58,7 @@ rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t siz
 	 * basic system memory reservation and VOS_POF_EXCL for concurrent
 	 * access protection.
 	 */
-	rc = vos_pool_create(path, (unsigned char *)uuid, size, 0 /* nvme_sz */,
+	rc = vos_pool_create(path, (unsigned char *)uuid, size, 0 /* nvme_sz */, 0 /* qlc_size */,
 			     VOS_POF_SMALL | VOS_POF_EXCL | VOS_POF_RDB, vos_df_version, &pool);
 	if (rc != 0)
 		goto out;
@@ -304,6 +304,7 @@ rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid, uint6
 	}
 	rdb_extra_sys[DAOS_MEDIA_SCM] = 0;
 	rdb_extra_sys[DAOS_MEDIA_NVME] = 0;
+	rdb_extra_sys[DAOS_MEDIA_QLC]  = 0;
 	if (SCM_FREE(&vps) > SCM_SYS(&vps)) {
 		rdb_extra_sys[DAOS_MEDIA_SCM] =
 			     ((SCM_FREE(&vps) - SCM_SYS(&vps)) * 52) / 100;

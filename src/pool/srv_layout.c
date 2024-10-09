@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -53,6 +53,7 @@ RDB_STRING_KEY(ds_pool_prop_, checkpoint_mode);
 RDB_STRING_KEY(ds_pool_prop_, checkpoint_freq);
 RDB_STRING_KEY(ds_pool_prop_, checkpoint_thresh);
 RDB_STRING_KEY(ds_pool_prop_, reint_mode);
+RDB_STRING_KEY(ds_pool_prop_, bulk_data_thresh);
 
 /** default properties, should cover all optional pool properties */
 struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
@@ -162,6 +163,10 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
     {
 	.dpe_type = DAOS_PROP_PO_SVC_OPS_ENTRY_AGE,
 	.dpe_val  = DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_DEFAULT,
+    },
+    {
+	.dpe_type = DAOS_PROP_PO_BULK_DATA_THRESH,
+	.dpe_val  = DAOS_PROP_PO_BULK_DATA_THRESH_DEFAULT,
     }};
 
 daos_prop_t pool_prop_default = {

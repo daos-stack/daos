@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -346,6 +346,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_PO_GLOBAL_VERSION:
 		case DAOS_PROP_PO_OBJ_VERSION:
 		case DAOS_PROP_PO_DATA_THRESH:
+		case DAOS_PROP_PO_BULK_DATA_THRESH:
 			break;
 		case DAOS_PROP_PO_UPGRADE_STATUS:
 			val = prop->dpp_entries[i].dpe_val;

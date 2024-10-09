@@ -268,6 +268,40 @@ bio_iod_alloc(struct bio_io_context *ctxt, struct umem_instance *umem,
 	D_ASSERT(type < BIO_IOD_TYPE_MAX);
 	biod->bd_umem = umem;
 	biod->bd_ctxt = ctxt;
+	/* set QLC related ctx to NULL for original process which not
+	 * access to QLC media. */
+	biod->bulk_bd_ctxt = NULL;
+	biod->bd_type      = type;
+	biod->bd_sgl_cnt   = sgl_cnt;
+
+	biod->bd_dma_done = ABT_EVENTUAL_NULL;
+	return biod;
+}
+
+struct bio_desc *
+bio_data_iod_alloc(struct bio_io_context *ctxt, struct bio_io_context *bulk_ctxt,
+		   struct umem_instance *umem, unsigned int sgl_cnt, unsigned int type)
+{
+	struct bio_desc *biod;
+
+	D_ASSERT(ctxt != NULL || bulk_ctxt != NULL);
+	D_ASSERT(sgl_cnt != 0);
+
+	D_ALLOC(biod, offsetof(struct bio_desc, bd_sgls[sgl_cnt]));
+	if (biod == NULL)
+		return NULL;
+
+	D_ASSERT(type < BIO_IOD_TYPE_MAX);
+	biod->bd_umem = umem;
+	/* set the bd_ctxt to bulk_ctxt when only bulk_ctxt set, for
+	 * common reference to bio_xs_context in io path. When bio_io_ctxt
+	 * for QLC access exist, then bio_io_ctxt for common (TLC) NVMe access
+	 * is also there, just not input. The bio_xs_context referred by both
+	 * bd_ctxt and bulk_bd_ctxt are the same, so we can just set the
+	 * bd_ctxt with the input bulk_ctxt to access bio_xs_context in common
+	 * process like iod_dma_wait and iod_dma_buf etc, without change. */
+	biod->bd_ctxt      = (ctxt != NULL) ? ctxt : bulk_ctxt;
+	biod->bulk_bd_ctxt = bulk_ctxt;
 	biod->bd_type = type;
 	biod->bd_sgl_cnt = sgl_cnt;
 
@@ -711,8 +745,11 @@ iod_add_region(struct bio_desc *biod, struct bio_dma_chunk *chk,
 	rsrvd_dma->brd_regions[cnt].brr_media = media;
 	rsrvd_dma->brd_rg_cnt++;
 
+	/* not support async post for qlc access. */
 	if (media == DAOS_MEDIA_NVME)
 		biod->bd_nvme_bytes += (end - off);
+	else if (media == DAOS_MEDIA_QLC)
+		biod->bd_has_qlc_rg = 1;
 
 	return 0;
 }
@@ -1010,26 +1047,45 @@ dma_drop_iod(struct bio_dma_buffer *bdb)
 	ABT_mutex_unlock(bdb->bdb_mutex);
 }
 
+struct bio_rw_cb_arg {
+	struct bio_desc *biod;
+	uint16_t         media_type;
+	uint16_t         iocnt; /* how many blob io (read or write) issued */
+};
+
 static void
 rw_completion(void *cb_arg, int err)
 {
 	struct bio_xs_context	*xs_ctxt;
 	struct bio_xs_blobstore	*bxb;
 	struct bio_io_context	*io_ctxt;
-	struct bio_desc		*biod = cb_arg;
+	struct bio_rw_cb_arg    *bio_cb_arg = cb_arg;
+	struct bio_desc         *biod       = bio_cb_arg->biod;
 	struct media_error_msg	*mem;
+	uint16_t                 media_type = bio_cb_arg->media_type;
+
+	--bio_cb_arg->iocnt;
+	if (bio_cb_arg->iocnt == 0) {
+		D_FREE(cb_arg);
+	}
 
 	D_ASSERT(biod->bd_type < BIO_IOD_TYPE_GETBUF);
 	D_ASSERT(biod->bd_inflights > 0);
+	D_ASSERT(media_type == DAOS_MEDIA_NVME || media_type == DAOS_MEDIA_QLC);
 	biod->bd_inflights--;
 
-	bxb = biod->bd_ctxt->bic_xs_blobstore;
+	if (media_type == DAOS_MEDIA_NVME) {
+		io_ctxt = biod->bd_ctxt;
+	} else {
+		io_ctxt = biod->bulk_bd_ctxt;
+	}
+	D_ASSERT(io_ctxt != NULL);
+
+	bxb = io_ctxt->bic_xs_blobstore;
 	D_ASSERT(bxb != NULL);
 	D_ASSERT(bxb->bxb_blob_rw > 0);
 	bxb->bxb_blob_rw--;
 
-	io_ctxt = biod->bd_ctxt;
-	D_ASSERT(io_ctxt != NULL);
 	D_ASSERT(io_ctxt->bic_inflight_dmas > 0);
 	io_ctxt->bic_inflight_dmas--;
 
@@ -1050,8 +1106,8 @@ rw_completion(void *cb_arg, int err)
 		}
 		mem->mem_err_type = (biod->bd_type == BIO_IOD_TYPE_UPDATE) ? MET_WRITE : MET_READ;
 		mem->mem_bs = bxb->bxb_blobstore;
-		D_ASSERT(biod->bd_ctxt->bic_xs_ctxt);
-		xs_ctxt = biod->bd_ctxt->bic_xs_ctxt;
+		D_ASSERT(io_ctxt->bic_xs_ctxt);
+		xs_ctxt         = io_ctxt->bic_xs_ctxt;
 		mem->mem_tgt_id = xs_ctxt->bxc_tgt_id;
 		spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error, mem);
 	}
@@ -1123,15 +1179,29 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 {
 	struct spdk_io_channel	*channel;
 	struct spdk_blob	*blob;
+	struct bio_io_context   *io_ctxt;
 	struct bio_xs_context	*xs_ctxt;
 	uint64_t		 pg_idx, pg_cnt, rw_cnt;
 	void			*payload;
-	struct bio_xs_blobstore	*bxb = biod->bd_ctxt->bic_xs_blobstore;
+	struct bio_xs_blobstore *bxb;
+	struct bio_rw_cb_arg    *bio_cb_arg = NULL;
 
+	if (rg->brr_media == DAOS_MEDIA_NVME) {
+		io_ctxt = biod->bd_ctxt;
+	} else if (rg->brr_media == DAOS_MEDIA_QLC) {
+		io_ctxt = biod->bulk_bd_ctxt;
+	} else {
+		D_ERROR("rg->brr_media type:%d unexpected.\n", rg->brr_media);
+		biod->bd_result = -DER_INVAL;
+		return;
+	}
+
+	D_ASSERT(io_ctxt != NULL);
+	bxb = io_ctxt->bic_xs_blobstore;
 	D_ASSERT(bxb != NULL);
-	D_ASSERT(biod->bd_ctxt->bic_xs_ctxt);
-	xs_ctxt = biod->bd_ctxt->bic_xs_ctxt;
-	blob = biod->bd_ctxt->bic_blob;
+	D_ASSERT(io_ctxt->bic_xs_ctxt);
+	xs_ctxt = io_ctxt->bic_xs_ctxt;
+	blob    = io_ctxt->bic_blob;
 	channel = bxb->bxb_io_channel;
 
 	/* Bypass NVMe I/O, used by daos_perf for performance evaluation */
@@ -1148,9 +1218,8 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 		return;
 	}
 
-	if (!is_blob_valid(biod->bd_ctxt)) {
-		D_ERROR("Blobstore is invalid. blob:%p, closing:%d\n",
-			blob, biod->bd_ctxt->bic_closing);
+	if (!is_blob_valid(io_ctxt)) {
+		D_ERROR("Blobstore is invalid. blob:%p, closing:%d\n", blob, io_ctxt->bic_closing);
 		biod->bd_result = -DER_NO_HDL;
 		return;
 	}
@@ -1163,6 +1232,20 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 	D_ASSERT(pg_cnt > pg_idx);
 	pg_cnt -= pg_idx;
 
+	if (pg_cnt > 0) {
+		D_ALLOC(bio_cb_arg, sizeof(struct bio_rw_cb_arg));
+		if (bio_cb_arg == NULL) {
+			D_ERROR("alloc completion cb_arg failed.\n");
+			biod->bd_result = -DER_NOMEM;
+			return;
+		}
+
+		bio_cb_arg->biod       = biod;
+		bio_cb_arg->media_type = rg->brr_media;
+		bio_cb_arg->iocnt      = (pg_cnt % bio_chk_sz == 0) ? (pg_cnt / bio_chk_sz)
+								    : ((pg_cnt / bio_chk_sz) + 1);
+	}
+
 	while (pg_cnt > 0) {
 
 		drain_inflight_ios(xs_ctxt, bxb);
@@ -1170,7 +1253,7 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 		biod->bd_dma_issued = 1;
 		biod->bd_inflights++;
 		bxb->bxb_blob_rw++;
-		biod->bd_ctxt->bic_inflight_dmas++;
+		io_ctxt->bic_inflight_dmas++;
 
 		rw_cnt = (pg_cnt > bio_chk_sz) ? bio_chk_sz : pg_cnt;
 
@@ -1181,14 +1264,14 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 		D_ASSERT(biod->bd_type < BIO_IOD_TYPE_GETBUF);
 		if (biod->bd_type == BIO_IOD_TYPE_UPDATE)
 			spdk_blob_io_write(blob, channel, payload,
-					   page2io_unit(biod->bd_ctxt, pg_idx, BIO_DMA_PAGE_SZ),
-					   page2io_unit(biod->bd_ctxt, rw_cnt, BIO_DMA_PAGE_SZ),
-					   rw_completion, biod);
+					   page2io_unit(io_ctxt, pg_idx, BIO_DMA_PAGE_SZ),
+					   page2io_unit(io_ctxt, rw_cnt, BIO_DMA_PAGE_SZ),
+					   rw_completion, bio_cb_arg);
 		else {
 			spdk_blob_io_read(blob, channel, payload,
-					  page2io_unit(biod->bd_ctxt, pg_idx, BIO_DMA_PAGE_SZ),
-					  page2io_unit(biod->bd_ctxt, rw_cnt, BIO_DMA_PAGE_SZ),
-					  rw_completion, biod);
+					  page2io_unit(io_ctxt, pg_idx, BIO_DMA_PAGE_SZ),
+					  page2io_unit(io_ctxt, rw_cnt, BIO_DMA_PAGE_SZ),
+					  rw_completion, bio_cb_arg);
 			if (DAOS_ON_VALGRIND)
 				VALGRIND_MAKE_MEM_DEFINED(payload, rw_cnt * BIO_DMA_PAGE_SZ);
 		}
@@ -1534,6 +1617,17 @@ bio_iod_post_async(struct bio_desc *biod, int err)
 	/* Async post is only for MD on SSD */
 	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
 		goto out;
+
+	/*
+	 * Currently, we not support async post if there is qlc region in this boid,
+	 * so there will no UMEM_ACT_CSUM action for biod with qlc region. In other
+	 * words, the UMEM_ACT_CSUM in wal commit and wal replay only related to the
+	 * SMD_DEV_TYPE_DATA blob.
+	 */
+	if (biod->bd_has_qlc_rg == 1) {
+		goto out;
+	}
+
 	/*
 	 * When the I/O to data blob is too large, submitting the large data I/O & small
 	 * WAL I/O simultaneously might case more I/O reordering on SSD (when WAL & DATA
@@ -1673,6 +1767,54 @@ out:
 	return rc;
 }
 
+static int
+bio_data_rwv(struct bio_io_context *ioctxt, struct bio_io_context *bulk_ioctxt,
+	     struct bio_sglist *bsgl_in, d_sg_list_t *sgl, bool update)
+{
+	struct bio_sglist *bsgl;
+	struct bio_desc   *biod;
+	int                i, rc;
+
+	for (i = 0; i < bsgl_in->bs_nr; i++) {
+		if (bio_addr_is_hole(&bsgl_in->bs_iovs[i].bi_addr)) {
+			D_ERROR("Read/write a hole isn't allowed\n");
+			return -DER_INVAL;
+		}
+	}
+
+	/* allocate blob I/O descriptor */
+	biod = bio_data_iod_alloc(ioctxt, bulk_ioctxt, NULL, 1 /* single bsgl */,
+				  update ? BIO_IOD_TYPE_UPDATE : BIO_IOD_TYPE_FETCH);
+	if (biod == NULL)
+		return -DER_NOMEM;
+
+	bsgl = iod_dup_sgl(biod, bsgl_in);
+	if (bsgl == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
+	/* map the biov to DMA safe buffer, fill DMA buffer if read operation */
+	rc = bio_iod_prep(biod, BIO_CHK_TYPE_LOCAL, NULL, 0);
+	if (rc)
+		goto out;
+
+	for (i = 0; i < bsgl->bs_nr; i++)
+		D_ASSERT(bio_iov2raw_buf(&bsgl->bs_iovs[i]) != NULL);
+
+	rc = bio_iod_copy(biod, sgl, 1 /* single sgl */);
+	if (rc)
+		D_ERROR("Copy biod failed, " DF_RC "\n", DP_RC(rc));
+
+	/* release DMA buffer, write data back to NVMe device for write */
+	rc = bio_iod_post(biod, rc);
+
+out:
+	bio_iod_free(biod); /* also calls bio_sgl_fini */
+
+	return rc;
+}
+
 int
 bio_readv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl,
 	  d_sg_list_t *sgl)
@@ -1737,10 +1879,51 @@ bio_rw(struct bio_io_context *ioctxt, bio_addr_t addr, d_iov_t *iov,
 	return rc;
 }
 
+static int
+bio_data_rw(struct bio_io_context *ioctxt, bio_addr_t addr, d_iov_t *iov, bool update)
+{
+	struct bio_sglist bsgl;
+	struct bio_iov    biov;
+	d_sg_list_t       sgl;
+	int               rc;
+
+	bio_iov_set(&biov, addr, iov->iov_len);
+	bsgl.bs_iovs = &biov;
+	bsgl.bs_nr = bsgl.bs_nr_out = 1;
+
+	sgl.sg_iovs   = iov;
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 0;
+
+	if (addr.ba_type == DAOS_MEDIA_NVME) {
+		rc = bio_data_rwv(ioctxt, NULL, &bsgl, &sgl, update);
+	} else if (addr.ba_type == DAOS_MEDIA_QLC) {
+		rc = bio_data_rwv(NULL, ioctxt, &bsgl, &sgl, update);
+	} else {
+		D_ERROR("%s to blob:%p ba_type invalid for xs:%p.\n", update ? "Write" : "Read",
+			ioctxt->bic_blob, ioctxt->bic_xs_ctxt);
+		return -DER_INVAL;
+	}
+	if (rc)
+		D_ERROR("%s to blob:%p failed for xs:%p, rc:%d\n", update ? "Write" : "Read",
+			ioctxt->bic_blob, ioctxt->bic_xs_ctxt, rc);
+	else
+		D_DEBUG(DB_IO, "%s to blob %p for xs:%p successfully\n", update ? "Write" : "Read",
+			ioctxt->bic_blob, ioctxt->bic_xs_ctxt);
+
+	return rc;
+}
+
 int
 bio_read(struct bio_io_context *ioctxt, bio_addr_t addr, d_iov_t *iov)
 {
 	return bio_rw(ioctxt, addr, iov, false);
+}
+
+int
+bio_data_read(struct bio_io_context *ioctxt, bio_addr_t addr, d_iov_t *iov)
+{
+	return bio_data_rw(ioctxt, addr, iov, false);
 }
 
 int
@@ -1749,16 +1932,22 @@ bio_write(struct bio_io_context *ioctxt, bio_addr_t addr, d_iov_t *iov)
 	return bio_rw(ioctxt, addr, iov, true);
 }
 
+int
+bio_data_write(struct bio_io_context *ioctxt, bio_addr_t addr, d_iov_t *iov)
+{
+	return bio_data_rw(ioctxt, addr, iov, true);
+}
+
 struct bio_desc *
-bio_buf_alloc(struct bio_io_context *ioctxt, unsigned int len, void *bulk_ctxt,
-	      unsigned int bulk_perm)
+bio_buf_alloc(struct bio_io_context *ioctxt, struct bio_io_context *bulk_ioctxt, unsigned int len,
+	      void *bulk_ctxt, unsigned int bulk_perm)
 {
 	struct bio_sglist	*bsgl;
 	struct bio_desc		*biod;
 	unsigned int		 chk_type;
 	int			 rc;
 
-	biod = bio_iod_alloc(ioctxt, NULL, 1, BIO_IOD_TYPE_GETBUF);
+	biod = bio_data_iod_alloc(ioctxt, bulk_ioctxt, NULL, 1, BIO_IOD_TYPE_GETBUF);
 	if (biod == NULL)
 		return NULL;
 
@@ -1830,8 +2019,9 @@ free_copy_desc(struct bio_copy_desc *copy_desc)
 }
 
 static struct bio_copy_desc *
-alloc_copy_desc(struct bio_io_context *ioctxt, struct umem_instance *umem,
-		struct bio_sglist *bsgl_src, struct bio_sglist *bsgl_dst)
+alloc_copy_desc(struct bio_io_context *ioctxt, struct bio_io_context *bulk_ioctxt,
+		struct umem_instance *umem, struct bio_sglist *bsgl_src,
+		struct bio_sglist *bsgl_dst)
 {
 	struct bio_copy_desc	*copy_desc;
 	struct bio_sglist	*bsgl_read, *bsgl_write;
@@ -1840,11 +2030,13 @@ alloc_copy_desc(struct bio_io_context *ioctxt, struct umem_instance *umem,
 	if (copy_desc == NULL)
 		return NULL;
 
-	copy_desc->bcd_iod_src = bio_iod_alloc(ioctxt, umem, 1, BIO_IOD_TYPE_FETCH);
+	copy_desc->bcd_iod_src =
+	    bio_data_iod_alloc(ioctxt, bulk_ioctxt, umem, 1, BIO_IOD_TYPE_FETCH);
 	if (copy_desc->bcd_iod_src == NULL)
 		goto free;
 
-	copy_desc->bcd_iod_dst = bio_iod_alloc(ioctxt, umem, 1, BIO_IOD_TYPE_UPDATE);
+	copy_desc->bcd_iod_dst =
+	    bio_data_iod_alloc(ioctxt, bulk_ioctxt, umem, 1, BIO_IOD_TYPE_UPDATE);
 	if (copy_desc->bcd_iod_dst == NULL)
 		goto free;
 
@@ -1863,14 +2055,14 @@ free:
 }
 
 int
-bio_copy_prep(struct bio_io_context *ioctxt, struct umem_instance *umem,
-	      struct bio_sglist *bsgl_src, struct bio_sglist *bsgl_dst,
+bio_copy_prep(struct bio_io_context *ioctxt, struct bio_io_context *bulk_ioctxt,
+	      struct umem_instance *umem, struct bio_sglist *bsgl_src, struct bio_sglist *bsgl_dst,
 	      struct bio_copy_desc **desc)
 {
 	struct bio_copy_desc	*copy_desc;
 	int			 rc, ret;
 
-	copy_desc = alloc_copy_desc(ioctxt, umem, bsgl_src, bsgl_dst);
+	copy_desc = alloc_copy_desc(ioctxt, bulk_ioctxt, umem, bsgl_src, bsgl_dst);
 	if (copy_desc == NULL) {
 		*desc = NULL;
 		return -DER_NOMEM;
@@ -1951,14 +2143,14 @@ bio_copy_get_sgl(struct bio_copy_desc *copy_desc, bool src)
 }
 
 int
-bio_copy(struct bio_io_context *ioctxt, struct umem_instance *umem,
-	 struct bio_sglist *bsgl_src, struct bio_sglist *bsgl_dst,
+bio_copy(struct bio_io_context *ioctxt, struct bio_io_context *bulk_ioctxt,
+	 struct umem_instance *umem, struct bio_sglist *bsgl_src, struct bio_sglist *bsgl_dst,
 	 unsigned int copy_size, struct bio_csum_desc *csum_desc)
 {
 	struct bio_copy_desc	*copy_desc;
 	int			 rc;
 
-	rc = bio_copy_prep(ioctxt, umem, bsgl_src, bsgl_dst, &copy_desc);
+	rc = bio_copy_prep(ioctxt, bulk_ioctxt, umem, bsgl_src, bsgl_dst, &copy_desc);
 	if (rc)
 		return rc;
 

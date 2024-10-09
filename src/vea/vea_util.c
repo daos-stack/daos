@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -448,11 +448,13 @@ frags_type2str(int frags_type)
 }
 
 #define VEA_TELEMETRY_DIR	"block_allocator"
+#define BULK_VEA_TELEMETRY_DIR  "qlc_block_allocator"
 
 void *
-vea_metrics_alloc(const char *path, int tgt_id)
+vea_metrics_alloc(const char *path, int tgt_id, bool is_bulk)
 {
 	struct vea_metrics	*metrics;
+	char                    *vea_tel_dir = NULL;
 	char			 desc[40];
 	int			 i, rc;
 
@@ -462,12 +464,18 @@ vea_metrics_alloc(const char *path, int tgt_id)
 	if (metrics == NULL)
 		return NULL;
 
+	if (is_bulk) {
+		vea_tel_dir = BULK_VEA_TELEMETRY_DIR;
+	} else {
+		vea_tel_dir = VEA_TELEMETRY_DIR;
+	}
+
 	for (i = 0; i < STAT_RESRV_TYPE_MAX; i++) {
 		snprintf(desc, sizeof(desc), "number of %s block allocs", rsrv_type2str(i));
 
 		rc = d_tm_add_metric(&metrics->vm_rsrv[i], D_TM_COUNTER, desc, "allocs",
-				     "%s/%s/alloc/%s/tgt_%u", path, VEA_TELEMETRY_DIR,
-				     rsrv_type2str(i), tgt_id);
+				     "%s/%s/alloc/%s/tgt_%u", path, vea_tel_dir, rsrv_type2str(i),
+				     tgt_id);
 		if (rc)
 			D_WARN("Failed to create 'alloc/%s' telemetry: "DF_RC"\n",
 			       rsrv_type2str(i), DP_RC(rc));
@@ -479,15 +487,15 @@ vea_metrics_alloc(const char *path, int tgt_id)
 		snprintf(desc, sizeof(desc), "number of %s frags", frags_type2str(type));
 
 		rc = d_tm_add_metric(&metrics->vm_frags[i], D_TM_GAUGE, desc, "frags",
-				     "%s/%s/frags/%s/tgt_%u", path, VEA_TELEMETRY_DIR,
+				     "%s/%s/frags/%s/tgt_%u", path, vea_tel_dir,
 				     frags_type2str(type), tgt_id);
 		if (rc)
 			D_WARN("Failed to create 'frags/%s' telemetry: "DF_RC"\n",
 			       frags_type2str(type), DP_RC(rc));
 	}
 
-	rc = d_tm_add_metric(&metrics->vm_free_blks, D_TM_GAUGE, "number of free blocks",
-			     "blks", "%s/%s/free_blks/tgt_%u", path, VEA_TELEMETRY_DIR, tgt_id);
+	rc = d_tm_add_metric(&metrics->vm_free_blks, D_TM_GAUGE, "number of free blocks", "blks",
+			     "%s/%s/free_blks/tgt_%u", path, vea_tel_dir, tgt_id);
 	if (rc)
 		D_WARN("Failed to create free blks telemetry: "DF_RC"\n", DP_RC(rc));
 

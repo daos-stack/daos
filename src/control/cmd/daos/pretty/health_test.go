@@ -163,6 +163,14 @@ var healthyPool = &daos.PoolInfo{
 			Max:       240 * humanize.GByte,
 			Mean:      166 * humanize.TByte,
 		},
+		{
+			MediaType: daos.StorageMediaTypeQlc,
+			Total:     6 * humanize.TByte,
+			Free:      4 * humanize.TByte,
+			Min:       130 * humanize.GByte,
+			Max:       240 * humanize.GByte,
+			Mean:      166 * humanize.TByte,
+		},
 	},
 	EnabledRanks:     ranklist.MustCreateRankSet("[0,1,2]"),
 	PoolLayoutVer:    1,
@@ -243,25 +251,26 @@ func TestPretty_printPoolHealth(t *testing.T) {
 		"healthy": {
 			pi: healthyPool,
 			expPrintStr: fmt.Sprintf(`
-%s: Healthy (4.1 TB Free)
+%s: Healthy (8.1 TB Free)
 `, healthyPool.Label),
 		},
 		"healthy; verbose": {
 			pi:      healthyPool,
 			verbose: true,
 			expPrintStr: fmt.Sprintf(`
-%s: Healthy (meta: 64 GB/128 GB Free, data: 4.0 TB/6.0 TB Free) (imbalances: 54%% meta, 44%% data)
+%s: Healthy (meta: 64 GB/128 GB Free, data: 4.0 TB/6.0 TB Free, bulk: 4.0 TB/6.0 TB Free) (imbalances: 54%% meta, 44%% data, 44%% bulk)
 `, healthyPool.Label),
 		},
 		"healthy no imbalances; verbose": {
 			pi: getTestPool(func(pi *daos.PoolInfo) *daos.PoolInfo {
 				pi.TierStats[0].Min = pi.TierStats[0].Max
 				pi.TierStats[1].Min = pi.TierStats[1].Max
+				pi.TierStats[2].Min = pi.TierStats[2].Max
 				return pi
 			}),
 			verbose: true,
 			expPrintStr: fmt.Sprintf(`
-%s: Healthy (meta: 64 GB/128 GB Free, data: 4.0 TB/6.0 TB Free)
+%s: Healthy (meta: 64 GB/128 GB Free, data: 4.0 TB/6.0 TB Free, bulk: 4.0 TB/6.0 TB Free)
 `, healthyPool.Label),
 		},
 	} {
@@ -350,7 +359,7 @@ System Information
   Fabric Provider: %s
   Access Points: ["%s0","%s1"]
 Pool Status
-  %s: Healthy (4.1 TB Free)
+  %s: Healthy (8.1 TB Free)
     Container Status
       %s: Healthy
 `, srvComp.Version, cliComp.BuildInfo, sysInfo.Name, sysInfo.Provider, hostBase, hostBase, healthyPool.Label, healthyContainer.ContainerLabel),
@@ -391,7 +400,7 @@ System Information
   Fabric Provider: %s
   Access Points: ["%s0","%s1"]
 Pool Status
-  %s: Healthy (4.1 TB Free)
+  %s: Healthy (8.1 TB Free)
     Container Status
       No containers in pool.
 `, srvComp.Version, cliComp.BuildInfo, sysInfo.Name, sysInfo.Provider, hostBase, hostBase, healthyPool.Label),

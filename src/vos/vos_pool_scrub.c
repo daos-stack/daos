@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -334,7 +334,8 @@ sc_should_evict(struct scrub_ctx *ctx)
 static bool
 sc_is_nvme(struct scrub_ctx *ctx)
 {
-	return bio_iov2media(ctx->sc_cur_biov) == DAOS_MEDIA_NVME;
+	return ((bio_iov2media(ctx->sc_cur_biov) == DAOS_MEDIA_NVME) ||
+		(bio_iov2media(ctx->sc_cur_biov) == DAOS_MEDIA_QLC));
 }
 
 static bool
@@ -525,7 +526,11 @@ sc_verify_obj_value(struct scrub_ctx *ctx, struct bio_iov *biov, daos_handle_t i
 	/* Fetch data */
 	iter = vos_hdl2iter(ih);
 	oiter = vos_iter2oiter(iter);
-	bio_ctx = vos_data_ioctxt(oiter->it_obj->obj_cont->vc_pool);
+	if (biov->bi_addr.ba_type == DAOS_MEDIA_QLC) {
+		bio_ctx = vos_bulk_data_ioctxt(oiter->it_obj->obj_cont->vc_pool);
+	} else {
+		bio_ctx = vos_data_ioctxt(oiter->it_obj->obj_cont->vc_pool);
+	}
 	umem = &oiter->it_obj->obj_cont->vc_pool->vp_umm;
 	rc = vos_media_read(bio_ctx, umem, biov->bi_addr, &data);
 

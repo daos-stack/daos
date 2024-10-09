@@ -79,6 +79,9 @@ extern struct dss_module_key vos_module_key;
 #define VOS_POOL_HHASH_BITS 10 /* Up to 1024 pools */
 #define VOS_CONT_HHASH_BITS 20 /* Up to 1048576 containers */
 
+#define VOS_BULK_BLK_SHIFT      16                          /* 64k */
+#define VOS_BULK_BLK_SZ         (1UL << VOS_BULK_BLK_SHIFT) /* bytes */
+
 #define VOS_BLK_SHIFT		12	/* 4k */
 #define VOS_BLK_SZ		(1UL << VOS_BLK_SHIFT) /* bytes */
 #define VOS_BLOB_HDR_BLKS	1	/* block */
@@ -117,6 +120,12 @@ enum {
 #define VOS_MW_NVME_THRESH	256		/* 256 * VOS_BLK_SZ = 1MB */
 
 /*
+ * Default size (in blocks) threshold for merging QLC NVMe records, we choose
+ * 16 blocks as default value since the default DFS chunk size is 1MB.
+ */
+#define VOS_MW_QLC_THRESH       16 /* 16 * VOS_BULK_BLK_SZ = 1MB */
+
+/*
  * Aggregation/Discard ULT yield when certain amount of credits consumed.
  *
  * More credits are used in tight mode to reduce re-probe on iterating;
@@ -142,11 +151,19 @@ enum {
 
 extern unsigned int vos_agg_nvme_thresh;
 extern bool vos_dkey_punch_propagate;
+extern unsigned int    vos_agg_qlc_thresh;
 
 static inline uint32_t vos_byte2blkcnt(uint64_t bytes)
 {
 	D_ASSERT(bytes != 0);
 	return (bytes + VOS_BLK_SZ - 1) >> VOS_BLK_SHIFT;
+}
+
+static inline uint32_t
+vos_bulk_byte2blkcnt(uint64_t bytes)
+{
+	D_ASSERT(bytes != 0);
+	return (bytes + VOS_BULK_BLK_SZ - 1) >> VOS_BULK_BLK_SHIFT;
 }
 
 static inline uint64_t vos_byte2blkoff(uint64_t bytes)
@@ -157,6 +174,15 @@ static inline uint64_t vos_byte2blkoff(uint64_t bytes)
 	return bytes >> VOS_BLK_SHIFT;
 }
 
+static inline uint64_t
+vos_bulk_byte2blkoff(uint64_t bytes)
+{
+	D_ASSERT(bytes != 0);
+	D_ASSERTF((bytes >> VOS_BULK_BLK_SHIFT) > 0, "" DF_U64 "\n", bytes);
+	D_ASSERTF(!(bytes & ((uint64_t)VOS_BULK_BLK_SZ - 1)), "" DF_U64 "\n", bytes);
+	return bytes >> VOS_BULK_BLK_SHIFT;
+}
+
 static inline void
 agg_reserve_space(daos_size_t *rsrvd)
 {
@@ -164,6 +190,7 @@ agg_reserve_space(daos_size_t *rsrvd)
 
 	rsrvd[DAOS_MEDIA_SCM]	+= size;
 	rsrvd[DAOS_MEDIA_NVME]	+= size;
+	rsrvd[DAOS_MEDIA_QLC] += size;
 }
 
 enum {
@@ -221,8 +248,10 @@ vos_gc_metrics_init(struct vos_gc_metrics *vc_metrics, const char *path, int tgt
 struct vos_space_metrics {
 	struct d_tm_node_t	*vsm_scm_used;		/* SCM space used */
 	struct d_tm_node_t	*vsm_nvme_used;		/* NVMe space used */
+	struct d_tm_node_t      *vsm_qlc_used;          /* QLC NVMe space used */
 	struct d_tm_node_t      *vsm_scm_total;         /* SCM space total */
 	struct d_tm_node_t      *vsm_nvme_total;        /* NVMe space total */
+	struct d_tm_node_t      *vsm_qlc_total;         /* QLC NVMe space total */
 	uint64_t		 vsm_last_update_ts;	/* Timeout counter */
 };
 
@@ -243,6 +272,7 @@ void vos_wal_metrics_init(struct vos_wal_metrics *vw_metrics, const char *path, 
 
 struct vos_pool_metrics {
 	void			*vp_vea_metrics;
+	void                    *vp_qlc_vea_metrics; /* for QLC vea allocator */
 	struct vos_agg_metrics	 vp_agg_metrics;
 	struct vos_gc_metrics    vp_gc_metrics;
 	struct vos_space_metrics vp_space_metrics;
@@ -294,6 +324,8 @@ struct vos_pool {
 	struct bio_io_context	*vp_dummy_ioctxt;
 	/** In-memory free space tracking for NVMe device */
 	struct vea_space_info	*vp_vea_info;
+	/** In-memory free space tracking for QLC NVMe device */
+	struct vea_space_info   *vp_qlc_vea_info;
 	/** Reserved sys space (for space reclaim, rebuild, etc.) in bytes */
 	daos_size_t		vp_space_sys[DAOS_MEDIA_MAX];
 	/** Held space by in-flight updates. In bytes */
@@ -308,6 +340,8 @@ struct vos_pool {
 	uint32_t		 vp_dtx_committed_count;
 	/** Data threshold size */
 	uint32_t		 vp_data_thresh;
+	/** Bulk_data threshold size */
+	uint32_t                 vp_bulk_data_thresh;
 	/** Space (in percentage) reserved for rebuild */
 	unsigned int		 vp_space_rb;
 };
@@ -346,9 +380,14 @@ struct vos_container {
 	d_list_t		vc_gc_link;
 	/**
 	 * Corresponding in-memory block allocator hints for the
-	 * durable hints in vos_cont_df
+	 * durable hints for data (common NVMe) in vos_cont_df
 	 */
 	struct vea_hint_context	*vc_hint_ctxt[VOS_IOS_CNT];
+	/**
+	 * Corresponding in-memory block allocator hints for the
+	 * durable hints for bulk_data (QLC NVMe) in vos_cont_df
+	 */
+	struct vea_hint_context *vc_bulk_hint_ctxt[VOS_IOS_CNT];
 	/* Current ongoing aggregation ERR */
 	daos_epoch_range_t	vc_epr_aggregation;
 	/* Current ongoing discard EPR */
@@ -1269,6 +1308,7 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool is_sysdb);
  * \param[in]	dth_in		The dtx handle, if applicable
  * \param[in]	rsrvd_scmp	Pointer to reserved scm, will be consumed
  * \param[in]	nvme_exts	List of resreved nvme extents
+ * \param[in]	qlc_exts	List of resreved qlc extents for bulk_data
  * \param[in]	started		Only applies when dth_in is invalid,
  *				indicates if vos_tx_begin was successful
  * \param[in]	biod		bio_desc for data I/O
@@ -1278,8 +1318,8 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool is_sysdb);
  */
 int
 vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
-	   struct umem_rsrvd_act **rsrvd_actp, d_list_t *nvme_exts, bool started,
-	   struct bio_desc *biod, int err);
+	   struct umem_rsrvd_act **rsrvd_actp, d_list_t *nvme_exts, d_list_t *qlc_exts,
+	   bool started, struct bio_desc *biod, int err);
 
 /* vos_obj.c */
 int
@@ -1311,12 +1351,12 @@ vos_reserve_scm(struct vos_container *cont, struct umem_rsrvd_act *rsrvd_scm,
 int
 vos_publish_scm(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_scm, bool publish);
 int
-vos_reserve_blocks(struct vos_container *cont, d_list_t *rsrvd_nvme,
-		   daos_size_t size, enum vos_io_stream ios, uint64_t *off);
+vos_reserve_blocks(struct vos_container *cont, d_list_t *rsrvd_list, daos_size_t size, bool is_bulk,
+		   enum vos_io_stream ios, uint64_t *off);
 
 int
 vos_publish_blocks(struct vos_container *cont, d_list_t *blk_list, bool publish,
-		   enum vos_io_stream ios);
+		   enum vos_io_stream ios, bool is_bulk);
 
 static inline struct umem_instance *
 vos_pool2umm(struct vos_pool *pool)
@@ -1695,9 +1735,9 @@ static inline int
 vos_media_read(struct bio_io_context *ioc, struct umem_instance *umem,
 	       bio_addr_t addr, d_iov_t *iov_out)
 {
-	if (addr.ba_type == DAOS_MEDIA_NVME) {
+	if (addr.ba_type == DAOS_MEDIA_NVME || addr.ba_type == DAOS_MEDIA_QLC) {
 		D_ASSERT(ioc != NULL);
-		return bio_read(ioc, addr, iov_out);
+		return bio_data_read(ioc, addr, iov_out);
 	}
 
 	D_ASSERT(umem != NULL);
@@ -1723,6 +1763,20 @@ vos_data_ioctxt(struct vos_pool *vp)
 	/* Use dummy I/O context when data blob doesn't exist */
 	D_ASSERT(vp->vp_dummy_ioctxt != NULL);
 	return vp->vp_dummy_ioctxt;
+}
+
+static inline struct bio_io_context *
+vos_bulk_data_ioctxt(struct vos_pool *vp)
+{
+	struct bio_meta_context *mc = vos_pool2mc(vp);
+
+	/* when bulk_data used, then means NVMe SSD used, so
+	 * not use dummy_ioctxt. */
+	if (mc != NULL && bio_mc2ioc(mc, SMD_DEV_TYPE_BULK) != NULL) {
+		return bio_mc2ioc(mc, SMD_DEV_TYPE_BULK);
+	} else {
+		return NULL;
+	}
 }
 
 /*
@@ -1810,19 +1864,26 @@ key_tree_is_evt(int flags, enum vos_tree_class tclass, struct vos_krec_df *krec)
 				     (krec->kr_bmap & KREC_BF_NO_AKEY)));
 }
 
-static inline bool
-vos_io_scm(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size, enum vos_io_stream ios)
+static inline enum daos_media_type_t
+vos_io_find_media(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size,
+		  enum vos_io_stream ios)
 {
+	/* if no vp_vea_info, then vp_qlc_vea_info should also be null */
 	if (pool->vp_vea_info == NULL)
-		return true;
+		return DAOS_MEDIA_SCM;
 
 	if (pool->vp_data_thresh == 0)
-		return true;
+		return DAOS_MEDIA_SCM;
 
 	if (size < pool->vp_data_thresh)
-		return true;
+		return DAOS_MEDIA_SCM;
 
-	return false;
+	/* if no qlc media, then it should store on common NVMe media */
+	if (pool->vp_qlc_vea_info == NULL || pool->vp_bulk_data_thresh == 0 ||
+	    (size >= pool->vp_data_thresh && size < pool->vp_bulk_data_thresh))
+		return DAOS_MEDIA_NVME;
+
+	return DAOS_MEDIA_QLC;
 }
 
 /**

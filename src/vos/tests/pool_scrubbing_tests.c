@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -225,8 +225,8 @@ sts_ctx_pool_init(struct sts_context *ctx)
 	}
 
 	/* Use pool size as blob size for this moment. */
-	rc = vos_pool_create(pmem_file, ctx->tsc_pool_uuid, 0, ctx->tsc_nvme_size, 0,
-			     0 /* version */, &poh);
+	rc = vos_pool_create(pmem_file, ctx->tsc_pool_uuid, 0, ctx->tsc_nvme_size, 0 /* qlc_size */,
+			     0, 0 /* version */, &poh);
 	assert_success(rc);
 
 	ctx->tsc_poh = poh;

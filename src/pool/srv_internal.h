@@ -100,6 +100,7 @@ struct pool_iv_prop {
 	uint32_t	pip_reint_mode;
 	uint32_t         pip_svc_ops_enabled;
 	uint32_t         pip_svc_ops_entry_age;
+	uint64_t         pip_bulk_data_thresh;
 	char		pip_iv_buf[0];
 };
 

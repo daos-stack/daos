@@ -3411,9 +3411,11 @@ statfs(const char *pathname, struct statfs *sfs)
 		D_GOTO(out_err, rc = daos_der2errno(rc));
 
 	sfs->f_blocks = info.pi_space.ps_space.s_total[DAOS_MEDIA_SCM] +
-			info.pi_space.ps_space.s_total[DAOS_MEDIA_NVME];
+			info.pi_space.ps_space.s_total[DAOS_MEDIA_NVME] +
+			info.pi_space.ps_space.s_total[DAOS_MEDIA_QLC];
 	sfs->f_bfree = info.pi_space.ps_space.s_free[DAOS_MEDIA_SCM] +
-		       info.pi_space.ps_space.s_free[DAOS_MEDIA_NVME];
+		       info.pi_space.ps_space.s_free[DAOS_MEDIA_NVME] +
+		       info.pi_space.ps_space.s_free[DAOS_MEDIA_QLC];
 	sfs->f_bsize  = 1;
 	sfs->f_files  = -1;
 	sfs->f_ffree  = -1;
@@ -3468,9 +3470,11 @@ fstatfs(int fd, struct statfs *sfs)
 	}
 
 	sfs->f_blocks = info.pi_space.ps_space.s_total[DAOS_MEDIA_SCM] +
-			info.pi_space.ps_space.s_total[DAOS_MEDIA_NVME];
+			info.pi_space.ps_space.s_total[DAOS_MEDIA_NVME] +
+			info.pi_space.ps_space.s_total[DAOS_MEDIA_QLC];
 	sfs->f_bfree = info.pi_space.ps_space.s_free[DAOS_MEDIA_SCM] +
-		       info.pi_space.ps_space.s_free[DAOS_MEDIA_NVME];
+		       info.pi_space.ps_space.s_free[DAOS_MEDIA_NVME] +
+		       info.pi_space.ps_space.s_free[DAOS_MEDIA_QLC];
 	sfs->f_bsize  = 1;
 	sfs->f_files  = -1;
 	sfs->f_ffree  = -1;

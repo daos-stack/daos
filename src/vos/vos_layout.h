@@ -142,6 +142,10 @@ struct vos_pool_df {
 	struct vea_space_df			pd_vea_df;
 	/** GC bins for container/object/dkey... */
 	struct vos_gc_bin_df			pd_gc_bins[GC_MAX];
+	/** Total space in bytes on QLC NVMe media */
+	uint64_t                                pd_qlc_sz;
+	/** Free space tracking for QLC NVMe device */
+	struct vea_space_df                     pd_qlc_vea_df;
 };
 
 /**
@@ -270,12 +274,14 @@ struct vos_cont_df {
 	umem_off_t			cd_dtx_committed_head;
 	/** The committed DTXs blob tail. */
 	umem_off_t			cd_dtx_committed_tail;
-	/** Allocation hints for block allocator. */
+	/** Allocation hints for block allocator. e.g., common NVMe SSD */
 	struct vea_hint_df		cd_hint_df[VOS_IOS_CNT];
 	/** GC bins for object/dkey...Don't need GC_CONT entry */
 	struct vos_gc_bin_df		cd_gc_bins[GC_CONT];
 	/* The epoch for the most new DTX entry that is aggregated. */
 	uint64_t			cd_newest_aggregated;
+	/** Allocation hints for bulk data block allocator. e.g., QLC NVMe SSD */
+	struct vea_hint_df              cd_bulk_hint_df[VOS_IOS_CNT];
 };
 
 /* Assume cd_dtx_active_tail is just after cd_dtx_active_head. */

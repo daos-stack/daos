@@ -166,7 +166,8 @@ CRT_RPC_DECLARE(mgmt_pool_list, DAOS_ISEQ_MGMT_POOL_LIST, DAOS_OSEQ_MGMT_POOL_LI
 	((uuid_t)		(tc_pool_uuid)		CRT_VAR) \
 	((d_string_t)		(tc_tgt_dev)		CRT_VAR) \
 	((daos_size_t)		(tc_scm_size)		CRT_VAR) \
-	((daos_size_t)		(tc_nvme_size)		CRT_VAR)
+	((daos_size_t)		(tc_nvme_size)		CRT_VAR) \
+	((daos_size_t)		(tc_qlc_size)		CRT_VAR)
 
 #define DAOS_OSEQ_MGMT_TGT_CREATE /* output fields */		   \
 	((d_rank_t)		(tc_ranks)		CRT_ARRAY) \

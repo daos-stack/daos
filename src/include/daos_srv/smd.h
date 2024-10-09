@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -26,7 +26,8 @@ enum smd_dev_type {
 	SMD_DEV_TYPE_DATA = 0,
 	SMD_DEV_TYPE_META,
 	SMD_DEV_TYPE_WAL,
-	SMD_DEV_TYPE_MAX = 3,
+	SMD_DEV_TYPE_BULK, /* add for big data storage media, e.g., QLC SSD. */
+	SMD_DEV_TYPE_MAX = 4,
 };
 
 static inline unsigned int
@@ -39,6 +40,8 @@ smd_dev_type2role(enum smd_dev_type st)
 		return NVME_ROLE_META;
 	case SMD_DEV_TYPE_WAL:
 		return NVME_ROLE_WAL;
+	case SMD_DEV_TYPE_BULK:
+		return NVME_ROLE_BULK;
 	default:
 		D_ASSERT(0);
 		return NVME_ROLE_DATA;

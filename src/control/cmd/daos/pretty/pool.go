@@ -25,6 +25,8 @@ func getTierNameText(tierIdx int) string {
 		return fmt.Sprintf("- Storage tier %d (SCM):", tierIdx)
 	case int(daos.StorageMediaTypeNvme):
 		return fmt.Sprintf("- Storage tier %d (NVMe):", tierIdx)
+	case int(daos.StorageMediaTypeQlc):
+		return fmt.Sprintf("- Storage tier %d (QLC):", tierIdx)
 	default:
 		return fmt.Sprintf("- Storage tier %d (unknown):", tierIdx)
 	}

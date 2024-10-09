@@ -561,7 +561,7 @@ ds_mgmt_smd_list_pools(Ctl__SmdPoolResp *resp)
 	struct smd_pool_info	*pool_info = NULL, *tmp;
 	d_list_t		 pool_list;
 	int			 pool_list_cnt = 0;
-	int			 i = 0, j;
+	int                      i             = 0, j, k;
 	int			 rc = 0;
 
 	D_DEBUG(DB_MGMT, "Querying SMD pool list\n");
@@ -604,9 +604,9 @@ ds_mgmt_smd_list_pools(Ctl__SmdPoolResp *resp)
 		for (j = 0; j < pool_info->spi_tgt_cnt[SMD_DEV_TYPE_DATA]; j++)
 			resp->pools[i]->tgt_ids[j] = pool_info->spi_tgts[SMD_DEV_TYPE_DATA][j];
 
-		resp->pools[i]->n_blobs = pool_info->spi_tgt_cnt[SMD_DEV_TYPE_DATA];
-		D_ALLOC(resp->pools[i]->blobs,
-			sizeof(uint64_t) * pool_info->spi_tgt_cnt[SMD_DEV_TYPE_DATA]);
+		resp->pools[i]->n_blobs = pool_info->spi_tgt_cnt[SMD_DEV_TYPE_DATA] +
+					  pool_info->spi_tgt_cnt[SMD_DEV_TYPE_BULK];
+		D_ALLOC(resp->pools[i]->blobs, sizeof(uint64_t) * resp->pools[i]->n_blobs);
 		if (resp->pools[i]->blobs == NULL) {
 			rc = -DER_NOMEM;
 			break;
@@ -614,6 +614,8 @@ ds_mgmt_smd_list_pools(Ctl__SmdPoolResp *resp)
 		for (j = 0; j < pool_info->spi_tgt_cnt[SMD_DEV_TYPE_DATA]; j++)
 			resp->pools[i]->blobs[j] = pool_info->spi_blobs[SMD_DEV_TYPE_DATA][j];
 
+		for (k = 0; k < pool_info->spi_tgt_cnt[SMD_DEV_TYPE_BULK]; k++)
+			resp->pools[i]->blobs[j + k] = pool_info->spi_blobs[SMD_DEV_TYPE_BULK][k];
 
 		d_list_del(&pool_info->spi_link);
 		/* Frees spi_tgts, spi_blobs, and pool_info */

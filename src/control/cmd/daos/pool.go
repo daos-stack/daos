@@ -289,6 +289,7 @@ func convertPoolInfo(pinfo *C.daos_pool_info_t) (*daos.PoolInfo, error) {
 		poolInfo.TierStats = []*daos.StorageUsageStats{
 			convertPoolSpaceInfo(&pinfo.pi_space, C.DAOS_MEDIA_SCM),
 			convertPoolSpaceInfo(&pinfo.pi_space, C.DAOS_MEDIA_NVME),
+			convertPoolSpaceInfo(&pinfo.pi_space, C.DAOS_MEDIA_QLC),
 		}
 	}
 
@@ -392,6 +393,11 @@ func convertPoolTargetInfo(ptinfo *C.daos_target_info_t) (*daos.PoolQueryTargetI
 			Total:     uint64(ptinfo.ta_space.s_total[C.DAOS_MEDIA_NVME]),
 			Free:      uint64(ptinfo.ta_space.s_free[C.DAOS_MEDIA_NVME]),
 			MediaType: C.DAOS_MEDIA_NVME,
+		},
+		{
+			Total:     uint64(ptinfo.ta_space.s_total[C.DAOS_MEDIA_QLC]),
+			Free:      uint64(ptinfo.ta_space.s_free[C.DAOS_MEDIA_QLC]),
+			MediaType: C.DAOS_MEDIA_QLC,
 		},
 	}
 

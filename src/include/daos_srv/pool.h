@@ -64,6 +64,8 @@ struct ds_pool {
 	crt_group_t	       *sp_group;
 	/* Size threshold to store data on backend bdev */
 	uint32_t		sp_data_thresh;
+	/* Size threshold to store bulk data on backend bdev */
+	uint32_t                 sp_bulk_data_thresh;
 	ABT_mutex		sp_mutex;
 	ABT_cond		sp_fetch_hdls_cond;
 	ABT_cond		sp_fetch_hdls_done_cond;

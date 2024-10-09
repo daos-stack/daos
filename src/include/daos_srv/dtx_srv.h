@@ -165,6 +165,8 @@ struct dtx_handle {
 	void				*dth_local_stub;
 	/* NVME extents to release */
 	d_list_t			 dth_deferred_nvme;
+	/* QLC NVME extents to release */
+	d_list_t                          dth_deferred_qlc;
 	/* Committed or comittable DTX list */
 	d_list_t			 dth_share_cmt_list;
 	/* Aborted DTX list */
@@ -242,7 +244,7 @@ struct dtx_leader_handle {
 	struct dtx_sub_status		*dlh_subs;
 };
 
-_Static_assert(sizeof(struct dtx_leader_handle) == 360,
+_Static_assert(sizeof(struct dtx_leader_handle) == 392,
 	       "The size of this structure may be tracked by other modules e.g. telemetry");
 
 struct dtx_stat {

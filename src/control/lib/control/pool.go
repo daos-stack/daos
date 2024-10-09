@@ -233,7 +233,7 @@ type maxPoolSizeGetter func() (uint64, uint64, error)
 
 func poolCreateReqChkSizes(log debugLogger, getMaxPoolSz maxPoolSizeGetter, req *PoolCreateReq) error {
 	hasTotBytes := req.TotalBytes > 0
-	hasTierBytes := len(req.TierBytes) == 2
+	hasTierBytes := len(req.TierBytes) == 3
 	hasNoTierBytes := len(req.TierBytes) == 0
 	hasTierRatio := len(req.TierRatio) == 2
 	hasNoTierRatio := len(req.TierRatio) == 0
@@ -252,6 +252,7 @@ func poolCreateReqChkSizes(log debugLogger, getMaxPoolSz maxPoolSizeGetter, req 
 		}
 		// Storage tier ratios and total pool size given, distribution of space across
 		// ranks to be calculated on the server side (auto-total-size).
+		// will set the newly added Tier entry for QLC on server side for this case
 		log.Debugf("auto-total-size pool create mode: %+v", req)
 
 	case hasNoTierBytes && hasTierRatio && !hasTotBytes:
@@ -269,9 +270,11 @@ func poolCreateReqChkSizes(log debugLogger, getMaxPoolSz maxPoolSizeGetter, req 
 		if err != nil {
 			return err
 		}
+		/* no QLC Tier entry for this case, do it just to be compatible with backend interface */
 		req.TierBytes = []uint64{
 			uint64(float64(scmBytes) * availRatio),
 			uint64(float64(nvmeBytes) * availRatio),
+			uint64(0), /* no QLC in this case and fill the Tier entry for QLC to 0. */
 		}
 		if req.TierBytes[0] == 0 {
 			return errors.Errorf("Not enough SCM storage available with ratio %d%%: "+
@@ -602,6 +605,11 @@ func convertPoolTargetInfo(pbInfo *mgmtpb.PoolQueryTargetInfo) (*daos.PoolQueryT
 			Total:     uint64(pbInfo.Space[daos.StorageMediaTypeNvme].Total),
 			Free:      uint64(pbInfo.Space[daos.StorageMediaTypeNvme].Free),
 			MediaType: daos.StorageMediaTypeNvme,
+		},
+		{
+			Total:     uint64(pbInfo.Space[daos.StorageMediaTypeQlc].Total),
+			Free:      uint64(pbInfo.Space[daos.StorageMediaTypeQlc].Free),
+			MediaType: daos.StorageMediaTypeQlc,
 		},
 	}
 

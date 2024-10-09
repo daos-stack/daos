@@ -202,6 +202,8 @@ media2str(unsigned int media)
 		return "SCM";
 	case DAOS_MEDIA_NVME:
 		return "NVMe";
+	case DAOS_MEDIA_QLC:
+		return "QLC";
 	default:
 		return "Unknown";
 	}
@@ -295,7 +297,8 @@ wal_tst_pool_cont(void **state)
 	assert_int_equal(rc, 0);
 
 	/* Create pool: Create meta & WAL blobs, write meta & WAL header */
-	rc = vos_pool_create(pool_name, pool_id, 0, VPOOL_1G, 0, 0 /* version */, NULL);
+	rc = vos_pool_create(pool_name, pool_id, 0, VPOOL_1G, 0 /* qlc_size */, 0, 0 /* version */,
+			     NULL);
 	assert_int_equal(rc, 0);
 
 	/* Create cont: write WAL */

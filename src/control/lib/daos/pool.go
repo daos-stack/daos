@@ -351,6 +351,8 @@ const (
 	StorageMediaTypeScm = StorageMediaType(mgmtpb.StorageMediaType_SCM)
 	// StorageMediaTypeNvme indicates that the media is NVMe SSD
 	StorageMediaTypeNvme = StorageMediaType(mgmtpb.StorageMediaType_NVME)
+	// StorageMediaTypeQlc indicates that the media is QLC type SSD
+	StorageMediaTypeQlc = StorageMediaType(mgmtpb.StorageMediaType_QLC)
 )
 
 func (smt StorageMediaType) String() string {

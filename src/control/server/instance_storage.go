@@ -83,7 +83,7 @@ func (ei *EngineInstance) checkScmNeedFormat() (bool, error) {
 			return false, err
 		}
 		if cfg.Class != "ram" {
-			return false, storage.FaultBdevConfigRolesWithDCPM
+			return false, storage.FaultScmCtrlMetaPathWithDCPM
 		}
 		if !ei.storage.BdevRoleMetaConfigured() {
 			return false, storage.FaultBdevConfigControlMetadataNoRoles

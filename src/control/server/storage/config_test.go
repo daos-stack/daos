@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -505,7 +505,7 @@ storage:
   class: nvme
   bdev_list: [0000:85:00.0,0000:86:00.0]
   bdev_roles: [data]`,
-			expValidateErr: FaultBdevConfigBadNrTiersWithRoles,
+			expValidateErr: FaultBdevConfigBadNrRoles("Data", 2, 1),
 		},
 		"roles specified; ram scm class": {
 			input: `

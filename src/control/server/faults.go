@@ -90,6 +90,17 @@ func FaultPoolNvmeTooSmall(minTotal, minNVMe uint64) *fault.Fault {
 	)
 }
 
+func FaultPoolQlcTooSmall(minTotal, minQlc uint64) *fault.Fault {
+	return serverFault(
+		code.ServerPoolQlcTooSmall,
+		fmt.Sprintf("requested QLC NVMe capacity too small (min %s per target)",
+			humanize.IBytes(engine.QlcMinBytesPerTarget)),
+		fmt.Sprintf("retry the request with a pool size of at least %s, with at least %s QLC NVMe",
+			humanize.Bytes(minTotal+humanize.MiByte), humanize.Bytes(minQlc+humanize.MiByte),
+		),
+	)
+}
+
 func FaultPoolScmTooSmall(minTotal, minSCM uint64) *fault.Fault {
 	return serverFault(
 		code.ServerPoolScmTooSmall,

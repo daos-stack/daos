@@ -212,7 +212,7 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 				Ranks:      []uint32{0, 1},
 			},
 			expOut: &mgmtpb.PoolCreateReq{
-				TierBytes: []uint64{defaultScmBytes / 2, defaultNvmeBytes / 2},
+				TierBytes: []uint64{defaultScmBytes / 2, defaultNvmeBytes / 2, 0},
 				Ranks:     []uint32{0, 1},
 			},
 		},
@@ -241,14 +241,14 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 				Ranks:      []uint32{0},
 			},
 			expOut: &mgmtpb.PoolCreateReq{
-				TierBytes: []uint64{defaultTotal, 0},
+				TierBytes: []uint64{defaultTotal, 0, 0},
 				Ranks:     []uint32{0},
 			},
 		},
 		"tier bytes set for both (no NVMe in config)": {
 			disableNVMe: true,
 			in: &mgmtpb.PoolCreateReq{
-				TierBytes: []uint64{defaultScmBytes - 1, defaultNvmeBytes - 1},
+				TierBytes: []uint64{defaultScmBytes - 1, defaultNvmeBytes - 1, 0},
 				Ranks:     []uint32{0},
 			},
 			expErr: errors.New("config has zero bdevs"),
@@ -256,34 +256,34 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 		"tier bytes set for scm only (no NVMe in config)": {
 			disableNVMe: true,
 			in: &mgmtpb.PoolCreateReq{
-				TierBytes: []uint64{defaultTotal, 0},
+				TierBytes: []uint64{defaultTotal, 0, 0},
 				Ranks:     []uint32{0},
 			},
 			expOut: &mgmtpb.PoolCreateReq{
-				TierBytes: []uint64{defaultTotal, 0},
+				TierBytes: []uint64{defaultTotal, 0, 0},
 				Ranks:     []uint32{0},
 			},
 		},
 		"manual sizing": {
 			in: &mgmtpb.PoolCreateReq{
-				TierBytes: []uint64{defaultScmBytes - 1, defaultNvmeBytes - 1},
+				TierBytes: []uint64{defaultScmBytes - 1, defaultNvmeBytes - 1, 0},
 				Ranks:     []uint32{0, 1},
 			},
 			expOut: &mgmtpb.PoolCreateReq{
-				TierBytes: []uint64{defaultScmBytes - 1, defaultNvmeBytes - 1},
+				TierBytes: []uint64{defaultScmBytes - 1, defaultNvmeBytes - 1, 0},
 				Ranks:     []uint32{0, 1},
 			},
 		},
 		"manual sizing (not enough SCM)": {
 			in: &mgmtpb.PoolCreateReq{
-				TierBytes: []uint64{scmTooSmallReq, 0},
+				TierBytes: []uint64{scmTooSmallReq, 0, 0},
 				Ranks:     []uint32{0},
 			},
 			expErr: FaultPoolScmTooSmall(scmTooSmallReq, minPoolScm),
 		},
 		"manual sizing (not enough NVMe)": {
 			in: &mgmtpb.PoolCreateReq{
-				TierBytes: []uint64{defaultScmBytes, nvmeTooSmallReq},
+				TierBytes: []uint64{defaultScmBytes, nvmeTooSmallReq, 0},
 				Ranks:     []uint32{0},
 			},
 			expErr: FaultPoolNvmeTooSmall(nvmeTooSmallReq, minPoolNvme),
@@ -353,7 +353,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			targetCount: 8,
 			req: &mgmtpb.PoolCreateReq{
 				Uuid:       test.MockUUID(1),
-				TierBytes:  []uint64{100 * humanize.GiByte, 0},
+				TierBytes:  []uint64{100 * humanize.GiByte, 0, 0},
 				Properties: testPoolLabelProp(),
 			},
 			expErr: errors.New("not an access point"),
@@ -363,7 +363,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			targetCount: 8,
 			req: &mgmtpb.PoolCreateReq{
 				Uuid:       test.MockUUID(1),
-				TierBytes:  []uint64{100 * humanize.GiByte, 0},
+				TierBytes:  []uint64{100 * humanize.GiByte, 0, 0},
 				Properties: testPoolLabelProp(),
 			},
 			expErr: errors.New("not an access point"),
@@ -372,7 +372,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			targetCount: 8,
 			req: &mgmtpb.PoolCreateReq{
 				Uuid:       test.MockUUID(1),
-				TierBytes:  []uint64{100 * humanize.GiByte, 0},
+				TierBytes:  []uint64{100 * humanize.GiByte, 0, 0},
 				Properties: testPoolLabelProp(),
 			},
 			expErr: errors.New("send failure"),
@@ -381,7 +381,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			targetCount: 0,
 			req: &mgmtpb.PoolCreateReq{
 				Uuid:       test.MockUUID(1),
-				TierBytes:  []uint64{100 * humanize.GiByte, 0},
+				TierBytes:  []uint64{100 * humanize.GiByte, 0, 0},
 				Properties: testPoolLabelProp(),
 			},
 			expErr: errors.New("zero target count"),
@@ -390,7 +390,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			targetCount: 8,
 			req: &mgmtpb.PoolCreateReq{
 				Uuid:       test.MockUUID(1),
-				TierBytes:  []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
+				TierBytes:  []uint64{100 * humanize.GiByte, 10 * humanize.TByte, 0},
 				Properties: testPoolLabelProp(),
 			},
 			setupMockDrpc: func(svc *mgmtSvc, err error) {
@@ -405,15 +405,15 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			targetCount: 8,
 			req: &mgmtpb.PoolCreateReq{
 				Uuid:       test.MockUUID(1),
-				TierBytes:  []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
+				TierBytes:  []uint64{100 * humanize.GiByte, 10 * humanize.TByte, 0},
 				Properties: testPoolLabelProp(),
 			},
 			drpcRet: &mgmtpb.PoolCreateResp{
-				TierBytes: []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
+				TierBytes: []uint64{100 * humanize.GiByte, 10 * humanize.TByte, 0},
 				TgtRanks:  []uint32{0, 1},
 			},
 			expResp: &mgmtpb.PoolCreateResp{
-				TierBytes: []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
+				TierBytes: []uint64{100 * humanize.GiByte, 10 * humanize.TByte, 0},
 				TgtRanks:  []uint32{0, 1},
 			},
 		},
@@ -424,6 +424,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				TierBytes: []uint64{
 					engine.ScmMinBytesPerTarget * 8,
 					engine.NvmeMinBytesPerTarget * 8,
+					0,
 				},
 				Properties: testPoolLabelProp(),
 			},
@@ -431,6 +432,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				TierBytes: []uint64{
 					engine.ScmMinBytesPerTarget * 8,
 					engine.NvmeMinBytesPerTarget * 8,
+					0,
 				},
 				TgtRanks: []uint32{0, 1},
 			},
@@ -438,6 +440,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				TierBytes: []uint64{
 					engine.ScmMinBytesPerTarget * 8,
 					engine.NvmeMinBytesPerTarget * 8,
+					0,
 				},
 				TgtRanks: []uint32{0, 1},
 			},
@@ -454,6 +457,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				TierBytes: []uint64{
 					(100 * humanize.GiByte * DefaultPoolScmRatio) / 2,
 					(100 * humanize.GiByte * DefaultPoolNvmeRatio) / 2,
+					0,
 				},
 				TgtRanks: []uint32{0, 1},
 			},
@@ -461,6 +465,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				TierBytes: []uint64{
 					(100 * humanize.GiByte * DefaultPoolScmRatio) / 2,
 					(100 * humanize.GiByte * DefaultPoolNvmeRatio) / 2,
+					0,
 				},
 				TgtRanks: []uint32{0, 1},
 			},
@@ -650,6 +655,7 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 	wantReq.TierBytes = []uint64{
 		uint64(float64(totalBytes)*DefaultPoolScmRatio) / 3,
 		uint64(float64(totalBytes)*DefaultPoolNvmeRatio) / 3,
+		0,
 	}
 	wantReq.TierRatio = nil
 
@@ -1316,7 +1322,7 @@ func TestServer_MgmtSvc_PoolExtend(t *testing.T) {
 		"successfully extended": {
 			req: &mgmtpb.PoolExtendReq{Id: mockUUID, Ranks: []uint32{1}},
 			expResp: &mgmtpb.PoolExtendResp{
-				TierBytes: []uint64{scmAllocation, nvmeAllocation},
+				TierBytes: []uint64{scmAllocation, nvmeAllocation, 0},
 			},
 		},
 	} {

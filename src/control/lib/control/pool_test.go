@@ -403,7 +403,7 @@ func TestControl_PoolCreateReq_Convert(t *testing.T) {
 func TestControl_poolCreateReqChkSizes(t *testing.T) {
 	tierRatios := []float64{0.06, 0.94}
 	sameTierRatios := []float64{0.80, 0.80}
-	tierBytes := []uint64{humanize.GiByte * 6, humanize.GiByte * 94}
+	tierBytes := []uint64{humanize.GiByte * 6, humanize.GiByte * 94, 0}
 
 	for name, tc := range map[string]struct {
 		req              PoolCreateReq
@@ -446,7 +446,7 @@ func TestControl_poolCreateReqChkSizes(t *testing.T) {
 			getMaxScm:        100 * humanize.GiByte,
 			expNrGetMaxCalls: 1,
 			expReq: &PoolCreateReq{
-				TierBytes: []uint64{80 * humanize.GiByte, 0},
+				TierBytes: []uint64{80 * humanize.GiByte, 0, 0},
 			},
 		},
 		"auto-percentage-size": {
@@ -457,7 +457,7 @@ func TestControl_poolCreateReqChkSizes(t *testing.T) {
 			getMaxNvme:       200 * humanize.GiByte,
 			expNrGetMaxCalls: 1,
 			expReq: &PoolCreateReq{
-				TierBytes: []uint64{80 * humanize.GiByte, 160 * humanize.GiByte},
+				TierBytes: []uint64{80 * humanize.GiByte, 160 * humanize.GiByte, 0},
 			},
 		},
 		"manual-size": {
@@ -514,6 +514,7 @@ func TestControl_PoolCreate(t *testing.T) {
 		TierBytes: []uint64{
 			humanize.GiByte * 6,
 			humanize.GiByte * 10,
+			0,
 		},
 	}
 	customPoolUUID := test.MockPoolUUID()
