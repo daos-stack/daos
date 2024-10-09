@@ -439,10 +439,11 @@ class ErasureCodeMdtest(MdtestBase):
         # Write the MDtest data
         self.execute_mdtest(self.out_queue)
 
-    def start_online_mdtest(self):
-        """Run MDtest operation with thread in background.
+    def start_online_mdtest(self, ranks_to_stop):
+        """Run mdtest and stop ranks while mdtest is running.
 
-        Trigger the server failure while MDtest is running
+        Args:
+            ranks_to_stop (list): ranks to stop while mdtest is running
         """
         # Create the MDtest run thread
         job = threading.Thread(target=self.write_single_mdtest_dataset)
@@ -450,19 +451,15 @@ class ErasureCodeMdtest(MdtestBase):
         # Launch the MDtest thread
         job.start()
 
-        # Kill the server rank while IO operation in progress
-        if self.set_online_rebuild:
-            time.sleep(30)
-            # Kill the server rank
-            if self.rank_to_kill is not None:
-                self.server_managers[0].stop_ranks([self.rank_to_kill],
-                                                   self.d_log,
-                                                   force=True)
+        # Stop the server ranks while IO operation in progress
+        time.sleep(self.mdtest_cmd.stonewall_timer.value / 2)
+        self.server_managers[0].stop_ranks(ranks_to_stop, self.d_log, force=True)
 
         # Wait to finish the thread
         job.join()
 
         # Verify the queue result and make sure test has no failure
         while not self.out_queue.empty():
-            if self.out_queue.get() == "Mdtest Failed":
-                self.fail("FAIL")
+            result = self.out_queue.get()
+            if result == "Mdtest Failed":
+                self.fail(result)
