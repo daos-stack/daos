@@ -1131,19 +1131,20 @@ err_link:
 int
 duns_link_cont(daos_handle_t poh, const char *cont, const char *path)
 {
-	daos_handle_t		coh;
-	daos_prop_t		*prop;
-	struct daos_prop_entry	*entry;
-	daos_pool_info_t	pinfo = {0};
-	daos_cont_info_t	cinfo = {0};
-	daos_cont_layout_t	type;
-	char			pool_str[DAOS_UUID_STR_SIZE];
-	char			cont_str[DAOS_UUID_STR_SIZE];
-	int			len;
-	char			str[DUNS_MAX_XATTR_LEN];
-	char			type_str[10];
-	bool			backend_dfuse = false;
-	int			rc, rc2;
+	daos_handle_t           coh;
+	daos_prop_t            *prop;
+	struct daos_prop_entry *entry;
+	daos_pool_info_t        pinfo = {0};
+	daos_cont_info_t        cinfo = {0};
+	daos_cont_layout_t      type;
+	char                    pool_str[DAOS_UUID_STR_SIZE];
+	char                    cont_str[DAOS_UUID_STR_SIZE];
+	int                     len;
+	char                    str[DUNS_MAX_XATTR_LEN];
+	char                    type_str[10];
+	bool                    backend_dfuse = false;
+	int                     rc2;
+	int                     rc;
 
 	if (path == NULL) {
 		D_ERROR("Invalid path\n");
