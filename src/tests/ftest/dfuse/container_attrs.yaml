@@ -10,10 +10,16 @@ server_config:
   engines:
     0:
       log_file: daos_server0.log
-      storage: auto
+      targets: 4
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+  system_ram_reserved: 1
 
 pool:
-  size: 80%
+  size: 1G
 
 container_01:
   type: POSIX
