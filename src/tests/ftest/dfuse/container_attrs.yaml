@@ -13,7 +13,7 @@ server_config:
       storage: auto
 
 pool:
-  scm_size: 80%
+  size: 80%
 
 container_01:
   type: POSIX

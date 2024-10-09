@@ -1157,7 +1157,7 @@ duns_link_cont(daos_handle_t poh, const char *cont, const char *path)
 		return daos_der2errno(rc);
 	}
 
-	rc = daos_cont_open(poh, cont, DAOS_COO_RO, &coh, &cinfo, NULL);
+	rc = daos_cont_open(poh, cont, DAOS_COO_RW, &coh, &cinfo, NULL);
 	if (rc) {
 		D_ERROR("daos_cont_open() failed "DF_RC"\n", DP_RC(rc));
 		return daos_der2errno(rc);
@@ -1205,7 +1205,6 @@ duns_link_cont(daos_handle_t poh, const char *cont, const char *path)
 			D_FREE(dir);
 			D_GOTO(out_cont, rc = err);
 		}
-		D_FREE(dir);
 #ifdef LUSTRE_INCLUDE
 		if (fs.f_type == LL_SUPER_MAGIC) {
 			rc = duns_link_lustre_path(pool_str, cont_str, type, path, mode);
@@ -1220,6 +1219,7 @@ duns_link_cont(daos_handle_t poh, const char *cont, const char *path)
 		if (rc == -1) {
 			rc = errno;
 			D_ERROR("Failed to create dir %s: %d (%s)\n", path, rc, strerror(rc));
+			D_FREE(dir);
 			D_GOTO(out_cont, rc);
 		}
 
@@ -1227,22 +1227,38 @@ duns_link_cont(daos_handle_t poh, const char *cont, const char *path)
 		 * to discover the user running dfuse.
 		 */
 		if (fs.f_type == FUSE_SUPER_MAGIC) {
-			struct stat finfo;
-			/*
-			 * This next stat will cause dfuse to lookup the entry point and perform a
-			 * container connect, therefore this data will be read from root of the new
-			 * container, not the directory.
-			 *
-			 * TODO: This could call getxattr to verify success.
-			 */
-			rc = stat(path, &finfo);
-			if (rc) {
-				rc = errno;
-				D_ERROR("Failed to access container: %d (%s)\n", rc, strerror(rc));
+			int fd;
+			struct dfuse_user_reply dur = {};
+
+			fd = open(dirp, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+			if (fd == -1) {
+				int err = errno;
+
+				DS_ERROR(err, "Dfuse open failed '%s", dirp);
+				D_FREE(dir);
+				D_GOTO(err_link, err);
+			}
+
+			rc = ioctl(fd, DFUSE_IOCTL_DFUSE_USER, &dur);
+			close(fd);
+			if (rc == -1) {
+				int err = errno;
+
+				DS_ERROR(err, "Dfuse ioctl failed %s", dirp);
+				D_FREE(dir);
+				D_GOTO(err_link, err);
+			}
+
+			rc  = duns_set_fuse_acl(dur.uid, coh);
+			if (rc != -DER_SUCCESS) {
+				DS_ERROR(rc, "Dfuse set acl failed %s", dirp);
+				D_FREE(dir);
 				D_GOTO(err_link, rc);
 			}
+
 			backend_dfuse = true;
 		}
+		D_FREE(dir);
 	} else if (type != DAOS_PROP_CO_LAYOUT_UNKNOWN) {
 		/** create a new file for other container types */
 		int fd;
@@ -1319,7 +1335,7 @@ duns_link_cont(daos_handle_t poh, const char *cont, const char *path)
 		rc = stat(path, &finfo);
 		if (rc) {
 			rc = errno;
-			D_ERROR("Failed to access new container: %d (%s)\n", rc, strerror(rc));
+			DS_ERROR(rc, "Failed to access container bind at '%s'", path);
 			goto err_link;
 		}
 	}
