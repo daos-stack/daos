@@ -225,9 +225,10 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 	}
 
 out:
-	D_DEBUG(DB_TRACE, "DTX req for opc %x (req %p future %p) got reply from %d/%d: "
-		"epoch :"DF_X64", result %d\n", dra->dra_opc, req, dra->dra_future,
-		drr->drr_rank, drr->drr_tag, din != NULL ? din->di_epoch : 0, rc);
+	DL_CDEBUG(rc < 0 && rc != -DER_NONEXIST, DLOG_ERR, DB_TRACE, rc,
+		  "DTX req for opc %x (req %p future %p) got reply from %d/%d: "
+		  "epoch :"DF_X64, dra->dra_opc, req, dra->dra_future,
+		  drr->drr_rank, drr->drr_tag, din != NULL ? din->di_epoch : 0);
 
 	drr->drr_comp = 1;
 	drr->drr_result = rc;
@@ -347,7 +348,6 @@ dtx_req_wait(struct dtx_req_args *dra)
 
 struct dtx_common_args {
 	struct dss_chore	  dca_chore;
-	ABT_eventual		  dca_chore_eventual;
 	struct dtx_req_args	  dca_dra;
 	d_list_t		  dca_head;
 	struct btr_root		  dca_tree_root;
@@ -371,18 +371,10 @@ static int
 dtx_req_list_send(struct dtx_common_args *dca, bool is_reentrance)
 {
 	struct dtx_req_args	*dra = &dca->dca_dra;
-	int			 rc;
 
 	if (!is_reentrance) {
 		dra->dra_length = dca->dca_steps;
 		dca->dca_i = 0;
-
-		rc = ABT_future_create(dca->dca_steps, dtx_req_list_cb, &dra->dra_future);
-		if (rc != ABT_SUCCESS) {
-			D_ERROR("ABT_future_create failed for opc %x, len %d: rc %d.\n",
-				dra->dra_opc, dca->dca_steps, rc);
-			return dss_abterr2der(rc);
-		}
 
 		D_DEBUG(DB_TRACE, "%p: DTX req for opc %x, future %p (%d) start.\n",
 			&dca->dca_chore, dra->dra_opc, dra->dra_future, dca->dca_steps);
@@ -397,19 +389,14 @@ dtx_req_list_send(struct dtx_common_args *dca, bool is_reentrance)
 
 		if (unlikely(dra->dra_opc == DTX_COMMIT && dca->dca_i == 0 &&
 			     DAOS_FAIL_CHECK(DAOS_DTX_FAIL_COMMIT)))
-			rc = dtx_req_send(dca->dca_drr, 1);
+			dtx_req_send(dca->dca_drr, 1);
 		else
-			rc = dtx_req_send(dca->dca_drr, dca->dca_epoch);
-		if (rc != 0) {
-			/* If the first sub-RPC failed, then break, otherwise
-			 * other remote replicas may have already received the
-			 * RPC and executed it, so have to go ahead.
-			 */
-			if (dca->dca_i == 0) {
-				ABT_future_free(&dra->dra_future);
-				return rc;
-			}
-		}
+			dtx_req_send(dca->dca_drr, dca->dca_epoch);
+		/*
+		 * Do not care dtx_req_send result, itself or its cb func will set dra->dra_future.
+		 * Each RPC is independent from the others, let's go head to handle the other RPCs
+		 * and set dra->dra_future that will wakeup the RPC sponsor, see dtx_req_wait().
+		 */
 
 		/* dca->dca_drr maybe not points to a real entry if all RPCs have been sent. */
 		dca->dca_drr = d_list_entry(dca->dca_drr->drr_link.next,
@@ -419,8 +406,11 @@ dtx_req_list_send(struct dtx_common_args *dca, bool is_reentrance)
 			break;
 
 		/* Yield to avoid holding CPU for too long time. */
-		if (dca->dca_i % DTX_RPC_YIELD_THD == 0)
+		if (dca->dca_i % DTX_RPC_YIELD_THD == 0) {
+			dca->dca_chore.cho_load_comp = DTX_RPC_YIELD_THD;
+			dca->dca_chore.cho_load_left -= DTX_RPC_YIELD_THD;
 			return DSS_CHORE_YIELD;
+		}
 	}
 
 	return DSS_CHORE_DONE;
@@ -616,16 +606,11 @@ dtx_rpc_helper(struct dss_chore *chore, bool is_reentrance)
 	rc = dtx_req_list_send(dca, is_reentrance);
 	if (rc == DSS_CHORE_YIELD)
 		return DSS_CHORE_YIELD;
-	if (rc == DSS_CHORE_DONE)
-		rc = 0;
-	if (rc != 0)
-		dca->dca_dra.dra_result = rc;
-	D_CDEBUG(rc < 0, DLOG_ERR, DB_TRACE, "%p: DTX RPC chore for %u done: %d\n", chore,
-		 dca->dca_dra.dra_opc, rc);
-	if (dca->dca_chore_eventual != ABT_EVENTUAL_NULL) {
-		rc = ABT_eventual_set(dca->dca_chore_eventual, NULL, 0);
-		D_ASSERTF(rc == ABT_SUCCESS, "ABT_eventual_set: %d\n", rc);
-	}
+
+	D_ASSERTF(rc == DSS_CHORE_DONE, "Invalid ret value %d\n", rc);
+
+	chore->cho_load_comp = chore->cho_load_left;
+	chore->cho_load_left = 0;
 	return DSS_CHORE_DONE;
 }
 
@@ -644,7 +629,6 @@ dtx_rpc(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **dtes,
 
 	memset(dca, 0, sizeof(*dca));
 
-	dca->dca_chore_eventual = ABT_EVENTUAL_NULL;
 	D_INIT_LIST_HEAD(&dca->dca_head);
 	dca->dca_tree_hdl = DAOS_HDL_INVAL;
 	dca->dca_epoch = epoch;
@@ -715,6 +699,7 @@ dtx_rpc(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **dtes,
 	}
 
 	dca->dca_drr = d_list_entry(dca->dca_head.next, struct dtx_req_rec, drr_link);
+	dca->dca_chore.cho_cond_diy = 1;
 
 	/*
 	 * Do not send out the batched RPCs all together, instead, we do that step by step to
@@ -727,26 +712,19 @@ dtx_rpc(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **dtes,
 		else
 			dca->dca_steps = length;
 
-		/* Use helper ULT to handle DTX RPC if there are enough helper XS. */
-		if (dss_has_enough_helper()) {
-			rc = ABT_eventual_create(0, &dca->dca_chore_eventual);
-			if (rc != ABT_SUCCESS) {
-				D_ERROR("failed to create eventual: %d\n", rc);
-				rc = dss_abterr2der(rc);
-				goto out;
-			}
+		rc = ABT_future_create(dca->dca_steps, dtx_req_list_cb, &dra->dra_future);
+		if (rc != ABT_SUCCESS) {
+			D_ERROR("ABT_future_create failed for opc %x, len %d: rc %d.\n",
+				dra->dra_opc, dca->dca_steps, rc);
+			return dss_abterr2der(rc);
+		}
 
-			rc = dss_chore_delegate(&dca->dca_chore, dtx_rpc_helper);
-			if (rc != 0)
-				goto out;
-
-			rc = ABT_eventual_wait(dca->dca_chore_eventual, NULL);
-			D_ASSERTF(rc == ABT_SUCCESS, "ABT_eventual_wait: %d\n", rc);
-
-			rc = ABT_eventual_free(&dca->dca_chore_eventual);
-			D_ASSERTF(rc == ABT_SUCCESS, "ABT_eventual_free: %d\n", rc);
-		} else {
-			dss_chore_diy(&dca->dca_chore, dtx_rpc_helper);
+		dca->dca_chore.cho_load_left = dca->dca_steps;
+		rc = dss_chore_delegate(&dca->dca_chore, dtx_rpc_helper);
+		if (rc != 0) {
+			D_ERROR("Failed to create chore for dtx_rpc: " DF_RC "\n", DP_RC(rc));
+			ABT_future_free(&dra->dra_future);
+			goto out;
 		}
 
 		rc = dtx_req_wait(&dca->dca_dra);
@@ -1556,11 +1534,12 @@ dtx_coll_rpc_prep(struct ds_cont_child *cont, struct dtx_coll_entry *dce, uint32
 		return dss_abterr2der(rc);
 	}
 
-	if (dss_has_enough_helper()) {
-		rc = dss_chore_delegate(&dcra->dcra_chore, dtx_coll_rpc_helper);
-	} else {
-		dss_chore_diy(&dcra->dcra_chore, dtx_coll_rpc_helper);
-		rc = 0;
+	dcra->dcra_chore.cho_cond_diy = 1;
+	dcra->dcra_chore.cho_load_left = 1;
+	rc = dss_chore_delegate(&dcra->dcra_chore, dtx_coll_rpc_helper);
+	if (rc != 0) {
+		D_ERROR("Failed to create chore for coll_rpc: " DF_RC "\n", DP_RC(rc));
+		ABT_future_free(&dcra->dcra_future);
 	}
 
 	return rc;
@@ -1571,11 +1550,13 @@ dtx_coll_rpc_post(struct dtx_coll_rpc_args *dcra, int ret)
 {
 	int	rc;
 
-	rc = ABT_future_wait(dcra->dcra_future);
-	D_CDEBUG(rc != ABT_SUCCESS, DLOG_ERR, DB_TRACE,
-		 "Collective DTX wait req for opc %u, future %p done, rc %d, result %d\n",
-		 dcra->dcra_opc, dcra->dcra_future, rc, dcra->dcra_result);
-	ABT_future_free(&dcra->dcra_future);
+	if (dcra->dcra_future != ABT_FUTURE_NULL) {
+		rc = ABT_future_wait(dcra->dcra_future);
+		D_CDEBUG(rc != ABT_SUCCESS, DLOG_ERR, DB_TRACE,
+			 "Collective DTX wait req for opc %u, future %p done, rc %d, result %d\n",
+			 dcra->dcra_opc, dcra->dcra_future, rc, dcra->dcra_result);
+		ABT_future_free(&dcra->dcra_future);
+	}
 
 	return ret != 0 ? ret : dcra->dcra_result;
 }
@@ -1595,7 +1576,17 @@ dtx_coll_commit(struct ds_cont_child *cont, struct dtx_coll_entry *dce, struct d
 	if (dce->dce_ranks != NULL)
 		rc = dtx_coll_rpc_prep(cont, dce, DTX_COLL_COMMIT, 0, &dcra);
 
+	/*
+	 * NOTE: Before committing the DTX on remote participants, we cannot remove the active
+	 *	 DTX locally; otherwise, the local committed DTX entry may be removed via DTX
+	 *	 aggregation before remote participants commit done. Under such case, if some
+	 *	 remote DTX participant triggere DTX_REFRESH for such DTX during the interval,
+	 *	 then it will get -DER_TX_UNCERTAIN, that may cause related application to be
+	 *	 failed. So here, we let remote participants to commit firstly, if failed, we
+	 *	 will ask the leader to retry the commit until all participants got committed.
+	 */
 	if (dce->dce_bitmap != NULL) {
+		clrbit(dce->dce_bitmap, dss_get_module_info()->dmi_tgt_id);
 		len = dtx_coll_local_exec(cont->sc_pool_uuid, cont->sc_uuid, &dce->dce_xid, 0,
 					  DTX_COLL_COMMIT, dce->dce_bitmap_sz, dce->dce_bitmap,
 					  &results);
@@ -1658,7 +1649,17 @@ dtx_coll_abort(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoc
 	if (dce->dce_ranks != NULL)
 		rc = dtx_coll_rpc_prep(cont, dce, DTX_COLL_ABORT, epoch, &dcra);
 
+	/*
+	 * NOTE: The DTX abort maybe triggered by dtx_leader_end() for timeout on some DTX
+	 *	 participant(s). Under such case, the client side RPC sponsor may also hit
+	 *	 the RPC timeout and resends related RPC to the leader. Here, to avoid DTX
+	 *	 abort and resend RPC forwarding being executed in parallel, we will abort
+	 *	 local DTX after remote done, before that the logic of handling resent RPC
+	 *	 on server will find the local pinned DTX entry then notify related client
+	 *	 to resend sometime later.
+	 */
 	if (dce->dce_bitmap != NULL) {
+		clrbit(dce->dce_bitmap, dss_get_module_info()->dmi_tgt_id);
 		len = dtx_coll_local_exec(cont->sc_pool_uuid, cont->sc_uuid, &dce->dce_xid, epoch,
 					  DTX_COLL_ABORT, dce->dce_bitmap_sz, dce->dce_bitmap,
 					  &results);
