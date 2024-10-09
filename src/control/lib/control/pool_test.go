@@ -516,11 +516,13 @@ func TestControl_PoolCreate(t *testing.T) {
 			humanize.GiByte * 10,
 		},
 	}
+	customPoolUUID := test.MockPoolUUID()
 
 	for name, tc := range map[string]struct {
 		mic     *MockInvokerConfig
 		req     *PoolCreateReq
 		expResp *PoolCreateResp
+		cmpUUID bool
 		expErr  error
 	}{
 		"local failure": {
@@ -687,6 +689,36 @@ func TestControl_PoolCreate(t *testing.T) {
 				TgtRanks: []uint32{0, 1, 2},
 			},
 		},
+		"custom UUID": {
+			req: &PoolCreateReq{
+				UUID:       customPoolUUID,
+				TierRatio:  mockTierRatios,
+				TotalBytes: humanize.GiByte * 20,
+				Properties: []*daos.PoolProperty{
+					{
+						Name:   "label",
+						Number: daos.PoolPropertyLabel,
+						Value:  strVal("foo"),
+					},
+				},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolCreateResp{
+						SvcLdr:   1,
+						SvcReps:  []uint32{0, 1, 2},
+						TgtRanks: []uint32{0, 1, 2},
+					},
+				),
+			},
+			expResp: &PoolCreateResp{
+				UUID:     customPoolUUID.String(),
+				Leader:   1,
+				SvcReps:  []uint32{0, 1, 2},
+				TgtRanks: []uint32{0, 1, 2},
+			},
+			cmpUUID: true,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -706,8 +738,11 @@ func TestControl_PoolCreate(t *testing.T) {
 				return
 			}
 
-			cmpOpt := cmpopts.IgnoreFields(PoolCreateResp{}, "UUID")
-			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpt); diff != "" {
+			var cmpOpts cmp.Options
+			if !tc.cmpUUID {
+				cmpOpts = append(cmpOpts, cmpopts.IgnoreFields(PoolCreateResp{}, "UUID"))
+			}
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
@@ -805,7 +840,7 @@ func TestControl_PoolQueryResp_MarshalJSON(t *testing.T) {
 					UpgradeLayoutVer: 8,
 				},
 			},
-			exp: `{"query_mask":"rebuild,space","state":"Ready","uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":[0,1,2],"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8,"status":42}`,
+			exp: `{"query_mask":"disabled_engines,rebuild,space","state":"Ready","uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":[0,1,2],"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8,"status":42}`,
 		},
 		"valid rankset": {
 			pqr: &PoolQueryResp{
@@ -827,7 +862,7 @@ func TestControl_PoolQueryResp_MarshalJSON(t *testing.T) {
 					UpgradeLayoutVer: 8,
 				},
 			},
-			exp: `{"query_mask":"rebuild,space","state":"Ready","uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":[0,1,2],"rebuild":null,"tier_stats":null,"enabled_ranks":[0,1,2,3,5],"disabled_ranks":[],"pool_layout_ver":7,"upgrade_layout_ver":8,"status":42}`,
+			exp: `{"query_mask":"disabled_engines,rebuild,space","state":"Ready","uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":[0,1,2],"rebuild":null,"tier_stats":null,"enabled_ranks":[0,1,2,3,5],"disabled_ranks":[],"pool_layout_ver":7,"upgrade_layout_ver":8,"status":42}`,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

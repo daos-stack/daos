@@ -209,7 +209,7 @@ Devices:
 <a id="82"></a>
 - Manually Set Device State to FAULTY: **$dmg storage set nvme-faulty**
 ```
-$ dmg storage set nvme-faulty --uuid=9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0
+$ dmg storage set nvme-faulty --host=localhost --uuid=9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0
 Devices
         UUID:9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0 [TrAddr:0000:8d:00.0]
             Targets:[0] Rank:0 State:EVICTED
@@ -219,7 +219,7 @@ Devices
 <a id="83"></a>
 - Replace an evicted device with a new device: **$dmg storage replace nvme**
 ```
-$ dmg storage replace nvme --old-uuid=9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0 --new-uuid=8131fc39-4b1c-4662-bea1-734e728c434e
+$ dmg storage replace nvme --host=localhost --old-uuid=9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0 --new-uuid=8131fc39-4b1c-4662-bea1-734e728c434e
 Devices
         UUID:8131fc39-4b1c-4662-bea1-734e728c434e [TrAddr:0000:8d:00.0]
             Targets:[0] Rank:0 State:NORMAL
@@ -229,7 +229,7 @@ Devices
 <a id="84"></a>
 - Reuse a previously evicted device: **$dmg storage replace nvme**
 ```
-$ dmg storage replace nvme --old-uuid=9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0 --new-uuid=9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0
+$ dmg storage replace nvme --host=localhost --old-uuid=9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0 --new-uuid=9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0
 Devices
         UUID:9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0 [TrAddr:0000:8a:00.0]
             Targets:[0] Rank:0 State:NORMAL

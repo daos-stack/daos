@@ -1355,11 +1355,11 @@ handle_event(struct pool_svc *svc, struct pool_svc_event *event)
 
 	if (event->psv_rank == dss_self_rank() && event->psv_src == CRT_EVS_GRPMOD &&
 	    event->psv_type == CRT_EVT_DEAD) {
-		D_DEBUG(DB_MGMT, "ignore exclusion of self\n");
+		D_DEBUG(DB_MD, "ignore exclusion of self\n");
 		goto out;
 	}
 
-	D_DEBUG(DB_MD, DF_UUID": handling event: "DF_PS_EVENT"\n", DP_UUID(svc->ps_uuid),
+	D_INFO(DF_UUID": handling event: "DF_PS_EVENT"\n", DP_UUID(svc->ps_uuid),
 		DP_PS_EVENT(event));
 
 	if (event->psv_src == CRT_EVS_SWIM && event->psv_type == CRT_EVT_ALIVE) {
@@ -1381,8 +1381,8 @@ handle_event(struct pool_svc *svc, struct pool_svc_event *event)
 		 * and does not have a copy of the pool map.
 		 */
 		ds_rsvc_request_map_dist(&svc->ps_rsvc);
-		D_DEBUG(DB_MD, DF_UUID": requested map dist for rank %u\n", DP_UUID(svc->ps_uuid),
-			event->psv_rank);
+		D_DEBUG(DB_MD, DF_UUID": requested map dist for rank %u\n",
+			DP_UUID(svc->ps_uuid), event->psv_rank);
 	} else if (event->psv_type == CRT_EVT_DEAD) {
 		rc = pool_svc_exclude_rank(svc, event->psv_rank);
 		if (rc != 0)
@@ -1465,7 +1465,7 @@ init_events(struct pool_svc *svc)
 	D_ASSERT(events->pse_handler == ABT_THREAD_NULL);
 	D_ASSERT(events->pse_stop == false);
 
-	if (!ds_pool_skip_for_check(svc->ps_pool)) {
+	if (!ds_pool_restricted(svc->ps_pool, false)) {
 		rc = crt_register_event_cb(ds_pool_crt_event_cb, svc);
 		if (rc != 0) {
 			D_ERROR(DF_UUID": failed to register event callback: "DF_RC"\n",
@@ -1496,7 +1496,7 @@ init_events(struct pool_svc *svc)
 	return 0;
 
 err_cb:
-	if (!ds_pool_skip_for_check(svc->ps_pool))
+	if (!ds_pool_restricted(svc->ps_pool, false))
 		crt_unregister_event_cb(ds_pool_crt_event_cb, svc);
 	discard_events(&events->pse_queue);
 err:
@@ -1511,7 +1511,7 @@ fini_events(struct pool_svc *svc)
 
 	D_ASSERT(events->pse_handler != ABT_THREAD_NULL);
 
-	if (!ds_pool_skip_for_check(svc->ps_pool))
+	if (!ds_pool_restricted(svc->ps_pool, false))
 		crt_unregister_event_cb(ds_pool_crt_event_cb, svc);
 
 	ABT_mutex_lock(events->pse_mutex);
@@ -1809,7 +1809,7 @@ pool_svc_check_node_status(struct pool_svc *svc)
 
 	D_DEBUG(DB_MD, DF_UUID": checking node status\n", DP_UUID(svc->ps_uuid));
 	ABT_rwlock_rdlock(svc->ps_pool->sp_lock);
-	doms_cnt = pool_map_find_nodes(svc->ps_pool->sp_map, PO_COMP_ID_ALL,
+	doms_cnt = pool_map_find_ranks(svc->ps_pool->sp_map, PO_COMP_ID_ALL,
 				       &doms);
 	D_ASSERT(doms_cnt >= 0);
 	for (i = 0; i < doms_cnt; i++) {
@@ -2357,6 +2357,11 @@ int ds_pool_failed_lookup(uuid_t uuid)
 	return 0;
 }
 
+struct pool_start_args {
+	bool	psa_aft_chk;
+	bool	psa_immutable;
+};
+
 /*
  * Try to start the pool. Continue the iteration upon errors as other pools may
  * still be able to work.
@@ -2364,13 +2369,26 @@ int ds_pool_failed_lookup(uuid_t uuid)
 static int
 start_one(uuid_t uuid, void *varg)
 {
-	int rc;
+	struct pool_start_args	*psa = varg;
+	bool			 aft_chk;
+	bool			 immutable;
+	int			 rc;
 
-	D_DEBUG(DB_MD, DF_UUID ": starting pool\n", DP_UUID(uuid));
+	if (psa != NULL) {
+		aft_chk = psa->psa_aft_chk;
+		immutable = psa->psa_immutable;
+	} else {
+		aft_chk = false;
+		immutable = false;
+	}
 
-	rc = ds_pool_start(uuid, varg != NULL ? true : false);
+	D_DEBUG(DB_MD, DF_UUID ": starting pool, aft_chk %s, immutable %s\n",
+		DP_UUID(uuid), aft_chk ? "yes" : "no", immutable ? "yes" : "no");
+
+	rc = ds_pool_start(uuid, aft_chk, immutable);
 	if (rc != 0) {
-		DL_ERROR(rc, DF_UUID ": failed to start pool", DP_UUID(uuid));
+		DL_ERROR(rc, DF_UUID ": failed to start pool, aft_chk %s, immutable %s",
+			 DP_UUID(uuid), aft_chk ? "yes" : "no", immutable ? "yes" : "no");
 		ds_pool_failed_add(uuid, rc);
 	}
 
@@ -2389,12 +2407,27 @@ pool_start_all(void *arg)
 			DP_RC(rc));
 }
 
-int
-ds_pool_start_after_check(uuid_t uuid)
+bool
+ds_pool_restricted(struct ds_pool *pool, bool immutable)
 {
-	bool	aft_chk = true;
+	if (ds_pool_skip_for_check(pool))
+		return true;
 
-	return start_one(uuid, &aft_chk);
+	if (pool->sp_immutable && !immutable)
+		return true;
+
+	return false;
+}
+
+int
+ds_pool_start_after_check(uuid_t uuid, bool immutable)
+{
+	struct pool_start_args	psa;
+
+	psa.psa_aft_chk = true;
+	psa.psa_immutable = immutable;
+
+	return start_one(uuid, &psa);
 }
 
 /* Note that this function is currently called from the main xstream. */
@@ -3612,7 +3645,6 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 			   &ds_pool_prop_connectable, &value);
 	if (rc != 0)
 		goto out_lock;
-	D_DEBUG(DB_MD, DF_UUID ": connectable=%u\n", DP_UUID(in->pci_op.pi_uuid), connectable);
 	if (!connectable) {
 		D_ERROR(DF_UUID": being destroyed, not accepting connections\n",
 			DP_UUID(in->pci_op.pi_uuid));
@@ -3621,12 +3653,21 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 
 	/*
 	 * NOTE: Under check mode, there is a small race window between ds_pool_mark_connectable()
-	 *	 the PS restart for full service. If some client tries to connect the pool during
+	 *	 and PS restart with full service. If some client tries to connect the pool during
 	 *	 such internal, it will get -DER_BUSY temporarily.
 	 */
 	if (unlikely(ds_pool_skip_for_check(svc->ps_pool))) {
-		D_ERROR(DF_UUID" is not ready for full pool service\n", DP_UUID(in->pci_op.pi_uuid));
-		D_GOTO(out_lock, rc = -DER_BUSY);
+		rc = -DER_BUSY;
+		D_ERROR(DF_UUID " is not ready for full pool service: " DF_RC "\n",
+			DP_UUID(in->pci_op.pi_uuid), DP_RC(rc));
+		goto out_lock;
+	}
+
+	if (svc->ps_pool->sp_immutable && flags != DAOS_PC_RO) {
+		rc = -DER_NO_PERM;
+		D_ERROR(DF_UUID " failed to connect immutable pool, flags " DF_X64 ": " DF_RC "\n",
+			DP_UUID(in->pci_op.pi_uuid), flags, DP_RC(rc));
+		goto out_lock;
 	}
 
 	/* Check existing pool handles. */
@@ -3788,6 +3829,11 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 				D_GOTO(out_map_version, rc = -DER_BUSY);
 		}
 	}
+
+	D_DEBUG(DB_MD, DF_UUID "/" DF_UUID ": connecting to %s pool with flags "
+		DF_X64", sec_capas " DF_X64 "\n",
+		DP_UUID(in->pci_op.pi_uuid), DP_UUID(in->pci_op.pi_hdl),
+		svc->ps_pool->sp_immutable ? "immutable" : "regular", flags, sec_capas);
 
 	rc = pool_connect_iv_dist(svc, in->pci_op.pi_hdl, flags, sec_capas, credp, global_ver,
 				  obj_layout_ver);
@@ -6314,7 +6360,7 @@ pool_svc_schedule(struct pool_svc *svc, struct pool_svc_sched *sched, void (*fun
 
 	D_DEBUG(DB_MD, DF_UUID": begin\n", DP_UUID(svc->ps_uuid));
 
-	if (ds_pool_skip_for_check(svc->ps_pool)) {
+	if (ds_pool_restricted(svc->ps_pool, false)) {
 		D_DEBUG(DB_MD, DF_UUID": end: skip in check mode\n", DP_UUID(svc->ps_uuid));
 		return -DER_OP_CANCELED;
 	}
@@ -6500,6 +6546,49 @@ pool_svc_schedule_reconf(struct pool_svc *svc, struct pool_map *map, uint32_t ma
 	return 0;
 }
 
+static int
+pool_map_crit_prompt(struct pool_svc *svc, struct pool_map *map, d_rank_t rank)
+{
+	crt_group_t		*primary_grp;
+	struct pool_domain	*doms;
+	int			 doms_cnt;
+	int			 i;
+	int			 rc = 0;
+
+	D_DEBUG(DB_MD, DF_UUID": checking node status\n", DP_UUID(svc->ps_uuid));
+	doms_cnt = pool_map_find_ranks(map, PO_COMP_ID_ALL, &doms);
+	D_ASSERT(doms_cnt >= 0);
+	primary_grp = crt_group_lookup(NULL);
+	D_ASSERT(primary_grp != NULL);
+
+	D_CRIT("!!! Please try to recover these engines in top priority -\n");
+	D_CRIT("!!! Please refer \"Pool-Wise Redundancy Factor\" section in pool_operations.md\n");
+	D_CRIT("!!! pool "DF_UUID": intolerable unavailability: engine rank %u\n",
+	       DP_UUID(svc->ps_uuid), rank);
+	for (i = 0; i < doms_cnt; i++) {
+		struct swim_member_state state;
+
+		if (!(doms[i].do_comp.co_status & PO_COMP_ST_UPIN) ||
+		    (doms[i].do_comp.co_rank == rank))
+			continue;
+
+		rc = crt_rank_state_get(primary_grp, doms[i].do_comp.co_rank, &state);
+		if (rc != 0 && rc != -DER_NONEXIST) {
+			D_ERROR("failed to get status of rank %u: %d\n",
+				doms[i].do_comp.co_rank, rc);
+			break;
+		}
+
+		D_DEBUG(DB_MD, "rank/state %d/%d\n", doms[i].do_comp.co_rank,
+			rc == -DER_NONEXIST ? -1 : state.sms_status);
+		if (rc == -DER_NONEXIST || state.sms_status == SWIM_MEMBER_DEAD)
+			D_CRIT("!!! pool "DF_UUID" : intolerable unavailability: engine rank %u\n",
+			       DP_UUID(svc->ps_uuid), doms[i].do_comp.co_rank);
+	}
+
+	return rc;
+}
+
 /*
  * Perform an update to the pool map of \a svc.
  *
@@ -6532,7 +6621,8 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 			     struct pool_target_addr_list *tgt_addrs,
 			     struct rsvc_hint *hint, bool *p_updated,
 			     uint32_t *map_version_p, uint32_t *tgt_map_ver,
-			     struct pool_target_addr_list *inval_tgt_addrs)
+			     struct pool_target_addr_list *inval_tgt_addrs,
+			     enum map_update_source src)
 {
 	struct rdb_tx		tx;
 	struct pool_map	       *map;
@@ -6628,7 +6718,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 	 * If the map modification affects myself, leave it to a new PS leader
 	 * if there's another PS replica, or reject it.
 	 */
-	node = pool_map_find_node_by_rank(map, dss_self_rank());
+	node = pool_map_find_dom_by_rank(map, dss_self_rank());
 	if (node == NULL || !(node->do_comp.co_status & DC_POOL_SVC_MAP_STATES)) {
 		d_rank_list_t *replicas;
 
@@ -6651,6 +6741,33 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 		}
 		d_rank_list_free(replicas);
 		goto out_map;
+	}
+
+	/* For SWIM exclude, don't change pool map if the pw_rf is broken or is going to be broken,
+	 * with CRIT log message to ask administrator to bring back the engine.
+	 */
+	if (src == MUS_SWIM && opc == MAP_EXCLUDE) {
+		d_rank_t	rank;
+		int		failed_cnt;
+
+		rc = pool_map_update_failed_cnt(map);
+		if (rc != 0) {
+			DL_ERROR(rc, DF_UUID": pool_map_update_failed_cnt failed.",
+				 DP_UUID(svc->ps_uuid));
+			goto out_map;
+		}
+
+		D_ASSERT(tgt_addrs->pta_number == 1);
+		rank = tgt_addrs->pta_addrs->pta_rank;
+		failed_cnt = pool_map_get_failed_cnt(map, PO_COMP_TP_NODE);
+		D_INFO(DF_UUID": SWIM exclude rank %d, failed NODE %d\n",
+		       DP_UUID(svc->ps_uuid), rank, failed_cnt);
+		if (failed_cnt > pw_rf) {
+			D_CRIT(DF_UUID": exclude rank %d will break pw_rf %d, failed_cnt %d\n",
+			       DP_UUID(svc->ps_uuid), rank, pw_rf, failed_cnt);
+			rc = pool_map_crit_prompt(svc, map, rank);
+			goto out_map;
+		}
 	}
 
 	/* Write the new pool map. */
@@ -6809,7 +6926,7 @@ pool_update_map_internal(uuid_t pool_uuid, unsigned int opc, bool exclude_rank,
 	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, NULL, 0,
 					  NULL, tgts, tgt_addrs, hint, p_updated,
 					  map_version_p, tgt_map_ver,
-					  inval_tgt_addrs);
+					  inval_tgt_addrs, MUS_DMG);
 
 	pool_svc_put_leader(svc);
 	return rc;
@@ -6859,8 +6976,8 @@ static int
 pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		    d_rank_list_t *extend_rank_list, uint32_t *extend_domains,
 		    uint32_t extend_domains_nr, struct pool_target_addr_list *list,
-		    struct pool_target_addr_list *inval_list_out,
-		    uint32_t *map_version, struct rsvc_hint *hint)
+		    struct pool_target_addr_list *inval_list_out, uint32_t *map_version,
+		    struct rsvc_hint *hint, enum map_update_source src)
 {
 	struct pool_target_id_list	target_list = { 0 };
 	daos_prop_t			prop = { 0 };
@@ -6875,7 +6992,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, extend_rank_list,
 					  extend_domains_nr, extend_domains,
 					  &target_list, list, hint, &updated,
-					  map_version, &tgt_map_ver, inval_list_out);
+					  map_version, &tgt_map_ver, inval_list_out, src);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -6962,10 +7079,9 @@ ds_pool_extend_handler(crt_rpc_t *rpc)
 		goto out;
 
 	rc = pool_svc_update_map(svc, pool_opc_2map_opc(opc_get(rpc->cr_opc)),
-				 false /* exclude_rank */,
-				 &rank_list, domains, ndomains,
+				 false /* exclude_rank */, &rank_list, domains, ndomains,
 				 NULL, NULL, &out->peo_op.po_map_version,
-				 &out->peo_op.po_hint);
+				 &out->peo_op.po_hint, MUS_DMG);
 
 	pool_svc_put_leader(svc);
 out:
@@ -7067,7 +7183,7 @@ ds_pool_update_handler(crt_rpc_t *rpc, int handler_version)
 	rc = pool_svc_update_map(svc, pool_opc_2map_opc(opc_get(rpc->cr_opc)),
 				 false /* exclude_rank */, NULL, NULL, 0, &list,
 				 &inval_list_out, &out->pto_op.po_map_version,
-				 &out->pto_op.po_hint);
+				 &out->pto_op.po_hint, MUS_DMG);
 	if (rc != 0)
 		goto out_svc;
 
@@ -7112,7 +7228,7 @@ pool_svc_exclude_rank(struct pool_svc *svc, d_rank_t rank)
 
 	rc = pool_svc_update_map(svc, pool_opc_2map_opc(POOL_EXCLUDE), true /* exclude_rank */,
 				 NULL, NULL, 0, &list, &inval_list_out, &map_version,
-				 NULL /* hint */);
+				 NULL /* hint */, MUS_SWIM);
 
 	D_DEBUG(DB_MD, "Exclude pool "DF_UUID"/%u rank %u: rc %d\n",
 		DP_UUID(svc->ps_uuid), map_version, rank, rc);
@@ -8456,10 +8572,4 @@ ds_pool_svc_upgrade_vos_pool(struct ds_pool *pool)
 
 	ds_rsvc_put(rsvc);
 	return rc;
-}
-
-bool
-ds_pool_skip_for_check(struct ds_pool *pool)
-{
-	return engine_in_check() && !pool->sp_cr_checked;
 }

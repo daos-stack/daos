@@ -6,10 +6,9 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 import os
 
 from apricot import TestWithServers
-from ClusterShell.NodeSet import NodeSet
 from dfuse_utils import get_dfuse, start_dfuse
 from exception_utils import CommandFailure
-from general_utils import get_random_string, pcmd
+from general_utils import get_random_string
 from host_utils import get_local_host
 from ior_utils import IorCommand
 from job_manager_utils import get_job_manager
@@ -225,8 +224,6 @@ class IorTestBase(TestWithServers):
             env = self.ior_cmd.get_default_env(str(manager), self.client_log)
         if intercept:
             env['LD_PRELOAD'] = intercept
-            if 'D_IL_REPORT' not in env:
-                env['D_IL_REPORT'] = '1'
         if plugin_path:
             env["HDF5_VOL_CONNECTOR"] = "daos"
             env["HDF5_PLUGIN_PATH"] = str(plugin_path)
@@ -371,59 +368,3 @@ class IorTestBase(TestWithServers):
             self.fail(
                 "Pool Free Size did not match: actual={}, expected={}".format(
                     actual_pool_size, expected_pool_size))
-
-    def execute_cmd(self, command, fail_on_err=True, display_output=True):
-        """Execute cmd using general_utils.pcmd.
-
-        Args:
-            command (str): the command to execute on the client hosts
-            fail_on_err (bool, optional): whether or not to fail the test if
-                command returns a non zero return code. Defaults to True.
-            display_output (bool, optional): whether or not to display output.
-                Defaults to True.
-
-        Returns:
-            dict: a dictionary of return codes keys and accompanying NodeSet
-                values indicating which hosts yielded the return code.
-
-        """
-        try:
-            # Execute the bash command on each client host
-            result = self._execute_command(command, fail_on_err, display_output)
-
-        except CommandFailure as error:
-            # Report an error if any command fails
-            self.log.error("Failed to execute command: %s", str(error))
-            self.fail("Failed to execute command")
-
-        return result
-
-    def _execute_command(self, command, fail_on_err=True, display_output=True, hosts=None):
-        """Execute the command on all client hosts.
-
-        Optionally verify if the command returns a non zero return code.
-
-        Args:
-            command (str): the command to execute on the client hosts
-            fail_on_err (bool, optional): whether or not to fail the test if
-                command returns a non zero return code. Defaults to True.
-            display_output (bool, optional): whether or not to display output.
-                Defaults to True.
-
-        Raises:
-            CommandFailure: if 'fail_on_err' is set and the command fails on at
-                least one of the client hosts
-
-        Returns:
-            dict: a dictionary of return codes keys and accompanying NodeSet
-                values indicating which hosts yielded the return code.
-
-        """
-        if hosts is None:
-            hosts = self.hostlist_clients
-        result = pcmd(hosts, command, verbose=display_output, timeout=300)
-        if (0 not in result or len(result) > 1) and fail_on_err:
-            hosts = [str(nodes) for code, nodes in list(result.items()) if code != 0]
-            raise CommandFailure("Error running '{}' on the following hosts: {}".format(
-                command, NodeSet(",".join(hosts))))
-        return result

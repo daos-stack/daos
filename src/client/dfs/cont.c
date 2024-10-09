@@ -970,7 +970,9 @@ out_oit:
 out_snap:
 	D_FREE(oit_args);
 	epr.epr_hi = epr.epr_lo = snap_epoch;
-	rc2                     = daos_cont_destroy_snap(coh, epr, NULL);
+	rc2 = daos_cont_destroy_snap(coh, epr, NULL);
+	if (rc2 != 0)
+		D_ERROR("Failed to destroy OID table: " DF_RC "\n", DP_RC(rc2));
 	if (rc == 0)
 		rc = daos_der2errno(rc2);
 out_dfs:
@@ -1238,14 +1240,14 @@ dfs_get_size_by_oid(dfs_t *dfs, daos_obj_id_t oid, daos_size_t chunk_size, daos_
 		return EINVAL;
 
 	rc =
-	    daos_array_open_with_attr(dfs->coh, oid, DAOS_TX_NONE, DAOS_OO_RO, 1,
+	    daos_array_open_with_attr(dfs->coh, oid, dfs->th, DAOS_OO_RO, 1,
 				      chunk_size ? chunk_size : dfs->attr.da_chunk_size, &oh, NULL);
 	if (rc != 0) {
 		D_ERROR("daos_array_open() failed: " DF_RC "\n", DP_RC(rc));
 		return daos_der2errno(rc);
 	}
 
-	rc = daos_array_get_size(oh, DAOS_TX_NONE, size, NULL);
+	rc = daos_array_get_size(oh, dfs->th, size, NULL);
 	if (rc) {
 		daos_array_close(oh, NULL);
 		D_ERROR("daos_array_get_size() failed: " DF_RC "\n", DP_RC(rc));

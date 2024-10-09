@@ -8,7 +8,6 @@ job_manager:
   manager_timeout: 480
 pool:
   size: 500GB
-  control_method: dmg
 container:
   type: POSIX
   control_method: daos
