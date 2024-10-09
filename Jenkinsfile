@@ -15,7 +15,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@bmurrell/UT-on-Leap15') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -696,8 +696,8 @@ pipeline {
                             filename 'utils/docker/Dockerfile.leap.15'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                parallel_build: true,
-                                                                deps_build: true) +
+                                                                deps_build: true,
+                                                                parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME}-leap15" +
                                                 ' --build-arg COMPILER=icc'
                         }
@@ -705,9 +705,11 @@ pipeline {
                     steps {
                         job_step_update(
                             sconsBuild(parallel_build: true,
+                                       stash_files: 'ci/test_files_to_stash.txt',
+                                       build_deps: 'no',
+                                       stash_opt: true,
                                        scons_args: sconsFaultsArgs() +
-                                                   ' PREFIX=/opt/daos TARGET_TYPE=release',
-                                       build_deps: 'no'))
+                                                   ' PREFIX=/opt/daos TARGET_TYPE=release'))
                     }
                     post {
                         unsuccessful {
@@ -730,7 +732,7 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Unit Test on EL 8.8') {
+                stage('Unit Test on Leap 15.5 compiled with Intel-C') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
