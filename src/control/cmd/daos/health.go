@@ -99,32 +99,18 @@ func (cmd *healthCheckCmd) Execute([]string) error {
 			}
 		}()
 
-		queryMask := daos.MustNewPoolQueryMask(daos.PoolQueryOptionEnabledEngines)
+		queryMask := daos.MustNewPoolQueryMask(daos.PoolQueryOptionEnabledEngines,
+			daos.PoolQueryOptionSuspectEngines)
+		if pool.DisabledTargets > 0 {
+			queryMask.SetOptions(daos.PoolQueryOptionDisabledEngines)
+		}
 		tpi, err := queryPool(poolHdl, queryMask)
 		if err != nil {
 			cmd.Errorf("failed to query pool %s: %v", pool.Label, err)
 			continue
 		}
 		pool.EnabledRanks = tpi.EnabledRanks
-
-		if pool.DisabledTargets > 0 {
-			queryMask.ClearAll()
-			queryMask.SetOptions(daos.PoolQueryOptionDisabledEngines)
-			tpi, err = queryPool(poolHdl, queryMask)
-			if err != nil {
-				cmd.Errorf("failed to query pool %s: %v", pool.Label, err)
-				continue
-			}
-			pool.DisabledRanks = tpi.DisabledRanks
-		}
-
-		queryMask.ClearAll()
-		queryMask.SetOptions(daos.PoolQueryOptionSuspectEngines)
-		tpi, err = queryPool(poolHdl, queryMask)
-		if err != nil {
-			cmd.Errorf("failed to query pool %s: %v", pool.Label, err)
-			continue
-		}
+		pool.DisabledRanks = tpi.DisabledRanks
 		pool.SuspectRanks = tpi.SuspectRanks
 
 		poolConts, err := listContainers(poolHdl)
