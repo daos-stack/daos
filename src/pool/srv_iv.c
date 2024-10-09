@@ -1240,13 +1240,9 @@ ds_pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf, uint32_t map_v
 
 	crt_group_rank(pool->sp_group, &iv_entry->piv_map.piv_master_rank);
 	iv_entry->piv_map.piv_pool_map_ver = buf == NULL ? 0 : map_ver;
-<<<<<<< HEAD
 	if (buf != NULL) {
 		struct pool_map *map = NULL;
 
-=======
-	if (buf != NULL)
->>>>>>> release/2.6
 		memcpy(&iv_entry->piv_map.piv_pool_buf, buf,
 		       pool_buf_size(buf->pb_nr));
 
