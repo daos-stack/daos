@@ -267,8 +267,6 @@ struct shard_auxi_args {
 	/* only for EC, the start shard of the EC stripe */
 	uint32_t		 start_shard;
 	uint32_t		 flags;
-	/* for retried RPC */
-	uint64_t		 enqueue_id;
 };
 
 struct shard_rw_args {
@@ -747,7 +745,7 @@ int dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, 
 			   daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
 			   daos_epoch_t *max_epoch, const uuid_t coh_uuid, const uuid_t cont_uuid,
 			   struct dtx_id *dti, uint32_t *map_ver, daos_handle_t th,
-			   tse_task_t *task, uint32_t *max_delay, uint64_t *queue_id);
+			   tse_task_t *task, uint32_t *max_delay);
 
 int dc_obj_shard_coll_query(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint32_t flags,
 			    uint32_t req_map_ver, struct dc_object *obj, daos_key_t *dkey,
@@ -755,7 +753,7 @@ int dc_obj_shard_coll_query(struct dc_obj_shard *shard, struct dtx_epoch *epoch,
 			    const uuid_t coh_uuid, const uuid_t cont_uuid, struct dtx_id *dti,
 			    uint32_t *map_ver, struct daos_coll_target *tgts, uint32_t tgt_nr,
 			    uint32_t max_tgt_size, uint32_t disp_width, daos_handle_t th,
-			    tse_task_t *task, uint32_t *max_delay, uint64_t *queue_id);
+			    tse_task_t *task, uint32_t *max_delay);
 
 int dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		      void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
@@ -1077,7 +1075,6 @@ struct obj_query_merge_args {
 	uint32_t		*oqma_tgt_map_ver; /* output */
 	uint32_t		*oqma_shard; /* output */
 	uint32_t		*oqma_max_delay; /* output */
-	uint64_t		*oqma_queue_id; /* output */
 	crt_rpc_t		*oqma_rpc;
 	uint64_t		 oqma_flags;
 	uint32_t		 oqma_opc;

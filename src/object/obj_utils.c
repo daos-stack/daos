@@ -342,7 +342,6 @@ daos_obj_query_merge(struct obj_query_merge_args *oqma)
 {
 	uint64_t	*val;
 	uint64_t	*cur;
-	uint32_t	 timeout = 0;
 	bool		 check = true;
 	bool		 changed = false;
 	bool		 get_max = (oqma->oqma_flags & DAOS_GET_MAX) ? true : false;
@@ -365,29 +364,6 @@ daos_obj_query_merge(struct obj_query_merge_args *oqma)
 			D_ERROR("%s query rpc failed: "DF_RC"\n",
 				oqma->oqma_opc == DAOS_OBJ_RPC_COLL_QUERY ? "Coll" : "Regular",
 				DP_RC(oqma->oqma_ret));
-
-		if (oqma->oqma_ret == -DER_OVERLOAD_RETRY && oqma->oqma_rpc != NULL) {
-			D_ASSERT(oqma->oqma_max_delay != NULL);
-			D_ASSERT(oqma->oqma_queue_id != NULL);
-
-			if (oqma->oqma_opc == DAOS_OBJ_RPC_COLL_QUERY) {
-				struct obj_coll_query_out *ocqo = crt_reply_get(oqma->oqma_rpc);
-
-				if (*oqma->oqma_queue_id == 0)
-					*oqma->oqma_queue_id =
-						ocqo->ocqo_comm_out.req_out_enqueue_id;
-			} else {
-				struct obj_query_key_v10_out *okqo = crt_reply_get(oqma->oqma_rpc);
-
-				if (*oqma->oqma_queue_id == 0)
-					*oqma->oqma_queue_id =
-						okqo->okqo_comm_out.req_out_enqueue_id;
-			}
-
-			crt_req_get_timeout(oqma->oqma_rpc, &timeout);
-			if (timeout > *oqma->oqma_max_delay)
-				*oqma->oqma_max_delay = timeout;
-		}
 
 		D_GOTO(out, rc = oqma->oqma_ret);
 	}

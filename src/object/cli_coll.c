@@ -769,9 +769,6 @@ gen_mbs:
 
 	if (auxi->io_retry) {
 		flags |= ORF_RESEND;
-		/* Reset @enqueue_id if resend to new leader. */
-		if (spa->pa_auxi.target != shard->do_target_id)
-			spa->pa_auxi.enqueue_id = 0;
 	} else {
 		spa->pa_auxi.obj_auxi = auxi;
 		daos_dti_gen(&spa->pa_dti, false);

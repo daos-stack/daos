@@ -4017,7 +4017,6 @@ ds_object_migrate_send(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_h
 	migrate_in->om_ephs.ca_count = cnt;
 	migrate_in->om_punched_ephs.ca_arrays = punched_ephs;
 	migrate_in->om_punched_ephs.ca_count = cnt;
-	migrate_in->om_comm_in.req_in_enqueue_id = *enqueue_id;
 	crt_req_get_timeout(rpc, &rpc_timeout);
 
 	if (shards) {
@@ -4033,7 +4032,6 @@ ds_object_migrate_send(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_h
 	migrate_out = crt_reply_get(rpc);
 	rc = migrate_out->om_status;
 	if (rc == -DER_OVERLOAD_RETRY) {
-		*enqueue_id = migrate_out->om_comm_out.req_out_enqueue_id;
 		*max_delay = rpc_timeout;
 	}
 out:
