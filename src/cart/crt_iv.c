@@ -1086,8 +1086,8 @@ handle_ivfetch_response(const struct crt_cb_info *cb_info)
 	}
 
 	/* In case of a failure, call on_refresh with NULL iv_value */
-	iv_ops->ivo_on_refresh(ivns, &input->ifi_key, 0, /* TODO: iv_ver */
-			       iv_value, false, rc, iv_info->ifc_user_priv);
+	rc = iv_ops->ivo_on_refresh(ivns, &input->ifi_key, 0, /* TODO: iv_ver */
+				    iv_value, false, rc, iv_info->ifc_user_priv);
 
 	if (iv_info->ifc_bulk_hdl)
 		crt_bulk_free(iv_info->ifc_bulk_hdl);
