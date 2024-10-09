@@ -416,7 +416,7 @@ class Dfuse(DfuseCommand):
         result = run_remote(self.log, self.hosts, f"cat {log_file}")
         if not result.passed:
             raise CommandFailure(f'Log file {log_file} can not be open on {result.failed_hosts}')
-        return [output.stdout for output in result.output]
+        return result
 
 
 def get_dfuse(test, hosts, namespace=None):

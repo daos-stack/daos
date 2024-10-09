@@ -35,17 +35,17 @@ class DfuseContainerAttrs(TestWithServers):
             dfuse (Dfuse): DFuse instance to check
             container_name (str): Name of the container
         """
-        log_file = os.linesep.join(dfuse.get_log_file_data()[0])
+        log_file = os.linesep.join(dfuse.get_log_file_data().output[0].stdout)
         attrs = self.params.get("attrs", f"/run/{container_name}/*")
         for name, value in [attr.split(':') for attr in attrs.split(",")]:
             match = re.findall(
-                r"^.+\ssetting\s+'" + name + r"'\s+is\s+(\d+)\s+seconds$",
+                fr"^.+\ssetting\s+'{name}'\s+is\s+(\d+)\s+seconds$",
                 log_file,
                 re.MULTILINE)
             self.assertEqual(
                 len(match),
                 1,
-                "Unexpected number setting(s) of attribute {name}: want=1, got={len(match)}")
+                f"Unexpected number setting(s) of attribute {name}: want=1, got={len(match)}")
             self.assertEqual(
                 value,
                 match[0],
