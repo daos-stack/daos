@@ -171,16 +171,6 @@ class SoakTestBase(TestWithServers):
         run_metrics_check(self, prefix="final")
         # Gather logs
         get_job_logs(self)
-        try:
-            get_daos_server_logs(self)
-        except SoakTestError as error:
-            errors.append(f"<<FAILED: Failed to gather server logs {error}>>")
-        # Gather journalctl logs
-        hosts = list(set(self.hostlist_servers))
-        since = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.start_time))
-        until = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.end_time))
-        for journalctl_type in ["kernel", "daos_server"]:
-            get_journalctl_logs(self, hosts, since, until, journalctl_type)
 
         if self.all_failed_harassers:
             errors.extend(self.all_failed_harassers)
