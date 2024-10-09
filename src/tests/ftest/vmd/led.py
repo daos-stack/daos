@@ -107,10 +107,11 @@ class VmdLedStatus(OSAUtils):
             uuid_list = sorted(uuid_dict.keys())
             self.log.info("Devices on hosts %s: %s", hosts, uuid_list)
             for uuid in uuid_list:
-                resp = set_device_faulty(self, self.dmg, hosts.split(':')[0], uuid)
+                _sys_xs = uuid_dict[uuid]['has_sys_xs']
+                set_device_faulty(self, self.dmg, hosts.split(':')[0], uuid, None, _sys_xs)
                 self.log.info("Sleeping for 15 seconds ...")
                 time.sleep(15)
-                self.log.info(resp)
+                self.log.info(self.dmg.result)
 
     @fail_on(CommandFailure)
     def test_disk_failure_recover(self):
@@ -127,12 +128,11 @@ class VmdLedStatus(OSAUtils):
             self.log.info("Devices on hosts %s: %s", hosts, uuid_list)
             self.log.info("First device on hosts %s: %s", hosts, uuid_list[0])
             host = hosts.split(':')[0]
-            resp = set_device_faulty(self, self.dmg, host, uuid_list[0])
+            set_device_faulty(self, self.dmg, host, uuid_list[0])
             self.log.info("Sleeping for 15 seconds ...")
             time.sleep(15)
-            self.log.info(resp)
-            resp = self.dmg.storage_replace_nvme(
-                host=host, old_uuid=uuid_list[0], new_uuid=uuid_list[0])
+            self.log.info(self.dmg.result)
+            resp = self.dmg.storage_replace_nvme(host, old_uuid=uuid_list[0], new_uuid=uuid_list[0])
             self.log.info("Sleeping for 60 seconds ...")
             time.sleep(60)
             self.log.info(resp)
