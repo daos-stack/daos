@@ -300,6 +300,9 @@ class DaosCommandBase(CommandWithSubCommand):
                 #   --acl-file=PATH
                 #           input file containing ACL
                 self.acl_file = FormattedParameter("--acl-file={}", None)
+                #   --attrs=<name>:<value>[,<name>:<value>,...]
+                #           user-defined attributes
+                self.attrs = FormattedParameter("--attrs={}", None)
 
         class CreateSnapSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container create-snap command."""
