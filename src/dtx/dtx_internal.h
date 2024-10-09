@@ -213,6 +213,7 @@ struct dtx_pool_metrics {
 struct dtx_tls {
 	struct d_tm_node_t	*dt_committable;
 	struct d_tm_node_t	*dt_dtx_leader_total;
+	struct d_tm_node_t	*dt_async_cmt_lat;
 	uint64_t		 dt_agg_gen;
 	uint32_t		 dt_batched_ult_cnt;
 };
@@ -262,6 +263,9 @@ int dtx_cos_del(struct ds_cont_child *cont, struct dtx_id *xid,
 uint64_t dtx_cos_oldest(struct ds_cont_child *cont);
 void dtx_cos_prio(struct ds_cont_child *cont, struct dtx_id *xid,
 		  daos_unit_oid_t *oid, uint64_t dkey_hash);
+
+void dtx_cos_batched_del(struct ds_cont_child *cont, struct dtx_id xid[], bool rm[],
+			 uint32_t count);
 
 /* dtx_rpc.c */
 int dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte,
