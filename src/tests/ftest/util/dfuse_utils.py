@@ -399,47 +399,24 @@ class Dfuse(DfuseCommand):
             raise CommandFailure("fs query returned bad data.")
         return data["response"]
 
-    def get_log_file(self):
-        """Return the content of the log file
+    def get_log_file_data(self):
+        """Return the content of the log file for each clients
 
         Returns:
-            list: lines of the the DFuse log file
+            list: lines of the the DFuse log file for each clients
 
         Raises:
             CommandFailure: on failure to get the DFuse log file
 
         """
-
-        if len(self.hosts) != 1:
-            raise CommandFailure("get_log_file only supports one host")
-        if "D_LOG_FILE" not in self.env or not self.env["D_LOG_FILE"]:
-            raise CommandFailure("get_log_file needs a DFuse log files to be defined")
+        if not self.env.get("D_LOG_FILE"):
+            raise CommandFailure("get_log_file_data needs a DFuse log files to be defined")
 
         log_file = self.env["D_LOG_FILE"]
         result = run_remote(self.log, self.hosts, f"cat {log_file}")
         if not result.passed:
             raise CommandFailure(f'Log file {log_file} can not be open on {result.failed_hosts}')
-        return result.output[0].stdout
-
-    def mkdir(self, path):
-        """Create the directory(ies) if they do not exist
-
-        Args:
-            path (str): Path of the DFuse directory(ies) to create
-
-        Raises:
-            CommandFailure: on failure to create the DFuse directory(ies)
-
-        """
-
-        if len(self.hosts) != 1:
-            raise CommandFailure("mkdir only supports one host")
-
-        sub_dir = os.path.join(self.mount_dir.value, path)
-        result = run_remote(self.log, self.hosts, f"mkdir --parents {sub_dir}")
-        if not result.passed:
-            raise CommandFailure(
-                f'DFuse directory {path} can not be created on {result.failed_hosts}')
+        return [output.stdout for output in result.output]
 
 
 def get_dfuse(test, hosts, namespace=None):

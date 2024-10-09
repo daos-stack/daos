@@ -35,21 +35,21 @@ class DfuseContainerAttrs(TestWithServers):
             dfuse (Dfuse): DFuse instance to check
             container_name (str): Name of the container
         """
-        log_file = dfuse.get_log_file()
+        log_file = os.linesep.join(dfuse.get_log_file_data()[0])
         attrs = self.params.get("attrs", f"/run/{container_name}/*")
-        for attr in [attr.split(':') for attr in attrs.split(",")]:
-            match = None
-            attr_re = re.compile(r"^.+\ssetting\s+'" + attr[0] + r"'\s+is\s+(\d+)\s+seconds$")
-            for line in log_file:
-                match = attr_re.match(line)
-                if match:
-                    self.assertEqual(
-                        attr[1],
-                        match.group(1),
-                        f"Unexpected value for attribute {attr[0]}: "
-                        f"want={attr[1]}, got={match.group(1)}")
-                    break
-            self.assertIsNotNone(match, f"Setting of attribute {attr[0]} not found")
+        for name, value in [attr.split(':') for attr in attrs.split(",")]:
+            match = re.findall(
+                r"^.+\ssetting\s+'" + name + r"'\s+is\s+(\d+)\s+seconds$",
+                log_file,
+                re.MULTILINE)
+            self.assertEqual(
+                len(match),
+                1,
+                "Unexpected number setting(s) of attribute {name}: want=1, got={len(match)}")
+            self.assertEqual(
+                value,
+                match[0],
+                f"Unexpected value for attribute {name}: want={value}, got={match[0]}")
 
     def test_dfuse_container_attrs(self):
         """Jira ID: DAOS-14698.
