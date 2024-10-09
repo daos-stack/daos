@@ -717,11 +717,12 @@ dss_chore_ult(void *arg)
  *
  * \param[in]	chore	address of the embedded chore object
  * \param[in]	func	function to be executed via \a chore
+ * \param[in]	iofw	it is for IO forwarding or not
  *
  * \retval	-DER_CANCEL	chore queue stopping
  */
 int
-dss_chore_delegate(struct dss_chore *chore, dss_chore_func_t func)
+dss_chore_delegate(struct dss_chore *chore, dss_chore_func_t func, bool iofw)
 {
 	struct dss_module_info *info = dss_get_module_info();
 	int                     xs_id;
@@ -743,7 +744,7 @@ dss_chore_delegate(struct dss_chore *chore, dss_chore_func_t func)
 	}
 
 	/* Find the chore queue. */
-	xs_id = sched_ult2xs(DSS_XS_IOFW, info->dmi_tgt_id);
+	xs_id = sched_ult2xs(iofw ? DSS_XS_IOFW : DSS_XS_SWIM, info->dmi_tgt_id);
 	D_ASSERT(xs_id != -DER_INVAL);
 	dx = dss_get_xstream(xs_id);
 	D_ASSERT(dx != NULL);
