@@ -267,6 +267,8 @@ def define_components(reqs):
                 commands=[['make',
                            'all',
                            'NDCTL_ENABLE=n',
+                           'PMEMOBJ_IGNORE_DIRTY_SHUTDOWN=y',
+                           'PMEMOBJ_IGNORE_BAD_BLOCKS=y',
                            'BUILD_EXAMPLES=n',
                            'BUILD_BENCHMARKS=n',
                            'DOC=n',
