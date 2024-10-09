@@ -1811,7 +1811,7 @@ def create_cont(conf, pool=None, ctype=None, label=None, path=None, oclass=None,
         cmd.extend(['--hints', hints])
 
     if attrs:
-        cmd.extend(['--attrs', [f"{name}:{val}" for name, val in attrs.items()].join(',')])
+        cmd.extend(['--attrs', ','.join([f"{name}:{val}" for name, val in attrs.items()])])
 
     def _create_cont():
         """Helper function for create_cont"""
