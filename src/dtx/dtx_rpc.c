@@ -225,9 +225,10 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 	}
 
 out:
-	D_DEBUG(DB_TRACE, "DTX req for opc %x (req %p future %p) got reply from %d/%d: "
-		"epoch :"DF_X64", result %d\n", dra->dra_opc, req, dra->dra_future,
-		drr->drr_rank, drr->drr_tag, din != NULL ? din->di_epoch : 0, rc);
+	DL_CDEBUG(rc < 0 && rc != -DER_NONEXIST, DLOG_ERR, DB_TRACE, rc,
+		  "DTX req for opc %x (req %p future %p) got reply from %d/%d: "
+		  "epoch :"DF_X64"\n", dra->dra_opc, req, dra->dra_future,
+		  drr->drr_rank, drr->drr_tag, din != NULL ? din->di_epoch : 0);
 
 	drr->drr_comp = 1;
 	drr->drr_result = rc;

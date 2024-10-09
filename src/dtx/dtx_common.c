@@ -755,7 +755,7 @@ dtx_batched_commit(void *arg)
 			dbca->dbca_cleanup_done = 0;
 		}
 
-		if (dtx_cont_opened(cont) &&
+		if (0 && dtx_cont_opened(cont) &&
 		    !dbca->dbca_deregister && dbca->dbca_cleanup_req == NULL &&
 		    stat.dtx_oldest_active_time != 0 &&
 		    dtx_sec2age(stat.dtx_oldest_active_time) >= dbca->dbca_cleanup_thd) {
@@ -1351,7 +1351,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 		}
 	}
 
-	if (dth->dth_prepared || dtx_batched_ult_max == 0) {
+	if (dtx_batched_ult_max == 0) {
 		dth->dth_sync = 1;
 		goto sync;
 	}
