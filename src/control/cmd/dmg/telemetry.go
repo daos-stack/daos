@@ -197,11 +197,17 @@ type (
 		Targets []string `yaml:"targets,omitempty"`
 	}
 
+	tlsConfig struct {
+		CaFile string `yaml:"ca_file,omitempty"`
+	}
+
 	scrapeConfig struct {
 		JobName        string          `yaml:"job_name"`
 		ScrapeInterval time.Duration   `yaml:"scrape_interval,omitempty"`
 		ScrapeTimeout  time.Duration   `yaml:"scrape_timeout,omitempty"`
 		StaticConfigs  []*staticConfig `yaml:"static_configs,omitempty"`
+		Scheme         string          `yaml:"scheme,omitempty"`
+		TlsConfig      tlsConfig       `yaml:"tls_config,omitempty"`
 	}
 
 	promCfg struct {
@@ -261,11 +267,24 @@ func (cmd *telemConfigCmd) configurePrometheus() (*installInfo, error) {
 		}
 		sc.Targets = append(sc.Targets, host+":9191")
 	}
+
+	tc := tlsConfig{}
+	scheme := ""
+	if !cmd.cfgCmd.config.TelemetryConfig.AllowInsecure {
+		cmd.Infof("Prometheus configuration is setup as Secure (https) mode")
+		tc.CaFile = cmd.cfgCmd.config.TelemetryConfig.CARootPath
+		scheme = "https"
+	} else {
+		cmd.Infof("Prometheus configuration is setup as insecure (http) mode")
+	}
+
 	cfg.ScrapeConfigs = []*scrapeConfig{
 		{
 			JobName:        "daos",
 			ScrapeInterval: 5 * time.Second,
 			StaticConfigs:  []*staticConfig{sc},
+			Scheme:         scheme,
+			TlsConfig:      tc,
 		},
 	}
 
@@ -303,6 +322,7 @@ type metricsCmd struct {
 // metricsListCmd provides a list of metrics available from the requested DAOS servers.
 type metricsListCmd struct {
 	baseCmd
+	cfgCmd
 	cmdutil.JSONOutputCmd
 	singleHostCmd
 	Port uint32 `short:"p" long:"port" default:"9191" description:"Telemetry port on the host"`
@@ -318,6 +338,8 @@ func (cmd *metricsListCmd) Execute(args []string) error {
 	req := new(control.MetricsListReq)
 	req.Port = cmd.Port
 	req.Host = host
+	req.AllowInsecure = cmd.cfgCmd.config.TelemetryConfig.AllowInsecure
+	req.CaCertPath = cmd.cfgCmd.config.TelemetryConfig.CARootPath
 
 	if !cmd.JSONOutputEnabled() {
 		cmd.Info(getConnectingMsg(req.Host, req.Port))
@@ -357,6 +379,7 @@ func getConnectingMsg(host string, port uint32) string {
 // metricsQueryCmd collects the requested metrics from the requested DAOS servers.
 type metricsQueryCmd struct {
 	baseCmd
+	cfgCmd
 	cmdutil.JSONOutputCmd
 	singleHostCmd
 	Port    uint32 `short:"p" long:"port" default:"9191" description:"Telemetry port on the host"`
@@ -373,6 +396,8 @@ func (cmd *metricsQueryCmd) Execute(args []string) error {
 	req := new(control.MetricsQueryReq)
 	req.Port = cmd.Port
 	req.Host = host
+	req.AllowInsecure = cmd.cfgCmd.config.TelemetryConfig.AllowInsecure
+	req.CaCertPath = cmd.cfgCmd.config.TelemetryConfig.CARootPath
 	req.MetricNames = common.TokenizeCommaSeparatedString(cmd.Metrics)
 
 	if !cmd.JSONOutputEnabled() {
