@@ -306,11 +306,7 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	defer disconnectPool()
 
 	var contID string
-	if cmd.Path != "" {
-		contID, err = cmd.contCreateUNS()
-	} else {
-		contID, err = cmd.contCreate()
-	}
+	contID, err = cmd.contCreate()
 	if err != nil {
 		return err
 	}
@@ -398,12 +394,15 @@ func (cmd *containerCreateCmd) contCreate() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	contID := cmd.contUUID.String()
+	cContID := C.CString(contID)
+	defer freeString(cContID)
 
-	var contID string
-	if cmd.contUUID == uuid.Nil {
-		contID = cmd.contLabel
-	} else {
-		contID = cmd.contUUID.String()
+	cleanupContainer := func() {
+		rc := C.daos_cont_destroy(cmd.cPoolHandle, cContID, goBool2int(true), nil)
+		if err := daosError(rc); err != nil {
+			cmd.Noticef("Failed to clean-up container %v", err)
+		}
 	}
 
 	if len(cmd.Attrs.ParsedProps) != 0 {
@@ -416,104 +415,30 @@ func (cmd *containerCreateCmd) contCreate() (string, error) {
 		}
 
 		if err := cmd.openContainer(C.DAOS_COO_RW); err != nil {
+			cleanupContainer()
 			return "", errors.Wrapf(err, "failed to open new container %s", contID)
 		}
 		defer cmd.closeContainer()
 
 		if err := setDaosAttributes(cmd.cContHandle, contAttr, attrs); err != nil {
+			cleanupContainer()
 			return "", errors.Wrapf(err, "failed to set user attributes on new container %s", contID)
 		}
 	}
 
-	cmd.Infof("Successfully created container %s", contID)
-	return contID, nil
-}
+	if cmd.Path != "" {
+		cPath := C.CString(cmd.Path)
+		defer freeString(cPath)
 
-func (cmd *containerCreateCmd) contCreateUNS() (string, error) {
-	var dattr C.struct_duns_attr_t
-
-	props, cleanupProps, err := cmd.getCreateProps()
-	if err != nil {
-		return "", err
-	}
-	defer cleanupProps()
-	dattr.da_props = props
-
-	if !cmd.Type.Set {
-		return "", errors.New("container type is required for UNS")
-	}
-	dattr.da_type = cmd.Type.Type
-
-	if cmd.poolUUID != uuid.Nil {
-		poolUUIDStr := C.CString(cmd.poolUUID.String())
-		defer freeString(poolUUIDStr)
-		C.uuid_parse(poolUUIDStr, &dattr.da_puuid[0])
-	}
-	if cmd.contUUID != uuid.Nil {
-		contUUIDStr := C.CString(cmd.contUUID.String())
-		defer freeString(contUUIDStr)
-		C.uuid_parse(contUUIDStr, &dattr.da_cuuid[0])
-	}
-
-	if cmd.ChunkSize.Set {
-		dattr.da_chunk_size = cmd.ChunkSize.Size
-	}
-	if cmd.ObjectClass.Set {
-		dattr.da_oclass_id = cmd.ObjectClass.Class
-	}
-	if cmd.DirObjectClass.Set {
-		dattr.da_dir_oclass_id = cmd.DirObjectClass.Class
-	}
-	if cmd.FileObjectClass.Set {
-		dattr.da_file_oclass_id = cmd.FileObjectClass.Class
-	}
-	if cmd.CHints != "" {
-		hint := C.CString(cmd.CHints)
-		defer freeString(hint)
-		C.strncpy(&dattr.da_hints[0], hint, C.DAOS_CONT_HINT_MAX_LEN-1)
-	}
-
-	cPath := C.CString(cmd.Path)
-	defer freeString(cPath)
-
-	var dunsErrno C.int
-	attrs := cmd.Attrs.ParsedProps
-	if len(attrs) == 0 {
-		dunsErrno = C.duns_create_path(cmd.cPoolHandle, cPath, &dattr)
-	} else {
-		i := 0
-		attrNames := make([]*C.char, len(attrs))
-		valSizes := make([]C.size_t, len(attrs))
-		valBufs := make([]unsafe.Pointer, len(attrs))
-		for key, val := range attrs {
-			attrNames[i] = C.CString(key)
-			valSizes[i] = C.size_t(len(val))
-			valBufs[i] = C.malloc(valSizes[i])
-			valSlice := (*[1 << 30]byte)(valBufs[i])
-			copy(valSlice[:], val)
-			i++
+		dunsErrno := C.duns_link_cont(cmd.cPoolHandle, cContID, cPath)
+		rc := C.daos_errno2der(dunsErrno)
+		if err := daosError(rc); err != nil {
+			cleanupContainer()
+			return "", errors.Wrapf(err, "duns_link_cont() failed")
 		}
-		defer func(nameSlice []*C.char, bufSlice []unsafe.Pointer) {
-			for i := 0; i < len(nameSlice); i++ {
-				freeString(nameSlice[i])
-				C.free(bufSlice[i])
-			}
-		}(attrNames, valBufs)
-
-		dunsErrno = C.duns_create_path_attr(cmd.cPoolHandle, cPath, C.int(len(attrs)), &attrNames[0], &valBufs[0], &valSizes[0], &dattr)
 	}
 
-	rc := C.daos_errno2der(dunsErrno)
-	if err := daosError(rc); err != nil {
-		return "", errors.Wrapf(err, "duns_create_path() failed")
-	}
-
-	contID := C.GoString(&dattr.da_cont[0])
-	cmd.contUUID, err = uuid.Parse(contID)
-	if err != nil {
-		cmd.contLabel = contID
-	}
-	cmd.Infof("Successfully created container %s type %s", contID, cmd.Type.String())
+	cmd.Infof("Successfully created container %s", contID)
 	return contID, nil
 }
 
