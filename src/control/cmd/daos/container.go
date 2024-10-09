@@ -251,6 +251,7 @@ type containerCreateCmd struct {
 	Mode            ConsModeFlag         `long:"mode" short:"M" description:"DFS consistency mode"`
 	ACLFile         string               `long:"acl-file" short:"A" description:"input file containing ACL"`
 	Group           ui.ACLPrincipalFlag  `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
+	Attrs           ui.SetPropertiesFlag `long:"set-attr" short:"s" description:"user-defined attributes (key:val[,key:val...])"`
 	Args            struct {
 		Label string `positional-arg-name:"label"`
 	} `positional-args:"yes"`
@@ -405,6 +406,25 @@ func (cmd *containerCreateCmd) contCreate() (string, error) {
 		contID = cmd.contUUID.String()
 	}
 
+	if len(cmd.Attrs.ParsedProps) != 0 {
+		attrs := make(attrList, 0, len(cmd.Attrs.ParsedProps))
+		for key, val := range cmd.Attrs.ParsedProps {
+			attrs = append(attrs, &attribute{
+				Name:  key,
+				Value: []byte(val),
+			})
+		}
+
+		if err := cmd.openContainer(C.DAOS_COO_RW); err != nil {
+			return "", errors.Wrapf(err, "failed to open new container %s", contID)
+		}
+		defer cmd.closeContainer()
+
+		if err := setDaosAttributes(cmd.cContHandle, contAttr, attrs); err != nil {
+			return "", errors.Wrapf(err, "failed to set user attributes on new container %s", contID)
+		}
+	}
+
 	cmd.Infof("Successfully created container %s", contID)
 	return contID, nil
 }
@@ -456,7 +476,33 @@ func (cmd *containerCreateCmd) contCreateUNS() (string, error) {
 	cPath := C.CString(cmd.Path)
 	defer freeString(cPath)
 
-	dunsErrno := C.duns_create_path(cmd.cPoolHandle, cPath, &dattr)
+	var dunsErrno C.int
+	attrs := cmd.Attrs.ParsedProps
+	if len(attrs) == 0 {
+		dunsErrno = C.duns_create_path(cmd.cPoolHandle, cPath, &dattr)
+	} else {
+		i := 0
+		attrNames := make([]*C.char, len(attrs))
+		valSizes := make([]C.size_t, len(attrs))
+		valBufs := make([]unsafe.Pointer, len(attrs))
+		for key, val := range attrs {
+			attrNames[i] = C.CString(key)
+			valSizes[i] = C.size_t(len(val))
+			valBufs[i] = C.malloc(valSizes[i])
+			valSlice := (*[1 << 30]byte)(valBufs[i])
+			copy(valSlice[:], val)
+			i++
+		}
+		defer func(nameSlice []*C.char, bufSlice []unsafe.Pointer) {
+			for i := 0; i < len(nameSlice); i++ {
+				freeString(nameSlice[i])
+				C.free(bufSlice[i])
+			}
+		}(attrNames, valBufs)
+
+		dunsErrno = C.duns_create_path_attr(cmd.cPoolHandle, cPath, C.int(len(attrs)), &attrNames[0], &valBufs[0], &valSizes[0], &dattr)
+	}
+
 	rc := C.daos_errno2der(dunsErrno)
 	if err := daosError(rc); err != nil {
 		return "", errors.Wrapf(err, "duns_create_path() failed")

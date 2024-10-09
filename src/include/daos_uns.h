@@ -162,6 +162,34 @@ int
 duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp);
 
 /**
+ * Create a special directory (POSIX) or file (HDF5) depending on the container type, and create a
+ * new DAOS container with a givren set of user attributes. The uuid of the container can be either
+ * passed in \a attrp->da_cuuid (deprecated) or generated internally and returned in \a da_cont.
+ * The extended attributes are set on the dir/file created that points to pool uuid, container
+ * uuid. This is to be used in a unified namespace solution to be able to map a path in the unified
+ * namespace to a location in the DAOS tier.  The container and pool can have labels, but the UNS
+ * stores the uuids only and so labels are ignored in \a attrp.
+ * The user is not required to call duns_destory_attrs on \a attrp as this call does not allocate
+ * any buffers in attrp.
+ *
+ * \param[in]	poh	Pool handle
+ * \param[in]	path	Valid path in an existing namespace.
+ * \param[in]	count	Number of container attributes
+ * \param[in]	names	Array of \a count null-terminated container attribute names.
+ * \param[in]	values	Array of \a count container attribute values
+ * \param[in]	sizes	Array of \a count elements containing the sizes of respective container
+ *			attribute values.
+ * \param[in,out]
+ *		attrp	Struct containing the attributes. The uuid of the
+ *			container created is returned in da_cuuid.
+ *
+ * \return		0 on Success. errno code on failure.
+ */
+int
+duns_create_path_attr(daos_handle_t poh, const char *path, int count, char const *const names[],
+		      void const *const values[], size_t const sizes[], struct duns_attr_t *attrp);
+
+/**
  * Retrieve the pool and container uuids from a path corresponding to a DAOS location. If this was a
  * path created with duns_create_path(), then this call would return the pool, container, and type
  * values in the \a attr struct (the rest of the values are not populated.  By default, this call

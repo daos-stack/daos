@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -899,8 +899,9 @@ duns_link_lustre_path(const char *pool, const char *cont, daos_cont_layout_t typ
 }
 #endif
 
-int
-duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
+static int
+create_path(daos_handle_t poh, const char *path, int count, char const *const names[],
+	    void const *const values[], size_t const sizes[], struct duns_attr_t *attrp)
 {
 	char			type[10];
 	daos_pool_info_t	info = {0};
@@ -1080,6 +1081,31 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		D_GOTO(err_link, rc);
 	}
 
+	if (count > 0) {
+		daos_handle_t coh;
+
+		D_ASSERT(names != NULL);
+		D_ASSERT(values != NULL);
+		D_ASSERT(sizes != NULL);
+
+		rc = daos_cont_open(poh, attrp->da_cont, DAOS_COO_RW, &coh, NULL, NULL);
+		if (rc != 0) {
+			DL_ERROR(rc, "Failed to open container %s", attrp->da_cont);
+			D_GOTO(err_cont, rc = daos_der2errno(rc));
+		}
+		rc  = daos_cont_set_attr(coh, count, names, values, sizes, NULL);
+		rc2 = daos_cont_close(coh, NULL);
+		if (rc != 0) {
+			DL_ERROR(rc, "Failed to set user attribute of container %s",
+				 attrp->da_cont);
+			D_GOTO(err_cont, rc = daos_der2errno(rc));
+		}
+		if (rc2 != 0) {
+			DL_ERROR(rc2, "failed to close container %s", attrp->da_cont);
+			D_GOTO(err_cont, rc = daos_der2errno(rc2));
+		}
+	}
+
 	/** store the daos attributes in the path xattr */
 	len =
 	    snprintf(str, DUNS_MAX_XATTR_LEN, DUNS_XATTR_FMT, type, attrp->da_pool, attrp->da_cont);
@@ -1126,6 +1152,19 @@ err_link:
 	else if (attrp->da_type != DAOS_PROP_CO_LAYOUT_UNKNOWN)
 		unlink(path);
 	return rc;
+}
+
+int
+duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
+{
+	return create_path(poh, path, 0, NULL, NULL, NULL, attrp);
+}
+
+int
+duns_create_path_attr(daos_handle_t poh, const char *path, int count, char const *const names[],
+		      void const *const values[], size_t const sizes[], struct duns_attr_t *attrp)
+{
+	return create_path(poh, path, count, names, values, sizes, attrp);
 }
 
 int
