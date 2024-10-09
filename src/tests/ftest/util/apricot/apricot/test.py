@@ -10,6 +10,7 @@ import random
 import re
 import sys
 from ast import literal_eval
+from getpass import getuser
 from time import time
 
 from agent_utils import DaosAgentManager, include_local_host
@@ -147,8 +148,7 @@ class Test(avocadoTest):
 
     def setUp(self):
         """Set up each test case."""
-        test_env = TestEnvironment()
-        self.prefix = test_env.daos_prefix
+        self.prefix = self.test_env.daos_prefix
         self.log.info("Using daos install prefix = %s", self.prefix)
         self.cancel_from_list()
         self.check_variant_skip()
@@ -1065,12 +1065,10 @@ class TestWithServers(TestWithoutServers):
         """
         if group is None:
             group = self.server_group
-        if config_file is None and self.agent_manager_class == "Systemctl":
+
+        if config_file is None:
             config_file = self.test_env.agent_config
             config_temp = self.get_config_file(group, "agent", self.test_dir)
-        elif config_file is None:
-            config_file = self.get_config_file(group, "agent")
-            config_temp = None
 
         # Verify the correct configuration files have been provided
         if self.agent_manager_class == "Systemctl" and config_temp is None:
@@ -1079,10 +1077,12 @@ class TestWithServers(TestWithoutServers):
                 "file provided for the Systemctl manager class!")
 
         # Define the location of the certificates
-        if self.agent_manager_class == "Systemctl":
+        if self.agent_manager_class == "Systemctl" and self.test_env.agent_user != getuser():
+            # Default directory requiring privileged access
             cert_dir = os.path.join(os.sep, "etc", "daos", "certs")
         else:
-            cert_dir = self.workdir
+            # Test-specific directory not requiring privileged access
+            cert_dir = os.path.join(self.test_env.log_dir, "daos_certs")
 
         self.agent_managers.append(
             DaosAgentManager(
@@ -1115,19 +1115,14 @@ class TestWithServers(TestWithoutServers):
         """
         if group is None:
             group = self.server_group
-        if svr_config_file is None and self.server_manager_class == "Systemctl":
+
+        if svr_config_file is None:
             svr_config_file = self.test_env.server_config
-            svr_config_temp = self.get_config_file(
-                group, "server", self.test_dir)
-        elif svr_config_file is None:
-            svr_config_file = self.get_config_file(group, "server")
-            svr_config_temp = None
-        if dmg_config_file is None and self.server_manager_class == "Systemctl":
+            svr_config_temp = self.get_config_file(group, "server", self.test_dir)
+
+        if dmg_config_file is None:
             dmg_config_file = self.test_env.control_config
             dmg_config_temp = self.get_config_file(group, "dmg", self.test_dir)
-        elif dmg_config_file is None:
-            dmg_config_file = self.get_config_file(group, "dmg")
-            dmg_config_temp = None
 
         # Verify the correct configuration files have been provided
         if self.server_manager_class == "Systemctl" and svr_config_temp is None:
@@ -1137,16 +1132,18 @@ class TestWithServers(TestWithoutServers):
 
         # Define the location of the certificates
         if self.server_manager_class == "Systemctl":
+            # Default directory requiring privileged access
             svr_cert_dir = os.path.join(os.sep, "etc", "daos", "certs")
             dmg_cert_dir = os.path.join(os.sep, "etc", "daos", "certs")
         else:
-            svr_cert_dir = self.workdir
-            dmg_cert_dir = self.workdir
+            # Test-specific directory not requiring privileged access
+            svr_cert_dir = os.path.join(self.test_env.log_dir, "daos_certs")
+            dmg_cert_dir = os.path.join(self.test_env.log_dir, "daos_certs")
 
         self.server_managers.append(
             DaosServerManager(
                 group, self.bin, svr_cert_dir, svr_config_file, dmg_cert_dir,
-                dmg_config_file, svr_config_temp, dmg_config_temp,
+                dmg_config_file, "root", svr_config_temp, dmg_config_temp,
                 self.server_manager_class, access_points_suffix=self.access_points_suffix)
         )
         if self.server_config_namespace is not None:
