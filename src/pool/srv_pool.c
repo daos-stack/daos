@@ -1189,7 +1189,7 @@ pool_svc_locate_cb(d_iov_t *id, char **path)
 static unsigned int
 get_crt_event_delay(void)
 {
-	unsigned int t = 0 /* s */;
+	unsigned int t = 10 /* s */;
 
 	d_getenv_uint("CRT_EVENT_DELAY", &t);
 	return t;
@@ -6965,7 +6965,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 		D_INFO(DF_UUID": SWIM exclude %d ranks, failed NODE %d\n",
 		       DP_UUID(svc->ps_uuid), tgt_addrs->pta_number, failed_cnt);
 		if (failed_cnt > pw_rf) {
-			D_CRIT(DF_UUID": exclude %d ranks will break pw_rf %d, failed_cnt %d\n",
+			D_CRIT(DF_UUID": exclude %d ranks will break pool RF %d, failed_cnt %d\n",
 			       DP_UUID(svc->ps_uuid), tgt_addrs->pta_number, pw_rf, failed_cnt);
 			ABT_rwlock_rdlock(svc->ps_pool->sp_lock);
 			rc = pool_map_crit_prompt(svc, svc->ps_pool->sp_map);
