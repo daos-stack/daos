@@ -75,7 +75,7 @@ class DaosCommand(DaosCommandBase):
 
     def container_create(self, pool, sys_name=None, path=None, cont_type=None,
                          oclass=None, dir_oclass=None, file_oclass=None, chunk_size=None,
-                         properties=None, acl_file=None, label=None):
+                         properties=None, acl_file=None, label=None, attrs=None):
         # pylint: disable=too-many-arguments
         """Create a container.
 
@@ -96,6 +96,8 @@ class DaosCommand(DaosCommandBase):
                 pairs defining the container properties. Defaults to None
             acl_file (str, optional): ACL file. Defaults to None.
             label (str, optional): Container label. Defaults to None.
+            attrs (str, optional): String of comma-separated <name>:<value> pairs defining the
+                container user attributes.  Defaults to None.
 
         Returns:
             dict: the daos json command output converted to a python dictionary
@@ -110,10 +112,12 @@ class DaosCommand(DaosCommandBase):
                 properties += ',rd_lvl:1'
         else:
             properties = 'rd_lvl:1'
+
         return self._get_json_result(
             ("container", "create"), pool=pool, sys_name=sys_name, path=path,
             type=cont_type, oclass=oclass, dir_oclass=dir_oclass, file_oclass=file_oclass,
-            chunk_size=chunk_size, properties=properties, acl_file=acl_file, label=label)
+            chunk_size=chunk_size, properties=properties, acl_file=acl_file, label=label,
+            attrs=attrs)
 
     def container_clone(self, src, dst):
         """Clone a container to a new container.
