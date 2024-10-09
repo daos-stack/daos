@@ -251,7 +251,7 @@ type containerCreateCmd struct {
 	Mode            ConsModeFlag         `long:"mode" short:"M" description:"DFS consistency mode"`
 	ACLFile         string               `long:"acl-file" short:"A" description:"input file containing ACL"`
 	Group           ui.ACLPrincipalFlag  `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
-	Attrs           ui.SetPropertiesFlag `long:"set-attr" short:"s" description:"user-defined attributes (key:val[,key:val...])"`
+	Attrs           ui.SetPropertiesFlag `long:"attrs" short:"a" description:"user-defined attributes (key:val[,key:val...])"`
 	Args            struct {
 		Label string `positional-arg-name:"label"`
 	} `positional-args:"yes"`
