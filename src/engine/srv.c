@@ -523,6 +523,9 @@ dss_srv_handler(void *arg)
 		}
 	}
 
+	if (dx->dx_xs_id == 1)
+		with_chore_queue = true;
+
 	if (with_chore_queue) {
 		rc = dss_chore_queue_start(dx);
 		if (rc != 0) {
