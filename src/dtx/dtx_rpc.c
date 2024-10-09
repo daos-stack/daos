@@ -225,9 +225,10 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 	}
 
 out:
-	D_DEBUG(DB_TRACE, "DTX req for opc %x (req %p future %p) got reply from %d/%d: "
-		"epoch :"DF_X64", result %d\n", dra->dra_opc, req, dra->dra_future,
-		drr->drr_rank, drr->drr_tag, din != NULL ? din->di_epoch : 0, rc);
+	DL_CDEBUG(rc < 0 && rc != -DER_NONEXIST, DLOG_ERR, DB_TRACE, rc,
+		  "DTX req for opc %x (req %p future %p) got reply from %d/%d: "
+		  "epoch :"DF_X64, dra->dra_opc, req, dra->dra_future,
+		  drr->drr_rank, drr->drr_tag, din != NULL ? din->di_epoch : 0);
 
 	drr->drr_comp = 1;
 	drr->drr_result = rc;
@@ -736,6 +737,7 @@ dtx_rpc(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **dtes,
 				goto out;
 			}
 
+			dca->dca_chore.cho_load = dca->dca_steps;
 			rc = dss_chore_delegate(&dca->dca_chore, dtx_rpc_helper);
 			if (rc != 0)
 				goto out;
@@ -1557,6 +1559,7 @@ dtx_coll_rpc_prep(struct ds_cont_child *cont, struct dtx_coll_entry *dce, uint32
 	}
 
 	if (dss_has_enough_helper()) {
+		dcra->dcra_chore.cho_load = 1;
 		rc = dss_chore_delegate(&dcra->dcra_chore, dtx_coll_rpc_helper);
 	} else {
 		dss_chore_diy(&dcra->dcra_chore, dtx_coll_rpc_helper);

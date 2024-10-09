@@ -751,6 +751,7 @@ typedef enum dss_chore_status (*dss_chore_func_t)(struct dss_chore *chore, bool 
 struct dss_chore {
 	d_list_t              cho_link;
 	enum dss_chore_status cho_status;
+	uint32_t	      cho_load;
 	dss_chore_func_t      cho_func;
 };
 
