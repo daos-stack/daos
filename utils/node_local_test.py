@@ -4825,7 +4825,8 @@ def log_test(conf,
     lto.hide_fi_calls = skip_fi
 
     if ignore_einval:
-        lto.skip_suffixes.append(': 22 (Invalid argument)')
+        # lto.skip_suffixes.append(': 22 (Invalid argument)')
+        lto.skip_suffixes.append(': 5 (Input/output error)')
         lto.skip_suffixes.append(" DER_NO_HDL(-1002): 'Invalid handle'")
 
     if ignore_busy:
@@ -4978,6 +4979,242 @@ def run_dfuse(server, conf):
     else:
         print('Reached the end, no errors')
     return fatal_errors.errors
+
+
+def run_evict_test(server):
+    """Run dfuse, do some I/O and then evict the container to see what happens.
+
+    Create a container which will be persistent, then create a new container within that to
+    test on.
+
+    <root>                                                  first container
+    <root>/intermediate_dir
+    <root>/intermediate_dir/subcont                         second (evicted) container
+    <root>/intermediate_dir/subcont/test_dir
+    <root>/intermediate_dir/subcont/test_dir/dd_file        opened after eviction
+    """
+    pool = server.get_test_pool_obj()
+
+    container = create_cont(server.conf, pool=pool, label='evict_cont', ctype='POSIX')
+
+    pool = server.get_test_pool_obj()
+    dfuse = DFuse(server, server.conf, container=container, caching=False)
+    dfuse.start()
+
+    p_path = join(dfuse.dir, "intermediate_dir")
+    os.mkdir(p_path)
+    cont_path = join(p_path, 'subcont')
+
+    sub_cont = create_cont(server.conf, pool=pool, path=cont_path)
+
+    test_path = join(cont_path, "test_dir")
+
+    os.mkdir(test_path)
+
+    # Sample the inode number of the test dir in the sub container, and check it's accessible.
+    sub_stat = os.stat(test_path)
+    dfuse_stat = dfuse.check_usage(ino=sub_stat.st_ino)
+    print(dfuse_stat)
+
+    # pylint: disable-next=consider-using-with
+    fd = open(join(test_path, 'testfile'), 'wb', buffering=0)
+    fd.write(b'hello')
+    fd.close()
+
+    # Evict the container.
+    run_daos_cmd(server.conf, ['container', 'evict', '--all', pool.id(), sub_cont.id()])
+
+    # The evict can take some time to come into effect.
+    time.sleep(20)
+
+    subprocess.run(['dd', 'if=/dev/zero', 'bs=16k', 'count=64',  # nosec
+                    f'of={join(test_path, "dd_file")}'], check=False)
+
+    time.sleep(2)
+
+    print(os.stat(cont_path))
+
+    # Now evict the whole new container.  This will cause dfuse to flush everything and then
+    # unmount the container.
+    # Any missing refs in dfuse should cause an assertion, any extra refs should cause the number
+    # of inodes to be incorrect.
+    dfuse.evict_and_wait([p_path])
+
+    # Now check there is only the root inode, everything else should be disconnected/closed.
+    dfuse_stat = dfuse.check_usage(inodes=1, open_files=1, pools=1, containers=1)
+
+    dfuse.stop(ignore_einval=True)
+    return False
+
+
+def run_evict_test_fd(server):
+    """Run dfuse, do some I/O and then evict the container to see what happens.
+
+    Create a container which will be persistent, then create a new container within that to
+    test on.
+
+    <root>                                                  first container
+    <root>/intermediate_dir
+    <root>/intermediate_dir/subcont                         second (evicted) container
+    <root>/intermediate_dir/subcont/test_dir
+    <root>/intermediate_dir/subcont/test_dir/testfile       file with I/O errors
+    <root>/intermediate_dir/subcont/test_dir/dd_file        opened after eviction
+    """
+    pool = server.get_test_pool_obj()
+
+    container = create_cont(server.conf, pool=pool, label='evict_cont', ctype='POSIX')
+
+    pool = server.get_test_pool_obj()
+    dfuse = DFuse(server, server.conf, container=container, caching=False)
+    dfuse.start()
+
+    p_path = join(dfuse.dir, "intermediate_dir")
+    os.mkdir(p_path)
+    cont_path = join(p_path, 'subcont')
+
+    sub_cont = create_cont(server.conf, pool=pool, path=cont_path)
+
+    test_path = join(cont_path, "test_dir")
+
+    os.mkdir(test_path)
+
+    # Sample the inode number of the test dir in the sub container, and check it's accessible.
+    sub_stat = os.stat(test_path)
+    dfuse_stat = dfuse.check_usage(ino=sub_stat.st_ino)
+    print(dfuse_stat)
+
+    # pylint: disable-next=consider-using-with
+    fd = open(join(test_path, 'testfile'), 'wb', buffering=0)
+    fd.write(b'hello')
+
+    # Evict the container.
+    run_daos_cmd(server.conf, ['container', 'evict', '--all', pool.id(), sub_cont.id()])
+
+    # The evict can take some time to come into effect.
+    time.sleep(20)
+
+    try:
+        fd.write(b'world')
+        assert False
+    except OSError as error:
+        if error.errno != errno.EIO:
+            raise
+
+    fd.close()
+
+    time.sleep(2)
+
+    # Try a lookup again without any open files to trigger an inval_dentry in dfuse.
+    print(os.stat(cont_path))
+
+    # Now evict the whole new container.  This will cause dfuse to flush everything and then
+    # unmount the container.
+    # Any missing refs in dfuse should cause an assertion, any extra refs should cause the number
+    # of inodes to be incorrect.
+    dfuse.evict_and_wait([p_path])
+
+    # Now check there is only the root inode, everything else should be disconnected/closed.
+    dfuse_stat = dfuse.check_usage(inodes=1, open_files=1, pools=1, containers=1)
+
+    dfuse.stop(ignore_einval=True)
+    return False
+
+
+def run_evict_test_fd_dd(server):
+    """Run dfuse, do some I/O and then evict the container to see what happens.
+
+    Create a container which will be persistent, then create a new container within that to
+    test on.
+
+    <root>                                                  first container
+    <root>/intermediate_dir
+    <root>/intermediate_dir/subcont                         second (evicted) container
+    <root>/intermediate_dir/subcont/test_dir
+    <root>/intermediate_dir/subcont/test_dir/testfile       file with I/O errors
+    <root>/intermediate_dir/subcont/test_dir/dd_file        opened after eviction
+    """
+    pool = server.get_test_pool_obj()
+
+    container = create_cont(server.conf, pool=pool, label='evict_cont', ctype='POSIX')
+
+    pool = server.get_test_pool_obj()
+    dfuse = DFuse(server, server.conf, container=container, caching=False)
+    dfuse.start()
+
+    p_path = join(dfuse.dir, "intermediate_dir")
+    os.mkdir(p_path)
+    cont_path = join(p_path, 'subcont')
+
+    sub_cont = create_cont(server.conf, pool=pool, path=cont_path)
+
+    test_path = join(cont_path, "test_dir")
+
+    os.mkdir(test_path)
+
+    # Sample the inode number of the test dir in the sub container, and check it's accessible.
+    sub_stat = os.stat(test_path)
+    dfuse_stat = dfuse.check_usage(ino=sub_stat.st_ino)
+    print(dfuse_stat)
+
+    # pylint: disable-next=consider-using-with
+    fd = open(join(test_path, 'testfile'), 'wb', buffering=0)
+    fd.write(b'hello')
+
+    # Evict the container.
+    run_daos_cmd(server.conf, ['container', 'evict', '--all', pool.id(), sub_cont.id()])
+
+    # The evict can take some time to come into effect.
+    time.sleep(20)
+
+    try:
+        fd.write(b'world')
+        assert False
+    except OSError as error:
+        if error.errno != errno.EIO:
+            raise
+
+    subprocess.run(['dd', 'if=/dev/zero', 'bs=16k', 'count=64',  # nosec
+                    f'of={join(test_path, "dd_file")}'], check=False)
+
+    fd.close()
+
+    time.sleep(2)
+
+    # Try a lookup again without any open files to trigger an inval_dentry in dfuse.
+    try:
+        print(os.stat(cont_path))
+        assert False
+    except OSError as error:
+        if error.errno != errno.EIO:
+            raise
+
+    # Re-sample the sub-container to see if it's been evicted.  This does not access it but queries
+    # the mount.  The logic here is that dfuse should have received an I/O error and therefore
+    # evicted the inode.
+    count = 3
+    while True:
+        dfuse_stat = dfuse.check_usage(ino=sub_stat.st_ino)
+        print(dfuse_stat)
+        if dfuse_stat['resident'] is False:
+            print('Path has been evicted')
+            break
+        count -= 1
+        if count == 0:
+            print(f'Path with inode 0x{sub_stat.st_ino:x} should have been evicted')
+            assert False, f'Path with inode 0x{sub_stat.st_ino:x} should have been evicted'
+        time.sleep(1)
+
+    # Now evict the whole new container.  This will cause dfuse to flush everything and then
+    # unmount the container.
+    # Any missing refs in dfuse should cause an assertion, any extra refs should cause the number
+    # of inodes to be incorrect.
+    dfuse.evict_and_wait([p_path])
+
+    # Now check there is only the root inode, everything else should be disconnected/closed.
+    dfuse_stat = dfuse.check_usage(inodes=1, open_files=1, pools=1, containers=1)
+
+    dfuse.stop(ignore_einval=True)
+    return False
 
 
 def run_in_fg(server, conf, args):
@@ -6361,6 +6598,7 @@ def run(wf, args):
     else:
         with DaosServer(conf, test_class='first', wf=wf_server,
                         fatal_errors=fatal_errors) as server:
+
             if args.mode == 'launch':
                 run_in_fg(server, conf, args)
             elif args.mode == 'overlay':
@@ -6375,6 +6613,10 @@ def run(wf, args):
                 test_pydaos_kv(server, conf)
                 test_pydaos_kv_obj_class(server, conf)
                 fatal_errors.add_result(server.set_fi())
+            elif args.mode == 'evict-test':
+                fatal_errors.add_result(run_evict_test(server))
+                fatal_errors.add_result(run_evict_test_fd(server))
+                fatal_errors.add_result(run_evict_test_fd_dd(server))
             elif args.test == 'all':
                 fatal_errors.add_result(run_posix_tests(server, conf))
             elif args.test:
@@ -6521,7 +6763,8 @@ def main():
     parser.add_argument('--log-usage-save')
     parser.add_argument('--dtx', action='store_true')
     parser.add_argument('--test', help="Use '--test list' for list")
-    parser.add_argument('mode', nargs='*')
+    parser.add_argument('mode', nargs='*', choices=['fi', 'all', 'overlay', 'set-fi', 'launch',
+                                                    'evict-test', []])
     args = parser.parse_args()
 
     if args.server_fi:
