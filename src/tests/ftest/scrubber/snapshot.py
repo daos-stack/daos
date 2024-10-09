@@ -33,7 +33,7 @@ class TestScrubberEvictWithSnapshot(TestWithScrubber):
         self.create_pool_cont_with_scrubber(pool_prop=pool_prop, cont_prop=cont_prop)
         self.pool.query()
         initial_metrics = self.scrubber.get_scrub_corrupt_metrics()
-        self.run_ior_and_check_scruber_status(pool=self.pool, cont=self.container)
+        self.run_ior_and_check_scrubber_status(pool=self.pool, cont=self.container)
         # Wait for a minute for the scrubber to take action and evict target
         # after corruption threshold reached.
         # Take a snap-shot after 15 seconds while the csum faults are injected.
