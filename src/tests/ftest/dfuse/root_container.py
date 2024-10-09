@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
+import time
 
 from apricot import TestWithServers
 from dfuse_utils import get_dfuse, start_dfuse
@@ -142,12 +143,17 @@ class RootContainerTest(TestWithServers):
         pool_space_after = pool.get_pool_free_space(device)
         self.log.info("Pool space <= Expected")
         self.log.info("%s <= %s", pool_space_after, expected)
-        self.assertTrue(pool_space_after <= expected)
+        self.assertTrue(
+            pool_space_after <= expected,
+            f"Failed pool free space check after creating {cont_count} containers")
 
         self.log_step(f"Destroy half of the {cont_count} new sub containers ({cont_count // 2})")
         for _ in range(cont_count // 2):
             containers[-1].destroy(1)
             containers.pop()
+
+        self.log.info("Wait 60 seconds before checking for free space gain")
+        time.sleep(60)
 
         expected = pool_space_after + ((cont_count // 2) * tmp_file_count * tmp_file_size)
         self.log_step(
@@ -156,7 +162,9 @@ class RootContainerTest(TestWithServers):
         self.log.info("After container destroy")
         self.log.info("Free Pool space >= Expected")
         self.log.info("%s >= %s", pool_space_after_cont_destroy, expected)
-        self.assertTrue(pool_space_after_cont_destroy >= expected)
+        self.assertTrue(
+            pool_space_after_cont_destroy >= expected,
+            "Failed pool free space check after container destroy")
 
     def insert_files_and_verify(self, hosts, cont_dir, tmp_file_count, tmp_file_name,
                                 tmp_file_size):
