@@ -254,7 +254,7 @@ def get_daos_server_logs(self):
         self (obj): soak obj
     """
     daos_dir = self.outputsoak_dir + "/daos_server_logs"
-    logs_dir = self.test_env.log_dir
+    logs_dir = self.test_env.log_dir + "/*log*"
     hosts = self.hostlist_servers
     if not os.path.exists(daos_dir):
         os.mkdir(daos_dir)
@@ -439,8 +439,6 @@ def launch_jobscript(
         results = {"handle": job_id, "state": "CANCELLED", "host_list": host_list}
         debug_logging(log, test.enable_debug_msg, f"DBG: JOB {job_id} EXITED launch_jobscript")
         job_queue.put(results)
-        # give time to update the queue before exiting
-        time.sleep(0.5)
         return
     if isinstance(host_list, str):
         # assume one host in list
@@ -454,12 +452,6 @@ def launch_jobscript(
     joblog = job_log1.replace("RHOST", str(rhost))
     errorlog = error_log1.replace("RHOST", str(rhost))
     cmd = ";".join([env, f"{script} {hosts} {job_id} {joblog} {errorlog}"])
-    # if "_fio_" in job_log:
-    #     job_results = run_remote(
-    #         log, rhost, cmd, verbose=False, timeout=timeout * 60, task_debug=False, stderr=False)
-    # else:
-    #     job_results = run_local(
-    #         log, cmd, verbose=False, timeout=timeout * 60, capture_output=False, stderr=False)
     job_results = run_remote(
         log, rhost, cmd, verbose=False, timeout=timeout * 60, task_debug=False, stderr=False)
     if job_results:
@@ -1718,8 +1710,8 @@ def build_job_script(self, commands, job, nodesperjob, ppn):
                 script_file.write("JOB_ID=$2 \n")
                 script_file.write("JOB_LOG=$3 \n")
                 script_file.write("JOB_ERROR_LOG=$4 \n")
-                script_file.write("echo JOB NODES: $HOSTLIST \n")
-                script_file.write("echo JOB ID: $JOB_ID \n")
+                script_file.write("echo \"JOB NODES: $HOSTLIST \" \n")
+                script_file.write("echo \"JOB ID: $JOB_ID \" \n")
                 script_file.write("if [ -z \"$VIRTUAL_ENV\" ]; then \n")
                 script_file.write("    echo \"VIRTUAL_ENV not defined\" \n")
                 script_file.write("else \n")
@@ -1730,7 +1722,6 @@ def build_job_script(self, commands, job, nodesperjob, ppn):
 
             for cmd in list(job_cmds):
                 script_file.write(cmd + "\n")
-            script_file.close()
         os.chmod(scriptfile, stat.S_IXUSR | stat.S_IRUSR)
         script_list.append([scriptfile, output, error])
     return script_list
