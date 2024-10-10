@@ -27,12 +27,13 @@ exp_vals:
   pool_state: "Ready"
   total_targets: 4
   active_targets: 4
+  disabled_ranks: []
   total_engines: 1
   disabled_targets: 0
   version: 1
   leader: 0
   replicas: [0]
-  query_mask: "rebuild,space"
+  query_mask: "disabled_engines,rebuild,space"
   scm:
     total: 16000008192
   nvme:

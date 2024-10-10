@@ -18,6 +18,7 @@ dnf --nodocs install \
     clang-tools-extra \
     cmake \
     CUnit-devel \
+    daxctl-devel \
     diffutils \
     e2fsprogs \
     file \
@@ -47,6 +48,7 @@ dnf --nodocs install \
     lz4-devel \
     make \
     ndctl \
+    ndctl-devel \
     numactl \
     numactl-devel \
     openmpi-devel \
