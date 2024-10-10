@@ -478,6 +478,7 @@ func (ncs NvmeControllers) Usable() (tb uint64) {
 }
 
 // Summary reports accumulated storage space and the number of controllers.
+// Storage capacity printed with SI (decimal representation) units.
 func (ncs NvmeControllers) Summary() string {
 	return fmt.Sprintf("%s (%d %s)", humanize.Bytes(ncs.Capacity()),
 		len(ncs), common.Pluralise("controller", len(ncs)))

@@ -3905,13 +3905,13 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 				test.AssertEqual(t, tc.output.availableBytes[index], namespace.GetMount().GetAvailBytes(),
 					fmt.Sprintf("Invalid SCM available bytes: nsp=%s, want=%s (%d bytes), got=%s (%d bytes)",
 						namespace.GetMount().GetPath(),
-						humanize.Bytes(tc.output.availableBytes[index]), tc.output.availableBytes[index],
-						humanize.Bytes(namespace.GetMount().GetAvailBytes()), namespace.GetMount().GetAvailBytes()))
+						humanize.IBytes(tc.output.availableBytes[index]), tc.output.availableBytes[index],
+						humanize.IBytes(namespace.GetMount().GetAvailBytes()), namespace.GetMount().GetAvailBytes()))
 				test.AssertEqual(t, tc.output.usableBytes[index], namespace.GetMount().GetUsableBytes(),
 					fmt.Sprintf("Invalid SCM usable bytes: nsp=%s, want=%s (%d bytes), got=%s (%d bytes)",
 						namespace.GetMount().GetPath(),
-						humanize.Bytes(tc.output.usableBytes[index]), tc.output.usableBytes[index],
-						humanize.Bytes(namespace.GetMount().GetUsableBytes()), namespace.GetMount().GetUsableBytes()))
+						humanize.IBytes(tc.output.usableBytes[index]), tc.output.usableBytes[index],
+						humanize.IBytes(namespace.GetMount().GetUsableBytes()), namespace.GetMount().GetUsableBytes()))
 			}
 			if tc.output.message != "" {
 				test.AssertTrue(t,
