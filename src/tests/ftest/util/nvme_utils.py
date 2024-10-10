@@ -55,7 +55,7 @@ def set_device_faulty(test, dmg, server, uuid, pool=None, has_sys_xs=False, **kw
         dict: the json response from the dmg storage set-faulty command.
 
     """
-    dmg.hostlist = server
+    kwargs['host'] = server
     kwargs['uuid'] = uuid
     try:
         response = get_dmg_response(dmg.storage_set_faulty, **kwargs)

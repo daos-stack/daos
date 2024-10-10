@@ -606,16 +606,13 @@ struct  _Ctl__DevReplaceReq
   /*
    * UUID of new (hot-plugged) blobstore/device
    */
-  char *new_dev_uuid;
-  /*
-   * Skip device reintegration if set
-   */
-  protobuf_c_boolean no_reint;
+  char            *new_dev_uuid;
 };
-#define CTL__DEV_REPLACE_REQ__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&ctl__dev_replace_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0 }
-
+#define CTL__DEV_REPLACE_REQ__INIT                                                                 \
+	{                                                                                          \
+		PROTOBUF_C_MESSAGE_INIT(&ctl__dev_replace_req__descriptor)                         \
+		, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string                 \
+	}
 
 struct  _Ctl__SetFaultyReq
 {

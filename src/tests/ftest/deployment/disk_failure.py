@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,7 +8,6 @@ import threading
 import time
 
 from avocado import fail_on
-from ClusterShell.NodeSet import NodeSet
 from dmg_utils import get_dmg_response, get_storage_query_device_info
 from exception_utils import CommandFailure
 from general_utils import list_to_str
@@ -67,14 +66,12 @@ class DiskFailureTest(OSAUtils):
             # Evict a random target from the system
             evict_device = random.choice(device_info)  # nosec
             self.log.info("Evicting random target: %s", evict_device["uuid"])
-            original_hostlist = self.dmg_command.hostlist
             try:
-                self.dmg_command.hostlist = evict_device["hosts"].split(":")[0]
-                get_dmg_response(self.dmg_command.storage_set_faulty, uuid=evict_device["uuid"])
+                get_dmg_response(self.dmg_command.storage_set_faulty,
+                                 host=evict_device["hosts"].split(":")[0],
+                                 uuid=evict_device["uuid"])
             except CommandFailure:
                 self.fail("Error evicting target {}".format(evict_device["uuid"]))
-            finally:
-                self.dmg_command.hostlist = original_hostlist
             done = "Completed setting all devices to fault"
             self.print_and_assert_on_rebuild_failure(done)
             for thread in threads:
@@ -82,16 +79,13 @@ class DiskFailureTest(OSAUtils):
 
             # Now replace the faulty NVME device.
             self.log.info("Replacing evicted target: %s", evict_device["uuid"])
-            original_hostlist = self.dmg_command.hostlist
             try:
-                self.dmg_command.hostlist = evict_device["hosts"].split(":")[0]
-                get_dmg_response(
-                    self.dmg_command.storage_replace_nvme, old_uuid=evict_device["uuid"],
-                    new_uuid=evict_device["uuid"])
+                get_dmg_response(self.dmg_command.storage_replace_nvme,
+                                 host=evict_device["hosts"].split(":")[0],
+                                 old_uuid=evict_device["uuid"],
+                                 new_uuid=evict_device["uuid"])
             except CommandFailure as error:
                 self.fail(str(error))
-            finally:
-                self.dmg_command.hostlist = original_hostlist
             time.sleep(10)
             self.log.info(
                 "Reintegrating evicted target: uuid=%s, rank=%s, targets=%s",
@@ -119,7 +113,6 @@ class DiskFailureTest(OSAUtils):
         Test disk failures during the IO operation.
 
         :avocado: tags=all,manual
-        :avocado: tags=hw,medium
         :avocado: tags=deployment,disk_failure
         :avocado: tags=DiskFailureTest,test_disk_failure_w_rf
         """
@@ -131,7 +124,6 @@ class DiskFailureTest(OSAUtils):
         Test a disk inducing faults and resetting is back to normal state.
 
         :avocado: tags=all,manual
-        :avocado: tags=hw,medium
         :avocado: tags=deployment,disk_failure
         :avocado: tags=DiskFailureTest,test_disk_fault_to_normal
         """
@@ -142,13 +134,14 @@ class DiskFailureTest(OSAUtils):
             for key in sorted(device):
                 self.log.info("  %s: %s", key, device[key])
             try:
-                self.dmg_command.hostlist = NodeSet(host)
                 # Set the device as faulty
-                get_dmg_response(self.dmg_command.storage_set_faulty, uuid=device["uuid"])
+                get_dmg_response(self.dmg_command.storage_set_faulty, host=host,
+                                 uuid=device["uuid"])
                 # Replace the device with same uuid.
                 passed = False
                 for _ in range(10):
-                    data = self.dmg_command.storage_replace_nvme(old_uuid=device["uuid"],
+                    data = self.dmg_command.storage_replace_nvme(host=host,
+                                                                 old_uuid=device["uuid"],
                                                                  new_uuid=device["uuid"])
                     if not data['error'] and len(data['response']['host_errors']) == 0:
                         passed = True
@@ -158,5 +151,3 @@ class DiskFailureTest(OSAUtils):
                     self.fail('Replacing faulty device did not pass after 10 retries')
             except CommandFailure as error:
                 self.fail(str(error))
-            finally:
-                self.dmg_command.hostlist = self.server_managers[0].hosts
