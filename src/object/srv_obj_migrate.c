@@ -1174,9 +1174,8 @@ out:
 }
 
 static int
-migrate_fetch_update_parity_per_iod(struct migrate_one *mrone, daos_handle_t oh,
-				    daos_iod_t *iods, daos_epoch_t **ephs, int iod_nr,
-				    struct ds_cont_child *ds_cont)
+migrate_fetch_update_parity_per_iod(struct migrate_one *mrone, daos_handle_t oh, daos_iod_t *iods,
+				    daos_epoch_t **ephs, int iod_nr, struct ds_cont_child *ds_cont)
 {
 	int i;
 	int j;
@@ -1185,8 +1184,8 @@ migrate_fetch_update_parity_per_iod(struct migrate_one *mrone, daos_handle_t oh,
 	/* If it is parity recxs from another replica, then let's encode it anyway */
 	for (i = 0; i < iod_nr; i++) {
 		for (j = 0; j < iods[i].iod_nr; j++) {
-			daos_iod_t iod = iods[i];
-			daos_epoch_t fetch_eph;
+			daos_iod_t    iod = iods[i];
+			daos_epoch_t  fetch_eph;
 			daos_epoch_t *update_eph_p;
 
 			iod.iod_nr = 1;
@@ -1244,10 +1243,9 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 			 * shard in this case, because the other parity may not encode as well, only
 			 * encode the single parity may confuse the EC aggregation process.
 			 */
-			rc = __migrate_fetch_update_parity(mrone, oh, mrone->mo_iods,
-							   mrone->mo_epoch,
-							   mrone->mo_iods_update_ephs,
-							   mrone->mo_iod_num, ds_cont, false);
+			rc = __migrate_fetch_update_parity(
+			     mrone, oh, mrone->mo_iods, mrone->mo_epoch, mrone->mo_iods_update_ephs,
+			     mrone->mo_iod_num, ds_cont, false);
 		} else {
 			rc = migrate_fetch_update_parity_per_iod(mrone, oh, mrone->mo_iods,
 								 mrone->mo_iods_update_ephs,
