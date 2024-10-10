@@ -6,8 +6,10 @@
 from socket import gethostname
 
 from ClusterShell.NodeSet import NodeSet
+
 from command_utils import CommandWithSubCommand, YamlCommand
-from command_utils_base import BasicParameter, CommandWithParameters, FormattedParameter
+from command_utils_base import (BasicParameter, CommandWithParameters,
+                                FormattedParameter)
 from environment_utils import TestEnvironment
 from general_utils import nodeset_append_suffix
 
@@ -533,6 +535,7 @@ class DmgCommandBase(YamlCommand):
                 super().__init__("/run/dmg/pool/query/*", "query")
                 self.pool = BasicParameter(None, position=1)
                 self.show_enabled = FormattedParameter("--show-enabled", False)
+                self.health_only = FormattedParameter("--health-only", False)
 
         class QueryTargetsSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool query-targets command."""
