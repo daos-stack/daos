@@ -286,6 +286,28 @@ The example below shows a rebuild in progress and NVMe space allocated.
     Rebuild busy, 75 objs, 9722 recs
 ```
 
+After experiencing significant failures, the system may retain some suspect
+engines that have been marked as DEAD by the SWIM protocol but were not excluded
+from the system to prevent data loss. An administrator can bring these engines back
+online by restarting them. The example below illustrates the system’s status with
+suspect and disabled engines.
+
+```bash
+$ dmg pool query tank -t
+```
+
+NB: The --health-only/-t option is necessary to conduct pool health-related queries only,
+which will bypass the collective call to each vos target. This is important because such
+calls may hang and time out if there are suspect engines present.
+
+```bash
+Pool 6f450a68-8c7d-4da9-8900-02691650f6a2, ntarget=8, disabled=2, leader=3, version=4, state=Degraded
+    Pool health info:
+    - Disabled ranks: 1
+    - Suspect ranks: 2
+    - Rebuild busy, 0 objs, 0 recs
+```
+
 Additional status and telemetry data is planned to be exported through
 management tools and will be documented here once available.
 
