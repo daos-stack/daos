@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -7,7 +7,7 @@ from os.path import join
 
 from data_mover_test_base import DataMoverTestBase
 from dfuse_utils import get_dfuse, start_dfuse
-from exception_utils import CommandFailure
+from run_utils import run_remote
 
 
 class DmvrPosixMetaEntry(DataMoverTestBase):
@@ -143,7 +143,9 @@ class DmvrPosixMetaEntry(DataMoverTestBase):
 
             "popd"
         ]
-        self.execute_cmd_list(cmd_list)
+        cmd = " &&\n".join(cmd_list)
+        if not run_remote(self.log, self.hostlist_clients, cmd, timeout=300).passed:
+            self.fail("Failed to create data in path")
 
     def compare_data(self, path1, path2, cmp_filetype=True,
                      cmp_perms=True, cmp_owner=True, cmp_times=False,
@@ -190,11 +192,9 @@ class DmvrPosixMetaEntry(DataMoverTestBase):
                     field_printf, entry2)
                 diff_cmd = "diff <({} 2>&1) <({} 2>&1)".format(
                     stat_cmd1, stat_cmd2)
-                result = self.execute_cmd(diff_cmd, fail_on_err=False)
-                if 0 not in result or len(result) > 1:
-                    hosts = [str(nodes) for code, nodes in list(result.items()) if code != 0]
-                    raise CommandFailure(
-                        "Command to check files failed '{}' on {}".format(diff_cmd, hosts))
+                result = run_remote(self.log, self.hostlist_clients, diff_cmd, timeout=300)
+                if not result.passed or not result.homogeneous:
+                    self.fail(f"Unexpected diff between {entry1} and {entry2}")
 
             if cmp_xattr:
                 # Use getfattr to get the xattrs
@@ -202,13 +202,6 @@ class DmvrPosixMetaEntry(DataMoverTestBase):
                 xattr_cmd2 = "getfattr -d -h '{}'".format(entry2)
                 diff_cmd = "diff -I '^#' <({} 2>&1) <({} 2>&1)".format(
                     xattr_cmd1, xattr_cmd2)
-                self.execute_cmd(diff_cmd)
-
-    def execute_cmd_list(self, cmd_list):
-        """Execute a list of commands, separated by &&.
-
-        Args:
-            cmd_list (list): A list of commands to execute.
-        """
-        cmd = " &&\n".join(cmd_list)
-        self.execute_cmd(cmd)
+                result = run_remote(self.log, self.hostlist_clients, diff_cmd, timeout=300)
+                if not result.passed or not result.homogeneous:
+                    self.fail(f"Unexpected diff between {entry1} and {entry2}")

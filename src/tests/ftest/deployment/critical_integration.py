@@ -11,7 +11,7 @@ from apricot import TestWithoutServers, TestWithServers
 from ClusterShell.NodeSet import NodeSet
 from exception_utils import CommandFailure
 from general_utils import DaosTestError, get_journalctl, journalctl_time, run_command
-from ior_test_base import IorTestBase
+from run_utils import run_remote
 
 # pylint: disable-next=fixme
 # TODO Provision all daos nodes using provisioning tool provided by HPCM
@@ -67,7 +67,8 @@ class CriticalIntegrationWithoutServers(TestWithoutServers):
                 daos_server_version_list.append(out['response']['version'])
                 if check_remote_root_access:
                     run_command(remote_root_access)
-                IorTestBase._execute_command(self, command_for_inter_node, hosts=[host])
+                if not run_remote(self.log, NodeSet(host), command_for_inter_node).passed:
+                    self.fail(f"Inter-node clush failed on {host}")
             except (DaosTestError, CommandFailure, KeyError) as error:
                 self.log.error("Error: %s", error)
                 failed_nodes.add(host)
