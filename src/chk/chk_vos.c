@@ -78,17 +78,7 @@ chk_db_delete(char *key, int key_size)
 static int
 chk_db_traverse(sys_db_trav_cb_t cb, void *args)
 {
-	int	rc;
-
-	if (chk_db->sd_lock)
-		chk_db->sd_lock(chk_db);
-
-	rc = chk_db->sd_traverse(chk_db, CHK_DB_TABLE, cb, args);
-
-	if (chk_db->sd_unlock)
-		chk_db->sd_unlock(chk_db);
-
-	return rc;
+	return chk_db->sd_traverse(chk_db, CHK_DB_TABLE, cb, args);
 }
 
 int
