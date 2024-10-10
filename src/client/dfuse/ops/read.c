@@ -270,7 +270,7 @@ chunk_cb(struct dfuse_event *ev)
 	}
 }
 
-/* Submut a read to dfs.
+/* Submit a read to dfs.
  *
  * Returns true on success.
  */
@@ -408,6 +408,7 @@ found:
 		if (cd->complete) {
 			ev = cd->ev;
 		} else {
+			D_ASSERT(cd->reqs[slot] == 0);
 			cd->reqs[slot] = req;
 			cd->ohs[slot]  = oh;
 		}
