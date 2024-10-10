@@ -45,6 +45,7 @@ class DaosClient():
     the lifetime of a process.
     """
     _instance = None
+    _atfork = 1
 
     @classmethod
     def cleanup(cls):
@@ -63,7 +64,7 @@ class DaosClient():
     def _open(self):
         # Initialize DAOS
         self.connected = False
-        _rc = pydaos_shim.daos_init(DAOS_MAGIC)
+        _rc = pydaos_shim.daos_init(DAOS_MAGIC, self._atfork)
         if _rc != pydaos_shim.DER_SUCCESS:
             raise PyDError("Failed to initialize DAOS", _rc)
         self.connected = True
