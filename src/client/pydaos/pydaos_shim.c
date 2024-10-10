@@ -89,16 +89,13 @@ static PyObject *
 __shim_handle__daos_init(PyObject *self, PyObject *args)
 {
 	int rc;
-	int noeq = 1;
+	int atfork = 1;
 
 	/** Parse arguments, flags not used for now */
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "p", &noeq);
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "i", &atfork);
 
 	rc = daos_init();
 	if (rc)
-		return PyLong_FromLong(rc);
-
-	if (noeq)
 		return PyLong_FromLong(rc);
 
 	rc = daos_eq_create(&eq);
@@ -108,10 +105,12 @@ __shim_handle__daos_init(PyObject *self, PyObject *args)
 		return PyLong_FromLong(rc);
 	}
 
-	rc = pthread_atfork(NULL, NULL, &child_handler);
-	if (rc) {
-		DL_ERROR(rc, "Failed to set atfork handler");
-		return PyLong_FromLong(rc);
+	if (atfork) {
+		rc = pthread_atfork(NULL, NULL, &child_handler);
+		if (rc) {
+			DL_ERROR(rc, "Failed to set atfork handler");
+			return PyLong_FromLong(rc);
+		}
 	}
 
 	return PyLong_FromLong(rc);
@@ -121,16 +120,10 @@ static PyObject *
 __shim_handle__daos_fini(PyObject *self, PyObject *args)
 {
 	int rc;
-	int noeq = 0;
 
-	/** Parse arguments, flags not used for now */
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "p", &noeq);
-
-	if (!noeq) {
-		rc = daos_eq_destroy(eq, DAOS_EQ_DESTROY_FORCE);
-		if (rc)
-			D_ERROR("Failed to destroy global eq, " DF_RC "\n", DP_RC(rc));
-	}
+	rc = daos_eq_destroy(eq, DAOS_EQ_DESTROY_FORCE);
+	if (rc)
+		D_ERROR("Failed to destroy global eq, " DF_RC "\n", DP_RC(rc));
 
 	rc = daos_fini();
 
