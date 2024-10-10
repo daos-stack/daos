@@ -1010,7 +1010,14 @@ agg_diff_preprocess(struct ec_agg_entry *entry, unsigned char *diff,
 	hole_off = 0;
 	d_list_for_each_entry(extent, &entry->ae_cur_stripe.as_dextents,
 			      ae_link) {
-		D_ASSERT(!extent->ae_hole);
+		if (extent->ae_hole) {
+			/* valid hole processed by agg_process_holes_ult() */
+			D_ASSERTF(extent->ae_epoch < entry->ae_par_extent.ape_epoch,
+				  "hole ext epoch "DF_X64", parity epoch "DF_X64"\n",
+				  extent->ae_epoch, entry->ae_par_extent.ape_epoch);
+			continue;
+		}
+
 		if (extent->ae_epoch <= entry->ae_par_extent.ape_epoch)
 			continue;
 		D_ASSERT(extent->ae_recx.rx_idx >= ss);
