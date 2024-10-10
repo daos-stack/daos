@@ -16,6 +16,7 @@ on:
       - ci/**
       - requirements-build.txt
       - requirements-utest.txt
+      - utils/build.config
 
 permissions: {}
 
