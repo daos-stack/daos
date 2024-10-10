@@ -41,7 +41,11 @@
 #define DAOS_POOL_GLOBAL_VERSION_WITH_HDL_CRED    1
 #define DAOS_POOL_GLOBAL_VERSION_WITH_SVC_OPS_KVS 3
 #define DAOS_POOL_GLOBAL_VERSION_WITH_DATA_THRESH 3
-#define DAOS_POOL_GLOBAL_VERSION_WITH_BULK_DATA_THRESH 3
+/* set the VERSION for BULK_DATA_THRESH to value larger than current DAOS_POOL_GLOBAL_VERSION,
+* because the DAOS_POOL_GLOBAL_VERSION is still 3 now. Do this just to make sure we can access
+* exist old pool created with old software version which not support QLC after the software been
+* upgraded to the new software version which can support QLC. */
+#define DAOS_POOL_GLOBAL_VERSION_WITH_BULK_DATA_THRESH 4
 
 #define PS_OPS_PER_SEC                            4096
 

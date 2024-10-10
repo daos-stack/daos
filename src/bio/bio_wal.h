@@ -13,20 +13,16 @@ enum meta_hdr_flags {
 	META_HDR_FL_EMPTY	= (1UL << 0),
 };
 
-/* Meta blob header, only consider new deployment temporally.
- * will consider to support the exist pool created with old
- * structure separately. */
-struct meta_header {
+/* Meta blob header, without qlc. */
+struct meta_header_old {
 	uint32_t	mh_magic;
 	uint32_t	mh_version;
 	uuid_t		mh_meta_devid;		/* Meta SSD device ID */
 	uuid_t		mh_wal_devid;		/* WAL SSD device ID */
-	uuid_t		mh_data_devid;		/* Data SSD device ID */
-	uuid_t          mh_bulk_devid;          /* Bulk_data SSD device ID, refers to QLC SSD now */
+	uuid_t          mh_data_devid;          /* Data SSD device ID */
 	uint64_t	mh_meta_blobid;		/* Meta blob ID */
 	uint64_t	mh_wal_blobid;		/* WAL blob ID */
-	uint64_t	mh_data_blobid;		/* Data blob ID */
-	uint64_t        mh_bulk_blobid;         /* Bulk_data blob ID */
+	uint64_t        mh_data_blobid;         /* Data blob ID */
 	uint32_t	mh_blk_bytes;		/* Block size for meta, in bytes */
 	uint32_t	mh_hdr_blks;		/* Meta blob header size, in blocks */
 	uint64_t	mh_tot_blks;		/* Meta blob capacity, in blocks */
@@ -34,6 +30,27 @@ struct meta_header {
 	uint32_t	mh_flags;		/* Meta header flags */
 	uint32_t	mh_padding[5];		/* Reserved */
 	uint32_t	mh_csum;		/* Checksum of this header */
+};
+
+/* Meta blob header, with qlc supported. */
+struct meta_header {
+	uint32_t mh_magic;
+	uint32_t mh_version;
+	uuid_t   mh_meta_devid;  /* Meta SSD device ID */
+	uuid_t   mh_wal_devid;   /* WAL SSD device ID */
+	uuid_t   mh_data_devid;  /* Data SSD device ID */
+	uuid_t   mh_bulk_devid;  /* Bulk_data SSD device ID, refers to QLC SSD now */
+	uint64_t mh_meta_blobid; /* Meta blob ID */
+	uint64_t mh_wal_blobid;  /* WAL blob ID */
+	uint64_t mh_data_blobid; /* Data blob ID */
+	uint64_t mh_bulk_blobid; /* Bulk_data blob ID */
+	uint32_t mh_blk_bytes;   /* Block size for meta, in bytes */
+	uint32_t mh_hdr_blks;    /* Meta blob header size, in blocks */
+	uint64_t mh_tot_blks;    /* Meta blob capacity, in blocks */
+	uint32_t mh_vos_id;      /* Associated per-engine target ID */
+	uint32_t mh_flags;       /* Meta header flags */
+	uint32_t mh_padding[65]; /* Reserved */
+	uint32_t mh_csum;        /* Checksum of this header */
 };
 
 enum wal_hdr_flags {

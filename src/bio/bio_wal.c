@@ -8,7 +8,8 @@
 #include "bio_wal.h"
 
 #define BIO_META_MAGIC		(0xbc202210)
-#define BIO_META_VERSION	1
+#define BIO_META_VERSION        2
+#define BIO_META_VERSION1       1
 
 #define BIO_WAL_MAGIC		(0xaf202209)
 #define BIO_WAL_VERSION		1
@@ -1945,18 +1946,37 @@ wal_open(struct bio_meta_context *mc)
 
 }
 
+static void
+meta_rebuild_from_old_version(struct meta_header *meta_hdr, struct meta_header_old *hdr_old)
+{
+	meta_hdr->mh_magic   = BIO_META_MAGIC;
+	meta_hdr->mh_version = BIO_META_VERSION;
+	uuid_copy(meta_hdr->mh_meta_devid, hdr_old->mh_meta_devid);
+	uuid_copy(meta_hdr->mh_wal_devid, hdr_old->mh_wal_devid);
+	uuid_copy(meta_hdr->mh_data_devid, hdr_old->mh_data_devid);
+	meta_hdr->mh_meta_blobid = hdr_old->mh_meta_blobid;
+	meta_hdr->mh_wal_blobid  = hdr_old->mh_wal_blobid;
+	meta_hdr->mh_data_blobid = hdr_old->mh_data_blobid;
+	meta_hdr->mh_blk_bytes   = hdr_old->mh_blk_bytes;
+	meta_hdr->mh_hdr_blks    = hdr_old->mh_hdr_blks;
+	meta_hdr->mh_tot_blks    = hdr_old->mh_tot_blks;
+	meta_hdr->mh_vos_id      = hdr_old->mh_vos_id;
+	meta_hdr->mh_flags       = hdr_old->mh_flags;
+	meta_hdr->mh_bulk_blobid = SPDK_BLOBID_INVALID;
+	uuid_clear(meta_hdr->mh_bulk_devid);
+}
+
 static int
 load_meta_header(struct bio_meta_context *mc)
 {
+	struct meta_header_old  *hdr_old = NULL;
+	struct meta_header_old   hdr_tmp = {0};
 	struct meta_header	*hdr = &mc->mc_meta_hdr;
 	bio_addr_t		 addr = { 0 };
 	d_iov_t			 iov;
 	uint32_t		 csum;
 	int			 rc, csum_len;
 
-	/* Only consider new deployment with new meta_header structure
-	 * now temporally, will try to be compatible with data
-	 * structure stored on SSD in the future with separate change. */
 	bio_addr_set(&addr, DAOS_MEDIA_NVME, 0);
 	d_iov_set(&iov, hdr, sizeof(*hdr));
 
@@ -1971,21 +1991,42 @@ load_meta_header(struct bio_meta_context *mc)
 		return -DER_UNINIT;
 	}
 
-	if (hdr->mh_version != BIO_META_VERSION) {
+	if (hdr->mh_version != BIO_META_VERSION && hdr->mh_version != BIO_META_VERSION1) {
 		D_ERROR("Invalid meta version. %u\n", hdr->mh_version);
 		return -DER_DF_INCOMPT;
 	}
 
 	csum_len = meta_csum_len(mc);
-	rc = meta_csum_calc(mc, hdr, sizeof(*hdr) - csum_len, &csum, csum_len);
-	if (rc) {
-		D_ERROR("Calculate meta headr csum failed. "DF_RC"\n", DP_RC(rc));
-		return rc;
-	}
+	/* for pool created with old version which not support qlc. */
+	if (hdr->mh_version == BIO_META_VERSION1) {
+		hdr_old = (struct meta_header_old *)hdr;
+		rc      = meta_csum_calc(mc, hdr_old, sizeof(*hdr_old) - csum_len, &csum, csum_len);
+		if (rc) {
+			D_ERROR("Calculate meta headr csum without qlc supported failed. " DF_RC
+				"\n",
+				DP_RC(rc));
+			return rc;
+		}
 
-	if (csum != hdr->mh_csum) {
-		D_ERROR("Meta header is corrupted.\n");
-		return -DER_CSUM;
+		if (csum != hdr_old->mh_csum) {
+			D_ERROR("Meta header is corrupted.\n");
+			return -DER_CSUM;
+		}
+
+		/* copy data from old meta_header and rebuild the new header */
+		memcpy(&hdr_tmp, hdr_old, sizeof(hdr_tmp));
+		meta_rebuild_from_old_version(hdr, &hdr_tmp);
+	} else {
+		rc = meta_csum_calc(mc, hdr, sizeof(*hdr) - csum_len, &csum, csum_len);
+		if (rc) {
+			D_ERROR("Calculate meta headr csum failed. " DF_RC "\n", DP_RC(rc));
+			return rc;
+		}
+
+		if (csum != hdr->mh_csum) {
+			D_ERROR("Meta header is corrupted.\n");
+			return -DER_CSUM;
+		}
 	}
 
 	return 0;
