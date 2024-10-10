@@ -121,12 +121,12 @@ static PyObject *
 __shim_handle__daos_fini(PyObject *self, PyObject *args)
 {
 	int rc;
-	int noeq = 1;
+	int noeq = 0;
 
 	/** Parse arguments, flags not used for now */
 	RETURN_NULL_IF_FAILED_TO_PARSE(args, "p", &noeq);
 
-	if (noeq) {
+	if (!noeq) {
 		rc = daos_eq_destroy(eq, DAOS_EQ_DESTROY_FORCE);
 		if (rc)
 			D_ERROR("Failed to destroy global eq, " DF_RC "\n", DP_RC(rc));
