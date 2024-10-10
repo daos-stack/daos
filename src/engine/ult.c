@@ -458,7 +458,7 @@ sched_ult2xs(int xs_type, int tgt_id)
 		break;
 	case DSS_XS_OFFLOAD:
 		if (dss_numa_nr > 1)
-			xs_id = sched_ult2xs_multisocket(xs_type, tgt_id);
+			return sched_ult2xs_multisocket(xs_type, tgt_id);
 		if (!dss_helper_pool) {
 			if (dss_tgt_offload_xs_nr > 0)
 				xs_id = DSS_MAIN_XS_ID(tgt_id) + dss_tgt_offload_xs_nr / dss_tgt_nr;
