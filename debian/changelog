@@ -1,3 +1,19 @@
+daos (2.6.1-4) unstable; urgency=medium
+  [ Tomasz Gromadzki ]
+  * Add support of the PMDK package 2.1.0 with NDCTL enabled.
+    * Increase the default ULT stack size to 20KiB if the engine uses
+      the DCPM storage class.
+    * Prevent using the RAM storage class (simulated PMem) when
+      the shutdown state (SDS) is active.
+      * Automatically disable SDS for the RAM storage class on engine startup.
+      * Force explicitly setting the PMEMOBJ_CONF='sds.at_create=0'
+        environment variable to deactivate SDS for the DAOS tools
+        (ddb, daos_perf, vos_perf, etc.) when used WITHOUT DCPM.
+        Otherwise, a user is supposed to be stopped by an error
+        like: "Unsafe shutdown count is not supported for this source".
+
+ -- Tomasz Gromadzki <tomasz.gromadzki@intel.com>  Wed, 02 Oct 2024 12:00:00 +0200
+
 daos (2.6.1-3) unstable; urgency=medium
   [ Phillip Henderson ]
   * Third release candidate for 2.6.1
