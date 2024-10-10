@@ -201,6 +201,8 @@ struct vos_gc_metrics {
 	struct d_tm_node_t *vgm_sv_del;    /* SV records reclaimed */
 	struct d_tm_node_t *vgm_slack_cnt; /* Slack mode count */
 	struct d_tm_node_t *vgm_tight_cnt; /* Tight mode count */
+	struct d_tm_node_t *vgm_pin_cnt;   /* Pin count */
+	struct d_tm_node_t *vgm_pin_duration; /* Pin duration */
 };
 
 /*
@@ -252,6 +254,8 @@ struct vos_cache_metrics {
 	struct d_tm_node_t	*vcm_pg_flush;
 	struct d_tm_node_t	*vcm_pg_load;
 	struct d_tm_node_t	*vcm_obj_hit;
+	struct d_tm_node_t	*vcm_load_duration;
+	struct d_tm_node_t	*vcm_load_size;
 };
 
 void vos_cache_metrics_init(struct vos_cache_metrics *vc_metrcis, const char *path, int tgt_id);
