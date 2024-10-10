@@ -961,6 +961,7 @@ child_hdlr(void)
 		DL_WARN(rc, "daos_reinit() failed in child process");
 	td_eqh = main_eqh = DAOS_HDL_INVAL;
 	context_reset = true;
+	d_eq_count    = 0;
 }
 
 /* only free the reserved low fds when application exits or encounters error */
@@ -6301,6 +6302,14 @@ new_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 
 	atomic_fetch_add_relaxed(&num_mmap, 1);
 
+	if ((fd < FD_FILE_BASE) && (fd_directed >= FD_FILE_BASE) && d_compatible_mode) {
+		/* DAOS-14494: Force the kernel to update the size before mapping. */
+		rc = next_fxstat(1, fd, &stat_buf);
+		if (rc == -1)
+			return MAP_FAILED;
+		return next_mmap(addr, length, prot, flags, fd, offset);
+	}
+
 	addr_ret = next_mmap(addr, length, prot, flags | MAP_ANONYMOUS, -1, offset);
 	if (addr_ret == MAP_FAILED)
 		return MAP_FAILED;
@@ -7085,10 +7094,8 @@ init_myhook(void)
 
 	register_a_hook("libc", "fcntl", (void *)new_fcntl, (long int *)(&libc_fcntl));
 
-	if (d_compatible_mode == false) {
-		register_a_hook("libc", "mmap", (void *)new_mmap, (long int *)(&next_mmap));
-		register_a_hook("libc", "munmap", (void *)new_munmap, (long int *)(&next_munmap));
-	}
+	register_a_hook("libc", "mmap", (void *)new_mmap, (long int *)(&next_mmap));
+	register_a_hook("libc", "munmap", (void *)new_munmap, (long int *)(&next_munmap));
 
 	register_a_hook("libc", "exit", (void *)new_exit, (long int *)(&next_exit));
 	register_a_hook("libc", "dup3", (void *)new_dup3, (long int *)(&libc_dup3));
