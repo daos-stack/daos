@@ -1,3 +1,23 @@
+
+{
+   FI leak 7
+   Memcheck:Leak
+   ...
+   fun:fi_ini
+   ...
+}
+{
+   libnl-1
+   Memcheck:Leak
+   ...
+   fun:init_proto_names
+}
+{
+   libnl-2
+   Memcheck:Leak
+   ...
+   fun:init_routing_table_names
+}
 {
    <insert_a_suppression_name_here>
    Memcheck:Leak

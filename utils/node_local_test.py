@@ -1027,7 +1027,7 @@ class DaosServer():
 
         Enable logging, and valgrind for the command.
         """
-        valgrind_hdl = ValgrindHelper(self.conf)
+        valgrind_hdl = ValgrindHelper(self.conf, logid=os.path.basename(cmd[0]))
 
         if self.conf.args.memcheck == 'no':
             valgrind_hdl.use_valgrind = False
@@ -1370,7 +1370,7 @@ class DFuse():
         if self.conf.args.dtx == 'yes':
             my_env['DFS_USE_DTX'] = '1'
 
-        self.valgrind = ValgrindHelper(self.conf, f"dfuse_{v_hint}")
+        self.valgrind = ValgrindHelper(self.conf, f"dfuse.{v_hint}")
         if self.conf.args.memcheck == 'no':
             self.valgrind.use_valgrind = False
 
