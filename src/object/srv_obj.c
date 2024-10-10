@@ -2181,7 +2181,7 @@ obj_ioc_begin_lite(uint32_t rpc_map_ver, uuid_t pool_uuid,
 		 *
 		 * We'd ensure proper error code is returned for such case.
 		 */
-		poc = ds_pool_child_find(pool_uuid);
+		DS_POOL_CHILD_FIND(pool_uuid, &poc);
 		if (poc == NULL) {
 			D_ERROR("Failed to find pool:"DF_UUID"\n", DP_UUID(pool_uuid));
 			return rc;
@@ -2198,7 +2198,7 @@ obj_ioc_begin_lite(uint32_t rpc_map_ver, uuid_t pool_uuid,
 				rc = -DER_STALE;
 		}
 
-		ds_pool_child_put(poc);
+		DS_POOL_CHILD_PUT(&poc);
 		return rc;
 	}
 
