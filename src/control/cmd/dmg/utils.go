@@ -55,3 +55,17 @@ func errIncompatFlags(key string, incompat ...string) error {
 
 	return errors.Errorf("%s with --%s", base, strings.Join(incompat, " or --"))
 }
+
+// Convert pair of ratios to a single fraction.
+func ratiosToSingleFraction(ratios []float64) (float32, error) {
+	nrRatios := len(ratios)
+
+	// Most validation already performed by tierRatioFlag type, this just prevents
+	// incomplete or overvalue tier combinations and restricts to 1 or 2 tiers.
+	if nrRatios != 2 && ratios[0] < 1 {
+		return 0, errors.Errorf("want 2 ratio values got %d", nrRatios)
+	}
+
+	// Precision loss deemed acceptable with conversion from float64 to float32.
+	return float32(ratios[0]), nil
+}

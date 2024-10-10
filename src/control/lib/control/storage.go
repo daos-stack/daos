@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -160,6 +160,7 @@ type (
 		Usage      bool
 		NvmeHealth bool
 		NvmeBasic  bool
+		MemRatio   float32
 	}
 
 	// StorageScanResp contains the response from a storage scan request.
@@ -256,8 +257,9 @@ func StorageScan(ctx context.Context, rpcClient UnaryInvoker, req *StorageScanRe
 			Nvme: &ctlpb.ScanNvmeReq{
 				Basic: req.NvmeBasic,
 				// Health and meta details required to populate usage statistics.
-				Health: req.NvmeHealth || req.Usage,
-				Meta:   req.Usage,
+				Health:   req.NvmeHealth || req.Usage,
+				Meta:     req.Usage,
+				MemRatio: req.MemRatio,
 			},
 		})
 	})

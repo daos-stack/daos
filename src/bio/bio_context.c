@@ -613,14 +613,14 @@ __bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
 /*
  * Calculate a reasonable WAL size based on following assumptions:
  * - Single target update IOPS can be up to 65k;
- * - Each TX consumes 2 WAL blocks in average;
+ * - Each TX consumes 2 WAL blocks on average;
  * - Checkpointing interval is 5 seconds, and the WAL should have at least
  *   half free space before next checkpoint;
  */
 uint64_t
 default_wal_sz(uint64_t meta_sz)
 {
-	uint64_t wal_sz = (6ULL << 30);	/* 6GB */
+	uint64_t wal_sz = (6ULL << 30); /* 6GiB */
 
 	/* The WAL size could be larger than meta size for tiny pool */
 	if ((meta_sz * 2) <= wal_sz)
