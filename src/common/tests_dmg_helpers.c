@@ -1393,7 +1393,7 @@ dmg_storage_set_nvme_fault(const char *dmg_config_file,
 			D_GOTO(out, rc = -DER_NOMEM);
 	}
 
-	args = cmd_push_arg(args, &argcount, " --host-list=%s ", host);
+	args = cmd_push_arg(args, &argcount, " --host=%s ", host);
 	if (args == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 

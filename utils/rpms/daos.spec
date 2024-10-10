@@ -14,8 +14,8 @@
 %endif
 
 Name:          daos
-Version:       2.6.0
-Release:       5%{?relval}%{?dist}
+Version:       2.6.1
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -591,6 +591,15 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Oct 01 2024 Phillip Henderson <phillip.henderson@intel.com> 2.6.1-3
+- Third release candidate for 2.6.1
+
+* Fri Sep 20 2024 Phillip Henderson <phillip.henderson@intel.com> 2.6.1-2
+- Second release candidate for 2.6.1
+
+* Mon Sep 09 2024 Phillip Henderson <phillip.henderson@intel.com> 2.6.1-1
+- First release candidate for 2.6.1
+
 * Thu Aug 08 2024 Tom Nabarro <tom.nabarro@intel.com> 2.6.0-5
 - Add pciutils runtime dep for daos_server lspci call
 - Add pciutils-devel build dep for pciutils CGO bindings
