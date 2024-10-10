@@ -90,7 +90,10 @@ struct heap_rt {
 	unsigned                       zones_exhausted_ne;
 	unsigned                       zones_ne_gc;
 	unsigned                       zones_lastne_gc;
+	unsigned                       zones_unused_first;
 	unsigned                       zinfo_vec_size;
+	unsigned                       mb_create_waiters;
+	void                          *mb_create_wq;
 	struct zinfo_vec              *zinfo_vec;
 	struct mbrt                   *default_mb;
 	struct mbrt                  **evictable_mbs;
@@ -314,11 +317,19 @@ heap_mbrt_update_alloc_class_buckets(struct palloc_heap *heap, struct mbrt *mb,
 static inline int
 heap_mbrt_init(struct palloc_heap *heap)
 {
-	struct heap_rt *rt  = heap->rt;
-	int             ret = 0;
+	struct heap_rt    *rt    = heap->rt;
+	int                ret   = 0;
+	struct umem_store *store = heap->layout_info.store;
 
 	rt->default_mb          = NULL;
 	rt->active_evictable_mb = NULL;
+	rt->mb_create_waiters   = 0;
+	rt->mb_create_wq        = NULL;
+	ret                     = store->stor_ops->so_waitqueue_create(&rt->mb_create_wq);
+	if (ret) {
+		ret = daos_der2errno(ret);
+		goto error;
+	}
 
 	D_ALLOC_ARRAY(rt->evictable_mbs, rt->nzones);
 	if (rt->evictable_mbs == NULL) {
@@ -348,8 +359,9 @@ error:
 static inline void
 heap_mbrt_fini(struct palloc_heap *heap)
 {
-	struct heap_rt *rt = heap->rt;
-	int             i;
+	struct heap_rt    *rt = heap->rt;
+	int                i;
+	struct umem_store *store = heap->layout_info.store;
 
 	for (i = 0; i < rt->zones_exhausted; i++) {
 		if (heap_mbrt_ismb_evictable(heap, i))
@@ -361,6 +373,10 @@ heap_mbrt_fini(struct palloc_heap *heap)
 	rt->default_mb          = NULL;
 	rt->active_evictable_mb = NULL;
 	rt->evictable_mbs       = NULL;
+	D_ASSERT(rt->mb_create_waiters == 0);
+	if (rt->mb_create_wq != NULL)
+		store->stor_ops->so_waitqueue_destroy(rt->mb_create_wq);
+	rt->mb_create_wq = NULL;
 }
 
 /*
@@ -1540,6 +1556,7 @@ heap_boot(struct palloc_heap *heap, void *mmap_base, uint64_t heap_size, uint64_
 	h->zones_exhausted_ne = 0;
 	h->zones_ne_gc        = 0;
 	h->zones_lastne_gc    = 0;
+	h->zones_unused_first = 0;
 
 	h->nlocks = On_valgrind ? MAX_RUN_LOCKS_VG : MAX_RUN_LOCKS;
 	for (unsigned i = 0; i < h->nlocks; ++i)
@@ -1603,16 +1620,27 @@ heap_create_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
 	struct umem_cache_range rg = {0};
 	int                     rc;
 	struct zone            *z;
+	struct umem_pin_handle *pin_handle = NULL;
 
 	D_ASSERT(heap->rt->active_evictable_mb == NULL);
 
 	if (heap->rt->zones_exhausted_e >= heap->rt->nzones_e)
 		return -1;
 
-	zone_id = heap->rt->zones_exhausted++;
+	for (zone_id = heap->rt->zones_unused_first; zone_id < heap->rt->nzones; zone_id++) {
+		if (!heap_mbrt_ismb_initialized(heap, zone_id))
+			break;
+	}
+
+	D_ASSERT(zone_id < heap->rt->nzones);
 	mb      = heap_mbrt_setup_mb(heap, zone_id);
 	if (mb == NULL)
 		return -1;
+
+	heap->rt->zones_unused_first = zone_id + 1;
+	if (heap->rt->zones_exhausted < heap->rt->zones_unused_first)
+		heap->rt->zones_exhausted = heap->rt->zones_unused_first;
+	heap->rt->zones_exhausted_e++;
 	heap_mbrt_setmb_evictable(heap, mb);
 
 	/* Create a umem cache map for the new zone */
@@ -1623,13 +1651,9 @@ heap_create_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
 	rc = umem_cache_map(heap->layout_info.store, &rg, 1);
 	if (rc != 0) {
 		ERR("Failed to map zone %u to umem cache\n", zone_id);
-		heap_mbrt_cleanup_mb(mb);
-		heap->rt->evictable_mbs[zone_id] = NULL;
-		heap->rt->zones_exhausted--;
 		errno = daos_der2errno(rc);
-		return -1;
+		goto error;
 	}
-	heap->rt->zones_exhausted_e++;
 
 	D_DEBUG(DB_TRACE, "Creating evictable zone %d\n", zone_id);
 
@@ -1641,32 +1665,60 @@ heap_create_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
 
 	memset(z, 0, rg.cr_size);
 
+	rc = umem_cache_pin(heap->layout_info.store, &rg, 1, false, &pin_handle);
+	if (rc) {
+		errno = daos_der2errno(rc);
+		goto error;
+	}
+
 	/* ignore zone and chunk headers */
 	VALGRIND_ADD_TO_GLOBAL_TX_IGNORE(z, sizeof(z->header) + sizeof(z->chunk_headers));
+
+	rc = lw_tx_begin(heap->p_ops.base);
+	if (rc)
+		goto error;
 
 	heap_zone_init(heap, zone_id, 0, true);
 	rc = heap_mbrt_mb_reclaim_garbage(heap, zone_id);
 	if (rc) {
-		heap_mbrt_cleanup_mb(mb);
-		heap->rt->evictable_mbs[zone_id] = NULL;
-		heap->rt->zones_exhausted--;
-		return -1;
+		ERR("Failed to initialize evictable zone %u", zone_id);
+		lw_tx_end(heap->p_ops.base, NULL);
+		goto error;
 	}
 	heap_zinfo_set(heap, zone_id, true, true);
+	lw_tx_end(heap->p_ops.base, NULL);
+	umem_cache_unpin(heap->layout_info.store, pin_handle);
 
 	*mb_id = zone_id;
 	return 0;
+
+error:
+	if (pin_handle)
+		umem_cache_unpin(heap->layout_info.store, pin_handle);
+	heap_mbrt_cleanup_mb(mb);
+	heap->rt->evictable_mbs[zone_id] = NULL;
+	heap->rt->zones_exhausted_e--;
+	if (heap->rt->zones_unused_first > zone_id)
+		heap->rt->zones_unused_first = zone_id;
+	return -1;
 }
 
 int
 heap_get_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
 {
-	struct mbrt *mb;
-	int          ret;
+	struct mbrt       *mb;
+	int                ret;
+	struct umem_store *store = heap->layout_info.store;
+
+	heap->rt->mb_create_waiters++;
+	if (heap->rt->mb_create_waiters > 1) {
+		D_ASSERT(store->stor_ops->so_waitqueue_wait != NULL);
+		store->stor_ops->so_waitqueue_wait(heap->rt->mb_create_wq, false);
+	}
 
 	if (heap->rt->active_evictable_mb != NULL) {
 		*mb_id = heap->rt->active_evictable_mb->mb_id;
-		return 0;
+		goto out;
 	}
 
 	if (!TAILQ_EMPTY(&heap->rt->mb_u30)) {
@@ -1684,7 +1736,7 @@ heap_get_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
 			mb = TAILQ_FIRST(&heap->rt->mb_u90);
 			if (mb == NULL) {
 				*mb_id = 0;
-				return 0;
+				goto out;
 			}
 			TAILQ_REMOVE(&heap->rt->mb_u90, mb, mb_link);
 		} else {
@@ -1695,6 +1747,14 @@ heap_get_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
 	heap->rt->active_evictable_mb = mb;
 	mb->qptr                      = NULL;
 	*mb_id                        = mb->mb_id;
+
+out:
+	D_ASSERT(heap->rt->mb_create_waiters > 0);
+	heap->rt->mb_create_waiters--;
+	if (heap->rt->mb_create_waiters) {
+		D_ASSERT(store->stor_ops->so_waitqueue_wakeup != NULL);
+		store->stor_ops->so_waitqueue_wakeup(heap->rt->mb_create_wq, false);
+	}
 	return 0;
 }
 
@@ -1718,6 +1778,7 @@ heap_update_mbrt_zinfo(struct palloc_heap *heap, bool init)
 	struct mbrt       *mb;
 	struct zone       *z;
 	enum mb_usage_hint usage_hint;
+	int                last_allocated = 0;
 
 	heap->rt->zinfo_vec      = HEAP_OFF_TO_PTR(heap, z0->header.zone0_zinfo_off);
 	heap->rt->zinfo_vec_size = z0->header.zone0_zinfo_size;
@@ -1732,8 +1793,11 @@ heap_update_mbrt_zinfo(struct palloc_heap *heap, bool init)
 
 	for (i = 1; i < heap->rt->nzones; i++) {
 		heap_zinfo_get(heap, i, &allotted, &evictable);
-		if (!allotted)
-			break;
+		if (!allotted) {
+			if (!heap->rt->zones_unused_first)
+				heap->rt->zones_unused_first = i;
+			continue;
+		}
 		if (!evictable) {
 			heap_mbrt_setmb_nonevictable(heap, i);
 			nemb_cnt++;
@@ -1752,8 +1816,9 @@ heap_update_mbrt_zinfo(struct palloc_heap *heap, bool init)
 			}
 			emb_cnt++;
 		}
+		last_allocated = i;
 	}
-	heap->rt->zones_exhausted    = i;
+	heap->rt->zones_exhausted    = last_allocated + 1;
 	heap->rt->zones_exhausted_ne = nemb_cnt;
 	heap->rt->zones_exhausted_e  = emb_cnt;
 
