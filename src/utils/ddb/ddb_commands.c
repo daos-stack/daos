@@ -1,10 +1,11 @@
 /**
- * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include <daos/common.h>
+#include <daos_srv/vos.h>
 #include "ddb_common.h"
 #include "ddb_parse.h"
 #include "ddb.h"
@@ -56,7 +57,7 @@ ddb_run_open(struct ddb_ctx *ctx, struct open_options *opt)
 		return -DER_EXIST;
 	}
 	ctx->dc_write_mode = opt->write_mode;
-	return dv_pool_open(opt->path, &ctx->dc_poh);
+	return dv_pool_open(opt->path, &ctx->dc_poh, 0);
 }
 
 int
@@ -989,4 +990,80 @@ int ddb_run_dtx_act_abort(struct ddb_ctx *ctx, struct dtx_act_abort_options *opt
 
 	dtx_modify_fini(&args);
 	return rc;
+}
+
+int
+ddb_run_feature(struct ddb_ctx *ctx, struct feature_options *opt)
+{
+	int      rc;
+	uint64_t new_compat_flags;
+	uint64_t new_incompat_flags;
+	bool     close = false;
+
+	if (opt->set_compat_flags || opt->set_incompat_flags || opt->clear_compat_flags ||
+	    opt->clear_incompat_flags)
+		ctx->dc_write_mode = true;
+	else
+		ctx->dc_write_mode = false;
+
+	if (!ctx->dc_write_mode && !opt->show_features)
+		return -DER_INVAL;
+
+	if (ddb_pool_is_open(ctx))
+		goto skip;
+
+	if (!opt->path || (opt->path && strnlen(opt->path, PATH_MAX) == 0))
+		opt->path = ctx->dc_pool_path;
+
+	rc = dv_pool_open(opt->path, &ctx->dc_poh, VOS_POF_FOR_FEATURE_FLAG);
+	if (rc)
+		return rc;
+	close = true;
+
+skip:
+	rc = dv_pool_get_flags(ctx->dc_poh, &new_compat_flags, &new_incompat_flags);
+	if (rc) {
+		ddb_error(ctx, "Error with pool superblock");
+		goto out;
+	}
+
+	if (ctx->dc_write_mode) {
+		if (opt->set_compat_flags || opt->clear_compat_flags) {
+			new_compat_flags |= (opt->set_compat_flags & VOS_POOL_COMPAT_FLAG_SUPP);
+			new_compat_flags &= ~(opt->clear_compat_flags & VOS_POOL_COMPAT_FLAG_SUPP);
+		}
+		if (opt->set_incompat_flags || opt->clear_incompat_flags) {
+			new_incompat_flags |=
+			    (opt->set_incompat_flags & VOS_POOL_INCOMPAT_FLAG_SUPP);
+			new_incompat_flags &=
+			    ~(opt->clear_incompat_flags & VOS_POOL_INCOMPAT_FLAG_SUPP);
+		}
+		rc = dv_pool_update_flags(ctx->dc_poh, new_compat_flags, new_incompat_flags);
+		if (rc) {
+			ddb_printf(ctx, "Failed to update flags: %d\n", rc);
+			goto out;
+		}
+	}
+	if (opt->show_features) {
+		ddb_printf(ctx, "Compat Flags: %lu\n", new_compat_flags);
+		ddb_printf(ctx, "Incompat Flags: %lu\n", new_incompat_flags);
+	}
+out:
+	if (close)
+		rc = dv_pool_close(ctx->dc_poh);
+	ctx->dc_poh        = DAOS_HDL_INVAL;
+	ctx->dc_write_mode = false;
+
+	return rc;
+}
+
+int
+ddb_run_rm_pool(struct ddb_ctx *ctx, struct rm_pool_options *opt)
+{
+	if (ddb_pool_is_open(ctx)) {
+		ddb_error(ctx, "Must close pool before can open another\n");
+		return -DER_EXIST;
+	}
+
+	return dv_pool_destroy(opt->path);
 }
