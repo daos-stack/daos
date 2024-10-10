@@ -7,16 +7,10 @@
    ...
 }
 {
-   libnl-1
+   libnl
    Memcheck:Leak
    ...
-   fun:init_proto_names
-}
-{
-   libnl-2
-   Memcheck:Leak
-   ...
-   fun:init_routing_table_names
+   obj:*/libnl*
 }
 {
    <insert_a_suppression_name_here>
