@@ -874,7 +874,8 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		D_ASSERTF(rpt->rt_pool->sp_rebuilding >= 0, DF_UUID" rebuilding %d\n",
 			  DP_UUID(rpt->rt_pool_uuid), rpt->rt_pool->sp_rebuilding);
 			/* Wait for EC aggregation to abort before discard the object */
-		D_INFO(DF_UUID" wait for ec agg abort.\n", DP_UUID(entry->ie_couuid));
+		D_INFO(DF_UUID" wait for ec agg abort, rebuilding %d.\n",
+		       DP_UUID(entry->ie_couuid), rpt->rt_pool->sp_rebuilding);
 		dss_sleep(1000);
 		if (rpt->rt_abort || rpt->rt_finishing) {
 			D_DEBUG(DB_REBUILD, DF_CONT" rebuild op %s ver %u abort %u/%u.\n",
@@ -919,7 +920,7 @@ close:
 		ds_cont_child_put(cont_child);
 	}
 
-	D_DEBUG(DB_REBUILD, DF_UUID"/"DF_UUID" iterate cont done: "DF_RC"\n",
+	D_INFO(DF_UUID"/"DF_UUID" iterate cont done: "DF_RC"\n",
 		DP_UUID(rpt->rt_pool_uuid), DP_UUID(entry->ie_couuid),
 		DP_RC(rc));
 

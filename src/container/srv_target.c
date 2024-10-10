@@ -181,8 +181,7 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 	}
 
 	if (pool->sp_rebuilding && !vos_agg) {
-		cont->sc_ec_agg_active = 0;
-		D_INFO(DF_CONT": skip EC aggregation during rebuild %d, clear sc_ec_agg_active.\n",
+		D_INFO(DF_CONT": skip EC aggregation during rebuild %d.\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 			pool->sp_rebuilding);
 		return false;
@@ -192,14 +191,10 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 		if (!cont->sc_vos_agg_active)
 			D_DEBUG(DB_EPC, DF_CONT": resume VOS aggregation after reintegration.\n",
 				DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
-		cont->sc_vos_agg_active = 1;
 	} else {
 		if (!cont->sc_ec_agg_active)
 			D_INFO(DF_CONT": resume EC aggregation after reintegration.\n",
 				DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
-		cont->sc_ec_agg_active = 1;
-		D_INFO(DF_CONT": set sc_ec_agg_active\n",
-		       DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
 	}
 
 	if (!cont->sc_props_fetched)
@@ -473,6 +468,14 @@ cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 		if (!cont_aggregate_runnable(cont, req, param->ap_vos_agg))
 			goto next;
 
+		if (param->ap_vos_agg) {
+			cont->sc_vos_agg_active = 1;
+		} else {
+			cont->sc_ec_agg_active = 1;
+			D_INFO(DF_CONT": set sc_ec_agg_active\n",
+			       DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
+		}
+
 		rc = cont_child_aggregate(cont, cb, param);
 		if (rc == -DER_SHUTDOWN) {
 			break;	/* pool destroyed */
@@ -484,6 +487,14 @@ cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 		} else if (sched_req_space_check(req) != SCHED_SPACE_PRESS_NONE) {
 			/* Don't sleep too long when there is space pressure */
 			msecs = 2ULL * 100;
+		}
+
+		if (param->ap_vos_agg) {
+			cont->sc_vos_agg_active = 0;
+		} else {
+			cont->sc_ec_agg_active = 0;
+			D_INFO(DF_CONT": clear sc_ec_agg_active\n",
+			       DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
 		}
 next:
 		if (dss_ult_exiting(req))

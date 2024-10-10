@@ -2275,6 +2275,13 @@ ec_aggregate_yield(struct ec_agg_param *agg_param)
 	if (rc < 0) /* Abort */
 		return true;
 
+	if (agg_param->ap_pool_info.api_pool->sp_rebuilding > 0) {
+		D_INFO(DF_UUID": abort ec aggregation, sp_rebuilding %d\n",
+		       DP_UUID(agg_param->ap_pool_info.api_pool->sp_uuid),
+		       agg_param->ap_pool_info.api_pool->sp_rebuilding);
+		return true;
+	}
+
 	/*
 	 * FIXME: Implement fine credits for various operations and adjust
 	 *	  the credits according to the 'rc'.
