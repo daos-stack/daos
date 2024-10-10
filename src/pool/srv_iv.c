@@ -1222,8 +1222,7 @@ pool_iv_update(struct ds_iv_ns *ns, int class_id, uuid_t key_uuid,
 }
 
 int
-ds_pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf,
-		      uint32_t map_ver)
+ds_pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf, uint32_t map_ver)
 {
 	struct pool_iv_entry	*iv_entry;
 	uint32_t		 iv_entry_size;
@@ -1240,8 +1239,7 @@ ds_pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		return -DER_NOMEM;
 
 	crt_group_rank(pool->sp_group, &iv_entry->piv_map.piv_master_rank);
-	iv_entry->piv_map.piv_pool_map_ver =
-		buf == NULL ? 0 : pool->sp_map_version;
+	iv_entry->piv_map.piv_pool_map_ver = buf == NULL ? 0 : map_ver;
 	if (buf != NULL)
 		memcpy(&iv_entry->piv_map.piv_pool_buf, buf,
 		       pool_buf_size(buf->pb_nr));

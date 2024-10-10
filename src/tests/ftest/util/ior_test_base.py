@@ -225,8 +225,6 @@ class IorTestBase(TestWithServers):
             env = self.ior_cmd.get_default_env(str(manager), self.client_log)
         if intercept:
             env['LD_PRELOAD'] = intercept
-            if 'D_IL_REPORT' not in env:
-                env['D_IL_REPORT'] = '1'
         if plugin_path:
             env["HDF5_VOL_CONNECTOR"] = "daos"
             env["HDF5_PLUGIN_PATH"] = str(plugin_path)

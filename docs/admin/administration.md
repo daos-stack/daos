@@ -620,21 +620,17 @@ Usage:
 [nvme-faulty command options]
       -u, --uuid=     Device UUID to set
       -f, --force     Do not require confirmation
+      -l, --host=     Single host address <ipv4addr/hostname> to connect to
 ```
 
 To manually evict an NVMe SSD (auto eviction is covered later in this section),
 the device state needs to be set faulty by running the following command:
 ```bash
-$ dmg -l boro-11 storage set nvme-faulty --uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
+$ dmg storage set nvme-faulty --host=boro-11 --uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
 NOTICE: This command will permanently mark the device as unusable!
 Are you sure you want to continue? (yes/no)
 yes
--------
-boro-11
--------
-  Devices
-    UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 [TrAddr:]
-            Targets:[] Rank:0 State:EVICTED LED:ON
+set-faulty operation performed successfully on the following host: boro-11:10001
 ```
 The device state will transition from "NORMAL" to "EVICTED" (shown above), during which time the
 faulty device reaction will have been triggered (all targets on the SSD will be rebuilt).
@@ -693,19 +689,14 @@ Usage:
 [nvme command options]
           --old-uuid= Device UUID of hot-removed SSD
           --new-uuid= Device UUID of new device
-          --no-reint  Bypass reintegration of device and just bring back online.
+          -l, --host= Single host address <ipv4addr/hostname> to connect to
 ```
 
 To replace an NVMe SSD with an evicted device and reintegrate it into use with
 DAOS, run the following command:
 ```bash
-$ dmg -l boro-11 storage replace nvme --old-uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19 --new-uuid=80c9f1be-84b9-4318-a1be-c416c96ca48b
--------
-boro-11
--------
-  Devices
-    UUID:80c9f1be-84b9-4318-a1be-c416c96ca48b [TrAddr:]
-      Targets:[] Rank:1 State:NORMAL LED:OFF
+$ dmg storage replace nvme --host=boro-11 --old-uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19 --new-uuid=80c9f1be-84b9-4318-a1be-c416c96ca48b
+dev-replace operation performed successfully on the following host: boro-11:10001
 ```
 The old, now replaced device will remain in an "EVICTED" state until it is unplugged.
 The new device will transition from a "NEW" state to a "NORMAL" state (shown above).
@@ -716,14 +707,9 @@ In order to reuse a device that was previously set as FAULTY and evicted from th
 system, an admin can run the following command (setting the old device UUID to be the
 new device UUID):
 ```bash
-$ dmg -l boro-11 storage replace nvme --old-uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19 --new-uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
+$ dmg storage replace nvme --host=boro-11 ---old-uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19 --new-uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
 NOTICE: Attempting to reuse a previously set FAULTY device!
--------
-boro-11
--------
-  Devices
-    UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 [TrAddr:]
-      Targets:[] Rank:1 State:NORMAL LED:OFF
+dev-replace operation performed successfully on the following host: boro-11:10001
 ```
 The FAULTY device will transition from an "EVICTED" state back to a "NORMAL" state,
 and will again be available for use with DAOS. The use case of this command will mainly

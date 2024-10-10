@@ -476,6 +476,10 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 				msg = fmt.Sprintf("%s (MD-on-SSD)", msg)
 				// MD-on-SSD has extra sys-xstream for rdb.
 				sysXSCount++
+			} else if ec.TargetCount == 1 {
+				// Avoid DMA buffer allocation failure with single target count by
+				// increasing the minimum target count used to calculate hugepages.
+				cfgTargetCount++
 			}
 		}
 		log.Debug(msg)
@@ -507,9 +511,7 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 		cfg.NrHugepages = minHugepages
 		log.Infof("hugepage count automatically set to %d (%s)", minHugepages,
 			humanize.IBytes(hugePageBytes(minHugepages, mi.HugepageSizeKiB)))
-	}
-
-	if cfg.NrHugepages < minHugepages {
+	} else if cfg.NrHugepages < minHugepages {
 		log.Noticef("configured nr_hugepages %d is less than recommended %d, "+
 			"if this is not intentional update the 'nr_hugepages' config "+
 			"parameter or remove and it will be automatically calculated",
