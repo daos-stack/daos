@@ -2444,6 +2444,13 @@ is_id_evictable(struct umem_cache *cache, uint32_t pg_id)
 }
 
 static inline void
+cache_push_free_page(struct umem_cache *cache, struct umem_page_info *pinfo)
+{
+	d_list_add_tail(&pinfo->pi_lru_link, &cache->ca_pgs_free);
+	cache->ca_pgs_stats[UMEM_PG_STATS_FREE] += 1;
+}
+
+static inline void
 cache_unmap_page(struct umem_cache *cache, struct umem_page_info *pinfo)
 {
 	verify_clean_page(pinfo, 1);
@@ -2456,8 +2463,7 @@ cache_unmap_page(struct umem_cache *cache, struct umem_page_info *pinfo)
 	pinfo->pi_last_checkpoint                = 0;
 	cache->ca_pages[pinfo->pi_pg_id].pg_info = NULL;
 
-	d_list_add_tail(&pinfo->pi_lru_link, &cache->ca_pgs_free);
-	cache->ca_pgs_stats[UMEM_PG_STATS_FREE] += 1;
+	cache_push_free_page(cache, pinfo);
 
 	if (!is_id_evictable(cache, pinfo->pi_pg_id)) {
 		D_ASSERT(cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE] > 0);
@@ -2611,6 +2617,7 @@ touch_page(struct umem_store *store, struct umem_page_info *pinfo, uint64_t wr_t
 		pinfo->pi_bmap[idx] |= 1ULL << bit;
 	}
 
+	D_ASSERT(pinfo->pi_loaded == 1);
 	pinfo->pi_last_inflight = wr_tx;
 
 	/* Don't change the pi_dirty_link while the page is being flushed */
@@ -2989,7 +2996,7 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 		      uint64_t *out_id, struct umem_cache_chkpt_stats *stats)
 {
 	struct umem_cache		*cache;
-	struct umem_page_info		*pinfo, *tmp;
+	struct umem_page_info		*pinfo;
 	struct umem_checkpoint_data	*chkpt_data_all;
 	d_list_t			 dirty_list;
 	uint64_t			 chkpt_id = *out_id;
@@ -3002,7 +3009,7 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 		return 0; /* TODO: When SMD is supported outside VOS, this will be an error */
 
 	if (d_list_empty(&cache->ca_pgs_dirty))
-		goto done;
+		goto wait;
 
 	D_ALLOC_ARRAY(chkpt_data_all, MAX_INFLIGHT_SETS);
 	if (chkpt_data_all == NULL)
@@ -3019,13 +3026,14 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 		D_ASSERT(rc != 0);
 		d_list_move(&dirty_list, &cache->ca_pgs_dirty);
 	}
-done:
+wait:
 	/* Wait for the evicting pages (if any) with lower checkpoint id */
-	d_list_for_each_entry_safe(pinfo, tmp, &cache->ca_pgs_flushing, pi_flush_link) {
+	d_list_for_each_entry(pinfo, &cache->ca_pgs_flushing, pi_flush_link) {
 		D_ASSERT(pinfo->pi_io == 1);
 		if (store->stor_ops->so_wal_id_cmp(store, chkpt_id, pinfo->pi_last_checkpoint) < 0)
 			continue;
 		page_wait_io(cache, pinfo);
+		goto wait;
 	}
 
 	*out_id = chkpt_id;
@@ -3051,7 +3059,7 @@ cache_load_page(struct umem_cache *cache, struct umem_page_info *pinfo)
 
 	if (pinfo->pi_io == 1) {
 		page_wait_io(cache, pinfo);
-		return 0;
+		return pinfo->pi_loaded ? 0 : -DER_IO;
 	}
 
 	offset = cache_id2off(cache, pinfo->pi_pg_id);
@@ -3149,11 +3157,6 @@ cache_flush_page(struct umem_cache *cache, struct umem_page_info *pinfo)
 	uint64_t			 chkpt_id = 0;
 	int				 rc;
 
-	if (pinfo->pi_io == 1) {
-		page_wait_io(cache, pinfo);
-		return 0;
-	}
-
 	D_ALLOC_ARRAY(chkpt_data_all, 1);
 	if (chkpt_data_all == NULL)
 		return -DER_NOMEM;
@@ -3207,6 +3210,17 @@ cache_evict_page(struct umem_cache *cache, bool for_sys)
 	pinfo = d_list_entry(pg_list->next, struct umem_page_info, pi_lru_link);
 evict:
 	D_ASSERT(pinfo->pi_ref == 0);
+
+	/*
+	 * To minimize page eviction, let's evict page one by one for this moment, we
+	 * may consider to allow N concurrent pages eviction in the future.
+	 */
+	if (pinfo->pi_io == 1) {
+		D_ASSERT(!d_list_empty(&pinfo->pi_flush_link));
+		page_wait_io(cache, pinfo);
+		return -DER_AGAIN;
+	}
+
 	if (is_page_dirty(pinfo)) {
 		rc = cache_flush_page(cache, pinfo);
 		if (rc) {
@@ -3215,7 +3229,7 @@ evict:
 		}
 
 		/* The page is referenced by others while flushing */
-		if ((pinfo->pi_ref > 0) || is_page_dirty(pinfo))
+		if ((pinfo->pi_ref > 0) || is_page_dirty(pinfo) || pinfo->pi_io == 1)
 			return -DER_AGAIN;
 	}
 
@@ -3300,31 +3314,42 @@ cache_get_free_page(struct umem_cache *cache, struct umem_page_info **ret_pinfo,
 static int
 cache_map_pages(struct umem_cache *cache, uint32_t *pages, int page_nr)
 {
-	struct umem_page_info	*pinfo;
+	struct umem_page_info	*pinfo, *free_pinfo = NULL;
 	uint32_t		 pg_id;
 	int			 i, rc = 0;
 
 	for (i = 0; i < page_nr; i++) {
 		pg_id = pages[i];
-		pinfo = cache->ca_pages[pg_id].pg_info;
 
 		if (is_id_evictable(cache, pg_id) && page_nr != 1) {
 			D_ERROR("Can only map single evictable page.\n");
 			return -DER_INVAL;
 		}
-
+retry:
+		pinfo = cache->ca_pages[pg_id].pg_info;
 		/* The page is already mapped */
 		if (pinfo != NULL) {
 			D_ASSERT(pinfo->pi_pg_id == pg_id);
 			D_ASSERT(pinfo->pi_mapped == 1);
+			D_ASSERT(pinfo->pi_loaded == 1);
+			if (free_pinfo != NULL) {
+				cache_push_free_page(cache, free_pinfo);
+				free_pinfo = NULL;
+			}
 			continue;
 		}
 
 		if (is_id_evictable(cache, pg_id)) {
-			rc = cache_get_free_page(cache, &pinfo, 0, false);
-			if (rc) {
-				DL_ERROR(rc, "Failed to get free page.");
-				break;
+			if (free_pinfo == NULL) {
+				rc = cache_get_free_page(cache, &free_pinfo, 0, false);
+				if (rc) {
+					DL_ERROR(rc, "Failed to get free page.");
+					break;
+				}
+				goto retry;
+			} else {
+				pinfo = free_pinfo;
+				free_pinfo = NULL;
 			}
 		} else {
 			pinfo = cache_pop_free_page(cache);
@@ -3347,27 +3372,38 @@ cache_map_pages(struct umem_cache *cache, uint32_t *pages, int page_nr)
 static int
 cache_pin_pages(struct umem_cache *cache, uint32_t *pages, int page_nr, bool for_sys)
 {
-	struct umem_page_info	*pinfo;
+	struct umem_page_info	*pinfo, *free_pinfo = NULL;
 	uint32_t		 pg_id;
 	int			 i, processed = 0, pinned = 0, rc = 0;
 
 	for (i = 0; i < page_nr; i++) {
 		pg_id = pages[i];
+retry:
 		pinfo = cache->ca_pages[pg_id].pg_info;
-
 		/* The page is already mapped */
 		if (pinfo != NULL) {
 			D_ASSERT(pinfo->pi_pg_id == pg_id);
 			D_ASSERT(pinfo->pi_mapped == 1);
 			inc_cache_stats(cache, UMEM_CACHE_STATS_HIT);
+			if (free_pinfo != NULL) {
+				cache_push_free_page(cache, free_pinfo);
+				free_pinfo = NULL;
+			}
 			goto next;
 		}
 
-		inc_cache_stats(cache, UMEM_CACHE_STATS_MISS);
-		rc = cache_get_free_page(cache, &pinfo, pinned, for_sys);
-		if (rc)
-			goto error;
+		if (free_pinfo == NULL) {
+			rc = cache_get_free_page(cache, &free_pinfo, pinned, for_sys);
+			if (rc)
+				goto error;
+			/* Above cache_get_free_page() could yield, need re-check mapped status */
+			goto retry;
+		} else {
+			pinfo = free_pinfo;
+			free_pinfo = NULL;
+		}
 
+		inc_cache_stats(cache, UMEM_CACHE_STATS_MISS);
 		cache_map_page(cache, pinfo, pg_id);
 next:
 		cache_pin_page(cache, pinfo);
@@ -3383,12 +3419,8 @@ next:
 		D_ASSERT(pinfo != NULL);
 		if (pinfo->pi_loaded == 0) {
 			rc = cache_load_page(cache, pinfo);
-			if (rc) {
+			if (rc)
 				goto error;
-			} else if (pinfo->pi_loaded == 0) {
-				rc = -DER_IO;
-				goto error;
-			}
 		}
 		pinfo->pi_sys = for_sys;
 	}
