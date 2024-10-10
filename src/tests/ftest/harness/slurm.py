@@ -4,7 +4,6 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithoutServers
-
 from host_utils import get_local_host
 from slurm_utils import sinfo
 

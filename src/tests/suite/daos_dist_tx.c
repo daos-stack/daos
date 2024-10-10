@@ -2788,6 +2788,7 @@ dtx_38(void **state)
 	uint64_t	 val;
 	daos_handle_t	 th = { 0 };
 	d_rank_t	 kill_ranks[2];
+	bool		 rdg_verify = false;
 	int		 i;
 
 	FAULT_INJECTION_REQUIRED();
@@ -2795,6 +2796,10 @@ dtx_38(void **state)
 	print_message("DTX38: resync - lost whole redundancy groups\n");
 
 	if (!test_runable(arg, 7))
+		skip();
+
+	d_getenv_bool("DAOS_TX_VERIFY_RDG", &rdg_verify);
+	if (!rdg_verify)
 		skip();
 
 	if (arg->myrank == 0) {

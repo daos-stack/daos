@@ -44,10 +44,20 @@ severity, message, description, and cause.
 
 |Event|Event type|Severity|Message|Description|Cause|
 |:----|:----|:----|:----|:----|:----|
+| device\_set\_faulty| INFO\_ONLY| NOTICE or ERROR| Device: <uuid\> set faulty / Device: <uuid\> set faulty failed: <rc\> / Device: <uuid\> auto faulty detect / Device: <uuid\> auto faulty detect failed: <rc\> | Indicates that a device has either been explicitly automatically set as faulty. Device UUID specified in event data. | Either DMG set nvme-faulty command was used to explicitly set device as faulty or an error threshold was reached on a device which has triggered an auto faulty reaction. |
+| device\_media\_error| INFO\_ONLY| ERROR| Device: <uuid\> <error-type\> error logged from tgt\_id:<idx\> | Indicates that a device media error has been detected for a specific target. The error type could be unmap, write, read or checksum (csum). Device UUID and target ID specified in event data. | Media error occurred on backing device. |
+| device\_unplugged| INFO\_ONLY| NOTICE| Device: <uuid\> unplugged | Indicates device was physically removed from host. | NVMe SSD physically removed from host. |
+| device\_plugged| INFO\_ONLY| NOTICE| Detected hot plugged device: <bdev-name\> | Indicates device was physically inserted into host. | NVMe SSD physically added to host. |
+| device\_replace| INFO\_ONLY| NOTICE or ERROR| Replaced device: <uuid\> with device: <uuid\> [failed: <rc\>] | Indicates that a faulty device was replaced with a new device and if the operation failed. The old and new device IDs as well as any non-zero return code are specified in the event data. | Device was replaced using DMG nvme replace command. |
+| device\_link\_speed\_changed| NOTICE or WARNING| NVMe PCIe device at <pci-address\> port-<idx\>: link speed changed to <transfer-rate\> (max <transfer-rate\>)| Indicates that an NVMe device link speed has changed. The negotiated and maximum device link speeds are indicated in the event message field and the severity is set to warning if the negotiated speed is not at maximum capability (and notice level severity if at maximum). No other specific information is included in the event data.| Either device link speed was previously downgraded and has returned to maximum or link speed has downgraded to a value that is less than its maximum capability.|
+| device\_link\_width\_changed| NOTICE or WARNING| NVMe PCIe device at <pci-address\> port-<idx\>: link width changed to <pcie-link-lanes\> (max <pcie-link-lanes\>)| Indicates that an NVMe device link width has changed. The negotiated and maximum device link widths are indicated in the event message field and the severity is set to warning if the negotiated width is not at maximum capability (and notice level severity if at maximum). No other specific information is included in the event data.| Either device link width was previously downgraded and has returned to maximum or link width has downgraded to a value that is less than its maximum capability.|
 | engine\_format\_required|INFO\_ONLY|NOTICE|DAOS engine <idx\> requires a <type\> format|Indicates engine is waiting for allocated storage to be formatted on formatted on instance <idx\> with dmg tool. <type\> can be either SCM or Metadata.|DAOS server attempts to bring-up an engine that has unformatted storage.|
 | engine\_died| STATE\_CHANGE| ERROR| DAOS engine <idx\> exited exited unexpectedly: <error\> | Indicates engine instance <idx\> unexpectedly. <error> describes the exit state returned from exited daos\_engine process.| N/A                          |
-| engine\_asserted| STATE\_CHANGE| ERROR| TBD| Indicates engine instance <idx> threw a runtime assertion, causing a crash. | An unexpected internal state resulted in assert failure. |
+| engine\_asserted| STATE\_CHANGE| ERROR| TBD| Indicates engine instance <idx\> threw a runtime assertion, causing a crash. | An unexpected internal state resulted in assert failure. |
 | engine\_clock\_drift| INFO\_ONLY   | ERROR| clock drift detected| Indicates CART comms layer has detected clock skew between engines.| NTP may not be syncing clocks across DAOS system.      |
+| engine\_join\_failed| INFO\_ONLY| ERROR | DAOS engine <idx\> (rank <rank\>) was not allowed to join the system | Join operation failed for the given engine instance ID and rank (if assigned). | Reason should be provided in the extended info field of the event data. |
+| pool\_corruption\_detected| INFO\_ONLY| ERROR | Data corruption detected| Indicates a corruption in pool data has been detected. The event fields will contain pool and container UUIDs. | A corruption was found by the checksum scrubber. |
+| pool\_destroy\_deferred| INFO\_ONLY| WARNING | pool:<uuid\> destroy is deferred| Indicates a destroy operation has been deferre. | Pool destroy in progress but not complete. |
 | pool\_rebuild\_started| INFO\_ONLY| NOTICE   | Pool rebuild started.| Indicates a pool rebuild has started. The event data field contains pool map version and pool operation identifier. | When a pool rank becomes unavailable a rebuild will be triggered.   |
 | pool\_rebuild\_finished| INFO\_ONLY| NOTICE| Pool rebuild finished.| Indicates a pool rebuild has finished successfully. The event data field includes the pool map version and pool operation identifier.  | N/A|
 | pool\_rebuild\_failed| INFO\_ONLY| ERROR| Pool rebuild failed: <rc\>.| Indicates a pool rebuild has failed. The event data field includes the pool map version and pool operation identifier. <rc\> provides a string representation of DER code.| N/A                          |
@@ -59,42 +69,112 @@ severity, message, description, and cause.
 | swim\_rank\_dead| STATE\_CHANGE| NOTICE| SWIM rank marked as dead.| The SWIM protocol has detected the specified rank is unresponsive.| A remote DAOS engine has become unresponsive.|
 | system\_start\_failed| INFO\_ONLY| ERROR| System startup failed, <errors\>| Indicates that a user initiated controlled startup failed. <errors\> shows which ranks failed.| Ranks failed to start.|
 | system\_stop\_failed| INFO\_ONLY| ERROR| System shutdown failed during <action\> action, <errors\>  | Indicates that a user initiated controlled shutdown failed. <action\> identifies the failing shutdown action and <errors\> shows which ranks failed.| Ranks failed to stop.|
-
+| system\_fabric\_provider\_changed| NOTICE| System fabric provider has changed: <old-provider\> -> <new-provider\>| Indicates that the system-wide fabric provider has been updated. No other specific information is included in event data.| A system-wide fabric provider change has been intentionally applied to all joined ranks.|
 
 ## System Logging
 
-Engine logging is initially configured by setting the `log_file` and `log_mask`
+Engine logging is configured on `daos_server` start-up by setting the `log_file` and `log_mask`
 parameters in the server config file.
-The 'DD_MASK' and 'DD_SUBSYS' environment variables can also be defined within the "env\_vars"
-list parameter of the engine section of the server config file to tune log output.
+
+The `DD_MASK` and `DD_SUBSYS` environment variables can be defined within the `env_vars` list
+parameter of the engine section of the server config file to tune log output.
 
 Engine log levels can be changed dynamically (at runtime) by setting log masks for a set of
 facilities to a given level.
 Settings will be applied to all running DAOS I/O Engines present in the configured dmg hostlist
-using the command `dmg server set-logmasks [-m <masks>]`.
-The command accepts named arguments for masks ('D_LOG_MASK'), streams ('DD_MASK') and subsystems
-('DD_SUBSYS).
-If no args are passed, then the log masks for each running engine will be reset to the values of
-engine "log\_mask" parameter and "env\_vars" 'DD_MASK' and 'DD_SUBSYS' assignments in the server
-config file (as set at the time of daos\_server startup).
-If a single arg is passed, then this will be used as the log masks setting.
+using the `dmg server set-logmasks` command.
+The command accepts named arguments for masks `[-m|--masks]` (equivalent to `D_LOG_MASK`),
+streams `[-d|--streams]` (equivalent to `DD_MASK`) and subsystems `[-s|--subsystems]` (equivalent
+to `DD_SUBSYS`):
+
+Usage help:
+```
+dmg server set-logmasks --help
+Usage:
+  dmg [OPTIONS] server set-logmasks [set-logmasks-OPTIONS]
+
+Application Options:
+      --allow-proxy     Allow proxy configuration via environment
+  -i, --insecure        Have dmg attempt to connect without certificates
+  -d, --debug           Enable debug output
+      --log-file=       Log command output to the specified file
+  -j, --json            Enable JSON output
+  -J, --json-logging    Enable JSON-formatted log output
+  -o, --config-path=    Client config file path
+
+Help Options:
+  -h, --help            Show this help message
+
+[set-logmasks command options]
+      -l, --host-list=  A comma separated list of addresses <ipv4addr/hostname>
+                        to connect to
+      -m, --masks=      Set log masks for a set of facilities to a given level.
+                        The input string should look like
+                        PREFIX1=LEVEL1,PREFIX2=LEVEL2,... where the syntax is
+                        identical to what is expected by 'D_LOG_MASK'
+                        environment variable. If the 'PREFIX=' part is omitted,
+                        then the level applies to all defined facilities (e.g.
+                        a value of 'WARN' sets everything to WARN). If unset
+                        then reset engine log masks to use the 'log_mask' value
+                        set in the server config file (for each engine) at the
+                        time of DAOS system format. Supported levels are FATAL,
+                        CRIT, ERR, WARN, NOTE, INFO, DEBUG
+      -d, --streams=    Employ finer grained control over debug streams. Mask
+                        bits are set as the first argument passed in
+                        D_DEBUG(mask, ...) and this input string (DD_MASK) can
+                        be set to enable different debug streams. The expected
+                        syntax is a comma separated list of stream identifiers
+                        and accepted DAOS Debug Streams are
+                        md,pl,mgmt,epc,df,rebuild,daos_default and Common Debug
+                        Streams (GURT) are any,trace,mem,net,io. If not set,
+                        streams will be read from server config file and if set
+                        to an empty string then all debug streams will be
+                        enabled
+      -s, --subsystems= This input string is equivalent to the use of the
+                        DD_SUBSYS environment variable and can be set to enable
+                        logging for specific subsystems or facilities. The
+                        expected syntax is a comma separated list of facility
+                        identifiers. Accepted DAOS facilities are
+                        common,tree,vos,client,server,rdb,pool,container,object-
+                        ,placement,rebuild,tier,mgmt,bio,tests, Common
+                        facilities (GURT) are MISC,MEM and CaRT facilities
+                        RPC,BULK,CORPC,GRP,LM,HG,ST,IV If not set, subsystems
+                        to enable will be read from server config file and if
+                        set to an empty string then logging all subsystems will
+                        be enabled
+```
+
+If an arg is not passed, then that logging parameter for each engine process is reset to the
+values set in the server config file that was used when starting `daos_server`.
+- `--masks` will be reset to the value of the engine config `log_mask` parameter.
+- `--streams` will be reset to the `env_vars` `DD_MASK` environment variable value or to an empty
+string if not set.
+- `--subsystems` will be reset to the `env_vars` `DD_SUBSYS` environment variable value or to an
+empty string if not set.
 
 Example usage:
 ```
-dmg server set-logmasks -m ERR,mgmt=DEBUG
+dmg server set-logmasks -m DEBUG,MEM=ERR -d mgmt,md -s server,mgmt,bio,common
 ```
 
-The masks input string should look like PREFIX1=LEVEL1,PREFIX2=LEVEL2,... where the syntax is
-identical to what is expected by the 'D_LOG_MASK' environment variable.
-If the 'PREFIX=' part is omitted, then the level applies to all defined facilities (e.g., a value
-of 'WARN' sets everything to WARN).
+This example would be a runtime equivalent to setting the following in the server config file:
+```
+...
+engines:
+- log_mask: DEBUG,MEM=ERR
+  env_vars:
+  - DD_SUBSYS=server,mgmt,bio,common
+  - DD_MASK=mgmt,md
+...
+```
 
-Supported priority levels for engine logging are FATAL, CRIT, ERR, WARN, NOTE, INFO, DEBUG.
+If the above server config file was used to start an engine process, running `dmg server
+set-logmasks` without parameters would reset logging to config values and would be equivalent to the
+example given above.
 
-For usage of streams ('DD_MASK') and subsystems ('DD_SUBSYS') parameters, logging is described in
-detail in the
-[`Debugging System`](https://docs.daos.io/v2.6/admin/troubleshooting/#debugging-system)
-section.
+For more information on the usage of masks (`D_LOG_MASK`), streams (`DD_MASK`) and subsystems
+(`DD_SUBSYS`) parameters refer to the
+[`Debugging System`](https://docs.daos.io/v2.6/admin/troubleshooting/#debugging-system) section.
 
 ## System Monitoring
 
@@ -238,7 +318,6 @@ Usage:
 ...
 
 Available commands:
-  device-health  Query the device health
   list-devices   List storage devices on the server
   list-pools     List pools on the server
   usage          Show SCM & NVMe storage space utilization per storage server
@@ -302,6 +381,8 @@ Usage:
 ...
 
 [list-devices command options]
+      -l, --host-list=    A comma separated list of addresses <ipv4addr/hostname> to
+                          connect to
       -r, --rank=         Constrain operation to the specified server rank
       -b, --health        Include device health in results
       -u, --uuid=         Device UUID (all devices if blank)
@@ -318,18 +399,6 @@ Usage:
       -r, --rank=     Constrain operation to the specified server rank
       -u, --uuid=     Pool UUID (all pools if blank)
       -v, --verbose   Show more detail about pools
-```
-```bash
-$ dmg storage scan --nvme-meta --help
-Usage:
-  dmg [OPTIONS] storage scan [scan-OPTIONS]
-
-...
-
-[scan command options]
-      -v, --verbose      List SCM & NVMe device details
-      -n, --nvme-health  Display NVMe device health statistics
-      -m, --nvme-meta    Display server meta data held on NVMe storage
 ```
 
 The NVMe storage query list-devices and list-pools commands query the persistently
@@ -394,14 +463,19 @@ boro-11
 
 - Query Storage Device Health Data:
 ```bash
-$ dmg storage query device-health --help
+$ dmg storage query list-devices --health --help
 Usage:
-  dmg [OPTIONS] storage query device-health [device-health-OPTIONS]
+  dmg [OPTIONS] storage query list-devices [list-devices-OPTIONS]
 
 ...
 
-[device-health command options]
-      -u, --uuid=     Device UUID
+[list-devices command options]
+      -l, --host-list=    A comma separated list of addresses <ipv4addr/hostname> to
+                          connect to
+      -r, --rank=         Constrain operation to the specified server rank
+      -b, --health        Include device health in results
+      -u, --uuid=         Device UUID (all devices if blank)
+      -e, --show-evicted  Show only evicted faulty devices
 ```
 ```bash
 $ dmg storage scan --nvme-health --help
@@ -411,27 +485,31 @@ Usage:
 ...
 
 [scan command options]
+      -l, --host-list=   A comma separated list of addresses <ipv4addr/hostname>
+                         to connect to
       -v, --verbose      List SCM & NVMe device details
       -n, --nvme-health  Display NVMe device health statistics
-      -m, --nvme-meta    Display server meta data held on NVMe storage
 ```
 
-The NVMe storage query device-health command queries the device health data, including
-NVMe SSD health stats and in-memory I/O error and checksum error counters.
-The server rank and device state are also listed.
-Additionally, vendor-specific SMART stats are displayed, currently for Intel devices only.
+The 'dmg storage scan --nvme-health' command queries the device health data, including
+NVMe SSD health stats and in-memory I/O error and checksum error counters and prefixes the stat
+list with NVMe controller details.
+The 'dmg storage query list-devices --health' command displays the same health data and SMD UUID,
+bdev roles, server rank and device state.
+
+Vendor-specific SMART stats are displayed, currently for Intel devices only.
 Note: A reasonable timed workload > 60 min must be ran for the SMART stats to register
 (Raw values are 65535).
 Media wear percentage can be calculated by dividing by 1024 to find the percentage of the
 maximum rated cycles.
 ```bash
-$ dmg -l boro-11 storage query device-health --uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
+$ dmg -l boro-11 storage query list-devices --health --uuid=d5ec1227-6f39-40db-a1f6-70245aa079f1
 -------
 boro-11
 -------
   Devices
-    UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 [TrAddr:0000:8a:00.0]
-      Targets:[0 1 2 3] Rank:0 State:NORMAL
+    UUID:d5ec1227-6f39-40db-a1f6-70245aa079f1 [TrAddr:d70505:03:00.0 NSID:1]
+      Roles:NA Targets:[3 7] Rank:0 State:NORMAL LED:OFF
       Health Stats:
         Timestamp:2021-09-13T11:12:34.000+00:00
         Temperature:289K(15C)
@@ -478,6 +556,59 @@ boro-11
 ```
 #### Exclusion and Hotplug
 
+- Automatic exclusion of an NVMe SSD:
+
+Automatic exclusion based on faulty criteria is the default behavior in DAOS
+release 2.6. The default criteria parameters are `max_io_errs: 10` and
+`max_csum_errs: <uint32_max>` (essentially eviction due to checksum errors is
+disabled by default).
+
+Setting auto-faulty criteria parameters can be done through the server config
+file by adding the following YAML to the engine section of the server config
+file.
+
+```yaml
+engines:
+-  bdev_auto_faulty:
+     enable: true
+     max_io_errs: 1
+     max_csum_errs: 2
+```
+
+On formatting the storage for the engine, these settings result in the
+following `daos_server` log entries to indicate the parameters are written to
+the engine's NVMe config:
+
+```bash
+DEBUG 13:59:29.229795 provider.go:592: BdevWriteConfigRequest: &{ForwardableRequest:{Forwarded:false} ConfigOutputPath:/mnt/daos0/daos_nvme.conf OwnerUID:10695475 OwnerGID:10695475 TierProps:[{Class:nvme DeviceList:0000:5e:00.0 DeviceFileSize:0 Tier:1 DeviceRoles:{OptionBits:0}}] HotplugEnabled:false HotplugBusidBegin:0 HotplugBusidEnd:0 Hostname:wolf-310.wolf.hpdd.intel.com AccelProps:{Engine: Options:0} SpdkRpcSrvProps:{Enable:false SockAddr:} AutoFaultyProps:{Enable:true MaxIoErrs:1 MaxCsumErrs:2} VMDEnabled:false ScannedBdevs:}
+Writing NVMe config file for engine instance 0 to "/mnt/daos0/daos_nvme.conf"
+```
+
+The engine's NVMe config (produced during format) then contains the following
+JSON to apply the criteria:
+
+```json
+cat /mnt/daos0/daos_nvme.conf
+{
+  "daos_data": {
+    "config": [
+      {
+        "params": {
+          "enable": true,
+          "max_io_errs": 1,
+          "max_csum_errs": 2
+        },
+        "method": "auto_faulty"
+ ...
+```
+
+These engine logfile entries indicate that the settings have been read and
+applied:
+
+```bash
+01/12-13:59:41.36 wolf-310 DAOS[1299350/-1/0] bio  INFO src/bio/bio_config.c:1016 bio_read_auto_faulty_criteria() NVMe auto faulty is enabled. Criteria: max_io_errs:1, max_csum_errs:2
+```
+
 - Manually exclude an NVMe SSD:
 ```bash
 $ dmg storage set nvme-faulty --help
@@ -489,21 +620,17 @@ Usage:
 [nvme-faulty command options]
       -u, --uuid=     Device UUID to set
       -f, --force     Do not require confirmation
+      -l, --host=     Single host address <ipv4addr/hostname> to connect to
 ```
 
-To manually evict an NVMe SSD (auto eviction will be supported in a future release),
+To manually evict an NVMe SSD (auto eviction is covered later in this section),
 the device state needs to be set faulty by running the following command:
 ```bash
-$ dmg -l boro-11 storage set nvme-faulty --uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
+$ dmg storage set nvme-faulty --host=boro-11 --uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
 NOTICE: This command will permanently mark the device as unusable!
 Are you sure you want to continue? (yes/no)
 yes
--------
-boro-11
--------
-  Devices
-    UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 [TrAddr:]
-            Targets:[] Rank:0 State:EVICTED LED:ON
+set-faulty operation performed successfully on the following host: wolf-310:10001
 ```
 The device state will transition from "NORMAL" to "EVICTED" (shown above), during which time the
 faulty device reaction will have been triggered (all targets on the SSD will be rebuilt).
@@ -562,19 +689,14 @@ Usage:
 [nvme command options]
           --old-uuid= Device UUID of hot-removed SSD
           --new-uuid= Device UUID of new device
-          --no-reint  Bypass reintegration of device and just bring back online.
+          -l, --host= Single host address <ipv4addr/hostname> to connect to
 ```
 
 To replace an NVMe SSD with an evicted device and reintegrate it into use with
 DAOS, run the following command:
 ```bash
-$ dmg -l boro-11 storage replace nvme --old-uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19 --new-uuid=80c9f1be-84b9-4318-a1be-c416c96ca48b
--------
-boro-11
--------
-  Devices
-    UUID:80c9f1be-84b9-4318-a1be-c416c96ca48b [TrAddr:]
-      Targets:[] Rank:1 State:NORMAL LED:OFF
+$ dmg storage replace nvme --host=boro-11 --old-uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19 --new-uuid=80c9f1be-84b9-4318-a1be-c416c96ca48b
+dev-replace operation performed successfully on the following host: boro-11:10001
 ```
 The old, now replaced device will remain in an "EVICTED" state until it is unplugged.
 The new device will transition from a "NEW" state to a "NORMAL" state (shown above).
@@ -585,14 +707,9 @@ In order to reuse a device that was previously set as FAULTY and evicted from th
 system, an admin can run the following command (setting the old device UUID to be the
 new device UUID):
 ```bash
-$ dmg -l boro-11 storage replace nvme --old-uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19 --new-uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
+$ dmg storage replace nvme --host=boro-11 ---old-uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19 --new-uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
 NOTICE: Attempting to reuse a previously set FAULTY device!
--------
-boro-11
--------
-  Devices
-    UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 [TrAddr:]
-      Targets:[] Rank:1 State:NORMAL LED:OFF
+dev-replace operation performed successfully on the following host: boro-11:10001
 ```
 The FAULTY device will transition from an "EVICTED" state back to a "NORMAL" state,
 and will again be available for use with DAOS. The use case of this command will mainly
@@ -619,7 +736,7 @@ Usage:
 
 [identify command arguments]
   ids:                Comma-separated list of identifiers which could be either VMD backing device
-                      (NVMe SSD) PCI addresses or device
+                      (NVMe SSD) PCI addresses or device. All SSDs selected if arg not provided.
 ```
 
 To identify a single SSD, any of the Device-UUIDs can be used which can be found from
@@ -669,11 +786,16 @@ in the command.
 
 Upon issuing a device identify command with specified device IDs and optional custom timeout value,
 an admin now can quickly identify a device in question.
+
 After issuing the identify command, the status LED on the VMD device is now set to a "QUICK_BLINK"
 state, representing a quick, 4Hz blinking amber light.
+
 The device will quickly blink for the specified timeout (in minutes) or the default (2 minutes) if
 no value is specified on the command line, after which the LED state will return to the previous
 state (faulty "ON" or default "OFF").
+
+The led identify command will set (or --reset) the state of all devices on the specified host(s) if
+no positional arguments are supplied.
 
 - Check LED state of SSDs:
 
@@ -689,6 +811,9 @@ boro-11
     TrAddr:850505:0b:00.0 LED:QUICK_BLINK
     TrAddr:850505:11:00.0 LED:QUICK_BLINK
 ```
+
+The led check command will return the state of all devices on the specified host(s) if no positional
+arguments are supplied.
 
 - Locate an Evicted SSD:
 
@@ -947,3 +1072,33 @@ required that all engines in the same system run the same DAOS version.
 
 !!! warning
     Rolling upgrade is not supporting at this time.
+
+DAOS v2.2 client connections to pools which were created by DAOS v2.4
+will be rejected. DAOS v2.4 client should work with DAOS v2.4 and DAOS v2.2
+server. To upgrade all pools to latest format after software upgrade, run
+`dmg pool upgrade <pool>`
+
+### Interoperability Matrix
+
+The following table is intended to visually depict the interoperability
+policies for all major components in a DAOS system.
+
+
+||Server<br>(daos_server)|Engine<br>(daos_engine)|Agent<br>(daos_agent)|Client<br>(libdaos)|Admin<br>(dmg)|
+|:---|:---:|:---:|:---:|:---:|:---:|
+|Server|x.y.z|x.y.z|x.(y±1)|n/a|x.y|
+|Engine|x.y.z|x.y.z|n/a|x.(y±1)|n/a|
+|Agent|x.(y±1)|n/a|n/a|x.y.z|n/a|
+|Client|n/a|x.(y±1)|x.y.z|n/a|n/a|
+|Admin|x.y|n/a|n/a|n/a|n/a|
+
+Key:
+  * x.y.z: Major.Minor.Patch must be equal
+  * x.y: Major.Minor must be equal
+  * x.(y±1): Major must be equal, Minor must be equal or -1/+1 release version
+  * n/a: Components do not communicate
+
+Examples:
+  * daos_server 2.4.0 is only compatible with daos_engine 2.4.0
+  * daos_agent 2.6.0 is compatible with daos_server 2.4.0 (2.5 is a development version)
+  * dmg 2.4.1 is compatible with daos_server 2.4.0

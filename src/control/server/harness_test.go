@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -241,8 +241,7 @@ func TestServer_Harness_Start(t *testing.T) {
 				}
 				if tc.trc.StartCb == nil {
 					tc.trc.StartCb = func() {
-						atomic.StoreUint32(&instanceStarts,
-							atomic.AddUint32(&instanceStarts, 1))
+						_ = atomic.AddUint32(&instanceStarts, 1)
 					}
 				}
 				runner := engine.NewTestRunner(tc.trc, engineCfg)
@@ -268,7 +267,7 @@ func TestServer_Harness_Start(t *testing.T) {
 					}, nil
 				}
 
-				ei := NewEngineInstance(log, provider, joinFn, runner)
+				ei := NewEngineInstance(log, provider, joinFn, runner, nil)
 				var isAP bool
 				if tc.isAP && i == 0 { // first instance will be AP & bootstrap MS
 					isAP = true
@@ -295,13 +294,17 @@ func TestServer_Harness_Start(t *testing.T) {
 			}
 
 			instances := harness.Instances()
-
+			mockDrpcClients := make([]*mockDrpcClient, 0, len(instances))
 			// set mock dRPC client to record call details
 			for _, e := range instances {
 				ei := e.(*EngineInstance)
-				ei.setDrpcClient(newMockDrpcClient(&mockDrpcClientConfig{
+				cli := newMockDrpcClient(&mockDrpcClientConfig{
 					SendMsgResponse: &drpc.Response{},
-				}))
+				})
+				mockDrpcClients = append(mockDrpcClients, cli)
+				ei.getDrpcClientFn = func(s string) drpc.DomainSocketClient {
+					return cli
+				}
 			}
 
 			ctx, cancel := context.WithCancel(test.Context(t))
@@ -418,13 +421,10 @@ func TestServer_Harness_Start(t *testing.T) {
 			defer joinMu.Unlock()
 			// verify expected RPCs were made, ranks allocated and
 			// members added to membership
-			for _, e := range instances {
+			for i, e := range instances {
 				ei := e.(*EngineInstance)
-				dc, err := ei.getDrpcClient()
-				if err != nil {
-					t.Fatal(err)
-				}
-				gotDrpcCalls := dc.(*mockDrpcClient).CalledMethods()
+				dc := mockDrpcClients[i]
+				gotDrpcCalls := dc.CalledMethods()
 				AssertEqual(t, tc.expDrpcCalls[ei.Index()], gotDrpcCalls,
 					fmt.Sprintf("%s: unexpected dRPCs for instance %d", name, ei.Index()))
 
@@ -439,7 +439,10 @@ func TestServer_Harness_Start(t *testing.T) {
 				}
 				CmpErr(t, tc.expIoErrs[ei.Index()], ei._lastErr)
 			}
-			members := membership.Members(nil)
+			members, err := membership.Members(nil)
+			if err != nil {
+				t.Fatal(err)
+			}
 			AssertEqual(t, len(tc.expMembers), len(members), "unexpected number in membership")
 			for i, member := range members {
 				if diff := cmp.Diff(fmt.Sprintf("%v", member),
@@ -520,20 +523,6 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 				},
 			},
 		},
-		"one not ready, one fails": {
-			mics: []*MockInstanceConfig{
-				{
-					Ready:       atm.NewBool(true),
-					CallDrpcErr: errDRPCNotReady,
-				},
-				{
-					Ready:       atm.NewBool(true),
-					CallDrpcErr: errors.New("whoops"),
-				},
-			},
-			expErr:         errors.New("whoops"),
-			expFailHandler: true,
-		},
 		"instance not ready": {
 			mics: []*MockInstanceConfig{
 				{
@@ -558,8 +547,7 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 					Ready: atm.NewBool(true),
 				},
 			},
-			expErr:         errors.New("whoops"),
-			expFailHandler: true,
+			expErr: errors.New("whoops"),
 		},
 		"none available": {
 			mics: []*MockInstanceConfig{
@@ -574,6 +562,79 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 			},
 			expNotLeader:   true,
 			expErr:         FaultDataPlaneNotStarted,
+			expFailHandler: true,
+		},
+		"none available; not leader": {
+			notLeader: true,
+			mics: []*MockInstanceConfig{
+				{
+					Ready:       atm.NewBool(true),
+					CallDrpcErr: errDRPCNotReady,
+				},
+				{
+					Ready:       atm.NewBool(true),
+					CallDrpcErr: FaultDataPlaneNotStarted,
+				},
+			},
+			expNotLeader:   true,
+			expErr:         FaultDataPlaneNotStarted,
+			expFailHandler: true,
+		},
+		"none available; no drpc related errors": {
+			mics: []*MockInstanceConfig{
+				{
+					Started:     atm.NewBool(true),
+					CallDrpcErr: errEngineNotReady,
+				},
+				{
+					Ready:       atm.NewBool(true),
+					CallDrpcErr: errors.New("whoops"),
+				},
+			},
+			expErr: errors.New("whoops"),
+		},
+		"none available; one engine not ready, one drpc not ready": {
+			mics: []*MockInstanceConfig{
+				{
+					Started:     atm.NewBool(true),
+					CallDrpcErr: errEngineNotReady,
+				},
+				{
+					Ready:       atm.NewBool(true),
+					CallDrpcErr: errDRPCNotReady,
+				},
+			},
+			expNotLeader:   true,
+			expErr:         errDRPCNotReady,
+			expFailHandler: true,
+		},
+		"none available; one drpc not ready, one engine not ready": {
+			mics: []*MockInstanceConfig{
+				{
+					Ready:       atm.NewBool(true),
+					CallDrpcErr: errDRPCNotReady,
+				},
+				{
+					Started:     atm.NewBool(true),
+					CallDrpcErr: errEngineNotReady,
+				},
+			},
+			expNotLeader:   true,
+			expErr:         errEngineNotReady,
+			expFailHandler: true,
+		},
+		"none available; one data-plane not ready, one engine not ready": {
+			mics: []*MockInstanceConfig{
+				{
+					CallDrpcErr: FaultDataPlaneNotStarted,
+				},
+				{
+					Started:     atm.NewBool(true),
+					CallDrpcErr: errEngineNotReady,
+				},
+			},
+			expNotLeader:   true,
+			expErr:         errEngineNotReady,
 			expFailHandler: true,
 		},
 		"context canceled": {
@@ -597,15 +658,17 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 				}
 			}
 
-			var drpcFailureInvoked atm.Bool
-			h.OnDrpcFailure(func(_ context.Context, err error) {
-				drpcFailureInvoked.SetTrue()
-			})
-
-			ctx, cancel := context.WithCancel(test.Context(t))
 			db := &mockdb{
 				isLeader: !tc.notLeader,
 			}
+
+			var drpcFailureInvoked atm.Bool
+			h.OnDrpcFailure(func(ctx context.Context, err error) {
+				drpcFailureInvoked.SetTrue()
+				newOnDrpcFailureFn(log, db)(ctx, err)
+			})
+
+			ctx, cancel := context.WithCancel(test.Context(t))
 
 			startErr := make(chan error)
 			go func() {

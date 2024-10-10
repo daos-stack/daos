@@ -1,39 +1,58 @@
 """Build pydaos client"""
+import os
 import sys
+
+SOURCES = ["pydaos_core.py", "pydaos_shim.c", "__init__.py"]
+SOURCES_RAW = ["daos_cref.py", "__init__.py", "conversion.py", "daos_api.py"]
+
+
+def install_shim_sources():
+    """Install the sources required to build pydaos"""
+
+    Import("env")
+
+    env.Install(os.path.join("$PREFIX", "lib/daos/python/pydaos"), SOURCES)
+    for source in SOURCES_RAW:
+        env.Install(
+            os.path.join("$PREFIX", "lib/daos/python/pydaos/raw"), f"raw/{source}"
+        )
 
 
 def build_shim_module():
     """Build PyDAOS shim module for the specified python version"""
 
-    if GetOption('help'):
+    if GetOption("help"):
         return
 
-    version = f'{sys.version_info.major}.{sys.version_info.minor}'
+    version = f"{sys.version_info.major}.{sys.version_info.minor}"
 
-    Import('base_env')
+    Import("base_env")
 
     new_env = base_env.Clone()
-    new_env.ParseConfig(f'pkg-config --cflags --libs python-{version}')
+    new_env.ParseConfig(f"pkg-config --cflags --libs python-{version}")
 
-    new_env.Replace(LIBS=['daos', 'duns'])
-    new_env.AppendUnique(LIBPATH=[Dir('../dfs')])
-    new_env.AppendUnique(LIBPATH=[Dir('../api')])
+    new_env.Replace(LIBS=["daos", "duns"])
+    new_env.AppendUnique(LIBPATH=[Dir("../dfs")])
+    new_env.AppendUnique(LIBPATH=[Dir("../api")])
 
-    new_env['CC'] = 'gcc'
-    new_env.AppendUnique(CCFLAGS=['-pthread', '-Wno-missing-field-initializers'])
+    new_env["CC"] = "gcc"
+    new_env.AppendUnique(CCFLAGS=["-pthread", "-Wno-missing-field-initializers"])
 
     new_env.compiler_setup()
 
-    obj = new_env.SharedObject('pydaos_shim', 'pydaos_shim.c',
-                               SHLINKFLAGS=[],
-                               SHLIBPREFIX="")
-    base = new_env.d_library(target='pydaos_shim', source=[obj],
-                             install_off="../../../..",
-                             SHLINK='gcc -pthread -shared',
-                             SHLINKFLAGS=[],
-                             SHLIBPREFIX="",
-                             SHLIBSUFFIX='.so')
-    install_path = f'$PREFIX/lib64/python{version}/site-packages/pydaos'
+    obj = new_env.SharedObject(
+        "pydaos_shim", "pydaos_shim.c", SHLINKFLAGS=[], SHLIBPREFIX=""
+    )
+    base = new_env.d_library(
+        target="pydaos_shim",
+        source=[obj],
+        install_off="../../../..",
+        SHLINK="gcc -pthread -shared",
+        SHLINKFLAGS=[],
+        SHLIBPREFIX="",
+        SHLIBSUFFIX=".so",
+    )
+    install_path = f"$PREFIX/lib64/python{version}/site-packages/pydaos"
     new_env.Install(install_path, base)
     # install new wrappers too
     new_env.Install(install_path, "__init__.py")
@@ -47,4 +66,5 @@ def build_shim_module():
 
 
 if __name__ == "SCons.Script":
+    install_shim_sources()
     build_shim_module()

@@ -1,12 +1,12 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from performance_test_base import PerformanceTestBase
 from data_mover_test_base import DataMoverTestBase
 from exception_utils import CommandFailure
+from performance_test_base import PerformanceTestBase
 
 
 class BasicCheckout(PerformanceTestBase):
@@ -110,7 +110,7 @@ class BasicCheckoutDm(DataMoverTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=deployment,datamover,fs_copy,ior,basic_checkout
+        :avocado: tags=deployment,datamover,daos_fs_copy,ior,basic_checkout
         :avocado: tags=BasicCheckoutDm,test_basic_checkout_dm
         """
         # load ior params for dm test
@@ -120,7 +120,7 @@ class BasicCheckoutDm(DataMoverTestBase):
         self.ior_ppn = self.ppn
 
         # create pool and container
-        pool = self.create_pool()
+        pool = self.get_pool()
         cont = self.get_container(pool, oclass=self.ior_cmd.dfs_oclass.value)
 
         # run datamover

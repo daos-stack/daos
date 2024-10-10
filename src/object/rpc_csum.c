@@ -182,15 +182,17 @@ crt_proc_struct_dcs_iod_csums_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 
 	if (DECODING(proc_op)) {
 		PROC(uint32_t, &iod_csum->ic_nr);
-		D_ALLOC_ARRAY(iod_csum->ic_data, iod_csum->ic_nr);
-		if (iod_csum->ic_data == NULL)
-			return -DER_NOMEM;
-		for (i = 0; i < iod_csum->ic_nr; i++) {
-			rc = proc_struct_dcs_csum_info(proc, proc_op,
-						       &iod_csum->ic_data[i]);
-			if (unlikely(rc)) {
-				D_FREE(iod_csum->ic_data);
-				return rc;
+		if (iod_csum->ic_nr) {
+			D_ALLOC_ARRAY(iod_csum->ic_data, iod_csum->ic_nr);
+			if (iod_csum->ic_data == NULL)
+				return -DER_NOMEM;
+			for (i = 0; i < iod_csum->ic_nr; i++) {
+				rc = proc_struct_dcs_csum_info(proc, proc_op,
+							       &iod_csum->ic_data[i]);
+				if (unlikely(rc)) {
+					D_FREE(iod_csum->ic_data);
+					return rc;
+				}
 			}
 		}
 	}

@@ -1,10 +1,10 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from command_utils_base import FormattedParameter, CommandWithParameters, BasicParameter
 from command_utils import CommandWithSubCommand
+from command_utils_base import BasicParameter, CommandWithParameters, FormattedParameter
 
 
 class DaosCommandBase(CommandWithSubCommand):
@@ -27,6 +27,8 @@ class DaosCommandBase(CommandWithSubCommand):
             self.sub_command_class = self.PoolSubCommand()
         elif self.sub_command.value == "container":
             self.sub_command_class = self.ContainerSubCommand()
+        elif self.sub_command.value == "faults":
+            self.sub_command_class = self.FaultsSubCommand()
         elif self.sub_command.value == "object":
             self.sub_command_class = self.ObjectSubCommand()
         elif self.sub_command.value == "filesystem":
@@ -47,8 +49,10 @@ class DaosCommandBase(CommandWithSubCommand):
 
         def get_sub_command_class(self):
             # pylint: disable=redefined-variable-type
-            """Get the dmg network sub command object."""
-            if self.sub_command.value in ("list-containers", "list"):
+            """Get the daos pool sub command object."""
+            if self.sub_command.value == "list":
+                self.sub_command_class = self.ListSubCommand()
+            elif self.sub_command.value == "list-containers":
                 self.sub_command_class = self.ListContainersSubCommand()
             elif self.sub_command.value == "query":
                 self.sub_command_class = self.QuerySubCommand()
@@ -64,6 +68,16 @@ class DaosCommandBase(CommandWithSubCommand):
                 self.sub_command_class = self.AutotestSubCommand()
             else:
                 self.sub_command_class = None
+
+        class ListSubCommand(CommandWithParameters):
+            """Defines an object for the daos pool list command."""
+
+            def __init__(self):
+                """Create a daos pool list command object."""
+                super().__init__("/run/daos/pool/list/*", "list")
+                self.sys_name = FormattedParameter("--sys-name={}")
+                self.no_query = FormattedParameter("--no-query", False)
+                self.verbose = FormattedParameter("--verbose", False)
 
         class CommonPoolSubCommand(CommandWithParameters):
             """Defines an object for the common daos pool sub-command.
@@ -436,6 +450,9 @@ class DaosCommandBase(CommandWithSubCommand):
                 super().__init__("set-owner")
                 self.user = FormattedParameter("--user={}")
                 self.group = FormattedParameter("--group={}")
+                self.uid = FormattedParameter("--uid={}")
+                self.gid = FormattedParameter("--gid={}")
+                self.no_check = FormattedParameter("--no-check", False)
 
         class SetPropSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container set-prop command."""
@@ -460,6 +477,55 @@ class DaosCommandBase(CommandWithSubCommand):
                 super().__init__("update-acl")
                 self.acl_file = FormattedParameter("--acl-file={}")
                 self.entry = FormattedParameter("--entry={}")
+
+    class FaultsSubCommand(CommandWithSubCommand):
+        """Defines an object for the daos faults sub command."""
+
+        def __init__(self):
+            """Create a daos faults subcommand object."""
+            super().__init__("/run/daos/faults/*", "faults")
+
+        def get_sub_command_class(self):
+            # pylint: disable=redefined-variable-type
+            """Get the daos faults sub command object."""
+            if self.sub_command.value == "container":
+                self.sub_command_class = self.ContainerSubCommand()
+            elif self.sub_command.value == "set-param":
+                self.sub_command_class = self.SetParamSubCommand()
+            else:
+                self.sub_command_class = None
+
+        class CommonFaultsSubCommand(CommandWithParameters):
+            """Defines an object for the common daos faults sub-command."""
+
+            def __init__(self, sub_command):
+                """Create a common daos faults sub-command object.
+
+                Args:
+                    sub_command (str): sub-command name
+                """
+                super().__init__("/run/daos/faults/{}/*".format(sub_command), sub_command)
+                self.rank = FormattedParameter("--rank={}")
+                self.frequency = FormattedParameter("--frequency={}", None)
+                self.location = FormattedParameter("--location={}", None)
+
+        class ContainerSubCommand(CommonFaultsSubCommand):
+            """Defines an object for the daos faults container command."""
+
+            def __init__(self):
+                """Create a daos faults container object."""
+                super().__init__("container")
+                self.pool = BasicParameter(None, position=1)
+                self.cont = BasicParameter(None, position=2)
+                self.sys_name = FormattedParameter("--sys-name={}", None)
+                self.path = FormattedParameter("--path={}", None)
+
+        class SetParamSubCommand(CommonFaultsSubCommand):
+            """Defines an object for the daos faults set-param command."""
+
+            def __init__(self):
+                """Create a daos faults set-param object."""
+                super().__init__("set-param")
 
     class ObjectSubCommand(CommandWithSubCommand):
         """Defines an object for the daos object sub command."""

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -47,7 +47,7 @@ func realRemove(name string) error {
 // accessible by SPDK on a given host.
 //
 // Calls C.nvme_discover which returns pointers to single linked list of
-// ctrlr_t structs. These are converted and returned as Controller slices
+// nvme_ctrlr_t structs. These are converted and returned as Controller slices
 // containing any Namespace and DeviceHealth structs.
 // Afterwards remove lockfile for each discovered device.
 func (n *NvmeImpl) Discover(log logging.Logger) (storage.NvmeControllers, error) {
@@ -57,8 +57,11 @@ func (n *NvmeImpl) Discover(log logging.Logger) (storage.NvmeControllers, error)
 
 	ctrlrs, err := collectCtrlrs(C.nvme_discover(), "NVMe Discover(): C.nvme_discover")
 
-	pciAddrs := ctrlrPCIAddresses(ctrlrs)
-	log.Debugf("discovered nvme ssds: %v", pciAddrs)
+	pciAddrs := make([]string, 0, len(ctrlrs))
+	for _, c := range ctrlrs {
+		log.Debugf("nvme ssd scanned: %+v", c)
+		pciAddrs = append(pciAddrs, c.PciAddr)
+	}
 
 	return ctrlrs, wrapCleanError(err, cleanLockfiles(log, realRemove, pciAddrs...))
 }
@@ -102,12 +105,12 @@ func (n *NvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path string, 
 }
 
 // c2GoController is a private translation function.
-func c2GoController(ctrlr *C.struct_ctrlr_t) *storage.NvmeController {
+func c2GoController(ctrlr *C.struct_nvme_ctrlr_t) *storage.NvmeController {
 	return &storage.NvmeController{
-		Model:    C.GoString(&ctrlr.model[0]),
-		Serial:   C.GoString(&ctrlr.serial[0]),
-		PciAddr:  C.GoString(&ctrlr.pci_addr[0]),
-		FwRev:    C.GoString(&ctrlr.fw_rev[0]),
+		Model:    C.GoString(ctrlr.model),
+		Serial:   C.GoString(ctrlr.serial),
+		PciAddr:  C.GoString(ctrlr.pci_addr),
+		FwRev:    C.GoString(ctrlr.fw_rev),
 		SocketID: int32(ctrlr.socket_id),
 	}
 }
@@ -152,7 +155,7 @@ func c2GoDeviceHealth(hs *C.struct_nvme_stats) *storage.NvmeHealth {
 }
 
 // c2GoNamespace is a private translation function.
-func c2GoNamespace(ns *C.struct_ns_t) *storage.NvmeNamespace {
+func c2GoNamespace(ns *C.struct_nvme_ns_t) *storage.NvmeNamespace {
 	return &storage.NvmeNamespace{
 		ID:   uint32(ns.id),
 		Size: uint64(ns.size),

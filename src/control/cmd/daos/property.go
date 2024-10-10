@@ -542,8 +542,10 @@ var propHdlrs = propHdlrMap{
 			return vh(e, v)
 		},
 		valHdlrMap{
-			"1": setDpeVal(C.DAOS_PROP_CO_REDUN_RANK),
-			"2": setDpeVal(C.DAOS_PROP_CO_REDUN_NODE),
+			"1":    setDpeVal(C.DAOS_PROP_CO_REDUN_RANK),
+			"2":    setDpeVal(C.DAOS_PROP_CO_REDUN_NODE),
+			"rank": setDpeVal(C.DAOS_PROP_CO_REDUN_RANK),
+			"node": setDpeVal(C.DAOS_PROP_CO_REDUN_NODE),
 		},
 		func(e *C.struct_daos_prop_entry, name string) string {
 			if e == nil {
@@ -556,6 +558,38 @@ var propHdlrs = propHdlrMap{
 				return fmt.Sprintf("rank (%d)", lvl)
 			case C.DAOS_PROP_CO_REDUN_NODE:
 				return fmt.Sprintf("node (%d)", lvl)
+			default:
+				return fmt.Sprintf("(%d)", lvl)
+			}
+		},
+		false,
+	},
+	C.DAOS_PROP_ENTRY_PERF_DOMAIN: {
+		C.DAOS_PROP_CO_PERF_DOMAIN,
+		"Performance domain level",
+		func(h *propHdlr, e *C.struct_daos_prop_entry, v string) error {
+			vh, err := h.valHdlrs.get("perf_domain", v)
+			if err != nil {
+				return err
+			}
+
+			return vh(e, v)
+		},
+		valHdlrMap{
+			"root":  setDpeVal(C.DAOS_PROP_PERF_DOMAIN_ROOT),
+			"group": setDpeVal(C.DAOS_PROP_PERF_DOMAIN_GROUP),
+		},
+		func(e *C.struct_daos_prop_entry, name string) string {
+			if e == nil {
+				return propNotFound(name)
+			}
+
+			lvl := C.get_dpe_val(e)
+			switch lvl {
+			case C.DAOS_PROP_PERF_DOMAIN_ROOT:
+				return fmt.Sprintf("root (%d)", lvl)
+			case C.DAOS_PROP_PERF_DOMAIN_GROUP:
+				return fmt.Sprintf("group (%d)", lvl)
 			default:
 				return fmt.Sprintf("(%d)", lvl)
 			}

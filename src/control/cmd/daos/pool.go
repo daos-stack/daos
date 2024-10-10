@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,14 +15,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/build"
-	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
+	"github.com/daos-stack/daos/src/control/cmd/daos/pretty"
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/common/proto/convert"
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/ranklist"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ui"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 /*
@@ -74,8 +71,7 @@ type poolBaseCmd struct {
 
 	cPoolHandle C.daos_handle_t
 
-	SysName string `long:"sys-name" short:"G" description:"DAOS system name"`
-	Args    struct {
+	Args struct {
 		Pool PoolID `positional-arg-name:"pool label or UUID" description:"required if --path is not used"`
 	} `positional-args:"yes"`
 }
@@ -92,15 +88,58 @@ func (cmd *poolBaseCmd) PoolID() ui.LabelOrUUIDFlag {
 	return cmd.Args.Pool.LabelOrUUIDFlag
 }
 
+// poolConnect is a convenience wrapper around poolConnectAPI.
+func poolConnect(poolID, sysName string, flags uint, query bool) (C.daos_handle_t, *C.daos_pool_info_t, error) {
+	var cSysName *C.char
+	if sysName != "" {
+		cSysName = C.CString(sysName)
+		defer freeString(cSysName)
+	}
+
+	cPoolID := C.CString(poolID)
+	defer freeString(cPoolID)
+
+	var hdl C.daos_handle_t
+	var infoPtr *C.daos_pool_info_t
+	if query {
+		infoPtr = &C.daos_pool_info_t{
+			pi_bits: C.ulong(daos.DefaultPoolQueryMask),
+		}
+	}
+
+	return hdl, infoPtr, poolConnectAPI(cPoolID, cSysName, C.uint(flags), &hdl, infoPtr)
+}
+
+// poolConnectAPI is a lower-level wrapper around daos_pool_connect().
+func poolConnectAPI(poolID, sysName *C.char, flags C.uint, hdl *C.daos_handle_t, info *C.daos_pool_info_t) error {
+	return daosError(C.daos_pool_connect(poolID, sysName, flags, hdl, info, nil))
+}
+
+// poolDisconnectAPI is a convenience wrapper around daos_pool_disconnect().
+func poolDisconnectAPI(hdl C.daos_handle_t) error {
+	// Hack for NLT fault injection testing: If the rc
+	// is -DER_NOMEM, retry once in order to actually
+	// shut down and release resources.
+	rc := C.daos_pool_disconnect(hdl, nil)
+	if rc == -C.DER_NOMEM {
+		rc = C.daos_pool_disconnect(hdl, nil)
+		// DAOS-8866, daos_pool_disconnect() might have failed, but worked anyway.
+		if rc == -C.DER_NO_HDL {
+			rc = -C.DER_SUCCESS
+		}
+	}
+
+	return daosError(rc)
+}
+
 func (cmd *poolBaseCmd) connectPool(flags C.uint) error {
 	sysName := cmd.SysName
-	if sysName == "" {
-		sysName = build.DefaultSystemName
+	var cSysName *C.char
+	if sysName != "" {
+		cSysName := C.CString(sysName)
+		defer freeString(cSysName)
 	}
-	cSysName := C.CString(sysName)
-	defer freeString(cSysName)
 
-	var rc C.int
 	switch {
 	case cmd.PoolID().HasLabel():
 		var poolInfo C.daos_pool_info_t
@@ -108,46 +147,34 @@ func (cmd *poolBaseCmd) connectPool(flags C.uint) error {
 		defer freeString(cLabel)
 
 		cmd.Debugf("connecting to pool: %s", cmd.PoolID().Label)
-		rc = C.daos_pool_connect(cLabel, cSysName, flags,
-			&cmd.cPoolHandle, &poolInfo, nil)
-		if rc == 0 {
-			var err error
-			cmd.poolUUID, err = uuidFromC(poolInfo.pi_uuid)
-			if err != nil {
-				cmd.disconnectPool()
-				return err
-			}
+		if err := poolConnectAPI(cLabel, cSysName, flags, &cmd.cPoolHandle, &poolInfo); err != nil {
+			return err
+		}
+		var err error
+		cmd.poolUUID, err = uuidFromC(poolInfo.pi_uuid)
+		if err != nil {
+			cmd.disconnectPool()
+			return err
 		}
 	case cmd.PoolID().HasUUID():
 		cmd.poolUUID = cmd.PoolID().UUID
 		cmd.Debugf("connecting to pool: %s", cmd.poolUUID)
 		cUUIDstr := C.CString(cmd.poolUUID.String())
 		defer freeString(cUUIDstr)
-		rc = C.daos_pool_connect(cUUIDstr, cSysName, flags,
-			&cmd.cPoolHandle, nil, nil)
+		if err := poolConnectAPI(cUUIDstr, cSysName, flags, &cmd.cPoolHandle, nil); err != nil {
+			return err
+		}
 	default:
 		return errors.New("no pool UUID or label supplied")
 	}
 
-	return daosError(rc)
+	return nil
 }
 
 func (cmd *poolBaseCmd) disconnectPool() {
 	cmd.Debugf("disconnecting pool %s", cmd.PoolID())
-	// Hack for NLT fault injection testing: If the rc
-	// is -DER_NOMEM, retry once in order to actually
-	// shut down and release resources.
-	rc := C.daos_pool_disconnect(cmd.cPoolHandle, nil)
-	if rc == -C.DER_NOMEM {
-		rc = C.daos_pool_disconnect(cmd.cPoolHandle, nil)
-		// DAOS-8866, daos_pool_disconnect() might have failed, but worked anyway.
-		if rc == -C.DER_NO_HDL {
-			rc = -C.DER_SUCCESS
-		}
-	}
-
-	if err := daosError(rc); err != nil {
-		cmd.Errorf("pool disconnect failed: %s", err)
+	if err := poolDisconnectAPI(cmd.cPoolHandle); err != nil {
+		cmd.Errorf("pool disconnect failed: %v", err)
 	}
 }
 
@@ -184,6 +211,7 @@ func (cmd *poolBaseCmd) getAttr(name string) (*attribute, error) {
 }
 
 type poolCmd struct {
+	List         poolListCmd         `command:"list" description:"list pools to which this user has access"`
 	Query        poolQueryCmd        `command:"query" description:"query pool info"`
 	QueryTargets poolQueryTargetsCmd `command:"query-targets" description:"query pool target info"`
 	ListConts    containerListCmd    `command:"list-containers" alias:"list-cont" description:"list all containers in pool"`
@@ -196,113 +224,125 @@ type poolCmd struct {
 
 type poolQueryCmd struct {
 	poolBaseCmd
-	ShowEnabledRanks  bool `short:"e" long:"show-enabled" description:"Show engine unique identifiers (ranks) which are enabled"`
-	ShowDisabledRanks bool `short:"b" long:"show-disabled" description:"Show engine unique identifiers (ranks) which are disabled"`
+	ShowEnabledRanks bool `short:"e" long:"show-enabled" description:"Show engine unique identifiers (ranks) which are enabled"`
+	HealthOnly       bool `short:"t" long:"health-only" description:"Only perform pool health related queries"`
 }
 
-func convertPoolSpaceInfo(in *C.struct_daos_pool_space, mt C.uint) *mgmtpb.StorageUsageStats {
+func convertPoolSpaceInfo(in *C.struct_daos_pool_space, mt C.uint) *daos.StorageUsageStats {
 	if in == nil {
 		return nil
 	}
 
-	return &mgmtpb.StorageUsageStats{
+	return &daos.StorageUsageStats{
 		Total:     uint64(in.ps_space.s_total[mt]),
 		Free:      uint64(in.ps_space.s_free[mt]),
 		Min:       uint64(in.ps_free_min[mt]),
 		Max:       uint64(in.ps_free_max[mt]),
 		Mean:      uint64(in.ps_free_mean[mt]),
-		MediaType: mgmtpb.StorageMediaType(mt),
+		MediaType: daos.StorageMediaType(mt),
 	}
 }
 
-func convertPoolRebuildStatus(in *C.struct_daos_rebuild_status) *mgmtpb.PoolRebuildStatus {
+func convertPoolRebuildStatus(in *C.struct_daos_rebuild_status) *daos.PoolRebuildStatus {
 	if in == nil {
 		return nil
 	}
 
-	out := &mgmtpb.PoolRebuildStatus{
+	out := &daos.PoolRebuildStatus{
 		Status: int32(in.rs_errno),
 	}
 	if out.Status == 0 {
+		out.TotalObjects = uint64(in.rs_toberb_obj_nr)
 		out.Objects = uint64(in.rs_obj_nr)
 		out.Records = uint64(in.rs_rec_nr)
 		switch {
 		case in.rs_version == 0:
-			out.State = mgmtpb.PoolRebuildStatus_IDLE
+			out.State = daos.PoolRebuildStateIdle
 		case C.get_rebuild_state(in) == C.DRS_COMPLETED:
-			out.State = mgmtpb.PoolRebuildStatus_DONE
+			out.State = daos.PoolRebuildStateDone
 		default:
-			out.State = mgmtpb.PoolRebuildStatus_BUSY
+			out.State = daos.PoolRebuildStateBusy
 		}
 	}
 
 	return out
 }
 
-// This is not great... But it allows us to leverage the existing
-// pretty printer that dmg uses for this info. Better to find some
-// way to unify all of this and remove redundancy/manual conversion.
-//
-// We're basically doing the same thing as ds_mgmt_drpc_pool_query()
-// to stuff the info into a protobuf message and then using the
-// automatic conversion from proto to control. Kind of ugly but
-// gets the job done. We could potentially create some function
-// that's shared between this code and the drpc handlers to deal
-// with stuffing the protobuf message but it's probably overkill.
-func convertPoolInfo(pinfo *C.daos_pool_info_t) (*control.PoolQueryResp, error) {
-	pqp := new(mgmtpb.PoolQueryResp)
+func convertPoolInfo(pinfo *C.daos_pool_info_t) (*daos.PoolInfo, error) {
+	poolInfo := new(daos.PoolInfo)
 
-	pqp.Uuid = uuid.Must(uuidFromC(pinfo.pi_uuid)).String()
-	pqp.TotalTargets = uint32(pinfo.pi_ntargets)
-	pqp.DisabledTargets = uint32(pinfo.pi_ndisabled)
-	pqp.ActiveTargets = uint32(pinfo.pi_space.ps_ntargets)
-	pqp.TotalEngines = uint32(pinfo.pi_nnodes)
-	pqp.Leader = uint32(pinfo.pi_leader)
-	pqp.Version = uint32(pinfo.pi_map_ver)
-
-	pqp.TierStats = []*mgmtpb.StorageUsageStats{
-		convertPoolSpaceInfo(&pinfo.pi_space, C.DAOS_MEDIA_SCM),
-		convertPoolSpaceInfo(&pinfo.pi_space, C.DAOS_MEDIA_NVME),
+	poolInfo.QueryMask = daos.PoolQueryMask(pinfo.pi_bits)
+	poolInfo.UUID = uuid.Must(uuidFromC(pinfo.pi_uuid))
+	poolInfo.TotalTargets = uint32(pinfo.pi_ntargets)
+	poolInfo.DisabledTargets = uint32(pinfo.pi_ndisabled)
+	poolInfo.ActiveTargets = uint32(pinfo.pi_space.ps_ntargets)
+	poolInfo.TotalEngines = uint32(pinfo.pi_nnodes)
+	poolInfo.ServiceLeader = uint32(pinfo.pi_leader)
+	poolInfo.Version = uint32(pinfo.pi_map_ver)
+	poolInfo.State = daos.PoolServiceStateReady
+	if poolInfo.DisabledTargets > 0 {
+		poolInfo.State = daos.PoolServiceStateDegraded
 	}
-	pqp.Rebuild = convertPoolRebuildStatus(&pinfo.pi_rebuild_st)
 
-	pqr := new(control.PoolQueryResp)
-	return pqr, convert.Types(pqp, pqr)
-}
-
-const (
-	dpiQuerySpace   = C.DPI_SPACE
-	dpiQueryRebuild = C.DPI_REBUILD_STATUS
-	dpiQueryAll     = C.uint64_t(^uint64(0)) // DPI_ALL is -1
-)
-
-func generateRankSet(ranklist *C.d_rank_list_t) string {
-	if ranklist.rl_nr == 0 {
-		return ""
-	}
-	ranks := uintptr(unsafe.Pointer(ranklist.rl_ranks))
-	const size = unsafe.Sizeof(uint32(0))
-	rankset := "["
-	for i := 0; i < int(ranklist.rl_nr); i++ {
-		if i > 0 {
-			rankset += ","
+	poolInfo.Rebuild = convertPoolRebuildStatus(&pinfo.pi_rebuild_st)
+	if poolInfo.QueryMask.HasOption(daos.PoolQueryOptionSpace) {
+		poolInfo.TierStats = []*daos.StorageUsageStats{
+			convertPoolSpaceInfo(&pinfo.pi_space, C.DAOS_MEDIA_SCM),
+			convertPoolSpaceInfo(&pinfo.pi_space, C.DAOS_MEDIA_NVME),
 		}
-		rankset += fmt.Sprint(*(*uint32)(unsafe.Pointer(ranks + uintptr(i)*size)))
 	}
-	rankset += "]"
-	return rankset
+
+	return poolInfo, nil
 }
 
-func (cmd *poolQueryCmd) Execute(_ []string) error {
-	if cmd.ShowEnabledRanks && cmd.ShowDisabledRanks {
-		return errors.New("show-enabled and show-disabled can't be used at the same time.")
-	}
+func queryPool(poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (*daos.PoolInfo, error) {
 	var rlPtr **C.d_rank_list_t = nil
 	var rl *C.d_rank_list_t = nil
 
-	if cmd.ShowEnabledRanks || cmd.ShowDisabledRanks {
+	if queryMask.HasOption(daos.PoolQueryOptionEnabledEngines) || queryMask.HasOption(daos.PoolQueryOptionDisabledEngines) {
 		rlPtr = &rl
 	}
+
+	cPoolInfo := C.daos_pool_info_t{
+		pi_bits: C.uint64_t(queryMask),
+	}
+
+	rc := C.daos_pool_query(poolHdl, rlPtr, &cPoolInfo, nil, nil)
+	defer C.d_rank_list_free(rl)
+	if err := daosError(rc); err != nil {
+		return nil, err
+	}
+
+	poolInfo, err := convertPoolInfo(&cPoolInfo)
+	if err != nil {
+		return nil, err
+	}
+
+	if rlPtr != nil {
+		rs, err := rankSetFromC(rl)
+		if err != nil {
+			return nil, err
+		}
+		if queryMask.HasOption(daos.PoolQueryOptionEnabledEngines) {
+			poolInfo.EnabledRanks = rs
+		}
+		if queryMask.HasOption(daos.PoolQueryOptionDisabledEngines) {
+			poolInfo.DisabledRanks = rs
+		}
+	}
+
+	return poolInfo, nil
+}
+
+func (cmd *poolQueryCmd) Execute(_ []string) error {
+	queryMask := daos.DefaultPoolQueryMask
+	if cmd.HealthOnly {
+		queryMask = daos.HealthOnlyPoolQueryMask
+	}
+	if cmd.ShowEnabledRanks {
+		queryMask.SetOptions(daos.PoolQueryOptionEnabledEngines)
+	}
+	queryMask.SetOptions(daos.PoolQueryOptionDisabledEngines)
 
 	cleanup, err := cmd.resolveAndConnect(C.DAOS_PC_RO, nil)
 	if err != nil {
@@ -310,43 +350,21 @@ func (cmd *poolQueryCmd) Execute(_ []string) error {
 	}
 	defer cleanup()
 
-	pinfo := C.daos_pool_info_t{
-		pi_bits: dpiQueryAll,
-	}
-	if cmd.ShowDisabledRanks {
-		pinfo.pi_bits &= C.uint64_t(^(uint64(C.DPI_ENGINES_ENABLED)))
-	}
-
-	rc := C.daos_pool_query(cmd.cPoolHandle, rlPtr, &pinfo, nil, nil)
-	defer C.d_rank_list_free(rl)
-	if err := daosError(rc); err != nil {
-		return errors.Wrapf(err,
-			"failed to query pool %s", cmd.poolUUID)
-	}
-
-	pqr, err := convertPoolInfo(&pinfo)
+	poolInfo, err := queryPool(cmd.cPoolHandle, queryMask)
 	if err != nil {
-		return err
-	}
-
-	if rlPtr != nil {
-		if cmd.ShowEnabledRanks {
-			pqr.EnabledRanks = ranklist.MustCreateRankSet(generateRankSet(rl))
-		}
-		if cmd.ShowDisabledRanks {
-			pqr.DisabledRanks = ranklist.MustCreateRankSet(generateRankSet(rl))
-		}
+		return errors.Wrapf(err, "failed to query pool %q", cmd.PoolID())
 	}
 
 	if cmd.JSONOutputEnabled() {
-		return cmd.OutputJSON(pqr, nil)
+		return cmd.OutputJSON(poolInfo, nil)
 	}
 
 	var bld strings.Builder
-	if err := pretty.PrintPoolQueryResponse(pqr, &bld); err != nil {
+	if err := pretty.PrintPoolInfo(poolInfo, &bld); err != nil {
 		return err
 	}
 
+	cmd.Debugf("Pool query options: %s", poolInfo.QueryMask)
 	cmd.Info(bld.String())
 
 	return nil
@@ -360,11 +378,11 @@ type poolQueryTargetsCmd struct {
 }
 
 // For using the pretty printer that dmg uses for this target info.
-func convertPoolTargetInfo(ptinfo *C.daos_target_info_t) (*control.PoolQueryTargetInfo, error) {
-	pqti := new(control.PoolQueryTargetInfo)
-	pqti.Type = control.PoolQueryTargetType(ptinfo.ta_type)
-	pqti.State = control.PoolQueryTargetState(ptinfo.ta_state)
-	pqti.Space = []*control.StorageTargetUsage{
+func convertPoolTargetInfo(ptinfo *C.daos_target_info_t) (*daos.PoolQueryTargetInfo, error) {
+	pqti := new(daos.PoolQueryTargetInfo)
+	pqti.Type = daos.PoolQueryTargetType(ptinfo.ta_type)
+	pqti.State = daos.PoolQueryTargetState(ptinfo.ta_state)
+	pqti.Space = []*daos.StorageUsageStats{
 		{
 			Total:     uint64(ptinfo.ta_space.s_total[C.DAOS_MEDIA_SCM]),
 			Free:      uint64(ptinfo.ta_space.s_free[C.DAOS_MEDIA_SCM]),
@@ -392,10 +410,24 @@ func (cmd *poolQueryTargetsCmd) Execute(_ []string) error {
 		return errors.WithMessage(err, "parsing target list")
 	}
 
-	infoResp := new(control.PoolQueryTargetResp)
+	if len(idxList) == 0 {
+		pi, err := queryPool(cmd.cPoolHandle, daos.HealthOnlyPoolQueryMask)
+		if err != nil || (pi.TotalTargets == 0 || pi.TotalEngines == 0) {
+			if err != nil {
+				return errors.Wrap(err, "pool query failed")
+			}
+			return errors.New("failed to derive target count from pool query")
+		}
+		tgtCount := pi.TotalTargets / pi.TotalEngines
+		for i := uint32(0); i < tgtCount; i++ {
+			idxList = append(idxList, i)
+		}
+	}
+
 	ptInfo := new(C.daos_target_info_t)
 	var rc C.int
 
+	infos := make([]*daos.PoolQueryTargetInfo, 0, len(idxList))
 	for tgt := 0; tgt < len(idxList); tgt++ {
 		rc = C.daos_pool_query_target(cmd.cPoolHandle, C.uint32_t(idxList[tgt]), C.uint32_t(cmd.Rank), ptInfo, nil)
 		if err := daosError(rc); err != nil {
@@ -404,19 +436,21 @@ func (cmd *poolQueryTargetsCmd) Execute(_ []string) error {
 		}
 
 		tgtInfo, err := convertPoolTargetInfo(ptInfo)
-		infoResp.Infos = append(infoResp.Infos, tgtInfo)
 		if err != nil {
 			return err
 		}
+		infos = append(infos, tgtInfo)
 	}
 
 	if cmd.JSONOutputEnabled() {
-		return cmd.OutputJSON(infoResp, nil)
+		return cmd.OutputJSON(infos, nil)
 	}
 
 	var bld strings.Builder
-	if err := pretty.PrintPoolQueryTargetResponse(infoResp, &bld); err != nil {
-		return err
+	for _, info := range infos {
+		if err := pretty.PrintPoolQueryTargetInfo(info, &bld); err != nil {
+			return err
+		}
 	}
 
 	cmd.Info(bld.String())
@@ -600,6 +634,130 @@ func (cmd *poolAutoTestCmd) Execute(_ []string) error {
 		return errors.Wrapf(err, "failed to run autotest for pool %s",
 			cmd.poolUUID)
 	}
+
+	return nil
+}
+
+func getPoolList(log logging.Logger, sysName string, queryEnabled bool) ([]*daos.PoolInfo, error) {
+	var cSysName *C.char
+	if sysName != "" {
+		cSysName := C.CString(sysName)
+		defer freeString(cSysName)
+	}
+
+	var cPools []C.daos_mgmt_pool_info_t
+	for {
+		var rc C.int
+		var poolCount C.size_t
+
+		// First, fetch the total number of pools in the system.
+		// We may not have access to all of them, so this is an upper bound.
+		rc = C.daos_mgmt_list_pools(cSysName, &poolCount, nil, nil)
+		if err := daosError(rc); err != nil {
+			return nil, err
+		}
+		log.Debugf("pools in system: %d", poolCount)
+
+		if poolCount < 1 {
+			return nil, nil
+		}
+
+		// Now, we actually fetch the pools into the buffer that we've created.
+		cPools = make([]C.daos_mgmt_pool_info_t, poolCount)
+		rc = C.daos_mgmt_list_pools(cSysName, &poolCount, &cPools[0], nil)
+		err := daosError(rc)
+		if err == nil {
+			cPools = cPools[:poolCount] // adjust the slice to the number of pools retrieved
+			log.Debugf("fetched %d pools", len(cPools))
+			break
+		}
+		if err == daos.StructTooSmall {
+			log.Notice("server-side pool list changed; re-fetching")
+			continue
+		}
+		log.Errorf("failed to fetch pool list: %s", err)
+		return nil, err
+	}
+
+	pools := make([]*daos.PoolInfo, 0, len(cPools))
+	for i := 0; i < len(cPools); i++ {
+		cPool := &cPools[i]
+
+		svcRanks, err := rankSetFromC(cPool.mgpi_svc)
+		if err != nil {
+			return nil, err
+		}
+		poolUUID, err := uuidFromC(cPool.mgpi_uuid)
+		if err != nil {
+			return nil, err
+		}
+		poolLabel := C.GoString(cPool.mgpi_label)
+
+		var pool *daos.PoolInfo
+		if queryEnabled {
+			poolHandle, poolInfo, err := poolConnect(poolUUID.String(), sysName, daos.PoolConnectFlagReadOnly, true)
+			if err != nil {
+				log.Errorf("failed to connect to pool %q: %s", poolLabel, err)
+				continue
+			}
+
+			var qErr error
+			pool, qErr = convertPoolInfo(poolInfo)
+			if qErr != nil {
+				log.Errorf("failed to query pool %q: %s", poolLabel, qErr)
+			}
+			if err := poolDisconnectAPI(poolHandle); err != nil {
+				log.Errorf("failed to disconnect from pool %q: %s", poolLabel, err)
+			}
+			if qErr != nil {
+				continue
+			}
+
+			// Add a few missing pieces that the query doesn't fill in.
+			pool.Label = poolLabel
+			pool.ServiceReplicas = svcRanks.Ranks()
+		} else {
+			// Just populate the basic info.
+			pool = &daos.PoolInfo{
+				UUID:            poolUUID,
+				Label:           poolLabel,
+				ServiceReplicas: svcRanks.Ranks(),
+				State:           daos.PoolServiceStateReady,
+			}
+		}
+
+		pools = append(pools, pool)
+	}
+
+	log.Debugf("fetched %d/%d pools", len(pools), len(cPools))
+	return pools, nil
+}
+
+type poolListCmd struct {
+	daosCmd
+	Verbose bool `short:"v" long:"verbose" description:"Add pool UUIDs and service replica lists to display"`
+	NoQuery bool `short:"n" long:"no-query" description:"Disable query of listed pools"`
+}
+
+func (cmd *poolListCmd) Execute(_ []string) error {
+	pools, err := getPoolList(cmd.Logger, cmd.SysName, !cmd.NoQuery)
+	if err != nil {
+		return err
+	}
+
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(struct {
+			Pools []*daos.PoolInfo `json:"pools"` // compatibility with dmg
+		}{
+			Pools: pools,
+		}, nil)
+	}
+
+	var buf strings.Builder
+	if err := pretty.PrintPoolList(pools, &buf, cmd.Verbose); err != nil {
+		return err
+	}
+	cmd.Info(buf.String())
 
 	return nil
 }

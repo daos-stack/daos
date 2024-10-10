@@ -20,10 +20,16 @@ func (c *ControlService) CollectLog(ctx context.Context, req *ctlpb.CollectLogRe
 	params := support.CollectLogsParams{}
 	params.TargetFolder = req.TargetFolder
 	params.ExtraLogsDir = req.ExtraLogsDir
-	params.TargetHost = req.TargetHost
+	params.AdminNode = req.AdminNode
 	params.JsonOutput = req.JsonOutput
 	params.LogFunction = req.LogFunction
 	params.LogCmd = req.LogCmd
+	params.LogStartDate = req.LogStartDate
+	params.LogEndDate = req.LogEndDate
+	params.LogStartTime = req.LogStartTime
+	params.LogEndTime = req.LogEndTime
+	params.StopOnError = req.StopOnError
+	params.FileTransferExecArgs = req.FileTransferExecArgs
 
 	err := support.CollectSupportLog(c.log, params)
 	if err != nil {

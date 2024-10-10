@@ -26,8 +26,55 @@
 # default: 10001
 #port: 10001
 
-## Transport Credentials Specifying certificates to secure communications
+## Enable HTTP endpoint for remote telemetry collection.
+# Note that enabling the endpoint automatically enables
+# client telemetry collection.
 #
+## default endpoint state: disabled
+## default endpoint port: 9192
+#telemetry_port: 9192
+
+## Enable client telemetry for all DAOS clients.
+# If false, clients will need to optionally enable telemetry by setting
+# the D_CLIENT_METRICS_ENABLE environment variable to true.
+#
+## default: false
+#telemetry_enabled: true
+
+## Retain client telemetry for a period of time after the client
+# process exits.
+#
+## default 0 (do not retain telemetry after client exit)
+#telemetry_retain: 1m
+
+## Configuration for user credential management.
+#credential_config:
+#  # If the agent should be able to resolve unknown client uids and gids
+#  # (e.g. when running in a container) into ACL principal names, then a
+#  # client user map may be defined. The optional "default" uid is a special
+#  # case and applies if no other matches are found.
+#  client_user_map:
+#    default:
+#      user: nobody
+#      group: nobody
+#    1000:
+#      user: ralph
+#      group: stanley
+#
+#  # Optionally cache generated credentials with the specified cache
+#  # lifetime. By default, a credential is generated for every client
+#  # process that connects to a pool. If the credential cache is
+#  # enabled, then local client processes connecting with stable
+#  # uid:gid associations may take advantage of the cached credential
+#  # and reduce some agent overhead. For heavily-loaded client nodes
+#  # with many frequent (e.g. hundreds per minute) client connections,
+#  # a lifetime of 1-5 minutes may be a reasonable tradeoff between
+#  # performance and responsiveness to user/group database updates.
+#  # If no expiration is set, credential caching is not enabled.
+#  cache_expiration: 1m
+#
+## Configuration for SSL certificates used to secure management traffic
+# and authenticate/authorize management components.
 #transport_config:
 #  # In order to disable transport security, uncomment and set allow_insecure
 #  # to true. Not recommended for production configurations.
@@ -39,6 +86,7 @@
 #  cert: /etc/daos/certs/agent.crt
 #  # Key portion of Agent Certificate
 #  key: /etc/daos/certs/agent.key
+#
 
 # Use the given directory for creating unix domain sockets
 #
@@ -65,7 +113,14 @@
 ## Note that this implies that stopping or restarting the agent will result
 ## in interruption of DAOS I/O for any local DAOS client processes that have
 ## an open pool handle.
-# disable_auto_evict: true
+## default: false
+#disable_auto_evict: true
+
+## If enabled, the agent will evict any open pool handles associated with this machine on agent
+## startup. This allows the servers to reclaim resources that may not have been properly cleaned
+## up in the event of an agent or machine crash.
+## default: false
+#enable_evict_on_start: true
 
 ## Disable the agent's internal caches. If set to true, the agent will query the
 ## server access point and local hardware data every time a client requests

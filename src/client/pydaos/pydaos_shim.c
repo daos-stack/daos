@@ -1,14 +1,8 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-
-/* Those are gone from python3, replaced with new functions */
-#define PyInt_FromLong		PyLong_FromLong
-#define PyString_FromString	PyUnicode_FromString
-#define PyString_FromStringAndSize PyUnicode_FromStringAndSize
-#define PyString_AsString	PyBytes_AsString
 
 #include <Python.h>
 
@@ -49,75 +43,71 @@ struct open_handle {
 	daos_obj_id_t	alloc; /** last allocated objid */
 };
 
-static int
-__is_magic_valid(int input)
-{
-	if (input != PY_SHIM_MAGIC_NUMBER) {
-		D_ERROR("MAGIC number does not match, expected %d got %d\n",
-			PY_SHIM_MAGIC_NUMBER, input);
-		return 0;
-	}
+/* Parse arguments and magic number.  As well as returning NULL this sets the Python exception
+ * state as required
+ */
+#define RETURN_NULL_IF_FAILED_TO_PARSE(args, format, x...)                                         \
+	do {                                                                                       \
+		int magic;                                                                         \
+		if (!PyArg_ParseTuple(args, "i" format, &magic, x)) {                              \
+			D_DEBUG(DB_ANY, "Bad args passed to %s", __func__);                        \
+			return NULL;                                                               \
+		}                                                                                  \
+		if (magic != PY_SHIM_MAGIC_NUMBER) {                                               \
+			D_ERROR("MAGIC number does not match, expected %d got %d\n",               \
+				PY_SHIM_MAGIC_NUMBER, magic);                                      \
+			PyErr_Format(PyExc_TypeError,                                              \
+				     "Bad magic value in pydaos(%s), expected %d got %d",          \
+				     __func__, PY_SHIM_MAGIC_NUMBER, magic);                       \
+			return NULL;                                                               \
+		}                                                                                  \
+	} while (0)
 
-	return 1;
-}
-
-/* Macro that parses out magic value and verifies it */
-#define RETURN_NULL_IF_BAD_MAGIC(args)					\
-do {									\
-	int magic;							\
-	if (!PyArg_ParseTuple(args, "i", &magic)) {			\
-		DEBUG_PRINT("Bad arguments passed to %s", __func__);	\
-		return NULL;						\
-	}								\
-									\
-	if (!__is_magic_valid(magic)) {					\
-		return NULL;						\
-	}								\
-} while (0)
-
-
-/* Parse arguments and magic number out*/
-#define RETURN_NULL_IF_FAILED_TO_PARSE(args, format, x...)		\
-do {									\
-	int magic;							\
-	if (!PyArg_ParseTuple(args, "i"format, &magic, x)) {		\
-		D_DEBUG(DB_ANY, "Bad args passed to %s", __func__);	\
-		return NULL;						\
-	}								\
-									\
-	if (!__is_magic_valid(magic)) {					\
-		return NULL;						\
-	}								\
-} while (0)
-
-static daos_handle_t	glob_eq;
-static int		use_glob_eq;
+/** Global event queue */
+static daos_handle_t eq;
 
 /**
  * Implementations of baseline shim functions
  */
 
+static void
+child_handler(void)
+{
+	int rc;
+
+	rc = daos_reinit();
+	if (rc)
+		D_WARN("daos_reinit() failed in child process %d", rc);
+
+	eq = DAOS_HDL_INVAL;
+	rc = daos_eq_create(&eq);
+	if (rc)
+		DL_ERROR(rc, "Failed to re-create global eq");
+}
+
 static PyObject *
 __shim_handle__daos_init(PyObject *self, PyObject *args)
 {
 	int rc;
-	int ret;
-	char *override;
 
 	rc = daos_init();
-	if ((rc == 0) && (use_glob_eq == 0)) {
-		override = getenv("PYDAOS_GLOB_EQ");
-		if ((override == NULL) || strcmp(override, "0")) {
-			use_glob_eq = 1;
-			ret = daos_eq_create(&glob_eq);
-			if (ret) {
-				D_ERROR("Failed to create global eq, "DF_RC"\n", DP_RC(ret));
-				use_glob_eq = 0;
-			}
-		}
+	if (rc)
+		return PyLong_FromLong(rc);
+
+	rc = daos_eq_create(&eq);
+	if (rc) {
+		DL_ERROR(rc, "Failed to create global eq");
+		daos_fini();
+		return PyLong_FromLong(rc);
 	}
 
-	return PyInt_FromLong(rc);
+	rc = pthread_atfork(NULL, NULL, &child_handler);
+	if (rc) {
+		DL_ERROR(rc, "Failed to set atfork handler");
+		return PyLong_FromLong(rc);
+	}
+
+	return PyLong_FromLong(rc);
 }
 
 static PyObject *
@@ -125,16 +115,13 @@ __shim_handle__daos_fini(PyObject *self, PyObject *args)
 {
 	int rc;
 
-	if (use_glob_eq) {
-		rc =  daos_eq_destroy(glob_eq, DAOS_EQ_DESTROY_FORCE);
-		if (rc)
-			D_ERROR("Failed to destroy global eq, "DF_RC"\n", DP_RC(rc));
-		use_glob_eq = 0;
-	}
+	rc = daos_eq_destroy(eq, DAOS_EQ_DESTROY_FORCE);
+	if (rc)
+		D_ERROR("Failed to destroy global eq, " DF_RC "\n", DP_RC(rc));
 
 	rc = daos_fini();
 
-	return PyInt_FromLong(rc);
+	return PyLong_FromLong(rc);
 }
 
 static PyObject *
@@ -152,7 +139,7 @@ __shim_handle__err_to_str(PyObject *self, PyObject *args)
 		return Py_None;
 	}
 
-	return PyString_FromString(str);
+	return PyUnicode_FromString(str);
 }
 
 /**
@@ -160,7 +147,7 @@ __shim_handle__err_to_str(PyObject *self, PyObject *args)
  */
 
 static PyObject *
-cont_open(int ret, char *pool, char *cont, int flags)
+cont_open(int ret, char *pool, char *cont, int ro)
 {
 	PyObject			*return_list;
 	struct open_handle		*hdl = NULL;
@@ -178,19 +165,19 @@ cont_open(int ret, char *pool, char *cont, int flags)
 	}
 
 	/** Connect to pool */
-	rc = daos_pool_connect(pool, NULL, DAOS_PC_RW, &poh, NULL, NULL);
+	rc = daos_pool_connect(pool, NULL, DAOS_PC_RO, &poh, NULL, NULL);
 	if (rc)
 		goto out;
 
 	/** Open container */
-	rc = daos_cont_open(poh, cont, DAOS_COO_RW, &coh, NULL, NULL);
+	rc = daos_cont_open(poh, cont, ro ? DAOS_COO_RO : DAOS_COO_RW, &coh, NULL, NULL);
 	if (rc)
 		goto out;
 
 	/** Retrieve container properties via cont_query() */
 	prop = daos_prop_alloc(0);
 	if (prop == NULL) {
-		rc = -ENOMEM;
+		rc = -DER_NOMEM;
 		goto out;
 	}
 
@@ -264,7 +251,7 @@ out:
 
 	/* Populate return list */
 	return_list = PyList_New(2);
-	PyList_SetItem(return_list, 0, PyInt_FromLong(rc));
+	PyList_SetItem(return_list, 0, PyLong_FromLong(rc));
 	PyList_SetItem(return_list, 1, PyLong_FromVoidPtr(hdl));
 
 	return return_list;
@@ -275,32 +262,32 @@ __shim_handle__cont_open(PyObject *self, PyObject *args)
 {
 	char	*pool;
 	char	*cont;
-	int	 flags;
+	int      ro;
 
 	/** Parse arguments, flags not used for now */
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "ssi", &pool, &cont, &flags);
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "ssp", &pool, &cont, &ro);
 
-	return cont_open(0, pool, cont, flags);
+	return cont_open(0, pool, cont, ro);
 }
 
 static PyObject *
 __shim_handle__cont_open_by_path(PyObject *self, PyObject *args)
 {
 	const char		*path;
-	PyObject		*obj;
-	int			 flags;
+	PyObject                *obj;
 	struct duns_attr_t	 attr = {0};
 	int			 rc;
+	int                      ro;
 
 	/** Parse arguments, flags not used for now */
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "si", &path, &flags);
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "sp", &path, &ro);
 
 	rc = duns_resolve_path(path, &attr);
 	if (rc)
 		goto out;
 
 out:
-	obj = cont_open(rc, attr.da_pool, attr.da_cont, flags);
+	obj = cont_open(rc, attr.da_pool, attr.da_cont, ro);
 	duns_destroy_attr(&attr);
 	return obj;
 }
@@ -342,10 +329,10 @@ __shim_handle__cont_get(PyObject *self, PyObject *args)
 out:
 	/* Populate return list */
 	return_list = PyList_New(4);
-	PyList_SetItem(return_list, 0, PyInt_FromLong(rc));
+	PyList_SetItem(return_list, 0, PyLong_FromLong(rc));
 	PyList_SetItem(return_list, 1, PyLong_FromLong(oid.hi));
 	PyList_SetItem(return_list, 2, PyLong_FromLong(oid.lo));
-	PyList_SetItem(return_list, 3, PyInt_FromLong(otype));
+	PyList_SetItem(return_list, 3, PyLong_FromLong(otype));
 
 	return return_list;
 }
@@ -407,7 +394,7 @@ __shim_handle__cont_newobj(PyObject *self, PyObject *args)
 out:
 	/* Populate return list */
 	return_list = PyList_New(3);
-	PyList_SetItem(return_list, 0, PyInt_FromLong(rc));
+	PyList_SetItem(return_list, 0, PyLong_FromLong(rc));
 	PyList_SetItem(return_list, 1, PyLong_FromLong(oid.hi));
 	PyList_SetItem(return_list, 2, PyLong_FromLong(oid.lo));
 
@@ -441,7 +428,7 @@ __shim_handle__cont_close(PyObject *self, PyObject *args)
 	if (rc == 0)
 		D_FREE(hdl);
 
-	return PyInt_FromLong(rc);
+	return PyLong_FromLong(rc);
 }
 
 #define ITER_NR		96
@@ -494,7 +481,7 @@ oit_mark(daos_handle_t oh, daos_handle_t oit)
 			}
 
 			memcpy(key, ptr, kds[i].kd_key_len);
-			key[kds[i].kd_key_len + 1] = '\0';
+			key[kds[i].kd_key_len] = '\0';
 			ptr += kds[i].kd_key_len;
 
 			rc = daos_kv_get(oh, DAOS_TX_NONE, DAOS_COND_KEY_GET, key, &size, &entry,
@@ -541,7 +528,7 @@ cont_check(int ret, char *pool, char *cont, int flags)
 	}
 
 	/** Connect to pool */
-	rc = daos_pool_connect(pool, NULL, DAOS_PC_RW, &poh, NULL, NULL);
+	rc = daos_pool_connect(pool, NULL, DAOS_PC_RO, &poh, NULL, NULL);
 	if (rc)
 		goto out;
 
@@ -683,7 +670,7 @@ out:
 			rc = rc2;
 	}
 
-	return PyInt_FromLong(rc);
+	return PyLong_FromLong(rc);
 }
 
 static PyObject *
@@ -871,7 +858,7 @@ __shim_handle__kv_open(PyObject *self, PyObject *args)
 
 	/* Populate return list */
 	return_list = PyList_New(2);
-	PyList_SetItem(return_list, 0, PyInt_FromLong(rc));
+	PyList_SetItem(return_list, 0, PyLong_FromLong(rc));
 	PyList_SetItem(return_list, 1, PyLong_FromLong(oh.cookie));
 
 	return return_list;
@@ -889,7 +876,7 @@ __shim_handle__kv_close(PyObject *self, PyObject *args)
 	/** Close object */
 	rc = daos_kv_close(oh, NULL);
 
-	return PyInt_FromLong(rc);
+	return PyLong_FromLong(rc);
 }
 
 /**
@@ -942,8 +929,7 @@ __shim_handle__kv_get(PyObject *self, PyObject *args)
 	PyObject	*daos_dict;
 	daos_handle_t	 oh;
 	PyObject	*key;
-	Py_ssize_t	 pos = 0;
-	daos_handle_t	 eq;
+	Py_ssize_t       pos      = 0;
 	struct kv_op	*kv_array = NULL;
 	struct kv_op	*op;
 	daos_event_t	*evp;
@@ -955,14 +941,6 @@ __shim_handle__kv_get(PyObject *self, PyObject *args)
 	/* Parse arguments */
 	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LO!l", &oh.cookie, &PyDict_Type,
 				       &daos_dict, &v_size);
-
-	if (!use_glob_eq) {
-		rc = daos_eq_create(&eq);
-		if (rc)
-			return PyInt_FromLong(rc);
-	} else {
-		eq = glob_eq;
-	}
 
 	D_ALLOC_ARRAY(kv_array, MAX_INFLIGHT);
 	if (kv_array == NULL) {
@@ -1044,7 +1022,7 @@ rewait:
 		if (PyUnicode_Check(key)) {
 			op->key = (char *)PyUnicode_AsUTF8(key);
 		} else {
-			op->key = PyString_AsString(key);
+			op->key = PyBytes_AsString(key);
 		}
 		if (!op->key)
 			D_GOTO(err, rc = 0);
@@ -1107,19 +1085,10 @@ rewait:
 out:
 	D_FREE(kv_array);
 
-	/** destroy event queue */
-	if (!use_glob_eq) {
-		ret = daos_eq_destroy(eq, DAOS_EQ_DESTROY_FORCE);
-		if (rc == DER_SUCCESS && ret < 0)
-			rc = ret;
-	}
-
 	/* Populate return list */
-	return PyInt_FromLong(rc);
+	return PyLong_FromLong(rc);
 
 err:
-	if (!use_glob_eq)
-		daos_eq_destroy(eq, DAOS_EQ_DESTROY_FORCE);
 	D_FREE(kv_array);
 
 	return NULL;
@@ -1132,8 +1101,7 @@ __shim_handle__kv_put(PyObject *self, PyObject *args)
 	daos_handle_t	 oh;
 	PyObject	*key;
 	PyObject	*value;
-	Py_ssize_t	 pos = 0;
-	daos_handle_t	 eq;
+	Py_ssize_t       pos = 0;
 	daos_event_t	 ev_array[MAX_INFLIGHT];
 	daos_event_t	*evp;
 	int		 i = 0;
@@ -1143,14 +1111,6 @@ __shim_handle__kv_put(PyObject *self, PyObject *args)
 	/* Parse arguments */
 	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LO!", &oh.cookie,
 				       &PyDict_Type, &daos_dict);
-
-	if (!use_glob_eq) {
-		rc = daos_eq_create(&eq);
-		if (rc)
-			return PyInt_FromLong(rc);
-	} else {
-		eq = glob_eq;
-	}
 
 	while (PyDict_Next(daos_dict, &pos, &key, &value)) {
 		char		*buf;
@@ -1206,7 +1166,7 @@ __shim_handle__kv_put(PyObject *self, PyObject *args)
 		if (PyUnicode_Check(key)) {
 			key_str = (char *)PyUnicode_AsUTF8(key);
 		} else {
-			key_str = PyString_AsString(key);
+			key_str = PyBytes_AsString(key);
 		}
 		if (!key_str)
 			D_GOTO(err, rc = 0);
@@ -1231,17 +1191,8 @@ __shim_handle__kv_put(PyObject *self, PyObject *args)
 	if (rc == DER_SUCCESS && ret < 0)
 		rc = ret;
 
-	/** destroy event queue */
-	if (!use_glob_eq) {
-		ret = daos_eq_destroy(eq, 0);
-		if (rc == DER_SUCCESS && ret < 0)
-			rc = ret;
-	}
-
-	return PyInt_FromLong(rc);
+	return PyLong_FromLong(rc);
 err:
-	if (!use_glob_eq)
-		daos_eq_destroy(eq, 0);
 	return NULL;
 }
 
@@ -1358,8 +1309,7 @@ __shim_handle__kv_iter(PyObject *self, PyObject *args)
 	for (ptr = enum_buf, i = 0; i < nr; i++) {
 		Py_ssize_t len = kds[i].kd_key_len;
 
-		rc = PyList_Append(entries,
-				   PyString_FromStringAndSize(ptr, len));
+		rc = PyList_Append(entries, PyUnicode_FromStringAndSize(ptr, len));
 		if (rc  < 0) {
 			rc = -DER_IO;
 			break;
@@ -1393,9 +1343,9 @@ out:
 
 	/* Populate return list */
 	return_list = PyList_New(4);
-	PyList_SetItem(return_list, 0, PyInt_FromLong(rc));
-	PyList_SetItem(return_list, 1, PyInt_FromLong(nr_req));
-	PyList_SetItem(return_list, 2, PyInt_FromLong(size));
+	PyList_SetItem(return_list, 0, PyLong_FromLong(rc));
+	PyList_SetItem(return_list, 1, PyLong_FromLong(nr_req));
+	PyList_SetItem(return_list, 2, PyLong_FromLong(size));
 	if (rc || daos_anchor_is_eof(anchor)) {
 		if (anchor_cap != NULL)
 			Py_DECREF(anchor_cap);
@@ -1484,13 +1434,13 @@ PyMODINIT_FUNC PyInit_pydaos_shim(void)
 
 	module = PyModule_Create(&moduledef);
 
-#define DEFINE_PY_RETURN_CODE(name, desc, errstr) \
-	PyModule_AddIntConstant(module, ""#name, desc);
+#define DEFINE_PY_RETURN_CODE(name, errstr) PyModule_AddIntConstant(module, "" #name, name);
 
 	/** export return codes */
 	D_FOREACH_GURT_ERR(DEFINE_PY_RETURN_CODE);
 	D_FOREACH_DAOS_ERR(DEFINE_PY_RETURN_CODE);
 	PyModule_AddIntConstant(module, "DER_SUCCESS", DER_SUCCESS);
+	PyModule_AddIntConstant(module, "DER_UNKNOWN", DER_UNKNOWN);
 
 	/** export object type */
 	PyModule_AddIntConstant(module, "PYDAOS_DICT", PYDAOS_DICT);

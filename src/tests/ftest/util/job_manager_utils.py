@@ -1,22 +1,21 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-# pylint: disable=too-many-lines
-from distutils.spawn import find_executable  # pylint: disable=deprecated-module
 import os
 import re
 import time
+# pylint: disable=too-many-lines
+from shutil import which
 
 from ClusterShell.NodeSet import NodeSet
-
 from command_utils import ExecutableCommand, SystemctlCommand
-from command_utils_base import FormattedParameter, EnvironmentVariables
-from exception_utils import CommandFailure, MPILoadError
+from command_utils_base import BasicParameter, EnvironmentVariables, FormattedParameter
 from env_modules import load_mpi
-from general_utils import pcmd, run_pcmd, get_job_manager_class, get_journalctl_command, \
-    journalctl_time
+from exception_utils import CommandFailure, MPILoadError
+from general_utils import (get_job_manager_class, get_journalctl_command, journalctl_time, pcmd,
+                           run_pcmd)
 from run_utils import run_remote, stop_processes
 from write_host_file import write_host_file
 
@@ -30,6 +29,9 @@ def get_job_manager(test, class_name=None, job=None, subprocess=None, mpi_type=N
         - the test yaml arguments (if no arguments are provided)
         - default values (if no arguments are provided and there are no test yaml entries)
 
+    Use this method to ensure the cleanup of processes started by JobManager.run() are handled in
+    the correct order in the test tearDown() method.
+
     Args:
         test (Test): avocado Test object
         class_name (str, optional): JobManager class name. Defaults to None.
@@ -41,11 +43,12 @@ def get_job_manager(test, class_name=None, job=None, subprocess=None, mpi_type=N
             to "/run/job_manager/*".
         class_name_default (str, optional): default class_name to use when. Defaults to "Mpirun".
 
+    Raises:
+        DaosTestError: if an invalid JobManager class name is specified.
+
     Returns:
         JobManager: a JobManager class, e.g. Orterun, Mpirun, Srun, etc.
-
     """
-    job_manager = None
     if class_name is None:
         class_name = test.params.get("class_name", namespace, default=class_name_default)
     if subprocess is None:
@@ -60,18 +63,32 @@ def get_job_manager(test, class_name=None, job=None, subprocess=None, mpi_type=N
             timeout = test.params.get("timeout", namespace, None)
 
     # Setup a job manager command for running the test command
-    if class_name is not None:
-        job_manager = get_job_manager_class(class_name, job, subprocess, mpi_type)
-        job_manager.get_params(test)
-        job_manager.timeout = timeout
-        if mpi_type == "openmpi" and hasattr(job_manager, "tmpdir_base"):
-            job_manager.tmpdir_base.update(test.test_dir, "tmpdir_base")
-        if isinstance(test.job_manager, list):
-            test.job_manager.append(job_manager)
-        else:
-            test.job_manager = job_manager
-
+    job_manager = get_job_manager_class(class_name, job, subprocess, mpi_type)
+    job_manager.get_params(test)
+    job_manager.timeout = timeout
+    if mpi_type == "openmpi" and hasattr(job_manager, "tmpdir_base"):
+        job_manager.tmpdir_base.update(test.test_dir, "tmpdir_base")
+    job_manager.register_cleanup_method = test.register_cleanup
     return job_manager
+
+
+def stop_job_manager(job_manager):
+    """Stop the job manager being run by the test.
+
+    Args:
+        job_manager (JobManager): the job manager to stop
+
+    Returns:
+        list: a list of any errors detected when stopping the job manager
+    """
+    error_list = []
+    job_manager.log.info("Stopping %s job manager: %s", job_manager.command, job_manager)
+    try:
+        job_manager.stop()
+    except Exception as error:      # pylint: disable=broad-except
+        job_manager.log.error("Error stopping %s job manager: %s", job_manager.command, error)
+        error_list.append(f"Error detected stopping {job_manager.command} job manager")
+    return error_list
 
 
 class JobManager(ExecutableCommand):
@@ -92,6 +109,7 @@ class JobManager(ExecutableCommand):
         super().__init__(namespace, command, path, subprocess)
         self.job = job
         self._hosts = NodeSet()
+        self.register_cleanup_method = None
 
     @property
     def hosts(self):
@@ -163,12 +181,12 @@ class JobManager(ExecutableCommand):
         """
 
     def assign_processes(self, processes):
-        """Assign the number of processes per node.
+        """Assign the number of processes.
 
         Set the appropriate command line parameter with the specified value.
 
         Args:
-            processes (int): number of processes per node
+            processes (int): number of processes
         """
 
     def assign_environment(self, env_vars, append=False):
@@ -244,6 +262,26 @@ class JobManager(ExecutableCommand):
         # processes running by returning a "R" state.
         return "R" if 1 not in results or len(results) > 1 else None
 
+    def run(self, raise_exception=None):
+        """Run the command.
+
+        Args:
+            raise_exception (bool, optional): whether or not to raise an exception if the command
+                fails. This overrides the self.exit_status_exception
+                setting if defined. Defaults to None.
+
+        Raises:
+            CommandFailure: if there is an error running the command
+
+        Returns:
+            CmdResult: result of the command
+        """
+        if callable(self.register_cleanup_method):
+            # Stop any running processes started by this job manager when the test completes
+            # pylint: disable=not-callable
+            self.register_cleanup_method(stop_job_manager, job_manager=self)
+        return super().run(raise_exception)
+
     def stop(self):
         """Stop the subprocess command and kill any job processes running on hosts.
 
@@ -287,7 +325,7 @@ class Orterun(JobManager):
         if not load_mpi(mpi_type):
             raise MPILoadError(mpi_type)
 
-        path = os.path.dirname(find_executable("orterun"))
+        path = os.path.dirname(which("orterun"))
         super().__init__("/run/orterun/*", "orterun", job, path, subprocess)
 
         # Default mca values to avoid queue pair errors
@@ -337,10 +375,10 @@ class Orterun(JobManager):
         self.hostfile.value = write_host_file(**kwargs)
 
     def assign_processes(self, processes):
-        """Assign the number of processes per node (-np).
+        """Assign the number of processes (-np).
 
         Args:
-            processes (int): number of processes per node
+            processes (int): number of processes
         """
         self.processes.value = processes
 
@@ -407,7 +445,7 @@ class Mpirun(JobManager):
         if not load_mpi(mpi_type):
             raise MPILoadError(mpi_type)
 
-        path = os.path.dirname(find_executable("mpirun"))
+        path = os.path.dirname(which("mpirun"))
         super().__init__("/run/mpirun/*", "mpirun", job, path, subprocess)
 
         mca_default = None
@@ -433,8 +471,7 @@ class Mpirun(JobManager):
         self.mca = FormattedParameter("--mca {}", mca_default)
         self.working_dir = FormattedParameter("-wdir {}", None)
         self.tmpdir_base = FormattedParameter("--mca orte_tmpdir_base {}", None)
-        self.bind_to = FormattedParameter("--bind-to {}", None)
-        self.map_by = FormattedParameter("--map-by {}", None)
+        self.args = BasicParameter(None, None)
         self.mpi_type = mpi_type
 
     def assign_hosts(self, hosts, path=None, slots=None, hostfile=True):
@@ -456,13 +493,18 @@ class Mpirun(JobManager):
             kwargs["path"] = path
         self.hostfile.value = write_host_file(**kwargs)
 
-    def assign_processes(self, processes):
-        """Assign the number of processes per node (-np).
+    def assign_processes(self, processes=None, ppn=None):
+        """Assign the number of processes (-np) and processes per node (-ppn).
 
         Args:
-            processes (int): number of processes per node
+            processes (int, optional): number of processes. Defaults to None.
+                if not specified, auto-calculated from ppn.
+            ppn (int, optional): number of processes per node. Defaults to None.
         """
+        if ppn is not None and processes is None:
+            processes = ppn * len(self._hosts)
         self.processes.update(processes, "mpirun.np")
+        self.ppn.update(ppn, "mpirun.ppn")
 
     def assign_environment(self, env_vars, append=False):
         """Assign or add environment variables to the command.
@@ -607,7 +649,6 @@ class Systemctl(JobManager):
         Args:
             job (SubProcessCommand): command object to manage.
         """
-        # path = os.path.dirname(find_executable("systemctl"))
         super().__init__("/run/systemctl/*", "systemd", job)
         self.job = job
         self._systemctl = SystemctlCommand()

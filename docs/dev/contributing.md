@@ -13,7 +13,9 @@ features, offer to add a feature, or just begin a dialog about DAOS:
 ## Coding Rules
 
 Please check the [coding conventions](https://wiki.daos.io/spaces/DC/pages/4836655701/Coding+Rules)
-for code contribution.
+for code contribution.  See [githooks](../../utils/githooks/README.md) for information about setting up
+some automated checks on commit to help with adherence to the rules.
+
 
 ## Commit Comments
 

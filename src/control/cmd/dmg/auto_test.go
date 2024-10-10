@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,20 +7,22 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -28,87 +30,217 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
+var cgReqCalls []string
+
+func runConfGenCmdTests(t *testing.T, cmdTests []cmdTest) {
+	t.Helper()
+
+	for _, st := range cmdTests {
+		t.Run(st.name, func(t *testing.T) {
+			t.Helper()
+			cgReqCalls = nil // Clear before running test case.
+
+			runCmdTest(t, st.cmd, "", st.expectedErr) // Invoker calls not checked.
+
+			if st.expectedCalls == "" && cgReqCalls == nil {
+				return
+			}
+
+			// Validate ConfGenerate control API requests.
+			callsStr := strings.Join(cgReqCalls, " ")
+			if diff := cmp.Diff(st.expectedCalls, callsStr); diff != "" {
+				t.Fatalf("unexpected other calls (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestAuto_ConfigCommands(t *testing.T) {
-	runCmdTests(t, []cmdTest{
+	printCGRReq := func(t *testing.T, req control.ConfGenerateRemoteReq) string {
+		req2 := req
+		req2.Log = nil
+		req2.Client = nil
+		return fmt.Sprintf("%T-%+v", req2, req2)
+	}
+
+	mockConfGenRemCall := func(_ context.Context, req control.ConfGenerateRemoteReq) (*control.ConfGenerateRemoteResp, error) {
+		cgReqCalls = append(cgReqCalls, printCGRReq(t, req))
+		return &control.ConfGenerateRemoteResp{}, nil
+	}
+
+	// Mock external API calls and restore after tests.
+	origGenRemCall := confGenRemoteCall
+	confGenRemoteCall = mockConfGenRemCall
+	defer func() {
+		confGenRemoteCall = origGenRemCall
+	}()
+
+	runConfGenCmdTests(t, []cmdTest{
 		{
 			"Generate with no access point",
 			"config generate",
-			strings.Join([]string{
-				printRequest(t, &control.NetworkScanReq{}),
-			}, " "),
-			errors.New("no host responses"),
+			printCGRReq(t, func() control.ConfGenerateRemoteReq {
+				req := control.ConfGenerateRemoteReq{
+					HostList: []string{"localhost:10001"},
+				}
+				req.ConfGenerateReq.NetClass = hardware.Infiniband
+				req.ConfGenerateReq.AccessPoints = []string{"localhost"}
+				return req
+			}()),
+			nil,
+		},
+		{
+			"Generate with hostlist",
+			"config generate -a foo -l bar-[1-10]",
+			printCGRReq(t, func() control.ConfGenerateRemoteReq {
+				req := control.ConfGenerateRemoteReq{
+					HostList: []string{
+						"bar-1", "bar-2", "bar-3", "bar-4", "bar-5",
+						"bar-6", "bar-7", "bar-8", "bar-9", "bar-10",
+					},
+				}
+				req.ConfGenerateReq.NetClass = hardware.Infiniband
+				req.ConfGenerateReq.AccessPoints = []string{"foo"}
+				return req
+			}()),
+			nil,
 		},
 		{
 			"Generate with defaults",
 			"config generate -a foo",
-			strings.Join([]string{
-				printRequest(t, &control.NetworkScanReq{}),
-			}, " "),
-			errors.New("no host responses"),
+			printCGRReq(t, func() control.ConfGenerateRemoteReq {
+				req := control.ConfGenerateRemoteReq{
+					HostList: []string{"localhost:10001"},
+				}
+				req.ConfGenerateReq.NetClass = hardware.Infiniband
+				req.ConfGenerateReq.AccessPoints = []string{"foo"}
+				return req
+			}()),
+			nil,
 		},
 		{
 			"Generate with no nvme",
 			"config generate -a foo --scm-only",
-			strings.Join([]string{
-				printRequest(t, &control.NetworkScanReq{}),
-			}, " "),
-			errors.New("no host responses"),
+			printCGRReq(t, func() control.ConfGenerateRemoteReq {
+				req := control.ConfGenerateRemoteReq{
+					HostList: []string{"localhost:10001"},
+				}
+				req.ConfGenerateReq.NetClass = hardware.Infiniband
+				req.ConfGenerateReq.AccessPoints = []string{"foo"}
+				req.ConfGenerateReq.SCMOnly = true
+				return req
+			}()),
+			nil,
 		},
 		{
 			"Generate with storage parameters",
 			"config generate -a foo --num-engines 2",
-			strings.Join([]string{
-				printRequest(t, &control.NetworkScanReq{}),
-			}, " "),
-			errors.New("no host responses"),
+			printCGRReq(t, func() control.ConfGenerateRemoteReq {
+				req := control.ConfGenerateRemoteReq{
+					HostList: []string{"localhost:10001"},
+				}
+				req.ConfGenerateReq.NetClass = hardware.Infiniband
+				req.ConfGenerateReq.AccessPoints = []string{"foo"}
+				req.ConfGenerateReq.NrEngines = 2
+				return req
+			}()),
+			nil,
 		},
 		{
 			"Generate with short option storage parameters",
 			"config generate -a foo -e 2 -s",
-			strings.Join([]string{
-				printRequest(t, &control.NetworkScanReq{}),
-			}, " "),
-			errors.New("no host responses"),
+			printCGRReq(t, func() control.ConfGenerateRemoteReq {
+				req := control.ConfGenerateRemoteReq{
+					HostList: []string{"localhost:10001"},
+				}
+				req.ConfGenerateReq.NetClass = hardware.Infiniband
+				req.ConfGenerateReq.AccessPoints = []string{"foo"}
+				req.ConfGenerateReq.NrEngines = 2
+				req.ConfGenerateReq.SCMOnly = true
+				return req
+			}()),
+			nil,
 		},
 		{
 			"Generate with ethernet network device class",
 			"config generate -a foo --net-class ethernet",
-			strings.Join([]string{
-				printRequest(t, &control.NetworkScanReq{}),
-			}, " "),
-			errors.New("no host responses"),
+			printCGRReq(t, func() control.ConfGenerateRemoteReq {
+				req := control.ConfGenerateRemoteReq{
+					HostList: []string{"localhost:10001"},
+				}
+				req.ConfGenerateReq.NetClass = hardware.Ether
+				req.ConfGenerateReq.AccessPoints = []string{"foo"}
+				return req
+			}()),
+			nil,
 		},
 		{
 			"Generate with infiniband network device class",
 			"config generate -a foo --net-class infiniband",
-			strings.Join([]string{
-				printRequest(t, &control.NetworkScanReq{}),
-			}, " "),
-			errors.New("no host responses"),
+			printCGRReq(t, func() control.ConfGenerateRemoteReq {
+				req := control.ConfGenerateRemoteReq{
+					HostList: []string{"localhost:10001"},
+				}
+				req.ConfGenerateReq.NetClass = hardware.Infiniband
+				req.ConfGenerateReq.AccessPoints = []string{"foo"}
+				return req
+			}()),
+			nil,
 		},
 		{
 			"Generate with deprecated network device class",
 			"config generate -a foo --net-class best-available",
-			strings.Join([]string{
-				printRequest(t, &control.NetworkScanReq{}),
-			}, " "),
+			"",
 			errors.New("Invalid value"),
 		},
 		{
 			"Generate with unsupported network device class",
 			"config generate -a foo --net-class loopback",
-			strings.Join([]string{
-				printRequest(t, &control.NetworkScanReq{}),
-			}, " "),
+			"",
 			errors.New("Invalid value"),
 		},
 		{
+			"Generate with custom network fabric ports",
+			"config generate -a foo --fabric-ports 12345,13345",
+			printCGRReq(t, func() control.ConfGenerateRemoteReq {
+				req := control.ConfGenerateRemoteReq{
+					HostList: []string{"localhost:10001"},
+				}
+				req.ConfGenerateReq.NetClass = hardware.Infiniband
+				req.ConfGenerateReq.AccessPoints = []string{"foo"}
+				req.ConfGenerateReq.FabricPorts = []int{12345, 13345}
+				return req
+			}()),
+			nil,
+		},
+		{
+			"Generate tmpfs non-MD-on-SSD config",
+			"config generate -a foo --use-tmpfs-scm",
+			printCGRReq(t, func() control.ConfGenerateRemoteReq {
+				req := control.ConfGenerateRemoteReq{
+					HostList: []string{"localhost:10001"},
+				}
+				req.ConfGenerateReq.NetClass = hardware.Infiniband
+				req.ConfGenerateReq.AccessPoints = []string{"foo"}
+				req.ConfGenerateReq.UseTmpfsSCM = true
+				return req
+			}()),
+			nil,
+		},
+		{
 			"Generate MD-on-SSD config",
-			"config generate -a foo --use-tmpfs-scm --control-metadata-path /opt/daos_md",
-			strings.Join([]string{
-				printRequest(t, &control.NetworkScanReq{}),
-			}, " "),
-			errors.New("no host responses"),
+			"config generate -a foo --use-tmpfs-scm --control-metadata-path /opt/daos",
+			printCGRReq(t, func() control.ConfGenerateRemoteReq {
+				req := control.ConfGenerateRemoteReq{
+					HostList: []string{"localhost:10001"},
+				}
+				req.ConfGenerateReq.NetClass = hardware.Infiniband
+				req.ConfGenerateReq.AccessPoints = []string{"foo"}
+				req.ConfGenerateReq.UseTmpfsSCM = true
+				req.ConfGenerateReq.ExtMetadataPath = "/opt/daos"
+				return req
+			}()),
+			nil,
 		},
 		{
 			"Nonexistent subcommand",
@@ -119,7 +251,39 @@ func TestAuto_ConfigCommands(t *testing.T) {
 	})
 }
 
-// The Control API calls made in configGenCmd.confGen() are already well tested so just do some
+func TestAuto_confGenCmd_Convert(t *testing.T) {
+	cmd := &configGenCmd{}
+	cmd.NrEngines = 1
+	cmd.NetProvider = "ofi+tcp"
+	cmd.SCMOnly = true
+	cmd.AccessPoints = "foo,bar"
+	cmd.NetClass = "infiniband"
+	cmd.UseTmpfsSCM = true
+	cmd.ExtMetadataPath = "/opt/daos_md"
+	cmd.FabricPorts = "12345,13345"
+
+	req := new(control.ConfGenerateReq)
+	if err := convert.Types(cmd.ConfGenCmd, req); err != nil {
+		t.Fatal(err)
+	}
+
+	expReq := &control.ConfGenerateReq{
+		NrEngines:       1,
+		NetProvider:     "ofi+tcp",
+		SCMOnly:         true,
+		AccessPoints:    []string{"foo", "bar"},
+		NetClass:        hardware.Infiniband,
+		UseTmpfsSCM:     true,
+		ExtMetadataPath: "/opt/daos_md",
+		FabricPorts:     []int{12345, 13345},
+	}
+
+	if diff := cmp.Diff(expReq, req); diff != "" {
+		t.Fatalf("unexpected request converted (-want, +got):\n%s\n", diff)
+	}
+}
+
+// The Control API calls made in ConfigGenCmd.confGen() are already well tested so just do some
 // sanity checking here to prevent regressions.
 func TestAuto_confGen(t *testing.T) {
 	ib0 := &ctlpb.FabricInterface{
@@ -140,24 +304,21 @@ func TestAuto_confGen(t *testing.T) {
 		Addr:    "host1",
 		Message: control.MockServerScanResp(t, "withSpaceUsage"),
 	}
-	// Total mem to meet requirements 34GiB hugeMem, 1GiB per engine rsvd, 6GiB sys rsvd,
-	// 5GiB per engine for tmpfs.
-	storRespHighMem := control.MockServerScanResp(t, "withSpaceUsage")
-	storRespHighMem.MemInfo.MemTotalKb = (humanize.GiByte * (34 + 2 + 6 + 10)) / humanize.KiByte
-	storHostRespHighMem := &control.HostResponse{
-		Addr:    "host1",
-		Message: storRespHighMem,
-	}
 	e0 := control.MockEngineCfg(0, 2, 4, 6, 8).WithHelperStreamCount(4)
 	e1 := control.MockEngineCfg(1, 1, 3, 5, 7).WithHelperStreamCount(4)
 	exmplEngineCfgs := []*engine.Config{e0, e1}
-	mockRamdiskSize := 5 // RoundDownGiB(16*0.75/2)
+	tmpfsEngineCfgs := []*engine.Config{
+		control.MockEngineCfgTmpfs(0, 0, control.MockBdevTier(0, 2, 4, 6, 8)).
+			WithHelperStreamCount(4),
+		control.MockEngineCfgTmpfs(1, 0, control.MockBdevTier(1, 1, 3, 5, 7)).
+			WithHelperStreamCount(4),
+	}
 	metadataMountPath := "/mnt/daos_md"
 	controlMetadata := storage.ControlMetadata{
 		Path: metadataMountPath,
 	}
-	tmpfsEngineCfgs := []*engine.Config{
-		control.MockEngineCfgTmpfs(0, mockRamdiskSize,
+	mdonssdEngineCfgs := []*engine.Config{
+		control.MockEngineCfgTmpfs(0, 0,
 			control.MockBdevTierWithRole(0, storage.BdevRoleWAL, 2),
 			control.MockBdevTierWithRole(0, storage.BdevRoleMeta|storage.BdevRoleData, 4, 6, 8)).
 			WithStorageControlMetadataPath(metadataMountPath).
@@ -165,7 +326,7 @@ func TestAuto_confGen(t *testing.T) {
 				filepath.Join(controlMetadata.EngineDirectory(0), storage.BdevOutConfName),
 			).
 			WithHelperStreamCount(4),
-		control.MockEngineCfgTmpfs(1, mockRamdiskSize,
+		control.MockEngineCfgTmpfs(1, 0,
 			control.MockBdevTierWithRole(1, storage.BdevRoleWAL, 1),
 			control.MockBdevTierWithRole(1, storage.BdevRoleMeta|storage.BdevRoleData, 3, 5, 7)).
 			WithStorageControlMetadataPath(metadataMountPath).
@@ -187,6 +348,7 @@ func TestAuto_confGen(t *testing.T) {
 		hostResponsesSet [][]*control.HostResponse
 		expCfg           *config.Server
 		expErr           error
+		expOutPrefix     string
 	}{
 		"no host responses": {
 			expErr: errors.New("no host responses"),
@@ -208,30 +370,26 @@ func TestAuto_confGen(t *testing.T) {
 			},
 			expErr: errors.New("1 host"),
 		},
-		"successful fetch of host storage and fabric": {
+		"dcpm scm": {
 			hostResponsesSet: [][]*control.HostResponse{
 				{netHostResp},
 				{storHostResp},
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", exmplEngineCfgs).
-				// 16 targets * 2 engines * 512 pages
-				WithNrHugepages(16 * 2 * 512).
 				WithAccessPoints("localhost:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
 		},
-		"successful fetch of host storage and fabric; access points set": {
+		"dcpm scm; access points set": {
 			accessPoints: "moon-111,mars-115,jupiter-119",
 			hostResponsesSet: [][]*control.HostResponse{
 				{netHostResp},
 				{storHostResp},
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", exmplEngineCfgs).
-				// 16 targets * 2 engines * 512 pages
-				WithNrHugepages(16*2*512).
 				WithAccessPoints("moon-111:10001", "mars-115:10001", "jupiter-119:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
 		},
-		"successful fetch of host storage and fabric; unmet min nr ssds": {
+		"dcpm scm; unmet min nr ssds": {
 			hostResponsesSet: [][]*control.HostResponse{
 				{netHostResp},
 				{
@@ -243,7 +401,7 @@ func TestAuto_confGen(t *testing.T) {
 			},
 			expErr: errors.New("insufficient number of ssds"),
 		},
-		"successful fetch of host storage and fabric; unmet nr engines": {
+		"dcpm scm; unmet nr engines": {
 			nrEngines: 8,
 			hostResponsesSet: [][]*control.HostResponse{
 				{netHostResp},
@@ -251,7 +409,7 @@ func TestAuto_confGen(t *testing.T) {
 			},
 			expErr: errors.New("insufficient number of pmem"),
 		},
-		"successful fetch of host storage and fabric; bad net class": {
+		"dcpm scm; bad net class": {
 			netClass: "foo",
 			hostResponsesSet: [][]*control.HostResponse{
 				{netHostResp},
@@ -259,35 +417,45 @@ func TestAuto_confGen(t *testing.T) {
 			},
 			expErr: errors.New("unrecognized net-class"),
 		},
-		"successful fetch of host storage and fabric; tmpfs scm; no control_metadata path": {
+		"tmpfs scm; no control_metadata path": {
 			tmpfsSCM: true,
 			hostResponsesSet: [][]*control.HostResponse{
 				{netHostResp},
-				{storHostRespHighMem},
+				{storHostResp},
 			},
-			expErr: ErrTmpfsNoExtMDPath,
+			expCfg: control.MockServerCfg("ofi+psm2", tmpfsEngineCfgs).
+				WithControlLogFile("/tmp/daos_server.log"),
 		},
-		"successful fetch of host storage and fabric; ram scm tier; low mem": {
+		"dcpm scm; control_metadata path set": {
+			extMetadataPath: metadataMountPath,
+			hostResponsesSet: [][]*control.HostResponse{
+				{netHostResp},
+				{storHostResp},
+			},
+			expErr: errors.New("only supported with scm class ram"),
+		},
+		"tmpfs scm; md-on-ssd": {
 			tmpfsSCM:        true,
 			extMetadataPath: metadataMountPath,
 			hostResponsesSet: [][]*control.HostResponse{
 				{netHostResp},
 				{storHostResp},
 			},
-			expErr: errors.New("insufficient ram"),
+			expCfg: control.MockServerCfg("ofi+psm2", mdonssdEngineCfgs).
+				WithControlLogFile("/tmp/daos_server.log").
+				WithControlMetadata(controlMetadata),
 		},
-		"successful fetch of host storage and fabric; tmpfs scm": {
+		"tmpfs scm; md-on-ssd; no logging to stdout": {
 			tmpfsSCM:        true,
 			extMetadataPath: metadataMountPath,
 			hostResponsesSet: [][]*control.HostResponse{
 				{netHostResp},
-				{storHostRespHighMem},
+				{storHostResp},
 			},
-			expCfg: control.MockServerCfg("ofi+psm2", tmpfsEngineCfgs).
-				// 16+1 (MD-on-SSD extra sys-XS) targets * 2 engines * 512 pages
-				WithNrHugepages(17 * 2 * 512).
+			expCfg: control.MockServerCfg("ofi+psm2", mdonssdEngineCfgs).
 				WithControlLogFile("/tmp/daos_server.log").
 				WithControlMetadata(controlMetadata),
+			expOutPrefix: "port: 10001",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -301,14 +469,14 @@ func TestAuto_confGen(t *testing.T) {
 			if tc.accessPoints == "" {
 				tc.accessPoints = "localhost"
 			}
-			cmd := &configGenCmd{
-				AccessPoints:    tc.accessPoints,
-				NrEngines:       tc.nrEngines,
-				SCMOnly:         tc.scmOnly,
-				NetClass:        tc.netClass,
-				UseTmpfsSCM:     tc.tmpfsSCM,
-				ExtMetadataPath: tc.extMetadataPath,
-			}
+			cmd := &configGenCmd{}
+			cmd.AccessPoints = tc.accessPoints
+			cmd.NrEngines = tc.nrEngines
+			cmd.SCMOnly = tc.scmOnly
+			cmd.NetClass = tc.netClass
+			cmd.UseTmpfsSCM = tc.tmpfsSCM
+			cmd.ExtMetadataPath = tc.extMetadataPath
+			log.SetLevel(logging.LogLevelInfo)
 			cmd.Logger = log
 			cmd.hostlist = tc.hostlist
 
@@ -322,6 +490,22 @@ func TestAuto_confGen(t *testing.T) {
 			}
 			mic.UnaryError = tc.uErr
 			cmd.ctlInvoker = control.NewMockInvoker(log, &mic)
+
+			if tc.expOutPrefix != "" {
+				gotErr := cmd.confGenPrint(test.Context(t))
+				if gotErr != nil {
+					t.Fatal(gotErr)
+				}
+				if len(buf.String()) == 0 {
+					t.Fatal("no output from config generate print function")
+				}
+				outFirstLine := strings.Split(buf.String(), "\n")[0]
+				test.AssertTrue(t, strings.Contains(outFirstLine, tc.expOutPrefix),
+					fmt.Sprintf("test: %s, expected %q to be included in the "+
+						"first line of output: %q", name, tc.expOutPrefix,
+						outFirstLine))
+				return
+			}
 
 			gotCfg, gotErr := cmd.confGen(test.Context(t))
 			test.CmpErr(t, tc.expErr, gotErr)
@@ -367,7 +551,6 @@ transport_config:
 engines:
 - targets: 12
   nr_xs_helpers: 2
-  first_core: 0
   log_file: /tmp/daos_engine.0.log
   storage:
   - class: dcpm
@@ -386,7 +569,6 @@ engines:
   pinned_numa_node: 0
 - targets: 6
   nr_xs_helpers: 0
-  first_core: 0
   log_file: /tmp/daos_engine.1.log
   storage:
   - class: dcpm
@@ -405,8 +587,8 @@ engines:
 disable_vfio: false
 disable_vmd: false
 enable_hotplug: false
-nr_hugepages: 6144
-system_ram_reserved: 6
+nr_hugepages: 0
+system_ram_reserved: 16
 disable_hugepages: false
 control_log_mask: INFO
 control_log_file: /tmp/daos_server.log
@@ -425,7 +607,6 @@ hyperthreads: false
 		WithControlLogFile(defaultControlLogFile).
 		WithFabricProvider("ofi+verbs").
 		WithAccessPoints("hostX:10002").
-		WithNrHugepages(6144).
 		WithDisableVMD(false).
 		WithEngines(
 			engine.MockConfig().

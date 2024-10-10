@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -172,9 +172,8 @@ smd_dev_get_info(struct d_uuid *id, struct smd_dev_info **dev_info)
 
 	rc = smd_db_fetch(TABLE_DEV, id, sizeof(*id), &dev, sizeof(dev));
 	if (rc) {
-		D_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MGMT,
-			 "Fetch dev "DF_UUID" failed. "DF_RC"\n",
-			 DP_UUID(&id->uuid), DP_RC(rc));
+		DL_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MGMT, rc,
+			  "Fetch dev " DF_UUID " failed", DP_UUID(&id->uuid));
 		return rc;
 	}
 
@@ -208,9 +207,8 @@ smd_dev_get_by_tgt(uint32_t tgt_id, enum smd_dev_type st, struct smd_dev_info **
 	smd_db_lock();
 	rc = smd_db_fetch(TABLE_TGTS[st], &tgt_id, sizeof(tgt_id), &id, sizeof(id));
 	if (rc) {
-		D_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MGMT,
-			 "Fetch target %d failed. "DF_RC"\n", tgt_id,
-			 DP_RC(rc));
+		DL_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MGMT, rc, "Fetch target %d failed",
+			  tgt_id);
 		goto out;
 	}
 	rc = smd_dev_get_info(&id, dev_info);
@@ -277,11 +275,11 @@ smd_dev_list(d_list_t *dev_list, int *devs)
 }
 
 int
-smd_dev_replace(uuid_t old_id, uuid_t new_id, d_list_t *pool_list)
+smd_dev_replace(uuid_t old_id, uuid_t new_id, unsigned int old_roles)
 {
 	struct smd_device	 dev;
 	struct d_uuid		 id;
-	struct smd_pool_info	*pool_info;
+	enum smd_dev_type	 st;
 	int			 i, rc;
 
 	D_ASSERT(uuid_compare(old_id, new_id) != 0);
@@ -350,25 +348,16 @@ smd_dev_replace(uuid_t old_id, uuid_t new_id, d_list_t *pool_list)
 	for (i = 0; i < dev.sd_tgt_cnt; i++) {
 		uint32_t tgt_id = dev.sd_tgts[i];
 
-		rc = smd_db_upsert(TABLE_TGTS[SMD_DEV_TYPE_DATA], &tgt_id, sizeof(tgt_id),
-				   &id, sizeof(id));
-		if (rc) {
-			D_ERROR("Update target %d failed. "DF_RC"\n",
-				tgt_id, DP_RC(rc));
-			goto tx_end;
-		}
-	}
+		for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
+			if (!(old_roles & smd_dev_type2role(st)))
+				continue;
 
-	if (pool_list == NULL)
-		goto tx_end;
-
-	/* Replace old blob IDs with new blob IDs in pool map */
-	d_list_for_each_entry(pool_info, pool_list, spi_link) {
-		rc = smd_pool_replace_blobs_locked(pool_info, dev.sd_tgt_cnt, &dev.sd_tgts[0]);
-		if (rc) {
-			D_ERROR("Update pool "DF_UUID" failed. "DF_RC"\n",
-				DP_UUID(pool_info->spi_id), DP_RC(rc));
-			goto tx_end;
+			rc = smd_db_upsert(TABLE_TGTS[st], &tgt_id, sizeof(tgt_id),
+					   &id, sizeof(id));
+			if (rc) {
+				DL_ERROR(rc, "Update target:%u type:%u failed.", tgt_id, st);
+				goto tx_end;
+			}
 		}
 	}
 tx_end:

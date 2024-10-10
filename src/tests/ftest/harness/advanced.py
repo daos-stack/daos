@@ -1,19 +1,18 @@
 """
-  (C) Copyright 2021-2023 Intel Corporation.
+  (C) Copyright 2021-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 from random import choice
 
-from ClusterShell.NodeSet import NodeSet
 from apricot import TestWithServers
-
+from ClusterShell.NodeSet import NodeSet
+from dfuse_utils import get_dfuse, start_dfuse
 from general_utils import get_avocado_config_value
 from run_utils import run_remote
 from test_utils_pool import POOL_TIMEOUT_INCREMENT
 from user_utils import get_chown_command
-from dfuse_utils import get_dfuse, start_dfuse
 
 
 class HarnessAdvancedTest(TestWithServers):
@@ -103,11 +102,11 @@ class HarnessAdvancedTest(TestWithServers):
         host = NodeSet(choice(self.server_managers[0].hosts))   # nosec
         self.log.info("Creating launch.py failure trigger files on %s", host)
         failure_trigger = "00_trigger-launch-failure_00"
-        failure_trigger_dir = os.path.join(self.base_test_dir, failure_trigger)
+        failure_trigger_dir = os.path.join(self.test_env.log_dir, failure_trigger)
         failure_trigger_files = [
-            os.path.join(self.base_test_dir, "{}_local.yaml".format(failure_trigger)),
+            os.path.join(self.test_env.log_dir, "{}_local.yaml".format(failure_trigger)),
             os.path.join(os.sep, "etc", "daos", "daos_{}.yml".format(failure_trigger)),
-            os.path.join(self.base_test_dir, "{}.log".format(failure_trigger)),
+            os.path.join(self.test_env.log_dir, "{}.log".format(failure_trigger)),
             os.path.join(failure_trigger_dir, "{}.log".format(failure_trigger)),
             os.path.join(os.sep, "tmp", "daos_dump_{}.txt".format(failure_trigger)),
             os.path.join(self.tmp, "valgrind_{}".format(failure_trigger)),

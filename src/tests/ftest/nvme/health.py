@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -7,10 +7,9 @@ from __future__ import division
 
 from avocado import fail_on
 from avocado.core.exceptions import TestFail
-
-from dmg_utils import get_storage_query_pool_info, get_dmg_smd_info
-from nvme_utils import ServerFillUp, get_device_ids
+from dmg_utils import get_dmg_smd_info, get_storage_query_pool_info
 from exception_utils import CommandFailure
+from nvme_utils import ServerFillUp, get_device_ids
 
 
 class NvmeHealth(ServerFillUp):
@@ -21,12 +20,13 @@ class NvmeHealth(ServerFillUp):
 
     @fail_on(CommandFailure)
     def test_monitor_for_large_pools(self):
+        # pylint: disable=too-many-locals
         """Jira ID: DAOS-4722.
 
         Test Description: Test Health monitor for large number of pools.
         Use Case: This test creates many pools and verifies the following command behavior:
             dmg storage query list-pools
-            dmg storage query device-health
+            dmg storage query list-devices --health
             dmg storage scan --nvme-health
 
         :avocado: tags=all,full_regression
@@ -48,8 +48,17 @@ class NvmeHealth(ServerFillUp):
         potential_num_pools = int((nvme_per_engine / (min_nvme_per_target * targets_per_engine)))
         actual_num_pools = min(max_num_pools, potential_num_pools)
 
+        # consider 1GiB RDB memory consume for MD-on-SSD
+        rdb_size = 1073741824
+        if self.server_managers[0].manager.job.using_control_metadata:
+            min_scm_per_pool = 104857600
+            potential_num_pools = int(scm_per_engine / (min_scm_per_pool + rdb_size))
+            actual_num_pools = min(potential_num_pools, actual_num_pools)
+
         # Split available space across the number of pools to be created
         scm_per_pool = int(scm_per_engine / actual_num_pools)
+        if self.server_managers[0].manager.job.using_control_metadata:
+            scm_per_pool = int(scm_per_pool - rdb_size)
         nvme_per_pool = int(nvme_per_engine / actual_num_pools)
 
         # Create the pools
@@ -113,11 +122,12 @@ class NvmeHealth(ServerFillUp):
 
         # Get the device health
         errors = 0
-        for host, uuid_list in device_ids.items():   # pylint: disable=too-many-nested-blocks
-            for uuid in uuid_list:
+        for host, uuid_dict in device_ids.items():   # pylint: disable=too-many-nested-blocks
+            for uuid in sorted(uuid_dict.keys()):
                 dmg.hostlist = host
                 try:
-                    info = get_dmg_smd_info(dmg.storage_query_device_health, 'devices', uuid=uuid)
+                    info = get_dmg_smd_info(dmg.storage_query_list_devices, 'devices', uuid=uuid,
+                                            health=True)
                 except CommandFailure as error:
                     self.fail(str(error))
                 self.log.info('Verifying the health of devices on %s', host)
@@ -128,20 +138,20 @@ class NvmeHealth(ServerFillUp):
                             if device['uuid'] != uuid:
                                 error_msg = '  <== ERROR: UNEXPECTED DEVICE UUID'
                                 errors += 1
-                            elif device['dev_state'].lower() != 'normal':
+                            elif device['ctrlr']['dev_state'].lower() != 'normal':
                                 error_msg = '  <== ERROR: STATE NOT NORMAL'
                                 errors += 1
                             self.log.info(
                                 '  health is %s for %s%s',
-                                device['dev_state'], device['uuid'], error_msg)
+                                device['ctrlr']['dev_state'], device['uuid'], error_msg)
                         except KeyError as error:
                             self.fail(
-                                "Error parsing dmg.storage_query_device_health() output: {}".format(
+                                "Error parsing dmg.storage_query_list_devices() output: {}".format(
                                     error))
         if errors:
             self.fail(
-                'Detected {} error(s) verifying dmg storage query device-health output'.format(
-                    errors))
+                'Detected {} error(s) verifying dmg storage query list-devices --health output'.
+                format(errors))
 
         # Get the nvme-health
         try:

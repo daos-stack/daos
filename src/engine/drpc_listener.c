@@ -143,12 +143,9 @@ drpc_listener_start_ult(ABT_thread *thread)
 static int
 generate_socket_path(void)
 {
-	D_ASPRINTF(drpc_listener_socket_path, "%s/daos_engine_%d.sock",
-		   dss_socket_dir, getpid());
-	if (drpc_listener_socket_path == NULL) {
-		D_ERROR("Failed to allocate socket path\n");
+	D_ASPRINTF(drpc_listener_socket_path, "%s/daos_engine_%d.sock", dss_socket_dir, getpid());
+	if (drpc_listener_socket_path == NULL)
 		return -DER_NOMEM;
-	}
 
 	return 0;
 }

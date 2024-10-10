@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,7 +15,6 @@
 
 #include <daos/agent.h>
 #include <daos/drpc_modules.h>
-#include <daos/drpc.pb-c.h>
 #include <daos/event.h>
 #include <daos/job.h>
 #include "rpc.h"
@@ -33,7 +32,7 @@ dc_debug_set_params(tse_task_t *task)
 	int				rc;
 
 	args = dc_task_get_args(task);
-	rc = dc_mgmt_sys_attach(args->grp, &cp_arg.sys);
+	rc   = dc_mgmt_sys_attach(args->grp, &cp_arg.sys);
 	if (rc != 0) {
 		D_ERROR("failed to attach to grp %s, rc "DF_RC"\n", args->grp,
 			DP_RC(rc));
@@ -47,8 +46,7 @@ dc_debug_set_params(tse_task_t *task)
 	 */
 	ep.ep_rank = args->rank == -1 ? 0 : args->rank;
 	ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
-	opc = DAOS_RPC_OPCODE(MGMT_PARAMS_SET, DAOS_MGMT_MODULE,
-			      DAOS_MGMT_VERSION);
+	opc = DAOS_RPC_OPCODE(MGMT_PARAMS_SET, DAOS_MGMT_MODULE, dc_mgmt_proto_version);
 	rc = crt_req_create(daos_task2ctx(task), &ep, opc, &rpc);
 	if (rc != 0) {
 		D_ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: "DF_RC"\n",
@@ -107,8 +105,7 @@ dc_debug_add_mark(const char *mark)
 	ep.ep_grp = sys->sy_group;
 	ep.ep_rank = 0;
 	ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
-	opc = DAOS_RPC_OPCODE(MGMT_MARK, DAOS_MGMT_MODULE,
-			      DAOS_MGMT_VERSION);
+	opc = DAOS_RPC_OPCODE(MGMT_MARK, DAOS_MGMT_MODULE, dc_mgmt_proto_version);
 	rc = crt_req_create(daos_get_crt_ctx(), &ep, opc, &rpc);
 	if (rc != 0) {
 		D_ERROR("crt_req_create failed, rc: "DF_RC"\n", DP_RC(rc));

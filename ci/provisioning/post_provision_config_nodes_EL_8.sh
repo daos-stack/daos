@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#  (C) Copyright 2021-2022 Intel Corporation.
+#  (C) Copyright 2021-2024 Intel Corporation.
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -15,13 +15,12 @@ group_repo_post() {
 }
 
 distro_custom() {
-    # install avocado
-    dnf -y install python3-avocado{,-plugins-{output-html,varianter-yaml-to-mux}} \
-                   clustershell
+    # TODO: This code is not exiting on failure.
 
-    # for Launchable's pip install
-    dnf -y install python3-setuptools.noarch
-
+    # Use a more recent python version for unit testing, this allows us to also test installing
+    # pydaos into virtual environments.
+    dnf -y install python39 python39-devel
+    dnf -y install python3.11 python3.11-devel
 }
 
 install_mofed() {
@@ -47,21 +46,23 @@ install_mofed() {
 
 
     stream=false
-    gversion="$(lsb_release -sr)"
+    gversion="$VERSION_ID"
     if [ "$gversion" == "8" ]; then
-        gversion="8.6"
+        # Mellanox does not have a release for 8.9 yet.
+        gversion="8.8"
         stream=true
      elif [[ $gversion = *.*.* ]]; then
         gversion="${gversion%.*}"
     fi
 
     # Add a repo to install MOFED RPMS
-    repo_url=https://artifactory.dc.hpdd.intel.com/artifactory/mlnx_ofed/"$MLNX_VER_NUM-rhel$gversion"-x86_64/
+    artifactory_base_url="https://artifactory.dc.hpdd.intel.com/artifactory/"
+    mellanox_proxy="${artifactory_base_url}mellanox-proxy/mlnx_ofed/"
+    mellanox_key_url="${artifactory_base_url}mlnx_ofed/RPM-GPG-KEY-Mellanox"
+    rpm --import "$mellanox_key_url"
+    repo_url="$mellanox_proxy$MLNX_VER_NUM/rhel$gversion/x86_64/"
     dnf -y config-manager --add-repo="$repo_url"
-    curl -L -O "$repo_url"RPM-GPG-KEY-Mellanox
     dnf -y config-manager --save --setopt="$(url_to_repo "$repo_url")".gpgcheck=1
-    rpm --import RPM-GPG-KEY-Mellanox
-    rm -f RPM-GPG-KEY-Mellanox
     dnf repolist || true
 
     time dnf -y install mlnx-ofed-basic ucx-cma ucx-ib ucx-knem ucx-rdmacm ucx-xpmem

@@ -5,8 +5,30 @@
 #
 
 # Pull base image
-FROM centos:7
+FROM centos:centos7
 LABEL maintainer="daos@daos.groups.io"
+
+# Use local repo server if present
+ARG REPO_FILE_URL
+RUN set -e;                                                      \
+    if [ -n "$REPO_FILE_URL" ]; then                             \
+        cd /etc/yum.repos.d/ &&                                  \
+        curl -k -f -o daos_ci-centos7-artifactory.repo.tmp       \
+             "$REPO_FILE_URL"daos_ci-centos7-artifactory.repo && \
+        for file in *.repo; do                                   \
+            true > $file;                                        \
+        done;                                                    \
+        mv daos_ci-centos7-artifactory.repo{.tmp,};              \
+    fi;                                                          \
+    yum -y install dnf;                                          \
+    yum clean all;                                               \
+    dnf --disablerepo \*epel\* -y install epel-release           \
+                                          dnf-plugins-core;      \
+    if [ -n "$REPO_FILE_URL" ]; then                             \
+        dnf -y --quiet config-manager --disable epel;            \
+    fi;                                                          \
+    dnf -y update epel-release;                                  \
+    dnf -y clean all
 
 # use same UID as host and default value of 1000 if not specified
 ARG UID=1000
@@ -15,9 +37,9 @@ ARG UID=1000
 #Nothing to do for CentOS
 
 # Install basic tools
-RUN yum install -y epel-release
-RUN yum install -y mock make rpm-build curl createrepo rpmlint redhat-lsb-core \
-                   git python-srpm-macros dnf
+RUN dnf install -y epel-release
+RUN dnf install -y mock make rpm-build curl createrepo rpmlint redhat-lsb-core \
+                   git python-srpm-macros dnf && dnf -y clean all
 
 # Add build user (to keep rpmbuild happy)
 ENV USER build

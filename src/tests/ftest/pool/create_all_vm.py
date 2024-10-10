@@ -38,7 +38,7 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
             "/run/server_config/engines/0/storage/0/*",
             False)
 
-    def test_one_pool(self):
+    def test_one_pool_vm(self):
         """Test the creation of one pool with all the storage capacity.
 
         Test Description:
@@ -48,9 +48,9 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
         :avocado: tags=all,pr
         :avocado: tags=vm
         :avocado: tags=pool,pool_create_all
-        :avocado: tags=PoolCreateAllVmTests,test_one_pool
+        :avocado: tags=PoolCreateAllVmTests,test_one_pool_vm
         """
-        delta_bytes = self.params.get("delta", "/run/test_one_pool/*", 0)
+        delta_bytes = self.params.get("delta", "/run/test_one_pool_vm/*", 0)
         self.log.info("Test basic pool creation with full storage")
         self.log.info("\t- delta=%s (%d Bytes)", bytes_to_human(delta_bytes), delta_bytes)
         self.log.info("\t- scm_hugepages_enabled=%s", self.scm_hugepages_enabled)
@@ -114,7 +114,7 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
 
         return delta_bytes * self.engines_count
 
-    def test_recycle_pools(self):
+    def test_recycle_pools_vm(self):
         """Test the pool creation and destruction.
 
         Test Description:
@@ -125,9 +125,9 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
         :avocado: tags=all,pr
         :avocado: tags=vm
         :avocado: tags=pool,pool_create_all
-        :avocado: tags=PoolCreateAllVmTests,test_recycle_pools
+        :avocado: tags=PoolCreateAllVmTests,test_recycle_pools_vm
         """
-        pool_count = self.params.get("pool_count", "/run/test_recycle_pools/*", 0)
+        pool_count = self.params.get("pool_count", "/run/test_recycle_pools_vm/*", 0)
         delta_bytes = self.get_recycle_pools_delta_bytes(pool_count)
         self.log.info("Test pool creation and destruction")
         self.log.info("\t- pool_count=%d", pool_count)
@@ -136,7 +136,7 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
 
         self.check_pool_recycling(pool_count, delta_bytes)
 
-    def test_two_pools(self):
+    def test_two_pools_vm(self):
         """Test the creation of two pools with 50% and 100% of the available storage.
 
         Test Description:
@@ -149,13 +149,13 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
         :avocado: tags=all,pr
         :avocado: tags=vm
         :avocado: tags=pool,pool_create_all
-        :avocado: tags=PoolCreateAllVmTests,test_two_pools
+        :avocado: tags=PoolCreateAllVmTests,test_two_pools_vm
         """
-        pool_half_delta_bytes = self.params.get("pool_half", "/run/test_two_pools/deltas/*", 0)
-        pool_full_delta_bytes = self.params.get("pool_full", "/run/test_two_pools/deltas/*", 0)
+        pool_half_delta_bytes = self.params.get("pool_half", "/run/test_two_pools_vm/deltas/*", 0)
+        pool_full_delta_bytes = self.params.get("pool_full", "/run/test_two_pools_vm/deltas/*", 0)
         distribution_delta_bytes = self.params.get(
             "distribution",
-            "/run/test_two_pools/deltas/*",
+            "/run/test_two_pools_vm/deltas/*",
             0)
         self.log.info(
             "Test pool creation of two pools with 50% and 100% of the available storage")

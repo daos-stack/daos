@@ -3,10 +3,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-import traceback
 import ctypes
-from avocado.core.exceptions import TestFail
+import traceback
+
 from apricot import TestWithServers
+from avocado.core.exceptions import TestFail
 
 
 class BadConnectTest(TestWithServers):
@@ -21,7 +22,7 @@ class BadConnectTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=pool
-        :avocado: tags=bad_connect,test_connect
+        :avocado: tags=BadConnectTest,test_connect
         """
         self.add_pool(connect=False)
 

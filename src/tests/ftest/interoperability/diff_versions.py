@@ -7,7 +7,7 @@
 from upgrade_downgrade_base import UpgradeDowngradeBase
 
 
-class UpgradeDowngradeTest(UpgradeDowngradeBase):
+class UpgradeDowngradeDiffVersionsTest(UpgradeDowngradeBase):
     """Runs DAOS interoperability test upgrade and downgrade.
 
     JIRA ID:
@@ -44,6 +44,6 @@ class UpgradeDowngradeTest(UpgradeDowngradeBase):
 
         :avocado: tags=manual
         :avocado: tags=interop
-        :avocado: tags=test_diff_versions_agent_server
+        :avocado: tags=UpgradeDowngradeDiffVersionsTest,test_diff_versions_agent_server
         """
         self.diff_versions_agent_server()

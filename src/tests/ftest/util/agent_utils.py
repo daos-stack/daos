@@ -1,23 +1,19 @@
 """
-  (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2019-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import socket
-import re
 import os
-from getpass import getuser
+import re
+import socket
 
+from agent_utils_params import DaosAgentTransportCredentials, DaosAgentYamlParameters
 from ClusterShell.NodeSet import NodeSet
-
-from command_utils_base import \
-    FormattedParameter, EnvironmentVariables, \
-    CommonConfig, CommandWithParameters
+from command_utils import CommandWithSubCommand, SubprocessManager, YamlCommand
+from command_utils_base import (CommandWithParameters, CommonConfig, EnvironmentVariables,
+                                FormattedParameter)
 from exception_utils import CommandFailure
-from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
-from general_utils import get_log_file, run_pcmd, get_default_config_file
-from agent_utils_params import \
-    DaosAgentTransportCredentials, DaosAgentYamlParameters
+from general_utils import get_default_config_file, get_log_file, run_pcmd
 from run_utils import run_remote
 
 
@@ -36,7 +32,7 @@ def include_local_host(hosts):
     return with_localhost
 
 
-def get_agent_command(group, cert_dir, bin_dir, config_file, config_temp=None):
+def get_agent_command(group, cert_dir, bin_dir, config_file, run_user, config_temp=None):
     """Get the daos_agent command object to manage.
 
     Args:
@@ -44,6 +40,7 @@ def get_agent_command(group, cert_dir, bin_dir, config_file, config_temp=None):
         cert_dir (str): directory in which to copy certificates
         bin_dir (str): location of the daos_server executable
         config_file (str): configuration file name and path
+        run_user (str): account to use to run the daos_agent command
         config_temp (str, optional): file name and path to use to generate the
             configuration file locally and then copy it to all the hosts using
             the config_file specification. Defaults to None, which creates and
@@ -56,7 +53,7 @@ def get_agent_command(group, cert_dir, bin_dir, config_file, config_temp=None):
     transport_config = DaosAgentTransportCredentials(cert_dir)
     common_config = CommonConfig(group, transport_config)
     config = DaosAgentYamlParameters(config_file, common_config)
-    command = DaosAgentCommand(bin_dir, config)
+    command = DaosAgentCommand(bin_dir, config, run_user=run_user)
     if config_temp:
         # Setup the DaosAgentCommand to write the config file data to the
         # temporary file and then copy the file to all the hosts using the
@@ -68,7 +65,7 @@ def get_agent_command(group, cert_dir, bin_dir, config_file, config_temp=None):
 class DaosAgentCommand(YamlCommand):
     """Defines an object representing a daos_agent command."""
 
-    def __init__(self, path="", yaml_cfg=None, timeout=15):
+    def __init__(self, path="", yaml_cfg=None, timeout=15, run_user=None):
         """Create a daos_agent command object.
 
         Args:
@@ -77,9 +74,10 @@ class DaosAgentCommand(YamlCommand):
                 parameters. Defaults to None.
             timeout (int, optional): number of seconds to wait for patterns to
                 appear in the subprocess output. Defaults to 60 seconds.
+            run_user (str, optional): user to run as. Defaults to None, which will run commands as
+                the current user.
         """
-        super().__init__(
-            "/run/agent_config/*", "daos_agent", path, yaml_cfg, timeout)
+        super().__init__("/run/agent_config/*", "daos_agent", path, yaml_cfg, timeout, run_user)
         self.pattern = "listening on "
 
         # If specified use the configuration file from the YamlParameters object
@@ -118,7 +116,7 @@ class DaosAgentCommand(YamlCommand):
         """Get the daos_agent sub command object based on the sub-command."""
         if self.sub_command.value == "dump-attachinfo":
             self.sub_command_class = self.DumpAttachInfoSubCommand()
-        if self.sub_command.value == "support":
+        elif self.sub_command.value == "support":
             self.sub_command_class = self.SupportSubCommand()
         else:
             self.sub_command_class = None
@@ -141,7 +139,6 @@ class DaosAgentCommand(YamlCommand):
             super().__init__("/run/daos_agent/support/*", "support")
 
         def get_sub_command_class(self):
-            # pylint: disable=redefined-variable-type
             """Get the daos_agent support sub command object."""
             if self.sub_command.value == "collect-log":
                 self.sub_command_class = self.CollectlogSubCommand()
@@ -195,20 +192,29 @@ class DaosAgentCommand(YamlCommand):
         self.set_command(("support", "collect-log"), **kwargs)
         return self._get_json_result()
 
-    def get_user_file(self):
-        """Get the file defined in the yaml file that must be owned by the user.
+    def get_socket_dir(self):
+        """Get the socket directory.
+
+        The socket directory is defined in the agent yaml file and must be owned by the user.
 
         Returns:
-            str: file defined in the yaml file that must be owned by the user
-
+            str: the socket directory
         """
         return self.get_config_value("runtime_dir")
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            DaosAgentCommand: a new DaosAgentCommand object
+        """
+        return DaosAgentCommand(self._path, self.yaml, self.pattern_timeout.value, self.run_user)
 
 
 class DaosAgentManager(SubprocessManager):
     """Manages the daos_agent execution on one or more hosts."""
 
-    def __init__(self, group, bin_dir, cert_dir, config_file, config_temp=None,
+    def __init__(self, group, bin_dir, cert_dir, config_file, run_user, config_temp=None,
                  manager="Orterun", outputdir=None):
         """Initialize a DaosAgentManager object.
 
@@ -217,6 +223,7 @@ class DaosAgentManager(SubprocessManager):
             bin_dir (str): directory from which to run daos_agent
             cert_dir (str): directory in which to copy certificates
             config_file (str): daos_agent configuration file name and path
+            run_user (str): account to use to run the daos_agent command
             config_temp (str, optional): file name and path used to generate
                 the daos_agent configuration file locally and copy it to all
                 the hosts using the config_file specification. Defaults to None.
@@ -227,12 +234,17 @@ class DaosAgentManager(SubprocessManager):
                 to None.
         """
         agent_command = get_agent_command(
-            group, cert_dir, bin_dir, config_file, config_temp)
+            group, cert_dir, bin_dir, config_file, run_user, config_temp)
         super().__init__(agent_command, manager)
 
         # Set the correct certificate file ownership
         if manager == "Systemctl":
-            self.manager.job.certificate_owner = "daos_agent"
+            if self.manager.job.run_user == "root":
+                # systemctl is run as root, but the process is spawned as daos_agent
+                self.manager.job.certificate_owner = "daos_agent"
+            else:
+                # systemctl and the process are run as the user
+                self.manager.job.certificate_owner = self.manager.job.run_user
 
         # Set default agent debug levels
         env_vars = {
@@ -244,6 +256,9 @@ class DaosAgentManager(SubprocessManager):
         self.manager.assign_environment_default(EnvironmentVariables(env_vars))
         self.attachinfo = None
         self.outputdir = outputdir
+
+        # Support disabling verifying the socket directory (runtime_dir) for tests
+        self.verify_socket_dir = True
 
     def _set_hosts(self, hosts, path, slots):
         """Set the hosts used to execute the daos command.
@@ -272,14 +287,15 @@ class DaosAgentManager(SubprocessManager):
             get_log_file("daosCA/certs"), self._hosts)
 
         # Verify the socket directory exists when using a non-systemctl manager
-        self.verify_socket_directory(getuser())
+        if self.verify_socket_dir:
+            self.verify_socket_directory(self.manager.job.certificate_owner)
 
         super().start()
 
     def dump_attachinfo(self):
         """Run dump-attachinfo on the daos_agent."""
-        self.manager.job.set_sub_command("dump-attachinfo")
-        self.manager.job.sudo = True
+        cmd = self.manager.job.copy()
+        cmd.set_sub_command("dump-attachinfo")
         self.attachinfo = run_pcmd(self.hosts,
                                    str(self.manager.job))[0]["stdout"]
         self.log.info("Agent attachinfo: %s", self.attachinfo)
@@ -297,16 +313,15 @@ class DaosAgentManager(SubprocessManager):
             CommandFailure: if the daos_agent command fails.
 
         Returns:
-            RemoteCommandResult: a grouping of the command results from
-                the same hosts with the same return status
+            CommandResult: groups of command results from the same hosts with the same return status
 
         """
-        cmd = DaosAgentCommand(self.manager.job.command_path)
-        cmd.sudo = True
+        cmd = self.manager.job.copy()
         cmd.debug.value = False
-        cmd.config.value = get_default_config_file("agent")
-        self.log.info("Support collect-log on clients: %s", str(cmd))
+        cmd.config.value = get_default_config_file(
+            "agent", os.path.dirname(self.manager.job.yaml.filename))
         cmd.set_command(("support", "collect-log"), **kwargs)
+        self.log.info("Support collect-log on clients: %s", str(cmd))
         return run_remote(self.log, self.hosts, cmd.with_exports)
 
     def get_attachinfo_file(self):
@@ -325,7 +340,7 @@ class DaosAgentManager(SubprocessManager):
         # Filter log messages from attachinfo content
         messages = [x for x in attach_info if re.match(r"^(name\s|size\s|all|\d+\s)", x)]
         attach_info_contents = "\n".join(messages)
-        attach_info_filename = "{}.attach_info_tmp".format(server_name)
+        attach_info_filename = f"{server_name}.attach_info_tmp"
 
         if len(messages) < 4:
             self.log.info("Malformed attachinfo file: %s", attach_info_contents)
@@ -334,7 +349,7 @@ class DaosAgentManager(SubprocessManager):
         # Write an attach_info_tmp file in this directory for cart_ctl to use
         attachinfo_file_path = os.path.join(self.outputdir, attach_info_filename)
 
-        with open(attachinfo_file_path, 'w') as file_handle:
+        with open(attachinfo_file_path, 'w', encoding='utf-8') as file_handle:
             file_handle.write(attach_info_contents)
 
         return attachinfo_file_path
@@ -355,9 +370,7 @@ class DaosAgentManager(SubprocessManager):
         try:
             super().stop()
         except CommandFailure as error:
-            messages.append(
-                "Error stopping the {} subprocess: {}".format(
-                    self.manager.command, error))
+            messages.append(f"Error stopping the {self.manager.command} subprocess: {str(error)}")
 
         # Kill any leftover processes that may not have been stopped correctly
         self.manager.kill()
@@ -367,11 +380,12 @@ class DaosAgentManager(SubprocessManager):
             raise CommandFailure(
                 "Failed to stop agents:\n  {}".format("\n  ".join(messages)))
 
-    def get_user_file(self):
-        """Get the file defined in the yaml file that must be owned by the user.
+    def get_socket_dir(self):
+        """Get the socket directory.
+
+        The socket directory is defined in the agent yaml file and must be owned by the user.
 
         Returns:
-            str: file defined in the yaml file that must be owned by the user
-
+            str: the socket directory
         """
         return self.get_config_value("runtime_dir")

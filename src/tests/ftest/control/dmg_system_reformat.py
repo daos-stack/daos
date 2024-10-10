@@ -1,14 +1,14 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
 
-from avocado.core.exceptions import TestFail
-
 from apricot import TestWithServers
+from avocado.core.exceptions import TestFail
 from exception_utils import CommandFailure
+from general_utils import journalctl_time
 from test_utils_pool import add_pool, get_size_params
 
 
@@ -92,6 +92,7 @@ class DmgSystemReformatTest(TestWithServers):
 
         # Check that engine starts up again
         self.log.info("<SERVER> Waiting for the engines to start")
+        self.server_managers[-1].manager.timestamps["start"] = journalctl_time()
         self.server_managers[-1].detect_engine_start()
 
         # Check that we have cleared storage by checking pool list

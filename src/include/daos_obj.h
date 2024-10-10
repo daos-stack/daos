@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -178,12 +178,12 @@ static inline bool
 daos_is_dkey_uint64_type(enum daos_otype_t type)
 {
 	switch (type) {
+	case DAOS_OT_ARRAY_BYTE:
 	case DAOS_OT_MULTI_UINT64:
 	case DAOS_OT_DKEY_UINT64:
 	case DAOS_OT_KV_UINT64:
 	case DAOS_OT_ARRAY:
 	case DAOS_OT_ARRAY_ATTR:
-	case DAOS_OT_ARRAY_BYTE:
 		return true;
 	default:
 		return false;
@@ -220,9 +220,9 @@ static inline bool
 daos_is_array_type(enum daos_otype_t type)
 {
 	switch (type) {
+	case DAOS_OT_ARRAY_BYTE:
 	case DAOS_OT_ARRAY:
 	case DAOS_OT_ARRAY_ATTR:
-	case DAOS_OT_ARRAY_BYTE:
 		return true;
 	default:
 		return false;
@@ -482,10 +482,10 @@ typedef struct {
 	uint32_t	kd_val_type;
 } daos_key_desc_t;
 
-static uint32_t
+static enum daos_obj_redun
 daos_obj_id2ord(daos_obj_id_t oid)
 {
-	return (oid.hi & OID_FMT_CLASS_MASK) >> OID_FMT_CLASS_SHIFT;
+	return (enum daos_obj_redun)((oid.hi & OID_FMT_CLASS_MASK) >> OID_FMT_CLASS_SHIFT);
 }
 
 static inline daos_oclass_id_t
@@ -563,6 +563,20 @@ int
 daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 		      enum daos_otype_t type, daos_oclass_id_t cid,
 		      daos_oclass_hints_t hints, uint32_t args);
+
+/**
+ * This function, if called 2^32 times will set oid->hi to every unique 32-bit
+ * value. The caller is responsible for setting the initial value, tracking the
+ * final value, and avoiding any values that are otherwise reserved.
+ *
+ * \param[in, out]	oid	oid to cycle
+ */
+static inline void
+daos_obj_oid_cycle(daos_obj_id_t *oid)
+{
+	/** Uses a large prime number to guarantee hitting every unique value */
+	oid->hi = (oid->hi + 999999937) & UINT_MAX;
+}
 
 /**
  * Open an DAOS object.
@@ -1078,7 +1092,7 @@ daos_obj_verify(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch);
  * feature is not supported yet.
  *
  * \param[in]	oh	Open object handle.
- * \param[in/out]
+ * \param[in,out]
  *		nr	[in]: Number of anchors requested and allocated in
  *			\a anchors. Pass 0 for DAOS to recommend split num.
  *			[out]: Number of anchors recommended if 0 is passed in.

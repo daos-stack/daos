@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -83,6 +83,11 @@ func MockNvmeHealth(varIdx ...int32) *NvmeHealth {
 		PllLockLossCnt:          uint64(idx),
 		NandBytesWritten:        uint64(idx),
 		HostBytesWritten:        uint64(idx),
+		LinkPortId:              uint32(idx),
+		LinkMaxSpeed:            float32(idx) * 1e+9,
+		LinkMaxWidth:            uint32(idx) * 4,
+		LinkNegSpeed:            float32(idx) * 1e+9,
+		LinkNegWidth:            uint32(idx) * 4,
 	}
 }
 
@@ -96,17 +101,18 @@ func MockNvmeNamespace(varIdx ...int32) *NvmeNamespace {
 }
 
 // MockSmdDevice returns struct with examples values.
-func MockSmdDevice(parentTrAddr string, varIdx ...int32) *SmdDevice {
+func MockSmdDevice(c *NvmeController, varIdx ...int32) *SmdDevice {
 	idx := test.GetIndex(varIdx...)
 	startTgt := (idx * 4) + 1
-	return &SmdDevice{
+	sd := SmdDevice{
 		UUID:      test.MockUUID(idx),
 		TargetIDs: []int32{startTgt, startTgt + 1, startTgt + 2, startTgt + 3},
-		NvmeState: NvmeStateNormal,
-		LedState:  LedStateNormal,
-		TrAddr:    parentTrAddr,
 		Roles:     BdevRoles{OptionBits(BdevRoleAll)},
 	}
+	if c != nil {
+		sd.Ctrlr = *c
+	}
+	return &sd
 }
 
 // MockNvmeController returns struct with examples values.
@@ -120,9 +126,10 @@ func MockNvmeController(varIdx ...int32) *NvmeController {
 		PciAddr:     pciAddr,
 		FwRev:       concat("fwRev", idx),
 		SocketID:    idx % 2,
+		NvmeState:   NvmeStateNormal,
+		LedState:    LedStateNormal,
 		HealthStats: MockNvmeHealth(idx),
 		Namespaces:  []*NvmeNamespace{MockNvmeNamespace(1)},
-		SmdDevices:  []*SmdDevice{MockSmdDevice(pciAddr, idx)},
 	}
 }
 
@@ -171,6 +178,7 @@ func MockScmModule(varIdx ...int32) *ScmModule {
 		UID:              fmt.Sprintf("Device%d", idx),
 		PartNumber:       fmt.Sprintf("PartNumber%d", idx),
 		FirmwareRevision: fmt.Sprintf("FWRev%d", idx),
+		HealthState:      "Healthy",
 	}
 }
 

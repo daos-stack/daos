@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,13 +9,12 @@ package scm
 import (
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
-
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/ipmctl"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 )
 
 func TestIpmctl_fwInfoStatusToUpdateStatus(t *testing.T) {
@@ -115,8 +114,14 @@ func TestIpmctl_GetFirmwareStatus(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			mockBinding := newMockIpmctl(tc.cfg)
-			cr, err := newCmdRunner(log, mockBinding, nil, nil)
+			getLibipmctl = func() ipmctl.IpmCtl {
+				return newMockIpmctl(tc.cfg)
+			}
+			defer func() {
+				getLibipmctl = libipmctlGet
+			}()
+
+			cr, err := newCmdRunner(log, nil, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -158,8 +163,14 @@ func TestIpmctl_UpdateFirmware(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			mockBinding := newMockIpmctl(tc.cfg)
-			cr, err := newCmdRunner(log, mockBinding, nil, nil)
+			getLibipmctl = func() ipmctl.IpmCtl {
+				return newMockIpmctl(tc.cfg)
+			}
+			defer func() {
+				getLibipmctl = libipmctlGet
+			}()
+
+			cr, err := newCmdRunner(log, nil, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

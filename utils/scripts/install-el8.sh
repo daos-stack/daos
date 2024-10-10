@@ -20,12 +20,12 @@ dnf --nodocs install \
     clang-tools-extra \
     cmake \
     CUnit-devel \
+    daxctl-devel \
     diffutils \
     e2fsprogs \
     file \
     flex \
     fuse3 \
-    fuse3-devel \
     gcc \
     gcc-c++ \
     git \
@@ -49,12 +49,15 @@ dnf --nodocs install \
     lz4-devel \
     make \
     ndctl \
+    ndctl-devel \
     numactl \
     numactl-devel \
     openmpi-devel \
     openssl-devel \
     patch \
     patchelf \
+    pciutils \
+    pciutils-devel \
     protobuf-c-devel \
     python3-devel \
     python3-pip \

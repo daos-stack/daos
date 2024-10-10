@@ -4,36 +4,48 @@ name: daos_server
 access_points: ['daos-server']
 port: 10001
 
-provider: ofi+tcp;ofi_rxm
+provider: ofi+tcp
 socket_dir: /var/run/daos_server
 nr_hugepages: @DAOS_HUGEPAGES_NBR@
 
 transport_config:
-@DAOS_NOAUTH_SECTION_BEGIN@
+@DAOS_NOAUTH_BEGIN@
   allow_insecure: true
-@DAOS_NOAUTH_SECTION_END@
-@DAOS_AUTH_SECTION_BEGIN@
+@DAOS_NOAUTH_END@
+@DAOS_AUTH_BEGIN@
   allow_insecure: false
   client_cert_dir: /etc/daos/certs/clients
   ca_cert: /etc/daos/certs/daosCA.crt
   cert: /etc/daos/certs/server.crt
   key: /etc/daos/certs/server.key
-@DAOS_AUTH_SECTION_END@
+@DAOS_AUTH_END@
 
+helper_log_file: /tmp/daos_server_helper.log
+control_log_file: /tmp/daos_server.log
 control_log_mask: INFO
+@DAOS_MD_ON_SSD_BEGIN@
+control_metadata:
+  path: /var/db/daos_server
+@DAOS_MD_ON_SSD_END@
 
 engines:
   - targets: 1
-    first_core: 0
+    pinned_numa_node: 0
     nr_xs_helpers: 0
     fabric_iface: @DAOS_IFACE_NAME@
     fabric_iface_port: 31416
     log_file: /tmp/daos_engine_0.log
-
-    scm_class: ram
-    scm_mount: /mnt/daos
-    scm_size: @DAOS_SCM_SIZE@
-
-    bdev_class: file
-    bdev_list: [/tmp/daos-bdev]
-    bdev_size: @DAOS_BDEV_SIZE@
+    log_mask: INFO
+    storage:
+      - class: ram
+        scm_mount: /mnt/daos
+        scm_size: @DAOS_SCM_SIZE@
+      - class: file
+        bdev_list: [/tmp/daos-bdev]
+        bdev_size: @DAOS_BDEV_SIZE@
+@DAOS_MD_ON_SSD_BEGIN@
+        bdev_roles:
+          - meta
+          - wal
+          - data
+@DAOS_MD_ON_SSD_END@

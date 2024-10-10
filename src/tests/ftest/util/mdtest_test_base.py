@@ -1,17 +1,19 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 import os
-from dfuse_test_base import DfuseTestBase
-from mdtest_utils import MdtestCommand
+
+from apricot import TestWithServers
+from dfuse_utils import get_dfuse, start_dfuse
 from exception_utils import CommandFailure
 from job_manager_utils import get_job_manager
+from mdtest_utils import MdtestCommand
 
 
-class MdtestBase(DfuseTestBase):
+class MdtestBase(TestWithServers):
     """Base mdtest class.
 
     :avocado: recursive
@@ -26,6 +28,13 @@ class MdtestBase(DfuseTestBase):
         self.hostfile_clients_slots = None
         self.subprocess = False
 
+        # We should not be using these as class level variables, but are needed until the
+        # execute_mdtest() method can be redesigned to pass in these arguments instead of
+        # optionally defining them
+        self.pool = None
+        self.container = None
+        self.dfuse = None
+
     def setUp(self):
         """Set up each test case."""
         # obtain separate logs
@@ -34,7 +43,7 @@ class MdtestBase(DfuseTestBase):
         super().setUp()
 
         # Get the parameters for Mdtest
-        self.mdtest_cmd = MdtestCommand()
+        self.mdtest_cmd = MdtestCommand(self.test_env.log_dir)
         self.mdtest_cmd.get_params(self)
         self.ppn = self.params.get("ppn", '/run/mdtest/client_processes/*')
         self.processes = self.params.get("np", '/run/mdtest/client_processes/*')
@@ -60,12 +69,16 @@ class MdtestBase(DfuseTestBase):
             params['dir_oclass'] = self.mdtest_cmd.dfs_dir_oclass.value
         return self.get_container(pool, **params)
 
-    def execute_mdtest(self, out_queue=None, display_space=True):
+    def execute_mdtest(self, out_queue=None, display_space=True, job_manager=None):
         """Runner method for Mdtest.
 
         Args:
             out_queue (queue, optional): Pass any exceptions in a queue. Defaults to None.
             display_space (bool, optional): Whether to display the pool space. Defaults to True.
+            job_manager (JobManager, optional): job manager used to run mdtest. Defaults to None.
+
+        Returns:
+            object: result of job manager run
         """
         # Create a pool if one does not already exist
         if self.pool is None:
@@ -74,24 +87,37 @@ class MdtestBase(DfuseTestBase):
         if self.container is None:
             self.container = self.get_mdtest_container(self.pool)
         # set Mdtest params
-        self.mdtest_cmd.set_daos_params(self.server_group, self.pool, self.container.identifier)
+        self.mdtest_cmd.update_params(
+            dfs_pool=self.pool.identifier, dfs_cont=self.container.identifier)
 
         # start dfuse if api is POSIX
         if self.mdtest_cmd.api.value == "POSIX":
-            self.start_dfuse(self.hostlist_clients, self.pool, self.container)
+            self.dfuse = get_dfuse(self, self.hostlist_clients)
+            start_dfuse(self, self.dfuse, self.pool, self.container)
             self.mdtest_cmd.test_dir.update(self.dfuse.mount_dir.value)
 
+        # Create a job manager if one is not provided
+        if job_manager is None:
+            job_manager = self.get_mdtest_job_manager_command(self.manager)
+
         # Run Mdtest
-        self.run_mdtest(self.get_mdtest_job_manager_command(self.manager),
-                        self.processes, display_space=display_space, out_queue=out_queue)
+        out = self.run_mdtest(
+            job_manager, self.processes, display_space=display_space, out_queue=out_queue)
 
         if self.subprocess:
-            return
+            return out
 
         # reset self.container if dfs_destroy is True or None.
-        if self.mdtest_cmd.dfs_destroy is not False:
+        if self.mdtest_cmd.dfs_destroy.value is True:
+            self.container.skip_cleanup()
+            # Need to set self.container to None to force a creation of a new container
             self.container = None
-        self.stop_dfuse()
+
+        if self.dfuse is not None:
+            self.dfuse.stop()
+            self.dfuse = None
+
+        return out
 
     def get_mdtest_job_manager_command(self, mpi_type):
         """Get the MPI job manager command for Mdtest.
@@ -123,11 +149,11 @@ class MdtestBase(DfuseTestBase):
         """
         env = self.mdtest_cmd.get_default_env(str(manager), self.client_log)
         manager.assign_hosts(self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
-        if self.ppn is None:
-            manager.assign_processes(processes)
+        # Pass only processes or ppn to be compatible with previous behavior
+        if self.ppn is not None:
+            manager.assign_processes(ppn=self.ppn)
         else:
-            manager.ppn.update(self.ppn, 'mpirun.ppn')
-            manager.processes.update(None, 'mpirun.np')
+            manager.assign_processes(processes=processes)
 
         manager.assign_environment(env)
 

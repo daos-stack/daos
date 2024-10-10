@@ -229,7 +229,7 @@ test_drpc_verify_notify_ready(void **state)
 
 	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
 
-	assert_rc_equal(drpc_notify_ready(), 0);
+	assert_rc_equal(drpc_notify_ready(false), 0);
 
 	/* socket was closed */
 	assert_int_equal(close_call_count, 1);
@@ -240,51 +240,6 @@ test_drpc_verify_notify_ready(void **state)
 
 	/* Now let's shut things down... */
 	drpc_fini();
-}
-
-static void
-verify_notify_bio_error(void)
-{
-	Drpc__Call		*call;
-	Srv__BioErrorReq	*req;
-
-	call = drpc__call__unpack(NULL, sendmsg_msg_iov_len,
-				  sendmsg_msg_content);
-	assert_non_null(call);
-	assert_int_equal(call->module, DRPC_MODULE_SRV);
-	assert_int_equal(call->method, DRPC_METHOD_SRV_BIO_ERR);
-
-	/* Verify payload contents */
-	req = srv__bio_error_req__unpack(NULL, call->body.len,
-					 call->body.data);
-	assert_non_null(req);
-	assert_string_equal(req->uri, crt_self_uri_get_uri);
-	assert_string_equal(req->drpclistenersock, drpc_listener_socket_path);
-	assert_int_equal(req->instanceidx, dss_instance_idx);
-	assert_false(req->unmaperr);
-	assert_true(req->writeerr);
-	assert_false(req->readerr);
-	assert_int_equal(req->tgtid, 0);
-
-	/* Cleanup */
-	srv__bio_error_req__free_unpacked(req, NULL);
-	drpc__call__free_unpacked(call, NULL);
-}
-
-static void
-test_drpc_verify_notify_bio_error(void **state)
-{
-	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
-	assert_rc_equal(drpc_init(), 0);
-
-	assert_rc_equal(ds_notify_bio_error(MET_WRITE, 0), 0);
-	verify_notify_bio_error();
-
-	/* Now let's shut things down... */
-	drpc_fini();
-
-	/* socket was closed */
-	assert_int_equal(close_call_count, 1);
 }
 
 static void
@@ -516,7 +471,6 @@ main(void)
 		UTEST(test_drpc_call_connect_fails),
 		UTEST(test_drpc_call_sendmsg_fails),
 		UTEST(test_drpc_verify_notify_ready),
-		UTEST(test_drpc_verify_notify_bio_error),
 		UTEST(test_drpc_verify_notify_pool_svc_update),
 		UTEST(test_drpc_verify_notify_pool_svc_update_noreps),
 		UTEST(test_drpc_verify_notify_pool_svc_update_nopool),

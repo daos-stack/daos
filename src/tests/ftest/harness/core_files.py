@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2021-2023 Intel Corporation.
+  (C) Copyright 2021-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -7,10 +7,9 @@ import os
 from random import choice
 from re import findall
 
-from ClusterShell.NodeSet import NodeSet
-
 from apricot import TestWithServers
-from run_utils import run_remote, run_local, RunException
+from ClusterShell.NodeSet import NodeSet
+from run_utils import run_local, run_remote
 
 
 class HarnessCoreFilesTest(TestWithServers):
@@ -41,11 +40,10 @@ class HarnessCoreFilesTest(TestWithServers):
         """
         # create a core.gdb file
         self.log.debug("Create a core.gdb.harness.advanced file in core_pattern dir.")
-        try:
-            results = run_local(self.log, "cat /proc/sys/kernel/core_pattern", check=True)
-        except RunException:
+        result = run_local(self.log, "cat /proc/sys/kernel/core_pattern")
+        if not result.passed:
             self.fail("Unable to find local core file pattern")
-        core_path = os.path.split(results.stdout.splitlines()[-1])[0]
+        core_path = os.path.split(result.joined_stdout.splitlines()[-1])[0]
         core_file = "{}/core.gdb.harness.advanced".format(core_path)
 
         self.log.debug("Creating %s", core_file)
@@ -53,7 +51,7 @@ class HarnessCoreFilesTest(TestWithServers):
             with open(core_file, "w", encoding="utf-8") as local_core_file:
                 local_core_file.write("THIS IS JUST A TEST\n")
         except IOError as error:
-            self.fail("Error writing {}: {}".format(local_core_file, str(error)))
+            self.fail("Error writing {}: {}".format(core_file, str(error)))
 
         # Choose a server find the pid of its daos_engine process
         host = NodeSet(choice(self.server_managers[0].hosts))   # nosec

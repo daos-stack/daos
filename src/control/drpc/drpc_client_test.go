@@ -72,12 +72,13 @@ func TestNewClientConnection(t *testing.T) {
 		t.Fatal("Expected a real client")
 		return
 	}
-	test.AssertEqual(t, client.socketPath, testSockPath,
+	clientConn := client.(*ClientConnection)
+	test.AssertEqual(t, clientConn.socketPath, testSockPath,
 		"Should match the path we passed in")
 	test.AssertFalse(t, client.IsConnected(), "Shouldn't be connected yet")
 
 	// Dialer should be the private implementation type
-	_ = client.dialer.(*clientDialer)
+	_ = clientConn.dialer.(*clientDialer)
 }
 
 func TestClient_Connect_Success(t *testing.T) {

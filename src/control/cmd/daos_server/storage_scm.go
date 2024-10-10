@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,8 +13,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/server"
-	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -23,8 +21,10 @@ const MsgStoragePrepareWarn = "Memory allocation goals for PMem will be changed 
 	"and locally attached PMem modules are not in use. Please be patient as it may take " +
 	"several minutes and subsequent reboot maybe required.\n"
 
-type scmPrepareResetFn func(storage.ScmPrepareRequest) (*storage.ScmPrepareResponse, error)
-type scmScanFn func(storage.ScmScanRequest) (*storage.ScmScanResponse, error)
+var (
+	errNoForceWithJSON = errors.New("JSON output only supported with force option")
+	errNoConsent       = errors.New("consent not given")
+)
 
 type scmStorageCmd struct {
 	Prepare prepareSCMCmd `command:"prepare" description:"Prepare SCM devices so that they can be used with DAOS"`
@@ -38,43 +38,63 @@ type prepareSCMCmd struct {
 	Force                 bool `short:"f" long:"force" description:"Perform SCM operations without waiting for confirmation"`
 }
 
-func (cmd *prepareSCMCmd) preparePMem(prepareBackend scmPrepareResetFn) error {
+// Read SocketID from config if not set explicitly in command.
+func getSockFromCmd(cmd *scmCmd) {
+	affSrc, err := getAffinitySource(cmd.MustLogCtx(), cmd.Logger, cmd.config)
+	if err != nil {
+		cmd.Debugf("fabric info to determine affinity could not be fetched: %s", err.Error())
+	} else {
+		cmd.SocketID = getSockFromCfg(cmd.Logger, cmd.config, affSrc)
+		cmd.Debugf("affinity (socket-id %d) derived from config", cmd.SocketID)
+	}
+}
+
+func preparePMem(cmd *prepareSCMCmd) (*storage.ScmPrepareResponse, error) {
 	if cmd.NrNamespacesPerSocket == 0 {
-		return errors.New("(-S|--scm-ns-per-socket) should be set to at least 1")
+		return nil, errors.New("(-S|--scm-ns-per-socket) should be set to at least 1")
 	}
 
 	cmd.Info("Prepare locally-attached PMem...")
 
+	if cmd.config != nil && cmd.SocketID == nil {
+		getSockFromCmd(&cmd.scmCmd)
+	}
+
 	cmd.Info(MsgStoragePrepareWarn)
-	if !cmd.Force && !common.GetConsent(cmd) {
-		return errors.New("consent not given")
+	if !cmd.Force {
+		if cmd.JSONOutputEnabled() {
+			return nil, errNoForceWithJSON
+		}
+		if !common.GetConsent(cmd) {
+			return nil, errNoConsent
+		}
 	}
 
 	req := storage.ScmPrepareRequest{
 		SocketID:              cmd.SocketID,
 		NrNamespacesPerSocket: cmd.NrNamespacesPerSocket,
 	}
-	cmd.Debugf("scm prepare request: %+v", req)
+	cmd.Tracef("scm prepare request: %+v", req)
 
 	// Prepare PMem modules to be presented as pmem device files.
-	resp, err := prepareBackend(req)
+	resp, err := cmd.ctlSvc.ScmPrepare(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	cmd.Debugf("scm prepare response: %+v", resp)
+	cmd.Tracef("scm prepare response: %+v", resp)
 
 	if resp == nil {
-		return errors.New("scm prepare returned nil response")
+		return nil, errors.New("scm prepare returned nil response")
 	}
 	if resp.Socket == nil {
-		return errors.New("scm prepare returned nil socket state")
+		return nil, errors.New("scm prepare returned nil socket state")
 	}
 	state := resp.Socket.State
 
 	if resp.RebootRequired {
 		// The only valid state that requires a reboot after PMem prepare is NoRegions.
 		if state != storage.ScmNoRegions {
-			return errors.Errorf("expected %s state if reboot required, got %s",
+			return nil, errors.Errorf("expected %s state if reboot required, got %s",
 				storage.ScmNoRegions, state)
 		}
 
@@ -82,44 +102,54 @@ func (cmd *prepareSCMCmd) preparePMem(prepareBackend scmPrepareResetFn) error {
 		cmd.Info("PMem AppDirect interleaved regions will be created on reboot. " +
 			storage.ScmMsgRebootRequired)
 
-		return nil
+		return nil, nil
 	}
 
 	// Respond to state reported by prepare setup.
 	switch state {
 	case storage.ScmStateUnknown:
-		return errors.New("failed to report state")
+		return nil, errors.New("failed to report state")
 	case storage.ScmNoModules:
-		return storage.FaultScmNoPMem
+		return nil, storage.FaultScmNoPMem
 	case storage.ScmNoRegions:
-		return errors.New("failed to create regions")
+		return nil, errors.New("failed to create regions")
 	case storage.ScmFreeCap:
-		return errors.New("failed to create namespaces")
+		return nil, errors.New("failed to create namespaces")
 	case storage.ScmNoFreeCap:
 		if len(resp.Namespaces) == 0 {
-			return errors.New("failed to find namespaces")
+			return nil, errors.New("failed to find namespaces")
 		}
+
+		return resp, nil
+	default:
+		return nil, errors.Errorf("unexpected state %q after scm prepare", state)
+	}
+
+	return nil, nil
+}
+
+func (cmd *prepareSCMCmd) Execute(_ []string) error {
+	cmd.Debugf("executing prepare scm command: %+v", cmd)
+
+	resp, err := preparePMem(cmd)
+	if err != nil {
+		return err
+	}
+
+	if resp != nil && len(resp.Namespaces) != 0 {
+		if cmd.JSONOutputEnabled() {
+			return cmd.OutputJSON(resp.Namespaces, nil)
+		}
+
 		// Namespaces exist so print details.
 		var bld strings.Builder
 		if err := pretty.PrintScmNamespaces(resp.Namespaces, &bld); err != nil {
 			return err
 		}
 		cmd.Infof("%s\n", bld.String())
-	default:
-		return errors.Errorf("unexpected state %q after scm prepare", state)
 	}
 
 	return nil
-}
-
-func (cmd *prepareSCMCmd) Execute(_ []string) error {
-	if err := cmd.init(); err != nil {
-		return err
-	}
-	scs := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
-
-	cmd.Debugf("executing prepare scm command: %+v", cmd)
-	return cmd.preparePMem(scs.ScmPrepare)
 }
 
 type resetSCMCmd struct {
@@ -127,30 +157,39 @@ type resetSCMCmd struct {
 	Force bool `short:"f" long:"force" description:"Perform PMem prepare operation without waiting for confirmation"`
 }
 
-func (cmd *resetSCMCmd) resetPMem(resetBackend scmPrepareResetFn) error {
+func resetPMem(cmd *resetSCMCmd) error {
 	cmd.Info("Reset locally-attached PMem...")
 
-	cmd.Info(MsgStoragePrepareWarn)
-	if !cmd.Force && !common.GetConsent(cmd) {
-		return errors.New("consent not given")
+	if cmd.config != nil && cmd.SocketID == nil {
+		getSockFromCmd(&cmd.scmCmd)
 	}
 
-	req := storage.ScmPrepareRequest{
+	cmd.Info(MsgStoragePrepareWarn)
+	if !cmd.Force {
+		if cmd.JSONOutputEnabled() {
+			return errNoForceWithJSON
+		}
+		if !common.GetConsent(cmd) {
+			return errNoConsent
+		}
+	}
+
+	resetReq := storage.ScmPrepareRequest{
 		SocketID: cmd.SocketID,
 		Reset:    true,
 	}
-	cmd.Debugf("scm prepare (reset) request: %+v", req)
+	cmd.Tracef("scm prepare (reset) request: %+v", resetReq)
 
 	// Reset PMem modules to default memory mode after removing any PMem namespaces.
-	resp, err := resetBackend(req)
+	resetResp, err := cmd.ctlSvc.ScmPrepare(resetReq)
 	if err != nil {
 		return err
 	}
-	cmd.Debugf("scm prepare (reset) response: %+v", resp)
+	cmd.Tracef("scm prepare (reset) response: %+v", resetResp)
 
-	state := resp.Socket.State
+	state := resetResp.Socket.State
 
-	if resp.RebootRequired {
+	if resetResp.RebootRequired {
 		// Address valid state that requires a reboot after PMem reset.
 		msg := ""
 		switch state {
@@ -183,47 +222,45 @@ func (cmd *resetSCMCmd) resetPMem(resetBackend scmPrepareResetFn) error {
 }
 
 func (cmd *resetSCMCmd) Execute(_ []string) error {
-	if err := cmd.init(); err != nil {
-		return err
-	}
-	scs := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
+	cmd.Debugf("executing reset scm command: %+v", cmd)
 
-	cmd.Debugf("executing remove namespaces command: %+v", cmd)
-	return cmd.resetPMem(scs.ScmPrepare)
+	return resetPMem(cmd)
 }
 
 type scanSCMCmd struct {
 	scmCmd
 }
 
-func (cmd *scanSCMCmd) scanPMem(scanBackend scmScanFn) (*storage.ScmScanResponse, error) {
+func scanPMem(cmd *scanSCMCmd) (*storage.ScmScanResponse, error) {
 	cmd.Info("Scanning locally-attached PMem storage...")
+
+	if cmd.config != nil && cmd.SocketID == nil {
+		getSockFromCmd(&cmd.scmCmd)
+	}
 
 	req := storage.ScmScanRequest{
 		SocketID: cmd.SocketID,
 	}
-	cmd.Debugf("scm scan request: %+v", req)
 
-	resp, err := scanBackend(req)
-	if err != nil {
-		return nil, err
-	}
-	cmd.Debugf("scm scan response: %+v", resp)
-
-	return resp, nil
+	cmd.Tracef("scm scan request: %+v", req)
+	return cmd.ctlSvc.ScmScan(req)
 }
 
 func (cmd *scanSCMCmd) Execute(_ []string) error {
-	if err := cmd.init(); err != nil {
-		return err
-	}
-
-	svc := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
-
 	cmd.Debugf("executing scan scm command: %+v", cmd)
-	resp, err := cmd.scanPMem(svc.ScmScan)
+
+	resp, err := scanPMem(cmd)
 	if err != nil {
 		return err
+	}
+	cmd.Tracef("scm scan response: %+v", resp)
+
+	if cmd.JSONOutputEnabled() {
+		if len(resp.Namespaces) > 0 {
+			return cmd.OutputJSON(resp.Namespaces, nil)
+		} else {
+			return cmd.OutputJSON(resp.Modules, nil)
+		}
 	}
 
 	var bld strings.Builder

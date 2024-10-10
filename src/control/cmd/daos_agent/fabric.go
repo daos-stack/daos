@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -34,6 +34,7 @@ type FabricInterface struct {
 	hw          *hardware.FabricInterface
 }
 
+// Providers returns a slice of the providers associated with the interface.
 func (f *FabricInterface) Providers() []string {
 	provs := f.hw.Providers.ToSlice()
 	provStrs := make([]string, len(provs))
@@ -41,6 +42,11 @@ func (f *FabricInterface) Providers() []string {
 		provStrs[i] = p.Name
 	}
 	return provStrs
+}
+
+// ProviderSet returns a StringSet of the providers associated with the interface.
+func (f *FabricInterface) ProviderSet() *hardware.FabricProviderSet {
+	return f.hw.Providers
 }
 
 func (f *FabricInterface) String() string {
@@ -65,12 +71,26 @@ type addrFI interface {
 	Addrs() ([]net.Addr, error)
 }
 
+// NUMAFabricMap is an iterable map type that maps from a NUMA node ID to a set of FabricInterfaces.
+type NUMAFabricMap map[int][]*FabricInterface
+
+// MaxNUMANode gets the maximum NUMA node ID in the map.
+func (nfm NUMAFabricMap) MaxNUMANode() int {
+	max := -1
+	for numa := range nfm {
+		if numa > max {
+			max = numa
+		}
+	}
+	return max
+}
+
 // NUMAFabric represents a set of fabric interfaces organized by NUMA node.
 type NUMAFabric struct {
 	log   logging.Logger
 	mutex sync.RWMutex
 
-	numaMap map[int][]*FabricInterface
+	numaMap NUMAFabricMap
 
 	currentNumaDevIdx map[int]int // current device idx to use on each NUMA node
 	currentNUMANode   int         // current NUMA node to search
@@ -137,52 +157,77 @@ func (n *NUMAFabric) getNumNUMANodes() int {
 	return len(n.numaMap)
 }
 
+// RLockedMap read-locks the map and returns it, along with a release function.
+func (n *NUMAFabric) RLockedMap() (NUMAFabricMap, func(), error) {
+	if n == nil {
+		return nil, nil, errors.New("nil NUMAFabric")
+	}
+
+	n.mutex.RLock()
+	if n.numaMap == nil {
+		n.mutex.RUnlock()
+		return nil, nil, errors.New("NUMAFabric is uninitialized")
+	}
+	return n.numaMap, n.mutex.RUnlock, nil
+}
+
+// LockedMap write-locks the map and returns it, along with a release function.
+func (n *NUMAFabric) LockedMap() (NUMAFabricMap, func(), error) {
+	if n == nil {
+		return nil, nil, errors.New("nil NUMAFabric")
+	}
+
+	n.mutex.Lock()
+	if n.numaMap == nil {
+		n.mutex.Unlock()
+		return nil, nil, errors.New("NUMAFabric is uninitialized")
+	}
+	return n.numaMap, n.mutex.Unlock, nil
+}
+
+// FabricIfaceParams is a set of parameters associated with a fabric interface.
+type FabricIfaceParams struct {
+	Interface string
+	Domain    string
+	Provider  string
+	DevClass  hardware.NetDevClass
+	NUMANode  int
+}
+
 // GetDevice selects the next available interface device on the requested NUMA node.
-func (n *NUMAFabric) GetDevice(numaNode int, netDevClass hardware.NetDevClass, provider string) (*FabricInterface, error) {
+func (n *NUMAFabric) GetDevice(params *FabricIfaceParams) (*FabricInterface, error) {
 	if n == nil {
 		return nil, errors.New("nil NUMAFabric")
 	}
 
-	if provider == "" {
+	if params == nil {
+		return nil, errors.New("nil FabricIfaceParams")
+	}
+
+	if params.Provider == "" {
 		return nil, errors.New("provider is required")
 	}
 
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 
-	fi, err := n.getDeviceFromNUMA(numaNode, netDevClass, provider)
+	fi, err := n.getDeviceFromNUMA(params.NUMANode, params.DevClass, params.Provider)
 	if err == nil {
-		return copyFI(fi, provider), nil
+		return copyFI(fi), nil
 	}
 
-	fi, err = n.findOnAnyNUMA(netDevClass, provider)
+	fi, err = n.findOnAnyNUMA(params.DevClass, params.Provider)
 	if err != nil {
 		return nil, err
 	}
 
-	return copyFI(fi, provider), nil
+	return copyFI(fi), nil
 }
 
-func copyFI(fi *FabricInterface, provider string) *FabricInterface {
+func copyFI(fi *FabricInterface) *FabricInterface {
 	fiCopy := new(FabricInterface)
 	*fiCopy = *fi
 	return fiCopy
-}
-
-// Find finds a specific fabric device by name.
-func (n *NUMAFabric) Find(name string) (*FabricInterface, error) {
-	if n == nil {
-		return nil, errors.New("nil NUMAFabric")
-	}
-
-	for _, devs := range n.numaMap {
-		for _, fi := range devs {
-			if fi.Name == name {
-				return fi, nil
-			}
-		}
-	}
-	return nil, fmt.Errorf("fabric interface %q not found", name)
 }
 
 func (n *NUMAFabric) getDeviceFromNUMA(numaNode int, netDevClass hardware.NetDevClass, provider string) (*FabricInterface, error) {
@@ -294,6 +339,80 @@ func (n *NUMAFabric) getNextDevIndex(numaNode int) int {
 	panic(fmt.Sprintf("no fabric interfaces on NUMA node %d", numaNode))
 }
 
+// Find finds a specific fabric device by name. There may be more than one domain associated.
+func (n *NUMAFabric) Find(name string) ([]*FabricInterface, error) {
+	if n == nil {
+		return nil, errors.New("nil NUMAFabric")
+	}
+
+	result := make([]*FabricInterface, 0)
+	for _, devs := range n.numaMap {
+		for _, fi := range devs {
+			if fi.Name == name {
+				result = append(result, copyFI(fi))
+			}
+		}
+	}
+
+	if len(result) > 0 {
+		return result, nil
+	}
+
+	return nil, fmt.Errorf("fabric interface %q not found", name)
+}
+
+// FindDevice looks up a fabric device with a given name, domain, and provider.
+// NB: The name is required. All other parameters are optional. If there is more
+// than one match, all of them are returned.
+func (n *NUMAFabric) FindDevice(params *FabricIfaceParams) ([]*FabricInterface, error) {
+	if params == nil {
+		return nil, errors.New("nil FabricIfaceParams")
+	}
+
+	fiList, err := n.Find(params.Interface)
+	if err != nil {
+		return nil, err
+	}
+
+	if params.Domain != "" {
+		fiList = filterDomain(params.Domain, fiList)
+		if len(fiList) == 0 {
+			return nil, errors.Errorf("fabric interface %q doesn't have requested domain %q",
+				params.Interface, params.Domain)
+		}
+	}
+
+	if params.Provider != "" {
+		fiList = filterProvider(params.Provider, fiList)
+		if len(fiList) == 0 {
+			return nil, errors.Errorf("fabric interface %q doesn't support provider %q",
+				params.Interface, params.Provider)
+		}
+	}
+
+	return fiList, nil
+}
+
+func filterDomain(domain string, fiList []*FabricInterface) []*FabricInterface {
+	result := make([]*FabricInterface, 0, len(fiList))
+	for _, fi := range fiList {
+		if fi.Domain == domain || (fi.Name == domain && fi.Domain == "") {
+			result = append(result, fi)
+		}
+	}
+	return result
+}
+
+func filterProvider(provider string, fiList []*FabricInterface) []*FabricInterface {
+	result := make([]*FabricInterface, 0, len(fiList))
+	for _, fi := range fiList {
+		if fi.HasProvider(provider) || fi.NetDevClass == FabricDevClassManual {
+			result = append(result, fi)
+		}
+	}
+	return result
+}
+
 func newNUMAFabric(log logging.Logger) *NUMAFabric {
 	return &NUMAFabric{
 		log:               log,
@@ -335,12 +454,9 @@ func fabricInterfacesFromHardware(fi *hardware.FabricInterface) []*FabricInterfa
 	for netIF := range fi.NetInterfaces {
 		newFI := &FabricInterface{
 			Name:        netIF,
+			Domain:      fi.Name,
 			NetDevClass: fi.DeviceClass,
 			hw:          fi,
-		}
-
-		if fi.Name != netIF {
-			newFI.Domain = fi.Name
 		}
 
 		fis = append(fis, newFI)
@@ -356,12 +472,15 @@ func NUMAFabricFromConfig(log logging.Logger, cfg []*NUMAFabricConfig) *NUMAFabr
 	for _, fc := range cfg {
 		node := fc.NUMANode
 		for _, fi := range fc.Interfaces {
-			fabric.numaMap[node] = append(fabric.numaMap[node],
-				&FabricInterface{
-					Name:        fi.Interface,
-					Domain:      fi.Domain,
-					NetDevClass: FabricDevClassManual,
-				})
+			newFI := &FabricInterface{
+				Name:        fi.Interface,
+				Domain:      fi.Domain,
+				NetDevClass: FabricDevClassManual,
+			}
+			if newFI.Domain == "" {
+				newFI.Domain = newFI.Name
+			}
+			fabric.numaMap[node] = append(fabric.numaMap[node], newFI)
 		}
 	}
 

@@ -125,14 +125,22 @@ func TestBackend_groomDiscoveredBdevs(t *testing.T) {
 		"missing": {
 			reqAddrList: []string{ctrlr1.PciAddr, ctrlr2.PciAddr, ctrlr3.PciAddr},
 			inCtrlrs:    storage.NvmeControllers{ctrlr1, ctrlr3},
-			expErr:      storage.FaultBdevNotFound(ctrlr2.PciAddr),
+			expErr:      storage.FaultBdevNotFound(false, ctrlr2.PciAddr),
 		},
 		"vmd devices; vmd not enabled": {
 			reqAddrList: []string{"0000:85:05.5"},
 			inCtrlrs: ctrlrsFromPCIAddrs("850505:07:00.0", "850505:09:00.0",
 				"850505:0b:00.0", "850505:0d:00.0", "850505:0f:00.0",
 				"850505:11:00.0", "850505:14:00.0", "5d0505:03:00.0"),
-			expErr: storage.FaultBdevNotFound("0000:85:05.5"),
+			expErr: storage.FaultBdevNotFound(false, "0000:85:05.5"),
+		},
+		"vmd enabled; missing backing devices": {
+			vmdEnabled:  true,
+			reqAddrList: []string{"0000:85:05.5", "0000:05:05.5"},
+			inCtrlrs: ctrlrsFromPCIAddrs("850505:07:00.0", "850505:09:00.0",
+				"850505:0b:00.0", "850505:0d:00.0", "850505:0f:00.0",
+				"850505:11:00.0", "850505:14:00.0", "5d0505:03:00.0"),
+			expErr: storage.FaultBdevNotFound(true, "0000:05:05.5"),
 		},
 		"vmd devices; vmd enabled": {
 			vmdEnabled:  true,
@@ -205,7 +213,7 @@ func TestBackend_Scan(t *testing.T) {
 				DiscoverCtrlrs: storage.NvmeControllers{ctrlr1},
 			},
 			req:    mockScanReq(storage.MockNvmeController(2).PciAddr),
-			expErr: storage.FaultBdevNotFound(storage.MockNvmeController(2).PciAddr),
+			expErr: storage.FaultBdevNotFound(false, storage.MockNvmeController(2).PciAddr),
 		},
 		"emulated nvme; AIO-file": {
 			req:     mockScanReq(storage.MockNvmeAioFile(2).Path),
@@ -512,10 +520,8 @@ func TestBackend_Format(t *testing.T) {
 					Class:      storage.ClassNvme,
 					DeviceList: storage.MustNewBdevDeviceList(vmdAddr),
 				},
-				VMDEnabled: true,
-				BdevCache: &storage.BdevScanResponse{
-					Controllers: mockCtrlrsInclVMD(),
-				},
+				VMDEnabled:   true,
+				ScannedBdevs: mockCtrlrsInclVMD(),
 			},
 			expResp: &storage.BdevFormatResponse{
 				DeviceResponses: map[string]*storage.BdevDeviceFormatResponse{
@@ -649,9 +655,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 						DeviceList: storage.MustNewBdevDeviceList(vmdAddr),
 					},
 				},
-				BdevCache: &storage.BdevScanResponse{
-					Controllers: mockCtrlrsInclVMD(),
-				},
+				ScannedBdevs: mockCtrlrsInclVMD(),
 			},
 			expCall: &storage.BdevWriteConfigRequest{
 				VMDEnabled: true,
@@ -661,9 +665,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 						DeviceList: storage.MustNewBdevDeviceList(vmdBackingAddr1, vmdBackingAddr2),
 					},
 				},
-				BdevCache: &storage.BdevScanResponse{
-					Controllers: mockCtrlrsInclVMD(),
-				},
+				ScannedBdevs: mockCtrlrsInclVMD(),
 			},
 		},
 	} {

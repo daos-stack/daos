@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1005,6 +1005,24 @@ static void crt_swim_update_last_unpack_hlc(struct crt_swim_membs *csm)
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 }
 
+static void
+crt_metrics_sample_delay(crt_context_t crt_ctx, uint64_t delay, bool glitch)
+{
+	struct crt_context *ctx;
+
+	if (unlikely(crt_ctx == CRT_CONTEXT_NULL)) {
+		D_ERROR("invalid parameter (NULL crt_ctx).\n");
+		return;
+	}
+
+	ctx = crt_ctx;
+
+	d_tm_set_gauge(ctx->cc_swim_delay, delay);
+
+	if (glitch)
+		d_tm_inc_counter(ctx->cc_net_glitches, 1);
+}
+
 static int64_t crt_swim_progress_cb(crt_context_t crt_ctx, int64_t timeout_us, void *arg)
 {
 	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
@@ -1053,12 +1071,15 @@ static int64_t crt_swim_progress_cb(crt_context_t crt_ctx, int64_t timeout_us, v
 				swim_net_glitch_update(csm->csm_ctx, self_id, delay);
 				csm->csm_last_unpack_hlc = hlc2;
 			}
+			crt_metrics_sample_delay(crt_ctx, delay, delay > max_delay);
 		}
 
 		if (now < ctx->sc_next_event)
 			timeout_us = min(timeout_us, (ctx->sc_next_event - now) * 1000);
 	} else if (rc) {
 		D_ERROR("swim_progress(): "DF_RC"\n", DP_RC(rc));
+	} else {
+		crt_metrics_sample_delay(crt_ctx, 0, false);
 	}
 
 	return timeout_us;

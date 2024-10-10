@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,14 +11,20 @@ import (
 	"crypto"
 	"crypto/x509"
 	"encoding/pem"
+	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
+	"syscall"
 	"testing"
 	"time"
 
-	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	"gopkg.in/yaml.v2"
+
+	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/fault"
 )
 
 func InsecureTC() *TransportConfig {
@@ -110,9 +116,13 @@ func setExpiredVerifyTime(t *testing.T, cfg *TransportConfig) {
 }
 
 func TestPreLoadCertData(t *testing.T) {
+	clientDir := func(dir string) string {
+		return filepath.Join(dir, "client")
+	}
+
 	for name, tc := range map[string]struct {
-		getCfg    func(t *testing.T) *TransportConfig
-		setup     func(t *testing.T)
+		getCfg    func(t *testing.T, dir string) *TransportConfig
+		setup     func(t *testing.T) (string, func())
 		config    *TransportConfig
 		expLoaded bool
 		expErr    error
@@ -121,12 +131,12 @@ func TestPreLoadCertData(t *testing.T) {
 			expErr: errors.New("nil"),
 		},
 		"insecure": {
-			getCfg: func(t *testing.T) *TransportConfig {
+			getCfg: func(t *testing.T, _ string) *TransportConfig {
 				return InsecureTC()
 			},
 		},
 		"cert success": {
-			getCfg: func(t *testing.T) *TransportConfig {
+			getCfg: func(t *testing.T, _ string) *TransportConfig {
 				serverTC := ServerTC()
 				setValidVerifyTime(t, serverTC)
 				SetupTCFilePerms(t, serverTC)
@@ -135,25 +145,58 @@ func TestPreLoadCertData(t *testing.T) {
 			expLoaded: true,
 		},
 		"bad cert": {
-			getCfg: func(t *testing.T) *TransportConfig {
+			getCfg: func(t *testing.T, _ string) *TransportConfig {
 				badTC := BadTC()
 				SetupTCFilePerms(t, badTC)
 				return badTC
 			},
 			expErr: errors.New("insecure permissions"),
 		},
-		"bad client dir": {
-			getCfg: func(t *testing.T) *TransportConfig {
+		"client dir doesn't exist": {
+			setup: test.CreateTestDir,
+			getCfg: func(t *testing.T, dir string) *TransportConfig {
+				conf := ServerTC()
+				setValidVerifyTime(t, conf)
+				conf.ClientCertDir = "a thing that does not exist"
+				return conf
+			},
+			expErr: syscall.ENOENT,
+		},
+		"client dir not a directory": {
+			setup: test.CreateTestDir,
+			getCfg: func(t *testing.T, dir string) *TransportConfig {
 				clientDirTC := ServerTC()
 				setValidVerifyTime(t, clientDirTC)
-				clientDirTC.ClientCertDir = "testdata/badperms"
-				SetupTCFilePerms(t, clientDirTC)
+
+				filePath := clientDir(dir)
+				if err := os.WriteFile(filePath, []byte("some stuff"), 0400); err != nil {
+					t.Fatal(err)
+				}
+				clientDirTC.ClientCertDir = filePath
 				return clientDirTC
 			},
-			expErr: FaultUnreadableCertFile("testdata/badperms"),
+			expErr: syscall.ENOTDIR,
+		},
+		"can't access client dir": {
+			setup: func(t *testing.T) (string, func()) {
+				dir, cleanup := test.CreateTestDir(t)
+				if err := os.Mkdir(clientDir(dir), 0220); err != nil {
+					t.Fatal(err)
+				}
+
+				return dir, cleanup
+			},
+			getCfg: func(t *testing.T, dir string) *TransportConfig {
+				clientDirTC := ServerTC()
+				setValidVerifyTime(t, clientDirTC)
+
+				clientDirTC.ClientCertDir = clientDir(dir)
+				return clientDirTC
+			},
+			expErr: FaultUnreadableCertFile(""),
 		},
 		"expired cert": {
-			getCfg: func(t *testing.T) *TransportConfig {
+			getCfg: func(t *testing.T, _ string) *TransportConfig {
 				serverTC := ServerTC()
 				setExpiredVerifyTime(t, serverTC)
 				SetupTCFilePerms(t, serverTC)
@@ -164,14 +207,30 @@ func TestPreLoadCertData(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			var testDir string
+			if tc.setup != nil {
+				dir, teardown := tc.setup(t)
+				defer teardown()
+				testDir = dir
+			}
+
 			var cfg *TransportConfig
 			if tc.getCfg != nil {
-				cfg = tc.getCfg(t)
+				cfg = tc.getCfg(t, testDir)
 			}
 
 			err := cfg.PreLoadCertData()
 
-			test.CmpErr(t, tc.expErr, err)
+			// If it's a fault, we don't need to check the exact paths passed in
+			if fault.IsFault(tc.expErr) && fault.IsFault(err) {
+				expCode := tc.expErr.(*fault.Fault).Code
+				if !fault.IsFaultCode(err, expCode) {
+					t.Fatalf("expected fault: %s, got: %s", tc.expErr, err)
+				}
+			} else {
+				test.CmpErr(t, tc.expErr, err)
+			}
+
 			if cfg == nil {
 				return
 			}
@@ -349,6 +408,103 @@ func TestSecurity_DefaultTransportConfigs(t *testing.T) {
 				CertificateConfig{},
 			)); diff != "" {
 				t.Fatalf("(want-, got+)\n %s", diff)
+			}
+		})
+	}
+}
+
+func TestSecurity_ClientUserMap(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfgYaml string
+		expMap  ClientUserMap
+		expErr  error
+	}{
+		"empty": {},
+		"defaultKey": {
+			cfgYaml: fmt.Sprintf(`
+%d:
+  user: whoops
+`, defaultMapKey),
+			expErr: errors.New("reserved"),
+		},
+		"invalid uid (negative)": {
+			cfgYaml: `
+-1:
+  user: whoops
+`,
+			expErr: errors.New("invalid uid"),
+		},
+		"invalid uid (words)": {
+			cfgYaml: `
+blah:
+  user: whoops
+`,
+			expErr: errors.New("invalid uid"),
+		},
+		"invalid mapped user": {
+			cfgYaml: `
+1234:
+user: whoops
+`,
+			expErr: errors.New("unmarshal error"),
+		},
+		"good": {
+			cfgYaml: `
+default:
+  user: banana
+  group: rama
+  groups: [ding, dong]
+1234:
+  user: abc
+  group: def
+  groups: [yabba, dabba, doo]
+5678:
+  user: ghi
+  group: jkl
+  groups: [mno, pqr, stu]
+`,
+			expMap: ClientUserMap{
+				defaultMapKey: {
+					User:   "banana",
+					Group:  "rama",
+					Groups: []string{"ding", "dong"},
+				},
+				1234: {
+					User:   "abc",
+					Group:  "def",
+					Groups: []string{"yabba", "dabba", "doo"},
+				},
+				5678: {
+					User:   "ghi",
+					Group:  "jkl",
+					Groups: []string{"mno", "pqr", "stu"},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var result ClientUserMap
+			err := yaml.Unmarshal([]byte(tc.cfgYaml), &result)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+			if diff := cmp.Diff(tc.expMap, result); diff != "" {
+				t.Fatalf("unexpected ClientUserMap (-want, +got)\n %s", diff)
+			}
+
+			for uid, exp := range tc.expMap {
+				gotUser := result.Lookup(uid)
+				if diff := cmp.Diff(exp.User, gotUser.User); diff != "" {
+					t.Fatalf("unexpected User (-want, +got)\n %s", diff)
+				}
+			}
+
+			if expDefUser, found := tc.expMap[defaultMapKey]; found {
+				gotDefUser := result.Lookup(1234567)
+				if diff := cmp.Diff(expDefUser, gotDefUser); diff != "" {
+					t.Fatalf("unexpected DefaultUser (-want, +got)\n %s", diff)
+				}
 			}
 		})
 	}

@@ -6,9 +6,8 @@
 import contextlib
 import re
 
-from ClusterShell.NodeSet import NodeSet
-
 from apricot import TestWithServers
+from ClusterShell.NodeSet import NodeSet
 from general_utils import get_journalctl, journalctl_time, wait_for_result
 from run_utils import run_remote
 
@@ -114,7 +113,7 @@ class ControlLogEntry(TestWithServers):
         self.log_step('Reintegrate rank and wait for rebuild')
         expected = [fr'rank {rank}.*start reintegration' for rank in stop_ranks] \
             + [fr'rank {rank}.*is reintegrated' for rank in stop_ranks] \
-            + [r'Reintegrate \[queued\]', r'Reintegrate \[completed\]']
+            + [r'Rebuild \[queued\]', r'Rebuild \[completed\]']
         with self.verify_journalctl(expected):
             for rank in stop_ranks:
                 pool.reintegrate(str(rank))
@@ -135,7 +134,7 @@ class ControlLogEntry(TestWithServers):
         self.log_step('Reintegrate ranks and wait for rebuild')
         expected = [fr'rank {rank}.*start reintegration' for rank in exclude_ranks] \
             + [fr'rank {rank}.*is reintegrated' for rank in exclude_ranks] \
-            + [r'Reintegrate \[queued\]', r'Reintegrate \[completed\]']
+            + [r'Rebuild \[queued\]', r'Rebuild \[completed\]']
         with self.verify_journalctl(expected):
             for rank in exclude_ranks:
                 pool.reintegrate(str(rank))
@@ -163,7 +162,7 @@ class ControlLogEntry(TestWithServers):
         self.log_step('Reintegrate all ranks and wait for rebuild')
         expected = [fr'rank {rank}.*start reintegration' for rank in kill_ranks] \
             + [fr'rank {rank}.*is reintegrated' for rank in kill_ranks] \
-            + [r'Reintegrate \[queued\]', r'Reintegrate \[completed\]']
+            + [r'Rebuild \[queued\]', r'Rebuild \[completed\]']
         with self.verify_journalctl(expected):
             for rank in kill_ranks:
                 pool.reintegrate(str(rank))

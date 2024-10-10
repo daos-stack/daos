@@ -1,18 +1,18 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
-from threading import Thread
-from itertools import product
 import queue
+import time
+from itertools import product
+from threading import Thread
 
 from apricot import TestWithServers
-from write_host_file import write_host_file
-from ior_utils import IorCommand
 from exception_utils import CommandFailure
+from ior_utils import IorCommand
 from job_manager_utils import get_job_manager
+from write_host_file import write_host_file
 
 
 class NvmeFragmentation(TestWithServers):
@@ -35,7 +35,7 @@ class NvmeFragmentation(TestWithServers):
         self.ior_transfer_size = self.params.get("transfer_block_size", '/run/ior/iorflags/*')
         self.ior_dfs_oclass = self.params.get("obj_class", '/run/ior/iorflags/*')
         # Recreate the client hostfile without slots defined
-        self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir, None)
+        self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir)
         self.pool = None
         self.out_queue = queue.Queue()
 
@@ -58,10 +58,10 @@ class NvmeFragmentation(TestWithServers):
                                                 self.ior_transfer_size,
                                                 self.ior_flags):
             # Define the arguments for the ior_runner_thread method
-            ior_cmd = IorCommand()
+            ior_cmd = IorCommand(self.test_env.log_dir)
             ior_cmd.get_params(self)
             cont_label = self.label_generator.get_label('cont')
-            ior_cmd.set_daos_params(self.server_group, self.pool, cont_label)
+            ior_cmd.set_daos_params(self.pool, cont_label)
             ior_cmd.dfs_oclass.update(oclass)
             ior_cmd.api.update(api)
             ior_cmd.transfer_size.update(test[0])

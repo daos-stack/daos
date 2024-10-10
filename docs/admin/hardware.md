@@ -21,9 +21,9 @@ servers.
 DAOS requires a 64-bit processor architecture and is primarily developed
 on Intel x86\_64 architecture. The DAOS software and the libraries it
 depends on (e.g., [ISA-L](https://github.com/intel/isa-l),
-[SPDK](https://pmem.io/pmdk/), [PMDK](https://spdk.io/), and
+[SPDK](https://spdk.io/), [PMDK](https://github.com/pmem/pmdk/), and
 [DPDK](https://www.dpdk.org/) can take
-advantage of Intel Intel Streaming SIMD (SSE) and Intel Advanced Vector (AVX) extensions.
+advantage of Intel Streaming SIMD (SSE) and Intel Advanced Vector Extensions (AVX).
 
 Some success was also reported by the community on running the DAOS client
 on 64-bit ARM processors configured in Little Endian mode. That being said,
@@ -71,7 +71,7 @@ PMDK.
 
 The storage node can optionally be equipped with [NVMe](https://nvmexpress.org/)
 (non-volatile memory express)[^10] SSDs to provide capacity. HDDs,
-as well as SATA andSAS SSDs, are not supported by DAOS.
+as well as SATA and SAS SSDs, are not supported by DAOS.
 Both NVMe 3D-NAND and Optane SSDs are supported. Optane SSDs are
 preferred for DAOS installation that targets a very high IOPS rate.
 NVMe-oF devices are also supported by the

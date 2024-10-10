@@ -58,7 +58,7 @@ Please refer to the <a href="../bio/README.md">Blob I/O</a> (BIO) module for mor
 Special care is taken when developing and modifying the VOS layer because any software bug could corrupt data structures in persistent memory.
 The VOS, therefore, checksums its persistent data structures despite the presence of hardware ECC.
 
-The VOS provides a lightweight I/O stack fully in user space, leveraging the <a href="pmem.io">PMDK</a> open-source libraries developed to support this programming model.
+The VOS provides a lightweight I/O stack fully in user space, leveraging the <a href="https://github.com/pmem/pmdk">PMDK</a> open-source libraries developed to support this programming model.
 
 <a id="64"></a>
 
@@ -73,7 +73,7 @@ It is worth noting that such transactions are different from the DAOS transactio
 Persistent memory transactions must guarantee consistency of VOS internal data structures when processing incoming requests, regardless of their epoch number.
 Transactions over persistent memory can be implemented in many different ways, e.g., undo logs, redo logs, a combination of both, or copy-on-write.
 
-<a href="https://pmem.io">PMDK</a> is an open source collection of libraries for using persistent memory, optimized specifically for NVRAM.
+<a href="https://github.com/pmem/pmdk">PMDK</a> is an open source collection of libraries for using persistent memory, optimized specifically for NVRAM.
 Among these is the libpmemobj library, which implements relocatable persistent heaps called persistent memory pools.
 This includes memory allocation, transactions, and general facilities for persistent memory programming.
 The transactions are local to one thread (not multi-threaded) and rely on undo logs.

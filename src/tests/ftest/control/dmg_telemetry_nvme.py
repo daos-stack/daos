@@ -3,8 +3,8 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from telemetry_test_base import TestWithTelemetry
 from apricot import TestWithServers
+from telemetry_test_base import TestWithTelemetry
 from telemetry_utils import TelemetryUtils
 
 

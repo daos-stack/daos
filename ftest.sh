@@ -29,9 +29,7 @@ LAUNCH_OPT_ARGS="${3:-}"
 
 # Add the missing '--nvme' argument identifier for backwards compatibility with
 # the 'auto:Optane' optional argument specified without the identifier.
-if [[ "${LAUNCH_OPT_ARGS}" == "auto:-3DNAND" ]]; then
-    LAUNCH_OPT_ARGS="--nvme=${LAUNCH_OPT_ARGS}"
-fi
+LAUNCH_OPT_ARGS="$(echo "$LAUNCH_OPT_ARGS" | sed -e 's/^/ /' -e 's/ \(auto:-3DNAND\)/--nvme=\1/' -e 's/^ *//')"
 
 # For nodes that are only rebooted between CI nodes left over mounts
 # need to be cleaned up.

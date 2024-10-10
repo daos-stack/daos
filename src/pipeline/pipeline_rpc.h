@@ -14,34 +14,20 @@
 
 #define DAOS_PIPELINE_VERSION 1
 /* LIST of internal RPCS in form of:
- * OPCODE, flags, FMT, handler, corpc_hdlr and name
+ * OPCODE, flags, FMT, handler, corpc_hdlr
  */
-#define PIPELINE_PROTO_CLI_RPC_LIST					\
-	X(DAOS_PIPELINE_RPC_RUN,					\
-		0, &CQF_pipeline_run,					\
-		ds_pipeline_run_handler, NULL, "pipeline_run")
+#define PIPELINE_PROTO_CLI_RPC_LIST                                                                \
+	X(DAOS_PIPELINE_RPC_RUN, 0, &CQF_pipeline_run, ds_pipeline_run_handler, NULL)
 
-#define X(a, b, c, d, e, f) a
+#define X(a, ...) a,
 enum pipeline_rpc_opc {
-	PIPELINE_PROTO_CLI_RPC_LIST,
-	PIPELINE_PROTO_CLI_COUNT,
+	PIPELINE_PROTO_CLI_RPC_LIST PIPELINE_PROTO_CLI_COUNT,
 	PIPELINE_PROTO_CLI_LAST = PIPELINE_PROTO_CLI_COUNT - 1,
 };
 
 #undef X
 
 extern struct crt_proto_format pipeline_proto_fmt;
-
-static inline char *
-obj_opc_to_str(crt_opcode_t opc)
-{
-	switch (opc) {
-#define X(a, b, c, d, e, f) case a: return f;
-		PIPELINE_PROTO_CLI_RPC_LIST
-#undef X
-	}
-	return "unknown";
-}
 
 #define DAOS_ISEQ_PIPELINE_RUN	/* input fields */			\
 	((daos_pipeline_t)	(pri_pipe)		CRT_VAR)	\

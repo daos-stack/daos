@@ -7,11 +7,10 @@
 import os
 
 from apricot import TestWithServers
-
 from command_utils_base import CommandFailure, EnvironmentVariables
-from job_manager_utils import get_job_manager
-from mpiio_utils import LLNLCommand, Mpi4pyCommand, RomioCommand, Hdf5Command
 from duns_utils import format_path
+from job_manager_utils import get_job_manager
+from mpiio_utils import Hdf5Command, LLNLCommand, Mpi4pyCommand, RomioCommand
 
 
 class MpiioTests(TestWithServers):
@@ -63,7 +62,6 @@ class MpiioTests(TestWithServers):
             kwargs_list[1]["command"] = "t_shapesame"
             env["HDF5_PARAPREFIX"] = "daos:"
 
-        self.job_manager = []
         job_managers = []
         for kwargs in kwargs_list:
             manager = get_job_manager(self)
@@ -77,7 +75,6 @@ class MpiioTests(TestWithServers):
                 romio_job = self._test_name_class[test_name](**kwargs)
                 romio_job.env = env
                 job_managers.append(romio_job)
-                self.job_manager[-1] = romio_job
             else:
                 # finish job manager setup
                 job_managers.append(manager)

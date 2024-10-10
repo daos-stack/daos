@@ -153,6 +153,8 @@ struct umem_store {
 	int			 store_type;
 	/* standalone store */
 	bool			 store_standalone;
+	/* backend SSD is in faulty state */
+	bool			 store_faulty;
 };
 
 struct umem_slab_desc {
@@ -320,7 +322,6 @@ enum {
 /* Hints for umem atomic copy operation primarily for bmem implementation */
 enum acopy_hint {
 	UMEM_COMMIT_IMMEDIATE = 0, /* commit immediate, do not call within a tx */
-	UMEM_COMMIT_DEFER,	/* OK to defer commit to blob to a later point */
 	UMEM_RESERVED_MEM	/* memory from dav_reserve(), commit on publish */
 };
 

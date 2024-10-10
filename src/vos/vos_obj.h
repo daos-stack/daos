@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -49,30 +49,33 @@ struct vos_object {
 	struct vos_container		*obj_cont;
 	/** nobody should access this object */
 	bool				obj_zombie;
-	/** Object is in discard */
-	bool				obj_discard;
+	/** Object is held for discard */
+	uint32_t                         obj_discard : 1,
+	    /** If non-zero, object is held for aggregation */
+	    obj_aggregate                            : 1;
 };
 
 enum {
 	/** Only return the object if it's visible */
-	VOS_OBJ_VISIBLE		= (1 << 0),
+	VOS_OBJ_VISIBLE = (1 << 0),
 	/** Create the object if it doesn't exist */
-	VOS_OBJ_CREATE		= (1 << 1),
-	/** Hold for object specific discard */
-	VOS_OBJ_DISCARD		= (1 << 2),
-	/** Hold the object for delete dkey */
-	VOS_OBJ_KILL_DKEY	= (1 << 3),
+	VOS_OBJ_CREATE = (1 << 1),
+	/** Hold for discard */
+	VOS_OBJ_DISCARD = (1 << 2),
+	/** Hold for VOS or EC aggregation */
+	VOS_OBJ_AGGREGATE = (1 << 3),
 };
 
 /**
  * Find an object in the cache \a occ and take its reference. If the object is
- * not in cache, this function will load it from PMEM pool or create it, then
- * add it to the cache.
+ * not in cache, this function will load it from PMEM pool, then add it to the
+ * cache. If the object doesn't exist on PMEM pool, a negative cache entry will
+ * be returned when VOS_OBJ_CREATE flag is specified, otherwise, -DER_NONEXIST
+ * will be returned. This function should be called outside of local transaction.
  *
- * \param occ		[IN]		Object cache, can be per cpu
  * \param cont		[IN]		Open container.
  * \param oid		[IN]		VOS object ID.
- * \param epr		[IN,OUT]	Epoch range.   High epoch should be set
+ * \param epr		[IN]		Epoch range.   High epoch should be set
  *					to requested epoch.   The lower epoch
  *					can be 0 or bounded.
  * \param bound		[IN]		Epoch uncertainty bound
@@ -90,9 +93,8 @@ enum {
  *		other			Another error occurred
  */
 int
-vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
-	     daos_unit_oid_t oid, daos_epoch_range_t *epr, daos_epoch_t bound,
-	     uint64_t flags, uint32_t intent, struct vos_object **obj_p,
+vos_obj_hold(struct vos_container *cont, daos_unit_oid_t oid, daos_epoch_range_t *epr,
+	     daos_epoch_t bound, uint64_t flags, uint32_t intent, struct vos_object **obj_p,
 	     struct vos_ts_set *ts_set);
 
 /**
@@ -101,19 +103,12 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
  * \param obj	[IN]	Reference to be released.
  */
 void
-vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj, bool evict);
-
-static inline int
-vos_obj_refcount(struct vos_object *obj)
-{
-	return obj->obj_llink.ll_ref;
-}
+vos_obj_release(struct vos_object *obj, uint64_t flags, bool evict);
 
 /** Evict an object reference from the cache */
-void vos_obj_evict(struct daos_lru_cache *occ, struct vos_object *obj);
+void vos_obj_evict(struct vos_object *obj);
 
-int vos_obj_evict_by_oid(struct daos_lru_cache *occ, struct vos_container *cont,
-			 daos_unit_oid_t oid);
+int vos_obj_evict_by_oid(struct vos_container *cont, daos_unit_oid_t oid);
 
 /**
  * Create an object cache.
@@ -133,13 +128,7 @@ void
 vos_obj_cache_destroy(struct daos_lru_cache *occ);
 
 /** evict cached objects for the specified container */
-void vos_obj_cache_evict(struct daos_lru_cache *occ,
-			 struct vos_container *cont);
-
-/**
- * Return object cache for the current IO.
- */
-struct daos_lru_cache *vos_obj_cache_current(bool standalone);
+void vos_obj_cache_evict(struct vos_container *cont);
 
 /**
  * Object Index API and handles
@@ -201,6 +190,23 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
 	    struct vos_obj_df **obj, struct vos_ts_set *ts_set);
 
 /**
+ * Create a new object for the @oid and return the direct pointer of the
+ * new allocated object.
+ *
+ * \param cont	[IN]	Open container
+ * \param oid	[IN]	DAOS object ID
+ * \param epoch [IN]	Epoch for the lookup
+ * \param obj	[OUT]	Direct pointer to VOS object
+ * \param ts_set[IN]	Timestamp sets
+ *
+ * \return		0 on success and negative on
+ *			failure
+ */
+int
+vos_oi_alloc(struct vos_container *cont, daos_unit_oid_t oid, daos_epoch_t epoch,
+	     struct vos_obj_df **obj_p, struct vos_ts_set *ts_set);
+
+/**
  * Punch an object from the OI table
  */
 int
@@ -214,28 +220,45 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 int
 vos_oi_delete(struct vos_container *cont, daos_unit_oid_t oid, bool only_delete_entry);
 
-/** Hold object for range discard
+/**
+ * When the passed in 'obj' is a negative cache entry, create object on PMEM pool
+ * and associate it with the negative entry, otherwise, perform some update check
+ * only. This function should be called within local transaction.
  *
- * \param[in]	occ	Object cache, can be per cpu
- * \param[in]	cont	Open container
- * \param[in]	oid	The object id
- * \param[out]	objp	Returned object
+ * \param obj		[IN]		Object cache entry
+ * \param epr		[IN]		Epoch range.   High epoch should be set
+ *					to requested epoch.   The lower epoch
+ *					can be 0 or bounded.
+ * \param bound		[IN]		Epoch uncertainty bound
+ * \param flags		[IN]		Object flags
+ * \param intent	[IN]		The request intent.
+ * \param ts_set	[IN]		Timestamp set
  *
- * \return	-DER_NONEXIST	object doesn't exist
- *		-DER_BUSY	Object is already in discard
- *		-DER_AGAIN	Object is being destroyed
- *		0		Success
+ * \return	0			Object is successfully incarnated.
+ * \return	-DER_NONEXIST		The conditions for success don't apply
+ *		-DER_INPROGRESS		The local target doesn't have the
+ *					definitive state of the object.
+ *		other			Another error occurred
  */
 int
-vos_obj_discard_hold(struct daos_lru_cache *occ, struct vos_container *cont, daos_unit_oid_t oid,
-		     struct vos_object **objp);
+vos_obj_incarnate(struct vos_object *obj, daos_epoch_range_t *epr, daos_epoch_t bound,
+		  uint64_t flags, uint32_t intent, struct vos_ts_set *ts_set);
 
-/** Release object held for range discard
+/**
+ * Check if an operation will be conflicting with other ongoing operations over the
+ * same object. (aggregate, discard, obj discard, update, etc.)
  *
- * \param[in]	occ	Object cache, can be per cpu
- * \param[in]	obj	Object to release
+ * FIXME: This function could be deprecated once the obj discard is deprecated.
+ *
+ * \param cont		[IN]		VOS container
+ * \param oid		[IN]		VOS object ID.
+ * \param flags		[IN]		Object flags for the operation to be checked
+ *
+ * \return	0			No conflicting operations
+ * \return	-DER_BUSY		Read is conflicting with ongoing operations
+ *		-DER_UPDATE_AGAIN	Write is conflicting with ongoing operations
  */
-void
-vos_obj_discard_release(struct daos_lru_cache *occ, struct vos_object *obj);
+int
+vos_obj_check_discard(struct vos_container *cont, daos_unit_oid_t oid, uint64_t flags);
 
 #endif

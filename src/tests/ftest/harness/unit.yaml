@@ -1,2 +1,3 @@
 timeout: 10
-test_clients: 1
+hosts:
+  test_clients: 2

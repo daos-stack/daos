@@ -4,9 +4,9 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import base64
+
 from apricot import TestWithServers
 from general_utils import report_errors
-
 
 # Test container set-attr, get-attr, and list-attrs with different
 # types of characters.
@@ -55,12 +55,6 @@ class ContainerQueryAttributeTest(TestWithServers):
     :avocado: recursive
     """
 
-    def __init__(self, *args, **kwargs):
-        """Initialize a ContainerQueryAttribute object."""
-        super().__init__(*args, **kwargs)
-        self.expected_cont_uuid = None
-        self.daos_cmd = None
-
     def test_container_query_attr(self):
         """JIRA ID: DAOS-4640
 
@@ -74,25 +68,23 @@ class ContainerQueryAttributeTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=container,daos_cmd
-        :avocado: tags=cont_query_attr,test_container_query_attr
+        :avocado: tags=ContainerQueryAttributeTest,test_container_query_attr
         """
         # Create a pool and a container.
-        self.add_pool()
-        self.add_container(pool=self.pool)
-
-        self.daos_cmd = self.get_daos_command()
+        pool = self.get_pool()
+        container = self.get_container(pool)
 
         # Call daos container query, obtain pool and container UUID, and
         # compare against those used when creating the pool and the container.
-        kwargs = {
-            "pool": self.pool.uuid,
-            "cont": self.container.uuid
-        }
-        data = self.daos_cmd.container_query(**kwargs)['response']
+        data = container.query()['response']
         actual_pool_uuid = data['pool_uuid']
         actual_cont_uuid = data['container_uuid']
-        self.assertEqual(actual_pool_uuid, self.pool.uuid.lower())
-        self.assertEqual(actual_cont_uuid, self.container.uuid.lower())
+        self.assertEqual(
+            actual_pool_uuid, pool.uuid.lower(),
+            'pool UUID from cont query does not match pool create')
+        self.assertEqual(
+            actual_cont_uuid, container.uuid.lower(),
+            'container UUID from cont query does not match cont create')
 
         # Prepare attr-value pairs. Use the test_strings in value for the first
         # 7 and in attr for the next 7.
@@ -111,12 +103,9 @@ class ContainerQueryAttributeTest(TestWithServers):
         expected_attrs = []
 
         for attr_value in attr_values:
-            self.daos_cmd.container_set_attr(
-                pool=actual_pool_uuid, cont=actual_cont_uuid,
-                attrs={attr_value[0]: attr_value[1]})
+            container.set_attr(attrs={attr_value[0]: attr_value[1]})
 
-            kwargs["attr"] = attr_value[0]
-            data = self.daos_cmd.container_get_attr(**kwargs)['response']
+            data = container.get_attr(attr_value[0])['response']
 
             actual_val = base64.b64decode(data["value"]).decode()
             if attr_value[1] in escape_to_not:
@@ -141,15 +130,8 @@ class ContainerQueryAttributeTest(TestWithServers):
 
         # Verify that attr-lists works with test_strings.
         expected_attrs.sort()
-        kwargs = {
-            "pool": actual_pool_uuid,
-            "cont": actual_cont_uuid
-        }
-        data = self.daos_cmd.container_list_attrs(**kwargs)['response']
-        actual_attrs = list(data)
-        actual_attrs.sort()
-        self.log.debug(str(actual_attrs))
-        self.assertEqual(actual_attrs, expected_attrs)
+        actual_attrs = sorted(list(container.list_attrs()['response']))
+        self.assertEqual(actual_attrs, expected_attrs, 'list-attrs does not match set-attr')
 
     def test_container_query_attrs(self):
         """JIRA ID: DAOS-4640
@@ -164,25 +146,23 @@ class ContainerQueryAttributeTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=container,daos_cmd
-        :avocado: tags=cont_query_attr,test_container_query_attrs
+        :avocado: tags=ContainerQueryAttributeTest,test_container_query_attrs
         """
         # Create a pool and a container.
-        self.add_pool()
-        self.add_container(pool=self.pool)
-
-        self.daos_cmd = self.get_daos_command()
+        pool = self.get_pool()
+        container = self.get_container(pool)
 
         # Call daos container query, obtain pool and container UUID, and
         # compare against those used when creating the pool and the container.
-        kwargs = {
-            "pool": self.pool.uuid,
-            "cont": self.container.uuid
-        }
-        data = self.daos_cmd.container_query(**kwargs)['response']
+        data = container.query()['response']
         actual_pool_uuid = data['pool_uuid']
         actual_cont_uuid = data['container_uuid']
-        self.assertEqual(actual_pool_uuid, self.pool.uuid.lower())
-        self.assertEqual(actual_cont_uuid, self.container.uuid.lower())
+        self.assertEqual(
+            actual_pool_uuid, pool.uuid.lower(),
+            'pool UUID from cont query does not match pool create')
+        self.assertEqual(
+            actual_cont_uuid, container.uuid.lower(),
+            'container UUID from cont query does not match cont create')
 
         # Prepare attr-value pairs. Use the test_strings in value for the first
         # 7 and in attr for the next 7.
@@ -200,17 +180,10 @@ class ContainerQueryAttributeTest(TestWithServers):
         errors = []
 
         # bulk-set all attributes
-        self.daos_cmd.container_set_attr(
-            pool=actual_pool_uuid, cont=actual_cont_uuid,
-            attrs=attr_values)
-
-        attrs = []
-        for attr in attr_values:
-            attrs.append(attr)
+        container.set_attr(attrs=attr_values)
 
         # bulk-get all attributes
-        kwargs["attrs"] = attrs
-        data = self.daos_cmd.container_get_attrs(**kwargs)['response']
+        data = container.get_attr(list(attr_values))['response']
 
         for attr_resp in data:
             key = attr_resp["name"]
@@ -247,24 +220,17 @@ class ContainerQueryAttributeTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=container,daos_cmd
-        :avocado: tags=cont_list_attrs,test_list_attrs_long
+        :avocado: tags=ContainerQueryAttributeTest,test_list_attrs_long
         """
         # Create a pool and a container.
-        self.add_pool()
-        self.add_container(pool=self.pool)
-
-        self.daos_cmd = self.get_daos_command()
+        pool = self.get_pool()
+        container = self.get_container(pool)
 
         expected_attrs = {"attr" + str(idx): "val" + str(idx) for idx in range(50)}
 
-        self.container.set_attr(attrs=expected_attrs)
+        container.set_attr(attrs=expected_attrs)
 
-        kwargs = {
-            "pool": self.pool.uuid,
-            "cont": self.container.uuid
-        }
-        response = self.daos_cmd.container_list_attrs(**kwargs)['response']
-        actual_attr_names = sorted(list(response))
+        actual_attr_names = sorted(list(container.list_attrs()['response']))
         expected_attr_names = sorted(expected_attrs.keys())
         self.assertEqual(
             actual_attr_names, expected_attr_names, "Unexpected output from list_attrs")

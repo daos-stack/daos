@@ -12,9 +12,8 @@ server_config:
           class: ram
           scm_mount: /mnt/daos
   system_ram_reserved: 1
-timeout: 200
+timeout: 300
 pool:
-  control_method: dmg
   scm_size: 134217728
   pool_query_timeout: 30
 svc_params_mux: !mux

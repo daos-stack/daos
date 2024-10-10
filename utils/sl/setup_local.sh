@@ -1,21 +1,16 @@
 #!/bin/bash
 # /*
-#  * (C) Copyright 2016-2022 Intel Corporation.
+#  * (C) Copyright 2016-2023 Intel Corporation.
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 # */
 
 echo "$PWD"
-VARS_FILE=".build_vars-$(uname -s).sh"
-VARS_FILE2=.build_vars.sh
+VARS_FILE=.build_vars.sh
 if [ -f "./${VARS_FILE}" ]; then
   VARS_LOCAL="./${VARS_FILE}"
 elif [ -f "../${VARS_FILE}" ]; then
   VARS_LOCAL="../${VARS_FILE}"
-elif [ -f "./${VARS_FILE2}" ]; then
-  VARS_LOCAL="./${VARS_FILE2}"
-elif [ -f "../${VARS_FILE2}" ]; then
-  VARS_LOCAL="../${VARS_FILE2}"
 else
   VARS_LOCAL=""
 fi
@@ -28,7 +23,8 @@ then
 fi
 
 echo "Build vars file found: ${VARS_LOCAL}"
-. ${VARS_LOCAL}
+# shellcheck disable=SC1090
+. "${VARS_LOCAL}"
 
 os="$(uname)"
 if [ "$os" = "Darwin" ]; then
@@ -94,7 +90,7 @@ for item in $list; do
     if [ $? -eq 1 ]; then
         continue
     fi
-    export ${item}
+    export "${item?}"
     added+=" ${!item}"
     in_list "${!item}/bin" "${old_path}"
     if [ $? -eq 1 ]; then
@@ -106,6 +102,7 @@ for item in $list; do
 done
 
 in_list "${SL_PREFIX}/bin" "${old_path}"
+# shellcheck disable=SC2181
 if [ $? -eq 0 ]; then
     PATH=$SL_PREFIX/bin:$PATH
 fi

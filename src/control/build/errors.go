@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -35,3 +35,10 @@ func IsIncompatComponents(err error) bool {
 	_, ok := errors.Cause(err).(ErrIncompatComponents)
 	return ok
 }
+
+var (
+	// ErrNoCtxMetadata is returned when no component/version metadata is found in the context.
+	ErrNoCtxMetadata = errors.New("no component/version metadata found in context")
+	// ErrCtxMetadataExists is returned when component/version metadata has already been set in the context.
+	ErrCtxMetadataExists = errors.New("component/version metadata already exists in context")
+)

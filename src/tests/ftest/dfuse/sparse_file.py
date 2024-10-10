@@ -1,15 +1,17 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from getpass import getuser
 import os
-import paramiko
+from getpass import getuser
 
+import paramiko
+from dfuse_utils import get_dfuse, start_dfuse
 from general_utils import get_remote_file_size
 from ior_test_base import IorTestBase
+from run_utils import run_remote
 
 
 class SparseFile(IorTestBase):
@@ -50,15 +52,17 @@ class SparseFile(IorTestBase):
         # Create a pool, container and start dfuse.
         self.create_pool()
         self.create_cont()
-        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
+        dfuse = get_dfuse(self, self.hostlist_clients)
+        start_dfuse(self, dfuse, self.pool, self.container)
 
         # get scm space before write
         self.space_before = self.pool.get_pool_free_space("nvme")
 
         # create large file and perform write to it so that if goes out of
         # space.
-        sparse_file = os.path.join(self.dfuse.mount_dir.value, 'sparsefile.txt')
-        self.execute_cmd("touch {}".format(sparse_file))
+        sparse_file = os.path.join(dfuse.mount_dir.value, 'sparsefile.txt')
+        if not run_remote(self.log, self.hostlist_clients, f"touch {sparse_file}").passed:
+            self.fail(f"Failed to create {sparse_file}")
         self.log.info("File size (in bytes) before truncate: %s",
                       get_remote_file_size(self.hostlist_clients[0], sparse_file))
 
@@ -82,7 +86,8 @@ class SparseFile(IorTestBase):
 
         # write to the first byte of the file with char 'A'
         dd_first_byte = "echo 'A' | dd conv=notrunc of={} bs=1 count=1".format(sparse_file)
-        self.execute_cmd(dd_first_byte)
+        if not run_remote(self.log, self.hostlist_clients, dd_first_byte).passed:
+            self.fail(f"Failed to create first byte in {sparse_file}")
         fsize_write_1stbyte = get_remote_file_size(self.hostlist_clients[0], sparse_file)
         self.log.info("File size (in bytes) after writing first byte: %s", fsize_write_1stbyte)
         # verify file did not got overwritten after dd write.
@@ -91,7 +96,8 @@ class SparseFile(IorTestBase):
         # write to the 1024th byte position of the file
         dd_1024_byte = "echo 'A' | dd conv=notrunc of={} obs=1 seek=1023 bs=1 count=1".format(
             sparse_file)
-        self.execute_cmd(dd_1024_byte)
+        if not run_remote(self.log, self.hostlist_clients, dd_1024_byte).passed:
+            self.fail(f"Failed to create 1024th byte in {sparse_file}")
         fsize_write_1024thwrite = get_remote_file_size(self.hostlist_clients[0], sparse_file)
         self.log.info("File size (in bytes) after writing 1024th byte: %s", fsize_write_1024thwrite)
         # verify file did not got overwritten after dd write.
@@ -108,13 +114,13 @@ class SparseFile(IorTestBase):
         # check the middle 1022 bytes if they are filled with zeros
         middle_1022_bytes = "cmp --ignore-initial=1 --bytes=1022 {} {}".format(
             sparse_file, "/dev/zero")
-        self.execute_cmd(middle_1022_bytes)
+        if not run_remote(self.log, self.hostlist_clients, middle_1022_bytes).passed:
+            self.fail(f"Unexpected bytes in {sparse_file}")
 
         # read last 512 bytes which should be zeros till end of file.
         ignore_bytes = self.space_before - 512
         read_till_eof = "cmp --ignore-initial={} {} {}".format(
             ignore_bytes, sparse_file, "/dev/zero")
-        # self.execute_cmd(read_till_eof, False)
         # fail the test if the above command is successful.
-        if 0 in self.execute_cmd(read_till_eof, False):
+        if run_remote(self.log, self.hostlist_clients, read_till_eof).passed:
             self.fail("read_till_eof command was supposed to fail. But it completed successfully.")

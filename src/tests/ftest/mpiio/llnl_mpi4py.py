@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2019-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -49,5 +49,4 @@ class LlnlMpi4py(MpiioTests):
         :avocado: tags=mpiio,mpich,mpi4py
         :avocado: tags=LlnlMpi4py,test_mpi4py
         """
-        test_repo = self.params.get("mpi4py", '/run/test_repo/')
-        self.run_test(test_repo, "mpi4py")
+        self.run_test(self.params.get('mpi4py', '/run/test_repo/'), "mpi4py")

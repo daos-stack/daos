@@ -1,18 +1,18 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from getpass import getuser
-from grp import getgrgid
-from pwd import getpwnam
 import os
 import re
 from collections import defaultdict
+from getpass import getuser
+from grp import getgrgid
+from pwd import getpwnam
 
 from ClusterShell.NodeSet import NodeSet
-
-from run_utils import run_remote
+# pylint: disable=import-error,no-name-in-module
+from util.run_utils import run_remote
 
 
 def get_primary_group(user=None):
@@ -81,8 +81,7 @@ def getent(log, hosts, database, key, sudo=False):
         sudo (bool): whether to execute commands with sudo
 
     Returns:
-        RemoteCommandResult: result of run_remote()
-
+        CommandResult: groups of command results from the same hosts with the same return status
     """
     command = ' '.join(filter(None, [
         'sudo -n' if sudo else None,
@@ -103,8 +102,7 @@ def groupadd(log, hosts, group, force=False, sudo=False):
         sudo (bool, optional): whether to execute commands with sudo. Default is False
 
     Returns:
-        RemoteCommandResult: result of run_remote()
-
+        CommandResult: groups of command results from the same hosts with the same return status
     """
     command = ' '.join(filter(None, [
         'sudo -n' if sudo else None,
@@ -127,8 +125,7 @@ def useradd(log, hosts, user, group=None, parent_dir=None, sudo=False):
         sudo (bool): whether to execute commands with sudo. Default is False
 
     Returns:
-        RemoteCommandResult: result of run_remote()
-
+        CommandResult: groups of command results from the same hosts with the same return status
     """
     command = ' '.join(filter(None, [
         'sudo -n' if sudo else None,
@@ -150,8 +147,7 @@ def userdel(log, hosts, user, sudo=False):
         sudo (bool): whether to execute commands with sudo. Default is False
 
     Returns:
-        RemoteCommandResult: result of run_remote()
-
+        CommandResult: groups of command results from the same hosts with the same return status
     """
     command = ' '.join(filter(None, [
         'sudo -n' if sudo else None,

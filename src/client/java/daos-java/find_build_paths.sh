@@ -12,6 +12,7 @@ then
     echo "${daos_install_path}/prereq/release/protobufc/"
   fi
 else
+  #  shellcheck disable=SC1090
   source "${build_vars}"
   echo "${!var}"
 fi

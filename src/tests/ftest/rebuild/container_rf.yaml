@@ -1,9 +1,10 @@
 hosts:
-  test_servers: 6
+  test_servers: 7
   test_clients: 1
 timeout: 480
 server_config:
   name: daos_server
+  crt_timeout: 10
   engines_per_host: 1
   engines:
     0:
@@ -15,9 +16,8 @@ server_config:
           scm_mount: /mnt/daos
   system_ram_reserved: 1
 pool:
-  scm_size: 1073741824
-  svcn: 3
-  control_method: dmg
+  size: 1G
+  svcn: 7  # To match number of servers
   pool_query_timeout: 30
 container:
   control_method: daos

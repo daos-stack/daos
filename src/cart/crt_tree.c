@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,7 +15,7 @@ static int
 crt_get_filtered_grp_rank_list(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 			       bool filter_invert, d_rank_list_t *filter_ranks,
 			       d_rank_t root, d_rank_t self, d_rank_t *grp_size,
-			       uint32_t *grp_root, d_rank_t *grp_self,
+			       d_rank_t *grp_root, d_rank_t *grp_self,
 			       d_rank_list_t **result_grp_rank_list,
 			       bool *allocated)
 {
@@ -27,7 +27,7 @@ crt_get_filtered_grp_rank_list(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 
 	rc = d_rank_list_dup_sort_uniq(&grp_rank_list, membs);
 	if (rc != 0) {
-		D_ERROR("d_rank_list_dup failed, rc: %d.\n", rc);
+		D_ERROR("d_rank_list_dup failed, rc " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 	D_ASSERT(grp_rank_list != NULL);
@@ -80,7 +80,6 @@ out:
 		*result_grp_rank_list = grp_rank_list;
 	return rc;
 }
-
 
 #define CRT_TREE_PARAMETER_CHECKING(grp_priv, tree_topo, root, self)	\
 	do {								\
@@ -213,8 +212,8 @@ crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 					    &grp_rank_list, &allocated);
 	if (rc != 0) {
 		D_ERROR("crt_get_filtered_grp_rank_list(group %s, root %d, "
-			"self %d) failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
-			root, self, rc);
+			"self %d) failed, rc " DF_RC "\n",
+			grp_priv->gp_pub.cg_grpid, root, self, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 

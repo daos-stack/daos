@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -340,6 +340,9 @@ typedef struct {
 	 *			cannot make inplace change, should call
 	 *			rec_free() to release the original record
 	 *			and rec_alloc() to create a new record.
+	 *		1
+	 *			cannot make inplace change, but rec_free()
+	 *			and rec_alloc() for replacing are done.
 	 *		-ve	error code
 	 */
 	int		(*to_rec_update)(struct btr_instance *tins,
@@ -486,7 +489,10 @@ enum btr_feats {
 	BTR_FEAT_DYNAMIC_ROOT = (1 << 2),
 	/** Skip rebalance leaf when delete some record from the leaf. */
 	BTR_FEAT_SKIP_LEAF_REBAL = (1 << 3),
-
+	/** Tree supports embedded root. */
+	BTR_FEAT_EMBED_FIRST = (1 << 4),
+	/** Marks that the current root is an embedded value */
+	BTR_FEAT_EMBEDDED = (1 << 5),
 	/** Put new entries above this line */
 	/** Convenience entry for calculating mask for all feats */
 	BTR_FEAT_HELPER,
@@ -650,8 +656,8 @@ enum {
 	DBTREE_VOS_BEGIN	= 10,
 	DBTREE_VOS_END		= DBTREE_VOS_BEGIN + 9,
 	DBTREE_DSM_BEGIN	= 20,
-	DBTREE_DSM_END		= DBTREE_DSM_BEGIN + 9,
-	DBTREE_SMD_BEGIN	= 30,
+	DBTREE_DSM_END		= DBTREE_DSM_BEGIN + 19,
+	DBTREE_SMD_BEGIN	= 40,
 	DBTREE_SMD_END		= DBTREE_SMD_BEGIN + 9,
 };
 

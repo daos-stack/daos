@@ -31,34 +31,28 @@ server_config:
       log_file: daos_server1.log
       log_mask: ERR
       storage: auto
-create_pool_max_size:
-  scm: true
-  percentage: 90
 pool:
-  control_method: dmg
+  size: 90%
 container:
   type: POSIX
   control_method: daos
-  properties: dedup:memcmp
 ior:
   api: "DFS"
   client_processes:
     np: 32
-  dfs_destroy: false
   iorflags:
     flags: "-C -k -e -w -g -G 27 -D 120 -Q 1 -vv"
     read_flags: "-C -k -e -r -R -g -G 27 -D 120 -Q 1 -vv"
   test_file: daos:testFile
   segment_count: 2000000
-  repetitions: 1
   chunk_block_transfer_sizes:
     # [ChunkSize, BlocksSize, TransferSize]
     - [47008, 47008, 47008]
   objectclass:
     dfs_oclass_list:
       # - [EC_Object_Class, Minimum number of servers]
-      - ["EC_2P2G1", 6]
-      - ["EC_4P2G1", 8]
-      - ["EC_8P2G1", 12]
+      - ["EC_2P2GX", 6]
+      - ["EC_4P2GX", 8]
+      - ["EC_8P2GX", 12]
   sw_wearout: 1
-  sw_status_file: "/var/tmp/daos_testing/stoneWallingStatusFile"
+  sw_status_file: stoneWallingStatusFile

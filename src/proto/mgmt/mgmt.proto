@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,10 +11,13 @@ option go_package = "github.com/daos-stack/daos/src/control/common/proto/mgmt";
 
 import "shared/event.proto";
 import "mgmt/pool.proto";
+import "mgmt/check.proto";
 import "mgmt/cont.proto";
 import "mgmt/svc.proto";
 import "mgmt/acl.proto"; // ACL-related requests
 import "mgmt/system.proto";
+import "chk/chk.proto";
+import "chk/faults.proto";
 
 // Management Service is replicated on a small number of servers in the system,
 // these requests will be processed on a host that is a member of the management
@@ -67,7 +70,7 @@ service MgmtSvc {
 	// List all containers in a pool
 	rpc ListContainers(ListContReq) returns (ListContResp) {}
 	// Change the owner of a DAOS container
-	rpc ContSetOwner(ContSetOwnerReq) returns (ContSetOwnerResp) {}
+	rpc ContSetOwner(ContSetOwnerReq) returns (DaosResp) {}
 	// Query DAOS system status
 	rpc SystemQuery(SystemQueryReq) returns(SystemQueryResp) {}
 	// Stop DAOS system (shutdown data-plane instances)
@@ -80,6 +83,22 @@ service MgmtSvc {
 	rpc SystemErase(SystemEraseReq) returns(SystemEraseResp) {}
 	// Clean up leaked resources for a given node
 	rpc SystemCleanup(SystemCleanupReq) returns(SystemCleanupResp){}
+	// Enable system check mode
+	rpc SystemCheckEnable(CheckEnableReq) returns(DaosResp){}
+	// Disable system check mode
+	rpc SystemCheckDisable(CheckDisableReq) returns(DaosResp){}
+	// Initiate a system check
+	rpc SystemCheckStart(CheckStartReq) returns(CheckStartResp){}
+	// Stop a system check
+	rpc SystemCheckStop(CheckStopReq) returns(CheckStopResp){}
+	// Query a system check
+	rpc SystemCheckQuery(CheckQueryReq) returns(CheckQueryResp){}
+	// Set system check properties
+	rpc SystemCheckSetPolicy(CheckSetPolicyReq) returns(DaosResp){}
+	// Query system check properties
+	rpc SystemCheckGetPolicy(CheckGetPolicyReq) returns(CheckGetPolicyResp){}
+	// Send the desired action to repair an inconsistency.
+	rpc SystemCheckRepair(CheckActReq) returns(CheckActResp){}
 	// PoolUpgrade queries a DAOS pool.
 	rpc PoolUpgrade(PoolUpgradeReq) returns (PoolUpgradeResp) {}
 	// Set a system attribute or attributes.
@@ -90,4 +109,12 @@ service MgmtSvc {
 	rpc SystemSetProp(SystemSetPropReq) returns (DaosResp) {}
 	// Get a system property or properties.
 	rpc SystemGetProp(SystemGetPropReq) returns (SystemGetPropResp) {}
+
+
+	// Fault injection handlers are only implemented in non-release builds.
+	// FaultInjectReport injects a checker report.
+	rpc FaultInjectReport(chk.CheckReport) returns (DaosResp) {}
+	// FaultInjectPoolFault creates a pool fault for testing the checker.
+	rpc FaultInjectPoolFault(chk.Fault) returns (DaosResp) {}
+	rpc FaultInjectMgmtPoolFault(chk.Fault) returns (DaosResp) {}
 }

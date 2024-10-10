@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -463,7 +463,7 @@ csum_copy_inline(int type, vos_iter_entry_t *ent, struct ds_obj_enum_arg *arg,
 
 		rc = arg->copy_data_cb(ih, &ent_to_verify, &data_to_verify);
 		if (rc != 0) {
-			D_ERROR("Issue copying data");
+			D_ERROR("Issue copying data\n");
 			return rc;
 		}
 
@@ -475,7 +475,7 @@ csum_copy_inline(int type, vos_iter_entry_t *ent, struct ds_obj_enum_arg *arg,
 
 		D_FREE(data_to_verify.iov_buf);
 		if (rc != 0) {
-			D_ERROR("Found corruption!");
+			D_ERROR("Found corruption!\n");
 			return rc;
 		}
 
@@ -483,20 +483,20 @@ csum_copy_inline(int type, vos_iter_entry_t *ent, struct ds_obj_enum_arg *arg,
 						  ent->ie_rsize, iov_out,
 						  &new_csum_info);
 		if (rc != 0) {
-			D_ERROR("Issue calculating checksum");
+			D_ERROR("Issue calculating checksum\n");
 			return rc;
 		}
 
 		rc = fill_data_csum(new_csum_info, &arg->csum_iov);
 		daos_csummer_free_ci(csummer, &new_csum_info);
 		if (rc != 0) {
-			D_ERROR("Issue filling csum data");
+			D_ERROR("Issue filling csum data\n");
 			return rc;
 		}
 	} else {
 		rc = fill_data_csum(&ent->ie_csum, &arg->csum_iov);
 		if (rc != 0) {
-			D_ERROR("Issue filling csum data");
+			D_ERROR("Issue filling csum data\n");
 			return rc;
 		}
 	}
@@ -617,7 +617,8 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct ds_obj_enum_arg *ar
 	 * enum pack implementation doesn't support yield & re-probe.
 	 */
 	if (arg->inline_thres > 0 && data_size <= arg->inline_thres &&
-	    data_size > 0 && bio_iov2media(&key_ent->ie_biov) != DAOS_MEDIA_NVME) {
+	    data_size > 0 && bio_iov2media(&key_ent->ie_biov) != DAOS_MEDIA_NVME &&
+	    !BIO_ADDR_IS_GANG(&key_ent->ie_biov.bi_addr)) {
 		inline_data = true;
 		size += data_size;
 	}
@@ -693,7 +694,7 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct ds_obj_enum_arg *ar
 
 		rc = csum_copy_inline(type, key_ent, arg, ih, &iov_out);
 		if (rc != 0) {
-			D_ERROR("Issue copying csum");
+			D_ERROR("Issue copying csum\n");
 			return rc;
 		}
 

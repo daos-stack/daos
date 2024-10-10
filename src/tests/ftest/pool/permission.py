@@ -3,10 +3,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from pydaos.raw import DaosContainer, DaosApiError
-from avocado.core.exceptions import TestFail
-
 from apricot import TestWithServers
+from avocado.core.exceptions import TestFail
+from pydaos.raw import DaosApiError
+from test_utils_container import add_container
+from test_utils_pool import add_pool
 
 RESULT_PASS = "PASS"  # nosec
 RESULT_FAIL = "FAIL"
@@ -32,7 +33,7 @@ class Permission(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=pool
-        :avocado: tags=permission,file_modification,test_file_modification
+        :avocado: tags=Permission,test_file_modification
         """
         # parameter used for pool connect
         permissions = self.params.get("perm", '/run/createtests/permissions/*')
@@ -40,45 +41,44 @@ class Permission(TestWithServers):
 
         # initialize a python pool object then create the underlying
         # daos storage
-        self.add_pool(create=False)
+        pool = add_pool(self, create=False)
         self.test_log.debug("Pool initialization successful")
-        self.pool.create()
+        pool.create()
         self.test_log.debug("Pool Creation successful")
         try:
-            self.pool.connect(1 << permissions)
+            pool.connect(1 << permissions)
             self.test_log.debug("Pool Connect successful")
         except TestFail as excep:
             self.log.error(str(excep))
             if expected_result == RESULT_PASS:
-                self.fail(
-                    "#Test was expected to pass but it failed at pool.connect.\n")
+                self.fail("Test was expected to pass but it failed at pool.connect.")
+
+        container = add_container(self, pool, create=False)
+        self.test_log.debug("Container initialization successful")
         try:
-            self.container = DaosContainer(self.context)
-            self.test_log.debug("Container initialization successful")
-
-            self.container.create(self.pool.pool.handle)
+            container.create()
             self.test_log.debug("Container create successful")
-
             # now open it
-            self.container.open()
+            container.open()
             self.test_log.debug("Container open successful")
+        except TestFail as error:
+            self.log.error(str(error))
+            if expected_result == RESULT_PASS:
+                self.fail("Test was expected to pass but it failed at container operations.")
 
-            thedata = b"a string that I want to stuff into an object"
-            size = 45
-            dkey = b"this is the dkey"
-            akey = b"this is the akey"
-
-            self.container.write_an_obj(thedata, size, dkey, akey)
+        thedata = b"a string that I want to stuff into an object"
+        size = 45
+        dkey = b"this is the dkey"
+        akey = b"this is the akey"
+        try:
+            container.container.write_an_obj(thedata, size, dkey, akey)
             self.test_log.debug("Container write successful")
             if expected_result == RESULT_FAIL:
-                self.fail(
-                    "Test was expected to fail at container operations but it passed.\n")
-            else:
-                self.test_log.debug("Test Passed.")
-        except DaosApiError as excep:
-            self.log.error(str(excep))
+                self.fail("Test was expected to fail at container operations but it passed.")
+        except DaosApiError as error:
+            self.log.error(str(error))
             if expected_result == RESULT_PASS:
-                self.fail(
-                    "#Test was expected to pass but it failed at container operations.\n")
+                self.fail("Test was expected to pass but it failed at container operations.")
             else:
-                self.test_log.debug("Test expected failed in container create, r/w. Test Passed.")
+                self.test_log.debug("Test expected failed in container create, r/w.")
+        self.test_log.debug("Test Passed.")

@@ -79,7 +79,7 @@ Defensive I/O is used to manage a large simulation run over a period of time
 larger than the platform's mean time between failure (MTBF). The simulation
 regularly dumps the current computation state to a dedicated container used
 to guarantee forward progress in the event of failures. This section
-elaborates on how checkponting could be implemented on top of the DAOS
+elaborates on how checkpointing could be implemented on top of the DAOS
 storage stack. We first consider the traditional approach relying on
 blocking barriers and then a more loosely coupled execution.
 
@@ -160,7 +160,7 @@ storing the analyzed data are a single container. In other words, the
 down-sample job consumes input data and writes output data to the same
 container.
 
-The down-sample job opens the shared container, obtains an hold and dumps
+The down-sample job opens the shared container, obtains a hold and dumps
 new sampled timesteps to the container. As before, the post-process job also
 opens the container, fetches the latest analyzed timestep, but does not
 obtain an epoch hold until a new global HCE is ready. Once the post-process

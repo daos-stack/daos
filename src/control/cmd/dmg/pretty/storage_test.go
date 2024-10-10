@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,10 +8,8 @@ package pretty
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 
@@ -38,7 +36,7 @@ func mockHostStorageMap(t *testing.T, hosts ...*mockHostStorage) control.HostSto
 	return hsm
 }
 
-func TestControl_PrintStorageScanResponse(t *testing.T) {
+func TestPretty_PrintHostStorageMap(t *testing.T) {
 	var (
 		standard   = control.MockServerScanResp(t, "standard")
 		pmemSingle = control.MockServerScanResp(t, "pmemSingle")
@@ -409,7 +407,7 @@ host[2,4] 3.2 TB (2 namespaces) 2.0 TB (1 controller)
 	}
 }
 
-func TestControl_PrintStorageScanResponseVerbose(t *testing.T) {
+func TestPretty_PrintHostStorageMap_verbose(t *testing.T) {
 	var (
 		standard   = control.MockServerScanResp(t, "standard")
 		pmemSingle = control.MockServerScanResp(t, "pmemSingle")
@@ -472,11 +470,12 @@ Errors:
 host1
 -----
 HugePage Size: 2048 KB
-	No SCM modules found
 
-NVMe PCI     Model   FW Revision Socket ID Capacity 
---------     -----   ----------- --------- -------- 
-0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
+  No SCM modules found
+
+NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
+--------     -----   ----------- ------ -------- ------- ---- 
+0000:01:00.0 model-1 fwRev-1     1      2.0 TB   NA      0    
 
 `,
 		},
@@ -501,11 +500,12 @@ Errors:
 host1
 -----
 HugePage Size: 2048 KB
-SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
-------------- --------- --------------- ---------- ------------ -------- 
-1             1         1               1          1            954 MiB  
 
-	No NVMe devices found
+SCM Module Socket Memory Ctrlr Channel Channel Slot Capacity UID     Part Number Health  
+---------- ------ ------------ ------- ------------ -------- ---     ----------- ------  
+1          1      1            1       1            954 MiB  Device1 PartNumber1 Healthy 
+
+  No NVMe devices found
 
 `,
 		},
@@ -535,9 +535,10 @@ Errors:
 host[1-2]
 ---------
 HugePage Size: 2048 KB
-	No SCM modules found
 
-	No NVMe devices found
+  No SCM modules found
+
+  No NVMe devices found
 
 `,
 		},
@@ -561,9 +562,10 @@ HugePage Size: 2048 KB
 host[1-2]
 ---------
 HugePage Size: 2048 KB
-	No SCM modules found
 
-	No NVMe devices found
+  No SCM modules found
+
+  No NVMe devices found
 
 `,
 		},
@@ -583,13 +585,14 @@ HugePage Size: 2048 KB
 host1
 -----
 HugePage Size: 2048 KB
-SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
-------------- --------- --------------- ---------- ------------ -------- 
-1             1         1               1          1            954 MiB  
 
-NVMe PCI     Model   FW Revision Socket ID Capacity 
---------     -----   ----------- --------- -------- 
-0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
+SCM Module Socket Memory Ctrlr Channel Channel Slot Capacity UID     Part Number Health  
+---------- ------ ------------ ------- ------------ -------- ---     ----------- ------  
+1          1      1            1       1            954 MiB  Device1 PartNumber1 Healthy 
+
+NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
+--------     -----   ----------- ------ -------- ------- ---- 
+0000:01:00.0 model-1 fwRev-1     1      2.0 TB   NA      0    
 
 `,
 		},
@@ -609,13 +612,14 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 host1
 -----
 HugePage Size: 2048 KB
-SCM Namespace Socket ID Capacity 
-------------- --------- -------- 
-pmem0         0         1.0 TB   
 
-NVMe PCI     Model   FW Revision Socket ID Capacity 
---------     -----   ----------- --------- -------- 
-0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
+SCM Namespace Socket Capacity 
+------------- ------ -------- 
+pmem0         0      1.0 TB   
+
+NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
+--------     -----   ----------- ------ -------- ------- ---- 
+0000:01:00.0 model-1 fwRev-1     1      2.0 TB   NA      0    
 
 `,
 		},
@@ -639,13 +643,14 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 host[1-2]
 ---------
 HugePage Size: 2048 KB
-SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
-------------- --------- --------------- ---------- ------------ -------- 
-1             1         1               1          1            954 MiB  
 
-NVMe PCI     Model   FW Revision Socket ID Capacity 
---------     -----   ----------- --------- -------- 
-0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
+SCM Module Socket Memory Ctrlr Channel Channel Slot Capacity UID     Part Number Health  
+---------- ------ ------------ ------- ------------ -------- ---     ----------- ------  
+1          1      1            1       1            954 MiB  Device1 PartNumber1 Healthy 
+
+NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
+--------     -----   ----------- ------ -------- ------- ---- 
+0000:01:00.0 model-1 fwRev-1     1      2.0 TB   NA      0    
 
 `,
 		},
@@ -669,21 +674,23 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 host1
 -----
 HugePage Size: 2048 KB
-SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
-------------- --------- --------------- ---------- ------------ -------- 
-1             1         1               1          1            954 MiB  
 
-	No NVMe devices found
+SCM Module Socket Memory Ctrlr Channel Channel Slot Capacity UID     Part Number Health  
+---------- ------ ------------ ------- ------------ -------- ---     ----------- ------  
+1          1      1            1       1            954 MiB  Device1 PartNumber1 Healthy 
+
+  No NVMe devices found
 
 -----
 host2
 -----
 HugePage Size: 2048 KB
-	No SCM modules found
 
-NVMe PCI     Model   FW Revision Socket ID Capacity 
---------     -----   ----------- --------- -------- 
-0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
+  No SCM modules found
+
+NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
+--------     -----   ----------- ------ -------- ------- ---- 
+0000:01:00.0 model-1 fwRev-1     1      2.0 TB   NA      0    
 
 `,
 		},
@@ -699,13 +706,14 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 host[0-1023]
 ------------
 HugePage Size: 2048 KB
-SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
-------------- --------- --------------- ---------- ------------ -------- 
-1             1         1               1          1            954 MiB  
 
-NVMe PCI     Model   FW Revision Socket ID Capacity 
---------     -----   ----------- --------- -------- 
-0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
+SCM Module Socket Memory Ctrlr Channel Channel Slot Capacity UID     Part Number Health  
+---------- ------ ------------ ------- ------------ -------- ---     ----------- ------  
+1          1      1            1       1            954 MiB  Device1 PartNumber1 Healthy 
+
+NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
+--------     -----   ----------- ------ -------- ------- ---- 
+0000:01:00.0 model-1 fwRev-1     1      2.0 TB   NA      0    
 
 `,
 		},
@@ -737,11 +745,12 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 host-[0001-0004]
 ----------------
 HugePage Size: 2048 KB
-	No SCM modules found
 
-NVMe PCI     Model   FW Revision Socket ID Capacity 
---------     -----   ----------- --------- -------- 
-0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
+  No SCM modules found
+
+NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
+--------     -----   ----------- ------ -------- ------- ---- 
+0000:01:00.0 model-1 fwRev-1     1      2.0 TB   NA      0    
 
 `,
 		},
@@ -773,11 +782,12 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 host-j-[0001-0004]
 ------------------
 HugePage Size: 2048 KB
-	No SCM modules found
 
-NVMe PCI     Model   FW Revision Socket ID Capacity 
---------     -----   ----------- --------- -------- 
-0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
+  No SCM modules found
+
+NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
+--------     -----   ----------- ------ -------- ------- ---- 
+0000:01:00.0 model-1 fwRev-1     1      2.0 TB   NA      0    
 
 `,
 		},
@@ -809,29 +819,31 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 host[1,3]
 ---------
 HugePage Size: 2048 KB
-SCM Namespace Socket ID Capacity 
-------------- --------- -------- 
-pmem0         0         1.0 TB   
-pmem1         1         2.0 TB   
 
-NVMe PCI     Model FW Revision Socket ID Capacity 
---------     ----- ----------- --------- -------- 
-0000:01:00.0                   1         2.0 TB   
-0000:04:00.0                   0         2.0 TB   
+SCM Namespace Socket Capacity 
+------------- ------ -------- 
+pmem0         0      1.0 TB   
+pmem1         1      2.0 TB   
+
+NVMe PCI     Model FW Revision Socket Capacity Role(s)       Rank 
+--------     ----- ----------- ------ -------- -------       ---- 
+0000:01:00.0                   1      2.0 TB   data,meta,wal 0    
+0000:04:00.0                   0      2.0 TB   data,meta,wal 0    
 
 ---------
 host[2,4]
 ---------
 HugePage Size: 2048 KB
-SCM Namespace Socket ID Capacity 
-------------- --------- -------- 
-pmem0         0         1.0 TB   
-pmem1         1         2.0 TB   
 
-NVMe PCI     Model FW Revision Socket ID Capacity 
---------     ----- ----------- --------- -------- 
-0000:01:00.0                   1         2.1 TB   
-0000:04:00.0                   0         2.1 TB   
+SCM Namespace Socket Capacity 
+------------- ------ -------- 
+pmem0         0      1.0 TB   
+pmem1         1      2.0 TB   
+
+NVMe PCI     Model FW Revision Socket Capacity Role(s)       Rank 
+--------     ----- ----------- ------ -------- -------       ---- 
+0000:01:00.0                   1      2.1 TB   data,meta,wal 0    
+0000:04:00.0                   0      2.1 TB   data,meta,wal 0    
 
 `,
 		},
@@ -863,131 +875,7 @@ NVMe PCI     Model FW Revision Socket ID Capacity
 	}
 }
 
-func TestControl_PrintStorageUsageScanResponse(t *testing.T) {
-	var (
-		withSpaceUsage = control.MockServerScanResp(t, "withSpaceUsage")
-		noStorage      = control.MockServerScanResp(t, "noStorage")
-		bothFailed     = control.MockServerScanResp(t, "bothFailed")
-	)
-
-	for name, tc := range map[string]struct {
-		mic         *control.MockInvokerConfig
-		expPrintStr string
-	}{
-		"empty response": {
-			mic: &control.MockInvokerConfig{
-				UnaryResponse: &control.UnaryResponse{},
-			},
-		},
-		"server error": {
-			mic: &control.MockInvokerConfig{
-				UnaryResponse: &control.UnaryResponse{
-					Responses: []*control.HostResponse{
-						{
-							Addr:  "host1",
-							Error: errors.New("failed"),
-						},
-					},
-				},
-			},
-			expPrintStr: `
-Errors:
-  Hosts Error  
-  ----- -----  
-  host1 failed 
-
-`,
-		},
-		"scm and nvme scan error": {
-			mic: &control.MockInvokerConfig{
-				UnaryResponse: &control.UnaryResponse{
-					Responses: []*control.HostResponse{
-						{
-							Addr:    "host1:1",
-							Message: bothFailed,
-						},
-						{
-							Addr:    "host2:1",
-							Message: bothFailed,
-						},
-					},
-				},
-			},
-			expPrintStr: `
-Errors:
-  Hosts     Error            
-  -----     -----            
-  host[1-2] nvme scan failed 
-  host[1-2] scm scan failed  
-
-Hosts     SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used 
------     --------- -------- -------- ---------- --------- --------- 
-host[1-2] 0 B       0 B      N/A      0 B        0 B       N/A       
-`,
-		},
-		"no storage": {
-			mic: &control.MockInvokerConfig{
-				UnaryResponse: &control.UnaryResponse{
-					Responses: []*control.HostResponse{
-						{
-							Addr:    "host1",
-							Message: noStorage,
-						},
-					},
-				},
-			},
-			expPrintStr: `
-Hosts SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used 
------ --------- -------- -------- ---------- --------- --------- 
-host1 0 B       0 B      N/A      0 B        0 B       N/A       
-`,
-		},
-		"single host with space usage": {
-			mic: &control.MockInvokerConfig{
-				UnaryResponse: &control.UnaryResponse{
-					Responses: []*control.HostResponse{
-						{
-							Addr:    "host1",
-							Message: withSpaceUsage,
-						},
-					},
-				},
-			},
-			expPrintStr: `
-Hosts SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used 
------ --------- -------- -------- ---------- --------- --------- 
-host1 3.0 TB    750 GB   75 %     36 TB      27 TB     25 %      
-`,
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer test.ShowBufferOnFailure(t, buf)
-
-			ctx := test.Context(t)
-			mi := control.NewMockInvoker(log, tc.mic)
-
-			resp, err := control.StorageScan(ctx, mi, &control.StorageScanReq{})
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			var bld strings.Builder
-			if err := PrintResponseErrors(resp, &bld); err != nil {
-				t.Fatal(err)
-			}
-			if err := PrintHostStorageUsageMap(resp.HostStorage, &bld); err != nil {
-				t.Fatal(err)
-			}
-
-			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
-				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)
-			}
-		})
-	}
-}
-
-func TestControl_PrintStorageFormatResponse(t *testing.T) {
+func TestPretty_PrintStorageFormatMap(t *testing.T) {
 	for name, tc := range map[string]struct {
 		resp        *control.StorageFormatResp
 		expPrintStr string
@@ -1060,6 +948,41 @@ Format Summary:
   host1 2           2            
 `,
 		},
+		"1 SCM, NVMe skipped": {
+			resp: &control.StorageFormatResp{
+				HostErrorsResp: control.HostErrorsResp{
+					HostErrors: make(control.HostErrorsMap),
+				},
+				HostStorage: func() control.HostStorageMap {
+					hsm := make(control.HostStorageMap)
+					hs := &control.HostStorage{
+						ScmMountPoints: []*storage.ScmMountPoint{
+							{
+								Info: "success",
+								Path: "/mnt/0",
+							},
+						},
+						NvmeDevices: []*storage.NvmeController{
+							{
+								Info:    "skipping",
+								PciAddr: storage.NilBdevAddress,
+							},
+						},
+					}
+					if err := hsm.Add("host1", hs); err != nil {
+						t.Fatal(err)
+					}
+					return hsm
+				}(),
+			},
+			expPrintStr: `
+
+Format Summary:
+  Hosts SCM Devices NVMe Devices 
+  ----- ----------- ------------ 
+  host1 1           0            
+`,
+		},
 		"2 Hosts, 2 SCM, 2 NVMe; first SCM fails": {
 			resp: control.MockFormatResp(t, control.MockFormatConf{
 				Hosts:       2,
@@ -1110,7 +1033,7 @@ Format Summary:
 	}
 }
 
-func TestControl_PrintStorageFormatResponseVerbose(t *testing.T) {
+func TestPretty_PrintStorageFormatMap_verbose(t *testing.T) {
 	for name, tc := range map[string]struct {
 		resp        *control.StorageFormatResp
 		expPrintStr string
@@ -1151,9 +1074,9 @@ SCM Mount Format Result
 --------- ------------- 
 /mnt/2    CTL_SUCCESS   
 
-NVMe PCI Format Result 
--------- ------------- 
-2        CTL_SUCCESS   
+NVMe PCI Format Result Role(s) 
+-------- ------------- ------- 
+2        CTL_SUCCESS   NA      
 
 `,
 		},
@@ -1178,9 +1101,9 @@ SCM Mount Format Result
 /mnt/1    CTL_SUCCESS   
 /mnt/2    CTL_SUCCESS   
 
-NVMe PCI Format Result 
--------- ------------- 
-1        CTL_SUCCESS   
+NVMe PCI Format Result Role(s) 
+-------- ------------- ------- 
+1        CTL_SUCCESS   NA      
 
 `,
 		},
@@ -1200,10 +1123,10 @@ SCM Mount Format Result
 /mnt/1    CTL_SUCCESS   
 /mnt/2    CTL_SUCCESS   
 
-NVMe PCI Format Result 
--------- ------------- 
-1        CTL_SUCCESS   
-2        CTL_SUCCESS   
+NVMe PCI Format Result Role(s) 
+-------- ------------- ------- 
+1        CTL_SUCCESS   NA      
+2        CTL_SUCCESS   NA      
 
 `,
 		},
@@ -1227,9 +1150,9 @@ SCM Mount Format Result
 --------- ------------- 
 /mnt/2    CTL_SUCCESS   
 
-NVMe PCI Format Result 
--------- ------------- 
-2        CTL_SUCCESS   
+NVMe PCI Format Result Role(s) 
+-------- ------------- ------- 
+2        CTL_SUCCESS   NA      
 
 `,
 		},
@@ -1249,10 +1172,74 @@ SCM Mount Format Result
 /mnt/1    CTL_SUCCESS   
 /mnt/2    CTL_SUCCESS   
 
-NVMe PCI Format Result 
--------- ------------- 
-1        CTL_SUCCESS   
-2        CTL_SUCCESS   
+NVMe PCI Format Result Role(s) 
+-------- ------------- ------- 
+1        CTL_SUCCESS   NA      
+2        CTL_SUCCESS   NA      
+
+`,
+		},
+		"2 Hosts, 2 SCM, 2 NVMe; MD-on-SSD roles": {
+			resp: control.MockFormatResp(t, control.MockFormatConf{
+				Hosts:        2,
+				ScmPerHost:   2,
+				NvmePerHost:  2,
+				NvmeRoleBits: int(storage.BdevRoleAll),
+			}),
+			expPrintStr: `
+
+---------
+host[1-2]
+---------
+SCM Mount Format Result 
+--------- ------------- 
+/mnt/1    CTL_SUCCESS   
+/mnt/2    CTL_SUCCESS   
+
+NVMe PCI Format Result Role(s)       
+-------- ------------- -------       
+1        CTL_SUCCESS   data,meta,wal 
+2        CTL_SUCCESS   data,meta,wal 
+
+`,
+		},
+		"1 SCM, NVMe skipped": {
+			resp: &control.StorageFormatResp{
+				HostErrorsResp: control.HostErrorsResp{
+					HostErrors: make(control.HostErrorsMap),
+				},
+				HostStorage: func() control.HostStorageMap {
+					hsm := make(control.HostStorageMap)
+					hs := &control.HostStorage{
+						ScmMountPoints: []*storage.ScmMountPoint{
+							{
+								Info: "CTL_SUCCESS",
+								Path: "/mnt/0",
+							},
+						},
+						NvmeDevices: []*storage.NvmeController{
+							{
+								Info:    "skipping",
+								PciAddr: storage.NilBdevAddress,
+							},
+						},
+					}
+					if err := hsm.Add("host1", hs); err != nil {
+						t.Fatal(err)
+					}
+					return hsm
+				}(),
+			},
+			expPrintStr: `
+
+-----
+host1
+-----
+SCM Mount Format Result 
+--------- ------------- 
+/mnt/0    CTL_SUCCESS   
+
+  No NVMe devices were formatted
 
 `,
 		},
@@ -1268,349 +1255,6 @@ NVMe PCI Format Result
 
 			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
 				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)
-			}
-		})
-	}
-}
-
-func TestPretty_PrintSmdInfoMap(t *testing.T) {
-	mockController := storage.MockNvmeController(1)
-
-	for name, tc := range map[string]struct {
-		noDevs      bool
-		noPools     bool
-		hsm         control.HostStorageMap
-		opts        []PrintConfigOption
-		expPrintStr string
-	}{
-		"list-pools (standard)": {
-			noDevs: true,
-			hsm: mockHostStorageMap(t,
-				&mockHostStorage{
-					"host1",
-					&control.HostStorage{
-						SmdInfo: &control.SmdInfo{
-							Pools: control.SmdPoolMap{
-								test.MockUUID(0): {
-									{
-										UUID:      test.MockUUID(0),
-										Rank:      0,
-										TargetIDs: []int32{0, 1, 2, 3},
-										Blobs:     []uint64{11, 12, 13, 14},
-									},
-									{
-										UUID:      test.MockUUID(0),
-										Rank:      1,
-										TargetIDs: []int32{0, 1, 2, 3},
-										Blobs:     []uint64{11, 12, 13, 14},
-									},
-								},
-							},
-						},
-					},
-				},
-			),
-			expPrintStr: `
------
-host1
------
-  Pools
-    UUID:00000000-0000-0000-0000-000000000000
-      Rank:0 Targets:[0 1 2 3]
-      Rank:1 Targets:[0 1 2 3]
-
-`,
-		},
-		"list-pools (verbose)": {
-			noDevs: true,
-			opts:   []PrintConfigOption{PrintWithVerboseOutput(true)},
-			hsm: mockHostStorageMap(t,
-				&mockHostStorage{
-					"host1",
-					&control.HostStorage{
-						SmdInfo: &control.SmdInfo{
-							Pools: control.SmdPoolMap{
-								test.MockUUID(0): {
-									{
-										UUID:      test.MockUUID(0),
-										Rank:      0,
-										TargetIDs: []int32{0, 1, 2, 3},
-										Blobs:     []uint64{11, 12, 13, 14},
-									},
-									{
-										UUID:      test.MockUUID(0),
-										Rank:      1,
-										TargetIDs: []int32{0, 1, 2, 3},
-										Blobs:     []uint64{11, 12, 13, 14},
-									},
-								},
-							},
-						},
-					},
-				},
-			),
-			expPrintStr: `
------
-host1
------
-  Pools
-    UUID:00000000-0000-0000-0000-000000000000
-      Rank:0 Targets:[0 1 2 3] Blobs:[11 12 13 14]
-      Rank:1 Targets:[0 1 2 3] Blobs:[11 12 13 14]
-
-`,
-		},
-		"list-pools (none found)": {
-			noDevs: true,
-			hsm: mockHostStorageMap(t,
-				&mockHostStorage{
-					"host1",
-					&control.HostStorage{
-						SmdInfo: &control.SmdInfo{},
-					},
-				},
-			),
-			expPrintStr: `
------
-host1
------
-  No pools found
-`,
-		},
-		"list-devices": {
-			noPools: true,
-			hsm: mockHostStorageMap(t,
-				&mockHostStorage{
-					"host1",
-					&control.HostStorage{
-						SmdInfo: &control.SmdInfo{
-							Devices: []*storage.SmdDevice{
-								{
-									UUID:      test.MockUUID(0),
-									TrAddr:    "0000:8a:00.0",
-									TargetIDs: []int32{0, 1, 2},
-									Rank:      0,
-									NvmeState: storage.NvmeStateNew,
-									LedState:  storage.LedStateNormal,
-									HasSysXS:  true,
-									Roles:     storage.BdevRoles{storage.BdevRoleWAL},
-								},
-								{
-									UUID:      test.MockUUID(1),
-									TrAddr:    "0000:8b:00.0",
-									TargetIDs: []int32{3, 4, 5},
-									Rank:      0,
-									NvmeState: storage.NvmeStateFaulty,
-									LedState:  storage.LedStateFaulty,
-									Roles:     storage.BdevRoles{storage.BdevRoleMeta | storage.BdevRoleData},
-								},
-								{
-									UUID:      test.MockUUID(2),
-									TrAddr:    "0000:da:00.0",
-									TargetIDs: []int32{0, 1, 2},
-									Rank:      1,
-									NvmeState: storage.NvmeDevState(99),
-									LedState:  storage.LedStateUnknown,
-									HasSysXS:  true,
-									Roles:     storage.BdevRoles{storage.BdevRoleWAL},
-								},
-								{
-									UUID:      test.MockUUID(3),
-									TrAddr:    "0000:db:00.0",
-									TargetIDs: []int32{3, 4, 5},
-									Rank:      1,
-									NvmeState: storage.NvmeStateNormal,
-									LedState:  storage.LedStateIdentify,
-									Roles:     storage.BdevRoles{storage.BdevRoleMeta | storage.BdevRoleData},
-								},
-							},
-						},
-					},
-				},
-			),
-			expPrintStr: `
------
-host1
------
-  Devices
-    UUID:00000000-0000-0000-0000-000000000000 [TrAddr:0000:8a:00.0]
-      Roles:wal SysXS Targets:[0 1 2] Rank:0 State:NEW LED:OFF
-    UUID:00000001-0001-0001-0001-000000000001 [TrAddr:0000:8b:00.0]
-      Roles:data,meta Targets:[3 4 5] Rank:0 State:EVICTED LED:ON
-    UUID:00000002-0002-0002-0002-000000000002 [TrAddr:0000:da:00.0]
-      Roles:wal SysXS Targets:[0 1 2] Rank:1 State:UNKNOWN LED:NA
-    UUID:00000003-0003-0003-0003-000000000003 [TrAddr:0000:db:00.0]
-      Roles:data,meta Targets:[3 4 5] Rank:1 State:NORMAL LED:QUICK_BLINK
-`,
-		},
-		"list-devices (none found)": {
-			noPools: true,
-			hsm: mockHostStorageMap(t,
-				&mockHostStorage{
-					"host1",
-					&control.HostStorage{
-						SmdInfo: &control.SmdInfo{},
-					},
-				},
-			),
-			expPrintStr: `
------
-host1
------
-  No devices found
-`,
-		},
-		"device-health": {
-			noPools: true,
-			hsm: mockHostStorageMap(t,
-				&mockHostStorage{
-					"host1",
-					&control.HostStorage{
-						SmdInfo: &control.SmdInfo{
-							Devices: []*storage.SmdDevice{
-								{
-									UUID:      test.MockUUID(0),
-									TargetIDs: []int32{0, 1, 2},
-									Rank:      0,
-									NvmeState: storage.NvmeStateNormal,
-									LedState:  storage.LedStateNormal,
-									Health:    mockController.HealthStats,
-									Roles:     storage.BdevRoles{storage.BdevRoleAll},
-								},
-							},
-						},
-					},
-				},
-			),
-			expPrintStr: fmt.Sprintf(`
------
-host1
------
-  Devices
-    UUID:00000000-0000-0000-0000-000000000000 [TrAddr:]
-      Roles:data,meta,wal Targets:[0 1 2] Rank:0 State:NORMAL LED:OFF
-      Health Stats:
-        Temperature:%dK(%.02fC)
-        Temperature Warning Duration:%dm0s
-        Temperature Critical Duration:%dm0s
-        Controller Busy Time:%dm0s
-        Power Cycles:%d
-        Power On Duration:%s
-        Unsafe Shutdowns:%d
-        Media Errors:%d
-        Error Log Entries:%d
-      Critical Warnings:
-        Temperature: WARNING
-        Available Spare: WARNING
-        Device Reliability: WARNING
-        Read Only: WARNING
-        Volatile Memory Backup: WARNING
-      Intel Vendor SMART Attributes:
-        Program Fail Count:
-           Normalized:%d%s
-           Raw:%d
-        Erase Fail Count:
-           Normalized:%d%s
-           Raw:%d
-        Wear Leveling Count:
-           Normalized:%d%s
-           Min:%d
-           Max:%d
-           Avg:%d
-        End-to-End Error Detection Count:%d
-        CRC Error Count:%d
-        Timed Workload, Media Wear:%d
-        Timed Workload, Host Read/Write Ratio:%d
-        Timed Workload, Timer:%d
-        Thermal Throttle Status:%d%s
-        Thermal Throttle Event Count:%d
-        Retry Buffer Overflow Counter:%d
-        PLL Lock Loss Count:%d
-        NAND Bytes Written:%d
-        Host Bytes Written:%d
-
-`,
-				mockController.HealthStats.TempK(), mockController.HealthStats.TempC(),
-				mockController.HealthStats.TempWarnTime, mockController.HealthStats.TempCritTime,
-				mockController.HealthStats.CtrlBusyTime, mockController.HealthStats.PowerCycles,
-				time.Duration(mockController.HealthStats.PowerOnHours)*time.Hour,
-				mockController.HealthStats.UnsafeShutdowns, mockController.HealthStats.MediaErrors,
-				mockController.HealthStats.ErrorLogEntries,
-				mockController.HealthStats.ProgFailCntNorm, "%", mockController.HealthStats.ProgFailCntRaw,
-				mockController.HealthStats.EraseFailCntNorm, "%", mockController.HealthStats.EraseFailCntRaw,
-				mockController.HealthStats.WearLevelingCntNorm, "%", mockController.HealthStats.WearLevelingCntMin,
-				mockController.HealthStats.WearLevelingCntMax, mockController.HealthStats.WearLevelingCntAvg,
-				mockController.HealthStats.EndtoendErrCntRaw, mockController.HealthStats.CrcErrCntRaw,
-				mockController.HealthStats.MediaWearRaw, mockController.HealthStats.HostReadsRaw,
-				mockController.HealthStats.WorkloadTimerRaw,
-				mockController.HealthStats.ThermalThrottleStatus, "%", mockController.HealthStats.ThermalThrottleEventCnt,
-				mockController.HealthStats.RetryBufferOverflowCnt,
-				mockController.HealthStats.PllLockLossCnt,
-				mockController.HealthStats.NandBytesWritten, mockController.HealthStats.HostBytesWritten,
-			),
-		},
-		"identify led": {
-			noPools: true,
-			opts:    []PrintConfigOption{PrintOnlyLEDInfo()},
-			hsm: mockHostStorageMap(t,
-				&mockHostStorage{
-					"host1",
-					&control.HostStorage{
-						SmdInfo: &control.SmdInfo{
-							Devices: []*storage.SmdDevice{
-								{
-									UUID:     "842c739b-86b5-462f-a7ba-b4a91b674f3d",
-									TrAddr:   "0000:8a:00.0",
-									LedState: storage.LedStateIdentify,
-								},
-							},
-						},
-					},
-				},
-			),
-			expPrintStr: `
------
-host1
------
-  Devices
-    TrAddr:0000:8a:00.0 [UUID:842c739b-86b5-462f-a7ba-b4a91b674f3d] LED:QUICK_BLINK
-`,
-		},
-		"identify led; transport address specified": {
-			noPools: true,
-			opts:    []PrintConfigOption{PrintOnlyLEDInfo()},
-			hsm: mockHostStorageMap(t,
-				&mockHostStorage{
-					"host1",
-					&control.HostStorage{
-						SmdInfo: &control.SmdInfo{
-							Devices: []*storage.SmdDevice{
-								{
-									TrAddr:   "0000:8a:00.0",
-									LedState: storage.LedStateIdentify,
-								},
-							},
-						},
-					},
-				},
-			),
-			expPrintStr: `
------
-host1
------
-  Devices
-    TrAddr:0000:8a:00.0 LED:QUICK_BLINK
-`,
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			var bld strings.Builder
-			if err := PrintSmdInfoMap(tc.noDevs, tc.noPools, tc.hsm, &bld, tc.opts...); err != nil {
-				t.Fatal(err)
-			}
-
-			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
-				t.Fatalf("unexpected print output (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

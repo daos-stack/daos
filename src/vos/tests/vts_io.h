@@ -76,6 +76,10 @@ struct io_test_args {
 	int			 akey_size;
 	int			 dkey_size;
 	int			 co_create_step;
+	bool			 checkpoint;
+	bool			 no_replay;
+	bool			 fail_replay;
+	bool			 fail_checkpoint;
 };
 
 /** test counters */

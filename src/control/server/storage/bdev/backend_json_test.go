@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -38,36 +38,33 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 	aioName := func(i, roleBits int) string {
 		return fmt.Sprintf("AIO_%s", namePostfix(i, roleBits))
 	}
-
-	multiCtrlrConfs := func(roleBits ...int) []*SpdkSubsystemConfig {
-		rbs := disabledRoleBits
-		if len(roleBits) > 0 {
-			rbs = roleBits[0]
+	bdevCfg := func(idx, roleBits int) *SpdkSubsystemConfig {
+		return &SpdkSubsystemConfig{
+			Method: storage.ConfBdevNvmeAttachController,
+			Params: NvmeAttachControllerParams{
+				TransportType:    "PCIe",
+				DeviceName:       nvmeName(idx, roleBits),
+				TransportAddress: test.MockPCIAddr(int32(idx + 1)),
+			},
+		}
+	}
+	multiCtrlrConfs := func(roleBits int, hotplug bool) []*SpdkSubsystemConfig {
+		hpParams := NvmeSetHotplugParams{}
+		if hotplug {
+			hpParams = NvmeSetHotplugParams{
+				Enable:     true,
+				PeriodUsec: uint64((5 * time.Second).Microseconds()),
+			}
 		}
 		return append(defaultSpdkConfig().Subsystems[0].Configs,
 			[]*SpdkSubsystemConfig{
+				bdevCfg(0, roleBits),
+				bdevCfg(1, roleBits),
 				{
-					Method: storage.ConfBdevNvmeAttachController,
-					Params: NvmeAttachControllerParams{
-						TransportType:    "PCIe",
-						DeviceName:       nvmeName(0, rbs),
-						TransportAddress: test.MockPCIAddr(1),
-					},
-				},
-				{
-					Method: storage.ConfBdevNvmeAttachController,
-					Params: NvmeAttachControllerParams{
-						TransportType:    "PCIe",
-						DeviceName:       nvmeName(1, rbs),
-						TransportAddress: test.MockPCIAddr(2),
-					},
+					Method: storage.ConfBdevNvmeSetHotplug,
+					Params: hpParams,
 				},
 			}...)
-	}
-
-	hotplugConfs := multiCtrlrConfs()
-	hotplugConfs[2].Params = NvmeSetHotplugParams{
-		Enable: true, PeriodUsec: uint64((5 * time.Second).Microseconds()),
 	}
 
 	tests := map[string]struct {
@@ -83,6 +80,9 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 		accelOptMask       storage.AccelOptionBits
 		rpcSrvEnable       bool
 		rpcSrvSockAddr     string
+		autoFaultyEnable   bool
+		autoFaultyIO       uint32
+		autoFaultyCsum     uint32
 		expExtraSubsystems []*SpdkSubsystem
 		expBdevCfgs        []*SpdkSubsystemConfig
 		expDaosCfgs        []*DaosConfig
@@ -98,13 +98,13 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 			class:       storage.ClassNvme,
 			devList:     []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
 			devRoles:    storage.BdevRoleAll,
-			expBdevCfgs: multiCtrlrConfs(storage.BdevRoleAll),
+			expBdevCfgs: multiCtrlrConfs(storage.BdevRoleAll, false),
 		},
 		"multiple controllers; vmd enabled": {
 			class:       storage.ClassNvme,
 			enableVmd:   true,
 			devList:     []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
-			expBdevCfgs: multiCtrlrConfs(),
+			expBdevCfgs: multiCtrlrConfs(0, false),
 			expExtraSubsystems: []*SpdkSubsystem{
 				{
 					Name: "vmd",
@@ -122,7 +122,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 			devList:       []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
 			enableHotplug: true,
 			busidRange:    "0x8a-0x8f",
-			expBdevCfgs:   hotplugConfs,
+			expBdevCfgs:   multiCtrlrConfs(0, true),
 			expDaosCfgs: []*DaosConfig{
 				{
 					Method: storage.ConfSetHotplugBusidRange,
@@ -160,6 +160,10 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 							Filename:   "/path/to/myotherfile",
 						},
 					},
+					{
+						Method: storage.ConfBdevNvmeSetHotplug,
+						Params: NvmeSetHotplugParams{},
+					},
 				}...),
 			vosEnv: "AIO",
 		},
@@ -182,17 +186,24 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 							Filename:   "/dev/sdc",
 						},
 					},
+					{
+						Method: storage.ConfBdevNvmeSetHotplug,
+						Params: NvmeSetHotplugParams{},
+					},
 				}...),
 			vosEnv: "AIO",
 		},
-		"multiple controllers; accel & rpc server settings": {
-			class:          storage.ClassNvme,
-			devList:        []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
-			accelEngine:    storage.AccelEngineSPDK,
-			accelOptMask:   storage.AccelOptCRCFlag | storage.AccelOptMoveFlag,
-			rpcSrvEnable:   true,
-			rpcSrvSockAddr: "/tmp/spdk.sock",
-			expBdevCfgs:    multiCtrlrConfs(),
+		"multiple controllers; accel, rpc server & auto faulty settings": {
+			class:            storage.ClassNvme,
+			devList:          []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
+			accelEngine:      storage.AccelEngineSPDK,
+			accelOptMask:     storage.AccelOptCRCFlag | storage.AccelOptMoveFlag,
+			rpcSrvEnable:     true,
+			rpcSrvSockAddr:   "/tmp/spdk.sock",
+			autoFaultyEnable: true,
+			autoFaultyIO:     100,
+			autoFaultyCsum:   200,
+			expBdevCfgs:      multiCtrlrConfs(0, false),
 			expDaosCfgs: []*DaosConfig{
 				{
 					Method: storage.ConfSetAccelProps,
@@ -206,6 +217,14 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 					Params: SpdkRpcServerParams{
 						Enable:   true,
 						SockAddr: "/tmp/spdk.sock",
+					},
+				},
+				{
+					Method: storage.ConfSetAutoFaultyProps,
+					Params: AutoFaultyParams{
+						Enable:      true,
+						MaxIoErrs:   100,
+						MaxCsumErrs: 200,
 					},
 				},
 			},
@@ -251,7 +270,9 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				WithTargetCount(8).
 				WithPinnedNumaNode(0).
 				WithStorageAccelProps(tc.accelEngine, tc.accelOptMask).
-				WithStorageSpdkRpcSrvProps(tc.rpcSrvEnable, tc.rpcSrvSockAddr)
+				WithStorageSpdkRpcSrvProps(tc.rpcSrvEnable, tc.rpcSrvSockAddr).
+				WithStorageAutoFaultyCriteria(tc.autoFaultyEnable, tc.autoFaultyIO,
+					tc.autoFaultyCsum)
 
 			if tc.devRoles != 0 {
 				engineConfig.Storage.ControlMetadata = storage.ControlMetadata{

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,27 +11,21 @@
 #include <daos_pool.h>
 #include <daos_srv/bio.h>
 #include <daos_srv/vea.h>
+#include <daos_srv/daos_chk.h>
 #include <daos/object.h>
 #include <daos/dtx.h>
 #include <daos/checksum.h>
 
-#define VOS_SUB_OP_MAX	((uint16_t)-2)
+#define VOS_SUB_OP_MAX  (((uint16_t)-1) >> 2)
 
 #define VOS_POOL_DF_2_2 24
 #define VOS_POOL_DF_2_4 25
+#define VOS_POOL_DF_2_6 26
+#define VOS_POOL_DF_2_8 28
 
 struct dtx_rsrvd_uint {
 	void			*dru_scm;
 	d_list_t		dru_nvme;
-};
-
-enum dtx_cos_flags {
-	DCF_SHARED		= (1 << 0),
-	/* Some DTX (such as for the distributed transaction across multiple
-	 * RDGs, or for EC object modification) need to be committed via DTX
-	 * RPC instead of piggyback via other dispatched update/punch RPC.
-	 */
-	DCF_EXP_CMT		= (1 << 1),
 };
 
 enum dtx_stat_flags {
@@ -96,6 +90,8 @@ enum vos_pool_open_flags {
 	VOS_POF_RDB	= (1 << 4),
 	/** SYS DB pool */
 	VOS_POF_SYSDB	= (1 << 5),
+	/** Open the pool for daos check query, that will bypass EXEL flags. */
+	VOS_POF_FOR_CHECK_QUERY = (1 << 6),
 };
 
 enum vos_oi_attr {
@@ -138,6 +134,17 @@ struct vos_pool_space {
 #define NVME_FREE(vps)	((vps)->vps_space.s_free[DAOS_MEDIA_NVME])
 #define NVME_SYS(vps)	((vps)->vps_space_sys[DAOS_MEDIA_NVME])
 
+struct chk_pool_info {
+	/** DAOS check phase on the pool shard. */
+	uint32_t		cpi_phase;
+	/** DAOS check instance status on the pool shard. */
+	uint32_t		cpi_ins_status;
+	/** Inconsistency information for DAOS check on the pool shard. */
+	struct chk_statistics	cpi_statistics;
+	/** Time information for DAOS check on the pool shard. */
+	struct chk_time		cpi_time;
+};
+
 /**
  * pool attributes returned to query
  */
@@ -148,6 +155,8 @@ typedef struct {
 	struct vos_pool_space	pif_space;
 	/** garbage collector statistics */
 	struct vos_gc_stat	pif_gc_stat;
+	/** DAOS check related information */
+	struct chk_pool_info	pif_chk;
 	/** TODO */
 } vos_pool_info_t;
 
@@ -287,6 +296,12 @@ enum {
 	VOS_POOL_FEAT_CHK = (1ULL << 1),
 	/** Dynamic evtree root supported for this pool */
 	VOS_POOL_FEAT_DYN_ROOT = (1ULL << 2),
+	/** Embedded value in tree root supported */
+	VOS_POOL_FEAT_EMBED_FIRST = (1ULL << 3),
+	/** Flat DKEY support enabled */
+	VOS_POOL_FEAT_FLAT_DKEY = (1ULL << 4),
+	/** Gang address for SV support */
+	VOS_POOL_FEAT_GANG_SV = (1ULL << 5),
 };
 
 /** Mask for any conditionals passed to to the fetch */
@@ -315,23 +330,25 @@ D_CASSERT((VOS_OF_PUNCH_PROPAGATE & DAOS_COND_MASK) == 0);
 /** vos definitions that match daos_obj_key_query flags */
 enum {
 	/** retrieve the max of dkey, akey, and/or idx of array value */
-	VOS_GET_MAX		= DAOS_GET_MAX,
+	VOS_GET_MAX = DAOS_GET_MAX,
 	/** retrieve the min of dkey, akey, and/or idx of array value */
-	VOS_GET_MIN		= DAOS_GET_MIN,
+	VOS_GET_MIN = DAOS_GET_MIN,
 	/** retrieve the dkey */
-	VOS_GET_DKEY		= DAOS_GET_DKEY,
+	VOS_GET_DKEY = DAOS_GET_DKEY,
 	/** retrieve the akey */
-	VOS_GET_AKEY		= DAOS_GET_AKEY,
+	VOS_GET_AKEY = DAOS_GET_AKEY,
 	/** retrieve the idx of array value */
-	VOS_GET_RECX		= DAOS_GET_RECX,
+	VOS_GET_RECX = DAOS_GET_RECX,
 	/**
 	 * Internal flag to indicate retrieve the idx of EC array value,
 	 * in that case need to retrieve both normal space and parity space
 	 * (parity space with DAOS_EC_PARITY_BIT in the recx index).
 	 */
-	VOS_GET_RECX_EC		= (1 << 5),
+	VOS_GET_RECX_EC = (1 << 5),
 	/** Internal flag to indicate timestamps are used */
-	VOS_USE_TIMESTAMPS	= (1 << 6),
+	VOS_USE_TIMESTAMPS = (1 << 6),
+	/** Internal flag to indicate dkey is flat */
+	VOS_FLAT_DKEY = (1 << 7),
 };
 
 D_CASSERT((VOS_USE_TIMESTAMPS & (VOS_GET_MAX | VOS_GET_MIN | VOS_GET_DKEY |
@@ -339,29 +356,31 @@ D_CASSERT((VOS_USE_TIMESTAMPS & (VOS_GET_MAX | VOS_GET_MIN | VOS_GET_DKEY |
 
 enum {
 	/** The absence of any flags means iterate all unsorted extents */
-	VOS_IT_RECX_ALL		= 0,
+	VOS_IT_RECX_ALL = 0,
 	/** Include visible extents in sorted iteration */
-	VOS_IT_RECX_VISIBLE	= (1 << 0),
+	VOS_IT_RECX_VISIBLE = (1 << 0),
 	/** Include covered extents, implies VOS_IT_RECX_VISIBLE */
-	VOS_IT_RECX_COVERED	= (1 << 1) | VOS_IT_RECX_VISIBLE,
+	VOS_IT_RECX_COVERED = (1 << 1) | VOS_IT_RECX_VISIBLE,
 	/** Include hole extents in sorted iteration
 	 *  Only applicable if VOS_IT_RECX_COVERED is not set
 	 */
-	VOS_IT_RECX_SKIP_HOLES	= (1 << 2),
+	VOS_IT_RECX_SKIP_HOLES = (1 << 2),
 	/** When sorted iteration is enabled, iterate in reverse */
-	VOS_IT_RECX_REVERSE	= (1 << 3),
+	VOS_IT_RECX_REVERSE = (1 << 3),
 	/** The iterator is for purge operation */
-	VOS_IT_FOR_PURGE	= (1 << 4),
+	VOS_IT_FOR_PURGE = (1 << 4),
 	/** The iterator is for data migration scan */
-	VOS_IT_FOR_MIGRATION	= (1 << 5),
+	VOS_IT_FOR_MIGRATION = (1 << 5),
 	/** Iterate only show punched records in interval */
-	VOS_IT_PUNCHED		= (1 << 6),
+	VOS_IT_PUNCHED = (1 << 6),
 	/** Cleanup stale DTX entry. */
-	VOS_IT_FOR_DISCARD	= (1 << 7),
+	VOS_IT_FOR_DISCARD = (1 << 7),
 	/** Entry is not committed */
-	VOS_IT_UNCOMMITTED	= (1 << 8),
+	VOS_IT_UNCOMMITTED = (1 << 8),
+	/** The iterator is for an aggregation operation (EC or VOS) */
+	VOS_IT_FOR_AGG = (1 << 9),
 	/** Mask for all flags */
-	VOS_IT_MASK		= (1 << 9) - 1,
+	VOS_IT_MASK = (1 << 10) - 1,
 };
 
 typedef struct {
@@ -397,7 +416,9 @@ typedef int (*vos_iter_filter_cb_t)(daos_handle_t ih, vos_iter_desc_t *desc,
  * Parameters for initializing VOS iterator
  */
 typedef struct {
-	/** pool connection handle or container open handle */
+	/** pool connection handle or container open handle,
+	 *  for vos_iterate_key(), it's used for passing dkey or akey tree open handle.
+	 */
 	daos_handle_t		ip_hdl;
 	/** standalone prepare:	DAOS_HDL_INVAL
 	 *  nested prepare:	parent iterator handle

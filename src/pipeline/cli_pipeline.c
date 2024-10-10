@@ -119,6 +119,7 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 	struct pipeline_run_cb_args  *cb_args;
 	daos_pipeline_run_t          *api_args;
 	struct pipeline_run_out      *pro; /** received data from srv */
+	struct pipeline_run_in	     *pri;
 	int                           opc;
 	int                           ret = task->dt_result;
 	int                           rc  = 0;
@@ -132,6 +133,7 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 	api_args = cb_args->api_args;
 	rpc      = cb_args->rpc;
 	opc      = opc_get(rpc->cr_opc);
+	pri	 = (struct pipeline_run_in *)crt_req_get(rpc);
 
 	if (ret != 0) {
 		D_ERROR("RPC %d failed, " DF_RC "\n", opc, DP_RC(ret));
@@ -247,6 +249,14 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 	*api_args->anchor = pro->pro_anchor;
 
 out:
+	if (pri->pri_kds_bulk)
+		crt_bulk_free(pri->pri_kds_bulk);
+	if (pri->pri_iods_bulk)
+		crt_bulk_free(pri->pri_iods_bulk);
+	if (pri->pri_sgl_keys_bulk)
+		crt_bulk_free(pri->pri_sgl_keys_bulk);
+	if (pri->pri_sgl_recx_bulk)
+		crt_bulk_free(pri->pri_sgl_recx_bulk);
 	crt_req_decref(rpc);
 	tse_task_list_del(task);
 	tse_task_decref(task);
@@ -612,6 +622,10 @@ dc_pipeline_run(tse_task_t *api_task)
 		D_GOTO(out, rc = -DER_NO_HDL);
 	}
 	obj_md.omd_ver = dc_pool_get_version(pool);
+	obj_md.omd_pdom_lvl = dc_obj_hdl2pdom(api_args->oh);
+	obj_md.omd_fdom_lvl = dc_obj_hdl2redun_lvl(api_args->oh);
+	obj_md.omd_pda = dc_obj_hdl2pda(api_args->oh);
+
 
 	/** get layout */
 

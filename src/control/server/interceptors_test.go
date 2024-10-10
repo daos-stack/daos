@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,12 +16,14 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 type testStatus struct {
@@ -141,9 +143,95 @@ func TestServer_checkVersion(t *testing.T) {
 			otherVersion: "2.4.0",
 			ctx:          newTestAuthCtx(test.Context(t), "agent"),
 		},
-		"non-sys msg bypasses version checks": {
+		"non-sys msg bypasses version checks in secure mode": {
 			selfVersion: "2.4.0",
+			ctx:         newTestAuthCtx(test.Context(t), "agent"),
 			nonSysMsg:   true,
+		},
+		"insecure prelease agent with 2.4.0 server": {
+			selfVersion: "2.4.0",
+			ctx: metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
+				build.DaosComponentHeader, build.ComponentAgent.String(),
+				build.DaosVersionHeader, "2.3.108",
+			)),
+			nonSysMsg: true,
+		},
+		"insecure 2.4.1 agent with 2.4.0 server": {
+			selfVersion: "2.4.0",
+			ctx: metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
+				build.DaosComponentHeader, build.ComponentAgent.String(),
+				build.DaosVersionHeader, "2.4.1",
+			)),
+			nonSysMsg: true,
+		},
+		"insecure 2.4.0 agent with 2.4.1 server": {
+			selfVersion: "2.4.1",
+			ctx: metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
+				build.DaosComponentHeader, build.ComponentAgent.String(),
+				build.DaosVersionHeader, "2.4.0",
+			)),
+			nonSysMsg: true,
+		},
+		"insecure 2.6.0 agent with 2.4.1 server": {
+			selfVersion: "2.4.1",
+			ctx: metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
+				build.DaosComponentHeader, build.ComponentAgent.String(),
+				build.DaosVersionHeader, "2.6.0",
+			)),
+			nonSysMsg: true,
+		},
+		"insecure 2.4.1 dmg with 2.4.0 server": {
+			selfVersion: "2.4.0",
+			ctx: metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
+				build.DaosComponentHeader, build.ComponentAdmin.String(),
+				build.DaosVersionHeader, "2.4.1",
+			)),
+			nonSysMsg: true,
+		},
+		"insecure 2.6.0 dmg with 2.4.0 server": {
+			selfVersion: "2.4.0",
+			ctx: metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
+				build.DaosComponentHeader, build.ComponentAdmin.String(),
+				build.DaosVersionHeader, "2.6.0",
+			)),
+			nonSysMsg: true,
+			expErr:    errors.New("not compatible"),
+		},
+		"insecure 2.4.0 server with 2.4.1 server": {
+			selfVersion: "2.4.1",
+			ctx: metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
+				build.DaosComponentHeader, build.ComponentServer.String(),
+				build.DaosVersionHeader, "2.4.0",
+			)),
+			nonSysMsg: true,
+		},
+		"insecure 2.6.0 server with 2.4.1 server": {
+			selfVersion: "2.4.1",
+			ctx: metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
+				build.DaosComponentHeader, build.ComponentServer.String(),
+				build.DaosVersionHeader, "2.6.0",
+			)),
+			nonSysMsg: true,
+			expErr:    errors.New("not compatible"),
+		},
+		"invalid component": {
+			selfVersion: "2.4.1",
+			ctx: metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
+				build.DaosComponentHeader, "banana",
+				build.DaosVersionHeader, "2.6.0",
+			)),
+			nonSysMsg: true,
+			expErr:    errors.New("invalid component"),
+		},
+		"header/certificate component mismatch": {
+			selfVersion: "2.4.0",
+			ctx: newTestAuthCtx(
+				metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
+					build.DaosComponentHeader, build.ComponentServer.String(),
+					build.DaosVersionHeader, "2.6.0"),
+				), "agent"),
+			nonSysMsg: true,
+			expErr:    errors.New("component mismatch"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -169,7 +257,10 @@ func TestServer_checkVersion(t *testing.T) {
 				req = verReq
 			}
 
-			gotErr := checkVersion(ctx, selfComp, req)
+			log, buf := logging.NewTestLogger(name)
+			test.ShowBufferOnFailure(t, buf)
+
+			gotErr := checkVersion(ctx, log, selfComp, req)
 			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}

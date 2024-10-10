@@ -1,19 +1,17 @@
 """
-(C) Copyright 2019-2023 Intel Corporation.
+(C) Copyright 2019-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
-
 import os
 import random
-import time
-import threading
 import re
+import threading
+import time
 
 from ClusterShell.NodeSet import NodeSet, NodeSetParseError
-
-from run_utils import run_remote, run_local, RunException
+# pylint: disable=import-error,no-name-in-module
+from util.run_utils import run_local, run_remote
 
 PACKAGES = ['slurm', 'slurm-example-configs', 'slurm-slurmctld', 'slurm-slurmd']
 W_LOCK = threading.Lock()
@@ -32,8 +30,7 @@ def cancel_jobs(log, control, job_id):
         job_id (int): slurm job id
 
     Returns:
-        RemoteCommandResult: results from the scancel command
-
+        CommandResult: results from the scancel command
     """
     command = ['scancel', str(job_id)]
     return run_remote(log, control, ' '.join(command))
@@ -54,8 +51,7 @@ def create_partition(log, control, name, hosts, default='yes', max_time='UNLIMIT
         state (str, optional): state of jobs that can be allocated. Defaults to 'up'.
 
     Returns:
-        RemoteCommandResult: results from the scontrol command
-
+        CommandResult: results from the scontrol command
     """
     command = ['scontrol', 'create']
     command.append('='.join(['PartitionName', str(name)]))
@@ -92,8 +88,7 @@ def show_partition(log, control, name):
         name (str): slurm partition name
 
     Returns:
-        RemoteCommandResult: results from the scontrol command
-
+        CommandResult: results from the scontrol command
     """
     command = ['scontrol', 'show', 'partition', str(name)]
     return run_remote(log, control, ' '.join(command))
@@ -108,8 +103,7 @@ def show_reservation(log, control, name):
         name (str): slurm reservation name
 
     Returns:
-        RemoteCommandResult: results from the scontrol command
-
+        CommandResult: results from the scontrol command
     """
     command = ['scontrol', 'show', 'reservation', str(name)]
     return run_remote(log, control, ' '.join(command))
@@ -123,8 +117,7 @@ def sinfo(log, control):
         control (NodeSet): slurm control host
 
     Returns:
-        RemoteCommandResult: results from the sinfo command
-
+        CommandResult: results from the sinfo command
     """
     return run_remote(log, control, 'sinfo')
 
@@ -139,7 +132,6 @@ def sbatch(log, script, log_file=None):
 
     Returns:
         CommandResult: results from the sbatch command
-
     """
     command = ['sbatch']
     if log_file:
@@ -287,7 +279,7 @@ def run_slurm_script(log, script, logfile=None):
     """
     job_id = None
     result = sbatch(log, script, logfile)
-    match = re.search(r"Submitted\s+batch\s+job\s+(\d+)", result.stdout)
+    match = re.search(r"Submitted\s+batch\s+job\s+(\d+)", result.joined_stdout)
     if match is not None:
         job_id = match.group(1)
     else:
@@ -308,14 +300,12 @@ def check_slurm_job(log, handle):
 
     """
     state = "UNKNOWN"
-    command = ["scontrol", "show", "job", handle]
-    try:
-        result = run_local(log, ' '.join(command), verbose=False, check=True)
-        match = re.search(r"JobState=([a-zA-Z]+)", result.stdout)
+    command = f"scontrol show job {handle}"
+    result = run_local(log, command, verbose=False)
+    if result.passed:
+        match = re.search(r"JobState=([a-zA-Z]+)", result.joined_stdout)
         if match is not None:
             state = match.group(1)
-    except RunException as error:
-        log.debug(str(error))
     return state
 
 
@@ -403,8 +393,7 @@ def srun(log, control, hosts, cmd, srun_params=None, timeout=60):
         timeout (int, optional): timeout for the srun command. Defaults to 60.
 
     Returns:
-        RemoteCommandResult: results from the srun command
-
+        CommandResult: results from the srun command
     """
     srun_time = max(int(timeout / 60), 1)
     cmd = srun_str(hosts, cmd, srun_params, str(srun_time))

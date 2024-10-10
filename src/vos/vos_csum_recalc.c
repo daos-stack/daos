@@ -38,7 +38,7 @@
  *
  */
 
-/* Determine checksum parameters for verification of an input segemnt. */
+/* Determine checksum parameters for verification of an input segment. */
 static unsigned int
 calc_csum_params(struct dcs_csum_info *csum_info, struct csum_recalc *recalc,
 		 unsigned int prefix_len, unsigned int suffix_len,

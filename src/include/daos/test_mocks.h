@@ -20,7 +20,6 @@
 #include <poll.h>
 #include <abt.h>
 #include <daos/drpc.h>
-#include <daos/drpc.pb-c.h>
 
 void mock_socket_setup(void);
 extern int socket_return; /* value to be returned by socket() */

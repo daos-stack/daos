@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -32,6 +32,7 @@
 #define DAOS_PROP_ENTRY_RP_PDA		"rp_pda"
 #define DAOS_PROP_ENTRY_GLOBAL_VERSION	"global_version"
 #define DAOS_PROP_ENTRY_OBJ_VERSION	"obj_version"
+#define DAOS_PROP_ENTRY_PERF_DOMAIN	"perf_domain"
 
 /** DAOS deprecated property entry names keeped for backward compatibility */
 #define DAOS_PROP_ENTRY_REDUN_FAC_OLD	"rf"
@@ -53,6 +54,7 @@ struct cont_props {
 	uint32_t	 dcp_ec_cell_sz;
 	uint32_t	 dcp_ec_pda;
 	uint32_t	 dcp_rp_pda;
+	uint32_t	 dcp_perf_domain;
 	uint32_t	 dcp_global_version;
 	uint32_t	 dcp_obj_version;
 	uint32_t	 dcp_csum_enabled:1,
@@ -146,6 +148,9 @@ daos_cont_prop2ec_pda(daos_prop_t *prop);
 uint32_t
 daos_cont_prop2rp_pda(daos_prop_t *prop);
 
+uint32_t
+daos_cont_prop2perf_domain(daos_prop_t *prop);
+
 /**
  * Global version properties
  */
@@ -157,5 +162,11 @@ daos_cont_prop2global_version(daos_prop_t *prop);
  */
 uint32_t
 daos_cont_prop2obj_version(daos_prop_t *prop);
+
+static inline uint32_t
+daos_cont_props2pda(struct cont_props *props, bool is_ec_obj)
+{
+	return is_ec_obj ? props->dcp_ec_pda : props->dcp_rp_pda;
+}
 
 #endif /** __DAOS_CONT_PROPS_H__ */

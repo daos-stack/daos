@@ -77,8 +77,7 @@ mock_spdk_nvme_probe_fail(const struct spdk_nvme_transport_id *trid,
 }
 
 static int
-mock_copy_ctrlr_data(struct ctrlr_t *ctrlr,
-		     const struct spdk_nvme_ctrlr_data *cdata)
+mock_copy_ctrlr_data(struct nvme_ctrlr_t *ctrlr, const struct spdk_nvme_ctrlr_data *cdata)
 {
 	(void)ctrlr;
 	(void)cdata;

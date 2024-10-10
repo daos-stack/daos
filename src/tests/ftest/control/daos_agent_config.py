@@ -1,10 +1,10 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from apricot import TestWithServers
 from agent_utils import include_local_host
+from apricot import TestWithServers
 from exception_utils import CommandFailure
 
 
@@ -33,7 +33,7 @@ class DaosAgentConfigTest(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=control,basic
-        :avocado: tags=agent_start,daos_agent_config_test,test_daos_agent_config_basic
+        :avocado: tags=DaosAgentConfigTest,test_daos_agent_config_basic
         """
         # Setup the agents
         self.add_agent_manager()
@@ -42,6 +42,7 @@ class DaosAgentConfigTest(TestWithServers):
             self.agent_managers[-1],
             include_local_host(self.hostlist_clients),
             self.hostfile_clients_slots)
+        self.agent_managers[-1].verify_socket_dir = False
 
         # Get the input to verify
         c_val = self.params.get("config_val", "/run/agent_config_val/*/")

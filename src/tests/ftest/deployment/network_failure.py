@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -7,15 +7,15 @@ import os
 import time
 import threading
 from collections import defaultdict
-from ClusterShell.NodeSet import NodeSet
 
+from ClusterShell.NodeSet import NodeSet
+from command_utils_base import CommandFailure
+from dmg_utils import check_system_query_status
+from general_utils import report_errors, run_pcmd
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
-from general_utils import report_errors, run_pcmd
-from command_utils_base import CommandFailure
 from job_manager_utils import get_job_manager
-from network_utils import update_network_interface
-from dmg_utils import check_system_query_status
+from network_utils import NetworkInterface
 
 
 class NetworkFailureTest(IorTestBase):
@@ -30,18 +30,7 @@ class NetworkFailureTest(IorTestBase):
         super().__init__(*args, **kwargs)
         self.network_down_host = None
         self.interface = None
-        self.test_env = self.params.get("test_environment", "/run/*")
-
-    def pre_tear_down(self):
-        """Bring ib0 back up in case the test crashed in the middle."""
-        error_list = []
-        if self.test_env == "ci":
-            self.log.debug("Call ip link set before tearDown.")
-            if self.network_down_host:
-                update_network_interface(
-                    interface=self.interface, state="up", hosts=self.network_down_host,
-                    errors=error_list)
-        return error_list
+        self.update_nic = bool(self.params.get("test_environment", "/run/*") == "ci")
 
     def run_ior_report_error(self, results, job_num, file_name, pool, container,
                              namespace, timeout=None):
@@ -61,11 +50,11 @@ class NetworkFailureTest(IorTestBase):
                 infinite.
         """
         # Update the object class depending on the test case.
-        ior_cmd = IorCommand(namespace=namespace)
+        ior_cmd = IorCommand(self.test_env.log_dir, namespace=namespace)
         ior_cmd.get_params(self)
 
         # Standard IOR prep sequence.
-        ior_cmd.set_daos_params(self.server_group, pool, container.identifier)
+        ior_cmd.set_daos_params(pool, container.identifier)
         ior_cmd.test_file.update(os.path.join(os.sep, file_name))
 
         manager = get_job_manager(
@@ -175,9 +164,9 @@ class NetworkFailureTest(IorTestBase):
                 errors=errors)
         else:
             # Aurora. Manually run the command.
-            command = f"sudo ip link set {self.interface} up"
+            # command = f"sudo ip link set {self.interface} up"
             self.log.debug("## Call %s on %s", command, self.network_down_host)
-            time.sleep(30)
+            time.sleep(60)
         return errors
         
     def bring_network_interface_down(self, test_env):
@@ -191,9 +180,9 @@ class NetworkFailureTest(IorTestBase):
                 errors=errors)
         else:
             # Aurora. Manually run the command.
-            command = f"sudo ip link set {self.interface} up"
+            # command = f"sudo ip link set {self.interface} up"
             self.log.debug("## Call %s on %s", command, self.network_down_host)
-            time.sleep(30)
+            time.sleep(60)
         return errors
 
     def verify_network_failure(self, ior_namespace, container_namespace, with_io=False):
@@ -225,24 +214,31 @@ class NetworkFailureTest(IorTestBase):
                 redundancy factor.
         """
         # 1. Create a pool and a container.
+        self.log_step("Create a pool and a container.")
         self.container = []
         self.add_pool(namespace="/run/pool_size_ratio_80/*")
         self.container.append(
             self.get_container(pool=self.pool, namespace=container_namespace))
 
         # 2. Take down network interface of one of the engines. Use the first host.
+        self.log_step("Take down network interface of one of the engines.")
         errors = []
         self.network_down_host = NodeSet(self.hostlist_servers[0])
         self.log.info("network_down_host = %s", self.network_down_host)
-        self.interface = self.server_managers[0].get_config_value("fabric_iface")
+        self.interface = NetworkInterface(
+            self.server_managers[0].get_config_value("fabric_iface"), self.network_down_host,
+            self.update_nic)
+        self.register_cleanup(self.interface.restore, logger=self.log)
         self.log.info("interface to update = %s", self.interface)
-
-        # For non-IO testing, bring the network interface down now.
-        if with_io is False:
-            errors = self.bring_network_interface_down(self.test_env)
 
         # 3. Run IOR with given object class. It should fail.
         threads = []
+        # For non-IO testing, bring the network interface down now.
+        if with_io is False:
+            errors.extend(self.interface.bring_down(self.log))
+
+        # 3. Run IOR with given object class. It should fail.
+        self.log_step("Expect IOR to fail with the down network interface.")
         job_num = 1
         ior_results = {}
         file_name = "test_file_1"
@@ -270,9 +266,13 @@ class NetworkFailureTest(IorTestBase):
         self.log.info(ior_results)
 
         # 4. Bring up the network interface.
-        errors = self.bring_network_interface_up(self.test_env)
+        self.log_step("Bring up the network interface.")
+        errors.extend(self.interface.bring_up(self.log))
+        self.log.info("Sleeping for 20 seconds after network is up")
+        time.sleep(20)
 
         # 5. Restart DAOS with dmg.
+        self.log_step("Restart DAOS with dmg.")
         self.log.info("Wait for 5 sec for the network to come back up")
         time.sleep(5)
         dmg_cmd = self.get_dmg_command()
@@ -284,17 +284,20 @@ class NetworkFailureTest(IorTestBase):
         dmg_cmd.system_start()
 
         # 6. Call dmg pool query -b to find the disabled ranks.
-        output = dmg_cmd.pool_query(pool=self.pool.identifier, show_disabled=True)
-        disabled_ranks = output["response"]["disabled_ranks"]
+        self.log_step("Find the disabled ranks.")
+        output = dmg_cmd.pool_query(pool=self.pool.identifier)
+        disabled_ranks = output["response"].get("disabled_ranks")
         self.log.info("Disabled ranks = %s", disabled_ranks)
 
         # 7. Call dmg pool reintegrate one rank at a time to enable all ranks.
+        self.log_step("Reintegrate one rank at a time to enable all ranks.")
         for disabled_rank in disabled_ranks:
             self.pool.reintegrate(rank=disabled_rank)
             self.pool.wait_for_rebuild_to_start(interval=5)
             self.pool.wait_for_rebuild_to_end(interval=10)
 
         # 8. Run IOR again. It should work this time.
+        self.log_step("Expect IOR to pass with the network interface back up.")
         job_num = 2
         self.run_ior_report_error(
             job_num=job_num, results=ior_results, file_name="test_file_2",
@@ -302,10 +305,12 @@ class NetworkFailureTest(IorTestBase):
         self.verify_ior_worked(ior_results=ior_results, job_num=job_num, errors=errors)
 
         # 6. To further verify the system, create another container.
+        self.log_step("Create another container.")
         self.container.append(
             self.get_container(pool=self.pool, namespace=container_namespace))
 
         # 7. Run IOR to the new container. Should work.
+        self.log_step("Expect IOR to pass on the new container.")
         job_num = 3
         self.run_ior_report_error(
             job_num=job_num, results=ior_results, file_name="test_file_3",
@@ -377,6 +382,22 @@ class NetworkFailureTest(IorTestBase):
             ior_namespace="/run/ior_with_ec/*",
             container_namespace="/run/container_with_rf/*")
 
+    def test_network_failure_with_ec_io(self):
+        """Jira ID: DAOS-10003.
+
+        Test rank failure with redundancy factor and EC_8P2 object class. See
+        verify_rank_failure() for test steps.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=deployment,network_failure,rebuild
+        :avocado: tags=NetworkFailureTest,test_network_failure_with_ec_io
+        """
+        self.verify_network_failure(
+            ior_namespace="/run/ior_with_ec/*",
+            container_namespace="/run/container_with_rf/*",
+            with_io=True)
+
     def test_network_failure_isolation(self):
         """Jira ID: DAOS-10003.
 
@@ -430,29 +451,26 @@ class NetworkFailureTest(IorTestBase):
 
         # 2. Create a pool across the four ranks on the two nodes. Use --nsvc=3. We have
         # to provide the size because we're using --ranks.
+        self.log_step("Create a pool across the four ranks on the two nodes.")
         self.add_pool(namespace="/run/pool_size_value/*", target_list=target_list)
 
         # 3. Create a container without redundancy factor.
+        self.log_step("Create a container without redundancy factor.")
         self.container = []
         self.container.append(
             self.get_container(pool=self.pool, namespace="/run/container_wo_rf/*"))
 
         # 4. Take down the interface where the pool isn't created.
+        self.log_step("Take down the interface where the pool isn't created.")
         errors = []
-        self.interface = self.server_managers[0].get_config_value("fabric_iface")
-
-        # wolf
-        if self.test_env == "ci":
-            update_network_interface(
-                interface=self.interface, state="down", hosts=self.network_down_host,
-                errors=errors)
-        else:
-            # Aurora. Manually run the command.
-            command = "sudo ip link set {} {}".format(self.interface, "down")
-            self.log.debug("## Call %s on %s", command, self.network_down_host)
-            time.sleep(20)
+        self.interface = NetworkInterface(
+            self.server_managers[0].get_config_value("fabric_iface"), self.network_down_host,
+            self.update_nic)
+        self.register_cleanup(self.interface.restore, logger=self.log)
+        errors.extend(self.interface.bring_down(self.log))
 
         # 5. Run IOR with oclass SX.
+        self.log_step("Run IOR with oclass SX.")
         ior_results = {}
         job_num = 1
         ior_namespace = "/run/ior_wo_rf/*"
@@ -461,38 +479,37 @@ class NetworkFailureTest(IorTestBase):
             pool=self.pool, container=self.container[0], namespace=ior_namespace)
 
         # 6. Verify that IOR worked.
+        self.log_step("Verify that IOR ran successfully.")
         self.verify_ior_worked(ior_results=ior_results, job_num=job_num, errors=errors)
 
         # 7. Verify that the container Health is HEALTHY.
+        self.log_step("Verify that the container Health is HEALTHY.")
         if not self.container[0].verify_prop({"status": "HEALTHY"}):
-            errors.append(
-                "Container health isn't HEALTHY after taking ib0 down!")
+            errors.append("Container health isn't HEALTHY after taking ib0 down!")
 
         # 8. Create a new container on the pool and run IOR.
+        self.log_step("Create a new container on the pool")
         self.container.append(
             self.get_container(pool=self.pool, namespace="/run/container_wo_rf/*"))
 
-        # Run IOR and verify that it works.
+        # Run IOR.
+        self.log_step("Run IOR on the new pool/container.")
         job_num = 2
         self.run_ior_report_error(
             job_num=job_num, results=ior_results, file_name="test_file_2",
             pool=self.pool, container=self.container[1], namespace=ior_namespace)
+
+        # Verify that IOR worked.
+        self.log_step("Verify that IOR ran successfully on the new pool/container.")
         self.verify_ior_worked(ior_results=ior_results, job_num=job_num, errors=errors)
 
         # 9. Bring up the network interface.
-        if self.test_env == "ci":
-            # wolf
-            update_network_interface(
-                interface=self.interface, state="up", hosts=self.network_down_host,
-                errors=errors)
-        else:
-            # Aurora. Manually run the command.
-            command = "sudo ip link set {} {}".format(self.interface, "up")
-            self.log.debug("## Call %s on %s", command, self.network_down_host)
-            time.sleep(20)
+        self.log_step("Bring up the network interface.")
+        errors.extend(self.interface.bring_up(self.log))
 
         # Some ranks may be excluded after bringing up the network interface. Check if
         # all ranks are joined. If not, restart the servers and check again.
+        self.log_step("Check if all ranks are joined after bringing up the network interface.")
         dmg_command = self.get_dmg_command()
 
         # First, wait up to 60 sec for server(s) to crash. Whether a rank is marked as
@@ -508,6 +525,7 @@ class NetworkFailureTest(IorTestBase):
             time.sleep(1)
 
         # If server crash was detected, restart.
+        self.log_step("Restart any ranks that have not joined.")
         if server_crashed:
             self.log.info("Not all ranks are joined. Restart the servers.")
             dmg_command.system_stop()

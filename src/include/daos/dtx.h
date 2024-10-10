@@ -9,6 +9,13 @@
 
 #include <time.h>
 #include <uuid/uuid.h>
+#include <inttypes.h>
+#include <string.h>
+#include <stdbool.h>
+
+#include <daos_types.h>
+#include <gurt/debug.h>
+#include <gurt/common.h>
 
 /* If the count of committable DTXs on leader exceeds this threshold,
  * it will trigger batched DTX commit globally. We will optimize the
@@ -62,6 +69,8 @@ enum dtx_mbs_flags {
 	 * shard index to sort the dtx_memberships::dm_tgts. Obsolete.
 	 */
 	DMF_SORTED_SAD_IDX		= (1 << 3),
+	/* The dtx target information are organized as dtx_coll_target. */
+	DMF_COLL_TARGET			= (1 << 4),
 };
 
 /**
@@ -128,6 +137,64 @@ struct dtx_redundancy_group {
 	uint32_t			drg_ids[0];
 };
 
+/*
+ * How many targets are recorded in dtx_memberships::dm_tgts for collective DTX. The first one is
+ * current leader, the others are for new leader candicates in order when leader switched.
+ *
+ * For most of cases, when DTX leader switch happens, DTX resync will commit or abort related DTX.
+ * After that, related DTX dtx_memberships will become useless any longer and discarded. So unless
+ * the new leader is dead and excluded during current DTX resync, one new leader candidate will be
+ * enough. We record three new leader candidates, that can resolve the leader election trouble for
+ * twice when leader switch during DTX resync.
+ */
+#define DTX_COLL_INLINE_TARGETS		4
+
+/**
+ * A collective transaction may contains a lot of participants. If we store all of them one by one
+ * in the dtx_memberships (MBS) structure, then the MBS body will be very large. Transferring such
+ * large MBS on network is inconvenient and may have to via RDAM instead of directly packed inside
+ * related RPC body.
+ *
+ * To avoid such bad situation, collective DTX will use dtx_coll_target. Instead of recording all
+ * the DTX participants information in MBS, the dtx_coll_target will record the targets reside on
+ * current engine, that can be used for local DTX operation (commit, abort, check).
+ *
+ * Please note that collective DTX only can be used for single object based stand alone operation.
+ * If current user is the collective DTX leader, and wants to operate the collective DTX on other
+ * DAOS engines, then it needs to re-calculate related participants based on related object layout.
+ * For most of commit/abort cases, the collective DTX leader has already prepared the paraticipants
+ * information in DRAM before starting the DTX, it is unnecessary to re-calculate the paraticipants.
+ * The re-calculation DTX paraticipants will happen when resync or cleanup the collective DTX. Such
+ * two cases are relative rare, so even if the overhead for such re-calculation would be quite high,
+ * it will not affect the whole system too much.
+ *
+ * On the other hand, DTX refresh is frequently used DTX logic. Efficiently find out the DTX leader
+ * is crucial for that. Consider DTX leader switch, we will record several new leader candidates in
+ * the MBS in front of the collective targets information. Then for most of cases, DTX refresh does
+ * not need to re-calculation DTX paraticipants.
+ */
+struct dtx_coll_target {
+	/* Fault domain level - used for generating related object layout. */
+	uint32_t			dct_fdom_lvl;
+	/* Performance domain affinity - used for generating related object layout. */
+	uint32_t			dct_pda;
+	/* Performance domain level - used for generating related object layout. */
+	uint32_t			dct_pdom_lvl;
+	/* The object layout version - used for generating related object layout. */
+	uint16_t			dct_layout_ver;
+	/* How many shards on current engine that participant in the collective DTX. */
+	uint8_t				dct_tgt_nr;
+	/* The size of dct_bitmap. */
+	uint8_t				dct_bitmap_sz;
+	/*
+	 * The ID (pool_component::co_id) array for targets on current engine, used for DTX check.
+	 * The bitmap for local object shards on current engine is appended after the ID array. The
+	 * bitmap is used for DTX commit and abort. In fact, we can re-calculate such bitmap based
+	 * on the taregets ID, but directly store the bitmap is more efficient since it is not big.
+	 */
+	uint32_t			dct_tgts[0];
+};
+
 struct dtx_memberships {
 	/* How many touched shards in the DTX. */
 	uint32_t			dm_tgt_cnt;
@@ -153,7 +220,8 @@ struct dtx_memberships {
 	};
 
 	/* The first 'sizeof(struct dtx_daos_target) * dm_tgt_cnt' is the
-	 * dtx_daos_target array. The subsequent are modification groups.
+	 * dtx_daos_target array. The subsequent can be redundancy groups
+	 * or dtx_coll_target, depends on dm_flags.
 	 */
 	union {
 		char			dm_data[0];
@@ -174,6 +242,7 @@ struct dtx_id {
 
 void daos_dti_gen_unique(struct dtx_id *dti);
 void daos_dti_gen(struct dtx_id *dti, bool zero);
+void daos_dti_reset(void);
 
 static inline void
 daos_dti_copy(struct dtx_id *des, const struct dtx_id *src)
@@ -197,6 +266,7 @@ daos_dti_equal(struct dtx_id *dti0, struct dtx_id *dti1)
 }
 
 #define DF_DTI		DF_UUID"."DF_X64
+#define DF_DTIF		DF_UUIDF"."DF_X64
 #define DP_DTI(dti)	DP_UUID((dti)->dti_uuid), (dti)->dti_hlc
 
 enum daos_ops_intent {

@@ -3,17 +3,17 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from multiprocessing import Queue
-import time
 import random
-import threading
 import re
+import threading
+import time
+from multiprocessing import Queue
 
 from exception_utils import CommandFailure
 from ior_utils import run_ior, thread_run_ior
 from job_manager_utils import get_job_manager
-from test_utils_pool import add_pool
 from osa_utils import OSAUtils
+from test_utils_pool import add_pool
 from write_host_file import write_host_file
 
 
@@ -32,8 +32,7 @@ class NvmePoolExclude(OSAUtils):
         self.dmg_command = self.get_dmg_command()
         self.ior_test_sequence = self.params.get("ior_test_sequence", "/run/ior/iorflags/*")
         # Recreate the client hostfile without slots defined
-        self.hostfile_clients = write_host_file(
-            self.hostlist_clients, self.workdir, None)
+        self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir)
         self.pool = None
         self.cont_list = []
         self.dmg_command.exit_status_exception = True
@@ -87,7 +86,6 @@ class NvmePoolExclude(OSAUtils):
                     "hosts": self.hostlist_clients,
                     "path": self.workdir,
                     "slots": None,
-                    "group": self.server_group,
                     "pool": pool[val],
                     "container": self.cont_list[-1],
                     "processes": self.params.get("np", "/run/ior/client_processes/*"),

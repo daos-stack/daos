@@ -3,14 +3,15 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-import sys
 import ctypes
+import sys
+
 import avocado
-
-from pydaos.raw import DaosContainer, IORequest, DaosApiError
-
 from apricot import TestWithServers
 from general_utils import create_string_buffer
+from pydaos.raw import DaosApiError, IORequest
+from test_utils_container import add_container
+from test_utils_pool import add_pool
 
 
 class CreateManyDkeys(TestWithServers):
@@ -22,19 +23,20 @@ class CreateManyDkeys(TestWithServers):
     :avocado: recursive
     """
 
-    def write_a_bunch_of_values(self, how_many):
+    def write_a_bunch_of_values(self, pool, how_many):
+        """Write data to an object, each with a dkey and akey.
+
+        Args:
+            pool (TestPool): the pool in which to write data
+            how_many (int): how many key:value pairs are written
         """
-        Write data to an object, each with a dkey and akey.  The how_many
-        parameter determines how many key:value pairs are written.
-        """
+        self.log_step("Creating a container")
+        container = add_container(self, pool)
+        container.open()
 
-        self.container = DaosContainer(self.context)
-        self.container.create(self.pool.pool.handle)
-        self.container.open()
+        ioreq = IORequest(self.context, container.container, None)
 
-        ioreq = IORequest(self.context, self.container, None)
-
-        print("Started Writing the Dataset-----------\n")
+        self.log_step("Writing the dataset")
         inc = 50000
         last_key = inc
         for key in range(how_many):
@@ -53,7 +55,7 @@ class CreateManyDkeys(TestWithServers):
                 sys.stdout.flush()
                 last_key = key + inc
 
-        print("Started Verification of the Dataset-----------\n")
+        self.log_step("Verifying the dataset")
         last_key = inc
         for key in range(how_many):
             c_dkey = create_string_buffer("dkey {0}".format(key))
@@ -62,22 +64,17 @@ class CreateManyDkeys(TestWithServers):
             val = ioreq.single_fetch(c_dkey, c_akey, len(the_data) + 1)
             exp_value = val.value.decode("utf-8")
             if the_data != exp_value:
-                self.fail("ERROR: Data mismatch for dkey = {0}, akey={1}, "
-                          "Expected Value={2} and Received Value={3}\n"
-                          .format("dkey {0}".format(key),
-                                  "akey {0}".format(key),
-                                  the_data,
-                                  exp_value))
+                self.log.debug("Expected Value: %s", the_data)
+                self.log.debug("Received Value: %s", exp_value)
+                self.fail("ERROR: Data mismatch for dkey='dkey {key}', akey='akey {key}'")
 
             if key > last_key:
-                print("veried: {}".format(key))
+                print("verified: {}".format(key))
                 sys.stdout.flush()
                 last_key = key + inc
 
-        print("starting destroy")
-        self.container.close()
-        self.container.destroy()
-        print("destroy complete")
+        self.log_step("Destroying the container")
+        container.destroy()
 
     @avocado.fail_on(DaosApiError)
     def test_many_dkeys(self):
@@ -90,14 +87,18 @@ class CreateManyDkeys(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=object
-        :avocado: tags=many_dkeys,test_many_dkeys
+        :avocado: tags=CreateManyDkeys,test_many_dkeys
         """
-        self.prepare_pool()
         no_of_dkeys = self.params.get("number_of_dkeys", '/run/dkeys/')
 
+        self.log_step("Creating a pool")
+        pool = add_pool(self)
+
         # write a lot of individual data items, verify them, then destroy
-        self.write_a_bunch_of_values(no_of_dkeys)
+        self.write_a_bunch_of_values(pool, no_of_dkeys)
 
         # do it again, which should verify the first container
         # was truly destroyed because a second round won't fit otherwise
-        self.write_a_bunch_of_values(no_of_dkeys)
+        self.write_a_bunch_of_values(pool, no_of_dkeys)
+
+        self.log.info('Test passed')

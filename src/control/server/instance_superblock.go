@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,7 +7,7 @@
 package server
 
 import (
-	"io/ioutil"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -85,11 +85,11 @@ func (ei *EngineInstance) hasSuperblock() bool {
 	return ei.getSuperblock() != nil
 }
 
-// NeedsSuperblock indicates whether or not the instance appears
+// needsSuperblock indicates whether or not the instance appears
 // to need a superblock to be created in order to start.
 //
 // Should not be called if SCM format is required.
-func (ei *EngineInstance) NeedsSuperblock() (bool, error) {
+func (ei *EngineInstance) needsSuperblock() (bool, error) {
 	if ei.hasSuperblock() {
 		ei.log.Debugf("instance %d has no superblock set", ei.Index())
 		return false, nil
@@ -111,16 +111,16 @@ func (ei *EngineInstance) NeedsSuperblock() (bool, error) {
 }
 
 // createSuperblock creates instance superblock if needed.
-func (ei *EngineInstance) createSuperblock(recreate bool) error {
+func (ei *EngineInstance) createSuperblock() error {
 	if ei.IsStarted() {
 		return errors.Errorf("can't create superblock: instance %d already started", ei.Index())
 	}
 
-	needsSuperblock, err := ei.NeedsSuperblock() // scm format completed by now
+	needsSuperblock, err := ei.needsSuperblock() // scm format completed by now
 	if !needsSuperblock {
 		return nil
 	}
-	if err != nil && !recreate {
+	if err != nil {
 		return err
 	}
 
@@ -163,18 +163,26 @@ func (ei *EngineInstance) WriteSuperblock() error {
 	return WriteSuperblock(ei.superblockPath(), ei.getSuperblock())
 }
 
-// ReadSuperblock reads the instance's superblock
-// from storage.
+// ReadSuperblock reads the instance's superblock from storage.
 func (ei *EngineInstance) ReadSuperblock() error {
 	if err := ei.MountMetadata(); err != nil {
 		return errors.Wrap(err, "failed to mount control metadata device")
 	}
 
-	sb, err := ReadSuperblock(ei.superblockPath())
+	msgIdx := fmt.Sprintf("instance %d", ei.Index())
+	sbPath := ei.superblockPath()
+	ei.log.Tracef("%s: read sb: %q", msgIdx, sbPath)
+
+	data, err := ei.storage.Sys.ReadFile(sbPath)
 	if err != nil {
-		ei.log.Debugf("instance %d: failed to read superblock at %s: %s", ei.Index(), ei.superblockPath(), err)
-		return errors.Wrap(err, "failed to read instance superblock")
+		return errors.Wrapf(err, "%s: failed to read Superblock from %s", msgIdx, sbPath)
 	}
+
+	sb := &Superblock{}
+	if err := sb.Unmarshal(data); err != nil {
+		return err
+	}
+
 	ei.setSuperblock(sb)
 
 	return nil
@@ -197,19 +205,4 @@ func WriteSuperblock(sbPath string, sb *Superblock) error {
 
 	return errors.Wrapf(common.WriteFileAtomic(sbPath, data, 0600),
 		"Failed to write Superblock to %s", sbPath)
-}
-
-// ReadSuperblock reads a Superblock from storage.
-func ReadSuperblock(sbPath string) (*Superblock, error) {
-	data, err := ioutil.ReadFile(sbPath)
-	if err != nil {
-		return nil, errors.Wrapf(err, "Failed to read Superblock from %s", sbPath)
-	}
-
-	sb := &Superblock{}
-	if err := sb.Unmarshal(data); err != nil {
-		return nil, err
-	}
-
-	return sb, nil
 }

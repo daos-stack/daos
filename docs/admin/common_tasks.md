@@ -10,7 +10,7 @@ This section describes some of the common tasks handled by admins at a high leve
 4. Generate certificate files.
 5. Copy one of the example configs from `utils/config/examples` to
 `/etc/daos` and adjust it based on the environment. E.g., `access_points`,
-`bdev_class`.
+`class`.
 6. Check that the directory where the log files will be created exists. E.g.,
 `control_log_file`, `log_file` field in `engines` section.
 7. Start `daos_server`.
@@ -38,7 +38,7 @@ to server hosts and `daos-client` to client hosts.
 4. Generate certificate files and distribute them to all the hosts.
 5. Copy one of the example configs from `utils/config/examples` to
 `/etc/daos` of one of the server hosts and adjust it based on the environment.
-E.g., `access_points`, `bdev_class`.
+E.g., `access_points`, `class`.
 6. Check that the directory where the log files will be created exists. E.g.,
 `control_log_file`, `log_file` field in `engines` section.
 7. Start `daos_server`.
@@ -108,3 +108,13 @@ differ by at least 100.
 - Each engine must have a different `log_file`.
 - Use different `fabric_iface` for the best performance.
 - Each engine must have unique `scm_mount`, `scm_list`, and `bdev_list`.
+
+## Change fabric provider on a DAOS system
+
+1. Stop all DAOS client I/O.
+1. Evict client pool handles to ensure I/O has stopped.
+1. Shut down all `daos_server` processes.
+1. Update the fabric provider and interfaces in all `daos_server` configuration files. All `daos_server` configurations must use the same fabric provider.
+1. Restart all `daos_server` processes to re-load the configuration file.
+1. Ensure all ranks have re-joined by running `dmg system query`. If some ranks fail to join, check logs to troubleshoot.
+1. After all ranks have joined, restart `daos_agent` processes on client nodes, or alternately send SIGUSR2 to all of these processes to refresh network information.

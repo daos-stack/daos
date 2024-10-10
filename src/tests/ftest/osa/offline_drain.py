@@ -5,9 +5,9 @@
 """
 import random
 
+from nvme_utils import ServerFillUp
 from osa_utils import OSAUtils
 from test_utils_pool import add_pool
-from nvme_utils import ServerFillUp
 from write_host_file import write_host_file
 
 
@@ -29,8 +29,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         self.ior_test_sequence = self.params.get(
             "ior_test_sequence", '/run/ior/iorflags/*')
         # Recreate the client hostfile without slots defined
-        self.hostfile_clients = write_host_file(
-            self.hostlist_clients, self.workdir, None)
+        self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir)
 
     def run_offline_drain_test(self, num_pool, data=False, oclass=None, pool_fillup=0):
         """Run the offline drain without data.
@@ -144,6 +143,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
                     self.run_ior_thread("Read", oclass, test_seq)
                     self.run_mdtest_thread(oclass)
                     self.container = self.pool_cont_dict[self.pool][0]
+                    self.container.daos.env['UCX_LOG_LEVEL'] = 'error'
                     self.container.check()
 
     def test_osa_offline_drain(self):

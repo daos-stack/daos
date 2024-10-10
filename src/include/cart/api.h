@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -35,6 +35,27 @@ extern "C" {
 /** @addtogroup CART
  * @{
  */
+
+/**
+ * Get information on protocols that are supported by underlying mercury plugins. If
+ * \info_string is NULL, a list of all supported protocols by all plugins will
+ * be returned. The returned list must be freed using crt_protocol_info_free().
+ *
+ * \param[in]  info_string     NULL or "<protocol>" or "<plugin+protocol>"
+ * \param[out] protocol_info_p linked-list of protocol infos
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+*/
+int
+crt_protocol_info_get(const char *info_string, struct crt_protocol_info **protocol_info_p);
+
+/**
+ * Free protocol_info from crt_protocol_info_get().
+ *
+ * \param[in,out] protocol_info linked-list of protocol infos
+*/
+void
+crt_protocol_info_free(struct crt_protocol_info *protocol_info);
 
 /**
  * Initialize CRT transport layer. Must be called on both the server side and
@@ -83,6 +104,68 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 int
 crt_context_create(crt_context_t *crt_ctx);
 
+
+/**
+ * Returns number of interfaces passed to CaRT at initialization time.
+ *
+ * Interfaces are passed via either D_INTERFACE environment variable or
+ * through crt_init_options_t::cio_interface options to crt_init_opt() .
+ *
+ * \return                     Number of interfaces CaRT is initialized with.
+ */
+uint32_t
+crt_num_ifaces_get(void);
+
+
+/**
+ * Create CRT transport context on an interface specified by the index.
+ * Index must be less than total number of interfaces returned by
+ * crt_num_ifaces_get().
+ *
+ * Must be destroyed by crt_context_destroy() before calling crt_finalize().
+ *
+ * Note: This is a client-side only API.
+ *
+ * \param[in]  iface_index     index of the interface.
+ * \param[out] crt_ctx         created CRT transport context
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ */
+int
+crt_context_create_on_iface_idx(uint32_t iface_index, crt_context_t *crt_ctx);
+
+/**
+ * Returns an index corresponding to the interface name passed. Index returned
+ * can then be used to create a context on a specific interface using
+ * crt_context_create_on_iface_idx() API.
+ *
+ * \param[in]  iface_name       Interface name to look up.
+ * \param[out] idx              Returned index
+ *
+ * \return                      DER_SUCCESS on success, negative value if error
+ */
+int
+crt_iface_name2idx(const char *iface_name, int *idx);
+
+
+/**
+ * Create CRT transport context on an interface specified by the name.
+ * Interface name must match one of interfaces with which CaRT was initialized
+ * with via either D_INTERFACE env or crt_init_opt_t::cio_interface.
+ *
+ * Must be destroyed by crt_context_destroy() before calling crt_finalize().
+ *
+ * Note: This is a client-side only API.
+ *
+ * \param[in]  iface_name      name of the interface.
+ * \param[out] crt_ctx         created CRT transport context
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ */
+int
+crt_context_create_on_iface(const char *iface_name, crt_context_t *crt_ctx);
+
+
 /**
  * Set the timeout value for all RPC requests created on the specified context.
  * Setting the timeout after crt_req_create() call will not affect already
@@ -104,6 +187,19 @@ crt_context_create(crt_context_t *crt_ctx);
  */
 int
 crt_context_set_timeout(crt_context_t crt_ctx, uint32_t timeout_sec);
+
+/**
+ * Get the default timeout value for the RPC requests created on the specified context.
+ *
+ * This is an optional function.
+ *
+ * \param[in] req              pointer to RPC request
+ * \param[out] timeout_sec     timeout value in seconds
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ */
+int
+crt_context_get_timeout(crt_context_t crt_ctx, uint32_t *timeout_sec);
 
 /**
  * Destroy CRT transport context.
@@ -326,9 +422,8 @@ crt_req_get_timeout(crt_rpc_t *req, uint32_t *timeout_sec);
  *
  * \param[in] req              pointer to RPC request
  *
- * \return                     DER_SUCCESS on success, negative value if error
  */
-int
+void
 crt_req_addref(crt_rpc_t *req);
 
 /**
@@ -336,9 +431,8 @@ crt_req_addref(crt_rpc_t *req);
  *
  * \param[in] req              pointer to RPC request
  *
- * \return                     DER_SUCCESS on success, negative value if error
  */
-int
+void
 crt_req_decref(crt_rpc_t *req);
 
 /**
@@ -428,6 +522,18 @@ crt_req_dst_rank_get(crt_rpc_t *req, d_rank_t *rank);
  */
 int
 crt_req_dst_tag_get(crt_rpc_t *req, uint32_t *tag);
+
+/**
+ * Return source timeout in seconds
+ *
+ * \param[in] req              Pointer to RPC request
+ * \param[out] timeout         Returned timeout
+ *
+ * \return                     DER_SUCCESS on success or error
+ *                             on failure
+ */
+int
+crt_req_src_timeout_get(crt_rpc_t *rpc, uint32_t *timeout);
 
 /**
  * Return reply buffer
@@ -1600,6 +1706,18 @@ int
 crt_proc_d_iov_t(crt_proc_t proc, crt_proc_op_t proc_op, d_iov_t *data);
 
 /**
+ * Generic processing routine.
+ *
+ * \param[in,out] proc         abstract processor object
+ * \param[in] proc_op          proc operation type
+ * \param[in,out] data         pointer to data
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ */
+int
+crt_proc_d_sg_list_t(crt_proc_t proc, crt_proc_op_t proc_op, d_sg_list_t *data);
+
+/**
  * Create the processor object.
  *
  * \param[in] crt_ctx		Associated cart context
@@ -1830,6 +1948,8 @@ crt_proto_register(struct crt_proto_format *cpf);
  * \param[in] base_opc         the base opcode for the protocol
  * \param[in] ver              array of protocol version
  * \param[in] count            number of elements in ver
+ * \param[in] timeout          Timeout in seconds, ignored if 0 or greater than
+ *                             default timeout
  * \param[in] cb               completion callback. crt_proto_query() internally
  *                             sends an RPC to \a tgt_ep. \a cb will be called
  *                             upon completion of that RPC. The highest protocol
@@ -1843,8 +1963,8 @@ crt_proto_register(struct crt_proto_format *cpf);
  *                             failure.
  */
 int
-crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
-		uint32_t *ver, int count, crt_proto_query_cb_t cb, void *arg);
+crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, uint32_t *ver, int count,
+		uint32_t timeout, crt_proto_query_cb_t cb, void *arg);
 
 /**
  * query tgt_ep if it has registered base_opc with version using a user provided cart context.
@@ -1853,6 +1973,8 @@ crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
  * \param[in] base_opc         the base opcode for the protocol
  * \param[in] ver              array of protocol version
  * \param[in] count            number of elements in ver
+ * \param[in] timeout          Timeout in seconds, ignored if 0 or greater than
+ *                             default timeout
  * \param[in] cb               completion callback. crt_proto_query() internally
  *                             sends an RPC to \a tgt_ep. \a cb will be called
  *                             upon completion of that RPC. The highest protocol
@@ -1867,7 +1989,7 @@ crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
  */
 int
 crt_proto_query_with_ctx(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, uint32_t *ver, int count,
-			 crt_proto_query_cb_t cb, void *arg, crt_context_t ctx);
+			 uint32_t timeout, crt_proto_query_cb_t cb, void *arg, crt_context_t ctx);
 /**
  * Set self rank.
  *
@@ -1948,35 +2070,6 @@ int crt_self_uri_get(int tag, char **uri);
  *                              on failure.
  */
 int crt_self_incarnation_get(uint64_t *incarnation);
-
-/**
- * Retrieve group information containing ranks and associated uris
- *
- * This call will allocate memory for buffers in passed \a grp_info.
- * User is responsible for freeing the memory once not needed anymore.
- *
- * Returned data in \a grp_info can be passed to crt_group_info_set
- * call in order to setup group on a different node.
- *
- * \param[in] group             Group identifier
- * \param[in] grp_info          group info to be filled.
- *
- * \return                      DER_SUCCESS on success, negative value
- *                              on failure.
- */
-int crt_group_info_get(crt_group_t *group, d_iov_t *grp_info);
-
-/**
- * Sets group info (nodes and associated uris) baesd on passed
- * grp_info data. \a grp_info is to be retrieved via \a crt_group_info_get
- * call.
- *
- * \param[in] grp_info          Group information to set
- *
- * \return                      DER_SUCCESS on success, negative value
- *                              on failure.
- */
-int crt_group_info_set(d_iov_t *grp_info);
 
 /**
  * Retrieve list of ranks that belong to the specified group.
@@ -2188,8 +2281,7 @@ void crt_swim_fini(void);
 #define crt_proc_d_rank_t		crt_proc_uint32_t
 #define crt_proc_int			crt_proc_int32_t
 #define crt_proc_crt_status_t		crt_proc_int32_t
-#define crt_proc_crt_group_id_t		crt_proc_d_string_t
-#define crt_proc_crt_phy_addr_t		crt_proc_d_string_t
+#define crt_proc_crt_group_id_t         crt_proc_d_string_t
 
 /**
  * \a err is an error that ought to be logged at a less serious level than ERR.
@@ -2203,6 +2295,40 @@ crt_quiet_error(int err)
 {
 	return err == -DER_GRPVER;
 }
+
+/**
+ * Change the quota limit.
+ *
+ * \param[in] crt_ctx          CaRT context
+ * \param[in] quota            Quota type
+ * \param[in] val              Value
+ *
+ * \return                     DER_SUCCESS on success, negative value on
+ *                             failure.
+ */
+int crt_context_quota_limit_set(crt_context_t crt_ctx, crt_quota_type_t quota, int value);
+
+/**
+ * Query the quota limit.
+ *
+ * \param[in] crt_ctx          CaRT context
+ * \param[in] quota            Quota type
+ * \param[out] val             Returned value
+ *
+ * \return                     DER_SUCCESS on success, negative value on
+ *                             failure.
+ */
+int crt_context_quota_limit_get(crt_context_t crt_ctx, crt_quota_type_t quota, int *value);
+
+/**
+ * Get the proto version of an RPC request.
+ *
+ * \param[in] req              pointer to RPC request
+ *
+ * \return                     positive version or negative error.
+ */
+int
+crt_req_get_proto_ver(crt_rpc_t *req);
 
 /** @}
  */

@@ -55,6 +55,9 @@ daos_obj_close(daos_handle_t oh, daos_event_t *ev)
 	tse_task_t	*task;
 	int		rc;
 
+	if (ev == NULL)
+		return dc_obj_close_direct(oh);
+
 	rc = dc_obj_close_task_create(oh, ev, NULL, &task);
 	if (rc)
 		return rc;

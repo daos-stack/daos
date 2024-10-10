@@ -80,15 +80,16 @@
 /*
  * Object ID
  *
- * The highest bit represents the object ID class. The remaining 63 bits
+ * The highest 2 bits represent the object ID class. The remaining 62 bits
  * represent the object number, which must be nonzero.
  */
 typedef uint64_t rdb_oid_t;
 
 /* Object ID class (see rdb_oid_t) */
-#define RDB_OID_CLASS_MASK	(1ULL << 63)
-#define RDB_OID_CLASS_GENERIC	(0ULL << 63)
-#define RDB_OID_CLASS_INTEGER	(1ULL << 63)
+#define RDB_OID_CLASS_MASK    (3ULL << 62)
+#define RDB_OID_CLASS_GENERIC (0ULL << 62)
+#define RDB_OID_CLASS_INTEGER (2ULL << 62)
+#define RDB_OID_CLASS_LEXICAL (1ULL << 62)
 
 /* D-key for all a-keys */
 extern d_iov_t rdb_dkey;

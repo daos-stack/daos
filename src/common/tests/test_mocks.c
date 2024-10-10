@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -196,6 +196,10 @@ __wrap_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
 	accept_addr_ptr = addr;
 	accept_addrlen_ptr = addrlen;
 	accept_call_count++;
+	if (accept_return < 0) {
+		errno = -accept_return;
+		return -1;
+	}
 	return accept_return;
 }
 

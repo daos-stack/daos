@@ -1,0 +1,24 @@
+#!/bin/bash
+
+# find the base branch of the current branch
+# base branches can be master, release/2.4+, release/3+
+# or optionally branches passed into $1
+
+set -eu -o pipefail
+IFS=' ' read -r -a add_bases <<< "${1:-}"
+origin=origin
+mapfile -t all_bases < <(echo "master"
+                         git branch -r | sed -ne "/^  $origin\\/release\\/\(2.[4-9]\|[3-9]\)/s/^  $origin\\///p")
+all_bases+=("${add_bases[@]}")
+TARGET="master"
+min_diff=-1
+for base in "${all_bases[@]}"; do
+    git rev-parse --verify "$origin/$base" &> /dev/null || continue
+    commits_ahead=$(git log --oneline "$origin/$base..HEAD" | wc -l)
+    if [ "$min_diff" -eq -1 ] || [ "$min_diff" -gt "$commits_ahead" ]; then
+        TARGET="$base"
+        min_diff=$commits_ahead
+    fi
+done
+echo "$TARGET"
+exit 0

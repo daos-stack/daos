@@ -17,13 +17,18 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 var netSubsystems = []string{"cxi", "infiniband", "net"}
 
-const cxiProvider = "ofi+cxi"
+const (
+	cxiProvider     = "ofi+cxi"
+	netvscSubsystem = "net"
+	netvscDriver    = "hv_netvsc"
+)
 
 func isNetwork(subsystem string) bool {
 	for _, netSubsystem := range netSubsystems {
@@ -33,6 +38,20 @@ func isNetwork(subsystem string) bool {
 	}
 
 	return false
+}
+
+func isNetvscDevice(path string, subsystem string) bool {
+	if subsystem != netvscSubsystem {
+		return false
+	}
+
+	content, err := ioutil.ReadFile(filepath.Join(path, "device", "uevent"))
+	if err != nil {
+		return false
+	}
+
+	val, err := common.FindKeyValue(strings.Split(string(content), "\n"), "DRIVER")
+	return err == nil && val == netvscDriver
 }
 
 // NewProvider creates a new SysfsProvider.
@@ -86,7 +105,7 @@ func (s *Provider) GetTopology(ctx context.Context) (*hardware.Topology, error) 
 	topo := &hardware.Topology{}
 
 	for _, subsystem := range s.topologySubsystems() {
-		if err := s.addPCIDevices(topo, subsystem); err != nil {
+		if err := s.addSubsystemDevices(topo, subsystem); err != nil {
 			return nil, err
 		}
 	}
@@ -103,7 +122,8 @@ func (s *Provider) topologySubsystems() []string {
 	return netSubsystems
 }
 
-func (s *Provider) addPCIDevices(topo *hardware.Topology, subsystem string) error {
+func (s *Provider) addSubsystemDevices(topo *hardware.Topology, subsystem string) error {
+	var netvscPaths []string
 	subsysRoot := s.sysPath("class", subsystem)
 	err := filepath.Walk(subsysRoot, func(path string, fi os.FileInfo, err error) error {
 		if fi == nil {
@@ -118,41 +138,53 @@ func (s *Provider) addPCIDevices(topo *hardware.Topology, subsystem string) erro
 			return nil
 		}
 
-		var dev *hardware.PCIDevice
-		switch {
-		case isNetwork(subsystem):
-			dev, err = s.getNetworkDevice(path, subsystem)
-			if err != nil {
-				s.log.Tracef(err.Error())
-				return nil
-			}
-		default:
+		if isNetvscDevice(path, subsystem) {
+			netvscPaths = append(netvscPaths, path)
 			return nil
 		}
 
-		numaID, err := s.getNUMANode(path)
-		if err != nil {
-			s.log.Tracef("using default NUMA node, unable to get: %s", err.Error())
-			numaID = 0
-		}
-
-		pciAddr, err := s.getPCIAddress(path)
-		if err != nil {
-			s.log.Debug(err.Error())
-			return nil
-		}
-		dev.PCIAddr = *pciAddr
-
-		s.log.Tracef("adding device found at %q (type %s, NUMA node %d)", path, dev.Type, numaID)
-
-		return topo.AddDevice(uint(numaID), dev)
+		return s.addPCIDevice(topo, subsystem, path)
 	})
 
-	if err == io.EOF || err == nil {
+	if err != io.EOF && err != nil {
+		return err
+	}
+
+	for _, path := range netvscPaths {
+		if err := s.addNetvscDevice(topo, path); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *Provider) addPCIDevice(topo *hardware.Topology, subsystem string, path string) error {
+	if !isNetwork(subsystem) {
 		return nil
 	}
 
-	return err
+	dev, err := s.getNetworkDevice(path, subsystem)
+	if err != nil {
+		s.log.Tracef(err.Error())
+		return nil
+	}
+
+	numaID, err := s.getNUMANode(path)
+	if err != nil {
+		s.log.Tracef("using default NUMA node, unable to get: %s", err.Error())
+		numaID = 0
+	}
+
+	pciAddr, err := s.getPCIAddress(path)
+	if err != nil {
+		s.log.Trace(err.Error())
+		return nil
+	}
+	dev.PCIAddr = *pciAddr
+
+	s.log.Tracef("adding device found at %q (type %s, NUMA node %d)", path, dev.Type, numaID)
+	return topo.AddDevice(uint(numaID), dev)
 }
 
 func (s *Provider) getNetworkDevice(path, subsystem string) (*hardware.PCIDevice, error) {
@@ -216,6 +248,30 @@ func (s *Provider) getPCIAddress(path string) (*hardware.PCIAddress, error) {
 	return nil, errors.Errorf("unable to parse PCI address from %q", path)
 }
 
+func (s *Provider) addNetvscDevice(topo *hardware.Topology, path string) error {
+	ifaceName := filepath.Base(path)
+
+	virt := &hardware.VirtualDevice{
+		Name: ifaceName,
+		Type: hardware.DeviceTypeNetInterface,
+	}
+
+	backingDev, err := s.getBackingDevice(path, topo.AllDevices())
+	if err != nil {
+		s.log.Noticef("Skipping NetVSC network adapter %q: physical backing device not found",
+			ifaceName)
+		return nil
+	}
+	s.log.Tracef("NetVSC network adapter %q has physical backing device %q",
+		ifaceName, backingDev.DeviceName())
+	virt.BackingDevice = backingDev
+
+	s.log.Tracef("Adding NetVSC network adapter at %q", path)
+	topo.VirtualDevices = append(topo.VirtualDevices, virt)
+
+	return nil
+}
+
 func (s *Provider) addVirtualNetDevices(topo *hardware.Topology) error {
 	virtualDevices := make([]*hardware.VirtualDevice, 0)
 	addedDevices := topo.AllDevices()
@@ -245,7 +301,10 @@ func (s *Provider) addVirtualNetDevices(topo *hardware.Topology) error {
 	}
 
 	if len(virtualDevices) > 0 {
-		topo.VirtualDevices = virtualDevices
+		if len(topo.VirtualDevices) == 0 {
+			topo.VirtualDevices = make([]*hardware.VirtualDevice, 0)
+		}
+		topo.VirtualDevices = append(topo.VirtualDevices, virtualDevices...)
 	}
 
 	return nil

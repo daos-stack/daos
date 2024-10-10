@@ -3,20 +3,15 @@
 
 ENV:
   default:
-    #!filter-only : /run/env_CRT_CTX_SHARE_ADDR/sep
     #!filter-only : /run/tests/proto_np
     - D_LOG_MASK: "WARN"
-    - OFI_INTERFACE: "eth0"
+    - D_INTERFACE: "eth0"
     - CRT_TEST_CONT: "1"
     - test_servers_CRT_CTX_NUM: "16"
     - test_clients_CRT_CTX_NUM: "16"
-env_CRT_PHY_ADDR_STR: !mux
+env_D_PROVIDER: !mux
   ofi_tcp:
-    CRT_PHY_ADDR_STR: "ofi+tcp;ofi_rxm"
-env_CRT_CTX_SHARE_ADDR: !mux
-  no_sep:
-    env: no_sep
-    CRT_CTX_SHARE_ADDR: "1"
+    D_PROVIDER: "ofi+tcp"
 hosts: !mux
   hosts_1:
     config: one_node
@@ -36,7 +31,7 @@ tests: !mux
     test_clients_arg:
       - "--name client_group --attach_to tg_srv_grp_swim_test --init_only --holdtime 20"
       - "--name client_group --attach_to tg_srv_grp_swim_test --rank 0,1 --verify_swim_status 'rank2=alive' --skip_shutdown --skip_check_in"
-      - "--name client_group --attach_to tg_srv_grp_swim_test --rank 2   --shut_only --holdtime 20"
+      - "--name client_group --attach_to tg_srv_grp_swim_test --rank 2   --shut_only --holdtime 30"
       - "--name client_group --attach_to tg_srv_grp_swim_test --rank 0,1 --verify_swim_status 'rank2=dead'  --skip_shutdown --skip_check_in"
       - "--name client_group --attach_to tg_srv_grp_swim_test --rank 0,1 --verify_swim_status 'rank1=alive' --skip_shutdown --skip_check_in"
       - "--name client_group --attach_to tg_srv_grp_swim_test --rank 0,1 --verify_swim_status 'rank0=alive' --skip_shutdown --skip_check_in"

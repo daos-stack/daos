@@ -7,7 +7,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 from soak_test_base import SoakTestBase
 
 
-class SoakStress(SoakTestBase):
+class SoakStressTwoHour(SoakTestBase):
     """Test class Description: Runs soak smoke.
 
     :avocado: recursive
@@ -25,7 +25,7 @@ class SoakStress(SoakTestBase):
         :avocado: tags=manual
         :avocado: tags=hw,large
         :avocado: tags=soak
-        :avocado: tags=soak_stress_2h,test_soak_stress
+        :avocado: tags=SoakStressTwoHour,soak_stress_2h,test_soak_stress
         """
         test_param = "/run/soak_stress/"
         self.run_soak(test_param)

@@ -1,25 +1,24 @@
 '''
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-import time
+import glob
+import logging
 import os
+import re
 import shlex
 import subprocess  # nosec
-import logging
-import re
-import glob
-
-from ClusterShell.NodeSet import NodeSet
+import time
 
 import cart_logparse
 import cart_logtest
 from apricot import TestWithoutServers
-from run_utils import stop_processes
+from ClusterShell.NodeSet import NodeSet
 from host_utils import get_local_host
-from write_host_file import write_host_file
 from job_manager_utils import Orterun
+from run_utils import stop_processes
+from write_host_file import write_host_file
 
 
 class CartTest(TestWithoutServers):
@@ -188,18 +187,12 @@ class CartTest(TestWithoutServers):
 
     def get_env(self):
         """Get the basic env setting in yaml."""
-        env_ccsa = self.params.get("env", "/run/env_CRT_CTX_SHARE_ADDR/*/")
         test_name = self.params.get("name", "/run/tests/*/")
-        provider_str = self.params.get("CRT_PHY_ADDR_STR", "/run/env_CRT_PHY_ADDR_STR/*/")
+        provider_str = self.params.get("D_PROVIDER", "/run/env_D_PROVIDER/*/")
 
-        os.environ["CRT_PHY_ADDR_STR"] = provider_str
+        os.environ["D_PROVIDER"] = provider_str
 
-        if env_ccsa is not None:
-            log_dir = "{}-{}".format(test_name, env_ccsa)
-        else:
-            # Ensure we don't try to + concatenate None and string
-            env_ccsa = ""
-            log_dir = "{}".format(test_name)
+        log_dir = str(test_name)
 
         # Write group attach info file(s) to HOME or DAOS_TEST_SHARED_DIR.
         # (It can't be '.' or cwd(), it must be some place writable.)
@@ -207,13 +200,13 @@ class CartTest(TestWithoutServers):
 
         log_path = os.environ['DAOS_TEST_LOG_DIR']
         log_path = log_path.replace(";", "_")
-        log_file = os.path.join(log_path, log_dir, test_name + "_" + env_ccsa + "_"
+        log_file = os.path.join(log_path, log_dir, test_name + "_"
                                 + provider_str + "_cart.log").replace(";", "_")
 
         # Parse out envs of interest from the yaml file
-        envars_to_parse = ["D_LOG_MASK", "CRT_PHY_ADDR_STR", "D_PROVIDER", "D_INTERFACE",
-                           "D_DOMAIN", "OFI_INTERFACE", "OFI_DOMAIN", "CRT_CTX_SHARE_ADDR",
-                           "D_PORT", "OFI_PORT", "HG_LOG_LEVEL", "HG_LOG_SUBSYS"]
+        envars_to_parse = ["D_LOG_MASK", "D_PROVIDER", "D_INTERFACE",
+                           "D_DOMAIN", "CRT_TIMEOUT", "D_QUOTA_RPCS",
+                           "D_PORT", "HG_LOG_LEVEL", "HG_LOG_SUBSYS"]
         yaml_envs = ""
 
         for env_name in envars_to_parse:
@@ -224,13 +217,13 @@ class CartTest(TestWithoutServers):
 
         # Do not use the standard .log file extension, otherwise it'll get
         # removed (cleaned up for disk space savings) before we can archive it.
-        log_filename = test_name + "_" + env_ccsa + "_" + provider_str + "_" + \
+        log_filename = test_name + "_" + provider_str + "_" + \
             "output.orterun_log"
 
         output_filename_path = os.path.join(log_path, log_dir, log_filename).replace(";", "_")
         env = " --output-filename {!s}".format(output_filename_path)
         env += " -x D_LOG_FILE={!s}".format(log_file)
-        env += " -x D_LOG_FILE_APPEND_PID=1"
+        env += " -x D_LOG_FILE_APPEND_PID=1 -x D_LOG_FILE_APPEND_RANK=1 "
 
         env += yaml_envs
 
@@ -277,26 +270,18 @@ class CartTest(TestWithoutServers):
     def build_cmd(self, env, host, **kwargs):
         """Build a command string."""
 
-        env_ccsa = self.params.get("env", "/run/env_CRT_CTX_SHARE_ADDR/*/")
         test_name = self.params.get("name", "/run/tests/*/")
 
         # Write memcheck result file(s) to $HOME or DAOS_TEST_SHARED_DIR.
-        daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR',
-                                         os.getenv('HOME'))
-
-        if env_ccsa is None:
-            env_ccsa = ""
-
-        memcheck_xml = r"{}/valgrind.%q\{{PMIX_ID\}}_{}-{}.memcheck".format(daos_test_shared_dir,
-                                                                            test_name, env_ccsa)
-
+        daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR', os.getenv('HOME'))
+        memcheck_xml = r"{}/valgrind.%q\{{PMIX_ID\}}_{}.memcheck".format(
+            daos_test_shared_dir,
+            test_name)
         tst_cmd = ""
         tst_cont = None
 
         index = kwargs.get('index', None)
-
-        daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR',
-                                         os.getenv('HOME'))
+        daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR', os.getenv('HOME'))
 
         # Return 0 on memory leaks while suppression file is completed
         # (CART-975 and CART-977)

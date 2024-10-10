@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -26,6 +26,8 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/testing/protocmp"
+
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 // AssertTrue asserts b is true
@@ -129,8 +131,21 @@ func CmpErrBool(want, got error) bool {
 func CmpErr(t *testing.T, want, got error) {
 	t.Helper()
 
+	if want != nil && want.Error() == "" {
+		t.Fatal("comparison with empty error will always return true, don't do it")
+	}
+
 	if !CmpErrBool(want, got) {
 		t.Fatalf("unexpected error\n(wanted: %v, got: %v)", want, got)
+	}
+}
+
+// CmpAny compares two values and fails the test if they are not equal.
+func CmpAny(t *testing.T, desc string, want, got any, cmpOpts ...cmp.Option) {
+	t.Helper()
+
+	if diff := cmp.Diff(want, got, cmpOpts...); diff != "" {
+		t.Fatalf("unexpected %s (-want, +got):\n%s\n", desc, diff)
 	}
 }
 
@@ -406,5 +421,16 @@ func Context(t *testing.T) context.Context {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
+	return ctx
+}
+
+// MustLogContext returns a context containing the supplied logger.
+// Canceled when the test is done.
+func MustLogContext(t *testing.T, log logging.Logger) context.Context {
+	t.Helper()
+	ctx, err := logging.ToContext(Context(t), log)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return ctx
 }

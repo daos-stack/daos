@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,6 +14,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/syscall.h>
+#include <sys/mman.h>
 
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -21,17 +22,25 @@
 #include <sys/ioctl.h>
 #include <string.h>
 
-#include "dfuse_log.h"
 #include <gurt/list.h>
 #include <gurt/atomic.h>
+
+#include <daos/event.h>
+#include <dfuse_ioctl.h>
+
+#include "dfuse_log.h"
 #include "intercept.h"
-#include "dfuse_ioctl.h"
 #include "dfuse_vector.h"
 #include "dfuse_common.h"
 
 #include "ioil.h"
+#include "../pil4dfs/hook.h"
 
 FOREACH_INTERCEPT(IOIL_FORWARD_DECL)
+
+static __thread daos_handle_t ioil_eqh;
+
+#define IOIL_MAX_EQ 64
 
 struct ioil_pool {
 	daos_handle_t	iop_poh;
@@ -43,13 +52,18 @@ struct ioil_pool {
 struct ioil_global {
 	pthread_mutex_t	iog_lock;
 	d_list_t	iog_pools_head;
+	daos_handle_t	iog_main_eqh;
+	daos_handle_t	iog_eqs[IOIL_MAX_EQ];
+	uint16_t	iog_eq_count_max;
+	uint16_t	iog_eq_count;
+	uint16_t	iog_eq_idx;
 	pid_t           iog_init_tid;
 	bool		iog_initialized;
 	bool		iog_no_daos;
 	bool		iog_daos_init;
 
 	bool		iog_show_summary;	/**< Should a summary be shown at teardown */
-
+	bool		iog_fini_done;		/**< Whether destructor function is finished */
 	unsigned	iog_report_count;	/**< Number of operations that should be logged */
 
 	ATOMIC uint64_t iog_file_count;  /**< Number of file opens intercepted */
@@ -63,6 +77,10 @@ static vector_t	fd_table;
 static struct ioil_global ioil_iog;
 
 static __thread int saved_errno;
+
+static void *(*real_mmap)(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
+static void *
+dfuse_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
 
 #define SAVE_ERRNO(is_error)                 \
 	do {                                 \
@@ -149,19 +167,15 @@ ioil_shrink_cont(struct ioil_cont *cont, bool shrink_pool, bool force)
 static void
 entry_array_close(void *arg) {
 	struct fd_entry *entry = arg;
-	int              rc;
 
 	DFUSE_TRA_DOWN(entry->fd_dfsoh);
-	rc = dfs_release(entry->fd_dfsoh);
-	if (rc == ENOMEM)
-		dfs_release(entry->fd_dfsoh);
-
+	dfs_release(entry->fd_dfsoh);
 	entry->fd_cont->ioc_open_count -= 1;
 
 	/* Do not close container/pool handles at this point
-	 * to allow for re-use.
+	 * to allow for reuse.
 	 * ioil_shrink_cont(entry->fd_cont, true, true);
-	*/
+	 */
 }
 
 static int
@@ -281,6 +295,7 @@ ioil_init(void)
 	struct rlimit rlimit;
 	int rc;
 	uint64_t report_count = 0;
+	uint64_t eq_count = 0;
 
 	pthread_once(&init_links_flag, init_links);
 
@@ -323,14 +338,31 @@ ioil_init(void)
 	if (rc)
 		return;
 
+	rc = d_getenv_uint64_t("D_IL_MAX_EQ", &eq_count);
+	if (rc != -DER_NONEXIST) {
+		if (eq_count > IOIL_MAX_EQ) {
+			DFUSE_LOG_WARNING("Max EQ count (%"PRIu64") should not exceed: %d",
+					  eq_count, IOIL_MAX_EQ);
+			eq_count = IOIL_MAX_EQ;
+		}
+		ioil_iog.iog_eq_count_max = (uint16_t)eq_count;
+	} else {
+		ioil_iog.iog_eq_count_max = IOIL_MAX_EQ;
+	}
+
+	register_a_hook("libc", "mmap", (void *)dfuse_mmap, (long int *)(&real_mmap));
+	install_hook();
+
 	ioil_iog.iog_initialized = true;
 }
 
 static void
 ioil_show_summary()
 {
-	D_INFO("Performed %"PRIu64" reads and %"PRIu64" writes from %"PRIu64" files\n",
-	       ioil_iog.iog_read_count, ioil_iog.iog_write_count, ioil_iog.iog_file_count);
+	D_INFO("Performed %" PRIu64 " reads, %" PRIu64 " writes and %" PRIu64
+	       " fstats from %" PRIu64 " files\n",
+	       ioil_iog.iog_read_count, ioil_iog.iog_write_count, ioil_iog.iog_fstat_count,
+	       ioil_iog.iog_file_count);
 
 	if (ioil_iog.iog_file_count == 0 || !ioil_iog.iog_show_summary)
 		return;
@@ -349,11 +381,17 @@ ioil_fini(void)
 	int               rc;
 	pid_t             tid = syscall(SYS_gettid);
 
+	if (ioil_iog.iog_fini_done)
+		return;
 	if (tid != ioil_iog.iog_init_tid) {
 		DFUSE_TRA_INFO(&ioil_iog, "Ignoring destructor from alternate thread");
 		return;
 	}
 
+	if (ioil_iog.iog_initialized)
+		uninstall_hook();
+	else
+		free_memory_in_hook();
 	ioil_iog.iog_initialized = false;
 
 	DFUSE_TRA_DOWN(&ioil_iog);
@@ -381,10 +419,54 @@ ioil_fini(void)
 			ioil_shrink_pool(pool);
 	}
 
-	if (ioil_iog.iog_daos_init)
+	if (ioil_iog.iog_daos_init) {
+		int i;
+
+		/** destroy EQs created by threads */
+		for (i = 0; i < ioil_iog.iog_eq_count; i++)
+			daos_eq_destroy(ioil_iog.iog_eqs[i], 0);
+		/** destroy main thread eq */
+		if (daos_handle_is_valid(ioil_iog.iog_main_eqh))
+			daos_eq_destroy(ioil_iog.iog_main_eqh, 0);
 		daos_fini();
+	}
 	ioil_iog.iog_daos_init = false;
 	daos_debug_fini();
+	ioil_iog.iog_fini_done = true;
+}
+
+int
+ioil_get_eqh(daos_handle_t *eqh)
+{
+	int rc;
+
+	if (daos_handle_is_valid(ioil_eqh)) {
+		*eqh = ioil_eqh;
+		return 0;
+	}
+
+	/** No EQ support requested */
+	if (ioil_iog.iog_eq_count_max == 0)
+		return -1;
+
+	rc = pthread_mutex_lock(&ioil_iog.iog_lock);
+	/** create a new EQ if the EQ pool is not full; otherwise round robin EQ use from pool */
+	if (ioil_iog.iog_eq_count >= ioil_iog.iog_eq_count_max) {
+		ioil_eqh = ioil_iog.iog_eqs[ioil_iog.iog_eq_idx ++];
+		if (ioil_iog.iog_eq_idx == ioil_iog.iog_eq_count_max)
+			ioil_iog.iog_eq_idx = 0;
+	} else {
+		rc = daos_eq_create(&ioil_eqh);
+		if (rc) {
+			pthread_mutex_unlock(&ioil_iog.iog_lock); 
+			return -1;
+		}
+		ioil_iog.iog_eqs[ioil_iog.iog_eq_count] = ioil_eqh;
+		ioil_iog.iog_eq_count ++;
+	}
+	pthread_mutex_unlock(&ioil_iog.iog_lock);
+	*eqh = ioil_eqh;
+	return 0;
 }
 
 /* Get the object handle for the file itself */
@@ -733,6 +815,28 @@ out:
 	return rcb;
 }
 
+static void
+child_hdlr(void)
+{
+	int rc;
+
+	rc = daos_reinit();
+	if (rc)
+		DL_WARN(rc, "daos_reinit() failed in child process");
+
+	/** Reset event queue */
+	ioil_eqh = ioil_iog.iog_main_eqh = DAOS_HDL_INVAL;
+
+	if (ioil_iog.iog_eq_count_max) {
+		rc = daos_eq_create(&ioil_eqh);
+		if (rc)
+			DFUSE_LOG_WARNING("daos_eq_create() failed: " DF_RC, DP_RC(rc));
+		else
+			ioil_iog.iog_main_eqh = ioil_eqh;
+	}
+	ioil_iog.iog_eq_count = 0;
+}
+
 /* Returns true on success */
 static bool
 check_ioctl_on_open(int fd, struct fd_entry *entry, int flags)
@@ -768,9 +872,24 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags)
 	rc = pthread_mutex_lock(&ioil_iog.iog_lock);
 	D_ASSERT(rc == 0);
 
-	if (!ioil_iog.iog_daos_init)
+	if (!ioil_iog.iog_daos_init) {
 		if (!call_daos_init(fd))
 			goto err;
+
+		if (ioil_iog.iog_eq_count_max) {
+			rc = daos_eq_create(&ioil_eqh);
+			if (rc) {
+				DFUSE_LOG_WARNING("daos_eq_create() failed: "DF_RC, DP_RC(rc));
+				D_GOTO(err, rc = daos_der2errno(rc));
+			}
+			ioil_iog.iog_main_eqh = ioil_eqh;
+		}
+
+		rc = pthread_atfork(NULL, NULL, &child_hdlr);
+		if (rc)
+			DFUSE_LOG_WARNING("Failed to install atfork handler: " DF_RC, DP_RC(rc));
+		rc = 0;
+	}
 
 	d_list_for_each_entry(pool, &ioil_iog.iog_pools_head, iop_pools) {
 		if (uuid_compare(pool->iop_uuid, il_reply.fir_pool) != 0)
@@ -1332,10 +1451,14 @@ dfuse_lseek(int fd, off_t offset, int whence)
 	} else if (whence == SEEK_CUR) {
 		new_offset = entry->fd_pos + offset;
 	} else if (whence == SEEK_END) {
-		DFUSE_TRA_INFO(entry->fd_dfsoh, "Unsupported function, disabling SEEK_END");
-		entry->fd_status = DFUSE_IO_DIS_STREAM;
-		vector_decref(&fd_table, entry);
-		return __real_lseek(fd, offset, whence);
+		/**
+		 * use dfs_get_size() instead of dfs_ostat() to avoid fetching extra inode
+		 * attributes
+		 */
+		rc = dfs_get_size(entry->fd_cont->ioc_dfs, entry->fd_dfsoh,
+				  (daos_size_t *)&new_offset);
+		if (rc != 0)
+			goto do_real_lseek;
 	} else {
 		DFUSE_TRA_INFO(entry->fd_dfsoh, "Unsupported function, disabling %d", whence);
 		entry->fd_status = DFUSE_IO_DIS_STREAM;
@@ -1656,15 +1779,16 @@ do_real_pwritev:
 	return __real_pwritev(fd, vector, iovcnt, offset);
 }
 
-DFUSE_PUBLIC void *
-dfuse_mmap(void *address, size_t length, int prot, int flags, int fd,
-	   off_t offset)
+static void *
+dfuse_mmap(void *address, size_t length, int prot, int flags, int fd, off_t offset)
 {
 	struct fd_entry *entry;
 	int rc;
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc == 0) {
+		struct stat buf;
+
 		DFUSE_LOG_DEBUG("mmap(address=%p, length=%zu, prot=%d, flags=%d,"
 				" fd=%d, offset=%zd) "
 				"intercepted, disabling kernel bypass ", address,
@@ -1676,9 +1800,14 @@ dfuse_mmap(void *address, size_t length, int prot, int flags, int fd,
 		entry->fd_status = DFUSE_IO_DIS_MMAP;
 
 		vector_decref(&fd_table, entry);
+
+		/* DAOS-14494: Force the kernel to update the size before mapping. */
+		rc = fstat(fd, &buf);
+		if (rc == -1)
+			return MAP_FAILED;
 	}
 
-	return __real_mmap(address, length, prot, flags, fd, offset);
+	return real_mmap(address, length, prot, flags, fd, offset);
 }
 
 DFUSE_PUBLIC int
@@ -1689,7 +1818,10 @@ dfuse_ftruncate(int fd, off_t length)
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
-		goto do_real_ftruncate;
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
 
 	DFUSE_LOG_DEBUG("ftuncate(fd=%d) intercepted, bypass=%s offset %#lx", fd,
 			bypass_status[entry->fd_status], length);
@@ -1704,7 +1836,7 @@ dfuse_ftruncate(int fd, off_t length)
 	errno = rc;
 	return -1;
 
-do_real_ftruncate:
+do_real_fn:
 	return __real_ftruncate(fd, length);
 }
 
@@ -1716,14 +1848,17 @@ dfuse_fsync(int fd)
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
-		goto do_real_fsync;
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
 
 	DFUSE_LOG_DEBUG("fsync(fd=%d) intercepted, bypass=%s",
 			fd, bypass_status[entry->fd_status]);
 
 	vector_decref(&fd_table, entry);
 
-do_real_fsync:
+do_real_fn:
 	return __real_fsync(fd);
 }
 
@@ -1735,14 +1870,17 @@ dfuse_fdatasync(int fd)
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
-		goto do_real_fdatasync;
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
 
 	DFUSE_LOG_DEBUG("fdatasync(fd=%d) intercepted, bypass=%s",
 			fd, bypass_status[entry->fd_status]);
 
 	vector_decref(&fd_table, entry);
 
-do_real_fdatasync:
+do_real_fn:
 	return __real_fdatasync(fd);
 }
 
@@ -2089,7 +2227,7 @@ dfuse_fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 		if (nread != nmemb)
 			entry->fd_eof = true;
 	} else if (bytes_read < 0) {
-		entry->fd_err = bytes_read;
+		entry->fd_err = errcode;
 	} else {
 		entry->fd_eof = true;
 	}
@@ -2148,7 +2286,7 @@ dfuse_fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
 		nwrite        = bytes_written / size;
 		entry->fd_pos = oldpos + (nwrite * size);
 	} else if (bytes_written < 0) {
-		entry->fd_err = bytes_written;
+		entry->fd_err = errcode;
 	}
 
 	vector_decref(&fd_table, entry);
@@ -2393,14 +2531,8 @@ dfuse_fputs(char *__str, FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
-	D_ERROR("Unsupported function\n");
-
-	entry->fd_err = ENOTSUP;
-
+	DISABLE_STREAM(entry, stream);
 	vector_decref(&fd_table, entry);
-
-	errno = ENOTSUP;
-	return EOF;
 
 do_real_fn:
 	return __real_fputs(__str, stream);
@@ -2424,12 +2556,8 @@ dfuse_fputws(const wchar_t *ws, FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
-	entry->fd_err = ENOTSUP;
-
+	DISABLE_STREAM(entry, stream);
 	vector_decref(&fd_table, entry);
-
-	errno = ENOTSUP;
-	return -1;
 
 do_real_fn:
 	return __real_fputws(ws, stream);
@@ -2818,14 +2946,17 @@ dfuse___fxstat(int ver, int fd, struct stat *buf)
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
-		goto do_real_fstat;
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
 
 	/* Turn off this feature if the kernel is doing metadata caching, in this case it's better
 	 * to use the kernel cache and keep it up-to-date than query the severs each time.
 	 */
 	if (!entry->fd_fstat) {
 		vector_decref(&fd_table, entry);
-		goto do_real_fstat;
+		goto do_real_fn;
 	}
 
 	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_fstat_count, 1);
@@ -2868,7 +2999,7 @@ dfuse___fxstat(int ver, int fd, struct stat *buf)
 	}
 
 	return 0;
-do_real_fstat:
+do_real_fn:
 	return __real___fxstat(ver, fd, buf);
 }
 
@@ -2888,6 +3019,13 @@ dfuse_get_bypass_status(int fd)
 	vector_decref(&fd_table, entry);
 
 	return rc;
+}
+
+DFUSE_PUBLIC void
+dfuse_exit(int rc)
+{
+	ioil_fini();
+	return __real_exit(rc);
 }
 
 FOREACH_INTERCEPT(IOIL_DECLARE_ALIAS)

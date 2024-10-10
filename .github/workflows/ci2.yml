@@ -7,20 +7,26 @@ concurrency:
   group: ci2-${{ github.head_ref }}
   cancel-in-progress: true
 
+permissions: {}
+
 jobs:
 
-  # Re-use the cache from the landing-builds workflow if available, if not then build the images
+  # reuse the cache from the landing-builds workflow if available, if not then build the images
   # from scratch, but do not save them.
   Build-and-test:
     name: Run DAOS/NLT tests
     runs-on: ubuntu-22.04
+    permissions:
+      # https://github.com/EnricoMi/publish-unit-test-result-action#permissions
+      checks: write
+      pull-requests: write
     strategy:
       matrix:
         distro: [ubuntu]
         include:
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:22.04
+            with: ubuntu:mantic
     env:
       DEPS_JOBS: 10
       COMPILER: clang
@@ -28,7 +34,7 @@ jobs:
       DOCKER_BASE: ${{ matrix.base }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: true
           fetch-depth: 500
@@ -85,7 +91,7 @@ jobs:
             with: fedora:38
           - distro: leap.15
             base: leap.15
-            with: opensuse/leap:15.4
+            with: opensuse/leap:15.5
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
@@ -93,7 +99,7 @@ jobs:
       COMPILER: ${{ matrix.compiler }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: true
           fetch-depth: 500

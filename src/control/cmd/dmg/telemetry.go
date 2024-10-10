@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,7 +9,6 @@ package main
 import (
 	"archive/tar"
 	"compress/gzip"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -311,7 +310,7 @@ type metricsListCmd struct {
 
 // Execute runs the command to list metrics from the DAOS storage nodes.
 func (cmd *metricsListCmd) Execute(args []string) error {
-	host, err := getMetricsHost(cmd.getHostList())
+	host, err := getMetricsHost(cmd.Host.Slice())
 	if err != nil {
 		return err
 	}
@@ -324,7 +323,7 @@ func (cmd *metricsListCmd) Execute(args []string) error {
 		cmd.Info(getConnectingMsg(req.Host, req.Port))
 	}
 
-	resp, err := control.MetricsList(context.Background(), req)
+	resp, err := control.MetricsList(cmd.MustLogCtx(), req)
 	if err != nil {
 		return err
 	}
@@ -366,7 +365,7 @@ type metricsQueryCmd struct {
 
 // Execute runs the command to query metrics from the DAOS storage nodes.
 func (cmd *metricsQueryCmd) Execute(args []string) error {
-	host, err := getMetricsHost(cmd.getHostList())
+	host, err := getMetricsHost(cmd.Host.Slice())
 	if err != nil {
 		return err
 	}
@@ -380,7 +379,7 @@ func (cmd *metricsQueryCmd) Execute(args []string) error {
 		cmd.Info(getConnectingMsg(req.Host, req.Port))
 	}
 
-	resp, err := control.MetricsQuery(context.Background(), req)
+	resp, err := control.MetricsQuery(cmd.MustLogCtx(), req)
 	if err != nil {
 		return err
 	}

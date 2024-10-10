@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016 UChicago Argonne, LLC
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -49,7 +49,7 @@ extern "C" {
 
 /** SWIM protocol parameter defaults */
 #define SWIM_PROTOCOL_PERIOD_LEN 1000	/* milliseconds */
-#define SWIM_SUSPECT_TIMEOUT	(8 * SWIM_PROTOCOL_PERIOD_LEN)
+#define SWIM_SUSPECT_TIMEOUT	(20 * SWIM_PROTOCOL_PERIOD_LEN)
 #define SWIM_PING_TIMEOUT	900	/* milliseconds */
 #define SWIM_SUBGROUP_SIZE	2
 #define SWIM_PIGGYBACK_ENTRIES	8	/**< count of piggybacked entries */

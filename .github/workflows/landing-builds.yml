@@ -12,9 +12,13 @@ on:
       - 'utils/docker/Dockerfile.*'
       - 'utils/scripts/install-*.sh'
       - 'utils/scripts/helpers/*'
-      - utils/ci
-      - ci
-      - requirements.txt
+      - utils/ci/**
+      - ci/**
+      - requirements-build.txt
+      - requirements-utest.txt
+      - utils/build.config
+
+permissions: {}
 
 jobs:
 
@@ -40,7 +44,7 @@ jobs:
         include:
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:22.04
+            with: ubuntu:mantic
           - distro: rocky
             base: el.9
             with: rockylinux/rockylinux:9
@@ -49,14 +53,14 @@ jobs:
             with: fedora:38
           - distro: leap.15
             base: leap.15
-            with: opensuse/leap:15.4
+            with: opensuse/leap:15.5
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 500
       - name: Setup git hash
@@ -85,13 +89,17 @@ jobs:
     name: Run DAOS/NLT tests
     needs: Prepare
     runs-on: ubuntu-22.04
+    permissions:
+      # https://github.com/EnricoMi/publish-unit-test-result-action#permissions
+      checks: write
+      pull-requests: write
     strategy:
       matrix:
         distro: [ubuntu]
         include:
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:22.04
+            with: ubuntu:mantic
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
@@ -99,7 +107,7 @@ jobs:
       COMPILER: clang
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: true
           fetch-depth: 500
@@ -150,7 +158,7 @@ jobs:
         include:
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:22.04
+            with: ubuntu:mantic
           - distro: rocky
             base: el.9
             with: rockylinux/rockylinux:9
@@ -159,7 +167,7 @@ jobs:
             with: fedora:38
           - distro: leap.15
             base: leap.15
-            with: opensuse/leap:15.4
+            with: opensuse/leap:15.5
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
@@ -167,7 +175,7 @@ jobs:
       COMPILER: ${{ matrix.compiler }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: true
           fetch-depth: 500
@@ -222,7 +230,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [alma.8, alma.9, rocky.8]
+        distro: [alma.8, alma.9, rocky.8, ubuntu]
         include:
           - distro: alma.8
             base: el.8
@@ -233,12 +241,15 @@ jobs:
           - distro: rocky.8
             base: el.8
             with: rockylinux/rockylinux:8
+          - distro: ubuntu
+            base: ubuntu
+            with: ubuntu:22.04
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: true
       - name: Build dependencies in image.
@@ -301,6 +312,7 @@ jobs:
 
   Build-branch-ARM:
     name: Build DAOS (ARM64)
+    if: github.repository == 'daos-stack/daos'
     runs-on: [self-hosted, ARM64]
     strategy:
       fail-fast: false
@@ -310,13 +322,13 @@ jobs:
         include:
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:22.04
+            with: ubuntu:mantic
           - distro: alma.8
             base: el.8
             with: almalinux:8
           - distro: leap.15
             base: leap.15
-            with: opensuse/leap:15.4
+            with: opensuse/leap:15.5
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
@@ -324,7 +336,7 @@ jobs:
       COMPILER: ${{ matrix.compiler }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: true
       - name: Build dependencies in image.
@@ -383,4 +395,4 @@ jobs:
       - name: Run NLT
         run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
                  build-image ./daos/utils/node_local_test.py --no-root
-                 --memcheck no --test cont_copy
+                 --memcheck no --test cont_copy --system-ram-reserved 6

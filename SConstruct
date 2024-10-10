@@ -1,12 +1,12 @@
 """Build DAOS"""
-import os
-import sys
-import subprocess  # nosec
-import time
 import errno
+import os
+import subprocess  # nosec
+import sys
+import time
+
 import SCons.Warnings
-from prereq_tools import PreReqComponent
-# pylint: disable=reimported
+from prereq_tools import PreReqComponent  # pylint: disable=reimported
 
 if sys.version_info.major < 3:
     print(""""Python 2.7 is no longer supported in the DAOS build.
@@ -60,9 +60,15 @@ def add_command_line_options():
     AddOption('--build-deps',
               dest='build_deps',
               type='choice',
-              choices=['yes', 'no', 'only', 'build-only'],
+              choices=['fetch', 'yes', 'no', 'only'],
               default='no',
-              help="Automatically download and build sources.  (yes|no|only|build-only) [no]")
+              help="Automatically download and build sources.  (fetch|yes|no|only) [no]")
+
+    AddOption('--skip-download',
+              dest='skip_download',
+              action='store_true',
+              default=False,
+              help="Assume the source for prerequisites is already downloaded")
 
     # We want to be able to check what dependencies are needed without
     # doing a build, similar to --dry-run.  We can not use --dry-run
@@ -177,8 +183,8 @@ def check_for_release_target():  # pylint: disable=too-many-locals
         # pylint: disable=consider-using-f-string
         try:
             # pylint: disable=import-outside-toplevel
-            import pygit2
             import github
+            import pygit2
             import yaml
         except ImportError:
             print("You need yaml, pygit2 and pygithub python modules to create releases")
@@ -317,8 +323,8 @@ def check_for_release_target():  # pylint: disable=too-many-locals
         try:
             remote.push(['refs/heads/{}'.format(branch)],
                         callbacks=MyCallbacks())
-        except pygit2.GitError as excpt:
-            print("Error pushing branch: {}".format(excpt))
+        except pygit2.GitError as err:
+            print("Error pushing branch: {}".format(err))
             Exit(1)
 
         print("Creating the PR...")
@@ -363,7 +369,7 @@ MINIMAL_ENV = ('HOME', 'TERM', 'SSH_AUTH_SOCK', 'http_proxy', 'https_proxy', 'PK
 
 # Environment variables that are also kept when LD_PRELOAD is set.
 PRELOAD_ENV = ('LD_PRELOAD', 'D_LOG_FILE', 'DAOS_AGENT_DRPC_DIR', 'D_LOG_MASK', 'DD_MASK',
-               'DD_SUBSYS')
+               'DD_SUBSYS', 'D_IL_MAX_EQ', 'D_IL_ENFORCE_EXEC_ENV', 'D_IL_COMPATIBLE')
 
 
 def scons():
@@ -372,6 +378,11 @@ def scons():
     check_for_release_target()
 
     deps_env = Environment()
+    # Ensure 'install-sandbox' option is defined early
+    deps_env.Tool('install')
+
+    # Silence deprecation warning so it doesn't fail the build
+    SetOption('warn', ['no-python-version'])
 
     add_command_line_options()
 
@@ -480,9 +491,8 @@ def scons():
     prereqs.save_build_info()
     # also install to $PREFIX/lib to work with existing avocado test code
     if prereqs.test_requested():
-        env.Install('$PREFIX/lib/daos', ['.build_vars.sh', '.build_vars.json'])
         env.Install('$PREFIX/lib/daos/TESTING/ftest/util', ['site_scons/env_modules.py'])
-        env.Install('$PREFIX/lib/daos/TESTING/ftest/', ['ftest.sh'])
+        env.Install('$PREFIX/lib/daos/TESTING/ftest/', ['ftest.sh', "requirements-ftest.txt"])
 
     env.Install("$PREFIX/lib64/daos", "VERSION")
 

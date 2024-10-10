@@ -4,8 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
-from command_utils_base import ObjectWithParameters, BasicParameter
-from daos_utils import DaosCommand
+from command_utils_base import BasicParameter, ObjectWithParameters
 
 
 class RebuildTestParams(ObjectWithParameters):
@@ -33,7 +32,6 @@ class RebuildTestBase(TestWithServers):
         self.server_count = 0
         self.info_checks = None
         self.rebuild_checks = None
-        self.daos_cmd = None
 
     def setUp(self):
         """Set up each test case."""
@@ -75,8 +73,8 @@ class RebuildTestBase(TestWithServers):
         """Update the pool verification expected values."""
         self.info_checks["pi_ndisabled"] = ">0"
         self.rebuild_checks["rs_state"] = 2
-        self.rebuild_checks["rs_obj_nr"] = ">0"
-        self.rebuild_checks["rs_rec_nr"] = ">0"
+        self.rebuild_checks["rs_obj_nr"] = ">=0"
+        self.rebuild_checks["rs_rec_nr"] = ">=0"
 
     def execute_pool_verify(self, msg=None):
         """Verify the pool info.
@@ -160,7 +158,6 @@ class RebuildTestBase(TestWithServers):
         """
         # Get the test params
         self.setup_test_pool()
-        self.daos_cmd = DaosCommand(self.bin)
         if create_container:
             self.setup_test_container()
 
@@ -183,15 +180,11 @@ class RebuildTestBase(TestWithServers):
         self.pool.wait_for_rebuild_to_end(1)
 
         # clear container status for the RF issue
-        self.daos_cmd.container_set_prop(
-            pool=self.pool.uuid,
-            cont=self.container.uuid,
-            prop="status",
-            value="healthy")
+        self.container.set_prop(prop="status", value="healthy")
 
         # Refresh local pool and container
         self.pool.check_pool_info()
-        self.container.check_container_info()
+        self.container.query()
 
         # Verify the excluded rank is no longer used with the objects
         self.verify_rank_has_no_objects()

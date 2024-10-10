@@ -1,20 +1,26 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
+
 import security_test_base as secTestBase
+from agent_utils import include_local_host
 from cont_security_test_base import ContSecurityTestBase
 from pool_security_test_base import PoolSecurityTestBase
 
 
-class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
+class DaosContainerSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
     # pylint: disable=too-few-public-methods,too-many-ancestors
     """Test daos_container user acls.
 
     :avocado: recursive
     """
+
+    def _get_acl_file_name(self):
+        return os.path.join(self.tmp, self.params.get("acl_file_name", "/run/container_acl/*",
+                                                      "cont_test_acl.txt"))
 
     def test_container_user_acl(self):
         """
@@ -55,7 +61,7 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=security,container,container_acl,cont_user_sec,cont_group_sec,cont_sec
-        :avocado: tags=DaosContainterSecurityTest,test_container_user_acl
+        :avocado: tags=DaosContainerSecurityTest,test_container_user_acl
         """
 
         # (1)Setup
@@ -69,12 +75,10 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
         property_name, property_value = self.params.get(
             "property", "/run/container_acl/*")
         secTestBase.add_del_user(
-            self.hostlist_clients, "useradd", new_test_user)
+            include_local_host(self.hostlist_clients), "useradd", new_test_user)
         secTestBase.add_del_user(
-            self.hostlist_clients, "groupadd", new_test_group)
-        acl_file_name = os.path.join(
-            self.tmp, self.params.get(
-                "acl_file_name", "/run/container_acl/*", "cont_test_acl.txt"))
+            include_local_host(self.hostlist_clients), "groupadd", new_test_group)
+        acl_file_name = self._get_acl_file_name()
         test_user = self.params.get(
             "testuser", "/run/container_acl/daos_user/*")
         test_user_type = secTestBase.get_user_type(test_user)
@@ -91,26 +95,25 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
                       "   base_acl_entries= %s\n", base_acl_entries)
         self.add_pool()
         secTestBase.create_acl_file(acl_file_name, base_acl_entries)
-        self.container_uuid = self.create_container_with_daos(
-            self.pool, None, acl_file_name)
+        self.container = self.create_container_with_daos(self.pool, None, acl_file_name)
 
         # (3)Verify container permissions rw, rw-attribute
         permission_type = "attribute"
         self.log.info("(3)==>Verify container permission %s", permission_type)
 
-        self.update_container_acl(
-            secTestBase.acl_entry(test_user_type, test_user, "rw"))
+        with self.container.no_exception():
+            self.container.update_acl(entry=secTestBase.acl_entry(test_user_type, test_user, "rw"))
         self.verify_cont_rw_attribute(
-            "write", "pass", attribute_name, attribute_value)
+            self.container, "write", "pass", attribute_name, attribute_value)
         self.setup_container_acl_and_permission(
-            test_user_type, test_user, permission_type, cont_permission)
+            self.container, test_user_type, test_user, permission_type, cont_permission)
         self.log.info(
             "(3.1)Verify container_attribute: write, expect: %s", expect_write)
         self.verify_cont_rw_attribute(
-            "write", expect_write, attribute_name, attribute_value)
+            self.container, "write", expect_write, attribute_name, attribute_value)
         self.log.info(
             "(3.2)Verify container_attribute: read, expect: %s", expect_read)
-        self.verify_cont_rw_attribute("read", expect_read, attribute_name)
+        self.verify_cont_rw_attribute(self.container, "read", expect_read, attribute_name)
 
         # (4)Verify container permissions tT rw-property
         permission_type = "property"
@@ -119,16 +122,17 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
             "(4.1)Update container-acl %s, %s, permission_type: %s with %s",
             test_user_type, test_user, permission_type, cont_permission)
         self.setup_container_acl_and_permission(
-            test_user_type, test_user, permission_type, cont_permission)
+            self.container, test_user_type, test_user, permission_type, cont_permission)
         self.log.info("(4.2)Verify container_attribute: read, expect: %s", expect_read)
-        self.verify_cont_rw_property("read", expect_read)
+        self.verify_cont_rw_property(self.container, "read", expect_read)
         self.log.info("(4.3)Verify container_attribute: write, expect: %s", expect_write)
-        self.verify_cont_rw_property("write", expect_write, property_name, property_value)
+        self.verify_cont_rw_property(
+            self.container, "write", expect_write, property_name, property_value)
         # Update container label so it is in-sync
         if expect_write == "pass" and property_name.lower() == "label":
             self.container.label.update(property_value)
         self.log.info("(4.4)Verify container_attribute: read, expect: %s", expect_read)
-        self.verify_cont_rw_property("read", expect_read)
+        self.verify_cont_rw_property(self.container, "read", expect_read)
 
         # (5)Verify container permissions aA, rw-acl
         permission_type = "acl"
@@ -138,13 +142,13 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
             test_user_type, test_user, permission_type, cont_permission)
         expect = "pass"  # User who created the container has full acl access.
         self.setup_container_acl_and_permission(
-            test_user_type, test_user, permission_type, cont_permission)
+            self.container, test_user_type, test_user, permission_type, cont_permission)
         self.log.info("(5.2)Verify container_acl: write, expect: %s", expect)
         self.verify_cont_rw_acl(
-            "write", expect, secTestBase.acl_entry(
+            self.container, "write", expect, secTestBase.acl_entry(
                 test_user_type, test_user, cont_permission))
         self.log.info("(5.3)Verify container_acl: read, expect: %s", expect)
-        self.verify_cont_rw_acl("read", expect)
+        self.verify_cont_rw_acl(self.container, "read", expect)
 
         # (6)Verify container permission o, set-owner
         self.log.info("(6)==>Verify container permission o, set-owner")
@@ -157,11 +161,10 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
             " %s with %s", test_user_type, test_user, permission_type,
             cont_permission)
         self.setup_container_acl_and_permission(
-            test_user_type, test_user, permission_type, cont_permission)
-        self.log.info("(6.2)Verify container_ownership: write, expect: %s",
-                      expect)
+            self.container, test_user_type, test_user, permission_type, cont_permission)
+        self.log.info("(6.2)Verify container_ownership: write, expect: %s", expect)
         self.verify_cont_set_owner(
-            expect, new_test_user + "@", new_test_group + "@")
+            self.container, expect, new_test_user + "@", new_test_group + "@")
 
         # Verify container permission A acl-write after set container
         #  to a different owner.
@@ -170,7 +173,7 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
             expect = "deny"
             self.log.info("(6.3)Verify container_acl write after changed "
                           "ownership: expect: %s", expect)
-            self.verify_cont_rw_acl("write", expect,
+            self.verify_cont_rw_acl(self.container, "write", expect,
                                     secTestBase.acl_entry(
                                         test_user_type, test_user,
                                         cont_permission))
@@ -188,14 +191,14 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
             p_permission = "rct"
         if cont_permission == "":
             expect = "deny"
-        self.update_container_acl(secTestBase.acl_entry(test_user_type,
-                                                        test_user,
-                                                        c_permission))
+        with self.container.no_exception():
+            self.container.update_acl(
+                entry=secTestBase.acl_entry(test_user_type, test_user, c_permission))
         self.update_pool_acl_entry(
             "update", secTestBase.acl_entry("user", "OWNER", p_permission))
-        self.verify_cont_delete(expect)
+        self.verify_cont_delete(self.container, expect)
         if expect == "pass":  # Container deleted
-            self.container = None
+            self.container.skip_cleanup()
 
         # (8)Cleanup
         # Restore pool permissions in case they were altered

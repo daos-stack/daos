@@ -45,7 +45,7 @@ class PoolPDAProperty(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=pool
-        :avocado: tags=pool_pda_property,test_pda_pool_property
+        :avocado: tags=PoolPDAProperty,test_pda_pool_property
         """
 
         # Create the pool with default
@@ -53,7 +53,7 @@ class PoolPDAProperty(TestWithServers):
 
         # Verify pool ec_pda, pool_pda is default.
         self.assertEqual(1, self.pool.get_property("ec_pda"))
-        self.assertEqual(3, self.pool.get_property("rp_pda"))
+        self.assertEqual(4294967295, self.pool.get_property("rp_pda"))
 
         # destroy pool
         self.destroy_pools(pools=self.pool)

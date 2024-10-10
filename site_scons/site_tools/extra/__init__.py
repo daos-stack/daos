@@ -7,4 +7,4 @@ SCons Tools for useful features"""
 
 
 # pylint: disable=unused-import
-from .extra import generate, exists  # noqa: F401
+from .extra import exists, generate  # noqa: F401

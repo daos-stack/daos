@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -22,27 +22,20 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
-// mockControlService takes cfgs for tuneable scm and sys provider behavior but
-// default nvmeStorage behavior (cs.nvoe can be subsequently replaced in test).
-func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bmbc *bdev.MockBackendConfig, smbc *scm.MockBackendConfig, smsc *system.MockSysConfig, notStarted ...bool) *ControlService {
+func newMockControlServiceFromBackends(t *testing.T, log logging.Logger, cfg *config.Server, bmb *bdev.MockBackend, smb *scm.MockBackend, smsc *system.MockSysConfig, notStarted ...bool) *ControlService {
 	t.Helper()
-
-	started := true
-	if len(notStarted) > 0 && notStarted[0] {
-		started = false
-	}
 
 	if cfg == nil {
 		cfg = config.DefaultServer().WithEngines(engine.MockConfig().WithTargetCount(1))
 	}
 
-	// share sys provider between engines to be able to access to same mock config data
-	sysProv := system.NewMockSysProvider(log, smsc)
-	mounter := mount.NewProvider(log, sysProv)
-	scmProv := scm.NewProvider(log, scm.NewMockBackend(smbc), sysProv, mounter)
-	bdevProv := bdev.NewMockProvider(log, bmbc)
+	// Share sys provider between engines to be able to access to same mock config data.
+	bp := bdev.NewProvider(log, bmb)
+	syp := system.NewMockSysProvider(log, smsc)
+	mp := mount.NewProvider(log, syp)
+	sp := scm.NewProvider(log, smb, syp, mp)
 
-	mscs := NewMockStorageControlService(log, cfg.Engines, sysProv, scmProv, bdevProv, nil)
+	mscs := NewMockStorageControlService(log, cfg.Engines, syp, sp, bp, nil)
 
 	cs := &ControlService{
 		StorageControlService: *mscs,
@@ -51,21 +44,42 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 		srvCfg:                cfg,
 	}
 
+	started := make([]bool, len(cfg.Engines))
+	for idx := range started {
+		started[idx] = true
+	}
+	switch len(notStarted) {
+	case 0: // Not specified so start all engines.
+	case 1:
+		if notStarted[0] {
+			// If single true notStarted bool, don't start any engines.
+			for idx := range started {
+				started[idx] = false
+			}
+		}
+	case len(cfg.Engines): // One notStarted bool specified for each engine.
+		for idx := range started {
+			started[idx] = !notStarted[idx]
+		}
+	default:
+		t.Fatal("len notStarted != len cfg.Engines")
+	}
+
 	for idx, ec := range cfg.Engines {
 		trc := new(engine.TestRunnerConfig)
-		if started {
+		if started[idx] {
 			trc.Running.SetTrue()
 		}
 		runner := engine.NewTestRunner(trc, ec)
-		storProv := storage.MockProvider(log, 0, &ec.Storage, sysProv, scmProv, bdevProv,
-			nil)
+		storProv := storage.MockProvider(log, 0, &ec.Storage, syp, sp, bp, nil)
 
-		ei := NewEngineInstance(log, storProv, nil, runner)
+		ei := NewEngineInstance(log, storProv, nil, runner, nil)
 		ei.setSuperblock(&Superblock{
 			Rank: ranklist.NewRankPtr(uint32(idx)),
 		})
-		if started {
+		if started[idx] {
 			ei.ready.SetTrue()
+			ei.setDrpcSocket("/dontcare")
 		}
 		if err := cs.harness.AddInstance(ei); err != nil {
 			t.Fatal(err)
@@ -73,4 +87,15 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 	}
 
 	return cs
+}
+
+// mockControlService takes cfgs for tuneable scm and sys provider behavior but
+// default nvmeStorage behavior.
+func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bmbc *bdev.MockBackendConfig, smbc *scm.MockBackendConfig, smsc *system.MockSysConfig, notStarted ...bool) *ControlService {
+	t.Helper()
+
+	bmb := bdev.NewMockBackend(bmbc)
+	smb := scm.NewMockBackend(smbc)
+
+	return newMockControlServiceFromBackends(t, log, cfg, bmb, smb, smsc, notStarted...)
 }

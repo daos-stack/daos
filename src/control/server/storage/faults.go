@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -78,6 +78,17 @@ func FaultRamdiskLowMem(memType string, confRamdiskSize, memNeed, memHave uint64
 			"file if reducing the requested amount of RAM is not possible")
 }
 
+// FaultRamdiskBadSize indicates that the already-mounted ramdisk is out
+// of spec with the calculated ramdisk size for the engine.
+func FaultRamdiskBadSize(existingSize, calcSize uint64) *fault.Fault {
+	return storageFault(
+		code.ScmRamdiskBadSize,
+		fmt.Sprintf("already-mounted ramdisk size %s is too far from optimal size of %s",
+			humanize.IBytes(existingSize), humanize.IBytes(calcSize)),
+		fmt.Sprintf("unmount the ramdisk and allow DAOS to manage it, or remount with size %s",
+			humanize.IBytes(calcSize)))
+}
+
 // FaultConfigRamdiskUnderMinMem indicates that the tmpfs size requested in config is less than
 // minimum allowed.
 func FaultConfigRamdiskUnderMinMem(confSize, memRamdiskMin uint64) *fault.Fault {
@@ -91,7 +102,24 @@ func FaultConfigRamdiskUnderMinMem(confSize, memRamdiskMin uint64) *fault.Fault 
 	)
 }
 
+// FaultDeviceWithFsNoMountpoint creates a Fault for the case where a mount device is missing
+// respective target location.
+func FaultDeviceWithFsNoMountpoint(dev, tgt string) *fault.Fault {
+	return storageFault(
+		code.StorageDeviceWithFsNoMountpoint,
+		fmt.Sprintf("filesystem exists on device %s but mount-point path %s does not exist",
+			dev, tgt),
+		"check the mount-point path exists and if not create it before trying again",
+	)
+}
+
 var (
+	// FaultTargetAlreadyMounted represents an error where the target was already mounted.
+	FaultTargetAlreadyMounted = storageFault(
+		code.StorageTargetAlreadyMounted,
+		"request included already-mounted mount target (cannot double-mount)",
+		"unmount the target and retry the operation")
+
 	// FaultScmNoPMem represents an error where no PMem modules exist.
 	FaultScmNoPMem = storageFault(
 		code.ScmNoPMem,
@@ -178,14 +206,18 @@ func FaultBdevConfigBadNrRoles(role string, gotNr, wantNr int) *fault.Fault {
 			role, wantNr))
 }
 
-// FaultBdevNotFound creates a Fault for the case where no NVMe storage devices
-// match expected PCI addresses.
-func FaultBdevNotFound(bdevs ...string) *fault.Fault {
+// FaultBdevNotFound creates a Fault for the case where no NVMe storage devices match expected PCI
+// addresses. VMD addresses are expected to have backing devices.
+func FaultBdevNotFound(vmdEnabled bool, bdevs ...string) *fault.Fault {
+	msg := fmt.Sprintf("NVMe SSD%s", common.Pluralise("", len(bdevs)))
+	if vmdEnabled {
+		msg = "backing devices for VMDs"
+	}
+
 	return storageFault(
 		code.BdevNotFound,
-		fmt.Sprintf("NVMe SSD%s %v not found", common.Pluralise("", len(bdevs)), bdevs),
-		fmt.Sprintf("check SSD%s %v that are specified in server config exist",
-			common.Pluralise("", len(bdevs)), bdevs),
+		fmt.Sprintf("%s %v not found", msg, bdevs),
+		fmt.Sprintf("check %s %v that are specified in server config exist", msg, bdevs),
 	)
 }
 
@@ -221,12 +253,6 @@ var (
 		code.BdevNoIOMMU,
 		"IOMMU capability is required to access NVMe devices but no IOMMU capability detected",
 		"enable IOMMU per the DAOS Admin Guide")
-
-	// FaultTargetAlreadyMounted represents an error where the target was already mounted.
-	FaultTargetAlreadyMounted = storageFault(
-		code.StorageTargetAlreadyMounted,
-		"request included already-mounted mount target (cannot double-mount)",
-		"unmount the target and retry the operation")
 )
 
 // FaultPathAccessDenied represents an error where a mount point or device path for

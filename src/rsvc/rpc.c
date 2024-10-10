@@ -15,7 +15,7 @@ CRT_RPC_DEFINE(rsvc_start, DAOS_ISEQ_RSVC_START, DAOS_OSEQ_RSVC_START)
 CRT_RPC_DEFINE(rsvc_stop, DAOS_ISEQ_RSVC_STOP, DAOS_OSEQ_RSVC_STOP)
 
 /* Define for cont_rpcs[] array population below.
- * See POOL_PROTO_*_RPC_LIST macro definition
+ * See RSVC_PROTO_SRV_RPC_LIST macro definition
  */
 #define X(a, b, c, d, e)	\
 {				\

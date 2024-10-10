@@ -1,16 +1,15 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from logging import getLogger
-from time import sleep
-from threading import Lock
 from collections import defaultdict
+from logging import getLogger
+from threading import Lock
+from time import sleep
 
+from command_utils_base import BasicParameter, ObjectWithParameters
 from pydaos.raw import DaosApiError
-
-from command_utils_base import ObjectWithParameters, BasicParameter
 
 
 class CallbackHandler():
@@ -65,7 +64,6 @@ class TestDaosApiBase(ObjectWithParameters):
     # Constants to define whether to use API or a command to create and destroy
     # pools and containers.
     USE_API = "API"
-    USE_DMG = "dmg"
     USE_DAOS = "daos"
 
     def __init__(self, namespace):
@@ -80,7 +78,6 @@ class TestDaosApiBase(ObjectWithParameters):
 
         # Test yaml parameter used to define the control method:
         #   USE_API    - use the API methods to create/destroy containers
-        #   USE_DMG    - use the dmg command to create/destroy pools/containers
         #   USE_DAOS   - use the daos command to create/destroy pools/containers
         self.control_method = BasicParameter(self.USE_API, self.USE_API)
 

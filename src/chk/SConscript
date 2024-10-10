@@ -1,0 +1,31 @@
+# pylint: disable=consider-using-f-string
+# pylint: disable-next=wrong-spelling-in-comment
+"""Build check library"""
+
+
+def scons():
+    """Execute build"""
+    Import('env', 'prereqs')
+
+    env.AppendUnique(LIBPATH=[Dir('.')])
+
+    denv = env.Clone()
+
+    # common
+    prereqs.require(denv, 'argobots', 'protobufc')
+    chk_pb = denv.SharedObject(['chk.pb-c.c'])
+    Export('chk_pb')
+
+    if not prereqs.server_requested():
+        return
+
+    # chk
+    chk = denv.d_library('chk',
+                         [chk_pb, 'chk_srv.c', 'chk_common.c', 'chk_vos.c',
+                          'chk_rpc.c', 'chk_upcall.c', 'chk_iv.c', 'chk_leader.c',
+                          'chk_engine.c'], install_off="../..")
+    denv.Install('$PREFIX/lib64/daos_srv', chk)
+
+
+if __name__ == "SCons.Script":
+    scons()

@@ -6,7 +6,7 @@
 # Switch to dnf as it seems a bit faster.
 # libatomic should be in this list, but can not for now due to CI
 # post provisioning issue.
-# *** Keep these in as much alphbetical order as possible ***
+# *** Keep these in as much alphabetical order as possible ***
 
 set -e
 
@@ -20,12 +20,12 @@ dnf --nodocs install \
     cmake \
     cunit-devel \
     flex \
-    fuse3-devel \
+    fuse3 \
     gcc \
     gcc-c++ \
     git \
-    go1.18 \
-    go1.18-race \
+    go \
+    go-race \
     graphviz \
     gzip \
     hwloc-devel \
@@ -38,6 +38,7 @@ dnf --nodocs install \
     libjson-c-devel \
     libltdl7 \
     liblz4-devel \
+    libndctl-devel \
     libnuma-devel \
     libopenssl-devel \
     libprotobuf-c-devel \
@@ -53,6 +54,7 @@ dnf --nodocs install \
     patch \
     patchelf \
     pciutils \
+    pciutils-devel \
     python3-devel \
     scons \
     sg3_utils \

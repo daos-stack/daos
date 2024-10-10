@@ -47,7 +47,7 @@ func Test_ValidateLogMasks(t *testing.T) {
 		},
 		"single level; single assignment; illegal use of all": {
 			masks:  "ERR,all=DBUG",
-			expErr: errors.New(""),
+			expErr: errors.New("identifier can not be used"),
 		},
 		"single level; single assignment; bad level": {
 			masks:  "ERR,mgmt=DEG",
@@ -172,6 +172,10 @@ func Test_MergeLogEnvVars(t *testing.T) {
 			masks:      "debug",
 			subsystems: "all",
 			expMasks:   "DBUG",
+		},
+		"long mask string": {
+			masks:    "info,dtx=debug,vos=debug,object=debug",
+			expMasks: "INFO,dtx=DBUG,vos=DBUG,object=DBUG",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

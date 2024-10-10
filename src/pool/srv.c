@@ -13,12 +13,18 @@
 
 #include <daos_srv/pool.h>
 #include <daos/rpc.h>
+#include <daos/metrics.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/bio.h>
 #include "rpc.h"
 #include "srv_internal.h"
 #include "srv_layout.h"
-bool ec_agg_disabled;
+
+bool		ec_agg_disabled;
+uint32_t	pw_rf; /* pool wise RF */
+#define PW_RF_DEFAULT	(2)
+#define PW_RF_MIN	(1)
+#define PW_RF_MAX	(4)
 
 static int
 init(void)
@@ -45,6 +51,15 @@ init(void)
 	d_getenv_bool("DAOS_EC_AGG_DISABLE", &ec_agg_disabled);
 	if (unlikely(ec_agg_disabled))
 		D_WARN("EC aggregation is disabled.\n");
+
+	pw_rf = PW_RF_DEFAULT;
+	d_getenv_uint32_t("DAOS_POOL_RF", &pw_rf);
+	if (pw_rf < PW_RF_MIN || pw_rf > PW_RF_MAX) {
+		D_INFO("pw_rf %d is out of range [%d, %d], take default %d\n",
+		       pw_rf, PW_RF_MIN, PW_RF_MAX, PW_RF_DEFAULT);
+		pw_rf = PW_RF_DEFAULT;
+	}
+	D_INFO("pool wise RF %d\n", pw_rf);
 
 	ds_pool_rsvc_class_register();
 
@@ -77,9 +92,12 @@ setup(void)
 {
 	bool start = true;
 
-	d_getenv_bool("DAOS_START_POOL_SVC", &start);
-	if (start)
-		return ds_pool_start_all();
+	if (!engine_in_check()) {
+		d_getenv_bool("DAOS_START_POOL_SVC", &start);
+		if (start)
+			return ds_pool_start_all();
+	}
+
 	return 0;
 }
 
@@ -113,17 +131,13 @@ static struct crt_corpc_ops ds_pool_tgt_query_co_ops = {
 	.dr_opc       = a,	\
 	.dr_hdlr      = d,	\
 	.dr_corpc_ops = e,	\
-}
+},
 
-static struct daos_rpc_handler pool_handlers_v4[] = {
-	POOL_PROTO_CLI_RPC_LIST(4),
-	POOL_PROTO_SRV_RPC_LIST,
-};
+static struct daos_rpc_handler pool_handlers_v5[] = {POOL_PROTO_CLI_RPC_LIST(5)
+							 POOL_PROTO_SRV_RPC_LIST};
 
-static struct daos_rpc_handler pool_handlers_v5[] = {
-	POOL_PROTO_CLI_RPC_LIST(5),
-	POOL_PROTO_SRV_RPC_LIST,
-};
+static struct daos_rpc_handler pool_handlers_v6[] = {POOL_PROTO_CLI_RPC_LIST(6)
+							 POOL_PROTO_SRV_RPC_LIST};
 
 #undef X
 
@@ -174,25 +188,25 @@ struct dss_module_key pool_module_key = {
 	.dmk_fini = pool_tls_fini,
 };
 
-struct dss_module_metrics pool_metrics = {
-	.dmm_tags = DAOS_SYS_TAG,
-	.dmm_init = ds_pool_metrics_alloc,
-	.dmm_fini = ds_pool_metrics_free,
-	.dmm_nr_metrics = ds_pool_metrics_count,
+struct daos_module_metrics pool_metrics = {
+    .dmm_tags       = DAOS_SYS_TAG,
+    .dmm_init       = ds_pool_metrics_alloc,
+    .dmm_fini       = ds_pool_metrics_free,
+    .dmm_nr_metrics = ds_pool_metrics_count,
 };
 
-struct dss_module pool_module =  {
-	.sm_name	= "pool",
-	.sm_mod_id	= DAOS_POOL_MODULE,
-	.sm_ver		= DAOS_POOL_VERSION,
-	.sm_proto_count	= 2,
-	.sm_init	= init,
-	.sm_fini	= fini,
-	.sm_setup	= setup,
-	.sm_cleanup	= cleanup,
-	.sm_proto_fmt	= {&pool_proto_fmt_v4, &pool_proto_fmt_v5},
-	.sm_cli_count	= {POOL_PROTO_CLI_COUNT, POOL_PROTO_CLI_COUNT},
-	.sm_handlers	= {pool_handlers_v4, pool_handlers_v5},
-	.sm_key		= &pool_module_key,
-	.sm_metrics	= &pool_metrics,
+struct dss_module pool_module = {
+    .sm_name        = "pool",
+    .sm_mod_id      = DAOS_POOL_MODULE,
+    .sm_ver         = DAOS_POOL_VERSION,
+    .sm_proto_count = 2,
+    .sm_init        = init,
+    .sm_fini        = fini,
+    .sm_setup       = setup,
+    .sm_cleanup     = cleanup,
+    .sm_proto_fmt   = {&pool_proto_fmt_v5, &pool_proto_fmt_v6},
+    .sm_cli_count   = {POOL_PROTO_CLI_COUNT, POOL_PROTO_CLI_COUNT},
+    .sm_handlers    = {pool_handlers_v5, pool_handlers_v6},
+    .sm_key         = &pool_module_key,
+    .sm_metrics     = &pool_metrics,
 };

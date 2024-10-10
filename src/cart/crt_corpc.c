@@ -57,8 +57,8 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 		rpc_priv->crp_flags |= CRT_RPC_FLAG_COLL;
 		if (co_info->co_grp_priv->gp_primary)
 			rpc_priv->crp_flags |= CRT_RPC_FLAG_PRIMARY_GRP;
-		if (flags & CRT_RPC_FLAG_FILTER_INVERT)
-			rpc_priv->crp_flags |= CRT_RPC_FLAG_FILTER_INVERT;
+		rpc_priv->crp_flags |= flags & (CRT_RPC_FLAG_FILTER_INVERT |
+						CRT_RPC_FLAG_CO_FAILOUT);
 
 		co_hdr->coh_grpid = grp_priv->gp_pub.cg_grpid;
 		co_hdr->coh_filter_ranks = co_info->co_filter_ranks;
@@ -94,6 +94,7 @@ crt_corpc_initiate(struct crt_rpc_priv *rpc_priv)
 	struct crt_grp_gdata	*grp_gdata;
 	struct crt_grp_priv	*grp_priv;
 	struct crt_corpc_hdr	*co_hdr;
+	int			 src_timeout;
 	bool			 grp_ref_taken = false;
 	int			 rc = 0;
 
@@ -120,6 +121,12 @@ crt_corpc_initiate(struct crt_rpc_priv *rpc_priv)
 			D_GOTO(out, rc = -DER_GRPVER);
 		}
 	}
+
+	/* Inherit a timeout from a source */
+	src_timeout = rpc_priv->crp_req_hdr.cch_src_timeout;
+
+	if (src_timeout != 0)
+		rpc_priv->crp_timeout_sec = src_timeout;
 
 	rc = crt_corpc_info_init(rpc_priv, grp_priv, grp_ref_taken,
 				 co_hdr->coh_filter_ranks,
@@ -237,13 +244,12 @@ crt_corpc_free_chained_bulk(crt_bulk_t bulk_hdl)
 		D_GOTO(out, rc);
 	}
 
-	for (i = 0; i < seg_num; i++)
-		D_FREE(iovs[i].iov_buf);
-
 	rc = crt_bulk_free(bulk_hdl);
 	if (rc != 0)
 		D_ERROR("crt_bulk_free failed: "DF_RC"\n", DP_RC(rc));
 
+	for (i = 0; i < seg_num; i++)
+		D_FREE(iovs[i].iov_buf);
 out:
 	D_FREE(iovs);
 	return rc;
@@ -874,6 +880,7 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 		child_rpc_priv = container_of(child_rpc, struct crt_rpc_priv,
 					      crp_pub);
 
+		child_rpc_priv->crp_timeout_sec = rpc_priv->crp_timeout_sec;
 		corpc_add_child_rpc(rpc_priv, child_rpc_priv);
 
 		child_rpc_priv->crp_grp_priv = co_info->co_grp_priv;
@@ -899,6 +906,11 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 	}
 
 forward_done:
+	if (rc != 0 && rpc_priv->crp_flags & CRT_RPC_FLAG_CO_FAILOUT) {
+		crt_corpc_complete(rpc_priv);
+		goto out;
+	}
+
 	/* NOOP bcast (no child and root excluded) */
 	if (co_info->co_child_num == 0 && co_info->co_root_excluded)
 		crt_corpc_complete(rpc_priv);

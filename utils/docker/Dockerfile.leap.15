@@ -1,4 +1,4 @@
-# Copyright 2018-2023 Intel Corporation
+# Copyright 2018-2024 Intel Corporation
 # All rights reserved.
 #
 # 'recipe' for Docker to build an image of Leap based
@@ -6,11 +6,12 @@
 #
 
 # Pull base image
-ARG BASE_DISTRO=opensuse/leap:15.4
-FROM $BASE_DISTRO
+ARG POINT_RELEASE=
+ARG BASE_DISTRO=registry.opensuse.org/opensuse/leap-dnf:15$POINT_RELEASE
+FROM $BASE_DISTRO as basic
+LABEL maintainer="daos@daos.groups.io"
 # Needed for later use of BASE_DISTRO
 ARG BASE_DISTRO
-LABEL maintainer="daos@daos.groups.io"
 
 # Intermittent cache-bust.  Used to reduce load on the actual CB1 later.
 ARG CB0
@@ -22,9 +23,17 @@ ARG REPOS
 COPY ./utils/scripts/install-leap15.sh /tmp/install.sh
 # script to setup local repo if available
 COPY ./utils/scripts/helpers/repo-helper-leap15.sh /tmp/repo-helper.sh
-RUN set -e;                                         \
-    chmod +x /tmp/repo-helper.sh /tmp/install.sh && \
-    /tmp/repo-helper.sh
+
+RUN chmod +x /tmp/repo-helper.sh /tmp/install.sh && \
+    /tmp/repo-helper.sh &&                          \
+    rm -f /tmp/repo-helper.sh
+
+FROM basic
+# Install OS updates and package.  Include basic tools and daos dependencies
+RUN dnf upgrade &&        \
+    /tmp/install.sh &&    \
+    dnf clean all &&      \
+    rm -f /tmp/install.sh
 
 # Add DAOS users
 ARG UID=1000
@@ -41,16 +50,6 @@ RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent /home/
     chown -R daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server /home/daos &&  \
     chown daos_agent.daos_agent /var/run/daos_agent
 
-ARG QUICKBUILD=false
-ARG QUICKBUILD_DEPS
-
-RUN if $QUICKBUILD; then                                          \
-        echo "Installing: $QUICKBUILD_DEPS";                      \
-        echo "$QUICKBUILD_DEPS" | sed -e '/^$/d' | tr '\n' '\0' | \
-          xargs -0 dnf install;                                   \
-        dnf clean all;                                            \
-    fi
-
 USER daos_server:daos_server
 
 # Setup a python venv so that python packages can be installed locally.
@@ -59,11 +58,9 @@ ENV PATH=/home/daos/venv/bin:$PATH
 ENV VIRTUAL_ENV=/home/daos/venv/
 
 # Install latest versions of python tools.
-# wheel is needed first to avoid a warning when installing pyyaml.
-COPY requirements.txt .
+COPY requirements-build.txt requirements-utest.txt ./
 RUN python3 -m pip --no-cache-dir install --upgrade pip && \
-    python3 -m pip --no-cache-dir install wheel && \
-    python3 -m pip --no-cache-dir install --requirement requirements.txt
+    python3 -m pip --no-cache-dir install -r requirements-build.txt -r requirements-utest.txt
 
 WORKDIR /home/daos/pre
 RUN mkdir -p /home/daos/pre/site_scons/prereq_tools /home/daos/pre/site_scons/components
@@ -84,10 +81,9 @@ ARG DAOS_TARGET_TYPE=release
 # ensure that latest dependencies are used.
 # The dnf upgrade can add or re-enable distro repositories.
 USER root:root
-RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                                                     \
-        dnf upgrade                                                                          \
-            --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel && \
-        dnf clean all;                                                                       \
+RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                                                             \
+        dnf upgrade --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel && \
+        dnf clean all;                                                                               \
     }
 USER daos_server:daos_server
 
@@ -132,7 +128,7 @@ USER daos_server:daos_server
 LABEL DAOS=true
 
 WORKDIR /home/daos/daos/
-COPY --chown=daos_server:daos_server VERSION LICENSE ftest.sh SConstruct .clang-format ./
+COPY --chown=daos_server:daos_server VERSION LICENSE ftest.sh SConstruct requirements-ftest.txt .clang-format ./
 COPY --chown=daos_server:daos_server site_scons site_scons
 COPY --chown=daos_server:daos_server utils utils
 COPY --chown=daos_server:daos_server src src

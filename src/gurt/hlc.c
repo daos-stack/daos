@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -162,4 +162,14 @@ uint64_t d_hlc_epsilon_get(void)
 uint64_t d_hlc_epsilon_get_bound(uint64_t hlc)
 {
 	return (hlc + d_hlc_epsilon) | D_HLC_MASK;
+}
+
+uint64_t d_hlc_age2sec(uint64_t hlc)
+{
+	uint64_t pt = d_hlc_localtime_get();
+
+	if (unlikely(pt <= hlc))
+		return 0;
+
+	return d_hlc2sec(pt - hlc);
 }

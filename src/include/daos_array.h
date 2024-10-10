@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,6 +18,10 @@
 #if defined(__cplusplus)
 extern "C" {
 #endif
+
+#include <daos_types.h>
+#include <daos_obj.h>
+#include <daos_obj_class.h>
 
 /** Range of contiguous records */
 typedef struct {
@@ -341,7 +345,7 @@ daos_array_stat(daos_handle_t oh, daos_handle_t th, daos_array_stbuf_t *stbuf, d
 
 /**
  * Set the array size (truncate) in records. If array is shrinking, we punch
- * dkeys/records above the required size. If the array is epxanding, we insert 1
+ * dkeys/records above the required size. If the array is expanding, we insert 1
  * record at the corresponding size. This is NOT equivalent to an allocate.
  *
  *

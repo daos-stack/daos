@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -52,6 +52,7 @@ const (
 	ConfSetHotplugBusidRange     = C.NVME_CONF_SET_HOTPLUG_RANGE
 	ConfSetAccelProps            = C.NVME_CONF_SET_ACCEL_PROPS
 	ConfSetSpdkRpcServer         = C.NVME_CONF_SET_SPDK_RPC_SERVER
+	ConfSetAutoFaultyProps       = C.NVME_CONF_SET_AUTO_FAULTY
 )
 
 // Acceleration related constants for engine setting and optional capabilities.
@@ -76,7 +77,8 @@ type NvmeDevState int32
 
 // NvmeDevState values representing the operational device state.
 const (
-	NvmeStateNormal NvmeDevState = iota
+	NvmeStateUnknown NvmeDevState = iota
+	NvmeStateNormal
 	NvmeStateNew
 	NvmeStateFaulty
 	NvmeStateUnplugged
@@ -123,13 +125,13 @@ func (nds *NvmeDevState) UnmarshalJSON(data []byte) error {
 // LedState represents the LED state of device.
 type LedState int32
 
-// LedState values representing the VMD LED state (see include/spdk/vmd.h).
+// LedState values representing the VMD LED state (see src/proto/ctl/smd.proto).
 const (
-	LedStateNormal LedState = iota
+	LedStateUnknown LedState = iota
 	LedStateIdentify
 	LedStateFaulty
 	LedStateRebuild
-	LedStateUnknown
+	LedStateNormal
 )
 
 func (vls LedState) String() string {
@@ -173,47 +175,52 @@ func (vls *LedState) UnmarshalJSON(data []byte) error {
 // NvmeHealth represents a set of health statistics for a NVMe device
 // and mirrors C.struct_nvme_stats.
 type NvmeHealth struct {
-	Timestamp               uint64 `json:"timestamp"`
-	TempWarnTime            uint32 `json:"warn_temp_time"`
-	TempCritTime            uint32 `json:"crit_temp_time"`
-	CtrlBusyTime            uint64 `json:"ctrl_busy_time"`
-	PowerCycles             uint64 `json:"power_cycles"`
-	PowerOnHours            uint64 `json:"power_on_hours"`
-	UnsafeShutdowns         uint64 `json:"unsafe_shutdowns"`
-	MediaErrors             uint64 `json:"media_errs"`
-	ErrorLogEntries         uint64 `json:"err_log_entries"`
-	ReadErrors              uint32 `json:"bio_read_errs"`
-	WriteErrors             uint32 `json:"bio_write_errs"`
-	UnmapErrors             uint32 `json:"bio_unmap_errs"`
-	ChecksumErrors          uint32 `json:"checksum_errs"`
-	Temperature             uint32 `json:"temperature"`
-	TempWarn                bool   `json:"temp_warn"`
-	AvailSpareWarn          bool   `json:"avail_spare_warn"`
-	ReliabilityWarn         bool   `json:"dev_reliability_warn"`
-	ReadOnlyWarn            bool   `json:"read_only_warn"`
-	VolatileWarn            bool   `json:"volatile_mem_warn"`
-	ProgFailCntNorm         uint8  `json:"program_fail_cnt_norm"`
-	ProgFailCntRaw          uint64 `json:"program_fail_cnt_raw"`
-	EraseFailCntNorm        uint8  `json:"erase_fail_cnt_norm"`
-	EraseFailCntRaw         uint64 `json:"erase_fail_cnt_raw"`
-	WearLevelingCntNorm     uint8  `json:"wear_leveling_cnt_norm"`
-	WearLevelingCntMin      uint16 `json:"wear_leveling_cnt_min"`
-	WearLevelingCntMax      uint16 `json:"wear_leveling_cnt_max"`
-	WearLevelingCntAvg      uint16 `json:"wear_leveling_cnt_avg"`
-	EndtoendErrCntRaw       uint64 `json:"endtoend_err_cnt_raw"`
-	CrcErrCntRaw            uint64 `json:"crc_err_cnt_raw"`
-	MediaWearRaw            uint64 `json:"media_wear_raw"`
-	HostReadsRaw            uint64 `json:"host_reads_raw"`
-	WorkloadTimerRaw        uint64 `json:"workload_timer_raw"`
-	ThermalThrottleStatus   uint8  `json:"thermal_throttle_status"`
-	ThermalThrottleEventCnt uint64 `json:"thermal_throttle_event_cnt"`
-	RetryBufferOverflowCnt  uint64 `json:"retry_buffer_overflow_cnt"`
-	PllLockLossCnt          uint64 `json:"pll_lock_loss_cnt"`
-	NandBytesWritten        uint64 `json:"nand_bytes_written"`
-	HostBytesWritten        uint64 `json:"host_bytes_written"`
-	ClusterSize             uint64 `json:"cluster_size"`
-	MetaWalSize             uint64 `json:"meta_wal_size"`
-	RdbWalSize              uint64 `json:"rdb_wal_size"`
+	Timestamp               uint64  `json:"timestamp"`
+	TempWarnTime            uint32  `json:"warn_temp_time"`
+	TempCritTime            uint32  `json:"crit_temp_time"`
+	CtrlBusyTime            uint64  `json:"ctrl_busy_time"`
+	PowerCycles             uint64  `json:"power_cycles"`
+	PowerOnHours            uint64  `json:"power_on_hours"`
+	UnsafeShutdowns         uint64  `json:"unsafe_shutdowns"`
+	MediaErrors             uint64  `json:"media_errs"`
+	ErrorLogEntries         uint64  `json:"err_log_entries"`
+	ReadErrors              uint32  `json:"bio_read_errs"`
+	WriteErrors             uint32  `json:"bio_write_errs"`
+	UnmapErrors             uint32  `json:"bio_unmap_errs"`
+	ChecksumErrors          uint32  `json:"checksum_errs"`
+	Temperature             uint32  `json:"temperature"`
+	TempWarn                bool    `json:"temp_warn"`
+	AvailSpareWarn          bool    `json:"avail_spare_warn"`
+	ReliabilityWarn         bool    `json:"dev_reliability_warn"`
+	ReadOnlyWarn            bool    `json:"read_only_warn"`
+	VolatileWarn            bool    `json:"volatile_mem_warn"`
+	ProgFailCntNorm         uint8   `json:"program_fail_cnt_norm"`
+	ProgFailCntRaw          uint64  `json:"program_fail_cnt_raw"`
+	EraseFailCntNorm        uint8   `json:"erase_fail_cnt_norm"`
+	EraseFailCntRaw         uint64  `json:"erase_fail_cnt_raw"`
+	WearLevelingCntNorm     uint8   `json:"wear_leveling_cnt_norm"`
+	WearLevelingCntMin      uint16  `json:"wear_leveling_cnt_min"`
+	WearLevelingCntMax      uint16  `json:"wear_leveling_cnt_max"`
+	WearLevelingCntAvg      uint16  `json:"wear_leveling_cnt_avg"`
+	EndtoendErrCntRaw       uint64  `json:"endtoend_err_cnt_raw"`
+	CrcErrCntRaw            uint64  `json:"crc_err_cnt_raw"`
+	MediaWearRaw            uint64  `json:"media_wear_raw"`
+	HostReadsRaw            uint64  `json:"host_reads_raw"`
+	WorkloadTimerRaw        uint64  `json:"workload_timer_raw"`
+	ThermalThrottleStatus   uint8   `json:"thermal_throttle_status"`
+	ThermalThrottleEventCnt uint64  `json:"thermal_throttle_event_cnt"`
+	RetryBufferOverflowCnt  uint64  `json:"retry_buffer_overflow_cnt"`
+	PllLockLossCnt          uint64  `json:"pll_lock_loss_cnt"`
+	NandBytesWritten        uint64  `json:"nand_bytes_written"`
+	HostBytesWritten        uint64  `json:"host_bytes_written"`
+	ClusterSize             uint64  `json:"cluster_size"`
+	MetaWalSize             uint64  `json:"meta_wal_size"`
+	RdbWalSize              uint64  `json:"rdb_wal_size"`
+	LinkPortId              uint32  `json:"link_port_id"`
+	LinkMaxSpeed            float32 `json:"link_max_speed"`
+	LinkMaxWidth            uint32  `json:"link_max_width"`
+	LinkNegSpeed            float32 `json:"link_neg_speed"`
+	LinkNegWidth            uint32  `json:"link_neg_width"`
 }
 
 // TempK returns controller temperature in degrees Kelvin.
@@ -241,23 +248,21 @@ type NvmeNamespace struct {
 // SmdDevice contains DAOS storage device information, including
 // health details if requested.
 type SmdDevice struct {
-	UUID        string        `json:"uuid"`
-	TargetIDs   []int32       `hash:"set" json:"tgt_ids"`
-	NvmeState   NvmeDevState  `json:"dev_state"`
-	LedState    LedState      `json:"led_state"`
-	Rank        ranklist.Rank `json:"rank"`
-	TotalBytes  uint64        `json:"total_bytes"`
-	AvailBytes  uint64        `json:"avail_bytes"`
-	UsableBytes uint64        `json:"usable_bytes"`
-	ClusterSize uint64        `json:"cluster_size"`
-	MetaSize    uint64        `json:"meta_size"`
-	MetaWalSize uint64        `json:"meta_wal_size"`
-	RdbSize     uint64        `json:"rdb_size"`
-	RdbWalSize  uint64        `json:"rdb_wal_size"`
-	Health      *NvmeHealth   `json:"health"`
-	TrAddr      string        `json:"tr_addr"`
-	Roles       BdevRoles     `json:"roles"`
-	HasSysXS    bool          `json:"has_sys_xs"`
+	UUID             string         `json:"uuid"`
+	TargetIDs        []int32        `hash:"set" json:"tgt_ids"`
+	Rank             ranklist.Rank  `json:"rank"`
+	TotalBytes       uint64         `json:"total_bytes"`
+	AvailBytes       uint64         `json:"avail_bytes"`
+	UsableBytes      uint64         `json:"usable_bytes"`
+	ClusterSize      uint64         `json:"cluster_size"`
+	MetaSize         uint64         `json:"meta_size"`
+	MetaWalSize      uint64         `json:"meta_wal_size"`
+	RdbSize          uint64         `json:"rdb_size"`
+	RdbWalSize       uint64         `json:"rdb_wal_size"`
+	Roles            BdevRoles      `json:"roles"`
+	HasSysXS         bool           `json:"has_sys_xs"`
+	Ctrlr            NvmeController `json:"ctrlr"`
+	CtrlrNamespaceID uint32         `json:"ctrlr_namespace_id"`
 }
 
 func (sd *SmdDevice) String() string {
@@ -332,10 +337,14 @@ type NvmeController struct {
 	Serial      string           `hash:"ignore" json:"serial"`
 	PciAddr     string           `json:"pci_addr"`
 	FwRev       string           `json:"fw_rev"`
+	VendorID    string           `json:"vendor_id"`
+	PciType     string           `json:"pci_type"`
 	SocketID    int32            `json:"socket_id"`
 	HealthStats *NvmeHealth      `json:"health_stats"`
 	Namespaces  []*NvmeNamespace `hash:"set" json:"namespaces"`
 	SmdDevices  []*SmdDevice     `hash:"set" json:"smd_devices"`
+	NvmeState   NvmeDevState     `json:"dev_state"`
+	LedState    LedState         `json:"led_state"`
 }
 
 // UpdateSmd adds or updates SMD device entry for an NVMe Controller.
@@ -386,7 +395,11 @@ type NvmeControllers []*NvmeController
 func (ncs NvmeControllers) String() string {
 	var ss []string
 	for _, c := range ncs {
-		ss = append(ss, c.PciAddr)
+		s := c.PciAddr
+		for _, sd := range c.SmdDevices {
+			s += fmt.Sprintf("-nsid%d-%s", sd.CtrlrNamespaceID, sd.Roles.String())
+		}
+		ss = append(ss, s)
 	}
 	return strings.Join(ss, ", ")
 }
@@ -499,9 +512,8 @@ type (
 	// BdevScanRequest defines the parameters for a Scan operation.
 	BdevScanRequest struct {
 		pbin.ForwardableRequest
-		DeviceList  *BdevDeviceList
-		VMDEnabled  bool
-		BypassCache bool
+		DeviceList *BdevDeviceList
+		VMDEnabled bool
 	}
 
 	// BdevScanResponse contains information gleaned during a successful Scan operation.
@@ -522,12 +534,12 @@ type (
 	// BdevFormatRequest defines the parameters for a Format operation.
 	BdevFormatRequest struct {
 		pbin.ForwardableRequest
-		Properties BdevTierProperties
-		OwnerUID   int
-		OwnerGID   int
-		VMDEnabled bool
-		Hostname   string
-		BdevCache  *BdevScanResponse
+		Properties   BdevTierProperties
+		OwnerUID     int
+		OwnerGID     int
+		Hostname     string
+		VMDEnabled   bool
+		ScannedBdevs NvmeControllers // VMD needs address mapping for backing devices.
 	}
 
 	// BdevWriteConfigRequest defines the parameters for a WriteConfig operation.
@@ -537,14 +549,15 @@ type (
 		OwnerUID          int
 		OwnerGID          int
 		TierProps         []BdevTierProperties
-		VMDEnabled        bool
 		HotplugEnabled    bool
 		HotplugBusidBegin uint8
 		HotplugBusidEnd   uint8
 		Hostname          string
-		BdevCache         *BdevScanResponse
 		AccelProps        AccelProps
 		SpdkRpcSrvProps   SpdkRpcServer
+		AutoFaultyProps   BdevAutoFaulty
+		VMDEnabled        bool
+		ScannedBdevs      NvmeControllers // VMD needs address mapping for backing devices.
 	}
 
 	// BdevWriteConfigResponse contains the result of a WriteConfig operation.

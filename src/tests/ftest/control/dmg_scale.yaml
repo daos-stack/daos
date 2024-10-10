@@ -1,0 +1,37 @@
+# Note: We usually use the extra yaml in aurora-tools, but that extra yaml has test_clients while
+# this test doesn't need any client, so update the extra yaml or provide some dummy client to -tc.
+hosts:
+  test_servers: 256
+
+timeout: 900
+
+daos_server:
+  pattern_timeout: 60
+
+server_config:
+  name: daos_server
+  engines_per_host: 2
+  engines:
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      storage: auto
+      targets: 8
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      storage: auto
+      targets: 8
+
+pool_100:
+  size: 100%
+pool_small:
+  size: 2%
+  # If we use --size=2% during pool create, we can only create up to 49 pools.
+  quantity: 49

@@ -7,7 +7,6 @@
 package main
 
 import (
-	"context"
 	"io"
 	"strings"
 
@@ -42,7 +41,7 @@ type firmwareQueryCmd struct {
 
 // Execute runs the firmware query command.
 func (cmd *firmwareQueryCmd) Execute(args []string) error {
-	ctx := context.Background()
+	ctx := cmd.MustLogCtx()
 
 	req := &control.FirmwareQueryReq{
 		SCM:         cmd.isSCMRequested(),
@@ -127,7 +126,7 @@ type firmwareUpdateCmd struct {
 
 // Execute runs the firmware update command.
 func (cmd *firmwareUpdateCmd) Execute(args []string) error {
-	ctx := context.Background()
+	ctx := cmd.MustLogCtx()
 
 	req := &control.FirmwareUpdateReq{
 		FirmwarePath: cmd.FilePath,

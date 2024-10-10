@@ -7,7 +7,7 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-#include "daos_uns.h"
+#include <daos_uns.h>
 
 #define ACL_ACCESS	"system.posix_acl_access"
 #define ACL_DEFAULT	"system.posix_acl_default"

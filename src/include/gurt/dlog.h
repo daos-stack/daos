@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -357,6 +357,7 @@ void d_log_fini(void);
  */
 void d_log_close(void);
 
+void d_log_rank_setup(int rank);
 /**
  * Reapplies the masks set in D_LOG_MASK.   Can be called after adding new
  * log facilities to ensure that the mask is set appropriately for the
@@ -445,6 +446,12 @@ void d_log_add_cache(int *cache, int nr);
  * Fsync log files.
  */
 void d_log_sync(void);
+
+/**
+ * disable logging by resetting fd for logging
+ */
+void
+d_log_disable_logging(void);
 
 #if defined(__cplusplus)
 }

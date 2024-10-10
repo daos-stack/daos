@@ -7,8 +7,6 @@
 package server
 
 import (
-	"context"
-	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -16,7 +14,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -52,7 +49,7 @@ func (scs *StorageControlService) NvmeScan(req storage.BdevScanRequest) (*storag
 
 // WithVMDEnabled enables VMD support in storage provider.
 func (scs *StorageControlService) WithVMDEnabled() *StorageControlService {
-	scs.storage.WithVMDEnabled()
+	scs.storage.WithVMDEnabled(true)
 	return scs
 }
 
@@ -104,25 +101,26 @@ func (cs *ControlService) getScmUsage(ssr *storage.ScmScanResponse) (*storage.Sc
 
 	instances := cs.harness.Instances()
 
-	nss := make(storage.ScmNamespaces, len(instances))
-	for idx, ei := range instances {
-		if !ei.IsReady() {
+	nss := make(storage.ScmNamespaces, 0, len(instances))
+	for _, engine := range instances {
+		if !engine.IsReady() {
 			continue // skip if not running
 		}
 
-		cfg, err := ei.GetStorage().GetScmConfig()
+		cfg, err := engine.GetStorage().GetScmConfig()
 		if err != nil {
 			return nil, err
 		}
 
-		mount, err := ei.GetStorage().GetScmUsage()
+		mount, err := engine.GetStorage().GetScmUsage()
 		if err != nil {
 			return nil, err
 		}
 
+		var ns *storage.ScmNamespace
 		switch mount.Class {
 		case storage.ClassRam: // generate fake namespace for emulated ramdisk mounts
-			nss[idx] = &storage.ScmNamespace{
+			ns = &storage.ScmNamespace{
 				Mount:       mount,
 				BlockDevice: "ramdisk",
 				Size:        uint64(humanize.GiByte * cfg.Scm.RamdiskSize),
@@ -130,116 +128,32 @@ func (cs *ControlService) getScmUsage(ssr *storage.ScmScanResponse) (*storage.Sc
 		case storage.ClassDcpm: // update namespace mount info for online storage
 			if ssr.Namespaces == nil {
 				return nil, errors.Errorf("instance %d: input scm scan response missing namespaces",
-					ei.Index())
+					engine.Index())
 			}
-			ns := findPMemInScan(ssr, mount.DeviceList)
+			ns = findPMemInScan(ssr, mount.DeviceList)
 			if ns == nil {
 				return nil, errors.Errorf("instance %d: no pmem namespace for mount %s",
-					ei.Index(), mount.Path)
+					engine.Index(), mount.Path)
 			}
 			ns.Mount = mount
-			nss[idx] = ns
 		}
 
-		if nss[idx].Mount != nil {
-			rank, err := ei.GetRank()
+		if ns.Mount != nil {
+			rank, err := engine.GetRank()
 			if err != nil {
 				return nil, errors.Wrapf(err, "instance %d: no rank associated for mount %s",
-					ei.Index(), mount.Path)
+					engine.Index(), mount.Path)
 			}
-			nss[idx].Mount.Rank = rank
+			ns.Mount.Rank = rank
 		}
 
-		cs.log.Debugf("updated scm fs usage on device %s mounted at %s: %+v",
-			nss[idx].BlockDevice, mount.Path, nss[idx].Mount)
+		cs.log.Debugf("updated scm fs usage on device %s mounted at %s: %+v", ns.BlockDevice,
+			mount.Path, ns.Mount)
+		nss = append(nss, ns)
 	}
 
+	if len(nss) == 0 {
+		return nil, errors.New("no scm details found")
+	}
 	return &storage.ScmScanResponse{Namespaces: nss}, nil
-}
-
-// scanAssignedBdevs retrieves up-to-date NVMe controller info including
-// health statistics and stored server meta-data. If I/O Engines are running
-// then query is issued over dRPC as go-spdk bindings cannot be used to access
-// controller claimed by another process. Only update info for controllers
-// assigned to I/O Engines.
-func (cs *ControlService) scanAssignedBdevs(ctx context.Context, nsps []*ctl.ScmNamespace, statsReq bool) (*storage.BdevScanResponse, error) {
-	instances := cs.harness.Instances()
-	ctrlrs := new(storage.NvmeControllers)
-
-	for _, ei := range instances {
-		if !ei.GetStorage().HasBlockDevices() {
-			continue
-		}
-
-		tsrs, err := ei.ScanBdevTiers()
-		if err != nil {
-			return nil, err
-		}
-
-		// Build slice of controllers in all tiers.
-		tierCtrlrs := make([]storage.NvmeController, 0)
-		msg := fmt.Sprintf("NVMe tiers for engine-%d:", ei.Index())
-		for _, tsr := range tsrs {
-			msg += fmt.Sprintf("\n\tTier-%d: %s", tsr.Tier, tsr.Result.Controllers)
-			for _, c := range tsr.Result.Controllers {
-				tierCtrlrs = append(tierCtrlrs, *c)
-			}
-		}
-		cs.log.Info(msg)
-
-		// If the engine is not running or we aren't interested in temporal
-		// statistics for the bdev devices then continue to next engine.
-		if !ei.IsReady() || !statsReq {
-			ctrlrs.Update(tierCtrlrs...)
-			continue
-		}
-
-		cs.log.Debugf("updating stats for %d bdev(s) on instance %d", len(tierCtrlrs),
-			ei.Index())
-
-		// DAOS-12750 Compute the maximal size of the metadata to allow the engine to fill
-		// the WallMeta field response.  The maximal metadata (i.e. VOS index file) size
-		// should be equal to the SCM available size divided by the number of targets of the
-		// engine.
-		var md_size uint64
-		var rdb_size uint64
-		for _, nsp := range nsps {
-			mp := nsp.GetMount()
-			if mp == nil {
-				continue
-			}
-			if r, err := ei.GetRank(); err != nil || uint32(r) != mp.GetRank() {
-				continue
-			}
-
-			md_size = mp.GetUsableBytes() / uint64(ei.GetTargetCount())
-
-			engineCfg, err := cs.getEngineCfgFromScmNsp(nsp)
-			if err != nil {
-				return nil, errors.Wrap(err, "Engine with invalid configuration")
-			}
-			rdb_size, err = cs.getRdbSize(engineCfg)
-			if err != nil {
-				return nil, err
-			}
-			break
-		}
-
-		if md_size == 0 {
-			cs.log.Noticef("instance %d: no SCM space available for metadata", ei.Index)
-		}
-
-		// If engine is running and has claimed the assigned devices for
-		// each tier, iterate over scan results for each tier and send query
-		// over drpc to update controller details with current health stats
-		// and smd info.
-		updatedCtrlrs, err := ei.updateInUseBdevs(ctx, tierCtrlrs, md_size, rdb_size)
-		if err != nil {
-			return nil, errors.Wrapf(err, "instance %d: update online bdevs", ei.Index())
-		}
-
-		ctrlrs.Update(updatedCtrlrs...)
-	}
-
-	return &storage.BdevScanResponse{Controllers: *ctrlrs}, nil
 }

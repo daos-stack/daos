@@ -3,9 +3,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from ior_test_base import IorTestBase
-from data_utils import list_stats, dict_subtract, dict_extract_values
+from data_utils import dict_extract_values, dict_subtract, list_stats
 from general_utils import percent_change
+from ior_test_base import IorTestBase
 from oclass_utils import calculate_ec_targets_used
 
 
@@ -70,8 +70,7 @@ class EcodSpaceUsage(IorTestBase):
         # Run IOR
         self.ior_cmd.namespace = ior_namespace
         self.ior_cmd.get_params(self)
-        self.ior_cmd.set_daos_params(
-            self.server_group, self.pool.identifier, self.container.identifier)
+        self.ior_cmd.set_daos_params(self.pool.identifier, self.container.identifier)
         self.run_ior_with_pool(create_pool=False, create_cont=False, display_space=False)
 
         # Save space per target after running IOR

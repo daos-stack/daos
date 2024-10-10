@@ -5,10 +5,9 @@
 """
 import os
 
-from avocado.utils import process
-
-from dmg_utils import DmgCommand
 from apricot import TestWithServers
+from avocado.utils import process
+from dmg_utils import DmgCommand
 
 
 class DmgNvmeScanTest(TestWithServers):
@@ -33,7 +32,7 @@ class DmgNvmeScanTest(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=control,basic,dmg
-        :avocado: tags=nvme_scan,test_dmg_nvme_scan_basic
+        :avocado: tags=DmgNvmeScanTest,test_dmg_nvme_scan_basic
         """
         # Create dmg command
         dmg = DmgCommand(os.path.join(self.prefix, "bin"))

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -23,6 +23,7 @@
 #include <daos/btree_class.h>
 #include <daos/placement.h>
 #include <daos/job.h>
+#include <daos/metrics.h>
 #if BUILD_PIPELINE
 #include <daos/pipeline.h>
 #endif
@@ -33,13 +34,15 @@
 static pthread_mutex_t	module_lock = PTHREAD_MUTEX_INITIALIZER;
 
 /** refcount on how many times daos_init has been called */
-static int		module_initialized;
+static int                 module_initialized;
+
+/* clang-format off */
 
 const struct daos_task_api dc_funcs[] = {
 	/** Management */
 	{dc_deprecated, 0},
 	{dc_deprecated, 0},
-	{dc_deprecated, 0},
+	{dc_mgmt_pool_list, sizeof(daos_mgmt_pool_list_t)},
 	{dc_debug_set_params, sizeof(daos_set_params_t)},
 	{dc_mgmt_get_bs_state, sizeof(daos_mgmt_get_bs_state_t)},
 
@@ -138,6 +141,8 @@ const struct daos_task_api dc_funcs[] = {
 #endif
 };
 
+/* clang-format on */
+
 /**
  * Initialize DAOS client library.
  */
@@ -146,7 +151,8 @@ daos_init(void)
 {
 	struct d_fault_attr_t *d_fault_init;
 	struct d_fault_attr_t *d_fault_mem = NULL;
-	struct d_fault_attr_t d_fault_mem_saved;
+	struct d_fault_attr_t  d_fault_mem_saved;
+	crt_init_options_t    *crt_info;
 	int rc;
 
 	D_MUTEX_LOCK(&module_lock);
@@ -195,19 +201,28 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_agent, rc);
 
+	/** get and cache attach info of default system */
+	rc = dc_mgmt_cache_attach_info(NULL);
+	if (rc != 0)
+		D_GOTO(out_job, rc);
+
+	crt_info = daos_crt_init_opt_get(false, 1);
 	/**
 	 * get CaRT configuration (see mgmtModule.handleGetAttachInfo for the
 	 * handling of NULL system names)
 	 */
-	rc = dc_mgmt_net_cfg(NULL);
+	rc = dc_mgmt_net_cfg(NULL, crt_info);
 	if (rc != 0)
-		D_GOTO(out_job, rc);
+		D_GOTO(out_attach, rc);
 
 	/** set up event queue */
-	rc = daos_eq_lib_init();
+	rc = daos_eq_lib_init(crt_info);
+	D_FREE(crt_info->cio_provider);
+	D_FREE(crt_info->cio_interface);
+	D_FREE(crt_info->cio_domain);
 	if (rc != 0) {
 		D_ERROR("failed to initialize eq_lib: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_job, rc);
+		D_GOTO(out_attach, rc);
 	}
 
 	/**
@@ -226,6 +241,13 @@ daos_init(void)
 	rc = dc_mgmt_init();
 	if (rc != 0)
 		D_GOTO(out_pl, rc);
+
+	/** set up client telemetry */
+	rc = dc_tm_init();
+	if (rc != 0) {
+		/* should not be fatal */
+		DL_WARN(rc, "failed to initialize client telemetry");
+	}
 
 	/** set up pool */
 	rc = dc_pool_init();
@@ -260,11 +282,14 @@ out_co:
 out_pool:
 	dc_pool_fini();
 out_mgmt:
+	dc_tm_fini();
 	dc_mgmt_fini();
 out_pl:
 	pl_fini();
 out_eq:
 	daos_eq_lib_fini();
+out_attach:
+	dc_mgmt_drop_attach_info();
 out_job:
 	dc_job_fini();
 out_agent:
@@ -288,7 +313,7 @@ unlock:
 int
 daos_fini(void)
 {
-	int	rc;
+	int rc;
 
 	D_MUTEX_LOCK(&module_lock);
 	if (module_initialized == 0) {
@@ -309,6 +334,8 @@ daos_fini(void)
 		D_GOTO(unlock, rc);
 	}
 
+	/** clean up all registered per-module metrics */
+	daos_metrics_fini();
 #if BUILD_PIPELINE
 	dc_pipeline_fini();
 #endif
@@ -319,9 +346,10 @@ daos_fini(void)
 
 	rc = dc_mgmt_notify_exit();
 	if (rc != 0)
-		D_ERROR("failed to disconnect some resources may leak, "
-			DF_RC"\n", DP_RC(rc));
+		D_ERROR("failed to disconnect some resources may leak, " DF_RC "\n", DP_RC(rc));
 
+	dc_tm_fini();
+	dc_mgmt_drop_attach_info();
 	dc_agent_fini();
 	dc_job_fini();
 
@@ -332,4 +360,33 @@ daos_fini(void)
 unlock:
 	D_MUTEX_UNLOCK(&module_lock);
 	return rc;
+}
+
+/**
+ * Re-initialize the DAOS library in the child process after fork.
+ */
+int
+daos_reinit(void)
+{
+	int rc;
+
+	rc = daos_eq_lib_reset_after_fork();
+	if (rc)
+		return rc;
+
+	daos_dti_reset();
+
+	/**
+	 * Mark all pool and container handles owned by the parent process as if they were created
+	 * in the child processes with g2l to avoid confusing the DAOS engines.
+	 */
+	rc = dc_pool_mark_all_slave();
+	if (rc)
+		return rc;
+
+	rc = dc_cont_mark_all_slave();
+	if (rc)
+		return rc;
+
+	return 0;
 }

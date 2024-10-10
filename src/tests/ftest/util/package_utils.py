@@ -1,10 +1,11 @@
 """
-(C) Copyright 2023 Intel Corporation.
+(C) Copyright 2023-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from run_utils import run_remote, command_as_user
+# pylint: disable=import-error,no-name-in-module
+from util.run_utils import command_as_user, run_remote
 
 
 def find_packages(log, hosts, pattern, user=None):
@@ -39,7 +40,7 @@ def install_packages(log, hosts, packages, user=None, timeout=600):
         timeout (int, optional): timeout for the dnf install command. Defaults to 600.
 
     Returns:
-        RemoteCommandResult: the 'dnf install' command results
+        CommandResult: the 'dnf install' command results
     """
     log.info('Installing packages on %s: %s', hosts, ', '.join(packages))
     command = command_as_user(' '.join(['dnf', 'install', '-y'] + packages), user)
@@ -57,7 +58,7 @@ def remove_packages(log, hosts, packages, user=None, timeout=600):
         timeout (int, optional): timeout for the dnf remove command. Defaults to 600.
 
     Returns:
-        RemoteCommandResult: the 'dnf remove' command results
+        CommandResult: the 'dnf remove' command results
     """
     log.info('Removing packages on %s: %s', hosts, ', '.join(packages))
     command = command_as_user(' '.join(['dnf', 'remove', '-y'] + packages), user)

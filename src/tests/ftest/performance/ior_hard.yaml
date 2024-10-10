@@ -1,7 +1,9 @@
 hosts:
   test_servers: 2
   test_clients: 2
+
 timeout: 240
+
 server_config:
   name: daos_server
   control_log_mask: INFO
@@ -23,12 +25,15 @@ server_config:
       log_file: daos_server1.log
       log_mask: ERR
       storage: auto
+
 pool:
   size: 95%
   properties: ec_cell_sz:128KiB
+
 container:
   type: POSIX
   control_method: daos
+
 ior: &ior_base
   client_processes:
     ppn: 32
@@ -41,36 +46,31 @@ ior: &ior_base
   segment_count: 10000000
   sw_deadline: 30
   sw_wearout: 1
-  sw_status_file: "/var/tmp/daos_testing/stoneWallingStatusFile"
-ior_dfs_sx:
+  sw_status_file: stoneWallingStatusFile
+
+ior_sx: &ior_sx
   <<: *ior_base
-  api: DFS
   dfs_oclass: SX
   dfs_chunk: 470080
   transfer_size: 47008
-ior_dfs_ec_16p2gx:
+
+ior_ec_16p2gx: &ior_ec_16p2gx
   <<: *ior_base
-  api: DFS
   dfs_oclass: EC_16P2GX
   dfs_chunk: 2115360 # Multiple of 47008 and at least 128KiB * 16
   transfer_size: 47008
-ior_dfuse_sx:
-  <<: *ior_base
-  api: POSIX
-  dfs_oclass: SX # dfs params are translated to container params
-  dfs_chunk: 470080
-  transfer_size: 47008
-ior_dfuse_ec_16p2gx:
-  <<: *ior_base
-  api: POSIX
-  dfs_oclass: EC_16P2GX # dfs params are translated to container params
-  dfs_chunk: 2115360 ## Multiple of 47008 and at least 128KiB * 16
-  transfer_size: 47008
-dfuse:
-  disable_caching: True
+
+ior_dfs_sx:
+  api: DFS
+  <<: *ior_sx
+
+ior_dfs_ec_16p2gx:
+  api: DFS
+  <<: *ior_ec_16p2gx
+
 client:
   env_vars:
     - D_LOG_MASK=INFO
+
 mpirun:
-  bind_to: hwthread
-  map_by: socket
+  args: "--bind-to hwthread --map-by socket"

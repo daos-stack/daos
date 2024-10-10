@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,11 +18,12 @@
 #include <daos.h>
 #include <daos/common.h>
 #include <daos/debug.h>
+#include <daos/dfs_lib_int.h>
+#include <daos_types.h>
+#include <daos_fs.h>
+#include <daos_fs_sys.h>
+#include <daos_uns.h>
 
-#include "daos_types.h"
-#include "daos_fs.h"
-#include "dfs_internal.h"
-#include "daos_uns.h"
 #include "daos_hdlr.h"
 
 int
@@ -152,7 +153,7 @@ out_umount:
 }
 
 int
-fs_dfs_get_attr_hdlr(struct cmd_args_s *ap, dfs_obj_info_t *attrs)
+fs_dfs_get_attr_hdlr(struct cmd_args_s *ap, dfs_obj_info_t *attrs, mode_t *mode)
 {
 	int		 flags = O_RDONLY;
 	int		 rc;
@@ -178,15 +179,19 @@ fs_dfs_get_attr_hdlr(struct cmd_args_s *ap, dfs_obj_info_t *attrs)
 
 	rc = dfs_lookup(dfs, ap->dfs_path, flags, &obj, NULL, NULL);
 	if (rc) {
-		fprintf(ap->errstream, "failed to lookup %s (%s)\n",
-			ap->dfs_path, strerror(rc));
+		fprintf(ap->errstream, "failed to lookup %s (%s)\n", ap->dfs_path, strerror(rc));
 		D_GOTO(out_umount, rc);
 	}
 
 	rc = dfs_obj_get_info(dfs, obj, attrs);
 	if (rc) {
-		fprintf(ap->errstream, "failed to get obj info (%s)\n",
-			strerror(rc));
+		fprintf(ap->errstream, "failed to get obj info (%s)\n", strerror(rc));
+		D_GOTO(out_release, rc);
+	}
+
+	rc = dfs_get_mode(obj, mode);
+	if (rc) {
+		fprintf(ap->errstream, "failed to get obj mode (%s)\n", strerror(rc));
 		D_GOTO(out_release, rc);
 	}
 
@@ -305,4 +310,42 @@ int
 fs_relink_root_hdlr(struct cmd_args_s *ap)
 {
 	return dfs_relink_root(ap->cont);
+}
+
+int
+fs_chmod_hdlr(struct cmd_args_s *ap)
+{
+	const int  mflags = O_RDWR;
+	const int  sflags = DFS_SYS_NO_LOCK | DFS_SYS_NO_CACHE;
+	dfs_sys_t *dfs_sys;
+	int        rc  = 0;
+	int        rc2 = 0;
+
+	rc = dfs_sys_mount(ap->pool, ap->cont, mflags, sflags, &dfs_sys);
+	if (rc) {
+		fprintf(ap->errstream, "failed to mount container %s: %s (%d)\n", ap->cont_str,
+			strerror(rc), rc);
+		return rc;
+	}
+
+	if (ap->dfs_prefix) {
+		rc = dfs_sys_set_prefix(dfs_sys, ap->dfs_prefix);
+		if (rc) {
+			fprintf(ap->errstream, "failed to set path prefix %s: %s (%d)\n",
+				ap->dfs_prefix, strerror(rc), rc);
+			D_GOTO(out_umount, rc);
+		}
+	}
+
+	rc = dfs_sys_chmod(dfs_sys, ap->dfs_path, ap->object_mode);
+	if (rc) {
+		fprintf(ap->errstream, "failed to change mode bits for path %s: %s (%d)\n",
+			ap->dfs_path, strerror(rc), rc);
+	}
+
+out_umount:
+	rc2 = dfs_sys_umount(dfs_sys);
+	if (rc2)
+		fprintf(ap->errstream, "failed to umount DFS container\n");
+	return rc;
 }

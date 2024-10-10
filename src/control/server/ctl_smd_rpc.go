@@ -11,11 +11,13 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	uuid "github.com/google/uuid"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/drpc"
@@ -23,6 +25,13 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
+)
+
+// Set as variables so can be overwritten during unit testing.
+var (
+	baseDevReplaceBackoff      = 250 * time.Millisecond
+	maxDevReplaceBackoffFactor = 7 // 8s
+	maxDevReplaceRetries       = 20
 )
 
 func queryRank(reqRank uint32, engineRank ranklist.Rank) bool {
@@ -34,9 +43,13 @@ func queryRank(reqRank uint32, engineRank ranklist.Rank) bool {
 }
 
 func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQueryReq, resp *ctlpb.SmdQueryResp) error {
+	if req == nil {
+		return errors.New("nil request")
+	}
+
 	for _, ei := range svc.harness.Instances() {
 		if !ei.IsReady() {
-			svc.log.Debugf("skipping not-ready instance %d", ei.Index())
+			svc.log.Debugf("skipping not-ready instance")
 			continue
 		}
 
@@ -45,65 +58,15 @@ func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQu
 			return err
 		}
 		if !queryRank(req.GetRank(), engineRank) {
+			svc.log.Debugf("skipping rank %d not specified in request", engineRank)
 			continue
 		}
 
-		rResp := new(ctlpb.SmdQueryResp_RankResp)
-		rResp.Rank = engineRank.Uint32()
-
-		listDevsResp, err := ei.ListSmdDevices(ctx, new(ctlpb.SmdDevReq))
+		rResp, err := smdQueryEngine(ctx, ei, req)
 		if err != nil {
-			return errors.Wrapf(err, "rank %d", engineRank)
-		}
-
-		if len(listDevsResp.Devices) == 0 {
-			rResp.Devices = nil
-			resp.Ranks = append(resp.Ranks, rResp)
-			continue
-		}
-
-		// For each SmdDevice returned in list devs response, append a SmdDeviceWithHealth.
-		for _, sd := range listDevsResp.Devices {
-			rResp.Devices = append(rResp.Devices, &ctlpb.SmdQueryResp_SmdDeviceWithHealth{
-				Details: sd,
-			})
+			return err
 		}
 		resp.Ranks = append(resp.Ranks, rResp)
-
-		if req.Uuid != "" {
-			found := false
-			for _, dev := range rResp.Devices {
-				if dev.Details.Uuid == req.Uuid {
-					rResp.Devices = []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{dev}
-					found = true
-					break
-				}
-			}
-			if !found {
-				rResp.Devices = nil
-			}
-		}
-
-		for _, dev := range rResp.Devices {
-			state := dev.Details.DevState
-
-			// skip health query if the device is not in a normal or faulty state
-			if req.IncludeBioHealth {
-				if state != ctlpb.NvmeDevState_NEW {
-					health, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{
-						DevUuid: dev.Details.Uuid,
-					})
-					if err != nil {
-						return errors.Wrapf(err, "device %q, state %q",
-							dev, state)
-					}
-					dev.Health = health
-					continue
-				}
-				svc.log.Debugf("skip fetching health stats on device %q in NEW state",
-					dev, state)
-			}
-		}
 	}
 
 	return nil
@@ -121,6 +84,7 @@ func (svc *ControlService) querySmdPools(ctx context.Context, req *ctlpb.SmdQuer
 			return err
 		}
 		if !queryRank(req.GetRank(), engineRank) {
+			svc.log.Debugf("skipping rank %d not specified in request", engineRank)
 			continue
 		}
 
@@ -205,48 +169,86 @@ func (im idMap) Keys() (keys []string) {
 }
 
 // Split IDs in comma separated string and assign each token to relevant return list.
-func extractReqIDs(log logging.Logger, ids string) (idMap, idMap, error) {
-	if ids == "" {
-		return nil, nil, errors.New("empty id string")
-	}
-
+func extractReqIDs(log logging.Logger, ids string, addrs idMap, uuids idMap) error {
 	tokens := strings.Split(ids, ",")
 
-	addrs := make(idMap)
-	uuids := make(idMap)
-
 	for _, token := range tokens {
-		if addr, err := hardware.NewPCIAddress(token); err == nil && addr.IsVMDBackingAddress() {
+		if addr, e := hardware.NewPCIAddress(token); e == nil && addr.IsVMDBackingAddress() {
 			addrs[addr.String()] = true
 			continue
 		}
 
-		if uuid, err := uuid.Parse(token); err == nil {
+		if uuid, e := uuid.Parse(token); e == nil {
 			uuids[uuid.String()] = true
 			continue
 		}
 
-		return nil, nil, errors.Errorf("req id entry %q is neither a valid vmd backing "+
-			"device pci address or uuid", token)
+		return errors.Errorf("req id entry %q is neither a valid vmd backing device pci "+
+			"address or uuid", token)
 	}
 
-	return addrs, uuids, nil
+	return nil
 }
 
+// Union type containing either traddr or uuid.
 type devID struct {
 	trAddr string
 	uuid   string
 }
 
-type engineDevMap map[Engine][]devID
+func (id *devID) String() string {
+	if id.trAddr != "" {
+		return id.trAddr
+	}
+	return id.uuid
+}
+
+type devIDMap map[string]devID
+
+func (dim devIDMap) getFirst() *devID {
+	if len(dim) == 0 {
+		return nil
+	}
+
+	var keys []string
+	for key := range dim {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	d := dim[keys[0]]
+	return &d
+}
+
+type engineDevMap map[Engine]devIDMap
+
+func (edm engineDevMap) add(e Engine, id devID) {
+	if _, exists := edm[e]; !exists {
+		edm[e] = make(devIDMap)
+	}
+	if _, exists := edm[e][id.String()]; !exists {
+		edm[e][id.String()] = id
+	}
+}
 
 // Map requested device IDs provided in comma-separated string to the engine that controls the given
 // device. Device can be identified either by UUID or transport (PCI) address.
 func (svc *ControlService) mapIDsToEngine(ctx context.Context, ids string, useTrAddr bool) (engineDevMap, error) {
-	// Extract transport addresses and device UUIDs from IDs string.
-	trAddrs, devUUIDs, err := extractReqIDs(svc.log, ids)
-	if err != nil {
-		return nil, err
+	trAddrs := make(idMap)
+	devUUIDs := make(idMap)
+	matchAll := false
+
+	if ids == "" {
+		// Selecting all is not supported unless using transport addresses.
+		if !useTrAddr {
+			return nil, errors.New("empty id string")
+		}
+		matchAll = true
+	} else {
+		// Extract transport addresses and device UUIDs from IDs string.
+		if err := extractReqIDs(svc.log, ids, trAddrs, devUUIDs); err != nil {
+			return nil, err
+		}
 	}
 
 	req := &ctlpb.SmdQueryReq{Rank: uint32(ranklist.NilRank)}
@@ -263,36 +265,38 @@ func (svc *ControlService) mapIDsToEngine(ctx context.Context, ids string, useTr
 			return nil, err
 		}
 		if len(engines) == 0 {
-			return nil, errors.Errorf("failed to retrieve instance for rank %d", rr.Rank)
+			return nil, errors.Errorf("failed to retrieve instance for rank %d",
+				rr.Rank)
 		}
 		engine := engines[0]
 		for _, dev := range rr.Devices {
 			if dev == nil {
 				return nil, errors.New("nil device in smd query resp")
 			}
-			dds := dev.Details
-			if dds == nil {
-				return nil, errors.New("device with nil details in smd query resp")
+			if dev.Ctrlr.PciAddr == "" {
+				svc.log.Errorf("No transport address associated with device %s",
+					dev.Uuid)
 			}
 
-			uuidMatch := dds.Uuid != "" && devUUIDs[dds.Uuid]
+			matchUUID := dev.Uuid != "" && devUUIDs[dev.Uuid]
+
 			// Where possible specify the TrAddr over UUID as there may be multiple
 			// UUIDs mapping to the same TrAddr.
-			if useTrAddr && dds.TrAddr != "" {
-				if trAddrs[dds.TrAddr] || uuidMatch {
+			if useTrAddr && dev.Ctrlr.PciAddr != "" {
+				if matchAll || matchUUID || trAddrs[dev.Ctrlr.PciAddr] {
 					// If UUID matches, add by TrAddr rather than UUID which
 					// should avoid duplicate UUID entries for the same TrAddr.
-					edm[engine] = append(edm[engine], devID{trAddr: dds.TrAddr})
-					delete(trAddrs, dds.TrAddr)
-					delete(devUUIDs, dds.Uuid)
+					edm.add(engine, devID{trAddr: dev.Ctrlr.PciAddr})
+					delete(trAddrs, dev.Ctrlr.PciAddr)
+					delete(devUUIDs, dev.Uuid)
 					continue
 				}
 			}
 
-			if uuidMatch {
+			if matchUUID {
 				// Only add UUID entry if TrAddr is not available for a device.
-				edm[engine] = append(edm[engine], devID{uuid: dds.Uuid})
-				delete(devUUIDs, dds.Uuid)
+				edm.add(engine, devID{uuid: dev.Uuid})
+				delete(devUUIDs, dev.Uuid)
 			}
 		}
 	}
@@ -328,16 +332,171 @@ func sendManageReq(c context.Context, e Engine, m drpc.Method, b proto.Message) 
 	}, nil
 }
 
-func addManageRespIDOnFail(log logging.Logger, res *ctlpb.SmdManageResp_Result, dev devID) {
-	if res.Status != 0 {
-		log.Errorf("drpc returned status %q on dev %+v", daos.Status(res.Status), dev)
-		if res.Device == nil {
-			// Populate id so failure can be mapped to a device.
-			res.Device = &ctlpb.SmdDevice{
-				TrAddr: dev.trAddr, Uuid: dev.uuid,
-			}
+func addManageRespIDOnFail(log logging.Logger, res *ctlpb.SmdManageResp_Result, dev *devID) {
+	if res == nil || dev == nil || res.Status == 0 {
+		return
+	}
+
+	log.Errorf("drpc returned status %q on dev %+v", daos.Status(res.Status), dev)
+	if res.Device == nil {
+		// Populate id so failure can be mapped to a device.
+		res.Device = &ctlpb.SmdDevice{
+			Ctrlr: &ctlpb.NvmeController{
+				PciAddr: dev.trAddr,
+			},
+			Uuid: dev.uuid,
 		}
 	}
+}
+
+// Retry dev-replace requests as state propagation may take some time after set-faulty call has
+// been made to manually trigger a faulty device state.
+func replaceDevRetryBusy(ctx context.Context, log logging.Logger, e Engine, req proto.Message) (res *ctlpb.SmdManageResp_Result, err error) {
+	for try := 0; try < maxDevReplaceRetries; try++ {
+		res, err = sendManageReq(ctx, e, drpc.MethodReplaceStorage, req)
+		if err != nil {
+			return
+		}
+		if daos.Status(res.Status) != daos.Busy || try == maxDevReplaceRetries-1 {
+			break
+		}
+
+		backoff := common.ExpBackoff(baseDevReplaceBackoff, uint64(try),
+			uint64(maxDevReplaceBackoffFactor))
+		log.Debugf("retrying dev-replace drpc request after %s", backoff)
+
+		select {
+		case <-ctx.Done():
+			err = ctx.Err()
+			return
+		case <-time.After(backoff):
+		}
+	}
+
+	return
+}
+
+func (svc *ControlService) singleDevSmdManage(ctx context.Context, req *ctlpb.SmdManageReq, id string) ([]*ctlpb.SmdManageResp_RankResp, error) {
+	// Evaluate which engine(s) to send requests to.
+	engineDevMap, err := svc.mapIDsToEngine(ctx, id, false)
+	if err != nil {
+		return nil, errors.Wrap(err, "mapping device identifiers to engine")
+	}
+	if len(engineDevMap) != 1 {
+		return nil, errors.Errorf("%T request expects only one engine in device map",
+			req.Op)
+	}
+
+	var engine Engine
+	for engine, _ = range engineDevMap {
+		break
+	}
+	devs := engineDevMap[engine]
+	if len(devs) != 1 {
+		return nil, errors.Errorf("%T request expects only one device in map", req.Op)
+	}
+
+	rank, err := engine.GetRank()
+	if err != nil {
+		return nil, errors.Wrap(err, "retrieving engine rank")
+	}
+
+	var devRes *ctlpb.SmdManageResp_Result
+	msg := fmt.Sprintf("CtlSvc.SmdManage dispatch, rank %d", rank)
+
+	// Extract request from oneof field and execute dRPC.
+	switch req.Op.(type) {
+	case *ctlpb.SmdManageReq_Replace:
+		dReq := req.GetReplace()
+		msg := fmt.Sprintf("%s dev-replace", msg)
+		devRes, err = replaceDevRetryBusy(ctx, svc.log, engine, dReq)
+		svc.log.Tracef("%s: req %+v, resp %+v", msg, dReq, devRes)
+	case *ctlpb.SmdManageReq_Faulty:
+		dReq := req.GetFaulty()
+		msg := fmt.Sprintf("%s set-faulty", msg)
+		devRes, err = sendManageReq(ctx, engine, drpc.MethodSetFaultyState, dReq)
+		svc.log.Tracef("%s: req %+v, resp %+v", msg, dReq, devRes)
+	default:
+		return nil, errors.Errorf("unexpected smd manage request type, want "+
+			"SmdManageReq_(Replace|Faulty) got %T", req.Op)
+	}
+
+	if err != nil {
+		return nil, errors.Wrap(err, msg)
+	}
+
+	return []*ctlpb.SmdManageResp_RankResp{
+		{
+			Rank: rank.Uint32(), Results: []*ctlpb.SmdManageResp_Result{
+				{Status: devRes.Status},
+			},
+		},
+	}, nil
+}
+
+func (svc *ControlService) multiDevSmdManage(ctx context.Context, req *ctlpb.SmdManageReq, ids string) ([]*ctlpb.SmdManageResp_RankResp, error) {
+	// Only LED manage requests currently support operation over multiple devices.
+	if _, ok := req.Op.(*ctlpb.SmdManageReq_Led); !ok {
+		return nil, errors.Errorf("unexpected smd manage request type, want "+
+			"SmdManageReq_Led got %T", req.Op)
+	}
+
+	// Evaluate which engine(s) to send requests to. The last bool param indicates that the
+	// Device-UUID can be replaced with its parent NVMe controller address during processing of
+	// the request.
+	engineDevMap, err := svc.mapIDsToEngine(ctx, ids, true)
+	if err != nil {
+		return nil, errors.Wrap(err, "mapping device identifiers to engine")
+	}
+	if len(engineDevMap) == 0 {
+		return nil, errors.Errorf("%T request expects at least one engine in device map",
+			req.Op)
+	}
+
+	var rankResps []*ctlpb.SmdManageResp_RankResp
+	for engine, devs := range engineDevMap {
+		devResults := []*ctlpb.SmdManageResp_Result{}
+
+		if len(devs) == 0 {
+			return nil, errors.Errorf("%T request expects at least one device in map",
+				req.Op)
+		}
+
+		rank, err := engine.GetRank()
+		if err != nil {
+			return nil, errors.Wrap(err, "retrieving engine rank")
+		}
+
+		msg := fmt.Sprintf("CtlSvc.SmdManage dispatch, rank %d led-manage", rank)
+
+		// Multiple addresses are supported in LED request.
+		for _, dev := range devs {
+			dReq := req.GetLed()
+			// ID should by now have been resolved to a transport (PCI) address.
+			if dev.trAddr == "" {
+				return nil, errors.Errorf("device UUID %s not resolved to a PCI "+
+					"address", dev.uuid)
+			}
+			dReq.Ids = dev.trAddr
+			devRes, err := sendManageReq(ctx, engine, drpc.MethodLedManage, dReq)
+			if err != nil {
+				return nil, errors.Wrap(err, msg)
+			}
+			addManageRespIDOnFail(svc.log, devRes, &dev)
+			svc.log.Tracef("%s: req %+v, resp %+v", msg, dReq, devRes)
+			devResults = append(devResults, devRes)
+		}
+
+		rankResps = append(rankResps, &ctlpb.SmdManageResp_RankResp{
+			Rank: rank.Uint32(), Results: devResults,
+		})
+	}
+
+	sort.Slice(rankResps, func(i, j int) bool {
+		return rankResps[i].Rank < rankResps[j].Rank
+	})
+
+	return rankResps, nil
 }
 
 // SmdManage implements the method defined for the Management Service.
@@ -351,101 +510,23 @@ func (svc *ControlService) SmdManage(ctx context.Context, req *ctlpb.SmdManageRe
 		return nil, FaultDataPlaneNotStarted
 	}
 
-	// Flag indicates whether Device-UUID can be replaced with its parent NVMe controller address.
-	var useTrAddrInReq bool
-	var ids string
+	var rankResps []*ctlpb.SmdManageResp_RankResp
+	var err error
 
 	switch req.Op.(type) {
 	case *ctlpb.SmdManageReq_Replace:
-		ids = req.GetReplace().OldDevUuid
+		rankResps, err = svc.singleDevSmdManage(ctx, req, req.GetReplace().OldDevUuid)
 	case *ctlpb.SmdManageReq_Faulty:
-		ids = req.GetFaulty().Uuid
+		rankResps, err = svc.singleDevSmdManage(ctx, req, req.GetFaulty().Uuid)
 	case *ctlpb.SmdManageReq_Led:
-		useTrAddrInReq = true
-		ids = req.GetLed().Ids
+		rankResps, err = svc.multiDevSmdManage(ctx, req, req.GetLed().Ids)
 	default:
 		return nil, errors.Errorf("Unrecognized operation in SmdManageReq: %+v", req.Op)
 	}
 
-	// Evaluate which engine(s) to send requests to.
-	engineDevMap, err := svc.mapIDsToEngine(ctx, ids, useTrAddrInReq)
 	if err != nil {
-		return nil, errors.Wrap(err, "mapping device identifiers to engine")
+		return nil, err
 	}
 
-	rankResps := []*ctlpb.SmdManageResp_RankResp{}
-
-	for engine, devs := range engineDevMap {
-		devResults := []*ctlpb.SmdManageResp_Result{}
-
-		rank, err := engine.GetRank()
-		if err != nil {
-			return nil, errors.Wrap(err, "retrieving engine rank")
-		}
-
-		msg := fmt.Sprintf("CtlSvc.SmdManage dispatch, rank %d: %%s req:%%+v\n", rank)
-
-		// Extract request from oneof field and execute dRPC.
-		switch req.Op.(type) {
-		case *ctlpb.SmdManageReq_Replace:
-			if len(devs) != 1 {
-				return nil, errors.New("replace request expects only one device ID")
-			}
-			dReq := req.GetReplace()
-			svc.log.Debugf(msg, "dev-replace", dReq)
-			devRes, err := sendManageReq(ctx, engine, drpc.MethodReplaceStorage, dReq)
-			if err != nil {
-				return nil, err
-			}
-			addManageRespIDOnFail(svc.log, devRes, devs[0])
-			devResults = append(devResults, devRes)
-		case *ctlpb.SmdManageReq_Faulty:
-			if len(devs) != 1 {
-				return nil, errors.New("set-faulty request expects only one device ID")
-			}
-			dReq := req.GetFaulty()
-			svc.log.Debugf(msg, "set-faulty", dReq)
-			devRes, err := sendManageReq(ctx, engine, drpc.MethodSetFaultyState, dReq)
-			if err != nil {
-				return nil, err
-			}
-			addManageRespIDOnFail(svc.log, devRes, devs[0])
-			devResults = append(devResults, devRes)
-		case *ctlpb.SmdManageReq_Led:
-			if len(devs) == 0 {
-				return nil, errors.New("led-manage request expects one or more IDs")
-			}
-			// Multiple addresses are supported in LED request.
-			for _, dev := range devs {
-				dReq := req.GetLed()
-				// ID should by now have been resolved to a transport (PCI) address.
-				if dev.trAddr == "" {
-					return nil, errors.Errorf("device uuid %s not resolved to a PCI address",
-						dev.uuid)
-				}
-				dReq.Ids = dev.trAddr
-				svc.log.Debugf(msg, "led-manage", dReq)
-				devRes, err := sendManageReq(ctx, engine, drpc.MethodLedManage, dReq)
-				if err != nil {
-					return nil, err
-				}
-				addManageRespIDOnFail(svc.log, devRes, dev)
-				devResults = append(devResults, devRes)
-			}
-		default:
-			return nil, errors.New("unexpected smd manage request type")
-		}
-
-		rankResps = append(rankResps, &ctlpb.SmdManageResp_RankResp{
-			Rank: rank.Uint32(), Results: devResults,
-		})
-	}
-
-	sort.Slice(rankResps, func(i, j int) bool {
-		return rankResps[i].Rank < rankResps[j].Rank
-	})
-
-	resp := &ctlpb.SmdManageResp{Ranks: rankResps}
-
-	return resp, nil
+	return &ctlpb.SmdManageResp{Ranks: rankResps}, nil
 }

@@ -156,7 +156,7 @@ func (cr *cmdRunner) createNamespaces(regionPerSocket socketRegionMap, nrNsPerSo
 			cmd := cmdCreateNamespace
 			cmd.Args = append(cmd.Args, "--region", region.Dev, "--size",
 				fmt.Sprintf("%d", pmemBytes))
-			if _, err := cr.runCmd(cr.log, cmd); err != nil {
+			if _, err := cr.runCmd(cmd); err != nil {
 				return nil, errors.WithMessagef(err, "%s", region.Dev)
 			}
 			cr.log.Debugf("created namespace on %s size %s", region.Dev,
@@ -178,13 +178,13 @@ func (cr *cmdRunner) removeNamespace(devName string) error {
 
 	cmd := cmdDisableNamespace
 	cmd.Args = append(cmd.Args, devName)
-	if _, err := cr.runCmd(cr.log, cmd); err != nil {
+	if _, err := cr.runCmd(cmd); err != nil {
 		return err
 	}
 
 	cmd = cmdDestroyNamespace
 	cmd.Args = append(cmd.Args, devName)
-	_, err := cr.runCmd(cr.log, cmd)
+	_, err := cr.runCmd(cmd)
 	return err
 }
 
@@ -214,7 +214,7 @@ func (cr *cmdRunner) getNamespaces(numaID int) (storage.ScmNamespaces, error) {
 	if numaID != sockAny {
 		cmd.Args = append(cmd.Args, "--numa-node", fmt.Sprintf("%d", numaID))
 	}
-	out, err := cr.runCmd(cr.log, cmd)
+	out, err := cr.runCmd(cmd)
 	if err != nil {
 		return nil, err
 	}
@@ -268,7 +268,7 @@ func (cr *cmdRunner) getNdctlRegions(sockID int) (NdctlRegions, error) {
 	if sockID != sockAny {
 		cmd.Args = append(cmd.Args, "--numa-node", fmt.Sprintf("%d", sockID))
 	}
-	out, err := cr.runCmd(cr.log, cmd)
+	out, err := cr.runCmd(cmd)
 	if err != nil {
 		return nil, err
 	}

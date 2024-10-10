@@ -8,7 +8,7 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
 
     denv = env.Clone()
-    prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
+    denv.require('protobufc', 'hwloc')
 
     # Common pipeline code
     common_tgts = denv.SharedObject(['pipeline_rpc.c', 'common_pipeline.c'])
@@ -23,6 +23,7 @@ def scons():
 
     # generate server module
     senv = denv.Clone()
+    senv.require('argobots')
     srv = senv.d_library('pipeline',
                          common_tgts + ['srv_pipeline.c', 'srv_mod.c',
                                         'filter.c', 'filter_funcs.c',

@@ -75,13 +75,13 @@ The device owner xstream is responsible for maintaining anf updating all device 
 The DAOS data plane will monitor NVMe SSDs every 60 seconds, including updating the health stats with current values, checking current device states, and making any necessary blobstore/device state transitions. Once a FAULTY state transition has occurred, the monitoring period will be reduced to 10 seconds to allow for quicker transitions and finer-grained monitoring until the device is fully evicted.
 
  Useful admin command to query device health:
-  - <a href="#81">dmg storage query device-health</a> [used to query SSD health stats]
+  - <a href="#81">dmg storage query list-devices --health</a> [used to query SSD health stats]
 
 While monitoring this health data, an admin can now make the determination to manually evict a faulty device. This data will also be used to set the faulty device criteria for automatic SSD eviction (available in a future release).
 
 <a id="7"></a>
 ## Faulty Device Detection (SSD Eviction)
-Faulty device detection and reaction can be referred to as NVMe SSD eviction. This involves all affected pool targets being marked as down and the rebuild of all affected pool targets being automatically triggered. A persistent device state is maintained in SMD and the device state is updated from NORMAL to FAULTY upon SSD eviction. The faulty device reaction will involve various SPDK cleanup, including all I/O channels released, SPDK allocations (termed 'blobs') closed, and the SPDK blobstore created on the NVMe SSD unloaded. Currently only manual SSD eviction is supported, and a future release will support automatic SSD eviction.
+Faulty device detection and reaction can be referred to as NVMe SSD eviction. This involves all affected pool targets being marked as down and the rebuild of all affected pool targets being automatically triggered. A persistent device state is maintained in SMD and the device state is updated from NORMAL to FAULTY upon SSD eviction. The faulty device reaction involves various SPDK cleanup, including all I/O channels released, SPDK allocations (termed 'blobs') closed, and the SPDK blobstore created on the NVMe SSD unloaded. Automatic SSD eviction is enabled by default and can be disabled using the `bdev_auto_faulty` server config file engine parameter.
 
  Useful admin commands to manually evict an NVMe SSD:
   - <a href="#82">dmg storage set nvme-faulty</a> [used to manually set an NVMe SSD to FAULTY (ie evict the device)]
@@ -89,15 +89,15 @@ Faulty device detection and reaction can be referred to as NVMe SSD eviction. Th
 <a id="8"></a>
 ## NVMe SSD Hot Plug
 
-**Full NVMe hot plug capability will be available and supported in DAOS 2.0 release. Use is currently intended for testing only and is not supported for production.**
+NVMe hot plug with Intel VMD devices is supported in this release.
+
+**Full hot plug capability when using non-Intel-VMD devices is to be supported in DAOS 2.8 release. Use is currently intended for testing only and is not supported for production.**
 
 The NVMe hot plug feature includes device removal (an NVMe hot remove event) and device reintegration (an NVMe hotplug event) when a faulty device is replaced with a new device.
 
 For device removal, if the device is a faulty or previously evicted device, then nothing further would be done when the device is removed. The device state would be displayed as UNPLUGGED. If a healthy device that is currently in use by DAOS is removed, then all SPDK memory stubs would be deconstructed, and the device state would also display as UNPLUGGED.
 
 For device reintegration, if a new device is plugged to replace a faulty device, the admin would need to issue a device replacement command. All SPDK in-memory stubs would be created and all affected pool targets automatically reintegrated on the new device. The device state would be displayed as NEW initially and NORMAL after the replacement event occurred. If a faulty device or previously evicted device is re-plugged, the device will remain evicted, and the device state would display EVICTED. If a faulty device is desired to be reused (NOTE: this is not advised, mainly used for testing purposes), the admin can run the same device replacement command setting the new and old device IDs to be the same device ID. Reintegration will not occur on the device, as DAOS does not currently support incremental reintegration.
-
-NVMe hot plug with Intel VMD devices is currently not supported in this release, but will be supported in a future release.
 
  Useful admin commands to replace an evicted device:
   - <a href="#83">dmg storage replace nvme</a> [used to replace an evicted device with a new device]
@@ -179,10 +179,10 @@ Pools
 ```
 
 <a id="81"></a>
-- Query Device Health Data: **$dmg storage query device-health**
+- Query Device Health Data: **$dmg storage query list-devices --health**
 
 ```
-$ dmg storage query device-health --uuid=9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0
+$ dmg storage query list-devices --health --uuid=9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0
 Devices:
         UUID:9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0 [TrAddr:0000:8d:00.0]
            Targets:[0] Rank:0 State:NORMAL
@@ -209,7 +209,7 @@ Devices:
 <a id="82"></a>
 - Manually Set Device State to FAULTY: **$dmg storage set nvme-faulty**
 ```
-$ dmg storage set nvme-faulty --uuid=9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0
+$ dmg storage set nvme-faulty --host=localhost --uuid=9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0
 Devices
         UUID:9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0 [TrAddr:0000:8d:00.0]
             Targets:[0] Rank:0 State:EVICTED
@@ -219,7 +219,7 @@ Devices
 <a id="83"></a>
 - Replace an evicted device with a new device: **$dmg storage replace nvme**
 ```
-$ dmg storage replace nvme --old-uuid=9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0 --new-uuid=8131fc39-4b1c-4662-bea1-734e728c434e
+$ dmg storage replace nvme --host=localhost --old-uuid=9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0 --new-uuid=8131fc39-4b1c-4662-bea1-734e728c434e
 Devices
         UUID:8131fc39-4b1c-4662-bea1-734e728c434e [TrAddr:0000:8d:00.0]
             Targets:[0] Rank:0 State:NORMAL
@@ -229,7 +229,7 @@ Devices
 <a id="84"></a>
 - Reuse a previously evicted device: **$dmg storage replace nvme**
 ```
-$ dmg storage replace nvme --old-uuid=9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0 --new-uuid=9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0
+$ dmg storage replace nvme --host=localhost --old-uuid=9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0 --new-uuid=9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0
 Devices
         UUID:9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0 [TrAddr:0000:8a:00.0]
             Targets:[0] Rank:0 State:NORMAL

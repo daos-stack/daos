@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -241,33 +241,17 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
 }
 
 /**
- * Locate a durable object in OI table, or create it if it's not found
+ * Create a durable object in OI table.
  */
 int
-vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
-		  daos_epoch_t epoch, bool log, struct vos_obj_df **obj_p,
-		  struct vos_ts_set *ts_set)
+vos_oi_alloc(struct vos_container *cont, daos_unit_oid_t oid, daos_epoch_t epoch,
+	     struct vos_obj_df **obj_p, struct vos_ts_set *ts_set)
 {
-	struct dtx_handle	*dth = vos_dth_get(cont->vc_pool->vp_sysdb);
 	struct vos_obj_df	*obj = NULL;
-	d_iov_t			 key_iov;
-	d_iov_t			 val_iov;
-	daos_handle_t		 loh;
-	struct ilog_desc_cbs	 cbs;
+	d_iov_t			 key_iov, val_iov;
 	int			 rc;
 
-	D_DEBUG(DB_TRACE, "Lookup obj "DF_UOID" in the OI table.\n",
-		DP_UOID(oid));
-
-	rc = vos_oi_find(cont, oid, &obj, ts_set);
-	if (rc == 0)
-		goto do_log;
-	if (rc != -DER_NONEXIST)
-		return rc;
-
-	/* Object ID not found insert it to the OI tree */
-	D_DEBUG(DB_TRACE, "Object "DF_UOID" not found adding it..\n",
-		DP_UOID(oid));
+	D_DEBUG(DB_TRACE, "Adding object "DF_UOID"\n", DP_UOID(oid));
 
 	d_iov_set(&val_iov, NULL, 0);
 	d_iov_set(&key_iov, &oid, sizeof(oid));
@@ -284,19 +268,46 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 
 	vos_ilog_ts_ignore(vos_cont2umm(cont), &obj->vo_ilog);
 	vos_ilog_ts_mark(ts_set, &obj->vo_ilog);
-do_log:
-	if (!log)
-		goto skip_log;
-	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
-	rc = ilog_open(vos_cont2umm(cont), &obj->vo_ilog, &cbs, &loh);
-	if (rc != 0)
+	*obj_p = obj;
+
+	return 0;
+}
+
+/**
+ * Locate a durable object in OI table, or create it if it's not found
+ */
+int
+vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
+		  daos_epoch_t epoch, bool log, struct vos_obj_df **obj_p,
+		  struct vos_ts_set *ts_set)
+{
+	struct dtx_handle	*dth = vos_dth_get(cont->vc_pool->vp_sysdb);
+	struct vos_obj_df	*obj = NULL;
+	daos_handle_t		 loh;
+	struct ilog_desc_cbs	 cbs;
+	int			 rc;
+
+	D_DEBUG(DB_TRACE, "Lookup obj "DF_UOID" in the OI table.\n", DP_UOID(oid));
+
+	rc = vos_oi_find(cont, oid, &obj, ts_set);
+	if (rc == -DER_NONEXIST) {
+		rc = vos_oi_alloc(cont, oid, epoch, &obj, ts_set);
+		if (rc)
+			return rc;
+	} else if (rc) {
 		return rc;
+	}
 
-	rc = ilog_update(loh, NULL, epoch,
-			 dtx_is_valid_handle(dth) ? dth->dth_op_seq : 1, false);
+	if (log) {
+		vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
+		rc = ilog_open(vos_cont2umm(cont), &obj->vo_ilog, &cbs, dth == NULL, &loh);
+		if (rc != 0)
+			return rc;
 
-	ilog_close(loh);
-skip_log:
+		rc = ilog_update(loh, NULL, epoch, dtx_is_valid_handle(dth) ? dth->dth_op_seq : 1,
+				 false);
+		ilog_close(loh);
+	}
 	if (rc == 0)
 		*obj_p = obj;
 
@@ -824,8 +835,7 @@ oi_iter_check_punch(daos_handle_t ih)
 	D_DEBUG(DB_IO, "Moving object "DF_UOID" to gc heap\n",
 		DP_UOID(oid));
 	/* Evict the object from cache */
-	rc = vos_obj_evict_by_oid(vos_obj_cache_current(oiter->oit_cont->vc_pool->vp_sysdb),
-				  oiter->oit_cont, oid);
+	rc = vos_obj_evict_by_oid(oiter->oit_cont, oid);
 	if (rc != 0)
 		D_ERROR("Could not evict object "DF_UOID" "DF_RC"\n",
 			DP_UOID(oid), DP_RC(rc));
@@ -847,11 +857,13 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 {
 	struct vos_iterator	*iter = vos_hdl2iter(ih);
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
+	struct vos_container    *cont  = oiter->oit_cont;
 	struct vos_obj_df	*obj;
 	daos_unit_oid_t		 oid;
 	d_iov_t			 rec_iov;
 	bool			 delete = false, invisible = false;
 	int			 rc;
+	uint64_t                 base_flag = range_discard ? VOS_OBJ_DISCARD : VOS_OBJ_AGGREGATE;
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 
@@ -864,6 +876,16 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_obj_df));
 	obj = (struct vos_obj_df *)rec_iov.iov_buf;
 	oid = obj->vo_id;
+
+	rc = vos_obj_check_discard(cont, oid, base_flag);
+	if (rc != 0) {
+		/** -DER_BUSY means the object is in-use already.  We will after a yield in this
+		 * case.
+		 */
+		D_CDEBUG(rc == -DER_BUSY, DB_EPC, DLOG_ERR, "Hold check failed for " DF_UOID "\n",
+			 DP_UOID(oid));
+		return rc;
+	}
 
 	rc = umem_tx_begin(vos_cont2umm(oiter->oit_cont), NULL);
 	if (rc != 0)
@@ -883,8 +905,7 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 		 */
 
 		/* Evict the object from cache */
-		rc = vos_obj_evict_by_oid(vos_obj_cache_current(oiter->oit_cont->vc_pool->vp_sysdb),
-					  oiter->oit_cont, oid);
+		rc = vos_obj_evict_by_oid(oiter->oit_cont, oid);
 		if (rc != 0)
 			D_ERROR("Could not evict object "DF_UOID" "DF_RC"\n",
 				DP_UOID(oid), DP_RC(rc));

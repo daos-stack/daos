@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -29,30 +29,47 @@
 			((addr)->ba_flags &= ~(BIO_FLAG_DEDUP_BUF))
 #define BIO_ADDR_IS_CORRUPTED(addr) ((addr)->ba_flags & BIO_FLAG_CORRUPTED)
 #define BIO_ADDR_SET_CORRUPTED(addr) ((addr)->ba_flags |= BIO_FLAG_CORRUPTED)
+#define BIO_ADDR_IS_GANG(addr) ((addr)->ba_flags & BIO_FLAG_GANG)
+#define BIO_ADDR_SET_GANG(addr) ((addr)->ba_flags |= BIO_FLAG_GANG)
 
 /* Can support up to 16 flags for a BIO address */
 enum BIO_FLAG {
 	/* The address is a hole */
 	BIO_FLAG_HOLE = (1 << 0),
-	/* The address is a deduped extent */
+	/* The address is a deduped extent, transient only flag */
 	BIO_FLAG_DEDUP = (1 << 1),
-	/* The address is a buffer for dedup verify */
+	/* The address is a buffer for dedup verify, transient only flag */
 	BIO_FLAG_DEDUP_BUF = (1 << 2),
+	/* The data located on the address is marked as corrupted */
 	BIO_FLAG_CORRUPTED = (1 << 3),
+	/* The address is a gang address */
+	BIO_FLAG_GANG = (1 << 4),
 };
 
+#define BIO_DMA_CHUNK_MB	8	/* 8MB DMA chunks */
+
+/**
+ * It's used to represent an address on SCM, or an address on NVMe, or a gang address.
+ *
+ * The gang address consists of N addresses from scattered allocations, the scattered
+ * allocations could have different size and media type, they are compactly stored on
+ * the SCM pointing by 'ba_off' as following:
+ * 
+ * N 64bits offsets,  N 32bits sizes, N 8bits media types
+ */
 typedef struct {
 	/*
-	 * Byte offset within PMDK pmemobj pool for SCM;
+	 * Byte offset within PMDK pmemobj pool for SCM or gang address;
 	 * Byte offset within SPDK blob for NVMe.
 	 */
 	uint64_t	ba_off;
 	/* DAOS_MEDIA_SCM or DAOS_MEDIA_NVME */
 	uint8_t		ba_type;
-	uint8_t		ba_pad1;
+	/* Number of addresses when BIO_FLAG_GANG is set */
+	uint8_t		ba_gang_nr;
 	/* See BIO_FLAG enum */
 	uint16_t	ba_flags;
-	uint32_t	ba_pad2;
+	uint32_t	ba_pad;
 } bio_addr_t;
 
 struct sys_db;
@@ -127,8 +144,63 @@ enum bio_bs_state {
 	BIO_BS_STATE_SETUP,
 };
 
+/* Size for storing N offset + size + metia_type */
+static inline unsigned int
+bio_gaddr_size(uint8_t gang_nr)
+{
+	unsigned int size;
+
+	if (gang_nr == 0)
+		return 0;
+
+	size = sizeof(uint64_t) + sizeof(uint32_t) + sizeof(uint8_t);
+	return roundup(size * gang_nr, sizeof(uint64_t));
+}
+
 static inline void
-bio_addr_set(bio_addr_t *addr, uint16_t type, uint64_t off)
+bio_gaddr_set(struct umem_instance *umm, bio_addr_t *gaddr, int i,
+	      uint8_t type, uint32_t len, uint64_t off)
+{
+	uint8_t		*ptr;
+	unsigned int	 ptr_off;
+
+	D_ASSERT(BIO_ADDR_IS_GANG(gaddr));
+	D_ASSERT(i < gaddr->ba_gang_nr);
+	ptr = umem_off2ptr(umm, gaddr->ba_off);
+
+	ptr_off = sizeof(uint64_t) * i;
+	*((uint64_t *)(ptr + ptr_off)) = off;
+
+	ptr_off = sizeof(uint64_t) * gaddr->ba_gang_nr + sizeof(uint32_t) * i;
+	*((uint32_t *)(ptr + ptr_off)) = len;
+
+	ptr_off = (sizeof(uint64_t) + sizeof(uint32_t)) * gaddr->ba_gang_nr + i;
+	*(ptr + ptr_off) = type;
+}
+
+static inline void
+bio_gaddr_get(struct umem_instance *umm, bio_addr_t *gaddr, int i,
+	      uint8_t *type, uint32_t *len, uint64_t *off)
+{
+	uint8_t		*ptr;
+	unsigned int	 ptr_off;
+
+	D_ASSERT(BIO_ADDR_IS_GANG(gaddr));
+	D_ASSERT(i < gaddr->ba_gang_nr);
+	ptr = umem_off2ptr(umm, gaddr->ba_off);
+
+	ptr_off = sizeof(uint64_t) * i;
+	*off = *((uint64_t *)(ptr + ptr_off));
+
+	ptr_off = sizeof(uint64_t) * gaddr->ba_gang_nr + sizeof(uint32_t) * i;
+	*len = *((uint32_t *)(ptr + ptr_off));
+
+	ptr_off = (sizeof(uint64_t) + sizeof(uint32_t)) * gaddr->ba_gang_nr + i;
+	*type = *(ptr + ptr_off);
+}
+
+static inline void
+bio_addr_set(bio_addr_t *addr, uint8_t type, uint64_t off)
 {
 	addr->ba_type = type;
 	addr->ba_off = umem_off2offset(off);
@@ -353,17 +425,25 @@ struct bio_dev_info {
 	uint32_t		bdi_tgt_cnt;
 	int		       *bdi_tgts;
 	char		       *bdi_traddr;
-	uint32_t		bdi_dev_type;	/* reserved */
-	uint32_t		bdi_dev_roles;	/* reserved */
+	uint32_t                bdi_dev_roles;
+	struct nvme_ctrlr_t    *bdi_ctrlr; /* defined in control.h */
 };
 
 static inline void
 bio_free_dev_info(struct bio_dev_info *dev_info)
 {
-	if (dev_info->bdi_tgts != NULL)
-		D_FREE(dev_info->bdi_tgts);
-	if (dev_info->bdi_traddr != NULL)
-		D_FREE(dev_info->bdi_traddr);
+	D_FREE(dev_info->bdi_tgts);
+	D_FREE(dev_info->bdi_traddr);
+	if (dev_info->bdi_ctrlr != NULL) {
+		D_FREE(dev_info->bdi_ctrlr->model);
+		D_FREE(dev_info->bdi_ctrlr->serial);
+		D_FREE(dev_info->bdi_ctrlr->fw_rev);
+		D_FREE(dev_info->bdi_ctrlr->vendor_id);
+		D_FREE(dev_info->bdi_ctrlr->pci_type);
+		D_FREE(dev_info->bdi_ctrlr->pci_cfg);
+		D_FREE(dev_info->bdi_ctrlr->nss);
+		D_FREE(dev_info->bdi_ctrlr);
+	}
 	D_FREE(dev_info);
 }
 
@@ -376,7 +456,8 @@ bio_free_dev_info(struct bio_dev_info *dev_info)
  *
  * \return		Zero on success, negative value on error
  */
-int bio_dev_list(struct bio_xs_context *ctxt, d_list_t *dev_list, int *dev_cnt);
+int
+bio_dev_list(struct bio_xs_context *ctxt, d_list_t *dev_list, int *dev_cnt);
 
 /**
  * Callbacks called on NVMe device state transition
@@ -391,7 +472,6 @@ int bio_dev_list(struct bio_xs_context *ctxt, d_list_t *dev_list, int *dev_cnt);
 struct bio_reaction_ops {
 	int (*faulty_reaction)(int *tgt_ids, int tgt_cnt);
 	int (*reint_reaction)(int *tgt_ids, int tgt_cnt);
-	int (*ioerr_reaction)(int err_type, int tgt_id);
 };
 
 /*
@@ -427,7 +507,7 @@ int bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 		  unsigned int hugepage_size, unsigned int tgt_nr, bool bypass);
 
 /**
- * Global NVMe finilization.
+ * Global NVMe finalization.
  *
  * \return		N/A
  */
@@ -473,6 +553,18 @@ int bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_pollin
  * \returns		N/A
  */
 void bio_xsctxt_free(struct bio_xs_context *ctxt);
+
+/*
+ * Health check on the per-xstream NVMe context
+ *
+ * \param[in] xs_ctxt	Per-xstream NVMe context
+ * \param[in] log_err	Log media error if the device is not healthy
+ * \param[in] update	The check is called for an update operation or not
+ *
+ * \returns		0:		NVMe context is healthy
+ *			-DER_NVME_IO:	NVMe context is faulty
+ */
+int bio_xsctxt_health_check(struct bio_xs_context *xs_ctxt, bool log_err, bool update);
 
 /**
  * NVMe poller to poll NVMe I/O completions.
@@ -849,11 +941,13 @@ void *bio_buf_addr(struct bio_desc *biod);
  * \param umem		[IN]	umem instance
  * \param bsgl_src	[IN]	Source BIO SGL
  * \param bsgl_dst	[IN]	Target BIO SGL
+ * \param desc		[OUT]	Returned BIO copy descriptor
  *
- * \return			BIO copy descriptor on success, NULL on error
+ * \return			Zero on success, negative value on error
  */
-struct bio_copy_desc *bio_copy_prep(struct bio_io_context *ioctxt, struct umem_instance *umem,
-				    struct bio_sglist *bsgl_src, struct bio_sglist *bsgl_dst);
+int bio_copy_prep(struct bio_io_context *ioctxt, struct umem_instance *umem,
+		  struct bio_sglist *bsgl_src, struct bio_sglist *bsgl_dst,
+		  struct bio_copy_desc **desc);
 
 struct bio_csum_desc {
 	uint8_t		*bmd_csum_buf;
@@ -972,15 +1066,22 @@ int bio_mc_close(struct bio_meta_context *mc);
 /* Function to return io context for data/meta/wal blob */
 struct bio_io_context *bio_mc2ioc(struct bio_meta_context *mc, enum smd_dev_type type);
 
+struct bio_wal_stats {
+	uint32_t	ws_size;	/* WAL size for single tx in bytes */
+	uint32_t	ws_qd;		/* WAL tx QD */
+	uint32_t	ws_waiters;	/* Waiters for WAL reclaiming */
+};
+
 /*
  * Reserve WAL log space for current transaction
  *
  * \param[in]	mc		BIO meta context
  * \param[out]	tx_id		Reserved transaction ID
+ * \param[out]	stats		WAL stats (optional)
  *
  * \return			Zero on success, negative value on error
  */
-int bio_wal_reserve(struct bio_meta_context *mc, uint64_t *tx_id);
+int bio_wal_reserve(struct bio_meta_context *mc, uint64_t *tx_id, struct bio_wal_stats *stats);
 
 /*
  * Submit WAL I/O and wait for completion
@@ -988,10 +1089,12 @@ int bio_wal_reserve(struct bio_meta_context *mc, uint64_t *tx_id);
  * \param[in]	mc		BIO meta context
  * \param[in]	tx		umem_tx pointer
  * \param[in]	biod_data	BIO descriptor for data update (optional)
+ * \param[out]	stats		WAL stats (optional)
  *
  * \return			Zero on success, negative value on error
  */
-int bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct bio_desc *biod_data);
+int bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct bio_desc *biod_data,
+		   struct bio_wal_stats *stats);
 
 /*
  * Compare two WAL transaction IDs from same WAL instance
@@ -1062,7 +1165,7 @@ struct bio_wal_info {
 };
 
 /*
- * Qeury WAL total blocks & used blocks.
+ * Query WAL total blocks & used blocks.
  */
 void bio_wal_query(struct bio_meta_context *mc, struct bio_wal_info *info);
 

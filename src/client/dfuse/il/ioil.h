@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,7 +11,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "daos_fs.h"
+#include <daos_fs.h>
 
 struct ioil_cont {
 	/* Container open handle */
@@ -53,5 +53,7 @@ ioil_do_writex(const char *buff, size_t len, off_t position, struct fd_entry *en
 ssize_t
 ioil_do_pwritev(const struct iovec *iov, int count, off_t position, struct fd_entry *entry,
 		int *errcode);
+int
+ioil_get_eqh(daos_handle_t *eqh);
 
 #endif /* __IOIL_H__ */

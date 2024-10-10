@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,6 +11,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -167,7 +168,6 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 	if len(instances) < 1 {
 		return errors.New("harness has no managed instances")
 	}
-
 	if len(req.GetRanks()) == 0 {
 		return errors.New("zero ranks in calculateCreateStorage()")
 	}
@@ -178,62 +178,63 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 	// optional. As we add support for other tiers, this logic
 	// will need to be updated.
 
-	// the engine will accept only 2 tiers - add missing
-	if len(req.GetTierratio()) == 0 {
-		req.Tierratio = []float64{DefaultPoolScmRatio, DefaultPoolNvmeRatio}
-	} else if len(req.GetTierratio()) == 1 {
-		req.Tierratio = append(req.Tierratio, 0)
-	}
+	nvmeMissing := !instances[0].GetStorage().HasBlockDevices()
 
-	storagePerRank := func(total uint64) uint64 {
-		return total / uint64(len(req.GetRanks()))
-	}
-
-	if len(req.Tierbytes) == 0 {
-		req.Tierbytes = make([]uint64, len(req.Tierratio))
-	} else if len(req.Tierbytes) == 1 {
-		req.Tierbytes = append(req.Tierbytes, 0)
-	}
+	// As this is an exclusive interface between control-API and server, accept only known
+	// request parameter combinations.
 
 	switch {
-	case !instances[0].GetStorage().HasBlockDevices():
-		svc.log.Info("config has 0 bdevs; excluding NVMe from pool create request")
-		for tierIdx := range req.Tierbytes {
-			if tierIdx > 0 {
-				req.Tierbytes[tierIdx] = 0
-			} else if req.Tierbytes[0] == 0 {
-				req.Tierbytes[0] = storagePerRank(req.GetTotalbytes())
-			}
+	// Pool tier sizes already specified in request.
+	case len(req.TierBytes) == 2 && len(req.TierRatio) == 0 && req.TotalBytes == 0:
+		// If no NVMe, refuse request as NVMe has been incorrectly requested.
+		nvmeBytes := req.TierBytes[1]
+		if nvmeMissing && nvmeBytes > 0 {
+			return errors.Errorf("%s NVMe requested for pool but config has zero bdevs",
+				humanize.Bytes(nvmeBytes))
 		}
-	case req.GetTotalbytes() > 0:
-		for tierIdx := range req.Tierbytes {
-			req.Tierbytes[tierIdx] = storagePerRank(uint64(float64(req.GetTotalbytes()) * req.Tierratio[tierIdx]))
+
+	// Pool tier sizes to be populated based on total-size and ratio.
+	case len(req.TierBytes) == 0 && len(req.TierRatio) == 2 && req.TotalBytes > 0:
+		// If no NVMe, adjust ratio as NVMe hasn't been specifically requested.
+		if nvmeMissing {
+			svc.log.Noticef("config has zero bdevs; excluding NVMe from pool create " +
+				"request")
+			req.TierRatio = []float64{1.00, 0.00}
 		}
+		req.TierBytes = make([]uint64, len(req.TierRatio))
+		for tierIdx := range req.TierBytes {
+			req.TierBytes[tierIdx] =
+				uint64(float64(req.TotalBytes)*req.TierRatio[tierIdx]) /
+					uint64(len(req.GetRanks()))
+			svc.log.Infof("%s = (%s*%f) / %d", humanize.Bytes(req.TierBytes[tierIdx]),
+				humanize.Bytes(req.TotalBytes), req.TierRatio[tierIdx],
+				len(req.GetRanks()))
+		}
+
+	default:
+		return errors.Errorf("unexpected pool create params in request: %+v", req)
 	}
 
-	targetCount := instances[0].GetTargetCount()
-	if targetCount == 0 {
+	// Sanity check tier bytes are greater than the minimums.
+	tgts, ranks := uint64(instances[0].GetTargetCount()), uint64(len(req.GetRanks()))
+	if tgts == 0 {
 		return errors.New("zero target count")
 	}
-
-	tgts, ranks := uint64(targetCount), uint64(len(req.GetRanks()))
 	minPoolTotal := minPoolScm(tgts, ranks)
-	if req.Tierbytes[1] > 0 {
+	if req.TierBytes[1] > 0 {
 		minPoolTotal += minPoolNvme(tgts, ranks)
 	}
-
-	if req.Tierbytes[0] < minRankScm(tgts) {
+	if req.TierBytes[0] < minRankScm(tgts) {
 		return FaultPoolScmTooSmall(minPoolTotal, minPoolScm(tgts, ranks))
 	}
-	if req.Tierbytes[1] != 0 && req.Tierbytes[1] < minRankNvme(tgts) {
+	if req.TierBytes[1] != 0 && req.TierBytes[1] < minRankNvme(tgts) {
 		return FaultPoolNvmeTooSmall(minPoolTotal, minPoolNvme(tgts, ranks))
 	}
 
-	// zero these out as they're not needed anymore
-	req.Totalbytes = 0
-	for tierIdx := range req.Tierratio {
-		req.Tierratio[tierIdx] = 0
-	}
+	// Zero no longer required request fields.
+	req.TotalBytes = 0
+	req.TierRatio = nil
+	req.NumRanks = 0
 
 	return nil
 }
@@ -295,10 +296,11 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 			return nil, errors.Wrap(err, "query on already-created pool failed")
 		}
 
-		resp.Leader = qr.Leader
+		resp.SvcLdr = qr.SvcLdr
 		resp.SvcReps = ranklist.RanksToUint32(ps.Replicas)
 		resp.TgtRanks = ranklist.RanksToUint32(ps.Storage.CreationRanks())
 		resp.TierBytes = ps.Storage.PerRankTierStorage
+		// TODO DAOS-14223: Store Meta-Blob-Size in sysdb.
 
 		return resp, nil
 	}
@@ -352,8 +354,8 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		// specify a number of ranks, all are used).
 		nAllRanks := len(allRanks)
 		nRanks := nAllRanks
-		if req.GetNumranks() > 0 {
-			nRanks = int(req.GetNumranks())
+		if req.GetNumRanks() > 0 {
+			nRanks = int(req.GetNumRanks())
 
 			if nRanks > nAllRanks {
 				return nil, FaultPoolInvalidNumRanks(nRanks, nAllRanks)
@@ -389,8 +391,8 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		return uint32(allRanks)
 	}(len(req.GetRanks()))
 
-	// If Numsvcreps is not specified, daos_engine will choose a value.
-	if req.GetNumsvcreps() > maxSvcReps {
+	// If NumSvcReps is not specified, daos_engine will choose a value.
+	if req.GetNumSvcReps() > maxSvcReps {
 		return nil, FaultPoolInvalidServiceReps(maxSvcReps)
 	}
 
@@ -404,7 +406,7 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		return nil, err
 	}
 
-	ps = system.NewPoolService(poolUUID, req.Tierbytes, ranklist.RanksFromUint32(req.GetRanks()))
+	ps = system.NewPoolService(poolUUID, req.TierBytes, ranklist.RanksFromUint32(req.GetRanks()))
 	ps.PoolLabel = poolLabel
 	if err := svc.sysdb.AddPoolService(ctx, ps); err != nil {
 		return nil, err
@@ -593,7 +595,7 @@ func (svc *mgmtSvc) checkPools(parent context.Context, ignCreating bool, psList 
 			Id:        ps.PoolUUID.String(),
 		}
 
-		if _, err := svc.PoolDestroy(ctx, dr); err != nil {
+		if _, err := svc.poolDestroyNoLeaderCheck(ctx, dr); err != nil {
 			// Best effort cleanup. If the pool destroy fails here,
 			// another leadership step-up should get it eventually.
 			svc.log.Errorf("pool %s not destroyed: %s", ps.PoolUUID, err)
@@ -637,7 +639,7 @@ func (svc *mgmtSvc) poolEvictConnections(ctx context.Context, req *mgmtpb.PoolDe
 
 	evResp, err := svc.PoolEvict(ctx, evReq)
 	if err != nil {
-		svc.log.Debugf("svc.PoolEvict failed\n")
+		svc.log.Errorf("svc.PoolEvict failed\n")
 		return 0, err
 	}
 
@@ -652,6 +654,10 @@ func (svc *mgmtSvc) PoolDestroy(parent context.Context, req *mgmtpb.PoolDestroyR
 		return nil, err
 	}
 
+	return svc.poolDestroyNoLeaderCheck(parent, req)
+}
+
+func (svc *mgmtSvc) poolDestroyNoLeaderCheck(parent context.Context, req *mgmtpb.PoolDestroyReq) (*mgmtpb.PoolDestroyResp, error) {
 	poolUUID, err := svc.resolvePoolID(req.Id)
 	if err != nil {
 		return nil, err
@@ -694,7 +700,7 @@ func (svc *mgmtSvc) PoolDestroy(parent context.Context, req *mgmtpb.PoolDestroyR
 
 		// Perform separate PoolEvict _before_ possible transition to destroying state.
 		evStatus, err := svc.poolEvictConnections(ctx, req)
-		if err != nil {
+		if !req.Force && err != nil {
 			return nil, err
 		}
 
@@ -710,8 +716,10 @@ func (svc *mgmtSvc) PoolDestroy(parent context.Context, req *mgmtpb.PoolDestroyR
 
 		if evStatus != daos.Success {
 			svc.log.Errorf("PoolEvict during pool destroy failed: %s", evStatus)
-			resp.Status = int32(evStatus)
-			return resp, nil
+			if !req.Force {
+				resp.Status = int32(evStatus)
+				return resp, nil
+			}
 		}
 	}
 
@@ -859,7 +867,7 @@ func (svc *mgmtSvc) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq) (
 	if err != nil {
 		return nil, err
 	}
-	req.Tierbytes = ps.Storage.PerRankTierStorage
+	req.TierBytes = ps.Storage.PerRankTierStorage
 
 	svc.log.Debugf("MgmtSvc.PoolExtend forwarding modified req:%+v\n", req)
 
@@ -888,7 +896,20 @@ func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReinteg
 	if err != nil {
 		return nil, err
 	}
-	req.Tierbytes = ps.Storage.PerRankTierStorage
+
+	r := ranklist.Rank(req.Rank)
+
+	m, err := svc.membership.Get(r)
+	if err != nil {
+		return nil, err
+	}
+
+	if m.State&system.AvailableMemberFilter == 0 {
+		invalid := []ranklist.Rank{r}
+		return nil, FaultPoolInvalidRanks(invalid)
+	}
+
+	req.TierBytes = ps.Storage.PerRankTierStorage
 
 	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolReintegrate, req)
 	if err != nil {
@@ -909,6 +930,10 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 		return nil, err
 	}
 
+	if req.QueryMask == 0 {
+		req.QueryMask = uint64(daos.DefaultPoolQueryMask)
+	}
+
 	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolQuery, req)
 	if err != nil {
 		return nil, err
@@ -918,6 +943,9 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal PoolQuery response")
 	}
+
+	// Preserve compatibility with pre-2.6 callers.
+	resp.Leader = resp.SvcLdr
 
 	return resp, nil
 }
@@ -1183,7 +1211,7 @@ func (svc *mgmtSvc) PoolDeleteACL(ctx context.Context, req *mgmtpb.DeleteACLReq)
 
 // ListPools returns a set of all pools in the system.
 func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*mgmtpb.ListPoolsResp, error) {
-	if err := svc.checkReplicaRequest(req); err != nil {
+	if err := svc.checkReplicaRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
 

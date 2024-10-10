@@ -1,0 +1,34 @@
+name: Version checking
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    paths:
+      - 'utils/cq/requirements.txt'
+
+permissions: {}
+
+jobs:
+  upgrade-check:
+    name: Check for updates
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [pylint, yamllint, isort, codespell]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install extra python packages
+        run: python3 -m pip install --requirement utils/cq/requirements.txt
+      - name: Check ${{ matrix.package }} version
+        run: python -m ${{ matrix.package }} --version | tee -a version-pre
+      - name: Upgrade
+        run: pip install --upgrade ${{ matrix.package }}
+      - name: Check ${{ matrix.package }} for version
+        run: python -m  ${{ matrix.package }} --version | diff version-pre -

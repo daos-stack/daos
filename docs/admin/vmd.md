@@ -40,7 +40,7 @@ non-VMD setup to VMD is not possible without reformatting the DAOS storage.
 
 The following is an example of the `lspci` view on a server with eight
 NVMe SSDs, when VMD is _disabled_. This is the status when the devices are
-still bound to the kernel (before running `daos_server storage prepare –n`):
+still bound to the kernel (before running `daos_server nvme prepare`):
 
 ```bash
 [root@nvm0806 ~]# lspci -vv | grep -i nvme
@@ -54,7 +54,7 @@ e5:00.0 Non-Volatile memory controller: Intel Corporation NVMe DC SSD [3DNAND, S
 e6:00.0 Non-Volatile memory controller: Intel Corporation NVMe DC SSD [3DNAND, Sentinel Rock Controller] (prog-if 02 [NVM Express])
 ```
 
-After running `daos_server storage prepare -n`, the NVMe SSDs are bound
+After running `daos_server nvme prepare`, the NVMe SSDs are bound
 to SPDK, and `lspci` or `nvme list` no longer show them.
 
 
@@ -101,7 +101,7 @@ additional NVMe drive slots, but those slots are not populated with NVMe SSDs.
 
 ## NVMe view with VMD enabled (after binding to SPDK)
 
-After `daos_server storage prepare -n` has been run on a VMD-enabled DAOS server,
+After `daos_server nvme prepare` has been run on a VMD-enabled DAOS server,
 the NVMe disks are unbound from the Linux kernel and no longer show up in `lspci` or
 `nvme list` (just like in the non-VMD case).
 However, the VMD controller devices are still visible with `lspci`:
@@ -116,8 +116,8 @@ However, the VMD controller devices are still visible with `lspci`:
 The VMD-managed NVMe backing devices now show up in the DAOS storage scan, with their VMD IDs:
 
 ```bash
-[root@nvm0806 ~]# daos_server storage scan
-Scanning locally-attached storage...
+[root@nvm0806 ~]# daos_server nvme scan
+Scanning locally-attached NVMe storage...
 NVMe PCI       Model          FW Revision Socket ID Capacity
 --------       -----          ----------- --------- --------
 640005:81:00.0 SSDPF2KX038T9L 2CV1L028    0         3.8 TB

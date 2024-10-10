@@ -4,11 +4,9 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import yaml
-
 from apricot import TestWithServers
-
-from general_utils import nodeset_append_suffix
 from dmg_utils import DmgCommand
+from general_utils import nodeset_append_suffix
 
 
 class HarnessConfigTest(TestWithServers):

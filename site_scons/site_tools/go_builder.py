@@ -1,14 +1,13 @@
 """DAOS functions for building go"""
 
-import subprocess  # nosec B404
+import json
 import os
 import re
-import json
+import subprocess  # nosec B404
 
-from SCons.Script import Configure, GetOption, Scanner, Glob, Exit, File
+from SCons.Script import Configure, Dir, Exit, File, GetOption, Glob, Scanner
 
 GO_COMPILER = 'go'
-MIN_GO_VERSION = '1.18.0'
 include_re = re.compile(r'\#include [<"](\S+[>"])', re.M)
 
 
@@ -49,6 +48,37 @@ def _scan_go_file(node, env, _path):
     return includes
 
 
+def get_min_go_version():
+    """Get go minimum version from go.mod"""
+    go_mod_path = os.path.join(Dir('#').abspath, "src", "control", "go.mod")
+    with open(go_mod_path, 'r') as f:
+        for line in f:
+            if line.startswith('go '):  # e.g. "go 1.21"
+                parts = line.split()
+                return get_go_version("go" + parts[1])
+    return None
+
+
+def get_go_version(output):
+    """Capture only the version after 'go'"""
+    ver_re = re.compile(r'go([0-9\.]+)')
+    groups = ver_re.findall(output)
+    if not groups or len(groups) == 0:
+        return None
+    return groups[0]
+
+
+def test_go():
+    """Quick unit test"""
+    # pylint: disable=line-too-long
+    assert "1.20.10" == get_go_version("go version go1.20.10 linux/amd64")
+    assert "1.2.3" == get_go_version("go version go1.2.3 Linux/amd64")
+    assert "1.20.10" == get_go_version("go version go1.20.10-daos linux/amd64")
+    assert "1.20" == get_go_version("go version go1.20rc2.10 linux/amd64")
+    assert "1.22" == get_go_version("go version go1.22-20240109-RC01 cl/597041403 +dcbe772469 X:fieldtrack,boringcrypto linux/amd64")  # noqa: E501
+    assert None is get_go_version("go version goquack-moo linux/amd64")
+
+
 def generate(env):
     """Setup the go compiler"""
 
@@ -61,21 +91,31 @@ def generate(env):
             context.Result(0)
             return 0
 
+        context.Display('Getting minimum go version... ')
+        min_go_version = get_min_go_version()
+        if min_go_version is None:
+            context.Result('no minimum go version found in go.mod')
+            return 0
+        context.Display(min_go_version + '\n')
+
         context.Display(f'Checking {env.d_go_bin} version... ')
         cmd_rc = subprocess.run([env.d_go_bin, 'version'], check=True, stdout=subprocess.PIPE)
-        out = cmd_rc.stdout.decode('utf-8')
+        out = cmd_rc.stdout.decode('utf-8').strip()
         if len(out.split(' ')) < 3:
             context.Result(f'failed to get version from "{out}"')
             return 0
 
         # go version go1.2.3 Linux/amd64
-        go_version = out.split(' ')[2].replace('go', '')
-        if len([x for x, y in
-                zip(go_version.split('.'), MIN_GO_VERSION.split('.'))
-                if int(x) < int(y)]) > 0:
-            context.Result(f'{go_version} is too old (min supported: {MIN_GO_VERSION}) ')
+        go_version = get_go_version(out)
+        if go_version is None:
+            context.Result(f'failed to get version from "{out}"')
             return 0
-        context.Result(str(go_version))
+        if len([x for x, y in zip(go_version.split('.'), min_go_version.split('.'))
+                if int(x) < int(y)]) > 0:
+            context.Result(f'{out} is too old (min supported: {min_go_version}) ')
+            return 0
+
+        context.Result(go_version)
         return 1
 
     env.d_go_bin = env.get("GO_BIN", env.WhereIs(GO_COMPILER))

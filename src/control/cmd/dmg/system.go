@@ -7,7 +7,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"strings"
@@ -59,7 +58,7 @@ func (cmd *leaderQueryCmd) Execute(_ []string) (errOut error) {
 		return errors.New("no configuration loaded")
 	}
 
-	ctx := context.Background()
+	ctx := cmd.MustLogCtx()
 	req := new(control.LeaderQueryReq)
 
 	resp, err := control.LeaderQuery(ctx, cmd.ctlInvoker, req)
@@ -106,7 +105,9 @@ type systemQueryCmd struct {
 	ctlInvokerCmd
 	cmdutil.JSONOutputCmd
 	rankListCmd
-	Verbose bool `long:"verbose" short:"v" description:"Display more member details"`
+	Verbose      bool                  `long:"verbose" short:"v" description:"Display more member details"`
+	NotOK        bool                  `long:"not-ok" description:"Display components in need of administrative investigation"`
+	WantedStates ui.MemberStateSetFlag `long:"with-states" description:"Only show engines in one of a set of comma-separated states"`
 }
 
 // Execute is run when systemQueryCmd activates.
@@ -115,14 +116,19 @@ func (cmd *systemQueryCmd) Execute(_ []string) (errOut error) {
 		errOut = errors.Wrap(errOut, "system query failed")
 	}()
 
+	if cmd.NotOK && !cmd.WantedStates.Empty() {
+		return errors.New("--not-ok and --with-states options cannot be set together")
+	}
 	if err := cmd.validateHostsRanks(); err != nil {
 		return err
 	}
 	req := new(control.SystemQueryReq)
 	req.Hosts.Replace(&cmd.Hosts.HostSet)
 	req.Ranks.Replace(&cmd.Ranks.RankSet)
+	req.NotOK = cmd.NotOK
+	req.WantedStates = cmd.WantedStates.States
 
-	resp, err := control.SystemQuery(context.Background(), cmd.ctlInvoker, req)
+	resp, err := control.SystemQuery(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
 		return err // control api returned an error, disregard response
 	}
@@ -150,7 +156,7 @@ type systemEraseCmd struct {
 }
 
 func (cmd *systemEraseCmd) Execute(_ []string) error {
-	resp, err := control.SystemErase(context.Background(), cmd.ctlInvoker, new(control.SystemEraseReq))
+	resp, err := control.SystemErase(cmd.MustLogCtx(), cmd.ctlInvoker, new(control.SystemEraseReq))
 	if err != nil {
 		return err
 	}
@@ -183,7 +189,7 @@ func (cmd *systemStopCmd) Execute(_ []string) (errOut error) {
 	req.Hosts.Replace(&cmd.Hosts.HostSet)
 	req.Ranks.Replace(&cmd.Ranks.RankSet)
 
-	resp, err := control.SystemStop(context.Background(), cmd.ctlInvoker, req)
+	resp, err := control.SystemStop(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
 		return err // control api returned an error, disregard response
 	}
@@ -224,7 +230,7 @@ func (cmd *baseExcludeCmd) execute(clear bool) error {
 	req.Hosts.Replace(&cmd.Hosts.HostSet)
 	req.Ranks.Replace(&cmd.Ranks.RankSet)
 
-	resp, err := control.SystemExclude(context.Background(), cmd.ctlInvoker, req)
+	resp, err := control.SystemExclude(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
 		return err // control api returned an error, disregard response
 	}
@@ -284,7 +290,7 @@ func (cmd *systemStartCmd) Execute(_ []string) (errOut error) {
 	req.Hosts.Replace(&cmd.Hosts.HostSet)
 	req.Ranks.Replace(&cmd.Ranks.RankSet)
 
-	resp, err := control.SystemStart(context.Background(), cmd.ctlInvoker, req)
+	resp, err := control.SystemStart(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
 		return err // control api returned an error, disregard response
 	}
@@ -323,7 +329,7 @@ func (cmd *systemCleanupCmd) Execute(_ []string) (errOut error) {
 		errOut = errors.Wrap(errOut, "system cleanup failed")
 	}()
 
-	ctx := context.Background()
+	ctx := cmd.MustLogCtx()
 	req := new(control.SystemCleanupReq)
 	req.SetSystem(cmd.config.SystemName)
 	req.Machine = cmd.Args.Machine
@@ -370,7 +376,7 @@ func (cmd *systemSetAttrCmd) Execute(_ []string) error {
 		Attributes: cmd.Args.Attrs.ParsedProps,
 	}
 
-	err := control.SystemSetAttr(context.Background(), cmd.ctlInvoker, req)
+	err := control.SystemSetAttr(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if cmd.JSONOutputEnabled() {
 		return cmd.OutputJSON(nil, err)
 	}
@@ -422,7 +428,7 @@ func (cmd *systemGetAttrCmd) Execute(_ []string) error {
 		Keys: cmd.Args.Attrs.ParsedProps.ToSlice(),
 	}
 
-	resp, err := control.SystemGetAttr(context.Background(), cmd.ctlInvoker, req)
+	resp, err := control.SystemGetAttr(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if cmd.JSONOutputEnabled() {
 		return cmd.OutputJSON(resp, err)
 	}
@@ -459,7 +465,7 @@ func (cmd *systemDelAttrCmd) Execute(_ []string) error {
 		req.Attributes[key] = ""
 	}
 
-	err := control.SystemSetAttr(context.Background(), cmd.ctlInvoker, req)
+	err := control.SystemSetAttr(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if cmd.JSONOutputEnabled() {
 		return cmd.OutputJSON(nil, err)
 	}
@@ -535,7 +541,7 @@ func (cmd *systemSetPropCmd) Execute(_ []string) error {
 		Properties: cmd.Args.Props.ParsedProps,
 	}
 
-	err := control.SystemSetProp(context.Background(), cmd.ctlInvoker, req)
+	err := control.SystemSetProp(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if cmd.JSONOutputEnabled() {
 		return cmd.OutputJSON(nil, err)
 	}
@@ -628,7 +634,7 @@ func (cmd *systemGetPropCmd) Execute(_ []string) error {
 		Keys: cmd.Args.Props.ParsedProps,
 	}
 
-	resp, err := control.SystemGetProp(context.Background(), cmd.ctlInvoker, req)
+	resp, err := control.SystemGetProp(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if cmd.JSONOutputEnabled() {
 		return cmd.OutputJSON(resp.Properties, err)
 	}

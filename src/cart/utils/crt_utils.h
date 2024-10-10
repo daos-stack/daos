@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,7 +11,6 @@
 #include <semaphore.h>
 #include <cart/api.h>
 #include "../crt_internal.h"
-#include "svc.pb-c.h"
 
 #define DBG_PRINT(x...)							\
 	do {								\
@@ -76,7 +75,7 @@ int
 crtu_dc_mgmt_net_cfg_rank_add(const char *name, crt_group_t *group,
 			      crt_context_t *context);
 int
-crtu_dc_mgmt_net_cfg_setenv(const char *name);
+crtu_dc_mgmt_net_cfg_setenv(const char *name, crt_init_options_t *opt);
 
 int
 crtu_cli_start_basic(char *local_group_name, char *srv_group_name,

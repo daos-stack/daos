@@ -1,12 +1,15 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-import time
 import os
+import time
+
+from dfuse_utils import get_dfuse, start_dfuse
 from ior_test_base import IorTestBase
+from run_utils import run_remote
 
 
 class DfuseSpaceCheck(IorTestBase):
@@ -56,8 +59,11 @@ class DfuseSpaceCheck(IorTestBase):
         self.log.info("Free space when test terminated: %s", current_space)
         self.fail("Aggregation did not complete within {} seconds".format(retries * interval))
 
-    def write_multiple_files(self):
+    def write_multiple_files(self, dfuse):
         """Write multiple files.
+
+        Args:
+            dfuse (Dfuse): the dfuse object
 
         Returns:
             int: Total number of files created before going out of space.
@@ -65,10 +71,13 @@ class DfuseSpaceCheck(IorTestBase):
         """
         file_count = 0
         while self.get_nvme_free_space(False) >= self.block_size:
-            file_path = os.path.join(self.dfuse.mount_dir.value, "file{}.txt".format(file_count))
+            file_path = os.path.join(dfuse.mount_dir.value, "file{}.txt".format(file_count))
             write_dd_cmd = "dd if=/dev/zero of={} bs={} count=1".format(file_path, self.block_size)
-            if 0 in self.execute_cmd(write_dd_cmd, fail_on_err=True, display_output=False):
-                file_count += 1
+            result = run_remote(
+                self.log, self.hostlist_clients, write_dd_cmd, verbose=False, timeout=300)
+            if not result.passed:
+                self.fail(f"Error running: {write_dd_cmd}")
+            file_count += 1
 
         return file_count
 
@@ -105,21 +114,24 @@ class DfuseSpaceCheck(IorTestBase):
         # Create a pool, container, and start dfuse
         self.create_pool()
         self.create_cont()
-        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
+        dfuse = get_dfuse(self, self.hostlist_clients)
+        start_dfuse(self, dfuse, self.pool, self.container)
 
         # get nvme space before write
         self.initial_space = self.get_nvme_free_space()
 
         # Create a file as large as we can
-        large_file = os.path.join(self.dfuse.mount_dir.value, 'largefile.txt')
-        self.execute_cmd('touch {}'.format(large_file))
+        large_file = os.path.join(dfuse.mount_dir.value, 'largefile.txt')
+        if not run_remote(self.log, self.hostlist_clients, f'touch {large_file}').passed:
+            self.fail(f"Error creating {large_file}")
         dd_count = (self.initial_space // self.block_size) + 1
         write_dd_cmd = "dd if=/dev/zero of={} bs={} count={}".format(
             large_file, self.block_size, dd_count)
-        self.execute_cmd(write_dd_cmd, False)
+        run_remote(self.log, self.hostlist_clients, write_dd_cmd)
 
         # Remove the file
-        self.execute_cmd('rm -rf {}'.format(large_file))
+        if not run_remote(self.log, self.hostlist_clients, f'rm -rf {large_file}').passed:
+            self.fail(f"Error removing {large_file}")
 
         # Wait for aggregation to complete
         self.wait_for_aggregation()
@@ -129,14 +141,17 @@ class DfuseSpaceCheck(IorTestBase):
         self.pool.set_property("reclaim", "disabled")
 
         # Write small files until we run out of space
-        file_count1 = self.write_multiple_files()
+        file_count1 = self.write_multiple_files(dfuse)
 
         # Enable aggregation
         self.log.info("Enabling aggregation")
         self.pool.set_property("reclaim", "time")
 
         # remove all the small files created above.
-        self.execute_cmd("rm -rf {}".format(os.path.join(self.dfuse.mount_dir.value, '*')))
+        result = run_remote(
+            self.log, self.hostlist_clients, f"rm -rf {os.path.join(dfuse.mount_dir.value, '*')}")
+        if not result.passed:
+            self.fail("Error removing files in mount dir")
 
         # Wait for aggregation to complete after file removal
         self.wait_for_aggregation()
@@ -146,7 +161,7 @@ class DfuseSpaceCheck(IorTestBase):
         self.pool.set_property("reclaim", "disabled")
 
         # Write small files again until we run out of space and verify we wrote the same amount
-        file_count2 = self.write_multiple_files()
+        file_count2 = self.write_multiple_files(dfuse)
 
         self.log.info('file_count1 = %s', file_count1)
         self.log.info('file_count2 = %s', file_count2)

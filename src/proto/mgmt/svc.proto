@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2023 Intel Corporation.
+// (C) Copyright 2018-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,7 +20,7 @@ message DaosResp {
 message GroupUpdateReq {
 	message Engine {
 		uint32 rank = 1;
-		string uri = 2;
+		string uri = 2; // primary URI is the only one group update is concerned with
 		uint64 incarnation = 3;
 	}
 	uint32 map_version = 1;
@@ -32,15 +32,18 @@ message GroupUpdateResp {
 }
 
 message JoinReq {
-	string sys = 1;		// DAOS system name.
-	string uuid = 2;	// Server UUID.
-	uint32 rank = 3;	// Server rank desired, if not MAX_UINT32.
-	string uri = 4;		// Server CaRT base URI (i.e., for context 0).
-	uint32 nctxs = 5;	// Server CaRT context count.
-	string addr = 6;	// Server management address.
-	string srvFaultDomain = 7; // Fault domain for this instance's server
-	uint32 idx = 8;		// Instance index on server node.
-	uint64 incarnation = 9; // rank incarnation
+	string sys = 1;			// DAOS system name.
+	string uuid = 2;		// Server UUID.
+	uint32 rank = 3;		// Server rank desired, if not MAX_UINT32.
+	string uri = 4;			// Server CaRT primary provider URI (i.e., for context 0).
+	uint32 nctxs = 5;		// Server CaRT context count.
+	string addr = 6;		// Server management address.
+	string srvFaultDomain = 7; 	// Fault domain for this instance's server
+	uint32 idx = 8;			// Instance index on server node.
+	uint64 incarnation = 9; 	// rank incarnation
+	repeated string secondary_uris = 10; // URIs for any secondary providers
+	repeated uint32 secondary_nctxs = 11; // CaRT context count for each secondary provider
+	bool check_mode = 12; 		// rank started in check mode
 }
 
 message JoinResp {
@@ -49,6 +52,7 @@ message JoinResp {
 	enum State {
 		IN = 0;		// Server in the system.
 		OUT = 1;	// Server excluded from the system.
+		CHECK = 2;	// Server should start in checker mode.
 	}
 	State state = 3;	// Server state in the system map.
 	string faultDomain = 4; // Fault domain for the instance
@@ -70,18 +74,41 @@ message LeaderQueryResp {
 message GetAttachInfoReq {
 	string sys = 1;		// System name. For daos_agent only.
 	bool all_ranks = 2;	// Return Rank URIs for all ranks.
+	string interface = 3;	// Preferred fabric interface.
+	string domain = 4;	// Preferred fabric domain.
 }
 
 message ClientNetHint {
-	string provider = 1;		// CaRT OFI provider
-	string interface = 2;		// CaRT OFI_INTERFACE
-	string domain = 3;		// CaRT OFI_DOMAIN for given OFI_INTERFACE
-	uint32 crt_ctx_share_addr = 4;	// CaRT CRT_CTX_SHARE_ADDR
+	reserved 4;
+	string provider = 1;		// CaRT provider
+	string interface = 2;		// CaRT D_INTERFACE
+	string domain = 3;		// CaRT D_DOMAIN for given D_INTERFACE
 	uint32 crt_timeout = 5;		// CaRT CRT_TIMEOUT
 	uint32 net_dev_class = 6;	// ARP protocol hardware identifier of the
 					// I/O Engine network interface
-	int32 srv_srx_set = 7;          // Server SRX setting (-1, 0, 1; -1 == unset)
+	int32 srv_srx_set = 7;		// Server SRX setting (-1, 0, 1; -1 == unset)
 	repeated string env_vars = 8;	// Client-side environment variables to set
+	uint32 provider_idx = 9;	// Provider index - anything > 0 is a secondary provider
+}
+
+message FabricInterface {
+	uint32 numa_node = 1;
+	string interface = 2;
+	string domain = 3;
+	string provider = 4;
+}
+
+message FabricInterfaces {
+	uint32 numa_node = 1;
+	repeated FabricInterface ifaces = 2;
+}
+
+message BuildInfo
+{
+	uint32 major = 1;
+	uint32 minor = 2;
+	uint32 patch = 3;
+	string tag   = 4;
 }
 
 message GetAttachInfoResp {
@@ -89,14 +116,20 @@ message GetAttachInfoResp {
 	message RankUri {
 		uint32 rank = 1;
 		string uri = 2;
+		uint32 provider_idx = 3;
+		uint32 num_ctxs = 4;
 	}
-	repeated RankUri rank_uris = 2;	// Rank URIs
+	repeated RankUri rank_uris = 2;	// Rank URIs for the primary provider
 					// These CaRT settings are shared with the
 					// libdaos client to aid in CaRT initialization.
 	repeated uint32 ms_ranks = 3;	// Ranks local to MS replicas
-	ClientNetHint client_net_hint = 4;
-	uint64 data_version = 5;	// Version of the system database.
+	ClientNetHint client_net_hint = 4; // Primary provider hint
+	uint64 data_version = 5; // Version of the system database.
 	string sys = 6;			// Name of the DAOS system
+	repeated RankUri secondary_rank_uris = 7; // Rank URIs for additional providers
+	repeated ClientNetHint secondary_client_net_hints = 8; // Hints for additional providers
+	BuildInfo              build_info = 9; // Structured server build information
+	repeated FabricInterfaces numa_fabric_interfaces = 10; // Usable fabric interfaces by NUMA node (populated by agent)
 }
 
 message PrepShutdownReq {
@@ -123,4 +156,17 @@ message PoolMonitorReq {
 	string poolUUID = 2;	// Pool UUID associated with the Pool Handle
 	string poolHandleUUID = 3; // Pool Handle UUID for the connection
 	string jobid = 4;	// Job ID to associate instance with.
+}
+
+message ClientTelemetryReq
+{
+	string sys     = 1; // DAOS system identifier
+	string jobid   = 2; // Job ID used for client telemetry
+	int32  shm_key = 3; // Client's shared memory segment key
+}
+
+message ClientTelemetryResp
+{
+	int32 status    = 1; // DAOS status code
+	int32 agent_uid = 2; // UID of agent process
 }

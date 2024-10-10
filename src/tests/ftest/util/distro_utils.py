@@ -4,6 +4,7 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import re
+
 # pylint: disable-next=wildcard-import, unused-wildcard-import
 from avocado.utils.distro import *  # noqa: F403
 

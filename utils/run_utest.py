@@ -1,23 +1,24 @@
 #!/usr/bin/env python3
 """
-  (C) Copyright 2023 Intel Corporation.
+  (C) Copyright 2023-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
   Test script for running all DAOS unit tests
 """
+import argparse
+import json
 # pylint: disable=broad-except
 import os
-import sys
-import json
-import argparse
-import shutil
 import re
+import shutil
 import subprocess  # nosec
+import sys
 import tempfile
 import traceback
-from junit_xml import TestSuite, TestCase
+
 import yaml
+from junit_xml import TestCase, TestSuite
 
 
 def check_version():
@@ -151,7 +152,7 @@ def run_cmd(cmd, output_log=None, env=None):
             ret = subprocess.run(cmd, check=False, env=env, stdout=output,
                                  stderr=subprocess.STDOUT)
     else:
-        print(f"RUNNING COMMAND {' '.join(cmd)}")
+        print(f"RUNNING COMMAND {' '.join(cmd)}", flush=True)
         ret = subprocess.run(cmd, check=False, env=env)
     print(f'rc is {ret.returncode}')
     return ret.returncode
@@ -299,11 +300,15 @@ class AIO():
             config_file.write(contents)
 
     def prepare_test(self, name="AIO_1", min_size=4):
-        """Prepare AIO for a test, min_size in GB"""
+        """Prepare AIO for a test, min_size in GB. Erase 4K header if device exists (no truncate
+        opt makes dd behavior consistent across device disks and files enabling unit tests to be
+        run locally with /dev/vdb filt).
+        """
         if self.device is None:
             run_cmd(["dd", "if=/dev/zero", f"of={self.fname}", "bs=1G", f"count={min_size}"])
         else:
-            run_cmd(["sudo", "-E", "dd", "if=/dev/zero", f"of={self.fname}", "bs=4K", "count=1"])
+            run_cmd(["sudo", "-E", "dd", "if=/dev/zero", f"of={self.fname}", "bs=4K", "count=1",
+                     "conv=notrunc"])
         self.create_config(name)
 
     def finalize_test(self):
@@ -327,8 +332,9 @@ class Test():
 
     test_num = 1
 
-    def __init__(self, config, path_info, args):
+    def __init__(self, suite, config, path_info, args):
         """Initialize a test"""
+        self.suite = suite
         self.cmd = self.subst(config["cmd"], config.get("replace_path", {}), path_info)
         self.env = os.environ.copy()
         self.last = []
@@ -434,8 +440,12 @@ class Test():
             cmd = new_cmd
         self.last = cmd
 
-        output_log = os.path.join(self.log_dir(), "output.log")
-        retval = run_cmd(cmd, output_log=output_log, env=self.env)
+        self.env.update({"PMEMOBJ_CONF": "sds.at_create=0"})
+        if self.suite.gha:
+            retval = run_cmd(cmd, env=self.env)
+        else:
+            output_log = os.path.join(self.log_dir(), "output.log")
+            retval = run_cmd(cmd, output_log=output_log, env=self.env)
 
         return retval
 
@@ -454,7 +464,8 @@ class Test():
         """Remove empty log files, they are useless"""
         if not os.path.isdir(log_dir):
             return
-        print(f"Processing logs for {self.name}")
+        if not self.suite.gha:
+            print(f"Processing logs for {self.name}")
         for log in os.listdir(log_dir):
             fname = os.path.join(log_dir, log)
             if not os.path.isfile(fname):
@@ -476,6 +487,7 @@ class Suite():
             raise SuiteConfigError()
         self.sudo = config.get("sudo", None)
         self.memcheck = config.get("memcheck", True)
+        self.gha = config.get("gha", False)
         self.tests = []
         self.has_aio = False
 
@@ -484,7 +496,7 @@ class Suite():
 
         for test in config["tests"]:
             try:
-                real_test = Test(test, path_info, args)
+                real_test = Test(self, test, path_info, args)
             except TestSkipped:
                 continue
             if real_test.needs_aio():
@@ -519,6 +531,11 @@ class Suite():
         if args.memcheck and not self.memcheck:
             print(f"Skipped  suite {self.name}, valgrind not supported")
             raise SuiteSkipped()
+
+        if args.gha and not self.gha:
+            print(f"Skipped  suite {self.name}, running on GitHub Actions")
+            raise SuiteSkipped()
+
         return False
 
     def needs_aio(self):
@@ -537,7 +554,10 @@ class Suite():
 
     def run_suite(self, args, aio):
         """Run the test suite"""
-        print(f"\nRunning suite {self.name}")
+        if self.gha:
+            print(f"::group:: {self.name}")
+        else:
+            print(f"\nRunning suite {self.name}")
         results = BaseResults()
 
         if self.needs_aio() and aio is not None:
@@ -570,6 +590,8 @@ class Suite():
 
         if self.needs_aio() and aio is not None:
             aio.finalize()
+        if self.gha:
+            print("::endgroup::")
         return results
 
 
@@ -598,6 +620,7 @@ def get_args():
     """Parse the arguments"""
     parser = argparse.ArgumentParser(description='Run DAOS unit tests')
     parser.add_argument('--memcheck', action='store_true', help='Run tests with Valgrind memcheck')
+    parser.add_argument('--gha', action='store_true', help='Run tests tagged for GitHub Actions')
     parser.add_argument('--test_filter', default=None,
                         help='Regular expression to select tests to run')
     parser.add_argument('--suite_filter', default=None,
@@ -650,6 +673,9 @@ def main():
     with open(path_info["UTEST_YAML"], "r", encoding="UTF-8") as file:
         all_suites = yaml.safe_load(file)
 
+    if args.gha:
+        print("::group:: Preamble", flush=True)
+
     for suite_yaml in all_suites:
         try:
             real_suite = Suite(path_info, suite_yaml, args)
@@ -663,6 +689,9 @@ def main():
             raise exception
         suites.append(real_suite)
     results = Results(args.memcheck)
+    if args.gha:
+        print("::endgroup::")
+
     run_suites(args, suites, results, aio=aio)
 
     results.print_results()

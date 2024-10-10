@@ -100,10 +100,163 @@ Refer to the example configuration file
 [`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
 for latest information and examples.
 
+#### MD-on-SSD Configuration
+
+To enable MD-on-SSD, the Control-Plane-Metadata ('control_metadata') global section of the
+configuration file
+[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+needs to specify a persistent location to store control-plane specific metadata (which would be
+stored on PMem in non MD-on-SSD mode). Either set 'control_metadata:path' to an existing (mounted)
+local filesystem path or set 'control_metadata:device' to a storage partition which can be mounted
+and formatted by the control-plane during storage format. In the latter case when specifying a
+device the path parameter value will be used as the mountpoint path.
+
+The MD-on-SSD code path will only be used if it is explicitly enabled by specifying the new
+'bdev_role' property for the NVMe storage tier(s) in the 'daos_server.yml' file. There are three
+types of 'bdev_role': wal, meta, and data. Each role must be assigned to exactly one NVMe tier.
+Depending on the number of NVMe SSDs per DAOS engine there may be one, two or three NVMe tiers with
+different 'bdev_role' assignments.
+
+For a complete server configuration file example enabling MD-on-SSD, see
+[`daos_server_mdonssd.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml).
+
+Below are four different 'daos_server.yml' storage configuration snippets that represent scenarios
+for a DAOS engine with four NVMe SSDs and MD-on-SSD enabled.
+
+
+1. One NVMe tier where four SSDs are each assigned wal, meta and data roles:
+
+```bash
+storage:
+-
+  class: ram
+  scm_mount: /mnt/dram1
+-
+  class: nvme
+  bdev_roles:
+  - wal
+  - meta
+  - data
+  bdev_list:
+  - "0000:e3:00.0"
+  - "0000:e4:00.0"
+  - "0000:e5:00.0"
+  - "0000:e6:00.0"
+```
+
+This example shows the typical use case for a DAOS server with a small number of NVMe SSDs. With
+only four or five NVMe SSDs per engine, it is natural to assign all three roles to all NVMe SSDs
+configured as a single NVMe tier.
+
+
+2. Two NVMe tiers, one SSD assigned wal role (tier-1) and three SSDs assigned both meta and data
+   roles (tier-2):
+
+```bash
+storage:
+-
+  class: ram
+  scm_mount: /mnt/dram1
+-
+  class: nvme
+  bdev_roles:
+  - wal
+  bdev_list:
+  - "0000:e3:00.0"
+-
+  class: nvme
+  bdev_roles:
+  - meta
+  - data
+  bdev_list:
+  - "0000:e4:00.0"
+  - "0000:e5:00.0"
+  - "0000:e6:00.0"
+```
+
+This example shows where one NVMe SSD is dedicated for the wal, while the remaining three NVMe SSDs
+are assigned to hold the VOS checkpoints (meta) and the user data. Using two NVMe tiers makes it
+possible to use a higher endurance and higher performance SSD for the wal tier. It should be noted
+that the performance of a single high-performance SSD may still be lower than the aggregate
+performance of multiple lower-performance SSDs in the previous scenario.
+
+
+3. Two NVMe tiers, one SSD assigned both wal and meta roles (tier-1) and three SSDs assigned both
+   meta and data roles (tier-2):
+
+```bash
+storage:
+-
+  class: ram
+  scm_mount: /mnt/dram1
+-
+  class: nvme
+  bdev_roles:
+  - wal
+  - meta
+  bdev_list:
+  - "0000:e3:00.0"
+-
+  class: nvme
+  bdev_roles:
+  - data
+  bdev_list:
+  - "0000:e4:00.0"
+  - "0000:e5:00.0"
+  - "0000:e6:00.0"
+```
+
+This example uses two NVMe tiers but co-locates the wal and meta blobs on the same tier. This may be
+a better choice than co-locating meta and data if the endurance of the data NVMe SSDs is too low for
+the relatively frequent VOS checkpointing. It should be noted that performance may be impacted by
+reducing the number of NVMe SSDs available for VOS checkpointing from three to one.
+
+The other option to use two NVMe tiers would be to co-locate wal and data and dedicate the other
+tier for meta but this configuration is invalid. Sharing wal and data roles on the same tier is not
+allowed.
+
+
+4. Three NVMe tiers, one for each role (each device will have a single distinct role), one SSD
+   assigned wal role (tier-1), one SSD assigned meta role (tier-2) and two SSDs assigned data role
+   (tier-3):
+
+```bash
+storage:
+-
+  class: ram
+  scm_mount: /mnt/dram1
+-
+  class: nvme
+  bdev_roles:
+  - wal
+  bdev_list:
+  - "0000:e3:00.0"
+-
+  class: nvme
+  bdev_roles:
+  - meta
+  bdev_list:
+  - "0000:e4:00.0"
+-
+  class: nvme
+  bdev_roles:
+  - data
+  bdev_list:
+  - "0000:e5:00.0"
+  - "0000:e6:00.0"
+```
+
+Using three NVMe tiers (one per role) is not reasonable when there are only four NVMe SSDs per
+engine but maybe practical with a larger number of SSDs and so illustrated here for completeness.
+
 #### Auto Generate Configuration File
 
 DAOS can attempt to produce a server configuration file that makes optimal use of hardware on a
 given set of hosts either through the `dmg` or `daos_server` tools.
+
+To generate an MD-on-SSD configurations set both '--control-metadata-path' and '--use-tmpfs-scm'
+options as detailed below. Note that due to the number of variables considered when generating a
+configuration automatically the result may not be the most optimal in all situations.
 
 ##### Generating Configuration File Using daos_server Tool
 
@@ -123,6 +276,7 @@ Application Options:
       --allow-proxy                         Allow proxy configuration via environment
   -o, --config=                             Server config file path
   -b, --debug                               Enable debug output
+  -j, --json                                Enable JSON output
   -J, --json-logging                        Enable JSON-formatted log output
       --syslog                              Enable logging to syslog
 
@@ -137,9 +291,15 @@ Help Options:
                                             config file output. If unset then the value will be set to the
                                             number of NUMA nodes on storage hosts in the DAOS system.
       -s, --scm-only                        Create a SCM-only config without NVMe SSDs.
-      -c, --net-class=[ethernet|infiniband] Set the network class to be used (default: infiniband)
-      -p, --net-provider=                   Set the network provider to be used
+      -c, --net-class=[ethernet|infiniband] Set the network device class to be used (default: infiniband)
+      -p, --net-provider=                   Set the network fabric provider to be used
       -t, --use-tmpfs-scm                   Use tmpfs for scm rather than PMem
+      -m, --control-metadata-path=          External storage path to store control metadata. Set this to
+                                            a persistent location and specify --use-tmpfs-scm to create an
+                                            MD-on-SSD config
+      -f, --fabric-ports=                   Allow custom fabric interface ports to be specified for each engine
+                                            config section. Comma separated port numbers, one per engine
+          --skip-prep                       Skip preparation of devices during scan.
 ```
 
 Note the `--helper-log-file` which can be used to provide a log file path to output debug level
@@ -159,8 +319,6 @@ Usage:
 
 Application Options:
       --allow-proxy                         Allow proxy configuration via environment
-  -l, --host-list=                          A comma separated list of addresses <ipv4addr/hostname> to
-                                            connect to
   -i, --insecure                            Have dmg attempt to connect without certificates
   -d, --debug                               Enable debug output
       --log-file=                           Log command output to the specified file
@@ -172,15 +330,21 @@ Help Options:
   -h, --help                                Show this help message
 
 [generate command options]
-      -a, --access-points=                  Comma separated list of access point addresses
-                                            <ipv4addr/hostname> (default: localhost)
+      -l, --host-list=                      A comma separated list of addresses <ipv4addr/hostname> to connect to
+      -a, --access-points=                  Comma separated list of access point addresses <ipv4addr/hostname>
+                                            to host management service (default: localhost)
       -e, --num-engines=                    Set the number of DAOS Engine sections to be populated in the
                                             config file output. If unset then the value will be set to the
                                             number of NUMA nodes on storage hosts in the DAOS system.
       -s, --scm-only                        Create a SCM-only config without NVMe SSDs.
-      -c, --net-class=[ethernet|infiniband] Set the network class to be used (default: infiniband)
-      -p, --net-provider=                   Set the network provider to be used
+      -c, --net-class=[ethernet|infiniband] Set the network device class to be used (default: infiniband)
+      -p, --net-provider=                   Set the network fabric provider to be used
       -t, --use-tmpfs-scm                   Use tmpfs for scm rather than PMem
+      -m, --control-metadata-path=          External storage path to store control metadata. Set this to
+                                            a persistent location and specify --use-tmpfs-scm to create an
+                                            MD-on-SSD config
+      -f, --fabric-ports=                   Allow custom fabric interface ports to be specified for each engine
+                                            config section. Comma separated port numbers, one per engine
 ```
 
 The `daos_server` service must be running on the remote storage servers and as such a minimal
@@ -216,7 +380,7 @@ Each generated engine section will specify a SCM storage tier (PMem or tmpfs) in
 more NVMe storage tiers. All hardware components specified in an engine config section should be
 bound to the same NUMA node (PMem bdev, SSDs and host fabric interface).
 
-- `--scm-only` request that a config without NVMe should be generated. This flag will override the
+- `--scm-only` requests that a config without NVMe should be generated. This flag will override the
 command's normal behavior and should be used only in circumstances where NVMe SSDs are unavailable
 or not balanced across NUMA nodes and multiple engines are required per host. Note that DAOS
 performance will be suboptimal without NVMe SSDs.
@@ -224,7 +388,6 @@ performance will be suboptimal without NVMe SSDs.
 - `--net-class` selects a specific network device class, options are `ethernet` or `infiniband`.
 If not set explicitly on the commandline, default is `infiniband`. This option will alter the
 command's behavior and should only be used when normal command operation is not sufficient.
-Note that DAOS performance may be suboptimal if ethernet devices are used instead of infiniband.
 
 - `--net-provider` selects a specific network provider , this can be set to any provider string
 supported on the hosts e.g. ofi+tcp. This option will alter the command's behavior and should only
@@ -232,8 +395,15 @@ be used when normal command operation is not sufficient. Note that specifying a 
 prevent the command from selecting the best available.
 
 - `--use-tmpfs-scm` will produce a config specifying RAM-disk (tmpfs) devices in the first (SCM)
-storage tier. The RAM-disk sizes will be calculated based on using 75% of the host's total
-memory (as reported by `/proc/meminfo`).
+storage tier. The RAM-disk sizes will be calculated based on the host's total memory (as reported
+by `/proc/meminfo`).
+
+- `--control-metadata-path` specifies a persistent location to store control-plane metadata which
+allows MD-on-SSD DAOS deployments to survive without data loss over 'daos_server' restarts. If
+this option is set then a MD-on-SSD config will be generated.
+
+- `--fabric-ports` enables custom port numbers to be assigned to each engine's fabric settings.
+Comma separated list must contain enough numbers to cover all engines generated in config.
 
 The text generated by the command and output to stdout can be copied and used as the server config
 file on relevant hosts (normally by copying to `/etc/daos/daos_server.yml` and (re)starting service).
@@ -353,10 +523,15 @@ SCM format required on instance 0
 SCM format required on instance 1
 ```
 
-To format the storage and start the engine processes, we run the following on a separate
+The `daos_server start --auto-format` option has now been added to allow automatic formatting on
+startup in the event that externally triggered format is not desirable. When using this option
+the storage format will occur on `daos_server` startup without any user intervention assuming the
+supplied config file is valid.
+
+To manually format the storage and start the engine processes, we run the following on a separate
 terminal window and verify that engine processes (ranks) have registered with the system.
-Note the subsequent system query command may not show ranks started immediately after the
-storage format command returns so leave a short period before invoking.
+Note the subsequent system query command may not show ranks started immediately after the storage
+format command returns so it is recommended to leave a short delay (~5s) before invoking.
 
 ```bash
 [user@wolf-226 daos]$ install/bin/dmg storage format -i
@@ -370,8 +545,7 @@ Rank  State
 [0-1] Joined
 ```
 
-The format of storage enables the `daos_server` service started before to format the storage and
-launch the engine processes.
+Engine I/O processes will be launched by the `daos_server` service following storage format.
 
 ```bash
 Instance 0: starting format of nvme block devices 0000:2b:00.0,0000:2c:00.0,0000:2d:00.0,0000:2e:00.0,0000:63:00.0,0000:64:00.0,0000:65:00.0,0000:66:00.0
@@ -1356,6 +1530,12 @@ per four target threads, for example `targets: 16` and `nr_xs_helpers: 4`.
 The server should have sufficiently many physical cores to support the
 number of targets plus the additional service threads.
 
+The 'targets:' and 'nr_xs_helpers:' requirement are mandatory, if the number
+of physical cores are not enough it will fail the starting of the daos engine
+(notes that 2 cores reserved for system service), or configures with ENV
+"DAOS_TARGET_OVERSUBSCRIBE=1" to force starting daos engine (possibly hurts
+performance as multiple XS compete on same core).
+
 
 ## Storage Formatting
 
@@ -1382,18 +1562,18 @@ When the command is run, the pmem kernel devices created on SCM/PMem regions are
 formatted and mounted based on the parameters provided in the server config file.
 
 - `scm_mount` specifies the location of the mountpoint to create.
-- `scm_class` can be set to `ram` to use a tmpfs in the situation that no SCM/PMem
+- `class` can be set to `ram` to use a tmpfs in the situation that no SCM/PMem
   is available (`scm_size` dictates the size of tmpfs in GB), when set to `dcpm` the device
   specified under `scm_list` will be mounted at `scm_mount` path.
 
 ### NVMe Format
 
 When the command is run, NVMe SSDs are formatted and set up to be used by DAOS
-based on the parameters provided in the server config file.
+based on the parameters provided in the server config file engine storage sections.
 
-`bdev_class` can be set to `nvme` to use actual NVMe devices with SPDK for DAOS
+`class` can be set to `nvme` to use actual NVMe devices with SPDK for DAOS
 storage.
-Other `bdev_class` values can be used for emulation of NVMe storage as specified
+Other `class` values can be used for emulation of NVMe storage as specified
 in the server config file.
 `bdev_list` identifies devices to use with a list of PCI addresses (this can be
 populated after viewing results from `storage scan` command).

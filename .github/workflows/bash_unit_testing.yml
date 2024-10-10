@@ -1,0 +1,32 @@
+name: bash Unit Testing
+
+on:
+  pull_request:
+
+concurrency:
+  group: bash-unit-test-${{ github.head_ref  || github.run_id }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -ueo pipefail {0}
+
+permissions: {}
+
+jobs:
+  Test-gha-functions:
+    name: Tests in ci/gha_functions.sh
+    if: github.repository == 'daos-stack/daos'
+    runs-on: [self-hosted, light]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Checkout bash_unit project
+        uses: actions/checkout@v4
+        with:
+          repository: 'pgrange/bash_unit'
+          path: bash_unit
+      - name: Unit testing with bash_unit
+        run: FORCE_COLOR=true ./bash_unit/bash_unit ci/gha_functions.sh

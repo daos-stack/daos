@@ -106,8 +106,7 @@ func (r *Rank) RemoveFromList(ranks []Rank) []Rank {
 	return rankList
 }
 
-// RanksToUint32 is a convenience method to convert this
-// slice of system ranks to a slice of uint32 ranks.
+// RanksToUint32 is a convenience method to convert a slice of system ranks to a slice of uint32s.
 func RanksToUint32(in []Rank) []uint32 {
 	out := make([]uint32, len(in))
 	for i := range in {
@@ -117,8 +116,7 @@ func RanksToUint32(in []Rank) []uint32 {
 	return out
 }
 
-// RanksFromUint32 is a convenience method to convert this
-// slice of uint32 ranks to a slice of system ranks.
+// RanksFromUint32 is a convenience method to convert a slice of uint32s to a slice of system ranks.
 func RanksFromUint32(in []uint32) []Rank {
 	out := make([]Rank, len(in))
 	for i := range in {

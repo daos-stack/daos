@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -314,6 +314,11 @@ exit:
 	return rc;
 }
 
+static const struct lru_callbacks lru_cont_cbs = {
+	.lru_on_alloc = vos_lru_alloc_track,
+	.lru_on_free = vos_lru_free_track,
+};
+
 /**
  * Open a container within a VOSP
  */
@@ -371,7 +376,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	cont->vc_ts_idx = &cont->vc_cont_df->cd_ts_idx;
 	cont->vc_dtx_active_hdl = DAOS_HDL_INVAL;
 	cont->vc_dtx_committed_hdl = DAOS_HDL_INVAL;
-	if (umoff_is_null(cont->vc_cont_df->cd_dtx_committed_head))
+	if (UMOFF_IS_NULL(cont->vc_cont_df->cd_dtx_committed_head))
 		cont->vc_cmt_dtx_indexed = 1;
 	else
 		cont->vc_cmt_dtx_indexed = 0;
@@ -395,8 +400,8 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 
 	rc = lrua_array_alloc(&cont->vc_dtx_array, DTX_ARRAY_LEN, DTX_ARRAY_NR,
 			      sizeof(struct vos_dtx_act_ent),
-			      LRU_FLAG_REUSE_UNIQUE,
-			      NULL, NULL);
+			      LRU_FLAG_REUSE_UNIQUE, &lru_cont_cbs,
+			      vos_tls_get(cont->vc_pool->vp_sysdb));
 	if (rc != 0) {
 		D_ERROR("Failed to create DTX active array: rc = "DF_RC"\n",
 			DP_RC(rc));
@@ -483,7 +488,7 @@ vos_cont_close(daos_handle_t coh)
 
 	cont->vc_open_count--;
 	if (cont->vc_open_count == 0)
-		vos_obj_cache_evict(vos_obj_cache_current(cont->vc_pool->vp_sysdb), cont);
+		vos_obj_cache_evict(cont);
 
 	D_DEBUG(DB_TRACE, "Close cont "DF_UUID", open count: %d\n",
 		DP_UUID(cont->vc_id), cont->vc_open_count);

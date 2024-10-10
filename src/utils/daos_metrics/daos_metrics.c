@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,8 +10,9 @@
 
 #include <getopt.h>
 #include <string.h>
-#include "gurt/telemetry_common.h"
-#include "gurt/telemetry_consumer.h"
+#include <daos/metrics.h>
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_consumer.h>
 
 static void
 print_usage(const char *prog_name)
@@ -52,56 +53,115 @@ print_usage(const char *prog_name)
 	       "--gauge, -g\n"
 	       "\tInclude gauges\n"
 	       "--read, -r\n"
+	       "\tInclude timestamp of when metric was read\n"
 	       "--reset, -e\n"
-	       "\tInclude timestamp of when metric was read\n",
+	       "\tReset all metrics to zero\n"
+	       "--jobid, -j\n"
+	       "\tDisplay metrics of the specified job\n",
 	       prog_name);
+}
+
+static int
+process_metrics(int metric_id, char *dirname, int format, int filter, int extra_descriptors,
+		int delay, int num_iter, d_tm_iter_cb_t iter_cb, void *arg)
+{
+	struct d_tm_node_t	*root = NULL;
+	struct d_tm_node_t	*node = NULL;
+	struct d_tm_context	*ctx = NULL;
+	int                      iteration = 0;
+	int                      rc        = 0;
+
+	ctx = d_tm_open(metric_id);
+	if (!ctx)
+		D_GOTO(out, rc = 0);
+
+	root = d_tm_get_root(ctx);
+	if (!root)
+		D_GOTO(out, rc = -DER_NONEXIST);
+
+	if (strncmp(dirname, "/", D_TM_MAX_NAME_LEN) != 0) {
+		node = d_tm_find_metric(ctx, dirname);
+		if (node != NULL) {
+			root = node;
+		} else {
+			printf("No metrics found at: '%s'\n", dirname);
+			D_GOTO(out, rc = 0);
+		}
+	}
+
+	if (format == D_TM_CSV)
+		d_tm_print_field_descriptors(extra_descriptors, (FILE *)arg);
+
+	while ((num_iter == 0) || (iteration < num_iter)) {
+		d_tm_iterate(ctx, root, 0, filter, NULL, format, extra_descriptors, iter_cb, arg);
+		iteration++;
+		sleep(delay);
+		if (format == D_TM_STANDARD)
+			printf("\n\n");
+	}
+
+out:
+	if (ctx != NULL)
+		d_tm_close(&ctx);
+	return rc;
+}
+
+static void
+iter_print(struct d_tm_context *ctx, struct d_tm_node_t *node, int level, char *path, int format,
+	   int opt_fields, void *arg)
+{
+	d_tm_print_node(ctx, node, level, path, format, opt_fields, (FILE *)arg);
+}
+
+static void
+iter_reset(struct d_tm_context *ctx, struct d_tm_node_t *node, int level, char *path, int format,
+	   int opt_fields, void *arg)
+{
+	d_tm_reset_node(ctx, node, level, path, format, opt_fields, (FILE *)arg);
 }
 
 int
 main(int argc, char **argv)
 {
-	struct d_tm_node_t	*root = NULL;
-	struct d_tm_node_t	*node = NULL;
-	struct d_tm_context	*ctx = NULL;
 	char			dirname[D_TM_MAX_NAME_LEN] = {0};
+	char                    jobid[D_TM_MAX_NAME_LEN]   = {0};
 	bool			show_meta = false;
 	bool			show_when_read = false;
 	bool			show_type = false;
-	int			srv_idx = 0;
-	int			iteration = 0;
+	int                     srv_idx                    = 0;
 	int			num_iter = 1;
 	int			filter = 0;
 	int			delay = 1;
 	int			format = D_TM_STANDARD;
 	int			opt;
 	int			extra_descriptors = 0;
-	uint32_t		ops = 0;
+	d_tm_iter_cb_t          iter_cb           = NULL;
+	int                     rc;
 
 	sprintf(dirname, "/");
 
 	/********************* Parse user arguments *********************/
 	while (1) {
-		static struct option long_options[] = {
-			{"srv_idx", required_argument, NULL, 'S'},
-			{"counter", no_argument, NULL, 'c'},
-			{"csv", no_argument, NULL, 'C'},
-			{"duration", no_argument, NULL, 'd'},
-			{"timestamp", no_argument, NULL, 't'},
-			{"snapshot", no_argument, NULL, 's'},
-			{"gauge", no_argument, NULL, 'g'},
-			{"iterations", required_argument, NULL, 'i'},
-			{"path", required_argument, NULL, 'p'},
-			{"delay", required_argument, NULL, 'D'},
-			{"meta", no_argument, NULL, 'M'},
-			{"type", no_argument, NULL, 'T'},
-			{"read", no_argument, NULL, 'r'},
-			{"reset", no_argument, NULL, 'e'},
-			{"help", no_argument, NULL, 'h'},
-			{NULL, 0, NULL, 0}
-		};
+		static struct option long_options[] = {{"srv_idx", required_argument, NULL, 'S'},
+						       {"counter", no_argument, NULL, 'c'},
+						       {"csv", no_argument, NULL, 'C'},
+						       {"duration", no_argument, NULL, 'd'},
+						       {"timestamp", no_argument, NULL, 't'},
+						       {"snapshot", no_argument, NULL, 's'},
+						       {"gauge", no_argument, NULL, 'g'},
+						       {"iterations", required_argument, NULL, 'i'},
+						       {"path", required_argument, NULL, 'p'},
+						       {"delay", required_argument, NULL, 'D'},
+						       {"meta", no_argument, NULL, 'M'},
+						       {"meminfo", no_argument, NULL, 'm'},
+						       {"type", no_argument, NULL, 'T'},
+						       {"read", no_argument, NULL, 'r'},
+						       {"reset", no_argument, NULL, 'e'},
+						       {"jobid", required_argument, NULL, 'j'},
+						       {"help", no_argument, NULL, 'h'},
+						       {NULL, 0, NULL, 0}};
 
-		opt = getopt_long_only(argc, argv, "S:cCdtsgi:p:D:MTrhe",
-				       long_options, NULL);
+		opt = getopt_long_only(argc, argv, "S:cCdtsgi:p:D:MmTrj:he", long_options, NULL);
 		if (opt == -1)
 			break;
 
@@ -136,6 +196,9 @@ main(int argc, char **argv)
 		case 'M':
 			show_meta = true;
 			break;
+		case 'm':
+			filter |= D_TM_MEMINFO;
+			break;
 		case 'T':
 			show_type = true;
 			break;
@@ -146,7 +209,10 @@ main(int argc, char **argv)
 			delay = atoi(optarg);
 			break;
 		case 'e':
-			ops |= D_TM_ITER_RESET;
+			iter_cb = iter_reset;
+			break;
+		case 'j':
+			snprintf(jobid, sizeof(jobid), "%s", optarg);
 			break;
 		case 'h':
 		case '?':
@@ -156,36 +222,12 @@ main(int argc, char **argv)
 		}
 	}
 
-	if (ops == 0)
-		ops |= D_TM_ITER_READ;
+	if (iter_cb == NULL)
+		iter_cb = iter_print;
 
 	if (filter == 0)
-		filter = D_TM_COUNTER | D_TM_DURATION | D_TM_TIMESTAMP |
+		filter = D_TM_COUNTER | D_TM_DURATION | D_TM_TIMESTAMP | D_TM_MEMINFO |
 			 D_TM_TIMER_SNAPSHOT | D_TM_GAUGE | D_TM_STATS_GAUGE;
-
-	ctx = d_tm_open(srv_idx);
-	if (!ctx)
-		goto failure;
-
-	root = d_tm_get_root(ctx);
-	if (!root)
-		goto failure;
-
-	if (strncmp(dirname, "/", D_TM_MAX_NAME_LEN) != 0) {
-		node = d_tm_find_metric(ctx, dirname);
-		if (node != NULL) {
-			root = node;
-		} else {
-			printf("No metrics found at: '%s'\n", dirname);
-			exit(0);
-		}
-	}
-
-	if (format == D_TM_CSV)
-		filter &= ~D_TM_DIRECTORY;
-	else
-		filter |= D_TM_DIRECTORY;
-
 
 	if (show_when_read)
 		extra_descriptors |= D_TM_INCLUDE_TIMESTAMP;
@@ -195,27 +237,24 @@ main(int argc, char **argv)
 		extra_descriptors |= D_TM_INCLUDE_TYPE;
 
 	if (format == D_TM_CSV)
-		d_tm_print_field_descriptors(extra_descriptors, stdout);
+		filter &= ~D_TM_DIRECTORY;
+	else
+		filter |= D_TM_DIRECTORY;
 
-	while ((num_iter == 0) || (iteration < num_iter)) {
-		d_tm_iterate(ctx, root, 0, filter, NULL, format, extra_descriptors,
-			     ops, stdout);
-		iteration++;
-		sleep(delay);
-		if (format == D_TM_STANDARD)
-			printf("\n\n");
+	if (strlen(jobid) > 0) {
+		srv_idx = DC_TM_JOB_ROOT_ID;
+		snprintf(dirname, sizeof(dirname), "%s", jobid);
 	}
 
-	d_tm_close(&ctx);
-	return 0;
-
-failure:
-	printf("Unable to attach to the shared memory for the server index: %d"
-	       "\nMake sure to run the I/O Engine with the same index to "
-	       "initialize the shared memory and populate it with metrics.\n"
-	       "Verify user/group settings match those that started the I/O "
-	       "Engine.\n",
-	       srv_idx);
-	d_tm_close(&ctx);
-	return -1;
+	/* fetch metrics from server side */
+	rc = process_metrics(srv_idx, dirname, format, filter, extra_descriptors, delay, num_iter,
+			     iter_cb, stdout);
+	if (rc)
+		printf("Unable to attach to the shared memory for the server index: %d"
+		       "\nMake sure to run the I/O Engine with the same index to "
+		       "initialize the shared memory and populate it with metrics.\n"
+		       "Verify user/group settings match those that started the I/O "
+		       "Engine.\n",
+		       srv_idx);
+	return rc != 0 ? -1 : 0;
 }

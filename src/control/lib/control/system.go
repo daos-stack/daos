@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -109,14 +109,17 @@ type SystemJoinReq struct {
 	unaryRequest
 	msRequest
 	retryableRequest
-	ControlAddr *net.TCPAddr
-	UUID        string
-	Rank        ranklist.Rank
-	URI         string
-	NumContexts uint32              `json:"Nctxs"`
-	FaultDomain *system.FaultDomain `json:"SrvFaultDomain"`
-	InstanceIdx uint32              `json:"Idx"`
-	Incarnation uint64              `json:"Incarnation"`
+	ControlAddr          *net.TCPAddr
+	UUID                 string
+	Rank                 ranklist.Rank
+	URI                  string
+	SecondaryURIs        []string            `json:"secondary_uris"`
+	NumContexts          uint32              `json:"nctxs"`
+	NumSecondaryContexts []uint32            `json:"secondary_nctxs"`
+	FaultDomain          *system.FaultDomain `json:"srv_fault_domain"`
+	InstanceIdx          uint32              `json:"idx"`
+	Incarnation          uint64              `json:"incarnation"`
+	CheckMode            bool                `json:"check_mode"`
 }
 
 // MarshalJSON packs SystemJoinResp struct into a JSON message.
@@ -141,6 +144,30 @@ type SystemJoinResp struct {
 	State      system.MemberState
 	LocalJoin  bool
 	MapVersion uint32 `json:"map_version"`
+}
+
+func (resp *SystemJoinResp) UnmarshalJSON(data []byte) error {
+	type fromJSON SystemJoinResp
+	aux := &struct {
+		State mgmtpb.JoinResp_State `json:"state"`
+		*fromJSON
+	}{
+		fromJSON: (*fromJSON)(resp),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	switch aux.State {
+	case mgmtpb.JoinResp_IN:
+		resp.State = system.MemberStateJoined
+	case mgmtpb.JoinResp_OUT:
+		resp.State = system.MemberStateExcluded
+	case mgmtpb.JoinResp_CHECK:
+		resp.State = system.MemberStateCheckerStarted
+	}
+
+	return nil
 }
 
 // SystemJoin will attempt to join a new member to the DAOS system.
@@ -185,13 +212,30 @@ type SystemQueryReq struct {
 	msRequest
 	sysRequest
 	retryableRequest
-	FailOnUnavailable bool // Fail without retrying if the MS is unavailable.
+	FailOnUnavailable bool               // Fail without retrying if the MS is unavailable
+	NotOK             bool               // Only show engines not in a joined state
+	WantedStates      system.MemberState // Bitmask of desired states
+}
+
+func (req *SystemQueryReq) getStateMask() (system.MemberState, error) {
+	switch {
+	case req.NotOK:
+		return system.AllMemberFilter &^ system.MemberStateJoined, nil
+	case req.WantedStates == 0:
+		return system.AllMemberFilter, nil
+	case req.WantedStates > 0 && req.WantedStates <= system.AllMemberFilter:
+		return req.WantedStates, nil
+	default:
+		return system.MemberStateUnknown, errors.Errorf("invalid member states bitmask %x",
+			int(req.WantedStates))
+	}
 }
 
 // SystemQueryResp contains the request response.
 type SystemQueryResp struct {
 	sysResponse
-	Members system.Members `json:"members"`
+	Members   system.Members `json:"members"`
+	Providers []string       `json:"providers"`
 }
 
 // UnmarshalJSON unpacks JSON message into SystemQueryResp struct.
@@ -235,6 +279,12 @@ func SystemQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemQueryRe
 	pbReq.Hosts = req.Hosts.String()
 	pbReq.Ranks = req.Ranks.String()
 	pbReq.Sys = req.getSystem(rpcClient)
+
+	mask, err := req.getStateMask()
+	if err != nil {
+		return nil, errors.Wrap(err, "calculating member state bitmask")
+	}
+	pbReq.StateMask = uint32(mask)
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemQuery(ctx, pbReq)
@@ -331,11 +381,11 @@ func SystemStart(ctx context.Context, rpcClient UnaryInvoker, req *SystemStartRe
 		return nil, errors.Errorf("nil %T request", req)
 	}
 
-	pbReq := new(mgmtpb.SystemStartReq)
-	pbReq.Hosts = req.Hosts.String()
-	pbReq.Ranks = req.Ranks.String()
-	pbReq.Sys = req.getSystem(rpcClient)
-
+	pbReq := &mgmtpb.SystemStartReq{
+		Hosts: req.Hosts.String(),
+		Ranks: req.Ranks.String(),
+		Sys:   req.getSystem(rpcClient),
+	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemStart(ctx, pbReq)
 	})
@@ -665,8 +715,9 @@ func LeaderQuery(ctx context.Context, rpcClient UnaryInvoker, req *LeaderQueryRe
 type RanksReq struct {
 	unaryRequest
 	respReportCb HostResponseReportFn
-	Ranks        string
-	Force        bool
+	Ranks        string `json:"ranks"`
+	Force        bool   `json:"force"`
+	CheckMode    bool   `json:"check_mode"`
 }
 
 func (r *RanksReq) reportResponse(resp *HostResponse) {
@@ -821,27 +872,6 @@ func StartRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*Ra
 	return invokeRPCFanout(ctx, rpcClient, req)
 }
 
-// PingRanks concurrently performs ping on ranks across all hosts
-// supplied in the request's hostlist.
-//
-// This is called from SystemQuery in server/ctl_system.go with a
-// populated host list in the request parameter and blocks until all results
-// (successful or otherwise) are received after invoking fan-out.
-// Returns a single response structure containing results generated with
-// request responses from each selected rank.
-func PingRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
-	pbReq := new(ctlpb.RanksReq)
-	if err := convert.Types(req, pbReq); err != nil {
-		return nil, errors.Wrapf(err, "convert request type %T->%T", req, pbReq)
-	}
-	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return ctlpb.NewCtlSvcClient(conn).PingRanks(ctx, pbReq)
-	})
-
-	rpcClient.Debugf("DAOS system ping-ranks request: %s", pbUtil.Debug(pbReq))
-	return invokeRPCFanout(ctx, rpcClient, req)
-}
-
 // SystemCleanupReq contains the inputs for the system cleanup request.
 type SystemCleanupReq struct {
 	unaryRequest
@@ -854,7 +884,7 @@ type CleanupResult struct {
 	Status int32  `json:"status"`  // Status returned from this specific evict call
 	Msg    string `json:"msg"`     // Error message if Status is not Success
 	PoolID string `json:"pool_id"` // Unique identifier
-	Count  uint32 `json:"count"`   // Number of pools reclaimed
+	Count  uint32 `json:"count"`   // Number of pool handles evicted
 }
 
 // SystemCleanupResp contains the request response.

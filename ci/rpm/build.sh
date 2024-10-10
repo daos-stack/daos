@@ -12,10 +12,16 @@
 # has disabled fault injection or this is a Release build
 set -uex
 
+id
+if [ "$(id -u)" = "0" ]; then
+    echo "Should not be run as root"
+    exit 1
+fi
+
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 ci_envs="$mydir/../parse_ci_envs.sh"
 if [ -e "${ci_envs}" ]; then
-  # shellcheck disable=SC1091,SC1090
+  # shellcheck source=parse_ci_envs.sh
   source "${ci_envs}"
 fi
 
@@ -39,7 +45,12 @@ EXTERNAL_SCONS_OPT=" --define \"scons_args ${SCONS_ARGS}\""
 EXTERNAL_RPM_BUILD_OPTIONS="${EXTERNAL_SCONS_OPT}${EXTERNAL_COMPILER_OPT}"
 
 rm -rf "artifacts/${TARGET}/"
-mkdir -p "artifacts/${TARGET}/"
+if ! mkdir -p "artifacts/${TARGET}/"; then
+    echo "Failed to create directory \"artifacts/${TARGET}/\""
+    ls -ld . || true
+    pwd || true
+    exit 1
+fi
 
 # shellcheck disable=SC2086
 DEBEMAIL="$DAOS_EMAIL" DEBFULLNAME="$DAOS_FULLNAME"               \

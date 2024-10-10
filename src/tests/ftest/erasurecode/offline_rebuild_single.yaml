@@ -10,6 +10,9 @@ hosts:
 setup:
   start_servers_once: False
 timeout: 900
+agent_config:
+  #cache_expiration: 1
+  disable_caching: true
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -30,8 +33,6 @@ server_config:
       storage: auto
 pool:
   size: 93%
-  svcn: 1
-  control_method: dmg
   pool_query_timeout: 30
 container:
   type: POSIX

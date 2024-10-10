@@ -1,63 +1,39 @@
 /**
-* (C) Copyright 2019-2021 Intel Corporation.
-*
-* SPDX-License-Identifier: BSD-2-Clause-Patent
-*/
+ * (C) Copyright 2019-2023 Intel Corporation.
+ *
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
+ */
 
 #ifndef NVMECONTROL_COMMON_H
 #define NVMECONTROL_COMMON_H
 
 #include <stdbool.h>
 #include <spdk/nvme_intel.h>
-
-#define BUFLEN 1024
+#include <daos_srv/control.h>
 
 /**
  * \brief NVMECONTROL return codes
  */
 enum nvme_control_status_code {
-	NVMEC_SUCCESS			= 0x0,
-	NVMEC_ERR_CHK_SIZE		= 0x1,
-	NVMEC_ERR_GET_PCI_DEV		= 0x2,
-	NVMEC_ERR_PCI_ADDR_FMT		= 0x3,
-	NVMEC_ERR_PCI_ADDR_PARSE	= 0x4,
-	NVMEC_ERR_CTRLR_NOT_FOUND	= 0x5,
-	NVMEC_ERR_NS_NOT_FOUND		= 0x6,
-	NVMEC_ERR_NOT_SUPPORTED		= 0x7,
-	NVMEC_ERR_BAD_LBA		= 0x8,
-	NVMEC_ERR_ALLOC_IO_QPAIR	= 0x9,
-	NVMEC_ERR_NS_ID_UNEXPECTED	= 0xA,
-	NVMEC_ERR_NS_WRITE_FAIL		= 0xB,
-	NVMEC_ERR_MULTIPLE_ACTIVE_NS	= 0xC,
-	NVMEC_ERR_NULL_NS		= 0xD,
-	NVMEC_ERR_ALLOC_SEQUENCE_BUF	= 0xE,
-	NVMEC_ERR_NO_VMD_CTRLRS		= 0xF,
-	NVMEC_ERR_WRITE_TRUNC		= 0x10,
+	NVMEC_SUCCESS                = 0x0,
+	NVMEC_ERR_CHK_SIZE           = 0x1,
+	NVMEC_ERR_GET_PCI_DEV        = 0x2,
+	NVMEC_ERR_PCI_ADDR_FMT       = 0x3,
+	NVMEC_ERR_PCI_ADDR_PARSE     = 0x4,
+	NVMEC_ERR_CTRLR_NOT_FOUND    = 0x5,
+	NVMEC_ERR_NS_NOT_FOUND       = 0x6,
+	NVMEC_ERR_NOT_SUPPORTED      = 0x7,
+	NVMEC_ERR_BAD_LBA            = 0x8,
+	NVMEC_ERR_ALLOC_IO_QPAIR     = 0x9,
+	NVMEC_ERR_NS_ID_UNEXPECTED   = 0xA,
+	NVMEC_ERR_NS_WRITE_FAIL      = 0xB,
+	NVMEC_ERR_MULTIPLE_ACTIVE_NS = 0xC,
+	NVMEC_ERR_NULL_NS            = 0xD,
+	NVMEC_ERR_ALLOC_SEQUENCE_BUF = 0xE,
+	NVMEC_ERR_NO_VMD_CTRLRS      = 0xF,
+	NVMEC_ERR_WRITE_TRUNC        = 0x10,
+	NVMEC_ERR_GET_PCI_TYPE       = 0x11,
 	NVMEC_LAST_STATUS_VALUE
-};
-
-/**
- * \brief NVMe controller details
- */
-struct ctrlr_t {
-	char				 model[BUFLEN];
-	char				 serial[BUFLEN];
-	char				 pci_addr[BUFLEN];
-	char				 fw_rev[BUFLEN];
-	char				 pci_type[BUFLEN];
-	int				 socket_id;
-	struct ns_t			*nss;
-	struct nvme_stats		*stats;
-	struct ctrlr_t			*next;
-};
-
-/**
- * \brief NVMe namespace details
- */
-struct ns_t {
-	uint32_t	id;
-	uint64_t	size;
-	struct ns_t    *next;
 };
 
 /**
@@ -66,10 +42,10 @@ struct ns_t {
  * list element.
  */
 struct wipe_res_t {
-	char			 ctrlr_pci_addr[BUFLEN];
+	char                     ctrlr_pci_addr[NVME_DETAIL_BUFLEN];
 	uint32_t		 ns_id;
 	int			 rc;
-	char			 info[BUFLEN];
+	char                     info[NVME_DETAIL_BUFLEN];
 	struct wipe_res_t	*next;
 };
 
@@ -78,10 +54,10 @@ struct wipe_res_t {
  * results and info message
  */
 struct ret_t {
-	struct ctrlr_t		*ctrlrs;
+	struct nvme_ctrlr_t     *ctrlrs;
 	struct wipe_res_t	*wipe_results;
 	int			 rc;
-	char			 info[BUFLEN];
+	char                     info[NVME_DETAIL_BUFLEN];
 };
 
 struct ctrlr_entry {
@@ -186,8 +162,7 @@ _discover(prober, bool, health_getter);
  * Provide ability to pass function pointers to _collect for mocking
  * in unit tests.
  */
-typedef int
-(*data_copier)(struct ctrlr_t *, const struct spdk_nvme_ctrlr_data *);
+typedef int (*data_copier)(struct nvme_ctrlr_t *, const struct spdk_nvme_ctrlr_data *);
 
 typedef struct spdk_pci_device *
 (*pci_getter)(struct spdk_nvme_ctrlr *);

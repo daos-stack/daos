@@ -5,6 +5,7 @@
 """
 
 from random import randint
+
 from apricot import TestWithServers
 from exception_utils import CommandFailure
 from general_utils import DaosTestError

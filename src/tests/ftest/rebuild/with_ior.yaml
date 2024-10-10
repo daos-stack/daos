@@ -3,7 +3,9 @@ hosts:
   test_clients: 1
 
 timeout: 360
-
+agent_config:
+  #cache_expiration: 1
+  disable_caching: true
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -29,8 +31,7 @@ server_config:
 
 pool:
   scm_size: 6G
-  svcn: 3
-  control_method: dmg
+  properties: rd_fac:1
   pool_query_timeout: 30
 
 container:

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -220,36 +220,31 @@ bio_dev_set_faulty(struct bio_xs_context *xs, uuid_t dev_uuid)
 	if (ABT_eventual_free(&dsm.eventual) != ABT_SUCCESS)
 		rc = dss_abterr2der(rc);
 
+	if (rc == 0)
+		ras_notify_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO, RAS_SEV_NOTICE, NULL, NULL,
+				  NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+				  "Device: " DF_UUID " set faulty\n", DP_UUID(dev_uuid));
+	else
+		ras_notify_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO, RAS_SEV_ERROR, NULL, NULL,
+				  NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+				  "Device: " DF_UUID " set faulty failed: %d\n", DP_UUID(dev_uuid),
+				  rc);
 	return rc;
-}
-
-static inline struct bio_dev_health *
-cb_arg2dev_health(void *cb_arg)
-{
-
-	struct bio_xs_blobstore **bxb_ptr = (struct bio_xs_blobstore **)cb_arg;
-	struct bio_xs_blobstore *bxb;
-
-	bxb = *bxb_ptr;
-	/* bio_xsctxt_free() is underway */
-	if (bxb == NULL)
-		return NULL;
-
-	return &bxb->bxb_blobstore->bb_dev_health;
 }
 
 static void
 get_spdk_err_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 				 void *cb_arg)
 {
-	struct bio_dev_health	*dev_health = cb_arg2dev_health(cb_arg);
+	struct bio_dev_health	*dev_health = cb_arg;
 	int			 sc, sct;
 	uint32_t		 cdw0;
 
-	if (dev_health == NULL)
-		goto out;
-
 	D_ASSERT(dev_health->bdh_inflights == 1);
+	if (dev_health->bdh_stopping) {
+		dev_health->bdh_inflights--;
+		goto out;
+	}
 
 	/* Additional NVMe status information */
 	spdk_bdev_io_get_nvme_status(bdev_io, &cdw0, &sct, &sc);
@@ -267,7 +262,7 @@ static void
 get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 				   void *cb_arg)
 {
-	struct bio_dev_health		*dev_health = cb_arg2dev_health(cb_arg);
+	struct bio_dev_health		*dev_health = cb_arg;
 	struct spdk_nvme_ctrlr_data	*cdata;
 	struct spdk_bdev		*bdev;
 	struct spdk_nvme_cmd		 cmd;
@@ -278,10 +273,11 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 	int				 sc, sct;
 	uint32_t			 cdw0;
 
-	if (dev_health == NULL)
-		goto out;
-
 	D_ASSERT(dev_health->bdh_inflights == 1);
+	if (dev_health->bdh_stopping) {
+		dev_health->bdh_inflights--;
+		goto out;
+	}
 
 	/* Additional NVMe status information */
 	spdk_bdev_io_get_nvme_status(bdev_io, &cdw0, &sct, &sc);
@@ -553,17 +549,18 @@ static void
 get_spdk_intel_smart_log_completion(struct spdk_bdev_io *bdev_io, bool success,
 				    void *cb_arg)
 {
-	struct bio_dev_health	*dev_health = cb_arg2dev_health(cb_arg);
+	struct bio_dev_health	*dev_health = cb_arg;
 	struct spdk_bdev	*bdev;
 	struct spdk_nvme_cmd	 cmd;
 	uint32_t		 cp_sz;
 	int			 rc, sc, sct;
 	uint32_t		 cdw0;
 
-	if (dev_health == NULL)
-		goto out;
-
 	D_ASSERT(dev_health->bdh_inflights == 1);
+	if (dev_health->bdh_stopping) {
+		dev_health->bdh_inflights--;
+		goto out;
+	}
 
 	/* Additional NVMe status information */
 	spdk_bdev_io_get_nvme_status(bdev_io, &cdw0, &sct, &sc);
@@ -612,7 +609,7 @@ static void
 get_spdk_health_info_completion(struct spdk_bdev_io *bdev_io, bool success,
 				void *cb_arg)
 {
-	struct bio_dev_health	*dev_health = cb_arg2dev_health(cb_arg);
+	struct bio_dev_health	*dev_health = cb_arg;
 	struct spdk_bdev	*bdev;
 	struct spdk_nvme_cmd	 cmd;
 	uint32_t		 page_sz;
@@ -620,10 +617,11 @@ get_spdk_health_info_completion(struct spdk_bdev_io *bdev_io, bool success,
 	int			 rc, sc, sct;
 	uint32_t		 cdw0;
 
-	if (dev_health == NULL)
-		goto out;
-
 	D_ASSERT(dev_health->bdh_inflights == 1);
+	if (dev_health->bdh_stopping) {
+		dev_health->bdh_inflights--;
+		goto out;
+	}
 
 	/* Additional NVMe status information */
 	spdk_bdev_io_get_nvme_status(bdev_io, &cdw0, &sct, &sc);
@@ -698,6 +696,17 @@ is_bbs_faulty(struct bio_blobstore *bbs)
 		}
 	}
 
+	/* Auto-faulty for WAL/Meta device is always enabled */
+	if (bbs->bb_dev->bb_roles & (NVME_ROLE_META | NVME_ROLE_WAL)) {
+		/* The WAL/NVMe device needs be marked as faulty on any I/O error */
+		if (dev_stats->bio_read_errs || dev_stats->bio_write_errs) {
+			D_ERROR("NVMe device (role:%u) hit I/O error %u/%u\n",
+				bbs->bb_dev->bb_roles, dev_stats->bio_read_errs,
+				dev_stats->bio_write_errs);
+			return true;
+		}
+	}
+
 	if (!glb_criteria.fc_enabled)
 		return false;
 
@@ -719,24 +728,72 @@ is_bbs_faulty(struct bio_blobstore *bbs)
 void
 auto_faulty_detect(struct bio_blobstore *bbs)
 {
-	int	rc;
+	struct smd_dev_info	*dev_info;
+	int			 rc;
 
-	if (bbs->bb_state != BIO_BS_STATE_NORMAL)
+	/* The in-memory device is already in FAULTY state */
+	if (bbs->bb_state == BIO_BS_STATE_FAULTY)
+		return;
+
+	/* To make things simpler, don't detect faulty in SETUP phase */
+	if (bbs->bb_state == BIO_BS_STATE_SETUP)
 		return;
 
 	if (!is_bbs_faulty(bbs))
 		return;
 
-	rc = bio_bs_state_set(bbs, BIO_BS_STATE_FAULTY);
-	if (rc)
-		D_ERROR("Failed to set FAULTY state. "DF_RC"\n", DP_RC(rc));
+	/*
+	 * The device might have been unplugged before marked as FAULTY, and the bbs is
+	 * already in teardown.
+	 */
+	if (bbs->bb_state != BIO_BS_STATE_NORMAL) {
+		/* Faulty reaction is already successfully performed */
+		if (bbs->bb_faulty_done)
+			return;
+
+		rc = smd_dev_get_by_id(bbs->bb_dev->bb_uuid, &dev_info);
+		if (rc) {
+			DL_ERROR(rc, "Get device info "DF_UUID" failed.",
+				 DP_UUID(bbs->bb_dev->bb_uuid));
+			return;
+		}
+
+		/* The device is already marked as FAULTY */
+		if (dev_info->sdi_state == SMD_DEV_FAULTY) {
+			smd_dev_free_info(dev_info);
+			trigger_faulty_reaction(bbs);
+			return;
+		}
+		smd_dev_free_info(dev_info);
+
+		rc = smd_dev_set_state(bbs->bb_dev->bb_uuid, SMD_DEV_FAULTY);
+		if (rc)
+			DL_ERROR(rc, "Set device state failed.");
+		else
+			trigger_faulty_reaction(bbs);
+	} else {
+		rc = bio_bs_state_set(bbs, BIO_BS_STATE_FAULTY);
+		if (rc)
+			DL_ERROR(rc, "Failed to set FAULTY state.");
+	}
+
+	if (rc == 0)
+		ras_notify_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO, RAS_SEV_NOTICE, NULL, NULL,
+				  NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+				  "Device: " DF_UUID " auto faulty detect\n",
+				  DP_UUID(bbs->bb_dev->bb_uuid));
+	else
+		ras_notify_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO, RAS_SEV_ERROR, NULL, NULL,
+				  NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+				  "Device: " DF_UUID " auto faulty detect failed: %d\n",
+				  DP_UUID(bbs->bb_dev->bb_uuid), rc);
 }
 
 /* Collect the raw device health state through SPDK admin APIs */
 static void
 collect_raw_health_data(void *cb_arg)
 {
-	struct bio_dev_health	*dev_health = cb_arg2dev_health(cb_arg);
+	struct bio_dev_health	*dev_health = cb_arg;
 	struct spdk_bdev	*bdev;
 	struct spdk_nvme_cmd	 cmd;
 	uint32_t		 numd, numdl, numdu;
@@ -823,17 +880,14 @@ bio_bs_monitor(struct bio_xs_context *xs_ctxt, enum smd_dev_type st, uint64_t no
 		return;
 	dev_health->bdh_stat_age = now;
 
-	/* only support Data SSD auto fauty detection and state transit. */
-	if (st == SMD_DEV_TYPE_DATA) {
-		auto_faulty_detect(bbs);
-		rc = bio_bs_state_transit(bbs);
-		if (rc)
-			D_ERROR("State transition on target %d failed. %d\n",
-				bbs->bb_owner_xs->bxc_tgt_id, rc);
-	}
+	auto_faulty_detect(bbs);
+	rc = bio_bs_state_transit(bbs);
+	if (rc)
+		DL_ERROR(rc, "State transition on target %d failed",
+			 bbs->bb_owner_xs->bxc_tgt_id);
 
-	if (!bypass_health_collect())
-		collect_raw_health_data((void *)&xs_ctxt->bxc_xs_blobstores[st]);
+	if (!bypass_health_collect() && !dev_health->bdh_stopping)
+		collect_raw_health_data((void *)dev_health);
 }
 
 /* Free all device health monitoring info */
@@ -845,6 +899,7 @@ bio_fini_health_monitoring(struct bio_xs_context *ctxt, struct bio_blobstore *bb
 
 	/* Drain the in-flight request before putting I/O channel */
 	D_ASSERT(bdh->bdh_inflights < 2);
+	bdh->bdh_stopping = 1;
 	if (bdh->bdh_inflights > 0) {
 		D_INFO("Wait for health collecting done...\n");
 		rc = xs_poll_completion(ctxt, &bdh->bdh_inflights, 0);
@@ -992,9 +1047,11 @@ bio_export_health_stats(struct bio_blobstore *bb, char *bdev_name)
 #define X(field, fname, desc, unit, type)				\
 	memset(binfo, 0, sizeof(*binfo));				\
 	rc = fill_in_traddr(binfo, bdev_name);				\
-	if (rc || binfo->bdi_traddr == NULL) {				\
+	if (rc) {							\
 		D_WARN("Failed to extract %s addr: "DF_RC"\n",		\
 		       bdev_name, DP_RC(rc));				\
+	} else if (binfo->bdi_traddr == NULL) {				\
+		D_WARN("No health stats for %s\n", bdev_name);		\
 	} else {							\
 		rc = d_tm_add_metric(&bb->bb_dev_health.field,		\
 				     type,				\
@@ -1031,9 +1088,11 @@ bio_export_vendor_health_stats(struct bio_blobstore *bb, char *bdev_name)
 #define Y(field, fname, desc, unit, type)				\
 	memset(binfo, 0, sizeof(*binfo));				\
 	rc = fill_in_traddr(binfo, bdev_name);				\
-	if (rc || binfo->bdi_traddr == NULL) {				\
+	if (rc) {							\
 		D_WARN("Failed to extract %s addr: "DF_RC"\n",		\
 		       bdev_name, DP_RC(rc));				\
+	} else if (binfo->bdi_traddr == NULL) {				\
+		D_WARN("No vendor health stats for %s\n", bdev_name);	\
 	} else {							\
 		rc = d_tm_add_metric(&bb->bb_dev_health.field,		\
 				     type,				\
@@ -1076,8 +1135,10 @@ bio_set_vendor_id(struct bio_blobstore *bb, char *bdev_name)
 	int				 rc;
 
 	rc = fill_in_traddr(&binfo, bdev_name);
-	if (rc || binfo.bdi_traddr == NULL) {
+	if (rc) {
 		D_ERROR("Unable to get traddr for device:%s\n", bdev_name);
+		return;
+	} else if (binfo.bdi_traddr == NULL) {
 		return;
 	}
 

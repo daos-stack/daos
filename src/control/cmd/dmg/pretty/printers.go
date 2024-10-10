@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,13 +14,10 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
-)
-
-const (
-	rowFieldSep = "/"
 )
 
 var (
@@ -151,6 +148,62 @@ func PrintResponseErrors(resp hostErrorsGetter, out io.Writer, opts ...PrintConf
 			return err
 		}
 		fmt.Fprintln(out)
+	}
+
+	return nil
+}
+
+// PrintErrorsSummary generates a human-readable representation of the supplied
+// HostErrorsMap summary struct and writes it to the supplied io.Writer.
+func UpdateErrorSummary(resp hostErrorsGetter, cmd string, out io.Writer, opts ...PrintConfigOption) error {
+	if common.InterfaceIsNil(resp) {
+		return errors.Errorf("nil %T", resp)
+	}
+
+	if len(resp.GetHostErrors()) > 0 {
+		setTitle := "Hosts"
+		cmdTitle := "Command"
+		errTitle := "Error"
+
+		tablePrint := txtfmt.NewTableFormatter(setTitle, cmdTitle, errTitle)
+		tablePrint.InitWriter(out)
+		table := []txtfmt.TableRow{}
+
+		for _, errStr := range resp.GetHostErrors().Keys() {
+			errHosts := getPrintHosts(resp.GetHostErrors()[errStr].HostSet.RangedString(), opts...)
+			row := txtfmt.TableRow{setTitle: errHosts}
+
+			// Unpack the root cause error. If it's a fault,
+			// just print the description.
+			hostErr := errors.Cause(resp.GetHostErrors()[errStr].HostError)
+			row[cmdTitle] = cmd
+			row[errTitle] = hostErr.Error()
+			if f, ok := hostErr.(*fault.Fault); ok {
+				row[errTitle] = f.Description
+			}
+
+			table = append(table, row)
+		}
+
+		tablePrint.Format(table)
+	}
+
+	return nil
+}
+
+// PrintHostStorageSuccess displays a success message for the host set that completed the operation
+// successfully. To be used to print responses that are expected to contain one or zero successful
+// host sets.
+func PrintHostStorageSuccesses(desc string, hsm control.HostStorageMap, out io.Writer) error {
+	switch len(hsm) {
+	case 0:
+	case 1:
+		for _, hss := range hsm {
+			fmt.Fprintf(out, "%s successfully on the following %s: %s\n", desc,
+				common.Pluralise("host", hss.HostSet.Count()), hss.HostSet)
+		}
+	default:
+		return errors.New("unexpected number of keys in HostStorageMap")
 	}
 
 	return nil

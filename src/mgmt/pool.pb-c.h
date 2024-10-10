@@ -113,6 +113,29 @@ typedef enum _Mgmt__StorageMediaType {
   MGMT__STORAGE_MEDIA_TYPE__NVME = 1
     PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__STORAGE_MEDIA_TYPE)
 } Mgmt__StorageMediaType;
+typedef enum _Mgmt__PoolServiceState {
+  /*
+   * pool service is being created
+   */
+  MGMT__POOL_SERVICE_STATE__Creating = 0,
+  /*
+   * pool service is ready to be used
+   */
+  MGMT__POOL_SERVICE_STATE__Ready = 1,
+  /*
+   * pool service is being destroyed
+   */
+  MGMT__POOL_SERVICE_STATE__Destroying = 2,
+  /*
+   * pool service is degraded
+   */
+  MGMT__POOL_SERVICE_STATE__Degraded = 3,
+  /*
+   * pool service is Unknown state
+   */
+  MGMT__POOL_SERVICE_STATE__Unknown = 4
+    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__POOL_SERVICE_STATE)
+} Mgmt__PoolServiceState;
 
 /* --- messages --- */
 
@@ -137,7 +160,7 @@ struct  _Mgmt__PoolCreateReq
   /*
    * formatted group e.g. "builders@"
    */
-  char *usergroup;
+  char                *user_group;
   /*
    * Access Control Entries in short string format
    */
@@ -157,40 +180,43 @@ struct  _Mgmt__PoolCreateReq
   /*
    * Fault domain tree, minimal format
    */
-  size_t n_faultdomains;
-  uint32_t *faultdomains;
+  size_t               n_fault_domains;
+  uint32_t            *fault_domains;
   /*
    * desired number of pool service replicas
    */
-  uint32_t numsvcreps;
+  uint32_t             num_svc_reps;
   /*
-   * Total pool size in bytes (auto config)
+   * Total pool size in bytes
    */
-  uint64_t totalbytes;
+  uint64_t             total_bytes;
   /*
-   * Ratio of storage tiers expressed as % of totalbytes (auto config)
+   * Ratio of storage tiers expressed as % of totalbytes
    */
-  size_t n_tierratio;
-  double *tierratio;
+  size_t               n_tier_ratio;
+  double              *tier_ratio;
   /*
-   * Number of target ranks to use (auto config)
+   * Number of target ranks to use
    */
-  uint32_t numranks;
+  uint32_t             num_ranks;
   /*
-   * target ranks (manual config)
+   * target ranks
    */
   size_t n_ranks;
   uint32_t *ranks;
   /*
-   * Size in bytes of storage tiers (manual config)
+   * Size in bytes of storage tier
    */
-  size_t n_tierbytes;
-  uint64_t *tierbytes;
+  size_t               n_tier_bytes;
+  uint64_t            *tier_bytes;
 };
-#define MGMT__POOL_CREATE_REQ__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0,NULL, 0, 0, 0,NULL, 0, 0,NULL, 0,NULL }
-
+#define MGMT__POOL_CREATE_REQ__INIT                                                                \
+	{                                                                                          \
+		PROTOBUF_C_MESSAGE_INIT(&mgmt__pool_create_req__descriptor)                        \
+		, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string,                \
+		    (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, NULL, 0,  \
+		    NULL, 0, NULL, 0, 0, 0, NULL, 0, 0, NULL, 0, NULL                              \
+	}
 
 /*
  * PoolCreateResp returns created pool uuid and ranks.
@@ -203,9 +229,9 @@ struct  _Mgmt__PoolCreateResp
    */
   int32_t status;
   /*
-   * Current service leader
+   * Current service leader rank
    */
-  uint32_t leader;
+  uint32_t svc_ldr;
   /*
    * pool service replica ranks
    */
@@ -220,12 +246,13 @@ struct  _Mgmt__PoolCreateResp
    * storage tiers allocated to pool
    */
   size_t n_tier_bytes;
-  uint64_t *tier_bytes;
+  uint64_t        *tier_bytes;
 };
-#define MGMT__POOL_CREATE_RESP__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_resp__descriptor) \
-    , 0, 0, 0,NULL, 0,NULL, 0,NULL }
-
+#define MGMT__POOL_CREATE_RESP__INIT                                                               \
+	{                                                                                          \
+		PROTOBUF_C_MESSAGE_INIT(&mgmt__pool_create_resp__descriptor)                       \
+		, 0, 0, 0, NULL, 0, NULL, 0, NULL                                                  \
+	}
 
 /*
  * PoolDestroyReq supplies pool identifier and force flag.
@@ -359,8 +386,8 @@ struct  _Mgmt__PoolExcludeReq
   /*
    * target ranks
    */
-  size_t n_targetidx;
-  uint32_t *targetidx;
+  size_t           n_target_idx;
+  uint32_t        *target_idx;
   /*
    * List of pool service ranks
    */
@@ -409,8 +436,8 @@ struct  _Mgmt__PoolDrainReq
   /*
    * rank targets
    */
-  size_t n_targetidx;
-  uint32_t *targetidx;
+  size_t           n_target_idx;
+  uint32_t        *target_idx;
   /*
    * List of pool service ranks
    */
@@ -465,13 +492,13 @@ struct  _Mgmt__PoolExtendReq
   /*
    * Size in bytes of storage tiers
    */
-  size_t n_tierbytes;
-  uint64_t *tierbytes;
+  size_t           n_tier_bytes;
+  uint64_t        *tier_bytes;
   /*
    * fault domain tree, minimal format
    */
-  size_t n_faultdomains;
-  uint32_t *faultdomains;
+  size_t           n_fault_domains;
+  uint32_t        *fault_domains;
 };
 #define MGMT__POOL_EXTEND_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_extend_req__descriptor) \
@@ -520,8 +547,8 @@ struct  _Mgmt__PoolReintegrateReq
   /*
    * target ranks
    */
-  size_t n_targetidx;
-  uint32_t *targetidx;
+  size_t           n_target_idx;
+  uint32_t        *target_idx;
   /*
    * List of pool service ranks
    */
@@ -530,8 +557,8 @@ struct  _Mgmt__PoolReintegrateReq
   /*
    * Size in bytes of storage tiers
    */
-  size_t n_tierbytes;
-  uint64_t *tierbytes;
+  size_t           n_tier_bytes;
+  uint64_t        *tier_bytes;
 };
 #define MGMT__POOL_REINTEGRATE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_reintegrate_req__descriptor) \
@@ -590,10 +617,14 @@ struct  _Mgmt__ListPoolsResp__Pool
    * pool state
    */
   char *state;
+  /*
+   * pool rebuild state
+   */
+  char *rebuild_state;
 };
 #define MGMT__LIST_POOLS_RESP__POOL__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__list_pools_resp__pool__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, (char *)protobuf_c_empty_string }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
 /*
@@ -696,17 +727,13 @@ struct  _Mgmt__PoolQueryReq
   size_t n_svc_ranks;
   uint32_t *svc_ranks;
   /*
-   * True if the list of enabled ranks shall be returned
+   * Bitmask of pool query options
    */
-  protobuf_c_boolean include_enabled_ranks;
-  /*
-   * True if the list of disabled ranks shall be returned
-   */
-  protobuf_c_boolean include_disabled_ranks;
+  uint64_t query_mask;
 };
 #define MGMT__POOL_QUERY_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0, 0 }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0 }
 
 
 /*
@@ -790,7 +817,7 @@ struct  _Mgmt__PoolQueryResp
    */
   uint32_t version;
   /*
-   * current raft leader
+   * current raft leader (2.4)
    */
   uint32_t leader;
   /*
@@ -813,10 +840,27 @@ struct  _Mgmt__PoolQueryResp
    * latest pool global version to upgrade
    */
   uint32_t upgrade_layout_ver;
+  /*
+   * pool state
+   */
+  Mgmt__PoolServiceState state;
+  /*
+   * current raft leader (2.6+)
+   */
+  uint32_t svc_ldr;
+  /*
+   * service replica ranks
+   */
+  size_t n_svc_reps;
+  uint32_t *svc_reps;
+  /*
+   * Bitmask of pool query options used
+   */
+  uint64_t query_mask;
 };
 #define MGMT__POOL_QUERY_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_resp__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, 0,NULL, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0 }
+    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, 0,NULL, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, MGMT__POOL_SERVICE_STATE__Creating, 0, 0,NULL, 0 }
 
 
 typedef enum {
@@ -1832,6 +1876,7 @@ typedef void (*Mgmt__PoolQueryTargetResp_Closure)
 /* --- descriptors --- */
 
 extern const ProtobufCEnumDescriptor    mgmt__storage_media_type__descriptor;
+extern const ProtobufCEnumDescriptor    mgmt__pool_service_state__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_create_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_create_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_destroy_req__descriptor;

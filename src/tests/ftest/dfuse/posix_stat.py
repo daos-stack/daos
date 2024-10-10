@@ -3,10 +3,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from avocado.core.exceptions import TestFail
 
-from ior_test_base import IorTestBase
 from general_utils import get_remote_file_size, run_pcmd
+from ior_test_base import IorTestBase
 
 
 class POSIXStatTest(IorTestBase):
@@ -33,7 +32,7 @@ class POSIXStatTest(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=dfuse
-        :avocado: tags=stat_parameters,test_stat_parameters
+        :avocado: tags=POSIXStatTest,test_stat_parameters
         """
         block_sizes = self.params.get("block_sizes", "/run/*")
         error_list = []
@@ -51,12 +50,9 @@ class POSIXStatTest(IorTestBase):
             idx += 1
 
             # Run ior command.
-            try:
-                self.run_ior_with_pool(
-                    timeout=200, stop_dfuse=False, create_pool=False,
-                    create_cont=False, test_file_suffix=test_file_suffix)
-            except TestFail:
-                self.log.info("ior command failed!")
+            self.run_ior_with_pool(
+                timeout=200, stop_dfuse=False, create_pool=False,
+                create_cont=False, test_file_suffix=test_file_suffix)
 
             # Get current epoch.
             current_epoch = -1

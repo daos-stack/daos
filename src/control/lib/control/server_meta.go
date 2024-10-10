@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -34,6 +34,16 @@ const (
 	LedBlinkOp
 	LedResetOp
 )
+
+func (smo SmdManageOpcode) String() string {
+	return map[SmdManageOpcode]string{
+		SetFaultyOp:  "set-faulty",
+		DevReplaceOp: "dev-replace",
+		LedCheckOp:   "led-check",
+		LedBlinkOp:   "led-blink",
+		LedResetOp:   "led-reset",
+	}[smo]
+}
 
 type (
 	// SmdPool contains the per-server components of a DAOS pool.
@@ -70,7 +80,6 @@ type (
 		IDs             string // comma separated list of IDs
 		Rank            ranklist.Rank
 		ReplaceUUID     string // For device replacement, UUID of new device
-		ReplaceNoReint  bool   // For device replacement, indicate no reintegration
 		IdentifyTimeout uint32 // For LED identify, blink duration in minutes
 		Operation       SmdManageOpcode
 	}
@@ -112,22 +121,16 @@ func (sr *SmdResp) addHostQueryResponse(hr *HostResponse, faultyOnly bool) error
 		rank := ranklist.Rank(rResp.Rank)
 
 		for _, pbDev := range rResp.GetDevices() {
-			if faultyOnly && (pbDev.Details.DevState != ctlpb.NvmeDevState_EVICTED) {
+			isEvicted := pbDev.Ctrlr.DevState == ctlpb.NvmeDevState_EVICTED
+			if faultyOnly && !isEvicted {
 				continue
 			}
 
 			sd := new(storage.SmdDevice)
-			if err := convert.Types(pbDev.Details, sd); err != nil {
-				return errors.Wrapf(err, "converting %T to %T", pbDev.Details, sd)
+			if err := convert.Types(pbDev, sd); err != nil {
+				return errors.Wrapf(err, "converting %T to %T", pbDev, sd)
 			}
 			sd.Rank = rank
-
-			if pbDev.Health != nil {
-				sd.Health = new(storage.NvmeHealth)
-				if err := convert.Types(pbDev.Health, sd.Health); err != nil {
-					return errors.Wrapf(err, "converting %T to %T", pbDev.Health, sd.Health)
-				}
-			}
 
 			hs.SmdInfo.Devices = append(hs.SmdInfo.Devices, sd)
 		}
@@ -147,6 +150,17 @@ func (sr *SmdResp) addHostQueryResponse(hr *HostResponse, faultyOnly bool) error
 	}
 
 	return nil
+}
+
+func (sr *SmdResp) ResultCount() int {
+	if sr == nil {
+		return 0
+	}
+
+	nrErrs := sr.HostErrorsResp.GetHostErrors().ErrorCount()
+	nrHS := sr.HostStorage.HostCount()
+
+	return nrErrs + nrHS
 }
 
 // SmdQuery concurrently performs per-server metadata operations across all
@@ -202,20 +216,26 @@ func (sr *SmdResp) addHostManageResponse(hr *HostResponse) error {
 		return errors.Errorf("unable to unpack message: %+v", hr.Message)
 	}
 
-	hs := &HostStorage{
-		SmdInfo: &SmdInfo{},
-	}
+	var sds []*storage.SmdDevice
 	for _, rResp := range pbResp.GetRanks() {
 		rank := ranklist.Rank(rResp.Rank)
 
 		for _, pbResult := range rResp.GetResults() {
+			if pbResult.Device == nil {
+				continue
+			}
 			sd := new(storage.SmdDevice)
 			if err := convert.Types(pbResult.Device, sd); err != nil {
 				return errors.Wrapf(err, "converting %T to %T", pbResult.Device, sd)
 			}
 			sd.Rank = rank
-			hs.SmdInfo.Devices = append(hs.SmdInfo.Devices, sd)
+			sds = append(sds, sd)
 		}
+	}
+
+	hs := &HostStorage{}
+	if len(sds) != 0 {
+		hs.SmdInfo = &SmdInfo{Devices: sds}
 	}
 
 	if sr.HostStorage == nil {
@@ -244,7 +264,7 @@ func (sr *SmdResp) getHostManageRespErr(hr *HostResponse) error {
 			if pbResult.Device != nil {
 				id = pbResult.Device.Uuid
 				if id == "" {
-					id = pbResult.Device.TrAddr
+					id = pbResult.Device.Ctrlr.PciAddr
 				}
 				id += " "
 			}
@@ -285,7 +305,6 @@ func packPBSmdManageReq(req *SmdManageReq, pbReq *ctlpb.SmdManageReq) error {
 			Replace: &ctlpb.DevReplaceReq{
 				OldDevUuid: req.IDs,
 				NewDevUuid: req.ReplaceUUID,
-				NoReint:    req.ReplaceNoReint,
 			},
 		}
 	case LedCheckOp:
@@ -340,13 +359,14 @@ func SmdManage(ctx context.Context, rpcClient UnaryInvoker, req *SmdManageReq) (
 		return ctlpb.NewCtlSvcClient(conn).SmdManage(ctx, pbReq)
 	})
 
-	if req.Operation == SetFaultyOp {
+	if req.Operation == SetFaultyOp || req.Operation == DevReplaceOp {
 		reqHosts, err := getRequestHosts(DefaultConfig(), req)
 		if err != nil {
 			return nil, err
 		}
 		if len(reqHosts) > 1 {
-			return nil, errors.New("cannot perform SetFaulty operation on > 1 host")
+			return nil, errors.Errorf("cannot perform %s operation on > 1 host",
+				req.Operation)
 		}
 	}
 

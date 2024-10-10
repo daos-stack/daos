@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,40 +11,43 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/build"
-	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
-	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
 var (
-	errDRPCNotReady   = errors.New("no dRPC client set (data plane not started?)")
+	errDRPCNotReady   = errors.New("dRPC socket not ready (data plane not started?)")
 	errEngineNotReady = errors.New("engine not ready yet")
 )
 
-func (ei *EngineInstance) setDrpcClient(c drpc.DomainSocketClient) {
+func (ei *EngineInstance) setDrpcSocket(sock string) {
 	ei.Lock()
 	defer ei.Unlock()
-	ei._drpcClient = c
+	ei._drpcSocket = sock
 }
 
-func (ei *EngineInstance) getDrpcClient() (drpc.DomainSocketClient, error) {
+func (ei *EngineInstance) getDrpcSocket() string {
 	ei.RLock()
 	defer ei.RUnlock()
-	if ei._drpcClient == nil {
-		return nil, errDRPCNotReady
+	return ei._drpcSocket
+}
+
+func (ei *EngineInstance) getDrpcClient() drpc.DomainSocketClient {
+	ei.Lock()
+	defer ei.Unlock()
+	if ei.getDrpcClientFn == nil {
+		ei.getDrpcClientFn = drpc.NewClientConnection
 	}
-	return ei._drpcClient, nil
+	return ei.getDrpcClientFn(ei._drpcSocket)
 }
 
 // NotifyDrpcReady receives a ready message from the running Engine
@@ -52,8 +55,7 @@ func (ei *EngineInstance) getDrpcClient() (drpc.DomainSocketClient, error) {
 func (ei *EngineInstance) NotifyDrpcReady(msg *srvpb.NotifyReadyReq) {
 	ei.log.Debugf("%s instance %d drpc ready: %v", build.DataPlaneName, ei.Index(), msg)
 
-	// activate the dRPC client connection to this engine
-	ei.setDrpcClient(drpc.NewClientConnection(msg.DrpcListenerSock))
+	ei.setDrpcSocket(msg.DrpcListenerSock)
 
 	go func() {
 		ei.drpcReady <- msg
@@ -67,11 +69,12 @@ func (ei *EngineInstance) awaitDrpcReady() chan *srvpb.NotifyReadyReq {
 	return ei.drpcReady
 }
 
+func (ei *EngineInstance) isDrpcSocketReady() bool {
+	return ei.getDrpcSocket() != ""
+}
+
 func (ei *EngineInstance) callDrpc(ctx context.Context, method drpc.Method, body proto.Message) (*drpc.Response, error) {
-	dc, err := ei.getDrpcClient()
-	if err != nil {
-		return nil, err
-	}
+	dc := ei.getDrpcClient()
 
 	rankMsg := ""
 	if sb := ei.getSuperblock(); sb != nil && sb.Rank != nil {
@@ -93,6 +96,9 @@ func (ei *EngineInstance) CallDrpc(ctx context.Context, method drpc.Method, body
 	}
 	if !ei.IsReady() {
 		return nil, errEngineNotReady
+	}
+	if !ei.isDrpcSocketReady() {
+		return nil, errDRPCNotReady
 	}
 
 	return ei.callDrpc(ctx, method, body)
@@ -175,8 +181,8 @@ func (ei *EngineInstance) tryDrpc(ctx context.Context, method drpc.Method) *syst
 	}
 }
 
-func (ei *EngineInstance) GetBioHealth(ctx context.Context, req *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
-	dresp, err := ei.CallDrpc(ctx, drpc.MethodBioHealth, req)
+func getBioHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
+	dresp, err := engine.CallDrpc(ctx, drpc.MethodBioHealth, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "GetBioHealth dRPC call")
 	}
@@ -193,8 +199,8 @@ func (ei *EngineInstance) GetBioHealth(ctx context.Context, req *ctlpb.BioHealth
 	return resp, nil
 }
 
-func (ei *EngineInstance) ListSmdDevices(ctx context.Context, req *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error) {
-	dresp, err := ei.CallDrpc(ctx, drpc.MethodSmdDevs, req)
+func listSmdDevices(ctx context.Context, engine Engine, req *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error) {
+	dresp, err := engine.CallDrpc(ctx, drpc.MethodSmdDevs, req)
 	if err != nil {
 		return nil, err
 	}
@@ -209,107 +215,4 @@ func (ei *EngineInstance) ListSmdDevices(ctx context.Context, req *ctlpb.SmdDevR
 	}
 
 	return resp, nil
-}
-
-func (ei *EngineInstance) getSmdDetails(smd *ctlpb.SmdDevice) (*storage.SmdDevice, error) {
-	smdDev := new(storage.SmdDevice)
-	if err := convert.Types(smd, smdDev); err != nil {
-		return nil, errors.Wrap(err, "convert smd")
-	}
-
-	engineRank, err := ei.GetRank()
-	if err != nil {
-		return nil, errors.Wrapf(err, "get rank")
-	}
-
-	smdDev.Rank = engineRank
-	smdDev.TrAddr = smd.GetTrAddr()
-
-	return smdDev, nil
-}
-
-// updateInUseBdevs updates-in-place the input list of controllers with new NVMe health stats and
-// SMD metadata info.
-//
-// Query each SmdDevice on each I/O Engine instance for health stats and update existing controller
-// data in ctrlrMap using PCI address key.
-func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrs []storage.NvmeController, ms uint64, rs uint64) ([]storage.NvmeController, error) {
-	ctrlrMap := make(map[string]*storage.NvmeController)
-	for idx, ctrlr := range ctrlrs {
-		if _, exists := ctrlrMap[ctrlr.PciAddr]; exists {
-			return nil, errors.Errorf("duplicate entries for controller %s",
-				ctrlr.PciAddr)
-		}
-
-		// Clear SMD info for controllers to remove stale stats.
-		ctrlrs[idx].SmdDevices = []*storage.SmdDevice{}
-		// Update controllers in input slice through map by reference.
-		ctrlrMap[ctrlr.PciAddr] = &ctrlrs[idx]
-	}
-
-	smdDevs, err := ei.ListSmdDevices(ctx, new(ctlpb.SmdDevReq))
-	if err != nil {
-		return nil, errors.Wrapf(err, "list smd devices")
-	}
-	ei.log.Debugf("engine %d: smdDevs %+v", ei.Index(), smdDevs)
-
-	hasUpdatedHealth := make(map[string]bool)
-	for _, smd := range smdDevs.Devices {
-		msg := fmt.Sprintf("instance %d: smd %s: ctrlr %s", ei.Index(), smd.Uuid,
-			smd.TrAddr)
-
-		ctrlr, exists := ctrlrMap[smd.GetTrAddr()]
-		if !exists {
-			ei.log.Errorf("%s: ctrlr not found", msg)
-			continue
-		}
-
-		smdDev, err := ei.getSmdDetails(smd)
-		if err != nil {
-			return nil, errors.Wrapf(err, "%s: collect smd info", msg)
-		}
-		smdDev.MetaSize = ms
-		smdDev.RdbSize = rs
-
-		pbStats, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{DevUuid: smdDev.UUID, MetaSize: ms, RdbSize: rs})
-		if err != nil {
-			// Log the error if it indicates non-existent health and the SMD entity has
-			// an abnormal state. Otherwise it is expected that health may be missing.
-			status, ok := errors.Cause(err).(daos.Status)
-			if ok && status == daos.Nonexistent && smdDev.NvmeState != storage.NvmeStateNormal {
-				ei.log.Debugf("%s: stats not found (device state: %q), skip update",
-					msg, smdDev.NvmeState.String())
-			} else {
-				ei.log.Errorf("%s: fetch stats: %s", msg, err.Error())
-			}
-			ctrlr.UpdateSmd(smdDev)
-			continue
-		}
-
-		// Populate space usage for each SMD device from health stats.
-		smdDev.TotalBytes = pbStats.TotalBytes
-		smdDev.AvailBytes = pbStats.AvailBytes
-		smdDev.ClusterSize = pbStats.ClusterSize
-		smdDev.MetaWalSize = pbStats.MetaWalSize
-		smdDev.RdbWalSize = pbStats.RdbWalSize
-		msg = fmt.Sprintf("%s: smd usage = %s/%s", msg, humanize.Bytes(smdDev.AvailBytes),
-			humanize.Bytes(smdDev.TotalBytes))
-		ctrlr.UpdateSmd(smdDev)
-
-		// Multiple SMD entries for the same address key may exist when there are multiple
-		// NVMe namespaces (and resident blobstores) exist on a single controller. In this
-		// case only update once as health stats will be the same for each.
-		if hasUpdatedHealth[ctrlr.PciAddr] {
-			continue
-		}
-		ctrlr.HealthStats = new(storage.NvmeHealth)
-		if err := convert.Types(pbStats, ctrlr.HealthStats); err != nil {
-			ei.log.Errorf("%s: update ctrlr health: %s", msg, err.Error())
-			continue
-		}
-		ei.log.Debugf("%s: ctrlr health updated", msg)
-		hasUpdatedHealth[ctrlr.PciAddr] = true
-	}
-
-	return ctrlrs, nil
 }

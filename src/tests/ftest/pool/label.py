@@ -5,11 +5,10 @@
 """
 import string
 
-from avocado.core.exceptions import TestFail
-
 from apricot import TestWithServers
-from general_utils import report_errors, get_random_string
+from avocado.core.exceptions import TestFail
 from exception_utils import CommandFailure
+from general_utils import get_random_string, report_errors
 
 
 class Label(TestWithServers):
@@ -113,8 +112,8 @@ class Label(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=pool,pool_label
-        :avocado: tags=create_valid_labels,test_valid_labels
+        :avocado: tags=pool
+        :avocado: tags=Label,test_valid_labels
         """
         self.pool = []
         errors = []
@@ -142,8 +141,8 @@ class Label(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=pool,pool_label
-        :avocado: tags=create_invalid_labels,test_invalid_labels
+        :avocado: tags=pool
+        :avocado: tags=Label,test_invalid_labels
         """
         self.pool = []
         errors = []
@@ -169,8 +168,8 @@ class Label(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=pool,pool_label
-        :avocado: tags=duplicate_label_create,test_duplicate_create
+        :avocado: tags=pool
+        :avocado: tags=Label,test_duplicate_create
         """
         self.pool = []
         label = "TestLabel"
@@ -197,8 +196,8 @@ class Label(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=pool,pool_label
-        :avocado: tags=duplicate_label_destroy,test_duplicate_destroy
+        :avocado: tags=pool
+        :avocado: tags=Label,test_duplicate_destroy
         """
         self.pool = []
 
@@ -223,8 +222,8 @@ class Label(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=pool,pool_label
-        :avocado: tags=label_update,test_label_update
+        :avocado: tags=pool
+        :avocado: tags=Label,test_label_update
         """
         self.pool = []
 

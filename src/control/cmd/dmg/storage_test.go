@@ -89,30 +89,6 @@ func TestStorageCommands(t *testing.T) {
 			errors.New("cannot use --verbose"),
 		},
 		{
-			"Scan NVMe meta data short",
-			"storage scan -m",
-			printRequest(t, &control.StorageScanReq{NvmeMeta: true}),
-			nil,
-		},
-		{
-			"Scan NVMe meta data long",
-			"storage scan --nvme-meta",
-			printRequest(t, &control.StorageScanReq{NvmeMeta: true}),
-			nil,
-		},
-		{
-			"Scan NVMe meta with verbose",
-			"storage scan --nvme-meta --verbose",
-			"",
-			errors.New("cannot use --verbose"),
-		},
-		{
-			"Scan NVMe meta and health",
-			"storage scan --nvme-meta --nvme-health --verbose",
-			"",
-			errors.New("cannot use --nvme-health and --nvme-meta"),
-		},
-		{
 			"Rebind NVMe; no PCI address",
 			"storage nvme-rebind",
 			"",

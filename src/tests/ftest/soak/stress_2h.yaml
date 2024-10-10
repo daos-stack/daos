@@ -97,7 +97,7 @@ ior_stress:
   dfs_oclass:
     - ["SX","SX"]
   dfuse:
-    mount_dir: "/tmp/daos_dfuse/ior/"
+    mount_dir: "/tmp/soak_dfuse_ior/"
     disable_caching: true
 mdtest_stress:
   # maximum timeout for a single job in test in minutes
@@ -124,7 +124,7 @@ mdtest_stress:
     - ["S1","S1"]
   dfs_destroy: false
   dfuse:
-    mount_dir: "/tmp/daos_dfuse/mdtest/"
+    mount_dir: "/tmp/soak_dfuse_mdtest/"
     disable_caching: true
 vpic_stress:
   job_timeout: 20
@@ -134,9 +134,9 @@ vpic_stress:
     - 16
   cmdline: "/var/hit/daos/builds/vpic-install/bin/harris.Linux"
   posix: true
-  workdir: "/tmp/daos_dfuse/vpic/"
+  workdir: "/tmp/soak_dfuse_vpic/"
   dfuse:
-    mount_dir: "/tmp/daos_dfuse/vpic/"
+    mount_dir: "/tmp/soak_dfuse_vpic/"
     disable_caching: true
   oclass:
     - ["SX","SX"]
@@ -148,9 +148,9 @@ lammps_stress:
     - 16
   cmdline: "/var/hit/daos/builds/lammps/src/lmp_mpi -i /var/hit/daos/builds/lammps/bench/in.lj"
   posix: true
-  workdir: "/tmp/daos_dfuse/lammps/"
+  workdir: "/tmp/soak_dfuse_lammps/"
   dfuse:
-    mount_dir: "/tmp/daos_dfuse/lammps/"
+    mount_dir: "/tmp/soak_dfuse_lammps/"
     disable_caching: true
   oclass:
     - ["SX","SX"]

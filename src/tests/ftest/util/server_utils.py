@@ -1,31 +1,28 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
 
-from collections import defaultdict
-from getpass import getuser
 import os
-import re
-import time
 import random
+import time
+from getpass import getuser
 
 from avocado import fail_on
-
 from ClusterShell.NodeSet import NodeSet
-from command_utils_base import CommonConfig, BasicParameter
 from command_utils import SubprocessManager
+from command_utils_base import BasicParameter, CommonConfig
 from dmg_utils import get_dmg_command
 from exception_utils import CommandFailure
-from general_utils import pcmd, get_log_file, list_to_str, get_display_size, run_pcmd
-from general_utils import get_default_config_file
+from general_utils import (get_default_config_file, get_display_size, get_log_file, list_to_str,
+                           pcmd, run_pcmd)
 from host_utils import get_local_host
-from server_utils_base import ServerFailed, DaosServerCommand, DaosServerInformation
+from run_utils import run_remote, stop_processes
+from server_utils_base import DaosServerCommand, DaosServerInformation, ServerFailed
 from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
 from user_utils import get_chown_command
-from run_utils import run_remote, stop_processes
 
 
 def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):
@@ -48,7 +45,7 @@ def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):
     transport_config = DaosServerTransportCredentials(cert_dir)
     common_config = CommonConfig(group, transport_config)
     config = DaosServerYamlParameters(config_file, common_config)
-    command = DaosServerCommand(bin_dir, config)
+    command = DaosServerCommand(bin_dir, config, None)
     if config_temp:
         # Setup the DaosServerCommand to write the config file data to the
         # temporary file and then copy the file to all the hosts using the
@@ -63,9 +60,9 @@ class DaosServerManager(SubprocessManager):
 
     # Mapping of environment variable names to daos_server config param names
     ENVIRONMENT_VARIABLE_MAPPING = {
-        "CRT_PHY_ADDR_STR": "provider",
-        "OFI_INTERFACE": "fabric_iface",
-        "OFI_PORT": "fabric_iface_port",
+        "D_PROVIDER": "provider",
+        "D_INTERFACE": "fabric_iface",
+        "D_PORT": "fabric_iface_port",
     }
 
     # Defined in telemetry_common.h
@@ -133,7 +130,9 @@ class DaosServerManager(SubprocessManager):
 
         # Parameters to set storage prepare and format timeout
         self.storage_prepare_timeout = BasicParameter(None, 40)
-        self.storage_format_timeout = BasicParameter(None, 40)
+        self.storage_format_timeout = BasicParameter(None, 64)
+        self.storage_reset_timeout = BasicParameter(None, 120)
+        self.collect_log_timeout = BasicParameter(None, 120)
 
         # Optional external yaml data to use to create the server config file, bypassing the values
         # defined in the self.manager.job.yaml object.
@@ -237,6 +236,7 @@ class DaosServerManager(SubprocessManager):
         # Create the daos_server yaml file
         self.manager.job.temporary_file_hosts = self._hosts.copy()
         self.manager.job.create_yaml_file(self._external_yaml_data)
+        self.manager.job.update_pattern_timeout()
 
         # Copy certificates
         self.manager.job.copy_certificates(get_log_file("daosCA/certs"), self._hosts)
@@ -269,60 +269,89 @@ class DaosServerManager(SubprocessManager):
 
         Args:
             verbose (bool, optional): display clean commands. Defaults to True.
+
+        Raises:
+            ServerFailed: if there was an error cleaning up the daos server files
         """
-        clean_commands = []
-        for index, engine_params in enumerate(self.manager.job.yaml.engine_params):
-            scm_mount = engine_params.get_value("scm_mount")
-            self.log.info("Cleaning up the %s directory.", str(scm_mount))
-
-            # Remove the superblocks
-            cmd = "sudo rm -fr {}/*".format(scm_mount)
-            if cmd not in clean_commands:
-                clean_commands.append(cmd)
-
-            # Remove the shared memory segment associated with this io server
-            cmd = "sudo ipcrm -M {}".format(self.D_TM_SHARED_MEMORY_KEY + index)
-            clean_commands.append(cmd)
-
-            # Dismount the scm mount point
-            cmd = "while sudo umount {}; do continue; done".format(scm_mount)
-            if cmd not in clean_commands:
-                clean_commands.append(cmd)
-
+        scm_mounts = []
+        scm_lists = []
+        for engine_params in self.manager.job.yaml.engine_params:
+            scm_mounts.append(engine_params.get_value("scm_mount"))
             if self.manager.job.using_dcpm:
                 scm_list = engine_params.get_value("scm_list")
                 if isinstance(scm_list, list):
-                    self.log.info("Cleaning up the following device(s): %s.", ", ".join(scm_list))
-                    # Umount and wipefs the dcpm device
-                    cmd_list = [
-                        "for dev in {}".format(" ".join(scm_list)),
-                        "do mount=$(lsblk $dev -n -o MOUNTPOINT)",
-                        "if [ ! -z $mount ]",
-                        "then while sudo umount $mount",
-                        "do continue",
-                        "done",
-                        "fi",
-                        "sudo wipefs -a $dev",
-                        "done"
-                    ]
-                    cmd = "; ".join(cmd_list)
-                    if cmd not in clean_commands:
-                        clean_commands.append(cmd)
+                    scm_lists.append(scm_list)
+
+        for index, scm_mount in enumerate(scm_mounts):
+            # Remove the superblocks and dismount the scm mount point
+            self.log.info("Cleaning up the %s scm mount.", str(scm_mount))
+            self.clean_mount(self._hosts, scm_mount, verbose, index)
+
+        for scm_list in scm_lists:
+            # Umount and wipefs the dcpm device
+            self.log.info("Cleaning up the %s dcpm devices", str(scm_list))
+            command_list = [
+                "for dev in {}".format(" ".join(scm_list)),
+                "do mount=$(lsblk $dev -n -o MOUNTPOINT)",
+                "if [ ! -z $mount ]",
+                "then while sudo umount $mount",
+                "do continue",
+                "done",
+                "fi",
+                "sudo wipefs -a $dev",
+                "done"
+            ]
+            command = "; ".join(command_list)
+            result = run_remote(self.log, self._hosts, command, verbose)
+            if not result.passed:
+                raise ServerFailed("Failed cleaning {} on {}".format(scm_list, result.failed_hosts))
 
         if self.manager.job.using_control_metadata:
             # Remove the contents (superblocks) of the control plane metadata path
-            cmd = "sudo rm -fr {}/*".format(self.manager.job.control_metadata.path.value)
-            if cmd not in clean_commands:
-                clean_commands.append(cmd)
+            self.log.info(
+                "Cleaning up the control metadata path %s",
+                self.manager.job.control_metadata.path.value)
+            self.clean_mount(self._hosts, self.manager.job.control_metadata.path.value, verbose)
 
-            if self.manager.job.control_metadata.device.value is not None:
-                # Dismount the control plane metadata mount point
-                cmd = "while sudo umount {}; do continue; done".format(
-                    self.manager.job.control_metadata.device.value)
-                if cmd not in clean_commands:
-                    clean_commands.append(cmd)
+    def clean_mount(self, hosts, mount, verbose=True, index=None):
+        """Clean the mount point by removing the superblocks and dismounting.
 
-        pcmd(self._hosts, "; ".join(clean_commands), verbose)
+        Args:
+            hosts (NodeSet): the hosts on which to clean the mount point
+            mount (str): the mount point to clean
+            verbose (bool, optional): display clean commands. Defaults to True.
+            index (int, optional): Defaults to None.
+
+        Raises:
+            ServerFailed: if there is an error cleaning the mount point
+        """
+        self.log.debug("Checking for the existence of the %s mount point", mount)
+        command = "test -d {}".format(mount)
+        result = run_remote(self.log, hosts, command, verbose)
+        if result.passed_hosts:
+            mounted_hosts = result.passed_hosts
+
+            # Remove the superblocks
+            self.log.debug("Removing the %s superblocks", mount)
+            command = "sudo rm -fr {}/*".format(mount)
+            result = run_remote(self.log, mounted_hosts, command, verbose)
+            if not result.passed:
+                raise ServerFailed(
+                    "Failed to remove superblocks for {} on {}".format(mount, result.failed_hosts))
+
+            if index is not None:
+                # Remove the shared memory segment associated with this io server
+                self.log.debug("Removing the shared memory segment")
+                command = "sudo ipcrm -M {}".format(self.D_TM_SHARED_MEMORY_KEY + index)
+                run_remote(self.log, mounted_hosts, command, verbose)
+
+            # Dismount the scm mount point
+            self.log.debug("Dismount the %s mount point", mount)
+            command = "while sudo umount {}; do continue; done".format(mount)
+            result = run_remote(self.log, mounted_hosts, command, verbose)
+            if not result.passed:
+                raise ServerFailed(
+                    "Failed to dismount {} on {}".format(mount, result.failed_hosts))
 
     def prepare_storage(self, user, using_dcpm=None, using_nvme=None):
         """Prepare the server storage.
@@ -364,9 +393,7 @@ class DaosServerManager(SubprocessManager):
                 DaosServerCommand.ScmSubCommand.PrepareSubCommand object
 
         Raises:
-            RemoteCommandResult: a grouping of the command results from the same hosts with the same
-                return status
-
+            CommandResult: groups of command results from the same hosts with the same return status
         """
         cmd = DaosServerCommand(self.manager.job.command_path)
         cmd.sudo = False
@@ -389,9 +416,7 @@ class DaosServerManager(SubprocessManager):
                 DaosServerCommand.ScmSubCommand.ResetSubCommand object
 
         Raises:
-            RemoteCommandResult: a grouping of the command results from the same hosts with the same
-                return status
-
+            CommandResult: groups of command results from the same hosts with the same return status
         """
         cmd = DaosServerCommand(self.manager.job.command_path)
         cmd.sudo = False
@@ -409,9 +434,7 @@ class DaosServerManager(SubprocessManager):
                 DaosServerCommand.NvmeSubCommand.PrepareSubCommand object
 
         Returns:
-            RemoteCommandResult: a grouping of the command results from the same hosts with the same
-                return status
-
+            CommandResult: groups of command results from the same hosts with the same return status
         """
         cmd = DaosServerCommand(self.manager.job.command_path)
         cmd.sudo = False
@@ -429,17 +452,17 @@ class DaosServerManager(SubprocessManager):
                 DaosServerCommand.SupportSubCommand.CollectLogSubCommand object
 
         Returns:
-            RemoteCommandResult: a grouping of the command results from the same hosts with the same
-                return status
-
+            CommandResult: groups of command results from the same hosts with the same return status
         """
         cmd = DaosServerCommand(self.manager.job.command_path)
-        cmd.sudo = False
+        cmd.run_user = "daos_server"
         cmd.debug.value = False
-        cmd.config.value = get_default_config_file("server")
-        self.log.info("Support collect-log on servers: %s", str(cmd))
+        kwargs['config'] = get_default_config_file(
+            "server", os.path.dirname(self.manager.job.yaml.filename))
         cmd.set_command(("support", "collect-log"), **kwargs)
-        return run_remote(self.log, self._hosts, cmd.with_exports)
+        self.log.info("Support collect-log on servers: %s", str(cmd))
+        return run_remote(
+            self.log, self._hosts, cmd.with_exports, timeout=self.collect_log_timeout.value)
 
     def detect_format_ready(self, reformat=False):
         """Detect when all the daos_servers are ready for storage format.
@@ -562,7 +585,8 @@ class DaosServerManager(SubprocessManager):
         cmd.sub_command_class.sub_command_class.ignore_config.value = True
 
         self.log.info("Resetting DAOS server storage: %s", str(cmd))
-        result = run_remote(self.log, self._hosts, cmd.with_exports, timeout=120)
+        result = run_remote(
+            self.log, self._hosts, cmd.with_exports, timeout=self.storage_reset_timeout.value)
         if not result.passed:
             raise ServerFailed("Error resetting NVMe storage")
 
@@ -977,6 +1001,71 @@ class DaosServerManager(SubprocessManager):
         # set stopped servers state to make teardown happy
         self.update_expected_states(None, ["stopped", "excluded", "errored"])
 
+    @fail_on(CommandFailure)
+    def system_exclude(self, ranks, copy=False, rank_hosts=None):
+        """Exclude the specific server ranks.
+
+        Args:
+            ranks (list): a list of daos server ranks (int) to exclude
+            copy (bool, optional): Copy dmg command. Defaults to False.
+            rank_hosts (str): hostlist representing hosts whose managed ranks are to be
+                operated on.
+
+        Raises:
+            avocado.core.exceptions.TestFail: if there is an issue excluding the server
+                ranks.
+
+        """
+        msg = "Excluding DAOS ranks {} from server group {}".format(
+            ranks, self.get_config_value("name"))
+        self.log.info(msg)
+
+        # Exclude desired ranks using dmg.
+        if copy:
+            self.dmg.copy().system_exclude(
+                ranks=list_to_str(value=ranks), rank_hosts=rank_hosts)
+        else:
+            self.dmg.system_exclude(ranks=list_to_str(value=ranks), rank_hosts=rank_hosts)
+
+        # Update the expected status of the excluded ranks
+        self.update_expected_states(ranks, "adminexcluded")
+
+        # Verify current state is adminexcluded.
+        self.check_rank_state(ranks=ranks, valid_states=["adminexcluded"])
+
+    @fail_on(CommandFailure)
+    def system_clear_exclude(self, ranks, copy=False, rank_hosts=None):
+        """Clear the exclusion of the specific server ranks.
+
+        Args:
+            ranks (list): a list of daos server ranks (int) to clear the exclusion
+            copy (bool, optional): Copy dmg command. Defaults to False.
+            rank_hosts (str): hostlist representing hosts whose managed ranks are to be
+                operated on.
+
+        Raises:
+            avocado.core.exceptions.TestFail: if there is an issue clearing the exclusion
+                of the server ranks.
+
+        """
+        msg = "Clear the exclusion for DAOS ranks {} from server group {}".format(
+            ranks, self.get_config_value("name"))
+        self.log.info(msg)
+
+        # Clear the exclusion for desired ranks using dmg.
+        if copy:
+            self.dmg.copy().system_clear_exclude(
+                ranks=list_to_str(value=ranks), rank_hosts=rank_hosts)
+        else:
+            self.dmg.system_clear_exclude(
+                ranks=list_to_str(value=ranks), rank_hosts=rank_hosts)
+
+        # Update the expected status of the excluded ranks
+        self.update_expected_states(ranks, "excluded")
+
+        # Verify current state is excluded.
+        self.check_rank_state(ranks=ranks, valid_states=["excluded"])
+
     def get_host(self, rank):
         """Get the host name that matches the specified rank.
 
@@ -998,7 +1087,7 @@ class DaosServerManager(SubprocessManager):
         Use the specified data to generate and distribute the server configuration to the hosts.
 
         Also use this data to replace the engine storage configuration so that the storage options
-        defined in the specified data are configured correctly as part of the server startup.
+        defined in the specified data are configured correctly as part of the server start-up.
 
         Args:
             generated_yaml (YAMLObject): New server config data.
@@ -1074,80 +1163,3 @@ class DaosServerManager(SubprocessManager):
                 command="sudo {} -S {} --csv".format(daos_metrics_exe, engine))
             engines.append(results)
         return engines
-
-    def get_host_log_files(self):
-        """Get the active engine log file names on each host.
-
-        Returns:
-            dict: host keys with lists of log files on that host values
-
-        """
-        self.log.debug("Determining the current %s log files", self.manager.job.command)
-
-        # Get a list of engine pids from all of the hosts
-        host_engine_pids = defaultdict(list)
-        result = run_remote(self.log, self.hosts, "pgrep daos_engine", False)
-        for data in result.output:
-            if data.passed:
-                # Search each individual line of output independently to ensure a pid match
-                for line in data.stdout:
-                    match = re.findall(r'(^[0-9]+)', line)
-                    for host in data.hosts:
-                        host_engine_pids[host].extend(match)
-
-        # Find the log files that match the engine pids on each host
-        host_log_files = defaultdict(list)
-        log_files = self.manager.job.get_engine_values("log_file")
-        for host, pid_list in host_engine_pids.items():
-            # Generate a list of all of the possible log files that could exist on this host
-            file_search = []
-            for log_file in log_files:
-                for pid in pid_list:
-                    file_search.append(".".join([log_file, pid]))
-            # Determine which of those log files actually do exist on this host
-            # This matches the engine pid to the engine log file name
-            command = f"ls -1 {' '.join(file_search)} | grep -v 'No such file or directory'"
-            result = run_remote(self.log, host, command, False)
-            for data in result.output:
-                for line in data.stdout:
-                    match = re.findall(fr"^({'|'.join(file_search)})", line)
-                    if match:
-                        host_log_files[host].append(match[0])
-
-        self.log.debug("Engine log files per host")
-        for host in sorted(host_log_files):
-            self.log.debug("  %s:", host)
-            for log_file in sorted(host_log_files[host]):
-                self.log.debug("    %s", log_file)
-
-        return host_log_files
-
-    def search_log(self, pattern):
-        """Search the server log files on the remote hosts for the specified pattern.
-
-        Args:
-            pattern (str): the grep -E pattern to use to search the server log files
-
-        Returns:
-            int: number of patterns found
-
-        """
-        self.log.debug("Searching %s logs for '%s'", self.manager.job.command, pattern)
-        host_log_files = self.get_host_log_files()
-
-        # Search for the pattern in the remote log files
-        matches = 0
-        for host, log_files in host_log_files.items():
-            log_file_matches = 0
-            self.log.debug("Searching for '%s' in %s on %s", pattern, log_files, host)
-            result = run_remote(self.log, host, f"grep -E '{pattern}' {' '.join(log_files)}")
-            for data in result.output:
-                if data.returncode == 0:
-                    matches = re.findall(fr'{pattern}', '\n'.join(data.stdout))
-                    log_file_matches += len(matches)
-            self.log.debug("Found %s matches on %s", log_file_matches, host)
-            matches += log_file_matches
-        self.log.debug(
-            "Found %s total matches for '%s' in the %s logs",
-            matches, pattern, self.manager.job.command)
-        return matches

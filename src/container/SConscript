@@ -8,7 +8,7 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
 
-    denv.require('argobots', 'protobufc')
+    denv.require('protobufc')
 
     common = denv.SharedObject(['rpc.c'])
 
@@ -20,7 +20,7 @@ def scons():
 
     # ds_cont: Container Server
     senv = denv.Clone()
-    senv.require('pmdk', headers_only=True)
+    senv.require('argobots', 'pmdk', headers_only=True)
     senv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     ds_cont = senv.d_library('cont',
                              ['srv.c', 'srv_container.c', 'srv_epoch.c',

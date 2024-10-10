@@ -1,15 +1,15 @@
 '''
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from os.path import join
 
-from pydaos.raw import DaosApiError
 import avocado
-
 from data_mover_test_base import DataMoverTestBase
 from duns_utils import format_path
+from pydaos.raw import DaosApiError
+from test_utils_container import get_existing_container
 
 
 class DmvrPreserveProps(DataMoverTestBase):
@@ -56,8 +56,7 @@ class DmvrPreserveProps(DataMoverTestBase):
         self.set_api(api)
 
         # Create 1 pool
-        pool1 = self.create_pool()
-        pool1.connect(2)
+        pool1 = self.get_pool()
 
         # set the path to read and write container properties
         self.preserve_props_path = join(self.tmp, "cont_props.h5")
@@ -86,7 +85,7 @@ class DmvrPreserveProps(DataMoverTestBase):
             dst_path=format_path(pool1))
 
         cont2_label = self.parse_create_cont_label(result.stdout_text)
-        cont2 = self.get_cont(pool1, cont2_label)
+        cont2 = get_existing_container(self, pool1, cont2_label)
         cont2.type.update(cont1.type.value, "type")
         self.verify_cont(cont2, api, True, src_props)
 
@@ -224,7 +223,6 @@ class DmvrPreserveProps(DataMoverTestBase):
         :avocado: tags=all,pr
         :avocado: tags=vm
         :avocado: tags=datamover,daos_fs_copy,dfs,ior,hdf5,daos_cmd
-        :avocado: tags=dm_preserve_props,dm_preserve_props_fs_copy_posix_dfs
-        :avocado: tags=test_dm_preserve_props_fs_copy_posix_dfs
+        :avocado: tags=DmvrPreserveProps,test_dm_preserve_props_fs_copy_posix_dfs
         """
         self.run_dm_preserve_props("FS_COPY", "POSIX", "DFS")

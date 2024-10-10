@@ -1,0 +1,6 @@
+# Copyright 2021-2023 Intel Corporation
+# All rights reserved.
+#
+# Minimal configuration file for using the daos cli.
+
+runtime_dir: /var/run/daos_agent

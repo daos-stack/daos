@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,29 +15,11 @@ import "ctl/smd.proto";
 // NVMe Storage Protobuf Definitions related to interactions between
 // DAOS control server and locally attached storage.
 
-// NvmeController represents an NVMe Controller (SSD).
-message NvmeController {
-	// Namespace represents a namespace created on an NvmeController.
-	message Namespace {
-		uint32 id = 1;			// namespace id
-		uint64 size = 2;		// device capacity in bytes
-		string ctrlr_pci_addr = 3;	// parent controller PCI address
-	}
-
-	string model = 1;			// model name
-	string serial = 2;			// serial number
-	string pci_addr = 3;			// pci address
-	string fw_rev = 4;			// firmware revision
-	int32 socket_id = 5;			// NUMA socket ID
-	BioHealthResp health_stats = 6;		// controller's health stats
-	repeated Namespace namespaces = 7;	// controller's namespaces
-	repeated SmdDevice smd_devices = 8;	// controller's blobstores
-}
-
 // NvmeControllerResult represents state of operation performed on controller.
 message NvmeControllerResult {
 	string pci_addr = 1;		// PCI address of NVMe controller
 	ResponseState state = 2;	// state of current operation
+	uint32 role_bits = 3;		// Device active roles (bitmask)
 }
 
 message ScanNvmeReq {

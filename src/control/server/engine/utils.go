@@ -141,8 +141,8 @@ var (
 		"CRT", "RPC", "BULK", "CORPC", "GRP", "LM", "HG", // CaRT subsystems
 		"EXTERNAL", "ST", "IV", "CTL",
 	}
-	errLogNameAllWithOther = errors.New("'all' identifier cannot be used with any other")
-	errLogNameAllInMasks   = errors.New("'all' identifier cannot be used in log mask level assignments")
+	errLogNameAllWithOther = errors.New("'all' identifier can not be used with any other log identifier")
+	errLogNameAllInMasks   = errors.New("'all' identifier can not be used in log mask level assignments")
 )
 
 func isLogLevelValid(name string) bool {
@@ -281,6 +281,7 @@ func getLogLevelAssignments(masks, subsystemsStr string, baseLevel LogLevel) ([]
 		})
 	}
 
+	// Build subsystems slice from input string.
 	var subsystems []string
 	for _, ss := range strings.Split(subsystemsStr, logMasksStrAssignSep) {
 		if ss == "" || strings.ToUpper(ss) == "ALL" {
@@ -289,13 +290,18 @@ func getLogLevelAssignments(masks, subsystemsStr string, baseLevel LogLevel) ([]
 		subsystems = append(subsystems, ss)
 	}
 
-	// Remove assignments if level < ERROR and subsystem not in subsystems slice.
-	for i, a := range assignments {
-		if a.level < LogLevelErr && !common.Includes(subsystems, a.subsys) {
-			assignments = append(assignments[:i], assignments[i+1:]...)
-			i-- // slice just got shorter
+	if len(subsystems) == 0 {
+		return assignments, nil
+	}
+
+	// Remove assignments if assignment level < ERROR and subsystem not in subsystems slice.
+	var newAssignments []logSubsysLevel
+	for _, a := range assignments {
+		if a.level >= LogLevelErr || common.Includes(subsystems, a.subsys) {
+			newAssignments = append(newAssignments, a)
 		}
 	}
+	assignments = newAssignments
 
 	if baseLevel >= LogLevelErr {
 		return assignments, nil

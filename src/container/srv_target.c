@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -50,39 +50,29 @@ agg_rate_ctl(void *arg)
 	struct ds_cont_child	*cont = param->ap_cont;
 	struct ds_pool		*pool = cont->sc_pool->spc_pool;
 	struct sched_request	*req = cont2req(cont, param->ap_vos_agg);
+	uint32_t		 msecs;
 
 	/* Abort current round of aggregation */
 	if (dss_ult_exiting(req) || pool->sp_reclaim == DAOS_RECLAIM_DISABLED)
 		return -1;
 
-	/* If the container is discarding the object mostly due to rebuild failure
-	 * reclaim, let's abort the aggregation to let discard proceed.
-	 */
-	if (cont->sc_discarding)
+	/*
+	 * XXX temporary workaround: EC aggregation needs to be paused during rebuilding
+	 * to avoid the race between EC rebuild and EC aggregation.
+	 **/
+	if (pool->sp_rebuilding && cont->sc_ec_agg_active && !param->ap_vos_agg)
 		return -1;
 
-	/* System is idle, let aggregation run in tight mode */
-	if (!dss_xstream_is_busy()) {
+	/* When system is idle or under space pressure, let aggregation run in tight mode */
+	if (!dss_xstream_is_busy() || sched_req_space_check(req) != SCHED_SPACE_PRESS_NONE) {
 		sched_req_yield(req);
 		return 0;
 	}
 
-	/*
-	 * When it's under space pressure, aggregation will continue run in slack
-	 * mode no matter what reclaim policy is used, otherwise, it'll take an extra
-	 * sleep to minimize the performance impact.
-	 */
-	if (sched_req_space_check(req) == SCHED_SPACE_PRESS_NONE) {
-		uint32_t msecs;
+	msecs = (pool->sp_reclaim == DAOS_RECLAIM_LAZY) ? 1000 : 50;
+	sched_req_sleep(req, msecs);
 
-		/* Sleep 2 seconds in lazy mode, it's kind of pausing aggregation */
-		msecs = (pool->sp_reclaim == DAOS_RECLAIM_LAZY) ? 2000 : 50;
-		sched_req_sleep(req, msecs);
-	} else {
-		sched_req_yield(req);
-	}
-
-	/* System is busy, let aggregation run in slack mode */
+	/* System is busy and no space pressure, let aggregation run in slack mode */
 	return 1;
 }
 
@@ -96,7 +86,7 @@ ds_cont_get_props(struct cont_props *cont_props, uuid_t pool_uuid,
 	/* The provided prop entry types should cover the types used in
 	 * daos_props_2cont_props().
 	 */
-	props = daos_prop_alloc(16);
+	props = daos_prop_alloc(17);
 	if (props == NULL)
 		return -DER_NOMEM;
 
@@ -116,6 +106,7 @@ ds_cont_get_props(struct cont_props *cont_props, uuid_t pool_uuid,
 	props->dpp_entries[13].dpe_type = DAOS_PROP_CO_REDUN_LVL;
 	props->dpp_entries[14].dpe_type = DAOS_PROP_CO_OBJ_VERSION;
 	props->dpp_entries[15].dpe_type = DAOS_PROP_CO_STATUS;
+	props->dpp_entries[16].dpe_type = DAOS_PROP_CO_PERF_DOMAIN;
 
 	rc = cont_iv_prop_fetch(pool_uuid, cont_uuid, props);
 	if (rc == DER_SUCCESS)
@@ -183,21 +174,17 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 		 * see pool_iv_pre_sync(), the IV fetch from the following
 		 * ds_cont_csummer_init() will fail anyway.
 		 */
-		D_DEBUG(DB_EPC, DF_CONT": skip aggregation "
-			"No pool map yet or stopping %d\n",
-			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+		D_DEBUG(DB_EPC, DF_CONT ": skip %s aggregation: No pool map yet or stopping %d\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), vos_agg ? "VOS" : "EC",
 			pool->sp_stopping);
 		return false;
 	}
 
-	if (pool->sp_reintegrating) {
-		if (vos_agg)
-			cont->sc_vos_agg_active = 0;
-		else
-			cont->sc_ec_agg_active = 0;
-		D_DEBUG(DB_EPC, DF_CONT": skip %s aggregation during reintegration %d.\n",
+	if (pool->sp_rebuilding && !vos_agg) {
+		cont->sc_ec_agg_active = 0;
+		D_DEBUG(DB_EPC, DF_CONT": skip EC aggregation during rebuild %d.\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-			vos_agg ? "VOS" : "EC", pool->sp_reintegrating);
+			pool->sp_rebuilding);
 		return false;
 	}
 
@@ -219,15 +206,17 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 	if (cont->sc_props.dcp_dedup_enabled ||
 	    cont->sc_props.dcp_compress_enabled ||
 	    cont->sc_props.dcp_encrypt_enabled) {
-		D_DEBUG(DB_EPC, DF_CONT": skip aggregation for "
-			"deduped/compressed/encrypted container\n",
-			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
+		D_DEBUG(DB_EPC,
+			DF_CONT ": skip %s aggregation for deduped/compressed/encrypted"
+				" container\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), vos_agg ? "VOS" : "EC");
 		return false;
 	}
 
 	/* snapshot list isn't fetched yet */
 	if (cont->sc_aggregation_max == 0) {
-		D_DEBUG(DB_EPC, "No aggregation before snapshots fetched\n");
+		D_DEBUG(DB_EPC, "No %s aggregation before snapshots fetched\n",
+			vos_agg ? "VOS" : "EC");
 		/* fetch snapshot list */
 		if (dss_get_module_info()->dmi_tgt_id == 0)
 			ds_cont_tgt_snapshots_refresh(cont->sc_pool->spc_uuid,
@@ -240,10 +229,18 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 		return false;
 	}
 
+	/*
+	 * EC aggregation must proceed no matter if the target is busy or not,
+	 * otherwise, the global EC boundary won't be bumped promptly, and that
+	 * will impact VOS aggregation on every target.
+	 */
+	if (!vos_agg)
+		return true;
+
 	if (pool->sp_reclaim == DAOS_RECLAIM_LAZY && dss_xstream_is_busy() &&
 	    sched_req_space_check(req) == SCHED_SPACE_PRESS_NONE) {
-		D_DEBUG(DB_EPC, "Pool reclaim strategy is lazy, service is "
-			"busy and no space pressure\n");
+		D_DEBUG(DB_EPC, "Pool reclaim strategy is lazy, service is busy and no space"
+				" pressure\n");
 		return false;
 	}
 
@@ -323,6 +320,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 
 	if (unlikely(DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG) ||
 		     DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG_FAIL) ||
+		     DAOS_FAIL_CHECK(DAOS_OBJ_EC_AGG_LEADER_DIFF) ||
 		     DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG_PEER_FAIL)))
 		interval = 0;
 	else
@@ -437,8 +435,8 @@ out:
 	if (rc == 0 && epoch_min == 0)
 		param->ap_full_scan_hlc = hlc;
 
-	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating finished. "DF_RC"\n",
-		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), tgt_id, DP_RC(rc));
+	D_DEBUG(DB_EPC, DF_CONT "[%d]: Aggregating finished. %d\n",
+		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), tgt_id, rc);
 free:
 	if (snapshots != NULL && snapshots != snapshots_local)
 		D_FREE(snapshots);
@@ -454,9 +452,9 @@ cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 	struct sched_request	*req = cont2req(cont, param->ap_vos_agg);
 	int			 rc = 0;
 
-	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregation ULT started\n",
-		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-		dmi->dmi_tgt_id);
+	D_DEBUG(DB_EPC, DF_CONT "[%d]: %s Aggregation ULT started\n",
+		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), dmi->dmi_tgt_id,
+		param->ap_vos_agg ? "VOS" : "EC");
 
 	if (req == NULL)
 		goto out;
@@ -477,9 +475,10 @@ cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 		if (rc == -DER_SHUTDOWN) {
 			break;	/* pool destroyed */
 		} else if (rc < 0) {
-			D_ERROR(DF_CONT": VOS aggregate failed. "DF_RC"\n",
-				DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-				DP_RC(rc));
+			DL_CDEBUG(rc == -DER_BUSY, DB_EPC, DLOG_ERR, rc,
+				  DF_CONT ": %s aggregate failed",
+				  DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+				  param->ap_vos_agg ? "VOS" : "EC");
 		} else if (sched_req_space_check(req) != SCHED_SPACE_PRESS_NONE) {
 			/* Don't sleep too long when there is space pressure */
 			msecs = 2ULL * 100;
@@ -491,9 +490,9 @@ next:
 		sched_req_sleep(req, msecs);
 	}
 out:
-	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregation ULT stopped\n",
-		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-		dmi->dmi_tgt_id);
+	D_DEBUG(DB_EPC, DF_CONT "[%d]: %s Aggregation ULT stopped\n",
+		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), dmi->dmi_tgt_id,
+		param->ap_vos_agg ? "VOS" : "EC");
 }
 
 static int
@@ -630,13 +629,23 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 	rc = ABT_cond_create(&cont->sc_scrub_cond);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
-		goto out_mutex;
+		goto out_resync_cond;
+	}
+	rc = ABT_cond_create(&cont->sc_rebuild_cond);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto out_scrub_cond;
+	}
+	rc = ABT_cond_create(&cont->sc_fini_cond);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto out_rebuild_cond;
 	}
 
 	cont->sc_pool = ds_pool_child_lookup(po_uuid);
 	if (cont->sc_pool == NULL) {
 		rc = -DER_NO_HDL;
-		goto out_cond;
+		goto out_finish_cond;
 	}
 
 	rc = vos_cont_open(cont->sc_pool->spc_hdl, co_uuid, &cont->sc_hdl);
@@ -656,13 +665,23 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 	cont->sc_dtx_cos_hdl = DAOS_HDL_INVAL;
 	D_INIT_LIST_HEAD(&cont->sc_link);
 	D_INIT_LIST_HEAD(&cont->sc_open_hdls);
+	cont->sc_dtx_committable_count = 0;
+	cont->sc_dtx_committable_coll_count = 0;
+	D_INIT_LIST_HEAD(&cont->sc_dtx_cos_list);
+	D_INIT_LIST_HEAD(&cont->sc_dtx_coll_list);
 
 	*link = &cont->sc_list;
 	return 0;
 
 out_pool:
 	ds_pool_child_put(cont->sc_pool);
-out_cond:
+out_finish_cond:
+	ABT_cond_free(&cont->sc_fini_cond);
+out_rebuild_cond:
+	ABT_cond_free(&cont->sc_rebuild_cond);
+out_scrub_cond:
+	ABT_cond_free(&cont->sc_scrub_cond);
+out_resync_cond:
 	ABT_cond_free(&cont->sc_dtx_resync_cond);
 out_mutex:
 	ABT_mutex_free(&cont->sc_mutex);
@@ -689,6 +708,8 @@ cont_child_free_ref(struct daos_llink *llink)
 	D_FREE(cont->sc_snapshots);
 	ABT_cond_free(&cont->sc_dtx_resync_cond);
 	ABT_cond_free(&cont->sc_scrub_cond);
+	ABT_cond_free(&cont->sc_rebuild_cond);
+	ABT_cond_free(&cont->sc_fini_cond);
 	ABT_mutex_free(&cont->sc_mutex);
 	D_FREE(cont);
 }
@@ -719,11 +740,31 @@ cont_child_rec_hash(struct daos_llink *llink)
 				 2 * sizeof(uuid_t));
 }
 
+static void
+cont_child_wait(struct daos_llink *llink)
+{
+	struct ds_cont_child *cont = cont_child_obj(llink);
+
+	ABT_mutex_lock(cont->sc_mutex);
+	ABT_cond_wait(cont->sc_fini_cond, cont->sc_mutex);
+	ABT_mutex_unlock(cont->sc_mutex);
+}
+
+static void
+cont_child_wakeup(struct daos_llink *llink)
+{
+	struct ds_cont_child *cont = cont_child_obj(llink);
+
+	ABT_cond_broadcast(cont->sc_fini_cond);
+}
+
 static struct daos_llink_ops cont_child_cache_ops = {
 	.lop_alloc_ref	= cont_child_alloc_ref,
 	.lop_free_ref	= cont_child_free_ref,
 	.lop_cmp_keys	= cont_child_cmp_keys,
 	.lop_rec_hash	= cont_child_rec_hash,
+	.lop_wait	= cont_child_wait,
+	.lop_wakeup	= cont_child_wakeup,
 };
 
 int
@@ -741,6 +782,12 @@ void
 ds_cont_child_cache_destroy(struct daos_lru_cache *cache)
 {
 	daos_lru_cache_destroy(cache);
+}
+
+static void
+cont_child_put(struct daos_lru_cache *cache, struct ds_cont_child *cont)
+{
+	daos_lru_ref_release(cache, &cont->sc_list);
 }
 
 /*
@@ -777,12 +824,6 @@ cont_child_lookup(struct daos_lru_cache *cache, const uuid_t co_uuid,
 	return 0;
 }
 
-static void
-cont_child_put(struct daos_lru_cache *cache, struct ds_cont_child *cont)
-{
-	daos_lru_ref_release(cache, &cont->sc_list);
-}
-
 static inline bool
 cont_child_started(struct ds_cont_child *cont_child)
 {
@@ -808,13 +849,17 @@ cont_child_stop(struct ds_cont_child *cont_child)
 	/* Some ds_cont_child will only created by ds_cont_child_lookup().
 	 * never be started at all
 	 */
+	cont_child->sc_stopping = 1;
+
+	/* Stop DTX reindex by force. */
+	stop_dtx_reindex_ult(cont_child, true);
+
 	if (cont_child_started(cont_child)) {
 		D_DEBUG(DB_MD, DF_CONT"[%d]: Stopping container\n",
 			DP_CONT(cont_child->sc_pool->spc_uuid,
 				cont_child->sc_uuid),
 			dss_get_module_info()->dmi_tgt_id);
 
-		cont_child->sc_stopping = 1;
 		d_list_del_init(&cont_child->sc_link);
 
 		dtx_cont_deregister(cont_child);
@@ -844,6 +889,18 @@ ds_cont_child_stop_all(struct ds_pool_child *pool_child)
 	}
 }
 
+void
+ds_cont_child_reset_ec_agg_eph_all(struct ds_pool_child *pool_child)
+{
+	struct ds_cont_child	*cont_child;
+
+	D_DEBUG(DB_MD, DF_UUID"[%d]: reset all containers EC aggregate epoch.\n",
+		DP_UUID(pool_child->spc_uuid), dss_get_module_info()->dmi_tgt_id);
+
+	d_list_for_each_entry(cont_child, &pool_child->spc_cont_list, sc_link)
+		cont_child->sc_ec_agg_eph = cont_child->sc_ec_agg_eph_boundary;
+}
+
 static int
 cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 		 bool *started, struct ds_cont_child **cont_out)
@@ -860,9 +917,9 @@ cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 			       pool_child->spc_uuid, true /* create */,
 			       &cont_child);
 	if (rc) {
-		D_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MD,
-			 DF_CONT"[%d]: Load container error:%d\n",
-			 DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id, rc);
+		DL_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MD, rc,
+			  DF_CONT "[%d]: Load container error",
+			  DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id);
 		return rc;
 	}
 
@@ -872,19 +929,22 @@ cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 	 * 2. Pool is going to be destroyed, or;
 	 * 3. Pool service is going to be stopped;
 	 */
-	if (cont_child->sc_stopping) {
-		D_ERROR(DF_CONT"[%d]: Container is in stopping\n",
-			DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id);
+	if (cont_child->sc_stopping || cont_child->sc_destroying) {
+		D_ERROR(DF_CONT"[%d]: Container is being stopped or destroyed (s=%d, d=%d)\n",
+			DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id,
+			cont_child->sc_stopping, cont_child->sc_destroying);
 		rc = -DER_SHUTDOWN;
 	} else if (!cont_child_started(cont_child)) {
-		rc = cont_start_agg(cont_child);
-		if (rc != 0)
-			goto out;
+		if (!ds_pool_restricted(pool_child->spc_pool, false)) {
+			rc = cont_start_agg(cont_child);
+			if (rc != 0)
+				goto out;
 
-		rc = dtx_cont_register(cont_child);
-		if (rc != 0) {
-			cont_stop_agg(cont_child);
-			goto out;
+			rc = dtx_cont_register(cont_child);
+			if (rc != 0) {
+				cont_stop_agg(cont_child);
+				goto out;
+			}
 		}
 
 		d_list_add_tail(&cont_child->sc_link, &pool_child->spc_cont_list);
@@ -1135,73 +1195,64 @@ cont_destroy_wait(struct ds_pool_child *child, uuid_t co_uuid)
  * Called via dss_collective() to destroy the ds_cont object as well as the vos
  * container.
  */
-static int
+int
 cont_child_destroy_one(void *vin)
 {
 	struct dsm_tls		       *tls = dsm_tls_get();
 	struct cont_tgt_destroy_in     *in = vin;
 	struct ds_pool_child	       *pool;
-	int				rc, retry_cnt = 0;
+	struct ds_cont_child	       *cont;
+	int				rc;
 
 	pool = ds_pool_child_lookup(in->tdi_pool_uuid);
 	if (pool == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
-	while (1) {
-		struct ds_cont_child *cont;
+	rc = cont_child_lookup(tls->dt_cont_cache, in->tdi_uuid,
+			       in->tdi_pool_uuid, false /* create */, &cont);
+	if (rc == -DER_NONEXIST)
+		D_GOTO(out_pool, rc = 0);
 
-		rc = cont_child_lookup(tls->dt_cont_cache, in->tdi_uuid,
-				       in->tdi_pool_uuid, false /* create */,
-				       &cont);
-		if (rc == -DER_NONEXIST)
-			break;
-		if (rc != 0)
-			D_GOTO(out_pool, rc);
+	if (rc != 0)
+		D_GOTO(out_pool, rc);
 
-		if (cont->sc_open > 0) {
-			if (retry_cnt > 0)
-				D_ERROR(DF_CONT": Container is re-opened (%d) by race\n",
-					DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-					cont->sc_open);
-			else
-				D_ERROR(DF_CONT": Container is still in open(%d)\n",
-					DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-					cont->sc_open);
-			cont_child_put(tls->dt_cont_cache, cont);
-			D_GOTO(out_pool, rc = -DER_BUSY);
-		}
-
-		cont_child_stop(cont);
-
-		ABT_mutex_lock(cont->sc_mutex);
-		if (cont->sc_dtx_resyncing)
-			ABT_cond_wait(cont->sc_dtx_resync_cond, cont->sc_mutex);
-		ABT_mutex_unlock(cont->sc_mutex);
-
-		/* Give chance to DTX reindex ULT for exit. */
-		if (unlikely(cont->sc_dtx_reindex))
-			ABT_thread_yield();
-
-		/* Make sure checksum scrubbing has stopped */
-		ABT_mutex_lock(cont->sc_mutex);
-		if (cont->sc_scrubbing) {
-			sched_req_wakeup(cont->sc_pool->spc_scrubbing_req);
-			ABT_cond_wait(cont->sc_scrub_cond, cont->sc_mutex);
-		}
-		ABT_mutex_unlock(cont->sc_mutex);
-
-		retry_cnt++;
-		if (retry_cnt > 1) {
-			D_ERROR("container is still in-use: open %u, resync %s, reindex %s\n",
-				cont->sc_open, cont->sc_dtx_resyncing ? "yes" : "no",
-				cont->sc_dtx_reindex ? "yes" : "no");
-			cont_child_put(tls->dt_cont_cache, cont);
-			D_GOTO(out_pool, rc = -DER_BUSY);
-		} /* else: resync should have completed, try again */
-
-		/* If it is the last user, ds_cont_child will be removed from hash & freed. */
+	if (cont->sc_open > 0) {
+		D_ERROR(DF_CONT": Container is still in open(%d)\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), cont->sc_open);
 		cont_child_put(tls->dt_cont_cache, cont);
+		D_GOTO(out_pool, rc = -DER_BUSY);
 	}
+
+	if (cont->sc_destroying) {
+		cont_child_put(tls->dt_cont_cache, cont);
+		D_GOTO(out_pool, rc = -DER_BUSY);
+	}
+	cont->sc_destroying = 1; /* nobody can take refcount anymore */
+
+	cont_child_stop(cont);
+
+	ABT_mutex_lock(cont->sc_mutex);
+	if (cont->sc_dtx_resyncing)
+		ABT_cond_wait(cont->sc_dtx_resync_cond, cont->sc_mutex);
+	ABT_mutex_unlock(cont->sc_mutex);
+
+	/* Make sure checksum scrubbing has stopped */
+	ABT_mutex_lock(cont->sc_mutex);
+	if (cont->sc_scrubbing) {
+		sched_req_wakeup(cont->sc_pool->spc_scrubbing_req);
+		ABT_cond_wait(cont->sc_scrub_cond, cont->sc_mutex);
+	}
+	ABT_mutex_unlock(cont->sc_mutex);
+
+	/* Make sure rebuild has stopped */
+	ABT_mutex_lock(cont->sc_mutex);
+	if (cont->sc_rebuilding)
+		ABT_cond_wait(cont->sc_rebuild_cond, cont->sc_mutex);
+	ABT_mutex_unlock(cont->sc_mutex);
+
+	/* nobody should see it again after eviction */
+	daos_lru_ref_evict_wait(tls->dt_cont_cache, &cont->sc_list);
+	cont_child_put(tls->dt_cont_cache, cont);
 
 	D_DEBUG(DB_MD, DF_CONT": destroying vos container\n",
 		DP_CONT(pool->spc_uuid, in->tdi_uuid));
@@ -1228,6 +1279,19 @@ out:
 }
 
 int
+ds_cont_child_destroy(uuid_t pool_uuid, uuid_t cont_uuid)
+{
+	struct cont_tgt_destroy_in  destroy_in;
+	int rc;
+
+	uuid_copy(destroy_in.tdi_pool_uuid, pool_uuid);
+	uuid_copy(destroy_in.tdi_uuid, cont_uuid);
+	rc = cont_child_destroy_one(&destroy_in);
+
+	return rc;
+}
+
+int
 ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid)
 {
 	struct ds_pool	*pool;
@@ -1247,7 +1311,8 @@ ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid)
 	cont_iv_entry_delete(pool->sp_iv_ns, pool_uuid, cont_uuid);
 	ds_pool_put(pool);
 
-	rc = dss_thread_collective(cont_child_destroy_one, &in, 0);
+	rc = ds_pool_thread_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
+				       PO_COMP_ST_DOWNOUT, cont_child_destroy_one, &in, 0);
 	if (rc)
 		D_ERROR(DF_UUID"/"DF_UUID" container child destroy failed: %d\n",
 			DP_UUID(pool_uuid), DP_UUID(cont_uuid), rc);
@@ -1264,7 +1329,9 @@ ds_cont_tgt_destroy_handler(crt_rpc_t *rpc)
 	D_DEBUG(DB_MD, DF_CONT": handling rpc %p\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc);
 
-	rc = ds_cont_tgt_destroy(in->tdi_pool_uuid, in->tdi_uuid);
+	if (!DAOS_FAIL_CHECK(DAOS_CHK_CONT_ORPHAN))
+		rc = ds_cont_tgt_destroy(in->tdi_pool_uuid, in->tdi_uuid);
+
 	out->tdo_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p %d " DF_RC "\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc, out->tdo_rc, DP_RC(rc));
@@ -1289,9 +1356,20 @@ ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 		     struct ds_cont_child **ds_cont)
 {
 	struct dsm_tls		*tls = dsm_tls_get();
+	int			 rc;
 
-	return cont_child_lookup(tls->dt_cont_cache, cont_uuid, pool_uuid,
-				 true /* create */, ds_cont);
+	rc = cont_child_lookup(tls->dt_cont_cache, cont_uuid, pool_uuid,
+			       true /* create */, ds_cont);
+	if (rc != 0)
+		return rc;
+
+	if ((*ds_cont)->sc_stopping || (*ds_cont)->sc_destroying) {
+		cont_child_put(tls->dt_cont_cache, *ds_cont);
+		*ds_cont = NULL;
+		return -DER_SHUTDOWN;
+	}
+
+	return 0;
 }
 
 /**
@@ -1464,10 +1542,8 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 			D_GOTO(err_hdl, rc);
 
 		hdl->sch_cont = cont;
-		if (rc == 1) {
+		if (rc == 1)
 			poh = hdl->sch_cont->sc_pool->spc_hdl;
-			rc = 0;
-		}
 	}
 
 	uuid_copy(hdl->sch_uuid, cont_hdl_uuid);
@@ -1515,10 +1591,14 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		 *     but for creating rebuild global container handle.
 		 */
 		D_ASSERT(hdl->sch_cont != NULL);
+		D_ASSERT(hdl->sch_cont->sc_pool != NULL);
 		hdl->sch_cont->sc_open++;
 
 		if (hdl->sch_cont->sc_open > 1)
 			goto opened;
+
+		if (ds_pool_restricted(hdl->sch_cont->sc_pool->spc_pool, false))
+			goto csum_init;
 
 		rc = dtx_cont_open(hdl->sch_cont);
 		if (rc != 0) {
@@ -1533,7 +1613,11 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		if (ddra == NULL)
 			D_GOTO(err_dtx, rc = -DER_NOMEM);
 
-		ddra->pool = ds_pool_child_get(hdl->sch_cont->sc_pool);
+		ddra->pool = ds_pool_child_lookup(hdl->sch_cont->sc_pool->spc_uuid);
+		if (ddra->pool == NULL) {
+			D_FREE(ddra);
+			D_GOTO(err_dtx, rc = -DER_NO_HDL);
+		}
 		uuid_copy(ddra->co_uuid, cont_uuid);
 		rc = dss_ult_create(ds_dtx_resync, ddra, DSS_XS_SELF,
 				    0, 0, NULL);
@@ -1543,10 +1627,8 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 			D_GOTO(err_dtx, rc);
 		}
 
-		D_ASSERT(hdl->sch_cont != NULL);
-		D_ASSERT(hdl->sch_cont->sc_pool != NULL);
+csum_init:
 		rc = ds_cont_csummer_init(hdl->sch_cont);
-
 		if (rc != 0)
 			D_GOTO(err_dtx, rc);
 	}
@@ -1563,7 +1645,7 @@ err_dtx:
 		  DF_UUID": %d\n", DP_UUID(cont_uuid), hdl->sch_cont->sc_open);
 
 	hdl->sch_cont->sc_open--;
-	dtx_cont_close(hdl->sch_cont);
+	dtx_cont_close(hdl->sch_cont, true);
 
 err_cont:
 	if (daos_handle_is_valid(poh)) {
@@ -1625,9 +1707,22 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 		 uint32_t status_pm_ver)
 {
 	struct cont_tgt_open_arg arg = { 0 };
-	struct dss_coll_ops	coll_ops = { 0 };
-	struct dss_coll_args	coll_args = { 0 };
+	struct ds_pool		*pool;
 	int			rc;
+
+	/* Only for debugging purpose to compare srv_cont_hdl with cont_hdl_uuid */
+	rc = ds_pool_lookup(pool_uuid, &pool);
+	if (rc != 0) {
+		D_DEBUG(DB_MD, DF_UUID" lookup pool failed: "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
+		rc = -DER_NO_HDL;
+		return rc;
+	}
+
+	if (uuid_compare(pool->sp_srv_cont_hdl, cont_hdl_uuid) == 0 && sec_capas == 0)
+		D_WARN("srv hdl "DF_UUID" capas is "DF_X64"\n",
+		       DP_UUID(cont_hdl_uuid), sec_capas);
+	ds_pool_put(pool);
 
 	uuid_copy(arg.pool_uuid, pool_uuid);
 	uuid_copy(arg.cont_hdl_uuid, cont_hdl_uuid);
@@ -1640,23 +1735,9 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 	D_DEBUG(DB_TRACE, "open pool/cont/hdl "DF_UUID"/"DF_UUID"/"DF_UUID"\n",
 		DP_UUID(pool_uuid), DP_UUID(cont_uuid), DP_UUID(cont_hdl_uuid));
 
-	/* collective operations */
-	coll_ops.co_func = cont_open_one;
-	coll_args.ca_func_args	= &arg;
-
-	/* setting aggregator args */
-	rc = ds_pool_get_failed_tgt_idx(pool_uuid, &coll_args.ca_exclude_tgts,
-					&coll_args.ca_exclude_tgts_cnt);
-	if (rc) {
-		D_ERROR(DF_UUID "failed to get index : rc "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
-		return rc;
-	}
-
-	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
-	D_FREE(coll_args.ca_exclude_tgts);
-
-	if (rc != 0) {
+	rc = ds_pool_thread_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
+				       PO_COMP_ST_DOWNOUT, cont_open_one, &arg, 0);
+	if (rc != 0)
 		/* Once it exclude the target from the pool, since the target
 		 * might still in the cart group, so IV cont open might still
 		 * come to this target, especially if cont open/close will be
@@ -1666,8 +1747,6 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 		D_ERROR("open "DF_UUID"/"DF_UUID"/"DF_UUID":"DF_RC"\n",
 			DP_UUID(pool_uuid), DP_UUID(cont_uuid),
 			DP_UUID(cont_hdl_uuid), DP_RC(rc));
-		return rc;
-	}
 
 	return rc;
 }
@@ -1700,7 +1779,7 @@ cont_close_hdl(uuid_t cont_hdl_uuid)
 		D_ASSERT(cont_child->sc_open > 0);
 		cont_child->sc_open--;
 		if (cont_child->sc_open == 0)
-			dtx_cont_close(cont_child);
+			dtx_cont_close(cont_child, false);
 
 		D_DEBUG(DB_MD, DF_CONT": closed (%d): hdl="DF_UUID"\n",
 			DP_CONT(cont_child->sc_pool->spc_uuid, cont_child->sc_uuid),
@@ -1725,12 +1804,19 @@ cont_close_one_hdl(void *vin)
 }
 
 int
-ds_cont_tgt_close(uuid_t hdl_uuid)
+ds_cont_tgt_close(uuid_t pool_uuid, uuid_t hdl_uuid)
 {
 	struct coll_close_arg arg;
 
 	uuid_copy(arg.uuid, hdl_uuid);
-	return dss_thread_collective(cont_close_one_hdl, &arg, 0);
+
+	/*
+	 * The container might be opened when the target is up, but changed to down when closing.
+	 * We need to attempt to close down/downout targets regardless; it won't take any action
+	 * if it was not opened before. Failure to properly close it will result in container
+	 * destruction failing with EBUSY. (See DAOS-15514)
+	 */
+	return ds_pool_thread_collective(pool_uuid, 0, cont_close_one_hdl, &arg, 0);
 }
 
 struct xstream_cont_query {
@@ -1741,18 +1827,17 @@ struct xstream_cont_query {
 static int
 cont_query_one(void *vin)
 {
-	struct dss_coll_stream_args	*reduce	   = vin;
-	struct dss_stream_arg_type	*streams   = reduce->csa_streams;
-	struct dss_module_info		*info	   = dss_get_module_info();
-	int				tid	   = info->dmi_tgt_id;
-	struct xstream_cont_query	*pack_args = streams[tid].st_arg;
-	struct cont_tgt_query_in	*in	   = pack_args->xcq_rpc_in;
-	struct ds_pool_hdl		*pool_hdl;
-	struct ds_pool_child		*pool_child;
-	daos_handle_t			vos_chdl;
-	vos_cont_info_t			vos_cinfo;
-	char				*opstr;
-	int				rc;
+	struct dss_coll_stream_args *reduce    = vin;
+	struct dss_stream_arg_type  *streams   = reduce->csa_streams;
+	struct dss_module_info      *info      = dss_get_module_info();
+	int                          tid       = info->dmi_tgt_id;
+	struct xstream_cont_query   *pack_args = streams[tid].st_arg;
+	struct cont_tgt_query_in    *in        = pack_args->xcq_rpc_in;
+	struct ds_pool_hdl          *pool_hdl;
+	struct ds_pool_child        *pool_child;
+	daos_handle_t                vos_chdl;
+	vos_cont_info_t              vos_cinfo;
+	int                          rc;
 
 	info = dss_get_module_info();
 	pool_hdl = ds_pool_hdl_lookup(in->tqi_pool_uuid);
@@ -1763,22 +1848,17 @@ cont_query_one(void *vin)
 	if (pool_child == NULL)
 		D_GOTO(ds_pool_hdl, rc = -DER_NO_HDL);
 
-	opstr = "Opening VOS container open handle\n";
-	rc = vos_cont_open(pool_child->spc_hdl, in->tqi_cont_uuid,
-			   &vos_chdl);
+	rc = vos_cont_open(pool_child->spc_hdl, in->tqi_cont_uuid, &vos_chdl);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": Failed %s: "DF_RC"",
-			DP_CONT(in->tqi_pool_uuid, in->tqi_cont_uuid), opstr,
-			DP_RC(rc));
+		D_ERROR(DF_CONT ": Opening VOS container open handle failed: " DF_RC "\n",
+			DP_CONT(in->tqi_pool_uuid, in->tqi_cont_uuid), DP_RC(rc));
 		D_GOTO(ds_child, rc);
 	}
 
-	opstr = "Querying VOS container open handle\n";
 	rc = vos_cont_query(vos_chdl, &vos_cinfo);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": Failed :%s: "DF_RC"",
-			DP_CONT(in->tqi_pool_uuid, in->tqi_cont_uuid), opstr,
-			DP_RC(rc));
+		D_ERROR(DF_CONT ": Querying VOS container open handle failed: " DF_RC "\n",
+			DP_CONT(in->tqi_pool_uuid, in->tqi_cont_uuid), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 	pack_args->xcq_hae = vos_cinfo.ci_hae;
@@ -1833,6 +1913,7 @@ ds_cont_tgt_query_handler(crt_rpc_t *rpc)
 	struct dss_coll_ops		coll_ops;
 	struct dss_coll_args		coll_args = { 0 };
 	struct xstream_cont_query	pack_args;
+	struct ds_pool_hdl		*pool_hdl;
 
 	out->tqo_hae			= DAOS_EPOCH_MAX;
 
@@ -1851,9 +1932,18 @@ ds_cont_tgt_query_handler(crt_rpc_t *rpc)
 	coll_args.ca_aggregator		= &pack_args;
 	coll_args.ca_func_args		= &coll_args.ca_stream_args;
 
-	rc = dss_task_collective_reduce(&coll_ops, &coll_args, 0);
+	pool_hdl = ds_pool_hdl_lookup(in->tqi_pool_uuid);
+	if (pool_hdl == NULL)
+		D_GOTO(out, rc = -DER_NO_HDL);
+
+	rc = ds_pool_task_collective_reduce(pool_hdl->sph_pool->sp_uuid,
+					    PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+					    &coll_ops, &coll_args, 0);
 
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
+
+	ds_pool_hdl_put(pool_hdl);
+out:
 	out->tqo_hae	= MIN(out->tqo_hae, pack_args.xcq_hae);
 	out->tqo_rc	= (rc == 0 ? 0 : 1);
 
@@ -1891,9 +1981,14 @@ cont_snap_update_one(void *vin)
 	struct ds_cont_child	*cont;
 	int			 rc;
 
-	rc = ds_cont_child_lookup(args->pool_uuid, args->cont_uuid, &cont);
+	/* The container should be exist on the system at this point, if non-exist on this target
+	 * it should be the case of reintegrate the container was destroyed ahead, so just
+	 * open_create the container here.
+	 */
+	rc = ds_cont_child_open_create(args->pool_uuid, args->cont_uuid, &cont);
 	if (rc != 0)
 		return rc;
+
 	if (args->snap_count == 0) {
 		if (cont->sc_snapshots != NULL) {
 			D_ASSERT(cont->sc_snapshots_nr > 0);
@@ -1936,9 +2031,20 @@ ds_cont_tgt_snapshots_update(uuid_t pool_uuid, uuid_t cont_uuid,
 	uuid_copy(args.cont_uuid, cont_uuid);
 	args.snap_count = snap_count;
 	args.snapshots = snapshots;
+
 	D_DEBUG(DB_EPC, DF_UUID": refreshing snapshots %d\n",
 		DP_UUID(cont_uuid), snap_count);
-	return dss_task_collective(cont_snap_update_one, &args, 0);
+
+	/*
+	 * Before initiating the rebuild scan, the iv snap fetch function
+	 * will be invoked. This action may prompt a collective call to up targets
+	 * whose containers have not yet been created. Therefore, we should skip
+	 * the up targets in this scenario. The target property will be updated
+	 * upon initiating container aggregation.
+	 */
+	return ds_pool_thread_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
+					 PO_COMP_ST_DOWNOUT | PO_COMP_ST_UP,
+					 cont_snap_update_one, &args, 0);
 }
 
 void
@@ -1977,7 +2083,7 @@ ds_cont_tgt_snapshots_refresh(uuid_t pool_uuid, uuid_t cont_uuid)
 	uuid_copy(args->pool_uuid, pool_uuid);
 	uuid_copy(args->cont_uuid, cont_uuid);
 	rc = dss_ult_create(cont_snapshots_refresh_ult, args, DSS_XS_SYS,
-			    0, 0, NULL);
+			    0, DSS_DEEP_STACK_SZ, NULL);
 	if (rc != 0)
 		D_FREE(args);
 	return rc;
@@ -2025,7 +2131,10 @@ ds_cont_tgt_snapshot_notify_handler(crt_rpc_t *rpc)
 	args.snap_opts = in->tsi_opts;
 	args.oit_oid = in->tsi_oit_oid;
 
-	out->tso_rc = dss_thread_collective(cont_snap_notify_one, &args, 0);
+	out->tso_rc = ds_pool_thread_collective(in->tsi_pool_uuid,
+						PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
+						PO_COMP_ST_DOWNOUT, cont_snap_notify_one,
+						&args, 0);
 	if (out->tso_rc != 0)
 		D_ERROR(DF_CONT": Snapshot notify failed: "DF_RC"\n",
 			DP_CONT(in->tsi_pool_uuid, in->tsi_cont_uuid),
@@ -2070,7 +2179,9 @@ ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc)
 	if (out->tao_rc != 0)
 		return;
 
-	rc = dss_task_collective(cont_epoch_aggregate_one, NULL, 0);
+	rc = ds_pool_task_collective(in->tai_pool_uuid,
+				     PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
+				     PO_COMP_ST_DOWNOUT, cont_epoch_aggregate_one, NULL, 0);
 	if (rc != 0)
 		D_ERROR(DF_CONT": Aggregation failed: "DF_RC"\n",
 			DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
@@ -2345,9 +2456,19 @@ ds_cont_ec_eph_delete(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx)
 static void
 cont_ec_eph_destroy(struct cont_ec_eph *ec_eph)
 {
+	D_ASSERT(ec_eph->ce_ref == 0);
 	d_list_del(&ec_eph->ce_list);
 	D_FREE(ec_eph->ce_ephs);
 	D_FREE(ec_eph);
+}
+
+void
+ds_cont_ec_eph_free(struct ds_pool *pool)
+{
+	struct cont_ec_eph	*ec_eph, *tmp;
+
+	d_list_for_each_entry_safe(ec_eph, tmp, &pool->sp_ec_ephs_list, ce_list)
+		cont_ec_eph_destroy(ec_eph);
 }
 
 /**
@@ -2440,13 +2561,8 @@ yield:
 
 		sched_req_sleep(pool->sp_ec_ephs_req, EC_TGT_AGG_INTV);
 	}
-
 out:
-	D_INFO(DF_UUID" stop tgt ec aggregation\n", DP_UUID(pool->sp_uuid));
-
-	d_list_for_each_entry_safe(ec_eph, tmp, &pool->sp_ec_ephs_list,
-				   ce_list)
-		cont_ec_eph_destroy(ec_eph);
+	D_INFO(DF_UUID" stop tgt ec query eph ULT\n", DP_UUID(pool->sp_uuid));
 }
 
 struct cont_prop_set_arg {
@@ -2477,6 +2593,13 @@ cont_child_prop_update(void *data)
 		return rc;
 	}
 	D_ASSERT(child != NULL);
+	if (child->sc_stopping || child->sc_destroying) {
+		D_ERROR(DF_CONT" is being stopping or destroyed (s=%d, d=%d)\n",
+			DP_CONT(arg->cpa_pool_uuid, arg->cpa_cont_uuid),
+			child->sc_stopping, child->sc_destroying);
+		rc = -DER_SHUTDOWN;
+		goto out;
+	}
 	daos_props_2cont_props(arg->cpa_prop, &child->sc_props);
 
 	iv_entry = daos_prop_entry_get(arg->cpa_prop, DAOS_PROP_CO_STATUS);
@@ -2518,7 +2641,8 @@ ds_cont_tgt_prop_update(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t	*prop)
 	uuid_copy(arg.cpa_cont_uuid, cont_uuid);
 	uuid_copy(arg.cpa_pool_uuid, pool_uuid);
 	arg.cpa_prop = prop;
-	rc = dss_task_collective(cont_child_prop_update, &arg, 0);
+	rc = ds_pool_task_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
+				     PO_COMP_ST_DOWNOUT, cont_child_prop_update, &arg, 0);
 	if (rc)
 		D_ERROR("collective cont_write_data_turn_off failed, "DF_RC"\n",
 			DP_RC(rc));

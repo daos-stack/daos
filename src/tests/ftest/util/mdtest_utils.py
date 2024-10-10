@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2019-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -7,17 +7,24 @@
 import os
 import re
 
-from command_utils_base import FormattedParameter
 from command_utils import ExecutableCommand
+from command_utils_base import FormattedParameter, LogParameter
 from general_utils import get_log_file
 
 
 class MdtestCommand(ExecutableCommand):
     """Defines a object representing a mdtest command."""
 
-    def __init__(self):
-        """Create an MdtestCommand object."""
+    def __init__(self, log_dir):
+        """Create an MdtestCommand object.
+
+        Args:
+            log_dir (str): directory in which to put log files
+        """
         super().__init__("/run/mdtest/*", "mdtest")
+
+        self._log_dir = log_dir
+
         self.flags = FormattedParameter("{}")   # mdtest flags
         # Optional arguments
         #  -a=STRING             API for I/O [POSIX|DFS|DUMMY]
@@ -63,7 +70,7 @@ class MdtestCommand(ExecutableCommand):
         self.verbosity_value = FormattedParameter("-V {}")
         self.write_bytes = FormattedParameter("-w {}")
         self.stonewall_timer = FormattedParameter("-W {}")
-        self.stonewall_statusfile = FormattedParameter("-x {}")
+        self.stonewall_statusfile = LogParameter(self._log_dir, "-x {}", None)
         self.depth = FormattedParameter("-z {}")
 
         # Module DFS
@@ -106,19 +113,6 @@ class MdtestCommand(ExecutableCommand):
                 [name for name in all_param_names if "dfs" in name])
 
         return param_names
-
-    def set_daos_params(self, group, pool, cont):
-        """Set the Mdtest params for the DAOS group, pool, and container uuid.
-
-        Args:
-            group (str): DAOS server group name
-            pool (TestPool): DAOS test pool object
-            cont (str): the container uuid or label
-        """
-        self.update_params(
-            dfs_group=group,
-            dfs_pool=pool.identifier,
-            dfs_cont=cont)
 
     def get_default_env(self, manager_cmd, log_file=None):
         """Get the default environment settings for running mdtest.

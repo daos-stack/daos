@@ -5,7 +5,7 @@
 
 #define AD_ARENA_DEFAULT	0
 
-/* the memory region (blob) manged by ad-hoc allocator */
+/* the memory region (blob) managed by ad-hoc allocator */
 struct ad_blob;
 struct ad_arena;
 struct ad_group;

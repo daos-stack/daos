@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +8,7 @@ package server
 
 import (
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
@@ -26,12 +27,58 @@ const (
 	devStateNew    = ctlpb.NvmeDevState_NEW
 	devStateNormal = ctlpb.NvmeDevState_NORMAL
 	devStateFaulty = ctlpb.NvmeDevState_EVICTED
+	devStateUnplug = ctlpb.NvmeDevState_UNPLUGGED
 
 	ledStateIdentify = ctlpb.LedState_QUICK_BLINK
 	ledStateNormal   = ctlpb.LedState_OFF
 	ledStateFault    = ctlpb.LedState_ON
 	ledStateUnknown  = ctlpb.LedState_NA
 )
+
+func pbNewDev(i int32) *ctlpb.SmdDevice {
+	return &ctlpb.SmdDevice{
+		Uuid: test.MockUUID(i),
+		Ctrlr: &ctlpb.NvmeController{
+			PciAddr:  test.MockPCIAddr(i),
+			DevState: devStateNew,
+			LedState: ledStateNormal,
+		},
+	}
+}
+func pbNormDev(i int32) *ctlpb.SmdDevice {
+	return &ctlpb.SmdDevice{
+		Uuid: test.MockUUID(i),
+		Ctrlr: &ctlpb.NvmeController{
+			PciAddr:  test.MockPCIAddr(i),
+			DevState: devStateNormal,
+			LedState: ledStateNormal,
+		},
+	}
+}
+func pbFaultDev(i int32) *ctlpb.SmdDevice {
+	return &ctlpb.SmdDevice{
+		Uuid: test.MockUUID(i),
+		Ctrlr: &ctlpb.NvmeController{
+			PciAddr:  test.MockPCIAddr(i),
+			DevState: devStateFaulty,
+			LedState: ledStateFault,
+		},
+	}
+}
+func pbIdentDev(i int32) *ctlpb.SmdDevice {
+	return &ctlpb.SmdDevice{
+		Uuid: test.MockUUID(i),
+		Ctrlr: &ctlpb.NvmeController{
+			PciAddr:  test.MockPCIAddr(i),
+			DevState: devStateNormal,
+			LedState: ledStateIdentify,
+		},
+	}
+}
+func pbDevWithHealth(sd *ctlpb.SmdDevice, h *ctlpb.BioHealthResp) *ctlpb.SmdDevice {
+	sd.Ctrlr.HealthStats = h
+	return sd
+}
 
 func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 	for name, tc := range map[string]struct {
@@ -204,18 +251,31 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Message: &ctlpb.SmdDevResp{
 							Devices: []*ctlpb.SmdDevice{
 								{
-									Uuid:     test.MockUUID(0),
-									TrAddr:   "0000:8a:00.0",
-									TgtIds:   []int32{0, 1, 2},
-									DevState: devStateNormal,
-									LedState: ledStateNormal,
+									Uuid:   test.MockUUID(0),
+									TgtIds: []int32{0, 1, 2},
+									Ctrlr: &ctlpb.NvmeController{
+										PciAddr:  "0000:8a:00.0",
+										DevState: devStateNormal,
+										LedState: ledStateNormal,
+									},
 								},
 								{
-									Uuid:     test.MockUUID(1),
-									TrAddr:   "0000:80:00.0",
-									TgtIds:   []int32{3, 4, 5},
-									DevState: devStateFaulty,
-									LedState: ledStateFault,
+									Uuid:   test.MockUUID(1),
+									TgtIds: []int32{3, 4, 5},
+									Ctrlr: &ctlpb.NvmeController{
+										PciAddr:  "0000:80:00.0",
+										DevState: devStateFaulty,
+										LedState: ledStateFault,
+									},
+								},
+								{
+									Uuid:   test.MockUUID(2),
+									TgtIds: []int32{},
+									Ctrlr: &ctlpb.NvmeController{
+										PciAddr:  "0000:8b:00.0",
+										DevState: devStateUnplug,
+										LedState: ledStateUnknown,
+									},
 								},
 							},
 						},
@@ -226,18 +286,22 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Message: &ctlpb.SmdDevResp{
 							Devices: []*ctlpb.SmdDevice{
 								{
-									Uuid:     test.MockUUID(2),
-									TrAddr:   "0000:da:00.0",
-									TgtIds:   []int32{0, 1, 2},
-									DevState: devStateFaulty,
-									LedState: ledStateUnknown,
+									Uuid:   test.MockUUID(3),
+									TgtIds: []int32{0, 1, 2},
+									Ctrlr: &ctlpb.NvmeController{
+										PciAddr:  "0000:da:00.0",
+										DevState: devStateFaulty,
+										LedState: ledStateUnknown,
+									},
 								},
 								{
-									Uuid:     test.MockUUID(3),
-									TrAddr:   "0000:db:00.0",
-									TgtIds:   []int32{3, 4, 5},
-									DevState: devStateNormal,
-									LedState: ledStateIdentify,
+									Uuid:   test.MockUUID(4),
+									TgtIds: []int32{3, 4, 5},
+									Ctrlr: &ctlpb.NvmeController{
+										PciAddr:  "0000:db:00.0",
+										DevState: devStateNormal,
+										LedState: ledStateIdentify,
+									},
 								},
 							},
 						},
@@ -247,44 +311,53 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 			expResp: &ctlpb.SmdQueryResp{
 				Ranks: []*ctlpb.SmdQueryResp_RankResp{
 					{
-						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
+						Devices: []*ctlpb.SmdDevice{
 							{
-								Details: &ctlpb.SmdDevice{
-									Uuid:     test.MockUUID(0),
-									TrAddr:   "0000:8a:00.0",
-									TgtIds:   []int32{0, 1, 2},
+								Uuid:   test.MockUUID(0),
+								TgtIds: []int32{0, 1, 2},
+								Ctrlr: &ctlpb.NvmeController{
+									PciAddr:  "0000:8a:00.0",
 									DevState: devStateNormal,
 									LedState: ledStateNormal,
 								},
 							},
 							{
-								Details: &ctlpb.SmdDevice{
-									Uuid:     test.MockUUID(1),
-									TrAddr:   "0000:80:00.0",
-									TgtIds:   []int32{3, 4, 5},
+								Uuid:   test.MockUUID(1),
+								TgtIds: []int32{3, 4, 5},
+								Ctrlr: &ctlpb.NvmeController{
+									PciAddr:  "0000:80:00.0",
 									DevState: devStateFaulty,
 									LedState: ledStateFault,
+								},
+							},
+							{
+								Uuid:   test.MockUUID(2),
+								TgtIds: []int32{},
+								Ctrlr: &ctlpb.NvmeController{
+									PciAddr:  "0000:8b:00.0",
+									DevState: devStateUnplug,
+									LedState: ledStateUnknown,
 								},
 							},
 						},
 						Rank: uint32(0),
 					},
 					{
-						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
+						Devices: []*ctlpb.SmdDevice{
 							{
-								Details: &ctlpb.SmdDevice{
-									Uuid:     test.MockUUID(2),
-									TrAddr:   "0000:da:00.0",
-									TgtIds:   []int32{0, 1, 2},
+								Uuid:   test.MockUUID(3),
+								TgtIds: []int32{0, 1, 2},
+								Ctrlr: &ctlpb.NvmeController{
+									PciAddr:  "0000:da:00.0",
 									DevState: devStateFaulty,
 									LedState: ledStateUnknown,
 								},
 							},
 							{
-								Details: &ctlpb.SmdDevice{
-									Uuid:     test.MockUUID(3),
-									TrAddr:   "0000:db:00.0",
-									TgtIds:   []int32{3, 4, 5},
+								Uuid:   test.MockUUID(4),
+								TgtIds: []int32{3, 4, 5},
+								Ctrlr: &ctlpb.NvmeController{
+									PciAddr:  "0000:db:00.0",
 									DevState: devStateNormal,
 									LedState: ledStateIdentify,
 								},
@@ -307,8 +380,10 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 							Devices: []*ctlpb.SmdDevice{
 								{
 									Uuid:   test.MockUUID(0),
-									TrAddr: "0000:8a:00.0",
 									TgtIds: []int32{0, 1, 2},
+									Ctrlr: &ctlpb.NvmeController{
+										PciAddr: "0000:db:00.0",
+									},
 								},
 							},
 						},
@@ -318,12 +393,12 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 			expResp: &ctlpb.SmdQueryResp{
 				Ranks: []*ctlpb.SmdQueryResp_RankResp{
 					{
-						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
+						Devices: []*ctlpb.SmdDevice{
 							{
-								Details: &ctlpb.SmdDevice{
-									Uuid:   test.MockUUID(0),
-									TrAddr: "0000:8a:00.0",
-									TgtIds: []int32{0, 1, 2},
+								Uuid:   test.MockUUID(0),
+								TgtIds: []int32{0, 1, 2},
+								Ctrlr: &ctlpb.NvmeController{
+									PciAddr: "0000:db:00.0",
 								},
 							},
 						},
@@ -341,26 +416,14 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevice{
-								{
-									Uuid:     test.MockUUID(0),
-									DevState: devStateFaulty,
-									LedState: ledStateFault,
-								},
-							},
+							Devices: []*ctlpb.SmdDevice{pbFaultDev(0)},
 						},
 					},
 				},
 				1: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevice{
-								{
-									Uuid:     test.MockUUID(1),
-									DevState: devStateNormal,
-									LedState: ledStateNormal,
-								},
-							},
+							Devices: []*ctlpb.SmdDevice{pbNormDev(1)},
 						},
 					},
 				},
@@ -368,16 +431,8 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 			expResp: &ctlpb.SmdQueryResp{
 				Ranks: []*ctlpb.SmdQueryResp_RankResp{
 					{
-						Rank: 1,
-						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
-							{
-								Details: &ctlpb.SmdDevice{
-									Uuid:     test.MockUUID(1),
-									DevState: devStateNormal,
-									LedState: ledStateNormal,
-								},
-							},
-						},
+						Rank:    1,
+						Devices: []*ctlpb.SmdDevice{pbNormDev(1)},
 					},
 				},
 			},
@@ -392,26 +447,14 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevice{
-								{
-									Uuid:     test.MockUUID(0),
-									DevState: devStateNormal,
-									LedState: ledStateNormal,
-								},
-							},
+							Devices: []*ctlpb.SmdDevice{pbNormDev(0)},
 						},
 					},
 				},
 				1: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevice{
-								{
-									Uuid:     test.MockUUID(1),
-									DevState: devStateFaulty,
-									LedState: ledStateFault,
-								},
-							},
+							Devices: []*ctlpb.SmdDevice{pbFaultDev(1)},
 						},
 					},
 				},
@@ -420,16 +463,8 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				Ranks: []*ctlpb.SmdQueryResp_RankResp{
 					{},
 					{
-						Rank: 1,
-						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
-							{
-								Details: &ctlpb.SmdDevice{
-									Uuid:     test.MockUUID(1),
-									DevState: devStateFaulty,
-									LedState: ledStateFault,
-								},
-							},
-						},
+						Rank:    1,
+						Devices: []*ctlpb.SmdDevice{pbFaultDev(1)},
 					},
 				},
 			},
@@ -450,7 +485,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 			},
 			expErr: daos.Busy,
 		},
-		"device-health": {
+		"list-devices; with health": {
 			req: &ctlpb.SmdQueryReq{
 				OmitPools:        true,
 				Rank:             uint32(ranklist.NilRank),
@@ -461,24 +496,14 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevice{
-								{
-									Uuid: test.MockUUID(0),
-								},
-							},
+							Devices: []*ctlpb.SmdDevice{pbNormDev(0)},
 						},
 					},
 				},
 				1: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevice{
-								{
-									Uuid:     test.MockUUID(1),
-									DevState: devStateFaulty,
-									LedState: ledStateFault,
-								},
-							},
+							Devices: []*ctlpb.SmdDevice{pbFaultDev(1)},
 						},
 					},
 					{
@@ -494,24 +519,77 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 					{},
 					{
 						Rank: 1,
-						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
-							{
-								Details: &ctlpb.SmdDevice{
-									Uuid:     test.MockUUID(1),
-									DevState: devStateFaulty,
-									LedState: ledStateFault,
-								},
-								Health: &ctlpb.BioHealthResp{
+						Devices: []*ctlpb.SmdDevice{
+							pbDevWithHealth(
+								pbFaultDev(1),
+								&ctlpb.BioHealthResp{
 									Temperature: 1000000,
 									TempWarn:    true,
-								},
-							},
+								}),
 						},
 					},
 				},
 			},
 		},
-		"device-health (NEW SMD); skip health collection": {
+		"list-devices; with health; no uuid in request": {
+			req: &ctlpb.SmdQueryReq{
+				OmitPools:        true,
+				Rank:             uint32(ranklist.NilRank),
+				IncludeBioHealth: true,
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevice{pbNormDev(0)},
+						},
+					},
+					{
+						Message: &ctlpb.BioHealthResp{
+							Temperature: 100000,
+						},
+					},
+				},
+				1: {
+					{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevice{pbFaultDev(1)},
+						},
+					},
+					{
+						Message: &ctlpb.BioHealthResp{
+							Temperature: 1000000,
+							TempWarn:    true,
+						},
+					},
+				},
+			},
+			expResp: &ctlpb.SmdQueryResp{
+				Ranks: []*ctlpb.SmdQueryResp_RankResp{
+					{
+						Devices: []*ctlpb.SmdDevice{
+							pbDevWithHealth(
+								pbNormDev(0),
+								&ctlpb.BioHealthResp{
+									Temperature: 100000,
+								}),
+						},
+					},
+					{
+						Rank: 1,
+						Devices: []*ctlpb.SmdDevice{
+							pbDevWithHealth(
+								pbFaultDev(1),
+								&ctlpb.BioHealthResp{
+									Temperature: 1000000,
+									TempWarn:    true,
+								}),
+						},
+					},
+				},
+			},
+		},
+		"list-devices; with health (NEW SMD); skip health collection": {
 			req: &ctlpb.SmdQueryReq{
 				OmitPools:        true,
 				Rank:             uint32(ranklist.NilRank),
@@ -522,26 +600,14 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevice{
-								{
-									Uuid:     test.MockUUID(0),
-									DevState: devStateNew,
-									LedState: ledStateNormal,
-								},
-							},
+							Devices: []*ctlpb.SmdDevice{pbNormDev(0)},
 						},
 					},
 				},
 				1: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevice{
-								{
-									Uuid:     test.MockUUID(1),
-									DevState: devStateNew,
-									LedState: ledStateNormal,
-								},
-							},
+							Devices: []*ctlpb.SmdDevice{pbNewDev(1)},
 						},
 					},
 					{
@@ -556,21 +622,13 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				Ranks: []*ctlpb.SmdQueryResp_RankResp{
 					{},
 					{
-						Rank: 1,
-						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
-							{
-								Details: &ctlpb.SmdDevice{
-									Uuid:     test.MockUUID(1),
-									DevState: devStateNew,
-									LedState: ledStateNormal,
-								},
-							},
-						},
+						Rank:    1,
+						Devices: []*ctlpb.SmdDevice{pbNewDev(1)},
 					},
 				},
 			},
 		},
-		"device-health; DAOS Failure": {
+		"list-devices; with health; DAOS failure": {
 			req: &ctlpb.SmdQueryReq{
 				OmitPools:        true,
 				Rank:             uint32(ranklist.NilRank),
@@ -581,26 +639,14 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevice{
-								{
-									Uuid:     test.MockUUID(0),
-									DevState: devStateFaulty,
-									LedState: ledStateFault,
-								},
-							},
+							Devices: []*ctlpb.SmdDevice{pbFaultDev(0)},
 						},
 					},
 				},
 				1: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevice{
-								{
-									Uuid:     test.MockUUID(1),
-									DevState: devStateFaulty,
-									LedState: ledStateFault,
-								},
-							},
+							Devices: []*ctlpb.SmdDevice{pbFaultDev(1)},
 						},
 					},
 					{
@@ -656,7 +702,10 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						cfg.setSendMsgResponseList(t, mock)
 					}
 				}
-				srv.setDrpcClient(newMockDrpcClient(cfg))
+				mdc := newMockDrpcClient(cfg)
+				srv.getDrpcClientFn = func(s string) drpc.DomainSocketClient {
+					return mdc
+				}
 				srv.ready.SetTrue()
 			}
 			if tc.harnessStopped {
@@ -681,33 +730,73 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 	}
 }
 
+func TestServer_engineDevMap(t *testing.T) {
+	e1 := EngineInstance{}
+	e2 := EngineInstance{}
+	dev1 := devID{uuid: test.MockUUID(1)}
+	dev2 := devID{trAddr: test.MockPCIAddr(1)}
+
+	for name, tc := range map[string]struct {
+		devs1        []devID
+		devs2        []devID
+		expMap       engineDevMap
+		expFirstDev1 *devID
+		expFirstDev2 *devID
+	}{
+		"simple": {
+			devs1: []devID{dev1},
+			devs2: []devID{dev2},
+			expMap: engineDevMap{
+				&e1: devIDMap{dev1.String(): dev1},
+				&e2: devIDMap{dev2.String(): dev2},
+			},
+			expFirstDev1: &dev1,
+			expFirstDev2: &dev2,
+		},
+		"multiple devs": {
+			devs2: []devID{dev1, dev2},
+			expMap: engineDevMap{
+				&e2: devIDMap{dev1.String(): dev1, dev2.String(): dev2},
+			},
+			expFirstDev2: &dev1,
+		},
+		"missing dev": {
+			devs2: []devID{dev2},
+			expMap: engineDevMap{
+				&e2: devIDMap{dev2.String(): dev2},
+			},
+			expFirstDev2: &dev2,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			edm := make(engineDevMap)
+
+			for _, id := range tc.devs1 {
+				edm.add(&e1, id)
+			}
+			for _, id := range tc.devs2 {
+				edm.add(&e2, id)
+			}
+
+			cmpOpts := []cmp.Option{
+				cmp.AllowUnexported(devID{}),
+			}
+			if diff := cmp.Diff(tc.expMap, edm, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected map (-want, +got)\n%s\n", diff)
+			}
+			test.AssertEqual(t, tc.expFirstDev1, edm[&e1].getFirst(), "unexpected first dev1")
+			test.AssertEqual(t, tc.expFirstDev2, edm[&e2].getFirst(), "unexpected first dev2")
+		})
+	}
+}
+
 func TestServer_CtlSvc_SmdManage(t *testing.T) {
-	pbNormDev := &ctlpb.SmdDevice{
-		TrAddr:   test.MockPCIAddr(1),
-		Uuid:     test.MockUUID(1),
-		DevState: devStateNormal,
-		LedState: ledStateNormal,
-	}
-	pbReplacedDev := &ctlpb.SmdDevice{
-		TrAddr:   test.MockPCIAddr(2),
-		Uuid:     test.MockUUID(2),
-		DevState: devStateNormal,
-		LedState: ledStateNormal,
-	}
-	pbNormDevNoTrAddr := new(ctlpb.SmdDevice)
-	*pbNormDevNoTrAddr = *pbNormDev
-	pbNormDevNoTrAddr.TrAddr = ""
-	pbFaultyDev := &ctlpb.SmdDevice{
-		TrAddr:   test.MockPCIAddr(1),
-		Uuid:     test.MockUUID(1),
-		DevState: devStateFaulty,
-		LedState: ledStateFault,
-	}
-	pbIdentifyDev := &ctlpb.SmdDevice{
-		TrAddr:   test.MockPCIAddr(1),
-		Uuid:     test.MockUUID(1),
-		DevState: devStateNormal,
-		LedState: ledStateIdentify,
+	pbNormDevNoPciAddr := new(ctlpb.SmdDevice)
+	*pbNormDevNoPciAddr = *pbNormDev(1)
+	pbNormDevNoPciAddr.Ctrlr.PciAddr = ""
+	devManageBusyResp := &ctlpb.DevManageResp{
+		Status: int32(daos.Busy),
+		Device: pbNormDev(1),
 	}
 
 	for name, tc := range map[string]struct {
@@ -733,14 +822,6 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 		"missing operation in drpc request": {
 			req:    &ctlpb.SmdManageReq{},
 			expErr: errors.New("Unrecognized operation"),
-		},
-		"led-manage; missing ids": {
-			req: &ctlpb.SmdManageReq{
-				Op: &ctlpb.SmdManageReq_Led{
-					Led: &ctlpb.LedManageReq{},
-				},
-			},
-			expErr: errors.New("empty id string"),
 		},
 		"dev-replace; missing uuid": {
 			req: &ctlpb.SmdManageReq{
@@ -897,7 +978,7 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevice{pbNormDev},
+							Devices: []*ctlpb.SmdDevice{pbNormDev(1)},
 						},
 					},
 				},
@@ -916,7 +997,7 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevice{pbNormDevNoTrAddr},
+							Devices: []*ctlpb.SmdDevice{pbNormDevNoPciAddr},
 						},
 					},
 				},
@@ -935,12 +1016,12 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevice{pbNormDev},
+							Devices: []*ctlpb.SmdDevice{pbNormDev(1)},
 						},
 					},
 					{
 						Message: &ctlpb.DevManageResp{
-							Device: pbIdentifyDev,
+							Device: pbIdentDev(2),
 						},
 					},
 				},
@@ -960,12 +1041,12 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevice{pbNormDev},
+							Devices: []*ctlpb.SmdDevice{pbNormDev(1)},
 						},
 					},
 					{
 						Message: &ctlpb.DevManageResp{
-							Device: pbIdentifyDev,
+							Device: pbIdentDev(1),
 						},
 					},
 				},
@@ -974,7 +1055,7 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 				Ranks: []*ctlpb.SmdManageResp_RankResp{
 					{
 						Results: []*ctlpb.SmdManageResp_Result{
-							{Device: pbIdentifyDev},
+							{Device: pbIdentDev(1)},
 						},
 					},
 				},
@@ -985,7 +1066,7 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 				Op: &ctlpb.SmdManageReq_Led{
 					Led: &ctlpb.LedManageReq{
 						// Matches ID returned in initial list query.
-						Ids: test.MockUUID(1),
+						Ids: test.MockUUID(2),
 					},
 				},
 			},
@@ -993,19 +1074,68 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevice{pbNormDev},
+							Devices: []*ctlpb.SmdDevice{pbNormDev(1)},
 						},
 					},
 					{
 						Message: &ctlpb.DevManageResp{
-							Device: pbIdentifyDev,
+							Device: pbIdentDev(1),
 						},
 					},
 				},
 				1: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevice{},
+							Devices: []*ctlpb.SmdDevice{pbNormDev(2)},
+						},
+					},
+					{
+						Message: &ctlpb.DevManageResp{
+							Device: pbIdentDev(2),
+						},
+					},
+				},
+			},
+			expResp: &ctlpb.SmdManageResp{
+				Ranks: []*ctlpb.SmdManageResp_RankResp{
+					{
+						Rank: 1,
+						Results: []*ctlpb.SmdManageResp_Result{
+							{Device: pbIdentDev(2)},
+						},
+					},
+				},
+			},
+		},
+		"led-manage; dual-engine; no ids in request": {
+			req: &ctlpb.SmdManageReq{
+				Op: &ctlpb.SmdManageReq_Led{
+					// No ids specified in request should return all.
+					Led: &ctlpb.LedManageReq{},
+				},
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevice{pbNormDev(1)},
+						},
+					},
+					{
+						Message: &ctlpb.DevManageResp{
+							Device: pbIdentDev(1),
+						},
+					},
+				},
+				1: {
+					{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevice{pbNormDev(2)},
+						},
+					},
+					{
+						Message: &ctlpb.DevManageResp{
+							Device: pbIdentDev(2),
 						},
 					},
 				},
@@ -1014,7 +1144,13 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 				Ranks: []*ctlpb.SmdManageResp_RankResp{
 					{
 						Results: []*ctlpb.SmdManageResp_Result{
-							{Device: pbIdentifyDev},
+							{Device: pbIdentDev(1)},
+						},
+					},
+					{
+						Rank: 1,
+						Results: []*ctlpb.SmdManageResp_Result{
+							{Device: pbIdentDev(2)},
 						},
 					},
 				},
@@ -1033,12 +1169,12 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevice{pbNormDev},
+							Devices: []*ctlpb.SmdDevice{pbNormDev(1)},
 						},
 					},
 					{
 						Message: &ctlpb.DevManageResp{
-							Device: pbIdentifyDev,
+							Device: pbIdentDev(1),
 						},
 					},
 				},
@@ -1046,23 +1182,21 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 					{
 						Message: &ctlpb.SmdDevResp{
 							Devices: []*ctlpb.SmdDevice{
-								{
-									TrAddr:   "d50505:01:00.0",
-									Uuid:     test.MockUUID(2),
-									DevState: devStateNormal,
-									LedState: ledStateNormal,
-								},
+								func() *ctlpb.SmdDevice {
+									sd := pbNormDev(2)
+									sd.Ctrlr.PciAddr = "d50505:01:00.0"
+									return sd
+								}(),
 							},
 						},
 					},
 					{
 						Message: &ctlpb.DevManageResp{
-							Device: &ctlpb.SmdDevice{
-								TrAddr:   "d50505:01:00.0",
-								Uuid:     test.MockUUID(2),
-								DevState: devStateNormal,
-								LedState: ledStateNormal,
-							},
+							Device: func() *ctlpb.SmdDevice {
+								sd := pbIdentDev(2)
+								sd.Ctrlr.PciAddr = "d50505:01:00.0"
+								return sd
+							}(),
 						},
 					},
 				},
@@ -1071,20 +1205,60 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 				Ranks: []*ctlpb.SmdManageResp_RankResp{
 					{
 						Results: []*ctlpb.SmdManageResp_Result{
-							{Device: pbIdentifyDev},
+							{Device: pbIdentDev(1)},
 						},
 					},
 					{
 						Rank: 1,
 						Results: []*ctlpb.SmdManageResp_Result{
 							{
-								Device: &ctlpb.SmdDevice{
-									TrAddr:   "d50505:01:00.0",
-									Uuid:     test.MockUUID(2),
-									DevState: devStateNormal,
-									LedState: ledStateNormal,
-								},
+								Device: func() *ctlpb.SmdDevice {
+									sd := pbIdentDev(2)
+									sd.Ctrlr.PciAddr = "d50505:01:00.0"
+									return sd
+								}(),
 							},
+						},
+					},
+				},
+			},
+		},
+		// Multiple NVMe namespaces per SSD.
+		"led-manage; multiple dev ids for the same traddr": {
+			req: &ctlpb.SmdManageReq{
+				Op: &ctlpb.SmdManageReq_Led{
+					Led: &ctlpb.LedManageReq{
+						// Matches IDs returned in initial list query.
+						Ids: test.MockUUID(1) + "," + test.MockUUID(2),
+					},
+				},
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevice{
+								pbNormDev(1),
+								func() *ctlpb.SmdDevice {
+									d := *pbNormDev(1)
+									d.Uuid = test.MockUUID(2)
+									return &d
+								}(),
+							},
+						},
+					},
+					{
+						Message: &ctlpb.DevManageResp{
+							Device: pbIdentDev(1),
+						},
+					},
+				},
+			},
+			expResp: &ctlpb.SmdManageResp{
+				Ranks: []*ctlpb.SmdManageResp_RankResp{
+					{
+						Results: []*ctlpb.SmdManageResp_Result{
+							{Device: pbIdentDev(1)},
 						},
 					},
 				},
@@ -1102,7 +1276,7 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevice{pbNormDev},
+							Devices: []*ctlpb.SmdDevice{pbNormDev(1)},
 						},
 					},
 				},
@@ -1121,12 +1295,12 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevice{pbNormDev},
+							Devices: []*ctlpb.SmdDevice{pbNormDev(1)},
 						},
 					},
 					{
 						Message: &ctlpb.DevManageResp{
-							Device: pbFaultyDev,
+							Device: pbFaultDev(1),
 						},
 					},
 				},
@@ -1134,9 +1308,7 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 			expResp: &ctlpb.SmdManageResp{
 				Ranks: []*ctlpb.SmdManageResp_RankResp{
 					{
-						Results: []*ctlpb.SmdManageResp_Result{
-							{Device: pbFaultyDev},
-						},
+						Results: []*ctlpb.SmdManageResp_Result{{}},
 					},
 				},
 			},
@@ -1160,12 +1332,12 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 				1: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevice{pbNormDev},
+							Devices: []*ctlpb.SmdDevice{pbNormDev(1)},
 						},
 					},
 					{
 						Message: &ctlpb.DevManageResp{
-							Device: pbFaultyDev,
+							Device: pbFaultDev(1),
 						},
 					},
 				},
@@ -1173,10 +1345,8 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 			expResp: &ctlpb.SmdManageResp{
 				Ranks: []*ctlpb.SmdManageResp_RankResp{
 					{
-						Rank: 1,
-						Results: []*ctlpb.SmdManageResp_Result{
-							{Device: pbFaultyDev},
-						},
+						Rank:    1,
+						Results: []*ctlpb.SmdManageResp_Result{{}},
 					},
 				},
 			},
@@ -1193,7 +1363,7 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevice{pbNormDev},
+							Devices: []*ctlpb.SmdDevice{pbNormDev(1)},
 						},
 					},
 				},
@@ -1213,12 +1383,12 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevice{pbNormDev},
+							Devices: []*ctlpb.SmdDevice{pbNormDev(1)},
 						},
 					},
 					{
 						Message: &ctlpb.DevManageResp{
-							Device: pbReplacedDev,
+							Device: pbNormDev(2),
 						},
 					},
 				},
@@ -1226,9 +1396,7 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 			expResp: &ctlpb.SmdManageResp{
 				Ranks: []*ctlpb.SmdManageResp_RankResp{
 					{
-						Results: []*ctlpb.SmdManageResp_Result{
-							{Device: pbReplacedDev},
-						},
+						Results: []*ctlpb.SmdManageResp_Result{{}},
 					},
 				},
 			},
@@ -1246,12 +1414,12 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevice{pbNormDev},
+							Devices: []*ctlpb.SmdDevice{pbNormDev(1)},
 						},
 					},
 					{
 						Message: &ctlpb.DevManageResp{
-							Device: pbReplacedDev,
+							Device: pbNormDev(2),
 						},
 					},
 				},
@@ -1266,8 +1434,108 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 			expResp: &ctlpb.SmdManageResp{
 				Ranks: []*ctlpb.SmdManageResp_RankResp{
 					{
+						Results: []*ctlpb.SmdManageResp_Result{{}},
+					},
+				},
+			},
+		},
+		"dev-replace; retry on busy": {
+			req: &ctlpb.SmdManageReq{
+				Op: &ctlpb.SmdManageReq_Replace{
+					Replace: &ctlpb.DevReplaceReq{
+						OldDevUuid: test.MockUUID(1),
+						NewDevUuid: test.MockUUID(2),
+					},
+				},
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevice{pbNormDev(1)},
+						},
+					},
+					{Message: devManageBusyResp},
+					{Message: devManageBusyResp},
+					{Message: &ctlpb.DevManageResp{Device: pbNormDev(2)}},
+				},
+			},
+			expResp: &ctlpb.SmdManageResp{
+				Ranks: []*ctlpb.SmdManageResp_RankResp{
+					{
+						Results: []*ctlpb.SmdManageResp_Result{{}},
+					},
+				},
+			},
+		},
+		"dev-replace; retry on busy; other error": {
+			req: &ctlpb.SmdManageReq{
+				Op: &ctlpb.SmdManageReq_Replace{
+					Replace: &ctlpb.DevReplaceReq{
+						OldDevUuid: test.MockUUID(1),
+						NewDevUuid: test.MockUUID(2),
+					},
+				},
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevice{pbNormDev(1)},
+						},
+					},
+					{Message: devManageBusyResp},
+					{
+						Message: &ctlpb.DevManageResp{
+							Status: int32(daos.TimedOut),
+							Device: pbNormDev(1),
+						},
+					},
+					{Message: devManageBusyResp},
+				},
+			},
+			expResp: &ctlpb.SmdManageResp{
+				Ranks: []*ctlpb.SmdManageResp_RankResp{
+					{
 						Results: []*ctlpb.SmdManageResp_Result{
-							{Device: pbReplacedDev},
+							{
+								Status: int32(daos.TimedOut),
+							},
+						},
+					},
+				},
+			},
+		},
+		"dev-replace; retry on busy; keeps busy": {
+			req: &ctlpb.SmdManageReq{
+				Op: &ctlpb.SmdManageReq_Replace{
+					Replace: &ctlpb.DevReplaceReq{
+						OldDevUuid: test.MockUUID(1),
+						NewDevUuid: test.MockUUID(2),
+					},
+				},
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevice{pbNormDev(1)},
+						},
+					},
+					{Message: devManageBusyResp},
+					{Message: devManageBusyResp},
+					{Message: devManageBusyResp},
+					{Message: devManageBusyResp},
+					{Message: devManageBusyResp},
+				},
+			},
+			expResp: &ctlpb.SmdManageResp{
+				Ranks: []*ctlpb.SmdManageResp_RankResp{
+					{
+						Results: []*ctlpb.SmdManageResp_Result{
+							{
+								Status: int32(daos.Busy),
+							},
 						},
 					},
 				},
@@ -1277,6 +1545,18 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
+
+			origInterval := baseDevReplaceBackoff
+			origRetries := maxDevReplaceRetries
+			origFactor := maxDevReplaceBackoffFactor
+			baseDevReplaceBackoff = 50 * time.Millisecond
+			maxDevReplaceRetries = 5
+			maxDevReplaceBackoffFactor = 1
+			defer func() {
+				maxDevReplaceBackoffFactor = origFactor
+				maxDevReplaceRetries = origRetries
+				baseDevReplaceBackoff = origInterval
+			}()
 
 			engineCount := len(tc.drpcResps)
 			if engineCount == 0 {
@@ -1291,7 +1571,7 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 			svc.harness.started.SetTrue()
 
 			for i, e := range svc.harness.instances {
-				srv := e.(*EngineInstance)
+				ei := e.(*EngineInstance)
 				cfg := new(mockDrpcClientConfig)
 				if tc.junkResp {
 					cfg.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
@@ -1300,8 +1580,11 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 						cfg.setSendMsgResponseList(t, mock)
 					}
 				}
-				srv.setDrpcClient(newMockDrpcClient(cfg))
-				srv.ready.SetTrue()
+				mdc := newMockDrpcClient(cfg)
+				ei.getDrpcClientFn = func(s string) drpc.DomainSocketClient {
+					return mdc
+				}
+				ei.ready.SetTrue()
 			}
 			if tc.harnessStopped {
 				svc.harness.started.SetFalse()

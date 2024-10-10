@@ -68,6 +68,16 @@ struct vos_ilog_info {
 	bool			 ii_full_scan;
 };
 
+/** Copies only the parsed information, ii_entries is not touched in
+ * destination.
+ */
+static inline void
+vos_ilog_copy_info(struct vos_ilog_info *dest, const struct vos_ilog_info *src)
+{
+	memcpy(&dest->ii_uncommitted, &src->ii_uncommitted,
+	       sizeof(*src) - offsetof(__typeof__(*src), ii_uncommitted));
+}
+
 /** Initialize the incarnation log globals */
 int
 vos_ilog_init(void);

@@ -26,7 +26,7 @@ class DaosControlConfigTest(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=control,basic
-        :avocado: tags=control_start,test_daos_control_config_basic
+        :avocado: tags=DaosControlConfigTest,test_daos_control_config_basic
         """
         # Get the input to verify
         c_val = self.params.get("config_val", "/run/control_config_val/*/")

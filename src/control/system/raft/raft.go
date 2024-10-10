@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -25,6 +25,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/checker"
 )
 
 // This file contains the "guts" of the new MS database. The basic theory
@@ -46,6 +47,10 @@ const (
 	raftOpRemovePoolService
 	raftOpIncMapVer
 	raftOpUpdateSystemAttrs
+	raftOpAddCheckerFinding
+	raftOpUpdateCheckerFinding
+	raftOpRemoveCheckerFinding
+	raftOpClearCheckerFindings
 
 	sysDBFile = "daos_system.db"
 )
@@ -81,6 +86,10 @@ func (ro raftOp) String() string {
 		"removePoolService",
 		"incMapVer",
 		"updateSystemAttrs",
+		"addCheckerFinding",
+		"updateCheckerFinding",
+		"removeCheckerFinding",
+		"clearCheckerFindings",
 	}[ro]
 }
 
@@ -139,8 +148,19 @@ func (db *Database) Barrier() error {
 			db.log.Errorf("lost leadership during Barrier(): %s", err)
 			return errNotSysLeader(svc, db)
 		}
-		return err
+		if err != nil {
+			return err
+		}
+		return nil
 	})
+}
+
+// WaitForLeaderStepUp waits for all OnLeadershipGained functions to finish executing.
+func (db *Database) WaitForLeaderStepUp() {
+	for db.steppingUp.IsTrue() {
+		// short interval to keep this polling loop from consuming too many cycles
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 // ShutdownRaft signals that the raft implementation should shut down
@@ -460,6 +480,15 @@ func (db *Database) submitSystemAttrsUpdate(props map[string]string) error {
 	return db.submitRaftUpdate(data)
 }
 
+// submitCheckerUpdate submits the given system checker update.
+func (db *Database) submitCheckerUpdate(op raftOp, f *checker.Finding) error {
+	data, err := createRaftUpdate(op, f)
+	if err != nil {
+		return err
+	}
+	return db.submitRaftUpdate(data)
+}
+
 // submitRaftUpdate submits the serialized operation to the raft service.
 func (db *Database) submitRaftUpdate(data []byte) error {
 	return db.raft.withReadLock(func(svc raftService) error {
@@ -517,6 +546,8 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 		f.data.applyPoolUpdate(c.Op, c.Data, f.EmergencyShutdown)
 	case raftOpUpdateSystemAttrs:
 		f.data.applySystemUpdate(c.Op, c.Data, f.EmergencyShutdown)
+	case raftOpAddCheckerFinding, raftOpUpdateCheckerFinding, raftOpRemoveCheckerFinding, raftOpClearCheckerFindings:
+		f.data.applyCheckerUpdate(c.Op, c.Data, f.EmergencyShutdown)
 	default:
 		f.EmergencyShutdown(errors.Errorf("unhandled Apply operation: %d", c.Op))
 		return nil
@@ -623,6 +654,48 @@ func (d *dbData) applySystemUpdate(op raftOp, data []byte, panicFn func(error)) 
 	}
 }
 
+// applyCheckerUpdate is responsible for applying the checker update
+// operation to the database.
+func (d *dbData) applyCheckerUpdate(op raftOp, data []byte, panicFn func(error)) {
+	if op == raftOpClearCheckerFindings {
+		d.Lock()
+		defer d.Unlock()
+		d.Checker.resetFindings()
+		return
+	}
+
+	f := new(checker.Finding)
+	if err := json.Unmarshal(data, f); err != nil {
+		panicFn(errors.Wrap(err, "failed to decode checker finding update"))
+		return
+	}
+
+	d.Lock()
+	defer d.Unlock()
+
+	// TODO: Consider whether or not these should be fatal errors.
+	switch op {
+	case raftOpAddCheckerFinding:
+		if err := d.Checker.addFinding(f); err != nil {
+			panicFn(err)
+			return
+		}
+	case raftOpUpdateCheckerFinding:
+		if err := d.Checker.updateFinding(f); err != nil {
+			panicFn(err)
+			return
+		}
+	case raftOpRemoveCheckerFinding:
+		if err := d.Checker.removeFinding(f); err != nil {
+			panicFn(err)
+			return
+		}
+	default:
+		panicFn(errors.Errorf("unhandled Checker Apply operation: %d", op))
+		return
+	}
+}
+
 // Snapshot is called to support log compaction, so that we don't have to keep
 // every log entry from the start of the system. Instead, the raft service periodically
 // creates a point-in-time snapshot which can be used to restore the current state, or
@@ -658,6 +731,7 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 	f.data.NextRank = db.data.NextRank
 	f.data.MapVersion = db.data.MapVersion
 	f.data.System = db.data.System
+	f.data.Checker = db.data.Checker
 	f.data.Version = db.data.Version
 	f.data.Unlock()
 	f.log.Debugf("db snapshot loaded (map version %d; data version %d)", db.data.MapVersion, db.data.Version)

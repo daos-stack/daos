@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -95,13 +95,16 @@ func (m *Membership) Count() (int, error) {
 
 // JoinRequest contains information needed for join membership update.
 type JoinRequest struct {
-	Rank           Rank
-	UUID           uuid.UUID
-	ControlAddr    *net.TCPAddr
-	FabricURI      string
-	FabricContexts uint32
-	FaultDomain    *FaultDomain
-	Incarnation    uint64
+	Rank                    Rank
+	UUID                    uuid.UUID
+	ControlAddr             *net.TCPAddr
+	PrimaryFabricURI        string
+	SecondaryFabricURIs     []string
+	FabricContexts          uint32
+	SecondaryFabricContexts []uint32
+	FaultDomain             *FaultDomain
+	Incarnation             uint64
+	CheckMode               bool
 }
 
 // JoinResponse contains information returned from join membership update.
@@ -117,6 +120,10 @@ type JoinResponse struct {
 func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 	m.Lock()
 	defer m.Unlock()
+
+	if req.PrimaryFabricURI == "" {
+		return nil, errors.New("no primary fabric URI in JoinRequest")
+	}
 
 	resp = new(JoinResponse)
 	var curMember *Member
@@ -150,6 +157,9 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		if curMember.UUID != req.UUID {
 			return nil, ErrUuidChanged(req.UUID, curMember.UUID, curMember.Rank)
 		}
+		if curMember.Addr.String() != req.ControlAddr.String() {
+			return nil, ErrControlAddrChanged(req.ControlAddr, curMember.Addr, curMember.UUID, curMember.Rank)
+		}
 
 		if !curMember.FaultDomain.Equals(req.FaultDomain) {
 			m.log.Infof("fault domain for rank %d changed from %q to %q",
@@ -159,11 +169,17 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		}
 
 		resp.PrevState = curMember.State
-		curMember.State = MemberStateJoined
+		if req.CheckMode {
+			curMember.State = MemberStateCheckerStarted
+		} else {
+			curMember.State = MemberStateJoined
+		}
 		curMember.Info = ""
 		curMember.Addr = req.ControlAddr
-		curMember.FabricURI = req.FabricURI
-		curMember.FabricContexts = req.FabricContexts
+		curMember.PrimaryFabricURI = req.PrimaryFabricURI
+		curMember.SecondaryFabricURIs = req.SecondaryFabricURIs
+		curMember.PrimaryFabricContexts = req.FabricContexts
+		curMember.SecondaryFabricContexts = req.SecondaryFabricContexts
 		curMember.FaultDomain = req.FaultDomain
 		curMember.Incarnation = req.Incarnation
 		if err := m.db.UpdateMember(curMember); err != nil {
@@ -188,14 +204,16 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 	}
 
 	newMember := &Member{
-		Rank:           req.Rank,
-		Incarnation:    req.Incarnation,
-		UUID:           req.UUID,
-		Addr:           req.ControlAddr,
-		FabricURI:      req.FabricURI,
-		FabricContexts: req.FabricContexts,
-		FaultDomain:    req.FaultDomain,
-		State:          MemberStateJoined,
+		Rank:                    req.Rank,
+		Incarnation:             req.Incarnation,
+		UUID:                    req.UUID,
+		Addr:                    req.ControlAddr,
+		PrimaryFabricURI:        req.PrimaryFabricURI,
+		SecondaryFabricURIs:     req.SecondaryFabricURIs,
+		PrimaryFabricContexts:   req.FabricContexts,
+		SecondaryFabricContexts: req.SecondaryFabricContexts,
+		FaultDomain:             req.FaultDomain,
+		State:                   MemberStateJoined,
 	}
 	if err := m.db.AddMember(newMember); err != nil {
 		return nil, errors.Wrap(err, "failed to add new member")
@@ -330,22 +348,37 @@ func (m *Membership) HostList(rankSet *RankSet) []string {
 // Members returns slice of references to all system members ordered by rank.
 //
 // Empty rank list implies no filtering/include all and ignore ranks that are
-// not in the membership.
-func (m *Membership) Members(rankSet *RankSet) (members Members) {
+// not in the membership. Optionally filter on desired states.
+func (m *Membership) Members(rankSet *RankSet, desiredStates ...MemberState) (members Members, err error) {
 	m.RLock()
 	defer m.RUnlock()
 
+	mask, _ := MemberStates2Mask(desiredStates...)
+
 	if rankSet == nil || rankSet.Count() == 0 {
-		var err error
-		members, err = m.db.AllMembers()
-		if err != nil {
-			m.log.Errorf("failed to get all members: %s", err)
-			return nil
+		if mask == AllMemberFilter {
+			// No rank or member filtering required so copy database.
+			members, err = m.db.AllMembers()
+			if err != nil {
+				return
+			}
+		} else {
+			// No rank filtering so use full rank-set.
+			var rl []Rank
+			rl, err = m.db.MemberRanks()
+			if err != nil {
+				return
+			}
+			rankSet = RankSetFromRanks(rl)
 		}
-	} else {
+	}
+
+	if members == nil {
 		for _, rank := range rankSet.Ranks() {
 			if member, err := m.db.FindMemberByRank(rank); err == nil {
-				members = append(members, member)
+				if member.State&mask != 0 {
+					members = append(members, member)
+				}
 			}
 		}
 	}
@@ -417,18 +450,18 @@ func (m *Membership) CheckRanks(ranks string) (hit, miss *RankSet, err error) {
 	m.RLock()
 	defer m.RUnlock()
 
-	var allRanks, toTest []Rank
-	allRanks, err = m.db.MemberRanks()
-	if err != nil {
-		return
-	}
-	toTest, err = ParseRanks(ranks)
+	allRanks, err := m.db.MemberRanks()
 	if err != nil {
 		return
 	}
 
 	if ranks == "" {
 		return RankSetFromRanks(allRanks), RankSetFromRanks(nil), nil
+	}
+
+	toTest, err := ParseRanks(ranks)
+	if err != nil {
+		return
 	}
 
 	missing := CheckRankMembership(allRanks, toTest)

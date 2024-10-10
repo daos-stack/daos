@@ -4,9 +4,8 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from command_utils_base import FormattedParameter
-from command_utils_base import BasicParameter
 from command_utils import ExecutableCommand
+from command_utils_base import BasicParameter, FormattedParameter
 from job_manager_utils import Mpirun
 
 
@@ -102,11 +101,7 @@ class MfuCommandBase(ExecutableCommand):
         # Get job manager cmd
         job_manager = Mpirun(self, mpi_type="mpich")
         job_manager.assign_hosts(self.hosts, self.tmp)
-        if ppn is None:
-            job_manager.assign_processes(processes)
-        else:
-            job_manager.ppn.update(ppn, 'mpirun.ppn')
-            job_manager.processes.update(None, 'mpirun.np')
+        job_manager.assign_processes(processes, ppn)
         job_manager.exit_status_exception = self.exit_status_exception
         job_manager.assign_environment(env or {}, True)
 

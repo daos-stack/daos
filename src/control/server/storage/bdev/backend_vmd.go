@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -118,19 +118,19 @@ func substVMDAddrs(inPCIAddrs *hardware.PCIAddressSet, foundCtrlrs storage.NvmeC
 // substituteVMDAddresses wraps around substVMDAddrs to substitute VMD addresses with the relevant
 // backing device addresses.
 // Function takes a BdevScanResponse reference to derive address map and a logger.
-func substituteVMDAddresses(log logging.Logger, inPCIAddrs *hardware.PCIAddressSet, bdevCache *storage.BdevScanResponse) (*hardware.PCIAddressSet, error) {
+func substituteVMDAddresses(log logging.Logger, inPCIAddrs *hardware.PCIAddressSet, ctrlrs storage.NvmeControllers) (*hardware.PCIAddressSet, error) {
 	if inPCIAddrs == nil {
 		return nil, errors.New("nil input PCIAddressSet")
 	}
-	if bdevCache == nil || len(bdevCache.Controllers) == 0 {
-		log.Debugf("no bdev cache to find vmd backing devices (devs: %v)", inPCIAddrs)
+	if len(ctrlrs) == 0 {
+		log.Debugf("no bdev info to find vmd backing devices (devs: %v)", inPCIAddrs)
 		return inPCIAddrs, nil
 	}
 
 	msg := fmt.Sprintf("vmd detected, processing addresses (input %v, existing %v)",
-		inPCIAddrs, bdevCache.Controllers)
+		inPCIAddrs, ctrlrs)
 
-	dl, err := substVMDAddrs(inPCIAddrs, bdevCache.Controllers)
+	dl, err := substVMDAddrs(inPCIAddrs, ctrlrs)
 	if err != nil {
 		return nil, errors.Wrapf(err, msg)
 	}
@@ -142,17 +142,14 @@ func substituteVMDAddresses(log logging.Logger, inPCIAddrs *hardware.PCIAddressS
 // DetectVMD returns whether VMD devices have been found and a slice of VMD
 // PCI addresses if found. Implements vmdDetectFn.
 func DetectVMD() (*hardware.PCIAddressSet, error) {
-	distro := system.GetDistribution()
-	var lspciCmd *exec.Cmd
-
 	// Check available VMD devices with command:
 	// "$lspci | grep  -i -E "Volume Management Device"
-	switch {
-	case distro.ID == "opensuse-leap" || distro.ID == "opensuse" || distro.ID == "sles":
-		lspciCmd = exec.Command("/sbin/lspci")
-	default:
-		lspciCmd = exec.Command("lspci")
+
+	lspciPath, err := system.GetLspciPath()
+	if err != nil {
+		return nil, errors.Wrap(err, "lookup lspci binary path")
 	}
+	lspciCmd := exec.Command(lspciPath)
 
 	vmdCmd := exec.Command("grep", "-i", "-E", "Volume Management Device")
 	var cmdOut bytes.Buffer
@@ -160,9 +157,16 @@ func DetectVMD() (*hardware.PCIAddressSet, error) {
 
 	vmdCmd.Stdin, _ = lspciCmd.StdoutPipe()
 	vmdCmd.Stdout = &cmdOut
-	_ = lspciCmd.Start()
-	_ = vmdCmd.Run()
-	_ = lspciCmd.Wait()
+	if err := lspciCmd.Start(); err != nil {
+		return nil, errors.Wrap(err, "lspci start")
+	}
+	if err := vmdCmd.Run(); err != nil {
+		// Grep will return 1 if no results.
+		return hardware.NewPCIAddressSet()
+	}
+	if err := lspciCmd.Wait(); err != nil {
+		return nil, errors.Wrap(err, "lspci wait")
+	}
 
 	if cmdOut.Len() == 0 {
 		return hardware.NewPCIAddressSet()
@@ -257,11 +261,11 @@ func updatePrepareRequest(log logging.Logger, req *storage.BdevPrepareRequest, v
 	}
 
 	if vmdPCIAddrs.IsEmpty() {
-		log.Debug("no vmd devices found")
+		log.Debug("no volume management devices (vmd) found")
 		req.EnableVMD = false
 		return nil
 	}
-	log.Debugf("volume management devices found: %v", vmdPCIAddrs)
+	log.Debugf("volume management devices (vmd) found: %v", vmdPCIAddrs)
 
 	allowList, blockList, err := vmdFilterAddresses(log, req, vmdPCIAddrs)
 	if err != nil {
@@ -274,7 +278,7 @@ func updatePrepareRequest(log logging.Logger, req *storage.BdevPrepareRequest, v
 			vmdPCIAddrs, req.PCIAllowList, req.PCIBlockList)
 		req.EnableVMD = false
 	} else {
-		log.Debugf("volume management devices selected: %v", allowList)
+		log.Debugf("volume management devices (vmd) selected: %v", allowList)
 		req.PCIAllowList = allowList.String()
 		// Retain block list in request to cater for the case where NVMe SSDs are being
 		// protected against unbinding so they can continue to be used via kernel driver.

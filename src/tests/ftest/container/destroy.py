@@ -6,9 +6,8 @@
 import traceback
 import uuid
 
-from pydaos.raw import DaosApiError
-
 from apricot import TestWithServers
+from pydaos.raw import DaosApiError
 
 
 class ContainerDestroyTest(TestWithServers):
@@ -25,7 +24,7 @@ class ContainerDestroyTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=container,smoke
-        :avocado: tags=container_destroy,test_container_destroy
+        :avocado: tags=ContainerDestroyTest,test_container_destroy
         """
         expected_for_param = []
         change_result_uuid = self.params.get(

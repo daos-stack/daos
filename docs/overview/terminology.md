@@ -32,7 +32,7 @@
 |[OFI](https://ofiwg.github.io/libfabric/)|Open Fabrics Interfaces|
 |OS|Operating System|
 |PM|Persistent Memory|
-|[PMDK](https://pmem.io/pmdk/)|Persistent Memory Devevelopment Kit|
+|[PMDK](https://github.com/pmem/pmdk)|Persistent Memory Devevelopment Kit|
 |[RAFT](https://raft.github.io/)|Raft is a consensus algorithm used to distribute state transitions among DAOS server nodes.|
 |RAS|Reliability, Availability & Serviceability|
 |RDB|Replicated Database, containing pool metadata and maintained across DAOS servers using the Raft algorithm.|

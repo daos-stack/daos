@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2023 Intel Corporation.
+// (C) Copyright 2023-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 )
 
 func revString(version string) string {
@@ -35,23 +36,40 @@ func revString(version string) string {
 // String returns a string containing the name, version, and for non-release builds,
 // the revision of the binary.
 func String(name string) string {
-	return fmt.Sprintf("%s version %s", name, revString(DaosVersion))
+	return VersionString(name, revString(DaosVersion))
+}
+
+// VersionString returns a string concatenation of the supplied name and version.
+func VersionString(name, version string) string {
+	return fmt.Sprintf("%s version %s", name, version)
+}
+
+// Info contains a structured representation of the binary build info.
+type Info struct {
+	Name      string     `json:"name"`
+	Version   string     `json:"version"`
+	Revision  string     `json:"revision,omitempty"`
+	Dirty     bool       `json:"dirty,omitempty"`
+	Release   bool       `json:"release,omitempty"`
+	BuildHost string     `json:"build_host,omitempty"`
+	BuildTime *time.Time `json:"build_time,omitempty"`
+	BuildInfo string     `json:"build_info,omitempty"`
 }
 
 // MarshalJSON returns a JSON string containing a structured representation of
 // the binary build info.
 func MarshalJSON(name string) ([]byte, error) {
-	return json.Marshal(&struct {
-		Name     string `json:"name"`
-		Version  string `json:"version"`
-		Revision string `json:"revision,omitempty"`
-		Dirty    bool   `json:"dirty,omitempty"`
-		Release  bool   `json:"release,omitempty"`
-	}{
-		Name:     name,
-		Version:  DaosVersion,
-		Revision: Revision,
-		Dirty:    DirtyBuild,
-		Release:  ReleaseBuild,
+	// Not a fatal error if the build time can't be parsed.
+	buildTime, _ := time.Parse(time.RFC3339, BuildTime)
+
+	return json.Marshal(&Info{
+		Name:      name,
+		Version:   DaosVersion,
+		Revision:  Revision,
+		Dirty:     DirtyBuild,
+		Release:   ReleaseBuild,
+		BuildHost: BuildHost,
+		BuildTime: &buildTime,
+		BuildInfo: BuildInfo,
 	})
 }

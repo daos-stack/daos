@@ -7,8 +7,8 @@
  * This file shows an example of using the telemetry API to produce metrics
  */
 
-#include "gurt/telemetry_common.h"
-#include "gurt/telemetry_producer.h"
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 /**
  * A sample function that creates and incremements a metric for a loop counter

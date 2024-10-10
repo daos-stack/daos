@@ -7,6 +7,7 @@ def scons():
 
     unit_env = denv.Clone()
 
+    unit_env.require('argobots')
     unit_env.require('pmdk', headers_only=True)
 
     unit_env.Append(RPATH_FULL=['$PREFIX/lib64/daos_srv'])

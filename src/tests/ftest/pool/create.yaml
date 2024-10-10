@@ -5,7 +5,7 @@ timeouts:
   test_create_max_pool_scm_only: 180
   test_create_max_pool: 300
   test_create_no_space: 300
-  test_create_no_space_loop: 2160
+  test_create_no_space_loop: 3500
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -25,12 +25,10 @@ server_config:
       log_file: daos_server1.log
       storage: auto
 pool_1:
-  control_method: dmg
   scm_size: 1
   svcn: 1
   quantity: 1
 pool_2:
-  control_method: dmg
   size: 90%
   svcn: 1
   quantity: 1

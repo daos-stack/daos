@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,9 +10,13 @@
 #ifndef __DAOS_KVX_H__
 #define  __DAOS_KVX_H__
 
+#include <daos_types.h>
+#include <daos/tse.h>
+
 /* task function for HL operations */
 int dc_kv_open(tse_task_t *task);
 int dc_kv_close(tse_task_t *task);
+int dc_kv_close_direct(daos_handle_t oh);
 int dc_kv_destroy(tse_task_t *task);
 int dc_kv_get(tse_task_t *task);
 int dc_kv_put(tse_task_t *task);

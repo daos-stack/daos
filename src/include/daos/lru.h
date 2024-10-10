@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -27,6 +27,10 @@ struct daos_llink_ops {
 	uint32_t (*lop_rec_hash)(struct daos_llink *link);
 	/** Optional print_key function for debugging */
 	void	 (*lop_print_key)(void *key, unsigned int ksize);
+	/** Optional wait for last ref */
+	void	 (*lop_wait)(struct daos_llink *llink);
+	/** Optional wake up if it is last ref */
+	void	 (*lop_wakeup)(struct daos_llink *llink);
 };
 
 struct daos_llink {
@@ -34,6 +38,7 @@ struct daos_llink {
 	d_list_t		 ll_qlink;	/**< Temp link for traverse */
 	uint32_t		 ll_ref;	/**< refcount for this ref */
 	uint32_t		 ll_evicted:1;	/**< has been evicted */
+	uint32_t		 ll_wait_evict:1; /**< wait for completion of eviction */
 	struct daos_llink_ops	*ll_ops;	/**< ops to maintain refs */
 };
 
@@ -116,15 +121,7 @@ void
 daos_lru_ref_release(struct daos_lru_cache *lcache, struct daos_llink *llink);
 
 /**
- * Flush old items from LRU.
- *
- * \param[in] lcache		DAOS LRU cache
- */
-void
-daos_lru_ref_flush(struct daos_lru_cache *lcache);
-
-/**
- * Evict the item from LRU after releasing the last refcount on it.
+ * Evict the item from LRU before releasing the refcount on it.
  *
  * \param[in] lcache		DAOS LRU cache
  * \param[in] llink		DAOS LRU item to be evicted
@@ -137,15 +134,14 @@ daos_lru_ref_evict(struct daos_lru_cache *lcache, struct daos_llink *llink)
 }
 
 /**
- * Check if a LRU element has been evicted or not
+ * Evict the item from LRU before releasing the refcount on it, wait until
+ * the caller is the last one holds refcount.
  *
- * \param[in] llink		DAOS LRU item to check
+ * \param[in] lcache		DAOS LRU cache
+ * \param[in] llink		DAOS LRU item to be evicted
  */
-static inline bool
-daos_lru_ref_evicted(struct daos_llink *llink)
-{
-	return llink->ll_evicted;
-}
+void
+daos_lru_ref_evict_wait(struct daos_lru_cache *lcache, struct daos_llink *llink);
 
 /**
  * Increase a usage reference to the LRU element
@@ -156,6 +152,15 @@ static inline void
 daos_lru_ref_add(struct daos_llink *llink)
 {
 	llink->ll_ref++;
+}
+
+/**
+ * Return true if the caller is the last user of the LRU element.
+ */
+static inline bool
+daos_lru_is_last_user(struct daos_llink *llink)
+{
+	return llink->ll_ref <= 2;
 }
 
 #endif

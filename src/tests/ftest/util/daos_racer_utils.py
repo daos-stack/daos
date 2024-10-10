@@ -6,12 +6,11 @@
 import os
 
 from ClusterShell.NodeSet import NodeSet
-
-from command_utils_base import BasicParameter, FormattedParameter
-from exception_utils import CommandFailure, MPILoadError
 from command_utils import ExecutableCommand
-from general_utils import pcmd, get_log_file
+from command_utils_base import BasicParameter, FormattedParameter
 from env_modules import load_mpi
+from exception_utils import CommandFailure, MPILoadError
+from general_utils import get_log_file, pcmd
 
 
 class DaosRacerCommand(ExecutableCommand):

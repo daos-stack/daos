@@ -38,6 +38,8 @@ drain_dkeys(void **state)
 	int			tgt = DEFAULT_FAIL_TGT;
 	int			i;
 
+	FAULT_INJECTION_REQUIRED();
+
 	if (!test_runable(arg, 4))
 		return;
 
@@ -80,6 +82,76 @@ drain_dkeys(void **state)
 	ioreq_fini(&req);
 }
 
+static int
+cont_open_and_inflight_io(void *data)
+{
+	test_arg_t	*arg = data;
+	int		 rc;
+
+	assert_int_equal(arg->setup_state, SETUP_CONT_CREATE);
+	rc = test_setup_next_step((void **)&arg, NULL, NULL, NULL);
+	assert_success(rc);
+	assert_int_equal(arg->setup_state, SETUP_CONT_CONNECT);
+
+	return reintegrate_inflight_io(data);
+}
+
+static void
+cont_open_in_drain(void **state)
+{
+	test_arg_t		*arg = *state;
+	daos_obj_id_t		oid;
+	struct ioreq		req;
+	int			tgt = DEFAULT_FAIL_TGT;
+	int			i;
+
+	FAULT_INJECTION_REQUIRED();
+
+	if (!test_runable(arg, 4))
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
+				arg->myrank);
+	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
+	oid = dts_oid_set_tgt(oid, tgt);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	/** Insert 1000 records */
+	print_message("Insert %d kv record in object "DF_OID"\n",
+		      KEY_NR, DP_OID(oid));
+	for (i = 0; i < KEY_NR; i++) {
+		char	key[32] = {0};
+
+		sprintf(key, "dkey_0_%d", i);
+		insert_single(key, "a_key", 0, "data", strlen("data") + 1,
+			      DAOS_TX_NONE, &req);
+	}
+	ioreq_fini(&req);
+
+	test_teardown_cont_hdl(arg);
+	arg->rebuild_cb = cont_open_and_inflight_io;
+	arg->rebuild_cb_arg = &oid;
+	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	for (i = 0; i < KEY_NR; i++) {
+		char key[32] = {0};
+		char buf[16] = {0};
+
+		sprintf(key, "dkey_0_%d", i);
+		/** Lookup */
+		memset(buf, 0, 10);
+		lookup_single(key, "a_key", 0, buf, 10, DAOS_TX_NONE, &req);
+		assert_int_equal(req.iod[0].iod_size, strlen("data") + 1);
+
+		/** Verify data consistency */
+		assert_string_equal(buf, "data");
+	}
+
+	reintegrate_inflight_io_verify(arg);
+	ioreq_fini(&req);
+}
+
 static void
 drain_akeys(void **state)
 {
@@ -88,6 +160,8 @@ drain_akeys(void **state)
 	struct ioreq		req;
 	int			tgt = DEFAULT_FAIL_TGT;
 	int			i;
+
+	FAULT_INJECTION_REQUIRED();
 
 	if (!test_runable(arg, 4))
 		return;
@@ -139,6 +213,8 @@ drain_indexes(void **state)
 	int			tgt = DEFAULT_FAIL_TGT;
 	int			i;
 	int			j;
+
+	FAULT_INJECTION_REQUIRED();
 
 	if (!test_runable(arg, 4))
 		return;
@@ -199,6 +275,7 @@ drain_snap_update_keys(void **state)
 	char		buf[256];
 	int		buf_len = 256;
 
+	FAULT_INJECTION_REQUIRED();
 
 	if (!test_runable(arg, 4))
 		return;
@@ -274,6 +351,8 @@ drain_snap_punch_keys(void **state)
 	char		 buf[256];
 	int		 buf_len = 256;
 	uint32_t	 number;
+
+	FAULT_INJECTION_REQUIRED();
 
 	if (!test_runable(arg, 4))
 		return;
@@ -361,6 +440,8 @@ drain_multiple(void **state)
 	int		j;
 	int		k;
 
+	FAULT_INJECTION_REQUIRED();
+
 	if (!test_runable(arg, 4))
 		return;
 
@@ -427,6 +508,8 @@ drain_large_rec(void **state)
 	char			buffer[5000];
 	char			v_buffer[5000];
 
+	FAULT_INJECTION_REQUIRED();
+
 	if (!test_runable(arg, 4))
 		return;
 
@@ -475,6 +558,8 @@ drain_objects(void **state)
 	int		tgt = DEFAULT_FAIL_TGT;
 	int		i;
 
+	FAULT_INJECTION_REQUIRED();
+
 	if (!test_runable(arg, 4))
 		return;
 
@@ -501,6 +586,8 @@ drain_fail_and_retry_objects(void **state)
 	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
 
+	FAULT_INJECTION_REQUIRED();
+
 	if (!test_runable(arg, 4))
 		return;
 
@@ -515,7 +602,11 @@ drain_fail_and_retry_objects(void **state)
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 			      DAOS_REBUILD_OBJ_FAIL | DAOS_FAIL_ALWAYS, 0, NULL);
 
+	arg->no_rebuild = 1;
 	drain_single_pool_rank(arg, ranks_to_kill[0], false);
+	print_message("sleep 30 seconds for drain to fail and exit\n");
+	sleep(30);
+	arg->no_rebuild = 0;
 
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
 	rebuild_io_validate(arg, oids, OBJ_NR);
@@ -529,6 +620,8 @@ drain_then_exclude(void **state)
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
+
+	FAULT_INJECTION_REQUIRED();
 
 	if (!test_runable(arg, 4))
 		return;
@@ -781,6 +874,8 @@ dfs_extend_drain_common(void **state, int opc, uint32_t objclass)
 	dfs_attr_t attr = {};
 	int		rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	if (!test_runable(arg, 4))
 		return;
 
@@ -889,10 +984,79 @@ dfs_drain_writeloop(void **state)
 	dfs_extend_drain_common(state, EXTEND_DRAIN_WRITELOOP, OC_EC_4P2GX);
 }
 
+void
+dfs_drain_extend(void **state)
+{
+	test_arg_t	*arg = *state;
+	dfs_t		*dfs_mt;
+	daos_handle_t	co_hdl;
+	dfs_obj_t	*dir;
+	uuid_t		co_uuid;
+	char		str[37];
+	daos_obj_id_t	oids[EXTEND_DRAIN_OBJ_NR];
+	dfs_attr_t attr = {};
+	int		rc;
+
+	FAULT_INJECTION_REQUIRED();
+
+	if (!test_runable(arg, 3))
+		return;
+
+	attr.da_props = daos_prop_alloc(2);
+	assert_non_null(attr.da_props);
+	attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+	attr.da_props->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RANK;
+	attr.da_props->dpp_entries[1].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	attr.da_props->dpp_entries[1].dpe_val = DAOS_PROP_CO_REDUN_RF0;
+	rc = dfs_cont_create(arg->pool.poh, &co_uuid, &attr, &co_hdl, &dfs_mt);
+	daos_prop_free(attr.da_props);
+	assert_int_equal(rc, 0);
+	print_message("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
+
+	rc = dfs_open(dfs_mt, NULL, "dir", S_IFDIR | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT, OC_SX, 0, NULL, &dir);
+	assert_int_equal(rc, 0);
+
+	/* Create 10 files */
+	extend_drain_write(dfs_mt, dir, OC_SX, EXTEND_DRAIN_OBJ_NR, WRITE_SIZE,
+			   'a', oids);
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_REBUILD_HANG | DAOS_FAIL_ALWAYS);
+	arg->no_rebuild = 1;
+	drain_single_pool_rank(arg, ranks_to_kill[0], false);
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 0, 0, NULL);
+	extend_single_pool_rank(arg, 3);
+	arg->no_rebuild = 0;
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
+
+	if (arg->myrank == 0)
+		test_rebuild_wait(&arg, 1);
+
+	extend_drain_check(dfs_mt, dir, OC_SX, EXTEND_DRAIN_UPDATE);
+
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0], false);
+
+	extend_drain_check(dfs_mt, dir, OC_SX, EXTEND_DRAIN_UPDATE);
+
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+	rc = dfs_umount(dfs_mt);
+	assert_int_equal(rc, 0);
+
+	rc = daos_cont_close(co_hdl, NULL);
+	assert_rc_equal(rc, 0);
+
+	uuid_unparse(co_uuid, str);
+	rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
+	assert_rc_equal(rc, 0);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest drain_tests[] = {
-	{"DRAIN1: drain small rec multiple dkeys",
+	{"DRAIN0: drain small rec multiple dkeys",
 	 drain_dkeys, rebuild_small_sub_rf0_setup, test_teardown},
+	{"DRAIN1: cont open and update during drain",
+	 cont_open_in_drain, rebuild_small_sub_rf0_setup, test_teardown},
 	{"DRAIN2: drain small rec multiple akeys",
 	 drain_akeys, rebuild_small_sub_rf0_setup, test_teardown},
 	{"DRAIN3: drain small rec multiple indexes",
@@ -925,6 +1089,8 @@ static const struct CMUnitTest drain_tests[] = {
 	 dfs_drain_overwrite, rebuild_sub_rf0_setup, test_teardown},
 	{"DRAIN17: keep write during drain",
 	 dfs_drain_writeloop, rebuild_sub_rf0_setup, test_teardown},
+	{"DRAIN18: drain and extend at the same time",
+	 dfs_drain_extend, rebuild_sub_3nodes_rf0_setup, test_teardown},
 };
 
 int

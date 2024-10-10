@@ -298,7 +298,7 @@ gc_key_test(void **state)
 	int		     rc;
 
 	rc = gc_key_run(args);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 static int

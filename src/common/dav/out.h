@@ -40,8 +40,7 @@
 
 /* produce debug/trace output */
 #if defined(DAV_EXTRA_DEBUG)
-#define DAV_DBG(fmt, ...)
-	D_DEBUG(DAV_LOG_FAC, fmt "\n", ## __VA_ARGS__)
+#define DAV_DBG(fmt, ...) D_DEBUG(DAV_LOG_FAC, fmt "\n", ##__VA_ARGS__)
 #else
 #define DAV_DBG(fmt, ...) SUPPRESS_UNUSED(__VA_ARGS__)
 #endif

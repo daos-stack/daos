@@ -91,11 +91,17 @@ func TestServer_getFaultDomain(t *testing.T) {
 		"nil cfg": {
 			expErr: config.FaultBadConfig,
 		},
-		"cfg fault path": {
+		"single-layer fault path": {
 			cfg: &config.Server{
 				FaultPath: validFaultDomain,
 			},
 			expResult: validFaultDomain,
+		},
+		"two-layer fault path": {
+			cfg: &config.Server{
+				FaultPath: "/grp1/host0",
+			},
+			expResult: "/grp1/host0",
 		},
 		"cfg fault path is not valid": {
 			cfg: &config.Server{
@@ -109,9 +115,9 @@ func TestServer_getFaultDomain(t *testing.T) {
 			},
 			expErr: config.FaultConfigFaultDomainInvalid,
 		},
-		"too many layers": { // TODO DAOS-6353: change when multiple layers supported
+		"too many layers": { // TODO DAOS-6353: change when arbitrary layers supported
 			cfg: &config.Server{
-				FaultPath: "/rack1/host0",
+				FaultPath: "/rack1/grp1/host0",
 			},
 			expErr: config.FaultConfigTooManyLayersInFaultDomain,
 		},
@@ -229,7 +235,7 @@ func TestServer_getFaultDomainFromCallback(t *testing.T) {
 	createFaultCBScriptFile(t, invalidScriptPath, 0755, "some junk")
 
 	multiLayerScriptPath := filepath.Join(tmpDir, "multilayer.sh")
-	createFaultCBScriptFile(t, multiLayerScriptPath, 0755, "/one/two")
+	createFaultCBScriptFile(t, multiLayerScriptPath, 0755, "/one/two/three")
 
 	rootScriptPath := filepath.Join(tmpDir, "rootdomain.sh")
 	createFaultCBScriptFile(t, rootScriptPath, 0755, "/")

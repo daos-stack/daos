@@ -6,14 +6,14 @@
 from support_test_base import SupportTestBase
 
 
-class DaosSupportCollectLogTest(SupportTestBase):
+class DaosServerSupportCollectLogTest(SupportTestBase):
     # pylint: disable=too-many-ancestors
     """Test Class Description:Verify the daos_server support collect-log command.
 
     :avocado: recursive
     """
 
-    def test_daos_support_collect_log(self):
+    def test_daos_server_support_collect_log(self):
         """JIRA ID: DAOS-10625
 
         Test Description:
@@ -22,9 +22,10 @@ class DaosSupportCollectLogTest(SupportTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
         :avocado: tags=control,basic,support,daos_server
-        :avocado: tags=DaosSupportCollectLogTest,test_daos_server_support_collect_log
+        :avocado: tags=DaosServerSupportCollectLogTest,test_daos_server_support_collect_log
         """
         self.log_hosts = self.hostlist_servers
+        self.run_user = 'daos_server'
         # Create the custom log data which will be collected via support collect-log,
         # Later verify the data file is archived as part of collection.
         self.create_custom_log("Server_Support_Logs")

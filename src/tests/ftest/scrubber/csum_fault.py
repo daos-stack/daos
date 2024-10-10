@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
+
 from scrubber_test_base import TestWithScrubber
 
 
@@ -20,7 +21,7 @@ class TestWithScrubberFault(TestWithScrubber):
             whether scrubber finds them.
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=scrubber
+        :avocado: tags=scrubber,faults
         :avocado: tags=TestWithScrubberFault,test_scrubber_csum_fault
 
         """
@@ -42,7 +43,7 @@ class TestWithScrubberFault(TestWithScrubber):
         for test in transfer_block_size:
             self.ior_cmd.transfer_size.update(test[0])
             self.ior_cmd.block_size.update(test[1])
-        self.run_ior_and_check_scruber_status(pool=self.pool, cont=self.container)
+        self.run_ior_and_check_scrubber_status(pool=self.pool, cont=self.container)
         start_time = 0
         finish_time = 0
         poll_status = False

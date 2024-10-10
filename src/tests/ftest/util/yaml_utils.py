@@ -1,16 +1,16 @@
 """
-(C) Copyright 2020-2023 Intel Corporation.
+(C) Copyright 2020-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from collections import OrderedDict
 import os
 import re
+from collections import OrderedDict
+
 import yaml
-
 from ClusterShell.NodeSet import NodeSet
-
-from data_utils import list_unique, list_flatten, dict_extract_values
+# pylint: disable=import-error,no-name-in-module
+from util.data_utils import dict_extract_values, list_flatten, list_unique
 
 
 class YamlException(BaseException):
@@ -87,7 +87,6 @@ class YamlUpdater():
         ("pool_query_timeout", "_timeout", int),
         ("pool_query_delay", "_timeout", int),
         ("rebuild_timeout", "_timeout", int),
-        ("srv_timeout", "_timeout", int),
         ("storage_prepare_timeout", "_timeout", int),
         ("storage_format_timeout", "_timeout", int),
     ]

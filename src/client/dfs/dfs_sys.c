@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,10 +14,10 @@
 
 #include <gurt/atomic.h>
 
-#include "daos.h"
-#include "daos_fs.h"
+#include <daos.h>
+#include <daos_fs.h>
 
-#include "daos_fs_sys.h"
+#include <daos_fs_sys.h>
 
 /** Number of entries for readdir */
 #define DFS_SYS_NUM_DIRENTS 24
@@ -126,13 +126,10 @@ static void
 hash_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct hash_hdl *hdl = hash_hdl_obj(rlink);
-	int		rc = 0;
 
 	D_DEBUG(DB_TRACE, "name=%s\n", hdl->name);
 
-	rc = dfs_release(hdl->obj);
-	if (rc == ENOMEM)
-		dfs_release(hdl->obj);
+	dfs_release(hdl->obj);
 	D_FREE(hdl->name);
 	D_FREE(hdl);
 }
@@ -544,6 +541,12 @@ dfs_sys_umount(dfs_sys_t *dfs_sys)
 }
 
 int
+dfs_sys_set_prefix(dfs_sys_t *dfs_sys, const char *prefix)
+{
+	return dfs_set_prefix(dfs_sys->dfs, prefix);
+}
+
+int
 dfs_sys_local2global_all(dfs_sys_t *dfs_sys, d_iov_t *glob)
 {
 	if (dfs_sys == NULL)
@@ -795,7 +798,6 @@ dfs_sys_stat(dfs_sys_t *dfs_sys, const char *path, int flags,
 	     struct stat *buf)
 {
 	int             rc;
-	int             rc2;
 	struct sys_path sys_path;
 	dfs_obj_t      *obj;
 	int             lookup_flags = O_RDWR;
@@ -825,10 +827,7 @@ dfs_sys_stat(dfs_sys_t *dfs_sys, const char *path, int flags,
 			sys_path.name, rc);
 		D_GOTO(out_free_path, rc);
 	}
-
-	rc2 = dfs_release(obj);
-	if (rc2 == ENOMEM)
-		dfs_release(obj);
+	dfs_release(obj);
 
 out_free_path:
 	sys_path_free(dfs_sys, &sys_path);
@@ -1219,8 +1218,6 @@ dfs_sys_close(dfs_obj_t *obj)
 	int rc = 0;
 
 	rc = dfs_release(obj);
-	if (rc == ENOMEM)
-		dfs_release(obj);
 	return rc;
 }
 
@@ -1475,9 +1472,6 @@ dfs_sys_closedir(DIR *dirp)
 	sys_dir = (struct dfs_sys_dir *)dirp;
 
 	rc = dfs_release(sys_dir->obj);
-	if (rc == ENOMEM)
-		dfs_release(sys_dir->obj);
-
 	D_FREE(sys_dir);
 
 	return rc;

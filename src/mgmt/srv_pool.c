@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,7 +17,7 @@
 #include "srv_internal.h"
 
 /** Destroy the pool on the specified ranks. */
-static int
+int
 ds_mgmt_tgt_pool_destroy_ranks(uuid_t pool_uuid, d_rank_list_t *filter_ranks)
 {
 	crt_rpc_t			*td_req;
@@ -58,6 +58,29 @@ fini_ranks:
 	return rc;
 }
 
+static uint32_t
+pool_create_rpc_timeout(crt_rpc_t *tc_req, size_t scm_size)
+{
+	uint32_t	timeout;
+	uint32_t	default_timeout;
+	size_t		gib;
+	int		rc;
+	rc = crt_req_get_timeout(tc_req, &default_timeout);
+	D_ASSERTF(rc == 0, "crt_req_get_timeout: "DF_RC"\n", DP_RC(rc));
+
+	gib = scm_size / ((size_t)1024 * 1024 * 1024);
+	if (gib < 32)
+		timeout = 15;
+	else if (gib < 64)
+		timeout = 30;
+	else if (gib < 128)
+		timeout = 60;
+	else
+		timeout = 90;
+
+	return max(timeout, default_timeout);
+}
+
 static int
 ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev, d_rank_list_t *rank_list,
 			      size_t scm_size, size_t nvme_size)
@@ -69,6 +92,7 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev, d_rank_list_t *ra
 	int				topo;
 	int				rc;
 	int				rc_cleanup;
+	uint32_t			timeout;
 
 	/* Collective RPC to all of targets of the pool */
 	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 4);
@@ -83,6 +107,10 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev, d_rank_list_t *ra
 		return rc;
 	}
 
+	timeout = pool_create_rpc_timeout(tc_req, scm_size);
+	crt_req_set_timeout(tc_req, timeout);
+	D_DEBUG(DB_MGMT, DF_UUID": pool create RPC timeout: %u\n",
+		DP_UUID(pool_uuid), timeout);
 	tc_in = crt_req_get(tc_req);
 	D_ASSERT(tc_in != NULL);
 	uuid_copy(tc_in->tc_pool_uuid, pool_uuid);
@@ -140,15 +168,16 @@ ds_mgmt_pool_svc_create(uuid_t pool_uuid, int ntargets, const char *group, d_ran
 }
 
 int
-ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
-		    d_rank_list_t *targets, size_t scm_size, size_t nvme_size,
-		    daos_prop_t *prop, d_rank_list_t **svcp,
-		    int domains_nr, uint32_t *domains)
+ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev, d_rank_list_t *targets,
+		    size_t scm_size, size_t nvme_size, daos_prop_t *prop, d_rank_list_t **svcp,
+		    int domains_nr, uint32_t *domains, size_t meta_blob_size)
 {
 	d_rank_list_t			*pg_ranks = NULL;
 	d_rank_list_t			*pg_targets = NULL;
 	int				rc;
 	int				rc_cleanup;
+
+	D_DEBUG(DB_MGMT, DF_UUID ": meta blob size %ld", DP_UUID(pool_uuid), meta_blob_size);
 
 	/* Sanity check targets versus cart's current primary group members.
 	 * If any targets not in PG, flag error before MGMT_TGT_ corpcs fail.
@@ -167,16 +196,13 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 	if (!d_rank_list_identical(pg_targets, targets)) {
 		char *pg_str, *tgt_str;
 
-		pg_str = d_rank_list_to_str(pg_ranks);
-		if (pg_str == NULL) {
-			rc = -DER_NOMEM;
+		rc = d_rank_list_to_str(pg_ranks, &pg_str);
+		if (rc != 0)
 			D_GOTO(out, rc);
-		}
 
-		tgt_str = d_rank_list_to_str(targets);
-		if (tgt_str == NULL) {
+		rc = d_rank_list_to_str(targets, &tgt_str);
+		if (rc != 0) {
 			D_FREE(pg_str);
-			rc = -DER_NOMEM;
 			D_GOTO(out, rc);
 		}
 
@@ -278,7 +304,8 @@ ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t *r
 	/* TODO: Need to make pool service aware of new rank UUIDs */
 
 	ntargets = unique_add_ranks->rl_nr;
-	rc = ds_pool_extend(pool_uuid, ntargets, unique_add_ranks, domains_nr, domains, svc_ranks);
+	rc = dsc_pool_svc_extend(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), ntargets,
+				 unique_add_ranks, domains_nr, domains);
 out:
 	d_rank_list_free(unique_add_ranks);
 	return rc;
@@ -293,11 +320,11 @@ ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uuid_t *handles, 
 	D_DEBUG(DB_MGMT, "evict pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
 	/* Evict active pool connections if they exist*/
-	rc = ds_pool_svc_check_evict(pool_uuid, svc_ranks, handles, n_handles,
-				     destroy, force_destroy, machine, count);
+	rc = dsc_pool_svc_check_evict(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), handles,
+				      n_handles, destroy, force_destroy, machine, count);
 	if (rc != 0) {
-		D_ERROR("Failed to evict pool handles"DF_UUID" rc: %d\n",
-			DP_UUID(pool_uuid), rc);
+		D_ERROR("Failed to evict pool handles" DF_UUID " rc: " DF_RC "\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
 		goto out;
 	}
 
@@ -335,7 +362,8 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		}
 	}
 
-	rc = ds_pool_target_update_state(pool_uuid, svc_ranks, target_addrs, state);
+	rc = dsc_pool_svc_update_target_state(pool_uuid, svc_ranks, mgmt_ps_call_deadline(),
+					      target_addrs, state);
 
 	return rc;
 }
@@ -358,13 +386,8 @@ ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
  *
  * \param[in]		pool_uuid	   UUID of the pool.
  * \param[in]		svc_ranks	   Ranks of pool svc replicas.
- * \param[out]		ranks		   Optional, returned storage ranks in this pool.
- *					   If #pool_info is NULL, engines with disabled targets.
- *					   If #pool_info is passed, engines with enabled or
- *					   disabled targets according to
- *					   #pi_bits (DPI_ENGINES_ENABLED bit).
- *					   Note: ranks may be empty (i.e., *ranks->rl_nr may be 0).
- *					   The caller must free the list with d_rank_list_free().
+ * \param[out]		enabled_ranks	   Optional, returned storage ranks with enabled targets.
+ * \param[out]		disabled_ranks	   Optional, returned storage ranks with disabled targets.
  * \param[in][out]	pool_info	   Query results
  * \param[in][out]	pool_layout_ver	   Pool global version
  * \param[in][out]	upgrade_layout_ver Latest pool global version this pool might be upgraded
@@ -374,9 +397,9 @@ ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
  *			Negative value	   Other error
  */
 int
-ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **ranks,
-		   daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
-		   uint32_t *upgrade_layout_ver)
+ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **enabled_ranks,
+		   d_rank_list_t **disabled_ranks, daos_pool_info_t *pool_info,
+		   uint32_t *pool_layout_ver, uint32_t *upgrade_layout_ver)
 {
 	if (pool_info == NULL) {
 		D_ERROR("pool_info was NULL\n");
@@ -385,8 +408,8 @@ ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **r
 
 	D_DEBUG(DB_MGMT, "Querying pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
-	return ds_pool_svc_query(pool_uuid, svc_ranks, ranks, pool_info,
-				 pool_layout_ver, upgrade_layout_ver);
+	return dsc_pool_svc_query(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), enabled_ranks,
+				  disabled_ranks, pool_info, pool_layout_ver, upgrade_layout_ver);
 }
 
 /**
@@ -423,10 +446,10 @@ ds_mgmt_pool_query_targets(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_t 
 	for (i = 0; i < tgts->rl_nr; i++) {
 		D_DEBUG(DB_MGMT, "Querying pool "DF_UUID" rank %u tgt %u\n", DP_UUID(pool_uuid),
 			rank, tgts->rl_ranks[i]);
-		rc = ds_pool_svc_query_target(pool_uuid, svc_ranks, rank, tgts->rl_ranks[i],
-					      &out_infos[i]);
+		rc = dsc_pool_svc_query_target(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), rank,
+					       tgts->rl_ranks[i], &out_infos[i]);
 		if (rc != 0) {
-			D_ERROR(DF_UUID": ds_pool_svc_query_target() failed rank %u tgt %u\n",
+			D_ERROR(DF_UUID": dsc_pool_svc_query_target() failed rank %u tgt %u\n",
 				DP_UUID(pool_uuid), rank, tgts->rl_ranks[i]);
 			goto out;
 		}
@@ -459,7 +482,7 @@ get_access_props(uuid_t pool_uuid, d_rank_list_t *ranks, daos_prop_t **prop)
 	for (i = 0; i < ACCESS_PROPS_LEN; i++)
 		new_prop->dpp_entries[i].dpe_type = ACCESS_PROPS[i];
 
-	rc = ds_pool_svc_get_prop(pool_uuid, ranks, new_prop);
+	rc = dsc_pool_svc_get_prop(pool_uuid, ranks, mgmt_ps_call_deadline(), new_prop);
 	if (rc != 0) {
 		daos_prop_free(new_prop);
 		return rc;
@@ -497,7 +520,7 @@ ds_mgmt_pool_overwrite_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_ACL;
 	prop->dpp_entries[0].dpe_val_ptr = daos_acl_dup(acl);
 
-	rc = ds_pool_svc_set_prop(pool_uuid, svc_ranks, prop);
+	rc = dsc_pool_svc_set_prop(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), prop);
 	if (rc != 0)
 		goto out_prop;
 
@@ -520,7 +543,7 @@ ds_mgmt_pool_update_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	D_DEBUG(DB_MGMT, "Updating ACL for pool "DF_UUID"\n",
 		DP_UUID(pool_uuid));
 
-	rc = ds_pool_svc_update_acl(pool_uuid, svc_ranks, acl);
+	rc = dsc_pool_svc_update_acl(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), acl);
 	if (rc != 0)
 		goto out;
 
@@ -547,7 +570,7 @@ ds_mgmt_pool_delete_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	if (rc != 0)
 		goto out;
 
-	rc = ds_pool_svc_delete_acl(pool_uuid, svc_ranks, type, name);
+	rc = dsc_pool_svc_delete_acl(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), type, name);
 	if (rc != 0)
 		goto out_name;
 
@@ -576,7 +599,7 @@ ds_mgmt_pool_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	D_DEBUG(DB_MGMT, "Setting properties for pool "DF_UUID"\n",
 		DP_UUID(pool_uuid));
 
-	rc = ds_pool_svc_set_prop(pool_uuid, svc_ranks, prop);
+	rc = dsc_pool_svc_set_prop(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), prop);
 
 out:
 	return rc;
@@ -587,7 +610,7 @@ int ds_mgmt_pool_upgrade(uuid_t pool_uuid, d_rank_list_t *svc_ranks)
 	D_DEBUG(DB_MGMT, "Upgrading pool "DF_UUID"\n",
 		DP_UUID(pool_uuid));
 
-	return ds_pool_svc_upgrade(pool_uuid, svc_ranks);
+	return dsc_pool_svc_upgrade(pool_uuid, svc_ranks, mgmt_ps_call_deadline());
 }
 
 int
@@ -605,8 +628,56 @@ ds_mgmt_pool_get_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	D_DEBUG(DB_MGMT, "Getting properties for pool "DF_UUID"\n",
 		DP_UUID(pool_uuid));
 
-	rc = ds_pool_svc_get_prop(pool_uuid, svc_ranks, prop);
+	rc = dsc_pool_svc_get_prop(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), prop);
 
 out:
+	return rc;
+}
+
+/**
+ * Destroy the specified pool shard on the specified storage rank
+ */
+int
+ds_mgmt_tgt_pool_shard_destroy(uuid_t pool_uuid, int shard_idx, d_rank_t rank)
+{
+	crt_rpc_t				*req = NULL;
+	struct mgmt_tgt_shard_destroy_in	*tsdi;
+	struct mgmt_tgt_shard_destroy_out	*tsdo;
+	crt_endpoint_t				 tgt_ep;
+	crt_opcode_t				 opc;
+	int					 rc;
+
+	tgt_ep.ep_grp = NULL;
+	tgt_ep.ep_rank = rank;
+	tgt_ep.ep_tag = daos_rpc_tag(DAOS_REQ_TGT, shard_idx);
+
+	opc = DAOS_RPC_OPCODE(MGMT_TGT_SHARD_DESTROY, DAOS_MGMT_MODULE,
+			      DAOS_MGMT_VERSION);
+
+	rc = crt_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opc, &req);
+	if (rc != 0)
+		goto out;
+
+	tsdi = crt_req_get(req);
+	D_ASSERT(tsdi != NULL);
+
+	uuid_copy(tsdi->tsdi_pool_uuid, pool_uuid);
+	tsdi->tsdi_shard_idx = shard_idx;
+
+	rc = dss_rpc_send(req);
+	if (rc != 0)
+		goto out;
+
+	tsdo = crt_reply_get(req);
+	rc = tsdo->tsdo_rc;
+
+out:
+	if (req != NULL)
+		crt_req_decref(req);
+
+	if (rc != 0)
+		D_ERROR("Failed to destroy pool "DF_UUIDF" shard %u on rank %u: "DF_RC"\n",
+			DP_UUID(pool_uuid), shard_idx, rank, DP_RC(rc));
+
 	return rc;
 }

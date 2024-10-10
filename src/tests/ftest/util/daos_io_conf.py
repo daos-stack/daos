@@ -9,8 +9,8 @@ import random
 from apricot import TestWithServers
 from command_utils import ExecutableCommand
 from command_utils_base import BasicParameter, FormattedParameter
-from exception_utils import CommandFailure, MPILoadError
 from env_modules import load_mpi
+from exception_utils import CommandFailure, MPILoadError
 from job_manager_utils import Orterun
 
 

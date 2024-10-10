@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,9 +11,15 @@ import "time"
 
 var (
 	// ConfigDir should be set via linker flag using the value of CONF_DIR.
-	ConfigDir string = "./"
+	ConfigDir = "./"
 	// DaosVersion should be set via linker flag using the value of DAOS_VERSION.
-	DaosVersion string = "unset"
+	DaosVersion = "unset"
+	// BuildTime should be set via linker flag using the value of BUILD_TIME.
+	BuildTime = ""
+	// BuildHost should be set via linker flag using the value of BUILD_HOST.
+	BuildHost = ""
+	// BuildInfo should be set via linker flag using the value of BUILD_INFO.
+	BuildInfo = ""
 	// ControlPlaneName defines a consistent name for the control plane server.
 	ControlPlaneName = "DAOS Control Server"
 	// DataPlaneName defines a consistent name for the engine.

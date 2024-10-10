@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -22,19 +22,9 @@
 
 /* Common free extent structure for both SCM & in-memory index */
 struct vea_free_extent {
-	uint64_t	vfe_blk_off;	/* Block offset of the extent */
-	uint32_t	vfe_blk_cnt;	/* Total blocks of the extent */
-	uint32_t	vfe_age;	/* Monotonic timestamp */
-};
-
-/* Maximum extents a non-contiguous allocation can have */
-#define VEA_EXT_VECTOR_MAX	9
-
-/* Allocated extent vector */
-struct vea_ext_vector {
-	uint64_t	vev_blk_off[VEA_EXT_VECTOR_MAX];
-	uint32_t	vev_blk_cnt[VEA_EXT_VECTOR_MAX];
-	uint32_t	vev_size;	/* Size of the extent vector */
+	uint64_t vfe_blk_off; /* Block offset of the extent */
+	uint32_t vfe_blk_cnt; /* Total blocks of the extent */
+	uint32_t vfe_age;     /* Monotonic timestamp */
 };
 
 /* Reserved extent(s) */
@@ -49,8 +39,12 @@ struct vea_resrvd_ext {
 	uint64_t		 vre_hint_seq;
 	/* Total reserved blocks */
 	uint32_t		 vre_blk_cnt;
+	/* New extent allocated for bitmap */
+	uint32_t		 vre_new_bitmap_chunk:1;
 	/* Extent vector for non-contiguous reserve */
 	struct vea_ext_vector	*vre_vector;
+	/* private pointer */
+	void			*vre_private;
 };
 
 /*
@@ -83,6 +77,10 @@ struct vea_unmap_context {
 	bool vnc_ext_flush;
 };
 
+#define	VEA_COMPAT_FEATURE_BITMAP	(1 << 0)
+#define	VEA_COMPAT_END			(1 << 1)
+#define	VEA_COMPAT_MASK			(VEA_COMPAT_END - 1)
+
 /* Free space tracking information on SCM */
 struct vea_space_df {
 	uint32_t	vsd_magic;
@@ -95,8 +93,8 @@ struct vea_space_df {
 	uint64_t	vsd_tot_blks;
 	/* Free extent tree, sorted by offset */
 	struct btr_root	vsd_free_tree;
-	/* Allocated extent vector tree, for non-contiguous allocation */
-	struct btr_root	vsd_vec_tree;
+	/* Free bitmap tree, sorted by offset */
+	struct btr_root vsd_bitmap_tree;
 };
 
 /* VEA attributes */
@@ -116,8 +114,10 @@ struct vea_stat {
 	uint64_t	vs_resrv_hint;	/* Number of hint reserve */
 	uint64_t	vs_resrv_large;	/* Number of large reserve */
 	uint64_t	vs_resrv_small;	/* Number of small reserve */
+	uint64_t	vs_resrv_bitmap; /* Number of bitmap reserve */
 	uint64_t	vs_frags_large;	/* Large free frags */
 	uint64_t	vs_frags_small;	/* Small free frags */
+	uint64_t	vs_frags_bitmap; /* Bitmap frags */
 	uint64_t	vs_frags_aging;	/* Aging frags */
 };
 
@@ -125,6 +125,8 @@ struct vea_space_info;
 
 /* Callback to initialize block device header */
 typedef int (*vea_format_callback_t)(void *cb_data);
+/* Callback for vea free tree enumeration */
+typedef int (*vea_free_callback_t)(void *cb_arg, struct vea_free_extent *vfe);
 
 /**
  * Initialize the space tracking information on SCM and the header of the
@@ -139,6 +141,7 @@ typedef int (*vea_format_callback_t)(void *cb_data);
  * \param cb       [IN]	Callback to initialize block device header
  * \param cb_data  [IN]	Callback data
  * \param force    [IN]	Forcibly re-initialize an already initialized device
+ * \param compat   [IN]	Compatibility bits (e.g., VEA_COMPAT_FEATURE_BITMAP)
  *
  * \return		Zero on success; -DER_EXIST when try to format an
  *			already initialized device without setting @force to
@@ -147,7 +150,21 @@ typedef int (*vea_format_callback_t)(void *cb_data);
 int vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 	       struct vea_space_df *md, uint32_t blk_sz, uint32_t hdr_blks,
 	       uint64_t capacity, vea_format_callback_t cb, void *cb_data,
-	       bool force);
+	       bool force, uint32_t compat);
+/**
+ * Upgrade VEA to support latest disk format
+ *
+ * \param vsi	   [IN]	In-memory compound free extent index
+ * \param umem     [IN]	An instance of SCM
+ * \param md       [IN]	The allocation metadata on SCM
+ * \param version  [IN] Version which we try to upgrade
+ *
+ * \return			Zero on success, in-memory compound free extent
+ *				index returned by @vsi; Appropriated negative
+ *				value on error
+ */
+int vea_upgrade(struct vea_space_info *vsi, struct umem_instance *umem,
+		struct vea_space_df *md, uint32_t version);
 
 /**
  * Load space tracking information from SCM to initialize the in-memory compound
@@ -300,13 +317,12 @@ int vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
  * Flushing the free frags in aging buffer
  *
  * \param vsi        [IN]	In-memory compound index
- * \param force      [IN]	Force flush no matter if there is qualified extent
  * \param nr_flush   [IN]	Flush at most @nr_flush frags
  * \param nr_flushed [OUT]	How many frags are actually flushed (optional)
  *
  * \return			Zero on success; Appropriated negative value on error
  */
-int vea_flush(struct vea_space_info *vsi, bool force, uint32_t nr_flush, uint32_t *nr_flushed);
+int vea_flush(struct vea_space_info *vsi, uint32_t nr_flush, uint32_t *nr_flushed);
 
 /**
  * Free metrcis
@@ -329,5 +345,16 @@ void *vea_metrics_alloc(const char *path, int tgt_id);
  * Get VEA metrics count
  */
 int vea_metrics_count(void);
+
+/**
+ * Enumerate the free extents/regions vea tracks
+ *
+ * \param vsi        [IN]	In-memory compound index
+ * \param cb         [IN]	callback function for each entry
+ * \param cb_arg     [IN]	callback arg
+ *
+ * \return			0 on success, otherwise error code
+ */
+int vea_enumerate_free(struct vea_space_info *vsi, vea_free_callback_t cb, void *cb_arg);
 
 #endif /* __VEA_API_H__ */

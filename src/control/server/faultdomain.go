@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -58,7 +58,7 @@ func newFaultDomainFromConfig(domainStr string) (*system.FaultDomain, error) {
 		return nil, config.FaultConfigFaultDomainInvalid
 	}
 	// TODO DAOS-6353: remove when multiple layers supported
-	if fd.NumLevels() != 1 {
+	if fd.NumLevels() > 2 {
 		return nil, config.FaultConfigTooManyLayersInFaultDomain
 	}
 	return fd, nil

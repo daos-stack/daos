@@ -8,7 +8,7 @@ from apricot import TestWithServers
 from daos_racer_utils import DaosRacerCommand
 
 
-class DaosRacerTest(TestWithServers):
+class DaosRacerSimpleTest(TestWithServers):
     """Test cases that utilize the daos_racer tool.
 
     :avocado: recursive
@@ -30,8 +30,8 @@ class DaosRacerTest(TestWithServers):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=io,daosracer
-        :avocado: tags=daos_racer,DaosRacerTest,test_daos_racer_simple
+        :avocado: tags=io,daos_racer
+        :avocado: tags=DaosRacerSimpleTest,test_daos_racer_simple
         """
         dmg = self.get_dmg_command()
         self.assertGreater(

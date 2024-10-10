@@ -114,7 +114,7 @@ crt_treerank_2_grprank(uint32_t grp_size, uint32_t grp_root, uint32_t tree_rank)
 }
 
 static inline uint32_t
-crt_grprank_2_teerank(uint32_t grp_size, uint32_t grp_root, uint32_t grp_rank)
+crt_grprank_2_tree_rank(uint32_t grp_size, uint32_t grp_root, uint32_t grp_rank)
 {
 	D_ASSERT(grp_size > 0);
 	D_ASSERT(grp_root < grp_size);
