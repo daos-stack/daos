@@ -1,6 +1,5 @@
 cache:
   backend: fs
-  clear: false
   dir:
   redis:
     ca: ""
