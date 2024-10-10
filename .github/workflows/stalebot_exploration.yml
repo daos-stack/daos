@@ -16,7 +16,7 @@ jobs:
           days-before-stale: 120  # Number of days of inactivity before marking as stale
           days-before-close: -1  # -1 means do not close the stale PRs automatically
           stale-pr-message: 'This PR has been automatically marked as stale due to inactivity.'
-          only-labels: 'PRs'  # Only apply to PRs
+#          only-labels: 'PRs'  # Only apply to PRs
           remove-stale-when-updated: true  # Remove stale label if PR is updated
           operations-per-run: 300  # Limit the number of issues and PRs processed per run
           debug-only: true
