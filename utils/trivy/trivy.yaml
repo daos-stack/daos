@@ -1,6 +1,8 @@
+# SPDX-License-Identifier: BSD-2-Clause-Patent
+# Copyright (c) 2024 Intel Corporation.
+
 cache:
-  backend: fs
-  clear: false
+  backend: memory
   dir:
   redis:
     ca: ""
