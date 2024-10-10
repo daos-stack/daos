@@ -2,7 +2,7 @@
 # Copyright (c) 2024 Intel Corporation.
 
 cache:
-  backend: memory
+  backend: fs
   dir:
   redis:
     ca: ""
