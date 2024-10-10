@@ -11,6 +11,7 @@ timeout: 1500
 setup:
   start_agents_once: False
   start_servers_once: False
+  max_test_dir_usage_check: 3
 server_config:
   name: daos_server
   engines_per_host: 2
