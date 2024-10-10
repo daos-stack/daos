@@ -2364,7 +2364,7 @@ class PosixTests():
 
         re-read directory contents again, now this should be up to date.
         """
-        cache_time = 20
+        cache_time = 30
 
         cont_attrs = {'dfuse-data-cache': False,
                       'dfuse-attr-time': cache_time,
