@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2023 Intel Corporation.
+ * (C) Copyright 2023-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -61,7 +61,7 @@ static int
 action_obj(daos_handle_t coh, daos_obj_id_t oid, int op, const char *name)
 {
 	daos_handle_t	oh;
-	daos_key_t	dkey;
+	daos_key_t      dkey = {};
 	int		rc, rc2;
 
 	rc = daos_obj_open(coh, oid, DAOS_OO_RW, &oh, NULL);

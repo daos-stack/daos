@@ -22,3 +22,13 @@
    fun:fi_senddataz
    ...
 }
+{
+   setattr
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   ...
+   fun:daos_obj_update
+   fun:dfs_setxattr
+   fun:dfuse_cb_setxattr
+   fun:df_ll_setxattr
+}
