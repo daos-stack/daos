@@ -31,9 +31,7 @@ dfuse_cb_read_complete(struct dfuse_event *ev)
 	if (ev->de_len == 0) {
 		DFUSE_TRA_DEBUG(oh, "%#zx-%#zx requested (EOF)", ev->de_req_position,
 				ev->de_req_position + ev->de_req_len - 1);
-
-		DFUSE_REPLY_BUFQ(oh, ev->de_req, ev->de_iov.iov_buf, ev->de_len);
-		D_GOTO(release, 0);
+		D_GOTO(reply, 0);
 	}
 
 	if (ev->de_len == ev->de_req_len)
@@ -44,7 +42,7 @@ dfuse_cb_read_complete(struct dfuse_event *ev)
 				ev->de_req_position, ev->de_req_position + ev->de_len - 1,
 				ev->de_req_position + ev->de_len,
 				ev->de_req_position + ev->de_req_len - 1);
-
+reply:
 	DFUSE_REPLY_BUFQ(oh, ev->de_req, ev->de_iov.iov_buf, ev->de_len);
 release:
 	daos_event_fini(&ev->de_ev);

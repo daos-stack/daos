@@ -451,7 +451,7 @@ restart:
 					ie = container_of(drc->drc_rlink, struct dfuse_inode_entry,
 							  ie_htl);
 				} else {
-					char          out[DUNS_MAX_XATTR_LEN];
+					char          out[DUNS_MAX_XATTR_LEN] = {};
 					char         *outp     = &out[0];
 					daos_size_t   attr_len = DUNS_MAX_XATTR_LEN;
 					struct stat   stbuf    = {0};
