@@ -25,6 +25,7 @@ env:
   LEAP15_VERSION: 15.5
 
 runs:
+  using: "composite"
   env:
     ARTIFACTORY_URL: https://artifactory.dc.hpdd.intel.com/
     JENKINS_URL: https://build.hpdd.intel.com/
@@ -36,8 +37,9 @@ runs:
     ARTIFACTS_URL: file:///scratch/job_repos/
     MOCK_OPTIONS: --uniqueext=${{ github.run_id }}
     PR_NUM: ${{ github.event.pull_request.number }}
-    # TODO -- this should be on stable, backedup storage, not /scratch
-    REPO_PATH: /scratch/job_repos/daos-stack/job/daos/job/PR-${{ env.PR_NUM }}/
+    # TODO -- this should be on stable, backed up storage, not /scratch
+    # yamllint disable-line rule:line-length
+    REPO_PATH: /scratch/job_repos/daos-stack/job/daos/job/PR-${{ github.event.pull_request.number }}/
     RUN_ID: ${{ github.run_id }}
     DISTRO: ${{ inputs.distro }}
     TARGET: ${{ inputs.distro }}

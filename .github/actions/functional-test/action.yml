@@ -52,6 +52,7 @@ env:
   FTEST_ARG:
 
 runs:
+  using: "composite"
   steps:
     - name: Set variables
       run: |
