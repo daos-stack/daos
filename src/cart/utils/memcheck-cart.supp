@@ -13,6 +13,13 @@
    obj:*/libnl*
 }
 {
+   libnama
+   Memcheck:Leak
+   ...
+   fun:numa_bitmask_alloc
+   obj:*/libnuma*
+}
+{
    <insert_a_suppression_name_here>
    Memcheck:Leak
    ...
