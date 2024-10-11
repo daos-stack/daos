@@ -1254,6 +1254,7 @@ dfuse_ie_init(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 	atomic_init(&ie->ie_linear_read, true);
 	atomic_fetch_add_relaxed(&dfuse_info->di_inode_count, 1);
 	D_INIT_LIST_HEAD(&ie->ie_evict_entry);
+	D_INIT_LIST_HEAD(&ie->ie_open_reads);
 	D_RWLOCK_INIT(&ie->ie_wlock, 0);
 }
 
@@ -1316,6 +1317,9 @@ dfuse_read_event_size(void *arg, size_t size)
 		ev->de_sgl.sg_iovs     = &ev->de_iov;
 		ev->de_sgl.sg_nr       = 1;
 	}
+
+	/* D_INIT_LIST_HEAD(&ev->de_read_list); */
+	D_INIT_LIST_HEAD(&ev->de_read_slaves);
 
 	rc = daos_event_init(&ev->de_ev, ev->de_eqt->de_eq, NULL);
 	if (rc != -DER_SUCCESS) {

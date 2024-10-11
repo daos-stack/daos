@@ -7,8 +7,19 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
+/* Global lock for all chunk read operations.  Each inode has a struct read_chunk_core * entry
+ * which is checked for NULL and set whilst holding this lock.  Each read_chunk_core then has
+ * a list of read_chunk_data and again, this lock protects all lists on all inodes.  This avoids
+ * the need for a per-inode lock which for many files would consume considerable memory but does
+ * mean there is potentially some lock contention.  The lock however is only held for list
+ * manipulation, no dfs or kernel calls are made whilst holding the lock.
+ *
+ * Also used for ie_open_reads list.
+ */
+static pthread_mutex_t rc_lock = PTHREAD_MUTEX_INITIALIZER;
+
 static void
-dfuse_cb_read_complete(struct dfuse_event *ev)
+cb_read_helper(struct dfuse_event *ev, void *buff)
 {
 	struct dfuse_obj_hdl *oh = ev->de_oh;
 
@@ -40,9 +51,36 @@ dfuse_cb_read_complete(struct dfuse_event *ev)
 				ev->de_req_position + ev->de_len,
 				ev->de_req_position + ev->de_req_len - 1);
 
-	DFUSE_REPLY_BUFQ(oh, ev->de_req, ev->de_iov.iov_buf, ev->de_len);
+	DFUSE_REPLY_BUFQ(oh, ev->de_req, buff, ev->de_len);
 release:
 	daos_event_fini(&ev->de_ev);
+}
+
+static void
+dfuse_cb_read_complete(struct dfuse_event *ev)
+{
+	struct dfuse_event *evs, *evn;
+
+	D_MUTEX_LOCK(&rc_lock);
+	d_list_del(&ev->de_read_list);
+	D_MUTEX_UNLOCK(&rc_lock);
+
+	d_list_for_each_entry(evs, &ev->de_read_slaves, de_read_list) {
+		DFUSE_TRA_WARNING(ev, "concurrent network read %p", evs);
+		evs->de_len         = ev->de_len;
+		evs->de_ev.ev_error = ev->de_ev.ev_error;
+		d_list_del(&evs->de_read_list);
+		cb_read_helper(evs, ev->de_iov.iov_buf);
+	}
+
+	cb_read_helper(ev, ev->de_iov.iov_buf);
+
+	d_list_for_each_entry_safe(evs, evn, &ev->de_read_slaves, de_read_list) {
+		d_list_del(&evs->de_read_list);
+		d_slab_restock(evs->de_eqt->de_read_slab);
+		d_slab_release(evs->de_eqt->de_read_slab, ev);
+	}
+
 	d_slab_restock(ev->de_eqt->de_read_slab);
 	d_slab_release(ev->de_eqt->de_read_slab, ev);
 }
@@ -155,15 +193,6 @@ struct read_chunk_data {
 struct read_chunk_core {
 	d_list_t entries;
 };
-
-/* Global lock for all chunk read operations.  Each inode has a struct read_chunk_core * entry
- * which is checked for NULL and set whilst holding this lock.  Each read_chunk_core then has
- * a list of read_chunk_data and again, this lock protects all lists on all inodes.  This avoids
- * the need for a per-inode lock which for many files would consume considerable memory but does
- * mean there is potentially some lock contention.  The lock however is only held for list
- * manipulation, no dfs or kernel calls are made whilst holding the lock.
- */
-static pthread_mutex_t rc_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static void
 chunk_free(struct read_chunk_data *cd)
@@ -418,7 +447,7 @@ found:
 			if (cd->reqs[slot] != 0) {
 				/* Handle concurrent reads of the same slot, this wasn't expected
 				 * but can happen so for now reject it at this level and have read
-				 * perform a seperate I/O for this slot.
+				 * perform a separate I/O for this slot.
 				 * TODO: Handle DAOS-16686 here.
 				 */
 				rcb = false;
@@ -506,8 +535,10 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	eqt = pick_eqt(dfuse_info);
 
 	ev = d_slab_acquire(eqt->de_read_slab);
-	if (ev == NULL)
-		D_GOTO(err, rc = ENOMEM);
+	if (ev == NULL) {
+		DFUSE_REPLY_ERR_RAW(oh, req, ENOMEM);
+		return;
+	}
 
 	if (oh->doh_ie->ie_truncated && position + len < oh->doh_ie->ie_stat.st_size &&
 	    ((oh->doh_ie->ie_start_off == 0 && oh->doh_ie->ie_end_off == 0) ||
@@ -544,9 +575,29 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 
 	DFUSE_IE_WFLUSH(oh->doh_ie);
 
+	/* Not check for outstanding read which matches */
+	D_MUTEX_LOCK(&rc_lock);
+	{
+		struct dfuse_event *evc;
+
+		/* Check for concurrent overlapping reads and if so then add request to current op
+		 */
+		d_list_for_each_entry(evc, &oh->doh_ie->ie_open_reads, de_read_list) {
+			if (ev->de_req_position == evc->de_req_position &&
+			    ev->de_req_len <= evc->de_req_position) {
+				d_list_add(&ev->de_read_list, &evc->de_read_slaves);
+				D_MUTEX_UNLOCK(&rc_lock);
+				return;
+			}
+		}
+		d_list_add_tail(&ev->de_read_list, &oh->doh_ie->ie_open_reads);
+	}
+	D_MUTEX_UNLOCK(&rc_lock);
+
 	rc = dfs_read(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, position, &ev->de_len, &ev->de_ev);
 	if (rc != 0) {
-		D_GOTO(err, rc);
+		ev->de_ev.ev_error = rc;
+		dfuse_cb_read_complete(ev);
 		return;
 	}
 
@@ -557,12 +608,6 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	d_slab_restock(eqt->de_read_slab);
 
 	return;
-err:
-	DFUSE_REPLY_ERR_RAW(oh, req, rc);
-	if (ev) {
-		daos_event_fini(&ev->de_ev);
-		d_slab_release(eqt->de_read_slab, ev);
-	}
 }
 
 static void

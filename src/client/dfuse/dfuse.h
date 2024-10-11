@@ -401,6 +401,13 @@ struct dfuse_event {
 	d_iov_t          de_iov;
 	d_sg_list_t      de_sgl;
 	d_list_t         de_list;
+
+	/* Position in a list of events, this will either be off ie->ie_open_reads or
+	 * de->de_read_slaves
+	 */
+	d_list_t         de_read_list;
+	/* List of slave events */
+	d_list_t         de_read_slaves;
 	struct dfuse_eq *de_eqt;
 	union {
 		struct dfuse_obj_hdl     *de_oh;
@@ -1012,6 +1019,8 @@ struct dfuse_inode_entry {
 
 	/* Entry on the evict list */
 	d_list_t                  ie_evict_entry;
+
+	d_list_t                  ie_open_reads;
 
 	struct read_chunk_core   *ie_chunk;
 };
