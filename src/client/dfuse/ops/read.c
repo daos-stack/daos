@@ -66,7 +66,7 @@ dfuse_cb_read_complete(struct dfuse_event *ev)
 	D_MUTEX_UNLOCK(&rc_lock);
 
 	d_list_for_each_entry(evs, &ev->de_read_slaves, de_read_list) {
-		DFUSE_TRA_WARNING(ev, "concurrent network read %p", evs);
+		DFUSE_TRA_WARNING(ev->de_oh, "concurrent network read %p", evs);
 		evs->de_len         = min(ev->de_len, evs->de_req_len);
 		evs->de_ev.ev_error = ev->de_ev.ev_error;
 		cb_read_helper(evs, ev->de_iov.iov_buf);
