@@ -28,15 +28,10 @@ dfuse_cb_read_complete(struct dfuse_event *ev)
 		}
 	}
 
-	if (ev->de_len == 0) {
+	if (ev->de_len == 0)
 		DFUSE_TRA_DEBUG(oh, "%#zx-%#zx requested (EOF)", ev->de_req_position,
 				ev->de_req_position + ev->de_req_len - 1);
-
-		DFUSE_REPLY_BUFQ(oh, ev->de_req, ev->de_iov.iov_buf, ev->de_len);
-		D_GOTO(release, 0);
-	}
-
-	if (ev->de_len == ev->de_req_len)
+	else if (ev->de_len == ev->de_req_len)
 		DFUSE_TRA_DEBUG(oh, "%#zx-%#zx read", ev->de_req_position,
 				ev->de_req_position + ev->de_req_len - 1);
 	else
@@ -146,6 +141,7 @@ struct read_chunk_data {
 	struct dfuse_event   *ev;
 	fuse_req_t            reqs[8];
 	struct dfuse_obj_hdl *ohs[8];
+	bool                  slot_done[8];
 	d_list_t              list;
 	uint64_t              bucket;
 	struct dfuse_eq      *eqt;
@@ -226,6 +222,7 @@ chunk_cb(struct dfuse_event *ev)
 
 	do {
 		int i;
+
 		req = 0;
 
 		D_MUTEX_LOCK(&rc_lock);
@@ -239,8 +236,9 @@ chunk_cb(struct dfuse_event *ev)
 		cd->complete = true;
 		for (i = 0; i < 8; i++) {
 			if (cd->reqs[i]) {
-				req         = cd->reqs[i];
-				cd->reqs[i] = 0;
+				req              = cd->reqs[i];
+				cd->reqs[i]      = 0;
+				cd->slot_done[i] = true;
 				break;
 			}
 		}
@@ -396,6 +394,7 @@ found:
 		rcb = chunk_fetch(req, oh, cd, slot);
 	} else {
 		struct dfuse_event *ev = NULL;
+		bool                sd = false;
 
 		/* Now check if this read request is complete or not yet, if it isn't then just
 		 * save req in the right slot however if it is then reply here.  After the call to
@@ -407,10 +406,27 @@ found:
 		D_MUTEX_LOCK(&rc_lock);
 		if (cd->complete) {
 			ev = cd->ev;
+			if (!cd->slot_done[slot]) {
+				/* DAOS-16686: Reply to each slot more than once if requested, but
+				 * only track the first reply for knowing when to free the buffer.
+				 */
+				cd->slot_done[slot] = true;
+				sd                  = false;
+				DFUSE_TRA_WARNING(oh, "concurrent read, met");
+			}
 		} else {
-			D_ASSERT(cd->reqs[slot] == 0);
-			cd->reqs[slot] = req;
-			cd->ohs[slot]  = oh;
+			if (cd->reqs[slot] != 0) {
+				/* Handle concurrent reads of the same slot, this wasn't expected
+				 * but can happen so for now reject it at this level and have read
+				 * perform a seperate I/O for this slot.
+				 * TODO: Handle DAOS-16686 here.
+				 */
+				rcb = false;
+				DFUSE_TRA_WARNING(oh, "concurrent read, un-met");
+			} else {
+				cd->reqs[slot] = req;
+				cd->ohs[slot]  = oh;
+			}
 		}
 		D_MUTEX_UNLOCK(&rc_lock);
 
@@ -425,7 +441,7 @@ found:
 						position + K128 - 1);
 				DFUSE_REPLY_BUFQ(oh, req, ev->de_iov.iov_buf + (slot * K128), K128);
 			}
-			if (atomic_fetch_add_relaxed(&cd->exited, 1) == 7) {
+			if (sd && atomic_fetch_add_relaxed(&cd->exited, 1) == 7) {
 				d_slab_release(cd->eqt->de_read_slab, cd->ev);
 				D_FREE(cd);
 			}
