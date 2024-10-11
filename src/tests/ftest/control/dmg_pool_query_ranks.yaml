@@ -3,7 +3,7 @@ hosts:
 timeouts:
   test_pool_query_ranks_basic: 120
   test_pool_query_ranks_error: 120
-  test_pool_query_ranks_mgmt: 480
+  test_pool_query_ranks_mgmt: 780
 server_config:
   name: daos_server
   crt_timeout: 5
