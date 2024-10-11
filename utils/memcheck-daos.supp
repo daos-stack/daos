@@ -29,8 +29,6 @@
    ...
    fun:daos_obj_update
    fun:dfs_setxattr
-   fun:dfuse_cb_setxattr
-   fun:df_ll_setxattr
 }
 {
    fetch
@@ -39,4 +37,20 @@
    ...
    fun:daos_obj_fetch
    fun:fetch_entry
+}
+{
+   osetattr
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   ...
+   fun:daos_obj_update
+   fun:dfs_osetattr
+}
+{
+   getxattr
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   ...
+   fun:daos_obj_fetch
+   fun:dfs_getxattr
 }
