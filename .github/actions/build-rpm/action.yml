@@ -28,18 +28,10 @@ env:
   JENKINS_URL: https://build.hpdd.intel.com/
   DAOS_EMAIL: phil.henderson@intel.com
   DAOS_FULLNAME: daos-stack
-  DISTRO: ${{ inputs.distro }}
   DISTRO_REPOS: disabled
   # DOCKER_BUILDKIT: 0
   ARTIFACTS_URL: file:///scratch/job_repos/
-  MOCK_OPTIONS: --uniqueext=${{ github.run_id }}
-  PR_NUM: ${{ github.event.pull_request.number }}
-  # TODO -- this should be on stable, backed up storage, not /scratch
-  # yamllint disable-line rule:line-length
-  REPO_PATH: /scratch/job_repos/daos-stack/job/daos/job/PR-${{ github.event.pull_request.number }}/
   REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
-  RUN_ID: ${{ github.run_id }}
-  TARGET: ${{ inputs.distro }}
   # keep VS Code's GHA linting happy
   STAGE_NAME:
   DISTRO_NAME:
@@ -47,6 +39,11 @@ env:
   CP_LEAP15_VERSION:
   COMMIT_STATUS_DISTRO_VERSION:
   FVERSION:
+  PR_NUM:
+  MOCK_OPTIONS:
+  RUN_ID:
+  DISTRO:
+  TARGET:
 
 runs:
   - name: Set variables
@@ -80,6 +77,13 @@ runs:
         echo "STAGE_NAME=Build RPM on $DISTRO_NAME $DISTRO_VERSION" >> $GITHUB_ENV
         echo "FVERSION=$FVERSION" >> $GITHUB_ENV
         echo "COMMIT_STATUS_DISTRO_VERSION=$COMMIT_STATUS_DISTRO_VERSION" >> $GITHUB_ENV
+        echo "PR_NUM=${{ github.event.pull_request.number }}" >> $GITHUB_ENV
+        # TODO -- this should be on stable, backed up storage, not /scratch
+        echo "REPO_PATH=/scratch/job_repos/daos-stack/job/daos/job/PR-${PR_NUM}/" >> $GITHUB_ENV
+        echo "MOCK_OPTIONS=--uniqueext=${{ github.run_id }}" >> $GITHUB_ENV
+        echo "RUN_ID=${{ github.run_id }}" >> $GITHUB_ENV
+        echo "DISTRO=${{ inputs.distro }}" >> $GITHUB_ENV
+        echo "TARGET=${{ inputs.distro }}" >> $GITHUB_ENV
         echo "COVFN_DISABLED=${{ inputs.covfn_disabled }}" >> $GITHUB_ENV
   - name: Checkout code
     uses: actions/checkout@v4.1.1
