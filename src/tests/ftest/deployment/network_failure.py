@@ -164,7 +164,7 @@ class NetworkFailureTest(IorTestBase):
                 errors=errors)
         else:
             # Aurora. Manually run the command.
-            # command = f"sudo ip link set {self.interface} up"
+            command = f"sudo ip link set {self.interface} up"
             self.log.debug("## Call %s on %s", command, self.network_down_host)
             time.sleep(60)
         return errors
@@ -180,7 +180,7 @@ class NetworkFailureTest(IorTestBase):
                 errors=errors)
         else:
             # Aurora. Manually run the command.
-            # command = f"sudo ip link set {self.interface} up"
+            command = f"sudo ip link set {self.interface} up"
             self.log.debug("## Call %s on %s", command, self.network_down_host)
             time.sleep(60)
         return errors
@@ -228,6 +228,15 @@ class NetworkFailureTest(IorTestBase):
         self.interface = NetworkInterface(
             self.server_managers[0].get_config_value("fabric_iface"), self.network_down_host,
             self.update_nic)
+
+        # Test code 
+        # Create IP address - Hostname mapping by calling "hostname -i" on every server
+        # node.
+        ip_to_host = self.create_ip_to_host()
+        # Using dmg system query output and ip_to_host, create Hostname - Ranks mapping.
+        host_to_ranks = self.create_host_to_ranks(
+            ip_to_host=ip_to_host, system_query_members=members)
+        rank_value = {i for i in host_to_ranks if host_to_ranks[i]==self.network_down_host}
         self.register_cleanup(self.interface.restore, logger=self.log)
         self.log.info("interface to update = %s", self.interface)
 
@@ -278,8 +287,9 @@ class NetworkFailureTest(IorTestBase):
         dmg_cmd = self.get_dmg_command()
         # For debugging.
         dmg_cmd.system_query()
+        stop_rank = rank_value
         self.log.info("Call dmg system stop")
-        dmg_cmd.system_stop()
+        dmg_cmd.system_stop(ranks=stop_rank, force=True)
         self.log.info("Call dmg system start")
         dmg_cmd.system_start()
 
