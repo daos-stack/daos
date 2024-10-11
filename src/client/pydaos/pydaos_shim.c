@@ -70,6 +70,7 @@ static daos_handle_t eq;
  * Implementations of baseline shim functions
  */
 
+#if 0
 static void
 child_handler(void)
 {
@@ -87,6 +88,7 @@ child_handler(void)
 		DL_ERROR(rc, "Failed to re-create global eq");
 #endif
 }
+#endif
 
 static PyObject *
 __shim_handle__daos_init(PyObject *self, PyObject *args)
@@ -104,11 +106,14 @@ __shim_handle__daos_init(PyObject *self, PyObject *args)
 		return PyLong_FromLong(rc);
 	}
 
+#if 0
+	/** disabled due to DAOS-16637 */
 	rc = pthread_atfork(NULL, NULL, &child_handler);
 	if (rc) {
 		DL_ERROR(rc, "Failed to set atfork handler");
 		return PyLong_FromLong(rc);
 	}
+#endif
 
 	return PyLong_FromLong(rc);
 }
