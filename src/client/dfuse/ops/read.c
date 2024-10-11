@@ -67,9 +67,8 @@ dfuse_cb_read_complete(struct dfuse_event *ev)
 
 	d_list_for_each_entry(evs, &ev->de_read_slaves, de_read_list) {
 		DFUSE_TRA_WARNING(ev, "concurrent network read %p", evs);
-		evs->de_len         = ev->de_len;
+		evs->de_len         = min(ev->de_len, evs->de_req_len);
 		evs->de_ev.ev_error = ev->de_ev.ev_error;
-		d_list_del(&evs->de_read_list);
 		cb_read_helper(evs, ev->de_iov.iov_buf);
 	}
 
@@ -78,7 +77,7 @@ dfuse_cb_read_complete(struct dfuse_event *ev)
 	d_list_for_each_entry_safe(evs, evn, &ev->de_read_slaves, de_read_list) {
 		d_list_del(&evs->de_read_list);
 		d_slab_restock(evs->de_eqt->de_read_slab);
-		d_slab_release(evs->de_eqt->de_read_slab, ev);
+		d_slab_release(evs->de_eqt->de_read_slab, evs);
 	}
 
 	d_slab_restock(ev->de_eqt->de_read_slab);
@@ -452,6 +451,7 @@ found:
 				 */
 				rcb = false;
 				DFUSE_TRA_WARNING(oh, "concurrent read, un-met");
+				D_FREE(cd);
 			} else {
 				cd->reqs[slot] = req;
 				cd->ohs[slot]  = oh;
