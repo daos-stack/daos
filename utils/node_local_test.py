@@ -6367,9 +6367,6 @@ def run(wf, args):
                 fatal_errors.add_result(run_duns_overlay_test(server, conf))
             elif args.mode == 'set-fi':
                 fatal_errors.add_result(server.set_fi())
-            elif args.mode == 'kv':
-                test_pydaos_kv(server, conf)
-                test_pydaos_kv_obj_class(server, conf)
             elif args.mode == 'all':
                 fi_test_dfuse = True
                 fatal_errors.add_result(run_posix_tests(server, conf))

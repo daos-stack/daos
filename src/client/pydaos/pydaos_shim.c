@@ -74,8 +74,6 @@ static daos_handle_t eq;
 static void
 child_handler(void)
 {
-	return;
-#if 0
 	int rc;
 
 	rc = daos_reinit();
@@ -86,7 +84,6 @@ child_handler(void)
 	rc = daos_eq_create(&eq);
 	if (rc)
 		DL_ERROR(rc, "Failed to re-create global eq");
-#endif
 }
 #endif
 
