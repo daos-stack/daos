@@ -21,6 +21,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/hardware/pciutils"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -105,6 +106,14 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 		"update health; add link stats; pciutils lib error": {
 			pciDevErr: errors.New("fail"),
 			expErr:    errors.New("fail"),
+		},
+		"update health; add link stats; pciutils lib error; missing pcie caps": {
+			pciDevErr: pciutils.ErrNoPCIeCaps,
+			expCtrlr: &ctlpb.NvmeController{
+				PciAddr:     pciAddr,
+				DevState:    ctlpb.NvmeDevState_NORMAL,
+				HealthStats: healthWithLinkStats(0, 0, 0, 0),
+			},
 		},
 		"update health; add link stats; normal link state; no event published": {
 			expCtrlr: &ctlpb.NvmeController{

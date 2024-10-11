@@ -259,6 +259,13 @@ func populateCtrlrHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealt
 
 	if ctrlr.PciCfg != "" {
 		if err := addLinkInfoToHealthStats(prov, ctrlr.PciCfg, health); err != nil {
+			if err == pciutils.ErrNoPCIeCaps {
+				engine.Debugf("device %q not reporting PCIe capabilities",
+					ctrlr.PciAddr)
+				ctrlr.HealthStats = health
+				ctrlr.PciCfg = ""
+				return true, nil
+			}
 			return false, errors.Wrapf(err, "add link stats for %q", ctrlr)
 		}
 		publishLinkStatEvents(engine, ctrlr.PciAddr, health)
