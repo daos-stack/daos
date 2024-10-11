@@ -24,152 +24,149 @@ env:
   EL9_VERSION: 9
   LEAP15_VERSION: 15.5
 
-  ARTIFACTORY_URL: https://artifactory.dc.hpdd.intel.com/
-  JENKINS_URL: https://build.hpdd.intel.com/
-  DAOS_EMAIL: phil.henderson@intel.com
-  DAOS_FULLNAME: daos-stack
-  DISTRO_REPOS: disabled
-  # DOCKER_BUILDKIT: 0
-  ARTIFACTS_URL: file:///scratch/job_repos/
-  REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
-  # keep VS Code's GHA linting happy
-  STAGE_NAME:
-  DISTRO_NAME:
-  DISTRO_VERSION:
-  CP_LEAP15_VERSION:
-  COMMIT_STATUS_DISTRO_VERSION:
-  FVERSION:
-  PR_NUM:
-  MOCK_OPTIONS:
-  RUN_ID:
-  DISTRO:
-  TARGET:
-
 runs:
-  - name: Set variables
-    run: |
-        FVERSION="38"
-        case ${{ inputs.distro }} in
-            'el8')
-                CHROOT_NAME="rocky+epel-8-x86_64"
-                DISTRO_NAME="EL"
-                DISTRO_VERSION="${{ env.EL8_BUILD_VERSION }}"
-                COMMIT_STATUS_DISTRO_VERSION="8"
-                ;;
-            'el9')
-                CHROOT_NAME="rocky+epel-9-x86_64"
-                DISTRO_NAME="EL"
-                DISTRO_VERSION="${{ env.EL9_BUILD_VERSION }}"
-                ;;
-            'leap15')
-                CHROOT_NAME="opensuse-leap-${{ env.CP_LEAP15_VERSION &&
-                                                env.CP_LEAP15_VERSION ||
-                                                env.LEAP15_VERSION }}-x86_64"
-                DISTRO_NAME="Leap"
-                DISTRO_VERSION="${{ env.CP_LEAP15_VERSION &&
-                                    env.CP_LEAP15_VERSION || env.LEAP15_VERSION }}"
-                ;;
-        esac
-        echo "CHROOT_NAME=$CHROOT_NAME" >> $GITHUB_ENV
-        echo "DISTRO_NAME=$DISTRO_NAME" >> $GITHUB_ENV
-        echo "DISTRO_VERSION=$DISTRO_VERSION" >> $GITHUB_ENV
-        echo "BUILD_CHROOT=/var/lib/mock/$CHROOT_NAME-${{ github.run_id }}/" >> $GITHUB_ENV
-        echo "STAGE_NAME=Build RPM on $DISTRO_NAME $DISTRO_VERSION" >> $GITHUB_ENV
-        echo "FVERSION=$FVERSION" >> $GITHUB_ENV
-        echo "COMMIT_STATUS_DISTRO_VERSION=$COMMIT_STATUS_DISTRO_VERSION" >> $GITHUB_ENV
-        echo "PR_NUM=${{ github.event.pull_request.number }}" >> $GITHUB_ENV
-        # TODO -- this should be on stable, backed up storage, not /scratch
-        echo "REPO_PATH=/scratch/job_repos/daos-stack/job/daos/job/PR-${PR_NUM}/" >> $GITHUB_ENV
-        echo "MOCK_OPTIONS=--uniqueext=${{ github.run_id }}" >> $GITHUB_ENV
-        echo "RUN_ID=${{ github.run_id }}" >> $GITHUB_ENV
-        echo "DISTRO=${{ inputs.distro }}" >> $GITHUB_ENV
-        echo "TARGET=${{ inputs.distro }}" >> $GITHUB_ENV
-        echo "COVFN_DISABLED=${{ inputs.covfn_disabled }}" >> $GITHUB_ENV
-  - name: Checkout code
-    uses: actions/checkout@v4.1.1
-    with:
-      ref: ${{ github.event.pull_request.head.sha }}
-  - name: Build RPM Docker image
-    id: build-rpm-docker-image
-    continue-on-error: true
-    run: docker build --file utils/rpms/packaging/Dockerfile.mockbuild
-                      --build-arg CACHEBUST=$(date +%s%3N)
-                      --build-arg CB0=$(date +%V)
-                      --build-arg REPO_FILE_URL=$REPO_FILE_URL
-                      --build-arg UID=$(id -u)
-                      --build-arg FVERSION=${{ env.FVERSION }}
-                      --build-arg JENKINS_URL=${{ env.JENKINS_URL }}
-                      --tag mock-build
-                      utils/rpms
-  - name: Build RPM
-    id: build-rpm
-    continue-on-error: true
-    # yamllint disable rule:line-length
-    run: rm -rf mock_result;
-          mkdir -p mock_result;
-          docker run --name mock-build-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.distro }}
-                    --user build
-                    -v "$PWD":"$PWD" -w "$PWD"
-                    -v "$PWD"/mock_result:/var/lib/mock/$CHROOT_NAME/result
-                    --privileged=true
-                    -e DAOS_FULLNAME="$DAOS_FULLNAME"
-                    -e DAOS_EMAIL="$DAOS_EMAIL"
-                    -e DISTRO_VERSION="$DISTRO_VERSION"
-                    -e STAGE_NAME="$STAGE_NAME"
-                    -e CHROOT_NAME="$CHROOT_NAME"
-                    -e ARTIFACTORY_URL="$ARTIFACTORY_URL"
-                    -e REPO_FILE_URL="$REPO_FILE_URL"
-                    -e JENKINS_URL=${{ env.JENKINS_URL }}
-                    -e TARGET="$TARGET"
-                    -e COVFN_DISABLED="$COVFN_DISABLED"
-                    mock-build ci/rpm/build.sh
-    # yamllint enable rule:line-length
-  - name: Build RPM failure log
-    id: build-rpm-fail-log
-    continue-on-error: true
-    if: steps.build-rpm.outcome != 'success'
-    run: cat mock_result/root.log;
-          cat mock_result/build.log
-  - name: Save RPM build logs
-    continue-on-error: true
-    uses: actions/upload-artifact@v4
-    with:
-      name: ${{ env.STAGE_NAME }} logs
-      path: |
-        mock_result/root.log
-        mock_result/build.log
-  - name: Create lastBuild and lastSuccessfulBuild symlinks
-    if: steps.build-rpm.outcome == 'success'
-    run: . ci/gha_functions.sh;
-          mkdir -p ${REPO_PATH};
-          rm -f ${REPO_PATH}last{,Successful}Build;
-          ln -s ${{ github.run_number }} ${REPO_PATH}lastBuild;
-          ln -s ${{ github.run_number }} ${REPO_PATH}lastSuccessfulBuild
-  - name: Create repo
-    id: create-repo
-    if: steps.build-rpm.outcome == 'success'
-    continue-on-error: true
-    run: CHROOT_NAME=$CHROOT_NAME ci/rpm/create_repo.sh
-  - name: Test repo
-    id: test-repo
-    if: steps.create-repo.outcome == 'success'
-    continue-on-error: true
-    run: . ci/gha_functions.sh;
-          dnf --disablerepo=\* --repofrompath
-              testrepo,file://${REPO_PATH}${{ github.run_number }}/artifact/artifacts/$TARGET
-              repoquery -a
-  - name: Remove lastSuccessfulBuild link and exit failure
-    if: steps.test-repo.outcome != 'success'
-    run: rm -f ${REPO_PATH}lastSuccessfulBuild;
-          exit 1
-  - name: Publish RPMs
-    uses: actions/upload-artifact@v4
-    with:
-      name: ${{ env.DISTRO_NAME }} ${{ env.DISTRO_VERSION }} RPM repository
-      path: ${{ env.REPO_PATH}}${{ github.run_number }}/artifact/artifacts/${{ env.TARGET }}
-  - name: Update commit status
-    uses: ouzi-dev/commit-status-updater@v2
-    with:
-      # yamllint disable-line rule:line-length
-      name: 'build/Build RPM on ${{ env.DISTRO_NAME }} ${{ env.COMMIT_STATUS_DISTRO_VERSION && env.COMMIT_STATUS_DISTRO_VERSION || env.DISTRO_VERSION }}'
-      status: "${{ job.status }}"
+  env:
+    ARTIFACTORY_URL: https://artifactory.dc.hpdd.intel.com/
+    JENKINS_URL: https://build.hpdd.intel.com/
+    REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
+    DAOS_EMAIL: phil.henderson@intel.com
+    DAOS_FULLNAME: daos-stack
+    DISTRO_REPOS: disabled
+    DOCKER_BUILDKIT: 0
+    ARTIFACTS_URL: file:///scratch/job_repos/
+    MOCK_OPTIONS: --uniqueext=${{ github.run_id }}
+    PR_NUM: ${{ github.event.pull_request.number }}
+    # TODO -- this should be on stable, backedup storage, not /scratch
+    REPO_PATH: /scratch/job_repos/daos-stack/job/daos/job/PR-${{ env.PR_NUM }}/
+    RUN_ID: ${{ github.run_id }}
+    DISTRO: ${{ inputs.distro }}
+    TARGET: ${{ inputs.distro }}
+    COVFN_DISABLED: ${{ inputs.covfn_disabled }}
+    # keep VS Code's GHA linting happy
+    STAGE_NAME:
+    DISTRO_NAME:
+    DISTRO_VERSION:
+    CP_LEAP15_VERSION:
+    COMMIT_STATUS_DISTRO_VERSION:
+    FVERSION:
+
+  steps:
+    - name: Set variables
+      run: |
+          FVERSION="38"
+          case ${{ inputs.distro }} in
+              'el8')
+                  CHROOT_NAME="rocky+epel-8-x86_64"
+                  DISTRO_NAME="EL"
+                  DISTRO_VERSION="${{ env.EL8_BUILD_VERSION }}"
+                  COMMIT_STATUS_DISTRO_VERSION="8"
+                  ;;
+              'el9')
+                  CHROOT_NAME="rocky+epel-9-x86_64"
+                  DISTRO_NAME="EL"
+                  DISTRO_VERSION="${{ env.EL9_BUILD_VERSION }}"
+                  ;;
+              'leap15')
+                  CHROOT_NAME="opensuse-leap-${{ env.CP_LEAP15_VERSION &&
+                                                  env.CP_LEAP15_VERSION ||
+                                                  env.LEAP15_VERSION }}-x86_64"
+                  DISTRO_NAME="Leap"
+                  DISTRO_VERSION="${{ env.CP_LEAP15_VERSION &&
+                                      env.CP_LEAP15_VERSION || env.LEAP15_VERSION }}"
+                  ;;
+          esac
+          echo "CHROOT_NAME=$CHROOT_NAME" >> $GITHUB_ENV
+          echo "DISTRO_NAME=$DISTRO_NAME" >> $GITHUB_ENV
+          echo "DISTRO_VERSION=$DISTRO_VERSION" >> $GITHUB_ENV
+          echo "BUILD_CHROOT=/var/lib/mock/$CHROOT_NAME-${{ github.run_id }}/" >> $GITHUB_ENV
+          echo "STAGE_NAME=Build RPM on $DISTRO_NAME $DISTRO_VERSION" >> $GITHUB_ENV
+          echo "FVERSION=$FVERSION" >> $GITHUB_ENV
+          echo "COMMIT_STATUS_DISTRO_VERSION=$COMMIT_STATUS_DISTRO_VERSION" >> $GITHUB_ENV
+    - name: Checkout code
+      uses: actions/checkout@v4.1.1
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+    - name: Build RPM Docker image
+      id: build-rpm-docker-image
+      continue-on-error: true
+      run: docker build --file utils/rpms/packaging/Dockerfile.mockbuild
+                        --build-arg CACHEBUST=$(date +%s%3N)
+                        --build-arg CB0=$(date +%V)
+                        --build-arg REPO_FILE_URL=$REPO_FILE_URL
+                        --build-arg UID=$(id -u)
+                        --build-arg FVERSION=${{ env.FVERSION }}
+                        --build-arg JENKINS_URL=${{ env.JENKINS_URL }}
+                        --tag mock-build
+                        utils/rpms
+    - name: Build RPM
+      id: build-rpm
+      continue-on-error: true
+      # yamllint disable rule:line-length
+      run: rm -rf mock_result;
+            mkdir -p mock_result;
+            docker run --name mock-build-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.distro }}
+                      --user build
+                      -v "$PWD":"$PWD" -w "$PWD"
+                      -v "$PWD"/mock_result:/var/lib/mock/$CHROOT_NAME/result
+                      --privileged=true
+                      -e DAOS_FULLNAME="$DAOS_FULLNAME"
+                      -e DAOS_EMAIL="$DAOS_EMAIL"
+                      -e DISTRO_VERSION="$DISTRO_VERSION"
+                      -e STAGE_NAME="$STAGE_NAME"
+                      -e CHROOT_NAME="$CHROOT_NAME"
+                      -e ARTIFACTORY_URL="$ARTIFACTORY_URL"
+                      -e REPO_FILE_URL="$REPO_FILE_URL"
+                      -e JENKINS_URL=${{ env.JENKINS_URL }}
+                      -e TARGET="$TARGET"
+                      -e COVFN_DISABLED="$COVFN_DISABLED"
+                      mock-build ci/rpm/build.sh
+      # yamllint enable rule:line-length
+    - name: Build RPM failure log
+      id: build-rpm-fail-log
+      continue-on-error: true
+      if: steps.build-rpm.outcome != 'success'
+      run: cat mock_result/root.log;
+            cat mock_result/build.log
+    - name: Save RPM build logs
+      continue-on-error: true
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.STAGE_NAME }} logs
+        path: |
+          mock_result/root.log
+          mock_result/build.log
+    - name: Create lastBuild and lastSuccessfulBuild symlinks
+      if: steps.build-rpm.outcome == 'success'
+      run: . ci/gha_functions.sh;
+            mkdir -p ${REPO_PATH};
+            rm -f ${REPO_PATH}last{,Successful}Build;
+            ln -s ${{ github.run_number }} ${REPO_PATH}lastBuild;
+            ln -s ${{ github.run_number }} ${REPO_PATH}lastSuccessfulBuild
+    - name: Create repo
+      id: create-repo
+      if: steps.build-rpm.outcome == 'success'
+      continue-on-error: true
+      run: CHROOT_NAME=$CHROOT_NAME ci/rpm/create_repo.sh
+    - name: Test repo
+      id: test-repo
+      if: steps.create-repo.outcome == 'success'
+      continue-on-error: true
+      run: . ci/gha_functions.sh;
+            dnf --disablerepo=\* --repofrompath
+                testrepo,file://${REPO_PATH}${{ github.run_number }}/artifact/artifacts/$TARGET
+                repoquery -a
+    - name: Remove lastSuccessfulBuild link and exit failure
+      if: steps.test-repo.outcome != 'success'
+      run: rm -f ${REPO_PATH}lastSuccessfulBuild;
+            exit 1
+    - name: Publish RPMs
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.DISTRO_NAME }} ${{ env.DISTRO_VERSION }} RPM repository
+        path: ${{ env.REPO_PATH}}${{ github.run_number }}/artifact/artifacts/${{ env.TARGET }}
+    - name: Update commit status
+      uses: ouzi-dev/commit-status-updater@v2
+      with:
+        # yamllint disable-line rule:line-length
+        name: 'build/Build RPM on ${{ env.DISTRO_NAME }} ${{ env.COMMIT_STATUS_DISTRO_VERSION && env.COMMIT_STATUS_DISTRO_VERSION || env.DISTRO_VERSION }}'
+        status: "${{ job.status }}"
