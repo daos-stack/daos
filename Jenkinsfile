@@ -360,7 +360,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-vmd',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
-                            next_version: next_version,
+                            next_version: test_branch,
                             stage_tags: 'hw_vmd,medium',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
