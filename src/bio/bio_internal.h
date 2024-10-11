@@ -132,6 +132,20 @@ struct bio_dma_buffer {
 	uint64_t		 bdb_dump_ts;
 };
 
+#define BIO_PROTO_NVME_ENGINE_STATS_LIST				\
+	X(bdh_read_errs, "commands/read_errs",				\
+	  "Number of errors reported to the engine on read commands",	\
+	  "errs", D_TM_COUNTER)						\
+	X(bdh_write_errs, "commands/write_errs",			\
+	  "Number of errors reported to the engine on write commands",	\
+	  "errs", D_TM_COUNTER)						\
+	X(bdh_unmap_errs, "commands/unmap_errs",			\
+	  "Number of errors reported to the engine on unmap/trim commands",\
+	  "errs", D_TM_COUNTER)						\
+	X(bdh_checksum_errs, "commands/checksum_mismatch",		\
+	  "Number of checksum mismatch detected by the engine",		\
+	  "errs", D_TM_COUNTER)
+
 #define BIO_PROTO_NVME_STATS_LIST					\
 	X(bdh_du_written, "commands/data_units_written",		\
 	  "number of 512b data units written to the controller",	\
@@ -150,18 +164,6 @@ struct bio_dma_buffer {
 	  "minutes", D_TM_COUNTER)					\
 	X(bdh_media_errs, "commands/media_errs",			\
 	  "Number of unrecovered data integrity error",			\
-	  "errs", D_TM_COUNTER)						\
-	X(bdh_read_errs, "commands/read_errs",				\
-	  "Number of errors reported to the engine on read commands",	\
-	  "errs", D_TM_COUNTER)						\
-	X(bdh_write_errs, "commands/write_errs",			\
-	  "Number of errors reported to the engine on write commands",	\
-	  "errs", D_TM_COUNTER)						\
-	X(bdh_unmap_errs, "commands/unmap_errs",			\
-	  "Number of errors reported to the engine on unmap/trim commands",\
-	  "errs", D_TM_COUNTER)						\
-	X(bdh_checksum_errs, "commands/checksum_mismatch",		\
-	  "Number of checksum mismatch detected by the engine",		\
 	  "errs", D_TM_COUNTER)						\
 	X(bdh_power_cycles, "power_cycles",				\
 	  "Number of power cycles",					\
@@ -282,6 +284,14 @@ struct bio_dev_health {
 
 	/**
 	 * NVMe statistics exported via telemetry framework
+	 */
+#define	X(field, fname, desc, unit, type) struct d_tm_node_t *field;
+	 BIO_PROTO_NVME_ENGINE_STATS_LIST
+#undef X
+
+	/**
+	 * The following two metrics will be disabled if the engine is started
+	 * with bypass health check.
 	 */
 #define	X(field, fname, desc, unit, type) struct d_tm_node_t *field;
 	 BIO_PROTO_NVME_STATS_LIST
@@ -634,6 +644,7 @@ void bio_bs_monitor(struct bio_xs_context *xs_ctxt, enum smd_dev_type st, uint64
 void bio_media_error(void *msg_arg);
 void bio_export_health_stats(struct bio_blobstore *bb, char *bdev_name);
 void bio_export_vendor_health_stats(struct bio_blobstore *bb, char *bdev_name);
+void bio_export_engine_health_stats(struct bio_blobstore *bb, char *bdev_name);
 void bio_set_vendor_id(struct bio_blobstore *bb, char *bdev_name);
 void auto_faulty_detect(struct bio_blobstore *bbs);
 
