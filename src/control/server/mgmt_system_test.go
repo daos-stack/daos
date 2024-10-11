@@ -1672,7 +1672,6 @@ func TestServer_MgmtSvc_SystemExclude(t *testing.T) {
 		expMembers system.Members
 		expResults []*sharedpb.RankResult
 		expAPIErr  error
-		expVerIncr uint32
 	}{
 		"nil req": {
 			req:       (*mgmtpb.SystemExcludeReq)(nil),
@@ -1727,7 +1726,6 @@ func TestServer_MgmtSvc_SystemExclude(t *testing.T) {
 				mockMember(t, 2, 2, "joined"),
 				mockMember(t, 3, 2, "joined"),
 			},
-			expVerIncr: 2,
 		},
 		"exclude hosts": {
 			req: &mgmtpb.SystemExcludeReq{Hosts: test.MockHostAddr(1).String()},
@@ -1747,7 +1745,6 @@ func TestServer_MgmtSvc_SystemExclude(t *testing.T) {
 				mockMember(t, 2, 2, "joined"),
 				mockMember(t, 3, 2, "joined"),
 			},
-			expVerIncr: 2,
 		},
 		"unexclude ranks": {
 			req: &mgmtpb.SystemExcludeReq{Ranks: "0-1", Clear: true},
@@ -1767,8 +1764,8 @@ func TestServer_MgmtSvc_SystemExclude(t *testing.T) {
 				mockMember(t, 2, 2, "joined"),
 				mockMember(t, 3, 2, "joined"),
 			},
-			expVerIncr: 2,
 		},
+
 		"unexclude hosts": {
 			req: &mgmtpb.SystemExcludeReq{Hosts: test.MockHostAddr(1).String(), Clear: true},
 			members: system.Members{
@@ -1787,7 +1784,6 @@ func TestServer_MgmtSvc_SystemExclude(t *testing.T) {
 				mockMember(t, 2, 2, "joined"),
 				mockMember(t, 3, 2, "joined"),
 			},
-			expVerIncr: 2,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1812,15 +1808,20 @@ func TestServer_MgmtSvc_SystemExclude(t *testing.T) {
 				return
 			}
 
-			endMapVer, err := svc.sysdb.CurMapVersion()
-			if err != nil {
-				t.Fatalf("endMapVer CurMapVersion() failed\n")
-				return
+			// Check for any system map version increase by the (asynchronous) update.
+			// Test will time out if it never happens, thus choice of an infinite loop here.
+			for {
+				curMapVer, err := svc.sysdb.CurMapVersion()
+				if err != nil {
+					t.Fatalf("CurMapVersion() failed\n")
+					return
+				}
+
+				if curMapVer > startMapVer {
+					break
+				}
 			}
 
-			if endMapVer-startMapVer != tc.expVerIncr {
-				t.Fatalf("unexpected sysdb map version (want %d, got %d)\n", startMapVer+tc.expVerIncr, endMapVer)
-			}
 			checkRankResults(t, tc.expResults, gotResp.Results)
 			checkMembers(t, tc.expMembers, svc.membership)
 		})
