@@ -32,3 +32,11 @@
    fun:dfuse_cb_setxattr
    fun:df_ll_setxattr
 }
+{
+   fetch
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   ...
+   fun:daos_obj_fetch
+   fun:fetch_entry
+}
