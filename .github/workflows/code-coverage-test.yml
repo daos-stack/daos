@@ -16,19 +16,39 @@ defaults:
 permissions: {}
 
 jobs:
-  call-build-rpm:
-    uses: ./.github/actions/build-rpm
-    with:
-      distro: el8
-      covfn_disabled: false
+  build-rpms:
+    name: Bullseye Build RPMs
+    runs-on: [self-hosted, docker]
+    permissions:
+      statuses: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.1.1
+      - name: Build RPMs
+        uses: ./.github/actions/build-rpm
+        with:
+          distro: el8
+          covfn_disabled: false
 
-  call-functional-test:
-    uses: ./.github/actions/functional-test
-    needs: [call-build-rpm]
+  functional-test:
+    name: Bullseye Functional Test
+    runs-on: [self-hosted, wolf]
+    permissions:
+      statuses: write
+      # https://github.com/EnricoMi/publish-unit-test-result-action#permissions
+      checks: write
+      pull-requests: write
+    timeout-minutes: 7200
+    needs: [build-rpms]
     if: |
       (!cancelled()) &&
-      (needs.call-build-rpm.result == 'success' ||
-       needs.call-build-rpm.result == 'skipped')
-    with:
-      distro: el8
-      tags: test_one_pool_vm
+      (needs.build-rpms.result == 'success' ||
+       needs.build-rpms.result == 'skipped')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.1.1
+      - name: Build RPMs
+        uses: ./.github/actions/functional-test
+        with:
+          distro: el8
+          tags: test_one_pool_vm
