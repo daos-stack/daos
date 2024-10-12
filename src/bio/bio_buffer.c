@@ -1047,27 +1047,14 @@ dma_drop_iod(struct bio_dma_buffer *bdb)
 	ABT_mutex_unlock(bdb->bdb_mutex);
 }
 
-struct bio_rw_cb_arg {
-	struct bio_desc *biod;
-	uint16_t         media_type;
-	uint16_t         iocnt; /* how many blob io (read or write) issued */
-};
-
 static void
-rw_completion(void *cb_arg, int err)
+rw_completion(void *cb_arg, uint16_t media_type, int err)
 {
 	struct bio_xs_context	*xs_ctxt;
 	struct bio_xs_blobstore	*bxb;
 	struct bio_io_context	*io_ctxt;
-	struct bio_rw_cb_arg    *bio_cb_arg = cb_arg;
-	struct bio_desc         *biod       = bio_cb_arg->biod;
+	struct bio_desc         *biod       = cb_arg;
 	struct media_error_msg	*mem;
-	uint16_t                 media_type = bio_cb_arg->media_type;
-
-	--bio_cb_arg->iocnt;
-	if (bio_cb_arg->iocnt == 0) {
-		D_FREE(cb_arg);
-	}
 
 	D_ASSERT(biod->bd_type < BIO_IOD_TYPE_GETBUF);
 	D_ASSERT(biod->bd_inflights > 0);
@@ -1121,6 +1108,18 @@ done:
 		}
 		D_DEBUG(DB_IO, "DMA complete, type:%d\n", biod->bd_type);
 	}
+}
+
+static void
+nvme_rw_completion(void *cb_arg, int err)
+{
+	rw_completion(cb_arg, DAOS_MEDIA_NVME, err);
+}
+
+static void
+qlc_rw_completion(void *cb_arg, int err)
+{
+	rw_completion(cb_arg, DAOS_MEDIA_QLC, err);
 }
 
 void
@@ -1184,7 +1183,7 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 	uint64_t		 pg_idx, pg_cnt, rw_cnt;
 	void			*payload;
 	struct bio_xs_blobstore *bxb;
-	struct bio_rw_cb_arg    *bio_cb_arg = NULL;
+	spdk_blob_op_complete complete_cb;
 
 	if (rg->brr_media == DAOS_MEDIA_NVME) {
 		io_ctxt = biod->bd_ctxt;
@@ -1232,19 +1231,7 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 	D_ASSERT(pg_cnt > pg_idx);
 	pg_cnt -= pg_idx;
 
-	if (pg_cnt > 0) {
-		D_ALLOC(bio_cb_arg, sizeof(struct bio_rw_cb_arg));
-		if (bio_cb_arg == NULL) {
-			D_ERROR("alloc completion cb_arg failed.\n");
-			biod->bd_result = -DER_NOMEM;
-			return;
-		}
-
-		bio_cb_arg->biod       = biod;
-		bio_cb_arg->media_type = rg->brr_media;
-		bio_cb_arg->iocnt      = (pg_cnt % bio_chk_sz == 0) ? (pg_cnt / bio_chk_sz)
-								    : ((pg_cnt / bio_chk_sz) + 1);
-	}
+	complete_cb = rg->brr_media == DAOS_MEDIA_NVME ? nvme_rw_completion: qlc_rw_completion;
 
 	while (pg_cnt > 0) {
 
@@ -1266,12 +1253,12 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 			spdk_blob_io_write(blob, channel, payload,
 					   page2io_unit(io_ctxt, pg_idx, BIO_DMA_PAGE_SZ),
 					   page2io_unit(io_ctxt, rw_cnt, BIO_DMA_PAGE_SZ),
-					   rw_completion, bio_cb_arg);
+					   complete_cb, biod);
 		else {
 			spdk_blob_io_read(blob, channel, payload,
 					  page2io_unit(io_ctxt, pg_idx, BIO_DMA_PAGE_SZ),
 					  page2io_unit(io_ctxt, rw_cnt, BIO_DMA_PAGE_SZ),
-					  rw_completion, bio_cb_arg);
+					  complete_cb, biod);
 			if (DAOS_ON_VALGRIND)
 				VALGRIND_MAKE_MEM_DEFINED(payload, rw_cnt * BIO_DMA_PAGE_SZ);
 		}
