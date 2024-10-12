@@ -65,12 +65,23 @@ enum daos_media_type_t {
 	DAOS_MEDIA_MAX
 };
 
+/** MEDIA MAX for old version without QLC, corresponding to DAOS_POOL_VERSION 6 */
+#define DAOS_MEDIA_MAX_V6 2
+
 /** Pool target space usage information */
 struct daos_space {
 	/** Total space in bytes */
 	uint64_t		s_total[DAOS_MEDIA_MAX];
 	/** Free space in bytes */
 	uint64_t		s_free[DAOS_MEDIA_MAX];
+};
+
+/** Pool target space usage information for old version without QLC */
+struct daos_space_v6 {
+	/** Total space in bytes */
+	uint64_t s_total[DAOS_MEDIA_MAX_V6];
+	/** Free space in bytes */
+	uint64_t s_free[DAOS_MEDIA_MAX_V6];
 };
 
 /** Target information */
@@ -99,6 +110,22 @@ struct daos_pool_space {
 	uint32_t		ps_ntargets;
 	/** padding - not used */
 	uint32_t		ps_padding;
+};
+
+/** Pool space usage information for old version without QLC */
+struct daos_pool_space_v6 {
+	/** Aggregated space for all live targets */
+	struct daos_space_v6 ps_space;
+	/** Min target free space in bytes */
+	uint64_t             ps_free_min[DAOS_MEDIA_MAX_V6];
+	/** Max target free space in bytes */
+	uint64_t             ps_free_max[DAOS_MEDIA_MAX_V6];
+	/** Average target free space in bytes */
+	uint64_t             ps_free_mean[DAOS_MEDIA_MAX_V6];
+	/** Target(VOS) count */
+	uint32_t             ps_ntargets;
+	/** padding - not used */
+	uint32_t             ps_padding;
 };
 
 enum daos_rebuild_state_t {

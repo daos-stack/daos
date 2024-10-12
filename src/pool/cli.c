@@ -205,15 +205,15 @@ dc_pool_init(void)
 		daos_register_key(&dc_pool_module_key);
 
 	dc_pool_proto_version = 0;
-	rc = daos_rpc_proto_query(pool_proto_fmt_v5.cpf_base, ver_array, 2, &dc_pool_proto_version);
+	rc = daos_rpc_proto_query(pool_proto_fmt_v6.cpf_base, ver_array, 2, &dc_pool_proto_version);
 	if (rc)
 		return rc;
 
 	if (dc_pool_proto_version == DAOS_POOL_VERSION - 1) {
-		rc = daos_rpc_register(&pool_proto_fmt_v5, POOL_PROTO_CLI_COUNT, NULL,
+		rc = daos_rpc_register(&pool_proto_fmt_v6, POOL_PROTO_CLI_COUNT, NULL,
 				       DAOS_POOL_MODULE);
 	} else if (dc_pool_proto_version == DAOS_POOL_VERSION) {
-		rc = daos_rpc_register(&pool_proto_fmt_v6, POOL_PROTO_CLI_COUNT, NULL,
+		rc = daos_rpc_register(&pool_proto_fmt_v7, POOL_PROTO_CLI_COUNT, NULL,
 				       DAOS_POOL_MODULE);
 	} else {
 		D_ERROR("%d version pool RPC not supported.\n", dc_pool_proto_version);
@@ -236,9 +236,9 @@ dc_pool_fini(void)
 	int rc;
 
 	if (dc_pool_proto_version == DAOS_POOL_VERSION - 1) {
-		rc = daos_rpc_unregister(&pool_proto_fmt_v5);
-	} else if (dc_pool_proto_version == DAOS_POOL_VERSION) {
 		rc = daos_rpc_unregister(&pool_proto_fmt_v6);
+	} else if (dc_pool_proto_version == DAOS_POOL_VERSION) {
+		rc = daos_rpc_unregister(&pool_proto_fmt_v7);
 	} else {
 		rc = -DER_PROTO;
 		DL_ERROR(rc, "%d version pool RPC not supported", dc_pool_proto_version);
@@ -671,6 +671,85 @@ out_unlock:
 
 	if (info != NULL && rc == 0)
 		pool_query_reply_to_info(pool->dp_pool, map_buf, map_version,
+					 leader_rank, ps, rs, info);
+
+	return rc;
+}
+
+/*
+ * Using "map_buf", "map_version", and "mode", update "pool->dp_map" and fill
+ * "ranks" and/or "info", "prop" if not NULL. To compatible with old rpc version.
+ */
+static int
+process_query_reply_v6(struct dc_pool *pool, struct pool_buf *map_buf,
+		    uint32_t map_version, uint32_t leader_rank,
+		    struct daos_pool_space_v6 *ps, struct daos_rebuild_status *rs,
+		    d_rank_list_t **ranks, daos_pool_info_t *info,
+		    daos_prop_t *prop_req, daos_prop_t *prop_reply,
+		    bool connect)
+{
+	struct pool_map	       *map;
+	int			rc;
+
+	D_DEBUG(DB_MD, DF_UUID": info=%p (pi_bits="DF_X64"), ranks=%p\n",
+		DP_UUID(pool->dp_pool), info, info ? info->pi_bits : 0, ranks);
+
+	rc = pool_map_create(map_buf, map_version, &map);
+	if (rc != 0) {
+		D_ERROR("failed to create local pool map: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	D_RWLOCK_WRLOCK(&pool->dp_map_lock);
+	rc = dc_pool_map_update(pool, map, connect);
+	if (rc)
+		goto out_unlock;
+
+	/* Scan all targets for populating info->pi_ndisabled */
+	if (info != NULL) {
+		rc = pool_map_find_failed_tgts(map, NULL, &info->pi_ndisabled);
+		if (rc != 0) {
+			D_ERROR("Couldn't get failed targets, "DF_RC"\n", DP_RC(rc));
+			goto out_unlock;
+		}
+	}
+
+	/* Scan all targets for populating ranks */
+	if (ranks != NULL) {
+		d_rank_range_list_t	*range_list;
+		bool	get_enabled = (info ? ((info->pi_bits & DPI_ENGINES_ENABLED) != 0) : false);
+
+		rc = pool_map_get_ranks(pool->dp_pool, map, get_enabled, ranks);
+		if (rc != 0)
+			goto out_unlock;
+
+		/* For debug logging - convert to rank ranges */
+		range_list = d_rank_range_list_create_from_ranks(*ranks);
+		if (range_list) {
+			pool_print_range_list(pool, range_list, get_enabled);
+			d_rank_range_list_free(range_list);
+		}
+	}
+
+out_unlock:
+	pool_map_decref(map); /* NB: protected by pool::dp_map_lock */
+	/* Cache redun factor */
+	if (rc == 0 && !pool->dp_rf_valid) {
+		struct daos_prop_entry	*entry;
+
+		entry = daos_prop_entry_get(prop_reply, DAOS_PROP_PO_REDUN_FAC);
+		if (entry) {
+			pool->dp_rf = entry->dpe_val;
+			pool->dp_rf_valid = 1;
+		}
+	}
+	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
+
+	if (prop_req != NULL && rc == 0)
+		rc = daos_prop_copy(prop_req, prop_reply);
+
+	if (info != NULL && rc == 0)
+		pool_query_reply_to_info_v6(pool->dp_pool, map_buf, map_version,
 					 leader_rank, ps, rs, info);
 
 	return rc;
@@ -1799,13 +1878,14 @@ pool_query_cb(tse_task_t *task, void *data)
 {
 	struct pool_query_arg	       *arg = (struct pool_query_arg *)data;
 	struct pool_buf		       *map_buf = arg->dqa_map_buf;
-	struct pool_query_out          *out_v5  = crt_reply_get(arg->rpc);
+	struct pool_query_out          *out  = crt_reply_get(arg->rpc);
+	struct pool_query_v6_out          *v6_out  = crt_reply_get(arg->rpc);
 	d_rank_list_t		       *ranks = NULL;
 	d_rank_list_t		      **ranks_arg;
 	int				rc = task->dt_result;
 
 	rc = pool_rsvc_client_complete_rpc(arg->dqa_pool, &arg->rpc->cr_ep, rc,
-					   &out_v5->pqo_op, task);
+					   &out->pqo_op, task);
 	if (rc < 0)
 		D_GOTO(out, rc);
 	else if (rc == RSVC_CLIENT_RECHOOSE)
@@ -1819,17 +1899,21 @@ pool_query_cb(tse_task_t *task, void *data)
 		D_GOTO(out, rc);
 	}
 
-	rc = out_v5->pqo_op.po_rc;
+	rc = out->pqo_op.po_rc;
 	if (rc == -DER_TRUNC) {
 		struct dc_pool *pool = arg->dqa_pool;
 
 		D_WARN("pool map buffer size (%ld) < required (%u)\n",
-		       pool_buf_size(map_buf->pb_nr), out_v5->pqo_map_buf_size);
+		       pool_buf_size(map_buf->pb_nr),
+			dc_pool_proto_version >= DAOS_POOL_VERSION ? out->pqo_map_buf_size:\
+			v6_out->pqo_map_buf_size);
 
 		/* retry with map buffer size required by server */
 		D_INFO("retry with map buffer size required by server (%ul)\n",
-		       out_v5->pqo_map_buf_size);
-		pool->dp_map_sz = out_v5->pqo_map_buf_size;
+		       dc_pool_proto_version >= DAOS_POOL_VERSION ? out->pqo_map_buf_size:\
+				v6_out->pqo_map_buf_size);
+		pool->dp_map_sz = dc_pool_proto_version >= DAOS_POOL_VERSION ? out->pqo_map_buf_size:\
+				v6_out->pqo_map_buf_size;
 		rc = tse_task_reinit(task);
 		D_GOTO(out, rc);
 	} else if (rc != 0) {
@@ -1839,12 +1923,21 @@ pool_query_cb(tse_task_t *task, void *data)
 
 	ranks_arg = arg->dqa_ranks ? arg->dqa_ranks : &ranks;
 
-	rc = process_query_reply(arg->dqa_pool, map_buf,
-				 out_v5->pqo_op.po_map_version,
-				 out_v5->pqo_op.po_hint.sh_rank,
-				 &out_v5->pqo_space, &out_v5->pqo_rebuild_st,
+	if (dc_pool_proto_version >= DAOS_POOL_VERSION) {
+		rc = process_query_reply(arg->dqa_pool, map_buf,
+				 out->pqo_op.po_map_version,
+				 out->pqo_op.po_hint.sh_rank,
+				 &out->pqo_space, &out->pqo_rebuild_st,
 				 ranks_arg, arg->dqa_info,
-				 arg->dqa_prop, out_v5->pqo_prop, false);
+				 arg->dqa_prop, out->pqo_prop, false);
+	} else {
+		rc = process_query_reply_v6(arg->dqa_pool, map_buf,
+				 v6_out->pqo_op.po_map_version,
+				 v6_out->pqo_op.po_hint.sh_rank,
+				 &v6_out->pqo_space, &v6_out->pqo_rebuild_st,
+				 ranks_arg, arg->dqa_info,
+				 arg->dqa_prop, v6_out->pqo_prop, false);
+	}
 	if (rc != 0) {
 		if (rc == -DER_AGAIN) {
 			rc = tse_task_reinit(task);
@@ -2821,10 +2914,12 @@ pool_query_target_cb(tse_task_t *task, void *data)
 {
 	struct pool_query_target_arg *arg;
 	struct pool_query_info_out   *out;
+	struct pool_query_info_v6_out   *v6_out;
 	int			      rc;
 
 	arg = (struct pool_query_target_arg *)data;
 	out = crt_reply_get(arg->rpc);
+	v6_out = crt_reply_get(arg->rpc);
 	rc = task->dt_result;
 
 	rc = pool_rsvc_client_complete_rpc(arg->dqa_pool, &arg->rpc->cr_ep, rc,
@@ -2850,8 +2945,16 @@ pool_query_target_cb(tse_task_t *task, void *data)
 		D_GOTO(out, rc);
 	}
 
-	arg->dqa_info->ta_state = out->pqio_state;
-	arg->dqa_info->ta_space = out->pqio_space;
+	if (dc_pool_proto_version >= DAOS_POOL_VERSION) {
+		arg->dqa_info->ta_state = out->pqio_state;
+		arg->dqa_info->ta_space = out->pqio_space;
+	} else {
+		arg->dqa_info->ta_state = v6_out->pqio_state;
+		arg->dqa_info->ta_space.s_total[DAOS_MEDIA_SCM] = v6_out->pqio_space.s_total[DAOS_MEDIA_SCM];
+		arg->dqa_info->ta_space.s_total[DAOS_MEDIA_NVME] = v6_out->pqio_space.s_total[DAOS_MEDIA_NVME];
+		arg->dqa_info->ta_space.s_free[DAOS_MEDIA_SCM] = v6_out->pqio_space.s_free[DAOS_MEDIA_SCM];
+		arg->dqa_info->ta_space.s_free[DAOS_MEDIA_NVME] = v6_out->pqio_space.s_free[DAOS_MEDIA_NVME];
+	}
 	D_DEBUG(DB_MD, DF_UUID": rank %u index %u state %d\n", DP_UUID(arg->dqa_pool->dp_pool),
 		arg->dqa_rank, arg->dqa_tgt_idx, arg->dqa_info->ta_state);
 
