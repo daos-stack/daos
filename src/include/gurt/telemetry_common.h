@@ -8,6 +8,8 @@
 
 #include <gurt/common.h>
 
+#include <stdatomic.h>
+
 #define D_TM_VERSION			1
 #define D_TM_MAX_NAME_LEN		256
 #define D_TM_MAX_DESC_LEN		128
@@ -236,6 +238,7 @@ struct d_tm_node_t {
 	pthread_mutex_t		dtn_lock; /** individual mutex */
 	struct d_tm_metric_t	*dtn_metric; /** values */
 	bool			dtn_protect; /** synchronized access */
+	_Atomic bool             dtn_readable; /** fully initialized and ready for reads */
 };
 
 struct d_tm_nodeList_t {
