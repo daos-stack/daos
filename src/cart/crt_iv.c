@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2911,8 +2911,11 @@ exit:
 	return rc;
 
 send_error:
-	rc = crt_bulk_free(cb_info->buc_bulk_hdl);
 	output->rc = rc;
+	rc = crt_bulk_free(cb_info->buc_bulk_hdl);
+	if (rc != 0)
+		DL_ERROR(rc, "crt_bulk_free() failed\n");
+
 	iv_ops->ivo_on_put(ivns_internal, &cb_info->buc_iv_value,
 			   cb_info->buc_user_priv);
 
