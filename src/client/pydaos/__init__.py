@@ -56,11 +56,11 @@ class DaosClient():
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
-            atfork = kwargs.pop('atfork')
+            atfork = kwargs.pop('atfork', None)
             cls._instance = super().__new__(cls, *args, **kwargs)
             # pylint: disable=protected-access
-            if atfork != None and atfork == 0:
-                cls._instance._atfork = 0 # pylint: disable=protected-access
+            if atfork is not None and atfork == 0:
+                cls._instance._atfork = 0  # pylint: disable=protected-access
             cls._instance._open()
         return cls._instance
 
