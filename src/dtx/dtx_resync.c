@@ -393,6 +393,7 @@ dtx_status_handle(struct dtx_resync_args *dra)
 	if (tgt_array == NULL)
 		D_GOTO(out, err = -DER_NOMEM);
 
+again:
 	d_list_for_each_entry_safe(dre, next, &drh->drh_list, dre_link) {
 		if (dre->dre_dte.dte_ver < dra->discard_version) {
 			err = vos_dtx_abort(cont->sc_hdl, &dre->dre_xid, dre->dre_epoch);
@@ -475,7 +476,12 @@ commit:
 		rc = dtx_resync_commit(cont, drh, count);
 		if (rc < 0)
 			err = rc;
+		count = 0;
 	}
+
+	/* The last DTX entry may be re-added to the list because of DSHR_NEED_RETRY. */
+	if (unlikely(!d_list_empty(&drh->drh_list)))
+		goto again;
 
 out:
 	D_FREE(tgt_array);
