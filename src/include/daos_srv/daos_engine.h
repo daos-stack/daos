@@ -751,6 +751,12 @@ typedef enum dss_chore_status (*dss_chore_func_t)(struct dss_chore *chore, bool 
 struct dss_chore {
 	d_list_t              cho_link;
 	enum dss_chore_status cho_status;
+	uint32_t	      cho_load_left;
+	/* The completed sub_tasks since the latest schedule. */
+	uint32_t	      cho_load_comp;
+	/* Execute the task by current ULT itself if without enough helper resource. */
+	uint32_t	      cho_cond_diy:1,
+			      cho_for_io:1;
 	dss_chore_func_t      cho_func;
 };
 

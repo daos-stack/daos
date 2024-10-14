@@ -401,7 +401,7 @@ check:
 /* ============== ULT create functions =================================== */
 
 static inline int
-sched_ult2xs(int xs_type, int tgt_id)
+sched_ult2xs(int xs_type, int tgt_id, int *hint)
 {
 	uint32_t	xs_id;
 
@@ -422,8 +422,10 @@ sched_ult2xs(int xs_type, int tgt_id)
 		if (!dss_helper_pool) {
 			if (dss_tgt_offload_xs_nr > 0)
 				xs_id = DSS_MAIN_XS_ID(tgt_id) + 1;
-			else
+			else if (dss_forward_neighbor)
 				xs_id = DSS_MAIN_XS_ID((tgt_id + 1) % dss_tgt_nr);
+			else
+				return DSS_XS_SELF;
 			break;
 		}
 
@@ -450,30 +452,36 @@ sched_ult2xs(int xs_type, int tgt_id)
 		 * ask neighbor to do IO forwarding seems is helpful to make
 		 * them concurrent, right?
 		 */
-		if (dss_tgt_offload_xs_nr > 0)
+		D_ASSERT(dss_tgt_offload_xs_nr > 0);
+
+		if (hint != NULL) {
+			*hint = (*hint + 1) % min(dss_tgt_nr, dss_tgt_offload_xs_nr);
+			xs_id = dss_sys_xs_nr + dss_tgt_nr + *hint;
+		} else {
 			xs_id = dss_sys_xs_nr + dss_tgt_nr +
 				rand() % min(dss_tgt_nr, dss_tgt_offload_xs_nr);
-		else
-			xs_id = (DSS_MAIN_XS_ID(tgt_id) + 1) % dss_tgt_nr;
+		}
 		break;
 	case DSS_XS_OFFLOAD:
 		if (dss_numa_nr > 1)
-			xs_id = sched_ult2xs_multisocket(xs_type, tgt_id);
+			return sched_ult2xs_multisocket(xs_type, tgt_id);
 		if (!dss_helper_pool) {
 			if (dss_tgt_offload_xs_nr > 0)
 				xs_id = DSS_MAIN_XS_ID(tgt_id) + dss_tgt_offload_xs_nr / dss_tgt_nr;
-			else
+			else if (dss_forward_neighbor)
 				xs_id = DSS_MAIN_XS_ID((tgt_id + 1) % dss_tgt_nr);
+			else
+				return DSS_XS_SELF;
 			break;
 		}
+
+		D_ASSERT(dss_tgt_offload_xs_nr > 0);
 
 		if (dss_tgt_offload_xs_nr > dss_tgt_nr)
 			xs_id = dss_sys_xs_nr + 2 * dss_tgt_nr +
 				(tgt_id % (dss_tgt_offload_xs_nr - dss_tgt_nr));
-		else if (dss_tgt_offload_xs_nr > 0)
-			xs_id = dss_sys_xs_nr + dss_tgt_nr + tgt_id % dss_tgt_offload_xs_nr;
 		else
-			xs_id = (DSS_MAIN_XS_ID(tgt_id) + 1) % dss_tgt_nr;
+			xs_id = dss_sys_xs_nr + dss_tgt_nr + tgt_id % dss_tgt_offload_xs_nr;
 		break;
 	case DSS_XS_VOS:
 		xs_id = DSS_MAIN_XS_ID(tgt_id);
@@ -495,7 +503,7 @@ ult_create_internal(void (*func)(void *), void *arg, int xs_type, int tgt_idx,
 	int			 rc, rc1;
 	int			 stream_id;
 
-	stream_id = sched_ult2xs(xs_type, tgt_idx);
+	stream_id = sched_ult2xs(xs_type, tgt_idx, NULL);
 	if (stream_id == -DER_INVAL)
 		return stream_id;
 
@@ -704,14 +712,6 @@ reenter:
 	}
 }
 
-static void
-dss_chore_ult(void *arg)
-{
-	struct dss_chore *chore = arg;
-
-	dss_chore_diy_internal(chore);
-}
-
 /**
  * Add \a chore for \a func to the chore queue of some other xstream.
  *
@@ -725,6 +725,10 @@ dss_chore_delegate(struct dss_chore *chore, dss_chore_func_t func)
 {
 	struct dss_module_info *info = dss_get_module_info();
 	int                     xs_id;
+	int			tmp_id;
+	static __thread int	hint = -1;
+	uint32_t		load;
+	struct dss_xstream     *tmp_dx;
 	struct dss_xstream     *dx;
 	struct dss_chore_queue *queue;
 
@@ -736,25 +740,72 @@ dss_chore_delegate(struct dss_chore *chore, dss_chore_func_t func)
 	 * a "main" xstream when the chore queue is long. So we fall back to
 	 * the one-ULT-per-chore approach if there's no helper xstream.
 	 */
-	if (dss_tgt_offload_xs_nr == 0) {
-		D_INIT_LIST_HEAD(&chore->cho_link);
-		return dss_ult_create(dss_chore_ult, chore, DSS_XS_IOFW, info->dmi_tgt_id,
-				      0 /* stack_size */, NULL /* ult */);
+	if (dss_tgt_offload_xs_nr == 0 && chore->cho_cond_diy) {
+		dss_chore_diy(chore, func);
+		return 0;
 	}
 
 	/* Find the chore queue. */
-	xs_id = sched_ult2xs(DSS_XS_IOFW, info->dmi_tgt_id);
+	xs_id = sched_ult2xs(DSS_XS_IOFW, info->dmi_tgt_id, &hint);
 	D_ASSERT(xs_id != -DER_INVAL);
 	dx = dss_get_xstream(xs_id);
 	D_ASSERT(dx != NULL);
 	queue = &dx->dx_chore_queue;
 	D_ASSERT(queue != NULL);
 
+	/*
+	 * We do not guarantee strict load balance among helper XS, instead, just roughly
+	 * estimate the RPC load without holding the lock against related dx_chore_queue.
+	 *
+	 * To be efficient, only compare current helper and next helper, and elect the one
+	 * with less RPC load. The next dss_chore_delegate() will compare the next and the
+	 * next after next. So if there are a lot of chore tasks, then the RPC load can be
+	 * relative balanced.
+	 */
+	if (queue->chq_load > 0 && dss_numa_nr <= 1 && dss_helper_pool &&
+	    dss_tgt_offload_xs_nr > 1) {
+		tmp_id = dss_sys_xs_nr + dss_tgt_nr +
+			 (hint + 1) % min(dss_tgt_nr, dss_tgt_offload_xs_nr);
+		tmp_dx = dss_get_xstream(tmp_id);
+		D_ASSERT(tmp_dx != NULL);
+
+		if (tmp_dx->dx_chore_queue.chq_load < queue->chq_load) {
+			xs_id = tmp_id;
+			dx = tmp_dx;
+			queue = &tmp_dx->dx_chore_queue;
+			hint = xs_id - dss_sys_xs_nr - dss_tgt_nr;
+		}
+	}
+
+	if (chore->cho_for_io && xs_id != info->dmi_xs_id) {
+		/* If the helper or neighbor has too much workload, then diy. */
+		tmp_dx = dss_get_xstream(DSS_XS_SELF);
+
+		if (dss_tgt_offload_xs_nr > 0) {
+			load = tmp_dx->dx_chore_queue.chq_load + chore->cho_load_left;
+			if ((dss_tgt_nr > dss_tgt_offload_xs_nr) &&
+			    (queue->chq_load / load > dss_tgt_nr / dss_tgt_offload_xs_nr)) {
+				xs_id = info->dmi_xs_id;
+				dx = tmp_dx;
+				queue = &tmp_dx->dx_chore_queue;
+			}
+		} else {
+			if ((queue->chq_load != 0) &&
+			    (queue->chq_load + chore->cho_load_left >
+			     tmp_dx->dx_chore_queue.chq_load)) {
+				xs_id = info->dmi_xs_id;
+				dx = tmp_dx;
+				queue = &tmp_dx->dx_chore_queue;
+			}
+		}
+	}
+
 	ABT_mutex_lock(queue->chq_mutex);
 	if (queue->chq_stop) {
 		ABT_mutex_unlock(queue->chq_mutex);
 		return -DER_CANCELED;
 	}
+	queue->chq_load += chore->cho_load_left;
 	d_list_add_tail(&chore->cho_link, &queue->chq_list);
 	ABT_cond_broadcast(queue->chq_cond);
 	ABT_mutex_unlock(queue->chq_mutex);
@@ -824,6 +875,7 @@ dss_chore_queue_ult(void *arg)
 
 		d_list_for_each_entry_safe(chore, chore_tmp, &list, cho_link) {
 			enum dss_chore_status status;
+			uint32_t load_left = chore->cho_load_left;
 
 			/*
 			 * CAUTION: When cho_func returns DSS_CHORE_DONE, chore
@@ -834,10 +886,12 @@ dss_chore_queue_ult(void *arg)
 			status = chore->cho_func(chore, chore->cho_status == DSS_CHORE_YIELD);
 			D_DEBUG(DB_TRACE, "%p: after: status=%d\n", chore, status);
 			if (status == DSS_CHORE_YIELD) {
+				queue->chq_load -= chore->cho_load_comp;
 				chore->cho_status = status;
 				d_list_add_tail(&chore->cho_link, &list_tmp);
 			} else {
 				D_ASSERTF(status == DSS_CHORE_DONE, "status=%d\n", status);
+				queue->chq_load -= load_left;
 			}
 			ABT_thread_yield();
 		}
