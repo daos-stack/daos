@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,6 +19,7 @@ import (
 
 type singleHostFlag ui.HostSetFlag
 
+// UnmarshalFlag implements the go-flags.Unmarshaler interface.
 func (shf *singleHostFlag) UnmarshalFlag(value string) error {
 	if err := (*ui.HostSetFlag)(shf).UnmarshalFlag(value); err != nil {
 		return err
