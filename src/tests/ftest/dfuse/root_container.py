@@ -138,33 +138,28 @@ class RootContainerTest(TestWithServers):
                 tmp_file_size)
 
         expected = pool_space_before - cont_count * tmp_file_count * tmp_file_size
-        self.log_step(
-            "Verify the pool free space <= {expected} after creating {cont_count} containers")
-        pool_space_after = pool.get_pool_free_space(device)
-        self.log.info("Pool space <= Expected")
-        self.log.info("%s <= %s", pool_space_after, expected)
-        self.assertTrue(
-            pool_space_after <= expected,
-            f"Failed pool free space check after creating {cont_count} containers")
+        pool_space_after = self._verify_pool_free_space(
+            pool, device, f"after creating {cont_count} containers", expected)
 
         self.log_step(f"Destroy half of the {cont_count} new sub containers ({cont_count // 2})")
         for _ in range(cont_count // 2):
             containers[-1].destroy(1)
             containers.pop()
 
-        self.log.info("Wait 60 seconds before checking for free space gain")
-        time.sleep(60)
-
+        # Wait for pool free space to reach expected value or timeout
         expected = pool_space_after + ((cont_count // 2) * tmp_file_count * tmp_file_size)
-        self.log_step(
-            "Verify the pool free space >= {expected} after destroying half of the containers")
-        pool_space_after_cont_destroy = pool.get_pool_free_space(device)
-        self.log.info("After container destroy")
-        self.log.info("Free Pool space >= Expected")
-        self.log.info("%s >= %s", pool_space_after_cont_destroy, expected)
-        self.assertTrue(
-            pool_space_after_cont_destroy >= expected,
-            "Failed pool free space check after container destroy")
+        start = time.time()
+        loop = 0
+        while True:
+            loop += 1
+            try:
+                self._verify_pool_free_space(
+                    pool, device, "after destroying half of the containers (loop {loop})", expected)
+                break
+            except AssertionError as error:
+                if (time.time() - start) < 60:
+                    raise error
+                time.sleep(5)
 
     def insert_files_and_verify(self, hosts, cont_dir, tmp_file_count, tmp_file_name,
                                 tmp_file_size):
@@ -189,15 +184,20 @@ class RootContainerTest(TestWithServers):
             cmd = f"head -c {tmp_file_size} /dev/urandom > {cont_dir}/{file_name}"
             ls_cmds.append(f"ls {file_name}")
             cmds.append(cmd)
-        self._execute_cmd(";".join(cmds), hosts)
+
+        result = run_remote(self.log, hosts, ";".join(cmds), timeout=30)
+        if not result.passed:
+            self.fail(f"Error inserting files into {tmp_file_name} on {str(result.failed_hosts)}")
 
         cmds = []
         # Run ls to verify the temp files are actually created
         cmds = [f"cd {cont_dir}"]
         cmds.extend(ls_cmds)
-        self._execute_cmd(";".join(cmds), hosts)
+        result = run_remote(self.log, hosts, ";".join(cmds), timeout=30)
+        if not result.passed:
+            self.fail(f"Error inserting files into {cont_dir} on {str(result.failed_hosts)}")
 
-    def _execute_cmd(self, cmd, hosts):
+    def _verify_pool_free_space(self, pool, device, description, expected):
         """Execute command on the host clients.
 
         Args:
@@ -205,6 +205,9 @@ class RootContainerTest(TestWithServers):
             hosts (NodeSet): hosts on which to run the command
 
         """
-        result = run_remote(self.log, hosts, cmd, timeout=30)
-        if not result.passed:
-            self.fail(f"Error running '{cmd}' on {str(result.failed_hosts)}")
+        self.log_step(f"Verify the pool free space {description}")
+        current = pool.get_pool_free_space(device)
+        self.log.info("  Current pool free space:   %s", current)
+        self.log.info("  Expected pool free space:  %s", expected)
+        self.assertTrue(current <= expected, f"Failed pool free space {description} check")
+        return current
