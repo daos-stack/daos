@@ -600,10 +600,15 @@ class TestRunner():
         """
         logger.debug("-" * 80)
         test_env = TestEnvironment()
-        hosts = {"server": test.host_info.servers.hosts, "client": test.host_info.clients.hosts}
-        hosts["client"].add(self.local_host)
+        hosts = test.host_info.all_hosts
+        hosts.add(self.local_host)
+        logger.debug("Setting up '%s' on %s:", test_env.log_dir, hosts)
+        # Attempt to remove the directory w/o sudo first and then with sudo if that doesn't work.
+        # This is needed for daos user home directory cleanup on clients as well as control metadata
+        # path cleanup on servers.
+        rm_command = f"rm -fr {test_env.log_dir}"
         commands = [
-            f"rm -fr {test_env.log_dir}",
+            f"{rm_command} || {command_as_user(rm_command, 'root')}",
             f"mkdir -p {test_env.log_dir}",
             f"chmod a+wrx {test_env.log_dir}",
         ]
@@ -613,17 +618,10 @@ class TestRunner():
             directories.append(os.path.join(test_env.log_dir, directory))
         commands.append(f"mkdir -p {' '.join(directories)}")
         commands.append(f"ls -al {test_env.log_dir}")
-        for role in ("client", "server"):
-            if not hosts[role]:
-                continue
-            if role == "server":
-                # The control metadata path must be removed with sudo
-                commands[0] = command_as_user(commands[0], "root")
-            logger.debug("Setting up '%s' on %s hosts %s:", test_env.log_dir, role, hosts[role])
-            if not run_remote(logger, hosts[role], " &&\n".join(commands)).passed:
-                message = f"Error setting up the common test directory on {role} hosts"
-                self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
-                return 128
+        if not run_remote(logger, hosts, " &&\n".join(commands)).passed:
+            message = "Error setting up the common test directory on all hosts"
+            self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
+            return 128
         return 0
 
     def _user_setup(self, logger, test, create=False):
