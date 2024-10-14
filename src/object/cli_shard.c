@@ -121,6 +121,61 @@ rw_args2csum_iov(const struct shard_rw_args *shard_args)
 }
 
 static int
+rw_cb_csum_verify_update(const struct rw_cb_args *rw_args)
+{
+	struct obj_rw_in	*orw = crt_req_get(rw_args->rpc);
+	struct dcs_iod_csums	*new_csums = NULL;
+	struct dcs_iod_csums	*iod_csums;
+	struct daos_csummer	*csummer_copy = NULL;
+	struct dcs_csum_info	*csum_info;
+	struct dcs_csum_info	*new_csum_info;
+	bool			 is_ec_obj;
+	bool			 data_mismatch = false;
+	int			 i;
+	int			 rc;
+
+	is_ec_obj = (rw_args->shard_args->reasb_req != NULL) &&
+		    daos_oclass_is_ec(rw_args->shard_args->reasb_req->orr_oca);
+
+	if (!daos_csummer_initialized(rw_args->co->dc_csummer) || !is_ec_obj)
+		return 0;
+
+	csummer_copy = daos_csummer_copy(rw_args->co->dc_csummer);
+	D_ASSERT(csummer_copy != NULL);
+
+	iod_csums = orw->orw_iod_array.oia_iod_csums;
+	rc = daos_csummer_calc_iods(csummer_copy,
+				    rw_args->shard_args->reasb_req->orr_sgls,
+				    orw->orw_iod_array.oia_iods, NULL,
+				    orw->orw_iod_array.oia_iod_nr, false,
+				    NULL, -1, &new_csums);
+	D_ASSERT(rc == 0);
+	D_ASSERT(new_csums != NULL);
+
+	D_ASSERTF(iod_csums->ic_nr == new_csums->ic_nr, "%d != %d\n",
+		  iod_csums->ic_nr, new_csums->ic_nr);
+	for (i = 0; i < iod_csums->ic_nr; i++) {
+		csum_info = &iod_csums->ic_data[i];
+		new_csum_info = &new_csums->ic_data[i];
+		D_ASSERTF(csum_info->cs_nr == new_csum_info->cs_nr,
+			  "%d != %d\n", csum_info->cs_nr, new_csum_info->cs_nr);
+		if (memcmp(csum_info->cs_csum, new_csum_info->cs_csum, csum_info->cs_nr)) {
+			D_ERROR("i %d csum_info->cs_nr %d, ior_nr %d\n", i, csum_info->cs_nr,
+				orw->orw_iod_array.oia_iod_nr);
+			D_ERROR("i %d "DF_CI2"\n", i, DP_CI2(*csum_info));
+			D_ERROR("i %d new "DF_CI2"\n", i, DP_CI2(*new_csum_info));
+			D_ERROR("csum mismatch\n");
+			data_mismatch = true;
+		}
+	}
+	D_ERROR("csum compare done, mismatch %d\n", data_mismatch);
+
+	daos_csummer_free_ic(csummer_copy, &new_csums);
+	daos_csummer_destroy(&csummer_copy);
+	return rc;
+}
+
+static int
 rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 {
 	struct obj_rw_in	*orw = crt_req_get(rw_args->rpc);
@@ -848,10 +903,32 @@ dc_rw_cb(tse_task_t *task, void *arg)
 				DP_UOID(orw->orw_oid), rw_args->rpc, opc,
 				rw_args->rpc->cr_ep.ep_rank, rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
 		else
-			D_ERROR(DF_CONT" "DF_UOID" rpc %p opc %d to rank %d tag %d: "DF_RC"\n",
-				DP_CONT(orw->orw_pool_uuid, orw->orw_co_uuid),
-				DP_UOID(orw->orw_oid), rw_args->rpc, opc,
+			D_ERROR(DF_CONT" "DF_UOID" rpc %p rpcid "DF_U64" opc %d to rank %d tag %d: "
+				DF_RC"\n", DP_CONT(orw->orw_pool_uuid, orw->orw_co_uuid),
+				DP_UOID(orw->orw_oid), rw_args->rpc,
+				crt_rpc_get_rpcid(rw_args->rpc), opc,
 				rw_args->rpc->cr_ep.ep_rank, rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
+
+		if (opc == DAOS_OBJ_RPC_UPDATE && rc == -DER_CSUM) {
+			struct dcs_iod_csums	*tmp_csums;
+			daos_iod_t		*tmp_iod;
+			int			 z;
+
+			D_ERROR("rpcid "DF_U64", iod_nr %d, got -DER_CSUM\n",
+				crt_rpc_get_rpcid(rw_args->rpc), orw->orw_iod_array.oia_iod_nr);
+			tmp_csums = orw->orw_iod_array.oia_iod_csums;
+			tmp_iod = orw->orw_iod_array.oia_iods;
+			for (z = 0; z < tmp_iod->iod_nr; z++) {
+				if (tmp_iod->iod_recxs == NULL)
+					D_ERROR("z %d, csum "DF_CI2"\n",
+						z, DP_CI2(tmp_csums->ic_data[z]));
+				else
+					D_ERROR("z %d, "DF_RECX", csum "DF_CI2"\n",
+						z, DP_RECX(tmp_iod->iod_recxs[z]),
+						DP_CI2(tmp_csums->ic_data[z]));
+			}
+			rw_cb_csum_verify_update(rw_args);
+		}
 
 		if (opc == DAOS_OBJ_RPC_FETCH) {
 			/* For EC obj fetch, set orr_epoch as highest server
