@@ -183,7 +183,7 @@ class ServerRankFailure(IorTestBase):
                 errors.append("Server rank {} state isn't joined!".format(member["rank"]))
 
         # 9. Call dmg pool query -b to find the disabled ranks.
-        output = self.get_dmg_command().pool_query(pool=self.pool.identifier, show_disabled=True)
+        output = self.get_dmg_command().pool_query(pool=self.pool.identifier)
         disabled_ranks = output["response"].get("disabled_ranks")
         self.log.info("Disabled ranks = %s", disabled_ranks)
 

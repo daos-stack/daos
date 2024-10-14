@@ -781,7 +781,7 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
 	struct vos_pool_space	 vps = { 0 };
-	uint64_t		 scm_left, nvme_left;
+	uint64_t		 scm_left, nvme_left, ne_left, ne_sys;
 	struct pressure_ratio	*pr;
 	int			 orig_pressure, rc;
 
@@ -814,6 +814,17 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 	else
 		scm_left = 0;
 
+	if (vps.vps_ne_total == 0) {
+		ne_left = UINT64_MAX;
+	} else {
+		D_ASSERT(vps.vps_ne_total < SCM_TOTAL(&vps));
+		ne_sys = SCM_SYS(&vps) * vps.vps_ne_total / SCM_TOTAL(&vps);
+		if (vps.vps_ne_free > ne_sys)
+			ne_left = vps.vps_ne_free - ne_sys;
+		else
+			ne_left = 0;
+	}
+
 	if (NVME_TOTAL(&vps) == 0)      /* NVMe not enabled */
 		nvme_left = UINT64_MAX;
 	else if (NVME_FREE(&vps) > NVME_SYS(&vps))
@@ -824,7 +835,8 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 	orig_pressure = spi->spi_space_pressure;
 	for (pr = &pressure_gauge[0]; pr->pr_free != 0; pr++) {
 		if (scm_left > (SCM_TOTAL(&vps) * pr->pr_free / 100) &&
-		    nvme_left > (NVME_TOTAL(&vps) * pr->pr_free / 100))
+		    nvme_left > (NVME_TOTAL(&vps) * pr->pr_free / 100) &&
+		    ne_left > (vps.vps_ne_total * pr->pr_free / 100))
 			break;
 	}
 	spi->spi_space_pressure = pr->pr_pressure;
@@ -832,10 +844,11 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 	if (spi->spi_space_pressure != SCHED_SPACE_PRESS_NONE &&
 	    spi->spi_space_pressure != orig_pressure) {
 		D_INFO("Pool:"DF_UUID" is under %d pressure, "
-		       "SCM: tot["DF_U64"], sys["DF_U64"], free["DF_U64"] "
+		       "SCM: tot["DF_U64"], sys["DF_U64"], free["DF_U64"], ne["DF_U64"/"DF_U64"] "
 		       "NVMe: tot["DF_U64"], sys["DF_U64"], free["DF_U64"]\n",
 		       DP_UUID(spi->spi_pool_id), spi->spi_space_pressure,
 		       SCM_TOTAL(&vps), SCM_SYS(&vps), SCM_FREE(&vps),
+		       vps.vps_ne_free, vps.vps_ne_total,
 		       NVME_TOTAL(&vps), NVME_SYS(&vps), NVME_FREE(&vps));
 
 		spi->spi_pressure_ts = info->si_cur_ts;

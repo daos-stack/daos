@@ -1198,7 +1198,7 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 		vpa.vpa_scm_size  = 0;
 		vpa.vpa_nvme_size = tc_in->tc_nvme_size / dss_tgt_nr;
 		vpa.vpa_meta_size = tc_in->tc_meta_size / dss_tgt_nr;
-		rc = dss_thread_collective(tgt_vos_create_one, &vpa, 0);
+		rc = dss_thread_collective(tgt_vos_create_one, &vpa, DSS_ULT_DEEP_STACK);
 		if (rc) {
 			D_ERROR(DF_UUID": thread collective tgt_vos_create_one failed, "DF_RC"\n",
 				DP_UUID(tc_in->tc_pool_uuid), DP_RC(rc));

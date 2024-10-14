@@ -802,7 +802,7 @@ pin_obj:
 			D_ASSERT(gc->gc_type != GC_CONT);
 			D_ASSERT(vos_pool_is_evictable(pool));
 
-			rc = umem_tx_end(&pool->vp_umm, rc);
+			rc = umem_tx_end(&pool->vp_umm, rc < 0 ? rc : 0);
 			if (rc != 0) {
 				DL_ERROR(rc, "Transaction commit failed.");
 				goto tx_error;
@@ -859,7 +859,7 @@ pin_obj:
 		"pool="DF_UUID", creds origin=%d, current=%d, rc=%s\n",
 		DP_UUID(pool->vp_id), *credits, creds, d_errstr(rc));
 
-	rc = umem_tx_end(&pool->vp_umm, rc);
+	rc = umem_tx_end(&pool->vp_umm, rc < 0 ? rc : 0);
 	if (rc == 0)
 		*credits = creds;
 tx_error:
