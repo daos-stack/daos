@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -52,7 +52,7 @@ class HarnessBasicTest(TestWithoutServers):
         """Simple test of apricot test code.
 
         :avocado: tags=all
-        :avocado: tags=hw,medium,large
+        :avocado: tags=hw,hw_vmd,medium,large
         :avocado: tags=harness,harness_basic_test,always_passes
         :avocado: tags=HarnessBasicTest,test_always_passes_hw
         """
@@ -90,7 +90,7 @@ class HarnessBasicTest(TestWithoutServers):
         """Simple test of apricot test code to load the openmpi module.
 
         :avocado: tags=all
-        :avocado: tags=hw,medium,large
+        :avocado: tags=hw,hw_vmd,medium,large
         :avocado: tags=harness,harness_basic_test,load_mpi
         :avocado: tags=HarnessBasicTest,test_load_mpi_hw
         """
