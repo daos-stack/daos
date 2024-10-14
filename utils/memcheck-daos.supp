@@ -78,4 +78,27 @@
    fun:daos_obj_update
    fun:dfs_chmod
 }
-
+{
+   dfs_cont_check
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   ...
+   fun:daos_obj_fetch
+   fun:fetch_mark_oids
+   fun:dfs_cont_check
+}
+{
+   daos_cont_list_attr
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   ...
+   fun:daos_cont_list_attr
+}
+{
+   action_obj
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   ...
+   fun:daos_obj_update
+   fun:action_obj
+}
