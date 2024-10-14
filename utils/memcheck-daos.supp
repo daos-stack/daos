@@ -54,3 +54,28 @@
    fun:daos_obj_fetch
    fun:dfs_getxattr
 }
+{
+   dfs_obj_fix_type
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   ...
+   fun:daos_obj_update
+   fun:dfs_obj_fix_type
+}
+{
+   dfs_cont_set_owner
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   ...
+   fun:daos_obj_update
+   fun:dfs_cont_set_owner
+}
+{
+   dfs_chmod
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   ...
+   fun:daos_obj_update
+   fun:dfs_chmod
+}
+
