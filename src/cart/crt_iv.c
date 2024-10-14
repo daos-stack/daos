@@ -2912,7 +2912,7 @@ exit:
 
 send_error:
 	output->rc = rc;
-	rc = crt_bulk_free(cb_info->buc_bulk_hdl);
+	rc         = crt_bulk_free(cb_info->buc_bulk_hdl);
 	if (rc != 0)
 		DL_ERROR(rc, "crt_bulk_free() failed\n");
 
