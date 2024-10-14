@@ -596,6 +596,7 @@ struct chk_pool_rec {
 				 cpr_stop:1,
 				 cpr_done:1,
 				 cpr_skip:1,
+				 cpr_immutable:1,
 				 cpr_dangling:1,
 				 cpr_for_orphan:1,
 				 cpr_notified_exit:1,
