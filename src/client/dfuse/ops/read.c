@@ -66,7 +66,7 @@ dfuse_cb_read_complete(struct dfuse_event *ev)
 	D_MUTEX_UNLOCK(&rc_lock);
 
 	d_list_for_each_entry(evs, &ev->de_read_slaves, de_read_list) {
-		DFUSE_TRA_WARNING(ev->de_oh, "concurrent network read %p", evs);
+		DFUSE_TRA_WARNING(ev->de_oh, "concurrent network read %p", evs->de_oh);
 		evs->de_len         = min(ev->de_len, evs->de_req_len);
 		evs->de_ev.ev_error = ev->de_ev.ev_error;
 		cb_read_helper(evs, ev->de_iov.iov_buf);
@@ -222,6 +222,7 @@ read_chunk_close(struct dfuse_inode_entry *ie)
 		if (cd->complete) {
 			chunk_free(cd);
 		} else {
+			DFUSE_TRA_DEBUG(ie, "Abandoning %p", cd);
 			cd->exiting = true;
 		}
 	}
@@ -422,7 +423,7 @@ found:
 		rcb = chunk_fetch(req, oh, cd, slot);
 	} else {
 		struct dfuse_event *ev = NULL;
-		bool                sd = false;
+		bool                sd = true;
 
 		/* Now check if this read request is complete or not yet, if it isn't then just
 		 * save req in the right slot however if it is then reply here.  After the call to
@@ -451,7 +452,6 @@ found:
 				 */
 				rcb = false;
 				DFUSE_TRA_WARNING(oh, "concurrent read, un-met");
-				D_FREE(cd);
 			} else {
 				cd->reqs[slot] = req;
 				cd->ohs[slot]  = oh;
@@ -583,8 +583,12 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 		/* Check for concurrent overlapping reads and if so then add request to current op
 		 */
 		d_list_for_each_entry(evc, &oh->doh_ie->ie_open_reads, de_read_list) {
+			DFUSE_TRA_DEBUG(oh, "Checking %p %ld %ld", evc->de_oh, ev->de_req_position,
+					evc->de_req_position);
 			if (ev->de_req_position == evc->de_req_position &&
-			    ev->de_req_len <= evc->de_req_position) {
+			    ev->de_req_len <= evc->de_req_len) {
+				DFUSE_TRA_DEBUG(oh, "Match, making slave of %p", evc->de_oh);
+
 				d_list_add(&ev->de_read_list, &evc->de_read_slaves);
 				D_MUTEX_UNLOCK(&rc_lock);
 				return;
