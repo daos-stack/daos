@@ -1013,7 +1013,7 @@ agg_diff_preprocess(struct ec_agg_entry *entry, unsigned char *diff,
 		if (extent->ae_hole) {
 			/* valid hole processed by agg_process_holes_ult() */
 			D_ASSERTF(extent->ae_epoch < entry->ae_par_extent.ape_epoch,
-				  "hole ext epoch "DF_X64", parity epoch "DF_X64"\n",
+				  "hole ext epoch " DF_X64 ", parity epoch " DF_X64 "\n",
 				  extent->ae_epoch, entry->ae_par_extent.ape_epoch);
 			continue;
 		}
