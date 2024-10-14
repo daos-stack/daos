@@ -3,7 +3,7 @@ hosts:
 timeouts:
   test_pool_query_ranks_basic: 120
   test_pool_query_ranks_error: 120
-  test_pool_query_ranks_mgmt: 780
+  test_pool_query_ranks_mgmt: 480
 server_config:
   name: daos_server
   crt_timeout: 5
@@ -15,6 +15,7 @@ server_config:
       env_vars:
         - SWIM_SUSPECT_TIMEOUT=10000
         - DAOS_POOL_RF=1
+        - DD_MASK=io,epc,rebuild
       storage:
         0:
           class: ram
