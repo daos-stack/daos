@@ -2362,8 +2362,7 @@ class DaosContext():
             # For most functions, we need to ensure
             # that daos_init() has been called before
             # invoking anything.
-            self._dc = DaosClient()
-            self._dc._atfork = 0
+            self._dc = DaosClient(atfork=0)
         return self.ftable[function]
 
 
