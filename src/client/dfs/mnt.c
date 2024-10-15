@@ -781,9 +781,9 @@ dfs_mount_snap(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epo
 
 			nr = DFS_SNAP_NR;
 			for (i = 0; i < nr; i++)
-				names[i] = '\0';
+				names[i][0] = '\0';
 
-			rc = daos_cont_list_snap(coh, &nr, eps, &names, &anchor, NULL);
+			rc = daos_cont_list_snap(coh, &nr, eps, (char **)names, &anchor, NULL);
 			if (rc)
 				return EINVAL;
 
