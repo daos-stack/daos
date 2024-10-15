@@ -991,12 +991,12 @@ dfuse_cont_get_handle(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uui
 	}
 
 	if (uuid_is_null(cont)) {
-		return dfuse_cont_open(dfuse_info, dfp, NULL, _dfc);
+		return dfuse_cont_open(dfuse_info, dfp, NULL, 0, NULL, _dfc);
 	} else {
 		char uuid_str[37];
 
 		uuid_unparse(cont, uuid_str);
-		return dfuse_cont_open(dfuse_info, dfp, uuid_str, _dfc);
+		return dfuse_cont_open(dfuse_info, dfp, uuid_str, 0, NULL, _dfc);
 	}
 }
 

@@ -521,7 +521,7 @@ main(int argc, char **argv)
 			parse_mount_option(optarg, dfuse_info, pool_name, cont_name);
 			break;
 		case 's':
-			snap_name = arg;
+			snap_name = optarg;
 			dfuse_info->di_read_only = true;
 			break;
 		case 'N':
@@ -727,8 +727,8 @@ main(int argc, char **argv)
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
 	}
 
-	rc = dfuse_cont_open(dfuse_info, dfp, cont_name[0] ? cont_name : NULL, snap_name,
-			     snap_epoch, &dfs);
+	rc = dfuse_cont_open(dfuse_info, dfp, cont_name[0] ? cont_name : NULL, snap_epoch,
+			     snap_name, &dfs);
 	if (rc != 0) {
 		printf("Failed to connect to container: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(out_pool, rc = daos_errno2der(rc));
