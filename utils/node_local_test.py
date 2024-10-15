@@ -1962,9 +1962,9 @@ class needs_dfuse_with_opt():
     wrapping_lock = threading.Lock()
 
     # pylint: disable=too-few-public-methods
-    def __init__(self, caching_variants=[False, True], wbcache=True, single_threaded=False,
+    def __init__(self, caching_variants=None, wbcache=True, single_threaded=False,
                  dfuse_inval=True, ro=False):
-        self.caching_variants = caching_variants
+        self.caching_variants = caching_variants if caching_variants else [False, True]
         self.wbcache = wbcache
         self.single_threaded = single_threaded
         self.dfuse_inval = dfuse_inval
@@ -2015,25 +2015,30 @@ class needs_dfuse_with_opt():
 
     @staticmethod
     def get_excluded_versions(name):
+        """Get the excluded variants of a test"""
         with needs_dfuse_with_opt.wrapping_lock:
             return list(needs_dfuse_with_opt.excluded_name_dict[name]) \
                 if name in needs_dfuse_with_opt.excluded_name_dict else []
 
     @staticmethod
     def record_wrap(name, caching_variants):
+        """Record that a test is being wrapped and which variants of the test are wrapped"""
         needs_dfuse_with_opt.wrapped_names[name] = list(caching_variants)
 
     @staticmethod
     def record_exclusions(excluded_name_dict):
+        """Note at runtime which variants of a test are being excluded"""
         needs_dfuse_with_opt.excluded_name_dict = excluded_name_dict
 
     @staticmethod
     def parameterized_test_to_name(name, caching):
+        """Convert a parametrization to a string name for a test"""
         suffix = 'caching_on' if caching else 'caching_off'
         return name + '_' + suffix
 
     @staticmethod
     def get_test_variants(name):
+        """Return which variants of a test have been wrapped"""
         if name not in needs_dfuse_with_opt.wrapped_names:
             return []
 
@@ -2041,11 +2046,12 @@ class needs_dfuse_with_opt():
 
     @staticmethod
     def parse_test_name(name):
-        if not name.endswith('_caching_on') and not name.endswith('caching_off'):
+        """Convert a string name for a parameterized test to a parameterized tuple"""
+        if not name.endswith('_caching_on') and not name.endswith('_caching_off'):
             return (name, None)
 
         match = re.match(r'(.+)_(caching_on|caching_off)', name)
-        return (match.group(1), True if match.group(2) == 'caching_on' else False)
+        return (match.group(1), match.group(2) == 'caching_on')
 
 
 class PrintStat():
@@ -2097,12 +2103,13 @@ class PrintStat():
 # This is test code where methods are tests, so we want to have lots of them.
 class PosixTests():
     """Class for adding standalone unit tests"""
+    # pylint: disable=too-many-public-methods
 
     @staticmethod
     def generate_test_list():
+        """Generate list of Posix tests"""
         return [x for x in dir(PosixTests) if x.startswith('test')]
 
-    # pylint: disable=too-many-public-methods
     def __init__(self, server, conf, pool=None):
         self.server = server
         self.conf = conf
@@ -6374,10 +6381,12 @@ def server_fi(args):
 
 
 def generate_special_test_list():
+    """List all special tests"""
     return ['special_dfuse_multi', 'special_dfuse_overlay']
 
 
 def is_special_testname(testname):
+    """Check whether a test is special"""
     return testname.startswith('special')
 
 
@@ -6404,10 +6413,10 @@ def expand_input_list(input_list):
         if parameterization is not None and parameterization not in param_list:
             param_list.append(parameterization)
 
-    # Check if user specified an unparameterized test name (e.g., 'read') and we need to include
+    # Check if user specified an non-parameterized test name (e.g., 'read') and we need to include
     # all of its variants.
     possible_expansions = [(x, needs_dfuse_with_opt.get_test_variants(x))
-                           for x in name_dict.keys()]
+                           for x in name_dict]
     for name, parameters in possible_expansions:
         if name in name_dict and len(name_dict[name]) == 0:
             name_dict[name] = parameters
@@ -6418,8 +6427,7 @@ def expand_input_list(input_list):
 def explicit_list_to_exclusion_list(name_dict):
     """Convert a dict of explicitly requested tests to an exclusion dict of variants not to
     run."""
-    test_variants = dict([(x, needs_dfuse_with_opt.get_test_variants(x))
-                          for x in name_dict.keys()])
+    test_variants = {x: needs_dfuse_with_opt.get_test_variants(x) for x in name_dict}
     exclusion_dict = {}
     for name in name_dict.keys():
         exclusion_list = [x for x in test_variants[name] if x not in name_dict[name]]
@@ -6432,15 +6440,14 @@ def expand_test_list(raw_test_list, excluded_name_dict):
     """Expand a test list into a dict where the keys are test names and the values are a list of
     variants of that test (if any). Remove any test names where all variants have
     been excluded."""
-    test_variants = dict([(x, needs_dfuse_with_opt.get_test_variants(x))
-                          for x in raw_test_list])
+    test_variants = {x: needs_dfuse_with_opt.get_test_variants(x) for x in raw_test_list}
 
     keys_to_remove = []
     keys_to_update = []
-    for key in test_variants.keys():
-        if len(test_variants[key]) > 0:
-            viable = [x for x in test_variants[key] if x not in excluded_name_dict[key]] \
-                if key in excluded_name_dict else list(test_variants[key])
+    for key, vals in test_variants.items():
+        if len(vals) > 0:
+            viable = [x for x in vals if x not in excluded_name_dict[key]] \
+                if key in excluded_name_dict else list(vals)
             if len(viable) == 0:
                 keys_to_remove.append(key)
             else:
@@ -6511,11 +6518,10 @@ def run(wf, args):
                 custom_test_dict = expand_input_list(despecialed_list)
                 custom_exclusions = explicit_list_to_exclusion_list(custom_test_dict)
                 exclusion_union = {}
-                for key in custom_test_dict.keys():
+                for key in custom_test_dict:
                     exclusion_list = \
-                        list(set(custom_exclusions[key]
-                                 if key in custom_exclusions else []).union(
-                                     set(excluded_dict[key] if key in excluded_dict else [])))
+                        list(set(custom_exclusions.get(key, [])).union(
+                            set(excluded_dict.get(key, []))))
                     if len(exclusion_list) > 0:
                         exclusion_union[key] = exclusion_list
                 needs_dfuse_with_opt.record_exclusions(exclusion_union)
