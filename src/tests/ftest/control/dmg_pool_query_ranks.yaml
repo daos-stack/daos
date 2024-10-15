@@ -24,3 +24,4 @@ server_config:
 pool:
   size: 4GB
   svcn: 5
+  properties: rd_fac:1

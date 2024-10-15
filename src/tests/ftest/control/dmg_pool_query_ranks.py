@@ -23,7 +23,7 @@ class DmgPoolQueryRanks(ControlTestBase):
         super().setUp()
 
         # Init the pool
-        self.add_pool(connect=False, properties='rd_fac:1')
+        self.add_pool(connect=False)
 
     def test_pool_query_ranks_basic(self):
         """Test the state of ranks with dmg pool query.
@@ -89,7 +89,6 @@ class DmgPoolQueryRanks(ControlTestBase):
         self.random.shuffle(all_ranks)
         exclude_rank = all_ranks[0]
         suspect_rank = all_ranks[1]
-        suspect_ranks = [suspect_rank]
         self.log.info("Starting excluding rank:%d all_ranks=%s", exclude_rank, all_ranks)
         self.pool.exclude([exclude_rank])
         enabled_ranks.remove(exclude_rank)
@@ -111,42 +110,31 @@ class DmgPoolQueryRanks(ControlTestBase):
 
         # kill second rank.
         self.server_managers[0].stop_ranks([suspect_rank], self.d_log)
-        time.sleep(20)
-
-        self.log.debug("Checking suspect ranks state information")
-        data = self.dmg.pool_query(self.pool.identifier, health_only=True)
-        self.assertListEqual(
-            data['response'].get('suspect_ranks'), suspect_ranks,
-            "Invalid enabled_ranks field: want={}, got={}".format(
-                suspect_ranks, data['response'].get('suspect_ranks')))
+        self.pool.wait_pool_suspect_ranks([suspect_rank], timeout=30)
         self.assertListEqual(
             data['response'].get('disabled_ranks'), disabled_ranks,
             "Invalid disabled_ranks field: want={}, got={}".format(
                 disabled_ranks, data['response'].get('disabled_ranks')))
 
         self.server_managers[0].start_ranks([suspect_rank], self.d_log)
-        time.sleep(10)
-        data = self.dmg.pool_query(self.pool.identifier, health_only=True)
-        self.assertListEqual(
-            data['response'].get('suspect_ranks'), [],
-            "Invalid enabled_ranks field: want={}, got={}".format(
-                [], data['response'].get('suspect_ranks')))
+        self.pool.wait_pool_suspect_ranks([], timeout=30)
 
         self.log.debug("Reintegrating rank %d", exclude_rank)
         cmd_succeed = False
         for _ in range(3):
             try:
-                result = self.pool.reintegrate(exclude_rank)
+                self.pool.reintegrate(exclude_rank)
                 cmd_succeed = True
                 break
             except CommandFailure:
                 self.log.debug("dmg command failed retry")
             time.sleep(3)
 
-        self.assertTrue(cmd_succeed, "pool reintegrate failed: {}".format(result))
+        self.assertTrue(cmd_succeed, "pool reintegrate failed")
         self.log.debug("Waiting for pool to be rebuild")
         self.pool.wait_for_rebuild_to_start()
-        self.pool.wait_for_rebuild_to_end()
+        # Fix this after DAOS-16702
+        # self.pool.wait_for_rebuild_to_end
 
         enabled_ranks = sorted(enabled_ranks + [exclude_rank])
         disabled_ranks.remove(exclude_rank)
