@@ -769,7 +769,7 @@ dfs_mount_snap(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epo
 		char		names[DFS_SNAP_NR][DAOS_SNAPSHOT_MAX_LEN];
 		daos_epoch_t	eps[DFS_SNAP_NR];
 		int		nr;
-		daos_anchor_t	anchor;
+		daos_anchor_t	anchor = {0};
 		int		rc;
 
 		if (name == NULL)

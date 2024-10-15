@@ -181,7 +181,7 @@ dfs_connect(const char *pool, const char *sys, const char *cont, int flags, dfs_
  * \param[in]	flags	Mount flags for future use, will be O_RDONLY by definition.
  * \param[in]	epoch	Epoch associated with the snapshot to mount.
  *			Pass 0 to lookup by snapshot name instead or a snapshot epoch.
- * \param[in]	name	Optional name of the snapshot to mount, only valid when \param epoch is set
+ * \param[in]	name	Optional name of the snapshot to mount, only valid when epoch is set
  *			to 0.
  * \param[out]	dfs	Pointer to the created DFS mount point.
  *
@@ -292,7 +292,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **dfs);
  * \param[in]	flags	Mount flags for future use, will be O_RDONLY by definition.
  * \param[in]	epoch	Epoch associated with the snapshot to mount.
  *			Pass 0 to lookup by snapshot name instead or a snapshot epoch.
- * \param[in]	name	Optional name of the snapshot to mount, only valid when \param epoch is set
+ * \param[in]	name	Optional name of the snapshot to mount, only valid when epoch is set
  *			to 0.
  * \param[out]	dfs	Pointer to the file system object created.
  *
