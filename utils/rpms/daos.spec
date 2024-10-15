@@ -594,12 +594,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Mon Sep 23 2024 Kris Jacque <kris.jacque@intel.com> 2.7.100-6
-- Bump min supported go version to 1.21
-
-* Thu Aug 15 2024 Michael MacDonald <mjmac@google.com> 2.7.100-5
-- Add libdaos_self_test.so to client RPM
-
 * Tue Oct 01 2024 Phillip Henderson <phillip.henderson@intel.com> 2.6.1-3
 - Third release candidate for 2.6.1
 
@@ -609,7 +603,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 * Mon Sep 09 2024 Phillip Henderson <phillip.henderson@intel.com> 2.6.1-1
 - First release candidate for 2.6.1
 
-* Mon Jun 24 2024 Tom Nabarro <tom.nabarro@intel.com> 2.7.100-2
+* Thu Aug 08 2024 Tom Nabarro <tom.nabarro@intel.com> 2.6.0-5 
 - Add pciutils runtime dep for daos_server lspci call
 - Add pciutils-devel build dep for pciutils CGO bindings
 
