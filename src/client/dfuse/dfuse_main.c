@@ -525,7 +525,7 @@ main(int argc, char **argv)
 			dfuse_info->di_read_only = true;
 			break;
 		case 'N':
-			snap_epoch = atoi(arg);
+			snap_epoch = atoi(optarg);
 			dfuse_info->di_read_only = true;
 			break;
 		case 'h':
