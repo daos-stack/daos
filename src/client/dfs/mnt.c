@@ -471,9 +471,9 @@ dfs_connect(const char *pool, const char *sys, const char *cont, int flags, dfs_
 
 int
 dfs_connect_snap(const char *pool, const char *sys, const char *cont, int flags, daos_epoch_t epoch,
-		 const char *name, dfs_t **dfs)
+		 const char *name, dfs_t **_dfs)
 {
-	return dfs_connect_int(pool, sys, cont, O_RDONLY, NULL, epoch, name, _dfs)
+	return dfs_connect_int(pool, sys, cont, O_RDONLY, NULL, epoch, name, _dfs);
 }
 
 int
@@ -748,7 +748,7 @@ err_prop:
 int
 dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 {
-	return dfs_mount_int(poh, coh, flags, DAOS_EPOCH_MAX, dfs);
+	return dfs_mount_int(poh, coh, flags, DAOS_EPOCH_MAX, _dfs);
 }
 
 /** Number of snapshots to fetch in one list call */
@@ -758,7 +758,7 @@ int
 dfs_mount_snap(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epoch,
 	       const char *name, dfs_t **dfs)
 {
-	daos_epocht_t ep = 0;
+	daos_epoch_t ep = 0;
 
 	if (epoch == DAOS_EPOCH_MAX)
 		/** cannot be right */
@@ -783,7 +783,7 @@ dfs_mount_snap(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epo
 			for (i = 0; i < nr; i++)
 				names[i] = '\0';
 
-			rc = daos_cont_list_snap(coh, &nr, ep, names, &anchor, NULL);
+			rc = daos_cont_list_snap(coh, &nr, eps, &names, &anchor, NULL);
 			if (rc)
 				return EINVAL;
 
