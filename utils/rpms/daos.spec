@@ -606,7 +606,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
       (ddb, daos_perf, vos_perf, etc.) when used WITHOUT DCPM.
       Otherwise, a user is supposed to be stopped by an error
       like: "Unsafe shutdown count is not supported for this source".
->>>>>>> origin/master
 
 * Mon Sep 23 2024 Kris Jacque <kris.jacque@intel.com> 2.7.100-6
 - Bump min supported go version to 1.21

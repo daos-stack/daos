@@ -1,3 +1,9 @@
+daos (2.7.100-8) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Remove Build-Depends: for UCX as they were obsoleted as of e01970d
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Tue, 15 Oct 2024 10:49:37 -0400
+
 daos (2.7.100-7) unstable; urgency=medium
   [ Tomasz Gromadzki ]
   * Add support of the PMDK package 2.1.0 with NDCTL enabled.
