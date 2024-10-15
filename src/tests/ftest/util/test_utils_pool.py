@@ -1468,9 +1468,8 @@ class TestPool(TestDaosApiBase):
         while data['response'].get('suspect_ranks') != expected:
             self.log.info("  suspect ranks is %s ...", data['response'].get('suspect_ranks'))
             if time() - start > timeout:
-                raise DaosTestError(
-                    "TIMEOUT detected after {} seconds while for waiting for ranks: %s suspect",
-                    expected)
+                raise DaosTestError("TIMEOUT detected after {} seconds while for waiting "
+                                    "for ranks {} suspect".format(timeout, expected))
             sleep(interval)
             data = self.dmg.pool_query(self.identifier, health_only=True)
 
