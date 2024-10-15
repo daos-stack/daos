@@ -38,8 +38,11 @@ on:
       functional-test-distros:
         description: 'Distros to run Functional testing on (i.e. el8 el9 leap15, etc.)'
         required: false
-
   pull_request:
+  push:
+    branches:
+      - master
+      - 'release/*'
 
 concurrency:
   group: rpm-build-and-test-${{ github.head_ref  || github.run_id }}
@@ -105,7 +108,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Import commit pragmas
-        uses: daos-stack/action-import-commit-pragmas@bmurrell/initial
+        uses: daos-stack/action-import-commit-pragmas@v1
         with:
           commit-message: ${{ needs.Call-RPM-Build.outputs.dequoted-commit-message }}
       - name: Calculate Functional Testing Matrix
@@ -233,7 +236,7 @@ jobs:
           fetch-depth: 500
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Import commit pragmas
-        uses: daos-stack/action-import-commit-pragmas@bmurrell/initial
+        uses: daos-stack/action-import-commit-pragmas@v1
         with:
           commit-message: ${{ needs.Call-RPM-Build.outputs.dequoted-commit-message }}
       - name: Set variables
@@ -403,7 +406,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Import commit pragmas
-        uses: daos-stack/action-import-commit-pragmas@bmurrell/initial
+        uses: daos-stack/action-import-commit-pragmas@v1
         with:
           commit-message: ${{ needs.Call-RPM-Build.outputs.dequoted-commit-message }}
       - name: Calculate Functional Testing Matrix
@@ -515,7 +518,7 @@ jobs:
           fetch-depth: 500
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Import commit pragmas
-        uses: daos-stack/action-import-commit-pragmas@bmurrell/initial
+        uses: daos-stack/action-import-commit-pragmas@v1
         with:
           commit-message: ${{ needs.Call-RPM-Build.outputs.dequoted-commit-message }}
       - name: Set variables
