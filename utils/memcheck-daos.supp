@@ -102,3 +102,19 @@
    fun:daos_obj_update
    fun:action_obj
 }
+{
+   dfs_obj_set_chunk_size
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   ...
+   fun:dfs_obj_set_chunk_size
+   fun:fs_dfs_hdlr
+}
+{
+   cont_clone_hdlr
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   ...
+   fun:oit_list_filter
+   fun:cont_clone_hdlr
+}
