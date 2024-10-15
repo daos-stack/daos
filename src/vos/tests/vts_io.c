@@ -3125,6 +3125,9 @@ run_oclass_tests(const char *cfg)
 
 	rc += cmocka_run_group_tests_name(test_name, iterator_tests, setup_io, teardown_io);
 
+	/** Fake failure */
+	assert_int_equal(rc, 0);
+
 	return rc;
 }
 
