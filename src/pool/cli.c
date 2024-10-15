@@ -3662,3 +3662,20 @@ dc_pool_tgt_idx2ptr(struct dc_pool *pool, uint32_t tgt_idx,
 	}
 	return 0;
 }
+
+static int
+pool_mark_slave(struct d_hlink *link, void *arg)
+{
+	struct dc_pool *pool;
+
+	pool           = container_of(link, struct dc_pool, dp_hlink);
+	pool->dp_slave = 1;
+
+	return 0;
+}
+
+int
+dc_pool_mark_all_slave(void)
+{
+	return daos_hhash_traverse(DAOS_HTYPE_POOL, pool_mark_slave, NULL);
+}

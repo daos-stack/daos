@@ -104,7 +104,7 @@ type (
 
 const (
 	// DefaultPoolQueryMask defines the default pool query mask.
-	DefaultPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_ENGINES_DISABLED))
+	DefaultPoolQueryMask = PoolQueryMask(^uint64(0) &^ C.DPI_ENGINES_ENABLED)
 	// HealthOnlyPoolQueryMask defines the mask for health-only queries.
 	HealthOnlyPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_SPACE))
 

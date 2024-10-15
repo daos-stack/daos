@@ -630,6 +630,12 @@ daos_hhash_link_delete(struct d_hlink *hlink)
 	return d_hhash_link_delete(daos_ht.dht_hhash, hlink);
 }
 
+int
+daos_hhash_traverse(int type, daos_hhash_traverse_cb_t cb, void *arg)
+{
+	return d_hhash_traverse(daos_ht.dht_hhash, type, cb, arg);
+}
+
 /**
  * a helper to get the needed crt_init_opt.
  *
