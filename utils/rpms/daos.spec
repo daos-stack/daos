@@ -603,7 +603,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 * Mon Sep 09 2024 Phillip Henderson <phillip.henderson@intel.com> 2.6.1-1
 - First release candidate for 2.6.1
 
-* Thu Aug 08 2024 Tom Nabarro <tom.nabarro@intel.com> 2.6.0-5 
+* Thu Aug 08 2024 Tom Nabarro <tom.nabarro@intel.com> 2.6.0-5
 - Add pciutils runtime dep for daos_server lspci call
 - Add pciutils-devel build dep for pciutils CGO bindings
 
