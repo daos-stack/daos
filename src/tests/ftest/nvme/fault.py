@@ -31,7 +31,7 @@ class NvmeFault(ServerFillUp):
         pool_capacity = self.params.get('pool_capacity', '/run/faulttests/*')
         no_of_servers = self.params.get('no_of_servers', '/run/faulttests/*')
         no_of_drives = self.params.get('no_of_drives', '/run/faulttests/*')
-        dmg = self.get_dmg_command()
+        dmg = self.get_dmg_command().copy()
 
         # Create the Pool with Maximum NVMe size
         self.log_step(f'Creating a pool using {pool_capacity}% of the free NVMe space')
