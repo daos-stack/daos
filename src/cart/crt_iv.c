@@ -2911,10 +2911,11 @@ exit:
 	return rc;
 
 send_error:
+	/* send back whatever error got us here */
 	output->rc = rc;
 	rc         = crt_bulk_free(cb_info->buc_bulk_hdl);
 	if (rc != 0)
-		DL_ERROR(rc, "crt_bulk_free() failed\n");
+		DL_ERROR(rc, "crt_bulk_free() failed");
 
 	iv_ops->ivo_on_put(ivns_internal, &cb_info->buc_iv_value,
 			   cb_info->buc_user_priv);
