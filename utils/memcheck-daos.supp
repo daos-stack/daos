@@ -1,0 +1,120 @@
+{
+   ucs_init
+   Memcheck:Leak
+   ...
+   fun:ucs_init
+}
+{
+   ucs_load_modules
+   Memcheck:Leak
+   ...
+   fun:ucs_load_modules
+}
+{
+   Tcp provider
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   ...
+   fun:sendmsg
+   fun:ofi_sockapi_sendv_socket
+   fun:ofi_bsock_sendv
+   ...
+   fun:fi_senddataz
+   ...
+}
+{
+   setattr
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   ...
+   fun:daos_obj_update
+   fun:dfs_setxattr
+}
+{
+   fetch
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   ...
+   fun:daos_obj_fetch
+   fun:fetch_entry
+}
+{
+   osetattr
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   ...
+   fun:daos_obj_update
+   fun:dfs_osetattr
+}
+{
+   getxattr
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   ...
+   fun:daos_obj_fetch
+   fun:dfs_getxattr
+}
+{
+   dfs_obj_fix_type
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   ...
+   fun:daos_obj_update
+   fun:dfs_obj_fix_type
+}
+{
+   dfs_cont_set_owner
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   ...
+   fun:daos_obj_update
+   fun:dfs_cont_set_owner
+}
+{
+   dfs_chmod
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   ...
+   fun:daos_obj_update
+   fun:dfs_chmod
+}
+{
+   dfs_cont_check
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   ...
+   fun:daos_obj_fetch
+   fun:fetch_mark_oids
+   fun:dfs_cont_check
+}
+{
+   daos_cont_list_attr
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   ...
+   fun:daos_cont_list_attr
+}
+{
+   action_obj
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   ...
+   fun:daos_obj_update
+   fun:action_obj
+}
+{
+   dfs_obj_set_chunk_size
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   ...
+   fun:dfs_obj_set_chunk_size
+   fun:fs_dfs_hdlr
+}
+{
+   cont_clone_hdlr
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   ...
+   fun:oit_list_filter
+   fun:cont_clone_hdlr
+}

@@ -546,7 +546,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	daos_prop_t               *prop;
 	struct daos_prop_entry    *entry;
 	struct daos_prop_co_roots *roots;
-	struct dfs_entry           root_dir;
+	struct dfs_entry           root_dir = {};
 	int                        amode, omode;
 	int                        rc;
 	int                        i;
