@@ -615,9 +615,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 * Tue Oct 01 2024 Phillip Henderson <phillip.henderson@intel.com> 2.6.1-3
 - Third release candidate for 2.6.1
 
-* Mon Sep 23 2024 Kris Jacque <kris.jacque@intel.com> 2.7.100-6
-- Bump min supported go version to 1.21
-
 * Fri Sep 20 2024 Phillip Henderson <phillip.henderson@intel.com> 2.6.1-2
 - Second release candidate for 2.6.1
 
