@@ -466,7 +466,7 @@ int
 dfs_connect(const char *pool, const char *sys, const char *cont, int flags, dfs_attr_t *attr,
 	    dfs_t **_dfs)
 {
-	return dfs_connect_int(pool, sys, cont, flags, attr, DAOS_EPOCH_MAX, NULL, _dfs)
+	return dfs_connect_int(pool, sys, cont, flags, attr, DAOS_EPOCH_MAX, NULL, _dfs);
 }
 
 int
@@ -612,7 +612,7 @@ dfs_mount_int(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epoc
 		dfs->amode = amode;
 	} else {
 		/** Mount a snapshot */
-		dfs->amode = O_RDONLY
+		dfs->amode = O_RDONLY;
 		rc = daos_tx_open_snap(coh, epoch, &dfs->th, NULL);
 		if (rc != 0)
 			D_GOTO(err_dfs, rc = daos_der2errno(rc));
@@ -756,7 +756,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 
 int
 dfs_mount_snap(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epoch,
-	       const char *name, dfs_t **dfs);
+	       const char *name, dfs_t **dfs)
 {
 	daos_epocht_t ep = 0;
 
