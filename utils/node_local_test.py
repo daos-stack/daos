@@ -47,17 +47,27 @@ import yaml
 class NLTestFail(Exception):
     """Used to indicate test failure"""
 
+    def __repr__(self):
+        return "Test failure object for NLT"
+
 
 class NLTestNoFi(NLTestFail):
     """Used to indicate Fault injection didn't work"""
 
 
-class NLTestNoFunction(NLTestFail):
+class NLTestIlZeroCall(NLTestFail):
     """Used to indicate a function did not log anything"""
 
     def __init__(self, function):
         super().__init__(self)
         self.function = function
+        self.command = []
+
+    def __str__(self):
+        if self.command:
+            cmd = ' '.join(self.command)
+            return f'Command "{cmd}" has zero stat count for {self.function}'
+        return f"Called program did not call {self.function}"
 
 
 class NLTestTimeout(NLTestFail):
@@ -1508,8 +1518,17 @@ class DFuse():
         would be freed in the _fini() function, and a lot of
         commands do not free all memory anyway.
         """
+        if self.caching:
+            check_fstat = False
+
+        # DAOS-16585: Disable fstat checking for non Red Hat systems which appear to use a different
+        # implementation of fstat which isn't yet intercepted.  This allows testing to progress in
+        # the absence of this feature.
+        if not os.path.exists("/etc/redhat-release"):
+            check_fstat = False
+
         my_env = get_base_env()
-        prefix = f'dnt_dfuse_il_{get_inc_id()}_'
+        prefix = f'dnt_ioil_{cmd[0]}_{get_inc_id()}_'
         with tempfile.NamedTemporaryFile(prefix=prefix, suffix='.log', delete=False) as log_file:
             log_name = log_file.name
         my_env['D_LOG_FILE'] = log_name
@@ -1518,21 +1537,17 @@ class DFuse():
         my_env['D_IL_REPORT'] = '2'
         if self.conf.args.client_debug:
             my_env['D_LOG_MASK'] = self.conf.args.client_debug
+
         ret = subprocess.run(cmd, env=my_env, check=False)
         print(f'Logged il to {log_name}')
         print(ret)
 
-        if self.caching:
-            check_fstat = False
-
         try:
             log_test(self.conf, log_name, check_read=check_read, check_write=check_write,
                      check_fstat=check_fstat)
-            assert ret.returncode == 0
-        except NLTestNoFunction as error:
-            command = ' '.join(cmd)
-            print(f"ERROR: command '{command}' did not log via {error.function}")
-            ret.returncode = 1
+        except NLTestIlZeroCall as error:
+            error.command = cmd
+            raise
 
         assert ret.returncode == 0, ret
         return ret
@@ -1556,7 +1571,7 @@ class DFuse():
             cmd.extend(['--inode', str(ino)])
         rc = run_daos_cmd(self.conf, cmd, use_json=True)
         print(rc)
-        assert rc.returncode == 0
+        assert rc.returncode == 0, rc
 
         if inodes:
             assert rc.json['response']['inodes'] == inodes, rc
@@ -2713,11 +2728,7 @@ class PosixTests():
         with open(fname, 'w'):
             pass
 
-        check_fstat = True
-        if self.dfuse.caching:
-            check_fstat = False
-
-        self.dfuse.il_cmd(['cat', fname], check_write=False, check_fstat=check_fstat)
+        self.dfuse.il_cmd(['cat', fname], check_write=False)
 
     @needs_dfuse_with_opt(caching=False)
     def test_il(self):
@@ -4655,7 +4666,6 @@ def run_tests(dfuse):
     assert_file_size(ofd, 21)
     print(os.fstat(ofd.fileno()))
     ofd.close()
-    dfuse.il_cmd(['cat', fname], check_write=False)
     ofd = os.open(fname, os.O_TRUNC)
     assert_file_size_fd(ofd, 0)
     os.close(ofd)
@@ -4832,20 +4842,21 @@ def log_test(conf,
         if not lto.fi_triggered:
             raise NLTestNoFi
 
-    functions = set()
-
     if check_read or check_write or check_fstat:
         for line in log_iter.new_iter():
-            functions.add(line.function)
+            if line.function != "ioil_show_summary":
+                continue
+            print(line.get_msg())
 
-    if check_read and 'dfuse_read' not in functions:
-        raise NLTestNoFunction('dfuse_read')
+            # These numbers match the D_INFO log line in the ioil_show_summary function.
+            if check_read and int(line.get_field(3)) == 0:
+                raise NLTestIlZeroCall('read')
 
-    if check_write and 'dfuse_write' not in functions:
-        raise NLTestNoFunction('dfuse_write')
+            if check_write and int(line.get_field(5)) == 0:
+                raise NLTestIlZeroCall('write')
 
-    if check_fstat and 'dfuse___fxstat' not in functions:
-        raise NLTestNoFunction('dfuse___fxstat')
+            if check_fstat and int(line.get_field(8)) == 0:
+                raise NLTestIlZeroCall('fstat')
 
     if conf.max_log_size and fstat.st_size > conf.max_log_size:
         message = (f'Max log size exceeded, {sizeof_fmt(fstat.st_size)} > '
