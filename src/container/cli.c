@@ -3386,7 +3386,7 @@ dc_cont_node_id2ptr(daos_handle_t coh, uint32_t node_id,
 	pool = dc_hdl2pool(dc->dc_pool_hdl);
 	D_ASSERT(pool != NULL);
 	D_RWLOCK_RDLOCK(&pool->dp_map_lock);
-	n = pool_map_find_nodes(pool->dp_map, node_id, dom);
+	n = pool_map_find_ranks(pool->dp_map, node_id, dom);
 	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 	dc_pool_put(pool);
 	dc_cont_put(dc);
@@ -3523,4 +3523,21 @@ dc_cont_hdl2props(daos_handle_t coh)
 	dc_cont_put(dc);
 
 	return result;
+}
+
+static int
+cont_mark_slave(struct d_hlink *link, void *arg)
+{
+	struct dc_cont *cont;
+
+	cont           = container_of(link, struct dc_cont, dc_hlink);
+	cont->dc_slave = 1;
+
+	return 0;
+}
+
+int
+dc_cont_mark_all_slave(void)
+{
+	return daos_hhash_traverse(DAOS_HTYPE_CO, cont_mark_slave, NULL);
 }

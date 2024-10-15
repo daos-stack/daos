@@ -17,7 +17,6 @@ server_config:
   system_ram_reserved: 1
 
 pool:
-  control_method: dmg
   scm_size: 1GB
 
 uuids: !mux

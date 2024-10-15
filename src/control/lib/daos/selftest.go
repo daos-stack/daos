@@ -76,7 +76,7 @@ type (
 var defaultLatencyPercentiles []uint64 = []uint64{50, 75, 90, 95, 99}
 
 const (
-	defaultSendSize     = 1 << 20 // 1MiB
+	defaultSendSize     = 1 << 10 // 1KiB
 	defaultReplySize    = defaultSendSize
 	defaultRepCount     = 10000
 	defaultMaxInflight  = 16
@@ -297,6 +297,8 @@ func (str *SelfTestResult) MarshalJSON() ([]byte, error) {
 		MasterEndpoint    string                      `json:"master_endpoint"`
 		TargetEndpoints   []string                    `json:"target_endpoints"`
 		EndpointLatencies map[string]*EndpointLatency `json:"target_latencies,omitempty"`
+		RPCThroughput     float64                     `json:"rpc_count_per_second"`
+		RPCBandwidth      float64                     `json:"rpc_bytes_per_second"`
 		*toJSON
 	}{
 		MasterEndpoint: str.MasterEndpoint.String(),
@@ -308,6 +310,8 @@ func (str *SelfTestResult) MarshalJSON() ([]byte, error) {
 			return eps
 		}(),
 		EndpointLatencies: epLatencies,
+		RPCThroughput:     str.RPCThroughput(),
+		RPCBandwidth:      str.RPCBandwidth(),
 		toJSON:            (*toJSON)(str),
 	})
 }
@@ -351,4 +355,15 @@ func (str *SelfTestResult) TargetRanks() (ranks []ranklist.Rank) {
 		ranks = append(ranks, ep.Rank)
 	}
 	return
+}
+
+// RPCThroughput calculates the number of RPCs per second.
+func (str *SelfTestResult) RPCThroughput() float64 {
+	return float64(str.MasterLatency.Succeeded()) / str.Duration.Seconds()
+}
+
+// RPCBandwidth calculates the bytes per second value based on the number of
+// RPCs sent for the duration of the test.
+func (str *SelfTestResult) RPCBandwidth() float64 {
+	return str.RPCThroughput() * (float64(str.SendSize) + float64(str.ReplySize))
 }

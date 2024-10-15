@@ -590,9 +590,8 @@ func (cmd *PoolReintegrateCmd) Execute(args []string) error {
 // PoolQueryCmd is the struct representing the command to query a DAOS pool.
 type PoolQueryCmd struct {
 	poolCmd
-	ShowEnabledRanks  bool `short:"e" long:"show-enabled" description:"Show engine unique identifiers (ranks) which are enabled"`
-	ShowDisabledRanks bool `short:"b" long:"show-disabled" description:"Show engine unique identifiers (ranks) which are disabled"`
-	HealthOnly        bool `short:"t" long:"health-only" description:"Only perform pool health related queries"`
+	ShowEnabledRanks bool `short:"e" long:"show-enabled" description:"Show engine unique identifiers (ranks) which are enabled"`
+	HealthOnly       bool `short:"t" long:"health-only" description:"Only perform pool health related queries"`
 }
 
 // Execute is run when PoolQueryCmd subcommand is activated
@@ -608,9 +607,7 @@ func (cmd *PoolQueryCmd) Execute(args []string) error {
 	if cmd.ShowEnabledRanks {
 		req.QueryMask.SetOptions(daos.PoolQueryOptionEnabledEngines)
 	}
-	if cmd.ShowDisabledRanks {
-		req.QueryMask.SetOptions(daos.PoolQueryOptionDisabledEngines)
-	}
+	req.QueryMask.SetOptions(daos.PoolQueryOptionDisabledEngines)
 
 	resp, err := control.PoolQuery(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if cmd.JSONOutputEnabled() {
