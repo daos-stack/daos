@@ -1,8 +1,14 @@
-daos (2.7.100-8) unstable; urgency=medium
+daos (2.7.100-9) unstable; urgency=medium
   [ Brian J. Murrell ]
   * Remove Build-Depends: for UCX as they were obsoleted as of e01970d
 
  -- Brian J. Murrell <brian.murrell@intel.com>  Tue, 15 Oct 2024 10:49:37 -0400
+
+daos (2.7.100-8) unstable; urgency=medium
+  [ Cedric Koch-Hofer]
+  * Update BR: argobots to 1.2
+
+ -- Cedric Koch-Hofer <cedric.koch-hofer@intel.com>  Mon, 07 Oct 2024 11:06:00 -0700
 
 daos (2.7.100-7) unstable; urgency=medium
   [ Tomasz Gromadzki ]
