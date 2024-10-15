@@ -1110,11 +1110,15 @@ dss_xstreams_init(void)
 
 	D_ASSERT(dss_tgt_nr >= 1);
 
+#if 0
 	if (!dss_helper_pool || dss_tgt_nr <= dss_tgt_offload_xs_nr ||
 	    dss_tgt_nr % dss_tgt_offload_xs_nr != 0 || dss_numa_nr > 1)
 		dss_bind_helper = false;
 	else
 		d_getenv_bool("DAOS_BIND_HELPER", &dss_bind_helper);
+#endif
+	if (dss_tgt_offload_xs_nr != 0)
+		dss_bind_helper = true;
 	D_INFO("Binding helper is %s: tgt_nr %d, helper_nr %d, numa_nr %d\n",
 	       dss_bind_helper ? "enabled" : "disabled",
 	       dss_tgt_nr, dss_tgt_offload_xs_nr, dss_numa_nr);
