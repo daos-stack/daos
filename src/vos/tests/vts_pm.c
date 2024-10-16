@@ -1068,7 +1068,7 @@ obj_punch_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
 
 	assert_rc_equal(rc, 0);
 
-	rc = vos_dtx_commit(coh, &xid, 1, NULL);
+	rc = vos_dtx_commit(coh, &xid, 1, false, NULL);
 	assert_rc_equal(rc, 1);
 }
 
@@ -1095,7 +1095,7 @@ cond_dkey_punch_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
 	assert_rc_equal(rc, expected_rc);
 
 	if (expected_rc == 0) {
-		rc = vos_dtx_commit(coh, &xid, 1, NULL);
+		rc = vos_dtx_commit(coh, &xid, 1, false, NULL);
 		assert_rc_equal(rc, 1);
 	}
 }
@@ -1128,7 +1128,7 @@ cond_akey_punch_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
 	assert_rc_equal(rc, expected_rc);
 
 	if (expected_rc == 0) {
-		rc = vos_dtx_commit(coh, &xid, 1, NULL);
+		rc = vos_dtx_commit(coh, &xid, 1, false, NULL);
 		assert_rc_equal(rc, 1);
 	}
 }
@@ -1240,7 +1240,7 @@ cond_updaten_op_(void **state, daos_handle_t coh, daos_unit_oid_t oid,
 	vts_dtx_end(dth);
 
 	if (expected_rc == 0) {
-		rc = vos_dtx_commit(coh, &xid, 1, NULL);
+		rc = vos_dtx_commit(coh, &xid, 1, false, NULL);
 		assert_rc_equal(rc, 1);
 	}
 
@@ -1726,7 +1726,7 @@ tx_end:
 	vts_dtx_end(dth);
 	assert_rc_equal(rc, 0);
 
-	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, NULL);
+	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, false, NULL);
 	assert_rc_equal(rc, 1);
 
 	/* Now read back original # of bytes */
@@ -1822,7 +1822,7 @@ tx_end:
 	vts_dtx_end(dth);
 	assert_rc_equal(rc, 0);
 
-	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, NULL);
+	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, false, NULL);
 	assert_rc_equal(rc, 1);
 
 	/* Now read back original # of bytes */
@@ -2303,7 +2303,7 @@ test_inprogress_parent_punch(void **state)
 	assert_rc_equal(rc, 0);
 	xid2 = dth2->dth_xid;
 	vts_dtx_end(dth2);
-	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid2, 1, NULL);
+	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid2, 1, false, NULL);
 	assert_rc_equal(rc, 1);
 
 	/** Now try to punch akey 2, should fail */
@@ -2314,7 +2314,7 @@ test_inprogress_parent_punch(void **state)
 	assert_rc_equal(rc, -DER_INPROGRESS);
 
 	/** Now commit the in progress punch and try again */
-	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid1, 1, NULL);
+	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid1, 1, false, NULL);
 	assert_rc_equal(rc, 1);
 
 	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, epoch, 0, 0, &dkey, 1,
@@ -2322,7 +2322,7 @@ test_inprogress_parent_punch(void **state)
 	assert_rc_equal(rc, 0);
 	xid2 = dth2->dth_xid;
 	vts_dtx_end(dth2);
-	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid2, 1, NULL);
+	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid2, 1, false, NULL);
 	assert_rc_equal(rc, 1);
 
 	memset(buf, 'x', sizeof(buf));
@@ -2583,9 +2583,8 @@ start_over:
 						writes++;
 					vts_dtx_end(req[cur_tx].dth);
 					if (req[old_tx].commit) {
-						rc = vos_dtx_commit(coh,
-							    &req[old_tx].xid, 1,
-							    NULL);
+						rc = vos_dtx_commit(coh, &req[old_tx].xid, 1,
+								    false, NULL);
 						assert_rc_equal(rc, 1);
 					}
 					memset(&req[old_tx], 0, sizeof(req[0]));
@@ -2604,7 +2603,7 @@ start_over:
 			memset(&req[old_tx], 0, sizeof(req[0]));
 			continue;
 		}
-		rc = vos_dtx_commit(coh, &req[old_tx].xid, 1, NULL);
+		rc = vos_dtx_commit(coh, &req[old_tx].xid, 1, false, NULL);
 		assert_rc_equal(rc, 1);
 		memset(&req[old_tx], 0, sizeof(req[0]));
 	}
@@ -2668,7 +2667,7 @@ execute_op(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 do_commit:
 	vts_dtx_end(req.dth);
 	if (commit && req.commit) {
-		rc = vos_dtx_commit(coh, &req.xid, 1, NULL);
+		rc = vos_dtx_commit(coh, &req.xid, 1, false, NULL);
 		assert_rc_equal(rc, 1);
 	}
 
@@ -2720,7 +2719,7 @@ uncommitted_parent(void **state)
 	execute_op(coh, oid, epoch, &dkey, &akey[1], &sgl, first, 5, true,
 		   TX_OP_UPDATE1);
 	/** Commit the punch */
-	rc = vos_dtx_commit(coh, &xid, 1, NULL);
+	rc = vos_dtx_commit(coh, &xid, 1, false, NULL);
 	assert_rc_equal(rc, 1);
 
 	memset(buf, 'x', sizeof(buf));
@@ -2789,7 +2788,7 @@ test_uncommitted_key(void **state)
 	assert_rc_equal(rc, 0);
 
 	/** Commit the update */
-	rc = vos_dtx_commit(coh, &xid, 1, NULL);
+	rc = vos_dtx_commit(coh, &xid, 1, false, NULL);
 	assert_rc_equal(rc, 1);
 
 	memset(buf, 'x', sizeof(buf));
@@ -2888,7 +2887,7 @@ test_multiple_key_conditionals_common(void **state, bool with_dtx)
 	assert_rc_equal(rc, 0);
 	if (with_dtx) {
 		vts_dtx_end(dth);
-		rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, NULL);
+		rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, false, NULL);
 		assert_rc_equal(rc, 1);
 	}
 
@@ -2916,7 +2915,7 @@ test_multiple_key_conditionals_common(void **state, bool with_dtx)
 	assert_rc_equal(rc, 0);
 	if (with_dtx) {
 		vts_dtx_end(dth);
-		rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, NULL);
+		rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, false, NULL);
 		assert_rc_equal(rc, 1);
 	}
 
@@ -2933,7 +2932,7 @@ test_multiple_key_conditionals_common(void **state, bool with_dtx)
 	assert_rc_equal(rc, 0);
 	if (with_dtx) {
 		vts_dtx_end(dth);
-		rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, NULL);
+		rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, false, NULL);
 		assert_rc_equal(rc, 1);
 	}
 
@@ -2976,7 +2975,7 @@ test_multiple_key_conditionals_common(void **state, bool with_dtx)
 	assert_rc_equal(rc, 0);
 	if (with_dtx) {
 		vts_dtx_end(dth);
-		rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, NULL);
+		rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, false, NULL);
 		assert_rc_equal(rc, 1);
 	}
 
