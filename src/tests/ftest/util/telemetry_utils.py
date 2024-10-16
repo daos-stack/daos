@@ -365,7 +365,9 @@ class TelemetryUtils():
         *_gen_stats_metrics("engine_net_swim_delay"),
         "engine_net_uri_lookup_timeout",
         "engine_net_uri_lookup_other",
-        "engine_net_uri_lookup_self"]
+        "engine_net_uri_lookup_self",
+        'engine_net_quota_exceeded',
+        'engine_net_waitq_depth']
     ENGINE_RANK_METRICS = [
         "engine_rank"]
     ENGINE_NVME_HEALTH_METRICS = [
