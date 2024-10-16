@@ -25,6 +25,7 @@ import pprint
 import pwd
 import random
 import re
+import resource
 import shutil
 import signal
 import stat
@@ -1247,6 +1248,11 @@ class ValgrindHelper():
         """Return the command line prefix"""
         if not self.use_valgrind:
             return []
+
+        # valgrind reduces the hard limit unless we bump the soft limit first
+        (soft, hard) = resource.getrlimit(resource.RLIMIT_NOFILE)
+        if (soft < hard):
+            resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
 
         if not self._logid:
             self._logid = get_inc_id()
