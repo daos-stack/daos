@@ -50,7 +50,7 @@ class TestScrubberEvictWithAggregation(TestWithScrubber, TestWithTelemetry):
         self.ior_cmd.namespace = "/run/ior_large_block_size/*"
         self.processes = self.params.get("np", self.ior_cmd.namespace, self.processes)
         self.ior_cmd.get_params(self)
-        self.run_ior_and_check_scruber_status(pool=self.pool, cont=self.container)
+        self.run_ior_and_check_scrubber_status(pool=self.pool, cont=self.container)
         # Enable the aggregation on the pool.
         self.pool.set_property("reclaim", "time")
         # We want both aggregation and scrubber tasks

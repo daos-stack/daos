@@ -1,5 +1,5 @@
 """
-(C) Copyright 2021-2023 Intel Corporation.
+(C) Copyright 2021-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -23,14 +23,9 @@ class TestWithScrubber(IorTestBase):
     def setUp(self):
         """Set up each test case."""
         super().setUp()
-        self.scrubber = ScrubberUtils(self.get_dmg_command(),
-                                      self.server_managers[0].hosts)
-        self.daos_cmd = self.get_daos_command()
-        self.dmg_cmd = self.get_dmg_command()
+        self.scrubber = ScrubberUtils(self.get_dmg_command(), self.server_managers[0].hosts)
         self.pool = None
         self.container = None
-        self.initial_metrics = {}
-        self.final_metrics = {}
 
     def verify_scrubber_metrics_value(self, initial_metrics, final_metrics):
         """Compare the initial metrics value to final value after IO data.
@@ -73,47 +68,40 @@ class TestWithScrubber(IorTestBase):
         # Testing scenario : Create a pool and container without properties
         # and update them at runtime.
         if pool_prop is None:
-            self.add_pool(create=False, connect=False)
-            self.pool.properties.value = pool_prop
-            self.pool.create()
-            self.pool.connect()
+            # Create without properties and set at runtime below
+            self.add_pool(properties=None)
         else:
+            # Create with properties
             self.add_pool()
-        self.add_container(pool=self.pool, create=False)
         if pool_prop is None:
             pool_prop = "scrub:timed,scrub_freq:1"
-        if cont_prop is None:
-            cont_prop = "cksum:crc16"
         for prop_val in pool_prop.split(","):
             if prop_val is not None:
                 value = prop_val.split(":")
                 self.pool.set_property(value[0], value[1])
-        self.container.properties.value = cont_prop
-        self.container.create()
-        values = "Pool : {} Container: {}".format(self.pool, self.container)
-        self.log.info(values)
+        if cont_prop is None:
+            cont_prop = "cksum:crc16"
+        self.add_container(pool=self.pool, properties=cont_prop)
 
-    def run_ior_and_check_scruber_status(self, pool, cont, fail_on_warning=True):
+    def run_ior_and_check_scrubber_status(self, pool, cont):
         """Run IOR and get scrubber metrics
 
         Args:
             pool (object): Pool object
             cont (object): Container object within the pool.
-            fail_on_warning (bool, optional): [description]. Defaults to True.
 
         Returns:
-            status(bool) : True (Scrubber working), False(Scrubber not working)
+            bool: True (Scrubber working), False(Scrubber not working)
         """
-        status = False
-        self.initial_metrics = self.scrubber.get_csum_total_metrics()
+        initial_metrics = self.scrubber.get_csum_total_metrics()
         self.pool = pool
         self.container = cont
         # Print the pool properties
-        result = self.dmg_cmd.pool_get_prop(self.pool.uuid, "scrub")
+        result = self.pool.get_prop("scrub")
         self.log.info("Pool Properties")
         self.log.info("===============")
         self.log.info(result)
-        result = self.daos_cmd.container_get_prop(self.pool.uuid, self.container.uuid)
+        result = self.container.get_prop()
         self.log.info("Container Properties")
         self.log.info("===============")
         self.log.info(result)
@@ -122,12 +110,11 @@ class TestWithScrubber(IorTestBase):
         process = threading.Thread(target=self.run_ior_with_pool,
                                    kwargs={"create_pool": True,
                                            "create_cont": False,
-                                           "fail_on_warning": fail_on_warning})
+                                           "fail_on_warning": True})
         # Launch the IOR thread
         process.start()
         # Wait for the thread to finish
         process.join()
-        self.final_metrics = self.scrubber.get_csum_total_metrics()
+        final_metrics = self.scrubber.get_csum_total_metrics()
         # Just make sure scrubber is working here.
-        status = self.verify_scrubber_metrics_value(self.initial_metrics, self.final_metrics)
-        return status
+        return self.verify_scrubber_metrics_value(initial_metrics, final_metrics)

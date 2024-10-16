@@ -117,8 +117,7 @@ class RbldNoCapacity(TestWithServers):
         # query the pool before rebuild
         self.log.info("....Pool query after filling, written_pload=%s", written_pload)
         self.pool.set_query_data()
-        self.log.info(
-            "..Pool %s query data: %s\n", self.pool.uuid, self.pool.query_data)
+        self.log.info("..%s query data: %s\n", str(self.pool), self.pool.query_data)
 
         # Start rebuild
         rank = 1

@@ -4,7 +4,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
-from daos_utils import DaosCommand
 
 
 class RbldWithIO(TestWithServers):
@@ -62,7 +61,7 @@ class RbldWithIO(TestWithServers):
         # Write data to the container for 30 seconds
         self.log.info(
             "Wrote %s bytes to container %s",
-            self.container.execute_io(30, rank, obj_class), self.container.uuid)
+            self.container.execute_io(30, rank, obj_class), str(self.container))
 
         # Determine how many objects will need to be rebuilt
         self.container.get_target_rank_lists(" prior to rebuild")
@@ -73,14 +72,12 @@ class RbldWithIO(TestWithServers):
         # Wait for recovery to start
         self.pool.wait_for_rebuild_to_start()
 
-        daos_cmd = DaosCommand(self.bin)
-        daos_cmd.container_set_prop(
-            pool=self.pool.uuid, cont=self.container.uuid, prop="status", value="healthy")
+        self.container.set_prop(prop="status", value="healthy")
 
         # Write data to the container for another 30 seconds
         self.log.info(
             "Wrote an additional %s bytes to container %s",
-            self.container.execute_io(30), self.container.uuid)
+            self.container.execute_io(30), str(self.container))
 
         # Wait for recovery to complete
         self.pool.wait_for_rebuild_to_end()
