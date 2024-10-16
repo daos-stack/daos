@@ -35,7 +35,7 @@ exp_vals:
   replicas: [0]
   query_mask: "disabled_engines,rebuild,space"
   scm:
-    total: 16000000000
+    total: 16000008192
   nvme:
     total: 32000000000
   rebuild:

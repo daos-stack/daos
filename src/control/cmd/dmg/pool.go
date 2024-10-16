@@ -205,21 +205,20 @@ func ratio2Percentage(log logging.Logger, scm, nvme float64) (p float64) {
 	return
 }
 
-// MemRatio can be supplied as two fractions that make up 1 or a single fraction less than 1. Supply
-// only the first fraction in request and if not set then use the default.
+// MemRatio can be supplied as two fractions that make up 1 or a single fraction less than 1.
+// Supply only the first fraction in request and if not set then use the default.
 func (cmd *PoolCreateCmd) setMemRatio(req *control.PoolCreateReq, defVal float32) error {
 	if cmd.MemRatio.IsSet() {
-		ratios := cmd.MemRatio.Ratios()
-		nrRatios := len(ratios)
-		if nrRatios != 2 && ratios[0] < 1 {
-			return errors.Errorf("md-on-ssd mode pool create unexpected mem-ratio "+
-				"want 2 values got %d", nrRatios)
+		f, err := ratiosToSingleFraction(cmd.MemRatio.Ratios())
+		if err != nil {
+			return errors.Wrap(err, "md-on-ssd mode pool create unexpected mem-ratio")
 		}
-		req.MemRatio = float32(ratios[0])
-	} else {
-		req.MemRatio = defVal
+
+		req.MemRatio = f
+		return nil
 	}
 
+	req.MemRatio = defVal
 	return nil
 }
 

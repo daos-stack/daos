@@ -163,8 +163,6 @@ func minPoolNvme(tgtCount, rankCount uint64) uint64 {
 
 // calculateCreateStorage determines the amount of SCM/NVMe storage to allocate per engine in order
 // to fulfill the create request, if those values are not already supplied as part of the request.
-//
-// TODO DAOS-16160: Update size calculations to handle MD-on-SSD mode.
 func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 	instances := svc.harness.Instances()
 	if len(instances) < 1 {

@@ -477,6 +477,27 @@ func TestPoolCommands(t *testing.T) {
 			errors.New("unexpected mem-ratio"),
 		},
 		{
+			"Create pool with manual memory file ratio; MD-on-SSD syntax; 100% tier",
+			fmt.Sprintf("pool create label --meta-size %s --data-size 1024G --mem-ratio 100",
+				testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					User:      eUsr.Username + "@",
+					UserGroup: eGrp.Name + "@",
+					Ranks:     []ranklist.Rank{},
+					TierBytes: []uint64{
+						uint64(testSize),
+						1024 * humanize.GByte,
+					},
+					MemRatio: 1,
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Create pool with manual ranks",
 			fmt.Sprintf("pool create label --size %s --ranks 1,2", testSizeStr),
 			strings.Join([]string{
