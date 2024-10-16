@@ -81,7 +81,7 @@ BuildRequires: libyaml-devel
 BuildRequires: libcmocka-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
-BuildRequires: go >= 1.17
+BuildRequires: go >= 1.21
 BuildRequires: pciutils-devel
 %if (0%{?rhel} >= 8)
 BuildRequires: numactl-devel
@@ -218,7 +218,7 @@ Requires: dbench
 Requires: lbzip2
 Requires: attr
 Requires: ior
-Requires: go >= 1.18
+Requires: go >= 1.21
 %if (0%{?suse_version} >= 1315)
 Requires: lua-lmod
 Requires: libcapstone-devel

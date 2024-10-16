@@ -25,7 +25,7 @@ Build-Depends: debhelper (>= 10),
                dpdk-dev (>= 21.11.2),
                libisal-crypto-dev,
                libcunit1-dev,
-               golang-go (>= 1.18),
+               golang-go (>= 2:1.21),
                libboost-dev,
                libspdk-dev (>= 22.01.2),
                libipmctl-dev,
@@ -117,7 +117,7 @@ Depends: python (>=3.8), python3, python-yaml, python3-yaml,
          ${shlibs:Depends}, ${misc:Depends},
          daos-client (= ${binary:Version}),
          daos-admin (= ${binary:Version}),
-         golang-go (>=1.18),
+         golang-go (>= 2:1.21),
          libcapstone-dev
 Description: The Distributed Asynchronous Object Storage (DAOS) is an open-source
  software-defined object store designed from the ground up for
