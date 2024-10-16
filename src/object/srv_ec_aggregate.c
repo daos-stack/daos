@@ -2667,8 +2667,13 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	struct ec_agg_param	 *ec_agg_param = agg_param->ap_data;
 	vos_iter_param_t	 iter_param = { 0 };
 	struct vos_iter_anchors  anchors = { 0 };
+	struct dtx_handle	*dth = NULL;
+	struct dtx_share_peer	*dsp;
+	struct dtx_id		 dti = { 0 };
+	struct dtx_epoch	 epoch = { 0 };
+	daos_unit_oid_t		 oid = { 0 };
+	int			 blocks = 0;
 	int			 rc = 0;
-	int                       blocks       = 0;
 
 	/*
 	 * Avoid calling into vos_aggregate() when aborting aggregation
@@ -2715,8 +2720,32 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	agg_reset_entry(&ec_agg_param->ap_agg_entry, NULL, NULL);
 
 retry:
+	epoch.oe_value = epr->epr_hi;
+	rc = dtx_begin(cont->sc_hdl, &dti, &epoch, 0, cont->sc_pool->spc_map_version, &oid,
+		       NULL, 0, 0, NULL, &dth);
+	if (rc != 0)
+		goto update_hae;
+
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors, agg_iterate_pre_cb,
-			 agg_iterate_post_cb, ec_agg_param, NULL);
+			 agg_iterate_post_cb, ec_agg_param, dth);
+	if (rc == -DER_INPROGRESS && !d_list_empty(&dth->dth_share_tbd_list)) {
+		uint64_t	now = daos_gettime_coarse();
+
+		/* Report warning per each 10 seconds to avoid log flood. */
+		if (now - cont->sc_ec_agg_busy_ts > 10) {
+			while ((dsp = d_list_pop_entry(&dth->dth_share_tbd_list,
+						       struct dtx_share_peer, dsp_link)) != NULL) {
+				D_WARN(DF_CONT ": EC aggregate hit non-committed DTX " DF_DTI "\n",
+				       DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+				       DP_DTI(&dsp->dsp_xid));
+				dtx_dsp_free(dsp);
+			}
+
+			cont->sc_ec_agg_busy_ts = now;
+		}
+	}
+
+	dtx_end(dth, cont, rc);
 
 	/* Post_cb may not being executed in some cases */
 	agg_clear_extents(&ec_agg_param->ap_agg_entry);
