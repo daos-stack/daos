@@ -84,6 +84,8 @@ const (
 	BadDuration = time.Duration(BadIntVal)
 
 	PathSep = filepath.Separator
+
+	maxFetchRetries = 1
 )
 
 type (
@@ -302,6 +304,16 @@ func (mb *metricBase) String() string {
 	}
 
 	return strings.TrimSpace(string(buf[:bytes.Index(buf, []byte{0})]))
+}
+
+func (mb *metricBase) fetchValWithRetry(fetchFn func() C.int) C.int {
+	var rc C.int
+	for i := 0; i < maxFetchRetries; i++ {
+		if rc = fetchFn(); rc == C.DER_SUCCESS {
+			return rc
+		}
+	}
+	return rc
 }
 
 func (sm *statsMetric) Min() uint64 {
