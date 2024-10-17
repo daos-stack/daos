@@ -61,6 +61,8 @@ struct mbrt {
 	struct bucket_locked *default_bucket; /* bucket for free chunks */
 	struct bucket_locked *buckets[MAX_ALLOCATION_CLASSES];
 	struct recycler      *recyclers[MAX_ALLOCATION_CLASSES];
+	bool                  laf[MAX_ALLOCATION_CLASSES]; /* last allocation failed? */
+	bool                  laf_updated;
 };
 
 enum mb_usage_hint {
@@ -162,6 +164,35 @@ heap_zinfo_init(struct palloc_heap *heap)
 	z->num_elems = heap->rt->nzones;
 	mo_wal_persist(&heap->p_ops, z, sizeof(*z));
 	heap_zinfo_set(heap, 0, 1, false);
+}
+
+static void
+mbrt_set_laf(struct mbrt *mb, int c_id)
+{
+	if (mb->mb_id == 0)
+		return;
+	D_ASSERT(c_id < MAX_ALLOCATION_CLASSES);
+
+	mb->laf[c_id]   = true;
+	mb->laf_updated = 1;
+}
+
+static void
+mbrt_clear_laf(struct mbrt *mb)
+{
+	if (mb->mb_id == 0)
+		return;
+	if (mb->laf_updated) {
+		memset(mb->laf, 0, MAX_ALLOCATION_CLASSES);
+		mb->laf_updated = 0;
+	}
+}
+
+static bool
+mbrt_is_laf(struct mbrt *mb, int c_id)
+{
+	D_ASSERT(c_id < MAX_ALLOCATION_CLASSES);
+	return mb->laf[c_id];
 }
 
 void
@@ -1198,6 +1229,9 @@ heap_ensure_run_bucket_filled(struct palloc_heap *heap, struct bucket *b,
 	D_ASSERT(mb != NULL);
 	ASSERTeq(aclass->type, CLASS_RUN);
 
+	if (mbrt_is_laf(mb, aclass->id))
+		return ENOMEM;
+
 	if (heap_detach_and_try_discard_run(heap, b) != 0)
 		return ENOMEM;
 
@@ -1224,6 +1258,8 @@ heap_ensure_run_bucket_filled(struct palloc_heap *heap, struct bucket *b,
 
 	if (heap_reuse_from_recycler(heap, b, units, 1) == 0)
 		goto out;
+
+	mbrt_set_laf(mb, aclass->id);
 	ret = ENOMEM;
 out:
 	return ret;
@@ -1260,6 +1296,7 @@ heap_memblock_on_free(struct palloc_heap *heap, const struct memory_block *m)
 			c->id);
 	} else {
 		recycler_inc_unaccounted(recycler, m);
+		mbrt_clear_laf(mb);
 	}
 }
 
@@ -1621,11 +1658,22 @@ heap_create_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
 	int                     rc;
 	struct zone            *z;
 	struct umem_pin_handle *pin_handle = NULL;
+	struct umem_store      *store      = heap->layout_info.store;
 
 	D_ASSERT(heap->rt->active_evictable_mb == NULL);
 
 	if (heap->rt->zones_exhausted_e >= heap->rt->nzones_e)
 		return -1;
+
+	heap->rt->mb_create_waiters++;
+	if (heap->rt->mb_create_waiters > 1) {
+		D_ASSERT(store->stor_ops->so_waitqueue_wait != NULL);
+		store->stor_ops->so_waitqueue_wait(heap->rt->mb_create_wq, false);
+		D_ASSERT((int)heap->rt->mb_create_waiters >= 0);
+		rc    = -1;
+		errno = EBUSY;
+		goto out;
+	}
 
 	for (zone_id = heap->rt->zones_unused_first; zone_id < heap->rt->nzones; zone_id++) {
 		if (!heap_mbrt_ismb_initialized(heap, zone_id))
@@ -1634,8 +1682,11 @@ heap_create_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
 
 	D_ASSERT(zone_id < heap->rt->nzones);
 	mb      = heap_mbrt_setup_mb(heap, zone_id);
-	if (mb == NULL)
-		return -1;
+	if (mb == NULL) {
+		ERR("Failed to setup mbrt for zone %u\n", zone_id);
+		rc = -1;
+		goto out;
+	}
 
 	heap->rt->zones_unused_first = zone_id + 1;
 	if (heap->rt->zones_exhausted < heap->rt->zones_unused_first)
@@ -1690,7 +1741,8 @@ heap_create_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
 	umem_cache_unpin(heap->layout_info.store, pin_handle);
 
 	*mb_id = zone_id;
-	return 0;
+	rc     = 0;
+	goto out;
 
 error:
 	if (pin_handle)
@@ -1700,7 +1752,16 @@ error:
 	heap->rt->zones_exhausted_e--;
 	if (heap->rt->zones_unused_first > zone_id)
 		heap->rt->zones_unused_first = zone_id;
-	return -1;
+	rc = -1;
+
+out:
+	heap->rt->mb_create_waiters--;
+	D_ASSERT((int)heap->rt->mb_create_waiters >= 0);
+	if (heap->rt->mb_create_waiters) {
+		D_ASSERT(store->stor_ops->so_waitqueue_wakeup != NULL);
+		store->stor_ops->so_waitqueue_wakeup(heap->rt->mb_create_wq, false);
+	}
+	return rc;
 }
 
 int
@@ -1708,17 +1769,11 @@ heap_get_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
 {
 	struct mbrt       *mb;
 	int                ret;
-	struct umem_store *store = heap->layout_info.store;
 
-	heap->rt->mb_create_waiters++;
-	if (heap->rt->mb_create_waiters > 1) {
-		D_ASSERT(store->stor_ops->so_waitqueue_wait != NULL);
-		store->stor_ops->so_waitqueue_wait(heap->rt->mb_create_wq, false);
-	}
-
+retry:
 	if (heap->rt->active_evictable_mb != NULL) {
 		*mb_id = heap->rt->active_evictable_mb->mb_id;
-		goto out;
+		return 0;
 	}
 
 	if (!TAILQ_EMPTY(&heap->rt->mb_u30)) {
@@ -1732,29 +1787,30 @@ heap_get_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
 		TAILQ_REMOVE(&heap->rt->mb_u0, mb, mb_link);
 	} else {
 		ret = heap_create_evictable_mb(heap, mb_id);
+
 		if (ret) {
+			if (errno == EBUSY)
+				goto retry;
 			mb = TAILQ_FIRST(&heap->rt->mb_u90);
 			if (mb == NULL) {
 				*mb_id = 0;
-				goto out;
+				return 0;
 			}
 			TAILQ_REMOVE(&heap->rt->mb_u90, mb, mb_link);
 		} else {
 			mb = heap_mbrt_get_mb(heap, *mb_id);
 			D_ASSERT(mb != NULL);
+			if (heap->rt->active_evictable_mb) {
+				TAILQ_INSERT_HEAD(&heap->rt->mb_u0, mb, mb_link);
+				mb->qptr = &heap->rt->mb_u0;
+				*mb_id   = heap->rt->active_evictable_mb->mb_id;
+				return 0;
+			}
 		}
 	}
 	heap->rt->active_evictable_mb = mb;
 	mb->qptr                      = NULL;
 	*mb_id                        = mb->mb_id;
-
-out:
-	D_ASSERT(heap->rt->mb_create_waiters > 0);
-	heap->rt->mb_create_waiters--;
-	if (heap->rt->mb_create_waiters) {
-		D_ASSERT(store->stor_ops->so_waitqueue_wakeup != NULL);
-		store->stor_ops->so_waitqueue_wakeup(heap->rt->mb_create_wq, false);
-	}
 	return 0;
 }
 
