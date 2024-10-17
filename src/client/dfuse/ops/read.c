@@ -413,6 +413,7 @@ found:
 
 	if (++cd->entered < 8) {
 		/* Put on front of list for efficient searching */
+		DFUSE_TRA_DEBUG(oh, "at front of list");
 		d_list_add(&cd->list, &cc->entries);
 	}
 
@@ -423,7 +424,7 @@ found:
 		rcb = chunk_fetch(req, oh, cd, slot);
 	} else {
 		struct dfuse_event *ev = NULL;
-		bool                sd = true;
+		int                 exited;
 
 		/* Now check if this read request is complete or not yet, if it isn't then just
 		 * save req in the right slot however if it is then reply here.  After the call to
@@ -435,16 +436,21 @@ found:
 		D_MUTEX_LOCK(&rc_lock);
 		if (cd->complete) {
 			ev = cd->ev;
+			DFUSE_TRA_DEBUG(oh, "Checking for done %d", cd->slot_done[slot]);
+
 			if (!cd->slot_done[slot]) {
 				/* DAOS-16686: Reply to each slot more than once if requested, but
 				 * only track the first reply for knowing when to free the buffer.
 				 */
 				cd->slot_done[slot] = true;
-				sd                  = false;
+				atomic_fetch_sub_relaxed(&cd->exited, 1);
 				DFUSE_TRA_WARNING(oh, "concurrent read, met");
 			}
 		} else {
-			if (cd->reqs[slot] != 0) {
+			if (cd->reqs[slot] == 0) {
+				cd->reqs[slot] = req;
+				cd->ohs[slot]  = oh;
+			} else {
 				/* Handle concurrent reads of the same slot, this wasn't expected
 				 * but can happen so for now reject it at this level and have read
 				 * perform a separate I/O for this slot.
@@ -452,9 +458,6 @@ found:
 				 */
 				rcb = false;
 				DFUSE_TRA_WARNING(oh, "concurrent read, un-met");
-			} else {
-				cd->reqs[slot] = req;
-				cd->ohs[slot]  = oh;
 			}
 		}
 		D_MUTEX_UNLOCK(&rc_lock);
@@ -470,7 +473,9 @@ found:
 						position + K128 - 1);
 				DFUSE_REPLY_BUFQ(oh, req, ev->de_iov.iov_buf + (slot * K128), K128);
 			}
-			if (sd && atomic_fetch_add_relaxed(&cd->exited, 1) == 7) {
+			exited = atomic_fetch_add_relaxed(&cd->exited, 1);
+			DFUSE_TRA_DEBUG(oh, "Checking for done, exited %d", exited);
+			if (exited == 7) {
 				d_slab_release(cd->eqt->de_read_slab, cd->ev);
 				D_FREE(cd);
 			}
