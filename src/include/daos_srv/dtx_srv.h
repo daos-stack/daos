@@ -318,8 +318,8 @@ int
 dtx_cos_get_piggyback(struct ds_cont_child *cont, daos_unit_oid_t *oid, uint64_t dkey_hash,
 		      int max, struct dtx_id **dtis);
 void
-dtx_cos_put_piggyback(struct ds_cont_child *cont, struct dtx_id *xid,
-		      daos_unit_oid_t *oid, uint64_t dkey_hash);
+dtx_cos_put_piggyback(struct ds_cont_child *cont, daos_unit_oid_t *oid, uint64_t dkey_hash,
+		      struct dtx_id xid[], uint32_t count, bool rm);
 int
 dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 		    dtx_agg_cb_t agg_cb, int allow_failure, void *func_arg);
@@ -338,14 +338,15 @@ int dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 		 daos_epoch_t epoch);
 
 int dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
-	       struct dtx_cos_key *dcks, int count);
+	       struct dtx_cos_key *dcks, int count, bool has_cos);
 
 int dtx_abort(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch);
 
 int dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont);
 
 int
-dtx_coll_commit(struct ds_cont_child *cont, struct dtx_coll_entry *dce, struct dtx_cos_key *dck);
+dtx_coll_commit(struct ds_cont_child *cont, struct dtx_coll_entry *dce, struct dtx_cos_key *dck,
+		bool has_cos);
 
 int
 dtx_coll_abort(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoch_t epoch);
