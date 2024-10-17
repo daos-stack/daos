@@ -64,6 +64,7 @@ runs:
                         --build-arg JENKINS_URL=${{ inputs.jenkins_url }}
                         --tag mock-build
                         utils/rpms
+      shell: bash
     - name: Build RPM
       id: build-rpm
       continue-on-error: true
@@ -78,7 +79,7 @@ runs:
                       -e DAOS_FULLNAME="${{ inputs.daos_full_name }}"
                       -e DAOS_EMAIL="${{ inputs.daos_email }}"
                       -e DISTRO_VERSION="${{ steps.build-vars.outputs.distro_version }}"
-                      -e STAGE_NAME="Build RPM on ${{ steps.build-vars.outputs.build name }}"
+                      -e STAGE_NAME="Build RPM on ${{ steps.build-vars.outputs.build_name }}"
                       -e CHROOT_NAME="${{ steps.build-vars.outputs.chroot_name}}"
                       -e ARTIFACTORY_URL="${{ inputs.artifactory_url}}"
                       -e REPO_FILE_URL="${{ inputs.repo_file_url }}"
@@ -86,7 +87,7 @@ runs:
                       -e TARGET="${{ inputs.distro }}"
                       -e COVFN_DISABLED="${{ inputs.covfn_disabled }}"
                       mock-build ci/rpm/build.sh
-      # yamllint enable rule:line-length
+      shell: bash
     - name: Build RPM failure log
       id: build-rpm-fail-log
       continue-on-error: true
@@ -108,17 +109,20 @@ runs:
             rm -f ${REPO_PATH}last{,Successful}Build;
             ln -s ${{ github.run_number }} ${REPO_PATH}lastBuild;
             ln -s ${{ github.run_number }} ${REPO_PATH}lastSuccessfulBuild
+      shell: bash
     - name: Create repo
       id: create-repo
       if: steps.build-rpm.outcome == 'success'
       continue-on-error: true
       run: CHROOT_NAME=$CHROOT_NAME ci/rpm/create_repo.sh
+      shell: bash
     - name: Test repo
       id: test-repo
       if: steps.create-repo.outcome == 'success'
       continue-on-error: true
       run: . ci/gha_functions.sh;
             dnf --disablerepo=\* --repofrompath testrepo,file://${REPO_FILE} repoquery -a
+      shell: bash
       env:
         # yamllint disable-line rule:line-length
         REPO_FILE: ${{ inputs.repo_path }}${{ github.run_number }}/artifact/artifacts/${{ inputs.distro }}
@@ -126,6 +130,7 @@ runs:
       if: steps.test-repo.outcome != 'success'
       run: rm -f ${{ inputs.repo_path }}lastSuccessfulBuild;
             exit 1
+      shell: bash
     - name: Publish RPMs
       uses: actions/upload-artifact@v4
       with:
