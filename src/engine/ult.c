@@ -405,8 +405,13 @@ sched_ult2xs(int xs_type, int tgt_id)
 {
 	uint32_t	xs_id;
 
-	if (xs_type == DSS_XS_VOS || xs_type == DSS_XS_OFFLOAD || xs_type == DSS_XS_IOFW)
-		D_ASSERT(tgt_id >= 0 && tgt_id < dss_tgt_nr);
+	if (xs_type == DSS_XS_OFFLOAD || xs_type == DSS_XS_IOFW) {
+		struct dss_xstream	*dx = dss_current_xstream();
+
+		if (dx->dx_helper_id > 0)
+			return dx->dx_helper_id;
+	}
+
 	switch (xs_type) {
 	case DSS_XS_SELF:
 		return DSS_XS_SELF;
@@ -476,6 +481,7 @@ sched_ult2xs(int xs_type, int tgt_id)
 			xs_id = (DSS_MAIN_XS_ID(tgt_id) + 1) % dss_tgt_nr;
 		break;
 	case DSS_XS_VOS:
+		D_ASSERT(tgt_id >= 0 && tgt_id < dss_tgt_nr);
 		xs_id = DSS_MAIN_XS_ID(tgt_id);
 		break;
 	default:
@@ -717,11 +723,12 @@ dss_chore_ult(void *arg)
  *
  * \param[in]	chore	address of the embedded chore object
  * \param[in]	func	function to be executed via \a chore
+ * \param[in]	iofw	it is for IO forward or not
  *
  * \retval	-DER_CANCEL	chore queue stopping
  */
 int
-dss_chore_delegate(struct dss_chore *chore, dss_chore_func_t func)
+dss_chore_delegate(struct dss_chore *chore, dss_chore_func_t func, bool iofw)
 {
 	struct dss_module_info *info = dss_get_module_info();
 	int                     xs_id;
@@ -747,17 +754,17 @@ dss_chore_delegate(struct dss_chore *chore, dss_chore_func_t func)
 	D_ASSERT(xs_id != -DER_INVAL);
 	dx = dss_get_xstream(xs_id);
 	D_ASSERT(dx != NULL);
-	queue = &dx->dx_chore_queue;
+	queue = iofw ? &dx->dx_chore_iofw_queue : &dx->dx_chore_misc_queue;
 	D_ASSERT(queue != NULL);
 
-	ABT_mutex_lock(queue->chq_mutex);
+	ABT_mutex_spinlock(queue->chq_mutex);
 	if (queue->chq_stop) {
 		ABT_mutex_unlock(queue->chq_mutex);
 		return -DER_CANCELED;
 	}
 	d_list_add_tail(&chore->cho_link, &queue->chq_list);
-	ABT_cond_broadcast(queue->chq_cond);
 	ABT_mutex_unlock(queue->chq_mutex);
+	ABT_cond_broadcast(queue->chq_cond);
 
 	D_DEBUG(DB_TRACE, "%p: tgt_id=%d -> xs_id=%d dx.tgt_id=%d\n", chore, info->dmi_tgt_id,
 		xs_id, dx->dx_tgt_id);
@@ -848,11 +855,59 @@ dss_chore_queue_ult(void *arg)
 	D_DEBUG(DB_TRACE, "end\n");
 }
 
-int
-dss_chore_queue_init(struct dss_xstream *dx)
+static int
+chore_queue_start_one(struct dss_xstream *dx, struct dss_chore_queue *queue)
 {
-	struct dss_chore_queue *queue = &dx->dx_chore_queue;
-	int                     rc;
+	int	rc;
+
+	rc = daos_abt_thread_create(dx->dx_sp, dss_free_stack_cb, dx->dx_pools[DSS_POOL_GENERIC],
+				    dss_chore_queue_ult, queue, ABT_THREAD_ATTR_NULL,
+				    &queue->chq_ult);
+	if (rc != 0) {
+		D_ERROR("failed to create chore queue ULT: %d\n", rc);
+		rc = dss_abterr2der(rc);
+	}
+
+	return rc;
+}
+
+static void
+chore_queue_stop_one(struct dss_chore_queue *queue)
+{
+	ABT_mutex_spinlock(queue->chq_mutex);
+	queue->chq_stop = true;
+	ABT_mutex_unlock(queue->chq_mutex);
+	ABT_cond_broadcast(queue->chq_cond);
+	ABT_thread_free(&queue->chq_ult);
+}
+
+int
+dss_chore_queue_start(struct dss_xstream *dx)
+{
+	int	rc;
+
+	rc = chore_queue_start_one(dx, &dx->dx_chore_iofw_queue);
+	if (rc != 0)
+		return rc;
+
+	rc = chore_queue_start_one(dx, &dx->dx_chore_misc_queue);
+	if (rc != 0)
+		chore_queue_stop_one(&dx->dx_chore_iofw_queue);
+
+	return rc;
+}
+
+void
+dss_chore_queue_stop(struct dss_xstream *dx)
+{
+	chore_queue_stop_one(&dx->dx_chore_iofw_queue);
+	chore_queue_stop_one(&dx->dx_chore_misc_queue);
+}
+
+static int
+chore_queue_init_one(struct dss_chore_queue *queue)
+{
+	int	rc;
 
 	D_INIT_LIST_HEAD(&queue->chq_list);
 	queue->chq_stop = false;
@@ -873,40 +928,32 @@ dss_chore_queue_init(struct dss_xstream *dx)
 	return 0;
 }
 
-int
-dss_chore_queue_start(struct dss_xstream *dx)
+static void
+chore_queue_fini_one(struct dss_chore_queue *queue)
 {
-	struct dss_chore_queue *queue = &dx->dx_chore_queue;
-	int                     rc;
-
-	rc = daos_abt_thread_create(dx->dx_sp, dss_free_stack_cb, dx->dx_pools[DSS_POOL_GENERIC],
-				    dss_chore_queue_ult, queue, ABT_THREAD_ATTR_NULL,
-				    &queue->chq_ult);
-	if (rc != 0) {
-		D_ERROR("failed to create chore queue ULT: %d\n", rc);
-		return dss_abterr2der(rc);
-	}
-
-	return 0;
+	ABT_cond_free(&queue->chq_cond);
+	ABT_mutex_free(&queue->chq_mutex);
 }
 
-void
-dss_chore_queue_stop(struct dss_xstream *dx)
+int
+dss_chore_queue_init(struct dss_xstream *dx)
 {
-	struct dss_chore_queue *queue = &dx->dx_chore_queue;
+	int	rc;
 
-	ABT_mutex_lock(queue->chq_mutex);
-	queue->chq_stop = true;
-	ABT_cond_broadcast(queue->chq_cond);
-	ABT_mutex_unlock(queue->chq_mutex);
-	ABT_thread_free(&queue->chq_ult);
+	rc = chore_queue_init_one(&dx->dx_chore_iofw_queue);
+	if (rc != 0)
+		return rc;
+
+	rc = chore_queue_init_one(&dx->dx_chore_misc_queue);
+	if (rc != 0)
+		chore_queue_fini_one(&dx->dx_chore_iofw_queue);
+
+	return rc;
 }
 
 void
 dss_chore_queue_fini(struct dss_xstream *dx)
 {
-	struct dss_chore_queue *queue = &dx->dx_chore_queue;
-
-	ABT_cond_free(&queue->chq_cond);
-	ABT_mutex_free(&queue->chq_mutex);
+	chore_queue_fini_one(&dx->dx_chore_iofw_queue);
+	chore_queue_fini_one(&dx->dx_chore_misc_queue);
 }
