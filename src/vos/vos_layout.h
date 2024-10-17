@@ -80,6 +80,11 @@ enum vos_gc_type {
 	GC_MAX,
 };
 
+struct vos_gc_bkt_df {
+	/* GC bins categorized by bucket number */
+	struct btr_root		gd_bins_root;
+};
+
 #define POOL_DF_MAGIC				0x5ca1ab1e
 
 /** Lowest supported durable format version */
@@ -110,6 +115,16 @@ enum vos_gc_type {
 /** 2.8 features */
 #define VOS_POOL_FEAT_2_8			(VOS_POOL_FEAT_GANG_SV)
 
+/* VOS pool durable format extension */
+struct vos_pool_ext_df {
+	/* Extension for GC bucket */
+	struct vos_gc_bkt_df	ped_gc_bkt;
+	/* Paddings for other potential new feature */
+	uint64_t		ped_paddings[54];
+	/* Reserved for future extension */
+	uint64_t		ped_reserve;
+};
+
 /**
  * Durable format for VOS pool
  */
@@ -127,8 +142,8 @@ struct vos_pool_df {
 	 * a new format, containers with old format can be attached at here.
 	 */
 	uint64_t				pd_reserv_upgrade;
-	/** Reserved for future usage */
-	uint64_t				pd_reserv;
+	/** Pool durable format extension */
+	umem_off_t				pd_ext;
 	/** Unique PoolID for each VOS pool assigned on creation */
 	uuid_t					pd_id;
 	/** Total space in bytes on SCM */
@@ -252,6 +267,16 @@ enum vos_io_stream {
 	VOS_IOS_CNT
 };
 
+/* VOS container durable format extension */
+struct vos_cont_ext_df {
+	/* GC bucket extension */
+	struct vos_gc_bkt_df		ced_gc_bkt;
+	/* Reserved for potential new features */
+	uint64_t			ced_paddings[38];
+	/* Reserved for future extension */
+	uint64_t			ced_reserve;
+};
+
 /* VOS Container Value */
 struct vos_cont_df {
 	uuid_t				cd_id;
@@ -263,8 +288,8 @@ struct vos_cont_df {
 	struct btr_root			cd_obj_root;
 	/** reserved for placement algorithm upgrade */
 	uint64_t			cd_reserv_upgrade;
-	/** reserved for future usage */
-	uint64_t			cd_reserv;
+	/** Container durable format extension */
+	umem_off_t			cd_ext;
 	/** The active DTXs blob head. */
 	umem_off_t			cd_dtx_active_head;
 	/** The active DTXs blob tail. */
