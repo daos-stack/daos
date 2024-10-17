@@ -1251,7 +1251,7 @@ class ValgrindHelper():
 
         # valgrind reduces the hard limit unless we bump the soft limit first
         (soft, hard) = resource.getrlimit(resource.RLIMIT_NOFILE)
-        if (soft < hard):
+        if soft < hard:
             resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
 
         if not self._logid:
