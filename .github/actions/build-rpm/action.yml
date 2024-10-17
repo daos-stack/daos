@@ -94,6 +94,7 @@ runs:
       if: steps.build-rpm.outcome != 'success'
       run: cat mock_result/root.log;
             cat mock_result/build.log
+      shell: bash
     - name: Save RPM build logs
       continue-on-error: true
       uses: actions/upload-artifact@v4
