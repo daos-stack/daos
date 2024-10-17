@@ -267,6 +267,11 @@ struct vos_pool_metrics {
 	/* TODO: add more metrics for VOS */
 };
 
+struct vos_gc_info {
+	daos_handle_t	gi_bins_btr;
+	uint32_t	gi_last_pinned;
+};
+
 /**
  * VOS pool (DRAM)
  */
@@ -326,6 +331,8 @@ struct vos_pool {
 	uint32_t		 vp_data_thresh;
 	/** Space (in percentage) reserved for rebuild */
 	unsigned int		 vp_space_rb;
+	/* GC runtime for pool */
+	struct vos_gc_info	 vp_gc_info;
 };
 
 /**
@@ -379,7 +386,8 @@ struct vos_container {
 	 * * transaction with older epoch must have been committed.
 	 */
 	daos_epoch_t		vc_solo_dtx_epoch;
-
+	/* GC runtime for container */
+	struct vos_gc_info	vc_gc_info;
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
 				vc_in_discard:1,
@@ -1387,6 +1395,14 @@ int
 vos_gc_pool_tight(daos_handle_t poh, int *credits);
 void
 gc_reserve_space(daos_size_t *rsrvd);
+int
+gc_open_pool(struct vos_pool *pool);
+void
+gc_close_pool(struct vos_pool *pool);
+int
+gc_open_cont(struct vos_container *cont);
+void
+gc_close_cont(struct vos_container *cont);
 
 /**
  * If the object is fully punched, bypass normal aggregation and move it to container
