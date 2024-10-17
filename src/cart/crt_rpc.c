@@ -1453,9 +1453,10 @@ out:
 int
 crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 {
-	struct crt_rpc_priv	*rpc_priv = NULL;
-	bool			 locked = false;
-	int			 rc = 0;
+	struct timespec      ts_now;
+	struct crt_rpc_priv *rpc_priv = NULL;
+	bool                 locked   = false;
+	int                  rc       = 0;
 
 	if (req == NULL) {
 		D_ERROR("invalid parameter (NULL req).\n");
@@ -1503,6 +1504,7 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 
 	crt_rpc_lock(rpc_priv);
 	locked = true;
+	d_gettime_coarse(&ts_now);
 
 	rc = crt_context_req_track(rpc_priv);
 	if (rc == CRT_REQ_TRACK_IN_INFLIGHQ) {
@@ -1614,9 +1616,9 @@ crt_req_abort(crt_rpc_t *req)
 	 * crt_progress instead of directly aborting the RPC here.
 	 */
 	D_MUTEX_LOCK(&ctx->cc_mutex);
-	if (rpc_priv->crp_timeout_ts > 0) {
+	if (!d_timenull(&rpc_priv->crp_deadline)) {
 		crt_req_timeout_untrack(rpc_priv);
-		rpc_priv->crp_timeout_ts = 0;
+		rpc_priv->crp_deadline = d_time_ms(0);
 		crt_req_timeout_track(rpc_priv);
 	}
 	D_MUTEX_UNLOCK(&ctx->cc_mutex);
@@ -1892,7 +1894,7 @@ timeout_bp_node_cmp(struct d_binheap_node *a, struct d_binheap_node *b)
 	rpc_priv_a = container_of(a, struct crt_rpc_priv, crp_timeout_bp_node);
 	rpc_priv_b = container_of(b, struct crt_rpc_priv, crp_timeout_bp_node);
 
-	return rpc_priv_a->crp_timeout_ts < rpc_priv_b->crp_timeout_ts;
+	return d_timeless(&rpc_priv_a->crp_deadline, &rpc_priv_b->crp_deadline);
 }
 
 struct d_binheap_ops crt_timeout_bh_ops = {

@@ -60,6 +60,7 @@ typedef struct crt_init_options {
 			/** whether or not to use expected sizes */
 			cio_use_expected_size:1,
 			cio_use_unexpected_size:1;
+
 	/** overrides the value of the environment variable CRT_CTX_NUM */
 	int		cio_ctx_max_num;
 
@@ -90,9 +91,17 @@ typedef struct crt_init_options {
 	char		*cio_port;
 
 	/** If set, used as the authentication key instead of D_PROVIDER_AUTH_KEY env */
-	char		*cio_auth_key;
-} crt_init_options_t;
+	char            *cio_auth_key;
 
+	/** force busy wait (testing only, not in production) */
+	bool             cio_progress_busy;
+
+	/** use legacy progress method */
+	bool             cio_progress_legacy;
+
+	/** use single thread to access context */
+	bool             cio_thread_mode_single;
+} crt_init_options_t;
 
 typedef int		crt_status_t;
 /**

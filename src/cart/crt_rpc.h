@@ -143,7 +143,7 @@ struct crt_rpc_priv {
 	/* the timeout in seconds set by user */
 	uint32_t		crp_timeout_sec;
 	/* time stamp to be timeout, the key of timeout binheap */
-	uint64_t		crp_timeout_ts;
+	struct timespec          crp_deadline;
 	crt_cb_t		crp_complete_cb;
 	void			*crp_arg; /* argument for crp_complete_cb */
 	struct crt_ep_inflight	*crp_epi; /* point back to in-flight ep */
@@ -682,14 +682,16 @@ crt_req_timedout(struct crt_rpc_priv *rpc_priv)
 }
 
 static inline void
-crt_set_timeout(struct crt_rpc_priv *rpc_priv)
+crt_set_timeout(struct crt_rpc_priv *rpc_priv, const struct timespec *now)
 {
 	D_ASSERT(rpc_priv != NULL);
+	D_ASSERT(now != NULL);
 
 	if (rpc_priv->crp_timeout_sec == 0)
 		rpc_priv->crp_timeout_sec = crt_gdata.cg_timeout;
 
-	rpc_priv->crp_timeout_ts = d_timeus_secdiff(rpc_priv->crp_timeout_sec);
+	rpc_priv->crp_deadline = *now;
+	rpc_priv->crp_deadline.tv_sec += rpc_priv->crp_timeout_sec;
 }
 
 /*  decode cart opcode into module and rpc opcode strings */

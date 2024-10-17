@@ -49,17 +49,17 @@ test_time(void **state)
 
 	t2.tv_sec = 2;
 	t2.tv_nsec = 2 + NSEC_PER_USEC;
-	assert(d_time2us(d_timediff(t1, t2)) - 1.0 < EPSILON);
-	assert(d_time2us(d_timediff(t2, t1)) + 1.0 < EPSILON);
+	assert(d_time2us(d_timediff(&t1, &t2)) - 1.0 < EPSILON);
+	assert(d_time2us(d_timediff(&t2, &t1)) + 1.0 < EPSILON);
 
 	t2.tv_nsec = 2 + NSEC_PER_MSEC;
-	assert(d_time2ms(d_timediff(t1, t2)) - 1.0 < EPSILON);
-	assert(d_time2ms(d_timediff(t2, t1)) + 1.0 < EPSILON);
+	assert(d_time2ms(d_timediff(&t1, &t2)) - 1.0 < EPSILON);
+	assert(d_time2ms(d_timediff(&t2, &t1)) + 1.0 < EPSILON);
 
 	t2.tv_sec = 3;
 	t2.tv_nsec = 2;
-	assert(d_time2s(d_timediff(t1, t2)) - 1.0 < EPSILON);
-	assert(d_time2s(d_timediff(t2, t1)) + 1.0 < EPSILON);
+	assert(d_time2s(d_timediff(&t1, &t2)) - 1.0 < EPSILON);
+	assert(d_time2s(d_timediff(&t2, &t1)) + 1.0 < EPSILON);
 
 	t2.tv_sec = 2;
 	t2.tv_nsec = 2;
