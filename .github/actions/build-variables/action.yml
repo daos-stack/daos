@@ -111,3 +111,4 @@ runs:
           # echo -n "DAOS_STACK_${DISTRO_NAME_UPPER}_" >> $GITHUB_ENV
           # echo "${PROV_DISTRO_VERSION_MAJOR:-$DISTRO_VERSION_MAJOR}_LOCAL_REPO=not_used" >> \
           #      $GITHUB_ENV
+      shell: bash
