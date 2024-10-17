@@ -306,7 +306,7 @@ dtx_coll_local_one(void *args)
 
 	switch (opc) {
 	case DTX_COLL_COMMIT:
-		rc = vos_dtx_commit(cont->sc_hdl, &dcla->dcla_xid, 1, NULL);
+		rc = vos_dtx_commit(cont->sc_hdl, &dcla->dcla_xid, 1, false, NULL);
 		break;
 	case DTX_COLL_ABORT:
 		rc = vos_dtx_abort(cont->sc_hdl, &dcla->dcla_xid, dcla->dcla_epoch);
