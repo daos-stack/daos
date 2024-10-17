@@ -438,13 +438,14 @@ found:
 			ev = cd->ev;
 			DFUSE_TRA_DEBUG(oh, "Checking for done %d", cd->slot_done[slot]);
 
-			if (!cd->slot_done[slot]) {
+			if (cd->slot_done[slot]) {
 				/* DAOS-16686: Reply to each slot more than once if requested, but
 				 * only track the first reply for knowing when to free the buffer.
 				 */
-				cd->slot_done[slot] = true;
 				atomic_fetch_sub_relaxed(&cd->exited, 1);
 				DFUSE_TRA_WARNING(oh, "concurrent read, met");
+			} else {
+				cd->slot_done[slot] = true;
 			}
 		} else {
 			if (cd->reqs[slot] == 0) {
