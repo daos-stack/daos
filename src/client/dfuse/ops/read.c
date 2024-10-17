@@ -66,7 +66,7 @@ dfuse_cb_read_complete(struct dfuse_event *ev)
 	D_MUTEX_UNLOCK(&rc_lock);
 
 	d_list_for_each_entry(evs, &ev->de_read_slaves, de_read_list) {
-		DFUSE_TRA_WARNING(ev->de_oh, "concurrent network read %p", evs->de_oh);
+		DFUSE_TRA_DEBUG(ev->de_oh, "concurrent network read %p", evs->de_oh);
 		evs->de_len         = min(ev->de_len, evs->de_req_len);
 		evs->de_ev.ev_error = ev->de_ev.ev_error;
 		cb_read_helper(evs, ev->de_iov.iov_buf);
@@ -174,32 +174,28 @@ pick_eqt(struct dfuse_info *dfuse_info)
 
 #define CHUNK_SIZE (1024 * 1024)
 
+#define MAX_REQ_COUNT 64
+
 struct read_chunk_data {
 	struct dfuse_event   *ev;
-	fuse_req_t            reqs[8];
-	struct dfuse_obj_hdl *ohs[8];
 	bool                  slot_done[8];
 	d_list_t              list;
 	uint64_t              bucket;
 	struct dfuse_eq      *eqt;
 	int                   rc;
 	int                   entered;
-	ATOMIC int            exited;
-	bool                  exiting;
 	bool                  complete;
+	int                   idx;
+	struct {
+		int                   slot;
+		fuse_req_t            req;
+		struct dfuse_obj_hdl *oh;
+	} reqs[MAX_REQ_COUNT];
 };
 
 struct read_chunk_core {
 	d_list_t entries;
 };
-
-static void
-chunk_free(struct read_chunk_data *cd)
-{
-	d_list_del(&cd->list);
-	d_slab_release(cd->eqt->de_read_slab, cd->ev);
-	D_FREE(cd);
-}
 
 /* Called when the last open file handle on a inode is closed.  This needs to free everything which
  * is complete and for anything that isn't flag it for deletion in the callback.
@@ -219,12 +215,10 @@ read_chunk_close(struct dfuse_inode_entry *ie)
 	rcb = true;
 
 	d_list_for_each_entry_safe(cd, cdn, &ie->ie_chunk->entries, list) {
-		if (cd->complete) {
-			chunk_free(cd);
-		} else {
-			DFUSE_TRA_DEBUG(ie, "Abandoning %p", cd);
-			cd->exiting = true;
-		}
+		D_ASSERT(cd->complete);
+		d_list_del(&cd->list);
+		d_slab_release(cd->eqt->de_read_slab, cd->ev);
+		D_FREE(cd);
 	}
 	D_FREE(ie->ie_chunk);
 out:
@@ -236,8 +230,6 @@ static void
 chunk_cb(struct dfuse_event *ev)
 {
 	struct read_chunk_data *cd = ev->de_cd;
-	fuse_req_t              req;
-	bool                    done = false;
 
 	cd->rc = ev->de_ev.ev_error;
 
@@ -249,51 +241,32 @@ chunk_cb(struct dfuse_event *ev)
 
 	daos_event_fini(&ev->de_ev);
 
-	do {
-		int i;
+	/* Mark as complete so no more get put on list */
+	D_MUTEX_LOCK(&rc_lock);
+	cd->complete = true;
+	D_MUTEX_UNLOCK(&rc_lock);
 
-		req = 0;
+	for (int i = 0; i < cd->idx; i++) {
+		int        slot;
+		fuse_req_t req;
+		size_t     position;
 
-		D_MUTEX_LOCK(&rc_lock);
+		slot = cd->reqs[i].slot;
+		req  = cd->reqs[i].req;
 
-		if (cd->exiting) {
-			chunk_free(cd);
-			D_MUTEX_UNLOCK(&rc_lock);
-			return;
+		DFUSE_TRA_DEBUG(cd->reqs[i].oh, "Replying idx %d/%d for %ld[%d]", i, cd->idx,
+				cd->bucket, slot);
+
+		position = (cd->bucket * CHUNK_SIZE) + (slot * K128);
+
+		if (cd->rc != 0) {
+			DFUSE_REPLY_ERR_RAW(cd->reqs[i].oh, req, cd->rc);
+		} else {
+			DFUSE_TRA_DEBUG(cd->reqs[i].oh, "%#zx-%#zx read", position,
+					position + K128 - 1);
+			DFUSE_REPLY_BUFQ(cd->reqs[i].oh, req, ev->de_iov.iov_buf + (slot * K128),
+					 K128);
 		}
-
-		cd->complete = true;
-		for (i = 0; i < 8; i++) {
-			if (cd->reqs[i]) {
-				req              = cd->reqs[i];
-				cd->reqs[i]      = 0;
-				cd->slot_done[i] = true;
-				break;
-			}
-		}
-
-		D_MUTEX_UNLOCK(&rc_lock);
-
-		if (req) {
-			size_t position = (cd->bucket * CHUNK_SIZE) + (i * K128);
-
-			if (cd->rc != 0) {
-				DFUSE_REPLY_ERR_RAW(cd->ohs[i], req, cd->rc);
-			} else {
-				DFUSE_TRA_DEBUG(cd->ohs[i], "%#zx-%#zx read", position,
-						position + K128 - 1);
-				DFUSE_REPLY_BUFQ(cd->ohs[i], req, ev->de_iov.iov_buf + (i * K128),
-						 K128);
-			}
-
-			if (atomic_fetch_add_relaxed(&cd->exited, 1) == 7)
-				done = true;
-		}
-	} while (req && !done);
-
-	if (done) {
-		d_slab_release(cd->eqt->de_read_slab, cd->ev);
-		D_FREE(cd);
 	}
 }
 
@@ -302,14 +275,13 @@ chunk_cb(struct dfuse_event *ev)
  * Returns true on success.
  */
 static bool
-chunk_fetch(fuse_req_t req, struct dfuse_obj_hdl *oh, struct read_chunk_data *cd, int slot)
+chunk_fetch(fuse_req_t req, struct dfuse_inode_entry *ie, struct read_chunk_data *cd)
 {
-	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
-	struct dfuse_inode_entry *ie         = oh->doh_ie;
-	struct dfuse_event       *ev;
-	struct dfuse_eq          *eqt;
-	int                       rc;
-	daos_off_t                position = cd->bucket * CHUNK_SIZE;
+	struct dfuse_info  *dfuse_info = fuse_req_userdata(req);
+	struct dfuse_event *ev;
+	struct dfuse_eq    *eqt;
+	int                 rc;
+	daos_off_t          position = cd->bucket * CHUNK_SIZE;
 
 	eqt = pick_eqt(dfuse_info);
 
@@ -326,10 +298,8 @@ chunk_fetch(fuse_req_t req, struct dfuse_obj_hdl *oh, struct read_chunk_data *cd
 	ev->de_len         = 0;
 	ev->de_complete_cb = chunk_cb;
 
-	cd->ev         = ev;
-	cd->eqt        = eqt;
-	cd->reqs[slot] = req;
-	cd->ohs[slot]  = oh;
+	cd->ev  = ev;
+	cd->eqt = eqt;
 
 	rc = dfs_read(ie->ie_dfs->dfs_ns, ie->ie_obj, &ev->de_sgl, position, &ev->de_len,
 		      &ev->de_ev);
@@ -347,6 +317,7 @@ chunk_fetch(fuse_req_t req, struct dfuse_obj_hdl *oh, struct read_chunk_data *cd
 err:
 	daos_event_fini(&ev->de_ev);
 	d_slab_release(eqt->de_read_slab, ev);
+	cd->ev = NULL;
 	cd->rc = rc;
 	return false;
 }
@@ -359,7 +330,6 @@ static bool
 chunk_read(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
 {
 	struct dfuse_inode_entry *ie = oh->doh_ie;
-	struct read_chunk_core   *cc;
 	struct read_chunk_data   *cd;
 	off_t                     last;
 	uint64_t                  bucket;
@@ -393,12 +363,9 @@ chunk_read(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
 			goto err;
 		D_INIT_LIST_HEAD(&ie->ie_chunk->entries);
 	}
-	cc = ie->ie_chunk;
 
-	d_list_for_each_entry(cd, &cc->entries, list)
+	d_list_for_each_entry(cd, &ie->ie_chunk->entries, list)
 		if (cd->bucket == bucket) {
-			/* Remove from list to re-add again later. */
-			d_list_del(&cd->list);
 			goto found;
 		}
 
@@ -409,78 +376,72 @@ chunk_read(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
 	cd->bucket = bucket;
 	submit     = true;
 
+	d_list_add(&cd->list, &ie->ie_chunk->entries);
+
 found:
 
-	if (++cd->entered < 8) {
-		/* Put on front of list for efficient searching */
-		DFUSE_TRA_DEBUG(oh, "at front of list");
-		d_list_add(&cd->list, &cc->entries);
+#if 0
+	/* Keep track of which slots have been requested, but allow for multiple reads per
+	 * slot */
+	if (!cd->slot_done[slot]) {
+		cd->entered++;
+		cd->slot_done[slot] = true;
+	} else {
+		DFUSE_TRA_DEBUG(oh, "concurrent read on %ld[%d] complete %d", bucket, slot,
+				cd->complete);
 	}
 
-	D_MUTEX_UNLOCK(&rc_lock);
+	if (cd->entered < 8) {
+		/* Put on front of list for efficient searching */
+		DFUSE_TRA_DEBUG(oh, "%d slots requested, putting on front of list", cd->entered);
+		d_list_add(&cd->list, &ie->ie_chunk->entries);
+	}
+#endif
 
 	if (submit) {
-		DFUSE_TRA_DEBUG(oh, "submit for bucket %ld[%d]", bucket, slot);
-		rcb = chunk_fetch(req, oh, cd, slot);
-	} else {
-		struct dfuse_event *ev = NULL;
-		int                 exited;
+		cd->reqs[0].req  = req;
+		cd->reqs[0].oh   = oh;
+		cd->reqs[0].slot = slot;
+		cd->idx++;
 
-		/* Now check if this read request is complete or not yet, if it isn't then just
-		 * save req in the right slot however if it is then reply here.  After the call to
-		 * DFUSE_REPLY_* then no reference is held on either the open file or the inode so
-		 * at that point they could be closed.
-		 */
-		rcb = true;
-
-		D_MUTEX_LOCK(&rc_lock);
-		if (cd->complete) {
-			ev = cd->ev;
-			DFUSE_TRA_DEBUG(oh, "Checking for done %d", cd->slot_done[slot]);
-
-			if (cd->slot_done[slot]) {
-				/* DAOS-16686: Reply to each slot more than once if requested, but
-				 * only track the first reply for knowing when to free the buffer.
-				 */
-				atomic_fetch_sub_relaxed(&cd->exited, 1);
-				DFUSE_TRA_WARNING(oh, "concurrent read, met");
-			} else {
-				cd->slot_done[slot] = true;
-			}
-		} else {
-			if (cd->reqs[slot] == 0) {
-				cd->reqs[slot] = req;
-				cd->ohs[slot]  = oh;
-			} else {
-				/* Handle concurrent reads of the same slot, this wasn't expected
-				 * but can happen so for now reject it at this level and have read
-				 * perform a separate I/O for this slot.
-				 * TODO: Handle DAOS-16686 here.
-				 */
-				rcb = false;
-				DFUSE_TRA_WARNING(oh, "concurrent read, un-met");
-			}
-		}
 		D_MUTEX_UNLOCK(&rc_lock);
 
-		if (ev) {
-			if (cd->rc != 0) {
-				/* Don't pass fuse an error here, rather return false and the read
-				 * will be tried over the network.
-				 */
-				rcb = false;
-			} else {
-				DFUSE_TRA_DEBUG(oh, "%#zx-%#zx read", position,
-						position + K128 - 1);
-				DFUSE_REPLY_BUFQ(oh, req, ev->de_iov.iov_buf + (slot * K128), K128);
-			}
-			exited = atomic_fetch_add_relaxed(&cd->exited, 1);
-			DFUSE_TRA_DEBUG(oh, "Checking for done, exited %d", exited);
-			if (exited == 7) {
-				d_slab_release(cd->eqt->de_read_slab, cd->ev);
-				D_FREE(cd);
-			}
+		DFUSE_TRA_DEBUG(oh, "submit for bucket %ld[%d]", bucket, slot);
+
+		rcb = chunk_fetch(req, ie, cd);
+	} else if (cd->complete) {
+		D_MUTEX_UNLOCK(&rc_lock);
+
+		if (cd->rc != 0) {
+			/* Don't pass fuse an error here, rather return false and
+			 * the read will be tried over the network.
+			 */
+			rcb = false;
+		} else {
+			DFUSE_TRA_DEBUG(oh, "%#zx-%#zx read", position, position + K128 - 1);
+			DFUSE_REPLY_BUFQ(oh, req, cd->ev->de_iov.iov_buf + (slot * K128), K128);
+			rcb = true;
 		}
+
+	} else if (cd->idx < MAX_REQ_COUNT) {
+		DFUSE_TRA_DEBUG(oh, "Using idx %d for %ld[%d]", cd->idx, bucket, slot);
+
+		cd->reqs[cd->idx].req  = req;
+		cd->reqs[cd->idx].oh   = oh;
+		cd->reqs[cd->idx].slot = slot;
+		cd->idx++;
+		D_MUTEX_UNLOCK(&rc_lock);
+		rcb = true;
+	} else {
+		D_MUTEX_UNLOCK(&rc_lock);
+
+		/* Handle concurrent reads of the same slot, this wasn't
+		 * expected but can happen so for now reject it at this
+		 * level and have read perform a separate I/O for this slot.
+		 * TODO: Handle DAOS-16686 here.
+		 */
+		rcb = false;
+		DFUSE_TRA_WARNING(oh, "Too many outstanding reads");
 	}
 
 	return rcb;
@@ -589,12 +550,8 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 		/* Check for concurrent overlapping reads and if so then add request to current op
 		 */
 		d_list_for_each_entry(evc, &oh->doh_ie->ie_open_reads, de_read_list) {
-			DFUSE_TRA_DEBUG(oh, "Checking %p %ld %ld", evc->de_oh, ev->de_req_position,
-					evc->de_req_position);
 			if (ev->de_req_position == evc->de_req_position &&
 			    ev->de_req_len <= evc->de_req_len) {
-				DFUSE_TRA_DEBUG(oh, "Match, making slave of %p", evc->de_oh);
-
 				d_list_add(&ev->de_read_list, &evc->de_read_slaves);
 				D_MUTEX_UNLOCK(&rc_lock);
 				return;
