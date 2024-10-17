@@ -6,40 +6,35 @@ daos_openmpi_module_path: /usr/share/modulefiles/mpi/openmpi-x86_64
 daos_base_deps:
   rpms:
     - bash
+    - bzip2-devel
     - capstone
+    - createrepo
+    - dnf-plugins-core
     - gdb
     - glibc
+    - iproute
     - jq
     - lbzip2
     - numactl
     - numactl-libs
     - numatop
     - platform-python
+    - psmisc
     - python36
+    - python3.11-devel
+    - python3-pexpect
+    - python3-wheel
     - systemd
     - tree
+    - valgrind-devel
+    - wget
 
 daos_dev_deps:
   rpms:
-    - argobots-devel
-    - capstone-devel
-    - bzip2-devel
-    - clustershell
-    - cmake
-    - createrepo
     - daos-raft-devel
-    - dnf-plugins-core
-    - fuse3-devel
-    - gcc-c++
     - gcc-gfortran
-    - golang
     - libaec-devel
     - libattr-devel
-    - libcmocka-devel
-    - libevent-devel
-    - libyaml-devel
-    - openssl-devel
-    - pciutils-devel
     - python3.11
     - python3.11-devel
     - python3-clustershell
@@ -48,8 +43,6 @@ daos_dev_deps:
     - rpmdevtools
     - rpm-build
     - spdk-devel
-    - valgrind-devel
-    - wget
 
 daos_client_deps:
   rpms:
