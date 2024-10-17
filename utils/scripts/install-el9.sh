@@ -33,7 +33,6 @@ dnf --nodocs install \
     help2man \
     hwloc-devel \
     ipmctl \
-    java-1.8.0-openjdk \
     json-c-devel \
     libaio-devel \
     libcmocka-devel \
