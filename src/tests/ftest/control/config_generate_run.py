@@ -4,8 +4,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 
-import os
-
 import yaml
 from apricot import TestWithServers
 from server_utils import ServerFailed
@@ -49,7 +47,7 @@ class ConfigGenerateRun(TestWithServers):
         # path needs to be set in that case.
         control_metadata = None
         if use_tmpfs_scm:
-            control_metadata = os.path.join(self.test_env.log_dir, 'control_metadata')
+            control_metadata = self.test_env.control_metadata
 
         # Call dmg config generate. AP is always the first server host.
         server_host = self.hostlist_servers[0]
