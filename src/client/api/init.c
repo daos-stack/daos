@@ -370,6 +370,9 @@ daos_reinit(void)
 {
 	int rc;
 
+	if (module_initialized == 0)
+		return 0;
+
 	rc = daos_eq_lib_reset_after_fork();
 	if (rc)
 		return rc;
