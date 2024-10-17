@@ -643,6 +643,7 @@ class TestWithServers(TestWithoutServers):
         self.setup_start_agents = True
         self.slurm_exclude_servers = False
         self.slurm_exclude_nodes = NodeSet()
+        self.max_test_dir_usage_check = 90
         self.host_info = HostInfo()
         self.hostlist_servers = NodeSet()
         self.hostlist_clients = NodeSet()
@@ -692,6 +693,11 @@ class TestWithServers(TestWithoutServers):
         # Support removing any servers from the client list
         self.slurm_exclude_servers = self.params.get(
             "slurm_exclude_servers", "/run/setup/*", self.slurm_exclude_servers)
+
+        # Max test directory usage percentage - when exceeded will display sizes of files in the
+        # test directory
+        self.max_test_dir_usage_check = self.params.get(
+            "max_test_dir_usage_check", "/run/setup/*", self.max_test_dir_usage_check)
 
         # The server config name should be obtained from each ServerManager
         # object, but some tests still use this TestWithServers attribute.
@@ -765,12 +771,20 @@ class TestWithServers(TestWithoutServers):
 
         # List common test directory contents before running the test
         self.log.info("-" * 100)
-        self.log.debug("Common test directory (%s) contents:", os.path.dirname(self.test_dir))
+        self.log.debug(
+            "Common test directory (%s) contents (check > %s%%):",
+            os.path.dirname(self.test_dir), self.max_test_dir_usage_check)
         all_hosts = include_local_host(self.host_info.all_hosts)
         test_dir_parent = os.path.dirname(self.test_dir)
-        result = run_remote(self.log, all_hosts, f"df -h {test_dir_parent}")
-        if int(max(re.findall(r" ([\d+])% ", result.joined_stdout) + ["0"])) > 90:
-            run_remote(self.log, all_hosts, f"du -sh {test_dir_parent}/*")
+        _result = run_remote(self.log, all_hosts, f"df -h {test_dir_parent}")
+        _details = NodeSet()
+        for _host, _stdout in _result.all_stdout.items():
+            _test_dir_usage = re.findall(r"\s+([\d]+)%\s+", _stdout)
+            _test_dir_usage_int = int(max(_test_dir_usage + ["0"]))
+            if _test_dir_usage_int > self.max_test_dir_usage_check:
+                _details.add(_host)
+        if _details:
+            run_remote(self.log, _details, f"du -sh {test_dir_parent}/*")
         self.log.info("-" * 100)
 
         if not self.start_servers_once or self.name.uid == 1:
