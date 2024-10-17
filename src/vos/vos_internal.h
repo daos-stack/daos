@@ -767,7 +767,7 @@ vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p);
 
 int
 vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id dtis[],
-			int count, daos_epoch_t epoch, bool rm_cos[],
+			int count, daos_epoch_t epoch, bool keep_act, bool rm_cos[],
 			struct vos_dtx_act_ent **daes, struct vos_dtx_cmt_ent **dces);
 
 int
@@ -777,7 +777,7 @@ void
 vos_dtx_post_handle(struct vos_container *cont,
 		    struct vos_dtx_act_ent **daes,
 		    struct vos_dtx_cmt_ent **dces,
-		    int count, bool abort, bool rollback);
+		    int count, bool abort, bool rollback, bool keep_act);
 
 /**
  * Establish indexed active DTX table in DRAM.
