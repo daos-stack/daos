@@ -59,6 +59,7 @@ runs:
           echo "_LOCAL_REPO=not_used" >> $GITHUB_ENV
           echo "LABEL=${{ inputs.cluster_label }}" >> $GITHUB_ENV
           echo "INST_RPMS=${{ steps.build-vars.outputs.inst_rpms }}" >> $GITHUB_ENV
+      shell: bash
     - name: Checkout code
       uses: actions/checkout@v4
       with:
@@ -68,6 +69,7 @@ runs:
     - name: Request and Provision a Cluster
       timeout-minutes: 7200
       uses: ./.github/actions/provision-cluster
+      shell: bash
     - name: Run Test
       timeout-minutes: 7200
       id: run-test
@@ -76,6 +78,7 @@ runs:
         NODE_COUNT="$NODE_COUNT"
         TEST_TAG=${{ inputs.tags }}
         FTEST_ARG="${{ inputs.ftest_args }}" ci/functional/test_main.sh
+      shell: bash
     - name: Cancel cluster request (if cancelled after requesting)
       if: cancelled()
       run: |
@@ -88,6 +91,7 @@ runs:
                 exit 1
             fi
         fi
+      shell: bash
     - name: Job cleanup
       if: (!cancelled() && (success() || failure()))
       run: |
@@ -95,6 +99,7 @@ runs:
         . ci/gha_functions.sh
         NODELIST=${{ env.NODESTRING }} ci/functional/job_cleanup.sh || true
         cleanup_provision_request "${{ env.CLUSTER_REQUEST_reqid }}"
+      shell: bash
     - name: Publish test results
       if: (!cancelled()) && (success() || failure()) &&
           steps.run-test.outcome != 'skipped'
