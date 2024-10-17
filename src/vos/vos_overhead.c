@@ -8,13 +8,13 @@
 int
 vos_pool_get_msize(void)
 {
-	return sizeof(struct vos_pool_df);
+	return sizeof(struct vos_pool_df) + sizeof(struct vos_pool_ext_df);
 }
 
 int
 vos_container_get_msize(void)
 {
-	return sizeof(struct vos_cont_df);
+	return sizeof(struct vos_cont_df) + sizeof(struct vos_cont_ext_df);
 }
 
 int
