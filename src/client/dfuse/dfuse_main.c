@@ -525,7 +525,10 @@ main(int argc, char **argv)
 			dfuse_info->di_read_only = true;
 			break;
 		case 'N':
-			snap_epoch = atoi(optarg);
+			if (strncmp(optarg, "0x", 2) == 0)
+				snap_epoch = strtol(optarg + 2, NULL, 16);
+			else
+				snap_epoch = atol(optarg);
 			dfuse_info->di_read_only = true;
 			break;
 		case 'h':
