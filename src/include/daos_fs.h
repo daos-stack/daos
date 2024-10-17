@@ -168,11 +168,11 @@ dfs_connect(const char *pool, const char *sys, const char *cont, int flags, dfs_
  * case will leak open handles for the pool and container.
  *
  * The snapshot to mount must have been previously created with daos_cont_create_snap() or
- * daos_cont_create_snap_opt(). The epoch returned by those functions can be passed as \param epoch
+ * daos_cont_create_snap_opt(). The epoch returned by those functions can be passed as \a epoch
  * to identify the snapshot to mount.
  * The snapshot can also be identified by name (provide that one was passed at snapshot creation
- * time). In this case, an epoch of 0 should be passed and \param name should be set to the snapshot
- * name. Please note that \param name is valid only w
+ * time). In this case, an epoch of 0 should be passed and \a name should be set to the snapshot
+ * name. Please note that \a name is valid only w
  *
  * \param[in]	pool	Pool label.
  * \param[in]	sys	DAOS system name to use for the pool connect.
@@ -180,8 +180,8 @@ dfs_connect(const char *pool, const char *sys, const char *cont, int flags, dfs_
  * \param[in]	cont	Container label.
  * \param[in]	flags	Mount flags for future use, will be O_RDONLY by definition.
  * \param[in]	epoch	Epoch associated with the snapshot to mount.
- *			Pass 0 to lookup by snapshot name instead or a snapshot epoch.
- * \param[in]	name	Optional name of the snapshot to mount, only valid when epoch is set
+ *			If a null epoch is passed, then the snapshot is looked up by \a name.
+ * \param[in]	name	Optional name of the snapshot to mount, only valid when \a epoch is set
  *			to 0.
  * \param[out]	dfs	Pointer to the created DFS mount point.
  *
@@ -281,18 +281,18 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **dfs);
  * daos_cont_create_snap_opt().
  *
  * The snapshot to mount must have been previously created with daos_cont_create_snap() or
- * daos_cont_create_snap_opt(). The epoch returned by those functions can be passed as \param epoch
+ * daos_cont_create_snap_opt(). The epoch returned by those functions can be passed as \a epoch
  * to identify the snapshot to mount.
  * The snapshot can also be identified by name (provide that one was passed at snapshot creation
- * time). In this case, an epoch of 0 should be passed and \param name should be set to the snapshot
- * name. Please note that \param name is valid only when \param epoch is set to 0.
+ * time). In this case, an epoch of 0 should be passed and \a name should be set to the snapshot
+ * name. Please note that \a name is valid only when \a epoch is set to 0.
  *
  * \param[in]	poh	Pool connection handle
  * \param[in]	coh	Container open handle.
  * \param[in]	flags	Mount flags for future use, will be O_RDONLY by definition.
  * \param[in]	epoch	Epoch associated with the snapshot to mount.
- *			Pass 0 to lookup by snapshot name instead or a snapshot epoch.
- * \param[in]	name	Optional name of the snapshot to mount, only valid when epoch is set
+ *			If a null epoch is passed, then the snapshot is looked up by \a name.
+ * \param[in]	name	Optional name of the snapshot to mount, only valid when \a epoch is set
  *			to 0.
  * \param[out]	dfs	Pointer to the file system object created.
  *

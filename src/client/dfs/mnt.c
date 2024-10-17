@@ -1147,18 +1147,17 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob, 
 	}
 
 	/** Create transaction handle */
-	if (dfs_params->th_epoch == DAOS_EPOCH_MAX) {
-		dfs->th_epoch = DAOS_EPOCH_MAX;
-		dfs->th       = DAOS_TX_NONE;
+	dfs->th_epoch = dfs_params->th_epoch;
+	if (dfs->th_epoch == DAOS_EPOCH_MAX) {
+		dfs->th = DAOS_TX_NONE;
 	} else {
-		rc = daos_tx_open_snap(coh, dfs_params->th_epoch, &dfs->th, NULL);
+		rc = daos_tx_open_snap(coh, dfs->th_epoch, &dfs->th, NULL);
 		if (rc) {
 			D_ERROR("daos_tx_open_snap() failed, " DF_RC "\n", DP_RC(rc));
 			daos_obj_close(dfs->super_oh, NULL);
 			daos_obj_close(dfs->root.oh, NULL);
 			D_GOTO(err_dfs, rc = daos_der2errno(rc));
 		}
-		dfs->th_epoch = dfs_params->th_epoch;
 	}
 
 	dfs->mounted = DFS_MOUNT;
