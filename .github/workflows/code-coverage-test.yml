@@ -1,5 +1,30 @@
 name: Code Coverage Test
 
+env:
+  ARTIFACTORY_URL: https://artifactory.dc.hpdd.intel.com/
+  JENKINS_URL: https://build.hpdd.intel.com/
+  REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
+  DAOS_EMAIL: phil.henderson@intel.com
+  DAOS_FULLNAME: daos-stack
+  DISTRO_REPOS: disabled
+  DOCKER_BUILDKIT: 0
+  ARTIFACTS_URL: file:///scratch/job_repos/
+  MOCK_OPTIONS: --uniqueext=${{ github.run_id }}
+  PR_NUM: ${{ github.event.pull_request.number }}
+
+  # TODO -- this should be on stable, backed up storage, not /scratch
+  # yamllint disable-line rule:line-length
+  REPO_PATH: /scratch/job_repos/daos-stack/job/daos/job/PR-${{ github.event.pull_request.number }}/
+
+  # TODO: we really need to define a list of supported versions (ideally it's no more than 2)
+  #       build is done on the lowest version and test on the highest with a "sanity test"
+  #       stage done on all versions in the list except the highest
+  EL8_BUILD_VERSION: 8.6
+  EL8_VERSION: 8.8
+  EL9_BUILD_VERSION: 9
+  EL9_VERSION: 9
+  LEAP15_VERSION: 15.5
+
 on:
   pull_request:             # Remove after testing
   schedule:
@@ -28,7 +53,15 @@ jobs:
         uses: ./.github/actions/build-rpm
         with:
           distro: el8
+          version: ${{ env.EL8_VERSION }}
+          build_version: ${{ env.EL8_BUILD_VERSION }}
           covfn_disabled: false
+          repo_file_url: ${{ env.REPO_FILE_URL }}
+          jenkins_url: ${{ env.JENKINS_URL }}
+          daos_full_name: ${{ env.DAOS_FULLNAME }}
+          daos_email: ${{ env.DAOS_EMAIL }}
+          artifactory_url: ${{ env.ARTIFACTORY_URL }}
+          repo_path: ${{ env.REPO_PATH }}
 
   functional-test:
     name: Bullseye Functional Test
@@ -51,4 +84,7 @@ jobs:
         uses: ./.github/actions/functional-test
         with:
           distro: el8
+          version: ${{ env.EL8_VERSION }}
+          build_version: ${{ env.EL8_BUILD_VERSION }}
+          cluster_label: ci_vm9
           tags: test_one_pool_vm

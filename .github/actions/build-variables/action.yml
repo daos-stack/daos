@@ -1,0 +1,113 @@
+name: 'Build Variables'
+description: 'Set variables for build based upon distro version'
+
+on:
+  workflow_call:
+    inputs:
+      distro:
+        type: choice
+        options:
+          - el8
+          - el9
+          - leap15
+      version:
+        type: string
+        required: true
+      build_version:
+        type: string
+        required: true
+
+outputs:
+  fversion:
+    value: ${{ steps.set-variables.outputs.fversion }}
+  inst_rpms:
+    value: ${{ steps.set-variables.outputs.inst_rpms }}
+  chroot_name:
+    value: ${{ steps.set-variables.outputs.chroot_name }}
+  distro_name:
+    value: ${{ steps.set-variables.outputs.distro_name }}
+  distro_name_upper:
+    value: ${{ steps.set-variables.outputs.distro_name_upper }}
+  distro_name_lower:
+    value: ${{ steps.set-variables.outputs.distro_name_lower }}
+  distro_version:
+    value: ${{ steps.set-variables.outputs.distro_version }}
+  distro_version_major:
+    value: ${{ steps.set-variables.outputs.distro_version_major }}
+  commit_status_distro_version:
+    value: ${{ steps.set-variables.outputs.commit_status_distro_version }}
+  openmpi:
+    value: ${{ steps.set-variables.outputs.openmpi }}
+  build_chroot:
+    value: ${{ steps.set-variables.outputs.build_chroot }}
+  build_name:
+    value: ${{ steps.set-variables.outputs.build_name }}
+  distro:
+    value: ${{ steps.set-variables.outputs.distro }}
+  provision_distro:
+    value: ${{ steps.set-variables.outputs.provision_distro }}
+  local_repo_name:
+    value: ${{ steps.set-variables.outputs.local_repo_name }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set variables
+      id: set-variables
+      run: |
+          FVERSION="38"
+          INST_RPMS="daos-client daos-tests daos-server daos-serialize daos-tests-internal"
+          case ${{ inputs.distro }} in
+              'el8')
+                  CHROOT_NAME="rocky+epel-8-x86_64"
+                  DISTRO_NAME="EL"
+                  DISTRO_NAME_UPPER="EL"
+                  DISTRO_NAME_LOWER="el"
+                  DISTRO_VERSION="${{ inputs.build_version }}"
+                  DISTRO_VERSION_MAJOR="8"
+                  PROVISION_VERSION_MAJOR="8"
+                  COMMIT_STATUS_DISTRO_VERSION="8"
+                  OPENMPI="openmpi"
+                  ;;
+              'el9')
+                  CHROOT_NAME="rocky+epel-9-x86_64"
+                  DISTRO_NAME="EL"
+                  DISTRO_NAME_UPPER="EL"
+                  DISTRO_NAME_LOWER="el"
+                  DISTRO_VERSION="${{ inputs.build_version }}"
+                  DISTRO_VERSION_MAJOR="9"
+                  PROVISION_VERSION_MAJOR="8"
+                  COMMIT_STATUS_DISTRO_VERSION="${{ inputs.build_version }}"
+                  OPENMPI="openmpi"
+                  ;;
+              'leap15')
+                  CHROOT_NAME="opensuse-leap-${{ inputs.build_version }}-x86_64"
+                  DISTRO_NAME="Leap"
+                  DISTRO_NAME_UPPER="LEAP"
+                  DISTRO_NAME_LOWER="leap"
+                  DISTRO_VERSION="${{ inputs.build_version }}"
+                  DISTRO_VERSION_MAJOR="15"
+                  PROVISION_VERSION_MAJOR="15"
+                  COMMIT_STATUS_DISTRO_VERSION="${{ inputs.build_version }}"
+                  OPENMPI="openmpi3"
+                  ;;
+          esac
+          echo "fversion=${FVERSION}" >> $GITHUB_OUTPUT
+          echo "inst_rpms=${INST_RPMS}" >> $GITHUB_OUTPUT
+          echo "chroot_name=${CHROOT_NAME}" >> $GITHUB_OUTPUT
+          echo "distro_name=${DISTRO_NAME}" >> $GITHUB_OUTPUT
+          echo "distro_name_upper=${DISTRO_NAME_UPPER}" >> $GITHUB_OUTPUT
+          echo "distro_name_lower=${DISTRO_NAME_LOWER}" >> $GITHUB_OUTPUT
+          echo "distro_version=${DISTRO_VERSION}" >> $GITHUB_OUTPUT
+          echo "distro_version_major=${DISTRO_VERSION_MAJOR}" >> $GITHUB_OUTPUT
+          echo "commit_status_distro_version=${COMMIT_STATUS_DISTRO_VERSION}" >> $GITHUB_OUTPUT
+          echo "openmpi=${OPENMPI}" >> $GITHUB_OUTPUT
+          echo "build_chroot=/var/lib/mock/${CHROOT_NAME}-${{ github.run_id }}/" >> $GITHUB_OUTPUT
+          echo "build_name=${DISTRO_NAME} ${DISTRO_VERSION}" >> $GITHUB_OUTPUT
+          echo "distro=${DISTRO_NAME_UPPER}_${DISTRO_VERSION_MAJOR}" >> $GITHUB_OUTPUT
+          echo "provision_distro=${DISTRO_NAME_UPPER}_${PROVISION_VERSION_MAJOR}" >> $GITHUB_OUTPUT
+          echo "local_repo_name=${DISTRO_NAME_UPPER}_${PROVISION_VERSION_MAJOR}" >> $GITHUB_OUTPUT
+
+          # echo -n "DAOS_STACK_${DISTRO_NAME_UPPER}_" >> $GITHUB_ENV
+          # echo "${PROV_DISTRO_VERSION_MAJOR:-$DISTRO_VERSION_MAJOR}_LOCAL_REPO=not_used" >> \
+          #      $GITHUB_ENV
