@@ -64,7 +64,7 @@ func (cmd *containerSnapCreateCmd) Execute(args []string) error {
 		}, nil)
 	}
 
-	cmd.Infof("snapshot/epoch 0x%x has been created", cEpoch)
+	cmd.Infof("snapshot/epoch 0x%x has been created (timestamp: %s)", cEpoch, common.FormatTime(daos.HLC(cEpoch).ToTime()))
 
 	return nil
 }
@@ -233,13 +233,14 @@ func (cmd *containerSnapListCmd) Execute(args []string) error {
 		return cmd.OutputJSON(snaps, nil)
 	}
 
-	cmd.Info("Container's snapshots :")
+	cmd.Infof("%s\t\t\t%s\t\t\t%s", "Timestamp" , "Epoch", "Name")
+	cmd.Infof("---------\t\t\t-----\t\t\t----")
 	if len(snaps) == 0 {
 		cmd.Info("no snapshots")
 		return nil
 	}
 	for _, snap := range snaps {
-		cmd.Infof("0x%x %s", snap.Epoch, snap.Name)
+		cmd.Infof("%s\t0x%x\t%s", snap.Timestamp, snap.Epoch, snap.Name)
 	}
 
 	return nil
