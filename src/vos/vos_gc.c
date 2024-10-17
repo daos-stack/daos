@@ -744,10 +744,22 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 
 pin_obj:
 	if (bkt != UMEM_DEFAULT_MBKT_ID) {
+		struct d_tm_node_t	*duration = NULL;
+		struct d_tm_node_t	*count = NULL;
+
 		rg.cr_off = umem_get_mb_base_offset(vos_pool2umm(pool), bkt);
 		rg.cr_size = vos_pool2store(pool)->cache->ca_page_sz;
 
+		if (pool->vp_metrics != NULL) {
+			duration = pool->vp_metrics->vp_gc_metrics.vgm_pin_duration;
+			count = pool->vp_metrics->vp_gc_metrics.vgm_pin_cnt;
+		}
+
+		d_tm_inc_counter(count, 1);
+		d_tm_mark_duration_start(duration, D_TM_CLOCK_REALTIME);
 		rc = vos_cache_pin(pool, &rg, 1, false, &pin_hdl);
+		d_tm_mark_duration_end(duration);
+
 		if (rc) {
 			DL_ERROR(rc, "Failed to pin bucket %u.", bkt);
 			goto tx_error;
@@ -1384,4 +1396,15 @@ vos_gc_metrics_init(struct vos_gc_metrics *vgm, const char *path, int tgt_id)
 			     "%s/%s/tight_cnt/tgt_%u", path, VOS_GC_DIR, tgt_id);
 	if (rc)
 		D_WARN("Failed to create 'tight_cnt' telemetry: " DF_RC "\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&vgm->vgm_pin_cnt, D_TM_COUNTER, "GC pin count", NULL,
+			     "%s/%s/pin_cnt/tgt_%u", path, VOS_GC_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'pin_cnt' telemetry: " DF_RC "\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&vgm->vgm_pin_duration, D_TM_DURATION,
+			     "GC pin duration", NULL, "%s/%s/pin_duration/tgt_%u", path, VOS_GC_DIR,
+			     tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'pin_duration' telemetry: " DF_RC "\n", DP_RC(rc));
 }

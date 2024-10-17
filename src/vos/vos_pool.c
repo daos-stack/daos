@@ -158,6 +158,7 @@ vos_meta_load(struct umem_store *store, char *start, daos_off_t offset, daos_siz
 	int			 rc = 0;
 	struct meta_load_arg	*mla;
 	struct meta_load_control mlc;
+	struct vos_cache_metrics *vcm = store2cache_metrics(store);
 
 	mlc.mlc_inflights = 0;
 	mlc.mlc_rc = 0;
@@ -176,6 +177,8 @@ vos_meta_load(struct umem_store *store, char *start, daos_off_t offset, daos_siz
 		goto destroy_lock;
 	}
 
+	d_tm_set_gauge(vcm->vcm_load_size, len);
+	d_tm_mark_duration_start(vcm->vcm_load_duration, D_TM_CLOCK_REALTIME);
 	while (remain_size) {
 		read_size =
 		    (remain_size > META_READ_BATCH_SIZE) ? META_READ_BATCH_SIZE : remain_size;
@@ -216,6 +219,7 @@ vos_meta_load(struct umem_store *store, char *start, daos_off_t offset, daos_siz
 		ABT_cond_wait(mlc.mlc_cond, mlc.mlc_lock);
 		D_ASSERT(mlc.mlc_inflights == 0);
 	}
+	d_tm_mark_duration_end(vcm->vcm_load_duration);
 	ABT_cond_free(&mlc.mlc_cond);
 
 destroy_lock:
@@ -413,7 +417,6 @@ vos_wal_metrics_init(struct vos_wal_metrics *vw_metrics, const char *path, int t
 	if (rc)
 		D_WARN("Failed to create 'replay_transactions' telemetry: "DF_RC"\n", DP_RC(rc));
 
-
 	rc = d_tm_add_metric(&vw_metrics->vwm_replay_ent, D_TM_COUNTER,
 			     "Number of replayed log entries", NULL,
 			     "%s/%s/replay_entries/tgt_%u", path, VOS_WAL_DIR, tgt_id);
@@ -472,6 +475,16 @@ vos_cache_metrics_init(struct vos_cache_metrics *vc_metrics, const char *path, i
 			     "hits", "%s/%s/obj_hit/tgt_%d", path, VOS_CACHE_DIR, tgt_id);
 	if (rc)
 		DL_WARN(rc, "Failed to create object hit telemetry.");
+
+	rc = d_tm_add_metric(&vc_metrics->vcm_load_duration, D_TM_DURATION, "Load duration", NULL,
+			     "%s/%s/load_duration/tgt_%d", path, VOS_CACHE_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create load duration metric: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&vc_metrics->vcm_load_size, D_TM_STATS_GAUGE, "Load size",
+			     "bytes", "%s/%s/load_size/tgt_%d", path, VOS_CACHE_DIR, tgt_id);
+	if (rc)
+		DL_WARN(rc, "Failed to create load size telemetry.");
 
 }
 
