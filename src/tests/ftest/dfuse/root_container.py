@@ -138,8 +138,11 @@ class RootContainerTest(TestWithServers):
                 tmp_file_size)
 
         expected = pool_space_before - cont_count * tmp_file_count * tmp_file_size
-        pool_space_after = self._verify_pool_free_space(
-            pool, device, f"after creating {cont_count} containers", expected)
+        self.log_step(
+            f"Verify the pool free space <= {expected} after creating {cont_count} containers")
+        pool_space_after = self._get_pool_free_space(pool, device, expected)
+        if pool_space_after > expected:
+            self.fail(f"Pool free space exceeds {expected} after creating {cont_count} containers")
 
         self.log_step(f"Destroy half of the {cont_count} new sub containers ({cont_count // 2})")
         for _ in range(cont_count // 2):
@@ -150,16 +153,19 @@ class RootContainerTest(TestWithServers):
         expected = pool_space_after + ((cont_count // 2) * tmp_file_count * tmp_file_size)
         start = time.time()
         loop = 0
+        self.log_step(
+            f"Verify the pool free space >= {expected} after destroying half of the containers")
         while True:
             loop += 1
-            try:
-                self._verify_pool_free_space(
-                    pool, device, "after destroying half of the containers (loop {loop})", expected)
+            self.log.debug("Check if the pool free space >= %s - loop %s", expected, loop)
+            current = self._get_pool_free_space(pool, device, expected)
+            if current >= expected:
                 break
-            except AssertionError as error:
-                if (time.time() - start) < 60:
-                    raise error
-                time.sleep(5)
+            if (time.time() - start) < 60:
+                self.fail(
+                    f"Pool free space less than {expected} after destroying half of the containers")
+            time.sleep(5)
+        self.log.info("Test passed")
 
     def insert_files_and_verify(self, hosts, cont_dir, tmp_file_count, tmp_file_name,
                                 tmp_file_size):
@@ -197,17 +203,18 @@ class RootContainerTest(TestWithServers):
         if not result.passed:
             self.fail(f"Error inserting files into {cont_dir} on {str(result.failed_hosts)}")
 
-    def _verify_pool_free_space(self, pool, device, description, expected):
-        """Execute command on the host clients.
+    def _get_pool_free_space(self, pool, device, expected):
+        """Get the current pool free space.
 
         Args:
-            cmd (str): Command to run
-            hosts (NodeSet): hosts on which to run the command
+            pool (TestPool): pool to query
+            device (str): device type, e.g. "scm" or "nvme"
+            expected (int): expected pool free space
 
+        Returns:
+            int: current pool free space
         """
-        self.log_step(f"Verify the pool free space {description}")
         current = pool.get_pool_free_space(device)
         self.log.info("  Current pool free space:   %s", current)
         self.log.info("  Expected pool free space:  %s", expected)
-        self.assertTrue(current <= expected, f"Failed pool free space {description} check")
         return current
