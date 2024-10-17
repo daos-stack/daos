@@ -365,11 +365,11 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			getCtrlrsHealth = func(_ context.Context, _ Engine, _ *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
+			scanHealth = func(_ context.Context, _ Engine, _ *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
 				return tc.healthRes, tc.healthErr
 			}
 			defer func() {
-				getCtrlrsHealth = getBioHealth
+				scanHealth = getBioHealth
 			}()
 
 			var devState ctlpb.NvmeDevState
@@ -804,11 +804,11 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 			defer func() {
 				scanSmd = listSmdDevices
 			}()
-			getCtrlrsHealth = func(_ context.Context, _ Engine, _ *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
+			scanHealth = func(_ context.Context, _ Engine, _ *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
 				return tc.healthRes, tc.healthErr
 			}
 			defer func() {
-				getCtrlrsHealth = getBioHealth
+				scanHealth = getBioHealth
 			}()
 			linkStatsProv = &mockPCIeLinkStatsProvider{
 				pciDevErr: errors.New("link stats provider fail"),

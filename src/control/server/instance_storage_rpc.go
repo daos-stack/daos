@@ -29,9 +29,9 @@ import (
 
 var (
 	// Function pointers to enable mocking.
-	scanSmd         = listSmdDevices
-	getCtrlrsHealth = getBioHealth
-	linkStatsProv   = pciutils.NewPCIeLinkStatsProvider()
+	scanSmd       = listSmdDevices
+	scanHealth    = getBioHealth
+	linkStatsProv = pciutils.NewPCIeLinkStatsProvider()
 
 	// Sentinel errors to enable comparison.
 	errEngineBdevScanEmptyDevList = errors.New("empty device list for engine instance")
@@ -172,10 +172,9 @@ func (ei *EngineInstance) StorageFormatSCM(ctx context.Context, force bool) (mRe
 	return
 }
 
-func addLinkInfoToHealthStats(prov hardware.PCIeLinkStatsProvider, pciCfg string, health *ctlpb.BioHealthResp) (added bool, err error) {
+func addLinkInfoToHealthStats(prov hardware.PCIeLinkStatsProvider, pciCfg string, health *ctlpb.BioHealthResp) error {
 	if health == nil {
-		err = errors.New("nil BioHealthResp")
-		return
+		return errors.New("nil BioHealthResp")
 	}
 
 	// Convert byte-string to lspci-format.
@@ -183,8 +182,8 @@ func addLinkInfoToHealthStats(prov hardware.PCIeLinkStatsProvider, pciCfg string
 	formatBytestring(pciCfg, sb)
 
 	pciDev := &hardware.PCIDevice{}
-	if err = prov.PCIeCapsFromConfig([]byte(sb.String()), pciDev); err != nil {
-		return
+	if err := prov.PCIeCapsFromConfig([]byte(sb.String()), pciDev); err != nil {
+		return errors.Wrap(err, "pciutils lib")
 	}
 
 	// Copy link details from PCIDevice to health stats.
@@ -194,8 +193,7 @@ func addLinkInfoToHealthStats(prov hardware.PCIeLinkStatsProvider, pciCfg string
 	health.LinkNegSpeed = pciDev.LinkNegSpeed
 	health.LinkNegWidth = uint32(pciDev.LinkNegWidth)
 
-	added = true
-	return
+	return nil
 }
 
 // Only raise events if speed or width state is:
@@ -272,7 +270,7 @@ func getCtrlrHealth(ctx context.Context, req ctrlrHealthReq) (*ctlpb.BioHealthRe
 		return nil, errCtrlrHealthSkipped
 	}
 
-	health, err := getCtrlrsHealth(ctx, req.engine, req.bhReq)
+	health, err := scanHealth(ctx, req.engine, req.bhReq)
 	if err != nil {
 		return nil, errors.Wrapf(err, "retrieve health stats for %q (state %q)", req.ctrlr,
 			stateName)
@@ -285,19 +283,14 @@ func getCtrlrHealth(ctx context.Context, req ctrlrHealthReq) (*ctlpb.BioHealthRe
 // then if successful publish events based on link statistic changes. Link updated health stats to
 // controller.
 func setCtrlrHealthWithLinkInfo(req ctrlrHealthReq, health *ctlpb.BioHealthResp) error {
-	wasAdded, err := addLinkInfoToHealthStats(req.linkStatsProv, req.ctrlr.PciCfg, health)
-	if err != nil {
-		if err != pciutils.ErrNoPCIeCaps {
+	err := addLinkInfoToHealthStats(req.linkStatsProv, req.ctrlr.PciCfg, health)
+	if err == nil {
+		publishLinkStatEvents(req.engine, req.ctrlr.PciAddr, health)
+	} else {
+		if errors.Cause(err) != pciutils.ErrNoPCIeCaps {
 			return errors.Wrapf(err, "add link stats for %q", req.ctrlr)
 		}
 		req.engine.Debugf("device %q not reporting PCIe capabilities", req.ctrlr.PciAddr)
-	}
-
-	if wasAdded {
-		publishLinkStatEvents(req.engine, req.ctrlr.PciAddr, health)
-	} else {
-		req.engine.Debugf("link stats not added (prov:%+v, ctrlr:%+v)", req.linkStatsProv,
-			req.ctrlr)
 	}
 
 	return nil
@@ -321,8 +314,7 @@ func populateCtrlrHealth(ctx context.Context, req ctrlrHealthReq) (bool, error) 
 		req.engine.Debugf("device %q skip adding link stats; empty pci cfg",
 			req.ctrlr.PciAddr)
 	} else {
-		err = setCtrlrHealthWithLinkInfo(req, health)
-		if err != nil {
+		if err = setCtrlrHealthWithLinkInfo(req, health); err != nil {
 			return false, errors.Wrap(err, "set ctrlr health")
 		}
 	}

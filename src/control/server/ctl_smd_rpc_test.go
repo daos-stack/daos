@@ -89,6 +89,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 		drpcResps      map[int][]*mockDrpcResponse
 		harnessStopped bool
 		ioStopped      bool
+		pciDevErr      error
 		expResp        *ctlpb.SmdQueryResp
 		expErr         error
 	}{
@@ -694,10 +695,10 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 					},
 				},
 			},
-			// Prove mock provider gets called when IncludeBioHealth flag is set and
-			// Ctrlr.PciCfg string is not empty. This enables populateCtrlrHealth to add
-			// link state and capability information to be added to health stats.
-			expErr: errors.New("link stats provider fail"),
+			// Prove mock link stats provider gets called when IncludeBioHealth
+			// flag is set and Ctrlr.PciCfg string is not empty.
+			pciDevErr: errors.New("link stats provider fail"),
+			expErr:    errors.New("link stats provider fail"),
 		},
 		"ambiguous UUID": {
 			req: &ctlpb.SmdQueryReq{
@@ -722,7 +723,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			linkStatsProv = &mockPCIeLinkStatsProvider{
-				pciDevErr: errors.New("link stats provider fail"),
+				pciDevErr: tc.pciDevErr,
 			}
 			defer func() {
 				linkStatsProv = pciutils.NewPCIeLinkStatsProvider()
