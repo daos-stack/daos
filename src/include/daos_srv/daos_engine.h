@@ -781,7 +781,7 @@ struct dss_chore {
 	dss_chore_func_t      cho_func;
 };
 
-int dss_chore_delegate(struct dss_chore *chore, dss_chore_func_t func);
+int dss_chore_delegate(struct dss_chore *chore, dss_chore_func_t func, bool iofw);
 void dss_chore_diy(struct dss_chore *chore, dss_chore_func_t func);
 
 bool engine_in_check(void);

@@ -99,6 +99,30 @@ bool		dss_helper_pool;
 /** Bypass for the nvme health check */
 bool		dss_nvme_bypass_health_check;
 
+/**
+ * When a main IO XS wants to add some task to helper XS (in spite of via chore
+ * queue or creating new ULT), it needs to take lock on related helper XS. Under
+ * the dss_helper_pool mode, if there are a lot of ULTs from different main IO XS
+ * doing that concurrently, the overhead caused by lock contention may be high. To
+ * reduce such overhead, we will divide main IO XS into small groups, and bind each
+ * group to a helper XS: the ones in the same group will share one helper, different
+ * groups use different helpers. Then above lock contention will be restricted inside
+ * the group. Depends on the system configuration, such solution may be unnecessary,
+ * for example, there is only single helper per engine, or very limited targets (less
+ * than 4 or about) per engine. So this feature will be configurable via environment
+ * variable DAOS_BIND_HELPER that is unset by default.
+ *
+ * NOTE:
+ *
+ * 1. Binding helper is only available when the count of helper XS is non-zero and
+ *    smaller than the count of main IO XS.
+ * 2. If multiple sockets mode is enabled (dss_numa_nr > 1), then do not bind helper
+ *    for simplification.
+ * 3. To be load balanced, if the count of main IO XS is not the integral multiple
+ *    of the helper XS, then binding helper will be disabled automatically.
+ */
+bool		dss_bind_helper;
+
 static daos_epoch_t	dss_start_epoch;
 
 unsigned int
@@ -814,6 +838,10 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int tag, int xs_id)
 			 xs_id);
 	}
 
+	if (dx->dx_main_xs && dss_bind_helper)
+		dx->dx_helper_id = dss_sys_xs_nr + dss_tgt_nr +
+				   dx->dx_tgt_id % dss_tgt_offload_xs_nr;
+
 	/** create ABT scheduler in charge of this xstream */
 	rc = dss_sched_init(dx);
 	if (rc != 0) {
@@ -1081,6 +1109,15 @@ dss_xstreams_init(void)
 	int      tags;
 
 	D_ASSERT(dss_tgt_nr >= 1);
+
+	if (!dss_helper_pool || dss_tgt_nr <= dss_tgt_offload_xs_nr ||
+	    dss_tgt_nr % dss_tgt_offload_xs_nr != 0 || dss_numa_nr > 1)
+		dss_bind_helper = false;
+	else
+		d_getenv_bool("DAOS_BIND_HELPER", &dss_bind_helper);
+	D_INFO("Binding helper is %s: tgt_nr %d, helper_nr %d, numa_nr %d\n",
+	       dss_bind_helper ? "enabled" : "disabled",
+	       dss_tgt_nr, dss_tgt_offload_xs_nr, dss_numa_nr);
 
 	d_getenv_bool("DAOS_SCHED_PRIO_DISABLED", &sched_prio_disabled);
 	if (sched_prio_disabled)
