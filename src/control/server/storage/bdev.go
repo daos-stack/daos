@@ -318,6 +318,7 @@ func (sd *SmdDevice) UnmarshalJSON(data []byte) error {
 		sd.Roles.OptionBits = OptionBits(from.RoleBits)
 	}
 
+	// Handle any duplicate target IDs and set flag instead of sysXS target ID.
 	seen := make(map[int32]bool)
 	newTgts := make([]int32, 0, len(sd.TargetIDs))
 	for _, i := range sd.TargetIDs {
