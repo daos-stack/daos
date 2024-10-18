@@ -390,6 +390,41 @@ obj_layout_refresh(struct dc_object *obj)
 	return rc;
 }
 
+static int
+obj_auxi_alloc_tgt_list(struct obj_auxi_args *obj_auxi)
+{
+	struct obj_auxi_tgt_list *tgt_list;
+
+	D_ALLOC_PTR(tgt_list);
+	if (tgt_list == NULL)
+		return -DER_NOMEM;
+
+	D_INIT_LIST_HEAD(&tgt_list->tl_tried_list);
+
+	obj_auxi->failed_tgt_list = tgt_list;
+
+	return 0;
+}
+
+static void
+obj_auxi_free_tgt_list(struct obj_auxi_args *obj_auxi)
+{
+	struct obj_auxi_tgt_list *tgt_list = obj_auxi->failed_tgt_list;
+	struct obj_auxi_tried_tgt *tgt;
+	struct obj_auxi_tried_tgt *tmp;
+
+	if (tgt_list == NULL)
+		return;
+
+	d_list_for_each_entry_safe(tgt, tmp, &tgt_list->tl_tried_list, oatt_list) {
+		d_list_del(&tgt->oatt_list);
+		D_FREE(tgt);
+	}
+
+	D_FREE(tgt_list->tl_tgts);
+	D_FREE(obj_auxi->failed_tgt_list);
+}
+
 static bool
 tgt_in_failed_tgts_list(int32_t tgt, struct obj_auxi_tgt_list *tgt_list)
 {
@@ -404,18 +439,32 @@ tgt_in_failed_tgts_list(int32_t tgt, struct obj_auxi_tgt_list *tgt_list)
 	return false;
 }
 
+static bool
+tgt_in_tried_tgts_list(uint32_t tgt_id, struct obj_auxi_tgt_list *tgt_list)
+{
+	struct obj_auxi_tried_tgt *tgt;
+
+	D_ASSERT(tgt_list != NULL);
+	d_list_for_each_entry(tgt, &tgt_list->tl_tried_list, oatt_list) {
+		if (tgt->oatt_id == tgt_id)
+			return true;
+	}
+
+	return false;
+}
+
 static int
 obj_auxi_add_failed_tgt(struct obj_auxi_args *obj_auxi, uint32_t tgt)
 {
 	struct obj_auxi_tgt_list	*tgt_list = obj_auxi->failed_tgt_list;
-	bool				allocated = false;
 	uint32_t			*tgts;
 
 	if (tgt_list == NULL) {
-		D_ALLOC_PTR(tgt_list);
-		if (tgt_list == NULL)
-			return -DER_NOMEM;
-		allocated = true;
+		int rc;
+
+		rc = obj_auxi_alloc_tgt_list(obj_auxi);
+		if (rc != 0)
+			return rc;
 	} else {
 		if (tgt_in_failed_tgts_list(tgt, tgt_list)) {
 			D_DEBUG(DB_IO, "tgt %u exists in failed.\n", tgt);
@@ -425,11 +474,9 @@ obj_auxi_add_failed_tgt(struct obj_auxi_args *obj_auxi, uint32_t tgt)
 
 	D_REALLOC_ARRAY(tgts, tgt_list->tl_tgts, tgt_list->tl_nr,
 			tgt_list->tl_nr + 1);
-	if (tgts == NULL) {
-		if (allocated)
-			D_FREE(tgt_list);
+	if (tgts == NULL)
 		return -DER_NOMEM;
-	}
+
 	D_DEBUG(DB_IO, "Add tgt %u to %p failed list.\n", tgt, obj_auxi);
 	tgts[tgt_list->tl_nr] = tgt;
 	tgt_list->tl_tgts = tgts;
@@ -439,14 +486,37 @@ obj_auxi_add_failed_tgt(struct obj_auxi_args *obj_auxi, uint32_t tgt)
 	return 0;
 }
 
-static void
-obj_auxi_free_failed_tgt_list(struct obj_auxi_args *obj_auxi)
+static int
+obj_auxi_add_tried_tgt(struct obj_auxi_args *obj_auxi, uint32_t tgt_id)
 {
-	if (obj_auxi->failed_tgt_list == NULL)
-		return;
+	struct obj_auxi_tgt_list  *tgt_list = obj_auxi->failed_tgt_list;
+	struct obj_auxi_tried_tgt *new_tgt;
 
-	D_FREE(obj_auxi->failed_tgt_list->tl_tgts);
-	D_FREE(obj_auxi->failed_tgt_list);
+	if (tgt_list == NULL) {
+		int rc;
+
+		rc = obj_auxi_alloc_tgt_list(obj_auxi);
+		if (rc != 0)
+			return rc;
+		tgt_list = obj_auxi->failed_tgt_list;
+	} else {
+		if (tgt_in_tried_tgts_list(tgt_id, tgt_list)) {
+			D_DEBUG(DB_IO, "tgt %u exists in failed.\n", tgt_id);
+			return 0;
+		}
+	}
+
+	D_ALLOC_PTR(new_tgt);
+	if (new_tgt == NULL)
+		return -DER_NOMEM;
+
+	new_tgt->oatt_id = tgt_id;
+	/* Add to the head */
+	D_INIT_LIST_HEAD(&new_tgt->oatt_list);
+	d_list_add(&new_tgt->oatt_list, &tgt_list->tl_tried_list);
+	D_DEBUG(DB_IO, "Add tgt %u to %p tried list.\n", tgt_id, obj_auxi);
+
+	return 0;
 }
 
 static int
@@ -3769,13 +3839,26 @@ obj_shard_comp_cb(tse_task_t *task, struct shard_auxi_args *shard_auxi,
 		 * need_retry_redundancy().
 		 */
 		if ((ret == -DER_TX_UNCERTAIN || ret == -DER_CSUM || ret == -DER_NVME_IO) &&
-		    obj_auxi->is_ec_obj) {
+		     obj_auxi->is_ec_obj) {
 			rc = obj_auxi_add_failed_tgt(obj_auxi, shard_auxi->target);
 			if (rc != 0) {
 				D_ERROR("failed to add tgt %u to failed list: %d\n",
 					shard_auxi->target, rc);
 				ret = rc;
 			}
+		}
+
+		/* Add this to the tried list, so retry need try alternative options */
+		if (!obj_is_modification_opc(obj_auxi->opc) && ret == -DER_TIMEDOUT) {
+			rc = obj_auxi_add_tried_tgt(obj_auxi, shard_auxi->target);
+			if (rc != 0)
+				DL_WARN(rc, "failed to add tgt %u to tried list.\n",
+					shard_auxi->target);
+			/**
+			 * If the target can not be added to the tried list, then it might
+			 * retry the RPC to the same target.
+			 */
+			rc = 0;
 		}
 	} else if (ret == -DER_TGT_RETRY) {
 		/* some special handing for DER_TGT_RETRY, as we use that errno for
@@ -4573,7 +4656,7 @@ obj_reasb_io_fini(struct obj_auxi_args *obj_auxi, bool retry)
 		obj_auxi->reasb_req.orr_args->sgls = obj_auxi->reasb_req.orr_usgls;
 	}
 	obj_bulk_fini(obj_auxi);
-	obj_auxi_free_failed_tgt_list(obj_auxi);
+	obj_auxi_free_tgt_list(obj_auxi);
 	obj_dup_sgls_free(obj_auxi);
 	obj_reasb_req_fini(&obj_auxi->reasb_req, obj_auxi->iod_nr);
 	obj_auxi->req_reasbed = false;
@@ -5214,7 +5297,7 @@ need_retry_redundancy(struct obj_auxi_args *obj_auxi)
 	return (obj_auxi->csum_retry || obj_auxi->tx_uncertain || obj_auxi->nvme_io_err);
 }
 
-/* Check if the shard was failed in the previous fetch, so these shards can be skipped */
+/* Check if the shard was failed/tried in the previous fetch, so these shards can be skipped */
 static inline bool
 shard_was_fail(struct obj_auxi_args *obj_auxi, uint32_t shard_idx)
 {
@@ -5228,36 +5311,80 @@ shard_was_fail(struct obj_auxi_args *obj_auxi, uint32_t shard_idx)
 		return true;
 	}
 
-	if (obj_auxi->failed_tgt_list == NULL)
-		return false;
+	if (obj_auxi->failed_tgt_list != NULL) {
+		failed_list = obj_auxi->failed_tgt_list;
+		tgt_id      = obj_auxi->obj->cob_shards->do_shards[shard_idx].do_target_id;
 
-	failed_list = obj_auxi->failed_tgt_list;
-	tgt_id      = obj_auxi->obj->cob_shards->do_shards[shard_idx].do_target_id;
+		if (tgt_in_failed_tgts_list(tgt_id, failed_list))
+			return true;
 
-	if (tgt_in_failed_tgts_list(tgt_id, failed_list))
-		return true;
+		/* Check if the target has been tried */
+		if (tgt_in_tried_tgts_list(tgt_id, failed_list))
+			return true;
+	}
 
 	return false;
 }
 
+/**
+ * Try to remove some recoverable shards from ec fail info list. 
+ * Remove some targets:	return 1
+ * Can not remove some targets:	return 0 
+ */
 static int
-obj_ec_valid_shard_get(struct obj_auxi_args *obj_auxi, uint8_t *tgt_bitmap,
-		       uint32_t grp_idx, uint32_t *tgt_idx)
+obj_ec_fail_info_try_remove(struct obj_auxi_args *obj_auxi)
 {
-	struct dc_object	*obj = obj_auxi->obj;
-	uint32_t		grp_start = grp_idx * obj_get_grp_size(obj);
+	struct obj_auxi_tgt_list  *tgt_list = obj_auxi->failed_tgt_list;
+	struct obj_ec_fail_info   *fail_info;
+	struct obj_auxi_tried_tgt *tgt;
+	struct obj_auxi_tried_tgt *tmp;
+	int			  rc = 0;
+
+	fail_info = obj_ec_fail_info_get(&obj_auxi->reasb_req, false, 0);
+	D_ASSERT(fail_info != NULL);
+	D_ASSERT(tgt_list != NULL);
+	d_list_for_each_entry_reverse_safe(tgt, tmp, &tgt_list->tl_tried_list, oatt_list) {
+		if (tgt_in_failed_tgts_list(tgt->oatt_id, tgt_list))
+			continue;
+
+		/* Remove the target from the error list and retry */
+		if (obj_ec_tgt_in_err(fail_info->efi_tgt_list, fail_info->efi_ntgts,
+				      (uint16_t)tgt->oatt_id)) {
+			obj_ec_tgt_del_err(fail_info->efi_tgt_list, &fail_info->efi_ntgts,
+					   (uint16_t)tgt->oatt_id);
+			d_list_del(&tgt->oatt_list);
+			D_FREE(tgt);
+			rc = 1;
+			break;
+		}
+	}
+
+	return rc;
+}
+
+static int
+obj_ec_fetch_valid_shard_get(struct obj_auxi_args *obj_auxi, uint8_t *tgt_bitmap,
+			     uint32_t grp_idx, uint32_t *tgt_idx)
+{
+	struct dc_object	 *obj = obj_auxi->obj;
+	uint32_t		 grp_start = grp_idx * obj_get_grp_size(obj);
 	uint32_t                 shard_idx = grp_start + *tgt_idx;
-	int			rc = 0;
+	int			 rc = 0;
 
 	while (shard_was_fail(obj_auxi, shard_idx) ||
 	       obj_shard_is_invalid(obj, shard_idx, DAOS_OBJ_RPC_FETCH)) {
+		uint32_t tgt_id = obj_auxi->obj->cob_shards->do_shards[shard_idx].do_target_id;
+
 		D_DEBUG(DB_IO, "tried shard %d/%u %d/%d/%d on " DF_OID "\n", shard_idx, *tgt_idx,
-			obj->cob_shards->do_shards[shard_idx].do_rebuilding,
-			obj->cob_shards->do_shards[shard_idx].do_target_id,
+			obj->cob_shards->do_shards[shard_idx].do_rebuilding, tgt_id,
 			obj->cob_shards->do_shards[shard_idx].do_shard, DP_OID(obj->cob_md.omd_id));
+
 		rc = obj_ec_fail_info_insert(&obj_auxi->reasb_req, (uint16_t)*tgt_idx);
-		if (rc)
+		if (rc) {
+			if (rc == -DER_DATA_LOSS && obj_ec_fail_info_try_remove(obj_auxi) == 1)
+				continue;
 			break;
+		}
 
 		rc = obj_ec_fail_info_parity_get(obj, &obj_auxi->reasb_req, obj_auxi->dkey_hash,
 						 tgt_idx, tgt_bitmap);
@@ -5330,7 +5457,7 @@ obj_ec_fetch_shards_get(struct dc_object *obj, daos_obj_fetch_t *args, unsigned 
 		}
 
 		ec_deg_tgt = tgt_idx;
-		rc = obj_ec_valid_shard_get(obj_auxi, tgt_bitmap, grp_idx, &ec_deg_tgt);
+		rc = obj_ec_fetch_valid_shard_get(obj_auxi, tgt_bitmap, grp_idx, &ec_deg_tgt);
 		if (rc)
 			D_GOTO(out, rc);
 
