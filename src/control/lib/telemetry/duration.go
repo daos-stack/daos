@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -34,18 +34,22 @@ func (d *Duration) Type() MetricType {
 }
 
 func (d *Duration) Value() time.Duration {
+	durValue := BadDuration
 	if d.handle == nil || d.node == nil {
-		return BadDuration
+		return durValue
 	}
 
-	var tms C.struct_timespec
-
-	res := C.d_tm_get_duration(d.handle.ctx, &tms, &d.stats, d.node)
-	if res == C.DER_SUCCESS {
-		return time.Duration(tms.tv_sec)*time.Second + time.Duration(tms.tv_nsec)*time.Nanosecond
+	fetch := func() C.int {
+		var tms C.struct_timespec
+		res := C.d_tm_get_duration(d.handle.ctx, &tms, &d.stats, d.node)
+		if res == C.DER_SUCCESS {
+			durValue = time.Duration(tms.tv_sec)*time.Second + time.Duration(tms.tv_nsec)*time.Nanosecond
+		}
+		return res
 	}
+	d.fetchValWithRetry(fetch)
 
-	return BadDuration
+	return durValue
 }
 
 func (d *Duration) FloatValue() float64 {

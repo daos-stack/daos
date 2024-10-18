@@ -13,6 +13,7 @@
 #include <float.h>
 #include <pthread.h>
 #include <malloc.h>
+#include <gurt/atomic.h>
 #include <gurt/common.h>
 #include <gurt/list.h>
 #include <sys/shm.h>
@@ -624,6 +625,7 @@ alloc_node(struct d_tm_shmem_hdr *shmem, struct d_tm_node_t **newnode,
 		goto out;
 	tmp->dtn_metric  = NULL;
 	tmp->dtn_sibling = NULL;
+	atomic_store_relaxed(&tmp->dtn_readable, false);
 
 	*newnode = node;
 out:
@@ -2409,6 +2411,9 @@ add_metric(struct d_tm_context *ctx, struct d_tm_node_t **node, int metric_type,
 		pthread_mutexattr_destroy(&mattr);
 		temp->dtn_protect = true;
 	}
+
+	atomic_store_relaxed(&temp->dtn_readable, true);
+
 	if (node != NULL)
 		*node = temp;
 
@@ -3090,6 +3095,15 @@ out:
 	return rc;
 }
 
+static bool
+node_is_readable(struct d_tm_node_t *node)
+{
+	if (node == NULL)
+		return false;
+
+	return atomic_load_relaxed(&node->dtn_readable);
+}
+
 /**
  * Creates histogram counters for the given node.  It calculates the
  * extents of each bucket and creates counters at the path specified that
@@ -3278,6 +3292,9 @@ d_tm_get_num_buckets(struct d_tm_context *ctx,
 	if (ctx == NULL || histogram == NULL || node == NULL)
 		return -DER_INVAL;
 
+	if (unlikely(!node_is_readable(node)))
+		return -DER_AGAIN;
+
 	rc = validate_node_ptr(ctx, node, &shmem);
 	if (rc != 0)
 		return rc;
@@ -3341,6 +3358,9 @@ d_tm_get_bucket_range(struct d_tm_context *ctx, struct d_tm_bucket_t *bucket,
 	if (rc != 0)
 		return rc;
 
+	if (unlikely(!node_is_readable(node)))
+		return -DER_AGAIN;
+
 	if (!has_stats(node))
 		return -DER_OP_NOT_PERMITTED;
 
@@ -3392,6 +3412,9 @@ d_tm_get_counter(struct d_tm_context *ctx, uint64_t *val,
 	if (node->dtn_type != D_TM_COUNTER)
 		return -DER_OP_NOT_PERMITTED;
 
+	if (unlikely(!node_is_readable(node)))
+		return -DER_AGAIN;
+
 	/* "ctx == NULL" is server side fast version to read the counter. */
 	if (ctx == NULL) {
 		metric_data = node->dtn_metric;
@@ -3441,6 +3464,9 @@ d_tm_get_timestamp(struct d_tm_context *ctx, time_t *val,
 	if (node->dtn_type != D_TM_TIMESTAMP)
 		return -DER_OP_NOT_PERMITTED;
 
+	if (unlikely(!node_is_readable(node)))
+		return -DER_AGAIN;
+
 	metric_data = conv_ptr(shmem, node->dtn_metric);
 	if (metric_data != NULL) {
 		d_tm_node_lock(node);
@@ -3469,6 +3495,9 @@ d_tm_get_meminfo(struct d_tm_context *ctx, struct d_tm_meminfo_t *meminfo,
 
 	if (node->dtn_type != D_TM_MEMINFO)
 		return -DER_OP_NOT_PERMITTED;
+
+	if (unlikely(!node_is_readable(node)))
+		return -DER_AGAIN;
 
 	metric_data = conv_ptr(shmem, node->dtn_metric);
 	if (metric_data != NULL) {
@@ -3512,6 +3541,9 @@ d_tm_get_timer_snapshot(struct d_tm_context *ctx, struct timespec *tms,
 
 	if (!(node->dtn_type & D_TM_TIMER_SNAPSHOT))
 		return -DER_OP_NOT_PERMITTED;
+
+	if (unlikely(!node_is_readable(node)))
+		return -DER_AGAIN;
 
 	metric_data = conv_ptr(shmem, node->dtn_metric);
 	if (metric_data != NULL) {
@@ -3562,6 +3594,9 @@ d_tm_get_duration(struct d_tm_context *ctx, struct timespec *tms,
 
 	if (!(node->dtn_type & D_TM_DURATION))
 		return -DER_OP_NOT_PERMITTED;
+
+	if (unlikely(!node_is_readable(node)))
+		return -DER_AGAIN;
 
 	metric_data = conv_ptr(shmem, node->dtn_metric);
 	if (metric_data == NULL)
@@ -3627,6 +3662,9 @@ d_tm_get_gauge(struct d_tm_context *ctx, uint64_t *val,
 
 	if (!is_gauge(node))
 		return -DER_OP_NOT_PERMITTED;
+
+	if (unlikely(!node_is_readable(node)))
+		return -DER_AGAIN;
 
 	metric_data = conv_ptr(shmem, node->dtn_metric);
 	if (metric_data != NULL) {
@@ -3699,6 +3737,9 @@ int d_tm_get_metadata(struct d_tm_context *ctx, char **desc, char **units,
 
 	if (node->dtn_type == D_TM_DIRECTORY)
 		return -DER_OP_NOT_PERMITTED;
+
+	if (unlikely(!node_is_readable(node)))
+		return -DER_AGAIN;
 
 	metric_data = conv_ptr(shmem, node->dtn_metric);
 	if (metric_data != NULL) {
