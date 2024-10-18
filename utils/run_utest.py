@@ -440,6 +440,7 @@ class Test():
             cmd = new_cmd
         self.last = cmd
 
+        self.env.update({"PMEMOBJ_CONF": "sds.at_create=0"})
         if self.suite.gha:
             retval = run_cmd(cmd, env=self.env)
         else:

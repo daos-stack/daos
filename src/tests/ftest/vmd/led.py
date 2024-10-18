@@ -76,8 +76,8 @@ class VmdLedStatus(OSAUtils):
     def test_vmd_led_status(self):
         """Jira ID: DAOS-11290
 
-        :avocado: tags=all,manual
-        :avocado: tags=hw,medium
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw_vmd,medium
         :avocado: tags=vmd,vmd_led
         :avocado: tags=VmdLedStatus,test_vmd_led_status
         """
@@ -97,8 +97,8 @@ class VmdLedStatus(OSAUtils):
     def test_vmd_led_faulty(self):
         """Jira ID: DAOS-11290
 
-        :avocado: tags=all,manual
-        :avocado: tags=hw,medium
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw_vmd,medium
         :avocado: tags=vmd,vmd_led
         :avocado: tags=VmdLedStatus,test_vmd_led_faulty
         """

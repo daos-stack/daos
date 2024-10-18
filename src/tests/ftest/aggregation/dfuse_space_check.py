@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -9,6 +9,7 @@ import time
 
 from dfuse_utils import get_dfuse, start_dfuse
 from ior_test_base import IorTestBase
+from run_utils import run_remote
 
 
 class DfuseSpaceCheck(IorTestBase):
@@ -72,8 +73,11 @@ class DfuseSpaceCheck(IorTestBase):
         while self.get_nvme_free_space(False) >= self.block_size:
             file_path = os.path.join(dfuse.mount_dir.value, "file{}.txt".format(file_count))
             write_dd_cmd = "dd if=/dev/zero of={} bs={} count=1".format(file_path, self.block_size)
-            if 0 in self.execute_cmd(write_dd_cmd, fail_on_err=True, display_output=False):
-                file_count += 1
+            result = run_remote(
+                self.log, self.hostlist_clients, write_dd_cmd, verbose=False, timeout=300)
+            if not result.passed:
+                self.fail(f"Error running: {write_dd_cmd}")
+            file_count += 1
 
         return file_count
 
@@ -118,14 +122,16 @@ class DfuseSpaceCheck(IorTestBase):
 
         # Create a file as large as we can
         large_file = os.path.join(dfuse.mount_dir.value, 'largefile.txt')
-        self.execute_cmd('touch {}'.format(large_file))
+        if not run_remote(self.log, self.hostlist_clients, f'touch {large_file}').passed:
+            self.fail(f"Error creating {large_file}")
         dd_count = (self.initial_space // self.block_size) + 1
         write_dd_cmd = "dd if=/dev/zero of={} bs={} count={}".format(
             large_file, self.block_size, dd_count)
-        self.execute_cmd(write_dd_cmd, False)
+        run_remote(self.log, self.hostlist_clients, write_dd_cmd)
 
         # Remove the file
-        self.execute_cmd('rm -rf {}'.format(large_file))
+        if not run_remote(self.log, self.hostlist_clients, f'rm -rf {large_file}').passed:
+            self.fail(f"Error removing {large_file}")
 
         # Wait for aggregation to complete
         self.wait_for_aggregation()
@@ -142,7 +148,10 @@ class DfuseSpaceCheck(IorTestBase):
         self.pool.set_property("reclaim", "time")
 
         # remove all the small files created above.
-        self.execute_cmd("rm -rf {}".format(os.path.join(dfuse.mount_dir.value, '*')))
+        result = run_remote(
+            self.log, self.hostlist_clients, f"rm -rf {os.path.join(dfuse.mount_dir.value, '*')}")
+        if not result.passed:
+            self.fail("Error removing files in mount dir")
 
         # Wait for aggregation to complete after file removal
         self.wait_for_aggregation()

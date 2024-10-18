@@ -38,6 +38,7 @@ dnf --nodocs install \
     libjson-c-devel \
     libltdl7 \
     liblz4-devel \
+    libndctl-devel \
     libnuma-devel \
     libopenssl-devel \
     libprotobuf-c-devel \
