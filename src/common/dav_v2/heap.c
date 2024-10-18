@@ -174,7 +174,7 @@ mbrt_set_laf(struct mbrt *mb, int c_id)
 	D_ASSERT(c_id < MAX_ALLOCATION_CLASSES);
 
 	mb->laf[c_id]   = true;
-	mb->laf_updated = 1;
+	mb->laf_updated = true;
 }
 
 static void
@@ -184,7 +184,7 @@ mbrt_clear_laf(struct mbrt *mb)
 		return;
 	if (mb->laf_updated) {
 		memset(mb->laf, 0, MAX_ALLOCATION_CLASSES);
-		mb->laf_updated = 0;
+		mb->laf_updated = false;
 	}
 }
 
