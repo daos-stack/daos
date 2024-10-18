@@ -211,6 +211,32 @@ func listContainerSnapshots(ap *C.struct_cmd_args_s, containerID string) ([]*sna
 	return snapshots, nil
 }
 
+func printSnaps(out io.Writer, snaps []*snapshot) {
+	if len(snaps) == 0 {
+		fmt.Fprintf(out, "No snapshots.\n")
+		return
+	}
+
+	timeTitle := "Timestamp"
+	epochTitle := "Epoch"
+	nameTitle := "Name"
+	titles := []string{timeTitle, epochTitle, nameTitle}
+
+	table := []txtfmt.TableRow{}
+	for _, snap := range snaps {
+		table = append(table,
+			txtfmt.TableRow{
+				timeTitle:  snap.Timestamp,
+				epochTitle: snap.Epoch,
+				nameTitle:  snap.Name,
+			})
+	}
+
+	tf := txtfmt.NewTableFormatter(titles...)
+	tf.InitWriter(out)
+	tf.Format(table)
+}
+
 func (cmd *containerSnapListCmd) Execute(args []string) error {
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
@@ -233,15 +259,11 @@ func (cmd *containerSnapListCmd) Execute(args []string) error {
 		return cmd.OutputJSON(snaps, nil)
 	}
 
-	cmd.Infof("%s\t\t\t%s\t\t\t%s", "Timestamp" , "Epoch", "Name")
-	cmd.Infof("---------\t\t\t-----\t\t\t----")
-	if len(snaps) == 0 {
-		cmd.Info("no snapshots")
-		return nil
+	var bld strings.Builder
+	if err := printSnaps(&bld, snap, true); err != nil {
+		return err
 	}
-	for _, snap := range snaps {
-		cmd.Infof("%s\t0x%x\t%s", snap.Timestamp, snap.Epoch, snap.Name)
-	}
+	cmd.Info(bld.String())
 
 	return nil
 }

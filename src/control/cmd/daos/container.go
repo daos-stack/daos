@@ -962,9 +962,9 @@ func printContainerInfo(out io.Writer, ci *daos.ContainerInfo, verbose bool) err
 			{"Pool UUID": ci.PoolUUID.String()},
 			{"Container redundancy factor": fmt.Sprintf("%d", ci.RedundancyFactor)},
 			{"Number of open handles": fmt.Sprintf("%d", ci.NumHandles)},
-			{"Latest open time": fmt.Sprintf("%s (%#x) (%s)", daos.HLC(ci.OpenTime), ci.OpenTime)},
+			{"Latest open time": fmt.Sprintf("%s (%#x)", daos.HLC(ci.OpenTime), ci.OpenTime)},
 			{"Latest close/modify time": fmt.Sprintf("%s (%#x)", daos.HLC(ci.CloseModifyTime), ci.CloseModifyTime)},
-			{"Number of snapshots": fmt.Sprintf("%d", ci.NumSnapshots)},
+			{"Number of snapshots": fmt.Sprintf("%d", Ci.NumSnapshots)},
 		}...)
 
 		if ci.LatestSnapshot != 0 {
