@@ -964,7 +964,7 @@ func printContainerInfo(out io.Writer, ci *daos.ContainerInfo, verbose bool) err
 			{"Number of open handles": fmt.Sprintf("%d", ci.NumHandles)},
 			{"Latest open time": fmt.Sprintf("%s (%#x)", daos.HLC(ci.OpenTime), ci.OpenTime)},
 			{"Latest close/modify time": fmt.Sprintf("%s (%#x)", daos.HLC(ci.CloseModifyTime), ci.CloseModifyTime)},
-			{"Number of snapshots": fmt.Sprintf("%d", Ci.NumSnapshots)},
+			{"Number of snapshots": fmt.Sprintf("%d", ci.NumSnapshots)},
 		}...)
 
 		if ci.LatestSnapshot != 0 {

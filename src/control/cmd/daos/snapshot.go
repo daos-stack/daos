@@ -7,12 +7,16 @@
 package main
 
 import (
+	"fmt"
+	"io"
+	"strings"
 	"unsafe"
 
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
 
 /*
@@ -227,7 +231,7 @@ func printSnaps(out io.Writer, snaps []*snapshot) {
 		table = append(table,
 			txtfmt.TableRow{
 				timeTitle:  snap.Timestamp,
-				epochTitle: snap.Epoch,
+				epochTitle: fmt.Sprintf("%#x", snap.Epoch),
 				nameTitle:  snap.Name,
 			})
 	}
@@ -260,9 +264,7 @@ func (cmd *containerSnapListCmd) Execute(args []string) error {
 	}
 
 	var bld strings.Builder
-	if err := printSnaps(&bld, snap, true); err != nil {
-		return err
-	}
+	printSnaps(&bld, snaps)
 	cmd.Info(bld.String())
 
 	return nil
