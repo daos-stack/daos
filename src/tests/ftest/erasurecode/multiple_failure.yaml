@@ -25,6 +25,7 @@ server_config:
       storage: auto
 pool:
   size: 93%
+  set_logmasks: False
 container:
   type: POSIX
   control_method: daos
