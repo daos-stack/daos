@@ -90,5 +90,4 @@ jobs:
           cluster_label: ci_vm9
           tags: test_one_pool_vm
           jenkins_url: ${{ env.JENKINS_URL }}
-        secrets:
           GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
