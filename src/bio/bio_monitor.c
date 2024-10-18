@@ -956,6 +956,7 @@ bio_init_health_monitoring(struct bio_blobstore *bb, char *bdev_name)
 	D_ASSERT(bb != NULL);
 	D_ASSERT(bdev_name != NULL);
 
+	bio_export_engine_health_stats(bb, bdev_name);
 	if (bypass_health_collect())
 		return 0;
 
@@ -1112,6 +1113,46 @@ bio_export_vendor_health_stats(struct bio_blobstore *bb, char *bdev_name)
 	D_FREE(binfo);
 }
 
+/*
+ * Register DAOS metrics to export Intel Vendor SMART NVMe SSD attributes.
+ */
+void
+bio_export_engine_health_stats(struct bio_blobstore *bb, char *bdev_name)
+{
+	struct bio_dev_info		*binfo;
+	int				 rc;
+
+	D_ALLOC_PTR(binfo);
+	if (binfo == NULL) {
+		D_WARN("Failed to allocate binfo\n");
+		return;
+	}
+#define X(field, fname, desc, unit, type)				\
+	memset(binfo, 0, sizeof(*binfo));				\
+	rc = fill_in_traddr(binfo, bdev_name);				\
+	if (rc) {							\
+		D_WARN("Failed to extract %s addr: "DF_RC"\n",		\
+		       bdev_name, DP_RC(rc));				\
+	} else if (binfo->bdi_traddr == NULL) {				\
+		D_WARN("No engine health stats for %s\n", bdev_name);	\
+	} else {							\
+		rc = d_tm_add_metric(&bb->bb_dev_health.field,		\
+				     type,				\
+				     desc,				\
+				     unit,				\
+				     "/nvme/%s/%s",			\
+				     binfo->bdi_traddr,			\
+				     fname);				\
+		if (rc)							\
+			D_WARN("Failed to create %s sensor for %s: "	\
+			       DF_RC"\n", fname, bdev_name, DP_RC(rc));	\
+		D_FREE(binfo->bdi_traddr);				\
+	}
+
+	BIO_PROTO_NVME_ENGINE_STATS_LIST
+#undef X
+	D_FREE(binfo);
+}
 
 static void
 get_vendor_id(void *ctx, struct spdk_pci_device *pci_device)
