@@ -87,9 +87,9 @@ The DAOS Agent (running on the client nodes) is responsible for resolving a user
 UID/GID to user/group names, which are then added to a signed credential and sent to
 the DAOS storage nodes.
 
-## HPC Fabric setup
+## Network Setup
 
-DAOS depends on the HPC fabric software stack and drivers. Depending on the type of HPC fabric
+DAOS depends on the network fabric software stack and drivers. Depending on the type of fabric
 that is used, a supported version of the fabric stack needs to be installed.
 
 Note that for InfiniBand fabrics, DAOS is only supported with the MLNX\_OFED stack that is
@@ -162,8 +162,32 @@ Some distributions install a firewall as part of the base OS installation. DAOS 
 for its management service. If this port is blocked by firewall rules, neither `dmg` nor the
 `daos_agent` on a remote node will be able to contact the DAOS server(s).
 
-Either configure the firewall to allow traffic for this port, or disable the firewall
+If telemetry is enabled in the server configuration file, the telemetry port (9191 by default)
+must also be accessible on the DAOS server nodes.
+
+Depending on the provider used, each engine might also listen on a range of ports. This is
+the case for the tcp provider. This range will start at the fabric_iface_port specified in the
+server YAML file and use two ports for management, one port per target and helper xstream. For instance,
+with fabric_iface_port set to 20000, 16 targets and 4 helper streams, the engine will listen on ports
+in the range from 20000 to 20021 for a total of 22 ports.
+
+Moreover, there are cases where an engine might have to initiate a connection to a running application.
+In this case, inbound connections from the storage nodes to the compute nodes must be allowed.
+The default port range used by applications is 20100-21100 with the tcp provider. This can be modified
+by setting the FI_TCP_PORT_LOW_RANGE and FI_TCP_PORT_HIGH_RANGE environment variables before running
+the application.
+
+Either configure the firewall to allow traffic for these ports, or disable the firewall
 (for example, by running `systemctl stop firewalld; systemctl disable firewalld`).
+
+The table below summarizes all ports that should be opened on the firewall:
+
+| Node Type | Component     |  Process    | Settings                                         | Default     |
+| --------- | --------------|-------------|-------------------------------------------------------|-------------|
+| Server    | Control plane | daos_server | port:                                                 | 10001       |
+| Server    | Telemetry     | daos_server | telemetry_port:                                       | 9191        |
+| Server    | Data plane    | daos_engine | fabric_iface_port: + 2 + targets: + nr_xs_helpers:    | 20000-20019 |
+| Client    | libdaos       | application | FI_TCP_PORT_LOW_RANGE/FI_TCP_PORT_HIGH_RANGE env vars | 20100-21100 |
 
 ## Install from Source
 
