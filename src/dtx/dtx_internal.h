@@ -259,7 +259,7 @@ int dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
 int dtx_cos_add(struct ds_cont_child *cont, void *entry, daos_unit_oid_t *oid,
 		uint64_t dkey_hash, daos_epoch_t epoch, uint32_t flags);
 int dtx_cos_del(struct ds_cont_child *cont, struct dtx_id *xid,
-		daos_unit_oid_t *oid, uint64_t dkey_hash);
+		daos_unit_oid_t *oid, uint64_t dkey_hash, bool demote);
 uint64_t dtx_cos_oldest(struct ds_cont_child *cont);
 void dtx_cos_prio(struct ds_cont_child *cont, struct dtx_id *xid,
 		  daos_unit_oid_t *oid, uint64_t dkey_hash);
