@@ -86,7 +86,7 @@ runs:
         if ! JENKINS_URL="${{ inputs.jenkins_url }}" QUEUE_URL="${{ env.QUEUE_URL }}" \
               cancel_provision; then
             # probably already provisioned and needs un-provisioning
-            if ! cleanup_provision_request "${{ inputs.cluster_request_reqid }}"; then
+            if ! cleanup_provision_request "${{ env.CLUSTER_REQUEST_reqid }}"; then
                 exit 1
             fi
         fi
