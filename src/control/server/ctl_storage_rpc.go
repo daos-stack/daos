@@ -489,8 +489,20 @@ type deviceSizeStat struct {
 	devs             []*deviceToAdjust
 }
 
+// Dedupe and remove sysXS target ID from slice before counting IDs. See
+// storage.SmdDevice.UnmarshalJSON() for tgtID sanitization.
+func getSmdTgtCount(log logging.Logger, sd *ctlpb.SmdDevice) int {
+	var sdOut storage.SmdDevice
+	if err := convert.Types(sd, &sdOut); err != nil {
+		log.Errorf("could not retrieve target count for smd %s", sd.GetUuid())
+		return 0
+	}
+
+	return len(sdOut.TargetIDs)
+}
+
 // Add a device to the input map of device to which the usable size have to be adjusted
-func (cs *ControlService) addDeviceToAdjust(devsStat map[uint32]*deviceSizeStat, devToAdjust *deviceToAdjust, dataClusterCount uint64) {
+func (cs *ControlService) addDeviceToAdjust(devsStat map[uint32]*deviceSizeStat, devToAdjust *deviceToAdjust, dataClusterCount uint64, devTgtCount int) {
 	dev := devToAdjust.ctlr.GetSmdDevices()[devToAdjust.idx]
 	if devsStat[devToAdjust.rank] == nil {
 		devsStat[devToAdjust.rank] = &deviceSizeStat{
@@ -498,8 +510,7 @@ func (cs *ControlService) addDeviceToAdjust(devsStat map[uint32]*deviceSizeStat,
 		}
 	}
 	devsStat[devToAdjust.rank].devs = append(devsStat[devToAdjust.rank].devs, devToAdjust)
-	devTgtCount := uint64(len(dev.GetTgtIds()))
-	clusterPerTarget := dataClusterCount / devTgtCount
+	clusterPerTarget := dataClusterCount / uint64(devTgtCount)
 	cs.log.Tracef("SMD device %s (rank %d, ctlr %s) added to the list of device to adjust",
 		dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
 	if clusterPerTarget < devsStat[devToAdjust.rank].clusterPerTarget {
@@ -525,7 +536,7 @@ func (cs *ControlService) getMetaClusterCount(engineCfg *engine.Config, devToAdj
 	clusterSize := uint64(dev.GetClusterSize())
 	// Calculate MD cluster overhead based on the number of targets allocated to the device
 	// as per-target blobs will be striped across all of a given role's SSDs.
-	devTgtCount := len(dev.GetTgtIds())
+	devTgtCount := getSmdTgtCount(cs.log, dev)
 
 	if dev.GetRoleBits()&storage.BdevRoleMeta != 0 {
 		clusterCount := getClusterCount(dev.GetMetaSize(), devTgtCount, clusterSize)
@@ -575,6 +586,7 @@ func (cs *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 
 		for idx, dev := range ctlr.GetSmdDevices() {
 			rank := dev.GetRank()
+			devTgtCount := getSmdTgtCount(cs.log, dev)
 
 			if dev.GetRoleBits() != 0 && (dev.GetRoleBits()&storage.BdevRoleData) == 0 {
 				cs.log.Debugf("SMD device %s (rank %d, ctlr %s) not used to store data (Role bits 0x%X)",
@@ -593,7 +605,7 @@ func (cs *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 				continue
 			}
 
-			if dev.GetClusterSize() == 0 || len(dev.GetTgtIds()) == 0 {
+			if dev.GetClusterSize() == 0 || devTgtCount == 0 {
 				cs.log.Noticef("SMD device %s (rank %d,  ctlr %s) not usable: missing storage info",
 					dev.GetUuid(), rank, ctlr.GetPciAddr())
 				dev.AvailBytes = 0
@@ -623,7 +635,8 @@ func (cs *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 			if dev.GetRoleBits() == 0 {
 				cs.log.Tracef("No meta-data stored on SMD device %s (rank %d, ctlr %s)",
 					dev.GetUuid(), rank, ctlr.GetPciAddr())
-				cs.addDeviceToAdjust(devsStat, &devToAdjust, dataClusterCount)
+				cs.addDeviceToAdjust(devsStat, &devToAdjust, dataClusterCount,
+					devTgtCount)
 				continue
 			}
 
@@ -637,15 +650,15 @@ func (cs *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 			cs.log.Tracef("Removing %d metadata clusters from %d total",
 				subtrClusterCount, dataClusterCount)
 			dataClusterCount -= subtrClusterCount
-			cs.addDeviceToAdjust(devsStat, &devToAdjust, dataClusterCount)
+			cs.addDeviceToAdjust(devsStat, &devToAdjust, dataClusterCount, devTgtCount)
 		}
 	}
 
 	for rank, item := range devsStat {
 		for _, dev := range item.devs {
 			smdDev := dev.ctlr.GetSmdDevices()[dev.idx]
-			devTgtCount := uint64(len(smdDev.GetTgtIds()))
-			smdDev.UsableBytes = devTgtCount * item.clusterPerTarget * smdDev.GetClusterSize()
+			clusters := uint64(getSmdTgtCount(cs.log, smdDev)) * item.clusterPerTarget
+			smdDev.UsableBytes = clusters * smdDev.GetClusterSize()
 			cs.log.Debugf("Defining usable size of the SMD device %s (rank %d, ctlr %s) as %s (%d bytes)",
 				smdDev.GetUuid(), rank, dev.ctlr.GetPciAddr(),
 				humanize.Bytes(smdDev.GetUsableBytes()), smdDev.GetUsableBytes())
