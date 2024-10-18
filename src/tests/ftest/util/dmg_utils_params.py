@@ -1,10 +1,11 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from command_utils_base import BasicParameter, LogParameter, TransportCredentials, YamlParameters
+from command_utils_base import (BasicParameter, LogParameter, TelemetryConfig,
+                                TransportCredentials, YamlParameters)
 
 
 class DmgTransportCredentials(TransportCredentials):
@@ -25,16 +26,35 @@ class DmgTransportCredentials(TransportCredentials):
         return DmgTransportCredentials(self._log_dir)
 
 
+class DmgTelemetryConfig(TelemetryConfig):
+    """Telemetry credentials listing certificates for secure communication."""
+
+    def __init__(self, log_dir="/tmp"):
+        """Initialize a TelemetryConfig object."""
+        super().__init__("/run/dmg/telemetry_config/*", None, log_dir)
+        self.ca_cert = LogParameter(self._log_dir, None, "daosTelemetryCA.crt")
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            DmgTelemetryConfig: a new DmgTelemetryConfig object
+        """
+        return DmgTelemetryConfig(self._log_dir)
+
+
 class DmgYamlParameters(YamlParameters):
     """Defines the dmg configuration yaml parameters."""
 
-    def __init__(self, filename, name, transport):
+    def __init__(self, filename, name, transport, telemetry=None):
         """Initialize a DmgYamlParameters object.
 
         Args:
             filename (str): yaml configuration file name
             name (str): The DAOS system name.
             transport (DmgTransportCredentials): dmg security
+                configuration settings.
+            telemetry (DmgTelemetryConfig): dmg telemetry
                 configuration settings.
         """
         super().__init__("/run/dmg/*", filename, None, transport)
@@ -56,6 +76,9 @@ class DmgYamlParameters(YamlParameters):
         self.name = BasicParameter(None, name)
         self.hostlist = BasicParameter(None, "localhost")
         self.port = BasicParameter(None, 10001)
+
+        if telemetry is not None:
+            self.telemetry_config = telemetry
 
     def _get_new(self):
         """Get a new object based upon this one.
