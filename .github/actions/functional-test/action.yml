@@ -24,10 +24,13 @@ on:
         required: true
       ftest_args:
         type: string
-        default: ""
+        default: "--nvme=auto"
       jenkins_url:
         type: string
         default: https://build.hpdd.intel.com/
+    secrets:
+      GITHUB_TOKEN:
+        required: true
 
 runs:
   using: "composite"
@@ -67,11 +70,8 @@ runs:
         fetch-depth: 500
         ref: ${{ github.event.pull_request.head.sha }}
     - name: Request and Provision a Cluster
-      timeout-minutes: 7200
       uses: ./.github/actions/provision-cluster
-      shell: bash
     - name: Run Test
-      timeout-minutes: 7200
       id: run-test
       run: |
         . ci/gha_functions.sh

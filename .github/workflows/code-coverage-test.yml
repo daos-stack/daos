@@ -80,7 +80,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4.1.1
-      - name: Build RPMs
+      - name: Run function test
+        timeout-minutes: 2880
         uses: ./.github/actions/functional-test
         with:
           distro: el8
@@ -88,3 +89,6 @@ jobs:
           build_version: ${{ env.EL8_BUILD_VERSION }}
           cluster_label: ci_vm9
           tags: test_one_pool_vm
+          jenkins_url: ${{ env.JENKINS_URL }}
+        secrets:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
