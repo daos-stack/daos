@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -27,19 +27,19 @@ func TestSystem_NewFaultDomain(t *testing.T) {
 		},
 		"empty strings": {
 			input:  []string{"ok", ""},
-			expErr: errors.New("invalid fault domain"),
+			expErr: errors.New("empty string"),
 		},
 		"explicit root": {
 			input:  []string{"/"},
-			expErr: errors.New("invalid fault domain"),
+			expErr: errors.New("special character"),
 		},
 		"whitespace-only strings": {
 			input:  []string{"ok", "\t    "},
-			expErr: errors.New("invalid fault domain"),
+			expErr: errors.New("empty string"),
 		},
 		"name contains separator": {
 			input:  []string{"ok", "alpha/beta"},
-			expErr: errors.New("invalid fault domain"),
+			expErr: errors.New("special character"),
 		},
 		"single-level": {
 			input: []string{"ok"},
@@ -65,13 +65,47 @@ func TestSystem_NewFaultDomain(t *testing.T) {
 				Domains: []string{"ok", "go"},
 			},
 		},
+		"labels": {
+			input: []string{"First=ok", "second=go"},
+			expResult: &FaultDomain{
+				Domains: []string{"ok", "go"},
+				Labels:  []string{"first", "second"},
+			},
+		},
+		"strip quote marks": {
+			input: []string{"first=\"ok\"", "SECOND=go"},
+			expResult: &FaultDomain{
+				Domains: []string{"ok", "go"},
+				Labels:  []string{"first", "second"},
+			},
+		},
+		"empty label": {
+			input:  []string{"=ok", "second=go"},
+			expErr: errors.New("empty string"),
+		},
+		"empty label with quote marks": {
+			input:  []string{" \" \"\"=ok", "second=go"},
+			expErr: errors.New("empty string"),
+		},
+		"missing first label": {
+			input:  []string{"ok", "second=go"},
+			expErr: errors.New("has a label"),
+		},
+		"missing second label": {
+			input:  []string{"first=ok", "go"},
+			expErr: errors.New("has no label"),
+		},
+		"domain contains label assigner": {
+			input:  []string{"first=ok", "second=go=back"},
+			expErr: errors.New("special character"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			result, err := NewFaultDomain(tc.input...)
 
 			test.CmpErr(t, tc.expErr, err)
 
-			if diff := cmp.Diff(result, tc.expResult); diff != "" {
+			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Fatalf("(-want, +got): %s", diff)
 			}
 		})
@@ -130,7 +164,7 @@ func TestSystem_NewFaultDomainFromString(t *testing.T) {
 		},
 		"fault domain doesn't start with separator": {
 			input:  "junk",
-			expErr: errors.New("invalid fault domain"),
+			expErr: errors.New("fault path must start with root"),
 		},
 		"fault domain ends with separator": {
 			input:  "/junk/",
@@ -143,6 +177,13 @@ func TestSystem_NewFaultDomainFromString(t *testing.T) {
 		"fault domain with only whitespace between levels": {
 			input:  "/dc0/    /pdu2/host",
 			expErr: errors.New("invalid fault domain"),
+		},
+		"labels": {
+			input: "/datacenter=dc0/rack=rack1/power=pdu2/node=host",
+			expResult: &FaultDomain{
+				Domains: []string{"dc0", "rack1", "pdu2", "host"},
+				Labels:  []string{"datacenter", "rack", "power", "node"},
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -181,9 +222,94 @@ func TestSystem_FaultDomain_String(t *testing.T) {
 			},
 			expStr: "/rack0/pdu1/host",
 		},
+		"labels": {
+			domain: &FaultDomain{
+				Domains: []string{"rack0", "pdu1", "host"},
+				Labels:  []string{"rack", "power", "node"},
+			},
+			expStr: "/rack=rack0/power=pdu1/node=host",
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			test.AssertEqual(t, tc.expStr, tc.domain.String(), "unexpected result")
+		})
+	}
+}
+
+func TestSystem_FaultDomain_DomainStrings(t *testing.T) {
+	for name, tc := range map[string]struct {
+		domain *FaultDomain
+		expStr []string
+	}{
+		"nil": {
+			expStr: []string{},
+		},
+		"empty": {
+			domain: &FaultDomain{},
+			expStr: []string{},
+		},
+		"single level": {
+			domain: &FaultDomain{
+				Domains: []string{"host"},
+			},
+			expStr: []string{"host"},
+		},
+		"multi level": {
+			domain: &FaultDomain{
+				Domains: []string{"rack0", "pdu1", "host"},
+			},
+			expStr: []string{"rack0", "pdu1", "host"},
+		},
+		"labels": {
+			domain: &FaultDomain{
+				Domains: []string{"rack0", "pdu1", "host"},
+				Labels:  []string{"rack", "power", "node"},
+			},
+			expStr: []string{"rack=rack0", "power=pdu1", "node=host"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.AssertEqual(t, tc.expStr, tc.domain.DomainStrings(), "unexpected result")
+		})
+	}
+}
+
+func TestSystem_FaultDomain_HasLabels(t *testing.T) {
+	for name, tc := range map[string]struct {
+		domain    *FaultDomain
+		expResult bool
+	}{
+		"nil": {},
+		"empty": {
+			domain: &FaultDomain{},
+		},
+		"matching labels for domains": {
+			domain: &FaultDomain{
+				Domains: []string{"a", "b", "c"},
+				Labels:  []string{"1", "2", "3"},
+			},
+			expResult: true,
+		},
+		"no labels for domains": {
+			domain: &FaultDomain{
+				Domains: []string{"a", "b", "c"},
+			},
+		},
+		"not enough labels for domains": {
+			domain: &FaultDomain{
+				Domains: []string{"a", "b", "c"},
+				Labels:  []string{"1", "2"},
+			},
+		},
+		"too many labels for domains": { // length mismatch means we don't know how to match labels
+			domain: &FaultDomain{
+				Domains: []string{"a", "b", "c"},
+				Labels:  []string{"1", "2", "3", "4"},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.AssertEqual(t, tc.expResult, tc.domain.HasLabels(), "")
 		})
 	}
 }
@@ -240,6 +366,38 @@ func TestSystem_FaultDomain_Equals(t *testing.T) {
 		"totally different": {
 			domain1: &FaultDomain{
 				Domains: []string{"three", "four"},
+			},
+			domain2: &FaultDomain{
+				Domains: []string{"one", "two"},
+			},
+			expResult: false,
+		},
+		"label matching": {
+			domain1: &FaultDomain{
+				Domains: []string{"one", "two"},
+				Labels:  []string{"l1", "l2"},
+			},
+			domain2: &FaultDomain{
+				Domains: []string{"one", "two"},
+				Labels:  []string{"l1", "l2"},
+			},
+			expResult: true,
+		},
+		"label doesn't match": {
+			domain1: &FaultDomain{
+				Domains: []string{"one", "two"},
+				Labels:  []string{"l1", "l2"},
+			},
+			domain2: &FaultDomain{
+				Domains: []string{"one", "two"},
+				Labels:  []string{"l1", "l3"},
+			},
+			expResult: false,
+		},
+		"labels vs no labels": {
+			domain1: &FaultDomain{
+				Domains: []string{"one", "two"},
+				Labels:  []string{"l1", "l2"},
 			},
 			domain2: &FaultDomain{
 				Domains: []string{"one", "two"},
@@ -513,6 +671,35 @@ func TestSystem_FaultDomain_IsAncestorOf(t *testing.T) {
 	}
 }
 
+func TestSystem_FaultDomain_GetLabel(t *testing.T) {
+	for name, tc := range map[string]struct {
+		fd        *FaultDomain
+		expResult string
+	}{
+		"nil": {
+			expResult: "(nil)",
+		},
+		"empty": {
+			fd: MustCreateFaultDomain(),
+		},
+		"unlabeled": {
+			fd: MustCreateFaultDomain("one", "two", "three"),
+		},
+		"single layer": {
+			fd:        MustCreateFaultDomain("layer1=one"),
+			expResult: "layer1",
+		},
+		"multi layer": {
+			fd:        MustCreateFaultDomain("layer1=one", "layer2=two"),
+			expResult: "layer2",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.AssertEqual(t, tc.expResult, tc.fd.GetLabel(), "")
+		})
+	}
+}
+
 func TestSystem_FaultDomain_NewChild(t *testing.T) {
 	for name, tc := range map[string]struct {
 		orig       *FaultDomain
@@ -561,6 +748,30 @@ func TestSystem_FaultDomain_NewChild(t *testing.T) {
 			},
 			childLevel: "/",
 			expErr:     errors.New("invalid fault domain"),
+		},
+		"with labels": {
+			orig: &FaultDomain{
+				Domains: []string{"one=parent"},
+			},
+			childLevel: "two=child",
+			expResult: &FaultDomain{
+				Domains: []string{"parent", "child"},
+				Labels:  []string{"one", "two"},
+			},
+		},
+		"unlabeled child with labeled parent": {
+			orig: &FaultDomain{
+				Domains: []string{"one=parent"},
+			},
+			childLevel: "child",
+			expErr:     errors.New("labels"),
+		},
+		"labeled child with unlabeled parent": {
+			orig: &FaultDomain{
+				Domains: []string{"parent"},
+			},
+			childLevel: "two=child",
+			expErr:     errors.New("labels"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -820,6 +1031,32 @@ func TestSystem_NewFaultDomainTree(t *testing.T) {
 				},
 			},
 		},
+		"multi-layer with labels": {
+			domains: []*FaultDomain{MustCreateFaultDomainFromString("/rack=r1/pdu=p2/node=n3")},
+			expResult: &FaultDomainTree{
+				Domain: MustCreateFaultDomain(),
+				ID:     FaultDomainRootID,
+				Children: []*FaultDomainTree{
+					{
+						Domain: MustCreateFaultDomainFromString("/rack=r1"),
+						ID:     ExpFaultDomainID(1),
+						Children: []*FaultDomainTree{
+							{
+								Domain: MustCreateFaultDomainFromString("/rack=r1/pdu=p2"),
+								ID:     ExpFaultDomainID(2),
+								Children: []*FaultDomainTree{
+									{
+										Domain:   MustCreateFaultDomainFromString("/rack=r1/pdu=p2/node=n3"),
+										ID:       ExpFaultDomainID(3),
+										Children: []*FaultDomainTree{},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			result := NewFaultDomainTree(tc.domains...)
@@ -981,6 +1218,69 @@ func TestSystem_FaultDomainTree_nextID(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			test.AssertEqual(t, tc.expResult, tc.tree.nextID(), "")
+		})
+	}
+}
+
+func TestSystem_FaultDomainTree_GetLabel(t *testing.T) {
+	for name, tc := range map[string]struct {
+		tree      *FaultDomainTree
+		expResult string
+	}{
+		"nil tree": {
+			expResult: "(nil)",
+		},
+		"nil domain": {
+			tree: &FaultDomainTree{},
+		},
+		"root": {
+			tree: NewFaultDomainTree(),
+		},
+		"labeled": {
+			tree: &FaultDomainTree{
+				Domain: MustCreateFaultDomain("rack=r1"),
+			},
+			expResult: "rack",
+		},
+		"unlabeled": {
+			tree: &FaultDomainTree{
+				Domain: MustCreateFaultDomain("r1"),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.AssertEqual(t, tc.expResult, tc.tree.GetLabel(), "")
+		})
+	}
+}
+
+func TestSystem_FaultDomainTree_Labels(t *testing.T) {
+	for name, tc := range map[string]struct {
+		tree      *FaultDomainTree
+		expResult []string
+		expErr    error
+	}{
+		"nil": {
+			expErr: errors.New("nil"),
+		},
+		"empty tree": {
+			tree:      NewFaultDomainTree(),
+			expResult: []string{},
+		},
+		"labeled tree": {
+			tree:      NewFaultDomainTree(MustCreateFaultDomainFromString("/room=lab100/rack=123/node=host456")),
+			expResult: []string{"room", "rack", "node"},
+		},
+		"unlabeled tree": {
+			tree:      NewFaultDomainTree(MustCreateFaultDomainFromString("/lab100/123/host456")),
+			expResult: []string{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			result, err := tc.tree.Labels()
+
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expResult, result, "")
 		})
 	}
 }
@@ -1191,7 +1491,7 @@ func TestSystem_FaultDomainTree_Merge(t *testing.T) {
 		"different top level domains can't merge": {
 			tree:    NewFaultDomainTree(),
 			toMerge: NewFaultDomainTree().WithNodeDomain(rack0),
-			expErr:  errors.New("trees cannot be merged"),
+			expErr:  errors.New("cannot be merged"),
 		},
 		"merge single branch into empty tree": {
 			tree:      NewFaultDomainTree(),
@@ -1263,6 +1563,31 @@ func TestSystem_FaultDomainTree_Merge(t *testing.T) {
 			tree:      NewFaultDomainTree(rack0),
 			toMerge:   fullTree(),
 			expResult: fullTree(),
+		},
+		"merge labeled into empty tree": {
+			tree:      NewFaultDomainTree(),
+			toMerge:   NewFaultDomainTree(MustCreateFaultDomain("rack=rack1")),
+			expResult: NewFaultDomainTree(MustCreateFaultDomain("rack=rack1")),
+		},
+		"merge labeled into unlabeled tree": {
+			tree:    NewFaultDomainTree(rack0),
+			toMerge: NewFaultDomainTree(MustCreateFaultDomain("rack=rack1")),
+			expErr:  errors.New("with labels into one with no labels"),
+		},
+		"merge unlabeled into labeled tree": {
+			tree:    NewFaultDomainTree(MustCreateFaultDomain("rack=rack1")),
+			toMerge: NewFaultDomainTree(rack0),
+			expErr:  errors.New("with no labels into one with labels"),
+		},
+		"merge different labels at same layer": {
+			tree:    NewFaultDomainTree(MustCreateFaultDomain("room=lab123", "rack=rack1")),
+			toMerge: NewFaultDomainTree(MustCreateFaultDomain("room=lab123", "group=rack0")),
+			expErr:  errors.New("different existing label"),
+		},
+		"merge different labels on totally separate branches": {
+			tree:    NewFaultDomainTree(MustCreateFaultDomain("room=lab123", "rack=rack1")),
+			toMerge: NewFaultDomainTree(MustCreateFaultDomain("room=lab456", "group=rack0")),
+			expErr:  errors.New("different existing label"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
