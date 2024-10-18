@@ -1212,7 +1212,7 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	tc_out->tc_ranks.ca_arrays = rank;
 	tc_out->tc_ranks.ca_count  = 1;
 
-	rc = ds_pool_start(tc_in->tc_pool_uuid, false);
+	rc = ds_pool_start(tc_in->tc_pool_uuid, false, false);
 	if (rc) {
 		D_ERROR(DF_UUID": failed to start pool: "DF_RC"\n",
 			DP_UUID(tc_in->tc_pool_uuid), DP_RC(rc));
