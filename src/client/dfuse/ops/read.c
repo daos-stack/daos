@@ -18,6 +18,12 @@
  */
 static pthread_mutex_t rc_lock = PTHREAD_MUTEX_INITIALIZER;
 
+struct read_chunk_core {
+	d_list_t entries;
+	size_t   file_size;
+	bool     seen_eof;
+};
+
 static void
 cb_read_helper(struct dfuse_event *ev, void *buff)
 {
@@ -39,17 +45,28 @@ cb_read_helper(struct dfuse_event *ev, void *buff)
 		}
 	}
 
-	if (ev->de_len == 0)
-		DFUSE_TRA_DEBUG(oh, "%#zx-%#zx requested (EOF)", ev->de_req_position,
-				ev->de_req_position + ev->de_req_len - 1);
-	else if (ev->de_len == ev->de_req_len)
+	if (ev->de_len == ev->de_req_len) {
 		DFUSE_TRA_DEBUG(oh, "%#zx-%#zx read", ev->de_req_position,
 				ev->de_req_position + ev->de_req_len - 1);
-	else
-		DFUSE_TRA_DEBUG(oh, "%#zx-%#zx read %#zx-%#zx not read (truncated)",
-				ev->de_req_position, ev->de_req_position + ev->de_len - 1,
-				ev->de_req_position + ev->de_len,
-				ev->de_req_position + ev->de_req_len - 1);
+	} else {
+		struct dfuse_inode_entry *ie = oh->doh_ie;
+
+		if (ie->ie_chunk) {
+			ie->ie_chunk->seen_eof = true;
+			if (ev->de_len == 0)
+				ie->ie_chunk->file_size = ev->de_req_position;
+			else
+				ie->ie_chunk->file_size = ev->de_req_position + ev->de_len - 1;
+		}
+		if (ev->de_len == 0)
+			DFUSE_TRA_DEBUG(oh, "%#zx-%#zx requested (EOF)", ev->de_req_position,
+					ev->de_req_position + ev->de_req_len - 1);
+		else
+			DFUSE_TRA_DEBUG(oh, "%#zx-%#zx read %#zx-%#zx not read (truncated)",
+					ev->de_req_position, ev->de_req_position + ev->de_len - 1,
+					ev->de_req_position + ev->de_len,
+					ev->de_req_position + ev->de_req_len - 1);
+	}
 
 	DFUSE_REPLY_BUFQ(oh, ev->de_req, buff, ev->de_len);
 release:
@@ -192,10 +209,6 @@ struct read_chunk_data {
 		fuse_req_t            req;
 		struct dfuse_obj_hdl *oh;
 	} reqs[MAX_REQ_COUNT];
-};
-
-struct read_chunk_core {
-	d_list_t entries;
 };
 
 /* Called when the last open file handle on a inode is closed.  This needs to free everything which
@@ -419,6 +432,8 @@ found:
 			 */
 			rcb = false;
 		} else {
+			oh->doh_linear_read_pos = max(oh->doh_linear_read_pos, position + K128);
+
 			DFUSE_IE_STAT_ADD(oh->doh_ie, DS_READ_BUCKET_M);
 			DFUSE_TRA_DEBUG(oh, "%#zx-%#zx read", position, position + K128 - 1);
 			DFUSE_REPLY_BUFQ(oh, req, cd->ev->de_iov.iov_buf + (slot * K128), K128);
@@ -462,13 +477,26 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	struct dfuse_eq      *eqt;
 	int                   rc;
 	struct dfuse_event   *ev;
+	bool                  reached_eof = false;
 
 	DFUSE_IE_STAT_ADD(oh->doh_ie, DS_READ);
 
 	if (oh->doh_linear_read_eof && position == oh->doh_linear_read_pos) {
+		reached_eof = true;
+	} else if (oh->doh_ie->ie_chunk && oh->doh_ie->ie_chunk->seen_eof) {
+		if (position >= oh->doh_ie->ie_chunk->file_size)
+			reached_eof = true;
+	}
+
+	if (reached_eof) {
 		DFUSE_TRA_DEBUG(oh, "Returning EOF early without round trip %#zx", position);
 		oh->doh_linear_read_eof = false;
+#if 0
+		/* Release uses this to set the bit on the directory so do not turn it off here
+		* but I do need to check why it was set before.
+		*/
 		oh->doh_linear_read     = false;
+#endif
 
 		if (oh->doh_readahead) {
 			D_MUTEX_LOCK(&oh->doh_readahead->dra_lock);
@@ -483,6 +511,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 				DFUSE_IE_STAT_ADD(oh->doh_ie, DS_PRE_READ);
 			}
 		}
+		DFUSE_IE_STAT_ADD(oh->doh_ie, DS_READ_EOF_M);
 		DFUSE_REPLY_BUFQ(oh, req, NULL, 0);
 		return;
 	}
