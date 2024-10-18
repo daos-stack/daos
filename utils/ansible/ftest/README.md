@@ -67,6 +67,10 @@ The inventory should also contain a set of mandatory and optional variables.
   sub-cluster.
 - **daos\_source\_dir**: mandatory variable only used by the node of the *daos\_dev* group defining
   the path of the directory containing the DAOS source code.
+- **daos\_build\_dir**: mandatory variable only used by the node of the *daos\_dev* group defining
+  the path of the DAOS building directory.
+- **daos\_launch\_username**: mandatory variable defining the name of the user running the
+  daos_launch.sh script.
 - **daos\_ofi\_provider**: optional variable (default value: ofi+tcp;ofi_rxm) defining the network
   provider to be used by the DAOS engines.  It also defines which network rpms driver to install
   (e.g. ib mellanox driver).

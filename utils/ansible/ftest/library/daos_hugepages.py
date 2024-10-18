@@ -68,7 +68,7 @@ elapsed:
 '''
 
 
-__HUGEPAGES_STATE_PATTERN__ = re.compile(r"(\[madvise\])|(\[always\])")
+__HUGEPAGES_STATE_PATTERN__ = re.compile(r"(.*\[madvise\])|(\[always\]).*")
 __HUGEPAGES_SYSCTL_PATTERN = re.compile(r"^vm\.nr_hugepages\s*=\s*(?P<size>\d+)$")
 
 

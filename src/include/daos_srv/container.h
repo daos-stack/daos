@@ -134,6 +134,8 @@ struct ds_cont_child {
 	d_list_t		 sc_dtx_cos_list;
 	/* The global list for committable collective DTXs. */
 	d_list_t		 sc_dtx_coll_list;
+	/* The list for current DTX batched commit. */
+	d_list_t		 sc_dtx_batched_list;
 	/* the pool map version of updating DAOS_PROP_CO_STATUS prop */
 	uint32_t		 sc_status_pm_ver;
 };

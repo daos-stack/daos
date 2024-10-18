@@ -10,6 +10,7 @@ CWD="${CWD%/*}"
 DAOS_INSTALL_DIR="{{ daos_runtime_dir }}/install"
 DAOS_VENV_DIR="{{ daos_runtime_dir }}/virtualenvs"
 DAOS_SOURCE_DIR="{{ daos_source_dir }}"
+DAOS_BUILD_DIR="{{ daos_build_dir }}"
 SERVERS_LIST="{{ groups["daos_servers"] | join(',') }}"
 {% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
 CLIENTS_LIST="{{ groups["daos_clients"] | join(',') }}"
@@ -177,18 +178,8 @@ check_cmds $SSH_EXE $WGET_EXE $CLUSH_EXE $NODESET_EXE $MODULE_EXE $MAKE_EXE $CMA
 
 set -e
 
-info "Checking of home partition"
-{% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
-for host in $($NODESET_EXE -e $CLIENTS_LIST $SERVERS_LIST)
-{% else %}
-for host in $($NODESET_EXE -e $SERVERS_LIST)
-{% endif %}
-do
-	run $SSH_EXE root@$host mountpoint --quiet "$HOME" || fatal "Home directory '$home' not mounted on $host"
-done
-
 if "$FORCE_INSTALL" ; then
-	for dir in "$DAOS_INSTALL_DIR" "$DAOS_VENV_DIR" "$DAOS_SOURCE_DIR/build"
+	for dir in "$DAOS_INSTALL_DIR" "$DAOS_VENV_DIR" "$DAOS_BUILD_DIR"
 	do
 		info "Removing old DAOS directory $dir"
 		if ! run /bin/rm -fr "$dir" ; then
@@ -224,14 +215,14 @@ SCONS_OPTS="--directory="$DAOS_SOURCE_DIR" --jobs=$JOBS_NB"
 
 if "$DAOS_BUILD_DEPS" ; then
 	info "Building DAOS dependencies from source tree $DAOS_SOURCE_DIR"
-	if ! run "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" PREFIX="$DAOS_INSTALL_DIR" $SCONS_OPTS --build-deps=only ; then
+	if ! run "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" BUILD_ROOT="$DAOS_BUILD_DIR" PREFIX="$DAOS_INSTALL_DIR" $SCONS_OPTS --build-deps=only ; then
 		fatal "DAOS dependencies could not be properly build"
 	fi
 fi
 
 info "Building DAOS from source tree $DAOS_SOURCE_DIR"
 # NOTE Dependencies will not be build as 'no' is default value of the --build-deps option
-if ! run env MPI_PKG=any "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" PREFIX="$DAOS_INSTALL_DIR" $SCONS_OPTS ; then
+if ! run env MPI_PKG=any "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" BUILD_ROOT="$DAOS_BUILD_DIR" PREFIX="$DAOS_INSTALL_DIR" $SCONS_OPTS ; then
 	fatal "DAOS could not be properly build"
 fi
 
@@ -255,30 +246,30 @@ info "Finalizing spdk install"
 for item in $(find "$DAOS_INSTALL_DIR/share/daos" -type f)
 do
         dest="/usr/${item#$DAOS_INSTALL_DIR/}"
-        run $CLUSH_EXE $CLUSH_OPTS -l root -w $SERVERS_LIST install -v -D -o root -g root -m 755 "$item" "$dest"
+        run $CLUSH_EXE $CLUSH_OPTS -w $SERVERS_LIST sudo install -v -D -o root -g root -m 755 "$item" "$dest"
 done
 
 info "Finalizing daos-server-helper install"
 run chmod 0446 "$DAOS_INSTALL_DIR/bin/daos_server_helper"
-run $CLUSH_EXE $CLUSH_OPTS -l root -w $SERVERS_LIST cp -f "$DAOS_INSTALL_DIR/bin/daos_server_helper" /usr/bin
-run $CLUSH_EXE $CLUSH_OPTS -l root -w $SERVERS_LIST chown root:daos_server /usr/bin/daos_server_helper
-run $CLUSH_EXE $CLUSH_OPTS -l root -w $SERVERS_LIST chmod 4755 /usr/bin/daos_server_helper
+run $CLUSH_EXE $CLUSH_OPTS -w $SERVERS_LIST sudo cp -f "$DAOS_INSTALL_DIR/bin/daos_server_helper" /usr/bin
+run $CLUSH_EXE $CLUSH_OPTS -w $SERVERS_LIST sudo chown root:daos_server /usr/bin/daos_server_helper
+run $CLUSH_EXE $CLUSH_OPTS -w $SERVERS_LIST sudo chmod 4755 /usr/bin/daos_server_helper
 run $CLUSH_EXE $CLUSH_OPTS -w $SERVERS_LIST chmod a-x  "$DAOS_INSTALL_DIR/bin/daos_server_helper"
 
 {% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
 info "Finalizing dfuse install"
-run $CLUSH_EXE $CLUSH_OPTS -l root -w $CLIENTS_LIST cp -f "$DAOS_INSTALL_DIR/bin/dfuse" /usr/bin
-run $CLUSH_EXE $CLUSH_OPTS -l root -w $CLIENTS_LIST chown root:root /usr/bin/dfuse
-run $CLUSH_EXE $CLUSH_OPTS -l root -w $CLIENTS_LIST chmod 755 /usr/bin/dfuse
+run $CLUSH_EXE $CLUSH_OPTS -w $CLIENTS_LIST sudo cp -f "$DAOS_INSTALL_DIR/bin/dfuse" /usr/bin
+run $CLUSH_EXE $CLUSH_OPTS -w $CLIENTS_LIST sudo chown root:root /usr/bin/dfuse
+run $CLUSH_EXE $CLUSH_OPTS -w $CLIENTS_LIST sudo chmod 755 /usr/bin/dfuse
 {% endif %}
 
 info "Updating dynamic linker configuration"
 {% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
-run $CLUSH_EXE $CLUSH_OPTS -l root -w $SERVERS_LIST -w $CLIENTS_LIST rm -f /etc/ld.so.cache
-run $CLUSH_EXE $CLUSH_OPTS -l root -w $SERVERS_LIST -w $CLIENTS_LIST ldconfig
+run $CLUSH_EXE $CLUSH_OPTS -w $SERVERS_LIST -w $CLIENTS_LIST sudo rm -f /etc/ld.so.cache
+run $CLUSH_EXE $CLUSH_OPTS -w $SERVERS_LIST -w $CLIENTS_LIST sudo ldconfig
 {% else %}
-run $CLUSH_EXE $CLUSH_OPTS -l root -w $SERVERS_LIST rm -f /etc/ld.so.cache
-run $CLUSH_EXE $CLUSH_OPTS -l root -w $SERVERS_LIST ldconfig
+run $CLUSH_EXE $CLUSH_OPTS -w $SERVERS_LIST sudo rm -f /etc/ld.so.cache
+run $CLUSH_EXE $CLUSH_OPTS -w $SERVERS_LIST sudo ldconfig
 {% endif %}
 
 if [[ ${MPICH_PATH:+x} ]] ; then
@@ -375,7 +366,7 @@ if [[ ${MPICH_PATH:+x} ]] ; then
 		mkdir -p /usr/share/modulefiles/mpi
 		ln -fs "$DAOS_INSTALL_DIR/share/modulefiles/mpich-x86_64" /usr/share/modulefiles/mpi/mpich-x86_64
 		EOF
-	} | run $CLUSH_EXE $CLUSH_OPTS -l root -w $CLIENTS_LIST -w $SERVERS_LIST bash -s
+	} | run $CLUSH_EXE $CLUSH_OPTS -w $CLIENTS_LIST -w $SERVERS_LIST sudo bash -s
 fi
 
 if [[ ${HDF5_PATH:+x} ]] ; then
@@ -626,9 +617,9 @@ fi
 
 info "Updating dynamic linker configuration"
 {% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
-run $CLUSH_EXE $CLUSH_OPTS -l root -w $SERVERS_LIST -w $CLIENTS_LIST rm -f /etc/ld.so.cache
-run $CLUSH_EXE $CLUSH_OPTS -l root -w $SERVERS_LIST -w $CLIENTS_LIST ldconfig
+run $CLUSH_EXE $CLUSH_OPTS -w $SERVERS_LIST -w $CLIENTS_LIST sudo rm -f /etc/ld.so.cache
+run $CLUSH_EXE $CLUSH_OPTS -w $SERVERS_LIST -w $CLIENTS_LIST sudo ldconfig
 {% else %}
-run $CLUSH_EXE $CLUSH_OPTS -l root -w $SERVERS_LIST rm -f /etc/ld.so.cache
-run $CLUSH_EXE $CLUSH_OPTS -l root -w $SERVERS_LIST ldconfig
+run $CLUSH_EXE $CLUSH_OPTS -w $SERVERS_LIST sudo rm -f /etc/ld.so.cache
+run $CLUSH_EXE $CLUSH_OPTS -w $SERVERS_LIST sudo ldconfig
 {% endif %}
