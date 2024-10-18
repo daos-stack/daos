@@ -28,7 +28,6 @@ on:
       jenkins_url:
         type: string
         default: https://build.hpdd.intel.com/
-    secrets:
       GITHUB_TOKEN:
         required: true
 
@@ -106,7 +105,7 @@ runs:
       uses: EnricoMi/publish-unit-test-result-action@v2
       with:
         check_name: ${{ env.STAGE_NAME }} Test Results (old)
-        github_token: ${{ secrets.GITHUB_TOKEN }}
+        github_token: ${{ inputs.GITHUB_TOKEN }}
         junit_files: ${{ env.STAGE_NAME }}/**/results.xml
     - name: Publish artifacts
       if: (!cancelled()) && (success() || failure()) &&
