@@ -151,21 +151,21 @@ class RootContainerTest(TestWithServers):
 
         # Wait for pool free space to reach expected value or timeout
         expected = pool_space_after + ((cont_count // 2) * tmp_file_count * tmp_file_size)
-        start = time.time()
+        max_loops = 10
         loop = 0
         self.log_step(
             f"Verify the pool free space >= {expected} after destroying half of the containers")
-        while True:
+        while loop < max_loops:
             loop += 1
-            self.log.debug("Check if the pool free space >= %s - loop %s", expected, loop)
+            self.log.debug(
+                "Check if the pool free space >= %s (loop %s/%s)", expected, loop, max_loops)
             current = self._get_pool_free_space(pool, device, expected)
             if current >= expected:
                 break
-            if (time.time() - start) < 60:
-                self.fail(
-                    f"Pool free space less than {expected} after destroying half of the containers")
-            time.sleep(5)
-        self.log.info("Test passed")
+            time.sleep(int(60 / max_loops))
+        if loop >= max_loops:
+            self.fail(
+                f"Pool free space less than {expected} after destroying half of the containers")
 
     def insert_files_and_verify(self, hosts, cont_dir, tmp_file_count, tmp_file_name,
                                 tmp_file_size):
