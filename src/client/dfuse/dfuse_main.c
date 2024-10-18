@@ -166,6 +166,7 @@ dfuse_bg(struct dfuse_info *dfuse_info)
  *
  * Should be called from the post_start plugin callback and creates
  * a filesystem.
+ * Returns a DAOS error code.
  * Returns true on success, false on failure.
  */
 int
@@ -205,14 +206,16 @@ dfuse_launch_fuse(struct dfuse_info *dfuse_info, struct fuse_args *args)
 
 	/* Blocking */
 	rc = dfuse_loop(dfuse_info);
-	if (rc != 0)
+	if (rc != 0) {
 		DHS_ERROR(dfuse_info, rc, "Fuse loop exited");
+		rc = daos_errno2der(rc);
+	}
 
 umount:
 
 	fuse_session_unmount(dfuse_info->di_session);
 
-	return daos_errno2der(rc);
+	return rc;
 }
 
 #define DF_POOL_PREFIX "pool="
