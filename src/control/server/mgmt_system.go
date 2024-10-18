@@ -1067,6 +1067,8 @@ func (svc *mgmtSvc) SystemExclude(ctx context.Context, req *mgmtpb.SystemExclude
 		})
 	}
 
+	svc.reqGroupUpdate(ctx, false)
+
 	return resp, nil
 }
 

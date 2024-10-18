@@ -1766,6 +1766,7 @@ func TestServer_MgmtSvc_SystemExclude(t *testing.T) {
 				mockMember(t, 3, 2, "joined"),
 			},
 		},
+
 		"unexclude hosts": {
 			req: &mgmtpb.SystemExcludeReq{Hosts: test.MockHostAddr(1).String(), Clear: true},
 			members: system.Members{
@@ -1796,10 +1797,30 @@ func TestServer_MgmtSvc_SystemExclude(t *testing.T) {
 			if tc.req != nil && tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName
 			}
+
+			startMapVer, err := svc.sysdb.CurMapVersion()
+			if err != nil {
+				t.Fatalf("startMapVer CurMapVersion() failed\n")
+				return
+			}
 			gotResp, gotAPIErr := svc.SystemExclude(ctx, tc.req)
 			test.CmpErr(t, tc.expAPIErr, gotAPIErr)
 			if tc.expAPIErr != nil {
 				return
+			}
+
+			// Check for any system map version increase by the (asynchronous) update.
+			// Test will time out if it never happens, thus choice of an infinite loop here.
+			for {
+				curMapVer, err := svc.sysdb.CurMapVersion()
+				if err != nil {
+					t.Fatalf("CurMapVersion() failed\n")
+					return
+				}
+
+				if curMapVer > startMapVer {
+					break
+				}
 			}
 
 			checkRankResults(t, tc.expResults, gotResp.Results)
