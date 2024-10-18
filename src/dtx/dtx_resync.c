@@ -115,7 +115,7 @@ next:
 	}
 
 	if (j > 0) {
-		rc = dtx_commit(cont, dtes, dcks, j);
+		rc = dtx_commit(cont, dtes, dcks, j, true);
 		if (rc < 0)
 			D_ERROR("Failed to commit the DTXs: rc = "DF_RC"\n",
 				DP_RC(rc));
@@ -359,7 +359,7 @@ out:
 
 		dck.oid = oid;
 		dck.dkey_hash = dkey_hash;
-		rc = dtx_coll_commit(cont, dce, &dck);
+		rc = dtx_coll_commit(cont, dce, &dck, true);
 	}
 
 	dtx_coll_entry_put(dce);
