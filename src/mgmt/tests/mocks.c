@@ -281,11 +281,13 @@ daos_pool_info_t ds_mgmt_pool_query_info_in;
 void            *ds_mgmt_pool_query_info_ptr;
 d_rank_list_t   *ds_mgmt_pool_query_enabled_ranks_out;
 d_rank_list_t   *ds_mgmt_pool_query_disabled_ranks_out;
+d_rank_list_t   *ds_mgmt_pool_query_suspect_ranks_out;
 
 int
 ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **enabled_ranks,
-		   d_rank_list_t **disabled_ranks, daos_pool_info_t *pool_info,
-		   uint32_t *pool_layout_ver, uint32_t *upgrade_layout_ver)
+		   d_rank_list_t **disabled_ranks, d_rank_list_t **suspect_ranks,
+		   daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
+		   uint32_t *upgrade_layout_ver)
 {
 	/* If function is to return with an error, pool_info and ranks will not be filled. */
 	if (ds_mgmt_pool_query_return != 0)
@@ -310,6 +312,13 @@ ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **e
 		ds_mgmt_pool_query_disabled_ranks_out = *disabled_ranks;
 	}
 
+	if ((pool_info->pi_bits & DPI_ENGINES_SUSPECT) != 0) {
+		D_ASSERT(suspect_ranks != NULL);
+
+		*suspect_ranks = d_rank_list_alloc(2); /* 0-1 ; caller must free this */
+		ds_mgmt_pool_query_suspect_ranks_out = *suspect_ranks;
+	}
+
 	ds_mgmt_pool_query_info_in = *pool_info;
 	*pool_info                 = ds_mgmt_pool_query_info_out;
 
@@ -325,6 +334,7 @@ mock_ds_mgmt_pool_query_setup(void)
 	memset(&ds_mgmt_pool_query_info_out, 0, sizeof(daos_pool_info_t));
 	ds_mgmt_pool_query_enabled_ranks_out  = NULL;
 	ds_mgmt_pool_query_disabled_ranks_out = NULL;
+	ds_mgmt_pool_query_suspect_ranks_out  = NULL;
 }
 
 int			ds_mgmt_pool_query_targets_return;
