@@ -481,6 +481,9 @@ struct dfuse_pool {
 	ACTION(RENAME)                                                                             \
 	ACTION(OPEN)                                                                               \
 	ACTION(PRE_READ)                                                                           \
+	ACTION(CON_READ)                                                                           \
+	ACTION(CON_READ_BUCKET)                                                                    \
+	ACTION(CON_READ_BC)                                                                        \
 	ACTION(READ)                                                                               \
 	ACTION(WRITE)                                                                              \
 	ACTION(STATFS)

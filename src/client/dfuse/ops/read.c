@@ -69,6 +69,7 @@ dfuse_cb_read_complete(struct dfuse_event *ev)
 		DFUSE_TRA_DEBUG(ev->de_oh, "concurrent network read %p", evs->de_oh);
 		evs->de_len         = min(ev->de_len, evs->de_req_len);
 		evs->de_ev.ev_error = ev->de_ev.ev_error;
+		DFUSE_IE_STAT_ADD(ev->de_oh->doh_ie, DS_CON_READ);
 		cb_read_helper(evs, ev->de_iov.iov_buf);
 	}
 
@@ -174,7 +175,7 @@ pick_eqt(struct dfuse_info *dfuse_info)
 
 #define CHUNK_SIZE (1024 * 1024)
 
-#define MAX_REQ_COUNT 64
+#define MAX_REQ_COUNT 256
 
 struct read_chunk_data {
 	struct dfuse_event   *ev;
@@ -258,7 +259,7 @@ chunk_cb(struct dfuse_event *ev)
 				cd->bucket, slot);
 
 		position = (cd->bucket * CHUNK_SIZE) + (slot * K128);
-
+		DFUSE_IE_STAT_ADD(ev->de_oh->doh_ie, DS_CON_READ_BUCKET);
 		if (cd->rc != 0) {
 			DFUSE_REPLY_ERR_RAW(cd->reqs[i].oh, req, cd->rc);
 		} else {
@@ -418,6 +419,7 @@ found:
 			 */
 			rcb = false;
 		} else {
+			DFUSE_IE_STAT_ADD(oh->doh_ie, DS_CON_READ_BC);
 			DFUSE_TRA_DEBUG(oh, "%#zx-%#zx read", position, position + K128 - 1);
 			DFUSE_REPLY_BUFQ(oh, req, cd->ev->de_iov.iov_buf + (slot * K128), K128);
 			rcb = true;
