@@ -392,12 +392,29 @@ class Dfuse(DfuseCommand):
         cmd = f"daos filesystem query --json {self.mount_dir.value}"
         result = run_remote(self.log, self.hosts, cmd)
         if not result.passed:
-            raise CommandFailure(f'"fs query failed on {result.failed_hosts}')
+            raise CommandFailure(f'fs query failed on {result.failed_hosts}')
 
         data = json.loads("\n".join(result.output[0].stdout))
         if data["status"] != 0 or data["error"] is not None:
             raise CommandFailure("fs query returned bad data.")
         return data["response"]
+
+    def get_log_file(self):
+        """Return the content of the log file
+
+        Only works if there is one entry in the client list.
+        """
+
+        if len(self.hosts) != 1:
+            raise CommandFailure("get_log_file only supports one host")
+        if "D_LOG_FILE" not in self.env or not self.env["D_LOG_FILE"]:
+            raise CommandFailure("get_log_file needs a DFuse log files to be defined")
+
+        log_file = self.env["D_LOG_FILE"]
+        result = run_remote(self.log, self.hosts, f"cat {log_file}")
+        if not result.passed:
+            raise CommandFailure(f'Log file {log_file} can not be open on {result.failed_hosts}')
+        return result.output[0].stdout
 
 
 def get_dfuse(test, hosts, namespace=None):
