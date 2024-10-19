@@ -110,7 +110,7 @@ class ListVerboseTest(IorTestBase):
                     "imbalance": nvme_imbalance
                 },
             ],
-            "mem_file_bytes": 0
+            "mem_file_bytes": scm_size
         }
 
     @staticmethod
