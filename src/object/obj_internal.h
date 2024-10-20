@@ -292,10 +292,15 @@ struct coll_oper_args {
 	struct shard_auxi_args	 coa_auxi;
 	int			 coa_dct_nr;
 	uint32_t		 coa_dct_cap;
-	uint32_t		 coa_max_dct_sz;
+	union {
+		uint32_t	 coa_max_dct_sz;
+		/* Temporarily save obj->cob_min_rank for verification during obj_coll_prep_one. */
+		uint32_t	 coa_min_rank;
+	};
 	uint8_t			 coa_max_shard_nr;
 	uint8_t			 coa_max_bitmap_sz;
 	uint8_t			 coa_for_modify:1,
+				 coa_raw_sparse:1,
 				 coa_sparse:1;
 	uint8_t			 coa_target_nr;
 	/*
