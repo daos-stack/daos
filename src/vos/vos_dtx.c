@@ -1976,9 +1976,6 @@ vos_dtx_load_mbs(daos_handle_t coh, struct dtx_id *dti, daos_unit_oid_t *oid,
 			rc = -DER_INPROGRESS;
 	}
 
-	if (rc < 0)
-		D_ERROR("Failed to load mbs for "DF_DTI": "DF_RC"\n", DP_DTI(dti), DP_RC(rc));
-
 	return rc;
 }
 
