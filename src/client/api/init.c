@@ -361,32 +361,3 @@ unlock:
 	D_MUTEX_UNLOCK(&module_lock);
 	return rc;
 }
-
-/**
- * Re-initialize the DAOS library in the child process after fork.
- */
-int
-daos_reinit(void)
-{
-	int rc;
-
-	rc = daos_eq_lib_reset_after_fork();
-	if (rc)
-		return rc;
-
-	daos_dti_reset();
-
-	/**
-	 * Mark all pool and container handles owned by the parent process as if they were created
-	 * in the child processes with g2l to avoid confusing the DAOS engines.
-	 */
-	rc = dc_pool_mark_all_slave();
-	if (rc)
-		return rc;
-
-	rc = dc_cont_mark_all_slave();
-	if (rc)
-		return rc;
-
-	return 0;
-}

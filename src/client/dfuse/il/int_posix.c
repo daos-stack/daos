@@ -820,11 +820,10 @@ child_hdlr(void)
 {
 	int rc;
 
-	rc = daos_reinit();
+	rc = daos_eq_lib_reset_after_fork();
 	if (rc)
-		DL_WARN(rc, "daos_reinit() failed in child process");
-
-	/** Reset event queue */
+		DL_WARN(rc, "daos_eq_lib_init() failed in child process");
+	daos_dti_reset();
 	ioil_eqh = ioil_iog.iog_main_eqh = DAOS_HDL_INVAL;
 
 	if (ioil_iog.iog_eq_count_max) {
@@ -883,12 +882,10 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags)
 				D_GOTO(err, rc = daos_der2errno(rc));
 			}
 			ioil_iog.iog_main_eqh = ioil_eqh;
-		}
 
-		rc = pthread_atfork(NULL, NULL, &child_hdlr);
-		if (rc)
-			DFUSE_LOG_WARNING("Failed to install atfork handler: " DF_RC, DP_RC(rc));
-		rc = 0;
+			rc = pthread_atfork(NULL, NULL, &child_hdlr);
+			D_ASSERT(rc == 0);
+		}
 	}
 
 	d_list_for_each_entry(pool, &ioil_iog.iog_pools_head, iop_pools) {
