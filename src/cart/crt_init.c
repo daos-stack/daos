@@ -18,6 +18,10 @@ static volatile int	gdata_init_flag;
 struct crt_plugin_gdata crt_plugin_gdata;
 static bool		g_prov_settings_applied[CRT_PROV_COUNT];
 
+#define X(a, b) b,
+static const char *const crt_tc_name[] = {CRT_TRAFFIC_CLASSES};
+#undef X
+
 static void
 crt_lib_init(void) __attribute__((__constructor__));
 
@@ -237,18 +241,30 @@ crt_gdata_dump(void)
 	DUMP_GDATA_FIELD("%d", cg_rpc_quota);
 }
 
+static enum crt_traffic_class
+crt_str_to_tc(const char *str)
+{
+	enum crt_traffic_class i = 0;
+
+	while (str != NULL && strcmp(crt_tc_name[i], str) != 0 && i < CRT_TC_UNKNOWN)
+		i++;
+
+	return i == CRT_TC_UNKNOWN ? CRT_TC_UNSPEC : i;
+}
+
 /* first step init - for initializing crt_gdata */
 static int data_init(int server, crt_init_options_t *opt)
 {
-	uint32_t        timeout = 0;
-	uint32_t	credits;
-	uint32_t	fi_univ_size = 0;
-	uint32_t	mem_pin_enable = 0;
-	uint32_t        is_secondary;
-	uint32_t        post_init = CRT_HG_POST_INIT, post_incr = CRT_HG_POST_INCR;
-	unsigned int    mrecv_buf      = CRT_HG_MRECV_BUF;
-	unsigned int    mrecv_buf_copy = 0; /* buf copy disabled by default */
-	int             rc             = 0;
+	uint32_t     timeout = 0;
+	uint32_t     credits;
+	uint32_t     fi_univ_size   = 0;
+	uint32_t     mem_pin_enable = 0;
+	uint32_t     is_secondary;
+	uint32_t     post_init = CRT_HG_POST_INIT, post_incr = CRT_HG_POST_INCR;
+	unsigned int mrecv_buf          = CRT_HG_MRECV_BUF;
+	unsigned int mrecv_buf_copy     = 0; /* buf copy disabled by default */
+	char        *swim_traffic_class = NULL;
+	int          rc                 = 0;
 
 	crt_env_dump();
 
@@ -261,6 +277,8 @@ static int data_init(int server, crt_init_options_t *opt)
 	crt_gdata.cg_mrecv_buf = mrecv_buf;
 	crt_env_get(D_MRECV_BUF_COPY, &mrecv_buf_copy);
 	crt_gdata.cg_mrecv_buf_copy = mrecv_buf_copy;
+	crt_env_get(SWIM_TRAFFIC_CLASS, &swim_traffic_class);
+	crt_gdata.cg_swim_tc = crt_str_to_tc(swim_traffic_class);
 
 	is_secondary = 0;
 	/* Apply CART-890 workaround for server side only */
