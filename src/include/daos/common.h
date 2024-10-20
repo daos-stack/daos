@@ -959,10 +959,6 @@ bool daos_hhash_link_delete(struct d_hlink *hlink);
 #define daos_hhash_link_empty(hlink)		d_hhash_link_empty(hlink)
 #define daos_hhash_link_key(hlink, key)		d_hhash_link_key(hlink, key)
 
-typedef int (*daos_hhash_traverse_cb_t)(struct d_hlink *link, void *arg);
-int
-daos_hhash_traverse(int type, daos_hhash_traverse_cb_t cb, void *arg);
-
 /* daos_recx_t overlap detector */
 #define DAOS_RECX_OVERLAP(recx_1, recx_2)				\
 	(((recx_1).rx_idx < (recx_2).rx_idx + (recx_2).rx_nr) &&	\
