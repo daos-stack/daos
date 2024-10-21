@@ -24,7 +24,7 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, const void *value, da
 	d_iov_t         sg_iovs[3];
 	daos_iod_t      iods[2];
 	daos_recx_t     recxs[2];
-	daos_key_t      dkey;
+	daos_key_t      dkey = {};
 	daos_handle_t   oh;
 	uint64_t        cond = 0;
 	struct timespec now;
