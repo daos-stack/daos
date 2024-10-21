@@ -15,11 +15,10 @@
 #include "vos_layout.h"
 #include "vos_internal.h"
 
-/* 128 KB per SCM blob */
-#define DTX_BLOB_SIZE		(1 << 17)
-/** Ensure 16-bit signed int is sufficient to store record index */
-D_CASSERT((DTX_BLOB_SIZE / sizeof(struct vos_dtx_act_ent_df)) <  (1 << 15));
-D_CASSERT((DTX_BLOB_SIZE / sizeof(struct vos_dtx_cmt_ent_df)) <  (1 << 15));
+/* 16 KB blob for each active DTX blob */
+#define DTX_ACT_BLOB_SIZE	(1 << 14)
+/* 4 KB for committed DTX blob */
+#define DTX_CMT_BLOB_SIZE	(1 << 12)
 
 #define DTX_ACT_BLOB_MAGIC	0x14130a2b
 #define DTX_CMT_BLOB_MAGIC	0x2502191c
@@ -767,7 +766,7 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 static int
 vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti, daos_epoch_t epoch,
 		   daos_epoch_t cmt_time, struct vos_dtx_cmt_ent **dce_p,
-		   struct vos_dtx_act_ent **dae_p, bool *rm_cos, bool *fatal)
+		   struct vos_dtx_act_ent **dae_p, bool *rm_cos)
 {
 	struct vos_dtx_act_ent		*dae = NULL;
 	struct vos_dtx_cmt_ent		*dce = NULL;
@@ -866,10 +865,8 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti, daos_epoch_t 
 		goto out;
 
 	rc = dtx_rec_release(cont, dae, false);
-	if (rc != 0) {
-		*fatal = true;
+	if (rc != 0)
 		goto out;
-	}
 
 	D_ASSERT(dae_p != NULL);
 	*dae_p = dae;
@@ -915,7 +912,7 @@ vos_dtx_extend_act_table(struct vos_container *cont)
 	umem_off_t			 dbd_off;
 	int				 rc;
 
-	dbd_off = umem_zalloc(umm, DTX_BLOB_SIZE);
+	dbd_off = umem_zalloc(umm, DTX_ACT_BLOB_SIZE);
 	if (UMOFF_IS_NULL(dbd_off)) {
 		D_ERROR("No space when create active DTX table.\n");
 		return -DER_NOSPACE;
@@ -923,7 +920,7 @@ vos_dtx_extend_act_table(struct vos_container *cont)
 
 	dbd = umem_off2ptr(umm, dbd_off);
 	dbd->dbd_magic = DTX_ACT_BLOB_MAGIC;
-	dbd->dbd_cap = (DTX_BLOB_SIZE - sizeof(struct vos_dtx_blob_df)) /
+	dbd->dbd_cap = (DTX_ACT_BLOB_SIZE - sizeof(struct vos_dtx_blob_df)) /
 			sizeof(struct vos_dtx_act_ent_df);
 	dbd->dbd_count = 0;
 	dbd->dbd_index = 0;
@@ -1994,12 +1991,11 @@ vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id dtis[],
 	umem_off_t			 dbd_off;
 	uint64_t			 cmt_time = daos_gettime_coarse();
 	int				 committed = 0;
-	int				 cur = 0;
 	int				 rc = 0;
-	int				 rc1 = 0;
+	int				 p = 0;
 	int				 i = 0;
 	int				 j;
-	bool				 fatal = false;
+	int				 k;
 	bool				 allocated = false;
 
 	dbd = umem_off2ptr(umm, cont_df->cd_dtx_committed_tail);
@@ -2017,67 +2013,64 @@ vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id dtis[],
 		goto new_blob;
 
 again:
-	for (j = dbd->dbd_count; i < count && j < dbd->dbd_cap && rc1 == 0;
-	     i++, cur++) {
-		struct vos_dtx_cmt_ent	*dce = NULL;
-
-		rc = vos_dtx_commit_one(cont, &dtis[cur], epoch, cmt_time, &dce,
-					daes != NULL ? &daes[cur] : NULL,
-					rm_cos != NULL ? &rm_cos[cur] : NULL, &fatal);
-		if (dces != NULL)
-			dces[cur] = dce;
-
-		if (fatal)
-			goto out;
-
-		if (rc == 0 && (daes == NULL || daes[cur] != NULL))
+	for (j = dbd->dbd_count; j < dbd->dbd_cap && i < count; i++) {
+		rc = vos_dtx_commit_one(cont, &dtis[i], epoch, cmt_time, &dces[i],
+					daes != NULL ? &daes[i] : NULL,
+					rm_cos != NULL ? &rm_cos[i] : NULL);
+		if (rc == 0 && (daes == NULL || daes[i] != NULL))
 			committed++;
 
 		if (rc == -DER_ALREADY || rc == -DER_NONEXIST)
 			rc = 0;
 
-		if (rc1 == 0)
-			rc1 = rc;
+		if (rc != 0)
+			goto out;
 
-		if (dce != NULL) {
-			rc = umem_tx_xadd_ptr(umm, &dbd->dbd_committed_data[j],
-					      sizeof(struct vos_dtx_cmt_ent_df),
-					      UMEM_XADD_NO_SNAPSHOT);
+		if (dces[i] != NULL)
+			j++;
+	}
+
+	if (j > dbd->dbd_count) {
+		if (!allocated) {
+			rc = umem_tx_xadd_ptr(umm, &dbd->dbd_committed_data[dbd->dbd_count],
+					      sizeof(struct vos_dtx_cmt_ent_df) *
+					      (j - dbd->dbd_count), UMEM_XADD_NO_SNAPSHOT);
 			if (rc != 0)
-				D_GOTO(out, fatal = true);
+				goto out;
 
-			memcpy(&dbd->dbd_committed_data[j++], &dce->dce_base,
+			/* Only need to add range for the first partial blob. */
+			rc = umem_tx_add_ptr(umm, &dbd->dbd_count, sizeof(dbd->dbd_count));
+			if (rc != 0)
+				goto out;
+		}
+
+		for (k = dbd->dbd_count; k < j; k++, p++) {
+			while (dces[p] == NULL)
+				p++;
+
+			memcpy(&dbd->dbd_committed_data[k], &dces[p]->dce_base,
 			       sizeof(struct vos_dtx_cmt_ent_df));
 		}
+
+		dbd->dbd_count = j;
 	}
 
-	if (!allocated) {
-		/* Only need to add range for the first partial blob. */
-		rc = umem_tx_add_ptr(umm, &dbd->dbd_count,
-				     sizeof(dbd->dbd_count));
-		if (rc != 0)
-			D_GOTO(out, fatal = true);
-	}
-
-	dbd->dbd_count = j;
-
-	if (i == count || rc1 != 0)
+	if (i == count)
 		goto out;
 
 new_blob:
 	dbd_prev = dbd;
 	/* Need new @dbd */
-	dbd_off = umem_zalloc(umm, DTX_BLOB_SIZE);
+	dbd_off = umem_zalloc(umm, DTX_CMT_BLOB_SIZE);
 	if (UMOFF_IS_NULL(dbd_off)) {
 		D_ERROR("No space to store committed DTX %d "DF_DTI"\n",
-			count, DP_DTI(&dtis[cur]));
-		fatal = true;
+			count, DP_DTI(&dtis[i]));
 		D_GOTO(out, rc = -DER_NOSPACE);
 	}
 
 	dbd = umem_off2ptr(umm, dbd_off);
 	dbd->dbd_magic = DTX_CMT_BLOB_MAGIC;
-	dbd->dbd_cap = (DTX_BLOB_SIZE - sizeof(struct vos_dtx_blob_df)) /
+	dbd->dbd_cap = (DTX_CMT_BLOB_SIZE - sizeof(struct vos_dtx_blob_df)) /
 		       sizeof(struct vos_dtx_cmt_ent_df);
 	dbd->dbd_prev = umem_ptr2off(umm, dbd_prev);
 
@@ -2090,21 +2083,21 @@ new_blob:
 				     sizeof(cont_df->cd_dtx_committed_head) +
 				     sizeof(cont_df->cd_dtx_committed_tail));
 		if (rc != 0)
-			D_GOTO(out, fatal = true);
+			goto out;
 
 		cont_df->cd_dtx_committed_head = dbd_off;
 	} else {
 		rc = umem_tx_add_ptr(umm, &dbd_prev->dbd_next,
 				     sizeof(dbd_prev->dbd_next));
 		if (rc != 0)
-			D_GOTO(out, fatal = true);
+			goto out;
 
 		dbd_prev->dbd_next = dbd_off;
 
 		rc = umem_tx_add_ptr(umm, &cont_df->cd_dtx_committed_tail,
 				     sizeof(cont_df->cd_dtx_committed_tail));
 		if (rc != 0)
-			D_GOTO(out, fatal = true);
+			goto out;
 	}
 
 	D_DEBUG(DB_IO, "Allocated DTX committed blob %p ("UMOFF_PF") for cont "DF_UUID"\n",
@@ -2115,7 +2108,7 @@ new_blob:
 	goto again;
 
 out:
-	return fatal ? rc : (committed > 0 ? committed : rc1);
+	return rc < 0 ? rc : committed;
 }
 
 void
