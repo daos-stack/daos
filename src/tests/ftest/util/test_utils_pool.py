@@ -700,7 +700,7 @@ class TestPool(TestDaosApiBase):
             self.log.error("self.acl_file isn't defined!")
 
     @fail_on(CommandFailure)
-    def query(self, show_enabled=False):
+    def query(self, show_enabled=False, health_only=False):
         """Execute dmg pool query.
 
         Args:
@@ -1118,7 +1118,7 @@ class TestPool(TestDaosApiBase):
         }
         return pool_percent
 
-    def set_query_data(self, show_enabled=False):
+    def set_query_data(self, show_enabled=False, health_only=False):
         """Execute dmg pool query and store the results.
 
         Args:
@@ -1129,7 +1129,7 @@ class TestPool(TestDaosApiBase):
 
         """
         self.query_data = {}
-        self.query_data = self.query(show_enabled)
+        self.query_data = self.query(show_enabled, health_only)
 
     def _get_query_data_keys(self, *keys, refresh=False):
         """Get the pool version from the dmg pool query output.
@@ -1277,7 +1277,7 @@ class TestPool(TestDaosApiBase):
         previous_data = dict(self._rebuild_data.items())
 
         # Update the current rebuild data
-        self.set_query_data()
+        self.set_query_data(health_only=True)
         try:
             self._rebuild_data["version"] = self.get_version(False)
         except (CommandFailure, ValueError) as error:

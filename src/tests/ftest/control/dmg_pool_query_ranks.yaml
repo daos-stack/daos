@@ -12,6 +12,7 @@ server_config:
     0:
       targets: 4
       nr_xs_helpers: 0
+      log_mask: DEBUG,MEM=ERR
       env_vars:
         - SWIM_SUSPECT_TIMEOUT=10000
         - DAOS_POOL_RF=1
