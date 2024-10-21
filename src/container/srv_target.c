@@ -669,6 +669,7 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 	cont->sc_dtx_committable_coll_count = 0;
 	D_INIT_LIST_HEAD(&cont->sc_dtx_cos_list);
 	D_INIT_LIST_HEAD(&cont->sc_dtx_coll_list);
+	D_INIT_LIST_HEAD(&cont->sc_dtx_batched_list);
 
 	*link = &cont->sc_list;
 	return 0;
