@@ -392,12 +392,54 @@ class Dfuse(DfuseCommand):
         cmd = f"daos filesystem query --json {self.mount_dir.value}"
         result = run_remote(self.log, self.hosts, cmd)
         if not result.passed:
-            raise CommandFailure(f'"fs query failed on {result.failed_hosts}')
+            raise CommandFailure(f'fs query failed on {result.failed_hosts}')
 
         data = json.loads("\n".join(result.output[0].stdout))
         if data["status"] != 0 or data["error"] is not None:
             raise CommandFailure("fs query returned bad data.")
         return data["response"]
+
+    def get_log_file(self):
+        """Return the content of the log file
+
+        Returns:
+            list: lines of the the DFuse log file
+
+        Raises:
+            CommandFailure: on failure to get the DFuse log file
+
+        """
+
+        if len(self.hosts) != 1:
+            raise CommandFailure("get_log_file only supports one host")
+        if "D_LOG_FILE" not in self.env or not self.env["D_LOG_FILE"]:
+            raise CommandFailure("get_log_file needs a DFuse log files to be defined")
+
+        log_file = self.env["D_LOG_FILE"]
+        result = run_remote(self.log, self.hosts, f"cat {log_file}")
+        if not result.passed:
+            raise CommandFailure(f'Log file {log_file} can not be open on {result.failed_hosts}')
+        return result.output[0].stdout
+
+    def mkdir(self, path):
+        """Create the directory(ies) if they do not exist
+
+        Args:
+            path (str): Path of the DFuse directory(ies) to create
+
+        Raises:
+            CommandFailure: on failure to create the DFuse directory(ies)
+
+        """
+
+        if len(self.hosts) != 1:
+            raise CommandFailure("mkdir only supports one host")
+
+        sub_dir = os.path.join(self.mount_dir.value, path)
+        result = run_remote(self.log, self.hosts, f"mkdir --parents {sub_dir}")
+        if not result.passed:
+            raise CommandFailure(
+                f'DFuse directory {path} can not be created on {result.failed_hosts}')
 
 
 def get_dfuse(test, hosts, namespace=None):
@@ -432,6 +474,7 @@ def start_dfuse(test, dfuse, pool=None, container=None, **params):
 
     Args:
         test (Test): the test instance
+        dfuse (Dfuse): the dfuse instance to start
         pool (TestPool, optional): pool to mount. Defaults to None
         container (TestContainer, optional): container to mount. Defaults to None
         params (Object, optional): Dfuse command arguments to update
