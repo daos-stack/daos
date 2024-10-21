@@ -720,6 +720,59 @@ func TestServer_bdevScan(t *testing.T) {
 				{Meta: true, MemRatio: 0.5, MetaSize: defMetaSize * 2, RdbSize: defRdbSize},
 			},
 		},
+		"scan remote; bdev with md-on-ssd roles in config; duplicate and sysXS tgt ids": {
+			req: &ctlpb.ScanNvmeReq{Health: true, Meta: true},
+			engTierCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassRam.String()).
+						WithScmMountPoint(defScmMountPt),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(1)).
+						WithBdevDeviceRoles(storage.BdevRoleAll),
+				},
+			},
+			engStopped: []bool{false},
+			engErr:     []error{nil},
+			engRes: []ctlpb.ScanNvmeResp{
+				ctlpb.ScanNvmeResp{
+					Ctrlrs: proto.NvmeControllers{
+						func() *ctlpb.NvmeController {
+							nc := proto.MockNvmeController(1)
+							sd := mockSmd(storage.BdevRoleAll)
+							sd.TgtIds = []int32{
+								1024, 1024, 1, 1, 2, 2, 3, 3, 4, 4,
+							}
+							nc.SmdDevices = []*ctlpb.SmdDevice{sd}
+							return nc
+						}(),
+					},
+				},
+			},
+			expResp: &ctlpb.ScanNvmeResp{
+				Ctrlrs: proto.NvmeControllers{
+					func() *ctlpb.NvmeController {
+						nc := proto.MockNvmeController(1)
+						sd := mockSmd(storage.BdevRoleAll)
+						sd.TgtIds = []int32{
+							// See storage.SmdDevice.UnmarshalJSON()
+							// for tgtID sanitization.
+							1024, 1024, 1, 1, 2, 2, 3, 3, 4, 4,
+						}
+						// See TestServer_CtlSvc_adjustNvmeSize
+						// 80 metadata, 128 wal, 64 rdb = 272 clusters
+						sd.UsableBytes = (1024 - 272) * (32 * humanize.MiByte)
+						nc.SmdDevices = []*ctlpb.SmdDevice{sd}
+						return nc
+					}(),
+				},
+				State: new(ctlpb.ResponseState),
+			},
+			expRemoteScanCalls: []*ctlpb.ScanNvmeReq{
+				{Health: true, Meta: true, MetaSize: defMetaSize, RdbSize: defRdbSize},
+			},
+		},
 		"scan remote; collate results from multiple engines": {
 			req: &ctlpb.ScanNvmeReq{Health: true, Meta: true},
 			engTierCfgs: []storage.TierConfigs{
