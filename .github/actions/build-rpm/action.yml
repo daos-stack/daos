@@ -1,0 +1,148 @@
+name: 'Build RPM'
+description: 'Build DAOS RPMs'
+
+on:
+  workflow_call:
+    inputs:
+      distro:
+        type: choice
+        options:
+          - el8
+          - el9
+          - leap15
+      version:
+        type: string
+        required: true
+      build_version:
+        type: string
+        required: true
+      covfn_disabled:
+        type: bool
+        default: true
+      repo_file_url:
+        type: string
+        required: true
+      jenkins_url:
+        type: string
+        required: true
+      daos_full_name:
+        type: string
+        required: true
+      daos_email:
+        type: string
+        required: true
+      artifactory_url:
+        type: string
+        required: true
+      repo_path:
+        type: string
+        required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set build variables
+      id: build-vars
+      uses: ./.github/actions/build-variables
+      with:
+        distro: ${{ inputs.distro }}
+        version: ${{ inputs.version }}
+        build_version: ${{ inputs.build_version }}
+    - name: Checkout code
+      uses: actions/checkout@v4.1.1
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+    - name: Build RPM Docker image
+      id: build-rpm-docker-image
+      continue-on-error: true
+      run: docker build --file utils/rpms/packaging/Dockerfile.mockbuild
+                        --build-arg CACHEBUST=$(date +%s%3N)
+                        --build-arg CB0=$(date +%V)
+                        --build-arg REPO_FILE_URL=${{ inputs.repo_file_url }}
+                        --build-arg UID=$(id -u)
+                        --build-arg FVERSION=${{ steps.build-vars.outputs.fversion }}
+                        --build-arg JENKINS_URL=${{ inputs.jenkins_url }}
+                        --tag mock-build
+                        utils/rpms
+      shell: bash
+    - name: Build RPM
+      id: build-rpm
+      continue-on-error: true
+      # yamllint disable rule:line-length
+      run: rm -rf mock_result;
+            mkdir -p mock_result;
+            docker run --name mock-build-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.distro }}
+                      --user build
+                      -v "$PWD":"$PWD" -w "$PWD"
+                      -v "$PWD"/mock_result:/var/lib/mock/${{ steps.build-vars.outputs.chroot_name }}/result
+                      --privileged=true
+                      -e DAOS_FULLNAME="${{ inputs.daos_full_name }}"
+                      -e DAOS_EMAIL="${{ inputs.daos_email }}"
+                      -e DISTRO_VERSION="${{ steps.build-vars.outputs.distro_version }}"
+                      -e STAGE_NAME="Build RPM on ${{ steps.build-vars.outputs.build_name }}"
+                      -e CHROOT_NAME="${{ steps.build-vars.outputs.chroot_name}}"
+                      -e ARTIFACTORY_URL="${{ inputs.artifactory_url}}"
+                      -e REPO_FILE_URL="${{ inputs.repo_file_url }}"
+                      -e JENKINS_URL=${{ inputs.jenkins_url }}
+                      -e TARGET="${{ inputs.distro }}"
+                      -e COVFN_DISABLED="${{ inputs.covfn_disabled }}"
+                      mock-build ci/rpm/build.sh
+      shell: bash
+    - name: Build RPM failure log
+      id: build-rpm-fail-log
+      continue-on-error: true
+      if: steps.build-rpm.outcome != 'success'
+      run: cat mock_result/root.log;
+            cat mock_result/build.log
+      shell: bash
+    - name: Save RPM build logs
+      continue-on-error: true
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ steps.build-vars.outputs.stage_name }} logs
+        path: |
+          mock_result/root.log
+          mock_result/build.log
+    - name: Create lastBuild and lastSuccessfulBuild symlinks
+      if: steps.build-rpm.outcome == 'success'
+      run: . ci/gha_functions.sh;
+            mkdir -p ${REPO_PATH};
+            rm -f ${REPO_PATH}last{,Successful}Build;
+            ln -s ${{ github.run_number }} ${REPO_PATH}lastBuild;
+            ln -s ${{ github.run_number }} ${REPO_PATH}lastSuccessfulBuild
+      shell: bash
+    - name: Create repo
+      id: create-repo
+      if: steps.build-rpm.outcome == 'success'
+      continue-on-error: true
+      run: ci/rpm/create_repo.sh
+      shell: bash
+      env:
+        TARGET: ${{ inputs.distro }}
+    - name: Test repo
+      id: test-repo
+      if: steps.create-repo.outcome == 'success'
+      continue-on-error: true
+      run: . ci/gha_functions.sh;
+            dnf --disablerepo=\* --repofrompath testrepo,file://${REPO_FILE} repoquery -a
+      shell: bash
+      env:
+        # yamllint disable-line rule:line-length
+        REPO_FILE: ${{ inputs.repo_path }}${{ github.run_number }}/artifact/artifacts/${{ inputs.distro }}
+    - name: Remove lastSuccessfulBuild link and exit failure
+      if: steps.test-repo.outcome != 'success'
+      run: rm -f ${{ inputs.repo_path }}lastSuccessfulBuild;
+            exit 1
+      shell: bash
+    - name: Publish RPMs
+      uses: actions/upload-artifact@v4
+      with:
+        # yamllint disable-line rule:line-length
+        name: ${{ steps.build-vars.outputs.distro_name }} ${{ steps.build-vars.outputs.distro_version }} RPM repository
+        path: ${{ inputs.REPO_PATH}}${{ github.run_number }}/artifact/artifacts/${{ inputs.distro }}
+    - name: Update commit status
+      uses: ouzi-dev/commit-status-updater@v2
+      with:
+        # yamllint disable-line rule:line-length
+        name: 'build/Build RPM on ${{ steps.build-vars.outputs.distro_name }} ${{ steps.build-vars.outputs.commit_status_distro_version }}'
+        status: "${{ job.status }}"
