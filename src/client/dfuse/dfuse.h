@@ -161,6 +161,7 @@ struct dfuse_obj_hdl {
 	ATOMIC uint32_t           doh_il_calls;
 
 	ATOMIC uint64_t           doh_write_count;
+	ATOMIC uint64_t           doh_read_count;
 
 	/* Next offset we expect from readdir */
 	off_t                     doh_rd_offset;
@@ -168,12 +169,16 @@ struct dfuse_obj_hdl {
 	/* Pointer to the last returned drc entry */
 	struct dfuse_readdir_c   *doh_rd_nextc;
 
-	/* Linear read function, if a file is read from start to end then this normally requires
-	 * a final read request at the end of the file that returns zero bytes.  Detect this case
-	 * and when the final read is detected then just return without a round trip.
-	 * Store a flag for this being enabled (starts as true, but many I/O patterns will set it
-	 * to false), the expected position of the next read and a boolean for if EOF has been
-	 * detected.
+	/* Linear read tracking.  If a file is opened and read from start to finish then this is
+	 * called a linear read, linear reads however may or may not read EOF at the end of a file,
+	 * as the reader may be checking the file size.
+	 *
+	 * Detect this case and track it at the file handle level, this is then used in two places:
+	 *  For read of EOF it means the round-trip can be avoided.
+	 *  On release we can use this flag to apply a setting to the directory inode.
+	 *
+	 * This flag starts enabled and many I/O patterns will disable it.  We also store the next
+	 * expected read position and if EOF has been reached.
 	 */
 	off_t                     doh_linear_read_pos;
 	bool                      doh_linear_read;

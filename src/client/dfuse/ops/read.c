@@ -70,7 +70,7 @@ dfuse_readahead_reply(fuse_req_t req, size_t len, off_t position, struct dfuse_o
 	}
 
 	if (((position % K128) == 0) && ((len % K128) == 0)) {
-		DFUSE_TRA_INFO(oh, "allowing out-of-order pre read");
+		DFUSE_TRA_DEBUG(oh, "allowing out-of-order pre read");
 		/* Do not closely track the read position in this case, just the maximum,
 		 * later checks will determine if the file is read to the end.
 		 */
@@ -431,10 +431,11 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 
 	DFUSE_IE_STAT_ADD(oh->doh_ie, DS_READ);
 
+	atomic_fetch_add_relaxed(&oh->doh_write_count, 1);
+
 	if (oh->doh_linear_read_eof && position == oh->doh_linear_read_pos) {
 		DFUSE_TRA_DEBUG(oh, "Returning EOF early without round trip %#zx", position);
 		oh->doh_linear_read_eof = false;
-		oh->doh_linear_read     = false;
 
 		if (oh->doh_readahead) {
 			D_MUTEX_LOCK(&oh->doh_readahead->dra_lock);

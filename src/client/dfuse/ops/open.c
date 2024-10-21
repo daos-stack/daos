@@ -238,9 +238,9 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 		if (oh->doh_linear_read) {
 			/* If the file was not read from then this could indicate a cached read
-			 * so do not disable pre-read for the directory.
+			 * so do not change the settings on the directory.
 			 */
-			if (!oh->doh_linear_read_eof)
+			if (atomic_load(&oh->doh_read_count) == 0)
 				set_linear_read = false;
 			use_linear_read = true;
 		}
