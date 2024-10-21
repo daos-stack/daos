@@ -783,7 +783,7 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 			},
 		},
 		"scan over drpc; with health; link info update run but failed": {
-			req: ctlpb.ScanNvmeReq{Health: true},
+			req: ctlpb.ScanNvmeReq{Health: true, LinkStats: true},
 			smdRes: func() *ctlpb.SmdDevResp {
 				ssr := defSmdScanRes()
 				ssr.Devices[0].Ctrlr.PciCfg = "ABCD"

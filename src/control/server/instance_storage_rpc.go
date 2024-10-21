@@ -390,8 +390,8 @@ func scanEngineBdevsOverDrpc(ctx context.Context, engine Engine, pbReq *ctlpb.Sc
 				bhReq:  bhReq,
 				ctrlr:  c,
 			}
-			if !pbReq.Meta {
-				// Add link stats to health only if health requested w/o usage flag.
+			if pbReq.LinkStats {
+				// Add link stats to health if flag set.
 				chReq.linkStatsProv = linkStatsProv
 			}
 
