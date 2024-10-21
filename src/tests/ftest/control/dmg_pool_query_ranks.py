@@ -109,7 +109,7 @@ class DmgPoolQueryRanks(ControlTestBase):
         self.pool.wait_for_rebuild_to_start()
 
         # kill second rank.
-        self.server_managers[0].stop_ranks([suspect_rank], self.d_log)
+        self.server_managers[0].stop_ranks([suspect_rank], self.d_log, force=True)
         self.pool.wait_pool_suspect_ranks([suspect_rank], timeout=30)
         self.assertListEqual(
             data['response'].get('disabled_ranks'), disabled_ranks,
@@ -118,6 +118,7 @@ class DmgPoolQueryRanks(ControlTestBase):
 
         self.server_managers[0].start_ranks([suspect_rank], self.d_log)
         self.pool.wait_pool_suspect_ranks([], timeout=30)
+        self.pool.wait_for_rebuild_to_end()
 
         self.log.debug("Reintegrating rank %d", exclude_rank)
         cmd_succeed = False
