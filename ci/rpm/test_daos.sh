@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# modified file
+
 set -uex
 
 # DAOS_PKG_VERSION environment variable needs to be set for this script
