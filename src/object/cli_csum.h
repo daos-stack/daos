@@ -11,6 +11,9 @@
 #include <daos/cont_props.h>
 #include "obj_internal.h"
 
+/** How many times to retry UPDATE RPCs on checksum error */
+#define MAX_CSUM_RETRY 10
+
 int dc_obj_csum_update(struct daos_csummer *csummer, struct cont_props props, daos_obj_id_t param,
 		       daos_key_t *dkey, daos_iod_t *iods, d_sg_list_t *sgls, const uint32_t iod_nr,
 		       struct dcs_layout *layout, struct dcs_csum_info **dkey_csum,
