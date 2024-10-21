@@ -3666,6 +3666,7 @@ umem_cache_reserve(struct umem_store *store)
 			DL_ERROR(rc, "Evict page failed.");
 			break;
 		}
+		rc = 0;
 
 		D_CDEBUG(retry_cnt == 10, DLOG_ERR, DB_TRACE,
 			 "Retry reserve free page, %d times\n", retry_cnt);
