@@ -873,8 +873,9 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	       rpt->rt_rebuild_op != RB_OP_FAIL_RECLAIM) {
 		D_ASSERTF(rpt->rt_pool->sp_rebuilding >= 0, DF_UUID" rebuilding %d\n",
 			  DP_UUID(rpt->rt_pool_uuid), rpt->rt_pool->sp_rebuilding);
-			/* Wait for EC aggregation to abort before discard the object */
-		D_INFO(DF_UUID" wait for ec agg abort.\n", DP_UUID(entry->ie_couuid));
+		/* Wait for EC aggregation to abort before discard the object */
+		D_INFO(DF_UUID" wait for ec agg abort, rebuilding %d.\n",
+		       DP_UUID(entry->ie_couuid), rpt->rt_pool->sp_rebuilding);
 		dss_sleep(1000);
 		if (rpt->rt_abort || rpt->rt_finishing) {
 			D_DEBUG(DB_REBUILD, DF_CONT" rebuild op %s ver %u abort %u/%u.\n",
@@ -1050,6 +1051,7 @@ rebuild_scan_leader(void *data)
 	struct rebuild_tgt_pool_tracker *rpt = data;
 	struct rebuild_pool_tls	  *tls;
 	int			   rc;
+	bool			   wait = false;
 
 	D_DEBUG(DB_REBUILD, DF_UUID "check resync %u/%u < %u\n",
 		DP_UUID(rpt->rt_pool_uuid), rpt->rt_pool->sp_dtx_resync_version,
@@ -1063,6 +1065,7 @@ rebuild_scan_leader(void *data)
 				D_INFO(DF_UUID "wait for global dtx %u rebuild ver %u\n",
 				       DP_UUID(rpt->rt_pool_uuid),
 				       rpt->rt_global_dtx_resync_version, rpt->rt_rebuild_ver);
+				wait = true;
 				ABT_cond_wait(rpt->rt_global_dtx_wait_cond, rpt->rt_lock);
 			}
 			ABT_mutex_unlock(rpt->rt_lock);
@@ -1074,8 +1077,11 @@ rebuild_scan_leader(void *data)
 		}
 	}
 
-	D_DEBUG(DB_REBUILD, "rebuild scan collective "DF_UUID" begin.\n",
-		DP_UUID(rpt->rt_pool_uuid));
+	if (wait)
+		D_INFO("rebuild scan collective "DF_UUID" begin.\n", DP_UUID(rpt->rt_pool_uuid));
+	else
+		D_DEBUG(DB_REBUILD, "rebuild scan collective "DF_UUID" begin.\n",
+			DP_UUID(rpt->rt_pool_uuid));
 
 	rc = ds_pool_thread_collective(rpt->rt_pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
 				       PO_COMP_ST_DOWNOUT, rebuild_scanner, rpt,
@@ -1083,8 +1089,11 @@ rebuild_scan_leader(void *data)
 	if (rc)
 		D_GOTO(out, rc);
 
-	D_DEBUG(DB_REBUILD, "rebuild scan collective "DF_UUID" done.\n",
-		DP_UUID(rpt->rt_pool_uuid));
+	if (wait)
+		D_INFO("rebuild scan collective "DF_UUID" done.\n", DP_UUID(rpt->rt_pool_uuid));
+	else
+		D_DEBUG(DB_REBUILD, "rebuild scan collective "DF_UUID" done.\n",
+			DP_UUID(rpt->rt_pool_uuid));
 
 	ABT_mutex_lock(rpt->rt_lock);
 	rc = ds_pool_task_collective(rpt->rt_pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
