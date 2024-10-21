@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
+import time
 
 from apricot import TestWithServers
 from dfuse_utils import get_dfuse, start_dfuse
@@ -138,25 +139,33 @@ class RootContainerTest(TestWithServers):
 
         expected = pool_space_before - cont_count * tmp_file_count * tmp_file_size
         self.log_step(
-            "Verify the pool free space <= {expected} after creating {cont_count} containers")
-        pool_space_after = pool.get_pool_free_space(device)
-        self.log.info("Pool space <= Expected")
-        self.log.info("%s <= %s", pool_space_after, expected)
-        self.assertTrue(pool_space_after <= expected)
+            f"Verify the pool free space <= {expected} after creating {cont_count} containers")
+        pool_space_after = self._get_pool_free_space(pool, device, expected)
+        if pool_space_after > expected:
+            self.fail(f"Pool free space exceeds {expected} after creating {cont_count} containers")
 
         self.log_step(f"Destroy half of the {cont_count} new sub containers ({cont_count // 2})")
         for _ in range(cont_count // 2):
             containers[-1].destroy(1)
             containers.pop()
 
+        # Wait for pool free space to reach expected value or timeout
         expected = pool_space_after + ((cont_count // 2) * tmp_file_count * tmp_file_size)
+        max_loops = 10
+        loop = 0
         self.log_step(
-            "Verify the pool free space >= {expected} after destroying half of the containers")
-        pool_space_after_cont_destroy = pool.get_pool_free_space(device)
-        self.log.info("After container destroy")
-        self.log.info("Free Pool space >= Expected")
-        self.log.info("%s >= %s", pool_space_after_cont_destroy, expected)
-        self.assertTrue(pool_space_after_cont_destroy >= expected)
+            f"Verify the pool free space >= {expected} after destroying half of the containers")
+        while loop < max_loops:
+            loop += 1
+            self.log.debug(
+                "Check if the pool free space >= %s (loop %s/%s)", expected, loop, max_loops)
+            current = self._get_pool_free_space(pool, device, expected)
+            if current >= expected:
+                break
+            if loop >= max_loops:
+                self.fail(
+                    f"Pool free space less than {expected} after destroying half of the containers")
+            time.sleep(int(60 / max_loops))
 
     def insert_files_and_verify(self, hosts, cont_dir, tmp_file_count, tmp_file_name,
                                 tmp_file_size):
@@ -181,22 +190,31 @@ class RootContainerTest(TestWithServers):
             cmd = f"head -c {tmp_file_size} /dev/urandom > {cont_dir}/{file_name}"
             ls_cmds.append(f"ls {file_name}")
             cmds.append(cmd)
-        self._execute_cmd(";".join(cmds), hosts)
+
+        result = run_remote(self.log, hosts, ";".join(cmds), timeout=30)
+        if not result.passed:
+            self.fail(f"Error inserting files into {tmp_file_name} on {str(result.failed_hosts)}")
 
         cmds = []
         # Run ls to verify the temp files are actually created
         cmds = [f"cd {cont_dir}"]
         cmds.extend(ls_cmds)
-        self._execute_cmd(";".join(cmds), hosts)
+        result = run_remote(self.log, hosts, ";".join(cmds), timeout=30)
+        if not result.passed:
+            self.fail(f"Error inserting files into {cont_dir} on {str(result.failed_hosts)}")
 
-    def _execute_cmd(self, cmd, hosts):
-        """Execute command on the host clients.
+    def _get_pool_free_space(self, pool, device, expected):
+        """Get the current pool free space.
 
         Args:
-            cmd (str): Command to run
-            hosts (NodeSet): hosts on which to run the command
+            pool (TestPool): pool to query
+            device (str): device type, e.g. "scm" or "nvme"
+            expected (int): expected pool free space
 
+        Returns:
+            int: current pool free space
         """
-        result = run_remote(self.log, hosts, cmd, timeout=30)
-        if not result.passed:
-            self.fail(f"Error running '{cmd}' on {str(result.failed_hosts)}")
+        current = pool.get_pool_free_space(device)
+        self.log.info("  Current pool free space:   %s", current)
+        self.log.info("  Expected pool free space:  %s", expected)
+        return current
