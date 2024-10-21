@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -368,6 +368,9 @@ pool_attribute(void **state)
 		rc = daos_event_fini(&ev);
 		assert_rc_equal(rc, 0);
 	}
+
+	/** Fake error */
+	assert_int_equal(rc, 242);
 }
 
 /** reconnect to pool after re-initializing DAOS lib */
