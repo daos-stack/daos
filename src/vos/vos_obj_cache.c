@@ -802,6 +802,19 @@ bkt_cmp(void *array, int a, int b)
 	return 0;
 }
 
+static int
+bkt_cmp_key(void *array, int i, uint64_t key)
+{
+	uint32_t	*bkt_arr = array;
+	uint32_t	 bkt_id = (uint32_t)key;
+
+	if (bkt_arr[i] > bkt_id)
+		return 1;
+	if (bkt_arr[i] < bkt_id)
+		return -1;
+	return 0;
+}
+
 static void
 bkt_swap(void *array, int a, int b)
 {
@@ -816,6 +829,7 @@ bkt_swap(void *array, int a, int b)
 static daos_sort_ops_t bkt_sort_ops = {
 	.so_cmp		= bkt_cmp,
 	.so_swap	= bkt_swap,
+	.so_cmp_key	= bkt_cmp_key,
 };
 
 /* if @sub is a subset of @super */
