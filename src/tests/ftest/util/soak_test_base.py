@@ -25,8 +25,8 @@ from run_utils import run_local, run_remote
 from soak_utils import (SoakTestError, add_pools, build_job_script, cleanup_dfuse,
                         create_app_cmdline, create_dm_cmdline, create_fio_cmdline,
                         create_ior_cmdline, create_macsio_cmdline, create_mdtest_cmdline,
-                        create_racer_cmdline, ddhhmmss_format, get_daos_server_logs, get_harassers,
-                        get_journalctl, launch_exclude_reintegrate, launch_extend, launch_reboot,
+                        create_racer_cmdline, ddhhmmss_format, get_harassers,
+                        launch_exclude_reintegrate, launch_extend, launch_reboot,
                         launch_server_stop_start, launch_snapshot, launch_vmd_identify_check,
                         reserved_file_copy, run_event_check, run_metrics_check, run_monitor_check)
 
@@ -164,17 +164,6 @@ class SoakTestBase(TestWithServers):
 
         # display final metrics
         run_metrics_check(self, prefix="final")
-        # Gather server logs
-        try:
-            get_daos_server_logs(self)
-        except SoakTestError as error:
-            errors.append(f"<<FAILED: Failed to gather server logs {error}>>")
-        # Gather journalctl logs
-        hosts = list(set(self.hostlist_servers))
-        since = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.start_time))
-        until = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.end_time))
-        for journalctl_type in ["kernel", "daos_server"]:
-            get_journalctl(self, hosts, since, until, journalctl_type, logging=True)
 
         if self.all_failed_harassers:
             errors.extend(self.all_failed_harassers)
