@@ -1458,6 +1458,43 @@ resume_event_handling(struct pool_svc *svc)
 	ABT_mutex_unlock(events->pse_mutex);
 }
 
+/*
+ * Restart rebuild if the rank is UPIN in pool map and is in rebuilding.
+ *
+ * This function only used when PS leader gets CRT_EVT_ALIVE event of engine \a rank,
+ * if that rank is UPIN in pool map and with unfinished rebuilding should be massive
+ * failure case -
+ * 1. some engines down and triggered rebuild.
+ * 2. the engine \a rank participated the rebuild, not finished yet, it became down again,
+ *    the #failures exceeds pool RF and will not change pool map.
+ * 3. That engine restarted by administrator.
+ *
+ * In that case should recover the rebuild task on engine \a rank, to simplify it now just
+ * abort and retry the global rebuild task.
+ */
+static void
+pool_restart_rebuild_if_rank_wip(struct ds_pool *pool, d_rank_t rank)
+{
+	struct pool_domain	*dom;
+
+	dom = pool_map_find_dom_by_rank(pool->sp_map, rank);
+	if (dom == NULL) {
+		D_DEBUG(DB_MD, DF_UUID": rank %d non-exist on pool map.\n",
+			DP_UUID(pool->sp_uuid), rank);
+		return;
+	}
+
+	if (dom->do_comp.co_status != PO_COMP_ST_UPIN) {
+		D_INFO(DF_UUID": rank %d status %d in pool map, got CRT_EVT_ALIVE.\n",
+		       DP_UUID(pool->sp_uuid), rank, dom->do_comp.co_status);
+		return;
+	}
+
+	ds_rebuild_restart_if_rank_wip(pool->sp_uuid, rank);
+
+	return;
+}
+
 static int pool_svc_exclude_ranks(struct pool_svc *svc, struct pool_svc_event_set *event_set);
 
 static int
@@ -1489,6 +1526,9 @@ handle_event(struct pool_svc *svc, struct pool_svc_event_set *event_set)
 
 		if (event->psv_src != CRT_EVS_SWIM || event->psv_type != CRT_EVT_ALIVE)
 			continue;
+
+		pool_restart_rebuild_if_rank_wip(svc->ps_pool, event->psv_rank);
+
 		if (ds_pool_map_rank_up(svc->ps_pool->sp_map, event->psv_rank)) {
 			/*
 			 * The rank is up in the pool map. Request a pool map
