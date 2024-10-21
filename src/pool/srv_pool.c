@@ -1477,22 +1477,18 @@ pool_restart_rebuild_if_rank_wip(struct ds_pool *pool, d_rank_t rank)
 {
 	struct pool_domain	*dom;
 
-	ABT_rwlock_rdlock(pool->sp_lock);
 	dom = pool_map_find_dom_by_rank(pool->sp_map, rank);
 	if (dom == NULL) {
-		ABT_rwlock_unlock(pool->sp_lock);
-		D_INFO(DF_UUID": rank %d non-exist on pool map.\n",
-		       DP_UUID(pool->sp_uuid), rank);
+		D_DEBUG(DB_MD, DF_UUID": rank %d non-exist on pool map.\n",
+			DP_UUID(pool->sp_uuid), rank);
 		return;
 	}
 
 	if (dom->do_comp.co_status != PO_COMP_ST_UPIN) {
-		ABT_rwlock_unlock(pool->sp_lock);
 		D_INFO(DF_UUID": rank %d status %d in pool map, got CRT_EVT_ALIVE.\n",
-			DP_UUID(pool->sp_uuid), rank, dom->do_comp.co_status);
+		       DP_UUID(pool->sp_uuid), rank, dom->do_comp.co_status);
 		return;
 	}
-	ABT_rwlock_unlock(pool->sp_lock);
 
 	ds_rebuild_restart_if_rank_wip(pool->sp_uuid, rank);
 
