@@ -1524,9 +1524,11 @@ handle_event(struct pool_svc *svc, struct pool_svc_event_set *event_set)
 	for (i = 0; i < event_set->pss_len; i++) {
 		struct pool_svc_event *event = &event_set->pss_buf[i];
 
-		if (event->psv_src != CRT_EVS_SWIM || event->psv_type != CRT_EVT_ALIVE)
+		if (event->psv_type != CRT_EVT_ALIVE)
 			continue;
 
+		D_DEBUG(DB_MD, DF_UUID ": got CRT_EVT_ALIVE event, psv_src %d, psv_rank %d\n",
+		       DP_UUID(svc->ps_uuid), event->psv_src, event->psv_rank);
 		pool_restart_rebuild_if_rank_wip(svc->ps_pool, event->psv_rank);
 
 		if (ds_pool_map_rank_up(svc->ps_pool->sp_map, event->psv_rank)) {
