@@ -23,6 +23,7 @@ runs:
           if ! JENKINS_URL='${{ env.JENKINS_URL }}'                   \
                LABEL='${{ env.LABEL }}'                               \
                PRIORITY=${CP_PRIORITY:-3}                             \
+               COVFN_DISABLED=${COVFN_DISABLED}                       \
                provision_cluster "$STAGE_NAME" "${{ github.run_id }}" \
                                  "${{ runner.name }}"                 \
                                  "$REQID-${STAGE_NAME// /_}"; then
