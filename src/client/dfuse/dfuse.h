@@ -1002,6 +1002,7 @@ struct dfuse_inode_entry {
 	 * acquired and released to flush outstanding writes for getattr, close and forget.
 	 */
 	pthread_rwlock_t          ie_wlock;
+
 	/** Last file closed in this directory was read linearly.  Directories only.
 	 *
 	 * Set on close() of a file in the directory to the value of linear_read from the fh.
