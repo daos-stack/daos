@@ -1558,8 +1558,8 @@ class DFuse():
         print(rc)
         return rc
 
-    def check_usage(self, old=None, ino=None, inodes=None, open_files=None, pools=None,
-                    containers=None, qpath=None):
+    def check_usage(self, ino=None, inodes=None, open_files=None, pools=None, containers=None,
+                    qpath=None, old=None):
         """Query and verify the dfuse statistics.
 
         Optionally verify numbers are as expected/defined or return a delta to a previous sample.
@@ -1583,7 +1583,8 @@ class DFuse():
 
         # If a prior version of the statistics was supplied then take a delta, but take a delta of
         # the prior version as it came from daos, not as it was reported.
-        rc.json['response']['raw'] = copy.deepcopy(rc.json['response']['statistics'])
+        if 'statistics' in rc.json['response']:
+            rc.json['response']['raw'] = copy.deepcopy(rc.json['response']['statistics'])
         if old:
             for key in rc.json['response']['statistics']:
                 rc.json['response']['statistics'][key] -= old['raw'].get(key, 0)
@@ -1612,7 +1613,7 @@ class DFuse():
         for inode in inodes:
             found = True
             while found:
-                rc = self.check_usage(inode, qpath=qpath)
+                rc = self.check_usage(ino=inode, qpath=qpath)
                 print(rc)
                 found = rc['resident']
                 if not found:
