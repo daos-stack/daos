@@ -514,15 +514,11 @@ vos_obj_check_discard(struct vos_container *cont, daos_unit_oid_t oid, uint64_t 
 	if (rc)
 		return rc;
 
-	rc = vos_obj_pin(obj);
-	if (rc)
-		return rc;
-
 	if (check_discard(obj, flags))
 		/* Update request will retry with this error */
 		rc = (flags & VOS_OBJ_CREATE) ? -DER_UPDATE_AGAIN : -DER_BUSY;
 
-	obj_release(occ, obj, false);
+	obj_put(occ, obj, false);
 	return rc;
 }
 
