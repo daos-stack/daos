@@ -23,7 +23,7 @@ class MultipleContainerDelete(IorTestBase):
 
         Test Description:
             Purpose of this test is to verify the container delete
-            returns all space used by a container without leak
+            returns all space used by a container without leak.
         Use case:
             Create a pool spanning 4 servers.
             Capture the pool space.
