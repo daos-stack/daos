@@ -2010,7 +2010,7 @@ class needs_dfuse_with_opt():
                               'dfuse-dentry-dir-time': '5m',
                               'dfuse-ndentry-time': '5m'}
                 obj.container.set_attrs(cont_attrs)
-            elif self.caching:
+            elif caching:
                 cont_attrs = {'dfuse-attr-time': '1m',
                               'dfuse-dentry-time': '1m',
                               'dfuse-dentry-dir-time': '1m',
@@ -3400,7 +3400,7 @@ class PosixTests():
         for fd in fds:
             fd.close()
 
-    @needs_dfuse_with_opt(caching=True)
+    @needs_dfuse_with_opt(caching_variants=[False])
     def test_create_exists(self):
         """Test creating a file.
 
