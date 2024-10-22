@@ -12,7 +12,6 @@ on:
   pull_request:
     branches: ["master", "release/**"]
 
-
 # Declare default permissions as nothing.
 permissions: {}
 
@@ -63,6 +62,7 @@ jobs:
         # 3.25.15 (v3)
         with:
           sarif_file: 'trivy-results.sarif'
+          category: my-analysis-tool
 
       - name: Adjust config file to show and validate scan results
         run: |
