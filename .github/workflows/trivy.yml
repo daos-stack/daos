@@ -9,33 +9,16 @@ on:
     - cron: '45 8 * * *'
   push:
     branches: ["master", "release/**"]
-    paths:
-      - '**/go.mod'
-      - '**/pom.xml'
-      - '**/*gradle.lockfile'
-      - '**/*.sbt.lock'
-      - '**/requirements.txt'
-      - '**/poetry.lock'
-      - '**/Pipfile.lock'
-      - '**/*trivy*'
   pull_request:
     branches: ["master", "release/**"]
-    paths:
-      - '**/go.mod'
-      - '**/pom.xml'
-      - '**/*gradle.lockfile'
-      - '**/*.sbt.lock'
-      - '**/requirements.txt'
-      - '**/poetry.lock'
-      - '**/Pipfile.lock'
-      - '**/*trivy*'
+
 
 # Declare default permissions as nothing.
 permissions: {}
 
 jobs:
   build:
-    name: Build
+    name: Scan with Trivy
     runs-on: ubuntu-20.04
     permissions:
       security-events: write
