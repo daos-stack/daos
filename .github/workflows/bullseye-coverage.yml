@@ -1,4 +1,4 @@
-name: RPM Build and Test
+name: Bullseye Code Coverage
 
 env:
   # TODO: we really need to define a list of supported versions (ideally it's no more than 2)
@@ -11,11 +11,11 @@ env:
   LEAP15_VERSION: 15.5
   NEXT_VERSION_master: 1000
   # Which distros to build for
-  DISTROS: el8 el9 leap15
+  DISTROS: el8
   TEST_TAG: pr
   PACKAGING_DIR: utils/rpms
   NAME: daos
-  COVFN_DISABLED: true
+  COVFN_DISABLED: false
 
 on:
   workflow_dispatch:
@@ -46,7 +46,7 @@ on:
       - 'release/*'
 
 concurrency:
-  group: rpm-build-and-test-${{ github.head_ref  || github.run_id }}
+  group: bullseye-coverage-${{ github.head_ref  || github.run_id }}
   cancel-in-progress: true
 
 defaults:
