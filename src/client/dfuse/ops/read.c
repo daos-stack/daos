@@ -144,6 +144,7 @@ pick_eqt(struct dfuse_info *dfuse_info)
 
 struct read_chunk_data {
 	struct dfuse_event   *ev;
+	struct active_inode  *ia;
 	fuse_req_t            reqs[8];
 	struct dfuse_obj_hdl *ohs[8];
 	d_list_t              list;
@@ -155,19 +156,6 @@ struct read_chunk_data {
 	bool                  exiting;
 	bool                  complete;
 };
-
-struct read_chunk_core {
-	d_list_t entries;
-};
-
-/* Global lock for all chunk read operations.  Each inode has a struct read_chunk_core * entry
- * which is checked for NULL and set whilst holding this lock.  Each read_chunk_core then has
- * a list of read_chunk_data and again, this lock protects all lists on all inodes.  This avoids
- * the need for a per-inode lock which for many files would consume considerable memory but does
- * mean there is potentially some lock contention.  The lock however is only held for list
- * manipulation, no dfs or kernel calls are made whilst holding the lock.
- */
-static pthread_mutex_t rc_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static void
 chunk_free(struct read_chunk_data *cd)
@@ -188,22 +176,21 @@ read_chunk_close(struct dfuse_inode_entry *ie)
 	struct read_chunk_data *cd, *cdn;
 	bool                    rcb = false;
 
-	D_MUTEX_LOCK(&rc_lock);
-	if (!ie->ie_active->chunk)
+	D_MUTEX_LOCK(&ie->ie_active->lock);
+	if (d_list_empty(&ie->ie_active->chunks))
 		goto out;
 
 	rcb = true;
 
-	d_list_for_each_entry_safe(cd, cdn, &ie->ie_active->chunk->entries, list) {
+	d_list_for_each_entry_safe(cd, cdn, &ie->ie_active->chunks, list) {
 		if (cd->complete) {
 			chunk_free(cd);
 		} else {
 			cd->exiting = true;
 		}
 	}
-	D_FREE(ie->ie_active->chunk);
 out:
-	D_MUTEX_UNLOCK(&rc_lock);
+	D_MUTEX_UNLOCK(&ie->ie_active->lock);
 	return rcb;
 }
 
@@ -211,6 +198,7 @@ static void
 chunk_cb(struct dfuse_event *ev)
 {
 	struct read_chunk_data *cd = ev->de_cd;
+	struct active_inode    *ia = cd->ia;
 	fuse_req_t              req;
 	bool                    done = false;
 
@@ -228,11 +216,11 @@ chunk_cb(struct dfuse_event *ev)
 		int i;
 		req = 0;
 
-		D_MUTEX_LOCK(&rc_lock);
+		D_MUTEX_LOCK(&ia->lock);
 
 		if (cd->exiting) {
 			chunk_free(cd);
-			D_MUTEX_UNLOCK(&rc_lock);
+			D_MUTEX_UNLOCK(&ia->lock);
 			return;
 		}
 
@@ -245,7 +233,7 @@ chunk_cb(struct dfuse_event *ev)
 			}
 		}
 
-		D_MUTEX_UNLOCK(&rc_lock);
+		D_MUTEX_UNLOCK(&ia->lock);
 
 		if (req) {
 			size_t position = (cd->bucket * CHUNK_SIZE) + (i * K128);
@@ -332,7 +320,6 @@ static bool
 chunk_read(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
 {
 	struct dfuse_inode_entry *ie = oh->doh_ie;
-	struct read_chunk_core   *cc;
 	struct read_chunk_data   *cd;
 	off_t                     last;
 	uint64_t                  bucket;
@@ -359,16 +346,9 @@ chunk_read(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
 	DFUSE_TRA_DEBUG(oh, "read bucket %#zx-%#zx last %#zx size %#zx bucket %ld slot %d",
 			position, position + len - 1, last, ie->ie_stat.st_size, bucket, slot);
 
-	D_MUTEX_LOCK(&rc_lock);
-	if (ie->ie_active->chunk == NULL) {
-		D_ALLOC_PTR(ie->ie_active->chunk);
-		if (ie->ie_active->chunk == NULL)
-			goto err;
-		D_INIT_LIST_HEAD(&ie->ie_active->chunk->entries);
-	}
-	cc = ie->ie_active->chunk;
+	D_MUTEX_LOCK(&ie->ie_active->lock);
 
-	d_list_for_each_entry(cd, &cc->entries, list)
+	d_list_for_each_entry(cd, &ie->ie_active->chunks, list)
 		if (cd->bucket == bucket) {
 			/* Remove from list to re-add again later. */
 			d_list_del(&cd->list);
@@ -379,6 +359,7 @@ chunk_read(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
 	if (cd == NULL)
 		goto err;
 
+	cd->ia     = ie->ie_active;
 	cd->bucket = bucket;
 	submit     = true;
 
@@ -386,10 +367,10 @@ found:
 
 	if (++cd->entered < 8) {
 		/* Put on front of list for efficient searching */
-		d_list_add(&cd->list, &cc->entries);
+		d_list_add(&cd->list, &ie->ie_active->chunks);
 	}
 
-	D_MUTEX_UNLOCK(&rc_lock);
+	D_MUTEX_UNLOCK(&ie->ie_active->lock);
 
 	if (submit) {
 		DFUSE_TRA_DEBUG(oh, "submit for bucket %ld[%d]", bucket, slot);
@@ -404,14 +385,14 @@ found:
 		 */
 		rcb = true;
 
-		D_MUTEX_LOCK(&rc_lock);
+		D_MUTEX_LOCK(&ie->ie_active->lock);
 		if (cd->complete) {
 			ev = cd->ev;
 		} else {
 			cd->reqs[slot] = req;
 			cd->ohs[slot]  = oh;
 		}
-		D_MUTEX_UNLOCK(&rc_lock);
+		D_MUTEX_UNLOCK(&ie->ie_active->lock);
 
 		if (ev) {
 			if (cd->rc != 0) {
@@ -434,7 +415,7 @@ found:
 	return rcb;
 
 err:
-	D_MUTEX_UNLOCK(&rc_lock);
+	D_MUTEX_UNLOCK(&ie->ie_active->lock);
 	return false;
 }
 

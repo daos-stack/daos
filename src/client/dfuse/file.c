@@ -12,6 +12,7 @@ int
 active_ie_init(struct dfuse_inode_entry *ie)
 {
 	uint32_t oc;
+	int      rc;
 
 	oc = atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
 
@@ -23,7 +24,21 @@ active_ie_init(struct dfuse_inode_entry *ie)
 	D_ALLOC_PTR(ie->ie_active);
 	if (!ie->ie_active)
 		return -DER_NOMEM;
+
+	rc = D_MUTEX_INIT(&ie->ie_active->lock, NULL);
+	if (rc != -DER_SUCCESS) {
+		D_FREE(ie->ie_active);
+		return rc;
+	}
+	D_INIT_LIST_HEAD(&ie->ie_active->chunks);
 	return -DER_SUCCESS;
+}
+
+static void
+ah_free(struct dfuse_inode_entry *ie)
+{
+	D_MUTEX_DESTROY(&ie->ie_active->lock);
+	D_FREE(ie->ie_active);
 }
 
 bool
@@ -43,7 +58,7 @@ active_oh_decref(struct dfuse_obj_hdl *oh)
 
 	rcb = read_chunk_close(oh->doh_ie);
 
-	D_FREE(oh->doh_ie->ie_active);
+	ah_free(oh->doh_ie);
 	return rcb;
 }
 
@@ -57,6 +72,8 @@ active_ie_decref(struct dfuse_inode_entry *ie)
 
 	DFUSE_TRA_DEBUG(ie, "Decref to %d", oc - 1);
 
-	if (oc == 1)
-		D_FREE(ie->ie_active);
+	if (oc != 1)
+		return;
+
+	ah_free(ie);
 }
