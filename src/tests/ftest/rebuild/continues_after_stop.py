@@ -6,7 +6,7 @@
 import os
 
 from command_utils_base import CommandFailure
-from general_utils import get_journalctl, journalctl_time, wait_for_result
+from general_utils import journalctl_time, wait_for_result
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
 from job_manager_utils import get_job_manager
@@ -77,12 +77,8 @@ class ContinuesAfterStop(IorTestBase):
         self.log_step(msg)
 
         def _search_scanning():
-            """Search 'Rebuild [scanning]' from journalctl output using wait_for_result().
-            """
-            journalctl_out = get_journalctl(
-                hosts=self.hostlist_servers, since=ior_start_time, until=None,
-                journalctl_type="daos_server")
-
+            """Search 'Rebuild [scanning]' from journalctl output using wait_for_result()."""
+            journalctl_out = self.server_managers[0].get_journalctl(ior_start_time, None)
             for _, journalctl in enumerate(journalctl_out):
                 data = journalctl["data"]
                 for line in data.splitlines():

@@ -9,7 +9,7 @@ import time
 
 from ClusterShell.NodeSet import NodeSet
 from command_utils_base import CommandFailure
-from general_utils import get_journalctl, journalctl_time, report_errors
+from general_utils import journalctl_time, report_errors
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
 from job_manager_utils import get_job_manager
@@ -55,7 +55,7 @@ class AgentFailure(IorTestBase):
             # We'll verify the error message.
             results[job_num].append(ior_output.stderr_text)
         except CommandFailure as error:
-            results[job_num] = [False, "IOR failed: {}".format(error)]
+            results[job_num] = [False, f"IOR failed: {error}"]
 
     def test_agent_failure(self):
         """Jira ID: DAOS-9385.
@@ -121,14 +121,10 @@ class AgentFailure(IorTestBase):
             errors.append("IOR worked when agent is killed!")
 
         # 5. Verify journalctl shows the log that the agent is stopped.
-        results = get_journalctl(
-            hosts=self.hostlist_clients, since=since, until=until,
-            journalctl_type="daos_agent")
+        results = self.agent_managers[0].get_journalctl(since, until)
         self.log.info("journalctl results = %s", results)
         if "shutting down" not in results[0]["data"]:
-            msg = "Agent shut down message not found in journalctl! Output = {}".format(
-                results)
-            errors.append(msg)
+            errors.append(f"Agent shut down message not found in journalctl! Output = {results}")
 
         # 6. Restart agent.
         self.log.info("Restart agent")
@@ -146,7 +142,7 @@ class AgentFailure(IorTestBase):
         self.log.info(ior_results[job_num])
         if not ior_results[job_num][0]:
             ior_error = ior_results[job_num][-1]
-            errors.append("IOR with restarted agent failed! Error: {}".format(ior_error))
+            errors.append(f"IOR with restarted agent failed! Error: {ior_error}")
 
         self.log.info("########## Errors ##########")
         report_errors(test=self, errors=errors)
@@ -215,11 +211,9 @@ class AgentFailure(IorTestBase):
             self.log, hosts=agent_host_kill, pattern=pattern,
             user=self.agent_managers[0].manager.job.run_user)
         if not detected:
-            msg = "No daos_agent process killed on {}!".format(agent_host_kill)
-            errors.append(msg)
+            errors.append(f"No daos_agent process killed on {agent_host_kill}!")
         elif running:
-            msg = "Unable to kill daos_agent processes on {}!".format(running)
-            errors.append(msg)
+            errors.append(f"Unable to kill daos_agent processes on {running}!")
         else:
             self.log.info("daos_agent processes on %s killed", detected)
         until = journalctl_time()
@@ -238,29 +232,25 @@ class AgentFailure(IorTestBase):
         self.log.info(ior_results[job_num_keep])
         if not ior_results[job_num_keep][0]:
             ior_error = ior_results[job_num_keep][-1]
-            errors.append("Error found in IOR on keep client! {}".format(ior_error))
+            errors.append(f"Error found in IOR on keep client! {ior_error}")
 
         # 6. On the killed client, verify journalctl shows the log that the agent is
         # stopped.
-        results = get_journalctl(
-            hosts=[agent_host_kill], since=since, until=until,
-            journalctl_type="daos_agent")
+        results = self.agent_managers[0].get_journalctl(since, until, agent_host_kill)
         self.log.info("journalctl results (kill) = %s", results)
         if "shutting down" not in results[0]["data"]:
-            msg = ("Agent shut down message not found in journalctl on killed client! "
-                   "Output = {}".format(results))
-            errors.append(msg)
+            errors.append(
+                "Agent shut down message not found in journalctl on killed client! "
+                f"Output = {results}")
 
         # 7. On the other client where agent is still running, verify that the journalctl
         # in the previous step doesn't show that the agent is stopped.
-        results = get_journalctl(
-            hosts=[agent_host_keep], since=since, until=until,
-            journalctl_type="daos_agent")
+        results = self.agent_managers[0].get_journalctl(since, until, agent_host_keep)
         self.log.info("journalctl results (keep) = %s", results)
         if "shutting down" in results[0]["data"]:
-            msg = ("Agent shut down message found in journalctl on keep client! "
-                   "Output = {}".format(results))
-            errors.append(msg)
+            errors.append(
+                "Agent shut down message found in journalctl on keep client! "
+                f"Output = {results}")
 
         # 8. Restart both daos_agent. (Currently, there's no clean way to restart one.)
         self.start_agent_managers()
@@ -276,7 +266,7 @@ class AgentFailure(IorTestBase):
         self.log.info(ior_results[job_num_keep])
         if not ior_results[job_num_keep][0]:
             ior_error = ior_results[job_num_keep][-1]
-            errors.append("Error found in second IOR run! {}".format(ior_error))
+            errors.append(f"Error found in second IOR run! {ior_error}")
 
         self.log.info("########## Errors ##########")
         report_errors(test=self, errors=errors)

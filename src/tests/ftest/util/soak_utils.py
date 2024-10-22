@@ -23,9 +23,9 @@ from dmg_utils import get_storage_query_device_info, get_storage_query_device_uu
 from duns_utils import format_path
 from exception_utils import CommandFailure
 from fio_utils import FioCommand
-from general_utils import (DaosTestError, check_ping, check_ssh, get_host_data, get_log_file,
-                           get_random_bytes, get_random_string, list_to_str, pcmd, run_command,
-                           run_pcmd, wait_for_result)
+from general_utils import (DaosTestError, check_ping, check_ssh, get_log_file, get_random_bytes,
+                           get_random_string, list_to_str, pcmd, run_command, run_pcmd,
+                           wait_for_result)
 from ior_utils import IorCommand
 from job_manager_utils import Mpirun
 from macsio_util import MacsioCommand
@@ -211,17 +211,14 @@ def get_journalctl(self, hosts, since, until, journalctl_type, logging=False):
             "data":  data requested for the group of hosts
 
     """
-    command = "{} /usr/bin/journalctl --system -t {} --since=\"{}\" --until=\"{}\"".format(
-        self.sudo_cmd, journalctl_type, since, until)
-    err = "Error gathering system log events"
-    results = get_host_data(hosts, command, "journalctl", err)
+    results = self.server_manager[0].get_journalctl(since, until, hosts, journalctl_type)
     name = f"journalctl_{journalctl_type}.log"
     destination = self.outputsoak_dir
     if logging:
         for result in results:
             for host in result["hosts"]:
                 log_name = name + "-" + str(host)
-                self.log.info("Logging %s output to %s", command, log_name)
+                self.log.info("Logging journalctl output to %s", log_name)
                 write_logfile(result["data"], log_name, destination)
     return results
 

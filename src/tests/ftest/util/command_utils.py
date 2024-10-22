@@ -21,7 +21,8 @@ from command_utils_base import (BasicParameter, CommandWithParameters, Environme
 from exception_utils import CommandFailure
 from file_utils import create_directory, distribute_files
 from general_utils import (DaosTestError, check_file_exists, get_file_listing,
-                           get_job_manager_class, get_subprocess_stdout, run_command)
+                           get_job_manager_class, get_journalctl, get_subprocess_stdout,
+                           run_command)
 from run_utils import command_as_user, run_remote
 from yaml_utils import get_yaml_data
 
@@ -59,6 +60,11 @@ class ExecutableCommand(CommandWithParameters):
         self.output_check = "both"
         self.verbose = True
         self.env = EnvironmentVariables()
+        _env_from_os = ("DAOS_AGENT_DRPC_DIR",)
+        for key in _env_from_os:
+            val = os.environ.get(key)
+            if val is not None:
+                self.env[key] = val
 
         # User to run the command as. "root" is equivalent to sudo
         self.run_user = run_user
@@ -1299,7 +1305,7 @@ class SubprocessManager(ObjectWithParameters):
         return value
 
     def get_current_state(self):
-        """Get the current state of the daos_server ranks.
+        """Get the current state of the service.
 
         Returns:
             dict: dictionary of server rank keys, each referencing a dictionary
@@ -1493,6 +1499,28 @@ class SubprocessManager(ObjectWithParameters):
                 self.manager.dump_logs(show_log_hosts)
 
         return status
+
+    def get_journalctl(self, since, until, hosts=None, journalctl_type=None):
+        """Run the journalctl on the hosts.
+
+        Args:
+            since (str): Start time to search the log.
+            until (str): End time to search the log.
+            hosts (NodeSet, optional): optional subset of agent hosts from which to obtain the
+                journalctl log. Defaults to None.
+            journalctl_type (str, optional): optional override of the journalctl_type.
+                Defaults to None.
+
+        Returns:
+            list: a list of dictionaries containing the following key/value pairs:
+                "hosts": NodeSet containing the hosts with this data
+                "data":  data requested for the group of hosts
+        """
+        if not hosts:
+            hosts = self.hosts
+        if not journalctl_type:
+            journalctl_type = self.manager.job.command
+        return get_journalctl(hosts, since, until, journalctl_type, self.manager.job.run_user)
 
 
 class SystemctlCommand(ExecutableCommand):
