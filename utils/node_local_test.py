@@ -25,6 +25,7 @@ import pprint
 import pwd
 import random
 import re
+import resource
 import shutil
 import signal
 import stat
@@ -6527,6 +6528,12 @@ def main():
     parser.add_argument('--test', help="Use '--test list' for list")
     parser.add_argument('mode', nargs='*')
     args = parser.parse_args()
+
+    # valgrind reduces the hard limit unless we bump the soft limit first
+    if args.memcheck != "no":
+        (soft, hard) = resource.getrlimit(resource.RLIMIT_NOFILE)
+        if soft < hard:
+            resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
 
     if args.server_fi:
         server_fi(args)
