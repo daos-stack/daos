@@ -206,6 +206,10 @@ pipeline {
         string(name: 'CI_RPM_TEST_VERSION',
                defaultValue: '',
                description: 'Package version to use instead of building. example: 1.3.103-1, 1.2-2')
+        string(name: 'BaseBranch',
+               defaultValue: 'master',
+               description: 'The base branch to run Functional HW testing stages against (i.e. ' +
+                            'master, or a PR\'s branch)')
         // TODO: add parameter support for per-distro CI_PR_REPOS
         string(name: 'CI_PR_REPOS',
                defaultValue: '',
@@ -1167,6 +1171,7 @@ pipeline {
                         'Functional Hardware Medium': getFunctionalTestStage(
                             name: 'Functional Hardware Medium',
                             pragma_suffix: '-hw-medium',
+                            base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,-provider',
@@ -1179,6 +1184,7 @@ pipeline {
                         'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium MD on SSD',
                             pragma_suffix: '-hw-medium-md-on-ssd',
+                            base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,-provider',
@@ -1192,6 +1198,7 @@ pipeline {
                         'Functional Hardware Medium VMD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium VMD',
                             pragma_suffix: '-hw-medium-vmd',
+                            base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw_vmd,medium',
@@ -1205,6 +1212,7 @@ pipeline {
                         'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider',
                             pragma_suffix: '-hw-medium-verbs-provider',
+                            base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,provider',
@@ -1218,6 +1226,7 @@ pipeline {
                         'Functional Hardware Medium Verbs Provider MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider MD on SSD',
                             pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
+                            base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,provider',
@@ -1232,6 +1241,7 @@ pipeline {
                         'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium UCX Provider',
                             pragma_suffix: '-hw-medium-ucx-provider',
+                            base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,provider',
@@ -1245,6 +1255,7 @@ pipeline {
                         'Functional Hardware Large': getFunctionalTestStage(
                             name: 'Functional Hardware Large',
                             pragma_suffix: '-hw-large',
+                            base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,large',
@@ -1257,6 +1268,7 @@ pipeline {
                         'Functional Hardware Large MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Large MD on SSD',
                             pragma_suffix: '-hw-large-md-on-ssd',
+                            base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,large',
