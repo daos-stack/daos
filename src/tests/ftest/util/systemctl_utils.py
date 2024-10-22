@@ -190,6 +190,10 @@ def create_override_config(logger, hosts, service, user, service_command, servic
     Returns:
         str: the systemctl override config file path
     """
+    # Reload since teardown removes the files
+    if not daemon_reload(logger, hosts, user, verbose, timeout).passed:
+        raise SystemctlFailure("Error reloading systemctl daemon before override config directory")
+
     # Get the existing service file
     service_file = get_service_file(logger, hosts, service, user, verbose, timeout)
 

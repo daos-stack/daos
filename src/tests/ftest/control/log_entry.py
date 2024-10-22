@@ -8,7 +8,7 @@ import re
 
 from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
-from general_utils import get_journalctl, journalctl_time, wait_for_result
+from general_utils import journalctl_time, wait_for_result
 from run_utils import run_remote
 
 
@@ -36,16 +36,14 @@ class ControlLogEntry(TestWithServers):
             since (str): start time for journalctl
             expected_messages (list): list of regular expressions to look for
         """
-        self.log_step('Verify journalctl output since {}'.format(since))
+        self.log_step(f'Verify journalctl output since {since}')
 
         not_found = set(expected_messages)
         journalctl_per_hosts = []
 
         def _search():
             """Look for each message in any host's journalctl."""
-            journalctl_results = get_journalctl(
-                hosts=self.hostlist_servers, since=since, until=journalctl_time(),
-                journalctl_type="daos_server")
+            journalctl_results = self.server_managers[0].get_journalctl(since, journalctl_time())
 
             # Convert the journalctl to a dict of hosts : output
             journalctl_per_hosts.append({})
@@ -76,7 +74,7 @@ class ControlLogEntry(TestWithServers):
 
         # Fail if any message was not found
         if not_found:
-            fail_msg = '{} messages not found in journalctl'.format(len(not_found))
+            fail_msg = f'{len(not_found)} messages not found in journalctl'
             self.log.error(fail_msg)
             for message in not_found:
                 self.log.error('  %s', message)
