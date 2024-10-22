@@ -88,6 +88,8 @@ dfuse_reply_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 			D_GOTO(out_err, rc = EIO);
 		}
 
+		/* TODO: For create then call active_ie_init() on new inode? */
+
 		DFUSE_TRA_DEBUG(inode,
 				"Maybe updating parent inode %#lx dfs_ino %#lx",
 				entry.ino, ie->ie_dfs->dfs_ino);

@@ -1003,6 +1003,7 @@ struct dfuse_inode_entry {
 	 * acquired and released to flush outstanding writes for getattr, close and forget.
 	 */
 	pthread_rwlock_t          ie_wlock;
+
 	/** Last file closed in this directory was read linearly.  Directories only.
 	 *
 	 * Set on close() of a file in the directory to the value of linear_read from the fh.
@@ -1010,11 +1011,31 @@ struct dfuse_inode_entry {
 	 */
 	ATOMIC bool               ie_linear_read;
 
+	struct active_inode      *ie_active;
+
 	/* Entry on the evict list */
 	d_list_t                  ie_evict_entry;
 
-	struct read_chunk_core   *ie_chunk;
+	/* Number of concurrent release calls on inode */
+	ATOMIC uint32_t           ie_release_count;
 };
+
+struct active_inode {
+	struct read_chunk_core *chunk;
+	pthread_mutex_t        *lock;
+};
+
+/* Increase active count on inode.  This takes a reference and allocates ie->active as required */
+int
+active_ie_init(struct dfuse_inode_entry *ie);
+
+/* Mark a oh as closing and drop the ref on inode active */
+bool
+active_oh_decref(struct dfuse_obj_hdl *oh);
+
+/* Decrease active count on inode, called on error where there is no oh */
+void
+active_ie_decref(struct dfuse_inode_entry *ie);
 
 /* Flush write-back cache writes to a inode.  It does this by waiting for and then releasing an
  * exclusive lock on the inode.  Writes take a shared lock so this will block until all pending

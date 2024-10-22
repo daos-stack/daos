@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -217,7 +217,8 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent, const char *na
 
 	dfuse_compute_inode(dfs, &ie->ie_oid, &ie->ie_stat.st_ino);
 
-	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
+	/* TODO: This can fail */
+	active_ie_init(ie);
 
 	/* Return the new inode data, and keep the parent ref */
 	dfuse_reply_entry(dfuse_info, ie, &fi_out, true, req);

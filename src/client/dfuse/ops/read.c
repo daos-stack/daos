@@ -189,19 +189,19 @@ read_chunk_close(struct dfuse_inode_entry *ie)
 	bool                    rcb = false;
 
 	D_MUTEX_LOCK(&rc_lock);
-	if (!ie->ie_chunk)
+	if (!ie->ie_active->chunk)
 		goto out;
 
 	rcb = true;
 
-	d_list_for_each_entry_safe(cd, cdn, &ie->ie_chunk->entries, list) {
+	d_list_for_each_entry_safe(cd, cdn, &ie->ie_active->chunk->entries, list) {
 		if (cd->complete) {
 			chunk_free(cd);
 		} else {
 			cd->exiting = true;
 		}
 	}
-	D_FREE(ie->ie_chunk);
+	D_FREE(ie->ie_active->chunk);
 out:
 	D_MUTEX_UNLOCK(&rc_lock);
 	return rcb;
@@ -360,13 +360,13 @@ chunk_read(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
 			position, position + len - 1, last, ie->ie_stat.st_size, bucket, slot);
 
 	D_MUTEX_LOCK(&rc_lock);
-	if (ie->ie_chunk == NULL) {
-		D_ALLOC_PTR(ie->ie_chunk);
-		if (ie->ie_chunk == NULL)
+	if (ie->ie_active->chunk == NULL) {
+		D_ALLOC_PTR(ie->ie_active->chunk);
+		if (ie->ie_active->chunk == NULL)
 			goto err;
-		D_INIT_LIST_HEAD(&ie->ie_chunk->entries);
+		D_INIT_LIST_HEAD(&ie->ie_active->chunk->entries);
 	}
-	cc = ie->ie_chunk;
+	cc = ie->ie_active->chunk;
 
 	d_list_for_each_entry(cd, &cc->entries, list)
 		if (cd->bucket == bucket) {
