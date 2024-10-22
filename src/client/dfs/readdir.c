@@ -113,6 +113,47 @@ dfs_readdirplus(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
 }
 
 int
+dfs_dir_anchor_init(dfs_obj_t *obj, dfs_dir_anchor_t **_anchor)
+{
+	dfs_dir_anchor_t *anchor;
+
+	D_ALLOC_PTR(anchor);
+	if (anchor == NULL)
+		return ENOMEM;
+
+	anchor->dda_dir = obj;
+	daos_anchor_init(&anchor->dda_anchor_int, 0);
+	anchor->dda_bucket_id     = 0;
+	anchor->dda_bucket_offset = 0;
+	*_anchor                  = anchor;
+	return 0;
+}
+
+void
+dfs_dir_anchor_reset(dfs_dir_anchor_t *anchor)
+{
+	daos_anchor_init(&anchor->dda_anchor_int, 0);
+	anchor->dda_bucket_id     = 0;
+	anchor->dda_bucket_offset = 0;
+}
+
+void
+dfs_dir_anchor_destroy(dfs_dir_anchor_t *anchor)
+{
+	D_FREE(anchor);
+}
+
+int
+dfs_readdir2(dfs_t *dfs, dfs_obj_t *obj, dfs_dir_anchor_t *anchor, struct dirent dir)
+{
+	/** if no caching, just use the internal anchor with 1 entry */
+	if (dfs->dcache == NULL)
+		return readdir_int(dfs, obj, *anchor->dda_anchor_int, 1, &dir, NULL);
+
+	dcache_readdir(dfs->dcache, obj, anchor, dir);
+}
+
+int
 dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr, size_t size,
 	    dfs_filler_cb_t op, void *udata)
 {

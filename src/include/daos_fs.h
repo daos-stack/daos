@@ -47,6 +47,8 @@ extern "C" {
 typedef struct dfs_obj dfs_obj_t;
 /** DFS mount handle struct */
 typedef struct dfs dfs_t;
+/** DFS readdir anchor for dfs_readdir2() */
+typedef struct dfs_dir_anchor dfs_dir_anchor_t;
 
 /*
  * Consistency modes of the DFS container. A container created with balanced

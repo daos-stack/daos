@@ -270,6 +270,15 @@ struct dfs_mnt_hdls {
 	int           type;
 };
 
+/** readdir anchor for dfs_readdir2(). If dcache is disabled, the only valid setting is the
+ * daos_anchor_t. */
+struct dfs_dir_anchor {
+	dfs_obj_t    *dda_dir;
+	daos_anchor_t dda_anchor_int;
+	size_t        dda_bucket_id;
+	off_t         dda_bucket_offset;
+}
+
 static inline bool
 tspec_gt(struct timespec l, struct timespec r)
 {

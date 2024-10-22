@@ -75,7 +75,7 @@ typedef void (*drec_decref_fn_t)(dfs_dcache_t *, dfs_obj_t *);
 typedef void (*drec_del_at_fn_t)(dfs_dcache_t *, dfs_obj_t *);
 typedef int (*drec_del_fn_t)(dfs_dcache_t *, char *, dfs_obj_t *);
 
-/** DFS directory cache */
+/** DFS dentry cache */
 struct dfs_dcache {
 	/** Cached DAOS file system */
 	dfs_t              *dd_dfs;
@@ -117,6 +117,7 @@ struct dfs_dcache {
 	drec_del_fn_t       drec_del_fn;
 };
 
+/** dfs readdir cache */
 static inline int64_t
 time_cmp(struct timespec *t0, struct timespec *t1)
 {
@@ -990,3 +991,5 @@ drec_del(dfs_dcache_t *dcache, char *path, dfs_obj_t *parent)
 
 	return dcache->drec_del_fn(dcache, path, parent);
 }
+
+dcache_readdir(dfs_dcache_t *dcache, dfs_obj_t *obj, dfs_dir_anchor_t *anchor, struct dirent dir) {}
