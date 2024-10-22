@@ -976,8 +976,11 @@ dtx_refresh_internal(struct ds_cont_child *cont, int *check_count, d_list_t *che
 		if (dsp->dsp_mbs == NULL) {
 			rc = vos_dtx_load_mbs(cont->sc_hdl, &dsp->dsp_xid, NULL, &dsp->dsp_mbs);
 			if (rc != 0) {
-				if (rc < 0 && rc != -DER_NONEXIST && for_io)
+				if (rc < 0 && rc != -DER_NONEXIST && for_io) {
+					D_ERROR("Failed to load mbs for "DF_DTI": "DF_RC"\n",
+						DP_DTI(&dsp->dsp_xid), DP_RC(rc));
 					goto out;
+				}
 
 				drop = true;
 				goto next;
