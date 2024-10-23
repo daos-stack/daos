@@ -2375,7 +2375,8 @@ pin_objects:
 	/* Commit multiple DTXs via single local transaction. */
 	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
 	if (rc == 0) {
-		committed = vos_dtx_commit_internal(cont, &dtis[idx], pinned, 0, &rm_cos[idx],
+		committed = vos_dtx_commit_internal(cont, &dtis[idx], pinned, 0,
+						    rm_cos != NULL ? &rm_cos[idx] : NULL,
 						    &daes[idx], &dces[idx]);
 		if (committed >= 0) {
 			rc = umem_tx_commit(vos_cont2umm(cont));
