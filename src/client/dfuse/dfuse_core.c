@@ -30,10 +30,8 @@ dfuse_progress_thread(void *arg)
 
 		for (i = 0; i < to_consume; i++) {
 cont:
-			printf("to_consume: %d\n", to_consume);
 			errno = 0;
 			rc    = sem_wait(&eqt->de_sem);
-			printf("sem_wait rc: %d\n", rc);
 			if (rc != 0) {
 				rc = errno;
 
@@ -48,7 +46,6 @@ cont:
 			int pending;
 
 			pending = daos_eq_query(eqt->de_eq, DAOS_EQR_ALL, 0, NULL);
-			printf("There are %d events pending\n", pending);
 			DFUSE_TRA_INFO(eqt, "There are %d events pending", pending);
 
 			if (pending == 0)
@@ -56,7 +53,6 @@ cont:
 		}
 
 		rc = daos_eq_poll(eqt->de_eq, 1, DAOS_EQ_NOWAIT, 128, &dev[0]);
-		printf("poll rc: %d\n", rc);
 		if (rc >= 1) {
 			for (i = 0; i < rc; i++) {
 				struct dfuse_event *ev;
@@ -1483,7 +1479,6 @@ dfuse_fs_start(struct dfuse_info *dfuse_info, struct dfuse_cont *dfs)
 	if (rc != -DER_SUCCESS)
 		D_GOTO(err_ie_remove, rc);
 
-	printf("di_eq_count: %d\n", dfuse_info->di_eq_count);
 	for (int i = 0; i < dfuse_info->di_eq_count; i++) {
 		struct dfuse_eq *eqt = &dfuse_info->di_eqt[i];
 
