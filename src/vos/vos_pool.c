@@ -1298,6 +1298,18 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_
 		goto end;
 
 	memset(pool_df, 0, sizeof(*pool_df));
+
+	pool_df->pd_ext = umem_zalloc(&umem, sizeof(struct vos_pool_ext_df));
+	if (UMOFF_IS_NULL(pool_df->pd_ext)) {
+		D_ERROR("Failed to allocate pool df extension.\n");
+		rc = -DER_NOSPACE;
+		goto end;
+	}
+
+	rc = gc_init_pool(&umem, pool_df);
+	if (rc)
+		goto end;
+
 	rc = dbtree_create_inplace(VOS_BTR_CONT_TABLE, 0, VOS_CONT_ORDER,
 				   &uma, &pool_df->pd_cont_root, &hdl);
 	if (rc != 0)
@@ -1314,8 +1326,6 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_
 		pool_df->pd_version = 0;
 	else
 		pool_df->pd_version = version;
-
-	gc_init_pool(&umem, pool_df);
 end:
 	/**
 	 * The transaction can in reality be aborted
@@ -1602,15 +1612,8 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 	/* Insert the opened pool to the uuid hash table */
 	uuid_copy(ukey.uuid, pool_df->pd_id);
 	pool->vp_sysdb = !!(flags & VOS_POF_SYSDB);
-	rc = pool_link(pool, &ukey, poh);
-	if (rc) {
-		D_ERROR("Error inserting into vos DRAM hash\n");
-		D_GOTO(failed, rc);
-	}
-
 	pool->vp_dtx_committed_count = 0;
 	pool->vp_pool_df             = pool_df;
-
 	pool->vp_opened = 1;
 	pool->vp_excl = !!(flags & VOS_POF_EXCL);
 	pool->vp_small = !!(flags & VOS_POF_SMALL);
@@ -1627,6 +1630,16 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 		pool->vp_data_thresh = 0;
 	else
 		pool->vp_data_thresh = DAOS_PROP_PO_DATA_THRESH_DEFAULT;
+
+	rc = gc_open_pool(pool);
+	if (rc)
+		goto failed;
+
+	rc = pool_link(pool, &ukey, poh);
+	if (rc) {
+		D_ERROR("Error inserting into vos DRAM hash\n");
+		D_GOTO(failed, rc);
+	}
 
 	vos_space_sys_init(pool);
 	/* Ensure GC is triggered after server restart */
@@ -1819,10 +1832,12 @@ vos_pool_close(daos_handle_t poh)
 	pool->vp_opened--;
 
 	/* If the last reference is holding by GC */
-	if (pool->vp_opened == 1 && gc_have_pool(pool))
+	if (pool->vp_opened == 1 && gc_have_pool(pool)) {
 		gc_del_pool(pool);
-	else if (pool->vp_opened == 0)
+	} else if (pool->vp_opened == 0) {
 		vos_pool_hash_del(pool);
+		gc_close_pool(pool);
+	}
 
 	vos_pool_decref(pool); /* -1 for myself */
 	return 0;
