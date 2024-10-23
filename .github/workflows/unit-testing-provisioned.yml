@@ -11,7 +11,6 @@ jobs:
     runs-on: [self-hosted, wolf]
     env:
       CP_PRIORITY: 1
-
       EL8_BUILD_VERSION: 8.8
       EL8_VERSION: 8.8
       EL9_BUILD_VERSION: 9
@@ -24,13 +23,9 @@ jobs:
       JENKINS_URL: https://build.hpdd.intel.com/
       REPOSITORY_URL: https://repo.dc.hpdd.intel.com/
       REMOVE_EXISTING_RPMS: false
-      # TODO -- this should be on stable, backed-up storage
       ARTIFACTS_URL: file:///scratch/job_repos/
       REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
-
       REPO_PATH: /scratch/job_repos/daos-stack/job/daos/job/PR-${{ github.event.pull_request.number }}/
-
-
       CHROOT_NAME: "rocky+epel-8-x86_64"
       DISTRO_NAME: "EL"
       DISTRO_NAME_UPPER: "EL"
@@ -44,9 +39,7 @@ jobs:
       DAOS_STACK_EL_8_LOCAL_REPO: not_used
       DAOS_STACK_EL_8_GROUP_REPO:
       DAOS_STACK_EL_8_APPSTREAM_REPO:
-
       DAOS_STACK_EL_7_LOCAL_REPO: not_used
-
       NODESTRING:
       CP_PR_REPOS:
       CP_FEATURES:
@@ -62,9 +55,6 @@ jobs:
       QUEUE_URL:
       COMMIT_STATUS_DISTRO_VERSION:
       PROVISION_DISTRO: EL_8
-
-
-# anything missiong ...
       ARTIFACTORY_URL: https://artifactory.dc.hpdd.intel.com/
       DAOS_FULLNAME: daos-stack
       DISTRO_REPOS: disabled
@@ -79,7 +69,6 @@ jobs:
       BUILD_CHROOT: /var/lib/mock/rocky+epel-8-x86_64-10390383274/
 
 
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -92,6 +81,7 @@ jobs:
           condition: true
 
       - name: Scons Build
+        condition: true
         run: |
           echo "whoami: $(whoami)"
           echo "hostname: $(hostname)"
@@ -104,11 +94,18 @@ jobs:
           first_node=${NODELIST%%,*}
           
           rsync -rlpt -z -e "ssh -i ci_key" . jenkins@$first_node:build/
-          ssh -i ci_key jenkins@$first_node 'echo "------"; echo "hostname: $(hostname); echo pwd: $(pwd)"'
           
-          # dnf --assumeyes install dnf-plugins-core
-          # dnf config-manager --save --setopt=assumeyes=True
-          # ./utils/scripts/install-el8.sh
-          ssh -i ci_key jenkins@$first_node 'dnf --assumeyes install dnf-plugins-core; dnf config-manager --save --setopt=assumeyes=True; ./utils/scripts/install-el8.sh'
-          ssh -i ci_key jenkins@$first_node 'sudo dnf install -y python3-pyelftools meson'
-          ssh -i ci_key jenkins@$first_node 'cd build;scons-3 install --build-deps=yes --config=force PREFIX=install'
+          ssh -i ci_key jenkins@$first_node << EOF
+            echo "------"
+            echo "hostname: $(hostname)"
+            echo "pwd: $(pwd)"
+            cd build
+            sudo dnf --assumeyes install dnf-plugins-core 
+            sudo dnf config-manager --save --setopt=assumeyes=True
+            ./utils/scripts/install-el8.sh
+            sudo dnf install -y python3-pyelftools meson
+            scons-3 install --build-deps=yes --config=force PREFIX=install
+          EOF
+      - name: Run Test
+        run: |
+          echo "Beginning Tests ..."
