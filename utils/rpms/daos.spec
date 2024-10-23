@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.6.2
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -112,14 +112,6 @@ BuildRequires: systemd-rpm-macros
 %endif
 %endif
 BuildRequires: libuuid-devel
-
-%if (0%{?suse_version} > 0)
-BuildRequires: libucp-devel
-BuildRequires: libucs-devel
-BuildRequires: libuct-devel
-%else
-BuildRequires: ucx-devel
-%endif
 
 Requires: openssl
 # This should only be temporary until we can get a stable upstream release
@@ -323,7 +315,7 @@ This is the package that bridges the difference between the MOFED openmpi
 %endif
 
 %prep
-%autosetup
+%autosetup -p1
 
 %build
 
@@ -598,6 +590,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Mon Dec 16 2024 Brian J. Murrell <brian.murrell@intel.com> - 2.6.2-4
+- Drop BRs for UCX as they were obsoleted as of e01970d
+
 * Wed Dec 11 2024 Kris Jacque <kristin.jacque@hpe.com> 2.6.2-3
 - Bump min supported go version to 1.21
 
