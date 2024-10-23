@@ -433,22 +433,12 @@ class EngineYamlParameters(YamlParameters):
 
     # Engine environment variables that are required by provider type.
     REQUIRED_ENV_VARS = {
-        "common": [
-            "D_LOG_FILE_APPEND_PID=1",
-            "DAOS_POOL_RF=4",
-            "CRT_EVENT_DELAY=1",
-            # pylint: disable-next=fixme
-            # FIXME disable space cache since some tests need to verify instant pool space
-            # changing, this global setting to individual test setting once in follow-on PR.
-            "DAOS_POOL_SPACE_CACHE_INTVL=0",
-            "COVFILE=/tmp/test.cov"],
+        "common": [],  # let extra yaml set needed envs
         "ofi+tcp": [],
         "ofi+tcp;ofi_rxm": [],
         "ofi+verbs": [
             "FI_OFI_RXM_USE_SRX=1"],
-        "ofi+cxi": [
-            "FI_OFI_RXM_USE_SRX=1",
-            "CRT_MRC_ENABLE=1"],
+        "ofi+cxi": [],  # let extra yaml set needed envs
     }
 
     def __init__(self, base_namespace, index, provider=None, max_storage_tiers=MAX_STORAGE_TIERS):
