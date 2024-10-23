@@ -515,7 +515,7 @@ crt_rpc_complete_and_unlock(struct crt_rpc_priv *rpc_priv, int rc)
 
 	if (rc == -DER_CANCELED)
 		rpc_priv->crp_state = RPC_STATE_CANCELED;
-	else if (rc == -DER_TIMEDOUT)
+	else if (rc == -DER_TIMEDOUT || rc == -DER_DEADLINE_EXPIRED)
 		rpc_priv->crp_state = RPC_STATE_TIMEOUT;
 	else if (rc == -DER_UNREACH)
 		rpc_priv->crp_state = RPC_STATE_FWD_UNREACH;
