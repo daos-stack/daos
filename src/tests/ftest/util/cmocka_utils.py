@@ -108,6 +108,7 @@ class CmockaUtils():
         error_message = None
         error_exception = None
         try:
+            command.timeout = 10
             command.run()
 
         except CommandFailure as error:
