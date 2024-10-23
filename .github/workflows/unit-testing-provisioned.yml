@@ -104,5 +104,11 @@ jobs:
           first_node=${NODELIST%%,*}
           
           rsync -rlpt -z -e "ssh -i ci_key" . jenkins@$first_node:build/
-          ssh -i ci_key jenkins@$first_node 'echo "pwd: $(pwd)"; ls -ltr'
+          ssh -i ci_key jenkins@$first_node 'echo "------"; echo "hostname: $(hostname); echo pwd: $(pwd)"'
+          
+          # dnf --assumeyes install dnf-plugins-core
+          # dnf config-manager --save --setopt=assumeyes=True
+          # ./utils/scripts/install-el8.sh
+          ssh -i ci_key jenkins@$first_node 'dnf --assumeyes install dnf-plugins-core; dnf config-manager --save --setopt=assumeyes=True; ./utils/scripts/install-el8.sh'
+          ssh -i ci_key jenkins@$first_node 'sudo dnf install -y python3-pyelftools meson'
           ssh -i ci_key jenkins@$first_node 'cd build;scons-3 install --build-deps=yes --config=force PREFIX=install'
