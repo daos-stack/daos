@@ -101,4 +101,8 @@ jobs:
           echo "ls -ltr"
           ls -ltr
           
-          which scons-3
+          first_node=${NODELIST%%,*}
+          
+          rsync -rlpt -z -e "ssh -i ci_key" . jenkins@first_node:build/
+          ssh -i ci_key jenkins@first_node 'echo "pwd: $(pwd)"; ls -ltr'
+          ssh -i ci_key jenkins@$first_node 'cd build;scons-3 install --build-deps=yes --config=force PREFIX=/opt/daos'
