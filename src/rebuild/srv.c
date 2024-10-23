@@ -261,7 +261,7 @@ int
 rebuild_global_status_update(struct rebuild_global_pool_tracker *rgt,
 			     struct rebuild_iv *iv)
 {
-	D_DEBUG(DB_REBUILD, "iv rank %d scan_done %d pull_done %d resync dtx %u\n",
+	D_ERROR("iv rank %d scan_done %d pull_done %d resync dtx %u\n",
 		iv->riv_rank, iv->riv_scan_done, iv->riv_pull_done,
 		iv->riv_dtx_resyc_version);
 
@@ -511,7 +511,7 @@ ds_rebuild_restart_if_rank_wip(uuid_t pool_uuid, d_rank_t rank)
 				rgt->rgt_status.rs_errno = -DER_STALE;
 				rgt->rgt_abort = 1;
 				rgt->rgt_status.rs_fail_rank = rank;
-				D_INFO(DF_RB ": abort rebuild because rank %d WIP\n",
+				D_ERROR(DF_RB ": lxz abort rebuild because rank %d WIP\n",
 				       DP_RB_RGT(rgt), rank);
 			}
 			rgt_put(rgt);
@@ -2355,6 +2355,7 @@ rebuild_tgt_status_check_ult(void *arg)
 				rc = rebuild_iv_update(ns, &iv,
 						       CRT_IV_SHORTCUT_TO_ROOT,
 						       CRT_IV_SYNC_NONE, false);
+			D_ERROR("lxz rank %d iv update resync ver %d, rc %d\n", iv.riv_rank, iv.riv_dtx_resyc_version, rc);
 			if (rc == 0) {
 				if (rpt->rt_re_report) {
 					rpt->rt_reported_toberb_objs =

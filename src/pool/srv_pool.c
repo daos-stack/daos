@@ -1527,7 +1527,7 @@ handle_event(struct pool_svc *svc, struct pool_svc_event_set *event_set)
 		if (event->psv_type != CRT_EVT_ALIVE)
 			continue;
 
-		D_DEBUG(DB_MD, DF_UUID ": got CRT_EVT_ALIVE event, psv_src %d, psv_rank %d\n",
+		D_ERROR(DF_UUID ": lxz got CRT_EVT_ALIVE event, psv_src %d, psv_rank %d\n",
 		       DP_UUID(svc->ps_uuid), event->psv_src, event->psv_rank);
 		pool_restart_rebuild_if_rank_wip(svc->ps_pool, event->psv_rank);
 
@@ -7004,7 +7004,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 		}
 
 		failed_cnt = pool_map_get_failed_cnt(map, PO_COMP_TP_NODE);
-		D_INFO(DF_UUID": SWIM exclude %d ranks, failed NODE %d\n",
+		D_ERROR(DF_UUID": lxz SWIM exclude %d ranks, failed NODE %d\n",
 		       DP_UUID(svc->ps_uuid), tgt_addrs->pta_number, failed_cnt);
 		if (failed_cnt > pw_rf) {
 			D_CRIT(DF_UUID": exclude %d ranks will break pool RF %d, failed_cnt %d\n",

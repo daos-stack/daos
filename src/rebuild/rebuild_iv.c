@@ -150,7 +150,8 @@ rebuild_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			rgt->rgt_status.rs_obj_nr, rgt->rgt_status.rs_rec_nr,
 			rgt->rgt_status.rs_state, rgt->rgt_status.rs_errno,
 			src_iv->riv_rank, rgt->rgt_abort);
-	}
+	} else 
+		D_ERROR("lxz rgt_leader_term %d, riv_leader_term %d\n", (int)rgt->rgt_leader_term, (int)src_iv->riv_leader_term);
 	rgt_put(rgt);
 out:
 	D_DEBUG(DB_TRACE, "pool "DF_UUID" master_rank %d\n",
