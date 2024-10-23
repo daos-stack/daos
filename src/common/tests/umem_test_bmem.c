@@ -2273,16 +2273,6 @@ test_tx_alloc_from_multimb(void **state)
 	assert_true(id == ainfo[7].mb_id);
 	alloc_bucket_to_full(umm, &ainfo[7]);
 
-	/* Next preference should be 75%-90% */
-	id = umem_allot_mb_evictable(umm, 0);
-	print_message("obtained id %d, expected is %d\n", id, ainfo[5].mb_id);
-	assert_true(id == ainfo[5].mb_id);
-	alloc_bucket_to_full(umm, &ainfo[5]);
-	id = umem_allot_mb_evictable(umm, 0);
-	print_message("obtained id %d, expected is %d\n", id, ainfo[6].mb_id);
-	assert_true(id == ainfo[6].mb_id);
-	alloc_bucket_to_full(umm, &ainfo[6]);
-
 	/* Next preference should be 0%-30% */
 	id = umem_allot_mb_evictable(umm, 0);
 	print_message("obtained id %d, expected is %d\n", id, ainfo[4].mb_id);
@@ -2299,8 +2289,7 @@ test_tx_alloc_from_multimb(void **state)
 		assert_true(id != ainfo[i].mb_id);
 	print_message("obtained id %d\n", id);
 
-	/* If there are no more new evictable mb available it should return
-	 * one with 90% or more utilization.
+	/* Without eviction support 75-90% and 90% and above cannot be tested.
 	 * TBD: as this requires supporting eviction within this test environment.
 	 */
 }

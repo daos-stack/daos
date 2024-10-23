@@ -95,6 +95,7 @@ struct heap_rt {
 	unsigned                       zones_unused_first;
 	unsigned                       zinfo_vec_size;
 	unsigned                       mb_create_waiters;
+	unsigned                       mb_pressure;
 	void                          *mb_create_wq;
 	struct zinfo_vec              *zinfo_vec;
 	struct mbrt                   *default_mb;
@@ -356,6 +357,7 @@ heap_mbrt_init(struct palloc_heap *heap)
 	rt->active_evictable_mb = NULL;
 	rt->mb_create_waiters   = 0;
 	rt->mb_create_wq        = NULL;
+	rt->mb_pressure         = 0;
 	ret                     = store->stor_ops->so_waitqueue_create(&rt->mb_create_wq);
 	if (ret) {
 		ret = daos_der2errno(ret);
@@ -465,9 +467,11 @@ heap_mbrt_setmb_usage(struct palloc_heap *heap, uint32_t zone_id, uint64_t usage
 	} else if (mb->space_usage > MB_U30) {
 		TAILQ_INSERT_TAIL(&heap->rt->mb_u30, mb, mb_link);
 		mb->qptr = &heap->rt->mb_u30;
+		heap->rt->mb_pressure = 0;
 	} else {
 		TAILQ_INSERT_TAIL(&heap->rt->mb_u0, mb, mb_link);
 		mb->qptr = &heap->rt->mb_u0;
+		heap->rt->mb_pressure = 0;
 	}
 	mb->prev_usage = mb->space_usage;
 }
@@ -532,12 +536,14 @@ heap_mbrt_incrmb_usage(struct palloc_heap *heap, uint32_t zone_id, int size)
 			TAILQ_INSERT_TAIL(&heap->rt->mb_u30, mb, mb_link);
 			mb->qptr = &heap->rt->mb_u30;
 			heap_zinfo_set_usage(heap, zone_id, MB_U30_HINT);
+			heap->rt->mb_pressure = 0;
 		}
 	} else if (mb->qptr != &heap->rt->mb_u0) {
 		TAILQ_REMOVE(mb->qptr, mb, mb_link);
 		TAILQ_INSERT_TAIL(&heap->rt->mb_u0, mb, mb_link);
 		mb->qptr = &heap->rt->mb_u0;
 		heap_zinfo_set_usage(heap, zone_id, MB_U0_HINT);
+		heap->rt->mb_pressure = 0;
 	}
 	mb->prev_usage = mb->space_usage;
 }
@@ -1670,7 +1676,7 @@ heap_create_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
 		D_ASSERT(store->stor_ops->so_waitqueue_wait != NULL);
 		store->stor_ops->so_waitqueue_wait(heap->rt->mb_create_wq, false);
 		D_ASSERT((int)heap->rt->mb_create_waiters >= 0);
-		rc    = -1;
+		rc    = 1;
 		errno = EBUSY;
 		goto out;
 	}
@@ -1772,41 +1778,42 @@ heap_get_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
 
 retry:
 	if (heap->rt->active_evictable_mb != NULL) {
-		*mb_id = heap->rt->active_evictable_mb->mb_id;
-		return 0;
-	}
-
-	if (!TAILQ_EMPTY(&heap->rt->mb_u30)) {
-		mb = TAILQ_FIRST(&heap->rt->mb_u30);
-		TAILQ_REMOVE(&heap->rt->mb_u30, mb, mb_link);
-	} else if (!TAILQ_EMPTY(&heap->rt->mb_u75)) {
-		mb = TAILQ_FIRST(&heap->rt->mb_u75);
-		TAILQ_REMOVE(&heap->rt->mb_u75, mb, mb_link);
-	} else if (!TAILQ_EMPTY(&heap->rt->mb_u0)) {
-		mb = TAILQ_FIRST(&heap->rt->mb_u0);
-		TAILQ_REMOVE(&heap->rt->mb_u0, mb, mb_link);
-	} else {
-		ret = heap_create_evictable_mb(heap, mb_id);
-
-		if (ret) {
-			if (errno == EBUSY)
-				goto retry;
-			mb = TAILQ_FIRST(&heap->rt->mb_u90);
-			if (mb == NULL) {
-				*mb_id = 0;
-				return 0;
-			}
-			TAILQ_REMOVE(&heap->rt->mb_u90, mb, mb_link);
-		} else {
-			mb = heap_mbrt_get_mb(heap, *mb_id);
-			D_ASSERT(mb != NULL);
-			if (heap->rt->active_evictable_mb) {
-				TAILQ_INSERT_HEAD(&heap->rt->mb_u0, mb, mb_link);
-				mb->qptr = &heap->rt->mb_u0;
-				*mb_id   = heap->rt->active_evictable_mb->mb_id;
-				return 0;
-			}
+		if ((heap->rt->mb_pressure) ||
+		    (heap->rt->active_evictable_mb->space_usage <= MB_U75)) {
+			*mb_id = heap->rt->active_evictable_mb->mb_id;
+			return 0;
 		}
+		mb                            = heap->rt->active_evictable_mb;
+		heap->rt->active_evictable_mb = NULL;
+		heap_mbrt_setmb_usage(heap, mb->mb_id, mb->space_usage);
+	}
+	heap->rt->mb_pressure = 0;
+
+	if ((mb = TAILQ_FIRST(&heap->rt->mb_u30)) != NULL)
+		TAILQ_REMOVE(&heap->rt->mb_u30, mb, mb_link);
+	else if ((mb = TAILQ_FIRST(&heap->rt->mb_u0)) != NULL)
+		TAILQ_REMOVE(&heap->rt->mb_u0, mb, mb_link);
+	else if ((ret = heap_create_evictable_mb(heap, mb_id)) >= 0) {
+		if (ret)
+			goto retry;
+		mb = heap_mbrt_get_mb(heap, *mb_id);
+		D_ASSERT(mb != NULL);
+		if (heap->rt->active_evictable_mb) {
+			TAILQ_INSERT_HEAD(&heap->rt->mb_u0, mb, mb_link);
+			mb->qptr = &heap->rt->mb_u0;
+			*mb_id   = heap->rt->active_evictable_mb->mb_id;
+			return 0;
+		}
+	} else if ((mb = TAILQ_FIRST(&heap->rt->mb_u75)) != NULL) {
+		TAILQ_REMOVE(&heap->rt->mb_u75, mb, mb_link);
+		heap->rt->mb_pressure = 1;
+	} else if ((mb = TAILQ_FIRST(&heap->rt->mb_u90)) != NULL) {
+		TAILQ_REMOVE(&heap->rt->mb_u90, mb, mb_link);
+		heap->rt->mb_pressure = 1;
+	} else {
+		D_ERROR("Failed to get an evictable MB");
+		*mb_id = 0;
+		return 0;
 	}
 	heap->rt->active_evictable_mb = mb;
 	mb->qptr                      = NULL;
