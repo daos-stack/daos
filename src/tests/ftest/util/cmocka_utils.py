@@ -1,9 +1,10 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
+import time
 
 from agent_utils import include_local_host
 from command_utils import ExecutableCommand
@@ -108,6 +109,7 @@ class CmockaUtils():
         error_message = None
         error_exception = None
         try:
+            time.sleep(30)      # Debug
             command.run()
 
         except CommandFailure as error:
@@ -117,6 +119,7 @@ class CmockaUtils():
             test.fail(error_message)
 
         finally:
+            run_remote(test.log, self.hosts, "ps -ejH")
             self._collect_cmocka_results(test)
             if not self._check_cmocka_files():
                 if error_message is None:
