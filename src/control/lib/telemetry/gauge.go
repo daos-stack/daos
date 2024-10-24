@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -41,18 +41,22 @@ func (g *Gauge) FloatValue() float64 {
 
 // Value returns the value as an unsigned integer.
 func (g *Gauge) Value() uint64 {
+	gaugeVal := BadUintVal
 	if g.handle == nil || g.node == nil {
-		return BadUintVal
+		return gaugeVal
 	}
 
-	var val C.uint64_t
-
-	res := C.d_tm_get_gauge(g.handle.ctx, &val, nil, g.node)
-	if res == C.DER_SUCCESS {
-		return uint64(val)
+	fetch := func() C.int {
+		var val C.uint64_t
+		res := C.d_tm_get_gauge(g.handle.ctx, &val, nil, g.node)
+		if res == C.DER_SUCCESS {
+			gaugeVal = uint64(val)
+		}
+		return res
 	}
+	g.fetchValWithRetry(fetch)
 
-	return BadUintVal
+	return gaugeVal
 }
 
 func newGauge(hdl *handle, path string, name *string, node *C.struct_d_tm_node_t) *Gauge {
@@ -103,18 +107,22 @@ func (g *StatsGauge) FloatValue() float64 {
 
 // Value returns the gauge value as an unsigned integer.
 func (g *StatsGauge) Value() uint64 {
+	gaugeVal := BadUintVal
 	if g.handle == nil || g.node == nil {
-		return BadUintVal
+		return gaugeVal
 	}
 
-	var val C.uint64_t
-
-	res := C.d_tm_get_gauge(g.handle.ctx, &val, &g.stats, g.node)
-	if res == C.DER_SUCCESS {
-		return uint64(val)
+	fetch := func() C.int {
+		var val C.uint64_t
+		res := C.d_tm_get_gauge(g.handle.ctx, &val, &g.stats, g.node)
+		if res == C.DER_SUCCESS {
+			gaugeVal = uint64(val)
+		}
+		return res
 	}
+	g.fetchValWithRetry(fetch)
 
-	return BadUintVal
+	return gaugeVal
 }
 
 func newStatsGauge(hdl *handle, path string, name *string, node *C.struct_d_tm_node_t) *StatsGauge {

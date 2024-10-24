@@ -25,8 +25,8 @@ from run_utils import run_local, run_remote
 from soak_utils import (SoakTestError, add_pools, build_job_script, cleanup_dfuse,
                         create_app_cmdline, create_dm_cmdline, create_fio_cmdline,
                         create_ior_cmdline, create_macsio_cmdline, create_mdtest_cmdline,
-                        create_racer_cmdline, ddhhmmss_format, debug_logging, get_daos_server_logs,
-                        get_harassers, get_id, get_job_logs, get_journalctl_logs, job_cleanup,
+                        create_racer_cmdline, ddhhmmss_format, debug_logging,
+                        get_harassers, get_id, get_job_logs, job_cleanup,
                         launch_exclude_reintegrate, launch_extend, launch_jobscript, launch_reboot,
                         launch_server_stop_start, launch_snapshot, launch_vmd_identify_check,
                         reserved_file_copy, run_event_check, run_metrics_check, run_monitor_check)
@@ -169,8 +169,6 @@ class SoakTestBase(TestWithServers):
 
         # display final metrics
         run_metrics_check(self, prefix="final")
-        # Gather logs
-        get_job_logs(self)
 
         if self.all_failed_harassers:
             errors.extend(self.all_failed_harassers)
