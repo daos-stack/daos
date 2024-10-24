@@ -1,0 +1,25 @@
+diff --git a/src/na/na_ofi.c b/src/na/na_ofi.c
+index c833dc1..17fd842 100644
+--- a/src/na/na_ofi.c
++++ b/src/na/na_ofi.c
+@@ -4363,20 +4363,6 @@ na_ofi_cxi_set_domain_ops(struct na_ofi_domain *na_ofi_domain)
+         return NA_SUCCESS;
+     }
+ 
+-    /* Prevent potential memory corruption by ensuring that memory backing MRs
+-     * cannot be accessed after invoking fi_close() even if that memory remains
+-     * in the MR cache. */
+-    rc = dom_ops->enable_mr_match_events(&na_ofi_domain->fi_domain->fid, true);
+-    NA_CHECK_SUBSYS_ERROR(cls, rc != 0, error, ret, na_ofi_errno_to_na(-rc),
+-        "enable_mr_match_events() failed, rc: %d (%s)", rc, fi_strerror(-rc));
+-
+-    /* Disable use of optimized MRs to prevent quick recycle of MR keys (when
+-     * using FI_MR_PROV_KEY). This prevents potential memory corruptions when
+-     * multiple regions could end up using the same key. */
+-    rc = dom_ops->enable_optimized_mrs(&na_ofi_domain->fi_domain->fid, false);
+-    NA_CHECK_SUBSYS_ERROR(cls, rc != 0, error, ret, na_ofi_errno_to_na(-rc),
+-        "enable_optimized_mrs() failed, rc: %d (%s)", rc, fi_strerror(-rc));
+-
+     return NA_SUCCESS;
+ 
+ error:
