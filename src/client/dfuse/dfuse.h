@@ -1015,9 +1015,6 @@ struct dfuse_inode_entry {
 
 	/* Entry on the evict list */
 	d_list_t                  ie_evict_entry;
-
-	/* Number of concurrent release calls on inode */
-	ATOMIC uint32_t           ie_release_count;
 };
 
 struct active_inode {

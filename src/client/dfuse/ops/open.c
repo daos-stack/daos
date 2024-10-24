@@ -136,6 +136,10 @@ err:
 	DFUSE_REPLY_ERR_RAW(ie, req, rc);
 }
 
+/* Release a file handle, called after close() by an application.
+ *
+ * Can be invoked concurrently on the same inode.
+ */
 void
 dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
@@ -149,9 +153,7 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	 * but the inode only tracks number of open handles with non-zero ioctl counts
 	 */
 
-	D_ASSERTF(oh->doh_ie->ie_active, "Inode is not active");
-
-	D_ASSERT(atomic_fetch_add_relaxed(&oh->doh_ie->ie_release_count, 1) == 0);
+	D_ASSERT(oh->doh_ie->ie_active);
 
 	DFUSE_TRA_DEBUG(oh, "Closing %d", oh->doh_caching);
 
@@ -219,8 +221,6 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		ie = oh->doh_ie;
 		atomic_fetch_add_relaxed(&ie->ie_ref, 1);
 	}
-
-	D_ASSERT(atomic_fetch_sub_relaxed(&oh->doh_ie->ie_release_count, 1) == 1);
 
 	if (active_oh_decref(oh))
 		oh->doh_linear_read = true;
