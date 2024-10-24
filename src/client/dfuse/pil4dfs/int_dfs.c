@@ -1069,7 +1069,6 @@ PMPI_Init(int *argc, char ***argv)
 	}
 
 	atomic_fetch_add_relaxed(&mpi_init_count, 1);
-	printf("DBG> mpi_init_count = %ld\n", mpi_init_count);
 	rc = next_pmpi_init(argc, argv);
 	atomic_fetch_add_relaxed(&mpi_init_count, -1);
 	return rc;
