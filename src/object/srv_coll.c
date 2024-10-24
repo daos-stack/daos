@@ -239,9 +239,15 @@ obj_coll_punch_prep(struct obj_coll_punch_in *ocpi, struct daos_coll_target *dct
 	int			 i;
 	int			 j;
 
-	/* dcts[0] is for current engine. */
-	if (dcts[0].dct_bitmap == NULL || dcts[0].dct_bitmap_sz == 0 ||
-	    dcts[0].dct_shards == NULL) {
+	/* dcts[0] must be for current engine. */
+	if (unlikely(dcts[0].dct_rank != dss_self_rank())) {
+		D_ERROR("Invalid targets array: rank %u vs %u, nr %u, flags %x\n",
+			dcts[0].dct_rank, dss_self_rank(), dct_nr, ocpi->ocpi_flags);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (unlikely(dcts[0].dct_bitmap == NULL || dcts[0].dct_bitmap_sz == 0 ||
+		     dcts[0].dct_shards == NULL)) {
 		D_ERROR("Invalid input for current engine: bitmap %s, bitmap_sz %u, shards %s\n",
 			dcts[0].dct_bitmap == NULL ? "empty" : "non-empty", dcts[0].dct_bitmap_sz,
 			dcts[0].dct_shards == NULL ? "empty" : "non-empty");
@@ -302,6 +308,11 @@ obj_coll_punch_prep(struct obj_coll_punch_in *ocpi, struct daos_coll_target *dct
 
 	/* Set i = 1 to skip leader_rank. */
 	for (i = 1; i < dct_nr; i++) {
+		if (unlikely(dcts[0].dct_rank == dcts[i].dct_rank)) {
+			D_ERROR("Duplicated leader rank %u at %d\n", dcts[0].dct_rank, i);
+			D_GOTO(out, rc = -DER_INVAL);
+		}
+
 		dce->dce_ranks->rl_ranks[i - 1] = dcts[i].dct_rank;
 		if (max_rank < dcts[i].dct_rank)
 			max_rank = dcts[i].dct_rank;
