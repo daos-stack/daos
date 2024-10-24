@@ -1508,16 +1508,6 @@ wal_mb_utilization_tests(void **state)
 	assert_true(id == ainfo[5].mb_id);
 	alloc_bucket_to_full(umm, &ainfo[5], checkpoint_fn, &arg->ctx.tc_po_hdl);
 
-	/* Next preference should be 75%-90% */
-	id = umem_allot_mb_evictable(umm, 0);
-	print_message("obtained id %d, expected is %d\n", id, ainfo[3].mb_id);
-	assert_true(id == ainfo[3].mb_id);
-	alloc_bucket_to_full(umm, &ainfo[3], checkpoint_fn, &arg->ctx.tc_po_hdl);
-	id = umem_allot_mb_evictable(umm, 0);
-	print_message("obtained id %d, expected is %d\n", id, ainfo[4].mb_id);
-	assert_true(id == ainfo[4].mb_id);
-	alloc_bucket_to_full(umm, &ainfo[4], checkpoint_fn, &arg->ctx.tc_po_hdl);
-
 	/* Next preference should be 0%-30% */
 	id = umem_allot_mb_evictable(umm, 0);
 	print_message("obtained id %d, expected is %d\n", id, ainfo[2].mb_id);
@@ -1533,31 +1523,37 @@ wal_mb_utilization_tests(void **state)
 	for (i = 0; i < MDTEST_MAX_EMB_CNT - 1; i++)
 		assert_true(id != ainfo[i].mb_id);
 	print_message("obtained id %d\n", id);
+	i = MDTEST_MAX_EMB_CNT - 1;
+
+	ainfo[i].mb_id       = id;
+	ainfo[i].num_allocs  = 0;
+	ainfo[i].start_umoff = UMOFF_NULL;
+	ainfo[i].alloc_size  = 0;
+	assert_true(ainfo[i].mb_id != 0);
+	alloc_bucket_to_full(umm, &ainfo[i], checkpoint_fn, &arg->ctx.tc_po_hdl);
+
+	/* Next preference should be 75%-90% */
+	id = umem_allot_mb_evictable(umm, 0);
+	print_message("obtained id %d, expected is %d\n", id, ainfo[3].mb_id);
+	assert_true(id == ainfo[3].mb_id);
+	alloc_bucket_to_full(umm, &ainfo[3], checkpoint_fn, &arg->ctx.tc_po_hdl);
+	id = umem_allot_mb_evictable(umm, 0);
+	print_message("obtained id %d, expected is %d\n", id, ainfo[4].mb_id);
+	assert_true(id == ainfo[4].mb_id);
+	alloc_bucket_to_full(umm, &ainfo[4], checkpoint_fn, &arg->ctx.tc_po_hdl);
 
 	/* If there are no more new evictable mb available it should return
 	 * one with 90% or more utilization.
 	 */
-	for (i = MDTEST_MAX_EMB_CNT - 1; i < MDTEST_MB_CNT + 1; i++) {
-		id = umem_allot_mb_evictable(umm, 0);
-		for (j = 0; j < i; j++) {
-			if (id == ainfo[j].mb_id) {
-				print_message("reusing evictable mb %d\n", id);
-				mb_reuse = 1;
-				break;
-			}
-		}
-		if (mb_reuse)
+	id = umem_allot_mb_evictable(umm, 0);
+	for (j = 0; j < i; j++) {
+		if (id == ainfo[j].mb_id) {
+			print_message("reusing evictable mb %d\n", id);
+			mb_reuse = 1;
 			break;
-		ainfo[i].mb_id       = id;
-		ainfo[i].num_allocs  = 0;
-		ainfo[i].start_umoff = UMOFF_NULL;
-		ainfo[i].alloc_size  = 0;
-		assert_true(ainfo[i].mb_id != 0);
-		alloc_bucket_to_full(umm, &ainfo[i], checkpoint_fn, &arg->ctx.tc_po_hdl);
+		}
 	}
-
-	print_message("evictable memory buckets created = %d\n", i);
-	assert_true(i == MDTEST_MAX_EMB_CNT);
+	assert_true(mb_reuse);
 }
 
 #define ZONE_MAX_SIZE (16 * 1024 * 1024)
