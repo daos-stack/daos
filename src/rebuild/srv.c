@@ -261,7 +261,7 @@ int
 rebuild_global_status_update(struct rebuild_global_pool_tracker *rgt,
 			     struct rebuild_iv *iv)
 {
-	D_DEBUG(DB_REBUILD, "iv rank %d scan_done %d pull_done %d resync dtx %u\n",
+	D_ERROR("iv rank %d scan_done %d pull_done %d resync dtx %u\n",
 		iv->riv_rank, iv->riv_scan_done, iv->riv_pull_done,
 		iv->riv_dtx_resyc_version);
 
@@ -484,6 +484,45 @@ ds_rebuild_running_query(uuid_t pool_uuid, uint32_t opc, uint32_t *upper_ver,
 	}
 	if (rpt)
 		rpt_put(rpt);
+}
+
+/*
+ * Restart rebuild if \a rank's rebuild not finished.
+ * Only used for massive failure recovery case, see pool_restart_rebuild_if_rank_wip().
+ */
+void
+ds_rebuild_restart_if_rank_wip(uuid_t pool_uuid, d_rank_t rank)
+{
+	struct rebuild_global_pool_tracker	*rgt;
+	int					 i;
+
+	rgt = rebuild_global_pool_tracker_lookup(pool_uuid, -1, -1);
+	if (rgt == NULL)
+		return;
+
+	if (rgt->rgt_status.rs_state != DRS_IN_PROGRESS) {
+		rgt_put(rgt);
+		return;
+	}
+
+	for (i = 0; i < rgt->rgt_servers_number; i++) {
+		if (rgt->rgt_servers[i].rank == rank) {
+			if (!rgt->rgt_servers[i].pull_done) {
+				rgt->rgt_status.rs_errno = -DER_STALE;
+				rgt->rgt_abort = 1;
+				rgt->rgt_status.rs_fail_rank = rank;
+				D_ERROR(DF_RB ": lxz abort rebuild because rank %d WIP\n",
+				       DP_RB_RGT(rgt), rank);
+			}
+			rgt_put(rgt);
+			return;
+		}
+	}
+
+	D_INFO(DF_RB ": rank %d not in rgt_servers,  rgt_servers_number %d\n",
+	       DP_RB_RGT(rgt), rank, rgt->rgt_servers_number);
+	rgt_put(rgt);
+	return;
 }
 
 /* TODO: Add something about what the current operation is for output status */
@@ -2316,6 +2355,7 @@ rebuild_tgt_status_check_ult(void *arg)
 				rc = rebuild_iv_update(ns, &iv,
 						       CRT_IV_SHORTCUT_TO_ROOT,
 						       CRT_IV_SYNC_NONE, false);
+			D_ERROR("lxz rank %d iv update resync ver %d, rc %d\n", iv.riv_rank, iv.riv_dtx_resyc_version, rc);
 			if (rc == 0) {
 				if (rpt->rt_re_report) {
 					rpt->rt_reported_toberb_objs =
