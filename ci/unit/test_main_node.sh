@@ -35,7 +35,7 @@ if [ -n "$BULLSEYE" ]; then
 fi
 
 cd "${SL_SRC_DIR}"
-mkdir new_dir
+mkdir -p new_dir
 sudo cp -a new_dir /opt/daos
 tar --strip-components=2 --directory /opt/daos -xf opt-daos.tar
 

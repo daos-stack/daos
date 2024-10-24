@@ -46,5 +46,5 @@ runs:
             inst_repos+=":${{ github.run_number }}"
         fi
         ARTIFACTS_URL=$ARTIFACTS_URL                                      \
-        INST_REPOS="$(eval echo "$inst_repos")"                           \
+        INST_REPOS=""                           \
         DISTRO=$PROVISION_DISTRO ci/provisioning/post_provision_config.sh
