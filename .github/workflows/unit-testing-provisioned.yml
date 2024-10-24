@@ -97,6 +97,7 @@ jobs:
           echo "::endgroup::"
           echo "::group::Sending Build Commands to $first_node"
           ssh -tt -i ci_key jenkins@$first_node << EOF
+            set -e
             echo "------"
             echo "hostname: $(hostname)"
             echo "pwd: $(pwd)"
@@ -110,15 +111,13 @@ jobs:
             # these shouldn't be needed???
             # sudo dnf install -y ndctl-devel daxctl-devel
             scons-3 --build-deps=yes --config=force -j12 install
+            tar -cf opt-daos.tar ./build/
+            mv opt-daos.tar ./build/
+            set +e
           EOF
           echo "::endgroup::"
           
-          echo "::group::Create Tar File::"
-          ssh -tt -i ci_key jenkins@$first_node << EOF
-            tar -cf opt-daos.tar ./build/
-            mv opt-daos.tar ./build/
-          EOF
-          echo "::endgroup::"
+
       - name: Run Test
         run: |
           echo "Beginning Tests ..."
