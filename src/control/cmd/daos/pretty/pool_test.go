@@ -169,6 +169,45 @@ Pool space info:
   Free: 1 B, min:0 B, max:0 B, mean:0 B
 `, poolUUID.String()),
 		},
+		"normal response; suspect ranks": {
+			pi: &daos.PoolInfo{
+				QueryMask:        daos.HealthOnlyPoolQueryMask,
+				State:            daos.PoolServiceStateDegraded,
+				UUID:             poolUUID,
+				TotalTargets:     2,
+				DisabledTargets:  1,
+				ActiveTargets:    1,
+				ServiceLeader:    42,
+				Version:          100,
+				PoolLayoutVer:    1,
+				UpgradeLayoutVer: 2,
+				DisabledRanks:    ranklist.MustCreateRankSet("[0,1,3]"),
+				SuspectRanks:     ranklist.MustCreateRankSet("[2]"),
+				Rebuild: &daos.PoolRebuildStatus{
+					State:   daos.PoolRebuildStateBusy,
+					Objects: 42,
+					Records: 21,
+				},
+				TierStats: []*daos.StorageUsageStats{
+					{
+						Total: 2,
+						Free:  1,
+					},
+					{
+						Total: 2,
+						Free:  1,
+					},
+				},
+			},
+			expPrintStr: fmt.Sprintf(`
+Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
+Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
+Pool health info:
+- Disabled ranks: 0-1,3
+- Suspect ranks: 2
+- Rebuild busy, 42 objs, 21 recs
+`, poolUUID.String()),
+		},
 		"unknown/invalid rebuild state response": {
 			pi: &daos.PoolInfo{
 				QueryMask:        daos.DefaultPoolQueryMask,
