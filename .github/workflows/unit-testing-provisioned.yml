@@ -101,10 +101,22 @@ jobs:
             cd build
             sudo dnf --assumeyes install dnf-plugins-core 
             sudo dnf config-manager --save --setopt=assumeyes=True
-            ./utils/scripts/install-el8.sh
-            sudo dnf install -y python3-pyelftools meson
-            scons-3 install --build-deps=yes --config=force PREFIX=install
+            sudo ./utils/scripts/install-el8.sh
+            sudo python3 -m pip install -r requirements-build.txt
+            # sudo dnf install -y python3-pyelftools meson
+          
+            # these shouldn't be needed???
+            # sudo dnf install -y ndctl-devel daxctl-devel
+            scons-3 install --build-deps=yes --config=force PREFIX=install -j12
           EOF
       - name: Run Test
         run: |
           echo "Beginning Tests ..."
+
+#      - name: Job cleanup
+#        if: (!cancelled() && (success() || failure()))
+#        run: |
+#          set -eux
+#          . ci/gha_functions.sh
+#          cleanup_provision_request "${{ env.CLUSTER_REQUEST_reqid }}"
+#          NODELIST=${{ env.NODESTRING }} ci/functional/job_cleanup.sh
