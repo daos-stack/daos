@@ -96,9 +96,8 @@ jobs:
           rsync -rlpt -z -e "ssh -i ci_key" . jenkins@$first_node:build/
           echo "::endgroup::"
           echo "::group::Sending Build Commands to $first_node"
-          ssh -tt -i ci_key jenkins@$first_node << EOF
+          ssh -i ci_key jenkins@$first_node << EOF
             set -e
-            echo "------"
             echo "hostname: $(hostname)"
             echo "pwd: $(pwd)"
             cd build
@@ -106,10 +105,6 @@ jobs:
             sudo dnf config-manager --save --setopt=assumeyes=True
             sudo ./utils/scripts/install-el8.sh
             sudo python3 -m pip install -r requirements-build.txt
-            # sudo dnf install -y python3-pyelftools meson
-          
-            # these shouldn't be needed???
-            # sudo dnf install -y ndctl-devel daxctl-devel
             scons-3 --build-deps=yes --config=force -j12 install
             tar -cf opt-daos.tar ./build/
             mv opt-daos.tar ./build/
