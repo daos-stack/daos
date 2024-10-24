@@ -155,6 +155,7 @@ const (
 	ServerPoolHasContainers
 	ServerHugepagesDisabled
 	ServerPoolMemRatioNoRoles
+	ServerBadFaultDomainLabels
 )
 
 // server config fault codes

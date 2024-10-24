@@ -260,6 +260,8 @@ func StorageScan(ctx context.Context, rpcClient UnaryInvoker, req *StorageScanRe
 				Health:   req.NvmeHealth || req.Usage,
 				Meta:     req.Usage,
 				MemRatio: req.MemRatio,
+				// Only request link stats if health explicitly requested.
+				LinkStats: req.NvmeHealth,
 			},
 		})
 	})
