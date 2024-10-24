@@ -370,7 +370,7 @@ pool_attribute(void **state)
 	}
 
 	/** Fake error */
-	assert_int_equal(rc, 242);
+	assert_int_equal(rc, 2242);
 }
 
 /** reconnect to pool after re-initializing DAOS lib */
