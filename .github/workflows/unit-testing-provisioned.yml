@@ -106,7 +106,9 @@ jobs:
             sudo ./utils/scripts/install-el8.sh
             sudo python3 -m pip install -r requirements-build.txt
             scons-3 --build-deps=yes --config=force -j12 install
-            tar -cf opt-daos.tar ./build/
+          # need to simulate: 'tar -cf opt-daos.tar /opt/daos/' (this is how the sconsBuild.grovy does it in Jenkins)
+          # will be unpacked with: tar --strip-components=2 --directory /opt/daos -xf opt-daos.tar
+            tar -cf opt-daos.tar -C ./build/ install
             mv opt-daos.tar ./build/
             set +e
           EOF
@@ -115,11 +117,8 @@ jobs:
 
       - name: Run Test
         run: |
-          echo "Beginning Tests ..."
-          export BULLSEYE=
-          ssh -tt -i ci_key jenkins@$first_node << EOF
-            ./ci/unit/test_main_node.sh
-          EOF
+          echo "Beginning Tests ..."         
+          ssh -i ci_key jenkins@$first_node 'export BULLSEYE=;export WITH_VALGRIND=;export BDEV_TEST=false; .build/ci/unit/test_main_node.sh'
 
 #      - name: Job cleanup
 #        if: (!cancelled() && (success() || failure()))
