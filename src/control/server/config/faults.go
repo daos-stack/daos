@@ -61,11 +61,6 @@ var (
 		"no DAOS IO Engines specified in configuration",
 		"specify at least one IO Engine configuration ('engines' list parameter) and restart the control server",
 	)
-	FaultConfigFaultDomainInvalid = serverConfigFault(
-		code.ServerConfigFaultDomainInvalid,
-		"invalid fault domain",
-		"specify a valid fault domain ('fault_path' parameter) or callback script ('fault_cb' parameter) and restart the control server",
-	)
 	FaultConfigFaultCallbackNotFound = serverConfigFault(
 		code.ServerConfigFaultCallbackNotFound,
 		"fault domain callback script not found",
@@ -112,6 +107,14 @@ var (
 		"set `system_ram_reserved` to a positive integer value in config",
 	)
 )
+
+func FaultConfigFaultDomainInvalid(err error) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigFaultDomainInvalid,
+		fmt.Sprintf("invalid fault domain: %s", err.Error()),
+		"specify a valid fault domain ('fault_path' parameter) or callback script ('fault_cb' parameter) and restart the control server",
+	)
+}
 
 func FaultConfigDuplicateFabric(curIdx, seenIdx int) *fault.Fault {
 	return serverConfigFault(
