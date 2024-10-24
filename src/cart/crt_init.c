@@ -18,6 +18,10 @@ static volatile int     gdata_init_flag;
 struct crt_plugin_gdata crt_plugin_gdata;
 static bool             g_prov_settings_applied[CRT_PROV_COUNT];
 
+#define X(a, b) b,
+static const char *const crt_tc_name[] = {CRT_TRAFFIC_CLASSES};
+#undef X
+
 static void
 crt_lib_init(void) __attribute__((__constructor__));
 
@@ -87,6 +91,8 @@ dump_opt(crt_init_options_t *opt)
 	/* Handle similar to D_PROVIDER_AUTH_KEY */
 	if (opt->cio_auth_key)
 		D_INFO("auth_key is set\n");
+	if (opt->cio_thread_mode_single)
+		D_INFO("thread mode single is set\n");
 }
 
 static int
@@ -228,6 +234,17 @@ crt_gdata_dump(void)
 	DUMP_GDATA_FIELD("%d", cg_rpc_quota);
 }
 
+static enum crt_traffic_class
+crt_str_to_tc(const char *str)
+{
+	enum crt_traffic_class i = 0;
+
+	while (str != NULL && strcmp(crt_tc_name[i], str) != 0 && i < CRT_TC_UNKNOWN)
+		i++;
+
+	return i == CRT_TC_UNKNOWN ? CRT_TC_UNSPEC : i;
+}
+
 /* first step init - for initializing crt_gdata */
 static int
 data_init(int server, crt_init_options_t *opt)
@@ -238,9 +255,10 @@ data_init(int server, crt_init_options_t *opt)
 	uint32_t     mem_pin_enable = 0;
 	uint32_t     is_secondary;
 	uint32_t     post_init = CRT_HG_POST_INIT, post_incr = CRT_HG_POST_INCR;
-	unsigned int mrecv_buf      = CRT_HG_MRECV_BUF;
-	unsigned int mrecv_buf_copy = 0; /* buf copy disabled by default */
-	int          rc             = 0;
+	unsigned int mrecv_buf          = CRT_HG_MRECV_BUF;
+	unsigned int mrecv_buf_copy     = 0; /* buf copy disabled by default */
+	char        *swim_traffic_class = NULL;
+	int          rc                 = 0;
 
 	crt_env_dump();
 
@@ -253,6 +271,8 @@ data_init(int server, crt_init_options_t *opt)
 	crt_gdata.cg_mrecv_buf = mrecv_buf;
 	crt_env_get(D_MRECV_BUF_COPY, &mrecv_buf_copy);
 	crt_gdata.cg_mrecv_buf_copy = mrecv_buf_copy;
+	crt_env_get(SWIM_TRAFFIC_CLASS, &swim_traffic_class);
+	crt_gdata.cg_swim_tc = crt_str_to_tc(swim_traffic_class);
 
 	is_secondary = 0;
 	/* Apply CART-890 workaround for server side only */
@@ -492,6 +512,61 @@ out:
 	return rc;
 }
 
+#define CRT_MIN_TCP_FD 131072
+
+/** For some providers, we require a file descriptor for every connection
+ * and some platforms set the soft limit too low meaning and we run out. We can
+ * set the limit up to the configured max by default to avoid this and warn
+ * when that isn't possible.
+ */
+static void
+file_limit_bump(void)
+{
+	int           rc;
+	struct rlimit rlim;
+
+	/* Bump file descriptor limit if low and if possible */
+	rc = getrlimit(RLIMIT_NOFILE, &rlim);
+	if (rc != 0) {
+		DS_ERROR(errno, "getrlimit() failed. Unable to check file descriptor limit");
+		/** Per the man page, this can only fail if rlim is invalid */
+		D_ASSERT(0);
+		return;
+	}
+
+	if (rlim.rlim_cur >= CRT_MIN_TCP_FD)
+		return;
+
+	if (rlim.rlim_max < CRT_MIN_TCP_FD) {
+		if (getuid() != 0) {
+			D_WARN("File descriptor hard limit should be at least %d, limit is %lu\n",
+			       CRT_MIN_TCP_FD, rlim.rlim_max);
+		} else {
+			/** root should be able to change it */
+			D_INFO("Super user attempting to update hard file descriptor limit to %d,"
+			       " limit was %lu\n",
+			       CRT_MIN_TCP_FD, rlim.rlim_max);
+			rlim.rlim_max = CRT_MIN_TCP_FD;
+		}
+
+		if (rlim.rlim_cur >= rlim.rlim_max)
+			return;
+
+		/* May as well bump it as much as we can */
+	}
+
+	rlim.rlim_cur = rlim.rlim_max;
+	rc            = setrlimit(RLIMIT_NOFILE, &rlim);
+	if (rc != 0) {
+		DS_ERROR(errno,
+			 "setrlimit() failed. Unable to bump file descriptor"
+			 " limit to value >= %d, limit is %lu",
+			 CRT_MIN_TCP_FD, rlim.rlim_max);
+		return;
+	}
+	D_INFO("Updated soft file descriptor limit to %lu\n", rlim.rlim_max);
+}
+
 static void
 prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 {
@@ -509,6 +584,9 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 		if (prov == CRT_PROV_OFI_TCP_RXM && crt_is_service())
 			d_setenv("FI_OFI_RXM_DEF_TCP_WAIT_OBJ", "pollfd", 0);
 	}
+
+	if (prov == CRT_PROV_OFI_TCP || prov == CRT_PROV_OFI_TCP_RXM)
+		file_limit_bump();
 
 	if (prov == CRT_PROV_OFI_CXI)
 		mrc_enable = 1;
@@ -626,6 +704,14 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 					path, rc);
 			else
 				D_DEBUG(DB_ALL, "set group_config_path as %s.\n", path);
+		}
+
+		if (opt && opt->cio_thread_mode_single) {
+			crt_gdata.cg_thread_mode_single = opt->cio_thread_mode_single;
+		} else {
+			bool thread_mode_single = false;
+			crt_env_get(D_THREAD_MODE_SINGLE, &thread_mode_single);
+			crt_gdata.cg_thread_mode_single = thread_mode_single;
 		}
 
 		if (opt && opt->cio_auth_key)
