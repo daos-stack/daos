@@ -16,7 +16,7 @@
 
 Name:          daos
 Version:       2.7.100
-Release:       9%{?relval}%{?dist}
+Release:       10%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -592,6 +592,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Oct 25 2024 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.7.100-10
+- pmemobj errors and warnings reported via DAOS logging system
+
 * Tue Oct 15 2024 Brian J. Murrell <brian.murrell@intel.com> - 2.7.100-9
 - Drop BRs for UCX as they were obsoleted as of e01970d
 
