@@ -119,7 +119,9 @@ extern "C" {
 	/** Fatal (non-retry-able) transport layer mercury error */                                \
 	ACTION(DER_HG_FATAL, Fatal transport layer mercury error)                                  \
 	/** Quota limit reached on the requested resource */                                       \
-	ACTION(DER_QUOTA_LIMIT, Quota limit reached)
+	ACTION(DER_QUOTA_LIMIT, Quota limit reached)						   \
+	/** Deadline expired for the action */                                       		   \
+	ACTION(DER_DEADLINE_EXPIRED, Deadline expired)						   \
 	/** TODO: add more error numbers */
 
 /** Preprocessor macro defining DAOS errno values and internal definition of d_errstr */
