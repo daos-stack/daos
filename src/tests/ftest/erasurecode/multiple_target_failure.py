@@ -6,7 +6,7 @@
 from ec_utils import ErasureCodeIor
 
 
-class EcodOnlineMultFail(ErasureCodeIor):
+class EcodOnlineMultiTargetFail(ErasureCodeIor):
     # pylint: disable=too-many-ancestors
     """
     Test Class Description: To validate Erasure code object data after killing multiple rank,targets
@@ -23,6 +23,8 @@ class EcodOnlineMultFail(ErasureCodeIor):
         """Common function to Write and Read IOR"""
         # Write IOR data set with different EC object. kill rank, targets or mix of both while IOR
         # Write phase is in progress.
+        self.log_step(
+            f"Write datasets using IOR and exclude target {self.pool_exclude} while IOR is running")
         self.ior_write_dataset()
 
         # Disabled Online rebuild
@@ -31,24 +33,8 @@ class EcodOnlineMultFail(ErasureCodeIor):
         # Read IOR data and verify for EC object again
         # EC data was written with +2 parity so after killing ranks of targets data should be
         # intact and no data corruption observed.
+        self.log_step(f"Read datasets using IOR after exclude target {self.pool_exclude}")
         self.ior_read_dataset(parity=2)
-
-    def test_ec_multiple_rank_failure(self):
-        """Jira ID: DAOS-7344.
-
-        Test Description: Test Erasure code object with IOR with multiple rank failure
-        Use Case: Create the pool, run IOR with supported EC object type class, kill multiple
-                  server ranks, while IOR Write phase is in progress, verify all IOR write
-                  finish.Read and verify data.
-
-        :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
-        :avocado: tags=ec,ec_online_rebuild,rebuild,ec_fault,ec_multiple_failure
-        :avocado: tags=EcodOnlineMultFail,test_ec_multiple_rank_failure
-        """
-        # Kill Two server ranks
-        self.rank_to_kill = [self.server_count - 1, self.server_count - 3]
-        self.run_ior_cascade_failure()
 
     def test_ec_multiple_targets_on_same_rank(self):
         """Jira ID: DAOS-7344.
@@ -61,7 +47,7 @@ class EcodOnlineMultFail(ErasureCodeIor):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=ec,ec_array,ec_online_rebuild,rebuild,ec_fault,ec_multiple_failure
-        :avocado: tags=EcodOnlineMultFail,test_ec_multiple_targets_on_same_rank
+        :avocado: tags=EcodOnlineMultiTargetFail,test_ec_multiple_targets_on_same_rank
         """
         # Kill Two targets 2,4 from same rank 2
         self.pool_exclude[2] = "2,4"
@@ -78,7 +64,7 @@ class EcodOnlineMultFail(ErasureCodeIor):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=ec,ec_array,ec_online_rebuild,rebuild,ec_fault,ec_multiple_failure
-        :avocado: tags=EcodOnlineMultFail,test_ec_multiple_targets_on_diff_ranks
+        :avocado: tags=EcodOnlineMultiTargetFail,test_ec_multiple_targets_on_diff_ranks
         """
         # Kill Two targets from different ranks
         self.pool_exclude[2] = "2"
@@ -96,7 +82,7 @@ class EcodOnlineMultFail(ErasureCodeIor):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=ec,ec_online_rebuild,rebuild,ec_fault,ec_multiple_failure
-        :avocado: tags=EcodOnlineMultFail,test_ec_single_target_rank_failure
+        :avocado: tags=EcodOnlineMultiTargetFail,test_ec_single_target_rank_failure
         """
         # Kill One server rank
         self.rank_to_kill = [self.server_count - 1]
