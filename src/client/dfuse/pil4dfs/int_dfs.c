@@ -470,6 +470,7 @@ static int (*next_tcgetattr)(int fd, void *termios_p);
 /* end NOT supported by DAOS */
 
 static int (*next_mpi_init)(int *argc, char ***argv);
+static int (*next_pmpi_init)(int *argc, char ***argv);
 
 /* to do!! */
 /**
@@ -1037,6 +1038,22 @@ MPI_Init(int *argc, char ***argv)
 
 	atomic_fetch_add_relaxed(&mpi_init_count, 1);
 	rc = next_mpi_init(argc, argv);
+	atomic_fetch_add_relaxed(&mpi_init_count, -1);
+	return rc;
+}
+
+int
+PMPI_Init(int *argc, char ***argv)
+{
+	int rc;
+
+	if (next_pmpi_init == NULL) {
+		next_pmpi_init = dlsym(RTLD_NEXT, "PMPI_Init");
+		D_ASSERT(next_pmpi_init != NULL);
+	}
+
+	atomic_fetch_add_relaxed(&mpi_init_count, 1);
+	rc = next_pmpi_init(argc, argv);
 	atomic_fetch_add_relaxed(&mpi_init_count, -1);
 	return rc;
 }
