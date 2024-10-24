@@ -3,10 +3,9 @@
 # find the base branch of the current branch
 # base branches can be master, release/2.4+, release/3+
 # or optionally branches passed into $1
-
 set -eu -o pipefail
 IFS=' ' read -r -a add_bases <<< "${1:-}"
-origin=origin
+origin="${ORIGIN:-origin}"
 mapfile -t all_bases < <(echo "master"
                          git branch -r | sed -ne "/^  $origin\\/release\\/\(2.[4-9]\|[3-9]\)/s/^  $origin\\///p")
 all_bases+=("${add_bases[@]}")
