@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -52,7 +52,7 @@ func TestServer_getDefaultFaultDomain(t *testing.T) {
 			getHostname: func() (string, error) {
 				return "/////////", nil
 			},
-			expErr: config.FaultConfigFaultDomainInvalid,
+			expErr: config.FaultConfigFaultDomainInvalid(errors.New("domain name \"\": empty string is an invalid fault domain")),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -107,13 +107,13 @@ func TestServer_getFaultDomain(t *testing.T) {
 			cfg: &config.Server{
 				FaultPath: "junk",
 			},
-			expErr: config.FaultConfigFaultDomainInvalid,
+			expErr: config.FaultConfigFaultDomainInvalid(errors.New("fault path must start with root (/)")),
 		},
 		"root-only path is not valid": {
 			cfg: &config.Server{
 				FaultPath: "/",
 			},
-			expErr: config.FaultConfigFaultDomainInvalid,
+			expErr: config.FaultConfigFaultDomainInvalid(errors.New("at least one domain level is required")),
 		},
 		"too many layers": { // TODO DAOS-6353: change when arbitrary layers supported
 			cfg: &config.Server{
@@ -284,11 +284,11 @@ func TestServer_getFaultDomainFromCallback(t *testing.T) {
 		},
 		"script returned invalid fault domain": {
 			scriptPath: invalidScriptPath,
-			expErr:     config.FaultConfigFaultDomainInvalid,
+			expErr:     config.FaultConfigFaultDomainInvalid(errors.New("fault path must start with root (/)")),
 		},
 		"script returned root fault domain": {
 			scriptPath: rootScriptPath,
-			expErr:     config.FaultConfigFaultDomainInvalid,
+			expErr:     config.FaultConfigFaultDomainInvalid(errors.New("at least one domain level is required")),
 		},
 		"script returned fault domain with too many layers": { // TODO DAOS-6353: change when multiple layers supported
 			scriptPath: multiLayerScriptPath,
