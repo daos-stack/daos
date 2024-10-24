@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1131,18 +1131,20 @@ err_link:
 int
 duns_link_cont(daos_handle_t poh, const char *cont, const char *path)
 {
-	daos_handle_t		coh;
-	daos_prop_t		*prop;
-	struct daos_prop_entry	*entry;
-	daos_pool_info_t	pinfo = {0};
-	daos_cont_info_t	cinfo = {0};
-	daos_cont_layout_t	type;
-	char			pool_str[DAOS_UUID_STR_SIZE];
-	char			cont_str[DAOS_UUID_STR_SIZE];
-	int			len;
-	char			str[DUNS_MAX_XATTR_LEN];
-	char			type_str[10];
-	int			rc, rc2;
+	daos_handle_t           coh;
+	daos_prop_t            *prop;
+	struct daos_prop_entry *entry;
+	daos_pool_info_t        pinfo = {0};
+	daos_cont_info_t        cinfo = {0};
+	daos_cont_layout_t      type;
+	char                    pool_str[DAOS_UUID_STR_SIZE];
+	char                    cont_str[DAOS_UUID_STR_SIZE];
+	int                     len;
+	char                    str[DUNS_MAX_XATTR_LEN];
+	char                    type_str[10];
+	bool                    backend_dfuse = false;
+	int                     rc2;
+	int                     rc;
 
 	if (path == NULL) {
 		D_ERROR("Invalid path\n");
@@ -1239,6 +1241,7 @@ duns_link_cont(daos_handle_t poh, const char *cont, const char *path)
 				D_ERROR("Failed to access container: %d (%s)\n", rc, strerror(rc));
 				D_GOTO(err_link, rc);
 			}
+			backend_dfuse = true;
 		}
 	} else if (type != DAOS_PROP_CO_LAYOUT_UNKNOWN) {
 		/** create a new file for other container types */
@@ -1303,6 +1306,22 @@ duns_link_cont(daos_handle_t poh, const char *cont, const char *path)
 			D_ERROR("Failed to set DAOS xattr: %d (%s)\n", rc, strerror(rc));
 		}
 		D_GOTO(err_link, rc);
+	}
+	if (backend_dfuse) {
+		struct stat finfo;
+		/*
+		 * This next stat will cause dfuse to lookup the entry point and perform a
+		 * container connect, therefore this data will be read from root of the new
+		 * container, not the directory.
+		 *
+		 * TODO: This could call getxattr to verify success.
+		 */
+		rc = stat(path, &finfo);
+		if (rc) {
+			rc = errno;
+			D_ERROR("Failed to access new container: %d (%s)\n", rc, strerror(rc));
+			goto err_link;
+		}
 	}
 
 out_cont:
