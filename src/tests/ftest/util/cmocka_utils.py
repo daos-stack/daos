@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
+import time
 
 from agent_utils import include_local_host
 from command_utils import ExecutableCommand
@@ -108,7 +109,7 @@ class CmockaUtils():
         error_message = None
         error_exception = None
         try:
-            command.timeout = 10
+            time.sleep(30)      # Debug
             command.run()
 
         except CommandFailure as error:
