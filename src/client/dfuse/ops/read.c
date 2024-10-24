@@ -304,13 +304,12 @@ chunk_fetch(fuse_req_t req, struct dfuse_obj_hdl *oh, struct read_chunk_data *cd
 	cd->reqs[slot] = req;
 	cd->ohs[slot]  = oh;
 
-	rc = dfs_read(ie->ie_dfs->dfs_ns, ie->ie_obj, &ev->de_sgl, position, &ev->de_len,
-		      &ev->de_ev);
+	rc = dfs_read(ie->ie_dfs->dfs_ns, ie->ie_obj, &ev->de_sgl, position, &ev->de_len, NULL);
 	if (rc != 0)
 		goto err;
-
+	DFUSE_REPLY_BUFQ(oh, ev->de_req, ev->de_iov.iov_buf, ev->de_len);
 	/* Send a message to the async thread to wake it up and poll for events */
-	sem_post(&eqt->de_sem);
+	// sem_post(&eqt->de_sem);
 
 	/* Now ensure there are more descriptors for the next request */
 	d_slab_restock(eqt->de_read_slab);
@@ -527,14 +526,14 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 
 	DFUSE_IE_WFLUSH(oh->doh_ie);
 
-	rc = dfs_read(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, position, &ev->de_len, &ev->de_ev);
+	rc = dfs_read(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, position, &ev->de_len, NULL);
 	if (rc != 0) {
 		D_GOTO(err, rc);
 		return;
 	}
-
+	DFUSE_REPLY_BUFQ(oh, ev->de_req, ev->de_iov.iov_buf, ev->de_len);
 	/* Send a message to the async thread to wake it up and poll for events */
-	sem_post(&eqt->de_sem);
+	// sem_post(&eqt->de_sem);
 
 	/* Now ensure there are more descriptors for the next request */
 	d_slab_restock(eqt->de_read_slab);
@@ -598,14 +597,14 @@ dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh)
 	ev->de_complete_cb        = dfuse_cb_pre_read_complete;
 	oh->doh_readahead->dra_ev = ev;
 
-	rc = dfs_read(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, 0, &ev->de_len, &ev->de_ev);
+	rc = dfs_read(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, 0, &ev->de_len, NULL);
 	if (rc != 0) {
 		D_GOTO(err, rc);
 		return;
 	}
-
+	DFUSE_REPLY_BUFQ(oh, ev->de_req, ev->de_iov.iov_buf, ev->de_len);
 	/* Send a message to the async thread to wake it up and poll for events */
-	sem_post(&eqt->de_sem);
+	// sem_post(&eqt->de_sem);
 
 	/* Now ensure there are more descriptors for the next request */
 	d_slab_restock(eqt->de_read_slab);
