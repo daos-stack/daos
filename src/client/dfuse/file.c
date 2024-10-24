@@ -63,7 +63,6 @@ active_oh_decref(struct dfuse_obj_hdl *oh)
 
 	DFUSE_TRA_DEBUG(oh->doh_ie, "Decref to %d", oc - 1);
 
-	/* TODO: What to return here? It's probably best to set oh->doh_linear_read directly */
 	if (oc != 1)
 		goto out;
 

@@ -91,9 +91,13 @@ dfuse_reply_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 		/* Make the inode active for the create case */
 		if (ie->ie_active) {
 			D_ASSERT(atomic_load_relaxed(&ie->ie_open_count) == 1);
-			/* TODO: This can fail */
-			active_ie_init(inode);
 			active_ie_decref(ie);
+			rc = active_ie_init(inode);
+			if (rc != -DER_SUCCESS) {
+				atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
+				dfuse_ie_close(dfuse_info, ie);
+				D_GOTO(out_err, rc);
+			}
 		}
 
 		DFUSE_TRA_DEBUG(inode,
