@@ -5910,7 +5910,7 @@ def test_dfuse_start(server, conf, wf):
 
     cmd = [join(conf['PREFIX'], 'bin', 'dfuse'),
            '--mountpoint', mount_point,
-           '--pool', pool.id(), '--cont', container.id(), '--foreground', '--thread-count=1']
+           '--pool', pool.id(), '--cont', container.id(), '--foreground', '--thread-count=2']
 
     test_cmd = AllocFailTest(conf, 'dfuse', cmd)
     test_cmd.wf = wf
