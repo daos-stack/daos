@@ -295,7 +295,7 @@ func convertPoolInfo(pinfo *C.daos_pool_info_t) (*daos.PoolInfo, error) {
 	return poolInfo, nil
 }
 
-func queryPoolHelper(poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (*daos.PoolInfo, error) {
+func queryPoolRankLists(poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (*daos.PoolInfo, error) {
 	var rlPtr **C.d_rank_list_t = nil
 	var rl *C.d_rank_list_t = nil
 
@@ -337,51 +337,61 @@ func queryPoolHelper(poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (*da
 
 	return poolInfo, nil
 }
-
 func queryPool(poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (*daos.PoolInfo, error) {
-	origQueryMask := queryMask
-	queryMask.ClearOptions(daos.PoolQueryOptionEnabledEngines,
-		daos.PoolQueryOptionSuspectEngines, daos.PoolQueryOptionDisabledEngines)
-	if origQueryMask.HasOption(daos.PoolQueryOptionEnabledEngines) {
-		queryMask.SetOptions(daos.PoolQueryOptionEnabledEngines)
-		origQueryMask.ClearOptions(daos.PoolQueryOptionEnabledEngines)
-	} else if origQueryMask.HasOption(daos.PoolQueryOptionDisabledEngines) {
-		queryMask.SetOptions(daos.PoolQueryOptionDisabledEngines)
-		origQueryMask.ClearOptions(daos.PoolQueryOptionDisabledEngines)
-	} else if origQueryMask.HasOption(daos.PoolQueryOptionSuspectEngines) {
-		queryMask.SetOptions(daos.PoolQueryOptionSuspectEngines)
-		origQueryMask.ClearOptions(daos.PoolQueryOptionSuspectEngines)
+	poolInfo := &daos.PoolInfo{}
+	originalMask := queryMask // Save the original queryMask
+
+	// Function to handle the query and return a single RankList
+	queryAndUpdate := func(option string) error {
+		// Clear previous options and set new option
+		queryMask.ClearAll()
+		queryMask.SetOptions(option)
+
+		poolInfo1, err := queryPoolRankLists(poolHdl, queryMask)
+		if err != nil {
+			return err
+		}
+
+		switch option {
+		case daos.PoolQueryOptionEnabledEngines:
+			poolInfo.EnabledRanks = poolInfo1.EnabledRanks
+		case daos.PoolQueryOptionDisabledEngines:
+			poolInfo.DisabledRanks = poolInfo1.DisabledRanks
+		case daos.PoolQueryOptionSuspectEngines:
+			poolInfo.SuspectRanks = poolInfo1.SuspectRanks
+		}
+		return nil
 	}
-	poolInfo, err := queryPoolHelper(poolHdl, queryMask)
-	if err != nil {
+
+	// Preprocess queryMask, select one option for the first query
+	var firstOption string
+	if originalMask.HasOption(daos.PoolQueryOptionEnabledEngines) {
+		firstOption = daos.PoolQueryOptionEnabledEngines
+	} else if originalMask.HasOption(daos.PoolQueryOptionDisabledEngines) {
+		firstOption = daos.PoolQueryOptionDisabledEngines
+	} else if originalMask.HasOption(daos.PoolQueryOptionSuspectEngines) {
+		firstOption = daos.PoolQueryOptionSuspectEngines
+	}
+
+	// Perform the first query to get basic information
+	if err := queryAndUpdate(firstOption); err != nil {
 		return nil, err
 	}
-	if origQueryMask.HasOption(daos.PoolQueryOptionEnabledEngines) {
-		queryMask.ClearAll()
-		queryMask.SetOptions(daos.PoolQueryOptionEnabledEngines)
-		poolInfo1, err := queryPoolHelper(poolHdl, queryMask)
-		if err != nil {
-			return nil, err
-		}
-		poolInfo.EnabledRanks = poolInfo1.EnabledRanks
+
+	// Check the original query mask and update fields as needed
+	queryOptions := []string{
+		daos.PoolQueryOptionEnabledEngines,
+		daos.PoolQueryOptionDisabledEngines,
+		daos.PoolQueryOptionSuspectEngines,
 	}
-	if origQueryMask.HasOption(daos.PoolQueryOptionDisabledEngines) {
-		queryMask.ClearAll()
-		queryMask.SetOptions(daos.PoolQueryOptionDisabledEngines)
-		poolInfo1, err := queryPoolHelper(poolHdl, queryMask)
-		if err != nil {
-			return nil, err
+
+	// Process each option sequentially
+	for _, opt := range queryOptions {
+		if originalMask.HasOption(opt) && opt != firstOption {
+			if err := queryAndUpdate(opt); err != nil {
+				return nil, err
+			}
 		}
-		poolInfo.DisabledRanks = poolInfo1.DisabledRanks
-	}
-	if origQueryMask.HasOption(daos.PoolQueryOptionSuspectEngines) {
-		queryMask.ClearAll()
-		queryMask.SetOptions(daos.PoolQueryOptionSuspectEngines)
-		poolInfo1, err := queryPoolHelper(poolHdl, queryMask)
-		if err != nil {
-			return nil, err
-		}
-		poolInfo.SuspectRanks = poolInfo1.SuspectRanks
 	}
 
 	return poolInfo, nil
