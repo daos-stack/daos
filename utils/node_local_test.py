@@ -1028,7 +1028,7 @@ class DaosServer():
 
         Enable logging, and valgrind for the command.
         """
-        valgrind_hdl = ValgrindHelper(self.conf)
+        valgrind_hdl = ValgrindHelper(self.conf, logid=os.path.basename(cmd[0]))
 
         if self.conf.args.memcheck == 'no':
             valgrind_hdl.use_valgrind = False
@@ -1260,6 +1260,8 @@ class ValgrindHelper():
                f'--xml-file={self._xml_file}',
                '--xml=yes',
                '--fair-sched=yes',
+               '--track-origins=yes',
+               '--num-callers=40',
                '--gen-suppressions=all',
                '--error-exitcode=42']
 
@@ -1268,11 +1270,15 @@ class ValgrindHelper():
         else:
             cmd.append('--leak-check=no')
 
-        src_suppression_file = join('src', 'cart', 'utils', 'memcheck-cart.supp')
+        if self._logid == "daos":
+            src_suppression_file = join('src', 'cart', 'utils', 'memcheck-cart.supp')
+            if not os.path.exists(src_suppression_file):
+                src_suppression_file = join(self.conf['PREFIX'], 'etc', 'memcheck-cart.supp')
+            cmd.append(f'--suppressions={src_suppression_file}')
+
+        src_suppression_file = join('utils', 'memcheck-daos.supp')
         if os.path.exists(src_suppression_file):
             cmd.append(f'--suppressions={src_suppression_file}')
-        else:
-            cmd.append(f"--suppressions={join(self.conf['PREFIX'], 'etc', 'memcheck-cart.supp')}")
 
         return cmd
 
@@ -1365,7 +1371,7 @@ class DFuse():
         if self.conf.args.dtx == 'yes':
             my_env['DFS_USE_DTX'] = '1'
 
-        self.valgrind = ValgrindHelper(self.conf, v_hint)
+        self.valgrind = ValgrindHelper(self.conf, f"dfuse.{v_hint}")
         if self.conf.args.memcheck == 'no':
             self.valgrind.use_valgrind = False
 
@@ -1685,7 +1691,7 @@ def run_daos_cmd(conf,
     Enable logging, and valgrind for the command.
     """
     dcr = DaosCmdReturn()
-    valgrind_hdl = ValgrindHelper(conf)
+    valgrind_hdl = ValgrindHelper(conf, logid="daos")
 
     if conf.args.memcheck == 'no':
         valgrind = False
@@ -2416,7 +2422,7 @@ class PosixTests():
 
         re-read directory contents again, now this should be up to date.
         """
-        cache_time = 20
+        cache_time = 30
 
         cont_attrs = {'dfuse-data-cache': False,
                       'dfuse-attr-time': cache_time,
