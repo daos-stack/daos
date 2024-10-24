@@ -55,6 +55,7 @@ server_config:
         - D_LOG_FLUSH=DEBUG
         - FI_LOG_LEVEL=warn
         - D_LOG_STDERR_IN_LOG=1
+        - DAOS_POOL_RF=4
       storage: auto
     1:
       pinned_numa_node: 1
@@ -70,6 +71,7 @@ server_config:
         - D_LOG_FLUSH=DEBUG
         - FI_LOG_LEVEL=warn
         - D_LOG_STDERR_IN_LOG=1
+        - DAOS_POOL_RF=4
       storage: auto
   transport_config:
     allow_insecure: true
