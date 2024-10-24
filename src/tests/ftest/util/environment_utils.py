@@ -3,6 +3,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import getpass
 import os
 import shutil
 import site
@@ -109,18 +110,16 @@ class TestEnvironment():
         'bullseye_file': 'COVFILE',
         'daos_prefix': 'DAOS_TEST_PREFIX',
         'agent_user': 'DAOS_TEST_AGENT_USER',
+        'systemd_path': 'DAOS_TEST_SYSTEMD_PATH',
         'systemd_library_path': 'DAOS_TEST_SYSTEMD_LIBRARY_PATH',
         'control_config': 'DAOS_TEST_CONTROL_CONFIG',
         'agent_config': 'DAOS_TEST_AGENT_CONFIG',
         'server_config': 'DAOS_TEST_SERVER_CONFIG',
+        'control_metadata': 'DAOS_TEST_CONTROL_METADATA'
     }
 
-    def __init__(self):
-        """Initialize a TestEnvironment object with existing or default test environment values."""
-        self.set_defaults(None)
-
     def set_defaults(self, logger, servers=None, clients=None, provider=None, insecure_mode=None,
-                     agent_user=None, log_dir=None, systemd_lib_path=None):
+                     agent_user=None, log_dir=None, systemd_path=None, systemd_lib_path=None):
         """Set the default test environment variable values with optional inputs.
 
         Args:
@@ -135,7 +134,9 @@ class TestEnvironment():
             agent_user (str, optional): user account to use when running the daos_agent. Defaults
                 to None.
             log_dir (str, optional): test log directory base path. Defaults to None.
-            systemd_lib_path (str, optional): systemd library path. Defaults to None.
+            systemd_path (str, optional): systemd PATH to use in testing. Defaults to None.
+            systemd_lib_path (str, optional): systemd LD_LIBRARY_PATH to use in testing. Defaults
+                to None.
 
         Raises:
             TestEnvironmentException: if there are any issues setting environment variable default
@@ -154,12 +155,14 @@ class TestEnvironment():
             self.insecure_mode = insecure_mode
         if agent_user is not None:
             self.agent_user = agent_user
+        if systemd_path is not None:
+            self.systemd_path = systemd_path
         if systemd_lib_path is not None:
             self.systemd_library_path = systemd_lib_path
 
         # Set defaults for any unset values
         if self.log_dir is None:
-            self.log_dir = os.path.join(os.sep, "var", "tmp", "daos_testing")
+            self.log_dir = os.path.join(os.sep, "var", "tmp", f"daos_testing_{getpass.getuser()}")
         if self.shared_dir is None:
             self.shared_dir = os.path.expanduser(os.path.join("~", "daos_test"))
         if self.app_dir is None:
@@ -187,6 +190,8 @@ class TestEnvironment():
             self.agent_config = os.path.join(self.log_dir, "configs", "daos_agent.yml")
         if self.server_config is None:
             self.server_config = os.path.join(self.log_dir, "configs", "daos_server.yml")
+        if self.control_metadata is None:
+            self.control_metadata = os.path.join(self.log_dir, 'control_metadata')
 
     def __set_value(self, key, value):
         """Set the test environment variable.
@@ -521,6 +526,24 @@ class TestEnvironment():
         self.__set_value('agent_user', value)
 
     @property
+    def systemd_path(self):
+        """Get the systemd PATH.
+
+        Returns:
+            str: the systemd PATH
+        """
+        return os.environ.get(self.__ENV_VAR_MAP['systemd_path'])
+
+    @systemd_path.setter
+    def systemd_path(self, value):
+        """Set the systemd PATH.
+
+        Args:
+            value (str): the systemd PATH
+        """
+        self.__set_value('systemd_path', value)
+
+    @property
     def systemd_library_path(self):
         """Get the systemd LD_LIBRARY_PATH.
 
@@ -592,6 +615,24 @@ class TestEnvironment():
         """
         self.__set_value('server_config', value)
 
+    @property
+    def control_metadata(self):
+        """Get the server control metadata path used in testing.
+
+        Returns:
+            str: the server control metadata path
+        """
+        return os.environ.get(self.__ENV_VAR_MAP['control_metadata'])
+
+    @control_metadata.setter
+    def control_metadata(self, value):
+        """Set the server control metadata path used in testing.
+
+        Args:
+            value (str): the server control metadata path
+        """
+        self.__set_value('control_metadata', value)
+
     def config_file_directories(self):
         """Get the unique list of directories for the client, control, and server config files.
 
@@ -607,7 +648,8 @@ class TestEnvironment():
 
 def set_test_environment(logger, test_env=None, servers=None, clients=None, provider=None,
                          insecure_mode=False, details=None, agent_user=None, log_dir=None,
-                         systemd_lib_path=None):
+                         systemd_path=None, systemd_lib_path=None):
+    # pylint: disable=too-many-arguments
     """Set up the test environment.
 
     Args:
@@ -625,7 +667,9 @@ def set_test_environment(logger, test_env=None, servers=None, clients=None, prov
         agent_user (str, optional): user account to use when running the daos_agent. Defaults to
             None.
         log_dir (str, optional): test log directory base path. Defaults to None.
-        systemd_lib_path (str, optional): systemd library path. Defaults to None.
+        systemd_path (str, optional): systemd PATH to use w/ tests. Defaults to None.
+        systemd_lib_path (str, optional): systemd LD_LIBRARY_PATH to use in testing. Defaults
+                to None.
 
     Raises:
         TestEnvironmentException: if there is a problem setting up the test environment
@@ -637,7 +681,7 @@ def set_test_environment(logger, test_env=None, servers=None, clients=None, prov
     if test_env:
         # Get the default fabric interface, provider, and daos prefix
         test_env.set_defaults(
-            logger, servers, clients, provider, insecure_mode, agent_user, log_dir,
+            logger, servers, clients, provider, insecure_mode, agent_user, log_dir, systemd_path,
             systemd_lib_path)
         logger.info("Testing with interface:   %s", test_env.interface)
         logger.info("Testing with provider:    %s", test_env.provider)

@@ -137,6 +137,10 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
     """
     log = getLogger()
     msg = None
+    if env is not None and "DAOS_AGENT_DRPC_DIR" not in env:
+        daos_agent_drpc_dir = os.environ.get("DAOS_AGENT_DRPC_DIR")
+        if daos_agent_drpc_dir:
+            env["DAOS_AGENT_DRPC_DIR"] = daos_agent_drpc_dir
     kwargs = {
         "cmd": command,
         "timeout": timeout,
@@ -444,7 +448,7 @@ def get_host_data(hosts, command, text, error, timeout=None):
     data_error = "[ERROR]"
 
     # Find the data for each specified servers
-    log.info("  Obtaining %s data on %s", text, hosts)
+    log.info("  Obtaining %s data on %s using: %s", text, hosts, command)
     results = run_pcmd(hosts, command, False, timeout, None)
     errors = [
         item["exit_status"]
@@ -1024,7 +1028,8 @@ def percent_change(val1, val2):
         return math.nan
 
 
-def get_journalctl_command(since, until=None, system=False, units=None, identifiers=None):
+def get_journalctl_command(since, until=None, system=False, units=None, identifiers=None,
+                           run_user="root"):
     """Get the journalctl command to capture all unit/identifier activity from since to until.
 
     Args:
@@ -1036,31 +1041,34 @@ def get_journalctl_command(since, until=None, system=False, units=None, identifi
             None.
         identifiers (str/list, optional): show messages for the specified syslog identifier(s).
             Defaults to None.
+        run_user (str, optional): user to run as. Defaults to "root".
 
     Returns:
         str: journalctl command to capture all unit activity
-
     """
-    command = ["sudo", os.path.join(os.sep, "usr", "bin", "journalctl")]
+    command = [os.path.join(os.sep, "usr", "bin", "journalctl")]
     if system:
         command.append("--system")
+    if run_user != "root":
+        command.append("--user")
     for key, values in {"unit": units or [], "identifier": identifiers or []}.items():
         for item in values if isinstance(values, (list, tuple)) else [values]:
-            command.append("--{}={}".format(key, item))
-    command.append("--since=\"{}\"".format(since))
+            command.append(f"--{key}={item}")
+    command.append(f'--since="{since}"')
     if until:
-        command.append("--until=\"{}\"".format(until))
-    return " ".join(command)
+        command.append(f'--until="{until}"')
+    return command_as_user(" ".join(command), run_user)
 
 
-def get_journalctl(hosts, since, until, journalctl_type):
+def get_journalctl(hosts, since, until, journalctl_type, run_user="root"):
     """Run the journalctl on the hosts.
 
     Args:
-        hosts (list): List of hosts to run journalctl.
+        hosts (NodeSet): hosts on which to run journalctl.
         since (str): Start time to search the log.
         until (str): End time to search the log.
         journalctl_type (str): String to search in the log. -t param for journalctl.
+        run_user (str, optional): user to run as. Defaults to root
 
     Returns:
         list: a list of dictionaries containing the following key/value pairs:
@@ -1068,7 +1076,9 @@ def get_journalctl(hosts, since, until, journalctl_type):
             "data":  data requested for the group of hosts
 
     """
-    command = get_journalctl_command(since, until, True, identifiers=journalctl_type)
+    system = run_user != getuser()
+    command = get_journalctl_command(
+        since, until, system, identifiers=journalctl_type, run_user=run_user)
     err = "Error gathering system log events"
     return get_host_data(hosts=hosts, command=command, text="journalctl", error=err)
 

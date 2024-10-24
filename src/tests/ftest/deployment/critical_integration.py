@@ -10,7 +10,7 @@ import json
 from apricot import TestWithoutServers, TestWithServers
 from ClusterShell.NodeSet import NodeSet
 from exception_utils import CommandFailure
-from general_utils import DaosTestError, get_journalctl, journalctl_time, run_command
+from general_utils import DaosTestError, journalctl_time, run_command
 from run_utils import run_remote
 
 # pylint: disable-next=fixme
@@ -167,22 +167,20 @@ class CriticalIntegrationWithServers(TestWithServers):
             dmg.system_start(ranks=ranks_to_stop)
             check_started_ranks = self.server_managers[0].check_rank_state(sub_list, ["joined"], 5)
             if check_started_ranks:
-                self.fail("Following Ranks {} failed to restart".format(check_started_ranks))
+                self.fail(f"Following Ranks {check_started_ranks} failed to restart")
 
         until = journalctl_time()
 
         # gather journalctl logs for each server host, verify system stop event was sent to logs
-        results = get_journalctl(hosts=self.hostlist_servers, since=since,
-                                 until=until, journalctl_type="daos_server")
+        results = self.server_managers[0].get_journalctl(since, until)
         str_to_match = "daos_engine exited: process exited with 0"
         for count, host in enumerate(self.hostlist_servers):
             occurrence = results[count]["data"].count(str_to_match)
             if occurrence != 2:
-                self.log.info("Occurrence %s for rank stop not as expected for host %s",
-                              occurrence, host)
-                msg = "Rank shut down message not found in journalctl! Output = {}".format(
-                    results[count]["data"])
-                self.fail(msg)
+                self.log.error(
+                    "Occurrence %s for rank stop not as expected for host %s", occurrence, host)
+                self.log.debug("Journalctl output: %s", results[count]["data"])
+                self.fail("Rank shut down message not found in journalctl!")
 
         dmg.storage_scan()
         dmg.network_scan()

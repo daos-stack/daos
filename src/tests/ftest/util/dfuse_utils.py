@@ -251,6 +251,10 @@ class Dfuse(DfuseCommand):
         if 'COVFILE' not in self.env:
             self.env['COVFILE'] = '/tmp/test.cov'
 
+        drpc_dir = os.environ.get("DAOS_AGENT_DRPC_DIR", None)
+        if 'DAOS_AGENT_DRPC_DIR' not in self.env and drpc_dir is not None:
+            self.env['DAOS_AGENT_DRPC_DIR'] = str(drpc_dir)
+
         # mark the instance as needing cleanup before starting setup
         self.__need_cleanup = True
 
