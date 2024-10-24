@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2023 Intel Corporation.
+// (C) Copyright 2018-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -26,20 +26,21 @@ import (
 )
 
 type cliOptions struct {
-	AllowProxy bool                   `long:"allow-proxy" description:"Allow proxy configuration via environment"`
-	Debug      bool                   `short:"d" long:"debug" description:"Enable debug output"`
-	JSON       bool                   `short:"j" long:"json" description:"Enable JSON output"`
-	JSONLogs   bool                   `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
-	ConfigPath string                 `short:"o" long:"config-path" description:"Path to agent configuration file"`
-	Insecure   bool                   `short:"i" long:"insecure" description:"have agent attempt to connect without certificates"`
-	RuntimeDir string                 `short:"s" long:"runtime_dir" description:"Path to agent communications socket"`
-	LogFile    string                 `short:"l" long:"logfile" description:"Full path and filename for daos agent log file"`
-	Start      startCmd               `command:"start" description:"Start daos_agent daemon (default behavior)"`
-	Version    versionCmd             `command:"version" description:"Print daos_agent version"`
-	DumpInfo   dumpAttachInfoCmd      `command:"dump-attachinfo" description:"Dump system attachinfo"`
-	DumpTopo   hwprov.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
-	NetScan    netScanCmd             `command:"net-scan" description:"Perform local network fabric scan"`
-	Support    supportCmd             `command:"support" description:"Perform debug tasks to help support team"`
+	AllowProxy    bool                   `long:"allow-proxy" description:"Allow proxy configuration via environment"`
+	Debug         bool                   `short:"d" long:"debug" description:"Enable debug output"`
+	JSON          bool                   `short:"j" long:"json" description:"Enable JSON output"`
+	JSONLogs      bool                   `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
+	ConfigPath    string                 `short:"o" long:"config-path" description:"Path to agent configuration file"`
+	Insecure      bool                   `short:"i" long:"insecure" description:"have agent attempt to connect without certificates"`
+	RuntimeDir    string                 `short:"s" long:"runtime_dir" description:"Path to agent communications socket"`
+	LogFile       string                 `short:"l" long:"logfile" description:"Full path and filename for daos agent log file"`
+	Start         startCmd               `command:"start" description:"Start daos_agent daemon (default behavior)"`
+	Version       versionCmd             `command:"version" description:"Print daos_agent version"`
+	ServerVersion serverVersionCmd       `command:"server-version" description:"Print daos_server version"`
+	DumpInfo      dumpAttachInfoCmd      `command:"dump-attachinfo" description:"Dump system attachinfo"`
+	DumpTopo      hwprov.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
+	NetScan       netScanCmd             `command:"net-scan" description:"Perform local network fabric scan"`
+	Support       supportCmd             `command:"support" description:"Perform debug tasks to help support team"`
 }
 
 type (
@@ -88,6 +89,32 @@ func (cmd *versionCmd) Execute(_ []string) error {
 	}
 
 	_, err := fmt.Println(versionString())
+	return err
+}
+
+type serverVersionCmd struct {
+	attachInfoCmd
+}
+
+func (cmd *serverVersionCmd) Execute(_ []string) error {
+	resp, err := cmd.getAttachInfo(cmd.MustLogCtx())
+	if err != nil {
+		return err
+	}
+
+	if cmd.JSONOutputEnabled() {
+		buf, err := json.Marshal(&build.Info{
+			Name:      build.ControlPlaneName,
+			Version:   resp.BuildInfo.VersionString(),
+			BuildInfo: resp.BuildInfo.Tag,
+		})
+		if err != nil {
+			return err
+		}
+		return cmd.OutputJSON(json.RawMessage(buf), nil)
+	}
+
+	_, err = fmt.Println(build.VersionString(build.ControlPlaneName, resp.BuildInfo.VersionString()))
 	return err
 }
 

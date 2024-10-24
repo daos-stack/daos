@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -320,7 +320,7 @@ func (n *NUMAFabric) Find(name string) ([]*FabricInterface, error) {
 }
 
 // FindDevice looks up a fabric device with a given name, domain, and provider.
-// NB: The domain and provider are optional. All other parameters are required. If there is more
+// NB: The name is required. All other parameters are optional. If there is more
 // than one match, all of them are returned.
 func (n *NUMAFabric) FindDevice(params *FabricIfaceParams) ([]*FabricInterface, error) {
 	if params == nil {
@@ -364,7 +364,7 @@ func filterDomain(domain string, fiList []*FabricInterface) []*FabricInterface {
 func filterProvider(provider string, fiList []*FabricInterface) []*FabricInterface {
 	result := make([]*FabricInterface, 0, len(fiList))
 	for _, fi := range fiList {
-		if fi.HasProvider(provider) {
+		if fi.HasProvider(provider) || fi.NetDevClass == FabricDevClassManual {
 			result = append(result, fi)
 		}
 	}

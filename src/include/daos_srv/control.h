@@ -26,6 +26,11 @@ dpdk_cli_override_opts;
 
 #define NVME_PCI_DEV_TYPE_VMD           "vmd"
 #define NVME_DETAIL_BUFLEN              1024
+/**
+ * intel.com/content/www/us/en/docs/programmable/683488/16-0/pci-express-capability-structure.html
+ * read up to byte 0xb4 to include extended capabilities.
+ */
+#define NVME_PCI_CFG_SPC_MAX_LEN        0xb4
 
 /** Device state flags */
 #define NVME_DEV_FL_PLUGGED	(1 << 0)	/* Device is present in slot */
@@ -137,6 +142,7 @@ struct nvme_ctrlr_t {
 	char                *fw_rev;
 	char                *pci_type;
 	char                *vendor_id;
+	char                *pci_cfg;
 	int                  socket_id;
 	struct nvme_ns_t    *nss;
 	struct nvme_stats   *stats;

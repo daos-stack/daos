@@ -1,5 +1,5 @@
 hosts:
-  test_servers: 1
+  test_servers: 2
   test_clients: 1
 timeout: 80
 server_config:
@@ -7,7 +7,6 @@ server_config:
   engines_per_host: 1
   engines:
     0:
-      pinned_numa_node: 0
       targets: 4
       nr_xs_helpers: 0
       fabric_iface_port: 31416
@@ -18,5 +17,5 @@ server_config:
       storage:
         0:
           class: ram
-          scm_mount: /mnt/daos
+          scm_mount: /mnt/daos0
   system_ram_reserved: 1

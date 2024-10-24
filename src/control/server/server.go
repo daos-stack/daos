@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2023 Intel Corporation.
+// (C) Copyright 2018-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -101,6 +101,12 @@ func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricI
 
 	if err := setDaosHelperEnvs(cfg, osSetenv); err != nil {
 		return err
+	}
+
+	for _, ec := range cfg.Engines {
+		if err := ec.UpdatePMDKEnvars(); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -324,7 +330,7 @@ func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config
 	sp := storage.DefaultProvider(srv.log, idx, &cfg.Storage).
 		WithVMDEnabled(srv.ctlSvc.storage.IsVMDEnabled())
 
-	engine := NewEngineInstance(srv.log, sp, joinFn, engine.NewRunner(srv.log, cfg)).
+	engine := NewEngineInstance(srv.log, sp, joinFn, engine.NewRunner(srv.log, cfg), srv.pubSub).
 		WithHostFaultDomain(srv.harness.faultDomain)
 
 	if idx == 0 {

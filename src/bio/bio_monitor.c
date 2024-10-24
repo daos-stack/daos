@@ -221,15 +221,14 @@ bio_dev_set_faulty(struct bio_xs_context *xs, uuid_t dev_uuid)
 		rc = dss_abterr2der(rc);
 
 	if (rc == 0)
-		ras_notify_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO,
-				  RAS_SEV_NOTICE, NULL, NULL, NULL,
-				  NULL, NULL, NULL, NULL, NULL, NULL,
-				  "Dev: "DF_UUID" set faulty\n", DP_UUID(dev_uuid));
+		ras_notify_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO, RAS_SEV_NOTICE, NULL, NULL,
+				  NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+				  "Device: " DF_UUID " set faulty\n", DP_UUID(dev_uuid));
 	else
-		ras_notify_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO,
-				  RAS_SEV_ERROR, NULL, NULL, NULL,
-				  NULL, NULL, NULL, NULL, NULL, NULL,
-				  "Dev: "DF_UUID" set faulty failed: %d\n", DP_UUID(dev_uuid), rc);
+		ras_notify_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO, RAS_SEV_ERROR, NULL, NULL,
+				  NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+				  "Device: " DF_UUID " set faulty failed: %d\n", DP_UUID(dev_uuid),
+				  rc);
 	return rc;
 }
 
@@ -729,29 +728,64 @@ is_bbs_faulty(struct bio_blobstore *bbs)
 void
 auto_faulty_detect(struct bio_blobstore *bbs)
 {
-	int	rc;
+	struct smd_dev_info	*dev_info;
+	int			 rc;
 
-	if (bbs->bb_state != BIO_BS_STATE_NORMAL)
+	/* The in-memory device is already in FAULTY state */
+	if (bbs->bb_state == BIO_BS_STATE_FAULTY)
+		return;
+
+	/* To make things simpler, don't detect faulty in SETUP phase */
+	if (bbs->bb_state == BIO_BS_STATE_SETUP)
 		return;
 
 	if (!is_bbs_faulty(bbs))
 		return;
 
-	rc = bio_bs_state_set(bbs, BIO_BS_STATE_FAULTY);
-	if (rc)
-		D_ERROR("Failed to set FAULTY state. "DF_RC"\n", DP_RC(rc));
+	/*
+	 * The device might have been unplugged before marked as FAULTY, and the bbs is
+	 * already in teardown.
+	 */
+	if (bbs->bb_state != BIO_BS_STATE_NORMAL) {
+		/* Faulty reaction is already successfully performed */
+		if (bbs->bb_faulty_done)
+			return;
+
+		rc = smd_dev_get_by_id(bbs->bb_dev->bb_uuid, &dev_info);
+		if (rc) {
+			DL_ERROR(rc, "Get device info "DF_UUID" failed.",
+				 DP_UUID(bbs->bb_dev->bb_uuid));
+			return;
+		}
+
+		/* The device is already marked as FAULTY */
+		if (dev_info->sdi_state == SMD_DEV_FAULTY) {
+			smd_dev_free_info(dev_info);
+			trigger_faulty_reaction(bbs);
+			return;
+		}
+		smd_dev_free_info(dev_info);
+
+		rc = smd_dev_set_state(bbs->bb_dev->bb_uuid, SMD_DEV_FAULTY);
+		if (rc)
+			DL_ERROR(rc, "Set device state failed.");
+		else
+			trigger_faulty_reaction(bbs);
+	} else {
+		rc = bio_bs_state_set(bbs, BIO_BS_STATE_FAULTY);
+		if (rc)
+			DL_ERROR(rc, "Failed to set FAULTY state.");
+	}
 
 	if (rc == 0)
-		ras_notify_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO,
-				  RAS_SEV_NOTICE, NULL, NULL, NULL,
-				  NULL, NULL, NULL, NULL, NULL, NULL,
-				  "Dev: "DF_UUID" auto faulty detect\n",
+		ras_notify_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO, RAS_SEV_NOTICE, NULL, NULL,
+				  NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+				  "Device: " DF_UUID " auto faulty detect\n",
 				  DP_UUID(bbs->bb_dev->bb_uuid));
 	else
-		ras_notify_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO,
-				  RAS_SEV_ERROR, NULL, NULL, NULL,
-				  NULL, NULL, NULL, NULL, NULL, NULL,
-				  "Dev: "DF_UUID" auto faulty detect failed: %d\n",
+		ras_notify_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO, RAS_SEV_ERROR, NULL, NULL,
+				  NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+				  "Device: " DF_UUID " auto faulty detect failed: %d\n",
 				  DP_UUID(bbs->bb_dev->bb_uuid), rc);
 }
 

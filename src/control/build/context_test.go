@@ -89,6 +89,19 @@ func TestBuild_ToContext(t *testing.T) {
 			verString: "x.y.z",
 			expErr:    errors.New("invalid major version"),
 		},
+		"already set": {
+			parent: func() context.Context {
+				parent := test.Context(t)
+				ctx, err := ToContext(parent, ComponentAgent, "2.3.108")
+				if err != nil {
+					t.Fatal(err)
+				}
+				return ctx
+			}(),
+			comp:      ComponentAgent,
+			verString: "2.3.108",
+			expErr:    ErrCtxMetadataExists,
+		},
 		"good component version": {
 			parent:    test.Context(t),
 			comp:      ComponentAgent,

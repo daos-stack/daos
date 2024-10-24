@@ -38,6 +38,7 @@ dnf --nodocs install \
     libjson-c-devel \
     libltdl7 \
     liblz4-devel \
+    libndctl-devel \
     libnuma-devel \
     libopenssl-devel \
     libprotobuf-c-devel \
@@ -53,6 +54,7 @@ dnf --nodocs install \
     patch \
     patchelf \
     pciutils \
+    pciutils-devel \
     python3-devel \
     scons \
     sg3_utils \

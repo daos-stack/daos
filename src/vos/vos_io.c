@@ -1506,7 +1506,7 @@ vos_fetch_end(daos_handle_t ioh, daos_size_t *size, int err)
 	D_ASSERT(!ioc->ic_update);
 
 	if (err == 0) {
-		err = vos_tgt_health_check(ioc->ic_cont);
+		err = vos_tgt_health_check(ioc->ic_cont, false);
 		if (err)
 			DL_ERROR(err, "Fail fetch due to faulty NVMe.");
 	}
@@ -1546,7 +1546,7 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	D_DEBUG(DB_TRACE, "Fetch "DF_UOID", desc_nr %d, epoch "DF_X64"\n",
 		DP_UOID(oid), iod_nr, epoch);
 
-	rc = vos_tgt_health_check(vos_hdl2cont(coh));
+	rc = vos_tgt_health_check(vos_hdl2cont(coh), false);
 	if (rc) {
 		DL_ERROR(rc, DF_UOID": Reject fetch due to faulty NVMe.", DP_UOID(oid));
 		return rc;
@@ -2543,7 +2543,7 @@ abort:
 	vos_space_unhold(vos_cont2pool(ioc->ic_cont), &ioc->ic_space_held[0]);
 
 	if (err == 0) {
-		err = vos_tgt_health_check(ioc->ic_cont);
+		err = vos_tgt_health_check(ioc->ic_cont, true);
 		if (err)
 			DL_ERROR(err, "Fail update due to faulty NVMe.");
 	}
@@ -2590,7 +2590,7 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		"Prepare IOC for " DF_UOID ", iod_nr %d, epc " DF_X64 ", flags=" DF_X64 "\n",
 		DP_UOID(oid), iod_nr, (dtx_is_real_handle(dth) ? dth->dth_epoch : epoch), flags);
 
-	rc = vos_tgt_health_check(vos_hdl2cont(coh));
+	rc = vos_tgt_health_check(vos_hdl2cont(coh), true);
 	if (rc) {
 		DL_ERROR(rc, DF_UOID": Reject update due to faulty NVMe.", DP_UOID(oid));
 		return rc;

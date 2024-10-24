@@ -1,5 +1,5 @@
 """
-(C) Copyright 2021-2023 Intel Corporation.
+(C) Copyright 2021-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -51,7 +51,7 @@ class PoolCreateQueryTests(TestWithServers):
 
         # Query pool created
         resp = self.get_dmg_command().pool_query(pool.identifier, show_enabled=True)["response"]
-        nb_ranks = len(resp["enabled_ranks"])
+        nb_ranks = len(resp.get("enabled_ranks"))
         tier_stats = resp["tier_stats"]
         self.assertEqual("SCM", tier_stats[0]["media_type"].upper(), "Unexpected tier media type")
         self.assertEqual("NVME", tier_stats[1]["media_type"].upper(), "Unexpected tier media type")

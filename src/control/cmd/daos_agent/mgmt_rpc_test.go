@@ -13,7 +13,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/proto"
@@ -100,6 +99,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		mockFabricScan    fabricScanFn
 		mockGetNetIfaces  func() ([]net.Interface, error)
 		numaGetter        *mockNUMAProvider
+		fabricCfg         []*NUMAFabricConfig
 		reqBytes          []byte
 		expResp           *mgmtpb.GetAttachInfoResp
 		expErr            error
@@ -145,6 +145,24 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		"no sys succeeds": {
 			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{}),
 			expResp:  respWith(testResp, "test1", "dev1"),
+		},
+		"req interface with cfg ifaces": {
+			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{
+				Sys:       testSys,
+				Interface: "test0",
+			}),
+			fabricCfg: []*NUMAFabricConfig{
+				{
+					NUMANode: 0,
+					Interfaces: []*FabricInterfaceConfig{
+						{
+							Interface: "test0",
+							Domain:    "test0",
+						},
+					},
+				},
+			},
+			expResp: respWith(testResp, "test0", "test0"),
 		},
 		"incompatible error": {
 			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{}),
@@ -200,14 +218,26 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 				}
 			}
 
+			ic := newTestInfoCache(t, log, testInfoCacheParams{
+				mockGetAttachInfo: tc.mockGetAttachInfo,
+				mockScanFabric:    tc.mockFabricScan,
+				mockNetIfaces:     tc.mockGetNetIfaces,
+				mockNetDevClassGetter: &hardware.MockNetDevClassProvider{
+					GetNetDevClassReturn: []hardware.MockGetNetDevClassResult{
+						{
+							NDC: hardware.Ether,
+						},
+					},
+				},
+			})
+			if tc.fabricCfg != nil {
+				nf := NUMAFabricFromConfig(log, tc.fabricCfg)
+				ic.EnableStaticFabricCache(test.Context(t), nf)
+			}
 			mod := &mgmtModule{
-				log: log,
-				sys: testSys,
-				cache: newTestInfoCache(t, log, testInfoCacheParams{
-					mockGetAttachInfo: tc.mockGetAttachInfo,
-					mockScanFabric:    tc.mockFabricScan,
-					mockNetIfaces:     tc.mockGetNetIfaces,
-				}),
+				log:        log,
+				sys:        testSys,
+				cache:      ic,
 				numaGetter: tc.numaGetter,
 			}
 
@@ -227,11 +257,10 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if diff := cmp.Diff(tc.expResp, resp, cmpopts.IgnoreUnexported(
-				mgmtpb.GetAttachInfoResp{},
-				mgmtpb.GetAttachInfoResp_RankUri{},
-				mgmtpb.ClientNetHint{},
-			)); diff != "" {
+			cmpOpts := cmp.Options{
+				protocmp.Transform(),
+			}
+			if diff := cmp.Diff(tc.expResp, resp, cmpOpts...); diff != "" {
 				t.Fatalf("want-, got+:\n%s", diff)
 			}
 		})

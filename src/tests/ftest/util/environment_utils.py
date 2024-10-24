@@ -9,6 +9,7 @@ import site
 
 from ClusterShell.NodeSet import NodeSet
 # pylint: disable=import-error,no-name-in-module
+from util.host_utils import get_local_host
 from util.network_utils import (PROVIDER_ALIAS, SUPPORTED_PROVIDERS, NetworkException,
                                 get_common_provider, get_fastest_interface)
 from util.run_utils import run_remote
@@ -106,14 +107,20 @@ class TestEnvironment():
         'insecure_mode': 'DAOS_TEST_INSECURE_MODE',
         'bullseye_src': 'DAOS_TEST_BULLSEYE_SRC',
         'bullseye_file': 'COVFILE',
-        'daos_prefix': 'DAOS_TEST_PREFIX'
+        'daos_prefix': 'DAOS_TEST_PREFIX',
+        'agent_user': 'DAOS_TEST_AGENT_USER',
+        'systemd_library_path': 'DAOS_TEST_SYSTEMD_LIBRARY_PATH',
+        'control_config': 'DAOS_TEST_CONTROL_CONFIG',
+        'agent_config': 'DAOS_TEST_AGENT_CONFIG',
+        'server_config': 'DAOS_TEST_SERVER_CONFIG',
     }
 
     def __init__(self):
         """Initialize a TestEnvironment object with existing or default test environment values."""
         self.set_defaults(None)
 
-    def set_defaults(self, logger, servers=None, clients=None, provider=None, insecure_mode=None):
+    def set_defaults(self, logger, servers=None, clients=None, provider=None, insecure_mode=None,
+                     agent_user=None, log_dir=None, systemd_lib_path=None):
         """Set the default test environment variable values with optional inputs.
 
         Args:
@@ -125,6 +132,10 @@ class TestEnvironment():
             provider (str, optional): provider to use in testing. Defaults to None.
             insecure_mode (bool, optional): whether or not to run tests in insecure mode. Defaults
                 to None.
+            agent_user (str, optional): user account to use when running the daos_agent. Defaults
+                to None.
+            log_dir (str, optional): test log directory base path. Defaults to None.
+            systemd_lib_path (str, optional): systemd library path. Defaults to None.
 
         Raises:
             TestEnvironmentException: if there are any issues setting environment variable default
@@ -135,31 +146,47 @@ class TestEnvironment():
         all_hosts.update(clients)
 
         # Override values if explicitly specified
+        if log_dir is not None:
+            self.log_dir = log_dir
         if provider is not None:
             self.provider = provider
         if insecure_mode is not None:
             self.insecure_mode = insecure_mode
+        if agent_user is not None:
+            self.agent_user = agent_user
+        if systemd_lib_path is not None:
+            self.systemd_library_path = systemd_lib_path
 
+        # Set defaults for any unset values
         if self.log_dir is None:
-            self.log_dir = self._default_log_dir()
+            self.log_dir = os.path.join(os.sep, "var", "tmp", "daos_testing")
         if self.shared_dir is None:
-            self.shared_dir = self._default_shared_dir()
+            self.shared_dir = os.path.expanduser(os.path.join("~", "daos_test"))
         if self.app_dir is None:
-            self.app_dir = self._default_app_dir()
+            self.app_dir = os.path.join(self.shared_dir, "daos_test", "apps")
         if self.user_dir is None:
-            self.user_dir = self._default_user_dir()
+            self.user_dir = os.path.join(self.log_dir, "user")
         if self.interface is None:
             self.interface = self._default_interface(logger, all_hosts)
         if self.provider is None:
             self.provider = self._default_provider(logger, servers)
         if self.insecure_mode is None:
-            self.insecure_mode = self._default_insecure_mode()
+            self.insecure_mode = "True"
         if self.bullseye_src is None:
-            self.bullseye_src = self._default_bullseye_src()
+            self.bullseye_src = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)), "..", "test.cov")
         if self.bullseye_file is None:
-            self.bullseye_file = self._default_bullseye_file()
+            self.bullseye_file = os.path.join(os.sep, "tmp", "test.cov")
         if self.daos_prefix is None:
             self.daos_prefix = self._default_daos_prefix(logger)
+        if self.agent_user is None:
+            self.agent_user = 'root'
+        if self.control_config is None:
+            self.control_config = os.path.join(self.log_dir, "configs", "daos_control.yml")
+        if self.agent_config is None:
+            self.agent_config = os.path.join(self.log_dir, "configs", "daos_agent.yml")
+        if self.server_config is None:
+            self.server_config = os.path.join(self.log_dir, "configs", "daos_server.yml")
 
     def __set_value(self, key, value):
         """Set the test environment variable.
@@ -190,14 +217,6 @@ class TestEnvironment():
             value (str): the application directory path
         """
         self.__set_value('app_dir', value)
-
-    def _default_app_dir(self):
-        """Get the default application directory path.
-
-        Returns:
-            str: the default application directory path
-        """
-        return os.path.join(self.shared_dir, "daos_test", "apps")
 
     @property
     def app_src(self):
@@ -235,15 +254,6 @@ class TestEnvironment():
         """
         self.__set_value('log_dir', value)
 
-    @staticmethod
-    def _default_log_dir():
-        """Get the default local log directory path.
-
-        Returns:
-            str: the default local log directory path
-        """
-        return os.path.join(os.sep, "var", "tmp", "daos_testing")
-
     @property
     def shared_dir(self):
         """Get the shared log directory path.
@@ -262,15 +272,6 @@ class TestEnvironment():
         """
         self.__set_value('shared_dir', value)
 
-    @staticmethod
-    def _default_shared_dir():
-        """Get the default shared log directory path.
-
-        Returns:
-            str: the default shared log directory path
-        """
-        return os.path.expanduser(os.path.join("~", "daos_test"))
-
     @property
     def user_dir(self):
         """Get the user directory path.
@@ -288,14 +289,6 @@ class TestEnvironment():
             value (str): the user directory path
         """
         self.__set_value('user_dir', value)
-
-    def _default_user_dir(self):
-        """Get the default user directory path.
-
-        Returns:
-            str: the default user directory path
-        """
-        return os.path.join(self.log_dir, "user")
 
     @property
     def interface(self):
@@ -334,7 +327,7 @@ class TestEnvironment():
             # Find all the /sys/class/net interfaces on the launch node (excluding lo)
             logger.debug("Detecting network devices - D_INTERFACE not set")
             try:
-                interface = get_fastest_interface(logger, hosts)
+                interface = get_fastest_interface(logger, hosts | get_local_host())
             except NetworkException as error:
                 raise TestEnvironmentException("Error obtaining a default interface!") from error
         return interface
@@ -386,7 +379,7 @@ class TestEnvironment():
 
         # Check for a Omni-Path interface
         logger.debug("Checking for Omni-Path devices")
-        command = "sudo -n opainfo"
+        command = "which opainfo && sudo -n opainfo"
         result = run_remote(logger, hosts, command)
         if result.passed:
             # Omni-Path adapter found; remove verbs as it will not work with OPA devices.
@@ -429,15 +422,6 @@ class TestEnvironment():
         """
         self.__set_value('insecure_mode', value)
 
-    @staticmethod
-    def _default_insecure_mode():
-        """Get the default insecure mode.
-
-        Returns:
-            str: the default insecure mode
-        """
-        return "True"
-
     @property
     def bullseye_src(self):
         """Get the bullseye source file.
@@ -456,15 +440,6 @@ class TestEnvironment():
         """
         self.__set_value('bullseye_src', value)
 
-    @staticmethod
-    def _default_bullseye_src():
-        """Get the default bullseye source file.
-
-        Returns:
-            str: the default bullseye source file
-        """
-        return os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "test.cov")
-
     @property
     def bullseye_file(self):
         """Get the bullseye file.
@@ -482,15 +457,6 @@ class TestEnvironment():
             value (str, bool): the bullseye file
         """
         self.__set_value('bullseye_file', value)
-
-    @staticmethod
-    def _default_bullseye_file():
-        """Get the default bullseye file.
-
-        Returns:
-            str: the default bullseye file
-        """
-        return os.path.join(os.sep, "tmp", "test.cov")
 
     @property
     def daos_prefix(self):
@@ -536,9 +502,112 @@ class TestEnvironment():
         # E.g. /usr/bin/daos -> /usr
         return os.path.dirname(os.path.dirname(daos_bin_path))
 
+    @property
+    def agent_user(self):
+        """Get the daos_agent user.
+
+        Returns:
+            str: the daos_agent user
+        """
+        return os.environ.get(self.__ENV_VAR_MAP['agent_user'])
+
+    @agent_user.setter
+    def agent_user(self, value):
+        """Set the daos_agent user.
+
+        Args:
+            value (str): the daos_agent user
+        """
+        self.__set_value('agent_user', value)
+
+    @property
+    def systemd_library_path(self):
+        """Get the systemd LD_LIBRARY_PATH.
+
+        Returns:
+            str: the systemd LD_LIBRARY_PATH
+        """
+        return os.environ.get(self.__ENV_VAR_MAP['systemd_library_path'])
+
+    @systemd_library_path.setter
+    def systemd_library_path(self, value):
+        """Set the systemd LD_LIBRARY_PATH.
+
+        Args:
+            value (str): the systemd LD_LIBRARY_PATH
+        """
+        self.__set_value('systemd_library_path', value)
+
+    @property
+    def control_config(self):
+        """Get the control config file used in testing.
+
+        Returns:
+            str: the control config file
+        """
+        return os.environ.get(self.__ENV_VAR_MAP['control_config'])
+
+    @control_config.setter
+    def control_config(self, value):
+        """Set the control config file used in testing.
+
+        Args:
+            value (str): the control config file
+        """
+        self.__set_value('control_config', value)
+
+    @property
+    def agent_config(self):
+        """Get the agent config file used in testing.
+
+        Returns:
+            str: the agent config file
+        """
+        return os.environ.get(self.__ENV_VAR_MAP['agent_config'])
+
+    @agent_config.setter
+    def agent_config(self, value):
+        """Set the agent config file used in testing.
+
+        Args:
+            value (str): the agent config file
+        """
+        self.__set_value('agent_config', value)
+
+    @property
+    def server_config(self):
+        """Get the server config file used in testing.
+
+        Returns:
+            str: the server config file
+        """
+        return os.environ.get(self.__ENV_VAR_MAP['server_config'])
+
+    @server_config.setter
+    def server_config(self, value):
+        """Set the server config file used in testing.
+
+        Args:
+            value (str): the server config file
+        """
+        self.__set_value('server_config', value)
+
+    def config_file_directories(self):
+        """Get the unique list of directories for the client, control, and server config files.
+
+        Returns:
+            list: a list of directories for the client, control, and server config files
+        """
+        directories = set()
+        directories.add(os.path.dirname(self.agent_config))
+        directories.add(os.path.dirname(self.control_config))
+        directories.add(os.path.dirname(self.server_config))
+        return list(directories)
+
 
 def set_test_environment(logger, test_env=None, servers=None, clients=None, provider=None,
-                         insecure_mode=False, details=None):
+                         insecure_mode=False, details=None, agent_user=None, log_dir=None,
+                         systemd_lib_path=None):
     """Set up the test environment.
 
     Args:
@@ -553,6 +622,10 @@ def set_test_environment(logger, test_env=None, servers=None, clients=None, prov
             False.
         details (dict, optional): dictionary to update with interface and provider settings if
             provided. Defaults to None.
+        agent_user (str, optional): user account to use when running the daos_agent. Defaults to
+            None.
+        log_dir (str, optional): test log directory base path. Defaults to None.
+        systemd_lib_path (str, optional): systemd library path. Defaults to None.
 
     Raises:
         TestEnvironmentException: if there is a problem setting up the test environment
@@ -563,10 +636,13 @@ def set_test_environment(logger, test_env=None, servers=None, clients=None, prov
 
     if test_env:
         # Get the default fabric interface, provider, and daos prefix
-        test_env.set_defaults(logger, servers, clients, provider, insecure_mode)
+        test_env.set_defaults(
+            logger, servers, clients, provider, insecure_mode, agent_user, log_dir,
+            systemd_lib_path)
         logger.info("Testing with interface:   %s", test_env.interface)
         logger.info("Testing with provider:    %s", test_env.provider)
         logger.info("Testing with daos_prefix: %s", test_env.daos_prefix)
+        logger.info("Testing with agent_user:  %s", test_env.agent_user)
 
         # Update the PATH environment variable
         _update_path(test_env.daos_prefix)
@@ -579,6 +655,10 @@ def set_test_environment(logger, test_env=None, servers=None, clients=None, prov
         os.environ["D_LOG_FILE"] = os.path.join(test_env.log_dir, "daos.log")
         os.environ["D_LOG_FILE_APPEND_PID"] = "1"
         os.environ["D_LOG_FILE_APPEND_RANK"] = "1"
+
+        # Default agent socket dir to be accessible by agent user
+        if os.environ.get("DAOS_AGENT_DRPC_DIR") is None and test_env.agent_user != 'root':
+            os.environ["DAOS_AGENT_DRPC_DIR"] = os.path.join(test_env.log_dir, "daos_agent")
 
     # Python paths required for functional testing
     set_python_environment(logger)

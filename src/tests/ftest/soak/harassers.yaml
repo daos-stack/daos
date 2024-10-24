@@ -108,6 +108,7 @@ soak_harassers:
   enable_intercept_lib: false
   enable_remote_logging: false
   enable_scrubber: false
+  enable_rebuild_logmasks: false
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO

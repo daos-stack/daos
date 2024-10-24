@@ -38,7 +38,7 @@ ior_easy: &ior_easy_base
   block_size: '150G'
   sw_deadline: 30
   sw_wearout: 1
-  sw_status_file: "/var/tmp/daos_testing/stoneWallingStatusFile"
+  sw_status_file: stoneWallingStatusFile
 ior_dfs_sx:
   <<: *ior_easy_base
   api: DFS
@@ -70,7 +70,7 @@ mdtest_easy: &mdtest_easy_base
   write_bytes: 0
   num_of_files_dirs: 100000000
   stonewall_timer: 30
-  stonewall_statusfile: "/var/tmp/daos_testing/stoneWallingStatusFile"
+  stonewall_statusfile: stoneWallingStatusFile
   dfs_destroy: false
 mdtest_dfs_s1:
   <<: *mdtest_easy_base

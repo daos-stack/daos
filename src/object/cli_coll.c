@@ -139,7 +139,7 @@ obj_coll_oper_args_init(struct coll_oper_args *coa, struct dc_object *obj, bool 
 	D_ASSERT(coa->coa_dcts == NULL);
 
 	D_RWLOCK_RDLOCK(&pool->dp_map_lock);
-	pool_ranks = pool_map_node_nr(pool->dp_map);
+	pool_ranks = pool_map_rank_nr(pool->dp_map);
 	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 
 	D_RWLOCK_RDLOCK(&obj->cob_lock);
@@ -451,8 +451,11 @@ obj_coll_prep_one(struct coll_oper_args *coa, struct dc_object *obj,
 
 	dcs->dcs_buf[dcs->dcs_nr++] = shard->do_id.id_shard;
 
-	if (unlikely(dct->dct_tgt_nr == (uint8_t)(-1)))
+	if (unlikely(dct->dct_tgt_nr == (uint8_t)(-1))) {
+		D_WARN("Too much shards for obj "DF_OID"reside on the same target %u/%u\n",
+		       DP_OID(obj->cob_md.omd_id), shard->do_target_rank, shard->do_target_idx);
 		goto out;
+	}
 
 	if (coa->coa_for_modify) {
 		if (dct->dct_tgt_nr >= dct->dct_tgt_cap) {

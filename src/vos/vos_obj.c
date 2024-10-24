@@ -455,7 +455,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	D_DEBUG(DB_IO, "Punch "DF_UOID", epoch "DF_X64"\n",
 		DP_UOID(oid), epr.epr_hi);
 
-	rc = vos_tgt_health_check(cont);
+	rc = vos_tgt_health_check(cont, true);
 	if (rc) {
 		DL_ERROR(rc, DF_UOID": Reject punch due to faulty NVMe.", DP_UOID(oid));
 		return rc;
@@ -592,7 +592,7 @@ reset:
 	vos_ts_set_free(ts_set);
 
 	if (rc == 0) {
-		rc = vos_tgt_health_check(cont);
+		rc = vos_tgt_health_check(cont, true);
 		if (rc)
 			DL_ERROR(rc, "Fail punch due to faulty NVMe.");
 	}
@@ -1689,15 +1689,23 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 		  struct vos_ts_set *ts_set)
 {
 	struct vos_obj_iter	*oiter;
-	struct vos_container	*cont = vos_hdl2cont(param->ip_hdl);
-	bool			 is_sysdb = cont->vc_pool->vp_sysdb;
-	struct dtx_handle	*dth = vos_dth_get(is_sysdb);
+	struct vos_container	*cont = NULL;
+	bool			 is_sysdb = false;
+	struct dtx_handle	*dth = NULL;
 	daos_epoch_t		 bound;
 	int			 rc;
 
 	D_ALLOC_PTR(oiter);
 	if (oiter == NULL)
 		return -DER_NOMEM;
+
+	/* ip_hdl is dkey or akey tree open handle for vos_iterate_key() */
+	if (param->ip_flags != VOS_IT_KEY_TREE) {
+		D_ASSERT(!(param->ip_flags & VOS_IT_KEY_TREE));
+		cont = vos_hdl2cont(param->ip_hdl);
+		is_sysdb = cont->vc_pool->vp_sysdb;
+		dth = vos_dth_get(is_sysdb);
+	}
 
 	bound = dtx_is_valid_handle(dth) ? dth->dth_epoch_bound :
 		param->ip_epr.epr_hi;

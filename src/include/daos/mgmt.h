@@ -65,6 +65,8 @@ int dc_mgmt_get_pool_svc_ranks(struct dc_mgmt_sys *sys, const uuid_t puuid,
 			       d_rank_list_t **svcranksp);
 int dc_mgmt_pool_find(struct dc_mgmt_sys *sys, const char *label,
 		      uuid_t puuid, d_rank_list_t **svcranksp);
+int
+     dc_mgmt_pool_list(tse_task_t *task);
 int dc_mgmt_notify_pool_connect(struct dc_pool *pool);
 int dc_mgmt_notify_pool_disconnect(struct dc_pool *pool);
 int dc_mgmt_notify_exit(void);

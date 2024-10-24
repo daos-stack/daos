@@ -970,7 +970,9 @@ out_oit:
 out_snap:
 	D_FREE(oit_args);
 	epr.epr_hi = epr.epr_lo = snap_epoch;
-	rc2                     = daos_cont_destroy_snap(coh, epr, NULL);
+	rc2 = daos_cont_destroy_snap(coh, epr, NULL);
+	if (rc2 != 0)
+		D_ERROR("Failed to destroy OID table: " DF_RC "\n", DP_RC(rc2));
 	if (rc == 0)
 		rc = daos_der2errno(rc2);
 out_dfs:
@@ -1563,8 +1565,9 @@ dfs_cont_scan(daos_handle_t poh, const char *cont, uint64_t flags, const char *s
 	D_PRINT("DFS scanner: " DF_U64 " directories\n", scan_args.num_dirs);
 	D_PRINT("DFS scanner: " DF_U64 " max tree depth\n", scan_args.max_depth);
 	D_PRINT("DFS scanner: " DF_U64 " bytes of total data\n", scan_args.total_bytes);
-	D_PRINT("DFS scanner: " DF_U64 " bytes per file on average\n",
-		scan_args.total_bytes / scan_args.num_files);
+	if (scan_args.num_files > 0)
+		D_PRINT("DFS scanner: " DF_U64 " bytes per file on average\n",
+			scan_args.total_bytes / scan_args.num_files);
 	D_PRINT("DFS scanner: " DF_U64 " bytes is largest file size\n", scan_args.largest_file);
 	D_PRINT("DFS scanner: " DF_U64 " entries in the largest directory\n",
 		scan_args.largest_dir);

@@ -16,6 +16,8 @@
 #include <daos_security.h>
 #include <gurt/telemetry_common.h>
 
+extern uint32_t pw_rf;
+
 /**
  * Global pool metrics
  */
@@ -53,6 +55,12 @@ pool_tls_get()
 	dtc = dss_tls_get();
 	tls = dss_module_key_get(dtc, &pool_module_key);
 	return tls;
+}
+
+static inline bool
+ds_pool_skip_for_check(struct ds_pool *pool)
+{
+	return engine_in_check() && !pool->sp_cr_checked;
 }
 
 struct pool_iv_map {
@@ -147,6 +155,8 @@ uint32_t ds_pool_get_vos_df_version(uint32_t pool_global_version);
 char *ds_pool_svc_rdb_path(const uuid_t pool_uuid);
 int ds_pool_svc_load(struct rdb_tx *tx, uuid_t uuid, rdb_path_t *root, uint32_t *global_version_out,
 		     struct pool_buf **map_buf_out, uint32_t *map_version_out);
+int ds_pool_svc_start(uuid_t uuid);
+int ds_pool_svc_stop(uuid_t pool_uuid);
 int ds_pool_start_all(void);
 int ds_pool_stop_all(void);
 int ds_pool_hdl_is_from_srv(struct ds_pool *pool, uuid_t hdl);

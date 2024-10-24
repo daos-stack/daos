@@ -812,6 +812,7 @@ child_hdlr(void)
 		DFUSE_LOG_WARNING("daos_eq_create() failed: "DF_RC, DP_RC(rc));
 	else
 		ioil_iog.iog_main_eqh = ioil_eqh;
+	ioil_iog.iog_eq_count = 0;
 }
 
 /* Returns true on success */
@@ -2507,14 +2508,8 @@ dfuse_fputs(char *__str, FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
-	D_ERROR("Unsupported function\n");
-
-	entry->fd_err = ENOTSUP;
-
+	DISABLE_STREAM(entry, stream);
 	vector_decref(&fd_table, entry);
-
-	errno = ENOTSUP;
-	return EOF;
 
 do_real_fn:
 	return __real_fputs(__str, stream);
@@ -2538,12 +2533,8 @@ dfuse_fputws(const wchar_t *ws, FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
-	entry->fd_err = ENOTSUP;
-
+	DISABLE_STREAM(entry, stream);
 	vector_decref(&fd_table, entry);
-
-	errno = ENOTSUP;
-	return -1;
 
 do_real_fn:
 	return __real_fputws(ws, stream);
