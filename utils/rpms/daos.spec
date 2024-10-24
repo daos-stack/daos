@@ -5,6 +5,7 @@
 
 %global mercury_version   2.4
 %global libfabric_version 1.15.1-1
+%global argobots_version 1.2
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -15,7 +16,7 @@
 
 Name:          daos
 Version:       2.7.100
-Release:       7%{?relval}%{?dist}
+Release:       10%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -41,11 +42,11 @@ BuildRequires: hwloc-devel
 BuildRequires: bullseye
 %endif
 %if (0%{?rhel} >= 8)
-BuildRequires: argobots-devel >= 1.1
+BuildRequires: argobots-devel >= %{argobots_version}
 BuildRequires: json-c-devel
 BuildRequires: boost-python3-devel
 %else
-BuildRequires: libabt-devel >= 1.0rc1
+BuildRequires: libabt-devel >= %{argobots_version}
 BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
@@ -112,14 +113,6 @@ BuildRequires: systemd-rpm-macros
 %endif
 %endif
 BuildRequires: libuuid-devel
-
-%if (0%{?suse_version} > 0)
-BuildRequires: libucp-devel
-BuildRequires: libucs-devel
-BuildRequires: libuct-devel
-%else
-BuildRequires: ucx-devel
-%endif
 
 Requires: openssl
 # This should only be temporary until we can get a stable upstream release
@@ -232,6 +225,13 @@ Requires: fuse3-devel >= 3
 Requires: fuse3-devel >= 3.4.2
 %endif
 Requires: pciutils-devel
+%if (0%{?suse_version} > 0)
+Requires: libndctl-devel
+%endif
+%if (0%{?rhel} >= 8)
+Requires: ndctl-devel
+Requires: daxctl-devel
+%endif
 
 %description client-tests
 This is the package needed to run the DAOS test suite (client tests)
@@ -316,7 +316,7 @@ This is the package that bridges the difference between the MOFED openmpi
 %endif
 
 %prep
-%autosetup
+%autosetup -p1
 
 %build
 
@@ -592,8 +592,27 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Fri Oct 04 2024 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.7.100-7
+* Fri Oct 25 2024 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.7.100-10
 - pmemobj errors and warnings reported via DAOS logging system
+
+* Tue Oct 15 2024 Brian J. Murrell <brian.murrell@intel.com> - 2.7.100-9
+- Drop BRs for UCX as they were obsoleted as of e01970d
+
+* Mon Oct 07 2024 Cedric Koch-Hofer <cedric.koch-hofer@intel.com> 2.7.100-8
+- Update BR: argobots to 1.2
+
+* Tue Oct 01 2024 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.7.100-7
+- Add support of the PMDK package 2.1.0 with NDCTL enabled.
+  * Increase the default ULT stack size to 20KiB if the engine uses
+    the DCPM storage class.
+  * Prevent using the RAM storage class (simulated PMem) when
+    the shutdown state (SDS) is active.
+    * Automatically disable SDS for the RAM storage class on engine startup.
+    * Force explicitly setting the PMEMOBJ_CONF='sds.at_create=0'
+      environment variable to deactivate SDS for the DAOS tools
+      (ddb, daos_perf, vos_perf, etc.) when used WITHOUT DCPM.
+      Otherwise, a user is supposed to be stopped by an error
+      like: "Unsafe shutdown count is not supported for this source".
 
 * Mon Sep 23 2024 Kris Jacque <kris.jacque@intel.com> 2.7.100-6
 - Bump min supported go version to 1.21

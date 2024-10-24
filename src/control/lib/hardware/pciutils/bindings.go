@@ -40,6 +40,7 @@ var (
 	ErrMultiDevices     = errors.New("want single device config got multiple")
 	ErrCfgNotTerminated = errors.New("device config content not new-line terminated")
 	ErrCfgMissing       = errors.New("incomplete device config")
+	ErrNoPCIeCaps       = errors.New("no pci-express capabilities found")
 )
 
 // api provides the PCIeLinkStatsProvider interface by exposing a concrete implementation of
@@ -150,7 +151,7 @@ func (ap *api) PCIeCapsFromConfig(cfgBytes []byte, dev *hardware.PCIDevice) erro
 	var cp *C.struct_pci_cap = C.pci_find_cap(pciDev, C.PCI_CAP_ID_EXP, C.PCI_CAP_NORMAL)
 
 	if cp == nil {
-		return errors.New("no pci-express capabilities found")
+		return ErrNoPCIeCaps
 	}
 
 	cpAddr := uint32(cp.addr)

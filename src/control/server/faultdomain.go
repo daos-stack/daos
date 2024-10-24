@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -54,8 +54,11 @@ func getFaultDomain(cfg *config.Server) (*system.FaultDomain, error) {
 
 func newFaultDomainFromConfig(domainStr string) (*system.FaultDomain, error) {
 	fd, err := system.NewFaultDomainFromString(domainStr)
-	if err != nil || fd.NumLevels() == 0 {
-		return nil, config.FaultConfigFaultDomainInvalid
+	if err != nil {
+		return nil, config.FaultConfigFaultDomainInvalid(err)
+	}
+	if fd.NumLevels() == 0 {
+		return nil, config.FaultConfigFaultDomainInvalid(errors.New("at least one domain level is required"))
 	}
 	// TODO DAOS-6353: remove when multiple layers supported
 	if fd.NumLevels() > 2 {
