@@ -96,7 +96,7 @@ jobs:
           rsync -rlpt -z -e "ssh -i ci_key" . jenkins@$first_node:build/
           echo "::endgroup::"
           echo "::group::Sending Build Commands to $first_node"
-          ssh -i ci_key jenkins@$first_node << EOF
+          ssh -tt -i ci_key jenkins@$first_node << EOF
             echo "------"
             echo "hostname: $(hostname)"
             echo "pwd: $(pwd)"
@@ -114,7 +114,7 @@ jobs:
           echo "::endgroup::"
           
           echo "::group::Create Tar File::"
-          ssh -i ci_key jenkins@$first_node << EOF
+          ssh -tt -i ci_key jenkins@$first_node << EOF
             tar -cf opt-daos.tar ./build/
             mv opt-daos.tar ./build/
           EOF
@@ -123,8 +123,8 @@ jobs:
         run: |
           echo "Beginning Tests ..."
           export BULLSEYE=
-          ssh -i ci_key jenkins@$first_node << EOF
-          ./ci/unit/test_main_node.sh
+          ssh -tt -i ci_key jenkins@$first_node << EOF
+            ./ci/unit/test_main_node.sh
           EOF
 
 #      - name: Job cleanup
