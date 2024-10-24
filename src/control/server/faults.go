@@ -171,6 +171,15 @@ func FaultNoCompatibilityInsecure(self, other build.Version) *fault.Fault {
 	)
 }
 
+func FaultBadFaultDomainLabels(faultPath, addr string, reqLabels, systemLabels []string) *fault.Fault {
+	return serverFault(
+		code.ServerBadFaultDomainLabels,
+		fmt.Sprintf("labels in join request [%s] don't match system labels [%s] for server %s (fault path: %s)",
+			strings.Join(reqLabels, ", "), strings.Join(systemLabels, ", "), addr, faultPath),
+		"update the 'fault_path' or executable specified in 'fault_cb' in the affected server's configuration file to match the system labels",
+	)
+}
+
 func serverFault(code code.Code, desc, res string) *fault.Fault {
 	return &fault.Fault{
 		Domain:      "server",

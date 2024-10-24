@@ -129,24 +129,6 @@ __shim_handle__daos_fini(PyObject *self, PyObject *args)
 	return PyLong_FromLong(rc);
 }
 
-static PyObject *
-__shim_handle__err_to_str(PyObject *self, PyObject *args)
-{
-	const char	*str;
-	int		 val;
-
-	/* Parse arguments */
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "i", &val);
-	/* Call C function */
-	str = d_errstr(val);
-	if (str == NULL) {
-		Py_INCREF(Py_None);
-		return Py_None;
-	}
-
-	return PyUnicode_FromString(str);
-}
-
 /**
  * Implementation of container functions
  */
@@ -1363,6 +1345,33 @@ out:
 	return return_list;
 }
 
+#define DEFINE_PY_RETURN_CODE(name, errstr)                                                        \
+	{                                                                                          \
+		PyObject *ne  = Py_BuildValue("(ss)", #name, #errstr);                             \
+		PyObject *idx = PyLong_FromLong(name);                                             \
+		if (PyDict_SetItem(nd, idx, ne) < 0)                                               \
+			return NULL;                                                               \
+	}
+
+/* Populate a dict of error codes, index by Long containing a tuple of name/message */
+static PyObject *
+setup_ders()
+{
+	PyObject *nd;
+
+	nd = PyDict_New();
+	if (!nd)
+		return NULL;
+
+	/** export return codes */
+	D_FOREACH_GURT_ERR(DEFINE_PY_RETURN_CODE);
+	D_FOREACH_DAOS_ERR(DEFINE_PY_RETURN_CODE);
+
+	return nd;
+}
+
+#undef DEFINE_PY_RETURN_CODE
+
 /**
  * Python shim module
  */
@@ -1375,31 +1384,29 @@ out:
 }
 
 static PyMethodDef daosMethods[] = {
-	/** Generic methods */
-	EXPORT_PYTHON_METHOD(daos_init),
-	EXPORT_PYTHON_METHOD(daos_fini),
-	EXPORT_PYTHON_METHOD(err_to_str),
+    /** Generic methods */
+    EXPORT_PYTHON_METHOD(daos_init),
+    EXPORT_PYTHON_METHOD(daos_fini),
 
-	/** Container operations */
-	EXPORT_PYTHON_METHOD(cont_open),
-	EXPORT_PYTHON_METHOD(cont_open_by_path),
-	EXPORT_PYTHON_METHOD(cont_get),
-	EXPORT_PYTHON_METHOD(cont_newobj),
-	EXPORT_PYTHON_METHOD(cont_close),
-	EXPORT_PYTHON_METHOD(cont_check),
-	EXPORT_PYTHON_METHOD(cont_check_by_path),
+    /** Container operations */
+    EXPORT_PYTHON_METHOD(cont_open),
+    EXPORT_PYTHON_METHOD(cont_open_by_path),
+    EXPORT_PYTHON_METHOD(cont_get),
+    EXPORT_PYTHON_METHOD(cont_newobj),
+    EXPORT_PYTHON_METHOD(cont_close),
+    EXPORT_PYTHON_METHOD(cont_check),
+    EXPORT_PYTHON_METHOD(cont_check_by_path),
 
-	/** KV operations */
-	EXPORT_PYTHON_METHOD(kv_open),
-	EXPORT_PYTHON_METHOD(kv_close),
-	EXPORT_PYTHON_METHOD(kv_get),
-	EXPORT_PYTHON_METHOD(kv_put),
-	EXPORT_PYTHON_METHOD(kv_iter),
+    /** KV operations */
+    EXPORT_PYTHON_METHOD(kv_open),
+    EXPORT_PYTHON_METHOD(kv_close),
+    EXPORT_PYTHON_METHOD(kv_get),
+    EXPORT_PYTHON_METHOD(kv_put),
+    EXPORT_PYTHON_METHOD(kv_iter),
 
-	/** Array operations */
+    /** Array operations */
 
-	{NULL, NULL}
-};
+    {NULL, NULL}};
 
 struct module_struct {
 	PyObject *error;
@@ -1436,8 +1443,14 @@ PyMODINIT_FUNC PyInit_pydaos_shim(void)
 
 {
 	PyObject *module;
+	PyObject *ders;
 
 	module = PyModule_Create(&moduledef);
+
+	ders = setup_ders();
+	if (PyModule_AddObject(module, "_errors", ders) < 0) {
+		Py_XDECREF(ders);
+	}
 
 #define DEFINE_PY_RETURN_CODE(name, errstr) PyModule_AddIntConstant(module, "" #name, name);
 
