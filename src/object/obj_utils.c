@@ -633,7 +633,7 @@ obj_coll_disp_dest(struct obj_coll_disp_cursor *ocdc, struct daos_coll_target *t
 		 * use the "cur_pos" as the relay engine.
 		 */
 		pos = rand % (ocdc->tgt_nr - ocdc->cur_pos) + ocdc->cur_pos;
-		if (pos != ocdc->cur_pos && tgts[pos].dct_rank > dct->dct_rank) {
+		if (pos > ocdc->cur_pos && tgts[pos].dct_rank > dct->dct_rank) {
 			memcpy(&tmp, &tgts[pos], sizeof(tmp));
 			memcpy(&tgts[pos], dct, sizeof(tmp));
 			memcpy(dct, &tmp, sizeof(tmp));
