@@ -76,8 +76,8 @@ class DCont():
     """
 
     def __init__(self, pool=None, cont=None, path=None, open_mode='RW'):
-        self._dc = DaosClient()
         self._hdl = None
+        self._dc = DaosClient()
         if path is None and (pool is None or cont is None):
             raise PyDError("invalid pool or container UUID",
                            -pydaos_shim.DER_INVAL)

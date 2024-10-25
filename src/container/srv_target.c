@@ -475,7 +475,7 @@ cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 		if (rc == -DER_SHUTDOWN) {
 			break;	/* pool destroyed */
 		} else if (rc < 0) {
-			DL_CDEBUG(rc == -DER_BUSY, DB_EPC, DLOG_ERR, rc,
+			DL_CDEBUG(rc == -DER_BUSY || rc == -DER_INPROGRESS, DB_EPC, DLOG_ERR, rc,
 				  DF_CONT ": %s aggregate failed",
 				  DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 				  param->ap_vos_agg ? "VOS" : "EC");
@@ -669,6 +669,7 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 	cont->sc_dtx_committable_coll_count = 0;
 	D_INIT_LIST_HEAD(&cont->sc_dtx_cos_list);
 	D_INIT_LIST_HEAD(&cont->sc_dtx_coll_list);
+	D_INIT_LIST_HEAD(&cont->sc_dtx_batched_list);
 
 	*link = &cont->sc_list;
 	return 0;
