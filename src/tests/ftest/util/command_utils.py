@@ -714,7 +714,13 @@ class CommandWithSubCommand(ExecutableCommand):
             self.output_check = prev_output_check
             if json_err:
                 self.exit_status_exception = prev_exit_exception
-        return json.loads(self.result.stdout)
+        try:
+            return json.loads(self.result.stdout)
+        except json.decoder.JSONDecodeError as error:
+            if self.result.stdout:
+                raise error
+            # Error expected if the stdout is empty
+            return {}
 
     def _get_new(self):
         """Get a new object based upon this one.
