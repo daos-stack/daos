@@ -101,6 +101,7 @@ struct dss_xstream {
 	int			dx_ctx_id;
 	/* Cart progress timeout in micro-seconds */
 	unsigned int		dx_timeout;
+	int			dx_helper_id;
 	bool			dx_main_xs;	/* true for main XS */
 	bool			dx_comm;	/* true with cart context */
 	bool			dx_iofw;	/* true for DSS_XS_IOFW XS */
@@ -112,7 +113,10 @@ struct dss_xstream {
 #endif
 	bool			dx_progress_started;	/* Network poll started */
 	int                     dx_tag;                 /** tag for xstream */
-	struct dss_chore_queue	dx_chore_queue;
+	/* Chore queue for IO forwarding. */
+	struct dss_chore_queue	dx_chore_iofw_queue;
+	/* Chore queue for other tasks, such as DTX. */
+	struct dss_chore_queue	dx_chore_misc_queue;
 };
 
 /** Engine module's metrics */
