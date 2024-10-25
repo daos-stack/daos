@@ -9,10 +9,6 @@ jobs:
   Build_and_unit_test:
     name: "Build and Run Unit Tests for Ryon"
     runs-on: [self-hosted, wolf]
-    defaults:
-      run:
-        shell: bash
-        shell-options: -eux
     env:
       CP_PRIORITY: 1
       EL8_BUILD_VERSION: 8.8
@@ -86,6 +82,7 @@ jobs:
 
       - name: Scons Build
         run: |
+          set -eux
           echo "hostname: $(hostname)"
           echo "nodelist: $NODELIST"
           echo "pwd: $(pwd)"
@@ -100,6 +97,7 @@ jobs:
 
       - name: Run Test
         run: |
+          set -eux
           echo "Beginning Tests ..."         
           # ssh -i ci_key jenkins@$first_node 'export BULLSEYE=;export WITH_VALGRIND=;export BDEV_TEST=false; ./build/ci/unit/test_main_node.sh'
           ssh -i ci_key jenkins@$first_node \
