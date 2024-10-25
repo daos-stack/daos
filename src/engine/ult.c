@@ -401,7 +401,7 @@ check:
 /* ============== ULT create functions =================================== */
 
 static inline int
-sched_ult2xs(int xs_type, int tgt_id)
+sched_ult2xs(int xs_type, int tgt_id, int *hint)
 {
 	uint32_t	xs_id;
 
@@ -450,11 +450,17 @@ sched_ult2xs(int xs_type, int tgt_id)
 		 * ask neighbor to do IO forwarding seems is helpful to make
 		 * them concurrent, right?
 		 */
-		if (dss_tgt_offload_xs_nr > 0)
-			xs_id = dss_sys_xs_nr + dss_tgt_nr +
-				rand() % min(dss_tgt_nr, dss_tgt_offload_xs_nr);
-		else
+		if (dss_tgt_offload_xs_nr > 0) {
+			if (hint != NULL) {
+				*hint = (*hint + 1) % min(dss_tgt_nr, dss_tgt_offload_xs_nr);
+				xs_id = dss_sys_xs_nr + dss_tgt_nr + *hint;
+			} else {
+				xs_id = dss_sys_xs_nr + dss_tgt_nr +
+					rand() % min(dss_tgt_nr, dss_tgt_offload_xs_nr);
+			}
+		} else {
 			xs_id = (DSS_MAIN_XS_ID(tgt_id) + 1) % dss_tgt_nr;
+		}
 		break;
 	case DSS_XS_OFFLOAD:
 		if (dss_numa_nr > 1)
@@ -495,7 +501,7 @@ ult_create_internal(void (*func)(void *), void *arg, int xs_type, int tgt_idx,
 	int			 rc, rc1;
 	int			 stream_id;
 
-	stream_id = sched_ult2xs(xs_type, tgt_idx);
+	stream_id = sched_ult2xs(xs_type, tgt_idx, NULL);
 	if (stream_id == -DER_INVAL)
 		return stream_id;
 
@@ -723,8 +729,11 @@ dss_chore_ult(void *arg)
 int
 dss_chore_delegate(struct dss_chore *chore, dss_chore_func_t func)
 {
+	static __thread int	hint = -1;
 	struct dss_module_info *info = dss_get_module_info();
 	int                     xs_id;
+	int			next_helper;
+	struct dss_xstream     *next_dx;
 	struct dss_xstream     *dx;
 	struct dss_chore_queue *queue;
 
@@ -743,18 +752,43 @@ dss_chore_delegate(struct dss_chore *chore, dss_chore_func_t func)
 	}
 
 	/* Find the chore queue. */
-	xs_id = sched_ult2xs(DSS_XS_IOFW, info->dmi_tgt_id);
+	xs_id = sched_ult2xs(DSS_XS_IOFW, info->dmi_tgt_id, &hint);
 	D_ASSERT(xs_id != -DER_INVAL);
 	dx = dss_get_xstream(xs_id);
 	D_ASSERT(dx != NULL);
 	queue = &dx->dx_chore_queue;
 	D_ASSERT(queue != NULL);
 
+	/*
+	 * We do not guarantee strict load balance among helper XS, instead, just roughly
+	 * estimate the RPC load without holding the lock against related dx_chore_queue.
+	 *
+	 * To be efficient, only compare current helper and next helper, and elect the one
+	 * with less RPC load. The next dss_chore_delegate() will compare the next and the
+	 * next after next. So if there are a lot of chore tasks, then the RPC load can be
+	 * relative balanced.
+	 */
+	if (queue->chq_load > 0 && dss_numa_nr <= 1 && dss_helper_pool &&
+	    dss_tgt_offload_xs_nr > 1) {
+		next_helper = dss_sys_xs_nr + dss_tgt_nr +
+			      (hint + 1) % min(dss_tgt_nr, dss_tgt_offload_xs_nr);
+		next_dx = dss_get_xstream(next_helper);
+		D_ASSERT(next_dx != NULL);
+
+		if (next_dx->dx_chore_queue.chq_load < queue->chq_load) {
+			xs_id = next_helper;
+			dx = next_dx;
+			queue = &next_dx->dx_chore_queue;
+			hint = xs_id - dss_sys_xs_nr - dss_tgt_nr;
+		}
+	}
+
 	ABT_mutex_lock(queue->chq_mutex);
 	if (queue->chq_stop) {
 		ABT_mutex_unlock(queue->chq_mutex);
 		return -DER_CANCELED;
 	}
+	queue->chq_load += chore->cho_load;
 	d_list_add_tail(&chore->cho_link, &queue->chq_list);
 	ABT_cond_broadcast(queue->chq_cond);
 	ABT_mutex_unlock(queue->chq_mutex);
@@ -824,6 +858,7 @@ dss_chore_queue_ult(void *arg)
 
 		d_list_for_each_entry_safe(chore, chore_tmp, &list, cho_link) {
 			enum dss_chore_status status;
+			uint32_t load = chore->cho_load;
 
 			/*
 			 * CAUTION: When cho_func returns DSS_CHORE_DONE, chore
@@ -838,6 +873,7 @@ dss_chore_queue_ult(void *arg)
 				d_list_add_tail(&chore->cho_link, &list_tmp);
 			} else {
 				D_ASSERTF(status == DSS_CHORE_DONE, "status=%d\n", status);
+				queue->chq_load -= load;
 			}
 			ABT_thread_yield();
 		}

@@ -76,6 +76,7 @@ struct dss_chore_queue {
 	ABT_mutex  chq_mutex;
 	ABT_cond   chq_cond;
 	ABT_thread chq_ult;
+	uint64_t   chq_load;
 };
 
 /** Per-xstream configuration data */
