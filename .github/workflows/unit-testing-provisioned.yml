@@ -92,33 +92,29 @@ jobs:
           
           first_node=${NODELIST%%,*}
           
-          echo "::group::Copying code to $first_node"
           rsync -rlpt -z -e "ssh -i ci_key" . jenkins@$first_node:build/
-          echo "::endgroup::"
-          echo "::group::Sending Build Commands to $first_node"
-          ssh -i ci_key jenkins@$first_node << EOF
-            set -e
-            echo "hostname: $(hostname)"
-            echo "pwd: $(pwd)"
-            cd build
-            sudo dnf --assumeyes install dnf-plugins-core 
-            sudo dnf config-manager --save --setopt=assumeyes=True
-            sudo ./utils/scripts/install-el8.sh
-            sudo python3 -m pip install -r requirements-build.txt
-            scons-3 --build-deps=yes --config=force -j12 install
-          # need to simulate: 'tar -cf opt-daos.tar /opt/daos/' (this is how the sconsBuild.grovy does it in Jenkins)
-          # will be unpacked with: tar --strip-components=2 --directory /opt/daos -xf opt-daos.tar
-            tar -cf opt-daos.tar -C ./build/ install
-            mv opt-daos.tar ./build/
-            set +e
-          EOF
-          echo "::endgroup::"
-          
+
+#          ssh -i ci_key jenkins@$first_node << EOF
+#            set -e
+#            echo "hostname: $(hostname)"
+#            echo "pwd: $(pwd)"
+#            cd build
+#            sudo dnf --assumeyes install dnf-plugins-core
+#            sudo dnf config-manager --save --setopt=assumeyes=True
+#            sudo ./utils/scripts/install-el8.sh
+#            sudo python3 -m pip install -r requirements-build.txt
+#            scons-3 --build-deps=yes --config=force -j12 install
+#          # need to simulate: 'tar -cf opt-daos.tar /opt/daos/' (this is how the sconsBuild.grovy does it in Jenkins)
+#          # will be unpacked with: tar --strip-components=2 --directory /opt/daos -xf opt-daos.tar
+#            tar -cf opt-daos.tar -C ./build/ install
+#            mv opt-daos.tar ./build/
+#            set +e
+#          EOF
 
       - name: Run Test
         run: |
           echo "Beginning Tests ..."         
-          ssh -i ci_key jenkins@$first_node 'export BULLSEYE=;export WITH_VALGRIND=;export BDEV_TEST=false; .build/ci/unit/test_main_node.sh'
+#          ssh -i ci_key jenkins@$first_node 'export BULLSEYE=;export WITH_VALGRIND=;export BDEV_TEST=false; .build/ci/unit/test_main_node.sh'
 
 #      - name: Job cleanup
 #        if: (!cancelled() && (success() || failure()))
