@@ -99,7 +99,9 @@ jobs:
       - name: Run Test
         run: |
           set -eux
-          echo "Beginning Tests ..."         
+          
+          first_node=${NODELIST%%,*}
+          echo "Beginning Tests on $first_node"
           # ssh -i ci_key jenkins@$first_node 'export BULLSEYE=;export WITH_VALGRIND=;export BDEV_TEST=false; ./build/ci/unit/test_main_node.sh'
           ssh -i ci_key jenkins@$first_node \
             'env BULLSEYE= WITH_VALGRIND= BDEV_TEST=false \
