@@ -92,8 +92,9 @@ jobs:
           
           first_node=${NODELIST%%,*}
           
+          # 'build' might be needed because of test structure
           rsync -rlpt -z -e "ssh -i ci_key" . jenkins@$first_node:build/
-          ssh -i ci_key jenkins@$first_node './ci/scons_build.sh'
+          ssh -i ci_key jenkins@$first_node 'cd build; ./ci/scons_build.sh'
 
       - name: Run Test
         run: |
