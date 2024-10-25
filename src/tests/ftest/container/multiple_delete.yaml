@@ -45,5 +45,7 @@ ior:
   api: DFS
   transfer_size: 1M
   block_size: 1G
-  dfs_oclass: EC_2P2G1
-  dfs_dir_oclass: EC_2P2G1
+  dfs_oclass: EC_2P2GX
+  dfs_dir_oclass: EC_2P2GX
+
+scm_threshold: 400000
