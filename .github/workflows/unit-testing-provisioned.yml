@@ -9,6 +9,10 @@ jobs:
   Build_and_unit_test:
     name: "Build and Run Unit Tests for Ryon"
     runs-on: [self-hosted, wolf]
+    defaults:
+      run:
+        shell: bash
+        shell-options: -eux
     env:
       CP_PRIORITY: 1
       EL8_BUILD_VERSION: 8.8
@@ -82,7 +86,6 @@ jobs:
 
       - name: Scons Build
         run: |
-          echo "whoami: $(whoami)"
           echo "hostname: $(hostname)"
           echo "nodelist: $NODELIST"
           echo "pwd: $(pwd)"
@@ -93,28 +96,15 @@ jobs:
           first_node=${NODELIST%%,*}
           
           rsync -rlpt -z -e "ssh -i ci_key" . jenkins@$first_node:build/
-
-#          ssh -i ci_key jenkins@$first_node << EOF
-#            set -e
-#            echo "hostname: $(hostname)"
-#            echo "pwd: $(pwd)"
-#            cd build
-#            sudo dnf --assumeyes install dnf-plugins-core
-#            sudo dnf config-manager --save --setopt=assumeyes=True
-#            sudo ./utils/scripts/install-el8.sh
-#            sudo python3 -m pip install -r requirements-build.txt
-#            scons-3 --build-deps=yes --config=force -j12 install
-#          # need to simulate: 'tar -cf opt-daos.tar /opt/daos/' (this is how the sconsBuild.grovy does it in Jenkins)
-#          # will be unpacked with: tar --strip-components=2 --directory /opt/daos -xf opt-daos.tar
-#            tar -cf opt-daos.tar -C ./build/ install
-#            mv opt-daos.tar ./build/
-#            set +e
-#          EOF
+          ssh -i ci_key jenkins@$first_node './ci/scons_build.sh'
 
       - name: Run Test
         run: |
           echo "Beginning Tests ..."         
-#          ssh -i ci_key jenkins@$first_node 'export BULLSEYE=;export WITH_VALGRIND=;export BDEV_TEST=false; .build/ci/unit/test_main_node.sh'
+          # ssh -i ci_key jenkins@$first_node 'export BULLSEYE=;export WITH_VALGRIND=;export BDEV_TEST=false; ./build/ci/unit/test_main_node.sh'
+          ssh -i ci_key jenkins@$first_node \
+            'env BULLSEYE= WITH_VALGRIND= BDEV_TEST=false \
+            ./build/ci/unit/test_main_node.sh'
 
 #      - name: Job cleanup
 #        if: (!cancelled() && (success() || failure()))
@@ -122,4 +112,3 @@ jobs:
 #          set -eux
 #          . ci/gha_functions.sh
 #          cleanup_provision_request "${{ env.CLUSTER_REQUEST_reqid }}"
-#          NODELIST=${{ env.NODESTRING }} ci/functional/job_cleanup.sh
