@@ -18,6 +18,9 @@ services:
         - "DAOS_VERSION=${DAOS_VERSION}"
         - "DAOS_CLIENT_UNAME=${DAOS_CLIENT_UNAME}"
         - "DAOS_CLIENT_GNAME=${DAOS_CLIENT_GNAME}"
+        - "HTTP_PROXY=${HTTP_PROXY:-${http_proxy:-\"\"}}"
+        - "HTTPS_PROXY=${HTTPS_PROXY:-${https_proxy:-\"\"}}"
+        - "NO_PROXY=${NO_PROXY:-${no_proxy:-\"\"}}"
     tty: true
     network_mode: host
     cap_add:

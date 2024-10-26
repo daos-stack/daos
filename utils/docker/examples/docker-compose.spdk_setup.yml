@@ -16,6 +16,9 @@ services:
         - "DAOS_DOCKER_IMAGE_NSP=${DAOS_DOCKER_IMAGE_NSP}"
         - "DAOS_DOCKER_IMAGE_TAG=${DAOS_DOCKER_IMAGE_TAG}"
         - "DAOS_VERSION=${DAOS_VERSION}"
+        - "HTTP_PROXY=${HTTP_PROXY:-${http_proxy:-\"\"}}"
+        - "HTTPS_PROXY=${HTTPS_PROXY:-${https_proxy:-\"\"}}"
+        - "NO_PROXY=${NO_PROXY:-${no_proxy:-\"\"}}"
     # XXX Seems to not be possible to use uio without privileged mode
     # https://github.com/moby/moby/issues/22825
     privileged: true

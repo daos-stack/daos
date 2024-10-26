@@ -23,6 +23,12 @@ ARG	LINUX_IMAGE_TAG=""
 FROM	"$LINUX_IMAGE_NAME:$LINUX_IMAGE_TAG"
 LABEL	maintainer="daos@daos.groups.io"
 
+# Set environment variables for proxy
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+
+
 # Base configuration of dnf and system update
 RUN	dnf clean all &&                                                                           \
 	dnf makecache &&                                                                           \
