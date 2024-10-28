@@ -970,7 +970,9 @@ out_oit:
 out_snap:
 	D_FREE(oit_args);
 	epr.epr_hi = epr.epr_lo = snap_epoch;
-	rc2                     = daos_cont_destroy_snap(coh, epr, NULL);
+	rc2 = daos_cont_destroy_snap(coh, epr, NULL);
+	if (rc2 != 0)
+		D_ERROR("Failed to destroy OID table: " DF_RC "\n", DP_RC(rc2));
 	if (rc == 0)
 		rc = daos_der2errno(rc2);
 out_dfs:
