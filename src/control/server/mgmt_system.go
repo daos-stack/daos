@@ -214,6 +214,11 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 		return nil, errors.Wrap(err, "failed to join system")
 	}
 
+	psList, err := svc.sysdb.PoolServiceList(true)
+	if err != nil {
+		return nil, errors.Wrapf(err, "rank %d", req.Rank)
+	}
+
 	member := joinResponse.Member
 	if joinResponse.Created {
 		svc.log.Debugf("new system member: rank %d, addr %s, primary uri %s, secondary uris %s",
@@ -231,6 +236,11 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 		State:      joinState,
 		Rank:       member.Rank.Uint32(),
 		MapVersion: joinResponse.MapVersion,
+	}
+	for _, ps := range psList {
+		if ps.State != system.PoolServiceStateDestroying {
+			resp.PoolUuids = append(resp.PoolUuids, ps.PoolUUID.String())
+		}
 	}
 
 	if svc.isGroupUpdatePaused() && svc.allRanksJoined() {
@@ -251,7 +261,7 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 		}
 		srv := srvs[0]
 
-		if err := srv.SetupRank(ctx, joinResponse.Member.Rank, joinResponse.MapVersion); err != nil {
+		if err := srv.SetupRank(ctx, joinResponse.Member.Rank, joinResponse.MapVersion, resp.PoolUuids); err != nil {
 			return nil, errors.Wrap(err, "SetupRank on local instance failed")
 		}
 	}
