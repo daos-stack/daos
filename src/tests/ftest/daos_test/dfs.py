@@ -1,10 +1,8 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
-import os
 
 from daos_core_base import DaosCoreBase
 
@@ -34,8 +32,7 @@ class DaosCoreTestDfs(DaosCoreBase):
         :avocado: tags=daos_test,dfs_test,dfs
         :avocado: tags=DaosCoreTestDfs,test_daos_dfs_unit
         """
-        self.daos_test = os.path.join(self.bin, 'dfs_test')
-        self.run_subtest()
+        self.run_subtest('dfs_test')
 
     def test_daos_dfs_parallel(self):
         """Jira ID: DAOS-5409.
@@ -51,8 +48,7 @@ class DaosCoreTestDfs(DaosCoreBase):
         :avocado: tags=daos_test,dfs_test,dfs
         :avocado: tags=DaosCoreTestDfs,test_daos_dfs_parallel
         """
-        self.daos_test = os.path.join(self.bin, 'dfs_test')
-        self.run_subtest()
+        self.run_subtest('dfs_test')
 
     def test_daos_dfs_sys(self):
         """Jira ID: DAOS-7759.
@@ -68,5 +64,4 @@ class DaosCoreTestDfs(DaosCoreBase):
         :avocado: tags=daos_test,dfs_test,dfs
         :avocado: tags=DaosCoreTestDfs,test_daos_dfs_sys
         """
-        self.daos_test = os.path.join(self.bin, 'dfs_test')
-        self.run_subtest()
+        self.run_subtest('dfs_test')

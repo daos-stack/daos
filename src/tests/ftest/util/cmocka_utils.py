@@ -4,14 +4,53 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
-import time
 
 from agent_utils import include_local_host
 from command_utils import ExecutableCommand
-from command_utils_base import EnvironmentVariables
+from command_utils_base import BasicParameter, EnvironmentVariables
 from exception_utils import CommandFailure
 from results_utils import Job, Results, TestName, TestResult, create_xml
 from run_utils import get_clush_command, run_local, run_remote
+
+
+def get_cmocka_command(path, executable, parameters=None):
+    """Get an ExecutableCommand representing the provided command string.
+
+    Adds detection of any bad keywords in the command output that, if found, will result in a
+    command failure.
+
+    Args:
+        path (str): the command path to use to create the CmockaCommand
+        executable (str): the command name to use to create the CmockaCommand
+        parameters (str): parameters to use to create the CmockaCommand
+
+    Returns:
+        ExecutableCommand: the object setup to run the command
+
+    """
+    keywords = ["Process received signal", "stack smashing detected", "End of error message",
+                "buffer overflow detected"]
+    command = CmockaCommand(path, executable, keywords)
+    command.parameters.value = parameters
+    return command
+
+
+class CmockaCommand(ExecutableCommand):
+    """Defines a object representing a daos command."""
+
+    def __init__(self, path, executable, keywords):
+        """Create a CmockaCommand object.
+
+        Args:
+            path (str): the command path. This is excluded from the search when the process is
+                killed.
+            executable (str): the command executable. Also the string used to search for the process
+                when it is killed.
+            keywords (list): list of words used to mark the command as failed if any are found in
+                the command output. Defaults to None.
+        """
+        super().__init__(None, executable, path, check_results=keywords)
+        self.parameters = BasicParameter(None)
 
 
 class CmockaUtils():
@@ -77,25 +116,7 @@ class CmockaUtils():
             "CMOCKA_MESSAGE_OUTPUT": "xml",
         })
 
-    @staticmethod
-    def get_cmocka_command(command):
-        """Get an ExecutableCommand representing the provided command string.
-
-        Adds detection of any bad keywords in the command output that, if found, will result in a
-        command failure.
-
-        Args:
-            command (str): the command string to use to create the ExecutableCommand
-
-        Returns:
-            ExecutableCommand: the object setup to run the command
-
-        """
-        keywords = ["Process received signal", "stack smashing detected", "End of error message",
-                    "buffer overflow detected"]
-        return ExecutableCommand(namespace=None, command=command, check_results=keywords)
-
-    def run_cmocka_test(self, test, command):
+    def run_cmocka_test(self, test, command='daos_test'):
         """Run the cmocka test command.
 
         After the command completes, copy any remote cmocka results that may exist back to this host
@@ -109,22 +130,20 @@ class CmockaUtils():
         error_message = None
         error_exception = None
         try:
-            time.sleep(50)      # Debug
             command.run()
 
         except CommandFailure as error:
-            error_message = "Error detected running {}".format(job_command)
+            error_message = f"Error detected running {job_command}"
             error_exception = error
             test.log.exception(error_message)
             test.fail(error_message)
 
         finally:
-            run_remote(test.log, self.hosts, "ps -ejH")
+            run_remote(test.log, self.hosts, "ps -ejH")     # TODO: remove debug
             self._collect_cmocka_results(test)
             if not self._check_cmocka_files():
                 if error_message is None:
-                    error_message = "Missing cmocka results for {} in {}".format(
-                        job_command, self.cmocka_dir)
+                    error_message = f"Missing cmocka results for {job_command} in {self.cmocka_dir}"
                 self._generate_cmocka_files(test, error_message, error_exception)
 
     def _collect_cmocka_results(self, test):
@@ -190,7 +209,7 @@ class CmockaUtils():
         test_result.traceback = error_exception
         test_result.time_elapsed = 0
 
-        cmocka_xml = os.path.join(self.outputdir, "{}_cmocka_results.xml".format(self.test_name))
+        cmocka_xml = os.path.join(self.outputdir, f"{self.test_name}_cmocka_results.xml")
         job = Job(self.test_name, xml_output=cmocka_xml)
         result = Results(test.logfile)
         result.tests.append(test_result)

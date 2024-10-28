@@ -6,7 +6,7 @@
 import os
 
 from apricot import TestWithoutServers
-from cmocka_utils import CmockaUtils
+from cmocka_utils import CmockaUtils, get_cmocka_command
 from command_utils import SubProcessCommand
 from exception_utils import CommandFailure
 from job_manager_utils import Mpirun, Orterun
@@ -141,30 +141,58 @@ class HarnessBasicTest(TestWithoutServers):
         self.log.info("  This should generate a cmocka xml file with a 'Missing file' error")
         name = "no_cmocka_xml_file_test"
         cmocka_utils = CmockaUtils(None, name, self.outputdir, self.test_dir, self.log)
-        command = cmocka_utils.get_cmocka_command("hostname")
+        command = get_cmocka_command("", "hostname")
         cmocka_utils.run_cmocka_test(self, command)
+        self._verify_no_cmocka_xml(name)
+        self.log.info("Test passed")
 
+    def test_no_cmocka_xml_timeout(self):
+        """Test to verify CmockaUtils handles timed out process correctly.
+
+        If working correctly this test should fail due to a test timeout and a missing cmocka file.
+
+        :avocado: tags=all
+        :avocado: tags=vm
+        :avocado: tags=harness,harness_cmocka,failure_expected
+        :avocado: tags=HarnessBasicTest,test_no_cmocka_xml_timeout
+        """
+        self.log.info("=" * 80)
+        self.log.info("Running the 'sleep 30' command via CmockaUtils")
+        self.log.info("  This should generate a test timeout failure")
+        self.log.info("  This should generate a cmocka xml file with a 'Missing file' error")
+        name = "no_cmocka_xml_file_timeout_test"
+        cmocka_utils = CmockaUtils(None, name, self.outputdir, self.test_dir, self.log)
+        command = get_cmocka_command("", "sleep", "60")
+        try:
+            cmocka_utils.run_cmocka_test(self, command)
+        finally:
+            self._verify_no_cmocka_xml(name)
+        self.fail("Test did not timeout")
+
+    def _verify_no_cmocka_xml(self, name):
+        """Verify a cmocka xml file was generated with the expected error.
+
+        Args:
+            name (str): name of the cmocka test
+        """
         # Verify a generated cmocka xml file exists
-        expected = os.path.join(self.outputdir, "{}_cmocka_results.xml".format(name))
+        expected = os.path.join(self.outputdir, f"{name}_cmocka_results.xml")
         self.log.info("Verifying the existence of the generated cmocka file: %s", expected)
         if not os.path.isfile(expected):
-            self.fail("No {} file found".format(expected))
+            self.fail(f"No {expected} file found")
 
         # Verify the generated cmocka xml file contains the expected error
         self.log.info("Verifying contents of the generated cmocka file: %s", expected)
         with open(expected, "r", encoding="utf-8") as file_handle:
             actual_contents = file_handle.readlines()
-        error_message = "Missing cmocka results for hostname in {}".format(self.outputdir)
+        error_message = f"Missing cmocka results for hostname in {self.outputdir}"
         expected_lines = [
-            "<testsuite errors=\"1\" failures=\"0\" name=\"{}\" skipped=\"0\" tests=\"1\"".format(
-                name),
-            "<testcase classname=\"{}\" name=\"{}\"".format(name, self.name),
-            "<error message=\"{}\" type=\"Missing file\">".format(error_message)
+            f"<testsuite errors=\"1\" failures=\"0\" name=\"{name}\" skipped=\"0\" tests=\"1\"",
+            f"<testcase classname=\"{name}\" name=\"{self.name}\"",
+            f"<error message=\"{error_message}\" type=\"Missing file\">"
         ]
         for index, actual_line in enumerate(actual_contents[1:4]):
             self.log.debug("  expecting: %s", expected_lines[index])
             self.log.debug("  in actual: %s", actual_line[:-1].strip())
             if expected_lines[index] not in actual_line:
-                self.fail("Badly formed {} file".format(expected))
-
-        self.log.info("Test passed")
+                self.fail(f"Badly formed {expected} file")
