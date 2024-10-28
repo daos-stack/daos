@@ -80,8 +80,12 @@ dtx_coll_prep_ult(void *arg)
 				DP_UUID(cont->sc_uuid), DP_RC(rc));
 	}
 
-	if (dcpa->dcpa_result != 0)
+	if (dcpa->dcpa_result != 0) {
+		if (dcpa->dcpa_result != -DER_INPROGRESS && dcpa->dcpa_result != -DER_NONEXIST)
+			D_ERROR("Failed to load mbs for "DF_DTI", opc %u: "DF_RC"\n",
+				DP_DTI(&dci->dci_xid), opc, DP_RC(rc));
 		goto out;
+	}
 
 	dcpa->dcpa_result = dtx_coll_prep(dci->dci_po_uuid, dcpa->dcpa_oid, &dci->dci_xid, mbs, -1,
 					  dci->dci_version, cont->sc_pool->spc_map_version,
