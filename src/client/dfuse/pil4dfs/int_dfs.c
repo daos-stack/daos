@@ -6235,6 +6235,50 @@ new_fcntl(int fd, int cmd, ...)
 	}
 }
 
+static ssize_t
+write_all(int fd, const void *buf, size_t count)
+{
+	ssize_t rc, byte_written = 0;
+	char   *p_buf = (char *)buf;
+
+	if (fd >= FD_FILE_BASE)
+		return write(fd, buf, count);
+
+	while (count != 0 && (rc = write(fd, p_buf, count)) != 0) {
+		if (rc == -1) {
+			if (errno == EINTR)
+				continue;
+			else if (errno == ENOSPC)
+				/* out of space. Quit immediately. */
+				return -1;
+			printf("Error in write_all: %s\n", strerror(errno));
+			return -1;
+		}
+		byte_written += rc;
+		count -= rc;
+		p_buf += rc;
+	}
+	return byte_written;
+}
+
+void append_log(int rc_in, int errno_in, int fd_in, unsigned long request)
+{
+	int fd;
+	int rc;
+	int len;
+	char msg[256];
+
+	fd = open("/dev/shm/log_pil4dfs_dbg.txt", O_RDWR | O_CREAT, 0600);
+	assert(fd >= 0);
+	len = sprintf(msg, "rc = %d errno = %d fd = %x request = %lx\n", rc_in, errno_in, fd_in,
+		      request);
+	rc = lseek(fd, 0, SEEK_END);
+	rc = write_all(fd, msg, len);
+	assert(rc == len);
+	rc = close(fd);
+	assert(rc == 0);
+}
+
 int
 ioctl(int fd, unsigned long request, ...)
 {
@@ -6242,6 +6286,8 @@ ioctl(int fd, unsigned long request, ...)
 	void                           *param;
 	struct dfuse_user_reply        *reply;
 	int                             fd_directed;
+	int                             rc;
+	int                             errno_save;
 
 	va_start(arg, request);
 	param = va_arg(arg, void *);
@@ -6251,8 +6297,10 @@ ioctl(int fd, unsigned long request, ...)
 		next_ioctl = dlsym(RTLD_NEXT, "ioctl");
 		D_ASSERT(next_ioctl != NULL);
 	}
-	if (!d_hook_enabled)
-		return next_ioctl(fd, request, param);
+	if (!d_hook_enabled) {
+		rc = next_ioctl(fd, request, param);
+		goto out;
+	}
 
 	/* To pass existing test of ioctl() with DFUSE_IOCTL_DFUSE_USER */
 	/* Provided to pass dfuse_test                                  */
@@ -6263,16 +6311,27 @@ ioctl(int fd, unsigned long request, ...)
 		return 0;
 	}
 
-	if (fd < FD_FILE_BASE && d_compatible_mode)
-		return next_ioctl(fd, request, param);
+	if (fd < FD_FILE_BASE && d_compatible_mode) {
+		rc = next_ioctl(fd, request, param);
+		goto out;
+	}
 
 	fd_directed = d_get_fd_redirected(fd);
-	if (fd_directed < FD_FILE_BASE)
-		return next_ioctl(fd, request, param);
+	if (fd_directed < FD_FILE_BASE) {
+		rc = next_ioctl(fd, request, param);
+		goto out;
+	}
 
 	errno = ENOTSUP;
 
-	return -1;
+	rc = -1;
+
+out:
+	errno_save = errno;
+	if (rc != 0)
+		append_log(rc, errno, fd, request);
+	errno = errno_save;
+	return rc;
 }
 
 int
