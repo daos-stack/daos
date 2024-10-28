@@ -42,6 +42,7 @@
 #include <linux/limits.h>
 #include <capstone/capstone.h>
 #include <gurt/common.h>
+#include <gnu/libc-version.h>
 
 #include "hook.h"
 #include "hook_int.h"
@@ -89,10 +90,9 @@ static uint64_t lib_base_addr[MAX_NUM_LIB];
 /* List of names of loaded libraries */
 static char   **lib_name_list;
 
-/* we set libc_version as DEFAULT_LIBC_VER when we fail to determine it from libc.so */
-#define DEFAULT_LIBC_VER 2.28
 /* libc version number in current process. e.g., 2.28 */
 static float    libc_version;
+static char    *libc_version_str;
 
 /* end   to compile list of memory blocks in /proc/pid/maps */
 
@@ -219,7 +219,7 @@ determine_lib_path(void)
 {
 	int   path_offset   = 0, read_size, i, rc;
 	char *read_buff_map = NULL;
-	char *pos, *start, *end, lib_ver_str[32] = "", *lib_dir_str = NULL;
+	char *pos, *start, *end, *lib_dir_str = NULL;
 
 	read_size = read_map_file(&read_buff_map);
 
@@ -296,21 +296,17 @@ determine_lib_path(void)
 		goto err;
 	path_libc[end - start] = 0;
 
-	pos = strstr(path_libc, "libc-2.");
-	if (pos) {
-		/* containing version in name. example, 2.17 */
-		memcpy(lib_ver_str, pos + 5, 4);
-		lib_ver_str[4] = 0;
+	if (libc_version_str == NULL) {
+		libc_version_str = (char *)gnu_get_libc_version();
+		if (libc_version_str == NULL) {
+			DS_ERROR(errno, "Failed to determine libc version");
+			goto err;
+		}
+		libc_version = atof(libc_version_str);
 	}
 
-	if (lib_ver_str[0]) {
-		/* with version in name */
-		rc = asprintf(&path_libpthread, "%s/libpthread-%s.so", lib_dir_str, lib_ver_str);
-		libc_version = atof(lib_ver_str);
-	} else {
-		rc = asprintf(&path_libpthread, "%s/libpthread.so.0", lib_dir_str);
-		libc_version = DEFAULT_LIBC_VER;
-	}
+	/* with version in name */
+	rc = asprintf(&path_libpthread, "%s/libpthread-%s.so", lib_dir_str, libc_version_str);
 	if (rc < 0) {
 		DS_ERROR(ENOMEM, "Failed to allocate memory for path_libpthread");
 		goto err_1;
@@ -321,11 +317,7 @@ determine_lib_path(void)
 		DS_ERROR(ENAMETOOLONG, "path_libpthread is too long");
 		goto err_1;
 	}
-	if (lib_ver_str[0]) {
-		rc = asprintf(&path_libdl, "%s/libdl-%s.so", lib_dir_str, lib_ver_str);
-	} else {
-		rc = asprintf(&path_libdl, "%s/libdl.so", lib_dir_str);
-	}
+	rc = asprintf(&path_libdl, "%s/libdl-%s.so", lib_dir_str, libc_version_str);
 	if (rc < 0) {
 		DS_ERROR(ENOMEM, "Failed to allocate memory for path_libdl");
 		goto err_1;
