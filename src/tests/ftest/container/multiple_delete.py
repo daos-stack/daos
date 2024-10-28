@@ -75,7 +75,7 @@ class MultipleContainerDelete(IorTestBase):
         # since 50 is not divisible by 8, some data would remain in the disk right after
         # the 50th iteration. If we wait for several seconds, that remaining data will be
         # deleted (and we have 198KB left as mentioned above).
-        scm_threshold = self.params.get("smc_threshold", "/run/*")
+        scm_threshold = self.params.get("scm_threshold", "/run/*")
         self.log.info("scm_threshold = %d", scm_threshold)
         for _ in range(5):
             final_scm_fs, _ = self.get_pool_space()
