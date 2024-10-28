@@ -392,11 +392,11 @@ dtx_cleanup(void *arg)
 				if (rc == 0) {
 					D_ASSERT(dce != NULL);
 
-					rc = dtx_coll_commit(cont, dce, NULL);
+					rc = dtx_coll_commit(cont, dce, NULL, false);
 					dtx_coll_entry_put(dce);
 				}
 			} else {
-				rc = dtx_commit(cont, &dte, NULL, 1);
+				rc = dtx_commit(cont, &dte, NULL, 1, false);
 			}
 		}
 
@@ -620,17 +620,16 @@ dtx_batched_commit_one(void *arg)
 	tls->dt_batched_ult_cnt++;
 
 	/* dbca->dbca_reg_gen != cont->sc_dtx_batched_gen means someone reopen the container. */
-	while (!dss_ult_exiting(dbca->dbca_commit_req) &&
+	while (!dss_ult_exiting(dbca->dbca_commit_req) && dtx_cont_opened(cont) &&
 		dbca->dbca_reg_gen == cont->sc_dtx_batched_gen) {
 		struct dtx_entry	**dtes = NULL;
-		struct dtx_cos_key	 *dcks = NULL;
 		struct dtx_coll_entry	 *dce = NULL;
 		struct dtx_stat		  stat = { 0 };
 		int			  cnt;
 		int			  rc;
 
 		cnt = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT, NULL,
-					    DAOS_EPOCH_MAX, false, &dtes, &dcks, &dce);
+					    DAOS_EPOCH_MAX, false, &dtes, NULL, &dce);
 		if (cnt == 0)
 			break;
 
@@ -644,11 +643,11 @@ dtx_batched_commit_one(void *arg)
 			/* Currently, commit collective DTX one by one. */
 			D_ASSERT(cnt == 1);
 
-			rc = dtx_coll_commit(cont, dce, dcks);
+			rc = dtx_coll_commit(cont, dce, NULL, true);
 		} else {
-			rc = dtx_commit(cont, dtes, dcks, cnt);
+			rc = dtx_commit(cont, dtes, NULL, cnt, true);
 		}
-		dtx_free_committable(dtes, dcks, dce, cnt);
+		dtx_free_committable(dtes, NULL, dce, cnt);
 		if (rc != 0) {
 			D_WARN("Fail to batched commit %d entries for "DF_UUID": "DF_RC"\n",
 			       cnt, DP_UUID(cont->sc_uuid), DP_RC(rc));
@@ -1271,7 +1270,6 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 	uint32_t			 flags;
 	int				 status = -1;
 	int				 rc = 0;
-	int				 i;
 	bool				 aborted = false;
 	bool				 unpin = false;
 
@@ -1424,10 +1422,10 @@ sync:
 		vos_dtx_mark_committable(dth);
 
 		if (dlh->dlh_coll) {
-			rc = dtx_coll_commit(cont, dlh->dlh_coll_entry, NULL);
+			rc = dtx_coll_commit(cont, dlh->dlh_coll_entry, NULL, false);
 		} else {
 			dte = &dth->dth_dte;
-			rc = dtx_commit(cont, &dte, NULL, 1);
+			rc = dtx_commit(cont, &dte, NULL, 1, false);
 		}
 
 		if (rc != 0)
@@ -1487,15 +1485,9 @@ out:
 	/* If piggyback DTX has been done everywhere, then need to handle CoS cache.
 	 * It is harmless to keep some partially committed DTX entries in CoS cache.
 	 */
-	if (result == 0 && dth->dth_cos_done) {
-		for (i = 0; i < dth->dth_dti_cos_count; i++)
-			dtx_cos_del(cont, &dth->dth_dti_cos[i],
-				    &dth->dth_leader_oid, dth->dth_dkey_hash);
-	} else {
-		for (i = 0; i < dth->dth_dti_cos_count; i++)
-			dtx_cos_put_piggyback(cont, &dth->dth_dti_cos[i],
-					      &dth->dth_leader_oid, dth->dth_dkey_hash);
-	}
+	dtx_cos_put_piggyback(cont, &dth->dth_leader_oid, dth->dth_dkey_hash, dth->dth_dti_cos,
+			      dth->dth_dti_cos_count,
+			      (result == 0 && dth->dth_cos_done) ? true : false);
 
 	D_DEBUG(DB_IO, "Stop the DTX "DF_DTI" ver %u, dkey %lu, %s, cos %d/%d: result "DF_RC"\n",
 		DP_DTI(&dth->dth_xid), dth->dth_ver, (unsigned long)dth->dth_dkey_hash,
@@ -1654,7 +1646,8 @@ dtx_flush_on_close(struct dss_module_info *dmi, struct dtx_batched_cont_args *db
 		struct dtx_coll_entry	 *dce = NULL;
 
 		cnt = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT,
-					    NULL, DAOS_EPOCH_MAX, true, &dtes, &dcks, &dce);
+					    NULL, DAOS_EPOCH_MAX, true, &dtes,
+					    dbca->dbca_commit_req != NULL ? &dcks : NULL, &dce);
 		if (cnt <= 0)
 			D_GOTO(out, rc = cnt);
 
@@ -1675,9 +1668,9 @@ dtx_flush_on_close(struct dss_module_info *dmi, struct dtx_batched_cont_args *db
 		if (dce != NULL) {
 			D_ASSERT(cnt == 1);
 
-			rc = dtx_coll_commit(cont, dce, dcks);
+			rc = dtx_coll_commit(cont, dce, dcks, true);
 		} else {
-			rc = dtx_commit(cont, dtes, dcks, cnt);
+			rc = dtx_commit(cont, dtes, dcks, cnt, true);
 		}
 		dtx_free_committable(dtes, dcks, dce, cnt);
 	}
@@ -2365,9 +2358,9 @@ dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 		if (dce != NULL) {
 			D_ASSERT(cnt == 1);
 
-			rc = dtx_coll_commit(cont, dce, dcks);
+			rc = dtx_coll_commit(cont, dce, dcks, true);
 		} else {
-			rc = dtx_commit(cont, dtes, dcks, cnt);
+			rc = dtx_commit(cont, dtes, dcks, cnt, true);
 		}
 		dtx_free_committable(dtes, dcks, dce, cnt);
 		if (rc < 0) {
