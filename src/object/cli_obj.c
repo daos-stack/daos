@@ -4834,11 +4834,14 @@ obj_comp_cb(tse_task_t *task, void *data)
 		D_ASSERT(daos_handle_is_inval(obj_auxi->th));
 		D_ASSERT(obj_is_modification_opc(obj_auxi->opc));
 
-		if (task->dt_result == -DER_TX_ID_REUSED && obj_auxi->retry_cnt != 0)
-			/* XXX: it is must because miss to set "RESEND" flag, that is bug. */
-			D_ASSERTF(0,
-				  "Miss 'RESEND' flag (%x) when resend the RPC for task %p: %u\n",
-				  obj_auxi->flags, task, obj_auxi->retry_cnt);
+		if (task->dt_result == -DER_TX_ID_REUSED && obj_auxi->retry_cnt != 0) {
+			D_ERROR("Be complained as TX ID reused for unknown reason, "
+				"task %p, opc %u, flags %x, retry_cnt %u\n",
+				task, obj_auxi->opc, obj_auxi->flags, obj_auxi->retry_cnt);
+			task->dt_result = -DER_IO;
+			obj_auxi->io_retry = 0;
+			goto args_fini;
+		}
 
 		if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE) {
 			daos_obj_rw_t		*api_args = dc_task_get_args(obj_auxi->obj_task);
@@ -4864,6 +4867,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 		}
 	}
 
+args_fini:
 	if (obj_auxi->opc == DAOS_OBJ_RPC_COLL_PUNCH)
 		obj_coll_oper_args_fini(&obj_auxi->p_args.pa_coa);
 

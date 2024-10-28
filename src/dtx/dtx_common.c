@@ -1271,7 +1271,6 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 	int				 status = -1;
 	int				 rc = 0;
 	bool				 aborted = false;
-	bool				 unpin = false;
 
 	D_ASSERT(cont != NULL);
 
@@ -1339,7 +1338,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 	 * it persistently. Otherwise, the subsequent DTX resync may not find it as
 	 * to regard it as failed transaction and abort it.
 	 */
-	if (result == 0 && !dth->dth_active && !dth->dth_prepared && !dth->dth_solo &&
+	if (!dth->dth_active && !dth->dth_prepared &&
 	    (dth->dth_dist || dth->dth_modification_cnt > 0)) {
 		result = vos_dtx_attach(dth, true, dth->dth_ent != NULL ? true : false);
 		if (unlikely(result < 0)) {
@@ -1363,14 +1362,12 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 	if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_COMMIT))
 		dth->dth_sync = 1;
 
-	/* For synchronous DTX, do not add it into CoS cache, otherwise,
-	 * we may have no way to remove it from the cache.
-	 */
 	if (dth->dth_sync)
 		goto sync;
 
 	D_ASSERT(dth->dth_mbs != NULL);
 
+cache:
 	if (dlh->dlh_coll) {
 		rc = dtx_cos_add(cont, dlh->dlh_coll_entry, &dth->dth_leader_oid,
 				 dth->dth_dkey_hash, dth->dth_epoch, DCF_EXP_CMT | DCF_COLL);
@@ -1378,38 +1375,47 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 		size = sizeof(*dte) + sizeof(*mbs) + dth->dth_mbs->dm_data_size;
 		D_ALLOC(dte, size);
 		if (dte == NULL) {
-			dth->dth_sync = 1;
-			goto sync;
+			rc = -DER_NOMEM;
+		} else {
+			mbs = (struct dtx_memberships *)(dte + 1);
+			memcpy(mbs, dth->dth_mbs, size - sizeof(*dte));
+
+			dte->dte_xid = dth->dth_xid;
+			dte->dte_ver = dth->dth_ver;
+			dte->dte_refs = 1;
+			dte->dte_mbs = mbs;
+
+			if (!(mbs->dm_flags & DMF_SRDG_REP))
+				flags = DCF_EXP_CMT;
+			else if (dth->dth_modify_shared)
+				flags = DCF_SHARED;
+			else
+				flags = 0;
+
+			rc = dtx_cos_add(cont, dte, &dth->dth_leader_oid, dth->dth_dkey_hash,
+					 dth->dth_epoch, flags);
+			dtx_entry_put(dte);
 		}
-
-		mbs = (struct dtx_memberships *)(dte + 1);
-		memcpy(mbs, dth->dth_mbs, size - sizeof(*dte));
-
-		dte->dte_xid = dth->dth_xid;
-		dte->dte_ver = dth->dth_ver;
-		dte->dte_refs = 1;
-		dte->dte_mbs = mbs;
-
-		if (!(mbs->dm_flags & DMF_SRDG_REP))
-			flags = DCF_EXP_CMT;
-		else if (dth->dth_modify_shared)
-			flags = DCF_SHARED;
-		else
-			flags = 0;
-
-		rc = dtx_cos_add(cont, dte, &dth->dth_leader_oid, dth->dth_dkey_hash,
-				 dth->dth_epoch, flags);
-		dtx_entry_put(dte);
 	}
 
-	if (rc == 0) {
-		if (!DAOS_FAIL_CHECK(DAOS_DTX_NO_COMMITTABLE)) {
-			vos_dtx_mark_committable(dth);
-			if (cont->sc_dtx_committable_count > DTX_THRESHOLD_COUNT || dlh->dlh_coll)
-				sched_req_wakeup(dss_get_module_info()->dmi_dtx_cmt_req);
-		}
-	} else {
-		dth->dth_sync = 1;
+	/*
+	 * NOTE: If we failed to add the committable DTX into CoS cache, then we also have no way
+	 *	 to commit (or abort) the DTX because of out of memory. Such DTX will be finally
+	 *	 committed via next DTX resync (after recovered from OOM).
+	 *
+	 *	 Here, we only warning to notify the trouble, but not failed the transaction.
+	 */
+	if (rc != 0) {
+		D_WARN(DF_UUID": Fail to cache %s DTX "DF_DTI": "DF_RC"\n",
+		       DP_UUID(cont->sc_uuid), dlh->dlh_coll ? "collective" : "regular",
+		       DP_DTI(&dth->dth_xid), DP_RC(rc));
+		D_GOTO(out, result = 0);
+	}
+
+	if (!DAOS_FAIL_CHECK(DAOS_DTX_NO_COMMITTABLE)) {
+		vos_dtx_mark_committable(dth);
+		if (cont->sc_dtx_committable_count > DTX_THRESHOLD_COUNT || dlh->dlh_coll)
+			sched_req_wakeup(dss_get_module_info()->dmi_dtx_cmt_req);
 	}
 
 sync:
@@ -1428,10 +1434,13 @@ sync:
 			rc = dtx_commit(cont, &dte, NULL, 1, false);
 		}
 
-		if (rc != 0)
+		if (rc != 0) {
 			D_WARN(DF_UUID": Fail to sync %s commit DTX "DF_DTI": "DF_RC"\n",
 			       DP_UUID(cont->sc_uuid), dlh->dlh_coll ? "collective" : "regular",
 			       DP_DTI(&dth->dth_xid), DP_RC(rc));
+			dth->dth_sync = 0;
+			goto cache;
+		}
 
 		/*
 		 * NOTE: The semantics of 'sync' commit does not guarantee that all
@@ -1451,7 +1460,7 @@ abort:
 	 * to locally retry for avoiding related forwarded RPC timeout, instead,
 	 * The leader will trigger retry globally without abort 'prepared' ones.
 	 */
-	if (unpin || (result < 0 && result != -DER_AGAIN && !dth->dth_solo)) {
+	if (result < 0 && result != -DER_AGAIN && !dth->dth_solo) {
 		/* 1. Drop partial modification for distributed transaction.
 		 * 2. Remove the pinned DTX entry.
 		 */

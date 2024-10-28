@@ -2089,6 +2089,8 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, crt_rpc_t *rpc
 	ioc->ioc_opc = opc_get(rpc->cr_opc);
 	rc = ds_cont_find_hdl(pool_uuid, coh_uuid, &coh);
 	if (rc) {
+		D_ERROR("Can not find the cont hdl "DF_UUID"/"DF_UUID": "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_UUID(coh_uuid), DP_RC(rc));
 		if (rc == -DER_NONEXIST)
 			rc = -DER_NO_HDL;
 		return rc;
@@ -3045,7 +3047,7 @@ again2:
 			 * newer epoch.
 			 */
 			orw->orw_epoch = d_hlc_get();
-			orw->orw_flags &= ~ORF_RESEND;
+			orw->orw_flags |= ORF_RESEND;
 			flags = 0;
 			d_tm_inc_counter(opm->opm_update_restart, 1);
 			goto again2;
@@ -3964,7 +3966,7 @@ again2:
 		 * epoch.
 		 */
 		opi->opi_epoch = d_hlc_get();
-		opi->opi_flags &= ~ORF_RESEND;
+		opi->opi_flags |= ORF_RESEND;
 		flags = 0;
 		goto again2;
 	case -DER_AGAIN:
@@ -5664,7 +5666,10 @@ ds_obj_coll_punch_handler(crt_rpc_t *rpc)
 	if (ocpi->ocpi_flags & ORF_RESEND) {
 
 again1:
-		tmp = 0;
+		if (ocpi->ocpi_flags & ORF_LEADER)
+			tmp = 0;
+		else
+			tmp = ocpi->ocpi_epoch;
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &ocpi->ocpi_xid, &tmp, &version);
 		switch (rc) {
 		case -DER_ALREADY:
@@ -5675,6 +5680,11 @@ again1:
 			/* TODO: Also recovery the epoch uncertainty. */
 			break;
 		case -DER_NONEXIST:
+			break;
+		case -DER_MISMATCH:
+			rc = vos_dtx_abort(ioc.ioc_vos_coh, &ocpi->ocpi_xid, tmp);
+			if (rc < 0 && rc != -DER_NONEXIST)
+				D_GOTO(out, rc);
 			break;
 		default:
 			D_GOTO(out, rc);
@@ -5728,7 +5738,7 @@ again2:
 	switch (rc) {
 	case -DER_TX_RESTART:
 		ocpi->ocpi_epoch = d_hlc_get();
-		ocpi->ocpi_flags &= ~ORF_RESEND;
+		ocpi->ocpi_flags |= ORF_RESEND;
 		flags = 0;
 		goto again2;
 	case -DER_AGAIN:
@@ -5755,12 +5765,14 @@ out:
 		max_ver = version;
 
 	DL_CDEBUG(rc != 0 && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART, DLOG_ERR, DB_IO, rc,
-		  "(%s) handled collective punch RPC %p for obj "DF_UOID" on XS %u/%u epc "
-		  DF_X64" pmv %u/%u, with dti "DF_DTI", bulk_tgt_sz %u, bulk_tgt_nr %u, "
-		  "tgt_nr %u, forward width %u, forward depth %u, flags %x",
+		  "(%s) handled collective punch RPC %p for obj "DF_UOID" on XS %u/%u in "DF_UUID
+		  DF_UUID"/"DF_UUID" with epc "DF_X64", pmv %u/%u, dti "DF_DTI", bulk_tgt_sz %u, "
+		  "bulk_tgt_nr %u, tgt_nr %u, forward width %u, forward depth %u, flags %x",
 		  (ocpi->ocpi_flags & ORF_LEADER) ? "leader" :
 		  (ocpi->ocpi_tgts.ca_count == 1 ? "non-leader" : "relay-engine"), rpc,
-		  DP_UOID(ocpi->ocpi_oid), dmi->dmi_xs_id, dmi->dmi_tgt_id, ocpi->ocpi_epoch,
+		  DP_UOID(ocpi->ocpi_oid), dmi->dmi_xs_id, dmi->dmi_tgt_id,
+		  DP_UUID(ocpi->ocpi_po_uuid), DP_UUID(ocpi->ocpi_co_hdl),
+		  DP_UUID(ocpi->ocpi_co_uuid), ocpi->ocpi_epoch,
 		  ocpi->ocpi_map_ver, max_ver, DP_DTI(&ocpi->ocpi_xid), ocpi->ocpi_bulk_tgt_sz,
 		  ocpi->ocpi_bulk_tgt_nr, (unsigned int)ocpi->ocpi_tgts.ca_count,
 		  ocpi->ocpi_disp_width, ocpi->ocpi_disp_depth, ocpi->ocpi_flags);
