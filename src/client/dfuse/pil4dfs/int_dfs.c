@@ -29,6 +29,7 @@
 #include <sys/ucontext.h>
 #include <sys/user.h>
 #include <linux/binfmts.h>
+#include <execinfo.h>
 
 #ifdef __aarch64__
 #ifndef PAGE_SIZE
@@ -6261,19 +6262,34 @@ write_all(int fd, const void *buf, size_t count)
 	return byte_written;
 }
 
+#define N_LEVEL 10
+char msg_buf[8192];
 void append_log(int rc_in, int errno_in, int fd_in, unsigned long request)
 {
 	int fd;
 	int rc;
 	int len;
-	char msg[256];
+	void *array[N_LEVEL];
+	char **strings;
+	int  size, i;
 
 	fd = open("/dev/shm/log_pil4dfs_dbg.txt", O_RDWR | O_CREAT, 0600);
 	assert(fd >= 0);
-	len = sprintf(msg, "rc = %d errno = %d fd = %x request = %lx\n", rc_in, errno_in, fd_in,
+	len = sprintf(msg_buf, "rc = %d errno = %d fd = %x request = %lx\n", rc_in, errno_in, fd_in,
 		      request);
+	size = backtrace (array, N_LEVEL);
+	strings = backtrace_symbols (array, size);
+	if (strings != NULL) {
+		len += sprintf(msg_buf + len, "Obtained %d stack frames.\n", size);
+		for (i = 0; i < size; i++) {
+			len += sprintf(msg_buf + len, "%s\n", strings[i]);
+			free(strings[i]);
+		}
+		free(strings);
+	}
+
 	rc = lseek(fd, 0, SEEK_END);
-	rc = write_all(fd, msg, len);
+	rc = write_all(fd, msg_buf, len);
 	assert(rc == len);
 	rc = close(fd);
 	assert(rc == 0);
