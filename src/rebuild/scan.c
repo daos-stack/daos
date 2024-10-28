@@ -1012,6 +1012,8 @@ rebuild_scanner(void *data)
 		}
 	}
 
+	D_INFO(DF_UUID" iterate pool start ...\n", DP_UUID(rpt->rt_pool_uuid));
+
 	child = ds_pool_child_lookup(rpt->rt_pool_uuid);
 	if (child == NULL)
 		D_GOTO(out, rc = -DER_NONEXIST);
@@ -1036,7 +1038,7 @@ out:
 	if (tls->rebuild_pool_status == 0 && rc != 0)
 		tls->rebuild_pool_status = rc;
 
-	D_DEBUG(DB_REBUILD, DF_UUID" iterate pool done: "DF_RC"\n",
+	D_INFO(DF_UUID" iterate pool done: "DF_RC"\n",
 		DP_UUID(rpt->rt_pool_uuid), DP_RC(rc));
 	return rc;
 }

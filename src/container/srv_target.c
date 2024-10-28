@@ -181,7 +181,7 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 	}
 
 	if (pool->sp_rebuilding && !vos_agg) {
-		D_INFO(DF_CONT": skip EC aggregation during rebuild %d.\n",
+		D_DEBUG(DB_EPC, DF_CONT": skip EC aggregation during rebuild %d.\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 			pool->sp_rebuilding);
 		return false;
@@ -499,6 +499,9 @@ cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 next:
 		if (dss_ult_exiting(req))
 			break;
+
+		if (cont->sc_pool->spc_pool->sp_rebuilding && !param->ap_vos_agg)
+			msecs = 18000;
 
 		sched_req_sleep(req, msecs);
 	}
