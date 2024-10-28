@@ -801,6 +801,7 @@ pipeline {
                             unitTestPost artifacts: ['nlt_logs/'],
                                          testResults: 'nlt-junit.xml',
                                          always_script: 'ci/unit/test_nlt_post.sh',
+					 referenceJobName: 'daos-stack/daos/release%252F2.6',
                                          valgrind_stash: 'el8-gcc-nlt-memcheck'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
@@ -1037,7 +1038,7 @@ pipeline {
                     }
                     post {
                         always {
-                            discoverGitReferenceBuild referenceJob: 'daos-stack/daos/master',
+                            discoverGitReferenceBuild referenceJob: 'daos-stack/daos/release%252F2.6',
                                                       scm: 'daos-stack/daos',
                                                       requiredResult: hudson.model.Result.UNSTABLE
                             recordIssues enabledForFailure: true,
