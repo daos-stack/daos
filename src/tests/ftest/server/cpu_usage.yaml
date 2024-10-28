@@ -19,7 +19,6 @@ ior:
 pool:
   scm_size: 10G
   nvme_size: 100G
-  control_method: dmg
 container:
   type: POSIX
   control_method: daos

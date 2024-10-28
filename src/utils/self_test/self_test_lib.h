@@ -57,5 +57,7 @@ int
 st_compare_latencies_by_ranks(const void *a_in, const void *b_in);
 void
 free_size_latencies(struct st_latency ***latencies, uint32_t num_msg_sizes, uint32_t num_ms_endpts);
+void
+self_test_fini(bool agent_used);
 
 #endif /* __SELF_TEST_LIB_H__ */

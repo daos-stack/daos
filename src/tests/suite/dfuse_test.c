@@ -324,9 +324,17 @@ do_stream(void **state)
 	rc = fclose(stream);
 	assert_int_equal(rc, 0);
 
+	fd = openat(root, "stream_file", O_RDWR | O_EXCL, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
+	stream = fdopen(fd, "w+");
+	assert_non_null(stream);
+
+	rc = fputs("Hello World!\n", stream);
+	assert_return_code(rc, errno);
+	fclose(stream);
+
 	rc = unlinkat(root, "stream_file", 0);
 	assert_return_code(rc, errno);
-
 	rc = close(root);
 	assert_return_code(rc, errno);
 }
@@ -805,11 +813,6 @@ verify_pil4dfs_env()
 		goto err;
 	}
 
-	p = getenv("D_IL_ENFORCE_EXEC_ENV");
-	if (!p) {
-		printf("Error: D_IL_ENFORCE_EXEC_ENV is unset.\n");
-		goto err;
-	}
 	exit(0);
 
 err:

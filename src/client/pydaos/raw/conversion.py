@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -7,8 +7,6 @@
 
 import ctypes
 import uuid
-
-from .. import DAOS_MAGIC, pydaos_shim
 
 
 def c_uuid_to_str(cuuid):
@@ -31,19 +29,3 @@ def str_to_c_uuid(uuidstr):
     cuuid = (ctypes.c_ubyte * 16)()
     c_uuid(puuid, cuuid)
     return cuuid
-
-
-def c_err_to_str(err_num):
-    """ Utility function to convert C error code to its string id.
-
-    Args:
-        err_num (int): C error code.
-
-    Returns:
-        str: String identifying a C error code.
-
-    """
-    err_str = pydaos_shim.err_to_str(DAOS_MAGIC, err_num)
-    if err_str:
-        return err_str
-    return str(err_num)

@@ -13,7 +13,6 @@ server_config:
           scm_mount: /mnt/daos0
 # Force the use of certificates regardless of the launch.py --insecure setting.
 pool:
-  control_method: dmg
   transport_config:
     allow_insecure: False
 agent_config:

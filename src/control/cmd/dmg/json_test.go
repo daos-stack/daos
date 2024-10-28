@@ -76,10 +76,11 @@ func TestDmg_JsonOutput(t *testing.T) {
 				testArgs = append(testArgs, "-l", "foo.com", "-a",
 					test.MockPCIAddr(), "-e", "0")
 			case "storage set nvme-faulty":
-				testArgs = append(testArgs, "--force", "-u", test.MockUUID())
+				testArgs = append(testArgs, "--host", "foo.com", "--force", "-u",
+					test.MockUUID())
 			case "storage replace nvme":
-				testArgs = append(testArgs, "--old-uuid", test.MockUUID(),
-					"--new-uuid", test.MockUUID())
+				testArgs = append(testArgs, "--host", "foo.com", "--old-uuid",
+					test.MockUUID(), "--new-uuid", test.MockUUID())
 			case "storage led identify", "storage led check", "storage led clear":
 				testArgs = append(testArgs, test.MockUUID())
 			case "pool create":
@@ -101,8 +102,7 @@ func TestDmg_JsonOutput(t *testing.T) {
 			case "pool query-targets":
 				testArgs = append(testArgs, test.MockUUID(), "--rank", "0", "--target-idx", "1,3,5,7")
 			case "container set-owner":
-				testArgs = append(testArgs, "--user", "foo", "--pool", test.MockUUID(),
-					"--cont", test.MockUUID())
+				testArgs = append(testArgs, "--user", "foo", test.MockUUID(), test.MockUUID())
 			case "telemetry metrics list", "telemetry metrics query":
 				return // These commands query via http directly
 			case "system cleanup":
