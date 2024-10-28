@@ -94,6 +94,8 @@ enum vos_pool_open_flags {
 	VOS_POF_FOR_CHECK_QUERY = (1 << 6),
 	/** Open the pool for feature fetch/update, that will skip VEA load */
 	VOS_POF_FOR_FEATURE_FLAG = (1 << 7),
+	/** continue if possible for error */
+	VOS_POF_ERROR_CONTINUE = (1 << 8),
 };
 
 enum vos_oi_attr {

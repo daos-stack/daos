@@ -1757,14 +1757,14 @@ vos_pool_biov2addr(daos_handle_t poh, struct bio_iov *biov)
 }
 
 bool
-vos_pool_feature_skip_load(daos_handle_t poh)
+vos_pool_feature_skip_start(daos_handle_t poh)
 {
 	struct vos_pool *vos_pool;
 
 	vos_pool = vos_hdl2pool(poh);
 	D_ASSERT(vos_pool != NULL);
 
-	return vos_pool->vp_pool_df->pd_compat_flags & VOS_POOL_COMPAT_FLAG_SKIP_LOAD;
+	return vos_pool->vp_pool_df->pd_compat_flags & VOS_POOL_COMPAT_FLAG_SKIP_START;
 }
 
 bool

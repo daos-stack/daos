@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -29,6 +29,7 @@ struct dt_vos_pool_ctx {
 	uint32_t	dvt_obj_count;
 	uint32_t	dvt_dkey_count;
 	uint32_t	dvt_akey_count;
+	bool            special_pool_destroy;
 };
 
 daos_unit_oid_t dvt_gen_uoid(uint32_t i);

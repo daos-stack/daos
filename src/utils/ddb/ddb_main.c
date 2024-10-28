@@ -200,10 +200,11 @@ open_if_needed(struct ddb_ctx *ctx, struct program_args *pa, bool *open)
 		rc = ddb_parse_cmd_str(ctx, pa->pa_r_cmd_run, open);
 		if (rc)
 			return rc;
-	}
-
-	if (str_has_value(pa->pa_cmd_file))
+	} else if (str_has_value(pa->pa_cmd_file)) {
 		*open = true;
+	} else {
+		*open = false;
+	}
 
 out:
 	return rc;

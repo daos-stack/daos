@@ -1054,7 +1054,16 @@ delete_path_parts_tests(void **state)
 static int
 dv_suit_setup(void **state)
 {
-	return ddb_test_setup_vos(state);
+	int                     rc;
+	struct dt_vos_pool_ctx *tctx;
+
+	rc = ddb_test_setup_vos(state);
+	if (rc)
+		return rc;
+	tctx                       = *state;
+	tctx->special_pool_destroy = true;
+
+	return 0;
 }
 
 static int

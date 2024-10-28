@@ -1000,6 +1000,12 @@ ddb_run_feature(struct ddb_ctx *ctx, struct feature_options *opt)
 	uint64_t new_incompat_flags;
 	bool     close = false;
 
+	if (ddb_pool_is_open(ctx)) {
+		if (!ctx->dc_write_mode && !opt->show_features)
+			return -DER_INVAL;
+		goto skip;
+	}
+
 	if (opt->set_compat_flags || opt->set_incompat_flags || opt->clear_compat_flags ||
 	    opt->clear_incompat_flags)
 		ctx->dc_write_mode = true;
@@ -1009,10 +1015,7 @@ ddb_run_feature(struct ddb_ctx *ctx, struct feature_options *opt)
 	if (!ctx->dc_write_mode && !opt->show_features)
 		return -DER_INVAL;
 
-	if (ddb_pool_is_open(ctx))
-		goto skip;
-
-	if (!opt->path || (opt->path && strnlen(opt->path, PATH_MAX) == 0))
+	if (!opt->path || strnlen(opt->path, PATH_MAX) == 0)
 		opt->path = ctx->dc_pool_path;
 
 	rc = dv_pool_open(opt->path, &ctx->dc_poh, VOS_POF_FOR_FEATURE_FLAG);

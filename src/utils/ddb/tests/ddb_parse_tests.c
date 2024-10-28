@@ -334,8 +334,8 @@ pool_flags_tests(void **state)
 	uint64_t       expected_flags;
 	int            rc;
 
-	expected_flags = VOS_POOL_COMPAT_FLAG_IMMUTABLE | VOS_POOL_COMPAT_FLAG_SKIP_LOAD;
-	rc = ddb_feature_string2flags(&ctx, "immutable,skip_load", &compat_flags, &incompat_flags);
+	expected_flags = VOS_POOL_COMPAT_FLAG_IMMUTABLE | VOS_POOL_COMPAT_FLAG_SKIP_START;
+	rc = ddb_feature_string2flags(&ctx, "immutable,skip_start", &compat_flags, &incompat_flags);
 	assert_success(rc);
 	assert(compat_flags == expected_flags);
 	expected_flags = 0;

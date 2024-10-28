@@ -14,6 +14,7 @@ import (
 	"runtime/debug"
 	"sort"
 	"strings"
+	"unsafe"
 
 	"github.com/desertbit/grumble"
 	"github.com/jessevdk/go-flags"
@@ -23,6 +24,10 @@ import (
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
 )
+
+/*
+ #include <stdlib.h>
+*/
 import "C"
 
 func exitWithError(log logging.Logger, err error) {
@@ -191,6 +196,7 @@ Example Paths:
 
 	if opts.Args.VosPath != "" {
 		ctx.ctx.dc_pool_path = C.CString(string(opts.Args.VosPath))
+		defer C.free(unsafe.Pointer(ctx.ctx.dc_pool_path))
 	}
 	if opts.Args.RunCmd != "" || opts.CmdFile != "" {
 		// Non-interactive mode
