@@ -136,7 +136,7 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 	*orw = *orw_parent;
 
 	orw->orw_oid.id_shard = shard_tgt->st_shard_id;
-	orw->orw_flags |= ORF_BULK_BIND | obj_exec_arg->flags;
+	orw->orw_flags |= (ORF_BULK_BIND | obj_exec_arg->flags) & ~ORF_LEADER;
 	if (shard_tgt->st_flags & DTF_DELAY_FORWARD && dlh->dlh_drop_cond)
 		orw->orw_api_flags &= ~DAOS_COND_MASK;
 	orw->orw_dti_cos.ca_count = dth->dth_dti_cos_count;
@@ -247,7 +247,7 @@ ds_obj_remote_punch(struct dtx_leader_handle *dlh, void *data, int idx,
 	*opi = *opi_parent;
 
 	opi->opi_oid.id_shard = shard_tgt->st_shard_id;
-	opi->opi_flags |= obj_exec_arg->flags;
+	opi->opi_flags |= obj_exec_arg->flags & ~ORF_LEADER;
 	if (shard_tgt->st_flags & DTF_DELAY_FORWARD && dlh->dlh_drop_cond)
 		opi->opi_api_flags &= ~DAOS_COND_PUNCH;
 	opi->opi_dti_cos.ca_count = dth->dth_dti_cos_count;
@@ -495,7 +495,7 @@ ds_obj_coll_punch_remote(struct dtx_leader_handle *dlh, void *data, int idx,
 	crt_endpoint_t			 tgt_ep = { 0 };
 	crt_rpc_t			*parent_req = exec_arg->rpc;
 	crt_rpc_t			*req;
-	struct obj_coll_punch_in	*ocpi_parent;
+	struct obj_coll_punch_in	*ocpi_parent = crt_req_get(parent_req);
 	struct obj_coll_punch_in	*ocpi;
 	int				 tag;
 	int				 rc = 0;
@@ -509,7 +509,7 @@ ds_obj_coll_punch_remote(struct dtx_leader_handle *dlh, void *data, int idx,
 	if (remote_arg == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	obj_coll_disp_dest(cursor, exec_arg->coll_tgts, &tgt_ep);
+	obj_coll_disp_dest(cursor, exec_arg->coll_tgts, &tgt_ep, ocpi_parent->ocpi_oid.id_pub);
 	tag = tgt_ep.ep_tag;
 
 	crt_req_addref(parent_req);
@@ -524,9 +524,7 @@ ds_obj_coll_punch_remote(struct dtx_leader_handle *dlh, void *data, int idx,
 		D_GOTO(out, rc);
 	}
 
-	ocpi_parent = crt_req_get(parent_req);
 	ocpi = crt_req_get(req);
-
 	ocpi->ocpi_odm = ocpi_parent->ocpi_odm;
 	uuid_copy(ocpi->ocpi_po_uuid, ocpi_parent->ocpi_po_uuid);
 	uuid_copy(ocpi->ocpi_co_hdl, ocpi_parent->ocpi_co_hdl);
@@ -634,7 +632,7 @@ ds_obj_coll_query_remote(struct dtx_leader_handle *dlh, void *data, int idx,
 	if (remote_arg == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	obj_coll_disp_dest(cursor, exec_arg->coll_tgts, &tgt_ep);
+	obj_coll_disp_dest(cursor, exec_arg->coll_tgts, &tgt_ep, ocqi_parent->ocqi_oid.id_pub);
 	tag = tgt_ep.ep_tag;
 
 	remote_arg->dlh = dlh;

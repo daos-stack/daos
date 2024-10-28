@@ -312,16 +312,38 @@ dtx_act_ent_update(struct btr_instance *tins, struct btr_record *rec,
 
 	if (unlikely(!dae_old->dae_aborted)) {
 		/*
-		 * XXX: There are two possible reasons for that:
-		 *
-		 *	1. Client resent the RPC but without set 'RESEND' flag.
-		 *	2. Client reused the DTX ID for different modifications.
-		 *
-		 *	Currently, the 1st case is more suspected.
+		 * If the new entry and the old entry are for the same transaction, then the RPC
+		 * for the new one will take 'RESEND' flag, that will cause the old one has been
+		 * aborted before arriving at here. So it is quite possible that the new one and
+		 * the old one are for different transactions.
 		 */
-		D_ERROR("The TX ID "DF_DTI" may be reused for epoch "DF_X64" vs "DF_X64"\n",
-			DP_DTI(&DAE_XID(dae_old)), DAE_EPOCH(dae_old), DAE_EPOCH(dae_new));
-		return -DER_TX_ID_REUSED;
+		if (DAE_EPOCH(dae_old) < DAE_EPOCH(dae_new)) {
+			D_ERROR("The TX ID "DF_DTI" may be reused for epoch "DF_X64" vs "DF_X64"\n",
+				DP_DTI(&DAE_XID(dae_old)), DAE_EPOCH(dae_old), DAE_EPOCH(dae_new));
+			return -DER_TX_ID_REUSED;
+		}
+
+		/*
+		 * If the old entry has higher epoch, it is quite possible that the resent RPC
+		 * was handled before the original RPC (corresponding to 'dae_new'). Returning
+		 * -DER_INPROGRESS to make the RPC sponsor to retry the RPC with 'RESEND' flag,
+		 *  then related RPC handler logic will handle such case.
+		 */
+		if (DAE_EPOCH(dae_old) > DAE_EPOCH(dae_new)) {
+			D_ERROR("Resent RPC may be handled before original one for DTX "DF_DTI
+				" with epoch "DF_X64" vs "DF_X64"\n",
+				DP_DTI(&DAE_XID(dae_old)), DAE_EPOCH(dae_old), DAE_EPOCH(dae_new));
+			return -DER_INPROGRESS;
+		}
+
+		/*
+		 * The two entries uses the same epoch, then it may be caused by repeated RPCs
+		 * from different sources, such as multiple relay engines forward the same RPC
+		 * to current target. We need to notify related caller for such buggy case.
+		 */
+		D_ERROR("Receive repeated DTX "DF_DTI" with epoch "DF_X64"\n",
+			DP_DTI(&DAE_XID(dae_old)), DAE_EPOCH(dae_old));
+		return -DER_MISC;
 	}
 
 	rec->rec_off = umem_ptr2off(&tins->ti_umm, dae_new);
@@ -1172,16 +1194,20 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	}
 
 	if (intent == DAOS_INTENT_PURGE) {
-		uint32_t	age = d_hlc_age2sec(DAE_XID(dae).dti_hlc);
+		uint64_t	now = daos_gettime_coarse();
 
 		/*
 		 * The DTX entry still references related data record,
 		 * then we cannot (vos) aggregate related data record.
+		 * Report warning per each 10 seconds to avoid log flood.
 		 */
-		if (age >= DAOS_AGG_THRESHOLD)
-			D_WARN("DTX "DF_DTI" (state:%u, age:%u) still references the data, "
-			       "cannot be (VOS) aggregated\n",
-			       DP_DTI(&DAE_XID(dae)), vos_dtx_status(dae), age);
+		if (now - cont->vc_agg_busy_ts > 10) {
+			D_WARN("DTX "DF_DTI" (state:%u, flags:%x, age:%u) still references "
+			       "the modification, cannot be (VOS) aggregated\n",
+			       DP_DTI(&DAE_XID(dae)), vos_dtx_status(dae), DAE_FLAGS(dae),
+			       (unsigned int)d_hlc_age2sec(DAE_XID(dae).dti_hlc));
+			cont->vc_agg_busy_ts = now;
+		}
 
 		return ALB_AVAILABLE_DIRTY;
 	}
@@ -1909,8 +1935,13 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 			daos_epoch_t	e = *epoch;
 
 			*epoch = DAE_EPOCH(dae);
-			if (e != 0 && e != DAE_EPOCH(dae))
-				return -DER_MISMATCH;
+			if (e != 0) {
+				if (e > DAE_EPOCH(dae))
+					return -DER_MISMATCH;
+
+				if (e < DAE_EPOCH(dae))
+					return -DER_TX_RESTART;
+			}
 		}
 
 		return vos_dae_is_prepare(dae) ? DTX_ST_PREPARED : DTX_ST_INITED;
