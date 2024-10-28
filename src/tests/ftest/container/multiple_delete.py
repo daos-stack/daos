@@ -87,7 +87,7 @@ class MultipleContainerDelete(IorTestBase):
                 self.log.info(msg)
                 scm_recovered = True
                 break
-            time.sleep(10)
+            time.sleep(30)
 
         if not scm_recovered:
             msg = ("SCM space wasn't recovered! Initial = {}, Final = {}, "
