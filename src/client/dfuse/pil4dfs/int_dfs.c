@@ -160,6 +160,7 @@ static long int         page_size;
 #define DAOS_INIT_NOT_RUNNING 0
 #define DAOS_INIT_RUNNING     1
 
+static _Atomic uint64_t mpi_init_count;
 static _Atomic int64_t  zeInit_count;
 
 static long int         daos_initing;
@@ -469,6 +470,8 @@ static int (*next_posix_fallocate64)(int fd, off64_t offset, off64_t len);
 static int (*next_tcgetattr)(int fd, void *termios_p);
 /* end NOT supported by DAOS */
 
+static int (*next_mpi_init)(int *argc, char ***argv);
+static int (*next_pmpi_init)(int *argc, char ***argv);
 static int (*next_ze_init)(int flags);
 static void *(*next_dlsym)(void *handle, const char *symbol);
 static void *(*new_dlsym)(void *handle, const char *symbol);
@@ -1027,6 +1030,38 @@ err:
 }
 
 int
+MPI_Init(int *argc, char ***argv)
+{
+	int rc;
+
+	if (next_mpi_init == NULL) {
+		next_mpi_init = dlsym(RTLD_NEXT, "MPI_Init");
+		D_ASSERT(next_mpi_init != NULL);
+	}
+
+	atomic_fetch_add_relaxed(&mpi_init_count, 1);
+	rc = next_mpi_init(argc, argv);
+	atomic_fetch_add_relaxed(&mpi_init_count, -1);
+	return rc;
+}
+
+int
+PMPI_Init(int *argc, char ***argv)
+{
+	int rc;
+
+	if (next_pmpi_init == NULL) {
+		next_pmpi_init = dlsym(RTLD_NEXT, "PMPI_Init");
+		D_ASSERT(next_pmpi_init != NULL);
+	}
+
+	atomic_fetch_add_relaxed(&mpi_init_count, 1);
+	rc = next_pmpi_init(argc, argv);
+	atomic_fetch_add_relaxed(&mpi_init_count, -1);
+	return rc;
+}
+
+int
 zeInit(int flags)
 {
 	int rc;
@@ -1053,7 +1088,13 @@ query_new_dlsym_addr(void *addr)
 
 	/* assume little endian */
 	for (i = 0; i < 64; i++) {
+		/* 0x56579090 is corresponding to the first four instructions at new_dlsym_asm.
+		 * 0x90 - nop, 0x90 - nop, 0x57 - push %rdi, 0x56 - push %rsi
+		 */
 		if (*((int *)(addr + i)) == 0x56579090) {
+			/* two nop are added for easier positioning. offset +2 here to skip two
+			 * nop and start from the real entry.
+			 */
 			return ((void *)(addr + i + 2));
 		}
 	}
@@ -1092,7 +1133,6 @@ new_dlsym_marker(void)
 {
 }
 
-/*__attribute__((naked,unused)) int new_dlsym(void *handle, const char *symbol) */
 __asm__(
 	"new_dlsym_asm:\n"
 	"nop\n"
@@ -1254,6 +1294,15 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 		if (atomic_load_relaxed(&d_daos_inited) == false) {
 			uint64_t status_old = DAOS_INIT_NOT_RUNNING;
 			bool     rc_cmp_swap;
+
+			/* Check whether MPI_Init() is running. If yes, pass to the original
+			 * libc functions. Avoid possible zeInit reentrancy/nested call.
+			 */
+
+			if (atomic_load_relaxed(&mpi_init_count) > 0) {
+				*is_target_path = 0;
+				goto out_normal;
+			}
 
 			/* Check whether zeInit() is running. If yes, pass to the original
 			 * libc functions. Avoid possible zeInit reentrancy/nested call.
