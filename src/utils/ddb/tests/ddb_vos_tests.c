@@ -1060,8 +1060,8 @@ dv_suit_setup(void **state)
 	rc = ddb_test_setup_vos(state);
 	if (rc)
 		return rc;
-	tctx                       = *state;
-	tctx->special_pool_destroy = true;
+	tctx                           = *state;
+	tctx->dvt_special_pool_destroy = true;
 
 	return 0;
 }
