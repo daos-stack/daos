@@ -1,0 +1,27 @@
+name: RPM Build Script Test
+
+on:
+  pull_request:
+
+permissions: {}
+jobs:
+  Run_in_docker:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: ["rockylinux:8", "rockylinux:9"]
+        platform: ["amd64"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Run Shell Script in Docker
+        run: |
+          distro="${{ matrix.os }}"
+          distro_clean="${distro//[:\/]/_}"
+          rpm_dst=~/rpms/$distro_clean
+
+          mkdir -p "$rpm_dst"
+          chmod 777 "$rpm_dst"
+          docker run --rm -v "$rpm_dst":/root/rpms -v .:/daos $distro \
+            /daos/utils/build_rpms_from_scratch.sh /root/rpms
