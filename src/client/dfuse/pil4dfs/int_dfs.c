@@ -6261,7 +6261,7 @@ write_all(int fd, const void *buf, size_t count)
 	return byte_written;
 }
 
-void append_log(int rc_in, int errno_in, int fd_in, unsigned long request)
+void append_log(int rc_in, int errno_in, int fd_in, int fd_directed, unsigned long request)
 {
 	int fd;
 	int rc;
@@ -6270,8 +6270,8 @@ void append_log(int rc_in, int errno_in, int fd_in, unsigned long request)
 
 	fd = open("/dev/shm/log_pil4dfs_dbg.txt", O_RDWR | O_CREAT, 0600);
 	assert(fd >= 0);
-	len = sprintf(msg, "rc = %d errno = %d fd = %x request = %lx\n", rc_in, errno_in, fd_in,
-		      request);
+	len = sprintf(msg, "rc = %d errno = %d fd = %x fd_directed = %x request = %lx\n", rc_in,
+		      errno_in, fd_in, fd_directed, request);
 	rc = lseek(fd, 0, SEEK_END);
 	rc = write_all(fd, msg, len);
 	assert(rc == len);
@@ -6285,7 +6285,7 @@ ioctl(int fd, unsigned long request, ...)
 	va_list                         arg;
 	void                           *param;
 	struct dfuse_user_reply        *reply;
-	int                             fd_directed;
+	int                             fd_directed = fd;
 	int                             rc;
 	int                             errno_save;
 
@@ -6317,7 +6317,7 @@ ioctl(int fd, unsigned long request, ...)
 	}
 
 	fd_directed = d_get_fd_redirected(fd);
-	if (fd_directed < FD_FILE_BASE) {
+	if ((fd_directed < FD_FILE_BASE) || (fd_directed >= (FD_DIR_BASE + MAX_OPENED_DIR))) {
 		rc = next_ioctl(fd, request, param);
 		goto out;
 	}
@@ -6328,8 +6328,8 @@ ioctl(int fd, unsigned long request, ...)
 
 out:
 	errno_save = errno;
-	if (rc != 0)
-		append_log(rc, errno, fd, request);
+	if ((rc != 0) && ((fd >= FD_FILE_BASE) || (fd_directed >= FD_FILE_BASE)))
+		append_log(rc, errno, fd, fd_directed, request);
 	errno = errno_save;
 	return rc;
 }
