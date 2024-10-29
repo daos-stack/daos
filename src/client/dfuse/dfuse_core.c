@@ -32,6 +32,7 @@ dfuse_progress_thread(void *arg)
 cont:
 			errno = 0;
 			rc    = sem_wait(&eqt->de_sem);
+
 			if (rc != 0) {
 				rc = errno;
 
