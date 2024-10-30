@@ -19,10 +19,27 @@ set -uex
 #
 ###############################################################################
 
+# Set up the temporary local repository configuration with GPG check disabled
+setup_local_repo() {
+  local rpms_dst=$1
+
+  echo "[local-rpms]
+name=Local RPM Repository
+baseurl=file://$rpms_dst
+enabled=1
+gpgcheck=0" > /etc/yum.repos.d/local-rpms.repo
+}
+
+# Clean up the temporary repository configuration
+cleanup_local_repo() {
+  rm -f /etc/yum.repos.d/local-rpms.repo
+}
+
 dnf_builddep() {
   local rpms_dst=$1
   local spec_file="$2"
-  dnf --nogpgcheck --repofrompath rpms,"$rpms_dst" --refresh builddep -y "$spec_file"
+  # dnf --nogpgcheck --repofrompath rpms,"$rpms_dst" --refresh builddep -y "$spec_file"
+  dnf --refresh builddep -y "$spec_file"
 }
 
 setup_rpm_build_env() {
@@ -34,13 +51,11 @@ setup_rpm_build_env() {
       rpm-build \
       rpmdevtools \
       dnf-plugins-core \
-      epel-release
+      createrepo \
+      epel-release \
+      make # shouldn't be needed here, but dependency spec files don't include
 
-  # Install build tools and dependencies
-  dnf groupinstall -y "Development Tools"
-  dnf install -y mock epel-release
-
-  # enable Power Tools or CodeReady Builder depending on el version
+  # enable Power Tools or CodeReady Builder depending on el version. Needed for yasm and maybe others
   if [[ "$el_version" == "8" ]]; then
     dnf config-manager --set-enabled powertools
   elif [[ "$el_version" == "9" ]]; then
@@ -55,9 +70,8 @@ setup_rpm_build_env() {
 }
 
 # Function to clone a daos-stack repo, build rpms, and setup the rpm repository
-build_and_install_rpm() {
+build_and_copy_rpm() {
   local repo_name=$1
-  local rpm_build_options=${2:-""}
 
   # Check if already successful - helps if running script many times while troubleshooting
   if [ ! -f "$repo_name"/success ]; then
@@ -66,7 +80,7 @@ build_and_install_rpm() {
     git clone https://github.com/daos-stack/"$repo_name".git
     cd "$repo_name"
       dnf_builddep "$rpms_dst" "$repo_name".spec
-      make rpms RPM_BUILD_OPTIONS="$rpm_build_options"
+      make rpms RPM_BUILD_OPTIONS="--nocheck" # --nocheck = don't run tests during rpm build process
       cp -r _topdir/RPMS/* "$rpms_dst"/
       createrepo "$rpms_dst"
       touch success
@@ -77,8 +91,8 @@ build_and_install_rpm() {
 }
 
 get_el_version() {
-  VERSION_ID=$(grep "^VERSION_ID" /etc/os-release | cut -d'=' -f2 | tr -d '"' | cut -d'.' -f1)
-  echo "$VERSION_ID"
+  . /etc/os-release
+  echo "${VERSION_ID%%.*}"
 }
 
 # ---- #
@@ -93,6 +107,9 @@ echo "RPMS will be located in $rpms_dst (built in $build_dst)"
 # make sure rpm and build folders are created
 mkdir -p "$rpms_dst" "$build_dst"
 
+# Setup temporary local repository configuration
+setup_local_repo "$rpms_dst"
+
 # ------------------------------
 # Build Dependency and DAOS RPMS
 # ------------------------------
@@ -103,13 +120,11 @@ cd $build_dst
 # Initialize the rpm repo
 createrepo "$rpms_dst"
 
-# Call the function with the repository name as an argument
-build_and_install_rpm "isa-l_crypto"
-build_and_install_rpm "dpdk" # dependency of spdk.
-build_and_install_rpm "spdk"
-build_and_install_rpm "argobots"
-build_and_install_rpm "mercury"
-build_and_install_rpm "pmdk" "--nocheck"
+# build rpms for dependencies in daos_stack github org
+for pkg in isa-l_crypto dpdk spdk argobots mercury pmdk; do
+  build_and_copy_rpm "$pkg"
+done
+
 
 # DAOS and Raft (Submodule)
 git clone --recursive https://github.com/daos-stack/daos.git
@@ -139,4 +154,5 @@ fi
 # --------
 # Clean up
 # --------
+cleanup_local_repo
 rm -rf $build_dst
