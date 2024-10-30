@@ -6235,32 +6235,6 @@ new_fcntl(int fd, int cmd, ...)
 	}
 }
 
-static ssize_t
-write_all(int fd, const void *buf, size_t count)
-{
-	ssize_t rc, byte_written = 0;
-	char   *p_buf = (char *)buf;
-
-	if (fd >= FD_FILE_BASE)
-		return write(fd, buf, count);
-
-	while (count != 0 && (rc = write(fd, p_buf, count)) != 0) {
-		if (rc == -1) {
-			if (errno == EINTR)
-				continue;
-			else if (errno == ENOSPC)
-				/* out of space. Quit immediately. */
-				return -1;
-			printf("Error in write_all: %s\n", strerror(errno));
-			return -1;
-		}
-		byte_written += rc;
-		count -= rc;
-		p_buf += rc;
-	}
-	return byte_written;
-}
-
 int
 ioctl(int fd, unsigned long request, ...)
 {
@@ -6268,8 +6242,6 @@ ioctl(int fd, unsigned long request, ...)
 	void                           *param;
 	struct dfuse_user_reply        *reply;
 	int                             fd_directed = fd;
-	int                             rc;
-	int                             errno_save;
 
 	va_start(arg, request);
 	param = va_arg(arg, void *);
