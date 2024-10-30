@@ -36,7 +36,7 @@ def get_cmocka_command(path, executable, parameters=None):
 
 
 class CmockaCommand(ExecutableCommand):
-    """Defines a object representing a daos command."""
+    """Defines a object representing a cmocka test command."""
 
     def __init__(self, path, executable, keywords):
         """Create a CmockaCommand object.
@@ -116,7 +116,7 @@ class CmockaUtils():
             "CMOCKA_MESSAGE_OUTPUT": "xml",
         })
 
-    def run_cmocka_test(self, test, command='daos_test'):
+    def run_cmocka_test(self, test, command):
         """Run the cmocka test command.
 
         After the command completes, copy any remote cmocka results that may exist back to this host
