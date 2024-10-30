@@ -18,6 +18,7 @@ jobs:
         run: sudo docker build . --file utils/docker/gcp/client/el/Dockerfile
             --build-arg ROCKY_BUILDER=rockylinux/rockylinux:8
             --build-arg DAOS_BUILD_TYPE=release
+            --build-arg DAOS_SRC_DIR="."
             --tag gha-amd-${{github.run_id}}-${{github.run_attempt}}
       - name: Run Unit Testing
         run: sudo docker run gha-amd-${{github.run_id}}-${{github.run_attempt}}

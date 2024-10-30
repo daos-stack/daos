@@ -5,13 +5,14 @@ ARG GIT_REPOSITORY
 ARG GIT_BRANCH_OR_TAG
 ARG DAOS_BUILD_TYPE=release
 ARG ROCKY_BUILDER
+ARG DAOS_SRC_DIR
 
 RUN echo $ROCKY_BUILDER
 
 RUN echo $(TZ=PDT date +'%Y%m%d.%H%M%S') > /tmp/build_ts.txt
 
 # Copy the previously cloned daos
-COPY daos /daos/
+COPY "$DAOS_SRC_DIR" /daos/
 
 RUN dnf install -y epel-release dnf-plugins-core
 
