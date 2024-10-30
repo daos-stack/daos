@@ -98,17 +98,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
 
-      - name: Get current date to create cache entry
-        id: date
-        run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
-
-      - name: Check if Trivy DB cached already
-        id: db-downloaded
+      - name: Restore Trivy CVEs DB from cache (the latest one)
         uses: actions/cache/restore@6849a6489940f00c2f30c0fb92c6274307ccb58a  # v4.1.2
         with:
           path: ${{ github.workspace }}/.cache/trivy
-          key: cache-trivy-${{ steps.date.outputs.date }}
-          lookup-only: true
+          key: cache-trivy-YY-MM-DD
+          restore-keys: cache-trivy-
 
       - name: Run Trivy vulnerability scanner in filesystem mode (table format)
         uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2  # 0.28.0
@@ -116,10 +111,10 @@ jobs:
           scan-type: 'fs'
           scan-ref: '.'
           trivy-config: 'utils/trivy/trivy.yaml'
-          cache: ${{ steps.db-downloaded.outputs.cache-hit == 'true' }}
+          cache: false
         env:
-          TRIVY_SKIP_DB_UPDATE: ${{ steps.db-downloaded.outputs.cache-hit == 'true' }}
-          TRIVY_SKIP_JAVA_DB_UPDATE: ${{ steps.db-downloaded.outputs.cache-hit == 'true' }}
+          TRIVY_SKIP_DB_UPDATE: true
+          TRIVY_SKIP_JAVA_DB_UPDATE: true
 
       - name: Prepare the report to be uploaded to the GitHub artifact store
         run: |
@@ -147,10 +142,10 @@ jobs:
           scan-ref: '.'
           trivy-config: 'utils/trivy/trivy.yaml'
           skip-setup-trivy: true
-          cache: ${{ steps.db-downloaded.outputs.cache-hit == 'true' }}
+          cache: false
         env:
-          TRIVY_SKIP_DB_UPDATE: ${{ steps.db-downloaded.outputs.cache-hit == 'true' }}
-          TRIVY_SKIP_JAVA_DB_UPDATE: ${{ steps.db-downloaded.outputs.cache-hit == 'true' }}
+          TRIVY_SKIP_DB_UPDATE: true
+          TRIVY_SKIP_JAVA_DB_UPDATE: true
 
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@afb54ba388a7dca6ecae48f608c4ff05ff4cc77a
@@ -172,7 +167,7 @@ jobs:
           scan-ref: '.'
           trivy-config: 'utils/trivy/trivy.yaml'
           skip-setup-trivy: true
-          cache: ${{ steps.db-downloaded.outputs.cache-hit == 'true' }}
+          cache: false
         env:
-          TRIVY_SKIP_DB_UPDATE: ${{ steps.db-downloaded.outputs.cache-hit == 'true' }}
-          TRIVY_SKIP_JAVA_DB_UPDATE: ${{ steps.db-downloaded.outputs.cache-hit == 'true' }}
+          TRIVY_SKIP_DB_UPDATE: true
+          TRIVY_SKIP_JAVA_DB_UPDATE: true
