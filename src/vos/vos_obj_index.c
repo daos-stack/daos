@@ -844,6 +844,16 @@ oi_iter_check_punch(daos_handle_t ih)
 				 NULL, &oiter->oit_ilog_info))
 		return 0;
 
+	rc = vos_obj_check_discard(oiter->oit_cont, oid, VOS_OBJ_AGGREGATE);
+	if (rc != 0) {
+		/** -DER_BUSY means the object is in-use already.  We will after a yield in this
+		 * case.
+		 */
+		D_CDEBUG(rc == -DER_BUSY, DB_EPC, DLOG_ERR, "Hold check failed for " DF_UOID "\n",
+			 DP_UOID(oid));
+		return rc;
+	}
+
 	/** Ok, ilog is fully punched, so we can move it to gc heap */
 	rc = umem_tx_begin(vos_cont2umm(oiter->oit_cont), NULL);
 	if (rc != 0)
