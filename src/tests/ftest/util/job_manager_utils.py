@@ -153,7 +153,7 @@ class JobManager(ExecutableCommand):
             str: regular expression to use to search for the command
         """
         # pylint: disable=protected-access
-        return "'({})'".format("|".join(self._exe_names + self.job._exe_names))
+        return f"'({'|'.join(self._exe_names + self.job._exe_names)})'"
 
     def __str__(self):
         """Return the command with all of its defined parameters as a string.
@@ -338,19 +338,19 @@ class JobManager(ExecutableCommand):
         """Forcibly terminate any job processes running on hosts."""
         if not self.job:
             return
-        regex = self.job.command_regex
-        detected, running = stop_processes(self.log, self._hosts, regex)
+        detected, running = stop_processes(self.log, self._hosts, self.command_regex)
         if not detected:
             self.log.info(
-                "No remote %s processes killed on %s (none found), done.", regex, self._hosts)
+                "No remote %s processes killed on %s (none found), done.",
+                self.command_regex, self._hosts)
         elif running:
             self.log.info(
                 "***Unable to kill remote %s process on %s! Please investigate/report.***",
-                regex, running)
+                self.command_regex, running)
         else:
             self.log.info(
                 "***At least one remote %s process needed to be killed on %s! Please investigate/"
-                "report.***", regex, detected)
+                "report.***", self.command_regex, detected)
 
 
 class Orterun(JobManager):

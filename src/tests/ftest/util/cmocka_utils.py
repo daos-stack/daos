@@ -139,7 +139,7 @@ class CmockaUtils():
             test.fail(error_message)
 
         finally:
-            run_remote(test.log, self.hosts, "ps -ejH")     # TODO: remove debug
+            run_remote(test.log, self.hosts, "ps -jH")
             self._collect_cmocka_results(test)
             if not self._check_cmocka_files():
                 if error_message is None:
