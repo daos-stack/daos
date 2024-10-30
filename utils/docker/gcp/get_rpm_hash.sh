@@ -1,7 +1,6 @@
 #!/bin/bash
-path_to_daos=$(realpath $(dirname ${BASH_SOURCE[0]})/..)
-cd ${path_to_daos}
 
+cd /daos
 set -e
 
 # This is the md5sum of the current utils/build.config. We need to detect when

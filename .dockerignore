@@ -10,6 +10,7 @@
 !utils/ci
 !utils/completion
 !utils/config
+!utils/docker/gcp
 !utils/node_local_test.py
 !utils/nlt_server.yaml
 !utils/setup_daos_server_helper.sh
