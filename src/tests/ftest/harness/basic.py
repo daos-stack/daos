@@ -168,7 +168,7 @@ class HarnessBasicTest(TestWithoutServers):
         try:
             cmocka_utils.run_cmocka_test(self, job)
         finally:
-            self._verify_no_cmocka_xml(name, str(job))
+            self._verify_no_cmocka_xml(name, str(command))
         self.fail("Test did not timeout")
 
     def _verify_no_cmocka_xml(self, name, command):
