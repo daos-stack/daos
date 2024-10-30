@@ -52,11 +52,12 @@ def set_device_faulty(test, dmg, server, uuid, pool=None, has_sys_xs=False, **kw
         kwargs (dict, optional): named arguments to pass to the DmgCommand.storage_set_faulty.
 
     Returns:
-        dict: the json response from the dmg storage set-faulty command.
+        dict: the json response from the dmg storage set-faulty command. None if has_sys_xs is True.
 
     """
     kwargs['host'] = server
     kwargs['uuid'] = uuid
+    response = None
     try:
         response = get_dmg_response(dmg.storage_set_faulty, **kwargs)
     except CommandFailure as error:
