@@ -5,6 +5,7 @@
 
 %global mercury_version   2.4
 %global libfabric_version 1.15.1-1
+%global argobots_version 1.2
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -15,7 +16,7 @@
 
 Name:          daos
 Version:       2.7.100
-Release:       7%{?relval}%{?dist}
+Release:       9%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -41,11 +42,11 @@ BuildRequires: hwloc-devel
 BuildRequires: bullseye
 %endif
 %if (0%{?rhel} >= 8)
-BuildRequires: argobots-devel >= 1.1
+BuildRequires: argobots-devel >= %{argobots_version}
 BuildRequires: json-c-devel
 BuildRequires: boost-python3-devel
 %else
-BuildRequires: libabt-devel >= 1.0rc1
+BuildRequires: libabt-devel >= %{argobots_version}
 BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
@@ -112,14 +113,6 @@ BuildRequires: systemd-rpm-macros
 %endif
 %endif
 BuildRequires: libuuid-devel
-
-%if (0%{?suse_version} > 0)
-BuildRequires: libucp-devel
-BuildRequires: libucs-devel
-BuildRequires: libuct-devel
-%else
-BuildRequires: ucx-devel
-%endif
 
 Requires: openssl
 # This should only be temporary until we can get a stable upstream release
@@ -323,7 +316,7 @@ This is the package that bridges the difference between the MOFED openmpi
 %endif
 
 %prep
-%autosetup
+%autosetup -p1
 
 %build
 
@@ -599,6 +592,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Oct 15 2024 Brian J. Murrell <brian.murrell@intel.com> - 2.7.100-9
+- Drop BRs for UCX as they were obsoleted as of e01970d
+
+* Mon Oct 07 2024 Cedric Koch-Hofer <cedric.koch-hofer@intel.com> 2.7.100-8
+- Update BR: argobots to 1.2
+
 * Tue Oct 01 2024 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.7.100-7
 - Add support of the PMDK package 2.1.0 with NDCTL enabled.
   * Increase the default ULT stack size to 20KiB if the engine uses
