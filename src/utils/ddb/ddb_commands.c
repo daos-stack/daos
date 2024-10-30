@@ -1013,7 +1013,7 @@ ddb_run_feature(struct ddb_ctx *ctx, struct feature_options *opt)
 		ctx->dc_write_mode = false;
 
 	if (!ctx->dc_write_mode && !opt->show_features)
-		return -DER_INVAL;
+		return -DER_NO_PERM;
 
 	if (!opt->path || strnlen(opt->path, PATH_MAX) == 0)
 		opt->path = ctx->dc_pool_path;
@@ -1065,7 +1065,7 @@ ddb_run_rm_pool(struct ddb_ctx *ctx, struct rm_pool_options *opt)
 {
 	if (ddb_pool_is_open(ctx)) {
 		ddb_error(ctx, "Must close pool before can open another\n");
-		return -DER_EXIST;
+		return -DER_BUSY;
 	}
 
 	return dv_pool_destroy(opt->path);

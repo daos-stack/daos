@@ -5,17 +5,6 @@
  */
 
 #include "ddb_test_driver.h"
-#include "ddb_cmocka.h"
-#include "ddb_vos.h"
-#include <daos/tests_lib.h>
-#include <daos_srv/dtx_srv.h>
-#include <daos_srv/vos.h>
-#include <ddb_common.h>
-#include <ddb_main.h>
-#include <fcntl.h>
-#include <gurt/debug.h>
-#include <libgen.h>
-#include <sys/stat.h>
 
 #define DEFINE_IOV(str) {.iov_buf = str, .iov_buf_len = strlen(str), .iov_len = strlen(str)}
 #ifndef DDB_FORCE_VALGRIND

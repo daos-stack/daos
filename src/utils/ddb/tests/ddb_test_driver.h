@@ -6,8 +6,17 @@
 #ifndef DAOS_DDB_TEST_DRIVER_H
 #define DAOS_DDB_TEST_DRIVER_H
 
+#include "ddb_cmocka.h"
+#include "ddb_vos.h"
+#include <daos/tests_lib.h>
+#include <daos_srv/dtx_srv.h>
+#include <daos_srv/vos.h>
 #include <ddb_common.h>
+#include <ddb_main.h>
+#include <fcntl.h>
+#include <gurt/debug.h>
 #include <libgen.h>
+#include <sys/stat.h>
 
 extern bool		 g_verbose;
 extern const char	*g_uuids_str[10];
