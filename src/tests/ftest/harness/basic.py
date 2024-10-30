@@ -9,7 +9,7 @@ from apricot import TestWithoutServers
 from cmocka_utils import CmockaUtils, get_cmocka_command
 from command_utils import SubProcessCommand
 from exception_utils import CommandFailure
-from job_manager_utils import Mpirun, Orterun
+from job_manager_utils import JobManager, Mpirun, Orterun
 
 
 class HarnessBasicTest(TestWithoutServers):
@@ -143,7 +143,7 @@ class HarnessBasicTest(TestWithoutServers):
         cmocka_utils = CmockaUtils(None, name, self.outputdir, self.test_dir, self.log)
         command = get_cmocka_command("", "hostname")
         cmocka_utils.run_cmocka_test(self, command)
-        self._verify_no_cmocka_xml(name)
+        self._verify_no_cmocka_xml(name, str(command))
         self.log.info("Test passed")
 
     def test_no_cmocka_xml_timeout(self):
@@ -163,17 +163,20 @@ class HarnessBasicTest(TestWithoutServers):
         name = "no_cmocka_xml_file_timeout_test"
         cmocka_utils = CmockaUtils(None, name, self.outputdir, self.test_dir, self.log)
         command = get_cmocka_command("", "sleep", "60")
+        job = JobManager("/run/job_manager/time/*", "time", command)
+        job.register_cleanup_method = self.register_cleanup
         try:
-            cmocka_utils.run_cmocka_test(self, command)
+            cmocka_utils.run_cmocka_test(self, job)
         finally:
-            self._verify_no_cmocka_xml(name)
+            self._verify_no_cmocka_xml(name, str(job))
         self.fail("Test did not timeout")
 
-    def _verify_no_cmocka_xml(self, name):
+    def _verify_no_cmocka_xml(self, name, command):
         """Verify a cmocka xml file was generated with the expected error.
 
         Args:
             name (str): name of the cmocka test
+            command (str): command for the cmocka test
         """
         # Verify a generated cmocka xml file exists
         expected = os.path.join(self.outputdir, f"{name}_cmocka_results.xml")
@@ -185,7 +188,7 @@ class HarnessBasicTest(TestWithoutServers):
         self.log.info("Verifying contents of the generated cmocka file: %s", expected)
         with open(expected, "r", encoding="utf-8") as file_handle:
             actual_contents = file_handle.readlines()
-        error_message = f"Missing cmocka results for hostname in {self.outputdir}"
+        error_message = f"Missing cmocka results for {command} in {self.outputdir}"
         expected_lines = [
             f"<testsuite errors=\"1\" failures=\"0\" name=\"{name}\" skipped=\"0\" tests=\"1\"",
             f"<testcase classname=\"{name}\" name=\"{self.name}\"",
