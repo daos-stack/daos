@@ -2579,7 +2579,8 @@ ec_agg_param_fini(struct ds_cont_child *cont, struct ec_agg_param *agg_param)
 	arg.param = agg_param;
 	arg.tgt_idx = dss_get_module_info()->dmi_tgt_id;
 	if (cont->sc_ec_query_agg_eph) {
-		dss_ult_execute(ec_agg_fini_ult, &arg, NULL, NULL, DSS_XS_SYS, 0, 0);
+		dss_ult_execute(ec_agg_fini_ult, &arg, NULL, NULL, DSS_XS_SYS, 0,
+				DSS_DEEP_STACK_SZ);
 		cont->sc_ec_query_agg_eph = NULL;
 	}
 
@@ -2619,7 +2620,8 @@ ec_agg_param_init(struct ds_cont_child *cont, struct agg_param *param)
 
 	arg.param = agg_param;
 	arg.tgt_idx = dss_get_module_info()->dmi_tgt_id;
-	rc = dss_ult_execute(ec_agg_init_ult, &arg, NULL, NULL, DSS_XS_SYS, 0, 0);
+	rc = dss_ult_execute(ec_agg_init_ult, &arg, NULL, NULL, DSS_XS_SYS, 0,
+			     DSS_DEEP_STACK_SZ);
 	if (arg.ec_query_p != NULL)
 		cont->sc_ec_query_agg_eph = arg.ec_query_p;
 	if (rc != 0)

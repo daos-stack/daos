@@ -1956,7 +1956,8 @@ cont_svc_ec_agg_leader_start(struct cont_svc *svc)
 	D_ASSERT(svc->cs_ec_leader_ephs_req == NULL);
 	uuid_clear(anonym_uuid);
 	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);
-	svc->cs_ec_leader_ephs_req = sched_create_ult(&attr, cont_agg_eph_leader_ult, svc, 0);
+	svc->cs_ec_leader_ephs_req = sched_create_ult(&attr, cont_agg_eph_leader_ult, svc,
+						      DSS_DEEP_STACK_SZ);
 	if (svc->cs_ec_leader_ephs_req == NULL) {
 		D_ERROR(DF_UUID" Failed to create EC leader eph ULT.\n",
 			DP_UUID(svc->cs_pool_uuid));

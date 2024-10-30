@@ -572,7 +572,7 @@ cont_start_agg(struct ds_cont_child *cont)
 	if (likely(!ec_agg_disabled)) {
 		D_ASSERT(cont->sc_ec_agg_req == NULL);
 		cont->sc_ec_agg_req = sched_create_ult(&attr, cont_ec_agg_ult, cont,
-						       DSS_DEEP_STACK_SZ);
+						       DSS_DEEP_STACK_SZ * 2);
 		if (cont->sc_ec_agg_req == NULL) {
 			D_ERROR(DF_CONT"[%d]: Failed to create EC aggregation ULT.\n",
 				DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), dmi->dmi_tgt_id);
