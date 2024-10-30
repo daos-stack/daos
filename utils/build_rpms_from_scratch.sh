@@ -107,24 +107,23 @@ echo "RPMS will be located in $rpms_dst (built in $build_dst)"
 # make sure rpm and build folders are created
 mkdir -p "$rpms_dst" "$build_dst"
 
+setup_rpm_build_env "$(get_el_version)"
+
 # Setup temporary local repository configuration
 setup_local_repo "$rpms_dst"
+createrepo "$rpms_dst"
+
+
 
 # ------------------------------
 # Build Dependency and DAOS RPMS
 # ------------------------------
-setup_rpm_build_env "$(get_el_version)"
-
 cd $build_dst
-
-# Initialize the rpm repo
-createrepo "$rpms_dst"
 
 # build rpms for dependencies in daos_stack github org
 for pkg in isa-l_crypto dpdk spdk argobots mercury pmdk; do
   build_and_copy_rpm "$pkg"
 done
-
 
 # DAOS and Raft (Submodule)
 git clone --recursive https://github.com/daos-stack/daos.git
