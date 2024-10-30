@@ -13,9 +13,6 @@ RUN echo $(TZ=PDT date +'%Y%m%d.%H%M%S') > /tmp/build_ts.txt
 # Copy the previously cloned daos
 COPY daos /daos/
 
-# Copy over a patch script to use scons3
-COPY /buildfiles /buildfiles
-
 RUN dnf install -y epel-release dnf-plugins-core
 
 RUN if [[ "$ROCKY_BUILDER" == "rockylinux/rockylinux:9" ]]; then \
@@ -144,7 +141,7 @@ RUN git restore utils/rpms/daos.spec && \
   git --no-pager diff utils/rpms/daos.spec
 
 RUN if [[ "$ROCKY_BUILDER" == "rockylinux/rockylinux:9" ]]; then \
-  /bin/sh -c "/buildfiles/scripts/patch_daos_spec.sh"; \
+  /bin/sh -c "daos/utils/docker/gcp/client/el/patch_daos_spec.sh"; \
 fi
 
 RUN virtualenv venv && \
