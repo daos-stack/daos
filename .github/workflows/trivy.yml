@@ -16,81 +16,8 @@ on:
 permissions: {}
 
 jobs:
-  update-trivy-db:
-    # Only one CVEs database in the default branch cache to be shared across all branches.
-    # https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/caching-dependencies-to-speed-up-workflows#restrictions-for-accessing-a-cache
-    # The solution is based on
-    # https://github.com/aquasecurity/trivy-action?tab=readme-ov-file#updating-caches-in-the-default-branch.
-    # Alternatively, it can be moved to a separate workflow.
-    # The workflow triggered by `schedule` event at 00:00 creates a new cache entry
-    # based on actual date (e.g. `cache-trivy-2024-10-29`).
-    # The same cache key is used for a whole date by all workflow execution.
-    # Practically all PR-triggered execution skips this job,
-    # as it is not executed on the `default` branch
-
-    name: Update Trivy DB in the default branch cache
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code to see if we run on default (master) branch
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
-
-      # This step is only to print message why we are skipping database update
-      - name: CVEs database update conditions check
-        if: github.ref != format('refs/heads/{0}', github.event.repository.default_branch)
-        run: |
-          echo "Not on the default branch - skip CVEs database caching"
-
-      # The following steps are executed only on the default branch
-      - name: Setup oras
-        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-        uses: oras-project/setup-oras@9c92598691bfef1424de2f8fae81941568f5889c  # v1.21
-
-      - name: Get current date to create cache entry
-        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-        id: date
-        run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
-
-      - name: Check if Trivy DB cached already for a given date
-        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-        id: db-downloaded
-        uses: actions/cache/restore@6849a6489940f00c2f30c0fb92c6274307ccb58a  # v4.1.2
-        with:
-          path: ${{ github.workspace }}/.cache/trivy
-          key: cache-trivy-${{ steps.date.outputs.date }}
-          lookup-only: true
-
-      - name: Download and extract the vulnerability DB
-        if: |
-          steps.db-downloaded.outputs.cache-hit != 'true' &&
-          github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-        run: |
-          mkdir -p $GITHUB_WORKSPACE/.cache/trivy/db
-          oras pull ghcr.io/aquasecurity/trivy-db:2
-          tar -xzf db.tar.gz -C $GITHUB_WORKSPACE/.cache/trivy/db
-
-      - name: Download and extract the Java DB
-        if: |
-          steps.db-downloaded.outputs.cache-hit != 'true' &&
-          github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-        run: |
-          mkdir -p $GITHUB_WORKSPACE/.cache/trivy/java-db
-          oras pull ghcr.io/aquasecurity/trivy-java-db:1
-          tar -xzf javadb.tar.gz -C $GITHUB_WORKSPACE/.cache/trivy/java-db
-
-      - name: Save DBs in cache of the default (master) branch
-        if: |
-          steps.db-downloaded.outputs.cache-hit != 'true' &&
-          github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-        uses: actions/cache/save@6849a6489940f00c2f30c0fb92c6274307ccb58a  # v4.1.2
-        with:
-          path: ${{ github.workspace }}/.cache/trivy
-          key: cache-trivy-${{ steps.date.outputs.date }}
-
   scan:
     name: Scan with Trivy
-    # Trivy scan may use cached CVEs database if cache already exists.
-    # Otherwise, the Trivy scan tool downloads CVEs database itself.
-    needs: update-trivy-db
     runs-on: ubuntu-latest
     permissions:
       security-events: write
@@ -98,23 +25,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
 
-      - name: Restore Trivy CVEs DB from cache (the latest one)
-        uses: actions/cache/restore@6849a6489940f00c2f30c0fb92c6274307ccb58a  # v4.1.2
-        with:
-          path: ${{ github.workspace }}/.cache/trivy
-          key: cache-trivy-YY-MM-DD
-          restore-keys: cache-trivy-
-
       - name: Run Trivy vulnerability scanner in filesystem mode (table format)
         uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2  # 0.28.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
           trivy-config: 'utils/trivy/trivy.yaml'
-          cache: false
-        env:
-          TRIVY_SKIP_DB_UPDATE: true
-          TRIVY_SKIP_JAVA_DB_UPDATE: true
 
       - name: Prepare the report to be uploaded to the GitHub artifact store
         run: |
@@ -135,17 +51,11 @@ jobs:
           sed -i 's/format: template/format: sarif/g' utils/trivy/trivy.yaml
 
       - name: Run Trivy vulnerability scanner in filesystem mode (sarif format)
-        # master to have 'skip-setup-trivy'
-        uses: aquasecurity/trivy-action@d2a392a13760cb64cb6bbd31d4bed2a7d9a5298d
+        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2  # 0.28.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
           trivy-config: 'utils/trivy/trivy.yaml'
-          skip-setup-trivy: true
-          cache: false
-        env:
-          TRIVY_SKIP_DB_UPDATE: true
-          TRIVY_SKIP_JAVA_DB_UPDATE: true
 
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@afb54ba388a7dca6ecae48f608c4ff05ff4cc77a
@@ -160,14 +70,8 @@ jobs:
           sed -i 's/exit-code: 0/exit-code: 1/g' utils/trivy/trivy.yaml
 
       - name: Run Trivy vulnerability scanner in filesystem mode (human readable format)
-        # master to have 'skip-setup-trivy'
-        uses: aquasecurity/trivy-action@d2a392a13760cb64cb6bbd31d4bed2a7d9a5298d
+        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2  # 0.28.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
           trivy-config: 'utils/trivy/trivy.yaml'
-          skip-setup-trivy: true
-          cache: false
-        env:
-          TRIVY_SKIP_DB_UPDATE: true
-          TRIVY_SKIP_JAVA_DB_UPDATE: true
