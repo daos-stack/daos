@@ -1210,7 +1210,7 @@ new_dlsym_c(void *handle, const char *symbol)
 		return next_ze_init;
 
 org_dlsym:
-	/* Ideally we need to jump to adjust stack and jump to next_dlsym(). */
+	/* Ideally we need to adjust stack and jump to next_dlsym(). */
 	return next_dlsym(handle, symbol);
 }
 #endif
@@ -6261,24 +6261,6 @@ write_all(int fd, const void *buf, size_t count)
 	return byte_written;
 }
 
-void append_log(int rc_in, int errno_in, int fd_in, int fd_directed, unsigned long request)
-{
-	int fd;
-	int rc;
-	int len;
-	char msg[256];
-
-	fd = open("/dev/shm/log_pil4dfs_dbg.txt", O_RDWR | O_CREAT, 0600);
-	assert(fd >= 0);
-	len = sprintf(msg, "rc = %d errno = %d fd = %x fd_directed = %x request = %lx\n", rc_in,
-		      errno_in, fd_in, fd_directed, request);
-	rc = lseek(fd, 0, SEEK_END);
-	rc = write_all(fd, msg, len);
-	assert(rc == len);
-	rc = close(fd);
-	assert(rc == 0);
-}
-
 int
 ioctl(int fd, unsigned long request, ...)
 {
@@ -6297,10 +6279,8 @@ ioctl(int fd, unsigned long request, ...)
 		next_ioctl = dlsym(RTLD_NEXT, "ioctl");
 		D_ASSERT(next_ioctl != NULL);
 	}
-	if (!d_hook_enabled) {
-		rc = next_ioctl(fd, request, param);
-		goto out;
-	}
+	if (!d_hook_enabled)
+		return next_ioctl(fd, request, param);
 
 	/* To pass existing test of ioctl() with DFUSE_IOCTL_DFUSE_USER */
 	/* Provided to pass dfuse_test                                  */
@@ -6311,27 +6291,15 @@ ioctl(int fd, unsigned long request, ...)
 		return 0;
 	}
 
-	if (fd < FD_FILE_BASE && d_compatible_mode) {
-		rc = next_ioctl(fd, request, param);
-		goto out;
-	}
+	if (fd < FD_FILE_BASE && d_compatible_mode)
+		return next_ioctl(fd, request, param);
 
 	fd_directed = d_get_fd_redirected(fd);
-	if ((fd_directed < FD_FILE_BASE) || (fd_directed >= (FD_DIR_BASE + MAX_OPENED_DIR))) {
-		rc = next_ioctl(fd, request, param);
-		goto out;
-	}
+	if ((fd_directed < FD_FILE_BASE) || (fd_directed >= (FD_DIR_BASE + MAX_OPENED_DIR)))
+		return next_ioctl(fd, request, param);
 
 	errno = ENOTSUP;
-
-	rc = -1;
-
-out:
-	errno_save = errno;
-	if ((rc != 0) && ((fd >= FD_FILE_BASE) || (fd_directed >= FD_FILE_BASE)))
-		append_log(rc, errno, fd, fd_directed, request);
-	errno = errno_save;
-	return rc;
+	return (-1);
 }
 
 int
