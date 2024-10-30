@@ -9,6 +9,7 @@ from apricot import TestWithoutServers
 from cmocka_utils import CmockaUtils, get_cmocka_command
 from command_utils import SubProcessCommand
 from exception_utils import CommandFailure
+from host_utils import get_local_host
 from job_manager_utils import JobManager, Mpirun, Orterun
 
 
@@ -164,6 +165,7 @@ class HarnessBasicTest(TestWithoutServers):
         cmocka_utils = CmockaUtils(None, name, self.outputdir, self.test_dir, self.log)
         command = get_cmocka_command("", "sleep", "60")
         job = JobManager("/run/job_manager/time/*", "time", command)
+        job.assign_hosts(get_local_host())
         job.register_cleanup_method = self.register_cleanup
         try:
             cmocka_utils.run_cmocka_test(self, job)

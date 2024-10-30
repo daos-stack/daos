@@ -177,7 +177,7 @@ class JobManager(ExecutableCommand):
         """
         return self.job.check_subprocess_status(sub_process)
 
-    def assign_hosts(self, hosts, path=None, slots=None, hostfile=True):
+    def assign_hosts(self, *args, **kwargs):
         """Assign the hosts to use with the command.
 
         Set the appropriate command line parameter with the specified value.
@@ -191,6 +191,36 @@ class JobManager(ExecutableCommand):
             hostfile (bool, optional): whether or not to also update any host related command
                 parameters to keep them in sync with the hosts. Defaults to True.
         """
+        self._set_hosts(*args, **kwargs)
+
+    def _set_hosts(self, hosts):
+        """Assign hosts.
+
+        Args:
+            hosts (NodeSet): hosts to specify on the command line
+        """
+        self._hosts = hosts.copy()
+
+    def _setup_hostfile(self, path=None, slots=None, hostfile=True):
+        """Setup the hostfile to use with the command.
+
+        Args:
+            path (str, optional): path to use when specifying the hosts through
+                a hostfile. Defaults to None.
+            slots (int, optional): number of slots per host to specify in the
+                optional hostfile. Defaults to None.
+            hostfile (bool, optional): whether or not to also update any host related command
+                parameters to keep them in sync with the hosts. Defaults to True.
+
+        Returns:
+            str: the full path of the written hostfile; None if one is not written
+        """
+        if not hostfile:
+            return None
+        kwargs = {"hosts": self._hosts, "slots": slots}
+        if path is not None:
+            kwargs["path"] = path
+        return write_host_file(**kwargs)
 
     def assign_processes(self, processes):
         """Assign the number of processes.
@@ -367,7 +397,7 @@ class Orterun(JobManager):
         self.bind_to = FormattedParameter("--bind-to {}", None)
         self.mpi_type = mpi_type
 
-    def assign_hosts(self, hosts, path=None, slots=None, hostfile=True):
+    def assign_hosts(self, *args, **kwargs):
         """Assign the hosts to use with the command (--hostfile).
 
         Args:
@@ -378,13 +408,8 @@ class Orterun(JobManager):
             hostfile (bool, optional): whether or not to also update any host related command
                 parameters to keep them in sync with the hosts. Defaults to True.
         """
-        self._hosts = hosts.copy()
-        if not hostfile:
-            return
-        kwargs = {"hosts": self._hosts, "slots": slots}
-        if path is not None:
-            kwargs["path"] = path
-        self.hostfile.value = write_host_file(**kwargs)
+        super().assign_hosts(*args, **kwargs)
+        self.hostfile.value = self._setup_hostfile(*args, **kwargs)
 
     def assign_processes(self, processes):
         """Assign the number of processes (-np).
@@ -486,7 +511,7 @@ class Mpirun(JobManager):
         self.args = BasicParameter(None, None)
         self.mpi_type = mpi_type
 
-    def assign_hosts(self, hosts, path=None, slots=None, hostfile=True):
+    def assign_hosts(self, *args, **kwargs):
         """Assign the hosts to use with the command (-f).
 
         Args:
@@ -497,13 +522,8 @@ class Mpirun(JobManager):
             hostfile (bool, optional): whether or not to also update any host related command
                 parameters to keep them in sync with the hosts. Defaults to True.
         """
-        self._hosts = hosts.copy()
-        if not hostfile:
-            return
-        kwargs = {"hosts": self._hosts, "slots": slots}
-        if path is not None:
-            kwargs["path"] = path
-        self.hostfile.value = write_host_file(**kwargs)
+        super().assign_hosts(*args, **kwargs)
+        self.hostfile.value = self._setup_hostfile(*args, **kwargs)
 
     def assign_processes(self, processes=None, ppn=None):
         """Assign the number of processes (-np) and processes per node (-ppn).
@@ -590,7 +610,7 @@ class Srun(JobManager):
         self.partition = FormattedParameter("--partition={}", None)
         self.output = FormattedParameter("--output={}", None)
 
-    def assign_hosts(self, hosts, path=None, slots=None, hostfile=True):
+    def assign_hosts(self, *args, **kwargs):
         """Assign the hosts to use with the command (-f).
 
         Args:
@@ -601,13 +621,17 @@ class Srun(JobManager):
             hostfile (bool, optional): whether or not to also update any host related command
                 parameters to keep them in sync with the hosts. Defaults to True.
         """
-        self._hosts = hosts.copy()
-        if not hostfile:
-            return
-        kwargs = {"hosts": self._hosts, "slots": None}
-        if path is not None:
-            kwargs["path"] = path
-        self.nodefile.value = write_host_file(**kwargs)
+        super().assign_hosts(*args, **kwargs)
+        self.nodefile.value = self._setup_hostfile(*args, **kwargs)
+        self._set_ntasks_per_node(*args, **kwargs)
+
+    def _set_ntasks_per_node(self, slots=None):
+        """Assign the ntasks_per_node value.
+
+        Args:
+            slots (int, optional): number of slots per host to specify in the
+                hostfile. Defaults to None.
+        """
         self.ntasks_per_node.value = slots
 
     def assign_processes(self, processes):
@@ -767,19 +791,6 @@ class Systemctl(JobManager):
         return self.check_logs(
             self.job.pattern, self.timestamps["start"], None,
             self.job.pattern_count, self.job.pattern_timeout.value)
-
-    def assign_hosts(self, hosts, path=None, slots=None, hostfile=True):
-        """Assign the hosts to use with the command.
-
-        Set the appropriate command line parameter with the specified value.
-
-        Args:
-            hosts (NodeSet): hosts to specify on the command line
-            path (str, optional): not used. Defaults to None.
-            slots (int, optional): not used. Defaults to None.
-            hostfile (bool, optional): not used. Defaults to True.
-        """
-        self._hosts = hosts.copy()
 
     def assign_environment(self, env_vars, append=False):
         """Assign or add environment variables to the command.
@@ -1224,17 +1235,6 @@ class Clush(JobManager):
         """
         commands = [super().__str__(), "-w {}".format(self.hosts), str(self.job)]
         return " ".join(commands)
-
-    def assign_hosts(self, hosts, path=None, slots=None, hostfile=True):
-        """Assign the hosts to use with the command (--hostfile).
-
-        Args:
-            hosts (NodeSet): hosts to specify in the hostfile
-            path (str, optional): not used. Defaults to None.
-            slots (int, optional): not used. Defaults to None.
-            hostfile (bool, optional): not used. Defaults to True.
-        """
-        self._hosts = hosts.copy()
 
     def assign_environment(self, env_vars, append=False):
         """Assign or add environment variables to the command.
