@@ -629,9 +629,9 @@ setup_wal_io(void **state)
 
 static struct io_test_args test_args;
 
-#define MDTEST_META_BLOB_SIZE (256 * 1024 * 1024)
-#define MDTEST_VOS_SIZE       (160 * 1024 * 1024)
-#define MDTEST_MB_SIZE        (16 * 1024 * 1024)
+#define MDTEST_META_BLOB_SIZE (256 * 1024 * 1024UL)
+#define MDTEST_VOS_SIZE       (160 * 1024 * 1024UL)
+#define MDTEST_MB_SIZE        (16 * 1024 * 1024UL)
 #define MDTEST_MB_CNT         (MDTEST_META_BLOB_SIZE / MDTEST_MB_SIZE)
 #define MDTEST_MB_VOS_CNT     (MDTEST_VOS_SIZE / MDTEST_MB_SIZE)
 #define MDTEST_MAX_NEMB_CNT   (MDTEST_MB_VOS_CNT * 8 / 10)
@@ -655,6 +655,20 @@ teardown_mb_io(void **state)
 
 	vts_ctx_fini(&args->ctx);
 	return 0;
+}
+
+static int
+setup_mb_io_nembpct(void **state)
+{
+	d_setenv("DAOS_MD_ON_SSD_NEMB_PCT", "40", true);
+	return setup_mb_io(state);
+}
+
+static int
+teardown_mb_io_nembpct(void **state)
+{
+	d_unsetenv("DAOS_MD_ON_SSD_NEMB_PCT");
+	return teardown_mb_io(state);
 }
 
 /* refill:true - perform the pool re-load and refill after every key update/punch */
@@ -1669,6 +1683,71 @@ out:
 		free_bucket_by_pct(umm, &ainfo[j], 100, checkpoint_fn, &arg->ctx.tc_po_hdl);
 }
 
+static void
+wal_mb_nemb_pct(void **state)
+{
+	struct io_test_args     *arg = *state;
+	struct vos_container    *cont;
+	struct umem_instance    *umm;
+	int                      i, j, rc, found = 0;
+	struct bucket_alloc_info ainfo[MDTEST_MB_CNT + 1];
+	daos_size_t              maxsz, cur_allocated1, cur_allocated;
+
+	cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
+	umm  = vos_cont2umm(cont);
+
+	/*
+	 * The setup for this test would have set environment variable
+	 * DAOS_MD_ON_SSD_NEMB_PCT to 40 before creating the pool.
+	 */
+	ainfo[0].mb_id       = 0;
+	ainfo[0].num_allocs  = 0;
+	ainfo[0].start_umoff = UMOFF_NULL;
+	ainfo[0].alloc_size  = 2048;
+	alloc_bucket_to_full(umm, &ainfo[0], checkpoint_fn, &arg->ctx.tc_po_hdl);
+	rc = umempobj_get_mbusage(umm->umm_pool, 0, &cur_allocated, &maxsz);
+	assert_true(rc == 0);
+	print_message("nemb space utilization is %lu max is %lu\n", cur_allocated, maxsz);
+	assert_true(maxsz == MDTEST_VOS_SIZE * 40 / 100);
+
+	/* Reopen pool after setting DAOS_MD_ON_SSD_NEMB_PCT to 80%
+	 * It should not impact already created vos pool.
+	 */
+	d_setenv("DAOS_MD_ON_SSD_NEMB_PCT", "80", true);
+	wal_pool_refill(arg);
+	cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
+	umm  = vos_cont2umm(cont);
+	alloc_bucket_to_full(umm, &ainfo[0], checkpoint_fn, &arg->ctx.tc_po_hdl);
+	rc = umempobj_get_mbusage(umm->umm_pool, 0, &cur_allocated1, &maxsz);
+	assert_true(rc == 0);
+	print_message("nemb space utilization is %lu max is %lu\n", cur_allocated1, maxsz);
+	assert_true(maxsz == MDTEST_VOS_SIZE * 40 / 100);
+	assert_true(cur_allocated == cur_allocated1);
+
+	/* Allocate from Evictable Buckets. */
+	for (i = 1; i <= MDTEST_MB_CNT; i++) {
+		/* Create an MB and fill it with allocs */
+		ainfo[i].mb_id = umem_allot_mb_evictable(umm, 0);
+		for (j = 1; j < i; j++) {
+			if (ainfo[i].mb_id == ainfo[j].mb_id) {
+				found = 1;
+				break;
+			}
+		}
+		if (found)
+			break;
+		ainfo[i].num_allocs  = 0;
+		ainfo[i].start_umoff = UMOFF_NULL;
+		ainfo[i].alloc_size  = 2048;
+		assert_true(ainfo[i].mb_id != 0);
+		alloc_bucket_to_full(umm, &ainfo[i], checkpoint_fn, &arg->ctx.tc_po_hdl);
+	}
+	i--;
+	print_message("Created %d evictable buckets, expected = %ld\n", i,
+		      (MDTEST_META_BLOB_SIZE - maxsz) / MDTEST_MB_SIZE);
+	assert_true(i == (MDTEST_META_BLOB_SIZE - maxsz) / MDTEST_MB_SIZE);
+}
+
 static int
 umoff_in_freelist(umem_off_t *free_list, int cnt, umem_off_t umoff, bool clear)
 {
@@ -2434,6 +2513,7 @@ static const struct CMUnitTest wal_MB_tests[] = {
     {"WAL37: UMEM MB stats test ", wal_umempobj_mbusage_test, setup_mb_io, teardown_mb_io},
     {"WAL38: P2 basic", p2_basic_test, setup_mb_io, teardown_mb_io},
     {"WAL39: P2 fill evictable buckets", p2_fill_test, setup_mb_io, teardown_mb_io},
+    {"WAL40: nemb pct test", wal_mb_nemb_pct, setup_mb_io_nembpct, teardown_mb_io_nembpct},
 };
 
 int

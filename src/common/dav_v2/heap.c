@@ -25,6 +25,8 @@
 #include "alloc_class.h"
 #include "meta_io.h"
 
+#define HEAP_NEMB_PCT_DEFAULT 80
+
 static void
 heap_reclaim_zone_garbage(struct palloc_heap *heap, struct bucket *bucket, uint32_t zone_id);
 
@@ -96,6 +98,7 @@ struct heap_rt {
 	unsigned                       zinfo_vec_size;
 	unsigned                       mb_create_waiters;
 	unsigned                       mb_pressure;
+	unsigned                       nemb_pct;
 	void                          *mb_create_wq;
 	struct zinfo_vec              *zinfo_vec;
 	struct mbrt                   *default_mb;
@@ -1397,7 +1400,8 @@ heap_create_alloc_class_buckets(struct palloc_heap *heap, struct alloc_class *c)
  * heap_write_header -- (internal) creates a clean header
  */
 static int
-heap_write_header(struct umem_store *store, size_t heap_size, size_t umem_cache_size)
+heap_write_header(struct umem_store *store, size_t heap_size, size_t umem_cache_size,
+		  uint32_t nemb_pct)
 {
 	struct heap_header *newhdr;
 	int                 rc;
@@ -1414,6 +1418,7 @@ heap_write_header(struct umem_store *store, size_t heap_size, size_t umem_cache_
 	newhdr->heap_hdr_size   = sizeof(struct heap_header);
 	newhdr->chunksize       = CHUNKSIZE;
 	newhdr->chunks_per_zone = MAX_CHUNK;
+	newhdr->nemb_pct        = (uint8_t)nemb_pct;
 	newhdr->checksum        = 0;
 
 	util_checksum(newhdr, sizeof(*newhdr), &newhdr->checksum, 1, 0);
@@ -1480,6 +1485,11 @@ heap_verify_header(struct heap_header *hdr, size_t heap_size, size_t cache_size)
 	if (hdr->cache_size != cache_size) {
 		D_ERROR("umem cache size mismatch, created with %lu , opened with %lu\n",
 			hdr->cache_size, cache_size);
+		return -1;
+	}
+
+	if (hdr->nemb_pct > 100) {
+		D_ERROR("nemb pct value (%d) in heap header is incorrect\n", hdr->nemb_pct);
 		return -1;
 	}
 
@@ -1558,6 +1568,7 @@ heap_boot(struct palloc_heap *heap, void *mmap_base, uint64_t heap_size, uint64_
 	struct heap_header     *newhdr;
 	int                     err;
 	struct heap_zone_limits hzl;
+	uint32_t                nemb_pct = HEAP_NEMB_PCT_DEFAULT;
 
 	D_ALLOC_PTR(newhdr);
 	if (!newhdr)
@@ -1575,6 +1586,8 @@ heap_boot(struct palloc_heap *heap, void *mmap_base, uint64_t heap_size, uint64_
 		D_FREE(newhdr);
 		return EINVAL;
 	}
+	if (newhdr->nemb_pct)
+		nemb_pct = newhdr->nemb_pct;
 	D_FREE(newhdr);
 
 	D_ALLOC_PTR_NZ(h);
@@ -1589,7 +1602,7 @@ heap_boot(struct palloc_heap *heap, void *mmap_base, uint64_t heap_size, uint64_
 		goto error_alloc_classes_new;
 	}
 
-	hzl = heap_get_zone_limits(heap_size, cache_size);
+	hzl = heap_get_zone_limits(heap_size, cache_size, nemb_pct);
 
 	h->nzones             = hzl.nzones_heap;
 	h->nzones_ne          = hzl.nzones_ne_max;
@@ -1630,6 +1643,28 @@ error_heap_malloc:
 	return err;
 }
 
+static unsigned int
+heap_get_nemb_pct()
+{
+	unsigned int nemb_pct;
+
+	nemb_pct = HEAP_NEMB_PCT_DEFAULT;
+	d_getenv_uint("DAOS_MD_ON_SSD_NEMB_PCT", &nemb_pct);
+	if ((nemb_pct > 100) || (nemb_pct == 0)) {
+		D_ERROR("Invalid value %d for tunable DAOS_MD_ON_SSD_NEMB_PCT", nemb_pct);
+		nemb_pct = HEAP_NEMB_PCT_DEFAULT;
+	}
+	D_INFO("DAOS_MD_ON_SSD_NEMB_PCT set to %d", nemb_pct);
+
+	return nemb_pct;
+}
+
+int
+heap_get_max_nemb(struct palloc_heap *heap)
+{
+	return heap->rt->nzones_ne;
+}
+
 /*
  * heap_init -- initializes the heap
  *
@@ -1639,6 +1674,7 @@ int
 heap_init(void *heap_start, uint64_t umem_cache_size, struct umem_store *store)
 {
 	int      nzones;
+	uint32_t nemb_pct  = heap_get_nemb_pct();
 	uint64_t heap_size = store->stor_size;
 
 	if (heap_size < HEAP_MIN_SIZE)
@@ -1649,7 +1685,7 @@ heap_init(void *heap_start, uint64_t umem_cache_size, struct umem_store *store)
 	nzones = heap_max_zone(heap_size);
 	meta_clear_pages(store, sizeof(struct heap_header), 4096, ZONE_MAX_SIZE, nzones);
 
-	if (heap_write_header(store, heap_size, umem_cache_size))
+	if (heap_write_header(store, heap_size, umem_cache_size, nemb_pct))
 		return ENOMEM;
 
 	return 0;
@@ -1885,6 +1921,8 @@ heap_update_mbrt_zinfo(struct palloc_heap *heap, bool init)
 	heap->rt->zones_exhausted_ne = nemb_cnt;
 	heap->rt->zones_exhausted_e  = emb_cnt;
 
+	D_ASSERT(heap->rt->nzones_e >= heap->rt->zones_exhausted_e);
+	D_ASSERT(heap->rt->nzones_ne >= heap->rt->zones_exhausted_ne);
 	return 0;
 }
 
@@ -2058,9 +2096,11 @@ heap_foreach_object(struct palloc_heap *heap, object_callback cb, void *arg,
 }
 
 struct heap_zone_limits
-heap_get_zone_limits(uint64_t heap_size, uint64_t cache_size)
+heap_get_zone_limits(uint64_t heap_size, uint64_t cache_size, uint32_t nemb_pct)
 {
 	struct heap_zone_limits zd = {0};
+
+	D_ASSERT(nemb_pct <= 100);
 
 	if (heap_size < sizeof(struct heap_header))
 		zd.nzones_heap = 0;
@@ -2075,7 +2115,7 @@ heap_get_zone_limits(uint64_t heap_size, uint64_t cache_size)
 		if (zd.nzones_heap < (zd.nzones_cache + UMEM_CACHE_MIN_EVICTABLE_PAGES))
 			zd.nzones_ne_max = zd.nzones_cache - UMEM_CACHE_MIN_EVICTABLE_PAGES;
 		else
-			zd.nzones_ne_max = zd.nzones_cache * 8 / 10;
+			zd.nzones_ne_max = ((unsigned long)zd.nzones_cache * nemb_pct) / 100;
 		if (zd.nzones_cache < (zd.nzones_ne_max + UMEM_CACHE_MIN_EVICTABLE_PAGES))
 			zd.nzones_ne_max = zd.nzones_cache - UMEM_CACHE_MIN_EVICTABLE_PAGES;
 	} else

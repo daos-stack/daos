@@ -133,7 +133,8 @@ struct heap_header {
 	uint64_t heap_hdr_size;
 	uint64_t chunksize;
 	uint64_t chunks_per_zone;
-	uint8_t  reserved[4016];
+	uint8_t  nemb_pct;
+	uint8_t  reserved[4015];
 	uint64_t checksum;
 };
 

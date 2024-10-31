@@ -70,7 +70,7 @@ dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct
 	struct heap_zone_limits hzl;
 	struct zone            *z0;
 
-	hzl = heap_get_zone_limits(store->stor_size, scm_sz);
+	hzl = heap_get_zone_limits(store->stor_size, scm_sz, 100);
 
 	if (hzl.nzones_heap == 0) {
 		ERR("Insufficient heap size.");
@@ -78,7 +78,7 @@ dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct
 		return NULL;
 	}
 
-	if (hzl.nzones_ne_max < 2) {
+	if ((hzl.nzones_cache < 2) && (hzl.nzones_heap > hzl.nzones_cache)) {
 		ERR("Insufficient scm size.");
 		errno = EINVAL;
 		return NULL;
@@ -117,24 +117,15 @@ dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct
 		goto out1;
 	}
 
-	rc = umem_cache_alloc(store, ZONE_MAX_SIZE, hzl.nzones_heap, hzl.nzones_cache,
-			      hzl.nzones_ne_max, 4096, mmap_base, is_zone_evictable,
-			      dav_uc_callback, hdl);
-	if (rc != 0) {
-		D_ERROR("Could not allocate page cache: rc=" DF_RC "\n", DP_RC(rc));
-		err = daos_der2errno(rc);
-		goto out1;
-	}
-
-	D_STRNDUP(hdl->do_path, path, strlen(path));
-
 	if (flags & DAV_HEAP_INIT) {
 		rc = heap_init(mmap_base, scm_sz, store);
 		if (rc) {
 			err = errno;
-			goto out2;
+			goto out1;
 		}
 	}
+
+	D_STRNDUP(hdl->do_path, path, strlen(path));
 	D_ALLOC_PTR(hdl->do_heap);
 	if (hdl->do_heap == NULL) {
 		err = ENOMEM;
@@ -155,37 +146,46 @@ dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct
 	heap_set_root_ptrs(hdl->do_heap, &hdl->do_root_offsetp, &hdl->do_root_sizep);
 	heap_set_stats_ptr(hdl->do_heap, &hdl->do_stats->persistent);
 
+	rc = umem_cache_alloc(store, ZONE_MAX_SIZE, hzl.nzones_heap, hzl.nzones_cache,
+			      heap_get_max_nemb(hdl->do_heap), 4096, mmap_base, is_zone_evictable,
+			      dav_uc_callback, hdl);
+	if (rc != 0) {
+		D_ERROR("Could not allocate page cache: rc=" DF_RC "\n", DP_RC(rc));
+		err = daos_der2errno(rc);
+		goto out3;
+	}
+
 	if (!(flags & DAV_HEAP_INIT)) {
 		rc = heap_zone_load(hdl->do_heap, 0);
 		if (rc) {
 			err = rc;
-			goto out3;
+			goto out4;
 		}
 		D_ASSERT(store != NULL);
 		rc = hdl->do_store->stor_ops->so_wal_replay(hdl->do_store, dav_wal_replay_cb, hdl);
 		if (rc) {
 			err = daos_der2errno(rc);
-			goto out3;
+			goto out4;
 		}
 	}
 
 	rc = dav_create_clogs(hdl);
 	if (rc) {
 		err = rc;
-		goto out3;
+		goto out4;
 	}
 
 	rc = lw_tx_begin(hdl);
 	if (rc) {
 		D_ERROR("lw_tx_begin failed with err %d\n", rc);
 		err = ENOMEM;
-		goto out3;
+		goto out5;
 	}
 	rc = heap_ensure_zone0_initialized(hdl->do_heap);
 	if (rc) {
 		lw_tx_end(hdl, NULL);
 		D_ERROR("Failed to initialize zone0, rc = %d", daos_errno2der(rc));
-		goto out3;
+		goto out5;
 	}
 	lw_tx_end(hdl, NULL);
 
@@ -198,14 +198,14 @@ dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct
 		if (rc) {
 			D_ERROR("Failed to update mbrt with zinfo errno = %d", rc);
 			err = rc;
-			goto out3;
+			goto out5;
 		}
 
 		rc = heap_load_nonevictable_zones(hdl->do_heap);
 		if (rc) {
 			D_ERROR("Failed to load required zones during boot, errno= %d", rc);
 			err = rc;
-			goto out3;
+			goto out5;
 		}
 	} else {
 		D_ASSERT(z0->header.zone0_zinfo_size == 0);
@@ -213,20 +213,20 @@ dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct
 		if (rc) {
 			D_ERROR("lw_tx_begin failed with err %d\n", rc);
 			err = ENOMEM;
-			goto out3;
+			goto out5;
 		}
 		rc = obj_realloc(hdl, &z0->header.zone0_zinfo_off, &z0->header.zone0_zinfo_size,
 				 heap_zinfo_get_size(hzl.nzones_heap));
 		if (rc != 0) {
 			lw_tx_end(hdl, NULL);
 			D_ERROR("Failed to setup zinfo");
-			goto out3;
+			goto out5;
 		}
 		rc = heap_update_mbrt_zinfo(hdl->do_heap, true);
 		if (rc) {
 			D_ERROR("Failed to update mbrt with zinfo errno = %d", rc);
 			err = rc;
-			goto out3;
+			goto out5;
 		}
 		lw_tx_end(hdl, NULL);
 	}
@@ -240,7 +240,10 @@ dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct
 	hdl->do_booted = 1;
 
 	return hdl;
-
+out5:
+	dav_destroy_clogs(hdl);
+out4:
+	umem_cache_free(hdl->do_store);
 out3:
 	heap_cleanup(hdl->do_heap);
 out2:
@@ -253,7 +256,6 @@ out2:
 		D_FREE(hdl->do_utx);
 	}
 	D_FREE(hdl->do_path);
-	umem_cache_free(hdl->do_store);
 out1:
 	D_FREE(hdl);
 out0:
