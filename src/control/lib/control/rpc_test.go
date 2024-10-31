@@ -128,11 +128,12 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 			}(),
 			req: &testRequest{
 				rpcFn: func(ctx context.Context, _ *grpc.ClientConn) (proto.Message, error) {
-					if ctx.Err() != nil {
+					select {
+					case <-ctx.Done():
 						return nil, ctx.Err()
+					case <-time.After(10 * time.Second): // shouldn't be allowed to run this long
+						return defaultMessage, nil
 					}
-					time.Sleep(10 * time.Second) // shouldn't be allowed to run this long
-					return defaultMessage, nil
 				},
 			},
 			expResp: []*HostResponse{{}},
