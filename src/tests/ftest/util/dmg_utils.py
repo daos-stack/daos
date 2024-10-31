@@ -601,8 +601,11 @@ class DmgCommand(DmgCommandBase):
         #     0,
         #     1
         #   ],
-        #   "scm_bytes": 256000000,
-        #   "nvme_bytes": 0
+        #   "tier_bytes": [
+        #     256000000,
+        #     0
+        #   ],
+        #   "mem_file_bytes": 0
         # },
         # "error": null,
         # "status": 0
@@ -622,6 +625,7 @@ class DmgCommand(DmgCommandBase):
         data["ranks"] = ",".join([str(r) for r in output["response"]["tgt_ranks"]])
         data["scm_per_rank"] = output["response"]["tier_bytes"][0]
         data["nvme_per_rank"] = output["response"]["tier_bytes"][1]
+        data["memfile_per_rank"] = output["response"]["mem_file_bytes"]
 
         return data
 
