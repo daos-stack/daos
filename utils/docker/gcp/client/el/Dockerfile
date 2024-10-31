@@ -129,7 +129,8 @@ RUN readarray -t arr < /tmp/raft.txt ; for r in "${arr[@]}" ; do { OLD_RPM_NAME=
 WORKDIR /daos
 # Remove broken dependencies (daos-raft-devel, isa-l-devel, libpmemobj-devel), add license,
 # show difference
-RUN git restore utils/rpms/daos.spec && \
+
+RUN cp utils/rpms/daos.spec utils/rpms/daos.spec.orig && \
   sed -i '/Version:/ s/$/.'$(cat /tmp/build_ts.txt)'/' utils/rpms/daos.spec && \
   awk -i inplace '!/BuildRequires: daos-raft-devel/' utils/rpms/daos.spec && \
   awk -i inplace '!/BuildRequires: libpmemobj-devel/' utils/rpms/daos.spec && \
@@ -139,7 +140,7 @@ RUN git restore utils/rpms/daos.spec && \
   awk -i inplace '!/Requires: ior/' utils/rpms/daos.spec && \
   sed -i 's/STATIC_FUSE=0//' utils/rpms/daos.spec && \
   awk -i inplace  '/%files/ { print $0 ; print "%license LICENSE"; print "%license third_party_programs.txt"; next } ; 1' utils/rpms/daos.spec && \
-  git --no-pager diff utils/rpms/daos.spec
+  diff utils/rpms/daos.spec.orig utils/rpms/daos.spec || true
 
 RUN if [[ "$ROCKY_BUILDER" == "rockylinux/rockylinux:9" ]]; then \
   /bin/sh -c "daos/utils/docker/gcp/client/el/patch_daos_spec.sh"; \
