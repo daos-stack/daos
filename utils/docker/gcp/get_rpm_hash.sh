@@ -31,8 +31,7 @@ argobots=7a123c8bf1c327adef682904eb813d0fd84b5dd6
 dpdk=372c857e0122f0777a8e2b76c4988614917384bb
 # https://github.com/daos-stack/spdk.git
 spdk=cefc39f9a511206fcb4e28b0f8f06ac593808a04
-# this one should never be out of date
-raft=$(cat .git/modules/raft/HEAD)
+raft=HEAD
 # https://github.com/daos-stack/pmdk.git
 pmdk=7fe78c07067e988c61308139dc1f3ddb5b310607
 
