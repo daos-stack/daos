@@ -143,18 +143,6 @@ class JobManager(ExecutableCommand):
                 and self._job.check_results_list):
             self.check_results_list.extend(self._job.check_results_list)
 
-    @property
-    def command_regex(self):
-        """Get the regular expression to use to search for the command.
-
-        Typical use would include combining with pgrep to verify a subprocess is running.
-
-        Returns:
-            str: regular expression to use to search for the command
-        """
-        # pylint: disable=protected-access
-        return f"'({'|'.join(self._exe_names + self.job._exe_names)})'"
-
     def __str__(self):
         """Return the command with all of its defined parameters as a string.
 
@@ -330,19 +318,30 @@ class JobManager(ExecutableCommand):
         """Forcibly terminate any job processes running on hosts."""
         if not self.job:
             return
-        detected, running = stop_processes(self.log, self._hosts, self.command_regex)
+        # Kill the job command
+        self._kill_process(self.job.command_regex)
+        time.sleep(5)
+        # Kill the manager command
+        self._kill_process(self.command_regex)
+
+    def _kill_process(self, pattern):
+        """Forcibly terminate the specified process.
+
+        Args:
+            pattern (str): regular expression used to find process names to stop
+        """
+        detected, running = stop_processes(self.log, self._hosts, pattern)
         if not detected:
             self.log.info(
-                "No remote %s processes killed on %s (none found), done.",
-                self.command_regex, self._hosts)
+                "No remote %s processes killed on %s (none found), done.", pattern, self._hosts)
         elif running:
             self.log.info(
                 "***Unable to kill remote %s process on %s! Please investigate/report.***",
-                self.command_regex, running)
+                pattern, running)
         else:
             self.log.info(
                 "***At least one remote %s process needed to be killed on %s! Please investigate/"
-                "report.***", self.command_regex, detected)
+                "report.***", pattern, detected)
 
 
 class Orterun(JobManager):

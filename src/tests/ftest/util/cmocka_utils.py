@@ -139,7 +139,9 @@ class CmockaUtils():
             test.fail(error_message)
 
         finally:
-            run_remote(test.log, self.hosts, "ps -jH")
+            if test.status is not None and test.status != 'PASS' and test.status != 'SKIP':
+                test.log.debug("Currently running processes for non-passing test:")
+                run_remote(test.log, self.hosts, "ps -jH")
             self._collect_cmocka_results(test)
             if not self._check_cmocka_files():
                 if error_message is None:
