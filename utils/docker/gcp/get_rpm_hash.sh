@@ -22,7 +22,7 @@ mercury=8a9b97c248d97f70b0caa64be588f0c404ecfadf
 # https://github.com/daos-stack/isa-l.git
 isal=500b6b0f4f0748385265e77ec8dc0c2063a6f8d1
 # https://github.com/daos-stack/isa-l_crypto.git
-isal_crypto=e87aa39e932849e0e8572db92fa8fd5c93d414c4
+isal_crypto=f98224c2f481e3f119248ff6e27aa7d34a39b8f0
 # https://github.com/daos-stack/argobots.git
 argobots=7a123c8bf1c327adef682904eb813d0fd84b5dd6
 # https://github.com/daos-stack/dpdk.git
@@ -31,7 +31,8 @@ argobots=7a123c8bf1c327adef682904eb813d0fd84b5dd6
 dpdk=372c857e0122f0777a8e2b76c4988614917384bb
 # https://github.com/daos-stack/spdk.git
 spdk=cefc39f9a511206fcb4e28b0f8f06ac593808a04
-raft=HEAD
+# this one should never be out of date
+raft=$(cat .git/modules/raft/HEAD)
 # https://github.com/daos-stack/pmdk.git
 pmdk=7fe78c07067e988c61308139dc1f3ddb5b310607
 
