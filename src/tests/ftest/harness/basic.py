@@ -10,7 +10,7 @@ from cmocka_utils import CmockaUtils, get_cmocka_command
 from command_utils import SubProcessCommand
 from exception_utils import CommandFailure
 from host_utils import get_local_host
-from job_manager_utils import JobManager, Mpirun, Orterun
+from job_manager_utils import Mpirun, Orterun, get_job_manager
 
 
 class HarnessBasicTest(TestWithoutServers):
@@ -164,11 +164,10 @@ class HarnessBasicTest(TestWithoutServers):
         name = "no_cmocka_xml_file_timeout_test"
         cmocka_utils = CmockaUtils(None, name, self.outputdir, self.test_dir, self.log)
         command = get_cmocka_command("", "sleep", "60")
-        job = JobManager("/run/job_manager/time/*", "time", command)
-        job.assign_hosts(get_local_host())
-        job.register_cleanup_method = self.register_cleanup
+        manager = get_job_manager(self, job=command)
+        manager.assign_hosts(get_local_host())
         try:
-            cmocka_utils.run_cmocka_test(self, job)
+            cmocka_utils.run_cmocka_test(self, manager)
         finally:
             self._verify_no_cmocka_xml(name, str(command))
         self.fail("Test did not timeout")

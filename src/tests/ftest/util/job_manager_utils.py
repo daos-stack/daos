@@ -179,6 +179,7 @@ class JobManager(ExecutableCommand):
             hostfile (bool, optional): whether or not to also update any host related command
                 parameters to keep them in sync with the hosts. Defaults to True.
         """
+        # pylint: disable=unused-argument
         self._hosts = hosts.copy()
 
     def _setup_hostfile(self, path=None, slots=None, hostfile=True):
@@ -318,11 +319,7 @@ class JobManager(ExecutableCommand):
         """Forcibly terminate any job processes running on hosts."""
         if not self.job:
             return
-        # Kill the job command
         self._kill_process(self.job.command_regex)
-        time.sleep(5)
-        # Kill the manager command
-        self._kill_process(self.command_regex)
 
     def _kill_process(self, pattern):
         """Forcibly terminate the specified process.
@@ -458,6 +455,12 @@ class Orterun(JobManager):
 
         return super().run(raise_exception)
 
+    def kill(self):
+        """Forcibly terminate any job processes running on hosts."""
+        super().kill()
+        time.sleep(1)
+        self._kill_process(self.command_regex)
+
 
 class Mpirun(JobManager):
     """A class for the mpirun job manager command."""
@@ -571,6 +574,12 @@ class Mpirun(JobManager):
             raise MPILoadError(self.mpi_type)
 
         return super().run(raise_exception)
+
+    def kill(self):
+        """Forcibly terminate any job processes running on hosts."""
+        super().kill()
+        time.sleep(1)
+        self._kill_process(self.command_regex)
 
 
 class Srun(JobManager):

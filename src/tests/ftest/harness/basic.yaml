@@ -1,1 +1,9 @@
 timeout: 10
+
+job_manager: !mux
+  manager_1:
+    class_name: Clush
+  manager_2:
+    class_name: Orterun
+  manager_3:
+    class_name: Mpirun
