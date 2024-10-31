@@ -992,6 +992,13 @@ int ddb_run_dtx_act_abort(struct ddb_ctx *ctx, struct dtx_act_abort_options *opt
 	return rc;
 }
 
+static inline bool
+feature_write_action(struct feature_options *opt)
+{
+	return opt->set_compat_flags || opt->set_incompat_flags || opt->clear_compat_flags ||
+	       opt->clear_incompat_flags;
+}
+
 int
 ddb_run_feature(struct ddb_ctx *ctx, struct feature_options *opt)
 {
@@ -1000,19 +1007,17 @@ ddb_run_feature(struct ddb_ctx *ctx, struct feature_options *opt)
 	uint64_t new_incompat_flags;
 	bool     close = false;
 
+	if (!opt->show_features && !feature_write_action(opt))
+		return -DER_INVAL;
+
 	if (ddb_pool_is_open(ctx)) {
-		if (!ctx->dc_write_mode && !opt->show_features)
-			return -DER_INVAL;
+		if (feature_write_action(opt) && !ctx->dc_write_mode)
+			return -DER_NO_PERM;
 		goto skip;
 	}
 
-	if (opt->set_compat_flags || opt->set_incompat_flags || opt->clear_compat_flags ||
-	    opt->clear_incompat_flags)
-		ctx->dc_write_mode = true;
-	else
-		ctx->dc_write_mode = false;
-
-	if (!ctx->dc_write_mode && !opt->show_features)
+	ctx->dc_write_mode = feature_write_action(opt);
+	if (feature_write_action(opt) && !ctx->dc_write_mode)
 		return -DER_NO_PERM;
 
 	if (!opt->path || strnlen(opt->path, PATH_MAX) == 0)

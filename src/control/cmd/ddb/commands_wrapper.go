@@ -224,7 +224,7 @@ func ddbDtxActAbort(ctx *DdbContext, path string, dtx_id string) error {
 	return daosError(C.ddb_run_dtx_act_abort(&ctx.ctx, &options))
 }
 
-func ddbFeature(ctx *DdbContext, path string, enable string, disable string, show bool) error {
+func ddbFeature(ctx *DdbContext, path, enable, disable string, show bool) error {
 	/* Set up the options */
 	options := C.struct_feature_options{}
 	options.path = C.CString(path)
