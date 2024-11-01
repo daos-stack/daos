@@ -700,7 +700,7 @@ class TestPool(TestDaosApiBase):
             self.log.error("self.acl_file isn't defined!")
 
     @fail_on(CommandFailure)
-    def query(self, show_enabled=False):
+    def query(self, show_enabled=False, health_only=False):
         """Execute dmg pool query.
 
         Args:
@@ -1118,7 +1118,7 @@ class TestPool(TestDaosApiBase):
         }
         return pool_percent
 
-    def set_query_data(self, show_enabled=False):
+    def set_query_data(self, show_enabled=False, health_only=False):
         """Execute dmg pool query and store the results.
 
         Args:
@@ -1129,7 +1129,7 @@ class TestPool(TestDaosApiBase):
 
         """
         self.query_data = {}
-        self.query_data = self.query(show_enabled)
+        self.query_data = self.query(show_enabled, health_only)
 
     def _get_query_data_keys(self, *keys, refresh=False):
         """Get the pool version from the dmg pool query output.
@@ -1277,7 +1277,7 @@ class TestPool(TestDaosApiBase):
         previous_data = dict(self._rebuild_data.items())
 
         # Update the current rebuild data
-        self.set_query_data()
+        self.set_query_data(health_only=True)
         try:
             self._rebuild_data["version"] = self.get_version(False)
         except (CommandFailure, ValueError) as error:
@@ -1447,6 +1447,33 @@ class TestPool(TestDaosApiBase):
                 self.log.error("%s: %s not found", result[1], filename)
                 status = False
         return status
+
+    def wait_pool_suspect_ranks(self, expected, interval=1, timeout=30):
+        """Wait for the pool suspect ranks.
+
+        Args:
+            expected (list): suspect ranks check to wait.
+            interval (int, optional): number of seconds to wait in between pool query checks
+            timeout(int, optional): time to fail test if it could not match
+                expected values.
+
+        Raises:
+            DaosTestError: if waiting for timeout.
+
+        """
+        self.log.info("waiting for pool ranks %s to be suspected", expected)
+
+        start = time()
+        data = self.dmg.pool_query(self.identifier, health_only=True)
+        while data['response'].get('suspect_ranks') != expected:
+            self.log.info("  suspect ranks is %s ...", data['response'].get('suspect_ranks'))
+            if time() - start > timeout:
+                raise DaosTestError("TIMEOUT detected after {} seconds while for waiting "
+                                    "for ranks {} suspect".format(timeout, expected))
+            sleep(interval)
+            data = self.dmg.pool_query(self.identifier, health_only=True)
+
+        self.log.info("Wait for suspect ranks complete: suspect ranks %s", expected)
 
     def verify_uuid_directory(self, host, scm_mount):
         """Check if pool folder exist on server.
