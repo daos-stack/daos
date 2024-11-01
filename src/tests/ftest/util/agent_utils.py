@@ -314,6 +314,7 @@ class DaosAgentManager(SubprocessManager):
 
         Returns:
             CommandResult: groups of command results from the same hosts with the same return status
+
         """
         cmd = self.manager.job.copy()
         cmd.debug.value = False
