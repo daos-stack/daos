@@ -176,7 +176,7 @@ read_chunk_close(struct dfuse_inode_entry *ie)
 	struct read_chunk_data *cd, *cdn;
 	bool                    rcb = false;
 
-	D_MUTEX_LOCK(&ie->ie_active->lock);
+	D_SPIN_LOCK(&ie->ie_active->lock);
 	if (d_list_empty(&ie->ie_active->chunks))
 		goto out;
 
@@ -190,7 +190,7 @@ read_chunk_close(struct dfuse_inode_entry *ie)
 		}
 	}
 out:
-	D_MUTEX_UNLOCK(&ie->ie_active->lock);
+	D_SPIN_UNLOCK(&ie->ie_active->lock);
 	return rcb;
 }
 
@@ -216,11 +216,11 @@ chunk_cb(struct dfuse_event *ev)
 		int i;
 		req = 0;
 
-		D_MUTEX_LOCK(&ia->lock);
+		D_SPIN_LOCK(&ia->lock);
 
 		if (cd->exiting) {
 			chunk_free(cd);
-			D_MUTEX_UNLOCK(&ia->lock);
+			D_SPIN_UNLOCK(&ia->lock);
 			return;
 		}
 
@@ -233,7 +233,7 @@ chunk_cb(struct dfuse_event *ev)
 			}
 		}
 
-		D_MUTEX_UNLOCK(&ia->lock);
+		D_SPIN_UNLOCK(&ia->lock);
 
 		if (req) {
 			size_t position = (cd->bucket * CHUNK_SIZE) + (i * K128);
@@ -346,7 +346,7 @@ chunk_read(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
 	DFUSE_TRA_DEBUG(oh, "read bucket %#zx-%#zx last %#zx size %#zx bucket %ld slot %d",
 			position, position + len - 1, last, ie->ie_stat.st_size, bucket, slot);
 
-	D_MUTEX_LOCK(&ie->ie_active->lock);
+	D_SPIN_LOCK(&ie->ie_active->lock);
 
 	d_list_for_each_entry(cd, &ie->ie_active->chunks, list)
 		if (cd->bucket == bucket) {
@@ -370,7 +370,7 @@ found:
 		d_list_add(&cd->list, &ie->ie_active->chunks);
 	}
 
-	D_MUTEX_UNLOCK(&ie->ie_active->lock);
+	D_SPIN_UNLOCK(&ie->ie_active->lock);
 
 	if (submit) {
 		DFUSE_TRA_DEBUG(oh, "submit for bucket %ld[%d]", bucket, slot);
@@ -385,14 +385,14 @@ found:
 		 */
 		rcb = true;
 
-		D_MUTEX_LOCK(&ie->ie_active->lock);
+		D_SPIN_LOCK(&ie->ie_active->lock);
 		if (cd->complete) {
 			ev = cd->ev;
 		} else {
 			cd->reqs[slot] = req;
 			cd->ohs[slot]  = oh;
 		}
-		D_MUTEX_UNLOCK(&ie->ie_active->lock);
+		D_SPIN_UNLOCK(&ie->ie_active->lock);
 
 		if (ev) {
 			if (cd->rc != 0) {
@@ -415,7 +415,7 @@ found:
 	return rcb;
 
 err:
-	D_MUTEX_UNLOCK(&ie->ie_active->lock);
+	D_SPIN_UNLOCK(&ie->ie_active->lock);
 	return false;
 }
 

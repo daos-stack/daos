@@ -1017,8 +1017,8 @@ struct dfuse_inode_entry {
 };
 
 struct active_inode {
-	d_list_t        chunks;
-	pthread_mutex_t lock;
+	d_list_t           chunks;
+	pthread_spinlock_t lock;
 };
 
 /* Increase active count on inode.  This takes a reference and allocates ie->active as required */

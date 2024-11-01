@@ -32,7 +32,7 @@ active_ie_init(struct dfuse_inode_entry *ie)
 	if (!ie->ie_active)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rc = D_MUTEX_INIT(&ie->ie_active->lock, NULL);
+	rc = D_SPIN_INIT(&ie->ie_active->lock, 0);
 	if (rc != -DER_SUCCESS) {
 		D_FREE(ie->ie_active);
 		goto out;
@@ -46,7 +46,7 @@ out:
 static void
 ah_free(struct dfuse_inode_entry *ie)
 {
-	D_MUTEX_DESTROY(&ie->ie_active->lock);
+	D_SPIN_DESTROY(&ie->ie_active->lock);
 	D_FREE(ie->ie_active);
 }
 
