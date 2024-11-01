@@ -53,7 +53,6 @@ def set_device_faulty(test, dmg, server, uuid, pool=None, has_sys_xs=False, **kw
 
     Returns:
         dict: the json response from the dmg storage set-faulty command. None if has_sys_xs is True.
-
     """
     kwargs['host'] = server
     kwargs['uuid'] = uuid
