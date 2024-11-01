@@ -16,7 +16,7 @@
 
 Name:          daos
 Version:       2.7.100
-Release:       9%{?relval}%{?dist}
+Release:       10%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -593,6 +593,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Nov 1 2024 Sherin T George <sherin-t.george@hpe.com> 2.7.100-10
+- The modified DAV allocator with memory bucket support for md_on_ssd
+  phase-2 is delivered as dav_v2.so.
+
 * Tue Oct 15 2024 Brian J. Murrell <brian.murrell@intel.com> - 2.7.100-9
 - Drop BRs for UCX as they were obsoleted as of e01970d
 
@@ -674,10 +678,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 * Fri Nov 03 2023 Phillip Henderson <phillip.henderson@intel.com> 2.5.100-10
 - Move verify_perms.py location
-
-* Mon Oct 16 2023 Sherin T George <sherin-t.george@hpe.com> 2.5.100-10
-- The modified DAV allocator with memory bucket support for md_on_ssd
-  phase-2 is delivered as dav_v2.so.
 
 * Wed Aug 23 2023 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-9
 - Update fuse3 requirement to R: /usr/bin/fusermount3 by path
