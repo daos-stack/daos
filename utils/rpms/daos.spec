@@ -3,7 +3,7 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version   2.3.1-1%{?dist}
+%global mercury_version   2.4
 %global libfabric_version 1.15.1-1
 %global __python %{__python3}
 
@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.6.1
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -49,7 +49,7 @@ BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
-BuildRequires: libpmemobj-devel >= 2.0.0
+BuildRequires: libpmemobj-devel >= 2.1.0
 %if (0%{?rhel} >= 8)
 BuildRequires: fuse3-devel >= 3
 %else
@@ -147,11 +147,11 @@ Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 03.00.00.0423
-Requires: libpmemobj1 >= 2.0.0-1.suse1500
+Requires: libpmemobj1 >= 2.1.0-1.suse1500
 Requires: libfabric1 >= %{libfabric_version}
 %else
 Requires: ipmctl >= 03.00.00.0468
-Requires: libpmemobj >= 2.0.0-1%{?dist}
+Requires: libpmemobj >= 2.1.0-1%{?dist}
 %endif
 Requires: libfabric >= %{libfabric_version}
 Requires: mercury >= %{mercury_version}
@@ -232,6 +232,13 @@ Requires: fuse3-devel >= 3
 Requires: fuse3-devel >= 3.4.2
 %endif
 Requires: pciutils-devel
+%if (0%{?suse_version} > 0)
+Requires: libndctl-devel
+%endif
+%if (0%{?rhel} >= 8)
+Requires: ndctl-devel
+Requires: daxctl-devel
+%endif
 
 %description client-tests
 This is the package needed to run the DAOS test suite (client tests)
@@ -594,6 +601,20 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+
+* Wed Oct 02 2024 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.6.1-4
+- Add support of the PMDK package 2.1.0 with NDCTL enabled.
+  * Increase the default ULT stack size to 20KiB if the engine uses
+    the DCPM storage class.
+  * Prevent using the RAM storage class (simulated PMem) when
+    the shutdown state (SDS) is active.
+    * Automatically disable SDS for the RAM storage class on engine startup.
+    * Force explicitly setting the PMEMOBJ_CONF='sds.at_create=0'
+      environment variable to deactivate SDS for the DAOS tools
+      (ddb, daos_perf, vos_perf, etc.) when used WITHOUT DCPM.
+      Otherwise, a user is supposed to be stopped by an error
+      like: "Unsafe shutdown count is not supported for this source".
+
 * Tue Oct 01 2024 Phillip Henderson <phillip.henderson@intel.com> 2.6.1-3
 - Third release candidate for 2.6.1
 
