@@ -394,8 +394,7 @@ static int pool_create_fill_resp(Mgmt__PoolCreateResp *resp, uuid_t uuid, d_rank
 
 	D_DEBUG(DB_MGMT, "%d service replicas\n", svc_ranks->rl_nr);
 
-	rc =
-	    ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, NULL, NULL, &pool_info, NULL, NULL);
+	rc = ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, NULL, &pool_info, NULL, NULL);
 	if (rc != 0) {
 		D_ERROR("Failed to query created pool: rc=%d\n", rc);
 		D_GOTO(out, rc);
@@ -1747,10 +1746,8 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	d_rank_list_t          *svc_ranks          = NULL;
 	d_rank_list_t          *enabled_ranks      = NULL;
 	d_rank_list_t          *disabled_ranks     = NULL;
-	d_rank_list_t          *suspect_ranks      = NULL;
 	char                   *enabled_ranks_str  = NULL;
 	char                   *disabled_ranks_str = NULL;
-	char                   *suspect_ranks_str  = NULL;
 	size_t                  len;
 	uint8_t                *body;
 
@@ -1774,8 +1771,8 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(error, rc = -DER_NOMEM);
 
 	pool_info.pi_bits = req->query_mask;
-	rc = ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, &disabled_ranks, &suspect_ranks,
-				&pool_info, &resp.pool_layout_ver, &resp.upgrade_layout_ver);
+	rc = ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, &disabled_ranks, &pool_info,
+				&resp.pool_layout_ver, &resp.upgrade_layout_ver);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID ": Failed to query the pool", DP_UUID(uuid));
 		D_GOTO(error, rc);
@@ -1797,18 +1794,9 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			 DP_UUID(uuid));
 		D_GOTO(error, rc);
 	}
-	rc = d_rank_list_to_str(suspect_ranks, &suspect_ranks_str);
-	if (rc != 0) {
-		DL_ERROR(rc, DF_UUID ": Failed to serialize the list of suspect ranks",
-			 DP_UUID(uuid));
-		D_GOTO(error, rc);
-	}
 	if (disabled_ranks_str != NULL)
 		D_DEBUG(DB_MGMT, DF_UUID ": list of disabled ranks: %s\n", DP_UUID(uuid),
 			disabled_ranks_str);
-	if (suspect_ranks_str != NULL)
-		D_DEBUG(DB_MGMT, DF_UUID ": list of suspect ranks: %s\n", DP_UUID(uuid),
-			suspect_ranks_str);
 
 	/* Populate the response */
 	resp.query_mask       = pool_info.pi_bits;
@@ -1825,8 +1813,6 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		resp.enabled_ranks = enabled_ranks_str;
 	if (disabled_ranks_str != NULL)
 		resp.disabled_ranks = disabled_ranks_str;
-	if (suspect_ranks_str != NULL)
-		resp.suspect_ranks = suspect_ranks_str;
 
 	D_ALLOC_ARRAY(resp.tier_stats, DAOS_MEDIA_MAX);
 	if (resp.tier_stats == NULL)
@@ -1864,8 +1850,6 @@ error:
 	D_FREE(enabled_ranks_str);
 	d_rank_list_free(disabled_ranks);
 	D_FREE(disabled_ranks_str);
-	d_rank_list_free(suspect_ranks);
-	D_FREE(suspect_ranks_str);
 	d_rank_list_free(svc_ranks);
 	pool_query_free_tier_stats(&resp);
 }
