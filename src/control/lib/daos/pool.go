@@ -77,7 +77,6 @@ type (
 		TierStats        []*StorageUsageStats `json:"tier_stats"`
 		EnabledRanks     *ranklist.RankSet    `json:"enabled_ranks,omitempty"`
 		DisabledRanks    *ranklist.RankSet    `json:"disabled_ranks,omitempty"`
-		SuspectRanks     *ranklist.RankSet    `json:"suspect_ranks,omitempty"`
 		PoolLayoutVer    uint32               `json:"pool_layout_ver"`
 		UpgradeLayoutVer uint32               `json:"upgrade_layout_ver"`
 	}
@@ -105,7 +104,7 @@ type (
 
 const (
 	// DefaultPoolQueryMask defines the default pool query mask.
-	DefaultPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_ENGINES_SUSPECT))
+	DefaultPoolQueryMask = PoolQueryMask(^uint64(0) &^ C.DPI_ENGINES_ENABLED)
 	// HealthOnlyPoolQueryMask defines the mask for health-only queries.
 	HealthOnlyPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_SPACE))
 
@@ -117,8 +116,6 @@ const (
 	PoolQueryOptionEnabledEngines = "enabled_engines"
 	// PoolQueryOptionDisabledEngines retrieves disabled engines as part of the pool query.
 	PoolQueryOptionDisabledEngines = "disabled_engines"
-	// PoolQueryOptionSuspectEngines retrieves suspect engines as part of the pool query.
-	PoolQueryOptionSuspectEngines = "suspect_engines"
 
 	// PoolConnectFlagReadOnly indicates that the connection is read-only.
 	PoolConnectFlagReadOnly = C.DAOS_PC_RO
@@ -133,7 +130,6 @@ var poolQueryOptMap = map[C.int]string{
 	C.DPI_REBUILD_STATUS:   PoolQueryOptionRebuild,
 	C.DPI_ENGINES_ENABLED:  PoolQueryOptionEnabledEngines,
 	C.DPI_ENGINES_DISABLED: PoolQueryOptionDisabledEngines,
-	C.DPI_ENGINES_SUSPECT:  PoolQueryOptionSuspectEngines,
 }
 
 func resolvePoolQueryOpt(name string) (C.int, error) {

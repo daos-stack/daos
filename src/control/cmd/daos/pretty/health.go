@@ -61,13 +61,6 @@ func printPoolHealth(out io.Writer, pi *daos.PoolInfo, verbose bool) {
 	}
 
 	var healthStrings []string
-	if pi.SuspectRanks != nil && pi.SuspectRanks.Count() > 0 {
-		degStr := "Suspect"
-		if verbose {
-			degStr += fmt.Sprintf(" %s", pi.SuspectRanks)
-		}
-		healthStrings = append(healthStrings, degStr)
-	}
 	if pi.DisabledTargets > 0 {
 		degStr := "Degraded"
 		if verbose {
