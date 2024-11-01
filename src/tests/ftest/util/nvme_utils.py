@@ -67,16 +67,14 @@ def set_device_faulty(test, dmg, server, uuid, pool=None, has_sys_xs=False, **kw
     # Update the expected status of the any stopped/excluded ranks
     if has_sys_xs:
         rank_to_host = test.server_managers[-1].ranks
-        test.log.debug("## rank_to_host = %s", rank_to_host)
         ranks = []
         for rank, host in rank_to_host.items():
             if host == str(server):
                 ranks.append(rank)
-        test.log.debug("## ranks = %s", ranks)
         test.server_managers[-1].update_expected_states(ranks, ["stopped", "excluded"])
-
-    # Add a tearDown method to reset the faulty device
-    test.register_cleanup(reset_fault_device, dmg=dmg, server=server, uuid=uuid)
+    else:
+        # Add a tearDown method to reset the faulty device
+        test.register_cleanup(reset_fault_device, dmg=dmg, server=server, uuid=uuid)
 
     if pool:
         # Wait for rebuild to start
