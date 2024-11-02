@@ -455,12 +455,6 @@ class Orterun(JobManager):
 
         return super().run(raise_exception)
 
-    def kill(self):
-        """Forcibly terminate any job processes running on hosts."""
-        super().kill()
-        time.sleep(1)
-        self._kill_process(self.command_regex)
-
 
 class Mpirun(JobManager):
     """A class for the mpirun job manager command."""
@@ -574,12 +568,6 @@ class Mpirun(JobManager):
             raise MPILoadError(self.mpi_type)
 
         return super().run(raise_exception)
-
-    def kill(self):
-        """Forcibly terminate any job processes running on hosts."""
-        super().kill()
-        time.sleep(1)
-        self._kill_process(self.command_regex)
 
 
 class Srun(JobManager):
@@ -1255,6 +1243,11 @@ class Clush(JobManager):
         """
         if raise_exception is None:
             raise_exception = self.exit_status_exception
+
+        if callable(self.register_cleanup_method):
+            # Stop any running processes started by this job manager when the test completes
+            # pylint: disable=not-callable
+            self.register_cleanup_method(stop_job_manager, job_manager=self)
 
         command = " ".join([self.env.to_export_str(), str(self.job)]).strip()
         self.result = run_remote(self.log, self._hosts, command, self.verbose, self.timeout)

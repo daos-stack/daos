@@ -87,7 +87,7 @@ class HarnessCmockaTest(TestWithoutServers):
         try:
             cmocka_utils.run_cmocka_test(self, command)
         finally:
-            self._verify_no_cmocka_xml(self.test_id, str(command))
+            self._verify_no_cmocka_xml(self.test_id, command)
 
     def _get_manager_command(self, class_name, executable, parameters):
         """Get a JobManager command object.
@@ -110,7 +110,7 @@ class HarnessCmockaTest(TestWithoutServers):
 
         Args:
             name (str): name of the cmocka test
-            command (str): command for the cmocka test
+            command (ExecutableCommand): command for the cmocka test
         """
         # Verify a generated cmocka xml file exists
         expected = os.path.join(self.outputdir, f"{name}_cmocka_results.xml")
@@ -122,7 +122,10 @@ class HarnessCmockaTest(TestWithoutServers):
         self.log.info("Verifying contents of the generated cmocka file: %s", expected)
         with open(expected, "r", encoding="utf-8") as file_handle:
             actual_contents = file_handle.readlines()
-        error_message = f"Missing cmocka results for {command} in {self.outputdir}"
+        if hasattr(command, "job"):
+            error_message = f"Missing cmocka results for {str(command.job)} in {self.outputdir}"
+        else:
+            error_message = f"Missing cmocka results for {str(command)} in {self.outputdir}"
         expected_lines = [
             f"<testsuite errors=\"1\" failures=\"0\" name=\"{name}\" skipped=\"0\" tests=\"1\"",
             f"<testcase classname=\"{name}\" name=\"{self.name}\"",
