@@ -13,23 +13,22 @@ from results_utils import Job, Results, TestName, TestResult, create_xml
 from run_utils import get_clush_command, run_local, run_remote
 
 
-def get_cmocka_command(path, executable, parameters=None):
+def get_cmocka_command(command, parameters=None):
     """Get an ExecutableCommand representing the provided command string.
 
     Adds detection of any bad keywords in the command output that, if found, will result in a
     command failure.
 
     Args:
-        path (str): the command path to use to create the CmockaCommand
-        executable (str): the command name to use to create the CmockaCommand
+        command (str): the command path to use to create the CmockaCommand
         parameters (str): parameters to use to create the CmockaCommand
 
     Returns:
         ExecutableCommand: the object setup to run the command
-
     """
     keywords = ["Process received signal", "stack smashing detected", "End of error message",
                 "buffer overflow detected"]
+    path, executable = os.path.split(command)
     command = CmockaCommand(path, executable, keywords)
     command.parameters.value = parameters
     return command

@@ -24,10 +24,10 @@ class HarnessCmockaTest(TestWithoutServers):
 
         :avocado: tags=all
         :avocado: tags=vm
-        :avocado: tags=harness,harness_cmocka,failure_expected
+        :avocado: tags=harness,failure_expected
         :avocado: tags=HarnessCmockaTest,test_no_cmocka_xml
         """
-        self._run_cmocka_test(get_cmocka_command("", "hostname"), False, True)
+        self._run_cmocka_test(get_cmocka_command("hostname"), False, True)
         self.log.info("Test passed")
 
     def test_clush_manager_timeout(self):
@@ -37,7 +37,7 @@ class HarnessCmockaTest(TestWithoutServers):
 
         :avocado: tags=all
         :avocado: tags=vm
-        :avocado: tags=harness,harness_cmocka,failure_expected
+        :avocado: tags=harness,failure_expected
         :avocado: tags=HarnessCmockaTest,test_clush_manager_timeout
         """
         self._run_cmocka_test(self._get_manager_command("Clush", "sleep", "60"), True, True)
@@ -50,7 +50,7 @@ class HarnessCmockaTest(TestWithoutServers):
 
         :avocado: tags=all
         :avocado: tags=vm
-        :avocado: tags=harness,harness_cmocka,failure_expected
+        :avocado: tags=harness,failure_expected
         :avocado: tags=HarnessCmockaTest,test_orterun_manager_timeout
         """
         self._run_cmocka_test(self._get_manager_command("Orterun", "sleep", "60"), True, True)
@@ -63,7 +63,7 @@ class HarnessCmockaTest(TestWithoutServers):
 
         :avocado: tags=all
         :avocado: tags=vm
-        :avocado: tags=harness,harness_cmocka,failure_expected
+        :avocado: tags=harness,failure_expected
         :avocado: tags=HarnessCmockaTest,test_mpirun_manager_timeout
         """
         self._run_cmocka_test(self._get_manager_command("Mpirun", "sleep", "60"), True, True)
@@ -100,7 +100,7 @@ class HarnessCmockaTest(TestWithoutServers):
         Returns:
             JobManager: the requested JobManager class
         """
-        command = get_cmocka_command("", executable, parameters)
+        command = get_cmocka_command(executable, parameters)
         manager = get_job_manager(self, class_name, command)
         manager.assign_hosts(get_local_host())
         return manager

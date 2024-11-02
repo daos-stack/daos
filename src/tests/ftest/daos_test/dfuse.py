@@ -103,6 +103,7 @@ class DaosCoreTestDfuse(TestWithServers):
                 daos_test_env['D_IL_MAX_EQ'] = '2'
                 daos_test_env['D_IL_NO_BYPASS'] = '1'
 
+        command = os.path.join(self.bin, 'dfuse_test')
         parameters = [
             '--test-dir',
             mount_dir,
@@ -125,8 +126,7 @@ class DaosCoreTestDfuse(TestWithServers):
         if cache_mode != 'writeback':
             parameters.append('--metadata')
 
-        job = get_job_manager(
-            self, "Clush", get_cmocka_command(self.bin, 'dfuse_test', " ".join(parameters)))
+        job = get_job_manager(self, "Clush", get_cmocka_command(command, ' '.join(parameters)))
         job.assign_hosts(cmocka_utils.hosts)
         job.assign_environment(daos_test_env)
 
