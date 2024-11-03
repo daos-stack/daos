@@ -54,25 +54,39 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	if (rc)
 		D_GOTO(err, rc);
 
+	/*
+	 * dfs_dup() just locally duplicates the file handle. If we have
+	 * O_TRUNC flag, we need to truncate the file manually.
+	 */
+	if (fi->flags & O_TRUNC) {
+		rc = dfs_punch(ie->ie_dfs->dfs_ns, ie->ie_obj, 0, DFS_MAX_FSIZE);
+		if (rc)
+			D_GOTO(err, rc);
+		dfuse_dcache_evict(oh->doh_ie);
+	}
+
+	/* There are no failure points between here and the kernel reply */
+
 	if ((fi->flags & O_ACCMODE) != O_RDONLY)
 		oh->doh_writeable = true;
 
 	if (ie->ie_dfs->dfc_data_timeout != 0) {
-		if (fi->flags & O_DIRECT)
+		if (fi->flags & O_DIRECT) {
 			fi_out.direct_io = 1;
-
-		/* If the file is already open or (potentially) in cache then allow any existing
-		 * kernel cache to be used.  If not then use pre-read.
-		 * This should mean that pre-read is only used on the first read, and on files
-		 * which pre-existed in the container.
-		 */
-
-		if (atomic_load_relaxed(&ie->ie_open_count) > 0 ||
-		    ((ie->ie_dcache_last_update.tv_sec != 0) &&
-		     dfuse_dcache_get_valid(ie, ie->ie_dfs->dfc_data_timeout))) {
-			fi_out.keep_cache = 1;
 		} else {
-			prefetch = true;
+			dfuse_ie_cs_flush(ie);
+
+			/* If the file is already open or (potentially) in cache then allow any
+			 * existing kernel cache to be used.  If not then use pre-read. This should
+			 * mean that pre-read is only used on the first read, and on files which
+			 * pre-existed in the container.
+			 */
+			if (atomic_load_relaxed(&ie->ie_open_count) > 0 ||
+			    dfuse_dcache_get_valid(ie, ie->ie_dfs->dfc_data_timeout)) {
+				fi_out.keep_cache = 1;
+			} else {
+				prefetch = true;
+			}
 		}
 	} else if (ie->ie_dfs->dfc_data_otoc) {
 		/* Open to close caching, this allows the use of shared mmap */
@@ -85,6 +99,8 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		fi_out.direct_io = 1;
 	}
 
+	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
+
 	if (ie->ie_dfs->dfc_direct_io_disable)
 		fi_out.direct_io = 0;
 
@@ -92,19 +108,6 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		oh->doh_caching = true;
 
 	fi_out.fh = (uint64_t)oh;
-
-	/*
-	 * dfs_dup() just locally duplicates the file handle. If we have
-	 * O_TRUNC flag, we need to truncate the file manually.
-	 */
-	if (fi->flags & O_TRUNC) {
-		rc = dfs_punch(ie->ie_dfs->dfs_ns, ie->ie_obj, 0, DFS_MAX_FSIZE);
-		if (rc)
-			D_GOTO(err, rc);
-		dfuse_dcache_evict(oh->doh_ie);
-	}
-
-	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
 
 	/* Enable this for files up to the max read size. */
 	if (prefetch && oh->doh_parent_dir &&
@@ -133,6 +136,101 @@ err:
 }
 
 void
+dfuse_ie_cs_flush(struct dfuse_inode_entry *ie)
+{
+	uint32_t new = 2;
+	uint32_t old = 1;
+
+restart:
+	if (atomic_compare_exchange(&ie->ie_dc.active, old, new)) {
+		/* ie->ie_ref was 1, now it's 2 */
+		sem_wait(&ie->ie_dc.sem);
+
+	} else if (old == 0) {
+		/* ie->ie_ref was and is 0 */
+		return;
+	} else {
+		new = old + 1;
+
+		/* ie->ie_ref was > 1 and is unchanged */
+		if (!atomic_compare_exchange(&ie->ie_dc.active, old, new))
+			goto restart;
+
+		/* ie->ie_ref was > 1 and is unchanged */
+
+		sem_wait(&ie->ie_dc.sem);
+	}
+
+	old = atomic_fetch_sub(&ie->ie_dc.active, 1);
+
+	if (old > 1)
+		sem_post(&ie->ie_dc.sem);
+}
+
+static void
+getattr_cb(struct dfuse_event *ev)
+{
+	if (ev->de_ev.ev_error != 0) {
+		ev->de_ie->ie_dc.valid = false;
+		goto free;
+	}
+
+	ev->de_ie->ie_dc.stat.st_ino = ev->de_ie->ie_stat.st_ino;
+	ev->de_ie->ie_dc.valid       = true;
+	dfuse_dc_cache_set_time(ev->de_ie);
+
+	/* Data will have been read directory into ie->ie_dc.stat */
+
+free:
+	atomic_fetch_sub(&ev->de_ie->ie_dc.active, 1);
+	sem_post(&ev->de_ie->ie_dc.sem);
+	dfuse_inode_decref(ev->de_di, ev->de_ie);
+	D_FREE(ev);
+}
+
+void
+size_resample(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
+{
+	struct dfuse_event *ev;
+	uint64_t            eqt_idx;
+	struct dfuse_eq    *eqt;
+	int                 rc;
+
+	if (ie->ie_unlinked)
+		return;
+
+	eqt_idx = atomic_fetch_add_relaxed(&dfuse_info->di_eqt_idx, 1);
+	eqt     = &dfuse_info->di_eqt[eqt_idx % dfuse_info->di_eq_count];
+	D_ALLOC_PTR(ev);
+	if (ev == NULL)
+		return;
+
+	ev->de_complete_cb = getattr_cb;
+	ev->de_ie          = ie;
+	ev->de_di          = dfuse_info;
+
+	atomic_fetch_add_relaxed(&ie->ie_ref, 1);
+
+	rc = daos_event_init(&ev->de_ev, eqt->de_eq, NULL);
+	if (rc != -DER_SUCCESS)
+		goto err;
+
+	rc = dfs_ostatx(ie->ie_dfs->dfs_ns, ie->ie_obj, &ie->ie_dc.stat, &ev->de_ev);
+	if (rc != 0)
+		goto err;
+
+	atomic_fetch_add(&ie->ie_dc.active, 1);
+
+	sem_post(&eqt->de_sem);
+
+	return;
+err:
+	dfuse_inode_decref(ev->de_di, ev->de_ie);
+	ie->ie_dc.valid = false;
+	D_FREE(ev);
+}
+
+void
 dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
 	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
@@ -141,6 +239,7 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	int                       rc;
 	uint32_t                  oc;
 	uint32_t                  il_calls;
+	bool                      update_data_cache = false;
 
 	/* Perform the opposite of what the ioctl call does, always change the open handle count
 	 * but the inode only tracks number of open handles with non-zero ioctl counts
@@ -185,7 +284,7 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 			if (il_calls == 0) {
 				DFUSE_TRA_DEBUG(oh, "Evicting metadata cache, setting data cache");
 				dfuse_mcache_evict(oh->doh_ie);
-				dfuse_dcache_set_time(oh->doh_ie);
+				update_data_cache = true;
 			} else {
 				DFUSE_TRA_DEBUG(oh, "Evicting cache");
 				dfuse_cache_evict(oh->doh_ie);
@@ -196,6 +295,7 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		if (oh->doh_caching) {
 			if (il_calls == 0) {
 				DFUSE_TRA_DEBUG(oh, "Saving data cache");
+				/* Set the time here but do not re-sample as there are no writes. */
 				dfuse_dcache_set_time(oh->doh_ie);
 			} else {
 				DFUSE_TRA_DEBUG(oh, "Evicting cache");
@@ -204,9 +304,9 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		}
 	}
 	DFUSE_TRA_DEBUG(oh, "il_calls %d, caching %d,", il_calls, oh->doh_caching);
-	if (il_calls != 0) {
+	if (il_calls != 0)
 		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_il_count, 1);
-	}
+
 	oc = atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_count, 1);
 	if (oc == 1) {
 		if (read_chunk_close(oh->doh_ie))
@@ -216,6 +316,13 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	if (oh->doh_evict_on_close) {
 		ie = oh->doh_ie;
 		atomic_fetch_add_relaxed(&ie->ie_ref, 1);
+	}
+
+	if (update_data_cache) {
+		dfuse_dcache_set_time(oh->doh_ie);
+		if (oc == 1)
+			/* Fire off a ostatx call to fetch the new mtime */
+			size_resample(dfuse_info, oh->doh_ie);
 	}
 
 	rc = dfs_release(oh->doh_obj);

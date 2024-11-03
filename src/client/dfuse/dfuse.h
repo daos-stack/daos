@@ -411,6 +411,7 @@ struct dfuse_event {
 	union {
 		size_t de_req_len;
 		size_t de_readahead_len;
+		struct dfuse_info *de_di;
 	};
 	void (*de_complete_cb)(struct dfuse_event *ev);
 	struct stat de_attr;
@@ -457,6 +458,7 @@ struct dfuse_pool {
 	ACTION(CREATE)                                                                             \
 	ACTION(MKNOD)                                                                              \
 	ACTION(FGETATTR)                                                                           \
+	ACTION(PRE_GETATTR)                                                                        \
 	ACTION(GETATTR)                                                                            \
 	ACTION(FSETATTR)                                                                           \
 	ACTION(SETATTR)                                                                            \
@@ -535,6 +537,9 @@ struct dfuse_cont {
 	double                  dfc_dentry_dir_timeout;
 	double                  dfc_ndentry_timeout;
 	double                  dfc_data_timeout;
+
+	double                        dfc_dentry_inval_time;
+
 	bool                    dfc_data_otoc;
 	bool                    dfc_direct_io_disable;
 	bool                          dfc_wb_cache;
@@ -550,9 +555,6 @@ struct dfuse_cont {
 
 #define DFUSE_IE_STAT_ADD(_ie, _stat)                                                              \
 	atomic_fetch_add_relaxed(&(_ie)->ie_dfs->dfs_stat_value[(_stat)], 1)
-
-void
-dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc);
 
 /* Connect to a container via a label
  * Called either for labels on the command line or via dfuse_cont_get_handle() if opening via uuid
@@ -749,7 +751,7 @@ dfuse_loop(struct dfuse_info *dfuse_info);
 		_Static_assert(IS_OH(_oh), "Param is not open handle");                            \
 		(_oh)->doh_ie = NULL;                                                              \
 		__rc          = fuse_reply_err(req, 0);                                            \
-		if (__rc != 0)                                                                     \
+		if ((__rc != 0) && (__rc != -ENOENT))                                              \
 			DS_ERROR(-__rc, "fuse_reply_err() error");                                 \
 	} while (0)
 
@@ -999,6 +1001,36 @@ struct dfuse_inode_entry {
 	/** File has been unlinked from daos */
 	bool                      ie_unlinked;
 
+	/* Data cache metadata, list known size/mtime for file, if these have been updated then
+	 * the data cache should be dropped.
+	 *
+	 * When the last fd on a file is closed and all writes are completed then dfuse will launch
+	 * a stat to get the update size/mtime for the inode.  Future opens should block on this
+	 * stat in order to know if the file has been updated.
+	 *
+	 * Access is controlled via atomics and semaphore, when a decision to make the stat is taken
+	 * then active in increased, and the sem is posted.
+	 *
+	 * Future accesses of the inode should check active, if the value is 0 then there is nothing
+	 * to do.
+	 * If active is positive then it should increase active, wait on the semaphore, decrease
+	 * active and then post the semaphore if active != 0;
+	 *
+	 * After active is 0, (or the semaphore has been waited on) then the new stat structure is
+	 * valid.
+	 *
+	 * The release() code to initialize stat is atomic as it's only triggered by the last
+	 * release on a inode.  It could race with open() where the inode is known in advance
+	 * or create() where it is not.  Open will flush the stat before setting keep_cache.
+	 */
+	struct {
+		struct stat     stat;
+		bool            valid;
+		ATOMIC uint32_t active;
+		struct timespec last_update;
+		sem_t           sem;
+	} ie_dc;
+
 	/* Lock for writes, shared locks are held during write-back reads, exclusive lock is
 	 * acquired and released to flush outstanding writes for getattr, close and forget.
 	 */
@@ -1016,6 +1048,8 @@ struct dfuse_inode_entry {
 	struct read_chunk_core   *ie_chunk;
 };
 
+void
+dfuse_ie_cs_flush(struct dfuse_inode_entry *ie);
 /* Flush write-back cache writes to a inode.  It does this by waiting for and then releasing an
  * exclusive lock on the inode.  Writes take a shared lock so this will block until all pending
  * writes are complete.
@@ -1135,6 +1169,11 @@ dfuse_mcache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *tim
 /* Check the dentry cache setting against a given timeout, and return time left */
 bool
 dfuse_dentry_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout);
+
+void
+dfuse_dc_cache_set_time(struct dfuse_inode_entry *ie);
+bool
+dfuse_dc_cache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout);
 
 /* inval.c */
 

@@ -2369,6 +2369,83 @@ class PosixTests():
         assert len(data5) == 0
         assert raw_data1 == data6
 
+    def test_read_from_cache(self):
+        """Test a basic read.
+
+        Write to a file, then read from it.  With write-through caching on then the read should come
+        from the page cache.  Due to the way this is implement the cache will be truncated down
+        to a page size so this test only works for whole pages.
+
+        The I/O that dfuse should see are:
+        create
+        write
+        release
+        stat
+        open
+        release
+        open
+        release
+
+        After that update the file time from a different path and re-read the file, this should
+        trigger an actual read due to the file size changing triggering a cache invalidation.
+        """
+
+        # The value of attr-time.  Too slow and the test won't run fast enough and will fail,
+        # too long and the wall-clock time will be affected.
+        attr_time = 30
+
+        self.container.set_attrs({'dfuse-attr-time': str(attr_time),
+                                  'dfuse-data-cache': '5m',
+                                  'dfuse-dentry-time': '5m'})
+
+        dfuse0 = DFuse(self.server,
+                       self.conf,
+                       caching=True,
+                       wbcache=False,
+                       container=self.container)
+        dfuse0.start(v_hint='rfc')
+
+        file_name = join(dfuse0.dir, 'file')
+
+        # Create the file.
+        subprocess.run(["dd", "if=/dev/zero", f"of={file_name}", 'count=1', 'bs=4k'], check=True)
+
+        start = time.time()
+
+        # Read it after write, this should come from cache.
+        subprocess.run(["dd", "of=/dev/zero", f"if={file_name}", 'count=4k', 'bs=1'], check=True)
+        sd = dfuse0.check_usage()
+
+        assert sd["statistics"].get("read", 0) == 0, sd
+
+        # Read it after read, this should also come from cache.
+        subprocess.run(["dd", "of=/dev/zero", f"if={file_name}", 'count=1', 'bs=4k'], check=True)
+        sd = dfuse0.check_usage()
+        assert sd["statistics"].get("read", 0) == 0, sd
+
+        elapsed = time.time() - start
+
+        to_sleep = attr_time + 5 - elapsed
+
+        if to_sleep < 5:
+            raise NLTestFail("attr_time not high enough")
+
+        print(f"Sleeping for {to_sleep} seconds")
+        time.sleep(to_sleep)
+
+        # Now the attr time has expired but the dentry and data caches are still valid.  At this
+        # point change the file time using touch and then re-read the file which should perform
+        # an actual read this time.
+        self.server.run_daos_client_cmd_pil4dfs(['touch', 'file'], container=self.container)
+
+        # Read it after attr timeout, this should not come from cache due to the times changing.
+        subprocess.run(["dd", "of=/dev/zero", f"if={file_name}", 'count=1', 'bs=4k'], check=True)
+        sd = dfuse0.check_usage()
+        assert sd["statistics"].get("read", 0) > 0, sd
+
+        if dfuse0.stop():
+            self.fatal_errors = True
+
     def test_two_mounts(self):
         """Create two mounts, and check that a file created in one can be read from the other"""
         dfuse0 = DFuse(self.server,
@@ -3533,11 +3610,13 @@ class PosixTests():
         if dfuse.stop():
             self.fatal_errors = True
 
-    @needs_dfuse
+    @needs_dfuse_with_opt(caching=False)
     def test_complex_rename(self):
         """Test for rename semantics
 
-        Check that that rename is correctly updating the dfuse data for the moved file.
+        Check that that rename is correctly updating the dfuse data for the moved file.  For this
+        test to work correctly with caching then the attr-timeout needs to be shorter than the
+        time it takes to spin up the second DFuse instance, so do not this with caching on.
 
         # Create a file, read/write to it.
         # Check fstat works.

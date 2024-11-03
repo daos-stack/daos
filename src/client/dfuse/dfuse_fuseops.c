@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -54,6 +54,12 @@ dfuse_show_flags(void *handle, unsigned int cap, unsigned int want)
 #ifdef FUSE_CAP_EXPLICIT_INVAL_DATA
 	SHOW_FLAG(handle, cap, want, FUSE_CAP_EXPLICIT_INVAL_DATA);
 #endif
+#ifdef FUSE_CAP_EXPIRE_ONLY
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_EXPIRE_ONLY);
+#endif
+#ifdef FUSE_CAP_SETXATTR_EXT
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_SETXATTR_EXT);
+#endif
 
 	if (cap)
 		DFUSE_TRA_WARNING(handle, "Unknown capability flags %#x", cap);
@@ -89,6 +95,12 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 
 	conn->want |= FUSE_CAP_READDIRPLUS;
 	conn->want |= FUSE_CAP_READDIRPLUS_AUTO;
+
+#ifdef FUSE_CAP_EXPLICIT_INVAL_DATA
+	/* DAOS-15338 Do not let the kernel evict data on mtime changes */
+	conn->want |= FUSE_CAP_EXPLICIT_INVAL_DATA;
+	conn->want &= ~FUSE_CAP_AUTO_INVAL_DATA;
+#endif
 
 #ifdef FUSE_CAP_CACHE_SYMLINKS
 	conn->want |= FUSE_CAP_CACHE_SYMLINKS;
@@ -164,6 +176,22 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		DFUSE_IE_STAT_ADD(inode, DS_GETATTR);
 	}
 
+	/* Check for stat-after-write/close.  On close a stat is performed so the first getattr
+	 * call can use the result of that.
+	 */
+	if (inode->ie_dfs->dfc_attr_timeout) {
+		double timeout;
+		dfuse_ie_cs_flush(inode);
+
+		if (dfuse_dc_cache_get_valid(inode, inode->ie_dfs->dfc_attr_timeout, &timeout)) {
+			if (inode->ie_dc.valid) {
+				DFUSE_IE_STAT_ADD(inode, DS_PRE_GETATTR);
+				inode->ie_dc.valid = false;
+				DFUSE_REPLY_ATTR_FORCE(inode, req, timeout);
+				return;
+			}
+		}
+	}
 	DFUSE_IE_WFLUSH(inode);
 
 	if (inode->ie_dfs->dfc_attr_timeout &&
