@@ -21,7 +21,7 @@ craft_default_jobid(char **jobid)
 
 	ret = uname(&name);
 	if (ret) {
-		D_ERROR("Uname to get uname for creating default jobid\n");
+		D_ERROR("Uname to get uname for creating default jobid");
 		return daos_errno2der(errno);
 	}
 
@@ -67,8 +67,8 @@ dc_job_init(void)
 
 	dc_jobid = jobid;
 
-	D_INFO("Using JOBID ENV: %s\n", dc_jobid_env);
-	D_INFO("Using JOBID %s\n", dc_jobid);
+	D_INFO("Using JOBID ENV: %s", dc_jobid_env);
+	D_INFO("Using JOBID %s", dc_jobid);
 	return 0;
 
 out_env:

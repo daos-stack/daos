@@ -87,7 +87,7 @@ daos_pool_query(daos_handle_t poh, d_rank_list_t **ranks, daos_pool_info_t *info
 	DAOS_API_ARG_ASSERT(*args, POOL_QUERY);
 
 	if (pool_prop != NULL && !daos_prop_valid(pool_prop, true, false)) {
-		D_ERROR("invalid pool_prop parameter.\n");
+		D_ERROR("invalid pool_prop parameter");
 		return -DER_INVAL;
 	}
 
@@ -139,7 +139,7 @@ daos_pool_list_cont(daos_handle_t poh, daos_size_t *ncont,
 	DAOS_API_ARG_ASSERT(*args, POOL_LIST_CONT);
 
 	if (ncont == NULL) {
-		D_ERROR("ncont must be non-NULL\n");
+		D_ERROR("ncont must be non-NULL");
 		return -DER_INVAL;
 	}
 
@@ -211,12 +211,12 @@ daos_pool_filter_cont(daos_handle_t poh, daos_pool_cont_filter_t *filter,
 	DAOS_API_ARG_ASSERT(*args, POOL_FILTER_CONT);
 
 	if (ncont == NULL) {
-		D_ERROR("ncont must be non-NULL\n");
+		D_ERROR("ncont must be non-NULL");
 		return -DER_INVAL;
 	}
 
 	if (filter && filter->pcf_nparts > DAOS_POOL_CONT_FILTER_MAX_NPARTS) {
-		D_ERROR("filter pcf_nparts %u > maximum (%u)\n", filter->pcf_nparts,
+		D_ERROR("filter pcf_nparts %u > maximum (%u)", filter->pcf_nparts,
 			DAOS_POOL_CONT_FILTER_MAX_NPARTS);
 		return -DER_INVAL;
 	}
@@ -230,8 +230,8 @@ daos_pool_filter_cont(daos_handle_t poh, daos_pool_cont_filter_t *filter,
 	args->filt	= filter;
 	args->ncont	= ncont;
 	args->cont_buf	= cbuf;
-	D_DEBUG(DB_MD, "args=%p, filt=%p, ncont=%p, *ncont=%zu, cont_buf=%p\n",
-		args, args->filt, args->ncont, *args->ncont, args->cont_buf);
+	D_DEBUG(DB_MD, "args=%p, filt=%p, ncont=%p, *ncont=%zu, cont_buf=%p", args, args->filt,
+		args->ncont, *args->ncont, args->cont_buf);
 
 	return dc_task_schedule(task, true);
 }

@@ -64,7 +64,7 @@ daos_rpc_wait(crt_context_t *ctx, struct daos_rpc_status *status)
 
 		rc = crt_progress(ctx, 0);
 		if (rc && rc != -DER_TIMEDOUT) {
-			D_ERROR("failed to progress CART context: %d\n", rc);
+			D_ERROR("failed to progress CART context: %d", rc);
 			break;
 		}
 	}
@@ -116,7 +116,7 @@ query_cb(struct crt_proto_query_cb_info *cb_info)
 	if (daos_rpc_retryable_rc(cb_info->pq_rc)) {
 		rc = rsvc_client_choose(&rproto->cli, &rproto->ep);
 		if (rc) {
-			D_ERROR("rsvc_client_choose() failed: "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "rsvc_client_choose() failed");
 			rproto->rc = rc;
 			rproto->completed = true;
 		}
@@ -125,7 +125,7 @@ query_cb(struct crt_proto_query_cb_info *cb_info)
 					      rproto->ver_array, rproto->array_size,
 					      query_cb, rproto, daos_get_crt_ctx());
 		if (rc) {
-			D_ERROR("crt_proto_query_with_ctx() failed: "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "crt_proto_query_with_ctx() failed");
 			rproto->rc = rc;
 			rproto->completed = true;
 		}
@@ -148,7 +148,7 @@ daos_rpc_proto_query(crt_opcode_t base_opc, uint32_t *ver_array, int count, int 
 
 	rc = dc_mgmt_sys_attach(NULL, &sys);
 	if (rc != 0) {
-		D_ERROR("failed to attach to grp rc "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to attach to grp");
 		return rc;
 	}
 
@@ -158,7 +158,7 @@ daos_rpc_proto_query(crt_opcode_t base_opc, uint32_t *ver_array, int count, int 
 
 	rc = rsvc_client_init(&rproto->cli, sys->sy_info.ms_ranks);
 	if (rc) {
-		D_ERROR("rsvc_client_init() failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "rsvc_client_init() failed");
 		D_GOTO(out_free, rc);
 	}
 
@@ -173,21 +173,21 @@ daos_rpc_proto_query(crt_opcode_t base_opc, uint32_t *ver_array, int count, int 
 	rc = crt_proto_query_with_ctx(&rproto->ep, base_opc,
 				      ver_array, count, query_cb, rproto, ctx);
 	if (rc) {
-		D_ERROR("crt_proto_query_with_ctx() failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "crt_proto_query_with_ctx() failed");
 		D_GOTO(out_rsvc, rc);
 	}
 
 	while (!rproto->completed) {
 		rc = crt_progress(ctx, 0);
 		if (rc && rc != -DER_TIMEDOUT) {
-			D_ERROR("failed to progress CART context: %d\n", rc);
+			D_ERROR("failed to progress CART context: %d", rc);
 			D_GOTO(out_rsvc, rc);
 		}
 	}
 
 	if (rproto->rc != -DER_SUCCESS) {
 		rc = rproto->rc;
-		D_ERROR("crt_proto_query()failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "crt_proto_query()failed");
 		D_GOTO(out_rsvc, rc);
 	}
 	rc = 0;
@@ -197,7 +197,7 @@ daos_rpc_proto_query(crt_opcode_t base_opc, uint32_t *ver_array, int count, int 
 			break;
 
 	if (i == count) {
-		D_ERROR("Invalid RPC protocol version %d\n", rproto->version);
+		D_ERROR("Invalid RPC protocol version %d", rproto->version);
 		rc = -DER_PROTO;
 	} else {
 		*ret_ver = rproto->version;

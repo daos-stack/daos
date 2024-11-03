@@ -123,7 +123,7 @@ open_handle_cb(tse_task_t *task, void *data)
 	int		rc = task->dt_result;
 
 	if (rc != 0) {
-		D_ERROR("Failed to open kv obj "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to open kv obj");
 		D_GOTO(err_obj, rc);
 	}
 
@@ -152,7 +152,7 @@ err_obj:
 		rc2 = daos_task_create(DAOS_OPC_OBJ_CLOSE, tse_task2sched(task),
 				       0, NULL, &close_task);
 		if (rc2) {
-			D_ERROR("Failed to create task to cleanup obj hdl\n");
+			D_ERROR("Failed to create task to cleanup obj hdl");
 			return rc;
 		}
 
@@ -191,14 +191,14 @@ dc_kv_open(tse_task_t *task)
 	int			rc;
 
 	if (!daos_is_kv(args->oid)) {
-		D_ERROR("KV object must be of type Flat KV (OID feats).\n");
+		D_ERROR("KV object must be of type Flat KV (OID feats)");
 		D_GOTO(err_ptask, rc = -DER_INVAL);
 	}
 
 	/** Create task to open object */
 	rc = daos_task_create(DAOS_OPC_OBJ_OPEN, tse_task2sched(task), 0, NULL, &open_task);
 	if (rc != 0) {
-		D_ERROR("Failed to create object_open task "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to create object_open task");
 		D_GOTO(err_ptask, rc);
 	}
 
@@ -211,12 +211,12 @@ dc_kv_open(tse_task_t *task)
 	/** The upper task completes when the open task completes */
 	rc = tse_task_register_deps(task, 1, &open_task);
 	if (rc != 0) {
-		D_ERROR("Failed to register dependency\n");
+		D_ERROR("Failed to register dependency");
 		D_GOTO(err_put1, rc);
 	}
 	rc = tse_task_register_comp_cb(task, open_handle_cb, &args, sizeof(args));
 	if (rc != 0) {
-		D_ERROR("Failed to register completion cb\n");
+		D_ERROR("Failed to register completion cb");
 		D_GOTO(err_put1, rc);
 	}
 	rc = tse_task_schedule(open_task, true);
@@ -243,7 +243,7 @@ dc_kv_close_direct(daos_handle_t oh)
 
 	rc = daos_obj_close(kv->daos_oh, NULL);
 	if (rc) {
-		D_ERROR("daos_obj_close() failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "daos_obj_close() failed");
 		kv_decref(kv);
 		return rc;
 	}
@@ -273,7 +273,7 @@ dc_kv_close(tse_task_t *task)
 	/** Create task to close object */
 	rc = daos_task_create(DAOS_OPC_OBJ_CLOSE, tse_task2sched(task), 0, NULL, &close_task);
 	if (rc != 0) {
-		D_ERROR("Failed to create object_close task\n");
+		D_ERROR("Failed to create object_close task");
 		D_GOTO(err_put1, rc);
 	}
 	close_args = daos_task_get_args(close_task);
@@ -282,7 +282,7 @@ dc_kv_close(tse_task_t *task)
 	/** The upper task completes when the close task completes */
 	rc = tse_task_register_deps(task, 1, &close_task);
 	if (rc != 0) {
-		D_ERROR("Failed to register dependency\n");
+		D_ERROR("Failed to register dependency");
 		D_GOTO(err_put2, rc);
 	}
 
@@ -290,7 +290,7 @@ dc_kv_close(tse_task_t *task)
 	rc = tse_task_register_cbs(task, NULL, NULL, 0, free_handle_cb,
 				   &kv, sizeof(kv));
 	if (rc != 0) {
-		D_ERROR("Failed to register completion cb\n");
+		D_ERROR("Failed to register completion cb");
 		D_GOTO(err_put2, rc);
 	}
 
@@ -323,7 +323,7 @@ dc_kv_destroy(tse_task_t *task)
 	/** Create task to punch object */
 	rc = daos_task_create(DAOS_OPC_OBJ_PUNCH, tse_task2sched(task), 0, NULL, &punch_task);
 	if (rc != 0) {
-		D_ERROR("Failed to create object_punch task\n");
+		D_ERROR("Failed to create object_punch task");
 		D_GOTO(err_put1, rc);
 	}
 	punch_args = daos_task_get_args(punch_task);
@@ -336,7 +336,7 @@ dc_kv_destroy(tse_task_t *task)
 	/** The upper task completes when the punch task completes */
 	rc = tse_task_register_deps(task, 1, &punch_task);
 	if (rc != 0) {
-		D_ERROR("Failed to register dependency\n");
+		D_ERROR("Failed to register dependency");
 		D_GOTO(err_put2, rc);
 	}
 
@@ -475,7 +475,7 @@ dc_kv_get(tse_task_t *task)
 	buf = args->buf;
 	buf_size = args->buf_size;
 	if (buf_size == NULL) {
-		D_ERROR("Buffer size pointer is NULL\n");
+		D_ERROR("Buffer size pointer is NULL");
 		D_GOTO(err_task, rc = -DER_INVAL);
 	}
 

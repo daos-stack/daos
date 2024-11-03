@@ -34,7 +34,7 @@ ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, b
 		rc            = 0;
 		*is_truncated = true;
 	} else {
-		D_ERROR("Failed to list containers in pool, rc = %d\n", rc);
+		D_ERROR("Failed to list containers in pool, rc = %d", rc);
 		rc = daos_der2errno(rc);
 		goto err;
 	}
@@ -98,33 +98,33 @@ ds3_bucket_create(const char *name, struct ds3_bucket_info *info, dfs_attr_t *at
 
 	/* Prevent attempting to create metadata bucket */
 	if (strcmp(name, METADATA_BUCKET) == 0) {
-		D_ERROR("Cannot create metadata bucket\n");
+		D_ERROR("Cannot create metadata bucket");
 		return -EINVAL;
 	}
 
 	/* Create dfs container and open ds3b */
 	rc = dfs_cont_create_with_label(ds3->poh, name, attr, NULL, NULL, NULL);
 	if (rc != 0) {
-		D_ERROR("Failed to create container, rc = %d\n", rc);
+		D_ERROR("Failed to create container, rc = %d", rc);
 		return -rc;
 	}
 
 	rc = ds3_bucket_open(name, &ds3b, ds3, ev);
 	if (rc != 0) {
-		D_ERROR("Failed to open container, rc = %d\n", rc);
+		D_ERROR("Failed to open container, rc = %d", rc);
 		return -rc;
 	}
 
 	rc = ds3_bucket_set_info(info, ds3b, ev);
 	if (rc != 0) {
-		D_ERROR("Failed to put bucket info, rc = %d\n", rc);
+		D_ERROR("Failed to put bucket info, rc = %d", rc);
 		goto err;
 	}
 
 	/* Create multipart index */
 	rc = dfs_mkdir(ds3->meta_dfs, ds3->meta_dirs[MULTIPART_DIR], name, DEFFILEMODE, 0);
 	if (rc != 0 && rc != EEXIST)
-		D_ERROR("Failed to create multipart index, rc = %d\n", rc);
+		D_ERROR("Failed to create multipart index, rc = %d", rc);
 
 err:
 	rc2 = ds3_bucket_close(ds3b, ev);
@@ -207,7 +207,7 @@ ds3_bucket_open(const char *name, ds3_bucket_t **ds3b, ds3_t *ds3, daos_event_t 
 
 	/* Prevent attempting to open metadata bucket */
 	if (strcmp(name, METADATA_BUCKET) == 0) {
-		D_ERROR("Cannot open metadata bucket\n");
+		D_ERROR("Cannot open metadata bucket");
 		return -ENOENT;
 	}
 
@@ -418,7 +418,7 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 					  objs[obji].encoded, &objs[obji].encoded_length);
 			/* Skip if file has no dirent */
 			if (rc != 0) {
-				D_DEBUG(DB_ALL, "No dirent, skipping entry= %s\n", name);
+				D_DEBUG(DB_ALL, "No dirent, skipping entry= %s", name);
 				rc = dfs_release(entry_obj);
 				if (rc != 0)
 					goto err_dirents;
@@ -428,7 +428,7 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 			obji++;
 		} else {
 			/* Skip other types */
-			D_DEBUG(DB_ALL, "Skipping entry = %s\n", name);
+			D_DEBUG(DB_ALL, "Skipping entry = %s", name);
 		}
 
 		/* Close handles */

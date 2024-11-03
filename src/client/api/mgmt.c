@@ -53,7 +53,7 @@ daos_mgmt_get_bs_state(const char *group, uuid_t blobstore_uuid,
 	DAOS_API_ARG_ASSERT(*args, MGMT_GET_BS_STATE);
 
 	if (uuid_is_null(blobstore_uuid)) {
-		D_ERROR("Blobstore UUID must be non-NULL\n");
+		D_ERROR("Blobstore UUID must be non-NULL");
 		return -DER_INVAL;
 	}
 

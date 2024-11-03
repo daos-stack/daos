@@ -102,7 +102,7 @@ ds3_bucket_list_multipart(const char *bucket_name, uint32_t *nmp,
 		/* Skip if file has no saved key */
 		rc = dfs_getxattr(ds3->meta_dfs, upload_dir, RGW_KEY_XATTR, key, &size);
 		if (rc != 0) {
-			D_DEBUG(DB_ALL, "No key xattr, skipping upload_id= %s\n", upload_id);
+			D_DEBUG(DB_ALL, "No key xattr, skipping upload_id= %s", upload_id);
 			rc = dfs_release(upload_dir);
 			if (rc != 0)
 				goto err_key;
@@ -136,7 +136,7 @@ ds3_bucket_list_multipart(const char *bucket_name, uint32_t *nmp,
 				rc = dfs_getxattr(ds3->meta_dfs, upload_dir, RGW_DIR_ENTRY_XATTR,
 						  mps[mpi].encoded, &mps[mpi].encoded_length);
 				if (rc != 0) {
-					D_DEBUG(DB_ALL, "No dirent, skipping upload_id= %s\n",
+					D_DEBUG(DB_ALL, "No dirent, skipping upload_id= %s",
 						upload_id);
 					rc = dfs_release(upload_dir);
 					if (rc != 0)

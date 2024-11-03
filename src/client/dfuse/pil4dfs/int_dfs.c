@@ -693,11 +693,11 @@ discover_dfuse_mounts(void)
 			pt_dfs_mt->dfs_dir_hash = NULL;
 			pt_dfs_mt->len_fs_root  = strnlen(fs_entry->mnt_dir, DFS_MAX_PATH);
 			if (pt_dfs_mt->len_fs_root >= DFS_MAX_PATH) {
-				D_DEBUG(DB_ANY, "mnt_dir[] is too long! Skip this entry.\n");
+				D_DEBUG(DB_ANY, "mnt_dir[] is too long! Skip this entry");
 				D_GOTO(out, rc = ENAMETOOLONG);
 			}
 			if (access(fs_entry->mnt_dir, R_OK)) {
-				D_DEBUG(DB_ANY, "no read permission for %s: %d (%s)\n",
+				D_DEBUG(DB_ANY, "no read permission for %s: %d (%s)",
 					fs_entry->mnt_dir, errno, strerror(errno));
 				continue;
 			}
@@ -730,7 +730,7 @@ retrieve_handles_from_fuse(int idx)
 	fd = libc_open(dfs_list[idx].fs_root, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
 	if (fd < 0) {
 		errno_saved = errno;
-		D_DEBUG(DB_ANY, "failed to open dir %s: %d (%s)\n", dfs_list[idx].fs_root,
+		D_DEBUG(DB_ANY, "failed to open dir %s: %d (%s)", dfs_list[idx].fs_root,
 			errno_saved, strerror(errno_saved));
 		errno = errno_saved;
 		return (-1);
@@ -740,7 +740,7 @@ retrieve_handles_from_fuse(int idx)
 	rc  = ioctl(fd, cmd, &hs_reply);
 	if (rc != 0) {
 		errno_saved = errno;
-		D_DEBUG(DB_ANY, "failed to query size info from dfuse with ioctl(): %d (%s)\n",
+		D_DEBUG(DB_ANY, "failed to query size info from dfuse with ioctl(): %d (%s)",
 			errno_saved, strerror(errno_saved));
 		goto err;
 	}
@@ -764,7 +764,7 @@ retrieve_handles_from_fuse(int idx)
 		if (rc != 0) {
 			errno_saved = errno;
 			D_DEBUG(DB_ANY,
-				"failed to query pool handle from dfuse with ioctl(): %d (%s)\n",
+				"failed to query pool handle from dfuse with ioctl(): %d (%s)",
 				errno_saved, strerror(errno_saved));
 			goto err;
 		}
@@ -777,7 +777,7 @@ retrieve_handles_from_fuse(int idx)
 		rc = ioctl(fd, cmd, fname);
 		if (rc != 0) {
 			errno_saved = errno;
-			D_DEBUG(DB_ANY, "ioctl call on %d failed: %d (%s)\n", fd, errno_saved,
+			D_DEBUG(DB_ANY, "ioctl call on %d failed: %d (%s)", fd, errno_saved,
 				strerror(errno_saved));
 			goto err;
 		}
@@ -785,7 +785,7 @@ retrieve_handles_from_fuse(int idx)
 		tmp_file = fopen(fname, "rb");
 		if (tmp_file == NULL) {
 			errno_saved = errno;
-			D_DEBUG(DB_ANY, "fopen(%s) failed: %d (%s)\n", fname, errno_saved,
+			D_DEBUG(DB_ANY, "fopen(%s) failed: %d (%s)", fname, errno_saved,
 				strerror(errno_saved));
 			goto err;
 		}
@@ -794,7 +794,7 @@ retrieve_handles_from_fuse(int idx)
 		unlink(fname);
 		if (read_size != hs_reply.fsr_pool_size) {
 			errno_saved = EAGAIN;
-			D_DEBUG(DB_ANY, "fread expected %zu bytes, read %d bytes : %d (%s)\n",
+			D_DEBUG(DB_ANY, "fread expected %zu bytes, read %d bytes : %d (%s)",
 				hs_reply.fsr_pool_size, read_size, errno_saved,
 				strerror(errno_saved));
 			goto err;
@@ -806,8 +806,7 @@ retrieve_handles_from_fuse(int idx)
 	rc              = daos_pool_global2local(iov, &dfs_list[idx].poh);
 	if (rc != 0) {
 		errno_saved = daos_der2errno(rc);
-		D_DEBUG(DB_ANY,
-			"failed to create pool handle in daos_pool_global2local(): %d (%s)\n",
+		D_DEBUG(DB_ANY, "failed to create pool handle in daos_pool_global2local(): %d (%s)",
 			errno_saved, strerror(errno_saved));
 		goto err;
 	}
@@ -816,8 +815,7 @@ retrieve_handles_from_fuse(int idx)
 	rc  = ioctl(fd, cmd, iov.iov_buf);
 	if (rc != 0) {
 		errno_saved = errno;
-		D_DEBUG(DB_ANY,
-			"failed to query container handle from dfuse with ioctl(): %d (%s)\n",
+		D_DEBUG(DB_ANY, "failed to query container handle from dfuse with ioctl(): %d (%s)",
 			errno_saved, strerror(errno_saved));
 		goto err;
 	}
@@ -827,7 +825,7 @@ retrieve_handles_from_fuse(int idx)
 	if (rc != 0) {
 		errno_saved = daos_der2errno(rc);
 		D_DEBUG(DB_ANY,
-			"failed to create container handle in daos_pool_global2local(): %d (%s)\n",
+			"failed to create container handle in daos_pool_global2local(): %d (%s)",
 			errno_saved, strerror(errno_saved));
 		goto err;
 	}
@@ -836,7 +834,7 @@ retrieve_handles_from_fuse(int idx)
 	rc  = ioctl(fd, cmd, iov.iov_buf);
 	if (rc != 0) {
 		errno_saved = errno;
-		D_DEBUG(DB_ANY, "failed to query DFS handle from dfuse with ioctl(): %d (%s)\n",
+		D_DEBUG(DB_ANY, "failed to query DFS handle from dfuse with ioctl(): %d (%s)",
 			errno_saved, strerror(errno_saved));
 		goto err;
 	}
@@ -845,8 +843,7 @@ retrieve_handles_from_fuse(int idx)
 	rc = dfs_global2local(dfs_list[idx].poh, dfs_list[idx].coh, 0, iov, &dfs_list[idx].dfs);
 	if (rc != 0) {
 		errno_saved = daos_der2errno(rc);
-		D_DEBUG(DB_ANY,
-			"failed to create DFS handle in daos_pool_global2local(): %d (%s)\n",
+		D_DEBUG(DB_ANY, "failed to create DFS handle in daos_pool_global2local(): %d (%s)",
 			errno_saved, strerror(errno_saved));
 		goto err;
 	}
@@ -855,7 +852,7 @@ retrieve_handles_from_fuse(int idx)
 				 &hdl_hash_ops, &dfs_list[idx].dfs_dir_hash);
 	if (rc) {
 		errno_saved = daos_der2errno(rc);
-		D_DEBUG(DB_ANY, "failed to create hash table for dir: %d (%s)\n", errno_saved,
+		D_DEBUG(DB_ANY, "failed to create hash table for dir: %d (%s)", errno_saved,
 			strerror(errno_saved));
 		goto err;
 	}
@@ -965,7 +962,7 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 		pt_end = stpncpy(full_path_parse, cur_dir, DFS_MAX_PATH);
 		len = (int)(pt_end - full_path_parse);
 		if (len >= DFS_MAX_PATH) {
-			D_DEBUG(DB_ANY, "full_path_parse[] is not large enough: %d (%s)\n",
+			D_DEBUG(DB_ANY, "full_path_parse[] is not large enough: %d (%s)",
 				ENAMETOOLONG, strerror(ENAMETOOLONG));
 			D_GOTO(out_err, rc = ENAMETOOLONG);
 		}
@@ -974,7 +971,7 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 		pt_end = stpncpy(full_path_parse, szInput, DFS_MAX_PATH);
 		len = (int)(pt_end - full_path_parse);
 		if (len >= DFS_MAX_PATH) {
-			D_DEBUG(DB_ANY, "full_path_parse[] is not large enough: %d (%s)\n",
+			D_DEBUG(DB_ANY, "full_path_parse[] is not large enough: %d (%s)",
 				ENAMETOOLONG, strerror(ENAMETOOLONG));
 			D_GOTO(out_err, rc = ENAMETOOLONG);
 		}
@@ -982,7 +979,7 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 		/* relative path */
 		len = snprintf(full_path_parse, DFS_MAX_PATH, "%s/%s", cur_dir, szInput);
 		if (len >= DFS_MAX_PATH) {
-			D_DEBUG(DB_ANY, "The length of path is too long: %d (%s)\n", ENAMETOOLONG,
+			D_DEBUG(DB_ANY, "The length of path is too long: %d (%s)", ENAMETOOLONG,
 				strerror(ENAMETOOLONG));
 			D_GOTO(out_err, rc = ENAMETOOLONG);
 		}
@@ -1075,7 +1072,7 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 
 			len_item_name = strnlen(full_path_parse + pos + 1, len);
 			if (len_item_name >= DFS_MAX_NAME) {
-				D_DEBUG(DB_ANY, "item_name[] is not large enough: %d (%s)\n",
+				D_DEBUG(DB_ANY, "item_name[] is not large enough: %d (%s)",
 					ENAMETOOLONG, strerror(ENAMETOOLONG));
 				D_GOTO(out_err, rc = ENAMETOOLONG);
 			}
@@ -1131,7 +1128,7 @@ remove_dot_dot(char path[], int *len)
 again:
 	nNonZero = 0;
 	if (p_Offset_2Dots == path) {
-		D_DEBUG(DB_ANY, "wrong path %s: %d (%s)\n", path, EINVAL, strerror(EINVAL));
+		D_DEBUG(DB_ANY, "wrong path %s: %d (%s)", path, EINVAL, strerror(EINVAL));
 		return EINVAL;
 	}
 
@@ -1608,7 +1605,7 @@ close_dup_fd_src(int (*next_close)(int fd), int fd)
 	D_MUTEX_UNLOCK(&lock_fd_dup2ed);
 
 	if (idx_dup < 0) {
-		D_DEBUG(DB_ANY, "failed to find fd %d in fd_dup2_list[]: %d (%s)\n", fd, EINVAL,
+		D_DEBUG(DB_ANY, "failed to find fd %d in fd_dup2_list[]: %d (%s)", fd, EINVAL,
 			strerror(EINVAL));
 		errno = EINVAL;
 		return (-1);
@@ -1751,7 +1748,7 @@ out_toolong:
 		free(*full_path_out);
 		*full_path_out = NULL;
 	}
-	D_DEBUG(DB_ANY, "path is too long: %d (%s)\n", ENAMETOOLONG, strerror(ENAMETOOLONG));
+	D_DEBUG(DB_ANY, "path is too long: %d (%s)", ENAMETOOLONG, strerror(ENAMETOOLONG));
 	*error = ENAMETOOLONG;
 	return (-1);
 
@@ -1881,7 +1878,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 			D_GOTO(out_error, rc = ENOMEM);
 		}
 		if (strnlen(dir_list[idx_dirfd]->path, DFS_MAX_PATH) >= DFS_MAX_PATH) {
-			D_DEBUG(DB_ANY, "path is longer than DFS_MAX_PATH: %d (%s)\n", ENAMETOOLONG,
+			D_DEBUG(DB_ANY, "path is longer than DFS_MAX_PATH: %d (%s)", ENAMETOOLONG,
 				strerror(ENAMETOOLONG));
 			free_dirfd(idx_dirfd);
 			D_GOTO(out_error, rc = ENAMETOOLONG);
@@ -2929,7 +2926,7 @@ opendir(const char *path)
 		D_GOTO(out_err, rc = ENOMEM);
 	}
 	if (strnlen(dir_list[idx_dirfd]->path, DFS_MAX_PATH) >= DFS_MAX_PATH) {
-		D_DEBUG(DB_ANY, "path is longer than DFS_MAX_PATH: %d (%s)\n", ENAMETOOLONG,
+		D_DEBUG(DB_ANY, "path is longer than DFS_MAX_PATH: %d (%s)", ENAMETOOLONG,
 			strerror(ENAMETOOLONG));
 		free_dirfd(idx_dirfd);
 		D_GOTO(out_err, rc = ENAMETOOLONG);
@@ -3094,7 +3091,7 @@ closedir(DIR *dirp)
 	_Pragma("GCC diagnostic ignored \"-Wnonnull-compare\"")
 	/* Check whether dirp is NULL or not since application provides dirp */
 	if (!dirp) {
-		D_DEBUG(DB_ANY, "dirp is NULL in closedir(): %d (%s)\n", EINVAL, strerror(EINVAL));
+		D_DEBUG(DB_ANY, "dirp is NULL in closedir(): %d (%s)", EINVAL, strerror(EINVAL));
 		errno = EINVAL;
 		return (-1);
 	}
@@ -3122,7 +3119,7 @@ new_readdir(DIR *dirp)
 
 	if (mydir->fd < FD_DIR_BASE) {
 		/* Not suppose to be here */
-		D_DEBUG(DB_ANY, "readdir() failed: %d (%s)\n", EINVAL, strerror(EINVAL));
+		D_DEBUG(DB_ANY, "readdir() failed: %d (%s)", EINVAL, strerror(EINVAL));
 		errno = EINVAL;
 		return NULL;
 	}
@@ -3155,14 +3152,13 @@ out_readdir:
 			   dir_list[mydir->fd - FD_DIR_BASE]->dfs_mt->len_fs_root,
 			   mydir->ents[mydir->num_ents].d_name);
 	if (len_str >= DFS_MAX_PATH) {
-		D_DEBUG(DB_ANY, "path is too long: %d (%s)\n", ENAMETOOLONG,
-			strerror(ENAMETOOLONG));
+		D_DEBUG(DB_ANY, "path is too long: %d (%s)", ENAMETOOLONG, strerror(ENAMETOOLONG));
 		free(full_path);
 		mydir->num_ents = 0;
 		errno = ENAMETOOLONG;
 		return NULL;
 	} else if (len_str < 0) {
-		D_DEBUG(DB_ANY, "asprintf() failed: %d (%s)\n", errno, strerror(errno));
+		D_DEBUG(DB_ANY, "asprintf() failed: %d (%s)", errno, strerror(errno));
 		mydir->num_ents = 0;
 		errno           = ENOMEM;
 		return NULL;
@@ -3633,7 +3629,7 @@ rename(const char *old_name, const char *new_name)
 			D_GOTO(out_err, rc);
 		type_old = mode_old & S_IFMT;
 		if (type_old != S_IFLNK && type_old != S_IFREG && type_old != S_IFDIR) {
-			D_DEBUG(DB_ANY, "unsupported type for old file %s: %d (%s)\n", old_name,
+			D_DEBUG(DB_ANY, "unsupported type for old file %s: %d (%s)", old_name,
 				ENOTSUP, strerror(ENOTSUP));
 			D_GOTO(out_err, rc = ENOTSUP);
 		}
@@ -3644,7 +3640,7 @@ rename(const char *old_name, const char *new_name)
 		if (rc == 0) {
 			type_new = stat_new.st_mode & S_IFMT;
 			if (type_new != S_IFLNK && type_new != S_IFREG && type_new != S_IFDIR) {
-				D_DEBUG(DB_ANY, "unsupported type for new file %s: %d (%s)\n",
+				D_DEBUG(DB_ANY, "unsupported type for new file %s: %d (%s)",
 					new_name, ENOTSUP, strerror(ENOTSUP));
 				D_GOTO(out_err, rc = ENOTSUP);
 			}
@@ -3673,8 +3669,7 @@ rename(const char *old_name, const char *new_name)
 				D_GOTO(out_old, rc = ENOMEM);
 			rc = dfs_get_symlink_value(obj_old, symlink_value, &link_len);
 			if (link_len >= DFS_MAX_PATH) {
-				D_DEBUG(DB_ANY,
-					"link is too long. link_len = %" PRIu64 ": %d (%s)\n",
+				D_DEBUG(DB_ANY, "link is too long. link_len = %" PRIu64 ": %d (%s)",
 					link_len, ENAMETOOLONG, strerror(ENAMETOOLONG));
 				D_GOTO(out_old, rc = ENAMETOOLONG);
 			}
@@ -3717,7 +3712,7 @@ rename(const char *old_name, const char *new_name)
 					/* Unexpected!!! */
 					D_DEBUG(DB_ANY,
 						"dfs_read() failed to read %" PRIu64
-						" bytes from %s: %d (%s)\n",
+						" bytes from %s: %d (%s)",
 						byte_to_write, old_name, EREMOTEIO,
 						strerror(EREMOTEIO));
 					D_GOTO(out_old, rc = EREMOTEIO);
@@ -3732,7 +3727,7 @@ rename(const char *old_name, const char *new_name)
 				if (rc != byte_to_write) {
 					close(fd);
 					/* Unexpected!!! */
-					D_DEBUG(DB_ANY, "write() failed: %d (%s)\n", EIO,
+					D_DEBUG(DB_ANY, "write() failed: %d (%s)", EIO,
 						strerror(EIO));
 					D_GOTO(out_old, rc = EIO);
 				}
@@ -3762,7 +3757,7 @@ rename(const char *old_name, const char *new_name)
 			D_GOTO(out_err, rc = errno);
 		type_old = stat_old.st_mode & S_IFMT;
 		if (type_old != S_IFLNK && type_old != S_IFREG && type_old != S_IFDIR) {
-			D_DEBUG(DB_ANY, "unsupported type for old file %s: %d (%s)\n", old_name,
+			D_DEBUG(DB_ANY, "unsupported type for old file %s: %d (%s)", old_name,
 				ENOTSUP, strerror(ENOTSUP));
 			D_GOTO(out_err, rc = ENOTSUP);
 		}
@@ -3778,7 +3773,7 @@ rename(const char *old_name, const char *new_name)
 		if (rc == 0) {
 			type_new = mode_new & S_IFMT;
 			if (type_new != S_IFLNK && type_new != S_IFREG && type_new != S_IFDIR) {
-				D_DEBUG(DB_ANY, "unsupported type for new file %s: %d (%s)\n",
+				D_DEBUG(DB_ANY, "unsupported type for new file %s: %d (%s)",
 					new_name, ENOTSUP, strerror(ENOTSUP));
 				dfs_release(obj_new);
 				D_GOTO(out_err, rc = ENOTSUP);
@@ -3818,8 +3813,7 @@ rename(const char *old_name, const char *new_name)
 				D_GOTO(out_err, rc = ENOMEM);
 			link_len_libc = readlink(old_name, symlink_value, DFS_MAX_PATH - 1);
 			if (link_len_libc >= DFS_MAX_PATH) {
-				D_DEBUG(DB_ANY,
-					"link is too long. link_len = %" PRIu64	": %d (%s)\n",
+				D_DEBUG(DB_ANY, "link is too long. link_len = %" PRIu64 ": %d (%s)",
 					link_len_libc, ENAMETOOLONG, strerror(ENAMETOOLONG));
 				D_GOTO(out_err, rc = ENAMETOOLONG);
 			} else if (link_len_libc < 0) {
@@ -4115,8 +4109,7 @@ chdir(const char *path)
 	if (rc)
 		D_GOTO(out_err, rc);
 	if (!S_ISDIR(stat_buf.st_mode)) {
-		D_DEBUG(DB_ANY, "%s is not a directory: %d (%s)\n", path, ENOTDIR,
-			strerror(ENOTDIR));
+		D_DEBUG(DB_ANY, "%s is not a directory: %d (%s)", path, ENOTDIR, strerror(ENOTDIR));
 		D_GOTO(out_err, rc = ENOTDIR);
 	}
 	if (is_root)
@@ -4127,8 +4120,7 @@ chdir(const char *path)
 		D_GOTO(out_err, rc);
 	len_str = snprintf(cur_dir, DFS_MAX_PATH, "%s%s", dfs_mt->fs_root, full_path);
 	if (len_str >= DFS_MAX_PATH) {
-		D_DEBUG(DB_ANY, "path is too long: %d (%s)\n", ENAMETOOLONG,
-			strerror(ENAMETOOLONG));
+		D_DEBUG(DB_ANY, "path is too long: %d (%s)", ENAMETOOLONG, strerror(ENAMETOOLONG));
 		D_GOTO(out_err, rc = ENAMETOOLONG);
 	}
 
@@ -4158,8 +4150,7 @@ fchdir(int dirfd)
 
 	pt_end = stpncpy(cur_dir, dir_list[dirfd - FD_DIR_BASE]->path, DFS_MAX_PATH - 1);
 	if ((long int)(pt_end - cur_dir) >= DFS_MAX_PATH - 1) {
-		D_DEBUG(DB_ANY, "path is too long: %d (%s)\n", ENAMETOOLONG,
-			strerror(ENAMETOOLONG));
+		D_DEBUG(DB_ANY, "path is too long: %d (%s)", ENAMETOOLONG, strerror(ENAMETOOLONG));
 		errno = ENAMETOOLONG;
 		return (-1);
 	}
@@ -4356,7 +4347,7 @@ truncate(const char *path, off_t length)
 	if (rc)
 		D_GOTO(out_err, rc);
 	if (!S_ISREG(mode)) {
-		D_DEBUG(DB_ANY, "%s is not a regular file: %d (%s)\n", path, EISDIR,
+		D_DEBUG(DB_ANY, "%s is not a regular file: %d (%s)", path, EISDIR,
 			strerror(EISDIR));
 		D_GOTO(out_err, rc = EISDIR);
 	}
@@ -5526,7 +5517,7 @@ init_myhook(void)
 	rc = discover_dfuse_mounts();
 	if (rc) {
 		/* Do not enable interception if discover_dfuse_mounts() failed. */
-		D_DEBUG(DB_ANY, "discover_dfuse_mounts() failed: %d (%s)\n", rc, strerror(rc));
+		D_DEBUG(DB_ANY, "discover_dfuse_mounts() failed: %d (%s)", rc, strerror(rc));
 		return;
 	}
 
@@ -5537,7 +5528,7 @@ init_myhook(void)
 	}
 	if (num_dfs == 0) {
 		/* Do not enable interception if no DFS mounts found. */
-		D_DEBUG(DB_ANY, "No DFS mount points found.\n");
+		D_DEBUG(DB_ANY, "No DFS mount points found");
 		return;
 	}
 

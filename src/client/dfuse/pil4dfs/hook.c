@@ -229,7 +229,7 @@ determine_lib_path(void)
 		}
 	}
 	if (path_offset == 0) {
-		D_ERROR("Fail to determine path_offset in /proc/self/maps!\n");
+		D_ERROR("Fail to determine path_offset in /proc/self/maps!");
 		quit_hook_init();
 	}
 
@@ -238,12 +238,12 @@ determine_lib_path(void)
 		/* try a different format */
 		pos = strstr(read_buff_map, "ld-2.");
 	if (pos == NULL) {
-		D_ERROR("Failed to find ld.so!\n");
+		D_ERROR("Failed to find ld.so!");
 		goto err;
 	}
 	get_path_pos(pos, &start, &end, path_offset, read_buff_map, read_buff_map + read_size);
 	if (start == NULL || end == NULL) {
-		D_ERROR("get_path_pos() failed to determine the path for ld.so!\n");
+		D_ERROR("get_path_pos() failed to determine the path for ld.so!");
 		goto err;
 	}
 	if ((end - start + 1) >= PATH_MAX) {
@@ -260,12 +260,12 @@ determine_lib_path(void)
 		/* try a different format */
 		pos = strstr(read_buff_map, "libc-2.");
 	if (pos == NULL) {
-		D_ERROR("Failed to find the path of libc.so!\n");
+		D_ERROR("Failed to find the path of libc.so!");
 		goto err;
 	}
 	get_path_pos(pos, &start, &end, path_offset, read_buff_map, read_buff_map + read_size);
 	if (start == NULL || end == NULL) {
-		D_ERROR("get_path_pos() failed to determine the path for libc.so.!\n");
+		D_ERROR("get_path_pos() failed to determine the path for libc.so.!");
 		goto err;
 	}
 	if ((end - start + 1) >= PATH_MAX) {
@@ -373,7 +373,7 @@ query_func_addr(const char lib_path[], const char func_name_list[][MAX_LEN_FUNC_
 			if (sections[i].sh_entsize == 0) {
 				munmap(map_start, file_stat.st_size);
 				close(fd);
-				D_ERROR("Unexpected entry size in ELF file.\n");
+				D_ERROR("Unexpected entry size in ELF file");
 				quit_hook_init();
 			}
 			num_sym        = sections[i].sh_size / sections[i].sh_entsize;
@@ -580,15 +580,15 @@ get_module_maps(void)
 					lib_base_addr[num_lib_in_map] = addr_B;
 					num_lib_in_map++;
 					if (num_lib_in_map >= MAX_NUM_LIB) {
-						D_WARN("lib_base_addr is FULL. "
-						       "You may need to increase MAX_NUM_LIB.\n");
+						D_WARN("lib_base_addr is FULL. You may need to "
+						       "increase MAX_NUM_LIB");
 						break;
 					}
 				}
 			}
 		}
 		if (num_seg >= MAX_NUM_SEG) {
-			D_WARN("num_seg >= MAX_NUM_LIB. You may want to increase MAX_NUM_LIB.\n");
+			D_WARN("num_seg >= MAX_NUM_LIB. You may want to increase MAX_NUM_LIB");
 			break;
 		}
 	}
@@ -664,8 +664,9 @@ allocate_memory_block_for_patches(void)
 
 			if (idx_seg < (num_seg - 1)) {
 				if ((addr_min[idx_seg + 1] - addr_max[idx_seg]) < MIN_MEM_SIZE) {
-					D_ERROR("Only %" PRIu64 " bytes available. No enough "
-						"space to hold the trampoline for patches.\n",
+					D_ERROR("Only %" PRIu64
+						" bytes available. No enough space to hold the "
+						"trampoline for patches",
 						addr_min[idx_seg + 1] - addr_max[idx_seg]);
 					quit_hook_init();
 				}
@@ -678,7 +679,7 @@ allocate_memory_block_for_patches(void)
 				DS_ERROR(errno, "mmap() failed");
 				quit_hook_init();
 			} else if (patch_blk_list[num_patch_blk].patch_addr != pt_alloc) {
-				D_ERROR("mmap failed to allocate memory at desired address\n");
+				D_ERROR("mmap failed to allocate memory at desired address");
 				quit_hook_init();
 			}
 
@@ -769,7 +770,7 @@ install_hook(void)
 	allocate_memory_block_for_patches();
 
 	if (cs_open(CS_ARCH_X86, CS_MODE_64, &handle)) {
-		D_ERROR("cs_open() failed to initialize capstone engine!\n");
+		D_ERROR("cs_open() failed to initialize capstone engine!");
 		quit_hook_init();
 	}
 	cs_opt_skipdata skipdata = {
@@ -815,7 +816,7 @@ install_hook(void)
 					     (unsigned char *)tramp_list[nFunc_InBlk].addr_org_func,
 					     MAX_LEN_DISASSEMBLE, 0, 0, &insn);
 			if (num_inst <= 0) {
-				D_ERROR("cs_disasm() failed to disassemble code.\n");
+				D_ERROR("cs_disasm() failed to disassemble code");
 				goto err;
 			}
 
@@ -1020,7 +1021,7 @@ register_a_hook(const char *module_name, const char *func_name, const void *new_
 
 	idx = query_lib_name_in_list(module_name_local);
 	if (idx == -1) {
-		D_ERROR("Failed to find %s in /proc/pid/maps\n", module_name_local);
+		D_ERROR("Failed to find %s in /proc/pid/maps", module_name_local);
 		quit_hook_init();
 	}
 
@@ -1052,7 +1053,7 @@ register_a_hook(const char *module_name, const char *func_name, const void *new_
 	num_hook++;
 
 	if (num_hook > MAX_PATCH) {
-		D_ERROR("num_hook > MAX_PATCH. MAX_PATCH needs to be increased.\n");
+		D_ERROR("num_hook > MAX_PATCH. MAX_PATCH needs to be increased");
 		quit_hook_init();
 	}
 
@@ -1078,8 +1079,8 @@ query_all_org_func_addr(void)
 
 		if (idx == -1) {
 			/* a new name not in list */
-			D_ERROR("Fail to find library %s in maps.\n",
-			       module_list[idx_mod].module_name);
+			D_ERROR("Fail to find library %s in maps",
+				module_list[idx_mod].module_name);
 			quit_hook_init();
 		} else {
 			strcpy(module_list[idx_mod].module_name, lib_name_list[idx]);

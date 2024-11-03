@@ -206,7 +206,7 @@ daos_init(void)
 	/** set up event queue */
 	rc = daos_eq_lib_init();
 	if (rc != 0) {
-		D_ERROR("failed to initialize eq_lib: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to initialize eq_lib");
 		D_GOTO(out_job, rc);
 	}
 
@@ -305,7 +305,7 @@ daos_fini(void)
 
 	rc = daos_eq_lib_fini();
 	if (rc != 0) {
-		D_ERROR("failed to finalize eq: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to finalize eq");
 		D_GOTO(unlock, rc);
 	}
 
@@ -319,8 +319,7 @@ daos_fini(void)
 
 	rc = dc_mgmt_notify_exit();
 	if (rc != 0)
-		D_ERROR("failed to disconnect some resources may leak, "
-			DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to disconnect some resources may leak");
 
 	dc_agent_fini();
 	dc_job_fini();

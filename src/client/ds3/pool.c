@@ -47,7 +47,7 @@ create_metadir(dfs_t *dfs, const char *dir)
 	if (rc == EEXIST)
 		rc = 0;
 	if (rc != 0)
-		D_ERROR("failed to create meta dir %s, rc = %d\n", dir, rc);
+		D_ERROR("failed to create meta dir %s, rc = %d", dir, rc);
 
 	return rc;
 }
@@ -59,7 +59,7 @@ open_metadir(dfs_t *dfs, const char *dir, dfs_obj_t **obj)
 
 	rc = dfs_lookup_rel(dfs, NULL, dir, O_RDWR, obj, NULL, NULL);
 	if (rc != 0)
-		D_ERROR("failed to open meta dir %s, rc = %d\n", dir, rc);
+		D_ERROR("failed to open meta dir %s, rc = %d", dir, rc);
 
 	return rc;
 }
@@ -71,7 +71,7 @@ close_metadir(const char *dir, dfs_obj_t *obj)
 
 	rc = dfs_release(obj);
 	if (rc != 0)
-		D_ERROR("failed to release meta dir %s, rc = %d\n", dir, rc);
+		D_ERROR("failed to release meta dir %s, rc = %d", dir, rc);
 
 	return rc;
 }
@@ -100,7 +100,7 @@ ds3_connect(const char *pool, const char *sys, ds3_t **ds3, daos_event_t *ev)
 	/** Connect to the pool first */
 	rc = daos_pool_connect(pool, sys, DAOS_PC_RW, &ds3_tmp->poh, &ds3_tmp->pinfo, ev);
 	if (rc != 0) {
-		D_ERROR("Failed to connect to pool %s, rc = %d\n", pool, rc);
+		D_ERROR("Failed to connect to pool %s, rc = %d", pool, rc);
 		rc = daos_der2errno(rc);
 		goto err_ds3;
 	}
@@ -121,7 +121,7 @@ ds3_connect(const char *pool, const char *sys, ds3_t **ds3, daos_event_t *ev)
 
 #undef X
 	} else {
-		D_ERROR("Failed to create metadata container in pool %s, rc = %d\n", pool, rc);
+		D_ERROR("Failed to create metadata container in pool %s, rc = %d", pool, rc);
 		goto err_poh;
 	}
 
@@ -149,11 +149,11 @@ err:
 
 	rc2 = dfs_disconnect(ds3_tmp->meta_dfs);
 	if (rc2)
-		D_ERROR("dfs_disconnect() Failed %d (%s)\n", rc2, strerror(rc2));
+		D_ERROR("dfs_disconnect() Failed %d (%s)", rc2, strerror(rc2));
 err_poh:
 	rc2 = daos_pool_disconnect(ds3_tmp->poh, NULL);
 	if (rc2)
-		D_ERROR("daos_pool_disconnect() Failed "DF_RC"\n", DP_RC(rc2));
+		DL_ERROR(rc2, "daos_pool_disconnect() Failed");
 err_ds3:
 	D_FREE(ds3_tmp);
 	return -rc;
@@ -175,10 +175,10 @@ ds3_disconnect(ds3_t *ds3, daos_event_t *ev)
 
 	rc = dfs_disconnect(ds3->meta_dfs);
 	if (rc)
-		D_ERROR("dfs_disconnect() Failed %d (%s)\n", rc, strerror(rc));
+		D_ERROR("dfs_disconnect() Failed %d (%s)", rc, strerror(rc));
 	rc = daos_pool_disconnect(ds3->poh, ev);
 	if (rc) {
-		D_ERROR("daos_pool_disconnect() Failed "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "daos_pool_disconnect() Failed");
 		rc = daos_der2errno(rc);
 	}
 	D_FREE(ds3);
