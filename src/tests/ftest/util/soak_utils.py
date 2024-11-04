@@ -22,7 +22,7 @@ from command_utils_base import EnvironmentVariables
 from daos_racer_utils import DaosRacerCommand
 from data_mover_utils import DcpCommand, FsCopy
 from dfuse_utils import get_dfuse
-from dmg_utils import get_storage_query_device_info, get_storage_query_device_uuids
+from dmg_utils import get_storage_query_device_info
 from duns_utils import format_path
 from exception_utils import CommandFailure
 from fio_utils import FioCommand
