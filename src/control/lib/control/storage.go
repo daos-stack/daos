@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -258,6 +258,8 @@ func StorageScan(ctx context.Context, rpcClient UnaryInvoker, req *StorageScanRe
 				// Health and meta details required to populate usage statistics.
 				Health: req.NvmeHealth || req.Usage,
 				Meta:   req.Usage,
+				// Only request link stats if health explicitly requested.
+				LinkStats: req.NvmeHealth,
 			},
 		})
 	})
