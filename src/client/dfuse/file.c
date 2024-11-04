@@ -38,6 +38,7 @@ active_ie_init(struct dfuse_inode_entry *ie)
 		goto out;
 	}
 	D_INIT_LIST_HEAD(&ie->ie_active->chunks);
+	atomic_init(&ie->ie_active->read_count, 0);
 out:
 	D_MUTEX_UNLOCK(&alock);
 	return rc;
@@ -62,6 +63,7 @@ active_oh_decref(struct dfuse_obj_hdl *oh)
 
 	DFUSE_TRA_DEBUG(oh->doh_ie, "Decref to %d", oc - 1);
 
+	/* Leave set_linear_read as false in this case */
 	if (oc != 1)
 		goto out;
 
