@@ -1,0 +1,115 @@
+name: Unit testing
+
+on:
+  pull_request:
+
+permissions: {}
+
+jobs:
+  Build_and_unit_test:
+    name: "Build and Run Unit Tests for Ryon"
+    runs-on: [self-hosted, wolf]
+    env:
+      CP_PRIORITY: 1
+      EL8_BUILD_VERSION: 8.8
+      EL8_VERSION: 8.8
+      EL9_BUILD_VERSION: 9
+      EL9_VERSION: 9
+      LEAP15_VERSION: 15.5
+      CONFIG_POWER_ONLY: false
+      PRAGMA_SUFFIX: -vm
+      OPERATIONS_EMAIL: ryon.jensen@intel.com
+      TEST_RPMS: true
+      JENKINS_URL: https://build.hpdd.intel.com/
+      REPOSITORY_URL: https://repo.dc.hpdd.intel.com/
+      REMOVE_EXISTING_RPMS: false
+      ARTIFACTS_URL: file:///scratch/job_repos/
+      REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
+      REPO_PATH: /scratch/job_repos/daos-stack/job/daos/job/PR-${{ github.event.pull_request.number }}/
+      CHROOT_NAME: "rocky+epel-8-x86_64"
+      DISTRO_NAME: "EL"
+      DISTRO_NAME_UPPER: "EL"
+      DISTRO_NAME_LOWER: "el"
+      DISTRO_VERSION: "8.8"
+      DISTRO_VERSION_MAJOR: "8"
+      DISTRO_WITH_VERSION: "el8.8"
+      OPENMPI: "openmpi"
+      LABEL: "ci_vm1"
+      DISTRO: EL_8
+      DAOS_STACK_EL_8_LOCAL_REPO: not_used
+      DAOS_STACK_EL_8_GROUP_REPO:
+      DAOS_STACK_EL_8_APPSTREAM_REPO:
+      DAOS_STACK_EL_7_LOCAL_REPO: not_used
+      NODESTRING:
+      CP_PR_REPOS:
+      CP_FEATURES:
+      CP_TEST_TAG:
+      CP_EL8_VM9_LABEL:
+      CP_EL9_VM9_LABEL:
+      CP_LEAP15_VM9_LABEL:
+      CP_EL8_VERSION:
+      CP_EL9_VERSION:
+      CP_LEAP15_VERSION:
+      CLUSTER_REQUEST_reqid:
+      STAGE_NAME: STAGE_RYON
+      QUEUE_URL:
+      COMMIT_STATUS_DISTRO_VERSION:
+      PROVISION_DISTRO: EL_8
+      ARTIFACTORY_URL: https://artifactory.dc.hpdd.intel.com/
+      DAOS_FULLNAME: daos-stack
+      DISTRO_REPOS: disabled
+      DOCKER_BUILDKIT: 0
+      MOCK_OPTIONS: --uniqueext=10390383274
+      PR_NUM: 14943
+      RUN_ID: ${{ github.run_id }}
+      TARGET: el8
+      FVERSION:
+      CP_RUN_GHA: true
+      CP_DOC_ONLY: false
+      BUILD_CHROOT: /var/lib/mock/rocky+epel-8-x86_64-10390383274/
+
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Request and Provision a Cluster
+        timeout-minutes: 7200
+        uses: ./.github/actions/provision-cluster
+        with:
+          condition: true
+
+      - name: Scons Build
+        run: |
+          set -eux
+          echo "hostname: $(hostname)"
+          echo "nodelist: $NODELIST"
+          echo "pwd: $(pwd)"
+          echo "HOME: $HOME"
+          echo "ls -ltr"
+          ls -ltr
+          
+          first_node=${NODELIST%%,*}
+          
+          # 'build' might be needed because of test structure
+          rsync -rlpt -z -e "ssh -i ci_key" . jenkins@$first_node:build/
+          ssh -i ci_key jenkins@$first_node 'cd build; ./ci/scons_build.sh'
+
+      - name: Run Test
+        run: |
+          set -eux
+          
+          first_node=${NODELIST%%,*}
+          echo "Beginning Tests on $first_node"
+          # ssh -i ci_key jenkins@$first_node 'export BULLSEYE=;export WITH_VALGRIND=;export BDEV_TEST=false; ./build/ci/unit/test_main_node.sh'
+          ssh -i ci_key jenkins@$first_node \
+            'env BULLSEYE= WITH_VALGRIND= BDEV_TEST=false \
+            ./build/ci/unit/test_main_node.sh'
+
+#      - name: Job cleanup
+#        if: (!cancelled() && (success() || failure()))
+#        run: |
+#          set -eux
+#          . ci/gha_functions.sh
+#          cleanup_provision_request "${{ env.CLUSTER_REQUEST_reqid }}"
