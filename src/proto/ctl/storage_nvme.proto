@@ -28,7 +28,8 @@ message ScanNvmeReq {
 	bool Basic = 3;		// Strip NVMe device details to only basic
 	uint64 MetaSize = 4;	// Size of the metadata blob
 	uint64 RdbSize = 5;	// Size of the RDB blob
-	bool   LinkStats = 6;     // Populate PCIe link info in health statistics
+	float  MemRatio = 6;	// Ratio of VOS-file:meta-blob sizes
+	bool   LinkStats = 7;	// Populate PCIe link info in health statistics
 }
 
 message ScanNvmeResp {
