@@ -161,7 +161,6 @@ struct dfuse_obj_hdl {
 	ATOMIC uint32_t           doh_il_calls;
 
 	ATOMIC uint64_t           doh_write_count;
-	ATOMIC uint64_t           doh_read_count;
 
 	/* Next offset we expect from readdir */
 	off_t                     doh_rd_offset;
@@ -183,6 +182,8 @@ struct dfuse_obj_hdl {
 	off_t                     doh_linear_read_pos;
 	bool                      doh_linear_read;
 	bool                      doh_linear_read_eof;
+
+	bool                      doh_set_linear_read;
 
 	/** True if caching is enabled for this file. */
 	bool                      doh_caching;
@@ -1023,6 +1024,7 @@ struct dfuse_inode_entry {
 struct active_inode {
 	d_list_t           chunks;
 	pthread_spinlock_t lock;
+	ATOMIC uint64_t    read_count;
 };
 
 /* Increase active count on inode.  This takes a reference and allocates ie->active as required */
@@ -1030,7 +1032,7 @@ int
 active_ie_init(struct dfuse_inode_entry *ie);
 
 /* Mark a oh as closing and drop the ref on inode active */
-bool
+void
 active_oh_decref(struct dfuse_obj_hdl *oh);
 
 /* Decrease active count on inode, called on error where there is no oh */

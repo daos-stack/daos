@@ -50,11 +50,10 @@ ah_free(struct dfuse_inode_entry *ie)
 	D_FREE(ie->ie_active);
 }
 
-bool
+void
 active_oh_decref(struct dfuse_obj_hdl *oh)
 {
 	uint32_t oc;
-	bool     rcb = true;
 
 	D_MUTEX_LOCK(&alock);
 
@@ -66,12 +65,24 @@ active_oh_decref(struct dfuse_obj_hdl *oh)
 	if (oc != 1)
 		goto out;
 
-	rcb = read_chunk_close(oh->doh_ie);
+	if (read_chunk_close(oh->doh_ie))
+		oh->doh_linear_read = true;
+
+	/* Do not set linear read in the case where there's no reads or writes, this could be
+	 * simple open/close calls but it could also be cache use so leave the setting unchanged
+	 * in this case.
+	 */
+	if (oh->doh_linear_read) {
+		if (oh->doh_ie->ie_active->read_count == 0)
+			oh->doh_set_linear_read = true;
+	} else {
+		oh->doh_set_linear_read = true;
+	}
 
 	ah_free(oh->doh_ie);
 out:
 	D_MUTEX_UNLOCK(&alock);
-	return rcb;
+	return;
 }
 
 void

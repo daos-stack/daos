@@ -1241,7 +1241,6 @@ dfuse_open_handle_init(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh,
 	oh->doh_linear_read_pos = 0;
 	atomic_init(&oh->doh_il_calls, 0);
 	atomic_init(&oh->doh_write_count, 0);
-	atomic_init(&oh->doh_read_count, 0);
 	atomic_fetch_add_relaxed(&dfuse_info->di_fh_count, 1);
 }
 
