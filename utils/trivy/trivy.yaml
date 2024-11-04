@@ -19,7 +19,7 @@ db:
   no-progress: false
   repository: ghcr.io/aquasecurity/trivy-db
   skip-update: false
-debug: false
+debug: true
 dependency-tree: true
 exit-code: 0
 generate-default-config: false
