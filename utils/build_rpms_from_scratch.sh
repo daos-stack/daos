@@ -58,15 +58,12 @@ install_dependencies() {
 
   if [[ "$OS_ID" == "opensuse-leap" ]]; then
    dependencies=$(rpmspec -q --buildrequires "$spec_file" | grep -v "^rpmlib" | grep -v "^/" | tr '\n' ' ')
-      if [ -n "$dependencies" ]; then
-          # Install dependencies using zypper
-          echo "Installing build dependencies: $dependencies"
-          zypper install --allow-vendor-change -y $dependencies
-      else
-          echo "No build dependencies found in the spec file."
-      fi
+    if [ -n "$dependencies" ]; then
+        # Install dependencies using zypper
+        zypper install --allow-vendor-change -y $dependencies
+    fi
   else
-    dnf --refresh builddep -y "$spec_file"
+    dnf builddep -y "$spec_file"
   fi
 }
 
@@ -79,7 +76,7 @@ prepare_env_leap() {
   # Install needed packages
   # git so can clone the repo
   # rpm-build, rpmdevtools, createrepo for building the rpms and setting up the rpm repo
-  # make is used for managing the rpmbuild process. This should probably be a dependency of the rpm.spec files, but not
+  # make is used for managing the rpmbuild process.
   # python3-Sphinx is needed by dpdk. The file /usr/bin/sphinx-build is listed as a dependency in the spec file,
   #   however, zypper isn't able to resolve a filename to a package and the scripting to handle that case is pretty
   #   messy, especially because "zypper what-provides" actually returns three options for sphinx-build. So, forgoing
@@ -108,18 +105,17 @@ prepare_env_leap() {
       echo "Main Update Repository already exists, skipping addition."
   fi
 
-  # Ignore dpdk because want to use RPMs built from daos-stack/dpdk
   zypper update -y --skip-interactive --no-recommends
 }
 
-prepare_env_rocky() {
+prepare_env_el() {
   el_version=$OS_VERSION # default to '8'
 
     # Install needed packages
     # git so can clone the repo
     # rpm-build, rpmdevtools, createrepo for building the rpms and setting up the rpm repo
     # dnf-plugins-core for additional dnf capabilities
-    # make is used for managing the rpmbuild process. This should probably be a dependency of the rpm.spec files, but not
+    # make is used for managing the rpmbuild process.
   dnf install -y \
       git \
       rpm-build \
@@ -144,7 +140,9 @@ l_createrepo() {
   createrepo "$1"
 
   if [[ "$OS_ID" == "opensuse-leap" ]]; then
-    zypper refresh
+    zypper refresh --repo local-rpms
+  else
+    dnf --disablerepo=\* --enablerepo=local-rpms makecache
   fi
 }
 
@@ -159,7 +157,7 @@ prepare_env() {
   if [[ "$OS_ID" == "opensuse-leap" ]]; then
       prepare_env_leap
     else
-      prepare_env_rocky
+      prepare_env_el
   fi
 
   setup_local_repo "$rpms_dst"
@@ -169,7 +167,6 @@ prepare_env() {
 }
 
 verify_os_version() {
-  $OS_ID
   if [[ "$OS_ID" == "opensuse-leap" ]]; then
     if ! [[ "$OS_VERSION" == "15.4" || "$OS_VERSION" == "15.5" || "$OS_VERSION" == "15.6" ]]; then
       echo "Untested SUSE Version: $suse_version"
