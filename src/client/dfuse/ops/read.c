@@ -166,32 +166,27 @@ chunk_free(struct read_chunk_data *cd)
 }
 
 /* Called when the last open file handle on a inode is closed.  This needs to free everything which
- * is complete and for anything that isn't flag it for deletion in the callback.
+ * is complete and for anything that isn't flag it for deletion in the callback.  No locking is
+ * needed here as this is only called as active is being released.
  *
  * Returns true if the feature was used.
  */
 bool
-read_chunk_close(struct dfuse_inode_entry *ie)
+read_chunk_close(struct active_inode *active)
 {
 	struct read_chunk_data *cd, *cdn;
-	bool                    rcb = false;
 
-	D_SPIN_LOCK(&ie->ie_active->lock);
-	if (d_list_empty(&ie->ie_active->chunks))
-		goto out;
+	if (d_list_empty(&active->chunks))
+		return false;
 
-	rcb = true;
-
-	d_list_for_each_entry_safe(cd, cdn, &ie->ie_active->chunks, list) {
+	d_list_for_each_entry_safe(cd, cdn, &active->chunks, list) {
 		if (cd->complete) {
 			chunk_free(cd);
 		} else {
 			cd->exiting = true;
 		}
 	}
-out:
-	D_SPIN_UNLOCK(&ie->ie_active->lock);
-	return rcb;
+	return true;
 }
 
 static void
