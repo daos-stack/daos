@@ -174,6 +174,12 @@ class SoakTestBase(TestWithServers):
         run_metrics_check(self, prefix="final")
         # Gather logs
         get_job_logs(self)
+        self.log.info("<<preTearDown Pool List >>")
+        self.dmg_command.pool_list()
+        # Check pool space after all done
+        self.log.info("<<preTearDown Pool Query >>")
+        for pool in self.pool:
+            self.dmg_command.pool_query(pool.identifier)
 
         if self.all_failed_harassers:
             errors.extend(self.all_failed_harassers)
