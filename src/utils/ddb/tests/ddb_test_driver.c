@@ -243,7 +243,9 @@ ddb_test_pool_setup(struct dt_vos_pool_ctx *tctx)
 		return rc;
 	}
 
-	rc = vos_pool_create(tctx->dvt_pmem_file, tctx->dvt_pool_uuid, 0, 0, 0, 0, NULL);
+	rc = vos_pool_create(tctx->dvt_pmem_file, tctx->dvt_pool_uuid, 0 /* scm_sz */,
+			     0 /* data_sz */, 0 /* meta_sz */, 0 /* flags */, 0 /* version */,
+			     NULL);
 	if (rc) {
 		close(tctx->dvt_fd);
 		return rc;
