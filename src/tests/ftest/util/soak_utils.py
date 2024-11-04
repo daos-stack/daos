@@ -610,16 +610,6 @@ def launch_vmd_identify_check(self, name, results, args):
     self.log.info("Harasser args: %s", self.harasser_args)
     self.log.info("<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
 
-    params = {"name": name,
-              "status": status,
-              "vars": {"failing_vmd_devices": failing_vmd}}
-    self.harasser_job_done(params)
-    results.put(self.harasser_results)
-    args.put(self.harasser_args)
-    self.log.info("Harasser results: %s", self.harasser_results)
-    self.log.info("Harasser args: %s", self.harasser_args)
-    self.log.info("<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
-
 
 def launch_reboot(self, pools, name, results, args):
     """Execute server unexpected reboot.
