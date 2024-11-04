@@ -37,6 +37,7 @@ if [ -z "$TARGET" ]; then
     # as the target, calculated as the sum of the commits this branch is ahead and
     # behind.
     # check master, then current release branches, then current feature branches.
+    export ORIGIN
     TARGET="$ORIGIN/$(utils/rpms/packaging/get_release_branch "feature/cat_recovery feature/multiprovider")"
     echo "  Install gh command to auto-detect target branch, assuming $TARGET."
 fi

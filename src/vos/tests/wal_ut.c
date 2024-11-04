@@ -29,7 +29,7 @@ ut_mc_init(struct bio_ut_args *args, uint64_t meta_sz, uint64_t wal_sz, uint64_t
 	int	rc, ret;
 
 	uuid_generate(args->bua_pool_id);
-	rc = bio_mc_create(args->bua_xs_ctxt, args->bua_pool_id, meta_sz, wal_sz, data_sz, 0);
+	rc = bio_mc_create(args->bua_xs_ctxt, args->bua_pool_id, 0, meta_sz, wal_sz, data_sz, 0, 0);
 	if (rc) {
 		D_ERROR("UT MC create failed. "DF_RC"\n", DP_RC(rc));
 		return rc;
