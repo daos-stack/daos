@@ -791,14 +791,14 @@ exit:
 int
 oi_iter_check_punch(daos_handle_t ih)
 {
-	struct vos_iterator     *iter = vos_hdl2iter(ih);
-	struct vos_oi_iter      *oiter = iter2oiter(iter);
-	struct vos_container    *cont  = oiter->oit_cont;
-	struct vos_obj_df       *obj;
-	struct oi_delete_arg     del_arg;
-	daos_unit_oid_t          oid;
-	d_iov_t                  rec_iov;
-	int                      rc;
+	struct vos_iterator  *iter  = vos_hdl2iter(ih);
+	struct vos_oi_iter   *oiter = iter2oiter(iter);
+	struct vos_container *cont  = oiter->oit_cont;
+	struct vos_obj_df    *obj;
+	struct oi_delete_arg  del_arg;
+	daos_unit_oid_t       oid;
+	d_iov_t               rec_iov;
+	int                   rc;
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 
