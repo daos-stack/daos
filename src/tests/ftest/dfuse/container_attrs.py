@@ -37,7 +37,7 @@ class DfuseContainerAttrs(TestWithServers):
         # it has to be done on one of the client node holding the root DFuse mount point.
         self.dfuse_hosts = self.agent_managers[0].hosts
 
-    def _check_attrs(self, dfuse, attrs={}, namespace=None):
+    def _check_attrs(self, dfuse, attrs=None, namespace=None):
         """Check if the DFuse attributes of a container are loaded
 
         Check in the log file of the dfuse instance if it contains the DFuse attributes of a given
@@ -46,16 +46,20 @@ class DfuseContainerAttrs(TestWithServers):
         Args:
             dfuse (Dfuse): DFuse instance to check
             attrs (dict, optional): list of attributes to test
-                Defaults to {}
+                Defaults to None
             namespace (str, optional): Namespace for TestContainer parameters in the test yaml file.
                 Defaults to None
         """
-        log_file = os.linesep.join(dfuse.get_log_file_data().output[0].stdout)
+        if attrs is None:
+            attrs = {}
+
         if namespace is not None:
             for attr in self.params.get("attrs", namespace).split(","):
                 key, value = attr.split(':')
                 if key not in attrs:
                     attrs[key] = value
+
+        log_file = os.linesep.join(dfuse.get_log_file_data().output[0].stdout)
         for name, value in attrs.items():
             match = re.findall(
                 fr"^.+\ssetting\s+'{name}'\s+is\s+(\d+)\s+seconds$",
@@ -176,7 +180,7 @@ class DfuseContainerAttrs(TestWithServers):
         self.log_step("Running stat on the DFuse sub-container mount point")
         result = run_remote(self.log, self.dfuse_hosts, f"stat {sub_dir}")
         if not result.passed:
-            self.fail(f"stat on {sub_dir } can not be run on {result.failed_hosts}")
+            self.fail(f"stat on {sub_dir} can not be run on {result.failed_hosts}")
 
         self.log_step("Checking DFuse log file")
         self._check_attrs(dfuse, attrs=attrs)
