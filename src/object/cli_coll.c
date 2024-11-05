@@ -873,7 +873,7 @@ queue_coll_query_task(tse_task_t *api_task, struct obj_auxi_args *obj_auxi, stru
 			   0, 0, ocdc);
 
 	for (i = 0; i < ocdc->grp_nr; i++) {
-		obj_coll_disp_dest(ocdc, coa->coa_dcts, &tgt_ep);
+		obj_coll_disp_dest(ocdc, coa->coa_dcts, &tgt_ep, obj->cob_md.omd_id);
 
 		tmp = coa->coa_dcts[ocdc->cur_pos].dct_shards[tgt_ep.ep_tag].dcs_idx;
 		rc = queue_shard_query_key_task(api_task, obj_auxi, epoch, tmp, map_ver,
