@@ -2220,6 +2220,7 @@ again:
 		D_GOTO(out, rc = dss_abterr2der(rc));
 	}
 
+	dtx_chore.chore.cho_load = dlh->dlh_forward_cnt;
 	rc = dss_chore_delegate(&dtx_chore.chore, dtx_leader_exec_ops_chore);
 	if (rc != 0) {
 		DL_ERROR(rc, "chore create failed [%u, %u] (2)", dlh->dlh_forward_idx,
@@ -2299,6 +2300,7 @@ exec:
 	/* The ones without DELAY flag will be skipped when scan the targets array. */
 	dlh->dlh_forward_cnt = dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt;
 
+	dtx_chore.chore.cho_load = dlh->dlh_forward_cnt;
 	rc = dss_chore_delegate(&dtx_chore.chore, dtx_leader_exec_ops_chore);
 	if (rc != 0) {
 		DL_ERROR(rc, "chore create failed (4)");
