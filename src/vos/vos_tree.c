@@ -154,8 +154,9 @@ ktr_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 {
 	struct ktr_hkey		*kkey = (struct ktr_hkey *)hkey;
 	struct umem_pool        *umm_pool = tins->ti_umm.umm_pool;
-	struct vos_pool         *pool     = (struct vos_pool *)tins->ti_priv;
+	struct vos_pool         *pool;
 
+	pool = vos_obj2pool(tins->ti_priv);
 	D_ASSERT(key_iov->iov_len < pool->vp_pool_df->pd_scm_sz);
 	hkey_common_gen(key_iov, hkey);
 
@@ -255,7 +256,7 @@ ktr_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 
 	rbund = iov2rec_bundle(val_iov);
 
-	rec->rec_off = umem_zalloc(&tins->ti_umm, vos_krec_size(rbund));
+	rec->rec_off = vos_obj_alloc(&tins->ti_umm, tins->ti_priv, vos_krec_size(rbund), true);
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return -DER_NOSPACE;
 
@@ -286,6 +287,8 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	int			 gc;
 	int			 rc;
 	struct vos_pool		*pool;
+	struct vos_object	*obj;
+	uint32_t		*bkt_ids = NULL;
 
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return 0;
@@ -298,14 +301,22 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	if (rc != 0)
 		return rc;
 
-	pool = (struct vos_pool *)tins->ti_priv;
+	D_ASSERT(tins->ti_priv);
+	obj = tins->ti_priv;
+	pool = vos_obj2pool(obj);
+
 	vos_ilog_ts_evict(&krec->kr_ilog, (krec->kr_bmap & KREC_BF_DKEY) ?
 			  VOS_TS_TYPE_DKEY : VOS_TS_TYPE_AKEY, pool->vp_sysdb);
 
-	D_ASSERT(tins->ti_priv);
 	gc = (krec->kr_bmap & KREC_BF_DKEY) ? GC_DKEY : GC_AKEY;
 	coh = vos_cont2hdl(args);
-	return gc_add_item(pool, coh, gc, rec->rec_off, 0);
+
+	if (vos_pool_is_evictable(pool)) {
+		D_ASSERT(obj->obj_bkt_alloted == 1);
+		bkt_ids = &obj->obj_bkt_ids[0];
+	}
+
+	return gc_add_item(pool, coh, gc, rec->rec_off, bkt_ids);
 }
 
 static int
@@ -351,7 +362,7 @@ ktr_rec_update(struct btr_instance *tins, struct btr_record *rec,
 static umem_off_t
 ktr_node_alloc(struct btr_instance *tins, int size)
 {
-	return umem_zalloc(&tins->ti_umm, size);
+	return vos_obj_alloc(&tins->ti_umm, tins->ti_priv, size, true);
 }
 
 static btr_ops_t key_btr_ops = {
@@ -636,7 +647,7 @@ svt_free_payload(struct vos_pool *pool, bio_addr_t *addr, uint64_t rsize)
 	} else if (addr->ba_type == DAOS_MEDIA_NVME) {
 		rc = vos_bio_addr_free(pool, addr, rsize);
 		if (rc)
-			DL_ERROR(rc, "Free SV payload on NVMe failed."); 
+			DL_ERROR(rc, "Free SV payload on NVMe failed.");
 	}
 	/* Payload is allocated along with vos_iref_df when SV is stored on SCM */
 
@@ -670,7 +681,10 @@ svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
 		return rc;
 
 	if (!overwrite) {
-		struct vos_pool	*pool = tins->ti_priv;
+		struct vos_pool *pool;
+
+		D_ASSERT(tins->ti_priv != NULL);
+		pool = vos_obj2pool(tins->ti_priv);
 
 		rc = svt_free_payload(pool, addr, irec->ir_size);
 		if (rc)
@@ -762,7 +776,7 @@ svt_check_availability(struct btr_instance *tins, struct btr_record *rec,
 static umem_off_t
 svt_node_alloc(struct btr_instance *tins, int size)
 {
-	return umem_zalloc(&tins->ti_umm, size);
+	return vos_obj_alloc(&tins->ti_umm, tins->ti_priv, size, true);
 }
 
 static btr_ops_t singv_btr_ops = {
@@ -850,12 +864,13 @@ evt_dop_log_del(struct umem_instance *umm, daos_epoch_t epoch,
 }
 
 void
-vos_evt_desc_cbs_init(struct evt_desc_cbs *cbs, struct vos_pool *pool,
-		      daos_handle_t coh)
+vos_evt_desc_cbs_init(struct evt_desc_cbs *cbs, struct vos_pool *pool, daos_handle_t coh,
+		      struct vos_object *obj)
 {
 	/* NB: coh is not required for destroy */
 	cbs->dc_bio_free_cb	= evt_dop_bio_free;
 	cbs->dc_bio_free_args	= (void *)pool;
+	cbs->dc_alloc_arg	= (void *)obj;
 	cbs->dc_log_status_cb	= evt_dop_log_status;
 	cbs->dc_log_status_args	= (void *)(unsigned long)coh.cookie;
 	cbs->dc_log_add_cb	= evt_dop_log_add;
@@ -877,7 +892,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 	int			 unexpected_flag;
 	int			 rc = 0;
 
-	vos_evt_desc_cbs_init(&cbs, pool, coh);
+	vos_evt_desc_cbs_init(&cbs, pool, coh, obj);
 	if ((krec->kr_bmap & (KREC_BF_BTR | KREC_BF_EVT)) == 0)
 		goto create;
 
@@ -903,7 +918,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 	if (expected_flag == KREC_BF_EVT) {
 		rc = evt_open(&krec->kr_evt, uma, &cbs, sub_toh);
 	} else {
-		rc = dbtree_open_inplace_ex(&krec->kr_btr, uma, coh, pool, sub_toh);
+		rc = dbtree_open_inplace_ex(&krec->kr_btr, uma, coh, obj, sub_toh);
 	}
 	if (rc != 0)
 		D_ERROR("Failed to open tree: " DF_RC "\n", DP_RC(rc));
@@ -972,7 +987,7 @@ create:
 
 		rc = dbtree_create_inplace_ex(ta->ta_class, tree_feats,
 					      ta->ta_order, uma, &krec->kr_btr,
-					      coh, pool, sub_toh);
+					      coh, obj, sub_toh);
 		if (rc != 0) {
 			D_ERROR("Failed to create btree: "DF_RC"\n", DP_RC(rc));
 			goto out;
@@ -1254,14 +1269,13 @@ obj_tree_init(struct vos_object *obj)
 					      ta->ta_order, vos_obj2uma(obj),
 					      &obj->obj_df->vo_tree,
 					      vos_cont2hdl(obj->obj_cont),
-					      vos_obj2pool(obj),
-					      &obj->obj_toh);
+					      obj, &obj->obj_toh);
 	} else {
 		D_DEBUG(DB_DF, "Open btree for object\n");
 		rc = dbtree_open_inplace_ex(&obj->obj_df->vo_tree,
 					    vos_obj2uma(obj),
 					    vos_cont2hdl(obj->obj_cont),
-					    vos_obj2pool(obj), &obj->obj_toh);
+					    obj, &obj->obj_toh);
 	}
 
 	if (rc)

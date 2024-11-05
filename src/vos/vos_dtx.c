@@ -311,16 +311,38 @@ dtx_act_ent_update(struct btr_instance *tins, struct btr_record *rec,
 
 	if (unlikely(!dae_old->dae_aborted)) {
 		/*
-		 * XXX: There are two possible reasons for that:
-		 *
-		 *	1. Client resent the RPC but without set 'RESEND' flag.
-		 *	2. Client reused the DTX ID for different modifications.
-		 *
-		 *	Currently, the 1st case is more suspected.
+		 * If the new entry and the old entry are for the same transaction, then the RPC
+		 * for the new one will take 'RESEND' flag, that will cause the old one has been
+		 * aborted before arriving at here. So it is quite possible that the new one and
+		 * the old one are for different transactions.
 		 */
-		D_ERROR("The TX ID "DF_DTI" may be reused for epoch "DF_X64" vs "DF_X64"\n",
-			DP_DTI(&DAE_XID(dae_old)), DAE_EPOCH(dae_old), DAE_EPOCH(dae_new));
-		return -DER_TX_ID_REUSED;
+		if (DAE_EPOCH(dae_old) < DAE_EPOCH(dae_new)) {
+			D_ERROR("The TX ID "DF_DTI" may be reused for epoch "DF_X64" vs "DF_X64"\n",
+				DP_DTI(&DAE_XID(dae_old)), DAE_EPOCH(dae_old), DAE_EPOCH(dae_new));
+			return -DER_TX_ID_REUSED;
+		}
+
+		/*
+		 * If the old entry has higher epoch, it is quite possible that the resent RPC
+		 * was handled before the original RPC (corresponding to 'dae_new'). Returning
+		 * -DER_INPROGRESS to make the RPC sponsor to retry the RPC with 'RESEND' flag,
+		 *  then related RPC handler logic will handle such case.
+		 */
+		if (DAE_EPOCH(dae_old) > DAE_EPOCH(dae_new)) {
+			D_ERROR("Resent RPC may be handled before original one for DTX "DF_DTI
+				" with epoch "DF_X64" vs "DF_X64"\n",
+				DP_DTI(&DAE_XID(dae_old)), DAE_EPOCH(dae_old), DAE_EPOCH(dae_new));
+			return -DER_INPROGRESS;
+		}
+
+		/*
+		 * The two entries uses the same epoch, then it may be caused by repeated RPCs
+		 * from different sources, such as multiple relay engines forward the same RPC
+		 * to current target. We need to notify related caller for such buggy case.
+		 */
+		D_ERROR("Receive repeated DTX "DF_DTI" with epoch "DF_X64"\n",
+			DP_DTI(&DAE_XID(dae_old)), DAE_EPOCH(dae_old));
+		return -DER_MISC;
 	}
 
 	rec->rec_off = umem_ptr2off(&tins->ti_umm, dae_new);
@@ -1171,16 +1193,20 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	}
 
 	if (intent == DAOS_INTENT_PURGE) {
-		uint32_t	age = d_hlc_age2sec(DAE_XID(dae).dti_hlc);
+		uint64_t	now = daos_gettime_coarse();
 
 		/*
 		 * The DTX entry still references related data record,
 		 * then we cannot (vos) aggregate related data record.
+		 * Report warning per each 10 seconds to avoid log flood.
 		 */
-		if (age >= DAOS_AGG_THRESHOLD)
-			D_WARN("DTX "DF_DTI" (state:%u, age:%u) still references the data, "
-			       "cannot be (VOS) aggregated\n",
-			       DP_DTI(&DAE_XID(dae)), vos_dtx_status(dae), age);
+		if (now - cont->vc_agg_busy_ts > 10) {
+			D_WARN("DTX "DF_DTI" (state:%u, flags:%x, age:%u) still references "
+			       "the modification, cannot be (VOS) aggregated\n",
+			       DP_DTI(&DAE_XID(dae)), vos_dtx_status(dae), DAE_FLAGS(dae),
+			       (unsigned int)d_hlc_age2sec(DAE_XID(dae).dti_hlc));
+			cont->vc_agg_busy_ts = now;
+		}
 
 		return ALB_AVAILABLE_DIRTY;
 	}
@@ -1908,8 +1934,13 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 			daos_epoch_t	e = *epoch;
 
 			*epoch = DAE_EPOCH(dae);
-			if (e != 0 && e != DAE_EPOCH(dae))
-				return -DER_MISMATCH;
+			if (e != 0) {
+				if (e > DAE_EPOCH(dae))
+					return -DER_MISMATCH;
+
+				if (e < DAE_EPOCH(dae))
+					return -DER_TX_RESTART;
+			}
 		}
 
 		return vos_dae_is_prepare(dae) ? DTX_ST_PREPARED : DTX_ST_INITED;
@@ -2205,14 +2236,139 @@ vos_dtx_post_handle(struct vos_container *cont,
 	}
 }
 
+static inline void
+dtx_unpin(struct vos_container *cont, struct umem_pin_handle *pin_hdl)
+{
+	struct vos_pool	*pool = vos_cont2pool(cont);
+
+	if (pin_hdl != NULL)
+		umem_cache_unpin(vos_pool2store(pool), pin_hdl);
+}
+
+static inline int
+bkts_add_rec(struct vos_pool *pool, struct vos_bkt_array *bkts, umem_off_t rec_off)
+{
+	uint32_t	bkt_id;
+	int		rc;
+
+	if (UMOFF_IS_NULL(rec_off))
+		return 0;
+
+	bkt_id = umem_get_mb_from_offset(vos_pool2umm(pool), rec_off);
+	if (bkt_id == UMEM_DEFAULT_MBKT_ID)
+		return 0;
+
+	rc = vos_bkt_array_add(bkts, bkt_id);
+	if (rc)
+		DL_ERROR(rc, "Failed to add %u into bucket array.", bkt_id);
+
+	return rc;
+}
+
+static int
+bkts_add_dae(struct vos_pool *pool, struct vos_bkt_array *bkts_in, struct vos_dtx_act_ent *dae)
+{
+	struct vos_bkt_array	local_bkts, *bkts;
+	umem_off_t		rec_off;
+	int			i, count, rc = 0;
+
+	vos_bkt_array_init(&local_bkts);
+	bkts = bkts_in->vba_cnt == 0 ? bkts_in : &local_bkts;
+
+	if (dae->dae_records != NULL) {
+		D_ASSERT(DAE_REC_CNT(dae) > DTX_INLINE_REC_CNT);
+
+		for (i = DAE_REC_CNT(dae) - DTX_INLINE_REC_CNT - 1; i >= 0; i--) {
+			rec_off = umem_off2offset(dae->dae_records[i]);
+			rc = bkts_add_rec(pool, bkts, rec_off);
+			if (rc)
+				goto out;
+		}
+		count = DTX_INLINE_REC_CNT;
+	} else {
+		count = DAE_REC_CNT(dae);
+	}
+
+	for (i = count - 1; i >= 0; i--) {
+		rec_off = umem_off2offset(DAE_REC_INLINE(dae)[i]);
+		rc = bkts_add_rec(pool, bkts, rec_off);
+		if (rc)
+			goto out;
+	}
+
+	/* Stop adding the dae when current dae not located in the subset of @bkts_in */
+	if (local_bkts.vba_cnt != 0 && !vos_bkt_array_subset(bkts_in, &local_bkts))
+		rc = 1;
+out:
+	vos_bkt_array_fini(&local_bkts);
+	return rc;
+}
+
+static int
+dtx_commit_pin(struct vos_container *cont, struct dtx_id dtis[], int count, int *pinned,
+	       struct umem_pin_handle **pin_hdl)
+{
+	struct vos_dtx_act_ent	*dae;
+	struct vos_bkt_array	 bkts;
+	d_iov_t			 kiov, riov;
+	int			 i, rc;
+
+	*pinned = count;
+	*pin_hdl = NULL;
+
+	if (!vos_pool_is_evictable(vos_cont2pool(cont)))
+		return 0;
+
+	vos_bkt_array_init(&bkts);
+
+	for (i = 0; i < count; i++) {
+		d_iov_set(&kiov, &dtis[i], sizeof(struct dtx_id));
+		d_iov_set(&riov, NULL, 0);
+
+		rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
+		if (rc == -DER_NONEXIST) {
+			rc = 0;
+			continue;
+		} else if (rc) {
+			DL_ERROR(rc, "Failed to lookup DTX active table.");
+			goto out;
+		}
+
+		dae = riov.iov_buf;
+		D_ASSERT(dae->dae_preparing == 0);
+
+		if (vos_dae_is_abort(dae) || dae->dae_committed || dae->dae_committing ||
+		    dae->dae_need_release == 0)
+			continue;
+
+		rc = bkts_add_dae(vos_cont2pool(cont), &bkts, dae);
+		if (rc) {
+			if (rc < 0) {
+				DL_ERROR(rc, "Failed to add DTX to bucket array.");
+				goto out;
+			}
+			*pinned = i;
+			break;
+		}
+	}
+
+	rc = vos_bkt_array_pin(vos_cont2pool(cont), &bkts, pin_hdl);
+	if (rc)
+		DL_ERROR(rc, "Failed to pin buckets.");
+out:
+	vos_bkt_array_fini(&bkts);
+	return rc;
+}
+
 int
 vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool rm_cos[])
 {
 	struct vos_dtx_act_ent	**daes = NULL;
 	struct vos_dtx_cmt_ent	**dces = NULL;
 	struct vos_container	 *cont;
-	int			  committed = 0;
-	int			  rc = 0;
+	struct umem_pin_handle	 *pin_hdl;
+	int			  tot_committed = 0, committed, pinned;
+	int			  idx = 0, rc = 0;
 
 	D_ASSERT(count > 0);
 
@@ -2227,24 +2383,73 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool rm_cos[]
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
 
+pin_objects:
+	rc = dtx_commit_pin(cont, &dtis[idx], count, &pinned, &pin_hdl);
+	if (rc) {
+		DL_ERROR(rc, "Pin objects failed before DTX commit.");
+		goto out;
+	}
+
+	D_ASSERT(pinned > 0 && pinned <= count);
+	count -= pinned;
+
 	/* Commit multiple DTXs via single local transaction. */
 	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
 	if (rc == 0) {
-		committed = vos_dtx_commit_internal(cont, dtis, count, 0, rm_cos, daes, dces);
+		committed = vos_dtx_commit_internal(cont, &dtis[idx], pinned, 0,
+						    rm_cos != NULL ? &rm_cos[idx] : NULL,
+						    &daes[idx], &dces[idx]);
 		if (committed >= 0) {
 			rc = umem_tx_commit(vos_cont2umm(cont));
 			D_ASSERT(rc == 0);
+			tot_committed += committed;
 		} else {
 			rc = umem_tx_abort(vos_cont2umm(cont), committed);
 		}
-		vos_dtx_post_handle(cont, daes, dces, count, false, rc != 0);
+		vos_dtx_post_handle(cont, &daes[idx], &dces[idx], pinned, false, rc != 0);
 	}
 
+	dtx_unpin(cont, pin_hdl);
+
+	if (count > 0) {
+		idx += pinned;
+		goto pin_objects;
+	}
 out:
 	D_FREE(daes);
 	D_FREE(dces);
 
-	return rc < 0 ? rc : committed;
+	return rc < 0 ? rc : tot_committed;
+}
+
+static int
+dtx_abort_pin(struct vos_container *cont, struct vos_dtx_act_ent *dae,
+	      struct umem_pin_handle **pin_hdl)
+{
+	struct vos_bkt_array	bkts;
+	int			rc;
+
+	if (!vos_pool_is_evictable(vos_cont2pool(cont)))
+		return 0;
+
+	if (dae->dae_need_release == 0)
+		return 0;
+
+	vos_bkt_array_init(&bkts);
+	rc = bkts_add_dae(vos_cont2pool(cont), &bkts, dae);
+	if (rc) {
+		D_ASSERT(rc < 0);
+		DL_ERROR(rc, "Failed to add DTX to buckets.");
+		goto out;
+	}
+
+	rc = vos_bkt_array_pin(vos_cont2pool(cont), &bkts, pin_hdl);
+	if (rc)
+		DL_ERROR(rc, "Failed to pin buckets.");
+out:
+	vos_bkt_array_fini(&bkts);
+	return rc;
+
 }
 
 int
@@ -2252,7 +2457,12 @@ vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, 
 {
 	struct dtx_handle	*dth = dae->dae_dth;
 	struct umem_instance	*umm;
+	struct umem_pin_handle	*pin_hdl = NULL;
 	int			 rc;
+
+	rc = dtx_abort_pin(cont, dae, &pin_hdl);
+	if (rc)
+		goto out;
 
 	umm = vos_cont2umm(cont);
 	rc = umem_tx_begin(umm, NULL);
@@ -2294,6 +2504,8 @@ vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, 
 	 */
 
 out:
+	dtx_unpin(cont, pin_hdl);
+
 	if (rc == 0 || force)
 		vos_dtx_post_handle(cont, &dae, NULL, 1, true, false);
 	else if (rc != 0)
@@ -3044,6 +3256,11 @@ vos_dtx_attach(struct dtx_handle *dth, bool persistent, bool exist)
 		}
 	}
 
+	/*
+	 * Doesn't need to pin the object before starting tx, since the DTX commit from
+	 * following vos_dtx_prepared() is for read-only DTX transaction, no object data
+	 * will be accessed during DTX commit.
+	 */
 	if (persistent) {
 		rc = umem_tx_begin(umm, NULL);
 		if (rc != 0)
@@ -3297,6 +3514,13 @@ vos_dtx_local_begin(struct dtx_handle *dth, daos_handle_t poh)
 
 	pool = vos_hdl2pool(poh);
 	umm  = vos_pool2umm(pool);
+
+	if (vos_pool_is_evictable(pool)) {
+		D_ERROR("VOS local tx doesn't support evictable pool:"DF_UUID"\n",
+			DP_UUID(pool->vp_id));
+		rc = -DER_NOTSUPPORTED;
+		goto error;
+	}
 
 	rc = vos_tx_begin(dth, umm, pool->vp_sysdb);
 	if (rc != 0) {
