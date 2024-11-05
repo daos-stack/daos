@@ -3970,6 +3970,18 @@ d_tm_get_srv_key(int srv_idx)
 	return D_TM_SHARED_MEMORY_KEY + srv_idx;
 }
 
+key_t
+d_tm_cli_pid_key(pid_t pid)
+{
+	/*
+	 * Set the key based the pid so that it can be easily found.
+	 * NB: This is the inverse of d_tm_get_srv_key() above; we
+	 * do it this way to hide the implementation details and avoid
+	 * unnecessary code changes.
+	 */
+	return pid - D_TM_SHARED_MEMORY_KEY;
+}
+
 /**
  * Allocates a shared memory segment for a given key.
  *

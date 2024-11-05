@@ -252,7 +252,7 @@ main(int argc, char **argv)
 		srv_idx = DC_TM_JOB_ROOT_ID;
 		snprintf(dirname, sizeof(dirname), "%s", jobid);
 	} else if (cli_pid > 0) {
-		srv_idx = cli_pid - D_TM_SHARED_MEMORY_KEY;
+		srv_idx = d_tm_cli_pid_key(cli_pid);
 	}
 
 	/* fetch metrics from server side */
