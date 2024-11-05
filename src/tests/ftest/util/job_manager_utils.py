@@ -473,6 +473,7 @@ class Mpirun(JobManager):
         self.tmpdir_base = FormattedParameter("--mca orte_tmpdir_base {}", None)
         self.args = BasicParameter(None, None)
         self.mpi_type = mpi_type
+        self.hostlist = FormattedParameter("-hosts {}", None)
 
     def assign_hosts(self, hosts, path=None, slots=None, hostfile=True):
         """Assign the hosts to use with the command (-f).
@@ -651,7 +652,7 @@ class Systemctl(JobManager):
         """
         super().__init__("/run/systemctl/*", "systemd", job)
         self.job = job
-        self._systemctl = SystemctlCommand()
+        self._systemctl = SystemctlCommand(run_user=job.run_user)
         self._systemctl.service.value = self.job.service_name
 
         self.timestamps = {
@@ -816,25 +817,16 @@ class Systemctl(JobManager):
             CommandFailure: if there is an issue running the command
 
         Returns:
-            dict: a dictionary of return codes keys and accompanying NodeSet
-                values indicating which hosts yielded the return code.
+            RemoteCommandResult: a grouping of the command results from the same hosts with the
+                same return status
 
         """
         self._systemctl.unit_command.value = command
         self.timestamps[command] = journalctl_time()
-        result = pcmd(self._hosts, str(self), self.verbose, self.timeout)
-        if 255 in result:
+        result = run_remote(self.log, self._hosts, str(self), self.verbose, self.timeout)
+        if not result.passed:
             raise CommandFailure(
-                "Timeout detected running '{}' with a {}s timeout on {}".format(
-                    str(self), self.timeout, NodeSet.fromlist(result[255])))
-
-        if 0 not in result or len(result) > 1:
-            failed = []
-            for item, value in list(result.items()):
-                if item != 0:
-                    failed.extend(value)
-            raise CommandFailure(
-                "Error occurred running '{}' on {}".format(str(self), NodeSet.fromlist(failed)))
+                "Error occurred running '{}' on {}".format(str(self), result.failed_hosts))
         return result
 
     def _report_unit_command(self, command):
@@ -847,8 +839,8 @@ class Systemctl(JobManager):
             CommandFailure: if there is an issue running the command
 
         Returns:
-            dict: a dictionary of return codes keys and accompanying NodeSet
-                values indicating which hosts yielded the return code.
+            RemoteCommandResult: a grouping of the command results from the same hosts with the
+                same return status
 
         """
         try:
@@ -856,7 +848,8 @@ class Systemctl(JobManager):
         except CommandFailure as error:
             self.log.info(error)
             command = get_journalctl_command(
-                self.timestamps[command], units=self._systemctl.service.value)
+                self.timestamps[command], units=self._systemctl.service.value,
+                run_user=self.job.run_user)
             self.display_log_data(self.get_log_data(self._hosts, command))
             raise CommandFailure(error) from error
 
@@ -867,8 +860,8 @@ class Systemctl(JobManager):
             CommandFailure: if unable to enable
 
         Returns:
-            dict: a dictionary of return codes keys and accompanying NodeSet
-                values indicating which hosts yielded the return code.
+            RemoteCommandResult: a grouping of the command results from the same hosts with the
+                same return status
 
         """
         return self._report_unit_command("enable")
@@ -880,8 +873,8 @@ class Systemctl(JobManager):
             CommandFailure: if unable to disable
 
         Returns:
-            dict: a dictionary of return codes keys and accompanying NodeSet
-                values indicating which hosts yielded the return code.
+            RemoteCommandResult: a grouping of the command results from the same hosts with the
+                same return status
 
         """
         return self._report_unit_command("disable")
@@ -893,8 +886,8 @@ class Systemctl(JobManager):
             CommandFailure: if unable to start
 
         Returns:
-            dict: a dictionary of return codes keys and accompanying NodeSet
-                values indicating which hosts yielded the return code.
+            RemoteCommandResult: a grouping of the command results from the same hosts with the
+                same return status
 
         """
         return self._report_unit_command("start")
@@ -906,8 +899,8 @@ class Systemctl(JobManager):
             CommandFailure: if unable to stop
 
         Returns:
-            dict: a dictionary of return codes keys and accompanying NodeSet
-                values indicating which hosts yielded the return code.
+            RemoteCommandResult: a grouping of the command results from the same hosts with the
+                same return status
 
         """
         return self._report_unit_command("stop")
@@ -919,8 +912,8 @@ class Systemctl(JobManager):
             CommandFailure: if unable to get the status
 
         Returns:
-            dict: a dictionary of return codes keys and accompanying NodeSet
-                values indicating which hosts yielded the return code.
+            RemoteCommandResult: a grouping of the command results from the same hosts with the
+                same return status
 
         """
         return self._report_unit_command("status")
@@ -1084,7 +1077,8 @@ class Systemctl(JobManager):
                 (str)  - string indicating the number of patterns found in what duration
 
         """
-        command = get_journalctl_command(since, until, units=self._systemctl.service.value)
+        command = get_journalctl_command(
+            since, until, units=self._systemctl.service.value, run_user=self.job.run_user)
         self.log.info("Searching for '%s' in '%s' output on %s", pattern, command, self._hosts)
 
         log_data = None
@@ -1171,7 +1165,8 @@ class Systemctl(JobManager):
         if timestamp:
             if hosts is None:
                 hosts = self._hosts
-            command = get_journalctl_command(timestamp, units=self._systemctl.service.value)
+            command = get_journalctl_command(
+                timestamp, units=self._systemctl.service.value, run_user=self.job.run_user)
             self.display_log_data(self.get_log_data(hosts, command))
 
     def log_additional_debug_data(self, hosts, since, until):
@@ -1184,7 +1179,8 @@ class Systemctl(JobManager):
                 to None, in which case it is not utilized.
         """
         command = get_journalctl_command(
-            since, until, True, identifiers=["kernel", self._systemctl.service.value])
+            since, until, True, identifiers=["kernel", self._systemctl.service.value],
+            run_user=self.job.run_user)
         details = self.str_log_data(self.get_log_data(hosts, command))
         self.log.info("Additional '%s' output:\n%s", command, details)
 
