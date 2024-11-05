@@ -228,7 +228,6 @@ Additionally, there are several optional command-line options:
 | --container=<label\|uuid\> | container label or uuid to open  |
 | --sys-name=<name\>         | DAOS system name                 |
 | --foreground               | run in foreground                |
-| --singlethreaded           | run single threaded              |
 | --thread-count=<count>     | Number of threads to use         |
 | --multi-user               | Run in multi user mode           |
 | --read-only                | Mount in read-only mode          |

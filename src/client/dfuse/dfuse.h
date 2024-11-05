@@ -29,7 +29,6 @@ struct dfuse_info {
 	char                *di_mountpoint;
 	int32_t              di_thread_count;
 	uint32_t             di_eq_count;
-	bool                 di_threaded;
 	bool                 di_foreground;
 	bool                 di_caching;
 	bool                 di_multi_user;

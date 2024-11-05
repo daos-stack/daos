@@ -39,6 +39,12 @@ const (
 	sysXSTgtID     = 1024
 	// Minimum amount of hugepage memory (in bytes) needed for each target.
 	memHugepageMinPerTarget = 1 << 30 // 1GiB
+
+	// DefaultMemoryFileRatio (mem_size:meta_size) describes the behavior of MD-on-SSD in
+	// phase-1 mode where the per-target-meta-blob size is equal to the per-target-VOS-file
+	// size. In phase-2 mode where the per-target-meta-blob size is greater than
+	// per-target-VOS-file size, the memory file ratio will be less than one.
+	DefaultMemoryFileRatio = 1.0
 )
 
 // JSON config file constants.
@@ -312,6 +318,7 @@ func (sd *SmdDevice) UnmarshalJSON(data []byte) error {
 		sd.Roles.OptionBits = OptionBits(from.RoleBits)
 	}
 
+	// Handle any duplicate target IDs and set flag instead of sysXS target ID.
 	seen := make(map[int32]bool)
 	newTgts := make([]int32, 0, len(sd.TargetIDs))
 	for _, i := range sd.TargetIDs {
@@ -389,6 +396,26 @@ func (nc NvmeController) Free() (tb uint64) {
 	return
 }
 
+// Roles returns bdev_roles for NVMe controller being used in MD-on-SSD mode. Assume that all SMD
+// devices on a controller have the same roles.
+func (nc *NvmeController) Roles() *BdevRoles {
+	if len(nc.SmdDevices) > 0 {
+		return &nc.SmdDevices[0].Roles
+	}
+
+	return &BdevRoles{}
+}
+
+// Rank returns rank on which this NVMe controller is being used. Assume that all SMD devices on a
+// controller have the same rank.
+func (nc *NvmeController) Rank() ranklist.Rank {
+	if len(nc.SmdDevices) > 0 {
+		return nc.SmdDevices[0].Rank
+	}
+
+	return ranklist.NilRank
+}
+
 // NvmeControllers is a type alias for []*NvmeController.
 type NvmeControllers []*NvmeController
 
@@ -402,6 +429,11 @@ func (ncs NvmeControllers) String() string {
 		ss = append(ss, s)
 	}
 	return strings.Join(ss, ", ")
+}
+
+// Len returns the length of the NvmeController reference slice.
+func (ncs NvmeControllers) Len() int {
+	return len(ncs)
 }
 
 // Capacity returns the cumulative total bytes of all controller capacities.

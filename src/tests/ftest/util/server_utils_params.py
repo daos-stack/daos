@@ -434,6 +434,7 @@ class EngineYamlParameters(YamlParameters):
     REQUIRED_ENV_VARS = {
         "common": [
             "D_LOG_FILE_APPEND_PID=1",
+            "DAOS_POOL_RF=4",
             "CRT_EVENT_DELAY=1",
             "COVFILE=/tmp/test.cov"],
         "ofi+tcp": [],
@@ -494,7 +495,6 @@ class EngineYamlParameters(YamlParameters):
             "ABT_ENV_MAX_NUM_XSTREAMS=100",
             "ABT_MAX_NUM_XSTREAMS=100",
             "DAOS_MD_CAP=1024",
-            "DAOS_POOL_RF=4",
             "DAOS_SCHED_WATCHDOG_ALL=1",
             "DD_MASK=mgmt,io,md,epc,rebuild",
         ]

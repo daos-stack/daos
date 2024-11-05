@@ -160,7 +160,7 @@ struct  _Mgmt__PoolCreateReq
   /*
    * formatted group e.g. "builders@"
    */
-  char                *user_group;
+  char *user_group;
   /*
    * Access Control Entries in short string format
    */
@@ -180,25 +180,25 @@ struct  _Mgmt__PoolCreateReq
   /*
    * Fault domain tree, minimal format
    */
-  size_t               n_fault_domains;
-  uint32_t            *fault_domains;
+  size_t n_fault_domains;
+  uint32_t *fault_domains;
   /*
    * desired number of pool service replicas
    */
-  uint32_t             num_svc_reps;
+  uint32_t num_svc_reps;
   /*
    * Total pool size in bytes
    */
-  uint64_t             total_bytes;
+  uint64_t total_bytes;
   /*
    * Ratio of storage tiers expressed as % of totalbytes
    */
-  size_t               n_tier_ratio;
-  double              *tier_ratio;
+  size_t n_tier_ratio;
+  double *tier_ratio;
   /*
    * Number of target ranks to use
    */
-  uint32_t             num_ranks;
+  uint32_t num_ranks;
   /*
    * target ranks
    */
@@ -207,16 +207,17 @@ struct  _Mgmt__PoolCreateReq
   /*
    * Size in bytes of storage tier
    */
-  size_t               n_tier_bytes;
-  uint64_t            *tier_bytes;
+  size_t n_tier_bytes;
+  uint64_t *tier_bytes;
+  /*
+   * Fraction of meta-blob-sz to use as mem-file-sz
+   */
+  float mem_ratio;
 };
-#define MGMT__POOL_CREATE_REQ__INIT                                                                \
-	{                                                                                          \
-		PROTOBUF_C_MESSAGE_INIT(&mgmt__pool_create_req__descriptor)                        \
-		, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string,                \
-		    (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, NULL, 0,  \
-		    NULL, 0, NULL, 0, 0, 0, NULL, 0, 0, NULL, 0, NULL                              \
-	}
+#define MGMT__POOL_CREATE_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_req__descriptor) \
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0,NULL, 0, 0, 0,NULL, 0, 0,NULL, 0,NULL, 0 }
+
 
 /*
  * PoolCreateResp returns created pool uuid and ranks.
@@ -243,16 +244,19 @@ struct  _Mgmt__PoolCreateResp
   size_t n_tgt_ranks;
   uint32_t *tgt_ranks;
   /*
-   * storage tiers allocated to pool
+   * per-rank storage tier sizes allocated in pool
    */
   size_t n_tier_bytes;
-  uint64_t        *tier_bytes;
+  uint64_t *tier_bytes;
+  /*
+   * per-rank accumulated value of memory file sizes
+   */
+  uint64_t mem_file_bytes;
 };
-#define MGMT__POOL_CREATE_RESP__INIT                                                               \
-	{                                                                                          \
-		PROTOBUF_C_MESSAGE_INIT(&mgmt__pool_create_resp__descriptor)                       \
-		, 0, 0, 0, NULL, 0, NULL, 0, NULL                                                  \
-	}
+#define MGMT__POOL_CREATE_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_resp__descriptor) \
+    , 0, 0, 0,NULL, 0,NULL, 0,NULL, 0 }
+
 
 /*
  * PoolDestroyReq supplies pool identifier and force flag.
@@ -386,8 +390,8 @@ struct  _Mgmt__PoolExcludeReq
   /*
    * target ranks
    */
-  size_t           n_target_idx;
-  uint32_t        *target_idx;
+  size_t n_target_idx;
+  uint32_t *target_idx;
   /*
    * List of pool service ranks
    */
@@ -436,8 +440,8 @@ struct  _Mgmt__PoolDrainReq
   /*
    * rank targets
    */
-  size_t           n_target_idx;
-  uint32_t        *target_idx;
+  size_t n_target_idx;
+  uint32_t *target_idx;
   /*
    * List of pool service ranks
    */
@@ -492,13 +496,13 @@ struct  _Mgmt__PoolExtendReq
   /*
    * Size in bytes of storage tiers
    */
-  size_t           n_tier_bytes;
-  uint64_t        *tier_bytes;
+  size_t n_tier_bytes;
+  uint64_t *tier_bytes;
   /*
    * fault domain tree, minimal format
    */
-  size_t           n_fault_domains;
-  uint32_t        *fault_domains;
+  size_t n_fault_domains;
+  uint32_t *fault_domains;
 };
 #define MGMT__POOL_EXTEND_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_extend_req__descriptor) \
@@ -520,10 +524,14 @@ struct  _Mgmt__PoolExtendResp
    */
   size_t n_tier_bytes;
   uint64_t *tier_bytes;
+  /*
+   * Size in bytes of metadata blob on SSD
+   */
+  uint32_t meta_blob_bytes;
 };
 #define MGMT__POOL_EXTEND_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_extend_resp__descriptor) \
-    , 0, 0,NULL }
+    , 0, 0,NULL, 0 }
 
 
 /*
@@ -547,8 +555,8 @@ struct  _Mgmt__PoolReintegrateReq
   /*
    * target ranks
    */
-  size_t           n_target_idx;
-  uint32_t        *target_idx;
+  size_t n_target_idx;
+  uint32_t *target_idx;
   /*
    * List of pool service ranks
    */
@@ -557,8 +565,8 @@ struct  _Mgmt__PoolReintegrateReq
   /*
    * Size in bytes of storage tiers
    */
-  size_t           n_tier_bytes;
-  uint64_t        *tier_bytes;
+  size_t n_tier_bytes;
+  uint64_t *tier_bytes;
 };
 #define MGMT__POOL_REINTEGRATE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_reintegrate_req__descriptor) \
@@ -858,18 +866,14 @@ struct  _Mgmt__PoolQueryResp
    */
   uint64_t query_mask;
   /*
-   * optional set of suspect ranks
+   * per-pool accumulated value of memory file sizes
    */
-  char                     *suspect_ranks;
+  uint64_t mem_file_bytes;
 };
-#define MGMT__POOL_QUERY_RESP__INIT                                                                \
-	{                                                                                          \
-		PROTOBUF_C_MESSAGE_INIT(&mgmt__pool_query_resp__descriptor)                        \
-		, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0,    \
-		    NULL, 0, NULL, 0, 0, (char *)protobuf_c_empty_string,                          \
-		    (char *)protobuf_c_empty_string, 0, 0, 0, MGMT__POOL_SERVICE_STATE__Creating,  \
-		    0, 0, NULL, 0, (char *)protobuf_c_empty_string                                 \
-	}
+#define MGMT__POOL_QUERY_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_resp__descriptor) \
+    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, 0,NULL, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, MGMT__POOL_SERVICE_STATE__Creating, 0, 0,NULL, 0, 0 }
+
 
 typedef enum {
   MGMT__POOL_PROPERTY__VALUE__NOT_SET = 0,
@@ -1110,10 +1114,14 @@ struct  _Mgmt__PoolQueryTargetInfo
    */
   size_t n_space;
   Mgmt__StorageTargetUsage **space;
+  /*
+   * per-target value of memory file size
+   */
+  uint64_t mem_file_bytes;
 };
 #define MGMT__POOL_QUERY_TARGET_INFO__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_target_info__descriptor) \
-    , MGMT__POOL_QUERY_TARGET_INFO__TARGET_TYPE__UNKNOWN, MGMT__POOL_QUERY_TARGET_INFO__TARGET_STATE__STATE_UNKNOWN, 0,NULL }
+    , MGMT__POOL_QUERY_TARGET_INFO__TARGET_TYPE__UNKNOWN, MGMT__POOL_QUERY_TARGET_INFO__TARGET_STATE__STATE_UNKNOWN, 0,NULL, 0 }
 
 
 /*
