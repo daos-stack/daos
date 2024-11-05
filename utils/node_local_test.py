@@ -6147,7 +6147,7 @@ def test_alloc_fail_cont_create(server, conf):
                     'dfuse-dentry-dir-time:3m',
                     'dfuse-ndentry-time:2m',
                     'dfuse-data-cache:off',
-                    'dfuse-direct-io-disable:on'])]
+                    'dfuse-direct-io-disable:off'])]
 
     test_cmd = AllocFailTest(conf, 'cont-create', get_cmd)
     test_cmd.check_post_stdout = False
