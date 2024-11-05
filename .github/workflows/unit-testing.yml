@@ -1,0 +1,26 @@
+name: Unit testing
+
+on:
+  pull_request:
+
+permissions: {}
+
+jobs:
+  Run_rocky8_in_docker_on_gcp:
+    if: github.repository == 'daos-stack/daos'
+    runs-on: [self-hosted, gcp, rocky8]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          sparse-checkout-cone-mode: false
+      - name: Build Docker
+        run: sudo docker build . --file utils/docker/gcp/client/el/Dockerfile
+            --build-arg ROCKY_BUILDER=rockylinux/rockylinux:8
+            --build-arg DAOS_BUILD_TYPE=release
+            --build-arg DAOS_SRC_DIR="."
+            --tag gha-amd-${{github.run_id}}-${{github.run_attempt}}
+      - name: Run Unit Testing
+        run: sudo docker run gha-amd-${{github.run_id}}-${{github.run_attempt}}
+            ./daos/utils/ci/run_unit_tests_in_gha.sh

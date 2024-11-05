@@ -10,8 +10,10 @@
 !utils/ci
 !utils/completion
 !utils/config
+!utils/docker/gcp
 !utils/node_local_test.py
 !utils/nlt_server.yaml
+!utils/rpms
 !utils/setup_daos_server_helper.sh
 !utils/sl/setup_local.sh
 !utils/scripts
@@ -28,9 +30,11 @@
 !requirements-utest.txt
 !requirements-ftest.txt
 
+
 # Now disallow extra files which may be present but are not required.
 # Include the rdb repo as well.
 **/.git
+!.git/modules/raft/HEAD
 
 # Build and test output, in case tree has been used outside docker
 dnt*.xml
