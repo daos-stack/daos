@@ -597,7 +597,7 @@ class DaosCommandBase(CommandWithSubCommand):
             """Get the daos filesystem sub command object."""
             if self.sub_command.value == "copy":
                 self.sub_command_class = self.CopySubCommand()
-            if self.sub_command.value == "evict":
+            elif self.sub_command.value == "evict":
                 self.sub_command_class = self.EvictSubCommand()
             else:
                 self.sub_command_class = None
