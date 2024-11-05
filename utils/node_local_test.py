@@ -6139,7 +6139,9 @@ def test_alloc_fail_cont_create(server, conf):
                 '--type',
                 'POSIX',
                 '--path',
-                join(dfuse.dir, f'container_{cont_id}')]
+                join(dfuse.dir, f'container_{cont_id}'),
+                '--properties',
+                f'srv_cksum:on,label:{cont_id}']
 
     test_cmd = AllocFailTest(conf, 'cont-create', get_cmd)
     test_cmd.check_post_stdout = False
