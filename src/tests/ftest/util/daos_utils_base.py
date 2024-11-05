@@ -597,6 +597,8 @@ class DaosCommandBase(CommandWithSubCommand):
             """Get the daos filesystem sub command object."""
             if self.sub_command.value == "copy":
                 self.sub_command_class = self.CopySubCommand()
+            if self.sub_command.value == "evict":
+                self.sub_command_class = self.EvictSubCommand()
             else:
                 self.sub_command_class = None
 
@@ -625,6 +627,14 @@ class DaosCommandBase(CommandWithSubCommand):
                 self.dst = FormattedParameter("--dst={}")
                 # filename to write and read container properties
                 self.preserve_props = FormattedParameter("--preserve-props={}")
+
+        class EvictSubCommand(CommonFilesystemSubCommand):
+            """Defines an object for the daos filesystem evict command."""
+
+            def __init__(self):
+                """Create a daos filesystem evict command object."""
+                super().__init__("evict")
+                self.path = BasicParameter(None, position=1)
 
     class SystemSubCommand(CommandWithSubCommand):
         """Defines an object for the daos system subcommand."""

@@ -1,8 +1,11 @@
 hosts:
   test_servers: 1
-  test_clients: 1
+  # TODO DAOS-14698: DFuse is mounted and checked on the launcher node until DAOS-7164 will be
+  # fixed.  At this time, it is not possible to create a DFuse sub-container and destroy it properly
+  # as it has to be done on one of the client node holding the root DFuse mount point.
+  # test_clients: 1
 
-timeout: 200
+timeout: 100
 
 server_config:
   name: daos_server
@@ -34,4 +37,11 @@ container_03:
   type: POSIX
   attrs: dfuse-attr-time:42,dfuse-dentry-time:404
   control_method: daos
-  path: foo
+
+container_04:
+  type: POSIX
+  control_method: daos
+
+container_05:
+  type: POSIX
+  control_method: daos

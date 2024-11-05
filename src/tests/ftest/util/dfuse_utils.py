@@ -13,9 +13,7 @@ from command_utils import ExecutableCommand
 from command_utils_base import BasicParameter, FormattedParameter
 from exception_utils import CommandFailure
 from general_utils import check_file_exists, get_log_file
-from pydaos.raw import DaosContainer, str_to_c_uuid
 from run_utils import command_as_user, run_remote
-from test_utils_container import CONT_NAMESPACE
 
 
 class DfuseCommand(ExecutableCommand):
@@ -77,9 +75,6 @@ class Dfuse(DfuseCommand):
 
         # used by stop() to know cleanup is needed
         self.__need_cleanup = False
-
-        # List of sub-containers mounted of this DFuse mount point
-        self.sub_conts = []
 
     def __del__(self):
         """Destruct the object."""
@@ -322,9 +317,6 @@ class Dfuse(DfuseCommand):
         """
         self._update_mount_state()
 
-        for cont in self.sub_conts:
-            self.destroy_sub_cont(cont)
-
         for current_try in range(tries):
             if not self._running_hosts:
                 return
@@ -399,7 +391,7 @@ class Dfuse(DfuseCommand):
         cmd = f"daos filesystem query --json {self.mount_dir.value}"
         result = run_remote(self.log, self.hosts, cmd)
         if not result.passed:
-            raise CommandFailure(f'fs query failed on {result.failed_hosts}')
+            raise CommandFailure(f"fs query failed on {result.failed_hosts}")
 
         data = json.loads("\n".join(result.output[0].stdout))
         if data["status"] != 0 or data["error"] is not None:
@@ -422,112 +414,8 @@ class Dfuse(DfuseCommand):
         log_file = self.env["D_LOG_FILE"]
         result = run_remote(self.log, self.hosts, f"cat {log_file}")
         if not result.passed:
-            raise CommandFailure(f'Log file {log_file} can not be open on {result.failed_hosts}')
+            raise CommandFailure(f"Log file {log_file} can not be open on {result.failed_hosts}")
         return result
-
-    def create_sub_cont(self, test, pool, namespace=CONT_NAMESPACE, daos=None, **params):
-        """Add a new TestContainer object to the test.
-
-        Args:
-            test (Test): the test instance
-            pool (TestPool): pool in which to create the container.
-            namespace (str, optional): Namespace for TestContainer parameters in the test yaml file.
-                Defaults to CONT_NAMESPACE.
-            daos (DaosCommand, optional): daos command object used to create the container.
-                Defaults to calling test.get_daos_command().
-
-        Returns:
-            TestContainer: the new container object
-        """
-        if not self.check_running(False):
-            raise CommandFailure("DFuse must be running to create a sub-container")
-
-        # NOTE Container will be deleted when the DFuse mount point will be unmounted
-        sub_cont = test.get_container(
-            pool, namespace, create=False, daos=daos, register_cleanup=False, **params)
-
-        if sub_cont.path.value is None:
-            raise CommandFailure("Missing 'path' parameter to create a DFuse sub-container")
-        sub_cont.path.value = sub_cont.path.value.strip()
-        if sub_cont.path.value[0] == '/':
-            raise CommandFailure(
-                "Invalid 'path' parameter for creating a DFuse sub-container:"
-                f" absolute path '{sub_cont.path.value}' is not supported")
-        sub_cont.path.value = os.path.join(self.mount_dir.value, sub_cont.path.value)
-
-        self.log.info(
-            "Creating a DFuse sub-container with pool handle %s",
-            pool.pool.handle.value if hasattr(pool.pool.handle, 'value') else pool.pool.handle)
-        sub_cont.container = DaosContainer(pool.context)
-        sub_cont.container.poh = pool.pool.handle
-
-        sub_cont.daos.json.update(True)
-        kwargs = {
-            "pool": pool.identifier,
-            "sys_name": pool.name.value,
-            "path": sub_cont.path.value,
-            "type": sub_cont.type.value,
-            "oclass": sub_cont.oclass.value,
-            "dir_oclass": sub_cont.dir_oclass.value,
-            "file_oclass": sub_cont.file_oclass.value,
-            "chunk_size": sub_cont.chunk_size.value,
-            "properties": sub_cont.properties.value,
-            "acl_file": sub_cont.acl_file.value,
-            "label": sub_cont.label.value,
-            "attrs": sub_cont.attrs.value
-        }
-        sub_cont.daos.set_command(("container", "create"), **kwargs)
-        result = run_remote(self.log, self._running_hosts[0], str(sub_cont.daos))
-        if not result.passed:
-            raise CommandFailure(
-                f"DFuse sub-container can not be created on {result.failed_hosts}: "
-                f"{result.output[0].stderr}")
-        result_json = json.loads(os.linesep.join(result.output[0].stdout))
-        try:
-            sub_cont.uuid = result_json["response"]["container_uuid"]
-        except KeyError as error:
-            raise CommandFailure("Error: Unexpected daos container create output") from error
-        sub_cont.label.update(result_json["response"].get("container_label"))
-        sub_cont.type.update(result_json["response"].get("container_type"))
-
-        sub_cont.container.uuid = str_to_c_uuid(sub_cont.uuid)
-        sub_cont.container.attached = 1
-
-        self.sub_conts.append(sub_cont)
-
-        return sub_cont
-
-    def destroy_sub_cont(self, cont):
-        """Destroy a given DFuse sub-container
-
-        Args:
-            cont (TestContainer): DFuse sub-container to destroy
-
-        Returns:
-            bool: True if the container has been destroyed; False otherwise
-
-        """
-        if not self.check_running(False):
-            self.log.info("DFuse must be running to destroy a sub-container")
-            return False
-
-        if cont not in self.sub_conts:
-            self.log.info("DAOS container %s is not a DFuse sub-container", str(cont))
-            return False
-
-        host = self._running_hosts[0]
-        kwargs = {"path": cont.path.value}
-        cont.daos.set_command(("container", "destroy"), **kwargs)
-        self.log.info("Destroying DFuse sub-container %s on %s", str(cont), host)
-        result = run_remote(self.log, host, str(cont.daos))
-        if not result.passed:
-            self.log.info(
-                "DFuse sub-container %s can not be destroyed on %s: %s",
-                cont, result.failed_hosts, result.output[0].stderr)
-            return False
-
-        self.sub_conts.remove(cont)
-        return True
 
 
 def get_dfuse(test, hosts, namespace=None):

@@ -965,6 +965,26 @@ class DaosCommand(DaosCommandBase):
         return self._get_result(
             ("filesystem", "copy"), src=src, dst=dst, preserve_props=preserve_props)
 
+    def filesystem_evict(self, path):
+        """Evict local resources of a DFuse mounted path.
+
+        Args:
+            path (str): The source, formatted as
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Todo:
+            As for the container create with path, this command should have a given list of host on
+            which to apply.  This should be done in the context of the ticket DAOS-7164.
+
+        Raises:
+            CommandFailure: if the daos filesystem copy command fails.
+
+        """
+        return self._get_result(("filesystem", "evict"), path=path)
+
     def version(self):
         """Call daos version.
 

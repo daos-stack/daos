@@ -1345,7 +1345,7 @@ out_cont:
 	if (rc2 != -DER_SUCCESS) {
 		DL_ERROR(rc2, "failed to close container");
 		if (rc2 == -DER_NOMEM)
-			// Second close to properly handle fault injection
+			/* Second close to properly handle fault injection */
 			daos_cont_close(coh, NULL);
 		else if (rc == -DER_SUCCESS)
 			rc = daos_der2errno(rc2);
