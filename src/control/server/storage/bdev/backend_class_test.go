@@ -180,10 +180,8 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				Tier:  tierID,
 				Class: storage.ClassNvme,
 				Bdev: storage.BdevConfig{
-					DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddrs(1, 2)...),
-					DeviceRoles: storage.BdevRoles{
-						OptionBits: storage.OptionBits(storage.BdevRoleAll),
-					},
+					DeviceList:  storage.MustNewBdevDeviceList(test.MockPCIAddrs(1, 2)...),
+					DeviceRoles: storage.BdevRolesFromBits(storage.BdevRoleAll),
 				},
 			}),
 			expOut: `

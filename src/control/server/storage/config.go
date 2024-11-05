@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -228,7 +229,7 @@ func (tc *TierConfig) WithBdevBusidRange(rangeStr string) *TierConfig {
 
 // WithBdevDeviceRoles sets the role assignments for the bdev tier.
 func (tc *TierConfig) WithBdevDeviceRoles(bits int) *TierConfig {
-	tc.Bdev.DeviceRoles = BdevRoles{OptionBits(bits)}
+	tc.Bdev.DeviceRoles = BdevRolesFromBits(bits)
 	return tc
 }
 
@@ -846,7 +847,7 @@ func (ofm optFlagMap) keys() []string {
 	return keys.ToSlice()
 }
 
-// toStrings returns a slice of option names that have been set.
+// toStrings returns a sorted slice of option names that have been set.
 func (obs OptionBits) toStrings(optStr2Flag optFlagMap) []string {
 	opts := common.NewStringSet()
 	for str, flag := range optStr2Flag {
@@ -855,7 +856,9 @@ func (obs OptionBits) toStrings(optStr2Flag optFlagMap) []string {
 		}
 	}
 
-	return opts.ToSlice()
+	outOpts := opts.ToSlice()
+	sort.Strings(outOpts)
+	return outOpts
 }
 
 // toString returns a comma separated list of option names that have been set.
@@ -965,6 +968,20 @@ func (bdr *BdevRoles) HasWAL() bool {
 	}
 
 	return bdr.OptionBits&BdevRoleWAL != 0
+}
+
+// IsEmpty returns true if no options have been set.
+func (bdr *BdevRoles) IsEmpty() bool {
+	return bdr == nil || bdr.OptionBits.IsEmpty()
+}
+
+// BdevRolesFromBits returns BdevRoles initialized with supplied option bitset.
+func BdevRolesFromBits(bits int) BdevRoles {
+	if bits <= 0 {
+		return BdevRoles{}
+	}
+
+	return BdevRoles{OptionBits(bits)}
 }
 
 // BdevConfig represents a Block Device (NVMe, etc.) configuration entry.
