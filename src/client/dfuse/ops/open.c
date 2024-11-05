@@ -13,11 +13,11 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
 	struct dfuse_inode_entry *ie;
 	struct dfuse_obj_hdl     *oh;
-	struct fuse_file_info     fi_out = {0};
-	int                       rc;
-	bool                      prefetch = false;
-	bool                      preread  = false;
-	int                       flags;
+	struct dfuse_event	 *ev;
+	struct fuse_file_info    fi_out = {0};
+	int                      rc;
+	bool                     preread  = false;
+	int                      flags;
 
 	ie = dfuse_inode_lookup_nf(dfuse_info, ino);
 
@@ -45,17 +45,13 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	LOG_FLAGS(ie, fi->flags);
 
 	flags = fi->flags;
+	oh->doh_flags = flags;
 
 	if (flags & O_APPEND)
 		flags &= ~O_APPEND;
 
-	/** duplicate the file handle for the fuse handle */
-	rc = dfs_dup(ie->ie_dfs->dfs_ns, ie->ie_obj, flags, &oh->doh_obj);
-	if (rc)
-		D_GOTO(err, rc);
-
 	if ((fi->flags & O_ACCMODE) != O_RDONLY)
-		oh->doh_writeable = true;
+		oh->doh_writeable = 1;
 
 	if (ie->ie_dfs->dfc_data_timeout != 0) {
 		if (fi->flags & O_DIRECT)
@@ -66,13 +62,33 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		 * This should mean that pre-read is only used on the first read, and on files
 		 * which pre-existed in the container.
 		 */
-
-		if (atomic_load_relaxed(&ie->ie_open_count) > 0 ||
+		if (atomic_load_relaxed(&ie->ie_open_count) > 1 ||
 		    ((ie->ie_dcache_last_update.tv_sec != 0) &&
 		     dfuse_dcache_get_valid(ie, ie->ie_dfs->dfc_data_timeout))) {
 			fi_out.keep_cache = 1;
 		} else {
-			prefetch = true;
+			D_MUTEX_LOCK(&ie->ie_read_lock);
+			if (((oh->doh_parent_dir && atomic_load_relaxed(&oh->doh_parent_dir->ie_linear_read)) ||
+			     (ie->ie_stat.st_size > 0 && ie->ie_stat.st_size <= DFUSE_MAX_PRE_READ))) {
+				if (ie->ie_readahead == NULL) {
+					D_ALLOC_PTR(ie->ie_readahead);
+					if (ie->ie_readahead == NULL) {
+						D_MUTEX_UNLOCK(&ie->ie_read_lock);
+						D_GOTO(err, rc = -DER_NOMEM);
+					}
+					/* Add the read extent to the list to make sure the following read
+					 * will check the readahead list first.
+					 */
+					rc = dfuse_pre_read_init(dfuse_info, ie, &ev);
+					if (rc != 0) {
+						D_MUTEX_UNLOCK(&ie->ie_read_lock);
+						D_GOTO(err, rc);
+					}
+					oh->doh_readahead_inflight = 1;
+					preread = true;
+				}
+			}
+			D_MUTEX_UNLOCK(&ie->ie_read_lock);
 		}
 	} else if (ie->ie_dfs->dfc_data_otoc) {
 		/* Open to close caching, this allows the use of shared mmap */
@@ -89,33 +105,22 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		fi_out.direct_io = 0;
 
 	if (!fi_out.direct_io)
-		oh->doh_caching = true;
+		oh->doh_caching = 1;
 
 	fi_out.fh = (uint64_t)oh;
 
+	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
 	/*
 	 * dfs_dup() just locally duplicates the file handle. If we have
 	 * O_TRUNC flag, we need to truncate the file manually.
 	 */
 	if (fi->flags & O_TRUNC) {
 		rc = dfs_punch(ie->ie_dfs->dfs_ns, ie->ie_obj, 0, DFS_MAX_FSIZE);
-		if (rc)
+		if (rc) {
+			atomic_fetch_sub_relaxed(&ie->ie_open_count, 1);
 			D_GOTO(err, rc);
-		dfuse_dcache_evict(oh->doh_ie);
-	}
-
-	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
-
-	/* Enable this for files up to the max read size. */
-	if (prefetch && oh->doh_parent_dir &&
-	    atomic_load_relaxed(&oh->doh_parent_dir->ie_linear_read) && ie->ie_stat.st_size > 0 &&
-	    ie->ie_stat.st_size <= DFUSE_MAX_PRE_READ) {
-		D_ALLOC_PTR(oh->doh_readahead);
-		if (oh->doh_readahead) {
-			D_MUTEX_INIT(&oh->doh_readahead->dra_lock, 0);
-			D_MUTEX_LOCK(&oh->doh_readahead->dra_lock);
-			preread = true;
 		}
+		dfuse_dcache_evict(oh->doh_ie);
 	}
 
 	DFUSE_REPLY_OPEN(oh, req, &fi_out);
@@ -124,10 +129,12 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	 * release from completing which also holds open the inode.
 	 */
 	if (preread)
-		dfuse_pre_read(dfuse_info, oh);
+		dfuse_pre_read(dfuse_info, oh, ev);
 
 	return;
 err:
+	if (preread)
+		oh->doh_readahead_inflight = 0;
 	dfuse_oh_free(dfuse_info, oh);
 	DFUSE_REPLY_ERR_RAW(ie, req, rc);
 }
@@ -137,8 +144,9 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
 	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
 	struct dfuse_obj_hdl     *oh         = (struct dfuse_obj_hdl *)fi->fh;
-	struct dfuse_inode_entry *ie         = NULL;
-	int                       rc;
+	struct dfuse_inode_entry *ie         = oh->doh_ie;
+	bool			 evict_on_close = false;
+	int                       rc = 0;
 	uint32_t                  oc;
 	uint32_t                  il_calls;
 
@@ -148,27 +156,7 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	DFUSE_TRA_DEBUG(oh, "Closing %d", oh->doh_caching);
 
-	DFUSE_IE_WFLUSH(oh->doh_ie);
-
-	if (oh->doh_readahead) {
-		struct dfuse_event *ev;
-
-		/* Grab this lock first to ensure that the read cb has been completed.  The
-		 * callback might register an error and release ev so do not read it's value
-		 * until after this has completed.
-		 */
-		D_MUTEX_LOCK(&oh->doh_readahead->dra_lock);
-		D_MUTEX_UNLOCK(&oh->doh_readahead->dra_lock);
-
-		ev = oh->doh_readahead->dra_ev;
-
-		D_MUTEX_DESTROY(&oh->doh_readahead->dra_lock);
-		if (ev) {
-			daos_event_fini(&ev->de_ev);
-			d_slab_release(ev->de_eqt->de_pre_read_slab, ev);
-		}
-		D_FREE(oh->doh_readahead);
-	}
+	DFUSE_IE_WFLUSH(ie);
 
 	/* If the file was read from then set the data cache time for future use, however if the
 	 * file was written to then evict the metadata cache.
@@ -184,42 +172,71 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		if (oh->doh_caching) {
 			if (il_calls == 0) {
 				DFUSE_TRA_DEBUG(oh, "Evicting metadata cache, setting data cache");
-				dfuse_mcache_evict(oh->doh_ie);
-				dfuse_dcache_set_time(oh->doh_ie);
+				dfuse_mcache_evict(ie);
+				dfuse_dcache_set_time(ie);
 			} else {
 				DFUSE_TRA_DEBUG(oh, "Evicting cache");
-				dfuse_cache_evict(oh->doh_ie);
+				dfuse_cache_evict(ie);
 			}
 		}
-		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_write_count, 1);
+		atomic_fetch_sub_relaxed(&ie->ie_open_write_count, 1);
 	} else {
 		if (oh->doh_caching) {
 			if (il_calls == 0) {
 				DFUSE_TRA_DEBUG(oh, "Saving data cache");
-				dfuse_dcache_set_time(oh->doh_ie);
+				dfuse_dcache_set_time(ie);
 			} else {
 				DFUSE_TRA_DEBUG(oh, "Evicting cache");
-				dfuse_cache_evict(oh->doh_ie);
+				dfuse_cache_evict(ie);
 			}
 		}
 	}
 	if (il_calls != 0) {
-		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_il_count, 1);
+		atomic_fetch_sub_relaxed(&ie->ie_il_count, 1);
 	}
-	oc = atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_count, 1);
+
+wait_readahead:
+	/* Wait inflight readahead RPC finished before release */
+	D_MUTEX_LOCK(&ie->ie_read_lock);
+	if (oh->doh_readahead_inflight) {
+		D_MUTEX_UNLOCK(&ie->ie_read_lock);
+		goto wait_readahead;
+	}
+	D_MUTEX_UNLOCK(&ie->ie_read_lock);
+
+	oc = atomic_fetch_sub_relaxed(&ie->ie_open_count, 1);
 	DFUSE_TRA_DEBUG(oh, "il_calls %d, caching %d, open count %d", il_calls, oh->doh_caching,
 			oc - 1);
 	if (oc == 1) {
-		if (read_chunk_close(oh->doh_ie))
+		struct dfuse_pre_read *readahead;
+		struct dfuse_event *ev;
+
+		if (read_chunk_close(ie))
 			oh->doh_linear_read = true;
+
+		D_MUTEX_LOCK(&ie->ie_read_lock);
+		readahead = ie->ie_readahead;
+		ie->ie_readahead = NULL;
+		D_MUTEX_UNLOCK(&ie->ie_read_lock);
+
+		if (readahead != NULL) {
+			ev = readahead->dra_ev;
+			if (ev) {
+				daos_event_fini(&ev->de_ev);
+				d_slab_release(ev->de_eqt->de_pre_read_slab, ev);
+			}
+			D_FREE(readahead);
+		}
 	}
 
 	if (oh->doh_evict_on_close) {
-		ie = oh->doh_ie;
+		evict_on_close = true;
 		atomic_fetch_add_relaxed(&ie->ie_ref, 1);
 	}
 
-	rc = dfs_release(oh->doh_obj);
+	if (oh->doh_obj != NULL)
+		rc = dfs_release(oh->doh_obj);
+
 	if (rc == 0) {
 		DFUSE_REPLY_ZERO_OH(oh, req);
 	} else {
@@ -248,7 +265,7 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 		dfuse_inode_decref(dfuse_info, oh->doh_parent_dir);
 	}
-	if (ie) {
+	if (evict_on_close) {
 		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, ie->ie_parent,
 						      ie->ie_name, strnlen(ie->ie_name, NAME_MAX));
 

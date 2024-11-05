@@ -137,7 +137,6 @@ struct dfuse_inode_entry;
  * when EOF is returned to the kernel.  If it's still present on release then it's freed then.
  */
 struct dfuse_pre_read {
-	pthread_mutex_t     dra_lock;
 	struct dfuse_event *dra_ev;
 	int                 dra_rc;
 };
@@ -148,8 +147,6 @@ struct dfuse_obj_hdl {
 	dfs_t                    *doh_dfs;
 	/** the DFS object handle.  Not created for directories. */
 	dfs_obj_t                *doh_obj;
-
-	struct dfuse_pre_read    *doh_readahead;
 
 	/** the inode entry for the file */
 	struct dfuse_inode_entry *doh_ie;
@@ -176,27 +173,26 @@ struct dfuse_obj_hdl {
 	 * to false), the expected position of the next read and a boolean for if EOF has been
 	 * detected.
 	 */
-	off_t                     doh_linear_read_pos;
-	bool                      doh_linear_read;
-	bool                      doh_linear_read_eof;
-
-	/** True if caching is enabled for this file. */
-	bool                      doh_caching;
-
+	off_t			doh_linear_read_pos;
+	uint64_t		doh_linear_read:1,
+				doh_linear_read_eof:1,
+				/** True if caching is enabled for this file. */
+				doh_caching:1,
 	/* True if the file handle is writable - used for cache invalidation */
-	bool                      doh_writeable;
-
+				doh_writeable:1,
 	/* Track possible kernel cache of readdir on this directory */
 	/* Set to true if there is any reason the kernel will not use this directory handle as the
 	 * basis for a readdir cache.  Includes if seekdir or rewind are used.
 	 */
-	bool                      doh_kreaddir_invalid;
+				doh_kreaddir_invalid:1,
 	/* Set to true if readdir calls are made on this handle */
-	bool                      doh_kreaddir_started;
+				doh_kreaddir_started:1,
 	/* Set to true if readdir calls reach EOF made on this handle */
-	bool                      doh_kreaddir_finished;
+				doh_kreaddir_finished:1,
+				doh_evict_on_close:1,
+				doh_readahead_inflight:1;
 
-	bool                      doh_evict_on_close;
+	int			doh_flags;
 };
 
 /* Readdir support.
@@ -1024,7 +1020,10 @@ struct dfuse_inode_entry {
 	/* Entry on the evict list */
 	d_list_t                  ie_evict_entry;
 
+	/* ie read lock is used to protect ie_open_reads and ie_readahead */
 	d_list_t                  ie_open_reads;
+	struct dfuse_pre_read	  *ie_readahead;
+	pthread_mutex_t		  ie_read_lock;
 
 	struct read_chunk_core   *ie_chunk;
 };
@@ -1193,8 +1192,13 @@ dfuse_cache_evict(struct dfuse_inode_entry *ie);
 bool
 dfuse_dcache_get_valid(struct dfuse_inode_entry *ie, double max_age);
 
+int
+dfuse_pre_read_init(struct dfuse_info *info, struct dfuse_inode_entry *ie,
+		    struct dfuse_event **evp);
+
 void
-dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh);
+dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh,
+	       struct dfuse_event *ev);
 
 int
 check_for_uns_ep(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, char *attr,
@@ -1206,6 +1210,7 @@ dfuse_ie_init(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie);
 #define dfuse_ie_free(_di, _ie)                                                                    \
 	do {                                                                                       \
 		atomic_fetch_sub_relaxed(&(_di)->di_inode_count, 1);                               \
+		D_MUTEX_DESTROY(&_ie->ie_read_lock);					  	   \
 		D_FREE(_ie);                                                                       \
 	} while (0)
 

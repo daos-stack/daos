@@ -353,9 +353,9 @@ dfuse_do_readdir(struct dfuse_info *dfuse_info, fuse_req_t req, struct dfuse_obj
 	 */
 	if (offset == 0) {
 		if (oh->doh_kreaddir_started) {
-			oh->doh_kreaddir_invalid = true;
+			oh->doh_kreaddir_invalid = 1;
 		}
-		oh->doh_kreaddir_started = true;
+		oh->doh_kreaddir_started = 1;
 	}
 
 	D_RWLOCK_RDLOCK(&hdl->drh_lock);
@@ -565,7 +565,7 @@ restart:
 
 		DFUSE_TRA_DEBUG(oh, "Seeking from offset %#lx to %#lx", oh->doh_rd_offset, offset);
 
-		oh->doh_kreaddir_invalid = true;
+		oh->doh_kreaddir_invalid = 1;
 
 		/* Drop if shared */
 		if (oh->doh_rd->drh_caching) {
@@ -836,7 +836,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 	 * reply early in this case.
 	 */
 	if (offset == READDIR_EOD) {
-		oh->doh_kreaddir_finished = true;
+		oh->doh_kreaddir_finished = 1;
 		DFUSE_TRA_DEBUG(oh, "End of directory %#lx", offset);
 
 		size = 0;

@@ -353,7 +353,7 @@ err:
 static void
 handle_cont_evict_ioctl(fuse_req_t req, struct dfuse_obj_hdl *oh)
 {
-	oh->doh_evict_on_close = true;
+	oh->doh_evict_on_close = 1;
 
 	handle_cont_qe_ioctl_helper(oh, req, NULL);
 }

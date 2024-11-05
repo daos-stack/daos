@@ -36,11 +36,11 @@ cb_read_helper(struct dfuse_event *ev, void *buff)
 
 	if (oh->doh_linear_read) {
 		if (oh->doh_linear_read_pos != ev->de_req_position) {
-			oh->doh_linear_read = false;
+			oh->doh_linear_read = 0;
 		} else {
 			oh->doh_linear_read_pos = ev->de_req_position + ev->de_len;
 			if (ev->de_len < ev->de_req_len) {
-				oh->doh_linear_read_eof = true;
+				oh->doh_linear_read_eof = 1;
 			}
 		}
 	}
@@ -68,7 +68,8 @@ cb_read_helper(struct dfuse_event *ev, void *buff)
 					ev->de_req_position + ev->de_req_len - 1);
 	}
 
-	DFUSE_REPLY_BUFQ(oh, ev->de_req, buff, ev->de_len);
+	if (ev->de_req)
+		DFUSE_REPLY_BUFQ(oh, ev->de_req, buff, ev->de_len);
 release:
 	daos_event_fini(&ev->de_ev);
 }
@@ -77,26 +78,26 @@ static void
 dfuse_cb_read_complete(struct dfuse_event *ev)
 {
 	struct dfuse_event *evs, *evn;
+	struct dfuse_inode_entry *ie = ev->de_oh->doh_ie;
 
-	D_MUTEX_LOCK(&rc_lock);
-	d_list_del(&ev->de_read_list);
-	D_MUTEX_UNLOCK(&rc_lock);
-
+	D_MUTEX_LOCK(&ie->ie_read_lock);
+	d_list_del_init(&ev->de_read_list);
 	d_list_for_each_entry(evs, &ev->de_read_slaves, de_read_list) {
 		DFUSE_TRA_DEBUG(ev->de_oh, "concurrent network read %p", evs->de_oh);
 		evs->de_len         = min(ev->de_len, evs->de_req_len);
 		evs->de_ev.ev_error = ev->de_ev.ev_error;
-		DFUSE_IE_STAT_ADD(ev->de_oh->doh_ie, DS_READ_CON);
+		DFUSE_IE_STAT_ADD(ie, DS_READ_CON);
 		cb_read_helper(evs, ev->de_iov.iov_buf);
 	}
 
 	cb_read_helper(ev, ev->de_iov.iov_buf);
 
 	d_list_for_each_entry_safe(evs, evn, &ev->de_read_slaves, de_read_list) {
-		d_list_del(&evs->de_read_list);
+		d_list_del_init(&evs->de_read_list);
 		d_slab_restock(evs->de_eqt->de_read_slab);
 		d_slab_release(evs->de_eqt->de_read_slab, evs);
 	}
+	D_MUTEX_UNLOCK(&ie->ie_read_lock);
 
 	d_slab_restock(ev->de_eqt->de_read_slab);
 	d_slab_release(ev->de_eqt->de_read_slab, ev);
@@ -109,13 +110,19 @@ dfuse_readahead_reply(fuse_req_t req, size_t len, off_t position, struct dfuse_o
 {
 	size_t reply_len;
 
-	if (oh->doh_readahead->dra_rc) {
-		DFUSE_REPLY_ERR_RAW(oh, req, oh->doh_readahead->dra_rc);
+	if (oh->doh_ie->ie_readahead->dra_rc) {
+		DFUSE_TRA_DEBUG(oh, "failed readahead");
+		DFUSE_REPLY_ERR_RAW(oh, req, oh->doh_ie->ie_readahead->dra_rc);
 		return true;
 	}
 
-	if (!oh->doh_linear_read || oh->doh_readahead->dra_ev == NULL) {
+	if (!oh->doh_linear_read || oh->doh_ie->ie_readahead->dra_ev == NULL) {
 		DFUSE_TRA_DEBUG(oh, "Pre read disabled");
+		return false;
+	}
+
+	if (!d_list_empty(&oh->doh_ie->ie_readahead->dra_ev->de_read_list)) {
+		DFUSE_TRA_DEBUG(oh, "still on read %lu", oh->doh_ie->ie_stat.st_ino);
 		return false;
 	}
 
@@ -125,19 +132,19 @@ dfuse_readahead_reply(fuse_req_t req, size_t len, off_t position, struct dfuse_o
 		 * later checks will determine if the file is read to the end.
 		 */
 		oh->doh_linear_read_pos = max(oh->doh_linear_read_pos, position + len);
-	} else if (oh->doh_linear_read_pos != position) {
+	} else if (oh->doh_linear_read_pos != position && 0 /* always enable pre read */) {
 		DFUSE_TRA_DEBUG(oh, "disabling pre read");
-		daos_event_fini(&oh->doh_readahead->dra_ev->de_ev);
-		d_slab_release(oh->doh_readahead->dra_ev->de_eqt->de_pre_read_slab,
-			       oh->doh_readahead->dra_ev);
-		oh->doh_readahead->dra_ev = NULL;
+		daos_event_fini(&oh->doh_ie->ie_readahead->dra_ev->de_ev);
+		d_slab_release(oh->doh_ie->ie_readahead->dra_ev->de_eqt->de_pre_read_slab,
+			       oh->doh_ie->ie_readahead->dra_ev);
+		oh->doh_ie->ie_readahead->dra_ev = NULL;
 		return false;
 	} else {
 		oh->doh_linear_read_pos = position + len;
 	}
 
-	if (position + len >= oh->doh_readahead->dra_ev->de_readahead_len) {
-		oh->doh_linear_read_eof = true;
+	if (position + len >= oh->doh_ie->ie_readahead->dra_ev->de_readahead_len) {
+		oh->doh_linear_read_eof = 1;
 	}
 
 	/* At this point there is a buffer of known length that contains the data, and a read
@@ -146,18 +153,18 @@ dfuse_readahead_reply(fuse_req_t req, size_t len, off_t position, struct dfuse_o
 	 * It the attempted read is smaller than the buffer it will be met in full.
 	 */
 
-	if (position + len < oh->doh_readahead->dra_ev->de_readahead_len) {
+	if (position + len < oh->doh_ie->ie_readahead->dra_ev->de_readahead_len) {
 		reply_len = len;
 		DFUSE_TRA_DEBUG(oh, "%#zx-%#zx read", position, position + reply_len - 1);
 	} else {
 		/* The read will be truncated */
-		reply_len = oh->doh_readahead->dra_ev->de_readahead_len - position;
+		reply_len = oh->doh_ie->ie_readahead->dra_ev->de_readahead_len - position;
 		DFUSE_TRA_DEBUG(oh, "%#zx-%#zx read %#zx-%#zx not read (truncated)", position,
 				position + reply_len - 1, position + reply_len, position + len - 1);
 	}
 
 	DFUSE_IE_STAT_ADD(oh->doh_ie, DS_PRE_READ);
-	DFUSE_REPLY_BUFQ(oh, req, oh->doh_readahead->dra_ev->de_iov.iov_buf + position, reply_len);
+	DFUSE_REPLY_BUFQ(oh, req, oh->doh_ie->ie_readahead->dra_ev->de_iov.iov_buf + position, reply_len);
 	return true;
 }
 
@@ -477,20 +484,21 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	struct dfuse_eq      *eqt;
 	int                   rc;
 	struct dfuse_event   *ev;
+	struct dfuse_inode_entry *ie = oh->doh_ie;
 	bool                  reached_eof = false;
 
-	DFUSE_IE_STAT_ADD(oh->doh_ie, DS_READ);
+	DFUSE_IE_STAT_ADD(ie, DS_READ);
 
 	if (oh->doh_linear_read_eof && position == oh->doh_linear_read_pos) {
 		reached_eof = true;
-	} else if (oh->doh_ie->ie_chunk && oh->doh_ie->ie_chunk->seen_eof) {
-		if (position >= oh->doh_ie->ie_chunk->file_size)
+	} else if (ie->ie_chunk && ie->ie_chunk->seen_eof) {
+		if (position >= ie->ie_chunk->file_size)
 			reached_eof = true;
 	}
 
 	if (reached_eof) {
 		DFUSE_TRA_DEBUG(oh, "Returning EOF early without round trip %#zx", position);
-		oh->doh_linear_read_eof = false;
+		oh->doh_linear_read_eof = 0;
 #if 0
 		/* Release uses this to set the bit on the directory so do not turn it off here
 		* but I do need to check why it was set before.
@@ -498,30 +506,29 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 		oh->doh_linear_read     = false;
 #endif
 
-		if (oh->doh_readahead) {
-			D_MUTEX_LOCK(&oh->doh_readahead->dra_lock);
-			ev = oh->doh_readahead->dra_ev;
-
-			oh->doh_readahead->dra_ev = NULL;
-			D_MUTEX_UNLOCK(&oh->doh_readahead->dra_lock);
+		if (ie->ie_readahead) {
+			D_MUTEX_LOCK(&ie->ie_read_lock);
+			ev = ie->ie_readahead->dra_ev;
+			ie->ie_readahead->dra_ev = NULL;
+			D_MUTEX_UNLOCK(&ie->ie_read_lock);
 
 			if (ev) {
 				daos_event_fini(&ev->de_ev);
 				d_slab_release(ev->de_eqt->de_pre_read_slab, ev);
-				DFUSE_IE_STAT_ADD(oh->doh_ie, DS_PRE_READ);
+				DFUSE_IE_STAT_ADD(ie, DS_PRE_READ);
 			}
 		}
-		DFUSE_IE_STAT_ADD(oh->doh_ie, DS_READ_EOF_M);
+		DFUSE_IE_STAT_ADD(ie, DS_READ_EOF_M);
 		DFUSE_REPLY_BUFQ(oh, req, NULL, 0);
 		return;
 	}
 
-	if (oh->doh_readahead) {
+	if (ie->ie_readahead) {
 		bool replied;
 
-		D_MUTEX_LOCK(&oh->doh_readahead->dra_lock);
+		D_MUTEX_LOCK(&ie->ie_read_lock);
 		replied = dfuse_readahead_reply(req, len, position, oh);
-		D_MUTEX_UNLOCK(&oh->doh_readahead->dra_lock);
+		D_MUTEX_UNLOCK(&ie->ie_read_lock);
 
 		if (replied)
 			return;
@@ -538,9 +545,9 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 		return;
 	}
 
-	if (oh->doh_ie->ie_truncated && position + len < oh->doh_ie->ie_stat.st_size &&
-	    ((oh->doh_ie->ie_start_off == 0 && oh->doh_ie->ie_end_off == 0) ||
-	     position >= oh->doh_ie->ie_end_off || position + len <= oh->doh_ie->ie_start_off)) {
+	if (ie->ie_truncated && position + len < ie->ie_stat.st_size &&
+	    ((ie->ie_start_off == 0 && ie->ie_end_off == 0) ||
+	     position >= ie->ie_end_off || position + len <= ie->ie_start_off)) {
 		DFUSE_TRA_DEBUG(oh, "Returning zeros");
 		mock_read = true;
 	}
@@ -556,6 +563,8 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 		       ev->de_iov.iov_buf_len);
 	}
 
+	if (position + len > ie->ie_stat.st_size)
+	       len = ie->ie_stat.st_size - position;	
 	ev->de_iov.iov_len  = len;
 	ev->de_req          = req;
 	ev->de_sgl.sg_nr    = 1;
@@ -571,26 +580,36 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 
 	ev->de_complete_cb = dfuse_cb_read_complete;
 
-	DFUSE_IE_WFLUSH(oh->doh_ie);
+	DFUSE_IE_WFLUSH(ie);
 
 	/* Not check for outstanding read which matches */
-	D_MUTEX_LOCK(&rc_lock);
+	D_MUTEX_LOCK(&ie->ie_read_lock);
 	{
 		struct dfuse_event *evc;
 
 		/* Check for concurrent overlapping reads and if so then add request to current op
 		 */
-		d_list_for_each_entry(evc, &oh->doh_ie->ie_open_reads, de_read_list) {
-			if (ev->de_req_position == evc->de_req_position &&
+		d_list_for_each_entry(evc, &ie->ie_open_reads, de_read_list) {
+			if (ev->de_req_position >= evc->de_req_position &&
 			    ev->de_req_len <= evc->de_req_len) {
 				d_list_add(&ev->de_read_list, &evc->de_read_slaves);
-				D_MUTEX_UNLOCK(&rc_lock);
+				D_MUTEX_UNLOCK(&ie->ie_read_lock);
 				return;
 			}
 		}
-		d_list_add_tail(&ev->de_read_list, &oh->doh_ie->ie_open_reads);
+		d_list_add_tail(&ev->de_read_list, &ie->ie_open_reads);
 	}
-	D_MUTEX_UNLOCK(&rc_lock);
+	D_MUTEX_UNLOCK(&ie->ie_read_lock);
+
+	if (oh->doh_obj == NULL) {
+		/** duplicate the file handle for the fuse handle */
+		rc = dfs_dup(oh->doh_dfs, oh->doh_ie->ie_obj, oh->doh_flags, &oh->doh_obj);
+		if (rc) {
+			ev->de_ev.ev_error = rc;
+			dfuse_cb_read_complete(ev);
+			return;
+		}
+	}
 
 	rc = dfs_read(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, position, &ev->de_len, &ev->de_ev);
 	if (rc != 0) {
@@ -612,14 +631,38 @@ static void
 dfuse_cb_pre_read_complete(struct dfuse_event *ev)
 {
 	struct dfuse_obj_hdl *oh = ev->de_oh;
+	struct dfuse_event *evs, *evn;
+	struct dfuse_inode_entry *ie = oh->doh_ie;
+	struct dfuse_pre_read *readahead;
 
-	oh->doh_readahead->dra_rc = ev->de_ev.ev_error;
+	D_ASSERTF(ie != NULL, "%p", ev);
+	readahead = ie->ie_readahead;
+	D_ASSERTF(readahead != NULL, "%p", ev);
+
+	D_MUTEX_LOCK(&ie->ie_read_lock);
+	ie->ie_readahead->dra_rc = ev->de_ev.ev_error;
+
+	d_list_del_init(&ev->de_read_list);
+
+	d_list_for_each_entry(evs, &ev->de_read_slaves, de_read_list) {
+		DFUSE_TRA_DEBUG(ev->de_oh, "concurrent network read %p", evs->de_oh);
+		evs->de_len         = min(ev->de_len, evs->de_req_len);
+		evs->de_ev.ev_error = ev->de_ev.ev_error;
+		DFUSE_IE_STAT_ADD(ev->de_oh->doh_ie, DS_READ_CON);
+		cb_read_helper(evs, ev->de_iov.iov_buf);
+	}
+
+	d_list_for_each_entry_safe(evs, evn, &ev->de_read_slaves, de_read_list) {
+		d_list_del_init(&evs->de_read_list);
+		d_slab_restock(evs->de_eqt->de_read_slab);
+		d_slab_release(evs->de_eqt->de_read_slab, evs);
+	}
 
 	if (ev->de_ev.ev_error != 0) {
-		oh->doh_readahead->dra_rc = ev->de_ev.ev_error;
+		readahead->dra_rc = ev->de_ev.ev_error;
 		daos_event_fini(&ev->de_ev);
 		d_slab_release(ev->de_eqt->de_pre_read_slab, ev);
-		oh->doh_readahead->dra_ev = NULL;
+		readahead->dra_ev = NULL;
 	}
 
 	/* If the length is not as expected then the file has been modified since the last stat so
@@ -629,35 +672,63 @@ dfuse_cb_pre_read_complete(struct dfuse_event *ev)
 	if (ev->de_len != ev->de_readahead_len) {
 		daos_event_fini(&ev->de_ev);
 		d_slab_release(ev->de_eqt->de_pre_read_slab, ev);
-		oh->doh_readahead->dra_ev = NULL;
+		readahead->dra_ev = NULL;
 	}
-
-	D_MUTEX_UNLOCK(&oh->doh_readahead->dra_lock);
+	oh->doh_readahead_inflight = 0;
+	D_MUTEX_UNLOCK(&ie->ie_read_lock);
 }
 
-void
-dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh)
+int
+dfuse_pre_read_init(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
+		    struct dfuse_event **evp)
 {
 	struct dfuse_eq    *eqt;
-	int                 rc;
 	struct dfuse_event *ev;
-	size_t              len = oh->doh_ie->ie_stat.st_size;
+	size_t              len = ie->ie_stat.st_size;
 
 	eqt = pick_eqt(dfuse_info);
 	ev = d_slab_acquire(eqt->de_pre_read_slab);
 	if (ev == NULL)
-		D_GOTO(err, rc = ENOMEM);
+		return ENOMEM;
 
 	ev->de_iov.iov_len   = len;
 	ev->de_req           = 0;
 	ev->de_sgl.sg_nr     = 1;
-	ev->de_oh            = oh;
 	ev->de_readahead_len = len;
 	ev->de_req_position  = 0;
 
 	ev->de_complete_cb        = dfuse_cb_pre_read_complete;
-	oh->doh_readahead->dra_ev = ev;
+	ie->ie_readahead->dra_ev = ev;
 
+	/* NB: the inode_entry has been locked by ie_read_lock */	
+	d_list_add_tail(&ev->de_read_list, &ie->ie_open_reads);
+
+	*evp = ev;
+	return 0;
+}
+
+void
+dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh, struct dfuse_event *ev)
+{
+	struct dfuse_eq    *eqt;
+	int                 rc;
+	size_t              len = oh->doh_ie->ie_stat.st_size;
+
+	DFUSE_TRA_DEBUG(oh, "ino %llu prefetch len %zd event %p",
+			(unsigned long long)oh->doh_ie->ie_stat.st_ino, len, &ev->de_ev);
+
+	eqt = pick_eqt(dfuse_info);
+
+	if (oh->doh_obj == NULL) {
+		/** duplicate the file handle for the fuse handle */
+		rc = dfs_dup(oh->doh_dfs, oh->doh_ie->ie_obj, oh->doh_flags, &oh->doh_obj);
+		if (rc)
+			D_GOTO(err, rc);
+	}
+
+	ev->de_oh          = oh;
+	ev->de_complete_cb = dfuse_cb_pre_read_complete;
+	oh->doh_ie->ie_readahead->dra_ev = ev;
 	rc = dfs_read(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, 0, &ev->de_len, &ev->de_ev);
 	if (rc != 0) {
 		D_GOTO(err, rc);
@@ -672,11 +743,14 @@ dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh)
 
 	return;
 err:
-	oh->doh_readahead->dra_rc = rc;
+	D_MUTEX_LOCK(&oh->doh_ie->ie_read_lock);
+	oh->doh_ie->ie_readahead->dra_rc = rc;
+	oh->doh_readahead_inflight = 0;
 	if (ev) {
 		daos_event_fini(&ev->de_ev);
+		DFUSE_TRA_DEBUG(oh, "release ev %p", ev);
 		d_slab_release(eqt->de_pre_read_slab, ev);
-		oh->doh_readahead->dra_ev = NULL;
+		oh->doh_ie->ie_readahead->dra_ev = NULL;
 	}
-	D_MUTEX_UNLOCK(&oh->doh_readahead->dra_lock);
+	D_MUTEX_UNLOCK(&oh->doh_ie->ie_read_lock);
 }
