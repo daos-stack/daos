@@ -1120,15 +1120,10 @@ Administrator can set the default pool redundancy factor by environment variable
 dead and the number of failed fault domain exceeds or is going to exceed the pool
 redundancy factor, it will not change pool map immediately. Instead, it will give
 critical log message:
+```
 intolerable unavailability: engine rank x
-In this case, the system administrator should check and try to recover those
-failed engines and bring them back with:
-dmg system start --ranks=x
-one by one. A reintegrate call is not needed.
-
-For true unrecoverable failures, the administrator can still exclude engines.
-However, data loss is expected as the number of unrecoverable failures exceeds
-the pool redundancy factor.
+```
+To recover, see [Servers or engines become unavailable](troubleshooting.md#engines-become-unavailable).
 
 ## Recovering Container Ownership
 
