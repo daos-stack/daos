@@ -260,7 +260,7 @@ $(subst deb,%,$(DEBS)): $(DEB_BUILD).tar.$(SRC_EXT) \
 	rm -rf $(DEB_TOP)/*-tmp
 	cd $(DEB_BUILD); debuild --no-lintian -b -us -uc
 	cd $(DEB_BUILD); debuild -- clean
-	if [ -d .git ]; then git status; fi
+	git status
 	rm -rf $(DEB_TOP)/$(NAME)-tmp
 	lfile1=$(shell echo $(DEB_TOP)/$(NAME)[0-9]*_$(VERSION)-1_amd64.deb);\
 	  lfile=$$(ls $${lfile1}); \

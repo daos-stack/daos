@@ -61,27 +61,26 @@ RUN EL_VERSION=`echo "$ROCKY_BUILDER" | sed 's/.*://'` && \
 RUN rpm --import https://packages.daos.io/RPM-GPG-KEY
 RUN dnf install -y \
     spdk-devel \
-    argobots-devel \
     libpmemobj-devel
 
 WORKDIR /
 
-COPY "$DAOS_SRC_DIR/utils/scripts/install*" /tmp/
+
+COPY "$DAOS_SRC_DIR/utils/build.config" /daos/utils/build.config
+COPY "$DAOS_SRC_DIR/.git/modules/raft/HEAD" /daos/.git/modules/raft/HEAD
 COPY "$DAOS_SRC_DIR/utils/docker/gcp/*.sh" /tmp/
+COPY "$DAOS_SRC_DIR/utils/scripts/install*" /tmp/
+
+# Need to pass server argument because no way to build RPM without it
+RUN /tmp/clone_repos.sh
 
 RUN if [[ "$ROCKY_BUILDER" == "rockylinux/rockylinux:9" ]]; then \
   /tmp/install-el9.sh; \
 fi
 
 RUN if [[ "$ROCKY_BUILDER" == "rockylinux/rockylinux:8" ]]; then \
-/tmp/install-el8.sh; \
+  /tmp/install-el8.sh; \
 fi
-
-COPY "$DAOS_SRC_DIR/utils/build.config" /daos/utils/build.config
-COPY "$DAOS_SRC_DIR/.git/modules/raft/HEAD" /daos/.git/modules/raft/HEAD
-
-# Need to pass server argument because no way to build RPM without it
-RUN /tmp/clone_repos.sh
 
 # The script in the internal DAOS repo returns the git hash to use for each
 # component we check out that matches the current version of DAOS being used.
@@ -129,33 +128,35 @@ RUN make -j -f ./Makefile-rpm.mk && \
 RUN find _topdir/RPMS -name "raft*.rpm" > /tmp/raft.txt && sed -i 's/\.rpm$//' /tmp/raft.txt
 RUN readarray -t arr < /tmp/raft.txt ; for r in "${arr[@]}" ; do { OLD_RPM_NAME="$r"; NEW_RPM_NAME=$(echo $OLD_RPM_NAME | awk -v VERSION_SUFFIX=$(cat /tmp/build_ts.txt) '{split($0,a,"~"); if (a[2]!="") {print a[1] "." VERSION_SUFFIX "~" a[2]} else {print a[1] "." VERSION_SUFFIX}; }');  mv "$OLD_RPM_NAME.rpm" "$NEW_RPM_NAME.rpm";   } done
 
+WORKDIR /argobots
+RUN make && \
+  awk -v VERSION_SUFFIX=$(cat /tmp/build_ts.txt) -i inplace '/Version:/ {split($0,a,"~"); if (a[2]!="") {print a[1] "." VERSION_SUFFIX "~" a[2]} else {print a[1] "." VERSION_SUFFIX}; next; } ; 1' argobots.spec && \
+  git --no-pager diff argobots.spec && \
+  find _topdir/RPMS -name "*.rpm" | tr "\n" " " | xargs rpm -vU
+RUN find _topdir/RPMS -name "argobots*.rpm" > /tmp/argobots.txt && sed -i 's/\.rpm$//' /tmp/argobots.txt
+RUN readarray -t arr < /tmp/argobots.txt ; for r in "${arr[@]}" ; do { OLD_RPM_NAME="$r"; NEW_RPM_NAME=$(echo $OLD_RPM_NAME | awk -v VERSION_SUFFIX=$(cat /tmp/build_ts.txt) '{split($0,a,"~"); if (a[2]!="") {print a[1] "." VERSION_SUFFIX "~" a[2]} else {print a[1] "." VERSION_SUFFIX}; }');  mv "$OLD_RPM_NAME.rpm" "$NEW_RPM_NAME.rpm";   } done
 
-COPY "$DAOS_SRC_DIR/utils/rpms/daos.spec" /tmp/daos.spec
+COPY "$DAOS_SRC_DIR" /daos/
 
 WORKDIR /daos
 # Remove broken dependencies (daos-raft-devel, isa-l-devel, libpmemobj-devel), add license,
 # show difference
 
-RUN cp /tmp/daos.spec /tmp/daos.spec.orig && \
-  sed -i '/Version:/ s/$/.'$(cat /tmp/build_ts.txt)'/' /tmp/daos.spec && \
-  awk -i inplace '!/BuildRequires: daos-raft-devel/' /tmp/daos.spec && \
-  awk -i inplace '!/BuildRequires: libpmemobj-devel/' /tmp/daos.spec && \
-  awk -i inplace '!/BuildRequires: isa-l-devel/' /tmp/daos.spec && \
-  sed -i 's/USE_INSTALLED/GOOGLE_INTERNAL_UTILS=0 \\\n      USE_INSTALLED/' /tmp/daos.spec && \
-  awk -i inplace '!/Requires: fuse3-devel/' /tmp/daos.spec && \
-  awk -i inplace '!/Requires: ior/' /tmp/daos.spec && \
-  sed -i 's/STATIC_FUSE=0//' /tmp/daos.spec && \
+RUN cp utils/rpms/daos.spec utils/rpms/daos.spec.orig && \
+  sed -i '/Version:/ s/$/.'$(cat /tmp/build_ts.txt)'/' utils/rpms/daos.spec && \
+  awk -i inplace '!/BuildRequires: daos-raft-devel/' utils/rpms/daos.spec && \
+  awk -i inplace '!/BuildRequires: libpmemobj-devel/' utils/rpms/daos.spec && \
+  awk -i inplace '!/BuildRequires: isa-l-devel/' utils/rpms/daos.spec && \
+  sed -i 's/USE_INSTALLED/GOOGLE_INTERNAL_UTILS=0 \\\n      USE_INSTALLED/' utils/rpms/daos.spec && \
+  awk -i inplace '!/Requires: fuse3-devel/' utils/rpms/daos.spec && \
+  awk -i inplace '!/Requires: ior/' utils/rpms/daos.spec && \
+  sed -i 's/STATIC_FUSE=0//' utils/rpms/daos.spec && \
   awk -i inplace  '/%files/ { print $0 ; print "%license LICENSE"; print "%license third_party_programs.txt"; next } ; 1' utils/rpms/daos.spec && \
-  diff /tmp/daos.spec.orig /tmp/daos.spec || true && rm -f /tmp/daos.spec
-
-COPY "$DAOS_SRC_DIR/daos/utils/docker/gcp/client/el/patch_daos_spec.sh" /tmp/patch_daos_spec.sh
+  diff utils/rpms/daos.spec.orig utils/rpms/daos.spec || true
 
 RUN if [[ "$ROCKY_BUILDER" == "rockylinux/rockylinux:9" ]]; then \
-  /bin/sh -c "/tmp/patch_daos_spec.sh"; \
+  /bin/sh -c "daos/utils/docker/gcp/client/el/patch_daos_spec.sh"; \
 fi
-
-COPY "$DAOS_SRC_DIR/requirements*.txt" /daos/
-COPY "$DAOS_SRC_DIR/install/prereq/release/fuse" /daos/install/prereq/release/fuse
 
 RUN virtualenv venv && \
   source venv/bin/activate && \
@@ -196,6 +197,6 @@ RUN mkdir -p out && \
 RUN echo $GIT_REPOSITORY > /out/git_repo.txt && \
     echo $GIT_BRANCH_OR_TAG > /out/git_branch_or_tag.txt
 
-FROM scratch
+#FROM scratch
 
-COPY --from=builder /out /out
+#COPY --from=builder /out /out
