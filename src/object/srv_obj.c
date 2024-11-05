@@ -4401,6 +4401,44 @@ cleanup:
 	oco->oco_sub_epochs.ca_count = 0;
 }
 
+static inline void
+cpd_unpin_objects(daos_handle_t coh, struct vos_pin_handle *pin_hdl)
+{
+	if (pin_hdl != NULL)
+		vos_unpin_objects(coh, pin_hdl);
+}
+
+static int
+cpd_pin_objects(daos_handle_t coh, struct daos_cpd_sub_req *dcsrs,
+		struct daos_cpd_req_idx *dcri, int count, struct vos_pin_handle **pin_hdl)
+{
+	struct daos_cpd_sub_req	*dcsr;
+	daos_unit_oid_t		*oids;
+	int			 i, rc;
+
+	if (count == 0)
+		return 0;
+
+	D_ALLOC_ARRAY(oids, count);
+	if (oids == NULL)
+		return -DER_NOMEM;
+
+	for (i = 0; i < count; i++) {
+		dcsr = &dcsrs[dcri[i].dcri_req_idx];
+		dcsr->dcsr_oid.id_shard = dcri[i].dcri_shard_id;
+
+		D_ASSERT(dcsr->dcsr_opc != DCSO_READ);
+		oids[i] = dcsr->dcsr_oid;
+	}
+
+	rc = vos_pin_objects(coh, oids, count, pin_hdl);
+	if (rc)
+		DL_ERROR(rc, "Failed to pin CPD objects.");
+
+	D_FREE(oids);
+	return rc;
+}
+
 /* Locally process the operations belong to one DTX.
  * Common logic, shared by both leader and non-leader.
  */
@@ -4438,6 +4476,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 	int                      i;
 	uint64_t                 update_flags;
 	uint64_t                 sched_seq = sched_cur_seq();
+	struct vos_pin_handle	*pin_hdl = NULL;
 
 	if (dth->dth_flags & DTE_LEADER &&
 	    DAOS_FAIL_CHECK(DAOS_DTX_RESTART))
@@ -4498,6 +4537,12 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 			poffs[i] = &local_offs[i];
 			pskips[i] = (uint8_t *)&local_skips[i];
 		}
+	}
+
+	rc = cpd_pin_objects(ioc->ioc_vos_coh, dcsrs, dcri, dcde->dcde_write_cnt, &pin_hdl);
+	if (rc) {
+		DL_ERROR(rc, "Failed to pin objects.");
+		goto out;
 	}
 
 	/* P2: vos_update_begin. */
@@ -4819,6 +4864,8 @@ out:
 			}
 		}
 	}
+
+	cpd_unpin_objects(ioc->ioc_vos_coh, pin_hdl);
 
 	D_FREE(iohs);
 	D_FREE(biods);

@@ -1336,7 +1336,7 @@ class DFuse():
 
         return f'DFuse instance at {self.dir} ({running})'
 
-    def start(self, v_hint=None, single_threaded=False, use_oopt=False):
+    def start(self, v_hint=None, use_oopt=False):
         """Start a dfuse instance"""
         # pylint: disable=too-many-branches
         dfuse_bin = join(self.conf['PREFIX'], 'bin', 'dfuse')
@@ -1384,9 +1384,7 @@ class DFuse():
         if self.multi_user:
             cmd.append('--multi-user')
 
-        if single_threaded:
-            cmd.append('--singlethread')
-        elif not self.cores:
+        if not self.cores:
             # Use a lower default thread-count for NLT due to running tests in parallel.
             cmd.extend(['--thread-count', '4'])
 
@@ -1983,11 +1981,9 @@ class needs_dfuse_with_opt():
     wrapping_lock = threading.Lock()
 
     # pylint: disable=too-few-public-methods
-    def __init__(self, caching_variants=None, wbcache=True, single_threaded=False,
-                 dfuse_inval=True, ro=False):
+    def __init__(self, caching_variants=None, wbcache=True, dfuse_inval=True, ro=False):
         self.caching_variants = caching_variants if caching_variants else [False, True]
         self.wbcache = wbcache
-        self.single_threaded = single_threaded
         self.dfuse_inval = dfuse_inval
         self.ro = ro
 
@@ -2023,7 +2019,7 @@ class needs_dfuse_with_opt():
                               caching=caching,
                               wbcache=self.wbcache,
                               **args)
-            obj.dfuse.start(v_hint=method.__name__, single_threaded=self.single_threaded)
+            obj.dfuse.start(v_hint=method.__name__)
             try:
                 rc = method(obj)
             finally:
@@ -2680,11 +2676,6 @@ class PosixTests():
         assert len(files) == count
         assert len(post_files) == len(files) - 1
         assert post_files == files[:-2] + [files[-1]]
-
-    @needs_dfuse_with_opt(single_threaded=True, caching_variants=[True])
-    def test_single_threaded(self):
-        """Test single-threaded mode"""
-        self.readdir_test(10)
 
     @needs_dfuse
     def test_open_replaced(self):
@@ -5923,7 +5914,7 @@ def test_dfuse_start(server, conf, wf):
 
     cmd = [join(conf['PREFIX'], 'bin', 'dfuse'),
            '--mountpoint', mount_point,
-           '--pool', pool.id(), '--cont', container.id(), '--foreground', '--singlethread']
+           '--pool', pool.id(), '--cont', container.id(), '--foreground', '--thread-count=2']
 
     test_cmd = AllocFailTest(conf, 'dfuse', cmd)
     test_cmd.wf = wf
