@@ -13,6 +13,7 @@ DAOS_SOURCE_DIR="{{ daos_source_dir }}"
 {% if daos_ofi_interface is defined %}
 OFI_INTERFACE="{{ daos_ofi_interface }}"
 {% endif %}
+DEV_LIST="{{ groups["daos_dev"] | join(',') }}"
 SERVERS_LIST="{{ groups["daos_servers"] | join(',') }}"
 {% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
 CLIENTS_LIST="{{ groups["daos_clients"] | join(',') }}"
@@ -175,7 +176,7 @@ function cleanup
 			mountpoint="/mnt/daos$index"
 			if run ssh $host sudo mountpoint -q "$mountpoint" ; then
 				info "Cleaning mount points $mountpoint of host $host"
-				run ssh $host sudo m -fr $mountpoint/*
+				run ssh $host sudo rm -fr $mountpoint/*
 				run ssh $host sudo umount $mountpoint
 			fi
 		done
