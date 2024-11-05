@@ -25,7 +25,7 @@ class DfuseContainerAttrs(TestWithServers):
         # Start the servers and agents
         super().setUp()
 
-    def _check_attrs(self, dfuse, container_name):
+    def _check_attrs(self, dfuse, namespace):
         """Check if the DFuse attributes of a container are loaded
 
         Check in the log file of the dfuse instance if it contains the DFuse attributes of a given
@@ -33,10 +33,10 @@ class DfuseContainerAttrs(TestWithServers):
 
         Args:
             dfuse (Dfuse): DFuse instance to check
-            container_name (str): Name of the container
+            namespace (str): Namespace for TestContainer parameters in the test yaml file.
         """
         log_file = os.linesep.join(dfuse.get_log_file_data().output[0].stdout)
-        attrs = self.params.get("attrs", f"/run/{container_name}/*")
+        attrs = self.params.get("attrs", namespace)
         for name, value in [attr.split(':') for attr in attrs.split(",")]:
             match = re.findall(
                 fr"^.+\ssetting\s+'{name}'\s+is\s+(\d+)\s+seconds$",
@@ -75,7 +75,7 @@ class DfuseContainerAttrs(TestWithServers):
         start_dfuse(self, dfuse, pool, container)
 
         self.log_step("Checking DFuse log file")
-        self._check_attrs(dfuse, "container_01")
+        self._check_attrs(dfuse, "/run/container_01/*")
 
         self.log_step("Test passed")
 
@@ -104,10 +104,9 @@ class DfuseContainerAttrs(TestWithServers):
         start_dfuse(self, dfuse, pool, container)
 
         self.log_step("Creating DAOS subcontainer with DFuse attributes")
-        sub_dir = os.path.join(dfuse.mount_dir.value, "foo")
-        container = self.get_container(pool, namespace="/run/container_03/*", path=sub_dir)
+        dfuse.create_sub_cont(self, pool, namespace="/run/container_03/*")
 
         self.log_step("Checking DFuse log file")
-        self._check_attrs(dfuse, "container_03")
+        self._check_attrs(dfuse, "/run/container_03/*")
 
         self.log_step("Test passed")
