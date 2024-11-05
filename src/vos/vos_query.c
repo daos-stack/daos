@@ -162,7 +162,7 @@ query_normal_recx(struct open_query *query, daos_recx_t *recx)
 	uint32_t		inob;
 
 
-	vos_evt_desc_cbs_init(&cbs, query->qt_pool, query->qt_coh);
+	vos_evt_desc_cbs_init(&cbs, query->qt_pool, query->qt_coh, query->qt_obj);
 	rc = evt_open(query->qt_recx_root, &query->qt_pool->vp_uma, &cbs, &toh);
 	if (rc != 0)
 		return rc;
@@ -344,7 +344,7 @@ query_ec_recx(struct open_query *query, daos_recx_t *recx)
 	bool			prefresh = true;
 
 
-	vos_evt_desc_cbs_init(&cbs, query->qt_pool, query->qt_coh);
+	vos_evt_desc_cbs_init(&cbs, query->qt_pool, query->qt_coh, query->qt_obj);
 	rc = evt_open(query->qt_recx_root, &query->qt_pool->vp_uma, &cbs, &toh);
 	if (rc != 0)
 		return rc;
@@ -517,7 +517,7 @@ open_and_query_key(struct open_query *query, daos_key_t *key,
 		return -DER_NONEXIST;
 
 	rc = dbtree_open_inplace_ex(to_open, &query->qt_pool->vp_uma,
-				    query->qt_coh, query->qt_pool, toh);
+				    query->qt_coh, query->qt_obj, toh);
 	if (rc != 0)
 		return rc;
 

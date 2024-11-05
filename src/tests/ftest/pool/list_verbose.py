@@ -108,7 +108,12 @@ class ListVerboseTest(IorTestBase):
                     "size": nvme_size,
                     "free": nvme_free,
                     "imbalance": nvme_imbalance
-                }],
+                },
+            ],
+            "mem_file_bytes": (
+                scm_size if
+                self.server_managers[0].manager.job.using_control_metadata else
+                0)
         }
 
     @staticmethod

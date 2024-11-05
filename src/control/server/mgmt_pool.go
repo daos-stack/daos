@@ -24,6 +24,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/engine"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -160,9 +161,8 @@ func minPoolNvme(tgtCount, rankCount uint64) uint64 {
 	return minRankNvme(tgtCount) * rankCount
 }
 
-// calculateCreateStorage determines the amount of SCM/NVMe storage to
-// allocate per engine in order to fulfill the create request, if those
-// values are not already supplied as part of the request.
+// calculateCreateStorage determines the amount of SCM/NVMe storage to allocate per engine in order
+// to fulfill the create request, if those values are not already supplied as part of the request.
 func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 	instances := svc.harness.Instances()
 	if len(instances) < 1 {
@@ -172,11 +172,21 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 		return errors.New("zero ranks in calculateCreateStorage()")
 	}
 
-	// NB: The following logic is based on the assumption that
-	// a request will always include SCM as tier 0. Currently,
-	// we only support one additional tier, NVMe, which is
-	// optional. As we add support for other tiers, this logic
-	// will need to be updated.
+	mdOnSSD := instances[0].GetStorage().BdevRoleMetaConfigured()
+	switch {
+	case !mdOnSSD && req.MemRatio > 0:
+		// Prevent MD-on-SSD parameters being used in incompatible mode.
+		return FaultPoolMemRatioNoRoles
+	case mdOnSSD && req.MemRatio == 0:
+		// Set reasonable default if not set in MD-on-SSD mode.
+		req.MemRatio = storage.DefaultMemoryFileRatio
+		svc.log.Infof("Default memory-file:md-on-ssd ratio of %d%% applied",
+			int(storage.DefaultMemoryFileRatio)*100)
+	}
+
+	// NB: The following logic is based on the assumption that a request will always include SCM
+	// as tier 0. Currently, we only support one additional tier, NVMe, which is optional. As we
+	// add support for other tiers, this logic will need to be updated.
 
 	nvmeMissing := !instances[0].GetStorage().HasBlockDevices()
 
@@ -251,6 +261,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 	if err != nil {
 		return nil, err
 	}
+
 	return msg.(*mgmtpb.PoolCreateResp), nil
 }
 
@@ -300,7 +311,6 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		resp.SvcReps = ranklist.RanksToUint32(ps.Replicas)
 		resp.TgtRanks = ranklist.RanksToUint32(ps.Storage.CreationRanks())
 		resp.TierBytes = ps.Storage.PerRankTierStorage
-		// TODO DAOS-14223: Store Meta-Blob-Size in sysdb.
 
 		return resp, nil
 	}
@@ -947,6 +957,13 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 	// Preserve compatibility with pre-2.6 callers.
 	resp.Leader = resp.SvcLdr
 
+	// TODO DAOS-16209: After VOS query API is updated, zero-value mem_file_bytes will be
+	//                  returned in non-MD-on-SSD mode and this hack can be removed.
+	storage := svc.harness.Instances()[0].GetStorage()
+	if !storage.ControlMetadataPathConfigured() {
+		resp.MemFileBytes = 0
+	}
+
 	return resp, nil
 }
 
@@ -964,6 +981,15 @@ func (svc *mgmtSvc) PoolQueryTarget(ctx context.Context, req *mgmtpb.PoolQueryTa
 	resp := &mgmtpb.PoolQueryTargetResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal PoolQueryTarget response")
+	}
+
+	// TODO DAOS-16209: After VOS query API is updated, zero-value mem_file_bytes will be
+	//                  returned in non-MD-on-SSD mode and this hack can be removed.
+	storage := svc.harness.Instances()[0].GetStorage()
+	if !storage.ControlMetadataPathConfigured() {
+		for _, tgtInfo := range resp.Infos {
+			tgtInfo.MemFileBytes = 0
+		}
 	}
 
 	return resp, nil

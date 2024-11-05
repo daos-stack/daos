@@ -984,7 +984,7 @@ reserve_segment(struct vos_object *obj, struct agg_io_context *io,
 
 	if (vos_io_scm(vos_obj2pool(obj), DAOS_IOD_ARRAY, size, VOS_IOS_AGGREGATION)) {
 		/** Store on SCM */
-		off = vos_reserve_scm(obj->obj_cont, io->ic_rsrvd_scm, size);
+		off = vos_reserve_scm(obj->obj_cont, io->ic_rsrvd_scm, size, obj);
 		if (UMOFF_IS_NULL(off)) {
 			now = daos_gettime_coarse();
 			if (now - obj->obj_cont->vc_agg_nospc_ts > VOS_NOSPC_ERROR_INTVL) {
