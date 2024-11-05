@@ -728,6 +728,7 @@ dtx_rpc(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **dtes,
 				goto out;
 			}
 
+			dca->dca_chore.cho_load = dca->dca_steps;
 			rc = dss_chore_delegate(&dca->dca_chore, dtx_rpc_helper);
 			if (rc != 0) {
 				ABT_eventual_free(&dca->dca_chore_eventual);
@@ -1558,6 +1559,7 @@ dtx_coll_rpc_prep(struct ds_cont_child *cont, struct dtx_coll_entry *dce, uint32
 	}
 
 	if (dss_has_enough_helper()) {
+		dcra->dcra_chore.cho_load = 1;
 		rc = dss_chore_delegate(&dcra->dcra_chore, dtx_coll_rpc_helper);
 	} else {
 		dss_chore_diy(&dcra->dcra_chore, dtx_coll_rpc_helper);
