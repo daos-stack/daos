@@ -34,3 +34,4 @@ container_03:
   type: POSIX
   attrs: dfuse-attr-time:42,dfuse-dentry-time:404
   control_method: daos
+  path: foo

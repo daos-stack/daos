@@ -512,7 +512,7 @@ class Dfuse(DfuseCommand):
             return False
 
         if cont not in self.sub_conts:
-            self.log.info(f"DAOS container {cont} is not a DFuse sub-container")
+            self.log.info("DAOS container %s is not a DFuse sub-container", str(cont))
             return False
 
         host = self._running_hosts[0]
@@ -522,8 +522,8 @@ class Dfuse(DfuseCommand):
         result = run_remote(self.log, host, str(cont.daos))
         if not result.passed:
             self.log.info(
-                f"DFuse sub-container {cont} can not be destroyed on {result.failed_hosts}: "
-                f"{result.output[0].stderr}")
+                "DFuse sub-container %s can not be destroyed on %s: %s",
+                cont, result.failed_hosts, result.output[0].stderr)
             return False
 
         self.sub_conts.remove(cont)
