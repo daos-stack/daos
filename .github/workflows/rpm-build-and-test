@@ -11,8 +11,12 @@ env:
   LEAP15_VERSION: 15.5
 
 on:
+  workflow_dispatch:
+    inputs:
+      pr-repos:
+        description: 'Any PR-repos that you want included in this build'
+        required: false
   pull_request:
-  
 
 concurrency:
   group: rpm-build-and-test-${{ github.head_ref  || github.run_id }}
