@@ -49,6 +49,7 @@ class CmockaCommand(ExecutableCommand):
                 the command output. Defaults to None.
         """
         super().__init__(None, executable, path, check_results=keywords)
+        self.full_command_regex = True
         self.parameters = BasicParameter(None)
 
 

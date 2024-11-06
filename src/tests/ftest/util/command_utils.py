@@ -72,6 +72,9 @@ class ExecutableCommand(CommandWithParameters):
         # used to check on the progress or terminate the command.
         self._exe_names = [self.command]
 
+        # If set use the full command string when returning the 'command_regex' property
+        self.full_command_regex = False
+
         # Define an attribute to store the CmdResult from the last run() call.
         # A CmdResult object has the following properties:
         #   command         - command string
@@ -132,10 +135,11 @@ class ExecutableCommand(CommandWithParameters):
         Typical use would include combining with pgrep to verify a subprocess is running.
 
         Returns:
-            str: regular expression to use to search for the command
-
+            str: regular expression to use to search for the command, typically with pgrep or pkill
         """
-        return "'({})'".format("|".join(self._exe_names))
+        if self.full_command_regex:
+            return f"--full '{str(self)}'"
+        return f"'({'|'.join(self._exe_names)})'"
 
     @property
     def with_bind(self):

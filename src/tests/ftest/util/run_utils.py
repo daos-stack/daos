@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
+import re
 import subprocess  # nosec
 import time
 from getpass import getuser
@@ -543,6 +544,9 @@ def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, 
             processes. Defaults to False which will attempt to kill w/o a signal, then with the ABRT
             signal, and finally with the KILL signal.
 
+    Raises:
+        ValueError: if the pattern ends up matching process 1.
+
     Returns:
         tuple: (NodeSet, NodeSet) where the first NodeSet indicates on which hosts processes
             matching the pattern were initially detected and the second NodeSet indicates on which
@@ -563,6 +567,10 @@ def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, 
     if not result.passed_hosts:
         log.debug("No processes found on %s that match %s", result.failed_hosts, pattern_match)
         return processes_detected, processes_running
+
+    # Catch any attempt to kill process 1.
+    if "1" in re.findall(r"^(\d+)\s+", result.joined_stdout, re.MULTILINE):
+        raise ValueError(f"Attempting to kill process 1 as a match for {pattern}!")
 
     # Indicate on which hosts processes matching the pattern were found running in the return status
     processes_detected.add(result.passed_hosts)

@@ -319,26 +319,19 @@ class JobManager(ExecutableCommand):
         """Forcibly terminate any job processes running on hosts."""
         if not self.job:
             return
-        self._kill_process(self.job.command_regex)
-
-    def _kill_process(self, pattern):
-        """Forcibly terminate the specified process.
-
-        Args:
-            pattern (str): regular expression used to find process names to stop
-        """
-        detected, running = stop_processes(self.log, self._hosts, pattern)
+        regex = self.job.command_regex
+        detected, running = stop_processes(self.log, self._hosts, regex)
         if not detected:
             self.log.info(
-                "No remote %s processes killed on %s (none found), done.", pattern, self._hosts)
+                "No remote %s processes killed on %s (none found), done.", regex, self._hosts)
         elif running:
             self.log.info(
                 "***Unable to kill remote %s process on %s! Please investigate/report.***",
-                pattern, running)
+                regex, running)
         else:
             self.log.info(
                 "***At least one remote %s process needed to be killed on %s! Please investigate/"
-                "report.***", pattern, detected)
+                "report.***", regex, detected)
 
 
 class Orterun(JobManager):
