@@ -1756,11 +1756,16 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 {
 	tse_sched_t	 *sched = tse_task2sched(task);
 	tse_task_t	 *pool_task = NULL;
+	tse_task_t	 *ping_task = NULL;
 	uint32_t	  delay;
 	int		  result = task->dt_result;
 	int		  rc;
 
-	if (pmap_stale) {
+	if (result == -DER_BULK_CONNECT) {
+		rc = obj_ping_targets_task(sched, obj, &ping_task);
+		if (rc != 0)
+			D_GOTO(err, rc);
+	} else if (pmap_stale) {
 		rc = obj_pool_query_task(sched, obj, 0, &pool_task);
 		if (rc != 0)
 			D_GOTO(err, rc);
@@ -1776,8 +1781,18 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 			}
 		}
 
-		delay = dc_obj_retry_delay(task, result, &obj_auxi->retry_cnt,
-					   &obj_auxi->inprogress_cnt, obj_auxi->max_delay);
+		if (ping_task != NULL) {
+			rc = dc_task_depend(task, 1, &ping_task);
+			if (rc != 0) {
+				D_ERROR("Failed to add dependency on ping task (%p)\n", ping_task);
+				D_GOTO(err, rc);
+			}
+			delay = 0;
+		} else {
+			delay = dc_obj_retry_delay(task, result, &obj_auxi->retry_cnt,
+						   &obj_auxi->inprogress_cnt, obj_auxi->max_delay);
+		}
+
 		rc = tse_task_reinit_with_delay(task, delay);
 		if (rc != 0)
 			D_GOTO(err, rc);
@@ -1788,6 +1803,10 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	if (pool_task != NULL)
 		/* ignore returned value, error is reported by comp_cb */
 		tse_task_schedule(pool_task, obj_auxi->io_retry);
+
+	if (ping_task != NULL)
+		/* ignore returned value, error is reported by comp_cb */
+		tse_task_schedule(ping_task, obj_auxi->io_retry);
 
 	D_DEBUG(DB_IO, "Retrying task=%p/%d for err=%d, io_retry=%d\n",
 		task, task->dt_result, result, obj_auxi->io_retry);
