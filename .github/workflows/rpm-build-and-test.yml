@@ -180,6 +180,7 @@ jobs:
       DISTRO_REPOS: disabled
       DOCKER_BUILDKIT: 0
       ARTIFACTS_URL: file:///scratch/job_repos/
+      JENKINS_URL:
       MOCK_OPTIONS: --uniqueext=${{ github.run_id }}
       PR_NUM: ${{ github.event.pull_request.number }}
       # TODO -- this should be on stable, backedup storage, not /scratch
