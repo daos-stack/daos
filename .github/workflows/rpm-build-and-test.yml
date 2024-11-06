@@ -159,8 +159,8 @@ jobs:
   Build-RPM:
     name: Build RPM
     permissions:
-      contents: 'read'
-      id-token: 'write'
+      contents: read
+      id-token: write
       statuses: write
     runs-on: [self-hosted, gcp, rocky8]
     needs: [Create-symlinks, Import-commit-pragmas, Calc-rpm-build-matrix]
@@ -173,7 +173,7 @@ jobs:
       fail-fast: false
     env:
       ARCH: GCP
-      ARTIFACTORY_URL: https://storage.cloud.google.com/github_ci_artifacts
+      ARTIFACTORY_URL:
       DAOS_EMAIL: brian.murrell@intel.com
       DAOS_FULLNAME: daos-stack
       DISTRO: ${{ matrix.distro }}
@@ -185,7 +185,7 @@ jobs:
       # TODO -- this should be on stable, backedup storage, not /scratch
       # yamllint disable-line rule:line-length
       REPO_PATH: /scratch/job_repos/daos-stack/job/daos/job/PR-${{ github.event.pull_request.number }}/
-      REPO_FILE_URL: https://storage.cloud.google.com/github_ci_artifacts/repo-files/
+      REPO_FILE_URL:
       RUN_ID: ${{ github.run_id }}
       TARGET: ${{ matrix.distro }}
       # keep VS Code's GHA linting happy
@@ -233,6 +233,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+      - name: Temp
+        id: temp
+        run: whoami
       - name: Build RPM Docker image
         id: build-rpm-docker-image
         continue-on-error: true
@@ -244,16 +247,13 @@ jobs:
                           --build-arg FVERSION=${{ env.FVERSION }}
                           --tag mock-build
                           utils/rpms
-      - name: Authenticate to GCP
-        id: gcp-authentication
-        uses: 'google-github-actions/auth@v2'
-        with:
-          project_id: daos-github-ci
-          workload_identity_provider: |
-            'projects/192572342707/locations/global/workloadIdentityPools/github/providers/daos'
-      - name: Temp
-        id: temp
-        run: whoami
+      # - name: Authenticate to GCP
+      #   id: gcp-authentication
+      #   uses: 'google-github-actions/auth@v2'
+      #   with:
+      #     project_id: daos-github-ci
+      #     workload_identity_provider: |
+      #       'projects/192572342707/locations/global/workloadIdentityPools/github/providers/daos'
       - name: Build RPM
         id: build-rpm
         continue-on-error: true
