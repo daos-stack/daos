@@ -347,7 +347,7 @@ Rank T1-Total T1-Free T1-Usage
 			},
 			expErr: errInconsistentRoles,
 		},
-		"multiple hosts with space usage; separate roles; two-tiers per rank": {
+		"multiple hosts with space available; separate roles; two-tiers per rank": {
 			mic: &control.MockInvokerConfig{
 				UnaryResponse: &control.UnaryResponse{
 					Responses: []*control.HostResponse{
@@ -376,6 +376,7 @@ Rank T1-Total T1-Free T1-Usage T2-Total T2-Free T2-Usage
 3    1.0 TB   250 GB  75 %     1.0 TB   500 GB  50 %     
 `,
 		},
+		// META tier separate so print available rather than usable (which would be zero).
 		"multiple hosts with space usable; separate roles; two-tiers per rank": {
 			showUsable: true,
 			mic: &control.MockInvokerConfig{
@@ -400,10 +401,10 @@ T2   data
 
 Rank T1-Total T1-Usable T1-Usage T2-Total T2-Usable T2-Usage 
 ---- -------- --------- -------- -------- --------- -------- 
-0    2.0 TB   500 GB    75 %     2.0 TB   1.0 TB    50 %     
-1    2.0 TB   250 GB    87 %     2.0 TB   500 GB    75 %     
-2    1.0 TB   250 GB    75 %     1.0 TB   500 GB    50 %     
-3    1.0 TB   125 GB    87 %     1.0 TB   250 GB    75 %     
+0    2.0 TB   1.0 TB    50 %     2.0 TB   1.0 TB    50 %     
+1    2.0 TB   500 GB    75 %     2.0 TB   500 GB    75 %     
+2    1.0 TB   500 GB    50 %     1.0 TB   500 GB    50 %     
+3    1.0 TB   250 GB    75 %     1.0 TB   250 GB    75 %     
 `,
 		},
 	} {

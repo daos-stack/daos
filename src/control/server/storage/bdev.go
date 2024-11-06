@@ -448,7 +448,7 @@ func (ncs NvmeControllers) Len() int {
 // Capacity returns the cumulative total bytes of all controller capacities.
 func (ncs NvmeControllers) Capacity() (tb uint64) {
 	for _, c := range ncs {
-		tb += (*NvmeController)(c).Capacity()
+		tb += c.Capacity()
 	}
 	return
 }
@@ -456,7 +456,7 @@ func (ncs NvmeControllers) Capacity() (tb uint64) {
 // Total returns the cumulative total bytes of all controller blobstores.
 func (ncs NvmeControllers) Total() (tb uint64) {
 	for _, c := range ncs {
-		tb += (*NvmeController)(c).Total()
+		tb += c.Total()
 	}
 	return
 }
@@ -464,7 +464,7 @@ func (ncs NvmeControllers) Total() (tb uint64) {
 // Free returns the cumulative available bytes of all blobstore clusters.
 func (ncs NvmeControllers) Free() (tb uint64) {
 	for _, c := range ncs {
-		tb += (*NvmeController)(c).Free()
+		tb += c.Free()
 	}
 	return
 }
@@ -473,7 +473,7 @@ func (ncs NvmeControllers) Free() (tb uint64) {
 // capacity calculated whilst taking into account future pool metadata overheads.
 func (ncs NvmeControllers) Usable() (tb uint64) {
 	for _, c := range ncs {
-		tb += (*NvmeController)(c).Usable()
+		tb += c.Usable()
 	}
 	return
 }

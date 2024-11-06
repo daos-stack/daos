@@ -69,7 +69,6 @@ func PrintHostStorageUsageMap(hsm control.HostStorageMap, out io.Writer) {
 	}
 
 	tablePrint.Format(table)
-	return
 }
 
 const (
@@ -146,19 +145,18 @@ func printTierRolesTable(hsm control.HostStorageMap, out, dbg io.Writer) ([]stor
 		fmt.Fprintf(dbg, "scan resp: %+v\n", hsm)
 		return nil, errInsufficientScan
 	}
-	table = append(table, txtfmt.TableRow{
-		tierTitle:  "T1",
-		rolesTitle: metaRoles.String(),
-	})
-	rolesToShow := []storage.BdevRoles{metaRoles}
 
-	// Print data role row if assigned to a separate tier from meta role.
+	rolesToShow := []storage.BdevRoles{metaRoles}
 	if !dataRoles.IsEmpty() {
-		table = append(table, txtfmt.TableRow{
-			tierTitle:  "T2",
-			rolesTitle: dataRoles.String(),
-		})
+		// Print data role row if assigned to a separate tier from meta role.
 		rolesToShow = append(rolesToShow, dataRoles)
+	}
+	for i, roles := range rolesToShow {
+		table = append(table, txtfmt.TableRow{
+			// Starting tier index of 1.
+			tierTitle:  fmt.Sprintf("T%d", i+1),
+			rolesTitle: roles.String(),
+		})
 	}
 
 	tablePrint.Format(table)

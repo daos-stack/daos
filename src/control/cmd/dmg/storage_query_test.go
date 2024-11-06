@@ -122,7 +122,7 @@ func TestStorageQueryCommands(t *testing.T) {
 			nil,
 		},
 		{
-			"per-server storage space query (with custom mem-ratio but no show-usage)",
+			"per-server storage space query (with custom mem-ratio but no show-usable)",
 			"storage query usage --mem-ratio 25.5",
 			"",
 			errors.New("only supported with --show-usable"),

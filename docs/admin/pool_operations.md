@@ -186,13 +186,10 @@ allocated in memory, set `dmg pool create --mem-ratio` option to `50%`. This
 implies that the ratio of metadata on memory and on storage should be 0.5 and
 therefore metadata-on-SSD allocation is twice that of metadata-in-memory.
 
-A MD-on-SSD pool created with a `--mem-ratio` between 0 and 100 percent is
-said to be operating in "phase-2" mode.
-
-#### MD-on-SSD phase-2 pool create examples
+#### MD-on-SSD dmg pool create --mem-ratio examples
 
 These examples cover the recommended way to create a pool in MD-on-SSD
-(including phase-2) mode using the `--size` percentage option.
+mode with a fractional mem-ratio and using the `--size` percentage option.
 
 1. The first simplistic example is run on a single host with a single
 rank/engine where bdev roles META and DATA are not shared.
@@ -215,7 +212,7 @@ definitions with `bdev_roles` "meta" and "data" assigned to separate tiers:
 ```
 
 This pool command requests to use all available storage and maintain a 1:1
-(phase-1 mode) Memory-File to Metadata-Storage:
+Memory-File to Metadata-Storage size ratio (mem-ratio):
 ```bash
 $ dmg pool create bob --size 100% --mem-ratio 100%
 
@@ -240,7 +237,9 @@ reports usable ramdisk capacity for the single rank is 142 GiB (152 GB).
 
 
 2. If the `--mem-ratio` is reduced to 50% in the above example, we end up with
-double the Metadata-Storage size (and a larger total pool size):
+double the Metadata-Storage size compared to Memory-File size (because a larger
+proportion of META is allocated due to the change in mem-ratio) and this results
+in a larger total pool size:
 
 ```bash
 $ dmg pool create bob --size 100% --mem-ratio 50%
@@ -258,10 +257,9 @@ Pool created with 27.46%,72.54% storage tier ratio
 ```
 
 
-3. If we then try the same with 2 ranks/engines where bdev
-roles META and DATA are shared. Here we can illustrate how metadata overheads
-are accommodated for when the same devices share roles (and will be used to
-store both metadata and data).
+3. If we then try the same with bdev roles META and DATA are shared. Here we
+can illustrate how metadata overheads are accommodated for when the same
+devices share roles (and will be used to store both metadata and data).
 
 This is a snippet of the server config file engine section showing storage
 definitions with `bdev_roles` "meta" and "data" assigned to the same (single)
@@ -278,7 +276,7 @@ tier:
 ```
 
 This pool command requests to use all available storage and maintain a 1:1
-(phase-1 mode) Memory-File to Metadata-Storage:
+Memory-File to Metadata-Storage size ratio (mem-ratio):
 ```bash
 $ dmg pool create bob --size 100% --mem-ratio 100%
 
@@ -299,7 +297,7 @@ because both SSDs are sharing META and DATA roles, more capacity is available
 for DATA.
 
 
-5. If the `--mem-ratio` is then reduced to 50% in the above example, we end up
+4. If the `--mem-ratio` is then reduced to 50% in the above example, we end up
 with double the Metadata-Storage size which detracts from the DATA capacity.
 
 ```bash
@@ -321,9 +319,12 @@ Pool created with 20.32%,79.68% storage tier ratio
 META has been doubled at the cost of DATA capacity.
 
 
-6. Adding another engine/rank on the same host results in more than double DATA
+5. Adding another engine/rank on the same host results in more than double DATA
 capacity because RAM-disk capacity is halved across two engines/ranks on the same
 host and this results in a reduction of META and increase in DATA per-rank sizes.
+The RAM-disk capacity for each engine is based on half of the available system
+RAM. When only one engine exists on the host, all of the available system RAM
+(less some calculated reserve) is used for the engine RAM-disk.
 
 ```bash
 $ dmg -i pool create bob -z 100% --mem-ratio 50%
@@ -342,7 +343,7 @@ Pool created with 8.65%,91.35% storage tier ratio
 ```
 
 
-7. A larger pool with 6 engines/ranks across 3 hosts using the same shared-role
+6. A larger pool with 6 engines/ranks across 3 hosts using the same shared-role
 configuration and pool-create commandline as the previous example.
 
 ```bash
@@ -365,7 +366,7 @@ Here the size has increased linearly with the per-rank sizes remaining the
 same.
 
 
-8. Now for a more involved example with shared roles. Create two pools of
+7. Now for a more involved example with shared roles. Create two pools of
 roughly equal size each using half available capacity and a `--mem-ratio` of
 50%.
 
@@ -390,6 +391,9 @@ Rank T1-Total T1-Usable T1-Usage
 4    1.6 TB   1.4 TB    14 %
 5    1.6 TB   1.4 TB    14 %
 ```
+
+The last column indicates the percentage of the total capacity that is not
+usable for new pool data.
 
 First create a pool using 50% of available capacity:
 
@@ -478,7 +482,7 @@ created pool is slightly smaller meaning the total cumulative pool size reading
 of extra per-pool overheads and possible rounding in size calculations.
 
 
-9. Now for a similar experiment as example no. 8 but with separate META and
+8. Now for a similar experiment as example no. 8 but with separate META and
 DATA roles.
 
 ```bash
