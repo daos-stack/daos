@@ -60,4 +60,10 @@ free_memory_in_hook(void);
 char *
 query_pil4dfs_path(void);
 
+/**
+ * return glibc version in current process
+ */
+float
+query_libc_version(void);
+
 #endif
