@@ -4,10 +4,8 @@ env:
   # TODO: we really need to define a list of supported versions (ideally it's no more than 2)
   #       build is done on the lowest version and test on the highest with a "sanity test"
   #       stage done on all versions in the list except the highest
-  EL8_BUILD_VERSION: 8.6
-  EL8_VERSION: 8.8
+  EL8_BUILD_VERSION: 8.9
   EL9_BUILD_VERSION: 9
-  EL9_VERSION: 9
   LEAP15_VERSION: 15.5
 
 on:
@@ -283,14 +281,14 @@ jobs:
         if: steps.build-rpm.outcome != 'success'
         run: cat mock_result/root.log;
              cat mock_result/build.log
-      - name: Save RPM build logs
-        id: 'upload-rpm-logs'
-        continue-on-error: true
-        uses: 'google-github-actions/upload-cloud-storage@v2'
-        with:
-          path: 'mock_result'
-          destination: 'github_ci_artifacts/${{ github.run_id }}'
-          glob: '**/*.txt'
+      # - name: Save RPM build logs
+      #   id: 'upload-rpm-logs'
+      #   continue-on-error: true
+      #   uses: 'google-github-actions/upload-cloud-storage@v2'
+      #   with:
+      #     path: 'mock_result'
+      #     destination: 'github_ci_artifacts/${{ github.run_id }}'
+      #     glob: '**/*.txt'
       - name: Create repo
         id: create-repo
         if: steps.build-rpm.outcome == 'success'
