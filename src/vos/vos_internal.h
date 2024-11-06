@@ -376,6 +376,8 @@ struct vos_container {
 	daos_epoch_range_t	vc_epr_aggregation;
 	/* Current ongoing discard EPR */
 	daos_epoch_range_t	vc_epr_discard;
+	/* Last timestamp when VOS aggregation reports -DER_TX_BUSY */
+	uint64_t		vc_agg_busy_ts;
 	/* Last timestamp when VOS aggregation reporting ENOSPACE */
 	uint64_t		vc_agg_nospc_ts;
 	/* Last timestamp when IO reporting ENOSPACE */
