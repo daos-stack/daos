@@ -97,7 +97,11 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
                     "tier_name": "NVME",
                     "size": self.params.get("total", path="/run/exp_vals/nvme/*")
                 }
-            ]
+            ],
+            "mem_file_bytes": (
+                self.params.get("total", path="/run/exp_vals/scm/*") if
+                self.server_managers[0].manager.job.using_control_metadata else
+                0)
         }
 
         self.assertDictEqual(

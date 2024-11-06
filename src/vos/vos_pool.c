@@ -149,12 +149,12 @@ vos_meta_load_fn(void *arg)
 		ABT_cond_signal(mlc->mlc_cond);
 }
 
-static inline int
-vos_meta_load(struct umem_store *store, char *start)
+static int
+vos_meta_load(struct umem_store *store, char *start, daos_off_t offset, daos_size_t len)
 {
 	uint64_t		 read_size;
-	uint64_t		 remain_size = store->stor_size;
-	daos_off_t		 off = 0;
+	uint64_t		 remain_size = len;
+	daos_off_t		 off = offset;
 	int			 rc = 0;
 	struct meta_load_arg	*mla;
 	struct meta_load_control mlc;
@@ -221,6 +221,74 @@ vos_meta_load(struct umem_store *store, char *start)
 destroy_lock:
 	ABT_mutex_free(&mlc.mlc_lock);
 	return rc ? rc : mlc.mlc_rc;
+}
+
+struct vos_waitqueue {
+	ABT_cond	vw_cond;
+	ABT_mutex	vw_mutex;
+};
+
+static int
+vos_waitqueue_create(void **ret_wq)
+{
+	struct vos_waitqueue	*wq;
+	int			 rc;
+
+	D_ALLOC_PTR(wq);
+	if (wq == NULL)
+		return -DER_NOMEM;
+
+	rc = ABT_mutex_create(&wq->vw_mutex);
+	if (rc != ABT_SUCCESS) {
+		D_FREE(wq);
+		return dss_abterr2der(rc);
+	}
+	rc = ABT_cond_create(&wq->vw_cond);
+	if (rc != ABT_SUCCESS) {
+		ABT_mutex_free(&wq->vw_mutex);
+		D_FREE(wq);
+		return dss_abterr2der(rc);
+	}
+
+	*ret_wq = wq;
+	return 0;
+}
+
+static void
+vos_waitqueue_destroy(void *arg)
+{
+	struct vos_waitqueue	*wq = arg;
+
+	ABT_cond_free(&wq->vw_cond);
+	ABT_mutex_free(&wq->vw_mutex);
+	D_FREE(wq);
+}
+
+static void
+vos_waitqueue_wait(void *arg, bool yield_only)
+{
+	struct vos_waitqueue	*wq = arg;
+
+	if (yield_only) {
+		ABT_thread_yield();
+		return;
+	}
+	ABT_mutex_lock(wq->vw_mutex);
+	ABT_cond_wait(wq->vw_cond, wq->vw_mutex);
+	ABT_mutex_unlock(wq->vw_mutex);
+}
+
+static void
+vos_waitqueue_wakeup(void *arg, bool wakeup_all)
+{
+	struct vos_waitqueue	*wq = arg;
+
+	ABT_mutex_lock(wq->vw_mutex);
+	if (wakeup_all)
+		ABT_cond_broadcast(wq->vw_cond);
+	else
+		ABT_cond_signal(wq->vw_cond);
+	ABT_mutex_unlock(wq->vw_mutex);
 }
 
 static inline int
@@ -353,13 +421,75 @@ vos_wal_metrics_init(struct vos_wal_metrics *vw_metrics, const char *path, int t
 		D_WARN("Failed to create 'replay_entries' telemetry: "DF_RC"\n", DP_RC(rc));
 }
 
+#define VOS_CACHE_DIR	"vos_cache"
+
+void
+vos_cache_metrics_init(struct vos_cache_metrics *vc_metrics, const char *path, int tgt_id)
+{
+	int	rc;
+
+	rc = d_tm_add_metric(&vc_metrics->vcm_pg_ne, D_TM_GAUGE, "Non-evictable pages",
+			     "pages", "%s/%s/page_ne/tgt_%d", path, VOS_CACHE_DIR, tgt_id);
+	if (rc)
+		DL_WARN(rc, "Failed to create non-evictable pages telemetry.");
+
+	rc = d_tm_add_metric(&vc_metrics->vcm_pg_pinned, D_TM_GAUGE, "Pinned pages",
+			     "pages", "%s/%s/page_pinned/tgt_%d", path, VOS_CACHE_DIR, tgt_id);
+	if (rc)
+		DL_WARN(rc, "Failed to create pinned pages telemetry.");
+
+	rc = d_tm_add_metric(&vc_metrics->vcm_pg_free, D_TM_GAUGE, "Free pages",
+			     "pages", "%s/%s/page_free/tgt_%d", path, VOS_CACHE_DIR, tgt_id);
+	if (rc)
+		DL_WARN(rc, "Failed to create free pages telemetry.");
+
+	rc = d_tm_add_metric(&vc_metrics->vcm_pg_hit, D_TM_COUNTER, "Page cache hit",
+			     "hits", "%s/%s/page_hit/tgt_%d", path, VOS_CACHE_DIR, tgt_id);
+	if (rc)
+		DL_WARN(rc, "Failed to create page hit telemetry.");
+
+	rc = d_tm_add_metric(&vc_metrics->vcm_pg_miss, D_TM_COUNTER, "Page cache miss",
+			     "misses", "%s/%s/page_miss/tgt_%d", path, VOS_CACHE_DIR, tgt_id);
+	if (rc)
+		DL_WARN(rc, "Failed to create page miss telemetry.");
+
+	rc = d_tm_add_metric(&vc_metrics->vcm_pg_evict, D_TM_COUNTER, "Page cache evict",
+			     "pages", "%s/%s/page_evict/tgt_%d", path, VOS_CACHE_DIR, tgt_id);
+	if (rc)
+		DL_WARN(rc, "Failed to create page evict telemetry.");
+
+	rc = d_tm_add_metric(&vc_metrics->vcm_pg_flush, D_TM_COUNTER, "Page cache flush",
+			     "pages", "%s/%s/page_flush/tgt_%d", path, VOS_CACHE_DIR, tgt_id);
+	if (rc)
+		DL_WARN(rc, "Failed to create page flush telemetry.");
+
+	rc = d_tm_add_metric(&vc_metrics->vcm_pg_load, D_TM_COUNTER, "Page cache load",
+			     "pages", "%s/%s/page_load/tgt_%d", path, VOS_CACHE_DIR, tgt_id);
+	if (rc)
+		DL_WARN(rc, "Failed to create page load telemetry.");
+
+	rc = d_tm_add_metric(&vc_metrics->vcm_obj_hit, D_TM_COUNTER, "Object cache hit",
+			     "hits", "%s/%s/obj_hit/tgt_%d", path, VOS_CACHE_DIR, tgt_id);
+	if (rc)
+		DL_WARN(rc, "Failed to create object hit telemetry.");
+
+}
+
+static inline struct vos_wal_metrics *
+store2wal_metrics(struct umem_store *store)
+{
+	struct vos_pool_metrics	*vpm = (struct vos_pool_metrics *)store->stor_stats;
+
+	return vpm != NULL ? &vpm->vp_wal_metrics : NULL;
+}
+
 static inline int
 vos_wal_reserve(struct umem_store *store, uint64_t *tx_id)
 {
 	struct bio_wal_info	wal_info;
 	struct vos_pool		*pool;
 	struct bio_wal_stats	ws = { 0 };
-	struct vos_wal_metrics	*vwm;
+	struct vos_wal_metrics	*vwm = store2wal_metrics(store);
 	int			rc;
 
 	pool = store->vos_priv;
@@ -377,7 +507,6 @@ vos_wal_reserve(struct umem_store *store, uint64_t *tx_id)
 
 reserve:
 	D_ASSERT(store && store->stor_priv != NULL);
-	vwm = (struct vos_wal_metrics *)store->stor_stats;
 	rc = bio_wal_reserve(store->stor_priv, tx_id, (vwm != NULL) ? &ws : NULL);
 	if (rc == 0 && vwm != NULL)
 		d_tm_set_gauge(vwm->vwm_wal_waiters, ws.ws_waiters);
@@ -391,11 +520,10 @@ vos_wal_commit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_
 	struct bio_wal_info     wal_info;
 	struct vos_pool        *pool;
 	struct bio_wal_stats    ws = {0};
-	struct vos_wal_metrics *vwm;
+	struct vos_wal_metrics *vwm = store2wal_metrics(store);
 	int                     rc;
 
 	D_ASSERT(store && store->stor_priv != NULL);
-	vwm = (struct vos_wal_metrics *)store->stor_stats;
 	if (vwm != NULL)
 		d_tm_mark_duration_start(vwm->vwm_wal_dur, D_TM_CLOCK_REALTIME);
 	rc = bio_wal_commit(store->stor_priv, wal_tx, data_iod, (vwm != NULL) ? &ws : NULL);
@@ -426,6 +554,9 @@ vos_wal_commit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_
 		d_tm_set_gauge(vwm->vwm_wal_qd, ws.ws_qd);
 	}
 
+	bio_wal_query(store->stor_priv, &wal_info);
+	umem_cache_commit(store, wal_info.wi_commit_id);
+
 	pool = store->vos_priv;
 	if (unlikely(pool == NULL))
 		return 0; /** In case there is any race for checkpoint init. */
@@ -433,8 +564,6 @@ vos_wal_commit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_
 	/** Update checkpoint state after commit in case there is an active checkpoint waiting
 	 *  for this commit to finish.
 	 */
-	bio_wal_query(store->stor_priv, &wal_info);
-
 	pool->vp_update_cb(pool->vp_chkpt_arg, wal_info.wi_commit_id, wal_info.wi_used_blks,
 			   wal_info.wi_tot_blks);
 
@@ -446,18 +575,15 @@ vos_wal_replay(struct umem_store *store,
 	       int (*replay_cb)(uint64_t tx_id, struct umem_action *act, void *arg),
 	       void *arg)
 {
-	struct bio_wal_rp_stats wrs;
-	int rc;
+	struct bio_wal_rp_stats	 wrs;
+	struct vos_wal_metrics	*vwm = store2wal_metrics(store);
+	int			 rc;
 
 	D_ASSERT(store && store->stor_priv != NULL);
-	rc = bio_wal_replay(store->stor_priv,
-			    (store->stor_stats != NULL) ? &wrs : NULL,
-			    replay_cb, arg);
+	rc = bio_wal_replay(store->stor_priv, (vwm != NULL) ? &wrs : NULL, replay_cb, arg);
 
 	/* VOS file rehydration metrics */
-	if (store->stor_stats != NULL && rc >= 0) {
-		struct vos_wal_metrics *vwm = (struct vos_wal_metrics *)store->stor_stats;
-
+	if (vwm != NULL && rc >= 0) {
 		d_tm_inc_counter(vwm->vwm_replay_count, 1);
 		d_tm_set_gauge(vwm->vwm_replay_size, wrs.wrs_sz);
 		d_tm_set_gauge(vwm->vwm_replay_time, wrs.wrs_tm);
@@ -475,6 +601,10 @@ vos_wal_id_cmp(struct umem_store *store, uint64_t id1, uint64_t id2)
 }
 
 struct umem_store_ops vos_store_ops = {
+	.so_waitqueue_create	= vos_waitqueue_create,
+	.so_waitqueue_destroy	= vos_waitqueue_destroy,
+	.so_waitqueue_wait	= vos_waitqueue_wait,
+	.so_waitqueue_wakeup	= vos_waitqueue_wakeup,
 	.so_load	= vos_meta_load,
 	.so_read	= vos_meta_readv,
 	.so_write	= vos_meta_writev,
@@ -667,30 +797,90 @@ vos2mc_flags(unsigned int vos_flags)
 	return mc_flags;
 }
 
+static inline void
+init_umem_store(struct umem_store *store, struct bio_meta_context *mc)
+{
+	bio_meta_get_attr(mc, &store->stor_size, &store->stor_blk_size, &store->stor_hdr_blks,
+			  (uint8_t *)&store->store_type, &store->store_evictable);
+	store->stor_priv = mc;
+	store->stor_ops = &vos_store_ops;
+
+	/* Legacy BMEM V1 pool without backend type stored */
+	if (bio_nvme_configured(SMD_DEV_TYPE_META) && store->store_type == DAOS_MD_PMEM)
+		store->store_type = DAOS_MD_BMEM;
+}
+
+static int
+vos_pool_store_type(daos_size_t scm_sz, daos_size_t meta_sz)
+{
+	int backend;
+
+	backend = umempobj_get_backend_type();
+	D_ASSERT((meta_sz != 0) && (scm_sz != 0));
+
+	if (scm_sz > meta_sz) {
+		D_ERROR("memsize %lu is greater than metasize %lu", scm_sz, meta_sz);
+		return -DER_INVAL;
+	}
+
+	if (scm_sz < meta_sz) {
+		if ((backend == DAOS_MD_BMEM) && umempobj_allow_md_bmem_v2())
+			backend = DAOS_MD_BMEM_V2;
+		else if (backend != DAOS_MD_BMEM_V2) {
+			D_ERROR("scm_sz %lu is less than meta_sz %lu", scm_sz, meta_sz);
+			return -DER_INVAL;
+		}
+	}
+
+	return backend;
+}
+
+int
+vos_pool_roundup_size(daos_size_t *scm_sz, daos_size_t *meta_sz)
+{
+	size_t alignsz;
+	int    rc;
+
+	D_ASSERT(*scm_sz != 0);
+	rc = vos_pool_store_type(*scm_sz, *meta_sz ? *meta_sz : *scm_sz);
+	if (rc < 0)
+		return rc;
+
+	/* Round up the size such that it is compatible with backend */
+	alignsz  = umempobj_pgsz(rc);
+	*scm_sz  = max(D_ALIGNUP(*scm_sz, alignsz), 1 << 24);
+	if (*meta_sz)
+		*meta_sz = max(D_ALIGNUP(*meta_sz, alignsz), 1 << 24);
+
+	return 0;
+}
+
 static int
 vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
-		   size_t scm_sz, size_t nvme_sz, size_t wal_sz, unsigned int flags,
-		   struct umem_pool **ph)
+		   size_t scm_sz, size_t nvme_sz, size_t wal_sz, size_t meta_sz,
+		   unsigned int flags, struct umem_pool **ph)
 {
 	struct bio_xs_context	*xs_ctxt = vos_xsctxt_get();
 	struct umem_store	 store = { 0 };
 	struct bio_meta_context	*mc;
 	struct umem_pool	*pop = NULL;
 	enum bio_mc_flags	 mc_flags = vos2mc_flags(flags);
-	size_t			 meta_sz = scm_sz;
 	int			 rc, ret;
+	size_t                   scm_sz_actual;
 
 	*ph = NULL;
 	/* always use PMEM mode for SMD */
-	store.store_type = umempobj_get_backend_type();
 	if (flags & VOS_POF_SYSDB) {
 		store.store_type = DAOS_MD_PMEM;
 		store.store_standalone = true;
+		goto umem_create;
 	}
 
 	/* No NVMe is configured or current xstream doesn't have NVMe context */
-	if (!bio_nvme_configured(SMD_DEV_TYPE_MAX) || xs_ctxt == NULL)
+	if (!bio_nvme_configured(SMD_DEV_TYPE_MAX) || xs_ctxt == NULL) {
+		store.store_type = DAOS_MD_PMEM;
 		goto umem_create;
+	}
 
 	if (!scm_sz) {
 		struct stat lstat;
@@ -698,14 +888,28 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 		rc = stat(path, &lstat);
 		if (rc != 0)
 			return daos_errno2der(errno);
-		meta_sz = lstat.st_size;
+		scm_sz_actual = lstat.st_size;
+	} else
+		scm_sz_actual = scm_sz;
+
+	/* Is meta_sz is set then use it, otherwise derive from VOS file size or scm_sz */
+	if (!meta_sz)
+		meta_sz = scm_sz_actual;
+
+	rc = vos_pool_store_type(scm_sz_actual, meta_sz);
+	if (rc < 0) {
+		D_ERROR("Failed to determine the store type for xs:%p pool:"DF_UUID". "DF_RC,
+			xs_ctxt, DP_UUID(pool_id), DP_RC(rc));
+		return rc;
 	}
+	store.store_type = rc;
 
 	D_DEBUG(DB_MGMT, "Create BIO meta context for xs:%p pool:"DF_UUID" "
-		"meta_sz: %zu, nvme_sz: %zu wal_sz:%zu\n",
-		xs_ctxt, DP_UUID(pool_id), meta_sz, nvme_sz, wal_sz);
+		"scm_sz: %zu meta_sz: %zu, nvme_sz: %zu wal_sz:%zu backend:%d\n",
+		xs_ctxt, DP_UUID(pool_id), scm_sz, meta_sz, nvme_sz, wal_sz, store.store_type);
 
-	rc = bio_mc_create(xs_ctxt, pool_id, meta_sz, wal_sz, nvme_sz, mc_flags);
+	rc = bio_mc_create(xs_ctxt, pool_id, scm_sz_actual, meta_sz, wal_sz, nvme_sz, mc_flags,
+			   store.store_type);
 	if (rc != 0) {
 		D_ERROR("Failed to create BIO meta context for xs:%p pool:"DF_UUID". "DF_RC"\n",
 			xs_ctxt, DP_UUID(pool_id), DP_RC(rc));
@@ -724,11 +928,11 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 		return rc;
 	}
 
-	bio_meta_get_attr(mc, &store.stor_size, &store.stor_blk_size, &store.stor_hdr_blks);
-	store.stor_priv = mc;
-	store.stor_ops = &vos_store_ops;
+	init_umem_store(&store, mc);
 
 umem_create:
+	D_DEBUG(DB_MGMT, "umempobj_create sz: " DF_U64 " store_sz: " DF_U64, scm_sz,
+		store.stor_size);
 	pop = umempobj_create(path, layout, UMEMPOBJ_ENABLE_STATS, scm_sz, 0600, &store);
 	if (pop != NULL) {
 		*ph = pop;
@@ -764,15 +968,17 @@ vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned 
 
 	*ph = NULL;
 	/* always use PMEM mode for SMD */
-	store.store_type = umempobj_get_backend_type();
 	if (flags & VOS_POF_SYSDB) {
 		store.store_type = DAOS_MD_PMEM;
 		store.store_standalone = true;
+		goto umem_open;
 	}
 
 	/* No NVMe is configured or current xstream doesn't have NVMe context */
-	if (!bio_nvme_configured(SMD_DEV_TYPE_MAX) || xs_ctxt == NULL)
+	if (!bio_nvme_configured(SMD_DEV_TYPE_MAX) || xs_ctxt == NULL) {
+		store.store_type = DAOS_MD_PMEM;
 		goto umem_open;
+	}
 
 	D_DEBUG(DB_MGMT, "Open BIO meta context for xs:%p pool:"DF_UUID"\n",
 		xs_ctxt, DP_UUID(pool_id));
@@ -784,14 +990,8 @@ vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned 
 		return rc;
 	}
 
-	bio_meta_get_attr(mc, &store.stor_size, &store.stor_blk_size, &store.stor_hdr_blks);
-	store.stor_priv = mc;
-	store.stor_ops = &vos_store_ops;
-	if (metrics != NULL) {
-		struct vos_pool_metrics	*vpm = (struct vos_pool_metrics *)metrics;
-
-		store.stor_stats = &vpm->vp_wal_metrics;
-	}
+	init_umem_store(&store, mc);
+	store.stor_stats = metrics;
 
 umem_open:
 	pop = umempobj_open(path, layout, UMEMPOBJ_ENABLE_STATS, &store);
@@ -1014,7 +1214,8 @@ static int pool_open(void *ph, struct vos_pool_df *pool_df,
 
 int
 vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t nvme_sz,
-		   daos_size_t wal_sz, unsigned int flags, uint32_t version, daos_handle_t *poh)
+		   daos_size_t wal_sz, daos_size_t meta_sz, unsigned int flags, uint32_t version,
+		   daos_handle_t *poh)
 {
 	struct umem_pool	*ph;
 	struct umem_attr	 uma = {0};
@@ -1036,9 +1237,9 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_
 		return -DER_INVAL;
 
 	D_DEBUG(DB_MGMT,
-		"Pool Path: %s, size: " DF_U64 ":" DF_U64 ", "
+		"Pool Path: %s, size: " DF_U64 ":" DF_U64 ":" DF_U64 ", "
 		"UUID: " DF_UUID ", version: %u\n",
-		path, scm_sz, nvme_sz, DP_UUID(uuid), version);
+		path, scm_sz, nvme_sz, meta_sz, DP_UUID(uuid), version);
 
 	if (flags & VOS_POF_SMALL)
 		flags |= VOS_POF_EXCL;
@@ -1054,15 +1255,16 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_
 	}
 
 	/* Path must be a file with a certain size when size argument is 0 */
-	if (!scm_sz && access(path, F_OK) == -1) {
+	if (!scm_sz && access(path, F_OK | R_OK | W_OK) == -1) {
 		D_ERROR("File not accessible (%d) when size is 0\n", errno);
 		return daos_errno2der(errno);
 	}
 
-	rc = vos_pmemobj_create(path, uuid, VOS_POOL_LAYOUT, scm_sz, nvme_sz, wal_sz, flags, &ph);
+	rc = vos_pmemobj_create(path, uuid, VOS_POOL_LAYOUT, scm_sz, nvme_sz, wal_sz, meta_sz,
+				flags, &ph);
 	if (rc) {
-		D_ERROR("Failed to create pool %s, scm_sz="DF_U64", nvme_sz="DF_U64". "DF_RC"\n",
-			path, scm_sz, nvme_sz, DP_RC(rc));
+		D_ERROR("Failed to create pool %s, scm_sz="DF_U64", nvme_sz="DF_U64", meta_sz="
+			DF_U64". "DF_RC"\n", path, scm_sz, nvme_sz, meta_sz, DP_RC(rc));
 		return rc;
 	}
 
@@ -1096,6 +1298,18 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_
 		goto end;
 
 	memset(pool_df, 0, sizeof(*pool_df));
+
+	pool_df->pd_ext = umem_zalloc(&umem, sizeof(struct vos_pool_ext_df));
+	if (UMOFF_IS_NULL(pool_df->pd_ext)) {
+		D_ERROR("Failed to allocate pool df extension.\n");
+		rc = -DER_NOSPACE;
+		goto end;
+	}
+
+	rc = gc_init_pool(&umem, pool_df);
+	if (rc)
+		goto end;
+
 	rc = dbtree_create_inplace(VOS_BTR_CONT_TABLE, 0, VOS_CONT_ORDER,
 				   &uma, &pool_df->pd_cont_root, &hdl);
 	if (rc != 0)
@@ -1104,15 +1318,14 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_
 	dbtree_close(hdl);
 
 	uuid_copy(pool_df->pd_id, uuid);
-	pool_df->pd_scm_sz	= scm_sz;
+	/* Use meta-blob size as scm if present */
+	pool_df->pd_scm_sz      = (meta_sz) ? meta_sz : scm_sz;
 	pool_df->pd_nvme_sz	= nvme_sz;
 	pool_df->pd_magic	= POOL_DF_MAGIC;
 	if (DAOS_FAIL_CHECK(FLC_POOL_DF_VER))
 		pool_df->pd_version = 0;
 	else
 		pool_df->pd_version = version;
-
-	gc_init_pool(&umem, pool_df);
 end:
 	/**
 	 * The transaction can in reality be aborted
@@ -1172,11 +1385,11 @@ close:
 }
 
 int
-vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t nvme_sz,
-		unsigned int flags, uint32_t version, daos_handle_t *poh)
+vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t data_sz,
+		daos_size_t meta_sz, unsigned int flags, uint32_t version, daos_handle_t *poh)
 {
 	/* create vos pool with default WAL size */
-	return vos_pool_create_ex(path, uuid, scm_sz, nvme_sz, 0, flags, version, poh);
+	return vos_pool_create_ex(path, uuid, scm_sz, data_sz, 0, meta_sz, flags, version, poh);
 }
 
 /**
@@ -1399,15 +1612,8 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 	/* Insert the opened pool to the uuid hash table */
 	uuid_copy(ukey.uuid, pool_df->pd_id);
 	pool->vp_sysdb = !!(flags & VOS_POF_SYSDB);
-	rc = pool_link(pool, &ukey, poh);
-	if (rc) {
-		D_ERROR("Error inserting into vos DRAM hash\n");
-		D_GOTO(failed, rc);
-	}
-
 	pool->vp_dtx_committed_count = 0;
 	pool->vp_pool_df             = pool_df;
-
 	pool->vp_opened = 1;
 	pool->vp_excl = !!(flags & VOS_POF_EXCL);
 	pool->vp_small = !!(flags & VOS_POF_SMALL);
@@ -1424,6 +1630,16 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 		pool->vp_data_thresh = 0;
 	else
 		pool->vp_data_thresh = DAOS_PROP_PO_DATA_THRESH_DEFAULT;
+
+	rc = gc_open_pool(pool);
+	if (rc)
+		goto failed;
+
+	rc = pool_link(pool, &ukey, poh);
+	if (rc) {
+		D_ERROR("Error inserting into vos DRAM hash\n");
+		D_GOTO(failed, rc);
+	}
 
 	vos_space_sys_init(pool);
 	/* Ensure GC is triggered after server restart */
@@ -1616,10 +1832,12 @@ vos_pool_close(daos_handle_t poh)
 	pool->vp_opened--;
 
 	/* If the last reference is holding by GC */
-	if (pool->vp_opened == 1 && gc_have_pool(pool))
+	if (pool->vp_opened == 1 && gc_have_pool(pool)) {
 		gc_del_pool(pool);
-	else if (pool->vp_opened == 0)
+	} else if (pool->vp_opened == 0) {
 		vos_pool_hash_del(pool);
+		gc_close_pool(pool);
+	}
 
 	vos_pool_decref(pool); /* -1 for myself */
 	return 0;
