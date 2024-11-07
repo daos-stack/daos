@@ -506,10 +506,10 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (req->mem_ratio)
 		scm_bytes *= (double)req->mem_ratio;
 
-	rc = ds_mgmt_create_pool(pool_uuid, req->sys, "pmem", targets, scm_bytes,
-				 req->tier_bytes[DAOS_MEDIA_NVME] /* nvme_size */, prop, &svc,
-				 req->n_fault_domains, req->fault_domains,
-				 req->tier_bytes[DAOS_MEDIA_SCM] /* meta_size */);
+	rc = ds_mgmt_create_pool(pool_uuid, req->sys, targets, scm_bytes,
+				 req->tier_bytes[DAOS_MEDIA_NVME] /* nvme_size */,
+				 req->tier_bytes[DAOS_MEDIA_SCM] /* meta_size */, prop, &svc,
+				 req->n_fault_domains, req->fault_domains);
 	if (rc != 0) {
 		D_ERROR("failed to create pool: "DF_RC"\n", DP_RC(rc));
 		goto out;
@@ -901,10 +901,9 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (svc_ranks == NULL)
 		D_GOTO(out_list, rc = -DER_NOMEM);
 
-	rc = ds_mgmt_pool_extend(uuid, svc_ranks, rank_list, "pmem", scm_bytes, nvme_bytes,
+	rc = ds_mgmt_pool_extend(uuid, svc_ranks, rank_list, scm_bytes, nvme_bytes,
 				 req->tier_bytes[DAOS_MEDIA_SCM] /* meta_size */,
 				 req->n_fault_domains, req->fault_domains);
-
 	if (rc != 0)
 		D_ERROR("Failed to extend pool %s: "DF_RC"\n", req->id,
 			DP_RC(rc));
