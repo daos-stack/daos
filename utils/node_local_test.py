@@ -6395,7 +6395,17 @@ def run(wf, args):
     # If the perf-check option is given then re-start everything without much
     # debugging enabled and run some micro-benchmarks to give numbers for use
     # as a comparison against other builds.
+    run_fi = False
+
     if args.perf_check or fi_test or fi_test_dfuse:
+        fs = subprocess.run([os.path.join(conf['PREFIX'], 'bin', 'fault_status')], check=False)
+        print(fs)
+        if fs.returncode == 0:
+            run_fi = True
+        else:
+            print("Unable to detect fault injection feature, skipping testing")
+
+    if run_fi:
         args.server_debug = 'INFO'
         args.memcheck = 'no'
         args.dfuse_debug = 'WARN'
