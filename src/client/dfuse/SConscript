@@ -193,7 +193,7 @@ def find_static_fuse(cenv):
     if os.path.exists(cenv.subst('$FUSE_PREFIX')):
         fuse_prefix = cenv.subst('$FUSE_PREFIX')
 
-    for path in ['lib64', 'lib/x86_64-linux-gnu', 'lib']:
+    for path in ['lib64', 'lib/x86_64-linux-gnu', 'lib/aarch64-linux-gnu', 'lib']:
         fuselib = os.path.join(fuse_prefix, path, "libfuse3.a")
         if os.path.exists(fuselib):
             return [File(fuselib)]
