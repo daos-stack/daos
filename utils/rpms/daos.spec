@@ -14,8 +14,8 @@
 %endif
 
 Name:          daos
-Version:       2.6.1
-Release:       4%{?relval}%{?dist}
+Version:       2.6.2
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -601,6 +601,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+
+* Tue Nov 05 2024 Phillip Henderson <phillip.henderson@intel.com> 2.6.2-1
+- First test build for 2.6.2
 
 * Wed Oct 02 2024 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.6.1-4
 - Add support of the PMDK package 2.1.0 with NDCTL enabled.
