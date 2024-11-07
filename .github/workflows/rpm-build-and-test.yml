@@ -4,7 +4,7 @@ env:
   # TODO: we really need to define a list of supported versions (ideally it's no more than 2)
   #       build is done on the lowest version and test on the highest with a "sanity test"
   #       stage done on all versions in the list except the highest
-  EL8_BUILD_VERSION: 8.9
+  EL8_BUILD_VERSION: 8.6
   EL9_BUILD_VERSION: 9
   LEAP15_VERSION: 15.5
 
