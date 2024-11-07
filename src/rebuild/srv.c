@@ -502,6 +502,45 @@ ds_rebuild_running_query(uuid_t pool_uuid, uint32_t opc, uint32_t *upper_ver,
 		rpt_put(rpt);
 }
 
+/*
+ * Restart rebuild if \a rank's rebuild not finished.
+ * Only used for massive failure recovery case, see pool_restart_rebuild_if_rank_wip().
+ */
+void
+ds_rebuild_restart_if_rank_wip(uuid_t pool_uuid, d_rank_t rank)
+{
+	struct rebuild_global_pool_tracker	*rgt;
+	int					 i;
+
+	rgt = rebuild_global_pool_tracker_lookup(pool_uuid, -1, -1);
+	if (rgt == NULL)
+		return;
+
+	if (rgt->rgt_status.rs_state != DRS_IN_PROGRESS) {
+		rgt_put(rgt);
+		return;
+	}
+
+	for (i = 0; i < rgt->rgt_servers_number; i++) {
+		if (rgt->rgt_servers[i].rank == rank) {
+			if (!rgt->rgt_servers[i].pull_done) {
+				rgt->rgt_status.rs_errno = -DER_STALE;
+				rgt->rgt_abort = 1;
+				rgt->rgt_status.rs_fail_rank = rank;
+				D_INFO(DF_RB ": abort rebuild because rank %d WIP\n",
+				       DP_RB_RGT(rgt), rank);
+			}
+			rgt_put(rgt);
+			return;
+		}
+	}
+
+	D_INFO(DF_RB ": rank %d not in rgt_servers,  rgt_servers_number %d\n",
+	       DP_RB_RGT(rgt), rank, rgt->rgt_servers_number);
+	rgt_put(rgt);
+	return;
+}
+
 /* TODO: Add something about what the current operation is for output status */
 int
 ds_rebuild_query(uuid_t pool_uuid, struct daos_rebuild_status *status)
@@ -696,7 +735,7 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 		for (i = 0; i < excluded.rl_nr; i++) {
 			struct pool_domain *dom;
 
-			dom = pool_map_find_node_by_rank(pool->sp_map, excluded.rl_ranks[i]);
+			dom = pool_map_find_dom_by_rank(pool->sp_map, excluded.rl_ranks[i]);
 			D_ASSERT(dom != NULL);
 
 			if (rgt->rgt_opc == RB_OP_REBUILD) {
@@ -808,7 +847,7 @@ rebuild_global_pool_tracker_create(struct ds_pool *pool, uint32_t ver, uint32_t 
 				   uint32_t opc, struct rebuild_global_pool_tracker **p_rgt)
 {
 	struct rebuild_global_pool_tracker *rgt;
-	int node_nr;
+	int rank_nr;
 	struct pool_domain *doms;
 	double                              now;
 	int i;
@@ -819,11 +858,11 @@ rebuild_global_pool_tracker_create(struct ds_pool *pool, uint32_t ver, uint32_t 
 		return -DER_NOMEM;
 
 	D_INIT_LIST_HEAD(&rgt->rgt_list);
-	node_nr = pool_map_find_nodes(pool->sp_map, PO_COMP_ID_ALL, &doms);
-	if (node_nr < 0)
-		D_GOTO(out, rc = node_nr);
+	rank_nr = pool_map_find_ranks(pool->sp_map, PO_COMP_ID_ALL, &doms);
+	if (rank_nr < 0)
+		D_GOTO(out, rc = rank_nr);
 
-	D_ALLOC_ARRAY(rgt->rgt_servers, node_nr);
+	D_ALLOC_ARRAY(rgt->rgt_servers, rank_nr);
 	if (rgt->rgt_servers == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 	D_ALLOC_ARRAY(rgt->rgt_servers_last_update, node_nr);
@@ -843,9 +882,9 @@ rebuild_global_pool_tracker_create(struct ds_pool *pool, uint32_t ver, uint32_t 
 	if (rc != ABT_SUCCESS)
 		D_GOTO(out, rc = dss_abterr2der(rc));
 
-	for (i = 0; i < node_nr; i++)
+	for (i = 0; i < rank_nr; i++)
 		rgt->rgt_servers[i].rank = doms[i].do_comp.co_rank;
-	rgt->rgt_servers_number = node_nr;
+	rgt->rgt_servers_number = rank_nr;
 
 	uuid_copy(rgt->rgt_pool_uuid, pool->sp_uuid);
 	rgt->rgt_rebuild_ver = ver;
@@ -1014,7 +1053,7 @@ rebuild_scan_broadcast(struct ds_pool *pool, struct rebuild_global_pool_tracker 
 		for (i = 0; i < up_ranks.rl_nr; i++) {
 			struct pool_domain *dom;
 
-			dom = pool_map_find_node_by_rank(pool->sp_map, up_ranks.rl_ranks[i]);
+			dom = pool_map_find_dom_by_rank(pool->sp_map, up_ranks.rl_ranks[i]);
 			D_ASSERT(dom != NULL);
 			D_DEBUG(DB_REBUILD, DF_RB " rank %u co_in_ver %u\n", DP_RB_RGT(rgt),
 				up_ranks.rl_ranks[i], dom->do_comp.co_in_ver);
@@ -1986,7 +2025,7 @@ ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver,
 		return 0;
 	}
 
-	if (ds_pool_skip_for_check(pool)) {
+	if (ds_pool_restricted(pool, false)) {
 		D_DEBUG(DB_REBUILD, DF_UUID" skip rebuild under check mode\n",
 			DP_UUID(pool->sp_uuid));
 		return 0;

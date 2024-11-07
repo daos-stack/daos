@@ -86,6 +86,7 @@ int ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver,
 			daos_epoch_t stable_eph, uint32_t layout_version,
 			struct pool_target_id_list *tgts,
 			daos_rebuild_opc_t rebuild_op, uint64_t delay_sec);
+void ds_rebuild_restart_if_rank_wip(uuid_t pool_uuid, d_rank_t rank);
 int ds_rebuild_query(uuid_t pool_uuid,
 		     struct daos_rebuild_status *status);
 void ds_rebuild_running_query(uuid_t pool_uuid, uint32_t opc, uint32_t *rebuild_ver,

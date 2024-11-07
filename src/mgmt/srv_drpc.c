@@ -287,7 +287,7 @@ out:
 }
 
 static int
-create_pool_props(daos_prop_t **out_prop, uint32_t numsvcreps, char *owner, char *owner_grp,
+create_pool_props(daos_prop_t **out_prop, uint32_t num_svc_reps, char *owner, char *owner_grp,
 		  const char **ace_list, size_t ace_nr)
 {
 	uint64_t	out_svc_rf = DAOS_PROP_PO_SVC_REDUN_FAC_DEFAULT;
@@ -299,16 +299,16 @@ create_pool_props(daos_prop_t **out_prop, uint32_t numsvcreps, char *owner, char
 	uint32_t	idx = 0;
 	int		rc = 0;
 
-	if (numsvcreps > 0) {
+	if (num_svc_reps > 0) {
 #ifndef DRPC_TEST
-		out_svc_rf = ds_pool_svc_rf_from_nreplicas(numsvcreps);
+		out_svc_rf = ds_pool_svc_rf_from_nreplicas(num_svc_reps);
 #else
-		if (numsvcreps % 2 == 0)
-			numsvcreps--;
-		out_svc_rf = numsvcreps / 2;
+		if (num_svc_reps % 2 == 0)
+			num_svc_reps--;
+		out_svc_rf = num_svc_reps / 2;
 #endif
 		if (!daos_svc_rf_is_valid(out_svc_rf)) {
-			D_ERROR("invalid numsvcreps %u\n", numsvcreps);
+			D_ERROR("invalid num_svc_reps %u\n", num_svc_reps);
 			rc = -DER_INVAL;
 			goto err_out;
 		}
@@ -441,6 +441,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	daos_prop_t		*base_props = NULL;
 	uint8_t			*body;
 	size_t			 len;
+	size_t                   scm_size;
 	int			 rc;
 
 	/* Unpack the inner request from the drpc call body */
@@ -454,7 +455,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_INFO("Received request to create pool on %zu ranks.\n", req->n_ranks);
 
-	if (req->n_tierbytes != DAOS_MEDIA_MAX)
+	if (req->n_tier_bytes != DAOS_MEDIA_MAX)
 		D_GOTO(out, rc = -DER_INVAL);
 
 	if (req->n_properties > 0) {
@@ -479,7 +480,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(pool_uuid));
 
-	rc = create_pool_props(&base_props, req->numsvcreps, req->user, req->usergroup,
+	rc = create_pool_props(&base_props, req->num_svc_reps, req->user, req->user_group,
 			       (const char **)req->acl, req->n_acl);
 	if (rc != 0)
 		goto out;
@@ -494,11 +495,19 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		base_props = NULL;
 	}
 
-	/* Ranks to allocate targets (in) & svc for pool replicas (out). */
-	rc = ds_mgmt_create_pool(pool_uuid, req->sys, "pmem", targets,
-				 req->tierbytes[DAOS_MEDIA_SCM], req->tierbytes[DAOS_MEDIA_NVME],
-				 prop, &svc, req->n_faultdomains, req->faultdomains,
-				 req->meta_blob_size);
+	/**
+	 * Ranks to allocate targets (in) & svc for pool replicas (out). Mapping of tier_bytes in
+	 * MD-on-SSD mode is (tier0*mem_ratio)->scm_size (mem-file-size), tier0->meta_size and
+	 * tier1->nvme_size (data_size).
+	 */
+
+	scm_size = req->tier_bytes[DAOS_MEDIA_SCM];
+	if (req->mem_ratio)
+		scm_size *= (double)req->mem_ratio;
+
+	rc = ds_mgmt_create_pool(pool_uuid, req->sys, "pmem", targets, scm_size,
+				 req->tier_bytes[DAOS_MEDIA_NVME], prop, &svc, req->n_fault_domains,
+				 req->fault_domains, req->tier_bytes[DAOS_MEDIA_SCM]);
 	if (rc != 0) {
 		D_ERROR("failed to create pool: "DF_RC"\n", DP_RC(rc));
 		goto out;
@@ -506,6 +515,14 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	rc = pool_create_fill_resp(&resp, pool_uuid, svc);
 	d_rank_list_free(svc);
+
+	/**
+	 * TODO DAOS-16209: Populate per-rank VOS-file sizes. For now just calculate here based on
+	 *                  the supplied input values but really should be returned from
+	 *                  ds_mgmt_pool_query() through the VOS query API and set in
+	 *                  pool_create_fill_resp(). Return zero for non-MD-on-SSD mode.
+	 */
+	resp.mem_file_bytes = req->tier_bytes[DAOS_MEDIA_SCM] * req->mem_ratio;
 
 out:
 	resp.status = rc;
@@ -691,16 +708,16 @@ out:
 }
 
 static int
-pool_change_target_state(char *id, d_rank_list_t *svc_ranks, size_t n_targetidx,
-			 uint32_t *targetidx, uint32_t rank, pool_comp_state_t state,
-			 size_t scm_size, size_t nvme_size)
+pool_change_target_state(char *id, d_rank_list_t *svc_ranks, size_t n_target_idx,
+			 uint32_t *target_idx, uint32_t rank, pool_comp_state_t state,
+			 size_t scm_size, size_t nvme_size, size_t meta_blob_bytes)
 {
 	uuid_t				uuid;
 	struct pool_target_addr_list	target_addr_list;
 	int				num_addrs;
 	int				rc, i;
 
-	num_addrs = (n_targetidx > 0) ? n_targetidx : 1;
+	num_addrs = (n_target_idx > 0) ? n_target_idx : 1;
 	if (uuid_parse(id, uuid) != 0) {
 		rc = -DER_INVAL;
 		DL_ERROR(rc, "Pool UUID is invalid");
@@ -711,9 +728,9 @@ pool_change_target_state(char *id, d_rank_list_t *svc_ranks, size_t n_targetidx,
 	if (rc)
 		return rc;
 
-	if (n_targetidx > 0) {
-		for (i = 0; i < n_targetidx; ++i) {
-			target_addr_list.pta_addrs[i].pta_target = targetidx[i];
+	if (n_target_idx > 0) {
+		for (i = 0; i < n_target_idx; ++i) {
+			target_addr_list.pta_addrs[i].pta_target = target_idx[i];
 			target_addr_list.pta_addrs[i].pta_rank = rank;
 		}
 	} else {
@@ -722,7 +739,7 @@ pool_change_target_state(char *id, d_rank_list_t *svc_ranks, size_t n_targetidx,
 	}
 
 	rc = ds_mgmt_pool_target_update_state(uuid, svc_ranks, &target_addr_list, state, scm_size,
-					      nvme_size);
+					      nvme_size, meta_blob_bytes);
 	if (rc != 0) {
 		D_ERROR("Failed to set pool target up "DF_UUID": "DF_RC"\n",
 			DP_UUID(uuid), DP_RC(rc));
@@ -760,9 +777,9 @@ ds_mgmt_drpc_pool_exclude(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (svc_ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rc = pool_change_target_state(req->id, svc_ranks, req->n_targetidx, req->targetidx,
+	rc = pool_change_target_state(req->id, svc_ranks, req->n_target_idx, req->target_idx,
 				      req->rank, PO_COMP_ST_DOWN, 0 /* scm_size */,
-				      0 /* nvme_size */);
+				      0 /* nvme_size */, 0 /* meta_blob_bytes */);
 
 	d_rank_list_free(svc_ranks);
 
@@ -809,9 +826,9 @@ ds_mgmt_drpc_pool_drain(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (svc_ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rc = pool_change_target_state(req->id, svc_ranks, req->n_targetidx, req->targetidx,
+	rc = pool_change_target_state(req->id, svc_ranks, req->n_target_idx, req->target_idx,
 				      req->rank, PO_COMP_ST_DRAIN, 0 /* scm_size */,
-				      0 /* nvme_size */);
+				      0 /* nvme_size */, 0 /* meta_blob_bytes */);
 
 	d_rank_list_free(svc_ranks);
 
@@ -856,15 +873,14 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	if (req->n_tierbytes == 0 || req->n_tierbytes > DAOS_MEDIA_MAX) {
-		D_ERROR("Invalid number of storage tiers: "DF_U64"\n",
-			req->n_tierbytes);
+	if (req->n_tier_bytes == 0 || req->n_tier_bytes > DAOS_MEDIA_MAX) {
+		D_ERROR("Invalid number of storage tiers: " DF_U64 "\n", req->n_tier_bytes);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	scm_bytes = req->tierbytes[DAOS_MEDIA_SCM];
-	if (req->n_tierbytes > DAOS_MEDIA_NVME) {
-		nvme_bytes = req->tierbytes[DAOS_MEDIA_NVME];
+	scm_bytes = req->tier_bytes[DAOS_MEDIA_SCM];
+	if (req->n_tier_bytes > DAOS_MEDIA_NVME) {
+		nvme_bytes = req->tier_bytes[DAOS_MEDIA_NVME];
 	}
 
 	if (uuid_parse(req->id, uuid) != 0) {
@@ -881,9 +897,8 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (svc_ranks == NULL)
 		D_GOTO(out_list, rc = -DER_NOMEM);
 
-	rc = ds_mgmt_pool_extend(uuid, svc_ranks, rank_list, "pmem",
-				 scm_bytes, nvme_bytes,
-				 req->n_faultdomains, req->faultdomains);
+	rc = ds_mgmt_pool_extend(uuid, svc_ranks, rank_list, "pmem", scm_bytes, nvme_bytes, 0,
+				 req->n_fault_domains, req->fault_domains);
 
 	if (rc != 0)
 		D_ERROR("Failed to extend pool %s: "DF_RC"\n", req->id,
@@ -895,8 +910,9 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	 * In the future, we may need to adjust the allocations somehow and
 	 * this is how we would let the caller know.
 	 */
-	resp.n_tier_bytes = req->n_tierbytes;
-	resp.tier_bytes = req->tierbytes;
+	resp.n_tier_bytes = req->n_tier_bytes;
+	resp.tier_bytes   = req->tier_bytes;
+	resp.meta_blob_bytes = 0;
 
 out_list:
 	d_rank_list_free(rank_list);
@@ -941,23 +957,22 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	if (req->n_tierbytes == 0 || req->n_tierbytes > DAOS_MEDIA_MAX) {
-		D_ERROR("Invalid number of storage tiers: "DF_U64"\n",
-			req->n_tierbytes);
+	if (req->n_tier_bytes == 0 || req->n_tier_bytes > DAOS_MEDIA_MAX) {
+		D_ERROR("Invalid number of storage tiers: " DF_U64 "\n", req->n_tier_bytes);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	scm_bytes = req->tierbytes[DAOS_MEDIA_SCM];
-	if (req->n_tierbytes > DAOS_MEDIA_NVME) {
-		nvme_bytes = req->tierbytes[DAOS_MEDIA_NVME];
+	scm_bytes = req->tier_bytes[DAOS_MEDIA_SCM];
+	if (req->n_tier_bytes > DAOS_MEDIA_NVME) {
+		nvme_bytes = req->tier_bytes[DAOS_MEDIA_NVME];
 	}
 
 	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
 	if (svc_ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rc = pool_change_target_state(req->id, svc_ranks, req->n_targetidx, req->targetidx,
-				      req->rank, PO_COMP_ST_UP, scm_bytes, nvme_bytes);
+	rc = pool_change_target_state(req->id, svc_ranks, req->n_target_idx, req->target_idx,
+				      req->rank, PO_COMP_ST_UP, scm_bytes, nvme_bytes, 0);
 
 	d_rank_list_free(svc_ranks);
 
@@ -1831,6 +1846,13 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	pool_rebuild_status_from_info(&rebuild, &pool_info.pi_rebuild_st);
 	resp.rebuild = &rebuild;
 
+	/**
+	 * TODO DAOS-16209: Populate VOS-file sizes in response. For now just return the meta-blob
+	 *                  size until VOS query API is updated. When updated, zero-value should
+	 *                  be returned in non-MD-on-SSD mode.
+	 */
+	resp.mem_file_bytes = scm.total;
+
 error:
 	resp.status = rc;
 
@@ -1982,6 +2004,7 @@ ds_mgmt_smd_free_dev(Ctl__SmdDevice *dev)
 		D_FREE(dev->ctrlr->fw_rev);
 		D_FREE(dev->ctrlr->vendor_id);
 		D_FREE(dev->ctrlr->pci_dev_type);
+		D_FREE(dev->ctrlr->pci_cfg);
 		if (dev->ctrlr->namespaces != NULL) {
 			D_FREE(dev->ctrlr->namespaces[0]);
 			D_FREE(dev->ctrlr->namespaces);
@@ -2455,11 +2478,11 @@ ds_mgmt_drpc_cont_set_owner(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Mgmt__ContSetOwnerReq	*req = NULL;
-	Mgmt__ContSetOwnerResp	 resp = MGMT__CONT_SET_OWNER_RESP__INIT;
+	Mgmt__DaosResp           resp  = MGMT__DAOS_RESP__INIT;
 	uint8_t			*body;
-	size_t			 len;
-	uuid_t			 pool_uuid, cont_uuid;
+	size_t                   len;
 	d_rank_list_t		*svc_ranks = NULL;
+	uuid_t                   pool_uuid;
 	int			 rc = 0;
 
 	req = mgmt__cont_set_owner_req__unpack(&alloc.alloc, drpc_req->body.len,
@@ -2471,39 +2494,33 @@ ds_mgmt_drpc_cont_set_owner(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to change container owner\n");
+	D_INFO("Received request to change owner for container '%s' in pool '%s'\n", req->cont_id,
+	       req->pool_id);
 
-	if (uuid_parse(req->contuuid, cont_uuid) != 0) {
-		rc = -DER_INVAL;
-		DL_ERROR(rc, "Container UUID is invalid");
-		goto out;
-	}
-
-	if (uuid_parse(req->pooluuid, pool_uuid) != 0) {
-		rc = -DER_INVAL;
-		DL_ERROR(rc, "Pool UUID is invalid");
-		goto out;
+	if (uuid_parse(req->pool_id, pool_uuid) != 0) {
+		DL_ERROR(-DER_INVAL, "Pool UUID is invalid");
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
 	if (svc_ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rc = ds_mgmt_cont_set_owner(pool_uuid, svc_ranks, cont_uuid,
-				    req->owneruser, req->ownergroup);
+	rc = ds_mgmt_cont_set_owner(pool_uuid, svc_ranks, req->cont_id, req->owner_user,
+				    req->owner_group);
 	if (rc != 0)
-		D_ERROR("Set owner failed: %d\n", rc);
+		D_ERROR("Container set owner failed: " DF_RC "\n", DP_RC(rc));
 
 	d_rank_list_free(svc_ranks);
 
 out:
 	resp.status = rc;
-	len = mgmt__cont_set_owner_resp__get_packed_size(&resp);
+	len         = mgmt__daos_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 	} else {
-		mgmt__cont_set_owner_resp__pack(&resp, body);
+		mgmt__daos_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
 		drpc_resp->body.data = body;
 	}

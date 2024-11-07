@@ -16,7 +16,8 @@ from process_core_files import CoreFileException, CoreFileProcessing
 # pylint: disable=import-error,no-name-in-module
 from util.environment_utils import TestEnvironment
 from util.host_utils import get_local_host
-from util.run_utils import RunException, find_command, run_local, run_remote, stop_processes
+from util.run_utils import find_command, run_local, run_remote, stop_processes
+from util.systemctl_utils import stop_service
 from util.user_utils import get_chown_command
 from util.yaml_utils import get_test_category
 
@@ -64,97 +65,6 @@ def stop_daos_server_service(logger, test):
     logger.debug("-" * 80)
     logger.debug("Verifying %s after running '%s'", service, test)
     return stop_service(logger, hosts, service)
-
-
-def stop_service(logger, hosts, service):
-    """Stop any daos_server.service running on the hosts running servers.
-
-    Args:
-        logger (Logger): logger for the messages produced by this method
-        hosts (NodeSet): list of hosts on which to stop the service.
-        service (str): name of the service
-
-    Returns:
-        bool: True if the service was successfully stopped; False otherwise
-
-    """
-    result = {"status": True}
-    if hosts:
-        status_keys = ["reset-failed", "stop", "disable"]
-        mapping = {"stop": "active", "disable": "enabled", "reset-failed": "failed"}
-        check_hosts = NodeSet(hosts)
-        loop = 1
-        # Reduce 'max_loops' to 2 once https://jira.hpdd.intel.com/browse/DAOS-7809
-        # has been resolved
-        max_loops = 3
-        while check_hosts:
-            # Check the status of the service on each host
-            result = get_service_status(logger, check_hosts, service)
-            check_hosts = NodeSet()
-            for key in status_keys:
-                if result[key]:
-                    if loop == max_loops:
-                        # Exit the while loop if the service is still running
-                        logger.error(
-                            " - Error %s still %s on %s", service, mapping[key], result[key])
-                        result["status"] = False
-                    else:
-                        # Issue the appropriate systemctl command to remedy the
-                        # detected state, e.g. 'stop' for 'active'.
-                        command = ["sudo", "-n", "systemctl", key, service]
-                        run_remote(logger, result[key], " ".join(command))
-
-                        # Run the status check again on this group of hosts
-                        check_hosts.add(result[key])
-            loop += 1
-    else:
-        logger.debug("  Skipping stopping %s service - no hosts", service)
-
-    return result["status"]
-
-
-def get_service_status(logger, hosts, service):
-    """Get the status of the daos_server.service.
-
-    Args:
-        logger (Logger): logger for the messages produced by this method
-        hosts (NodeSet): hosts on which to get the service state
-        service (str): name of the service
-
-    Returns:
-        dict: a dictionary with the following keys:
-            - "status":       boolean set to True if status was obtained; False otherwise
-            - "stop":         NodeSet where to stop the daos_server.service
-            - "disable":      NodeSet where to disable the daos_server.service
-            - "reset-failed": NodeSet where to reset the daos_server.service
-
-    """
-    status = {
-        "status": True,
-        "stop": NodeSet(),
-        "disable": NodeSet(),
-        "reset-failed": NodeSet()}
-    status_states = {
-        "stop": ["active", "activating", "deactivating"],
-        "disable": ["active", "activating", "deactivating"],
-        "reset-failed": ["failed"]}
-    command = ["systemctl", "is-active", service]
-    result = run_remote(logger, hosts, " ".join(command))
-    for data in result.output:
-        if data.timeout:
-            status["status"] = False
-            status["stop"].add(data.hosts)
-            status["disable"].add(data.hosts)
-            status["reset-failed"].add(data.hosts)
-            logger.debug("  %s: TIMEOUT", data.hosts)
-            break
-        logger.debug("  %s: %s", data.hosts, "\n".join(data.stdout))
-        for key, state_list in status_states.items():
-            for line in data.stdout:
-                if line in state_list:
-                    status[key].add(data.hosts)
-                    break
-    return status
 
 
 def reset_server_storage(logger, test):
@@ -562,20 +472,17 @@ def move_files(logger, hosts, source, pattern, destination, depth, timeout, test
     # Clush -rcopy the temporary remote directory to this host
     command = ["clush", "-w", str(hosts), "-pv", "--rcopy", f"'{tmp_copy_dir}'", "--dest",
                f"'{rcopy_dest}'"]
-    try:
-        run_local(logger, " ".join(command), check=True, timeout=timeout)
-    except RunException:
+    if not run_local(logger, " ".join(command), timeout=timeout).passed:
         message = f"Error copying remote files to {destination}"
         test_result.fail_test(logger, "Process", message, sys.exc_info())
         return_code = 16
 
-    finally:
-        # Remove the temporary remote directory on each host
-        command = f"{sudo_command}rm -fr '{tmp_copy_dir}'"
-        if not run_remote(logger, hosts, command).passed:
-            message = f"Error removing temporary remote copy directory '{tmp_copy_dir}'"
-            test_result.fail_test(logger, "Process", message)
-            return_code = 16
+    # Remove the temporary remote directory on each host
+    command = f"{sudo_command}rm -fr '{tmp_copy_dir}'"
+    if not run_remote(logger, hosts, command).passed:
+        message = f"Error removing temporary remote copy directory '{tmp_copy_dir}'"
+        test_result.fail_test(logger, "Process", message)
+        return_code = 16
 
     return return_code
 
@@ -648,14 +555,13 @@ def create_steps_log(logger, job_results_dir, test_result):
     job_log = os.path.join(test_logs_dir, 'job.log')
     step_log = os.path.join(test_logs_dir, 'steps.log')
     command = rf"grep -E '(INFO |ERROR)\| (==> Step|START|PASS|FAIL|ERROR)' {job_log}"
-    try:
-        result = run_local(logger, command)
-        with open(step_log, 'w', encoding="utf-8") as file:
-            file.write(result.stdout)
-    except Exception:   # pylint: disable=broad-except
+    result = run_local(logger, command)
+    if not result.passed:
         message = f"Error creating {step_log}"
         test_result.fail_test(logger, "Process", message, sys.exc_info())
         return 8192
+    with open(step_log, 'w', encoding="utf-8") as file:
+        file.write(result.joined_stdout)
     return 0
 
 
@@ -713,9 +619,7 @@ def rename_avocado_test_dir(logger, test, job_results_dir, test_result, jenkins_
         return 1024
 
     # Remove latest symlink directory to avoid inclusion in the Jenkins build artifacts
-    try:
-        run_local(logger, f"rm -fr '{test_logs_lnk}'")
-    except RunException:
+    if not run_local(logger, f"rm -fr '{test_logs_lnk}'").passed:
         message = f"Error removing {test_logs_lnk}"
         test_result.fail_test(logger, "Process", message, sys.exc_info())
         return 1024
@@ -987,14 +891,15 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
             "depth": 1,
             "timeout": 300,
         }
-        remote_files["remote configuration files"] = {
-            "source": os.path.join(os.sep, "etc", "daos"),
-            "destination": os.path.join(job_results_dir, "latest", TEST_RESULTS_DIRS[0]),
-            "pattern": "daos_*.yml",
-            "hosts": test.host_info.all_hosts,
-            "depth": 1,
-            "timeout": 300,
-        }
+        for index, source in enumerate(test_env.config_file_directories()):
+            remote_files[f"remote configuration files ({index})"] = {
+                "source": source,
+                "destination": os.path.join(job_results_dir, "latest", TEST_RESULTS_DIRS[0]),
+                "pattern": "daos_*.yml",
+                "hosts": test.host_info.all_hosts,
+                "depth": 1,
+                "timeout": 300,
+            }
         remote_files["daos log files"] = {
             "source": test_env.log_dir,
             "destination": os.path.join(job_results_dir, "latest", TEST_RESULTS_DIRS[1]),

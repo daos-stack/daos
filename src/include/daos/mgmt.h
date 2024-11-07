@@ -17,6 +17,8 @@
 #include <daos/pool.h>
 #include "svc.pb-c.h"
 
+extern bool d_dynamic_ctx_g;
+
 int dc_mgmt_init(void);
 
 void dc_mgmt_fini(void);
@@ -41,6 +43,8 @@ struct dc_mgmt_sys_info {
 	d_rank_list_t  *ms_ranks;
 	char		system_name[DAOS_SYS_INFO_STRING_MAX + 1];
 	uint32_t        provider_idx; /* Provider index (if more than one available) */
+	daos_size_t     numa_entries_nr;
+	daos_size_t    *numa_iface_idx_rr;
 };
 
 /** Client system handle */
@@ -65,6 +69,8 @@ int dc_mgmt_get_pool_svc_ranks(struct dc_mgmt_sys *sys, const uuid_t puuid,
 			       d_rank_list_t **svcranksp);
 int dc_mgmt_pool_find(struct dc_mgmt_sys *sys, const char *label,
 		      uuid_t puuid, d_rank_list_t **svcranksp);
+int
+     dc_mgmt_pool_list(tse_task_t *task);
 int dc_mgmt_notify_pool_connect(struct dc_pool *pool);
 int dc_mgmt_notify_pool_disconnect(struct dc_pool *pool);
 int dc_mgmt_notify_exit(void);
@@ -76,5 +82,7 @@ int dc_get_attach_info(const char *name, bool all_ranks, struct dc_mgmt_sys_info
 void dc_put_attach_info(struct dc_mgmt_sys_info *info, Mgmt__GetAttachInfoResp *resp);
 int dc_mgmt_cache_attach_info(const char *name);
 void dc_mgmt_drop_attach_info(void);
+int
+    dc_mgmt_get_iface(char *iface);
 int dc_mgmt_tm_register(const char *sys, const char *jobid, key_t shm_key, uid_t *owner_uid);
 #endif

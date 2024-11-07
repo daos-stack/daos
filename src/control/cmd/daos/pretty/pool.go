@@ -9,6 +9,7 @@ package pretty
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -19,14 +20,36 @@ import (
 
 const msgNoPools = "No pools in system"
 
-func getTierNameText(tierIdx int) string {
-	switch tierIdx {
-	case int(daos.StorageMediaTypeScm):
-		return fmt.Sprintf("- Storage tier %d (SCM):", tierIdx)
-	case int(daos.StorageMediaTypeNvme):
-		return fmt.Sprintf("- Storage tier %d (NVMe):", tierIdx)
-	default:
-		return fmt.Sprintf("- Storage tier %d (unknown):", tierIdx)
+func printPoolTiers(memFileBytes uint64, suss []*daos.StorageUsageStats, w *txtfmt.ErrWriter, fullStats bool) {
+	mdOnSSD := memFileBytes != 0
+	for tierIdx, tierStats := range suss {
+		if mdOnSSD {
+			if tierIdx == 0 {
+				if fullStats {
+					fmt.Fprintf(w, "- Total memory-file size: %s\n",
+						humanize.Bytes(memFileBytes))
+				}
+				fmt.Fprintf(w, "- Metadata storage:\n")
+			} else {
+				fmt.Fprintf(w, "- Data storage:\n")
+			}
+		} else {
+			if tierIdx >= int(daos.StorageMediaTypeMax) {
+				// Print unknown type tiers.
+				tierStats.MediaType = daos.StorageMediaTypeMax
+			}
+			fmt.Fprintf(w, "- Storage tier %d (%s):\n", tierIdx,
+				strings.ToUpper(tierStats.MediaType.String()))
+		}
+
+		fmt.Fprintf(w, "  Total size: %s\n", humanize.Bytes(tierStats.Total))
+		if fullStats {
+			fmt.Fprintf(w, "  Free: %s, min:%s, max:%s, mean:%s\n",
+				humanize.Bytes(tierStats.Free), humanize.Bytes(tierStats.Min),
+				humanize.Bytes(tierStats.Max), humanize.Bytes(tierStats.Mean))
+		} else {
+			fmt.Fprintf(w, "  Free: %s\n", humanize.Bytes(tierStats.Free))
+		}
 	}
 }
 
@@ -50,7 +73,7 @@ func PrintPoolInfo(pi *daos.PoolInfo, out io.Writer) error {
 	if pi.EnabledRanks != nil && pi.EnabledRanks.Count() > 0 {
 		fmt.Fprintf(w, "- Enabled ranks: %s\n", pi.EnabledRanks)
 	}
-	if pi.DisabledRanks != nil && pi.DisabledRanks.Count() > 0 {
+	if pi.DisabledRanks.Count() > 0 {
 		fmt.Fprintf(w, "- Disabled ranks: %s\n", pi.DisabledRanks)
 	}
 	if pi.Rebuild != nil {
@@ -66,14 +89,8 @@ func PrintPoolInfo(pi *daos.PoolInfo, out io.Writer) error {
 
 	if pi.QueryMask.HasOption(daos.PoolQueryOptionSpace) && pi.TierStats != nil {
 		fmt.Fprintln(w, "Pool space info:")
-		fmt.Fprintf(w, "- Target(VOS) count:%d\n", pi.ActiveTargets)
-		for tierIdx, tierStats := range pi.TierStats {
-			fmt.Fprintln(w, getTierNameText(tierIdx))
-			fmt.Fprintf(w, "  Total size: %s\n", humanize.Bytes(tierStats.Total))
-			fmt.Fprintf(w, "  Free: %s, min:%s, max:%s, mean:%s\n",
-				humanize.Bytes(tierStats.Free), humanize.Bytes(tierStats.Min),
-				humanize.Bytes(tierStats.Max), humanize.Bytes(tierStats.Mean))
-		}
+		fmt.Fprintf(w, "- Target count:%d\n", pi.ActiveTargets)
+		printPoolTiers(pi.MemFileBytes, pi.TierStats, w, true)
 	}
 	return w.Err
 }
@@ -89,12 +106,192 @@ func PrintPoolQueryTargetInfo(pqti *daos.PoolQueryTargetInfo, out io.Writer) err
 	// Maintain output compatibility with the `daos pool query-targets` output.
 	fmt.Fprintf(w, "Target: type %s, state %s\n", pqti.Type, pqti.State)
 	if pqti.Space != nil {
-		for tierIdx, tierUsage := range pqti.Space {
-			fmt.Fprintln(w, getTierNameText(tierIdx))
-			fmt.Fprintf(w, "  Total size: %s\n", humanize.Bytes(tierUsage.Total))
-			fmt.Fprintf(w, "  Free: %s\n", humanize.Bytes(tierUsage.Free))
-		}
+		printPoolTiers(pqti.MemFileBytes, pqti.Space, w, false)
 	}
 
 	return w.Err
+}
+
+func poolListCreateRow(pool *daos.PoolInfo, upgrade bool) txtfmt.TableRow {
+	// display size of the largest non-empty tier
+	var size uint64
+	poolUsage := pool.Usage()
+	for ti := len(poolUsage) - 1; ti >= 0; ti-- {
+		if poolUsage[ti].Size != 0 {
+			size = poolUsage[ti].Size
+			break
+		}
+	}
+
+	// display usage of the most used tier
+	var used int
+	for ti := 0; ti < len(poolUsage); ti++ {
+		t := poolUsage[ti]
+		u := float64(t.Size-t.Free) / float64(t.Size)
+
+		if int(u*100) > used {
+			used = int(u * 100)
+		}
+	}
+
+	// display imbalance of the most imbalanced tier
+	var imbalance uint32
+	for ti := 0; ti < len(poolUsage); ti++ {
+		if poolUsage[ti].Imbalance > imbalance {
+			imbalance = poolUsage[ti].Imbalance
+		}
+	}
+
+	row := txtfmt.TableRow{
+		"Pool":      pool.Name(),
+		"Size":      humanize.Bytes(size),
+		"State":     pool.State.String(),
+		"Used":      fmt.Sprintf("%d%%", used),
+		"Imbalance": fmt.Sprintf("%d%%", imbalance),
+		"Disabled":  fmt.Sprintf("%d/%d", pool.DisabledTargets, pool.TotalTargets),
+	}
+
+	if upgrade {
+		upgradeString := "None"
+
+		if pool.PoolLayoutVer != pool.UpgradeLayoutVer {
+			upgradeString = fmt.Sprintf("%d->%d", pool.PoolLayoutVer, pool.UpgradeLayoutVer)
+		}
+		row["UpgradeNeeded?"] = upgradeString
+	}
+
+	return row
+}
+
+func printPoolList(pools []*daos.PoolInfo, out io.Writer) error {
+	upgrade := false
+	for _, pool := range pools {
+		if pool.PoolLayoutVer != pool.UpgradeLayoutVer {
+			upgrade = true
+		}
+	}
+
+	titles := []string{"Pool", "Size", "State", "Used", "Imbalance", "Disabled"}
+	if upgrade {
+		titles = append(titles, "UpgradeNeeded?")
+	}
+	formatter := txtfmt.NewTableFormatter(titles...)
+
+	var table []txtfmt.TableRow
+	for _, pool := range pools {
+		table = append(table, poolListCreateRow(pool, upgrade))
+	}
+
+	fmt.Fprintln(out, formatter.Format(table))
+
+	return nil
+}
+
+func addVerboseTierUsage(row txtfmt.TableRow, usage *daos.PoolTierUsage) txtfmt.TableRow {
+	row[usage.TierName+" Size"] = humanize.Bytes(usage.Size)
+	row[usage.TierName+" Used"] = humanize.Bytes(usage.Size - usage.Free)
+	row[usage.TierName+" Imbalance"] = fmt.Sprintf("%d%%", usage.Imbalance)
+
+	return row
+}
+
+func poolListCreateRowVerbose(pool *daos.PoolInfo, hasSpace, hasRebuild bool) txtfmt.TableRow {
+	label := pool.Label
+	if label == "" {
+		label = "-"
+	}
+
+	svcReps := "N/A"
+	if len(pool.ServiceReplicas) != 0 {
+		svcReps = PrintRanks(pool.ServiceReplicas)
+	}
+
+	upgrade := "None"
+	if pool.PoolLayoutVer != pool.UpgradeLayoutVer {
+		upgrade = fmt.Sprintf("%d->%d", pool.PoolLayoutVer, pool.UpgradeLayoutVer)
+	}
+
+	row := txtfmt.TableRow{
+		"Label":   label,
+		"UUID":    pool.UUID.String(),
+		"State":   pool.State.String(),
+		"SvcReps": svcReps,
+	}
+	if hasSpace {
+		row["Disabled"] = fmt.Sprintf("%d/%d", pool.DisabledTargets, pool.TotalTargets)
+		row["UpgradeNeeded?"] = upgrade
+	}
+	if hasRebuild {
+		row["Rebuild State"] = pool.RebuildState()
+	}
+
+	if hasSpace {
+		for _, tu := range pool.Usage() {
+			row = addVerboseTierUsage(row, tu)
+		}
+	}
+
+	return row
+}
+
+func printVerbosePoolList(pools []*daos.PoolInfo, out io.Writer) error {
+	// Basic pool info should be available without a query.
+	titles := []string{"Label", "UUID", "State", "SvcReps"}
+
+	hasSpaceQuery := false
+	hasRebuildQuery := false
+	for _, pool := range pools {
+		if hasSpaceQuery && hasRebuildQuery {
+			break
+		}
+
+		if pool.QueryMask.HasOption(daos.PoolQueryOptionSpace) {
+			hasSpaceQuery = true
+		}
+		if pool.QueryMask.HasOption(daos.PoolQueryOptionRebuild) {
+			hasRebuildQuery = true
+		}
+	}
+
+	// If any of the pools was queried, then we'll need to show more fields.
+	if hasSpaceQuery {
+		for _, t := range pools[0].Usage() {
+			titles = append(titles,
+				t.TierName+" Size",
+				t.TierName+" Used",
+				t.TierName+" Imbalance")
+		}
+		titles = append(titles, "Disabled")
+		titles = append(titles, "UpgradeNeeded?")
+	}
+
+	if hasRebuildQuery {
+		titles = append(titles, "Rebuild State")
+	}
+
+	formatter := txtfmt.NewTableFormatter(titles...)
+
+	var table []txtfmt.TableRow
+	for _, pool := range pools {
+		table = append(table, poolListCreateRowVerbose(pool, hasSpaceQuery, hasRebuildQuery))
+	}
+
+	fmt.Fprintln(out, formatter.Format(table))
+
+	return nil
+}
+
+// PrintPoolList generates a human-readable representation of the supplied
+// slice of daos.PoolInfo structs and writes it to the supplied io.Writer.
+func PrintPoolList(pools []*daos.PoolInfo, out io.Writer, verbose bool) error {
+	if len(pools) == 0 {
+		fmt.Fprintln(out, "No pools in system")
+		return nil
+	}
+
+	if verbose {
+		return printVerbosePoolList(pools, out)
+	}
+
+	return printPoolList(pools, out)
 }

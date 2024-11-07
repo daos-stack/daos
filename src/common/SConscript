@@ -30,7 +30,7 @@ def build_daos_common(denv, client):
                    'dav/ravl_interval.c', 'dav/recycler.c', 'dav/stats.c', 'dav/tx.c', 'dav/ulog.c',
                    'dav/util.c', 'dav/wal_tx.c']
         ad_mem_files = ['ad_mem.c', 'ad_tx.c']
-        common_libs.extend(['pmemobj', 'abt'])
+        common_libs.extend(['pmemobj', 'abt', 'dav_v2'])
         benv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
         benv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
         benv.Append(OBJPREFIX="v_")
@@ -51,6 +51,7 @@ def scons():
     """Execute build"""
     Import('env', 'base_env', 'prereqs')
 
+    SConscript('dav_v2/SConscript')
     env.AppendUnique(LIBPATH=[Dir('.')])
     base_env.AppendUnique(LIBPATH=[Dir('.')])
     base_env.d_add_build_rpath()

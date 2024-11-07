@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,7 +7,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -80,6 +79,35 @@ func (cmd *containerBaseCmd) contUUIDPtr() *C.uchar {
 	return (*C.uchar)(unsafe.Pointer(&cmd.contUUID[0]))
 }
 
+func containerOpen(poolHdl C.daos_handle_t, contID string, flags uint, query bool) (C.daos_handle_t, *C.daos_cont_info_t, error) {
+	cContID := C.CString(contID)
+	defer freeString(cContID)
+
+	var contHdl C.daos_handle_t
+	var infoPtr *C.daos_cont_info_t
+	if query {
+		infoPtr = new(C.daos_cont_info_t)
+	}
+
+	return contHdl, infoPtr, containerOpenAPI(poolHdl, cContID, C.uint(flags), &contHdl, infoPtr)
+}
+
+func containerOpenAPI(poolHdl C.daos_handle_t, contID *C.char, flags C.uint, contHdl *C.daos_handle_t, contInfo *C.daos_cont_info_t) error {
+	return daosError(C.daos_cont_open(poolHdl, contID, flags, contHdl, contInfo, nil))
+}
+
+func containerCloseAPI(contHdl C.daos_handle_t) error {
+	// Hack for NLT fault injection testing: If the rc
+	// is -DER_NOMEM, retry once in order to actually
+	// shut down and release resources.
+	rc := C.daos_cont_close(contHdl, nil)
+	if rc == -C.DER_NOMEM {
+		rc = C.daos_cont_close(contHdl, nil)
+	}
+
+	return daosError(rc)
+}
+
 func (cmd *containerBaseCmd) openContainer(openFlags C.uint) error {
 	openFlags |= C.DAOS_COO_FORCE
 	if (openFlags & C.DAOS_COO_RO) != 0 {
@@ -94,22 +122,23 @@ func (cmd *containerBaseCmd) openContainer(openFlags C.uint) error {
 		defer freeString(cLabel)
 
 		cmd.Debugf("opening container: %s", cmd.contLabel)
-		rc = C.daos_cont_open(cmd.cPoolHandle, cLabel, openFlags,
-			&cmd.cContHandle, &contInfo, nil)
-		if rc == 0 {
-			var err error
-			cmd.contUUID, err = uuidFromC(contInfo.ci_uuid)
-			if err != nil {
-				cmd.closeContainer()
-				return err
-			}
+		if err := containerOpenAPI(cmd.cPoolHandle, cLabel, openFlags, &cmd.cContHandle, &contInfo); err != nil {
+			return err
+		}
+
+		var err error
+		cmd.contUUID, err = uuidFromC(contInfo.ci_uuid)
+		if err != nil {
+			cmd.closeContainer()
+			return err
 		}
 	case cmd.contUUID != uuid.Nil:
 		cmd.Debugf("opening container: %s", cmd.contUUID)
 		cUUIDstr := C.CString(cmd.contUUID.String())
 		defer freeString(cUUIDstr)
-		rc = C.daos_cont_open(cmd.cPoolHandle, cUUIDstr,
-			openFlags, &cmd.cContHandle, nil, nil)
+		if err := containerOpenAPI(cmd.cPoolHandle, cUUIDstr, openFlags, &cmd.cContHandle, nil); err != nil {
+			return err
+		}
 	default:
 		return errors.New("no container UUID or label supplied")
 	}
@@ -119,21 +148,13 @@ func (cmd *containerBaseCmd) openContainer(openFlags C.uint) error {
 
 func (cmd *containerBaseCmd) closeContainer() {
 	cmd.Debugf("closing container: %s", cmd.contUUID)
-	// Hack for NLT fault injection testing: If the rc
-	// is -DER_NOMEM, retry once in order to actually
-	// shut down and release resources.
-	rc := C.daos_cont_close(cmd.cContHandle, nil)
-	if rc == -C.DER_NOMEM {
-		rc = C.daos_cont_close(cmd.cContHandle, nil)
-	}
-
-	if err := daosError(rc); err != nil {
+	if err := containerCloseAPI(cmd.cContHandle); err != nil {
 		cmd.Errorf("container close failed: %s", err)
 	}
 }
 
-func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
-	ci := newContainerInfo(&cmd.poolUUID, &cmd.contUUID)
+func queryContainer(poolUUID, contUUID uuid.UUID, poolHandle, contHandle C.daos_handle_t) (*daos.ContainerInfo, error) {
+	var cInfo C.daos_cont_info_t
 	var cType [10]C.char
 
 	props, entries, err := allocProps(3)
@@ -148,11 +169,12 @@ func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
 	props.dpp_nr++
 	defer func() { C.daos_prop_free(props) }()
 
-	rc := C.daos_cont_query(cmd.cContHandle, &ci.dci, props, nil)
+	rc := C.daos_cont_query(contHandle, &cInfo, props, nil)
 	if err := daosError(rc); err != nil {
 		return nil, err
 	}
 
+	ci := convertContainerInfo(poolUUID, contUUID, &cInfo)
 	lType := C.get_dpe_val(&entries[0])
 	C.daos_unparse_ctype(C.ushort(lType), &cType[0])
 	ci.Type = C.GoString(&cType[0])
@@ -173,7 +195,7 @@ func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
 		var dir_oclass [C.MAX_OBJ_CLASS_NAME_LEN]C.char
 		var file_oclass [C.MAX_OBJ_CLASS_NAME_LEN]C.char
 
-		rc := C.dfs_mount(cmd.cPoolHandle, cmd.cContHandle, C.O_RDONLY, &dfs)
+		rc := C.dfs_mount(poolHandle, contHandle, C.O_RDONLY, &dfs)
 		if err := dfsError(rc); err != nil {
 			return nil, errors.Wrap(err, "failed to mount container")
 		}
@@ -297,8 +319,8 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	}
 	defer cmd.closeContainer()
 
-	var ci *containerInfo
-	ci, err = cmd.queryContainer()
+	var ci *daos.ContainerInfo
+	ci, err = queryContainer(cmd.poolUUID, cmd.contUUID, cmd.cPoolHandle, cmd.cContHandle)
 	if err != nil {
 		if errors.Cause(err) != daos.NoPermission {
 			return errors.Wrapf(err, "failed to query new container %s", contID)
@@ -307,10 +329,10 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		// Special case for creating a container without permission to query it.
 		cmd.Errorf("container %s was created, but query failed", contID)
 
-		ci = new(containerInfo)
-		ci.PoolUUID = &cmd.poolUUID
+		ci = new(daos.ContainerInfo)
+		ci.PoolUUID = cmd.poolUUID
 		ci.Type = cmd.Type.String()
-		ci.ContainerUUID = &cmd.contUUID
+		ci.ContainerUUID = cmd.contUUID
 		ci.ContainerLabel = cmd.Args.Label
 	}
 
@@ -926,7 +948,7 @@ func (cmd *containerStatCmd) Execute(_ []string) error {
 	return nil
 }
 
-func printContainerInfo(out io.Writer, ci *containerInfo, verbose bool) error {
+func printContainerInfo(out io.Writer, ci *daos.ContainerInfo, verbose bool) error {
 	rows := []txtfmt.TableRow{
 		{"Container UUID": ci.ContainerUUID.String()},
 	}
@@ -939,14 +961,14 @@ func printContainerInfo(out io.Writer, ci *containerInfo, verbose bool) error {
 		rows = append(rows, []txtfmt.TableRow{
 			{"Pool UUID": ci.PoolUUID.String()},
 			{"Container redundancy factor": fmt.Sprintf("%d", ci.RedundancyFactor)},
-			{"Number of open handles": fmt.Sprintf("%d", *ci.NumHandles)},
-			{"Latest open time": fmt.Sprintf("%#x (%s)", *ci.OpenTime, daos.HLC(*ci.OpenTime))},
-			{"Latest close/modify time": fmt.Sprintf("%#x (%s)", *ci.CloseModifyTime, daos.HLC(*ci.CloseModifyTime))},
-			{"Number of snapshots": fmt.Sprintf("%d", *ci.NumSnapshots)},
+			{"Number of open handles": fmt.Sprintf("%d", ci.NumHandles)},
+			{"Latest open time": fmt.Sprintf("%#x (%s)", ci.OpenTime, daos.HLC(ci.OpenTime))},
+			{"Latest close/modify time": fmt.Sprintf("%#x (%s)", ci.CloseModifyTime, daos.HLC(ci.CloseModifyTime))},
+			{"Number of snapshots": fmt.Sprintf("%d", ci.NumSnapshots)},
 		}...)
 
-		if *ci.LatestSnapshot != 0 {
-			rows = append(rows, txtfmt.TableRow{"Latest Persistent Snapshot": fmt.Sprintf("%#x (%s)", *ci.LatestSnapshot, daos.HLC(*ci.LatestSnapshot))})
+		if ci.LatestSnapshot != 0 {
+			rows = append(rows, txtfmt.TableRow{"Latest Persistent Snapshot": fmt.Sprintf("%#x (%s)", ci.LatestSnapshot, daos.HLC(ci.LatestSnapshot))})
 		}
 		if ci.ObjectClass != "" {
 			rows = append(rows, txtfmt.TableRow{"Object Class": ci.ObjectClass})
@@ -968,47 +990,16 @@ func printContainerInfo(out io.Writer, ci *containerInfo, verbose bool) error {
 	return err
 }
 
-type containerInfo struct {
-	dci              C.daos_cont_info_t
-	PoolUUID         *uuid.UUID `json:"pool_uuid"`
-	ContainerUUID    *uuid.UUID `json:"container_uuid"`
-	ContainerLabel   string     `json:"container_label,omitempty"`
-	LatestSnapshot   *uint64    `json:"latest_snapshot"`
-	RedundancyFactor uint32     `json:"redundancy_factor"`
-	NumHandles       *uint32    `json:"num_handles"`
-	NumSnapshots     *uint32    `json:"num_snapshots"`
-	OpenTime         *uint64    `json:"open_time"`
-	CloseModifyTime  *uint64    `json:"close_modify_time"`
-	Type             string     `json:"container_type"`
-	ObjectClass      string     `json:"object_class,omitempty"`
-	DirObjectClass   string     `json:"dir_object_class,omitempty"`
-	FileObjectClass  string     `json:"file_object_class,omitempty"`
-	CHints           string     `json:"hints,omitempty"`
-	ChunkSize        uint64     `json:"chunk_size,omitempty"`
-}
-
-func (ci *containerInfo) MarshalJSON() ([]byte, error) {
-	type toJSON containerInfo
-	return json.Marshal(&struct {
-		*toJSON
-	}{
-		toJSON: (*toJSON)(ci),
-	})
-}
-
-// as an experiment, try creating a Go struct whose members are
-// pointers into the C struct.
-func newContainerInfo(poolUUID, contUUID *uuid.UUID) *containerInfo {
-	ci := new(containerInfo)
-
-	ci.PoolUUID = poolUUID
-	ci.ContainerUUID = contUUID
-	ci.LatestSnapshot = (*uint64)(&ci.dci.ci_lsnapshot)
-	ci.NumHandles = (*uint32)(&ci.dci.ci_nhandles)
-	ci.NumSnapshots = (*uint32)(&ci.dci.ci_nsnapshots)
-	ci.OpenTime = (*uint64)(&ci.dci.ci_md_otime)
-	ci.CloseModifyTime = (*uint64)(&ci.dci.ci_md_mtime)
-	return ci
+func convertContainerInfo(poolUUID, contUUID uuid.UUID, cInfo *C.daos_cont_info_t) *daos.ContainerInfo {
+	return &daos.ContainerInfo{
+		PoolUUID:        poolUUID,
+		ContainerUUID:   contUUID,
+		LatestSnapshot:  uint64(cInfo.ci_lsnapshot),
+		NumHandles:      uint32(cInfo.ci_nhandles),
+		NumSnapshots:    uint32(cInfo.ci_nsnapshots),
+		OpenTime:        uint64(cInfo.ci_md_otime),
+		CloseModifyTime: uint64(cInfo.ci_md_mtime),
+	}
 }
 
 type containerQueryCmd struct {
@@ -1028,7 +1019,7 @@ func (cmd *containerQueryCmd) Execute(_ []string) error {
 	}
 	defer cleanup()
 
-	ci, err := cmd.queryContainer()
+	ci, err := queryContainer(cmd.poolUUID, cmd.contUUID, cmd.cPoolHandle, cmd.cContHandle)
 	if err != nil {
 		return errors.Wrapf(err,
 			"failed to query container %s",

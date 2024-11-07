@@ -12,7 +12,7 @@ from ClusterShell.NodeSet import NodeSet
 from cpu_utils import CpuInfo
 from dfuse_utils import get_dfuse, start_dfuse
 from fio_utils import FioCommand
-from general_utils import bytes_to_human, percent_change
+from general_utils import bytes_to_human, get_log_file, percent_change
 
 
 class Pil4dfsFio(TestWithServers):
@@ -74,7 +74,7 @@ class Pil4dfsFio(TestWithServers):
         """Returns FIO bandwidth of a given I/O pattern
 
         Args:
-            fio_result (RemoteCommandResult): results of a FIO command.
+            fio_result (CommandResult): results of a FIO command.
             rw (str): Type of I/O pattern.
 
         Returns:
@@ -115,6 +115,9 @@ class Pil4dfsFio(TestWithServers):
             "global", "cpus_allowed", self.fio_cpus_allowed,
             f"fio --name=global --cpus_allowed={self.fio_cpus_allowed}")
         fio_cmd.env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
+        fio_cmd.env['D_DYNAMIC_CTX'] = 1
+        fio_cmd.env["D_LOG_FILE"] = get_log_file(self.client_log)
+        fio_cmd.env["D_LOG_MASK"] = 'INFO'
         fio_cmd.hosts = self.hostlist_clients
 
         bws = {}
@@ -154,6 +157,9 @@ class Pil4dfsFio(TestWithServers):
         fio_cmd.update(
             "job", "pool", container.pool.uuid, f"fio --name=job --pool={container.pool.uuid}")
         fio_cmd.update("job", "cont", container.uuid, f"fio --name=job --cont={container.uuid}")
+        fio_cmd.env['D_DYNAMIC_CTX'] = 1
+        fio_cmd.env["D_LOG_FILE"] = get_log_file(self.client_log)
+        fio_cmd.env["D_LOG_MASK"] = 'INFO'
         fio_cmd.hosts = self.hostlist_clients
 
         bws = {}
@@ -180,7 +186,7 @@ class Pil4dfsFio(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=pil4dfs,dfuse,dfs,fio
+        :avocado: tags=dfs,dfuse,pil4dfs,fio
         :avocado: tags=Pil4dfsFio,test_pil4dfs_vs_dfs
         """
         bw_deltas = {}

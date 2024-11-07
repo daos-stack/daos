@@ -25,6 +25,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/common/test"
@@ -297,16 +298,6 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 	}
 }
 
-type eventsDispatched struct {
-	rx     []*events.RASEvent
-	cancel context.CancelFunc
-}
-
-func (d *eventsDispatched) OnEvent(ctx context.Context, e *events.RASEvent) {
-	d.rx = append(d.rx, e)
-	d.cancel()
-}
-
 func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 	eventEngineDied := mockEvtEngineDied(t)
 
@@ -315,7 +306,7 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 		zeroSeq       bool
 		event         *events.RASEvent
 		expResp       *sharedpb.ClusterEventResp
-		expDispatched []*events.RASEvent
+		expDispatched []string
 		expErr        error
 	}{
 		"nil request": {
@@ -327,8 +318,12 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			expResp: &sharedpb.ClusterEventResp{
 				Sequence: 1,
 			},
-			expDispatched: []*events.RASEvent{
-				eventEngineDied.WithForwarded(true),
+			expDispatched: []string{
+				func() string {
+					e := eventEngineDied.WithForwarded(true)
+					e.Timestamp = ""
+					return e.String()
+				}(),
 			},
 		},
 	} {
@@ -342,10 +337,12 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			defer cancel()
 
 			ps := events.NewPubSub(ctx, log)
+			defer ps.Close()
+
 			svc.events = ps
 
-			dispatched := &eventsDispatched{cancel: cancel}
-			svc.events.Subscribe(events.RASTypeStateChange, dispatched)
+			subscriber := newMockSubscriber(1)
+			svc.events.Subscribe(events.RASTypeStateChange, subscriber)
 
 			var pbReq *sharedpb.ClusterEventReq
 			switch {
@@ -377,7 +374,7 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 
-			if diff := cmp.Diff(tc.expDispatched, dispatched.rx, defEvtCmpOpts...); diff != "" {
+			if diff := cmp.Diff(tc.expDispatched, subscriber.getRx(), defEvtCmpOpts...); diff != "" {
 				t.Fatalf("unexpected events dispatched (-want, +got)\n%s\n", diff)
 			}
 		})
@@ -1261,8 +1258,8 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 			defer ps.Close()
 			svc.events = ps
 
-			dispatched := &eventsDispatched{cancel: cancel}
-			svc.events.Subscribe(events.RASTypeStateChange, dispatched)
+			subscriber := newMockSubscriber(1)
+			svc.events.Subscribe(events.RASTypeStateChange, subscriber)
 
 			if !tc.emptyDb {
 				for _, m := range defaultMembers {
@@ -1309,8 +1306,10 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 			Message: &mgmtpb.SystemStartResp{Results: rrs},
 		}
 	}
-	expEventsStartFail := []*events.RASEvent{
-		newSystemStartFailedEvent("failed rank 0"),
+	expEventsStartFail := func(msgErr string) []string {
+		e := newSystemStartFailedEvent(msgErr)
+		e.Timestamp = ""
+		return []string{e.String()}
 	}
 
 	for name, tc := range map[string]struct {
@@ -1322,7 +1321,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 		expAbsentRanks string
 		expAbsentHosts string
 		expAPIErr      error
-		expDispatched  []*events.RASEvent
+		expDispatched  []string
 	}{
 		"nil req": {
 			req:       (*mgmtpb.SystemStartReq)(nil),
@@ -1358,7 +1357,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 				mockMember(t, 2, 2, "ready"),
 				mockMember(t, 3, 2, "ready"),
 			},
-			expDispatched: expEventsStartFail,
+			expDispatched: expEventsStartFail("failed rank 0"),
 		},
 		"filtered and oversubscribed ranks": {
 			req: &mgmtpb.SystemStartReq{Ranks: "0-1,4-9"},
@@ -1382,7 +1381,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 				mockMember(t, 3, 2, "stopped"),
 			},
 			expAbsentRanks: "4-9",
-			expDispatched:  expEventsStartFail,
+			expDispatched:  expEventsStartFail("failed rank 0"),
 		},
 		"filtered and oversubscribed hosts": {
 			req: &mgmtpb.SystemStartReq{Hosts: "10.0.0.[2-5]"},
@@ -1406,9 +1405,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 				mockMember(t, 3, 2, "ready"),
 			},
 			expAbsentHosts: "10.0.0.[3-5]",
-			expDispatched: []*events.RASEvent{
-				newSystemStartFailedEvent("failed rank 2"),
-			},
+			expDispatched:  expEventsStartFail("failed rank 2"),
 		},
 		"filtered hosts": {
 			req: &mgmtpb.SystemStartReq{Hosts: "10.0.0.[1-2]"},
@@ -1448,8 +1445,8 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 			ps := events.NewPubSub(ctx, log)
 			svc.events = ps
 
-			dispatched := &eventsDispatched{cancel: cancel}
-			svc.events.Subscribe(events.RASTypeInfoOnly, dispatched)
+			subscriber := newMockSubscriber(1)
+			svc.events.Subscribe(events.RASTypeInfoOnly, subscriber)
 
 			if tc.req != nil && tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName
@@ -1467,7 +1464,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 
 			<-ctx.Done()
 
-			if diff := cmp.Diff(tc.expDispatched, dispatched.rx, defEvtCmpOpts...); diff != "" {
+			if diff := cmp.Diff(tc.expDispatched, subscriber.getRx(), defEvtCmpOpts...); diff != "" {
 				t.Fatalf("unexpected events dispatched (-want, +got)\n%s\n", diff)
 			}
 		})
@@ -1475,17 +1472,14 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_SystemStop(t *testing.T) {
-	defaultMembers := system.Members{
-		mockMember(t, 0, 1, "joined"),
-		mockMember(t, 1, 1, "joined"),
-		mockMember(t, 3, 2, "joined"),
-	}
-	emf := func(a string) system.Members {
-		return system.Members{
-			// updated to err on prep fail if not forced
-			mockMember(t, 0, 1, "errored").WithInfo(a + " failed"),
-			mockMember(t, 1, 1, act2state(a)),
-			mockMember(t, 3, 2, "errored").WithInfo(a + " failed"),
+	emf := func(a string) func() system.Members {
+		return func() system.Members {
+			return system.Members{
+				// updated to err on prep fail if not forced
+				mockMember(t, 0, 1, "errored").WithInfo(a + " failed"),
+				mockMember(t, 1, 1, act2state(a)),
+				mockMember(t, 3, 2, "errored").WithInfo(a + " failed"),
+			}
 		}
 	}
 	expMembersPrepFail := emf("prep shutdown")
@@ -1526,23 +1520,21 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 	rankResStopSuccess := []*sharedpb.RankResult{
 		mockRankSuccess("stop", 0, 1), mockRankSuccess("stop", 1, 1), mockRankSuccess("stop", 3, 2),
 	}
-	expEventsPrepFail := []*events.RASEvent{
-		newSystemStopFailedEvent("prep shutdown", "failed ranks 0,3"),
-	}
-	expEventsStopFail := []*events.RASEvent{
-		newSystemStopFailedEvent("stop", "failed ranks 0,3"),
+	expEventsStopFail := func(msgErr string) []string {
+		e := newSystemStopFailedEvent(msgErr, "failed ranks 0,3")
+		e.Timestamp = ""
+		return []string{e.String()}
 	}
 
 	for name, tc := range map[string]struct {
 		req            *mgmtpb.SystemStopReq
-		members        system.Members
 		mResps         [][]*control.HostResponse
-		expMembers     system.Members
+		expMembers     func() system.Members
 		expResults     []*sharedpb.RankResult
 		expAbsentRanks string
 		expAbsentHosts string
 		expAPIErr      error
-		expDispatched  []*events.RASEvent
+		expDispatched  []string
 		expInvokeCount int
 	}{
 		"nil req": {
@@ -1557,67 +1549,69 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 		},
 		"prep fail": {
 			req:            &mgmtpb.SystemStopReq{},
-			members:        defaultMembers,
 			mResps:         hostRespFail,
 			expResults:     rankResPrepFail,
 			expMembers:     expMembersPrepFail,
-			expDispatched:  expEventsPrepFail,
+			expDispatched:  expEventsStopFail("prep shutdown"),
 			expInvokeCount: 1,
 		},
 		"prep success stop fail": {
 			req:            &mgmtpb.SystemStopReq{},
-			members:        defaultMembers,
 			mResps:         hostRespStopFail,
 			expResults:     rankResStopFail,
 			expMembers:     expMembersStopFail,
-			expDispatched:  expEventsStopFail,
+			expDispatched:  expEventsStopFail("stop"),
 			expInvokeCount: 2,
 		},
 		"stop some ranks": {
 			req:        &mgmtpb.SystemStopReq{Ranks: "0,1"},
-			members:    defaultMembers,
 			mResps:     [][]*control.HostResponse{{hr(1, mockRankSuccess("stop", 0), mockRankSuccess("stop", 1))}},
 			expResults: []*sharedpb.RankResult{mockRankSuccess("stop", 0, 1), mockRankSuccess("stop", 1, 1)},
-			expMembers: system.Members{
-				mockMember(t, 0, 1, "stopped"),
-				mockMember(t, 1, 1, "stopped"),
-				mockMember(t, 3, 2, "joined"),
+			expMembers: func() system.Members {
+				return system.Members{
+					mockMember(t, 0, 1, "stopped"),
+					mockMember(t, 1, 1, "stopped"),
+					mockMember(t, 3, 2, "joined"),
+				}
 			},
 			expInvokeCount: 1, // prep should not be called
 		},
 		"stop with all ranks (same as full system stop)": {
 			req:        &mgmtpb.SystemStopReq{Ranks: "0,1,3"},
-			members:    defaultMembers,
 			mResps:     hostRespSuccess,
 			expResults: rankResStopSuccess,
-			expMembers: system.Members{
-				mockMember(t, 0, 1, "stopped"),
-				mockMember(t, 1, 1, "stopped"),
-				mockMember(t, 3, 2, "stopped"),
+			expMembers: func() system.Members {
+				return system.Members{
+					mockMember(t, 0, 1, "stopped"),
+					mockMember(t, 1, 1, "stopped"),
+					mockMember(t, 3, 2, "stopped"),
+				}
 			},
 			expInvokeCount: 2, // prep should be called
 		},
 		"full system stop": {
 			req:        &mgmtpb.SystemStopReq{},
-			members:    defaultMembers,
 			mResps:     hostRespSuccess,
 			expResults: rankResStopSuccess,
-			expMembers: system.Members{
-				mockMember(t, 0, 1, "stopped"),
-				mockMember(t, 1, 1, "stopped"),
-				mockMember(t, 3, 2, "stopped"),
+			expMembers: func() system.Members {
+				return system.Members{
+					mockMember(t, 0, 1, "stopped"),
+					mockMember(t, 1, 1, "stopped"),
+					mockMember(t, 3, 2, "stopped"),
+				}
 			},
 			expInvokeCount: 2, // prep should be called
 		},
 		"full system stop (forced)": {
 			req:        &mgmtpb.SystemStopReq{Force: true},
-			members:    defaultMembers,
 			mResps:     hostRespStopSuccess,
 			expResults: rankResStopSuccess,
-			expMembers: system.Members{
-				mockMember(t, 0, 1, "stopped"),
-				mockMember(t, 1, 1, "stopped"),
-				mockMember(t, 3, 2, "stopped"),
+			expMembers: func() system.Members {
+				return system.Members{
+					mockMember(t, 0, 1, "stopped"),
+					mockMember(t, 1, 1, "stopped"),
+					mockMember(t, 3, 2, "stopped"),
+				}
 			},
 			expInvokeCount: 1, // prep should not be called
 		},
@@ -1629,7 +1623,12 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			if tc.mResps == nil {
 				tc.mResps = [][]*control.HostResponse{{}}
 			}
-			svc := mgmtSystemTestSetup(t, log, tc.members, tc.mResps...)
+			members := system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "joined"),
+				mockMember(t, 3, 2, "joined"),
+			}
+			svc := mgmtSystemTestSetup(t, log, members, tc.mResps...)
 
 			ctx, cancel := context.WithTimeout(test.Context(t), 200*time.Millisecond)
 			defer cancel()
@@ -1637,8 +1636,8 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			ps := events.NewPubSub(ctx, log)
 			svc.events = ps
 
-			dispatched := &eventsDispatched{cancel: cancel}
-			svc.events.Subscribe(events.RASTypeInfoOnly, dispatched)
+			subscriber := newMockSubscriber(1)
+			svc.events.Subscribe(events.RASTypeInfoOnly, subscriber)
 
 			if tc.req != nil && tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName
@@ -1650,13 +1649,13 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			}
 
 			checkRankResults(t, tc.expResults, gotResp.Results)
-			checkMembers(t, tc.expMembers, svc.membership)
+			checkMembers(t, tc.expMembers(), svc.membership)
 			test.AssertEqual(t, tc.expAbsentHosts, gotResp.Absenthosts, "absent hosts")
 			test.AssertEqual(t, tc.expAbsentRanks, gotResp.Absentranks, "absent ranks")
 
 			<-ctx.Done()
 
-			if diff := cmp.Diff(tc.expDispatched, dispatched.rx, defEvtCmpOpts...); diff != "" {
+			if diff := cmp.Diff(tc.expDispatched, subscriber.getRx(), defEvtCmpOpts...); diff != "" {
 				t.Fatalf("unexpected events dispatched (-want, +got)\n%s\n", diff)
 			}
 
@@ -1767,6 +1766,7 @@ func TestServer_MgmtSvc_SystemExclude(t *testing.T) {
 				mockMember(t, 3, 2, "joined"),
 			},
 		},
+
 		"unexclude hosts": {
 			req: &mgmtpb.SystemExcludeReq{Hosts: test.MockHostAddr(1).String(), Clear: true},
 			members: system.Members{
@@ -1797,10 +1797,30 @@ func TestServer_MgmtSvc_SystemExclude(t *testing.T) {
 			if tc.req != nil && tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName
 			}
+
+			startMapVer, err := svc.sysdb.CurMapVersion()
+			if err != nil {
+				t.Fatalf("startMapVer CurMapVersion() failed\n")
+				return
+			}
 			gotResp, gotAPIErr := svc.SystemExclude(ctx, tc.req)
 			test.CmpErr(t, tc.expAPIErr, gotAPIErr)
 			if tc.expAPIErr != nil {
 				return
+			}
+
+			// Check for any system map version increase by the (asynchronous) update.
+			// Test will time out if it never happens, thus choice of an infinite loop here.
+			for {
+				curMapVer, err := svc.sysdb.CurMapVersion()
+				if err != nil {
+					t.Fatalf("CurMapVersion() failed\n")
+					return
+				}
+
+				if curMapVer > startMapVer {
+					break
+				}
 			}
 
 			checkRankResults(t, tc.expResults, gotResp.Results)
@@ -1955,7 +1975,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 			req: &mgmtpb.JoinReq{
 				SrvFaultDomain: "bad fault domain",
 			},
-			expErr: errors.New("bad fault domain"),
+			expErr: errors.New("invalid fault domain"),
 		},
 		"dupe host same rank diff uuid": {
 			req: &mgmtpb.JoinReq{
@@ -2343,6 +2363,154 @@ func TestServer_MgmtSvc_doGroupUpdate(t *testing.T) {
 					t.Fatalf("want-, got+:\n%s", diff)
 				}
 			}
+		})
+	}
+}
+
+func TestMgmtSvc_verifyFaultDomain(t *testing.T) {
+	testURI := "tcp://localhost:10001"
+	for name, tc := range map[string]struct {
+		getSvc         func(*testing.T, logging.Logger) *mgmtSvc
+		curLabels      []string
+		req            *mgmtpb.JoinReq
+		expFaultDomain *system.FaultDomain
+		expErr         error
+		expLabels      []string
+	}{
+		"no fault domain": {
+			req:    &mgmtpb.JoinReq{},
+			expErr: errors.New("no fault domain"),
+		},
+		"invalid fault domain": {
+			req:    &mgmtpb.JoinReq{SrvFaultDomain: "junk"},
+			expErr: errors.New("invalid fault domain"),
+		},
+		"failed to get system domain labels": {
+			getSvc: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				svc := newTestMgmtSvcMulti(t, log, maxEngines, false)
+				// not a replica
+				svc.sysdb = raft.MockDatabaseWithCfg(t, log, &raft.DatabaseConfig{
+					SystemName: build.DefaultSystemName,
+				})
+
+				return svc
+			},
+			req:    &mgmt.JoinReq{SrvFaultDomain: "/rack=r1/node=n2"},
+			expErr: &system.ErrNotReplica{},
+		},
+		"failed to set system domain labels": {
+			getSvc: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				svc := newTestMgmtSvcMulti(t, log, maxEngines, true)
+				svc.sysdb = raft.MockDatabaseWithCfg(t, log, &raft.DatabaseConfig{
+					SystemName: build.DefaultSystemName,
+					Replicas:   []*net.TCPAddr{common.LocalhostCtrlAddr()},
+				})
+				if err := svc.sysdb.ResignLeadership(errors.New("test")); err != nil {
+					t.Fatal(err)
+				}
+
+				return svc
+			},
+			req:    &mgmt.JoinReq{SrvFaultDomain: "/rack=r1/node=n2"},
+			expErr: &system.ErrNotLeader{},
+		},
+		"first success with labels": {
+			req:            &mgmt.JoinReq{SrvFaultDomain: "/rack=r1/node=n2"},
+			expFaultDomain: system.MustCreateFaultDomainFromString("/rack=r1/node=n2"),
+			expLabels:      []string{"rack", "node"},
+		},
+		"first success with no labels": {
+			req:            &mgmt.JoinReq{SrvFaultDomain: "/r1/n2"},
+			expFaultDomain: system.MustCreateFaultDomainFromString("/r1/n2"),
+			expLabels:      []string{"", ""},
+		},
+		"success with labels": {
+			curLabels:      []string{"rack", "node"},
+			req:            &mgmt.JoinReq{SrvFaultDomain: "/rack=r1/node=n2"},
+			expFaultDomain: system.MustCreateFaultDomainFromString("/rack=r1/node=n2"),
+			expLabels:      []string{"rack", "node"},
+		},
+		"success with no labels": {
+			curLabels:      []string{"", ""},
+			req:            &mgmt.JoinReq{SrvFaultDomain: "/r1/n2"},
+			expFaultDomain: system.MustCreateFaultDomainFromString("/r1/n2"),
+			expLabels:      []string{"", ""},
+		},
+		"labeled request with unlabeled system": {
+			curLabels: []string{"", ""},
+			req: &mgmt.JoinReq{
+				SrvFaultDomain: "/rack=r1/node=n2",
+				Uri:            testURI,
+			},
+			expErr:    FaultBadFaultDomainLabels("/rack=r1/node=n2", testURI, []string{"rack", "node"}, nil),
+			expLabels: []string{"", ""},
+		},
+		"unlabeled request with labeled system": {
+			curLabels: []string{"rack", "node"},
+			req: &mgmt.JoinReq{
+				SrvFaultDomain: "/r1/n2",
+				Uri:            testURI,
+			},
+			expErr:    FaultBadFaultDomainLabels("/r1/n2", testURI, nil, []string{"rack", "node"}),
+			expLabels: []string{"rack", "node"},
+		},
+		"mismatched labels": {
+			curLabels: []string{"rack", "node"},
+			req: &mgmt.JoinReq{
+				SrvFaultDomain: "/rack=r1/host=n2",
+				Uri:            testURI,
+			},
+			expErr:    FaultBadFaultDomainLabels("/rack=r1/host=n2", testURI, []string{"rack", "host"}, []string{"rack", "node"}),
+			expLabels: []string{"rack", "node"},
+		},
+		"mismatched length": {
+			curLabels: []string{"rack"},
+			req: &mgmt.JoinReq{
+				SrvFaultDomain: "/rack=r1/node=n2",
+				Uri:            testURI,
+			},
+			expErr:    FaultBadFaultDomainLabels("/rack=r1/node=n2", testURI, []string{"rack", "node"}, []string{"rack"}),
+			expLabels: []string{"rack"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			if tc.getSvc == nil {
+				tc.getSvc = func(t *testing.T, l logging.Logger) *mgmtSvc {
+					svc := mgmtSystemTestSetup(t, l,
+						system.Members{
+							mockMember(t, 1, 1, "stopped"),
+							mockMember(t, 2, 2, "stopped"),
+						},
+						[]*control.HostResponse{})
+					return svc
+				}
+			}
+			svc := tc.getSvc(t, log)
+			if tc.curLabels != nil {
+				if err := svc.setDomainLabels(tc.curLabels); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			fd, err := svc.verifyFaultDomain(tc.req)
+
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertTrue(t, fd.Equals(tc.expFaultDomain), fmt.Sprintf("want %q, got %q", tc.expFaultDomain, fd))
+
+			if tc.expLabels == nil {
+				return
+			}
+
+			newLabels, labelErr := svc.getDomainLabels()
+			if len(tc.expLabels) == 0 {
+				test.AssertTrue(t, system.IsErrSystemAttrNotFound(labelErr), "")
+			} else if labelErr != nil {
+				t.Fatal(labelErr)
+			}
+			test.CmpAny(t, "", tc.expLabels, newLabels)
 		})
 	}
 }

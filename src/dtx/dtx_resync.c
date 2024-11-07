@@ -85,7 +85,7 @@ dtx_resync_commit(struct ds_cont_child *cont,
 		 * committed or aborted the DTX during we handling other
 		 * DTXs. So double check the status before current commit.
 		 */
-		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid, NULL, NULL, NULL, NULL, false);
+		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid, NULL, NULL, NULL, false);
 
 		/* Skip this DTX since it has been committed or aggregated. */
 		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE || rc == -DER_NONEXIST)
@@ -115,7 +115,7 @@ next:
 	}
 
 	if (j > 0) {
-		rc = dtx_commit(cont, dtes, dcks, j);
+		rc = dtx_commit(cont, dtes, dcks, j, true);
 		if (rc < 0)
 			D_ERROR("Failed to commit the DTXs: rc = "DF_RC"\n",
 				DP_RC(rc));
@@ -301,7 +301,7 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 		 * committed or aborted the DTX during we handling other
 		 * DTXs. So double check the status before next action.
 		 */
-		rc = vos_dtx_check(cont->sc_hdl, &dte->dte_xid, NULL, NULL, NULL, NULL, false);
+		rc = vos_dtx_check(cont->sc_hdl, &dte->dte_xid, NULL, NULL, NULL, false);
 
 		/* Skip the DTX that may has been committed or aborted. */
 		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE || rc == -DER_NONEXIST)
@@ -359,7 +359,7 @@ out:
 
 		dck.oid = oid;
 		dck.dkey_hash = dkey_hash;
-		rc = dtx_coll_commit(cont, dce, &dck);
+		rc = dtx_coll_commit(cont, dce, &dck, true);
 	}
 
 	dtx_coll_entry_put(dce);
@@ -393,6 +393,7 @@ dtx_status_handle(struct dtx_resync_args *dra)
 	if (tgt_array == NULL)
 		D_GOTO(out, err = -DER_NOMEM);
 
+again:
 	d_list_for_each_entry_safe(dre, next, &drh->drh_list, dre_link) {
 		if (dre->dre_dte.dte_ver < dra->discard_version) {
 			err = vos_dtx_abort(cont->sc_hdl, &dre->dre_xid, dre->dre_epoch);
@@ -475,7 +476,12 @@ commit:
 		rc = dtx_resync_commit(cont, drh, count);
 		if (rc < 0)
 			err = rc;
+		count = 0;
 	}
+
+	/* The last DTX entry may be re-added to the list because of DSHR_NEED_RETRY. */
+	if (unlikely(!d_list_empty(&drh->drh_list)))
+		goto again;
 
 out:
 	D_FREE(tgt_array);
@@ -786,16 +792,21 @@ void
 dtx_resync_ult(void *data)
 {
 	struct dtx_scan_args	*arg = data;
-	struct ds_pool		*pool;
-	int			rc = 0;
+	struct ds_pool		*pool = NULL;
+	int			rc;
 
 	rc = ds_pool_lookup(arg->pool_uuid, &pool);
-	D_ASSERTF(pool != NULL, DF_UUID" rc %d\n", DP_UUID(arg->pool_uuid), rc);
+	if (rc != 0) {
+		D_WARN("Cannot find the pool "DF_UUID" for DTX resync: "DF_RC"\n",
+		       DP_UUID(arg->pool_uuid), DP_RC(rc));
+		goto out;
+	}
+
 	if (pool->sp_dtx_resync_version >= arg->version) {
 		D_DEBUG(DB_MD, DF_UUID" ignore dtx resync version %u/%u\n",
 			DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version,
 			arg->version);
-		D_GOTO(out_put, rc);
+		goto out;
 	}
 	D_DEBUG(DB_MD, DF_UUID" update dtx resync version %u->%u\n",
 		DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version,
@@ -816,7 +827,9 @@ dtx_resync_ult(void *data)
 			DP_UUID(arg->pool_uuid), rc);
 	}
 	pool->sp_dtx_resync_version = arg->version;
-out_put:
-	ds_pool_put(pool);
+
+out:
+	if (pool != NULL)
+		ds_pool_put(pool);
 	D_FREE(arg);
 }

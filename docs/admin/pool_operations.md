@@ -26,6 +26,7 @@ Its subcommands can be grouped into the following areas:
 * An upgrade command to upgrade a pool's format version
   after a DAOS software upgrade.
 
+
 ### Creating a Pool
 
 A DAOS pool can be created through the `dmg pool create` command.
@@ -168,6 +169,195 @@ Note that it is difficult to determine the usable space by the user, and
 currently we cannot provide the precise value. The usable space depends not only
 on pool size, but also on number of targets, target size, object class,
 storage redundancy factor, etc.
+
+
+#### Creating a pool in MD-on-SSD mode
+
+In MD-on-SSD mode, a pool is made up of a single component in memory (RAM-disk
+associated with each engine) and three components on storage (NVMe SSD). The
+components in storage are related to "roles" WAL, META and DATA and roles are
+assigned to hardware devices in the
+[server configuration file](https://docs.daos.io/v2.6/admin/deployment/#server-configuration-file).
+
+In MD-on-SSD mode pools are by default created with equal allocations for
+metadata-in-memory and metadata-on-SSD but it is possible to change this. To
+create a pool with a metadata-on-SSD allocation size that is double what is
+allocated in memory, set `dmg pool create --mem-ratio` option to `50%`. This
+implies that the ratio of metadata on memory and on storage should be 0.5 and
+therefore metadata-on-SSD allocation is twice that of metadata-in-memory.
+
+A MD-on-SSD pool created with a `--mem-ratio` between 0 and 100 percent is
+said to be operating in "phase-2" mode.
+
+#### MD-on-SSD phase-2 pool create examples
+
+These examples cover the recommended way to create a pool in MD-on-SSD phase-2
+mode using the `--size` percentage option.
+
+The following example is run on a single host with dual engines where bdev
+roles META and DATA are not shared. Two pools are created with VOS index file
+size equal to half the meta-blob size (`--mem-ratio 50%`). Both pools use
+roughly half the original capacity available (first using 50% and the second
+100% of the remainder).
+
+Rough calculations: `dmg storage scan` shows that for each rank, one 800GB SSD
+is assigned for each tier (first: WAL+META, second: DATA). `df -h /mnt/daos*`
+reports usable ramdisk capacity for each rank is 66GiB.
+- Expected Data storage would then be 400GB for a 50% capacity first pool and
+  100% capacity second pool per-rank.
+- Expected Meta storage at 50% mem-ratio would be `66GiB*2 = 132GiB == 141GB`
+  giving ~70GB for 50% first and 100% second pools.
+- Expected Memory file size (aggregated) is `66GiB/2 = 35GB` for 50% first and
+  100% second pools.
+
+```bash
+$ dmg pool create bob --size 50% --mem-ratio 50%
+
+Pool created with 14.86%,85.14% storage tier ratio
+--------------------------------------------------
+  UUID             : 47060d94-c689-4981-8c89-011beb063f8f
+  Service Leader   : 0
+  Service Ranks    : [0-1]
+  Storage Ranks    : [0-1]
+  Total Size       : 940 GB
+  Metadata Storage : 140 GB (70 GB / rank)
+  Data Storage     : 800 GB (400 GB / rank)
+  Memory File Size : 70 GB (35 GB / rank)
+
+$ dmg pool create bob2 --size 100% --mem-ratio 50%
+
+Pool created with 14.47%,85.53% storage tier ratio
+--------------------------------------------------
+  UUID             : bdbef091-f0f8-411d-8995-f91c4efc690f
+  Service Leader   : 1
+  Service Ranks    : [0-1]
+  Storage Ranks    : [0-1]
+  Total Size       : 935 GB
+  Metadata Storage : 135 GB (68 GB / rank)
+  Data Storage     : 800 GB (400 GB / rank)
+  Memory File Size : 68 GB (34 GB / rank)
+
+$ dmg pool query bob
+
+Pool 47060d94-c689-4981-8c89-011beb063f8f, ntarget=32, disabled=0, leader=0, version=1, state=Ready
+Pool health info:
+- Rebuild idle, 0 objs, 0 recs
+Pool space info:
+- Target count:32
+- Total memory-file size: 70 GB
+- Metadata storage:
+  Total size: 140 GB
+  Free: 131 GB, min:4.1 GB, max:4.1 GB, mean:4.1 GB
+- Data storage:
+  Total size: 800 GB
+  Free: 799 GB, min:25 GB, max:25 GB, mean:25 GB
+
+$ dmg pool query bob2
+
+Pool bdbef091-f0f8-411d-8995-f91c4efc690f, ntarget=32, disabled=0, leader=1, version=1, state=Ready
+Pool health info:
+- Rebuild idle, 0 objs, 0 recs
+Pool space info:
+- Target count:32
+- Total memory-file size: 68 GB
+- Metadata storage:
+  Total size: 135 GB
+  Free: 127 GB, min:4.0 GB, max:4.0 GB, mean:4.0 GB
+- Data storage:
+  Total size: 800 GB
+  Free: 799 GB, min:25 GB, max:25 GB, mean:25 GB
+```
+
+The following examples are with a single host with dual engines where bdev
+roles WAL, META and DATA are shared.
+
+Single pool with VOS index file size equal to the meta-blob size (`--mem-ratio
+100%`).
+
+```bash
+$ dmg pool create bob --size 100% --mem-ratio 100%
+
+Pool created with 5.93%,94.07% storage tier ratio
+-------------------------------------------------
+  UUID             : bad54f1d-8976-428b-a5dd-243372dfa65c
+  Service Leader   : 1
+  Service Ranks    : [0-1]
+  Storage Ranks    : [0-1]
+  Total Size       : 2.4 TB
+  Metadata Storage : 140 GB (70 GB / rank)
+  Data Storage     : 2.2 TB (1.1 TB / rank)
+  Memory File Size : 140 GB (70 GB / rank)
+
+```
+
+Rough calculations: 1.2TB of usable space is returned from storage scan and
+because roles are shared required META (70GB) is reserved so only 1.1TB is
+provided for data.
+
+Logging shows:
+```bash
+DEBUG 2024/09/24 15:44:38.554431 pool.go:1139: added smd device c7da7391-9077-4eb6-9f4a-a3d656166236 (rank 1, ctrlr 0000:d8:00.0, roles "data,meta,wal") as usable: device state="NORMAL", smd-size 623 GB (623307128832), ctrlr-total-free 623 GB (623307128832)
+DEBUG 2024/09/24 15:44:38.554516 pool.go:1139: added smd device 18c7bf45-7586-49ba-93c0-cbc08caed901 (rank 1, ctrlr 0000:d9:00.0, roles "data,meta,wal") as usable: device state="NORMAL", smd-size 554 GB (554050781184), ctrlr-total-free 1.2 TB (1177357910016)
+DEBUG 2024/09/24 15:44:38.554603 pool.go:1246: based on minimum available ramdisk capacity of 70 GB and mem-ratio 1.00 with 70 GB of reserved metadata capacity, the maximum per-rank sizes for a pool are META=70 GB (69792169984 B) DATA=1.1 TB (1107565740032 B)
+```
+
+Now the same as above but with a single pool with VOS index file size equal to
+a quarter of the meta-blob size (`--mem-ratio 25%`).
+
+```bash
+$ dmg pool create bob --size 100% --mem-ratio 25%
+
+Pool created with 23.71%,76.29% storage tier ratio
+--------------------------------------------------
+  UUID             : 999ecf55-474e-4476-9f90-0b4c754d4619
+  Service Leader   : 0
+  Service Ranks    : [0-1]
+  Storage Ranks    : [0-1]
+  Total Size       : 2.4 TB
+  Metadata Storage : 558 GB (279 GB / rank)
+  Data Storage     : 1.8 TB (898 GB / rank)
+  Memory File Size : 140 GB (70 GB / rank)
+
+```
+
+Rough calculations: 1.2TB of usable space is returned from storage scan and
+because roles are shared required META (279GB) is reserved so only ~900GB is
+provided for data.
+
+Logging shows:
+```bash
+DEBUG 2024/09/24 16:16:00.172719 pool.go:1246: based on minimum available ramdisk capacity of 70 GB and mem-ratio 0.25 with 279 GB of reserved metadata capacity, the maximum per-rank sizes for a pool are META=279 GB (279168679936 B) DATA=898 GB (898189230080 B)
+```
+
+Now with 6 ranks and a single pool with VOS index file size equal to a half of
+the meta-blob size (`--mem-ratio 50%`).
+
+```bash
+$ dmg pool create bob --size 100% --mem-ratio 50%
+
+Pool created with 11.86%,88.14% storage tier ratio
+--------------------------------------------------
+  UUID             : 4fa38199-23a9-4b4d-aa9a-8b9838cad1d6
+  Service Leader   : 1
+  Service Ranks    : [0-2,4-5]
+  Storage Ranks    : [0-5]
+  Total Size       : 7.1 TB
+  Metadata Storage : 838 GB (140 GB / rank)
+  Data Storage     : 6.2 TB (1.0 TB / rank)
+  Memory File Size : 419 GB (70 GB / rank)
+
+```
+
+Rough calculations: 1177 GB of usable space is returned from storage scan and
+because roles are shared required META (140 GB) is reserved so only 1037 GB is
+provided for data (per-rank).
+
+Logging shows:
+```bash
+DEBUG 2024/09/24 16:40:41.570331 pool.go:1139: added smd device c921c7b9-5f5c-4332-a878-0ebb8191c160 (rank 1, ctrlr 0000:d8:00.0, roles "data,meta,wal") as usable: device state="NORMAL", smd-size 623 GB (623307128832), ctrlr-total-free 623 GB (623307128832)
+DEBUG 2024/09/24 16:40:41.570447 pool.go:1139: added smd device a071c3cf-5de1-4911-8549-8c5e8f550554 (rank 1, ctrlr 0000:d9:00.0, roles "data,meta,wal") as usable: device state="NORMAL", smd-size 554 GB (554050781184), ctrlr-total-free 1.2 TB (1177357910016)
+DEBUG 2024/09/24 16:40:41.570549 pool.go:1246: based on minimum available ramdisk capacity of 70 GB and mem-ratio 0.50 with 140 GB of reserved metadata capacity, the maximum per-rank sizes for a pool are META=140 GB (139584339968 B) DATA=1.0 TB (1037773570048 B)
+```
 
 
 ### Listing Pools
@@ -915,6 +1105,30 @@ Meanwhile, PMDK provides a recovery tool (i.e., pmempool check) to verify
 and possibly repair a pmemobj file. As discussed in the previous section, the
 rebuild status can be consulted via the pool query and will be expanded
 with more information.
+
+## Pool Redundancy Factor
+
+If the DAOS system experiences cascading failures, where the number of failed
+fault domains exceeds a pool's redundancy factor, there could be unrecoverable
+errors and applications could suffer from data loss. This can happen in cases
+of power or network outages and would cause node/engine failures. In most cases
+those failures can be recovered and DAOS engines can be restarted and the system
+can function again.
+
+Administrator can set the default pool redundancy factor by environment variable
+"DAOS_POOL_RF" in the server yaml file. If SWIM detects and reports an engine is
+dead and the number of failed fault domain exceeds or is going to exceed the pool
+redundancy factor, it will not change pool map immediately. Instead, it will give
+critical log message:
+intolerable unavailability: engine rank x
+In this case, the system administrator should check and try to recover those
+failed engines and bring them back with:
+dmg system start --ranks=x
+one by one. A reintegrate call is not needed.
+
+For true unrecoverable failures, the administrator can still exclude engines.
+However, data loss is expected as the number of unrecoverable failures exceeds
+the pool redundancy factor.
 
 ## Recovering Container Ownership
 

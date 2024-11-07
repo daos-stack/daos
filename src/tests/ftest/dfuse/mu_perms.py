@@ -301,7 +301,8 @@ class DfuseMUPerms(TestWithServers):
         env_with_il = env_without_il.copy()
         env_with_il.update({
             'LD_PRELOAD': os.path.join(self.prefix, 'lib64', il_lib),
-            'D_IL_REPORT': -1  # Log all intercepted calls
+            'D_IL_REPORT': -1,  # Log all intercepted calls
+            'D_IL_NO_BYPASS': '1'
         })
 
         def _verify(use_il, expected_il_messages, expect_der_no_perm):
@@ -416,7 +417,7 @@ class DfuseMUPerms(TestWithServers):
         """
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=dfuse,dfuse_mu,verify_perms
+        :avocado: tags=dfuse,dfuse_mu,ioil,verify_perms
         :avocado: tags=DfuseMUPerms,test_dfuse_mu_perms_ioil
         """
         self.run_test_il(il_lib='libioil.so')
@@ -426,7 +427,7 @@ class DfuseMUPerms(TestWithServers):
         """
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=dfuse,dfuse_mu,verify_perms,pil4dfs
+        :avocado: tags=dfuse,dfuse_mu,pil4dfs,verify_perms
         :avocado: tags=DfuseMUPerms,test_dfuse_mu_perms_pil4dfs
         """
         self.run_test_il(il_lib='libpil4dfs.so')

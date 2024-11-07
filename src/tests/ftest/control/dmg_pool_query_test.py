@@ -58,13 +58,11 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         #   exp_info = self.params.get("exp_vals", path="/run/*", default={})
         # but this yields an empty dictionary (the default), so it needs to be defined manually:
         exp_info = {
-            "enabled_ranks": None,
-            "disabled_ranks": None,
-            "status": self.params.get("pool_status", path="/run/exp_vals/*"),
             "state": self.params.get("pool_state", path="/run/exp_vals/*"),
             "uuid": self.pool.uuid.lower(),
             "total_targets": self.params.get("total_targets", path="/run/exp_vals/*"),
             "active_targets": self.params.get("active_targets", path="/run/exp_vals/*"),
+            "disabled_ranks": self.params.get("disabled_ranks", path="/run/exp_vals/*"),
             "total_engines": self.params.get("total_engines", path="/run/exp_vals/*"),
             "disabled_targets": self.params.get("disabled_targets", path="/run/exp_vals/*"),
             "version": self.params.get("version", path="/run/exp_vals/*"),
@@ -74,7 +72,8 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
                 "status": self.params.get("rebuild_status", path="/run/exp_vals/rebuild/*"),
                 "state": self.params.get("state", path="/run/exp_vals/rebuild/*"),
                 "objects": self.params.get("objects", path="/run/exp_vals/rebuild/*"),
-                "records": self.params.get("records", path="/run/exp_vals/rebuild/*")
+                "records": self.params.get("records", path="/run/exp_vals/rebuild/*"),
+                "total_objects": self.params.get("total_objects", path="/run/exp_vals/rebuild/*")
             },
             "tier_stats": [
                 {
@@ -98,11 +97,15 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
                     "tier_name": "NVME",
                     "size": self.params.get("total", path="/run/exp_vals/nvme/*")
                 }
-            ]
+            ],
+            "mem_file_bytes": (
+                self.params.get("total", path="/run/exp_vals/scm/*") if
+                self.server_managers[0].manager.job.using_control_metadata else
+                0)
         }
 
         self.assertDictEqual(
-            self.pool.query_data["response"], exp_info,
+            exp_info, self.pool.query_data["response"],
             "Found difference in dmg pool query output and the expected values")
 
         self.log.info("All expect values found in dmg pool query output.")

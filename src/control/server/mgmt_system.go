@@ -36,6 +36,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/system"
 	"github.com/daos-stack/daos/src/control/system/checker"
 	"github.com/daos-stack/daos/src/control/system/raft"
@@ -43,6 +44,9 @@ import (
 
 const fabricProviderProp = "fabric_providers"
 const groupUpdatePauseProp = "group_update_paused"
+const domainLabelsProp = "domain_labels"
+
+const domainLabelsSep = "=" // invalid in a label name
 
 // GetAttachInfo handles a request to retrieve a map of ranks to fabric URIs, in addition
 // to client network autoconfiguration hints.
@@ -182,9 +186,9 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 		return nil, errors.Wrapf(err, "invalid uuid %q", req.Uuid)
 	}
 
-	fd, err := system.NewFaultDomainFromString(req.SrvFaultDomain)
+	fd, err := svc.verifyFaultDomain(req)
 	if err != nil {
-		return nil, errors.Wrapf(err, "invalid server fault domain %q", req.SrvFaultDomain)
+		return nil, err
 	}
 
 	if err := svc.checkReqFabricProvider(req, peerAddr, svc.events); err != nil {
@@ -253,6 +257,67 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 	}
 
 	return resp, nil
+}
+
+func (svc *mgmtSvc) verifyFaultDomain(req *mgmtpb.JoinReq) (*system.FaultDomain, error) {
+	fd, err := system.NewFaultDomainFromString(req.SrvFaultDomain)
+	if err != nil {
+		return nil, config.FaultConfigFaultDomainInvalid(err)
+	}
+
+	if fd.Empty() {
+		return nil, errors.New("no fault domain in join request")
+	}
+
+	labels := fd.Labels
+	if !fd.HasLabels() {
+		// While saving the labels, an unlabeled fault domain sets the labels to empty
+		// strings. This allows us to distinguish between unset and unlabeled.
+		labels = make([]string, fd.NumLevels())
+	}
+
+	sysLabels, err := svc.getDomainLabels()
+	if system.IsErrSystemAttrNotFound(err) {
+		svc.log.Debugf("setting fault domain labels for the first time: %+v", labels)
+		if err := svc.setDomainLabels(labels); err != nil {
+			return nil, errors.Wrap(err, "failed to set fault domain labels")
+		}
+		return fd, nil
+	}
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get current fault domain labels")
+	}
+
+	// If system labels are all empty strings, that indicates an unlabeled system. In errors
+	// and logging, clearer to present this as a completely empty array.
+	var printSysLabels []string
+	if sysLabels[0] != "" {
+		printSysLabels = sysLabels
+	}
+
+	svc.log.Tracef("system labels: [%s], request labels: [%s]", strings.Join(printSysLabels, ", "), strings.Join(labels, ", "))
+	if len(sysLabels) != len(labels) {
+		return nil, FaultBadFaultDomainLabels(req.SrvFaultDomain, req.Uri, fd.Labels, printSysLabels)
+	}
+	for i := range sysLabels {
+		if labels[i] != sysLabels[i] {
+			return nil, FaultBadFaultDomainLabels(req.SrvFaultDomain, req.Uri, fd.Labels, printSysLabels)
+		}
+	}
+	return fd, nil
+}
+
+func (svc *mgmtSvc) getDomainLabels() ([]string, error) {
+	propStr, err := system.GetMgmtProperty(svc.sysdb, domainLabelsProp)
+	if err != nil {
+		return nil, err
+	}
+	return strings.Split(propStr, domainLabelsSep), nil
+}
+
+func (svc *mgmtSvc) setDomainLabels(labels []string) error {
+	propStr := strings.Join(labels, domainLabelsSep)
+	return system.SetMgmtProperty(svc.sysdb, domainLabelsProp, propStr)
 }
 
 // allRanksJoined checks whether all ranks that the system knows about, and that are not admin
@@ -391,9 +456,9 @@ func (svc *mgmtSvc) updateFabricProviders(provList []string, publisher events.Pu
 	return nil
 }
 
-func newFabricProvChangedEvent(old, new string) *events.RASEvent {
+func newFabricProvChangedEvent(o, n string) *events.RASEvent {
 	return events.NewGenericEvent(events.RASSystemFabricProvChanged, events.RASSeverityNotice,
-		fmt.Sprintf("system fabric provider has changed: %s -> %s", old, new), "")
+		fmt.Sprintf("system fabric provider has changed: %s -> %s", o, n), "")
 }
 
 // reqGroupUpdate requests a group update.
@@ -1001,6 +1066,8 @@ func (svc *mgmtSvc) SystemExclude(ctx context.Context, req *mgmtpb.SystemExclude
 			Addr:   m.Addr.String(),
 		})
 	}
+
+	svc.reqGroupUpdate(ctx, false)
 
 	return resp, nil
 }

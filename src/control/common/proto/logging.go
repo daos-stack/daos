@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dustin/go-humanize"
 	"google.golang.org/protobuf/proto"
 
 	grpcpb "github.com/Jille/raft-grpc-transport/proto"
@@ -80,7 +81,7 @@ func Debug(msg proto.Message) string {
 			fmt.Fprintf(&bld, "%s:%s ", state, set.String())
 		}
 	case *mgmtpb.PoolCreateReq:
-		fmt.Fprintf(&bld, "%T uuid:%s u:%s g:%s ", m, m.Uuid, m.User, m.Usergroup)
+		fmt.Fprintf(&bld, "%T uuid:%s u:%s g:%s ", m, m.Uuid, m.User, m.UserGroup)
 		if len(m.Properties) > 0 {
 			fmt.Fprintf(&bld, "p:%+v ", m.Properties)
 		}
@@ -90,12 +91,13 @@ func Debug(msg proto.Message) string {
 		}
 		fmt.Fprintf(&bld, "ranks:%s ", ranks.String())
 		fmt.Fprint(&bld, "tiers:")
-		for i, b := range m.Tierbytes {
+		for i, b := range m.TierBytes {
 			fmt.Fprintf(&bld, "%d: %d ", i, b)
-			if len(m.Tierratio) > i+1 {
-				fmt.Fprintf(&bld, "(%.02f%%) ", m.Tierratio[i])
+			if len(m.TierRatio) > i+1 {
+				fmt.Fprintf(&bld, "(%.02f%%) ", m.TierRatio[i])
 			}
 		}
+		fmt.Fprintf(&bld, "mem-ratio: %.02f ", m.MemRatio)
 	case *mgmtpb.PoolCreateResp:
 		fmt.Fprintf(&bld, "%T svc_ldr:%d ", m, m.SvcLdr)
 		ranks := &ranklist.RankSet{}
@@ -112,6 +114,7 @@ func Debug(msg proto.Message) string {
 		for i, b := range m.TierBytes {
 			fmt.Fprintf(&bld, "%d:%d ", i, b)
 		}
+		fmt.Fprintf(&bld, "meta-file-size:%s", humanize.Bytes(m.MemFileBytes))
 	case *mgmtpb.PoolEvictReq:
 		fmt.Fprintf(&bld, "%T pool:%s", m, m.Id)
 		if len(m.Handles) > 0 {

@@ -145,8 +145,9 @@ class SlurmSetup():
         non_control = self.nodes.difference(self.control)
         self.log.debug('Copying the munge key to %s', non_control)
         command = get_clush_command(
-            non_control, args=f"-B -S -v --copy {self.MUNGE_KEY} --dest {self.MUNGE_KEY}")
-        result = run_remote(self.log, self.control, command)
+            non_control, args=f"-B -S -v --copy {self.MUNGE_KEY} --dest {self.MUNGE_KEY}",
+            timeout=60)
+        result = run_remote(self.log, self.control, command, timeout=None)
         if not result.passed:
             raise SlurmSetupException(f'Error creating munge key on {result.failed_hosts}')
 
@@ -207,7 +208,7 @@ class SlurmSetup():
         """
         self.log.debug('Creating the slurm epilog script to run after each job.')
         try:
-            with open(script, 'w') as script_file:
+            with open(script, 'w', encoding='utf-8') as script_file:
                 script_file.write('#!/bin/bash\n#\n')
                 script_file.write('/usr/bin/bash -c \'pkill --signal 9 dfuse\'\n')
                 script_file.write(
@@ -364,7 +365,7 @@ class SlurmSetup():
             echo_command (str): command adding contents to the config file
 
         Returns:
-            RemoteCommandResult: the result from the echo | tee command
+            CommandResult: the result from the echo | tee command
         """
         tee_command = command_as_user(f'tee -a {self.SLURM_CONF}', self.root)
         return run_remote(self.log, self.all_nodes, f'{echo_command} | {tee_command}')

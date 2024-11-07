@@ -390,7 +390,7 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt, uuid_t co_uuid,
 }
 
 #define LOCAL_ARRAY_SIZE	128
-#define NUM_SHARDS_STEP_INCREASE	10
+#define NUM_SHARDS_STEP_INCREASE	64
 /* The structure for scan per xstream */
 struct rebuild_scan_arg {
 	struct rebuild_tgt_pool_tracker *rpt;
@@ -1156,6 +1156,24 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 			  "rsi_rebuild_ver %d != rt_rebuild_ver %d\n",
 			  rsi->rsi_rebuild_ver, rpt->rt_rebuild_ver);
 
+		/* The same PS leader request rebuild with higher rsi_rebuild_gen.
+		 * Is the case of massive failure case, see pool_restart_rebuild_if_rank_wip().
+		 */
+		if (rpt->rt_leader_rank == rsi->rsi_master_rank &&
+		    rpt->rt_leader_term == rsi->rsi_leader_term &&
+		    rpt->rt_rebuild_gen < rsi->rsi_rebuild_gen) {
+			/* rebuild_leader_status_notify(LAZY rebuild_iv_update),
+			 * it will set rpt->rt_global_done to abort rpt.
+			 * set rt_abort here just for safe.
+			 */
+			rpt->rt_abort = 1;
+			D_INFO(DF_RBF ", start new rebuild, gen %d -> %d.\n",
+			       DP_RBF_RPT(rpt), rpt->rt_rebuild_gen, rsi->rsi_rebuild_gen);
+			rpt_put(rpt);
+			rpt = NULL;
+			goto tls_lookup;
+		}
+
 		D_DEBUG(DB_REBUILD, "already started, existing " DF_RBF ", req " DF_RBF "\n",
 			DP_RBF_RPT(rpt), DP_RBF_RSI(rsi));
 
@@ -1186,6 +1204,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		rpt = NULL;
 	}
 
+tls_lookup:
 	tls = rebuild_pool_tls_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver,
 				      rsi->rsi_rebuild_gen);
 	if (tls != NULL) {

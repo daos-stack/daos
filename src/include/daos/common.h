@@ -851,7 +851,7 @@ enum {
 #define DAOS_NVME_FAULTY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x50)
 #define DAOS_NVME_WRITE_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x51)
 #define DAOS_NVME_READ_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x52)
-#define DAOS_NVME_ALLOCBUF_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x53)
+#define DAOS_NVME_ALLOCBUF_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x53)	/* deprecated */
 #define DAOS_NVME_WAL_TX_LOST		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x54)
 
 #define DAOS_POOL_CREATE_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x60)
@@ -904,6 +904,7 @@ enum {
 #define DAOS_OBJ_FAIL_NVME_IO		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9f)
 
 #define DAOS_POOL_EVICT_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa0)
+#define DAOS_POOL_RFCHECK_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa1)
 
 #define DAOS_CHK_CONT_ORPHAN		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb0)
 #define DAOS_CHK_CONT_BAD_LABEL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb1)
@@ -957,6 +958,10 @@ bool daos_hhash_link_delete(struct d_hlink *hlink);
 #define daos_hhash_hlink_init(hlink, ops)	d_hhash_hlink_init(hlink, ops)
 #define daos_hhash_link_empty(hlink)		d_hhash_link_empty(hlink)
 #define daos_hhash_link_key(hlink, key)		d_hhash_link_key(hlink, key)
+
+typedef int (*daos_hhash_traverse_cb_t)(struct d_hlink *link, void *arg);
+int
+daos_hhash_traverse(int type, daos_hhash_traverse_cb_t cb, void *arg);
 
 /* daos_recx_t overlap detector */
 #define DAOS_RECX_OVERLAP(recx_1, recx_2)				\

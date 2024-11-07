@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -7,6 +7,7 @@ import os
 import threading
 import time
 
+import pydaos
 from apricot import skipForTicket
 from avocado.core.exceptions import TestFail
 from daos_utils import DaosCommand
@@ -15,7 +16,6 @@ from general_utils import get_display_size, get_errors_count
 from ior_utils import IorCommand, IorMetrics
 from job_manager_utils import get_job_manager
 from nvme_utils import ServerFillUp
-from pydaos.raw import c_err_to_str
 from telemetry_test_base import TestWithTelemetry
 
 
@@ -173,6 +173,10 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         Args:
             log_file (str): name prefix of the log files to check.
         """
+
+        def err_to_str(err_no):
+            return pydaos.DaosErrorCode(err_no).name
+
         logfile_glob = log_file + r".*[0-9]"
         errors_count = get_errors_count(self.hostlist_clients, logfile_glob)
         for error in self.expected_errors:
@@ -190,7 +194,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             }
             msg = 'Found unexpected errors in client logs {}: '.format(logfile_glob)
             msg += ", ".join(
-                f'{c_err_to_str(key)}({key}): got={val}'
+                f'{err_to_str(key)}({key}): got={val}'
                 for key, val in unexpected_errors_count.items())
             self.fail(msg)
 
@@ -201,7 +205,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
                 continue
             self.log.info(
                 "Number of errors %s (%s) is > 0: got=%d",
-                c_err_to_str(error), error, errors_count[error])
+                err_to_str(error), error, errors_count[error])
 
     def delete_all_containers(self):
         """Delete all the containers."""
@@ -234,7 +238,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         self.log.info('----Starting background IOR load----')
 
         # Define the IOR Command and use the parameter from yaml file.
-        ior_bg_cmd = IorCommand()
+        ior_bg_cmd = IorCommand(self.test_env.log_dir)
         ior_bg_cmd.get_params(self)
         ior_bg_cmd.set_daos_params(self.pool, None)
         ior_bg_cmd.dfs_oclass.update(self.ior_cmd.dfs_oclass.value)
@@ -309,8 +313,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         except TestFail:
             self.log.info('Test is expected to fail because of DER_NOSPACE')
         else:
-            self.fail('This test is suppose to FAIL because of DER_NOSPACE'
-                      'but it Passed')
+            self.fail('This test is suppose to FAIL because of DER_NOSPACE but it Passed')
 
         # Display the pool statistics
         self.pool.get_info()

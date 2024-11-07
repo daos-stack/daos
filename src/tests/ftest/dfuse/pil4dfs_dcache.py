@@ -391,6 +391,7 @@ class Pil4dfsDcache(TestWithServers):
         env['D_IL_DCACHE_REC_TIMEOUT'] = '1'
         env['D_IL_DCACHE_GC_PERIOD'] = '2'
         env['D_IL_DCACHE_GC_RECLAIM_MAX'] = '2'
+        env['D_IL_NO_BYPASS'] = '1'
 
         env.update(kwargs)
 
@@ -448,7 +449,7 @@ class Pil4dfsDcache(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=pil4dfs,dcache,dfuse
+        :avocado: tags=dcache,dfuse,pil4dfs
         :avocado: tags=Pil4dfsDcache,test_pil4dfs_dcache_enabled
         """
         self.log_step("Mount a DFuse mount point")
@@ -482,7 +483,7 @@ class Pil4dfsDcache(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=pil4dfs,dcache,dfuse
+        :avocado: tags=dcache,dfuse,pil4dfs
         :avocado: tags=Pil4dfsDcache,test_pil4dfs_dcache_disabled
         """
         self.log_step("Mount a DFuse mount point")
@@ -517,7 +518,7 @@ class Pil4dfsDcache(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=pil4dfs,dcache,dfuse
+        :avocado: tags=dcache,dfuse,pil4dfs
         :avocado: tags=Pil4dfsDcache,test_pil4dfs_dcache_gc_disabled
         """
         self.log_step("Mount a DFuse mount point")

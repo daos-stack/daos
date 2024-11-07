@@ -39,6 +39,12 @@ const (
 	sysXSTgtID     = 1024
 	// Minimum amount of hugepage memory (in bytes) needed for each target.
 	memHugepageMinPerTarget = 1 << 30 // 1GiB
+
+	// DefaultMemoryFileRatio (mem_size:meta_size) describes the behavior of MD-on-SSD in
+	// phase-1 mode where the per-target-meta-blob size is equal to the per-target-VOS-file
+	// size. In phase-2 mode where the per-target-meta-blob size is greater than
+	// per-target-VOS-file size, the memory file ratio will be less than one.
+	DefaultMemoryFileRatio = 1.0
 )
 
 // JSON config file constants.
@@ -175,47 +181,52 @@ func (vls *LedState) UnmarshalJSON(data []byte) error {
 // NvmeHealth represents a set of health statistics for a NVMe device
 // and mirrors C.struct_nvme_stats.
 type NvmeHealth struct {
-	Timestamp               uint64 `json:"timestamp"`
-	TempWarnTime            uint32 `json:"warn_temp_time"`
-	TempCritTime            uint32 `json:"crit_temp_time"`
-	CtrlBusyTime            uint64 `json:"ctrl_busy_time"`
-	PowerCycles             uint64 `json:"power_cycles"`
-	PowerOnHours            uint64 `json:"power_on_hours"`
-	UnsafeShutdowns         uint64 `json:"unsafe_shutdowns"`
-	MediaErrors             uint64 `json:"media_errs"`
-	ErrorLogEntries         uint64 `json:"err_log_entries"`
-	ReadErrors              uint32 `json:"bio_read_errs"`
-	WriteErrors             uint32 `json:"bio_write_errs"`
-	UnmapErrors             uint32 `json:"bio_unmap_errs"`
-	ChecksumErrors          uint32 `json:"checksum_errs"`
-	Temperature             uint32 `json:"temperature"`
-	TempWarn                bool   `json:"temp_warn"`
-	AvailSpareWarn          bool   `json:"avail_spare_warn"`
-	ReliabilityWarn         bool   `json:"dev_reliability_warn"`
-	ReadOnlyWarn            bool   `json:"read_only_warn"`
-	VolatileWarn            bool   `json:"volatile_mem_warn"`
-	ProgFailCntNorm         uint8  `json:"program_fail_cnt_norm"`
-	ProgFailCntRaw          uint64 `json:"program_fail_cnt_raw"`
-	EraseFailCntNorm        uint8  `json:"erase_fail_cnt_norm"`
-	EraseFailCntRaw         uint64 `json:"erase_fail_cnt_raw"`
-	WearLevelingCntNorm     uint8  `json:"wear_leveling_cnt_norm"`
-	WearLevelingCntMin      uint16 `json:"wear_leveling_cnt_min"`
-	WearLevelingCntMax      uint16 `json:"wear_leveling_cnt_max"`
-	WearLevelingCntAvg      uint16 `json:"wear_leveling_cnt_avg"`
-	EndtoendErrCntRaw       uint64 `json:"endtoend_err_cnt_raw"`
-	CrcErrCntRaw            uint64 `json:"crc_err_cnt_raw"`
-	MediaWearRaw            uint64 `json:"media_wear_raw"`
-	HostReadsRaw            uint64 `json:"host_reads_raw"`
-	WorkloadTimerRaw        uint64 `json:"workload_timer_raw"`
-	ThermalThrottleStatus   uint8  `json:"thermal_throttle_status"`
-	ThermalThrottleEventCnt uint64 `json:"thermal_throttle_event_cnt"`
-	RetryBufferOverflowCnt  uint64 `json:"retry_buffer_overflow_cnt"`
-	PllLockLossCnt          uint64 `json:"pll_lock_loss_cnt"`
-	NandBytesWritten        uint64 `json:"nand_bytes_written"`
-	HostBytesWritten        uint64 `json:"host_bytes_written"`
-	ClusterSize             uint64 `json:"cluster_size"`
-	MetaWalSize             uint64 `json:"meta_wal_size"`
-	RdbWalSize              uint64 `json:"rdb_wal_size"`
+	Timestamp               uint64  `json:"timestamp"`
+	TempWarnTime            uint32  `json:"warn_temp_time"`
+	TempCritTime            uint32  `json:"crit_temp_time"`
+	CtrlBusyTime            uint64  `json:"ctrl_busy_time"`
+	PowerCycles             uint64  `json:"power_cycles"`
+	PowerOnHours            uint64  `json:"power_on_hours"`
+	UnsafeShutdowns         uint64  `json:"unsafe_shutdowns"`
+	MediaErrors             uint64  `json:"media_errs"`
+	ErrorLogEntries         uint64  `json:"err_log_entries"`
+	ReadErrors              uint32  `json:"bio_read_errs"`
+	WriteErrors             uint32  `json:"bio_write_errs"`
+	UnmapErrors             uint32  `json:"bio_unmap_errs"`
+	ChecksumErrors          uint32  `json:"checksum_errs"`
+	Temperature             uint32  `json:"temperature"`
+	TempWarn                bool    `json:"temp_warn"`
+	AvailSpareWarn          bool    `json:"avail_spare_warn"`
+	ReliabilityWarn         bool    `json:"dev_reliability_warn"`
+	ReadOnlyWarn            bool    `json:"read_only_warn"`
+	VolatileWarn            bool    `json:"volatile_mem_warn"`
+	ProgFailCntNorm         uint8   `json:"program_fail_cnt_norm"`
+	ProgFailCntRaw          uint64  `json:"program_fail_cnt_raw"`
+	EraseFailCntNorm        uint8   `json:"erase_fail_cnt_norm"`
+	EraseFailCntRaw         uint64  `json:"erase_fail_cnt_raw"`
+	WearLevelingCntNorm     uint8   `json:"wear_leveling_cnt_norm"`
+	WearLevelingCntMin      uint16  `json:"wear_leveling_cnt_min"`
+	WearLevelingCntMax      uint16  `json:"wear_leveling_cnt_max"`
+	WearLevelingCntAvg      uint16  `json:"wear_leveling_cnt_avg"`
+	EndtoendErrCntRaw       uint64  `json:"endtoend_err_cnt_raw"`
+	CrcErrCntRaw            uint64  `json:"crc_err_cnt_raw"`
+	MediaWearRaw            uint64  `json:"media_wear_raw"`
+	HostReadsRaw            uint64  `json:"host_reads_raw"`
+	WorkloadTimerRaw        uint64  `json:"workload_timer_raw"`
+	ThermalThrottleStatus   uint8   `json:"thermal_throttle_status"`
+	ThermalThrottleEventCnt uint64  `json:"thermal_throttle_event_cnt"`
+	RetryBufferOverflowCnt  uint64  `json:"retry_buffer_overflow_cnt"`
+	PllLockLossCnt          uint64  `json:"pll_lock_loss_cnt"`
+	NandBytesWritten        uint64  `json:"nand_bytes_written"`
+	HostBytesWritten        uint64  `json:"host_bytes_written"`
+	ClusterSize             uint64  `json:"cluster_size"`
+	MetaWalSize             uint64  `json:"meta_wal_size"`
+	RdbWalSize              uint64  `json:"rdb_wal_size"`
+	LinkPortId              uint32  `json:"link_port_id"`
+	LinkMaxSpeed            float32 `json:"link_max_speed"`
+	LinkMaxWidth            uint32  `json:"link_max_width"`
+	LinkNegSpeed            float32 `json:"link_neg_speed"`
+	LinkNegWidth            uint32  `json:"link_neg_width"`
 }
 
 // TempK returns controller temperature in degrees Kelvin.
@@ -307,6 +318,7 @@ func (sd *SmdDevice) UnmarshalJSON(data []byte) error {
 		sd.Roles.OptionBits = OptionBits(from.RoleBits)
 	}
 
+	// Handle any duplicate target IDs and set flag instead of sysXS target ID.
 	seen := make(map[int32]bool)
 	newTgts := make([]int32, 0, len(sd.TargetIDs))
 	for _, i := range sd.TargetIDs {
@@ -384,6 +396,26 @@ func (nc NvmeController) Free() (tb uint64) {
 	return
 }
 
+// Roles returns bdev_roles for NVMe controller being used in MD-on-SSD mode. Assume that all SMD
+// devices on a controller have the same roles.
+func (nc *NvmeController) Roles() *BdevRoles {
+	if len(nc.SmdDevices) > 0 {
+		return &nc.SmdDevices[0].Roles
+	}
+
+	return &BdevRoles{}
+}
+
+// Rank returns rank on which this NVMe controller is being used. Assume that all SMD devices on a
+// controller have the same rank.
+func (nc *NvmeController) Rank() ranklist.Rank {
+	if len(nc.SmdDevices) > 0 {
+		return nc.SmdDevices[0].Rank
+	}
+
+	return ranklist.NilRank
+}
+
 // NvmeControllers is a type alias for []*NvmeController.
 type NvmeControllers []*NvmeController
 
@@ -397,6 +429,11 @@ func (ncs NvmeControllers) String() string {
 		ss = append(ss, s)
 	}
 	return strings.Join(ss, ", ")
+}
+
+// Len returns the length of the NvmeController reference slice.
+func (ncs NvmeControllers) Len() int {
+	return len(ncs)
 }
 
 // Capacity returns the cumulative total bytes of all controller capacities.

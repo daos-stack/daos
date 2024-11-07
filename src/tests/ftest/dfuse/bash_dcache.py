@@ -51,12 +51,12 @@ class DFuseBashdcacheTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=pil4dfs,dfs
+        :avocado: tags=dfs,dfuse,pil4dfs
         :avocado: tags=DFuseBashdcacheTest,test_bash_dcache_pil4dfs
         """
 
         lib_path = os.path.join(self.prefix, "lib64", "libpil4dfs.so")
-        env_str = f"export LD_PRELOAD={lib_path}; "
+        env_str = f"export LD_PRELOAD={lib_path}; export D_IL_NO_BYPASS=1; "
 
         pool = self.get_pool(connect=False)
         container = self.get_container(pool)

@@ -157,6 +157,13 @@ func printNvmeHealth(stat *storage.NvmeHealth, out io.Writer, opts ...PrintConfi
 			uint64(stat.HostBytesWritten))
 	}
 
+	fmt.Fprintf(out, "PCIe Link Info:\n")
+	fmt.Fprintf(iw, "Port: #%d\n", stat.LinkPortId)
+	fmt.Fprintf(iw, "Max Speed: %s\n", humanize.SI(float64(stat.LinkMaxSpeed), "T/s"))
+	fmt.Fprintf(iw, "Negotiated Speed: %s\n", humanize.SI(float64(stat.LinkNegSpeed), "T/s"))
+	fmt.Fprintf(iw, "Max Width: x%d\n", stat.LinkMaxWidth)
+	fmt.Fprintf(iw, "Negotiated Width: x%d\n", stat.LinkNegWidth)
+
 	return w.Err
 }
 
@@ -206,6 +213,22 @@ func printNvmeFormatResults(inCtrlrs storage.NvmeControllers, out io.Writer, opt
 	return nil
 }
 
+func rolesRankFromSmd(ctrlr *storage.NvmeController) (string, string) {
+	rolesStr := "NA"
+	roles := ctrlr.Roles()
+	if !roles.IsEmpty() {
+		rolesStr = roles.String()
+	}
+
+	rankStr := "None"
+	rank := ctrlr.Rank()
+	if rank != ranklist.NilRank {
+		rankStr = rank.String()
+	}
+
+	return rolesStr, rankStr
+}
+
 // PrintNvmeControllers displays controller details in a verbose table.
 func PrintNvmeControllers(controllers storage.NvmeControllers, out io.Writer, opts ...PrintConfigOption) error {
 	w := txtfmt.NewErrWriter(out)
@@ -238,18 +261,7 @@ func PrintNvmeControllers(controllers storage.NvmeControllers, out io.Writer, op
 		row[fwTitle] = ctrlr.FwRev
 		row[socketTitle] = fmt.Sprint(ctrlr.SocketID)
 		row[capacityTitle] = humanize.Bytes(ctrlr.Capacity())
-		roles := "NA"
-		rank := "None"
-		// Assumes that all SMD devices on a controller have the same roles and rank.
-		if len(ctrlr.SmdDevices) > 0 {
-			sd := ctrlr.SmdDevices[0]
-			roles = sd.Roles.String()
-			if sd.Rank != ranklist.NilRank {
-				rank = sd.Rank.String()
-			}
-		}
-		row[rolesTitle] = roles
-		row[rankTitle] = rank
+		row[rolesTitle], row[rankTitle] = rolesRankFromSmd(ctrlr)
 
 		table = append(table, row)
 	}
@@ -269,7 +281,7 @@ func PrintNvmeHealthMap(hsm control.HostStorageMap, out io.Writer, opts ...Print
 		lineBreak := strings.Repeat("-", len(hosts))
 		fmt.Fprintf(out, "%s\n%s\n%s\n", lineBreak, hosts, lineBreak)
 
-		if len(hss.HostStorage.NvmeDevices) == 0 {
+		if hss.HostStorage.NvmeDevices.Len() == 0 {
 			fmt.Fprintln(out, "  No NVMe devices detected")
 			continue
 		}

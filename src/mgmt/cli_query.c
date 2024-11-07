@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -83,7 +83,7 @@ dc_mgmt_get_bs_state(tse_task_t *task)
 	svr_ep.ep_rank = 0;
 	svr_ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
 	opc = DAOS_RPC_OPCODE(MGMT_GET_BS_STATE, DAOS_MGMT_MODULE,
-			      DAOS_MGMT_VERSION);
+			      dc_mgmt_proto_version);
 
 	rc = crt_req_create(daos_task2ctx(task), &svr_ep, opc, &rpc_req);
 	if (rc != 0) {

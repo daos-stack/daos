@@ -28,7 +28,7 @@ server_config:
 
 pool:
   size: 95%
-  properties: ec_cell_sz:128KiB
+  properties: ec_cell_sz:1MiB
 
 container:
   type: POSIX
@@ -44,7 +44,7 @@ ior: &ior_base
   block_size: '150G'
   sw_deadline: 30
   sw_wearout: 1
-  sw_status_file: "/var/tmp/daos_testing/stoneWallingStatusFile"
+  sw_status_file: stoneWallingStatusFile
 
 ior_sx: &ior_sx
   <<: *ior_base
