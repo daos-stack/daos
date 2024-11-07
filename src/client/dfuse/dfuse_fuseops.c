@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -197,7 +197,7 @@ df_ll_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, int to_set,
 
 	if (handle) {
 		inode                   = handle->doh_ie;
-		handle->doh_linear_read = false;
+		handle->doh_linear_read = 0;
 		DFUSE_IE_STAT_ADD(inode, DS_FSETATTR);
 
 	} else {
