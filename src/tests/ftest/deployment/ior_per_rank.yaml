@@ -22,7 +22,7 @@ server_config:
       storage: auto
 pool:
   mode: 146
-  size: 750G # Cannot use percentage, as it does not work when using pool create for per rank.
+  size: 350G # Cannot use percentage, as it does not work when using pool create for per rank.
   properties: ec_cell_sz:128KiB
 container:
   type: POSIX
