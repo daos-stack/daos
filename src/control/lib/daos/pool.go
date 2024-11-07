@@ -53,10 +53,11 @@ type (
 
 	// PoolRebuildStatus contains detailed information about the pool rebuild process.
 	PoolRebuildStatus struct {
-		Status  int32            `json:"status"`
-		State   PoolRebuildState `json:"state"`
-		Objects uint64           `json:"objects"`
-		Records uint64           `json:"records"`
+		Status       int32            `json:"status"`
+		State        PoolRebuildState `json:"state"`
+		Objects      uint64           `json:"objects"`
+		Records      uint64           `json:"records"`
+		TotalObjects uint64           `json:"total_objects"`
 	}
 
 	// PoolInfo contains information about the pool.
@@ -74,10 +75,11 @@ type (
 		ServiceReplicas  []ranklist.Rank      `json:"svc_reps,omitempty"`
 		Rebuild          *PoolRebuildStatus   `json:"rebuild"`
 		TierStats        []*StorageUsageStats `json:"tier_stats"`
-		EnabledRanks     *ranklist.RankSet    `json:"-"`
-		DisabledRanks    *ranklist.RankSet    `json:"-"`
+		EnabledRanks     *ranklist.RankSet    `json:"enabled_ranks,omitempty"`
+		DisabledRanks    *ranklist.RankSet    `json:"disabled_ranks,omitempty"`
 		PoolLayoutVer    uint32               `json:"pool_layout_ver"`
 		UpgradeLayoutVer uint32               `json:"upgrade_layout_ver"`
+		MemFileBytes     uint64               `json:"mem_file_bytes"`
 	}
 
 	PoolQueryTargetType  int32
@@ -85,9 +87,10 @@ type (
 
 	// PoolQueryTargetInfo contains information about a single target
 	PoolQueryTargetInfo struct {
-		Type  PoolQueryTargetType  `json:"target_type"`
-		State PoolQueryTargetState `json:"target_state"`
-		Space []*StorageUsageStats `json:"space"`
+		Type         PoolQueryTargetType  `json:"target_type"`
+		State        PoolQueryTargetState `json:"target_state"`
+		Space        []*StorageUsageStats `json:"space"`
+		MemFileBytes uint64               `json:"mem_file_bytes"`
 	}
 
 	// StorageTargetUsage represents DAOS target storage usage
@@ -103,7 +106,7 @@ type (
 
 const (
 	// DefaultPoolQueryMask defines the default pool query mask.
-	DefaultPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_ENGINES_DISABLED))
+	DefaultPoolQueryMask = PoolQueryMask(^uint64(0) &^ C.DPI_ENGINES_ENABLED)
 	// HealthOnlyPoolQueryMask defines the mask for health-only queries.
 	HealthOnlyPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_SPACE))
 
@@ -115,6 +118,13 @@ const (
 	PoolQueryOptionEnabledEngines = "enabled_engines"
 	// PoolQueryOptionDisabledEngines retrieves disabled engines as part of the pool query.
 	PoolQueryOptionDisabledEngines = "disabled_engines"
+
+	// PoolConnectFlagReadOnly indicates that the connection is read-only.
+	PoolConnectFlagReadOnly = C.DAOS_PC_RO
+	// PoolConnectFlagReadWrite indicates that the connection is read-write.
+	PoolConnectFlagReadWrite = C.DAOS_PC_RW
+	// PoolConnectFlagExclusive indicates that the connection is exclusive.
+	PoolConnectFlagExclusive = C.DAOS_PC_EX
 )
 
 var poolQueryOptMap = map[C.int]string{
@@ -131,6 +141,15 @@ func resolvePoolQueryOpt(name string) (C.int, error) {
 		}
 	}
 	return 0, errors.Errorf("invalid pool query option: %q", name)
+}
+
+// MustNewPoolQueryMask returns a PoolQueryMask initialized with the specified options.
+// NB: If an error occurs due to an invalid option, it panics.
+func MustNewPoolQueryMask(options ...string) (mask PoolQueryMask) {
+	if err := mask.SetOptions(options...); err != nil {
+		panic(err)
+	}
+	return
 }
 
 // SetOptions sets the pool query mask to include the specified options.
@@ -203,7 +222,7 @@ func (pqm *PoolQueryMask) UnmarshalJSON(data []byte) error {
 	}
 
 	var newVal PoolQueryMask
-	for _, opt := range strings.Split(string(data), ",") {
+	for _, opt := range strings.Split(strings.Trim(string(data), "\""), ",") {
 		for k, v := range poolQueryOptMap {
 			if v == opt {
 				newVal |= PoolQueryMask(k)
@@ -334,6 +353,8 @@ const (
 	StorageMediaTypeScm = StorageMediaType(mgmtpb.StorageMediaType_SCM)
 	// StorageMediaTypeNvme indicates that the media is NVMe SSD
 	StorageMediaTypeNvme = StorageMediaType(mgmtpb.StorageMediaType_NVME)
+	// StorageMediaTypeMax indicates the end of the StorageMediaType array
+	StorageMediaTypeMax = StorageMediaType(StorageMediaTypeNvme + 1)
 )
 
 func (smt StorageMediaType) String() string {
@@ -346,6 +367,18 @@ func (smt StorageMediaType) String() string {
 
 func (smt StorageMediaType) MarshalJSON() ([]byte, error) {
 	return []byte(`"` + smt.String() + `"`), nil
+}
+
+func (smt *StorageMediaType) UnmarshalJSON(data []byte) error {
+	mediaTypeStr := strings.ToUpper(strings.Trim(string(data), "\""))
+
+	sm, err := unmarshalStrVal(mediaTypeStr, mgmtpb.StorageMediaType_value, mgmtpb.StorageMediaType_name)
+	if err != nil {
+		return errors.Wrap(err, "failed to unmarshal StorageMediaType")
+	}
+	*smt = StorageMediaType(sm)
+
+	return nil
 }
 
 // PoolRebuildState indicates the current state of the pool rebuild process.
@@ -373,7 +406,7 @@ func (prs PoolRebuildState) MarshalJSON() ([]byte, error) {
 }
 
 func (prs *PoolRebuildState) UnmarshalJSON(data []byte) error {
-	stateStr := strings.ToUpper(string(data))
+	stateStr := strings.ToUpper(strings.Trim(string(data), "\""))
 
 	state, err := unmarshalStrVal(stateStr, mgmtpb.PoolRebuildStatus_State_value, mgmtpb.PoolRebuildStatus_State_name)
 	if err != nil {

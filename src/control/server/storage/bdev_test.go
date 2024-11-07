@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -193,9 +193,10 @@ func Test_Convert_SmdDevice(t *testing.T) {
 		`_throttle_status":1,"thermal_throttle_event_cnt":1,"retry_buffer` +
 		`_overflow_cnt":1,"pll_lock_loss_cnt":1,"nand_bytes_written":1,"` +
 		`host_bytes_written":1,"cluster_size":0,"meta_wal_size":0,"rdb_wal` +
-		`_size":0},"namespaces":[{"id":1,"size":2000000000000}],"smd_devices` +
-		`":null,"dev_state":"EVICTED","led_state":"ON"},"ctrlr_namespace` +
-		`_id":0}`
+		`_size":0,"link_port_id":1,"link_max_speed":1000000000,"link_max_width":4,` +
+		`"link_neg_speed":1000000000,"link_neg_width":4},"namespaces":[{"id":1,` +
+		`"size":2000000000000}],"smd_devices":null,"dev_state":"EVICTED",` +
+		`"led_state":"ON"},"ctrlr_namespace_id":0}`
 	if diff := cmp.Diff(expOut, string(out)); diff != "" {
 		t.Fatalf("expected json output to match (-want, +got):\n%s\n", diff)
 	}
@@ -343,21 +344,28 @@ func Test_CalcMinHugepages(t *testing.T) {
 			},
 			expErr: errors.New("numTargets"),
 		},
-		"2KB pagesize; 16 targets": {
+		"2MiB pagesize; 1 target": {
+			input: &common.MemInfo{
+				HugepageSizeKiB: 2048,
+			},
+			numTargets: 1,
+			expPages:   512,
+		},
+		"2MiB pagesize; 16 targets": {
 			input: &common.MemInfo{
 				HugepageSizeKiB: 2048,
 			},
 			numTargets: 16,
 			expPages:   8192,
 		},
-		"2KB pagesize; 31 targets": {
+		"2MiB pagesize; 31 targets": {
 			input: &common.MemInfo{
 				HugepageSizeKiB: 2048,
 			},
 			numTargets: 31,
 			expPages:   15872,
 		},
-		"1GB pagesize; 16 targets": {
+		"1GiB pagesize; 16 targets": {
 			input: &common.MemInfo{
 				HugepageSizeKiB: 1048576,
 			},

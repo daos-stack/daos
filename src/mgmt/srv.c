@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -19,6 +19,8 @@
 #include <signal.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/rsvc.h>
+#include <daos_srv/pool.h>
+#include <daos_srv/security.h>
 #include <daos/drpc_modules.h>
 #include <daos_mgmt.h>
 
@@ -52,7 +54,8 @@ static struct crt_corpc_ops ds_mgmt_hdlr_tgt_map_update_co_ops = {
 	    .dr_corpc_ops = e,                                                                     \
 	},
 
-static struct daos_rpc_handler mgmt_handlers[] = {MGMT_PROTO_CLI_RPC_LIST MGMT_PROTO_SRV_RPC_LIST};
+static struct daos_rpc_handler mgmt_handlers_v2[] = {MGMT_PROTO_CLI_RPC_LIST MGMT_PROTO_SRV_RPC_LIST_V2};
+static struct daos_rpc_handler mgmt_handlers_v3[] = {MGMT_PROTO_CLI_RPC_LIST MGMT_PROTO_SRV_RPC_LIST};
 
 #undef X
 
@@ -429,6 +432,150 @@ void ds_mgmt_pool_find_hdlr(crt_rpc_t *rpc)
 }
 
 static int
+check_cred_pool_access(uuid_t pool_uuid, d_rank_list_t *svc_ranks, int flags, d_iov_t *cred)
+{
+	daos_prop_t            *props           = NULL;
+	struct daos_prop_entry *acl_entry       = NULL;
+	struct daos_prop_entry *owner_entry     = NULL;
+	struct daos_prop_entry *owner_grp_entry = NULL;
+	struct d_ownership      owner;
+	uint64_t                sec_capas;
+	int                     rc;
+
+	rc = ds_mgmt_pool_get_acl(pool_uuid, svc_ranks, &props);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": failed to retrieve ACL props", DP_UUID(pool_uuid));
+		return rc;
+	}
+
+	acl_entry = daos_prop_entry_get(props, DAOS_PROP_PO_ACL);
+	D_ASSERT(acl_entry != NULL);
+	D_ASSERT(acl_entry->dpe_val_ptr != NULL);
+
+	owner_entry = daos_prop_entry_get(props, DAOS_PROP_PO_OWNER);
+	D_ASSERT(owner_entry != NULL);
+	D_ASSERT(owner_entry->dpe_str != NULL);
+
+	owner_grp_entry = daos_prop_entry_get(props, DAOS_PROP_PO_OWNER_GROUP);
+	D_ASSERT(owner_grp_entry != NULL);
+	D_ASSERT(owner_grp_entry->dpe_str != NULL);
+
+	owner.user  = owner_entry->dpe_str;
+	owner.group = owner_grp_entry->dpe_str;
+
+	rc = ds_sec_pool_get_capabilities(flags, cred, &owner, acl_entry->dpe_val_ptr, &sec_capas);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": failed to read sec capabilities", DP_UUID(pool_uuid));
+		D_GOTO(out_props, rc);
+	}
+
+	if (!ds_sec_pool_can_connect(sec_capas)) {
+		D_GOTO(out_props, rc = -DER_NO_PERM);
+	}
+
+out_props:
+	daos_prop_free(props);
+	return rc;
+}
+
+void
+ds_mgmt_pool_list_hdlr(crt_rpc_t *rpc)
+{
+	struct mgmt_pool_list_in   *in;
+	struct mgmt_pool_list_out  *out;
+	size_t                      n_mgmt     = 0;
+	size_t                      n_rpc      = 0;
+	daos_mgmt_pool_info_t      *mgmt_pools = NULL;
+	struct mgmt_pool_list_pool *rpc_pools  = NULL;
+	int                         i;
+	int                         rc;
+	int                         chk_rc;
+
+	in = crt_req_get(rpc);
+	D_ASSERT(in != NULL);
+
+	out = crt_reply_get(rpc);
+	D_ASSERT(out != NULL);
+
+	if (in->pli_npools > 0) {
+		D_ALLOC_ARRAY(mgmt_pools, in->pli_npools);
+		if (mgmt_pools == NULL) {
+			D_ERROR("failed to alloc mgmt pools\n");
+			D_GOTO(send_resp, rc = -DER_NOMEM);
+		}
+	}
+
+	n_mgmt = in->pli_npools;
+	rc     = ds_get_pool_list(&n_mgmt, mgmt_pools);
+	if (rc != 0) {
+		DL_ERROR(rc, "ds_get_pool_list() failed");
+		D_GOTO(send_resp, rc);
+	}
+
+	/* caller just needs the number of pools */
+	if (in->pli_npools == 0) {
+		out->plo_npools = n_mgmt;
+		D_GOTO(send_resp, rc);
+	}
+
+	D_ALLOC_ARRAY(rpc_pools, n_mgmt);
+	if (rpc_pools == NULL) {
+		D_ERROR("failed to alloc response pools\n");
+		D_GOTO(send_resp, rc = -DER_NOMEM);
+	}
+
+	for (i = 0; i < n_mgmt; i++) {
+		daos_mgmt_pool_info_t      *mgmt_pool = &mgmt_pools[i];
+		struct mgmt_pool_list_pool *rpc_pool  = &rpc_pools[n_rpc];
+
+		chk_rc = check_cred_pool_access(mgmt_pool->mgpi_uuid, mgmt_pool->mgpi_svc,
+						DAOS_PC_RO, &in->pli_cred);
+		if (chk_rc != 0) {
+			if (chk_rc != -DER_NO_PERM)
+				DL_ERROR(chk_rc, DF_UUID ": failed to check pool access",
+					 DP_UUID(mgmt_pool->mgpi_uuid));
+			continue;
+		}
+		uuid_copy(rpc_pool->plp_uuid, mgmt_pool->mgpi_uuid);
+		rpc_pool->plp_label    = mgmt_pool->mgpi_label;
+		rpc_pool->plp_svc_list = mgmt_pool->mgpi_svc;
+		n_rpc++;
+	}
+	out->plo_pools.ca_arrays = rpc_pools;
+	out->plo_pools.ca_count  = n_rpc;
+	out->plo_npools          = n_rpc;
+
+send_resp:
+	out->plo_op.mo_rc = rc;
+
+	if (rc == 0) {
+		if (n_rpc > 0)
+			D_DEBUG(DB_MGMT, "returning %zu/%zu pools\n", n_rpc, n_mgmt);
+		else
+			D_DEBUG(DB_MGMT, "returning %zu pools\n", n_mgmt);
+	} else {
+		DL_ERROR(rc, "failed to list pools");
+	}
+
+	rc = crt_reply_send(rpc);
+	if (rc != 0)
+		DL_ERROR(rc, "crt_reply_send() failed");
+
+	if (n_mgmt > 0 && mgmt_pools != NULL) {
+		for (i = 0; i < n_mgmt; i++) {
+			daos_mgmt_pool_info_t *mgmt_pool = &mgmt_pools[i];
+			if (mgmt_pool->mgpi_label)
+				D_FREE(mgmt_pool->mgpi_label);
+			if (mgmt_pool->mgpi_svc)
+				d_rank_list_free(mgmt_pool->mgpi_svc);
+		}
+		D_FREE(mgmt_pools);
+	}
+	if (rpc_pools)
+		D_FREE(rpc_pools);
+}
+
+static int
 ds_mgmt_init()
 {
 	int rc;
@@ -464,16 +611,16 @@ ds_mgmt_cleanup()
 }
 
 struct dss_module mgmt_module = {
-    .sm_name          = "mgmt",
-    .sm_mod_id        = DAOS_MGMT_MODULE,
-    .sm_ver           = DAOS_MGMT_VERSION,
-    .sm_proto_count   = 1,
-    .sm_init          = ds_mgmt_init,
-    .sm_fini          = ds_mgmt_fini,
-    .sm_setup         = ds_mgmt_setup,
-    .sm_cleanup       = ds_mgmt_cleanup,
-    .sm_proto_fmt     = {&mgmt_proto_fmt},
-    .sm_cli_count     = {MGMT_PROTO_CLI_COUNT},
-    .sm_handlers      = {mgmt_handlers},
-    .sm_drpc_handlers = mgmt_drpc_handlers,
+	.sm_name          = "mgmt",
+	.sm_mod_id        = DAOS_MGMT_MODULE,
+	.sm_ver           = DAOS_MGMT_VERSION,
+	.sm_proto_count   = 2,
+	.sm_init          = ds_mgmt_init,
+	.sm_fini          = ds_mgmt_fini,
+	.sm_setup         = ds_mgmt_setup,
+	.sm_cleanup       = ds_mgmt_cleanup,
+	.sm_proto_fmt     = {&mgmt_proto_fmt_v2, &mgmt_proto_fmt_v3},
+	.sm_cli_count     = {MGMT_PROTO_CLI_COUNT, MGMT_PROTO_CLI_COUNT},
+	.sm_handlers      = {mgmt_handlers_v2, mgmt_handlers_v3},
+	.sm_drpc_handlers = mgmt_drpc_handlers,
 };

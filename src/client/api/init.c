@@ -34,13 +34,15 @@
 static pthread_mutex_t	module_lock = PTHREAD_MUTEX_INITIALIZER;
 
 /** refcount on how many times daos_init has been called */
-static int		module_initialized;
+static int                 module_initialized;
+
+/* clang-format off */
 
 const struct daos_task_api dc_funcs[] = {
 	/** Management */
 	{dc_deprecated, 0},
 	{dc_deprecated, 0},
-	{dc_deprecated, 0},
+	{dc_mgmt_pool_list, sizeof(daos_mgmt_pool_list_t)},
 	{dc_debug_set_params, sizeof(daos_set_params_t)},
 	{dc_mgmt_get_bs_state, sizeof(daos_mgmt_get_bs_state_t)},
 
@@ -138,6 +140,8 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_pipeline_run, sizeof(daos_pipeline_run_t)},
 #endif
 };
+
+/* clang-format on */
 
 /**
  * Initialize DAOS client library.
@@ -309,7 +313,7 @@ unlock:
 int
 daos_fini(void)
 {
-	int	rc;
+	int rc;
 
 	D_MUTEX_LOCK(&module_lock);
 	if (module_initialized == 0) {
@@ -342,8 +346,7 @@ daos_fini(void)
 
 	rc = dc_mgmt_notify_exit();
 	if (rc != 0)
-		D_ERROR("failed to disconnect some resources may leak, "
-			DF_RC"\n", DP_RC(rc));
+		D_ERROR("failed to disconnect some resources may leak, " DF_RC "\n", DP_RC(rc));
 
 	dc_tm_fini();
 	dc_mgmt_drop_attach_info();
@@ -357,4 +360,33 @@ daos_fini(void)
 unlock:
 	D_MUTEX_UNLOCK(&module_lock);
 	return rc;
+}
+
+/**
+ * Re-initialize the DAOS library in the child process after fork.
+ */
+int
+daos_reinit(void)
+{
+	int rc;
+
+	rc = daos_eq_lib_reset_after_fork();
+	if (rc)
+		return rc;
+
+	daos_dti_reset();
+
+	/**
+	 * Mark all pool and container handles owned by the parent process as if they were created
+	 * in the child processes with g2l to avoid confusing the DAOS engines.
+	 */
+	rc = dc_pool_mark_all_slave();
+	if (rc)
+		return rc;
+
+	rc = dc_cont_mark_all_slave();
+	if (rc)
+		return rc;
+
+	return 0;
 }

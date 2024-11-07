@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -110,12 +110,18 @@ int main(int argc, char **argv)
 	char		*env;
 	char		*cur_iface_str;
 	char		*new_iface_str;
+	char            *cur_domain_str = NULL;
+	char            *new_domain_str = NULL;
 	int		iface_idx = -1;
 	int		num_ifaces;
 	crt_context_t	c1,c2;
 	char		*uri1;
 	char		*uri2;
 	int		rc;
+
+	/* Set these 2 if they are not set so that test still runs by default */
+	setenv("D_PROVIDER", "ofi+tcp", 0);
+	setenv("D_INTERFACE", "eth0", 0);
 
 	rc = d_log_init();
 	assert(rc == 0);
@@ -164,8 +170,23 @@ int main(int argc, char **argv)
 	/* Append loopback to the current interface list */
 	D_ASPRINTF(new_iface_str, "%s,lo", cur_iface_str);
 	D_ASSERTF(new_iface_str != NULL, "Failed to allocate string");
-
 	setenv("D_INTERFACE", new_iface_str, 1);
+
+	/* Append ',lo' to domain string as 'lo' should be available everywhere */
+	env = getenv("D_DOMAIN");
+
+	/* Domain is optional, can be set for manual testing */
+	if (env != NULL) {
+		/* Save current domain value */
+		D_ASPRINTF(cur_domain_str, "%s", env);
+		D_ASSERTF(cur_domain_str != NULL, "Failed to allocate string");
+
+		/* Append loopback to the current domain list */
+		D_ASPRINTF(new_domain_str, "%s,lo", cur_domain_str);
+		D_ASSERTF(new_domain_str != NULL, "Failed to allocate string");
+
+		setenv("D_DOMAIN", new_domain_str, 1);
+	}
 
 	/* Reinitialize as a client to be able to use multi-interface APIs */
 	rc = crt_init(0, 0);
@@ -204,6 +225,8 @@ int main(int argc, char **argv)
 
 	D_FREE(cur_iface_str);
 	D_FREE(new_iface_str);
+	D_FREE(cur_domain_str);
+	D_FREE(new_domain_str);
 	D_FREE(uri1);
 	D_FREE(uri2);
 
@@ -217,6 +240,28 @@ int main(int argc, char **argv)
 	D_ASSERTF(rc == 0, "crt_finalize() failed");
 	DBG_PRINT("Multi-interface context tests PASSED\n");
 
+	/* Test CXI as CaRT treats interface differently for it from other providers */
+	DBG_PRINT("Multi-interface tests, stage 2\n");
+	setenv("D_PROVIDER", "ofi+cxi", 1);
+	setenv("D_INTERFACE", "hsn0,hsn1,hsn2,hsn3,hsn4,hsn5,hsn6,hsn7", 1);
+	setenv("D_DOMAIN", "cxi0,cxi1,cxi2,cxi3,cxi4,cxi5,cxi6,cxi7", 1);
+
+	/* Reinitialize as a client to be able to use multi-interface APIs */
+	rc = crt_init(0, 0);
+	D_ASSERTF(rc == 0, "crt_init() failed; rc=%d\n", rc);
+
+	/* Test multi-interface APIs */
+	num_ifaces = crt_num_ifaces_get();
+	D_ASSERTF(num_ifaces == 8, "expected 8, got %d interafces\n", num_ifaces);
+
+	rc = crt_iface_name2idx("hsn4", &iface_idx);
+	D_ASSERTF(rc == 0, "crt_iface_name2idx() failed; rc=%d\n", rc);
+	D_ASSERTF(iface_idx == 4, "Expected index 4, got %d\n", iface_idx);
+
+	rc = crt_finalize();
+	D_ASSERTF(rc == 0, "crt_finalize() failed");
+
+	DBG_PRINT("Multi-interface tests, stage 2 PASSED\n");
 	d_log_fini();
 
 	return 0;

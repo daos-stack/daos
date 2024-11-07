@@ -97,6 +97,8 @@ class DFuseFdTest(TestWithServers):
         if il_lib is not None:
             lib_path = os.path.join(self.prefix, "lib64", il_lib)
             env_str = f"export LD_PRELOAD={lib_path}; "
+            if il_lib == 'libpil4dfs.so':
+                env_str = env_str + 'export D_IL_NO_BYPASS=1; '
         else:
             env_str = ""
 
@@ -137,7 +139,7 @@ class DFuseFdTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=dfuse,dfs
+        :avocado: tags=dfs,dfuse
         :avocado: tags=DFuseFdTest,test_bashfd
         """
         self.run_bashfd()
@@ -150,7 +152,7 @@ class DFuseFdTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=dfuse,dfs,ioil
+        :avocado: tags=dfs,dfuse,ioil
         :avocado: tags=DFuseFdTest,test_bashfd_ioil
         """
         self.run_bashfd(il_lib="libioil.so")
@@ -163,7 +165,7 @@ class DFuseFdTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=dfuse,dfs,pil4dfs
+        :avocado: tags=dfs,dfuse,pil4dfs
         :avocado: tags=DFuseFdTest,test_bashfd_pil4dfs
         """
         self.run_bashfd(il_lib="libpil4dfs.so")

@@ -1718,15 +1718,20 @@ dc_obj_retry_delay(tse_task_t *task, int err, uint16_t *retry_cnt, uint16_t *inp
 		   uint32_t timeout_sec)
 {
 	uint32_t	delay = 0;
+	uint32_t	limit = 4;
 
 	/*
-	 * Randomly delay 5 - 68 us if it is not the first retry for
+	 * Randomly delay 5 ~ 1028 us if it is not the first retry for
 	 * -DER_INPROGRESS || -DER_UPDATE_AGAIN cases.
 	 */
 	++(*retry_cnt);
 	if (err == -DER_INPROGRESS || err == -DER_UPDATE_AGAIN) {
 		if (++(*inprogress_cnt) > 1) {
-			delay = (d_rand() & ((1 << 6) - 1)) + 5;
+			limit += *inprogress_cnt;
+			if (limit > 10)
+				limit = 10;
+
+			delay = (d_rand() & ((1 << limit) - 1)) + 5;
 			/* Rebuild is being established on the server side, wait a bit longer */
 			if (err == -DER_UPDATE_AGAIN)
 				delay <<= 10;
@@ -4684,12 +4689,15 @@ obj_comp_cb(tse_task_t *task, void *data)
 	int			rc;
 
 	obj_auxi = tse_task_stack_pop(task, sizeof(*obj_auxi));
-	obj_auxi->io_retry = 0;
-	obj_auxi->result = 0;
-	obj_auxi->csum_retry = 0;
-	obj_auxi->tx_uncertain = 0;
-	obj_auxi->nvme_io_err = 0;
 	obj = obj_auxi->obj;
+
+	/** Clear various bits for a new attempt */
+	obj_auxi->io_retry	= 0;
+	obj_auxi->result	= 0;
+	obj_auxi->csum_retry	= 0;
+	obj_auxi->tx_uncertain	= 0;
+	obj_auxi->nvme_io_err	= 0;
+
 	rc = obj_comp_cb_internal(obj_auxi);
 	if (rc != 0 || obj_auxi->result) {
 		if (task->dt_result == 0)
@@ -4760,9 +4768,28 @@ obj_comp_cb(tse_task_t *task, void *data)
 						obj_auxi->tx_uncertain = 1;
 					else
 						obj_auxi->nvme_io_err = 1;
-				} else if (task->dt_result != -DER_NVME_IO) {
-					/* Don't retry update for CSUM & UNCERTAIN errors */
-					obj_auxi->io_retry = 0;
+				} else {
+					if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE &&
+					    task->dt_result == -DER_CSUM) {
+						struct shard_rw_args *rw_arg = &obj_auxi->rw_args;
+
+						/** Retry a few times on checksum error on update */
+						if (rw_arg->csum_retry_cnt < MAX_CSUM_RETRY) {
+							obj_auxi->csum_retry = 1;
+							rw_arg->csum_retry_cnt++;
+							D_DEBUG(DB_IO, DF_OID" checksum error on "
+								"update, retrying\n",
+								DP_OID(obj->cob_md.omd_id));
+						} else {
+							D_ERROR(DF_OID" checksum error on update, "
+								"too many retries. Failing I/O\n",
+								DP_OID(obj->cob_md.omd_id));
+							obj_auxi->io_retry = 0;
+						}
+					} else if (task->dt_result != -DER_NVME_IO) {
+						/* Don't retry update for UNCERTAIN errors */
+						obj_auxi->io_retry = 0;
+					}
 				}
 			} else {
 				obj_auxi->io_retry = 0;
@@ -4834,11 +4861,14 @@ obj_comp_cb(tse_task_t *task, void *data)
 		D_ASSERT(daos_handle_is_inval(obj_auxi->th));
 		D_ASSERT(obj_is_modification_opc(obj_auxi->opc));
 
-		if (task->dt_result == -DER_TX_ID_REUSED && obj_auxi->retry_cnt != 0)
-			/* XXX: it is must because miss to set "RESEND" flag, that is bug. */
-			D_ASSERTF(0,
-				  "Miss 'RESEND' flag (%x) when resend the RPC for task %p: %u\n",
-				  obj_auxi->flags, task, obj_auxi->retry_cnt);
+		if (task->dt_result == -DER_TX_ID_REUSED && obj_auxi->retry_cnt != 0) {
+			D_ERROR("TX ID maybe reused for unknown reason, "
+				"task %p, opc %u, flags %x, retry_cnt %u\n",
+				task, obj_auxi->opc, obj_auxi->flags, obj_auxi->retry_cnt);
+			task->dt_result = -DER_IO;
+			obj_auxi->io_retry = 0;
+			goto args_fini;
+		}
 
 		if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE) {
 			daos_obj_rw_t		*api_args = dc_task_get_args(obj_auxi->obj_task);
@@ -4864,6 +4894,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 		}
 	}
 
+args_fini:
 	if (obj_auxi->opc == DAOS_OBJ_RPC_COLL_PUNCH)
 		obj_coll_oper_args_fini(&obj_auxi->p_args.pa_coa);
 
@@ -6288,7 +6319,9 @@ obj_ec_get_parity_or_alldata_shard(struct obj_auxi_args *obj_auxi, unsigned int 
 			shard_idx = grp_start + i;
 			if (obj_shard_is_invalid(obj, shard_idx, DAOS_OBJ_RPC_ENUMERATE)) {
 				if (++fail_cnt > obj_ec_parity_tgt_nr(oca)) {
-					D_ERROR(DF_OID" reach max failure "DF_RC"\n",
+					D_ERROR(DF_CONT", obj "DF_OID" reach max failure "DF_RC"\n",
+						DP_CONT(obj->cob_pool->dp_pool,
+							obj->cob_co->dc_uuid),
 						DP_OID(obj->cob_md.omd_id), DP_RC(-DER_DATA_LOSS));
 					D_GOTO(out, shard = -DER_DATA_LOSS);
 				}
@@ -6435,7 +6468,8 @@ obj_list_shards_get(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 	}
 
 	if (rc < 0) {
-		D_ERROR(DF_OID" Can not find shard grp %d: "DF_RC"\n",
+		D_ERROR(DF_CONT", obj "DF_OID" Can not find shard grp %d: "DF_RC"\n",
+			DP_CONT(obj->cob_pool->dp_pool, obj->cob_co->dc_uuid),
 			DP_OID(obj->cob_md.omd_id), grp_idx, DP_RC(rc));
 		D_GOTO(out, rc);
 	}

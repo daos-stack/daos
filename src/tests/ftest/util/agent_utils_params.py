@@ -48,6 +48,9 @@ class DaosAgentYamlParameters(YamlParameters):
         # enable easy log file archiving by launch.py
         log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
 
+        # Support specifying a user owned runtime directory
+        default_runtime_dir = os.environ.get("DAOS_AGENT_DRPC_DIR", "/var/run/daos_agent")
+
         # daos_agent parameters:
         #   - runtime_dir: <str>, e.g. /var/run/daos_agent
         #       Use the given directory for creating Unix domain sockets
@@ -69,7 +72,7 @@ class DaosAgentYamlParameters(YamlParameters):
         #        Enable client telemetry for all client processes.
         #   - telemetry_retain: <str>, e.g. 5m
         #        Time to retain per-client telemetry data.
-        self.runtime_dir = BasicParameter(None, "/var/run/daos_agent")
+        self.runtime_dir = BasicParameter(None, default_runtime_dir)
         self.log_file = LogParameter(log_dir, None, "daos_agent.log")
         self.control_log_mask = BasicParameter(None, "debug")
         self.exclude_fabric_ifaces = BasicParameter(None)

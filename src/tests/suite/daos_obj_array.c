@@ -1421,8 +1421,8 @@ test_async_io(void *arg)
 	d_iov_t			sg_iovs[NUM_IOS];
 	daos_iod_t		iods[NUM_IOS];
 	daos_recx_t		recx[NUM_IOS];
-	char			akey_str[NUM_IOS][10];
-	char			dkey_str[NUM_IOS][10];
+	char			akey_str[NUM_IOS][16];
+	char			dkey_str[NUM_IOS][16];
 	char			buf[NUM_IOS][IO_SIZE];
 	daos_handle_t		eqh;
 	int			i, rc;

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,6 +7,7 @@
 package ranklist
 
 import (
+	"encoding/json"
 	"math/bits"
 	"strings"
 
@@ -138,6 +139,41 @@ func (rs *RankSet) Ranks() (out []Rank) {
 	}
 
 	return
+}
+
+func (rs *RankSet) MarshalJSON() ([]byte, error) {
+	if rs == nil {
+		return json.Marshal(nil)
+	}
+	return json.Marshal(rs.Ranks())
+}
+
+func (rs *RankSet) UnmarshalJSON(data []byte) error {
+	if rs == nil {
+		return errors.New("nil RankSet")
+	}
+
+	var ranks []Rank
+	if err := json.Unmarshal(data, &ranks); err == nil {
+		rs.Replace(RankSetFromRanks(ranks))
+		return nil
+	}
+
+	// If the input doesn't parse as a JSON array, try parsing
+	// it as a ranged string.
+	trimmed := strings.Trim(string(data), "\"")
+	if trimmed == "[]" {
+		rs.Replace(&RankSet{})
+		return nil
+	}
+
+	newRs, err := CreateRankSet(trimmed)
+	if err != nil {
+		return err
+	}
+	rs.Replace(newRs)
+
+	return nil
 }
 
 // MustCreateRankSet is like CreateRankSet but will panic on error.

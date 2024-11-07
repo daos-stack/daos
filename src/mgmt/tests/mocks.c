@@ -384,18 +384,17 @@ mock_ds_mgmt_pool_query_targets_teardown(void)
 	}
 }
 
-int	ds_mgmt_cont_set_owner_return;
-uuid_t	ds_mgmt_cont_set_owner_pool;
-uuid_t	ds_mgmt_cont_set_owner_cont;
+int      ds_mgmt_cont_set_owner_return;
+uuid_t   ds_mgmt_cont_set_owner_pool;
+char    *ds_mgmt_cont_set_owner_cont;
 char	*ds_mgmt_cont_set_owner_user;
 char	*ds_mgmt_cont_set_owner_group;
 int
-ds_mgmt_cont_set_owner(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-		       uuid_t cont_uuid, const char *user,
-		       const char *group)
+ds_mgmt_cont_set_owner(uuid_t pool_uuid, d_rank_list_t *svc_ranks, const char *cont_id,
+		       const char *user, const char *group)
 {
 	uuid_copy(ds_mgmt_cont_set_owner_pool, pool_uuid);
-	uuid_copy(ds_mgmt_cont_set_owner_cont, cont_uuid);
+	D_STRNDUP(ds_mgmt_cont_set_owner_cont, cont_id, DAOS_PROP_LABEL_MAX_LEN);
 	if (user != NULL)
 		D_STRNDUP(ds_mgmt_cont_set_owner_user, user,
 			  DAOS_ACL_MAX_PRINCIPAL_LEN);
@@ -412,12 +411,13 @@ mock_ds_mgmt_cont_set_owner_setup(void)
 	ds_mgmt_cont_set_owner_return = 0;
 
 	uuid_clear(ds_mgmt_cont_set_owner_pool);
-	uuid_clear(ds_mgmt_cont_set_owner_cont);
+	ds_mgmt_cont_set_owner_cont  = NULL;
 	ds_mgmt_cont_set_owner_user = NULL;
 	ds_mgmt_cont_set_owner_group = NULL;
 }
 void mock_ds_mgmt_cont_set_owner_teardown(void)
 {
+	D_FREE(ds_mgmt_cont_set_owner_cont);
 	D_FREE(ds_mgmt_cont_set_owner_user);
 	D_FREE(ds_mgmt_cont_set_owner_group);
 }
@@ -427,7 +427,8 @@ uuid_t  ds_mgmt_target_update_uuid;
 int
 ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 				 struct pool_target_addr_list *target_addrs,
-				 pool_comp_state_t state, size_t scm_size, size_t nvme_size)
+				 pool_comp_state_t state, size_t scm_size, size_t nvme_size,
+				 size_t meta_blob_bytes)
 {
 	uuid_copy(ds_mgmt_target_update_uuid, pool_uuid);
 	return ds_mgmt_target_update_return;
@@ -445,7 +446,7 @@ uuid_t  ds_mgmt_pool_extend_uuid;
 int
 ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		    d_rank_list_t *rank_list,
-		    char *tgt_dev,  size_t scm_size, size_t nvme_size,
+		    char *tgt_dev,  size_t scm_size, size_t nvme_size, size_t meta_blob_bytes,
 		    size_t domains_nr, uint32_t *domains)
 {
 	uuid_copy(ds_mgmt_pool_extend_uuid, pool_uuid);
@@ -525,7 +526,7 @@ ds_mgmt_group_update_handler(struct mgmt_grp_up_in *in)
 int
 ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev, d_rank_list_t *targets,
 		    size_t scm_size, size_t nvme_size, daos_prop_t *prop, d_rank_list_t **svcp,
-		    int domains_nr, uint32_t *domains, size_t meta_blob_size)
+		    int domains_nr, uint32_t *domains, size_t meta_blob_bytes)
 {
 	return 0;
 }

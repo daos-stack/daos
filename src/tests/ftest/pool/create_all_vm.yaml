@@ -45,5 +45,3 @@ server_config:
               scm_hugepages_disabled: false
             disabled:
               scm_hugepages_disabled: true
-pool:
-  control_method: dmg

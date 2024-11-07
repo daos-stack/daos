@@ -22,7 +22,18 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
 
-func TestPretty_PrintPoolQueryTargetResp(t *testing.T) {
+func TestPretty_PrintPoolQueryTargetResponse(t *testing.T) {
+	tier0 := &daos.StorageUsageStats{
+		Total:     6000000000,
+		Free:      5000000000,
+		MediaType: daos.StorageMediaTypeScm,
+	}
+	tier1 := &daos.StorageUsageStats{
+		Total:     100000000000,
+		Free:      90000000000,
+		MediaType: daos.StorageMediaTypeNvme,
+	}
+
 	for name, tc := range map[string]struct {
 		pqtr        *control.PoolQueryTargetResp
 		expPrintStr string
@@ -44,58 +55,22 @@ func TestPretty_PrintPoolQueryTargetResp(t *testing.T) {
 					{
 						Type:  0,
 						State: daos.PoolTargetStateDown,
-						Space: []*daos.StorageUsageStats{
-							{
-								Total: 6000000000,
-								Free:  5000000000,
-							},
-							{
-								Total: 100000000000,
-								Free:  90000000000,
-							},
-						},
+						Space: []*daos.StorageUsageStats{tier0, tier1},
 					},
 					{
 						Type:  0,
 						State: daos.PoolTargetStateUpIn,
-						Space: []*daos.StorageUsageStats{
-							{
-								Total: 6000000000,
-								Free:  5000000000,
-							},
-							{
-								Total: 100000000000,
-								Free:  90000000000,
-							},
-						},
+						Space: []*daos.StorageUsageStats{tier0, tier1},
 					},
 					{
 						Type:  0,
 						State: daos.PoolTargetStateDownOut,
-						Space: []*daos.StorageUsageStats{
-							{
-								Total: 6000000000,
-								Free:  5000000000,
-							},
-							{
-								Total: 100000000000,
-								Free:  90000000000,
-							},
-						},
+						Space: []*daos.StorageUsageStats{tier0, tier1},
 					},
 					{
 						Type:  0,
 						State: daos.PoolTargetStateUpIn,
-						Space: []*daos.StorageUsageStats{
-							{
-								Total: 6000000000,
-								Free:  5000000000,
-							},
-							{
-								Total: 100000000000,
-								Free:  90000000000,
-							},
-						},
+						Space: []*daos.StorageUsageStats{tier0, tier1},
 					},
 				},
 			},
@@ -104,28 +79,28 @@ Target: type unknown, state down
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
-- Storage tier 1 (NVMe):
+- Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
 Target: type unknown, state up_in
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
-- Storage tier 1 (NVMe):
+- Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
 Target: type unknown, state down_out
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
-- Storage tier 1 (NVMe):
+- Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
 Target: type unknown, state up_in
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
-- Storage tier 1 (NVMe):
+- Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
 `,
@@ -137,58 +112,22 @@ Target: type unknown, state up_in
 					{
 						Type:  0,
 						State: 42,
-						Space: []*daos.StorageUsageStats{
-							{
-								Total: 6000000000,
-								Free:  5000000000,
-							},
-							{
-								Total: 100000000000,
-								Free:  90000000000,
-							},
-						},
+						Space: []*daos.StorageUsageStats{tier0, tier1},
 					},
 					{
 						Type:  0,
 						State: daos.PoolTargetStateUpIn,
-						Space: []*daos.StorageUsageStats{
-							{
-								Total: 6000000000,
-								Free:  5000000000,
-							},
-							{
-								Total: 100000000000,
-								Free:  90000000000,
-							},
-						},
+						Space: []*daos.StorageUsageStats{tier0, tier1},
 					},
 					{
 						Type:  0,
 						State: daos.PoolTargetStateDownOut,
-						Space: []*daos.StorageUsageStats{
-							{
-								Total: 6000000000,
-								Free:  5000000000,
-							},
-							{
-								Total: 100000000000,
-								Free:  90000000000,
-							},
-						},
+						Space: []*daos.StorageUsageStats{tier0, tier1},
 					},
 					{
 						Type:  0,
 						State: daos.PoolTargetStateUpIn,
-						Space: []*daos.StorageUsageStats{
-							{
-								Total: 6000000000,
-								Free:  5000000000,
-							},
-							{
-								Total: 100000000000,
-								Free:  90000000000,
-							},
-						},
+						Space: []*daos.StorageUsageStats{tier0, tier1},
 					},
 				},
 			},
@@ -197,28 +136,28 @@ Target: type unknown, state invalid
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
-- Storage tier 1 (NVMe):
+- Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
 Target: type unknown, state up_in
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
-- Storage tier 1 (NVMe):
+- Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
 Target: type unknown, state down_out
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
-- Storage tier 1 (NVMe):
+- Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
 Target: type unknown, state up_in
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
-- Storage tier 1 (NVMe):
+- Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
 `,
@@ -230,58 +169,22 @@ Target: type unknown, state up_in
 					{
 						Type:  42,
 						State: daos.PoolTargetStateDown,
-						Space: []*daos.StorageUsageStats{
-							{
-								Total: 6000000000,
-								Free:  5000000000,
-							},
-							{
-								Total: 100000000000,
-								Free:  90000000000,
-							},
-						},
+						Space: []*daos.StorageUsageStats{tier0, tier1},
 					},
 					{
 						Type:  0,
 						State: daos.PoolTargetStateUpIn,
-						Space: []*daos.StorageUsageStats{
-							{
-								Total: 6000000000,
-								Free:  5000000000,
-							},
-							{
-								Total: 100000000000,
-								Free:  90000000000,
-							},
-						},
+						Space: []*daos.StorageUsageStats{tier0, tier1},
 					},
 					{
 						Type:  0,
 						State: daos.PoolTargetStateDownOut,
-						Space: []*daos.StorageUsageStats{
-							{
-								Total: 6000000000,
-								Free:  5000000000,
-							},
-							{
-								Total: 100000000000,
-								Free:  90000000000,
-							},
-						},
+						Space: []*daos.StorageUsageStats{tier0, tier1},
 					},
 					{
 						Type:  0,
 						State: daos.PoolTargetStateUpIn,
-						Space: []*daos.StorageUsageStats{
-							{
-								Total: 6000000000,
-								Free:  5000000000,
-							},
-							{
-								Total: 100000000000,
-								Free:  90000000000,
-							},
-						},
+						Space: []*daos.StorageUsageStats{tier0, tier1},
 					},
 				},
 			},
@@ -290,28 +193,28 @@ Target: type invalid, state down
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
-- Storage tier 1 (NVMe):
+- Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
 Target: type unknown, state up_in
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
-- Storage tier 1 (NVMe):
+- Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
 Target: type unknown, state down_out
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
-- Storage tier 1 (NVMe):
+- Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
 Target: type unknown, state up_in
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
-- Storage tier 1 (NVMe):
+- Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
 `,
@@ -324,14 +227,7 @@ Target: type unknown, state up_in
 						Type:  0,
 						State: daos.PoolTargetStateDown,
 						Space: []*daos.StorageUsageStats{
-							{
-								Total: 6000000000,
-								Free:  5000000000,
-							},
-							{
-								Total: 100000000000,
-								Free:  90000000000,
-							},
+							tier0, tier1,
 							{
 								Total: 800000000000,
 								Free:  200000000000,
@@ -342,14 +238,7 @@ Target: type unknown, state up_in
 						Type:  0,
 						State: daos.PoolTargetStateUpIn,
 						Space: []*daos.StorageUsageStats{
-							{
-								Total: 6000000000,
-								Free:  5000000000,
-							},
-							{
-								Total: 100000000000,
-								Free:  90000000000,
-							},
+							tier0, tier1,
 							{
 								Total: 800000000000,
 								Free:  200000000000,
@@ -360,17 +249,11 @@ Target: type unknown, state up_in
 						Type:  0,
 						State: daos.PoolTargetStateDownOut,
 						Space: []*daos.StorageUsageStats{
+							tier0, tier1,
 							{
-								Total: 6000000000,
-								Free:  5000000000,
-							},
-							{
-								Total: 100000000000,
-								Free:  90000000000,
-							},
-							{
-								Total: 800000000000,
-								Free:  200000000000,
+								Total:     800000000000,
+								Free:      200000000000,
+								MediaType: daos.StorageMediaType(3),
 							},
 						},
 					},
@@ -378,14 +261,7 @@ Target: type unknown, state up_in
 						Type:  0,
 						State: daos.PoolTargetStateUpIn,
 						Space: []*daos.StorageUsageStats{
-							{
-								Total: 6000000000,
-								Free:  5000000000,
-							},
-							{
-								Total: 100000000000,
-								Free:  90000000000,
-							},
+							tier0, tier1,
 							{
 								Total: 800000000000,
 								Free:  200000000000,
@@ -399,40 +275,40 @@ Target: type unknown, state down
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
-- Storage tier 1 (NVMe):
+- Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
-- Storage tier 2 (unknown):
+- Storage tier 2 (UNKNOWN):
   Total size: 800 GB
   Free: 200 GB
 Target: type unknown, state up_in
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
-- Storage tier 1 (NVMe):
+- Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
-- Storage tier 2 (unknown):
+- Storage tier 2 (UNKNOWN):
   Total size: 800 GB
   Free: 200 GB
 Target: type unknown, state down_out
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
-- Storage tier 1 (NVMe):
+- Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
-- Storage tier 2 (unknown):
+- Storage tier 2 (UNKNOWN):
   Total size: 800 GB
   Free: 200 GB
 Target: type unknown, state up_in
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
-- Storage tier 1 (NVMe):
+- Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
-- Storage tier 2 (unknown):
+- Storage tier 2 (UNKNOWN):
   Total size: 800 GB
   Free: 200 GB
 `,
@@ -488,6 +364,31 @@ Pool created with 5.66%%,94.34%% storage tier ratio
   Total Size           : 42 GB                               
   Storage tier 0 (SCM) : 2.4 GB (600 MB / rank)              
   Storage tier 1 (NVMe): 40 GB (10 GB / rank)                
+
+`, test.MockPoolUUID()),
+		},
+		"basic; md-on-ssd": {
+			pcr: &control.PoolCreateResp{
+				UUID:     test.MockUUID(),
+				SvcReps:  mockRanks(0, 1, 2),
+				TgtRanks: mockRanks(0, 1, 2, 3),
+				TierBytes: []uint64{
+					600 * humanize.MByte,
+					10 * humanize.GByte,
+				},
+				MemFileBytes: 300 * humanize.MByte, // Non-zero indicates MD-on-SSD.
+			},
+			expPrintStr: fmt.Sprintf(`
+Pool created with 5.66%%,94.34%% storage tier ratio
+-------------------------------------------------
+  UUID             : %s
+  Service Leader   : 0                                   
+  Service Ranks    : [0-2]                               
+  Storage Ranks    : [0-3]                               
+  Total Size       : 42 GB                               
+  Metadata Storage : 2.4 GB (600 MB / rank)              
+  Data Storage     : 40 GB (10 GB / rank)                
+  Memory File Size : 1.2 GB (300 MB / rank)              
 
 `, test.MockPoolUUID()),
 		},
@@ -557,23 +458,6 @@ func TestPretty_PrintListPoolsResponse(t *testing.T) {
 			resp:        &control.ListPoolsResp{},
 			expPrintStr: msgNoPools + "\n",
 		},
-		"one pool; no usage": {
-			resp: &control.ListPoolsResp{
-				Pools: []*daos.PoolInfo{
-					{
-						UUID:            test.MockPoolUUID(1),
-						ServiceReplicas: []ranklist.Rank{0, 1, 2},
-						State:           daos.PoolServiceStateReady,
-					},
-				},
-			},
-			expPrintStr: `
-Pool     Size State Used Imbalance Disabled 
-----     ---- ----- ---- --------- -------- 
-00000001 0 B  Ready 0%   0%        0/0      
-
-`,
-		},
 		"one pool; no uuid": {
 			resp: &control.ListPoolsResp{
 				Pools: []*daos.PoolInfo{
@@ -612,82 +496,6 @@ Pool     Size State Used Imbalance Disabled
 				},
 			},
 			expErr: errors.New("has 1 storage tiers, want 2"),
-		},
-		"two pools; only one labeled": {
-			resp: &control.ListPoolsResp{
-				Pools: []*daos.PoolInfo{
-					{
-						UUID:             test.MockPoolUUID(1),
-						ServiceReplicas:  []ranklist.Rank{0, 1, 2},
-						TierStats:        exampleTierStats,
-						TotalTargets:     16,
-						ActiveTargets:    16,
-						DisabledTargets:  0,
-						State:            daos.PoolServiceStateReady,
-						PoolLayoutVer:    1,
-						UpgradeLayoutVer: 2,
-					},
-					{
-						Label:            "two",
-						UUID:             test.MockPoolUUID(2),
-						ServiceReplicas:  []ranklist.Rank{3, 4, 5},
-						TierStats:        exampleTierStats,
-						TotalTargets:     64,
-						ActiveTargets:    56,
-						DisabledTargets:  8,
-						State:            daos.PoolServiceStateReady,
-						PoolLayoutVer:    1,
-						UpgradeLayoutVer: 2,
-					},
-				},
-			},
-			expPrintStr: `
-Pool     Size   State Used Imbalance Disabled UpgradeNeeded? 
-----     ----   ----- ---- --------- -------- -------------- 
-00000001 6.0 TB Ready 83%  16%       0/16     1->2           
-two      6.0 TB Ready 83%  56%       8/64     1->2           
-
-`,
-		},
-		"two pools; one SCM only": {
-			resp: &control.ListPoolsResp{
-				Pools: []*daos.PoolInfo{
-					{
-						Label:            "one",
-						UUID:             test.MockPoolUUID(1),
-						ServiceReplicas:  []ranklist.Rank{0, 1, 2},
-						TierStats:        exampleTierStats,
-						TotalTargets:     16,
-						ActiveTargets:    16,
-						DisabledTargets:  0,
-						State:            daos.PoolServiceStateReady,
-						PoolLayoutVer:    1,
-						UpgradeLayoutVer: 2,
-					},
-					{
-						Label:           "two",
-						UUID:            test.MockPoolUUID(2),
-						ServiceReplicas: []ranklist.Rank{3, 4, 5},
-						TierStats: []*daos.StorageUsageStats{
-							exampleTierStats[0],
-							{MediaType: daos.StorageMediaTypeNvme},
-						},
-						TotalTargets:     64,
-						ActiveTargets:    56,
-						DisabledTargets:  8,
-						State:            daos.PoolServiceStateReady,
-						PoolLayoutVer:    2,
-						UpgradeLayoutVer: 2,
-					},
-				},
-			},
-			expPrintStr: `
-Pool Size   State Used Imbalance Disabled UpgradeNeeded? 
----- ----   ----- ---- --------- -------- -------------- 
-one  6.0 TB Ready 83%  16%       0/16     1->2           
-two  100 GB Ready 80%  56%       8/64     None           
-
-`,
 		},
 		"two pools; one failed query": {
 			resp: &control.ListPoolsResp{
@@ -774,7 +582,7 @@ one  6.0 TB Ready 83%%  16%%       0/16
 			verbose:     true,
 			expPrintStr: msgNoPools + "\n",
 		},
-		"verbose; zero svc replicas": {
+		"verbose, two pools": {
 			resp: &control.ListPoolsResp{
 				Pools: []*daos.PoolInfo{
 					{
@@ -789,6 +597,7 @@ one  6.0 TB Ready 83%%  16%%       0/16
 						Rebuild: &daos.PoolRebuildStatus{
 							State: daos.PoolRebuildStateIdle,
 						},
+						QueryMask: daos.DefaultPoolQueryMask,
 					},
 				},
 			},
@@ -797,102 +606,6 @@ one  6.0 TB Ready 83%%  16%%       0/16
 Label UUID                                 State SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled UpgradeNeeded? Rebuild State 
 ----- ----                                 ----- ------- -------- -------- ------------- --------- --------- -------------- -------- -------------- ------------- 
 -     00000001-0001-0001-0001-000000000001 Ready N/A     100 GB   80 GB    16%           6.0 TB    5.0 TB    8%             0/16     1->2           idle          
-
-`,
-		},
-		"verbose; zero svc replicas with no query": {
-			resp: &control.ListPoolsResp{
-				Pools: []*daos.PoolInfo{
-					{
-						UUID:             test.MockPoolUUID(1),
-						TierStats:        exampleTierStats,
-						TotalTargets:     16,
-						ActiveTargets:    16,
-						DisabledTargets:  0,
-						State:            daos.PoolServiceStateReady,
-						PoolLayoutVer:    1,
-						UpgradeLayoutVer: 2,
-					},
-				},
-			},
-			verbose: true,
-			noQuery: true,
-			expPrintStr: `
-Label UUID                                 State SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled UpgradeNeeded? 
------ ----                                 ----- ------- -------- -------- ------------- --------- --------- -------------- -------- -------------- 
--     00000001-0001-0001-0001-000000000001 Ready N/A     100 GB   80 GB    16%           6.0 TB    5.0 TB    8%             0/16     1->2           
-
-`,
-		},
-		"verbose; two pools; one destroying": {
-			resp: &control.ListPoolsResp{
-				Pools: []*daos.PoolInfo{
-					{
-						Label:            "one",
-						UUID:             test.MockPoolUUID(1),
-						ServiceReplicas:  []ranklist.Rank{0, 1, 2},
-						TierStats:        exampleTierStats,
-						TotalTargets:     16,
-						ActiveTargets:    16,
-						DisabledTargets:  0,
-						State:            daos.PoolServiceStateReady,
-						PoolLayoutVer:    1,
-						UpgradeLayoutVer: 2,
-						Rebuild: &daos.PoolRebuildStatus{
-							State: daos.PoolRebuildStateIdle,
-						},
-					},
-					{
-						Label:            "two",
-						UUID:             test.MockPoolUUID(2),
-						ServiceReplicas:  []ranklist.Rank{3, 4, 5},
-						TierStats:        exampleTierStats,
-						TotalTargets:     64,
-						ActiveTargets:    56,
-						DisabledTargets:  8,
-						State:            daos.PoolServiceStateDestroying,
-						PoolLayoutVer:    2,
-						UpgradeLayoutVer: 2,
-						Rebuild: &daos.PoolRebuildStatus{
-							State: daos.PoolRebuildStateDone,
-						},
-					},
-				},
-			},
-			verbose: true,
-			expPrintStr: `
-Label UUID                                 State      SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled UpgradeNeeded? Rebuild State 
------ ----                                 -----      ------- -------- -------- ------------- --------- --------- -------------- -------- -------------- ------------- 
-one   00000001-0001-0001-0001-000000000001 Ready      [0-2]   100 GB   80 GB    16%           6.0 TB    5.0 TB    8%             0/16     1->2           idle          
-two   00000002-0002-0002-0002-000000000002 Destroying [3-5]   100 GB   80 GB    56%           6.0 TB    5.0 TB    27%            8/64     None           done          
-
-`,
-		},
-		"verbose; one pools; rebuild state busy": {
-			resp: &control.ListPoolsResp{
-				Pools: []*daos.PoolInfo{
-					{
-						Label:            "one",
-						UUID:             test.MockPoolUUID(1),
-						ServiceReplicas:  []ranklist.Rank{0, 1, 2},
-						TierStats:        exampleTierStats,
-						TotalTargets:     16,
-						ActiveTargets:    8,
-						DisabledTargets:  8,
-						State:            daos.PoolServiceStateDegraded,
-						PoolLayoutVer:    1,
-						UpgradeLayoutVer: 2,
-						Rebuild: &daos.PoolRebuildStatus{
-							State: daos.PoolRebuildStateBusy,
-						},
-					},
-				},
-			},
-			verbose: true,
-			expPrintStr: `
-Label UUID                                 State    SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled UpgradeNeeded? Rebuild State 
------ ----                                 -----    ------- -------- -------- ------------- --------- --------- -------------- -------- -------------- ------------- 
-one   00000001-0001-0001-0001-000000000001 Degraded [0-2]   100 GB   80 GB    8%            6.0 TB    5.0 TB    4%             8/16     1->2           busy          
 
 `,
 		},

@@ -35,10 +35,10 @@ server_config:
       storage: auto
 pool:
   size: 60%
-  control_method: dmg
   aggregation:
     threshold: 50000000
     aggr_timeout: 180
+  set_logmasks: False
 container:
   type: POSIX
   control_method: daos

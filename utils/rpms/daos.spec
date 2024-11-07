@@ -3,8 +3,9 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.3.1-1%{?dist}
+%global mercury_version   2.4
 %global libfabric_version 1.15.1-1
+%global argobots_version 1.2
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -15,7 +16,7 @@
 
 Name:          daos
 Version:       2.7.100
-Release:       1%{?relval}%{?dist}
+Release:       11%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -41,15 +42,15 @@ BuildRequires: hwloc-devel
 BuildRequires: bullseye
 %endif
 %if (0%{?rhel} >= 8)
-BuildRequires: argobots-devel >= 1.1
+BuildRequires: argobots-devel >= %{argobots_version}
 BuildRequires: json-c-devel
 BuildRequires: boost-python3-devel
 %else
-BuildRequires: libabt-devel >= 1.0rc1
+BuildRequires: libabt-devel >= %{argobots_version}
 BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
-BuildRequires: libpmemobj-devel >= 2.0.0
+BuildRequires: libpmemobj-devel >= 2.1.0
 %if (0%{?rhel} >= 8)
 BuildRequires: fuse3-devel >= 3
 %else
@@ -81,7 +82,8 @@ BuildRequires: libyaml-devel
 BuildRequires: libcmocka-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
-BuildRequires: go >= 1.17
+BuildRequires: go >= 1.21
+BuildRequires: pciutils-devel
 %if (0%{?rhel} >= 8)
 BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
@@ -112,14 +114,6 @@ BuildRequires: systemd-rpm-macros
 %endif
 BuildRequires: libuuid-devel
 
-%if (0%{?suse_version} > 0)
-BuildRequires: libucp-devel
-BuildRequires: libucs-devel
-BuildRequires: libuct-devel
-%else
-BuildRequires: ucx-devel
-%endif
-
 Requires: openssl
 # This should only be temporary until we can get a stable upstream release
 # of mercury, at which time the autoprov shared library version should
@@ -146,17 +140,18 @@ Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 03.00.00.0423
-Requires: libpmemobj1 >= 2.0.0-1.suse1500
+Requires: libpmemobj1 >= 2.1.0-1.suse1500
 Requires: libfabric1 >= %{libfabric_version}
 %else
 Requires: ipmctl >= 03.00.00.0468
-Requires: libpmemobj >= 2.0.0-1%{?dist}
+Requires: libpmemobj >= 2.1.0-1%{?dist}
 %endif
 Requires: libfabric >= %{libfabric_version}
 Requires: mercury >= %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 Requires: numactl
+Requires: pciutils
 %{?systemd_requires}
 
 %description server
@@ -216,7 +211,7 @@ Requires: dbench
 Requires: lbzip2
 Requires: attr
 Requires: ior
-Requires: go >= 1.18
+Requires: go >= 1.21
 %if (0%{?suse_version} >= 1315)
 Requires: lua-lmod
 Requires: libcapstone-devel
@@ -228,6 +223,14 @@ Requires: capstone-devel
 Requires: fuse3-devel >= 3
 %else
 Requires: fuse3-devel >= 3.4.2
+%endif
+Requires: pciutils-devel
+%if (0%{?suse_version} > 0)
+Requires: libndctl-devel
+%endif
+%if (0%{?rhel} >= 8)
+Requires: ndctl-devel
+Requires: daxctl-devel
 %endif
 
 %description client-tests
@@ -313,7 +316,7 @@ This is the package that bridges the difference between the MOFED openmpi
 %endif
 
 %prep
-%autosetup
+%autosetup -p1
 
 %build
 
@@ -415,6 +418,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_sysconfdir}/bash_completion.d/daos.bash
 # Certificate generation files
 %dir %{_libdir}/%{name}
+%{_bindir}/daos_metrics
 %{_libdir}/%{name}/certgen/
 %{_libdir}/%{name}/VERSION
 %{_libdir}/libcart.so.*
@@ -431,7 +435,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # and/or daos_firmware_helper
 %attr(2755,root,daos_server) %{_bindir}/daos_server
 %{_bindir}/daos_engine
-%{_bindir}/daos_metrics
 %{_bindir}/ddb
 %{_sysconfdir}/ld.so.conf.d/daos.conf
 %dir %{_libdir}/daos_srv
@@ -454,6 +457,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/daos_srv/libplacement.so
 %{_libdir}/daos_srv/libpipeline.so
 %{_libdir}/libdaos_common_pmem.so
+%{_libdir}/libdav_v2.so
 %config(noreplace) %{conf_dir}/vos_size_input.yaml
 %{_bindir}/daos_storage_estimator.py
 %{python3_sitearch}/storage_estimator/*.py
@@ -482,6 +486,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/dfuse
 %{_bindir}/daos
 %{_libdir}/libdaos_cmd_hdlrs.so
+%{_libdir}/libdaos_self_test.so
 %{_libdir}/libdfs.so
 %{_libdir}/libds3.so
 %{_libdir}/%{name}/API_VERSION
@@ -588,6 +593,49 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Nov 5 2024 Michael MacDonald <mjmac@google.com> 2.7.100-11
+- Move daos_metrics tool to daos package for use on both clients
+  and servers.
+
+* Fri Nov 1 2024 Sherin T George <sherin-t.george@hpe.com> 2.7.100-10
+- The modified DAV allocator with memory bucket support for md_on_ssd
+  phase-2 is delivered as dav_v2.so.
+
+* Tue Oct 15 2024 Brian J. Murrell <brian.murrell@intel.com> - 2.7.100-9
+- Drop BRs for UCX as they were obsoleted as of e01970d
+
+* Mon Oct 07 2024 Cedric Koch-Hofer <cedric.koch-hofer@intel.com> 2.7.100-8
+- Update BR: argobots to 1.2
+
+* Tue Oct 01 2024 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.7.100-7
+- Add support of the PMDK package 2.1.0 with NDCTL enabled.
+  * Increase the default ULT stack size to 20KiB if the engine uses
+    the DCPM storage class.
+  * Prevent using the RAM storage class (simulated PMem) when
+    the shutdown state (SDS) is active.
+    * Automatically disable SDS for the RAM storage class on engine startup.
+    * Force explicitly setting the PMEMOBJ_CONF='sds.at_create=0'
+      environment variable to deactivate SDS for the DAOS tools
+      (ddb, daos_perf, vos_perf, etc.) when used WITHOUT DCPM.
+      Otherwise, a user is supposed to be stopped by an error
+      like: "Unsafe shutdown count is not supported for this source".
+
+* Mon Sep 23 2024 Kris Jacque <kris.jacque@intel.com> 2.7.100-6
+- Bump min supported go version to 1.21
+
+* Thu Aug 15 2024 Michael MacDonald <mjmac@google.com> 2.7.100-5
+- Add libdaos_self_test.so to client RPM
+
+* Mon Aug 05 2024 Jerome Soumagne <jerome.soumagne@intel.com> 2.7.100-4
+- Bump mercury version to 2.4.0rc4
+
+* Thu Jul 11 2024 Dalton Bohning <dalton.bohning@intel.com> 2.7.100-3
+- Add pciutils-devel build dep for client-tests package
+
+* Mon Jun 24 2024 Tom Nabarro <tom.nabarro@intel.com> 2.7.100-2
+- Add pciutils runtime dep for daos_server lspci call
+- Add pciutils-devel build dep for pciutils CGO bindings
+
 * Mon May 20 2024 Phillip Henderson <phillip.henderson@intel.com> 2.7.100-1
 - Bump version to 2.7.100
 

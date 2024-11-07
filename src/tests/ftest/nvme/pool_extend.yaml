@@ -30,7 +30,6 @@ server_config:
       storage: auto
 pool:
   svcn: 4
-  control_method: dmg
   rebuild_timeout: 120
   pool_query_timeout: 30
 pool_qty_1:

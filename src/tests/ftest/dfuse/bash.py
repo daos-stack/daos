@@ -17,7 +17,7 @@ class DfuseBashCmd(TestWithServers):
     :avocado: recursive
     """
 
-    def run_bashcmd(self, il_lib=None, compatible_mode=False):
+    def run_bashcmd(self, il_lib=None, compatible_mode=False, nobypass=False):
         """Jira ID: DAOS-3508.
 
         Use cases:
@@ -52,6 +52,8 @@ class DfuseBashCmd(TestWithServers):
                 env_str = f"export LD_PRELOAD={lib_path}; export D_IL_COMPATIBLE=1; "
             else:
                 env_str = f"export LD_PRELOAD={lib_path}; "
+            if nobypass:
+                env_str = env_str + "export D_IL_NO_BYPASS=1; "
         else:
             env_str = ""
 
@@ -128,7 +130,10 @@ class DfuseBashCmd(TestWithServers):
             f"bzip2 -z {fuse_root_dir}/lib.a",
             f"chmod u-r {fuse_root_dir}/lib.a.bz2",
             'fio --readwrite=randwrite --name=test --size="2M" --directory '
-            f'{fuse_root_dir}/ --bs=1M --numjobs="4" --ioengine=psync '
+            f'{fuse_root_dir}/ --bs=1M --numjobs="4" --ioengine=psync --thread=0'
+            "--group_reporting --exitall_on_error --continue_on_error=none",
+            'fio --readwrite=randwrite --name=test --size="2M" --directory '
+            f'{fuse_root_dir}/ --bs=1M --numjobs="4" --ioengine=psync --thread=1'
             "--group_reporting --exitall_on_error --continue_on_error=none",
             'fio --readwrite=randwrite --name=test --size="2M" --directory '
             f'{fuse_root_dir}/ --bs=1M --numjobs="1" --ioengine=libaio --iodepth=16'
@@ -152,7 +157,7 @@ class DfuseBashCmd(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=dfuse,dfs
+        :avocado: tags=dfs,dfuse
         :avocado: tags=DfuseBashCmd,test_bashcmd
         """
         self.run_bashcmd()
@@ -167,7 +172,7 @@ class DfuseBashCmd(TestWithServers):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
-        :avocado: tags=dfuse,dfs,ioil
+        :avocado: tags=dfs,dfuse,ioil
         :avocado: tags=DfuseBashCmd,test_bashcmd_ioil
         """
         self.run_bashcmd(il_lib="libioil.so")
@@ -182,7 +187,22 @@ class DfuseBashCmd(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=dfuse,dfs,pil4dfs
+        :avocado: tags=dfs,dfuse,pil4dfs
         :avocado: tags=DfuseBashCmd,test_bashcmd_pil4dfs
         """
         self.run_bashcmd(il_lib="libpil4dfs.so")
+
+    def test_bashcmd_pil4dfs_nobypass(self):
+        """
+
+        Test Description:
+            Purpose of this test is to mount different mount points of dfuse
+            for different container and pool sizes and perform basic bash
+            commands.
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=dfuse,dfs,pil4dfs
+        :avocado: tags=DfuseBashCmd,test_bashcmd_pil4dfs_nobypass
+        """
+        self.run_bashcmd(il_lib="libpil4dfs.so", nobypass=True)

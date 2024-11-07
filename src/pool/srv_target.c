@@ -33,6 +33,7 @@
 #include <daos/pool.h>
 #include <daos_srv/container.h>
 #include <daos_srv/daos_mgmt_srv.h>
+#include <daos_srv/object.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/rebuild.h>
 #include <daos_srv/srv_csum.h>
@@ -85,6 +86,21 @@ pool_child_lookup_noref(const uuid_t uuid)
 		}
 	}
 	return NULL;
+}
+
+struct ds_pool_child *
+ds_pool_child_find(const uuid_t uuid)
+{
+	struct ds_pool_child	*child;
+
+	child = pool_child_lookup_noref(uuid);
+	if (child == NULL) {
+		D_ERROR(DF_UUID": Pool child isn't found.\n", DP_UUID(uuid));
+		return child;
+	}
+
+	child->spc_ref++;
+	return child;
 }
 
 struct ds_pool_child *
@@ -431,8 +447,10 @@ pool_child_recreate(struct ds_pool_child *child)
 		goto pool_info;
 	}
 
-	rc = vos_pool_create(path, child->spc_uuid, 0, pool_info->spi_blob_sz[SMD_DEV_TYPE_DATA],
-			     0, 0 /* version */, NULL);
+	rc = vos_pool_create(path, child->spc_uuid, 0 /* scm_sz */,
+			     pool_info->spi_blob_sz[SMD_DEV_TYPE_DATA],
+			     pool_info->spi_blob_sz[SMD_DEV_TYPE_META],
+			     0 /* flags */, 0 /* version */, NULL);
 	if (rc)
 		DL_ERROR(rc, DF_UUID": Create VOS pool failed.", DP_UUID(child->spc_uuid));
 
@@ -490,7 +508,7 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 		goto done;
 	}
 
-	if (!ds_pool_skip_for_check(child->spc_pool)) {
+	if (!ds_pool_restricted(child->spc_pool, false)) {
 		rc = start_gc_ult(child);
 		if (rc != 0)
 			goto out_close;
@@ -1113,7 +1131,7 @@ pool_fetch_hdls_ult_abort(struct ds_pool *pool)
  * till ds_pool_stop. Only for mgmt and pool modules.
  */
 int
-ds_pool_start(uuid_t uuid, bool aft_chk)
+ds_pool_start(uuid_t uuid, bool aft_chk, bool immutable)
 {
 	struct ds_pool			*pool;
 	struct daos_llink		*llink;
@@ -1170,6 +1188,11 @@ ds_pool_start(uuid_t uuid, bool aft_chk)
 	else
 		pool->sp_cr_checked = 0;
 
+	if (immutable)
+		pool->sp_immutable = 1;
+	else
+		pool->sp_immutable = 0;
+
 	pool->sp_starting = 1;
 	rc = pool_child_add_all(pool);
 	if (rc != 0)
@@ -1185,7 +1208,9 @@ ds_pool_start(uuid_t uuid, bool aft_chk)
 		}
 
 		pool->sp_fetch_hdls = 1;
+	}
 
+	if (!ds_pool_restricted(pool, false)) {
 		rc = ds_pool_start_ec_eph_query_ult(pool);
 		if (rc != 0) {
 			D_ERROR(DF_UUID": failed to start ec eph query ult: "DF_RC"\n",
@@ -1196,6 +1221,11 @@ ds_pool_start(uuid_t uuid, bool aft_chk)
 
 	ds_iv_ns_start(pool->sp_iv_ns);
 	pool->sp_starting = 0;
+
+	/* Ignore errors, for other PS replicas may work. */
+	rc = ds_pool_svc_start(uuid);
+	if (rc != 0)
+		DL_ERROR(rc, DF_UUID": failed to start pool service", DP_UUID(uuid));
 
 	return 0;
 
@@ -1237,6 +1267,7 @@ int
 ds_pool_stop(uuid_t uuid)
 {
 	struct ds_pool *pool;
+	int             rc;
 
 	ds_pool_failed_remove(uuid);
 
@@ -1246,14 +1277,18 @@ ds_pool_stop(uuid_t uuid)
 		return 0;
 	}
 	if (pool->sp_stopping) {
-		int rc = -DER_AGAIN;
-
+		rc = -DER_AGAIN;
 		DL_INFO(rc, DF_UUID ": already stopping", DP_UUID(uuid));
 		ds_pool_put(pool);
 		return rc;
 	}
 	pool->sp_stopping = 1;
 	D_INFO(DF_UUID ": stopping\n", DP_UUID(uuid));
+
+	/* An error means the PS is stopping. Ignore it. */
+	rc = ds_pool_svc_stop(uuid);
+	if (rc != 0)
+		DL_INFO(rc, DF_UUID": stop pool service", DP_UUID(uuid));
 
 	pool_tgt_disconnect_all(pool);
 
@@ -1859,12 +1894,9 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		       DP_UUID(pool->sp_uuid), map_version_before, map_version);
 	}
 
-	if (map_updated) {
+	if (map_updated && !ds_pool_restricted(pool, false)) {
 		struct dtx_scan_args	*arg;
 		int ret;
-
-		if (ds_pool_skip_for_check(pool))
-			D_GOTO(out, rc = 0);
 
 		D_ALLOC_PTR(arg);
 		if (arg == NULL)
@@ -2511,4 +2543,79 @@ out:
 	crt_reply_send(rpc);
 	if (rc != 0 && arg != NULL)
 		tgt_discard_arg_free(arg);
+}
+
+static int
+bulk_cb(const struct crt_bulk_cb_info *cb_info)
+{
+	ABT_eventual *eventual = cb_info->bci_arg;
+
+	ABT_eventual_set(*eventual, (void *)&cb_info->bci_rc, sizeof(cb_info->bci_rc));
+	return 0;
+}
+
+void
+ds_pool_tgt_warmup_handler(crt_rpc_t *rpc)
+{
+	struct pool_tgt_warmup_in *in;
+	crt_bulk_t                 bulk_cli;
+	crt_bulk_t                 bulk_local = NULL;
+	crt_bulk_opid_t            bulk_opid;
+	uint64_t                   len;
+	struct crt_bulk_desc       bulk_desc;
+	ABT_eventual               eventual;
+	void                      *buf = NULL;
+	int                       *status;
+	d_sg_list_t                sgl;
+	d_iov_t                    iov;
+	int                        rc;
+
+	in       = crt_req_get(rpc);
+	bulk_cli = in->tw_bulk;
+	rc       = crt_bulk_get_len(bulk_cli, &len);
+	if (rc != 0)
+		D_GOTO(out, rc);
+	D_ALLOC(buf, len);
+	if (buf == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs   = &iov;
+	d_iov_set(&iov, buf, len);
+	rc = crt_bulk_create(rpc->cr_ctx, &sgl, CRT_BULK_RW, &bulk_local);
+	if (rc)
+		goto out;
+
+	bulk_desc.bd_rpc        = rpc;
+	bulk_desc.bd_bulk_op    = CRT_BULK_GET;
+	bulk_desc.bd_remote_hdl = bulk_cli;
+	bulk_desc.bd_remote_off = 0;
+	bulk_desc.bd_local_hdl  = bulk_local;
+	bulk_desc.bd_local_off  = 0;
+	bulk_desc.bd_len        = len;
+
+	rc = ABT_eventual_create(sizeof(*status), &eventual);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(out, rc = dss_abterr2der(rc));
+
+	rc = crt_bulk_transfer(&bulk_desc, bulk_cb, &eventual, &bulk_opid);
+	if (rc != 0)
+		D_GOTO(out_eventual, rc);
+
+	rc = ABT_eventual_wait(eventual, (void **)&status);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
+
+	if (*status != 0)
+		rc = *status;
+
+out_eventual:
+	ABT_eventual_free(&eventual);
+out:
+	if (bulk_local != NULL)
+		crt_bulk_free(bulk_local);
+	D_FREE(buf);
+	if (rc)
+		D_ERROR("rpc failed, " DF_RC "\n", DP_RC(rc));
+	crt_reply_send(rpc);
 }

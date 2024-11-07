@@ -945,8 +945,12 @@ btr_root_alloc(struct btr_context *tcx)
 	struct btr_instance	*tins = &tcx->tc_tins;
 	struct btr_root		*root;
 
-	tins->ti_root_off = umem_zalloc(btr_umm(tcx),
-					sizeof(struct btr_root));
+	if (btr_ops(tcx)->to_node_alloc != NULL)
+		tins->ti_root_off = btr_ops(tcx)->to_node_alloc(&tcx->tc_tins,
+								sizeof(struct btr_root));
+	else
+		tins->ti_root_off = umem_zalloc(btr_umm(tcx), sizeof(struct btr_root));
+
 	if (UMOFF_IS_NULL(tins->ti_root_off))
 		return btr_umm(tcx)->umm_nospc_rc;
 
@@ -986,7 +990,7 @@ btr_embedded_create_hash(struct btr_context *tcx, bool force)
 			D_ERROR("Failed to get key from embedded record: " DF_RC "\n", DP_RC(rc));
 			return rc;
 		}
-		D_ASSERT(rec != NULL);
+		D_ASSERT(old_key.iov_buf != NULL);
 		btr_hkey_gen(tcx, &old_key, &rec->rec_hkey[0]);
 		btr_embedded_hash_set(tcx);
 	}

@@ -434,6 +434,8 @@ class EngineYamlParameters(YamlParameters):
     REQUIRED_ENV_VARS = {
         "common": [
             "D_LOG_FILE_APPEND_PID=1",
+            "DAOS_POOL_RF=4",
+            "CRT_EVENT_DELAY=1",
             "COVFILE=/tmp/test.cov"],
         "ofi+tcp": [],
         "ofi+tcp;ofi_rxm": [],

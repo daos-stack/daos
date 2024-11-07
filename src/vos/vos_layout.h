@@ -43,6 +43,16 @@ struct vos_gc_bin_df {
 	uint16_t		bin_pad16;
 };
 
+/*
+ * This is smaller than the VOS_OBJ_BKTS_MAX for object durable format, because
+ * I don't want to increase each GC item size (the amount of GC item is massive)
+ * for an imagined requirement.
+ *
+ * If we really need to support more than 2 evict-able buckets per object in the
+ * futhure, we can enlarge the GC item then.
+ */
+#define VOS_GC_BKTS_MAX		2
+
 struct vos_gc_bag_df {
 	/** index of the first item in FIFO */
 	uint16_t		bag_item_first;
@@ -57,24 +67,22 @@ struct vos_gc_bag_df {
 	struct vos_gc_item {
 		/* address of the item to be freed */
 		umem_off_t		it_addr;
-		/** Reserved, argument for GC_VEA/BIO (e.g. size of extent) */
-		uint64_t		it_args;
+		/* object buckets for GC_AKEY/DKEY/OBJ of the md-on-ssd p2 pool */
+		uint32_t		it_bkt_ids[VOS_GC_BKTS_MAX];
 	}			bag_items[0];
 };
 
 enum vos_gc_type {
-	/* XXX: we could define GC_VEA, which can free NVMe/SCM space.
-	 * So svt_rec_free() and evt_desc_bio_free() only need to call
-	 * gc_add_item() to register BIO address for GC.
-	 *
-	 * However, GC_VEA could have extra overhead of reassigning SCM
-	 * pointers, but it also has low latency for undo changes.
-	 */
 	GC_AKEY,
 	GC_DKEY,
 	GC_OBJ,
 	GC_CONT,
 	GC_MAX,
+};
+
+struct vos_gc_bkt_df {
+	/* GC bins categorized by bucket number */
+	struct btr_root		gd_bins_root;
 };
 
 #define POOL_DF_MAGIC				0x5ca1ab1e
@@ -91,7 +99,7 @@ enum vos_gc_type {
  */
 
 /** Current durable format version */
-#define POOL_DF_VERSION                         VOS_POOL_DF_2_6
+#define POOL_DF_VERSION                         VOS_POOL_DF_2_8
 
 /** 2.2 features.  Until we have an upgrade path for RDB, we need to support more than one old
  *  version.
@@ -103,6 +111,19 @@ enum vos_gc_type {
 
 /** 2.6 features */
 #define VOS_POOL_FEAT_2_6                       (VOS_POOL_FEAT_FLAT_DKEY | VOS_POOL_FEAT_EMBED_FIRST)
+
+/** 2.8 features */
+#define VOS_POOL_FEAT_2_8			(VOS_POOL_FEAT_GANG_SV)
+
+/* VOS pool durable format extension */
+struct vos_pool_ext_df {
+	/* Extension for GC bucket */
+	struct vos_gc_bkt_df	ped_gc_bkt;
+	/* Paddings for other potential new feature */
+	uint64_t		ped_paddings[54];
+	/* Reserved for future extension */
+	uint64_t		ped_reserve;
+};
 
 /**
  * Durable format for VOS pool
@@ -121,8 +142,8 @@ struct vos_pool_df {
 	 * a new format, containers with old format can be attached at here.
 	 */
 	uint64_t				pd_reserv_upgrade;
-	/** Reserved for future usage */
-	uint64_t				pd_reserv;
+	/** Pool durable format extension */
+	umem_off_t				pd_ext;
 	/** Unique PoolID for each VOS pool assigned on creation */
 	uuid_t					pd_id;
 	/** Total space in bytes on SCM */
@@ -246,6 +267,16 @@ enum vos_io_stream {
 	VOS_IOS_CNT
 };
 
+/* VOS container durable format extension */
+struct vos_cont_ext_df {
+	/* GC bucket extension */
+	struct vos_gc_bkt_df		ced_gc_bkt;
+	/* Reserved for potential new features */
+	uint64_t			ced_paddings[38];
+	/* Reserved for future extension */
+	uint64_t			ced_reserve;
+};
+
 /* VOS Container Value */
 struct vos_cont_df {
 	uuid_t				cd_id;
@@ -257,8 +288,8 @@ struct vos_cont_df {
 	struct btr_root			cd_obj_root;
 	/** reserved for placement algorithm upgrade */
 	uint64_t			cd_reserv_upgrade;
-	/** reserved for future usage */
-	uint64_t			cd_reserv;
+	/** Container durable format extension */
+	umem_off_t			cd_ext;
 	/** The active DTXs blob head. */
 	umem_off_t			cd_dtx_active_head;
 	/** The active DTXs blob tail. */
@@ -376,5 +407,19 @@ struct vos_obj_df {
 	/** VOS dkey btree root */
 	struct btr_root			vo_tree;
 };
+
+#define	VOS_OBJ_BKTS_MAX	4
+D_CASSERT(VOS_GC_BKTS_MAX <= VOS_OBJ_BKTS_MAX);
+
+/*
+ * VOS object durable format for md-on-ssd phase2. The size is fit to the 128 bytes
+ * slab (see slab_map[] defined in mem.c).
+ */
+struct vos_obj_p2_df {
+	struct vos_obj_df	p2_obj_df;
+	uint32_t		p2_bkt_ids[VOS_OBJ_BKTS_MAX];
+	uint64_t		p2_reserved;
+};
+D_CASSERT(sizeof(struct vos_obj_p2_df) == D_ALIGNUP(sizeof(struct vos_obj_df), 32));
 
 #endif

@@ -112,7 +112,7 @@ class PoolListConsolidationTest(RecoveryTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,cat_recov,pool_list_consolidation
+        :avocado: tags=recovery,cat_recov,pool_list_consolidation,faults
         :avocado: tags=PoolListConsolidationTest,test_dangling_pool
         """
         # 1. Create a pool.
@@ -206,7 +206,7 @@ class PoolListConsolidationTest(RecoveryTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,cat_recov,pool_list_consolidation
+        :avocado: tags=recovery,cat_recov,pool_list_consolidation,faults
         :avocado: tags=PoolListConsolidationTest,test_orphan_pool_trust_ps
         """
         errors = []
@@ -228,7 +228,7 @@ class PoolListConsolidationTest(RecoveryTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,cat_recov,pool_list_consolidation
+        :avocado: tags=recovery,cat_recov,pool_list_consolidation,faults
         :avocado: tags=PoolListConsolidationTest,test_orphan_pool_trust_ms
         """
         errors = []
