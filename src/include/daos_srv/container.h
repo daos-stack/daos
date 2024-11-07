@@ -108,6 +108,9 @@ struct ds_cont_child {
 	uint32_t		 sc_dtx_committable_count;
 	uint32_t		 sc_dtx_committable_coll_count;
 
+	/* Last timestamp when EC aggregation reports -DER_INPROGRESS. */
+	uint64_t		 sc_ec_agg_busy_ts;
+
 	/* The global minimum EC aggregation epoch, which will be upper
 	 * limit for VOS aggregation, i.e. EC object VOS aggregation can
 	 * not cross this limit. For simplification purpose, all objects
