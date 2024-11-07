@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -7,8 +7,6 @@ import time
 
 from general_utils import DaosTestError
 from ior_test_base import IorTestBase
-
-SCM_THRESHOLD = 400000
 
 
 class MultipleContainerDelete(IorTestBase):
@@ -77,13 +75,14 @@ class MultipleContainerDelete(IorTestBase):
         # since 50 is not divisible by 8, some data would remain in the disk right after
         # the 50th iteration. If we wait for several seconds, that remaining data will be
         # deleted (and we have 198KB left as mentioned above).
+        scm_threshold = self.params.get("scm_threshold", "/run/*")
         for _ in range(5):
             final_scm_fs, _ = self.get_pool_space()
             scm_diff = initial_scm_fs - final_scm_fs
-            if scm_diff <= SCM_THRESHOLD:
+            if scm_diff <= scm_threshold:
                 msg = ("SCM space was recovered. Initial = {}; Final = {}; "
                        "Threshold = {}; (Unit is in byte)").format(
-                           initial_scm_fs, final_scm_fs, SCM_THRESHOLD)
+                           initial_scm_fs, final_scm_fs, scm_threshold)
                 self.log.info(msg)
                 scm_recovered = True
                 break
@@ -92,7 +91,7 @@ class MultipleContainerDelete(IorTestBase):
         if not scm_recovered:
             msg = ("SCM space wasn't recovered! Initial = {}, Final = {}, "
                    "Threshold = {}; (Unit is in byte.)".format(
-                       initial_scm_fs, final_scm_fs, SCM_THRESHOLD))
+                       initial_scm_fs, final_scm_fs, scm_threshold))
             self.fail(msg)
 
     def get_pool_space(self):
