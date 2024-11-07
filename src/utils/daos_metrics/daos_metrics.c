@@ -57,7 +57,9 @@ print_usage(const char *prog_name)
 	       "--reset, -e\n"
 	       "\tReset all metrics to zero\n"
 	       "--jobid, -j\n"
-	       "\tDisplay metrics of the specified job\n",
+	       "\tDisplay metrics of the specified job (if agent-managed)\n"
+	       "--cli_pid, -P\n"
+	       "\tDisplay metrics of the specified client process\n",
 	       prog_name);
 }
 
@@ -125,6 +127,7 @@ main(int argc, char **argv)
 {
 	char			dirname[D_TM_MAX_NAME_LEN] = {0};
 	char                    jobid[D_TM_MAX_NAME_LEN]   = {0};
+	int                     cli_pid                    = 0;
 	bool			show_meta = false;
 	bool			show_when_read = false;
 	bool			show_type = false;
@@ -158,10 +161,11 @@ main(int argc, char **argv)
 						       {"read", no_argument, NULL, 'r'},
 						       {"reset", no_argument, NULL, 'e'},
 						       {"jobid", required_argument, NULL, 'j'},
+						       {"cli_pid", required_argument, NULL, 'P'},
 						       {"help", no_argument, NULL, 'h'},
 						       {NULL, 0, NULL, 0}};
 
-		opt = getopt_long_only(argc, argv, "S:cCdtsgi:p:D:MmTrj:he", long_options, NULL);
+		opt = getopt_long_only(argc, argv, "S:cCdtsgi:p:D:MmTrj:P:he", long_options, NULL);
 		if (opt == -1)
 			break;
 
@@ -214,6 +218,9 @@ main(int argc, char **argv)
 		case 'j':
 			snprintf(jobid, sizeof(jobid), "%s", optarg);
 			break;
+		case 'P':
+			cli_pid = atoi(optarg);
+			break;
 		case 'h':
 		case '?':
 		default:
@@ -244,6 +251,8 @@ main(int argc, char **argv)
 	if (strlen(jobid) > 0) {
 		srv_idx = DC_TM_JOB_ROOT_ID;
 		snprintf(dirname, sizeof(dirname), "%s", jobid);
+	} else if (cli_pid > 0) {
+		srv_idx = d_tm_cli_pid_key(cli_pid);
 	}
 
 	/* fetch metrics from server side */

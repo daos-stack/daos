@@ -427,6 +427,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_sysconfdir}/bash_completion.d/daos.bash
 # Certificate generation files
 %dir %{_libdir}/%{name}
+%{_bindir}/daos_metrics
 %{_libdir}/%{name}/certgen/
 %{_libdir}/%{name}/VERSION
 %{_libdir}/libcart.so.*
@@ -443,7 +444,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # and/or daos_firmware_helper
 %attr(2755,root,daos_server) %{_bindir}/daos_server
 %{_bindir}/daos_engine
-%{_bindir}/daos_metrics
 %{_bindir}/ddb
 %{_sysconfdir}/ld.so.conf.d/daos.conf
 %dir %{_libdir}/daos_srv
