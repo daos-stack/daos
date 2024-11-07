@@ -258,6 +258,9 @@ struct d_tm_nodeList_t {
 struct d_tm_context;
 
 key_t d_tm_get_srv_key(int srv_idx);
+key_t
+		    d_tm_cli_pid_key(int pid);
+
 struct d_tm_node_t *d_tm_follow_link(struct d_tm_context *ctx,
 				     struct d_tm_node_t *link);
 int d_tm_list_add_node(struct d_tm_node_t *src,
@@ -269,4 +272,5 @@ double d_tm_compute_standard_dev(double sum_of_squares, uint64_t sample_size,
 				 double mean);
 void d_tm_compute_histogram(struct d_tm_node_t *node, uint64_t value);
 void d_tm_print_stats(FILE *stream, struct d_tm_stats_t *stats, int format);
+
 #endif /* __TELEMETRY_COMMON_H__ */

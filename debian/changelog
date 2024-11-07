@@ -1,3 +1,10 @@
+daos (2.7.100-11) unstable; urgency=medium
+  [ Michael MacDonald ]
+  * Move daos_metrics utility to daos package for use on both clients
+    and servers.
+
+ -- Michael MacDonald <mjmac@google.com>  Tue, 5 Nov 2024 12:00:00 -0500
+
 daos (2.7.100-10) unstable; urgency=medium
 
   [ Sherin T George ]
