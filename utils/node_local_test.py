@@ -4531,6 +4531,83 @@ class PosixTests():
                 return
             raise
 
+    def import_torch(self):
+        """Return a handle to the pydaos.torch module"""
+
+        os.environ['DD_MASK'] = 'all'
+        os.environ['DD_SUBSYS'] = 'all'
+        os.environ['D_LOG_MASK'] = 'DEBUG'
+        os.environ['FI_UNIVERSE_SIZE'] = '128'
+        os.environ['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
+
+        import importlib
+        return importlib.import_module('pydaos.torch')
+
+    @needs_dfuse_with_opt(caching_variants=[False])
+    def test_torch_map_dataset(self):
+        test_files = [
+            { "name": "0.txt", "content": b"0", "seen": 0},
+            { "name": "1/l1.txt", "content": b"1", "seen": 0},
+            { "name": "1/2/l2.txt", "content": b"2", "seen": 0},
+            { "name": "1/2/3/l3.txt", "content": b"3", "seen": 0},
+        ]
+
+        for tf in test_files:
+            file = join(self.dfuse.dir, tf["name"])
+            os.makedirs(os.path.dirname(file), exist_ok=True)
+            with open(file, 'wb') as f:
+                f.write(tf["content"])
+
+        torch = self.import_torch()
+        dataset = torch.Dataset(pool=self.pool.uuid, cont=self.container.uuid)
+
+        assert len(dataset) == len(test_files)
+
+        for i in range(len(dataset)):
+            content = dataset[i]
+            for f in test_files:
+                if f["content"] == content:
+                    f["seen"] += 1
+
+        for f in test_files:
+            assert f["seen"] == 1
+
+        dataset = None
+        # agent will be stopped by the time module calls fini()
+        # pylint: disable=protected-access
+        torch._fini()
+
+    @needs_dfuse_with_opt(caching_variants=[False])
+    def test_torch_iter_dataset(self):
+        test_files = [
+            { "name": "0.txt", "content": b"0", "seen": 0},
+            { "name": "1/l1.txt", "content": b"1", "seen": 0},
+            { "name": "1/2/l2.txt", "content": b"2", "seen": 0},
+            { "name": "1/2/3/l3.txt", "content": b"3", "seen": 0},
+        ]
+
+        for tf in test_files:
+            file = join(self.dfuse.dir, tf["name"])
+            os.makedirs(os.path.dirname(file), exist_ok=True)
+            with open(file, 'wb') as f:
+                f.write(tf["content"])
+
+        torch = self.import_torch()
+        dataset = torch.IterableDataset(pool=self.pool.uuid, cont=self.container.uuid)
+
+        for content in dataset:
+            for f in test_files:
+                if f["content"] == content:
+                    f["seen"] += 1
+
+        for f in test_files:
+            assert f["seen"] == 1
+
+        dataset = None
+        # agent will be stopped by the time module calls fini()
+        # pylint: disable=protected-access
+        torch._fini()
+
 
 class NltStdoutWrapper():
     """Class for capturing stdout from threads"""
@@ -5454,6 +5531,7 @@ def test_pydaos_kv_obj_class(server, conf):
     del container
     daos._cleanup()
     log_test(conf, log_name)
+
 
 # Fault injection testing.
 #
