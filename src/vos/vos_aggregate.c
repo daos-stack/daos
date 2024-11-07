@@ -343,8 +343,7 @@ vos_agg_filter(daos_handle_t ih, vos_iter_desc_t *desc, void *cb_arg, unsigned i
 	struct vos_agg_param	*agg_param = cb_arg;
 	int			 rc = 0;
 
-	rc = need_aggregate(ih, agg_param, desc);
-	if (rc == 0) {
+	if (!need_aggregate(ih, agg_param, desc)) {
 		if (desc->id_type == VOS_ITER_OBJ) {
 			D_DEBUG(DB_EPC, "Skip untouched oid:"DF_UOID"\n",
 				DP_UOID(desc->id_oid));
@@ -359,9 +358,6 @@ vos_agg_filter(daos_handle_t ih, vos_iter_desc_t *desc, void *cb_arg, unsigned i
 		D_GOTO(out, rc = 0);
 	}
 
-	if (rc < 0) /** Ignore the filter error, let iterator handle it on actual probe */
-		D_GOTO(out, rc = 0);
-
 	if (desc->id_type == VOS_ITER_OBJ)
 		rc = oi_iter_check_punch(ih);
 	else
@@ -373,8 +369,14 @@ vos_agg_filter(daos_handle_t ih, vos_iter_desc_t *desc, void *cb_arg, unsigned i
 		inc_agg_counter(agg_param, desc->id_type, AGG_OP_DEL);
 		D_GOTO(out, rc = 0);
 	}
-out:
 
+	/* This MUST be the last check */
+	if (desc->id_type == VOS_ITER_OBJ && vos_bkt_iter_skip(ih, desc)) {
+		credits_consume(&agg_param->ap_credits, AGG_OP_SCAN);
+		*acts |= VOS_ITER_CB_SKIP;
+		D_GOTO(out, rc = 0);
+	}
+out:
 	if (credits_exhausted(&agg_param->ap_credits) ||
 	    (DAOS_FAIL_CHECK(DAOS_VOS_AGG_RANDOM_YIELD) && (rand() % 2))) {
 		D_DEBUG(DB_EPC, "Credits exhausted, type:%u, acts:%u\n", desc->id_type, *acts);
@@ -2707,9 +2709,8 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 
 	ad->ad_iter_param.ip_flags |= VOS_IT_FOR_PURGE | VOS_IT_FOR_AGG;
 retry:
-	rc = vos_iterate(&ad->ad_iter_param, VOS_ITER_OBJ, true, &ad->ad_anchors,
-			 vos_aggregate_pre_cb, vos_aggregate_post_cb,
-			 &ad->ad_agg_param, NULL);
+	rc = vos_iterate_obj(&ad->ad_iter_param, true, &ad->ad_anchors, vos_aggregate_pre_cb,
+			     vos_aggregate_post_cb, &ad->ad_agg_param, NULL);
 	if (rc == -DER_BUSY) {
 		/** Hit a conflict with obj_discard.   Rather than exiting, let's
 		 * yield and try again.
