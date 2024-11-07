@@ -308,15 +308,15 @@ determine_lib_path(void)
 	/* with version in name */
 	D_ASPRINTF(path_libpthread, "%s/libpthread-%s.so", lib_dir_str, libc_version_str);
 	if (path_libpthread == NULL)
-		goto err_1;
+		goto err;
 	if (strnlen(path_libpthread, PATH_MAX) >= PATH_MAX) {
 		D_FREE(path_libpthread);
 		DS_ERROR(ENAMETOOLONG, "path_libpthread is too long");
-		goto err_1;
+		goto err;
 	}
 	D_ASPRINTF(path_libdl, "%s/libdl-%s.so", lib_dir_str, libc_version_str);
 	if (path_libdl == NULL)
-		goto err_1;
+		goto err;
 	D_FREE(lib_dir_str);
 
 	if (strstr(read_buff_map, "libioil.so")) {
@@ -346,7 +346,6 @@ determine_lib_path(void)
 
 err:
 	D_FREE(read_buff_map);
-err_1:
 	D_FREE(lib_dir_str);
 	found_libc = 0;
 	quit_hook_init();
