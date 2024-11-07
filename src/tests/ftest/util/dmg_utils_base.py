@@ -686,7 +686,7 @@ class DmgCommandBase(YamlCommand):
                     super().__init__("/run/dmg/storage/replace/nvme/*", "nvme")
                     self.old_uuid = FormattedParameter("--old-uuid {}", None)
                     self.new_uuid = FormattedParameter("--new-uuid {}", None)
-                    self.no_reint = FormattedParameter("--no-reint", False)
+                    self.host = FormattedParameter("--host {}", None)
 
         class LedSubCommand(CommandWithSubCommand):
             """Defines an object for the dmg storage LED command"""
@@ -810,6 +810,7 @@ class DmgCommandBase(YamlCommand):
                     super().__init__("/run/dmg/storage/query/device-state/*", "nvme-faulty")
                     self.uuid = FormattedParameter("-u {}", None)
                     self.force = FormattedParameter("--force", False)
+                    self.host = FormattedParameter("--host {}", None)
 
     class SystemSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg system sub command."""
@@ -955,7 +956,7 @@ class DmgCommandBase(YamlCommand):
                 def __init__(self):
                     """Create a dmg telemetry metrics list object."""
                     super().__init__("/run/dmg/telemetry/metrics/list/*", "list")
-                    self.host = FormattedParameter("--host-list={}", None)
+                    self.host = FormattedParameter("--host={}", None)
                     self.port = FormattedParameter("--port={}", None)
 
             class QuerySubCommand(CommandWithParameters):
@@ -964,7 +965,7 @@ class DmgCommandBase(YamlCommand):
                 def __init__(self):
                     """Create a dmg telemetry metrics query object."""
                     super().__init__("/run/dmg/telemetry/metrics/query/*", "query")
-                    self.host = FormattedParameter("--host-list={}", None)
+                    self.host = FormattedParameter("--host={}", None)
                     self.port = FormattedParameter("--port={}", None)
                     self.metrics = FormattedParameter("--metrics={}", None)
 

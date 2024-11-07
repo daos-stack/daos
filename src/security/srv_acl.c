@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -752,6 +752,12 @@ bool
 ds_sec_cont_can_evict_all(uint64_t cont_capas)
 {
 	return (cont_capas & CONT_CAPA_EVICT_ALL) != 0;
+}
+
+bool
+ds_sec_cont_can_modify(uint64_t cont_capas)
+{
+	return (cont_capas & CONT_CAPAS_W_MASK) != 0;
 }
 
 uint64_t
