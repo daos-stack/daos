@@ -69,13 +69,20 @@ func NewInfoCache(ctx context.Context, log logging.Logger, client control.UnaryI
 	return ic
 }
 
+func fabricDeviceFilter(cfg *Config) (common.StringSet, bool) {
+	if len(cfg.ExcludeFabricIfaces) > 0 {
+		return cfg.ExcludeFabricIfaces, true
+	}
+	return cfg.IncludeFabricIfaces, false
+}
+
 func getFabricScanFn(log logging.Logger, cfg *Config, scanner *hardware.FabricScanner) fabricScanFn {
 	return func(ctx context.Context, provs ...string) (*NUMAFabric, error) {
 		fis, err := scanner.Scan(ctx, provs...)
 		if err != nil {
 			return nil, err
 		}
-		return NUMAFabricFromScan(ctx, log, fis).WithIgnoredDevices(cfg.ExcludeFabricIfaces), nil
+		return NUMAFabricFromScan(ctx, log, fis).WithDeviceFilter(fabricDeviceFilter(cfg)), nil
 	}
 }
 

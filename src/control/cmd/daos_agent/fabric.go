@@ -92,9 +92,10 @@ type NUMAFabric struct {
 
 	numaMap NUMAFabricMap
 
-	currentNumaDevIdx map[int]int // current device idx to use on each NUMA node
-	currentNUMANode   int         // current NUMA node to search
-	ignoreIfaces      common.StringSet
+	currentNumaDevIdx  map[int]int      // current device idx to use on each NUMA node
+	currentNUMANode    int              // current NUMA node to search
+	ifaceFilterSet     common.StringSet // set of interface names for filtering
+	ifaceFilterExclude bool             // true: exclude filtered interfaces, false: include only filtered interfaces
 
 	getAddrInterface func(name string) (addrFI, error)
 }
@@ -112,12 +113,13 @@ func (n *NUMAFabric) Add(numaNode int, fi *FabricInterface) error {
 	return nil
 }
 
-// WithIgnoredDevices adds a set of fabric interface names that should be ignored when
-// selecting a device.
-func (n *NUMAFabric) WithIgnoredDevices(ifaces common.StringSet) *NUMAFabric {
-	n.ignoreIfaces = ifaces
+// WithDeviceFilter adds a set of fabric interface names that should be used for
+// filtering when selecting a device.
+func (n *NUMAFabric) WithDeviceFilter(ifaces common.StringSet, exclude bool) *NUMAFabric {
+	n.ifaceFilterExclude = exclude
+	n.ifaceFilterSet = ifaces
 	if len(ifaces) > 0 {
-		n.log.Tracef("ignoring fabric devices: %s", n.ignoreIfaces)
+		n.log.Tracef("filtering fabric devices: %s (exclude: %t)", n.ifaceFilterSet, n.ifaceFilterExclude)
 	}
 	return n
 }
@@ -234,9 +236,18 @@ func (n *NUMAFabric) getDeviceFromNUMA(numaNode int, netDevClass hardware.NetDev
 	for checked := 0; checked < n.getNumDevices(numaNode); checked++ {
 		fabricIF := n.getNextDevice(numaNode)
 
-		if n.ignoreIfaces.Has(fabricIF.Name) {
-			n.log.Tracef("device %s: ignored (ignore list %s)", fabricIF, n.ignoreIfaces)
-			continue
+		if len(n.ifaceFilterSet) > 0 {
+			if n.ifaceFilterExclude {
+				if n.ifaceFilterSet.Has(fabricIF.Name) {
+					n.log.Tracef("device %s: ignored (exclude list %s)", fabricIF, n.ifaceFilterSet)
+					continue
+				}
+			} else {
+				if !n.ifaceFilterSet.Has(fabricIF.Name) {
+					n.log.Tracef("device %s: ignored (include list %s)", fabricIF, n.ifaceFilterSet)
+					continue
+				}
+			}
 		}
 
 		// Manually-provided interfaces can be assumed to support what's needed by the system.
