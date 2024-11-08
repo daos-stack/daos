@@ -87,7 +87,8 @@ struct ds_pool {
 				sp_immutable:1,
 				sp_fetch_hdls:1,
 				sp_need_discard:1,
-				sp_disable_rebuild:1;
+				sp_disable_rebuild:1,
+				sp_disable_dtx_resync:1;
 	/* pool_uuid + map version + leader term + rebuild generation define a
 	 * rebuild job.
 	 */
