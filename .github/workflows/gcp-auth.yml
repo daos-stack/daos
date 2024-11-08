@@ -1,0 +1,24 @@
+name: GCP Auth Test
+
+on:
+  pull_request:
+
+permissions:
+  id-token: write
+
+jobs:
+  GCP-Auth:
+    name: Google Cloud Authentication
+    permissions:
+      contents: read
+      id-token: write
+      statuses: write
+    runs-on: [self-hosted, gcp, rocky8]
+    steps:
+      - name: Authenticate to GCP
+        id: gcp-authentication
+        uses: 'google-github-actions/auth@v2'
+        with:
+          project_id: daos-github-ci
+          workload_identity_provider: |
+            'projects/192572342707/locations/global/workloadIdentityPools/github/providers/daos'

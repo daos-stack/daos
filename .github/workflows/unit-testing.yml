@@ -1,7 +1,7 @@
 name: Unit testing
 
-on:
-  pull_request:
+on: fork
+  # pull_request:
 
 permissions: {}
 

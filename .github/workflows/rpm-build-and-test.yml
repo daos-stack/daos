@@ -8,13 +8,13 @@ env:
   EL9_BUILD_VERSION: 9
   LEAP15_VERSION: 15.5
 
-on:
-  workflow_dispatch:
-    inputs:
-      pr-repos:
-        description: 'Any PR-repos that you want included in this build'
-        required: false
-  pull_request:
+on: fork
+  # workflow_dispatch:
+  #   inputs:
+  #     pr-repos:
+  #       description: 'Any PR-repos that you want included in this build'
+  #       required: false
+  # pull_request:
 
 permissions: {}
 
