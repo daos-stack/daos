@@ -44,5 +44,5 @@ jobs:
             docker run --rm -v "$rpm_dst":/root/rpms -v .:/daos $distro \
               /daos/utils/build_rpms_from_scratch.sh /root/rpms          
           else
-            echo "Warning: Docker image '$distro' does not exist. Skipping this step."
+            echo "::warning::Warning: Docker image '$distro' does not exist. Skipping this step."
           fi

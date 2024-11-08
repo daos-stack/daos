@@ -94,16 +94,18 @@ prepare_env_leap() {
   zypper install -y -t pattern devel_basis
 
   # Enable additional repositories if needed
-  if ! zypper lr | grep -q "Main Repository"; then
-      zypper ar -f http://download.opensuse.org/distribution/leap/$suse_version/repo/oss/ "Main Repository"
-  else
-      echo "Main Repository already exists, skipping addition."
-  fi
-  if ! zypper lr | grep -q "Main Update Repository"; then
-      zypper ar -f http://download.opensuse.org/update/leap/$suse_version/oss/ "Main Update Repository"
-  else
-      echo "Main Update Repository already exists, skipping addition."
-  fi
+
+  declare -A repos
+  repos["Main Repository"]="distribution/leap/$suse_version/repo/oss"
+  repos["Main Update Repository"]="update/leap/$suse_version/oss"
+
+  for repo in "${!repos[@]}"; do
+    if ! zypper lr | grep -q "$repo"; then
+      zypper ar -f http://download.opensuse.org/"${repos[$repo]}" "$repo"
+    else
+      echo "$repo already exists, skipping addition."
+    fi
+  done
 
   zypper update -y --skip-interactive --no-recommends
 }
@@ -169,17 +171,17 @@ prepare_env() {
 verify_os_version() {
   if [[ "$OS_ID" == "opensuse-leap" ]]; then
     if ! [[ "$OS_VERSION" == "15.4" || "$OS_VERSION" == "15.5" || "$OS_VERSION" == "15.6" ]]; then
-      echo "Untested SUSE Version: $suse_version"
+      echo "Untested SUSE Version: $OS_VERSION"
       exit 1
     fi
   elif [[ "$OS_ID" == "rocky" ]]; then
     if ! [[ "$OS_VERSION" == "8.9" || "$OS_VERSION" == "9.3" ]]; then
-      echo "Untested Rocky Version: $suse_version"
+      echo "Untested Rocky Version: $OS_VERSION"
       exit 1
     fi
-    else
-      echo "Untested OS: $OS_ID"
-      exit 1
+  else
+    echo "Untested OS: $OS_ID"
+    exit 1
   fi
 }
 
@@ -218,6 +220,7 @@ main() {
   echo "RPMS will be located in $rpms_dst (built in $build_dst)"
 
   prepare_env "$rpms_dst" "$build_dst"
+  cd "$build_dst"
 
   for pkg in isa-l isa-l_crypto dpdk spdk argobots mercury pmdk; do
     build_and_copy_rpm "$pkg"
