@@ -135,11 +135,10 @@ class ExecutableCommand(CommandWithParameters):
         Typical use would include combining with pgrep to verify a subprocess is running.
 
         Returns:
-            str: regular expression to use to search for the command, typically with pgrep or pkill
+            str: regular expression to use to search for the command
+
         """
-        if self.full_command_regex:
-            return f"--full '{str(self)}'"
-        return f"'({'|'.join(self._exe_names)})'"
+        return "'({})'".format("|".join(self._exe_names))
 
     @property
     def with_bind(self):

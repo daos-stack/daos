@@ -320,7 +320,10 @@ class JobManager(ExecutableCommand):
         if not self.job:
             return
         regex = self.job.command_regex
-        detected, running = stop_processes(self.log, self._hosts, regex)
+        if self.job.full_command_regex:
+            regex = f"'{str(self.job)}'"
+        detected, running = stop_processes(
+            self.log, self._hosts, regex, full_command=self.job.full_command_regex)
         if not detected:
             self.log.info(
                 "No remote %s processes killed on %s (none found), done.", regex, self._hosts)
