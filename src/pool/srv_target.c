@@ -505,6 +505,27 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 		goto done;
 	}
 
+	if (!ds_pool_skip_for_check(child->spc_pool) &&
+	    vos_pool_feature_skip_start(child->spc_hdl)) {
+		D_INFO(DF_UUID ": skipped to start\n", DP_UUID(child->spc_uuid));
+		rc = -DER_SHUTDOWN;
+		goto out_close;
+	}
+
+	if (vos_pool_feature_immutable(child->spc_hdl))
+		child->spc_pool->sp_immutable = 1;
+
+	/*
+	 * Rebuild depends on DTX resync, if DTX resync is skipped,
+	 * then rebuild also needs to be skipped.
+	 */
+	if (vos_pool_feature_skip_rebuild(child->spc_hdl) ||
+	    vos_pool_feature_skip_dtx_resync(child->spc_hdl))
+		child->spc_pool->sp_disable_rebuild = 1;
+
+	if (vos_pool_feature_skip_dtx_resync(child->spc_hdl))
+		child->spc_pool->sp_disable_dtx_resync = 1;
+
 	if (!ds_pool_restricted(child->spc_pool, false)) {
 		rc = start_gc_ult(child);
 		if (rc != 0)

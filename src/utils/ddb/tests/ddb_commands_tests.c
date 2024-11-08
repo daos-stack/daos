@@ -362,6 +362,19 @@ dtx_abort_entry_tests(void **state)
 	assert_success(ddb_run_dtx_act_abort(&g_ctx, &opt));
 }
 
+static void
+feature_cmd_tests(void **state)
+{
+	struct dt_vos_pool_ctx *tctx;
+	struct feature_options  opt = {0};
+
+	tctx = *state;
+	assert_invalid(ddb_run_feature(&g_ctx, &opt));
+	opt.path          = tctx->dvt_pmem_file;
+	opt.show_features = true;
+	assert_success(ddb_run_feature(&g_ctx, &opt));
+}
+
 /*
  * --------------------------------------------------------------
  * End test functions
@@ -377,7 +390,7 @@ dcv_suit_setup(void **state)
 
 	/* test setup creates the pool, but doesn't open it ... leave it open for these tests */
 	tctx = *state;
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, &tctx->dvt_poh));
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, &tctx->dvt_poh, 0));
 
 	g_ctx.dc_poh = tctx->dvt_poh;
 
@@ -406,19 +419,20 @@ int
 ddb_commands_tests_run()
 {
 	const struct CMUnitTest tests[] = {
-		TEST(quit_cmd_tests),
-		TEST(ls_cmd_tests),
-		TEST(dump_value_cmd_tests),
-		TEST(dump_ilog_cmd_tests),
-		TEST(dump_superblock_cmd_tests),
-		TEST(dump_dtx_cmd_tests),
-		TEST(rm_cmd_tests),
-		TEST(load_cmd_tests),
-		TEST(rm_ilog_cmd_tests),
-		TEST(process_ilog_cmd_tests),
-		TEST(clear_cmt_dtx_cmd_tests),
-		TEST(dtx_commit_entry_tests),
-		TEST(dtx_abort_entry_tests),
+	    TEST(quit_cmd_tests),
+	    TEST(ls_cmd_tests),
+	    TEST(dump_value_cmd_tests),
+	    TEST(dump_ilog_cmd_tests),
+	    TEST(dump_superblock_cmd_tests),
+	    TEST(dump_dtx_cmd_tests),
+	    TEST(rm_cmd_tests),
+	    TEST(load_cmd_tests),
+	    TEST(rm_ilog_cmd_tests),
+	    TEST(process_ilog_cmd_tests),
+	    TEST(clear_cmt_dtx_cmd_tests),
+	    TEST(dtx_commit_entry_tests),
+	    TEST(dtx_abort_entry_tests),
+	    TEST(feature_cmd_tests),
 	};
 
 	return cmocka_run_group_tests_name("DDB commands tests", tests,

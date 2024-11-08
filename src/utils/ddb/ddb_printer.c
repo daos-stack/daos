@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -189,6 +189,8 @@ ddb_print_superblock(struct ddb_ctx *ctx, struct ddb_superblock *sb)
 	ddb_printf(ctx, "Pool UUID: "DF_UUIDF"\n", DP_UUID(sb->dsb_id));
 	ddb_printf(ctx, "Format Version: %d\n", sb->dsb_durable_format_version);
 	ddb_printf(ctx, "Containers: %lu\n", sb->dsb_cont_nr);
+	ddb_printf(ctx, "Compat Flags: %lu\n", sb->dsb_compat_flags);
+	ddb_printf(ctx, "Incompat Flags: %lu\n", sb->dsb_incompat_flags);
 	print_bytes(ctx, "SCM Size", sb->dsb_scm_sz);
 	print_bytes(ctx, "NVME Size", sb->dsb_nvme_sz);
 	print_bytes(ctx, "Block Size", sb->dsb_blk_sz);
