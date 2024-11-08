@@ -680,3 +680,8 @@
    fun:__tsan_go_atomic32_compare_exchange
    fun:racecall
 }
+{
+   racefuncenter
+   Memcheck:Addr8
+   fun:racefuncenter
+}
