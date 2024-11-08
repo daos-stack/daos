@@ -4618,13 +4618,7 @@ execve(const char *filename, char *const argv[], char *const envp[])
 	if (rc)
 		goto err;
 
-	rc = next_execve(filename, argv, new_envp);
-	if (rc == -1)
-		/* d_hook_enabled could be set false in reset_daos_env_before_exec(). Need to be
-		 * restored if exec() failed for some reason.
-		 */
-		d_hook_enabled = true;
-	return rc;
+	return next_execve(filename, argv, new_envp);
 
 err:
 	errno = rc;
@@ -4652,10 +4646,7 @@ execvpe(const char *filename, char *const argv[], char *const envp[])
 	if (rc)
 		goto err;
 
-	rc = next_execvpe(filename, argv, new_envp);
-	if (rc == -1)
-		d_hook_enabled = true;
-	return rc;
+	return next_execvpe(filename, argv, new_envp);
 
 err:
 	errno = rc;
@@ -4680,10 +4671,7 @@ execv(const char *filename, char *const argv[])
 		return (-1);
 	}
 
-	rc = next_execv(filename, argv);
-	if (rc == -1)
-		d_hook_enabled = true;
-	return rc;
+	return next_execv(filename, argv);
 }
 
 int
@@ -4704,10 +4692,7 @@ execvp(const char *filename, char *const argv[])
 		return (-1);
 	}
 
-	rc = next_execvp(filename, argv);
-	if (rc == -1)
-		d_hook_enabled = true;
-	return rc;
+	return next_execvp(filename, argv);
 }
 
 int
@@ -4731,10 +4716,7 @@ fexecve(int fd, char *const argv[], char *const envp[])
 	if (rc)
 		goto err;
 
-	rc = next_fexecve(fd, argv, new_envp);
-	if (rc == -1)
-		d_hook_enabled = true;
-	return rc;
+	return next_fexecve(fd, argv, new_envp);
 
 err:
 	errno = rc;
