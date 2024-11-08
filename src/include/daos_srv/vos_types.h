@@ -79,19 +79,21 @@ D_CASSERT(sizeof(struct dtx_entry) ==
 /** Pool open flags (for vos_pool_create and vos_pool_open) */
 enum vos_pool_open_flags {
 	/** Pool is small (for sys space reservation); implies VOS_POF_EXCL */
-	VOS_POF_SMALL	= (1 << 0),
+	VOS_POF_SMALL = (1 << 0),
 	/** Exclusive (-DER_BUSY if already opened) */
-	VOS_POF_EXCL	= (1 << 1),
+	VOS_POF_EXCL = (1 << 1),
 	/** Ignore the pool uuid passed into vos_pool_open */
 	VOS_POF_SKIP_UUID_CHECK = (1 << 2),
 	/** Caller does VEA flush periodically */
-	VOS_POF_EXTERNAL_FLUSH	= (1 << 3),
+	VOS_POF_EXTERNAL_FLUSH = (1 << 3),
 	/** RDB pool */
-	VOS_POF_RDB	= (1 << 4),
+	VOS_POF_RDB = (1 << 4),
 	/** SYS DB pool */
-	VOS_POF_SYSDB	= (1 << 5),
+	VOS_POF_SYSDB = (1 << 5),
 	/** Open the pool for daos check query, that will bypass EXEL flags. */
 	VOS_POF_FOR_CHECK_QUERY = (1 << 6),
+	/** Open the pool for feature fetch/update, that will skip VEA load */
+	VOS_POF_FOR_FEATURE_FLAG = (1 << 7),
 };
 
 enum vos_oi_attr {
