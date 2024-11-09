@@ -118,7 +118,7 @@ prepare_env_leap() {
 }
 
 prepare_env_el() {
-  el_version=$OS_VERSION # default to '8'
+  major_version="${OS_VERSION%%.*}"
 
     # Install needed packages
     # git so can clone the repo
@@ -135,9 +135,9 @@ prepare_env_el() {
       make # shouldn't be needed here, but dependency spec files don't include
 
   # enable Power Tools or CodeReady Builder depending on el version. Needed for yasm and maybe others
-  if [[ "$el_version" == "8" ]]; then
+  if [[ "$major_version" == "8" ]]; then
     dnf config-manager --set-enabled powertools
-  elif [[ "$el_version" == "9" ]]; then
+  elif [[ "$major_version" == "9" ]]; then
     dnf config-manager --set-enabled crb # CodeReady Builder
   fi
 

@@ -8,6 +8,7 @@ jobs:
   Run_in_docker:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         # this should be aligned with OS Supported in the script
         os: ["rockylinux:8.6",
