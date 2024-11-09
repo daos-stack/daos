@@ -205,9 +205,10 @@ struct d_tm_bucket_t {
 
 struct d_tm_histogram_t {
 	struct d_tm_bucket_t	*dth_buckets;
-	int			dth_num_buckets;
-	int			dth_initial_width;
-	int			dth_value_multiplier;
+	bool                     dth_fast_bucketing;
+	int                      dth_num_buckets;
+	int                      dth_initial_width;
+	int                      dth_value_multiplier;
 };
 
 struct d_tm_meminfo_t {
