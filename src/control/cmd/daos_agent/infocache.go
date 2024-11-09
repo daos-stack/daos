@@ -69,11 +69,11 @@ func NewInfoCache(ctx context.Context, log logging.Logger, client control.UnaryI
 	return ic
 }
 
-func fabricDeviceFilter(cfg *Config) (common.StringSet, bool) {
+func fabricDeviceFilter(cfg *Config) *deviceFilter {
 	if len(cfg.ExcludeFabricIfaces) > 0 {
-		return cfg.ExcludeFabricIfaces, true
+		return newDeviceFilter(cfg.ExcludeFabricIfaces, filterModeExclude)
 	}
-	return cfg.IncludeFabricIfaces, false
+	return newDeviceFilter(cfg.IncludeFabricIfaces, filterModeInclude)
 }
 
 func getFabricScanFn(log logging.Logger, cfg *Config, scanner *hardware.FabricScanner) fabricScanFn {

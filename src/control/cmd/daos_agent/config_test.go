@@ -142,7 +142,7 @@ exclude_fabric_ifaces: ["ib3"]
 		},
 		"bad filter config": {
 			path:   badFilterCfg,
-			expErr: errors.New("agent config validation failed"),
+			expErr: errors.New("cannot specify both exclude_fabric_ifaces and include_fabric_ifaces"),
 		},
 		"all options": {
 			path: optCfg,

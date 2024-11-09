@@ -764,7 +764,7 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 				},
 			},
 		},
-		"ignore interface": {
+		"exclude interface": {
 			nf: &NUMAFabric{
 				numaMap: map[int][]*FabricInterface{
 					0: {
@@ -804,7 +804,7 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 				},
 			},
 		},
-		"ignore all interfaces": {
+		"exclude all interfaces": {
 			nf: &NUMAFabric{
 				numaMap: map[int][]*FabricInterface{
 					0: {
@@ -841,13 +841,13 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 					tc.nf.getAddrInterface = getMockNetInterfaceSuccess
 				}
 
-				var exclude bool
-				filter := common.NewStringSet(tc.include...)
-				if len(tc.exclude) > 0 {
-					exclude = true
-					filter = common.NewStringSet(tc.exclude...)
+				mode := filterModeExclude
+				devSet := common.NewStringSet(tc.exclude...)
+				if len(tc.include) > 0 {
+					mode = filterModeInclude
+					devSet = common.NewStringSet(tc.include...)
 				}
-				tc.nf = tc.nf.WithDeviceFilter(filter, exclude)
+				tc.nf = tc.nf.WithDeviceFilter(newDeviceFilter(devSet, mode))
 			}
 
 			numDevices := 0
