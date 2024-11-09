@@ -9,6 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
+        # this should be aligned with OS Supported in the script
         os: ["rockylinux:8.6",
              "rockylinux:8.8",
              "rockylinux:8.10",

@@ -21,6 +21,15 @@ OS_NAME=$NAME
 OS_VERSION=$VERSION_ID
 OS_ID=$ID
 
+OS_SUPPORTED=("rockylinux:8.6"
+              "rockylinux:8.8"
+              "rockylinux:8.10"
+              "rockylinux:9.2"
+              "rockylinux:9.3"
+              "opensuse-leap:15.4"
+              "opensuse-leap:15.5"
+              "opensuse-leap:15.6")
+
 # -----------------------------------------------------------------------------
 # This first set of functions serve to abstract away some OS specifics. It is
 # assumed that by the time these functions are called, the OS and Version
@@ -68,7 +77,7 @@ install_dependencies() {
 }
 
 prepare_env_leap() {
-  suse_version=$OS_VERSION # default to '15.4'
+  suse_version=$OS_VERSION
 
   # Update and install required packages using zypper
   zypper refresh
@@ -89,12 +98,10 @@ prepare_env_leap() {
       make \
       python3-Sphinx
 
-
   # Install build tools and dependencies
   zypper install -y -t pattern devel_basis
 
-  # Enable additional repositories if needed
-
+  # Enable additional repositories
   declare -A repos
   repos["Main Repository"]="distribution/leap/$suse_version/repo/oss"
   repos["Main Update Repository"]="update/leap/$suse_version/oss"
@@ -169,20 +176,13 @@ prepare_env() {
 }
 
 verify_os_version() {
-  if [[ "$OS_ID" == "opensuse-leap" ]]; then
-    if ! [[ "$OS_VERSION" == "15.4" || "$OS_VERSION" == "15.5" || "$OS_VERSION" == "15.6" ]]; then
-      echo "Untested SUSE Version: $OS_VERSION"
-      exit 1
-    fi
-  elif [[ "$OS_ID" == "rocky" ]]; then
-    if ! [[ "$OS_VERSION" == "8.9" || "$OS_VERSION" == "9.3" ]]; then
-      echo "Untested Rocky Version: $OS_VERSION"
-      exit 1
-    fi
-  else
-    echo "Untested OS: $OS_ID"
-    exit 1
-  fi
+  local full_version="${OS_ID}:${OS_VERSION}"
+
+  for os in "${OS_SUPPORTED[@]}"; do
+    if [[ "$os" == "$full_version" ]]; then return; fi
+  done
+
+  echo "Untested OS: $full_version"
 }
 
 # -----------------------------------------------------------------------------
@@ -222,7 +222,7 @@ main() {
   prepare_env "$rpms_dst" "$build_dst"
   cd "$build_dst"
 
-  for pkg in isa-l isa-l_crypto dpdk spdk argobots mercury pmdk; do
+  for pkg in isa-l isa-l_crypto libfabric dpdk spdk argobots mercury pmdk; do
     build_and_copy_rpm "$pkg"
   done
 
