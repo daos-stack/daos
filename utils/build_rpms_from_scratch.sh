@@ -27,8 +27,7 @@ OS_SUPPORTED=("rockylinux:8.6"
               "rockylinux:9.2"
               "rockylinux:9.3"
               "opensuse-leap:15.4"
-              "opensuse-leap:15.5"
-              "opensuse-leap:15.6")
+              "opensuse-leap:15.5")
 
 # -----------------------------------------------------------------------------
 # This first set of functions serve to abstract away some OS specifics. It is
@@ -79,29 +78,7 @@ install_dependencies() {
 prepare_env_leap() {
   suse_version=$OS_VERSION
 
-  # Update and install required packages using zypper
-  zypper refresh
-
-  # Install needed packages
-  # git so can clone the repo
-  # rpm-build, rpmdevtools, createrepo for building the rpms and setting up the rpm repo
-  # make is used for managing the rpmbuild process.
-  # python3-Sphinx is needed by dpdk. The file /usr/bin/sphinx-build is listed as a dependency in the spec file,
-  #   however, zypper isn't able to resolve a filename to a package and the scripting to handle that case is pretty
-  #   messy, especially because "zypper what-provides" actually returns three options for sphinx-build. So, forgoing
-  #   automation here and simply hardcoding the dependency.
-  zypper install -y \
-      git \
-      rpm-build \
-      rpmdevtools \
-      createrepo_c \
-      make \
-      python3-Sphinx
-
-  # Install build tools and dependencies
-  zypper install -y -t pattern devel_basis
-
-  # Enable additional repositories
+  # Ensure these repos exist
   declare -A repos
   repos["Main Repository"]="distribution/leap/$suse_version/repo/oss"
   repos["Main Update Repository"]="update/leap/$suse_version/oss"
@@ -113,6 +90,34 @@ prepare_env_leap() {
       echo "$repo already exists, skipping addition."
     fi
   done
+
+  # Update and install required packages using zypper
+  zypper refresh
+
+  # Install needed packages for cloning repos, building rpms and managing a local repo for those rpms. `make` is used
+  # to manage the rpmbuild process.
+  zypper install -y \
+      git \
+      rpm-build \
+      rpmdevtools \
+      createrepo_c \
+      make
+
+  # ----------------------------------
+  # some special considerations
+  # ----------------------------------
+
+  # python3-Sphinx is needed by dpdk. The file /usr/bin/sphinx-build is listed as a dependency in the spec file,
+  #   however, zypper isn't able to resolve a filename to a package and the scripting to handle that case is pretty
+  #   messy, especially because "zypper what-provides" actually returns three options for sphinx-build. So, forgoing
+  #   automation here and simply hardcoding the dependency.
+  zypper install -y python3-Sphinx
+
+  # python-pyelftools is listed as a dependency for dpdk, however, in leap 15.6 the version installed is found by
+  # python3, while meson runs with python3.11
+  if [ "$OS_VERSION" == "15.6" ]; then
+    zypper install -y python311-pyelftools
+  fi
 
   zypper update -y --skip-interactive --no-recommends
 }
