@@ -131,6 +131,11 @@
   required_src: ["src/vos/tests/bio_ut.c"]
   tests:
     - cmd: ["bin/vos_tests", "-A", "50"]
+      env_vars:
+        DAOS_MD_ON_SSD_MODE: "3"
+      aio: "AIO_7"
+      size: 13
+    - cmd: ["bin/vos_tests", "-A", "50"]
       aio: "AIO_7"
       size: 13
     - cmd: ["bin/bio_ut"]

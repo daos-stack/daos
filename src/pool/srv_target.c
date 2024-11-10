@@ -447,8 +447,10 @@ pool_child_recreate(struct ds_pool_child *child)
 		goto pool_info;
 	}
 
-	rc = vos_pool_create(path, child->spc_uuid, 0, pool_info->spi_blob_sz[SMD_DEV_TYPE_DATA],
-			     0, 0 /* version */, NULL);
+	rc = vos_pool_create(path, child->spc_uuid, 0 /* scm_sz */,
+			     pool_info->spi_blob_sz[SMD_DEV_TYPE_DATA],
+			     pool_info->spi_blob_sz[SMD_DEV_TYPE_META],
+			     0 /* flags */, 0 /* version */, NULL);
 	if (rc)
 		DL_ERROR(rc, DF_UUID": Create VOS pool failed.", DP_UUID(child->spc_uuid));
 
@@ -505,6 +507,27 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 		child->spc_no_storage = 1;
 		goto done;
 	}
+
+	if (!ds_pool_skip_for_check(child->spc_pool) &&
+	    vos_pool_feature_skip_start(child->spc_hdl)) {
+		D_INFO(DF_UUID ": skipped to start\n", DP_UUID(child->spc_uuid));
+		rc = -DER_SHUTDOWN;
+		goto out_close;
+	}
+
+	if (vos_pool_feature_immutable(child->spc_hdl))
+		child->spc_pool->sp_immutable = 1;
+
+	/*
+	 * Rebuild depends on DTX resync, if DTX resync is skipped,
+	 * then rebuild also needs to be skipped.
+	 */
+	if (vos_pool_feature_skip_rebuild(child->spc_hdl) ||
+	    vos_pool_feature_skip_dtx_resync(child->spc_hdl))
+		child->spc_pool->sp_disable_rebuild = 1;
+
+	if (vos_pool_feature_skip_dtx_resync(child->spc_hdl))
+		child->spc_pool->sp_disable_dtx_resync = 1;
 
 	if (!ds_pool_restricted(child->spc_pool, false)) {
 		rc = start_gc_ult(child);

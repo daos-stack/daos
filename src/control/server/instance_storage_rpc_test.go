@@ -21,6 +21,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/hardware/pciutils"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -59,24 +60,27 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		badDevState    bool
-		noPciCfgSpc    bool
-		pciDev         *hardware.PCIDevice
-		pciDevErr      error
-		emptyHealthRes bool
-		healthErr      error
-		lastStats      map[string]*ctlpb.BioHealthResp
-		expCtrlr       *ctlpb.NvmeController
-		expNotUpdated  bool
-		expErr         error
-		expDispatched  []*events.RASEvent
-		expLastStats   map[string]*ctlpb.BioHealthResp
+		badDevState      bool
+		nilLinkStatsProv bool
+		noPciCfgSpc      bool
+		pciDev           *hardware.PCIDevice
+		pciDevErr        error
+		healthReq        *ctlpb.BioHealthReq
+		healthRes        *ctlpb.BioHealthResp
+		nilHealthRes     bool
+		healthErr        error
+		lastStats        map[string]*ctlpb.BioHealthResp
+		expCtrlr         *ctlpb.NvmeController
+		expNotUpdated    bool
+		expErr           error
+		expDispatched    []*events.RASEvent
+		expLastStats     map[string]*ctlpb.BioHealthResp
 	}{
 		"bad state; skip health": {
 			badDevState: true,
-			noPciCfgSpc: true,
 			expCtrlr: &ctlpb.NvmeController{
 				PciAddr: pciAddr,
+				PciCfg:  "ABCD",
 			},
 			expNotUpdated: true,
 		},
@@ -88,11 +92,16 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 				HealthStats: healthWithLinkStats(0, 0, 0, 0),
 			},
 		},
+		"nil bio health response": {
+			nilHealthRes: true,
+			expErr:       errors.New("nil BioHealthResp"),
+		},
 		"empty bio health response; empty link stats": {
-			emptyHealthRes: true,
-			pciDev:         new(hardware.PCIDevice),
+			healthRes: new(ctlpb.BioHealthResp),
+			pciDev:    new(hardware.PCIDevice),
 			expCtrlr: &ctlpb.NvmeController{
 				PciAddr:     pciAddr,
+				PciCfg:      "ABCD",
 				DevState:    ctlpb.NvmeDevState_NORMAL,
 				HealthStats: new(ctlpb.BioHealthResp),
 			},
@@ -106,9 +115,19 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 			pciDevErr: errors.New("fail"),
 			expErr:    errors.New("fail"),
 		},
+		"update health; add link stats; pciutils lib error; missing pcie caps": {
+			pciDevErr: pciutils.ErrNoPCIeCaps,
+			expCtrlr: &ctlpb.NvmeController{
+				PciAddr:     pciAddr,
+				PciCfg:      "ABCD",
+				DevState:    ctlpb.NvmeDevState_NORMAL,
+				HealthStats: healthWithLinkStats(0, 0, 0, 0),
+			},
+		},
 		"update health; add link stats; normal link state; no event published": {
 			expCtrlr: &ctlpb.NvmeController{
 				PciAddr:     pciAddr,
+				PciCfg:      "ABCD",
 				DevState:    ctlpb.NvmeDevState_NORMAL,
 				HealthStats: proto.MockNvmeHealth(),
 			},
@@ -128,6 +147,7 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 			},
 			expCtrlr: &ctlpb.NvmeController{
 				PciAddr:     test.MockPCIAddr(1),
+				PciCfg:      "ABCD",
 				DevState:    ctlpb.NvmeDevState_NORMAL,
 				HealthStats: healthWithLinkStats(2.5e+9, 1e+9, 4, 4),
 			},
@@ -152,6 +172,7 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 			},
 			expCtrlr: &ctlpb.NvmeController{
 				PciAddr:     test.MockPCIAddr(1),
+				PciCfg:      "ABCD",
 				DevState:    ctlpb.NvmeDevState_NORMAL,
 				HealthStats: healthWithLinkStats(1e+9, 1e+9, 8, 4),
 			},
@@ -167,6 +188,7 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 			lastStats: lastStatsMap(proto.MockNvmeHealth()),
 			expCtrlr: &ctlpb.NvmeController{
 				PciAddr:     test.MockPCIAddr(1),
+				PciCfg:      "ABCD",
 				DevState:    ctlpb.NvmeDevState_NORMAL,
 				HealthStats: proto.MockNvmeHealth(),
 			},
@@ -176,6 +198,7 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 			lastStats: lastStatsMap(healthWithLinkStats(1e+9, 0.5e+9, 4, 4)),
 			expCtrlr: &ctlpb.NvmeController{
 				PciAddr:     pciAddr,
+				PciCfg:      "ABCD",
 				DevState:    ctlpb.NvmeDevState_NORMAL,
 				HealthStats: proto.MockNvmeHealth(),
 			},
@@ -191,6 +214,7 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 			lastStats: lastStatsMap(healthWithLinkStats(1e+9, 1e+9, 4, 1)),
 			expCtrlr: &ctlpb.NvmeController{
 				PciAddr:     pciAddr,
+				PciCfg:      "ABCD",
 				DevState:    ctlpb.NvmeDevState_NORMAL,
 				HealthStats: proto.MockNvmeHealth(),
 			},
@@ -213,6 +237,7 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 			lastStats: lastStatsMap(healthWithLinkStats(2.5e+9, 1e+9, 4, 4)),
 			expCtrlr: &ctlpb.NvmeController{
 				PciAddr:     test.MockPCIAddr(1),
+				PciCfg:      "ABCD",
 				DevState:    ctlpb.NvmeDevState_NORMAL,
 				HealthStats: healthWithLinkStats(2.5e+9, 1e+9, 4, 4),
 			},
@@ -229,6 +254,7 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 			lastStats: lastStatsMap(healthWithLinkStats(1e+9, 1e+9, 8, 4)),
 			expCtrlr: &ctlpb.NvmeController{
 				PciAddr:     test.MockPCIAddr(1),
+				PciCfg:      "ABCD",
 				DevState:    ctlpb.NvmeDevState_NORMAL,
 				HealthStats: healthWithLinkStats(1e+9, 1e+9, 8, 4),
 			},
@@ -245,6 +271,7 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 			lastStats: lastStatsMap(healthWithLinkStats(2.5e+9, 2.5e+9, 8, 4)),
 			expCtrlr: &ctlpb.NvmeController{
 				PciAddr:     test.MockPCIAddr(1),
+				PciCfg:      "ABCD",
 				DevState:    ctlpb.NvmeDevState_NORMAL,
 				HealthStats: healthWithLinkStats(2.5e+9, 1e+9, 8, 8),
 			},
@@ -271,6 +298,7 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 			lastStats: lastStatsMap(healthWithLinkStats(2.5e+9, 1e+9, 8, 8)),
 			expCtrlr: &ctlpb.NvmeController{
 				PciAddr:     test.MockPCIAddr(1),
+				PciCfg:      "ABCD",
 				DevState:    ctlpb.NvmeDevState_NORMAL,
 				HealthStats: healthWithLinkStats(2.5e+9, 2.5e+9, 8, 4),
 			},
@@ -297,6 +325,7 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 			lastStats: lastStatsMap(healthWithLinkStats(8e+9, 2.5e+9, 4, 4)),
 			expCtrlr: &ctlpb.NvmeController{
 				PciAddr:     test.MockPCIAddr(1),
+				PciCfg:      "ABCD",
 				DevState:    ctlpb.NvmeDevState_NORMAL,
 				HealthStats: healthWithLinkStats(8e+9, 1e+9, 4, 4),
 			},
@@ -319,6 +348,7 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 			lastStats: lastStatsMap(healthWithLinkStats(1e+9, 1e+9, 16, 8)),
 			expCtrlr: &ctlpb.NvmeController{
 				PciAddr:     test.MockPCIAddr(1),
+				PciCfg:      "ABCD",
 				DevState:    ctlpb.NvmeDevState_NORMAL,
 				HealthStats: healthWithLinkStats(1e+9, 1e+9, 16, 4),
 			},
@@ -335,15 +365,11 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			healthRes := healthWithLinkStats(0, 0, 0, 0)
-			if tc.emptyHealthRes {
-				healthRes = new(ctlpb.BioHealthResp)
-			}
-			getCtrlrHealth = func(_ context.Context, _ Engine, _ *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
-				return healthRes, tc.healthErr
+			scanHealth = func(_ context.Context, _ Engine, _ *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
+				return tc.healthRes, tc.healthErr
 			}
 			defer func() {
-				getCtrlrHealth = getBioHealth
+				scanHealth = getBioHealth
 			}()
 
 			var devState ctlpb.NvmeDevState
@@ -363,10 +389,16 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 					LinkMaxWidth: 4,
 				}
 			}
+			if tc.healthRes == nil && !tc.nilHealthRes {
+				tc.healthRes = healthWithLinkStats(0, 0, 0, 0)
+			}
 
-			mockProv := &mockPCIeLinkStatsProvider{
-				pciDev:    tc.pciDev,
-				pciDevErr: tc.pciDevErr,
+			var mockProv *mockPCIeLinkStatsProvider
+			if !tc.nilLinkStatsProv {
+				mockProv = &mockPCIeLinkStatsProvider{
+					pciDev:    tc.pciDev,
+					pciDevErr: tc.pciDevErr,
+				}
 			}
 
 			ctrlr := &ctlpb.NvmeController{
@@ -387,8 +419,14 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 			subscriber := newMockSubscriber(2)
 			ps.Subscribe(events.RASTypeInfoOnly, subscriber)
 
-			upd, err := populateCtrlrHealth(test.Context(t), ei,
-				&ctlpb.BioHealthReq{}, ctrlr, mockProv)
+			chReq := ctrlrHealthReq{
+				engine:        ei,
+				bhReq:         tc.healthReq,
+				ctrlr:         ctrlr,
+				linkStatsProv: mockProv,
+			}
+
+			upd, err := populateCtrlrHealth(test.Context(t), chReq)
 			test.CmpErr(t, tc.expErr, err)
 			if err != nil {
 				return
@@ -436,6 +474,7 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 	}
 	defSmdScanRes := func() *ctlpb.SmdDevResp {
 		sd := proto.MockSmdDevice(c, 2)
+		sd.Rank = 2
 		return &ctlpb.SmdDevResp{Devices: []*ctlpb.SmdDevice{sd}}
 	}
 	healthRespWithUsage := func() *ctlpb.BioHealthResp {
@@ -443,6 +482,19 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 		mh.TotalBytes, mh.AvailBytes, mh.ClusterSize = 1, 2, 3
 		mh.MetaWalSize, mh.RdbWalSize = 4, 5
 		return mh
+	}
+	ctrlrWithUsageAndMeta := func() *ctlpb.NvmeController {
+		c := proto.MockNvmeController(2)
+		c.HealthStats = healthRespWithUsage()
+		sd := proto.MockSmdDevice(nil, 2)
+		sd.Rank = 1
+		sd.TotalBytes = c.HealthStats.TotalBytes
+		sd.AvailBytes = c.HealthStats.AvailBytes
+		sd.ClusterSize = c.HealthStats.ClusterSize
+		sd.MetaWalSize = c.HealthStats.MetaWalSize
+		sd.RdbWalSize = c.HealthStats.RdbWalSize
+		c.SmdDevices = []*ctlpb.SmdDevice{sd}
+		return c
 	}
 
 	for name, tc := range map[string]struct {
@@ -640,28 +692,14 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 				State: new(ctlpb.ResponseState),
 			},
 		},
-		"scan over drpc; with smd and health; usage and wal size reported": {
+		"scan over drpc; with meta and health; usage and wal size reported": {
 			req:       ctlpb.ScanNvmeReq{Meta: true, Health: true},
 			rank:      1,
 			smdRes:    defSmdScanRes(),
 			healthRes: healthRespWithUsage(),
 			expResp: &ctlpb.ScanNvmeResp{
-				Ctrlrs: proto.NvmeControllers{
-					func() *ctlpb.NvmeController {
-						c := proto.MockNvmeController(2)
-						c.HealthStats = healthRespWithUsage()
-						sd := proto.MockSmdDevice(nil, 2)
-						sd.Rank = 1
-						sd.TotalBytes = c.HealthStats.TotalBytes
-						sd.AvailBytes = c.HealthStats.AvailBytes
-						sd.ClusterSize = c.HealthStats.ClusterSize
-						sd.MetaWalSize = c.HealthStats.MetaWalSize
-						sd.RdbWalSize = c.HealthStats.RdbWalSize
-						c.SmdDevices = []*ctlpb.SmdDevice{sd}
-						return c
-					}(),
-				},
-				State: new(ctlpb.ResponseState),
+				Ctrlrs: proto.NvmeControllers{ctrlrWithUsageAndMeta()},
+				State:  new(ctlpb.ResponseState),
 			},
 		},
 		"scan over drpc; only ctrlrs with valid states shown": {
@@ -703,7 +741,7 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 				State: new(ctlpb.ResponseState),
 			},
 		},
-		"scan over drpc; with smd and health; missing ctrlr in smd": {
+		"scan over drpc; with meta and health; missing ctrlr in smd": {
 			req: ctlpb.ScanNvmeReq{Meta: true, Health: true},
 			smdRes: func() *ctlpb.SmdDevResp {
 				ssr := defSmdScanRes()
@@ -713,22 +751,47 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 			healthRes: healthRespWithUsage(),
 			expErr:    errors.New("no ctrlr ref"),
 		},
-		"scan over drpc; with smd and health; health scan fails": {
+		"scan over drpc; with meta and health; health scan fails": {
 			req:       ctlpb.ScanNvmeReq{Meta: true, Health: true},
 			smdRes:    defSmdScanRes(),
 			healthErr: errors.New("health scan failed"),
 			expErr:    errors.New("health scan failed"),
 		},
-		"scan over drpc; with smd and health; smd list fails": {
+		"scan over drpc; with meta and health; smd list fails": {
 			req:       ctlpb.ScanNvmeReq{Meta: true, Health: true},
 			smdErr:    errors.New("smd scan failed"),
 			healthRes: healthRespWithUsage(),
 			expErr:    errors.New("smd scan failed"),
 		},
-		"scan over drpc; with smd and health; nil smd list returned": {
+		"scan over drpc; with meta and health; nil smd list returned": {
 			req:       ctlpb.ScanNvmeReq{Meta: true, Health: true},
 			healthRes: healthRespWithUsage(),
 			expErr:    errors.New("nil smd scan resp"),
+		},
+		"scan over drpc; with meta and health; link info update skipped": {
+			req:  ctlpb.ScanNvmeReq{Meta: true, Health: true},
+			rank: 1,
+			smdRes: func() *ctlpb.SmdDevResp {
+				ssr := defSmdScanRes()
+				ssr.Devices[0].Ctrlr.PciCfg = "ABCD"
+				return ssr
+			}(),
+			healthRes: healthRespWithUsage(),
+			expResp: &ctlpb.ScanNvmeResp{
+				Ctrlrs: proto.NvmeControllers{ctrlrWithUsageAndMeta()},
+				State:  new(ctlpb.ResponseState),
+			},
+		},
+		"scan over drpc; with health; link info update run but failed": {
+			req: ctlpb.ScanNvmeReq{Health: true, LinkStats: true},
+			smdRes: func() *ctlpb.SmdDevResp {
+				ssr := defSmdScanRes()
+				ssr.Devices[0].Ctrlr.PciCfg = "ABCD"
+				return ssr
+			}(),
+			healthRes: healthRespWithUsage(),
+			// Prove link stat provider gets called without Meta flag.
+			expErr: errors.New("link stats provider fail"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -741,11 +804,17 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 			defer func() {
 				scanSmd = listSmdDevices
 			}()
-			getCtrlrHealth = func(_ context.Context, _ Engine, _ *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
+			scanHealth = func(_ context.Context, _ Engine, _ *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
 				return tc.healthRes, tc.healthErr
 			}
 			defer func() {
-				getCtrlrHealth = getBioHealth
+				scanHealth = getBioHealth
+			}()
+			linkStatsProv = &mockPCIeLinkStatsProvider{
+				pciDevErr: errors.New("link stats provider fail"),
+			}
+			defer func() {
+				linkStatsProv = pciutils.NewPCIeLinkStatsProvider()
 			}()
 
 			if tc.provRes == nil {
@@ -776,7 +845,8 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 				ei.setSuperblock(nil)
 			} else {
 				ei.setSuperblock(&Superblock{
-					Rank: ranklist.NewRankPtr(uint32(tc.rank)), ValidRank: true,
+					Rank:      ranklist.NewRankPtr(uint32(tc.rank)),
+					ValidRank: true,
 				})
 			}
 

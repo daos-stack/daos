@@ -4,16 +4,6 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-#include <fcntl.h>
-#include <libgen.h>
-#include <daos/tests_lib.h>
-#include <daos_srv/dtx_srv.h>
-#include <daos_srv/vos.h>
-#include <gurt/debug.h>
-#include <ddb_common.h>
-#include <ddb_main.h>
-#include <sys/stat.h>
-#include "ddb_cmocka.h"
 #include "ddb_test_driver.h"
 
 #define DEFINE_IOV(str) {.iov_buf = str, .iov_buf_len = strlen(str), .iov_len = strlen(str)}
@@ -243,7 +233,9 @@ ddb_test_pool_setup(struct dt_vos_pool_ctx *tctx)
 		return rc;
 	}
 
-	rc = vos_pool_create(tctx->dvt_pmem_file, tctx->dvt_pool_uuid, 0, 0, 0, 0, NULL);
+	rc = vos_pool_create(tctx->dvt_pmem_file, tctx->dvt_pool_uuid, 0 /* scm_sz */,
+			     0 /* data_sz */, 0 /* meta_sz */, 0 /* flags */, 0 /* version */,
+			     NULL);
 	if (rc) {
 		close(tctx->dvt_fd);
 		return rc;
@@ -313,19 +305,25 @@ int
 ddb_teardown_vos(void **state)
 {
 	struct dt_vos_pool_ctx		*tctx = *state;
+	int                              rc   = 0;
 
 	if (tctx == NULL) {
 		fail_msg("Test context not setup correctly");
 		return -DER_UNKNOWN;
 	}
 
-	vos_self_init("/mnt/daos", false, 0);
-	assert_success(vos_pool_destroy(tctx->dvt_pmem_file, tctx->dvt_pool_uuid));
-	vos_self_fini();
+	if (tctx->dvt_special_pool_destroy) {
+		rc = dv_pool_destroy(tctx->dvt_pmem_file);
+	} else {
+		vos_self_init("/mnt/daos", false, 0);
+		assert_success(vos_pool_destroy(tctx->dvt_pmem_file, tctx->dvt_pool_uuid));
+		vos_self_fini();
+	}
+
 	close(tctx->dvt_fd);
 	D_FREE(tctx);
 
-	return 0;
+	return rc;
 }
 
 void

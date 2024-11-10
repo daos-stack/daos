@@ -6,14 +6,14 @@
     msg: "Variable '{{ item }}' is not defined"
   when: item not in vars
   loop:
-    - daos_runtime_dir
     - daos_source_dir
+    - daos_build_dir
 
 - name: Client DAOS configuration
   import_tasks: daos_clients.yml
 
 - name: Add DAOS server groups
-  remote_user: root
+  become: true
   group:
     name: "{{ item }}"
     state: present
@@ -23,7 +23,7 @@
     - daos_server
 
 - name: Add DAOS server user
-  remote_user: root
+  become: true
   user:
     name: daos_server
     state: present
@@ -36,7 +36,7 @@
       - daos_daemons
 
 - name: Create client certificate daos-server configuration file tree
-  remote_user: root
+  become: true
   file:
     path: /etc/daos/certs/clients
     state: directory

@@ -42,6 +42,17 @@ struct crt_na_config {
 	char            **noc_domain_str; /* Array of domains */
 };
 
+#define CRT_TRAFFIC_CLASSES                                                                        \
+	X(CRT_TC_UNSPEC, "unspec")           /* Leave it upon plugin to choose */                  \
+	X(CRT_TC_BEST_EFFORT, "best_effort") /* Best effort */                                     \
+	X(CRT_TC_LOW_LATENCY, "low_latency") /* Low latency */                                     \
+	X(CRT_TC_BULK_DATA, "bulk_data")     /* Bulk data */                                       \
+	X(CRT_TC_UNKNOWN, "unknown")         /* Unknown */
+
+#define X(a, b) a,
+enum crt_traffic_class { CRT_TRAFFIC_CLASSES };
+#undef X
+
 struct crt_prov_gdata {
 	/** NA plugin type */
 	int			cpg_provider;
@@ -105,6 +116,9 @@ struct crt_gdata {
 	/** cart context index used by SWIM */
 	int32_t                  cg_swim_ctx_idx;
 
+	/** traffic class used by SWIM */
+	enum crt_traffic_class   cg_swim_tc;
+
 	/** credits limitation for #in-flight RPCs per target EP CTX */
 	uint32_t		cg_credit_ep_ctx;
 
@@ -132,6 +146,9 @@ struct crt_gdata {
 	unsigned int             cg_use_sensors         : 1;
 	/** whether we are on a primary provider */
 	unsigned int             cg_provider_is_primary : 1;
+
+	/** use single thread to access context */
+	bool                     cg_thread_mode_single;
 
 	ATOMIC uint64_t		cg_rpcid; /* rpc id */
 
@@ -208,6 +225,7 @@ struct crt_event_cb_priv {
 	ENV(D_POLL_TIMEOUT)                                                                        \
 	ENV_STR(D_PORT)                                                                            \
 	ENV(D_PORT_AUTO_ADJUST)                                                                    \
+	ENV(D_THREAD_MODE_SINGLE)                                                                  \
 	ENV(D_POST_INCR)                                                                           \
 	ENV(D_POST_INIT)                                                                           \
 	ENV(D_MRECV_BUF)                                                                           \
@@ -220,6 +238,7 @@ struct crt_event_cb_priv {
 	ENV(SWIM_PING_TIMEOUT)                                                                     \
 	ENV(SWIM_PROTOCOL_PERIOD_LEN)                                                              \
 	ENV(SWIM_SUSPECT_TIMEOUT)                                                                  \
+	ENV_STR(SWIM_TRAFFIC_CLASS)                                                                \
 	ENV_STR(UCX_IB_FORK_INIT)
 
 /* uint env */

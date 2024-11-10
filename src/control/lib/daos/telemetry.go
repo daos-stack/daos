@@ -8,6 +8,7 @@ package daos
 
 import (
 	"encoding/json"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -220,6 +221,71 @@ func (ms *MetricSet) MarshalJSON() ([]byte, error) {
 		Type:   strings.ToLower(ms.Type.String()),
 		toJSON: (*toJSON)(ms),
 	})
+}
+
+// jsonFloat is a terrible hack to deal with the stdlib's inabilility
+// to deal with -Inf/+Inf/NaN: https://github.com/golang/go/issues/59627
+type jsonFloat float64
+
+func (jf jsonFloat) MarshalJSON() ([]byte, error) {
+	switch {
+	case math.IsInf(float64(jf), 1):
+		return []byte(`"+Inf"`), nil
+	case math.IsInf(float64(jf), -1):
+		return []byte(`"-Inf"`), nil
+	case math.IsNaN(float64(jf)):
+		return []byte(`"NaN"`), nil
+	}
+	return json.Marshal(float64(jf))
+}
+
+func (jf *jsonFloat) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, (*float64)(jf)); err == nil {
+		return nil
+	}
+
+	var stringVal string
+	if err := json.Unmarshal(data, &stringVal); err != nil {
+		return err
+	}
+
+	val, err := strconv.ParseFloat(stringVal, 64)
+	if err != nil {
+		return err
+	}
+
+	*jf = jsonFloat(val)
+
+	return nil
+}
+
+func (mb *MetricBucket) MarshalJSON() ([]byte, error) {
+	type toJSON MetricBucket
+	return json.Marshal(&struct {
+		*toJSON
+		UpperBound jsonFloat `json:"upper_bound"`
+	}{
+		toJSON:     (*toJSON)(mb),
+		UpperBound: jsonFloat(mb.UpperBound),
+	})
+}
+
+func (mb *MetricBucket) UnmarshalJSON(data []byte) error {
+	type fromJSON MetricBucket
+
+	from := &struct {
+		UpperBound jsonFloat `json:"upper_bound"`
+		*fromJSON
+	}{
+		fromJSON: (*fromJSON)(mb),
+	}
+	if err := json.Unmarshal(data, from); err != nil {
+		return err
+	}
+
+	mb.UpperBound = float64(from.UpperBound)
+
+	return nil
 }
 
 // jsonMetric serves as a universal metric representation for unmarshaling from
