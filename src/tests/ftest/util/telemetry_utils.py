@@ -373,15 +373,15 @@ class TelemetryUtils():
     ENGINE_RANK_METRICS = [
         "engine_rank"]
     ENGINE_NVME_HEALTH_METRICS = [
-        "engine_nvme_commands_read_errs",
-        "engine_nvme_commands_write_errs",
-        "engine_nvme_commands_unmap_errs",
-        "engine_nvme_commands_checksum_mismatch",
         "engine_nvme_commands_data_units_written",
         "engine_nvme_commands_data_units_read",
         "engine_nvme_commands_host_write_cmds",
         "engine_nvme_commands_host_read_cmds",
         "engine_nvme_commands_media_errs",
+        "engine_nvme_commands_read_errs",
+        "engine_nvme_commands_write_errs",
+        "engine_nvme_commands_unmap_errs",
+        "engine_nvme_commands_checksum_mismatch",
         "engine_nvme_power_cycles",
         "engine_nvme_commands_ctrl_busy_time",
         "engine_nvme_power_on_hours",
