@@ -1108,7 +1108,7 @@ int daos_obj_query_merge(struct obj_query_merge_args *oqma);
 void obj_coll_disp_init(uint32_t tgt_nr, uint32_t max_tgt_size, uint32_t inline_size,
 			uint32_t start, uint32_t max_width, struct obj_coll_disp_cursor *ocdc);
 void obj_coll_disp_dest(struct obj_coll_disp_cursor *ocdc, struct daos_coll_target *tgts,
-			crt_endpoint_t *tgt_ep);
+			crt_endpoint_t *tgt_ep, daos_obj_id_t oid);
 void obj_coll_disp_move(struct obj_coll_disp_cursor *ocdc);
 int obj_utils_init(void);
 void obj_utils_fini(void);

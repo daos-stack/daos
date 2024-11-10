@@ -13,6 +13,7 @@
 #include <pthread.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
+#include <time.h>
 #include <daos/tests_lib.h>
 #include "wrap_cmocka.h"
 #include <gurt/telemetry_common.h>
@@ -341,16 +342,16 @@ static void
 check_bucket_counter(char *path, int bucket_id, uint64_t exp_val)
 {
 	struct d_tm_node_t	*node;
-	uint64_t		val;
-	int			rc;
-	char			bucket_path[D_TM_MAX_NAME_LEN];
+	struct d_tm_bucket_t     bucket;
+	uint64_t                 val;
+	int                      rc;
 
-	snprintf(bucket_path, sizeof(bucket_path), "%s/bucket %d",
-		 path, bucket_id);
-
-	node = d_tm_find_metric(cli_ctx, bucket_path);
+	node = d_tm_find_metric(cli_ctx, path);
 	assert_non_null(node);
-	rc = d_tm_get_counter(cli_ctx, &val, node);
+
+	rc = d_tm_get_bucket_range(cli_ctx, &bucket, bucket_id, node);
+	assert_rc_equal(rc, DER_SUCCESS);
+	rc = d_tm_get_counter(cli_ctx, &val, bucket.dtb_bucket);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(val, exp_val);
 }
@@ -373,11 +374,12 @@ check_histogram_m1_stats(char *path)
 static void
 check_bucket_metadata(struct d_tm_node_t *node, int bucket_id)
 {
-	struct d_tm_bucket_t	bucket;
+	struct d_tm_bucket_t     bucket;
 	char			*desc;
 	char			*units;
-	int			rc;
-	char			exp_desc[D_TM_MAX_DESC_LEN];
+	char                     exp_desc[D_TM_MAX_DESC_LEN];
+	char                     max_str[21];
+	int                      rc;
 
 	printf("Checking bucket %d\n", bucket_id);
 
@@ -385,9 +387,13 @@ check_bucket_metadata(struct d_tm_node_t *node, int bucket_id)
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_non_null(bucket.dtb_bucket);
 
-	snprintf(exp_desc, sizeof(exp_desc),
-		 "histogram bucket %d [%lu .. %lu]",
-		 bucket_id, bucket.dtb_min, bucket.dtb_max);
+	if (bucket.dtb_max == UINT64_MAX)
+		snprintf(max_str, sizeof(max_str), "inf");
+	else
+		snprintf(max_str, sizeof(max_str), "%lu", bucket.dtb_max);
+
+	snprintf(exp_desc, sizeof(exp_desc), "histogram bucket %d [%lu .. %s]", bucket_id,
+		 bucket.dtb_min, max_str);
 
 	rc = d_tm_get_metadata(cli_ctx, &desc, &units, bucket.dtb_bucket);
 	assert_rc_equal(rc, DER_SUCCESS);
@@ -473,8 +479,7 @@ test_gauge_with_histogram_multiplier_1(void **state)
 	initial_width = 5;
 	multiplier = 1;
 
-	rc = d_tm_init_histogram(gauge, path, num_buckets,
-				 initial_width, multiplier);
+	rc = d_tm_init_histogram(gauge, path, num_buckets, initial_width, multiplier, NULL);
 	assert_rc_equal(rc, DER_SUCCESS);
 
 	/* bucket 0 - gets 3 values */
@@ -533,36 +538,87 @@ check_histogram_m2_data(char *path)
 	assert_rc_equal(rc, DER_SUCCESS);
 
 	assert_int_equal(histogram.dth_num_buckets, 5);
-	assert_int_equal(histogram.dth_initial_width, 2048);
+	assert_int_equal(histogram.dth_initial_width, 256);
 	assert_int_equal(histogram.dth_value_multiplier, 2);
 
 	rc = d_tm_get_bucket_range(cli_ctx, &bucket, 0, gauge);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(bucket.dtb_min, 0);
-	assert_int_equal(bucket.dtb_max, 2047);
+	assert_int_equal(bucket.dtb_max, 255);
 
 	rc = d_tm_get_bucket_range(cli_ctx, &bucket, 1, gauge);
 	assert_rc_equal(rc, DER_SUCCESS);
-	assert_int_equal(bucket.dtb_min, 2048);
-	assert_int_equal(bucket.dtb_max, 6143);
+	assert_int_equal(bucket.dtb_min, 256);
+	assert_int_equal(bucket.dtb_max, 511);
 
 	rc = d_tm_get_bucket_range(cli_ctx, &bucket, 2, gauge);
 	assert_rc_equal(rc, DER_SUCCESS);
-	assert_int_equal(bucket.dtb_min, 6144);
-	assert_int_equal(bucket.dtb_max, 14335);
+	assert_int_equal(bucket.dtb_min, 512);
+	assert_int_equal(bucket.dtb_max, 1023);
 
 	rc = d_tm_get_bucket_range(cli_ctx, &bucket, 3, gauge);
 	assert_rc_equal(rc, DER_SUCCESS);
-	assert_int_equal(bucket.dtb_min, 14336);
-	assert_int_equal(bucket.dtb_max, 30719);
+	assert_int_equal(bucket.dtb_min, 1024);
+	assert_int_equal(bucket.dtb_max, 2047);
 
 	rc = d_tm_get_bucket_range(cli_ctx, &bucket, 4, gauge);
 	assert_rc_equal(rc, DER_SUCCESS);
-	assert_int_equal(bucket.dtb_min, 30720);
+	assert_int_equal(bucket.dtb_min, 2048);
 	assert_true(bucket.dtb_max == UINT64_MAX);
 
 	rc = d_tm_get_bucket_range(cli_ctx, &bucket, 5, gauge);
 	assert_rc_equal(rc, -DER_INVAL);
+}
+
+static void
+benchmark_histogram_fast_vs_slow(void **state)
+{
+	struct d_tm_node_t      *dir_node = NULL;
+	struct d_tm_node_t      *gauge;
+	struct d_tm_histogram_t *histogram;
+	int                      num_buckets;
+	int                      initial_width;
+	int                      multiplier;
+	int                      rc;
+	char                    *path, *dir;
+
+	dir  = "gurt/tests/telem/benchmark";
+	path = "gurt/tests/telem/benchmark/test_hist";
+
+	for (int i = 0; i < 2; i++) {
+		rc = d_tm_add_ephemeral_dir(&dir_node, 8192, dir);
+		assert_rc_equal(rc, DER_SUCCESS);
+
+		rc = d_tm_add_metric(&gauge, D_TM_STATS_GAUGE,
+				     "A gauge with a histogram for benchmarking", D_TM_TERABYTE,
+				     path);
+		assert_rc_equal(rc, DER_SUCCESS);
+
+		num_buckets   = 16;
+		initial_width = 256;
+		multiplier    = 2;
+
+		rc = d_tm_init_histogram(gauge, path, num_buckets, initial_width, multiplier, NULL);
+		assert_rc_equal(rc, DER_SUCCESS);
+
+		histogram = gauge->dtn_metric->dtm_histogram;
+		assert_non_null(histogram);
+
+		histogram->dth_fast_bucketing = i;
+		float start_time              = (float)clock() / CLOCKS_PER_SEC;
+
+		for (int j = 0; j < 1 << 22; j++) {
+			d_tm_set_gauge(gauge, j);
+		}
+
+		float end_time = (float)clock() / CLOCKS_PER_SEC;
+
+		D_PRINT("clock time with fast %d: %f\n", histogram->dth_fast_bucketing,
+			end_time - start_time);
+
+		rc = d_tm_del_ephemeral_dir(dir);
+		assert_rc_equal(rc, DER_SUCCESS);
+	}
 }
 
 static void
@@ -583,38 +639,37 @@ test_gauge_with_histogram_multiplier_2(void **state)
 	assert_rc_equal(rc, DER_SUCCESS);
 
 	num_buckets = 5;
-	initial_width = 2048;
+	initial_width = 256;
 	multiplier = 2;
 
-	rc = d_tm_init_histogram(gauge, path, num_buckets,
-				 initial_width, multiplier);
+	rc = d_tm_init_histogram(gauge, path, num_buckets, initial_width, multiplier, NULL);
 	assert_rc_equal(rc, DER_SUCCESS);
 
 	/* bucket 0 - gets 3 values */
 	d_tm_set_gauge(gauge, 0);
-	d_tm_set_gauge(gauge, 512);
-	d_tm_set_gauge(gauge, 2047);
+	d_tm_set_gauge(gauge, 128);
+	d_tm_set_gauge(gauge, 255);
 
 	/* bucket 1 - gets 4 values  */
-	d_tm_set_gauge(gauge, 2048);
-	d_tm_set_gauge(gauge, 2049);
-	d_tm_set_gauge(gauge, 3000);
-	d_tm_set_gauge(gauge, 6143);
+	d_tm_set_gauge(gauge, 256);
+	d_tm_set_gauge(gauge, 312);
+	d_tm_set_gauge(gauge, 480);
+	d_tm_set_gauge(gauge, 511);
 
 	/* bucket 2 - gets 2 values  */
-	d_tm_set_gauge(gauge, 6144);
-	d_tm_set_gauge(gauge, 14335);
+	d_tm_set_gauge(gauge, 512);
+	d_tm_set_gauge(gauge, 1023);
 
 	/* bucket 3 - gets 3 values  */
-	d_tm_set_gauge(gauge, 14336);
-	d_tm_set_gauge(gauge, 16383);
-	d_tm_set_gauge(gauge, 30719);
+	d_tm_set_gauge(gauge, 1024);
+	d_tm_set_gauge(gauge, 2000);
+	d_tm_set_gauge(gauge, 2047);
 
 	/* bucket 4 - gets 4 values  */
-	d_tm_set_gauge(gauge, 30720);
-	d_tm_set_gauge(gauge, 35000);
-	d_tm_set_gauge(gauge, 40000);
-	d_tm_set_gauge(gauge, 65000);
+	d_tm_set_gauge(gauge, 2048);
+	d_tm_set_gauge(gauge, 3000);
+	d_tm_set_gauge(gauge, 4000);
+	d_tm_set_gauge(gauge, 8193);
 
 	/* Verify result data */
 	check_histogram_m2_data(path);
@@ -1351,32 +1406,33 @@ fini_tests(void **state)
 int
 main(int argc, char **argv)
 {
-	const struct CMUnitTest	tests[] = {
-		cmocka_unit_test(test_timer_snapshot),
-		cmocka_unit_test(test_increment_counter),
-		cmocka_unit_test(test_add_to_counter),
-		cmocka_unit_test(test_gauge),
-		cmocka_unit_test(test_record_timestamp),
-		cmocka_unit_test(test_interval_timer),
-		cmocka_unit_test(test_gauge_stats),
-		cmocka_unit_test(test_duration_stats),
-		cmocka_unit_test(test_gauge_with_histogram_multiplier_1),
-		cmocka_unit_test(test_gauge_with_histogram_multiplier_2),
-		cmocka_unit_test(test_units),
-		cmocka_unit_test(test_ephemeral_simple),
-		cmocka_unit_test(test_ephemeral_nested),
-		cmocka_unit_test(test_ephemeral_cleared_sibling),
-		cmocka_unit_test(test_gc_ctx),
-		/* Run after the tests that populate the metrics */
-		cmocka_unit_test(test_list_ephemeral),
-		cmocka_unit_test(test_list_subdirs),
-		cmocka_unit_test(test_follow_link),
-		cmocka_unit_test(test_find_metric),
-		cmocka_unit_test(test_verify_object_count),
-		cmocka_unit_test(test_print_metrics),
-		/* Run last since nothing can be written afterward */
-		cmocka_unit_test(test_shared_memory_cleanup),
-		cmocka_unit_test(test_cleanup_on_init),
+	const struct CMUnitTest tests[] = {
+	    cmocka_unit_test(test_timer_snapshot),
+	    cmocka_unit_test(test_increment_counter),
+	    cmocka_unit_test(test_add_to_counter),
+	    cmocka_unit_test(test_gauge),
+	    cmocka_unit_test(test_record_timestamp),
+	    cmocka_unit_test(test_interval_timer),
+	    cmocka_unit_test(test_gauge_stats),
+	    cmocka_unit_test(test_duration_stats),
+	    cmocka_unit_test(test_gauge_with_histogram_multiplier_1),
+	    cmocka_unit_test(test_gauge_with_histogram_multiplier_2),
+	    cmocka_unit_test(benchmark_histogram_fast_vs_slow),
+	    cmocka_unit_test(test_units),
+	    cmocka_unit_test(test_ephemeral_simple),
+	    cmocka_unit_test(test_ephemeral_nested),
+	    cmocka_unit_test(test_ephemeral_cleared_sibling),
+	    cmocka_unit_test(test_gc_ctx),
+	    /* Run after the tests that populate the metrics */
+	    cmocka_unit_test(test_list_ephemeral),
+	    cmocka_unit_test(test_list_subdirs),
+	    cmocka_unit_test(test_follow_link),
+	    cmocka_unit_test(test_find_metric),
+	    cmocka_unit_test(test_verify_object_count),
+	    cmocka_unit_test(test_print_metrics),
+	    /* Run last since nothing can be written afterward */
+	    cmocka_unit_test(test_shared_memory_cleanup),
+	    cmocka_unit_test(test_cleanup_on_init),
 	};
 
 	d_register_alt_assert(mock_assert);
