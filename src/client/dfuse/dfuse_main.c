@@ -22,6 +22,7 @@
 #include <daos_fs.h>
 #include <daos_api.h>
 #include <daos_uns.h>
+#include <daos/metrics.h>
 
 #include <gurt/common.h>
 /* Signal handler for SIGCHLD, it doesn't need to do anything, but it's
@@ -605,6 +606,18 @@ main(int argc, char **argv)
 	if (cont_name[0] && !pool_name[0]) {
 		printf("Container name specified without pool\n");
 		D_GOTO(out_debug, rc = -DER_INVAL);
+	}
+
+	if (dfuse_info->di_thread_count > 20) {
+		int value = (dfuse_info->di_thread_count/20 + 1) * 2048;
+		char str[8];
+
+		/* If there are more than 20 service threads, let's reset
+		 * the share memory size environment to make sure there
+		 * are enough share memory for client metrics.
+		 */
+		sprintf(str, "%d", value);
+		d_setenv(DAOS_CLIENT_METRICS_MAX_ENTRY_CNT, str, true);
 	}
 
 	rc = daos_init();
