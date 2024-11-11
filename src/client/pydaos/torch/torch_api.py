@@ -5,7 +5,7 @@
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 """
-torch module provides implementation for Pytorch Map-Style and Iterable Style Datasets
+torch module provides implementation for PyTorch Map-Style and Iterable Style Datasets
 to access training data on DAOS DFS via POSIX container.
 """
 
@@ -259,7 +259,7 @@ class IterableDataset(TorchIterableDataset):
 
 class _Dfs():
     """
-    Class encapsulating libdfs interface to load Pytorch Dataset
+    Class encapsulating libdfs interface to load PyTorch Dataset
     Should not be used directly. Exported in __init__.py only to be used in DLIO benchmark
     """
 

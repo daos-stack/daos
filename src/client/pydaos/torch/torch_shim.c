@@ -16,7 +16,6 @@
 #include <daos_event.h>
 #include <daos_types.h>
 #include <daos_fs.h>
-#include <daos/event.h>
 
 #include <gurt/debug.h>
 #include <gurt/common.h>

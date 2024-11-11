@@ -18,6 +18,7 @@ import argparse
 import copy
 import errno
 import functools
+import importlib
 import json
 import os
 import pickle  # nosec
@@ -4540,11 +4541,11 @@ class PosixTests():
         os.environ['FI_UNIVERSE_SIZE'] = '128'
         os.environ['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
 
-        import importlib
         return importlib.import_module('pydaos.torch')
 
     @needs_dfuse_with_opt(caching_variants=[False])
     def test_torch_map_dataset(self):
+        """Check that all files in container are read regardless of the directory level"""
         test_files = [
             {"name": "0.txt", "content": b"0", "seen": 0},
             {"name": "1/l1.txt", "content": b"1", "seen": 0},
@@ -4563,8 +4564,7 @@ class PosixTests():
 
         assert len(dataset) == len(test_files)
 
-        for i in range(len(dataset)):
-            content = dataset[i]
+        for i, content in enumerate(dataset):
             for f in test_files:
                 if f["content"] == content:
                     f["seen"] += 1
@@ -4579,6 +4579,7 @@ class PosixTests():
 
     @needs_dfuse_with_opt(caching_variants=[False])
     def test_torch_iter_dataset(self):
+        """Check that all files in container are read regardless of the directory level"""
         test_files = [
             {"name": "0.txt", "content": b"0", "seen": 0},
             {"name": "1/l1.txt", "content": b"1", "seen": 0},
