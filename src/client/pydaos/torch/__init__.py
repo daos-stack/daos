@@ -4,6 +4,7 @@
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
+# pylint: disable=cyclic-import
 """
 PyTorch DAOS Module allowing using DFS as Dataset
 """
