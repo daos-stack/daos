@@ -25,6 +25,8 @@ import (
 	"time"
 )
 
+var _ Metric = (*Timestamp)(nil)
+
 type Timestamp struct {
 	metricBase
 }

@@ -25,6 +25,8 @@ import (
 	"time"
 )
 
+var _ Metric = (*Snapshot)(nil)
+
 type Snapshot struct {
 	metricBase
 }
