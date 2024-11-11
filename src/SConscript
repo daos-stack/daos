@@ -65,15 +65,6 @@ def scons():
 
     # For Common library and headers.
     env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/tse.h')
-    env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/event.h')
-
-    # These are the dependencies of daos/event.h that are needed for pydaos.torch module
-    env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/task.h')
-    env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/common.h')
-    env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/debug.h')
-    env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/profile.h')
-    env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/dtx.h')
-    env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/cmd_parser.h')
 
     # Generic DAOS includes
     env.AppendUnique(CPPPATH=[Dir('include').srcnode()])

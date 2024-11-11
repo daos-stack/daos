@@ -24,7 +24,7 @@ def transform(data):
 
 ds = DaosDataset(pool="torch", cont="my-dataset", transform_fn=transform)
 
-print(f"Loaded dataset of {len(ds)} itmes")
+print(f"Loaded dataset of {len(ds)} items")
 
 figure = plt.figure(figsize=(8, 8))
 cols, rows = 3, 3

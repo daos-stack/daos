@@ -4546,10 +4546,10 @@ class PosixTests():
     @needs_dfuse_with_opt(caching_variants=[False])
     def test_torch_map_dataset(self):
         test_files = [
-            { "name": "0.txt", "content": b"0", "seen": 0},
-            { "name": "1/l1.txt", "content": b"1", "seen": 0},
-            { "name": "1/2/l2.txt", "content": b"2", "seen": 0},
-            { "name": "1/2/3/l3.txt", "content": b"3", "seen": 0},
+            {"name": "0.txt", "content": b"0", "seen": 0},
+            {"name": "1/l1.txt", "content": b"1", "seen": 0},
+            {"name": "1/2/l2.txt", "content": b"2", "seen": 0},
+            {"name": "1/2/3/l3.txt", "content": b"3", "seen": 0},
         ]
 
         for tf in test_files:
@@ -4580,10 +4580,10 @@ class PosixTests():
     @needs_dfuse_with_opt(caching_variants=[False])
     def test_torch_iter_dataset(self):
         test_files = [
-            { "name": "0.txt", "content": b"0", "seen": 0},
-            { "name": "1/l1.txt", "content": b"1", "seen": 0},
-            { "name": "1/2/l2.txt", "content": b"2", "seen": 0},
-            { "name": "1/2/3/l3.txt", "content": b"3", "seen": 0},
+            {"name": "0.txt", "content": b"0", "seen": 0},
+            {"name": "1/l1.txt", "content": b"1", "seen": 0},
+            {"name": "1/2/l2.txt", "content": b"2", "seen": 0},
+            {"name": "1/2/3/l3.txt", "content": b"3", "seen": 0},
         ]
 
         for tf in test_files:

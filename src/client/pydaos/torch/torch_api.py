@@ -1,5 +1,6 @@
 #
 # (C) Copyright 2024 Google LLC
+# (C) Copyright 2024 Enakta Labs Ltd
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -8,17 +9,16 @@ torch module provides implementation for Pytorch Map-Style and Iterable Style Da
 to access training data on DAOS DFS via POSIX container.
 """
 
-import os
-import math
 import concurrent
-from concurrent.futures import ProcessPoolExecutor, FIRST_COMPLETED
+import math
+import os
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor
 
-from torch.utils.data import get_worker_info
 from torch.utils.data import Dataset as TorchDataset
 from torch.utils.data import IterableDataset as TorchIterableDataset
+from torch.utils.data import get_worker_info
 
 from . import DAOS_MAGIC, PyDError, torch_shim
-
 
 IN_FLIGHT_OPS_MAX = 16
 READDIR_BATCH_SIZE = 128
@@ -33,14 +33,14 @@ def transform_fn_default(data):
 class Dataset(TorchDataset):
     """
     Class representing pytorch.Dataset over DAOS POSIX container.
-    During the initialisation it will scan namespace of the container and build
+    During the initialization it will scan namespace of the container and build
     a list of objects (samples of the dataset) available to read.
 
-    The samples are accessed by index operator __getitem__ or its optimised version
+    The samples are accessed by index operator __getitem__ or its optimized version
     __getitems__ that accepts batch of indices and load them in parallel.
 
     If this Dataset is planned to be used via multiple workers in different processes,
-    before accessing the data, workers needs to call worker_init function to re-initialise
+    before accessing the data, workers needs to call worker_init function to re-initialize
     DAOS internals after fork(s).
 
     Attributes
@@ -56,13 +56,13 @@ class Dataset(TorchDataset):
     readdir_batch_size: int (optional)
         Number of directory entries to read for each readdir call.
     in_flight_ops_max: int (optional)
-        Number of simultanious IO operations during batch reads
+        Number of simultaneous IO operations during batch reads
 
 
     Methods
     -------
     __len__():
-        Returns number of samples Dataset loaded during its initialisation.
+        Returns number of samples Dataset loaded during its initialization.
 
     __getitem__(index):
         Returns sample by its index.
@@ -71,7 +71,7 @@ class Dataset(TorchDataset):
         Returns batch of the items by their indices read in parallel.
 
     worker_init(worker_id):
-        (Re)Initialises worker on the current running process to be able access DAOS Dataset,
+        (Re)Initializes worker on the current running process to be able access DAOS Dataset,
         after the fork, which is default way for pytorch.DataLoader to run multiple workers.
         It is recommended to set it as a worker_init_fn parameter of pytorch.DataLoader class.
     """
@@ -112,7 +112,7 @@ class Dataset(TorchDataset):
         return [self._transform_fn(x) for x in result]
 
     def worker_init(self, worker_id):
-        """ Re-initialises DAOS internals after fork """
+        """ Re-initializes DAOS internals after fork """
 
         if worker_id is None or worker_id < 0:
             return
@@ -135,13 +135,13 @@ class Dataset(TorchDataset):
 class IterableDataset(TorchIterableDataset):
     """
     Class representing pytorch.IterableDataset over DAOS POSIX container.
-    During the initialisation it will scan namespace of the container and build
+    During the initialization it will scan namespace of the container and build
     a list of objects (samples of the dataset) available to read.
 
     The samples are accessed by iterator returned by __iter__ method.
 
     If this Dataset is planned to be used via multiple workers in different processes,
-    before accessing the data, workers needs to call worker_init function to re-initialise
+    before accessing the data, workers needs to call worker_init function to re-initialize
     DAOS internals after fork(s) and to split work between them.
 
     The typical usage with pytorch.DataLoader would look like the following example:
@@ -173,7 +173,7 @@ class IterableDataset(TorchIterableDataset):
     readdir_batch_size: int (optional)
         Number of directory entries to read for each readdir call.
     in_flight_ops_max: int (optional)
-        Number of simultanious IO operations during batch reads
+        Number of simultaneous IO operations during batch reads
 
 
     Methods
@@ -182,7 +182,7 @@ class IterableDataset(TorchIterableDataset):
         Returns an iterator over the dataset.
 
     worker_init(worker_id):
-        (Re)Initialises worker on the current process and setup the working subset of the items
+        (Re)Initializes worker on the current process and setup the working subset of the items
         to load for this worker.
     """
 
@@ -217,7 +217,7 @@ class IterableDataset(TorchIterableDataset):
 
     def worker_init(self, worker_id):
         """
-        Re-initialises DAOS internals after fork and split the work between the workers.
+        Re-initializes DAOS internals after fork and split the work between the workers.
         Each of workers receive its share of items to load in self.workset for __iter__ method.
         """
 
@@ -259,7 +259,7 @@ class IterableDataset(TorchIterableDataset):
 
 class _Dfs():
     """
-    Class encapsulating libdf interface to load Pytorch Dataset
+    Class encapsulating libdfs interface to load Pytorch Dataset
     Should not be used directly. Exported in __init__.py only to be used in DLIO benchmark
     """
 
@@ -364,7 +364,7 @@ class _Dfs():
         return result
 
     def read(self, path, size):
-        """ This is specialised version of file read, when the file size is known in advance. """
+        """ This is specialized version of file read, when the file size is known in advance. """
 
         buf = bytearray(size)
         ret = torch_shim.torch_read(DAOS_MAGIC, self._dfs, path, buf)
@@ -405,8 +405,8 @@ class _Dfs():
         return ret
 
     def reinit(self):
-        """ Tries to reinitialise DAOS DFS for the current process after fork """
+        """ Tries to reinitialize DAOS DFS for the current process after fork """
 
         ret = torch_shim.torch_reinit(DAOS_MAGIC, self._dfs)
         if ret != torch_shim.DER_SUCCESS:
-            raise PyDError("failed to reinitialise DAOS DFS", ret)
+            raise PyDError("failed to reinitialize DAOS DFS", ret)

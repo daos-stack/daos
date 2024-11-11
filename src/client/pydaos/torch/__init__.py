@@ -1,5 +1,6 @@
 # (C) Copyright 2019-2024 Intel Corporation.
 # (C) Copyright 2024 Google LLC
+# (C) Copyright 2024 Enakta Labs Ltd
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -35,7 +36,7 @@ class PyDError(Exception):
 # The module loader procedure guarantees that __init__.py is going to be run only once
 _rc = torch_shim.module_init()
 if _rc != 0:
-    raise ValueError(f"Could not initialise DAOS module: rc={_rc}")
+    raise ValueError(f"Could not initialize DAOS module: rc={_rc}")
 
 
 @atexit.register
@@ -43,10 +44,9 @@ def _fini():
     rc = torch_shim.module_fini()
     if rc != 0:
         # torch_shim module is no longer usable at this point so as err_to_str call
-        raise ValueError(f"Could not finalise DAOS module, rc={rc}")
+        raise ValueError(f"Could not finalize DAOS module, rc={rc}")
 
 
 from .torch_api import *  # noqa: F403,E402
-
 
 __all__ = ["torch_api"]  # noqa: F405

@@ -1,6 +1,7 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
  * (C) Copyright 2024 Google LLC
+ * (C) Copyright 2024 Enakta Labs Ltd
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -54,11 +55,10 @@ struct dfs_handle {
 static void
 atfork_handler(void)
 {
-	int rc = daos_eq_lib_reset_after_fork();
+	int rc = daos_reinit();
 	if (rc) {
-		D_WARN("daos_eq_lib_init() failed in child process %d", rc);
+		D_WARN("daos_reinit() failed in child process %s (rc=%d)",  d_errstr(rc), rc);
 	}
-	daos_dti_reset();
 }
 
 static PyObject *
@@ -66,7 +66,7 @@ __shim_handle__module_init(PyObject *self, PyObject *args)
 {
 	int rc = daos_init();
 	if (rc) {
-		PyErr_Format(PyExc_TypeError, "Could not initialise DAOS module %s (rc=%d)",
+		PyErr_Format(PyExc_TypeError, "Could not initialize DAOS module %s (rc=%d)",
 			     d_errstr(rc), rc);
 		return NULL;
 	}
@@ -123,7 +123,7 @@ __shim_handle__torch_connect(PyObject *self, PyObject *args)
 
 	rc = dfs_init();
 	if (rc) {
-		D_ERROR("Could not initialise DFS: %s (rc=%d)", strerror(rc), rc);
+		D_ERROR("Could not initialize DFS: %s (rc=%d)", strerror(rc), rc);
 		goto out;
 	}
 
@@ -205,13 +205,13 @@ __shim_handle__torch_disconnect(PyObject *self, PyObject *args)
 	 * The last process calling disconnect will free the resources */
 	rc = dfs_fini();
 	if (rc && rc != -DER_BUSY) {
-		D_ERROR("Could not finalise DFS: %s (rc=%d)", strerror(rc), rc);
+		D_ERROR("Could not finalize DFS: %s (rc=%d)", strerror(rc), rc);
 		goto out;
 	}
 
 	rc = daos_fini();
 	if (rc == -DER_BUSY) {
-		D_ERROR("Could not finalise DAOS: %s (rc=%d)", d_errstr(rc), rc);
+		D_ERROR("Could not finalize DAOS: %s (rc=%d)", d_errstr(rc), rc);
 		rc = DER_SUCCESS;
 	}
 
@@ -415,6 +415,10 @@ __shim_handle__torch_read(PyObject *self, PyObject *args)
 		return NULL;
 	}
 
+	/*
+	  Since python can use buffer like objects that might not have contiguous memory layout,
+	  let's put a guardrail accepting only buffers with contiguous memory region
+	*/
 	if (!PyBuffer_IsContiguous(&bview, 'C')) {
 		PyErr_SetString(PyExc_BufferError, "Buffer is not contiguous");
 		PyBuffer_Release(&bview);
@@ -547,7 +551,7 @@ out:
 
 	int rc2 = daos_event_fini(&op->ev);
 	if (rc2) {
-		D_ERROR("Could not finalise event: %s (rc=%d)", d_errstr(rc2), rc2);
+		D_ERROR("Could not finalize event: %s (rc=%d)", d_errstr(rc2), rc2);
 	}
 
 	if (op->obj != NULL) {
@@ -581,7 +585,7 @@ complete_read_op(struct dfs_handle *hdl, struct io_op *op)
 
 	rc = daos_event_fini(&op->ev);
 	if (rc) {
-		D_WARN("Could not finalise event handler of '%s': %s (rc=%d)", op->path,
+		D_WARN("Could not finalize event handler of '%s': %s (rc=%d)", op->path,
 		       d_errstr(rc), rc);
 	}
 
@@ -816,10 +820,13 @@ __shim_handle__err_to_str(PyObject *self, PyObject *args)
 /**
  * Python shim module
  */
-#define EXPORT_PYTHON_METHOD(name)                                                                 \
-	{                                                                                          \
-#name, __shim_handle__##name, METH_VARARGS | METH_KEYWORDS, "text"                 \
-	}
+#define EXPORT_PYTHON_METHOD(name)		\
+{						\
+	#name,					\
+	__shim_handle__##name,			\
+	METH_VARARGS | METH_KEYWORDS,		\
+	"text"					\
+}
 
 static PyMethodDef torchMethods[] = {
     /** Torch operations */
