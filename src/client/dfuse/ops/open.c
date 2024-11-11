@@ -67,6 +67,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		 * which pre-existed in the container.
 		 */
 
+		/* TODO: This probably wants reflowing to not reference ie_open_count */
 		if (atomic_load_relaxed(&ie->ie_open_count) > 0 ||
 		    ((ie->ie_dcache_last_update.tv_sec != 0) &&
 		     dfuse_dcache_get_valid(ie, ie->ie_dfs->dfc_data_timeout))) {
@@ -93,7 +94,14 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	fi_out.fh = (uint64_t)oh;
 
-	rc = active_ie_init(ie);
+	/* Pre-read this for files up to the max read size. */
+	if (prefetch && oh->doh_parent_dir &&
+	    atomic_load_relaxed(&oh->doh_parent_dir->ie_linear_read) && ie->ie_stat.st_size > 0 &&
+	    ie->ie_stat.st_size <= DFUSE_MAX_PRE_READ) {
+		preread = true;
+	}
+
+	rc = active_ie_init(ie, &preread);
 	if (rc)
 		goto err;
 
@@ -106,18 +114,6 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		if (rc)
 			D_GOTO(decref, rc);
 		dfuse_dcache_evict(oh->doh_ie);
-	}
-
-	/* Enable this for files up to the max read size. */
-	if (prefetch && oh->doh_parent_dir &&
-	    atomic_load_relaxed(&oh->doh_parent_dir->ie_linear_read) && ie->ie_stat.st_size > 0 &&
-	    ie->ie_stat.st_size <= DFUSE_MAX_PRE_READ) {
-		D_ALLOC_PTR(oh->doh_readahead);
-		if (oh->doh_readahead) {
-			D_MUTEX_INIT(&oh->doh_readahead->dra_lock, 0);
-			D_MUTEX_LOCK(&oh->doh_readahead->dra_lock);
-			preread = true;
-		}
 	}
 
 	DFUSE_REPLY_OPEN(oh, req, &fi_out);
@@ -158,26 +154,6 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	DFUSE_TRA_DEBUG(oh, "Closing %d", oh->doh_caching);
 
 	DFUSE_IE_WFLUSH(oh->doh_ie);
-
-	if (oh->doh_readahead) {
-		struct dfuse_event *ev;
-
-		/* Grab this lock first to ensure that the read cb has been completed.  The
-		 * callback might register an error and release ev so do not read it's value
-		 * until after this has completed.
-		 */
-		D_MUTEX_LOCK(&oh->doh_readahead->dra_lock);
-		D_MUTEX_UNLOCK(&oh->doh_readahead->dra_lock);
-
-		ev = oh->doh_readahead->dra_ev;
-
-		D_MUTEX_DESTROY(&oh->doh_readahead->dra_lock);
-		if (ev) {
-			daos_event_fini(&ev->de_ev);
-			d_slab_release(ev->de_eqt->de_pre_read_slab, ev);
-		}
-		D_FREE(oh->doh_readahead);
-	}
 
 	/* If the file was read from then set the data cache time for future use, however if the
 	 * file was written to then evict the metadata cache.
