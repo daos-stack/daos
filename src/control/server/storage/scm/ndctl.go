@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -147,8 +147,8 @@ func (cr *cmdRunner) createNamespaces(regionPerSocket socketRegionMap, nrNsPerSo
 
 		if pmemBytes%alignmentBoundaryBytes != 0 {
 			return nil, errors.Errorf("%s: available size (%s) is not %s aligned",
-				region.Dev, humanize.Bytes(pmemBytes),
-				humanize.Bytes(alignmentBoundaryBytes))
+				region.Dev, humanize.IBytes(pmemBytes),
+				humanize.IBytes(alignmentBoundaryBytes))
 		}
 
 		// Create specified number of namespaces on a single region (NUMA node).
@@ -160,7 +160,7 @@ func (cr *cmdRunner) createNamespaces(regionPerSocket socketRegionMap, nrNsPerSo
 				return nil, errors.WithMessagef(err, "%s", region.Dev)
 			}
 			cr.log.Debugf("created namespace on %s size %s", region.Dev,
-				humanize.Bytes(pmemBytes))
+				humanize.IBytes(pmemBytes))
 		}
 
 		numaNodesPrepped = append(numaNodesPrepped, int(region.NumaNode))
