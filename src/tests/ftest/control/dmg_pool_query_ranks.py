@@ -57,7 +57,7 @@ class DmgPoolQueryRanks(ControlTestBase):
                 data['response'].get('enabled_ranks')))
         self.assertListEqual(
             data['response'].get('disabled_ranks'), [],
-            "Invalid suspect_ranks field: want=[], got={}".format(
+            "Invalid disabled_ranks field: want=[], got={}".format(
                 data['response'].get('disabled_ranks')))
 
         self.log.debug("Checking suspect ranks state information")
@@ -71,9 +71,10 @@ class DmgPoolQueryRanks(ControlTestBase):
         """Test the state of ranks after excluding and reintegrate them.
 
         Test Description:
-            Create a pool with some engines exclude them one by one and check the consistency of the
-            list of enabled and disabled ranks.  Then, reintegrate them and check the consistency of
-            the list of enabled and disabled ranks.
+            Create a pool with 5 engines, first excluded engine marked as "Disabled"
+            second stopped one as “Suspect,” restarting it, ensuring rebuild completes,
+            clearing the “Suspect” status, reintegrating the excluded first engine, and
+            finally verifying that all engines are enabled with the excluded rank now empty.
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
@@ -89,12 +90,12 @@ class DmgPoolQueryRanks(ControlTestBase):
         self.random.shuffle(all_ranks)
         exclude_rank = all_ranks[0]
         suspect_rank = all_ranks[1]
-        self.log.info("Starting excluding rank:%d all_ranks=%s", exclude_rank, all_ranks)
+        self.log_step(f"Starting excluding rank:{exclude_rank} all_ranks={all_ranks}")
         self.pool.exclude([exclude_rank])
         enabled_ranks.remove(exclude_rank)
         disabled_ranks = sorted(disabled_ranks + [exclude_rank])
 
-        self.log.debug("Checking enabled ranks state information")
+        self.log_step("Checking enabled ranks state information")
         data = self.dmg.pool_query(self.pool.identifier, show_enabled=True)
         self.assertListEqual(
             data['response'].get('enabled_ranks'), enabled_ranks,
@@ -105,10 +106,11 @@ class DmgPoolQueryRanks(ControlTestBase):
             "Invalid disabled_ranks field: want={}, got={}".format(
                 disabled_ranks, data['response'].get('disabled_ranks')))
 
-        self.log.debug("Waiting for pool to be rebuild")
+        self.log_step("Waiting for pool to be rebuild")
         self.pool.wait_for_rebuild_to_start()
 
         # kill second rank.
+        self.log_step(f"Starting excluding rank:{suspect_rank} all_ranks={all_ranks}")
         self.server_managers[0].stop_ranks([suspect_rank], self.d_log)
         self.pool.wait_pool_suspect_ranks([suspect_rank], timeout=30)
         self.assertListEqual(
@@ -120,7 +122,7 @@ class DmgPoolQueryRanks(ControlTestBase):
         self.pool.wait_pool_suspect_ranks([], timeout=30)
         self.pool.wait_for_rebuild_to_end()
 
-        self.log.debug("Reintegrating rank %d", exclude_rank)
+        self.log_step(f"Reintegrating rank {exclude_rank}")
         cmd_succeed = False
         for _ in range(3):
             try:
@@ -132,14 +134,14 @@ class DmgPoolQueryRanks(ControlTestBase):
             time.sleep(3)
 
         self.assertTrue(cmd_succeed, "pool reintegrate failed")
-        self.log.debug("Waiting for pool to be rebuild")
+        self.log_step("Waiting for pool to be rebuild")
         self.pool.wait_for_rebuild_to_start()
         self.pool.wait_for_rebuild_to_end()
 
         enabled_ranks = sorted(enabled_ranks + [exclude_rank])
         disabled_ranks.remove(exclude_rank)
 
-        self.log.debug("Checking enabled ranks state information")
+        self.log_step("Checking enabled ranks state information")
         data = self.dmg.pool_query(self.pool.identifier, show_enabled=True)
         self.assertListEqual(
             data['response'].get('enabled_ranks'), enabled_ranks,
