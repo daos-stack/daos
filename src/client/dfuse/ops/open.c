@@ -148,7 +148,6 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	struct dfuse_inode_entry *ie         = NULL;
 	int                       rc;
 	uint32_t                  il_calls;
-	uint32_t oc;
 
 	/* Perform the opposite of what the ioctl call does, always change the open handle count
 	 * but the inode only tracks number of open handles with non-zero ioctl counts
@@ -213,16 +212,9 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 			}
 		}
 	}
+	DFUSE_TRA_DEBUG(oh, "il_calls %d, caching %d,", il_calls, oh->doh_caching);
 	if (il_calls != 0) {
 		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_il_count, 1);
-	}
-
-	oc = atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_count, 1);
-	DFUSE_TRA_DEBUG(oh, "il_calls %d, caching %d, open count %d", il_calls, oh->doh_caching,
-			oc - 1);
-	if (oc == 1) {
-		if (read_chunk_close(oh->doh_ie))
-			oh->doh_linear_read = true;
 	}
 
 	if (oh->doh_evict_on_close) {

@@ -66,7 +66,7 @@ active_oh_decref(struct dfuse_obj_hdl *oh)
 	if (oc != 1)
 		goto out;
 
-	rcb = read_chunk_close(oh->doh_ie);
+	rcb = read_chunk_close(oh->doh_ie->ie_active);
 
 	ah_free(oh->doh_ie);
 out:

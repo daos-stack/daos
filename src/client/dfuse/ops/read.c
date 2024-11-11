@@ -16,13 +16,6 @@
  *
  * Also used for ie_open_reads list.
  */
-static pthread_mutex_t rc_lock = PTHREAD_MUTEX_INITIALIZER;
-
-struct read_chunk_core {
-	d_list_t entries;
-	size_t   file_size;
-	bool     seen_eof;
-};
 
 static void
 cb_read_helper(struct dfuse_event *ev, void *buff)
@@ -51,13 +44,12 @@ cb_read_helper(struct dfuse_event *ev, void *buff)
 	} else {
 		struct dfuse_inode_entry *ie = oh->doh_ie;
 
-		if (ie->ie_chunk) {
-			ie->ie_chunk->seen_eof = true;
-			if (ev->de_len == 0)
-				ie->ie_chunk->file_size = ev->de_req_position;
-			else
-				ie->ie_chunk->file_size = ev->de_req_position + ev->de_len - 1;
-		}
+		ie->ie_active->seen_eof = true;
+		if (ev->de_len == 0)
+			ie->ie_active->file_size = ev->de_req_position;
+		else
+			ie->ie_active->file_size = ev->de_req_position + ev->de_len - 1;
+
 		if (ev->de_len == 0)
 			DFUSE_TRA_DEBUG(oh, "%#zx-%#zx requested (EOF)", ev->de_req_position,
 					ev->de_req_position + ev->de_req_len - 1);
@@ -78,9 +70,9 @@ dfuse_cb_read_complete(struct dfuse_event *ev)
 {
 	struct dfuse_event *evs, *evn;
 
-	D_MUTEX_LOCK(&rc_lock);
+	D_SPIN_LOCK(&ev->de_oh->doh_ie->ie_active->lock);
 	d_list_del(&ev->de_read_list);
-	D_MUTEX_UNLOCK(&rc_lock);
+	D_SPIN_UNLOCK(&ev->de_oh->doh_ie->ie_active->lock);
 
 	d_list_for_each_entry(evs, &ev->de_read_slaves, de_read_list) {
 		DFUSE_TRA_DEBUG(ev->de_oh, "concurrent network read %p", evs->de_oh);
@@ -218,26 +210,20 @@ struct read_chunk_data {
  * Returns true if the feature was used.
  */
 bool
-read_chunk_close(struct dfuse_inode_entry *ie)
+read_chunk_close(struct active_inode *active)
 {
 	struct read_chunk_data *cd, *cdn;
-	bool                    rcb = false;
 
-	D_SPIN_LOCK(&ie->ie_active->lock);
-	if (d_list_empty(&ie->ie_active->chunks))
-		goto out;
+	if (d_list_empty(&active->chunks))
+		return false;
 
-	rcb = true;
-
-	d_list_for_each_entry_safe(cd, cdn, &ie->ie_active->chunks, list) {
+	d_list_for_each_entry_safe(cd, cdn, &active->chunks, list) {
 		D_ASSERT(cd->complete);
 		d_list_del(&cd->list);
 		d_slab_release(cd->eqt->de_read_slab, cd->ev);
 		D_FREE(cd);
 	}
-out:
-	D_SPIN_UNLOCK(&ie->ie_active->lock);
-	return rcb;
+	return true;
 }
 
 static void
@@ -371,8 +357,6 @@ chunk_read(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
 	DFUSE_TRA_DEBUG(oh, "read bucket %#zx-%#zx last %#zx size %#zx bucket %ld slot %d",
 			position, position + len - 1, last, ie->ie_stat.st_size, bucket, slot);
 
-
-	d_list_for_each_entry(cd, &ie->ie_chunk->entries, list)
 	D_SPIN_LOCK(&ie->ie_active->lock);
 
 	d_list_for_each_entry(cd, &ie->ie_active->chunks, list)
@@ -388,7 +372,7 @@ chunk_read(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
 	cd->bucket = bucket;
 	submit     = true;
 
-	d_list_add(&cd->list, &ie->ie_chunk->entries);
+	d_list_add(&cd->list, &ie->ie_active->chunks);
 
 found:
 
@@ -409,12 +393,6 @@ found:
 		d_list_add(&cd->list, &ie->ie_chunk->entries);
 	}
 #endif
-	if (++cd->entered < 8) {
-		/* Put on front of list for efficient searching */
-		d_list_add(&cd->list, &ie->ie_active->chunks);
-	}
-
-	D_SPIN_UNLOCK(&ie->ie_active->lock);
 
 	if (submit) {
 		cd->reqs[0].req  = req;
@@ -429,10 +407,11 @@ found:
 		 */
 
 		DFUSE_TRA_DEBUG(oh, "submit for bucket %ld[%d]", bucket, slot);
+		D_SPIN_UNLOCK(&ie->ie_active->lock);
 
 		rcb = chunk_fetch(req, ie, cd);
 	} else if (cd->complete) {
-		D_MUTEX_UNLOCK(&rc_lock);
+		D_SPIN_UNLOCK(&ie->ie_active->lock);
 
 		if (cd->rc != 0) {
 			/* Don't pass fuse an error here, rather return false and
@@ -455,10 +434,10 @@ found:
 		cd->reqs[cd->idx].oh   = oh;
 		cd->reqs[cd->idx].slot = slot;
 		cd->idx++;
-		D_MUTEX_UNLOCK(&rc_lock);
+		D_SPIN_UNLOCK(&ie->ie_active->lock);
 		rcb = true;
 	} else {
-		D_MUTEX_UNLOCK(&rc_lock);
+		D_SPIN_UNLOCK(&ie->ie_active->lock);
 
 		/* Handle concurrent reads of the same slot, this wasn't
 		 * expected but can happen so for now reject it at this
@@ -491,8 +470,8 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 
 	if (oh->doh_linear_read_eof && position == oh->doh_linear_read_pos) {
 		reached_eof = true;
-	} else if (oh->doh_ie->ie_chunk && oh->doh_ie->ie_chunk->seen_eof) {
-		if (position >= oh->doh_ie->ie_chunk->file_size)
+	} else if (oh->doh_ie->ie_active->seen_eof) {
+		if (position >= oh->doh_ie->ie_active->file_size)
 			reached_eof = true;
 	}
 
@@ -582,7 +561,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	DFUSE_IE_WFLUSH(oh->doh_ie);
 
 	/* Not check for outstanding read which matches */
-	D_MUTEX_LOCK(&rc_lock);
+	D_SPIN_LOCK(&oh->doh_ie->ie_active->lock);
 	{
 		struct dfuse_event *evc;
 
@@ -592,13 +571,13 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 			if (ev->de_req_position == evc->de_req_position &&
 			    ev->de_req_len <= evc->de_req_len) {
 				d_list_add(&ev->de_read_list, &evc->de_read_slaves);
-				D_MUTEX_UNLOCK(&rc_lock);
+				D_SPIN_UNLOCK(&oh->doh_ie->ie_active->lock);
 				return;
 			}
 		}
 		d_list_add_tail(&ev->de_read_list, &oh->doh_ie->ie_open_reads);
 	}
-	D_MUTEX_UNLOCK(&rc_lock);
+	D_SPIN_UNLOCK(&oh->doh_ie->ie_active->lock);
 
 	rc = dfs_read(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, position, &ev->de_len, &ev->de_ev);
 	if (rc != 0) {

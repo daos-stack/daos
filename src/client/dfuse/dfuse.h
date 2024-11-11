@@ -1026,12 +1026,12 @@ struct dfuse_inode_entry {
 	d_list_t                  ie_evict_entry;
 
 	d_list_t                  ie_open_reads;
-
-	struct read_chunk_core   *ie_chunk;
 };
 
 struct active_inode {
 	d_list_t           chunks;
+	size_t             file_size;
+	bool               seen_eof;
 	pthread_spinlock_t lock;
 };
 
@@ -1147,7 +1147,7 @@ dfuse_cache_evict_dir(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *i
  * Returns true if feature was used.
  */
 bool
-read_chunk_close(struct dfuse_inode_entry *ie);
+read_chunk_close(struct active_inode *active);
 
 /* Metadata caching functions. */
 
