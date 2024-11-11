@@ -41,7 +41,7 @@ active_ie_init(struct dfuse_inode_entry *ie, bool *preread)
 		goto out;
 	}
 	D_INIT_LIST_HEAD(&ie->ie_active->chunks);
-	if (*preread) {
+	if (preread && *preread) {
 		D_ALLOC_PTR(ie->ie_active->readahead);
 		if (ie->ie_active->readahead) {
 			D_MUTEX_INIT(&ie->ie_active->readahead->dra_lock, 0);
