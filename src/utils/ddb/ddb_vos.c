@@ -18,10 +18,9 @@
 						anchors, cb, NULL, args, NULL)
 
 int
-dv_pool_open(char *path, daos_handle_t *poh)
+dv_pool_open(const char *path, daos_handle_t *poh, uint32_t flags)
 {
-	struct vos_file_parts	path_parts = {0};
-	uint32_t		flags = 0; /* Will need to be a flag to ignore uuid check */
+	struct vos_file_parts   path_parts = {0};
 	int			rc;
 
 	/*
@@ -46,6 +45,35 @@ dv_pool_open(char *path, daos_handle_t *poh)
 		D_ERROR("Failed to open pool: "DF_RC"\n", DP_RC(rc));
 		vos_self_fini();
 	}
+
+	return rc;
+}
+
+int
+dv_pool_destroy(const char *path)
+{
+	struct vos_file_parts path_parts = {0};
+	int                   rc, flags = 0;
+
+	rc = vos_path_parse(path, &path_parts);
+	if (!SUCCESS(rc))
+		return rc;
+
+	rc = vos_self_init(path_parts.vf_db_path, true, path_parts.vf_target_idx);
+	if (!SUCCESS(rc)) {
+		D_ERROR("Failed to initialize VOS with path '%s': " DF_RC "\n",
+			path_parts.vf_db_path, DP_RC(rc));
+		return rc;
+	}
+
+	if (strncmp(path_parts.vf_vos_file, "rdb", 3) == 0)
+		flags |= VOS_POF_RDB;
+
+	rc = vos_pool_destroy_ex(path, path_parts.vf_pool_uuid, flags);
+	if (!SUCCESS(rc))
+		D_ERROR("Failed to destroy pool: " DF_RC "\n", DP_RC(rc));
+
+	vos_self_fini();
 
 	return rc;
 }
@@ -896,7 +924,7 @@ dv_iterate(daos_handle_t poh, struct dv_tree_path *path, bool recursive,
 int
 dv_superblock(daos_handle_t poh, dv_dump_superblock_cb cb, void *cb_args)
 {
-	struct ddb_superblock	 sb = {0};
+	struct ddb_superblock    sb = {0};
 	struct vos_pool		*pool;
 	struct vos_pool_df	*pool_df;
 
@@ -921,7 +949,8 @@ dv_superblock(daos_handle_t poh, dv_dump_superblock_cb cb, void *cb_args)
 	sb.dsb_blk_sz = pool_df->pd_vea_df.vsd_blk_sz;
 	sb.dsb_hdr_blks = pool_df->pd_vea_df.vsd_hdr_blks;
 	sb.dsb_tot_blks = pool_df->pd_vea_df.vsd_tot_blks;
-
+	sb.dsb_compat_flags   = pool_df->pd_compat_flags;
+	sb.dsb_incompat_flags = pool_df->pd_incompat_flags;
 
 	cb(cb_args, &sb);
 
@@ -1746,7 +1775,7 @@ sync_cb(struct ddbs_sync_info *info, void *cb_args)
 		D_WARN("delete target failed: " DF_RC "\n", DP_RC(rc));
 
 	rc = smd_pool_add_tgt(pool_id, info->dsi_hdr->bbh_vos_id,
-			      info->dsi_hdr->bbh_blob_id, st, blob_size);
+			      info->dsi_hdr->bbh_blob_id, st, blob_size, 0);
 	if (!SUCCESS(rc)) {
 		D_ERROR("add target failed: "DF_RC"\n", DP_RC(rc));
 		args->sync_rc = rc;
@@ -1850,4 +1879,71 @@ dv_vea_free_region(daos_handle_t poh, uint32_t offset, uint32_t blk_cnt)
 		D_ERROR("vea_free error: "DF_RC"\n", DP_RC(rc));
 
 	return rc;
+}
+
+int
+dv_pool_update_flags(daos_handle_t poh, uint64_t compat_flags, uint64_t incompat_flags)
+{
+	struct vos_pool    *pool;
+	struct vos_pool_df *pool_df;
+	int                 rc;
+
+	pool = vos_hdl2pool(poh);
+	if (pool == NULL)
+		return -DER_INVAL;
+
+	pool_df = pool->vp_pool_df;
+
+	rc = umem_tx_begin(&pool->vp_umm, NULL);
+	if (rc != 0)
+		return rc;
+
+	rc = umem_tx_add_ptr(&pool->vp_umm, &pool_df->pd_compat_flags,
+			     sizeof(pool_df->pd_compat_flags));
+	if (rc != 0)
+		goto end;
+
+	pool_df->pd_compat_flags = compat_flags;
+	rc                       = umem_tx_add_ptr(&pool->vp_umm, &pool_df->pd_incompat_flags,
+						   sizeof(pool_df->pd_incompat_flags));
+	if (rc != 0)
+		goto end;
+	pool_df->pd_incompat_flags = incompat_flags;
+
+end:
+	rc = umem_tx_end(&pool->vp_umm, rc);
+	return rc;
+}
+
+struct vos_pool_feature_flags {
+	uint64_t compat_flags;
+	uint64_t incompat_flags;
+};
+
+static int
+get_flags_cb(void *cb_arg, struct ddb_superblock *sb)
+{
+	struct vos_pool_feature_flags *pff = cb_arg;
+
+	pff->compat_flags   = sb->dsb_compat_flags;
+	pff->incompat_flags = sb->dsb_incompat_flags;
+
+	return 0;
+}
+int
+dv_pool_get_flags(daos_handle_t poh, uint64_t *compat_flags, uint64_t *incompat_flags)
+{
+	int                           rc;
+	struct vos_pool_feature_flags pff;
+
+	rc = dv_superblock(poh, get_flags_cb, &pff);
+	if (rc == -DER_DF_INVAL)
+		return rc;
+
+	if (compat_flags)
+		*compat_flags = pff.compat_flags;
+	if (incompat_flags)
+		*incompat_flags = pff.incompat_flags;
+
+	return 0;
 }

@@ -197,6 +197,7 @@ pick_eqt(struct dfuse_info *dfuse_info)
 struct read_chunk_data {
 	struct dfuse_event   *ev;
 	bool                  slot_done[8];
+	struct active_inode  *ia;
 	d_list_t              list;
 	uint64_t              bucket;
 	struct dfuse_eq      *eqt;
@@ -222,21 +223,20 @@ read_chunk_close(struct dfuse_inode_entry *ie)
 	struct read_chunk_data *cd, *cdn;
 	bool                    rcb = false;
 
-	D_MUTEX_LOCK(&rc_lock);
-	if (!ie->ie_chunk)
+	D_SPIN_LOCK(&ie->ie_active->lock);
+	if (d_list_empty(&ie->ie_active->chunks))
 		goto out;
 
 	rcb = true;
 
-	d_list_for_each_entry_safe(cd, cdn, &ie->ie_chunk->entries, list) {
+	d_list_for_each_entry_safe(cd, cdn, &ie->ie_active->chunks, list) {
 		D_ASSERT(cd->complete);
 		d_list_del(&cd->list);
 		d_slab_release(cd->eqt->de_read_slab, cd->ev);
 		D_FREE(cd);
 	}
-	D_FREE(ie->ie_chunk);
 out:
-	D_MUTEX_UNLOCK(&rc_lock);
+	D_SPIN_UNLOCK(&ie->ie_active->lock);
 	return rcb;
 }
 
@@ -244,6 +244,7 @@ static void
 chunk_cb(struct dfuse_event *ev)
 {
 	struct read_chunk_data *cd = ev->de_cd;
+	struct active_inode    *ia = cd->ia;
 
 	cd->rc = ev->de_ev.ev_error;
 
@@ -256,9 +257,9 @@ chunk_cb(struct dfuse_event *ev)
 	daos_event_fini(&ev->de_ev);
 
 	/* Mark as complete so no more get put on list */
-	D_MUTEX_LOCK(&rc_lock);
+	D_SPIN_LOCK(&ia->lock);
 	cd->complete = true;
-	D_MUTEX_UNLOCK(&rc_lock);
+	D_SPIN_UNLOCK(&ia->lock);
 
 	for (int i = 0; i < cd->idx; i++) {
 		int        slot;
@@ -370,15 +371,11 @@ chunk_read(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
 	DFUSE_TRA_DEBUG(oh, "read bucket %#zx-%#zx last %#zx size %#zx bucket %ld slot %d",
 			position, position + len - 1, last, ie->ie_stat.st_size, bucket, slot);
 
-	D_MUTEX_LOCK(&rc_lock);
-	if (ie->ie_chunk == NULL) {
-		D_ALLOC_PTR(ie->ie_chunk);
-		if (ie->ie_chunk == NULL)
-			goto err;
-		D_INIT_LIST_HEAD(&ie->ie_chunk->entries);
-	}
 
 	d_list_for_each_entry(cd, &ie->ie_chunk->entries, list)
+	D_SPIN_LOCK(&ie->ie_active->lock);
+
+	d_list_for_each_entry(cd, &ie->ie_active->chunks, list)
 		if (cd->bucket == bucket) {
 			goto found;
 		}
@@ -387,6 +384,7 @@ chunk_read(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
 	if (cd == NULL)
 		goto err;
 
+	cd->ia     = ie->ie_active;
 	cd->bucket = bucket;
 	submit     = true;
 
@@ -411,6 +409,12 @@ found:
 		d_list_add(&cd->list, &ie->ie_chunk->entries);
 	}
 #endif
+	if (++cd->entered < 8) {
+		/* Put on front of list for efficient searching */
+		d_list_add(&cd->list, &ie->ie_active->chunks);
+	}
+
+	D_SPIN_UNLOCK(&ie->ie_active->lock);
 
 	if (submit) {
 		cd->reqs[0].req  = req;
@@ -418,7 +422,11 @@ found:
 		cd->reqs[0].slot = slot;
 		cd->idx++;
 
-		D_MUTEX_UNLOCK(&rc_lock);
+		/* Now check if this read request is complete or not yet, if it isn't then just
+		 * save req in the right slot however if it is then reply here.  After the call to
+		 * DFUSE_REPLY_* then no reference is held on either the open file or the inode so
+		 * at that point they could be closed.
+		 */
 
 		DFUSE_TRA_DEBUG(oh, "submit for bucket %ld[%d]", bucket, slot);
 
@@ -464,7 +472,7 @@ found:
 	return rcb;
 
 err:
-	D_MUTEX_UNLOCK(&rc_lock);
+	D_SPIN_UNLOCK(&ie->ie_active->lock);
 	return false;
 }
 

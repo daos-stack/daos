@@ -53,7 +53,7 @@ cont:
 				return NULL;
 		}
 
-		rc = daos_eq_poll(eqt->de_eq, 1, DAOS_EQ_WAIT, 128, &dev[0]);
+		rc = daos_eq_poll(eqt->de_eq, 1, DAOS_EQ_NOWAIT, 128, &dev[0]);
 		if (rc >= 1) {
 			for (i = 0; i < rc; i++) {
 				struct dfuse_event *ev;
@@ -1275,6 +1275,7 @@ dfuse_ie_close(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 		  atomic_load_relaxed(&ie->ie_il_count));
 	D_ASSERTF(atomic_load_relaxed(&ie->ie_open_count) == 0, "open_count is %d",
 		  atomic_load_relaxed(&ie->ie_open_count));
+	D_ASSERT(!ie->ie_active);
 
 	if (ie->ie_obj) {
 		rc = dfs_release(ie->ie_obj);

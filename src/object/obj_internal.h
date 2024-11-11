@@ -293,10 +293,16 @@ struct coll_oper_args {
 	struct shard_auxi_args	 coa_auxi;
 	int			 coa_dct_nr;
 	uint32_t		 coa_dct_cap;
-	uint32_t		 coa_max_dct_sz;
+	union {
+		/* Save obj->cob_min_rank for verification during obj_coll_prep_one(). */
+		uint32_t	 coa_min_rank;
+		/* Only can be used since obj_coll_oper_args_collapse() after object layout scan. */
+		uint32_t	 coa_max_dct_sz;
+	};
 	uint8_t			 coa_max_shard_nr;
 	uint8_t			 coa_max_bitmap_sz;
 	uint8_t			 coa_for_modify:1,
+				 coa_raw_sparse:1,
 				 coa_sparse:1;
 	uint8_t			 coa_target_nr;
 	/*
@@ -1094,7 +1100,7 @@ int daos_obj_query_merge(struct obj_query_merge_args *oqma);
 void obj_coll_disp_init(uint32_t tgt_nr, uint32_t max_tgt_size, uint32_t inline_size,
 			uint32_t start, uint32_t max_width, struct obj_coll_disp_cursor *ocdc);
 void obj_coll_disp_dest(struct obj_coll_disp_cursor *ocdc, struct daos_coll_target *tgts,
-			crt_endpoint_t *tgt_ep);
+			crt_endpoint_t *tgt_ep, daos_obj_id_t oid);
 void obj_coll_disp_move(struct obj_coll_disp_cursor *ocdc);
 int obj_utils_init(void);
 void obj_utils_fini(void);

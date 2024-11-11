@@ -129,8 +129,8 @@ db_open_create(struct sys_db *db, bool try_create)
 	}
 	D_DEBUG(DB_IO, "Opening %s, try_create=%d\n", vdb->db_file, try_create);
 	if (try_create) {
-		rc = vos_pool_create(vdb->db_file, vdb->db_pool, SYS_DB_SIZE, 0, VOS_POF_SYSDB,
-				     0 /* version */, &vdb->db_poh);
+		rc = vos_pool_create(vdb->db_file, vdb->db_pool, SYS_DB_SIZE, 0 /* data_sz */,
+				     0 /* meta_sz */, VOS_POF_SYSDB, 0 /* version */, &vdb->db_poh);
 		if (rc) {
 			D_CRIT("sys pool create error: "DF_RC"\n", DP_RC(rc));
 			goto failed;
@@ -349,8 +349,9 @@ vos_db_init(const char *db_path)
 int
 vos_db_init_ex(const char *db_path, const char *db_name, bool force_create, bool destroy_db_on_fini)
 {
-	int	create;
-	int	rc;
+	ABT_mutex_attr	attr = ABT_MUTEX_ATTR_NULL;
+	int		create;
+	int		rc;
 
 	D_ASSERT(db_path != NULL);
 
@@ -373,11 +374,25 @@ vos_db_init_ex(const char *db_path, const char *db_name, bool force_create, bool
 		goto failed;
 	}
 
-	rc = ABT_mutex_create(&vos_db.db_lock);
+	rc = ABT_mutex_attr_create(&attr);
 	if (rc != ABT_SUCCESS) {
-		rc = -DER_NOMEM;
-		goto failed;
+		D_ERROR("Failed to create mutex attr: %d\n", rc);
+		D_GOTO(failed, rc = dss_abterr2der(rc));
 	}
+
+	rc = ABT_mutex_attr_set_recursive(attr, ABT_TRUE);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("Failed to set mutex attr: %d\n", rc);
+		D_GOTO(failed, rc = dss_abterr2der(rc));
+	}
+
+	rc = ABT_mutex_create_with_attr(attr, &vos_db.db_lock);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("Failed to create mutex with attr: %d\n", rc);
+		D_GOTO(failed, rc = dss_abterr2der(rc));
+	}
+
+	ABT_mutex_attr_free(&attr);
 
 	vos_db.db_poh = DAOS_HDL_INVAL;
 	vos_db.db_coh = DAOS_HDL_INVAL;
@@ -416,6 +431,8 @@ vos_db_init_ex(const char *db_path, const char *db_name, bool force_create, bool
 	}
 	return 0;
 failed:
+	if (attr != ABT_MUTEX_ATTR_NULL)
+		ABT_mutex_attr_free(&attr);
 	vos_db_fini();
 	return rc;
 }

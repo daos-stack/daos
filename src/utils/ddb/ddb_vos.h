@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -48,8 +48,18 @@ struct ddb_array {
 };
 
 /* Open and close a pool for a ddb_ctx */
-int dv_pool_open(char *path, daos_handle_t *poh);
+int
+    dv_pool_open(const char *path, daos_handle_t *poh, uint32_t flags);
 int dv_pool_close(daos_handle_t poh);
+int
+dv_pool_destroy(const char *path);
+
+/* Update vos pool flags */
+int
+dv_pool_update_flags(daos_handle_t poh, uint64_t compat_flags, uint64_t incompat_flags);
+/* Get vos pool flags */
+int
+    dv_pool_get_flags(daos_handle_t poh, uint64_t *compat_flags, uint64_t *incompat_flags);
 
 /* Open and close a cont for a ddb_ctx */
 int dv_cont_open(daos_handle_t poh, uuid_t uuid, daos_handle_t *coh);
@@ -111,6 +121,8 @@ struct ddb_superblock {
 	uint64_t	dsb_cont_nr;
 	uint64_t	dsb_nvme_sz;
 	uint64_t	dsb_scm_sz;
+	uint64_t        dsb_compat_flags;
+	uint64_t        dsb_incompat_flags;
 	uint64_t	dsb_tot_blks; /* vea: Block device capacity */
 	uint32_t	dsb_durable_format_version;
 	uint32_t	dsb_blk_sz; /* vea: Block size, 4k bytes by default */

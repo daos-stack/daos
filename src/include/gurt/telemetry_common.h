@@ -8,6 +8,8 @@
 
 #include <gurt/common.h>
 
+#include <stdatomic.h>
+
 #define D_TM_VERSION			1
 #define D_TM_MAX_NAME_LEN		256
 #define D_TM_MAX_DESC_LEN		128
@@ -203,9 +205,10 @@ struct d_tm_bucket_t {
 
 struct d_tm_histogram_t {
 	struct d_tm_bucket_t	*dth_buckets;
-	int			dth_num_buckets;
-	int			dth_initial_width;
-	int			dth_value_multiplier;
+	bool                     dth_fast_bucketing;
+	int                      dth_num_buckets;
+	int                      dth_initial_width;
+	int                      dth_value_multiplier;
 };
 
 struct d_tm_meminfo_t {
@@ -236,6 +239,7 @@ struct d_tm_node_t {
 	pthread_mutex_t		dtn_lock; /** individual mutex */
 	struct d_tm_metric_t	*dtn_metric; /** values */
 	bool			dtn_protect; /** synchronized access */
+	_Atomic bool             dtn_readable; /** fully initialized and ready for reads */
 };
 
 struct d_tm_nodeList_t {
@@ -255,6 +259,9 @@ struct d_tm_nodeList_t {
 struct d_tm_context;
 
 key_t d_tm_get_srv_key(int srv_idx);
+key_t
+		    d_tm_cli_pid_key(int pid);
+
 struct d_tm_node_t *d_tm_follow_link(struct d_tm_context *ctx,
 				     struct d_tm_node_t *link);
 int d_tm_list_add_node(struct d_tm_node_t *src,
@@ -266,4 +273,5 @@ double d_tm_compute_standard_dev(double sum_of_squares, uint64_t sample_size,
 				 double mean);
 void d_tm_compute_histogram(struct d_tm_node_t *node, uint64_t value);
 void d_tm_print_stats(FILE *stream, struct d_tm_stats_t *stats, int format);
+
 #endif /* __TELEMETRY_COMMON_H__ */

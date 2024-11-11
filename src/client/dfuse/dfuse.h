@@ -29,7 +29,6 @@ struct dfuse_info {
 	char                *di_mountpoint;
 	int32_t              di_thread_count;
 	uint32_t             di_eq_count;
-	bool                 di_threaded;
 	bool                 di_foreground;
 	bool                 di_caching;
 	bool                 di_multi_user;
@@ -1021,6 +1020,8 @@ struct dfuse_inode_entry {
 	 */
 	ATOMIC bool               ie_linear_read;
 
+	struct active_inode      *ie_active;
+
 	/* Entry on the evict list */
 	d_list_t                  ie_evict_entry;
 
@@ -1028,6 +1029,23 @@ struct dfuse_inode_entry {
 
 	struct read_chunk_core   *ie_chunk;
 };
+
+struct active_inode {
+	d_list_t           chunks;
+	pthread_spinlock_t lock;
+};
+
+/* Increase active count on inode.  This takes a reference and allocates ie->active as required */
+int
+active_ie_init(struct dfuse_inode_entry *ie);
+
+/* Mark a oh as closing and drop the ref on inode active */
+bool
+active_oh_decref(struct dfuse_obj_hdl *oh);
+
+/* Decrease active count on inode, called on error where there is no oh */
+void
+active_ie_decref(struct dfuse_inode_entry *ie);
 
 /* Flush write-back cache writes to a inode.  It does this by waiting for and then releasing an
  * exclusive lock on the inode.  Writes take a shared lock so this will block until all pending

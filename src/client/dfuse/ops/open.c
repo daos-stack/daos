@@ -93,6 +93,10 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	fi_out.fh = (uint64_t)oh;
 
+	rc = active_ie_init(ie);
+	if (rc)
+		goto err;
+
 	/*
 	 * dfs_dup() just locally duplicates the file handle. If we have
 	 * O_TRUNC flag, we need to truncate the file manually.
@@ -100,11 +104,9 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	if (fi->flags & O_TRUNC) {
 		rc = dfs_punch(ie->ie_dfs->dfs_ns, ie->ie_obj, 0, DFS_MAX_FSIZE);
 		if (rc)
-			D_GOTO(err, rc);
+			D_GOTO(decref, rc);
 		dfuse_dcache_evict(oh->doh_ie);
 	}
-
-	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
 
 	/* Enable this for files up to the max read size. */
 	if (prefetch && oh->doh_parent_dir &&
@@ -127,11 +129,17 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		dfuse_pre_read(dfuse_info, oh);
 
 	return;
+decref:
+	active_ie_decref(ie);
 err:
 	dfuse_oh_free(dfuse_info, oh);
 	DFUSE_REPLY_ERR_RAW(ie, req, rc);
 }
 
+/* Release a file handle, called after close() by an application.
+ *
+ * Can be invoked concurrently on the same inode.
+ */
 void
 dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
@@ -139,12 +147,14 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	struct dfuse_obj_hdl     *oh         = (struct dfuse_obj_hdl *)fi->fh;
 	struct dfuse_inode_entry *ie         = NULL;
 	int                       rc;
-	uint32_t                  oc;
 	uint32_t                  il_calls;
+	uint32_t oc;
 
 	/* Perform the opposite of what the ioctl call does, always change the open handle count
 	 * but the inode only tracks number of open handles with non-zero ioctl counts
 	 */
+
+	D_ASSERT(oh->doh_ie->ie_active);
 
 	DFUSE_TRA_DEBUG(oh, "Closing %d", oh->doh_caching);
 
@@ -206,6 +216,7 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	if (il_calls != 0) {
 		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_il_count, 1);
 	}
+
 	oc = atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_count, 1);
 	DFUSE_TRA_DEBUG(oh, "il_calls %d, caching %d, open count %d", il_calls, oh->doh_caching,
 			oc - 1);
@@ -218,6 +229,9 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		ie = oh->doh_ie;
 		atomic_fetch_add_relaxed(&ie->ie_ref, 1);
 	}
+
+	if (active_oh_decref(oh))
+		oh->doh_linear_read = true;
 
 	rc = dfs_release(oh->doh_obj);
 	if (rc == 0) {
