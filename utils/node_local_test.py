@@ -4564,7 +4564,7 @@ class PosixTests():
 
         assert len(dataset) == len(test_files)
 
-        for i, content in enumerate(dataset):
+        for _, content in enumerate(dataset):
             for f in test_files:
                 if f["content"] == content:
                     f["seen"] += 1
