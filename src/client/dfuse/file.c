@@ -14,7 +14,7 @@ static pthread_mutex_t alock = PTHREAD_MUTEX_INITIALIZER;
 
 /* Perhaps combine with dfuse_open_handle_init? */
 int
-active_ie_init(struct dfuse_inode_entry *ie)
+active_ie_init(struct dfuse_inode_entry *ie, bool *preread)
 {
 	uint32_t oc;
 	int      rc = -DER_SUCCESS;
@@ -25,8 +25,11 @@ active_ie_init(struct dfuse_inode_entry *ie)
 
 	DFUSE_TRA_DEBUG(ie, "Addref to %d", oc + 1);
 
-	if (oc != 0)
+	if (oc != 0) {
+		if (preread && *preread)
+			*preread = false;
 		goto out;
+	}
 
 	D_ALLOC_PTR(ie->ie_active);
 	if (!ie->ie_active)
@@ -38,6 +41,13 @@ active_ie_init(struct dfuse_inode_entry *ie)
 		goto out;
 	}
 	D_INIT_LIST_HEAD(&ie->ie_active->chunks);
+	if (preread && *preread) {
+		D_ALLOC_PTR(ie->ie_active->readahead);
+		if (ie->ie_active->readahead) {
+			D_MUTEX_INIT(&ie->ie_active->readahead->dra_lock, 0);
+			D_MUTEX_LOCK(&ie->ie_active->readahead->dra_lock);
+		}
+	}
 out:
 	D_MUTEX_UNLOCK(&alock);
 	return rc;
@@ -46,7 +56,22 @@ out:
 static void
 ah_free(struct dfuse_inode_entry *ie)
 {
-	D_SPIN_DESTROY(&ie->ie_active->lock);
+	struct active_inode *active = ie->ie_active;
+
+	if (active->readahead) {
+		struct dfuse_event *ev;
+
+		ev = active->readahead->dra_ev;
+
+		D_MUTEX_DESTROY(&active->readahead->dra_lock);
+		if (ev) {
+			daos_event_fini(&ev->de_ev);
+			d_slab_release(ev->de_eqt->de_pre_read_slab, ev);
+		}
+		D_FREE(active->readahead);
+	}
+
+	D_SPIN_DESTROY(&active->lock);
 	D_FREE(ie->ie_active);
 }
 

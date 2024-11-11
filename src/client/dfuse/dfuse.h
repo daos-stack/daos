@@ -148,8 +148,6 @@ struct dfuse_obj_hdl {
 	/** the DFS object handle.  Not created for directories. */
 	dfs_obj_t                *doh_obj;
 
-	struct dfuse_pre_read    *doh_readahead;
-
 	/** the inode entry for the file */
 	struct dfuse_inode_entry *doh_ie;
 
@@ -1018,11 +1016,12 @@ struct dfuse_inode_entry {
 struct active_inode {
 	d_list_t           chunks;
 	pthread_spinlock_t lock;
+	struct dfuse_pre_read *readahead;
 };
 
 /* Increase active count on inode.  This takes a reference and allocates ie->active as required */
 int
-active_ie_init(struct dfuse_inode_entry *ie);
+active_ie_init(struct dfuse_inode_entry *ie, bool *preread);
 
 /* Mark a oh as closing and drop the ref on inode active */
 bool
