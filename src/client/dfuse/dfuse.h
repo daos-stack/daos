@@ -1024,14 +1024,13 @@ struct dfuse_inode_entry {
 
 	/* Entry on the evict list */
 	d_list_t                  ie_evict_entry;
-
-	d_list_t                  ie_open_reads;
 };
 
 struct active_inode {
 	d_list_t           chunks;
 	size_t             file_size;
 	bool               seen_eof;
+	d_list_t           open_reads;
 	pthread_spinlock_t lock;
 };
 

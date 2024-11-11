@@ -1254,7 +1254,6 @@ dfuse_ie_init(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 	atomic_init(&ie->ie_linear_read, true);
 	atomic_fetch_add_relaxed(&dfuse_info->di_inode_count, 1);
 	D_INIT_LIST_HEAD(&ie->ie_evict_entry);
-	D_INIT_LIST_HEAD(&ie->ie_open_reads);
 	D_RWLOCK_INIT(&ie->ie_wlock, 0);
 }
 

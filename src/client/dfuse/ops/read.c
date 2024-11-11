@@ -459,6 +459,7 @@ void
 dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct fuse_file_info *fi)
 {
 	struct dfuse_obj_hdl *oh         = (struct dfuse_obj_hdl *)fi->fh;
+	struct active_inode  *active     = oh->doh_ie->ie_active;
 	struct dfuse_info    *dfuse_info = fuse_req_userdata(req);
 	bool                  mock_read  = false;
 	struct dfuse_eq      *eqt;
@@ -470,8 +471,8 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 
 	if (oh->doh_linear_read_eof && position == oh->doh_linear_read_pos) {
 		reached_eof = true;
-	} else if (oh->doh_ie->ie_active->seen_eof) {
-		if (position >= oh->doh_ie->ie_active->file_size)
+	} else if (active->seen_eof) {
+		if (position >= active->file_size)
 			reached_eof = true;
 	}
 
@@ -561,23 +562,23 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	DFUSE_IE_WFLUSH(oh->doh_ie);
 
 	/* Not check for outstanding read which matches */
-	D_SPIN_LOCK(&oh->doh_ie->ie_active->lock);
+	D_SPIN_LOCK(&active->lock);
 	{
 		struct dfuse_event *evc;
 
 		/* Check for concurrent overlapping reads and if so then add request to current op
 		 */
-		d_list_for_each_entry(evc, &oh->doh_ie->ie_open_reads, de_read_list) {
+		d_list_for_each_entry(evc, &active->open_reads, de_read_list) {
 			if (ev->de_req_position == evc->de_req_position &&
 			    ev->de_req_len <= evc->de_req_len) {
 				d_list_add(&ev->de_read_list, &evc->de_read_slaves);
-				D_SPIN_UNLOCK(&oh->doh_ie->ie_active->lock);
+				D_SPIN_UNLOCK(&active->lock);
 				return;
 			}
 		}
-		d_list_add_tail(&ev->de_read_list, &oh->doh_ie->ie_open_reads);
+		d_list_add_tail(&ev->de_read_list, &active->open_reads);
 	}
-	D_SPIN_UNLOCK(&oh->doh_ie->ie_active->lock);
+	D_SPIN_UNLOCK(&active->lock);
 
 	rc = dfs_read(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, position, &ev->de_len, &ev->de_ev);
 	if (rc != 0) {

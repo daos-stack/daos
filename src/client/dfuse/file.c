@@ -38,6 +38,7 @@ active_ie_init(struct dfuse_inode_entry *ie)
 		goto out;
 	}
 	D_INIT_LIST_HEAD(&ie->ie_active->chunks);
+	D_INIT_LIST_HEAD(&ie->ie_active->open_reads);
 out:
 	D_MUTEX_UNLOCK(&alock);
 	return rc;
