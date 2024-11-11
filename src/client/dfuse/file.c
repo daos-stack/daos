@@ -44,8 +44,7 @@ active_ie_init(struct dfuse_inode_entry *ie, bool *preread)
 	if (preread && *preread) {
 		D_ALLOC_PTR(ie->ie_active->readahead);
 		if (ie->ie_active->readahead) {
-			D_MUTEX_INIT(&ie->ie_active->readahead->dra_lock, 0);
-			D_MUTEX_LOCK(&ie->ie_active->readahead->dra_lock);
+			D_INIT_LIST_HEAD(&ie->ie_active->readahead->req_list);
 		}
 	}
 out:
@@ -61,9 +60,11 @@ ah_free(struct dfuse_inode_entry *ie)
 	if (active->readahead) {
 		struct dfuse_event *ev;
 
+		D_ASSERT(active->readahead->complete);
+		D_ASSERT(d_list_empty(&active->readahead->req_list));
+
 		ev = active->readahead->dra_ev;
 
-		D_MUTEX_DESTROY(&active->readahead->dra_lock);
 		if (ev) {
 			daos_event_fini(&ev->de_ev);
 			d_slab_release(ev->de_eqt->de_pre_read_slab, ev);

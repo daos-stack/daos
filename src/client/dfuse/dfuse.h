@@ -136,9 +136,10 @@ struct dfuse_inode_entry;
  * when EOF is returned to the kernel.  If it's still present on release then it's freed then.
  */
 struct dfuse_pre_read {
-	pthread_mutex_t     dra_lock;
+	d_list_t            req_list;
 	struct dfuse_event *dra_ev;
 	int                 dra_rc;
+	bool                complete;
 };
 
 /** what is returned as the handle for fuse fuse_file_info on create/open/opendir */
@@ -1014,8 +1015,8 @@ struct dfuse_inode_entry {
 };
 
 struct active_inode {
-	d_list_t           chunks;
-	pthread_spinlock_t lock;
+	d_list_t               chunks;
+	pthread_spinlock_t     lock;
 	struct dfuse_pre_read *readahead;
 };
 
