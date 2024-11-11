@@ -57,7 +57,7 @@ atfork_handler(void)
 {
 	int rc = daos_reinit();
 	if (rc) {
-		D_WARN("daos_reinit() failed in child process %s (rc=%d)",  d_errstr(rc), rc);
+		D_WARN("daos_reinit() failed in child process %s (rc=%d)", d_errstr(rc), rc);
 	}
 }
 
@@ -820,13 +820,10 @@ __shim_handle__err_to_str(PyObject *self, PyObject *args)
 /**
  * Python shim module
  */
-#define EXPORT_PYTHON_METHOD(name)		\
-{						\
-	#name,					\
-	__shim_handle__##name,			\
-	METH_VARARGS | METH_KEYWORDS,		\
-	"text"					\
-}
+#define EXPORT_PYTHON_METHOD(name)                                                                 \
+	{                                                                                          \
+		#name, __shim_handle__##name, METH_VARARGS | METH_KEYWORDS, "text"                 \
+	}
 
 static PyMethodDef torchMethods[] = {
     /** Torch operations */
