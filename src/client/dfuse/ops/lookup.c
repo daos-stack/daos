@@ -91,7 +91,7 @@ dfuse_reply_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 		/* Make the inode active for the create case */
 		if (ie->ie_active) {
 			D_ASSERT(atomic_load_relaxed(&ie->ie_open_count) == 1);
-			active_ie_decref(ie);
+			active_ie_decref(dfuse_info, ie);
 			rc = active_ie_init(inode, NULL);
 			if (rc != -DER_SUCCESS) {
 				atomic_fetch_sub_relaxed(&ie->ie_ref, 1);

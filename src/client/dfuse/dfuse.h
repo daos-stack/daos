@@ -405,6 +405,7 @@ struct dfuse_event {
 		struct dfuse_inode_entry *de_ie;
 		struct read_chunk_data   *de_cd;
 	};
+	struct dfuse_info *de_di;
 	off_t  de_req_position; /**< The file position requested by fuse */
 	union {
 		size_t de_req_len;
@@ -1026,11 +1027,11 @@ active_ie_init(struct dfuse_inode_entry *ie, bool *preread);
 
 /* Mark a oh as closing and drop the ref on inode active */
 bool
-active_oh_decref(struct dfuse_obj_hdl *oh);
+active_oh_decref(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh);
 
 /* Decrease active count on inode, called on error where there is no oh */
 void
-active_ie_decref(struct dfuse_inode_entry *ie);
+active_ie_decref(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie);
 
 /* Flush write-back cache writes to a inode.  It does this by waiting for and then releasing an
  * exclusive lock on the inode.  Writes take a shared lock so this will block until all pending

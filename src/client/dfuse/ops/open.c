@@ -126,7 +126,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	return;
 decref:
-	active_ie_decref(ie);
+	active_ie_decref(dfuse_info, ie);
 err:
 	dfuse_oh_free(dfuse_info, oh);
 	DFUSE_REPLY_ERR_RAW(ie, req, rc);
@@ -198,7 +198,7 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		atomic_fetch_add_relaxed(&ie->ie_ref, 1);
 	}
 
-	if (active_oh_decref(oh))
+	if (active_oh_decref(dfuse_info, oh))
 		oh->doh_linear_read = true;
 
 	rc = dfs_release(oh->doh_obj);

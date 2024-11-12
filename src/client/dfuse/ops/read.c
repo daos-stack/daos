@@ -572,8 +572,9 @@ pre_read_mark_done(struct active_inode *active)
 static void
 dfuse_cb_pre_read_complete(struct dfuse_event *ev)
 {
-	struct dfuse_obj_hdl *oh = ev->de_oh;
-	struct active_inode  *active = oh->doh_ie->ie_active;
+	struct dfuse_info        *dfuse_info = ev->de_di;
+	struct dfuse_inode_entry *ie         = ev->de_ie;
+	struct active_inode      *active     = ie->ie_active;
 
 	active->readahead->dra_rc = ev->de_ev.ev_error;
 
@@ -594,6 +595,8 @@ dfuse_cb_pre_read_complete(struct dfuse_event *ev)
 		active->readahead->dra_ev = NULL;
 	}
 	pre_read_mark_done(active);
+	/* Drop the extra ref on active, the file could be closed before this read completes */
+	active_ie_decref(dfuse_info, ie);
 }
 
 void
@@ -613,9 +616,10 @@ dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh)
 	ev->de_iov.iov_len   = len;
 	ev->de_req           = 0;
 	ev->de_sgl.sg_nr     = 1;
-	ev->de_oh            = oh;
+	ev->de_ie            = oh->doh_ie;
 	ev->de_readahead_len = len;
 	ev->de_req_position  = 0;
+	ev->de_di            = dfuse_info;
 
 	ev->de_complete_cb        = dfuse_cb_pre_read_complete;
 	active->readahead->dra_ev = ev;
