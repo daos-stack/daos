@@ -7,16 +7,6 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-/* Global lock for all chunk read operations.  Each inode has a struct read_chunk_core * entry
- * which is checked for NULL and set whilst holding this lock.  Each read_chunk_core then has
- * a list of read_chunk_data and again, this lock protects all lists on all inodes.  This avoids
- * the need for a per-inode lock which for many files would consume considerable memory but does
- * mean there is potentially some lock contention.  The lock however is only held for list
- * manipulation, no dfs or kernel calls are made whilst holding the lock.
- *
- * Also used for ie_open_reads list.
- */
-
 static void
 cb_read_helper(struct dfuse_event *ev, void *buff)
 {
@@ -174,12 +164,10 @@ pick_eqt(struct dfuse_info *dfuse_info)
  *
  * This code is entered when caching is enabled and reads are correctly size/aligned and not in the
  * last CHUNK_SIZE of a file.  When open then the inode contains a single read_chunk_core pointer
- * and this contains a list of read_chunk_data entries, one for each bucket.  Buckets where all
- * slots have been requested are remove from the list and closed when the last request is completed.
+ * and this contains a list of read_chunk_data entries, one for each bucket.
  *
- * TODO: Currently there is no code to remove partially read buckets from the list so reading
- * one slot every chunk would leave the entire file contents in memory until close and mean long
- * list traversal times.
+ * TODO: Currently there is no code to remove buckets from the list so all buckets will remain in
+ * memory until close.
  */
 
 #define CHUNK_SIZE (1024 * 1024)
@@ -245,6 +233,13 @@ chunk_cb(struct dfuse_event *ev)
 	/* Mark as complete so no more get put on list */
 	D_SPIN_LOCK(&ia->lock);
 	cd->complete = true;
+
+	/* Mark the slot as replied to.  There's a race here as the slot hasn't been replied to
+	 * however references are dropped by the DFUSE_REPLY macros below so an extra ref on active
+	 * would be required.
+	 */
+	for (int i = 0; i < cd->idx; i++)
+		cd->slot_done[cd->reqs[i].slot] = true;
 	D_SPIN_UNLOCK(&ia->lock);
 
 	for (int i = 0; i < cd->idx; i++) {
@@ -337,6 +332,7 @@ chunk_read(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
 	int                       slot;
 	bool                      submit = false;
 	bool                      rcb;
+	bool                      all_done = true;
 
 	if (len != K128)
 		return false;
@@ -361,6 +357,7 @@ chunk_read(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
 
 	d_list_for_each_entry(cd, &ie->ie_active->chunks, list)
 		if (cd->bucket == bucket) {
+			d_list_del(&cd->list);
 			goto found;
 		}
 
@@ -376,23 +373,15 @@ chunk_read(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
 
 found:
 
-#if 0
-	/* Keep track of which slots have been requested, but allow for multiple reads per
-	 * slot */
-	if (!cd->slot_done[slot]) {
-		cd->entered++;
-		cd->slot_done[slot] = true;
-	} else {
-		DFUSE_TRA_DEBUG(oh, "concurrent read on %ld[%d] complete %d", bucket, slot,
-				cd->complete);
+	for (int i = 0; i < 8; i++) {
+		if (!cd->slot_done[i])
+			all_done = false;
 	}
 
-	if (cd->entered < 8) {
-		/* Put on front of list for efficient searching */
-		DFUSE_TRA_DEBUG(oh, "%d slots requested, putting on front of list", cd->entered);
-		d_list_add(&cd->list, &ie->ie_chunk->entries);
-	}
-#endif
+	if (all_done)
+		d_list_add(&cd->list, &ie->ie_active->chunks);
+	else
+		d_list_add_tail(&cd->list, &ie->ie_active->chunks);
 
 	if (submit) {
 		cd->reqs[0].req  = req;
@@ -411,6 +400,8 @@ found:
 
 		rcb = chunk_fetch(req, ie, cd);
 	} else if (cd->complete) {
+		cd->slot_done[slot] = true;
+
 		D_SPIN_UNLOCK(&ie->ie_active->lock);
 
 		if (cd->rc != 0) {
@@ -561,13 +552,14 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 
 	DFUSE_IE_WFLUSH(oh->doh_ie);
 
-	/* Not check for outstanding read which matches */
+	/* Check for open matching reads, if there are multiple readers of the same file offset
+	 * then chain future requests off the first one to avoid extra network round-trips.  This
+	 * can and does happen even with caching enabled if there are multiple client processes.
+	 */
 	D_SPIN_LOCK(&active->lock);
 	{
 		struct dfuse_event *evc;
 
-		/* Check for concurrent overlapping reads and if so then add request to current op
-		 */
 		d_list_for_each_entry(evc, &active->open_reads, de_read_list) {
 			if (ev->de_req_position == evc->de_req_position &&
 			    ev->de_req_len <= evc->de_req_len) {

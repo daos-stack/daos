@@ -401,8 +401,8 @@ struct dfuse_event {
 	d_sg_list_t      de_sgl;
 	d_list_t         de_list;
 
-	/* Position in a list of events, this will either be off ie->ie_open_reads or
-	 * de->de_read_slaves
+	/* Position in a list of events, this will either be off active->open_reads or
+	 * de->de_read_slaves.
 	 */
 	d_list_t         de_read_list;
 	/* List of slave events */
