@@ -58,7 +58,7 @@ def git_fetch():
         str: the fetch result
     """
     result = subprocess.run(
-        ['git', 'fetch'],
+        ['git', 'fetch', '--all'],
         stdout=subprocess.PIPE, check=True, cwd=PARENT_DIR)
     return result.stdout.decode().rstrip('\n')
 
