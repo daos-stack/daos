@@ -369,8 +369,6 @@ chunk_read(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
 	cd->bucket = bucket;
 	submit     = true;
 
-	d_list_add(&cd->list, &ie->ie_active->chunks);
-
 found:
 
 	for (int i = 0; i < 8; i++) {
@@ -470,12 +468,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	if (reached_eof) {
 		DFUSE_TRA_DEBUG(oh, "Returning EOF early without round trip %#zx", position);
 		oh->doh_linear_read_eof = false;
-#if 0
-		/* Release uses this to set the bit on the directory so do not turn it off here
-		* but I do need to check why it was set before.
-		*/
 		oh->doh_linear_read     = false;
-#endif
 
 		if (oh->doh_readahead) {
 			D_MUTEX_LOCK(&oh->doh_readahead->dra_lock);
