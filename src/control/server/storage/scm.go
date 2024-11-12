@@ -199,9 +199,8 @@ func (sms ScmModules) Capacity() (tb uint64) {
 	return
 }
 
-// Summary reports total storage space and the number of modules.
-//
-// Capacity given in IEC standard units.
+// Summary reports total storage space and the number of modules. Memory capacity printed with IEC
+// (binary representation) units.
 func (sms ScmModules) Summary() string {
 	return fmt.Sprintf("%s (%d %s)", humanize.IBytes(sms.Capacity()), len(sms),
 		common.Pluralise("module", len(sms)))
@@ -295,14 +294,9 @@ func (sns ScmNamespaces) Usable() (tb uint64) {
 	return
 }
 
-// PercentUsage returns the percentage of used storage space.
-func (sns ScmNamespaces) PercentUsage() string {
-	return common.PercentageString(sns.Total()-sns.Free(), sns.Total())
-}
-
-// Summary reports total storage space and the number of namespaces.
-//
-// Capacity given in IEC standard units.
+// Summary reports total storage space and the number of namespaces. Although the underlying
+// hardware is memory the PMem namespaces will be presented as block storage devices so print
+// capacity with SI (decimal representation) units.
 func (sns ScmNamespaces) Summary() string {
 	return fmt.Sprintf("%s (%d %s)", humanize.Bytes(sns.Capacity()), len(sns),
 		common.Pluralise("namespace", len(sns)))

@@ -1121,7 +1121,6 @@ query_new_dlsym_addr(void *addr)
 _Pragma("GCC diagnostic push")
 _Pragma("GCC diagnostic ignored \"-Wunused-function\"")
 _Pragma("GCC diagnostic ignored \"-Wunused-variable\"")
-
 _Pragma("GCC push_options")
 _Pragma("GCC optimize(\"-O0\")")
 static char str_zeinit[] = "zeInit";
@@ -1129,7 +1128,7 @@ static char str_zeinit[] = "zeInit";
 static int
 is_hook_enabled(void)
 {
-	return (d_hook_enabled ? (1) : (0));
+	return (d_hook_enabled ? 1 : 0);
 }
 
 /* This wrapper function is introduced to avoid compiling issue with Intel-C on Leap 15.5 */
@@ -1198,7 +1197,6 @@ new_dlsym_c(void *handle, const char *symbol)
 {
 	if (!d_hook_enabled)
 		goto org_dlsym;
-	printf("Inside my dlsym().\n");
 	if (strcmp(symbol, "zeInit") != 0)
 		goto org_dlsym;
 

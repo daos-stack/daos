@@ -136,9 +136,14 @@
 #cache_expiration: 30
 
 ## Ignore a subset of fabric interfaces when selecting an interface for client
-## applications.
+## applications. (Mutually exclusive with include).
 #
 #exclude_fabric_ifaces: ["lo", "eth1"]
+
+## Conversely, only consider a specific set of fabric interfaces when selecting
+## an interface for client applications. (Mutually exclusive with exclude).
+#
+#include_fabric_ifaces: ["eth0"]
 
 # Manually define the fabric interfaces and domains to be used by the agent,
 # organized by NUMA node.
