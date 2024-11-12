@@ -51,11 +51,23 @@
 uint32_t
 ds_pool_get_vos_df_version(uint32_t pool_global_version)
 {
-	if (pool_global_version >= 3)
+	if (pool_global_version == 4)
+		return VOS_POOL_DF_2_8;
+	if (pool_global_version == 3)
 		return VOS_POOL_DF_2_6;
 	else if (pool_global_version == 2)
 		return VOS_POOL_DF_2_4;
 	return 0;
+}
+
+/** Return the default VOS DF version for the default pool global version. */
+uint32_t
+ds_pool_get_vos_df_version_default(void)
+{
+	uint32_t v = ds_pool_get_vos_df_version(DAOS_POOL_GLOBAL_VERSION);
+
+	D_ASSERT(v != 0);
+	return v;
 }
 
 #define DUP_OP_MIN_RDB_SIZE                       (1 << 30)
@@ -1023,7 +1035,7 @@ ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
 	d_iov_set(&psid, (void *)pool_uuid, sizeof(uuid_t));
 	rc = ds_rsvc_dist_start(DS_RSVC_CLASS_POOL, &psid, pool_uuid, ranks, RDB_NIL_TERM,
 				DS_RSVC_CREATE, true /* bootstrap */, ds_rsvc_get_md_cap(),
-				0 /* vos_df_version */);
+				ds_pool_get_vos_df_version_default());
 	if (rc != 0)
 		D_GOTO(out_ranks, rc);
 
