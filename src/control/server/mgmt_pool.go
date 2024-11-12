@@ -200,7 +200,7 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 		nvmeBytes := req.TierBytes[1]
 		if nvmeMissing && nvmeBytes > 0 {
 			return errors.Errorf("%s NVMe requested for pool but config has zero bdevs",
-				humanize.Bytes(nvmeBytes))
+				humanize.IBytes(nvmeBytes))
 		}
 
 	// Pool tier sizes to be populated based on total-size and ratio.
@@ -216,8 +216,8 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 			req.TierBytes[tierIdx] =
 				uint64(float64(req.TotalBytes)*req.TierRatio[tierIdx]) /
 					uint64(len(req.GetRanks()))
-			svc.log.Infof("%s = (%s*%f) / %d", humanize.Bytes(req.TierBytes[tierIdx]),
-				humanize.Bytes(req.TotalBytes), req.TierRatio[tierIdx],
+			svc.log.Infof("%s = (%s*%f) / %d", humanize.IBytes(req.TierBytes[tierIdx]),
+				humanize.IBytes(req.TotalBytes), req.TierRatio[tierIdx],
 				len(req.GetRanks()))
 		}
 

@@ -652,7 +652,6 @@ func TestServer_bdevScan(t *testing.T) {
 					func() *ctlpb.NvmeController {
 						nc := proto.MockNvmeController(1)
 						sd := mockSmd(storage.BdevRoleWAL | storage.BdevRoleMeta)
-						sd.AvailBytes = 0
 						nc.SmdDevices = []*ctlpb.SmdDevice{sd}
 						return nc
 					}(),
@@ -3574,17 +3573,17 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 					320 * clusterSize,
 					320 * clusterSize,
 					320 * clusterSize,
-					0 * humanize.GiByte,
-					0 * humanize.GiByte,
-					0 * humanize.GiByte,
+					320 * clusterSize,
+					320 * clusterSize,
+					320 * clusterSize,
 				},
 				availableBytes: []uint64{
 					320 * clusterSize,
 					320 * clusterSize,
 					320 * clusterSize,
-					0 * humanize.GiByte,
-					0 * humanize.GiByte,
-					0 * humanize.GiByte,
+					320 * clusterSize,
+					320 * clusterSize,
+					320 * clusterSize,
 				},
 				usableBytes: []uint64{
 					// 5tgts * 64mib = 320mib of meta on SSD (10 clusters)
@@ -3958,13 +3957,13 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 				test.AssertEqual(t, tc.output.availableBytes[index], namespace.GetMount().GetAvailBytes(),
 					fmt.Sprintf("Invalid SCM available bytes: nsp=%s, want=%s (%d bytes), got=%s (%d bytes)",
 						namespace.GetMount().GetPath(),
-						humanize.Bytes(tc.output.availableBytes[index]), tc.output.availableBytes[index],
-						humanize.Bytes(namespace.GetMount().GetAvailBytes()), namespace.GetMount().GetAvailBytes()))
+						humanize.IBytes(tc.output.availableBytes[index]), tc.output.availableBytes[index],
+						humanize.IBytes(namespace.GetMount().GetAvailBytes()), namespace.GetMount().GetAvailBytes()))
 				test.AssertEqual(t, tc.output.usableBytes[index], namespace.GetMount().GetUsableBytes(),
 					fmt.Sprintf("Invalid SCM usable bytes: nsp=%s, want=%s (%d bytes), got=%s (%d bytes)",
 						namespace.GetMount().GetPath(),
-						humanize.Bytes(tc.output.usableBytes[index]), tc.output.usableBytes[index],
-						humanize.Bytes(namespace.GetMount().GetUsableBytes()), namespace.GetMount().GetUsableBytes()))
+						humanize.IBytes(tc.output.usableBytes[index]), tc.output.usableBytes[index],
+						humanize.IBytes(namespace.GetMount().GetUsableBytes()), namespace.GetMount().GetUsableBytes()))
 			}
 			if tc.output.message != "" {
 				test.AssertTrue(t,
