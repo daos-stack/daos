@@ -625,10 +625,8 @@ dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh)
 	active->readahead->dra_ev = ev;
 
 	rc = dfs_read(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, 0, &ev->de_len, &ev->de_ev);
-	if (rc != 0) {
-		D_GOTO(err, rc);
-		return;
-	}
+	if (rc != 0)
+		goto err;
 
 	/* Send a message to the async thread to wake it up and poll for events */
 	sem_post(&eqt->de_sem);
@@ -644,5 +642,6 @@ err:
 		d_slab_release(eqt->de_pre_read_slab, ev);
 		active->readahead->dra_ev = NULL;
 	}
+	active_ie_decref(dfuse_info, oh->doh_ie);
 	pre_read_mark_done(active);
 }
