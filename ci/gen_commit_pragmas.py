@@ -51,6 +51,18 @@ def git_files_changed(target):
     return [os.path.join(git_root, path) for path in result.stdout.decode().split('\n') if path]
 
 
+def git_fetch():
+    """Run git fetch.
+
+    Returns:
+        str: the fetch result
+    """
+    result = subprocess.run(
+        ['git', 'fetch', '--all'],
+        stdout=subprocess.PIPE, check=True, cwd=PARENT_DIR)
+    return result.stdout.decode().rstrip('\n')
+
+
 def git_merge_base(*commits):
     """Run git merge-base.
 
@@ -103,6 +115,9 @@ def main():
         required=True,
         help="git target to as reference diff")
     args = parser.parse_args()
+
+    # Fetch latest repo
+    git_fetch()
 
     commit_pragmas = gen_commit_pragmas(git_merge_base('HEAD', args.target))
     for pragma, value in commit_pragmas.items():
