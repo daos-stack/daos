@@ -19,6 +19,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/telemetry"
@@ -441,7 +442,8 @@ func TestPromExp_Collector_Collect(t *testing.T) {
 		expMetricNames []string
 	}{
 		"nil channel": {
-			collector: defaultCollector,
+			collector:      defaultCollector,
+			expMetricNames: []string{},
 		},
 		"success": {
 			collector:  defaultCollector,
@@ -454,9 +456,9 @@ func TestPromExp_Collector_Collect(t *testing.T) {
 				"engine_stats_gauge2_max",
 				"engine_stats_gauge2_mean",
 				"engine_stats_gauge2_sum",
+				"engine_stats_gauge2_samples",
 				"engine_stats_gauge2_stddev",
 				"engine_stats_gauge2_sumsquares",
-				"engine_stats_gauge2_samples",
 				"engine_timer_stamp",
 				"engine_timer_snapshot",
 				"engine_timer_duration",
@@ -464,9 +466,9 @@ func TestPromExp_Collector_Collect(t *testing.T) {
 				"engine_timer_duration_max",
 				"engine_timer_duration_mean",
 				"engine_timer_duration_sum",
+				"engine_timer_duration_samples",
 				"engine_timer_duration_stddev",
 				"engine_timer_duration_sumsquares",
-				"engine_timer_duration_samples",
 			},
 		},
 		"ignore some metrics": {
@@ -492,19 +494,18 @@ func TestPromExp_Collector_Collect(t *testing.T) {
 				}
 			}
 
-			test.AssertEqual(t, len(tc.expMetricNames), len(gotMetrics), "wrong number of metrics returned")
-			for _, exp := range tc.expMetricNames {
-				found := false
-				for _, got := range gotMetrics {
-					if strings.Contains(got.Desc().String(), exp) {
-						found = true
-						break
-					}
-				}
-
-				if !found {
-					t.Errorf("expected metric %q not found", exp)
-				}
+			fqNameRe := regexp.MustCompile(`fqName: "(\w*)"`)
+			gotMetricNames := make([]string, len(gotMetrics))
+			for i, m := range gotMetrics {
+				gotMetricNames[i] = fqNameRe.FindStringSubmatch(m.Desc().String())[1]
+			}
+			cmpOpts := cmp.Options{
+				cmpopts.SortSlices(func(a, b string) bool {
+					return a < b
+				}),
+			}
+			if diff := cmp.Diff(tc.expMetricNames, gotMetricNames, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected set of metrics (-want,+got: %s)", diff)
 			}
 		})
 	}
@@ -610,6 +611,14 @@ func TestPromExp_extractEngineLabels(t *testing.T) {
 		"pool_tgt_scrubber_corruption_total": {
 			input:   "ID: 1/pool/86eacd2c-eceb-4054-8621-017f4f661fe2/tgt_5/scrubber/corruption/total",
 			expName: "pool_scrubber_corruption_total",
+			expLabels: labelMap{
+				"pool":   "86eacd2c-eceb-4054-8621-017f4f661fe2",
+				"target": "5",
+			},
+		},
+		"pool_xferred_update": {
+			input:   "ID: 1/pool/86eacd2c-eceb-4054-8621-017f4f661fe2/xferred/update/tgt_5",
+			expName: "pool_xferred_update",
 			expLabels: labelMap{
 				"pool":   "86eacd2c-eceb-4054-8621-017f4f661fe2",
 				"target": "5",
@@ -818,5 +827,133 @@ func TestPromExp_Collector_RemoveSource(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestPromExp_Collector_DaosHistograms(t *testing.T) {
+	var (
+		poolID string = "86eacd2c-eceb-4054-8621-017f4f661fe2"
+	)
+
+	type sample struct {
+		count  uint64
+		sum    uint64
+		values []uint64
+	}
+	type metricData struct {
+		name    string
+		labels  labelMap
+		samples []sample
+		buckets []float64
+	}
+	testData := map[string]*metricData{
+		"rank_3/tgt_5": {
+			name: "pool_xferred_update",
+			labels: labelMap{
+				"rank":   "3",
+				"pool":   poolID,
+				"target": "5",
+			},
+			samples: []sample{
+				{
+					count:  1,
+					sum:    2,
+					values: []uint64{0, 2},
+				},
+				{
+					count:  2,
+					sum:    3,
+					values: []uint64{1, 2},
+				},
+				{
+					count:  3,
+					sum:    3,
+					values: []uint64{1, 2},
+				},
+			},
+			buckets: []float64{1, 2},
+		},
+		"rank_0/tgt_1": {
+			name: "pool_xferred_update",
+			labels: labelMap{
+				"rank":   "0",
+				"pool":   poolID,
+				"target": "1",
+			},
+			samples: []sample{
+				{
+					count:  0,
+					sum:    0,
+					values: []uint64{0, 0},
+				},
+				{
+					count:  0,
+					sum:    0,
+					values: []uint64{0, 0},
+				},
+				{
+					count:  0,
+					sum:    0,
+					values: []uint64{0, 0},
+				},
+			},
+			buckets: []float64{1, 2},
+		},
+	}
+
+	hvm := make(hvMap)
+
+	for _, v := range testData {
+		hvm.add(v.name, "help", v.labels, v.buckets)
+		for _, samp := range v.samples {
+			if err := hvm.set(v.name, v.labels, samp.count, samp.sum, samp.values); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	ch := make(chan prometheus.Metric)
+	go func() {
+		for _, hv := range hvm {
+			hv.Collect(ch)
+		}
+		close(ch)
+	}()
+
+	for m := range ch {
+		var mp dto.Metric
+		if err := m.Write(&mp); err != nil {
+			t.Fatal(err)
+		}
+
+		hist := mp.GetHistogram()
+		if hist == nil {
+			t.Fatalf("received metric %+v did not contain Histogram", mp)
+		}
+
+		var poolLabel string
+		var rankLabel string
+		for _, pair := range mp.Label {
+			switch pair.GetName() {
+			case "pool":
+				poolLabel = pair.GetValue()
+			case "rank":
+				rankLabel = pair.GetValue()
+			}
+		}
+
+		t.Logf("mp: %+v", mp)
+		test.AssertEqual(t, poolLabel, poolID, "unexpected pool label value")
+
+		switch rankLabel {
+		case "3":
+			test.AssertEqual(t, hist.GetSampleCount(), uint64(3), "unexpected sample count for rank 3")
+			test.AssertEqual(t, hist.GetSampleSum(), float64(3), "unexpected sample sum for rank 3")
+		case "0":
+			test.AssertEqual(t, hist.GetSampleCount(), uint64(0), "unexpected sample count for rank 0")
+			test.AssertEqual(t, hist.GetSampleSum(), float64(0), "unexpected sample sum for rank 0")
+		default:
+			t.Fatalf("unexpected rank %s in results", rankLabel)
+		}
 	}
 }
