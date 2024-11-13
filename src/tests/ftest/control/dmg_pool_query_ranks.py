@@ -38,34 +38,19 @@ class DmgPoolQueryRanks(ControlTestBase):
         """
         self.log.info("Basic tests of pool query with ranks state")
 
-        self.log.debug("Checking without ranks state information")
+        self.log_step("Checking pool query without ranks state information")
         data = self.dmg.pool_query(self.pool.identifier)
-        self.assertIsNone(
-            data['response'].get('enabled_ranks'),
-            "Invalid enabled_ranks field: want=None, got={}".format(
-                data['response'].get('enabled_ranks')))
-        self.assertListEqual(
-            data['response'].get('disabled_ranks'), [],
-            "Invalid disabled_ranks field: want=[], got={}".format(
-                data['response'].get('disabled_ranks')))
+        self._verify_ranks(None, data, "enabled_ranks")
+        self._verify_ranks([], data, "disabled_ranks")
 
-        self.log.debug("Checking enabled ranks state information")
+        self.log_step("Checking pool query with enabled ranks state information")
         data = self.dmg.pool_query(self.pool.identifier, show_enabled=True)
-        self.assertListEqual(
-            data['response'].get('enabled_ranks'), [0, 1, 2, 3, 4],
-            "Invalid enabled_ranks field: want=[0, 1, 2, 3, 4], got={}".format(
-                data['response'].get('enabled_ranks')))
-        self.assertListEqual(
-            data['response'].get('disabled_ranks'), [],
-            "Invalid disabled_ranks field: want=[], got={}".format(
-                data['response'].get('disabled_ranks')))
+        self._verify_ranks([0, 1, 2, 3, 4], data, "enabled_ranks")
+        self._verify_ranks([], data, "disabled_ranks")
 
-        self.log.debug("Checking suspect ranks state information")
+        self.log_step("Checking pool query with suspect ranks state information")
         data = self.dmg.pool_query(self.pool.identifier, health_only=True)
-        self.assertListEqual(
-            data['response'].get('suspect_ranks'), [],
-            "Invalid suspect_ranks field: want=[], got={}".format(
-                data['response'].get('suspect_ranks')))
+        self._verify_ranks([], data, "suspect_ranks")
 
     def test_pool_query_ranks_mgmt(self):
         """Test the state of ranks after excluding and reintegrate them.
@@ -90,36 +75,32 @@ class DmgPoolQueryRanks(ControlTestBase):
         self.random.shuffle(all_ranks)
         exclude_rank = all_ranks[0]
         suspect_rank = all_ranks[1]
-        self.log_step(f"Starting excluding rank:{exclude_rank} all_ranks={all_ranks}")
+        self.log_step(f"Excluding pool rank:{exclude_rank} all_ranks={all_ranks}")
         self.pool.exclude([exclude_rank])
         enabled_ranks.remove(exclude_rank)
         disabled_ranks = sorted(disabled_ranks + [exclude_rank])
 
         self.log_step("Checking enabled ranks state information")
         data = self.dmg.pool_query(self.pool.identifier, show_enabled=True)
-        self.assertListEqual(
-            data['response'].get('enabled_ranks'), enabled_ranks,
-            "Invalid enabled_ranks field: want={}, got={}".format(
-                enabled_ranks, data['response'].get('enabled_ranks')))
-        self.assertListEqual(
-            data['response'].get('disabled_ranks'), disabled_ranks,
-            "Invalid disabled_ranks field: want={}, got={}".format(
-                disabled_ranks, data['response'].get('disabled_ranks')))
-
-        self.log_step("Waiting for pool to be rebuild")
-        self.pool.wait_for_rebuild_to_start()
+        self._verify_ranks(enabled_ranks, data, "enabled_ranks")
+        self._verify_ranks(disabled_ranks, data, "disabled_ranks")
 
         # kill second rank.
         self.log_step(f"Starting excluding rank:{suspect_rank} all_ranks={all_ranks}")
         self.server_managers[0].stop_ranks([suspect_rank], self.d_log)
-        self.pool.wait_pool_suspect_ranks([suspect_rank], timeout=30)
-        self.assertListEqual(
-            data['response'].get('disabled_ranks'), disabled_ranks,
-            "Invalid disabled_ranks field: want={}, got={}".format(
-                disabled_ranks, data['response'].get('disabled_ranks')))
+        self.pool.wait_for_rebuild_to_start()
 
+        self.log_step(f"Waiting for pool rank {suspect_rank} to be suspected")
+        self.pool.wait_pool_suspect_ranks([suspect_rank], timeout=30)
+        self._verify_ranks(disabled_ranks, data, "disabled_ranks")
+
+        self.log_step(f"Starting rank {suspect_rank}")
         self.server_managers[0].start_ranks([suspect_rank], self.d_log)
+
+        self.log_step("Waiting for pool ranks to no longer be suspected")
         self.pool.wait_pool_suspect_ranks([], timeout=30)
+
+        self.log_step("Waiting for rebuild to complete")
         self.pool.wait_for_rebuild_to_end()
 
         self.log_step(f"Reintegrating rank {exclude_rank}")
@@ -134,7 +115,7 @@ class DmgPoolQueryRanks(ControlTestBase):
             time.sleep(3)
 
         self.assertTrue(cmd_succeed, "pool reintegrate failed")
-        self.log_step("Waiting for pool to be rebuild")
+        self.log_step(f"Waiting for rebuild to complete after reintegrating rank {exclude_rank}")
         self.pool.wait_for_rebuild_to_start()
         self.pool.wait_for_rebuild_to_end()
 
@@ -143,11 +124,20 @@ class DmgPoolQueryRanks(ControlTestBase):
 
         self.log_step("Checking enabled ranks state information")
         data = self.dmg.pool_query(self.pool.identifier, show_enabled=True)
-        self.assertListEqual(
-            data['response'].get('enabled_ranks'), enabled_ranks,
-            "Invalid enabled_ranks field: want={}, got={}".format(
-                enabled_ranks, data['response'].get('enabled_ranks')))
-        self.assertListEqual(
-            data['response'].get('disabled_ranks'), disabled_ranks,
-            "Invalid disabled_ranks field: want={}, got={}".format(
-                disabled_ranks, data['response'].get('disabled_ranks')))
+        self._verify_ranks(enabled_ranks, data, "enabled_ranks")
+        self._verify_ranks(disabled_ranks, data, "disabled_ranks")
+
+    def _verify_ranks(self, expect, data, key):
+        """Verify the expected and actual rank lists are equal.
+
+        Args:
+            expect (list): list of ranks to expect
+            data (dict): dmg json response containing actual list of ranks
+            key (str): the dmg json response key used to access the actual list of ranks
+        """
+        actual = data["response"].get(key)
+        if expect is None:
+            self.assertIsNone(actual, f"Invalid {key} field: want=None, got={actual}")
+        else:
+            self.assertListEqual(
+                actual, expect, f"Invalid {key} field: want={expect}, got={actual}")
