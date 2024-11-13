@@ -68,7 +68,6 @@ dfuse_cb_read_complete(struct dfuse_event *ev)
 		DFUSE_TRA_DEBUG(ev->de_oh, "concurrent network read %p", evs->de_oh);
 		evs->de_len         = min(ev->de_len, evs->de_req_len);
 		evs->de_ev.ev_error = ev->de_ev.ev_error;
-		DFUSE_IE_STAT_ADD(ev->de_oh->doh_ie, DS_READ_CON);
 		cb_read_helper(evs, ev->de_iov.iov_buf);
 	}
 
@@ -102,7 +101,7 @@ dfuse_readahead_reply(fuse_req_t req, size_t len, off_t position, struct dfuse_o
 	}
 
 	if (((position % K128) == 0) && ((len % K128) == 0)) {
-		DFUSE_TRA_INFO(oh, "allowing out-of-order pre read");
+		DFUSE_TRA_DEBUG(oh, "allowing out-of-order pre read");
 		/* Do not closely track the read position in this case, just the maximum,
 		 * later checks will determine if the file is read to the end.
 		 */
@@ -254,7 +253,6 @@ chunk_cb(struct dfuse_event *ev)
 				cd->bucket, slot);
 
 		position = (cd->bucket * CHUNK_SIZE) + (slot * K128);
-		DFUSE_IE_STAT_ADD(cd->reqs[i].oh->doh_ie, DS_READ_BUCKET);
 		if (cd->rc != 0) {
 			DFUSE_REPLY_ERR_RAW(cd->reqs[i].oh, req, cd->rc);
 		} else {
@@ -410,7 +408,6 @@ found:
 		} else {
 			oh->doh_linear_read_pos = max(oh->doh_linear_read_pos, position + K128);
 
-			DFUSE_IE_STAT_ADD(oh->doh_ie, DS_READ_BUCKET_M);
 			DFUSE_TRA_DEBUG(oh, "%#zx-%#zx read", position, position + K128 - 1);
 			DFUSE_REPLY_BUFQ(oh, req, cd->ev->de_iov.iov_buf + (slot * K128), K128);
 			rcb = true;
@@ -483,7 +480,6 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 				DFUSE_IE_STAT_ADD(oh->doh_ie, DS_PRE_READ);
 			}
 		}
-		DFUSE_IE_STAT_ADD(oh->doh_ie, DS_READ_EOF_M);
 		DFUSE_REPLY_BUFQ(oh, req, NULL, 0);
 		return;
 	}
