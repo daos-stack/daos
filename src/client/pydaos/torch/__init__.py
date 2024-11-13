@@ -16,24 +16,6 @@ from . import torch_shim  # pylint: disable=relative-beyond-top-level,import-sel
 DAOS_MAGIC = 0x7A8B
 
 
-class PyDError(Exception):
-    """PyDAOS exception when operation cannot be completed."""
-
-    # DER_* error code is printed in both integer and string format where
-    # possible.  There is an odd effect with daos_init() errors that
-    # torch_shim is valid during __init__ but None during __str__ so format
-    # the string early and just report it later on.
-    def __init__(self, message, rc):  # pylint: disable=super-init-not-called
-        err = torch_shim.err_to_str(DAOS_MAGIC, rc)
-        if err:
-            self.message = f"{message}: {err} (rc = {rc})"
-        else:
-            self.message = f"{message}: {rc}"
-
-    def __str__(self):
-        return self.message
-
-
 # The module loader procedure guarantees that __init__.py is going to be run only once
 _rc = torch_shim.module_init()
 if _rc != 0:

@@ -18,7 +18,7 @@ from torch.utils.data import Dataset as TorchDataset
 from torch.utils.data import IterableDataset as TorchIterableDataset
 from torch.utils.data import get_worker_info
 
-from . import DAOS_MAGIC, PyDError, torch_shim
+from . import DAOS_MAGIC, torch_shim
 
 IN_FLIGHT_OPS_MAX = 16
 READDIR_BATCH_SIZE = 128
@@ -265,11 +265,11 @@ class _Dfs():
 
     def __init__(self, pool=None, cont=None, rd_only=True):
         if (pool is None or cont is None):
-            raise PyDError("invalid pool or container labels", -torch_shim.DER_INVAL)
+            raise ValueError("invalid pool or container labels")
 
         (ret, dfs) = torch_shim.torch_connect(DAOS_MAGIC, pool, cont, rd_only)
-        if ret != torch_shim.DER_SUCCESS:
-            raise PyDError("failed to open dfs", ret)
+        if ret != 0:
+            raise OSError(ret, os.strerror(ret), f"could not connect to {pool}:{cont}")
 
         self._dfs = dfs
 
@@ -280,8 +280,8 @@ class _Dfs():
             return
 
         ret = torch_shim.torch_disconnect(DAOS_MAGIC, self._dfs)
-        if ret != torch_shim.DER_SUCCESS:
-            raise PyDError("failed to disconnect from dfs", ret)
+        if ret != 0:
+            raise OSError(ret, os.strerror(ret))
         self._dfs = None
 
     def worker_fn(self, work, readdir_batch_size=READDIR_BATCH_SIZE):
@@ -297,10 +297,8 @@ class _Dfs():
         ret = torch_shim.torch_list_with_anchor(DAOS_MAGIC, self._dfs,
                                                 path, index, files, dirs, readdir_batch_size
                                                 )
-        if ret != torch_shim.DER_SUCCESS:
-            if ret > 0:
-                raise OSError(ret, os.strerror(ret), path)
-            raise PyDError("failed to list directory with indexed anchor", ret)
+        if ret != 0:
+            raise OSError(ret, os.strerror(ret), path)
 
         dirs = [chunk for d in dirs for chunk in self.split_dir_for_parallel_scan(
             os.path.join(path, d))
@@ -317,8 +315,7 @@ class _Dfs():
 
         ret = torch_shim.torch_recommended_dir_split(DAOS_MAGIC, self._dfs, path)
         if ret < 0:
-            errno = -ret
-            raise OSError(errno, os.strerror(errno), path)
+            raise OSError(-ret, os.strerror(-ret), path)
 
         return [(path, idx) for idx in range(0, ret)]
 
@@ -369,8 +366,7 @@ class _Dfs():
         buf = bytearray(size)
         ret = torch_shim.torch_read(DAOS_MAGIC, self._dfs, path, buf)
         if ret < 0:
-            errno = -ret
-            raise OSError(errno, os.strerror(errno), path)
+            raise OSError(-ret, os.strerror(-ret), path)
 
         if ret != len(buf):
             raise ValueError(
@@ -384,9 +380,8 @@ class _Dfs():
         to_read = [(item[0], bytearray(item[1])) for item in items]
         ret = torch_shim.torch_batch_read(DAOS_MAGIC, self._dfs, to_read, in_flight_ops_max)
 
-        if ret < 0:
-            errno = -ret
-            raise OSError(errno, os.strerror(errno))
+        if ret != 0:
+            raise OSError(ret, os.strerror(ret))
 
         return [item[1] for item in to_read]
 
@@ -394,5 +389,5 @@ class _Dfs():
         """ Tries to reinitialize DAOS DFS for the current process after fork """
 
         ret = torch_shim.torch_worker_init(DAOS_MAGIC, self._dfs)
-        if ret != torch_shim.DER_SUCCESS:
-            raise PyDError("failed to reinitialize DAOS DFS", ret)
+        if ret != 0:
+            raise OSError(ret, os.strerror(ret), "could not re-initialize DAOS for worker")

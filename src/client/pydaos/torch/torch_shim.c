@@ -17,6 +17,7 @@
 #include <daos_types.h>
 #include <daos_fs.h>
 
+#include <daos/common.h>
 #include <gurt/debug.h>
 #include <gurt/common.h>
 
@@ -84,11 +85,15 @@ static PyObject *
 __shim_handle__module_fini(PyObject *self, PyObject *args)
 {
 	int rc = daos_fini();
-	if (rc == -DER_BUSY) {
+	if (rc) {
+		rc = daos_der2errno(rc);
+	}
+	if (rc == EBUSY) {
 		/* Most likely module is shared via python multiprocessing.
 		 * The last one will free the resources */
-		rc = DER_SUCCESS;
+		rc = 0;
 	}
+
 	return PyLong_FromLong(rc);
 }
 
@@ -110,13 +115,14 @@ __shim_handle__torch_connect(PyObject *self, PyObject *args)
 
 	D_ALLOC_PTR(hdl);
 	if (hdl == NULL) {
-		rc = -DER_NOMEM;
+		rc = ENOMEM;
 		goto out;
 	}
 	hdl->flags = rd_only ? O_RDONLY : O_RDWR;
 
 	rc = daos_init();
 	if (rc && rc != -DER_ALREADY) {
+		rc = daos_der2errno(rc);
 		goto out;
 	}
 
@@ -156,6 +162,7 @@ __shim_handle__torch_connect(PyObject *self, PyObject *args)
 	rc = daos_eq_create(&hdl->eq);
 	if (rc) {
 		D_WARN("Could not create event queue: %s (rc=%d)", d_errstr(rc), rc);
+		rc = daos_der2errno(rc);
 		goto out;
 	}
 	hdl->eq_owner_pid = getpid();
@@ -197,21 +204,25 @@ __shim_handle__torch_disconnect(PyObject *self, PyObject *args)
 	rc = daos_eq_destroy(hdl->eq, DAOS_EQ_DESTROY_FORCE);
 	if (rc) {
 		D_ERROR("Could not destroy event queue: %s (rc=%d)", d_errstr(rc), rc);
+		rc = daos_der2errno(rc);
 		goto out;
 	}
 
-	/* DER_BUSY errors are due to module sharing via python multiprocessing.
+	/* EBUSY errors are due to module sharing via python multiprocessing.
 	 * The last process calling disconnect will free the resources */
 	rc = dfs_fini();
-	if (rc && rc != -DER_BUSY) {
+	if (rc && rc != EBUSY) {
 		D_ERROR("Could not finalize DFS: %s (rc=%d)", strerror(rc), rc);
 		goto out;
 	}
 
 	rc = daos_fini();
-	if (rc == -DER_BUSY) {
-		D_ERROR("Could not finalize DAOS: %s (rc=%d)", d_errstr(rc), rc);
-		rc = DER_SUCCESS;
+	if (rc) {
+		rc = daos_der2errno(rc);
+	}
+	if (rc == EBUSY) {
+		/* Same as above: last process to call will free the resources */
+		rc = 0;
 	}
 
 out:
@@ -256,6 +267,7 @@ __shim_handle__torch_worker_init(PyObject *self, PyObject *args)
 	rc = daos_eq_create(&hdl->eq);
 	if (rc) {
 		D_ERROR("Could not create event queue: %s (rc=%d)", d_errstr(rc), rc);
+		rc = daos_der2errno(rc);
 	}
 
 	return PyLong_FromLong(rc);
@@ -267,6 +279,7 @@ __shim_handle__torch_recommended_dir_split(PyObject *self, PyObject *args)
 	struct dfs_handle *hdl  = NULL;
 	char              *path = NULL;
 	dfs_obj_t         *obj  = NULL;
+	uint32_t           nr   = 0;
 
 	RETURN_NULL_IF_FAILED_TO_PARSE(args, "Ls", &hdl, &path);
 
@@ -277,8 +290,7 @@ __shim_handle__torch_recommended_dir_split(PyObject *self, PyObject *args)
 		return PyLong_FromLong(-rc);
 	}
 
-	uint32_t nr = 0;
-	rc          = dfs_obj_anchor_split(obj, &nr, NULL);
+	rc = dfs_obj_anchor_split(obj, &nr, NULL);
 	dfs_release(obj);
 
 	if (rc) {
@@ -310,18 +322,18 @@ __shim_handle__torch_list_with_anchor(PyObject *self, PyObject *args)
 	assert(hdl->dfs != NULL);
 
 	if (readdir_chunk == 0) {
-		return PyLong_FromLong(-DER_INVAL);
+		return PyLong_FromLong(EINVAL);
 	}
 
 	D_ALLOC_ARRAY(dentries, readdir_chunk);
 	if (dentries == NULL) {
-		rc = -DER_NOMEM;
+		rc = ENOMEM;
 		goto out;
 	}
 
 	D_ALLOC_ARRAY(stats, readdir_chunk);
 	if (stats == NULL) {
-		rc = -DER_NOMEM;
+		rc = ENOMEM;
 		goto out;
 	}
 
@@ -376,7 +388,7 @@ __shim_handle__torch_list_with_anchor(PyObject *self, PyObject *args)
 			rc = PyList_Append(files, item);
 			Py_DECREF(item); /* PyList_Append does not steal the reference */
 			if (rc < 0) {
-				rc = -DER_IO;
+				rc = EIO;
 				goto out;
 			}
 		}
@@ -522,6 +534,7 @@ start_read_op(struct dfs_handle *hdl, PyObject *item, struct io_op *op)
 	rc = daos_event_init(evp, hdl->eq, NULL);
 	if (rc) {
 		D_ERROR("Could not init event: %s (rc=%d)", d_errstr(rc), rc);
+		rc = daos_der2errno(rc);
 		goto out;
 	}
 
@@ -546,7 +559,7 @@ start_read_op(struct dfs_handle *hdl, PyObject *item, struct io_op *op)
 		goto out;
 	}
 
-	return DER_SUCCESS;
+	return 0;
 
 out:
 	PyBuffer_Release(&op->buf_view);
@@ -605,6 +618,7 @@ reap_read_op(struct dfs_handle *hdl, struct io_op **op)
 	int rc = daos_eq_poll(hdl->eq, 1, DAOS_EQ_WAIT, 1, &evp);
 	if (rc < 0) {
 		D_ERROR("Could not poll event queue: %s (rc = %d)", d_errstr(rc), rc);
+		rc = daos_der2errno(rc);
 		return rc;
 	}
 
@@ -638,7 +652,7 @@ __shim_handle__torch_batch_read(PyObject *self, PyObject *args)
 
 	D_ALLOC_ARRAY(ops, max_in_flight);
 	if (ops == NULL) {
-		return PyLong_FromLong(-DER_NOMEM);
+		return PyLong_FromLong(ENOMEM);
 	}
 
 	size_t inflight = 0;
@@ -646,7 +660,7 @@ __shim_handle__torch_batch_read(PyObject *self, PyObject *args)
 		PyObject *item = PyList_GetItem(items, index);
 		if (item == NULL) {
 			D_ERROR("Unexpected NULL entry in the batch read list");
-			rc = -DER_INVAL;
+			rc = EINVAL;
 			break;
 		}
 
@@ -669,7 +683,7 @@ __shim_handle__torch_batch_read(PyObject *self, PyObject *args)
 
 		if (op == NULL) {
 			/* Something weird happened: could not fetch any in-flight requests */
-			rc = -DER_IO;
+			rc = EIO;
 			break;
 		}
 
@@ -680,7 +694,7 @@ __shim_handle__torch_batch_read(PyObject *self, PyObject *args)
 	}
 
 	/* In case error happened before queuing any request */
-	int err = rc ? rc : DER_SUCCESS;
+	int err = rc ? rc : 0;
 	do {
 		rc = reap_read_op(hdl, &op);
 		if (rc < 0) {
@@ -692,7 +706,7 @@ __shim_handle__torch_batch_read(PyObject *self, PyObject *args)
 			break;
 		}
 
-		if (err == DER_SUCCESS && op->err != DER_SUCCESS) {
+		if (err == 0 && op->err != 0) {
 			err = op->err;
 		}
 
@@ -701,24 +715,6 @@ __shim_handle__torch_batch_read(PyObject *self, PyObject *args)
 	D_FREE(ops);
 
 	return PyLong_FromLong(err);
-}
-
-static PyObject *
-__shim_handle__err_to_str(PyObject *self, PyObject *args)
-{
-	const char *str;
-	int         val;
-
-	/* Parse arguments */
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "i", &val);
-	/* Call C function */
-	str = d_errstr(val);
-	if (str == NULL) {
-		Py_INCREF(Py_None);
-		return Py_None;
-	}
-
-	return PyUnicode_FromString(str);
 }
 
 /**
@@ -738,8 +734,6 @@ static PyMethodDef torchMethods[] = {
     EXPORT_PYTHON_METHOD(torch_batch_read),
     EXPORT_PYTHON_METHOD(torch_recommended_dir_split),
     EXPORT_PYTHON_METHOD(torch_list_with_anchor),
-
-    EXPORT_PYTHON_METHOD(err_to_str),
 
     EXPORT_PYTHON_METHOD(module_init),
     EXPORT_PYTHON_METHOD(module_fini),
