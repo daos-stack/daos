@@ -724,7 +724,7 @@ vos_pool_checkpoint(daos_handle_t poh)
 	struct bio_wal_info            wal_info;
 	int                            rc;
 	uint64_t                       purge_size = 0;
-	struct umem_cache_chkpt_stats  stats;
+	struct umem_cache_chkpt_stats  stats = { 0 };
 	struct vos_chkpt_metrics      *chkpt_metrics = NULL;
 
 	pool = vos_hdl2pool(poh);

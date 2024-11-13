@@ -27,6 +27,7 @@ type (
 		CurrentRankStr     string            // string rankset representing current ranks
 		currentRanks       *ranklist.RankSet // used to reconstitute the rankset
 		PerRankTierStorage []uint64          // storage allocated to each tier on a rank
+		MemRatio           float32           // ratio md-blob-on-ssd:ramdisk-memfile sz
 	}
 
 	// PoolServiceState is a local type alias for daos.PoolServiceState.
@@ -57,13 +58,14 @@ func (pss PoolServiceState) String() string {
 }
 
 // NewPoolService returns a properly-initialized *PoolService.
-func NewPoolService(uuid uuid.UUID, tierStorage []uint64, ranks []ranklist.Rank) *PoolService {
+func NewPoolService(uuid uuid.UUID, tierStorage []uint64, memRatio float32, ranks []ranklist.Rank) *PoolService {
 	rs := ranklist.RankSetFromRanks(ranks)
 	return &PoolService{
 		PoolUUID: uuid,
 		State:    PoolServiceStateCreating,
 		Storage: &PoolServiceStorage{
 			PerRankTierStorage: tierStorage,
+			MemRatio:           memRatio,
 			CreationRankStr:    rs.RangedString(),
 			CurrentRankStr:     rs.RangedString(),
 		},
