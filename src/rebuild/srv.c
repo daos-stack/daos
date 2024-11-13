@@ -161,22 +161,70 @@ is_rebuild_global_done(struct rebuild_global_pool_tracker *rgt)
 
 #define SCAN_DONE	0x1
 #define PULL_DONE	0x2
+
+static void
+servers_sop_swap(void *array, int a, int b)
+{
+	struct rebuild_server_status **servers = (struct rebuild_server_status **)array;
+	struct rebuild_server_status  *tmp;
+
+	tmp = servers[a];
+	servers[a] = servers[b];
+	servers[b] = tmp;
+}
+
+static int
+servers_sop_cmp(void *array, int a, int b)
+{
+	struct rebuild_server_status **servers = (struct rebuild_server_status **)array;
+
+	if (servers[a]->rank > servers[b]->rank)
+		return 1;
+	if (servers[a]->rank < servers[b]->rank)
+		return -1;
+	return 0;
+}
+
+static int
+servers_sop_cmp_key(void *array, int i, uint64_t key)
+{
+	struct rebuild_server_status **servers = (struct rebuild_server_status **)array;
+	d_rank_t                       rank    = (d_rank_t)key;
+
+	if (servers[i]->rank > rank)
+		return 1;
+	if (servers[i]->rank < rank)
+		return -1;
+	return 0;
+}
+
+static daos_sort_ops_t	servers_sort_ops = {
+	.so_swap	= servers_sop_swap,
+	.so_cmp		= servers_sop_cmp,
+	.so_cmp_key	= servers_sop_cmp_key,
+};
+
+static struct rebuild_server_status *
+rebuild_server_get_status(struct rebuild_global_pool_tracker *rgt, d_rank_t rank)
+{
+	int idx;
+
+	idx = daos_array_find(rgt->rgt_servers_sorted, rgt->rgt_servers_number, rank,
+			      &servers_sort_ops);
+	if (idx < 0)
+		return NULL;
+	return rgt->rgt_servers_sorted[idx];
+}
+
 static void
 rebuild_leader_set_status(struct rebuild_global_pool_tracker *rgt,
 			  d_rank_t rank, uint32_t resync_ver, unsigned flags)
 {
 	struct rebuild_server_status	*status = NULL;
-	int				i;
 
 	D_ASSERT(rgt->rgt_servers_number > 0);
 	D_ASSERT(rgt->rgt_servers != NULL);
-	for (i = 0; i < rgt->rgt_servers_number; i++) {
-		if (rgt->rgt_servers[i].rank == rank) {
-			status = &rgt->rgt_servers[i];
-			break;
-		}
-	}
-
+	status = rebuild_server_get_status(rgt, rank);
 	if (status == NULL) {
 		D_INFO("rank %u is not included in this rebuild.\n", rank);
 		return;
@@ -194,11 +242,11 @@ rebuild_leader_set_update_time(struct rebuild_global_pool_tracker *rgt, d_rank_t
 {
 	int i;
 
-	for (i = 0; i < rgt->rgt_servers_number; i++) {
-		if (rgt->rgt_servers[i].rank == rank) {
-			rgt->rgt_servers_last_update[i] = ABT_get_wtime();
-			return;
-		}
+	i = daos_array_find(rgt->rgt_servers_sorted, rgt->rgt_servers_number, rank,
+			    &servers_sort_ops);
+	if (i >=0) {
+		rgt->rgt_servers_last_update[i] = ABT_get_wtime();
+		return;
 	}
 	D_INFO("rank %u is not included in this rebuild.\n", rank);
 }
@@ -661,18 +709,19 @@ warn_for_slow_engine_updates(struct rebuild_global_pool_tracker *rgt)
 	double tw     = now - rgt->rgt_last_warn; /* time since last warning logged */
 	bool   warned = false;
 
+	/* Throttle warnings to not more often than once per 2 minutes */
+	if (tw < 120)
+		return;
+
+	/* Warn for ranks not done and that haven't provided updates in a while (> 30 sec) */
 	for (i = 0; i < rgt->rgt_servers_number; i++) {
-		/* tu: time since the most recent update from engine rank rgt_server[i].rank */
 		double   tu = now - rgt->rgt_servers_last_update[i];
 		d_rank_t r  = rgt->rgt_servers[i].rank;
 
 		if (rgt->rgt_servers[i].scan_done && rgt->rgt_servers[i].pull_done)
 			continue;
 
-		/* Warn if it's been a while (> 30 seconds) since receiving an update from the rank.
-		 * And throttle warnings - do not print more than once per 2 minutes period.
-		 */
-		if ((tu > 30) && (tw > 120)) {
+		if (tu > 30) {
 			D_WARN(DF_RB ": no updates from rank %u in %8.3f seconds. "
 				     "scan_done=%d pull_done=%d\n",
 			       DP_RB_RGT(rgt), r, tu, rgt->rgt_servers[i].scan_done,
@@ -829,6 +878,8 @@ rebuild_global_pool_tracker_destroy(struct rebuild_global_pool_tracker *rgt)
 	d_list_del(&rgt->rgt_list);
 	if (rgt->rgt_servers)
 		D_FREE(rgt->rgt_servers);
+	if (rgt->rgt_servers_sorted)
+		D_FREE(rgt->rgt_servers_sorted);
 	if (rgt->rgt_servers_last_update)
 		D_FREE(rgt->rgt_servers_last_update);
 
@@ -865,14 +916,24 @@ rebuild_global_pool_tracker_create(struct ds_pool *pool, uint32_t ver, uint32_t 
 	D_ALLOC_ARRAY(rgt->rgt_servers, rank_nr);
 	if (rgt->rgt_servers == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	D_ALLOC_ARRAY(rgt->rgt_servers_last_update, node_nr);
+	D_ALLOC_ARRAY(rgt->rgt_servers_sorted, rank_nr);
+	if (rgt->rgt_servers_sorted == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+	D_ALLOC_ARRAY(rgt->rgt_servers_last_update, rank_nr);
 	if (rgt->rgt_servers_last_update == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	now                = ABT_get_wtime();
 	rgt->rgt_last_warn = now;
-	for (i = 0; i < node_nr; i++)
+	for (i = 0; i < rank_nr; i++) {
+		rgt->rgt_servers_sorted[i]      = &rgt->rgt_servers[i];
+		rgt->rgt_servers[i].rank        = doms[i].do_comp.co_rank;
 		rgt->rgt_servers_last_update[i] = now;
+	}
+	rgt->rgt_servers_number = rank_nr;
+
+	rc = daos_array_sort(rgt->rgt_servers_sorted, rank_nr, true, &servers_sort_ops);
+	D_ASSERT(rc == 0);
 
 	rc = ABT_mutex_create(&rgt->rgt_lock);
 	if (rc != ABT_SUCCESS)
@@ -881,10 +942,6 @@ rebuild_global_pool_tracker_create(struct ds_pool *pool, uint32_t ver, uint32_t 
 	rc = ABT_cond_create(&rgt->rgt_done_cond);
 	if (rc != ABT_SUCCESS)
 		D_GOTO(out, rc = dss_abterr2der(rc));
-
-	for (i = 0; i < rank_nr; i++)
-		rgt->rgt_servers[i].rank = doms[i].do_comp.co_rank;
-	rgt->rgt_servers_number = rank_nr;
 
 	uuid_copy(rgt->rgt_pool_uuid, pool->sp_uuid);
 	rgt->rgt_rebuild_ver = ver;
