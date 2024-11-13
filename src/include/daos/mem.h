@@ -289,14 +289,12 @@ struct umem_cache {
 };
 
 struct umem_cache_chkpt_stats {
-	/** Last committed checkpoint id */
-	uint64_t *uccs_chkpt_id;
 	/** Number of pages processed */
-	int       uccs_nr_pages;
+	unsigned int       uccs_nr_pages;
 	/** Number of dirty chunks copied */
-	int       uccs_nr_dchunks;
+	unsigned int       uccs_nr_dchunks;
 	/** Number of sgl iovs used to copy dirty chunks */
-	int       uccs_nr_iovs;
+	unsigned int       uccs_nr_iovs;
 };
 
 /** Allocate global cache for umem store.
