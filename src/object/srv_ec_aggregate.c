@@ -2400,6 +2400,13 @@ check:
 		*acts = VOS_ITER_CB_SKIP;
 		goto done;
 	}
+
+	/* This MUST be the last check */
+	if (desc->id_type == VOS_ITER_OBJ && vos_bkt_iter_skip(ih, desc)) {
+		agg_param->ap_credits++;
+		*acts |= VOS_ITER_CB_SKIP;
+		goto done;
+	}
 done:
 	if (agg_param->ap_credits > agg_param->ap_credits_max) {
 		agg_param->ap_credits = 0;
@@ -2733,8 +2740,8 @@ retry:
 	if (rc != 0)
 		goto update_hae;
 
-	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors, agg_iterate_pre_cb,
-			 agg_iterate_post_cb, ec_agg_param, dth);
+	rc = vos_iterate_obj(&iter_param, true, &anchors, agg_iterate_pre_cb,
+			     agg_iterate_post_cb, ec_agg_param, dth);
 	if (rc == -DER_INPROGRESS && !d_list_empty(&dth->dth_share_tbd_list)) {
 		uint64_t	now = daos_gettime_coarse();
 
