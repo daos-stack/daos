@@ -119,7 +119,7 @@ class Dataset(TorchDataset):
 
         # On the initial connect we made local2global() and now we should be able
         # to use that global connection and dfs
-        self._dfs.reinit()
+        self._dfs.worker_init()
 
     def __del__(self):
         """ Cleanups the used resources and connection """
@@ -237,7 +237,7 @@ class IterableDataset(TorchIterableDataset):
 
         # On the initial connect we made local2global() and now we should be able
         # to use that global connection and dfs
-        self._dfs.reinit()
+        self._dfs.worker_init()
 
     def __del__(self):
         """ Cleanups the used resources and connection """
@@ -341,7 +341,7 @@ class _Dfs():
         result = []
         inprogress = set()
         dirs = self.split_dir_for_parallel_scan(path)
-        with ProcessPoolExecutor(max_workers=workers, initializer=self.reinit) as pool:
+        with ProcessPoolExecutor(max_workers=workers, initializer=self.worker_init) as pool:
             while True:
                 batch = dirs[:workers]
                 dirs = dirs[len(batch):]
@@ -390,23 +390,9 @@ class _Dfs():
 
         return [item[1] for item in to_read]
 
-    def write(self, path, buf):
-        """
-        write(path, buf)
-            Write buf in file path (create it if not exists).
-            buf should be compliant with BufferProtocol
-        """
-
-        ret = torch_shim.torch_write(DAOS_MAGIC, self._dfs, path, buf)
-        if ret < 0:
-            errno = -ret
-            raise OSError(errno, os.strerror(errno), path)
-
-        return ret
-
-    def reinit(self):
+    def worker_init(self):
         """ Tries to reinitialize DAOS DFS for the current process after fork """
 
-        ret = torch_shim.torch_reinit(DAOS_MAGIC, self._dfs)
+        ret = torch_shim.torch_worker_init(DAOS_MAGIC, self._dfs)
         if ret != torch_shim.DER_SUCCESS:
             raise PyDError("failed to reinitialize DAOS DFS", ret)

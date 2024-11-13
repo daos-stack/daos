@@ -221,8 +221,13 @@ out:
 	return PyLong_FromLong(rc);
 }
 
+/*
+  DataLoader uses python multiprocessing with fork method to create its workers.
+  This function is the part of initialization routine for such workers, it reuses global connection
+  to the container and create an even queue for the worker process.
+ */
 static PyObject *
-__shim_handle__torch_reinit(PyObject *self, PyObject *args)
+__shim_handle__torch_worker_init(PyObject *self, PyObject *args)
 {
 	struct dfs_handle *hdl = NULL;
 
@@ -292,11 +297,10 @@ __shim_handle__torch_list_with_anchor(PyObject *self, PyObject *args)
 	PyObject          *dirs          = NULL;
 	uint32_t           readdir_chunk = 0;
 	uint32_t           anchor_index  = 0;
-
-	dfs_obj_t         *obj = NULL;
+	dfs_obj_t         *obj           = NULL;
 	daos_anchor_t      anchor;
-	int                rc = 0;
-
+	int                rc       = 0;
+	uint32_t           nr       = 0;
 	struct stat       *stats    = NULL;
 	struct dirent     *dentries = NULL;
 
@@ -335,8 +339,7 @@ __shim_handle__torch_list_with_anchor(PyObject *self, PyObject *args)
 		goto out;
 	}
 
-	uint32_t nr = readdir_chunk;
-	while (nr > 0) {
+	do {
 		nr = readdir_chunk;
 		rc = dfs_readdirplus(hdl->dfs, obj, &anchor, &nr, dentries, stats);
 		if (rc) {
@@ -377,7 +380,7 @@ __shim_handle__torch_list_with_anchor(PyObject *self, PyObject *args)
 				goto out;
 			}
 		}
-	}
+	} while (nr > 0);
 
 out:
 	D_FREE(dentries);
@@ -398,6 +401,9 @@ __shim_handle__torch_read(PyObject *self, PyObject *args)
 	char              *path   = NULL;
 	dfs_obj_t         *obj    = NULL;
 	PyObject          *buffer = NULL;
+	Py_buffer          bview;
+	d_iov_t            iov;
+	daos_size_t        read = 0;
 
 	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LsO", &hdl, &path, &buffer);
 	assert(hdl->dfs != NULL);
@@ -408,7 +414,6 @@ __shim_handle__torch_read(PyObject *self, PyObject *args)
 		return NULL;
 	}
 
-	Py_buffer bview;
 	if (PyObject_GetBuffer(buffer, &bview, PyBUF_WRITE) == -1) {
 		PyErr_SetString(PyExc_BufferError, "Buffer is not writable");
 		return NULL;
@@ -424,9 +429,7 @@ __shim_handle__torch_read(PyObject *self, PyObject *args)
 		return NULL;
 	}
 
-	daos_size_t read = bview.len;
-
-	d_iov_t     iov;
+	read = bview.len;
 	d_iov_set(&iov, bview.buf, read);
 
 	d_sg_list_t sgl = {
@@ -700,104 +703,6 @@ __shim_handle__torch_batch_read(PyObject *self, PyObject *args)
 	return PyLong_FromLong(err);
 }
 
-/*
- * Not the most efficient way to do it but we should support hierarchical namespace:
- * If the container was mounted via dfuse and samples were written not as a flat namespace,
- * an attempt to write would fail.
- * In any case this should not be used directly: it's indirectly only for dlio_benchmark
- */
-static PyObject *
-__shim_handle__torch_write(PyObject *self, PyObject *args)
-{
-	ssize_t            rc      = 0;
-	struct dfs_handle *hdl     = NULL;
-	char              *path    = NULL;
-	char              *dircpy  = NULL;
-	char              *namecpy = NULL;
-	dfs_obj_t         *dir     = NULL;
-	dfs_obj_t         *obj     = NULL;
-	PyObject          *buffer  = NULL;
-
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LsO", &hdl, &path, &buffer);
-	assert(hdl->dfs != NULL);
-
-	if (!PyObject_CheckBuffer(buffer)) {
-		PyErr_SetString(PyExc_TypeError,
-				"Expected an object that supports the buffer protocol");
-		return NULL;
-	}
-
-	Py_buffer bview;
-	if (PyObject_GetBuffer(buffer, &bview, PyBUF_READ) == -1) {
-		return NULL;
-	}
-
-	if (!PyBuffer_IsContiguous(&bview, 'C')) {
-		PyErr_SetString(PyExc_BufferError, "Buffer is not contiguous");
-		PyBuffer_Release(&bview);
-		return NULL;
-	}
-
-	d_iov_t iov;
-	d_iov_set(&iov, bview.buf, bview.len);
-
-	d_sg_list_t sgl = {
-	    .sg_nr     = 1,
-	    .sg_nr_out = 0,
-	    .sg_iovs   = &iov,
-	};
-
-	D_STRNDUP(dircpy, path, PATH_MAX);
-	D_STRNDUP(namecpy, path, PATH_MAX);
-	if (dircpy == NULL || namecpy == NULL) {
-		rc = -ENOMEM;
-		goto out;
-	}
-
-	const char *dirp  = dirname(dircpy);
-	const char *namep = basename(namecpy);
-	if (dirp == NULL || namep == NULL) {
-		rc = -DER_INVAL;
-		goto out;
-	}
-
-	rc = dfs_lookup(hdl->dfs, dirp, O_RDWR, &dir, NULL, NULL);
-	if (rc) {
-		rc = -rc;
-		goto out;
-	}
-
-	const int    flags = O_RDWR | O_CREAT | O_TRUNC;
-	const mode_t mode  = S_IFREG | S_IRWXU | S_IRWXG | S_IRWXO;
-
-	rc = dfs_open(hdl->dfs, dir, namep, mode, flags, 0, 0, NULL, &obj);
-	if (rc) {
-		rc = -rc;
-		goto out;
-	}
-
-	rc = dfs_write(hdl->dfs, obj, &sgl, 0 /* offset */, NULL);
-	if (rc) {
-		rc = -rc;
-		goto out;
-	}
-	rc = bview.len;
-
-out:
-	D_FREE(dircpy);
-	D_FREE(namecpy);
-
-	PyBuffer_Release(&bview);
-
-	if (obj) {
-		dfs_release(obj);
-	}
-	if (dir) {
-		dfs_release(dir);
-	}
-	return PyLong_FromLong(rc);
-}
-
 static PyObject *
 __shim_handle__err_to_str(PyObject *self, PyObject *args)
 {
@@ -828,10 +733,9 @@ static PyMethodDef torchMethods[] = {
     /** Torch operations */
     EXPORT_PYTHON_METHOD(torch_connect),
     EXPORT_PYTHON_METHOD(torch_disconnect),
-    EXPORT_PYTHON_METHOD(torch_reinit),
+    EXPORT_PYTHON_METHOD(torch_worker_init),
     EXPORT_PYTHON_METHOD(torch_read),
     EXPORT_PYTHON_METHOD(torch_batch_read),
-    EXPORT_PYTHON_METHOD(torch_write),
     EXPORT_PYTHON_METHOD(torch_recommended_dir_split),
     EXPORT_PYTHON_METHOD(torch_list_with_anchor),
 

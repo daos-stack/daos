@@ -4534,13 +4534,7 @@ class PosixTests():
 
     def import_torch(self):
         """Return a handle to the pydaos.torch module"""
-
-        os.environ['DD_MASK'] = 'all'
-        os.environ['DD_SUBSYS'] = 'all'
-        os.environ['D_LOG_MASK'] = 'DEBUG'
-        os.environ['FI_UNIVERSE_SIZE'] = '128'
-        os.environ['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
-
+        os.environ['D_LOG_MASK'] = 'INFO'
         return importlib.import_module('pydaos.torch')
 
     @needs_dfuse_with_opt(caching_variants=[False])
