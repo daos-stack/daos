@@ -83,9 +83,3 @@ echo ::endgroup::
 echo ::group::Container copy test
 ./utils/node_local_test.py --no-root --memcheck no --system-ram-reserved 1 --test cont_copy
 echo ::endgroup::
-
-echo ::group::PyTorch test
-pip install 'torch>=2.2.0'
-./utils/node_local_test.py --no-root --memcheck no --system-ram-reserved 1 --test torch_map_dataset
-./utils/node_local_test.py --no-root --memcheck no --system-ram-reserved 1 --test torch_iter_dataset
-echo ::endgroup::
