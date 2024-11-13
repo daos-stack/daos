@@ -57,32 +57,45 @@ func printTierBytesRow(fmtName string, tierBytes uint64, numRanks int) txtfmt.Ta
 	}
 }
 
-func getPoolCreateRespRows(mdOnSSD bool, tierBytes []uint64, tierRatios []float64, numRanks int) (title string, rows []txtfmt.TableRow) {
+func getPoolCreateRespRows(tierBytes []uint64, tierRatios []float64, numRanks int) (title string, rows []txtfmt.TableRow) {
 	title = "Pool created with "
 	tierName := "SCM"
-	if mdOnSSD {
-		tierName = "Metadata"
-	}
 
 	for tierIdx, tierRatio := range tierRatios {
 		if tierIdx > 0 {
 			title += ","
 			tierName = "NVMe"
-			if mdOnSSD {
-				tierName = "Data"
-			}
 		}
 
 		title += PrintTierRatio(tierRatio)
 		fmtName := fmt.Sprintf("Storage tier %d (%s)", tierIdx, tierName)
-		if mdOnSSD {
-			fmtName = tierName + " Storage"
-		}
 		rows = append(rows, printTierBytesRow(fmtName, tierBytes[tierIdx], numRanks))
 	}
 	title += " storage tier ratio"
 
-	return title, rows
+	return
+}
+
+func getPoolCreateRespRowsMDOnSSD(tierBytes []uint64, tierRatios []float64, numRanks int, memFileBytes uint64) (title string, rows []txtfmt.TableRow) {
+	title = "Pool created with "
+	tierName := "Metadata"
+
+	for tierIdx, tierRatio := range tierRatios {
+		if tierIdx > 0 {
+			title += ","
+			tierName = "Data"
+		}
+
+		title += PrintTierRatio(tierRatio)
+		fmtName := tierName + " Storage"
+		rows = append(rows, printTierBytesRow(fmtName, tierBytes[tierIdx], numRanks))
+	}
+	title += " storage tier ratio"
+
+	// Print memory-file size for MD-on-SSD.
+	rows = append(rows, printTierBytesRow("Memory File Size", memFileBytes, numRanks))
+
+	return
 }
 
 // PrintPoolCreateResponse generates a human-readable representation of the pool create
@@ -122,17 +135,14 @@ func PrintPoolCreateResponse(pcr *control.PoolCreateResp, out io.Writer, opts ..
 		"Total Size": humanize.Bytes(totalSize * uint64(numRanks)),
 	})
 
-	mdOnSsdEnabled := pcr.MemFileBytes > 0
-
-	title, tierRows := getPoolCreateRespRows(mdOnSsdEnabled, pcr.TierBytes, tierRatios,
-		numRanks)
-
-	// Print memory-file to meta-blob ratio for MD-on-SSD.
-	if mdOnSsdEnabled {
-		tierRows = append(tierRows, printTierBytesRow("Memory File Size",
-			pcr.MemFileBytes, numRanks))
+	var title string
+	var tierRows []txtfmt.TableRow
+	if pcr.MemFileBytes > 0 {
+		title, tierRows = getPoolCreateRespRowsMDOnSSD(pcr.TierBytes, tierRatios, numRanks,
+			pcr.MemFileBytes)
+	} else {
+		title, tierRows = getPoolCreateRespRows(pcr.TierBytes, tierRatios, numRanks)
 	}
-
 	fmtArgs = append(fmtArgs, tierRows...)
 
 	_, err := fmt.Fprintln(out, txtfmt.FormatEntity(title, fmtArgs))

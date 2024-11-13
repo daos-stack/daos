@@ -100,23 +100,19 @@ CRT_RPC_DEFINE(mgmt_tgt_shard_destroy, DAOS_ISEQ_MGMT_TGT_SHARD_DESTROY,
 static struct crt_proto_rpc_format mgmt_proto_rpc_fmt_v3[] = {
     MGMT_PROTO_CLI_RPC_LIST MGMT_PROTO_SRV_RPC_LIST};
 
-static struct crt_proto_rpc_format mgmt_proto_rpc_fmt_v2[] = {
-    MGMT_PROTO_CLI_RPC_LIST MGMT_PROTO_SRV_RPC_LIST_V2};
+static struct crt_proto_rpc_format mgmt_proto_rpc_fmt_v4[] = {
+    MGMT_PROTO_CLI_RPC_LIST MGMT_PROTO_SRV_RPC_LIST};
 
 #undef X
 
-struct crt_proto_format mgmt_proto_fmt_v2 = {
-	.cpf_name  = "management",
-	.cpf_ver   = DAOS_MGMT_VERSION - 1,
-	.cpf_count = ARRAY_SIZE(mgmt_proto_rpc_fmt_v2),
-	.cpf_prf   = mgmt_proto_rpc_fmt_v2,
-	.cpf_base  = DAOS_RPC_OPCODE(0, DAOS_MGMT_MODULE, 0)
-};
+struct crt_proto_format mgmt_proto_fmt_v3 = {.cpf_name  = "management",
+					     .cpf_ver   = DAOS_MGMT_VERSION - 1,
+					     .cpf_count = ARRAY_SIZE(mgmt_proto_rpc_fmt_v3),
+					     .cpf_prf   = mgmt_proto_rpc_fmt_v3,
+					     .cpf_base  = DAOS_RPC_OPCODE(0, DAOS_MGMT_MODULE, 0)};
 
-struct crt_proto_format mgmt_proto_fmt_v3 = {
-	.cpf_name  = "management",
-	.cpf_ver   = DAOS_MGMT_VERSION,
-	.cpf_count = ARRAY_SIZE(mgmt_proto_rpc_fmt_v3),
-	.cpf_prf   = mgmt_proto_rpc_fmt_v3,
-	.cpf_base  = DAOS_RPC_OPCODE(0, DAOS_MGMT_MODULE, 0)
-};
+struct crt_proto_format mgmt_proto_fmt_v4 = {.cpf_name  = "management",
+					     .cpf_ver   = DAOS_MGMT_VERSION,
+					     .cpf_count = ARRAY_SIZE(mgmt_proto_rpc_fmt_v4),
+					     .cpf_prf   = mgmt_proto_rpc_fmt_v4,
+					     .cpf_base  = DAOS_RPC_OPCODE(0, DAOS_MGMT_MODULE, 0)};
