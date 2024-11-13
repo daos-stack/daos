@@ -212,9 +212,7 @@ func TestControl_SmdQuery(t *testing.T) {
 									NvmeState: storage.NvmeStateNormal,
 									LedState:  storage.LedStateNormal,
 								},
-								Roles: storage.BdevRoles{
-									storage.OptionBits(storage.BdevRoleAll),
-								},
+								Roles:    storage.BdevRolesFromBits(storage.BdevRoleAll),
 								HasSysXS: true,
 							},
 							{
@@ -226,9 +224,7 @@ func TestControl_SmdQuery(t *testing.T) {
 									NvmeState: storage.NvmeStateFaulty,
 									LedState:  storage.LedStateFaulty,
 								},
-								Roles: storage.BdevRoles{
-									storage.OptionBits(storage.BdevRoleData),
-								},
+								Roles: storage.BdevRolesFromBits(storage.BdevRoleData),
 							},
 						},
 						Pools: make(map[string][]*SmdPool),
@@ -771,10 +767,8 @@ func TestControl_SmdManage(t *testing.T) {
 								Rank:      ranklist.Rank(0),
 								TargetIDs: []int32{1, 2, 3},
 								Ctrlr:     defMockCtrlr,
-								Roles: storage.BdevRoles{
-									storage.OptionBits(storage.BdevRoleAll),
-								},
-								HasSysXS: true,
+								Roles:     storage.BdevRolesFromBits(storage.BdevRoleAll),
+								HasSysXS:  true,
 							},
 						},
 					},

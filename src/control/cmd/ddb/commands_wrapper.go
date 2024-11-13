@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -222,4 +222,37 @@ func ddbDtxActAbort(ctx *DdbContext, path string, dtx_id string) error {
 	defer freeString(options.dtx_id)
 	/* Run the c code command */
 	return daosError(C.ddb_run_dtx_act_abort(&ctx.ctx, &options))
+}
+
+func ddbFeature(ctx *DdbContext, path, enable, disable string, show bool) error {
+	/* Set up the options */
+	options := C.struct_feature_options{}
+	options.path = C.CString(path)
+	defer freeString(options.path)
+	if enable != "" {
+		err := daosError(C.ddb_feature_string2flags(&ctx.ctx, C.CString(enable),
+			&options.set_compat_flags, &options.set_incompat_flags))
+		if err != nil {
+			return err
+		}
+	}
+	if disable != "" {
+		err := daosError(C.ddb_feature_string2flags(&ctx.ctx, C.CString(disable),
+			&options.clear_compat_flags, &options.clear_incompat_flags))
+		if err != nil {
+			return err
+		}
+	}
+	options.show_features = C.bool(show)
+	/* Run the c code command */
+	return daosError(C.ddb_run_feature(&ctx.ctx, &options))
+}
+
+func ddbRmPool(ctx *DdbContext, path string) error {
+	/* Set up the options */
+	options := C.struct_rm_pool_options{}
+	options.path = C.CString(path)
+	defer freeString(options.path)
+	/* Run the c code command */
+	return daosError(C.ddb_run_rm_pool(&ctx.ctx, &options))
 }
