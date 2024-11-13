@@ -1406,6 +1406,12 @@ gc_open_cont(struct vos_container *cont);
 void
 gc_close_cont(struct vos_container *cont);
 
+struct vos_bkt_iter {
+	uint32_t	bi_bkt_tot;
+	uint32_t	bi_bkt_cur;
+	uint8_t		bi_skipped[0];
+};
+
 /**
  * If the object is fully punched, bypass normal aggregation and move it to container
  * discard pool.

@@ -85,7 +85,7 @@ func FaultPoolNvmeTooSmall(minTotal, minNVMe uint64) *fault.Fault {
 		fmt.Sprintf("requested NVMe capacity too small (min %s per target)",
 			humanize.IBytes(engine.NvmeMinBytesPerTarget)),
 		fmt.Sprintf("retry the request with a pool size of at least %s, with at least %s NVMe",
-			humanize.Bytes(minTotal+humanize.MiByte), humanize.Bytes(minNVMe+humanize.MiByte),
+			humanize.IBytes(minTotal+humanize.MiByte), humanize.IBytes(minNVMe+humanize.MiByte),
 		),
 	)
 }
@@ -96,7 +96,7 @@ func FaultPoolScmTooSmall(minTotal, minSCM uint64) *fault.Fault {
 		fmt.Sprintf("requested SCM capacity is too small (min %s per target)",
 			humanize.IBytes(engine.ScmMinBytesPerTarget)),
 		fmt.Sprintf("retry the request with a pool size of at least %s, with at least %s SCM",
-			humanize.Bytes(minTotal+humanize.MiByte), humanize.Bytes(minSCM+humanize.MiByte),
+			humanize.IBytes(minTotal+humanize.MiByte), humanize.IBytes(minSCM+humanize.MiByte),
 		),
 	)
 }
