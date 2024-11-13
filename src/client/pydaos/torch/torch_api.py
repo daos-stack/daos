@@ -368,10 +368,6 @@ class _Dfs():
         if ret < 0:
             raise OSError(-ret, os.strerror(-ret), path)
 
-        if ret != len(buf):
-            raise ValueError(
-                f"Short read of '{path}': expected {size} bytes to read but got only {ret}")
-
         return buf
 
     def batch_read(self, items, in_flight_ops_max=IN_FLIGHT_OPS_MAX):

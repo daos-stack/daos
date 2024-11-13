@@ -463,6 +463,9 @@ __shim_handle__torch_read(PyObject *self, PyObject *args)
 		goto out;
 	}
 	rc = read;
+	if (read != bview.len) {
+		rc = -EIO;
+	}
 
 out:
 	PyBuffer_Release(&bview);
@@ -595,8 +598,11 @@ complete_read_op(struct dfs_handle *hdl, struct io_op *op)
 		       rc);
 	}
 	op->obj = NULL;
-
 	op->err = op->ev.ev_error;
+
+	if (op->err == 0 && op->size != op->buf_view.len) {
+		op->err = EIO;
+	}
 
 	rc = daos_event_fini(&op->ev);
 	if (rc) {
