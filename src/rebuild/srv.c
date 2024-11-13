@@ -168,7 +168,7 @@ servers_sop_swap(void *array, int a, int b)
 	struct rebuild_server_status **servers = (struct rebuild_server_status **)array;
 	struct rebuild_server_status  *tmp;
 
-	tmp = servers[a];
+	tmp        = servers[a];
 	servers[a] = servers[b];
 	servers[b] = tmp;
 }
@@ -198,10 +198,10 @@ servers_sop_cmp_key(void *array, int i, uint64_t key)
 	return 0;
 }
 
-static daos_sort_ops_t	servers_sort_ops = {
-	.so_swap	= servers_sop_swap,
-	.so_cmp		= servers_sop_cmp,
-	.so_cmp_key	= servers_sop_cmp_key,
+static daos_sort_ops_t servers_sort_ops = {
+    .so_swap    = servers_sop_swap,
+    .so_cmp     = servers_sop_cmp,
+    .so_cmp_key = servers_sop_cmp_key,
 };
 
 static struct rebuild_server_status *
@@ -220,7 +220,7 @@ static void
 rebuild_leader_set_status(struct rebuild_global_pool_tracker *rgt,
 			  d_rank_t rank, uint32_t resync_ver, unsigned flags)
 {
-	struct rebuild_server_status	*status = NULL;
+	struct rebuild_server_status *status = NULL;
 
 	D_ASSERT(rgt->rgt_servers_number > 0);
 	D_ASSERT(rgt->rgt_servers != NULL);
@@ -244,7 +244,7 @@ rebuild_leader_set_update_time(struct rebuild_global_pool_tracker *rgt, d_rank_t
 
 	i = daos_array_find(rgt->rgt_servers_sorted, rgt->rgt_servers_number, rank,
 			    &servers_sort_ops);
-	if (i >=0) {
+	if (i >= 0) {
 		rgt->rgt_servers_last_update[i] = ABT_get_wtime();
 		return;
 	}

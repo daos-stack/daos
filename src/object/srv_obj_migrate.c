@@ -2730,7 +2730,7 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 	if (!create_migrate_one) {
 		struct ds_cont_child *cont = NULL;
 
-		D_DEBUG(DB_REBUILD, DF_RB ": " DF_UOID"/"DF_KEY" does not need rebuild.\n",
+		D_DEBUG(DB_REBUILD, DF_RB ": " DF_UOID "/" DF_KEY " does not need rebuild.\n",
 			DP_RB_MPT(tls), DP_UOID(io->ui_oid), DP_KEY(&io->ui_dkey));
 
 		/* Create the vos container when no record need to be rebuilt for this shard,
