@@ -59,6 +59,8 @@ def set_device_faulty(test, dmg, server, uuid, pool=None, has_sys_xs=False, **kw
     response = None
     try:
         response = get_dmg_response(dmg.storage_set_faulty, **kwargs)
+        if has_sys_xs:
+            test.fail("Setting a sys_xs device faulty should fail.")
     except CommandFailure as error:
         if not has_sys_xs:
             test.fail(str(error))
