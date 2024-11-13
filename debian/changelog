@@ -1,3 +1,9 @@
+daos (2.6.2-2) unstable; urgency=medium
+  [ Phillip Henderson ]
+  * Second test build for 2.6.2
+
+ -- Phillip Henderson <phillip.henderson@intel.com>  Wed, 06 Nov 2024 18:37:00 -0500
+
 daos (2.6.2-1) unstable; urgency=medium
   [ Phillip Henderson ]
   * First test build for 2.6.2
