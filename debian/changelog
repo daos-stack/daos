@@ -1,3 +1,7 @@
+daos (2.7.101-2) unstable; urgency=medium
+  [ Denis Barakhtanov ]
+  * Add pydaos.torch module to daos-client package
+
 daos (2.7.101-1) unstable; urgency=medium
   [ Phillip Henderson ]
   * Bump version to 2.7.101
