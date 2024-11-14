@@ -416,7 +416,8 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		return nil, err
 	}
 
-	ps = system.NewPoolService(poolUUID, req.TierBytes, ranklist.RanksFromUint32(req.GetRanks()))
+	ps = system.NewPoolService(poolUUID, req.TierBytes, req.MemRatio,
+		ranklist.RanksFromUint32(req.GetRanks()))
 	ps.PoolLabel = poolLabel
 	if err := svc.sysdb.AddPoolService(ctx, ps); err != nil {
 		return nil, err
@@ -878,6 +879,7 @@ func (svc *mgmtSvc) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq) (
 		return nil, err
 	}
 	req.TierBytes = ps.Storage.PerRankTierStorage
+	req.MemRatio = ps.Storage.MemRatio
 
 	svc.log.Debugf("MgmtSvc.PoolExtend forwarding modified req:%+v\n", req)
 
@@ -920,6 +922,7 @@ func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReinteg
 	}
 
 	req.TierBytes = ps.Storage.PerRankTierStorage
+	req.MemRatio = ps.Storage.MemRatio
 
 	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolReintegrate, req)
 	if err != nil {
