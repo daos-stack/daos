@@ -5,6 +5,7 @@
  */
 #include <daos/tests_lib.h>
 #include <gurt/debug.h>
+#include <daos_srv/vos.h>
 #include <ddb_common.h>
 #include <ddb_parse.h>
 #include "ddb_cmocka.h"
@@ -324,6 +325,29 @@ keys_are_parsed_correctly(void **state)
 	daos_iov_free(&key);
 }
 
+static void
+pool_flags_tests(void **state)
+{
+	struct ddb_ctx ctx = {.dc_io_ft.ddb_print_message = fake_print,
+			      .dc_io_ft.ddb_print_error   = fake_print};
+	uint64_t       compat_flags, incompat_flags;
+	uint64_t       expected_flags;
+	int            rc;
+
+	expected_flags = VOS_POOL_COMPAT_FLAG_IMMUTABLE | VOS_POOL_COMPAT_FLAG_SKIP_START;
+	rc = ddb_feature_string2flags(&ctx, "immutable,skip_start", &compat_flags, &incompat_flags);
+	assert_success(rc);
+	assert(compat_flags == expected_flags);
+	expected_flags = 0;
+	if (incompat_flags != expected_flags) {
+		print_error("ERROR: %lu != %lu\n", incompat_flags, expected_flags);
+		assert_success(-DER_INVAL);
+	}
+
+	rc = ddb_feature_string2flags(&ctx, "immutablexxx", &compat_flags, &incompat_flags);
+	assert_rc_equal(-DER_INVAL, rc);
+}
+
 /*
  * -----------------------------------------------
  * Execute
@@ -334,11 +358,8 @@ int
 ddb_parse_tests_run()
 {
 	static const struct CMUnitTest tests[] = {
-		TEST(vos_file_parts_tests),
-		TEST(string_to_argv_tests),
-		TEST(parse_args_tests),
-		TEST(parse_dtx_id_tests),
-		TEST(keys_are_parsed_correctly),
+	    TEST(vos_file_parts_tests), TEST(string_to_argv_tests),      TEST(parse_args_tests),
+	    TEST(parse_dtx_id_tests),   TEST(keys_are_parsed_correctly), TEST(pool_flags_tests),
 	};
 	return cmocka_run_group_tests_name("DDB helper parsing function tests", tests,
 					   NULL, NULL);

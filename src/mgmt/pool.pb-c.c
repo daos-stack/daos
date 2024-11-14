@@ -2365,7 +2365,7 @@ const ProtobufCMessageDescriptor mgmt__pool_drain_resp__descriptor =
   (ProtobufCMessageInit) mgmt__pool_drain_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_extend_req__field_descriptors[6] =
+static const ProtobufCFieldDescriptor mgmt__pool_extend_req__field_descriptors[7] =
 {
   {
     "sys",
@@ -2439,10 +2439,23 @@ static const ProtobufCFieldDescriptor mgmt__pool_extend_req__field_descriptors[6
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "mem_ratio",
+    7,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_FLOAT,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PoolExtendReq, mem_ratio),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__pool_extend_req__field_indices_by_name[] = {
   5,   /* field[5] = fault_domains */
   1,   /* field[1] = id */
+  6,   /* field[6] = mem_ratio */
   2,   /* field[2] = ranks */
   3,   /* field[3] = svc_ranks */
   0,   /* field[0] = sys */
@@ -2451,7 +2464,7 @@ static const unsigned mgmt__pool_extend_req__field_indices_by_name[] = {
 static const ProtobufCIntRange mgmt__pool_extend_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 6 }
+  { 0, 7 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_extend_req__descriptor =
 {
@@ -2461,14 +2474,14 @@ const ProtobufCMessageDescriptor mgmt__pool_extend_req__descriptor =
   "Mgmt__PoolExtendReq",
   "mgmt",
   sizeof(Mgmt__PoolExtendReq),
-  6,
+  7,
   mgmt__pool_extend_req__field_descriptors,
   mgmt__pool_extend_req__field_indices_by_name,
   1,  mgmt__pool_extend_req__number_ranges,
   (ProtobufCMessageInit) mgmt__pool_extend_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_extend_resp__field_descriptors[3] =
+static const ProtobufCFieldDescriptor mgmt__pool_extend_resp__field_descriptors[2] =
 {
   {
     "status",
@@ -2494,28 +2507,15 @@ static const ProtobufCFieldDescriptor mgmt__pool_extend_resp__field_descriptors[
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
-  {
-    "meta_blob_bytes",
-    3,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolExtendResp, meta_blob_bytes),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
 };
 static const unsigned mgmt__pool_extend_resp__field_indices_by_name[] = {
-  2,   /* field[2] = meta_blob_bytes */
   0,   /* field[0] = status */
   1,   /* field[1] = tier_bytes */
 };
 static const ProtobufCIntRange mgmt__pool_extend_resp__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 3 }
+  { 0, 2 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_extend_resp__descriptor =
 {
@@ -2525,14 +2525,14 @@ const ProtobufCMessageDescriptor mgmt__pool_extend_resp__descriptor =
   "Mgmt__PoolExtendResp",
   "mgmt",
   sizeof(Mgmt__PoolExtendResp),
-  3,
+  2,
   mgmt__pool_extend_resp__field_descriptors,
   mgmt__pool_extend_resp__field_indices_by_name,
   1,  mgmt__pool_extend_resp__number_ranges,
   (ProtobufCMessageInit) mgmt__pool_extend_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_reintegrate_req__field_descriptors[6] =
+static const ProtobufCFieldDescriptor mgmt__pool_reintegrate_req__field_descriptors[7] =
 {
   {
     "sys",
@@ -2606,9 +2606,22 @@ static const ProtobufCFieldDescriptor mgmt__pool_reintegrate_req__field_descript
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "mem_ratio",
+    7,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_FLOAT,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PoolReintegrateReq, mem_ratio),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__pool_reintegrate_req__field_indices_by_name[] = {
   1,   /* field[1] = id */
+  6,   /* field[6] = mem_ratio */
   2,   /* field[2] = rank */
   4,   /* field[4] = svc_ranks */
   0,   /* field[0] = sys */
@@ -2618,7 +2631,7 @@ static const unsigned mgmt__pool_reintegrate_req__field_indices_by_name[] = {
 static const ProtobufCIntRange mgmt__pool_reintegrate_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 6 }
+  { 0, 7 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_reintegrate_req__descriptor =
 {
@@ -2628,7 +2641,7 @@ const ProtobufCMessageDescriptor mgmt__pool_reintegrate_req__descriptor =
   "Mgmt__PoolReintegrateReq",
   "mgmt",
   sizeof(Mgmt__PoolReintegrateReq),
-  6,
+  7,
   mgmt__pool_reintegrate_req__field_descriptors,
   mgmt__pool_reintegrate_req__field_indices_by_name,
   1,  mgmt__pool_reintegrate_req__number_ranges,

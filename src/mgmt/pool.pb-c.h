@@ -503,10 +503,14 @@ struct  _Mgmt__PoolExtendReq
    */
   size_t n_fault_domains;
   uint32_t *fault_domains;
+  /*
+   * Fraction of meta-blob-sz to use as mem-file-sz
+   */
+  float mem_ratio;
 };
 #define MGMT__POOL_EXTEND_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_extend_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0,NULL, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0,NULL, 0,NULL, 0 }
 
 
 /*
@@ -524,14 +528,10 @@ struct  _Mgmt__PoolExtendResp
    */
   size_t n_tier_bytes;
   uint64_t *tier_bytes;
-  /*
-   * Size in bytes of metadata blob on SSD
-   */
-  uint32_t meta_blob_bytes;
 };
 #define MGMT__POOL_EXTEND_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_extend_resp__descriptor) \
-    , 0, 0,NULL, 0 }
+    , 0, 0,NULL }
 
 
 /*
@@ -567,10 +567,14 @@ struct  _Mgmt__PoolReintegrateReq
    */
   size_t n_tier_bytes;
   uint64_t *tier_bytes;
+  /*
+   * Fraction of meta-blob-sz to use as mem-file-sz
+   */
+  float mem_ratio;
 };
 #define MGMT__POOL_REINTEGRATE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_reintegrate_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0,NULL, 0,NULL, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0,NULL, 0,NULL, 0,NULL, 0 }
 
 
 /*

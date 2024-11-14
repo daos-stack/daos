@@ -293,7 +293,7 @@ func getPMemState(log logging.Logger, regions Regions) (*storage.ScmSocketState,
 			return resp, nil
 		case storage.ScmFreeCap:
 			log.Debugf("socket %d app-direct region has %s free", r.SocketID,
-				humanize.Bytes(uint64(r.FreeCapacity)))
+				humanize.IBytes(uint64(r.FreeCapacity)))
 			hasFreeCap = true
 		case storage.ScmNoFreeCap:
 			// Fall-through

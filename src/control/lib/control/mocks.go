@@ -317,11 +317,11 @@ func MockMemInfo() *common.MemInfo {
 	}
 }
 
-func mockNvmeCtrlrWithSmd(bdevRoles storage.OptionBits, varIdx ...int32) *storage.NvmeController {
+func mockNvmeCtrlrWithSmd(roleBits int, varIdx ...int32) *storage.NvmeController {
 	idx := test.GetIndex(varIdx...)
 	nc := storage.MockNvmeController(idx)
 	sd := storage.MockSmdDevice(nil, idx)
-	sd.Roles = storage.BdevRoles{bdevRoles}
+	sd.Roles = storage.BdevRolesFromBits(roleBits)
 	nc.SmdDevices = []*storage.SmdDevice{sd}
 	return nc
 }
@@ -334,7 +334,7 @@ func standardServerScanResponse(t *testing.T) *ctlpb.StorageScanResp {
 	}
 
 	nvmeControllers := storage.NvmeControllers{
-		mockNvmeCtrlrWithSmd(storage.OptionBits(0)),
+		mockNvmeCtrlrWithSmd(0),
 	}
 	if err := convert.Types(nvmeControllers, &pbSsr.Nvme.Ctrlrs); err != nil {
 		t.Fatal(err)
@@ -368,12 +368,50 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 		}
 		return ncs
 	}
+	ctrlrWithUsage := func(i, rank, roleBits int, tot, avail, usabl uint64) *storage.NvmeController {
+		nc := storage.MockNvmeController(int32(i))
+		nc.SocketID = int32(i % 2)
+		sd := storage.MockSmdDevice(nil, int32(i))
+		sd.TotalBytes = tot
+		sd.AvailBytes = avail
+		sd.UsableBytes = usabl
+		sd.Rank = ranklist.Rank(rank)
+		sd.Roles = storage.BdevRolesFromBits(roleBits)
+		nc.SmdDevices = append(nc.SmdDevices, sd)
+		return nc
+	}
+	ctrlrsWithUsageSepRoles := func(firstRank, secondRank int, baseBytes uint64) storage.NvmeControllers {
+		ncs := make(storage.NvmeControllers, 0)
+		for _, i := range []int{1, 2} {
+			ncs = append(ncs, ctrlrWithUsage(i, firstRank,
+				storage.BdevRoleWAL|storage.BdevRoleMeta, baseBytes,
+				baseBytes/2, baseBytes/4))
+		}
+		for _, i := range []int{3, 4} {
+			ncs = append(ncs, ctrlrWithUsage(i, firstRank, storage.BdevRoleData,
+				baseBytes, (baseBytes/4)*3, // 75% available
+				(baseBytes/4)*2)) // 50% usable
+		}
+		for _, i := range []int{5, 6} {
+			ncs = append(ncs, ctrlrWithUsage(i, secondRank,
+				storage.BdevRoleWAL|storage.BdevRoleMeta, baseBytes,
+				baseBytes/4, baseBytes/8))
+		}
+		for _, i := range []int{7, 8} {
+			ncs = append(ncs, ctrlrWithUsage(i, secondRank, storage.BdevRoleData,
+				baseBytes, (baseBytes/4)*2, // 50% available
+				baseBytes/4)) // 25% usable
+		}
+		return ncs
+	}
 
 	switch variant {
 	case "withSpaceUsage":
 		snss := make(storage.ScmNamespaces, 0)
 		for _, i := range []int{0, 1} {
 			sm := storage.MockScmMountPoint(int32(i))
+			sm.AvailBytes = uint64((humanize.TByte/4)*3) * uint64(i)  // 75% available
+			sm.UsableBytes = uint64((humanize.TByte/4)*2) * uint64(i) // 50% usable
 			sns := storage.MockScmNamespace(int32(i))
 			sns.Mount = sm
 			snss = append(snss, sns)
@@ -383,15 +421,21 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 		}
 		ncs := make(storage.NvmeControllers, 0)
 		for _, i := range []int{1, 2, 3, 4, 5, 6, 7, 8} {
-			nc := storage.MockNvmeController(int32(i))
-			nc.SocketID = int32(i % 2)
-			sd := storage.MockSmdDevice(nc, int32(i))
-			sd.TotalBytes = uint64(humanize.TByte) * uint64(i)
-			sd.AvailBytes = uint64((humanize.TByte/4)*3) * uint64(i)  // 25% used
-			sd.UsableBytes = uint64((humanize.TByte/4)*3) * uint64(i) // 25% used
-			nc.SmdDevices = append(nc.SmdDevices, sd)
-			ncs = append(ncs, nc)
+			ncs = append(ncs, ctrlrWithUsage(i, 0, storage.BdevRoleAll,
+				uint64(humanize.TByte)*uint64(i),
+				uint64((humanize.TByte/4)*3)*uint64(i),  // 75% available
+				uint64((humanize.TByte/4)*2)*uint64(i))) // 50% usable
 		}
+		if err := convert.Types(ncs, &ssr.Nvme.Ctrlrs); err != nil {
+			t.Fatal(err)
+		}
+	case "withSpaceUsageRolesSeparate1":
+		ncs := ctrlrsWithUsageSepRoles(0, 1, humanize.TByte)
+		if err := convert.Types(ncs, &ssr.Nvme.Ctrlrs); err != nil {
+			t.Fatal(err)
+		}
+	case "withSpaceUsageRolesSeparate2":
+		ncs := ctrlrsWithUsageSepRoles(2, 3, 0.5*humanize.TByte)
 		if err := convert.Types(ncs, &ssr.Nvme.Ctrlrs); err != nil {
 			t.Fatal(err)
 		}
@@ -594,9 +638,7 @@ func MockFormatResp(t *testing.T, mfc MockFormatConf) *StorageFormatResp {
 				PciAddr: fmt.Sprintf("%d", j+1),
 				SmdDevices: []*storage.SmdDevice{
 					{
-						Roles: storage.BdevRoles{
-							storage.OptionBits(mfc.NvmeRoleBits),
-						},
+						Roles: storage.BdevRolesFromBits(mfc.NvmeRoleBits),
 					},
 				},
 			})

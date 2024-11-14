@@ -82,8 +82,8 @@ pool_create_rpc_timeout(crt_rpc_t *tc_req, size_t scm_size)
 }
 
 static int
-ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev, d_rank_list_t *rank_list,
-			      size_t scm_size, size_t nvme_size, size_t meta_size)
+ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, d_rank_list_t *rank_list, size_t scm_size,
+			      size_t nvme_size, size_t meta_size)
 {
 	crt_rpc_t			*tc_req;
 	crt_opcode_t			opc;
@@ -114,7 +114,6 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev, d_rank_list_t *ra
 	tc_in = crt_req_get(tc_req);
 	D_ASSERT(tc_in != NULL);
 	uuid_copy(tc_in->tc_pool_uuid, pool_uuid);
-	tc_in->tc_tgt_dev = tgt_dev;
 	tc_in->tc_scm_size = scm_size;
 	tc_in->tc_nvme_size = nvme_size;
 	tc_in->tc_meta_size = meta_size;
@@ -169,9 +168,9 @@ ds_mgmt_pool_svc_create(uuid_t pool_uuid, int ntargets, const char *group, d_ran
 }
 
 int
-ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev, d_rank_list_t *targets,
-		    size_t scm_size, size_t nvme_size, daos_prop_t *prop, d_rank_list_t **svcp,
-		    int domains_nr, uint32_t *domains, size_t meta_size)
+ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, d_rank_list_t *targets, size_t scm_size,
+		    size_t nvme_size, size_t meta_size, daos_prop_t *prop, d_rank_list_t **svcp,
+		    int domains_nr, uint32_t *domains)
 {
 	d_rank_list_t			*pg_ranks = NULL;
 	d_rank_list_t			*pg_targets = NULL;
@@ -216,8 +215,7 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev, d_rank_l
 		D_GOTO(out, rc = -DER_OOG);
 	}
 
-	rc = ds_mgmt_tgt_pool_create_ranks(pool_uuid, tgt_dev, targets,
-					   scm_size, nvme_size, meta_size);
+	rc = ds_mgmt_tgt_pool_create_ranks(pool_uuid, targets, scm_size, nvme_size, meta_size);
 	if (rc != 0) {
 		D_ERROR("creating pool "DF_UUID" on ranks failed: rc "DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
@@ -282,8 +280,8 @@ out:
 
 int
 ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t *rank_list,
-		    char *tgt_dev,  size_t scm_size, size_t nvme_size, size_t meta_size,
-		    size_t domains_nr, uint32_t *domains)
+		    size_t scm_size, size_t nvme_size, size_t meta_size, size_t domains_nr,
+		    uint32_t *domains)
 {
 	d_rank_list_t		*unique_add_ranks = NULL;
 	int			ntargets;
@@ -295,8 +293,8 @@ ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t *r
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	rc = ds_mgmt_tgt_pool_create_ranks(pool_uuid, tgt_dev, unique_add_ranks, scm_size,
-					   nvme_size, meta_size);
+	rc = ds_mgmt_tgt_pool_create_ranks(pool_uuid, unique_add_ranks, scm_size, nvme_size,
+					   meta_size);
 	if (rc != 0) {
 		D_ERROR("creating pool on ranks "DF_UUID" failed: rc "DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
@@ -344,23 +342,23 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	int			rc;
 
 	if (state == PO_COMP_ST_UP) {
-		/* When doing reintegration, need to make sure the pool is
-		 * created and started on the target rank
+		/* When doing reintegration, need to make sure the pool is created and started on
+		 * the target rank
 		 */
 
 		d_rank_list_t reint_ranks;
 
-		/* Just one list element - so reference it directly, rather
-		 * than allocating an actual list array and populating it
+		/* Just one list element - so reference it directly, rather than allocating an
+		 * actual list array and populating it
 		 */
 		reint_ranks.rl_nr = 1;
 		reint_ranks.rl_ranks = &target_addrs->pta_addrs[0].pta_rank;
 
-		rc = ds_mgmt_tgt_pool_create_ranks(pool_uuid, "pmem", &reint_ranks, scm_size,
-						   nvme_size, meta_size);
+		rc = ds_mgmt_tgt_pool_create_ranks(pool_uuid, &reint_ranks, scm_size, nvme_size,
+						   meta_size);
 		if (rc != 0) {
-			D_ERROR("creating pool on ranks "DF_UUID" failed: rc "
-				DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
+			D_ERROR("creating pool on ranks " DF_UUID " failed: rc " DF_RC "\n",
+				DP_UUID(pool_uuid), DP_RC(rc));
 			return rc;
 		}
 	}

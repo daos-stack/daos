@@ -1,3 +1,16 @@
+daos (2.7.101-1) unstable; urgency=medium
+  [ Phillip Henderson ]
+  * Bump version to 2.7.101
+
+ -- Phillip Henderson <phillip.henderson@intel.com>  Fri, 08 Nov 2024 13:05:00 -0500
+
+daos (2.7.100-11) unstable; urgency=medium
+  [ Michael MacDonald ]
+  * Move daos_metrics utility to daos package for use on both clients
+    and servers.
+
+ -- Michael MacDonald <mjmac@google.com>  Tue, 5 Nov 2024 12:00:00 -0500
+
 daos (2.7.100-10) unstable; urgency=medium
 
   [ Sherin T George ]
