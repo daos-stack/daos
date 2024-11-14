@@ -6,7 +6,6 @@
 import os
 
 from command_utils_base import BasicParameter, LogParameter, TransportCredentials, YamlParameters
-from environment_utils import EnvironmentalVariable
 
 MAX_STORAGE_TIERS = 5
 
@@ -434,17 +433,17 @@ class EngineYamlParameters(YamlParameters):
     # Engine environment variables that are required by provider type.
     REQUIRED_ENV_VARS = {
         "common": [
-            EnvironmentalVariable("D_LOG_FILE_APPEND_PID", "1"),
-            EnvironmentalVariable("DAOS_POOL_RF", "4", True),
-            EnvironmentalVariable("CRT_EVENT_DELAY", "1"),
-            EnvironmentalVariable("COVFILE", "/tmp/test.cov")],
+            "D_LOG_FILE_APPEND_PID=1",
+            "DAOS_POOL_RF=4",
+            "CRT_EVENT_DELAY=1",
+            "COVFILE=/tmp/test.cov"],
         "ofi+tcp": [],
         "ofi+tcp;ofi_rxm": [],
         "ofi+verbs": [
-            EnvironmentalVariable("FI_OFI_RXM_USE_SRX", "1")],
+            "FI_OFI_RXM_USE_SRX=1"],
         "ofi+cxi": [
-            EnvironmentalVariable("FI_OFI_RXM_USE_SRX", "1"),
-            EnvironmentalVariable("CRT_MRC_ENABLE", "1")],
+            "FI_OFI_RXM_USE_SRX=1",
+            "CRT_MRC_ENABLE=1"],
     }
 
     def __init__(self, base_namespace, index, provider=None, max_storage_tiers=MAX_STORAGE_TIERS):
@@ -502,7 +501,7 @@ class EngineYamlParameters(YamlParameters):
         default_env_vars.extend(self.REQUIRED_ENV_VARS["common"])
         for name in self._provider.split(";"):
             if name in self.REQUIRED_ENV_VARS:
-                default_env_vars.extend([str(env) for env in self.REQUIRED_ENV_VARS[name]])
+                default_env_vars.extend(self.REQUIRED_ENV_VARS[name])
         self.env_vars = BasicParameter(None, default_env_vars)
 
         # the storage configuration for this engine
@@ -526,25 +525,26 @@ class EngineYamlParameters(YamlParameters):
         # Define any required env vars
         required_env_vars = {}
         for env in self.REQUIRED_ENV_VARS["common"]:
-            required_env_vars[env.name] = env
+            required_env_vars[env.split("=", maxsplit=1)[0]] = env.split("=", maxsplit=1)[1]
         for name in self._provider.split(";"):
             if name in self.REQUIRED_ENV_VARS:
-                required_env_vars.update({env.name: env for env in self.REQUIRED_ENV_VARS[name]})
+                required_env_vars.update({
+                    env.split("=", maxsplit=1)[0]: env.split("=", maxsplit=1)[1]
+                    for env in self.REQUIRED_ENV_VARS[name]})
 
         # Enable fault injection if configured
         if test.fault_injection.fault_file is not None:
             self.log.debug("Enabling fault injection")
-            required_env_vars["D_FI_CONFIG"] = EnvironmentalVariable(
-                "D_FI_CONFIG", test.fault_injection.fault_file)
+            required_env_vars["D_FI_CONFIG"] = test.fault_injection.fault_file
 
         # Update the env vars with any missing or different required setting
         update = False
-        env_var_dict = {env.split("=")[0]: env.split("=")[1] for env in self.env_vars.value}
+        env_var_dict = {
+            env.split("=", maxsplit=1)[0]: env.split("=", maxsplit=1)[1]
+            for env in self.env_vars.value}
         for key in sorted(required_env_vars):
-            if key not in env_var_dict or env_var_dict[key] != required_env_vars[key]:
-                if key in env_var_dict:
-                    required_env_vars[key].update(env_var_dict[key])
-                env_var_dict[key] = required_env_vars[key].value
+            if key not in env_var_dict:
+                env_var_dict[key] = required_env_vars[key]
                 update = True
         if update:
             self.log.debug("Assigning required env_vars")
