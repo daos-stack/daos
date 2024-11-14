@@ -760,9 +760,11 @@ dfs_mount_snap(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epo
 {
 	daos_epoch_t ep = 0;
 
-	if (epoch == DAOS_EPOCH_MAX)
+	if (epoch == DAOS_EPOCH_MAX) {
+		D_ERROR("DAOS_EPOCH_MAX not supported for dfs_mount_snap()\n");
 		/** cannot be right */
 		return EINVAL;
+	}
 
 	if (epoch == 0) {
 		/** Look up epoch associated with snapshot name */
@@ -800,7 +802,7 @@ dfs_mount_snap(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epo
 		}
 
 		if (ep == 0) {
-			D_DEBUG(DB_ALL, "No matching snapshot name found.\n");
+			D_ERROR("No matching snapshot name found.\n");
 			/** no match found */
 			return ENOENT;
 		}
