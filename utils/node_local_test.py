@@ -4532,9 +4532,11 @@ class PosixTests():
                 return
             raise
 
-    def import_torch(self):
+    def import_torch(self, server):
         """Return a handle to the pydaos.torch module"""
         os.environ['D_LOG_MASK'] = 'INFO'
+        os.environ['DAOS_AGENT_DRPC_DIR'] = server.agent_dir
+
         return importlib.import_module('pydaos.torch')
 
     @needs_dfuse_with_opt(caching_variants=[False])
@@ -4553,7 +4555,7 @@ class PosixTests():
             with open(file, 'wb') as f:
                 f.write(tf["content"])
 
-        torch = self.import_torch()
+        torch = self.import_torch(self.server)
         dataset = torch.Dataset(pool=self.pool.uuid, cont=self.container.uuid)
 
         assert len(dataset) == len(test_files)
@@ -4587,7 +4589,7 @@ class PosixTests():
             with open(file, 'wb') as f:
                 f.write(tf["content"])
 
-        torch = self.import_torch()
+        torch = self.import_torch(self.server)
         dataset = torch.IterableDataset(pool=self.pool.uuid, cont=self.container.uuid)
 
         for content in dataset:
