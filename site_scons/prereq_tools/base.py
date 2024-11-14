@@ -206,7 +206,9 @@ class Runner():
                 retval = True
             else:
                 print(f"RUN: {' '.join(cmd)}")
-                if subprocess.call(cmd, shell=False, cwd=subdir, env=passed_env['ENV']) != 0:
+                rc = subprocess.call(cmd, shell=False, cwd=subdir, env=passed_env['ENV'])
+                if rc != 0:
+                    print(f"Command failed with {rc}")
                     retval = False
                     break
         return retval

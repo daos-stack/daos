@@ -332,6 +332,12 @@ chunk_read(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
 	bool                      rcb;
 	bool                      all_done = true;
 
+	if (ie->ie_dfs->dfc_data_timeout == 0)
+		return false;
+
+	if (atomic_load_relaxed(&oh->doh_ie->ie_open_write_count) != 0)
+		return false;
+
 	if (len != K128)
 		return false;
 
