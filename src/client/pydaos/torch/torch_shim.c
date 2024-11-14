@@ -22,6 +22,7 @@
 #include <gurt/common.h>
 
 #define PY_SHIM_MAGIC_NUMBER (0x7A8B)
+#define EQ_POLL_BATCH_SIZE   (64)
 
 struct dfs_handle {
 	int           flags;
@@ -614,113 +615,82 @@ complete_read_op(struct dfs_handle *hdl, struct io_op *op)
 	return 0;
 }
 
-static int
-reap_read_op(struct dfs_handle *hdl, struct io_op **op)
-{
-	daos_event_t *evp = NULL;
+/*
 
-	assert(op != NULL);
-
-	int rc = daos_eq_poll(hdl->eq, 1, DAOS_EQ_WAIT, 1, &evp);
-	if (rc < 0) {
-		D_ERROR("Could not poll event queue: %s (rc = %d)", d_errstr(rc), rc);
-		rc = daos_der2errno(rc);
-		return rc;
-	}
-
-	if (rc == 0) {
-		*op = NULL;
-		return rc;
-	}
-
-	*op = container_of(evp, struct io_op, ev);
-
-	return complete_read_op(hdl, *op);
-};
-
+ */
 static PyObject *
 __shim_handle__torch_batch_read(PyObject *self, PyObject *args)
 {
-	int                rc            = 0;
-	struct dfs_handle *hdl           = NULL;
-	PyObject          *items         = NULL;
-	size_t             max_in_flight = 0;
+	int                rc        = 0;
+	int                completed = 0;
+	PyObject          *items     = NULL;
+	Py_ssize_t         nr        = 0;
+	struct io_op      *ops       = NULL;
+	struct dfs_handle *hdl       = NULL;
+	daos_event_t      *evp[EQ_POLL_BATCH_SIZE];
 
-	struct io_op      *ops = NULL;
-	struct io_op      *op  = NULL;
-
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LOI", &hdl, &items, &max_in_flight);
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LO", &hdl, &items);
 	assert(hdl->dfs != NULL);
 
-	Py_ssize_t nr = PyList_Size(items);
+	nr = PyList_Size(items);
+	if (nr <= 0) {
+		return PyLong_FromLong(EINVAL);
+	}
 
-	D_DEBUG(DB_ANY, "Batch read of %zu items with max_in_flight = %zu", nr, max_in_flight);
-
-	D_ALLOC_ARRAY(ops, max_in_flight);
+	D_ALLOC_ARRAY(ops, nr);
 	if (ops == NULL) {
 		return PyLong_FromLong(ENOMEM);
 	}
 
-	size_t inflight = 0;
-	for (Py_ssize_t index = 0; index < nr; ++index) {
-		PyObject *item = PyList_GetItem(items, index);
+	/* For optimal usage of transport layer, we try to enqueue all items in the bath
+	   leaving the throttling up to transport level.
+	   It can be manually adjusted by D_QUOTA_RPC environment variable.
+	 */
+	for (Py_ssize_t i = 0; i < nr; ++i) {
+		PyObject *item = PyList_GetItem(items, i);
 		if (item == NULL) {
 			D_ERROR("Unexpected NULL entry in the batch read list");
 			rc = EINVAL;
+
+			nr = i;
 			break;
 		}
 
-		if (inflight < max_in_flight) {
-			op = &ops[inflight];
-
-			rc = start_read_op(hdl, item, op);
-			if (rc) {
-				break;
-			}
-
-			inflight++;
-			continue;
-		}
-
-		rc = reap_read_op(hdl, &op);
+		rc = start_read_op(hdl, item, &ops[i]);
 		if (rc) {
-			break;
-		}
-
-		if (op == NULL) {
-			/* Something weird happened: could not fetch any in-flight requests */
-			rc = EIO;
-			break;
-		}
-
-		rc = start_read_op(hdl, item, op);
-		if (rc) {
+			nr = i;
 			break;
 		}
 	}
 
-	/* In case error happened before queuing any request */
-	int err = rc ? rc : 0;
 	do {
-		rc = reap_read_op(hdl, &op);
-		if (rc < 0) {
-			err = rc;
+		int eq_rc = daos_eq_poll(hdl->eq, 0, DAOS_EQ_NOWAIT, nr, evp);
+		if (eq_rc < 0) {
+			D_ERROR("Could not poll event queue: %s (rc=%d)", d_errstr(eq_rc), eq_rc);
+			rc = daos_der2errno(eq_rc);
 			break;
 		}
 
-		if (op == NULL) {
-			break;
-		}
+		for (int i = 0; i < eq_rc; ++i) {
+			struct io_op *op    = container_of(evp[i], struct io_op, ev);
+			int           op_rc = complete_read_op(hdl, op);
 
-		if (err == 0 && op->err != 0) {
-			err = op->err;
-		}
+			if (rc == 0 && op_rc != 0) {
+				rc = op_rc;
+			}
 
-	} while (rc == 0);
+			if (op_rc) {
+				D_ERROR("ERROR in fetching the results: %s (rc=%d)",
+					strerror(op_rc), op_rc);
+			}
+		}
+		completed += eq_rc;
+
+	} while (completed < nr);
 
 	D_FREE(ops);
 
-	return PyLong_FromLong(err);
+	return PyLong_FromLong(rc);
 }
 
 /**

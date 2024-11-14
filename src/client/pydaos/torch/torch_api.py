@@ -20,9 +20,9 @@ from torch.utils.data import get_worker_info
 
 from . import DAOS_MAGIC, torch_shim
 
-IN_FLIGHT_OPS_MAX = 16
+ITER_BATCH_SIZE = 32
 READDIR_BATCH_SIZE = 128
-PARALLEL_SCAN_WORKERS = 8
+PARALLEL_SCAN_WORKERS = 16
 
 
 def transform_fn_default(data):
@@ -55,8 +55,6 @@ class Dataset(TorchDataset):
         Function to transform samples from storage to in-memory representation
     readdir_batch_size: int (optional)
         Number of directory entries to read for each readdir call.
-    in_flight_ops_max: int (optional)
-        Number of simultaneous IO operations during batch reads
 
 
     Methods
@@ -79,8 +77,7 @@ class Dataset(TorchDataset):
     # pylint: disable=too-many-arguments
     def __init__(self, pool=None, cont=None, path=None,
                  transform_fn=transform_fn_default,
-                 readdir_batch_size=READDIR_BATCH_SIZE,
-                 in_flight_ops_max=IN_FLIGHT_OPS_MAX):
+                 readdir_batch_size=READDIR_BATCH_SIZE):
         super().__init__()
 
         self._pool = pool
@@ -88,7 +85,6 @@ class Dataset(TorchDataset):
         self._dfs = _Dfs(pool=pool, cont=cont)
         self._transform_fn = transform_fn
         self._readdir_batch_size = readdir_batch_size
-        self._in_flight_ops_max = in_flight_ops_max
 
         self.objects = self._dfs.parallel_list(path, readdir_batch_size=self._readdir_batch_size)
 
@@ -108,7 +104,7 @@ class Dataset(TorchDataset):
         """ Batch read of multiple items in parallel by their indices """
 
         items = [self.objects[idx] for idx in indices]
-        result = self._dfs.batch_read(items, in_flight_ops_max=self._in_flight_ops_max)
+        result = self._dfs.batch_read(items)
         return [self._transform_fn(x) for x in result]
 
     def worker_init(self, worker_id):
@@ -172,8 +168,6 @@ class IterableDataset(TorchIterableDataset):
         Function to transform samples from storage to in-memory representation
     readdir_batch_size: int (optional)
         Number of directory entries to read for each readdir call.
-    in_flight_ops_max: int (optional)
-        Number of simultaneous IO operations during batch reads
 
 
     Methods
@@ -189,8 +183,7 @@ class IterableDataset(TorchIterableDataset):
     # pylint: disable=too-many-arguments,too-many-instance-attributes
     def __init__(self, pool=None, cont=None, path=None,
                  transform_fn=transform_fn_default,
-                 readdir_batch_size=READDIR_BATCH_SIZE,
-                 in_flight_ops_max=IN_FLIGHT_OPS_MAX):
+                 readdir_batch_size=READDIR_BATCH_SIZE, batch_size=ITER_BATCH_SIZE):
         super().__init__()
 
         self._pool = pool
@@ -198,7 +191,7 @@ class IterableDataset(TorchIterableDataset):
         self._dfs = _Dfs(pool=pool, cont=cont)
         self._transform_fn = transform_fn
         self._readdir_batch_size = readdir_batch_size
-        self._in_flight_ops_max = in_flight_ops_max
+        self._batch_size = batch_size
 
         self.objects = self._dfs.parallel_list(path, readdir_batch_size=self._readdir_batch_size)
         self.workset = self.objects
@@ -210,8 +203,8 @@ class IterableDataset(TorchIterableDataset):
         there's no need to implement Iterator Protocol.
         """
 
-        batch_size = self._in_flight_ops_max
-        batches = (self.workset[i:i + batch_size] for i in range(0, len(self.workset), batch_size))
+        batches = (self.workset[i:i + self._batch_size]
+                   for i in range(0, len(self.workset), self._batch_size))
         for batch in batches:
             yield from self.__load_batch(batch)
 
@@ -253,7 +246,7 @@ class IterableDataset(TorchIterableDataset):
     def __load_batch(self, items):
         """ load items in batch and applies data transformation function """
 
-        result = self._dfs.batch_read(items, in_flight_ops_max=self._in_flight_ops_max)
+        result = self._dfs.batch_read(items)
         return [self._transform_fn(x) for x in result]
 
 
@@ -370,11 +363,11 @@ class _Dfs():
 
         return buf
 
-    def batch_read(self, items, in_flight_ops_max=IN_FLIGHT_OPS_MAX):
+    def batch_read(self, items):
         """ parallel read of multiple files """
 
         to_read = [(item[0], bytearray(item[1])) for item in items]
-        ret = torch_shim.torch_batch_read(DAOS_MAGIC, self._dfs, to_read, in_flight_ops_max)
+        ret = torch_shim.torch_batch_read(DAOS_MAGIC, self._dfs, to_read)
 
         if ret != 0:
             raise OSError(ret, os.strerror(ret))
