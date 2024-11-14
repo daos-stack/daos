@@ -502,7 +502,7 @@ class EngineYamlParameters(YamlParameters):
         default_env_vars.extend(self.REQUIRED_ENV_VARS["common"])
         for name in self._provider.split(";"):
             if name in self.REQUIRED_ENV_VARS:
-                default_env_vars.extend(self.REQUIRED_ENV_VARS[name])
+                default_env_vars.extend([str(env) for env in self.REQUIRED_ENV_VARS[name]])
         self.env_vars = BasicParameter(None, default_env_vars)
 
         # the storage configuration for this engine
