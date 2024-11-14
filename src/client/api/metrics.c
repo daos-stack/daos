@@ -20,11 +20,15 @@
 #include <gurt/telemetry_consumer.h>
 #include <gurt/telemetry_producer.h>
 
-#define INIT_JOB_NUM 1024
 bool daos_client_metric;
 bool daos_client_metric_retain;
+uint32_t max_entry_cnt = 1024;
 
-#define MAX_IDS_SIZE(num) (num * D_TM_METRIC_SIZE)
+static inline uint32_t
+client_metrics_shm_size(uint32_t num)
+{
+	return num * D_TM_METRIC_SIZE;
+}
 /* The client side metrics structure looks like
  * root/job_id/pid/....
  */
@@ -66,8 +70,9 @@ init_root(const char *name, pid_t pid, int flags)
 	key_t key;
 	int   rc;
 
+	d_getenv_uint(DAOS_CLIENT_METRICS_MAX_ENTRY_CNT, &max_entry_cnt);
 	key = d_tm_cli_pid_key(pid);
-	rc  = d_tm_init_with_name(key, MAX_IDS_SIZE(INIT_JOB_NUM), flags, name);
+	rc  = d_tm_init_with_name(key, client_metrics_shm_size(max_entry_cnt), flags, name);
 	if (rc != 0) {
 		DL_ERROR(rc, "failed to initialize root for %s.", name);
 		return rc;

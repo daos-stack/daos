@@ -266,6 +266,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	DFUSE_TRA_UP(ie, parent, "inode");
 
 	dfuse_ie_init(dfuse_info, ie);
+	dfuse_dcache_set_time(ie);
 
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;

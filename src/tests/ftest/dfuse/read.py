@@ -23,7 +23,9 @@ class DFusePreReadTest(TestWithServers):
         Read one large file entirely using pre-read.  Read a second smaller file to ensure that
         the first file leaves the flag enabled.
 
-        :avocado: tags=all,full_regression
+        TODO: Check this with 128k I/O size and non-128K I/O size.
+
+        :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=dfuse
         :avocado: tags=DFusePreReadTest,test_dfuse_pre_read
