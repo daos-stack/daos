@@ -21,4 +21,4 @@ jobs:
         with:
           project_id: daos-github-ci
           workload_identity_provider: |
-            'projects/192572342707/locations/global/workloadIdentityPools/github/providers/daos'
+            projects/192572342707/locations/global/workloadIdentityPools/github/providers/daos
