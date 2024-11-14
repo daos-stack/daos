@@ -32,7 +32,6 @@ class DmgTelemetryConfig(TelemetryConfig):
     def __init__(self, log_dir="/tmp"):
         """Initialize a TelemetryConfig object."""
         super().__init__("/run/dmg/telemetry_config/*", None, log_dir)
-        self.ca_cert = LogParameter(self._log_dir, None, "daosTelemetryCA.crt")
 
     def _get_new(self):
         """Get a new object based upon this one.

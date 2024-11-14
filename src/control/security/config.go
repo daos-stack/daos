@@ -20,20 +20,19 @@ import (
 )
 
 const (
-	certDir                = "/etc/daos/certs/"
-	defaultCACert          = certDir + "daosCA.crt"
-	defaultServerCert      = certDir + "server.crt"
-	defaultServerKey       = certDir + "server.key"
-	defaultAdminCert       = certDir + "admin.crt"
-	defaultAdminKey        = certDir + "admin.key"
-	defaultAgentCert       = certDir + "agent.crt"
-	defaultAgentKey        = certDir + "agent.key"
-	defaultTelemetryCert   = certDir + "telemetry.crt"
-	defaultTelemetryKey    = certDir + "telemetry.key"
-	defaultTelemetryCACert = certDir + "daosTelemetryCA.crt"
-	defaultClientCertDir   = certDir + "clients"
-	defaultServer          = "server"
-	defaultInsecure        = false
+	certDir              = "/etc/daos/certs/"
+	defaultCACert        = certDir + "daosCA.crt"
+	defaultServerCert    = certDir + "server.crt"
+	defaultServerKey     = certDir + "server.key"
+	defaultAdminCert     = certDir + "admin.crt"
+	defaultAdminKey      = certDir + "admin.key"
+	defaultAgentCert     = certDir + "agent.crt"
+	defaultAgentKey      = certDir + "agent.key"
+	defaultTelemetryCert = certDir + "telemetry.crt"
+	defaultTelemetryKey  = certDir + "telemetry.key"
+	defaultClientCertDir = certDir + "clients"
+	defaultServer        = "server"
+	defaultInsecure      = false
 )
 
 // MappedClientUser represents a client user that is mapped to a uid.
@@ -128,7 +127,6 @@ func DefaultClientTelemetryConfig() *TelemetryConfig {
 		AllowInsecure: true,
 		HttpsCert:     defaultTelemetryCert,
 		HttpsKey:      defaultTelemetryKey,
-		CARootPath:    defaultTelemetryCACert,
 	}
 }
 

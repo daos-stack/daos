@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/pkg/errors"
 	pclient "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
@@ -83,10 +84,11 @@ type (
 	// MetricsListReq is used to request the list of metrics.
 	MetricsListReq struct {
 		httpReq
-		Host          string // Host to query for telemetry data
-		Port          uint32 // Port to use for collecting telemetry data
-		AllowInsecure bool   // Set the https end point secure
-		CaCertPath    string // CA Cert path for telemetry
+		Host          string         // Host to query for telemetry data
+		Port          uint32         // Port to use for collecting telemetry data
+		AllowInsecure bool           // Set the https end point secure
+		CaCertPath    string         // CA Cert path for telemetry
+		Log           logging.Logger // Logging the info
 	}
 
 	// MetricsListResp contains the list of available metrics.
@@ -109,14 +111,9 @@ func MetricsList(ctx context.Context, req *MetricsListReq) (*MetricsListResp, er
 		return nil, errors.New("port must be specified")
 	}
 
-	if req.AllowInsecure == false && req.CaCertPath == "" {
-		return nil, errors.New("Provide the CA certificate path")
-	}
-
-	req.url = getMetricsURL(req.Host, req.Port, req.AllowInsecure)
 	req.allowInsecure = req.AllowInsecure
 	req.cacertpath = &req.CaCertPath
-
+	req.url = getMetricsURL(req.Host, req.Port, req.allowInsecure)
 	scraped, err := scrapeMetrics(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to list metrics")
@@ -171,14 +168,9 @@ func MetricsQuery(ctx context.Context, req *MetricsQueryReq) (*MetricsQueryResp,
 		return nil, errors.New("port must be specified")
 	}
 
-	if req.AllowInsecure == false && req.CaCertPath == "" {
-		return nil, errors.New("Provide the CA certificate path")
-	}
-
-	req.url = getMetricsURL(req.Host, req.Port, req.AllowInsecure)
 	req.allowInsecure = req.AllowInsecure
 	req.cacertpath = &req.CaCertPath
-
+	req.url = getMetricsURL(req.Host, req.Port, req.allowInsecure)
 	scraped, err := scrapeMetrics(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to query metrics")

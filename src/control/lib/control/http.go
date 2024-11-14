@@ -128,9 +128,14 @@ func httpGetBodyRetry(ctx context.Context, req httpGetter) ([]byte, error) {
 	return result, err
 }
 
-// httpsGetFunc will prepare the GET requested using the certificate for secure mode
+// httpsSecureGetFunc will prepare the GET requested using the certificate for secure mode
 // and return the http.Get
-func httpsGetFunc(cert []byte) (httpGetFn, error) {
+func httpsSecureGetFunc(cacertpath string) (httpGetFn, error) {
+	cert, err := ioutil.ReadFile(cacertpath)
+	if err != nil {
+		return nil, errors.Wrap(err, "reading CA certificate file Error")
+	}
+
 	caCertPool := x509.NewCertPool()
 	result := caCertPool.AppendCertsFromPEM(cert)
 	if !result {
@@ -150,6 +155,22 @@ func httpsGetFunc(cert []byte) (httpGetFn, error) {
 	return client.Get, nil
 }
 
+// httpsInsecureGetFunc will prepare the GET requested without certificate for secure mode
+// and return the http.Get
+func httpsInsecureGetFunc() httpGetFn {
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: true,
+	}
+
+	tr := &http.Transport{
+		TLSClientConfig: tlsConfig,
+	}
+
+	client := &http.Client{Transport: tr}
+
+	return client.Get
+}
+
 // httpGetBody executes a simple HTTP GET request to a given URL and returns the
 // content of the response body.
 func httpGetBody(ctx context.Context, url *url.URL, get httpGetFn, timeout time.Duration, allowInsecure bool, cacertpath *string) ([]byte, error) {
@@ -165,19 +186,15 @@ func httpGetBody(ctx context.Context, url *url.URL, get httpGetFn, timeout time.
 		return nil, errors.New("nil get function")
 	}
 
-	if !allowInsecure {
-		if cacertpath == nil {
-			return nil, errors.New("Provide the CA certificate path")
-		}
-
-		cert, err := ioutil.ReadFile(*cacertpath)
-		if err != nil {
-			return nil, errors.Wrap(err, "reading CA certificate file Error")
-		}
-
-		get, err = httpsGetFunc(cert)
-		if err != nil {
-			return nil, errors.Wrap(err, "https GET request failed")
+	if allowInsecure == false {
+		if cacertpath == nil || *cacertpath == "" {
+			get = httpsInsecureGetFunc()
+		} else {
+			var err error
+			get, err = httpsSecureGetFunc(*cacertpath)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -186,7 +203,6 @@ func httpGetBody(ctx context.Context, url *url.URL, get httpGetFn, timeout time.
 
 	respChan := make(chan *http.Response)
 	errChan := make(chan error)
-
 	go func() {
 		httpResp, err := get(url.String())
 		if err != nil {

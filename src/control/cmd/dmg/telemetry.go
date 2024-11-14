@@ -338,16 +338,31 @@ func (cmd *metricsListCmd) Execute(args []string) error {
 	req := new(control.MetricsListReq)
 	req.Port = cmd.Port
 	req.Host = host
-	req.AllowInsecure = cmd.cfgCmd.config.TelemetryConfig.AllowInsecure
 	req.CaCertPath = cmd.cfgCmd.config.TelemetryConfig.CARootPath
 
 	if !cmd.JSONOutputEnabled() {
 		cmd.Info(getConnectingMsg(req.Host, req.Port))
 	}
 
+	// Trying Secure Mode First, It will ignore the certificate if it's not provided
+	// or request with the certificate.
+	req.AllowInsecure = false
+	if req.CaCertPath == "" {
+		cmd.Debug("Trying Secure Mode (HTTPS) first, ignoring certificate")
+	} else {
+		cmd.Debug("Trying Secure Mode (HTTPS) first with certificate")
+	}
+
 	resp, err := control.MetricsList(cmd.MustLogCtx(), req)
 	if err != nil {
-		return err
+		cmd.Errorf("Secure Mode (HTTPS) failed: %s", err.Error())
+		//Trying Insecure Mode
+		req.AllowInsecure = !req.AllowInsecure
+		cmd.Debug("Trying Insecure Mode (HTTP)")
+		resp, err = control.MetricsList(cmd.MustLogCtx(), req)
+		if err != nil {
+			return err
+		}
 	}
 
 	if cmd.JSONOutputEnabled() {
@@ -396,7 +411,6 @@ func (cmd *metricsQueryCmd) Execute(args []string) error {
 	req := new(control.MetricsQueryReq)
 	req.Port = cmd.Port
 	req.Host = host
-	req.AllowInsecure = cmd.cfgCmd.config.TelemetryConfig.AllowInsecure
 	req.CaCertPath = cmd.cfgCmd.config.TelemetryConfig.CARootPath
 	req.MetricNames = common.TokenizeCommaSeparatedString(cmd.Metrics)
 
@@ -404,9 +418,25 @@ func (cmd *metricsQueryCmd) Execute(args []string) error {
 		cmd.Info(getConnectingMsg(req.Host, req.Port))
 	}
 
+	// Trying Secure Mode First, It will ignore the certificate if it's not provided
+	// or request with the certificate.
+	req.AllowInsecure = false
+	if req.CaCertPath == "" {
+		cmd.Debug("Trying Secure Mode (HTTPS) first, ignoring certificate")
+	} else {
+		cmd.Debug("Trying Secure Mode (HTTPS) first with certificate")
+	}
+
 	resp, err := control.MetricsQuery(cmd.MustLogCtx(), req)
 	if err != nil {
-		return err
+		cmd.Errorf("Secure Mode (HTTPS) failed: %s", err.Error())
+		//Trying Insecure Mode
+		req.AllowInsecure = !req.AllowInsecure
+		cmd.Debug("Trying Insecure Mode (HTTP)")
+		resp, err = control.MetricsQuery(cmd.MustLogCtx(), req)
+		if err != nil {
+			return err
+		}
 	}
 
 	if cmd.JSONOutputEnabled() {

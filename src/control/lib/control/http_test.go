@@ -198,10 +198,9 @@ func TestControl_httpGetBody(t *testing.T) {
 			getFn: func(_ string) (*http.Response, error) {
 				return &http.Response{
 					StatusCode: http.StatusOK,
-					Body:       newMockReadCloser("this is the body of an HTTP response"),
 				}, nil
 			},
-			expErr: errors.New("Provide the CA certificate path"),
+			expErr: errors.New("Get \"//testhost\": unsupported protocol scheme"),
 		},
 		"failure with body in secure mode with bad CA certificate": {
 			url:           defaultURL,
@@ -210,7 +209,6 @@ func TestControl_httpGetBody(t *testing.T) {
 			getFn: func(_ string) (*http.Response, error) {
 				return &http.Response{
 					StatusCode: http.StatusOK,
-					Body:       newMockReadCloser("this is the body of an HTTP response"),
 				}, nil
 			},
 			expErr: errors.New("Get \"//testhost\": unsupported protocol scheme"),
@@ -222,7 +220,6 @@ func TestControl_httpGetBody(t *testing.T) {
 			getFn: func(_ string) (*http.Response, error) {
 				return &http.Response{
 					StatusCode: http.StatusOK,
-					Body:       newMockReadCloser("this is the body of an HTTP response"),
 				}, nil
 			},
 			expErr: errors.New("reading CA certificate file Error: open wrongpath/notavailable.crt: no such file or directory"),

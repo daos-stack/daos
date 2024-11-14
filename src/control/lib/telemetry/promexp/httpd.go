@@ -85,7 +85,6 @@ func StartExporter(ctx context.Context, log logging.Logger, cfg *ExporterConfig)
 	// http listener is a blocking call
 	go func() {
 		log.Infof("Listening on %s", listenAddress)
-		log.Infof("cfg.AllowInsecure %s", cfg.AllowInsecure)
 		if cfg.AllowInsecure {
 			log.Infof("Prometheus web exporter started with insecure (http) mode")
 			err := srv.ListenAndServe()

@@ -596,7 +596,6 @@ telemetry_config:
   allow_insecure: true
   https_cert: /etc/daos/certs/telemetry.crt
   https_key: /etc/daos/certs/telemetry.key
-  ca_cert: /etc/daos/certs/daosTelemetryCA.crt
 core_dump_filter: 19
 name: daos_server
 socket_dir: /var/run/daos_server
