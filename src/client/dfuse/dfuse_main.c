@@ -166,6 +166,7 @@ dfuse_bg(struct dfuse_info *dfuse_info)
  *
  * Should be called from the post_start plugin callback and creates
  * a filesystem.
+ * Returns a DAOS error code.
  * Returns true on success, false on failure.
  */
 int
@@ -204,18 +205,17 @@ dfuse_launch_fuse(struct dfuse_info *dfuse_info, struct fuse_args *args)
 		DFUSE_TRA_ERROR(dfuse_info, "Error sending signal to fg: "DF_RC, DP_RC(rc));
 
 	/* Blocking */
-	if (dfuse_info->di_threaded)
-		rc = dfuse_loop(dfuse_info);
-	else
-		rc = fuse_session_loop(dfuse_info->di_session);
-	if (rc != 0)
+	rc = dfuse_loop(dfuse_info);
+	if (rc != 0) {
 		DHS_ERROR(dfuse_info, rc, "Fuse loop exited");
+		rc = daos_errno2der(rc);
+	}
 
 umount:
 
 	fuse_session_unmount(dfuse_info->di_session);
 
-	return daos_errno2der(rc);
+	return rc;
 }
 
 #define DF_POOL_PREFIX "pool="
@@ -279,7 +279,6 @@ show_help(char *name)
 	    "	   --path=<path>	Path to load UNS pool/container data\n"
 	    "	   --sys-name=STR	DAOS system name context for servers\n"
 	    "\n"
-	    "	-S --singlethread	Single threaded (deprecated)\n"
 	    "	-t --thread-count=count	Total number of threads to use\n"
 	    "	-e --eq-count=count	Number of event queues to use\n"
 	    "	-f --foreground		Run in foreground\n"
@@ -427,7 +426,6 @@ main(int argc, char **argv)
 					     {"pool", required_argument, 0, 'p'},
 					     {"container", required_argument, 0, 'c'},
 					     {"sys-name", required_argument, 0, 'G'},
-					     {"singlethread", no_argument, 0, 'S'},
 					     {"thread-count", required_argument, 0, 't'},
 					     {"eq-count", required_argument, 0, 'e'},
 					     {"foreground", no_argument, 0, 'f'},
@@ -453,13 +451,12 @@ main(int argc, char **argv)
 	if (dfuse_info == NULL)
 		D_GOTO(out_debug, rc = -DER_NOMEM);
 
-	dfuse_info->di_threaded = true;
 	dfuse_info->di_caching  = true;
 	dfuse_info->di_wb_cache = true;
 	dfuse_info->di_eq_count = 1;
 
 	while (1) {
-		c = getopt_long(argc, argv, "Mm:St:o:fhe:s:N:v", long_options, NULL);
+		c = getopt_long(argc, argv, "Mm:t:o:fhe:s:N:v", long_options, NULL);
 
 		if (c == -1)
 			break;
@@ -496,13 +493,6 @@ main(int argc, char **argv)
 			break;
 		case 'P':
 			path = optarg;
-			break;
-		case 'S':
-			/* Set it to be single threaded, but allow an extra one
-			 * for the event queue processing
-			 */
-			dfuse_info->di_threaded     = false;
-			dfuse_info->di_thread_count = 2;
 			break;
 		case 'e':
 			dfuse_info->di_eq_count = atoi(optarg);
@@ -581,7 +571,7 @@ main(int argc, char **argv)
 	 * check CPU binding.  If bound to a number of cores then launch that number of threads,
 	 * if not bound them limit to 16.
 	 */
-	if (dfuse_info->di_threaded && !have_thread_count) {
+	if (!have_thread_count) {
 		struct hwloc_topology *hwt;
 		hwloc_const_cpuset_t   hw;
 		int                    total;

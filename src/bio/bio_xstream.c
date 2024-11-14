@@ -20,6 +20,7 @@
 #include <spdk/blob_bdev.h>
 #include <spdk/blob.h>
 #include <spdk/rpc.h>
+#include <spdk/env_dpdk.h>
 #include "bio_internal.h"
 #include <daos_srv/smd.h>
 
@@ -174,7 +175,9 @@ bio_spdk_env_init(void)
 	if (geteuid() != 0) {
 		opts.iova_mode = "va"; // workaround for spdk issue #2683 when running as non-root
 	}
-	rc = spdk_env_init(&opts);
+
+	/* Don't pass opt for reinitialization, otherwise it will fail */
+	rc = spdk_env_init(spdk_env_dpdk_external_init() ? &opts : NULL);
 	if (rc != 0) {
 		rc = -DER_INVAL; /* spdk_env_init() returns -1 */
 		D_ERROR("Failed to initialize SPDK env, "DF_RC"\n", DP_RC(rc));

@@ -441,6 +441,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	daos_prop_t		*base_props = NULL;
 	uint8_t			*body;
 	size_t			 len;
+	size_t                   scm_bytes;
 	int			 rc;
 
 	/* Unpack the inner request from the drpc call body */
@@ -495,13 +496,20 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 
 	/**
-	 * Ranks to allocate targets (in) & svc for pool replicas (out). Meta-blob size set equal
-	 * to SCM size for MD-on-SSD phase 1.
+	 * Ranks to allocate targets (in) & svc for pool replicas (out). Mapping of tier_bytes in
+	 * MD-on-SSD mode is (tier0*mem_ratio)->scm_bytes (mem-file-size), tier0->meta_size and
+	 * tier1->nvme_size (data_size).
 	 */
-	rc = ds_mgmt_create_pool(pool_uuid, req->sys, "pmem", targets,
-				 req->tier_bytes[DAOS_MEDIA_SCM], req->tier_bytes[DAOS_MEDIA_NVME],
-				 prop, &svc, req->n_fault_domains, req->fault_domains,
-				 req->tier_bytes[DAOS_MEDIA_SCM]);
+
+	scm_bytes = req->tier_bytes[DAOS_MEDIA_SCM];
+	// Derive scm bytes from meta bytes (tier-0) and mem-ratio.
+	if (req->mem_ratio)
+		scm_bytes *= (double)req->mem_ratio;
+
+	rc = ds_mgmt_create_pool(pool_uuid, req->sys, targets, scm_bytes,
+				 req->tier_bytes[DAOS_MEDIA_NVME] /* nvme_size */,
+				 req->tier_bytes[DAOS_MEDIA_SCM] /* meta_size */, prop, &svc,
+				 req->n_fault_domains, req->fault_domains);
 	if (rc != 0) {
 		D_ERROR("failed to create pool: "DF_RC"\n", DP_RC(rc));
 		goto out;
@@ -509,6 +517,14 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	rc = pool_create_fill_resp(&resp, pool_uuid, svc);
 	d_rank_list_free(svc);
+
+	/**
+	 * TODO DAOS-16209: Populate per-rank VOS-file sizes. For now just calculate here based on
+	 *                  the supplied input values but really should be returned from
+	 *                  ds_mgmt_pool_query() through the VOS query API and set in
+	 *                  pool_create_fill_resp(). Return zero for non-MD-on-SSD mode.
+	 */
+	resp.mem_file_bytes = req->tier_bytes[DAOS_MEDIA_SCM] * req->mem_ratio;
 
 out:
 	resp.status = rc;
@@ -696,7 +712,7 @@ out:
 static int
 pool_change_target_state(char *id, d_rank_list_t *svc_ranks, size_t n_target_idx,
 			 uint32_t *target_idx, uint32_t rank, pool_comp_state_t state,
-			 size_t scm_size, size_t nvme_size)
+			 size_t scm_size, size_t nvme_size, size_t meta_size)
 {
 	uuid_t				uuid;
 	struct pool_target_addr_list	target_addr_list;
@@ -725,7 +741,7 @@ pool_change_target_state(char *id, d_rank_list_t *svc_ranks, size_t n_target_idx
 	}
 
 	rc = ds_mgmt_pool_target_update_state(uuid, svc_ranks, &target_addr_list, state, scm_size,
-					      nvme_size);
+					      nvme_size, meta_size);
 	if (rc != 0) {
 		D_ERROR("Failed to set pool target up "DF_UUID": "DF_RC"\n",
 			DP_UUID(uuid), DP_RC(rc));
@@ -765,7 +781,7 @@ ds_mgmt_drpc_pool_exclude(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	rc = pool_change_target_state(req->id, svc_ranks, req->n_target_idx, req->target_idx,
 				      req->rank, PO_COMP_ST_DOWN, 0 /* scm_size */,
-				      0 /* nvme_size */);
+				      0 /* nvme_size */, 0 /* meta_size */);
 
 	d_rank_list_free(svc_ranks);
 
@@ -814,7 +830,7 @@ ds_mgmt_drpc_pool_drain(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	rc = pool_change_target_state(req->id, svc_ranks, req->n_target_idx, req->target_idx,
 				      req->rank, PO_COMP_ST_DRAIN, 0 /* scm_size */,
-				      0 /* nvme_size */);
+				      0 /* nvme_size */, 0 /* meta_size */);
 
 	d_rank_list_free(svc_ranks);
 
@@ -865,9 +881,11 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 
 	scm_bytes = req->tier_bytes[DAOS_MEDIA_SCM];
-	if (req->n_tier_bytes > DAOS_MEDIA_NVME) {
+	// Derive scm bytes from meta bytes (tier-0) and mem-ratio.
+	if (req->mem_ratio)
+		scm_bytes *= (double)req->mem_ratio;
+	if (req->n_tier_bytes > DAOS_MEDIA_NVME)
 		nvme_bytes = req->tier_bytes[DAOS_MEDIA_NVME];
-	}
 
 	if (uuid_parse(req->id, uuid) != 0) {
 		rc = -DER_INVAL;
@@ -883,9 +901,9 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (svc_ranks == NULL)
 		D_GOTO(out_list, rc = -DER_NOMEM);
 
-	rc = ds_mgmt_pool_extend(uuid, svc_ranks, rank_list, "pmem", scm_bytes, nvme_bytes,
+	rc = ds_mgmt_pool_extend(uuid, svc_ranks, rank_list, scm_bytes, nvme_bytes,
+				 req->tier_bytes[DAOS_MEDIA_SCM] /* meta_size */,
 				 req->n_fault_domains, req->fault_domains);
-
 	if (rc != 0)
 		D_ERROR("Failed to extend pool %s: "DF_RC"\n", req->id,
 			DP_RC(rc));
@@ -948,16 +966,19 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 
 	scm_bytes = req->tier_bytes[DAOS_MEDIA_SCM];
-	if (req->n_tier_bytes > DAOS_MEDIA_NVME) {
+	// Derive scm bytes from meta bytes (tier-0) and mem-ratio.
+	if (req->mem_ratio)
+		scm_bytes *= (double)req->mem_ratio;
+	if (req->n_tier_bytes > DAOS_MEDIA_NVME)
 		nvme_bytes = req->tier_bytes[DAOS_MEDIA_NVME];
-	}
 
 	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
 	if (svc_ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	rc = pool_change_target_state(req->id, svc_ranks, req->n_target_idx, req->target_idx,
-				      req->rank, PO_COMP_ST_UP, scm_bytes, nvme_bytes);
+				      req->rank, PO_COMP_ST_UP, scm_bytes, nvme_bytes,
+				      req->tier_bytes[DAOS_MEDIA_SCM] /* meta_size */);
 
 	d_rank_list_free(svc_ranks);
 
@@ -1830,6 +1851,13 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	pool_rebuild_status_from_info(&rebuild, &pool_info.pi_rebuild_st);
 	resp.rebuild = &rebuild;
+
+	/**
+	 * TODO DAOS-16209: Populate VOS-file sizes in response. For now just return the meta-blob
+	 *                  size until VOS query API is updated. When updated, zero-value should
+	 *                  be returned in non-MD-on-SSD mode.
+	 */
+	resp.mem_file_bytes = scm.total;
 
 error:
 	resp.status = rc;
