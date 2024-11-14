@@ -61,8 +61,6 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_f
 	if (atomic_load_relaxed(&oh->doh_il_calls) != 0)
 		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_il_count, 1);
 
-	active_oh_decref(oh);
-
 	DFUSE_TRA_DEBUG(oh, "Kernel cache flags invalid %d started %d finished %d",
 			oh->doh_kreaddir_invalid, oh->doh_kreaddir_started,
 			oh->doh_kreaddir_finished);
@@ -73,6 +71,8 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_f
 	}
 
 	dfuse_dre_drop(dfuse_info, oh);
+
+	active_oh_decref(oh);
 
 	if (oh->doh_evict_on_close) {
 		ie = oh->doh_ie;

@@ -323,7 +323,7 @@ struct dfuse_readdir_hdl {
 	/* Starts at true and set to false if a directory is modified when open.  Prevents new
 	 * readers from sharing the handle
 	 */
-	bool                       drh_valid;
+	ATOMIC bool                drh_valid;
 
 	/* Locking:
 	 * There can be multiple readers from the same handle concurrently, to do this use
@@ -986,9 +986,6 @@ struct dfuse_inode_entry {
 	/* Number of file open file descriptors using IL */
 	ATOMIC uint32_t           ie_il_count;
 
-	/* Readdir handle, if present.  May be shared */
-	struct dfuse_readdir_hdl *ie_rd_hdl;
-
 	/** file was truncated from 0 to a certain size */
 	bool                      ie_truncated;
 
@@ -1018,6 +1015,8 @@ struct dfuse_inode_entry {
 struct active_inode {
 	d_list_t           chunks;
 	pthread_spinlock_t lock;
+	/* Readdir handle, if present.  May be shared */
+	struct dfuse_readdir_hdl *rd_hdl;
 };
 
 /* Increase active count on inode.  This takes a reference and allocates ie->active as required */
@@ -1125,7 +1124,7 @@ dfuse_compute_inode(struct dfuse_cont *dfs,
  * unlink or rename
  */
 void
-dfuse_cache_evict_dir(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie);
+dfuse_cache_evict_dir(struct dfuse_inode_entry *ie);
 
 /* Free any read chunk data for an inode.
  *

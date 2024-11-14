@@ -43,6 +43,27 @@ out:
 	return rc;
 }
 
+/* Mark a directory change so that any cache can be evicted.  The kernel pagecache is already
+ * wiped on unlink if the directory isn't open, if it is then already open handles will return
+ * the unlinked file, and a inval() call here does not change that.
+ */
+void
+dfuse_cache_evict_dir(struct dfuse_inode_entry *ie)
+{
+	D_MUTEX_LOCK(&alock);
+	if (ie->ie_active) {
+		DFUSE_TRA_DEBUG(ie, "Directory change whilst open");
+
+		if (ie->ie_active->rd_hdl) {
+			DFUSE_TRA_DEBUG(ie, "Setting shared readdir handle as invalid");
+			atomic_store_relaxed(&ie->ie_active->rd_hdl->drh_valid, false);
+		}
+	}
+	D_MUTEX_UNLOCK(&alock);
+
+	dfuse_cache_evict(ie);
+}
+
 static void
 ah_free(struct dfuse_inode_entry *ie)
 {
