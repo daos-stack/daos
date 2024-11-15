@@ -58,7 +58,7 @@ atfork_handler(void)
 {
 	int rc = daos_reinit();
 	if (rc) {
-		D_WARN("daos_reinit() failed in child process %s (rc=%d)", d_errstr(rc), rc);
+		D_ERROR("daos_reinit() failed in child process %s (rc=%d)", d_errstr(rc), rc);
 	}
 }
 
@@ -86,13 +86,14 @@ static PyObject *
 __shim_handle__module_fini(PyObject *self, PyObject *args)
 {
 	int rc = daos_fini();
+	/* This is only for NLT tests when agent stops before python unloads the module.
+	   Should be removed once NLT tests replaced by functional tests
+	 */
+	if (rc == -DER_UNINIT) {
+		rc = 0;
+	}
 	if (rc) {
 		rc = daos_der2errno(rc);
-	}
-	if (rc == EBUSY) {
-		/* Most likely module is shared via python multiprocessing.
-		 * The last one will free the resources */
-		rc = 0;
 	}
 
 	return PyLong_FromLong(rc);
@@ -120,12 +121,6 @@ __shim_handle__torch_connect(PyObject *self, PyObject *args)
 		goto out;
 	}
 	hdl->flags = rd_only ? O_RDONLY : O_RDWR;
-
-	rc = daos_init();
-	if (rc && rc != -DER_ALREADY) {
-		rc = daos_der2errno(rc);
-		goto out;
-	}
 
 	rc = dfs_init();
 	if (rc) {
@@ -162,7 +157,7 @@ __shim_handle__torch_connect(PyObject *self, PyObject *args)
 
 	rc = daos_eq_create(&hdl->eq);
 	if (rc) {
-		D_WARN("Could not create event queue: %s (rc=%d)", d_errstr(rc), rc);
+		D_ERROR("Could not create event queue: %s (rc=%d)", d_errstr(rc), rc);
 		rc = daos_der2errno(rc);
 		goto out;
 	}
@@ -209,21 +204,10 @@ __shim_handle__torch_disconnect(PyObject *self, PyObject *args)
 		goto out;
 	}
 
-	/* EBUSY errors are due to module sharing via python multiprocessing.
-	 * The last process calling disconnect will free the resources */
 	rc = dfs_fini();
-	if (rc && rc != EBUSY) {
+	if (rc) {
 		D_ERROR("Could not finalize DFS: %s (rc=%d)", strerror(rc), rc);
 		goto out;
-	}
-
-	rc = daos_fini();
-	if (rc) {
-		rc = daos_der2errno(rc);
-	}
-	if (rc == EBUSY) {
-		/* Same as above: last process to call will free the resources */
-		rc = 0;
 	}
 
 out:
@@ -292,8 +276,11 @@ __shim_handle__torch_recommended_dir_split(PyObject *self, PyObject *args)
 	}
 
 	rc = dfs_obj_anchor_split(obj, &nr, NULL);
-	dfs_release(obj);
+	if (rc) {
+		return PyLong_FromLong(-rc);
+	}
 
+	rc = dfs_release(obj);
 	if (rc) {
 		return PyLong_FromLong(-rc);
 	}
@@ -400,7 +387,7 @@ out:
 	D_FREE(stats);
 
 	if (obj) {
-		dfs_release(obj);
+		rc = dfs_release(obj);
 	}
 
 	return PyLong_FromLong(rc);
@@ -460,12 +447,10 @@ __shim_handle__torch_read(PyObject *self, PyObject *args)
 
 	rc = dfs_read(hdl->dfs, obj, &sgl, 0 /* offset */, &read, NULL);
 	if (rc) {
-		rc = -rc;
 		goto out;
 	}
-	rc = read;
 	if (read != bview.len) {
-		rc = -EIO;
+		rc = EIO;
 	}
 
 out:
@@ -476,6 +461,8 @@ out:
 		if (rc2) {
 			D_ERROR("Could not release object '%s': %s (rc=%d)", path, strerror(rc2),
 				rc2);
+			if (rc == 0)
+				rc = rc2;
 		}
 	}
 
@@ -493,7 +480,6 @@ struct io_op {
 	const char  *path;
 
 	daos_size_t  size;
-	int          err;
 
 	d_iov_t      iov;
 	d_sg_list_t  sgl;
@@ -508,29 +494,30 @@ start_read_op(struct dfs_handle *hdl, PyObject *item, struct io_op *op)
 	assert(op != NULL);
 
 	int           rc  = 0;
+	int           rc2 = 0;
 	daos_event_t *evp = &op->ev;
 
 	PyObject     *py_path = PyTuple_GetItem(item, 0);
 	PyObject     *py_buff = PyTuple_GetItem(item, 1);
 
 	if (py_path == NULL || py_buff == NULL) {
-		D_WARN("Each tuple must contain exactly two elements: path and bytearray");
+		D_ERROR("Each tuple must contain exactly two elements: path and bytearray");
 		return EINVAL;
 	}
 
 	const char *path = PyUnicode_AsUTF8(py_path);
 	if (path == NULL) {
-		D_WARN("First element of a tuple does not look like a path");
+		D_ERROR("First element of a tuple does not look like a path");
 		return EINVAL;
 	}
 
 	if (PyObject_GetBuffer(py_buff, &op->buf_view, PyBUF_WRITE) == -1) {
-		D_WARN("Buffer is not writable");
+		D_ERROR("Buffer is not writable");
 		return EINVAL;
 	}
 
 	if (!PyBuffer_IsContiguous(&op->buf_view, 'C')) {
-		D_WARN("Buffer for '%s' is not contiguous", path);
+		D_ERROR("Buffer for '%s' is not contiguous", path);
 		rc = EINVAL;
 		goto out;
 	}
@@ -568,7 +555,7 @@ start_read_op(struct dfs_handle *hdl, PyObject *item, struct io_op *op)
 out:
 	PyBuffer_Release(&op->buf_view);
 
-	int rc2 = daos_event_fini(&op->ev);
+	rc2 = daos_event_fini(&op->ev);
 	if (rc2) {
 		D_ERROR("Could not finalize event: %s (rc=%d)", d_errstr(rc2), rc2);
 	}
@@ -588,31 +575,38 @@ out:
 static int
 complete_read_op(struct dfs_handle *hdl, struct io_op *op)
 {
+	int rc  = 0;
+	int rc2 = 0;
+
 	assert(op != NULL);
 
 	D_DEBUG(DB_ANY, "READ of %zu bytes from '%s' completed with  status: %s (rc = %d)",
 		op->size, op->path, d_errstr(op->ev.ev_error), op->ev.ev_error);
 
-	int rc = dfs_release(op->obj);
-	if (rc) {
-		D_WARN("Could not release object handler %s: %s (rc=%d)", op->path, strerror(rc),
-		       rc);
+	rc = op->ev.ev_error;
+	if (rc == 0 && op->size != op->buf_view.len) {
+		rc = EIO;
+	}
+
+	rc2 = daos_event_fini(&op->ev);
+	if (rc2) {
+		D_ERROR("Could not finalize event handler of '%s': %s (rc=%d)", op->path,
+			d_errstr(rc2), rc2);
+		if (rc == 0)
+			rc = rc2;
+	}
+
+	rc2 = dfs_release(op->obj);
+	if (rc2) {
+		D_ERROR("Could not release object handler %s: %s (rc=%d)", op->path, strerror(rc2),
+			rc2);
+		if (rc == 0)
+			rc = rc2;
 	}
 	op->obj = NULL;
-	op->err = op->ev.ev_error;
-
-	if (op->err == 0 && op->size != op->buf_view.len) {
-		op->err = EIO;
-	}
-
-	rc = daos_event_fini(&op->ev);
-	if (rc) {
-		D_WARN("Could not finalize event handler of '%s': %s (rc=%d)", op->path,
-		       d_errstr(rc), rc);
-	}
 
 	PyBuffer_Release(&op->buf_view);
-	return 0;
+	return rc;
 }
 
 /*

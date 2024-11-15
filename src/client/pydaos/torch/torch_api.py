@@ -358,8 +358,8 @@ class _Dfs():
 
         buf = bytearray(size)
         ret = torch_shim.torch_read(DAOS_MAGIC, self._dfs, path, buf)
-        if ret < 0:
-            raise OSError(-ret, os.strerror(-ret), path)
+        if ret != 0:
+            raise OSError(ret, os.strerror(ret), path)
 
         return buf
 
