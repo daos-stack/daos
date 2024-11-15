@@ -2010,6 +2010,12 @@ class needs_dfuse_with_opt():
                               'dfuse-dentry-dir-time': '5m',
                               'dfuse-ndentry-time': '5m'}
                 obj.container.set_attrs(cont_attrs)
+            elif caching:
+                cont_attrs = {'dfuse-attr-time': '1m',
+                              'dfuse-dentry-time': '1m',
+                              'dfuse-dentry-dir-time': '1m',
+                              'dfuse-ndentry-time': '1m'}
+                obj.container.set_attrs(cont_attrs)
 
             if self.ro:
                 args["ro"] = True
@@ -3372,7 +3378,7 @@ class PosixTests():
         print(os.listdir(self.dfuse.dir))
         print(os.listdir(dfuse.dir))
 
-        # Rename file 0 to file 0 in the background, this will remove file 1
+        # Rename file 0 to file 1 in the background, this will remove the old file 1
         os.rename(join(dfuse.dir, 'file.0'), join(dfuse.dir, 'file.1'))
 
         # Perform the unlink, this will unlink the other file.
@@ -3388,6 +3394,45 @@ class PosixTests():
 
         for fd in fds:
             fd.close()
+
+    @needs_dfuse_with_opt(caching_variants=[False])
+    def test_create_exists(self):
+        """Test creating a file.
+
+        This tests for create where the dentry being created already exists and is a file that's
+        known to dfuse.
+
+        To do this make a file in dfuse, use a back channel to rename it and then create a file
+        using the new name."""
+
+        filename = join(self.dfuse.dir, 'myfile')
+
+        with open(filename, 'w') as fd:
+            fd.write('hello')
+
+        filename = join(self.dfuse.dir, 'newfile')
+        try:
+            os.stat(filename)
+            raise NLTestFail("File exists")
+        except FileNotFoundError:
+            pass
+
+        # Start another dfuse instance to move the files around without the kernel knowing.
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      container=self.container,
+                      caching=False)
+        dfuse.start(v_hint='create_exists_1')
+
+        os.rename(join(dfuse.dir, 'myfile'), join(dfuse.dir, 'newfile'))
+
+        filename = join(self.dfuse.dir, 'newfile')
+
+        with open(filename, 'w') as fd:
+            fd.write('hello')
+
+        if dfuse.stop():
+            self.fatal_errors = True
 
     def test_cont_rw(self):
         """Test write access to another users container"""

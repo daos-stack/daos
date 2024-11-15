@@ -376,6 +376,8 @@ struct vos_container {
 	daos_epoch_range_t	vc_epr_aggregation;
 	/* Current ongoing discard EPR */
 	daos_epoch_range_t	vc_epr_discard;
+	/* Last timestamp when VOS aggregation reports -DER_TX_BUSY */
+	uint64_t		vc_agg_busy_ts;
 	/* Last timestamp when VOS aggregation reporting ENOSPACE */
 	uint64_t		vc_agg_nospc_ts;
 	/* Last timestamp when IO reporting ENOSPACE */
@@ -1403,6 +1405,12 @@ int
 gc_open_cont(struct vos_container *cont);
 void
 gc_close_cont(struct vos_container *cont);
+
+struct vos_bkt_iter {
+	uint32_t	bi_bkt_tot;
+	uint32_t	bi_bkt_cur;
+	uint8_t		bi_skipped[0];
+};
 
 /**
  * If the object is fully punched, bypass normal aggregation and move it to container

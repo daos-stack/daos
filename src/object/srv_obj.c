@@ -2362,8 +2362,9 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc,
 {
 	if (opc == DAOS_OBJ_RPC_ENUMERATE && flags & ORF_FOR_MIGRATION) {
 		if (child->sc_ec_agg_active) {
-			D_ERROR(DF_UUID" ec aggregate still active\n",
-				DP_UUID(child->sc_pool->spc_uuid));
+			D_ERROR(DF_CONT" ec aggregate still active, rebuilding %d\n",
+				DP_CONT(child->sc_pool->spc_uuid, child->sc_uuid),
+				child->sc_pool->spc_pool->sp_rebuilding);
 			return -DER_UPDATE_AGAIN;
 		}
 	}
@@ -2953,8 +2954,11 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 		d_tm_inc_counter(opm->opm_update_resent, 1);
 
-again1:
-		e = 0;
+again:
+		if (flags & ORF_RESEND)
+			e = orw->orw_epoch;
+		else
+			e = 0;
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_dti,
 				       &e, &version);
 		switch (rc) {
@@ -2965,8 +2969,13 @@ again1:
 			orw->orw_epoch = e;
 			/* TODO: Also recover the epoch uncertainty. */
 			break;
+		case -DER_MISMATCH:
+			rc = vos_dtx_abort(ioc.ioc_vos_coh, &orw->orw_dti, e);
+			if (rc < 0 && rc != -DER_NONEXIST)
+				D_GOTO(out, rc);
+			/* Fall through */
 		case -DER_NONEXIST:
-			rc = 0;
+			flags = 0;
 			break;
 		default:
 			D_GOTO(out, rc);
@@ -2976,7 +2985,6 @@ again1:
 		D_GOTO(out, rc);
 	}
 
-again2:
 	/* For leader case, we need to find out the potential conflict
 	 * (or share the same non-committed object/dkey) DTX(s) in the
 	 * CoS (committable) cache, piggyback them via the dispdatched
@@ -3021,7 +3029,7 @@ again2:
 
 	exec_arg.rpc = rpc;
 	exec_arg.ioc = &ioc;
-	exec_arg.flags = flags;
+	exec_arg.flags |= flags;
 	exec_arg.start = orw->orw_start_shard;
 
 	/* Execute the operation on all targets */
@@ -3036,28 +3044,25 @@ again2:
 	case -DER_TX_RESTART:
 		/*
 		 * If this is a standalone operation, we can restart the
-		 * internal transaction right here. Otherwise, we have to defer
-		 * the restart to the RPC client.
+		 * internal transaction right here. Otherwise we have to
+		 * defer the restart to the RPC sponsor.
 		 */
-		if (opc == DAOS_OBJ_RPC_UPDATE) {
-			/*
-			 * Only standalone updates use this RPC. Retry with
-			 * newer epoch.
-			 */
-			orw->orw_epoch = d_hlc_get();
-			orw->orw_flags &= ~ORF_RESEND;
-			flags = 0;
-			d_tm_inc_counter(opm->opm_update_restart, 1);
-			goto again2;
-		}
+		if (opc != DAOS_OBJ_RPC_UPDATE)
+			break;
 
-		break;
+		/* Only standalone updates use this RPC. Retry with newer epoch. */
+		orw->orw_epoch = d_hlc_get();
+		exec_arg.flags |= ORF_RESEND;
+		flags = ORF_RESEND;
+		d_tm_inc_counter(opm->opm_update_restart, 1);
+		goto again;
 	case -DER_AGAIN:
-		orw->orw_flags |= ORF_RESEND;
 		need_abort = true;
+		exec_arg.flags |= ORF_RESEND;
+		flags = ORF_RESEND;
 		d_tm_inc_counter(opm->opm_update_retry, 1);
 		ABT_thread_yield();
-		goto again1;
+		goto again;
 	default:
 		break;
 	}
@@ -3875,8 +3880,11 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	if (opi->opi_flags & ORF_RESEND) {
 		daos_epoch_t	e;
 
-again1:
-		e = 0;
+again:
+		if (flags & ORF_RESEND)
+			e = opi->opi_epoch;
+		else
+			e = 0;
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &opi->opi_dti,
 				       &e, &version);
 		switch (rc) {
@@ -3887,8 +3895,13 @@ again1:
 			flags |= ORF_RESEND;
 			/* TODO: Also recovery the epoch uncertainty. */
 			break;
+		case -DER_MISMATCH:
+			rc = vos_dtx_abort(ioc.ioc_vos_coh, &opi->opi_dti, e);
+			if (rc < 0 && rc != -DER_NONEXIST)
+				D_GOTO(out, rc);
+			/* Fall through */
 		case -DER_NONEXIST:
-			rc = 0;
+			flags = 0;
 			break;
 		default:
 			D_GOTO(out, rc);
@@ -3898,7 +3911,6 @@ again1:
 		goto cleanup;
 	}
 
-again2:
 	/* For leader case, we need to find out the potential conflict
 	 * (or share the same non-committed object/dkey) DTX(s) in the
 	 * CoS (committable) cache, piggyback them via the dispdatched
@@ -3943,7 +3955,7 @@ again2:
 
 	exec_arg.rpc = rpc;
 	exec_arg.ioc = &ioc;
-	exec_arg.flags = flags;
+	exec_arg.flags |= flags;
 
 	/* Execute the operation on all shards */
 	if (opi->opi_api_flags & DAOS_COND_PUNCH)
@@ -3959,19 +3971,17 @@ again2:
 	rc = dtx_leader_end(dlh, ioc.ioc_coh, rc);
 	switch (rc) {
 	case -DER_TX_RESTART:
-		/*
-		 * Only standalone punches use this RPC. Retry with newer
-		 * epoch.
-		 */
+		/* Only standalone punches use this RPC. Retry with newer epoch. */
 		opi->opi_epoch = d_hlc_get();
-		opi->opi_flags &= ~ORF_RESEND;
-		flags = 0;
-		goto again2;
+		exec_arg.flags |= ORF_RESEND;
+		flags = ORF_RESEND;
+		goto again;
 	case -DER_AGAIN:
-		opi->opi_flags |= ORF_RESEND;
 		need_abort = true;
+		exec_arg.flags |= ORF_RESEND;
+		flags = ORF_RESEND;
 		ABT_thread_yield();
-		goto again1;
+		goto again;
 	default:
 		break;
 	}
@@ -5710,8 +5720,11 @@ ds_obj_coll_punch_handler(crt_rpc_t *rpc)
 
 	if (ocpi->ocpi_flags & ORF_RESEND) {
 
-again1:
-		tmp = 0;
+again:
+		if (!(ocpi->ocpi_flags & ORF_LEADER) || (flags & ORF_RESEND))
+			tmp = ocpi->ocpi_epoch;
+		else
+			tmp = 0;
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &ocpi->ocpi_xid, &tmp, &version);
 		switch (rc) {
 		case -DER_ALREADY:
@@ -5721,7 +5734,13 @@ again1:
 			flags |= ORF_RESEND;
 			/* TODO: Also recovery the epoch uncertainty. */
 			break;
+		case -DER_MISMATCH:
+			rc = vos_dtx_abort(ioc.ioc_vos_coh, &ocpi->ocpi_xid, tmp);
+			if (rc < 0 && rc != -DER_NONEXIST)
+				D_GOTO(out, rc);
+			/* Fall through */
 		case -DER_NONEXIST:
+			flags = 0;
 			break;
 		default:
 			D_GOTO(out, rc);
@@ -5730,7 +5749,6 @@ again1:
 		dce->dce_ver = version;
 	}
 
-again2:
 	epoch.oe_value = ocpi->ocpi_epoch;
 	epoch.oe_first = epoch.oe_value;
 	epoch.oe_flags = orf_to_dtx_epoch_flags(ocpi->ocpi_flags);
@@ -5742,7 +5760,7 @@ again2:
 
 	exec_arg.rpc = rpc;
 	exec_arg.ioc = &ioc;
-	exec_arg.flags = flags;
+	exec_arg.flags |= flags;
 	exec_arg.coll_shards = dcts[0].dct_shards;
 	exec_arg.coll_tgts = dcts;
 	obj_coll_disp_init(dct_nr, ocpi->ocpi_max_tgt_sz,
@@ -5775,14 +5793,15 @@ again2:
 	switch (rc) {
 	case -DER_TX_RESTART:
 		ocpi->ocpi_epoch = d_hlc_get();
-		ocpi->ocpi_flags &= ~ORF_RESEND;
-		flags = 0;
-		goto again2;
+		exec_arg.flags |= ORF_RESEND;
+		flags = ORF_RESEND;
+		goto again;
 	case -DER_AGAIN:
-		ocpi->ocpi_flags |= ORF_RESEND;
 		need_abort = true;
+		exec_arg.flags |= ORF_RESEND;
+		flags = ORF_RESEND;
 		ABT_thread_yield();
-		goto again1;
+		goto again;
 	default:
 		break;
 	}
@@ -5802,12 +5821,14 @@ out:
 		max_ver = version;
 
 	DL_CDEBUG(rc != 0 && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART, DLOG_ERR, DB_IO, rc,
-		  "(%s) handled collective punch RPC %p for obj "DF_UOID" on XS %u/%u epc "
-		  DF_X64" pmv %u/%u, with dti "DF_DTI", bulk_tgt_sz %u, bulk_tgt_nr %u, "
-		  "tgt_nr %u, forward width %u, forward depth %u, flags %x",
+		  "(%s) handled collective punch RPC %p for obj "DF_UOID" on XS %u/%u in "DF_UUID"/"
+		  DF_UUID"/"DF_UUID" with epc "DF_X64", pmv %u/%u, dti "DF_DTI", bulk_tgt_sz %u, "
+		  "bulk_tgt_nr %u, tgt_nr %u, forward width %u, forward depth %u, flags %x",
 		  (ocpi->ocpi_flags & ORF_LEADER) ? "leader" :
 		  (ocpi->ocpi_tgts.ca_count == 1 ? "non-leader" : "relay-engine"), rpc,
-		  DP_UOID(ocpi->ocpi_oid), dmi->dmi_xs_id, dmi->dmi_tgt_id, ocpi->ocpi_epoch,
+		  DP_UOID(ocpi->ocpi_oid), dmi->dmi_xs_id, dmi->dmi_tgt_id,
+		  DP_UUID(ocpi->ocpi_po_uuid), DP_UUID(ocpi->ocpi_co_hdl),
+		  DP_UUID(ocpi->ocpi_co_uuid), ocpi->ocpi_epoch,
 		  ocpi->ocpi_map_ver, max_ver, DP_DTI(&ocpi->ocpi_xid), ocpi->ocpi_bulk_tgt_sz,
 		  ocpi->ocpi_bulk_tgt_nr, (unsigned int)ocpi->ocpi_tgts.ca_count,
 		  ocpi->ocpi_disp_width, ocpi->ocpi_disp_depth, ocpi->ocpi_flags);

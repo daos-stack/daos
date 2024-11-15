@@ -25,8 +25,11 @@ import (
 	"time"
 )
 
+var _ StatsMetric = (*Duration)(nil)
+
 type Duration struct {
 	statsMetric
+	hist *Histogram // optional histogram data
 }
 
 func (d *Duration) Type() MetricType {
@@ -67,6 +70,7 @@ func newDuration(hdl *handle, path string, name *string, node *C.struct_d_tm_nod
 			},
 		},
 	}
+	d.hist = newHistogram(&d.statsMetric)
 
 	// Load up statistics
 	_ = d.Value()
