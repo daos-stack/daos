@@ -85,10 +85,12 @@ class DmgPoolQueryRanks(ControlTestBase):
         self._verify_ranks(enabled_ranks, data, "enabled_ranks")
         self._verify_ranks(disabled_ranks, data, "disabled_ranks")
 
-        # kill second rank.
-        self.log_step(f"Starting excluding rank:{suspect_rank} all_ranks={all_ranks}")
-        self.server_managers[0].stop_ranks([suspect_rank], self.d_log)
+        self.log_step(f"Waiting for rebuild to start after excluding pool rank {exclude_rank}")
         self.pool.wait_for_rebuild_to_start()
+
+        # kill second rank.
+        self.log_step(f"Stopping rank:{suspect_rank} all_ranks={all_ranks}")
+        self.server_managers[0].stop_ranks([suspect_rank], self.d_log)
 
         self.log_step(f"Waiting for pool rank {suspect_rank} to be suspected")
         self.pool.wait_pool_suspect_ranks([suspect_rank], timeout=30)
@@ -141,3 +143,4 @@ class DmgPoolQueryRanks(ControlTestBase):
         else:
             self.assertListEqual(
                 actual, expect, f"Invalid {key} field: want={expect}, got={actual}")
+        self.log.debug("Check of %s passed: %s == %s", key, expect, actual)
