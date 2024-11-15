@@ -1420,7 +1420,10 @@ class _Component():
                 full_lib = os.path.join(path, lib)
                 cmd = ['patchelf', '--set-rpath', ':'.join(rpath), full_lib]
                 if not RUNNER.run_commands([cmd]):
-                    print(f'Skipped patching {full_lib}')
+                    if lib == 'libspdk.so':
+                        print(f'Skipped patching {full_lib}')
+                    else:
+                        raise BuildFailure(f"Failed to patch {lib}")
 
     def build(self, env, needed_libs):
         """Build the component, if necessary
