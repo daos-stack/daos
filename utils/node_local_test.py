@@ -4568,10 +4568,7 @@ class PosixTests():
         for f in test_files:
             assert f["seen"] == 1
 
-        dataset = None
-        # agent will be stopped by the time module calls fini()
-        # pylint: disable=protected-access
-        torch._fini()
+        del dataset
 
     @needs_dfuse_with_opt(caching_variants=[False])
     def test_torch_iter_dataset(self):
@@ -4600,11 +4597,7 @@ class PosixTests():
         for f in test_files:
             assert f["seen"] == 1
 
-        dataset = None
-        # agent will be stopped by the time module calls fini()
-        # pylint: disable=protected-access
-        torch._fini()
-
+        del dataset
 
 class NltStdoutWrapper():
     """Class for capturing stdout from threads"""

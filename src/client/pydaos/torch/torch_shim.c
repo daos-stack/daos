@@ -86,12 +86,6 @@ static PyObject *
 __shim_handle__module_fini(PyObject *self, PyObject *args)
 {
 	int rc = daos_fini();
-	/* This is only for NLT tests when agent stops before python unloads the module.
-	   Should be removed once NLT tests replaced by functional tests
-	 */
-	if (rc == -DER_UNINIT) {
-		rc = 0;
-	}
 	if (rc) {
 		rc = daos_der2errno(rc);
 	}
@@ -441,7 +435,6 @@ __shim_handle__torch_read(PyObject *self, PyObject *args)
 	rc = dfs_lookup(hdl->dfs, path, O_RDONLY, &obj, NULL, NULL);
 	if (rc) {
 		D_ERROR("Could not lookup '%s': %s (rc=%ld)", path, strerror(rc), rc);
-		rc = -rc;
 		goto out;
 	}
 
