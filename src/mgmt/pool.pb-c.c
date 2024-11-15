@@ -2365,275 +2365,175 @@ const ProtobufCMessageDescriptor mgmt__pool_drain_resp__descriptor =
   (ProtobufCMessageInit) mgmt__pool_drain_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_extend_req__field_descriptors[6] =
-{
-  {
-    "sys",
-    1,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolExtendReq, sys),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "id",
-    2,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolExtendReq, id),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "ranks",
-    3,
-    PROTOBUF_C_LABEL_REPEATED,
-    PROTOBUF_C_TYPE_UINT32,
-    offsetof(Mgmt__PoolExtendReq, n_ranks),
-    offsetof(Mgmt__PoolExtendReq, ranks),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "svc_ranks",
-    4,
-    PROTOBUF_C_LABEL_REPEATED,
-    PROTOBUF_C_TYPE_UINT32,
-    offsetof(Mgmt__PoolExtendReq, n_svc_ranks),
-    offsetof(Mgmt__PoolExtendReq, svc_ranks),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "tier_bytes",
-    5,
-    PROTOBUF_C_LABEL_REPEATED,
-    PROTOBUF_C_TYPE_UINT64,
-    offsetof(Mgmt__PoolExtendReq, n_tier_bytes),
-    offsetof(Mgmt__PoolExtendReq, tier_bytes),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "fault_domains",
-    6,
-    PROTOBUF_C_LABEL_REPEATED,
-    PROTOBUF_C_TYPE_UINT32,
-    offsetof(Mgmt__PoolExtendReq, n_fault_domains),
-    offsetof(Mgmt__PoolExtendReq, fault_domains),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
+static const ProtobufCFieldDescriptor mgmt__pool_extend_req__field_descriptors[7] = {
+    {
+	"sys", 1, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0, /* quantifier_offset */
+	offsetof(Mgmt__PoolExtendReq, sys), NULL, &protobuf_c_empty_string, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"id", 2, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0, /* quantifier_offset */
+	offsetof(Mgmt__PoolExtendReq, id), NULL, &protobuf_c_empty_string, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"ranks", 3, PROTOBUF_C_LABEL_REPEATED, PROTOBUF_C_TYPE_UINT32,
+	offsetof(Mgmt__PoolExtendReq, n_ranks), offsetof(Mgmt__PoolExtendReq, ranks), NULL, NULL,
+	0,            /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"svc_ranks", 4, PROTOBUF_C_LABEL_REPEATED, PROTOBUF_C_TYPE_UINT32,
+	offsetof(Mgmt__PoolExtendReq, n_svc_ranks), offsetof(Mgmt__PoolExtendReq, svc_ranks), NULL,
+	NULL, 0,      /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"tier_bytes", 5, PROTOBUF_C_LABEL_REPEATED, PROTOBUF_C_TYPE_UINT64,
+	offsetof(Mgmt__PoolExtendReq, n_tier_bytes), offsetof(Mgmt__PoolExtendReq, tier_bytes),
+	NULL, NULL, 0, /* flags */
+	0, NULL, NULL  /* reserved1,reserved2, etc */
+    },
+    {
+	"fault_domains", 6, PROTOBUF_C_LABEL_REPEATED, PROTOBUF_C_TYPE_UINT32,
+	offsetof(Mgmt__PoolExtendReq, n_fault_domains),
+	offsetof(Mgmt__PoolExtendReq, fault_domains), NULL, NULL, 0, /* flags */
+	0, NULL, NULL                                                /* reserved1,reserved2, etc */
+    },
+    {
+	"mem_ratio", 7, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_FLOAT, 0, /* quantifier_offset */
+	offsetof(Mgmt__PoolExtendReq, mem_ratio), NULL, NULL, 0,         /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
 };
 static const unsigned mgmt__pool_extend_req__field_indices_by_name[] = {
-  5,   /* field[5] = fault_domains */
-  1,   /* field[1] = id */
-  2,   /* field[2] = ranks */
-  3,   /* field[3] = svc_ranks */
-  0,   /* field[0] = sys */
-  4,   /* field[4] = tier_bytes */
+    5, /* field[5] = fault_domains */
+    1, /* field[1] = id */
+    6, /* field[6] = mem_ratio */
+    2, /* field[2] = ranks */
+    3, /* field[3] = svc_ranks */
+    0, /* field[0] = sys */
+    4, /* field[4] = tier_bytes */
 };
-static const ProtobufCIntRange mgmt__pool_extend_req__number_ranges[1 + 1] =
-{
-  { 1, 0 },
-  { 0, 6 }
-};
-const ProtobufCMessageDescriptor mgmt__pool_extend_req__descriptor =
-{
-  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "mgmt.PoolExtendReq",
-  "PoolExtendReq",
-  "Mgmt__PoolExtendReq",
-  "mgmt",
-  sizeof(Mgmt__PoolExtendReq),
-  6,
-  mgmt__pool_extend_req__field_descriptors,
-  mgmt__pool_extend_req__field_indices_by_name,
-  1,  mgmt__pool_extend_req__number_ranges,
-  (ProtobufCMessageInit) mgmt__pool_extend_req__init,
-  NULL,NULL,NULL    /* reserved[123] */
-};
-static const ProtobufCFieldDescriptor mgmt__pool_extend_resp__field_descriptors[3] =
-{
-  {
-    "status",
+static const ProtobufCIntRange   mgmt__pool_extend_req__number_ranges[1 + 1] = {{1, 0}, {0, 7}};
+const ProtobufCMessageDescriptor mgmt__pool_extend_req__descriptor           = {
+    PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+    "mgmt.PoolExtendReq",
+    "PoolExtendReq",
+    "Mgmt__PoolExtendReq",
+    "mgmt",
+    sizeof(Mgmt__PoolExtendReq),
+    7,
+    mgmt__pool_extend_req__field_descriptors,
+    mgmt__pool_extend_req__field_indices_by_name,
     1,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_INT32,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolExtendResp, status),
+    mgmt__pool_extend_req__number_ranges,
+    (ProtobufCMessageInit)mgmt__pool_extend_req__init,
     NULL,
     NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "tier_bytes",
-    2,
-    PROTOBUF_C_LABEL_REPEATED,
-    PROTOBUF_C_TYPE_UINT64,
-    offsetof(Mgmt__PoolExtendResp, n_tier_bytes),
-    offsetof(Mgmt__PoolExtendResp, tier_bytes),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "meta_blob_bytes",
-    3,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolExtendResp, meta_blob_bytes),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
+    NULL /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__pool_extend_resp__field_descriptors[2] = {
+    {
+	"status", 1, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_INT32, 0, /* quantifier_offset */
+	offsetof(Mgmt__PoolExtendResp, status), NULL, NULL, 0,        /* flags */
+	0, NULL, NULL                                                 /* reserved1,reserved2, etc */
+    },
+    {
+	"tier_bytes", 2, PROTOBUF_C_LABEL_REPEATED, PROTOBUF_C_TYPE_UINT64,
+	offsetof(Mgmt__PoolExtendResp, n_tier_bytes), offsetof(Mgmt__PoolExtendResp, tier_bytes),
+	NULL, NULL, 0, /* flags */
+	0, NULL, NULL  /* reserved1,reserved2, etc */
+    },
 };
 static const unsigned mgmt__pool_extend_resp__field_indices_by_name[] = {
-  2,   /* field[2] = meta_blob_bytes */
-  0,   /* field[0] = status */
-  1,   /* field[1] = tier_bytes */
+    0, /* field[0] = status */
+    1, /* field[1] = tier_bytes */
 };
-static const ProtobufCIntRange mgmt__pool_extend_resp__number_ranges[1 + 1] =
-{
-  { 1, 0 },
-  { 0, 3 }
-};
-const ProtobufCMessageDescriptor mgmt__pool_extend_resp__descriptor =
-{
-  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "mgmt.PoolExtendResp",
-  "PoolExtendResp",
-  "Mgmt__PoolExtendResp",
-  "mgmt",
-  sizeof(Mgmt__PoolExtendResp),
-  3,
-  mgmt__pool_extend_resp__field_descriptors,
-  mgmt__pool_extend_resp__field_indices_by_name,
-  1,  mgmt__pool_extend_resp__number_ranges,
-  (ProtobufCMessageInit) mgmt__pool_extend_resp__init,
-  NULL,NULL,NULL    /* reserved[123] */
-};
-static const ProtobufCFieldDescriptor mgmt__pool_reintegrate_req__field_descriptors[6] =
-{
-  {
-    "sys",
-    1,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolReintegrateReq, sys),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "id",
+static const ProtobufCIntRange   mgmt__pool_extend_resp__number_ranges[1 + 1] = {{1, 0}, {0, 2}};
+const ProtobufCMessageDescriptor mgmt__pool_extend_resp__descriptor           = {
+    PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+    "mgmt.PoolExtendResp",
+    "PoolExtendResp",
+    "Mgmt__PoolExtendResp",
+    "mgmt",
+    sizeof(Mgmt__PoolExtendResp),
     2,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolReintegrateReq, id),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "rank",
-    3,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolReintegrateReq, rank),
+    mgmt__pool_extend_resp__field_descriptors,
+    mgmt__pool_extend_resp__field_indices_by_name,
+    1,
+    mgmt__pool_extend_resp__number_ranges,
+    (ProtobufCMessageInit)mgmt__pool_extend_resp__init,
     NULL,
     NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "target_idx",
-    4,
-    PROTOBUF_C_LABEL_REPEATED,
-    PROTOBUF_C_TYPE_UINT32,
-    offsetof(Mgmt__PoolReintegrateReq, n_target_idx),
-    offsetof(Mgmt__PoolReintegrateReq, target_idx),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "svc_ranks",
-    5,
-    PROTOBUF_C_LABEL_REPEATED,
-    PROTOBUF_C_TYPE_UINT32,
-    offsetof(Mgmt__PoolReintegrateReq, n_svc_ranks),
-    offsetof(Mgmt__PoolReintegrateReq, svc_ranks),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "tier_bytes",
-    6,
-    PROTOBUF_C_LABEL_REPEATED,
-    PROTOBUF_C_TYPE_UINT64,
-    offsetof(Mgmt__PoolReintegrateReq, n_tier_bytes),
-    offsetof(Mgmt__PoolReintegrateReq, tier_bytes),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
+    NULL /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__pool_reintegrate_req__field_descriptors[7] = {
+    {
+	"sys", 1, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0, /* quantifier_offset */
+	offsetof(Mgmt__PoolReintegrateReq, sys), NULL, &protobuf_c_empty_string, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"id", 2, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0, /* quantifier_offset */
+	offsetof(Mgmt__PoolReintegrateReq, id), NULL, &protobuf_c_empty_string, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"rank", 3, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32, 0, /* quantifier_offset */
+	offsetof(Mgmt__PoolReintegrateReq, rank), NULL, NULL, 0,     /* flags */
+	0, NULL, NULL                                                /* reserved1,reserved2, etc */
+    },
+    {
+	"target_idx", 4, PROTOBUF_C_LABEL_REPEATED, PROTOBUF_C_TYPE_UINT32,
+	offsetof(Mgmt__PoolReintegrateReq, n_target_idx),
+	offsetof(Mgmt__PoolReintegrateReq, target_idx), NULL, NULL, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"svc_ranks", 5, PROTOBUF_C_LABEL_REPEATED, PROTOBUF_C_TYPE_UINT32,
+	offsetof(Mgmt__PoolReintegrateReq, n_svc_ranks),
+	offsetof(Mgmt__PoolReintegrateReq, svc_ranks), NULL, NULL, 0, /* flags */
+	0, NULL, NULL                                                 /* reserved1,reserved2, etc */
+    },
+    {
+	"tier_bytes", 6, PROTOBUF_C_LABEL_REPEATED, PROTOBUF_C_TYPE_UINT64,
+	offsetof(Mgmt__PoolReintegrateReq, n_tier_bytes),
+	offsetof(Mgmt__PoolReintegrateReq, tier_bytes), NULL, NULL, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"mem_ratio", 7, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_FLOAT, 0, /* quantifier_offset */
+	offsetof(Mgmt__PoolReintegrateReq, mem_ratio), NULL, NULL, 0,    /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
 };
 static const unsigned mgmt__pool_reintegrate_req__field_indices_by_name[] = {
-  1,   /* field[1] = id */
-  2,   /* field[2] = rank */
-  4,   /* field[4] = svc_ranks */
-  0,   /* field[0] = sys */
-  3,   /* field[3] = target_idx */
-  5,   /* field[5] = tier_bytes */
+    1, /* field[1] = id */
+    6, /* field[6] = mem_ratio */
+    2, /* field[2] = rank */
+    4, /* field[4] = svc_ranks */
+    0, /* field[0] = sys */
+    3, /* field[3] = target_idx */
+    5, /* field[5] = tier_bytes */
 };
-static const ProtobufCIntRange mgmt__pool_reintegrate_req__number_ranges[1 + 1] =
-{
-  { 1, 0 },
-  { 0, 6 }
-};
-const ProtobufCMessageDescriptor mgmt__pool_reintegrate_req__descriptor =
-{
-  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "mgmt.PoolReintegrateReq",
-  "PoolReintegrateReq",
-  "Mgmt__PoolReintegrateReq",
-  "mgmt",
-  sizeof(Mgmt__PoolReintegrateReq),
-  6,
-  mgmt__pool_reintegrate_req__field_descriptors,
-  mgmt__pool_reintegrate_req__field_indices_by_name,
-  1,  mgmt__pool_reintegrate_req__number_ranges,
-  (ProtobufCMessageInit) mgmt__pool_reintegrate_req__init,
-  NULL,NULL,NULL    /* reserved[123] */
+static const ProtobufCIntRange mgmt__pool_reintegrate_req__number_ranges[1 + 1] = {{1, 0}, {0, 7}};
+const ProtobufCMessageDescriptor mgmt__pool_reintegrate_req__descriptor         = {
+    PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+    "mgmt.PoolReintegrateReq",
+    "PoolReintegrateReq",
+    "Mgmt__PoolReintegrateReq",
+    "mgmt",
+    sizeof(Mgmt__PoolReintegrateReq),
+    7,
+    mgmt__pool_reintegrate_req__field_descriptors,
+    mgmt__pool_reintegrate_req__field_indices_by_name,
+    1,
+    mgmt__pool_reintegrate_req__number_ranges,
+    (ProtobufCMessageInit)mgmt__pool_reintegrate_req__init,
+    NULL,
+    NULL,
+    NULL /* reserved[123] */
 };
 static const ProtobufCFieldDescriptor mgmt__pool_reintegrate_resp__field_descriptors[1] =
 {

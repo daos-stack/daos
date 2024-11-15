@@ -585,24 +585,34 @@ tank     47 GB  0%   0%        0/32
 
 This returns a table of pool labels (or UUIDs if no label was specified)
 with the following information for each pool:
-- the total pool size
-- the percentage of used space (i.e., 100 * used space  / total space)
-- the imbalance percentage indicating whether data distribution across
+- The total pool size (NVMe or DATA tier, not including Metadata tier).
+- The percentage of used space (i.e., 100 * used space  / total space)
+  for the NVMe or DATA tier.
+- The imbalance percentage indicating whether data distribution across
   the difference storage targets is well balanced. 0% means that there is
   no imbalance and 100% means that out-of-space errors might be returned
-  by some storage targets while space is still available on others.
-- the number of disabled targets (0 here) and the number of targets that
+  by some storage targets while space is still available on others. Again
+  for the NVMe or DATA tier.
+- The number of disabled targets (0 here) and the number of targets that
   the pool was originally configured with (total).
 
 The --verbose option provides more detailed information including the
 number of service replicas, the full UUIDs and space distribution
-between SCM and NVMe for each pool:
+between SCM and NVMe (or META and DATA in MD-on-SSD mode) for each pool:
 
 ```bash
 $ dmg pool list --verbose
 Label UUID                                 SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled
 ----- ----                                 ------- -------- -------- ------------- --------- --------- -------------- --------
-tank  8a05bf3a-a088-4a77-bb9f-df989fce7cc8 1-3      3 GB    10 kB    0%            47 GB     0 B       0%             0/32
+tank  8a05bf3a-a088-4a77-bb9f-df989fce7cc8 1-3     3 GB     10 kB    0%            47 GB     0 B       0%             0/32
+```
+
+In MD-on-SSD mode:
+```bash
+$ dmg pool list --verbose
+Label UUID                                 SvcReps Meta Size Meta Used Meta Imbalance DATA Size DATA Used DATA Imbalance Disabled
+----- ----                                 ------- --------- --------- -------------- --------- --------- -------------- --------
+tank  8a05bf3a-a088-4a77-bb9f-df989fce7cc8 1-3     3 GB      10 kB     0%             47 GB     0 B       0%             0/32
 ```
 
 ### Destroying a Pool
@@ -1332,15 +1342,10 @@ Administrator can set the default pool redundancy factor by environment variable
 dead and the number of failed fault domain exceeds or is going to exceed the pool
 redundancy factor, it will not change pool map immediately. Instead, it will give
 critical log message:
+```
 intolerable unavailability: engine rank x
-In this case, the system administrator should check and try to recover those
-failed engines and bring them back with:
-dmg system start --ranks=x
-one by one. A reintegrate call is not needed.
-
-For true unrecoverable failures, the administrator can still exclude engines.
-However, data loss is expected as the number of unrecoverable failures exceeds
-the pool redundancy factor.
+```
+To recover, see [Servers or engines become unavailable](troubleshooting.md#engines-become-unavailable).
 
 ## Recovering Container Ownership
 
