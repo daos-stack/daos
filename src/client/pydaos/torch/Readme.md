@@ -12,17 +12,17 @@ To implement map style dataset only two methods are required: `__len__()` and `_
 
 During dataset creation the connection to container will be established and its namespace will be scanned to build
 a list of files in container with their size. The number of items in that list will be used to implement `__len__()` method.
-`__getitem__()` implementation consist of looking up the object by its absolute path and reading its content into the buffer
-create on the python side.
+`__getitem__()` implementation consists of looking up the object by its absolute path and reading its content into the buffer
+created on the python side.
 
-The `__getitems__()` method allow to request multiple samples at once making this a good case to use DAOS event queue to send and wait on batch items.
+The `__getitems__()` method allows requesting multiple samples at once, making this a good case to use DAOS event queues to send and wait on batch items.
 
-By default Dataset is single threaded (more like single process in python), `__getitem__()` and `__getitems__()` are regular blocking calls.
-If multiprocessing is enabled, Dataset provides the `worker_init` method, which worker processes are calling upon their startup,
-during this setup the global connection should be reused and the new event queue should be created for calling worker process.
+By default `Dataset` is single threaded (more like single process in python), `__getitem__()` and `__getitems__()` are regular blocking calls.
+If multiprocessing is enabled, `Dataset` provides the `worker_init` method, which worker processes are calling upon their startup.
+During this setup the global connection should be reused and the new event queue should be created for calling worker processes.
 
 There's no internal multithreading inside the shim module - it's driven on outside by `torch.utils.DataLoader`.
-If DataLoader is configured to have 8 readers then 8 event queues are going to be created per each worker process so the performance of individual worker should not be affected by others.
+If `DataLoader` is configured to have 8 readers then 8 event queues are going to be created per each worker process so the performance of individual worker should not be affected by others.
 
 
 Implementation of `torch.utils.data.IterableDataset` requires to implement `__iter__()` protocol, which can be fully implemented on python side,
@@ -35,7 +35,7 @@ Configured and running DAOS agent on the node(s) and correctly set ACLs - the us
 
 
 
-### Example of usage Map style Dataset
+### Example usage of Map style Dataset
 
 ```python
 import numpy as np

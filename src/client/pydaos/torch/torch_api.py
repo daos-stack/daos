@@ -316,7 +316,7 @@ class _Dfs():
                       readdir_batch_size=READDIR_BATCH_SIZE,
                       workers=PARALLEL_SCAN_WORKERS):
         """
-        Parallel list tires to leverage DAOS ability to read dir in parallel
+        Parallel list tries to leverage DAOS ability to read dir in parallel
         by splitting across multiple engines.
 
         To fully use this feature the container should be configured with directory object classes

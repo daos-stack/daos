@@ -1,4 +1,4 @@
-# (C) Copyright 2019-2024 Intel Corporation.
+# (C) Copyright 2024 Intel Corporation.
 # (C) Copyright 2024 Google LLC
 # (C) Copyright 2024 Enakta Labs Ltd
 #
