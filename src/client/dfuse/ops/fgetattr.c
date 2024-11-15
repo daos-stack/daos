@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -54,11 +54,14 @@ dfuse_cb_getattr(fuse_req_t req, struct dfuse_inode_entry *ie)
 	if (rc != -DER_SUCCESS)
 		D_GOTO(ev, rc = daos_der2errno(rc));
 
-	rc = dfs_ostatx(ie->ie_dfs->dfs_ns, ie->ie_obj, &ev->de_attr, &ev->de_ev);
+	rc = dfs_ostatx(ie->ie_dfs->dfs_ns, ie->ie_obj, &ev->de_attr, NULL);
 	if (rc != 0)
 		D_GOTO(ev, rc);
 
-	sem_post(&eqt->de_sem);
+	ev->de_attr.st_ino = ev->de_ie->ie_stat.st_ino;
+	ev->de_ie->ie_stat = ev->de_attr;
+	DFUSE_REPLY_ATTR(ev->de_ie, ev->de_req, &ev->de_attr);
+	// sem_post(&eqt->de_sem);
 
 	return;
 ev:
