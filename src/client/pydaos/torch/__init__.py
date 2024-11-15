@@ -26,7 +26,6 @@ if _rc != 0:
 def _fini():
     rc = torch_shim.module_fini()
     if rc != 0:
-        # torch_shim module is no longer usable at this point so as err_to_str call
         raise ValueError(f"Could not finalize DAOS module, rc={rc}")
 
 

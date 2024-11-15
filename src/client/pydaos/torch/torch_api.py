@@ -168,6 +168,8 @@ class IterableDataset(TorchIterableDataset):
         Function to transform samples from storage to in-memory representation
     readdir_batch_size: int (optional)
         Number of directory entries to read for each readdir call.
+    batch_size: int (optional)
+        Number of samples to fetch per iteration.
 
 
     Methods
@@ -183,7 +185,8 @@ class IterableDataset(TorchIterableDataset):
     # pylint: disable=too-many-arguments,too-many-instance-attributes
     def __init__(self, pool=None, cont=None, path=None,
                  transform_fn=transform_fn_default,
-                 readdir_batch_size=READDIR_BATCH_SIZE, batch_size=ITER_BATCH_SIZE):
+                 readdir_batch_size=READDIR_BATCH_SIZE,
+                 batch_size=ITER_BATCH_SIZE):
         super().__init__()
 
         self._pool = pool
@@ -253,7 +256,7 @@ class IterableDataset(TorchIterableDataset):
 class _Dfs():
     """
     Class encapsulating libdfs interface to load PyTorch Dataset
-    Should not be used directly. Exported in __init__.py only to be used in DLIO benchmark
+    Should not be used directly.
     """
 
     def __init__(self, pool=None, cont=None, rd_only=True):
