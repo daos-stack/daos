@@ -25,7 +25,7 @@ typedef struct _Mgmt__LeaderQueryReq Mgmt__LeaderQueryReq;
 typedef struct _Mgmt__LeaderQueryResp Mgmt__LeaderQueryResp;
 typedef struct _Mgmt__GetAttachInfoReq Mgmt__GetAttachInfoReq;
 typedef struct _Mgmt__ClientNetHint Mgmt__ClientNetHint;
-typedef struct _Mgmt__BuildInfo                  Mgmt__BuildInfo;
+typedef struct _Mgmt__BuildInfo Mgmt__BuildInfo;
 typedef struct _Mgmt__GetAttachInfoResp Mgmt__GetAttachInfoResp;
 typedef struct _Mgmt__GetAttachInfoResp__RankUri Mgmt__GetAttachInfoResp__RankUri;
 typedef struct _Mgmt__PrepShutdownReq Mgmt__PrepShutdownReq;
@@ -301,18 +301,19 @@ struct  _Mgmt__ClientNetHint
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__client_net_hint__descriptor) \
     , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, 0,NULL, 0 }
 
-struct _Mgmt__BuildInfo {
+
+struct  _Mgmt__BuildInfo
+{
   ProtobufCMessage base;
-  uint32_t         major;
-  uint32_t         minor;
-  uint32_t         patch;
-  char            *tag;
+  uint32_t major;
+  uint32_t minor;
+  uint32_t patch;
+  char *tag;
 };
-#define MGMT__BUILD_INFO__INIT                                                                     \
-  {                                                                                                \
-	  PROTOBUF_C_MESSAGE_INIT(&mgmt__build_info__descriptor)                                   \
-	  , 0, 0, 0, (char *)protobuf_c_empty_string                                               \
-  }
+#define MGMT__BUILD_INFO__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__build_info__descriptor) \
+    , 0, 0, 0, (char *)protobuf_c_empty_string }
+
 
 struct  _Mgmt__GetAttachInfoResp__RankUri
 {
@@ -373,13 +374,12 @@ struct  _Mgmt__GetAttachInfoResp
   /*
    * Structured server build information
    */
-  Mgmt__BuildInfo                   *build_info;
+  Mgmt__BuildInfo *build_info;
 };
-#define MGMT__GET_ATTACH_INFO_RESP__INIT                                                           \
-  {                                                                                                \
-	  PROTOBUF_C_MESSAGE_INIT(&mgmt__get_attach_info_resp__descriptor)                         \
-	  , 0, 0, NULL, 0, NULL, NULL, 0, (char *)protobuf_c_empty_string, 0, NULL, 0, NULL, NULL  \
-  }
+#define MGMT__GET_ATTACH_INFO_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_attach_info_resp__descriptor) \
+    , 0, 0,NULL, 0,NULL, NULL, 0, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, NULL }
+
 
 struct  _Mgmt__PrepShutdownReq
 {
@@ -662,18 +662,24 @@ void   mgmt__client_net_hint__free_unpacked
                      (Mgmt__ClientNetHint *message,
                       ProtobufCAllocator *allocator);
 /* Mgmt__BuildInfo methods */
-void
-mgmt__build_info__init(Mgmt__BuildInfo *message);
-size_t
-mgmt__build_info__get_packed_size(const Mgmt__BuildInfo *message);
-size_t
-mgmt__build_info__pack(const Mgmt__BuildInfo *message, uint8_t *out);
-size_t
-mgmt__build_info__pack_to_buffer(const Mgmt__BuildInfo *message, ProtobufCBuffer *buffer);
+void   mgmt__build_info__init
+                     (Mgmt__BuildInfo         *message);
+size_t mgmt__build_info__get_packed_size
+                     (const Mgmt__BuildInfo   *message);
+size_t mgmt__build_info__pack
+                     (const Mgmt__BuildInfo   *message,
+                      uint8_t             *out);
+size_t mgmt__build_info__pack_to_buffer
+                     (const Mgmt__BuildInfo   *message,
+                      ProtobufCBuffer     *buffer);
 Mgmt__BuildInfo *
-mgmt__build_info__unpack(ProtobufCAllocator *allocator, size_t len, const uint8_t *data);
-void
-       mgmt__build_info__free_unpacked(Mgmt__BuildInfo *message, ProtobufCAllocator *allocator);
+       mgmt__build_info__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__build_info__free_unpacked
+                     (Mgmt__BuildInfo *message,
+                      ProtobufCAllocator *allocator);
 /* Mgmt__GetAttachInfoResp__RankUri methods */
 void   mgmt__get_attach_info_resp__rank_uri__init
                      (Mgmt__GetAttachInfoResp__RankUri         *message);
@@ -842,7 +848,9 @@ typedef void (*Mgmt__GetAttachInfoReq_Closure)
 typedef void (*Mgmt__ClientNetHint_Closure)
                  (const Mgmt__ClientNetHint *message,
                   void *closure_data);
-typedef void (*Mgmt__BuildInfo_Closure)(const Mgmt__BuildInfo *message, void *closure_data);
+typedef void (*Mgmt__BuildInfo_Closure)
+                 (const Mgmt__BuildInfo *message,
+                  void *closure_data);
 typedef void (*Mgmt__GetAttachInfoResp__RankUri_Closure)
                  (const Mgmt__GetAttachInfoResp__RankUri *message,
                   void *closure_data);
