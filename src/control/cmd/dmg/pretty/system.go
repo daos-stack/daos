@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -227,5 +227,58 @@ func PrintSystemCleanupResponse(out, outErr io.Writer, resp *control.SystemClean
 	}
 
 	fmt.Fprintln(out, "System Cleanup Success")
+	return nil
+}
+
+func printSystemDrainRespVerbose(out io.Writer, resp *control.SystemDrainResp) error {
+	if len(resp.Results) == 0 {
+		fmt.Fprintln(out, "no pool ranks drained")
+		return nil
+	}
+
+	titles := []string{"Pool", "Ranks Drained"}
+	formatter := txtfmt.NewTableFormatter(titles...)
+
+	var table []txtfmt.TableRow
+	for _, r := range resp.Results {
+		row := txtfmt.TableRow{
+			"Pool":          r.PoolID,
+			"Ranks Drained": r.Ranks,
+		}
+		table = append(table, row)
+	}
+
+	fmt.Fprintln(out, formatter.Format(table))
+
+	return nil
+}
+
+// PrintSystemDrainResponse generates a human-readable representation of the
+// supplied SystemDrainResp struct and writes it to the supplied io.Writer.
+func PrintSystemDrainResponse(out, outErr io.Writer, resp *control.SystemDrainResp, verbose bool) error {
+	err := resp.Errors()
+
+	if err != nil {
+		fmt.Fprintln(outErr, err.Error())
+	}
+
+	if len(resp.Results) == 0 {
+		fmt.Fprintln(out, "No pool ranks drained")
+		return nil
+	}
+
+	if verbose {
+		return printSystemDrainRespVerbose(out, resp)
+	}
+
+	var msg string
+	for i, result := range resp.Results {
+		if i != 0 {
+			fmt.Sprintf("%s, ", msg)
+		}
+		fmt.Sprintf("%s%s: %s", msg, result.PoolID, result.Ranks)
+	}
+
+	fmt.Fprintf(out, "System Drain Success. Drained pool ranks: %s\n", msg)
 	return nil
 }

@@ -68,11 +68,11 @@ func (req *sysRequest) SetHosts(hosts *hostlist.HostSet) {
 }
 
 type sysResponse struct {
-	AbsentRanks ranklist.RankSet `json:"-"`
-	AbsentHosts hostlist.HostSet `json:"-"`
+	AbsentRanks ranklist.RankSet
+	AbsentHosts hostlist.HostSet
 }
 
-func (resp *sysResponse) getAbsentHostsRanks(inHosts, inRanks string) error {
+func (resp *sysResponse) setAbsentHostsRanks(inHosts, inRanks string) error {
 	ahs, err := hostlist.CreateSet(inHosts)
 	if err != nil {
 		return err
@@ -102,6 +102,10 @@ func (resp *sysResponse) getAbsentHostsRanksErrors() error {
 	}
 
 	return nil
+}
+
+func (resp *sysResponse) getErrors(errIn error) error {
+	return concatSysErrs(resp.getAbsentHostsRanksErrors(), errIn)
 }
 
 // SystemJoinReq contains the inputs for the system join request.
@@ -233,14 +237,16 @@ func (req *SystemQueryReq) getStateMask() (system.MemberState, error) {
 
 // SystemQueryResp contains the request response.
 type SystemQueryResp struct {
-	sysResponse
-	Members   system.Members `json:"members"`
-	Providers []string       `json:"providers"`
+	sysResponse `json:"-"`
+	Members     system.Members `json:"members"`
+	Providers   []string       `json:"providers"`
 }
 
-// UnmarshalJSON unpacks JSON message into SystemQueryResp struct.
-func (resp *SystemQueryResp) UnmarshalJSON(data []byte) error {
-	type Alias SystemQueryResp
+// Wrap sysResponse handling of absent hosts and ranks in a helper to be called from response
+// UnmarshalJSON implementations.
+func unmarshalSysRespJsonFields(data []byte, sr *sysResponse) error {
+	resp := &sysResponse{}
+	type Alias sysResponse
 	aux := &struct {
 		AbsentHosts string
 		AbsentRanks string
@@ -251,7 +257,22 @@ func (resp *SystemQueryResp) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
 	}
-	if err := resp.getAbsentHostsRanks(aux.AbsentHosts, aux.AbsentRanks); err != nil {
+	if err := sr.setAbsentHostsRanks(aux.AbsentHosts, aux.AbsentRanks); err != nil {
+		return err
+	}
+	return nil
+}
+
+// UnmarshalJSON unpacks JSON message into SystemQueryResp struct.
+func (resp *SystemQueryResp) UnmarshalJSON(data []byte) error {
+	type Alias SystemQueryResp
+	aux := &struct{ *Alias }{Alias: (*Alias)(resp)}
+
+	// Use type alias to avoid recursive decode issues.
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	if err := unmarshalSysRespJsonFields(data, &resp.sysResponse); err != nil {
 		return err
 	}
 
@@ -261,7 +282,7 @@ func (resp *SystemQueryResp) UnmarshalJSON(data []byte) error {
 // Errors returns a single error combining all error messages associated with a
 // system query response.
 func (resp *SystemQueryResp) Errors() error {
-	return resp.getAbsentHostsRanksErrors()
+	return resp.sysResponse.getErrors(nil)
 }
 
 // SystemQuery requests DAOS system status.
@@ -340,24 +361,20 @@ type SystemStartReq struct {
 
 // SystemStartResp contains the request response.
 type SystemStartResp struct {
-	sysResponse
-	Results system.MemberResults // resulting from harness starts
+	sysResponse `json:"-"`
+	Results     system.MemberResults // resulting from harness starts
 }
 
 // UnmarshalJSON unpacks JSON message into SystemStartResp struct.
 func (resp *SystemStartResp) UnmarshalJSON(data []byte) error {
 	type Alias SystemStartResp
-	aux := &struct {
-		AbsentHosts string
-		AbsentRanks string
-		*Alias
-	}{
-		Alias: (*Alias)(resp),
-	}
+	aux := &struct{ *Alias }{Alias: (*Alias)(resp)}
+
+	// Use type alias to avoid recursive decode issues.
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
 	}
-	if err := resp.getAbsentHostsRanks(aux.AbsentHosts, aux.AbsentRanks); err != nil {
+	if err := unmarshalSysRespJsonFields(data, &resp.sysResponse); err != nil {
 		return err
 	}
 
@@ -367,7 +384,7 @@ func (resp *SystemStartResp) UnmarshalJSON(data []byte) error {
 // Errors returns a single error combining all error messages associated with a
 // system start response.
 func (resp *SystemStartResp) Errors() error {
-	return concatSysErrs(resp.getAbsentHostsRanksErrors(), resp.Results.Errors())
+	return resp.sysResponse.getErrors(resp.Results.Errors())
 }
 
 // SystemStart will perform a start after a controlled shutdown of DAOS system.
@@ -410,24 +427,20 @@ type SystemStopReq struct {
 
 // SystemStopResp contains the request response.
 type SystemStopResp struct {
-	sysResponse
-	Results system.MemberResults
+	sysResponse `json:"-"`
+	Results     system.MemberResults
 }
 
 // UnmarshalJSON unpacks JSON message into SystemStopResp struct.
 func (resp *SystemStopResp) UnmarshalJSON(data []byte) error {
 	type Alias SystemStopResp
-	aux := &struct {
-		AbsentHosts string
-		AbsentRanks string
-		*Alias
-	}{
-		Alias: (*Alias)(resp),
-	}
+	aux := &struct{ *Alias }{Alias: (*Alias)(resp)}
+
+	// Use type alias to avoid recursive decode issues.
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
 	}
-	if err := resp.getAbsentHostsRanks(aux.AbsentHosts, aux.AbsentRanks); err != nil {
+	if err := unmarshalSysRespJsonFields(data, &resp.sysResponse); err != nil {
 		return err
 	}
 
@@ -437,7 +450,7 @@ func (resp *SystemStopResp) UnmarshalJSON(data []byte) error {
 // Errors returns a single error combining all error messages associated with a
 // system stop response.
 func (resp *SystemStopResp) Errors() error {
-	return concatSysErrs(resp.getAbsentHostsRanksErrors(), resp.Results.Errors())
+	return resp.sysResponse.getErrors(resp.Results.Errors())
 }
 
 // SystemStop will perform a two-phase controlled shutdown of DAOS system and a
@@ -452,12 +465,12 @@ func SystemStop(ctx context.Context, rpcClient UnaryInvoker, req *SystemStopReq)
 		return nil, errors.Errorf("nil %T request", req)
 	}
 
-	pbReq := new(mgmtpb.SystemStopReq)
-	pbReq.Hosts = req.Hosts.String()
-	pbReq.Ranks = req.Ranks.String()
-	pbReq.Force = req.Force
-	pbReq.Sys = req.getSystem(rpcClient)
-
+	pbReq := &mgmtpb.SystemStopReq{
+		Hosts: req.Hosts.String(),
+		Ranks: req.Ranks.String(),
+		Sys:   req.getSystem(rpcClient),
+		Force: req.Force,
+	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemStop(ctx, pbReq)
 	})
@@ -508,16 +521,18 @@ type SystemExcludeReq struct {
 	Clear bool
 }
 
-// SystemExcludeResp contains the request response.
+// SystemExcludeResp contains the request response. UnmarshalJSON is not implemented on this type
+// because missing ranks or hosts specified in requests are not tolerated and therefore not returned
+// in the response so decoding is not required.
 type SystemExcludeResp struct {
-	sysResponse
-	Results system.MemberResults
+	sysResponse `json:"-"`
+	Results     system.MemberResults
 }
 
-// Errors returns a single error combining all error messages associated with a
-// system exclude response.
+// Errors returns a single error combining all error messages associated with a system exclude
+// response.
 func (resp *SystemExcludeResp) Errors() error {
-	return concatSysErrs(resp.getAbsentHostsRanksErrors(), resp.Results.Errors())
+	return resp.sysResponse.getErrors(resp.Results.Errors())
 }
 
 // SystemExclude will mark the specified ranks as administratively excluded from the system.
@@ -543,6 +558,75 @@ func SystemExclude(ctx context.Context, rpcClient UnaryInvoker, req *SystemExclu
 	}
 
 	resp := new(SystemExcludeResp)
+	return resp, convertMSResponse(ur, resp)
+}
+
+// SystemDrainReq contains the inputs for the system drain request.
+type SystemDrainReq struct {
+	unaryRequest
+	msRequest
+	sysRequest
+}
+
+// DrainResult describes the result of a drain operation on a pool's ranks.
+type DrainResult struct {
+	Status int32  `json:"status"`  // Status returned from a specific drain call
+	Msg    string `json:"msg"`     // Error message if Status is not Success
+	PoolID string `json:"pool_id"` // Unique identifier for pool
+	Ranks  string `json:"ranks"`   // RankSet of ranks that should be drained on pool
+}
+
+// SystemDrainResp contains the request response. UnmarshalJSON is not implemented on this type
+// because missing ranks or hosts specified in requests are not tolerated and therefore not returned
+// in the response so decoding is not required.
+type SystemDrainResp struct {
+	sysResponse `json:"-"`
+	Results     []*DrainResult `json:"results"`
+}
+
+// Errors returns a single error combining all error messages associated with a system drain
+// response.
+func (resp *SystemDrainResp) Errors() error {
+	out := new(strings.Builder)
+
+	for _, r := range resp.Results {
+		if r.Status != int32(daos.Success) {
+			fmt.Fprintf(out, "%s\n", r.Msg)
+		}
+	}
+
+	var err error
+	if out.String() != "" {
+		err = errors.New(out.String())
+	}
+
+	return resp.sysResponse.getErrors(err)
+}
+
+// SystemDrain will drain either hosts or ranks from all pools that they are members of. When hosts
+// are specified in the request, any ranks that are resident on that host are drained from all
+// relevant pools.
+func SystemDrain(ctx context.Context, rpcClient UnaryInvoker, req *SystemDrainReq) (*SystemDrainResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T request", req)
+	}
+
+	pbReq := &mgmtpb.SystemDrainReq{
+		Hosts: req.Hosts.String(),
+		Ranks: req.Ranks.String(),
+		Sys:   req.getSystem(rpcClient),
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).SystemDrain(ctx, pbReq)
+	})
+
+	rpcClient.Debugf("DAOS system drain request: %s", pbUtil.Debug(pbReq))
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(SystemDrainResp)
 	return resp, convertMSResponse(ur, resp)
 }
 

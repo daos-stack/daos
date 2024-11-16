@@ -575,7 +575,11 @@ func (cmd *PoolDrainCmd) Execute(args []string) error {
 		return err
 	}
 
-	req := &control.PoolDrainReq{ID: cmd.PoolID().String(), Rank: ranklist.Rank(cmd.Rank), TargetIdx: idxList}
+	req := &control.PoolDrainReq{
+		ID:        cmd.PoolID().String(),
+		Rank:      ranklist.Rank(cmd.Rank),
+		TargetIdx: idxList,
+	}
 
 	err := control.PoolDrain(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {

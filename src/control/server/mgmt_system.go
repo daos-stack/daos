@@ -1072,6 +1072,105 @@ func (svc *mgmtSvc) SystemExclude(ctx context.Context, req *mgmtpb.SystemExclude
 	return resp, nil
 }
 
+func (svc *mgmtSvc) SystemDrain(ctx context.Context, req *mgmtpb.SystemDrainReq) (*mgmtpb.SystemDrainResp, error) {
+	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
+		return nil, err
+	}
+
+	if req.Hosts == "" && req.Ranks == "" {
+		return nil, errors.New("no hosts or ranks specified")
+	}
+
+	hitRanks, missRanks, missHosts, err := svc.resolveRanks(req.Hosts, req.Ranks)
+	if err != nil {
+		return nil, err
+	}
+
+	if missHosts.Count() > 0 {
+		return nil, errors.Errorf("invalid host(s): %s", missHosts.String())
+	}
+	if missRanks.Count() > 0 {
+		return nil, errors.Errorf("invalid rank(s): %s", missRanks.String())
+	}
+	if hitRanks.Count() == 0 {
+		return nil, errors.New("no ranks to drain")
+	}
+
+	// Drain rank on each pool it belongs to.
+
+	psList, err := svc.sysdb.PoolServiceList(false)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(mgmtpb.SystemDrainResp)
+	drainReq := new(mgmtpb.PoolDrainReq)
+	drainReq.Sys = req.Sys
+
+	ranksMap := make(map[ranklist.Rank]struct{})
+	for _, r := range hitRanks.Ranks() {
+		ranksMap[r] = struct{}{}
+	}
+
+	poolRanks := make(map[string]*ranklist.RankSet)
+	for _, ps := range psList {
+		for _, r := range ps.Storage.CurrentRanks() {
+			if _, exists := ranksMap[r]; !exists {
+				continue
+			}
+			id := ps.PoolUUID.String()
+			if _, exists := poolRanks[id]; !exists {
+				poolRanks[id] = ranklist.MustCreateRankSet("")
+			}
+			poolRanks[id].Add(r)
+		}
+	}
+
+	for id, rs := range poolRanks {
+		if rs.Count() == 0 {
+			continue
+		}
+
+		// Use our incoming request and just replace relevant parameters on each iteration.
+		drainReq.Id = id
+
+		// TODO DAOS-6611: Drain multiple pool-ranks per call when drpc.MethodPoolDrain API
+		//                 supports it.
+		for _, r := range rs.Ranks() {
+			var errMsg string
+			drainReq.Rank = r.Uint32()
+
+			drpcResp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolDrain,
+				drainReq)
+			if err != nil {
+				return nil, err
+			}
+
+			drainResp := &mgmtpb.PoolDrainResp{}
+			if err = proto.Unmarshal(drpcResp.Body, drainResp); err != nil {
+				errMsg = errors.Wrap(err, "unmarshal PoolEvict response").Error()
+				drainResp.Status = int32(daos.IOInvalid)
+			} else if drainResp.Status != int32(daos.Success) {
+				errMsg = fmt.Sprintf("drain failed for rank %d on pool %s: %s",
+					drainReq.Rank, drainReq.Id,
+					daos.Status(drainResp.Status).Error())
+			}
+
+			svc.log.Tracef("pool-drain triggered from system-drain: '%+v' (req: '%+v')",
+				drainResp, drainReq)
+
+			resp.Results = append(resp.Results, &mgmtpb.SystemDrainResp_DrainResult{
+				Status: drainResp.Status,
+				Msg:    errMsg,
+				PoolId: drainReq.Id,
+				Ranks:  fmt.Sprintf("%d", drainReq.Rank),
+			})
+		}
+	}
+
+	return resp, nil
+}
+
 // ClusterEvent management service gRPC handler receives ClusterEvent requests
 // from control-plane instances attempting to notify the MS of a cluster event
 // in the DAOS system (this handler should only get called on the MS leader).
@@ -1221,7 +1320,7 @@ func (svc *mgmtSvc) SystemCleanup(ctx context.Context, req *mgmtpb.SystemCleanup
 	evictReq.Machine = req.Machine
 
 	for _, ps := range psList {
-		var errmsg string = ""
+		var errMsg string
 
 		// Use our incoming request and just replace the uuid on each iteration
 		evictReq.Id = ps.PoolUUID.String()
@@ -1234,18 +1333,18 @@ func (svc *mgmtSvc) SystemCleanup(ctx context.Context, req *mgmtpb.SystemCleanup
 		res := &mgmtpb.PoolEvictResp{}
 		if err = proto.Unmarshal(dresp.Body, res); err != nil {
 			res.Status = int32(daos.IOInvalid)
-			errmsg = errors.Wrap(err, "unmarshal PoolEvict response").Error()
+			errMsg = errors.Wrap(err, "unmarshal PoolEvict response").Error()
 			res.Count = 0
 		}
 
 		if res.Status != int32(daos.Success) {
-			errmsg = fmt.Sprintf("Unable to clean up handles for machine %s on pool %s", evictReq.Machine, evictReq.Id)
+			errMsg = fmt.Sprintf("Unable to clean up handles for machine %s on pool %s", evictReq.Machine, evictReq.Id)
 		}
 
 		svc.log.Debugf("Response from pool evict in cleanup: '%+v' (req: '%+v')", res, evictReq)
 		resp.Results = append(resp.Results, &mgmtpb.SystemCleanupResp_CleanupResult{
 			Status: res.Status,
-			Msg:    errmsg,
+			Msg:    errMsg,
 			PoolId: evictReq.Id,
 			Count:  uint32(res.Count),
 		})

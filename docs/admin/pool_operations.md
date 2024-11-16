@@ -591,8 +591,8 @@ with the following information for each pool:
 - The imbalance percentage indicating whether data distribution across
   the difference storage targets is well balanced. 0% means that there is
   no imbalance and 100% means that out-of-space errors might be returned
-  by some storage targets while space is still available on others. Again
-  for the NVMe or DATA tier.
+  by some storage targets while space is still available on others. Applies
+  only for the NVMe or DATA tier.
 - The number of disabled targets (0 here) and the number of targets that
   the pool was originally configured with (total).
 
