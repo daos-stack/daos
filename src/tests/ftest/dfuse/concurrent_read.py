@@ -40,7 +40,7 @@ class DFuseConReadTest(TestWithServers):
         start_dfuse(self, dfuse, pool, container)
 
         rd = f"{dfuse.mount_dir.value}/data/"
-        rep_ten = "seq 1 10 | xargs -L 1 -P 100 -I %"
+        rep_ten = "seq 1 100 | xargs -L 1 -P 100 -I %"
 
         cmds = [f"mkdir -p {rd}one",
                 f"mkdir -p {rd}two",
@@ -50,8 +50,8 @@ class DFuseConReadTest(TestWithServers):
                 f"dd if=/dev/zero of={rd}three/file bs=64k count=1",
                 f"dd if=/dev/zero of={rd}three/token bs=1 count=1",
                 f"daos filesystem evict {rd}",
-                f"{rep_ten} dd if={rd}one/file bs=64k count=1 of=/dev/zero",
-                f"{rep_ten} dd if={rd}two/file bs=128k count=1 of=/dev/zero",
+                f"{rep_ten} dd if={rd}one/file bs=64k of=/dev/zero",
+                f"{rep_ten} dd if={rd}two/file bs=128k of=/dev/zero",
                 f"dd if={rd}/three/token of=/dev/zero bs=64k count=1",
                 f"{rep_ten} dd if={rd}three/file bs=64k count=1 of=/dev/zero"]
 
