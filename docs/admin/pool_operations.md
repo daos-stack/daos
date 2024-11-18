@@ -585,24 +585,34 @@ tank     47 GB  0%   0%        0/32
 
 This returns a table of pool labels (or UUIDs if no label was specified)
 with the following information for each pool:
-- the total pool size
-- the percentage of used space (i.e., 100 * used space  / total space)
-- the imbalance percentage indicating whether data distribution across
+- The total pool size (NVMe or DATA tier, not including Metadata tier).
+- The percentage of used space (i.e., 100 * used space  / total space)
+  for the NVMe or DATA tier.
+- The imbalance percentage indicating whether data distribution across
   the difference storage targets is well balanced. 0% means that there is
   no imbalance and 100% means that out-of-space errors might be returned
-  by some storage targets while space is still available on others.
-- the number of disabled targets (0 here) and the number of targets that
+  by some storage targets while space is still available on others. Again
+  for the NVMe or DATA tier.
+- The number of disabled targets (0 here) and the number of targets that
   the pool was originally configured with (total).
 
 The --verbose option provides more detailed information including the
 number of service replicas, the full UUIDs and space distribution
-between SCM and NVMe for each pool:
+between SCM and NVMe (or META and DATA in MD-on-SSD mode) for each pool:
 
 ```bash
 $ dmg pool list --verbose
 Label UUID                                 SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled
 ----- ----                                 ------- -------- -------- ------------- --------- --------- -------------- --------
-tank  8a05bf3a-a088-4a77-bb9f-df989fce7cc8 1-3      3 GB    10 kB    0%            47 GB     0 B       0%             0/32
+tank  8a05bf3a-a088-4a77-bb9f-df989fce7cc8 1-3     3 GB     10 kB    0%            47 GB     0 B       0%             0/32
+```
+
+In MD-on-SSD mode:
+```bash
+$ dmg pool list --verbose
+Label UUID                                 SvcReps Meta Size Meta Used Meta Imbalance DATA Size DATA Used DATA Imbalance Disabled
+----- ----                                 ------- --------- --------- -------------- --------- --------- -------------- --------
+tank  8a05bf3a-a088-4a77-bb9f-df989fce7cc8 1-3     3 GB      10 kB     0%             47 GB     0 B       0%             0/32
 ```
 
 ### Destroying a Pool
@@ -686,6 +696,28 @@ The example below shows a rebuild in progress and NVMe space allocated.
         Total size: 56GB
         Free: 28GB, min:470MB, max:512MB, mean:509MB
     Rebuild busy, 75 objs, 9722 recs
+```
+
+After experiencing significant failures, the pool may retain some suspect
+engines that have been marked as DEAD by the SWIM protocol but were not excluded
+from the pool to prevent potential data inconsistency. An administrator can bring
+these engines back online by restarting them. The example below illustrates the
+system’s status with suspect and disabled engines.
+
+```bash
+$ dmg pool query tank -t
+```
+
+NB: The --health-only/-t option is necessary to conduct pool health-related queries only.
+This is important because suspect ranks may cause commands to hang and timeout so identifying
+and restarting them is a useful procedure.
+
+```bash
+Pool 6f450a68-8c7d-4da9-8900-02691650f6a2, ntarget=8, disabled=2, leader=3, version=4, state=Degraded
+    Pool health info:
+    - Disabled ranks: 1
+    - Suspect ranks: 2
+    - Rebuild busy, 0 objs, 0 recs
 ```
 
 Additional status and telemetry data is planned to be exported through
