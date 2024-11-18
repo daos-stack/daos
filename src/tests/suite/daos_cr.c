@@ -1945,8 +1945,6 @@ cr_pause(void **state, bool force)
 	int				 rc;
 	int				 i;
 
-	FAULT_INJECTION_REQUIRED();
-
 	rc = cr_pool_create(state, &pool, false, class);
 	assert_rc_equal(rc, 0);
 
@@ -3674,6 +3672,8 @@ cr_maintenance_mode(void **state)
 	char			 fetch_buf[CR_IO_SIZE];
 	struct daos_check_info	 dci = { 0 };
 	int			 rc;
+
+	FAULT_INJECTION_REQUIRED();
 
 	print_message("CR28: maintenance mode after dry-run check\n");
 
