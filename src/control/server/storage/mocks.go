@@ -107,7 +107,7 @@ func MockSmdDevice(c *NvmeController, varIdx ...int32) *SmdDevice {
 	sd := SmdDevice{
 		UUID:      test.MockUUID(idx),
 		TargetIDs: []int32{startTgt, startTgt + 1, startTgt + 2, startTgt + 3},
-		Roles:     BdevRoles{OptionBits(BdevRoleAll)},
+		Roles:     BdevRolesFromBits(BdevRoleAll),
 	}
 	if c != nil {
 		sd.Ctrlr = *c
@@ -203,7 +203,7 @@ func MockScmMountPoint(varIdx ...int32) *ScmMountPoint {
 		Path:       fmt.Sprintf("/mnt/daos%d", idx),
 		DeviceList: []string{fmt.Sprintf("pmem%d", idx)},
 		TotalBytes: uint64(humanize.TByte) * uint64(idx+1),
-		AvailBytes: uint64(humanize.TByte/4) * uint64(idx+1), // 75% used
+		AvailBytes: uint64(humanize.TByte/4) * uint64(idx+1), // 25% available
 		Rank:       ranklist.Rank(uint32(idx)),
 	}
 }

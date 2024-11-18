@@ -217,7 +217,7 @@ read_map_file(char **buf)
 static void
 determine_lib_path(void)
 {
-	int   path_offset   = 0, read_size, i, rc;
+	int   path_offset   = 0, read_size, i;
 	char *read_buff_map = NULL;
 	char *pos, *start, *end, *lib_dir_str = NULL;
 
@@ -306,28 +306,17 @@ determine_lib_path(void)
 	}
 
 	/* with version in name */
-	rc = asprintf(&path_libpthread, "%s/libpthread-%s.so", lib_dir_str, libc_version_str);
-	if (rc < 0) {
-		DS_ERROR(ENOMEM, "Failed to allocate memory for path_libpthread");
-		goto err_1;
-	}
-	if (rc >= PATH_MAX) {
-		free(path_libpthread);
-		path_libpthread = NULL;
+	D_ASPRINTF(path_libpthread, "%s/libpthread-%s.so", lib_dir_str, libc_version_str);
+	if (path_libpthread == NULL)
+		goto err;
+	if (strnlen(path_libpthread, PATH_MAX) >= PATH_MAX) {
+		D_FREE(path_libpthread);
 		DS_ERROR(ENAMETOOLONG, "path_libpthread is too long");
-		goto err_1;
+		goto err;
 	}
-	rc = asprintf(&path_libdl, "%s/libdl-%s.so", lib_dir_str, libc_version_str);
-	if (rc < 0) {
-		DS_ERROR(ENOMEM, "Failed to allocate memory for path_libdl");
-		goto err_1;
-	}
-	if (rc >= PATH_MAX) {
-		free(path_libdl);
-		path_libdl = NULL;
-		DS_ERROR(ENAMETOOLONG, "path_libdl is too long");
-		goto err_1;
-	}
+	D_ASPRINTF(path_libdl, "%s/libdl-%s.so", lib_dir_str, libc_version_str);
+	if (path_libdl == NULL)
+		goto err;
 	D_FREE(lib_dir_str);
 
 	if (strstr(read_buff_map, "libioil.so")) {
@@ -357,7 +346,6 @@ determine_lib_path(void)
 
 err:
 	D_FREE(read_buff_map);
-err_1:
 	D_FREE(lib_dir_str);
 	found_libc = 0;
 	quit_hook_init();
@@ -780,8 +768,8 @@ free_memory_in_hook(void)
 	D_FREE(path_ld);
 	D_FREE(path_libc);
 	D_FREE(module_list);
-	free(path_libdl);
-	free(path_libpthread);
+	D_FREE(path_libdl);
+	D_FREE(path_libpthread);
 
 	if (lib_name_list) {
 		for (i = 0; i < num_lib_in_map; i++) {

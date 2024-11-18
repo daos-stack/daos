@@ -724,7 +724,7 @@ vos_pool_checkpoint(daos_handle_t poh)
 	struct bio_wal_info            wal_info;
 	int                            rc;
 	uint64_t                       purge_size = 0;
-	struct umem_cache_chkpt_stats  stats;
+	struct umem_cache_chkpt_stats  stats = { 0 };
 	struct vos_chkpt_metrics      *chkpt_metrics = NULL;
 
 	pool = vos_hdl2pool(poh);
@@ -1585,7 +1585,8 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 	}
 
 	pool->vp_metrics = metrics;
-	if (bio_nvme_configured(SMD_DEV_TYPE_DATA) && pool_df->pd_nvme_sz != 0) {
+	if (!(flags & VOS_POF_FOR_FEATURE_FLAG) && bio_nvme_configured(SMD_DEV_TYPE_DATA) &&
+	    pool_df->pd_nvme_sz != 0) {
 		struct vea_unmap_context	 unmap_ctxt;
 		struct vos_pool_metrics		*vp_metrics = metrics;
 		void				*vea_metrics = NULL;
@@ -1971,4 +1972,48 @@ vos_pool_biov2addr(daos_handle_t poh, struct bio_iov *biov)
 		return NULL;
 
 	return umem_off2ptr(vos_pool2umm(pool), bio_iov2raw_off(biov));
+}
+
+bool
+vos_pool_feature_skip_start(daos_handle_t poh)
+{
+	struct vos_pool *vos_pool;
+
+	vos_pool = vos_hdl2pool(poh);
+	D_ASSERT(vos_pool != NULL);
+
+	return vos_pool->vp_pool_df->pd_compat_flags & VOS_POOL_COMPAT_FLAG_SKIP_START;
+}
+
+bool
+vos_pool_feature_immutable(daos_handle_t poh)
+{
+	struct vos_pool *vos_pool;
+
+	vos_pool = vos_hdl2pool(poh);
+	D_ASSERT(vos_pool != NULL);
+
+	return vos_pool->vp_pool_df->pd_compat_flags & VOS_POOL_COMPAT_FLAG_IMMUTABLE;
+}
+
+bool
+vos_pool_feature_skip_rebuild(daos_handle_t poh)
+{
+	struct vos_pool *vos_pool;
+
+	vos_pool = vos_hdl2pool(poh);
+	D_ASSERT(vos_pool != NULL);
+
+	return vos_pool->vp_pool_df->pd_compat_flags & VOS_POOL_COMPAT_FLAG_SKIP_REBUILD;
+}
+
+bool
+vos_pool_feature_skip_dtx_resync(daos_handle_t poh)
+{
+	struct vos_pool *vos_pool;
+
+	vos_pool = vos_hdl2pool(poh);
+	D_ASSERT(vos_pool != NULL);
+
+	return vos_pool->vp_pool_df->pd_compat_flags & VOS_POOL_COMPAT_FLAG_SKIP_DTX_RESYNC;
 }

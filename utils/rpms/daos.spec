@@ -15,8 +15,8 @@
 %endif
 
 Name:          daos
-Version:       2.7.100
-Release:       11%{?relval}%{?dist}
+Version:       2.7.101
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -418,6 +418,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_sysconfdir}/bash_completion.d/daos.bash
 # Certificate generation files
 %dir %{_libdir}/%{name}
+%{_bindir}/daos_metrics
 %{_libdir}/%{name}/certgen/
 %{_libdir}/%{name}/VERSION
 %{_libdir}/libcart.so.*
@@ -434,7 +435,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # and/or daos_firmware_helper
 %attr(2755,root,daos_server) %{_bindir}/daos_server
 %{_bindir}/daos_engine
-%{_bindir}/daos_metrics
 %{_bindir}/ddb
 %{_sysconfdir}/ld.so.conf.d/daos.conf
 %dir %{_libdir}/daos_srv
@@ -593,8 +593,15 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Wed Nov 6 2024 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.7.100-11
+* Mon Nov 18 2024 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.7.101-2
 - pmemobj errors and warnings reported via DAOS logging system
+
+* Fri Nov 08 2024 Phillip Henderson <phillip.henderson@intel.com> 2.7.101-1
+- Bump version to 2.7.100
+
+* Tue Nov 5 2024 Michael MacDonald <mjmac@google.com> 2.7.100-11
+- Move daos_metrics tool to daos package for use on both clients
+  and servers.
 
 * Fri Nov 1 2024 Sherin T George <sherin-t.george@hpe.com> 2.7.100-10
 - The modified DAV allocator with memory bucket support for md_on_ssd

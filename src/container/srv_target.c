@@ -181,7 +181,6 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 	}
 
 	if (pool->sp_rebuilding && !vos_agg) {
-		cont->sc_ec_agg_active = 0;
 		D_DEBUG(DB_EPC, DF_CONT": skip EC aggregation during rebuild %d.\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 			pool->sp_rebuilding);
@@ -192,12 +191,10 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 		if (!cont->sc_vos_agg_active)
 			D_DEBUG(DB_EPC, DF_CONT": resume VOS aggregation after reintegration.\n",
 				DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
-		cont->sc_vos_agg_active = 1;
 	} else {
 		if (!cont->sc_ec_agg_active)
 			D_DEBUG(DB_EPC, DF_CONT": resume EC aggregation after reintegration.\n",
 				DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
-		cont->sc_ec_agg_active = 1;
 	}
 
 	if (!cont->sc_props_fetched)
@@ -471,6 +468,11 @@ cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 		if (!cont_aggregate_runnable(cont, req, param->ap_vos_agg))
 			goto next;
 
+		if (param->ap_vos_agg)
+			cont->sc_vos_agg_active = 1;
+		else
+			cont->sc_ec_agg_active = 1;
+
 		rc = cont_child_aggregate(cont, cb, param);
 		if (rc == -DER_SHUTDOWN) {
 			break;	/* pool destroyed */
@@ -483,9 +485,21 @@ cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 			/* Don't sleep too long when there is space pressure */
 			msecs = 2ULL * 100;
 		}
+
+		if (param->ap_vos_agg)
+			cont->sc_vos_agg_active = 0;
+		else
+			cont->sc_ec_agg_active = 0;
+
 next:
 		if (dss_ult_exiting(req))
 			break;
+
+		/* sleep 18 seconds for EC aggregation ULT if the pool is in rebuilding,
+		 * if no space pressure.
+		 */
+		if (cont->sc_pool->spc_pool->sp_rebuilding && !param->ap_vos_agg && msecs != 200)
+			msecs = 18000;
 
 		sched_req_sleep(req, msecs);
 	}
