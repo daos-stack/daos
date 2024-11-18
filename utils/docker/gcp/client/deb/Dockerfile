@@ -7,11 +7,12 @@ FROM $BASE_IMAGE_BUILDER as builder
 ARG GIT_REPOSITORY
 ARG GIT_BRANCH_OR_TAG
 ARG DAOS_BUILD_TYPE=release
+ARG DAOS_SRC_DIR
 
 RUN echo $(TZ=PDT date +'%Y%m%d.%H%M%S') > /tmp/build_ts.txt
 
 # Copy the previously cloned daos
-COPY daos /daos/
+COPY "${DAOS_SRC_DIR}" /daos/
 
 # Making bash a default shell
 SHELL ["/bin/bash", "-c"]
@@ -225,7 +226,8 @@ Description: The Distributed Asynchronous Object Storage (DAOS) is an open-sourc
   VERSION=$(cat "daos/utils/rpms/daos.spec" | awk -v VERSION_SUFFIX=$(cat /tmp/build_ts.txt) '/^Version:/ {split($2,a,"~"); if (a[2]!="") {print a[1] "." VERSION_SUFFIX "~" a[2]} else {print a[1] "." VERSION_SUFFIX}; }') envsubst | \
   tee /debs/daos-client/DEBIAN/control
 
-RUN dpkg-deb -Zxz --build debs/daos-client/
+#some copied files do not have the required permissions for dpkg-deb (must be >=0755 and <=0775)
+RUN chmod -R 755 debs/daos-client && dpkg-deb -Zxz --build debs/daos-client/
 # RUN find daos/ -name
 
 RUN mkdir -p out && \
