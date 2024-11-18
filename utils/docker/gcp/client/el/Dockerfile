@@ -143,7 +143,7 @@ RUN cp utils/rpms/daos.spec utils/rpms/daos.spec.orig && \
   diff utils/rpms/daos.spec.orig utils/rpms/daos.spec || true
 
 RUN if [[ "$BASE_IMAGE_BUILDER" == "rockylinux/rockylinux:9" ]]; then \
-  /bin/sh -c "daos/utils/docker/gcp/client/el/patch_daos_spec.sh"; \
+  /bin/sh -c "utils/docker/gcp/client/el/patch_daos_spec.sh"; \
 fi
 
 RUN virtualenv venv && \

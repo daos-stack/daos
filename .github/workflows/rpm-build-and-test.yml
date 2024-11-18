@@ -209,7 +209,7 @@ jobs:
         # necessary because our Dockerfile assumes /daos is our build context
         # but the .dockerignore file ignores many files we need in our RPM
         id: rm-docker-ignore
-        run: rm -f .dockerignore
+        run: rm -f .dockerignore && touch .dockerignore
       - name: Build RPM
         id: build-rpm
         continue-on-error: true
