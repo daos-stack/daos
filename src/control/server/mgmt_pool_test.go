@@ -196,7 +196,7 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 	scmTooSmallRatio := 0.01
 	scmTooSmallTotal := uint64(testTargetCount * engine.NvmeMinBytesPerTarget)
 	scmTooSmallReq := uint64(float64(scmTooSmallTotal) * scmTooSmallRatio)
-	nvmeTooSmallTotal := uint64(3 * humanize.GByte)
+	nvmeTooSmallTotal := uint64(3 * humanize.GiByte)
 	nvmeTooSmallReq := nvmeTooSmallTotal
 
 	for name, tc := range map[string]struct {
@@ -579,7 +579,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			memberCount: MaxPoolServiceReps + 2,
 			req: &mgmtpb.PoolCreateReq{
 				Uuid:       test.MockUUID(1),
-				TotalBytes: 100 * humanize.GByte,
+				TotalBytes: 100 * humanize.GiByte,
 				TierRatio:  defaultTierRatios,
 				NumSvcReps: MaxPoolServiceReps + 2,
 				Properties: testPoolLabelProp(),
@@ -591,7 +591,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			memberCount: MaxPoolServiceReps - 2,
 			req: &mgmtpb.PoolCreateReq{
 				Uuid:       test.MockUUID(1),
-				TotalBytes: 100 * humanize.GByte,
+				TotalBytes: 100 * humanize.GiByte,
 				TierRatio:  defaultTierRatios,
 				NumSvcReps: MaxPoolServiceReps - 1,
 				Properties: testPoolLabelProp(),

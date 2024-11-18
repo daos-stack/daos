@@ -20,6 +20,56 @@
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/vos_types.h>
 
+#define VOS_POOL_COMPAT_FLAG_IMMUTABLE (1ULL << 0)
+#define VOS_POOL_COMPAT_FLAG_SKIP_START      (1ULL << 1)
+#define VOS_POOL_COMPAT_FLAG_SKIP_REBUILD    (1ULL << 2)
+#define VOS_POOL_COMPAT_FLAG_SKIP_DTX_RESYNC (1ULL << 3)
+
+#define VOS_POOL_COMPAT_FLAG_SUPP                                                                  \
+	(VOS_POOL_COMPAT_FLAG_IMMUTABLE | VOS_POOL_COMPAT_FLAG_SKIP_START |                        \
+	 VOS_POOL_COMPAT_FLAG_SKIP_REBUILD | VOS_POOL_COMPAT_FLAG_SKIP_DTX_RESYNC)
+
+#define VOS_POOL_INCOMPAT_FLAG_SUPP    0
+
+#define VOS_MAX_FLAG_NAME_LEN          32
+
+static inline uint64_t
+vos_pool_name2flag(const char *name, bool *compat_feature)
+{
+	*compat_feature = false;
+
+	if (strncmp(name, "immutable", VOS_MAX_FLAG_NAME_LEN) == 0) {
+		*compat_feature = true;
+		return VOS_POOL_COMPAT_FLAG_IMMUTABLE;
+	}
+	if (strncmp(name, "skip_start", VOS_MAX_FLAG_NAME_LEN) == 0) {
+		*compat_feature = true;
+		return VOS_POOL_COMPAT_FLAG_SKIP_START;
+	}
+	if (strncmp(name, "skip_rebuild", VOS_MAX_FLAG_NAME_LEN) == 0) {
+		*compat_feature = true;
+		return VOS_POOL_COMPAT_FLAG_SKIP_REBUILD;
+	}
+	if (strncmp(name, "skip_dtx_resync", VOS_MAX_FLAG_NAME_LEN) == 0) {
+		*compat_feature = true;
+		return VOS_POOL_COMPAT_FLAG_SKIP_DTX_RESYNC;
+	}
+
+	return 0;
+}
+
+bool
+vos_pool_feature_skip_start(daos_handle_t poh);
+
+bool
+vos_pool_feature_immutable(daos_handle_t poh);
+
+bool
+vos_pool_feature_skip_rebuild(daos_handle_t poh);
+
+bool
+vos_pool_feature_skip_dtx_resync(daos_handle_t poh);
+
 /** Initialize the vos reserve/cancel related fields in dtx handle
  *
  * \param dth	[IN]	The dtx handle
@@ -1161,6 +1211,40 @@ int
 vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	    struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb,
 	    vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth);
+
+/**
+ * Iterate VOS objects and subtrees when recursive mode is specified. When it's
+ * called against md-on-ssd phase2 pool, it iterates objects in bucket ID order
+ * instead of OID order to minimize bucket eviction/load.
+ *
+ * \param[in]		param		iteration parameters
+ * \param[in]		recursive	iterate in lower level recursively
+ * \param[in]		anchors		array of anchors, one for each
+ *					iteration level
+ * \param[in]		pre_cb		pre subtree iteration callback
+ * \param[in]		post_cb		post subtree iteration callback
+ * \param[in]		arg		callback argument
+ * \param[in]		dth		DTX handle
+ *
+ * \retval		0	iteration complete
+ * \retval		> 0	callback return value
+ * \retval		-DER_*	error (but never -DER_NONEXIST)
+ */
+int
+vos_iterate_obj(vos_iter_param_t *param, bool recursive, struct vos_iter_anchors *anchors,
+		vos_iter_cb_t pre_cb, vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth);
+
+/**
+ * Skip the object not located on specified bucket (for md-on-ssd phase2).
+ *
+ * \param ih[IN]	Iterator handle
+ * \param desc[IN]	Iterator desc for current OI entry
+ *
+ * \return		true:	current entry is skipped
+ *			false:	current entry isn't skipped
+ */
+bool
+vos_bkt_iter_skip(daos_handle_t ih, vos_iter_desc_t *desc);
 
 /**
  * Retrieve the largest or smallest integer DKEY, AKEY, and array offset from an

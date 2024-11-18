@@ -85,6 +85,37 @@ func (nfm NUMAFabricMap) MaxNUMANode() int {
 	return max
 }
 
+type filterMode int
+
+const (
+	// filterModeExclude indicates that devices in the set should be excluded
+	filterModeExclude filterMode = 0
+	// filterModeInclude indicates that only devices in the set should be included
+	filterModeInclude filterMode = 1
+)
+
+type deviceFilter struct {
+	deviceSet common.StringSet
+	mode      filterMode
+}
+
+func (df *deviceFilter) ShouldIgnore(devName string) bool {
+	if df == nil || df.deviceSet == nil {
+		return false
+	}
+	if df.mode == filterModeExclude {
+		return df.deviceSet.Has(devName)
+	}
+	return !df.deviceSet.Has(devName)
+}
+
+func newDeviceFilter(deviceSet common.StringSet, mode filterMode) *deviceFilter {
+	return &deviceFilter{
+		deviceSet: deviceSet,
+		mode:      mode,
+	}
+}
+
 // NUMAFabric represents a set of fabric interfaces organized by NUMA node.
 type NUMAFabric struct {
 	log   logging.Logger
@@ -92,9 +123,9 @@ type NUMAFabric struct {
 
 	numaMap NUMAFabricMap
 
-	currentNumaDevIdx map[int]int // current device idx to use on each NUMA node
-	currentNUMANode   int         // current NUMA node to search
-	ignoreIfaces      common.StringSet
+	currentNumaDevIdx map[int]int   // current device idx to use on each NUMA node
+	currentNUMANode   int           // current NUMA node to search
+	ifaceFilter       *deviceFilter // set of interface names for filtering
 
 	getAddrInterface func(name string) (addrFI, error)
 }
@@ -112,12 +143,12 @@ func (n *NUMAFabric) Add(numaNode int, fi *FabricInterface) error {
 	return nil
 }
 
-// WithIgnoredDevices adds a set of fabric interface names that should be ignored when
-// selecting a device.
-func (n *NUMAFabric) WithIgnoredDevices(ifaces common.StringSet) *NUMAFabric {
-	n.ignoreIfaces = ifaces
-	if len(ifaces) > 0 {
-		n.log.Tracef("ignoring fabric devices: %s", n.ignoreIfaces)
+// WithDeviceFilter adds a set of fabric interface names that should be used for
+// filtering when selecting a device.
+func (n *NUMAFabric) WithDeviceFilter(filter *deviceFilter) *NUMAFabric {
+	if filter != nil {
+		n.ifaceFilter = filter
+		n.log.Tracef("fabric device filter: %+v", n.ifaceFilter)
 	}
 	return n
 }
@@ -234,8 +265,8 @@ func (n *NUMAFabric) getDeviceFromNUMA(numaNode int, netDevClass hardware.NetDev
 	for checked := 0; checked < n.getNumDevices(numaNode); checked++ {
 		fabricIF := n.getNextDevice(numaNode)
 
-		if n.ignoreIfaces.Has(fabricIF.Name) {
-			n.log.Tracef("device %s: ignored (ignore list %s)", fabricIF, n.ignoreIfaces)
+		if n.ifaceFilter.ShouldIgnore(fabricIF.Name) {
+			n.log.Tracef("device %s: ignored (filter: %+v)", fabricIF, n.ifaceFilter)
 			continue
 		}
 
