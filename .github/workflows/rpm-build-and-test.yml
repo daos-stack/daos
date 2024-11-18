@@ -4,19 +4,18 @@ env:
   # TODO: we really need to define a list of supported versions (ideally it's no more than 2)
   #       build is done on the lowest version and test on the highest with a "sanity test"
   #       stage done on all versions in the list except the highest
-  EL8_BUILD_VERSION: 8.9
-  EL9_BUILD_VERSION: 9
-  LEAP15_VERSION: 15.5
+  EL8_VERSION: 8
+  EL9_VERSION: 9
+  DEBIAN_VERSION: 12
+  UBUNTU_VERSION: 22.04
 
-on: fork
-  # workflow_dispatch:
-  #   inputs:
-  #     pr-repos:
-  #       description: 'Any PR-repos that you want included in this build'
-  #       required: false
-  # pull_request:
-
-permissions: {}
+on:
+  workflow_dispatch:
+    inputs:
+      pr-repos:
+        description: 'Any PR-repos that you want included in this build'
+        required: false
+  pull_request:
 
 concurrency:
   group: rpm-build-and-test-${{ github.head_ref  || github.run_id }}
@@ -26,13 +25,15 @@ defaults:
   run:
     shell: bash --noprofile --norc -ueo pipefail {0}
 
+permissions: {}
+
 jobs:
   # it's a real shame that this step is even needed.  push events have the commit message # in
   # ${{ github.event.head_commit.message }} but pull_requests don't.  :-(
   Import-commit-message:
     name: Get commit message
     if: github.repository == 'daos-stack/daos'
-    runs-on: [self-hosted, gcp, rocky8]
+    runs-on: [self-hosted, light]
     # Map a step output to a job output
     outputs:
       message: ${{ steps.commit_message.outputs.text }}
@@ -59,21 +60,10 @@ jobs:
 
   Import-commit-pragmas:
     name: Make commit pragma variables
-    runs-on: [self-hosted, gcp, rocky8]
+    runs-on: [self-hosted, light]
     needs: [Import-commit-message]
     # can't use matrixes for matrixed output yet
     # https://github.com/actions/runner/pull/2477
-    # strategy:
-    #  matrix:
-    #    distro: [el8, el9, leap15]
-    #    include:
-    #      - distro: el8
-    #        UC_DISTRO: EL8
-    #      - distro: el9
-    #        UC_DISTRO: EL9
-    #      - distro: leap15
-    #        UC_DISTRO: LEAP15
-    # Map a step output to a job output
     outputs:
       rpm-test-version: ${{ steps.rpm-test-version.outputs.value }}
       pr-repos: ${{ steps.pr-repos.outputs.value }}
@@ -111,7 +101,7 @@ jobs:
     # instead we assume success at the beginning and then let any axis that fails remove the
     # lastSuccessfulBuild link if it fails
     name: Create lastBuild and lastSuccessfulBuild symlinks
-    runs-on: [self-hosted, gcp, rocky8]
+    runs-on: [self-hosted, light]
     needs: [Import-commit-pragmas]
     if: needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
         needs.Import-commit-pragmas.outputs.rpm-test-version == '' &&
@@ -130,7 +120,7 @@ jobs:
 
   Calc-rpm-build-matrix:
     name: Calculate RPM Build Matrix
-    runs-on: [self-hosted, gcp, rocky8]
+    runs-on: [self-hosted, gcp]
     needs: [Import-commit-pragmas, Create-symlinks]
     outputs:
       matrix: ${{ steps.matrix.outputs.text }}
@@ -151,18 +141,18 @@ jobs:
              if ! ${CP_SKIP_BUILD_EL9_RPM:-false}; then
                  l+=('"el9"')
              fi
-             if ${{ github.event_name == 'push' }} ||
-                (${{ github.event_name == 'pull_request' }} &&
-                ! ${CP_SKIP_BUILD_LEAP15_RPM:-false}); then
-                 l+=('"leap15"')
+             if ! ${CP_SKIP_BUILD_DEB12_RPM:-false}; then
+                 l+=('"deb12"')
              fi
+             if ! ${CP_SKIP_BUILD_UBUNTU22_RPM:-false}; then
+                 l+=('"ubuntu22"')
+             fi
+
   Build-RPM:
     name: Build RPM
     permissions:
-      contents: read
-      id-token: write
       statuses: write
-    runs-on: [self-hosted, gcp, rocky8]
+    runs-on: [self-hosted, gcp]
     needs: [Create-symlinks, Import-commit-pragmas, Calc-rpm-build-matrix]
     if: needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
         needs.Create-symlinks.result == 'success' &&
@@ -171,151 +161,61 @@ jobs:
       matrix:
         distro: ${{ fromJSON(needs.Calc-rpm-build-matrix.outputs.matrix) }}
       fail-fast: false
-    env:
-      ARCH: GCP
-      ARTIFACTORY_URL:
-      DAOS_EMAIL: brian.murrell@intel.com
-      DAOS_FULLNAME: daos-stack
-      DISTRO: ${{ matrix.distro }}
-      DISTRO_REPOS: disabled
-      DOCKER_BUILDKIT: 0
-      ARTIFACTS_URL: file:///scratch/job_repos/
-      JENKINS_URL:
-      MOCK_OPTIONS: --uniqueext=${{ github.run_id }}
-      PR_NUM: ${{ github.event.pull_request.number }}
-      # TODO -- this should be on stable, backedup storage, not /scratch
-      # yamllint disable-line rule:line-length
-      REPO_PATH: /scratch/job_repos/daos-stack/job/daos/job/PR-${{ github.event.pull_request.number }}/
-      REPO_FILE_URL:
-      RUN_ID: ${{ github.run_id }}
-      TARGET: ${{ matrix.distro }}
-      # keep VS Code's GHA linting happy
-      STAGE_NAME:
-      DISTRO_NAME:
-      DISTRO_VERSION:
-      CP_LEAP15_VERSION:
-      COMMIT_STATUS_DISTRO_VERSION:
-      FVERSION:
     steps:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
       - name: Set variables
         run: |
-            FVERSION="38"
+            GO_BUILDER=""
             case ${{ matrix.distro }} in
                 'el8')
-                    CHROOT_NAME="rocky+epel-8-x86_64"
+                    DOCKERFILE="utils/docker/gcp/client/el/Dockerfile"
+                    BASE_IMAGE_BUILDER="rockylinux/rockylinux:${{ env.EL8_VERSION }}"
                     DISTRO_NAME="EL"
-                    DISTRO_VERSION="${{ env.EL8_BUILD_VERSION }}"
-                    COMMIT_STATUS_DISTRO_VERSION="8"
+                    DISTRO_VERSION="${{ env.EL8_VERSION }}"
                     ;;
                 'el9')
-                    CHROOT_NAME="rocky+epel-9-x86_64"
+                    DOCKERFILE="utils/docker/gcp/client/el/Dockerfile"
+                    BASE_IMAGE_BUILDER="rockylinux/rockylinux:${{ env.EL9_VERSION }}"
                     DISTRO_NAME="EL"
-                    DISTRO_VERSION="${{ env.EL9_BUILD_VERSION }}"
+                    DISTRO_VERSION="${{ env.EL9_VERSION }}"
                     ;;
-                'leap15')
-                    CHROOT_NAME="opensuse-leap-${{ env.CP_LEAP15_VERSION &&
-                                                   env.CP_LEAP15_VERSION ||
-                                                   env.LEAP15_VERSION }}-x86_64"
-                    DISTRO_NAME="Leap"
-                    DISTRO_VERSION="${{ env.CP_LEAP15_VERSION &&
-                                        env.CP_LEAP15_VERSION || env.LEAP15_VERSION }}"
+                'deb12')
+                    DOCKERFILE="utils/docker/gcp/client/deb/Dockerfile"
+                    BASE_IMAGE_BUILDER="debian:${{ env.DEBIAN_VERSION }}"
+                    GO_BUILDER="google-go.pkg.dev/golang:1.22.4"
+                    DISTRO_NAME="DEBIAN"
+                    DISTRO_VERSION="${{ env.DEBIAN_VERSION }}"
+                    ;;
+                'ubuntu22')
+                    DOCKERFILE="utils/docker/gcp/client/deb/Dockerfile"
+                    BASE_IMAGE_BUILDER="ubuntu:${{ env.UBUNTU_VERSION }}"
+                    GO_BUILDER="google-go.pkg.dev/golang:1.22.4"
+                    DISTRO_NAME="DEBIAN"
+                    DISTRO_VERSION="${{ env.UBUNTU_VERSION }}"
                     ;;
             esac
-            echo "CHROOT_NAME=$CHROOT_NAME" >> $GITHUB_ENV
+            echo "DOCKERFILE=$DOCKERFILE" >> $GITHUB_ENV
+            echo "BASE_IMAGE_BUILDER=$BASE_IMAGE_BUILDER" >> $GITHUB_ENV
+            echo "GO_BUILDER=$GO_BUILDER" >> $GITHUB_ENV
             echo "DISTRO_NAME=$DISTRO_NAME" >> $GITHUB_ENV
             echo "DISTRO_VERSION=$DISTRO_VERSION" >> $GITHUB_ENV
-            echo "BUILD_CHROOT=/var/lib/mock/$CHROOT_NAME-${{ github.run_id }}/" >> $GITHUB_ENV
             echo "STAGE_NAME=Build RPM on $DISTRO_NAME $DISTRO_VERSION" >> $GITHUB_ENV
-            echo "FVERSION=$FVERSION" >> $GITHUB_ENV
-            echo "COMMIT_STATUS_DISTRO_VERSION=$COMMIT_STATUS_DISTRO_VERSION" >> $GITHUB_ENV
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-      - name: Give Docker Permissions
-        id: give-docker-permissions
-        run: sudo usermod -a -G docker $(whoami)
-      - name: Build RPM Docker image
-        id: build-rpm-docker-image
-        continue-on-error: true
-        run: docker build --file utils/rpms/packaging/Dockerfile.mockbuild
-                          --build-arg CACHEBUST=$(date +%s%3N)
-                          --build-arg CB0=$(date +%V)
-                          --build-arg REPO_FILE_URL=$REPO_FILE_URL
-                          --build-arg UID=$(id -u)
-                          --build-arg FVERSION=${{ env.FVERSION }}
-                          --tag mock-build
-                          utils/rpms
-      # - name: Authenticate to GCP
-      #   id: gcp-authentication
-      #   uses: 'google-github-actions/auth@v2'
-      #   with:
-      #     project_id: daos-github-ci
-      #     workload_identity_provider: |
-      #       'projects/192572342707/locations/global/workloadIdentityPools/github/providers/daos'
       - name: Build RPM
         id: build-rpm
         continue-on-error: true
         # yamllint disable rule:line-length
-        run: rm -rf mock_result;
-             mkdir -p mock_result;
-             docker run --name mock-build-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.distro }}
-                        --user build
-                        -v "$PWD":"$PWD" -w "$PWD"
-                        -v "$PWD"/mock_result:/var/lib/mock/$CHROOT_NAME/result
-                        --privileged=true
-                        -e DAOS_FULLNAME="$DAOS_FULLNAME"
-                        -e DAOS_EMAIL="$DAOS_EMAIL"
-                        -e DISTRO_VERSION="$DISTRO_VERSION"
-                        -e STAGE_NAME="$STAGE_NAME"
-                        -e CHROOT_NAME="$CHROOT_NAME"
-                        -e ARTIFACTORY_URL="$ARTIFACTORY_URL"
-                        -e REPO_FILE_URL="$REPO_FILE_URL"
-                        -e JENKINS_URL="$JENKINS_URL"
-                        -e TARGET="$TARGET"
-                        mock-build ci/rpm/build.sh
-        # yamllint enable rule:line-length
-      - name: Build RPM failure log
-        id: build-rpm-fail-log
-        continue-on-error: true
-        if: steps.build-rpm.outcome != 'success'
-        run: cat mock_result/root.log;
-             cat mock_result/build.log
-      # - name: Save RPM build logs
-      #   id: 'upload-rpm-logs'
-      #   continue-on-error: true
-      #   uses: 'google-github-actions/upload-cloud-storage@v2'
-      #   with:
-      #     path: 'mock_result'
-      #     destination: 'github_ci_artifacts/${{ github.run_id }}'
-      #     glob: '**/*.txt'
-      - name: Create repo
-        id: create-repo
-        if: steps.build-rpm.outcome == 'success'
-        continue-on-error: true
-        run: CHROOT_NAME=$CHROOT_NAME ci/rpm/create_repo.sh
-      - name: Test repo
-        id: test-repo
-        if: steps.create-repo.outcome == 'success'
-        continue-on-error: true
-        run: . ci/gha_functions.sh;
-             dnf --disablerepo=\* --repofrompath
-                 testrepo,file://${REPO_PATH}${{ github.run_number }}/artifact/artifacts/$TARGET
-                 repoquery -a
+        run: sudo docker build . --file "${DOCKERFILE}"
+            --build-arg BASE_IMAGE_BUILDER="${BASE_IMAGE_BUILDER}"
+            --build-arg GO_BUILDER="${GO_BUILDER}"
+            --build-arg DAOS_BUILD_TYPE=release
+            --build-arg DAOS_SRC_DIR="."
+            --tag gha-amd-${{github.run_id}}-${{github.run_attempt}}
       - name: Remove lastSuccessfulBuild link and exit failure
-        if: steps.test-repo.outcome != 'success'
+        if: steps.build-rpm.outcome != 'success'
         run: rm -f ${REPO_PATH}lastSuccessfulBuild;
              exit 1
-      - name: Publish RPMs
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.ARCH }} ${{ env.DISTRO_NAME }} ${{ env.DISTRO_VERSION }} RPM repository
-          path: ${{ env.REPO_PATH}}${{ github.run_number }}/artifact/artifacts/${{ env.TARGET }}
-      - name: Update commit status
-        uses: ouzi-dev/commit-status-updater@v2
-        with:
-          # yamllint disable-line rule:line-length
-          name: 'build/Build RPM on ${{ env.DISTRO_NAME }} ${{ env.COMMIT_STATUS_DISTRO_VERSION && env.COMMIT_STATUS_DISTRO_VERSION || env.DISTRO_VERSION }}'
-          status: "${{ job.status }}"

@@ -1,13 +1,13 @@
-ARG ROCKY_BUILDER
-FROM $ROCKY_BUILDER as builder
+ARG BASE_IMAGE_BUILDER
+FROM $BASE_IMAGE_BUILDER as builder
 
 ARG GIT_REPOSITORY
 ARG GIT_BRANCH_OR_TAG
 ARG DAOS_BUILD_TYPE=release
-ARG ROCKY_BUILDER
+ARG BASE_IMAGE_BUILDER
 ARG DAOS_SRC_DIR
 
-RUN echo $ROCKY_BUILDER
+RUN echo $BASE_IMAGE_BUILDER
 
 RUN echo $(TZ=PDT date +'%Y%m%d.%H%M%S') > /tmp/build_ts.txt
 
@@ -16,12 +16,12 @@ COPY "$DAOS_SRC_DIR" /daos/
 
 RUN dnf install -y epel-release dnf-plugins-core
 
-RUN if [[ "$ROCKY_BUILDER" == "rockylinux/rockylinux:9" ]]; then \
+RUN if [[ "$BASE_IMAGE_BUILDER" == "rockylinux/rockylinux:9" ]]; then \
   dnf config-manager --enable crb && \
   dnf install -y python Lmod systemd; \
 fi
 
-RUN if [[ "$ROCKY_BUILDER" == "rockylinux/rockylinux:8" ]]; then \
+RUN if [[ "$BASE_IMAGE_BUILDER" == "rockylinux/rockylinux:8" ]]; then \
   dnf config-manager --enable powertools; \
 fi
 
@@ -57,7 +57,7 @@ RUN dnf config-manager --save --setopt=assumeyes=True && \
 # We need some packages for build only because daos.spec does not allow us
 # to only build the client. Rather than building them, just download them from
 # upstream repo.
-RUN EL_VERSION=`echo "$ROCKY_BUILDER" | sed 's/.*://'` && \
+RUN EL_VERSION=`echo "$BASE_IMAGE_BUILDER" | sed 's/.*://'` && \
       wget -O /etc/yum.repos.d/daos-packages.repo \
               "https://packages.daos.io/v2.6/EL${EL_VERSION}/packages/x86_64/daos_packages.repo"
 
@@ -72,11 +72,11 @@ WORKDIR /
 # Need to pass server argument because no way to build RPM without it
 RUN daos/utils/docker/gcp/clone_repos.sh
 
-RUN if [[ "$ROCKY_BUILDER" == "rockylinux/rockylinux:9" ]]; then \
+RUN if [[ "$BASE_IMAGE_BUILDER" == "rockylinux/rockylinux:9" ]]; then \
   daos/utils/scripts/install-el9.sh; \
 fi
 
-RUN if [[ "$ROCKY_BUILDER" == "rockylinux/rockylinux:8" ]]; then \
+RUN if [[ "$BASE_IMAGE_BUILDER" == "rockylinux/rockylinux:8" ]]; then \
   daos/utils/scripts/install-el8.sh; \
 fi
 
@@ -142,7 +142,7 @@ RUN cp utils/rpms/daos.spec utils/rpms/daos.spec.orig && \
   awk -i inplace  '/%files/ { print $0 ; print "%license LICENSE"; print "%license third_party_programs.txt"; next } ; 1' utils/rpms/daos.spec && \
   diff utils/rpms/daos.spec.orig utils/rpms/daos.spec || true
 
-RUN if [[ "$ROCKY_BUILDER" == "rockylinux/rockylinux:9" ]]; then \
+RUN if [[ "$BASE_IMAGE_BUILDER" == "rockylinux/rockylinux:9" ]]; then \
   /bin/sh -c "daos/utils/docker/gcp/client/el/patch_daos_spec.sh"; \
 fi
 
