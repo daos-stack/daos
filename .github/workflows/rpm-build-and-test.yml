@@ -205,6 +205,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+      - name: Remove Dockerignore file
+        # necessary because our Dockerfile assumes /daos is our build context
+        # but the .dockerignore file ignores many files we need in our RPM
+        id: rm-docker-ignore
+        run: rm -f .dockerignore
       - name: Build RPM
         id: build-rpm
         continue-on-error: true
@@ -219,3 +224,6 @@ jobs:
         if: steps.build-rpm.outcome != 'success'
         run: rm -f ${REPO_PATH}lastSuccessfulBuild;
              exit 1
+      - name: Restore Dockerignore file
+        id: restore-docker-ignore
+        run: git restore .dockerignore
