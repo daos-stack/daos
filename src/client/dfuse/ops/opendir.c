@@ -72,7 +72,7 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_f
 
 	dfuse_dre_drop(dfuse_info, oh);
 
-	active_oh_decref(oh);
+	active_oh_decref(dfuse_info, oh);
 
 	if (oh->doh_evict_on_close) {
 		ie = oh->doh_ie;
