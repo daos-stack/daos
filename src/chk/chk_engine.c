@@ -668,7 +668,7 @@ chk_engine_pool_mbs_one(struct chk_pool_rec *cpr, struct pool_map *map, struct c
 	int			 rc = 0;
 	bool			 unknown;
 
-	dom = pool_map_find_node_by_rank(map, mbs->cpm_rank);
+	dom = pool_map_find_dom_by_rank(map, mbs->cpm_rank);
 	if (dom == NULL) {
 		D_ASSERT(mbs->cpm_rank != dss_self_rank());
 
@@ -777,7 +777,7 @@ chk_engine_find_dangling_pm(struct chk_pool_rec *cpr, struct pool_map *map)
 	int			 j;
 	bool			 down;
 
-	rank_nr = pool_map_find_nodes(map, PO_COMP_ID_ALL, &doms);
+	rank_nr = pool_map_find_ranks(map, PO_COMP_ID_ALL, &doms);
 	if (rank_nr <= 0)
 		D_GOTO(out, rc = rank_nr);
 
@@ -1797,10 +1797,8 @@ cont:
 	}
 
 	rc = chk_engine_cont_cleanup(cpr, svc, &aggregator);
-	if (rc != 0)
-		goto out;
-
-	rc = ds_pool_svc_schedule_reconf(svc);
+	if (rc == 0 && !cpr->cpr_immutable)
+		rc = ds_pool_svc_schedule_reconf(svc);
 
 out:
 	chk_engine_cont_list_fini(&aggregator);
@@ -2112,6 +2110,11 @@ chk_engine_start_post(struct chk_instance *ins)
 
 		if (pool_cbk->cb_phase == CHK__CHECK_SCAN_PHASE__CSP_DONE)
 			continue;
+
+		if (ins->ci_prop.cp_flags & CHK__CHECK_FLAG__CF_DRYRUN)
+			cpr->cpr_immutable = 1;
+		else
+			cpr->cpr_immutable = 0;
 
 		if (phase > pool_cbk->cb_phase)
 			phase = pool_cbk->cb_phase;
@@ -2950,7 +2953,7 @@ chk_engine_pool_start(uint64_t gen, uuid_t uuid, uint32_t phase, uint32_t flags)
 	cbk = &cpr->cpr_bk;
 	chk_pool_get(cpr);
 
-	rc = ds_pool_start(uuid, false);
+	rc = ds_pool_start(uuid, false, cpr->cpr_immutable);
 	if (rc != 0)
 		D_GOTO(put, rc = (rc == -DER_NONEXIST ? 1 : rc));
 

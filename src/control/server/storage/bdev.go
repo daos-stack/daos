@@ -39,6 +39,12 @@ const (
 	sysXSTgtID     = 1024
 	// Minimum amount of hugepage memory (in bytes) needed for each target.
 	memHugepageMinPerTarget = 1 << 30 // 1GiB
+
+	// DefaultMemoryFileRatio (mem_size:meta_size) describes the behavior of MD-on-SSD in
+	// phase-1 mode where the per-target-meta-blob size is equal to the per-target-VOS-file
+	// size. In phase-2 mode where the per-target-meta-blob size is greater than
+	// per-target-VOS-file size, the memory file ratio will be less than one.
+	DefaultMemoryFileRatio = 1.0
 )
 
 // JSON config file constants.
@@ -312,6 +318,7 @@ func (sd *SmdDevice) UnmarshalJSON(data []byte) error {
 		sd.Roles.OptionBits = OptionBits(from.RoleBits)
 	}
 
+	// Handle any duplicate target IDs and set flag instead of sysXS target ID.
 	seen := make(map[int32]bool)
 	newTgts := make([]int32, 0, len(sd.TargetIDs))
 	for _, i := range sd.TargetIDs {
@@ -389,6 +396,35 @@ func (nc NvmeController) Free() (tb uint64) {
 	return
 }
 
+// Usable returns the cumulative usable bytes of blobstore clusters. This is a projected data
+// capacity calculated whilst taking into account future pool metadata overheads.
+func (nc NvmeController) Usable() (tb uint64) {
+	for _, d := range nc.SmdDevices {
+		tb += d.UsableBytes
+	}
+	return
+}
+
+// Roles returns bdev_roles for NVMe controller being used in MD-on-SSD mode. Assume that all SMD
+// devices on a controller have the same roles.
+func (nc *NvmeController) Roles() *BdevRoles {
+	if len(nc.SmdDevices) > 0 {
+		return &nc.SmdDevices[0].Roles
+	}
+
+	return &BdevRoles{}
+}
+
+// Rank returns rank on which this NVMe controller is being used. Assume that all SMD devices on a
+// controller have the same rank.
+func (nc *NvmeController) Rank() ranklist.Rank {
+	if len(nc.SmdDevices) > 0 {
+		return nc.SmdDevices[0].Rank
+	}
+
+	return ranklist.NilRank
+}
+
 // NvmeControllers is a type alias for []*NvmeController.
 type NvmeControllers []*NvmeController
 
@@ -404,10 +440,15 @@ func (ncs NvmeControllers) String() string {
 	return strings.Join(ss, ", ")
 }
 
+// Len returns the length of the NvmeController reference slice.
+func (ncs NvmeControllers) Len() int {
+	return len(ncs)
+}
+
 // Capacity returns the cumulative total bytes of all controller capacities.
 func (ncs NvmeControllers) Capacity() (tb uint64) {
 	for _, c := range ncs {
-		tb += (*NvmeController)(c).Capacity()
+		tb += c.Capacity()
 	}
 	return
 }
@@ -415,7 +456,7 @@ func (ncs NvmeControllers) Capacity() (tb uint64) {
 // Total returns the cumulative total bytes of all controller blobstores.
 func (ncs NvmeControllers) Total() (tb uint64) {
 	for _, c := range ncs {
-		tb += (*NvmeController)(c).Total()
+		tb += c.Total()
 	}
 	return
 }
@@ -423,17 +464,22 @@ func (ncs NvmeControllers) Total() (tb uint64) {
 // Free returns the cumulative available bytes of all blobstore clusters.
 func (ncs NvmeControllers) Free() (tb uint64) {
 	for _, c := range ncs {
-		tb += (*NvmeController)(c).Free()
+		tb += c.Free()
 	}
 	return
 }
 
-// PercentUsage returns the percentage of used storage space.
-func (ncs NvmeControllers) PercentUsage() string {
-	return common.PercentageString(ncs.Total()-ncs.Free(), ncs.Total())
+// Usable returns the cumulative usable bytes of all blobstore clusters. This is a projected data
+// capacity calculated whilst taking into account future pool metadata overheads.
+func (ncs NvmeControllers) Usable() (tb uint64) {
+	for _, c := range ncs {
+		tb += c.Usable()
+	}
+	return
 }
 
 // Summary reports accumulated storage space and the number of controllers.
+// Storage capacity printed with SI (decimal representation) units.
 func (ncs NvmeControllers) Summary() string {
 	return fmt.Sprintf("%s (%d %s)", humanize.Bytes(ncs.Capacity()),
 		len(ncs), common.Pluralise("controller", len(ncs)))
@@ -470,6 +516,14 @@ func (ncs NvmeControllers) Addresses() (*hardware.PCIAddressSet, error) {
 		}
 	}
 	return pas, nil
+}
+
+// HaveMdOnSsdRoles returns true if bdev MD-on-SSD roles are configured on NVMe SSDs.
+func (ncs NvmeControllers) HaveMdOnSsdRoles() bool {
+	if ncs.Len() > 0 && !ncs[0].Roles().IsEmpty() {
+		return true
+	}
+	return false
 }
 
 // NvmeAioDevice returns struct representing an emulated NVMe AIO device (file or kdev).

@@ -44,13 +44,13 @@ addFilter("E: static-library-without-debuginfo \/usr\/lib64\/lib(dfuse|ioil)\.a"
 
 # these need to be fixed:
 # https://daosio.atlassian.net/browse/DAOS-11539
-addFilter("W: no-soname \/usr\/lib64\/lib(ds3|daos_(common|cmd_hdlrs|self_test|tests|serialize|common_pmem)|dfs|dfuse|duns|ioil|pil4dfs|dpar(|_mpi)).so")
+addFilter("W: no-soname \/usr\/lib64\/lib(ds3|daos_(common|cmd_hdlrs|self_test|tests|serialize|common_pmem)|dfs|dfuse|duns|ioil|pil4dfs|dpar(|_mpi)|dav_v2).so")
 
 # Tests rpm needs to be able to build daos from source so pulls in build deps and is expected.
-addFilter("daos-client-tests.x86_64: E: devel-dependency protobuf-c-devel")
+addFilter("daos-client-tests\.x86_64: E: devel-dependency protobuf-c-devel")
 
 # a functional test builds daos from source, so it needs the various *-devel packages for daos' build dependencies.
-addFilter("daos-client-tests.x86_64: E: devel-dependency capstone-devel")
-addFilter("daos-client-tests.x86_64: E: explicit-lib-dependency libcapstone-devel")
-addFilter("daos-client-tests.x86_64: E: devel-dependency libcapstone-devel")
-addFilter("daos-client-tests.x86_64: E: devel-dependency fuse3-devel")
+addFilter("daos-client-tests\.x86_64: E: devel-dependency capstone-devel")
+addFilter("daos-client-tests\.x86_64: E: explicit-lib-dependency lib(capstone|ndctl)-devel")
+addFilter("daos-client-tests\.x86_64: E: devel-dependency libcapstone-devel")
+addFilter("daos-client-tests\.x86_64: E: devel-dependency fuse3-devel")

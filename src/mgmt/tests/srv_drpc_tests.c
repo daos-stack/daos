@@ -1408,12 +1408,13 @@ test_drpc_pool_query_success(void **state)
 	Drpc__Response		resp = DRPC__RESPONSE__INIT;
 	uuid_t			exp_uuid;
 	daos_pool_info_t	exp_info = {0};
+	uint64_t flags = DPI_ENGINES_ENABLED | DPI_ENGINES_DISABLED | DPI_ENGINES_SUSPECT;
 
 	init_test_pool_info(&exp_info);
 	init_test_rebuild_status(&exp_info.pi_rebuild_st);
 	ds_mgmt_pool_query_info_out = exp_info;
 
-	setup_pool_query_drpc_call(&call, TEST_UUID, DPI_ENGINES_ENABLED | DPI_ENGINES_DISABLED);
+	setup_pool_query_drpc_call(&call, TEST_UUID, flags);
 
 	ds_mgmt_drpc_pool_query(&call, &resp);
 
@@ -1424,8 +1425,9 @@ test_drpc_pool_query_success(void **state)
 	assert_non_null(ds_mgmt_pool_query_info_ptr);
 	assert_non_null(ds_mgmt_pool_query_enabled_ranks_out);
 	assert_non_null(ds_mgmt_pool_query_disabled_ranks_out);
-	assert_int_equal(ds_mgmt_pool_query_info_in.pi_bits,
-			 DEFAULT_QUERY_BITS | DPI_ENGINES_ENABLED | DPI_ENGINES_DISABLED);
+	assert_non_null(ds_mgmt_pool_query_suspect_ranks_out);
+	flags |= DEFAULT_QUERY_BITS;
+	assert_int_equal(ds_mgmt_pool_query_info_in.pi_bits, DEFAULT_QUERY_BITS | flags);
 
 	expect_query_resp_with_info(&exp_info,
 				    MGMT__POOL_REBUILD_STATUS__STATE__IDLE,
@@ -2408,17 +2410,16 @@ static void
 expect_drpc_cont_set_owner_resp_with_status(Drpc__Response *resp,
 					   int expected_err)
 {
-	Mgmt__ContSetOwnerResp *payload_resp = NULL;
+	Mgmt__DaosResp *payload_resp = NULL;
 
 	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
 	assert_non_null(resp->body.data);
 
-	payload_resp = mgmt__cont_set_owner_resp__unpack(NULL, resp->body.len,
-							 resp->body.data);
+	payload_resp = mgmt__daos_resp__unpack(NULL, resp->body.len, resp->body.data);
 	assert_non_null(payload_resp);
 	assert_int_equal(payload_resp->status, expected_err);
 
-	mgmt__cont_set_owner_resp__free_unpacked(payload_resp, NULL);
+	mgmt__daos_resp__free_unpacked(payload_resp, NULL);
 }
 
 static void
@@ -2428,10 +2429,10 @@ test_drpc_cont_set_owner_bad_pool_uuid(void **state)
 	Drpc__Response		resp = DRPC__RESPONSE__INIT;
 	Mgmt__ContSetOwnerReq	req = MGMT__CONT_SET_OWNER_REQ__INIT;
 
-	req.pooluuid = "this isn't really a uuid";
-	req.contuuid = "11111111-1111-1111-1111-111111111111";
-	req.owneruser = "user@";
-	req.ownergroup = "group@";
+	req.pool_id     = "this isn't really a uuid";
+	req.cont_id     = "11111111-1111-1111-1111-111111111111";
+	req.owner_user  = "user@";
+	req.owner_group = "group@";
 
 	setup_cont_set_owner_drpc_call(&call, &req);
 
@@ -2444,22 +2445,32 @@ test_drpc_cont_set_owner_bad_pool_uuid(void **state)
 }
 
 static void
-test_drpc_cont_set_owner_bad_cont_uuid(void **state)
+test_drpc_cont_set_owner_cont_label(void **state)
 {
 	Drpc__Call		call = DRPC__CALL__INIT;
 	Drpc__Response		resp = DRPC__RESPONSE__INIT;
 	Mgmt__ContSetOwnerReq	req = MGMT__CONT_SET_OWNER_REQ__INIT;
+	uuid_t                  pool_uuid;
 
-	req.pooluuid = "11111111-1111-1111-1111-111111111111";
-	req.contuuid = "this isn't really a uuid";
-	req.owneruser = "user@";
-	req.ownergroup = "group@";
+	req.pool_id     = "11111111-1111-1111-1111-111111111111";
+	req.cont_id     = "cont_label";
+	req.owner_user  = "user@";
+	req.owner_group = "group@";
 
 	setup_cont_set_owner_drpc_call(&call, &req);
 
 	ds_mgmt_drpc_cont_set_owner(&call, &resp);
 
-	expect_drpc_cont_set_owner_resp_with_status(&resp, -DER_INVAL);
+	expect_drpc_cont_set_owner_resp_with_status(&resp, 0);
+
+	/* Verify mgmt_cont_set_owner called with correct params */
+	assert_int_equal(uuid_parse(req.pool_id, pool_uuid), 0);
+	assert_int_equal(uuid_compare(pool_uuid, ds_mgmt_cont_set_owner_pool), 0);
+	assert_string_equal(req.cont_id, ds_mgmt_cont_set_owner_cont);
+	assert_non_null(ds_mgmt_cont_set_owner_user);
+	assert_string_equal(req.owner_user, ds_mgmt_cont_set_owner_user);
+	assert_non_null(ds_mgmt_cont_set_owner_group);
+	assert_string_equal(req.owner_group, ds_mgmt_cont_set_owner_group);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
@@ -2473,10 +2484,10 @@ test_drpc_cont_set_owner_failed(void **state)
 	Mgmt__ContSetOwnerReq	req = MGMT__CONT_SET_OWNER_REQ__INIT;
 	int			exp_rc = -DER_MISC;
 
-	req.pooluuid = "11111111-1111-1111-1111-111111111111";
-	req.contuuid = "22222222-2222-2222-2222-222222222222";
-	req.owneruser = "user@";
-	req.ownergroup = "group@";
+	req.pool_id     = "11111111-1111-1111-1111-111111111111";
+	req.cont_id     = "22222222-2222-2222-2222-222222222222";
+	req.owner_user  = "user@";
+	req.owner_group = "group@";
 
 	setup_cont_set_owner_drpc_call(&call, &req);
 	ds_mgmt_cont_set_owner_return = exp_rc;
@@ -2495,22 +2506,17 @@ test_drpc_cont_set_owner_success(void **state)
 	Drpc__Call		call = DRPC__CALL__INIT;
 	Drpc__Response		resp = DRPC__RESPONSE__INIT;
 	Mgmt__ContSetOwnerReq	req = MGMT__CONT_SET_OWNER_REQ__INIT;
-	char			*pool_uuid_str;
-	uuid_t			pool_uuid;
-	char			*cont_uuid_str;
-	uuid_t			cont_uuid;
+	char                   *pool_uuid_str;
+	char                   *cont_uuid_str;
+	uuid_t                  pool_uuid;
 
 	pool_uuid_str = "11111111-1111-1111-1111-111111111111";
-	if (uuid_parse(pool_uuid_str, pool_uuid))
-		return;
 	cont_uuid_str = "22222222-2222-2222-2222-222222222222";
-	if (uuid_parse(cont_uuid_str, cont_uuid))
-		return;
 
-	req.pooluuid = pool_uuid_str;
-	req.contuuid = cont_uuid_str;
-	req.owneruser = "user@";
-	req.ownergroup = "group@";
+	req.pool_id     = pool_uuid_str;
+	req.cont_id     = cont_uuid_str;
+	req.owner_user  = "user@";
+	req.owner_group = "group@";
 
 	setup_cont_set_owner_drpc_call(&call, &req);
 
@@ -2519,14 +2525,13 @@ test_drpc_cont_set_owner_success(void **state)
 	expect_drpc_cont_set_owner_resp_with_status(&resp, 0);
 
 	/* Verify mgmt_cont_set_owner called with correct params */
-	assert_int_equal(uuid_compare(pool_uuid, ds_mgmt_cont_set_owner_pool),
-			 0);
-	assert_int_equal(uuid_compare(cont_uuid, ds_mgmt_cont_set_owner_cont),
-			 0);
+	assert_int_equal(uuid_parse(pool_uuid_str, pool_uuid), 0);
+	assert_int_equal(uuid_compare(pool_uuid, ds_mgmt_cont_set_owner_pool), 0);
+	assert_string_equal(cont_uuid_str, ds_mgmt_cont_set_owner_cont);
 	assert_non_null(ds_mgmt_cont_set_owner_user);
-	assert_string_equal(req.owneruser, ds_mgmt_cont_set_owner_user);
+	assert_string_equal(req.owner_user, ds_mgmt_cont_set_owner_user);
 	assert_non_null(ds_mgmt_cont_set_owner_group);
-	assert_string_equal(req.ownergroup, ds_mgmt_cont_set_owner_group);
+	assert_string_equal(req.owner_group, ds_mgmt_cont_set_owner_group);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
@@ -3112,7 +3117,7 @@ main(void)
 	    PING_RANK_TEST(test_drpc_ping_rank_success),
 	    PREP_SHUTDOWN_TEST(test_drpc_prep_shutdown_success),
 	    SET_LOG_MASKS_TEST(test_drpc_set_log_masks_success),
-	    CONT_SET_OWNER_TEST(test_drpc_cont_set_owner_bad_cont_uuid),
+	    CONT_SET_OWNER_TEST(test_drpc_cont_set_owner_cont_label),
 	    CONT_SET_OWNER_TEST(test_drpc_cont_set_owner_bad_pool_uuid),
 	    CONT_SET_OWNER_TEST(test_drpc_cont_set_owner_failed),
 	    CONT_SET_OWNER_TEST(test_drpc_cont_set_owner_success),

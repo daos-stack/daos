@@ -252,16 +252,18 @@ class DmgCommand(DmgCommandBase):
         self.timeout = saved_timeout
         return self.result
 
-    def storage_set_faulty(self, uuid, force=True):
+    def storage_set_faulty(self, host, uuid, force=True):
         """Get the result of the 'dmg storage set nvme-faulty' command.
 
         Args:
+            host (str): Identifier of host on which action should be performed.
             uuid (str): Device UUID to query.
             force (bool, optional): Force setting device state to FAULTY.
                 Defaults to True.
         """
         return self._get_json_result(
-            ("storage", "set", "nvme-faulty"), uuid=uuid, force=force)
+            ("storage", "set", "nvme-faulty"), host=host, uuid=uuid,
+            force=force)
 
     def storage_query_list_devices(self, rank=None, health=False, uuid=None):
         """Get the result of the 'dmg storage query list-devices' command.
@@ -338,13 +340,13 @@ class DmgCommand(DmgCommandBase):
         return self._get_json_result(
             ("storage", "led", "check"), ids=ids)
 
-    def storage_replace_nvme(self, old_uuid, new_uuid, no_reint=False):
+    def storage_replace_nvme(self, host, old_uuid, new_uuid):
         """Get the result of the 'dmg storage replace nvme' command.
 
         Args:
+            host (str): Identifier of host on which action should be performed.
             old_uuid (str): Old NVME Device ID.
             new_uuid (str): New NVME Device ID replacing the old device.
-            no_reint (bool, optional): Don't perform reintegration. Defaults to False.
 
         Returns:
             dict: JSON formatted dmg command result.
@@ -354,8 +356,8 @@ class DmgCommand(DmgCommandBase):
 
         """
         return self._get_json_result(
-            ("storage", "replace", "nvme"), old_uuid=old_uuid,
-            new_uuid=new_uuid, no_reint=no_reint)
+            ("storage", "replace", "nvme"), host=host, old_uuid=old_uuid,
+            new_uuid=new_uuid)
 
     def storage_scan_nvme_health(self):
         """Get the result of the 'dmg storage scan --nvme-health' command.
@@ -599,8 +601,11 @@ class DmgCommand(DmgCommandBase):
         #     0,
         #     1
         #   ],
-        #   "scm_bytes": 256000000,
-        #   "nvme_bytes": 0
+        #   "tier_bytes": [
+        #     256000000,
+        #     0
+        #   ],
+        #   "mem_file_bytes": 0
         # },
         # "error": null,
         # "status": 0
@@ -620,16 +625,17 @@ class DmgCommand(DmgCommandBase):
         data["ranks"] = ",".join([str(r) for r in output["response"]["tgt_ranks"]])
         data["scm_per_rank"] = output["response"]["tier_bytes"][0]
         data["nvme_per_rank"] = output["response"]["tier_bytes"][1]
+        data["memfile_per_rank"] = output["response"]["mem_file_bytes"]
 
         return data
 
-    def pool_query(self, pool, show_enabled=False, show_disabled=False):
+    def pool_query(self, pool, show_enabled=False, health_only=False):
         """Query a pool with the dmg command.
 
         Args:
             pool (str): Pool UUID or label to query.
             show_enabled (bool, optional): Display enabled ranks.
-            show_disabled (bool, optional): Display disabled ranks.
+            health_only (bool, optional): Only perform pool health related queries.
 
         Raises:
             CommandFailure: if the dmg pool query command fails.
@@ -676,7 +682,7 @@ class DmgCommand(DmgCommandBase):
         #     "status": 0
         # }
         return self._get_json_result(("pool", "query"), pool=pool,
-                                     show_enabled=show_enabled, show_disabled=show_disabled)
+                                     show_enabled=show_enabled, health_only=health_only)
 
     def pool_query_targets(self, pool, rank=None, target_idx=None):
         """Call dmg pool query-targets.
@@ -957,12 +963,12 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("pool", "reintegrate"), pool=pool, rank=rank, tgt_idx=tgt_idx)
 
-    def cont_set_owner(self, pool, cont, user, group):
+    def cont_set_owner(self, pool, cont, user=None, group=None):
         """Dmg container set-owner to the specified new user/group.
 
         Args:
-            pool (str): Pool uuid.
-            cont (str): Container uuid.
+            pool (str): Pool label or UUID.
+            cont (str): Container label or UUID.
             user (str): new user for the container.
             group (str): new group for the container.
 
@@ -974,7 +980,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg pool reintegrate command fails.
 
         """
-        return self._get_result(
+        return self._get_json_result(
             ("cont", "set-owner"), pool=pool, cont=cont, user=user, group=group)
 
     def system_cleanup(self, machinename=None, verbose=True):

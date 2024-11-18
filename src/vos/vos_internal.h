@@ -241,6 +241,21 @@ struct vos_wal_metrics {
 
 void vos_wal_metrics_init(struct vos_wal_metrics *vw_metrics, const char *path, int tgt_id);
 
+/* VOS pool metrics for umem cache */
+struct vos_cache_metrics {
+	struct d_tm_node_t	*vcm_pg_ne;
+	struct d_tm_node_t	*vcm_pg_pinned;
+	struct d_tm_node_t	*vcm_pg_free;
+	struct d_tm_node_t	*vcm_pg_hit;
+	struct d_tm_node_t	*vcm_pg_miss;
+	struct d_tm_node_t	*vcm_pg_evict;
+	struct d_tm_node_t	*vcm_pg_flush;
+	struct d_tm_node_t	*vcm_pg_load;
+	struct d_tm_node_t	*vcm_obj_hit;
+};
+
+void vos_cache_metrics_init(struct vos_cache_metrics *vc_metrcis, const char *path, int tgt_id);
+
 struct vos_pool_metrics {
 	void			*vp_vea_metrics;
 	struct vos_agg_metrics	 vp_agg_metrics;
@@ -248,7 +263,13 @@ struct vos_pool_metrics {
 	struct vos_space_metrics vp_space_metrics;
 	struct vos_chkpt_metrics vp_chkpt_metrics;
 	struct vos_wal_metrics	 vp_wal_metrics;
+	struct vos_cache_metrics vp_cache_metrics;
 	/* TODO: add more metrics for VOS */
+};
+
+struct vos_gc_info {
+	daos_handle_t	gi_bins_btr;
+	uint32_t	gi_last_pinned;
 };
 
 /**
@@ -310,6 +331,8 @@ struct vos_pool {
 	uint32_t		 vp_data_thresh;
 	/** Space (in percentage) reserved for rebuild */
 	unsigned int		 vp_space_rb;
+	/* GC runtime for pool */
+	struct vos_gc_info	 vp_gc_info;
 };
 
 /**
@@ -353,6 +376,8 @@ struct vos_container {
 	daos_epoch_range_t	vc_epr_aggregation;
 	/* Current ongoing discard EPR */
 	daos_epoch_range_t	vc_epr_discard;
+	/* Last timestamp when VOS aggregation reports -DER_TX_BUSY */
+	uint64_t		vc_agg_busy_ts;
 	/* Last timestamp when VOS aggregation reporting ENOSPACE */
 	uint64_t		vc_agg_nospc_ts;
 	/* Last timestamp when IO reporting ENOSPACE */
@@ -363,7 +388,8 @@ struct vos_container {
 	 * * transaction with older epoch must have been committed.
 	 */
 	daos_epoch_t		vc_solo_dtx_epoch;
-
+	/* GC runtime for container */
+	struct vos_gc_info	vc_gc_info;
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
 				vc_in_discard:1,
@@ -918,33 +944,31 @@ static inline void vos_irec_init_csum(struct vos_irec_df *irec,
 	}
 }
 
+#define	VOS_GANG_SIZE_THRESH	(BIO_DMA_CHUNK_MB << 20)	/* 8MB */
+
+static inline unsigned int
+vos_irec_gang_nr(struct vos_pool *pool, daos_size_t rsize)
+{
+	if (pool->vp_feats & VOS_POOL_FEAT_GANG_SV) {
+		if (rsize > VOS_GANG_SIZE_THRESH)
+			return (rsize + VOS_GANG_SIZE_THRESH - 1) / VOS_GANG_SIZE_THRESH;
+	}
+
+	return 0;
+}
+
 /** Size of metadata without user payload */
 static inline uint64_t
-vos_irec_msize(struct vos_rec_bundle *rbund)
+vos_irec_msize(struct vos_pool *pool, struct vos_rec_bundle *rbund)
 {
-	uint64_t size = 0;
+	uint64_t size = sizeof(struct vos_irec_df);
 
 	if (rbund->rb_csum != NULL)
-		size = vos_size_round(rbund->rb_csum->cs_len);
-	return size + sizeof(struct vos_irec_df);
-}
+		size += vos_size_round(rbund->rb_csum->cs_len);
 
-static inline uint64_t
-vos_irec_size(struct vos_rec_bundle *rbund)
-{
-	return vos_irec_msize(rbund) + rbund->rb_rsize;
-}
+	size += bio_gaddr_size(vos_irec_gang_nr(pool, rbund->rb_rsize));
 
-static inline bool
-vos_irec_size_equal(struct vos_irec_df *irec, struct vos_rec_bundle *rbund)
-{
-	if (irec->ir_size != rbund->rb_rsize)
-		return false;
-
-	if (vos_irec2csum_size(irec) != rbund->rb_csum->cs_len)
-		return false;
-
-	return true;
+	return size;
 }
 
 static inline char *
@@ -1258,7 +1282,7 @@ vos_bio_addr_free(struct vos_pool *pool, bio_addr_t *addr, daos_size_t nob);
 
 void
 vos_evt_desc_cbs_init(struct evt_desc_cbs *cbs, struct vos_pool *pool,
-		      daos_handle_t coh);
+		      daos_handle_t coh, struct vos_object *obj);
 
 int
 vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool is_sysdb);
@@ -1300,9 +1324,6 @@ int
 key_tree_delete(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov);
 
 /* vos_io.c */
-daos_size_t
-vos_recx2irec_size(daos_size_t rsize, struct dcs_csum_info *csum);
-
 int
 vos_dedup_init(struct vos_pool *pool);
 void
@@ -1312,7 +1333,7 @@ vos_dedup_invalidate(struct vos_pool *pool);
 
 umem_off_t
 vos_reserve_scm(struct vos_container *cont, struct umem_rsrvd_act *rsrvd_scm,
-		daos_size_t size);
+		daos_size_t size, struct vos_object *obj);
 int
 vos_publish_scm(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_scm, bool publish);
 int
@@ -1327,6 +1348,12 @@ static inline struct umem_instance *
 vos_pool2umm(struct vos_pool *pool)
 {
 	return &pool->vp_umm;
+}
+
+static inline struct umem_store *
+vos_pool2store(struct vos_pool *pool)
+{
+	return &pool->vp_umm.umm_pool->up_store;
 }
 
 static inline struct umem_instance *
@@ -1365,11 +1392,25 @@ void
 gc_check_cont(struct vos_container *cont);
 int
 gc_add_item(struct vos_pool *pool, daos_handle_t coh,
-	    enum vos_gc_type type, umem_off_t item_off, uint64_t args);
+	    enum vos_gc_type type, umem_off_t item_off, uint32_t *bkt_ids);
 int
 vos_gc_pool_tight(daos_handle_t poh, int *credits);
 void
 gc_reserve_space(daos_size_t *rsrvd);
+int
+gc_open_pool(struct vos_pool *pool);
+void
+gc_close_pool(struct vos_pool *pool);
+int
+gc_open_cont(struct vos_container *cont);
+void
+gc_close_cont(struct vos_container *cont);
+
+struct vos_bkt_iter {
+	uint32_t	bi_bkt_tot;
+	uint32_t	bi_bkt_cur;
+	uint8_t		bi_skipped[0];
+};
 
 /**
  * If the object is fully punched, bypass normal aggregation and move it to container
@@ -1843,5 +1884,150 @@ vos_io_scm(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size, enum v
  */
 int
 vos_insert_oid(struct dtx_handle *dth, struct vos_container *cont, daos_unit_oid_t *oid);
+
+static inline bool
+vos_pool_is_p2(struct vos_pool *pool)
+{
+	struct umem_store	*store = vos_pool2store(pool);
+
+	return store->store_type == DAOS_MD_BMEM_V2;
+}
+
+static inline bool
+vos_pool_is_evictable(struct vos_pool *pool)
+{
+	struct umem_store	*store = vos_pool2store(pool);
+
+	if (store->store_evictable) {
+		D_ASSERT(store->store_type == DAOS_MD_BMEM_V2);
+		return true;
+	}
+
+	return false;
+}
+
+static inline umem_off_t
+vos_obj_alloc(struct umem_instance *umm, struct vos_object *obj, size_t size, bool zeroing)
+{
+
+	if (obj != NULL && vos_pool_is_evictable(vos_obj2pool(obj))) {
+		D_ASSERT(obj->obj_bkt_alloted == 1);
+		if (zeroing)
+			return umem_zalloc_from_bucket(umm, size, obj->obj_bkt_ids[0]);
+
+		return umem_alloc_from_bucket(umm, size, obj->obj_bkt_ids[0]);
+	}
+
+	if (zeroing)
+		return umem_zalloc(umm, size);
+
+	return umem_alloc(umm, size);
+}
+
+static inline umem_off_t
+vos_obj_reserve(struct umem_instance *umm, struct vos_object *obj,
+		struct umem_rsrvd_act *rsrvd_scm, daos_size_t size)
+{
+	if (obj != NULL && vos_pool_is_evictable(vos_obj2pool(obj))) {
+		D_ASSERT(obj->obj_bkt_alloted == 1);
+		return umem_reserve_from_bucket(umm, rsrvd_scm, size, obj->obj_bkt_ids[0]);
+	}
+
+	return umem_reserve(umm, rsrvd_scm, size);
+}
+
+/* vos_obj_cache.c */
+static inline struct dtx_handle *
+clear_cur_dth(struct vos_pool *pool)
+{
+	struct dtx_handle	*dth;
+
+	dth = vos_dth_get(pool->vp_sysdb);
+	vos_dth_set(NULL, pool->vp_sysdb);
+
+	return dth;
+}
+
+static inline void
+restore_cur_dth(struct vos_pool *pool, struct dtx_handle *dth)
+{
+	vos_dth_set(dth, pool->vp_sysdb);
+}
+
+static inline struct vos_cache_metrics *
+store2cache_metrics(struct umem_store *store)
+{
+	struct vos_pool_metrics	*vpm = (struct vos_pool_metrics *)store->stor_stats;
+
+	return vpm != NULL ? &vpm->vp_cache_metrics : NULL;
+}
+
+static inline void
+update_page_stats(struct umem_store *store)
+{
+	struct vos_cache_metrics	*vcm = store2cache_metrics(store);
+	struct umem_cache		*cache = store->cache;
+
+	if (vcm == NULL)
+		return;
+
+	d_tm_set_gauge(vcm->vcm_pg_ne, cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE]);
+	d_tm_set_gauge(vcm->vcm_pg_pinned, cache->ca_pgs_stats[UMEM_PG_STATS_PINNED]);
+	d_tm_set_gauge(vcm->vcm_pg_free, cache->ca_pgs_stats[UMEM_PG_STATS_FREE]);
+
+	d_tm_set_counter(vcm->vcm_pg_hit, cache->ca_cache_stats[UMEM_CACHE_STATS_HIT]);
+	d_tm_set_counter(vcm->vcm_pg_miss, cache->ca_cache_stats[UMEM_CACHE_STATS_MISS]);
+	d_tm_set_counter(vcm->vcm_pg_evict, cache->ca_cache_stats[UMEM_CACHE_STATS_EVICT]);
+	d_tm_set_counter(vcm->vcm_pg_flush, cache->ca_cache_stats[UMEM_CACHE_STATS_FLUSH]);
+	d_tm_set_counter(vcm->vcm_pg_load, cache->ca_cache_stats[UMEM_CACHE_STATS_LOAD]);
+}
+
+static inline int
+vos_cache_pin(struct vos_pool *pool, struct umem_cache_range *ranges, int range_nr,
+	      bool for_sys, struct umem_pin_handle **pin_handle)
+{
+	struct umem_store	*store = vos_pool2store(pool);
+	struct dtx_handle	*cur_dth;
+	int			 rc;
+
+	cur_dth = clear_cur_dth(pool);
+	rc = umem_cache_pin(store, ranges, range_nr, for_sys, pin_handle);
+	restore_cur_dth(pool, cur_dth);
+
+	update_page_stats(store);
+
+	return rc;
+}
+
+int vos_obj_acquire(struct vos_container *cont, daos_unit_oid_t oid, bool pin,
+		    struct vos_object **obj_p);
+
+#define	VOS_BKTS_INLINE_MAX	4
+struct vos_bkt_array {
+	uint32_t	 vba_tot;
+	uint32_t	 vba_cnt;
+	uint32_t	 vba_inline_bkts[VOS_BKTS_INLINE_MAX];
+	uint32_t	*vba_bkts;
+};
+
+static inline void
+vos_bkt_array_fini(struct vos_bkt_array *bkts)
+{
+	if (bkts->vba_tot > VOS_BKTS_INLINE_MAX)
+		D_FREE(bkts->vba_bkts);
+}
+
+static inline void
+vos_bkt_array_init(struct vos_bkt_array *bkts)
+{
+	bkts->vba_tot	= VOS_BKTS_INLINE_MAX;
+	bkts->vba_cnt	= 0;
+	bkts->vba_bkts	= &bkts->vba_inline_bkts[0];
+}
+
+bool vos_bkt_array_subset(struct vos_bkt_array *super, struct vos_bkt_array *sub);
+int vos_bkt_array_add(struct vos_bkt_array *bkts, uint32_t bkt_id);
+int vos_bkt_array_pin(struct vos_pool *pool, struct vos_bkt_array *bkts,
+		      struct umem_pin_handle **pin_hdl);
 
 #endif /* __VOS_INTERNAL_H__ */

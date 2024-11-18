@@ -26,8 +26,7 @@ from environment_utils import TestEnvironment
 from exception_utils import CommandFailure
 from fault_config_utils import FaultInjection
 from general_utils import (dict_to_str, dump_engines_stacks, get_avocado_config_value,
-                           get_default_config_file, get_file_listing, nodeset_append_suffix,
-                           set_avocado_config_value)
+                           nodeset_append_suffix, set_avocado_config_value)
 from host_utils import HostException, HostInfo, HostRole, get_host_parameters, get_local_host
 from logger_utils import TestLogger
 from pydaos.raw import DaosApiError, DaosContext, DaosLog
@@ -644,6 +643,7 @@ class TestWithServers(TestWithoutServers):
         self.setup_start_agents = True
         self.slurm_exclude_servers = False
         self.slurm_exclude_nodes = NodeSet()
+        self.max_test_dir_usage_check = 90
         self.host_info = HostInfo()
         self.hostlist_servers = NodeSet()
         self.hostlist_clients = NodeSet()
@@ -693,6 +693,11 @@ class TestWithServers(TestWithoutServers):
         # Support removing any servers from the client list
         self.slurm_exclude_servers = self.params.get(
             "slurm_exclude_servers", "/run/setup/*", self.slurm_exclude_servers)
+
+        # Max test directory usage percentage - when exceeded will display sizes of files in the
+        # test directory
+        self.max_test_dir_usage_check = self.params.get(
+            "max_test_dir_usage_check", "/run/setup/*", self.max_test_dir_usage_check)
 
         # The server config name should be obtained from each ServerManager
         # object, but some tests still use this TestWithServers attribute.
@@ -762,13 +767,25 @@ class TestWithServers(TestWithoutServers):
             self.fail(f"Error creating test-specific temporary directory on {result.failed_hosts}")
 
         # Copy the fault injection files to the hosts.
-        self.fault_injection.copy_fault_files(self.host_info.all_hosts)
+        self.fault_injection.copy_fault_files(self.log, self.host_info.all_hosts)
 
         # List common test directory contents before running the test
         self.log.info("-" * 100)
-        self.log.debug("Common test directory (%s) contents:", self.test_dir)
+        self.log.debug(
+            "Common test directory (%s) contents (check > %s%%):",
+            os.path.dirname(self.test_dir), self.max_test_dir_usage_check)
         all_hosts = include_local_host(self.host_info.all_hosts)
-        get_file_listing(all_hosts, self.test_dir, self.test_env.agent_user).log_output(self.log)
+        test_dir_parent = os.path.dirname(self.test_dir)
+        _result = run_remote(self.log, all_hosts, f"df -h {test_dir_parent}")
+        _details = NodeSet()
+        for _host, _stdout in _result.all_stdout.items():
+            _test_dir_usage = re.findall(r"\s+([\d]+)%\s+", _stdout)
+            _test_dir_usage_int = int(max(_test_dir_usage + ["0"]))
+            if _test_dir_usage_int > self.max_test_dir_usage_check:
+                _details.add(_host)
+        if _details:
+            run_remote(self.log, _details, f"du -sh {test_dir_parent}/*")
+        self.log.info("-" * 100)
 
         if not self.start_servers_once or self.name.uid == 1:
             # Kill commands left running on the hosts (from a previous test)
@@ -1063,7 +1080,7 @@ class TestWithServers(TestWithoutServers):
         if group is None:
             group = self.server_group
         if config_file is None and self.agent_manager_class == "Systemctl":
-            config_file = get_default_config_file("agent")
+            config_file = self.test_env.agent_config
             config_temp = self.get_config_file(group, "agent", self.test_dir)
         elif config_file is None:
             config_file = self.get_config_file(group, "agent")
@@ -1113,14 +1130,14 @@ class TestWithServers(TestWithoutServers):
         if group is None:
             group = self.server_group
         if svr_config_file is None and self.server_manager_class == "Systemctl":
-            svr_config_file = get_default_config_file("server")
+            svr_config_file = self.test_env.server_config
             svr_config_temp = self.get_config_file(
                 group, "server", self.test_dir)
         elif svr_config_file is None:
             svr_config_file = self.get_config_file(group, "server")
             svr_config_temp = None
         if dmg_config_file is None and self.server_manager_class == "Systemctl":
-            dmg_config_file = get_default_config_file("control")
+            dmg_config_file = self.test_env.control_config
             dmg_config_temp = self.get_config_file(group, "dmg", self.test_dir)
         elif dmg_config_file is None:
             dmg_config_file = self.get_config_file(group, "dmg")
@@ -1320,7 +1337,6 @@ class TestWithServers(TestWithoutServers):
         self.log.info("-" * 100)
         self.log.info("--- SERVER INFORMATION ---")
         for manager in self.server_managers:
-            manager.get_host_log_files()
             try:
                 manager.dmg.storage_query_list_devices()
             except CommandFailure:
@@ -1669,7 +1685,7 @@ class TestWithServers(TestWithoutServers):
             return self.server_managers[index].dmg
 
         if self.server_manager_class == "Systemctl":
-            dmg_config_file = get_default_config_file("control")
+            dmg_config_file = self.test_env.control_config
             dmg_config_temp = self.get_config_file("daos", "dmg", self.test_dir)
             dmg_cert_dir = os.path.join(os.sep, "etc", "daos", "certs")
         else:

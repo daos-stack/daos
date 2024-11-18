@@ -29,30 +29,47 @@
 			((addr)->ba_flags &= ~(BIO_FLAG_DEDUP_BUF))
 #define BIO_ADDR_IS_CORRUPTED(addr) ((addr)->ba_flags & BIO_FLAG_CORRUPTED)
 #define BIO_ADDR_SET_CORRUPTED(addr) ((addr)->ba_flags |= BIO_FLAG_CORRUPTED)
+#define BIO_ADDR_IS_GANG(addr) ((addr)->ba_flags & BIO_FLAG_GANG)
+#define BIO_ADDR_SET_GANG(addr) ((addr)->ba_flags |= BIO_FLAG_GANG)
 
 /* Can support up to 16 flags for a BIO address */
 enum BIO_FLAG {
 	/* The address is a hole */
 	BIO_FLAG_HOLE = (1 << 0),
-	/* The address is a deduped extent */
+	/* The address is a deduped extent, transient only flag */
 	BIO_FLAG_DEDUP = (1 << 1),
-	/* The address is a buffer for dedup verify */
+	/* The address is a buffer for dedup verify, transient only flag */
 	BIO_FLAG_DEDUP_BUF = (1 << 2),
+	/* The data located on the address is marked as corrupted */
 	BIO_FLAG_CORRUPTED = (1 << 3),
+	/* The address is a gang address */
+	BIO_FLAG_GANG = (1 << 4),
 };
 
+#define BIO_DMA_CHUNK_MB	8	/* 8MB DMA chunks */
+
+/**
+ * It's used to represent an address on SCM, or an address on NVMe, or a gang address.
+ *
+ * The gang address consists of N addresses from scattered allocations, the scattered
+ * allocations could have different size and media type, they are compactly stored on
+ * the SCM pointing by 'ba_off' as following:
+ * 
+ * N 64bits offsets,  N 32bits sizes, N 8bits media types
+ */
 typedef struct {
 	/*
-	 * Byte offset within PMDK pmemobj pool for SCM;
+	 * Byte offset within PMDK pmemobj pool for SCM or gang address;
 	 * Byte offset within SPDK blob for NVMe.
 	 */
 	uint64_t	ba_off;
 	/* DAOS_MEDIA_SCM or DAOS_MEDIA_NVME */
 	uint8_t		ba_type;
-	uint8_t		ba_pad1;
+	/* Number of addresses when BIO_FLAG_GANG is set */
+	uint8_t		ba_gang_nr;
 	/* See BIO_FLAG enum */
 	uint16_t	ba_flags;
-	uint32_t	ba_pad2;
+	uint32_t	ba_pad;
 } bio_addr_t;
 
 struct sys_db;
@@ -127,8 +144,63 @@ enum bio_bs_state {
 	BIO_BS_STATE_SETUP,
 };
 
+/* Size for storing N offset + size + metia_type */
+static inline unsigned int
+bio_gaddr_size(uint8_t gang_nr)
+{
+	unsigned int size;
+
+	if (gang_nr == 0)
+		return 0;
+
+	size = sizeof(uint64_t) + sizeof(uint32_t) + sizeof(uint8_t);
+	return roundup(size * gang_nr, sizeof(uint64_t));
+}
+
 static inline void
-bio_addr_set(bio_addr_t *addr, uint16_t type, uint64_t off)
+bio_gaddr_set(struct umem_instance *umm, bio_addr_t *gaddr, int i,
+	      uint8_t type, uint32_t len, uint64_t off)
+{
+	uint8_t		*ptr;
+	unsigned int	 ptr_off;
+
+	D_ASSERT(BIO_ADDR_IS_GANG(gaddr));
+	D_ASSERT(i < gaddr->ba_gang_nr);
+	ptr = umem_off2ptr(umm, gaddr->ba_off);
+
+	ptr_off = sizeof(uint64_t) * i;
+	*((uint64_t *)(ptr + ptr_off)) = off;
+
+	ptr_off = sizeof(uint64_t) * gaddr->ba_gang_nr + sizeof(uint32_t) * i;
+	*((uint32_t *)(ptr + ptr_off)) = len;
+
+	ptr_off = (sizeof(uint64_t) + sizeof(uint32_t)) * gaddr->ba_gang_nr + i;
+	*(ptr + ptr_off) = type;
+}
+
+static inline void
+bio_gaddr_get(struct umem_instance *umm, bio_addr_t *gaddr, int i,
+	      uint8_t *type, uint32_t *len, uint64_t *off)
+{
+	uint8_t		*ptr;
+	unsigned int	 ptr_off;
+
+	D_ASSERT(BIO_ADDR_IS_GANG(gaddr));
+	D_ASSERT(i < gaddr->ba_gang_nr);
+	ptr = umem_off2ptr(umm, gaddr->ba_off);
+
+	ptr_off = sizeof(uint64_t) * i;
+	*off = *((uint64_t *)(ptr + ptr_off));
+
+	ptr_off = sizeof(uint64_t) * gaddr->ba_gang_nr + sizeof(uint32_t) * i;
+	*len = *((uint32_t *)(ptr + ptr_off));
+
+	ptr_off = (sizeof(uint64_t) + sizeof(uint32_t)) * gaddr->ba_gang_nr + i;
+	*type = *(ptr + ptr_off);
+}
+
+static inline void
+bio_addr_set(bio_addr_t *addr, uint8_t type, uint64_t off)
 {
 	addr->ba_type = type;
 	addr->ba_off = umem_off2offset(off);
@@ -945,15 +1017,18 @@ enum bio_mc_flags {
  *
  * \param[in]	xs_ctxt		Per-xstream NVMe context
  * \param[in]	pool_id		Pool UUID
+ * \param[in]	scm_sz		VOS file size in bytes
  * \param[in]	meta_sz		Meta blob size in bytes
  * \param[in]	wal_sz		WAL blob in bytes
  * \param[in]	data_sz		Data blob in bytes
  * \param[in]	flags		bio_mc_flags
+ * \param[in]	backend_type	Backend allocator type
  *
  * \return			Zero on success, negative value on error.
  */
-int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_sz,
-		  uint64_t wal_sz, uint64_t data_sz, enum bio_mc_flags flags);
+int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t scm_sz,
+		  uint64_t meta_sz, uint64_t wal_sz, uint64_t data_sz, enum bio_mc_flags flags,
+		  uint8_t backend_type);
 
 /*
  * Destroy Meta/Data/WAL blobs
@@ -1079,10 +1154,10 @@ int bio_wal_flush_header(struct bio_meta_context *mc);
 int bio_wal_checkpoint(struct bio_meta_context *mc, uint64_t tx_id, uint64_t *purge_size);
 
 /*
- * Query meta capacity & meta block size & meta blob header blocks.
+ * Query the attributes of umem_store
  */
 void bio_meta_get_attr(struct bio_meta_context *mc, uint64_t *capacity, uint32_t *blk_sz,
-		       uint32_t *hdr_blks);
+		       uint32_t *hdr_blks, uint8_t *backend_type, bool *evictable);
 
 struct bio_wal_info {
 	uint32_t	wi_tot_blks;	/* Total blocks */

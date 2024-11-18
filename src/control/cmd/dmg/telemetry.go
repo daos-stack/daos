@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -254,13 +254,11 @@ func (cmd *telemConfigCmd) configurePrometheus() (*installInfo, error) {
 	}
 
 	sc := &staticConfig{}
-	for _, h := range cmd.config.HostList {
-		host, _, err := common.SplitPort(h, 0)
-		if err != nil {
-			return nil, err
-		}
-		sc.Targets = append(sc.Targets, host+":9191")
+	sc.Targets, err = common.ParseHostList(cmd.config.HostList, 9191)
+	if err != nil {
+		return nil, err
 	}
+
 	cfg.ScrapeConfigs = []*scrapeConfig{
 		{
 			JobName:        "daos",
@@ -310,7 +308,7 @@ type metricsListCmd struct {
 
 // Execute runs the command to list metrics from the DAOS storage nodes.
 func (cmd *metricsListCmd) Execute(args []string) error {
-	host, err := getMetricsHost(cmd.getHostList())
+	host, err := getMetricsHost(cmd.Host.Slice())
 	if err != nil {
 		return err
 	}
@@ -365,7 +363,7 @@ type metricsQueryCmd struct {
 
 // Execute runs the command to query metrics from the DAOS storage nodes.
 func (cmd *metricsQueryCmd) Execute(args []string) error {
-	host, err := getMetricsHost(cmd.getHostList())
+	host, err := getMetricsHost(cmd.Host.Slice())
 	if err != nil {
 		return err
 	}

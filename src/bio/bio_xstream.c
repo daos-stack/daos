@@ -20,6 +20,7 @@
 #include <spdk/blob_bdev.h>
 #include <spdk/blob.h>
 #include <spdk/rpc.h>
+#include <spdk/env_dpdk.h>
 #include "bio_internal.h"
 #include <daos_srv/smd.h>
 
@@ -30,7 +31,6 @@
 /* SPDK blob parameters */
 #define DAOS_BS_CLUSTER_SZ	(1ULL << 25)	/* 32MB */
 /* DMA buffer parameters */
-#define DAOS_DMA_CHUNK_MB	8	/* 8MB DMA chunks */
 #define DAOS_DMA_CHUNK_CNT_INIT	24	/* Per-xstream init chunks, 192MB */
 #define DAOS_DMA_CHUNK_CNT_MAX	128	/* Per-xstream max chunks, 1GB */
 #define DAOS_DMA_CHUNK_CNT_MIN	32	/* Per-xstream min chunks, 256MB */
@@ -175,7 +175,9 @@ bio_spdk_env_init(void)
 	if (geteuid() != 0) {
 		opts.iova_mode = "va"; // workaround for spdk issue #2683 when running as non-root
 	}
-	rc = spdk_env_init(&opts);
+
+	/* Don't pass opt for reinitialization, otherwise it will fail */
+	rc = spdk_env_init(spdk_env_dpdk_external_init() ? &opts : NULL);
 	if (rc != 0) {
 		rc = -DER_INVAL; /* spdk_env_init() returns -1 */
 		D_ERROR("Failed to initialize SPDK env, "DF_RC"\n", DP_RC(rc));
@@ -207,7 +209,7 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 {
 	char		*env;
 	int		 rc, fd;
-	unsigned int	 size_mb = DAOS_DMA_CHUNK_MB;
+	unsigned int	 size_mb = BIO_DMA_CHUNK_MB;
 
 	if (tgt_nr <= 0) {
 		D_ERROR("tgt_nr: %u should be > 0\n", tgt_nr);

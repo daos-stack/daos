@@ -84,9 +84,11 @@ struct ds_pool {
 	uuid_t			sp_srv_pool_hdl;
 	uint32_t		sp_stopping:1,
 				sp_cr_checked:1,
+				sp_immutable:1,
 				sp_fetch_hdls:1,
 				sp_need_discard:1,
-				sp_disable_rebuild:1;
+				sp_disable_rebuild:1,
+				sp_disable_dtx_resync:1;
 	/* pool_uuid + map version + leader term + rebuild generation define a
 	 * rebuild job.
 	 */
@@ -249,6 +251,8 @@ ds_pool_svc_ops_save(struct rdb_tx *tx, void *pool_svc, uuid_t pool_uuid, uuid_t
 		     uint64_t cli_time, bool dup_op, int rc_in, struct ds_pool_svc_op_val *op_valp);
 
 /* Find ds_pool_child in cache, hold one reference */
+struct ds_pool_child *ds_pool_child_find(const uuid_t uuid);
+/* Find ds_pool_child in STARTING or STARTED state, hold one reference */
 struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);
 /* Put the reference held by ds_pool_child_lookup() */
 void ds_pool_child_put(struct ds_pool_child *child);
@@ -275,9 +279,9 @@ int ds_pool_tgt_finish_rebuild(uuid_t pool_uuid, struct pool_target_id_list *lis
 int ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 			   unsigned int map_version);
 
-bool ds_pool_skip_for_check(struct ds_pool *pool);
-int ds_pool_start_after_check(uuid_t uuid);
-int ds_pool_start(uuid_t uuid, bool aft_chk);
+bool ds_pool_restricted(struct ds_pool *pool, bool immutable);
+int ds_pool_start_after_check(uuid_t uuid, bool immutable);
+int ds_pool_start(uuid_t uuid, bool aft_chk, bool immutable);
 int ds_pool_stop(uuid_t uuid);
 int dsc_pool_svc_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uint64_t deadline, int ntargets,
 			const d_rank_list_t *rank_list, int ndomains, const uint32_t *domains);
@@ -301,10 +305,11 @@ int dsc_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t dea
 			    enum daos_acl_principal_type principal_type,
 			    const char *principal_name);
 
-int dsc_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_t deadline,
-		       d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ranks,
-		       daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
-		       uint32_t *upgrade_layout_ver);
+int
+     dsc_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_t deadline,
+			d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ranks,
+			d_rank_list_t **suspect_ranks, daos_pool_info_t *pool_info,
+			uint32_t *pool_layout_ver, uint32_t *upgrade_layout_ver);
 int dsc_pool_svc_query_target(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_t deadline,
 			      d_rank_t rank, uint32_t tgt_idx, daos_target_info_t *ti);
 

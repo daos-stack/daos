@@ -212,9 +212,7 @@ func TestControl_SmdQuery(t *testing.T) {
 									NvmeState: storage.NvmeStateNormal,
 									LedState:  storage.LedStateNormal,
 								},
-								Roles: storage.BdevRoles{
-									storage.OptionBits(storage.BdevRoleAll),
-								},
+								Roles:    storage.BdevRolesFromBits(storage.BdevRoleAll),
 								HasSysXS: true,
 							},
 							{
@@ -226,9 +224,7 @@ func TestControl_SmdQuery(t *testing.T) {
 									NvmeState: storage.NvmeStateFaulty,
 									LedState:  storage.LedStateFaulty,
 								},
-								Roles: storage.BdevRoles{
-									storage.OptionBits(storage.BdevRoleData),
-								},
+								Roles: storage.BdevRolesFromBits(storage.BdevRoleData),
 							},
 						},
 						Pools: make(map[string][]*SmdPool),
@@ -505,17 +501,15 @@ func TestControl_packPBSmdManageReq(t *testing.T) {
 		},
 		"dev-replace": {
 			req: &SmdManageReq{
-				Operation:      DevReplaceOp,
-				IDs:            test.MockUUID(1),
-				ReplaceUUID:    test.MockUUID(2),
-				ReplaceNoReint: true,
+				Operation:   DevReplaceOp,
+				IDs:         test.MockUUID(1),
+				ReplaceUUID: test.MockUUID(2),
 			},
 			expPBReq: &ctlpb.SmdManageReq{
 				Op: &ctlpb.SmdManageReq_Replace{
 					Replace: &ctlpb.DevReplaceReq{
 						OldDevUuid: test.MockUUID(1),
 						NewDevUuid: test.MockUUID(2),
-						NoReint:    true,
 					},
 				},
 			},
@@ -655,7 +649,6 @@ func TestControl_SmdManage(t *testing.T) {
 			},
 			expErr: errors.New("> 1 host"),
 		},
-		// set-faulty API calls do not return SMD info.
 		"set-faulty": {
 			req: &SmdManageReq{
 				Operation: SetFaultyOp,
@@ -774,10 +767,8 @@ func TestControl_SmdManage(t *testing.T) {
 								Rank:      ranklist.Rank(0),
 								TargetIDs: []int32{1, 2, 3},
 								Ctrlr:     defMockCtrlr,
-								Roles: storage.BdevRoles{
-									storage.OptionBits(storage.BdevRoleAll),
-								},
-								HasSysXS: true,
+								Roles:     storage.BdevRolesFromBits(storage.BdevRoleAll),
+								HasSysXS:  true,
 							},
 						},
 					},

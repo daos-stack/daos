@@ -616,24 +616,23 @@ obj_coll_disp_init(uint32_t tgt_nr, uint32_t max_tgt_size, uint32_t inline_size,
 
 void
 obj_coll_disp_dest(struct obj_coll_disp_cursor *ocdc, struct daos_coll_target *tgts,
-		   crt_endpoint_t *tgt_ep)
+		   crt_endpoint_t *tgt_ep, daos_obj_id_t oid)
 {
 	struct daos_coll_target		*dct = &tgts[ocdc->cur_pos];
 	struct daos_coll_target		 tmp;
-	unsigned long			 rand = 0;
 	uint32_t			 size;
 	int				 pos;
 	int				 i;
 
 	if (ocdc->cur_step > 2) {
-		rand = d_rand();
 		/*
-		 * Randomly choose an engine as the relay one for load balance.
-		 * If the one corresponding to "pos" is former moved one, then
-		 * use the "cur_pos" as the relay engine.
+		 * Choose an engine (according to the given oid) as the relay one for load balance.
+		 * If the one corresponding to "pos" is former moved one, then use the "cur_pos" as
+		 * the relay engine. Then even if related RPC was resent without changing pool map,
+		 * then the relay one will be the same as the original case.
 		 */
-		pos = rand % (ocdc->tgt_nr - ocdc->cur_pos) + ocdc->cur_pos;
-		if (pos != ocdc->cur_pos && tgts[pos].dct_rank > dct->dct_rank) {
+		pos = oid.lo % (ocdc->tgt_nr - ocdc->cur_pos) + ocdc->cur_pos;
+		if (pos > ocdc->cur_pos && tgts[pos].dct_rank > dct->dct_rank) {
 			memcpy(&tmp, &tgts[pos], sizeof(tmp));
 			memcpy(&tgts[pos], dct, sizeof(tmp));
 			memcpy(dct, &tmp, sizeof(tmp));
@@ -642,8 +641,8 @@ obj_coll_disp_dest(struct obj_coll_disp_cursor *ocdc, struct daos_coll_target *t
 
 	size = dct->dct_bitmap_sz << 3;
 
-	/* Randomly choose a XS as the local leader on target engine for load balance. */
-	for (i = 0, pos = (rand != 0 ? rand : d_rand()) % dct->dct_tgt_nr; i < size; i++) {
+	/* Choose a target as the local agent on the engine for load balance. */
+	for (i = 0, pos = oid.lo % dct->dct_tgt_nr; i < size; i++) {
 		if (isset(dct->dct_bitmap, i)) {
 			pos -= dct->dct_shards[i].dcs_nr;
 			if (pos < 0)

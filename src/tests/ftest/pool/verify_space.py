@@ -196,7 +196,7 @@ class VerifyPoolSpace(TestWithServers):
         self._compare_system_pool_size(pool_size, compare_methods)
 
     def test_verify_pool_space(self):
-        """Test ID: DAOS-3672.
+        """Test ID: DAOS-3672
 
         Test steps:
         1) Start servers and list associated storage, verify correctness

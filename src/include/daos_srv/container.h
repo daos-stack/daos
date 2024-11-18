@@ -32,8 +32,9 @@ int ds_cont_svc_init(struct cont_svc **svcp, const uuid_t pool_uuid,
 void ds_cont_svc_fini(struct cont_svc **svcp);
 int ds_cont_svc_step_up(struct cont_svc *svc);
 void ds_cont_svc_step_down(struct cont_svc *svc);
-int ds_cont_svc_set_prop(uuid_t pool_uuid, uuid_t cont_uuid,
-			      d_rank_list_t *ranks, daos_prop_t *prop);
+int
+    ds_cont_svc_set_prop(uuid_t pool_uuid, const char *cont_id, d_rank_list_t *ranks,
+			 daos_prop_t *prop);
 int ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts, uint64_t *ncont);
 int ds_cont_filter(uuid_t pool_uuid, daos_pool_cont_filter_t *filt,
 		   struct daos_pool_cont_info2 **conts, uint64_t *ncont);
@@ -72,6 +73,7 @@ struct ds_cont_child {
 				 sc_dtx_registered:1,
 				 sc_props_fetched:1,
 				 sc_stopping:1,
+				 sc_destroying:1,
 				 sc_vos_agg_active:1,
 				 sc_ec_agg_active:1,
 				 /* flag of CONT_CAPA_READ_DATA/_WRITE_DATA disabled */
@@ -106,6 +108,9 @@ struct ds_cont_child {
 	uint32_t		 sc_dtx_committable_count;
 	uint32_t		 sc_dtx_committable_coll_count;
 
+	/* Last timestamp when EC aggregation reports -DER_INPROGRESS. */
+	uint64_t		 sc_ec_agg_busy_ts;
+
 	/* The global minimum EC aggregation epoch, which will be upper
 	 * limit for VOS aggregation, i.e. EC object VOS aggregation can
 	 * not cross this limit. For simplification purpose, all objects
@@ -132,6 +137,8 @@ struct ds_cont_child {
 	d_list_t		 sc_dtx_cos_list;
 	/* The global list for committable collective DTXs. */
 	d_list_t		 sc_dtx_coll_list;
+	/* The list for current DTX batched commit. */
+	d_list_t		 sc_dtx_batched_list;
 	/* the pool map version of updating DAOS_PROP_CO_STATUS prop */
 	uint32_t		 sc_status_pm_ver;
 };

@@ -22,7 +22,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/cache"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
-	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
+	"github.com/daos-stack/daos/src/control/lib/hardware/defaults/network"
 	"github.com/daos-stack/daos/src/control/lib/telemetry"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -43,10 +43,10 @@ func NewInfoCache(ctx context.Context, log logging.Logger, client control.UnaryI
 		client:          client,
 		cache:           cache.NewItemCache(log),
 		getAttachInfoCb: control.GetAttachInfo,
-		fabricScan:      getFabricScanFn(log, cfg, hwprov.DefaultFabricScanner(log)),
+		fabricScan:      getFabricScanFn(log, cfg, network.DefaultFabricScanner(log)),
 		netIfaces:       net.Interfaces,
-		devClassGetter:  hwprov.DefaultNetDevClassProvider(log),
-		devStateGetter:  hwprov.DefaultNetDevStateProvider(log),
+		devClassGetter:  network.DefaultNetDevClassProvider(log),
+		devStateGetter:  network.DefaultNetDevStateProvider(log),
 	}
 
 	ic.clientTelemetryEnabled.Store(cfg.TelemetryEnabled)
@@ -69,13 +69,20 @@ func NewInfoCache(ctx context.Context, log logging.Logger, client control.UnaryI
 	return ic
 }
 
+func fabricDeviceFilter(cfg *Config) *deviceFilter {
+	if len(cfg.ExcludeFabricIfaces) > 0 {
+		return newDeviceFilter(cfg.ExcludeFabricIfaces, filterModeExclude)
+	}
+	return newDeviceFilter(cfg.IncludeFabricIfaces, filterModeInclude)
+}
+
 func getFabricScanFn(log logging.Logger, cfg *Config, scanner *hardware.FabricScanner) fabricScanFn {
 	return func(ctx context.Context, provs ...string) (*NUMAFabric, error) {
 		fis, err := scanner.Scan(ctx, provs...)
 		if err != nil {
 			return nil, err
 		}
-		return NUMAFabricFromScan(ctx, log, fis).WithIgnoredDevices(cfg.ExcludeFabricIfaces), nil
+		return NUMAFabricFromScan(ctx, log, fis).WithDeviceFilter(fabricDeviceFilter(cfg)), nil
 	}
 }
 

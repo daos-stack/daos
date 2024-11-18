@@ -15,7 +15,6 @@ server_config:
           scm_mount: /mnt/daos
   system_ram_reserved: 1
 pool:
-  control_method: dmg
   size: 1G
 container:
   control_method: daos
@@ -25,7 +24,6 @@ dfuse:
   multi_user: true
 dfuse_with_caching:
   multi_user: true
-  mount_dir: "/tmp/daos_dfuse"
 client_users:
   # Two users in the same group. One user in a separate group
   - daos_test_user_x1:daos_test_group_x1

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,6 +11,7 @@
 #define D_LOGFAC	DD_FAC(vos)
 
 #include <daos/btree.h>
+#include <daos/btree_class.h>
 #include <daos/mem.h>
 #include <daos_srv/vos.h>
 #include "vos_internal.h"
@@ -74,12 +75,26 @@ struct vos_gc {
  */
 static int
 gc_drain_btr(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
-	     struct btr_root *root, int *credits, bool *empty)
+	     struct vos_gc_item *item, struct btr_root *root, int *credits, bool *empty)
 {
-	daos_handle_t	toh;
-	int		rc;
+	struct vos_object	 dummy_obj = { 0 };
+	struct vos_container	 dummy_cont = { 0 };
+	daos_handle_t		 toh;
+	void			*priv;
+	int			 rc, i;
 
-	rc = dbtree_open_inplace_ex(root, &pool->vp_uma, coh, pool, &toh);
+	if (gc->gc_type == GC_CONT) {
+		priv = pool;
+	} else {
+		dummy_cont.vc_pool = pool;
+		dummy_obj.obj_cont = &dummy_cont;
+		dummy_obj.obj_bkt_alloted = 1;
+		for (i = 0; i < VOS_GC_BKTS_MAX; i++)
+			dummy_obj.obj_bkt_ids[i] = item->it_bkt_ids[i];
+		priv = &dummy_obj;
+	}
+
+	rc = dbtree_open_inplace_ex(root, &pool->vp_uma, coh, priv, &toh);
 	if (rc == -DER_NONEXIST) { /* empty tree */
 		*empty = true;
 		return 0;
@@ -115,7 +130,7 @@ gc_drain_evt(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 	daos_handle_t	    toh;
 	int		    rc;
 
-	vos_evt_desc_cbs_init(&cbs, pool, coh);
+	vos_evt_desc_cbs_init(&cbs, pool, coh, NULL);
 	rc = evt_open(root, &pool->vp_uma, &cbs, &toh);
 	if (rc == -DER_NONEXIST) {
 		*empty = true;
@@ -126,7 +141,7 @@ gc_drain_evt(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 
 	D_DEBUG(DB_TRACE, "drain %s evtree, creds=%d\n", gc->gc_name, *credits);
 	rc = evt_drain(toh, credits, empty);
-	D_ASSERT(evt_close(toh) == 0);
+	evt_close(toh);
 	if (rc)
 		goto failed;
 
@@ -160,7 +175,7 @@ gc_drain_key(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 	}
 
 	if (key->kr_bmap & KREC_BF_BTR) {
-		rc = gc_drain_btr(gc, pool, coh, &key->kr_btr, credits, empty);
+		rc = gc_drain_btr(gc, pool, coh, item, &key->kr_btr, credits, empty);
 
 	} else if (key->kr_bmap & KREC_BF_EVT) {
 		D_ASSERT(gc->gc_type == GC_AKEY);
@@ -195,7 +210,7 @@ gc_free_dkey(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh, struct
 
 	D_ASSERT(krec->kr_bmap & KREC_BF_DKEY);
 	if (krec->kr_bmap & KREC_BF_NO_AKEY)
-		gc_add_item(pool, coh, GC_AKEY, item->it_addr, item->it_args);
+		gc_add_item(pool, coh, GC_AKEY, item->it_addr, &item->it_bkt_ids[0]);
 	else
 		umem_free(&pool->vp_umm, item->it_addr);
 	return 0;
@@ -211,7 +226,7 @@ gc_drain_obj(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 {
 	struct vos_obj_df *obj = umem_off2ptr(&pool->vp_umm, item->it_addr);
 
-	return gc_drain_btr(gc, pool, coh, &obj->vo_tree, credits, empty);
+	return gc_drain_btr(gc, pool, coh, item, &obj->vo_tree, credits, empty);
 }
 
 static int
@@ -294,20 +309,29 @@ gc_drain_cont(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 			return rc;
 
 		/** Indicate to caller that we've taken over container bags */
-		return 1;
+		if (!vos_pool_is_evictable(pool))
+			return 1;
 	}
 
 	D_ASSERT(daos_handle_is_inval(coh));
-	return gc_drain_btr(gc, pool, coh, &cont->cd_obj_root,
-			    credits, empty);
+	return gc_drain_btr(gc, pool, coh, item, &cont->cd_obj_root, credits, empty);
 }
 
 static int
 gc_free_cont(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh, struct vos_gc_item *item)
 {
-	int	rc;
+	struct vos_cont_df	*cd = umem_off2ptr(&pool->vp_umm, item->it_addr);
+	int			 rc;
 
-	rc = vos_dtx_table_destroy(&pool->vp_umm, umem_off2ptr(&pool->vp_umm, item->it_addr));
+	if (!UMOFF_IS_NULL(cd->cd_ext)) {
+		rc = umem_free(&pool->vp_umm, cd->cd_ext);
+		if (rc) {
+			DL_ERROR(rc, "Failed to free cont_df extension");
+			return rc;
+		}
+	}
+
+	rc = vos_dtx_table_destroy(&pool->vp_umm, cd);
 	if (rc == 0)
 		rc = umem_free(&pool->vp_umm, item->it_addr);
 
@@ -369,19 +393,102 @@ gc_type2bin(struct vos_pool *pool, struct vos_container *cont,
 	return &cont->vc_cont_df->cd_gc_bins[type];
 }
 
+static int
+gc_bkt2bins(uint32_t *bkt_id, struct vos_gc_info *gc_info, bool create, bool try_next,
+	    struct vos_gc_bin_df **bins_ret)
+{
+	struct vos_gc_bin_df	dummy_bins[GC_CONT];
+	d_iov_t			key, key_out, val, val_out;
+	uint64_t		*new_id, key_id = *bkt_id;
+	int			probe_op = try_next ? BTR_PROBE_FIRST : BTR_PROBE_EQ;
+	int			i, rc;
+
+	D_ASSERT(try_next || *bkt_id != UMEM_DEFAULT_MBKT_ID);
+	D_ASSERT(daos_handle_is_valid(gc_info->gi_bins_btr));
+
+	/* Fetch the in-tree record */
+	d_iov_set(&key, &key_id, sizeof(key_id));
+	d_iov_set(&key_out, NULL, 0);
+	d_iov_set(&val_out, NULL, 0);
+
+	rc = dbtree_fetch(gc_info->gi_bins_btr, probe_op, DAOS_INTENT_DEFAULT, &key,
+			  &key_out, &val_out);
+	if (rc && rc != -DER_NONEXIST) {
+		DL_ERROR(rc, "Failed to lookup GC bins for bkt_id:%u", *bkt_id);
+		return rc;
+	}
+
+	if (rc == 0) {
+		*bins_ret = (struct vos_gc_bin_df *)val_out.iov_buf;
+		new_id = (uint64_t *)key_out.iov_buf;
+		D_ASSERT(new_id && (try_next || *bkt_id == *new_id));
+		*bkt_id = (uint32_t)*new_id;
+	} else if (create) {
+		D_ASSERT(!try_next);
+		memset(&dummy_bins[0], 0, sizeof(dummy_bins));
+		for (i = 0; i < GC_CONT; i++) {
+			dummy_bins[i].bin_bag_first	= UMOFF_NULL;
+			dummy_bins[i].bin_bag_last	= UMOFF_NULL;
+			dummy_bins[i].bin_bag_size	= gc_bag_size;
+			dummy_bins[i].bin_bag_nr	= 0;
+		}
+
+		d_iov_set(&val, &dummy_bins[0], sizeof(dummy_bins));
+		d_iov_set(&val_out, NULL, 0);
+
+		rc = dbtree_upsert(gc_info->gi_bins_btr, BTR_PROBE_BYPASS, DAOS_INTENT_UPDATE,
+				   &key, &val, &val_out);
+		if (rc != 0) {
+			DL_ERROR(rc, "Failed to insert GC bins for bkt_id:%u", *bkt_id);
+			return rc;
+		}
+		*bins_ret = (struct vos_gc_bin_df *)val_out.iov_buf;
+	}
+
+	return rc;
+}
+
+static int
+gc_get_bin(struct vos_pool *pool, struct vos_container *cont, enum vos_gc_type type,
+	   uint32_t bkt_id, struct vos_gc_bin_df **bin_df)
+{
+	struct vos_gc_bin_df	*bins = NULL;
+	int			 rc;
+
+	D_ASSERT(type < GC_MAX);
+	if (!vos_pool_is_evictable(pool) || bkt_id == UMEM_DEFAULT_MBKT_ID) {
+		*bin_df = gc_type2bin(pool, cont, type);
+		return 0;
+	}
+
+	D_ASSERT(type < GC_CONT);
+	if (cont == NULL)
+		rc = gc_bkt2bins(&bkt_id, &pool->vp_gc_info, true, false, &bins);
+	else
+		rc = gc_bkt2bins(&bkt_id, &cont->vc_gc_info, true, false, &bins);
+
+	if (rc == 0) {
+		D_ASSERT(bins != NULL);
+		*bin_df = &bins[type];
+	}
+
+	return rc;
+}
+
 /**
  * Free the first (oldest) garbage bag of a garbage bin unless it is also the
  * last (newest) bag.
  */
 static int
-gc_bin_free_bag(struct umem_instance *umm, struct vos_container *cont,
-		struct vos_gc_bin_df *bin, umem_off_t bag_id)
+gc_bin_free_bag(struct umem_instance *umm, struct vos_gc_bin_df *bin, umem_off_t bag_id,
+		bool free_last_bag)
+
 {
 	struct vos_gc_bag_df *bag = umem_off2ptr(umm, bag_id);
 	int		      rc;
 
 	D_ASSERT(bag_id == bin->bin_bag_first);
-	if (cont == NULL && bag_id == bin->bin_bag_last) {
+	if (!free_last_bag && bag_id == bin->bin_bag_last) {
 		/* don't free the last bag, only reset it */
 		D_ASSERT(bin->bin_bag_nr == 1);
 		rc = umem_tx_add_ptr(umm, bag, sizeof(*bag));
@@ -393,7 +500,7 @@ gc_bin_free_bag(struct umem_instance *umm, struct vos_container *cont,
 		return rc;
 	}
 
-	if (cont != NULL) {
+	if (free_last_bag) {
 		D_ASSERT(bin->bin_bag_nr > 0);
 	} else {
 		D_ASSERT(bin->bin_bag_nr > 1);
@@ -494,11 +601,10 @@ gc_bin_add_item(struct umem_instance *umm, struct vos_gc_bin_df *bin,
 	return rc;
 }
 
-static struct vos_gc_item *
-gc_get_item(struct vos_gc *gc, struct vos_pool *pool,
-	    struct vos_container *cont)
+
+static inline struct vos_gc_item *
+bin_get_item(struct vos_pool *pool, struct vos_gc_bin_df *bin)
 {
-	struct vos_gc_bin_df	*bin = gc_type2bin(pool, cont, gc->gc_type);
 	struct vos_gc_bag_df	*bag;
 
 	bag = umem_off2ptr(&pool->vp_umm, bin->bin_bag_first);
@@ -511,6 +617,14 @@ gc_get_item(struct vos_gc *gc, struct vos_pool *pool,
 	}
 
 	return &bag->bag_items[bag->bag_item_first];
+}
+
+static inline struct vos_gc_item *
+gc_get_item(struct vos_gc *gc, struct vos_pool *pool, struct vos_container *cont)
+{
+	struct vos_gc_bin_df	*bin = gc_type2bin(pool, cont, gc->gc_type);
+
+	return bin_get_item(pool, bin);
 }
 
 static int
@@ -554,10 +668,9 @@ gc_drain_item(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 }
 
 static int
-gc_free_item(struct vos_gc *gc, struct vos_pool *pool,
-	     struct vos_container *cont, struct vos_gc_item *item)
+gc_free_item(struct vos_gc *gc, struct vos_pool *pool, struct vos_container *cont,
+	     struct vos_gc_item *item, struct vos_gc_bin_df *bin)
 {
-	struct vos_gc_bin_df *bin = gc_type2bin(pool, cont, gc->gc_type);
 	struct vos_gc_bag_df *bag;
 	int		      first;
 	struct vos_gc_item    it;
@@ -575,8 +688,8 @@ gc_free_item(struct vos_gc *gc, struct vos_pool *pool,
 	if (first == bag->bag_item_last) {
 		/* it's going to be a empty bag */
 		D_ASSERT(bag->bag_item_nr == 1);
-		rc = gc_bin_free_bag(&pool->vp_umm, cont, bin,
-				     bin->bin_bag_first);
+		rc = gc_bin_free_bag(&pool->vp_umm, bin, bin->bin_bag_first,
+				     (cont != NULL || item->it_bkt_ids[0] != UMEM_DEFAULT_MBKT_ID));
 		if (rc)
 			goto failed;
 	} else {
@@ -627,12 +740,12 @@ failed:
  */
 int
 gc_add_item(struct vos_pool *pool, daos_handle_t coh,
-	    enum vos_gc_type type, umem_off_t item_off, uint64_t args)
+	    enum vos_gc_type type, umem_off_t item_off, uint32_t *bkt_ids)
 {
 	struct vos_container	*cont = vos_hdl2cont(coh);
-	struct vos_gc_bin_df	*bin = gc_type2bin(pool, cont, type);
+	struct vos_gc_bin_df	*bin;
 	struct vos_gc_item	 item;
-	int			 rc;
+	int			 rc, i;
 
 	D_DEBUG(DB_TRACE, "Add %s addr="DF_X64"\n",
 		gc_type2name(type), item_off);
@@ -641,7 +754,16 @@ gc_add_item(struct vos_pool *pool, daos_handle_t coh,
 		return 0; /* OK to ignore because the pool is being deleted */
 
 	item.it_addr = item_off;
-	item.it_args = args;
+	for (i = 0; i < VOS_GC_BKTS_MAX; i++)
+		item.it_bkt_ids[i] = bkt_ids ? bkt_ids[i] : UMEM_DEFAULT_MBKT_ID;
+
+	rc = gc_get_bin(pool, cont, type, item.it_bkt_ids[0], &bin);
+	if (rc) {
+		DL_ERROR(rc, "Failed to get GC bin for type:%d, bkt_id:%u",
+			 type, item.it_bkt_ids[0]);
+		return rc;
+	}
+
 	rc = gc_bin_add_item(&pool->vp_umm, bin, &item);
 	if (rc) {
 		D_ERROR("Failed to add item, pool=" DF_UUID ", rc=" DF_RC "\n",
@@ -711,6 +833,7 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 {
 	struct vos_container	*cont = gc_get_container(pool);
 	struct vos_gc		*gc    = &gc_table[0]; /* start from akey */
+	struct vos_gc_bin_df	*bin;
 	int			 creds = *credits;
 	int			 rc;
 
@@ -777,8 +900,9 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 		}
 
 		if (empty && creds) {
+			bin = gc_type2bin(pool, cont, gc->gc_type);
 			/* item can be released and removed from bin */
-			rc = gc_free_item(gc, pool, cont, item);
+			rc = gc_free_item(gc, pool, cont, item, bin);
 			if (rc) {
 				D_ERROR("GC=%s free item error: "DF_RC"\n", gc->gc_name, DP_RC(rc));
 				break;
@@ -812,7 +936,7 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 		"pool="DF_UUID", creds origin=%d, current=%d, rc=%s\n",
 		DP_UUID(pool->vp_id), *credits, creds, d_errstr(rc));
 
-	rc = umem_tx_end(&pool->vp_umm, rc);
+	rc = umem_tx_end(&pool->vp_umm, rc < 0 ? rc : 0);
 	if (rc == 0)
 		*credits = creds;
 
@@ -833,6 +957,592 @@ done:
 	return rc;
 }
 
+static inline bool
+bins_empty(struct vos_pool *pool, struct vos_gc_bin_df *bins)
+{
+	int	i;
+
+	for (i = 0; i < GC_CONT; i++) {
+		if (bin_get_item(pool, &bins[i]) != NULL)
+			return false;
+	}
+	return true;
+}
+
+/* Add gc_bin[GC_CONT] from container bucket tree to pool bucket tree */
+static int
+gc_add_bins(struct vos_pool *pool, struct vos_gc_bin_df *src_bins, uint32_t bkt_id)
+{
+	struct vos_gc_bin_df	*dst_bins, dummy_bins[GC_CONT];
+	daos_handle_t		 pool_btr = pool->vp_gc_info.gi_bins_btr;
+	d_iov_t			 key, val, val_out;
+	uint64_t		 key_id = bkt_id;
+	int			 i, rc, added = 0;
+
+	D_ASSERT(daos_handle_is_valid(pool_btr));
+	/* Fetch the in-tree record from pool */
+	d_iov_set(&key, &key_id, sizeof(key_id));
+	d_iov_set(&val_out, NULL, 0);
+
+	rc = dbtree_fetch(pool_btr, BTR_PROBE_EQ, DAOS_INTENT_DEFAULT, &key, NULL, &val_out);
+	if (rc == -DER_NONEXIST) {
+		d_iov_set(&val, src_bins, sizeof(dummy_bins));
+		rc = dbtree_upsert(pool_btr, BTR_PROBE_BYPASS, DAOS_INTENT_UPDATE, &key, &val, NULL);
+		if (rc)
+			DL_ERROR(rc, "Failed to add bins for bkt_id:%u", bkt_id);
+		return rc;
+	} else if (rc) {
+		DL_ERROR(rc, "Failed to fetch bins from pool bucket tree for bkt_id:%u", bkt_id);
+		return rc;
+	}
+
+	dst_bins = (struct vos_gc_bin_df *)val_out.iov_buf;
+	D_ASSERT(dst_bins && !bins_empty(pool, dst_bins));
+
+	for (i = GC_AKEY; i < GC_CONT; i++) {
+		if (src_bins[i].bin_bag_first == UMOFF_NULL)
+			continue;
+
+		rc = gc_bags_move(pool, &dst_bins[i], &src_bins[i]);
+		if (rc != 0) {
+			DL_ERROR(rc, "Failed to move bags for bkt_id:%u, type:%d", bkt_id, i);
+			return rc;
+		}
+		added++;
+	}
+
+	D_ASSERT(added > 0);
+	return 0;
+}
+
+static int
+gc_move_bins(struct vos_pool *pool, struct vos_gc_item *item, int *credits, bool *empty_ret)
+{
+	struct umem_instance	*umm = &pool->vp_umm;
+	struct umem_attr	*uma = &pool->vp_uma;
+	struct vos_cont_df	*cd = umem_off2ptr(umm, item->it_addr);
+	struct vos_cont_ext_df	*cd_ext = umem_off2ptr(umm, cd->cd_ext);
+	daos_handle_t		 cont_btr;
+	d_iov_t			 key, key_out, val_out;
+	uint64_t		 key_id = UMEM_DEFAULT_MBKT_ID;
+	struct vos_gc_bin_df	*bins;
+	uint64_t		*bkt_id;
+	int			 rc, creds = *credits, moved = 0;
+
+	D_ASSERT(cd_ext != NULL);
+	rc = dbtree_open_inplace(&cd_ext->ced_gc_bkt.gd_bins_root, uma, &cont_btr);
+	if (rc == -DER_NONEXIST) {
+		*empty_ret = true;
+		return 0;
+	} else if (rc) {
+		DL_ERROR(rc, "Failed to open container bucket tree.");
+		return rc;
+	}
+	D_ASSERT(daos_handle_is_valid(cont_btr));
+
+	*empty_ret = false;
+	while (creds > 0) {
+		/* Fetch the in-tree record from container */
+		d_iov_set(&key, &key_id, sizeof(key_id));
+		d_iov_set(&key_out, NULL, 0);
+		d_iov_set(&val_out, NULL, 0);
+
+		rc = dbtree_fetch(cont_btr, BTR_PROBE_GE, DAOS_INTENT_DEFAULT,
+				  &key, &key_out, &val_out);
+		if (rc == -DER_NONEXIST) {
+			*empty_ret = true;
+			rc = 0;
+			break;
+		} else if (rc) {
+			DL_ERROR(rc, "Failed to fetch bins from container bucket tree.");
+			break;
+		}
+
+		bins = (struct vos_gc_bin_df *)val_out.iov_buf;
+		D_ASSERT(bins && !bins_empty(pool, bins));
+		bkt_id = (uint64_t *)key_out.iov_buf;
+		D_ASSERT(bkt_id && *bkt_id != UMEM_DEFAULT_MBKT_ID);
+
+		rc = gc_add_bins(pool, bins, (uint32_t)*bkt_id);
+		if (rc)
+			break;
+
+		rc = dbtree_delete(cont_btr, BTR_PROBE_BYPASS, &key_out, NULL);
+		if (rc) {
+			DL_ERROR(rc, "Failed to delete bins from container bucket tree.");
+			break;
+		}
+
+		moved++;
+		/* Consume 1 user credit on moving 8 gc_bin[GC_CONT] */
+		if (moved % 8 == 0)
+			creds--;
+	}
+
+	if (*empty_ret)
+		dbtree_destroy(cont_btr, NULL);
+	else
+		dbtree_close(cont_btr);
+
+	if (rc == 0)
+		*credits = creds;
+
+	return rc;
+}
+
+static int
+gc_flatten_cont(struct vos_pool *pool, int *credits)
+{
+	struct vos_gc		*gc = &gc_table[GC_CONT];
+	struct vos_gc_item	*item;
+	struct vos_gc_bin_df	*bin;
+	int			 creds = *credits;
+	int			 rc = 0, flattened = 0;
+
+	while (creds > 0) {
+		bool	empty = false;
+
+		item = gc_get_item(gc, pool, NULL);
+		if (item == NULL)	/* No containers to be flattened */
+			break;
+
+		/* Move all gc_bin[GC_CONT] from container to pool */
+		rc = gc_move_bins(pool, item, &creds, &empty);
+		if (rc) {
+			DL_ERROR(rc, "GC move bins failed.");
+			break;
+		}
+
+		if (!empty) {
+			D_ASSERT(creds == 0);
+			break;
+		}
+
+		if (creds == 0)
+			break;
+
+		empty = false;
+		/* Container drain doesn't consume user credits */
+		rc = gc_drain_item(gc, pool, DAOS_HDL_INVAL, item, NULL, &empty);
+		if (rc) {
+			D_ASSERT(rc < 0);
+			DL_ERROR(rc, "GC drain %s failed.", gc->gc_name);
+			break;
+		}
+
+		flattened++;
+		/* Consume 1 user credit on flattening every 8 objects */
+		if (flattened % 8 == 0)
+			creds--;
+
+		/* The container is flattened, free the gc_item */
+		if (empty && creds) {
+			bin = gc_type2bin(pool, NULL, gc->gc_type);
+			rc = gc_free_item(gc, pool, NULL, item, bin);
+			if (rc) {
+				DL_ERROR(rc, "GC free %s item failed.", gc->gc_name);
+				break;
+			}
+			creds--;
+		}
+	}
+
+	if (rc == 0)
+		*credits = creds;
+
+	return rc;
+}
+
+static int
+bkt_get_bins(struct vos_pool *pool, struct vos_container *cont, uint32_t *bkt_id, bool try_next,
+	     struct vos_gc_bin_df **bins_ret)
+{
+	struct vos_gc_info	*gc_info;
+	struct vos_gc_bin_df	*bins = NULL;
+	int			 rc;
+
+	if (*bkt_id == UMEM_DEFAULT_MBKT_ID || try_next) {
+		if (cont != NULL)
+			bins = &cont->vc_cont_df->cd_gc_bins[0];
+		else
+			bins = &pool->vp_pool_df->pd_gc_bins[0];
+
+		if (!bins_empty(pool, bins)) {
+			*bkt_id = UMEM_DEFAULT_MBKT_ID;
+			*bins_ret = bins;
+			return 0;
+		} else if (!try_next) {
+			return -DER_NONEXIST;
+		}
+	}
+
+	gc_info = (cont != NULL) ? &cont->vc_gc_info : &pool->vp_gc_info;
+	rc = gc_bkt2bins(bkt_id, gc_info, false, try_next, &bins);
+	if (rc)
+		return rc;
+
+	D_ASSERT(bins && !bins_empty(pool, bins));
+	*bins_ret = bins;
+
+	return 0;
+}
+
+static inline bool
+cont_bins_empty(struct vos_pool *pool, struct vos_container *cont)
+{
+	struct vos_gc_bin_df	*bins = &cont->vc_cont_df->cd_gc_bins[0];
+
+	if (!bins_empty(pool, bins))
+		return false;
+
+	D_ASSERT(daos_handle_is_valid(cont->vc_gc_info.gi_bins_btr));
+	if (!dbtree_is_empty(cont->vc_gc_info.gi_bins_btr))
+		return false;
+
+	return true;
+}
+
+/*
+ * Return non-empty gc_bin[GC_CONT] with specified bucket ID, different bucket ID
+ * could be returned if there is nothing to be reclaimed on the specified bucket.
+ */
+static int
+gc_get_bkt(struct vos_pool *pool, struct vos_container **cont_in, uint32_t *bkt_id,
+	   struct vos_gc_bin_df **bins_ret)
+{
+	struct vos_container	*cont, *tmp;
+	bool			 try_next = false;
+	int			 rc;
+
+switch_bkt:
+	/* Find non-empty gc_bin[GC_CONT] from containers */
+	d_list_for_each_entry_safe(cont, tmp, &pool->vp_gc_cont, vc_gc_link) {
+		if (cont_bins_empty(pool, cont)) {
+			d_list_del_init(&cont->vc_gc_link);
+			continue;
+		}
+
+		rc = bkt_get_bins(pool, cont, bkt_id, try_next, bins_ret);
+		if ((rc && rc != -DER_NONEXIST) || rc == 0)
+			goto done;
+	}
+
+	/* Find satisfied gc_bin[GC_CONT] from pool */
+	cont = NULL;
+	rc = bkt_get_bins(pool, NULL, bkt_id, try_next, bins_ret);
+	if ((rc && rc != -DER_NONEXIST) || rc == 0)
+		goto done;
+
+	if (!try_next) {
+		try_next = true;
+		goto switch_bkt;
+	}
+done:
+	if (*cont_in) {
+		vos_cont_decref(*cont_in);
+		*cont_in = NULL;
+	}
+
+	if (rc == 0 && cont) {
+		vos_cont_addref(cont);
+		*cont_in = cont;
+		/* Keep fairness */
+		d_list_del_init(&cont->vc_gc_link);
+		d_list_add_tail(&cont->vc_gc_link, &pool->vp_gc_cont);
+	}
+
+	return rc;
+}
+
+static int
+gc_reclaim_bins(struct vos_pool *pool, struct vos_container *cont,
+		struct vos_gc_bin_df *bins, int *credits)
+{
+	struct vos_gc		*gc = &gc_table[0];	/* Start from akey */
+	struct vos_gc_item	*item;
+	int		 	 rc = 0, creds = *credits;
+
+	while (creds > 0) {
+		bool	empty = false;
+
+		D_ASSERT(gc->gc_type < GC_CONT);
+		item = bin_get_item(pool, &bins[gc->gc_type]);
+		if (item == NULL) {
+			if (gc->gc_type == GC_OBJ)	/* hit the top level */
+				break;
+
+			/* Try upper level */
+			gc++;
+			continue;
+		}
+
+		rc = gc_drain_item(gc, pool, vos_cont2hdl(cont), item, &creds, &empty);
+		if (rc < 0) {
+			DL_ERROR(rc, "GC drain %s failed.", gc->gc_name);
+			break;
+		}
+
+		if (empty && creds) {
+			rc = gc_free_item(gc, pool, cont, item, &bins[gc->gc_type]);
+			if (rc) {
+				DL_ERROR(rc, "GC free %s item failed.", gc->gc_name);
+				break;
+			}
+			creds--;
+		}
+
+		/* always try to free akeys and values because they are the
+		 * items consuming most storage space.
+		 */
+		if (gc->gc_type == GC_AKEY)
+			continue;
+
+		/* should have flattened some items to the child GC, switch
+		 * to the child GC.
+		 */
+		gc--;
+	}
+
+	if (rc == 0)
+		*credits = creds;
+
+	return rc;
+}
+
+static int
+gc_delete_bins(struct vos_pool *pool, struct vos_container *cont, uint32_t bkt_id)
+{
+	struct vos_gc_bin_df	*bins;
+	struct vos_gc_info	*gc_info;
+	d_iov_t			 key, val_out;
+	uint64_t		 key_id = bkt_id;
+	int			 rc;
+
+	if (bkt_id == UMEM_DEFAULT_MBKT_ID)
+		return 0;
+
+	gc_info = (cont != NULL) ? &cont->vc_gc_info : &pool->vp_gc_info;
+	D_ASSERT(daos_handle_is_valid(gc_info->gi_bins_btr));
+
+	/* Fetch the in-tree record */
+	d_iov_set(&key, &key_id, sizeof(key_id));
+	d_iov_set(&val_out, NULL, 0);
+
+	rc = dbtree_fetch(gc_info->gi_bins_btr, BTR_PROBE_EQ, DAOS_INTENT_DEFAULT, &key,
+			  NULL, &val_out);
+	if (rc) {
+		DL_ERROR(rc, "Failed to lookup GC bins for bkt_id:%u", bkt_id);
+		return rc;
+	}
+
+	bins = (struct vos_gc_bin_df *)val_out.iov_buf;
+	D_ASSERT(bins && bins_empty(pool, bins));
+
+	rc = dbtree_delete(gc_info->gi_bins_btr, BTR_PROBE_BYPASS, &key, NULL);
+	if (rc)
+		DL_ERROR(rc, "Failed to delete GC bins for bkt_id:%u", bkt_id);
+
+	return rc;
+}
+
+static int
+gc_reclaim_pool_p2(struct vos_pool *pool, int *credits, bool *empty_ret)
+{
+	struct vos_container	*cont = NULL;
+	struct vos_gc_bin_df	*bins = NULL;
+	struct vos_gc_info	*gc_info = &pool->vp_gc_info;
+	uint32_t		 bkt = gc_info->gi_last_pinned, pinned_bkt = UMEM_DEFAULT_MBKT_ID;
+	struct umem_pin_handle	*pin_hdl = NULL;
+	struct umem_cache_range	 rg;
+	bool			 tx_started = false;
+	int			 creds = *credits, rc = 0;
+
+	if (pool->vp_dying) {
+		*empty_ret = true;
+		return rc;
+	}
+
+	*empty_ret = false;
+	while(creds > 0) {
+		if (bkt != UMEM_DEFAULT_MBKT_ID && bkt != pinned_bkt) {
+			if (tx_started) {
+				tx_started = false;
+				rc = umem_tx_end(&pool->vp_umm, 0);
+				if (rc) {
+					DL_ERROR(rc, "Failed to commit GC tx.");
+					break;
+				}
+			}
+
+			if (pin_hdl != NULL) {
+				umem_cache_unpin(vos_pool2store(pool), pin_hdl);
+				pin_hdl = NULL;
+			}
+
+			rg.cr_off = umem_get_mb_base_offset(vos_pool2umm(pool), bkt);
+			rg.cr_size = vos_pool2store(pool)->cache->ca_page_sz;
+
+			rc = vos_cache_pin(pool, &rg, 1, false, &pin_hdl);
+			if (rc) {
+				DL_ERROR(rc, "Failed to pin bucket %u.", bkt);
+				break;
+			}
+			pinned_bkt = bkt;
+			gc_info->gi_last_pinned = pinned_bkt;
+		}
+
+		if (!tx_started) {
+			rc = umem_tx_begin(&pool->vp_umm, NULL);
+			if (rc) {
+				DL_ERROR(rc, "Failed to start tx for pool:"DF_UUID".",
+					 DP_UUID(pool->vp_id));
+				break;
+			}
+			tx_started = true;
+		}
+
+		/* Flatten all containers first */
+		rc = gc_flatten_cont(pool, &creds);
+		if (rc < 0) {
+			DL_ERROR(rc, "GC flatten cont failed.");
+			break;
+		}
+
+		/* Container flattening used up all user credits */
+		if (creds == 0)
+			break;
+
+		/*
+		 * Pick gc_bin[GC_CONT] by bucket ID, the bucket ID could be switched if
+		 * there is nothing to be reclaimed for the specified ID
+		 */
+		rc = gc_get_bkt(pool, &cont, &bkt, &bins);
+		if (rc == -DER_NONEXIST) {
+			*empty_ret = true;
+			rc = 0;
+			break;
+		} else if (rc) {
+			DL_ERROR(rc, "Failed to get GC bkt bins for bkt_id:%u", bkt);
+			break;
+		}
+
+		/* Bucket ID is switched, need to unpin current bucket then pin the new bucket */
+		if (bkt != UMEM_DEFAULT_MBKT_ID && bkt != pinned_bkt)
+			continue;
+
+		rc = gc_reclaim_bins(pool, cont, bins, &creds);
+		if (rc) {
+			DL_ERROR(rc, "GC reclaim bins for bkt_id:%u failed.", bkt);
+			break;
+		}
+
+		if (bins_empty(pool, bins)) {
+			/* The gc_bin[GC_CONT] is empty, delete it to condense the bucket tree */
+			rc = gc_delete_bins(pool, cont, bkt);
+			if (rc) {
+				DL_ERROR(rc, "GC delete bins for bkt_id:%u failed.", bkt);
+				break;
+			}
+		}
+	}
+
+	if (tx_started) {
+		rc = umem_tx_end(&pool->vp_umm, rc);
+		if (rc)
+			DL_ERROR(rc, "Failed to commit GC tx.");
+	}
+
+	if (pin_hdl != NULL) {
+		umem_cache_unpin(vos_pool2store(pool), pin_hdl);
+		pin_hdl = NULL;
+	}
+
+	if (cont != NULL)
+		vos_cont_decref(cont);
+
+	if (rc == 0)
+		*credits = creds;
+
+	gc_update_stats(pool);
+	return rc;
+}
+
+static inline void
+gc_close_bkt(struct vos_gc_info *gc_info)
+{
+
+	if (daos_handle_is_valid(gc_info->gi_bins_btr)) {
+		dbtree_close(gc_info->gi_bins_btr);
+		gc_info->gi_bins_btr = DAOS_HDL_INVAL;
+	}
+	gc_info->gi_last_pinned = UMEM_DEFAULT_MBKT_ID;
+}
+
+static inline int
+gc_open_bkt(struct umem_attr *uma, struct vos_gc_bkt_df *bkt_df, struct vos_gc_info *gc_info)
+{
+	int	rc;
+
+	rc = dbtree_open_inplace(&bkt_df->gd_bins_root, uma, &gc_info->gi_bins_btr);
+	if (rc)
+		DL_ERROR(rc, "Failed to open GC bin tree.");
+	return rc;
+}
+
+void
+gc_close_pool(struct vos_pool *pool)
+{
+	return gc_close_bkt(&pool->vp_gc_info);
+}
+
+int
+gc_open_pool(struct vos_pool *pool)
+{
+	struct vos_pool_ext_df	*pd_ext = umem_off2ptr(&pool->vp_umm, pool->vp_pool_df->pd_ext);
+
+	if (pd_ext != NULL)
+		return gc_open_bkt(&pool->vp_uma, &pd_ext->ped_gc_bkt, &pool->vp_gc_info);
+	return 0;
+}
+
+void
+gc_close_cont(struct vos_container *cont)
+{
+	return gc_close_bkt(&cont->vc_gc_info);
+}
+
+int
+gc_open_cont(struct vos_container *cont)
+{
+	struct vos_pool		*pool = vos_cont2pool(cont);
+	struct vos_cont_ext_df	*cd_ext = umem_off2ptr(&pool->vp_umm, cont->vc_cont_df->cd_ext);
+
+	if (cd_ext != NULL)
+		return gc_open_bkt(&pool->vp_uma, &cd_ext->ced_gc_bkt, &cont->vc_gc_info);
+	return 0;
+}
+
+static int
+gc_init_bkt(struct umem_instance *umm, struct vos_gc_bkt_df *bkt_df)
+{
+	struct umem_attr	uma;
+	daos_handle_t		bins_btr;
+	int			rc;
+
+	uma.uma_id = umm->umm_id;
+	uma.uma_pool = umm->umm_pool;
+
+	rc = dbtree_create_inplace(DBTREE_CLASS_IFV, BTR_FEAT_UINT_KEY, 12, &uma,
+				   &bkt_df->gd_bins_root, &bins_btr);
+	if (rc) {
+		DL_ERROR(rc, "Failed to create GC bin tree.");
+		return rc;
+	}
+	dbtree_close(bins_btr);
+
+	return 0;
+}
+
 /**
  * Initialize garbage bins for a pool.
  *
@@ -842,10 +1552,9 @@ done:
 int
 gc_init_pool(struct umem_instance *umm, struct vos_pool_df *pd)
 {
-	int		i;
-	umem_off_t	bag_id;
-	int		size;
-	int		rc;
+	struct vos_pool_ext_df	*pd_ext = umem_off2ptr(umm, pd->pd_ext);
+	umem_off_t		 bag_id;
+	int			 i, size, rc;
 
 	D_DEBUG(DB_IO, "Init garbage bins for pool="DF_UUID"\n",
 		DP_UUID(pd->pd_id));
@@ -867,6 +1576,10 @@ gc_init_pool(struct umem_instance *umm, struct vos_pool_df *pd)
 		bin->bin_bag_last = bag_id;
 		bin->bin_bag_nr = 1;
 	}
+
+	if (pd_ext != NULL)
+		return gc_init_bkt(umm, &pd_ext->ped_gc_bkt);
+
 	return 0;
 }
 
@@ -879,7 +1592,8 @@ gc_init_pool(struct umem_instance *umm, struct vos_pool_df *pd)
 int
 gc_init_cont(struct umem_instance *umm, struct vos_cont_df *cd)
 {
-	int	i;
+	struct vos_cont_ext_df	*cd_ext = umem_off2ptr(umm, cd->cd_ext);
+	int			 i;
 
 	D_DEBUG(DB_IO, "Init garbage bins for cont="DF_UUID"\n",
 		DP_UUID(cd->cd_id));
@@ -892,6 +1606,10 @@ gc_init_cont(struct umem_instance *umm, struct vos_cont_df *cd)
 		bin->bin_bag_size  = gc_bag_size;
 		bin->bin_bag_nr	   = 0;
 	}
+
+	if (cd_ext != NULL)
+		return gc_init_bkt(umm, &cd_ext->ced_gc_bkt);
+
 	return 0;
 }
 
@@ -903,16 +1621,24 @@ gc_check_cont(struct vos_container *cont)
 {
 	int	i;
 	struct vos_gc_bin_df	*bin;
+	struct vos_pool		*pool = cont->vc_pool;
 
 	D_INIT_LIST_HEAD(&cont->vc_gc_link);
 
 	for (i = 0; i < GC_CONT; i++) {
-		bin = gc_type2bin(cont->vc_pool, cont, i);
+		bin = gc_type2bin(pool, cont, i);
 		if (bin->bin_bag_first != UMOFF_NULL) {
-			d_list_add_tail(&cont->vc_gc_link,
-					&cont->vc_pool->vp_gc_cont);
+			d_list_add_tail(&cont->vc_gc_link, &pool->vp_gc_cont);
 			return;
 		}
+	}
+
+	if (vos_pool_is_evictable(pool)) {
+		struct vos_gc_info	*gc_info = &cont->vc_gc_info;
+
+		D_ASSERT(daos_handle_is_valid(gc_info->gi_bins_btr));
+		if (!dbtree_is_empty(gc_info->gi_bins_btr))
+			d_list_add_tail(&cont->vc_gc_link, &pool->vp_gc_cont);
 	}
 }
 
@@ -949,8 +1675,10 @@ gc_del_pool(struct vos_pool *pool)
 	D_ASSERT(!d_list_empty(&pool->vp_gc_link));
 
 	pool->vp_opened--;
-	if (pool->vp_opened == 0)
+	if (pool->vp_opened == 0) {
 		vos_pool_hash_del(pool); /* un-pin from open-hash */
+		gc_close_pool(pool);
+	}
 
 	d_list_del_init(&pool->vp_gc_link);
 	vos_pool_decref(pool); /* -1 for the link */
@@ -1018,7 +1746,10 @@ vos_gc_run(int *credits)
 		D_DEBUG(DB_TRACE, "GC pool="DF_UUID", creds=%d\n",
 			DP_UUID(pool->vp_id), creds);
 
-		rc = gc_reclaim_pool(pool, &creds, &empty);
+		if (vos_pool_is_evictable(pool))
+			rc = gc_reclaim_pool_p2(pool, &creds, &empty);
+		else
+			rc = gc_reclaim_pool(pool, &creds, &empty);
 		if (rc) {
 			D_ERROR("GC pool="DF_UUID" error=%s\n",
 				DP_UUID(pool->vp_id), d_errstr(rc));
@@ -1097,7 +1828,10 @@ vos_gc_pool_tight(daos_handle_t poh, int *credits)
 		return 0; /* nothing to reclaim for this pool */
 
 	total = *credits;
-	rc = gc_reclaim_pool(pool, credits, &empty);
+	if (vos_pool_is_evictable(pool))
+		rc = gc_reclaim_pool_p2(pool, credits, &empty);
+	else
+		rc = gc_reclaim_pool(pool, credits, &empty);
 	if (rc) {
 		D_CRIT("gc_reclaim_pool failed " DF_RC "\n", DP_RC(rc));
 		return 0; /* caller can't do anything for it */

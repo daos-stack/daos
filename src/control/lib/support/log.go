@@ -25,7 +25,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
-	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
+	"github.com/daos-stack/daos/src/control/lib/hardware/defaults/topology"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 )
@@ -961,7 +961,7 @@ func collectDaosServerCmd(log logging.Logger, opts ...CollectLogsParams) error {
 		}
 	case "dump-topology":
 		hwlog := logging.NewCommandLineLogger()
-		hwProv := hwprov.DefaultTopologyProvider(hwlog)
+		hwProv := topology.DefaultProvider(hwlog)
 		topo, err := hwProv.GetTopology(context.Background())
 		if err != nil {
 			return err

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -24,6 +24,9 @@ import (
 	"fmt"
 )
 
+var _ Metric = (*Counter)(nil)
+
+// Counter is a counter metric.
 type Counter struct {
 	metricBase
 }
@@ -37,18 +40,22 @@ func (c *Counter) FloatValue() float64 {
 }
 
 func (c *Counter) Value() uint64 {
+	ctrVal := BadUintVal
 	if c.handle == nil || c.node == nil {
-		return BadUintVal
+		return ctrVal
 	}
 
-	var val C.uint64_t
-
-	res := C.d_tm_get_counter(c.handle.ctx, &val, c.node)
-	if res == C.DER_SUCCESS {
-		return uint64(val)
+	fetch := func() C.int {
+		var val C.uint64_t
+		res := C.d_tm_get_counter(c.handle.ctx, &val, c.node)
+		if res == C.DER_SUCCESS {
+			ctrVal = uint64(val)
+		}
+		return res
 	}
+	c.fetchValWithRetry(fetch)
 
-	return BadUintVal
+	return ctrVal
 }
 
 func newCounter(hdl *handle, path string, name *string, node *C.struct_d_tm_node_t) *Counter {
