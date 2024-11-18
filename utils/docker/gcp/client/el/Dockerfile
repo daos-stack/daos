@@ -62,14 +62,17 @@ RUN EL_VERSION=`echo "$BASE_IMAGE_BUILDER" | sed 's/.*://'` && \
               "https://packages.daos.io/v2.6/EL${EL_VERSION}/packages/x86_64/daos_packages.repo"
 
 RUN rpm --import https://packages.daos.io/RPM-GPG-KEY
+
+# DAOS 2.7 needs argobots-devel >= 1.2, but this isn't publicly available yet
+# so we need to build it from source for now
 RUN dnf install -y \
     spdk-devel \
-    argobots-devel \
     libpmemobj-devel
 
 WORKDIR /
 
-# Need to pass server argument because no way to build RPM without it
+# The script in the internal DAOS repo returns the git hash to use for each
+# component we check out that matches the current version of DAOS being used.
 RUN daos/utils/docker/gcp/clone_repos.sh
 
 RUN if [[ "$BASE_IMAGE_BUILDER" == "rockylinux/rockylinux:9" ]]; then \
@@ -80,8 +83,14 @@ RUN if [[ "$BASE_IMAGE_BUILDER" == "rockylinux/rockylinux:8" ]]; then \
   daos/utils/scripts/install-el8.sh; \
 fi
 
-# The script in the internal DAOS repo returns the git hash to use for each
-# component we check out that matches the current version of DAOS being used.
+WORKDIR /argobots
+# Building in parallel can cause build errors, so we use single threaded
+RUN make && \
+  awk -v VERSION_SUFFIX=$(cat /tmp/build_ts.txt) -i inplace '/Version:/ {split($0,a,"~"); if (a[2]!="") {print a[1] "." VERSION_SUFFIX "~" a[2]} else {print a[1] "." VERSION_SUFFIX}; next; } ; 1' argobots.spec && \
+  git --no-pager diff argobots.spec && \
+  find _topdir/RPMS -name "*.rpm" | tr "\n" " " | xargs rpm -vU
+RUN find _topdir/RPMS -name "argobots*.rpm" > /tmp/argobots.txt && sed -i 's/\.rpm$//' /tmp/argobots.txt
+RUN readarray -t arr < /tmp/argobots.txt ; for r in "${arr[@]}" ; do { OLD_RPM_NAME="$r"; NEW_RPM_NAME=$(echo $OLD_RPM_NAME | awk -v VERSION_SUFFIX=$(cat /tmp/build_ts.txt) '{split($0,a,"~"); if (a[2]!="") {print a[1] "." VERSION_SUFFIX "~" a[2]} else {print a[1] "." VERSION_SUFFIX}; }');  mv "$OLD_RPM_NAME.rpm" "$NEW_RPM_NAME.rpm";   } done
 
 WORKDIR /libfabric
 RUN make -j && \
