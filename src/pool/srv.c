@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -118,6 +118,11 @@ static struct crt_corpc_ops ds_pool_tgt_disconnect_co_ops = {
 	.co_pre_forward	= NULL,
 };
 
+static struct crt_corpc_ops ds_pool_tgt_query_co_ops_v6 = {
+	.co_aggregate	= ds_pool_tgt_query_aggregator_v6,
+	.co_pre_forward	= NULL,
+};
+
 static struct crt_corpc_ops ds_pool_tgt_query_co_ops = {
 	.co_aggregate	= ds_pool_tgt_query_aggregator,
 	.co_pre_forward	= NULL,
@@ -133,11 +138,11 @@ static struct crt_corpc_ops ds_pool_tgt_query_co_ops = {
 	.dr_corpc_ops = e,	\
 },
 
-static struct daos_rpc_handler pool_handlers_v5[] = {POOL_PROTO_CLI_RPC_LIST(5)
-							 POOL_PROTO_SRV_RPC_LIST};
-
 static struct daos_rpc_handler pool_handlers_v6[] = {POOL_PROTO_CLI_RPC_LIST(6)
-							 POOL_PROTO_SRV_RPC_LIST};
+						     POOL_PROTO_SRV_RPC_LIST(6)};
+
+static struct daos_rpc_handler pool_handlers_v7[] = {POOL_PROTO_CLI_RPC_LIST(7)
+						     POOL_PROTO_SRV_RPC_LIST(7)};
 
 #undef X
 
@@ -204,9 +209,9 @@ struct dss_module pool_module = {
     .sm_fini        = fini,
     .sm_setup       = setup,
     .sm_cleanup     = cleanup,
-    .sm_proto_fmt   = {&pool_proto_fmt_v5, &pool_proto_fmt_v6},
+    .sm_proto_fmt   = {&pool_proto_fmt_v6, &pool_proto_fmt_v7},
     .sm_cli_count   = {POOL_PROTO_CLI_COUNT, POOL_PROTO_CLI_COUNT},
-    .sm_handlers    = {pool_handlers_v5, pool_handlers_v6},
+    .sm_handlers    = {pool_handlers_v6, pool_handlers_v7},
     .sm_key         = &pool_module_key,
     .sm_metrics     = &pool_metrics,
 };

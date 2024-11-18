@@ -70,6 +70,15 @@ struct daos_space {
 	uint64_t		s_total[DAOS_MEDIA_MAX];
 	/** Free space in bytes */
 	uint64_t		s_free[DAOS_MEDIA_MAX];
+	/** Memory file size (in bytes) for md-on-ssd phase2 pool */
+	uint64_t		s_total_mem;
+};
+
+struct daos_space_v6 {
+	/** Total space in bytes */
+	uint64_t		s_total[DAOS_MEDIA_MAX];
+	/** Free space in bytes */
+	uint64_t		s_free[DAOS_MEDIA_MAX];
 };
 
 /** Target information */
@@ -88,6 +97,21 @@ typedef struct {
 struct daos_pool_space {
 	/** Aggregated space for all live targets */
 	struct daos_space	ps_space;
+	/** Min target free space in bytes */
+	uint64_t		ps_free_min[DAOS_MEDIA_MAX];
+	/** Max target free space in bytes */
+	uint64_t		ps_free_max[DAOS_MEDIA_MAX];
+	/** Average target free space in bytes */
+	uint64_t		ps_free_mean[DAOS_MEDIA_MAX];
+	/** Target(VOS) count */
+	uint32_t		ps_ntargets;
+	/** padding - not used */
+	uint32_t		ps_padding;
+};
+
+struct daos_pool_space_v6 {
+	/** Aggregated space for all live targets */
+	struct daos_space_v6	ps_space;
 	/** Min target free space in bytes */
 	uint64_t		ps_free_min[DAOS_MEDIA_MAX];
 	/** Max target free space in bytes */

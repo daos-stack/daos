@@ -145,6 +145,11 @@ vos_space_query(struct vos_pool *pool, struct vos_pool_space *vps, bool slow)
 
 	/* Query non-evictable zones usage when the phase2 pool is evictable */
 	if (vos_pool_is_evictable(pool)) {
+		struct vos_pool_ext_df *pd_ext_df = umem_off2ptr(vos_pool2umm(pool), df->pd_ext);
+
+		D_ASSERT(pd_ext_df != NULL);
+		vps->vps_space.s_total_mem = pd_ext_df->ped_mem_sz;
+
 		rc = umempobj_get_mbusage(vos_pool2umm(pool)->umm_pool, UMEM_DEFAULT_MBKT_ID,
 					  &ne_used, &vps->vps_ne_total);
 		if (rc) {
@@ -160,6 +165,7 @@ vos_space_query(struct vos_pool *pool, struct vos_pool_space *vps, bool slow)
 		}
 		vps->vps_ne_free = vps->vps_ne_total - ne_used;
 	} else {
+		vps->vps_space.s_total_mem = SCM_TOTAL(vps);
 		vps->vps_ne_total = 0;
 		vps->vps_ne_free = 0;
 	}
