@@ -2277,6 +2277,13 @@ ec_aggregate_yield(struct ec_agg_param *agg_param)
 {
 	int	rc;
 
+	if (agg_param->ap_pool_info.api_pool->sp_rebuilding > 0) {
+		D_INFO(DF_UUID": abort ec aggregation, sp_rebuilding %d\n",
+		       DP_UUID(agg_param->ap_pool_info.api_pool->sp_uuid),
+		       agg_param->ap_pool_info.api_pool->sp_rebuilding);
+		return true;
+	}
+
 	D_ASSERT(agg_param->ap_yield_func != NULL);
 	rc = agg_param->ap_yield_func(agg_param->ap_yield_arg);
 	if (rc < 0) /* Abort */
@@ -2474,6 +2481,17 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	D_ASSERT(agg_param->ap_initialized);
 
+	/* If rebuild started, abort it to save conflict window with rebuild
+	 * (see obj_inflight_io_check()).
+	 */
+	if (agg_param->ap_pool_info.api_pool->sp_rebuilding > 0) {
+		D_INFO(DF_CONT" abort as rebuild started, sp_rebuilding %d\n",
+			DP_CONT(agg_param->ap_pool_info.api_pool_uuid,
+				agg_param->ap_pool_info.api_cont_uuid),
+			agg_param->ap_pool_info.api_pool->sp_rebuilding);
+		return -1;
+	}
+
 	switch (type) {
 	case VOS_ITER_OBJ:
 		agg_param->ap_epr = param->ip_epr;
@@ -2495,7 +2513,9 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	if (rc < 0) {
-		D_ERROR("EC aggregation failed: "DF_RC"\n", DP_RC(rc));
+		D_ERROR(DF_UUID" EC aggregation (rebuilding %d) failed: "DF_RC"\n",
+			DP_UUID(agg_param->ap_pool_info.api_pool->sp_uuid),
+			agg_param->ap_pool_info.api_pool->sp_rebuilding, DP_RC(rc));
 		return rc;
 	}
 
