@@ -1418,7 +1418,9 @@ class _Component():
                     # Assume every file in bin can be patched
                     continue
                 full_lib = os.path.join(path, lib)
-                cmd = ['patchelf', '--set-rpath', ':'.join(rpath), full_lib]
+                # pylint: disable=line-too-long
+                cmd = ['strace', '-e', 'file,mmap,read,write,close',
+                       'patchelf', '--set-rpath', ':'.join(rpath), full_lib]
                 if not RUNNER.run_commands([cmd]):
                     if lib == 'libspdk.so':
                         print(f'Skipped patching {full_lib}')
