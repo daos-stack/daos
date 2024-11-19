@@ -1,0 +1,20 @@
+provider: ofi+tcp;ofi_rxm
+disable_vfio: true
+crt_timeout: 300
+nr_hugepages: 8192
+server_config:
+  engines:
+    0:
+      first_core: 0
+      fabric_iface: eth0
+      log_mask: INFO
+      nr_xs_helpers: 0
+      targets: 8
+      storage:
+        0:
+          class: ram
+          # scm_size: 128.4
+          scm_mount: /var/daos/ram
+        1:
+          class: nvme
+          bdev_list: ["0000:00:04.0"]

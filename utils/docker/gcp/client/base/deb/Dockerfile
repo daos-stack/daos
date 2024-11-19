@@ -243,3 +243,4 @@ RUN echo $GIT_REPOSITORY > /out/git_repo.txt && \
 FROM scratch
 
 COPY --from=builder /out /out
+

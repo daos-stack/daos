@@ -168,28 +168,29 @@ jobs:
       - name: Set variables
         run: |
             GO_BUILDER=""
+            DOCKER_FOLDER="utils/docker/gcp/client/base"
             case ${{ matrix.distro }} in
                 'el8')
-                    DOCKERFILE="utils/docker/gcp/client/el/Dockerfile"
+                    DOCKERFILE="${DOCKER_FOLDER}/el/Dockerfile"
                     BASE_IMAGE_BUILDER="rockylinux/rockylinux:${{ env.EL8_VERSION }}"
                     DISTRO_NAME="EL"
                     DISTRO_VERSION="${{ env.EL8_VERSION }}"
                     ;;
                 'el9')
-                    DOCKERFILE="utils/docker/gcp/client/el/Dockerfile"
+                    DOCKERFILE="${DOCKER_FOLDER}/el/Dockerfile"
                     BASE_IMAGE_BUILDER="rockylinux/rockylinux:${{ env.EL9_VERSION }}"
                     DISTRO_NAME="EL"
                     DISTRO_VERSION="${{ env.EL9_VERSION }}"
                     ;;
                 'deb12')
-                    DOCKERFILE="utils/docker/gcp/client/deb/Dockerfile"
+                    DOCKERFILE="${DOCKER_FOLDER}/deb/Dockerfile"
                     BASE_IMAGE_BUILDER="debian:${{ env.DEBIAN_VERSION }}"
                     GO_BUILDER="google-go.pkg.dev/golang:1.22.4"
                     DISTRO_NAME="DEBIAN"
                     DISTRO_VERSION="${{ env.DEBIAN_VERSION }}"
                     ;;
                 'ubuntu22')
-                    DOCKERFILE="utils/docker/gcp/client/deb/Dockerfile"
+                    DOCKERFILE="${DOCKER_FOLDER}/deb/Dockerfile"
                     BASE_IMAGE_BUILDER="ubuntu:${{ env.UBUNTU_VERSION }}"
                     GO_BUILDER="google-go.pkg.dev/golang:1.22.4"
                     DISTRO_NAME="DEBIAN"
@@ -220,7 +221,7 @@ jobs:
             --build-arg GO_BUILDER="${GO_BUILDER}"
             --build-arg DAOS_BUILD_TYPE=release
             --build-arg DAOS_SRC_DIR="."
-            --tag gha-amd-${{github.run_id}}-${{github.run_attempt}}
+            --tag gha-${{github.run_id}}-${{github.run_attempt}}
       - name: Remove lastSuccessfulBuild link and exit failure
         if: steps.build-rpm.outcome != 'success'
         run: rm -f ${REPO_PATH}lastSuccessfulBuild;
