@@ -2073,7 +2073,8 @@ struct umem_page_info {
 		 pi_copying	: 1, /** Page is being copied. Blocks writes. */
 		 pi_mapped	: 1, /** Page is mapped to a MD page */
 		 pi_sys		: 1, /** Page is brought to cache by system internal access */
-		 pi_loaded	: 1; /** Page is loaded */
+		 pi_loaded	: 1, /** Page is loaded */
+		 pi_evictable	: 1; /** Last known state on whether the page is evictable */
 	/** Highest transaction ID checkpointed.  This is set before the page is copied. The
 	 *  checkpoint will not be executed until the last committed ID is greater than or
 	 *  equal to this value.  If that's not the case immediately, the waiting flag is set
@@ -2480,9 +2481,9 @@ cache_map_page(struct umem_cache *cache, struct umem_page_info *pinfo, unsigned 
 	pinfo->pi_mapped = 1;
 	pinfo->pi_pg_id = pg_id;
 	cache->ca_pages[pg_id].pg_info = pinfo;
-	if (!is_id_evictable(cache, pg_id))
+	pinfo->pi_evictable            = is_id_evictable(cache, pg_id);
+	if (!pinfo->pi_evictable)
 		cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE] += 1;
-
 }
 
 static inline void
@@ -2491,7 +2492,7 @@ cache_add2lru(struct umem_cache *cache, struct umem_page_info *pinfo)
 	D_ASSERT(d_list_empty(&pinfo->pi_lru_link));
 	D_ASSERT(pinfo->pi_ref == 0);
 
-	if (is_id_evictable(cache, pinfo->pi_pg_id))
+	if (pinfo->pi_evictable)
 		d_list_add_tail(&pinfo->pi_lru_link, &cache->ca_pgs_lru[1]);
 	else
 		d_list_add_tail(&pinfo->pi_lru_link, &cache->ca_pgs_lru[0]);
@@ -3231,6 +3232,10 @@ evict:
 		/* The page is referenced by others while flushing */
 		if ((pinfo->pi_ref > 0) || is_page_dirty(pinfo) || pinfo->pi_io == 1)
 			return -DER_AGAIN;
+
+		/* The status of the page changed to non-evictable */
+		if (!is_id_evictable(cache, pinfo->pi_pg_id))
+			return -DER_AGAIN;
 	}
 
 	if (cache->ca_evtcb_fn) {
@@ -3310,6 +3315,7 @@ cache_get_free_page(struct umem_cache *cache, struct umem_page_info **ret_pinfo,
 /*
  * Only allow map empty pages. It could yield when mapping an evictable page,
  * so when caller tries to map non-evictable page, the page_nr must be 1.
+ * If a page is already mapped, check and update the evictability status.
  */
 static int
 cache_map_pages(struct umem_cache *cache, uint32_t *pages, int page_nr)
@@ -3335,6 +3341,13 @@ retry:
 			if (free_pinfo != NULL) {
 				cache_push_free_page(cache, free_pinfo);
 				free_pinfo = NULL;
+			}
+			if (is_id_evictable(cache, pg_id) != pinfo->pi_evictable) {
+				pinfo->pi_evictable = is_id_evictable(cache, pg_id);
+				cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE] +=
+				    is_id_evictable(cache, pg_id) ? (-1) : 1;
+				d_list_del_init(&pinfo->pi_lru_link);
+				cache_add2lru(cache, pinfo);
 			}
 			continue;
 		}
@@ -3520,6 +3533,7 @@ umem_cache_post_replay(struct umem_store *store)
 		if (!is_id_evictable(cache, pinfo[idx].pi_pg_id)) {
 			d_list_del_init(&pinfo[idx].pi_lru_link);
 			d_list_add_tail(&pinfo[idx].pi_lru_link, &cache->ca_pgs_lru[0]);
+			pinfo[idx].pi_evictable = 0;
 			cnt++;
 		}
 	}
