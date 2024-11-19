@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.6.2
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -601,6 +601,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+
+* Wed Nov 06 2024 Phillip Henderson <phillip.henderson@intel.com> 2.6.2-2
+- Second test build for 2.6.2
 
 * Tue Nov 05 2024 Phillip Henderson <phillip.henderson@intel.com> 2.6.2-1
 - First test build for 2.6.2
