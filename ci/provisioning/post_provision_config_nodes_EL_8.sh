@@ -61,6 +61,7 @@ install_mofed() {
     mellanox_key_url="${artifactory_base_url}mlnx_ofed/RPM-GPG-KEY-Mellanox"
     rpm --import "$mellanox_key_url"
     repo_url="$mellanox_proxy$MLNX_VER_NUM/rhel$gversion/x86_64/"
+    echo "repo_url: " repo_url
     dnf -y config-manager --add-repo="$repo_url"
     dnf -y config-manager --save --setopt="$(url_to_repo "$repo_url")".gpgcheck=1
     dnf repolist || true
