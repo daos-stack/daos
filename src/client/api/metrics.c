@@ -30,13 +30,6 @@ bool daos_client_metric_retain;
  */
 
 static int
-shm_key(pid_t pid)
-{
-	/* Set the key based on our pid so that it can be easily found. */
-	return pid - D_TM_SHARED_MEMORY_KEY;
-}
-
-static int
 shm_chown(key_t key, uid_t new_owner)
 {
 	struct shmid_ds shmid_ds;
@@ -73,7 +66,7 @@ init_root(const char *name, pid_t pid, int flags)
 	key_t key;
 	int   rc;
 
-	key = shm_key(pid);
+	key = d_tm_cli_pid_key(pid);
 	rc  = d_tm_init_with_name(key, MAX_IDS_SIZE(INIT_JOB_NUM), flags, name);
 	if (rc != 0) {
 		DL_ERROR(rc, "failed to initialize root for %s.", name);
@@ -214,7 +207,7 @@ dump_tm_file(const char *dump_dir)
 	filter = D_TM_COUNTER | D_TM_DURATION | D_TM_TIMESTAMP | D_TM_MEMINFO |
 		 D_TM_TIMER_SNAPSHOT | D_TM_GAUGE | D_TM_STATS_GAUGE;
 
-	ctx = d_tm_open(shm_key(pid));
+	ctx = d_tm_open(d_tm_cli_pid_key(pid));
 	if (ctx == NULL)
 		D_GOTO(close, rc = -DER_NOMEM);
 

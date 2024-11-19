@@ -88,12 +88,20 @@ transport_config:
   allow_insecure: true
 `)
 
-	telemetryRetainWithBadPort := test.CreateTestFile(t, dir, `
+	badFilterCfg := test.CreateTestFile(t, dir, `
 name: shire
 access_points: ["one:10001", "two:10001"]
 port: 4242
 runtime_dir: /tmp/runtime
 log_file: /home/frodo/logfile
+transport_config:
+  allow_insecure: true
+include_fabric_ifaces: ["ib0"]
+exclude_fabric_ifaces: ["ib3"]
+`)
+
+	telemetryRetainWithBadPort := test.CreateTestFile(t, dir, `
+
 control_log_mask: debug
 transport_config:
   allow_insecure: true
@@ -200,6 +208,10 @@ telemetry_config:
 		"bad log mask": {
 			path:   badLogMaskCfg,
 			expErr: errors.New("not a valid log level"),
+		},
+		"bad filter config": {
+			path:   badFilterCfg,
+			expErr: errors.New("cannot specify both exclude_fabric_ifaces and include_fabric_ifaces"),
 		},
 		"all options": {
 			path: optCfg,

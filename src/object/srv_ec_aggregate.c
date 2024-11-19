@@ -1010,7 +1010,14 @@ agg_diff_preprocess(struct ec_agg_entry *entry, unsigned char *diff,
 	hole_off = 0;
 	d_list_for_each_entry(extent, &entry->ae_cur_stripe.as_dextents,
 			      ae_link) {
-		D_ASSERT(!extent->ae_hole);
+		if (extent->ae_hole) {
+			/* valid hole processed by agg_process_holes_ult() */
+			D_ASSERTF(extent->ae_epoch < entry->ae_par_extent.ape_epoch,
+				  "hole ext epoch " DF_X64 ", parity epoch " DF_X64 "\n",
+				  extent->ae_epoch, entry->ae_par_extent.ape_epoch);
+			continue;
+		}
+
 		if (extent->ae_epoch <= entry->ae_par_extent.ape_epoch)
 			continue;
 		D_ASSERT(extent->ae_recx.rx_idx >= ss);
@@ -2270,6 +2277,13 @@ ec_aggregate_yield(struct ec_agg_param *agg_param)
 {
 	int	rc;
 
+	if (agg_param->ap_pool_info.api_pool->sp_rebuilding > 0) {
+		D_INFO(DF_UUID": abort ec aggregation, sp_rebuilding %d\n",
+		       DP_UUID(agg_param->ap_pool_info.api_pool->sp_uuid),
+		       agg_param->ap_pool_info.api_pool->sp_rebuilding);
+		return true;
+	}
+
 	D_ASSERT(agg_param->ap_yield_func != NULL);
 	rc = agg_param->ap_yield_func(agg_param->ap_yield_arg);
 	if (rc < 0) /* Abort */
@@ -2393,6 +2407,13 @@ check:
 		*acts = VOS_ITER_CB_SKIP;
 		goto done;
 	}
+
+	/* This MUST be the last check */
+	if (desc->id_type == VOS_ITER_OBJ && vos_bkt_iter_skip(ih, desc)) {
+		agg_param->ap_credits++;
+		*acts |= VOS_ITER_CB_SKIP;
+		goto done;
+	}
 done:
 	if (agg_param->ap_credits > agg_param->ap_credits_max) {
 		agg_param->ap_credits = 0;
@@ -2460,6 +2481,17 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	D_ASSERT(agg_param->ap_initialized);
 
+	/* If rebuild started, abort it to save conflict window with rebuild
+	 * (see obj_inflight_io_check()).
+	 */
+	if (agg_param->ap_pool_info.api_pool->sp_rebuilding > 0) {
+		D_INFO(DF_CONT" abort as rebuild started, sp_rebuilding %d\n",
+			DP_CONT(agg_param->ap_pool_info.api_pool_uuid,
+				agg_param->ap_pool_info.api_cont_uuid),
+			agg_param->ap_pool_info.api_pool->sp_rebuilding);
+		return -1;
+	}
+
 	switch (type) {
 	case VOS_ITER_OBJ:
 		agg_param->ap_epr = param->ip_epr;
@@ -2481,7 +2513,9 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	if (rc < 0) {
-		D_ERROR("EC aggregation failed: "DF_RC"\n", DP_RC(rc));
+		D_ERROR(DF_UUID" EC aggregation (rebuilding %d) failed: "DF_RC"\n",
+			DP_UUID(agg_param->ap_pool_info.api_pool->sp_uuid),
+			agg_param->ap_pool_info.api_pool->sp_rebuilding, DP_RC(rc));
 		return rc;
 	}
 
@@ -2667,8 +2701,13 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	struct ec_agg_param	 *ec_agg_param = agg_param->ap_data;
 	vos_iter_param_t	 iter_param = { 0 };
 	struct vos_iter_anchors  anchors = { 0 };
+	struct dtx_handle	*dth = NULL;
+	struct dtx_share_peer	*dsp;
+	struct dtx_id		 dti = { 0 };
+	struct dtx_epoch	 epoch = { 0 };
+	daos_unit_oid_t		 oid = { 0 };
+	int			 blocks = 0;
 	int			 rc = 0;
-	int                       blocks       = 0;
 
 	/*
 	 * Avoid calling into vos_aggregate() when aborting aggregation
@@ -2715,8 +2754,32 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	agg_reset_entry(&ec_agg_param->ap_agg_entry, NULL, NULL);
 
 retry:
-	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors, agg_iterate_pre_cb,
-			 agg_iterate_post_cb, ec_agg_param, NULL);
+	epoch.oe_value = epr->epr_hi;
+	rc = dtx_begin(cont->sc_hdl, &dti, &epoch, 0, cont->sc_pool->spc_map_version, &oid,
+		       NULL, 0, 0, NULL, &dth);
+	if (rc != 0)
+		goto update_hae;
+
+	rc = vos_iterate_obj(&iter_param, true, &anchors, agg_iterate_pre_cb,
+			     agg_iterate_post_cb, ec_agg_param, dth);
+	if (rc == -DER_INPROGRESS && !d_list_empty(&dth->dth_share_tbd_list)) {
+		uint64_t	now = daos_gettime_coarse();
+
+		/* Report warning per each 10 seconds to avoid log flood. */
+		if (now - cont->sc_ec_agg_busy_ts > 10) {
+			while ((dsp = d_list_pop_entry(&dth->dth_share_tbd_list,
+						       struct dtx_share_peer, dsp_link)) != NULL) {
+				D_WARN(DF_CONT ": EC aggregate hit non-committed DTX " DF_DTI "\n",
+				       DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+				       DP_DTI(&dsp->dsp_xid));
+				dtx_dsp_free(dsp);
+			}
+
+			cont->sc_ec_agg_busy_ts = now;
+		}
+	}
+
+	dtx_end(dth, cont, rc);
 
 	/* Post_cb may not being executed in some cases */
 	agg_clear_extents(&ec_agg_param->ap_agg_entry);

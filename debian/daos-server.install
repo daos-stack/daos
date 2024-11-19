@@ -7,7 +7,6 @@ usr/bin/daos_server_helper
 # set daos_server to be setgid daos_server in order to invoke daos_server_helper
 usr/bin/daos_server
 usr/bin/daos_engine
-usr/bin/daos_metrics
 usr/bin/ddb
 usr/lib64/daos_srv/libchk.so
 usr/lib64/daos_srv/libcont.so
@@ -28,6 +27,7 @@ usr/lib64/daos_srv/libbio.so
 usr/lib64/daos_srv/libplacement.so
 usr/lib64/daos_srv/libpipeline.so
 usr/lib64/libdaos_common_pmem.so
+usr/lib64/libdav_v2.so
 usr/share/daos/control/setup_spdk.sh
 usr/lib/systemd/system/daos_server.service
 usr/lib/sysctl.d/10-daos_server.conf

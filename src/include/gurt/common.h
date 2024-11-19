@@ -390,6 +390,7 @@ d_realpath(const char *path, char *resolved_path) _dalloc_;
 	})
 
 #define D_SPIN_LOCK(x)		__D_PTHREAD(pthread_spin_lock, x)
+#define D_MUTEX_TRYLOCK(x)	__D_PTHREAD_TRYLOCK(pthread_mutex_trylock, x)
 #define D_SPIN_UNLOCK(x)        __D_PTHREAD(pthread_spin_unlock, x)
 #define D_MUTEX_UNLOCK(x)       __D_PTHREAD(pthread_mutex_unlock, x)
 #define D_RWLOCK_TRYWRLOCK(x)	__D_PTHREAD_TRYLOCK(pthread_rwlock_trywrlock, x)

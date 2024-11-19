@@ -240,12 +240,10 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				Tier:  tierID,
 				Class: storage.ClassNvme,
 				Bdev: storage.BdevConfig{
-					DeviceList: storage.MustNewBdevDeviceList(tc.devList...),
-					FileSize:   tc.fileSizeGB,
-					BusidRange: storage.MustNewBdevBusRange(tc.busidRange),
-					DeviceRoles: storage.BdevRoles{
-						storage.OptionBits(tc.devRoles),
-					},
+					DeviceList:  storage.MustNewBdevDeviceList(tc.devList...),
+					FileSize:    tc.fileSizeGB,
+					BusidRange:  storage.MustNewBdevBusRange(tc.busidRange),
+					DeviceRoles: storage.BdevRolesFromBits(tc.devRoles),
 				},
 			}
 			if tc.class != "" {
