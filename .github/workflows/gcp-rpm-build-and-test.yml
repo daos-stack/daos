@@ -1,9 +1,6 @@
-name: RPM Build and Test
+name: RPM Build
 
 env:
-  # TODO: we really need to define a list of supported versions (ideally it's no more than 2)
-  #       build is done on the lowest version and test on the highest with a "sanity test"
-  #       stage done on all versions in the list except the highest
   EL8_VERSION: 8
   EL9_VERSION: 9
   DEBIAN_VERSION: 12
@@ -18,7 +15,7 @@ on:
   pull_request:
 
 concurrency:
-  group: rpm-build-and-test-${{ github.head_ref  || github.run_id }}
+  group: rpm-build-${{ github.head_ref  || github.run_id }}
   cancel-in-progress: true
 
 defaults:
@@ -91,7 +88,7 @@ jobs:
 
   Create-symlinks:
     # you might think this is an odd place to do this and it should be done as a result of the
-    # build and/or testing stages and ideally you'd be right.
+    # build stages and ideally you'd be right.
     # the problem with that is that there is no way to get the success/fail result of individual
     # axes of matrix jobs so there is no way to query them at the end and see their composite
     # results.
@@ -107,9 +104,9 @@ jobs:
         needs.Import-commit-pragmas.outputs.rpm-test-version == '' &&
         !contains(needs.Import-commit-pragmas.outputs.pr-repos, 'daos@')
     env:
-      # TODO -- this should be on stable, backedup storage, not /scratch
+      # TODO -- this should be on stable, backedup storage, not /tmp
       # yamllint disable-line rule:line-length
-      REPO_PATH: /scratch/job_repos/daos-stack/job/daos/job/PR-${{ github.event.pull_request.number }}/
+      REPO_PATH: /tmp/job_repos/daos-stack/job/daos/job/PR-${{ github.event.pull_request.number }}/
     steps:
       - name: Create lastBuild and lastSuccessfulBuild symlinks
         run: . ci/gha_functions.sh;
@@ -161,6 +158,10 @@ jobs:
       matrix:
         distro: ${{ fromJSON(needs.Calc-rpm-build-matrix.outputs.matrix) }}
       fail-fast: false
+    env:
+      DISTRO_NAME:
+      DISTRO_VERSION:
+      REPO_PATH: /tmp/job_repos/daos-stack/job/daos/job/PR-${{ github.event.pull_request.number }}/
     steps:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
@@ -208,7 +209,7 @@ jobs:
       - name: Remove Dockerignore file
         # necessary because our Dockerfile assumes /daos is our build context
         # but the .dockerignore file ignores many files we need in our RPM
-        id: rm-docker-ignore
+        id: rm-dockerignore
         run: rm -f .dockerignore && touch .dockerignore
       - name: Build RPM
         id: build-rpm
@@ -224,6 +225,14 @@ jobs:
         if: steps.build-rpm.outcome != 'success'
         run: rm -f ${REPO_PATH}lastSuccessfulBuild;
              exit 1
-      - name: Restore Dockerignore file
-        id: restore-docker-ignore
-        run: git restore .dockerignore
+      - name: Publish RPMs
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.DISTRO_NAME }} ${{ env.DISTRO_VERSION }} RPM repository
+          path: ${{ env.REPO_PATH}}${{ github.run_number }}/artifact/artifacts/${{ env.TARGET }}
+      - name: Update commit status
+        uses: ouzi-dev/commit-status-updater@v2
+        with:
+          # yamllint disable-line rule:line-length
+          name: 'build/Build RPM on ${{ env.DISTRO_NAME }} ${{ env.COMMIT_STATUS_DISTRO_VERSION && env.COMMIT_STATUS_DISTRO_VERSION || env.DISTRO_VERSION }}'
+          status: "${{ job.status }}"
