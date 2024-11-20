@@ -1023,11 +1023,11 @@ struct dfuse_inode_entry {
 };
 
 struct active_inode {
-	d_list_t           chunks;
-	size_t             file_size;
-	bool               seen_eof;
-	d_list_t           open_reads;
-	pthread_spinlock_t lock;
+	d_list_t               chunks;
+	size_t                 file_size;
+	bool                   seen_eof;
+	d_list_t               open_reads;
+	pthread_spinlock_t     lock;
 	struct dfuse_pre_read *readahead;
 };
 
