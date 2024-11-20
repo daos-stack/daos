@@ -3233,8 +3233,8 @@ evict:
 		if ((pinfo->pi_ref > 0) || is_page_dirty(pinfo) || pinfo->pi_io == 1)
 			return -DER_AGAIN;
 
-		/* The status of the page changed to non-evictable */
-		if (!is_id_evictable(cache, pinfo->pi_pg_id))
+		/* The status of the page changed to non-evictable? */
+		if (!pinfo->pi_evictable)
 			return -DER_AGAIN;
 	}
 
@@ -3344,8 +3344,10 @@ retry:
 			}
 			if (is_id_evictable(cache, pg_id) != pinfo->pi_evictable) {
 				pinfo->pi_evictable = is_id_evictable(cache, pg_id);
+				D_ASSERT(!pinfo->pi_evictable ||
+					 (cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE] > 0));
 				cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE] +=
-				    is_id_evictable(cache, pg_id) ? (-1) : 1;
+				    pinfo->pi_evictable ? (-1) : 1;
 				d_list_del_init(&pinfo->pi_lru_link);
 				cache_add2lru(cache, pinfo);
 			}
