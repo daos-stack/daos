@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -72,6 +72,8 @@ const (
 	PropEntryServerChecksum = C.DAOS_PROP_ENTRY_SRV_CKSUM
 	// PropEntryStatus is the status property.
 	PropEntryStatus = C.DAOS_PROP_ENTRY_STATUS
+	// PropEntryMetricsEnabled is the metrics enabled property.
+	PropEntryMetricsEnabled = C.DAOS_PROP_ENTRY_METRICS_ENABLED
 )
 
 const (

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -383,6 +383,8 @@ enum daos_cont_props {
 	DAOS_PROP_CO_OBJ_VERSION,
 	/** The container performance domain, now always inherit from pool */
 	DAOS_PROP_CO_PERF_DOMAIN,
+	/** Set if metrics should be enabled for this container */
+	DAOS_PROP_CO_METRICS_ENABLED,
 	DAOS_PROP_CO_MAX,
 };
 

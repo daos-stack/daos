@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -658,6 +658,36 @@ var propHdlrs = propHdlrMap{
 		},
 		true,
 	},
+	C.DAOS_PROP_ENTRY_METRICS_ENABLED: {
+		C.DAOS_PROP_CO_METRICS_ENABLED,
+		"Container Metrics Enabled",
+		func(_ *propHdlr, e *C.struct_daos_prop_entry, v string) error {
+			boolVal, err := strconv.ParseBool(v)
+			if err != nil {
+				return propError("invalid bool value %q", v)
+			}
+			var value uint64
+			if boolVal {
+				value = 1
+			}
+
+			C.set_dpe_val(e, C.uint64_t(value))
+			return nil
+		},
+		nil,
+		func(e *C.struct_daos_prop_entry, name string) string {
+			if e == nil {
+				return propNotFound(name)
+			}
+			var boolVal bool
+			if C.get_dpe_val(e) != 0 {
+				boolVal = true
+			}
+
+			return fmt.Sprintf("%t", boolVal)
+		},
+		false,
+	},
 }
 
 var contDeprProps = map[string]string{
@@ -1037,13 +1067,13 @@ type SetPropertiesFlag struct {
 }
 
 func (f *SetPropertiesFlag) Complete(match string) []flags.Completion {
-	f.SettableKeys("label", "status")
+	f.SettableKeys("label", "status", "metrics_enabled")
 
 	return f.PropertiesFlag.Complete(match)
 }
 
 func (f *SetPropertiesFlag) UnmarshalFlag(fv string) error {
-	f.SettableKeys("label", "status")
+	f.SettableKeys("label", "status", "metrics_enabled")
 
 	if err := f.PropertiesFlag.UnmarshalFlag(fv); err != nil {
 		return err
