@@ -507,6 +507,12 @@ corruption proactively. (see data_integrity.md for more details). This can be
 disabled per container using the `DAOS_PROP_CO_SCRUBBER_DISABLED` container
 property.
 
+### Per-Container Metrics Collection
+
+If enabled, per-container metrics (currently only POSIX containers are supported)
+will be collected on the client. Set the `DAOS_PROP_CO_METRICS_ENABLED` container
+property to enable this behavior.
+
 ### Deduplication (Preview)
 
 Data deduplication (dedup) is a process that allows to eliminate duplicated

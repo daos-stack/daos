@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -391,6 +391,10 @@ cont_iv_prop_l2g(daos_prop_t *prop, struct cont_iv_prop *iv_prop)
 		case DAOS_PROP_CO_SCRUBBER_DISABLED:
 			iv_prop->cip_scrubbing_disabled = prop_entry->dpe_val;
 			bits |= DAOS_CO_QUERY_PROP_SCRUB_DIS;
+			break;
+		case DAOS_PROP_CO_METRICS_ENABLED:
+			iv_prop->cip_metrics_enabled = prop_entry->dpe_val;
+			bits |= DAOS_CO_QUERY_PROP_METRICS_ENA;
 			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
@@ -1409,6 +1413,11 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t **prop_out)
 		prop_entry = &prop->dpp_entries[i++];
 		prop_entry->dpe_val = iv_prop->cip_scrubbing_disabled;
 		prop_entry->dpe_type = DAOS_PROP_CO_SCRUBBER_DISABLED;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_METRICS_ENA) {
+		prop_entry           = &prop->dpp_entries[i++];
+		prop_entry->dpe_val  = iv_prop->cip_metrics_enabled;
+		prop_entry->dpe_type = DAOS_PROP_CO_METRICS_ENABLED;
 	}
 out:
 	if (rc)

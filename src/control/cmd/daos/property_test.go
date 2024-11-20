@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,6 +16,42 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 )
+
+func TestProperty_MetricsEnabled(t *testing.T) {
+	for input, tc := range map[string]struct {
+		expValStr string
+		expErr    error
+	}{
+		// NB: Not testing all permutations because we don't need to test
+		// strconv.ParseBool()... Just enough to verify our code.
+		"true": {
+			expValStr: "true",
+		},
+		"1": {
+			expValStr: "true",
+		},
+		"false": {
+			expValStr: "false",
+		},
+		"0": {
+			expValStr: "false",
+		},
+		"b0rken": {
+			expErr: errors.New("invalid bool value"),
+		},
+	} {
+		t.Run(input, func(t *testing.T) {
+			propEntry := newTestPropEntry()
+			gotErr := propHdlrs[daos.PropEntryMetricsEnabled].nameHdlr(nil, propEntry, input)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+			valStr := propHdlrs[daos.PropEntryMetricsEnabled].toString(propEntry, daos.PropEntryMetricsEnabled)
+			test.AssertEqual(t, valStr, tc.expValStr, "Invalid Metrics Enabled Value")
+		})
+	}
+}
 
 func TestProperty_EcCellSize(t *testing.T) {
 	for name, tc := range map[string]struct {

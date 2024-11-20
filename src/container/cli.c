@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1386,6 +1386,9 @@ cont_query_bits(daos_prop_t *prop)
 			break;
 		case DAOS_PROP_CO_SCRUBBER_DISABLED:
 			bits |= DAOS_CO_QUERY_PROP_SCRUB_DIS;
+			break;
+		case DAOS_PROP_CO_METRICS_ENABLED:
+			bits |= DAOS_CO_QUERY_PROP_METRICS_ENA;
 			break;
 		case DAOS_PROP_CO_OBJ_VERSION:
 			bits |= DAOS_CO_QUERY_PROP_OBJ_VERSION;

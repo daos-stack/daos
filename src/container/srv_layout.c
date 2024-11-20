@@ -54,6 +54,7 @@ RDB_STRING_KEY(ds_cont_prop_, scrubber_disabled);
 RDB_STRING_KEY(ds_cont_prop_, co_md_times);
 RDB_STRING_KEY(ds_cont_prop_, cont_obj_version);
 RDB_STRING_KEY(ds_cont_prop_, nhandles);
+RDB_STRING_KEY(ds_cont_prop_, metrics_enabled);
 
 /* dummy value for container roots, avoid malloc on demand */
 static struct daos_prop_co_roots dummy_roots;
@@ -205,6 +206,9 @@ struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
 	}, {
 		.dpe_type	= DAOS_PROP_CO_PERF_DOMAIN,
 		.dpe_val	= 0, /* inherit from pool by default */
+	}, {
+		.dpe_type	= DAOS_PROP_CO_METRICS_ENABLED,
+		.dpe_val	= 0, /* disabled by default */
 	}
 };
 

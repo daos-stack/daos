@@ -450,6 +450,10 @@ co_properties(void **state)
 	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_ENCRYPT_OFF) {
 		fail_msg("encrypt verification failed.\n");
 	}
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_METRICS_ENABLED);
+	if (entry == NULL || entry->dpe_val != 0) {
+		fail_msg("metrics enabled verification failed.\n");
+	}
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_ACL);
 	if (entry == NULL || entry->dpe_val_ptr == NULL ||
@@ -1229,12 +1233,14 @@ co_set_prop(void **state)
 	/*
 	 * Set some props
 	 */
-	prop_in = daos_prop_alloc(2);
+	prop_in = daos_prop_alloc(3);
 	assert_non_null(prop_in);
 	prop_in->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
 	D_STRNDUP_S(prop_in->dpp_entries[0].dpe_str, exp_label);
 	prop_in->dpp_entries[1].dpe_type = DAOS_PROP_CO_OWNER;
 	D_STRNDUP_S(prop_in->dpp_entries[1].dpe_str, exp_owner);
+	prop_in->dpp_entries[2].dpe_type = DAOS_PROP_CO_METRICS_ENABLED;
+	prop_in->dpp_entries[2].dpe_val  = 1;
 
 	print_message("Setting the container props\n");
 	rc = daos_cont_set_prop(arg->coh, prop_in, NULL);
@@ -1263,6 +1269,12 @@ co_set_prop(void **state)
 	    strncmp(entry->dpe_str, exp_owner,
 		    DAOS_ACL_MAX_PRINCIPAL_LEN)) {
 		fail_msg("Owner prop verification failed.\n");
+	}
+
+	print_message("Checking metrics enabled\n");
+	entry = daos_prop_entry_get(prop_out, DAOS_PROP_CO_METRICS_ENABLED);
+	if (entry == NULL || entry->dpe_val != 1) {
+		fail_msg("Metrics enabled prop verification failed.\n");
 	}
 
 	par_barrier(PAR_COMM_WORLD);

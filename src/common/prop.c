@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -443,6 +443,13 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			break;
 		case DAOS_PROP_CO_SCRUBBER_DISABLED:
 			/* Placeholder */
+			break;
+		case DAOS_PROP_CO_METRICS_ENABLED:
+			val = prop->dpp_entries[i].dpe_val;
+			if (val != 0 && val != 1) {
+				D_ERROR("invalid metrics disable value: " DF_U64 "\n", val);
+				return false;
+			}
 			break;
 		case DAOS_PROP_CO_CSUM_SERVER_VERIFY:
 			val = prop->dpp_entries[i].dpe_val;
@@ -1085,6 +1092,9 @@ parse_entry(char *str, struct daos_prop_entry *entry)
 	} else if (strcmp(name, DAOS_PROP_ENTRY_PERF_DOMAIN) == 0) {
 		entry->dpe_type = DAOS_PROP_CO_PERF_DOMAIN;
 		entry->dpe_val = strtoull(val, NULL, 0);
+	} else if (strcmp(name, DAOS_PROP_ENTRY_METRICS_ENABLED) == 0) {
+		entry->dpe_type = DAOS_PROP_CO_METRICS_ENABLED;
+		entry->dpe_val  = strtoull(val, NULL, 0);
 	} else if (strcmp(name, DAOS_PROP_ENTRY_LAYOUT_TYPE) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_LAYOUT_VER) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_REDUN_LVL) == 0 ||
