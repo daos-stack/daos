@@ -1409,6 +1409,33 @@ class _Component():
                 norigin.append(os.path.normpath(path))
                 break
 
+        for folder in self.key_words.get("patch_rpath", []):
+            path = os.path.join(comp_path, folder)
+            files = os.listdir(path)
+            for lib in files:
+                if folder != 'bin' and not lib.endswith(".so"):
+                    # Assume every file in bin can be patched
+                    continue
+                full_lib = os.path.join(path, lib)
+                # pylint: disable=line-too-long
+                cmd = ['stat', full_lib]
+                RUNNER.run_commands([cmd])
+
+            cmd = ['daos', 'filesystem', 'evict', path]
+            RUNNER.run_commands([cmd])
+
+        for folder in self.key_words.get("patch_rpath", []):
+            path = os.path.join(comp_path, folder)
+            files = os.listdir(path)
+            for lib in files:
+                if folder != 'bin' and not lib.endswith(".so"):
+                    # Assume every file in bin can be patched
+                    continue
+                full_lib = os.path.join(path, lib)
+                # pylint: disable=line-too-long
+                cmd = ['stat', full_lib]
+                RUNNER.run_commands([cmd])
+
         rpath += norigin
         for folder in self.key_words.get("patch_rpath", []):
             path = os.path.join(comp_path, folder)
