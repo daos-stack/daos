@@ -1156,7 +1156,7 @@ func (svc *mgmtSvc) SystemDrain(ctx context.Context, req *mgmtpb.SystemDrainReq)
 					daos.Status(drainResp.Status).Error())
 			}
 
-			svc.log.Tracef("pool-drain triggered from system-drain: '%+v' (req: '%+v')",
+			svc.log.Tracef("pool-drain triggered from system-drain: %+v (req: %+v)",
 				drainResp, drainReq)
 
 			resp.Results = append(resp.Results, &mgmtpb.SystemDrainResp_DrainResult{

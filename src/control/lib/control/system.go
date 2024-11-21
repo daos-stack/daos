@@ -9,7 +9,6 @@ package control
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net"
 	"strings"
 	"time"
@@ -105,7 +104,11 @@ func (resp *sysResponse) getAbsentHostsRanksErrors() error {
 }
 
 func (resp *sysResponse) getErrors(errIn error) error {
-	return concatSysErrs(resp.getAbsentHostsRanksErrors(), errIn)
+	if errIn != nil {
+		errIn = errors.Errorf("check results for %s", errIn.Error())
+	}
+
+	return concatErrs(resp.getAbsentHostsRanksErrors(), errIn)
 }
 
 // SystemJoinReq contains the inputs for the system join request.
@@ -296,10 +299,11 @@ func SystemQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemQueryRe
 		return nil, errors.Errorf("nil %T request", req)
 	}
 
-	pbReq := new(mgmtpb.SystemQueryReq)
-	pbReq.Hosts = req.Hosts.String()
-	pbReq.Ranks = req.Ranks.String()
-	pbReq.Sys = req.getSystem(rpcClient)
+	pbReq := &mgmtpb.SystemQueryReq{
+		Hosts: req.Hosts.String(),
+		Ranks: req.Ranks.String(),
+		Sys:   req.getSystem(rpcClient),
+	}
 
 	mask, err := req.getStateMask()
 	if err != nil {
@@ -335,14 +339,14 @@ func SystemQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemQueryRe
 	return resp, convertMSResponse(ur, resp)
 }
 
-func concatSysErrs(errSys, errRes error) error {
+func concatErrs(errOne, errTwo error) error {
 	var errMsgs []string
 
-	if errSys != nil {
-		errMsgs = append(errMsgs, errSys.Error())
+	if errOne != nil {
+		errMsgs = append(errMsgs, errOne.Error())
 	}
-	if errRes != nil {
-		errMsgs = append(errMsgs, "check results for "+errRes.Error())
+	if errTwo != nil {
+		errMsgs = append(errMsgs, errTwo.Error())
 	}
 
 	if len(errMsgs) > 0 {
@@ -530,9 +534,10 @@ type SystemExcludeResp struct {
 }
 
 // Errors returns a single error combining all error messages associated with a system exclude
-// response.
+// response. Doesn't retrieve errors from sysResponse because missing ranks or hosts will not be
+// populated in SystemExcludeResp.
 func (resp *SystemExcludeResp) Errors() error {
-	return resp.sysResponse.getErrors(resp.Results.Errors())
+	return resp.Results.Errors()
 }
 
 // SystemExclude will mark the specified ranks as administratively excluded from the system.
@@ -585,22 +590,16 @@ type SystemDrainResp struct {
 }
 
 // Errors returns a single error combining all error messages associated with a system drain
-// response.
-func (resp *SystemDrainResp) Errors() error {
-	out := new(strings.Builder)
-
-	for _, r := range resp.Results {
+// response. Doesn't retrieve errors from sysResponse because missing ranks or hosts will not be
+// populated in SystemDrainResp.
+func (sdr *SystemDrainResp) Errors() (errOut error) {
+	for _, r := range sdr.Results {
 		if r.Status != int32(daos.Success) {
-			fmt.Fprintf(out, "%s\n", r.Msg)
+			errOut = concatErrs(errOut, errors.New(r.Msg))
 		}
 	}
 
-	var err error
-	if out.String() != "" {
-		err = errors.New(out.String())
-	}
-
-	return resp.sysResponse.getErrors(err)
+	return
 }
 
 // SystemDrain will drain either hosts or ranks from all pools that they are members of. When hosts
@@ -763,6 +762,10 @@ type LeaderQueryResp struct {
 // LeaderQuery requests the current Management Service leader and the set of
 // MS replicas.
 func LeaderQuery(ctx context.Context, rpcClient UnaryInvoker, req *LeaderQueryReq) (*LeaderQueryResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T request", req)
+	}
+
 	pbReq := &mgmtpb.LeaderQueryReq{Sys: req.getSystem(rpcClient)}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).LeaderQuery(ctx, pbReq)
@@ -773,11 +776,14 @@ func LeaderQuery(ctx context.Context, rpcClient UnaryInvoker, req *LeaderQueryRe
 	if err != nil {
 		return nil, err
 	}
+	rpcClient.Debugf("resp one: %+v", ur)
 
 	resp := new(LeaderQueryResp)
 	if err = convertMSResponse(ur, resp); err != nil {
 		return nil, errors.Wrap(err, "converting MS to LeaderQuery resp")
 	}
+
+	rpcClient.Debugf("resp one: %+v", resp)
 
 	req.SetHostList(resp.Replicas)
 	ur, err = rpcClient.InvokeUnaryRPC(ctx, req)
@@ -978,20 +984,14 @@ type SystemCleanupResp struct {
 
 // Errors returns a single error combining all error messages associated with a
 // system cleanup response.
-func (scr *SystemCleanupResp) Errors() error {
-	out := new(strings.Builder)
-
+func (scr *SystemCleanupResp) Errors() (errOut error) {
 	for _, r := range scr.Results {
 		if r.Status != int32(daos.Success) {
-			fmt.Fprintf(out, "%s\n", r.Msg)
+			errOut = concatErrs(errOut, errors.New(r.Msg))
 		}
 	}
 
-	if out.String() != "" {
-		return errors.New(out.String())
-	}
-
-	return nil
+	return
 }
 
 // SystemCleanup requests resources associated with a machine name be cleanedup.
@@ -1004,9 +1004,10 @@ func SystemCleanup(ctx context.Context, rpcClient UnaryInvoker, req *SystemClean
 		return nil, errors.New("SystemCleanup requires a machine name.")
 	}
 
-	pbReq := new(mgmtpb.SystemCleanupReq)
-	pbReq.Machine = req.Machine
-	pbReq.Sys = req.getSystem(rpcClient)
+	pbReq := &mgmtpb.SystemCleanupReq{
+		Sys:     req.getSystem(rpcClient),
+		Machine: req.Machine,
+	}
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemCleanup(ctx, pbReq)

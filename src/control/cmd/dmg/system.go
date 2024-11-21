@@ -23,6 +23,8 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/ui"
 )
 
+var errNoRanks = errors.New("no ranks or hosts specified")
+
 // SystemCmd is the struct representing the top-level system subcommand.
 type SystemCmd struct {
 	LeaderQuery  leaderQueryCmd        `command:"leader-query" description:"Query for current Management Service leader"`
@@ -34,7 +36,7 @@ type SystemCmd struct {
 	Drain        systemDrainCmd        `command:"drain" description:"Drain ranks or hosts from all relevant pools in DAOS system"`
 	Erase        systemEraseCmd        `command:"erase" description:"Erase system metadata prior to reformat"`
 	ListPools    PoolListCmd           `command:"list-pools" description:"List all pools in the DAOS system"`
-	Cleanu       systemCleanupCmd      `command:"cleanup" description:"Clean up all resources associated with the specified machine"`
+	Cleanup      systemCleanupCmd      `command:"cleanup" description:"Clean up all resources associated with the specified machine"`
 	SetAttr      systemSetAttrCmd      `command:"set-attr" description:"Set system attributes"`
 	GetAttr      systemGetAttrCmd      `command:"get-attr" description:"Get system attributes"`
 	DelAttr      systemDelAttrCmd      `command:"del-attr" description:"Delete system attributes"`
@@ -212,6 +214,46 @@ func (cmd *systemStopCmd) Execute(_ []string) (errOut error) {
 	return resp.Errors()
 }
 
+// systemStartCmd is the struct representing the command to start system.
+type systemStartCmd struct {
+	baseRankListCmd
+}
+
+// Execute is run when systemStartCmd activates.
+func (cmd *systemStartCmd) Execute(_ []string) (errOut error) {
+	defer func() {
+		errOut = errors.Wrap(errOut, "system start failed")
+	}()
+
+	if err := cmd.validateHostsRanks(); err != nil {
+		return err
+	}
+
+	req := new(control.SystemStartReq)
+	req.Hosts.Replace(&cmd.Hosts.HostSet)
+	req.Ranks.Replace(&cmd.Ranks.RankSet)
+
+	resp, err := control.SystemStart(cmd.MustLogCtx(), cmd.ctlInvoker, req)
+	if err != nil {
+		return err // control api returned an error, disregard response
+	}
+
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
+	}
+
+	var out, outErr strings.Builder
+	if err := pretty.PrintSystemStartResponse(&out, &outErr, resp); err != nil {
+		return err
+	}
+	cmd.Info(out.String())
+	if outErr.String() != "" {
+		cmd.Error(outErr.String())
+	}
+
+	return resp.Errors()
+}
+
 type systemExcludeCmd struct {
 	baseRankListCmd
 }
@@ -221,7 +263,7 @@ func (cmd *systemExcludeCmd) execute(clear bool) error {
 		return err
 	}
 	if cmd.Ranks.Count() == 0 && cmd.Hosts.Count() == 0 {
-		return errors.New("no ranks or hosts specified")
+		return errNoRanks
 	}
 
 	req := &control.SystemExcludeReq{Clear: clear}
@@ -276,7 +318,7 @@ func (cmd *systemDrainCmd) Execute(_ []string) (errOut error) {
 		return err
 	}
 	if cmd.Ranks.Count() == 0 && cmd.Hosts.Count() == 0 {
-		return errors.New("no ranks or hosts specified")
+		return errNoRanks
 	}
 
 	req := new(control.SystemDrainReq)
@@ -308,49 +350,10 @@ func (cmd *systemDrainCmd) Execute(_ []string) (errOut error) {
 	return nil
 }
 
-// systemStartCmd is the struct representing the command to start system.
-type systemStartCmd struct {
-	baseRankListCmd
-}
-
-// Execute is run when systemStartCmd activates.
-func (cmd *systemStartCmd) Execute(_ []string) (errOut error) {
-	defer func() {
-		errOut = errors.Wrap(errOut, "system start failed")
-	}()
-
-	if err := cmd.validateHostsRanks(); err != nil {
-		return err
-	}
-	req := new(control.SystemStartReq)
-	req.Hosts.Replace(&cmd.Hosts.HostSet)
-	req.Ranks.Replace(&cmd.Ranks.RankSet)
-
-	resp, err := control.SystemStart(cmd.MustLogCtx(), cmd.ctlInvoker, req)
-	if err != nil {
-		return err // control api returned an error, disregard response
-	}
-
-	if cmd.JSONOutputEnabled() {
-		return cmd.OutputJSON(resp, resp.Errors())
-	}
-
-	var out, outErr strings.Builder
-	if err := pretty.PrintSystemStartResponse(&out, &outErr, resp); err != nil {
-		return err
-	}
-	cmd.Info(out.String())
-	if outErr.String() != "" {
-		cmd.Error(outErr.String())
-	}
-
-	return resp.Errors()
-}
-
 type systemCleanupCmd struct {
 	baseCtlCmd
 	Args struct {
-		Machine string `positional-arg-name:"<Machine to cleanup>"`
+		Machine string `positional-arg-name:"machine to cleanup" required:"1"`
 	} `positional-args:"yes"`
 	Verbose bool `long:"verbose" short:"v" description:"Output additional cleanup information"`
 }
@@ -360,12 +363,11 @@ func (cmd *systemCleanupCmd) Execute(_ []string) (errOut error) {
 		errOut = errors.Wrap(errOut, "system cleanup failed")
 	}()
 
-	ctx := cmd.MustLogCtx()
 	req := new(control.SystemCleanupReq)
 	req.SetSystem(cmd.config.SystemName)
 	req.Machine = cmd.Args.Machine
 
-	resp, err := control.SystemCleanup(ctx, cmd.ctlInvoker, req)
+	resp, err := control.SystemCleanup(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
 		return err // control api returned an error, disregard response
 	}
