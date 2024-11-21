@@ -4,6 +4,9 @@ set -Exo pipefail
 
 source ./utils/ci/gcp/helper.sh
 
+ARTIFACTS="${ARTIFACTS_DIR}/${RESULTS_DIR}"
+mkdir -p "${ARTIFACTS}"
+
 function copy_artifacts() {
   echo "Copying test artifacts to ${ARTIFACTS}"
 
