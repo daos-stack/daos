@@ -506,14 +506,12 @@ struct  _Mgmt__PoolExtendReq
   /*
    * Fraction of meta-blob-sz to use as mem-file-sz
    */
-  float            mem_ratio;
+  float mem_ratio;
 };
-#define MGMT__POOL_EXTEND_REQ__INIT                                                                \
-	{                                                                                          \
-		PROTOBUF_C_MESSAGE_INIT(&mgmt__pool_extend_req__descriptor)                        \
-		, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, NULL, 0,    \
-		    NULL, 0, NULL, 0, NULL, 0                                                      \
-	}
+#define MGMT__POOL_EXTEND_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_extend_req__descriptor) \
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0,NULL, 0,NULL, 0 }
+
 
 /*
  * PoolExtendResp returns resultant state of Extend operation.
@@ -529,13 +527,12 @@ struct  _Mgmt__PoolExtendResp
    * storage tiers allocated to pool
    */
   size_t n_tier_bytes;
-  uint64_t        *tier_bytes;
+  uint64_t *tier_bytes;
 };
-#define MGMT__POOL_EXTEND_RESP__INIT                                                               \
-	{                                                                                          \
-		PROTOBUF_C_MESSAGE_INIT(&mgmt__pool_extend_resp__descriptor)                       \
-		, 0, 0, NULL                                                                       \
-	}
+#define MGMT__POOL_EXTEND_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_extend_resp__descriptor) \
+    , 0, 0,NULL }
+
 
 /*
  * PoolReintegrateReq supplies pool identifier, rank, and target_idxs.
@@ -573,14 +570,12 @@ struct  _Mgmt__PoolReintegrateReq
   /*
    * Fraction of meta-blob-sz to use as mem-file-sz
    */
-  float            mem_ratio;
+  float mem_ratio;
 };
-#define MGMT__POOL_REINTEGRATE_REQ__INIT                                                           \
-	{                                                                                          \
-		PROTOBUF_C_MESSAGE_INIT(&mgmt__pool_reintegrate_req__descriptor)                   \
-		, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, NULL, 0, \
-		    NULL, 0, NULL, 0                                                               \
-	}
+#define MGMT__POOL_REINTEGRATE_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_reintegrate_req__descriptor) \
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0,NULL, 0,NULL, 0,NULL, 0 }
+
 
 /*
  * PoolReintegrateResp returns resultant state of Reintegrate operation.
@@ -878,10 +873,14 @@ struct  _Mgmt__PoolQueryResp
    * per-pool accumulated value of memory file sizes
    */
   uint64_t mem_file_bytes;
+  /*
+   * optional set of suspect ranks
+   */
+  char *suspect_ranks;
 };
 #define MGMT__POOL_QUERY_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_resp__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, 0,NULL, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, MGMT__POOL_SERVICE_STATE__Creating, 0, 0,NULL, 0, 0 }
+    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, 0,NULL, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, MGMT__POOL_SERVICE_STATE__Creating, 0, 0,NULL, 0, 0, (char *)protobuf_c_empty_string }
 
 
 typedef enum {
