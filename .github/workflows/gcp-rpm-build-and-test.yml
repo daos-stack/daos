@@ -9,7 +9,6 @@ env:
   CP_SKIP_UNIT_TEST_DEBIAN12: true
   CP_SKIP_UNIT_TEST_UBUNTU22: true
 
-  # FIX ME
 on:
   workflow_dispatch:
     inputs:
@@ -210,7 +209,7 @@ jobs:
             GAR_REPO=docker-registry
             DOCKER_REGISTRY_REGION=us-central1
             DOCKER_REGISTRY="${DOCKER_REGISTRY_REGION}-docker.pkg.dev"
-            GAR_DOCKER_PATH="${DOCKER_REGISTRY}/${PROJECT_ID}/${GAR_REPO}/${DOCKER_IMAGE}:${DOCKER_TAG}"
+            GAR_DOCKER_PATH="${DOCKER_REGISTRY}/${PROJECT_ID}/${GAR_REPO}/${DOCKER_IMAGE}:${DOCKER_IMAGE_TAG}"
             WIP_PROVIDER="projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github/providers/daos"
             echo "PROJECT_ID=$PROJECT_ID" >> $GITHUB_ENV
             echo "DOCKER_REGISTRY=$DOCKER_REGISTRY" >> $GITHUB_ENV
@@ -252,7 +251,7 @@ jobs:
           project_id: ${{ env.PROJECT_ID }}
           workload_identity_provider: ${{ env.WIP_PROVIDER }}
       - name: "Set up Cloud SDK"
-        uses: "google-github-actions/setup-gcloud@v1"
+        uses: "google-github-actions/setup-gcloud@v2"
       - name: "Docker auth"
         run: |-
           gcloud auth configure-docker "${DOCKER_REGISTRY}" --quiet
@@ -391,7 +390,7 @@ jobs:
             GAR_REPO=docker-registry
             DOCKER_REGISTRY_REGION=us-central1
             DOCKER_REGISTRY="${DOCKER_REGISTRY_REGION}-docker.pkg.dev"
-            GAR_DOCKER_PATH="${DOCKER_REGISTRY}/${PROJECT_ID}/${GAR_REPO}/${DOCKER_IMAGE}:${DOCKER_TAG}"
+            GAR_DOCKER_PATH="${DOCKER_REGISTRY}/${PROJECT_ID}/${GAR_REPO}/${DOCKER_IMAGE}:${DOCKER_IMAGE_TAG}"
             WIP_PROVIDER="projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github/providers/daos"
             echo "PROJECT_ID=$PROJECT_ID" >> $GITHUB_ENV
             echo "DOCKER_REGISTRY=$DOCKER_REGISTRY" >> $GITHUB_ENV
@@ -405,7 +404,7 @@ jobs:
           project_id: ${{ env.PROJECT_ID }}
           workload_identity_provider: ${{ env.WIP_PROVIDER }}
       - name: "Set up Cloud SDK"
-        uses: "google-github-actions/setup-gcloud@v1"
+        uses: "google-github-actions/setup-gcloud@v2"
       - name: "Docker auth"
         run: |-
           gcloud auth configure-docker "${DOCKER_REGISTRY}" --quiet
