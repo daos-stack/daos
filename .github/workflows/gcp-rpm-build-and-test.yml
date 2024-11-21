@@ -5,20 +5,18 @@ env:
   EL9_VERSION: 9
   DEBIAN_VERSION: 12
   UBUNTU_VERSION: 22.04
-  CP_SKIP_UNIT_TEST_EL8: true
   CP_SKIP_UNIT_TEST_EL9: true
   CP_SKIP_UNIT_TEST_DEBIAN12: true
   CP_SKIP_UNIT_TEST_UBUNTU22: true
 
   # FIX ME
 on:
-  fork
-  # workflow_dispatch:
-  #   inputs:
-  #     pr-repos:
-  #       description: 'Any PR-repos that you want included in this build'
-  #       required: false
-  # pull_request:
+  workflow_dispatch:
+    inputs:
+      pr-repos:
+        description: 'Any PR-repos that you want included in this build'
+        required: false
+  pull_request:
 
 concurrency:
   group: rpm-build-${{ github.head_ref  || github.run_id }}
@@ -204,11 +202,24 @@ jobs:
                     ;;
             esac
             DISTRO_NAME_LOWER=$(echo $DISTRO_NAME | tr '[:upper:]' '[:lower:]')
+            IMAGE_TYPE="base"
+            DOCKER_IMAGE="${DISTRO_NAME_LOWER}-${DISTRO_VERSION}-${IMAGE_TYPE}"
+            DOCKER_IMAGE_TAG="${{ github.run_id }}-${{ github.run_attempt }}"
+            PROJECT_ID=daos-github-ci
+            PROJECT_NUMBER=192572342707
+            GAR_REPO=docker-registry
+            DOCKER_REGISTRY_REGION=us-central1
+            DOCKER_REGISTRY="${DOCKER_REGISTRY_REGION}-docker.pkg.dev"
+            GAR_DOCKER_PATH="${DOCKER_REGISTRY}/${PROJECT_ID}/${GAR_REPO}/${DOCKER_IMAGE}:${DOCKER_TAG}"
+            WIP_PROVIDER="projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github/providers/daos"
+            echo "PROJECT_ID=$PROJECT_ID" >> $GITHUB_ENV
+            echo "DOCKER_REGISTRY=$DOCKER_REGISTRY" >> $GITHUB_ENV
+            echo "GAR_DOCKER_PATH=$GAR_DOCKER_PATH" >> $GITHUB_ENV
+            echo "WIP_PROVIDER=$WIP_PROVIDER" >> $GITHUB_ENV
             echo "DOCKERFILE=$DOCKERFILE" >> $GITHUB_ENV
             echo "BASE_IMAGE_BUILDER=$BASE_IMAGE_BUILDER" >> $GITHUB_ENV
             echo "GO_BUILDER=$GO_BUILDER" >> $GITHUB_ENV
             echo "DISTRO_NAME=$DISTRO_NAME" >> $GITHUB_ENV
-            echo "DISTRO_NAME_LOWER=$DISTRO_NAME_LOWER" >> $GITHUB_ENV
             echo "DISTRO_VERSION=$DISTRO_VERSION" >> $GITHUB_ENV
             echo "STAGE_NAME=Build RPM on $DISTRO_NAME $DISTRO_VERSION" >> $GITHUB_ENV
       - name: Checkout code
@@ -229,21 +240,29 @@ jobs:
             --build-arg GO_BUILDER="${GO_BUILDER}"
             --build-arg DAOS_BUILD_TYPE=release
             --build-arg DAOS_SRC_DIR="."
-            --tag "gha-${DISTRO_NAME_LOWER}-${DISTRO_VERSION}-${{ github.run_id }}-${{ github.run_attempt }}-base"
+            --tag "${GAR_DOCKER_PATH}"
       - name: Remove lastSuccessfulBuild link and exit failure
         if: steps.build-rpm.outcome != 'success'
         run: rm -f ${REPO_PATH}/lastSuccessfulBuild;
              exit 1
-      - name: Publish RPMs
-        uses: actions/upload-artifact@v4
+      - name: Authenticate to GCP
+        id: gcp-authentication
+        uses: 'google-github-actions/auth@v2'
         with:
-          name: ${{ env.DISTRO_NAME }} ${{ env.DISTRO_VERSION }} RPM repository
-          path: ${{ env.REPO_PATH }}/${{ github.run_number }}/artifact/artifacts/${{ env.TARGET }}
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: ${{ env.WIP_PROVIDER }}
+      - name: "Set up Cloud SDK"
+        uses: "google-github-actions/setup-gcloud@v1"
+      - name: "Docker auth"
+        run: |-
+          gcloud auth configure-docker "${DOCKER_REGISTRY}" --quiet
+      - name: Publish Image to Artifact Registry
+        run: docker push "${GAR_DOCKER_PATH}"
       - name: Update commit status
         uses: ouzi-dev/commit-status-updater@v2
         with:
           # yamllint disable-line rule:line-length
-          name: 'build/Build RPM on ${{ env.DISTRO_NAME }} ${{ env.COMMIT_STATUS_DISTRO_VERSION && env.COMMIT_STATUS_DISTRO_VERSION || env.DISTRO_VERSION }}'
+          name: 'build/Build RPM on ${{ env.DISTRO_NAME }} ${{ env.DISTRO_VERSION }}'
           status: "${{ job.status }}"
 
   Calc-unit-matrix:
@@ -360,24 +379,40 @@ jobs:
             echo "TEST_IMAGE=$TEST_IMAGE" >> $GITHUB_ENV
             echo "IMAGE_VERSION=$IMAGE_VERSION" >> $GITHUB_ENV
             echo "STAGE_NAME=Unit Test on $DISTRO_NAME $DISTRO_VERSION" >> $GITHUB_ENV
-            echo "BASE_IMAGE=gha-${DISTRO_NAME_LOWER}-${DISTRO_VERSION}-${{ github.run_id }}-${{ github.run_attempt }}-base" >> $GITHUB_ENV
+            echo "BASE_IMAGE=${DISTRO_NAME_LOWER}-${DISTRO_VERSION}-base:${{ github.run_id }}-${{ github.run_attempt }}" >> $GITHUB_ENV
             echo "IMAGE_TYPE=unit_tests" >> $GITHUB_ENV
             echo "ARTIFACTS_DIR=$REPO_PATH" >> $GITHUB_ENV
             echo "RESULTS_DIR=unit_test_results" >> $GITHUB_ENV
             echo "GHA=true" >> $GITHUB_ENV
-      - name: Build unit testing image
-        run:
-          docker build . --file "${DOCKERFILE}"
-            --build-arg TEST_IMAGE="${TEST_IMAGE}"
-            --build-arg IMAGE_VERSION="${IMAGE_VERSION}"
-            --build-arg BASE_IMAGE="${BASE_IMAGE}"
-            --build-arg IMAGE_TYPE="${IMAGE_TYPE}"
-            --build-arg GHA="${GHA}"
-            --tag "${IMAGE_TYPE}:${DISTRO_NAME_LOWER}-${DISTRO_VERSION}-${{ github.run_id }}-${{ github.run_attempt }}"
+            DOCKER_IMAGE="${DISTRO_NAME_LOWER}-${DISTRO_VERSION}-${IMAGE_TYPE}"
+            DOCKER_IMAGE_TAG="${{ github.run_id }}-${{ github.run_attempt }}"
+            PROJECT_ID=daos-github-ci
+            PROJECT_NUMBER=192572342707
+            GAR_REPO=docker-registry
+            DOCKER_REGISTRY_REGION=us-central1
+            DOCKER_REGISTRY="${DOCKER_REGISTRY_REGION}-docker.pkg.dev"
+            GAR_DOCKER_PATH="${DOCKER_REGISTRY}/${PROJECT_ID}/${GAR_REPO}/${DOCKER_IMAGE}:${DOCKER_TAG}"
+            WIP_PROVIDER="projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github/providers/daos"
+            echo "PROJECT_ID=$PROJECT_ID" >> $GITHUB_ENV
+            echo "DOCKER_REGISTRY=$DOCKER_REGISTRY" >> $GITHUB_ENV
+            echo "GAR_DOCKER_PATH=$GAR_DOCKER_PATH" >> $GITHUB_ENV
+            echo "WIP_PROVIDER=$WIP_PROVIDER" >> $GITHUB_ENV
+      # needed because the Docker image we need is stored in Artifact Registry
+      - name: Authenticate to GCP
+        id: gcp-authentication
+        uses: 'google-github-actions/auth@v2'
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: ${{ env.WIP_PROVIDER }}
+      - name: "Set up Cloud SDK"
+        uses: "google-github-actions/setup-gcloud@v1"
+      - name: "Docker auth"
+        run: |-
+          gcloud auth configure-docker "${DOCKER_REGISTRY}" --quiet
       - name: Run Unit Testing
         run: docker run
             --mount type=tmpfs,destination=/mnt/daos,tmpfs-size=16G
             -e RESULTS_DIR="${RESULTS_DIR}"
             -e ARTIFACTS_DIR="${ARTIFACTS_DIR}"
-            "${IMAGE_TYPE}:${DISTRO_NAME_LOWER}-${DISTRO_VERSION}-${{ github.run_id }}-${{ github.run_attempt }}"
-            cd daos && /daos/utils/ci/gcp/run_unit_tests.sh
+            "${GAR_DOCKER_PATH}"
+            cd daos && ./utils/ci/gcp/run_unit_tests.sh
