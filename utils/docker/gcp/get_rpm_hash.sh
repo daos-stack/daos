@@ -6,7 +6,7 @@ set -e
 # This is the md5sum of the current utils/build.config. We need to detect when
 # it changes so we can update githashes of RPM builds according to what upstream
 # is using.
-echo "0707ec2020e3c3b6490fd57cb8828c2d  utils/build.config" > md5sum.build && \
+echo "ea10b5b0eb8f68dc2f8aa633201d3e44  utils/build.config" > md5sum.build && \
   md5sum --check md5sum.build >> /dev/null || \
   (echo "utils/build.config has changed, githashes need updating" && false)
 
@@ -18,7 +18,7 @@ echo "0707ec2020e3c3b6490fd57cb8828c2d  utils/build.config" > md5sum.build && \
 # https://github.com/daos-stack/libfabric.git
 libfabric=2e97711b8faf0876b95d813b28fae0beb4d6016e
 # https://github.com/daos-stack/mercury.git
-mercury=8a9b97c248d97f70b0caa64be588f0c404ecfadf
+mercury=3e568e6f9ed3646d82e7cec3e27d4f38fcd929bc
 # https://github.com/daos-stack/isa-l.git
 isal=500b6b0f4f0748385265e77ec8dc0c2063a6f8d1
 # https://github.com/daos-stack/isa-l_crypto.git

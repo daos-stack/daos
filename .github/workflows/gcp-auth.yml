@@ -20,12 +20,11 @@ jobs:
             REGION=us-central1
             PROJECT_ID=daos-github-ci
             PROJECT_NUMBER=192572342707
-            DOCKER_IMAGE=
-            DOCKER_TAG=
+            DOCKER_IMAGE="test-image"
+            DOCKER_TAG="test0"
             GAR_REPO=docker-registry
             DOCKER_REGISTRY="${REGION}-docker.pkg.dev"
             GAR_DOCKER_PATH="${DOCKER_REGISTRY}/${PROJECT_ID}/${GAR_REPO}/${DOCKER_IMAGE}:${DOCKER_TAG}"
-            WIP_PROVIDER="projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github/providers/daos"
             echo "REGION=$REGION" >> $GITHUB_ENV
             echo "PROJECT_ID=$PROJECT_ID" >> $GITHUB_ENV
             echo "PROJECT_NUMBER=$PROJECT_NUMBER" >> $GITHUB_ENV
@@ -36,16 +35,19 @@ jobs:
             echo "GAR_DOCKER_PATH=$GAR_DOCKER_PATH" >> $GITHUB_ENV
             echo "WIP_PROVIDER=$WIP_PROVIDER" >> $GITHUB_ENV
       - name: Create Docker image
-        run: echo "FROM python:3.9-slim" > /tmp/Dockerfile
-          echo "RUN echo 'hello'" >> /tmp/Dockerfile
+        run: |
+          cat <<EOF > /tmp/Dockerfile
+          FROM python:3.9-slim
+          RUN echo 'hello'
+          EOF
       - name: Build image
         run: docker build . --file /tmp/Dockerfile --tag "${GAR_DOCKER_PATH}"
       - name: Authenticate to GCP
         id: gcp-authentication
         uses: 'google-github-actions/auth@v2'
         with:
-          project_id: "${PROJECT_ID}"
-          workload_identity_provider: "${WIP_PROVIDER}"
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: ${{ env.WIP_PROVIDER }}
       - name: "Set up Cloud SDK"
         uses: "google-github-actions/setup-gcloud@v1"
       - name: "Docker auth"
