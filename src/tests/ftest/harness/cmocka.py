@@ -5,17 +5,27 @@
 """
 import os
 
-from apricot import TestWithoutServers
+from apricot import TestWithServers
 from cmocka_utils import CmockaUtils, get_cmocka_command
 from host_utils import get_local_host
 from job_manager_utils import get_job_manager
 
 
-class HarnessCmockaTest(TestWithoutServers):
+class HarnessCmockaTest(TestWithServers):
     """Cmocka harness test cases.
+
+    Inherit TestWithServers so that tearDown() will call self._cleanup().
 
     :avocado: recursive
     """
+
+    def __init__(self, *args, **kwargs):
+        """Initialize a TestWithServers object."""
+        super().__init__(*args, **kwargs)
+
+        # Disable starting agents and servers
+        self.setup_start_agents = False
+        self.setup_start_servers = False
 
     def test_no_cmocka_xml(self):
         """Test to verify CmockaUtils detects lack of cmocka file generation.
