@@ -680,3 +680,18 @@
    fun:__tsan_go_atomic32_compare_exchange
    fun:racecall
 }
+{
+   racefuncenter
+   Memcheck:Addr8
+   fun:racefuncenter
+}
+{
+   Runtime bootstrap memory leak
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   ...
+   fun:runtime.asmcgocall.abi0
+   ...
+   fun:runtime.rt0_go.abi0
+}
