@@ -1418,7 +1418,7 @@ class _Component():
                     continue
                 full_lib = os.path.join(path, lib)
                 # pylint: disable=line-too-long
-                cmd = ['stat', full_lib]
+                cmd = ['stat', '-L', full_lib]
                 RUNNER.run_commands([cmd])
 
             cmd = ['daos', 'filesystem', 'evict', path]
@@ -1436,7 +1436,7 @@ class _Component():
                     continue
                 full_lib = os.path.join(path, lib)
                 # pylint: disable=line-too-long
-                cmd = ['stat', full_lib]
+                cmd = ['stat', '-L', full_lib]
                 RUNNER.run_commands([cmd])
 
         rpath += norigin
