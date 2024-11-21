@@ -390,8 +390,12 @@ enum {
 
 typedef struct {
 	union {
-		/** The object id of the entry */
-		daos_unit_oid_t	 id_oid;
+		struct {
+			/** The object id of the entry */
+			daos_unit_oid_t		id_oid;
+			/** The bucket id of the object (for md-on-ssd phase2) */
+			uint32_t		id_bkt;
+		};
 		/** The key for the entry */
 		d_iov_t		 id_key;
 	};
@@ -445,6 +449,8 @@ typedef struct {
 	vos_iter_filter_cb_t	ip_filter_cb;
 	/** filter callback argument (vos_iterate only) */
 	void			*ip_filter_arg;
+	/** auxiliary data for md-on-ssd phase2 OI iterator */
+	void			*ip_bkt_iter;
 	/** flags for for iterator */
 	uint32_t		ip_flags;
 } vos_iter_param_t;
