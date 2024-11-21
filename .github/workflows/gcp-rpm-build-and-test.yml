@@ -5,6 +5,9 @@ env:
   EL9_VERSION: 9
   DEBIAN_VERSION: 12
   UBUNTU_VERSION: 22.04
+  CP_SKIP_UNIT_TEST_EL9: true
+  CP_SKIP_UNIT_TEST_DEBIAN12: true
+  CP_SKIP_UNIT_TEST_UBUNTU22: true
 
 on:
   workflow_dispatch:
@@ -53,7 +56,7 @@ jobs:
              echo "EOF" >> $GITHUB_OUTPUT;
       - name: Identify Commit Pragmas
         run: . ci/gha_functions.sh;
-             echo '${{steps.dequoted_commit_message.outputs.text }}' | get_commit_pragmas
+             echo '${{ steps.dequoted_commit_message.outputs.text }}' | get_commit_pragmas
 
   Import-commit-pragmas:
     name: Make commit pragma variables
@@ -106,14 +109,14 @@ jobs:
     env:
       # TODO -- this should be on stable, backedup storage, not /tmp
       # yamllint disable-line rule:line-length
-      REPO_PATH: /tmp/job_repos/daos-stack/job/daos/job/PR-${{ github.event.pull_request.number }}/
+      REPO_PATH: /tmp/job_repos/daos-stack/job/daos/job/PR-${{ github.event.pull_request.number }}
     steps:
       - name: Create lastBuild and lastSuccessfulBuild symlinks
         run: . ci/gha_functions.sh;
                mkdir -p ${REPO_PATH};
-               rm -f ${REPO_PATH}last{,Successful}Build;
-               ln -s ${{ github.run_number }} ${REPO_PATH}lastBuild;
-               ln -s ${{ github.run_number }} ${REPO_PATH}lastSuccessfulBuild
+               rm -f ${REPO_PATH}/last{,Successful}Build;
+               ln -s ${{ github.run_number }} ${REPO_PATH}/lastBuild;
+               ln -s ${{ github.run_number }} ${REPO_PATH}/lastSuccessfulBuild
 
   Calc-rpm-build-matrix:
     name: Calculate RPM Build Matrix
@@ -161,7 +164,7 @@ jobs:
     env:
       DISTRO_NAME:
       DISTRO_VERSION:
-      REPO_PATH: /tmp/job_repos/daos-stack/job/daos/job/PR-${{ github.event.pull_request.number }}/
+      REPO_PATH: /tmp/job_repos/daos-stack/job/daos/job/PR-${{ github.event.pull_request.number }}
     steps:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
@@ -197,10 +200,12 @@ jobs:
                     DISTRO_VERSION="${{ env.UBUNTU_VERSION }}"
                     ;;
             esac
+            DISTRO_NAME_LOWER=$(echo $DISTRO_NAME | tr '[:upper:]' '[:lower:]')
             echo "DOCKERFILE=$DOCKERFILE" >> $GITHUB_ENV
             echo "BASE_IMAGE_BUILDER=$BASE_IMAGE_BUILDER" >> $GITHUB_ENV
             echo "GO_BUILDER=$GO_BUILDER" >> $GITHUB_ENV
             echo "DISTRO_NAME=$DISTRO_NAME" >> $GITHUB_ENV
+            echo "DISTRO_NAME_LOWER=$DISTRO_NAME_LOWER" >> $GITHUB_ENV
             echo "DISTRO_VERSION=$DISTRO_VERSION" >> $GITHUB_ENV
             echo "STAGE_NAME=Build RPM on $DISTRO_NAME $DISTRO_VERSION" >> $GITHUB_ENV
       - name: Checkout code
@@ -221,19 +226,157 @@ jobs:
             --build-arg GO_BUILDER="${GO_BUILDER}"
             --build-arg DAOS_BUILD_TYPE=release
             --build-arg DAOS_SRC_DIR="."
-            --tag gha-${{github.run_id}}-${{github.run_attempt}}
+            --tag "gha-${DISTRO_NAME_LOWER}-${DISTRO_VERSION}-${{ github.run_id }}-${{ github.run_attempt }}-base"
       - name: Remove lastSuccessfulBuild link and exit failure
         if: steps.build-rpm.outcome != 'success'
-        run: rm -f ${REPO_PATH}lastSuccessfulBuild;
+        run: rm -f ${REPO_PATH}/lastSuccessfulBuild;
              exit 1
       - name: Publish RPMs
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.DISTRO_NAME }} ${{ env.DISTRO_VERSION }} RPM repository
-          path: ${{ env.REPO_PATH}}${{ github.run_number }}/artifact/artifacts/${{ env.TARGET }}
+          path: ${{ env.REPO_PATH }}/${{ github.run_number }}/artifact/artifacts/${{ env.TARGET }}
       - name: Update commit status
         uses: ouzi-dev/commit-status-updater@v2
         with:
           # yamllint disable-line rule:line-length
           name: 'build/Build RPM on ${{ env.DISTRO_NAME }} ${{ env.COMMIT_STATUS_DISTRO_VERSION && env.COMMIT_STATUS_DISTRO_VERSION || env.DISTRO_VERSION }}'
           status: "${{ job.status }}"
+
+  Calc-unit-matrix:
+    name: Calculate Unit Testing Matrix
+    runs-on: [self-hosted, gcp]
+    needs: [Import-commit-pragmas]
+    if: needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
+        ((!cancelled()) || success() || failure())
+    outputs:
+      matrix: ${{ steps.matrix.outputs.text }}
+    steps:
+      - name: Import commit pragmas
+        uses: ./.github/actions/import-commit-pragmas
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Calculate Unit Testing Matrix
+        id: matrix
+        run: |  # do not use the non-| format for this script
+              . ci/gha_functions.sh
+              set -eu
+              # it might seem tempting to factor in the result of the build for this
+              # distro here and not include a failed build in the test matrix but
+              # the problem with that is that if/when the user asks GHA to rebuild
+              # all failed jobs and a previously failed RPM job is successful, the
+              # test matrix won't include testing it since it was calculated and was
+              # successful on the previous run without the failed build stage in it
+              l=()
+              trap 'echo "text=[$(IFS=","; echo "${l[*]}")]" >> $GITHUB_OUTPUT' EXIT
+              if ${CP_SKIP_UNIT_TEST:-false}; then
+                  exit 0
+              fi
+
+                  if ! ${CP_SKIP_BUILD_EL8_RPM:-false} &&
+                    ! ${CP_SKIP_UNIT_TEST_EL8:-false}; then
+                      # it would definitely be nicer to get these into the environment
+                      # as unquoted strings so that we didn't have to double quote here
+                      l+=('"el8"')
+                  fi
+                  if ! ${CP_SKIP_BUILD_EL9_RPM:-false} &&
+                    ! ${CP_SKIP_UNIT_TEST_EL9:-false}; then
+                      l+=('"el9"')
+                  fi
+                  if ! ${CP_SKIP_BUILD_DEBIAN12_RPM:-false} &&
+                    ! ${CP_SKIP_UNIT_TEST_DEBIAN12:-false}; then
+                      l+=('"deb12"')
+                  fi
+                  if ! ${CP_SKIP_BUILD_UBUNTU22_RPM:-false} &&
+                    ! ${CP_SKIP_UNIT_TEST_UBUNTU22:-false}; then
+                      l+=('"ubuntu22"')
+                  fi
+              fi
+
+  Unit:
+    name: Unit Testing
+    # note: if we decide to expand unit testing to the other OSes, we might
+    # want to pull this whole job out as a reusable workflow so we can more
+    # easily/clearly have the OS run on match the Docker OS
+    runs-on: [self-hosted, gcp, el8]
+    permissions:
+      statuses: write
+      # https://github.com/EnricoMi/publish-unit-test-result-action#permissions
+      checks: write
+      pull-requests: write
+    timeout-minutes: 7200
+    needs: [Build-RPM, Import-commit-message, Calc-unit-matrix, Import-commit-pragmas]
+    strategy:
+      matrix:
+        distro: ${{ fromJSON(needs.Calc-unit-matrix.outputs.matrix) }}
+      fail-fast: false
+    # https://github.com/actions/runner/issues/491#issuecomment-926924523
+    if: |
+      needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
+      needs.Calc-unit-matrix.outputs.matrix != '[]' &&
+      (!cancelled()) &&
+      (needs.Build-RPM.result == 'success' ||
+        needs.Build-RPM.result == 'skipped')
+    steps:
+      - name: Set variables
+        run: |
+            IMAGE_VERSION=""
+            DOCKER_FOLDER="utils/docker/gcp/client/testing"
+            case ${{ matrix.distro }} in
+                'el8')
+                    DOCKERFILE="${DOCKER_FOLDER}/el/Dockerfile"
+                    DISTRO_NAME="EL"
+                    DISTRO_VERSION="${{ env.EL8_VERSION }}"
+                    TEST_IMAGE="rockylinux/rockylinux:8"
+                    IMAGE_VERSION="rocky8"
+                    ;;
+                'el9')
+                    DOCKERFILE="${DOCKER_FOLDER}/el/Dockerfile"
+                    DISTRO_NAME="EL"
+                    DISTRO_VERSION="${{ env.EL9_VERSION }}"
+                    TEST_IMAGE="rockylinux/rockylinux:9"
+                    IMAGE_VERSION="rocky9"
+                    ;;
+                'deb12')
+                    DOCKERFILE="${DOCKER_FOLDER}/deb/Dockerfile"
+                    DISTRO_NAME="DEBIAN"
+                    DISTRO_VERSION="${{ env.DEBIAN_VERSION }}"
+                    TEST_IMAGE="debian:12.7"
+                    ;;
+                'ubuntu22')
+                    DOCKERFILE="${DOCKER_FOLDER}/udebbuntu/Dockerfile"
+                    DISTRO_NAME="UBUNTU"
+                    DISTRO_VERSION="${{ env.UBUNTU_VERSION }}"
+                    TEST_IMAGE="ubuntu:jammy-20240911.1"
+                    ;;
+            esac
+            echo "DOCKERFILE=$DOCKERFILE" >> $GITHUB_ENV
+            echo "DISTRO_NAME=$DISTRO_NAME" >> $GITHUB_ENV
+            echo "DISTRO_NAME_LOWER=$(echo $DISTRO_NAME | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+            echo "DISTRO_VERSION=$DISTRO_VERSION" >> $GITHUB_ENV
+            echo "TEST_IMAGE=$TEST_IMAGE" >> $GITHUB_ENV
+            echo "IMAGE_VERSION=$IMAGE_VERSION" >> $GITHUB_ENV
+            echo "STAGE_NAME=Unit Test on $DISTRO_NAME $DISTRO_VERSION" >> $GITHUB_ENV
+            echo "BASE_IMAGE=gha-${DISTRO_NAME_LOWER}-${DISTRO_VERSION}-${{ github.run_id }}-${{ github.run_attempt }}-base" >> $GITHUB_ENV
+            echo "IMAGE_TYPE=unit_tests" >> $GITHUB_ENV
+            echo "ARTIFACTS_DIR=$REPO_PATH" >> $GITHUB_ENV
+            echo "RESULTS_DIR=unit_test_results" >> $GITHUB_ENV
+            echo "GHA=true" >> $GITHUB_ENV
+      - name: Build unit testing image
+        run:
+          docker build . --file "${DOCKERFILE}"
+            --build-arg TEST_IMAGE="${TEST_IMAGE}"
+            --build-arg IMAGE_VERSION="${IMAGE_VERSION}"
+            --build-arg BASE_IMAGE="${BASE_IMAGE}"
+            --build-arg IMAGE_TYPE="${IMAGE_TYPE}"
+            --build-arg GHA="${GHA}"
+            --tag "${IMAGE_TYPE}:${DISTRO_NAME_LOWER}-${DISTRO_VERSION}-${{ github.run_id }}-${{ github.run_attempt }}"
+      - name: Run Unit Testing
+        run: docker run
+            --mount type=tmpfs,destination=/mnt/daos,tmpfs-size=16G
+            -e RESULTS_DIR="${RESULTS_DIR}"
+            -e ARTIFACTS_DIR="${ARTIFACTS_DIR}"
+            "${IMAGE_TYPE}:${DISTRO_NAME_LOWER}-${DISTRO_VERSION}-${{ github.run_id }}-${{ github.run_attempt }}"
+            cd daos && /daos/utils/ci/gcp/run_unit_tests.sh

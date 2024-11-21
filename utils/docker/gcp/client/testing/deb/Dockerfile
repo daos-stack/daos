@@ -4,19 +4,28 @@ FROM $BASE_IMAGE as packages
 FROM $TEST_IMAGE
 
 ARG IMAGE_TYPE
+ARG DAOS_SRC_DIR
+
+# Copy the previously cloned daos
+COPY "$DAOS_SRC_DIR" /daos/
+
+# Copy buildfiles to the image if it exists
+# Have to include at least one file (LICENSE) that exists of the command will fail
+COPY LICENSE /buildfiles/* /buildfiles/
 
 # Set the open file limits
 RUN echo "* soft nofile 131072" >> /etc/security/limits.conf && \
   echo "* hard nofile 131072" >> /etc/security/limits.conf && \
   cat /etc/security/limits.conf
 
-# Copy the buildfiles directory to the Docker image
-COPY /buildfiles /buildfiles
-RUN chmod -R 0777 /buildfiles
-
-RUN echo "installing GRTE runtimes"; dpkg -i /buildfiles/packages/grtev5-runtimes.deb
-RUN echo "installing test-agent"; dpkg -i /buildfiles/packages/test-agent_0.0.0-0_amd64.deb
-RUN echo "installing perfutations"; dpkg -i /buildfiles/packages/perfutations_0.0.0-0_amd64.deb
+RUN if [[ "$GHA" == "false" ]]; then \
+  chmod -R 0777 /buildfiles && \
+  echo "installing GRTE runtimes"; dpkg -i /buildfiles/packages/grtev5-runtimes.deb && \
+  echo "installing test-agent"; dpkg -i /buildfiles/packages/test-agent_0.0.0-0_amd64.deb && \
+  echo "installing perfutations"; dpkg -i /buildfiles/packages/perfutations_0.0.0-0_amd64.deb && \
+  /bin/sh -c "/buildfiles/tools/install_gcsfuse.sh" && \
+  /bin/sh -c "/buildfiles/tools/install_gcloud.sh"; \
+fi
 
 # Install DAOS Client with Performance testing packages
 COPY --from=packages /out /packages
@@ -46,14 +55,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
   wget \
   hostname
 
-# Clone DAOS
 WORKDIR /
-RUN git clone https://gerrit.googlesource.com/gcompute-tools
-RUN python3 --version
-RUN python3 /gcompute-tools/git-cookie-authdaemon
-RUN DAOS_REPOSITORY="$(cat /packages/git_repo.txt)" && DAOS_BRANCH_OR_TAG="$(cat /packages/git_branch_or_tag.txt)" && \
-  echo "DAOS_REPOSITORY: $DAOS_REPOSITORY" && echo "DAOS_BRANCH_OR_TAG: $DAOS_BRANCH_OR_TAG" && \
-  git clone --recurse-submodules "$DAOS_REPOSITORY" --branch "$DAOS_BRANCH_OR_TAG"
 
 # Install all the packages needed for the build
 RUN daos/utils/scripts/install-ubuntu.sh
@@ -66,17 +68,13 @@ RUN dpkg -i /packages/libfabric.deb \
 
 RUN dpkg -i /packages/daos-client.deb
 
-# Install  gcsfuse and gcloud
-RUN /bin/sh -c "/buildfiles/tools/ubuntu/install_gcsfuse.sh"
-RUN /bin/sh -c "/buildfiles/tools/ubuntu/install_gcloud.sh"
-
 # Install Intel MPI
-RUN /bin/sh -c "/buildfiles/tools/ubuntu/install_intel_oneapi.sh"
+RUN /bin/sh -c "/daos/utils/docker/gcp/client/testing/deb/buildfiles/install_intel_oneapi.sh"
 
 # Install IO500
-RUN /bin/sh -c "/buildfiles/tools/install_io500_sc22.sh"
+RUN /bin/sh -c "/daos/utils/docker/gcp/client/testing/buildfiles/install_io500_sc22.sh"
 
 WORKDIR /
 
 # Install FIO
-RUN /bin/sh -c "/buildfiles/tools/install_fio.sh"
+RUN /bin/sh -c "/daos/utils/docker/gcp/client/testing/buildfiles/install_fio.sh"
