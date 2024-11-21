@@ -1400,6 +1400,60 @@ out_free_path:
 }
 
 int
+dfs_sys_mkdir_p(dfs_sys_t *dfs_sys, const char *dir, mode_t mode, daos_oclass_id_t cid)
+{
+	int         rc      = 0;
+	int         dir_len = strnlen(dir, PATH_MAX);
+	struct stat st      = {0};
+	char       *_dir    = NULL;
+	char       *ptr     = NULL;
+
+	if (dfs_sys == NULL)
+		return EINVAL;
+	if (dir == NULL)
+		return EINVAL;
+	if (dir_len == PATH_MAX)
+		return EINVAL;
+
+	/* quick check -- if it already exists we can exit early */
+	rc = dfs_sys_stat(dfs_sys, dir, 0, &st);
+	if (rc == 0) {
+		if ((st.st_mode & S_IFMT) != S_IFDIR) {
+			D_ERROR("%s exists and is not a directory", dir);
+			return ENOTDIR;
+		}
+		return 0;
+	}
+
+	D_STRNDUP(_dir, dir, dir_len);
+	if (_dir == NULL)
+		return ENOMEM;
+
+	/* iterate through the parent directories and create them if necessary */
+	for (ptr = _dir + 1; *ptr != '\0'; ptr++) {
+		if (*ptr != '/')
+			continue;
+
+		/* truncate the string here to create the parent */
+		*ptr = '\0';
+		rc   = dfs_sys_mkdir(dfs_sys, _dir, mode, cid);
+		if (rc != 0 && rc != EEXIST)
+			D_GOTO(out_free, rc);
+		/* reset to keep going */
+		*ptr = '/';
+	}
+
+	/* create the final directory */
+	rc = dfs_sys_mkdir(dfs_sys, _dir, mode, cid);
+	if (rc == EEXIST)
+		rc = 0;
+
+out_free:
+	D_FREE(_dir);
+	return rc;
+}
+
+int
 dfs_sys_opendir(dfs_sys_t *dfs_sys, const char *dir, int flags, DIR **_dirp)
 {
 	int			rc;
