@@ -25,6 +25,7 @@ jobs:
             GAR_REPO=docker-registry
             DOCKER_REGISTRY="${REGION}-docker.pkg.dev"
             GAR_DOCKER_PATH="${DOCKER_REGISTRY}/${PROJECT_ID}/${GAR_REPO}/${DOCKER_IMAGE}:${DOCKER_TAG}"
+            WIP_PROVIDER="projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github/providers/daos"
             echo "REGION=$REGION" >> $GITHUB_ENV
             echo "PROJECT_ID=$PROJECT_ID" >> $GITHUB_ENV
             echo "PROJECT_NUMBER=$PROJECT_NUMBER" >> $GITHUB_ENV

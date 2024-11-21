@@ -275,25 +275,23 @@ jobs:
               if ${CP_SKIP_UNIT_TEST:-false}; then
                   exit 0
               fi
-
-                  if ! ${CP_SKIP_BUILD_EL8_RPM:-false} &&
-                    ! ${CP_SKIP_UNIT_TEST_EL8:-false}; then
-                      # it would definitely be nicer to get these into the environment
-                      # as unquoted strings so that we didn't have to double quote here
-                      l+=('"el8"')
-                  fi
-                  if ! ${CP_SKIP_BUILD_EL9_RPM:-false} &&
-                    ! ${CP_SKIP_UNIT_TEST_EL9:-false}; then
-                      l+=('"el9"')
-                  fi
-                  if ! ${CP_SKIP_BUILD_DEBIAN12_RPM:-false} &&
-                    ! ${CP_SKIP_UNIT_TEST_DEBIAN12:-false}; then
-                      l+=('"deb12"')
-                  fi
-                  if ! ${CP_SKIP_BUILD_UBUNTU22_RPM:-false} &&
-                    ! ${CP_SKIP_UNIT_TEST_UBUNTU22:-false}; then
-                      l+=('"ubuntu22"')
-                  fi
+              if ! ${CP_SKIP_BUILD_EL8_RPM:-false} &&
+                ! ${CP_SKIP_UNIT_TEST_EL8:-false}; then
+                  # it would definitely be nicer to get these into the environment
+                  # as unquoted strings so that we didn't have to double quote here
+                  l+=('"el8"')
+              fi
+              if ! ${CP_SKIP_BUILD_EL9_RPM:-false} &&
+                ! ${CP_SKIP_UNIT_TEST_EL9:-false}; then
+                  l+=('"el9"')
+              fi
+              if ! ${CP_SKIP_BUILD_DEBIAN12_RPM:-false} &&
+                ! ${CP_SKIP_UNIT_TEST_DEBIAN12:-false}; then
+                  l+=('"deb12"')
+              fi
+              if ! ${CP_SKIP_BUILD_UBUNTU22_RPM:-false} &&
+                ! ${CP_SKIP_UNIT_TEST_UBUNTU22:-false}; then
+                  l+=('"ubuntu22"')
               fi
 
   Unit:
