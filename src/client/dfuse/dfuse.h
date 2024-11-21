@@ -1013,11 +1013,13 @@ struct dfuse_inode_entry {
 };
 
 struct active_inode {
-	struct dfuse_readdir_hdl *rd_hdl;
-	d_list_t               chunks;
-	pthread_spinlock_t     lock;
+	d_list_t                  chunks;
+	pthread_spinlock_t        lock;
+
 	/* Readdir handle, if present.  May be shared */
-	struct dfuse_pre_read *readahead;
+	struct dfuse_readdir_hdl *rd_hdl;
+
+	struct dfuse_pre_read    *readahead;
 };
 
 /* Increase active count on inode.  This takes a reference and allocates ie->active as required */
