@@ -45,7 +45,7 @@ jobs:
           project_id: ${{ env.PROJECT_ID }}
           workload_identity_provider: ${{ env.WIP_PROVIDER }}
       - name: "Set up Cloud SDK"
-        uses: "google-github-actions/setup-gcloud@v1"
+        uses: "google-github-actions/setup-gcloud@v2"
       - name: "Docker auth"
         run: |-
           gcloud auth configure-docker "${DOCKER_REGISTRY}" --quiet
