@@ -399,6 +399,13 @@ struct dfuse_event {
 	d_iov_t          de_iov;
 	d_sg_list_t      de_sgl;
 	d_list_t         de_list;
+
+	/* Position in a list of events, this will either be off active->open_reads or
+	 * de->de_read_slaves.
+	 */
+	d_list_t         de_read_list;
+	/* List of slave events */
+	d_list_t         de_read_slaves;
 	struct dfuse_eq *de_eqt;
 	union {
 		struct dfuse_obj_hdl     *de_oh;
@@ -1017,6 +1024,9 @@ struct dfuse_inode_entry {
 
 struct active_inode {
 	d_list_t               chunks;
+	d_list_t               open_reads;
+	bool                   seen_eof;
+	size_t                 file_size;
 	pthread_spinlock_t     lock;
 	struct dfuse_pre_read *readahead;
 };

@@ -1318,6 +1318,8 @@ dfuse_read_event_size(void *arg, size_t size)
 		ev->de_sgl.sg_nr       = 1;
 	}
 
+	D_INIT_LIST_HEAD(&ev->de_read_slaves);
+
 	rc = daos_event_init(&ev->de_ev, ev->de_eqt->de_eq, NULL);
 	if (rc != -DER_SUCCESS) {
 		return false;
