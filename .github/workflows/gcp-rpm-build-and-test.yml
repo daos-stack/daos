@@ -152,6 +152,8 @@ jobs:
     name: Build RPM
     permissions:
       statuses: write
+      contents: read
+      id-token: write
     runs-on: [self-hosted, gcp]
     needs: [Create-symlinks, Import-commit-pragmas, Calc-rpm-build-matrix]
     if: needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
@@ -322,9 +324,8 @@ jobs:
     runs-on: [self-hosted, gcp, el8]
     permissions:
       statuses: write
-      # https://github.com/EnricoMi/publish-unit-test-result-action#permissions
-      checks: write
-      pull-requests: write
+      contents: read
+      id-token: write
     timeout-minutes: 7200
     needs: [Build-RPM, Import-commit-message, Calc-unit-matrix, Import-commit-pragmas]
     strategy:
