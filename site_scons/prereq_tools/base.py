@@ -1422,7 +1422,10 @@ class _Component():
                 RUNNER.run_commands([cmd])
 
             cmd = ['daos', 'filesystem', 'evict', path]
-            RUNNER.run_commands([cmd])
+            try:
+                RUNNER.run_commands([cmd])
+            except FileNotFoundError:
+                pass
 
         for folder in self.key_words.get("patch_rpath", []):
             path = os.path.join(comp_path, folder)
