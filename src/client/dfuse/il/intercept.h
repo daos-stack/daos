@@ -28,6 +28,8 @@
  * fcntl (for now though we likely need for dup)
  */
 #define FOREACH_ALIASED_INTERCEPT(ACTION)                                                          \
+	_Pragma("GCC diagnostic push")								   \
+	_Pragma("GCC diagnostic ignored \"-Wmissing-attributes\"")				   \
 	ACTION(FILE *, fopen, (const char *, const char *))                                        \
 	ACTION(FILE *, freopen, (const char *, const char *, FILE *))                              \
 	ACTION(int, open, (const char *, int, ...))                                                \
@@ -40,7 +42,8 @@
 	ACTION(ssize_t, preadv, (int, const struct iovec *, int, off_t))                           \
 	ACTION(ssize_t, pwritev, (int, const struct iovec *, int, off_t))                          \
 	ACTION(off_t, ftello, (FILE *))                                                            \
-	ACTION(int, ftruncate, (int, off_t))
+	ACTION(int, ftruncate, (int, off_t))							   \
+        _Pragma("GCC diagnostic pop")
 
 #define FOREACH_SINGLE_INTERCEPT(ACTION)                                                           \
 	ACTION(int, fclose, (FILE *))                                                              \
