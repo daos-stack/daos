@@ -7,15 +7,18 @@ runs:
   steps:
     - name: Import Commit Message
       id: commit_message
+      shell: bash
       run: echo "text<<EOF" >> $GITHUB_OUTPUT;
             git show -s --format=%B >> $GITHUB_OUTPUT;
             echo "EOF" >> $GITHUB_OUTPUT;
     - name: Import and Dequote Commit Message
       id: dequoted_commit_message
+      shell: bash
       run: . ci/gha_functions.sh;
             echo "text<<EOF" >> $GITHUB_OUTPUT;
             git show -s --format=%B | escape_single_quotes >> $GITHUB_OUTPUT;
             echo "EOF" >> $GITHUB_OUTPUT;
     - name: Identify Commit Pragmas
+      shell: bash
       run: . ci/gha_functions.sh;
             echo '${{ steps.dequoted_commit_message.outputs.text }}' | get_commit_pragmas
