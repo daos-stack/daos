@@ -8,6 +8,9 @@ env:
   CP_SKIP_UNIT_TEST_EL9: true
   CP_SKIP_UNIT_TEST_DEBIAN12: true
   CP_SKIP_UNIT_TEST_UBUNTU22: true
+  CP_SKIP_NLT_EL9: true
+  CP_SKIP_NLT_DEBIAN12: true
+  CP_SKIP_NLT_UBUNTU22: true
 
 on:
   workflow_dispatch:
@@ -76,15 +79,10 @@ jobs:
           pragma: RUN_GHA
           default: false
 
-  Create-rpm-symlinks:
-    uses: ./.github/workflows/reusable/create-symlinks.yml@v1
-    with:
-      repo-path: /tmp/job_repos/daos-stack/job/daos/job/PR-${{ github.event.pull_request.number }}
-
   Calc-rpm-build-matrix:
     name: Calculate RPM Build Matrix
     runs-on: [self-hosted, gcp]
-    needs: [Import-commit-pragmas, Create-rpm-symlinks]
+    needs: [Import-commit-pragmas]
     outputs:
       matrix: ${{ steps.matrix.outputs.text }}
     if: inputs.use-existing-base-builds != 'true'
@@ -119,11 +117,10 @@ jobs:
       contents: read
       id-token: write
     runs-on: [self-hosted, gcp]
-    needs: [Create-rpm-symlinks, Import-commit-pragmas, Calc-rpm-build-matrix]
+    needs: [Import-commit-pragmas, Calc-rpm-build-matrix]
     if:
       inputs.use-existing-base-builds != 'true' &&
       needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
-        needs.Create-rpm-symlinks.result == 'success' &&
         ((!cancelled()) || success() || failure())
     strategy:
       matrix:
@@ -132,7 +129,6 @@ jobs:
     env:
       DISTRO_NAME:
       DISTRO_VERSION:
-      REPO_PATH:
     steps:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
@@ -285,12 +281,57 @@ jobs:
                   l+=('"ubuntu22"')
               fi
 
-  Create-unit-symlinks:
-    uses: ./.github/workflows/reusable/create-symlinks.yml@v1
-    with:
-      repo-path: /tmp/job_repos/daos-stack/job/daos/job/PR-${{ github.event.pull_request.number }}
+  Calc-NLT-matrix:
+    name: Calculate NLT Matrix
+    runs-on: [self-hosted, gcp]
+    needs: [Import-commit-pragmas]
+    if: needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
+        ((!cancelled()) || success() || failure())
+    outputs:
+      matrix: ${{ steps.matrix.outputs.text }}
+    steps:
+      - name: Import commit pragmas
+        uses: ./.github/actions/import-commit-pragmas
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Calculate Unit Testing Matrix
+        id: matrix
+        run: |  # do not use the non-| format for this script
+              . ci/gha_functions.sh
+              set -eu
+              # it might seem tempting to factor in the result of the build for this
+              # distro here and not include a failed build in the test matrix but
+              # the problem with that is that if/when the user asks GHA to rebuild
+              # all failed jobs and a previously failed RPM job is successful, the
+              # test matrix won't include testing it since it was calculated and was
+              # successful on the previous run without the failed build stage in it
+              l=()
+              trap 'echo "text=[$(IFS=","; echo "${l[*]}")]" >> $GITHUB_OUTPUT' EXIT
+              if ${CP_SKIP_NLT:-false}; then
+                  exit 0
+              fi
+              if ! ${CP_SKIP_BUILD_EL8_RPM:-false} &&
+                ! ${CP_SKIP_NLT_EL8:-false}; then
+                  # it would definitely be nicer to get these into the environment
+                  # as unquoted strings so that we didn't have to double quote here
+                  l+=('"el8"')
+              fi
+              if ! ${CP_SKIP_BUILD_EL9_RPM:-false} &&
+                ! ${CP_SKIP_NLT_EL9:-false}; then
+                  l+=('"el9"')
+              fi
+              if ! ${CP_SKIP_BUILD_DEBIAN12_RPM:-false} &&
+                ! ${CP_SKIP_NLT_DEBIAN12:-false}; then
+                  l+=('"deb12"')
+              fi
+              if ! ${CP_SKIP_BUILD_UBUNTU22_RPM:-false} &&
+                ! ${CP_SKIP_NLT_UBUNTU22:-false}; then
+                  l+=('"ubuntu22"')
+              fi
 
-  Build-Unit-Image:
+  Build-unit-And-NLT-Image:
     name: Build Unit Testing Image
     runs-on: [self-hosted, gcp]
     permissions:
@@ -298,7 +339,7 @@ jobs:
       contents: read
       id-token: write
     timeout-minutes: 7200
-    needs: [Build-RPM, Import-commit-message, Calc-unit-matrix, Import-commit-pragmas]
+    needs: [Build-RPM, Import-commit-message, Calc-unit-matrix, Calc-NLT-matrix, Import-commit-pragmas]
     strategy:
       matrix:
         distro: ${{ fromJSON(needs.Calc-unit-matrix.outputs.matrix) }}
@@ -306,7 +347,7 @@ jobs:
     # https://github.com/actions/runner/issues/491#issuecomment-926924523
     if: |
       needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
-      needs.Calc-unit-matrix.outputs.matrix != '[]' &&
+      (needs.Calc-unit-matrix.outputs.matrix != '[]' || needs.Calc-NLT-matrix.outputs.matrix != '[]') &&
       (!cancelled()) &&
       (needs.Build-RPM.result == 'success' ||
         needs.Build-RPM.result == 'skipped')
@@ -419,7 +460,7 @@ jobs:
       contents: read
       id-token: write
     timeout-minutes: 7200
-    needs: [Build-RPM, Import-commit-message, Calc-unit-matrix, Import-commit-pragmas, Build-Unit-Image]
+    needs: [Build-RPM, Import-commit-message, Calc-unit-matrix, Import-commit-pragmas, Build-unit-And-NLT-Image]
     strategy:
       matrix:
         distro: ${{ fromJSON(needs.Calc-unit-matrix.outputs.matrix) }}
@@ -429,10 +470,10 @@ jobs:
       needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
       needs.Calc-unit-matrix.outputs.matrix != '[]' &&
       (!cancelled()) &&
-      (needs.Build-Unit-Image.result == 'success' ||
-        needs.Build-Unit-Image.result == 'skipped')
+      (needs.Build-unit-And-NLT-Image.result == 'success' ||
+        needs.Build-unit-And-NLT-Image.result == 'skipped')
     env:
-      REPO_PATH: /tmp/job_repos/daos-stack/job/daos/job/PR-${{ github.event.pull_request.number }}
+      ARTIFACTS_DIR: /tmp/daos-stack/daos/job/PR-${{ github.event.pull_request.number }}
     steps:
       - name: Set variables
         run: |
@@ -506,8 +547,8 @@ jobs:
         run: |-
           gcloud auth configure-docker "${DOCKER_REGISTRY}" --quiet
       - name: Run Unit Testing
+        id: run-unit-tests
         run:
-          ARTIFACTS_DIR=$REPO_PATH
           RESULTS_DIR=unit_test_results
 
           docker run
@@ -516,9 +557,127 @@ jobs:
             -e ARTIFACTS_DIR="${ARTIFACTS_DIR}"
             "${GAR_DOCKER_PATH}"
             cd daos && ./utils/ci/gcp/run_unit_tests.sh
+      - name: Exit failure
+        if: steps.run-unit-tests.outcome != 'success'
+        run: exit 1
       - name: Update commit status
         uses: ouzi-dev/commit-status-updater@v2
         with:
           # yamllint disable-line rule:line-length
           name: 'test/Run UNIT on ${{ env.DISTRO_NAME }} ${{ env.DISTRO_VERSION }}'
+          status: "${{ job.status }}"
+
+  Run-NLT:
+    name: Run NLT
+    runs-on: [self-hosted, gcp]
+    permissions:
+      statuses: write
+      contents: read
+      id-token: write
+    timeout-minutes: 7200
+    needs: [Build-RPM, Import-commit-message, Calc-NLT-matrix, Import-commit-pragmas, Build-unit-And-NLT-Image]
+    strategy:
+      matrix:
+        distro: ${{ fromJSON(needs.Calc-NLT-matrix.outputs.matrix) }}
+      fail-fast: false
+    # https://github.com/actions/runner/issues/491#issuecomment-926924523
+    if: |
+      needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
+      needs.Calc-NLT-matrix.outputs.matrix != '[]' &&
+      (!cancelled()) &&
+      (needs.Build-unit-And-NLT-Image.result == 'success' ||
+        needs.Build-unit-And-NLT-Image.result == 'skipped')
+    env:
+      ARTIFACTS_DIR: /tmp/daos-stack/daos/job/PR-${{ github.event.pull_request.number }}
+    steps:
+      - name: Set variables
+        run: |
+            IMAGE_VERSION=""
+            DOCKER_FOLDER="utils/docker/gcp/client/testing"
+            case ${{ matrix.distro }} in
+                'el8')
+                    DOCKERFILE="${DOCKER_FOLDER}/el/Dockerfile"
+                    DISTRO_NAME="EL"
+                    DISTRO_VERSION="${{ env.EL8_VERSION }}"
+                    TEST_IMAGE="rockylinux/rockylinux:8"
+                    IMAGE_VERSION="rocky8"
+                    ;;
+                'el9')
+                    DOCKERFILE="${DOCKER_FOLDER}/el/Dockerfile"
+                    DISTRO_NAME="EL"
+                    DISTRO_VERSION="${{ env.EL9_VERSION }}"
+                    TEST_IMAGE="rockylinux/rockylinux:9"
+                    IMAGE_VERSION="rocky9"
+                    ;;
+                'deb12')
+                    DOCKERFILE="${DOCKER_FOLDER}/deb/Dockerfile"
+                    DISTRO_NAME="DEBIAN"
+                    DISTRO_VERSION="${{ env.DEBIAN_VERSION }}"
+                    TEST_IMAGE="debian:12.7"
+                    ;;
+                'ubuntu22')
+                    DOCKERFILE="${DOCKER_FOLDER}/udebbuntu/Dockerfile"
+                    DISTRO_NAME="UBUNTU"
+                    DISTRO_VERSION="${{ env.UBUNTU_VERSION }}"
+                    TEST_IMAGE="ubuntu:jammy-20240911.1"
+                    ;;
+            esac
+            echo "DOCKERFILE=$DOCKERFILE" >> $GITHUB_ENV
+            echo "DISTRO_NAME=$DISTRO_NAME" >> $GITHUB_ENV
+            echo "DISTRO_NAME_LOWER=$(echo $DISTRO_NAME | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+            echo "DISTRO_VERSION=$DISTRO_VERSION" >> $GITHUB_ENV
+            echo "TEST_IMAGE=$TEST_IMAGE" >> $GITHUB_ENV
+            echo "IMAGE_VERSION=$IMAGE_VERSION" >> $GITHUB_ENV
+            echo "STAGE_NAME=NLT on $DISTRO_NAME $DISTRO_VERSION" >> $GITHUB_ENV
+            if ${{ inputs.use-existing-base-builds }} == 'true'; then
+              echo "BASE_IMAGE=${DISTRO_NAME_LOWER}-${DISTRO_VERSION}-base:" >> $GITHUB_ENV
+            else
+              echo "BASE_IMAGE=${DISTRO_NAME_LOWER}-${DISTRO_VERSION}-base:${{ github.run_id }}-${{ github.run_attempt }}" >> $GITHUB_ENV
+            fi
+            echo "IMAGE_TYPE=unit_tests" >> $GITHUB_ENV
+            echo "GHA=true" >> $GITHUB_ENV
+            DOCKER_IMAGE="${DISTRO_NAME_LOWER}-${DISTRO_VERSION}-${IMAGE_TYPE}"
+            DOCKER_IMAGE_TAG="${{ github.run_id }}-${{ github.run_attempt }}"
+            PROJECT_ID=daos-github-ci
+            PROJECT_NUMBER=192572342707
+            GAR_REPO=docker-registry
+            DOCKER_REGISTRY_REGION=us-central1
+            DOCKER_REGISTRY="${DOCKER_REGISTRY_REGION}-docker.pkg.dev"
+            GAR_DOCKER_PATH="${DOCKER_REGISTRY}/${PROJECT_ID}/${GAR_REPO}/${DOCKER_IMAGE}:${DOCKER_IMAGE_TAG}"
+            WIP_PROVIDER="projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github/providers/daos"
+            echo "PROJECT_ID=$PROJECT_ID" >> $GITHUB_ENV
+            echo "DOCKER_REGISTRY=$DOCKER_REGISTRY" >> $GITHUB_ENV
+            echo "GAR_DOCKER_PATH=$GAR_DOCKER_PATH" >> $GITHUB_ENV
+            echo "WIP_PROVIDER=$WIP_PROVIDER" >> $GITHUB_ENV
+      # needed because the Docker image we need is stored in Artifact Registry
+      - name: Authenticate to GCP
+        id: gcp-authentication
+        uses: 'google-github-actions/auth@v2'
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: ${{ env.WIP_PROVIDER }}
+      - name: "Set up Cloud SDK"
+        uses: "google-github-actions/setup-gcloud@v2"
+      - name: "Docker auth"
+        run: |-
+          gcloud auth configure-docker "${DOCKER_REGISTRY}" --quiet
+      - name: Run NLT
+        id: run-NLT
+        run:
+          RESULTS_DIR=nlt_results
+
+          docker run
+            --mount type=tmpfs,destination=/mnt/daos,tmpfs-size=16G
+            -e RESULTS_DIR="${RESULTS_DIR}"
+            -e ARTIFACTS_DIR="${ARTIFACTS_DIR}"
+            "${GAR_DOCKER_PATH}"
+            id -u testuser > /proc/self/loginuid && cd /daos && ./utils/ci/gcp/run_nlt.sh
+      - name: Exit failure
+        if: steps.run-NLT.outcome != 'success'
+        run: exit 1
+      - name: Update commit status
+        uses: ouzi-dev/commit-status-updater@v2
+        with:
+          # yamllint disable-line rule:line-length
+          name: 'test/Run NLT on ${{ env.DISTRO_NAME }} ${{ env.DISTRO_VERSION }}'
           status: "${{ job.status }}"
