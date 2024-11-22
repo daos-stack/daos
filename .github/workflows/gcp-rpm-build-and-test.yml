@@ -15,6 +15,11 @@ on:
       pr-repos:
         description: 'Any PR-repos that you want included in this build'
         required: false
+      use-existing-base-builds:
+        description: 'Whether a previous base build for this PR should be used'
+        default: 'false'
+        required: false
+        type: string
   pull_request:
 
 concurrency:
@@ -28,35 +33,17 @@ defaults:
 permissions: {}
 
 jobs:
-  # it's a real shame that this step is even needed.  push events have the commit message # in
-  # ${{ github.event.head_commit.message }} but pull_requests don't.  :-(
   Import-commit-message:
     name: Get commit message
     if: github.repository == 'daos-stack/daos'
     runs-on: [self-hosted, light]
-    # Map a step output to a job output
     outputs:
-      message: ${{ steps.commit_message.outputs.text }}
-      dequoted_message: ${{ steps.dequoted_commit_message.outputs.text }}
+      message: ${{ steps.get-commit-message.outputs.text }}
+      dequoted_message: ${{ steps.get-commit-message.outputs.text }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-      - name: Import Commit Message
-        id: commit_message
-        run: echo "text<<EOF" >> $GITHUB_OUTPUT;
-             git show -s --format=%B >> $GITHUB_OUTPUT;
-             echo "EOF" >> $GITHUB_OUTPUT;
-      - name: Import and Dequote Commit Message
-        id: dequoted_commit_message
-        run: . ci/gha_functions.sh;
-             echo "text<<EOF" >> $GITHUB_OUTPUT;
-             git show -s --format=%B | escape_single_quotes >> $GITHUB_OUTPUT;
-             echo "EOF" >> $GITHUB_OUTPUT;
-      - name: Identify Commit Pragmas
-        run: . ci/gha_functions.sh;
-             echo '${{ steps.dequoted_commit_message.outputs.text }}' | get_commit_pragmas
+      - name: Get commit message
+        id: get-commit-message
+        uses: ./.github/actions/import-commit-message
 
   Import-commit-pragmas:
     name: Make commit pragma variables
@@ -89,41 +76,18 @@ jobs:
           pragma: RUN_GHA
           default: false
 
-  Create-symlinks:
-    # you might think this is an odd place to do this and it should be done as a result of the
-    # build stages and ideally you'd be right.
-    # the problem with that is that there is no way to get the success/fail result of individual
-    # axes of matrix jobs so there is no way to query them at the end and see their composite
-    # results.
-    # instead, the final result of the Build-RPM job, for example is a last-one-complete wins.
-    # so for example, if the el9 axis fails quickly and then the el8 axis succeeds afterward the
-    # resulting job state is success.
-    # instead we assume success at the beginning and then let any axis that fails remove the
-    # lastSuccessfulBuild link if it fails
-    name: Create lastBuild and lastSuccessfulBuild symlinks
-    runs-on: [self-hosted, light]
-    needs: [Import-commit-pragmas]
-    if: needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
-        needs.Import-commit-pragmas.outputs.rpm-test-version == '' &&
-        !contains(needs.Import-commit-pragmas.outputs.pr-repos, 'daos@')
-    env:
-      # TODO -- this should be on stable, backedup storage, not /tmp
-      # yamllint disable-line rule:line-length
-      REPO_PATH: /tmp/job_repos/daos-stack/job/daos/job/PR-${{ github.event.pull_request.number }}
-    steps:
-      - name: Create lastBuild and lastSuccessfulBuild symlinks
-        run: . ci/gha_functions.sh;
-               mkdir -p ${REPO_PATH};
-               rm -f ${REPO_PATH}/last{,Successful}Build;
-               ln -s ${{ github.run_number }} ${REPO_PATH}/lastBuild;
-               ln -s ${{ github.run_number }} ${REPO_PATH}/lastSuccessfulBuild
+  Create-rpm-symlinks:
+    uses: ./.github/workflows/reusable/create-symlinks.yml@v1
+    with:
+      repo-path: /tmp/job_repos/daos-stack/job/daos/job/PR-${{ github.event.pull_request.number }}
 
   Calc-rpm-build-matrix:
     name: Calculate RPM Build Matrix
     runs-on: [self-hosted, gcp]
-    needs: [Import-commit-pragmas, Create-symlinks]
+    needs: [Import-commit-pragmas, Create-rpm-symlinks]
     outputs:
       matrix: ${{ steps.matrix.outputs.text }}
+    if: inputs.use-existing-base-builds != 'true'
     steps:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
@@ -155,9 +119,11 @@ jobs:
       contents: read
       id-token: write
     runs-on: [self-hosted, gcp]
-    needs: [Create-symlinks, Import-commit-pragmas, Calc-rpm-build-matrix]
-    if: needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
-        needs.Create-symlinks.result == 'success' &&
+    needs: [Create-rpm-symlinks, Import-commit-pragmas, Calc-rpm-build-matrix]
+    if:
+      inputs.use-existing-base-builds != 'true' &&
+      needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
+        needs.Create-rpm-symlinks.result == 'success' &&
         ((!cancelled()) || success() || failure())
     strategy:
       matrix:
@@ -166,7 +132,7 @@ jobs:
     env:
       DISTRO_NAME:
       DISTRO_VERSION:
-      REPO_PATH: /tmp/job_repos/daos-stack/job/daos/job/PR-${{ github.event.pull_request.number }}
+      REPO_PATH:
     steps:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
@@ -206,16 +172,19 @@ jobs:
             IMAGE_TYPE="base"
             DOCKER_IMAGE="${DISTRO_NAME_LOWER}-${DISTRO_VERSION}-${IMAGE_TYPE}"
             DOCKER_IMAGE_TAG="${{ github.run_id }}-${{ github.run_attempt }}"
+            DOCKER_IMAGE_TAG2="${{ github.event.pull_request.number }}"
             PROJECT_ID=daos-github-ci
             PROJECT_NUMBER=192572342707
             GAR_REPO=docker-registry
             DOCKER_REGISTRY_REGION=us-central1
             DOCKER_REGISTRY="${DOCKER_REGISTRY_REGION}-docker.pkg.dev"
             GAR_DOCKER_PATH="${DOCKER_REGISTRY}/${PROJECT_ID}/${GAR_REPO}/${DOCKER_IMAGE}:${DOCKER_IMAGE_TAG}"
+            GAR_DOCKER_PATH2="${DOCKER_REGISTRY}/${PROJECT_ID}/${GAR_REPO}/${DOCKER_IMAGE}:${DOCKER_IMAGE_TAG2}"
             WIP_PROVIDER="projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github/providers/daos"
             echo "PROJECT_ID=$PROJECT_ID" >> $GITHUB_ENV
             echo "DOCKER_REGISTRY=$DOCKER_REGISTRY" >> $GITHUB_ENV
             echo "GAR_DOCKER_PATH=$GAR_DOCKER_PATH" >> $GITHUB_ENV
+            echo "GAR_DOCKER_PATH2=$GAR_DOCKER_PATH2" >> $GITHUB_ENV
             echo "WIP_PROVIDER=$WIP_PROVIDER" >> $GITHUB_ENV
             echo "DOCKERFILE=$DOCKERFILE" >> $GITHUB_ENV
             echo "BASE_IMAGE_BUILDER=$BASE_IMAGE_BUILDER" >> $GITHUB_ENV
@@ -242,10 +211,10 @@ jobs:
             --build-arg DAOS_BUILD_TYPE=release
             --build-arg DAOS_SRC_DIR="."
             --tag "${GAR_DOCKER_PATH}"
-      - name: Remove lastSuccessfulBuild link and exit failure
+            --tag "${GAR_DOCKER_PATH2}"
+      - name: Exit failure
         if: steps.build-rpm.outcome != 'success'
-        run: rm -f ${REPO_PATH}/lastSuccessfulBuild;
-             exit 1
+        run: exit 1
       - name: Authenticate to GCP
         id: gcp-authentication
         uses: 'google-github-actions/auth@v2'
@@ -316,12 +285,14 @@ jobs:
                   l+=('"ubuntu22"')
               fi
 
-  Unit:
-    name: Unit Testing
-    # note: if we decide to expand unit testing to the other OSes, we might
-    # want to pull this whole job out as a reusable workflow so we can more
-    # easily/clearly have the OS run on match the Docker OS
-    runs-on: [self-hosted, gcp, el8]
+  Create-unit-symlinks:
+    uses: ./.github/workflows/reusable/create-symlinks.yml@v1
+    with:
+      repo-path: /tmp/job_repos/daos-stack/job/daos/job/PR-${{ github.event.pull_request.number }}
+
+  Build-Unit-Image:
+    name: Build Unit Testing Image
+    runs-on: [self-hosted, gcp]
     permissions:
       statuses: write
       contents: read
@@ -379,10 +350,135 @@ jobs:
             echo "TEST_IMAGE=$TEST_IMAGE" >> $GITHUB_ENV
             echo "IMAGE_VERSION=$IMAGE_VERSION" >> $GITHUB_ENV
             echo "STAGE_NAME=Unit Test on $DISTRO_NAME $DISTRO_VERSION" >> $GITHUB_ENV
-            echo "BASE_IMAGE=${DISTRO_NAME_LOWER}-${DISTRO_VERSION}-base:${{ github.run_id }}-${{ github.run_attempt }}" >> $GITHUB_ENV
+            if ${{ inputs.use-existing-base-builds }} == 'true'; then
+              echo "BASE_IMAGE=${DISTRO_NAME_LOWER}-${DISTRO_VERSION}-base:" >> $GITHUB_ENV
+            else
+              echo "BASE_IMAGE=${DISTRO_NAME_LOWER}-${DISTRO_VERSION}-base:${{ github.run_id }}-${{ github.run_attempt }}" >> $GITHUB_ENV
+            fi
             echo "IMAGE_TYPE=unit_tests" >> $GITHUB_ENV
-            echo "ARTIFACTS_DIR=$REPO_PATH" >> $GITHUB_ENV
-            echo "RESULTS_DIR=unit_test_results" >> $GITHUB_ENV
+            echo "GHA=true" >> $GITHUB_ENV
+            DOCKER_IMAGE="${DISTRO_NAME_LOWER}-${DISTRO_VERSION}-${IMAGE_TYPE}"
+            DOCKER_IMAGE_TAG="${{ github.run_id }}-${{ github.run_attempt }}"
+            PROJECT_ID=daos-github-ci
+            PROJECT_NUMBER=192572342707
+            GAR_REPO=docker-registry
+            DOCKER_REGISTRY_REGION=us-central1
+            DOCKER_REGISTRY="${DOCKER_REGISTRY_REGION}-docker.pkg.dev"
+            GAR_DOCKER_PATH="${DOCKER_REGISTRY}/${PROJECT_ID}/${GAR_REPO}/${DOCKER_IMAGE}:${DOCKER_IMAGE_TAG}"
+            WIP_PROVIDER="projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github/providers/daos"
+            echo "PROJECT_ID=$PROJECT_ID" >> $GITHUB_ENV
+            echo "DOCKER_REGISTRY=$DOCKER_REGISTRY" >> $GITHUB_ENV
+            echo "GAR_DOCKER_PATH=$GAR_DOCKER_PATH" >> $GITHUB_ENV
+            echo "WIP_PROVIDER=$WIP_PROVIDER" >> $GITHUB_ENV
+      # needed because the Docker image we need is stored in Artifact Registry
+      - name: Authenticate to GCP
+        id: gcp-authentication
+        uses: 'google-github-actions/auth@v2'
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: ${{ env.WIP_PROVIDER }}
+      - name: "Set up Cloud SDK"
+        uses: "google-github-actions/setup-gcloud@v2"
+      - name: "Docker auth"
+        run: |-
+          gcloud auth configure-docker "${DOCKER_REGISTRY}" --quiet
+      - name: Build unit testing image
+        id: build-unit-image
+        run:
+          docker build . --file "${DOCKERFILE}"
+            --build-arg TEST_IMAGE="${TEST_IMAGE}"
+            --build-arg IMAGE_VERSION="${IMAGE_VERSION}"
+            --build-arg BASE_IMAGE="${BASE_IMAGE}"
+            --build-arg IMAGE_TYPE="${IMAGE_TYPE}"
+            --build-arg GHA="${GHA}"
+            --tag "${GAR_DOCKER_PATH}"
+      - name: Exit failure
+        if: steps.build-unit-image.outcome != 'success'
+        run: exit 1
+      # needed because Docker auth only lasts for 10 minutes
+      - name: Authenticate to GCP
+        id: gcp-re-authentication
+        uses: 'google-github-actions/auth@v2'
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: ${{ env.WIP_PROVIDER }}
+      - name: Publish Image to Artifact Registry
+        run: docker push "${GAR_DOCKER_PATH}"
+      - name: Update commit status
+        uses: ouzi-dev/commit-status-updater@v2
+        with:
+          # yamllint disable-line rule:line-length
+          name: 'build/Build UNIT on ${{ env.DISTRO_NAME }} ${{ env.DISTRO_VERSION }}'
+          status: "${{ job.status }}"
+
+  Run-Unit-Tests:
+    name: Run Unit Tests
+    runs-on: [self-hosted, gcp]
+    permissions:
+      statuses: write
+      contents: read
+      id-token: write
+    timeout-minutes: 7200
+    needs: [Build-RPM, Import-commit-message, Calc-unit-matrix, Import-commit-pragmas, Build-Unit-Image]
+    strategy:
+      matrix:
+        distro: ${{ fromJSON(needs.Calc-unit-matrix.outputs.matrix) }}
+      fail-fast: false
+    # https://github.com/actions/runner/issues/491#issuecomment-926924523
+    if: |
+      needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
+      needs.Calc-unit-matrix.outputs.matrix != '[]' &&
+      (!cancelled()) &&
+      (needs.Build-Unit-Image.result == 'success' ||
+        needs.Build-Unit-Image.result == 'skipped')
+    env:
+      REPO_PATH: /tmp/job_repos/daos-stack/job/daos/job/PR-${{ github.event.pull_request.number }}
+    steps:
+      - name: Set variables
+        run: |
+            IMAGE_VERSION=""
+            DOCKER_FOLDER="utils/docker/gcp/client/testing"
+            case ${{ matrix.distro }} in
+                'el8')
+                    DOCKERFILE="${DOCKER_FOLDER}/el/Dockerfile"
+                    DISTRO_NAME="EL"
+                    DISTRO_VERSION="${{ env.EL8_VERSION }}"
+                    TEST_IMAGE="rockylinux/rockylinux:8"
+                    IMAGE_VERSION="rocky8"
+                    ;;
+                'el9')
+                    DOCKERFILE="${DOCKER_FOLDER}/el/Dockerfile"
+                    DISTRO_NAME="EL"
+                    DISTRO_VERSION="${{ env.EL9_VERSION }}"
+                    TEST_IMAGE="rockylinux/rockylinux:9"
+                    IMAGE_VERSION="rocky9"
+                    ;;
+                'deb12')
+                    DOCKERFILE="${DOCKER_FOLDER}/deb/Dockerfile"
+                    DISTRO_NAME="DEBIAN"
+                    DISTRO_VERSION="${{ env.DEBIAN_VERSION }}"
+                    TEST_IMAGE="debian:12.7"
+                    ;;
+                'ubuntu22')
+                    DOCKERFILE="${DOCKER_FOLDER}/udebbuntu/Dockerfile"
+                    DISTRO_NAME="UBUNTU"
+                    DISTRO_VERSION="${{ env.UBUNTU_VERSION }}"
+                    TEST_IMAGE="ubuntu:jammy-20240911.1"
+                    ;;
+            esac
+            echo "DOCKERFILE=$DOCKERFILE" >> $GITHUB_ENV
+            echo "DISTRO_NAME=$DISTRO_NAME" >> $GITHUB_ENV
+            echo "DISTRO_NAME_LOWER=$(echo $DISTRO_NAME | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+            echo "DISTRO_VERSION=$DISTRO_VERSION" >> $GITHUB_ENV
+            echo "TEST_IMAGE=$TEST_IMAGE" >> $GITHUB_ENV
+            echo "IMAGE_VERSION=$IMAGE_VERSION" >> $GITHUB_ENV
+            echo "STAGE_NAME=Unit Test on $DISTRO_NAME $DISTRO_VERSION" >> $GITHUB_ENV
+            if ${{ inputs.use-existing-base-builds }} == 'true'; then
+              echo "BASE_IMAGE=${DISTRO_NAME_LOWER}-${DISTRO_VERSION}-base:" >> $GITHUB_ENV
+            else
+              echo "BASE_IMAGE=${DISTRO_NAME_LOWER}-${DISTRO_VERSION}-base:${{ github.run_id }}-${{ github.run_attempt }}" >> $GITHUB_ENV
+            fi
+            echo "IMAGE_TYPE=unit_tests" >> $GITHUB_ENV
             echo "GHA=true" >> $GITHUB_ENV
             DOCKER_IMAGE="${DISTRO_NAME_LOWER}-${DISTRO_VERSION}-${IMAGE_TYPE}"
             DOCKER_IMAGE_TAG="${{ github.run_id }}-${{ github.run_attempt }}"
@@ -410,9 +506,19 @@ jobs:
         run: |-
           gcloud auth configure-docker "${DOCKER_REGISTRY}" --quiet
       - name: Run Unit Testing
-        run: docker run
+        run:
+          ARTIFACTS_DIR=$REPO_PATH
+          RESULTS_DIR=unit_test_results
+
+          docker run
             --mount type=tmpfs,destination=/mnt/daos,tmpfs-size=16G
             -e RESULTS_DIR="${RESULTS_DIR}"
             -e ARTIFACTS_DIR="${ARTIFACTS_DIR}"
             "${GAR_DOCKER_PATH}"
             cd daos && ./utils/ci/gcp/run_unit_tests.sh
+      - name: Update commit status
+        uses: ouzi-dev/commit-status-updater@v2
+        with:
+          # yamllint disable-line rule:line-length
+          name: 'test/Run UNIT on ${{ env.DISTRO_NAME }} ${{ env.DISTRO_VERSION }}'
+          status: "${{ job.status }}"
