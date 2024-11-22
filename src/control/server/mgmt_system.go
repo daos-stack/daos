@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -1113,20 +1114,30 @@ func (svc *mgmtSvc) SystemDrain(ctx context.Context, req *mgmtpb.SystemDrainReq)
 	}
 
 	poolRanks := make(map[string]*ranklist.RankSet)
+	poolIDs := []string{}
 	for _, ps := range psList {
-		for _, r := range ps.Storage.CurrentRanks() {
+		currentRanks := ps.Storage.CurrentRanks()
+		poolID := ps.PoolUUID.String()
+
+		svc.log.Tracef("pool-service detected: id %s, ranks %v", poolID, currentRanks)
+
+		for _, r := range currentRanks {
 			if _, exists := ranksMap[r]; !exists {
 				continue
 			}
-			id := ps.PoolUUID.String()
-			if _, exists := poolRanks[id]; !exists {
-				poolRanks[id] = ranklist.MustCreateRankSet("")
+			if _, exists := poolRanks[poolID]; !exists {
+				poolRanks[poolID] = ranklist.MustCreateRankSet("")
+				poolIDs = append(poolIDs, poolID)
 			}
-			poolRanks[id].Add(r)
+			poolRanks[poolID].Add(r)
 		}
 	}
+	svc.log.Debugf("pool-ranks to drain: %v", poolRanks)
 
-	for id, rs := range poolRanks {
+	sort.Strings(poolIDs)
+
+	for _, id := range poolIDs {
+		rs := poolRanks[id]
 		if rs.Count() == 0 {
 			continue
 		}
@@ -1151,9 +1162,7 @@ func (svc *mgmtSvc) SystemDrain(ctx context.Context, req *mgmtpb.SystemDrainReq)
 				errMsg = errors.Wrap(err, "unmarshal PoolEvict response").Error()
 				drainResp.Status = int32(daos.IOInvalid)
 			} else if drainResp.Status != int32(daos.Success) {
-				errMsg = fmt.Sprintf("drain failed for rank %d on pool %s: %s",
-					drainReq.Rank, drainReq.Id,
-					daos.Status(drainResp.Status).Error())
+				errMsg = daos.Status(drainResp.Status).Error()
 			}
 
 			svc.log.Tracef("pool-drain triggered from system-drain: %+v (req: %+v)",
