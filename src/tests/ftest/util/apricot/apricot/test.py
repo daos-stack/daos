@@ -476,6 +476,9 @@ class Test(avocadoTest):
         self.report_timeout()
         super().tearDown()
 
+        # Execute any tear down steps in the reverse order of which they were registered.
+        self._teardown_errors.extend(self._cleanup())
+
         # Clean up any temporary files
         self._teardown_errors.extend(self.remove_temp_test_dir())
 
@@ -892,6 +895,7 @@ class TestWithServers(TestWithoutServers):
         self.setup_agents(agent_groups)
         if self.agent_managers:
             self.start_agent_managers(force)
+            self.register_cleanup(self.stop_agents)
 
     def start_servers(self, server_groups=None, force=False):
         """Start the daos_server processes.
@@ -915,6 +919,7 @@ class TestWithServers(TestWithoutServers):
         self.setup_servers(server_groups)
         if self.server_managers:
             force_agent_start = self.start_server_managers(force)
+            self.register_cleanup(self.stop_servers)
         return force_agent_start
 
     def restart_servers(self):
@@ -1394,23 +1399,13 @@ class TestWithServers(TestWithoutServers):
         # class (see DAOS-1452/DAOS-9941 and Avocado issue #5217 with
         # associated PR-5224)
         if self.status is not None and self.status != 'PASS' and self.status != 'SKIP':
-            self.__dump_engines_stacks("Test status is {}".format(self.status))
+            self.__dump_engines_stacks(f"Test status is {self.status}")
 
         # Report whether or not the timeout has expired
         self.report_timeout()
 
         # Tear down any test-specific items
         self._teardown_errors = self.pre_tear_down()
-
-        # Destroy any job managers, containers, pools, and dfuse instances next
-        # Eventually this call will encompass all teardown steps
-        self._teardown_errors.extend(self._cleanup())
-
-        # Stop the agents
-        self._teardown_errors.extend(self.stop_agents())
-
-        # Stop the servers
-        self._teardown_errors.extend(self.stop_servers())
 
         super().tearDown()
 
@@ -1611,11 +1606,6 @@ class TestWithServers(TestWithoutServers):
                 "Stopping %s group(s) of servers", len(self.server_managers))
             errors.extend(self._stop_managers(self.server_managers, "servers"))
 
-            # Stopping agents whenever servers are stopped for DAOS-6873
-            self.log.info(
-                "Workaround for DAOS-6873: Stopping %s group(s) of agents",
-                len(self.agent_managers))
-            errors.extend(self._stop_managers(self.agent_managers, "agents"))
         return errors
 
     def _stop_managers(self, managers, name):
