@@ -1227,6 +1227,7 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 	struct d_binheap_node		*bh_node;
 	d_list_t			 timeout_list;
 	uint64_t			 ts_now;
+	bool				 print_once = false;
 
 	D_ASSERT(crt_ctx != NULL);
 
@@ -1260,11 +1261,21 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 		/* NB: The reason that the error message is printed at INFO
 		 * level is because the user should know how serious the error
 		 * is and they will print the RPC error at appropriate level */
-		RPC_INFO(rpc_priv,
-			 "ctx_id %d, (status: %#x) timed out (%d seconds), "
-			 "target (%d:%d)\n",
-			 crt_ctx->cc_idx, rpc_priv->crp_state, rpc_priv->crp_timeout_sec,
-			 rpc_priv->crp_pub.cr_ep.ep_rank, rpc_priv->crp_pub.cr_ep.ep_tag);
+		if (!print_once) {
+			print_once = true;
+
+			RPC_WARN(rpc_priv,
+				 "ctx_id %d, (status: %#x) timed out (%d seconds), "
+				 "target (%d:%d)\n",
+				 crt_ctx->cc_idx, rpc_priv->crp_state, rpc_priv->crp_timeout_sec,
+				 rpc_priv->crp_pub.cr_ep.ep_rank, rpc_priv->crp_pub.cr_ep.ep_tag);
+		} else {
+			RPC_INFO(rpc_priv,
+				 "ctx_id %d, (status: %#x) timed out (%d seconds), "
+				 "target (%d:%d)\n",
+				 crt_ctx->cc_idx, rpc_priv->crp_state, rpc_priv->crp_timeout_sec,
+				 rpc_priv->crp_pub.cr_ep.ep_rank, rpc_priv->crp_pub.cr_ep.ep_tag);
+		}
 
 		crt_req_timeout_hdlr(rpc_priv);
 		RPC_DECREF(rpc_priv);
