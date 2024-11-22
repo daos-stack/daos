@@ -60,7 +60,7 @@ ds_pool_get_vos_df_version(uint32_t pool_global_version)
 	return 0;
 }
 
-/** Return the default VOS DF version for the default pool global version. */
+/** Return the VOS DF version for the default pool global version. */
 uint32_t
 ds_pool_get_vos_df_version_default(void)
 {
