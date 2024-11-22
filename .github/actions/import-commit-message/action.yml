@@ -5,10 +5,6 @@ description: 'Import Commit Message'
 runs:
   using: "composite"
   steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        ref: ${{ github.event.pull_request.head.sha }}
     - name: Import Commit Message
       id: commit_message
       run: echo "text<<EOF" >> $GITHUB_OUTPUT;

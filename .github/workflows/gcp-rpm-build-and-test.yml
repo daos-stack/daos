@@ -44,6 +44,10 @@ jobs:
       message: ${{ steps.get-commit-message.outputs.text }}
       dequoted_message: ${{ steps.get-commit-message.outputs.text }}
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: Get commit message
         id: get-commit-message
         uses: ./.github/actions/import-commit-message
