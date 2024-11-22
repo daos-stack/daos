@@ -89,7 +89,7 @@ jobs:
     needs: [Import-commit-pragmas]
     outputs:
       matrix: ${{ steps.matrix.outputs.text }}
-    if: github.event.inputs.use-existing-base-builds != 'true'
+    if: ${{ github.event.inputs.use-existing-base-builds }} != 'true'
     steps:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
@@ -123,7 +123,7 @@ jobs:
     runs-on: [self-hosted, gcp]
     needs: [Import-commit-pragmas, Calc-rpm-build-matrix]
     if:
-      github.event.inputs.use-existing-base-builds != 'true' &&
+      ${{ github.event.inputs.use-existing-base-builds }} != 'true' &&
       needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
         ((!cancelled()) || success() || failure())
     strategy:
