@@ -15,8 +15,8 @@
 %endif
 
 Name:          daos
-Version:       2.7.100
-Release:       11%{?relval}%{?dist}
+Version:       2.7.101
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -593,6 +593,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Nov 08 2024 Phillip Henderson <phillip.henderson@intel.com> 2.7.101-1
+- Bump version to 2.7.100
+
 * Tue Nov 5 2024 Michael MacDonald <mjmac@google.com> 2.7.100-11
 - Move daos_metrics tool to daos package for use on both clients
   and servers.

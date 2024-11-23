@@ -1274,6 +1274,7 @@ dfuse_ie_close(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 		  atomic_load_relaxed(&ie->ie_il_count));
 	D_ASSERTF(atomic_load_relaxed(&ie->ie_open_count) == 0, "open_count is %d",
 		  atomic_load_relaxed(&ie->ie_open_count));
+	D_ASSERT(!ie->ie_active);
 
 	if (ie->ie_obj) {
 		rc = dfs_release(ie->ie_obj);

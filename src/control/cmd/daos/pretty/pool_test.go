@@ -128,6 +128,45 @@ Pool space info:
   Free: 1 B, min:0 B, max:0 B, mean:0 B
 `, poolUUID.String()),
 		},
+		"normal response; suspect ranks": {
+			pi: &daos.PoolInfo{
+				QueryMask:        daos.HealthOnlyPoolQueryMask,
+				State:            daos.PoolServiceStateDegraded,
+				UUID:             poolUUID,
+				TotalTargets:     2,
+				DisabledTargets:  1,
+				ActiveTargets:    1,
+				ServiceLeader:    42,
+				Version:          100,
+				PoolLayoutVer:    1,
+				UpgradeLayoutVer: 2,
+				DisabledRanks:    ranklist.MustCreateRankSet("[0,1,3]"),
+				SuspectRanks:     ranklist.MustCreateRankSet("[2]"),
+				Rebuild: &daos.PoolRebuildStatus{
+					State:   daos.PoolRebuildStateBusy,
+					Objects: 42,
+					Records: 21,
+				},
+				TierStats: []*daos.StorageUsageStats{
+					{
+						Total: 2,
+						Free:  1,
+					},
+					{
+						Total: 2,
+						Free:  1,
+					},
+				},
+			},
+			expPrintStr: fmt.Sprintf(`
+Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
+Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
+Pool health info:
+- Disabled ranks: 0-1,3
+- Suspect ranks: 2
+- Rebuild busy, 42 objs, 21 recs
+`, poolUUID.String()),
+		},
 		"normal response; disabled ranks": {
 			pi: &daos.PoolInfo{
 				QueryMask:        daos.DefaultPoolQueryMask,
@@ -573,12 +612,13 @@ func TestPretty_PrintListPools(t *testing.T) {
 No pools in system
 `,
 		},
-		"one pool; no usage": {
+		"one pool; no usage; default query-mask": {
 			pools: []*daos.PoolInfo{
 				{
 					UUID:            test.MockPoolUUID(1),
 					ServiceReplicas: []ranklist.Rank{0, 1, 2},
 					State:           daos.PoolServiceStateReady,
+					QueryMask:       daos.DefaultPoolQueryMask,
 				},
 			},
 			expPrintStr: `
@@ -588,7 +628,52 @@ Pool     Size State Used Imbalance Disabled
 
 `,
 		},
-		"two pools; only one labeled": {
+		"two pools; only one labeled; no query (zero query-mask)": {
+			pools: []*daos.PoolInfo{
+				{
+					UUID:            test.MockPoolUUID(1),
+					ServiceReplicas: []ranklist.Rank{0, 1, 2},
+					State:           daos.PoolServiceStateReady,
+				},
+				{
+					Label:           "two",
+					UUID:            test.MockPoolUUID(2),
+					ServiceReplicas: []ranklist.Rank{3, 4, 5},
+					State:           daos.PoolServiceStateReady,
+				},
+			},
+			expPrintStr: `
+Pool     State 
+----     ----- 
+00000001 Ready 
+two      Ready 
+
+`,
+		},
+		"two pools; only one labeled; no query (zero query-mask); verbose": {
+			verbose: true,
+			pools: []*daos.PoolInfo{
+				{
+					UUID:            test.MockPoolUUID(1),
+					ServiceReplicas: []ranklist.Rank{0, 1, 2},
+					State:           daos.PoolServiceStateReady,
+				},
+				{
+					Label:           "two",
+					UUID:            test.MockPoolUUID(2),
+					ServiceReplicas: []ranklist.Rank{3, 4, 5},
+					State:           daos.PoolServiceStateReady,
+				},
+			},
+			expPrintStr: `
+Label UUID                                 State SvcReps 
+----- ----                                 ----- ------- 
+-     00000001-0001-0001-0001-000000000001 Ready [0-2]   
+two   00000002-0002-0002-0002-000000000002 Ready [3-5]   
+
+`,
+		},
+		"two pools; only one labeled; with query": {
 			pools: []*daos.PoolInfo{
 				{
 					UUID:             test.MockPoolUUID(1),
@@ -600,6 +685,7 @@ Pool     Size State Used Imbalance Disabled
 					State:            daos.PoolServiceStateReady,
 					PoolLayoutVer:    1,
 					UpgradeLayoutVer: 2,
+					QueryMask:        daos.DefaultPoolQueryMask,
 				},
 				{
 					Label:            "two",
@@ -612,13 +698,14 @@ Pool     Size State Used Imbalance Disabled
 					State:            daos.PoolServiceStateReady,
 					PoolLayoutVer:    1,
 					UpgradeLayoutVer: 2,
+					QueryMask:        daos.DefaultPoolQueryMask,
 				},
 			},
 			expPrintStr: `
 Pool     Size   State Used Imbalance Disabled UpgradeNeeded? 
 ----     ----   ----- ---- --------- -------- -------------- 
-00000001 6.0 TB Ready 83%  16%       0/16     1->2           
-two      6.0 TB Ready 83%  56%       8/64     1->2           
+00000001 6.0 TB Ready 83%  8%        0/16     1->2           
+two      6.0 TB Ready 83%  27%       8/64     1->2           
 
 `,
 		},
@@ -657,7 +744,7 @@ two      6.0 TB Ready 83%  56%       8/64     1->2
 			expPrintStr: `
 Pool Size   State Used Imbalance Disabled UpgradeNeeded? 
 ---- ----   ----- ---- --------- -------- -------------- 
-one  6.0 TB Ready 83%  16%       0/16     1->2           
+one  6.0 TB Ready 83%  8%        0/16     1->2           
 two  100 GB Ready 80%  56%       8/64     None           
 
 `,
@@ -782,6 +869,34 @@ two   00000002-0002-0002-0002-000000000002 Destroying [3-5]   100 GB   80 GB    
 Label UUID                                 State    SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled UpgradeNeeded? Rebuild State 
 ----- ----                                 -----    ------- -------- -------- ------------- --------- --------- -------------- -------- -------------- ------------- 
 one   00000001-0001-0001-0001-000000000001 Degraded [0-2]   100 GB   80 GB    8%            6.0 TB    5.0 TB    4%             8/16     1->2           busy          
+
+`,
+		},
+		"verbose; one pool; mdonssd": {
+			pools: []*daos.PoolInfo{
+				{
+					Label:            "one",
+					UUID:             test.MockPoolUUID(1),
+					ServiceReplicas:  []ranklist.Rank{0, 1, 2},
+					TierStats:        exampleTierStats,
+					TotalTargets:     16,
+					ActiveTargets:    8,
+					DisabledTargets:  8,
+					State:            daos.PoolServiceStateDegraded,
+					PoolLayoutVer:    1,
+					UpgradeLayoutVer: 2,
+					Rebuild: &daos.PoolRebuildStatus{
+						State: daos.PoolRebuildStateDone,
+					},
+					QueryMask:    daos.DefaultPoolQueryMask,
+					MemFileBytes: 1,
+				},
+			},
+			verbose: true,
+			expPrintStr: `
+Label UUID                                 State    SvcReps Meta Size Meta Used Meta Imbalance Data Size Data Used Data Imbalance Disabled UpgradeNeeded? Rebuild State 
+----- ----                                 -----    ------- --------- --------- -------------- --------- --------- -------------- -------- -------------- ------------- 
+one   00000001-0001-0001-0001-000000000001 Degraded [0-2]   100 GB    80 GB     8%             6.0 TB    5.0 TB    4%             8/16     1->2           done          
 
 `,
 		},

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -190,7 +190,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent, const char *na
 	/** duplicate the file handle for the fuse handle */
 	rc = dfs_dup(dfs->dfs_ns, oh->doh_obj, O_RDWR, &ie->ie_obj);
 	if (rc)
-		D_GOTO(release, rc);
+		D_GOTO(drop_ie, rc);
 
 	oh->doh_writeable = true;
 
@@ -217,14 +217,18 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent, const char *na
 
 	dfuse_compute_inode(dfs, &ie->ie_oid, &ie->ie_stat.st_ino);
 
-	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
+	rc = active_ie_init(ie, NULL);
+	if (rc != -DER_SUCCESS)
+		goto drop_oh;
 
 	/* Return the new inode data, and keep the parent ref */
 	dfuse_reply_entry(dfuse_info, ie, &fi_out, true, req);
 
 	return;
-release:
+drop_oh:
 	dfs_release(oh->doh_obj);
+drop_ie:
+	dfs_release(ie->ie_obj);
 err:
 	DFUSE_REPLY_ERR_RAW(parent, req, rc);
 	dfuse_oh_free(dfuse_info, oh);
