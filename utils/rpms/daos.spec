@@ -16,7 +16,7 @@
 
 Name:          daos
 Version:       2.7.101
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -593,6 +593,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Mon Nov 18 2024 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.7.101-2
+- pmemobj errors and warnings reported via DAOS logging system
+
 * Fri Nov 08 2024 Phillip Henderson <phillip.henderson@intel.com> 2.7.101-1
 - Bump version to 2.7.100
 
