@@ -26,7 +26,7 @@ jobs:
         include:
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:oracular
+            with: ubuntu:noble
     env:
       DEPS_JOBS: 10
       COMPILER: clang
