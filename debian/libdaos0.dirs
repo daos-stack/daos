@@ -4,3 +4,4 @@ usr/lib64/python3.8/site-packages
 usr/lib64/python3.8/site-packages/pydaos
 usr/lib64/python3.8/site-packages/storage_estimator
 usr/lib64/python3.8/site-packages/pydaos/raw
+usr/lib64/python3.8/site-packages/pydaos/torch

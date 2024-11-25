@@ -9,3 +9,4 @@ yamllint==1.37.1
 codespell==2.4.1
 # Used by ci/jira_query.py which pip installs it standalone.
 jira
+torch>=2.2.0
