@@ -16,7 +16,7 @@
 
 Name:          daos
 Version:       2.7.101
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -498,13 +498,18 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{python3_sitearch}/pydaos/*.py
 %dir %{python3_sitearch}/pydaos/raw
 %{python3_sitearch}/pydaos/raw/*.py
+%dir %{python3_sitearch}/pydaos/torch
+%{python3_sitearch}/pydaos/torch/*.py
 %if (0%{?rhel} >= 8)
 %dir %{python3_sitearch}/pydaos/__pycache__
 %{python3_sitearch}/pydaos/__pycache__/*.pyc
 %dir %{python3_sitearch}/pydaos/raw/__pycache__
 %{python3_sitearch}/pydaos/raw/__pycache__/*.pyc
+%dir %{python3_sitearch}/pydaos/torch/__pycache__
+%{python3_sitearch}/pydaos/torch/__pycache__/*.pyc
 %endif
 %{python3_sitearch}/pydaos/pydaos_shim.so
+%{python3_sitearch}/pydaos/torch/torch_shim.so
 %{_datarootdir}/%{name}/ioil-ld-opts
 %config(noreplace) %{conf_dir}/daos_agent.yml
 %{_unitdir}/%{agent_svc_name}
@@ -593,6 +598,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Nov 13 2024 Denis Barakhtanov <dbarahtanov@enakta.com> 2.7.101-2
+- Add pydaos.torch module to daos-client rpm.
+
 * Fri Nov 08 2024 Phillip Henderson <phillip.henderson@intel.com> 2.7.101-1
 - Bump version to 2.7.100
 
