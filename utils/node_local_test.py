@@ -19,6 +19,7 @@ import copy
 import errno
 import functools
 import getpass
+import importlib
 import json
 import os
 import pickle  # nosec
@@ -4495,6 +4496,73 @@ class PosixTests():
                 return
             raise
 
+    def import_torch(self, server):
+        """Return a handle to the pydaos.torch module"""
+        os.environ['D_LOG_MASK'] = 'INFO'
+        os.environ['DAOS_AGENT_DRPC_DIR'] = server.agent_dir
+
+        return importlib.import_module('pydaos.torch')
+
+    @needs_dfuse_with_opt(caching_variants=[False])
+    def test_torch_map_dataset(self):
+        """Check that all files in container are read regardless of the directory level"""
+        test_files = [
+            {"name": "0.txt", "content": b"0", "seen": 0},
+            {"name": "1/l1.txt", "content": b"1", "seen": 0},
+            {"name": "1/2/l2.txt", "content": b"2", "seen": 0},
+            {"name": "1/2/3/l3.txt", "content": b"3", "seen": 0},
+        ]
+
+        for tf in test_files:
+            file = join(self.dfuse.dir, tf["name"])
+            os.makedirs(os.path.dirname(file), exist_ok=True)
+            with open(file, 'wb') as f:
+                f.write(tf["content"])
+
+        torch = self.import_torch(self.server)
+        dataset = torch.Dataset(pool=self.pool.uuid, cont=self.container.uuid)
+
+        assert len(dataset) == len(test_files)
+
+        for _, content in enumerate(dataset):
+            for f in test_files:
+                if f["content"] == content:
+                    f["seen"] += 1
+
+        for f in test_files:
+            assert f["seen"] == 1
+
+        del dataset
+
+    @needs_dfuse_with_opt(caching_variants=[False])
+    def test_torch_iter_dataset(self):
+        """Check that all files in container are read regardless of the directory level"""
+        test_files = [
+            {"name": "0.txt", "content": b"0", "seen": 0},
+            {"name": "1/l1.txt", "content": b"1", "seen": 0},
+            {"name": "1/2/l2.txt", "content": b"2", "seen": 0},
+            {"name": "1/2/3/l3.txt", "content": b"3", "seen": 0},
+        ]
+
+        for tf in test_files:
+            file = join(self.dfuse.dir, tf["name"])
+            os.makedirs(os.path.dirname(file), exist_ok=True)
+            with open(file, 'wb') as f:
+                f.write(tf["content"])
+
+        torch = self.import_torch(self.server)
+        dataset = torch.IterableDataset(pool=self.pool.uuid, cont=self.container.uuid)
+
+        for content in dataset:
+            for f in test_files:
+                if f["content"] == content:
+                    f["seen"] += 1
+
+        for f in test_files:
+            assert f["seen"] == 1
+
+        del dataset
+
 
 class NltStdoutWrapper():
     """Class for capturing stdout from threads"""
@@ -5418,6 +5486,7 @@ def test_pydaos_kv_obj_class(server, conf):
     del container
     daos._cleanup()
     log_test(conf, log_name)
+
 
 # Fault injection testing.
 #
