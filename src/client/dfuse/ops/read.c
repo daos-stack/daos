@@ -385,6 +385,8 @@ chunk_read(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
 	if ((position % K128) != 0)
 		return false;
 
+	return false;
+
 	last = D_ALIGNUP(position + len - 1, CHUNK_SIZE);
 
 	if (last > oh->doh_ie->ie_stat.st_size)
@@ -575,6 +577,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	 */
 	D_SPIN_LOCK(&active->lock);
 	{
+#if 0
 		struct dfuse_event *evc;
 
 		d_list_for_each_entry(evc, &active->open_reads, de_read_list) {
@@ -585,6 +588,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 				return;
 			}
 		}
+#endif
 		d_list_add_tail(&ev->de_read_list, &active->open_reads);
 	}
 	D_SPIN_UNLOCK(&active->lock);
