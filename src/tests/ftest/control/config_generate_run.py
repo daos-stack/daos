@@ -82,4 +82,5 @@ class ConfigGenerateRun(TestWithServers):
             self.start_server_managers(force=True)
         except ServerFailed as error:
             self.fail(f"Restarting server failed! {error}")
+
         self.log.info("Test passed")
