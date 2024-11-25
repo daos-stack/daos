@@ -1024,7 +1024,7 @@ struct dfuse_inode_entry {
 struct active_inode {
 	d_list_t               chunks;
 	pthread_spinlock_t     lock;
-	ATOMIC uint64_t    read_count;
+	ATOMIC uint64_t        read_count;
 	struct dfuse_pre_read *readahead;
 };
 
