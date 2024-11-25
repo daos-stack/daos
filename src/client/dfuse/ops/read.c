@@ -506,9 +506,11 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 
 	if (oh->doh_linear_read_eof && position == oh->doh_linear_read_pos) {
 		reached_eof = true;
+#if 0
 	} else if (active->seen_eof) {
 		if (position >= active->file_size)
 			reached_eof = true;
+#endif
 	}
 
 	if (reached_eof) {
