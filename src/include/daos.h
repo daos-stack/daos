@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -45,17 +45,6 @@ daos_init(void);
  */
 int
 daos_fini(void);
-
-/**
- * Reinitialize DAOS library after a fork call.
- * For applications that initialize DAOS and then call fork without exec, some
- * internal data structures must be reinitialized in the child process.
- * It is recommended to call this function from a fork handler registered via
- * pthread_atfork(). If any event queues were created prior to the fork call,
- * those must be re-created in the child process.
- */
-int
-daos_reinit(void);
 
 #if defined(__cplusplus)
 }
