@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -280,11 +280,12 @@ daos_pool_info_t	ds_mgmt_pool_query_info_out;
 daos_pool_info_t	ds_mgmt_pool_query_info_in;
 void			*ds_mgmt_pool_query_info_ptr;
 d_rank_list_t		*ds_mgmt_pool_query_ranks_out;
+d_rank_list_t           *ds_mgmt_pool_query_suspect_ranks_out;
 
 int
 ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **ranks,
-		   daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
-		   uint32_t *upgrade_layout_ver)
+		   d_rank_list_t **suspect_ranks, daos_pool_info_t *pool_info,
+		   uint32_t *pool_layout_ver, uint32_t *upgrade_layout_ver)
 {
 	/* If function is to return with an error, pool_info and ranks will not be filled. */
 	if (ds_mgmt_pool_query_return != 0)
@@ -300,6 +301,13 @@ ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **r
 		*ranks = d_rank_list_alloc(8);		/* 0-7 ; caller must free this */
 		ds_mgmt_pool_query_ranks_out = *ranks;
 	}
+	if ((pool_info->pi_bits & DPI_ENGINES_SUSPECT) != 0) {
+		D_ASSERT(suspect_ranks != NULL);
+
+		*suspect_ranks = d_rank_list_alloc(2); /* 0-1 ; caller must free this */
+		ds_mgmt_pool_query_suspect_ranks_out = *suspect_ranks;
+	}
+
 	return ds_mgmt_pool_query_return;	/* 0 */
 }
 
@@ -311,6 +319,7 @@ mock_ds_mgmt_pool_query_setup(void)
 	ds_mgmt_pool_query_info_ptr = NULL;
 	memset(&ds_mgmt_pool_query_info_out, 0, sizeof(daos_pool_info_t));
 	ds_mgmt_pool_query_ranks_out = NULL;
+	ds_mgmt_pool_query_suspect_ranks_out = NULL;
 }
 
 int			ds_mgmt_pool_query_targets_return;
