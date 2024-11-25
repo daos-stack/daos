@@ -615,7 +615,7 @@ umempobj_get_heapusage(struct umem_pool *ph_p, daos_size_t *curr_allocated)
  *  statistics for an evictable memory bucket can be approximate value if
  *  memory bucket is not yet loaded on to the umem cache.
  *
- *  \param	pool[IN]		Pointer to the persistent object.
+ *  \param	ph_p[IN]		Pointer to the persistent object.
  *  \param	mb_id[IN]		memory bucket id.
  *  \param	curr_allocated[IN|OUT]	Total bytes currently allocated
  *  \param	maxsz[IN|OUT]	        Max size the memory bucket can grow.
@@ -649,6 +649,23 @@ umempobj_get_mbusage(struct umem_pool *ph_p, uint32_t mb_id, daos_size_t *curr_a
 	}
 
 	return rc;
+}
+
+/** Force GC within the heap to optimize umem_cache usage. This is only
+ *  with DAV v2 allocator.
+ *
+ *  \param	ph_p[IN]		Pointer to the persistent object.
+ *
+ *  \return	zero on success and non-zero on failure.
+ */
+int
+umem_heap_gc(struct umem_instance *umm)
+{
+	struct umem_pool *ph_p = umm->umm_pool;
+
+	if (ph_p->up_store.store_type == DAOS_MD_BMEM_V2)
+		return dav_force_gc_v2((dav_obj_t *)ph_p->up_priv);
+	return 0;
 }
 
 /** Log fragmentation related info for the pool.

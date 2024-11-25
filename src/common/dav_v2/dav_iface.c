@@ -237,6 +237,8 @@ dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct
 		palloc_heap_vg_open(hdl->do_heap, 1);
 #endif
 
+	dav_force_gc_v2(hdl);
+
 	hdl->do_booted = 1;
 
 	return hdl;
