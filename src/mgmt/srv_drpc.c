@@ -421,6 +421,7 @@ static int pool_create_fill_resp(Mgmt__PoolCreateResp *resp, uuid_t uuid, d_rank
 		resp->tier_bytes[index] =
 			pool_info.pi_space.ps_space.s_total[index] / resp->n_tgt_ranks;
 	}
+	resp->mem_file_bytes = pool_info.pi_space.ps_space.s_total_mem;
 
 out:
 	d_rank_list_free(enabled_ranks);
@@ -515,14 +516,6 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	rc = pool_create_fill_resp(&resp, pool_uuid, svc);
 	d_rank_list_free(svc);
-
-	/**
-	 * TODO DAOS-16209: Populate per-rank VOS-file sizes. For now just calculate here based on
-	 *                  the supplied input values but really should be returned from
-	 *                  ds_mgmt_pool_query() through the VOS query API and set in
-	 *                  pool_create_fill_resp(). Return zero for non-MD-on-SSD mode.
-	 */
-	resp.mem_file_bytes = req->tier_bytes[DAOS_MEDIA_SCM] * req->mem_ratio;
 
 out:
 	resp.status = rc;
@@ -1846,12 +1839,7 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	pool_rebuild_status_from_info(&rebuild, &pool_info.pi_rebuild_st);
 	resp.rebuild = &rebuild;
 
-	/**
-	 * TODO DAOS-16209: Populate VOS-file sizes in response. For now just return the meta-blob
-	 *                  size until VOS query API is updated. When updated, zero-value should
-	 *                  be returned in non-MD-on-SSD mode.
-	 */
-	resp.mem_file_bytes = scm.total;
+	resp.mem_file_bytes = pool_info.pi_space.ps_space.s_total_mem;
 
 error:
 	resp.status = rc;
