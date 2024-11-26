@@ -535,7 +535,7 @@ crt_rpc_complete_and_unlock(struct crt_rpc_priv *rpc_priv, int rc)
 
 		if (cbinfo.cci_rc != 0)
 			RPC_CWARN(crt_quiet_error(cbinfo.cci_rc), DB_NET, rpc_priv,
-				 "failed, " DF_RC "\n", DP_RC(cbinfo.cci_rc));
+				  "failed, " DF_RC "\n", DP_RC(cbinfo.cci_rc));
 
 		RPC_TRACE(DB_TRACE, rpc_priv,
 			  "Invoking RPC callback (rank %d tag %d) rc: "

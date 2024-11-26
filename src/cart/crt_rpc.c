@@ -887,7 +887,7 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 	ul_out = crt_reply_get(lookup_rpc);
 
 	if (ul_out->ul_rc != 0) {
-		RPC_WARN(chained_rpc_priv, "URI_LOOKUP returned rc="DF_RC"\n",
+		RPC_WARN(chained_rpc_priv, "URI_LOOKUP returned rc=" DF_RC "\n",
 			 DP_RC(ul_out->ul_rc));
 		D_GOTO(retry, rc = ul_out->ul_rc);
 	}

@@ -546,7 +546,7 @@ proto_query_cb(const struct crt_cb_info *cb_info)
 	D_FREE(rpc_req_input->pq_ver.iov_buf);
 
 	if (cb_info->cci_rc != 0) {
-		D_WARN("rpc (opc: %#x) failed: "DF_RC"\n", rpc_req->cr_opc,
+		D_WARN("rpc (opc: %#x) failed: " DF_RC "\n", rpc_req->cr_opc,
 		       DP_RC(cb_info->cci_rc));
 		D_GOTO(out, user_cb_info.pq_rc = cb_info->cci_rc);
 	}

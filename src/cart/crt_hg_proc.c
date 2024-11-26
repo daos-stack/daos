@@ -713,8 +713,9 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 		rc2 = rpc_priv->crp_reply_hdr.cch_rc;
 		if (rc2 != 0) {
 			RPC_CWARN(crt_quiet_error(rc2), DB_NET, rpc_priv,
-				 "RPC failed to execute on target. "
-				 "error code: "DF_RC"\n", DP_RC(rc2));
+				  "RPC failed to execute on target. "
+				  "error code: " DF_RC "\n",
+				  DP_RC(rc2));
 
 			D_GOTO(out, rc);
 		}

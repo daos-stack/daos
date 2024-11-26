@@ -92,12 +92,12 @@
 			RPC_ERROR(rpc, fmt, ## __VA_ARGS__);		\
 	} while (0)
 
-#define RPC_CWARN(cond, mask, rpc, fmt, ...)				\
-	do {								\
-		if (cond)						\
-			RPC_TRACE(mask, rpc, fmt, ## __VA_ARGS__);	\
-		else							\
-			RPC_WARN(rpc, fmt, ## __VA_ARGS__);		\
+#define RPC_CWARN(cond, mask, rpc, fmt, ...)                                                       \
+	do {                                                                                       \
+		if (cond)                                                                          \
+			RPC_TRACE(mask, rpc, fmt, ##__VA_ARGS__);                                  \
+		else                                                                               \
+			RPC_WARN(rpc, fmt, ##__VA_ARGS__);                                         \
 	} while (0)
 
 #ifdef CRT_DEBUG_TRACE
