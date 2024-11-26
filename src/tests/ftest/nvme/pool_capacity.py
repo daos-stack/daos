@@ -186,8 +186,7 @@ class NvmePoolCapacity(TestWithServers):
             # Destroy the last num_pool pools created
             offset = loop_count * num_pool
             for index in range(offset, offset + num_pool):
-                display_string = "Pool {} space at the End".format(
-                    self.pool[index].uuid)
+                display_string = "{} space at the End".format(str(self.pool[index]))
                 self.pool[index].display_pool_daos_space(display_string)
                 self.pool[index].destroy()
 

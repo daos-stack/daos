@@ -329,8 +329,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             list: a list of DaosObj created.
 
         """
-        self.log.info("Creating dataset in %s/%s",
-                      str(cont.pool.uuid), str(cont.uuid))
+        self.log.info("Creating dataset in %s/%s", str(cont.pool), str(cont))
 
         cont.open()
 
@@ -400,8 +399,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             akey_extents (list): varying number of akey extents to iterate.
 
         """
-        self.log.info("Verifying dataset in %s/%s",
-                      str(cont.pool.uuid), str(cont.uuid))
+        self.log.info("Verifying dataset in %s/%s", str(cont.pool), str(cont))
 
         cont.open()
 
