@@ -93,10 +93,10 @@ message SystemDrainResp
 	{
 		int32  status  = 1; // Status of the evict on the specific pool
 		string msg     = 2; // Error message if status indicates an error
-		string pool_id = 3; // uuid of pool
-		string ranks   = 4; // rankset to have been drained on pool
+		string pool_id = 3; // Label or uuid of pool
+		string ranks   = 4; // Rank-set that has encountered this result
 	}
-	repeated DrainResult results = 1; // Results for individual pool-ranks drain calls.
+	repeated DrainResult results = 1; // Results for pool-ranks drain calls.
 }
 
 // SystemQueryReq supplies system query parameters.

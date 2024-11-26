@@ -289,7 +289,7 @@ func (cmd *systemExcludeCmd) execute(clear bool) error {
 	}
 	cmd.Infof("updated ranks: %s", updated)
 
-	return nil
+	return resp.Errors()
 }
 
 func (cmd *systemExcludeCmd) Execute(_ []string) error {
@@ -306,7 +306,6 @@ func (cmd *systemClearExcludeCmd) Execute(_ []string) error {
 
 type systemDrainCmd struct {
 	baseRankListCmd
-	Verbose bool `long:"verbose" short:"v" description:"Output additional system drain information"`
 }
 
 func (cmd *systemDrainCmd) Execute(_ []string) (errOut error) {
@@ -335,19 +334,11 @@ func (cmd *systemDrainCmd) Execute(_ []string) (errOut error) {
 		return cmd.OutputJSON(resp, resp.Errors())
 	}
 
-	var out, outErr strings.Builder
-	if err := pretty.PrintSystemDrainResponse(&out, &outErr, resp, cmd.Verbose); err != nil {
-		return err
-	}
-	if outErr.String() != "" {
-		cmd.Error(outErr.String())
-	}
+	var out strings.Builder
+	pretty.PrintSystemDrainResponse(&out, resp)
+	cmd.Info(out.String())
 
-	// Infof prints raw string and doesn't try to expand "%"
-	// preserving column formatting in txtfmt table
-	cmd.Infof("%s", out.String())
-
-	return nil
+	return resp.Errors()
 }
 
 type systemCleanupCmd struct {
@@ -376,17 +367,14 @@ func (cmd *systemCleanupCmd) Execute(_ []string) (errOut error) {
 		return cmd.OutputJSON(resp, resp.Errors())
 	}
 
-	var out, outErr strings.Builder
-	if err := pretty.PrintSystemCleanupResponse(&out, &outErr, resp, cmd.Verbose); err != nil {
-		return err
-	}
-	if outErr.String() != "" {
-		cmd.Error(outErr.String())
+	var out strings.Builder
+	pretty.PrintSystemCleanupResponse(&out, resp, cmd.Verbose)
+
+	if resp.Errors() != nil {
+		cmd.Error(resp.Errors().Error())
 	}
 
-	// Infof prints raw string and doesn't try to expand "%"
-	// preserving column formatting in txtfmt table
-	cmd.Infof("%s", out.String())
+	cmd.Info(out.String())
 
 	return resp.Errors()
 }

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -637,7 +637,7 @@ type SystemDrainResp struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Results []*SystemDrainResp_DrainResult `protobuf:"bytes,1,rep,name=results,proto3" json:"results,omitempty"` // Results for individual pool-ranks drain calls.
+	Results []*SystemDrainResp_DrainResult `protobuf:"bytes,1,rep,name=results,proto3" json:"results,omitempty"` // Results for pool-ranks drain calls.
 }
 
 func (x *SystemDrainResp) Reset() {
@@ -1359,8 +1359,8 @@ type SystemDrainResp_DrainResult struct {
 
 	Status int32  `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"`              // Status of the evict on the specific pool
 	Msg    string `protobuf:"bytes,2,opt,name=msg,proto3" json:"msg,omitempty"`                     // Error message if status indicates an error
-	PoolId string `protobuf:"bytes,3,opt,name=pool_id,json=poolId,proto3" json:"pool_id,omitempty"` // uuid of pool
-	Ranks  string `protobuf:"bytes,4,opt,name=ranks,proto3" json:"ranks,omitempty"`                 // rankset to have drained on poolexclude
+	PoolId string `protobuf:"bytes,3,opt,name=pool_id,json=poolId,proto3" json:"pool_id,omitempty"` // Label or uuid of pool
+	Ranks  string `protobuf:"bytes,4,opt,name=ranks,proto3" json:"ranks,omitempty"`                 // Rank-set that has encountered this result
 }
 
 func (x *SystemDrainResp_DrainResult) Reset() {

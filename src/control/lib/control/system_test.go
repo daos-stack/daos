@@ -1127,7 +1127,7 @@ func TestControl_SystemDrain(t *testing.T) {
 					},
 				},
 			},
-			expRespErr: errors.New("fail1, fail2"),
+			expRespErr: errors.New("pool 00000001-0001-0001-0001-000000000001 ranks 1: fail1, pool 00000002-0002-0002-0002-000000000002 ranks 1: fail2"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

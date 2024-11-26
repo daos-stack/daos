@@ -595,7 +595,8 @@ type SystemDrainResp struct {
 func (sdr *SystemDrainResp) Errors() (errOut error) {
 	for _, r := range sdr.Results {
 		if r.Status != int32(daos.Success) {
-			errOut = concatErrs(errOut, errors.New(r.Msg))
+			errOut = concatErrs(errOut,
+				errors.Errorf("pool %s ranks %s: %s", r.PoolID, r.Ranks, r.Msg))
 		}
 	}
 

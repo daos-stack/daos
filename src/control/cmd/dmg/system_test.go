@@ -259,8 +259,18 @@ func TestDmg_SystemCommands(t *testing.T) {
 			errNoRanks,
 		},
 		{
+			"system drain with multiple hosts",
+			"system drain --rank-hosts foo-[0,1,4]",
+			strings.Join([]string{
+				printRequest(t, withSystem(
+					withHosts(&control.SystemDrainReq{}, "foo-[0-1,4]"),
+					"daos_server")),
+			}, " "),
+			nil,
+		},
+		{
 			"system drain with multiple ranks",
-			"system drain --ranks 0,1,4 -v",
+			"system drain --ranks 0,1,4",
 			strings.Join([]string{
 				printRequest(t, withSystem(
 					withRanks(&control.SystemDrainReq{}, 0, 1, 4),
@@ -270,13 +280,13 @@ func TestDmg_SystemCommands(t *testing.T) {
 		},
 		{
 			"system drain without ranks",
-			"system drain -v",
+			"system drain",
 			"",
 			errNoRanks,
 		},
 		{
 			"system cleanup with machine name",
-			"system cleanup foo1 -v",
+			"system cleanup foo1",
 			strings.Join([]string{
 				printRequest(t, withSystem(&control.SystemCleanupReq{
 					Machine: "foo1",

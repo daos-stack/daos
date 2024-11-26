@@ -1847,6 +1847,7 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 		drpcResp    *mgmtpb.PoolDrainResp
 		drpcErr     error
 		poolRanks   map[string]string
+		useLabels   bool
 		expResp     *mgmtpb.SystemDrainResp
 		expErr      error
 	}{
@@ -1906,8 +1907,7 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 			},
 			expResp: &mgmtpb.SystemDrainResp{
 				Results: []*mgmtpb.SystemDrainResp_DrainResult{
-					{PoolId: test.MockUUID(1), Ranks: "0"},
-					{PoolId: test.MockUUID(1), Ranks: "1"},
+					{PoolId: test.MockUUID(1), Ranks: "0-1"},
 					{PoolId: test.MockUUID(2), Ranks: "1"},
 				},
 			},
@@ -1929,13 +1929,31 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 			},
 			expResp: &mgmtpb.SystemDrainResp{
 				Results: []*mgmtpb.SystemDrainResp_DrainResult{
-					{PoolId: test.MockUUID(1), Ranks: "0"},
-					{PoolId: test.MockUUID(1), Ranks: "1"},
-					{PoolId: test.MockUUID(1), Ranks: "2"},
-					{PoolId: test.MockUUID(1), Ranks: "3"},
-					{PoolId: test.MockUUID(2), Ranks: "1"},
-					{PoolId: test.MockUUID(2), Ranks: "2"},
-					{PoolId: test.MockUUID(2), Ranks: "3"},
+					{PoolId: test.MockUUID(1), Ranks: "0-3"},
+					{PoolId: test.MockUUID(2), Ranks: "1-3"},
+				},
+			},
+		},
+		"matching hosts; multiple pools; pool labels": {
+			req: &mgmtpb.SystemDrainReq{
+				// Resolves to ranks 0-3.
+				Hosts: fmt.Sprintf("%s,%s", test.MockHostAddr(1),
+					test.MockHostAddr(2)),
+			},
+			poolRanks: map[string]string{
+				test.MockUUID(1): "0-4",
+				test.MockUUID(2): "1-7",
+			},
+			useLabels: true,
+			drpcResp:  &mgmtpb.PoolDrainResp{},
+			expDrpcReqs: []*mgmtpb.PoolDrainReq{
+				dReq(1, 0), dReq(1, 1), dReq(1, 2), dReq(1, 3),
+				dReq(2, 1), dReq(2, 2), dReq(2, 3),
+			},
+			expResp: &mgmtpb.SystemDrainResp{
+				Results: []*mgmtpb.SystemDrainResp_DrainResult{
+					{PoolId: "00000001", Ranks: "0-3"},
+					{PoolId: "00000002", Ranks: "1-3"},
 				},
 			},
 		},
@@ -1944,23 +1962,26 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				mockMember(t, 2, 0, "errored"),
 				mockMember(t, 1, 0, "excluded"),
 			},
-			req:       &mgmtpb.SystemDrainReq{Ranks: "1-2"},
-			poolRanks: map[string]string{test.MockUUID(1): "1-2"},
-			drpcResp:  &mgmtpb.PoolDrainResp{Status: -1},
+			req: &mgmtpb.SystemDrainReq{Ranks: "1-2"},
+			poolRanks: map[string]string{
+				test.MockUUID(1): "0-4",
+				test.MockUUID(2): "1-7",
+			},
+			drpcResp: &mgmtpb.PoolDrainResp{Status: -1},
 			expDrpcReqs: []*mgmtpb.PoolDrainReq{
-				dReq(1, 1), dReq(1, 2),
+				dReq(1, 1), dReq(1, 2), dReq(2, 1), dReq(2, 2),
 			},
 			expResp: &mgmtpb.SystemDrainResp{
 				Results: []*mgmtpb.SystemDrainResp_DrainResult{
 					{
 						PoolId: test.MockUUID(1),
-						Ranks:  "1",
+						Ranks:  "1-2",
 						Status: -1,
 						Msg:    "DER_UNKNOWN(-1): Unknown error code -1",
 					},
 					{
-						PoolId: test.MockUUID(1),
-						Ranks:  "2",
+						PoolId: test.MockUUID(2),
+						Ranks:  "1-2",
 						Status: -1,
 						Msg:    "DER_UNKNOWN(-1): Unknown error code -1",
 					},
@@ -1987,9 +2008,14 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 			svc := mgmtSystemTestSetup(t, log, tc.members, nil)
 
 			for uuidStr, ranksStr := range tc.poolRanks {
+				var label string
+				if tc.useLabels {
+					label = uuidStr[:8]
+				}
 				addTestPoolService(t, svc.sysdb, &system.PoolService{
-					PoolUUID: uuid.MustParse(uuidStr),
-					State:    system.PoolServiceStateReady,
+					PoolUUID:  uuid.MustParse(uuidStr),
+					PoolLabel: label,
+					State:     system.PoolServiceStateReady,
 					Storage: &system.PoolServiceStorage{
 						CurrentRankStr: ranksStr,
 					},

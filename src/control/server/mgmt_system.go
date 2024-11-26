@@ -1104,20 +1104,21 @@ func (svc *mgmtSvc) SystemDrain(ctx context.Context, req *mgmtpb.SystemDrainReq)
 		return nil, err
 	}
 
-	resp := new(mgmtpb.SystemDrainResp)
-	drainReq := new(mgmtpb.PoolDrainReq)
-	drainReq.Sys = req.Sys
-
 	ranksMap := make(map[ranklist.Rank]struct{})
 	for _, r := range hitRanks.Ranks() {
 		ranksMap[r] = struct{}{}
 	}
 
 	poolRanks := make(map[string]*ranklist.RankSet)
-	poolIDs := []string{}
+	poolIDs := []string{} // Label or UUID.
 	for _, ps := range psList {
 		currentRanks := ps.Storage.CurrentRanks()
-		poolID := ps.PoolUUID.String()
+
+		// Label preferred over UUID.
+		poolID := ps.PoolLabel
+		if poolID == "" {
+			poolID = ps.PoolUUID.String()
+		}
 
 		svc.log.Tracef("pool-service detected: id %s, ranks %v", poolID, currentRanks)
 
@@ -1136,11 +1137,17 @@ func (svc *mgmtSvc) SystemDrain(ctx context.Context, req *mgmtpb.SystemDrainReq)
 
 	sort.Strings(poolIDs)
 
+	resp := new(mgmtpb.SystemDrainResp)
+	drainReq := new(mgmtpb.PoolDrainReq)
+	drainReq.Sys = req.Sys
+
 	for _, id := range poolIDs {
 		rs := poolRanks[id]
 		if rs.Count() == 0 {
 			continue
 		}
+		drained := ranklist.MustCreateRankSet("")
+		failed := make(map[string]*ranklist.RankSet)
 
 		// Use our incoming request and just replace relevant parameters on each iteration.
 		drainReq.Id = id
@@ -1168,11 +1175,39 @@ func (svc *mgmtSvc) SystemDrain(ctx context.Context, req *mgmtpb.SystemDrainReq)
 			svc.log.Tracef("pool-drain triggered from system-drain: %+v (req: %+v)",
 				drainResp, drainReq)
 
+			// Each rank-drain failure message will produce a single result.
+			if drainResp.Status != 0 {
+				if _, exists := failed[errMsg]; !exists {
+					failed[errMsg] = ranklist.MustCreateRankSet("")
+				}
+				failed[errMsg].Add(r)
+			} else {
+				drained.Add(ranklist.Rank(drainReq.Rank))
+			}
+		}
+
+		// Single result generated for all ranks drained successfully.
+		if drained.Count() > 0 {
 			resp.Results = append(resp.Results, &mgmtpb.SystemDrainResp_DrainResult{
-				Status: drainResp.Status,
-				Msg:    errMsg,
-				PoolId: drainReq.Id,
-				Ranks:  fmt.Sprintf("%d", drainReq.Rank),
+				PoolId: id,
+				Ranks:  drained.String(),
+			})
+		}
+
+		var msgs []string
+		for msg := range failed {
+			msgs = append(msgs, msg)
+		}
+		sort.Strings(msgs)
+
+		// Result generated for each failure message rank-group.
+		for _, msg := range msgs {
+			resp.Results = append(resp.Results, &mgmtpb.SystemDrainResp_DrainResult{
+				// Status already included in error message.
+				Status: -1,
+				Msg:    msg,
+				PoolId: id,
+				Ranks:  failed[msg].String(),
 			})
 		}
 	}
