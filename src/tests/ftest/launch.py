@@ -282,7 +282,8 @@ class Launch():
             else:
                 set_test_environment(
                     logger, test_env, args.test_servers, args.test_clients, args.provider,
-                    args.insecure_mode, self.details)
+                    args.insecure_mode, self.details, args.agent_user, args.test_log_dir,
+                    args.systemd_path, args.systemd_lib_path)
         except TestEnvironmentException as error:
             message = f"Error setting up test environment: {str(error)}"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
@@ -320,12 +321,13 @@ class Launch():
             return self.get_exit_status(0, "Listing tests complete")
 
         # Setup the fuse configuration
-        try:
-            setup_fuse_config(logger, args.test_servers | args.test_clients)
-        except LaunchException:
-            # Warn but don't fail
-            message = "Issue detected setting up the fuse configuration"
-            setup_result.warn_test(logger, "Setup", message, sys.exc_info())
+        if args.fuse_setup:
+            try:
+                setup_fuse_config(logger, args.test_servers | args.test_clients)
+            except LaunchException:
+                # Warn but don't fail
+                message = "Issue detected setting up the fuse configuration"
+                setup_result.warn_test(logger, "Setup", message, sys.exc_info())
 
         # Setup override systemctl files
         try:
@@ -358,8 +360,8 @@ class Launch():
             group.update_test_yaml(
                 logger, args.scm_size, args.scm_mount, args.extra_yaml,
                 args.timeout_multiplier, args.override, args.verbose, args.include_localhost)
-        except (RunException, YamlException) as e:
-            message = "Error modifying the test yaml files: {}".format(e)
+        except (RunException, YamlException) as error:
+            message = f"Error modifying the test yaml files: {error}"
             status |= self.get_exit_status(1, message, "Setup", sys.exc_info())
         except StorageException:
             message = "Error detecting storage information for test yaml files"
@@ -541,6 +543,12 @@ def main():
         action="store_true",
         help="archive host log files in the avocado job-results directory")
     parser.add_argument(
+        "-au", "--agent_user",
+        action="store",
+        default=None,
+        type=str,
+        help="user account to use when running the daos_agent")
+    parser.add_argument(
         "-c", "--clear_mounts",
         action="append",
         default=[],
@@ -563,6 +571,10 @@ def main():
         action="store_true",
         help="stop the test suite after the first failure")
     parser.add_argument(
+        "-fs", "--fuse_setup",
+        action="store_true",
+        help="enable setting up fuse configuration files")
+    parser.add_argument(
         "-i", "--include_localhost",
         action="store_true",
         help="include the local host when cleaning and archiving")
@@ -584,7 +596,7 @@ def main():
         help="modify the test yaml files but do not run the tests")
     parser.add_argument(
         "-mo", "--mode",
-        choices=['normal', 'manual', 'ci'],
+        choices=['normal', 'manual', 'ci', 'custom_a'],
         default='normal',
         help="provide the mode of test to be run under. Default is normal, "
              "in which the final return code of launch.py is still zero if "
@@ -650,6 +662,18 @@ def main():
         action="store_true",
         help="enable installing slurm RPMs if required by the tests")
     parser.add_argument(
+        "-sl", "--systemd_lib_path",
+        action="store",
+        default=None,
+        type=str,
+        help="the daos_server and daos_agent systemd LD_LIBRARY_PATH to define in the config")
+    parser.add_argument(
+        "-sp", "--systemd_path",
+        action="store",
+        default=None,
+        type=str,
+        help="the daos_server and daos_agent systemd PATH to define in the config")
+    parser.add_argument(
         "--scm_mount",
         action="store",
         default="/mnt/daos",
@@ -681,6 +705,12 @@ def main():
         default=NodeSet(),
         help="comma-separated list of hosts to use as replacement values for "
              "client placeholders in each test's yaml file")
+    parser.add_argument(
+        "-tld", "--test_log_dir",
+        action="store",
+        default=None,
+        type=str,
+        help="test log directory base path")
     parser.add_argument(
         "-th", "--logs_threshold",
         action="store",
@@ -744,9 +774,21 @@ def main():
         args.slurm_install = True
         args.slurm_setup = True
         args.user_create = True
+        args.fuse_setup = True
         args.clear_mounts.append("/mnt/daos")
         args.clear_mounts.append("/mnt/daos0")
         args.clear_mounts.append("/mnt/daos1")
+
+    elif args.mode == "custom_a":
+        if args.agent_user is None:
+            # Run the agent with the current user by default
+            args.agent_user = getpass.getuser()
+        args.process_cores = False
+        args.logs_threshold = None
+        args.slurm_install = False
+        args.slurm_setup = False
+        args.user_create = False
+        args.fuse_setup = False
 
     # Setup the Launch object
     launch = Launch(args.name, args.mode, args.slurm_install, args.slurm_setup)

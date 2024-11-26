@@ -1,5 +1,5 @@
 """
-(C) Copyright 2021-2023 Intel Corporation.
+(C) Copyright 2021-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -206,7 +206,9 @@ class ManagementServiceResilience(TestWithServers):
             kill_list.remove(kill_list[-1])
             kill_list.add(leader)
         self.log.info("*** stopping leader (%s) + %d others: %s", leader, num_hosts - 1, kill_list)
-        stop_processes(self.log, kill_list, self.server_managers[0].manager.job.command_regex)
+        stop_processes(
+            self.log, kill_list, self.server_managers[0].manager.job.command_regex,
+            user=self.server_managers[0].manager.job.run_user)
 
         kill_ranks = self.server_managers[0].get_host_ranks(kill_list)
         self.assertGreaterEqual(len(kill_ranks), len(kill_list),

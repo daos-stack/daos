@@ -246,6 +246,11 @@ class DaosAgentManager(SubprocessManager):
                 # systemctl and the process are run as the user
                 self.manager.job.certificate_owner = self.manager.job.run_user
 
+        # Set whether or not the socket directory creation requires privileged access
+        self.__verify_privileged = False
+        if self.manager.job.run_user == "root":
+            self.__verify_privileged = True
+
         # Set default agent debug levels
         env_vars = {
             "D_LOG_MASK": "DEBUG,RPC=ERR",
@@ -256,9 +261,6 @@ class DaosAgentManager(SubprocessManager):
         self.manager.assign_environment_default(EnvironmentVariables(env_vars))
         self.attachinfo = None
         self.outputdir = outputdir
-
-        # Support disabling verifying the socket directory (runtime_dir) for tests
-        self.verify_socket_dir = True
 
     def _set_hosts(self, hosts, path, slots):
         """Set the hosts used to execute the daos command.
@@ -279,16 +281,15 @@ class DaosAgentManager(SubprocessManager):
     def start(self):
         """Start the agent through the job manager."""
         self.log.info(
-            "<AGENT> Starting daos_agent on %s with %s",
-            self._hosts, self.manager.command)
+            "<AGENT> Starting daos_agent on %s with %s using the %s user",
+            self._hosts, self.manager.command, self.manager.job.run_user)
 
         # Copy certificates
-        self.manager.job.copy_certificates(
-            get_log_file("daosCA/certs"), self._hosts)
+        self.manager.job.copy_certificates(get_log_file("daosCA/certs"), self._hosts)
 
         # Verify the socket directory exists when using a non-systemctl manager
-        if self.verify_socket_dir:
-            self.verify_socket_directory(self.manager.job.certificate_owner)
+        self.manager.job.verify_socket_directory(
+            self.manager.job.certificate_owner, self._hosts, privileged=self.__verify_privileged)
 
         super().start()
 

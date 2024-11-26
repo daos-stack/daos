@@ -102,7 +102,7 @@ def stop_service(logger, hosts, service, user="root"):
                 else:
                     # Issue the appropriate systemctl command to remedy the
                     # detected state, e.g. 'stop' for 'active'.
-                    command = command_as_user(get_systemctl_command(key, service, user), user)
+                    command = get_systemctl_command(key, service, user)
                     run_remote(logger, result[key], command)
 
                     # Run the status check again on this group of hosts
@@ -125,12 +125,12 @@ def get_systemctl_command(unit_command, service, user="root"):
     """
     command = ["systemctl"]
     if user != "root":
-        command.append(f"--user {user}")
+        command.append("--user")
     if unit_command:
         command.append(unit_command)
     if service:
         command.append(service)
-    return " ".join(command)
+    return command_as_user(" ".join(command), user)
 
 
 def get_service_file(logger, hosts, service, user, verbose=True, timeout=120):
@@ -190,6 +190,10 @@ def create_override_config(logger, hosts, service, user, service_command, servic
     Returns:
         str: the systemctl override config file path
     """
+    # Reload since teardown removes the files
+    if not daemon_reload(logger, hosts, user, verbose, timeout).passed:
+        raise SystemctlFailure("Error reloading systemctl daemon before override config directory")
+
     # Get the existing service file
     service_file = get_service_file(logger, hosts, service, user, verbose, timeout)
 

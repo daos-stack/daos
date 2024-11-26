@@ -129,12 +129,14 @@ def setup_systemctl(logger, servers, clients, test_env):
         __add_systemctl_override(
             logger, servers, "daos_server.service", "root",
             os.path.join(test_env.daos_prefix, "bin", "daos_server"), test_env.server_config,
-            None, None))
+            test_env.systemd_path, test_env.systemd_library_path))
     systemctl_configs.update(
         __add_systemctl_override(
             logger, clients, "daos_agent.service", test_env.agent_user,
             os.path.join(test_env.daos_prefix, "bin", "daos_agent"), test_env.agent_config,
-            None, None))
+            test_env.systemd_path, test_env.systemd_library_path))
+    for config, details in systemctl_configs.items():
+        run_remote(logger, details["hosts"], f"cat {config}")
     return systemctl_configs
 
 
@@ -601,8 +603,12 @@ class TestRunner():
         hosts = test.host_info.all_hosts
         hosts.add(self.local_host)
         logger.debug("Setting up '%s' on %s:", test_env.log_dir, hosts)
+        # Attempt to remove the directory w/o sudo first and then with sudo if that doesn't work.
+        # This is needed for daos user home directory cleanup on clients as well as control metadata
+        # path cleanup on servers.
+        rm_command = f"rm -fr {test_env.log_dir}"
         commands = [
-            f"sudo -n rm -fr {test_env.log_dir}",
+            f"{rm_command} || {command_as_user(rm_command, 'root')}",
             f"mkdir -p {test_env.log_dir}",
             f"chmod a+wrx {test_env.log_dir}",
         ]
@@ -612,11 +618,10 @@ class TestRunner():
             directories.append(os.path.join(test_env.log_dir, directory))
         commands.append(f"mkdir -p {' '.join(directories)}")
         commands.append(f"ls -al {test_env.log_dir}")
-        for command in commands:
-            if not run_remote(logger, hosts, command).passed:
-                message = "Error setting up the common test directory on all hosts"
-                self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
-                return 128
+        if not run_remote(logger, hosts, " &&\n".join(commands)).passed:
+            message = "Error setting up the common test directory on all hosts"
+            self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
+            return 128
         return 0
 
     def _user_setup(self, logger, test, create=False):
@@ -1051,7 +1056,7 @@ class TestGroup():
             if self._nvme.startswith("auto_md_on_ssd"):
                 tier_0_type = "ram"
                 max_nvme_tiers = 5
-                control_metadata = os.path.join(self._test_env.log_dir, 'control_metadata')
+                control_metadata = self._test_env.control_metadata
 
         self._details["storage"] = storage_info.device_dict()
 
@@ -1103,7 +1108,7 @@ class TestGroup():
             scm_size (int): scm_size to use with ram storage tiers
             scm_mount (str): the base path for the storage tier 0 scm_mount.
             max_nvme_tiers (int): maximum number of NVMe tiers to generate
-            control_metadata (str, optional): directory to store control plane metadata when using
+            control_metadata (str): directory to store control plane metadata when using
                 metadata on SSD.
 
         Raises:
