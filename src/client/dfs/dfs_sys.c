@@ -1422,10 +1422,10 @@ check_existing_dir(dfs_sys_t *dfs_sys, const char *dir_path)
 int
 dfs_sys_mkdir_p(dfs_sys_t *dfs_sys, const char *dir_path, mode_t mode, daos_oclass_id_t cid)
 {
-	int         path_len = strnlen(dir_path, PATH_MAX);
-	char       *_path    = NULL;
-	char       *ptr      = NULL;
-	int         rc       = 0;
+	int   path_len = strnlen(dir_path, PATH_MAX);
+	char *_path    = NULL;
+	char *ptr      = NULL;
+	int   rc       = 0;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
