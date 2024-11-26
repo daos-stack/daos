@@ -4,6 +4,7 @@ usr/lib64
 usr/lib64/daos
 usr/lib64/python3.8/site-packages/pydaos
 usr/lib64/python3.8/site-packages/pydaos/raw
+usr/lib64/python3.8/site-packages/pydaos/torch
 usr/share/daos/daos
 usr/lib/systemd/system
 usr/share/man/man8

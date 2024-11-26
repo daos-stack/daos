@@ -481,6 +481,7 @@ func TestPretty_PrintListPoolsResponse(t *testing.T) {
 						DisabledTargets:  0,
 						PoolLayoutVer:    1,
 						UpgradeLayoutVer: 2,
+						QueryMask:        daos.DefaultPoolQueryMask,
 					},
 					{
 						UUID:             test.MockPoolUUID(2),
@@ -492,6 +493,7 @@ func TestPretty_PrintListPoolsResponse(t *testing.T) {
 						DisabledTargets:  8,
 						PoolLayoutVer:    2,
 						UpgradeLayoutVer: 2,
+						QueryMask:        daos.DefaultPoolQueryMask,
 					},
 				},
 			},
@@ -511,6 +513,7 @@ func TestPretty_PrintListPoolsResponse(t *testing.T) {
 						State:            daos.PoolServiceStateReady,
 						PoolLayoutVer:    1,
 						UpgradeLayoutVer: 2,
+						QueryMask:        daos.DefaultPoolQueryMask,
 					},
 					{
 						Label:           "two",
@@ -529,7 +532,7 @@ Query on pool "two" unsuccessful, error: "stats unavailable"
 
 Pool Size   State Used Imbalance Disabled UpgradeNeeded? 
 ---- ----   ----- ---- --------- -------- -------------- 
-one  6.0 TB Ready 83%  16%       0/16     1->2           
+one  6.0 TB Ready 83%  8%        0/16     1->2           
 
 `,
 		},
@@ -547,6 +550,7 @@ one  6.0 TB Ready 83%  16%       0/16     1->2
 						State:            daos.PoolServiceStateReady,
 						PoolLayoutVer:    1,
 						UpgradeLayoutVer: 1,
+						QueryMask:        daos.DefaultPoolQueryMask,
 					},
 					{
 						UUID:            test.MockPoolUUID(2),
@@ -573,7 +577,7 @@ Query on pool "three" unsuccessful, status: %q
 
 Pool Size   State Used Imbalance Disabled 
 ---- ----   ----- ---- --------- -------- 
-one  6.0 TB Ready 83%%  16%%       0/16     
+one  6.0 TB Ready 83%%  8%%        0/16     
 
 `, daos.NotInit),
 		},
