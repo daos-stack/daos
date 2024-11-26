@@ -385,7 +385,6 @@ func queryPool(poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (*daos.Poo
 	}
 
 	// Check the original query mask and update fields as needed
-	// Process each option sequentially
 	for _, opt := range queryOptions {
 		if originalMask.HasOption(opt) && opt != firstOption {
 			if err := queryAndUpdate(opt); err != nil {
