@@ -8,7 +8,6 @@ import os
 import stat
 
 from apricot import TestWithServers
-from ClusterShell.NodeSet import NodeSet
 from run_utils import run_remote
 from server_utils import ServerFailed
 
@@ -38,11 +37,13 @@ class DaosPrivHelperTest(TestWithServers):
         # Verify that daos_server_helper has the correct permissions
         # Get the result remotely with os.stat so the format is compatible with local code
         self.log_step("Verify daos_server_helper binary permissions")
-        helper_path = os.path.join(self.prefix, "bin", "daos_server_helper")
+        helper_path = os.path.join(self.bin, "bin", "daos_server_helper")
         cmd = f"python3 -c 'import os; print(os.stat(\"{helper_path}\").st_mode)'"
-        result = run_remote(self.log, NodeSet(self.hostlist_servers[0]), cmd)
+        result = run_remote(self.log, self.hostlist_servers, cmd)
         if not result.passed:
             self.fail("Failed to get daos_server_helper mode")
+        if not result.homogeneous:
+            self.fail("Non-homogeneous daos_server_helper mode")
         mode = int(result.joined_stdout)
 
         # regular file, mode 4750
@@ -74,6 +75,7 @@ class DaosPrivHelperTest(TestWithServers):
         self.log_step("Start server as non-root")
         try:
             self.server_managers[0].detect_format_ready()
+            self.register_cleanup(self.stop_servers)
         except ServerFailed as error:
             self.fail(f"Failed to start server before format as non-root user: {error}")
 
