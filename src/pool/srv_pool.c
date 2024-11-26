@@ -6990,8 +6990,8 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 		goto out_map;
 	}
 
-	/* For SWIM exclude, don't change pool map if the pw_rf is broken or is going to be broken,
-	 * with CRIT log message to ask administrator to bring back the engine.
+	/* For SWIM exclude, don't change pool map if the pw_eviction_threshold is exceeded with
+	 * CRIT log message to ask administrator to bring back the engine.
 	 */
 	if (src == MUS_SWIM && opc == MAP_EXCLUDE) {
 		int failed_cnt;
@@ -7006,9 +7006,10 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 		failed_cnt = pool_map_get_failed_cnt(map, PO_COMP_TP_NODE);
 		D_INFO(DF_UUID": SWIM exclude %d ranks, failed NODE %d\n",
 		       DP_UUID(svc->ps_uuid), tgt_addrs->pta_number, failed_cnt);
-		if (failed_cnt > pw_rf) {
-			D_CRIT(DF_UUID": exclude %d ranks will break pool RF %d, failed_cnt %d\n",
-			       DP_UUID(svc->ps_uuid), tgt_addrs->pta_number, pw_rf, failed_cnt);
+		if (failed_cnt > pw_eviction_threshold) {
+			D_CRIT(DF_UUID": exclude %d ranks exceed threshold %d, failed_cnt %d\n",
+			       DP_UUID(svc->ps_uuid), tgt_addrs->pta_number, pw_eviction_threshold,
+			       failed_cnt);
 			ABT_rwlock_rdlock(svc->ps_pool->sp_lock);
 			rc = pool_map_crit_prompt(svc, svc->ps_pool->sp_map);
 			ABT_rwlock_unlock(svc->ps_pool->sp_lock);

@@ -14,7 +14,7 @@ server_config:
       nr_xs_helpers: 0
       env_vars:
         - SWIM_SUSPECT_TIMEOUT=10000
-        - DAOS_POOL_RF=1
+        - DAOS_EVICTION_THRESHOLD=1
         - DD_MASK=io,epc,rebuild
       storage:
         0:

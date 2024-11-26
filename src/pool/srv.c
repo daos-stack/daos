@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -21,10 +21,29 @@
 #include "srv_layout.h"
 
 bool		ec_agg_disabled;
-uint32_t	pw_rf; /* pool wise RF */
-#define PW_RF_DEFAULT	(2)
-#define PW_RF_MIN	(1)
-#define PW_RF_MAX	(4)
+uint32_t	pw_eviction_threshold = -1; /* pool wise eviction threshold */
+#define PW_ET_DEFAULT	(2)
+#define PW_ET_MIN	(0)
+#define PW_ET_MAX	(4)
+
+static inline bool
+check_pool_eviction_threshold(const char *variable)
+{
+	d_getenv_uint32_t(variable, &pw_eviction_threshold);
+	if (pw_eviction_threshold == -1)
+		return false;
+
+	D_INFO("Checked threshold %s=%d\n", variable, pw_eviction_threshold);
+
+	if (pw_eviction_threshold <= PW_ET_MAX)
+		return true;
+
+	D_INFO("pw_eviction_threshold %d is out of range [%d, %d], take default %d\n",
+	       pw_eviction_threshold, PW_ET_MIN, PW_ET_MAX, PW_ET_DEFAULT);
+	pw_eviction_threshold = PW_ET_DEFAULT;
+
+	return true;
+}
 
 static int
 init(void)
@@ -52,14 +71,15 @@ init(void)
 	if (unlikely(ec_agg_disabled))
 		D_WARN("EC aggregation is disabled.\n");
 
-	pw_rf = PW_RF_DEFAULT;
-	d_getenv_uint32_t("DAOS_POOL_RF", &pw_rf);
-	if (pw_rf < PW_RF_MIN || pw_rf > PW_RF_MAX) {
-		D_INFO("pw_rf %d is out of range [%d, %d], take default %d\n",
-		       pw_rf, PW_RF_MIN, PW_RF_MAX, PW_RF_DEFAULT);
-		pw_rf = PW_RF_DEFAULT;
+	pw_eviction_threshold = -1;
+	if (!check_pool_eviction_threshold("DAOS_EVICTION_THRESHOLD")) {
+		if (check_pool_eviction_threshold("DAOS_POOL_RF"))
+			D_WARN("DAOS_POOL_RF is deprecated. Use DAOS_EVICTION_THRESHOLD\n");
+		else {
+			pw_eviction_threshold = PW_ET_DEFAULT;
+		}
 	}
-	D_INFO("pool wise RF %d\n", pw_rf);
+	D_INFO("pool wise eviction threshold %d\n", pw_eviction_threshold);
 
 	ds_pool_rsvc_class_register();
 
