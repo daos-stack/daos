@@ -19,7 +19,7 @@ from exception_utils import CommandFailure
 from general_utils import (get_default_config_file, get_display_size, get_log_file, list_to_str,
                            pcmd, run_pcmd)
 from host_utils import get_local_host
-from run_utils import run_remote, stop_processes
+from run_utils import run_remote, stop_process_ids, stop_processes
 from server_utils_base import DaosServerCommand, DaosServerInformation, ServerFailed
 from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
 from user_utils import get_chown_command
@@ -138,6 +138,9 @@ class DaosServerManager(SubprocessManager):
         # defined in the self.manager.job.yaml object.
         self._external_yaml_data = None
 
+        # The process ID for each rank. Populated after starting the engines.
+        self.__pids = {}
+
     @property
     def engines(self):
         """Get the total number of engines.
@@ -159,6 +162,21 @@ class DaosServerManager(SubprocessManager):
         return {rank: value["host"] for rank, value in self._expected_states.items()}
 
     @property
+    def host_ranks(self):
+        """Get the engine rank(s) running on each host.
+
+        Returns:
+            dict: host key (str) with list of rank (int) values
+        """
+        host_ranks = {}
+        for rank, value in self._expected_states.items():
+            host = str(value["host"])
+            if host not in host_ranks:
+                host_ranks[host] = []
+            host_ranks[host].append(rank)
+        return host_ranks
+
+    @property
     def management_service_hosts(self):
         """Get the hosts running the management service.
 
@@ -177,6 +195,17 @@ class DaosServerManager(SubprocessManager):
 
         """
         return self.get_host_ranks(self.management_service_hosts)
+
+    @property
+    def rank_pids(self):
+        """Get the pid for each engine.
+
+        This data is only updated when starting the servers with systemctl.
+
+        Returns:
+            dict: dictionary of rank keys and process ID values
+        """
+        return self.__pids
 
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
@@ -510,6 +539,9 @@ class DaosServerManager(SubprocessManager):
         if not started:
             self.manager.kill()
             raise ServerFailed("Failed to start servers after format")
+
+        # Parse the engine rank/pid info from the server start detection messages (systemctl only)
+        self.__update_pids()
 
         # Update the dmg command host list to work with pool create/destroy
         self._prepare_dmg_hostlist()
@@ -892,7 +924,7 @@ class DaosServerManager(SubprocessManager):
 
     @fail_on(CommandFailure)
     def stop_ranks(self, ranks, daos_log, force=False, copy=False):
-        """Kill/Stop the specific server ranks using this pool.
+        """Stop the specific server ranks using this pool.
 
         Args:
             ranks (list): a list of daos server ranks (int) to kill
@@ -918,42 +950,6 @@ class DaosServerManager(SubprocessManager):
 
         # Update the expected status of the stopped/excluded ranks
         self.update_expected_states(ranks, ["stopped", "excluded"])
-
-    def stop_random_rank(self, daos_log, force=False, exclude_ranks=None):
-        """Kill/Stop a random server rank that is expected to be running.
-
-        Args:
-            daos_log (DaosLog): object for logging messages
-            force (bool, optional): whether to use --force option to dmg system
-                stop. Defaults to False.
-            exclude_ranks (list, optional): ranks to exclude from the random selection.
-                Default is None.
-
-        Raises:
-            avocado.core.exceptions.TestFail: if there is an issue stopping the server ranks.
-            ServerFailed: if there are no available ranks to stop.
-
-        """
-        # Exclude non-running ranks
-        rank_state = self.get_expected_states()
-        candidate_ranks = []
-        for rank, state in rank_state.items():
-            for running_state in self._states["running"]:
-                if running_state in state:
-                    candidate_ranks.append(rank)
-                    continue
-
-        # Exclude specified ranks
-        for rank in exclude_ranks or []:
-            if rank in candidate_ranks:
-                del candidate_ranks[candidate_ranks.index(rank)]
-
-        if len(candidate_ranks) < 1:
-            raise ServerFailed("No available candidate ranks to stop.")
-
-        # Stop a random rank
-        random_rank = random.choice(candidate_ranks)  # nosec
-        return self.stop_ranks([random_rank], daos_log=daos_log, force=force)
 
     def start_ranks(self, ranks, daos_log):
         """Start the specific server ranks.
@@ -986,20 +982,79 @@ class DaosServerManager(SubprocessManager):
         """Forcibly terminate any server process running on hosts."""
         regex = self.manager.job.command_regex
         detected, running = stop_processes(self.log, self._hosts, regex)
+        self.__report_killed(f"remote server {regex} process", detected, running, None)
+
+    def kill_ranks(self, ranks):
+        """Forcibly terminate the specified server ranks.
+
+        Args:
+            ranks (list): list of engine ranks to kill
+
+        Raises:
+            ServerFailed: if there is a problem determining the process ID or host for the rank
+        """
+        host_info = {}
+        for rank in ranks:
+            try:
+                pid = self.rank_pids[rank]
+            except KeyError as error:
+                raise ServerFailed(f"Unable to kill rank {rank}, no process ID assigned") from error
+            try:
+                host = str(self.ranks[rank])
+            except KeyError as error:
+                raise ServerFailed(f"Unable to kill rank {rank}, no host assigned") from error
+            if host not in host_info:
+                host_info[host] = {"ranks": [], "pids": []}
+            host_info[host]["pids"].append(pid)
+            host_info[host]["ranks"].append(rank)
+
+        for host, info in host_info.items():
+            detected, running = stop_process_ids(self.log, host, info["pids"])
+            self.__report_killed(
+                f"remote server {info['pids']} process", detected, running, info["ranks"])
+
+    def __report_killed(self, description, detected, running, ranks):
+        """Report the status of killing engine ranks.
+
+        Args:
+            description (str): description of what ranks were killed
+            detected (NodeSet): hosts on which the ranks were initially detected
+            running (NodeSet): hosts on which the ranks are still running
+            ranks (object): job ranks to update. Can be a single rank (int), multiple ranks (list),
+                or all the ranks (None).
+        """
         if not detected:
-            self.log.info(
-                "No remote %s server processes killed on %s (none found), done.",
-                regex, self._hosts)
+            self.log.info("No %ses killed on %s (none found), done.", description, self._hosts)
         elif running:
             self.log.info(
-                "***Unable to kill remote server %s process on %s! Please investigate/report.***",
-                regex, running)
+                "***Unable to kill %s on %s! Please investigate/report.***", description, running)
         else:
             self.log.info(
-                "***At least one remote server %s process needed to be killed on %s! Please "
-                "investigate/report.***", regex, detected)
+                "***At least one %s needed to be killed on %s! Please investigate/report.***",
+                description, detected)
         # set stopped servers state to make teardown happy
-        self.update_expected_states(None, ["stopped", "excluded", "errored"])
+        self.update_expected_states(ranks, ["stopped", "excluded", "errored"])
+
+    def __update_pids(self):
+        """Parse the most recent engine start detection pattern matches for engine rank/pid info.
+
+        Raises:
+            ServerFailed: if there is an error parsing the rank/pid information from the engine
+                started messages
+        """
+        self.__pids.clear()
+        for match in self.manager.job.pattern_matches:
+            if not isinstance(match, tuple) or len(match) < 2:
+                # Lines regex matches for pids will contain a rank and pid; ignore any other matches
+                continue
+            try:
+                self.__pids[int(match[1])] = int(match[0])
+            except ValueError as error:
+                self.log.debug(
+                    "Error extracting rank/pid from pattern matches: rank: %s, pid: %s "
+                    "pattern_matches: %s", match[1], match[0], self.manager.job.pattern_matches)
+                raise ServerFailed("Error collecting engine pid information") from error
+        self.log.debug("Updated pid mapping: %s", self.__pids)
 
     @fail_on(CommandFailure)
     def system_exclude(self, ranks, copy=False, rank_hosts=None):
@@ -1163,3 +1218,44 @@ class DaosServerManager(SubprocessManager):
                 command="sudo {} -S {} --csv".format(daos_metrics_exe, engine))
             engines.append(results)
         return engines
+
+    def get_random_ranks(self, quantity, running=True, management_service=False, exclude=None):
+        """Get one or more random engine ranks.
+
+        Args:
+            quantity (int): number of random ranks to return.
+            running (bool, optional): should the random rank be in a running state. Defaults to
+                True.
+            management_service (bool, optional): should the rank rank be running the management
+                service. Defaults to False.
+            exclude (list, optional): list of other rank numbers to exclude. Defaults to None.
+
+        Returns:
+            list: a unique list of the requested number of random ranks
+        """
+        rank_data = self.get_current_state()
+        available_ranks = set(rank_data.keys())
+        self.log.debug("Selecting a random engine rank from %s", available_ranks)
+        if exclude:
+            available_ranks = available_ranks.difference(exclude)
+            self.log.debug("  Excluding requested rank(s) %s => %s", exclude, available_ranks)
+        if running:
+            not_running = []
+            for rank, rank_info in rank_data.items():
+                if rank_info["state"] not in self._states["running"]:
+                    not_running.append(rank)
+            if not_running:
+                available_ranks = available_ranks.difference(not_running)
+                self.log.debug(
+                    "  Excluding non-running rank(s) %s => %s", not_running, available_ranks)
+        if management_service:
+            ms_ranks = self.management_service_ranks
+            available_ranks = available_ranks.intersection(ms_ranks)
+            self.log.debug(
+                "  Only including management service rank(s) %s => %s", ms_ranks, available_ranks)
+        if len(available_ranks) < quantity:
+            raise ServerFailed(
+                f"Not enough ranks from which to chose {quantity} randomly: {available_ranks}.")
+        random_rank = random.sample(list(available_ranks), quantity)
+        self.log.debug("  Selected rank(s) %s from %s", random_rank, available_ranks)
+        return random_rank

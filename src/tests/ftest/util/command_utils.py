@@ -755,6 +755,7 @@ class SubProcessCommand(CommandWithSubCommand):
         self.pattern = None
         self.pattern_count = 1
         self.pattern_timeout = BasicParameter(timeout, timeout)
+        self.pattern_matches = None
 
     def get_str_param_names(self):
         """Get a sorted list of the names of the command attributes.
@@ -789,6 +790,7 @@ class SubProcessCommand(CommandWithSubCommand):
             bool: whether or not the command progress has been detected
 
         """
+        self.pattern_matches = None
         complete = True
         self.log.info(
             "Checking status of the %s command in %s with a %s second timeout",
@@ -806,9 +808,10 @@ class SubProcessCommand(CommandWithSubCommand):
             #   - the time out is reached (failure)
             #   - the subprocess is no longer running (failure)
             while not complete and not timed_out and sub_process.poll() is None:
-                detected = len(re.findall(self.pattern, get_subprocess_stdout(sub_process)))
+                self.pattern_matches = re.findall(self.pattern, get_subprocess_stdout(sub_process))
+                detected = len(self.pattern_matches)
                 complete = detected == self.pattern_count
-                elapsed = time.time() - start
+                elapsed = round(time.time() - start, 2)
                 timed_out = elapsed > self.pattern_timeout.value
 
             # Summarize results
@@ -828,6 +831,7 @@ class SubProcessCommand(CommandWithSubCommand):
         """
         msg = "{}/{} '{}' messages detected in".format(detected, self.pattern_count, self.pattern)
         runtime = "{}/{} seconds".format(elapsed, self.pattern_timeout.value)
+        matches = f"with pattern matches: {self.pattern_matches}"
 
         if not complete:
             # Report the error / timeout
@@ -850,7 +854,8 @@ class SubProcessCommand(CommandWithSubCommand):
                 self.stop()
         else:
             # Report the successful start
-            self.log.info("%s subprocess startup detected - %s %s", self._command, msg, runtime)
+            self.log.info(
+                "%s subprocess startup detected - %s %s %s", self._command, msg, runtime, matches)
 
     def _get_new(self):
         """Get a new object based upon this one.
