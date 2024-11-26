@@ -1268,7 +1268,7 @@ command can be used. The command takes either a host-set or rank-set:
 To drain a set of hosts from all pools (drains all ranks on selected hosts):
 
 ```Bash
-$ dmg system drain --hosts foo-[001-100]
+$ dmg system drain --rank-hosts foo-[001-100]
 ```
 
 To drain a set of ranks from all pools:

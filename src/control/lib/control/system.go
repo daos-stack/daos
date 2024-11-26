@@ -777,14 +777,11 @@ func LeaderQuery(ctx context.Context, rpcClient UnaryInvoker, req *LeaderQueryRe
 	if err != nil {
 		return nil, err
 	}
-	rpcClient.Debugf("resp one: %+v", ur)
 
 	resp := new(LeaderQueryResp)
 	if err = convertMSResponse(ur, resp); err != nil {
 		return nil, errors.Wrap(err, "converting MS to LeaderQuery resp")
 	}
-
-	rpcClient.Debugf("resp one: %+v", resp)
 
 	req.SetHostList(resp.Replicas)
 	ur, err = rpcClient.InvokeUnaryRPC(ctx, req)
