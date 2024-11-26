@@ -629,29 +629,13 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 }
 
 /*
- * create a dir object. If caller passes parent obj, we check for existence of
- * object first.
+ * Create a dir object. If caller passes parent obj, and cid is not set,
+ * the child oclass is taken from the parent.
  */
 int
 create_dir(dfs_t *dfs, dfs_obj_t *parent, daos_oclass_id_t cid, dfs_obj_t *dir)
 {
-	bool             exists;
-	struct dfs_entry entry = {0};
-	size_t           len   = strnlen(dir->name, DFS_MAX_NAME);
 	int rc;
-
-	if (parent != NULL) {
-		rc = fetch_entry(dfs->layout_v, parent->oh, dfs->th, dir->name, len, false, &exists,
-				 &entry, 0, NULL, NULL, NULL);
-		if (rc != 0) {
-			DL_ERROR(rc, "fetch_entry() %s failed.", dir->name);
-			return rc;
-		} else if (exists) {
-			if (S_ISDIR(entry.mode))
-				return EEXIST;
-			return ENOTDIR;
-		}
-	}
 
 	/** set oclass for dir. order: API, parent dir, cont default */
 	if (cid == 0) {

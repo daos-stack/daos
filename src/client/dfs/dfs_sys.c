@@ -1399,12 +1399,32 @@ out_free_path:
 	return rc;
 }
 
+static int
+check_existing_dir(dfs_sys_t *dfs_sys, const char *dir_path)
+{
+	struct stat st = {0};
+	int         rc;
+
+	rc = dfs_sys_stat(dfs_sys, dir_path, 0, &st);
+	if (rc != 0) {
+		D_DEBUG(DB_TRACE, "failed to stat %s: (%d)\n", dir_path, rc);
+		return rc;
+	}
+
+	/* if it's not a directory, fail */
+	if (!S_ISDIR(st.st_mode))
+		return EEXIST;
+
+	/* if it is a directory, then it's not an error */
+	return 0;
+}
+
 int
 dfs_sys_mkdir_p(dfs_sys_t *dfs_sys, const char *dir_path, mode_t mode, daos_oclass_id_t cid)
 {
 	int         path_len = strnlen(dir_path, PATH_MAX);
 	char       *_path    = NULL;
-	char       *ptr     = NULL;
+	char       *ptr      = NULL;
 	int         rc       = 0;
 
 	if (dfs_sys == NULL)
@@ -1426,8 +1446,13 @@ dfs_sys_mkdir_p(dfs_sys_t *dfs_sys, const char *dir_path, mode_t mode, daos_ocla
 		/* truncate the string here to create the parent */
 		*ptr = '\0';
 		rc   = dfs_sys_mkdir(dfs_sys, _path, mode, cid);
-		if (rc != 0 && rc != EEXIST)
-			D_GOTO(out_free, rc);
+		if (rc != 0) {
+			if (rc != EEXIST)
+				D_GOTO(out_free, rc);
+			rc = check_existing_dir(dfs_sys, _path);
+			if (rc != 0)
+				D_GOTO(out_free, rc);
+		}
 		/* reset to keep going */
 		*ptr = '/';
 	}
@@ -1435,7 +1460,7 @@ dfs_sys_mkdir_p(dfs_sys_t *dfs_sys, const char *dir_path, mode_t mode, daos_ocla
 	/* create the final directory */
 	rc = dfs_sys_mkdir(dfs_sys, _path, mode, cid);
 	if (rc == EEXIST)
-		rc = 0;
+		rc = check_existing_dir(dfs_sys, _path);
 
 out_free:
 	D_FREE(_path);

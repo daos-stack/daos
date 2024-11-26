@@ -817,6 +817,42 @@ dfs_sys_test_chown(void **state)
 }
 
 static void
+dfs_sys_test_mkdir(void **state)
+{
+	test_arg_t *arg    = *state;
+	const char *parent = "/a";
+	const char *child  = "/a/b";
+	const char *file   = "/a/b/whoops";
+	dfs_obj_t  *obj;
+	int         rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	/* create the parent */
+	rc = dfs_sys_mkdir(dfs_sys_mt, parent, S_IWUSR | S_IRUSR, 0);
+	assert_int_equal(rc, 0);
+
+	/* trying to create the parent again should fail */
+	rc = dfs_sys_mkdir(dfs_sys_mt, parent, S_IWUSR | S_IRUSR, 0);
+	assert_int_equal(rc, EEXIST);
+
+	rc = dfs_sys_mkdir(dfs_sys_mt, child, S_IWUSR | S_IRUSR, 0);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_sys_open(dfs_sys_mt, file, S_IFREG, O_CREAT | O_RDWR, 0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	dfs_sys_close(obj);
+
+	/* this shouldn't work */
+	rc = dfs_sys_mkdir(dfs_sys_mt, file, S_IWUSR | S_IRUSR, 0);
+	assert_int_equal(rc, EEXIST);
+
+	rc = dfs_sys_remove(dfs_sys_mt, parent, true, NULL);
+	assert_int_equal(rc, 0);
+}
+
+static void
 dfs_sys_test_mkdir_p(void **state)
 {
 	test_arg_t *arg    = *state;
@@ -829,11 +865,11 @@ dfs_sys_test_mkdir_p(void **state)
 	if (arg->myrank != 0)
 		return;
 
-	/* create the child */
+	/* create the child and its parents */
 	rc = dfs_sys_mkdir_p(dfs_sys_mt, child, S_IWUSR | S_IRUSR, 0);
 	assert_int_equal(rc, 0);
 
-	/* the parent shouldn't fail even though it exists */
+	/* creating the parent shouldn't fail even though it exists */
 	rc = dfs_sys_mkdir_p(dfs_sys_mt, parent, S_IWUSR | S_IRUSR, 0);
 	assert_int_equal(rc, 0);
 
@@ -843,7 +879,7 @@ dfs_sys_test_mkdir_p(void **state)
 
 	/* this shouldn't work */
 	rc = dfs_sys_mkdir_p(dfs_sys_mt, file, S_IWUSR | S_IRUSR, 0);
-	assert_int_equal(rc, ENOTDIR);
+	assert_int_equal(rc, EEXIST);
 
 	rc = dfs_sys_remove(dfs_sys_mt, parent, true, NULL);
 	assert_int_equal(rc, 0);
@@ -871,7 +907,8 @@ static const struct CMUnitTest dfs_sys_unit_tests[] = {
     {"DFS_SYS_UNIT_TEST11: DFS Sys l2g/g2l handles", dfs_sys_test_handles, async_disable,
      test_case_teardown},
     {"DFS_SYS_UNIT_TEST12: DFS Sys chown", dfs_sys_test_chown, async_disable, test_case_teardown},
-    {"DFS_SYS_UNIT_TEST13: DFS Sys mkdir_p", dfs_sys_test_mkdir_p, async_disable,
+    {"DFS_SYS_UNIT_TEST13: DFS Sys mkdir", dfs_sys_test_mkdir, async_disable},
+    {"DFS_SYS_UNIT_TEST14: DFS Sys mkdir_p", dfs_sys_test_mkdir_p, async_disable,
      test_case_teardown},
 };
 
