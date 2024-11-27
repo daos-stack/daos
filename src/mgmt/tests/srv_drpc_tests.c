@@ -1604,6 +1604,7 @@ expect_drpc_pool_query_targets_resp_with_targets(Drpc__Response *resp,
 		assert_int_equal(pqt_resp->infos[i]->type, infos[i].ta_type);
 		assert_int_equal(pqt_resp->infos[i]->state, infos[i].ta_state);
 		assert_int_equal(pqt_resp->infos[i]->n_space, DAOS_MEDIA_MAX);
+		assert_int_equal(pqt_resp->infos[i]->mem_file_bytes, infos[i].ta_space.s_total_mem);
 
 		for (j = 0; j < DAOS_MEDIA_MAX; j++) {
 			Mgmt__StorageTargetUsage *space = pqt_resp->infos[i]->space[j];
