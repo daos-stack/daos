@@ -1227,7 +1227,7 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 	struct d_binheap_node		*bh_node;
 	d_list_t			 timeout_list;
 	uint64_t			 ts_now;
-	bool				 print_once = false;
+	bool                             print_once = false;
 
 	D_ASSERT(crt_ctx != NULL);
 
