@@ -412,6 +412,7 @@ static int pool_create_fill_resp(Mgmt__PoolCreateResp *resp, uuid_t uuid, d_rank
 	for (index = 0; index < DAOS_MEDIA_MAX; ++index) {
 		D_ASSERT(pool_info.pi_space.ps_space.s_total[index] % resp->n_tgt_ranks == 0);
 	}
+	D_ASSERT(pool_info.pi_space.ps_space.s_total_mem % resp->n_tgt_ranks == 0);
 	D_ALLOC_ARRAY(resp->tier_bytes, DAOS_MEDIA_MAX);
 	if (resp->tier_bytes == NULL) {
 		rc = -DER_NOMEM;
@@ -422,7 +423,7 @@ static int pool_create_fill_resp(Mgmt__PoolCreateResp *resp, uuid_t uuid, d_rank
 		resp->tier_bytes[index] =
 			pool_info.pi_space.ps_space.s_total[index] / resp->n_tgt_ranks;
 	}
-	resp->mem_file_bytes = pool_info.pi_space.ps_space.s_total_mem;
+	resp->mem_file_bytes = pool_info.pi_space.ps_space.s_total_mem / resp->n_tgt_ranks;
 
 out:
 	d_rank_list_free(enabled_ranks);

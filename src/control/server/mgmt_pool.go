@@ -485,6 +485,9 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 	// Zero mem_file_bytes in non-MD-on-SSD mode.
 	if !svc.harness.Instances()[0].GetStorage().BdevRoleMetaConfigured() {
 		resp.MemFileBytes = 0
+	} else {
+		svc.log.Tracef("%T mem_file_bytes: %s (%d)", resp,
+			humanize.Bytes(resp.MemFileBytes), resp.MemFileBytes)
 	}
 
 	if resp.GetStatus() != 0 {
@@ -968,6 +971,9 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 	// Zero mem_file_bytes in non-MD-on-SSD mode.
 	if !svc.harness.Instances()[0].GetStorage().BdevRoleMetaConfigured() {
 		resp.MemFileBytes = 0
+	} else {
+		svc.log.Tracef("%T mem_file_bytes: %s (%d)", resp,
+			humanize.Bytes(resp.MemFileBytes), resp.MemFileBytes)
 	}
 
 	return resp, nil
@@ -993,6 +999,12 @@ func (svc *mgmtSvc) PoolQueryTarget(ctx context.Context, req *mgmtpb.PoolQueryTa
 	if !svc.harness.Instances()[0].GetStorage().BdevRoleMetaConfigured() {
 		for _, tgtInfo := range resp.Infos {
 			tgtInfo.MemFileBytes = 0
+		}
+	} else {
+		for _, tgtInfo := range resp.Infos {
+			svc.log.Tracef("%T mem_file_bytes: %s (%d)", resp,
+				humanize.Bytes(tgtInfo.MemFileBytes), tgtInfo.MemFileBytes)
+			break
 		}
 	}
 
