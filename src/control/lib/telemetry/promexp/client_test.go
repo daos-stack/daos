@@ -17,6 +17,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/lib/telemetry"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -82,6 +83,24 @@ func TestPromExp_extractClientLabels(t *testing.T) {
 				"pool":  test.MockPoolUUID(1).String(),
 			},
 		},
+		"dfs ops": {
+			input:   fmt.Sprintf("ID: %d/%s/%s/container/%s/dfs/ops/CHMOD", shmID, jobID, pid, test.MockPoolUUID(1)),
+			expName: "dfs_ops_chmod",
+			expLabels: labelMap{
+				"jobid":     jobID,
+				"pid":       pid,
+				"container": test.MockPoolUUID(1).String(),
+			},
+		},
+		"dfs read bytes": {
+			input:   fmt.Sprintf("ID: %d/%s/%s/container/%s/dfs/read_bytes", shmID, jobID, pid, test.MockPoolUUID(1)),
+			expName: "dfs_read_bytes",
+			expLabels: labelMap{
+				"jobid":     jobID,
+				"pid":       pid,
+				"container": test.MockPoolUUID(1).String(),
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -136,6 +155,7 @@ func TestPromExp_NewClientCollector(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			defer telemetry.Fini()
 			result, err := NewClientCollector(ctx, log, cs, tc.opts)
 
 			test.CmpErr(t, tc.expErr, err)

@@ -204,7 +204,7 @@ func extractLabels(log logging.Logger, in string) (labels labelMap, name string)
 		}
 	}
 
-	name = sanitizeMetricName(name)
+	name = strings.ToLower(sanitizeMetricName(name))
 	return
 }
 
