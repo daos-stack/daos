@@ -37,7 +37,7 @@ class DaosPrivHelperTest(TestWithServers):
         # Verify that daos_server_helper has the correct permissions
         # Get the result remotely with os.stat so the format is compatible with local code
         self.log_step("Verify daos_server_helper binary permissions")
-        helper_path = os.path.join(self.bin, "bin", "daos_server_helper")
+        helper_path = os.path.join(self.bin, "daos_server_helper")
         cmd = f"python3 -c 'import os; print(os.stat(\"{helper_path}\").st_mode)'"
         result = run_remote(self.log, self.hostlist_servers, cmd)
         if not result.passed:
