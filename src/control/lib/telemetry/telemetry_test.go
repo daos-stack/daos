@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common/test"
@@ -457,6 +458,55 @@ func TestTelemetry_garbageCollection(t *testing.T) {
 			elapsed := end.Sub(start)
 			if elapsed >= testTimeout {
 				t.Fatalf("expected immediate return, took %v", elapsed)
+			}
+		})
+	}
+}
+
+func TestTelemetry_pruneMap(t *testing.T) {
+	for name, tc := range map[string]struct {
+		inputPaths map[string]bool
+		expToPrune []string
+	}{
+		"empty": {},
+		"no shared parents": {
+			inputPaths: map[string]bool{
+				"/a": true,
+				"/b": true,
+				"/c": true,
+			},
+			expToPrune: []string{"/c", "/b", "/a"},
+		},
+		"deeply nested should not be pruned": {
+			inputPaths: map[string]bool{
+				"/a":     true,
+				"/a/b":   true,
+				"/a/b/c": false,
+			},
+			expToPrune: nil,
+		},
+		"deeply nested should be pruned": {
+			inputPaths: map[string]bool{
+				"/a":     true,
+				"/a/b":   true,
+				"/a/b/c": true,
+			},
+			expToPrune: []string{"/a/b/c", "/a/b", "/a"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			pm := make(pruneMap)
+
+			for path, shouldPrune := range tc.inputPaths {
+				if shouldPrune {
+					pm.add(path)
+				} else {
+					pm.removeParents(path)
+				}
+			}
+
+			if diff := cmp.Diff(tc.expToPrune, pm.toPrune()); diff != "" {
+				t.Fatalf("unexpected toPrune list (-want, +got): %s", diff)
 			}
 		})
 	}
