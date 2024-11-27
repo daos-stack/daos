@@ -67,6 +67,7 @@ struct dfs_metrics {
 	struct d_tm_node_t *dm_read_bytes;
 	struct d_tm_node_t *dm_write_bytes;
 	struct d_tm_node_t *dm_mount_time;
+	struct d_tm_node_t *dm_dump_time;
 };
 
 void

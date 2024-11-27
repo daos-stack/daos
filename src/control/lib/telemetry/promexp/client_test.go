@@ -26,6 +26,7 @@ func TestPromExp_extractClientLabels(t *testing.T) {
 	jobID := "testJob"
 	pid := "12345"
 	tid := "67890"
+	filePath := "foo/bar"
 
 	testPath := func(suffix string) string {
 		return fmt.Sprintf("ID: %d/%s/%s/%s/%s", shmID, jobID, pid, tid, suffix)
@@ -83,6 +84,32 @@ func TestPromExp_extractClientLabels(t *testing.T) {
 				"pool":  test.MockPoolUUID(1).String(),
 			},
 		},
+		"dfs ops mkdir": {
+			input:   fmt.Sprintf("ID: %d/%s/%s/dfs/ops/mkdir", shmID, jobID, pid),
+			expName: "dfs_ops_mkdir",
+			expLabels: labelMap{
+				"jobid": jobID,
+				"pid":   pid,
+			},
+		},
+		"dfs file write_bytes": {
+			input:   fmt.Sprintf("ID: %d/%s/%s/dfs/file/write_bytes/%s", shmID, jobID, pid, filePath),
+			expName: "dfs_file_write_bytes",
+			expLabels: labelMap{
+				"jobid": jobID,
+				"pid":   pid,
+				"file":  filePath,
+			},
+		},
+		"dfs file read_bytes": {
+			input:   fmt.Sprintf("ID: %d/%s/%s/dfs/file/read_bytes/%s", shmID, jobID, pid, filePath),
+			expName: "dfs_file_read_bytes",
+			expLabels: labelMap{
+				"jobid": jobID,
+				"pid":   pid,
+				"file":  filePath,
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -91,7 +118,7 @@ func TestPromExp_extractClientLabels(t *testing.T) {
 			labels, name := extractClientLabels(log, tc.input)
 
 			test.AssertEqual(t, name, tc.expName, "")
-			if diff := cmp.Diff(labels, tc.expLabels); diff != "" {
+			if diff := cmp.Diff(tc.expLabels, labels); diff != "" {
 				t.Errorf("labels mismatch (-want +got):\n%s", diff)
 			}
 		})

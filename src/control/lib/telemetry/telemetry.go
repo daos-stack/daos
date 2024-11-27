@@ -22,7 +22,7 @@ package telemetry
 static int
 rm_ephemeral_dir(const char *path)
 {
-	return d_tm_del_ephemeral_dir(path);
+	return d_tm_try_del_ephemeral_dir(path);
 }
 
 static int

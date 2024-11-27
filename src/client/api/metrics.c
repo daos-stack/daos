@@ -237,6 +237,11 @@ dc_tm_fini()
 	if (!daos_client_metric)
 		return;
 
+	/* If we're dumping to a container, don't try to dump to a file. */
+	if (d_isenv_def(DAOS_CLIENT_METRICS_DUMP_POOL) &&
+	    d_isenv_def(DAOS_CLIENT_METRICS_DUMP_CONT))
+		goto out;
+
 	rc = d_agetenv_str(&dump_dir, DAOS_CLIENT_METRICS_DUMP_DIR);
 	if (rc != 0)
 		D_GOTO(out, rc);
