@@ -41,6 +41,18 @@ out:
 	return rc;
 }
 
+static void
+dfs_update_file_metrics(dfs_t *dfs, daos_size_t read_bytes, daos_size_t write_bytes)
+{
+	if (dfs == NULL || dfs->metrics == NULL)
+		return;
+
+	if (read_bytes > 0)
+		d_tm_inc_gauge(dfs->metrics->dm_read_bytes, read_bytes);
+	if (write_bytes > 0)
+		d_tm_inc_gauge(dfs->metrics->dm_write_bytes, write_bytes);
+}
+
 static int
 dfs_read_int(dfs_t *dfs, dfs_obj_t *obj, daos_off_t off, dfs_iod_t *iod, d_sg_list_t *sgl,
 	     daos_size_t buf_size, daos_size_t *read_size, daos_event_t *ev)
@@ -85,11 +97,14 @@ dfs_read_int(dfs_t *dfs, dfs_obj_t *obj, daos_off_t off, dfs_iod_t *iod, d_sg_li
 	if (rc)
 		D_GOTO(err_params, rc);
 
+	DFS_OP_STAT_INCR(dfs, DOS_READ);
 	/*
 	 * dc_task_schedule() calls tse_task_complete() even on error (which also calls the
 	 * completion cb that frees params in this case, so we can just ignore the rc here.
 	 */
 	dc_task_schedule(task, true);
+
+	dfs_update_file_metrics(dfs, *params->read_size, 0);
 	return 0;
 
 err_params:
@@ -125,6 +140,7 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off, daos_size
 			daos_event_launch(ev);
 			daos_event_complete(ev, 0);
 		}
+		DFS_OP_STAT_INCR(dfs, DOS_READ);
 		return 0;
 	}
 
@@ -146,7 +162,9 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off, daos_size
 			return daos_der2errno(rc);
 		}
 
+		DFS_OP_STAT_INCR(dfs, DOS_READ);
 		*read_size = iod.arr_nr_read;
+		dfs_update_file_metrics(dfs, iod.arr_nr_read, 0);
 		return 0;
 	}
 
@@ -173,6 +191,7 @@ dfs_readx(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl, daos_siz
 			daos_event_launch(ev);
 			daos_event_complete(ev, 0);
 		}
+		DFS_OP_STAT_INCR(dfs, DOS_READX);
 		return 0;
 	}
 
@@ -189,7 +208,9 @@ dfs_readx(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl, daos_siz
 			return daos_der2errno(rc);
 		}
 
+		DFS_OP_STAT_INCR(dfs, DOS_READX);
 		*read_size = arr_iod.arr_nr_read;
+		dfs_update_file_metrics(dfs, arr_iod.arr_nr_read, 0);
 		return 0;
 	}
 
@@ -223,6 +244,7 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off, daos_eve
 			daos_event_launch(ev);
 			daos_event_complete(ev, 0);
 		}
+		DFS_OP_STAT_INCR(dfs, DOS_WRITE);
 		return 0;
 	}
 
@@ -238,8 +260,12 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off, daos_eve
 		daos_event_errno_rc(ev);
 
 	rc = daos_array_write(obj->oh, DAOS_TX_NONE, &iod, sgl, ev);
-	if (rc)
+	if (rc == 0) {
+		DFS_OP_STAT_INCR(dfs, DOS_WRITE);
+		dfs_update_file_metrics(dfs, 0, buf_size);
+	} else {
 		D_ERROR("daos_array_write() failed, " DF_RC "\n", DP_RC(rc));
+	}
 
 	return daos_der2errno(rc);
 }
@@ -266,6 +292,7 @@ dfs_writex(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl, daos_ev
 			daos_event_launch(ev);
 			daos_event_complete(ev, 0);
 		}
+		DFS_OP_STAT_INCR(dfs, DOS_WRITEX);
 		return 0;
 	}
 
@@ -277,8 +304,11 @@ dfs_writex(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl, daos_ev
 		daos_event_errno_rc(ev);
 
 	rc = daos_array_write(obj->oh, DAOS_TX_NONE, &arr_iod, sgl, ev);
-	if (rc)
+	if (rc == 0) {
+		DFS_OP_STAT_INCR(dfs, DOS_WRITEX);
+	} else {
 		D_ERROR("daos_array_write() failed (%d)\n", rc);
+	}
 
 	return daos_der2errno(rc);
 }

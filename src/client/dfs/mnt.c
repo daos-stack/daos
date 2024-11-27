@@ -570,7 +570,8 @@ dfs_mount_int(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epoc
 	int                        amode, omode;
 	int                        rc;
 	int                        i;
-	uint32_t  props[] = {DAOS_PROP_CO_LAYOUT_TYPE, DAOS_PROP_CO_ROOTS, DAOS_PROP_CO_REDUN_FAC};
+	uint32_t  props[]   = {DAOS_PROP_CO_LAYOUT_TYPE, DAOS_PROP_CO_ROOTS, DAOS_PROP_CO_REDUN_FAC,
+			       DAOS_PROP_CO_METRICS_ENABLED};
 	const int num_props = ARRAY_SIZE(props);
 
 	if (_dfs == NULL)
@@ -729,6 +730,12 @@ dfs_mount_int(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epoc
 		daos_obj_oid_cycle(&dfs->oid);
 	}
 
+	/** If container metrics are enabled, set up the DFS metrics for it */
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_METRICS_ENABLED);
+	if (entry && entry->dpe_val == 1) {
+		dfs_metrics_init(dfs);
+	}
+
 	dfs->mounted = DFS_MOUNT;
 	*_dfs        = dfs;
 	daos_prop_free(prop);
@@ -843,6 +850,8 @@ dfs_umount(dfs_t *dfs)
 
 	daos_obj_close(dfs->root.oh, NULL);
 	daos_obj_close(dfs->super_oh, NULL);
+
+	dfs_metrics_fini(dfs);
 
 	D_FREE(dfs->prefix);
 	D_MUTEX_DESTROY(&dfs->lock);

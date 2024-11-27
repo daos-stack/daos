@@ -17,6 +17,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/lib/telemetry"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -136,6 +137,7 @@ func TestPromExp_NewClientCollector(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			defer telemetry.Fini()
 			result, err := NewClientCollector(ctx, log, cs, tc.opts)
 
 			test.CmpErr(t, tc.expErr, err)

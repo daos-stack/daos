@@ -625,6 +625,8 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 		stbuf->st_atim.tv_sec  = stbuf->st_mtim.tv_sec;
 		stbuf->st_atim.tv_nsec = stbuf->st_mtim.tv_nsec;
 	}
+
+	DFS_OP_STAT_INCR(dfs, DOS_STAT);
 	return 0;
 }
 
