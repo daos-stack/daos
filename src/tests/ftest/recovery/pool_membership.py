@@ -17,6 +17,14 @@ class PoolMembershipTest(IorTestBase):
     :avocado: recursive
     """
 
+    def tearDown(self):
+        """Tear down after each test case."""
+        self.dmg.server_set_logmasks("DEBUG", raise_exception=False)
+        super().tearDown()
+        self.dmg.server_set_logmasks(raise_exception=False)
+
+        # set logmasks back to what was configured
+
     def get_rank_to_free(self):
         """Get the free space for each engine rank.
 
