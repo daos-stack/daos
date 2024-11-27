@@ -7007,7 +7007,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 		D_INFO(DF_UUID": SWIM exclude %d ranks, failed NODE %d\n",
 		       DP_UUID(svc->ps_uuid), tgt_addrs->pta_number, failed_cnt);
 		if (failed_cnt > pw_exclude_limit) {
-			D_CRIT(DF_UUID": exclude %d ranks exceed threshold %d, failed_cnt %d\n",
+			D_CRIT(DF_UUID ": exclude %d ranks exceed threshold %d, failed_cnt %d\n",
 			       DP_UUID(svc->ps_uuid), tgt_addrs->pta_number, pw_exclude_limit,
 			       failed_cnt);
 			ABT_rwlock_rdlock(svc->ps_pool->sp_lock);

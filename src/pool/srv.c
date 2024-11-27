@@ -21,10 +21,10 @@
 #include "srv_layout.h"
 
 bool		ec_agg_disabled;
-uint32_t	pw_exclude_limit = -1; /* pool wise exclude limit */
-#define PW_EL_DEFAULT	(2)
-#define PW_EL_MIN	(0)
-#define PW_EL_MAX	(4)
+uint32_t        pw_exclude_limit = -1; /* pool wise exclude limit */
+#define PW_EL_DEFAULT (2)
+#define PW_EL_MIN     (0)
+#define PW_EL_MAX     (4)
 
 static inline bool
 check_pool_exclude_limit(const char *variable)
@@ -38,8 +38,8 @@ check_pool_exclude_limit(const char *variable)
 	if (pw_exclude_limit <= PW_EL_MAX)
 		return true;
 
-	D_INFO("pw_exclude_limit %d is out of range [%d, %d], take default %d\n",
-	       pw_exclude_limit, PW_EL_MIN, PW_EL_MAX, PW_EL_DEFAULT);
+	D_INFO("pw_exclude_limit %d is out of range [%d, %d], take default %d\n", pw_exclude_limit,
+	       PW_EL_MIN, PW_EL_MAX, PW_EL_DEFAULT);
 	pw_exclude_limit = PW_EL_DEFAULT;
 
 	return true;
