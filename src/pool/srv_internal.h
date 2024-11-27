@@ -16,7 +16,7 @@
 #include <daos_security.h>
 #include <gurt/telemetry_common.h>
 
-extern uint32_t pw_eviction_threshold;
+extern uint32_t pw_exclude_limit;
 
 /**
  * Global pool metrics

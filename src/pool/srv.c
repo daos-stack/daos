@@ -21,26 +21,26 @@
 #include "srv_layout.h"
 
 bool		ec_agg_disabled;
-uint32_t	pw_eviction_threshold = -1; /* pool wise eviction threshold */
-#define PW_ET_DEFAULT	(2)
-#define PW_ET_MIN	(0)
-#define PW_ET_MAX	(4)
+uint32_t	pw_exclude_limit = -1; /* pool wise exclude limit */
+#define PW_EL_DEFAULT	(2)
+#define PW_EL_MIN	(0)
+#define PW_EL_MAX	(4)
 
 static inline bool
-check_pool_eviction_threshold(const char *variable)
+check_pool_exclude_limit(const char *variable)
 {
-	d_getenv_uint32_t(variable, &pw_eviction_threshold);
-	if (pw_eviction_threshold == -1)
+	d_getenv_uint32_t(variable, &pw_exclude_limit);
+	if (pw_exclude_limit == -1)
 		return false;
 
-	D_INFO("Checked threshold %s=%d\n", variable, pw_eviction_threshold);
+	D_INFO("Checked threshold %s=%d\n", variable, pw_exclude_limit);
 
-	if (pw_eviction_threshold <= PW_ET_MAX)
+	if (pw_exclude_limit <= PW_EL_MAX)
 		return true;
 
-	D_INFO("pw_eviction_threshold %d is out of range [%d, %d], take default %d\n",
-	       pw_eviction_threshold, PW_ET_MIN, PW_ET_MAX, PW_ET_DEFAULT);
-	pw_eviction_threshold = PW_ET_DEFAULT;
+	D_INFO("pw_exclude_limit %d is out of range [%d, %d], take default %d\n",
+	       pw_exclude_limit, PW_EL_MIN, PW_EL_MAX, PW_EL_DEFAULT);
+	pw_exclude_limit = PW_EL_DEFAULT;
 
 	return true;
 }
@@ -71,15 +71,15 @@ init(void)
 	if (unlikely(ec_agg_disabled))
 		D_WARN("EC aggregation is disabled.\n");
 
-	pw_eviction_threshold = -1;
-	if (!check_pool_eviction_threshold("DAOS_EVICTION_THRESHOLD")) {
-		if (check_pool_eviction_threshold("DAOS_POOL_RF"))
-			D_WARN("DAOS_POOL_RF is deprecated. Use DAOS_EVICTION_THRESHOLD\n");
+	pw_exclude_limit = -1;
+	if (!check_pool_exclude_limit("DAOS_POOL_EXCLUDE_LIMIT")) {
+		if (check_pool_exclude_limit("DAOS_POOL_RF"))
+			D_WARN("DAOS_POOL_RF is deprecated. Use DAOS_POOL_EXCLUDE_LIMIT\n");
 		else {
-			pw_eviction_threshold = PW_ET_DEFAULT;
+			pw_exclude_limit = PW_EL_DEFAULT;
 		}
 	}
-	D_INFO("pool wise eviction threshold %d\n", pw_eviction_threshold);
+	D_INFO("pool wise exclusion limit %d\n", pw_exclude_limit);
 
 	ds_pool_rsvc_class_register();
 
