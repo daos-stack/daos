@@ -1402,7 +1402,7 @@ dfuse_fs_start(struct dfuse_info *dfuse_info, struct dfuse_cont *dfs)
 	 * standard allocation macros
 	 */
 	args.allocated = 1;
-	args.argv = calloc(args.argc, sizeof(*args.argv));
+	args.argv      = calloc(args.argc, sizeof(*args.argv));
 	if (!args.argv)
 		D_GOTO(err, rc = -DER_NOMEM);
 
