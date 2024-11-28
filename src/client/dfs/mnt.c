@@ -324,9 +324,9 @@ dfs_free_sb_layout(daos_iod_t *iods[])
 	D_FREE(*iods);
 }
 
-int
-dfs_connect(const char *pool, const char *sys, const char *cont, int flags, dfs_attr_t *attr,
-	    dfs_t **_dfs)
+static int
+dfs_connect_int(const char *pool, const char *sys, const char *cont, int flags, dfs_attr_t *attr,
+		daos_epoch_t epoch, const char *name, dfs_t **_dfs)
 {
 	daos_handle_t        poh         = {0};
 	daos_handle_t        coh         = {0};
@@ -396,7 +396,10 @@ mount:
 			 * few times to mount with some backoff.
 			 */
 			for (b = 0; b < 7; b++) {
-				rc = dfs_mount(poh, coh, amode, &dfs);
+				if (epoch == DAOS_EPOCH_MAX)
+					rc = dfs_mount(poh, coh, amode, &dfs);
+				else
+					rc = dfs_mount_snap(poh, coh, amode, epoch, name, &dfs);
 				if (rc == ENOENT)
 					usleep(pow(10, b));
 				else
@@ -416,7 +419,10 @@ mount:
 			D_GOTO(err, rc);
 	} else {
 		cont_h_bump = true;
-		rc          = dfs_mount(poh, cont_hdl->handle, amode, &dfs);
+		if (epoch == DAOS_EPOCH_MAX)
+			rc = dfs_mount(poh, cont_hdl->handle, amode, &dfs);
+		else
+			rc = dfs_mount_snap(poh, cont_hdl->handle, amode, epoch, name, &dfs);
 		if (rc) {
 			D_ERROR("Failed to mount DFS: %d (%s)\n", rc, strerror(rc));
 			D_GOTO(err, rc);
@@ -454,6 +460,20 @@ err:
 	}
 
 	return rc;
+}
+
+int
+dfs_connect(const char *pool, const char *sys, const char *cont, int flags, dfs_attr_t *attr,
+	    dfs_t **_dfs)
+{
+	return dfs_connect_int(pool, sys, cont, flags, attr, DAOS_EPOCH_MAX, NULL, _dfs);
+}
+
+int
+dfs_connect_snap(const char *pool, const char *sys, const char *cont, int flags, daos_epoch_t epoch,
+		 const char *name, dfs_t **_dfs)
+{
+	return dfs_connect_int(pool, sys, cont, O_RDONLY, NULL, epoch, name, _dfs);
 }
 
 int
@@ -539,8 +559,8 @@ err:
 	return rc;
 }
 
-int
-dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
+static int
+dfs_mount_int(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epoch, dfs_t **_dfs)
 {
 	dfs_t                     *dfs;
 	daos_prop_t               *prop;
@@ -586,9 +606,17 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 
 	dfs->poh      = poh;
 	dfs->coh      = coh;
-	dfs->amode    = amode;
-	dfs->th       = DAOS_TX_NONE;
-	dfs->th_epoch = DAOS_EPOCH_MAX;
+	dfs->th_epoch = epoch;
+	if (epoch == DAOS_EPOCH_MAX) {
+		dfs->th	   = DAOS_TX_NONE;
+		dfs->amode = amode;
+	} else {
+		/** Mount a snapshot */
+		dfs->amode = O_RDONLY;
+		rc = daos_tx_open_snap(coh, epoch, &dfs->th, NULL);
+		if (rc != 0)
+			D_GOTO(err_dfs, rc = daos_der2errno(rc));
+	}
 
 	rc = D_MUTEX_INIT(&dfs->lock, NULL);
 	if (rc != 0)
@@ -715,6 +743,76 @@ err_dfs:
 err_prop:
 	daos_prop_free(prop);
 	return rc;
+}
+
+int
+dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
+{
+	return dfs_mount_int(poh, coh, flags, DAOS_EPOCH_MAX, _dfs);
+}
+
+/** Number of snapshots to fetch in one list call */
+#define	DFS_SNAP_NR	10
+
+int
+dfs_mount_snap(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epoch,
+	       const char *name, dfs_t **dfs)
+{
+	daos_epoch_t ep = 0;
+
+	if (epoch == DAOS_EPOCH_MAX) {
+		D_ERROR("DAOS_EPOCH_MAX not supported for dfs_mount_snap()\n");
+		/** cannot be right */
+		return EINVAL;
+	}
+
+	if (epoch == 0) {
+		/** Look up epoch associated with snapshot name */
+		char		names[DFS_SNAP_NR][DAOS_SNAPSHOT_MAX_LEN];
+		daos_epoch_t	eps[DFS_SNAP_NR];
+		int		nr;
+		daos_anchor_t	anchor = {0};
+		int		rc;
+
+		if (name == NULL)
+			return EINVAL;
+
+		/** iterate until we (hopefully) find a matching name */
+		while (!daos_anchor_is_eof(&anchor)) {
+			int i;
+
+			nr = DFS_SNAP_NR;
+			for (i = 0; i < nr; i++)
+				names[i][0] = '\0';
+
+			rc = daos_cont_list_snap(coh, &nr, eps, (char **)names, &anchor, NULL);
+			if (rc)
+				return EINVAL;
+
+			/** check if we find a match */
+			for (i = 0; i < nr; i++) {
+				if (!strncmp(names[i], name, DAOS_SNAPSHOT_MAX_LEN)) {
+					ep = eps[i];
+					break;
+				}
+			}
+
+			if (ep != 0)
+				break;
+		}
+
+		if (ep == 0) {
+			D_ERROR("No matching snapshot name found.\n");
+			/** no match found */
+			return ENOENT;
+		}
+		D_DEBUG(DB_ALL, "Snapshot name %s associated with epoch "DF_U64"\n", name, epoch);
+	} else {
+		/** We are provided a epoch, let's use it */
+		ep = epoch;
+	}
+
+	return dfs_mount_int(poh, coh, O_RDONLY, ep, dfs);
 }
 
 int
@@ -1051,18 +1149,17 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob, 
 	}
 
 	/** Create transaction handle */
-	if (dfs_params->th_epoch == DAOS_EPOCH_MAX) {
-		dfs->th_epoch = DAOS_EPOCH_MAX;
-		dfs->th       = DAOS_TX_NONE;
+	dfs->th_epoch = dfs_params->th_epoch;
+	if (dfs->th_epoch == DAOS_EPOCH_MAX) {
+		dfs->th = DAOS_TX_NONE;
 	} else {
-		rc = daos_tx_open_snap(coh, dfs_params->th_epoch, &dfs->th, NULL);
+		rc = daos_tx_open_snap(coh, dfs->th_epoch, &dfs->th, NULL);
 		if (rc) {
 			D_ERROR("daos_tx_open_snap() failed, " DF_RC "\n", DP_RC(rc));
 			daos_obj_close(dfs->super_oh, NULL);
 			daos_obj_close(dfs->root.oh, NULL);
 			D_GOTO(err_dfs, rc = daos_der2errno(rc));
 		}
-		dfs->th_epoch = dfs_params->th_epoch;
 	}
 
 	dfs->mounted = DFS_MOUNT;
