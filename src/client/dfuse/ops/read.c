@@ -234,7 +234,6 @@ chunk_cb(struct dfuse_event *ev)
 	cd->rc = ev->de_ev.ev_error;
 
 	if (cd->rc == 0 && (ev->de_len != CHUNK_SIZE)) {
-		cd->rc = EIO;
 		DS_WARN(cd->rc, "Unexpected short read bucket %ld (%#zx) expected %i got %zi",
 			cd->bucket, cd->bucket * CHUNK_SIZE, CHUNK_SIZE, ev->de_len);
 	}
@@ -256,19 +255,26 @@ chunk_cb(struct dfuse_event *ev)
 	D_SPIN_UNLOCK(&ia->lock);
 
 	d_list_for_each_entry_safe(cr, crn, &cd->req_list, req_list) {
-		size_t position;
+		size_t position = (cd->bucket * CHUNK_SIZE) + (cr->slot * K128);
+		size_t len;
 
 		DFUSE_TRA_DEBUG(cr->oh, "Replying for %ld[%d]", cd->bucket, cr->slot);
 
-		position = (cd->bucket * CHUNK_SIZE) + (cr->slot * K128);
+		/* Delete from the list before replying as there's no reference held otherwise */
+		d_list_del(&cr->req_list);
+
 		if (cd->rc != 0) {
 			DFUSE_REPLY_ERR_RAW(cr->oh, cr->req, cd->rc);
 		} else {
-			DFUSE_TRA_DEBUG(cr->oh, "%#zx-%#zx read", position, position + K128 - 1);
+			if ((((cr->slot + 1) * K128) - 1) >= ev->de_len)
+				len = max(ev->de_len - (cr->slot * K128), 0);
+			else
+				len = K128;
+
+			DFUSE_TRA_DEBUG(cr->oh, "%#zx-%#zx read", position, position + len - 1);
 			DFUSE_REPLY_BUFQ(cr->oh, cr->req, ev->de_iov.iov_buf + (cr->slot * K128),
-					 K128);
+					 len);
 		}
-		d_list_del(&cr->req_list);
 		D_FREE(cr);
 	}
 }
@@ -410,10 +416,17 @@ found:
 			 */
 			rcb = false;
 		} else {
-			oh->doh_linear_read_pos = max(oh->doh_linear_read_pos, position + K128);
+			size_t read_len;
 
-			DFUSE_TRA_DEBUG(oh, "%#zx-%#zx read", position, position + K128 - 1);
-			DFUSE_REPLY_BUFQ(oh, req, cd->ev->de_iov.iov_buf + (slot * K128), K128);
+			if ((((slot + 1) * K128) - 1) >= cd->ev->de_len)
+				read_len = max(cd->ev->de_len - (slot * K128), 0);
+			else
+				read_len = K128;
+
+			oh->doh_linear_read_pos = max(oh->doh_linear_read_pos, position + read_len);
+
+			DFUSE_TRA_DEBUG(oh, "%#zx-%#zx read", position, position + read_len - 1);
+			DFUSE_REPLY_BUFQ(oh, req, cd->ev->de_iov.iov_buf + (slot * K128), read_len);
 			rcb = true;
 		}
 	} else {
