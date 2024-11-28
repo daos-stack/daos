@@ -1972,6 +1972,7 @@ ds_mgmt_drpc_pool_query_targets(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			resp.infos[i]->space[j]->free = infos[i].ta_space.s_free[j];
 			resp.infos[i]->space[j]->media_type = j;
 		}
+		resp.infos[i]->mem_file_bytes = infos[i].ta_space.s_total_mem;
 	}
 
 out_infos:
