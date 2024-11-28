@@ -181,8 +181,6 @@ pick_eqt(struct dfuse_info *dfuse_info)
 
 #define CHUNK_SIZE (1024 * 1024)
 
-#define MAX_REQ_COUNT 256
-
 struct read_chunk_data {
 	struct dfuse_event   *ev;
 	bool                  slot_done[8];
@@ -193,12 +191,14 @@ struct read_chunk_data {
 	int                   rc;
 	int                   entered;
 	bool                  complete;
-	int                   idx;
-	struct {
-		int                   slot;
-		fuse_req_t            req;
-		struct dfuse_obj_hdl *oh;
-	} reqs[MAX_REQ_COUNT];
+	d_list_t              req_list;
+};
+
+struct read_chunk_req {
+	d_list_t              req_list;
+	struct dfuse_obj_hdl *oh;
+	fuse_req_t            req;
+	int                   slot;
 };
 
 /* Called when the last open file handle on a inode is closed.  This needs to free everything which
@@ -228,6 +228,8 @@ chunk_cb(struct dfuse_event *ev)
 {
 	struct read_chunk_data *cd = ev->de_cd;
 	struct active_inode    *ia = cd->ia;
+	struct read_chunk_req  *cr;
+	struct read_chunk_req  *crn;
 
 	cd->rc = ev->de_ev.ev_error;
 
@@ -245,85 +247,30 @@ chunk_cb(struct dfuse_event *ev)
 
 	/* Mark the slot as replied to.  There's a race here as the slot hasn't been replied to
 	 * however references are dropped by the DFUSE_REPLY macros below so an extra ref on active
-	 * would be required.
+	 * would be required.  The danger is that the bucket gets put on the end of the list rather
+	 * than the start.
 	 */
-	for (int i = 0; i < cd->idx; i++)
-		cd->slot_done[cd->reqs[i].slot] = true;
+	d_list_for_each_entry(cr, &cd->req_list, req_list)
+		cd->slot_done[cr->slot] = true;
+
 	D_SPIN_UNLOCK(&ia->lock);
 
-	for (int i = 0; i < cd->idx; i++) {
-		int        slot;
-		fuse_req_t req;
-		size_t     position;
+	d_list_for_each_entry_safe(cr, crn, &cd->req_list, req_list) {
+		size_t position;
 
-		slot = cd->reqs[i].slot;
-		req  = cd->reqs[i].req;
+		DFUSE_TRA_DEBUG(cr->oh, "Replying for %ld[%d]", cd->bucket, cr->slot);
 
-		DFUSE_TRA_DEBUG(cd->reqs[i].oh, "Replying idx %d/%d for %ld[%d]", i, cd->idx,
-				cd->bucket, slot);
-
-		position = (cd->bucket * CHUNK_SIZE) + (slot * K128);
+		position = (cd->bucket * CHUNK_SIZE) + (cr->slot * K128);
 		if (cd->rc != 0) {
-			DFUSE_REPLY_ERR_RAW(cd->reqs[i].oh, req, cd->rc);
+			DFUSE_REPLY_ERR_RAW(cr->oh, cr->req, cd->rc);
 		} else {
-			DFUSE_TRA_DEBUG(cd->reqs[i].oh, "%#zx-%#zx read", position,
-					position + K128 - 1);
-			DFUSE_REPLY_BUFQ(cd->reqs[i].oh, req, ev->de_iov.iov_buf + (slot * K128),
+			DFUSE_TRA_DEBUG(cr->oh, "%#zx-%#zx read", position, position + K128 - 1);
+			DFUSE_REPLY_BUFQ(cr->oh, cr->req, ev->de_iov.iov_buf + (cr->slot * K128),
 					 K128);
 		}
+		d_list_del(&cr->req_list);
+		D_FREE(cr);
 	}
-}
-
-/* Submit a read to dfs.
- *
- * Returns true on success.
- */
-static bool
-chunk_fetch(fuse_req_t req, struct dfuse_inode_entry *ie, struct read_chunk_data *cd)
-{
-	struct dfuse_info  *dfuse_info = fuse_req_userdata(req);
-	struct dfuse_event *ev;
-	struct dfuse_eq    *eqt;
-	int                 rc;
-	daos_off_t          position = cd->bucket * CHUNK_SIZE;
-
-	eqt = pick_eqt(dfuse_info);
-
-	ev = d_slab_acquire(eqt->de_read_slab);
-	if (ev == NULL) {
-		cd->rc = ENOMEM;
-		return false;
-	}
-
-	ev->de_iov.iov_len = CHUNK_SIZE;
-	ev->de_req         = req;
-	ev->de_cd          = cd;
-	ev->de_sgl.sg_nr   = 1;
-	ev->de_len         = 0;
-	ev->de_complete_cb = chunk_cb;
-
-	cd->ev  = ev;
-	cd->eqt = eqt;
-
-	rc = dfs_read(ie->ie_dfs->dfs_ns, ie->ie_obj, &ev->de_sgl, position, &ev->de_len,
-		      &ev->de_ev);
-	if (rc != 0)
-		goto err;
-
-	/* Send a message to the async thread to wake it up and poll for events */
-	sem_post(&eqt->de_sem);
-
-	/* Now ensure there are more descriptors for the next request */
-	d_slab_restock(eqt->de_read_slab);
-
-	return true;
-
-err:
-	daos_event_fini(&ev->de_ev);
-	d_slab_release(eqt->de_read_slab, ev);
-	cd->ev = NULL;
-	cd->rc = rc;
-	return false;
 }
 
 /* Try and do a bulk read.
@@ -335,6 +282,7 @@ chunk_read(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
 {
 	struct dfuse_inode_entry *ie = oh->doh_ie;
 	struct read_chunk_data   *cd;
+	struct read_chunk_req    *cr;
 	off_t                     last;
 	uint64_t                  bucket;
 	int                       slot;
@@ -373,6 +321,13 @@ chunk_read(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
 	if (cd == NULL)
 		goto err;
 
+	D_ALLOC_PTR(cr);
+	if (cr == NULL) {
+		D_FREE(cd);
+		goto err;
+	}
+
+	D_INIT_LIST_HEAD(&cd->req_list);
 	cd->ia     = ie->ie_active;
 	cd->bucket = bucket;
 	submit     = true;
@@ -390,10 +345,25 @@ found:
 		d_list_add_tail(&cd->list, &ie->ie_active->chunks);
 
 	if (submit) {
-		cd->reqs[0].req  = req;
-		cd->reqs[0].oh   = oh;
-		cd->reqs[0].slot = slot;
-		cd->idx++;
+		struct dfuse_info  *dfuse_info = fuse_req_userdata(req);
+		struct dfuse_eq    *eqt;
+		struct dfuse_event *ev;
+		int                 rc;
+
+		/* Overwrite position here to the start of the bucket */
+		position = cd->bucket * CHUNK_SIZE;
+
+		eqt = pick_eqt(dfuse_info);
+
+		ev = d_slab_acquire(eqt->de_read_slab);
+		if (ev == NULL) {
+			d_list_del(&cd->list);
+			D_FREE(cr);
+			D_FREE(cd);
+			goto err;
+		}
+
+		d_list_add(&cr->req_list, &cd->req_list);
 
 		/* Now check if this read request is complete or not yet, if it isn't then just
 		 * save req in the right slot however if it is then reply here.  After the call to
@@ -404,7 +374,31 @@ found:
 		DFUSE_TRA_DEBUG(oh, "submit for bucket %ld[%d]", bucket, slot);
 		D_SPIN_UNLOCK(&ie->ie_active->lock);
 
-		rcb = chunk_fetch(req, ie, cd);
+		cd->eqt = eqt;
+		cd->ev  = ev;
+
+		cr->req  = req;
+		cr->oh   = oh;
+		cr->slot = slot;
+
+		ev->de_iov.iov_len = CHUNK_SIZE;
+		ev->de_req         = req;
+		ev->de_cd          = cd;
+		ev->de_sgl.sg_nr   = 1;
+		ev->de_len         = 0;
+		ev->de_complete_cb = chunk_cb;
+
+		rc = dfs_read(ie->ie_dfs->dfs_ns, ie->ie_obj, &ev->de_sgl, position, &ev->de_len,
+			      &ev->de_ev);
+		if (rc == 0) {
+			/* Send a message to the async thread to wake it up and poll for events */
+			sem_post(&eqt->de_sem);
+		} else {
+			ev->de_ev.ev_error = rc;
+			chunk_cb(ev);
+		}
+
+		rcb = true;
 	} else if (cd->complete) {
 		cd->slot_done[slot] = true;
 
@@ -422,26 +416,19 @@ found:
 			DFUSE_REPLY_BUFQ(oh, req, cd->ev->de_iov.iov_buf + (slot * K128), K128);
 			rcb = true;
 		}
-
-	} else if (cd->idx < MAX_REQ_COUNT) {
-		DFUSE_TRA_DEBUG(oh, "Using idx %d for %ld[%d]", cd->idx, bucket, slot);
-
-		cd->reqs[cd->idx].req  = req;
-		cd->reqs[cd->idx].oh   = oh;
-		cd->reqs[cd->idx].slot = slot;
-		cd->idx++;
-		D_SPIN_UNLOCK(&ie->ie_active->lock);
-		rcb = true;
 	} else {
-		D_SPIN_UNLOCK(&ie->ie_active->lock);
-
-		/* Handle concurrent reads of the same slot, this wasn't
-		 * expected but can happen so for now reject it at this
-		 * level and have read perform a separate I/O for this slot.
-		 * TODO: Handle DAOS-16686 here.
-		 */
 		rcb = false;
-		DFUSE_TRA_WARNING(oh, "Too many outstanding reads");
+
+		D_ALLOC_PTR(cr);
+		if (cr) {
+			cr->req  = req;
+			cr->oh   = oh;
+			cr->slot = slot;
+			d_list_add_tail(&cr->req_list, &cd->req_list);
+			rcb = true;
+		}
+
+		D_SPIN_UNLOCK(&ie->ie_active->lock);
 	}
 
 	return rcb;
