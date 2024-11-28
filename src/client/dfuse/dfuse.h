@@ -1025,8 +1025,6 @@ struct dfuse_inode_entry {
 struct active_inode {
 	d_list_t               chunks;
 	d_list_t               open_reads;
-	bool                   seen_eof;
-	size_t                 file_size;
 	pthread_spinlock_t     lock;
 	struct dfuse_pre_read *readahead;
 };
