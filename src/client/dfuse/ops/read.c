@@ -282,7 +282,7 @@ chunk_read(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
 {
 	struct dfuse_inode_entry *ie = oh->doh_ie;
 	struct read_chunk_data   *cd;
-	struct read_chunk_req    *cr;
+	struct read_chunk_req    *cr = NULL;
 	off_t                     last;
 	uint64_t                  bucket;
 	int                       slot;
