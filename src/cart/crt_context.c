@@ -515,7 +515,7 @@ crt_rpc_complete_and_unlock(struct crt_rpc_priv *rpc_priv, int rc)
 
 	if (rc == -DER_CANCELED)
 		rpc_priv->crp_state = RPC_STATE_CANCELED;
-	else if (rc == -DER_TIMEDOUT)
+	else if (rc == -DER_TIMEDOUT || rc == -DER_DEADLINE_EXPIRED)
 		rpc_priv->crp_state = RPC_STATE_TIMEOUT;
 	else if (rc == -DER_UNREACH)
 		rpc_priv->crp_state = RPC_STATE_FWD_UNREACH;
@@ -1279,10 +1279,11 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 
 		if (err_to_print > 0) {
 			RPC_ERROR(rpc_priv,
-				  "ctx_id %d, (status: %#x) timed out (%d seconds), "
+				  "ctx_id %d, (status: %#x) timed out (%d seconds) [deadline:%d], "
 				  "target (%d:%d)\n",
 				  crt_ctx->cc_idx, rpc_priv->crp_state, rpc_priv->crp_timeout_sec,
-				  rpc_priv->crp_pub.cr_ep.ep_rank, rpc_priv->crp_pub.cr_ep.ep_tag);
+				  rpc_priv->crp_deadline_sec, rpc_priv->crp_pub.cr_ep.ep_rank,
+				  rpc_priv->crp_pub.cr_ep.ep_tag);
 			err_to_print--;
 			left_to_print--;
 
@@ -1292,10 +1293,11 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 
 		} else {
 			RPC_INFO(rpc_priv,
-				 "ctx_id %d, (status: %#x) timed out (%d seconds), "
+				 "ctx_id %d, (status: %#x) timed out (%d seconds) [deadline:%d], "
 				 "target (%d:%d)\n",
 				 crt_ctx->cc_idx, rpc_priv->crp_state, rpc_priv->crp_timeout_sec,
-				 rpc_priv->crp_pub.cr_ep.ep_rank, rpc_priv->crp_pub.cr_ep.ep_tag);
+				 rpc_priv->crp_deadline_sec, rpc_priv->crp_pub.cr_ep.ep_rank,
+				 rpc_priv->crp_pub.cr_ep.ep_tag);
 			left_to_print--;
 		}
 
