@@ -58,7 +58,6 @@ dnf --nodocs install \
     python3-devel \
     scons \
     sg3_utils \
-    strace \
     sudo \
     valgrind-devel \
     which \

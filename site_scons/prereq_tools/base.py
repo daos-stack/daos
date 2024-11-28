@@ -206,9 +206,7 @@ class Runner():
                 retval = True
             else:
                 print(f"RUN: {' '.join(cmd)}")
-                rc = subprocess.call(cmd, shell=False, cwd=subdir, env=passed_env['ENV'])
-                if rc != 0:
-                    print(f"Command failed with {rc}")
+                if subprocess.call(cmd, shell=False, cwd=subdir, env=passed_env['ENV']) != 0:
                     retval = False
                     break
         return retval
@@ -1409,36 +1407,6 @@ class _Component():
                 norigin.append(os.path.normpath(path))
                 break
 
-        for folder in self.key_words.get("patch_rpath", []):
-            path = os.path.join(comp_path, folder)
-            files = os.listdir(path)
-            for lib in files:
-                if folder != 'bin' and not lib.endswith(".so"):
-                    # Assume every file in bin can be patched
-                    continue
-                full_lib = os.path.join(path, lib)
-                # pylint: disable=line-too-long
-                cmd = ['stat', '-L', full_lib]
-                RUNNER.run_commands([cmd])
-
-            cmd = ['daos', 'filesystem', 'evict', path]
-            try:
-                RUNNER.run_commands([cmd])
-            except FileNotFoundError:
-                pass
-
-        for folder in self.key_words.get("patch_rpath", []):
-            path = os.path.join(comp_path, folder)
-            files = os.listdir(path)
-            for lib in files:
-                if folder != 'bin' and not lib.endswith(".so"):
-                    # Assume every file in bin can be patched
-                    continue
-                full_lib = os.path.join(path, lib)
-                # pylint: disable=line-too-long
-                cmd = ['stat', '-L', full_lib]
-                RUNNER.run_commands([cmd])
-
         rpath += norigin
         for folder in self.key_words.get("patch_rpath", []):
             path = os.path.join(comp_path, folder)
@@ -1448,14 +1416,9 @@ class _Component():
                     # Assume every file in bin can be patched
                     continue
                 full_lib = os.path.join(path, lib)
-                # pylint: disable=line-too-long
-                cmd = ['strace', '-e', 'file,mmap,read,write,close',
-                       'patchelf', '--set-rpath', ':'.join(rpath), full_lib]
+                cmd = ['patchelf', '--set-rpath', ':'.join(rpath), full_lib]
                 if not RUNNER.run_commands([cmd]):
-                    if lib == 'libspdk.so':
-                        print(f'Skipped patching {full_lib}')
-                    else:
-                        raise BuildFailure(f"Failed to patch {lib}")
+                    print(f'Skipped patching {full_lib}')
 
     def build(self, env, needed_libs):
         """Build the component, if necessary
