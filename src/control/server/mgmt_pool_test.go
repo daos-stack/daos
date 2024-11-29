@@ -24,7 +24,6 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -656,8 +655,6 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			buf.Reset()
 			defer test.ShowBufferOnFailure(t, buf)
 
-			ctx := test.Context(t)
-
 			if tc.mgmtSvc == nil {
 				tier := storage.NewTierConfig().
 					WithStorageClass("nvme").
@@ -666,30 +663,11 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 					tier.WithBdevDeviceRoles(7)
 				}
 				engineCfg := engine.MockConfig().
-					WithTargetCount(tc.targetCount).
+					WithTargetCount(16).
 					WithStorage(tier)
-				r := engine.NewTestRunner(nil, engineCfg)
-				if _, err := r.Start(ctx); err != nil {
-					t.Fatal(err)
-				}
-
 				mp := storage.NewProvider(log, 0, &engineCfg.Storage,
 					nil, nil, nil, nil)
-				srv := NewEngineInstance(log, mp, nil, r, nil)
-				srv.setDrpcSocket("/dontcare")
-				srv.ready.SetTrue()
-
-				harness := NewEngineHarness(log)
-				if err := harness.AddInstance(srv); err != nil {
-					panic(err)
-				}
-				harness.started.SetTrue()
-
-				db := raft.MockDatabase(t, log)
-				ms := system.MockMembership(t, log, db, mockTCPResolver)
-				tc.mgmtSvc = newMgmtSvc(harness, ms, db, nil,
-					events.NewPubSub(ctx, log))
-				tc.mgmtSvc.startAsyncLoops(ctx)
+				tc.mgmtSvc = newTestMgmtSvcWithProvider(t, log, mp)
 			}
 
 			numMembers := tc.memberCount
