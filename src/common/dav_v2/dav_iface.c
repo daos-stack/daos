@@ -51,7 +51,7 @@ dav_uc_callback(int evt_type, void *arg, uint32_t zid)
 		break;
 	case UMEM_CACHE_EVENT_PGEVICT:
 		if (hdl->do_booted) {
-			VALGRIND_DO_DESTROY_MEMPOOL(z);
+			VALGRIND_DO_DESTROY_MEMPOOL_COND(z);
 		}
 		break;
 	default:

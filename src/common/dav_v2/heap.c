@@ -383,8 +383,13 @@ heap_mbrt_init(struct palloc_heap *heap)
 	rt->mb_create_wq        = NULL;
 	rt->mb_pressure         = 0;
 	rt->empty_nemb_cnt      = 0;
-	rt->empty_nemb_gcth     = 0;
-	ret                     = store->stor_ops->so_waitqueue_create(&rt->mb_create_wq);
+	rt->empty_nemb_gcth     = HEAP_NEMB_EMPTY_THRESHOLD;
+
+	d_getenv_uint("DAOS_NEMB_EMPTY_RECYCLE_THRESHOLD", &rt->empty_nemb_gcth);
+	if (!rt->empty_nemb_gcth)
+		rt->empty_nemb_gcth = HEAP_NEMB_EMPTY_THRESHOLD;
+
+	ret = store->stor_ops->so_waitqueue_create(&rt->mb_create_wq);
 	if (ret) {
 		ret = daos_der2errno(ret);
 		goto error;
@@ -2293,11 +2298,6 @@ heap_force_recycle(struct palloc_heap *heap)
 	struct mbrt   *mb;
 	uint32_t       zone_id;
 
-	if (!heap->rt->empty_nemb_gcth) {
-		heap->rt->empty_nemb_gcth = HEAP_NEMB_EMPTY_THRESHOLD;
-		d_getenv_uint("DAOS_NEMB_EMPTY_RECYCLE_THRESHOLD", &heap->rt->empty_nemb_gcth);
-	}
-
 	if (heap->rt->empty_nemb_cnt < heap->rt->empty_nemb_gcth)
 		return 0;
 
@@ -2376,6 +2376,9 @@ heap_vg_open(struct palloc_heap *heap, object_callback cb, void *arg, int object
 
 	for (unsigned i = 1; i < zones; ++i) {
 		if (!umem_cache_offisloaded(heap->layout_info.store, GET_ZONE_OFFSET(i)))
+			continue;
+
+		if (!heap_mbrt_ismb_initialized(heap, i))
 			continue;
 
 		if (heap_mbrt_ismb_evictable(heap, i))
