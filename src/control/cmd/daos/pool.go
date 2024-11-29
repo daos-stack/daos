@@ -369,9 +369,9 @@ func queryPool(poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (*daos.Poo
 		daos.PoolQueryOptionDisabledEngines,
 		daos.PoolQueryOptionSuspectEngines,
 	}
-	var firstOption string
+	var firstOption string = ""
 	for _, opt := range queryOptions {
-		if queryMask.HasOption(opt) && opt != firstOption {
+		if queryMask.HasOption(opt) && firstOption != "" {
 			firstOption = opt
 			continue
 		}
@@ -392,6 +392,7 @@ func queryPool(poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (*daos.Poo
 			}
 		}
 	}
+	poolInfo.QueryMask = originalMask
 
 	return poolInfo, nil
 }
