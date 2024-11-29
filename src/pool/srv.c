@@ -119,8 +119,8 @@ static struct crt_corpc_ops ds_pool_tgt_disconnect_co_ops = {
 };
 
 static struct crt_corpc_ops ds_pool_tgt_query_co_ops_v6 = {
-	.co_aggregate	= ds_pool_tgt_query_aggregator_v6,
-	.co_pre_forward	= NULL,
+    .co_aggregate   = ds_pool_tgt_query_aggregator_v6,
+    .co_pre_forward = NULL,
 };
 
 static struct crt_corpc_ops ds_pool_tgt_query_co_ops = {
@@ -139,10 +139,10 @@ static struct crt_corpc_ops ds_pool_tgt_query_co_ops = {
 },
 
 static struct daos_rpc_handler pool_handlers_v6[] = {POOL_PROTO_CLI_RPC_LIST(6)
-						     POOL_PROTO_SRV_RPC_LIST(6)};
+							 POOL_PROTO_SRV_RPC_LIST(6)};
 
 static struct daos_rpc_handler pool_handlers_v7[] = {POOL_PROTO_CLI_RPC_LIST(7)
-						     POOL_PROTO_SRV_RPC_LIST(7)};
+							 POOL_PROTO_SRV_RPC_LIST(7)};
 
 #undef X
 

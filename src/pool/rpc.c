@@ -213,9 +213,9 @@ CRT_RPC_DEFINE(pool_tgt_warmup, DAOS_ISEQ_POOL_TGT_WARMUP, DAOS_OSEQ_POOL_TGT_WA
 },
 
 static struct crt_proto_rpc_format pool_proto_rpc_fmt_v6[] = {POOL_PROTO_CLI_RPC_LIST(6)
-							      POOL_PROTO_SRV_RPC_LIST(6)};
+								  POOL_PROTO_SRV_RPC_LIST(6)};
 static struct crt_proto_rpc_format pool_proto_rpc_fmt_v7[] = {POOL_PROTO_CLI_RPC_LIST(7)
-							      POOL_PROTO_SRV_RPC_LIST(7)};
+								  POOL_PROTO_SRV_RPC_LIST(7)};
 
 #undef X
 

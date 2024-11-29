@@ -1562,7 +1562,7 @@ pool_query_space(uuid_t pool_uuid, struct daos_pool_space *x_ps)
 	x_ps->ps_ntargets = 1;
 	x_ps->ps_space.s_total[DAOS_MEDIA_SCM] = SCM_TOTAL(vps);
 	x_ps->ps_space.s_total[DAOS_MEDIA_NVME] = NVME_TOTAL(vps);
-	x_ps->ps_space.s_total_mem = vps->vps_space.s_total_mem;
+	x_ps->ps_space.s_total_mem              = vps->vps_space.s_total_mem;
 
 	/* Exclude the sys reserved space before reporting to user */
 	if (SCM_FREE(vps) > SCM_SYS(vps))
@@ -1948,16 +1948,16 @@ out:
 static inline void
 dps_to_dpsv6(struct daos_pool_space *ps, struct daos_pool_space_v6 *ps6)
 {
-	int	i;
+	int i;
 
 	ps6->ps_ntargets = ps->ps_ntargets;
 	for (i = DAOS_MEDIA_SCM; i < DAOS_MEDIA_MAX; i++) {
-		ps6->ps_space.s_total[i]	= ps->ps_space.s_total[i];
-		ps6->ps_space.s_free[i]		= ps->ps_space.s_free[i];
+		ps6->ps_space.s_total[i] = ps->ps_space.s_total[i];
+		ps6->ps_space.s_free[i]  = ps->ps_space.s_free[i];
 
-		ps6->ps_free_max[i]		= ps->ps_free_max[i];
-		ps6->ps_free_min[i]		= ps->ps_free_min[i];
-		ps6->ps_free_mean[i]		= ps->ps_free_mean[i];
+		ps6->ps_free_max[i]  = ps->ps_free_max[i];
+		ps6->ps_free_min[i]  = ps->ps_free_min[i];
+		ps6->ps_free_mean[i] = ps->ps_free_mean[i];
 	}
 }
 
@@ -1966,7 +1966,7 @@ pool_tgt_query_handler(crt_rpc_t *rpc, int handler_version)
 {
 	struct pool_tgt_query_in	*in = crt_req_get(rpc);
 	struct pool_tgt_query_out	*out = crt_reply_get(rpc);
-	struct daos_pool_space		out_space = { 0 }, *ps;
+	struct daos_pool_space           out_space = {0}, *ps;
 	struct ds_pool			*pool;
 	int				 rc;
 
@@ -2020,8 +2020,8 @@ ds_pool_tgt_query_handler(crt_rpc_t *rpc)
 static void
 aggregate_pool_space_v6(struct daos_pool_space_v6 *agg_ps, struct daos_pool_space_v6 *ps)
 {
-	int	i;
-	bool	first;
+	int  i;
+	bool first;
 
 	D_ASSERT(agg_ps && ps);
 
@@ -2042,16 +2042,15 @@ aggregate_pool_space_v6(struct daos_pool_space_v6 *agg_ps, struct daos_pool_spac
 		if (agg_ps->ps_free_min[i] > ps->ps_free_min[i] || first)
 			agg_ps->ps_free_min[i] = ps->ps_free_min[i];
 
-		agg_ps->ps_free_mean[i] = agg_ps->ps_space.s_free[i] /
-					  agg_ps->ps_ntargets;
+		agg_ps->ps_free_mean[i] = agg_ps->ps_space.s_free[i] / agg_ps->ps_ntargets;
 	}
 }
 
 int
 ds_pool_tgt_query_aggregator_v6(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 {
-	struct pool_tgt_query_v6_out	*out_source = crt_reply_get(source);
-	struct pool_tgt_query_v6_out	*out_result = crt_reply_get(result);
+	struct pool_tgt_query_v6_out *out_source = crt_reply_get(source);
+	struct pool_tgt_query_v6_out *out_result = crt_reply_get(result);
 
 	out_result->tqo_rc += out_source->tqo_rc;
 	if (out_source->tqo_rc != 0)

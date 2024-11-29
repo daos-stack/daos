@@ -1226,7 +1226,7 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_
 	daos_handle_t		 hdl;
 	struct d_uuid		 ukey;
 	struct vos_pool		*pool = NULL;
-	struct vos_pool_ext_df	*pd_ext_df;
+	struct vos_pool_ext_df  *pd_ext_df;
 	int			 rc = 0;
 
 	if (!path || uuid_is_null(uuid) || daos_file_is_dax(path))
@@ -1329,7 +1329,7 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_
 		pool_df->pd_version = version;
 
 	/* pd_ext is newly allocated, no need to call tx_add_ptr() */
-	pd_ext_df = umem_off2ptr(&umem, pool_df->pd_ext);
+	pd_ext_df             = umem_off2ptr(&umem, pool_df->pd_ext);
 	pd_ext_df->ped_mem_sz = scm_sz;
 end:
 	/**

@@ -79,8 +79,8 @@
 	X(POOL_UPGRADE, 0, &CQF_pool_upgrade, ds_pool_upgrade_handler, NULL)                       \
 	X(POOL_TGT_DISCARD, 0, &CQF_pool_tgt_discard, ds_pool_tgt_discard_handler, NULL)
 
-#define POOL_PROTO_RPC_LIST									\
-	POOL_PROTO_CLI_RPC_LIST(DAOS_POOL_VERSION)						\
+#define POOL_PROTO_RPC_LIST                                                                        \
+	POOL_PROTO_CLI_RPC_LIST(DAOS_POOL_VERSION)                                                 \
 	POOL_PROTO_SRV_RPC_LIST(DAOS_POOL_VERSION)
 
 /* Define for RPC enum population below */
@@ -88,8 +88,7 @@
 
 enum pool_operation {
 	/* This list must stay consistent with POOL_PROTO_RPC_LIST. */
-	POOL_PROTO_CLI_RPC_LIST(DAOS_POOL_VERSION)
-	POOL_PROTO_CLI_COUNT,
+	POOL_PROTO_CLI_RPC_LIST(DAOS_POOL_VERSION) POOL_PROTO_CLI_COUNT,
 	POOL_PROTO_CLI_LAST = POOL_PROTO_CLI_COUNT - 1,
 	POOL_PROTO_SRV_RPC_LIST(DAOS_POOL_VERSION)
 };

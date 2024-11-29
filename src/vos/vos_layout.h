@@ -120,9 +120,9 @@ struct vos_pool_ext_df {
 	/* Extension for GC bucket */
 	struct vos_gc_bkt_df	ped_gc_bkt;
 	/* Memory file size for md-on-ssd phase2 pool */
-	uint64_t		ped_mem_sz;
+	uint64_t                ped_mem_sz;
 	/* Paddings for other potential new feature */
-	uint64_t		ped_paddings[53];
+	uint64_t                ped_paddings[53];
 	/* Reserved for future extension */
 	uint64_t		ped_reserve;
 };
