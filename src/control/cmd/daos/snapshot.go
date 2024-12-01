@@ -7,12 +7,16 @@
 package main
 
 import (
+	"fmt"
+	"io"
+	"strings"
 	"unsafe"
 
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
 
 /*
@@ -64,7 +68,7 @@ func (cmd *containerSnapCreateCmd) Execute(args []string) error {
 		}, nil)
 	}
 
-	cmd.Infof("snapshot/epoch 0x%x has been created", cEpoch)
+	cmd.Infof("snapshot/epoch 0x%x has been created (timestamp: %s)", cEpoch, common.FormatTime(daos.HLC(cEpoch).ToTime()))
 
 	return nil
 }
@@ -211,6 +215,32 @@ func listContainerSnapshots(ap *C.struct_cmd_args_s, containerID string) ([]*sna
 	return snapshots, nil
 }
 
+func printSnaps(out io.Writer, snaps []*snapshot) {
+	if len(snaps) == 0 {
+		fmt.Fprintf(out, "No snapshots.\n")
+		return
+	}
+
+	timeTitle := "Timestamp"
+	epochTitle := "Epoch"
+	nameTitle := "Name"
+	titles := []string{timeTitle, epochTitle, nameTitle}
+
+	table := []txtfmt.TableRow{}
+	for _, snap := range snaps {
+		table = append(table,
+			txtfmt.TableRow{
+				timeTitle:  snap.Timestamp,
+				epochTitle: fmt.Sprintf("%#x", snap.Epoch),
+				nameTitle:  snap.Name,
+			})
+	}
+
+	tf := txtfmt.NewTableFormatter(titles...)
+	tf.InitWriter(out)
+	tf.Format(table)
+}
+
 func (cmd *containerSnapListCmd) Execute(args []string) error {
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
@@ -233,14 +263,9 @@ func (cmd *containerSnapListCmd) Execute(args []string) error {
 		return cmd.OutputJSON(snaps, nil)
 	}
 
-	cmd.Info("Container's snapshots :")
-	if len(snaps) == 0 {
-		cmd.Info("no snapshots")
-		return nil
-	}
-	for _, snap := range snaps {
-		cmd.Infof("0x%x %s", snap.Epoch, snap.Name)
-	}
+	var bld strings.Builder
+	printSnaps(&bld, snaps)
+	cmd.Info(bld.String())
 
 	return nil
 }
