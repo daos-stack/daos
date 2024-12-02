@@ -77,7 +77,7 @@ func TestAuto_ConfigCommands(t *testing.T) {
 
 	runConfGenCmdTests(t, []cmdTest{
 		{
-			"Generate with no access point",
+			"Generate with no MS replica",
 			"config generate",
 			printCGRReq(t, func() control.ConfGenerateRemoteReq {
 				req := control.ConfGenerateRemoteReq{
@@ -376,17 +376,17 @@ func TestAuto_confGen(t *testing.T) {
 				{storHostResp},
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", exmplEngineCfgs).
-				WithAccessPoints("localhost:10001").
+				WithMgmtSvcReplicas("localhost:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
 		},
-		"dcpm scm; access points set": {
+		"dcpm scm; MS replicas set": {
 			msReplicas: "moon-111,mars-115,jupiter-119",
 			hostResponsesSet: [][]*control.HostResponse{
 				{netHostResp},
 				{storHostResp},
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", exmplEngineCfgs).
-				WithAccessPoints("moon-111:10001", "mars-115:10001", "jupiter-119:10001").
+				WithMgmtSvcReplicas("moon-111:10001", "mars-115:10001", "jupiter-119:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
 		},
 		"dcpm scm; unmet min nr ssds": {
@@ -609,7 +609,7 @@ hyperthreads: false
 	typicalAutoGenOutCfg := config.DefaultServer().
 		WithControlLogFile(defaultControlLogFile).
 		WithFabricProvider("ofi+verbs").
-		WithAccessPoints("hostX:10002").
+		WithMgmtSvcReplicas("hostX:10002").
 		WithDisableVMD(false).
 		WithEngines(
 			engine.MockConfig().

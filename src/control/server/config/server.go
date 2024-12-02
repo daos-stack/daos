@@ -206,9 +206,9 @@ func (cfg *Server) WithEngines(engineList ...*engine.Config) *Server {
 	return cfg
 }
 
-// WithAccessPoints sets the access point list.
-func (cfg *Server) WithAccessPoints(aps ...string) *Server {
-	cfg.MgmtSvcReplicas = aps
+// WithMgmtSvcReplicas sets the MS replicas list.
+func (cfg *Server) WithMgmtSvcReplicas(reps ...string) *Server {
+	cfg.MgmtSvcReplicas = reps
 	return cfg
 }
 
@@ -435,7 +435,7 @@ func GetMSReplicaPort(log logging.Logger, addr string) (int, error) {
 	_, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		log.Errorf("invalid MS replica %q: %s", addr, err)
-		return 0, FaultConfigBadAccessPoints
+		return 0, FaultConfigBadMgmtSvcReplicas
 	}
 
 	portNum, err := strconv.Atoi(port)
@@ -675,8 +675,8 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 		newReps = append(newReps, newAP)
 	}
 	if common.StringSliceHasDuplicates(newReps) {
-		log.Error("duplicate access points addresses")
-		return FaultConfigBadAccessPoints
+		log.Error("duplicate MS replica addresses")
+		return FaultConfigBadMgmtSvcReplicas
 	}
 	cfg.MgmtSvcReplicas = newReps
 
@@ -699,9 +699,9 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 
 	switch {
 	case len(cfg.MgmtSvcReplicas) < 1:
-		return FaultConfigBadAccessPoints
+		return FaultConfigBadMgmtSvcReplicas
 	case len(cfg.MgmtSvcReplicas)%2 == 0:
-		return FaultConfigEvenAccessPoints
+		return FaultConfigEvenMgmtSvcReplicas
 	case len(cfg.MgmtSvcReplicas) == 1:
 		log.Noticef("Configuration includes only one MS replica. This provides no redundancy " +
 			"in the event of a MS replica failure.")

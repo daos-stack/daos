@@ -1228,7 +1228,7 @@ func genServerConfig(req ConfGenerateReq, ecs []*engine.Config, tc *threadCounts
 	}
 
 	cfg := config.DefaultServer().
-		WithAccessPoints(req.MgmtSvcReplicas...).
+		WithMgmtSvcReplicas(req.MgmtSvcReplicas...).
 		WithFabricProvider(ecs[0].Fabric.Provider).
 		WithEngines(ecs...).
 		WithControlLogFile(defaultControlLogFile)

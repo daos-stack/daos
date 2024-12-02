@@ -1644,13 +1644,13 @@ func TestControl_AutoConfig_genServerConfig(t *testing.T) {
 			ecs:          []*engine.Config{exmplEngineCfg0},
 			expErr:       errors.New("no MS replicas"),
 		},
-		"access points without the same port": {
+		"MS replicas without the same port": {
 			msReplicas:   []string{"bob:1", "joe:2"},
 			threadCounts: &threadCounts{16, 0},
 			ecs:          []*engine.Config{exmplEngineCfg0},
 			expErr:       errors.New("numbers do not match"),
 		},
-		"access points some with port specified": {
+		"MS replicas some with port specified": {
 			msReplicas:   []string{"bob:1", "joe"},
 			threadCounts: &threadCounts{16, 0},
 			ecs:          []*engine.Config{exmplEngineCfg0},
@@ -1664,7 +1664,7 @@ func TestControl_AutoConfig_genServerConfig(t *testing.T) {
 				[]*engine.Config{
 					exmplEngineCfg0.WithHelperStreamCount(0),
 				}).
-				WithAccessPoints("hostX:10001"), // Default applied.
+				WithMgmtSvcReplicas("hostX:10001"), // Default applied.
 		},
 		"single engine config; default port number specified": {
 			msReplicas:   []string{"hostX:10001"},
@@ -1674,9 +1674,9 @@ func TestControl_AutoConfig_genServerConfig(t *testing.T) {
 				[]*engine.Config{
 					exmplEngineCfg0.WithHelperStreamCount(0),
 				}).
-				WithAccessPoints("hostX:10001"), // ControlPort remains at 10001.
+				WithMgmtSvcReplicas("hostX:10001"), // ControlPort remains at 10001.
 		},
-		"dual engine config; custom access point port number": {
+		"dual engine config; custom MS replica port number": {
 			msReplicas:   []string{"hostX:10002"},
 			threadCounts: &threadCounts{16, 0},
 			ecs: []*engine.Config{
@@ -1688,10 +1688,10 @@ func TestControl_AutoConfig_genServerConfig(t *testing.T) {
 					exmplEngineCfg0.WithHelperStreamCount(0),
 					exmplEngineCfg1.WithHelperStreamCount(0),
 				}).
-				WithAccessPoints("hostX:10002").
+				WithMgmtSvcReplicas("hostX:10002").
 				WithControlPort(10002), // ControlPort updated to AP port.
 		},
-		"bad accesspoint port": {
+		"bad MS replica port": {
 			msReplicas:   []string{"hostX:-10001"},
 			threadCounts: &threadCounts{16, 0},
 			ecs: []*engine.Config{
@@ -1737,7 +1737,7 @@ func TestControl_AutoConfig_genServerConfig(t *testing.T) {
 								storage.BdevOutConfName),
 						),
 				}).
-				WithAccessPoints("hostX:10002", "hostY:10002", "hostZ:10002").
+				WithMgmtSvcReplicas("hostX:10002", "hostY:10002", "hostZ:10002").
 				WithControlPort(10002). // ControlPort updated to AP port.
 				WithControlMetadata(controlMetadata),
 		},

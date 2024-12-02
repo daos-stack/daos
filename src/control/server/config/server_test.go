@@ -255,7 +255,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithSocketDir("./.daos/daos_server").
 		WithFabricProvider("ofi+verbs;ofi_rxm").
 		WithCrtTimeout(30).
-		WithAccessPoints("hostname1").
+		WithMgmtSvcReplicas("hostname1").
 		WithFaultCb("./.daos/fd_callback").
 		WithFaultPath("/vcdu0/rack1/hostname").
 		WithClientEnvVars([]string{"foo=bar"}).
@@ -423,7 +423,7 @@ func TestServerConfig_MDonSSD_Constructed(t *testing.T) {
 		WithControlLogFile("/tmp/daos_server.log").
 		WithTelemetryPort(9191).
 		WithFabricProvider("ofi+tcp").
-		WithAccessPoints("example")
+		WithMgmtSvcReplicas("example")
 
 	constructed.Engines = []*engine.Config{
 		engine.MockConfig().
@@ -510,90 +510,90 @@ func TestServerConfig_Validation(t *testing.T) {
 			},
 			expErr: FaultConfigNoProvider,
 		},
-		"no access point": {
+		"no MS replica": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithAccessPoints()
+				return c.WithMgmtSvcReplicas()
 			},
-			expErr: FaultConfigBadAccessPoints,
+			expErr: FaultConfigBadMgmtSvcReplicas,
 		},
-		"single access point": {
+		"single MS replica": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithAccessPoints("1.2.3.4:1234")
-			},
-		},
-		"multiple access points (even)": {
-			extraConfig: func(c *Server) *Server {
-				return c.WithAccessPoints("1.2.3.4:1234", "5.6.7.8:5678")
-			},
-			expErr: FaultConfigEvenAccessPoints,
-		},
-		"multiple access points (odd)": {
-			extraConfig: func(c *Server) *Server {
-				return c.WithAccessPoints("1.2.3.4:1234", "5.6.7.8:5678", "1.5.3.8:6247")
+				return c.WithMgmtSvcReplicas("1.2.3.4:1234")
 			},
 		},
-		"multiple access points (dupes)": {
+		"multiple MS replicas (even)": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithAccessPoints("1.2.3.4", "5.6.7.8", "1.2.3.4")
+				return c.WithMgmtSvcReplicas("1.2.3.4:1234", "5.6.7.8:5678")
 			},
-			expErr: FaultConfigBadAccessPoints,
+			expErr: FaultConfigEvenMgmtSvcReplicas,
 		},
-		"multiple access points (dupes with ports)": {
+		"multiple MS replicas (odd)": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithAccessPoints("1.2.3.4:1234", "5.6.7.8:5678", "1.2.3.4:1234")
-			},
-			expErr: FaultConfigBadAccessPoints,
-		},
-		"multiple access points (dupes with and without ports)": {
-			extraConfig: func(c *Server) *Server {
-				return c.WithAccessPoints("1.2.3.4:10001", "5.6.7.8:5678", "1.2.3.4")
-			},
-			expErr: FaultConfigBadAccessPoints,
-		},
-		"multiple access points (dupes with different ports)": {
-			extraConfig: func(c *Server) *Server {
-				return c.WithAccessPoints("1.2.3.4:10002", "5.6.7.8:5678", "1.2.3.4")
+				return c.WithMgmtSvcReplicas("1.2.3.4:1234", "5.6.7.8:5678", "1.5.3.8:6247")
 			},
 		},
-		"no access points": {
+		"multiple MS replicas (dupes)": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithAccessPoints()
+				return c.WithMgmtSvcReplicas("1.2.3.4", "5.6.7.8", "1.2.3.4")
 			},
-			expErr: FaultConfigBadAccessPoints,
+			expErr: FaultConfigBadMgmtSvcReplicas,
 		},
-		"single access point no port": {
+		"multiple MS replicas (dupes with ports)": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithAccessPoints("1.2.3.4")
+				return c.WithMgmtSvcReplicas("1.2.3.4:1234", "5.6.7.8:5678", "1.2.3.4:1234")
+			},
+			expErr: FaultConfigBadMgmtSvcReplicas,
+		},
+		"multiple MS replicas (dupes with and without ports)": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithMgmtSvcReplicas("1.2.3.4:10001", "5.6.7.8:5678", "1.2.3.4")
+			},
+			expErr: FaultConfigBadMgmtSvcReplicas,
+		},
+		"multiple MS replicas (dupes with different ports)": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithMgmtSvcReplicas("1.2.3.4:10002", "5.6.7.8:5678", "1.2.3.4")
 			},
 		},
-		"single access point invalid port": {
+		"no MS replicas": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithAccessPoints("1.2.3.4").
+				return c.WithMgmtSvcReplicas()
+			},
+			expErr: FaultConfigBadMgmtSvcReplicas,
+		},
+		"single MS replica no port": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithMgmtSvcReplicas("1.2.3.4")
+			},
+		},
+		"single MS replica invalid port": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithMgmtSvcReplicas("1.2.3.4").
 					WithControlPort(0)
 			},
 			expErr: FaultConfigBadControlPort,
 		},
-		"single access point including invalid port (alphanumeric)": {
+		"single MS replica including invalid port (alphanumeric)": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithAccessPoints("1.2.3.4:0a0")
+				return c.WithMgmtSvcReplicas("1.2.3.4:0a0")
 			},
 			expErr: FaultConfigBadControlPort,
 		},
-		"single access point including invalid port (zero)": {
+		"single MS replica including invalid port (zero)": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithAccessPoints("1.2.3.4:0")
+				return c.WithMgmtSvcReplicas("1.2.3.4:0")
 			},
 			expErr: FaultConfigBadControlPort,
 		},
-		"single access point including negative port": {
+		"single MS replica including negative port": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithAccessPoints("1.2.3.4:-10002")
+				return c.WithMgmtSvcReplicas("1.2.3.4:-10002")
 			},
 			expErr: FaultConfigBadControlPort,
 		},
-		"single access point hostname including negative port": {
+		"single MS replica hostname including negative port": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithAccessPoints("hostX:-10002")
+				return c.WithMgmtSvcReplicas("hostX:-10002")
 			},
 			expErr: FaultConfigBadControlPort,
 		},
@@ -711,7 +711,7 @@ func TestServerConfig_Validation(t *testing.T) {
 					)
 			},
 			expConfig: baseCfg(t, log, testFile).
-				WithAccessPoints("hostname1:10001").
+				WithMgmtSvcReplicas("hostname1:10001").
 				WithControlMetadata(storage.ControlMetadata{
 					Path:       testMetadataDir,
 					DevicePath: "/dev/something",
@@ -786,7 +786,7 @@ func TestServerConfig_Validation(t *testing.T) {
 					)
 			},
 			expConfig: baseCfg(t, log, testFile).
-				WithAccessPoints("hostname1:10001").
+				WithMgmtSvcReplicas("hostname1:10001").
 				WithControlMetadata(storage.ControlMetadata{
 					Path:       testMetadataDir,
 					DevicePath: "/dev/something",
@@ -871,7 +871,7 @@ func TestServerConfig_Validation(t *testing.T) {
 					)
 			},
 			expConfig: baseCfg(t, log, testFile).
-				WithAccessPoints("hostname1:10001").
+				WithMgmtSvcReplicas("hostname1:10001").
 				WithControlMetadata(storage.ControlMetadata{
 					Path: testMetadataDir,
 				}).

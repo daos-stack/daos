@@ -1,7 +1,7 @@
 # Example configuration file for Metadata on SSD.
 
 name: daos_server           # sys group daos_server
-access_points: ['example']  # management service leader (bootstrap)
+mgmt_svc_replicas: ['example']  # management service leader (bootstrap)
 # port: 10001               # control listen port, default 10001
 provider: ofi+tcp
 control_log_mask: INFO
