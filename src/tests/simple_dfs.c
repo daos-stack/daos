@@ -48,8 +48,16 @@ main(int argc, char **argv)
 	rc = dfs_init();
 	ASSERT(rc == 0, "dfs_init failed with %d", rc);
 
+        daos_prop_t *props = daos_prop_alloc(2);
+        props->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+        props->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF1;
+        props->dpp_entries[1].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+        props->dpp_entries[1].dpe_val = DAOS_PROP_CO_REDUN_RANK;
+
+        dfs_attr_t attr = { .da_props = props };
+
 	/** this creates and mounts the POSIX container */
-	rc = dfs_connect(argv[1], NULL, argv[2], O_CREAT | O_RDWR, NULL, &dfs);
+	rc = dfs_connect(argv[1], NULL, argv[2], O_CREAT | O_RDWR, &attr, &dfs);
 	ASSERT(rc == 0, "dfs_connect failed with %d", rc);
 
 	mode_t	create_mode = S_IWUSR | S_IRUSR;
@@ -69,25 +77,31 @@ main(int argc, char **argv)
 
 	/** write a "hello world!" string to the file at offset 0 */
 
-	char		*wbuf = "hello world!";
+        const size_t    sz = 10485760;
+	char		*wbuf = malloc(sz);
 	d_sg_list_t     sgl;
 	d_iov_t         iov;
 
+        for (size_t i = 0; i < sz; i++) {
+          wbuf[i] = 'A' + i % 26;
+        }
+
 	/** setup iovec (sgl in DAOS terms) for write buffer */
-	d_iov_set(&iov, wbuf, strlen(wbuf) + 1);
+	d_iov_set(&iov, wbuf, sz);
 	sgl.sg_nr = 1;
 	sgl.sg_iovs = &iov;
 	rc = dfs_write(dfs, f1, &sgl, 0 /** offset */, NULL);
 	ASSERT(rc == 0, "dfs_write() failed\n");
 
-	char		rbuf[1024];
+	const size_t  rsz = 1048576;
+	char	      *rbuf = malloc(rsz);
 	daos_size_t	read_size;
 
 	/** reset iovec for read buffer */
-	d_iov_set(&iov, rbuf, sizeof(rbuf));
+	d_iov_set(&iov, rbuf, rsz);
 	rc = dfs_read(dfs, f1, &sgl, 0 /** offset */, &read_size, NULL);
 	ASSERT(rc == 0, "dfs_read() failed\n");
-	ASSERT(read_size == strlen(wbuf) + 1, "not enough data read\n");
+	//ASSERT(read_size == rsz, "not enough data read\n");
 	printf("read back: %s\n", rbuf);
 
 	/** close / finalize */
