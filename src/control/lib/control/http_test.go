@@ -125,18 +125,16 @@ func TestControl_httpGetBody(t *testing.T) {
 	defaultURL := &url.URL{Host: "testhost"}
 	defaultAllowInsecure := true
 	falseAllowInsecure := false
-	badCertPerm := "../../security/testdata/certs/badperms.crt"
-	badCertPath := "wrongpath/notavailable.crt"
 
 	for name, tc := range map[string]struct {
-		url           *url.URL
-		timeout       time.Duration
-		cancelCtx     bool
-		getFn         httpGetFn
-		allowInsecure bool
-		caCertPath    *string
-		expResult     []byte
-		expErr        error
+		url            *url.URL
+		timeout        time.Duration
+		cancelCtx      bool
+		getFn          httpGetFn
+		allowInsecure  bool
+		httpsException bool
+		expResult      []byte
+		expErr         error
 	}{
 		"nil url": {
 			expErr: errors.New("nil URL"),
@@ -202,28 +200,6 @@ func TestControl_httpGetBody(t *testing.T) {
 			},
 			expErr: errors.New("Get \"//testhost\": unsupported protocol scheme"),
 		},
-		"failure with body in secure mode with bad CA certificate": {
-			url:           defaultURL,
-			allowInsecure: falseAllowInsecure,
-			caCertPath:    &badCertPerm,
-			getFn: func(_ string) (*http.Response, error) {
-				return &http.Response{
-					StatusCode: http.StatusOK,
-				}, nil
-			},
-			expErr: errors.New("Get \"//testhost\": unsupported protocol scheme"),
-		},
-		"failure with body in secure mode with bad CA certificate path": {
-			url:           defaultURL,
-			allowInsecure: falseAllowInsecure,
-			caCertPath:    &badCertPath,
-			getFn: func(_ string) (*http.Response, error) {
-				return &http.Response{
-					StatusCode: http.StatusOK,
-				}, nil
-			},
-			expErr: errors.New("reading CA certificate file Error: open wrongpath/notavailable.crt: no such file or directory"),
-		},
 		"reading body fails": {
 			url:           defaultURL,
 			allowInsecure: defaultAllowInsecure,
@@ -276,7 +252,7 @@ func TestControl_httpGetBody(t *testing.T) {
 				tc.timeout = time.Second
 			}
 
-			result, err := httpGetBody(ctx, tc.url, tc.getFn, tc.timeout, tc.allowInsecure, tc.caCertPath)
+			result, err := httpGetBody(ctx, tc.url, tc.getFn, tc.timeout, tc.allowInsecure, tc.httpsException)
 
 			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
@@ -294,7 +270,7 @@ type mockHTTPGetter struct {
 	getBodyErr      error
 	getBodyCalled   uint
 	getBodyFailures uint
-	caCertPath      *string
+	httpsException  bool
 }
 
 func (r *mockHTTPGetter) canRetry(err error, cur uint) bool {
@@ -325,8 +301,8 @@ func (r *mockHTTPGetter) getAllowInsecure() bool {
 	return true
 }
 
-func (r *mockHTTPGetter) getCaCertPath() *string {
-	return r.caCertPath
+func (r *mockHTTPGetter) getHttpsException() bool {
+	return true
 }
 
 func (r *mockHTTPGetter) getBody(ctx context.Context) ([]byte, error) {

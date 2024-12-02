@@ -110,13 +110,13 @@ type TransportConfig struct {
 // TelemetryConfig contains all the information on whether or not to use
 // secure endpoint for telemetry and their location if their use is specified.
 type TelemetryConfig struct {
-	Port          int           `yaml:"telemetry_port,omitempty"`
-	AllowInsecure bool          `yaml:"allow_insecure,omitempty"`
-	Enabled       bool          `yaml:"telemetry_enabled,omitempty"`
-	Retain        time.Duration `yaml:"telemetry_retain,omitempty"`
-	HttpsCert     string        `yaml:"https_cert,omitempty"`
-	HttpsKey      string        `yaml:"https_key,omitempty"`
-	CARootPath    string        `yaml:"ca_cert,omitempty"`
+	Port           int           `yaml:"telemetry_port,omitempty"`
+	AllowInsecure  bool          `yaml:"allow_insecure,omitempty"`
+	Enabled        bool          `yaml:"telemetry_enabled,omitempty"`
+	Retain         time.Duration `yaml:"telemetry_retain,omitempty"`
+	HttpsCert      string        `yaml:"https_cert,omitempty"`
+	HttpsKey       string        `yaml:"https_key,omitempty"`
+	HttpsException bool          `yaml:"https_exception,omitempty"`
 }
 
 // DefaultClientTelemetryConfig provides a default telemetry config disabling

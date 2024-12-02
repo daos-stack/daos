@@ -198,7 +198,7 @@ type (
 	}
 
 	tlsConfig struct {
-		CaFile string `yaml:"ca_file,omitempty"`
+		InsecureSkipVerify bool `yaml:"insecure_skip_verify,omitempty"`
 	}
 
 	scrapeConfig struct {
@@ -269,7 +269,7 @@ func (cmd *telemConfigCmd) configurePrometheus() (*installInfo, error) {
 	scheme := ""
 	if !cmd.cfgCmd.config.TelemetryConfig.AllowInsecure {
 		cmd.Infof("Prometheus configuration is setup as Secure (https) mode")
-		tc.CaFile = cmd.cfgCmd.config.TelemetryConfig.CARootPath
+		tc.InsecureSkipVerify = cmd.cfgCmd.config.TelemetryConfig.HttpsException
 		scheme = "https"
 	} else {
 		cmd.Infof("Prometheus configuration is setup as insecure (http) mode")
@@ -335,7 +335,7 @@ func (cmd *metricsListCmd) Execute(args []string) error {
 	req := new(control.MetricsListReq)
 	req.Port = cmd.Port
 	req.Host = host
-	req.CaCertPath = cmd.cfgCmd.config.TelemetryConfig.CARootPath
+	req.HttpsException = cmd.cfgCmd.config.TelemetryConfig.HttpsException
 
 	if !cmd.JSONOutputEnabled() {
 		cmd.Info(getConnectingMsg(req.Host, req.Port))
@@ -343,11 +343,10 @@ func (cmd *metricsListCmd) Execute(args []string) error {
 
 	// Trying Secure Mode First, It will ignore the certificate if it's not provided
 	// or request with the certificate.
-	req.AllowInsecure = false
-	if req.CaCertPath == "" {
-		cmd.Debug("Trying Secure Mode (HTTPS) first, ignoring certificate")
+	if req.AllowInsecure {
+		cmd.Debug("Trying Secure Mode (HTTPS) with Exception")
 	} else {
-		cmd.Debug("Trying Secure Mode (HTTPS) first with certificate")
+		cmd.Debug("Trying Secure Mode (HTTPS) with system certificate")
 	}
 
 	resp, err := control.MetricsList(cmd.MustLogCtx(), req)
@@ -408,7 +407,7 @@ func (cmd *metricsQueryCmd) Execute(args []string) error {
 	req := new(control.MetricsQueryReq)
 	req.Port = cmd.Port
 	req.Host = host
-	req.CaCertPath = cmd.cfgCmd.config.TelemetryConfig.CARootPath
+	req.HttpsException = cmd.cfgCmd.config.TelemetryConfig.HttpsException
 	req.MetricNames = common.TokenizeCommaSeparatedString(cmd.Metrics)
 
 	if !cmd.JSONOutputEnabled() {
@@ -418,11 +417,7 @@ func (cmd *metricsQueryCmd) Execute(args []string) error {
 	// Trying Secure Mode First, It will ignore the certificate if it's not provided
 	// or request with the certificate.
 	req.AllowInsecure = false
-	if req.CaCertPath == "" {
-		cmd.Debug("Trying Secure Mode (HTTPS) first, ignoring certificate")
-	} else {
-		cmd.Debug("Trying Secure Mode (HTTPS) first with certificate")
-	}
+	cmd.Debug("Trying Secure Mode (HTTPS) first, with system certificate")
 
 	resp, err := control.MetricsQuery(cmd.MustLogCtx(), req)
 	if err != nil {

@@ -32,6 +32,7 @@ class DmgTelemetryConfig(TelemetryConfig):
     def __init__(self, log_dir="/tmp"):
         """Initialize a TelemetryConfig object."""
         super().__init__("/run/dmg/telemetry_config/*", None, log_dir)
+        self.https_exception = BasicParameter(None, True)
 
     def _get_new(self):
         """Get a new object based upon this one.

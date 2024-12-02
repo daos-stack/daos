@@ -46,5 +46,5 @@
 #  # to false.
 #  allow_insecure: true
 #
-#  # Custom CA Root certificate for generated telemetry certs
-#  ca_cert: /etc/daos/certs/daosTelemetryCA.crt
+#  # Skip the Server certificate verification. Recommended for testing purpose only.
+#  https_exception: true
