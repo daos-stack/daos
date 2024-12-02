@@ -44,6 +44,7 @@ var (
 		cmpopts.SortSlices(func(x, y string) bool { return x < y }),
 		cmpopts.IgnoreUnexported(
 			security.CertificateConfig{},
+			Server{},
 		),
 		cmpopts.IgnoreFields(Server{}, "Path"),
 		cmp.Comparer(func(x, y *storage.BdevDeviceList) bool {
@@ -55,10 +56,10 @@ var (
 	}
 )
 
-func baseCfg(t *testing.T, testFile string) *Server {
+func baseCfg(t *testing.T, log logging.Logger, testFile string) *Server {
 	t.Helper()
 
-	config, err := mockConfigFromFile(t, testFile)
+	config, err := mockConfigFromFile(t, log, testFile)
 	if err != nil {
 		t.Fatalf("failed to load %s: %s", testFile, err)
 	}
@@ -125,12 +126,12 @@ func uncommentServerConfig(t *testing.T, outFile string) {
 
 // mockConfigFromFile returns a populated server config file from the
 // file at the given path.
-func mockConfigFromFile(t *testing.T, path string) (*Server, error) {
+func mockConfigFromFile(t *testing.T, log logging.Logger, path string) (*Server, error) {
 	t.Helper()
 	c := DefaultServer()
 	c.Path = path
 
-	return c, c.Load()
+	return c, c.Load(log)
 }
 
 func TestServerConfig_MarshalUnmarshal(t *testing.T) {
@@ -163,7 +164,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 
 			configA := DefaultServer()
 			configA.Path = tt.inPath
-			err := configA.Load()
+			err := configA.Load(log)
 			if err == nil {
 				err = configA.Validate(log)
 			}
@@ -194,7 +195,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			err = configB.Load()
+			err = configB.Load(log)
 			if err == nil {
 				err = configB.Validate(log)
 			}
@@ -220,10 +221,13 @@ func TestServerConfig_Constructed(t *testing.T) {
 	testDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
 	// First, load a config based on the server config with all options uncommented.
 	testFile := filepath.Join(testDir, sConfigUncomment)
 	uncommentServerConfig(t, testFile)
-	defaultCfg, err := mockConfigFromFile(t, testFile)
+	defaultCfg, err := mockConfigFromFile(t, log, testFile)
 	if err != nil {
 		t.Fatalf("failed to load %s: %s", testFile, err)
 	}
@@ -407,7 +411,7 @@ func TestServerConfig_MDonSSD_Constructed(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	mdOnSSDCfg, err := mockConfigFromFile(t, mdOnSSDExample)
+	mdOnSSDCfg, err := mockConfigFromFile(t, log, mdOnSSDExample)
 	if err != nil {
 		t.Fatalf("failed to load %s: %s", mdOnSSDExample, err)
 	}
@@ -470,6 +474,9 @@ func TestServerConfig_MDonSSD_Constructed(t *testing.T) {
 func TestServerConfig_Validation(t *testing.T) {
 	testDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
+
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
 
 	// First, load a config based on the server config with all options uncommented.
 	testFile := filepath.Join(testDir, sConfigUncomment)
@@ -703,7 +710,7 @@ func TestServerConfig_Validation(t *testing.T) {
 							),
 					)
 			},
-			expConfig: baseCfg(t, testFile).
+			expConfig: baseCfg(t, log, testFile).
 				WithAccessPoints("hostname1:10001").
 				WithControlMetadata(storage.ControlMetadata{
 					Path:       testMetadataDir,
@@ -778,7 +785,7 @@ func TestServerConfig_Validation(t *testing.T) {
 							),
 					)
 			},
-			expConfig: baseCfg(t, testFile).
+			expConfig: baseCfg(t, log, testFile).
 				WithAccessPoints("hostname1:10001").
 				WithControlMetadata(storage.ControlMetadata{
 					Path:       testMetadataDir,
@@ -863,7 +870,7 @@ func TestServerConfig_Validation(t *testing.T) {
 							),
 					)
 			},
-			expConfig: baseCfg(t, testFile).
+			expConfig: baseCfg(t, log, testFile).
 				WithAccessPoints("hostname1:10001").
 				WithControlMetadata(storage.ControlMetadata{
 					Path: testMetadataDir,
@@ -956,7 +963,7 @@ func TestServerConfig_Validation(t *testing.T) {
 			}
 
 			// Apply test case changes to basic config
-			cfg := tt.extraConfig(baseCfg(t, testFile))
+			cfg := tt.extraConfig(baseCfg(t, log, testFile))
 
 			log.Debugf("baseCfg metadata: %+v", cfg.Metadata)
 
@@ -1165,7 +1172,7 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			// Apply test case changes to basic config
-			cfg := tc.extraConfig(baseCfg(t, testFile))
+			cfg := tc.extraConfig(baseCfg(t, log, testFile))
 
 			mi := &common.MemInfo{
 				HugepageSizeKiB: defHpSizeKb,
@@ -1357,7 +1364,7 @@ func TestServerConfig_SetRamdiskSize(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			// Apply test case changes to basic config
-			cfg := tc.extraConfig(baseCfg(t, testFile))
+			cfg := tc.extraConfig(baseCfg(t, log, testFile))
 
 			val := tc.memTotBytes / humanize.KiByte
 			if val > math.MaxInt {
@@ -1456,7 +1463,7 @@ func replaceFile(t *testing.T, name, oldTxt, newTxt string) {
 func TestServerConfig_Parsing(t *testing.T) {
 	noopExtra := func(c *Server) *Server { return c }
 
-	cfgFromFile := func(t *testing.T, testFile string, matchText, replaceText []string) (*Server, error) {
+	cfgFromFile := func(t *testing.T, log logging.Logger, testFile string, matchText, replaceText []string) (*Server, error) {
 		t.Helper()
 
 		if len(matchText) != len(replaceText) {
@@ -1470,17 +1477,17 @@ func TestServerConfig_Parsing(t *testing.T) {
 			replaceFile(t, testFile, m, replaceText[i])
 		}
 
-		return mockConfigFromFile(t, testFile)
+		return mockConfigFromFile(t, log, testFile)
 	}
 
 	// load a config based on the server config with all options uncommented.
-	loadFromFile := func(t *testing.T, testDir string, matchText, replaceText []string) (*Server, error) {
+	loadFromFile := func(t *testing.T, log logging.Logger, testDir string, matchText, replaceText []string) (*Server, error) {
 		t.Helper()
 
 		defaultConfigFile := filepath.Join(testDir, sConfigUncomment)
 		uncommentServerConfig(t, defaultConfigFile)
 
-		return cfgFromFile(t, defaultConfigFile, matchText, replaceText)
+		return cfgFromFile(t, log, defaultConfigFile, matchText, replaceText)
 	}
 
 	for name, tt := range map[string]struct {
@@ -1593,7 +1600,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 				tt.outTxtList = []string{tt.outTxt}
 			}
 
-			config, errParse := loadFromFile(t, testDir, tt.inTxtList, tt.outTxtList)
+			config, errParse := loadFromFile(t, log, testDir, tt.inTxtList, tt.outTxtList)
 			test.CmpErr(t, tt.expParseErr, errParse)
 			if tt.expParseErr != nil {
 				return

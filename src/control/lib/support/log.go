@@ -464,7 +464,7 @@ func rsyncLog(log logging.Logger, opts ...CollectLogsParams) error {
 	if cfgPath != "" {
 		serverConfig := config.DefaultServer()
 		serverConfig.SetPath(cfgPath)
-		if err := serverConfig.Load(); err == nil {
+		if err := serverConfig.Load(log); err == nil {
 			if serverConfig.SupportConfig.FileTransferExec != "" {
 				return customCopy(log, opts[0], serverConfig.SupportConfig.FileTransferExec)
 			}
@@ -682,7 +682,7 @@ func copyServerConfig(log logging.Logger, opts ...CollectLogsParams) error {
 
 	serverConfig := config.DefaultServer()
 	serverConfig.SetPath(cfgPath)
-	serverConfig.Load()
+	serverConfig.Load(log)
 	// Create the individual folder on each server
 	targetConfig, err := createHostLogFolder(DaosServerConfig, log, opts...)
 	if err != nil {
@@ -862,7 +862,7 @@ func collectServerLog(log logging.Logger, opts ...CollectLogsParams) error {
 	}
 	serverConfig := config.DefaultServer()
 	serverConfig.SetPath(cfgPath)
-	serverConfig.Load()
+	serverConfig.Load(log)
 
 	switch opts[0].LogCmd {
 	case "EngineLog":
@@ -928,7 +928,7 @@ func collectDaosMetrics(daosNodeLocation string, log logging.Logger, opts ...Col
 		}
 		serverConfig := config.DefaultServer()
 		serverConfig.SetPath(cfgPath)
-		serverConfig.Load()
+		serverConfig.Load(log)
 
 		for i := range serverConfig.Engines {
 			engineId := fmt.Sprintf("%d", i)
