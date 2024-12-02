@@ -1,0 +1,14 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directories:
+      - /utils/cq/requirements.txt
+    schedule:
+      interval: daily
+    groups:
+      python-packages:
+        patterns:
+          - pylint
+          - yamllint
+          - isort
+          - codespell
