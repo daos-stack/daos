@@ -2297,19 +2297,33 @@ heap_force_recycle(struct palloc_heap *heap)
 	struct bucket *defb;
 	struct mbrt   *mb;
 	uint32_t       zone_id;
-
-	if (heap->rt->empty_nemb_cnt < heap->rt->empty_nemb_gcth)
-		return 0;
+	uint32_t       max_reclaim = heap->rt->empty_nemb_gcth * 2;
 
 	mb   = heap_mbrt_get_mb(heap, 0);
+
+	if (heap->rt->empty_nemb_cnt < heap->rt->empty_nemb_gcth) {
+		if ((mb->space_usage > mb->prev_usage) ||
+		    ((mb->prev_usage - mb->space_usage) <
+		     (ZONE_MAX_SIZE * heap->rt->empty_nemb_gcth))) {
+			if (mb->space_usage > mb->prev_usage)
+				mb->prev_usage = mb->space_usage;
+			return 0;
+		}
+	}
+
+
 	defb = mbrt_bucket_acquire(mb, DEFAULT_ALLOC_CLASS_ID);
 	while (heap_reclaim_next_ne(heap, &zone_id) == 0) {
 		heap_reclaim_zone_garbage(heap, defb, zone_id);
 		heap_reclaim_setlast_ne(heap, zone_id);
+		if (--max_reclaim == 0)
+			break;
 	}
+
 	heap_reclaim_garbage(heap, defb);
 	mbrt_bucket_release(defb);
 	heap_populate_nemb_unused(heap);
+	mb->prev_usage = mb->space_usage;
 
 	if (heap->rt->empty_nemb_cnt >= heap->rt->empty_nemb_gcth)
 		D_ERROR("Force GC failed to free up enough nembs, cnt = %d",
