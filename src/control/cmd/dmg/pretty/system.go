@@ -222,20 +222,12 @@ func PrintSystemCleanupResponse(out io.Writer, resp *control.SystemCleanupResp, 
 	fmt.Fprintln(out, "System Cleanup Success")
 }
 
-// PrintSystemDrainResponse generates a human-readable representation of the supplied
-// SystemDrainResp struct and writes it to the supplied io.Writer. Result related errors written to
-// error io.Writer.
-func PrintSystemDrainResponse(out io.Writer, resp *control.SystemDrainResp) {
-	if len(resp.Results) == 0 {
-		fmt.Fprintln(out, "No pool ranks drained")
-		return
-	}
-
+func printSysOsaResults(out io.Writer, results []*control.SystemOsaResult) {
 	titles := []string{"Pool", "Ranks", "Result", "Reason"}
 	formatter := txtfmt.NewTableFormatter(titles...)
 
 	var table []txtfmt.TableRow
-	for _, r := range resp.Results {
+	for _, r := range results {
 		result := "OK"
 		reason := "N/A"
 		if r.Status != 0 {
@@ -252,4 +244,24 @@ func PrintSystemDrainResponse(out io.Writer, resp *control.SystemDrainResp) {
 	}
 
 	fmt.Fprintln(out, formatter.Format(table))
+}
+
+// PrintSystemDrainResponse generates a human-readable representation of the response's
+// SystemOsaResults and writes it to the supplied io.Writer.
+func PrintSystemDrainResponse(out io.Writer, resp *control.SystemDrainResp) {
+	if len(resp.Results) == 0 {
+		fmt.Fprintln(out, "No pool ranks drained")
+		return
+	}
+	printSysOsaResults(out, resp.Results)
+}
+
+// PrintSystemReintResponse generates a human-readable representation of the response's
+// SystemOsaResults and writes it to the supplied io.Writer.
+func PrintSystemReintResponse(out io.Writer, resp *control.SystemReintResp) {
+	if len(resp.Results) == 0 {
+		fmt.Fprintln(out, "No pool ranks reintegrated")
+		return
+	}
+	printSysOsaResults(out, resp.Results)
 }
