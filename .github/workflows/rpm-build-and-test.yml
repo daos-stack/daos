@@ -67,12 +67,11 @@ jobs:
       EL9_VERSION: ${{ vars.EL9_BUILD_VERSION_MASTER }}
       LEAP15_VERSION: ${{ vars.LEAP15_VERSION_MASTER }}
       # Which distros to build for
-      DISTROS: ${{ vars.DISTROS_MASTER }}
       TEST_TAG: ${{ vars.TEST_TAG }}
       PACKAGING_DIR: ${{ vars.PACKAGING_DIR }}
     outputs:
       NAME: ${{ env.NAME }}
-      DISTROS: ${{ env.DISTROS }}
+      DISTROS: ${{ env.COVFN_DISABLED && vars.DISTROS_MASTER || vars.COVERAGE_DISTROS_MASTER }}
       EL8_BUILD_VERSION: ${{ env.EL8_BUILD_VERSION }}
       EL9_BUILD_VERSION: ${{ env.EL9_BUILD_VERSION }}
       LEAP15_VERSION: ${{ env.LEAP15_VERSION }}
