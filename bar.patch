@@ -1,0 +1,150 @@
+diff --git a/.github/actions/variables-from-env/action.yml b/.github/actions/variables-from-env/action.yml
+deleted file mode 100644
+index b659805699..0000000000
+--- a/.github/actions/variables-from-env/action.yml
++++ /dev/null
+@@ -1,57 +0,0 @@
+-name: 'Create Variables from Env Variables'
+-description: 'Variables from Env Variables'
+-outputs:
+-  NAME:
+-    value: ${{ steps.NAME.outputs.NAME }}
+-  DISTROS:
+-    value: ${{ steps.DISTROS.outputs.DISTROS }}
+-  EL8_BUILD_VERSION:
+-    value: ${{ steps.EL8_BUILD_VERSION.outputs.EL8_BUILD_VERSION }}
+-  EL9_BUILD_VERSION:
+-    value: ${{ steps.EL9_BUILD_VERSION.outputs.EL9_BUILD_VERSION }}
+-  LEAP15_VERSION:
+-    value: ${{ steps.LEAP15_VERSION.outputs.LEAP15_VERSION }}
+-  PACKAGING_DIR:
+-    value: ${{ steps.PACKAGING_DIR.outputs.PACKAGING_DIR }}
+-  COVFN_DISABLED:
+-    value: ${{ steps.COVFN_DISABLED.outputs.COVFN_DISABLED }}
+-  TEST_TAG:
+-    value: ${{ steps.TEST_TAG.outputs.TEST_TAG }}
+-runs:
+-  using: "composite"
+-  # What a dumb jobs this is
+-  # Needed because of https://github.com/orgs/community/discussions/26671
+-  # Ideally want to be able to use:
+-  # with:
+-  #    NAME: ${{ env.DISTROS }}
+-  # in the Call-RPM-Build job but the above issue prevents it
+-  steps:
+-    - name: Make outputs from env variables
+-      run: |
+-          echo "Make outputs from env variables" \
+-               "(https://github.com/orgs/community/discussions/26671)"
+-      shell: bash
+-    - id: NAME
+-      run: echo "NAME=${{ env.NAME }}" >> $GITHUB_OUTPUT
+-      shell: bash
+-    - id: DISTROS
+-      run: echo "DISTROS=${{ env.DISTROS }}" >> $GITHUB_OUTPUT
+-      shell: bash
+-    - id: EL8_BUILD_VERSION
+-      run: echo "EL8_BUILD_VERSION=${{ env.EL8_BUILD_VERSION }}" >> $GITHUB_OUTPUT
+-      shell: bash
+-    - id: EL9_BUILD_VERSION
+-      run: echo "EL9_BUILD_VERSION=${{ env.EL9_BUILD_VERSION }}" >> $GITHUB_OUTPUT
+-      shell: bash
+-    - id: LEAP15_VERSION
+-      run: echo "LEAP15_VERSION=${{ env.LEAP15_VERSION }}" >> $GITHUB_OUTPUT
+-      shell: bash
+-    - id: PACKAGING_DIR
+-      run: echo "PACKAGING_DIR=${{ env.PACKAGING_DIR }}" >> $GITHUB_OUTPUT
+-      shell: bash
+-    - id: COVFN_DISABLED
+-      run: echo "COVFN_DISABLED=${{ env.COVFN_DISABLED }}" >> $GITHUB_OUTPUT
+-      shell: bash
+-    - id: TEST_TAG
+-      run: echo "TEST_TAG=${{ env.TEST_TAG }}" >> $GITHUB_OUTPUT
+-      shell: bash
+diff --git a/.github/workflows/rpm-build-and-test.yml b/.github/workflows/rpm-build-and-test.yml
+index d57786c8e1..3f9a302aa1 100644
+--- a/.github/workflows/rpm-build-and-test.yml
++++ b/.github/workflows/rpm-build-and-test.yml
+@@ -56,26 +56,27 @@ defaults:
+ permissions: {}
+ 
+ jobs:
+-  Test-Variables:
+-    name: Test Variables
+-    runs-on: [self-hosted, wolf]
++  Variables:
++    # What a dumb jobs this is
++    # Needed because of https://github.com/orgs/community/discussions/26671
++    # Ideally want to be able to use:
++    # with:
++    #    NAME: ${{ env.DISTROS }}
++    # in the Call-RPM-Build job but the above issue prevents it
++    name: Compute outputs
++    runs-on: [self-hosted, light]
++    outputs:
++      NAME: ${{ env.NAME }}
++      DISTROS: ${{ env.DISTROS }}
++      EL8_BUILD_VERSION: ${{ env.EL8_BUILD_VERSION }}
++      EL9_BUILD_VERSION: ${{ env.EL9_BUILD_VERSION }}
++      LEAP15_VERSION: ${{ env.LEAP15_VERSION }}
++      PACKAGING_DIR: ${{ env.PACKAGING_DIR }}
++      COVFN_DISABLED: ${{ env.COVFN_DISABLED }}
++      TEST_TAG: ${{ env.TEST_TAG }}
+     steps:
+-      - name: Checkout code
+-        uses: actions/checkout@v4
+-        with:
+-          ref: ${{ github.event.pull_request.head.sha }}
+-      - name: Convert Varibles
+-        id: variables
+-        uses: ./.github/actions/variables-from-env
+-      - run: |
+-          set -eux
+-          echo "NAME: ${{ steps.variables.outputs.NAME }}"
+-          echo "DISTROS: ${{ steps.variables.outputs.DISTROS }}"
+-          echo "EL8_BUILD_VERSION: ${{ steps.variables.outputs.EL8_BUILD_VERSION }}"
+-          echo "EL9_BUILD_VERSION: ${{ steps.variables.outputs.EL9_BUILD_VERSION }}"
+-          echo "LEAP15_VERSION: ${{ steps.variables.outputs.LEAP15_VERSION }}"
+-          echo "PACKAGING_DIR: ${{ steps.variables.outputs.PACKAGING_DIR }}"
+-          echo "COVFN_DISABLED: ${{ steps.variables.outputs.COVFN_DISABLED }}"
++      - name: Make outputs from env variables
++        run: echo "Make outputs from env variables"
+ 
+   Call-RPM-Build:
+     name: Build RPM
+@@ -83,25 +84,16 @@ jobs:
+     if: inputs.rpm-test-version == ''
+     permissions:
+       statuses: write
+-    steps:
+-      - name: Checkout code
+-        uses: actions/checkout@v4
+-        with:
+-          ref: ${{ github.event.pull_request.head.sha }}
+-      - name: Convert Varibles
+-        id: variables
+-        uses: ./.github/actions/variables-from-env
+-      - name: Call resuable workflow
+-        uses: daos-stack/actions-lib/.github/workflows/rpm-build.yml@bmurrell/initial
+-        secrets: inherit
+-        with:
+-          NAME: ${{ steps.variables.outputs.NAME }}
+-          DISTROS: ${{ steps.variables.outputs.DISTROS }}
+-          EL8_BUILD_VERSION: ${{ steps.variables.outputs.EL8_BUILD_VERSION }}
+-          EL9_BUILD_VERSION: ${{ steps.variables.outputs.EL9_BUILD_VERSION }}
+-          LEAP15_VERSION: ${{ steps.variables.outputs.LEAP15_VERSION }}
+-          PACKAGING_DIR: ${{ steps.variables.outputs.PACKAGING_DIR }}
+-          COVFN_DISABLED: ${{ fromJSON(steps.variables.outputs.COVFN_DISABLED) }}
++    uses: daos-stack/actions-lib/.github/workflows/rpm-build.yml@bmurrell/initial
++    secrets: inherit
++    with:
++      NAME: ${{ needs.Variables.outputs.NAME }}
++      DISTROS: ${{ needs.Variables.outputs.DISTROS }}
++      EL8_BUILD_VERSION: ${{ needs.Variables.outputs.EL8_BUILD_VERSION }}
++      EL9_BUILD_VERSION: ${{ needs.Variables.outputs.EL9_BUILD_VERSION }}
++      LEAP15_VERSION: ${{ needs.Variables.outputs.LEAP15_VERSION }}
++      PACKAGING_DIR: ${{ needs.Variables.outputs.PACKAGING_DIR }}
++      COVFN_DISABLED: ${{ fromJSON(needs.Variables.outputs.COVFN_DISABLED) }}
+ 
+   Calc-functional-matrix:
+     name: Calculate Functional Testing Matrix
