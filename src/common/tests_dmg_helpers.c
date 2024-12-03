@@ -1037,8 +1037,8 @@ out:
 }
 
 static int
-dmg_pool_target(const char *cmd, const char *dmg_config_file, const uuid_t uuid,
-		const char *grp, d_rank_t rank, int tgt_idx)
+dmg_pool_target(const char *cmd, const char *dmg_config_file, const uuid_t uuid, const char *grp,
+		d_rank_t rank, int tgt_idx, bool async)
 {
 	char			uuid_str[DAOS_UUID_STR_SIZE];
 	int			argcount = 0;
@@ -1053,6 +1053,12 @@ dmg_pool_target(const char *cmd, const char *dmg_config_file, const uuid_t uuid,
 
 	if (grp != NULL) {
 		args = cmd_push_arg(args, &argcount, "--sys=%s ", grp);
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	if (async) {
+		args = cmd_push_arg(args, &argcount, "--async");
 		if (args == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 	}
@@ -1086,21 +1092,21 @@ int
 dmg_pool_exclude(const char *dmg_config_file, const uuid_t uuid,
 		 const char *grp, d_rank_t rank, int tgt_idx)
 {
-	return dmg_pool_target("pool exclude", dmg_config_file, uuid, grp, rank, tgt_idx);
+	return dmg_pool_target("pool exclude", dmg_config_file, uuid, grp, rank, tgt_idx, true);
 }
 
 int
 dmg_pool_reintegrate(const char *dmg_config_file, const uuid_t uuid,
 		     const char *grp, d_rank_t rank, int tgt_idx)
 {
-	return dmg_pool_target("pool reintegrate", dmg_config_file, uuid, grp, rank, tgt_idx);
+	return dmg_pool_target("pool reintegrate", dmg_config_file, uuid, grp, rank, tgt_idx, true);
 }
 
 int
 dmg_pool_drain(const char *dmg_config_file, const uuid_t uuid,
 	       const char *grp, d_rank_t rank, int tgt_idx)
 {
-	return dmg_pool_target("pool drain", dmg_config_file, uuid, grp, rank, tgt_idx);
+	return dmg_pool_target("pool drain", dmg_config_file, uuid, grp, rank, tgt_idx, true);
 }
 
 int

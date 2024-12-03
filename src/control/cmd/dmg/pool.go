@@ -512,6 +512,7 @@ func (cmd *PoolDestroyCmd) Execute(args []string) error {
 // PoolEvictCmd is the struct representing the command to evict a DAOS pool.
 type PoolEvictCmd struct {
 	poolCmd
+	asyncCmd
 }
 
 // Execute is run when PoolEvictCmd subcommand is activated
@@ -519,6 +520,7 @@ func (cmd *PoolEvictCmd) Execute(args []string) error {
 	msg := "succeeded"
 
 	req := &control.PoolEvictReq{ID: cmd.PoolID().String()}
+	req.Async = cmd.Async
 
 	err := control.PoolEvict(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -533,6 +535,7 @@ func (cmd *PoolEvictCmd) Execute(args []string) error {
 // PoolExcludeCmd is the struct representing the command to exclude a DAOS target.
 type PoolExcludeCmd struct {
 	poolCmd
+	asyncCmd
 	Rank      uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be excluded"`
 	TargetIdx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be excluded from the rank"`
 }
@@ -547,6 +550,7 @@ func (cmd *PoolExcludeCmd) Execute(args []string) error {
 	}
 
 	req := &control.PoolExcludeReq{ID: cmd.PoolID().String(), Rank: ranklist.Rank(cmd.Rank), TargetIdx: idxList}
+	req.Async = cmd.Async
 
 	err := control.PoolExclude(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -561,6 +565,7 @@ func (cmd *PoolExcludeCmd) Execute(args []string) error {
 // PoolDrainCmd is the struct representing the command to Drain a DAOS target.
 type PoolDrainCmd struct {
 	poolCmd
+	asyncCmd
 	Rank      uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be drained"`
 	TargetIdx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be drained on the rank"`
 }
@@ -576,6 +581,7 @@ func (cmd *PoolDrainCmd) Execute(args []string) error {
 	}
 
 	req := &control.PoolDrainReq{ID: cmd.PoolID().String(), Rank: ranklist.Rank(cmd.Rank), TargetIdx: idxList}
+	req.Async = cmd.Async
 
 	err := control.PoolDrain(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -590,6 +596,7 @@ func (cmd *PoolDrainCmd) Execute(args []string) error {
 // PoolExtendCmd is the struct representing the command to Extend a DAOS pool.
 type PoolExtendCmd struct {
 	poolCmd
+	asyncCmd
 	RankList ui.RankSetFlag `long:"ranks" required:"1" description:"Comma-separated list of ranks to add to the pool"`
 }
 
@@ -601,6 +608,7 @@ func (cmd *PoolExtendCmd) Execute(args []string) error {
 		ID:    cmd.PoolID().String(),
 		Ranks: cmd.RankList.Ranks(),
 	}
+	req.Async = cmd.Async
 
 	err := control.PoolExtend(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -615,6 +623,7 @@ func (cmd *PoolExtendCmd) Execute(args []string) error {
 // PoolReintegrateCmd is the struct representing the command to Add a DAOS target.
 type PoolReintegrateCmd struct {
 	poolCmd
+	asyncCmd
 	Rank      uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be reintegrated"`
 	TargetIdx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be reintegrated into the rank"`
 }
@@ -629,11 +638,8 @@ func (cmd *PoolReintegrateCmd) Execute(args []string) error {
 		return err
 	}
 
-	req := &control.PoolReintegrateReq{
-		ID:        cmd.PoolID().String(),
-		Rank:      ranklist.Rank(cmd.Rank),
-		TargetIdx: idxList,
-	}
+	req := &control.PoolReintegrateReq{ID: cmd.PoolID().String(), Rank: ranklist.Rank(cmd.Rank), TargetIdx: idxList}
+	req.Async = cmd.Async
 
 	err := control.PoolReintegrate(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {

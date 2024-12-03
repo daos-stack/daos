@@ -91,6 +91,10 @@ func (cmd *cfgCmd) setConfig(cfg *control.Config) {
 	cmd.config = cfg
 }
 
+type asyncCmd struct {
+	Async bool `short:"a" long:"async" description:"Run command asynchronously (do not wait for completion)"`
+}
+
 type cliOptions struct {
 	AllowProxy     bool             `long:"allow-proxy" description:"Allow proxy configuration via environment"`
 	HostList       ui.HostSetFlag   `short:"l" long:"host-list" hidden:"true" description:"DEPRECATED: A comma separated list of addresses <ipv4addr/hostname> to connect to"`
