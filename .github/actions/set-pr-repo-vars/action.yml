@@ -1,0 +1,20 @@
+name: 'Set PR Repo Env Vars'
+description: 'Set PR Repo Env Vars'
+inputs:
+  pr-repos:
+    description: pr-repos output from variable-from-pragma
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Parse and output env vars
+      id: parse
+      shell: bash
+      run: |
+        for repo in "${pr-repos[@]}"; do
+          name="${repo%%@*}"
+          commit=${repo#*@}
+          uppercase_name=${name^^}
+          echo "${uppercase_name}_HASH=${commit}" >> $GITHUB_ENV
+        done

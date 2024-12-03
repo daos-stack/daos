@@ -1,0 +1,273 @@
+name: GCP Builds
+
+env:
+  EL8_VERSION: 8
+  EL9_VERSION: 9
+  DEBIAN_VERSION: 12
+  UBUNTU_VERSION: 22.04
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr-repos:
+        description: 'Any PR-repos that you want included in this build'
+        required: false
+      use-existing-base-builds:
+        description: 'Whether a previous base build for this PR should be used'
+        default: 'false'
+        required: false
+        type: string
+  pull_request:
+
+concurrency:
+  group: rpm-build-${{ github.head_ref  || github.run_id }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -ueo pipefail {0}
+
+permissions: {}
+
+jobs:
+  Import-commit-message:
+    name: Get commit message
+    if: github.repository == 'daos-stack/daos'
+    runs-on: [self-hosted, light]
+    outputs:
+      message: ${{ steps.get-commit-message.outputs.text }}
+      dequoted_message: ${{ steps.get-commit-message.outputs.text }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Get commit message
+        id: get-commit-message
+        uses: ./.github/actions/import-commit-message
+
+  Import-commit-pragmas:
+    name: Make commit pragma variables
+    runs-on: [self-hosted, light]
+    needs: [Import-commit-message]
+    # can't use matrixes for matrixed output yet
+    # https://github.com/actions/runner/pull/2477
+    outputs:
+      rpm-test-version: ${{ steps.rpm-test-version.outputs.value }}
+      pr-repos: ${{ steps.pr-repos.outputs.value }}
+      run-gha: ${{ steps.run-gha.outputs.value }}
+    steps:
+      - name: Set rpm-test-version variable
+        id: rpm-test-version
+        uses: ./.github/actions/variable-from-pragma
+        with:
+          commit_message: ${{ needs.Import-commit-message.outputs.dequoted_message }}
+          pragma: RPM_TEST_VERSION
+      - name: Set pr-repos variable
+        id: pr-repos
+        uses: ./.github/actions/variable-from-pragma
+        with:
+          commit_message: ${{ needs.Import-commit-message.outputs.dequoted_message }}
+          pragma: PR_REPOS
+      - name: Set run-gha variable
+        id: run-gha
+        uses: ./.github/actions/variable-from-pragma
+        with:
+          commit_message: ${{ needs.Import-commit-message.outputs.dequoted_message }}
+          pragma: RUN_GHA
+          default: false
+
+  Calc-rpm-build-matrix:
+    name: Calculate RPM Build Matrix
+    runs-on: [self-hosted, light]
+    needs: [Import-commit-pragmas]
+    outputs:
+      matrix: ${{ steps.matrix.outputs.text }}
+    if: ${{ github.event.inputs.use-existing-base-builds }} != 'true'
+    steps:
+      - name: Import commit pragmas
+        uses: ./.github/actions/import-commit-pragmas
+      - name: Calculate RPM Build Matrix
+        id: matrix
+        run: |  # do not use the non-| format for this script
+             l=()
+             trap 'echo "text=[$(IFS=","; echo "${l[*]}")]" >> $GITHUB_OUTPUT' EXIT
+             if ${CP_SKIP_BUILD:-false}; then
+                 exit 0
+             fi
+             if ! ${CP_SKIP_BUILD_EL8_RPM:-false}; then
+                 l+=('"el8"')
+             fi
+             if ! ${CP_SKIP_BUILD_EL9_RPM:-false}; then
+                 l+=('"el9"')
+             fi
+             if ! ${CP_SKIP_BUILD_DEB12_RPM:-false}; then
+                 l+=('"deb12"')
+             fi
+             if ! ${CP_SKIP_BUILD_UBUNTU22_RPM:-false}; then
+                 l+=('"ubuntu22"')
+             fi
+
+  Build-Client-RPM:
+    name: Build RPM
+    permissions:
+      statuses: write
+      contents: read
+      id-token: write
+    runs-on: [self-hosted, gcp]
+    needs: [Import-commit-pragmas, Calc-rpm-build-matrix]
+    if:
+      ${{ github.event.inputs.use-existing-base-builds }} != 'true' &&
+      needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
+        ((!cancelled()) || success() || failure())
+    strategy:
+      matrix:
+        distro: ${{ fromJSON(needs.Calc-rpm-build-matrix.outputs.matrix) }}
+      fail-fast: false
+    env:
+      DISTRO_NAME:
+      DISTRO_VERSION:
+    steps:
+      - name: Import commit pragmas
+        uses: ./.github/actions/import-commit-pragmas
+      - name: Set PR repo env vars
+        uses: ./.github/actions/set-pr-repo-vars
+        with:
+          pr-repos: ${{ needs.Import-commit-pragmas.outputs.pr-repos }}
+      - name: Set variables
+        run: |
+            GO_BUILDER=""
+            DOCKER_FOLDER="utils/docker/gcp/client/base"
+            case ${{ matrix.distro }} in
+                'el8')
+                    DOCKERFILE="${DOCKER_FOLDER}/el/Dockerfile"
+                    BASE_IMAGE_BUILDER="rockylinux/rockylinux:${{ env.EL8_VERSION }}"
+                    DISTRO_NAME="EL"
+                    DISTRO_VERSION="${{ env.EL8_VERSION }}"
+                    ;;
+                'el9')
+                    DOCKERFILE="${DOCKER_FOLDER}/el/Dockerfile"
+                    BASE_IMAGE_BUILDER="rockylinux/rockylinux:${{ env.EL9_VERSION }}"
+                    DISTRO_NAME="EL"
+                    DISTRO_VERSION="${{ env.EL9_VERSION }}"
+                    ;;
+                'deb12')
+                    DOCKERFILE="${DOCKER_FOLDER}/deb/Dockerfile"
+                    BASE_IMAGE_BUILDER="debian:${{ env.DEBIAN_VERSION }}"
+                    GO_BUILDER="google-go.pkg.dev/golang:1.22.4"
+                    DISTRO_NAME="DEBIAN"
+                    DISTRO_VERSION="${{ env.DEBIAN_VERSION }}"
+                    ;;
+                'ubuntu22')
+                    DOCKERFILE="${DOCKER_FOLDER}/deb/Dockerfile"
+                    BASE_IMAGE_BUILDER="ubuntu:${{ env.UBUNTU_VERSION }}"
+                    GO_BUILDER="google-go.pkg.dev/golang:1.22.4"
+                    DISTRO_NAME="DEBIAN"
+                    DISTRO_VERSION="${{ env.UBUNTU_VERSION }}"
+                    ;;
+            esac
+            DISTRO_NAME_LOWER=$(echo $DISTRO_NAME | tr '[:upper:]' '[:lower:]')
+            IMAGE_TYPE="base"
+            DOCKER_IMAGE="client-${DISTRO_NAME_LOWER}-${DISTRO_VERSION}-${IMAGE_TYPE}"
+            echo "DOCKERFILE=$DOCKERFILE" >> $GITHUB_ENV
+            echo "BASE_IMAGE_BUILDER=$BASE_IMAGE_BUILDER" >> $GITHUB_ENV
+            echo "GO_BUILDER=$GO_BUILDER" >> $GITHUB_ENV
+            echo "DISTRO_NAME=$DISTRO_NAME" >> $GITHUB_ENV
+            echo "DISTRO_VERSION=$DISTRO_VERSION" >> $GITHUB_ENV
+            echo "STAGE_NAME=Build RPM on $DISTRO_NAME $DISTRO_VERSION" >> $GITHUB_ENV
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Remove Dockerignore file
+        # necessary because our Dockerfile assumes /daos is our build context
+        # but the .dockerignore file ignores many files we need in our RPM
+        id: rm-dockerignore
+        run: rm -f .dockerignore && touch .dockerignore
+      - name: Build RPM
+        id: build-rpm
+        continue-on-error: false
+        # yamllint disable rule:line-length
+        run: sudo docker build . --file "${DOCKERFILE}"
+            --build-arg BASE_IMAGE_BUILDER="${BASE_IMAGE_BUILDER}"
+            --build-arg GO_BUILDER="${GO_BUILDER}"
+            --build-arg DAOS_BUILD_TYPE=release
+            --build-arg DAOS_SRC_DIR="."
+            --build-arg LIBFABRIC_HASH=${LIBFABRIC_HASH}
+            --build-arg MERCURY_HASH=${MERCURY_HASH}
+            --build-arg ISA-L_HASH=${ISA-L_HASH}
+            --build-arg ISA-L_CRYPTO_HASH=${ISA-L_CRYPTO_HASH}
+            --build-arg ARGOBOTS_HASH=${ARGOBOTS_HASH}
+            --build-arg DPDK_HASH=${DPDK_HASH}
+            --build-arg SPDK_HASH=${SPDK_HASH}
+            --build-arg RAFT_HASH={RAFT_HASH}
+            --build-arg PMDK_HASH=${PMDK_HASH}
+      - name: Update commit status
+        uses: ouzi-dev/commit-status-updater@v2
+        with:
+          # yamllint disable-line rule:line-length
+          name: 'build/Build RPM on ${{ env.DISTRO_NAME }} ${{ env.DISTRO_VERSION }}'
+          status: "${{ job.status }}"
+
+  Build-Server-Image:
+    name: Build Server Images
+    permissions:
+      statuses: write
+      contents: read
+      id-token: write
+    runs-on: [self-hosted, gcp]
+    needs: [Import-commit-pragmas, Calc-rpm-build-matrix]
+    if:
+      ${{ github.event.inputs.use-existing-base-builds }} != 'true' &&
+      needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
+        ((!cancelled()) || success() || failure())
+    env:
+      DISTRO_NAME:
+      DISTRO_VERSION:
+    steps:
+      - name: Import commit pragmas
+        uses: ./.github/actions/import-commit-pragmas
+      - name: Set variables
+        run: |
+            DISTRO_NAME=EL
+            DISTRO_NAME_LOWER=el
+            DISTRO_VERSION=8
+            DOCKER_FOLDER="utils/docker/gcp/server/base"
+            BUILD_IMAGE_DOCKERFILE="${DOCKER_FOLDER}/build_image/Dockerfile"
+            BASE_IMAGE_DOCKERFILE="${DOCKER_FOLDER}/daos_base_image/Dockerfile"
+            DAOS_IMAGE_DOCKERFILE="${DOCKER_FOLDER}/daos_image/Dockerfile"
+            BUILD_DOCKER_IMAGE="server-${DISTRO_NAME_LOWER}-${DISTRO_VERSION}-build"
+            BASE_DOCKER_IMAGE="server-${DISTRO_NAME_LOWER}-${DISTRO_VERSION}-base"
+            DAOS_DOCKER_IMAGE="server-${DISTRO_NAME_LOWER}-${DISTRO_VERSION}"
+            echo "BUILD_IMAGE_DOCKERFILE=$BUILD_IMAGE_DOCKERFILE" >> $GITHUB_ENV
+            echo "BASE_IMAGE_DOCKERFILE=$BASE_IMAGE_DOCKERFILE" >> $GITHUB_ENV
+            echo "DAOS_IMAGE_DOCKERFILE=$DAOS_IMAGE_DOCKERFILE" >> $GITHUB_ENV
+            echo "BUILD_DOCKER_IMAGE=$BUILD_DOCKER_IMAGE" >> $GITHUB_ENV
+            echo "BASE_DOCKER_IMAGE=$BASE_DOCKER_IMAGE" >> $GITHUB_ENV
+            echo "DAOS_DOCKER_IMAGE=$DAOS_DOCKER_IMAGE" >> $GITHUB_ENV
+            echo "STAGE_NAME=Build Server Images" >> $GITHUB_ENV
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Remove Dockerignore file
+        # necessary because our Dockerfile assumes /daos is our build context
+        # but the .dockerignore file ignores many files we need in our RPM
+        id: rm-dockerignore
+        run: rm -f .dockerignore && touch .dockerignore
+      - name: Build build image
+        run: sudo docker build . --file "${BUILD_IMAGE_DOCKERFILE}"
+      - name: Build base image
+        run: sudo docker build . --file "${BASE_IMAGE_DOCKERFILE}"
+      - name: Build DAOS image
+        run: sudo docker build . --file "${DAOS_IMAGE_DOCKERFILE}"
+            --build-arg BUILD_BASE="${BUILD_DOCKER_IMAGE}"
+            --build-arg BASE="${BASE_DOCKER_IMAGE}"
+            --build-arg DAOS_BUILD_TYPE="release"
+            --build-arg GHA="true"
+      - name: Update commit status
+        uses: ouzi-dev/commit-status-updater@v2
+        with:
+          # yamllint disable-line rule:line-length
+          name: 'build/Build Server on ${{ env.DISTRO_NAME }} ${{ env.DISTRO_VERSION }}'
+          status: "${{ job.status }}"
