@@ -91,6 +91,7 @@
 	FOREACH_SINGLE_INTERCEPT(ACTION)     \
 	FOREACH_ALIASED_INTERCEPT(ACTION)
 
+/* clang-format off */
 #ifdef IOIL_PRELOAD
 #include <dlfcn.h>
 
@@ -118,14 +119,8 @@
 	} while (0);
 
 #else /* !IOIL_PRELOAD */
-/* clang-format off */
 #define IOIL_FORWARD_DECL(type, name, params)                                                      \
-	_Pragma("GCC diagnostic push")                                                             \
-	_Pragma("GCC diagnostic ignored \"-Wpragmas\"")                                            \
-	_Pragma("GCC diagnostic ignored \"-Wmissing-attributes\"")                                 \
-	extern type __real_##name params;                                                          \
-	_Pragma("GCC diagnostic pop")
-/* clang-format on */
+	extern type __real_##name params;
 
 #define IOIL_DECL(name) __wrap_##name
 
@@ -140,5 +135,5 @@
 		__attribute__((weak, alias("__wrap_" #name)));
 
 #endif /* IOIL_PRELOAD */
-
+/* clang-format on */
 #endif /* __INTERCEPT_H__ */
