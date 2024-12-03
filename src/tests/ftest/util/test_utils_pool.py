@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -1474,6 +1475,41 @@ class TestPool(TestDaosApiBase):
             data = self.dmg.pool_query(self.identifier, health_only=True)
 
         self.log.info("Wait for dead ranks complete: dead ranks %s", expected)
+
+    def verify_space(self, verify_free_scm=None, verify_free_nvme=None, retries=4, interval=30):
+        """Verify pool space with a time constraint.
+
+        Args:
+            verify_free_scm (callable, optional): function(current) to verify scm free space.
+                Defaults to None. Must supply at least one verify_* argument.
+            verify_free_nvme (callable, optional): function(current) to verify nvme free space.
+                Defaults to None. Must supply at least one verify_* argument.
+            retries (int, optional): number of times to retry. Default is 4.
+            interval (int, optional): seconds to wait before retrying. Default is 60.
+
+        Returns:
+            bool: whether space verification succeeded within the time limit
+
+        Raises:
+            ValueError: if no verify_* argument is given
+
+        """
+        if verify_free_scm is None and verify_free_nvme is None:
+            raise ValueError("verify_free_scm or verify_free_nvme is required")
+        for retry in range(retries):
+            if retry > 0:
+                sleep(interval)
+            current_space = self.get_pool_daos_space()
+            current_free_scm = current_space["s_free"][0]
+            current_free_nvme = current_space["s_free"][1]
+            self.log.info("current_free_scm  = %s", current_free_scm)
+            self.log.info("current_free_nvme = %s", current_free_nvme)
+            if verify_free_scm and not verify_free_scm(current_free_scm):
+                continue
+            if verify_free_nvme and not verify_free_nvme(current_free_nvme):
+                continue
+            return True  # all succeeded
+        return False  # out of retries
 
     def verify_uuid_directory(self, host, scm_mount):
         """Check if pool folder exist on server.
