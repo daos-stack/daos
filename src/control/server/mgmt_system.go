@@ -531,7 +531,8 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, forced bool) error {
 
 	resp := new(mgmtpb.GroupUpdateResp)
 	if err = proto.Unmarshal(dResp.Body, resp); err != nil {
-		return errors.Wrap(err, "unmarshal GroupUpdate response")
+		svc.log.Errorf("GroupUpdateResp Unmarshal: %s", err)
+		return errors.Wrap(drpc.UnmarshalingPayloadFailure(), "GroupUpdateResp")
 	}
 
 	if resp.GetStatus() != 0 {
@@ -1073,6 +1074,7 @@ func (svc *mgmtSvc) SystemExclude(ctx context.Context, req *mgmtpb.SystemExclude
 	return resp, nil
 }
 
+// SystemDrain marks specified ranks on all pools in to drain state.
 func (svc *mgmtSvc) SystemDrain(ctx context.Context, req *mgmtpb.SystemDrainReq) (*mgmtpb.SystemDrainResp, error) {
 	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
@@ -1138,8 +1140,6 @@ func (svc *mgmtSvc) SystemDrain(ctx context.Context, req *mgmtpb.SystemDrainReq)
 	sort.Strings(poolIDs)
 
 	resp := new(mgmtpb.SystemDrainResp)
-	drainReq := new(mgmtpb.PoolDrainReq)
-	drainReq.Sys = req.Sys
 
 	for _, id := range poolIDs {
 		rs := poolRanks[id]
@@ -1149,14 +1149,15 @@ func (svc *mgmtSvc) SystemDrain(ctx context.Context, req *mgmtpb.SystemDrainReq)
 		drained := ranklist.MustCreateRankSet("")
 		failed := make(map[string]*ranklist.RankSet)
 
-		// Use our incoming request and just replace relevant parameters on each iteration.
-		drainReq.Id = id
-
 		// TODO DAOS-6611: Drain multiple pool-ranks per call when drpc.MethodPoolDrain API
 		//                 supports it.
 		for _, r := range rs.Ranks() {
 			var errMsg string
-			drainReq.Rank = r.Uint32()
+			drainReq := &mgmtpb.PoolDrainReq{
+				Sys:  req.Sys,
+				Rank: r.Uint32(),
+				Id:   id,
+			}
 
 			drpcResp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolDrain,
 				drainReq)
@@ -1166,8 +1167,10 @@ func (svc *mgmtSvc) SystemDrain(ctx context.Context, req *mgmtpb.SystemDrainReq)
 
 			drainResp := &mgmtpb.PoolDrainResp{}
 			if err = proto.Unmarshal(drpcResp.Body, drainResp); err != nil {
-				errMsg = errors.Wrap(err, "unmarshal PoolEvict response").Error()
-				drainResp.Status = int32(daos.IOInvalid)
+				svc.log.Errorf("PoolDrainResp Unmarshal: %s", err)
+				drainResp.Status = int32(daos.MiscError)
+				errMsg = errors.Wrap(drpc.UnmarshalingPayloadFailure(),
+					"PoolDrainResp").Error()
 			} else if drainResp.Status != int32(daos.Success) {
 				errMsg = daos.Status(drainResp.Status).Error()
 			}
@@ -1376,8 +1379,10 @@ func (svc *mgmtSvc) SystemCleanup(ctx context.Context, req *mgmtpb.SystemCleanup
 
 		res := &mgmtpb.PoolEvictResp{}
 		if err = proto.Unmarshal(dresp.Body, res); err != nil {
-			res.Status = int32(daos.IOInvalid)
-			errMsg = errors.Wrap(err, "unmarshal PoolEvict response").Error()
+			svc.log.Errorf("PoolEvictResp Unmarshal: %s", err)
+			res.Status = int32(daos.MiscError)
+			errMsg = errors.Wrap(drpc.UnmarshalingPayloadFailure(),
+				"PoolEvictResp").Error()
 			res.Count = 0
 		}
 
@@ -1500,7 +1505,9 @@ func (svc *mgmtSvc) updatePoolPropsWithSysProps(ctx context.Context, systemPrope
 		}
 
 		if err = proto.Unmarshal(dResp.Body, resp); err != nil {
-			return nil, errors.Wrap(err, "unmarshal PoolSetProp response")
+			svc.log.Errorf("PoolSetPropResp Unmarshal: %s", err)
+			return nil, errors.Wrap(drpc.UnmarshalingPayloadFailure(),
+				"PoolSetPropResp")
 		}
 		if resp.Status != 0 {
 			return nil, errors.Errorf("SystemSetProp: %d\n", resp.Status)
