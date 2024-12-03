@@ -71,7 +71,8 @@ jobs:
       PACKAGING_DIR: ${{ vars.PACKAGING_DIR }}
     outputs:
       NAME: ${{ env.NAME }}
-      DISTROS: ${{ env.COVFN_DISABLED && vars.DISTROS_MASTER || vars.COVERAGE_DISTROS_MASTER }}
+      DISTROS: ${{ env.COVFN_DISABLED == 'true' && vars.DISTROS_MASTER ||
+                                                   vars.COVERAGE_DISTROS_MASTER }}
       EL8_BUILD_VERSION: ${{ env.EL8_BUILD_VERSION }}
       EL9_BUILD_VERSION: ${{ env.EL9_BUILD_VERSION }}
       LEAP15_VERSION: ${{ env.LEAP15_VERSION }}
