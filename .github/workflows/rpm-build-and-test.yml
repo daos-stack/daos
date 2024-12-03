@@ -84,7 +84,8 @@ jobs:
     if: inputs.rpm-test-version == ''
     permissions:
       statuses: write
-    uses: daos-stack/actions-lib/.github/workflows/rpm-build.yml@v1
+    # yamllint disable-line rule:line-length
+    uses: daos-stack/actions-lib/.github/workflows/rpm-build.yml@bmurrell/skip-rpm-build-without-run-gha
     secrets: inherit
     with:
       NAME: ${{ needs.Variables.outputs.NAME }}
