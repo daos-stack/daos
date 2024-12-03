@@ -100,7 +100,8 @@ for file in $files; do
             fi
         elif [[ "$mode" == "gha" ]]; then
             # Print error but do not update
-            echo "::error file=$file::Copyright out of date"
+            lineno="$(grep -nE "$regex" "$file" | cut -f1 -d:)"
+            echo "::error file=$file,line=$lineno::Copyright out of date"
             errors=$((errors + 1))
         fi
     fi
