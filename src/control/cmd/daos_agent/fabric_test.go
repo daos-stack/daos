@@ -224,7 +224,8 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 	for name, tc := range map[string]struct {
 		nf         *NUMAFabric
 		params     *FabricIfaceParams
-		ignore     []string
+		include    []string
+		exclude    []string
 		expErr     error
 		expResults []*FabricInterface
 	}{
@@ -723,7 +724,7 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 				},
 			},
 		},
-		"ignore interface": {
+		"include interface": {
 			nf: &NUMAFabric{
 				numaMap: map[int][]*FabricInterface{
 					0: {
@@ -749,7 +750,7 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 				Provider: "ofi+sockets",
 				DevClass: hardware.Ether,
 			},
-			ignore: []string{"t1"},
+			include: []string{"t2"},
 			expResults: []*FabricInterface{
 				{
 					Name:        "t2",
@@ -763,7 +764,47 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 				},
 			},
 		},
-		"ignore all interfaces": {
+		"exclude interface": {
+			nf: &NUMAFabric{
+				numaMap: map[int][]*FabricInterface{
+					0: {
+						fabricInterfacesFromHardware(&hardware.FabricInterface{
+							NetInterfaces: common.NewStringSet("t1"),
+							Name:          "t1",
+							DeviceClass:   hardware.Ether,
+							Providers:     testFabricProviderSet("ofi+sockets"),
+						})[0],
+					},
+					1: {
+						fabricInterfacesFromHardware(&hardware.FabricInterface{
+							NetInterfaces: common.NewStringSet("t2"),
+							Name:          "t2",
+							DeviceClass:   hardware.Ether,
+							Providers:     testFabricProviderSet("ofi+sockets"),
+						})[0],
+					},
+				},
+			},
+			params: &FabricIfaceParams{
+				NUMANode: 0,
+				Provider: "ofi+sockets",
+				DevClass: hardware.Ether,
+			},
+			exclude: []string{"t1"},
+			expResults: []*FabricInterface{
+				{
+					Name:        "t2",
+					Domain:      "t2",
+					NetDevClass: hardware.Ether,
+				},
+				{
+					Name:        "t2",
+					Domain:      "t2",
+					NetDevClass: hardware.Ether,
+				},
+			},
+		},
+		"exclude all interfaces": {
 			nf: &NUMAFabric{
 				numaMap: map[int][]*FabricInterface{
 					0: {
@@ -787,8 +828,8 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 				Provider: "ofi+sockets",
 				DevClass: hardware.Ether,
 			},
-			ignore: []string{"t1", "t2"},
-			expErr: errors.New("no suitable fabric interface"),
+			exclude: []string{"t1", "t2"},
+			expErr:  errors.New("no suitable fabric interface"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -800,7 +841,13 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 					tc.nf.getAddrInterface = getMockNetInterfaceSuccess
 				}
 
-				tc.nf = tc.nf.WithIgnoredDevices(common.NewStringSet(tc.ignore...))
+				mode := filterModeExclude
+				devSet := common.NewStringSet(tc.exclude...)
+				if len(tc.include) > 0 {
+					mode = filterModeInclude
+					devSet = common.NewStringSet(tc.include...)
+				}
+				tc.nf = tc.nf.WithDeviceFilter(newDeviceFilter(devSet, mode))
 			}
 
 			numDevices := 0

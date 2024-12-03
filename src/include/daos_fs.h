@@ -163,6 +163,35 @@ dfs_connect(const char *pool, const char *sys, const char *cont, int flags, dfs_
 	    dfs_t **dfs);
 
 /**
+ * Same as dfs_connect(), but mount a read-only snapshot of a existing container.
+ * The handle must be released using dfs_disconnect() and not dfs_umount(). Using the latter in this
+ * case will leak open handles for the pool and container.
+ *
+ * The snapshot to mount must have been previously created with daos_cont_create_snap() or
+ * daos_cont_create_snap_opt(). The epoch returned by those functions can be passed as \a epoch
+ * to identify the snapshot to mount.
+ * The snapshot can also be identified by name (provide that one was passed at snapshot creation
+ * time). In this case, an epoch of 0 should be passed and \a name should be set to the snapshot
+ * name. Please note that \a name is valid only w
+ *
+ * \param[in]	pool	Pool label.
+ * \param[in]	sys	DAOS system name to use for the pool connect.
+ *			Pass NULL to use the default system.
+ * \param[in]	cont	Container label.
+ * \param[in]	flags	Mount flags for future use, will be O_RDONLY by definition.
+ * \param[in]	epoch	Epoch associated with the snapshot to mount.
+ *			If a null epoch is passed, then the snapshot is looked up by \a name.
+ * \param[in]	name	Optional name of the snapshot to mount, only valid when \a epoch is set
+ *			to 0.
+ * \param[out]	dfs	Pointer to the created DFS mount point.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_connect_snap(const char *pool, const char *sys, const char *cont, int flags, daos_epoch_t epoch,
+		 const char *name, dfs_t **dfs);
+
+/**
  * Umount the DFS namespace, and release the ref count on the container and pool handles. This
  * should be called on a dfs mount created with dfs_connect() and not dfs_mount().
  *
@@ -245,6 +274,33 @@ dfs_cont_create_with_label(daos_handle_t poh, const char *label, dfs_attr_t *att
  */
 int
 dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **dfs);
+
+/**
+ * Same as dfs_mount(), but mount a read-only file system using a container snapshot.
+ * The snapshot to mount must have been previously with daos_cont_create_snap() or
+ * daos_cont_create_snap_opt().
+ *
+ * The snapshot to mount must have been previously created with daos_cont_create_snap() or
+ * daos_cont_create_snap_opt(). The epoch returned by those functions can be passed as \a epoch
+ * to identify the snapshot to mount.
+ * The snapshot can also be identified by name (provide that one was passed at snapshot creation
+ * time). In this case, an epoch of 0 should be passed and \a name should be set to the snapshot
+ * name. Please note that \a name is valid only when \a epoch is set to 0.
+ *
+ * \param[in]	poh	Pool connection handle
+ * \param[in]	coh	Container open handle.
+ * \param[in]	flags	Mount flags for future use, will be O_RDONLY by definition.
+ * \param[in]	epoch	Epoch associated with the snapshot to mount.
+ *			If a null epoch is passed, then the snapshot is looked up by \a name.
+ * \param[in]	name	Optional name of the snapshot to mount, only valid when \a epoch is set
+ *			to 0.
+ * \param[out]	dfs	Pointer to the file system object created.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_mount_snap(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epoch,
+	       const char *name, dfs_t **dfs);
 
 /**
  * Unmount a DAOS file system. This closes open handles to the root object and
