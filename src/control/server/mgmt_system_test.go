@@ -1906,7 +1906,7 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				dReq(1, 0), dReq(1, 1), dReq(2, 1),
 			},
 			expResp: &mgmtpb.SystemDrainResp{
-				Results: []*mgmtpb.SystemDrainResp_DrainResult{
+				Results: []*mgmtpb.SystemOsaResult{
 					{PoolId: test.MockUUID(1), Ranks: "0-1"},
 					{PoolId: test.MockUUID(2), Ranks: "1"},
 				},
@@ -1928,7 +1928,7 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				dReq(2, 1), dReq(2, 2), dReq(2, 3),
 			},
 			expResp: &mgmtpb.SystemDrainResp{
-				Results: []*mgmtpb.SystemDrainResp_DrainResult{
+				Results: []*mgmtpb.SystemOsaResult{
 					{PoolId: test.MockUUID(1), Ranks: "0-3"},
 					{PoolId: test.MockUUID(2), Ranks: "1-3"},
 				},
@@ -1951,7 +1951,7 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				dReq(2, 1), dReq(2, 2), dReq(2, 3),
 			},
 			expResp: &mgmtpb.SystemDrainResp{
-				Results: []*mgmtpb.SystemDrainResp_DrainResult{
+				Results: []*mgmtpb.SystemOsaResult{
 					{PoolId: "00000001", Ranks: "0-3"},
 					{PoolId: "00000002", Ranks: "1-3"},
 				},
@@ -1972,7 +1972,7 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				dReq(1, 1), dReq(1, 2), dReq(2, 1), dReq(2, 2),
 			},
 			expResp: &mgmtpb.SystemDrainResp{
-				Results: []*mgmtpb.SystemDrainResp_DrainResult{
+				Results: []*mgmtpb.SystemOsaResult{
 					{
 						PoolId: test.MockUUID(1),
 						Ranks:  "1-2",
@@ -2041,7 +2041,7 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 
 			cmpOpts := []cmp.Option{
 				cmpopts.IgnoreUnexported(mgmtpb.SystemDrainResp{},
-					mgmtpb.SystemDrainResp_DrainResult{}),
+					mgmtpb.SystemOsaResult{}),
 			}
 			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
