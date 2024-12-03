@@ -99,19 +99,11 @@
 
 #define IOIL_DECL(name) name
 
-#define IOIL_DECLARE_ALIAS(type, name, params)                                                     \
-	_Pragma("GCC diagnostic push")                                                             \
-	_Pragma("GCC diagnostic ignored \"-Wpragmas\"")                                            \
-	_Pragma("GCC diagnostic ignored \"-Wmissing-attributes\"")                                 \
-	DFUSE_PUBLIC type name params __attribute__((weak, alias("dfuse_" #name)));                \
-	_Pragma("GCC diagnostic pop")
+#define IOIL_DECLARE_ALIAS(type, name, params) \
+	DFUSE_PUBLIC type name params __attribute__((weak, alias("dfuse_" #name)));
 
-#define IOIL_DECLARE_ALIAS64(type, name, params)                                                   \
-	_Pragma("GCC diagnostic push")                                                             \
-	_Pragma("GCC diagnostic ignored \"-Wpragmas\"")                                            \
-	_Pragma("GCC diagnostic ignored \"-Wmissing-attributes\"")                                 \
-	DFUSE_PUBLIC type name##64 params __attribute__((weak, alias(#name)));                     \
-	_Pragma("GCC diagnostic pop")
+#define IOIL_DECLARE_ALIAS64(type, name, params) \
+	DFUSE_PUBLIC type name##64 params __attribute__((weak, alias(#name)));
 
 /* Initialize the __real_##name function pointer */
 #define IOIL_FORWARD_MAP_OR_FAIL(type, name, params)                                               \
@@ -139,21 +131,13 @@
 
 #define IOIL_FORWARD_MAP_OR_FAIL(type, name, params) (void)0;
 
-#define IOIL_DECLARE_ALIAS(type, name, params)                                                     \
-	_Pragma("GCC diagnostic push")                                                             \
-	_Pragma("GCC diagnostic ignored \"-Wpragmas\"")                                            \
-	_Pragma("GCC diagnostic ignored \"-Wmissing-attributes\"")                                 \
-	DFUSE_PUBLIC type __wrap_##name params                                                     \
-		__attribute__((weak, alias("dfuse_" #name)));                                      \
-	_Pragma("GCC diagnostic pop")
+#define IOIL_DECLARE_ALIAS(type, name, params) \
+	DFUSE_PUBLIC type __wrap_##name params \
+		__attribute__((weak, alias("dfuse_" #name)));
 
-#define IOIL_DECLARE_ALIAS64(type, name, params)                                                   \
-	_Pragma("GCC diagnostic push")                                                             \
-	_Pragma("GCC diagnostic ignored \"-Wpragmas\"")                                            \
-	_Pragma("GCC diagnostic ignored \"-Wmissing-attributes\"")                                 \
-	DFUSE_PUBLIC type __wrap_##name##64 params                                                 \
-		__attribute__((weak, alias("__wrap_" #name)));                                     \
-	_Pragma("GCC diagnostic pop")
+#define IOIL_DECLARE_ALIAS64(type, name, params)                \
+	DFUSE_PUBLIC type __wrap_##name##64 params                \
+		__attribute__((weak, alias("__wrap_" #name)));
 
 #endif /* IOIL_PRELOAD */
 
