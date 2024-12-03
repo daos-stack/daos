@@ -78,6 +78,15 @@ message SystemExcludeResp {
 	repeated shared.RankResult results = 1;
 }
 
+// Results for system OSA calls on multiple pool-ranks.
+message SystemOsaResult
+{
+	int32  status  = 1; // Status of the OSA operation on a specific pool
+	string msg     = 2; // Error message if status indicates an error
+	string pool_id = 3; // Label or uuid of pool
+	string ranks   = 4; // Rank-set that has encountered this result
+}
+
 // SystemDrainReq supplies system-drain parameters.
 message SystemDrainReq
 {
@@ -89,14 +98,23 @@ message SystemDrainReq
 // SystemDrainResp returns status of system-drain request.
 message SystemDrainResp
 {
-	message DrainResult
-	{
-		int32  status  = 1; // Status of the evict on the specific pool
-		string msg     = 2; // Error message if status indicates an error
-		string pool_id = 3; // Label or uuid of pool
-		string ranks   = 4; // Rank-set that has encountered this result
-	}
-	repeated DrainResult results = 1; // Results for pool-ranks drain calls.
+	int32                    status  = 1; // Status of outer response.
+	repeated SystemOsaResult results = 2; // Results for system-drain calls on pool-ranks.
+}
+
+// SystemReintReq supplies system-reintegrate parameters.
+message SystemReintReq
+{
+	string sys   = 1; // DAOS system name
+	string ranks = 2; // rankset to reintegrate on all pools
+	string hosts = 3; // hostset to reintegrate on all pools
+}
+
+// SystemReintResp returns status of system-reintegrate request.
+message SystemReintResp
+{
+	int32                    status  = 1; // Status of outer response.
+	repeated SystemOsaResult results = 2; // Results for system-reintegrate calls on pool-ranks.
 }
 
 // SystemQueryReq supplies system query parameters.
