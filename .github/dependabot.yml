@@ -2,10 +2,8 @@ version: 2
 updates:
   - package-ecosystem: pip
     directories:
-      - /utils/cq/requirements.txt
-      - /requirements-build.txt
-      - /requirements-ftest.txt
-      - /requirements-utest.txt
+      - /utils/cq/
+      - /
     schedule:
       interval: daily
     groups:
