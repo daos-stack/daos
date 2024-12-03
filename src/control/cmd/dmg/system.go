@@ -34,6 +34,7 @@ type SystemCmd struct {
 	Exclude      systemExcludeCmd      `command:"exclude" description:"Exclude ranks from DAOS system"`
 	ClearExclude systemClearExcludeCmd `command:"clear-exclude" description:"Clear excluded state for ranks"`
 	Drain        systemDrainCmd        `command:"drain" description:"Drain ranks or hosts from all relevant pools in DAOS system"`
+	Reint        systemReintCmd        `command:"reintegrate" alias:"reint" description:"Reintegrate ranks or hosts into all relevant pools in DAOS system"`
 	Erase        systemEraseCmd        `command:"erase" description:"Erase system metadata prior to reformat"`
 	ListPools    poolListCmd           `command:"list-pools" description:"List all pools in the DAOS system"`
 	Cleanup      systemCleanupCmd      `command:"cleanup" description:"Clean up all resources associated with the specified machine"`
@@ -336,6 +337,43 @@ func (cmd *systemDrainCmd) Execute(_ []string) (errOut error) {
 
 	var out strings.Builder
 	pretty.PrintSystemDrainResponse(&out, resp)
+	cmd.Info(out.String())
+
+	return resp.Errors()
+}
+
+type systemReintCmd struct {
+	baseRankListCmd
+}
+
+func (cmd *systemReintCmd) Execute(_ []string) (errOut error) {
+	defer func() {
+		errOut = errors.Wrap(errOut, "system drain failed")
+	}()
+
+	if err := cmd.validateHostsRanks(); err != nil {
+		return err
+	}
+	if cmd.Ranks.Count() == 0 && cmd.Hosts.Count() == 0 {
+		return errNoRanks
+	}
+
+	req := new(control.SystemReintReq)
+	req.SetSystem(cmd.config.SystemName)
+	req.Hosts.Replace(&cmd.Hosts.HostSet)
+	req.Ranks.Replace(&cmd.Ranks.RankSet)
+
+	resp, err := control.SystemReint(cmd.MustLogCtx(), cmd.ctlInvoker, req)
+	if err != nil {
+		return err // control api returned an error, disregard response
+	}
+
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
+	}
+
+	var out strings.Builder
+	pretty.PrintSystemReintResponse(&out, resp)
 	cmd.Info(out.String())
 
 	return resp.Errors()

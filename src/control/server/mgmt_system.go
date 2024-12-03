@@ -1188,7 +1188,7 @@ func (svc *mgmtSvc) SystemDrain(ctx context.Context, req *mgmtpb.SystemDrainReq)
 
 		// Single result generated for all ranks drained successfully.
 		if drained.Count() > 0 {
-			resp.Results = append(resp.Results, &mgmtpb.SystemDrainResp_DrainResult{
+			resp.Results = append(resp.Results, &mgmtpb.SystemOsaResult{
 				PoolId: id,
 				Ranks:  drained.String(),
 			})
@@ -1202,7 +1202,7 @@ func (svc *mgmtSvc) SystemDrain(ctx context.Context, req *mgmtpb.SystemDrainReq)
 
 		// Result generated for each failure message rank-group.
 		for _, msg := range msgs {
-			resp.Results = append(resp.Results, &mgmtpb.SystemDrainResp_DrainResult{
+			resp.Results = append(resp.Results, &mgmtpb.SystemOsaResult{
 				// Status already included in error message.
 				Status: -1,
 				Msg:    msg,
