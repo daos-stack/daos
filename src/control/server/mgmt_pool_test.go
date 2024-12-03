@@ -1478,7 +1478,7 @@ func TestServer_MgmtSvc_PoolExtend(t *testing.T) {
 	}
 }
 
-func TestServer_MgmtSvc_PoolReintegrate(t *testing.T) {
+func TestServer_MgmtSvc_PoolReint(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	missingSB := newTestMgmtSvc(t, log)
 	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil
@@ -1488,9 +1488,9 @@ func TestServer_MgmtSvc_PoolReintegrate(t *testing.T) {
 		nilReq      bool
 		getMockDrpc func(error) *mockDrpcClient
 		mgmtSvc     *mgmtSvc
-		reqIn       *mgmtpb.PoolReintegrateReq
-		drpcResp    *mgmtpb.PoolReintegrateResp
-		expDrpcReq  *mgmtpb.PoolReintegrateReq
+		reqIn       *mgmtpb.PoolReintReq
+		drpcResp    *mgmtpb.PoolReintResp
+		expDrpcReq  *mgmtpb.PoolReintReq
 		expErr      error
 	}{
 		"nil request": {
@@ -1498,7 +1498,7 @@ func TestServer_MgmtSvc_PoolReintegrate(t *testing.T) {
 			expErr: errors.New("nil request"),
 		},
 		"wrong system": {
-			reqIn:  &mgmtpb.PoolReintegrateReq{Id: mockUUID, Sys: "bad"},
+			reqIn:  &mgmtpb.PoolReintReq{Id: mockUUID, Sys: "bad"},
 			expErr: FaultWrongSystem("bad", build.DefaultSystemName),
 		},
 		"missing superblock": {
@@ -1522,13 +1522,13 @@ func TestServer_MgmtSvc_PoolReintegrate(t *testing.T) {
 			expErr: errors.New("unmarshal"),
 		},
 		"missing uuid": {
-			reqIn:  &mgmtpb.PoolReintegrateReq{Rank: 1},
+			reqIn:  &mgmtpb.PoolReintReq{Rank: 1},
 			expErr: errors.New("empty pool id"),
 		},
 		"successfully extended": {
-			drpcResp: &mgmtpb.PoolReintegrateResp{},
+			drpcResp: &mgmtpb.PoolReintResp{},
 			// Expect that the last request contains updated params from ps entry.
-			expDrpcReq: &mgmtpb.PoolReintegrateReq{
+			expDrpcReq: &mgmtpb.PoolReintReq{
 				Sys:       build.DefaultSystemName,
 				SvcRanks:  mockSvcRanks,
 				Id:        mockUUID,
@@ -1543,7 +1543,7 @@ func TestServer_MgmtSvc_PoolReintegrate(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.reqIn == nil && !tc.nilReq {
-				tc.reqIn = &mgmtpb.PoolReintegrateReq{Id: mockUUID, Rank: 1}
+				tc.reqIn = &mgmtpb.PoolReintReq{Id: mockUUID, Rank: 1}
 			}
 			if tc.mgmtSvc == nil {
 				tc.mgmtSvc = newTestMgmtSvc(t, log)
@@ -1568,7 +1568,7 @@ func TestServer_MgmtSvc_PoolReintegrate(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			gotResp, gotErr := tc.mgmtSvc.PoolReintegrate(test.Context(t), tc.reqIn)
+			gotResp, gotErr := tc.mgmtSvc.PoolReint(test.Context(t), tc.reqIn)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -1580,7 +1580,7 @@ func TestServer_MgmtSvc_PoolReintegrate(t *testing.T) {
 			}
 
 			// Check extend gets called with correct params from PS entry.
-			lastReq := new(mgmtpb.PoolReintegrateReq)
+			lastReq := new(mgmtpb.PoolReintReq)
 			if err := proto.Unmarshal(getLastMockCall(mdc).Body, lastReq); err != nil {
 				t.Fatal(err)
 			}

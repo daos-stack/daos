@@ -896,8 +896,8 @@ func (svc *mgmtSvc) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq) (
 	return resp, nil
 }
 
-// PoolReintegrate implements the method defined for the Management Service.
-func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReintegrateReq) (*mgmtpb.PoolReintegrateResp, error) {
+// PoolReint implements the method defined for the Management Service.
+func (svc *mgmtSvc) PoolReint(ctx context.Context, req *mgmtpb.PoolReintReq) (*mgmtpb.PoolReintResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
@@ -924,14 +924,14 @@ func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReinteg
 	req.TierBytes = ps.Storage.PerRankTierStorage
 	req.MemRatio = ps.Storage.MemRatio
 
-	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolReintegrate, req)
+	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolReint, req)
 	if err != nil {
 		return nil, err
 	}
 
-	resp := &mgmtpb.PoolReintegrateResp{}
+	resp := &mgmtpb.PoolReintResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolReintegrate response")
+		return nil, errors.Wrap(err, "unmarshal PoolReint response")
 	}
 
 	return resp, nil

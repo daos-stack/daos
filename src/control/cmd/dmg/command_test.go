@@ -136,6 +136,8 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 		resp = control.MockMSResponse("", nil, &mgmtpb.SystemExcludeResp{})
 	case *control.SystemDrainReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.SystemDrainResp{})
+	case *control.SystemReintReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.SystemReintResp{})
 	case *control.SystemQueryReq:
 		if req.FailOnUnavailable {
 			resp = control.MockMSResponse("", system.ErrRaftUnavail, nil)
@@ -165,8 +167,8 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolDrainResp{})
 	case *control.PoolExtendReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolExtendResp{})
-	case *control.PoolReintegrateReq:
-		resp = control.MockMSResponse("", nil, &mgmtpb.PoolReintegrateResp{})
+	case *control.PoolReintReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolReintResp{})
 	case *control.SystemCheckEnableReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
 	case *control.SystemCheckDisableReq:
