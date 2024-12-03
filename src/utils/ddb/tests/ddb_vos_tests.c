@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -181,13 +181,13 @@ open_pool_test(void **state)
 	daos_handle_t		 poh;
 	struct dt_vos_pool_ctx	*tctx = *state;
 
-	assert_rc_equal(-DER_INVAL, dv_pool_open("/bad/path", &poh));
+	assert_rc_equal(-DER_INVAL, dv_pool_open("/bad/path", &poh, 0));
 
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, &poh));
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, &poh, 0));
 	assert_success(dv_pool_close(poh));
 
 	/* should be able to open again after closing */
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, &poh));
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, &poh, 0));
 	assert_success(dv_pool_close(poh));
 }
 
@@ -1054,7 +1054,16 @@ delete_path_parts_tests(void **state)
 static int
 dv_suit_setup(void **state)
 {
-	return ddb_test_setup_vos(state);
+	int                     rc;
+	struct dt_vos_pool_ctx *tctx;
+
+	rc = ddb_test_setup_vos(state);
+	if (rc)
+		return rc;
+	tctx                           = *state;
+	tctx->dvt_special_pool_destroy = true;
+
+	return 0;
 }
 
 static int
@@ -1077,7 +1086,7 @@ dv_test_setup(void **state)
 
 	active_entry_handler_called = 0;
 	committed_entry_handler_called = 0;
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, &tctx->dvt_poh));
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, &tctx->dvt_poh, 0));
 	return 0;
 }
 
@@ -1090,6 +1099,25 @@ dv_test_teardown(void **state)
 	return 0;
 }
 
+static void
+pool_flags_tests(void **state)
+{
+	daos_handle_t           poh;
+	struct dt_vos_pool_ctx *tctx = *state;
+	uint64_t                compat_flags;
+	uint64_t                incompat_flags;
+
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, &poh, VOS_POF_FOR_FEATURE_FLAG));
+	assert_success(dv_pool_get_flags(poh, &compat_flags, &incompat_flags));
+	assert(compat_flags == 0);
+	assert(incompat_flags == 0);
+	assert_success(
+	    dv_pool_update_flags(poh, VOS_POOL_COMPAT_FLAG_SUPP, VOS_POOL_INCOMPAT_FLAG_SUPP));
+	assert_success(dv_pool_get_flags(poh, &compat_flags, &incompat_flags));
+	assert(compat_flags == VOS_POOL_COMPAT_FLAG_SUPP);
+	assert(incompat_flags == VOS_POOL_INCOMPAT_FLAG_SUPP);
+	assert_success(dv_pool_close(poh));
+}
 
 /*
  * All these tests use the same VOS tree that is created at suit_setup. Therefore, tests
@@ -1097,28 +1125,29 @@ dv_test_teardown(void **state)
  */
 #define TEST(x) { #x, x, dv_test_setup, dv_test_teardown }
 const struct CMUnitTest dv_test_cases[] = {
-	{ "open_pool", open_pool_test, NULL, NULL }, /* don't want this test to run with setup */
-	TEST(list_items_test),
-	TEST(get_cont_uuid_from_idx_tests),
-	TEST(get_dkey_from_idx_tests),
-	TEST(get_akey_from_idx_tests),
-	TEST(get_recx_from_idx_tests),
-	TEST(get_value_tests),
-	TEST(get_obj_ilog_tests),
-	TEST(abort_obj_ilog_tests),
-	TEST(get_dkey_ilog_tests),
-	TEST(abort_dkey_ilog_tests),
-	TEST(get_superblock_tests),
-	TEST(obj_id_2_ddb_test),
-	TEST(get_dtx_tables_tests),
-	TEST(delete_path_parts_tests),
-	TEST(verify_correct_params_for_update_value_tests),
-	TEST(update_value_to_modify_tests),
-	TEST(update_value_to_insert_tests),
-	TEST(clear_committed_table),
-	TEST(dtx_commit_active_table),
-	TEST(dtx_abort_active_table),
-	TEST(path_verify),
+    {"open_pool", open_pool_test, NULL, NULL}, /* don't want this test to run with setup */
+    TEST(list_items_test),
+    TEST(get_cont_uuid_from_idx_tests),
+    TEST(get_dkey_from_idx_tests),
+    TEST(get_akey_from_idx_tests),
+    TEST(get_recx_from_idx_tests),
+    TEST(get_value_tests),
+    TEST(get_obj_ilog_tests),
+    TEST(abort_obj_ilog_tests),
+    TEST(get_dkey_ilog_tests),
+    TEST(abort_dkey_ilog_tests),
+    TEST(get_superblock_tests),
+    TEST(obj_id_2_ddb_test),
+    TEST(get_dtx_tables_tests),
+    TEST(delete_path_parts_tests),
+    TEST(verify_correct_params_for_update_value_tests),
+    TEST(update_value_to_modify_tests),
+    TEST(update_value_to_insert_tests),
+    TEST(clear_committed_table),
+    TEST(dtx_commit_active_table),
+    TEST(dtx_abort_active_table),
+    TEST(path_verify),
+    {"pool_flag_update", pool_flags_tests, NULL, NULL},
 };
 
 int

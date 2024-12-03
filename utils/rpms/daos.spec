@@ -5,6 +5,7 @@
 
 %global mercury_version   2.4
 %global libfabric_version 1.15.1-1
+%global argobots_version 1.2
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -14,8 +15,8 @@
 %endif
 
 Name:          daos
-Version:       2.7.100
-Release:       7%{?relval}%{?dist}
+Version:       2.7.101
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -41,11 +42,11 @@ BuildRequires: hwloc-devel
 BuildRequires: bullseye
 %endif
 %if (0%{?rhel} >= 8)
-BuildRequires: argobots-devel >= 1.1
+BuildRequires: argobots-devel >= %{argobots_version}
 BuildRequires: json-c-devel
 BuildRequires: boost-python3-devel
 %else
-BuildRequires: libabt-devel >= 1.0rc1
+BuildRequires: libabt-devel >= %{argobots_version}
 BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
@@ -112,14 +113,6 @@ BuildRequires: systemd-rpm-macros
 %endif
 %endif
 BuildRequires: libuuid-devel
-
-%if (0%{?suse_version} > 0)
-BuildRequires: libucp-devel
-BuildRequires: libucs-devel
-BuildRequires: libuct-devel
-%else
-BuildRequires: ucx-devel
-%endif
 
 Requires: openssl
 # This should only be temporary until we can get a stable upstream release
@@ -323,7 +316,7 @@ This is the package that bridges the difference between the MOFED openmpi
 %endif
 
 %prep
-%autosetup
+%autosetup -p1
 
 %build
 
@@ -425,6 +418,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_sysconfdir}/bash_completion.d/daos.bash
 # Certificate generation files
 %dir %{_libdir}/%{name}
+%{_bindir}/daos_metrics
 %{_libdir}/%{name}/certgen/
 %{_libdir}/%{name}/VERSION
 %{_libdir}/libcart.so.*
@@ -441,7 +435,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # and/or daos_firmware_helper
 %attr(2755,root,daos_server) %{_bindir}/daos_server
 %{_bindir}/daos_engine
-%{_bindir}/daos_metrics
 %{_bindir}/ddb
 %{_sysconfdir}/ld.so.conf.d/daos.conf
 %dir %{_libdir}/daos_srv
@@ -464,6 +457,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/daos_srv/libplacement.so
 %{_libdir}/daos_srv/libpipeline.so
 %{_libdir}/libdaos_common_pmem.so
+%{_libdir}/libdav_v2.so
 %config(noreplace) %{conf_dir}/vos_size_input.yaml
 %{_bindir}/daos_storage_estimator.py
 %{python3_sitearch}/storage_estimator/*.py
@@ -504,13 +498,18 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{python3_sitearch}/pydaos/*.py
 %dir %{python3_sitearch}/pydaos/raw
 %{python3_sitearch}/pydaos/raw/*.py
+%dir %{python3_sitearch}/pydaos/torch
+%{python3_sitearch}/pydaos/torch/*.py
 %if (0%{?rhel} >= 8)
 %dir %{python3_sitearch}/pydaos/__pycache__
 %{python3_sitearch}/pydaos/__pycache__/*.pyc
 %dir %{python3_sitearch}/pydaos/raw/__pycache__
 %{python3_sitearch}/pydaos/raw/__pycache__/*.pyc
+%dir %{python3_sitearch}/pydaos/torch/__pycache__
+%{python3_sitearch}/pydaos/torch/__pycache__/*.pyc
 %endif
 %{python3_sitearch}/pydaos/pydaos_shim.so
+%{python3_sitearch}/pydaos/torch/torch_shim.so
 %{_datarootdir}/%{name}/ioil-ld-opts
 %config(noreplace) %{conf_dir}/daos_agent.yml
 %{_unitdir}/%{agent_svc_name}
@@ -599,6 +598,26 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Nov 13 2024 Denis Barakhtanov <dbarahtanov@enakta.com> 2.7.101-2
+- Add pydaos.torch module to daos-client rpm.
+
+* Fri Nov 08 2024 Phillip Henderson <phillip.henderson@intel.com> 2.7.101-1
+- Bump version to 2.7.100
+
+* Tue Nov 5 2024 Michael MacDonald <mjmac@google.com> 2.7.100-11
+- Move daos_metrics tool to daos package for use on both clients
+  and servers.
+
+* Fri Nov 1 2024 Sherin T George <sherin-t.george@hpe.com> 2.7.100-10
+- The modified DAV allocator with memory bucket support for md_on_ssd
+  phase-2 is delivered as dav_v2.so.
+
+* Tue Oct 15 2024 Brian J. Murrell <brian.murrell@intel.com> - 2.7.100-9
+- Drop BRs for UCX as they were obsoleted as of e01970d
+
+* Mon Oct 07 2024 Cedric Koch-Hofer <cedric.koch-hofer@intel.com> 2.7.100-8
+- Update BR: argobots to 1.2
+
 * Tue Oct 01 2024 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.7.100-7
 - Add support of the PMDK package 2.1.0 with NDCTL enabled.
   * Increase the default ULT stack size to 20KiB if the engine uses

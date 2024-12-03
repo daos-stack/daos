@@ -42,6 +42,7 @@
 #include <linux/limits.h>
 #include <capstone/capstone.h>
 #include <gurt/common.h>
+#include <gnu/libc-version.h>
 
 #include "hook.h"
 #include "hook_int.h"
@@ -89,10 +90,15 @@ static uint64_t lib_base_addr[MAX_NUM_LIB];
 /* List of names of loaded libraries */
 static char   **lib_name_list;
 
+/* libc version number in current process. e.g., 2.28 */
+static float    libc_version;
+static char    *libc_version_str;
+
 /* end   to compile list of memory blocks in /proc/pid/maps */
 
 static char    *path_ld;
 static char    *path_libc;
+static char    *path_libdl;
 static char    *path_libpthread;
 /* This holds the path of libpil4dfs.so. It is needed when we want to
  * force child processes append libpil4dfs.so to env LD_PRELOAD. */
@@ -211,9 +217,10 @@ read_map_file(char **buf)
 static void
 determine_lib_path(void)
 {
-	int   path_offset   = 0, read_size, i, rc;
+	int   path_offset   = 0, read_size, i;
 	char *read_buff_map = NULL;
-	char *pos, *start, *end, lib_ver_str[32] = "", *lib_dir_str = NULL;
+	char *pos, *start, *end, *lib_dir_str = NULL;
+	bool  ver_in_lib_name = false;
 
 	read_size = read_map_file(&read_buff_map);
 
@@ -290,29 +297,38 @@ determine_lib_path(void)
 		goto err;
 	path_libc[end - start] = 0;
 
-	pos = strstr(path_libc, "libc-2.");
-	if (pos) {
-		/* containing version in name. example, 2.17 */
-		memcpy(lib_ver_str, pos + 5, 4);
-		lib_ver_str[4] = 0;
+	if (libc_version_str == NULL) {
+		libc_version_str = (char *)gnu_get_libc_version();
+		if (libc_version_str == NULL) {
+			DS_ERROR(errno, "Failed to determine libc version");
+			goto err;
+		}
+		libc_version = atof(libc_version_str);
 	}
 
-	if (lib_ver_str[0]) {
-		/* with version in name */
-		rc = asprintf(&path_libpthread, "%s/libpthread-%s.so", lib_dir_str, lib_ver_str);
-	} else {
-		rc = asprintf(&path_libpthread, "%s/libpthread.so.0", lib_dir_str);
-	}
-	if (rc < 0) {
-		DS_ERROR(ENOMEM, "Failed to allocate memory for path_libpthread");
-		goto err_1;
-	}
-	if (rc >= PATH_MAX) {
-		free(path_libpthread);
-		path_libpthread = NULL;
+	/* check whether libc name contains version. EL9 libs do not have version info! */
+	pos = strstr(path_libc, "libc-2.");
+	if (pos)
+		ver_in_lib_name = true;
+
+	/* with version in name */
+	if (ver_in_lib_name)
+		D_ASPRINTF(path_libpthread, "%s/libpthread-%s.so", lib_dir_str, libc_version_str);
+	else
+		D_ASPRINTF(path_libpthread, "%s/libpthread.so.0", lib_dir_str);
+	if (path_libpthread == NULL)
+		goto err;
+	if (strnlen(path_libpthread, PATH_MAX) >= PATH_MAX) {
+		D_FREE(path_libpthread);
 		DS_ERROR(ENAMETOOLONG, "path_libpthread is too long");
-		goto err_1;
-	}	
+		goto err;
+	}
+	if (ver_in_lib_name)
+		D_ASPRINTF(path_libdl, "%s/libdl-%s.so", lib_dir_str, libc_version_str);
+	else
+		D_ASPRINTF(path_libdl, "%s/libdl.so.2", lib_dir_str);
+	if (path_libdl == NULL)
+		goto err;
 	D_FREE(lib_dir_str);
 
 	if (strstr(read_buff_map, "libioil.so")) {
@@ -342,7 +358,6 @@ determine_lib_path(void)
 
 err:
 	D_FREE(read_buff_map);
-err_1:
 	D_FREE(lib_dir_str);
 	found_libc = 0;
 	quit_hook_init();
@@ -354,6 +369,11 @@ query_pil4dfs_path(void)
 	return path_libpil4dfs;
 }
 
+float
+query_libc_version(void)
+{
+	return libc_version;
+}
 
 /*
  * query_func_addr - Determine the addresses and code sizes of functions in func_name_list[].
@@ -760,7 +780,8 @@ free_memory_in_hook(void)
 	D_FREE(path_ld);
 	D_FREE(path_libc);
 	D_FREE(module_list);
-	free(path_libpthread);
+	D_FREE(path_libdl);
+	D_FREE(path_libpthread);
 
 	if (lib_name_list) {
 		for (i = 0; i < num_lib_in_map; i++) {
@@ -1040,6 +1061,8 @@ register_a_hook(const char *module_name, const char *func_name, const void *new_
 		module_name_local = path_ld;
 	else if (strncmp(module_name, "libc", 5) == 0)
 		module_name_local = path_libc;
+	else if (strncmp(module_name, "libdl", 6) == 0)
+		module_name_local = path_libdl;
 	else if (strncmp(module_name, "libpthread", 11) == 0)
 		module_name_local = path_libpthread;
 	else

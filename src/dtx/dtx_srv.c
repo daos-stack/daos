@@ -34,8 +34,8 @@ dtx_tls_init(int tags, int xs_id, int tgt_id)
 
 	tls->dt_agg_gen = 1;
 	rc = d_tm_add_metric(&tls->dt_committable, D_TM_STATS_GAUGE,
-			     "total number of committable DTX entries",
-			     "entries", "io/dtx/committable/tgt_%u", tgt_id);
+			     "total number of committable DTX entries", "entry",
+			     "io/dtx/committable/tgt_%u", tgt_id);
 	if (rc != DER_SUCCESS)
 		D_WARN("Failed to create DTX committable metric: " DF_RC"\n",
 		       DP_RC(rc));
@@ -46,6 +46,13 @@ dtx_tls_init(int tags, int xs_id, int tgt_id)
 			     sizeof(struct dtx_leader_handle), tgt_id);
 	if (rc != DER_SUCCESS)
 		D_WARN("Failed to create DTX leader metric: " DF_RC"\n",
+		       DP_RC(rc));
+
+	rc = d_tm_add_metric(&tls->dt_async_cmt_lat, D_TM_STATS_GAUGE,
+			     "DTX async commit latency", "ms",
+			     "io/dtx/async_cmt_lat/tgt_%u", tgt_id);
+	if (rc != DER_SUCCESS)
+		D_WARN("Failed to create DTX async commit latency metric: " DF_RC"\n",
 		       DP_RC(rc));
 
 	return tls;
@@ -117,7 +124,7 @@ dtx_metrics_alloc(const char *path, int tgt_id)
 
 	rc = d_tm_add_metric(&metrics->dpm_total[DTX_PROTO_SRV_RPC_COUNT], D_TM_COUNTER,
 			     "total number of processed sync DTX_COMMIT", "ops",
-			     "%s/ops/sync_dtx_commit/tgt_%u", path, tgt_id);
+			     "%s/ops/dtx_sync_commit/tgt_%u", path, tgt_id);
 	if (rc != DER_SUCCESS)
 		D_WARN("Failed to create sync DTX_COMMIT RPC cnt metric: "DF_RC"\n", DP_RC(rc));
 
@@ -330,7 +337,7 @@ out:
 	dout->do_status = rc;
 	/* For DTX_COMMIT, it is the count of real committed DTX entries. */
 	dout->do_misc = committed;
-	rc = crt_reply_send(rpc);
+	rc            = crt_reply_send_input_free(rpc);
 	if (rc != 0)
 		D_ERROR("send reply failed for DTX rpc %u: rc = "DF_RC"\n", opc,
 			DP_RC(rc));
@@ -467,8 +474,9 @@ dtx_coll_handler(crt_rpc_t *rpc)
 
 out:
 	D_CDEBUG(rc < 0, DLOG_ERR, DB_TRACE,
-		 "Handled collective DTX PRC %u on rank %u for "DF_DTI": "DF_RC"\n",
-		 opc, myrank, DP_DTI(&dci->dci_xid), DP_RC(rc));
+		 "Handled collective DTX PRC %u on rank %u for "DF_DTI" in "
+		 DF_UUID"/"DF_UUID": "DF_RC"\n", opc, myrank, DP_DTI(&dci->dci_xid),
+		 DP_UUID(dci->dci_po_uuid), DP_UUID(dci->dci_co_uuid), DP_RC(rc));
 
 	dco->dco_status = rc;
 	rc = crt_reply_send(rpc);

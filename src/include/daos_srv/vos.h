@@ -20,6 +20,56 @@
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/vos_types.h>
 
+#define VOS_POOL_COMPAT_FLAG_IMMUTABLE (1ULL << 0)
+#define VOS_POOL_COMPAT_FLAG_SKIP_START      (1ULL << 1)
+#define VOS_POOL_COMPAT_FLAG_SKIP_REBUILD    (1ULL << 2)
+#define VOS_POOL_COMPAT_FLAG_SKIP_DTX_RESYNC (1ULL << 3)
+
+#define VOS_POOL_COMPAT_FLAG_SUPP                                                                  \
+	(VOS_POOL_COMPAT_FLAG_IMMUTABLE | VOS_POOL_COMPAT_FLAG_SKIP_START |                        \
+	 VOS_POOL_COMPAT_FLAG_SKIP_REBUILD | VOS_POOL_COMPAT_FLAG_SKIP_DTX_RESYNC)
+
+#define VOS_POOL_INCOMPAT_FLAG_SUPP    0
+
+#define VOS_MAX_FLAG_NAME_LEN          32
+
+static inline uint64_t
+vos_pool_name2flag(const char *name, bool *compat_feature)
+{
+	*compat_feature = false;
+
+	if (strncmp(name, "immutable", VOS_MAX_FLAG_NAME_LEN) == 0) {
+		*compat_feature = true;
+		return VOS_POOL_COMPAT_FLAG_IMMUTABLE;
+	}
+	if (strncmp(name, "skip_start", VOS_MAX_FLAG_NAME_LEN) == 0) {
+		*compat_feature = true;
+		return VOS_POOL_COMPAT_FLAG_SKIP_START;
+	}
+	if (strncmp(name, "skip_rebuild", VOS_MAX_FLAG_NAME_LEN) == 0) {
+		*compat_feature = true;
+		return VOS_POOL_COMPAT_FLAG_SKIP_REBUILD;
+	}
+	if (strncmp(name, "skip_dtx_resync", VOS_MAX_FLAG_NAME_LEN) == 0) {
+		*compat_feature = true;
+		return VOS_POOL_COMPAT_FLAG_SKIP_DTX_RESYNC;
+	}
+
+	return 0;
+}
+
+bool
+vos_pool_feature_skip_start(daos_handle_t poh);
+
+bool
+vos_pool_feature_immutable(daos_handle_t poh);
+
+bool
+vos_pool_feature_skip_rebuild(daos_handle_t poh);
+
+bool
+vos_pool_feature_skip_dtx_resync(daos_handle_t poh);
+
 /** Initialize the vos reserve/cancel related fields in dtx handle
  *
  * \param dth	[IN]	The dtx handle
@@ -288,8 +338,9 @@ vos_self_fini(void);
  * \param path	[IN]	Path of the memory pool
  * \param uuid	[IN]    Pool UUID
  * \param scm_sz [IN]	Size of SCM for the pool
- * \param blob_sz[IN]	Size of blob for the pool
+ * \param data_sz[IN]	Size of data blob for the pool
  * \param wal_sz [IN]	Size of WAL blob for the pool
+ * \param meta_sz[IN]	Size of Meta blob for the pool
  * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
  * \param version[IN]	Pool version (0 for default version)
  * \param poh	[OUT]	Returned pool handle if not NULL
@@ -297,8 +348,9 @@ vos_self_fini(void);
  * \return              Zero on success, negative value if error
  */
 int
-vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t blob_sz,
-		   daos_size_t wal_sz, unsigned int flags, uint32_t version, daos_handle_t *poh);
+vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t data_sz,
+		   daos_size_t wal_sz, daos_size_t meta_sz, unsigned int flags, uint32_t version,
+		   daos_handle_t *poh);
 
 /**
  * Create a Versioning Object Storage Pool (VOSP), and open it if \a poh is not
@@ -307,7 +359,8 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_
  * \param path	[IN]	Path of the memory pool
  * \param uuid	[IN]    Pool UUID
  * \param scm_sz [IN]	Size of SCM for the pool
- * \param blob_sz[IN]	Size of blob for the pool
+ * \param data_sz[IN]	Size of data blob for the pool
+ * \param meta_sz[IN]	Size of Meta blob for the pool
  * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
  * \param version[IN]	Pool version (0 for default version)
  * \param poh	[OUT]	Returned pool handle if not NULL
@@ -315,8 +368,8 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_
  * \return              Zero on success, negative value if error
  */
 int
-vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t blob_sz,
-		unsigned int flags, uint32_t version, daos_handle_t *poh);
+vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t data_sz,
+		daos_size_t meta_sz, unsigned int flags, uint32_t version, daos_handle_t *poh);
 
 /**
  * Kill a VOS pool before destroy
@@ -515,6 +568,16 @@ enum {
 int
 vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	      int (*yield_func)(void *arg), void *yield_arg, uint32_t flags);
+
+/**
+ * Round up the scm and meta sizes to match the backend requirement.
+ * \param[in/out] scm_sz   SCM size that needs to be aligned up
+ * \param[in/out] meta_sz  META size that needs to be aligned up
+ *
+ * \return 0 on success, error otherwise.
+ */
+int
+vos_pool_roundup_size(size_t *scm_sz, size_t *meta_sz);
 
 /**
  * Discards changes in all epochs with the epoch range \a epr
@@ -1150,6 +1213,40 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	    vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth);
 
 /**
+ * Iterate VOS objects and subtrees when recursive mode is specified. When it's
+ * called against md-on-ssd phase2 pool, it iterates objects in bucket ID order
+ * instead of OID order to minimize bucket eviction/load.
+ *
+ * \param[in]		param		iteration parameters
+ * \param[in]		recursive	iterate in lower level recursively
+ * \param[in]		anchors		array of anchors, one for each
+ *					iteration level
+ * \param[in]		pre_cb		pre subtree iteration callback
+ * \param[in]		post_cb		post subtree iteration callback
+ * \param[in]		arg		callback argument
+ * \param[in]		dth		DTX handle
+ *
+ * \retval		0	iteration complete
+ * \retval		> 0	callback return value
+ * \retval		-DER_*	error (but never -DER_NONEXIST)
+ */
+int
+vos_iterate_obj(vos_iter_param_t *param, bool recursive, struct vos_iter_anchors *anchors,
+		vos_iter_cb_t pre_cb, vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth);
+
+/**
+ * Skip the object not located on specified bucket (for md-on-ssd phase2).
+ *
+ * \param ih[IN]	Iterator handle
+ * \param desc[IN]	Iterator desc for current OI entry
+ *
+ * \return		true:	current entry is skipped
+ *			false:	current entry isn't skipped
+ */
+bool
+vos_bkt_iter_skip(daos_handle_t ih, vos_iter_desc_t *desc);
+
+/**
  * Retrieve the largest or smallest integer DKEY, AKEY, and array offset from an
  * object. If object does not have an array value, 0 is returned in extent. User
  * has to specify what is being queried (dkey, akey, and/or recx) along with the
@@ -1537,5 +1634,31 @@ vos_aggregate_enter(daos_handle_t coh, daos_epoch_range_t *epr);
  */
 void
 vos_aggregate_exit(daos_handle_t coh);
+
+struct vos_pin_handle;
+
+/**
+ * Unpin the pinned objects in md-on-ssd phase2 mode
+ *
+ * \param[in]	coh	container open handle.
+ * \param[in]	hdl	pin handle.
+ *
+ * \return 0 on success, error otherwise.
+ */
+void
+vos_unpin_objects(daos_handle_t coh, struct vos_pin_handle *hdl);
+
+/**
+ * Pin bunch of objects in md-on-ssd phase2 mode
+ *
+ * \param[in]	coh	container open handle.
+ * \param[in]	oids	object IDs.
+ * \param[in]	count	number of object IDs.
+ * \param[out]	hdl	pin handle.
+ *
+ * \return 0 on success, error otherwise.
+ */
+int
+vos_pin_objects(daos_handle_t coh, daos_unit_oid_t oids[], int count, struct vos_pin_handle **hdl);
 
 #endif /* __VOS_API_H */
