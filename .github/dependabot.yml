@@ -3,12 +3,12 @@ updates:
   - package-ecosystem: pip
     directories:
       - /utils/cq/requirements.txt
+      - /requirements-build.txt
+      - /requirements-ftest.txt
+      - /requirements-utest.txt
     schedule:
       interval: daily
     groups:
       python-packages:
         patterns:
-          - pylint
-          - yamllint
-          - isort
-          - codespell
+          - "*"
