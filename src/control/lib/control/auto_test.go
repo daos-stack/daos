@@ -523,7 +523,7 @@ func TestControl_AutoConfig_getStorageSet(t *testing.T) {
 				HostSet: hostlist.MustCreateSet("host[1-2]"),
 				HostStorage: &HostStorage{
 					NvmeDevices: storage.NvmeControllers{
-						mockNvmeCtrlrWithSmd(storage.OptionBits(0)),
+						mockNvmeCtrlrWithSmd(0),
 					},
 					ScmModules: storage.ScmModules{storage.MockScmModule()},
 					ScmNamespaces: storage.ScmNamespaces{
