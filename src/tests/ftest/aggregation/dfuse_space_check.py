@@ -1,11 +1,11 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 import os
-import time
 
 from dfuse_utils import get_dfuse, start_dfuse
 from ior_test_base import IorTestBase
@@ -21,8 +21,8 @@ class DfuseSpaceCheck(IorTestBase):
     def __init__(self, *args, **kwargs):
         """Initialize a DfuseSpaceCheck object."""
         super().__init__(*args, **kwargs)
-        self.initial_space = None
-        self.block_size = None
+        self.__initial_space = None
+        self.__block_size = None
 
     def get_nvme_free_space(self, display=True):
         """Display pool free space.
@@ -40,24 +40,11 @@ class DfuseSpaceCheck(IorTestBase):
 
         return free_space_nvme
 
-    def wait_for_aggregation(self, retries=4, interval=60):
-        """Wait for aggregation to finish.
-
-        Args:
-            retries (int, optional): number of times to retry.
-                Default is 4.
-            interval (int, optional): seconds to wait before retrying.
-                Default is 60.
-
-        """
-        for _ in range(retries):
-            current_space = self.get_nvme_free_space()
-            if current_space == self.initial_space:
-                return
-            time.sleep(interval)
-
-        self.log.info("Free space when test terminated: %s", current_space)
-        self.fail("Aggregation did not complete within {} seconds".format(retries * interval))
+    def wait_for_aggregation(self):
+        """Wait for aggregation to finish."""
+        if not self.pool.check_free_space(
+                expected_nvme=self.__initial_space, timeout=240, interval=30):
+            self.fail("Aggregation did not complete within 240 seconds")
 
     def write_multiple_files(self, dfuse):
         """Write multiple files.
@@ -70,9 +57,9 @@ class DfuseSpaceCheck(IorTestBase):
 
         """
         file_count = 0
-        while self.get_nvme_free_space(False) >= self.block_size:
+        while self.get_nvme_free_space(False) >= self.__block_size:
             file_path = os.path.join(dfuse.mount_dir.value, "file{}.txt".format(file_count))
-            write_dd_cmd = "dd if=/dev/zero of={} bs={} count=1".format(file_path, self.block_size)
+            write_dd_cmd = f"dd if=/dev/zero of={file_path} bs={self.__block_size} count=1"
             result = run_remote(
                 self.log, self.hostlist_clients, write_dd_cmd, verbose=False, timeout=300)
             if not result.passed:
@@ -109,7 +96,7 @@ class DfuseSpaceCheck(IorTestBase):
         :avocado: tags=DfuseSpaceCheck,test_dfusespacecheck
         """
         # get test params for cont and pool count
-        self.block_size = self.params.get('block_size', '/run/dfusespacecheck/*')
+        self.__block_size = self.params.get('block_size', '/run/dfusespacecheck/*')
 
         # Create a pool, container, and start dfuse
         self.create_pool()
@@ -118,15 +105,15 @@ class DfuseSpaceCheck(IorTestBase):
         start_dfuse(self, dfuse, self.pool, self.container)
 
         # get nvme space before write
-        self.initial_space = self.get_nvme_free_space()
+        self.__initial_space = self.get_nvme_free_space()
 
         # Create a file as large as we can
         large_file = os.path.join(dfuse.mount_dir.value, 'largefile.txt')
         if not run_remote(self.log, self.hostlist_clients, f'touch {large_file}').passed:
             self.fail(f"Error creating {large_file}")
-        dd_count = (self.initial_space // self.block_size) + 1
+        dd_count = (self.__initial_space // self.__block_size) + 1
         write_dd_cmd = "dd if=/dev/zero of={} bs={} count={}".format(
-            large_file, self.block_size, dd_count)
+            large_file, self.__block_size, dd_count)
         run_remote(self.log, self.hostlist_clients, write_dd_cmd)
 
         # Remove the file
