@@ -12,9 +12,9 @@ env:
   #       build is done on the lowest version and test on the highest with a "sanity test"
   #       stage done on all versions in the list ecept the highest
   EL8_BUILD_VERSION: ${{ vars.EL8_BUILD_VERSION_MASTER }}
-  EL8_VERSION: ${{ vars.EL8_BUILD_VERSION_MASTER }}
+  EL8_VERSION: ${{ vars.EL8_VERSION_MASTER }}
   EL9_BUILD_VERSION: ${{ vars.EL9_BUILD_VERSION_MASTER }}
-  EL9_VERSION: ${{ vars.EL9_BUILD_VERSION_MASTER }}
+  EL9_VERSION: ${{ vars.EL9_VERSION_MASTER }}
   LEAP15_VERSION: ${{ vars.LEAP15_VERSION_MASTER }}
   # Which distros to build for
   TEST_TAG: ${{ vars.TEST_TAG }}
