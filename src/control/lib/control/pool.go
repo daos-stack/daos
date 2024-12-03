@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -777,9 +778,8 @@ type PoolDrainReq struct {
 
 // DrainResp has no other parameters other than success/failure for now.
 
-// PoolDrain will set a pool target for a specific rank to the drain status.
-// This should automatically start the rebuildiing process.
-// Returns an error (including any DER code from DAOS).
+// PoolDrain will set a pool target for a specific rank in to the drain state which should
+// automatically start the rebuildiing process. Returns an error (including any DER code from DAOS).
 func PoolDrain(ctx context.Context, rpcClient UnaryInvoker, req *PoolDrainReq) error {
 	pbReq := &mgmtpb.PoolDrainReq{
 		Sys:       req.getSystem(rpcClient),
