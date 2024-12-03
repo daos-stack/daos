@@ -479,7 +479,8 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 	}
 
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolCreate response")
+		svc.log.Errorf("PoolCreateResp Unmarshal: %s", err)
+		return nil, errors.Wrap(drpc.UnmarshalingPayloadFailure(), "PoolCreateResp")
 	}
 
 	if resp.GetStatus() != 0 {
@@ -751,14 +752,16 @@ func (svc *mgmtSvc) poolDestroyNoLeaderCheck(parent context.Context, req *mgmtpb
 	}
 	sort.Slice(allRanks, func(i, j int) bool { return allRanks[i] < allRanks[j] })
 	req.SvcRanks = allRanks
-	svc.log.Debugf("MgmtSvc.PoolDestroy issuing drpc.MethodPoolDestroy: id=%s nSvcRanks=%d\n", req.Id, len(req.SvcRanks))
+	svc.log.Debugf("MgmtSvc.PoolDestroy issuing drpc.MethodPoolDestroy: id=%s nSvcRanks=%d\n",
+		req.Id, len(req.SvcRanks))
 	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolDestroy, req)
 	if err != nil {
 		return nil, err
 	}
 
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolDestroy response")
+		svc.log.Errorf("PoolDestroyResp Unmarshal: %s", err)
+		return nil, errors.Wrap(drpc.UnmarshalingPayloadFailure(), "PoolDestroyResp")
 	}
 
 	ds := daos.Status(resp.Status)
@@ -791,7 +794,8 @@ func (svc *mgmtSvc) evictPoolConnections(ctx context.Context, req *mgmtpb.PoolEv
 
 	resp := &mgmtpb.PoolEvictResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolEvict response")
+		svc.log.Errorf("PoolEvictResp Unmarshal: %s", err)
+		return nil, errors.Wrap(drpc.UnmarshalingPayloadFailure(), "PoolEvictResp")
 	}
 
 	if resp.Count > 0 {
@@ -834,7 +838,8 @@ func (svc *mgmtSvc) PoolExclude(ctx context.Context, req *mgmtpb.PoolExcludeReq)
 
 	resp := &mgmtpb.PoolExcludeResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolExclude response")
+		svc.log.Errorf("PoolExcludeResp Unmarshal: %s", err)
+		return nil, errors.Wrap(drpc.UnmarshalingPayloadFailure(), "PoolExcludeResp")
 	}
 
 	return resp, nil
@@ -853,7 +858,8 @@ func (svc *mgmtSvc) PoolDrain(ctx context.Context, req *mgmtpb.PoolDrainReq) (*m
 
 	resp := &mgmtpb.PoolDrainResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolDrain response")
+		svc.log.Errorf("PoolDrainResp Unmarshal: %s", err)
+		return nil, errors.Wrap(drpc.UnmarshalingPayloadFailure(), "PoolDrainResp")
 	}
 
 	return resp, nil
@@ -890,7 +896,8 @@ func (svc *mgmtSvc) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq) (
 
 	resp := &mgmtpb.PoolExtendResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolExtend response")
+		svc.log.Errorf("PoolExtendResp Unmarshal: %s", err)
+		return nil, errors.Wrap(drpc.UnmarshalingPayloadFailure(), "PoolExtendResp")
 	}
 
 	return resp, nil
@@ -931,7 +938,8 @@ func (svc *mgmtSvc) PoolReint(ctx context.Context, req *mgmtpb.PoolReintReq) (*m
 
 	resp := &mgmtpb.PoolReintResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolReint response")
+		svc.log.Errorf("PoolReintResp Unmarshal: %s", err)
+		return nil, errors.Wrap(drpc.UnmarshalingPayloadFailure(), "PoolReintResp")
 	}
 
 	return resp, nil
@@ -954,7 +962,8 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 
 	resp := &mgmtpb.PoolQueryResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolQuery response")
+		svc.log.Errorf("PoolQueryResp Unmarshal: %s", err)
+		return nil, errors.Wrap(drpc.UnmarshalingPayloadFailure(), "PoolQueryResp")
 	}
 
 	// Preserve compatibility with pre-2.6 callers.
@@ -983,7 +992,8 @@ func (svc *mgmtSvc) PoolQueryTarget(ctx context.Context, req *mgmtpb.PoolQueryTa
 
 	resp := &mgmtpb.PoolQueryTargetResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolQueryTarget response")
+		svc.log.Errorf("PoolQueryTargetResp Unmarshal: %s", err)
+		return nil, errors.Wrap(drpc.UnmarshalingPayloadFailure(), "PoolQueryTargetResp")
 	}
 
 	// TODO DAOS-16209: After VOS query API is updated, zero-value mem_file_bytes will be
@@ -1011,7 +1021,8 @@ func (svc *mgmtSvc) PoolUpgrade(ctx context.Context, req *mgmtpb.PoolUpgradeReq)
 
 	resp := &mgmtpb.PoolUpgradeResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolUpgrade response")
+		svc.log.Errorf("PoolUpgradeResp Unmarshal: %s", err)
+		return nil, errors.Wrap(drpc.UnmarshalingPayloadFailure(), "PoolUpgradeResp")
 	}
 
 	return resp, nil
@@ -1060,7 +1071,8 @@ func (svc *mgmtSvc) updatePoolLabel(ctx context.Context, sys string, uuid uuid.U
 
 	resp := new(mgmtpb.PoolSetPropResp)
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return errors.Wrap(err, "unmarshal PoolSetProp response")
+		svc.log.Errorf("PoolSetPropResp Unmarshal: %s", err)
+		return errors.Wrap(drpc.UnmarshalingPayloadFailure(), "PoolSetPropResp")
 	}
 
 	if resp.GetStatus() != 0 {
@@ -1124,7 +1136,8 @@ func (svc *mgmtSvc) PoolSetProp(parent context.Context, req *mgmtpb.PoolSetPropR
 	}
 
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolSetProp response")
+		svc.log.Errorf("PoolSetPropResp Unmarshal: %s", err)
+		return nil, errors.Wrap(drpc.UnmarshalingPayloadFailure(), "PoolSetPropResp")
 	}
 
 	return resp, nil
@@ -1150,7 +1163,8 @@ func (svc *mgmtSvc) PoolGetProp(ctx context.Context, req *mgmtpb.PoolGetPropReq)
 
 	resp := new(mgmtpb.PoolGetPropResp)
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolGetProp response")
+		svc.log.Errorf("PoolGetPropResp Unmarshal: %s", err)
+		return nil, errors.Wrap(drpc.UnmarshalingPayloadFailure(), "PoolGetPropResp")
 	}
 
 	if resp.GetStatus() != 0 {
@@ -1173,7 +1187,8 @@ func (svc *mgmtSvc) PoolGetACL(ctx context.Context, req *mgmtpb.GetACLReq) (*mgm
 
 	resp := &mgmtpb.ACLResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolGetACL response")
+		svc.log.Errorf("PoolGetACL response Unmarshal: %s", err)
+		return nil, errors.Wrap(drpc.UnmarshalingPayloadFailure(), "PoolGetACL response")
 	}
 
 	return resp, nil
@@ -1192,7 +1207,8 @@ func (svc *mgmtSvc) PoolOverwriteACL(ctx context.Context, req *mgmtpb.ModifyACLR
 
 	resp := &mgmtpb.ACLResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolOverwriteACL response")
+		svc.log.Errorf("PoolOverwriteACL response Unmarshal: %s", err)
+		return nil, errors.Wrap(drpc.UnmarshalingPayloadFailure(), "PoolOverwriteACL response")
 	}
 
 	return resp, nil
@@ -1212,7 +1228,8 @@ func (svc *mgmtSvc) PoolUpdateACL(ctx context.Context, req *mgmtpb.ModifyACLReq)
 
 	resp := &mgmtpb.ACLResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolUpdateACL response")
+		svc.log.Errorf("PoolUpdateACL response Unmarshal: %s", err)
+		return nil, errors.Wrap(drpc.UnmarshalingPayloadFailure(), "PoolUpdateACL response")
 	}
 
 	return resp, nil
@@ -1232,7 +1249,8 @@ func (svc *mgmtSvc) PoolDeleteACL(ctx context.Context, req *mgmtpb.DeleteACLReq)
 
 	resp := &mgmtpb.ACLResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolDeleteACL response")
+		svc.log.Errorf("PoolDeleteACL response Unmarshal: %s", err)
+		return nil, errors.Wrap(drpc.UnmarshalingPayloadFailure(), "PoolDeleteACL response")
 	}
 
 	return resp, nil
