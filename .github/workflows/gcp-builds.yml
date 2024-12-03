@@ -127,7 +127,20 @@ jobs:
     env:
       DISTRO_NAME:
       DISTRO_VERSION:
+      LIBFABRIC_HASH:
+      MERCURY_HASH:
+      ISA-L_HASH:
+      ISA-L_CRYPTO_HASH:
+      ARGOBOTS_HASH:
+      DPDK_HASH:
+      SPDK_HASH:
+      RAFT_HASH:
+      PMDK_HASH:
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
       - name: Set PR repo env vars
@@ -175,10 +188,6 @@ jobs:
             echo "DISTRO_NAME=$DISTRO_NAME" >> $GITHUB_ENV
             echo "DISTRO_VERSION=$DISTRO_VERSION" >> $GITHUB_ENV
             echo "STAGE_NAME=Build RPM on $DISTRO_NAME $DISTRO_VERSION" >> $GITHUB_ENV
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
       - name: Remove Dockerignore file
         # necessary because our Dockerfile assumes /daos is our build context
         # but the .dockerignore file ignores many files we need in our RPM
@@ -225,6 +234,10 @@ jobs:
       DISTRO_NAME:
       DISTRO_VERSION:
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
       - name: Set variables
@@ -246,10 +259,6 @@ jobs:
             echo "BASE_DOCKER_IMAGE=$BASE_DOCKER_IMAGE" >> $GITHUB_ENV
             echo "DAOS_DOCKER_IMAGE=$DAOS_DOCKER_IMAGE" >> $GITHUB_ENV
             echo "STAGE_NAME=Build Server Images" >> $GITHUB_ENV
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
       - name: Remove Dockerignore file
         # necessary because our Dockerfile assumes /daos is our build context
         # but the .dockerignore file ignores many files we need in our RPM
