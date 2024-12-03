@@ -5,6 +5,8 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
+
+/* dummy change */
 #ifndef __HOOK_INT
 #define __HOOK_INT
 
