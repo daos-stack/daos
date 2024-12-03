@@ -197,6 +197,18 @@ jobs:
       - name: Run check
         run: yamllint --format github .
 
+  copyright:
+    name: Copyright check
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Run check
+        run: ./utils/cq/check_update_copyright.sh ${{ github.event.pull_request.base.sha }} gha
+
   linting-summary:
     name: Linting Summary
     runs-on: ubuntu-22.04
