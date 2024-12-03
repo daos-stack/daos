@@ -825,9 +825,9 @@ device would remain in this state until replaced by a new device.
 
 ## System Operations
 
-The DAOS server acting as the access point records details of engines
-that join the DAOS system. Once an engine has joined the DAOS system, it is
-identified by a unique system "rank". Multiple ranks can reside on the same
+The DAOS server acting as the Management Service (MS) leader records details
+of engines that join the DAOS system. Once an engine has joined the DAOS system,
+it is identified by a unique system "rank". Multiple ranks can reside on the same
 host machine, accessible via the same network address.
 
 A DAOS system can be shutdown and restarted to perform maintenance and/or
@@ -837,14 +837,14 @@ made to the rank's metadata stored on persistent memory.
 Storage reformat can also be performed after system shutdown. Pools will be
 removed and storage wiped.
 
-System commands will be handled by a DAOS Server acting as access point and
+System commands will be handled by a DAOS Server acting as the MS leader and
 listening on the address specified in the DMG config file "hostlist" parameter.
 See
 [`daos_control.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_control.yml)
 for details.
 
 At least one of the addresses in the hostlist parameters should match one of the
-"access point" addresses specified in the server config file
+`mgmt_svc_replicas` addresses specified in the server config file
 [`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
 that is supplied when starting `daos_server` instances.
 
@@ -1028,13 +1028,15 @@ formatted again by running `dmg storage format`.
 
 To add a new server to an existing DAOS system, one should install:
 
-- the relevant certificates
-- the server yaml file pointing to the access points of the running
-  DAOS system
+- A copy of the relevant certificates from an existing server. All servers must
+  share the same set of certificate in order to provide services.
+- A copy of the server yaml file from an existing server (DAOS server configurations
+  should be homegenous) -- the `mgmt_svc_replicas` entry is used by the new server in
+  order to know which servers will handle its SystemJoin request.
 
 The daos\_control.yml file should also be updated to include the new DAOS server.
 
-Then starts the daos\_server via systemd and format the new server via
+Then start the daos\_server via systemd and format the new server via
 dmg as follows:
 
 ```
