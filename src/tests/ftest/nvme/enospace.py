@@ -631,22 +631,32 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         """
         self.log.info(self.pool.pool_percentage_used())
 
-        # Enabled TIme mode for Aggregation.
+        self.log_step("Enable pool aggregation")
         self.pool.set_property("reclaim", "time")
+
+        self.log_step("Get initial pool free space")
+        pool_space = self.pool.get_tier_stats(True)
+        initial_free_scm = pool_space["scm"]["free"]
+        initial_free_nvme = pool_space["nvme"]["free"]
+        self.log.info("initial_free_scm  = %s", initial_free_scm)
+        self.log.info("initial_free_nvme = %s", initial_free_nvme)
 
         # Repeat the test in loop.
         for _loop in range(10):
-            self.log.info("-------enospc_time_fg Loop--------- %d", _loop)
+            self.log_step(f"Run IOR to fill the pool - enospace_time_with_fg loop {_loop}")
             self.log.info(self.pool.pool_percentage_used())
             # Run IOR to fill the pool.
             log_file = f"-loop_{_loop}".join(os.path.splitext(self.client_log))
             self.run_enospace_with_bg_job(log_file)
-            # Delete all the containers
+            self.log_step(f"Delete all containers - enospace_time_with_fg loop {_loop}")
             self.delete_all_containers(self.pool)
-            # Delete container will take some time to release the space
-            time.sleep(60)
+            self.log_step(f"Wait for aggregation to complete - enospace_time_with_fg loop {_loop}")
+            if not self.pool.check_free_space(
+                    expected_scm=initial_free_scm, expected_nvme=initial_free_nvme,
+                    timeout=240, interval=30):
+                self.fail("Pool space not reclaimed after deleting all containers")
 
-        # Run last IO
+        self.log_step("Run one more sanity IOR to fill 1%")
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
 
     @skipForTicket("DAOS-8896")
