@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,11 +18,15 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
 
 func defResCmpOpts() []cmp.Option {
 	return []cmp.Option{
 		cmp.Comparer(func(x, y *hostlist.HostSet) bool {
+			return x.RangedString() == y.RangedString()
+		}),
+		cmp.Comparer(func(x, y *ranklist.RankSet) bool {
 			return x.RangedString() == y.RangedString()
 		}),
 		cmpopts.IgnoreFields(HostErrorSet{}, "HostError"),
