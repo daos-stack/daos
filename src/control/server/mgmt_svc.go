@@ -18,6 +18,7 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
@@ -408,4 +409,13 @@ func (svc *mgmtSvc) leaderTaskLoop(parent context.Context) {
 			groupUpdateNeeded = false
 		}
 	}
+}
+
+func (svc *mgmtSvc) unmarshalPB(body []byte, resp proto.Message) error {
+	if err := proto.Unmarshal(body, resp); err != nil {
+		svc.log.Errorf("%T Unmarshal: %s", resp, err)
+		return errors.Wrapf(drpc.UnmarshalingPayloadFailure(), "%T", resp)
+	}
+
+	return nil
 }
