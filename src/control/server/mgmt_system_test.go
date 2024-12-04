@@ -1885,7 +1885,9 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 			poolRanks: map[string]string{
 				test.MockUUID(1): "2-5",
 			},
-			expResp: &mgmtpb.SystemDrainResp{},
+			expResp: &mgmtpb.SystemDrainResp{
+				Results: []*mgmtpb.SystemOsaResult{},
+			},
 		},
 		"matching ranks; multiple pools; no drpc response": {
 			req: &mgmtpb.SystemDrainReq{Ranks: "0,1"},
@@ -1976,13 +1978,13 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 					{
 						PoolId: test.MockUUID(1),
 						Ranks:  "1-2",
-						Status: -1,
+						Status: -1025,
 						Msg:    "DER_UNKNOWN(-1): Unknown error code -1",
 					},
 					{
 						PoolId: test.MockUUID(2),
 						Ranks:  "1-2",
-						Status: -1,
+						Status: -1025,
 						Msg:    "DER_UNKNOWN(-1): Unknown error code -1",
 					},
 				},
