@@ -31,7 +31,7 @@ usage(char *name, FILE *out)
 		"\n"
 		"Options:\n"
 		"\t--check-overflow, -c\n"
-		"\t\tCheck if the stack was overflowed\n",
+		"\t\tCheck if the stack was overflowed\n"
 		"\t--on-pool, -p\n"
 		"\t\tCreate ULT thread on ABT pool\n"
 		"\t--unnamed-thread, -u\n"
@@ -41,7 +41,7 @@ usage(char *name, FILE *out)
 		"\t--var-size=<variable size>, -S <variable size>\n"
 		"\t\tSize in bytes of the variable to allocate on the stack\n"
 		"\t--help, -h\n"
-		"\t\tPrint this description\n"
+		"\t\tPrint this description\n",
 		name, name);
 }
 

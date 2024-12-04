@@ -46,7 +46,7 @@ ts_abt_init(void)
 
 	rc = ABT_init(0, NULL);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("Failed to init ABT: " AF_RC "\n", AP_RC(rc));
+		fprintf(stderr, "Failed to init ABT: " AF_RC "\n", AP_RC(rc));
 		return -1;
 	}
 
@@ -58,7 +58,7 @@ ts_abt_init(void)
 
 	rc = ABT_xstream_get_cpubind(abt_xstream, &cpuid);
 	if (rc != ABT_SUCCESS) {
-		fprintf(stderr, "get cpubind failed: %d\n", rc);
+		fprintf(stderr, "get cpubind failed: " AF_RC "\n", AP_RC(rc));
 		fprintf(stderr, "No CPU affinity for this test.\n");
 		fprintf(stderr, "Build ABT by --enable-affinity if"
 			" you want to try CPU affinity.\n");
@@ -67,7 +67,7 @@ ts_abt_init(void)
 
 	rc = ABT_xstream_get_affinity(abt_xstream, 0, NULL, &num_cpus);
 	if (rc != ABT_SUCCESS) {
-		fprintf(stderr, "get num_cpus: %d\n", rc);
+		fprintf(stderr, "get num_cpus: " AF_RC "\n", AP_RC(rc));
 		fprintf(stderr, "No CPU affinity for this test.\n");
 		fprintf(stderr, "Build ABT by --enable-affinity if"
 			" you want to try CPU affinity.\n");
@@ -77,7 +77,7 @@ ts_abt_init(void)
 	cpuid = (cpuid + 1) % num_cpus;
 	rc = ABT_xstream_set_cpubind(abt_xstream, cpuid);
 	if (rc != ABT_SUCCESS) {
-		fprintf(stderr, "set affinity: %d\n", rc);
+		fprintf(stderr, "set affinity: " AF_RC "\n", AP_RC(rc));
 		fprintf(stderr, "No CPU affinity for this test.\n");
 		fprintf(stderr, "Build ABT by --enable-affinity if"
 			" you want to try CPU affinity.\n");
