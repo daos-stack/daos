@@ -36,7 +36,7 @@ def scons():
 
     abt_tenv = denv.Clone()
     abt_tenv.AppendUnique(OBJPREFIX='utest_')
-    abt_tenv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
+    abt_tenv.AppendUnique(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     libraries = ['abt', 'daos_common_pmem', 'gurt']
     abt_tenv.require('argobots')
 
