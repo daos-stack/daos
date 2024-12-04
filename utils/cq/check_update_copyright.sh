@@ -68,13 +68,11 @@ os=$(uname -s)
 . utils/githooks/git-version.sh
 
 for file in $files; do
-    echo "DEBUG: Checking $file"
     if [[ "$file" == *vendor* ]] || [[ "$file" == *pb.go ]]    ||
        [[ "$file" == *_string.go ]] || [[ "$file" == *pb-c* ]] ||
        { [ "$mode" == "githook" ] &&
          [ "$git_vercode" -ge 2030000 ] &&
          [ "$(git diff --cached -I Copyright "$file")" = '' ]; }; then
-        echo "DEBUG: Skipping $file"
         continue
     fi
     read -r y1 y2 <<< "$(sed -nre "s/^.*$regex.*$/\4 \6/p" "$file")"
