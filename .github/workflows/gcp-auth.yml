@@ -1,0 +1,53 @@
+name: GCP Auth Test
+
+on:
+  pull_request:
+
+permissions:
+  id-token: write
+
+jobs:
+  GCP-Auth:
+    name: Google Cloud Authentication
+    permissions:
+      contents: read
+      id-token: write
+      statuses: write
+    runs-on: [self-hosted, gcp, rocky8]
+    steps:
+      - name: Set variables
+        run: |
+            REGION=us-central1
+            PROJECT_ID=daos-github-ci
+            PROJECT_NUMBER=192572342707
+            DOCKER_IMAGE="test-image"
+            DOCKER_TAG="test0"
+            GAR_REPO=docker-registry
+            DOCKER_REGISTRY="${REGION}-docker.pkg.dev"
+            GAR_DOCKER_PATH="${DOCKER_REGISTRY}/${PROJECT_ID}/${GAR_REPO}/${DOCKER_IMAGE}:${DOCKER_TAG}"
+            WIP_PROVIDER="projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github/providers/daos"
+            echo "PROJECT_ID=$PROJECT_ID" >> $GITHUB_ENV
+            echo "DOCKER_REGISTRY=$DOCKER_REGISTRY" >> $GITHUB_ENV
+            echo "GAR_DOCKER_PATH=$GAR_DOCKER_PATH" >> $GITHUB_ENV
+            echo "WIP_PROVIDER=$WIP_PROVIDER" >> $GITHUB_ENV
+      - name: Create Docker image
+        run: |
+          cat <<EOF > /tmp/Dockerfile
+          FROM python:3.9-slim
+          RUN echo 'hello'
+          EOF
+      - name: Build image
+        run: docker build . --file /tmp/Dockerfile --tag "${GAR_DOCKER_PATH}"
+      - name: Authenticate to GCP
+        id: gcp-authentication
+        uses: 'google-github-actions/auth@v2'
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: ${{ env.WIP_PROVIDER }}
+      - name: "Set up Cloud SDK"
+        uses: "google-github-actions/setup-gcloud@v2"
+      - name: "Docker auth"
+        run: |-
+          gcloud auth configure-docker "${DOCKER_REGISTRY}" --quiet
+      - name: Push image
+        run: docker push "${GAR_DOCKER_PATH}"

@@ -1,0 +1,33 @@
+# you might think this is an odd place to do this and it should be done as a result of the
+# build stages and ideally you'd be right.
+# the problem with that is that there is no way to get the success/fail result of individual
+# axes of matrix jobs so there is no way to query them at the end and see their composite
+# results.
+# instead, the final result of the Build-RPM job, for example is a last-one-complete wins.
+# so for example, if the el9 axis fails quickly and then the el8 axis succeeds afterward the
+# resulting job state is success.
+# instead we assume success at the beginning and then let any axis that fails remove the
+# lastSuccessfulBuild link if it fails
+name: Create Symlinks
+
+on:
+  workflow_call:
+    inputs:
+      repo-path:
+        required: true
+        type: string
+jobs:
+  create-symlinks:
+    name: Create lastBuild and lastSuccessfulBuild symlinks
+    runs-on: [self-hosted, light]
+    needs: [Import-commit-pragmas]
+    if: needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
+        needs.Import-commit-pragmas.outputs.rpm-test-version == '' &&
+        !contains(needs.Import-commit-pragmas.outputs.pr-repos, 'daos@')
+    steps:
+      - name: Create lastBuild and lastSuccessfulBuild symlinks
+        run: . ci/gha_functions.sh;
+               mkdir -p ${{ inputs.repo-path }};
+               rm -f ${REPO_PATH}/last{,Successful}Build;
+               ln -s ${{ github.run_number }} ${{ inputs.repo-path }}/lastBuild;
+               ln -s ${{ github.run_number }} ${{ inputs.repo-path }}/lastSuccessfulBuild
