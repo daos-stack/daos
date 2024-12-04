@@ -2,6 +2,57 @@
 
 We are pleased to announce the release of DAOS version 2.6.
 
+## DAOS Version 2.6.2 (2024-12-04) 
+
+The DAOS 2.6.2 release contains the following updates on top of DAOS 2.6.1:
+
+* Bump hadoop-common from 3.3.6 to 3.4.0
+
+### Bug fixes and improvements
+
+The DAOS 2.6.2 release includes fixes for several defects
+
+* Add function to cycle OIDs non-sequentially and gain better object distribution
+
+* Batched CaRT event support: when multiple engines become unavailable around
+  the same time, if a pool cannot tolerate the unavailability of those engines,
+  it is sometimes desired that the pool would not exclude any of the engines.
+  A CaRT event delay is added by this patch, events signaling the
+  unavailability of engines within the delay can be handled in one batch,
+  it can give DAOS a chance to reject the pool map update and avoid unnecessary
+  rebuild for massive failure.
+
+* When a daos administrator runs dmg system exclude for a given set of engines,
+  the system map version / cart primary group version will be updated.
+  This change can avoid engine crash when user tries to start stopped engines
+  from massinve failure like switch reboot.
+
+* Fix a bug in IV refresh, which may cause rebuild timeout
+
+* Fix a race between telemetry init and read, which may cause crash.
+
+* Decrease the allocation size of DTX table and avoid failure of large
+  memory allocation
+
+* Add ability to select traffic class for SWIM context, so user can choose
+  low-latency traiffic class for SWIM if the network stack can support.
+
+* Optimization of Commit-On-Share cache, it can reduce the overhead of commit
+  when the system is under heavy workload.
+
+* Allow DAOS I/O service to release RPC input buffer before sending out reply,
+  so CaRT can recycle multi-receive buffer sooner.
+
+* Fix collective RPC bug for object with sparse layout
+
+* Handle missing PCIe capabilities in storage query usage
+
+* retry a few times on checksum mismatch on update RPC
+
+For details, please refer to the Github
+[release/2.6 commit history](https://github.com/daos-stack/daos/commits/release/2.6)
+and the associated [Jira tickets](https://jira.daos.io/) as stated in the commit messages.
+
 ## DAOS Version 2.6.1 (2024-10-05)
 
 The DAOS 2.6.1 release contains the following updates on top of DAOS 2.6.0:
