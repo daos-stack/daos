@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-#define D_LOGFAC	DD_FAC(tests)
+#define D_LOGFAC DD_FAC(tests)
 
 #include <getopt.h>
 #include <time.h>
@@ -98,11 +98,11 @@ abt_thread_1(void *arg)
 static void
 abt_ult_create_rate(void)
 {
-	uint64_t	then;
-	uint64_t	now;
-	uint64_t	prt;
-	int		rc;
-	int		nsec = 0;
+	uint64_t then;
+	uint64_t now;
+	uint64_t prt;
+	int      rc;
+	int      nsec = 0;
 
 	prt = now = then = abt_current_ms();
 	while (1) {
@@ -143,8 +143,7 @@ abt_ult_create_rate(void)
 
 		if (now - prt >= 1000) {
 			nsec++;
-			printf("Created %lu threads in %d seconds\n",
-			       abt_cntr, nsec);
+			printf("Created %lu threads in %d seconds\n", abt_cntr, nsec);
 			prt = now;
 		}
 		ABT_thread_yield();
@@ -174,9 +173,9 @@ abt_thread_2(void *arg)
 static void
 abt_sched_rate(void)
 {
-	uint64_t	then = 0;
-	uint64_t	now;
-	int		rc;
+	uint64_t then = 0;
+	uint64_t now;
+	int      rc;
 
 	while (1) {
 		if (then && !abt_exiting) {
@@ -233,13 +232,13 @@ enum {
 static void
 abt_lock_create_rate(void *arg)
 {
-	ABT_mutex	mutex;
-	ABT_cond	cond;
-	ABT_rwlock	rwlock;
-	ABT_eventual	eventual;
-	uint64_t	then;
-	uint64_t	now;
-	int		rc;
+	ABT_mutex    mutex;
+	ABT_cond     cond;
+	ABT_rwlock   rwlock;
+	ABT_eventual eventual;
+	uint64_t     then;
+	uint64_t     now;
+	int          rc;
 
 	then = abt_current_ms();
 	while (1) {
@@ -279,8 +278,7 @@ abt_lock_create_rate(void *arg)
 		}
 		abt_cntr++;
 	}
-	printf("ABT %s creation rate = %lu/sec.\n",
-		abt_name, abt_cntr / opt_secs);
+	printf("ABT %s creation rate = %lu/sec.\n", abt_name, abt_cntr / opt_secs);
 
 	ABT_mutex_lock(abt_lock);
 	if (abt_waiting) {
@@ -293,10 +291,10 @@ abt_lock_create_rate(void *arg)
 static void
 abt_reset(void)
 {
-	abt_cntr	= 0;
-	abt_ults	= 0;
-	abt_exiting	= false;
-	abt_waiting	= false;
+	abt_cntr    = 0;
+	abt_ults    = 0;
+	abt_exiting = false;
+	abt_waiting = false;
 }
 
 static struct option abt_ops[] = {
@@ -407,36 +405,32 @@ main(int argc, char **argv)
 	default:
 		break;
 	case 'c':
-		printf("ULT create rate test (concur=%d, secs=%d)\n",
-		       opt_concur, opt_secs);
+		printf("ULT create rate test (concur=%d, secs=%d)\n", opt_concur, opt_secs);
 		abt_ult_create_rate();
 		goto out;
 	case 's':
-		printf("ULT scheduling rate test (ULTs=%d, secs=%d)\n",
-		       opt_concur, opt_secs);
+		printf("ULT scheduling rate test (ULTs=%d, secs=%d)\n", opt_concur, opt_secs);
 		abt_sched_rate();
 		goto out;
 	case 'm':
 		printf("mutex creation rate test (secs=%d)\n", opt_secs);
 		opt_cr_type = CR_MUTEX;
-		abt_name = "mutex";
+		abt_name    = "mutex";
 		break;
 	case 'w':
 		printf("rwlock creation rate test (secs=%d)\n", opt_secs);
 		opt_cr_type = CR_RWLOCK;
-		abt_name = "rwlock";
+		abt_name    = "rwlock";
 		break;
 	case 'e':
-		printf("eventual creation rate test within ULT (secs=%d)\n",
-		       opt_secs);
+		printf("eventual creation rate test within ULT (secs=%d)\n", opt_secs);
 		opt_cr_type = CR_EVENTUAL;
-		abt_name = "eventual";
+		abt_name    = "eventual";
 		break;
 	case 'd':
-		printf("condition creation rate test within ULT (secs=%d)\n",
-		       opt_secs);
+		printf("condition creation rate test within ULT (secs=%d)\n", opt_secs);
 		opt_cr_type = CR_COND;
-		abt_name = "cond";
+		abt_name    = "cond";
 		break;
 	}
 

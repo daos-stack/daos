@@ -4,10 +4,9 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-#define D_LOGFAC       DD_FAC(server)
+#define D_LOGFAC DD_FAC(server)
 
 #include <abt.h>
-
 
 const char *
 dss_abterr2str(int rc)
