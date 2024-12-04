@@ -193,19 +193,19 @@
 - name: Argobot performance testing
   base: "BUILD_DIR"
   tests:
-    - cmd: ["src/common/tests/abt_perf", "--test=c", "--sec=10", "--num=100", "--stack=16"]
-    - cmd: ["src/common/tests/abt_perf", "--test=s", "--sec=10", "--num=100"]
-    - cmd: ["src/common/tests/abt_perf", "--test=m", "--sec=10"]
-    - cmd: ["src/common/tests/abt_perf", "--test=w", "--sec=10"]
-    - cmd: ["src/common/tests/abt_perf", "--test=e", "--sec=10"]
-    - cmd: ["src/common/tests/abt_perf", "--test=d", "--sec=10"]
+    - cmd: ["src/engine/tests/abt_perf", "--test=c", "--sec=10", "--num=100", "--stack=16"]
+    - cmd: ["src/engine/tests/abt_perf", "--test=s", "--sec=10", "--num=100"]
+    - cmd: ["src/engine/tests/abt_perf", "--test=m", "--sec=10"]
+    - cmd: ["src/engine/tests/abt_perf", "--test=w", "--sec=10"]
+    - cmd: ["src/engine/tests/abt_perf", "--test=e", "--sec=10"]
+    - cmd: ["src/engine/tests/abt_perf", "--test=d", "--sec=10"]
 - name: Argobot stack overflow testing
   base: "BUILD_DIR"
   memcheck: False
   tests:
-    - cmd: ["src/common/tests/abt_stack", "--check-overflow"]
+    - cmd: ["src/engine/tests/abt_stack", "--check-overflow"]
       env_vars:
         ABT_STACK_OVERFLOW_CHECK: "mprotect_strict"
-    - cmd: ["src/common/tests/abt_stack", "--check-overflow", "--on-pool"]
+    - cmd: ["src/engine/tests/abt_stack", "--check-overflow", "--on-pool"]
       env_vars:
         ABT_STACK_OVERFLOW_CHECK: "mprotect_strict"
