@@ -201,6 +201,7 @@
     - cmd: ["src/common/tests/abt_perf", "--test=d", "--sec=10"]
 - name: Argobot stack overflow testing
   base: "BUILD_DIR"
+  memcheck: False
   tests:
     - cmd: ["src/common/tests/abt_stack", "--check-overflow"]
       env_vars:
