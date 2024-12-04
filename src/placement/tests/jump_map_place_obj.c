@@ -1441,7 +1441,7 @@ drain_target_same_shard_repeatedly_for_all_shards(void **state)
 	int			i;
 	uint32_t		shard_id = 0;
 	uint32_t		target;
-	uint32_t		new_target;
+	uint32_t                new_target = 0;
 
 	for (shard_id = 0; shard_id < 18; shard_id++) {
 		jtc_init_with_layout(&ctx, 18 * 2, 1, 4, OC_EC_16P2G1,
