@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -33,7 +34,45 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         """Initialize a NvmeEnospace object."""
         super().__init__(*args, **kwargs)
 
-        self.metric_names = ['engine_pool_vos_space_scm_used', 'engine_pool_vos_space_nvme_used']
+        self.space_metric_names = [
+            'engine_pool_vos_space_scm_used',
+            'engine_pool_vos_space_nvme_used'
+        ]
+        self.aggr_metric_names = [
+            # -- Merged records --
+            "engine_pool_vos_aggregation_merged_size",
+            "engine_pool_vos_aggregation_merged_recs",
+            # -- Deleted records --
+            "engine_pool_vos_aggregation_deleted_ev",
+            "engine_pool_vos_aggregation_deleted_sv",
+            # -- Errors --
+            "engine_pool_vos_aggregation_fail_count",
+            "engine_pool_vos_aggregation_csum_errors",
+            "engine_pool_vos_aggregation_uncommitted",
+            "engine_pool_vos_aggregation_agg_blocked",
+            "engine_pool_vos_aggregation_discard_blocked",
+            # -- Details stat counter --
+            "engine_pool_vos_aggregation_obj_deleted",
+            "engine_pool_vos_aggregation_obj_scanned",
+            "engine_pool_vos_aggregation_obj_skipped",
+            "engine_pool_vos_aggregation_akey_deleted",
+            "engine_pool_vos_aggregation_akey_scanned",
+            "engine_pool_vos_aggregation_akey_skipped",
+            "engine_pool_vos_aggregation_dkey_deleted",
+            "engine_pool_vos_aggregation_dkey_scanned",
+            "engine_pool_vos_aggregation_dkey_skipped",
+            # -- Duration --
+            "engine_pool_vos_aggregation_epr_duration",
+            "engine_pool_vos_aggregation_epr_duration_max",
+            "engine_pool_vos_aggregation_epr_duration_mean",
+            "engine_pool_vos_aggregation_epr_duration_min",
+            # "engine_pool_vos_aggregation_epr_duration_samples",
+            "engine_pool_vos_aggregation_epr_duration_stddev",
+            # "engine_pool_vos_aggregation_epr_duration_sum",
+            # "engine_pool_vos_aggregation_epr_duration_sumsquares"
+        ]
+        self.metric_names = self.space_metric_names + self.aggr_metric_names
+
         self.media_names = ['SCM', 'NVMe']
         self.expected_errors = [self.DER_NOSPACE, self.DER_TIMEDOUT]
 
@@ -55,26 +94,30 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         self.daos_cmd = DaosCommand(self.bin)
         self.create_pool_max_size()
 
-    def get_pool_space_metrics(self, pool_uuid):
-        """Return the metrics on space usage of a given pool.
+    def get_pool_space_metrics(self, metrics):
+        """Return the metrics on space usage.
 
         Args:
-            pool_uuid (str): Unique id of a pool.
+            metrics (dict): telemetry metrics.
 
         Returns:
             dict: metrics on space usage.
 
         """
-        metrics = {}
-        for hostname, data in self.telemetry.get_metrics(",".join(self.metric_names)).items():
+        pool_uuid = self.pool.uuid
+        space_metrics = {}
+        for hostname, data in metrics.items():
             for metric_name, entry in data.items():
-                if metric_name not in metrics:
-                    metrics[metric_name] = {
+                if metric_name not in self.space_metric_names:
+                    continue
+
+                if metric_name not in space_metrics:
+                    space_metrics[metric_name] = {
                         "description": entry['description'],
                         "hosts": {}
                     }
 
-                hosts = metrics[metric_name]["hosts"]
+                hosts = space_metrics[metric_name]["hosts"]
                 for metric in entry['metrics']:
                     if metric['labels']['pool'].casefold() != pool_uuid.casefold():
                         continue
@@ -89,10 +132,58 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
                     target = metric['labels']['target']
                     hosts[hostname][rank][target] = metric['value']
 
-        return metrics
+        return space_metrics
+
+    def get_pool_aggr_metrics(self, metrics):
+        """Return the metrics on aggregation counters and gauges.
+
+        Args:
+            metrics (dict): telemetry metrics.
+
+        Returns:
+            dict: metrics on aggregation.
+
+        """
+        pool_uuid = self.pool.uuid
+        aggr_metrics = {
+            "metric_descriptions": {},
+            "metric_values": {}
+        }
+        for hostname, data in metrics.items():
+            if hostname not in aggr_metrics["metric_values"]:
+                aggr_metrics["metric_values"][hostname] = {}
+            hosts = aggr_metrics["metric_values"][hostname]
+
+            for metric_name, entry in data.items():
+                if metric_name not in self.aggr_metric_names:
+                    continue
+
+                if metric_name not in aggr_metrics["metric_descriptions"]:
+                    aggr_metrics["metric_descriptions"][metric_name] = entry["description"]
+
+                for metric in entry['metrics']:
+                    if metric['labels']['pool'].casefold() != pool_uuid.casefold():
+                        continue
+
+                    rank = metric['labels']['rank']
+                    if rank not in hosts:
+                        hosts[rank] = {}
+                    ranks = hosts[rank]
+
+                    target = metric['labels']['target']
+                    if target not in ranks:
+                        ranks[target] = {}
+                    targets = ranks[target]
+
+                    targets[metric_name] = metric['value']
+
+        return aggr_metrics
 
     def get_pool_usage(self, pool_space):
         """Get the pool storage used % for SCM and NVMe.
+
+        Args:
+            pool_space (object): space usage information of a pool.
 
         Returns:
             list: a list of SCM/NVMe pool space usage in %(float)
@@ -106,15 +197,52 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
 
         return pool_usage
 
-    def display_pool_stats(self, pool_space, pool_space_metrics):
-        """Display statistics on pool usage.
+    def display_table(self, title, table, cols_size, align_idx):
+        """Pretty print table content.
+
+        Args:
+            title (str): Title of the table.
+            table (list): Table to print on stdout.
+            cols_size (list): Size of the table columns.
+            align_idx (int): Last column to left align.
+        """
+        line_size = sum(cols_size) + 3 * (len(cols_size) - 1)
+        line = f"\n{' ' + title + ' ':-^{line_size}}"
+        self.log.debug(line)
+
+        line = ""
+        for idx, elt in enumerate(table[0]):
+            line += f"{elt:^{cols_size[idx]}}"
+            if idx + 1 != len(table[0]):
+                line += " | "
+        self.log.debug(line)
+
+        line = ""
+        for idx, size in enumerate(cols_size):
+            line += '-' * size
+            if idx + 1 != len(cols_size):
+                line += "-+-"
+        self.log.debug(line)
+
+        for row in table[1:]:
+            line = ""
+            for idx, elt in enumerate(row):
+                align_op = "<"
+                if idx > align_idx:
+                    align_op = ">"
+                line += f"{elt:{align_op}{cols_size[idx]}}"
+                if idx + 1 != len(row):
+                    line += " | "
+            self.log.debug(line)
+
+    def display_pool_space(self, pool_space, pool_space_metrics):
+        """Display space usage statistics of a given pool.
 
         Args:
             pool_space (object): space usage information of a pool.
             pool_space_metrics (dict): dict of metrics on space usage of a pool.
         """
-
-        title = f"{' Pool Space Usage ':-^80}"
+        title = f"\n\n{' Pool Space Usage ':-^80}"
         self.log.debug(title)
 
         pool_usage = self.get_pool_usage(pool_space)
@@ -148,21 +276,61 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
                         hostname = ""
                         rank = ""
 
-            for idx, elt in enumerate(table[0]):
-                table[0][idx] = f"{elt:^{cols_size[idx]}}"
-            row = ' | '.join(table[0])
-            title = f"{' ' + metric['description'] + ' ':-^{len(row)}}"
-            self.log.debug("")
-            self.log.debug(title)
-            self.log.debug(row)
-            self.log.debug("-" * len(row))
-            for row in table[1:]:
-                for idx, elt in enumerate(row):
-                    align_op = "<"
-                    if idx + 1 == len(row):
-                        align_op = ">"
-                    row[idx] = f"{elt:{align_op}{cols_size[idx]}}"
-                self.log.debug(" | ".join(row))
+            self.display_table(metric['description'], table, cols_size, 2)
+
+    def display_pool_aggregation(self, metrics):
+        """Display record aggregation statistics of a given pool.
+
+        Args:
+            metrics (dict): dict of metrics on pool aggregation.
+        """
+        table = [["Hostname", "Rank", "Target"]]
+        for it in self.aggr_metric_names:
+            table[0].append(metrics["metric_descriptions"][it])
+        cols_size = [len(it) for it in table[0]]
+
+        for hostname in sorted(metrics["metric_values"]):
+            row = [hostname]
+            cols_size[0] = max(cols_size[0], len(hostname))
+
+            for rank in sorted(metrics["metric_values"][hostname]):
+                if not row:
+                    row = [""]
+                row.append(rank)
+                cols_size[1] = max(cols_size[1], len(rank))
+
+                for target in sorted(metrics["metric_values"][hostname][rank]):
+                    if not row:
+                        row = ["", ""]
+                    row.append(target)
+                    cols_size[2] = max(cols_size[2], len(target))
+
+                    idx = 3
+                    for metric_name in self.aggr_metric_names:
+                        value = metrics["metric_values"][hostname][rank][target][metric_name]
+                        if metric_name == "engine_pool_vos_aggregation_merged_size":
+                            row.append(get_display_size(value))
+                        else:
+                            row.append(str(value))
+                        cols_size[idx] = max(cols_size[idx], len(row[-1]))
+                        idx += 1
+
+                    table.append(row)
+                    row = None
+
+        self.display_table('Pool Aggregation stats', table, cols_size, 2)
+
+    def display_stats(self):
+        """Display usage statistics of the tested pool."""
+        self.pool.get_info()
+        metrics = self.telemetry.get_metrics(",".join(self.metric_names))
+
+        pool_space = self.pool.info.pi_space
+        pool_space_metrics = self.get_pool_space_metrics(metrics)
+        self.display_pool_space(pool_space, pool_space_metrics)
+
+        pool_aggr_metrics = self.get_pool_aggr_metrics(metrics)
+        self.display_pool_aggregation(pool_aggr_metrics)
 
     def verify_enospace_log(self, log_file):
         """Function checking logs consistency.
@@ -291,17 +459,22 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             log_file (str): name prefix of the log files to check.
         """
         self.log.info('----Starting main IOR load----')
+        self.display_stats()
 
         # Fill 75% of current SCM free space. Aggregation is Enabled so NVMe space will
         # start to fill up.
         self.log.info('--Filling 75% of the current SCM free space--')
-        self.start_ior_load(storage='SCM', operation="Auto_Write", percent=75)
-        self.log.info(self.pool.pool_percentage_used())
+        try:
+            self.start_ior_load(storage='SCM', operation="Auto_Write", percent=75)
+        finally:
+            self.display_stats()
 
         # Fill 50% of current SCM free space. Aggregation is Enabled so NVMe space will
         # continue to fill up.
-        self.start_ior_load(storage='SCM', operation="Auto_Write", percent=50)
-        self.log.info(self.pool.pool_percentage_used())
+        try:
+            self.start_ior_load(storage='SCM', operation="Auto_Write", percent=50)
+        finally:
+            self.display_stats()
 
         # Fill 60% of current SCM free space. This time, NVMe will be Full so data will
         # not be moved to NVMe and continue to fill up SCM. SCM will be full and this
@@ -314,18 +487,14 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             self.log.info('Test is expected to fail because of DER_NOSPACE')
         else:
             self.fail('This test is suppose to FAIL because of DER_NOSPACE but it Passed')
-
-        # Display the pool statistics
-        self.pool.get_info()
-        pool_space = self.pool.info.pi_space
-        pool_space_metrics = self.get_pool_space_metrics(self.pool.uuid)
-        self.display_pool_stats(pool_space, pool_space_metrics)
+        finally:
+            self.display_stats()
 
         # verify the DER_NO_SPACE error count is expected and no other Error in client log
         self.verify_enospace_log(log_file)
 
         # Check both NVMe and SCM are full.
-        pool_usage = self.get_pool_usage(pool_space)
+        pool_usage = self.get_pool_usage(self.pool.info.pi_space)
         for idx, elt in enumerate(self.media_names):
             if pool_usage[idx] >= self.pool_usage_min[idx]:
                 continue
