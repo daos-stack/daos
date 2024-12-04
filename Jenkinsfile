@@ -534,7 +534,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build RPM on Leap 15.6') {
+                stage('Build RPM on Leap 15.5') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -687,7 +687,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Leap 15.6 with Intel-C and TARGET_PREFIX') {
+                stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -1083,7 +1083,7 @@ pipeline {
                         }
                     }
                 } // stage('Test RPMs on EL 8.6')
-                stage('Test RPMs on Leap 15.6') {
+                stage('Test RPMs on Leap 15.4') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
@@ -1097,8 +1097,8 @@ pipeline {
                          * additionally for this use-case, can't override
                            ftest_arg with this :-(
                         script {
-                            'Test RPMs on Leap 15.6': getFunctionalTestStage(
-                                name: 'Test RPMs on Leap 15.6',
+                            'Test RPMs on Leap 15.4': getFunctionalTestStage(
+                                name: 'Test RPMs on Leap 15.4',
                                 pragma_suffix: '',
                                 label: params.CI_UNIT_VM1_LABEL,
                                 next_version: next_version,
@@ -1134,7 +1134,7 @@ pipeline {
                             rpm_test_post(env.STAGE_NAME, env.NODELIST)
                         }
                     }
-                } // stage('Test RPMs on Leap 15.6')
+                } // stage('Test RPMs on Leap 15.4')
             } // parallel
         } // stage('Test')
         stage('Test Storage Prep on EL 8.8') {
