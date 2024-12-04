@@ -746,9 +746,12 @@ ts_print_usage(void)
 }
 
 const struct option perf_vos_opts[] = {
-    {"dir", required_argument, NULL, 'D'},  {"zcopy", no_argument, NULL, 'z'},
-    {"int_dkey", no_argument, NULL, 'i'},   {"flat_dkey", no_argument, NULL, 'f'},
-    {"const_akey", no_argument, NULL, 'I'}, {"abt_ult", no_argument, NULL, 'x'},
+    {"dir", required_argument, NULL, 'D'},
+    {"zcopy", no_argument, NULL, 'z'},
+    {"int_dkey", no_argument, NULL, 'i'},
+    {"flat_dkey", no_argument, NULL, 'f'},
+    {"const_akey", no_argument, NULL, 'I'},
+    {"abt_ult", no_argument, NULL, 'x'},
     {NULL, -1, NULL, 0},
 };
 

@@ -550,9 +550,12 @@ static inline int
 dss_abterr2der(int abt_errno)
 {
 	switch (abt_errno) {
-	case ABT_SUCCESS:	return 0;
-	case ABT_ERR_MEM:	return -DER_NOMEM;
-	default:		return -DER_INVAL;
+	case ABT_SUCCESS:
+		return 0;
+	case ABT_ERR_MEM:
+		return -DER_NOMEM;
+	default:
+		return -DER_INVAL;
 	}
 }
 
@@ -561,9 +564,12 @@ static inline int
 dss_der2abterr(int der)
 {
 	switch (der) {
-	case -DER_SUCCESS: return ABT_SUCCESS;
-	case -DER_NOMEM: return ABT_ERR_MEM;
-	default: return ABT_ERR_OTHER;
+	case -DER_SUCCESS:
+		return ABT_SUCCESS;
+	case -DER_NOMEM:
+		return ABT_ERR_MEM;
+	default:
+		return ABT_ERR_OTHER;
 	}
 }
 

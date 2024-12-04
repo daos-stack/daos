@@ -300,12 +300,9 @@ abt_reset(void)
 }
 
 static struct option abt_ops[] = {
-    {"test", required_argument, NULL, 't'},
-    {"num", required_argument, NULL, 'n'},
-    {"sec", required_argument, NULL, 's'},
-    {"stack", required_argument, NULL, 'S'},
-    {"help", no_argument, NULL, 'h'},
-    {0, 0, 0, 0}};
+    {"test", required_argument, NULL, 't'}, {"num", required_argument, NULL, 'n'},
+    {"sec", required_argument, NULL, 's'},  {"stack", required_argument, NULL, 'S'},
+    {"help", no_argument, NULL, 'h'},       {0, 0, 0, 0}};
 
 int
 main(int argc, char **argv)

@@ -48,8 +48,8 @@ usage(char *name, FILE *out)
 static void
 stack_fill(void *arg)
 {
-	void      *sp       = NULL;
 	ABT_thread thread;
+	void      *sp       = NULL;
 	size_t     var_size = (size_t)arg;
 	int        rc;
 
