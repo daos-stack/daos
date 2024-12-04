@@ -8,27 +8,30 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <signal.h>
+#include <stdbool.h>
 #include <errno.h>
 #include <abt.h>
 
 #include <daos/common.h>
 #include <gurt/common.h>
 
-static size_t g_total_size  = 0;
-static void  *g_stack_start = NULL;
-static void  *g_stack_end   = NULL;
+static size_t g_stack_size     = 0;
+static size_t g_total_size     = 0;
+static void  *g_stack_start    = NULL;
+static void  *g_stack_end      = NULL;
+static bool   g_check_overflow = false;
 
 static void
 usage(char *name, FILE *out)
 {
 	fprintf(out,
 		"Usage:\n"
+		"\t%s [-c] [-p] [-t] [-s stack_size] [-S var_size]\n"
 		"\t%s -h\n"
-		"\t%s [-p] [-t] [-s stack_size] [-m var_size] [-m] [-G]\n"
 		"\n"
 		"Options:\n"
-		"\t--help, -h\n"
-		"\t\tPrint this description\n"
+		"\t--check-overflow, -c\n"
+		"\t\tCheck if the stack was overflowed\n",
 		"\t--on-pool, -p\n"
 		"\t\tCreate ULT thread on ABT pool\n"
 		"\t--unnamed-thread, -u\n"
@@ -36,7 +39,9 @@ usage(char *name, FILE *out)
 		"\t--stack-size=<stack size>, -s <stack size>\n"
 		"\t\tSize in kilo bytes of the ULT thread stack\n"
 		"\t--var-size=<variable size>, -S <variable size>\n"
-		"\t\tSize in bytes of the variable to allocate on the stack\n",
+		"\t\tSize in bytes of the variable to allocate on the stack\n"
+		"\t--help, -h\n"
+		"\t\tPrint this description\n"
 		name, name);
 }
 
@@ -46,17 +51,16 @@ stack_fill(void *arg)
 	void      *sp       = NULL;
 	ABT_thread thread;
 	size_t     var_size = (size_t)arg;
-	size_t     stack_size;
 	int        rc;
 
 	rc = ABT_thread_self(&thread);
 	D_ASSERT(rc == ABT_SUCCESS);
-	rc = ABT_thread_get_stacksize(thread, &stack_size);
+	rc = ABT_thread_get_stacksize(thread, &g_stack_size);
 	D_ASSERT(rc == ABT_SUCCESS);
 	printf("Starting filling stack:\n"
 	       "\t- stack size: %zu\n"
 	       "\t- var size:   %zu\n",
-	       stack_size, var_size);
+	       g_stack_size, var_size);
 
 	g_stack_start = &sp;
 	for (;;) {
@@ -76,6 +80,9 @@ handler_segv(int sig, siginfo_t *si, void *unused)
 	       "--------------------------------------------------------------------------------\n",
 	       si->si_signo, si->si_addr, g_total_size, g_stack_start, g_stack_end,
 	       g_stack_start - g_stack_end);
+
+	if (g_check_overflow && (g_total_size > g_stack_size))
+		exit(EXIT_FAILURE);
 
 	exit(EXIT_SUCCESS);
 }
@@ -103,12 +110,13 @@ signal_register(void)
 int
 main(int argc, char **argv)
 {
-	const char         *opt_cfg        = "hpus:S:";
-	const struct option long_opt_cfg[] = {{"help", no_argument, NULL, 'h'},
-					      {"on-pool", required_argument, NULL, 'p'},
+	const char         *opt_cfg        = "pucs:S:h";
+	const struct option long_opt_cfg[] = {{"on-pool", no_argument, NULL, 'p'},
 					      {"unnamed-thread", no_argument, NULL, 'u'},
+					      {"check-overflow", no_argument, NULL, 'c'},
 					      {"stack-size", required_argument, NULL, 's'},
 					      {"var-size", required_argument, NULL, 'S'},
+					      {"help", no_argument, NULL, 'h'},
 					      {0, 0, 0, 0}};
 	int                 opt;
 	bool                create_on_pool;
@@ -121,6 +129,9 @@ main(int argc, char **argv)
 
 	while ((opt = getopt_long(argc, argv, opt_cfg, long_opt_cfg, NULL)) != -1) {
 		switch (opt) {
+		case 'c':
+			g_check_overflow = true;
+			break;
 		case 'p':
 			create_on_pool = true;
 			break;

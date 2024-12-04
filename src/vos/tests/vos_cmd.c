@@ -783,7 +783,7 @@ abit_start(void)
 
 	rc = ABT_init(0, NULL);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("Failed to init ABT: " AF_RC "\n", AP_RC(rc));
+		fprintf(stderr, "Failed to init ABT: " AF_RC "\n", AP_RC(rc));
 		return -1;
 	}
 

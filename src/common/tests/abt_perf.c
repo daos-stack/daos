@@ -26,9 +26,38 @@ static ABT_thread_attr abt_attr = ABT_THREAD_ATTR_NULL;
 static char           *abt_name;
 
 static int             opt_concur = 1;
-static int             opt_secs;
-static int             opt_stack;
+static int             opt_secs   = 0;
+static ssize_t         opt_stack  = -1;
 static int             opt_cr_type;
+
+static void
+usage(char *name, FILE *out)
+{
+	fprintf(out,
+		"Usage:\n"
+		"\t%s -t test_id -s sec [-n num_ult] [-S stack_size]\n"
+		"\t%s -h\n"
+		"\n"
+		"Options:\n"
+		"\t--test=<test id>, -t <test id>\n"
+		"\t\tIdentifier of the test to run:\n"
+		"\t\t\tc: ULT creation test\n"
+		"\t\t\ts: ULT scheduling test\n"
+		"\t\t\tm: mutex creation test\n"
+		"\t\t\tw: rwlock creation test\n"
+		"\t\t\te: eventual creation test\n"
+		"\t\t\td: condition creation test\n"
+		"\t--sec=<sec>, sn <sec>\n"
+		"\t\tDuration in seconds of the test\n"
+		"\t--num=<number of ult>, -n <number of ult>\n"
+		"\t\tNumber of concurrent creation for ULT creation test\n"
+		"\t\tNumber of ULT to schedule for ULT scheduling test\n"
+		"\t--stack=<stack size>, -S <stack size>\n"
+		"\t\tULT stack size\n"
+		"\t--help, -h\n"
+		"\t\tPrint this description\n",
+		name, name);
+}
 
 static inline uint64_t
 abt_current_ms(void)
@@ -108,7 +137,7 @@ abt_ult_create_rate(void)
 
 		rc = ABT_thread_create(abt_pool, abt_thread_1, NULL, abt_attr, NULL);
 		if (rc != ABT_SUCCESS) {
-			printf("ABT thread create failed: %d\n", rc);
+			fprintf(stderr, "ABT thread create failed: " AF_RC "\n", AP_RC(rc));
 			return;
 		}
 
@@ -271,38 +300,22 @@ abt_reset(void)
 }
 
 static struct option abt_ops[] = {
-    /**
-     * test-id:
-     * - c = ULT creation
-     * - s = ULT scheduling
-     * - m = mutext creation
-     * - e = eventual creation
-     * - d = condition creation
-     */
     {"test", required_argument, NULL, 't'},
-    /**
-     * if test-id is 'c', it is the number of concurrent creation
-     * if test-id is 's', it is the total number of running ULTs
-     */
     {"num", required_argument, NULL, 'n'},
-    /** test duration in seconds.  */
     {"sec", required_argument, NULL, 's'},
-    /** stack size (kilo-bytes) */
     {"stack", required_argument, NULL, 'S'},
+    {"help", no_argument, NULL, 'h'},
     {0, 0, 0, 0}};
 
 int
 main(int argc, char **argv)
 {
 	char        test_id = 0;
-	const char *optstr  = "t:n:s:S:m:";
+	const char *optstr  = "t:n:s:S:m:h";
 	int         rc;
 
 	while ((rc = getopt_long(argc, argv, optstr, abt_ops, NULL)) != -1) {
 		switch (rc) {
-		default:
-			fprintf(stderr, "unknown opc=%c\n", rc);
-			exit(-1);
 		case 't':
 			test_id = *optarg;
 			break;
@@ -316,68 +329,79 @@ main(int argc, char **argv)
 			opt_stack = atoi(optarg);
 			opt_stack <<= 10; /* kilo-byte */
 			break;
+		case 'h':
+			usage(argv[0], stdout);
+			exit(EXIT_SUCCESS);
+			break;
+		default:
+			usage(argv[0], stderr);
+			exit(EXIT_FAILURE);
+			break;
 		}
 	}
 
-	if (opt_secs == 0) {
-		printf("invalid sec=%s\n", argv[1]);
-		return -1;
+	if ((test_id == 'c' || test_id == 's') && opt_secs <= 0) {
+		fprintf(stderr, "Missing test duration or invalid value.\n");
+		usage(argv[0], stderr);
+		exit(EXIT_FAILURE);
 	}
 
-	if (opt_concur == 0) {
-		printf("invalid ABT threads=%s\n", argv[2]);
-		return -1;
+	if (opt_concur <= 0) {
+		fprintf(stderr, "Missing number of ULTs or invalid value.\n");
+		usage(argv[0], stderr);
+		exit(EXIT_FAILURE);
 	}
-
-	printf("Create ABT threads for %d seconds, concur=%d\n",
-	       opt_secs, opt_concur);
 
 	rc = daos_debug_init_ex("/dev/stdout", DLOG_INFO);
 	if (rc != 0) {
-		fprintf(stderr, "unable to create DAOS debg facities: " DF_RC "\n", DP_RC(rc));
-		return -1;
+		fprintf(stderr, "unable to create DAOS debug facities: " DF_RC "\n", DP_RC(rc));
+		exit(EXIT_FAILURE);
 	}
 
 	rc = ABT_init(0, NULL);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("Failed to init ABT: " AF_RC "\n", AP_RC(rc));
-		return -1;
+		fprintf(stderr, "Failed to init ABT: " AF_RC "\n", AP_RC(rc));
+		exit(EXIT_FAILURE);
 	}
 
 	rc = ABT_xstream_self(&abt_xstream);
 	if (rc != ABT_SUCCESS) {
-		printf("ABT get self xstream failed: %d\n", rc);
-		return -1;
+		fprintf(stderr, "ABT get self xstream failed: " AF_RC "\n", AP_RC(rc));
+		exit(EXIT_FAILURE);
 	}
 
 	rc = ABT_xstream_get_main_pools(abt_xstream, 1, &abt_pool);
 	if (rc != ABT_SUCCESS) {
-		printf("ABT pool get failed: %d\n", rc);
-		return -1;
+		fprintf(stderr, "ABT pool get failed: " AF_RC "\n", AP_RC(rc));
+		exit(EXIT_FAILURE);
 	}
 
 	rc = ABT_cond_create(&abt_cond);
 	if (rc != ABT_SUCCESS) {
-		printf("ABT cond create failed: %d\n", rc);
-		return -1;
+		fprintf(stderr, "ABT cond create failed: " AF_RC "\n", AP_RC(rc));
+		exit(EXIT_FAILURE);
 	}
 
 	rc = ABT_mutex_create(&abt_lock);
 	if (rc != ABT_SUCCESS) {
-		printf("ABT mutex create failed: %d\n", rc);
-		return -1;
+		fprintf(stderr, "ABT mutex create failed: " AF_RC "\n", AP_RC(rc));
+		exit(EXIT_FAILURE);
 	}
 
 	if (opt_stack > 0) {
 		rc = ABT_thread_attr_create(&abt_attr);
 		if (rc != ABT_SUCCESS) {
-			printf("ABT thread attr create failed: %d\n", rc);
-			return -1;
+			fprintf(stderr, "ABT thread attr create failed: " AF_RC "\n", AP_RC(rc));
+			exit(EXIT_FAILURE);
 		}
 
 		rc = ABT_thread_attr_set_stacksize(abt_attr, opt_stack);
-		D_ASSERT(rc == ABT_SUCCESS);
-		printf("ULT stack size = %d\n", opt_stack);
+		if (rc != ABT_SUCCESS) {
+			fprintf(stderr, "Setting ABT thread stack size to %zd failed: " AF_RC "\n",
+				opt_stack, AP_RC(rc));
+			exit(EXIT_FAILURE);
+		}
+		printf("ULT stack size = %zd\n", opt_stack);
 	} else {
 		printf("ULT stack size = default ABT ULT stack size\n");
 	}
@@ -421,6 +445,10 @@ main(int argc, char **argv)
 
 	abt_waiting = true;
 	rc = ABT_thread_create(abt_pool, abt_lock_create_rate, NULL, ABT_THREAD_ATTR_NULL, NULL);
+	if (rc != ABT_SUCCESS) {
+		fprintf(stderr, "ABT thread create failed: " AF_RC "\n", AP_RC(rc));
+		exit(EXIT_FAILURE);
+	}
 
 	ABT_mutex_lock(abt_lock);
 	if (abt_waiting)
