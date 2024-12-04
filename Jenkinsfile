@@ -16,6 +16,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@pahender/DAOS-16500') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -533,7 +534,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build RPM on Leap 15.5') {
+                stage('Build RPM on Leap 15.6') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -686,7 +687,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
+                stage('Build on Leap 15.6 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -965,7 +966,7 @@ pipeline {
                         }
                     }
                 } // stage('Functional on EL 9')
-                stage('Functional on Leap 15.5') {
+                stage('Functional on Leap 15.6') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -986,7 +987,7 @@ pipeline {
                             job_status_update()
                         }
                     } // post
-                } // stage('Functional on Leap 15.5')
+                } // stage('Functional on Leap 15.6')
                 stage('Functional on Ubuntu 20.04') {
                     when {
                         beforeAgent true
@@ -1061,7 +1062,7 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Fault inection testing on EL 8.8')
+                } // stage('Fault injection testing on EL 8.8')
                 stage('Test RPMs on EL 8.6') {
                     when {
                         beforeAgent true
@@ -1081,8 +1082,8 @@ pipeline {
                             rpm_test_post(env.STAGE_NAME, env.NODELIST)
                         }
                     }
-                } // stage('Test CentOS 7 RPMs')
-                stage('Test RPMs on Leap 15.4') {
+                } // stage('Test RPMs on EL 8.6')
+                stage('Test RPMs on Leap 15.6') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
@@ -1096,8 +1097,8 @@ pipeline {
                          * additionally for this use-case, can't override
                            ftest_arg with this :-(
                         script {
-                            'Test RPMs on Leap 15.4': getFunctionalTestStage(
-                                name: 'Test RPMs on Leap 15.4',
+                            'Test RPMs on Leap 15.6': getFunctionalTestStage(
+                                name: 'Test RPMs on Leap 15.6',
                                 pragma_suffix: '',
                                 label: params.CI_UNIT_VM1_LABEL,
                                 next_version: next_version,
@@ -1133,7 +1134,7 @@ pipeline {
                             rpm_test_post(env.STAGE_NAME, env.NODELIST)
                         }
                     }
-                } // stage('Test Leap 15 RPMs')
+                } // stage('Test RPMs on Leap 15.6')
             } // parallel
         } // stage('Test')
         stage('Test Storage Prep on EL 8.8') {
