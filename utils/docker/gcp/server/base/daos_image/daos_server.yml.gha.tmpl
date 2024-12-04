@@ -1,0 +1,25 @@
+access_points: ['localhost']
+
+transport_config:
+  allow_insecure: true
+
+provider: ofi+tcp
+disable_vfio: true
+nr_hugepages: 8192
+control_log_file: /tmp/daos/server.log
+telemetry_port: 9191
+
+engines:
+  - targets: 16
+    nr_xs_helpers: 0
+    bypass_health_chk: true
+    fabric_iface: eth0
+    fabric_iface_port: 31316
+    log_file: /tmp/daos/engine.log
+
+    storage:
+      - scm_mount: /var/daos/scm-ram
+        class: ram
+
+      - class: nvme
+        bdev_list: [ 0000:00:04.0 ]

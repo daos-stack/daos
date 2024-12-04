@@ -1,0 +1,2 @@
+transport_config:
+  allow_insecure: true
