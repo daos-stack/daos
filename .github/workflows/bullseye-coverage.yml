@@ -1,21 +1,24 @@
 name: Bullseye Code Coverage
 
 env:
+  # TODO: Surely this is a GH variable of some sort for the name of the repo
+  NAME: daos
+  NEXT_VERSION_master: 1000
+  # Which distros to build for
+  COVFN_DISABLED: false
+  # see https://github.com/organizations/daos-stack/settings/variables/actions for
+  # the organizational defaults values for these variables
   # TODO: we really need to define a list of supported versions (ideally it's no more than 2)
   #       build is done on the lowest version and test on the highest with a "sanity test"
   #       stage done on all versions in the list ecept the highest
-  EL8_BUILD_VERSION: 8.6
-  EL8_VERSION: 8.8
-  EL9_BUILD_VERSION: 9.4
-  EL9_VERSION: 9.4
-  LEAP15_VERSION: 15.5
-  NEXT_VERSION_master: 1000
+  EL8_BUILD_VERSION: ${{ vars.EL8_BUILD_VERSION_MASTER }}
+  EL8_VERSION: ${{ vars.EL8_VERSION_MASTER }}
+  EL9_BUILD_VERSION: ${{ vars.EL9_BUILD_VERSION_MASTER }}
+  EL9_VERSION: ${{ vars.EL9_VERSION_MASTER }}
+  LEAP15_VERSION: ${{ vars.LEAP15_VERSION_MASTER }}
   # Which distros to build for
-  DISTROS: el8
-  TEST_TAG: pr
-  PACKAGING_DIR: utils/rpms
-  NAME: daos
-  COVFN_DISABLED: false
+  TEST_TAG: ${{ vars.TEST_TAG }}
+  PACKAGING_DIR: ${{ vars.PACKAGING_DIR }}
 
 on:
   workflow_dispatch:
@@ -61,13 +64,14 @@ jobs:
     # Needed because of https://github.com/orgs/community/discussions/26671
     # Ideally want to be able to use:
     # with:
-    #    NAME: ${{ env.DISTROS }}
+    #    NAME: ${{ env.NAME }}
     # in the Call-RPM-Build job but the above issue prevents it
     name: Compute outputs
     runs-on: [self-hosted, light]
     outputs:
       NAME: ${{ env.NAME }}
-      DISTROS: ${{ env.DISTROS }}
+      DISTROS: ${{ env.COVFN_DISABLED == 'true' && vars.DISTROS_MASTER ||
+                                                   vars.COVERAGE_DISTROS_MASTER }}
       EL8_BUILD_VERSION: ${{ env.EL8_BUILD_VERSION }}
       EL9_BUILD_VERSION: ${{ env.EL9_BUILD_VERSION }}
       LEAP15_VERSION: ${{ env.LEAP15_VERSION }}
