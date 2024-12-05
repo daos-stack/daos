@@ -38,8 +38,8 @@ check_pool_redundancy_factor(const char *variable)
 	if (pw_rf <= PW_RF_MAX)
 		return true;
 
-	D_INFO("pw_rf %d is out of range [%d, %d], take default %d\n", pw_rf,
-	       PW_RF_MIN, PW_RF_MAX, PW_RF_DEFAULT);
+	D_INFO("pw_rf %d is out of range [%d, %d], take default %d\n", pw_rf, PW_RF_MIN, PW_RF_MAX,
+	       PW_RF_DEFAULT);
 	pw_rf = PW_RF_DEFAULT;
 
 	return true;
