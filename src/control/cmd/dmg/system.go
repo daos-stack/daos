@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -23,6 +23,8 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/ui"
 )
 
+var errNoRanks = errors.New("no ranks or hosts specified")
+
 // SystemCmd is the struct representing the top-level system subcommand.
 type SystemCmd struct {
 	LeaderQuery  leaderQueryCmd        `command:"leader-query" description:"Query for current Management Service leader"`
@@ -31,8 +33,9 @@ type SystemCmd struct {
 	Start        systemStartCmd        `command:"start" description:"Perform start of stopped DAOS system"`
 	Exclude      systemExcludeCmd      `command:"exclude" description:"Exclude ranks from DAOS system"`
 	ClearExclude systemClearExcludeCmd `command:"clear-exclude" description:"Clear excluded state for ranks"`
+	Drain        systemDrainCmd        `command:"drain" description:"Drain ranks or hosts from all relevant pools in DAOS system"`
 	Erase        systemEraseCmd        `command:"erase" description:"Erase system metadata prior to reformat"`
-	ListPools    PoolListCmd           `command:"list-pools" description:"List all pools in the DAOS system"`
+	ListPools    poolListCmd           `command:"list-pools" description:"List all pools in the DAOS system"`
 	Cleanup      systemCleanupCmd      `command:"cleanup" description:"Clean up all resources associated with the specified machine"`
 	SetAttr      systemSetAttrCmd      `command:"set-attr" description:"Set system attributes"`
 	GetAttr      systemGetAttrCmd      `command:"get-attr" description:"Get system attributes"`
@@ -41,11 +44,15 @@ type SystemCmd struct {
 	GetProp      systemGetPropCmd      `command:"get-prop" description:"Get system properties"`
 }
 
-type leaderQueryCmd struct {
+type baseCtlCmd struct {
 	baseCmd
 	cfgCmd
 	ctlInvokerCmd
 	cmdutil.JSONOutputCmd
+}
+
+type leaderQueryCmd struct {
+	baseCtlCmd
 	DownReplicas bool `short:"N" long:"down-replicas" description:"Show Down Replicas only"`
 }
 
@@ -98,13 +105,14 @@ func (cmd *rankListCmd) validateHostsRanks() error {
 	return nil
 }
 
+type baseRankListCmd struct {
+	baseCtlCmd
+	rankListCmd
+}
+
 // systemQueryCmd is the struct representing the command to query system status.
 type systemQueryCmd struct {
-	baseCmd
-	cfgCmd
-	ctlInvokerCmd
-	cmdutil.JSONOutputCmd
-	rankListCmd
+	baseRankListCmd
 	Verbose      bool                  `long:"verbose" short:"v" description:"Display more member details"`
 	NotOK        bool                  `long:"not-ok" description:"Display components in need of administrative investigation"`
 	WantedStates ui.MemberStateSetFlag `long:"with-states" description:"Only show engines in one of a set of comma-separated states"`
@@ -166,11 +174,7 @@ func (cmd *systemEraseCmd) Execute(_ []string) error {
 
 // systemStopCmd is the struct representing the command to shutdown DAOS system.
 type systemStopCmd struct {
-	baseCmd
-	cfgCmd
-	ctlInvokerCmd
-	cmdutil.JSONOutputCmd
-	rankListCmd
+	baseRankListCmd
 	Force bool `long:"force" description:"Force stop DAOS system members"`
 }
 
@@ -210,71 +214,9 @@ func (cmd *systemStopCmd) Execute(_ []string) (errOut error) {
 	return resp.Errors()
 }
 
-type baseExcludeCmd struct {
-	baseCmd
-	cfgCmd
-	ctlInvokerCmd
-	cmdutil.JSONOutputCmd
-	rankListCmd
-}
-
-func (cmd *baseExcludeCmd) execute(clear bool) error {
-	if err := cmd.validateHostsRanks(); err != nil {
-		return err
-	}
-	if cmd.Ranks.Count() == 0 && cmd.Hosts.Count() == 0 {
-		return errors.New("no ranks or hosts specified")
-	}
-
-	req := &control.SystemExcludeReq{Clear: clear}
-	req.Hosts.Replace(&cmd.Hosts.HostSet)
-	req.Ranks.Replace(&cmd.Ranks.RankSet)
-
-	resp, err := control.SystemExclude(cmd.MustLogCtx(), cmd.ctlInvoker, req)
-	if err != nil {
-		return err // control api returned an error, disregard response
-	}
-
-	if cmd.JSONOutputEnabled() {
-		return cmd.OutputJSON(resp, resp.Errors())
-	}
-
-	updated := ranklist.NewRankSet()
-	for _, result := range resp.Results {
-		updated.Add(result.Rank)
-	}
-
-	if resp.Errors() != nil {
-		cmd.Errorf("Errors: %s", resp.Errors())
-	}
-	cmd.Infof("updated ranks: %s", updated)
-
-	return nil
-}
-
-type systemExcludeCmd struct {
-	baseExcludeCmd
-}
-
-func (cmd *systemExcludeCmd) Execute(_ []string) error {
-	return cmd.execute(false)
-}
-
-type systemClearExcludeCmd struct {
-	baseExcludeCmd
-}
-
-func (cmd *systemClearExcludeCmd) Execute(_ []string) error {
-	return cmd.execute(true)
-}
-
 // systemStartCmd is the struct representing the command to start system.
 type systemStartCmd struct {
-	baseCmd
-	cfgCmd
-	ctlInvokerCmd
-	cmdutil.JSONOutputCmd
-	rankListCmd
+	baseRankListCmd
 }
 
 // Execute is run when systemStartCmd activates.
@@ -286,6 +228,7 @@ func (cmd *systemStartCmd) Execute(_ []string) (errOut error) {
 	if err := cmd.validateHostsRanks(); err != nil {
 		return err
 	}
+
 	req := new(control.SystemStartReq)
 	req.Hosts.Replace(&cmd.Hosts.HostSet)
 	req.Ranks.Replace(&cmd.Ranks.RankSet)
@@ -311,16 +254,98 @@ func (cmd *systemStartCmd) Execute(_ []string) (errOut error) {
 	return resp.Errors()
 }
 
+type systemExcludeCmd struct {
+	baseRankListCmd
+}
+
+func (cmd *systemExcludeCmd) execute(clear bool) error {
+	if err := cmd.validateHostsRanks(); err != nil {
+		return err
+	}
+	if cmd.Ranks.Count() == 0 && cmd.Hosts.Count() == 0 {
+		return errNoRanks
+	}
+
+	req := &control.SystemExcludeReq{Clear: clear}
+	req.Hosts.Replace(&cmd.Hosts.HostSet)
+	req.Ranks.Replace(&cmd.Ranks.RankSet)
+
+	resp, err := control.SystemExclude(cmd.MustLogCtx(), cmd.ctlInvoker, req)
+	if err != nil {
+		return err // control api returned an error, disregard response
+	}
+
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
+	}
+
+	updated := ranklist.NewRankSet()
+	for _, result := range resp.Results {
+		updated.Add(result.Rank)
+	}
+
+	if resp.Errors() != nil {
+		cmd.Errorf("Errors: %s", resp.Errors())
+	}
+	cmd.Infof("updated ranks: %s", updated)
+
+	return resp.Errors()
+}
+
+func (cmd *systemExcludeCmd) Execute(_ []string) error {
+	return cmd.execute(false)
+}
+
+type systemClearExcludeCmd struct {
+	systemExcludeCmd
+}
+
+func (cmd *systemClearExcludeCmd) Execute(_ []string) error {
+	return cmd.execute(true)
+}
+
+type systemDrainCmd struct {
+	baseRankListCmd
+}
+
+func (cmd *systemDrainCmd) Execute(_ []string) (errOut error) {
+	defer func() {
+		errOut = errors.Wrap(errOut, "system drain failed")
+	}()
+
+	if err := cmd.validateHostsRanks(); err != nil {
+		return err
+	}
+	if cmd.Ranks.Count() == 0 && cmd.Hosts.Count() == 0 {
+		return errNoRanks
+	}
+
+	req := new(control.SystemDrainReq)
+	req.SetSystem(cmd.config.SystemName)
+	req.Hosts.Replace(&cmd.Hosts.HostSet)
+	req.Ranks.Replace(&cmd.Ranks.RankSet)
+
+	resp, err := control.SystemDrain(cmd.MustLogCtx(), cmd.ctlInvoker, req)
+	if err != nil {
+		return err // control api returned an error, disregard response
+	}
+
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
+	}
+
+	var out strings.Builder
+	pretty.PrintSystemDrainResponse(&out, resp)
+	cmd.Info(out.String())
+
+	return resp.Errors()
+}
+
 type systemCleanupCmd struct {
-	baseCmd
-	cfgCmd
-	ctlInvokerCmd
-	cmdutil.JSONOutputCmd
-
+	baseCtlCmd
 	Args struct {
-		Machine string `positional-arg-name:"<Machine to cleanup>"`
+		Machine string `positional-arg-name:"machine to cleanup" required:"1"`
 	} `positional-args:"yes"`
-
 	Verbose bool `long:"verbose" short:"v" description:"Output additional cleanup information"`
 }
 
@@ -329,42 +354,34 @@ func (cmd *systemCleanupCmd) Execute(_ []string) (errOut error) {
 		errOut = errors.Wrap(errOut, "system cleanup failed")
 	}()
 
-	ctx := cmd.MustLogCtx()
 	req := new(control.SystemCleanupReq)
 	req.SetSystem(cmd.config.SystemName)
 	req.Machine = cmd.Args.Machine
 
-	resp, err := control.SystemCleanup(ctx, cmd.ctlInvoker, req)
+	resp, err := control.SystemCleanup(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
 		return err // control api returned an error, disregard response
 	}
 
 	if cmd.JSONOutputEnabled() {
-		return cmd.OutputJSON(resp, err)
+		return cmd.OutputJSON(resp, resp.Errors())
 	}
 
-	var out, outErr strings.Builder
-	if err := pretty.PrintSystemCleanupResponse(&out, &outErr, resp, cmd.Verbose); err != nil {
-		return err
-	}
-	if outErr.String() != "" {
-		cmd.Error(outErr.String())
+	var out strings.Builder
+	pretty.PrintSystemCleanupResponse(&out, resp, cmd.Verbose)
+
+	if resp.Errors() != nil {
+		cmd.Error(resp.Errors().Error())
 	}
 
-	// Infof prints raw string and doesn't try to expand "%"
-	// preserving column formatting in txtfmt table
-	cmd.Infof("%s", out.String())
+	cmd.Info(out.String())
 
 	return resp.Errors()
 }
 
 // systemSetAttrCmd represents the command to set system attributes.
 type systemSetAttrCmd struct {
-	baseCmd
-	cfgCmd
-	ctlInvokerCmd
-	cmdutil.JSONOutputCmd
-
+	baseCtlCmd
 	Args struct {
 		Attrs ui.SetPropertiesFlag `positional-arg-name:"system attributes to set (key:val[,key:val...])" required:"1"`
 	} `positional-args:"yes"`
@@ -391,11 +408,7 @@ func (cmd *systemSetAttrCmd) Execute(_ []string) error {
 
 // systemGetAttrCmd represents the command to get system attributes.
 type systemGetAttrCmd struct {
-	baseCmd
-	cfgCmd
-	ctlInvokerCmd
-	cmdutil.JSONOutputCmd
-
+	baseCtlCmd
 	Args struct {
 		Attrs ui.GetPropertiesFlag `positional-arg-name:"system attributes to get (key[,key...])"`
 	} `positional-args:"yes"`
@@ -446,11 +459,7 @@ func (cmd *systemGetAttrCmd) Execute(_ []string) error {
 
 // systemDelAttrCmd represents the command to delete system attributes.
 type systemDelAttrCmd struct {
-	baseCmd
-	cfgCmd
-	ctlInvokerCmd
-	cmdutil.JSONOutputCmd
-
+	baseCtlCmd
 	Args struct {
 		Attrs ui.GetPropertiesFlag `positional-arg-name:"system attributes to delete (key[,key...])" required:"1"`
 	} `positional-args:"yes"`
@@ -525,11 +534,7 @@ func (f *systemSetPropsFlag) Complete(match string) []flags.Completion {
 
 // systemSetPropCmd represents the command to set system properties.
 type systemSetPropCmd struct {
-	baseCmd
-	cfgCmd
-	ctlInvokerCmd
-	cmdutil.JSONOutputCmd
-
+	baseCtlCmd
 	Args struct {
 		Props systemSetPropsFlag `positional-arg-name:"system properties to set (key:val[,key:val...])" required:"1"`
 	} `positional-args:"yes"`
@@ -597,11 +602,7 @@ func (f *systemGetPropsFlag) Complete(match string) []flags.Completion {
 
 // systemGetPropCmd represents the command to get system properties.
 type systemGetPropCmd struct {
-	baseCmd
-	cfgCmd
-	ctlInvokerCmd
-	cmdutil.JSONOutputCmd
-
+	baseCtlCmd
 	Args struct {
 		Props systemGetPropsFlag `positional-arg-name:"system properties to get (key[,key...])"`
 	} `positional-args:"yes"`

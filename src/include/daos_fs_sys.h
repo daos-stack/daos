@@ -543,6 +543,19 @@ dfs_sys_mkdir(dfs_sys_t *dfs_sys, const char *dir, mode_t mode,
 	      daos_oclass_id_t cid);
 
 /**
+ * Create a directory and all of its parent directories.
+ *
+ * \param[in]	dfs_sys  Pointer to the mounted file system.
+ * \param[in]	dir_path Link path of new dir.
+ * \param[in]	mode	 mkdir mode.
+ * \param[in]	cid	 DAOS object class id (pass 0 for default MAX_RW).
+ *
+ * \return		 0 on success, errno code on failure.
+ */
+int
+dfs_sys_mkdir_p(dfs_sys_t *dfs_sys, const char *dir_path, mode_t mode, daos_oclass_id_t cid);
+
+/**
  * Open a directory.
  * The directory must be closed with dfs_sys_closedir().
  *

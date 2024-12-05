@@ -534,8 +534,8 @@ crt_rpc_complete_and_unlock(struct crt_rpc_priv *rpc_priv, int rc)
 			cbinfo.cci_rc = rpc_priv->crp_reply_hdr.cch_rc;
 
 		if (cbinfo.cci_rc != 0)
-			RPC_CERROR(crt_quiet_error(cbinfo.cci_rc), DB_NET, rpc_priv,
-				   "failed, " DF_RC "\n", DP_RC(cbinfo.cci_rc));
+			RPC_CWARN(crt_quiet_error(cbinfo.cci_rc), DB_NET, rpc_priv,
+				  "failed, " DF_RC "\n", DP_RC(cbinfo.cci_rc));
 
 		RPC_TRACE(DB_TRACE, rpc_priv,
 			  "Invoking RPC callback (rank %d tag %d) rc: "
@@ -1227,8 +1227,7 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 	struct d_binheap_node		*bh_node;
 	d_list_t			 timeout_list;
 	uint64_t			 ts_now;
-	int                              err_to_print  = 0;
-	int                              left_to_print = 0;
+	bool                             print_once = false;
 
 	D_ASSERT(crt_ctx != NULL);
 
@@ -1256,47 +1255,26 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 	};
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
-	/* Limit logging when many rpcs time-out at the same time */
-	d_list_for_each_entry(rpc_priv, &timeout_list, crp_tmp_link_timeout) {
-		left_to_print++;
-	}
-
-	/* TODO: might expose via env in future */
-	err_to_print = 1;
-
 	/* handle the timeout RPCs */
 	while ((rpc_priv =
 		    d_list_pop_entry(&timeout_list, struct crt_rpc_priv, crp_tmp_link_timeout))) {
-		/*
-		 * This error is annoying and fills the logs. For now prevent bursts of timeouts
-		 * happening at the same time.
-		 *
-		 * Ideally we would also limit to 1 error per target. Can keep track of it in per
-		 * target cache used for hg_addrs.
-		 *
-		 * Extra lookup cost of cache entry would be ok as this is an error case
-		 **/
+		/* NB: The reason that the error message is printed at INFO
+		 * level is because the user should know how serious the error
+		 * is and they will print the RPC error at appropriate level */
+		if (!print_once) {
+			print_once = true;
 
-		if (err_to_print > 0) {
-			RPC_ERROR(rpc_priv,
-				  "ctx_id %d, (status: %#x) timed out (%d seconds), "
-				  "target (%d:%d)\n",
-				  crt_ctx->cc_idx, rpc_priv->crp_state, rpc_priv->crp_timeout_sec,
-				  rpc_priv->crp_pub.cr_ep.ep_rank, rpc_priv->crp_pub.cr_ep.ep_tag);
-			err_to_print--;
-			left_to_print--;
-
-			if (err_to_print == 0 && left_to_print > 0)
-				D_ERROR(" %d more rpcs timed out. rest logged at INFO level\n",
-					left_to_print);
-
+			RPC_WARN(rpc_priv,
+				 "ctx_id %d, (status: %#x) timed out (%d seconds), "
+				 "target (%d:%d)\n",
+				 crt_ctx->cc_idx, rpc_priv->crp_state, rpc_priv->crp_timeout_sec,
+				 rpc_priv->crp_pub.cr_ep.ep_rank, rpc_priv->crp_pub.cr_ep.ep_tag);
 		} else {
 			RPC_INFO(rpc_priv,
 				 "ctx_id %d, (status: %#x) timed out (%d seconds), "
 				 "target (%d:%d)\n",
 				 crt_ctx->cc_idx, rpc_priv->crp_state, rpc_priv->crp_timeout_sec,
 				 rpc_priv->crp_pub.cr_ep.ep_rank, rpc_priv->crp_pub.cr_ep.ep_tag);
-			left_to_print--;
 		}
 
 		crt_req_timeout_hdlr(rpc_priv);
