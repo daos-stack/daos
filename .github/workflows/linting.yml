@@ -36,7 +36,7 @@ jobs:
 
   shell-check:
     name: ShellCheck
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -54,7 +54,7 @@ jobs:
 
   log-check:
     name: Logging macro checking
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -65,7 +65,7 @@ jobs:
 
   ftest-tags:
     name: Ftest tag check
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -73,7 +73,7 @@ jobs:
         run: \[ ! -x src/tests/ftest/tags.py \] || ./src/tests/ftest/tags.py lint --verbose
 
   flake8-lint:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     name: Flake8 check
     steps:
       - name: Check out source repository
@@ -107,7 +107,7 @@ jobs:
 
   doxygen:
     name: Doxygen
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -128,7 +128,7 @@ jobs:
 
   pylint:
     name: Pylint check
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -148,7 +148,7 @@ jobs:
 
   codespell:
     name: Codespell
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -163,7 +163,7 @@ jobs:
 
   linting-summary:
     name: Linting Summary
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: [isort, shell-check, log-check, ftest-tags, flake8-lint, doxygen, pylint, codespell]
     if: (!cancelled())
     steps:

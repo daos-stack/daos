@@ -108,4 +108,4 @@ else
     rc=0
 fi
 
-exit $rc
+exit "$rc"
