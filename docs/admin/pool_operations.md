@@ -1367,19 +1367,22 @@ and possibly repair a pmemobj file. As discussed in the previous section, the
 rebuild status can be consulted via the pool query and will be expanded
 with more information.
 
-## Pool Redundancy Factor
+## Pool Exclusion Limit
 
 If the DAOS system experiences cascading failures, where the number of failed
-fault domains exceeds a pool's redundancy factor, there could be unrecoverable
+fault domains exceeds the pool redundancy factor, there could be unrecoverable
 errors and applications could suffer from data loss. This can happen in cases
 of power or network outages and would cause node/engine failures. In most cases
 those failures can be recovered and DAOS engines can be restarted and the system
-can function again.
+can function again. Additionally, there are use cases where it is undesirable to
+exclude engines from the pool map even when failure are less than the redundancy
+factor such as when engine replacement or restart can be done quickly and
+rebuild is undesirable.
 
-Administrator can set the default pool redundancy factor by environment variable
-"DAOS_POOL_RF" in the server yaml file. If SWIM detects and reports an engine is
-dead and the number of failed fault domain exceeds or is going to exceed the pool
-redundancy factor, it will not change pool map immediately. Instead, it will give
+Administrator can set the default pool eviction threshold by environment variable
+"DAOS_POOL_EXCLUDE_LIMIT" in the server yaml file. If SWIM detects and reports
+an engine is dead and the number of failed fault domain exceeds or is going to exceed
+this threshold, it will not change pool map immediately. Instead, it will give
 critical log message:
 ```
 intolerable unavailability: engine rank x
