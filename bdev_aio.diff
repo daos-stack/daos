@@ -1,0 +1,23 @@
+commit 7f49c5acbb3a75584c8fd2e4f39c540b6bf18f61
+Author: Di Wang <ddiwang@google.com>
+Date:   Fri Dec 6 00:58:22 2024 +0000
+
+    daos/kdev: disable required alignment for kdev
+    
+    Disable alignment forcely for kdev to avoid 64KB IO split.
+    
+    Signed-off-by: Di Wang <ddiwang@google.com>
+
+diff --git a/module/bdev/aio/bdev_aio.c b/module/bdev/aio/bdev_aio.c
+index b51d6c83a..e12e32664 100644
+--- a/module/bdev/aio/bdev_aio.c
++++ b/module/bdev/aio/bdev_aio.c
+@@ -989,6 +989,8 @@ create_aio_bdev(const char *name, const char *filename, uint32_t block_size, boo
+ 		fdisk->disk.required_alignment = spdk_u32log2(block_size);
+ 	}
+ 
++	/* Disable required_alignment forcely */
++	fdisk->disk.required_alignment = 0;
+ 	if (disk_size % fdisk->disk.blocklen != 0) {
+ 		SPDK_ERRLOG("Disk size %" PRIu64 " is not a multiple of block size %" PRIu32 "\n",
+ 			    disk_size, fdisk->disk.blocklen);
