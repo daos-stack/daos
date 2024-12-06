@@ -415,7 +415,9 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             # Delete all the containers
             self.delete_all_containers()
             # Delete container will take some time to release the space
-            time.sleep(60)
+            # FIXME DAOS-16557: Should increase this value
+            # TODO DAOS-16557 Test with smaller value
+            # time.sleep(60)
 
         # Run last IO
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
@@ -477,7 +479,9 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             # Delete all the containers
             self.delete_all_containers()
             # Delete container will take some time to release the space
-            time.sleep(60)
+            # FIXME DAOS-16557: Should increase this value
+            # TODO DAOS-16557 Test with smaller value
+            # time.sleep(60)
 
         # Run last IO
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
