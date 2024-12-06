@@ -19,6 +19,7 @@ pool:
   label: pool
   set_logmasks: False
 container:
+  control_method: API
   akey_size: 5
   dkey_size: 5
   data_size: 256

@@ -56,3 +56,6 @@ attrtests:
       value:
         - NULL
         - FAIL
+
+container:
+  control_method: API

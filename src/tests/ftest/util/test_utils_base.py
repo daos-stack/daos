@@ -79,7 +79,7 @@ class TestDaosApiBase(ObjectWithParameters):
         # Test yaml parameter used to define the control method:
         #   USE_API    - use the API methods to create/destroy containers
         #   USE_DAOS   - use the daos command to create/destroy pools/containers
-        self.control_method = BasicParameter(self.USE_API, self.USE_API)
+        self.control_method = BasicParameter(self.USE_DAOS, self.USE_DAOS)
 
     def _log_method(self, name, kwargs):
         """Log the method call with its arguments.
