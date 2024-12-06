@@ -1,0 +1,129 @@
+name: 'Functional Test'
+description: 'Run VM functional tests against DAOS RPMs'
+
+on:
+  workflow_call:
+    inputs:
+      distro:
+        type: choice
+        options:
+          - el8
+          - el9
+          - leap15
+      version:
+        type: string
+        required: true
+      build_version:
+        type: string
+        required: true
+      cluster_label:
+        type: string
+        default: true
+      tags:
+        type: string
+        required: true
+      ftest_args:
+        type: string
+        default: "--nvme=auto"
+      jenkins_url:
+        type: string
+        default: https://build.hpdd.intel.com/
+      GITHUB_TOKEN:
+        required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set build variables
+      id: build-vars
+      uses: ./.github/actions/build-variables
+      with:
+        distro: ${{ inputs.distro }}
+        version: ${{ inputs.version }}
+        build_version: ${{ inputs.build_version }}
+    - name: Set variables
+      run: |
+          set -eux
+          env
+          echo "CHROOT_NAME=${{ steps.build-vars.outputs.chroot_name }}" >> $GITHUB_ENV
+          echo "DISTRO_NAME=${{ steps.build-vars.outputs.distro_name }}" >> $GITHUB_ENV
+          echo "DISTRO_VERSION=${{ steps.build-vars.outputs.distro_version }}" >> $GITHUB_ENV
+          echo -n "DISTRO_WITH_VERSION=" >> $GITHUB_ENV
+          echo -n "${{ steps.build-vars.outputs.distro_name_lower }}" >> $GITHUB_ENV
+          echo "${{ steps.build-vars.outputs.distro_version }}" >> $GITHUB_ENV
+          echo "BUILD_CHROOT=${{ steps.build-vars.outputs.build_chroot }}" >> $GITHUB_ENV
+          echo "STAGE_NAME=Functional on ${{ steps.build-vars.outputs.build_name }}" >> $GITHUB_ENV
+          echo "STAGE_TAGS=${{ inputs.tags }}" >> $GITHUB_ENV
+          echo "FTEST_ARG=${{ inputs.ftest_args }}" >> $GITHUB_ENV
+          echo "DISTRO=${{ steps.build-vars.outputs.distro }}" >> $GITHUB_ENV
+          echo "PROVISION_DISTRO=${{ steps.build-vars.outputs.provision_distro }}" >> $GITHUB_ENV
+          echo -n "DAOS_STACK_${{ steps.build-vars.outputs.local_repo_name }}" >> $GITHUB_ENV
+          echo "_LOCAL_REPO=not_used" >> $GITHUB_ENV
+          echo "LABEL=${{ inputs.cluster_label }}" >> $GITHUB_ENV
+          echo "INST_RPMS=${{ steps.build-vars.outputs.inst_rpms }}" >> $GITHUB_ENV
+      shell: bash
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: true
+        fetch-depth: 500
+        ref: ${{ github.event.pull_request.head.sha }}
+    - name: Request and Provision a Cluster
+      uses: ./.github/actions/provision-cluster
+    - name: Run Test
+      id: run-test
+      run: |
+        . ci/gha_functions.sh
+        NODE_COUNT="$NODE_COUNT"
+        TEST_TAG=${{ inputs.tags }}
+        FTEST_ARG="${{ inputs.ftest_args }}" ci/functional/test_main.sh
+      shell: bash
+    - name: Cancel cluster request (if cancelled after requesting)
+      if: cancelled()
+      run: |
+        set -eux
+        . ci/gha_functions.sh
+        if ! JENKINS_URL="${{ inputs.jenkins_url }}" QUEUE_URL="${{ env.QUEUE_URL }}" \
+              cancel_provision; then
+            # probably already provisioned and needs un-provisioning
+            if ! cleanup_provision_request "${{ env.CLUSTER_REQUEST_reqid }}"; then
+                exit 1
+            fi
+        fi
+      shell: bash
+    - name: Job cleanup
+      if: (!cancelled() && (success() || failure()))
+      run: |
+        set -eux
+        . ci/gha_functions.sh
+        NODELIST=${{ env.NODESTRING }} ci/functional/job_cleanup.sh || true
+        cleanup_provision_request "${{ env.CLUSTER_REQUEST_reqid }}"
+      shell: bash
+    - name: Publish test results
+      if: (!cancelled()) && (success() || failure()) &&
+          steps.run-test.outcome != 'skipped'
+      uses: EnricoMi/publish-unit-test-result-action@v2
+      with:
+        check_name: ${{ env.STAGE_NAME }} Test Results (old)
+        github_token: ${{ inputs.GITHUB_TOKEN }}
+        junit_files: ${{ env.STAGE_NAME }}/**/results.xml
+    - name: Publish artifacts
+      if: (!cancelled()) && (success() || failure()) &&
+          steps.run-test.outcome != 'skipped'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.STAGE_NAME }} artifacts
+        path: ${{ env.STAGE_NAME }}/**
+    - name: Upload test results
+      if: (success() || failure()) &&
+          steps.run-test.outcome != 'skipped'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.STAGE_NAME }} test-results
+        path: ${{ env.STAGE_NAME }}/**/results.xml
+    - name: Update commit status
+      uses: ouzi-dev/commit-status-updater@v2
+      with:
+        # yamllint disable-line rule:line-length
+        name: 'test/Functional on ${{ env.DISTRO_NAME }} ${{ env.COMMIT_STATUS_DISTRO_VERSION && env.COMMIT_STATUS_DISTRO_VERSION || env.DISTRO_VERSION }}'
+        status: "${{ job.status }}"
