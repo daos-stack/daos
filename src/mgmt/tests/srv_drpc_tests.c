@@ -1329,6 +1329,8 @@ init_test_pool_info(daos_pool_info_t *pool_info)
 	pool_info->pi_space.ps_free_max[DAOS_MEDIA_NVME] = 8;
 	pool_info->pi_space.ps_free_min[DAOS_MEDIA_NVME] = 9;
 	pool_info->pi_space.ps_free_mean[DAOS_MEDIA_NVME] = 10;
+
+	pool_info->pi_space.ps_space.s_total_mem = 11;
 }
 
 static void
@@ -1393,6 +1395,8 @@ expect_query_resp_with_info(daos_pool_info_t *exp_info,
 	assert_non_null(pq_resp->tier_stats[DAOS_MEDIA_NVME]);
 	expect_storage_usage(&exp_info->pi_space, DAOS_MEDIA_NVME,
 			     pq_resp->tier_stats[DAOS_MEDIA_NVME]);
+
+	assert_int_equal(pq_resp->mem_file_bytes, exp_info->pi_space.ps_space.s_total_mem);
 
 	assert_non_null(pq_resp->rebuild);
 	expect_rebuild_status(&exp_info->pi_rebuild_st, exp_state,
@@ -1604,6 +1608,7 @@ expect_drpc_pool_query_targets_resp_with_targets(Drpc__Response *resp,
 		assert_int_equal(pqt_resp->infos[i]->type, infos[i].ta_type);
 		assert_int_equal(pqt_resp->infos[i]->state, infos[i].ta_state);
 		assert_int_equal(pqt_resp->infos[i]->n_space, DAOS_MEDIA_MAX);
+		assert_int_equal(pqt_resp->infos[i]->mem_file_bytes, infos[i].ta_space.s_total_mem);
 
 		for (j = 0; j < DAOS_MEDIA_MAX; j++) {
 			Mgmt__StorageTargetUsage *space = pqt_resp->infos[i]->space[j];

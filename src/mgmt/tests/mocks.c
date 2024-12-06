@@ -373,6 +373,7 @@ mock_ds_mgmt_pool_query_targets_gen_infos(uint32_t n_infos)
 		infos[i].ta_space.s_free[DAOS_MEDIA_SCM] = 800000000 + i;
 		infos[i].ta_space.s_total[DAOS_MEDIA_NVME] = 9000000000;
 		infos[i].ta_space.s_free[DAOS_MEDIA_NVME] = 600000000 + i;
+		infos[i].ta_space.s_total_mem              = 2000000000;
 	}
 	ds_mgmt_pool_query_targets_info_out = infos;
 }
