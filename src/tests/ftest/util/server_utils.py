@@ -71,7 +71,7 @@ class DaosServerManager(SubprocessManager):
     def __init__(self, group, bin_dir,
                  svr_cert_dir, svr_config_file, dmg_cert_dir, dmg_config_file,
                  svr_config_temp=None, dmg_config_temp=None, manager="Orterun",
-                 namespace="/run/server_manager/*", access_points_suffix=None):
+                 namespace="/run/server_manager/*", mgmt_svc_replicas_suffix=None):
         # pylint: disable=too-many-arguments
         """Initialize a DaosServerManager object.
 
@@ -92,7 +92,7 @@ class DaosServerManager(SubprocessManager):
                 manage the YamlCommand defined through the "job" attribute.
                 Defaults to "Orterun".
             namespace (str): yaml namespace (path to parameters)
-            access_points_suffix (str, optional): Suffix to append to each access point name.
+            mgmt_svc_replicas_suffix (str, optional): Suffix to append to each MS replica name.
                 Defaults to None.
         """
         self.group = group
@@ -104,7 +104,8 @@ class DaosServerManager(SubprocessManager):
         # Dmg command to access this group of servers which will be configured
         # to access the daos_servers when they are started
         self.dmg = get_dmg_command(
-            group, dmg_cert_dir, bin_dir, dmg_config_file, dmg_config_temp, access_points_suffix)
+            group, dmg_cert_dir, bin_dir, dmg_config_file, dmg_config_temp,
+            mgmt_svc_replicas_suffix)
 
         # Set the correct certificate file ownership
         if manager == "Systemctl":
@@ -166,7 +167,7 @@ class DaosServerManager(SubprocessManager):
             NodeSet: the hosts running the management service
 
         """
-        return NodeSet.fromlist(self.get_config_value('access_points'))
+        return NodeSet.fromlist(self.get_config_value('mgmt_svc_replicas'))
 
     @property
     def management_service_ranks(self):
@@ -202,7 +203,7 @@ class DaosServerManager(SubprocessManager):
 
         Args:
             hosts (list, optional): dmg hostlist value. Defaults to None which
-                results in using the 'access_points' host list.
+                results in using the 'mgmt_svc_replicas' host list.
         """
         self._prepare_dmg_certificates()
         self._prepare_dmg_hostlist(hosts)

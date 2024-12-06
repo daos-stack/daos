@@ -1,5 +1,5 @@
 """
-(C) Copyright 2018-2023 Intel Corporation.
+(C) Copyright 2018-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -53,13 +53,13 @@ class DestroyTests(TestWithServers):
                 using the config_file specification. Defaults to None.
 
         Returns:
-            dict: a dictionary identifying the hosts and access points for the
+            dict: a dictionary identifying the hosts and MS replicas for the
                 server group dictionary
 
         """
         return {
             "hosts": hosts,
-            "access_points": hosts[:1],
+            "mgmt_svc_replicas": hosts[:1],
             "svr_config_file": svr_config_file,
             "dmg_config_file": dmg_config_file,
             "svr_config_temp": svr_config_temp,

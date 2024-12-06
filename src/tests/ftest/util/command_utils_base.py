@@ -794,7 +794,6 @@ class CommonConfig(YamlParameters):
 
     Includes:
         - the daos system name (name)
-        - a list of access point nodes (access_points)
         - the default port number (port)
         - the transport credentials
     """
@@ -812,18 +811,12 @@ class CommonConfig(YamlParameters):
         #   - name: <str>, e.g. "daos_server"
         #       Name associated with the DAOS system.
         #
-        #   - access_points: <list>, e.g.  ["hostname1:10001"]
-        #       Hosts can be specified with or without port, default port below
-        #       assumed if not specified. Defaults to the hostname of this node
-        #       at port 10000 for local testing
-        #
         #   - port: <int>, e.g. 10001
         #       Default port number with with to bind the daos_server. This
         #       will also be used when connecting to access points if the list
         #       only contains host names.
         #
         self.name = BasicParameter(None, name)
-        self.access_points = BasicParameter(None, ["localhost"])
         self.port = BasicParameter(None, 10001)
 
     def _get_new(self):

@@ -11,11 +11,12 @@ import (
 	"path"
 
 	"github.com/daos-stack/daos/src/control/build"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 )
 
 type cfgLoader interface {
-	loadConfig() error
+	loadConfig(logging.Logger) error
 	configPath() string
 	configOptional() bool
 }
@@ -43,7 +44,7 @@ func (c *cfgCmd) configPath() string {
 	return c.config.Path
 }
 
-func (c *cfgCmd) loadConfig() error {
+func (c *cfgCmd) loadConfig(log logging.Logger) error {
 	if c.IgnoreConfig {
 		c.config = nil
 		return nil
@@ -75,7 +76,7 @@ func (c *cfgCmd) loadConfig() error {
 		return err
 	}
 
-	return c.config.Load()
+	return c.config.Load(log)
 }
 
 func (c *cfgCmd) configOptional() bool {
