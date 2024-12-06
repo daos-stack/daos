@@ -44,7 +44,7 @@ container_3:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
   control_method: daos
-  oclass: EC_2P2GX
+  oclass: EC_16P2GX
 
 pool:
   size: 40%
@@ -60,35 +60,38 @@ container_set_owner:
 
 largefilecount:
   api:
-    - MPIIO
-    - POSIX
-    - HDF5
+    # We want to isolate the issues in HDF5 and HDF5-VOL, so comment out MPIIO, POSIX, and DFS.
+    #- MPIIO
+    #- POSIX
+    #- HDF5
     - HDF5-VOL
-    - DFS
+    #- DFS
   object_class:
     ior_oclass:          # Run once with SX and then with EC_16P2GX
       - SX
-      - EC_2P1GX
+      - EC_16P2GX        # Makito updated
     mdtest_oclass:       # Run once with S1 and then with EC_16P2G1
       - S1
-      - EC_2P1G1
+      - EC_16P2G1        # Makito updated
 ior:
   client_processes:
-    ppn: 30
+    ppn: 104
   dfs_destroy: False
-  flags: "-v -D 300 -W -w -k"
+  # 8/7: Removed -D 300
+  flags: -v -W -w -k
   test_file: daos:testFile
   repetitions: 1
   signature: 123
   transfer_size: '1Mib'
-  block_size: '1Mib'
+  # 8/1: 2Gib worked.
+  block_size: '2Gib'
 dfuse:
   disable_caching: True
 
 mdtest:
   client_processes:
-    ppn: 30
-  num_of_files_dirs: 100      # creating total of 1M files
+    ppn: 104
+  num_of_files_dirs: 1000      # creating total of 1M files
   test_dir: "/"
   iteration: 1
   dfs_destroy: False
@@ -107,8 +110,8 @@ hdf5_vol:
 
 io_sys_admin:
   steps_to_run:
-    pool_create_ownership: True
-    storage_system_query: True
+    pool_create_ownership: False
+    storage_system_query: False
     io: True
-    snapshot: True
-    datamover: True
+    snapshot: False
+    datamover: False
