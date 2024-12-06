@@ -77,6 +77,7 @@ class CartSelfTest(TestWithServers):
 
         # Start the daos server
         self.start_server_managers()
+        self.register_cleanup(self.stop_servers)
 
     def test_self_test(self):
         """Run a few CaRT self-test scenarios.

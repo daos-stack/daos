@@ -533,7 +533,7 @@ func poolQueryInt(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq
 	return resp, err
 }
 
-// UpdateState update the pool state based on response field values.
+// UpdateState updates the pool state based on response field values.
 func (pqr *PoolQueryResp) UpdateState() error {
 	// Update the state as Ready if DAOS return code is 0.
 	if pqr.Status == 0 {
@@ -785,9 +785,8 @@ type PoolDrainReq struct {
 
 // DrainResp has no other parameters other than success/failure for now.
 
-// PoolDrain will set a pool target for a specific rank to the drain status.
-// This should automatically start the rebuildiing process.
-// Returns an error (including any DER code from DAOS).
+// PoolDrain will set a pool target for a specific rank in to the drain state which should
+// automatically start the rebuildiing process. Returns an error (including any DER code from DAOS).
 func PoolDrain(ctx context.Context, rpcClient UnaryInvoker, req *PoolDrainReq) error {
 	pbReq := &mgmtpb.PoolDrainReq{
 		Sys:       req.getSystem(rpcClient),
