@@ -319,4 +319,15 @@ dav_allot_mb_evictable_v2(dav_obj_t *pop, int flags);
 size_t
 dav_obj_pgsz_v2();
 
+/** Force GC to reclaim freeblocks and mark empty non-evictable
+ *  memory buckets as unused, thus allowing more umem_cache
+ *  for non-evictable memory buckets.
+ *
+ * \param[in]           pop             pool handle
+ *
+ * \return  0, success
+ *        < 0, error and errno is set to appropriate value.
+ */
+int
+dav_force_gc_v2(dav_obj_t *pop);
 #endif /* __DAOS_COMMON_DAV_V2_H */
