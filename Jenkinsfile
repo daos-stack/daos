@@ -81,6 +81,7 @@ if (!env.CHANGE_ID &&
      !env.BRANCH_NAME.startsWith('release/') &&
      !env.BRANCH_NAME.startsWith('feature/') &&
      !env.BRANCH_NAME.startsWith('ci-') &&
+     !env.BRANCH_NAME.startsWith('google/') &&
      env.BRANCH_NAME != 'master')) {
     currentBuild.result = 'SUCCESS'
     return
