@@ -1084,7 +1084,6 @@ def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
                 # add envs for HDF5-VOL
                 env["HDF5_VOL_CONNECTOR"] = "daos"
                 env["HDF5_PLUGIN_PATH"] = str(plugin_path)
-                mpirun_cmd.working_dir.update(dfuse.mount_dir.value)
             mpirun_cmd.assign_environment(env, True)
             mpirun_cmd.ppn.update(ppn)
             sbatch_cmds.append(str(mpirun_cmd))

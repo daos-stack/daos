@@ -44,7 +44,7 @@ class MacsioTest(TestWithServers):
 
         return macsio
 
-    def run_macsio(self, macsio, hosts, processes, plugin=None, slots=None, working_dir=None):
+    def run_macsio(self, macsio, hosts, processes, plugin=None, slots=None):
         """Run the macsio test.
 
         Parameters for the macsio command are obtained from the test yaml file,
@@ -56,7 +56,6 @@ class MacsioTest(TestWithServers):
             processes (int): total number of processes to use to run macsio
             plugin (str, optional): plugin path to use with DAOS VOL connector
             slots (int, optional): slots per host to specify in the hostfile. Defaults to None.
-            working_dir (str, optional): working directory. Defaults to None.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other information.
@@ -73,7 +72,6 @@ class MacsioTest(TestWithServers):
         job_manager.assign_hosts(hosts, self.workdir, slots)
         job_manager.assign_processes(processes)
         job_manager.assign_environment(env)
-        job_manager.working_dir.value = working_dir
 
         # Run MACSio
         try:
@@ -159,9 +157,7 @@ class MacsioTest(TestWithServers):
         # Run macsio
         self.log_step("Running MACSio with DAOS VOL connector")
         macsio = self._get_macsio_command(pool, container)
-        result = self.run_macsio(
-            macsio, self.hostlist_clients, processes, plugin_path,
-            working_dir=dfuse.mount_dir.value)
+        result = self.run_macsio(macsio, self.hostlist_clients, processes, plugin_path)
         if not macsio.check_results(result, self.hostlist_clients):
             self.fail("MACSio failed")
         self.log.info("Test passed")
