@@ -359,8 +359,10 @@ ioil_init(void)
 static void
 ioil_show_summary()
 {
-	D_INFO("Performed %"PRIu64" reads and %"PRIu64" writes from %"PRIu64" files\n",
-	       ioil_iog.iog_read_count, ioil_iog.iog_write_count, ioil_iog.iog_file_count);
+	D_INFO("Performed %" PRIu64 " reads, %" PRIu64 " writes and %" PRIu64
+	       " fstats from %" PRIu64 " files\n",
+	       ioil_iog.iog_read_count, ioil_iog.iog_write_count, ioil_iog.iog_fstat_count,
+	       ioil_iog.iog_file_count);
 
 	if (ioil_iog.iog_file_count == 0 || !ioil_iog.iog_show_summary)
 		return;
@@ -818,16 +820,21 @@ child_hdlr(void)
 {
 	int rc;
 
-	rc = daos_eq_lib_reset_after_fork();
+	rc = daos_reinit();
 	if (rc)
-		DL_WARN(rc, "daos_eq_lib_init() failed in child process");
-	daos_dti_reset();
+		DL_WARN(rc, "daos_reinit() failed in child process");
+
+	/** Reset event queue */
 	ioil_eqh = ioil_iog.iog_main_eqh = DAOS_HDL_INVAL;
-	rc = daos_eq_create(&ioil_eqh);
-	if (rc)
-		DFUSE_LOG_WARNING("daos_eq_create() failed: "DF_RC, DP_RC(rc));
-	else
-		ioil_iog.iog_main_eqh = ioil_eqh;
+
+	if (ioil_iog.iog_eq_count_max) {
+		rc = daos_eq_create(&ioil_eqh);
+		if (rc)
+			DFUSE_LOG_WARNING("daos_eq_create() failed: " DF_RC, DP_RC(rc));
+		else
+			ioil_iog.iog_main_eqh = ioil_eqh;
+	}
+	ioil_iog.iog_eq_count = 0;
 }
 
 /* Returns true on success */
@@ -876,10 +883,12 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags)
 				D_GOTO(err, rc = daos_der2errno(rc));
 			}
 			ioil_iog.iog_main_eqh = ioil_eqh;
-
-			rc = pthread_atfork(NULL, NULL, &child_hdlr);
-			D_ASSERT(rc == 0);
 		}
+
+		rc = pthread_atfork(NULL, NULL, &child_hdlr);
+		if (rc)
+			DFUSE_LOG_WARNING("Failed to install atfork handler: " DF_RC, DP_RC(rc));
+		rc = 0;
 	}
 
 	d_list_for_each_entry(pool, &ioil_iog.iog_pools_head, iop_pools) {

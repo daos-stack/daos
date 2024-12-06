@@ -18,6 +18,8 @@
 
 #include <daos_mgmt.h>
 
+#include "daos_iotest.h"
+
 /*
  * Will enable accurate query result verification after DAOS-13520 resolved.
  * #define CR_ACCURATE_QUERY_RESULT	1
@@ -378,6 +380,78 @@ cr_locate_dcri(struct daos_check_info *dci, struct daos_check_report_info *base,
 	D_ASSERTF(found, "Cannot found inconsistency report for "DF_UUIDF"\n", DP_UUID(uuid));
 
 	return dcri;
+}
+
+static int
+cr_pool_fail_result(struct daos_check_info *dci, uuid_t uuid, uint32_t cla, uint32_t act, int *ret)
+{
+	struct daos_check_pool_info	*dcpi;
+	struct daos_check_report_info	*dcri;
+	int				 i;
+
+	if (dci->dci_pool_nr != 1) {
+		print_message("CR pool count %d (pool " DF_UUID ") is not 1\n",
+			      dci->dci_pool_nr, DP_UUID(uuid));
+		return -DER_INVAL;
+	}
+
+	dcpi = &dci->dci_pools[0];
+	D_ASSERTF(uuid_compare(dcpi->dcpi_uuid, uuid) == 0,
+		  "Unmatched pool UUID (1): " DF_UUID " vs " DF_UUID "\n",
+		  DP_UUID(dcpi->dcpi_uuid), DP_UUID(uuid));
+
+	if (!cr_pool_status_failed(dcpi->dcpi_status)) {
+		print_message("CR pool " DF_UUID " status %s is not failed\n",
+			      DP_UUID(uuid), dcpi->dcpi_status);
+		return -DER_INVAL;
+	}
+
+	if (cr_pool_phase_is_done(dcpi->dcpi_phase)) {
+		print_message("CR pool " DF_UUID " phase should not be done\n",
+			      DP_UUID(uuid));
+		return -DER_INVAL;
+	}
+
+#ifdef CR_ACCURATE_QUERY_RESULT
+	if (dci->dci_report_nr != 1) {
+		print_message("CR (failed) pool " DF_UUID " has unexpected reports: %d\n",
+			      DP_UUID(uuid), dci->dci_report_nr);
+		return -DER_INVAL;
+	}
+#endif
+
+	for (i = 0; i < dci->dci_report_nr; i++) {
+		dcri = &dci->dci_reports[i];
+		if (uuid_compare(dcri->dcri_uuid, uuid) != 0) {
+#ifdef CR_ACCURATE_QUERY_RESULT
+			print_message("Detect unrelated inconsistency report: "
+				      DF_UUID " vs " DF_UUID "\n",
+				      DP_UUID(dcpi->dcpi_uuid), DP_UUID(uuid));
+			return -DER_INVAL;
+#else
+			continue;
+#endif
+		}
+
+		if (dcri->dcri_class != cla) {
+			print_message("CR (failed) pool " DF_UUID " reports unexpected "
+				      "inconsistency at %d: %u vs %u\n",
+				      DP_UUID(uuid), i, dcri->dcri_class, cla);
+			return -DER_INVAL;
+		}
+
+		if (dcri->dcri_act != act) {
+			print_message("CR (failed) pool " DF_UUID " reports unexpected "
+				      "solution at %d: %u vs %u\n",
+				      DP_UUID(uuid), i, dcri->dcri_act, act);
+			return -DER_INVAL;
+		}
+
+		*ret = dcri->dcri_result;
+		return 0;
+	}
+
+	return -DER_INVAL;
 }
 
 static void
@@ -2951,7 +3025,7 @@ cr_engine_rejoin_fail(void **state)
 	uint32_t			 class = TCC_POOL_NONEXIST_ON_MS;
 	uint32_t			 action;
 	int				 rank = -1;
-	int				 result;
+	int				 result = 0;
 	int				 rc;
 	int				 i;
 
@@ -3004,14 +3078,12 @@ cr_engine_rejoin_fail(void **state)
 	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
 
-	/* The check on the pool will fail as -DER_HG or -DER_TIMEDOUT. */
-	result = -DER_HG;
-	rc = cr_pool_verify(&dci, pool.pool_uuid, TCPS_FAILED, 1, &class, &action, &result);
-	if (rc == -DER_INVAL) {
-		result = -DER_TIMEDOUT;
-		rc = cr_pool_verify(&dci, pool.pool_uuid, TCPS_FAILED, 1, &class, &action, &result);
-	}
+	rc = cr_pool_fail_result(&dci, pool.pool_uuid, class, action, &result);
 	assert_rc_equal(rc, 0);
+
+	/* The check on the pool will fail because of -DER_HG or -DER_TIMEDOUT or -DER_OOG. */
+	D_ASSERTF(result == -DER_HG || result == -DER_TIMEDOUT || result == -DER_OOG,
+		  "Unexpected pool " DF_UUID " fail result: %d\n", DP_UUID(pool.pool_uuid), result);
 
 	/* Reint the rank, rejoin will fail but not affect the rank start. */
 	rc = cr_rank_reint(rank, true);
@@ -3573,6 +3645,146 @@ cr_handle_fail_pool2(void **state)
 	cr_cleanup(arg, &pool, 1);
 }
 
+#define CR_IO_SIZE	16
+
+/*
+ * 1. Create pool and container without inconsistency.
+ * 2. Write something to the container.
+ * 3. Start checker with --dry-run option.
+ * 4. Query checker, it should be completed without any inconsistency reported.
+ * 5. Verify the pool only can be connected with read-only permission.
+ * 6. Verify the container only can be opened with read-only permission.
+ * 7. Verify the object only can be opened with read-only permission.
+ * 8. Verify the object cannot be written.
+ * 9. Read former wrote data and verify its correctness.
+ * 10. Switch to normal mode and cleanup.
+ */
+static void
+cr_maintenance_mode(void **state)
+{
+	test_arg_t		*arg = *state;
+	struct test_pool	 pool = { 0 };
+	struct test_cont	 cont = { 0 };
+	daos_handle_t		 coh;
+	daos_obj_id_t		 oid;
+	struct ioreq		 req;
+	const char		*dkey = "cr_dkey";
+	const char		*akey = "cr_akey";
+	char			 update_buf[CR_IO_SIZE];
+	char			 fetch_buf[CR_IO_SIZE];
+	struct daos_check_info	 dci = { 0 };
+	int			 rc;
+
+	print_message("CR28: maintenance mode after dry-run check\n");
+
+	rc = cr_pool_create(state, &pool, true, TCC_NONE);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_cont_create(state, &pool, &cont, 0);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_cont_open(pool.poh, cont.label, DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	oid = daos_test_oid_gen(coh, OC_SX, 0, 0, arg->myrank);
+	arg->fail_loc = DAOS_DTX_COMMIT_SYNC | DAOS_FAIL_ALWAYS;
+	arg->async = 0;
+	ioreq_init(&req, coh, oid, DAOS_IOD_SINGLE, arg);
+	dts_buf_render(update_buf, CR_IO_SIZE);
+
+	print_message("Generate some data.\n");
+
+	insert_single(dkey, akey, 0, update_buf, CR_IO_SIZE, DAOS_TX_NONE, &req);
+	daos_fail_loc_set(0);
+
+	rc = daos_obj_close(req.oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_pool_disconnect(pool.poh, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_system_stop(false);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_mode_switch(true);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_check_start(TCSF_DRYRUN, 0, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	cr_ins_wait(1, &pool.pool_uuid, &dci);
+
+	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_pool_verify(&dci, pool.pool_uuid, TCPS_CHECKED, 0, NULL, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("Verify the pool only can be connected as RDONLY mode.\n");
+
+	rc = daos_pool_connect(pool.pool_str, arg->group, DAOS_PC_RW, &pool.poh, NULL, NULL);
+	assert_rc_equal(rc, -DER_NO_PERM);
+
+	rc = daos_pool_connect(pool.pool_str, arg->group, DAOS_PC_RO, &pool.poh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("Verify the container only can be opened as RDONLY mode.\n");
+
+	rc = daos_cont_open(pool.poh, cont.label, DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, -DER_NO_PERM);
+
+	rc = daos_cont_open(pool.poh, cont.label, DAOS_COO_RO, &coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+#if 0
+	/*
+	 * NOTE: Currently, DAOS security check is server-side logic, but object open may not
+	 *	 talk with server. So related permission check will not be done until read or
+	 *	 write really happened. If not consider exclusively open and cache case, then
+	 *	 it seems fine; otherwise, need some enhancement in future.
+	 */
+
+	print_message("Verify the object only can be opened as RDONLY mode.\n");
+
+	rc = daos_obj_open(coh, oid, DAOS_OO_RW, &req.oh, NULL);
+	assert_rc_equal(rc, -DER_NO_PERM);
+#endif
+
+	rc = daos_obj_open(coh, oid, DAOS_OO_RO, &req.oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("Verify the object cannot be modified.\n");
+
+	req.arg->expect_result = -DER_NO_PERM;
+	insert_single(dkey, akey, 100, update_buf, CR_IO_SIZE, DAOS_TX_NONE, &req);
+	daos_fail_loc_set(0);
+
+	print_message("Verify former wrote data.\n");
+
+	req.arg->expect_result = 0;
+	lookup_single(dkey, akey, 0, fetch_buf, CR_IO_SIZE, DAOS_TX_NONE, &req);
+	assert_int_equal(req.iod[0].iod_size, CR_IO_SIZE);
+	assert_memory_equal(update_buf, fetch_buf, CR_IO_SIZE);
+
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_pool_disconnect(pool.poh, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_mode_switch(false);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_system_start();
+	assert_rc_equal(rc, 0);
+
+	cr_dci_fini(&dci);
+	cr_cleanup(arg, &pool, 1);
+}
+
 static const struct CMUnitTest cr_tests[] = {
 	{ "CR1: start checker for specified pools",
 	  cr_start_specified, async_disable, test_case_teardown},
@@ -3628,6 +3840,8 @@ static const struct CMUnitTest cr_tests[] = {
 	  cr_handle_fail_pool1, async_disable, test_case_teardown},
 	{ "CR27: handle the pool if some engine failed to report some pool service",
 	  cr_handle_fail_pool2, async_disable, test_case_teardown},
+	{ "CR28: maintenance mode after dry-run check",
+	  cr_maintenance_mode, async_disable, test_case_teardown},
 };
 
 static int

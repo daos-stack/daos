@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -41,7 +41,7 @@ func createEmptyFile(log logging.Logger, path string, size uint64) error {
 	// adjust file size to align with block size
 	size = (size / aioBlockSize) * aioBlockSize
 
-	log.Debugf("allocating blank file %s of size %s", path, humanize.Bytes(size))
+	log.Debugf("allocating blank file %s of size %s", path, humanize.IBytes(size))
 	file, err := common.TruncFile(path)
 	if err != nil {
 		return errors.Wrapf(err, "open %q for truncate", path)

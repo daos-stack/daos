@@ -34,6 +34,8 @@ struct vos_oi_iter {
 	struct vos_ilog_info	 oit_ilog_info;
 	/** punched epoch for current entry */
 	daos_epoch_t		 oit_punched;
+	/** auxiliary data for md-on-ssd phase2 OI iterator */
+	struct vos_bkt_iter	*oit_bkt_iter;
 	/** cached iterator flags */
 	uint32_t		 oit_flags;
 };
@@ -47,7 +49,8 @@ oi_hkey_size(void)
 static int
 oi_rec_msize(int alloc_overhead)
 {
-	return alloc_overhead + sizeof(struct vos_obj_df);
+	/* This function is only used for metadata overhead estimation. */
+	return alloc_overhead + D_ALIGNUP(sizeof(struct vos_obj_df), 32);
 }
 
 static void
@@ -67,6 +70,15 @@ oi_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 	return dbtree_key_cmp_rc(memcmp(oid1, oid2, sizeof(*oid1)));
 }
 
+static inline unsigned int
+vos_obj_df_size(struct vos_pool *pool)
+{
+	if (vos_pool_is_p2(pool))
+		return sizeof(struct vos_obj_p2_df);
+
+	return sizeof(struct vos_obj_df);
+}
+
 static int
 oi_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	     d_iov_t *val_iov, struct btr_record *rec, d_iov_t *val_out)
@@ -76,10 +88,11 @@ oi_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	struct vos_obj_df	*obj;
 	daos_unit_oid_t		*key;
 	umem_off_t		 obj_off;
+	struct vos_pool		*pool = (struct vos_pool *)tins->ti_priv;
 	int			 rc;
 
 	/* Allocate a PMEM value of type vos_obj_df */
-	obj_off = umem_zalloc(&tins->ti_umm, sizeof(struct vos_obj_df));
+	obj_off = umem_zalloc(&tins->ti_umm, vos_obj_df_size(pool));
 	if (UMOFF_IS_NULL(obj_off))
 		return -DER_NOSPACE;
 
@@ -100,11 +113,11 @@ oi_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	} else {
 		struct vos_obj_df *new_obj = val_out->iov_buf;
 
-		memcpy(obj, new_obj, sizeof(*obj));
+		memcpy(obj, new_obj, vos_obj_df_size(pool));
 		obj->vo_id = *key;
 	}
 
-	d_iov_set(val_iov, obj, sizeof(struct vos_obj_df));
+	d_iov_set(val_iov, obj, vos_obj_df_size(pool));
 	rec->rec_off = obj_off;
 
 	/* For new created object, commit it synchronously to reduce
@@ -134,6 +147,7 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	daos_handle_t		 coh = { 0 };
 	int			 rc;
 	struct vos_pool		*pool;
+	uint32_t		*bkt_ids = NULL;
 
 	obj = umem_off2ptr(umm, rec->rec_off);
 
@@ -162,7 +176,14 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 	if (del_arg != NULL)
 		coh = vos_cont2hdl((struct vos_container *)del_arg->cont);
-	return gc_add_item(tins->ti_priv, coh, GC_OBJ, rec->rec_off, 0);
+
+	if (vos_pool_is_evictable(pool)) {
+		struct vos_obj_p2_df *p2 = (struct vos_obj_p2_df *)obj;
+
+		bkt_ids = &p2->p2_bkt_ids[0];
+	}
+
+	return gc_add_item(tins->ti_priv, coh, GC_OBJ, rec->rec_off, bkt_ids);
 }
 
 static int
@@ -176,7 +197,7 @@ oi_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 		DP_UOID(obj->vo_id), rec->rec_off);
 
 	D_ASSERT(val_iov != NULL);
-	d_iov_set(val_iov, obj, sizeof(struct vos_obj_df));
+	d_iov_set(val_iov, obj, vos_obj_df_size((struct vos_pool *)tins->ti_priv));
 	return 0;
 }
 
@@ -234,7 +255,6 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
 	}
 
 	tmprc = vos_ilog_ts_add(ts_set, ilog, &oid, sizeof(oid));
-
 	D_ASSERT(tmprc == 0); /* Non-zero return for akey only */
 
 	return rc;
@@ -504,7 +524,7 @@ oi_iter_nested_tree_fetch(struct vos_iterator *iter, vos_iter_type_t type,
 		return rc;
 	}
 
-	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_obj_df));
+	D_ASSERT(rec_iov.iov_len == vos_obj_df_size(oiter->oit_cont->vc_pool));
 	obj = (struct vos_obj_df *)rec_iov.iov_buf;
 
 	rc = oi_iter_ilog_check(obj, oiter, &info->ii_epr, false);
@@ -562,6 +582,7 @@ oi_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	oiter->oit_iter.it_filter_cb = param->ip_filter_cb;
 	oiter->oit_iter.it_filter_arg = param->ip_filter_arg;
 	oiter->oit_flags = param->ip_flags;
+	oiter->oit_bkt_iter = param->ip_bkt_iter;
 	if (param->ip_flags & VOS_IT_FOR_PURGE)
 		oiter->oit_iter.it_for_purge = 1;
 	if (param->ip_flags & VOS_IT_FOR_DISCARD)
@@ -610,13 +631,18 @@ oi_iter_match_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t f
 			goto failed;
 		}
 
-		D_ASSERT(iov.iov_len == sizeof(struct vos_obj_df));
+		D_ASSERT(iov.iov_len == vos_obj_df_size(oiter->oit_cont->vc_pool));
 		obj = (struct vos_obj_df *)iov.iov_buf;
 
 		if (iter->it_filter_cb != NULL && (flags & VOS_ITER_PROBE_AGAIN) == 0) {
 			desc.id_type = VOS_ITER_OBJ;
 			desc.id_oid = obj->vo_id;
 			desc.id_parent_punch = 0;
+			if (vos_pool_is_evictable(oiter->oit_cont->vc_pool)) {
+				struct vos_obj_p2_df *p2 = (struct vos_obj_p2_df *)obj;
+
+				desc.id_bkt = p2->p2_bkt_ids[0];
+			}
 
 			feats = dbtree_feats_get(&obj->vo_tree);
 
@@ -767,7 +793,7 @@ oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 		return rc;
 	}
 
-	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_obj_df));
+	D_ASSERT(rec_iov.iov_len == vos_obj_df_size(oiter->oit_cont->vc_pool));
 
 	return oi_iter_fill(rec_iov.iov_buf, oiter, false, it_entry);
 }
@@ -818,13 +844,23 @@ oi_iter_check_punch(daos_handle_t ih)
 		  "Probe should be done before aggregation\n");
 	if (rc != 0)
 		return rc;
-	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_obj_df));
+	D_ASSERT(rec_iov.iov_len == vos_obj_df_size(oiter->oit_cont->vc_pool));
 	obj = (struct vos_obj_df *)rec_iov.iov_buf;
 	oid = obj->vo_id;
 
 	if (!vos_ilog_is_punched(vos_cont2hdl(oiter->oit_cont), &obj->vo_ilog, &oiter->oit_epr,
 				 NULL, &oiter->oit_ilog_info))
 		return 0;
+
+	rc = vos_obj_check_discard(oiter->oit_cont, oid, VOS_OBJ_AGGREGATE);
+	if (rc != 0) {
+		/** -DER_BUSY means the object is in-use already.  We will after a yield in this
+		 * case.
+		 */
+		D_CDEBUG(rc == -DER_BUSY, DB_EPC, DLOG_ERR, "Hold check failed for " DF_UOID "\n",
+			 DP_UOID(oid));
+		return rc;
+	}
 
 	/** Ok, ilog is fully punched, so we can move it to gc heap */
 	rc = umem_tx_begin(vos_cont2umm(oiter->oit_cont), NULL);
@@ -873,7 +909,7 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 		  "Probe should be done before aggregation\n");
 	if (rc != 0)
 		return rc;
-	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_obj_df));
+	D_ASSERT(rec_iov.iov_len == vos_obj_df_size(oiter->oit_cont->vc_pool));
 	obj = (struct vos_obj_df *)rec_iov.iov_buf;
 	oid = obj->vo_id;
 
@@ -934,6 +970,42 @@ struct vos_iter_ops vos_oi_iter_ops = {
 	.iop_fetch		= oi_iter_fetch,
 	.iop_process		= oi_iter_process,
 };
+
+bool
+vos_bkt_iter_skip(daos_handle_t ih, vos_iter_desc_t *desc)
+{
+	struct vos_iterator	*iter = vos_hdl2iter(ih);
+	struct vos_oi_iter	*oiter;
+	struct vos_bkt_iter	*bkt_iter;
+
+	D_ASSERT(desc->id_type == VOS_ITER_OBJ);
+	oiter = iter2oiter(iter);
+
+	if (!vos_pool_is_evictable(oiter->oit_cont->vc_pool))
+		return false;
+
+	/* Called from the common vos_iterate() */
+	if (oiter->oit_bkt_iter == NULL)
+		return false;
+
+	bkt_iter = oiter->oit_bkt_iter;
+	D_ASSERT(bkt_iter->bi_bkt_cur < bkt_iter->bi_bkt_tot);
+	D_ASSERT(desc->id_bkt < bkt_iter->bi_bkt_tot);
+
+	/* Lower bucket ID is already iterated */
+	if (desc->id_bkt < bkt_iter->bi_bkt_cur)
+		return true;
+	else if (desc->id_bkt == bkt_iter->bi_bkt_cur)
+		return false;
+
+	/*
+	 * Mark the skipped bitmap for higher bucket ID, vos_iterate_obj() will skip the
+	 * the bucket if it's not marked in bitmap.
+	 */
+	if (!isset(&bkt_iter->bi_skipped[0], desc->id_bkt))
+		setbit(&bkt_iter->bi_skipped[0], desc->id_bkt);
+	return true;
+}
 
 /**
  * Internal usage APIs

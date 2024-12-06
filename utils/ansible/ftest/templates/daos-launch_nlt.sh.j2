@@ -203,8 +203,8 @@ if [[ ${PYTHONPATH:+x} ]] ; then
 else
 	export PYTHONPATH="$DAOS_INSTALL_DIR/lib/daos/TESTING/ftest/util"
 fi
-cd "$DAOS_SOURCE_DIR/utils/sl"
-source setup_local.sh
+cd "$DAOS_SOURCE_DIR"
+source utils/sl/setup_local.sh
 
 info "Setting MPI simulation environment"
 if run $MODULE_EXE is-avail mpi/mpich-x86_64 ; then
@@ -214,6 +214,7 @@ fi
 info "Fixing daos_server_helper"
 run sudo -E "$DAOS_SOURCE_DIR/utils/setup_daos_server_helper.sh"
 run chmod -x "$DAOS_INSTALL_DIR/bin/daos_server_helper"
+run sudo prlimit --nofile=1024:262144 --pid $$
 
 info "Starting NLT tests"
 pushd "$DAOS_SOURCE_DIR" > /dev/null

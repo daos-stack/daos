@@ -276,6 +276,9 @@ pipeline {
         booleanParam(name: 'CI_medium_md_on_ssd_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium MD on SSD test stage')
+        booleanParam(name: 'CI_medium_vmd_TEST',
+                     defaultValue: true,
+                     description: 'Run the Functional Hardware Medium VMD test stage')
         booleanParam(name: 'CI_medium_verbs_provider_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium Verbs Provider test stage')
@@ -873,7 +876,7 @@ pipeline {
                     }
                     steps {
                         job_step_update(
-                            unitTest(timeout_time: 60,
+                            unitTest(timeout_time: 180,
                                      unstash_opt: true,
                                      ignore_failure: true,
                                      inst_repos: prRepos(),
@@ -1053,7 +1056,8 @@ pipeline {
                             stash name: 'fault-inject-valgrind',
                                   includes: '*.memcheck.xml',
                                   allowEmpty: true
-                            archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/'
+                            archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/',
+                                             allowEmptyArchive: true
                             job_status_update()
                         }
                     }
@@ -1163,6 +1167,7 @@ pipeline {
                         'Functional Hardware Medium': getFunctionalTestStage(
                             name: 'Functional Hardware Medium',
                             pragma_suffix: '-hw-medium',
+                            base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,-provider',
@@ -1175,6 +1180,7 @@ pipeline {
                         'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium MD on SSD',
                             pragma_suffix: '-hw-medium-md-on-ssd',
+                            base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,-provider',
@@ -1188,6 +1194,7 @@ pipeline {
                         'Functional Hardware Medium VMD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium VMD',
                             pragma_suffix: '-hw-medium-vmd',
+                            base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw_vmd,medium',
@@ -1201,6 +1208,7 @@ pipeline {
                         'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider',
                             pragma_suffix: '-hw-medium-verbs-provider',
+                            base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,provider',
@@ -1214,6 +1222,7 @@ pipeline {
                         'Functional Hardware Medium Verbs Provider MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider MD on SSD',
                             pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
+                            base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,provider',
@@ -1228,6 +1237,7 @@ pipeline {
                         'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium UCX Provider',
                             pragma_suffix: '-hw-medium-ucx-provider',
+                            base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,provider',
@@ -1241,6 +1251,7 @@ pipeline {
                         'Functional Hardware Large': getFunctionalTestStage(
                             name: 'Functional Hardware Large',
                             pragma_suffix: '-hw-large',
+                            base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,large',
@@ -1253,6 +1264,7 @@ pipeline {
                         'Functional Hardware Large MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Large MD on SSD',
                             pragma_suffix: '-hw-large-md-on-ssd',
+                            base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,large',

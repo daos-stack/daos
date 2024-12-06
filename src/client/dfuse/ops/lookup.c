@@ -88,6 +88,18 @@ dfuse_reply_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 			D_GOTO(out_err, rc = EIO);
 		}
 
+		/* Make the inode active for the create case */
+		if (ie->ie_active) {
+			D_ASSERT(atomic_load_relaxed(&ie->ie_open_count) == 1);
+			active_ie_decref(dfuse_info, ie);
+			rc = active_ie_init(inode, NULL);
+			if (rc != -DER_SUCCESS) {
+				atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
+				dfuse_ie_close(dfuse_info, ie);
+				D_GOTO(out_err, rc);
+			}
+		}
+
 		DFUSE_TRA_DEBUG(inode,
 				"Maybe updating parent inode %#lx dfs_ino %#lx",
 				entry.ino, ie->ie_dfs->dfs_ino);

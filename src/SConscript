@@ -19,7 +19,7 @@ HEADERS_CART = ['api.h', 'iv.h', 'types.h', 'swim.h']
 CART_VERSION = "4.9.0"
 
 API_VERSION_MAJOR = "2"
-API_VERSION_MINOR = "7"
+API_VERSION_MINOR = "8"
 API_VERSION_FIX = "0"
 API_VERSION = f'{API_VERSION_MAJOR}.{API_VERSION_MINOR}.{API_VERSION_FIX}'
 
@@ -65,6 +65,13 @@ def scons():
 
     # For Common library and headers.
     env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/tse.h')
+
+    # For daos_der2errno() used by pydaos.torch module
+    env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/common.h')
+    env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/debug.h')
+    env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/profile.h')
+    env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/dtx.h')
+    env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/cmd_parser.h')
 
     # Generic DAOS includes
     env.AppendUnique(CPPPATH=[Dir('include').srcnode()])

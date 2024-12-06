@@ -90,6 +90,7 @@ class TelemetryUtils():
         "engine_pool_ops_dtx_coll_commit",
         "engine_pool_ops_dtx_commit",
         "engine_pool_ops_dtx_refresh",
+        "engine_pool_ops_dtx_sync_commit",
         "engine_pool_ops_ec_agg",
         "engine_pool_ops_ec_rep",
         "engine_pool_ops_fetch",
@@ -200,6 +201,8 @@ class TelemetryUtils():
         "engine_dmabuff_queued_reqs",
         "engine_dmabuff_grab_errs",
         *_gen_stats_metrics("engine_dmabuff_grab_retries")]
+    ENGINE_IO_DTX_ASYNC_CMT_LAT_METRICS = \
+        _gen_stats_metrics("engine_io_dtx_async_cmt_lat")
     ENGINE_IO_DTX_COMMITTABLE_METRICS = \
         _gen_stats_metrics("engine_io_dtx_committable")
     ENGINE_IO_DTX_COMMITTED_METRICS = \
@@ -304,7 +307,8 @@ class TelemetryUtils():
         _gen_stats_metrics("engine_io_ops_tgt_update_active")
     ENGINE_IO_OPS_UPDATE_ACTIVE_METRICS = \
         _gen_stats_metrics("engine_io_ops_update_active")
-    ENGINE_IO_METRICS = ENGINE_IO_DTX_COMMITTABLE_METRICS +\
+    ENGINE_IO_METRICS = ENGINE_IO_DTX_ASYNC_CMT_LAT_METRICS +\
+        ENGINE_IO_DTX_COMMITTABLE_METRICS +\
         ENGINE_IO_DTX_COMMITTED_METRICS +\
         ENGINE_IO_LATENCY_FETCH_METRICS +\
         ENGINE_IO_LATENCY_BULK_FETCH_METRICS +\
@@ -423,7 +427,7 @@ class TelemetryUtils():
         ENGINE_NVME_CRIT_WARN_METRICS +\
         ENGINE_NVME_INTEL_VENDOR_METRICS
     ENGINE_MEM_USAGE_METRICS = [
-        "engine_mem_vos_vos_obj_360",
+        "engine_mem_vos_vos_obj_408",
         "engine_mem_vos_vos_lru_size",
         "engine_mem_dtx_dtx_leader_handle_360"]
     ENGINE_MEM_TOTAL_USAGE_METRICS = [

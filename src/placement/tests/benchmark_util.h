@@ -41,8 +41,7 @@ benchmark_alloc(void)
 {
 	struct benchmark_handle *hdl;
 
-	hdl = (struct benchmark_handle *)calloc(sizeof(struct benchmark_handle),
-						1);
+	hdl = (struct benchmark_handle *)calloc(1, sizeof(struct benchmark_handle));
 	if (hdl == NULL)
 		return NULL;
 

@@ -825,7 +825,8 @@ crt_sep_hg_class_set(crt_provider_t provider, hg_class_t *class)
 }
 
 static int
-crt_hg_class_init(crt_provider_t provider, int ctx_idx, bool primary, int iface_idx, hg_class_t **ret_hg_class)
+crt_hg_class_init(crt_provider_t provider, int ctx_idx, bool primary, int iface_idx,
+		  bool thread_mode_single, hg_class_t **ret_hg_class)
 {
 	char			*info_string = NULL;
 	struct hg_init_info	init_info = HG_INIT_INFO_INITIALIZER;
@@ -863,6 +864,11 @@ crt_hg_class_init(crt_provider_t provider, int ctx_idx, bool primary, int iface_
 	init_info.request_post_incr         = crt_gdata.cg_post_incr;
 	init_info.multi_recv_op_max         = crt_gdata.cg_mrecv_buf;
 	init_info.multi_recv_copy_threshold = crt_gdata.cg_mrecv_buf_copy;
+	/* Separate SWIM traffic in an effort to prevent potential congestion. */
+	if (crt_is_service() && ctx_idx == crt_gdata.cg_swim_ctx_idx)
+		init_info.traffic_class = (enum na_traffic_class)crt_gdata.cg_swim_tc;
+	if (thread_mode_single)
+		init_info.na_init_info.thread_mode = NA_THREAD_MODE_SINGLE;
 
 	hg_class = HG_Init_opt2(info_string, crt_is_service(), HG_VERSION(2, 4), &init_info);
 	if (hg_class == NULL) {
@@ -914,13 +920,16 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, crt_provider_t provider, int idx,
 	crt_ctx = container_of(hg_ctx, struct crt_context, cc_hg_ctx);
 
 	hg_ctx->chc_provider = provider;
-	sep_mode = crt_provider_is_sep(true, provider);
+	sep_mode             = crt_provider_is_sep(true, provider);
+	if ((!sep_mode && crt_is_service()) || crt_gdata.cg_thread_mode_single)
+		hg_ctx->chc_thread_mode_single = true;
 
 	/* In SEP mode all contexts share same hg_class*/
 	if (sep_mode) {
 		/* Only initialize class for context0 */
 		if (idx == 0) {
-			rc = crt_hg_class_init(provider, idx, primary, iface_idx, &hg_class);
+			rc = crt_hg_class_init(provider, idx, primary, iface_idx,
+					       hg_ctx->chc_thread_mode_single, &hg_class);
 			if (rc != 0)
 				D_GOTO(out, rc);
 
@@ -929,7 +938,8 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, crt_provider_t provider, int idx,
 			hg_class = crt_sep_hg_class_get(provider);
 		}
 	} else {
-		rc = crt_hg_class_init(provider, idx, primary, iface_idx, &hg_class);
+		rc = crt_hg_class_init(provider, idx, primary, iface_idx,
+				       hg_ctx->chc_thread_mode_single, &hg_class);
 		if (rc != 0)
 			D_GOTO(out, rc);
 	}
@@ -1144,9 +1154,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	else
 		rc = crt_corpc_common_hdlr(rpc_priv);
 	if (unlikely(rc != 0)) {
-		RPC_ERROR(rpc_priv,
-			  "failed to invoke RPC handler, rc: "DF_RC"\n",
-			  DP_RC(rc));
+		RPC_INFO(rpc_priv, "failed to invoke RPC handler, rc: " DF_RC "\n", DP_RC(rc));
 		crt_hg_reply_error_send(rpc_priv, rc);
 		D_GOTO(decref, hg_ret = HG_SUCCESS);
 	}
@@ -1354,8 +1362,8 @@ out:
 		crt_cbinfo.cci_rc = rc;
 
 		if (crt_cbinfo.cci_rc != 0)
-			RPC_CERROR(crt_quiet_error(crt_cbinfo.cci_rc), DB_NET, rpc_priv,
-				   "RPC failed; rc: " DF_RC "\n", DP_RC(crt_cbinfo.cci_rc));
+			RPC_CWARN(crt_quiet_error(crt_cbinfo.cci_rc), DB_NET, rpc_priv,
+				  "RPC failed; rc: " DF_RC "\n", DP_RC(crt_cbinfo.cci_rc));
 
 		RPC_TRACE(DB_TRACE, rpc_priv,
 			  "Invoking RPC callback (rank %d tag %d) rc: " DF_RC "\n",
@@ -1476,9 +1484,20 @@ crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 			  DP_HG_RC(hg_ret));
 		/* should success as addref above */
 		RPC_DECREF(rpc_priv);
-		rc = crt_hgret_2_der(hg_ret);
+		D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 	}
 
+	/* Release input buffer */
+	if (rpc_priv->crp_release_input_early && !rpc_priv->crp_forward) {
+		hg_ret = HG_Release_input_buf(rpc_priv->crp_hg_hdl);
+		if (hg_ret != HG_SUCCESS) {
+			RPC_ERROR(rpc_priv, "HG_Release_input_buf failed, hg_ret: " DF_HG_RC "\n",
+				  DP_HG_RC(hg_ret));
+			/* Fall through */
+		}
+	}
+
+out:
 	return rc;
 }
 

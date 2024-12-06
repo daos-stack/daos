@@ -5,6 +5,7 @@ from SCons.Script import Configure, Exit, GetOption
 FRAME_SIZE_MAX = 4096
 DESIRED_FLAGS = ['-fstack-usage',
                  '-Wno-sign-compare',
+                 '-Wno-missing-attributes',
                  '-Wno-unused-parameter',
                  '-Wno-missing-field-initializers',
                  '-Wno-implicit-fallthrough',

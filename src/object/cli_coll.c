@@ -178,6 +178,10 @@ obj_coll_oper_args_init(struct coll_oper_args *coa, struct dc_object *obj, bool 
 		if (coa->coa_sparse == 0)
 			coa->coa_dct_cap = obj_ranks;
 	}
+
+	/* Save obj->cob_min_rank for verification during subsequent obj_coll_prep_one(). */
+	coa->coa_min_rank = obj->cob_min_rank;
+
 	D_RWLOCK_UNLOCK(&obj->cob_lock);
 
 	if (coa->coa_sparse) {
@@ -208,7 +212,6 @@ obj_coll_oper_args_init(struct coll_oper_args *coa, struct dc_object *obj, bool 
 		coa->coa_dct_nr = -1;
 	}
 
-	coa->coa_max_dct_sz = 0;
 	coa->coa_max_shard_nr = 0;
 	coa->coa_max_bitmap_sz = 0;
 	coa->coa_target_nr = 0;
@@ -236,17 +239,55 @@ obj_coll_oper_args_fini(struct coll_oper_args *coa)
 	coa->coa_dct_nr = 0;
 }
 
+static void
+obj_coll_collapse_one(struct coll_oper_args *coa, struct daos_coll_target *dct,
+		      uint32_t *size, bool copy)
+{
+	struct daos_coll_shard	*dcs;
+	uint32_t		 dct_size;
+	int			 i;
+
+	/* The size may be over estimated, no matter. */
+	dct_size = sizeof(*dct) + dct->dct_bitmap_sz +
+		   sizeof(dct->dct_shards[0]) * (dct->dct_max_shard + 1);
+
+	for (i = 0; i <= dct->dct_max_shard; i++) {
+		dcs = &dct->dct_shards[i];
+		if (dcs->dcs_nr > 1)
+			dct_size += sizeof(dcs->dcs_buf[0]) * dcs->dcs_nr;
+	}
+
+	if (coa->coa_for_modify)
+		dct_size += sizeof(dct->dct_tgt_ids[0]) * dct->dct_tgt_nr;
+
+	if (coa->coa_max_dct_sz < dct_size)
+		coa->coa_max_dct_sz = dct_size;
+
+	if (copy)
+		memcpy(&coa->coa_dcts[coa->coa_dct_nr], dct, sizeof(*dct));
+
+	coa->coa_dct_nr++;
+	*size += dct_size;
+}
+
+struct obj_coll_tree_args {
+	struct coll_oper_args	*coa;
+	uint32_t		*size;
+};
+
 static int
 obj_coll_tree_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg)
 {
-	struct coll_oper_args	*coa = arg;
-	struct daos_coll_target	*dct = val->iov_buf;
+	struct obj_coll_tree_args	*octa = arg;
+	struct coll_oper_args		*coa = octa->coa;
+	struct daos_coll_target		*dct = val->iov_buf;
 
 	D_ASSERTF(coa->coa_dct_nr < coa->coa_dct_cap,
 		  "Too short pre-allcoated dct_array: %u vs %u\n",
 		  coa->coa_dct_nr, coa->coa_dct_cap);
+	D_ASSERT(dct->dct_bitmap != NULL);
 
-	memcpy(&coa->coa_dcts[coa->coa_dct_nr++], dct, sizeof(*dct));
+	obj_coll_collapse_one(coa, dct, octa->size, true);
 
 	/* The following members have been migrated into coa->coa_dcts. */
 	dct->dct_bitmap = NULL;
@@ -259,6 +300,7 @@ obj_coll_tree_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg)
 static int
 obj_coll_collapse_tree(struct coll_oper_args *coa, uint32_t *size)
 {
+	struct obj_coll_tree_args	 octa;
 	struct coll_sparse_targets	*tree = coa->coa_tree;
 	int				 rc = 0;
 
@@ -270,7 +312,14 @@ obj_coll_collapse_tree(struct coll_oper_args *coa, uint32_t *size)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	coa->coa_sparse = 0;
-	rc = dbtree_iterate(tree->cst_tree_hdl, DAOS_INTENT_DEFAULT, false, obj_coll_tree_cb, coa);
+	coa->coa_raw_sparse = 1;
+	coa->coa_dct_nr = 0;
+	coa->coa_max_dct_sz = 0;
+
+	octa.coa = coa;
+	octa.size = size;
+	rc = dbtree_iterate(tree->cst_tree_hdl, DAOS_INTENT_DEFAULT, false,
+			    obj_coll_tree_cb, &octa);
 	if (rc == 0)
 		D_ASSERTF(coa->coa_dct_nr == coa->coa_dct_cap,
 			  "Something is wrong when prepare coll target array: %u vs %u\n",
@@ -287,36 +336,13 @@ static int
 obj_coll_collapse_array(struct coll_oper_args *coa, uint32_t *size)
 {
 	struct daos_coll_target	*dct;
-	struct daos_coll_shard	*dcs;
-	uint32_t		 dct_size;
 	int			 i;
-	int			 j;
 
-	for (i = 0, *size = 0, coa->coa_dct_nr = 0; i < coa->coa_dct_cap; i++) {
+	for (i = 0, *size = 0, coa->coa_dct_nr = 0, coa->coa_max_dct_sz = 0;
+	     i < coa->coa_dct_cap; i++) {
 		dct = &coa->coa_dcts[i];
-		if (dct->dct_bitmap != NULL) {
-			/* The size may be over estimated, no matter. */
-			dct_size = sizeof(*dct) + dct->dct_bitmap_sz +
-				   sizeof(dct->dct_shards[0]) * (dct->dct_max_shard + 1);
-
-			for (j = 0; j <= dct->dct_max_shard; j++) {
-				dcs = &dct->dct_shards[j];
-				if (dcs->dcs_nr > 1)
-					dct_size += sizeof(dcs->dcs_buf[0]) * dcs->dcs_nr;
-			}
-
-			if (coa->coa_for_modify)
-				dct_size += sizeof(dct->dct_tgt_ids[0]) * dct->dct_tgt_nr;
-
-			if (coa->coa_max_dct_sz < dct_size)
-				coa->coa_max_dct_sz = dct_size;
-
-			if (coa->coa_dct_nr < i)
-				memcpy(&coa->coa_dcts[coa->coa_dct_nr], dct, sizeof(*dct));
-
-			coa->coa_dct_nr++;
-			*size += dct_size;
-		}
+		if (dct->dct_bitmap != NULL)
+			obj_coll_collapse_one(coa, dct, size, coa->coa_dct_nr < i);
 	}
 
 	/* Reset the other dct slots to avoid double free during cleanup. */
@@ -373,8 +399,9 @@ obj_coll_prep_one(struct coll_oper_args *coa, struct dc_object *obj,
 
 	D_RWLOCK_RDLOCK(&obj->cob_lock);
 
-	D_ASSERTF(shard->do_target_rank <= obj->cob_max_rank,
-		  "Unexpected shard with rank %u > %u\n", shard->do_target_rank, obj->cob_max_rank);
+	D_ASSERTF(coa->coa_min_rank == obj->cob_min_rank,
+		  "Object "DF_OID" layout has been changed unexpectedly %u => %u, idx %u, ver %u\n",
+		  DP_OID(obj->cob_md.omd_id), coa->coa_min_rank, obj->cob_min_rank, idx, map_ver);
 	D_ASSERTF(shard->do_target_rank >= obj->cob_min_rank,
 		  "Unexpected shard with rank %u < %u\n", shard->do_target_rank, obj->cob_min_rank);
 
@@ -669,7 +696,6 @@ dc_obj_coll_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epo
 	uint32_t			 tgt_size = 0;
 	uint32_t			 mbs_max_size;
 	uint32_t			 inline_size;
-	uint32_t			 flags = ORF_LEADER;
 	uint32_t			 leader = -1;
 	uint32_t			 len;
 	int				 rc;
@@ -746,6 +772,12 @@ gen_mbs:
 		memcpy(dct, &tmp_tgt, sizeof(tmp_tgt));
 	}
 
+	/* 'shard' is on the leader target that is must be the coa->coa_dcts[0]. */
+	D_ASSERTF(shard->do_target_rank == coa->coa_dcts[0].dct_rank,
+		  "Object "DF_OID" target array corrupted: rank %u vs %ur, nr %u\n",
+		  DP_OID(obj->cob_md.omd_id), shard->do_target_rank,
+		  coa->coa_dcts[0].dct_rank, coa->coa_dct_nr);
+
 	rc = dc_obj_coll_punch_mbs(coa, obj, shard->do_target_id, &mbs);
 	if (rc < 0)
 		goto out;
@@ -767,12 +799,14 @@ gen_mbs:
 	if (rc != 0)
 		goto out;
 
+	auxi->flags = ORF_LEADER;
 	if (auxi->io_retry) {
-		flags |= ORF_RESEND;
+		auxi->flags |= ORF_RESEND;
 		/* Reset @enqueue_id if resend to new leader. */
 		if (spa->pa_auxi.target != shard->do_target_id)
 			spa->pa_auxi.enqueue_id = 0;
 	} else {
+		auxi->flags &= ~ORF_RESEND;
 		spa->pa_auxi.obj_auxi = auxi;
 		daos_dti_gen(&spa->pa_dti, false);
 	}
@@ -781,14 +815,15 @@ gen_mbs:
 	spa->pa_auxi.shard = shard->do_shard_idx;
 
 	if (obj_is_ec(obj))
-		flags |= ORF_EC;
+		auxi->flags |= ORF_EC;
 
 	mbs_max_size = sizeof(*mbs) + mbs->dm_data_size +
 		       sizeof(coa->coa_targets[0]) * coa->coa_max_shard_nr + coa->coa_max_bitmap_sz;
 
 	return dc_obj_shard_coll_punch(shard, spa, mbs, mbs_max_size, cpca.cpca_bulks, tgt_size,
 				       coa->coa_dcts, coa->coa_dct_nr, coa->coa_max_dct_sz, epoch,
-				       args->flags, flags, map_ver, &auxi->map_ver_reply, task);
+				       args->flags, auxi->flags, map_ver,
+				       &auxi->map_ver_reply, task);
 
 out:
 	if (rc > 0)
@@ -838,7 +873,7 @@ queue_coll_query_task(tse_task_t *api_task, struct obj_auxi_args *obj_auxi, stru
 			   0, 0, ocdc);
 
 	for (i = 0; i < ocdc->grp_nr; i++) {
-		obj_coll_disp_dest(ocdc, coa->coa_dcts, &tgt_ep);
+		obj_coll_disp_dest(ocdc, coa->coa_dcts, &tgt_ep, obj->cob_md.omd_id);
 
 		tmp = coa->coa_dcts[ocdc->cur_pos].dct_shards[tgt_ep.ep_tag].dcs_idx;
 		rc = queue_shard_query_key_task(api_task, obj_auxi, epoch, tmp, map_ver,
