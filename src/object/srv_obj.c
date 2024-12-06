@@ -4480,8 +4480,6 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 	struct dcs_iod_csums   **pcsums                           = NULL;
 	uint64_t               **poffs                            = NULL;
 	struct dcs_csum_info    *pcsum_info                       = NULL;
-	int                      rma                              = 0;
-	int                      rma_idx                          = 0;
 	int                      rc                               = 0;
 	int                      i;
 	uint64_t                 update_flags;
@@ -4672,7 +4670,6 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 				goto out;
 			}
 
-			rma++;
 		} else if (dcu->dcu_sgls != NULL) {
 			/* no akey skip for non-bulk case (only with one data target) */
 			D_ASSERTF(piod_nrs[i] == dcsr->dcsr_nr,
@@ -4694,7 +4691,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 	}
 
 	/* P3: bulk data transafer. */
-	for (i = 0; i < dcde->dcde_write_cnt && rma_idx < rma; i++) {
+	for (i = 0; i < dcde->dcde_write_cnt; i++) {
 		int	*status;
 
 		if (!bulks[i].inited)
@@ -4710,7 +4707,6 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 
 		ABT_eventual_free(&bulks[i].eventual);
 		bio_iod_flush(biods[i]);
-		rma_idx++;
 
 		if (rc != 0) {
 			D_ERROR(DF_DTI" ABT_eventual_wait failed: "DF_RC"\n",
@@ -4844,14 +4840,14 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 out:
 	if (rc != 0) {
 		if (bulks != NULL) {
-			for (i = 0;
-			     i < dcde->dcde_write_cnt && rma_idx < rma; i++) {
+			for (i = 0; i < dcde->dcde_write_cnt; i++) {
 				if (!bulks[i].inited)
 					continue;
 
-				ABT_eventual_wait(bulks[i].eventual, NULL);
-				ABT_eventual_free(&bulks[i].eventual);
-				rma_idx++;
+				if (bulks[i].eventual != ABT_EVENTUAL_NULL) {
+					ABT_eventual_wait(bulks[i].eventual, NULL);
+					ABT_eventual_free(&bulks[i].eventual);
+				}
 			}
 		}
 
