@@ -408,8 +408,17 @@ pool_child_recreate(struct ds_pool_child *child)
 	struct dss_module_info	*info = dss_get_module_info();
 	struct smd_pool_info	*pool_info;
 	struct stat		 lstat;
+	uint32_t		 vos_df_version;
 	char			*path;
 	int			 rc;
+
+	vos_df_version = ds_pool_get_vos_df_version(child->spc_pool->sp_global_version);
+	if (vos_df_version == 0) {
+		rc = -DER_NO_PERM;
+		DL_ERROR(rc, DF_UUID ": pool global version %u not supported",
+			 DP_UUID(child->spc_uuid), child->spc_pool->sp_global_version);
+		return rc;
+	}
 
 	rc = ds_mgmt_tgt_file(child->spc_uuid, VOS_FILE, &info->dmi_tgt_id, &path);
 	if (rc != 0)
@@ -450,7 +459,7 @@ pool_child_recreate(struct ds_pool_child *child)
 	rc = vos_pool_create(path, child->spc_uuid, 0 /* scm_sz */,
 			     pool_info->spi_blob_sz[SMD_DEV_TYPE_DATA],
 			     pool_info->spi_blob_sz[SMD_DEV_TYPE_META],
-			     0 /* flags */, 0 /* version */, NULL);
+			     0 /* flags */, vos_df_version, NULL);
 	if (rc)
 		DL_ERROR(rc, DF_UUID": Create VOS pool failed.", DP_UUID(child->spc_uuid));
 
