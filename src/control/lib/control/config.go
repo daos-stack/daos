@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -29,6 +29,7 @@ type Config struct {
 	ControlPort     int                       `yaml:"port"`
 	HostList        []string                  `yaml:"hostlist"`
 	TransportConfig *security.TransportConfig `yaml:"transport_config"`
+	TelemetryConfig *security.TelemetryConfig `yaml:"telemetry_config"`
 	Path            string                    `yaml:"-"`
 }
 
@@ -41,6 +42,7 @@ func DefaultConfig() *Config {
 		ControlPort:     build.DefaultControlPort,
 		HostList:        []string{localServer},
 		TransportConfig: security.DefaultClientTransportConfig(),
+		TelemetryConfig: security.DefaultClientTelemetryConfig(),
 	}
 }
 

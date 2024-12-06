@@ -5,7 +5,8 @@
 """
 import os
 
-from command_utils_base import BasicParameter, LogParameter, TransportCredentials, YamlParameters
+from command_utils_base import (BasicParameter, LogParameter, TelemetryConfig,
+                                TransportCredentials, YamlParameters)
 
 
 class DaosAgentTransportCredentials(TransportCredentials):
@@ -30,6 +31,29 @@ class DaosAgentTransportCredentials(TransportCredentials):
             DaosAgentTransportCredentials: a new DaosAgentTransportCredentials object
         """
         return DaosAgentTransportCredentials(self._log_dir)
+
+
+class DaosAgentTelemetryConfig(TelemetryConfig):
+    # pylint: disable=too-few-public-methods
+    """Telemetry credentials listing certificates for secure communication."""
+
+    def __init__(self, log_dir=os.path.join(os.sep, "tmp")):
+        """Initialize a TelemetryConfig object."""
+        super().__init__("/run/agent_config/telemetry_config/*", None, log_dir)
+
+        self.telemetry_port = BasicParameter(None, 9192)
+        self.telemetry_enabled = BasicParameter(None)
+        self.telemetry_retain = BasicParameter(None)
+        self.https_cert = LogParameter(self._log_dir, None, "telemetry.crt")
+        self.https_key = LogParameter(self._log_dir, None, "telemetry.key")
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            DaosServerTelemetryConfig: a new DaosServerTelemetryConfig object
+        """
+        return DaosAgentTelemetryConfig(self._log_dir)
 
 
 class DaosAgentYamlParameters(YamlParameters):
@@ -78,9 +102,6 @@ class DaosAgentYamlParameters(YamlParameters):
         self.exclude_fabric_ifaces = BasicParameter(None)
         self.cache_expiration = BasicParameter(None)
         self.disable_caching = BasicParameter(None)
-        self.telemetry_port = BasicParameter(None)
-        self.telemetry_enabled = BasicParameter(None)
-        self.telemetry_retain = BasicParameter(None)
 
     def update_log_file(self, name):
         """Update the log file name for the daos agent.
