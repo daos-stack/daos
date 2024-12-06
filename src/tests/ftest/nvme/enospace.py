@@ -485,9 +485,11 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             self.delete_all_containers()
             self.log_step(f"Wait for aggregation to complete - enospace_time_with_fg loop {_loop}")
             agg_did_complete = self.pool.wait_for_aggregation(
-                verify_scm=lambda current: current <= initial_free_scm * 1.05,
-                verify_nvme=lambda current: current <= initial_free_nvme * 1.05,
-                retries=4, interval=30)
+                # verify_scm=lambda current: current <= initial_free_scm * 1.05,
+                # verify_nvme=lambda current: current <= initial_free_nvme * 1.05,
+                verify_scm=lambda current: current == initial_free_scm,
+                verify_nvme=lambda current: current == initial_free_nvme,
+                retries=8, interval=30)
             if not agg_did_complete:
                 self.fail("Pool space not reclaimed after deleting all containers")
 
