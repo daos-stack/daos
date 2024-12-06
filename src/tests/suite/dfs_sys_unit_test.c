@@ -848,6 +848,10 @@ dfs_sys_test_mkdir(void **state)
 	rc = dfs_sys_mkdir(dfs_sys_mt, file, S_IWUSR | S_IRUSR, 0);
 	assert_int_equal(rc, EEXIST);
 
+	rc = dfs_sys_remove(dfs_sys_mt, file, true, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_sys_remove(dfs_sys_mt, child, true, NULL);
+	assert_int_equal(rc, 0);
 	rc = dfs_sys_remove(dfs_sys_mt, parent, true, NULL);
 	assert_int_equal(rc, 0);
 }
@@ -879,8 +883,12 @@ dfs_sys_test_mkdir_p(void **state)
 
 	/* this shouldn't work */
 	rc = dfs_sys_mkdir_p(dfs_sys_mt, file, S_IWUSR | S_IRUSR, 0);
-	assert_int_equal(rc, EEXIST);
+	assert_int_equal(rc, ENOTDIR);
 
+	rc = dfs_sys_remove(dfs_sys_mt, file, true, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_sys_remove(dfs_sys_mt, child, true, NULL);
+	assert_int_equal(rc, 0);
 	rc = dfs_sys_remove(dfs_sys_mt, parent, true, NULL);
 	assert_int_equal(rc, 0);
 }
