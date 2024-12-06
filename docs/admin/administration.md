@@ -1029,10 +1029,10 @@ formatted again by running `dmg storage format`.
 To add a new server to an existing DAOS system, one should install:
 
 - A copy of the relevant certificates from an existing server. All servers must
-  share the same set of certificate in order to provide services.
+  share the same set of certificates in order to provide services.
 - A copy of the server yaml file from an existing server (DAOS server configurations
-  should be homegenous) -- the `mgmt_svc_replicas` entry is used by the new server in
-  order to know which servers will handle its SystemJoin request.
+  should be homogeneous) -- the `mgmt_svc_replicas` entry is used by the new server in
+  order to know which servers should handle its SystemJoin request.
 
 The daos\_control.yml file should also be updated to include the new DAOS server.
 

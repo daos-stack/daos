@@ -1365,10 +1365,10 @@ information, please refer to the [DAOS build documentation][6].
     DAOS Control Servers will need to be restarted on all hosts after updates to the server
     configuration file.
 
-    Pick an odd number of hosts in the system and set `mgmt_svc_replicas` to list of
-    that host's hostname or IP address (don't need to specify port).
+    Pick an odd number (3-7) of hosts in the system and set the `mgmt_svc_replicas` list to
+    include the hostnames or IP addresses (don't need to specify port) of those hosts.
 
-    This will be the host which bootstraps the DAOS management service (MS).
+    This will be the set of servers which host the replicated DAOS management service (MS).
 
 >The support of the optional providers is not guarantee and can be removed
 >without further notification.
