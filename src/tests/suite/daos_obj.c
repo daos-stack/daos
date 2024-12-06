@@ -5367,6 +5367,64 @@ io_57(void **state)
 	reintegrate_single_pool_rank(arg, 0, false);
 }
 
+void
+io_bulk_timeout(void **state)
+{
+	daos_obj_id_t	oid;
+	test_arg_t	*arg = *state;
+	struct ioreq	 req;
+	char		*fetch_buf;
+	char		*update_buf;
+	int		size =1048576;
+
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	D_ALLOC(fetch_buf, size);
+	assert_non_null(fetch_buf);
+	D_ALLOC(update_buf, size);
+	assert_non_null(update_buf);
+	dts_buf_render(update_buf, size);
+
+	print_message("timeout bulk\n");
+	if (arg->myrank == 0)
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				 DAOS_OBJ_FAIL_BULK_TIMEOUT | DAOS_FAIL_ONCE,
+				 0, NULL);
+
+	/** Insert */
+	insert_single("dkey", "akey", 0, update_buf, size, DAOS_TX_NONE, &req);
+
+	/** Lookup */
+	memset(fetch_buf, 0, size);
+	lookup_single("dkey", "akey", 0, fetch_buf, size, DAOS_TX_NONE, &req);
+
+	/** Verify data consistency */
+	assert_int_equal(req.iod[0].iod_size, size);
+	assert_memory_equal(update_buf, fetch_buf, size);
+
+	print_message("abort bulk\n");
+	if (arg->myrank == 0)
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				 DAOS_OBJ_FAIL_BULK_ABORT | DAOS_FAIL_ONCE,
+				 0, NULL);
+
+	/** Insert */
+	insert_single("dkey1", "akey", 0, update_buf, size, DAOS_TX_NONE, &req);
+
+	/** Lookup */
+	memset(fetch_buf, 0, size);
+	lookup_single("dkey1", "akey", 0, fetch_buf, size, DAOS_TX_NONE, &req);
+
+	/** Verify data consistency */
+	assert_int_equal(req.iod[0].iod_size, size);
+	assert_memory_equal(update_buf, fetch_buf, size);
+
+	D_FREE(update_buf);
+	D_FREE(fetch_buf);
+	ioreq_fini(&req);
+}
+
 static const struct CMUnitTest io_tests[] = {
 	{ "IO1: simple update/fetch/verify",
 	  io_simple, async_disable, test_case_teardown},
@@ -5481,6 +5539,8 @@ static const struct CMUnitTest io_tests[] = {
 	  io_56, async_disable, test_case_teardown},
 	{ "IO57: collective object query with rank_0 excluded",
 	  io_57, rebuild_sub_rf1_setup, test_teardown},
+	{ "IO58: IO bulk timeout",
+	  io_bulk_timeout, async_disable, test_case_teardown},
 };
 
 int
