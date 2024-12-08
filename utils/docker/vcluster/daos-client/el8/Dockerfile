@@ -22,6 +22,12 @@ ARG	DAOS_DOCKER_IMAGE_TAG=""
 FROM	"${DAOS_DOCKER_IMAGE_NSP}/daos-base-${LINUX_DISTRO}:$DAOS_DOCKER_IMAGE_TAG"
 LABEL	maintainer="daos@daos.groups.io"
 
+# Set environment variables for proxy
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+
+
 # Install DAOS client package
 ARG	DAOS_VERSION=""
 RUN	for it in DAOS_VERSION ; do                                                                \
