@@ -3292,7 +3292,7 @@ const ProtobufCMessageDescriptor mgmt__pool_rebuild_status__descriptor =
   (ProtobufCMessageInit) mgmt__pool_rebuild_status__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_query_resp__field_descriptors[19] =
+static const ProtobufCFieldDescriptor mgmt__pool_query_resp__field_descriptors[20] =
 {
   {
     "status",
@@ -3522,6 +3522,18 @@ static const ProtobufCFieldDescriptor mgmt__pool_query_resp__field_descriptors[1
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "suspect_ranks",
+    21,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PoolQueryResp, suspect_ranks),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__pool_query_resp__field_indices_by_name[] = {
   4,   /* field[4] = active_targets */
@@ -3535,6 +3547,7 @@ static const unsigned mgmt__pool_query_resp__field_indices_by_name[] = {
   6,   /* field[6] = rebuild */
   15,   /* field[15] = state */
   0,   /* field[0] = status */
+  19,   /* field[19] = suspect_ranks */
   16,   /* field[16] = svc_ldr */
   17,   /* field[17] = svc_reps */
   7,   /* field[7] = tier_stats */
@@ -3548,7 +3561,7 @@ static const ProtobufCIntRange mgmt__pool_query_resp__number_ranges[2 + 1] =
 {
   { 1, 0 },
   { 10, 8 },
-  { 0, 19 }
+  { 0, 20 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_query_resp__descriptor =
 {
@@ -3558,7 +3571,7 @@ const ProtobufCMessageDescriptor mgmt__pool_query_resp__descriptor =
   "Mgmt__PoolQueryResp",
   "mgmt",
   sizeof(Mgmt__PoolQueryResp),
-  19,
+  20,
   mgmt__pool_query_resp__field_descriptors,
   mgmt__pool_query_resp__field_indices_by_name,
   2,  mgmt__pool_query_resp__number_ranges,
