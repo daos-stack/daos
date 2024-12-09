@@ -16,6 +16,8 @@ server_config:
           class: ram
           scm_mount: /mnt/daos
   system_ram_reserved: 1
+  telemetry_config:
+    allow_insecure: false
 pool:
   scm_size: 2G
 container:
@@ -23,3 +25,6 @@ container:
 test:
   container_qty: 5
   open_close_qty: 3
+dmg:
+  telemetry_config:
+    allow_insecure: false
