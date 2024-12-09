@@ -15,16 +15,20 @@
 #name: daos_server
 #
 #
-## Access points
+## MS replicas
 ## Immutable after running "dmg storage format".
 #
-## To operate, DAOS will need a quorum of MS replica nodes to be available.
-## Must have the same value for all servers in a system.
+## To operate, DAOS requires a quorum of Management Service (MS) replica
+## hosts to be available. All servers (replica or otherwise) must have the
+## same list of replicas in order for the system to operate correctly. Choose
+## 3-5 hosts to serve as replicas, preferably not co-located within the same
+## fault domains.
+##
 ## Hosts can be specified with or without port. The default port that is set
 ## up in port: will be used if a port is not specified here.
 #
 ## default: hostname of this node
-#mgmt_svc_replicas: ['hostname1']
+#mgmt_svc_replicas: ['hostname1', 'hostname2', 'hostname3']
 #
 #
 ## Control plane metadata
