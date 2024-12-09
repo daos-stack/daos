@@ -389,7 +389,7 @@ migrate_pool_tls_destroy(struct migrate_pool_tls *tls)
 	D_DEBUG(DB_REBUILD, "TLS destroy for "DF_UUID" ver %d\n",
 		DP_UUID(tls->mpt_pool_uuid), tls->mpt_version);
 	if (tls->mpt_pool)
-		ds_pool_child_put(tls->mpt_pool);
+		DS_POOL_CHILD_PUT(&tls->mpt_pool);
 	if (tls->mpt_svc_list.rl_ranks)
 		D_FREE(tls->mpt_svc_list.rl_ranks);
 	if (tls->mpt_done_eventual)
@@ -484,7 +484,7 @@ migrate_pool_tls_create_one(void *data)
 		return 0;
 	}
 
-	pool_child = ds_pool_child_lookup(arg->pool_uuid);
+	DS_POOL_CHILD_LOOKUP(arg->pool_uuid, &pool_child);
 	if (pool_child == NULL) {
 		D_ASSERTF(dss_get_module_info()->dmi_xs_id == 0,
 			  "Cannot find the pool "DF_UUIDF"\n", DP_UUID(arg->pool_uuid));
@@ -542,7 +542,7 @@ migrate_pool_tls_create_one(void *data)
 	} else {
 		int tgt_id = dss_get_module_info()->dmi_tgt_id;
 
-		pool_tls->mpt_pool = ds_pool_child_lookup(arg->pool_uuid);
+		DS_POOL_CHILD_LOOKUP(arg->pool_uuid, &pool_tls->mpt_pool);
 		if (pool_tls->mpt_pool == NULL)
 			D_GOTO(out, rc = -DER_NO_HDL);
 		pool_tls->mpt_inflight_max_size = MIGRATE_MAX_SIZE / dss_tgt_nr;
@@ -569,7 +569,7 @@ out:
 		migrate_pool_tls_destroy(pool_tls);
 
 	if (pool_child != NULL)
-		ds_pool_child_put(pool_child);
+		DS_POOL_CHILD_PUT(&pool_child);
 
 	return rc;
 }
@@ -3490,7 +3490,7 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 	D_DEBUG(DB_REBUILD, "iter cont "DF_UUID"/%"PRIx64" %"PRIx64" start\n",
 		DP_UUID(cont_uuid), ih.cookie, root->root_hdl.cookie);
 
-	rc = ds_pool_lookup(tls->mpt_pool_uuid, &dp);
+	rc = DS_POOL_LOOKUP(tls->mpt_pool_uuid, &dp);
 	if (rc) {
 		D_ERROR(DF_UUID" ds_pool_lookup failed: "DF_RC"\n",
 			DP_UUID(tls->mpt_pool_uuid), DP_RC(rc));
@@ -3574,7 +3574,7 @@ out_put:
 	if (tls->mpt_status == 0 && rc < 0)
 		tls->mpt_status = rc;
 	if (dp != NULL)
-		ds_pool_put(dp);
+		DS_POOL_PUT(&dp);
 	return rc;
 }
 
@@ -3806,7 +3806,7 @@ ds_obj_migrate_handler(crt_rpc_t *rpc)
 	uuid_copy(po_uuid, migrate_in->om_pool_uuid);
 	uuid_copy(po_hdl_uuid, migrate_in->om_poh_uuid);
 
-	rc = ds_pool_lookup(po_uuid, &pool);
+	rc = DS_POOL_LOOKUP(po_uuid, &pool);
 	if (rc != 0) {
 		if (rc == -DER_SHUTDOWN) {
 			D_DEBUG(DB_REBUILD, DF_UUID" pool service is stopping.\n",
@@ -3834,7 +3834,7 @@ ds_obj_migrate_handler(crt_rpc_t *rpc)
 			       migrate_in->om_tgt_idx, migrate_in->om_new_layout_ver);
 out:
 	if (pool)
-		ds_pool_put(pool);
+		DS_POOL_PUT(&pool);
 
 	migrate_out = crt_reply_get(rpc);
 	migrate_out->om_status = rc;
