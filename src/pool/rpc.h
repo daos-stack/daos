@@ -902,7 +902,7 @@ pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 	crt_opcode_t           opcode;
 	static __thread uuid_t cli_id;
 	int                    proto_ver;
-	struct pool_op_in     *in = crt_req_get(*req);
+	struct pool_op_in     *in;
 
 	proto_ver = dc_pool_proto_version ? dc_pool_proto_version : DAOS_POOL_VERSION;
 
@@ -916,7 +916,7 @@ pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 	rc = crt_req_create(crt_ctx, tgt_ep, opcode, req);
 	if (rc != 0)
 		return rc;
-
+	in = crt_req_get(*req);
 	uuid_copy(in->pi_uuid, pi_uuid);
 	if (uuid_is_null(pi_hdl))
 		uuid_clear(in->pi_hdl);
