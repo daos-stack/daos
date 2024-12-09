@@ -1431,17 +1431,27 @@ dfs_sys_mkdir_p(dfs_sys_t *dfs_sys, const char *dir_path, mode_t mode, daos_ocla
 
 		rc = dfs_open(dfs_sys->dfs, parent, tok, mode | S_IFDIR, O_RDWR | O_CREAT, cid, 0,
 			      NULL, &cur);
-		if (rc != 0)
+		if (rc != 0) {
+			/*
+			 * If this is the last entry and dfs_open returns ENOTDIR, change that err
+			 * code to EEXISTS to match what posix mkdir does.
+			 */
+			if (rc == ENOTDIR) {
+				tok = strtok_r(NULL, "/", &sptr);
+				if (tok == NULL)
+					rc = EEXIST;
+			}
 			D_GOTO(out_free, rc);
+		}
+
 		if (parent)
 			dfs_release(parent);
 		parent = cur;
 	}
 
+out_free:
 	if (parent)
 		dfs_release(parent);
-
-out_free:
 	D_FREE(_path);
 	return rc;
 }
