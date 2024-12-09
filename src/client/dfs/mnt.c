@@ -729,6 +729,9 @@ dfs_mount_int(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epoc
 		daos_obj_oid_cycle(&dfs->oid);
 	}
 
+	if (dfs_metrics_enabled())
+		dfs_metrics_init(dfs);
+
 	dfs->mounted = DFS_MOUNT;
 	*_dfs        = dfs;
 	daos_prop_free(prop);
@@ -843,6 +846,8 @@ dfs_umount(dfs_t *dfs)
 
 	daos_obj_close(dfs->root.oh, NULL);
 	daos_obj_close(dfs->super_oh, NULL);
+
+	dfs_metrics_fini(dfs);
 
 	D_FREE(dfs->prefix);
 	D_MUTEX_DESTROY(&dfs->lock);
