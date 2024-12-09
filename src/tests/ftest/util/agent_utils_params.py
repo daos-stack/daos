@@ -72,6 +72,10 @@ class DaosAgentYamlParameters(YamlParameters):
         #        Enable client telemetry for all client processes.
         #   - telemetry_retain: <str>, e.g. 5m
         #        Time to retain per-client telemetry data.
+        #   - access_points: <list>, e.g.  ["hostname1:10001"]
+        #       Hosts can be specified with or without port, default port below
+        #       assumed if not specified. Defaults to the hostname of this node
+        #       at port 10000 for local testing.
         self.runtime_dir = BasicParameter(None, default_runtime_dir)
         self.log_file = LogParameter(log_dir, None, "daos_agent.log")
         self.control_log_mask = BasicParameter(None, "debug")
@@ -81,6 +85,7 @@ class DaosAgentYamlParameters(YamlParameters):
         self.telemetry_port = BasicParameter(None)
         self.telemetry_enabled = BasicParameter(None)
         self.telemetry_retain = BasicParameter(None)
+        self.access_points = BasicParameter(None, ["localhost"])
 
     def update_log_file(self, name):
         """Update the log file name for the daos agent.

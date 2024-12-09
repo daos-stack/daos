@@ -194,7 +194,7 @@ class TestPool(TestDaosApiBase):
                 self.context when calling from a test.
             dmg_command (DmgCommand): DmgCommand used to call dmg command. This
                 value can be obtained by calling self.get_dmg_command() from a
-                test. It'll return the object with -l <Access Point host:port>
+                test. It'll return the object with -l <MS replica host:port>
                 and --insecure.
             label_generator (LabelGenerator, optional): Generates label by
                 adding number to the end of the prefix set in self.label.

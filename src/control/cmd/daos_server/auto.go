@@ -122,6 +122,8 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 	}
 	cmd.Debugf("fetched host storage info on localhost: %+v", hs)
 
+	cmd.CheckDeprecated(cmd.Logger)
+
 	req := new(control.ConfGenerateReq)
 	if err := convert.Types(cmd, req); err != nil {
 		return nil, err

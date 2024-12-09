@@ -32,11 +32,11 @@ import (
 func TestDaosServer_Auto_Commands(t *testing.T) {
 	runCmdTests(t, []cmdTest{
 		{
-			"Generate with no access point",
+			"Generate with no MS replica",
 			"config generate",
 			printCommand(t, func() *configGenCmd {
 				cmd := &configGenCmd{}
-				cmd.AccessPoints = "localhost"
+				cmd.MgmtSvcReplicas = "localhost"
 				cmd.NetClass = "infiniband"
 				return cmd
 			}()),
@@ -44,10 +44,10 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 		},
 		{
 			"Generate with defaults",
-			"config generate -a foo",
+			"config generate -r foo",
 			printCommand(t, func() *configGenCmd {
 				cmd := &configGenCmd{}
-				cmd.AccessPoints = "foo"
+				cmd.MgmtSvcReplicas = "foo"
 				cmd.NetClass = "infiniband"
 				return cmd
 			}()),
@@ -55,10 +55,10 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 		},
 		{
 			"Generate with no nvme",
-			"config generate -a foo --scm-only",
+			"config generate -r foo --scm-only",
 			printCommand(t, func() *configGenCmd {
 				cmd := &configGenCmd{}
-				cmd.AccessPoints = "foo"
+				cmd.MgmtSvcReplicas = "foo"
 				cmd.NetClass = "infiniband"
 				cmd.SCMOnly = true
 				return cmd
@@ -67,10 +67,10 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 		},
 		{
 			"Generate with storage parameters",
-			"config generate -a foo --num-engines 2",
+			"config generate -r foo --num-engines 2",
 			printCommand(t, func() *configGenCmd {
 				cmd := &configGenCmd{}
-				cmd.AccessPoints = "foo"
+				cmd.MgmtSvcReplicas = "foo"
 				cmd.NetClass = "infiniband"
 				cmd.NrEngines = 2
 				return cmd
@@ -79,10 +79,10 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 		},
 		{
 			"Generate with short option storage parameters",
-			"config generate -a foo -e 2 -s",
+			"config generate -r foo -e 2 -s",
 			printCommand(t, func() *configGenCmd {
 				cmd := &configGenCmd{}
-				cmd.AccessPoints = "foo"
+				cmd.MgmtSvcReplicas = "foo"
 				cmd.NetClass = "infiniband"
 				cmd.NrEngines = 2
 				cmd.SCMOnly = true
@@ -92,10 +92,10 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 		},
 		{
 			"Generate with ethernet network device class",
-			"config generate -a foo --net-class ethernet",
+			"config generate -r foo --net-class ethernet",
 			printCommand(t, func() *configGenCmd {
 				cmd := &configGenCmd{}
-				cmd.AccessPoints = "foo"
+				cmd.MgmtSvcReplicas = "foo"
 				cmd.NetClass = "ethernet"
 				return cmd
 			}()),
@@ -103,10 +103,10 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 		},
 		{
 			"Generate with infiniband network device class",
-			"config generate -a foo --net-class infiniband",
+			"config generate -r foo --net-class infiniband",
 			printCommand(t, func() *configGenCmd {
 				cmd := &configGenCmd{}
-				cmd.AccessPoints = "foo"
+				cmd.MgmtSvcReplicas = "foo"
 				cmd.NetClass = "infiniband"
 				return cmd
 			}()),
@@ -114,22 +114,22 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 		},
 		{
 			"Generate with deprecated network device class",
-			"config generate -a foo --net-class best-available",
+			"config generate -r foo --net-class best-available",
 			"",
 			errors.New("Invalid value"),
 		},
 		{
 			"Generate with unsupported network device class",
-			"config generate -a foo --net-class loopback",
+			"config generate -r foo --net-class loopback",
 			"",
 			errors.New("Invalid value"),
 		},
 		{
 			"Generate tmpfs non-MD-on-SSD config",
-			"config generate -a foo --use-tmpfs-scm",
+			"config generate -r foo --use-tmpfs-scm",
 			printCommand(t, func() *configGenCmd {
 				cmd := &configGenCmd{}
-				cmd.AccessPoints = "foo"
+				cmd.MgmtSvcReplicas = "foo"
 				cmd.NetClass = "infiniband"
 				cmd.UseTmpfsSCM = true
 				return cmd
@@ -138,10 +138,10 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 		},
 		{
 			"Generate MD-on-SSD config",
-			"config generate -a foo --use-tmpfs-scm --control-metadata-path /opt/daos_md",
+			"config generate -r foo --use-tmpfs-scm --control-metadata-path /opt/daos_md",
 			printCommand(t, func() *configGenCmd {
 				cmd := &configGenCmd{}
-				cmd.AccessPoints = "foo"
+				cmd.MgmtSvcReplicas = "foo"
 				cmd.NetClass = "infiniband"
 				cmd.UseTmpfsSCM = true
 				cmd.ExtMetadataPath = "/opt/daos_md"
@@ -169,7 +169,7 @@ func TestDaosServer_Auto_confGenCmd_Convert(t *testing.T) {
 	cmd.NrEngines = 1
 	cmd.NetProvider = "ofi+tcp"
 	cmd.SCMOnly = true
-	cmd.AccessPoints = "foo,bar"
+	cmd.MgmtSvcReplicas = "foo,bar"
 	cmd.NetClass = "infiniband"
 	cmd.UseTmpfsSCM = true
 	cmd.ExtMetadataPath = "/opt/daos_md"
@@ -184,7 +184,7 @@ func TestDaosServer_Auto_confGenCmd_Convert(t *testing.T) {
 		NrEngines:       1,
 		NetProvider:     "ofi+tcp",
 		SCMOnly:         true,
-		AccessPoints:    []string{"foo", "bar"},
+		MgmtSvcReplicas: []string{"foo", "bar"},
 		NetClass:        hardware.Infiniband,
 		UseTmpfsSCM:     true,
 		ExtMetadataPath: "/opt/daos_md",
@@ -273,7 +273,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		accessPoints    string
+		msReplicas      string
 		nrEngines       int
 		scmOnly         bool
 		netClass        string
@@ -338,16 +338,16 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			hf: defHostFabric,
 			hs: defHostStorage,
 			expCfg: control.MockServerCfg("ofi+psm2", exmplEngineCfgs).
-				WithAccessPoints("localhost:10001").
+				WithMgmtSvcReplicas("localhost:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
 		},
-		"access points set": {
-			accessPoints: "moon-111,mars-115,jupiter-119",
-			hf:           defHostFabric,
-			hs:           defHostStorage,
+		"MS replicas set": {
+			msReplicas: "moon-111,mars-115,jupiter-119",
+			hf:         defHostFabric,
+			hs:         defHostStorage,
 			expCfg: control.MockServerCfg("ofi+psm2", exmplEngineCfgs).
-				WithAccessPoints("localhost:10001").
-				WithAccessPoints("moon-111:10001", "mars-115:10001", "jupiter-119:10001").
+				WithMgmtSvcReplicas("localhost:10001").
+				WithMgmtSvcReplicas("moon-111:10001", "mars-115:10001", "jupiter-119:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
 		},
 		"unmet min nr ssds": {
@@ -391,7 +391,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				},
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", tmpfsEngineCfgs).
-				WithAccessPoints("localhost:10001").
+				WithMgmtSvcReplicas("localhost:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
 		},
 		"dcpm scm; control_metadata path set": {
@@ -418,7 +418,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				},
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", mdOnSSDEngineCfgs).
-				WithAccessPoints("localhost:10001").
+				WithMgmtSvcReplicas("localhost:10001").
 				WithControlLogFile("/tmp/daos_server.log").
 				WithControlMetadata(controlMetadata),
 		},
@@ -510,7 +510,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 							WithBdevDeviceList("0000:97:00.5", "0000:e2:00.5"),
 					),
 			}).
-				WithAccessPoints("localhost:10001").
+				WithMgmtSvcReplicas("localhost:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
 		},
 	} {
@@ -522,12 +522,12 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			if tc.netClass == "" {
 				tc.netClass = "infiniband"
 			}
-			if tc.accessPoints == "" {
-				tc.accessPoints = "localhost"
+			if tc.msReplicas == "" {
+				tc.msReplicas = "localhost"
 			}
 
 			cmd := &configGenCmd{}
-			cmd.AccessPoints = tc.accessPoints
+			cmd.MgmtSvcReplicas = tc.msReplicas
 			cmd.NrEngines = tc.nrEngines
 			cmd.SCMOnly = tc.scmOnly
 			cmd.NetClass = tc.netClass
@@ -573,7 +573,10 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					}
 					return x.Equals(y)
 				}),
-				cmpopts.IgnoreUnexported(security.CertificateConfig{}),
+				cmpopts.IgnoreUnexported(
+					security.CertificateConfig{},
+					config.Server{},
+				),
 			}
 
 			if diff := cmp.Diff(tc.expCfg, gotCfg, cmpOpts...); diff != "" {
