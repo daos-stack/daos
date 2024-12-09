@@ -277,6 +277,8 @@ extern unsigned _On_memcheck;
 
 #define VALGRIND_DO_DESTROY_MEMPOOL(heap) { (void) (heap); }
 
+#define VALGRIND_DO_DESTROY_MEMPOOL_COND(heap) { (void) (heap); }
+
 #define VALGRIND_DO_MEMPOOL_ALLOC(heap, addr, size)\
 	do { (void) (heap); (void) (addr); (void) (size); } while (0)
 
