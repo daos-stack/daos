@@ -935,6 +935,13 @@ vos_cont_get_globla_stable_epoch(daos_handle_t coh)
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
 
+	if (cont->vc_pool->vp_pool_df->pd_version < VOS_POOL_DF_2_8) {
+		D_DEBUG(DB_MD, DF_CONT" return 0 stable epoch for lower pool version %d\n",
+			DP_CONT(cont->vc_pool->vp_pool_df->pd_id, cont->vc_id),
+			cont->vc_pool->vp_pool_df->pd_version);
+		return 0;
+	}
+
 	cont_ext = umem_off2ptr(vos_cont2umm(cont), cont->vc_cont_df->cd_ext);
 	if (cont_ext != NULL)
 		epoch = cont_ext->ced_global_stable_epoch;
