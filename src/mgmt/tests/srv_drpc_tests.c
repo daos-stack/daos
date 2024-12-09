@@ -1329,8 +1329,6 @@ init_test_pool_info(daos_pool_info_t *pool_info)
 	pool_info->pi_space.ps_free_max[DAOS_MEDIA_NVME] = 8;
 	pool_info->pi_space.ps_free_min[DAOS_MEDIA_NVME] = 9;
 	pool_info->pi_space.ps_free_mean[DAOS_MEDIA_NVME] = 10;
-
-	pool_info->pi_space.ps_space.s_total_mem = 11;
 }
 
 static void
@@ -1396,7 +1394,7 @@ expect_query_resp_with_info(daos_pool_info_t *exp_info,
 	expect_storage_usage(&exp_info->pi_space, DAOS_MEDIA_NVME,
 			     pq_resp->tier_stats[DAOS_MEDIA_NVME]);
 
-	assert_int_equal(pq_resp->mem_file_bytes, exp_info->pi_space.ps_space.s_total_mem);
+	assert_int_equal(pq_resp->mem_file_bytes, ds_mgmt_pool_query_mem_bytes);
 
 	assert_non_null(pq_resp->rebuild);
 	expect_rebuild_status(&exp_info->pi_rebuild_st, exp_state,
@@ -1417,6 +1415,7 @@ test_drpc_pool_query_success(void **state)
 	init_test_pool_info(&exp_info);
 	init_test_rebuild_status(&exp_info.pi_rebuild_st);
 	ds_mgmt_pool_query_info_out = exp_info;
+	ds_mgmt_pool_query_mem_bytes = 11;
 
 	setup_pool_query_drpc_call(&call, TEST_UUID, flags);
 
@@ -1452,6 +1451,7 @@ test_drpc_pool_query_success_rebuild_busy(void **state)
 	init_test_rebuild_status(&exp_info.pi_rebuild_st);
 	exp_info.pi_rebuild_st.rs_version = 1;
 	ds_mgmt_pool_query_info_out = exp_info;
+	ds_mgmt_pool_query_mem_bytes = 11;
 
 	setup_pool_query_drpc_call(&call, TEST_UUID, 0);
 
@@ -1477,6 +1477,7 @@ test_drpc_pool_query_success_rebuild_done(void **state)
 	exp_info.pi_rebuild_st.rs_version = 1;
 	exp_info.pi_rebuild_st.rs_state = DRS_COMPLETED;
 	ds_mgmt_pool_query_info_out = exp_info;
+	ds_mgmt_pool_query_mem_bytes = 11;
 
 	setup_pool_query_drpc_call(&call, TEST_UUID, 0);
 
@@ -1502,6 +1503,7 @@ test_drpc_pool_query_success_rebuild_err(void **state)
 	exp_info.pi_rebuild_st.rs_errno = -DER_MISC;
 
 	ds_mgmt_pool_query_info_out = exp_info;
+	ds_mgmt_pool_query_mem_bytes = 11;
 	/*
 	 * rebuild results returned to us shouldn't include the number of
 	 * objects/records if there's an error.
@@ -1587,7 +1589,8 @@ expect_drpc_pool_query_targets_resp_with_error(Drpc__Response *resp, int expecte
 static void
 expect_drpc_pool_query_targets_resp_with_targets(Drpc__Response *resp,
 						 daos_target_info_t *infos,
-						 uint32_t exp_infos_len)
+						 uint32_t exp_infos_len,
+						 uint64_t mem_file_bytes)
 {
 	Mgmt__PoolQueryTargetResp	*pqt_resp = NULL;
 	uint32_t			 i;
@@ -1608,7 +1611,7 @@ expect_drpc_pool_query_targets_resp_with_targets(Drpc__Response *resp,
 		assert_int_equal(pqt_resp->infos[i]->type, infos[i].ta_type);
 		assert_int_equal(pqt_resp->infos[i]->state, infos[i].ta_state);
 		assert_int_equal(pqt_resp->infos[i]->n_space, DAOS_MEDIA_MAX);
-		assert_int_equal(pqt_resp->infos[i]->mem_file_bytes, infos[i].ta_space.s_total_mem);
+		assert_int_equal(pqt_resp->infos[i]->mem_file_bytes, mem_file_bytes);
 
 		for (j = 0; j < DAOS_MEDIA_MAX; j++) {
 			Mgmt__StorageTargetUsage *space = pqt_resp->infos[i]->space[j];
@@ -1671,7 +1674,8 @@ test_drpc_pool_query_targets_with_targets(void **state)
 
 	expect_drpc_pool_query_targets_resp_with_targets(&resp,
 							 ds_mgmt_pool_query_targets_info_out,
-							 n_tgts);
+							 n_tgts,
+							 ds_mgmt_pool_query_targets_mem_bytes);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);

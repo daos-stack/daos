@@ -163,8 +163,6 @@ int ds_pool_hdl_is_from_srv(struct ds_pool *pool, uuid_t hdl);
 int ds_pool_svc_upgrade_vos_pool(struct ds_pool *pool);
 void ds_pool_create_handler(crt_rpc_t *rpc);
 void
-ds_pool_connect_handler_v6(crt_rpc_t *rpc);
-void
 ds_pool_connect_handler(crt_rpc_t *rpc);
 void
 ds_pool_disconnect_handler(crt_rpc_t *rpc);
@@ -195,7 +193,7 @@ ds_pool_list_cont_handler(crt_rpc_t *rpc);
 void
 ds_pool_filter_cont_handler(crt_rpc_t *rpc);
 void
-ds_pool_query_info_handler_v6(crt_rpc_t *rpc);
+    ds_pool_query_info_handler_v6(crt_rpc_t *rpc);
 void
      ds_pool_query_info_handler(crt_rpc_t *rpc);
 void ds_pool_ranks_get_handler(crt_rpc_t *rpc);

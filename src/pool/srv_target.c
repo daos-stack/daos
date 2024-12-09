@@ -1467,8 +1467,8 @@ ds_pool_hdl_put(struct ds_pool_hdl *hdl)
 }
 
 static void
-aggregate_pool_space(struct daos_pool_space *agg_ps,
-		     struct daos_pool_space *ps)
+aggregate_pool_space(struct daos_pool_space *agg_ps, uint64_t *agg_mem_bytes,
+		     struct daos_pool_space *ps, uint64_t *mem_bytes)
 {
 	int	i;
 	bool	first;
@@ -1495,12 +1495,16 @@ aggregate_pool_space(struct daos_pool_space *agg_ps,
 		agg_ps->ps_free_mean[i] = agg_ps->ps_space.s_free[i] /
 					  agg_ps->ps_ntargets;
 	}
-	agg_ps->ps_space.s_total_mem += ps->ps_space.s_total_mem;
+	if (agg_mem_bytes != NULL) {
+		D_ASSERT(mem_bytes != NULL);
+		*agg_mem_bytes += *mem_bytes;
+	}
 }
 
 struct pool_query_xs_arg {
 	struct ds_pool		*qxa_pool;
 	struct daos_pool_space	 qxa_space;
+	uint64_t		 qxa_mem_bytes;
 };
 
 static void
@@ -1513,7 +1517,8 @@ pool_query_xs_reduce(void *agg_arg, void *xs_arg)
 		return;
 
 	D_ASSERT(x_arg->qxa_space.ps_ntargets == 1);
-	aggregate_pool_space(&a_arg->qxa_space, &x_arg->qxa_space);
+	aggregate_pool_space(&a_arg->qxa_space, &a_arg->qxa_mem_bytes, &x_arg->qxa_space,
+			     &x_arg->qxa_mem_bytes);
 }
 
 static int
@@ -1538,7 +1543,7 @@ pool_query_xs_arg_free(struct dss_stream_arg_type *xs)
 }
 
 static int
-pool_query_space(uuid_t pool_uuid, struct daos_pool_space *x_ps)
+pool_query_space(uuid_t pool_uuid, struct daos_pool_space *x_ps, uint64_t *mem_file_bytes)
 {
 	struct dss_module_info	*info = dss_get_module_info();
 	int			 tid = info->dmi_tgt_id;
@@ -1562,7 +1567,8 @@ pool_query_space(uuid_t pool_uuid, struct daos_pool_space *x_ps)
 	x_ps->ps_ntargets = 1;
 	x_ps->ps_space.s_total[DAOS_MEDIA_SCM] = SCM_TOTAL(vps);
 	x_ps->ps_space.s_total[DAOS_MEDIA_NVME] = NVME_TOTAL(vps);
-	x_ps->ps_space.s_total_mem              = vps->vps_space.s_total_mem;
+	if (mem_file_bytes != NULL)
+		*mem_file_bytes = vps->vps_mem_bytes;
 
 	/* Exclude the sys reserved space before reporting to user */
 	if (SCM_FREE(vps) > SCM_SYS(vps))
@@ -1596,11 +1602,11 @@ pool_query_one(void *vin)
 	struct pool_query_xs_arg	*x_arg = streams[tid].st_arg;
 	struct ds_pool			*pool = x_arg->qxa_pool;
 
-	return pool_query_space(pool->sp_uuid, &x_arg->qxa_space);
+	return pool_query_space(pool->sp_uuid, &x_arg->qxa_space, &x_arg->qxa_mem_bytes);
 }
 
 static int
-pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps)
+pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps, uint64_t *mem_file_bytes)
 {
 	struct dss_coll_ops		 coll_ops;
 	struct dss_coll_args		 coll_args = { 0 };
@@ -1633,6 +1639,8 @@ pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps)
 	}
 
 	*ps = agg_arg.qxa_space;
+	if (mem_file_bytes != NULL)
+		*mem_file_bytes = agg_arg.qxa_mem_bytes;
 
 out:
 	return rc;
@@ -1945,39 +1953,23 @@ out:
 	return rc;
 }
 
-static inline void
-dps_to_dpsv6(struct daos_pool_space *ps, struct daos_pool_space_v6 *ps6)
-{
-	int i;
-
-	ps6->ps_ntargets = ps->ps_ntargets;
-	for (i = DAOS_MEDIA_SCM; i < DAOS_MEDIA_MAX; i++) {
-		ps6->ps_space.s_total[i] = ps->ps_space.s_total[i];
-		ps6->ps_space.s_free[i]  = ps->ps_space.s_free[i];
-
-		ps6->ps_free_max[i]  = ps->ps_free_max[i];
-		ps6->ps_free_min[i]  = ps->ps_free_min[i];
-		ps6->ps_free_mean[i] = ps->ps_free_mean[i];
-	}
-}
-
 static void
 pool_tgt_query_handler(crt_rpc_t *rpc, int handler_version)
 {
 	struct pool_tgt_query_in	*in = crt_req_get(rpc);
 	struct pool_tgt_query_out	*out = crt_reply_get(rpc);
-	struct daos_pool_space           out_space = {0}, *ps;
 	struct ds_pool			*pool;
+	uint64_t			*mem_file_bytes;
 	int				 rc;
 
-	if (handler_version == 6)
-		ps = &out_space;
+	if (handler_version >= 7)
+		mem_file_bytes = &out->tqo_mem_file_bytes;
 	else
-		ps = &out->tqo_space;
+		mem_file_bytes = NULL;
 
 	/* Single target query */
 	if (dss_get_module_info()->dmi_xs_id != 0) {
-		rc = pool_query_space(in->tqi_op.pi_uuid, ps);
+		rc = pool_query_space(in->tqi_op.pi_uuid, &out->tqo_space, mem_file_bytes);
 		goto out;
 	}
 
@@ -1989,19 +1981,12 @@ pool_tgt_query_handler(crt_rpc_t *rpc, int handler_version)
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
-	rc = pool_tgt_query(pool, ps);
+	rc = pool_tgt_query(pool, &out->tqo_space, mem_file_bytes);
 	if (rc != 0)
 		rc = 1;	/* For query aggregator */
 	ds_pool_put(pool);
 out:
-	if (handler_version == 6) {
-		struct pool_tgt_query_v6_out *out6 = crt_reply_get(rpc);
-
-		out6->tqo_rc = rc;
-		dps_to_dpsv6(ps, &out6->tqo_space);
-	} else {
-		out->tqo_rc = rc;
-	}
+	out->tqo_rc = rc;
 	crt_reply_send(rpc);
 }
 
@@ -2017,35 +2002,6 @@ ds_pool_tgt_query_handler(crt_rpc_t *rpc)
 	pool_tgt_query_handler(rpc, DAOS_POOL_VERSION);
 }
 
-static void
-aggregate_pool_space_v6(struct daos_pool_space_v6 *agg_ps, struct daos_pool_space_v6 *ps)
-{
-	int  i;
-	bool first;
-
-	D_ASSERT(agg_ps && ps);
-
-	if (ps->ps_ntargets == 0) {
-		D_DEBUG(DB_TRACE, "Skip empty space info\n");
-		return;
-	}
-
-	first = (agg_ps->ps_ntargets == 0);
-	agg_ps->ps_ntargets += ps->ps_ntargets;
-
-	for (i = DAOS_MEDIA_SCM; i < DAOS_MEDIA_MAX; i++) {
-		agg_ps->ps_space.s_total[i] += ps->ps_space.s_total[i];
-		agg_ps->ps_space.s_free[i] += ps->ps_space.s_free[i];
-
-		if (agg_ps->ps_free_max[i] < ps->ps_free_max[i])
-			agg_ps->ps_free_max[i] = ps->ps_free_max[i];
-		if (agg_ps->ps_free_min[i] > ps->ps_free_min[i] || first)
-			agg_ps->ps_free_min[i] = ps->ps_free_min[i];
-
-		agg_ps->ps_free_mean[i] = agg_ps->ps_space.s_free[i] / agg_ps->ps_ntargets;
-	}
-}
-
 int
 ds_pool_tgt_query_aggregator_v6(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 {
@@ -2056,7 +2012,7 @@ ds_pool_tgt_query_aggregator_v6(crt_rpc_t *source, crt_rpc_t *result, void *priv
 	if (out_source->tqo_rc != 0)
 		return 0;
 
-	aggregate_pool_space_v6(&out_result->tqo_space, &out_source->tqo_space);
+	aggregate_pool_space(&out_result->tqo_space, NULL, &out_source->tqo_space, NULL);
 	return 0;
 }
 
@@ -2070,7 +2026,8 @@ ds_pool_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	if (out_source->tqo_rc != 0)
 		return 0;
 
-	aggregate_pool_space(&out_result->tqo_space, &out_source->tqo_space);
+	aggregate_pool_space(&out_result->tqo_space, &out_result->tqo_mem_file_bytes,
+			     &out_source->tqo_space, &out_source->tqo_mem_file_bytes);
 	return 0;
 }
 

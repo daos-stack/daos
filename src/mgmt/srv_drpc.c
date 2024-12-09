@@ -382,6 +382,7 @@ static int pool_create_fill_resp(Mgmt__PoolCreateResp *resp, uuid_t uuid, d_rank
 	int			index;
 	d_rank_list_t	       *enabled_ranks = NULL;
 	daos_pool_info_t	pool_info = { .pi_bits = DPI_ENGINES_ENABLED | DPI_SPACE };
+	uint64_t		mem_file_bytes = 0;
 
 	D_ASSERT(svc_ranks != NULL);
 	D_ASSERT(svc_ranks->rl_nr > 0);
@@ -394,8 +395,8 @@ static int pool_create_fill_resp(Mgmt__PoolCreateResp *resp, uuid_t uuid, d_rank
 
 	D_DEBUG(DB_MGMT, "%d service replicas\n", svc_ranks->rl_nr);
 
-	rc =
-	    ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, NULL, NULL, &pool_info, NULL, NULL);
+	rc = ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, NULL, NULL, &pool_info, NULL, NULL,
+				&mem_file_bytes);
 	if (rc != 0) {
 		D_ERROR("Failed to query created pool: rc=%d\n", rc);
 		D_GOTO(out, rc);
@@ -409,10 +410,11 @@ static int pool_create_fill_resp(Mgmt__PoolCreateResp *resp, uuid_t uuid, d_rank
 		D_GOTO(out, rc);
 	}
 
+	D_ASSERT(resp->n_tgt_ranks > 0);
 	for (index = 0; index < DAOS_MEDIA_MAX; ++index) {
 		D_ASSERT(pool_info.pi_space.ps_space.s_total[index] % resp->n_tgt_ranks == 0);
 	}
-	D_ASSERT(pool_info.pi_space.ps_space.s_total_mem % resp->n_tgt_ranks == 0);
+	D_ASSERT(mem_file_bytes % resp->n_tgt_ranks == 0);
 	D_ALLOC_ARRAY(resp->tier_bytes, DAOS_MEDIA_MAX);
 	if (resp->tier_bytes == NULL) {
 		rc = -DER_NOMEM;
@@ -423,7 +425,7 @@ static int pool_create_fill_resp(Mgmt__PoolCreateResp *resp, uuid_t uuid, d_rank
 		resp->tier_bytes[index] =
 			pool_info.pi_space.ps_space.s_total[index] / resp->n_tgt_ranks;
 	}
-	resp->mem_file_bytes = pool_info.pi_space.ps_space.s_total_mem / resp->n_tgt_ranks;
+	resp->mem_file_bytes = mem_file_bytes / resp->n_tgt_ranks;
 
 out:
 	d_rank_list_free(enabled_ranks);
@@ -1790,7 +1792,8 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	pool_info.pi_bits = req->query_mask;
 	rc = ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, &disabled_ranks, &suspect_ranks,
-				&pool_info, &resp.pool_layout_ver, &resp.upgrade_layout_ver);
+				&pool_info, &resp.pool_layout_ver, &resp.upgrade_layout_ver,
+				&resp.mem_file_bytes);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID ": Failed to query the pool", DP_UUID(uuid));
 		D_GOTO(error, rc);
@@ -1860,8 +1863,6 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	pool_rebuild_status_from_info(&rebuild, &pool_info.pi_rebuild_st);
 	resp.rebuild = &rebuild;
 
-	resp.mem_file_bytes = pool_info.pi_space.ps_space.s_total_mem;
-
 error:
 	resp.status = rc;
 
@@ -1902,6 +1903,7 @@ ds_mgmt_drpc_pool_query_targets(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	uint8_t				*body;
 	daos_target_info_t		*infos = NULL;
 	Mgmt__PoolQueryTargetInfo	*resp_infos = NULL;
+	uint64_t			 mem_file_bytes = 0;
 
 	req = mgmt__pool_query_target_req__unpack(&alloc.alloc, drpc_req->body.len,
 						  drpc_req->body.data);
@@ -1927,7 +1929,7 @@ ds_mgmt_drpc_pool_query_targets(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (tgts == NULL)
 		D_GOTO(out_ranks, rc = -DER_NOMEM);
 
-	rc = ds_mgmt_pool_query_targets(uuid, svc_ranks, req->rank, tgts, &infos);
+	rc = ds_mgmt_pool_query_targets(uuid, svc_ranks, req->rank, tgts, &infos, &mem_file_bytes);
 	if (rc != 0) {
 		D_ERROR("ds_mgmt_pool_query_targets() failed, pool %s rank %u, "DF_RC"\n",
 			req->id, req->rank, DP_RC(rc));
@@ -1972,7 +1974,7 @@ ds_mgmt_drpc_pool_query_targets(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			resp.infos[i]->space[j]->free = infos[i].ta_space.s_free[j];
 			resp.infos[i]->space[j]->media_type = j;
 		}
-		resp.infos[i]->mem_file_bytes = infos[i].ta_space.s_total_mem;
+		resp.infos[i]->mem_file_bytes = mem_file_bytes;
 	}
 
 out_infos:

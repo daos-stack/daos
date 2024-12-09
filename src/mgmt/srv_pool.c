@@ -401,7 +401,7 @@ int
 ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **enabled_ranks,
 		   d_rank_list_t **disabled_ranks, d_rank_list_t **suspect_ranks,
 		   daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
-		   uint32_t *upgrade_layout_ver)
+		   uint32_t *upgrade_layout_ver, uint64_t *mem_file_bytes)
 {
 	if (pool_info == NULL) {
 		D_ERROR("pool_info was NULL\n");
@@ -412,7 +412,7 @@ ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **e
 
 	return dsc_pool_svc_query(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), enabled_ranks,
 				  disabled_ranks, suspect_ranks, pool_info, pool_layout_ver,
-				  upgrade_layout_ver);
+				  upgrade_layout_ver, mem_file_bytes);
 }
 
 /**
@@ -431,7 +431,8 @@ ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **e
  */
 int
 ds_mgmt_pool_query_targets(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_t rank,
-			   d_rank_list_t *tgts, daos_target_info_t **infos)
+			   d_rank_list_t *tgts, daos_target_info_t **infos,
+			   uint64_t *mem_file_bytes)
 {
 	int			rc = 0;
 	uint32_t		i;
@@ -447,14 +448,20 @@ ds_mgmt_pool_query_targets(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_t 
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	for (i = 0; i < tgts->rl_nr; i++) {
+		uint64_t	mem_bytes = 0;
+
 		D_DEBUG(DB_MGMT, "Querying pool "DF_UUID" rank %u tgt %u\n", DP_UUID(pool_uuid),
 			rank, tgts->rl_ranks[i]);
 		rc = dsc_pool_svc_query_target(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), rank,
-					       tgts->rl_ranks[i], &out_infos[i]);
+					       tgts->rl_ranks[i], &out_infos[i], &mem_bytes);
 		if (rc != 0) {
 			D_ERROR(DF_UUID": dsc_pool_svc_query_target() failed rank %u tgt %u\n",
 				DP_UUID(pool_uuid), rank, tgts->rl_ranks[i]);
 			goto out;
+		}
+		if (mem_file_bytes) {
+			D_ASSERT(i == 0 || *mem_file_bytes == mem_bytes);
+			*mem_file_bytes = mem_bytes;
 		}
 	}
 
