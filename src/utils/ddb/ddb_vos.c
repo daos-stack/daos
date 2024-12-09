@@ -1415,7 +1415,7 @@ dv_dtx_get_act_table(daos_handle_t coh, dv_dtx_act_handler handler_cb, void *han
 int
 dv_dtx_commit_active_entry(daos_handle_t coh, struct dtx_id *dti)
 {
-	return vos_dtx_commit(coh, dti, 1, NULL);
+	return vos_dtx_commit(coh, dti, 1, false, NULL);
 }
 
 int
