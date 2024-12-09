@@ -13,13 +13,12 @@ from job_manager_utils import get_job_manager
 from thread_manager import ThreadManager
 
 
-def run_ior_loop(test, manager, loops):
+def run_ior_loop(manager, cont_labels):
     """Run IOR multiple times.
 
     Args:
-        test (Test): the test object
         manager (str): mpi job manager command
-        loops (int): number of times to run IOR
+        cont_labels (list): container labels to run iteratively with
 
     Returns:
         list: a list of CmdResults from each ior command run
@@ -27,10 +26,8 @@ def run_ior_loop(test, manager, loops):
     """
     results = []
     errors = []
-    for index in range(loops):
-        cont = test.label_generator.get_label('cont')
-        manager.job.dfs_cont.update(cont, "ior.dfs_cont")
-
+    for index, cont_label in enumerate(cont_labels):
+        manager.job.dfs_cont.update(cont_label, "ior.dfs_cont")
         t_start = time.time()
 
         try:
@@ -39,7 +36,7 @@ def run_ior_loop(test, manager, loops):
             ior_mode = "read" if "-r" in manager.job.flags.value else "write"
             errors.append(
                 "IOR {} Loop {}/{} failed for container {}: {}".format(
-                    ior_mode, index, loops, cont, error))
+                    ior_mode, index, len(cont_labels), manager.job.dfs_cont.value, error))
         finally:
             t_end = time.time()
             ior_cmd_time = t_end - t_start
@@ -47,7 +44,8 @@ def run_ior_loop(test, manager, loops):
 
     if errors:
         raise CommandFailure(
-            "IOR failed in {}/{} loops: {}".format(len(errors), loops, "\n".join(errors)))
+            "IOR failed in {}/{} loops: {}".format(
+                len(errors), len(cont_labels), "\n".join(errors)))
     return results
 
 
@@ -467,10 +465,17 @@ class ObjectMetadata(TestWithServers):
         :avocado: tags=ObjectMetadata,test_metadata_server_restart
         """
         self.create_pool()
-        files_per_thread = 400
+        files_per_thread = 100  # 400  # DEBUGGING
         total_ior_threads = 5
 
-        processes = self.params.get("slots", "/run/ior/clientslots/*")
+        processes = self.params.get("np", "/run/ior/*")
+
+        # Generate all labels to be shared between write and read operation
+        all_cont_labels = []
+        for thread_index in range(total_ior_threads):
+            all_cont_labels.append([])
+            for file_index in range(files_per_thread):
+                all_cont_labels[-1].append(f'cont_{thread_index}_{file_index}')
 
         # Launch threads to run IOR to write data, restart the agents and
         # servers, and then run IOR to read the data
@@ -483,12 +488,11 @@ class ObjectMetadata(TestWithServers):
                 # Define the arguments for the run_ior_loop method
                 ior_cmd = IorCommand(self.test_env.log_dir)
                 ior_cmd.get_params(self)
-                ior_cmd.set_daos_params(self.pool, None)
-                ior_cmd.flags.value = self.params.get("ior{}flags".format(operation), "/run/ior/*")
+                ior_cmd.dfs_pool.update(self.pool.identifier)
+                ior_cmd.flags.update(self.params.get("ior{}flags".format(operation), "/run/ior/*"))
 
                 # Define the job manager for the IOR command
-                self.ior_managers.append(
-                    get_job_manager(self, "Clush", ior_cmd))
+                self.ior_managers.append(get_job_manager(self, job=ior_cmd))
                 env = ior_cmd.get_default_env(str(self.ior_managers[-1]))
                 self.ior_managers[-1].assign_hosts(self.hostlist_clients, self.workdir, None)
                 self.ior_managers[-1].assign_processes(processes)
@@ -497,7 +501,7 @@ class ObjectMetadata(TestWithServers):
 
                 # Add a thread for these IOR arguments
                 thread_manager.add(
-                    test=self, manager=self.ior_managers[-1], loops=files_per_thread)
+                    manager=self.ior_managers[-1], cont_labels=all_cont_labels[index])
                 self.log.info("Created %s thread %s", operation, index)
 
             # Launch the IOR threads
