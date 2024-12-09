@@ -7,13 +7,14 @@ on:
   pull_request:
     paths:
       - 'utils/cq/requirements.txt'
+      - '.github/workflows/version-checks.yml'
 
 permissions: {}
 
 jobs:
   upgrade-check:
     name: Check for updates
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
