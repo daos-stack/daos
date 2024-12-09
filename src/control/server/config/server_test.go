@@ -255,7 +255,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithSocketDir("./.daos/daos_server").
 		WithFabricProvider("ofi+verbs;ofi_rxm").
 		WithCrtTimeout(30).
-		WithMgmtSvcReplicas("hostname1").
+		WithMgmtSvcReplicas("hostname1", "hostname2", "hostname3").
 		WithFaultCb("./.daos/fd_callback").
 		WithFaultPath("/vcdu0/rack1/hostname").
 		WithClientEnvVars([]string{"foo=bar"}).
@@ -423,7 +423,7 @@ func TestServerConfig_MDonSSD_Constructed(t *testing.T) {
 		WithControlLogFile("/tmp/daos_server.log").
 		WithTelemetryPort(9191).
 		WithFabricProvider("ofi+tcp").
-		WithMgmtSvcReplicas("example")
+		WithMgmtSvcReplicas("example1", "example2", "example3")
 
 	constructed.Engines = []*engine.Config{
 		engine.MockConfig().
@@ -711,7 +711,7 @@ func TestServerConfig_Validation(t *testing.T) {
 					)
 			},
 			expConfig: baseCfg(t, log, testFile).
-				WithMgmtSvcReplicas("hostname1:10001").
+				WithMgmtSvcReplicas("hostname1:10001", "hostname2:10001", "hostname3:10001").
 				WithControlMetadata(storage.ControlMetadata{
 					Path:       testMetadataDir,
 					DevicePath: "/dev/something",
@@ -786,7 +786,7 @@ func TestServerConfig_Validation(t *testing.T) {
 					)
 			},
 			expConfig: baseCfg(t, log, testFile).
-				WithMgmtSvcReplicas("hostname1:10001").
+				WithMgmtSvcReplicas("hostname1:10001", "hostname2:10001", "hostname3:10001").
 				WithControlMetadata(storage.ControlMetadata{
 					Path:       testMetadataDir,
 					DevicePath: "/dev/something",
@@ -871,7 +871,7 @@ func TestServerConfig_Validation(t *testing.T) {
 					)
 			},
 			expConfig: baseCfg(t, log, testFile).
-				WithMgmtSvcReplicas("hostname1:10001").
+				WithMgmtSvcReplicas("hostname1:10001", "hostname2:10001", "hostname3:10001").
 				WithControlMetadata(storage.ControlMetadata{
 					Path: testMetadataDir,
 				}).
