@@ -2,7 +2,7 @@
 
 #include <fcntl.h>
 #include "vts_io.h"
-#include <daos/stack_mmap.h>
+#include <abt.h>
 #include <gurt/atomic.h>
 
 static pthread_once_t     once_control = PTHREAD_ONCE_INIT;
@@ -658,8 +658,8 @@ handle_op(struct cmd_info *cinfo, bool async)
 	if (async)
 		d_list_add(&ult_info->link, &active_list);
 
-	rc = daos_abt_thread_create_on_xstream(NULL, NULL, abt_xstream, ult_func, ult_info,
-					       ABT_THREAD_ATTR_NULL, &ult_info->thread);
+	rc = ABT_thread_create_on_xstream(abt_xstream, ult_func, ult_info, ABT_THREAD_ATTR_NULL,
+					  &ult_info->thread);
 	assert_int_equal(rc, ABT_SUCCESS);
 
 	if (!async) {
@@ -783,14 +783,14 @@ abit_start(void)
 
 	rc = ABT_init(0, NULL);
 	if (rc != ABT_SUCCESS) {
-		fprintf(stderr, "ABT init failed: %d\n", rc);
+		fprintf(stderr, "Failed to init ABT: " AF_RC "\n", AP_RC(rc));
 		return -1;
 	}
 
 	rc = ABT_xstream_self(&abt_xstream);
 	if (rc != ABT_SUCCESS) {
 		ABT_finalize();
-		printf("ABT get self xstream failed: %d\n", rc);
+		printf("ABT get self xstream failed: " AF_RC "\n", AP_RC(rc));
 		return -1;
 	}
 
