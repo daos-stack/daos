@@ -16,6 +16,7 @@ pkgs="argobots                         \
       fuse3-libs                       \
       gotestsum                        \
       hwloc-devel                      \
+      libasan                          \
       libipmctl-devel                  \
       libisa-l-devel                   \
       libfabric-devel                  \
