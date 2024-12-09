@@ -298,6 +298,8 @@ prop_to_str(uint32_t type)
 		return "DAOS_PROP_CO_ROOTS";
 	case DAOS_PROP_CO_SCRUBBER_DISABLED:
 		return "DAOS_PROP_CO_SCRUBBER_DISABLED";
+	case DAOS_PROP_CO_METRICS_ENABLED:
+		return "DAOS_PROP_CO_METRICS_ENABLED";
 	default:
 		return "PROPERTY NOT SUPPORTED";
 	}
@@ -362,7 +364,8 @@ daos_cont_serialize_props(hid_t file_id, daos_prop_t *prop_query)
 			   type == DAOS_PROP_CO_PERF_DOMAIN ||
 			   type == DAOS_PROP_CO_GLOBAL_VERSION ||
 			   type == DAOS_PROP_CO_ALLOCED_OID ||
-			   type == DAOS_PROP_CO_SCRUBBER_DISABLED) {
+			   type == DAOS_PROP_CO_SCRUBBER_DISABLED ||
+			   type == DAOS_PROP_CO_METRICS_ENABLED) {
 			entry = &prop_query->dpp_entries[i];
 			rc = serialize_uint(file_id, entry->dpe_val,
 					    prop_str);
@@ -1066,6 +1069,16 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop, uint64_
 		entry = &prop->dpp_entries[prop_num];
 		rc = deserialize_uint(file_id, &entry->dpe_val,
 				      "DAOS_PROP_CO_SCRUBBER_DISABLED");
+		if (rc != 0)
+			D_GOTO(out, rc);
+		prop_num++;
+	}
+	if (H5Aexists(file_id, "DAOS_PROP_CO_METRICS_ENABLED") > 0) {
+		type = DAOS_PROP_CO_METRICS_ENABLED;
+		prop->dpp_entries[prop_num].dpe_type = type;
+		entry = &prop->dpp_entries[prop_num];
+		rc = deserialize_uint(file_id, &entry->dpe_val,
+				      "DAOS_PROP_CO_METRICS_ENABLED");
 		if (rc != 0)
 			D_GOTO(out, rc);
 		prop_num++;
