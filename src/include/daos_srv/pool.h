@@ -289,6 +289,7 @@ int dsc_pool_svc_update_target_state(uuid_t pool_uuid, d_rank_list_t *ranks, uin
 				     struct pool_target_addr_list *target_list,
 				     pool_comp_state_t state);
 
+uint32_t ds_pool_get_vos_df_version_default(void);
 int ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
 			    d_rank_list_t *target_addrs, int ndomains, uint32_t *domains,
 			    daos_prop_t *prop, d_rank_list_t **svc_addrs);
