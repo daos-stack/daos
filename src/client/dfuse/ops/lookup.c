@@ -119,7 +119,6 @@ dfuse_reply_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 
 			/* Save the old name so that we can invalidate it in later */
 			wipe_parent = inode->ie_parent;
-			/* DAOS-17042 Replace strncpy with strncat or strlcpy */
 			strncpy(wipe_name, inode->ie_name, NAME_MAX);
 			wipe_name[NAME_MAX] = '\0';
 
