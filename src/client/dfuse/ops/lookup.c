@@ -119,11 +119,7 @@ dfuse_reply_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 
 			/* Save the old name so that we can invalidate it in later */
 			wipe_parent = inode->ie_parent;
-			/* GCC warns (-Wstringop-truncation) because the destination buffer size is
-			 * identical to max-size, leading to a potential char[] with no null
-			 * terminator.  nanopb can handle it fine, and parentheses around strncpy
-			 * silence that compiler warning. */
-			(strncpy(wipe_name, inode->ie_name, NAME_MAX - 1));
+			strncpy(wipe_name, inode->ie_name, NAME_MAX + 1);
 			wipe_name[NAME_MAX] = '\0';
 
 			inode->ie_parent = ie->ie_parent;
