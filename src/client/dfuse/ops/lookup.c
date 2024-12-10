@@ -299,7 +299,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		DFUSE_TRA_DEBUG(ie, "Attr len is %zi", attr_len);
 
 	strncpy(ie->ie_name, name, NAME_MAX);
-	ie->ie_name[NAME_MAX] = '\0'
+	ie->ie_name[NAME_MAX] = '\0';
 
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 
