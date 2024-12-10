@@ -142,7 +142,7 @@ String sconsArgs() {
         return sconsFaultsArgs()
     }
 
-    println("Compiling DAOS with libasan")
+    println("Compiling DAOS with custom arguments")
     return sconsFaultsArgs() + ' ' + params.CI_SCONS_ARGS
 }
 

@@ -59,12 +59,18 @@ def _base_setup(env):
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
 
     if 'SANITIZERS' in env and env['SANITIZERS'] != "":
-        for flag in [f"-Wframe-larger-than={FRAME_SIZE_MAX}", '-fomit-frame-pointer']:
-            if flag in env["CCFLAGS"]:
-                env["CCFLAGS"].remove(flag)
         cc = 'gcc'
         if 'COMPILER' in env:
             cc = env['COMPILER']
+        if cc not in ASAN_FRAME_SIZE_MAX:
+            print(f"C compiler {cc} is not supported with the ASan lib")
+            Exit(3)
+
+        print("Using ASasn lib is updating the compilation configuration "
+              "and may lead to unexpected behavior")
+        for flag in [f"-Wframe-larger-than={FRAME_SIZE_MAX}", '-fomit-frame-pointer']:
+            if flag in env["CCFLAGS"]:
+                env["CCFLAGS"].remove(flag)
         cc_flags = [f"-Wframe-larger-than={ASAN_FRAME_SIZE_MAX[cc]}",
                     '-fno-omit-frame-pointer',
                     '-fno-common']

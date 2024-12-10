@@ -119,12 +119,20 @@ dfuse_reply_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 
 			/* Save the old name so that we can invalidate it in later */
 			wipe_parent = inode->ie_parent;
-			memcpy(wipe_name, inode->ie_name, NAME_MAX);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstringop-truncation"
+			/* DAOS-17042 Replace strncpy with strncat or strlcpy */
+			strncpy(wipe_name, inode->ie_name, NAME_MAX);
 			wipe_name[NAME_MAX] = '\0';
+#pragma GCC diagnostic pop
 
 			inode->ie_parent = ie->ie_parent;
-			memcpy(inode->ie_name, ie->ie_name, NAME_MAX);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstringop-truncation"
+			/* DAOS-17042 Replace strncpy with strncat or strlcpy */
+			strncpy(inode->ie_name, ie->ie_name, NAME_MAX);
 			inode->ie_name[NAME_MAX] = '\0';
+#pragma GCC diagnostic pop
 		}
 		atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
 		dfuse_ie_close(dfuse_info, ie);
@@ -296,8 +304,12 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (attr_len)
 		DFUSE_TRA_DEBUG(ie, "Attr len is %zi", attr_len);
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstringop-truncation"
+	/* DAOS-17042 Replace strncpy with strncat or strlcpy */
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
+#pragma GCC diagnostic pop
 
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 
