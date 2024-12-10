@@ -511,7 +511,7 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
 		D_GOTO(err, rc = EINVAL);
 	}
 
-	strncpy(new_obj->name, obj->name, DFS_MAX_NAME);
+	memcpy(new_obj->name, obj->name, DFS_MAX_NAME);
 	new_obj->name[DFS_MAX_NAME] = '\0';
 	new_obj->dfs                = dfs;
 	new_obj->mode               = obj->mode;
@@ -618,7 +618,7 @@ dfs_obj_local2global(dfs_t *dfs, dfs_obj_t *obj, d_iov_t *glob)
 	oid_cp(&obj_glob->parent_oid, obj->parent_oid);
 	uuid_copy(obj_glob->coh_uuid, coh_uuid);
 	uuid_copy(obj_glob->cont_uuid, cont_uuid);
-	strncpy(obj_glob->name, obj->name, DFS_MAX_NAME);
+	memcpy(obj_glob->name, obj->name, DFS_MAX_NAME);
 	obj_glob->name[DFS_MAX_NAME] = '\0';
 	if (S_ISDIR(obj_glob->mode))
 		return 0;
@@ -676,7 +676,7 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
 
 	oid_cp(&obj->oid, obj_glob->oid);
 	oid_cp(&obj->parent_oid, obj_glob->parent_oid);
-	strncpy(obj->name, obj_glob->name, DFS_MAX_NAME);
+	memcpy(obj->name, obj_glob->name, DFS_MAX_NAME);
 	obj->name[DFS_MAX_NAME] = '\0';
 	obj->mode               = obj_glob->mode;
 	obj->dfs                = dfs;
