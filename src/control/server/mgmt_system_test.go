@@ -1853,7 +1853,7 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 	}{
 		"nil req": {
 			req:    (*mgmtpb.SystemDrainReq)(nil),
-			expErr: errors.New("nil request"),
+			expErr: errors.New("nil *mgmt.SystemDrainReq"),
 		},
 		"not system leader": {
 			req: &mgmtpb.SystemDrainReq{
@@ -2096,7 +2096,7 @@ func TestServer_MgmtSvc_SystemReint(t *testing.T) {
 	}{
 		"nil req": {
 			req:    (*mgmtpb.SystemReintReq)(nil),
-			expErr: errors.New("nil request"),
+			expErr: errors.New("nil *mgmt.SystemReintReq"),
 		},
 		"not system leader": {
 			req: &mgmtpb.SystemReintReq{
