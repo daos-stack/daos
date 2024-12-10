@@ -16,7 +16,7 @@
 
 Name:          daos
 Version:       2.7.101
-Release:       3%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -598,9 +598,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Fri Dec 06 2024 Cedric Koch-Hofer <cedric.koch-hofer@intel.com> 2.7.101-3
-- Add support of the libasan
-
 * Tue Nov 13 2024 Denis Barakhtanov <dbarahtanov@enakta.com> 2.7.101-2
 - Add pydaos.torch module to daos-client rpm.
 
