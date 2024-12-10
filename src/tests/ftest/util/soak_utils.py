@@ -253,8 +253,8 @@ def get_daos_server_logs(self):
     Args:
         self (obj): soak obj
     """
-    daos_dir = self.outputsoak_dir + "/daos_server_logs"
-    logs_dir = self.test_env.log_dir + "/*log*"
+    daos_dir = os.path.join(self.outputsoak_dir, "daos_server_logs")
+    logs_dir = os.path.join(self.test_env.log_dir, "*log*")
     hosts = self.hostlist_servers
     if not os.path.exists(daos_dir):
         os.mkdir(daos_dir)
@@ -283,14 +283,14 @@ def get_job_logs(self):
         cmd3 = f"/usr/bin/rsync -avtr --min-size=1B {sharedscr_dir} {self.outputsoak_dir}/"
         cmd4 = f"/usr/bin/rm -rf {sharedscr_dir}"
         if not run_local(self.log, cmd3, timeout=600).passed:
-            self.log.info("Script file copy failed with %s", cmd3)
+            self.log.error("Script file copy failed with %s", cmd3)
         if not run_local(self.log, cmd4, timeout=600).passed:
-            self.log.info("Script file copy failed with %s", cmd4)
+            self.log.error("Script file copy failed with %s", cmd4)
     # copy the local files; local host not included in hostlist_client
     if not run_local(self.log, cmd, timeout=600).passed:
-        self.log.info("Local copy failed: %s", cmd)
+        self.log.error("Local copy failed: %s", cmd)
     if not run_local(self.log, cmd2, timeout=600).passed:
-        self.log.info("Local copy failed: %s", cmd2)
+        self.log.error("Local copy failed: %s", cmd2)
 
 
 def run_monitor_check(self):

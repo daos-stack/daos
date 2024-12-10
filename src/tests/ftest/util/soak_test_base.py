@@ -301,11 +301,12 @@ class SoakTestBase(TestWithServers):
         jobs_not_done = []
         # remove any nodes marked as DOWN
         node_list.difference_update(self.down_nodes)
-        lib_path = os.getenv("LD_LIBRARY_PATH")
         path = os.getenv("PATH")
+        env = f"export PATH={path}"
+        lib_path = os.getenv("LD_LIBRARY_PATH")
+        if lib_path:
+            env = ";".join([env, f"export LD_LIBRARY_PATH={lib_path}"])
         v_env = os.getenv("VIRTUAL_ENV")
-        env = ";".join([f"export LD_LIBRARY_PATH={lib_path}",
-                        f"export PATH={path}"])
         if v_env:
             env = ";".join([env, f"export VIRTUAL_ENV={v_env}"])
         for job_dict in self.joblist:
