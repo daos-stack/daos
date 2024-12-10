@@ -600,7 +600,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Mon Jan 17 2025  Cedric Koch-Hofer <cedric.koch-hofer@intel.com> 2.7.101-5
+* Mon Jan 20 2025  Cedric Koch-Hofer <cedric.koch-hofer@intel.com> 2.7.101-5
 - Add support of the libasan
 
 * Fri Dec 20 2024 Jeff Olivier <jeffolivier@google.com> 2.7.101-4
