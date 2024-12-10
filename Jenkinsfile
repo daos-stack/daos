@@ -137,10 +137,11 @@ void rpm_test_post(String stage_name, String node) {
 }
 
 String sconsArgs() {
-    if (params.CI_SCONS_ARGS) {
+    if (!params.CI_SCONS_ARGS) {
         return sconsFaultsArgs()
     }
 
+    println("Compiling DAOS with libasan")
     return sconsFaultsArgs() + ' ' + params.CI_SCONS_ARGS
 }
 
