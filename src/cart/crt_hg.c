@@ -1154,9 +1154,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	else
 		rc = crt_corpc_common_hdlr(rpc_priv);
 	if (unlikely(rc != 0)) {
-		RPC_ERROR(rpc_priv,
-			  "failed to invoke RPC handler, rc: "DF_RC"\n",
-			  DP_RC(rc));
+		RPC_INFO(rpc_priv, "failed to invoke RPC handler, rc: " DF_RC "\n", DP_RC(rc));
 		crt_hg_reply_error_send(rpc_priv, rc);
 		D_GOTO(decref, hg_ret = HG_SUCCESS);
 	}
@@ -1364,8 +1362,8 @@ out:
 		crt_cbinfo.cci_rc = rc;
 
 		if (crt_cbinfo.cci_rc != 0)
-			RPC_CERROR(crt_quiet_error(crt_cbinfo.cci_rc), DB_NET, rpc_priv,
-				   "RPC failed; rc: " DF_RC "\n", DP_RC(crt_cbinfo.cci_rc));
+			RPC_CWARN(crt_quiet_error(crt_cbinfo.cci_rc), DB_NET, rpc_priv,
+				  "RPC failed; rc: " DF_RC "\n", DP_RC(crt_cbinfo.cci_rc));
 
 		RPC_TRACE(DB_TRACE, rpc_priv,
 			  "Invoking RPC callback (rank %d tag %d) rc: " DF_RC "\n",
