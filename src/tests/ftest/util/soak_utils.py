@@ -490,6 +490,7 @@ def launch_reboot(self, pools, name, results, args):
     # If all ranks "joined", issue reintegrate for all pool on all ranks and wait for
     #    rebuild to complete
     # Update multiprocessing queue with results and args
+    # pylint: disable=too-many-nested-blocks
     status = False
     params = {}
     ranks = None
