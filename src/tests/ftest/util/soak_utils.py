@@ -510,7 +510,7 @@ def launch_reboot(self, pools, name, results, args):
         if result.passed:
             status = True
         else:
-            self.log.error(f"<<<FAILED:{name} - {reboot_host} failed to issue reboot")
+            self.log.error(f"<<<FAILED: {name} - {reboot_host} failed to issue reboot")
             status = False
 
         if not wait_for_result(self.log, check_ping, 90, 5, True, host=reboot_host,
