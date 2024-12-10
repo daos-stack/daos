@@ -4,7 +4,7 @@ from SCons.Script import Configure, Exit, GetOption
 
 FRAME_SIZE_MAX = 4096
 ASAN_FRAME_SIZE_MAX = {'gcc': 8192,
-                       'clang': 9216}
+                       'clang': 10240}
 DESIRED_FLAGS = ['-fstack-usage',
                  '-Wno-sign-compare',
                  '-Wno-missing-attributes',
