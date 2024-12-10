@@ -3,6 +3,8 @@
 from SCons.Script import Configure, Exit, GetOption
 
 FRAME_SIZE_MAX = 4096
+ASAN_FRAME_SIZE_MAX = {'gcc': 8192,
+                       'clang': 9216}
 DESIRED_FLAGS = ['-fstack-usage',
                  '-Wno-sign-compare',
                  '-Wno-missing-attributes',
@@ -60,7 +62,10 @@ def _base_setup(env):
         for flag in [f"-Wframe-larger-than={FRAME_SIZE_MAX}", '-fomit-frame-pointer']:
             if flag in env["CCFLAGS"]:
                 env["CCFLAGS"].remove(flag)
-        cc_flags = [f"-Wframe-larger-than={max(8192, FRAME_SIZE_MAX)}",
+        cc = 'gcc'
+        if 'COMPILER' in env:
+            cc = env['COMPILER']
+        cc_flags = [f"-Wframe-larger-than={ASAN_FRAME_SIZE_MAX[cc]}",
                     '-fno-omit-frame-pointer',
                     '-fno-common']
 
