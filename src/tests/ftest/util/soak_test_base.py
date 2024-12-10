@@ -431,8 +431,8 @@ class SoakTestBase(TestWithServers):
                         if time.time() + int(180) < self.end_time:
                             failed_harasser_msg = self.launch_harasser(
                                 offline_harasser, self.pool)
-                            # wait 2 minutes to issue next harasser
-                            time.sleep(120)
+                            # wait 5 minutes to issue next harasser
+                            time.sleep(300)
             # check journalctl for events;
             until = journalctl_time()
             event_check_messages = run_event_check(self, since, until)
