@@ -33,7 +33,8 @@ Build-Depends: debhelper (>= 10),
                liblz4-dev,
                libaio-dev,
                libcapstone-dev,
-               libpci-dev
+               libpci-dev,
+               libasan8
 Standards-Version: 4.1.2
 Homepage: https://docs.daos.io/
 Vcs-Git: https://github.com/daos-stack/daos.git
