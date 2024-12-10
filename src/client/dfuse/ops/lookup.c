@@ -121,12 +121,12 @@ dfuse_reply_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 			wipe_parent = inode->ie_parent;
 			/* DAOS-17042 Replace strncpy with strncat or strlcpy */
 			strncpy(wipe_name, inode->ie_name, NAME_MAX);
-			wipe_name[NAME_MAX] = NULL;
+			wipe_name[NAME_MAX] = '\0';
 
 			inode->ie_parent = ie->ie_parent;
 			/* DAOS-17042 Replace strncpy with strncat or strlcpy */
 			strncpy(inode->ie_name, ie->ie_name, NAME_MAX);
-			inode->ie_name[NAME_MAX] = NULL;
+			inode->ie_name[NAME_MAX] = '\0';
 		}
 		atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
 		dfuse_ie_close(dfuse_info, ie);
@@ -300,7 +300,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	/* DAOS-17042 Replace strncpy with strncat or strlcpy */
 	strncpy(ie->ie_name, name, NAME_MAX);
-	ie->ie_name[NAME_MAX] = NULL;
+	ie->ie_name[NAME_MAX] = '\0';
 
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 
