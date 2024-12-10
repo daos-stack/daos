@@ -119,13 +119,11 @@ dfuse_reply_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 
 			/* Save the old name so that we can invalidate it in later */
 			wipe_parent = inode->ie_parent;
-			/* strncpy(wipe_name, inode->ie_name, NAME_MAX); */
-			strncpy(wipe_name, inode->ie_name, sizeof(wipe_name) - 1);
+			memcpy(wipe_name, inode->ie_name, NAME_MAX);
 			wipe_name[NAME_MAX] = '\0';
 
 			inode->ie_parent = ie->ie_parent;
-			/* strncpy(inode->ie_name, ie->ie_name, NAME_MAX); */
-			strncpy(inode->ie_name, ie->ie_name, sizeof(inode->ie_name) - 1);
+			memcpy(inode->ie_name, ie->ie_name, NAME_MAX);
 			inode->ie_name[NAME_MAX] = '\0';
 		}
 		atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
