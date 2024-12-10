@@ -790,8 +790,6 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf)
 		oh = parent->oh;
 	}
 
-	DFS_OP_STAT_INCR(dfs, DOS_STAT);
-
 	return entry_stat(dfs, dfs->th, oh, name, len, NULL, true, stbuf, NULL);
 }
 
@@ -816,9 +814,6 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf)
 		D_GOTO(out, rc);
 
 out:
-	if (rc == 0)
-		DFS_OP_STAT_INCR(dfs, DOS_OSTAT);
-
 	daos_obj_close(oh, NULL);
 	return rc;
 }
@@ -891,6 +886,8 @@ out:
 	rc2 = daos_obj_close(args->parent_oh, NULL);
 	if (rc == 0)
 		rc = rc2;
+	if (rc == 0)
+		DFS_OP_STAT_INCR(args->dfs, DOS_STAT);
 	return rc;
 }
 
@@ -1023,8 +1020,6 @@ err1_out:
 	D_FREE(op_args);
 	daos_obj_close(args->parent_oh, NULL);
 
-	if (rc == 0)
-		DFS_OP_STAT_INCR(args->dfs, DOS_OSTATX);
 	return rc;
 }
 

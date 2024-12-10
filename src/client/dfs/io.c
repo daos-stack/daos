@@ -48,6 +48,7 @@ read_cb(tse_task_t *task, void *data)
 		D_GOTO(out, rc);
 	}
 
+	DFS_OP_STAT_INCR(params->dfs, DOS_READ);
 	dfs_update_file_metrics(params->dfs, params->arr_iod.arr_nr_read, 0);
 	*params->read_size = params->arr_iod.arr_nr_read;
 out:
@@ -100,7 +101,6 @@ dfs_read_int(dfs_t *dfs, dfs_obj_t *obj, daos_off_t off, dfs_iod_t *iod, d_sg_li
 	if (rc)
 		D_GOTO(err_params, rc);
 
-	DFS_OP_STAT_INCR(dfs, DOS_READ);
 	/*
 	 * dc_task_schedule() calls tse_task_complete() even on error (which also calls the
 	 * completion cb that frees params in this case, so we can just ignore the rc here.
@@ -193,7 +193,7 @@ dfs_readx(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl, daos_siz
 			daos_event_launch(ev);
 			daos_event_complete(ev, 0);
 		}
-		DFS_OP_STAT_INCR(dfs, DOS_READX);
+		DFS_OP_STAT_INCR(dfs, DOS_READ);
 		return 0;
 	}
 
@@ -210,7 +210,7 @@ dfs_readx(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl, daos_siz
 			return daos_der2errno(rc);
 		}
 
-		DFS_OP_STAT_INCR(dfs, DOS_READX);
+		DFS_OP_STAT_INCR(dfs, DOS_READ);
 		*read_size = arr_iod.arr_nr_read;
 		dfs_update_file_metrics(dfs, arr_iod.arr_nr_read, 0);
 		return 0;
@@ -276,6 +276,8 @@ int
 dfs_writex(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl, daos_event_t *ev)
 {
 	daos_array_iod_t arr_iod;
+	daos_size_t      buf_size;
+	int              i;
 	int              rc;
 
 	if (dfs == NULL || !dfs->mounted)
@@ -294,7 +296,7 @@ dfs_writex(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl, daos_ev
 			daos_event_launch(ev);
 			daos_event_complete(ev, 0);
 		}
-		DFS_OP_STAT_INCR(dfs, DOS_WRITEX);
+		DFS_OP_STAT_INCR(dfs, DOS_WRITE);
 		return 0;
 	}
 
@@ -305,9 +307,15 @@ dfs_writex(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl, daos_ev
 	if (ev)
 		daos_event_errno_rc(ev);
 
+	buf_size = 0;
+	if (sgl)
+		for (i = 0; i < sgl->sg_nr; i++)
+			buf_size += sgl->sg_iovs[i].iov_len;
+
 	rc = daos_array_write(obj->oh, DAOS_TX_NONE, &arr_iod, sgl, ev);
 	if (rc == 0) {
-		DFS_OP_STAT_INCR(dfs, DOS_WRITEX);
+		DFS_OP_STAT_INCR(dfs, DOS_WRITE);
+		dfs_update_file_metrics(dfs, 0, buf_size);
 	} else {
 		D_ERROR("daos_array_write() failed (%d)\n", rc);
 	}

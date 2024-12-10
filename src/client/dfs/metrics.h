@@ -36,12 +36,9 @@ extern "C" {
 	ACTION(MKDIR)                                                                              \
 	ACTION(OPEN)                                                                               \
 	ACTION(OPENDIR)                                                                            \
-	ACTION(OSTAT)                                                                              \
-	ACTION(OSTATX)                                                                             \
 	ACTION(READ)                                                                               \
 	ACTION(READDIR)                                                                            \
 	ACTION(READLINK)                                                                           \
-	ACTION(READX)                                                                              \
 	ACTION(RENAME)                                                                             \
 	ACTION(RMXATTR)                                                                            \
 	ACTION(SETATTR)                                                                            \
@@ -51,8 +48,7 @@ extern "C" {
 	ACTION(SYNC)                                                                               \
 	ACTION(TRUNCATE)                                                                           \
 	ACTION(UNLINK)                                                                             \
-	ACTION(WRITE)                                                                              \
-	ACTION(WRITEX)
+	ACTION(WRITE)
 
 #define DFS_OP_STAT_DEFINE(name, ...) DOS_##name,
 
