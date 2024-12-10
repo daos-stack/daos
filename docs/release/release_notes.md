@@ -2,7 +2,7 @@
 
 We are pleased to announce the release of DAOS version 2.6.
 
-## DAOS Version 2.6.2 (2024-12-04) 
+## DAOS Version 2.6.2 (2024-12-10) 
 
 The DAOS 2.6.2 release contains the following updates on top of DAOS 2.6.1:
 
