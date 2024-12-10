@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -510,10 +511,11 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
 		D_GOTO(err, rc = EINVAL);
 	}
 
-	strncpy(new_obj->name, obj->name, DFS_MAX_NAME + 1);
-	new_obj->dfs   = dfs;
-	new_obj->mode  = obj->mode;
-	new_obj->flags = flags;
+	strncpy(new_obj->name, obj->name, DFS_MAX_NAME);
+	new_obj->name[DFS_MAX_NAME] = '\0';
+	new_obj->dfs                = dfs;
+	new_obj->mode               = obj->mode;
+	new_obj->flags              = flags;
 	oid_cp(&new_obj->parent_oid, obj->parent_oid);
 	oid_cp(&new_obj->oid, obj->oid);
 
@@ -616,8 +618,8 @@ dfs_obj_local2global(dfs_t *dfs, dfs_obj_t *obj, d_iov_t *glob)
 	oid_cp(&obj_glob->parent_oid, obj->parent_oid);
 	uuid_copy(obj_glob->coh_uuid, coh_uuid);
 	uuid_copy(obj_glob->cont_uuid, cont_uuid);
-	strncpy(obj_glob->name, obj->name, DFS_MAX_NAME + 1);
-	obj_glob->name[DFS_MAX_NAME] = 0;
+	strncpy(obj_glob->name, obj->name, DFS_MAX_NAME);
+	obj_glob->name[DFS_MAX_NAME] = '\0';
 	if (S_ISDIR(obj_glob->mode))
 		return 0;
 	rc = dfs_get_chunk_size(obj, &obj_glob->chunk_size);
@@ -674,7 +676,7 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
 
 	oid_cp(&obj->oid, obj_glob->oid);
 	oid_cp(&obj->parent_oid, obj_glob->parent_oid);
-	strncpy(obj->name, obj_glob->name, DFS_MAX_NAME + 1);
+	strncpy(obj->name, obj_glob->name, DFS_MAX_NAME);
 	obj->name[DFS_MAX_NAME] = '\0';
 	obj->mode               = obj_glob->mode;
 	obj->dfs                = dfs;
