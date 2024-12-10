@@ -1044,7 +1044,6 @@ dfuse_mcache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *tim
 		if (timeout)
 			*timeout = time_left;
 	}
-
 	return use;
 }
 
@@ -1237,7 +1236,7 @@ dfuse_open_handle_init(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh,
 {
 	oh->doh_dfs             = ie->ie_dfs->dfs_ns;
 	oh->doh_ie              = ie;
-	oh->doh_linear_read     = true;
+	oh->doh_linear_read     = 1;
 	oh->doh_linear_read_pos = 0;
 	atomic_init(&oh->doh_il_calls, 0);
 	atomic_init(&oh->doh_write_count, 0);
@@ -1254,7 +1253,9 @@ dfuse_ie_init(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 	atomic_init(&ie->ie_linear_read, true);
 	atomic_fetch_add_relaxed(&dfuse_info->di_inode_count, 1);
 	D_INIT_LIST_HEAD(&ie->ie_evict_entry);
+	D_INIT_LIST_HEAD(&ie->ie_open_reads);
 	D_RWLOCK_INIT(&ie->ie_wlock, 0);
+	D_MUTEX_INIT(&ie->ie_read_lock, 0);
 }
 
 void
@@ -1316,6 +1317,9 @@ dfuse_read_event_size(void *arg, size_t size)
 		ev->de_sgl.sg_iovs     = &ev->de_iov;
 		ev->de_sgl.sg_nr       = 1;
 	}
+
+	/* D_INIT_LIST_HEAD(&ev->de_read_list); */
+	D_INIT_LIST_HEAD(&ev->de_read_slaves);
 
 	rc = daos_event_init(&ev->de_ev, ev->de_eqt->de_eq, NULL);
 	if (rc != -DER_SUCCESS) {
