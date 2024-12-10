@@ -517,9 +517,9 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
 	strncpy(new_obj->name, obj->name, DFS_MAX_NAME);
 	new_obj->name[DFS_MAX_NAME] = '\0';
 #pragma GCC diagnostic pop
-	new_obj->dfs                = dfs;
-	new_obj->mode               = obj->mode;
-	new_obj->flags              = flags;
+	new_obj->dfs   = dfs;
+	new_obj->mode  = obj->mode;
+	new_obj->flags = flags;
 	oid_cp(&new_obj->parent_oid, obj->parent_oid);
 	oid_cp(&new_obj->oid, obj->oid);
 
