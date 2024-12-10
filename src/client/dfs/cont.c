@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -83,7 +84,11 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 			dattr.da_chunk_size = DFS_DEFAULT_CHUNK_SIZE;
 
 		if (attr->da_hints[0] != 0) {
-			strncpy(dattr.da_hints, attr->da_hints, DAOS_CONT_HINT_MAX_LEN);
+			/* GCC warns (-Wstringop-truncation) because the destination buffer size is
+			 * identical to max-size, leading to a potential char[] with no null
+			 * terminator.  nanopb can handle it fine, and parentheses around strncpy
+			 * silence that compiler warning. */
+			(strncpy(dattr.da_hints, attr->da_hints, DAOS_CONT_HINT_MAX_LEN - 1));
 			dattr.da_hints[DAOS_CONT_HINT_MAX_LEN - 1] = '\0';
 		}
 	} else {

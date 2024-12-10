@@ -25,7 +25,7 @@ apt-get install \
     golang-go \
     kmod \
     libaio-dev \
-    libasan8 \
+    libasan5 \
     libboost-dev \
     libcapstone-dev \
     libcmocka-dev \
