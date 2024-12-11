@@ -170,6 +170,12 @@ dfs_sys_test_create_remove(void **state)
 	rc = dfs_sys_symlink(dfs_sys_mt, sym1_target, sym1);
 	assert_int_equal(rc, 0);
 
+	/** remove should return ENOTSUP with force since caching is enabled */
+	rc = dfs_sys_remove(dfs_sys_mt, dir1, true, NULL);
+	assert_int_equal(rc, ENOTSUP);
+	rc = dfs_sys_remove_type(dfs_sys_mt, dir1, true, S_IFDIR, NULL);
+	assert_int_equal(rc, ENOTSUP);
+
 	/** Remove dirs, links with remove */
 	rc = dfs_sys_remove(dfs_sys_mt, sym1, 0, 0);
 	assert_int_equal(rc, 0);
@@ -212,20 +218,18 @@ dfs_sys_test_create_remove(void **state)
 	rc = dfs_sys_close(obj);
 	assert_int_equal(rc, 0);
 
-	/** Remove files with remove */
-	rc = dfs_sys_remove(dfs_sys_mt, file2, 0, 0);
-	assert_int_equal(rc, 0);
-
 	/** Remove dirs, files, links with remove_type */
 	rc = dfs_sys_remove_type(dfs_sys_mt, file1, false, S_IFREG, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_sys_remove_type(dfs_sys_mt, file2, false, S_IFREG, NULL);
 	assert_int_equal(rc, 0);
 	rc = dfs_sys_remove_type(dfs_sys_mt, sym1, false, S_IFLNK, NULL);
 	assert_int_equal(rc, 0);
 	rc = dfs_sys_remove_type(dfs_sys_mt, dir3, false, S_IFDIR, NULL);
 	assert_int_equal(rc, 0);
-
-	/** Remove dirs with remove_type(force) */
-	rc = dfs_sys_remove_type(dfs_sys_mt, dir1, true, S_IFDIR, NULL);
+	rc = dfs_sys_remove_type(dfs_sys_mt, dir2, false, S_IFDIR, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_sys_remove_type(dfs_sys_mt, dir1, false, S_IFDIR, NULL);
 	assert_int_equal(rc, 0);
 
 	/** Create dirs, files with mknod */
@@ -242,8 +246,14 @@ dfs_sys_test_create_remove(void **state)
 			   0, 0);
 	assert_int_equal(rc, 0);
 
-	/** Remove tree (dir) with remove(force) */
-	rc = dfs_sys_remove(dfs_sys_mt, dir1, true, NULL);
+	/** Remove tree with remove */
+	rc = dfs_sys_remove(dfs_sys_mt, file1, false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_sys_remove(dfs_sys_mt, dir3, false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_sys_remove(dfs_sys_mt, dir2, false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_sys_remove(dfs_sys_mt, dir1, false, NULL);
 	assert_int_equal(rc, 0);
 }
 
@@ -640,7 +650,14 @@ dfs_sys_test_open_readdir(void **state)
 	rc = dfs_sys_closedir(dirp);
 	assert_int_equal(rc, 0);
 
-	rc = dfs_sys_remove(dfs_sys_mt, dir1, true, NULL);
+	for (i = 0; i < num_dirs; i++) {
+		rc = snprintf(buf, buf_size, "%s/sub%u", dir1, i);
+		assert_true(rc > 0);
+		rc = dfs_sys_remove(dfs_sys_mt, buf, false, 0);
+		assert_int_equal(rc, 0);
+	}
+	rc = dfs_sys_remove(dfs_sys_mt, dir1, false, NULL);
+	assert_int_equal(rc, 0);
 }
 
 /**
@@ -848,11 +865,11 @@ dfs_sys_test_mkdir(void **state)
 	rc = dfs_sys_mkdir(dfs_sys_mt, file, S_IWUSR | S_IRUSR, 0);
 	assert_int_equal(rc, EEXIST);
 
-	rc = dfs_sys_remove(dfs_sys_mt, file, true, NULL);
+	rc = dfs_sys_remove(dfs_sys_mt, file, false, NULL);
 	assert_int_equal(rc, 0);
-	rc = dfs_sys_remove(dfs_sys_mt, child, true, NULL);
+	rc = dfs_sys_remove(dfs_sys_mt, child, false, NULL);
 	assert_int_equal(rc, 0);
-	rc = dfs_sys_remove(dfs_sys_mt, parent, true, NULL);
+	rc = dfs_sys_remove(dfs_sys_mt, parent, false, NULL);
 	assert_int_equal(rc, 0);
 }
 
@@ -885,11 +902,11 @@ dfs_sys_test_mkdir_p(void **state)
 	rc = dfs_sys_mkdir_p(dfs_sys_mt, file, S_IWUSR | S_IRUSR, 0);
 	assert_int_equal(rc, EEXIST);
 
-	rc = dfs_sys_remove(dfs_sys_mt, file, true, NULL);
+	rc = dfs_sys_remove(dfs_sys_mt, file, false, NULL);
 	assert_int_equal(rc, 0);
-	rc = dfs_sys_remove(dfs_sys_mt, child, true, NULL);
+	rc = dfs_sys_remove(dfs_sys_mt, child, false, NULL);
 	assert_int_equal(rc, 0);
-	rc = dfs_sys_remove(dfs_sys_mt, parent, true, NULL);
+	rc = dfs_sys_remove(dfs_sys_mt, parent, false, NULL);
 	assert_int_equal(rc, 0);
 }
 
