@@ -79,6 +79,8 @@ service MgmtSvc {
 	rpc SystemStart(SystemStartReq) returns(SystemStartResp) {}
 	// Exclude DAOS ranks
 	rpc SystemExclude(SystemExcludeReq) returns(SystemExcludeResp) {}
+	// Drain DAOS ranks from all pools
+	rpc SystemDrain(SystemDrainReq) returns (SystemDrainResp) {}
 	// Erase DAOS system database prior to reformat
 	rpc SystemErase(SystemEraseReq) returns(SystemEraseResp) {}
 	// Clean up leaked resources for a given node
