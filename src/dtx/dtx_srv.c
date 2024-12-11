@@ -196,7 +196,7 @@ dtx_handler(crt_rpc_t *rpc)
 				count = din->di_dtx_array.ca_count - i;
 
 			dtis = (struct dtx_id *)din->di_dtx_array.ca_arrays + i;
-			rc1 = vos_dtx_commit(cont->sc_hdl, dtis, count, NULL);
+			rc1 = vos_dtx_commit(cont->sc_hdl, dtis, count, false, NULL);
 			if (rc1 > 0)
 				committed += rc1;
 			else if (rc == 0 && rc1 < 0)
