@@ -11,13 +11,13 @@
 #include <linux/xattr.h>
 #include <daos/common.h>
 #include <daos/event.h>
-
 #include <gurt/atomic.h>
 
 #include <daos.h>
 #include <daos_fs.h>
-
 #include <daos_fs_sys.h>
+
+#include "dfs_internal.h"
 
 /** Number of entries for readdir */
 #define DFS_SYS_NUM_DIRENTS 24
@@ -1399,38 +1399,24 @@ out_free_path:
 	return rc;
 }
 
-static int
-check_existing_dir(dfs_sys_t *dfs_sys, const char *dir_path)
-{
-	struct stat st = {0};
-	int         rc;
-
-	rc = dfs_sys_stat(dfs_sys, dir_path, 0, &st);
-	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "failed to stat %s: (%d)\n", dir_path, rc);
-		return rc;
-	}
-
-	/* if it's not a directory, fail */
-	if (!S_ISDIR(st.st_mode))
-		return EEXIST;
-
-	/* if it is a directory, then it's not an error */
-	return 0;
-}
-
 int
 dfs_sys_mkdir_p(dfs_sys_t *dfs_sys, const char *dir_path, mode_t mode, daos_oclass_id_t cid)
 {
-	int   path_len = strnlen(dir_path, PATH_MAX);
-	char *_path    = NULL;
-	char *ptr      = NULL;
-	int   rc       = 0;
+	size_t     path_len;
+	char      *_path = NULL;
+	char      *sptr  = NULL;
+	char      *tok;
+	dfs_obj_t *parent;
+	int        rc = 0;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
 	if (dir_path == NULL)
 		return EINVAL;
+	if (dir_path[0] != '/')
+		return EINVAL;
+
+	path_len = strnlen(dir_path, PATH_MAX);
 	if (path_len == PATH_MAX)
 		return ENAMETOOLONG;
 
@@ -1438,31 +1424,34 @@ dfs_sys_mkdir_p(dfs_sys_t *dfs_sys, const char *dir_path, mode_t mode, daos_ocla
 	if (_path == NULL)
 		return ENOMEM;
 
+	parent = NULL;
 	/* iterate through the parent directories and create them if necessary */
-	for (ptr = _path + 1; *ptr != '\0'; ptr++) {
-		if (*ptr != '/')
-			continue;
+	for (tok = strtok_r(_path, "/", &sptr); tok != NULL; tok = strtok_r(NULL, "/", &sptr)) {
+		dfs_obj_t *cur;
 
-		/* truncate the string here to create the parent */
-		*ptr = '\0';
-		rc   = dfs_sys_mkdir(dfs_sys, _path, mode, cid);
+		rc = dfs_open(dfs_sys->dfs, parent, tok, mode | S_IFDIR, O_RDWR | O_CREAT, cid, 0,
+			      NULL, &cur);
 		if (rc != 0) {
-			if (rc != EEXIST)
-				D_GOTO(out_free, rc);
-			rc = check_existing_dir(dfs_sys, _path);
-			if (rc != 0)
-				D_GOTO(out_free, rc);
+			/*
+			 * If this is the last entry and dfs_open returns ENOTDIR, change that err
+			 * code to EEXISTS to match what posix mkdir does.
+			 */
+			if (rc == ENOTDIR) {
+				tok = strtok_r(NULL, "/", &sptr);
+				if (tok == NULL)
+					rc = EEXIST;
+			}
+			D_GOTO(out_free, rc);
 		}
-		/* reset to keep going */
-		*ptr = '/';
+
+		if (parent)
+			dfs_release(parent);
+		parent = cur;
 	}
 
-	/* create the final directory */
-	rc = dfs_sys_mkdir(dfs_sys, _path, mode, cid);
-	if (rc == EEXIST)
-		rc = check_existing_dir(dfs_sys, _path);
-
 out_free:
+	if (parent)
+		dfs_release(parent);
 	D_FREE(_path);
 	return rc;
 }
