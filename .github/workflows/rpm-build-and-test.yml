@@ -86,6 +86,13 @@ jobs:
     steps:
       - name: Make outputs from env variables
         run: echo "Make outputs from env variables"
+      - name: Debug
+        uses: raven-actions/debug@v1
+        with:
+          vars-context: ${{ toJson(vars) }}  # optional
+          secrets-context: ${{ toJson(secrets) }}  # optional
+          needs-context: ${{ toJson(needs) }}  # optional
+          inputs-context: ${{ toJson(inputs) }}  # optional
 
   Call-RPM-Build:
     name: Build RPM
