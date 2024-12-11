@@ -1,10 +1,13 @@
 hosts:
   test_servers: 6
   test_clients: 2
+
 timeout: 2000
+
 setup:
   start_agents_once: false
   start_servers_once: false
+
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -23,13 +26,16 @@ server_config:
       fabric_iface_port: 31417
       log_file: daos_server1.log
       storage: auto
+
 pool:
   size: 93%
   set_logmasks: False
+
 container:
   type: POSIX
   control_method: daos
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+
 ior:
   api: "DFS"
   client_processes:
