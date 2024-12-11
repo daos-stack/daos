@@ -14,8 +14,8 @@
 %endif
 
 Name:          daos
-Version:       2.6.1
-Release:       4%{?relval}%{?dist}
+Version:       2.6.2
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -600,6 +600,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %changelog
 * Fri Oct 04 2024 Kris Jacque <kris.jacque@intel.com> 2.6.1-5
 - Bump min supported go version to 1.21
+
+* Wed Nov 06 2024 Phillip Henderson <phillip.henderson@intel.com> 2.6.2-2
+- Second test build for 2.6.2
+
+* Tue Nov 05 2024 Phillip Henderson <phillip.henderson@intel.com> 2.6.2-1
+- First test build for 2.6.2
 
 * Wed Oct 02 2024 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.6.1-4
 - Add support of the PMDK package 2.1.0 with NDCTL enabled.

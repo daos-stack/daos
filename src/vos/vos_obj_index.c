@@ -791,13 +791,14 @@ exit:
 int
 oi_iter_check_punch(daos_handle_t ih)
 {
-	struct vos_iterator	*iter = vos_hdl2iter(ih);
-	struct vos_oi_iter	*oiter = iter2oiter(iter);
-	struct vos_obj_df	*obj;
-	struct oi_delete_arg	del_arg;
-	daos_unit_oid_t		 oid;
-	d_iov_t			 rec_iov;
-	int			 rc;
+	struct vos_iterator  *iter  = vos_hdl2iter(ih);
+	struct vos_oi_iter   *oiter = iter2oiter(iter);
+	struct vos_container *cont  = oiter->oit_cont;
+	struct vos_obj_df    *obj;
+	struct oi_delete_arg  del_arg;
+	daos_unit_oid_t       oid;
+	d_iov_t               rec_iov;
+	int                   rc;
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 
@@ -811,9 +812,21 @@ oi_iter_check_punch(daos_handle_t ih)
 	obj = (struct vos_obj_df *)rec_iov.iov_buf;
 	oid = obj->vo_id;
 
-	if (!vos_ilog_is_punched(vos_cont2hdl(oiter->oit_cont), &obj->vo_ilog, &oiter->oit_epr,
-				 NULL, &oiter->oit_ilog_info))
+	if (!vos_ilog_is_punched(vos_cont2hdl(cont), &obj->vo_ilog, &oiter->oit_epr, NULL,
+				 &oiter->oit_ilog_info))
 		return 0;
+
+	rc = vos_obj_hold(vos_obj_cache_current(cont->vc_pool->vp_sysdb), cont, oid,
+			  &oiter->oit_epr, iter->it_bound, VOS_OBJ_AGGREGATE | VOS_OBJ_NO_HOLD,
+			  DAOS_INTENT_PURGE, NULL, NULL);
+	if (rc != 0) {
+		/** -DER_BUSY means the object is in-use already.  We will after a yield in this
+		 * case.
+		 */
+		D_CDEBUG(rc == -DER_BUSY, DB_EPC, DLOG_ERR, "Hold check failed for " DF_UOID "\n",
+			 DP_UOID(oid));
+		return rc;
+	}
 
 	/** Ok, ilog is fully punched, so we can move it to gc heap */
 	rc = umem_tx_begin(vos_cont2umm(oiter->oit_cont), NULL);
