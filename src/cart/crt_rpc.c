@@ -1537,7 +1537,7 @@ out:
 			/* failure already reported through complete cb */
 			if (complete_cb != NULL)
 				rc = 0;
-		} else {
+		} else if (!crt_rpc_completed(rpc_priv)) {
 			RPC_DECREF(rpc_priv);
 		}
 	}
