@@ -10,6 +10,7 @@ require (
 	github.com/Jille/raft-grpc-transport v1.2.0
 	github.com/desertbit/grumble v1.1.3
 	github.com/dustin/go-humanize v1.0.0
+	github.com/golang/mock v1.6.0
 	github.com/google/go-cmp v0.6.0
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-hclog v1.2.2
@@ -39,6 +40,7 @@ require (
 	github.com/desertbit/go-shlex v0.1.1 // indirect
 	github.com/desertbit/readline v1.5.1 // indirect
 	github.com/fatih/color v1.13.0 // indirect
+	github.com/golang/mock v1.6.0 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
