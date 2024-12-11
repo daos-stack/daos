@@ -138,7 +138,7 @@ jobs:
         run: docker cp build-post:/home/daos/daos/nlt-junit.xml ./
       - name: Publish NLT test results
         if: always()
-        uses: EnricoMi/publish-unit-test-result-action@v1.17
+        uses: EnricoMi/publish-unit-test-result-action@v2.7
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           files: nlt-junit.xml
