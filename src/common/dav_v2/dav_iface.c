@@ -51,7 +51,7 @@ dav_uc_callback(int evt_type, void *arg, uint32_t zid)
 		break;
 	case UMEM_CACHE_EVENT_PGEVICT:
 		if (hdl->do_booted) {
-			VALGRIND_DO_DESTROY_MEMPOOL(z);
+			VALGRIND_DO_DESTROY_MEMPOOL_COND(z);
 		}
 		break;
 	default:
@@ -236,6 +236,8 @@ dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct
 	if (On_memcheck)
 		palloc_heap_vg_open(hdl->do_heap, 1);
 #endif
+
+	dav_force_gc_v2(hdl);
 
 	hdl->do_booted = 1;
 
