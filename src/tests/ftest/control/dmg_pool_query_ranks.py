@@ -101,7 +101,7 @@ class DmgPoolQueryRanks(ControlTestBase):
         all_ranks = enabled_ranks.copy()
         self.random.shuffle(all_ranks)
         exclude_rank = all_ranks[0]
-        suspect_rank = all_ranks[1]
+        dead_rank = all_ranks[1]
         self.log_step(f"Excluding pool rank:{exclude_rank} all_ranks={all_ranks}")
         self.pool.exclude([exclude_rank])
         enabled_ranks.remove(exclude_rank)

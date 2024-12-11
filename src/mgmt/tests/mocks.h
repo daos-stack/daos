@@ -109,7 +109,7 @@ extern daos_pool_info_t	ds_mgmt_pool_query_info_in;
 extern daos_pool_info_t	ds_mgmt_pool_query_info_out;
 extern void		*ds_mgmt_pool_query_info_ptr;
 extern d_rank_list_t	*ds_mgmt_pool_query_ranks_out;
-extern d_rank_list_t                    *ds_mgmt_pool_query_suspect_ranks_out;
+extern d_rank_list_t    *ds_mgmt_pool_query_dead_ranks_out;
 void mock_ds_mgmt_pool_query_setup(void);
 
 /*

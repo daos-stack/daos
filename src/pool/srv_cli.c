@@ -368,7 +368,7 @@ pool_query_init(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 }
 
 static int
-pool_map_get_suspect_ranks(struct pool_map *map, d_rank_list_t **ranks)
+pool_map_get_dead_ranks(struct pool_map *map, d_rank_list_t **ranks)
 {
 	crt_group_t        *primary_grp;
 	struct pool_domain *doms;

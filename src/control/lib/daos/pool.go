@@ -118,8 +118,8 @@ const (
 	PoolQueryOptionEnabledEngines = "enabled_engines"
 	// PoolQueryOptionDisabledEngines retrieves disabled engines as part of the pool query.
 	PoolQueryOptionDisabledEngines = "disabled_engines"
-	// PoolQueryOptionSuspectEngines retrieves suspect engines as part of the pool query.
-	PoolQueryOptionSuspectEngines = "suspect_engines"
+	// PoolQueryOptionDeadEngines retrieves dead engines as part of the pool query.
+	PoolQueryOptionDeadEngines = "dead_engines"
 
 	// PoolConnectFlagReadOnly indicates that the connection is read-only.
 	PoolConnectFlagReadOnly = C.DAOS_PC_RO
@@ -134,7 +134,7 @@ var poolQueryOptMap = map[C.int]string{
 	C.DPI_REBUILD_STATUS:   PoolQueryOptionRebuild,
 	C.DPI_ENGINES_ENABLED:  PoolQueryOptionEnabledEngines,
 	C.DPI_ENGINES_DISABLED: PoolQueryOptionDisabledEngines,
-	C.DPI_ENGINES_SUSPECT:  PoolQueryOptionSuspectEngines,
+	C.DPI_ENGINES_DEAD:     PoolQueryOptionDeadEngines,
 }
 
 func resolvePoolQueryOpt(name string) (C.int, error) {

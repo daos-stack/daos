@@ -1182,7 +1182,7 @@ func TestControl_PoolQuery(t *testing.T) {
 				},
 			},
 		},
-		"query succeeds suspect ranks": {
+		"query succeeds dead ranks": {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
 					&mgmtpb.PoolQueryResp{
@@ -1216,7 +1216,7 @@ func TestControl_PoolQuery(t *testing.T) {
 								MediaType: mgmtpb.StorageMediaType(daos.StorageMediaTypeNvme),
 							},
 						},
-						SuspectRanks: "[1,2,3,7]",
+						DeadRanks: "[1,2,3,7]",
 					},
 				),
 			},
@@ -1252,7 +1252,7 @@ func TestControl_PoolQuery(t *testing.T) {
 							MediaType: daos.StorageMediaTypeNvme,
 						},
 					},
-					SuspectRanks: ranklist.MustCreateRankSet("[1-3,7]"),
+					DeadRanks: ranklist.MustCreateRankSet("[1-3,7]"),
 				},
 			},
 		},
