@@ -332,6 +332,7 @@ func scanEngineBdevsOverDrpc(ctx context.Context, engine Engine, pbReq *ctlpb.Sc
 	if scanSmdResp == nil {
 		return nil, errors.New("nil smd scan resp")
 	}
+	engine.Tracef("smd scan devices: %+v", scanSmdResp.Devices)
 
 	// Re-link SMD devices inside NVMe controller structures and populate scan response.
 
@@ -340,12 +341,16 @@ func scanEngineBdevsOverDrpc(ctx context.Context, engine Engine, pbReq *ctlpb.Sc
 	}
 	seenCtrlrs := make(map[string]*ctlpb.NvmeController)
 
-	for _, sd := range scanSmdResp.Devices {
+	for i, sd := range scanSmdResp.Devices {
 		if sd.Ctrlr == nil {
 			return nil, errors.Errorf("smd %q has no ctrlr ref", sd.Uuid)
 		}
 
 		addr := sd.Ctrlr.PciAddr
+		if addr == "" {
+			// Mock identifier for emulated NVMe mode where devices have no PCI-address.
+			addr = fmt.Sprintf("0000:00:0.%d", i)
+		}
 
 		if _, exists := seenCtrlrs[addr]; !exists {
 			c := new(ctlpb.NvmeController)
@@ -460,6 +465,7 @@ func bdevScanEngineAssigned(ctx context.Context, engine Engine, req *ctlpb.ScanN
 	return scanEngineBdevsOverDrpc(ctx, engine, req)
 }
 
+// Accommodate for VMD backing devices and emulated NVMe (AIO).
 func getEffCtrlrCount(ctrlrs []*ctlpb.NvmeController) (int, error) {
 	pas := hardware.MustNewPCIAddressSet()
 	for _, c := range ctrlrs {
@@ -471,11 +477,13 @@ func getEffCtrlrCount(ctrlrs []*ctlpb.NvmeController) (int, error) {
 		if npas, err := pas.BackingToVMDAddresses(); err != nil {
 			return 0, err
 		} else {
-			pas = npas
+			return npas.Len(), nil
 		}
 	}
 
-	return pas.Len(), nil
+	// Return inputted number of controllers rather than number of parsed addresses to cater for
+	// the case of emulated NVMe where there will be no valid PCI address.
+	return len(ctrlrs), nil
 }
 
 // bdevScanEngine calls either in to the private engine storage provider to scan bdevs if engine process
