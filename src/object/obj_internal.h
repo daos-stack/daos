@@ -422,11 +422,19 @@ struct obj_req_tgts {
 	uint32_t		 ort_srv_disp:1;
 };
 
+struct obj_auxi_tried_tgt {
+	d_list_t	oatt_list;
+	uint32_t	oatt_id;
+};
+
 struct obj_auxi_tgt_list {
 	/** array of target ID */
 	uint32_t	*tl_tgts;
 	/** number of ranks & tgts */
 	uint32_t	tl_nr;
+
+	/** array of timeout target list */
+	d_list_t	tl_tried_list;
 };
 
 struct coll_query_args {
