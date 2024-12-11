@@ -3,7 +3,7 @@ port: 10001
 provider: ofi+tcp
 disable_hugepages: true
 control_log_mask: DEBUG
-access_points: ['localhost:10001']
+mgmt_svc_replicas: ['localhost:10001']
 engines:
   -
     targets: 4

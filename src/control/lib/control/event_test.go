@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -89,7 +89,7 @@ func TestControl_EventForwarder_OnEvent(t *testing.T) {
 	rasEventEngineDiedFwdable := mockEvtEngineDied(t).WithForwardable(true)
 
 	for name, tc := range map[string]struct {
-		aps            []string
+		replicas       []string
 		event          *events.RASEvent
 		nilClient      bool
 		expInvokeCount int
@@ -97,17 +97,17 @@ func TestControl_EventForwarder_OnEvent(t *testing.T) {
 		"nil event": {
 			event: nil,
 		},
-		"missing access points": {
+		"missing MS replicas": {
 			event: rasEventEngineDiedFwdable,
 		},
 		"successful forward": {
 			event:          rasEventEngineDiedFwdable,
-			aps:            []string{"192.168.1.1"},
+			replicas:       []string{"192.168.1.1"},
 			expInvokeCount: 2,
 		},
 		"skip non-forwardable event": {
-			event: rasEventEngineDied,
-			aps:   []string{"192.168.1.1"},
+			event:    rasEventEngineDied,
+			replicas: []string{"192.168.1.1"},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -126,7 +126,7 @@ func TestControl_EventForwarder_OnEvent(t *testing.T) {
 				callCount++ // call at least once
 			}
 
-			ef := NewEventForwarder(mi, tc.aps)
+			ef := NewEventForwarder(mi, tc.replicas)
 			for i := 0; i < callCount; i++ {
 				ef.OnEvent(test.Context(t), tc.event)
 			}

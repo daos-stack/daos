@@ -1,8 +1,11 @@
 # Example configuration file for UCX
 
-name: daos_server           # sys group daos_server
-access_points: ['example']  # management service leader (bootstrap)
-# port: 10001               # control listen port, default 10001
+# sys group daos_server
+name: daos_server
+# management service replicas
+mgmt_svc_replicas: ['example1', 'example2', 'example3']
+# control listen port, default 10001
+# port: 10001
 
 # UCX providers:
 #
