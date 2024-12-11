@@ -19,7 +19,8 @@ from command_utils_base import EnvironmentVariables
 from daos_racer_utils import DaosRacerCommand
 from data_mover_utils import DcpCommand, FsCopy
 from dfuse_utils import get_dfuse
-from dmg_utils import get_storage_query_device_info, get_storage_query_device_uuids
+from dmg_utils import (check_system_query_status, get_storage_query_device_info,
+                       get_storage_query_device_uuids)
 from duns_utils import format_path
 from exception_utils import CommandFailure
 from fio_utils import FioCommand
@@ -559,11 +560,22 @@ def launch_reboot(self, pools, name, results, args):
                     except CommandFailure as error:
                         self.log.error("<<<FAILED:dmg system start failed", exc_info=error)
                         status = False
+                    if status:
+                        # Check the servers are in joined state.
+                        all_joined = False
+                        retry = 0
+                        while not all_joined and retry < 10:
+                            all_joined = check_system_query_status(
+                                self.get_dmg_command().system_query())
+                            retry += 1
+                        if not all_joined:
+                            self.log.error("<<<FAILED: One or more servers failed to join")
+                            status = False
                     for pool in pools:
                         self.dmg_command.pool_query(pool.identifier)
                     self.dmg_command.system_query()
                 else:
-                    self.log.error("<<<FAILED:systemctl start daos_server failed")
+                    self.log.error("<<<FAILED: systemctl start daos_server failed")
                     status = False
             if status:
                 # reintegrate ranks
