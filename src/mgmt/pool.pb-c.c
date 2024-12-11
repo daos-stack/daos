@@ -3402,14 +3402,14 @@ static const ProtobufCFieldDescriptor mgmt__pool_query_resp__field_descriptors[2
 	0, NULL, NULL /* reserved1,reserved2, etc */
     },
     {
-	"suspect_ranks", 21, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING,
-	0, /* quantifier_offset */
-	offsetof(Mgmt__PoolQueryResp, suspect_ranks), NULL, &protobuf_c_empty_string, 0, /* flags */
+	"dead_ranks", 21, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0, /* quantifier_offset */
+	offsetof(Mgmt__PoolQueryResp, dead_ranks), NULL, &protobuf_c_empty_string, 0, /* flags */
 	0, NULL, NULL /* reserved1,reserved2, etc */
     },
 };
 static const unsigned mgmt__pool_query_resp__field_indices_by_name[] = {
     4,  /* field[4] = active_targets */
+    19, /* field[19] = dead_ranks */
     11, /* field[11] = disabled_ranks */
     5,  /* field[5] = disabled_targets */
     10, /* field[10] = enabled_ranks */
@@ -3420,7 +3420,6 @@ static const unsigned mgmt__pool_query_resp__field_indices_by_name[] = {
     6,  /* field[6] = rebuild */
     15, /* field[15] = state */
     0,  /* field[0] = status */
-    19, /* field[19] = suspect_ranks */
     16, /* field[16] = svc_ldr */
     17, /* field[17] = svc_reps */
     7,  /* field[7] = tier_stats */
