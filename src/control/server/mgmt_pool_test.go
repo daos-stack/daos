@@ -24,7 +24,6 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -504,6 +503,16 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				TgtRanks:  []uint32{0, 1},
 			},
 		},
+		"create with memory file ratio; mdonssd not enabled": {
+			targetCount: 8,
+			req: &mgmtpb.PoolCreateReq{
+				Uuid:       test.MockUUID(1),
+				TierBytes:  []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
+				MemRatio:   storage.DefaultMemoryFileRatio,
+				Properties: testPoolLabelProp(),
+			},
+			expErr: errors.New("MD-on-SSD has not been enabled"),
+		},
 		"successful creation with memory file ratio": {
 			targetCount:    8,
 			mdonssdEnabled: true,
@@ -522,6 +531,23 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				TierBytes:    []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
 				MemFileBytes: 50 * humanize.GiByte,
 				TgtRanks:     []uint32{0, 1},
+			},
+		},
+		"successful creation with memory file bytes in resp; mdonssd not enabled": {
+			targetCount: 8,
+			req: &mgmtpb.PoolCreateReq{
+				Uuid:       test.MockUUID(1),
+				TierBytes:  []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
+				Properties: testPoolLabelProp(),
+			},
+			drpcRet: &mgmtpb.PoolCreateResp{
+				TierBytes:    []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
+				MemFileBytes: 100 * humanize.GiByte,
+				TgtRanks:     []uint32{0, 1},
+			},
+			expResp: &mgmtpb.PoolCreateResp{
+				TierBytes: []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
+				TgtRanks:  []uint32{0, 1},
 			},
 		},
 		"successful creation minimum size": {
@@ -629,8 +655,6 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			buf.Reset()
 			defer test.ShowBufferOnFailure(t, buf)
 
-			ctx := test.Context(t)
-
 			if tc.mgmtSvc == nil {
 				tier := storage.NewTierConfig().
 					WithStorageClass("nvme").
@@ -639,30 +663,11 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 					tier.WithBdevDeviceRoles(7)
 				}
 				engineCfg := engine.MockConfig().
-					WithTargetCount(tc.targetCount).
+					WithTargetCount(16).
 					WithStorage(tier)
-				r := engine.NewTestRunner(nil, engineCfg)
-				if _, err := r.Start(ctx); err != nil {
-					t.Fatal(err)
-				}
-
 				mp := storage.NewProvider(log, 0, &engineCfg.Storage,
 					nil, nil, nil, nil)
-				srv := NewEngineInstance(log, mp, nil, r, nil)
-				srv.setDrpcSocket("/dontcare")
-				srv.ready.SetTrue()
-
-				harness := NewEngineHarness(log)
-				if err := harness.AddInstance(srv); err != nil {
-					panic(err)
-				}
-				harness.started.SetTrue()
-
-				db := raft.MockDatabase(t, log)
-				ms := system.MockMembership(t, log, db, mockTCPResolver)
-				tc.mgmtSvc = newMgmtSvc(harness, ms, db, nil,
-					events.NewPubSub(ctx, log))
-				tc.mgmtSvc.startAsyncLoops(ctx)
+				tc.mgmtSvc = newTestMgmtSvcWithProvider(t, log, mp)
 			}
 
 			numMembers := tc.memberCount
@@ -2315,11 +2320,12 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		mgmtSvc       *mgmtSvc
-		setupMockDrpc func(_ *mgmtSvc, _ error)
-		req           *mgmtpb.PoolQueryReq
-		expResp       *mgmtpb.PoolQueryResp
-		expErr        error
+		mdonssdEnabled bool
+		mgmtSvc        *mgmtSvc
+		setupMockDrpc  func(_ *mgmtSvc, _ error)
+		req            *mgmtpb.PoolQueryReq
+		expResp        *mgmtpb.PoolQueryResp
+		expErr         error
 	}{
 		"nil request": {
 			expErr: errors.New("nil request"),
@@ -2369,15 +2375,16 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 				Uuid:  mockUUID,
 			},
 		},
-		"successful query (includes pre-2.6 Leader field)": {
+		"successful query (includes pre-2.6 Leader field); mdonssd not enabled": {
 			req: &mgmtpb.PoolQueryReq{
 				Id: mockUUID,
 			},
 			setupMockDrpc: func(svc *mgmtSvc, err error) {
 				resp := &mgmtpb.PoolQueryResp{
-					State:  mgmtpb.PoolServiceState_Ready,
-					Uuid:   mockUUID,
-					SvcLdr: 42,
+					State:        mgmtpb.PoolServiceState_Ready,
+					Uuid:         mockUUID,
+					SvcLdr:       42,
+					MemFileBytes: humanize.GiByte,
 				}
 				setupMockDrpcClient(svc, resp, nil)
 			},
@@ -2388,19 +2395,50 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 				Leader: 42,
 			},
 		},
+		"successful query; mdonssd enabled": {
+			mdonssdEnabled: true,
+			req: &mgmtpb.PoolQueryReq{
+				Id: mockUUID,
+			},
+			setupMockDrpc: func(svc *mgmtSvc, err error) {
+				resp := &mgmtpb.PoolQueryResp{
+					State:        mgmtpb.PoolServiceState_Ready,
+					Uuid:         mockUUID,
+					MemFileBytes: humanize.GiByte,
+				}
+				setupMockDrpcClient(svc, resp, nil)
+			},
+			expResp: &mgmtpb.PoolQueryResp{
+				State:        mgmtpb.PoolServiceState_Ready,
+				Uuid:         mockUUID,
+				MemFileBytes: humanize.GiByte,
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			buf.Reset()
 			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.mgmtSvc == nil {
-				tc.mgmtSvc = newTestMgmtSvc(t, log)
+				tier := storage.NewTierConfig().
+					WithStorageClass("nvme").
+					WithBdevDeviceList("foo", "bar")
+				if tc.mdonssdEnabled {
+					tier.WithBdevDeviceRoles(7)
+				}
+				engineCfg := engine.MockConfig().
+					WithTargetCount(16).
+					WithStorage(tier)
+				mp := storage.NewProvider(log, 0, &engineCfg.Storage,
+					nil, nil, nil, nil)
+				tc.mgmtSvc = newTestMgmtSvcWithProvider(t, log, mp)
 			}
 			addTestPools(t, tc.mgmtSvc.sysdb, mockUUID)
 
 			if tc.setupMockDrpc == nil {
 				tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
-					setupSvcDrpcClient(svc, 0, getMockDrpcClient(tc.expResp, tc.expErr))
+					setupSvcDrpcClient(svc, 0,
+						getMockDrpcClient(tc.expResp, tc.expErr))
 				}
 			}
 			tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
