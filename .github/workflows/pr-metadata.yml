@@ -27,7 +27,7 @@ jobs:
         id: jira-data
       - name: Comment on PR
         if: always()
-        uses: thollander/actions-comment-pull-request@v2
+        uses: thollander/actions-comment-pull-request@v3
         with:
           comment_tag: 'jira_query_message'
           message: ${{ steps.jira-data.outputs.message }}
