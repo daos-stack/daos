@@ -700,11 +700,11 @@ def launch_reboot(self, pools, name, results, args):
                 self.log.info("<<<PASS %s: Issue systemctl restart daos_server on %s at %s>>>\n",
                               self.loop, name, reboot_host, time.ctime())
                 cmd_results = run_remote(
-                    self.log, reboot_host, "sudo systemctl restart daos_server")
+                    self.log, reboot_host, command_as_user("systemctl restart daos_server", "root"))
                 if cmd_results.passed:
                     self.dmg_command.system_query()
                     for pool in pools:
-                        self.dmg_command.pool_query(pool.identifier)
+                        pool.query()
                     # wait server to be started
                     try:
                         self.dmg_command.system_start(ranks=ranks)
@@ -723,7 +723,7 @@ def launch_reboot(self, pools, name, results, args):
                             self.log.error("<<<FAILED: One or more servers failed to join")
                             status = False
                     for pool in pools:
-                        self.dmg_command.pool_query(pool.identifier)
+                        pool.query()
                     self.dmg_command.system_query()
                 else:
                     self.log.error("<<<FAILED: systemctl start daos_server failed")
