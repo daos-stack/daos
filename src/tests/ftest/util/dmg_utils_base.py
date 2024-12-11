@@ -534,6 +534,7 @@ class DmgCommandBase(YamlCommand):
                 self.pool = BasicParameter(None, position=1)
                 self.show_enabled = FormattedParameter("--show-enabled", False)
                 self.show_disabled = FormattedParameter("--show-disabled", False)
+                self.health_only = FormattedParameter("--health-only", False)
 
         class QueryTargetsSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool query-targets command."""
