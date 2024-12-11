@@ -17,7 +17,7 @@ case "$mode" in
     "githook" | "gha")
         ;;
     *)
-        echo "Usage: check_update_copyright.sh <githook|gha>"
+        echo "Usage: check_update_copyright.sh <git_target> <githook|gha>"
         exit 1
 esac
 
