@@ -10,6 +10,7 @@ require (
 	github.com/Jille/raft-grpc-transport v1.2.0
 	github.com/desertbit/grumble v1.1.3
 	github.com/dustin/go-humanize v1.0.0
+	github.com/golang/mock v1.6.0
 	github.com/google/go-cmp v0.6.0
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-hclog v1.2.2

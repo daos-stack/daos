@@ -12,6 +12,7 @@ import (
 	"strings"
 	"unsafe"
 
+	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
@@ -24,6 +25,7 @@ import (
 
 /*
 #include "util.h"
+#include <gurt/common.h>
 */
 import "C"
 
@@ -295,7 +297,7 @@ func convertPoolInfo(pinfo *C.daos_pool_info_t) (*daos.PoolInfo, error) {
 	return poolInfo, nil
 }
 
-func queryPoolRankLists(poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (*daos.PoolInfo, error) {
+func queryPoolRankLists(mockDAOS *MockDAOSInterface, poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (*daos.PoolInfo, error) {
 	var rlPtr **C.d_rank_list_t = nil
 	var rl *C.d_rank_list_t = nil
 
@@ -308,10 +310,18 @@ func queryPoolRankLists(poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (
 		pi_bits: C.uint64_t(queryMask),
 	}
 
-	rc := C.daos_pool_query(poolHdl, rlPtr, &cPoolInfo, nil, nil)
-	defer C.d_rank_list_free(rl)
-	if err := daosError(rc); err != nil {
-		return nil, err
+	if mockDAOS != nil {
+		rc := mockDAOS.daos_pool_query(poolHdl, rlPtr, &cPoolInfo, nil, nil)
+		defer C.d_rank_list_free(rl)
+		if err := daosError(rc); err != nil {
+			return nil, err
+		}
+	} else {
+		rc := C.daos_pool_query(poolHdl, rlPtr, &cPoolInfo, nil, nil)
+		defer C.d_rank_list_free(rl)
+		if err := daosError(rc); err != nil {
+			return nil, err
+		}
 	}
 
 	poolInfo, err := convertPoolInfo(&cPoolInfo)
@@ -337,7 +347,7 @@ func queryPoolRankLists(poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (
 
 	return poolInfo, nil
 }
-func queryPool(poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (*daos.PoolInfo, error) {
+func queryPool(mockDAOS *MockDAOSInterface, poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (*daos.PoolInfo, error) {
 	poolInfo := &daos.PoolInfo{}
 	originalMask := queryMask // Save the original queryMask
 
@@ -347,7 +357,7 @@ func queryPool(poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (*daos.Poo
 		queryMask.ClearAll()
 		queryMask.SetOptions(option)
 
-		poolInfo1, err := queryPoolRankLists(poolHdl, queryMask)
+		poolInfo1, err := queryPoolRankLists(mockDAOS, poolHdl, queryMask)
 		if err != nil {
 			return err
 		}
@@ -371,7 +381,7 @@ func queryPool(poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (*daos.Poo
 	}
 	var firstOption string = ""
 	for _, opt := range queryOptions {
-		if queryMask.HasOption(opt) && firstOption != "" {
+		if queryMask.HasOption(opt) && firstOption == "" {
 			firstOption = opt
 			continue
 		}
@@ -379,7 +389,7 @@ func queryPool(poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (*daos.Poo
 	}
 
 	// Perform the first query to get basic information
-	poolInfo, err := queryPoolRankLists(poolHdl, queryMask)
+	poolInfo, err := queryPoolRankLists(mockDAOS, poolHdl, queryMask)
 	if err != nil {
 		return nil, err
 	}
@@ -393,6 +403,42 @@ func queryPool(poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (*daos.Poo
 		}
 	}
 	poolInfo.QueryMask = originalMask
+
+	return poolInfo, nil
+}
+
+func MockQueryPool(mockDAOS *MockDAOSInterface, queryMask daos.PoolQueryMask) (*daos.PoolInfo, error) {
+	var count int = 0
+	if queryMask.HasOption(daos.PoolQueryOptionEnabledEngines) {
+		count++
+	}
+	if queryMask.HasOption(daos.PoolQueryOptionDisabledEngines) {
+		count++
+	}
+	if queryMask.HasOption(daos.PoolQueryOptionDeadEngines) {
+		count++
+	}
+	if count == 0 {
+		count = 1
+	}
+	mockDAOS.EXPECT().daos_pool_query(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(C.int(0)).
+		DoAndReturn(func(poolHdl C.daos_handle_t, rlPtr **C.d_rank_list_t, poolInfo *C.daos_pool_info_t, arg3 unsafe.Pointer, arg4 unsafe.Pointer) C.int {
+			if poolInfo.pi_bits&C.DPI_ENGINES_ENABLED != 0 {
+				*rlPtr = C.d_rank_list_alloc(1)
+			}
+			if poolInfo.pi_bits&C.DPI_ENGINES_DISABLED != 0 {
+				*rlPtr = C.d_rank_list_alloc(2)
+			}
+			if poolInfo.pi_bits&C.DPI_ENGINES_DEAD != 0 {
+				*rlPtr = C.d_rank_list_alloc(3)
+			}
+			return C.int(0)
+		}).Times(count)
+
+	poolInfo, err := queryPool(mockDAOS, C.daos_handle_t{}, queryMask)
+	if err != nil {
+		return nil, err
+	}
 
 	return poolInfo, nil
 }
@@ -413,7 +459,7 @@ func (cmd *poolQueryCmd) Execute(_ []string) error {
 	}
 	defer cleanup()
 
-	poolInfo, err := queryPool(cmd.cPoolHandle, queryMask)
+	poolInfo, err := queryPool(nil, cmd.cPoolHandle, queryMask)
 	if err != nil {
 		return errors.Wrapf(err, "failed to query pool %q", cmd.PoolID())
 	}
@@ -474,7 +520,7 @@ func (cmd *poolQueryTargetsCmd) Execute(_ []string) error {
 	}
 
 	if len(idxList) == 0 {
-		pi, err := queryPool(cmd.cPoolHandle, daos.HealthOnlyPoolQueryMask)
+		pi, err := queryPool(nil, cmd.cPoolHandle, daos.HealthOnlyPoolQueryMask)
 		if err != nil || (pi.TotalTargets == 0 || pi.TotalEngines == 0) {
 			if err != nil {
 				return errors.Wrap(err, "pool query failed")

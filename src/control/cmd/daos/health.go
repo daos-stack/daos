@@ -104,7 +104,7 @@ func (cmd *healthCheckCmd) Execute([]string) error {
 		if pool.DisabledTargets > 0 {
 			queryMask.SetOptions(daos.PoolQueryOptionDisabledEngines)
 		}
-		tpi, err := queryPool(poolHdl, queryMask)
+		tpi, err := queryPool(nil, poolHdl, queryMask)
 		if err != nil {
 			cmd.Errorf("failed to query pool %s: %v", pool.Label, err)
 			continue
