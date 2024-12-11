@@ -490,6 +490,45 @@ ds_rebuild_running_query(uuid_t pool_uuid, uint32_t opc, uint32_t *upper_ver,
 		rpt_put(rpt);
 }
 
+/*
+ * Restart rebuild if \a rank's rebuild not finished.
+ * Only used for massive failure recovery case, see pool_restart_rebuild_if_rank_wip().
+ */
+void
+ds_rebuild_restart_if_rank_wip(uuid_t pool_uuid, d_rank_t rank)
+{
+	struct rebuild_global_pool_tracker	*rgt;
+	int					 i;
+
+	rgt = rebuild_global_pool_tracker_lookup(pool_uuid, -1, -1);
+	if (rgt == NULL)
+		return;
+
+	if (rgt->rgt_status.rs_state != DRS_IN_PROGRESS) {
+		rgt_put(rgt);
+		return;
+	}
+
+	for (i = 0; i < rgt->rgt_servers_number; i++) {
+		if (rgt->rgt_servers[i].rank == rank) {
+			if (!rgt->rgt_servers[i].pull_done) {
+				rgt->rgt_status.rs_errno = -DER_STALE;
+				rgt->rgt_abort = 1;
+				rgt->rgt_status.rs_fail_rank = rank;
+				D_INFO(DF_RB ": abort rebuild because rank %d WIP\n",
+				       DP_RB_RGT(rgt), rank);
+			}
+			rgt_put(rgt);
+			return;
+		}
+	}
+
+	D_INFO(DF_RB ": rank %d not in rgt_servers,  rgt_servers_number %d\n",
+	       DP_RB_RGT(rgt), rank, rgt->rgt_servers_number);
+	rgt_put(rgt);
+	return;
+}
+
 /* TODO: Add something about what the current operation is for output status */
 int
 ds_rebuild_query(uuid_t pool_uuid, struct daos_rebuild_status *status)
