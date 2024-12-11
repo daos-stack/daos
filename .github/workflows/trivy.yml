@@ -26,7 +26,7 @@ jobs:
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
 
       - name: Run Trivy vulnerability scanner in filesystem mode (table format)
-        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2  # 0.28.0
+        uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0  # 0.29.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -51,7 +51,7 @@ jobs:
           sed -i 's/format: template/format: sarif/g' utils/trivy/trivy.yaml
 
       - name: Run Trivy vulnerability scanner in filesystem mode (sarif format)
-        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2  # 0.28.0
+        uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0  # 0.29.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -70,7 +70,7 @@ jobs:
           sed -i 's/exit-code: 0/exit-code: 1/g' utils/trivy/trivy.yaml
 
       - name: Run Trivy vulnerability scanner in filesystem mode (human readable format)
-        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2  # 0.28.0
+        uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0  # 0.29.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
