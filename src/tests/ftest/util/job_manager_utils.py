@@ -473,6 +473,7 @@ class Mpirun(JobManager):
         self.tmpdir_base = FormattedParameter("--mca orte_tmpdir_base {}", None)
         self.args = BasicParameter(None, None)
         self.mpi_type = mpi_type
+        self.hostlist = FormattedParameter("-hosts {}", None)
 
     def assign_hosts(self, hosts, path=None, slots=None, hostfile=True):
         """Assign the hosts to use with the command (-f).
