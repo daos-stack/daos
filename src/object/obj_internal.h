@@ -281,6 +281,7 @@ struct shard_rw_args {
 	struct dcs_csum_info	*dkey_csum;
 	struct dcs_iod_csums	*iod_csums;
 	struct obj_reasb_req	*reasb_req;
+	uint16_t		 csum_retry_cnt;
 };
 
 struct coll_sparse_targets {
@@ -480,8 +481,8 @@ struct obj_auxi_args {
 					 rebuilding:1,
 					 for_migrate:1;
 	/* request flags. currently only: ORF_RESEND */
-	uint32_t			 flags;
 	uint32_t			 specified_shard;
+	uint32_t			 flags;
 	uint16_t			 retry_cnt;
 	uint16_t			 inprogress_cnt;
 	struct obj_req_tgts		 req_tgts;
@@ -1099,7 +1100,7 @@ int daos_obj_query_merge(struct obj_query_merge_args *oqma);
 void obj_coll_disp_init(uint32_t tgt_nr, uint32_t max_tgt_size, uint32_t inline_size,
 			uint32_t start, uint32_t max_width, struct obj_coll_disp_cursor *ocdc);
 void obj_coll_disp_dest(struct obj_coll_disp_cursor *ocdc, struct daos_coll_target *tgts,
-			crt_endpoint_t *tgt_ep);
+			crt_endpoint_t *tgt_ep, daos_obj_id_t oid);
 void obj_coll_disp_move(struct obj_coll_disp_cursor *ocdc);
 int obj_utils_init(void);
 void obj_utils_fini(void);

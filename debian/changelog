@@ -1,3 +1,15 @@
+daos (2.6.2-2) unstable; urgency=medium
+  [ Phillip Henderson ]
+  * Second test build for 2.6.2
+
+ -- Phillip Henderson <phillip.henderson@intel.com>  Wed, 06 Nov 2024 18:37:00 -0500
+
+daos (2.6.2-1) unstable; urgency=medium
+  [ Phillip Henderson ]
+  * First test build for 2.6.2
+
+ -- Phillip Henderson <phillip.henderson@intel.com>  Tue, 05 Nov 2024 23:25:00 -0500
+
 daos (2.6.1-4) unstable; urgency=medium
   [ Tomasz Gromadzki ]
   * Add support of the PMDK package 2.1.0 with NDCTL enabled.
