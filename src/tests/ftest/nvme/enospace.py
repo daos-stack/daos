@@ -464,22 +464,36 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         """
         self.log.info(self.pool.pool_percentage_used())
 
-        # Enabled TIme mode for Aggregation.
+        self.log_step("Enable pool aggregation")
         self.pool.set_property("reclaim", "time")
+
+        self.log_step("Get initial pool free space")
+        initial_space = self.pool.get_pool_daos_space()
+        initial_free_scm = initial_space["s_free"][0]
+        initial_free_nvme = initial_space["s_free"][1]
+        self.log.info("initial_free_scm  = %s", initial_free_scm)
+        self.log.info("initial_free_nvme = %s", initial_free_nvme)
 
         # Repeat the test in loop.
         for _loop in range(10):
-            self.log.info("-------enospc_time_fg Loop--------- %d", _loop)
+            self.log_step(f"Run IOR to fill the pool - enospace_time_with_fg loop {_loop}")
             self.log.info(self.pool.pool_percentage_used())
             # Run IOR to fill the pool.
             log_file = f"-loop_{_loop}".join(os.path.splitext(self.client_log))
             self.run_enospace_with_bg_job(log_file)
-            # Delete all the containers
+            self.log_step(f"Delete all containers - enospace_time_with_fg loop {_loop}")
             self.delete_all_containers()
-            # Delete container will take some time to release the space
-            time.sleep(60)
+            self.log_step(f"Wait for aggregation to complete - enospace_time_with_fg loop {_loop}")
+            agg_did_complete = self.pool.wait_for_aggregation(
+                # verify_scm=lambda current: current <= initial_free_scm * 1.05,
+                # verify_nvme=lambda current: current <= initial_free_nvme * 1.05,
+                verify_scm=lambda current: current == initial_free_scm,
+                verify_nvme=lambda current: current == initial_free_nvme,
+                retries=8, interval=30)
+            if not agg_did_complete:
+                self.fail("Pool space not reclaimed after deleting all containers")
 
-        # Run last IO
+        self.log_step("Run one more sanity IOR to fill 1%")
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
 
     @skipForTicket("DAOS-8896")
