@@ -2362,8 +2362,9 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc,
 {
 	if (opc == DAOS_OBJ_RPC_ENUMERATE && flags & ORF_FOR_MIGRATION) {
 		if (child->sc_ec_agg_active) {
-			D_ERROR(DF_UUID" ec aggregate still active\n",
-				DP_UUID(child->sc_pool->spc_uuid));
+			D_ERROR(DF_CONT" ec aggregate still active, rebuilding %d\n",
+				DP_CONT(child->sc_pool->spc_uuid, child->sc_uuid),
+				child->sc_pool->spc_pool->sp_rebuilding);
 			return -DER_UPDATE_AGAIN;
 		}
 	}
