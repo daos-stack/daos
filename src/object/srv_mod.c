@@ -38,6 +38,8 @@ obj_mod_init(void)
 		goto out_class;
 	}
 
+	D_INFO("lxz test with debug log\n");
+
 	return 0;
 
 out_class:

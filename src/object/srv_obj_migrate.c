@@ -628,6 +628,8 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, unsigned int version, unsig
 	tls = migrate_pool_tls_lookup(pool->sp_uuid, version, generation);
 	D_ASSERT(tls != NULL);
 	pool->sp_rebuilding++;
+	D_INFO(DF_UUID": sp_rebuilding inc to %d\n",
+	       DP_UUID(pool->sp_uuid), pool->sp_rebuilding);
 
 	rc = ABT_cond_create(&tls->mpt_init_cond);
 	if (rc != ABT_SUCCESS)
@@ -3201,6 +3203,8 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generat
 	migrate_pool_tls_put(tls);
 	pool->sp_rebuilding--;
 	D_INFO(DF_UUID" migrate stopped\n", DP_UUID(pool->sp_uuid));
+	D_INFO(DF_UUID": sp_rebuilding dec to %d\n",
+	       DP_UUID(pool->sp_uuid), pool->sp_rebuilding);
 }
 
 static int
