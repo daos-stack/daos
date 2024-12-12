@@ -300,7 +300,7 @@ func queryPoolRankLists(poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (
 	var rl *C.d_rank_list_t = nil
 
 	if queryMask.HasOption(daos.PoolQueryOptionEnabledEngines) || queryMask.HasOption(daos.PoolQueryOptionDisabledEngines) ||
-		queryMask.HasOption(daos.PoolQueryOptionSuspectEngines) {
+		queryMask.HasOption(daos.PoolQueryOptionDeadEngines) {
 		rlPtr = &rl
 	}
 
@@ -330,8 +330,8 @@ func queryPoolRankLists(poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (
 		if queryMask.HasOption(daos.PoolQueryOptionDisabledEngines) {
 			poolInfo.DisabledRanks = rs
 		}
-		if queryMask.HasOption(daos.PoolQueryOptionSuspectEngines) {
-			poolInfo.SuspectRanks = rs
+		if queryMask.HasOption(daos.PoolQueryOptionDeadEngines) {
+			poolInfo.DeadRanks = rs
 		}
 	}
 
@@ -357,8 +357,8 @@ func queryPool(poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (*daos.Poo
 			poolInfo.EnabledRanks = poolInfo1.EnabledRanks
 		case daos.PoolQueryOptionDisabledEngines:
 			poolInfo.DisabledRanks = poolInfo1.DisabledRanks
-		case daos.PoolQueryOptionSuspectEngines:
-			poolInfo.SuspectRanks = poolInfo1.SuspectRanks
+		case daos.PoolQueryOptionDeadEngines:
+			poolInfo.DeadRanks = poolInfo1.DeadRanks
 		}
 		return nil
 	}
@@ -369,8 +369,8 @@ func queryPool(poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (*daos.Poo
 		firstOption = daos.PoolQueryOptionEnabledEngines
 	} else if originalMask.HasOption(daos.PoolQueryOptionDisabledEngines) {
 		firstOption = daos.PoolQueryOptionDisabledEngines
-	} else if originalMask.HasOption(daos.PoolQueryOptionSuspectEngines) {
-		firstOption = daos.PoolQueryOptionSuspectEngines
+	} else if originalMask.HasOption(daos.PoolQueryOptionDeadEngines) {
+		firstOption = daos.PoolQueryOptionDeadEngines
 	}
 
 	// Perform the first query to get basic information
@@ -382,7 +382,7 @@ func queryPool(poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (*daos.Poo
 	queryOptions := []string{
 		daos.PoolQueryOptionEnabledEngines,
 		daos.PoolQueryOptionDisabledEngines,
-		daos.PoolQueryOptionSuspectEngines,
+		daos.PoolQueryOptionDeadEngines,
 	}
 
 	// Process each option sequentially

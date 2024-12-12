@@ -882,12 +882,12 @@ func TestControl_PoolQueryResp_MarshalJSON(t *testing.T) {
 					ServiceLeader:    6,
 					ServiceReplicas:  []ranklist.Rank{0, 1, 2},
 					DisabledRanks:    &ranklist.RankSet{},
-					SuspectRanks:     ranklist.MustCreateRankSet("[7,8,9]"),
+					DeadRanks:        ranklist.MustCreateRankSet("[7,8,9]"),
 					PoolLayoutVer:    7,
 					UpgradeLayoutVer: 8,
 				},
 			},
-			exp: `{"query_mask":"disabled_engines,rebuild,suspect_engines","state":"Ready","uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":[0,1,2],"rebuild":null,"tier_stats":null,"disabled_ranks":[],"suspect_ranks":[7,8,9],"pool_layout_ver":7,"upgrade_layout_ver":8,"mem_file_bytes":0,"status":42}`,
+			exp: `{"query_mask":"dead_engines,disabled_engines,rebuild","state":"Ready","uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":[0,1,2],"rebuild":null,"tier_stats":null,"disabled_ranks":[],"dead_ranks":[7,8,9],"pool_layout_ver":7,"upgrade_layout_ver":8,"mem_file_bytes":0,"status":42}`,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -929,7 +929,7 @@ func TestControl_PoolQueryResp_UnmarshalJSON(t *testing.T) {
 			},
 		},
 		"valid rankset": {
-			data: `{"enabled_ranks":"[0,1-3,5]","disabled_ranks":"[]","suspect_ranks":"[4]","status":0,"uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":null,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8,"mem_file_bytes":1000}`,
+			data: `{"enabled_ranks":"[0,1-3,5]","dead_ranks":"[4]","disabled_ranks":"[]","status":0,"uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":null,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8,"mem_file_bytes":1000}`,
 			expResp: PoolQueryResp{
 				Status: 0,
 				PoolInfo: daos.PoolInfo{
@@ -942,7 +942,7 @@ func TestControl_PoolQueryResp_UnmarshalJSON(t *testing.T) {
 					ServiceLeader:    6,
 					EnabledRanks:     ranklist.MustCreateRankSet("[0-3,5]"),
 					DisabledRanks:    &ranklist.RankSet{},
-					SuspectRanks:     ranklist.MustCreateRankSet("[4]"),
+					DeadRanks:        ranklist.MustCreateRankSet("[4]"),
 					PoolLayoutVer:    7,
 					UpgradeLayoutVer: 8,
 					MemFileBytes:     1000,
@@ -1214,7 +1214,7 @@ func TestControl_PoolQuery(t *testing.T) {
 				},
 			},
 		},
-		"query succeeds suspect ranks": {
+		"query succeeds dead ranks": {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
 					&mgmtpb.PoolQueryResp{
@@ -1248,7 +1248,7 @@ func TestControl_PoolQuery(t *testing.T) {
 								MediaType: mgmtpb.StorageMediaType(daos.StorageMediaTypeNvme),
 							},
 						},
-						SuspectRanks: "[1,2,3,7]",
+						DeadRanks: "[1,2,3,7]",
 					},
 				),
 			},
@@ -1284,7 +1284,7 @@ func TestControl_PoolQuery(t *testing.T) {
 							MediaType: daos.StorageMediaTypeNvme,
 						},
 					},
-					SuspectRanks: ranklist.MustCreateRankSet("[1-3,7]"),
+					DeadRanks: ranklist.MustCreateRankSet("[1-3,7]"),
 				},
 			},
 		},
