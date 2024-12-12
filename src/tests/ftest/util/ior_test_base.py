@@ -294,8 +294,7 @@ class IorTestBase(TestWithServers):
 
         return None
 
-    def run_ior_multiple_variants(self, obj_class, apis, transfer_block_size,
-                                  flags, mount_dir):
+    def run_ior_multiple_variants(self, obj_class, apis, transfer_block_size, flags):
         """Run multiple ior commands with various different combination of ior input params.
 
         Args:
@@ -306,7 +305,6 @@ class IorTestBase(TestWithServers):
                                        1M is transfer size and 32M is
                                        block size in the above example.
             flags(list): list of ior flags. Only the first index is used
-            mount_dir(str): dfuse mount directory
         """
         results = []
 
@@ -333,7 +331,7 @@ class IorTestBase(TestWithServers):
                     try:
                         self.run_ior_with_pool(
                             intercept=intercept, plugin_path=hdf5_plugin_path,
-                            timeout=self.ior_timeout, mount_dir=mount_dir)
+                            timeout=self.ior_timeout)
                         results.append(["PASS", str(self.ior_cmd)])
                     except CommandFailure:
                         results.append(["FAIL", str(self.ior_cmd)])
