@@ -22,7 +22,8 @@ from command_utils_base import EnvironmentVariables
 from daos_racer_utils import DaosRacerCommand
 from data_mover_utils import DcpCommand, FsCopy
 from dfuse_utils import get_dfuse
-from dmg_utils import get_storage_query_device_info
+from dmg_utils import (check_system_query_status, get_storage_query_device_info,
+                       get_storage_query_device_uuids)
 from duns_utils import format_path
 from exception_utils import CommandFailure
 from fio_utils import FioCommand
@@ -634,9 +635,12 @@ def launch_reboot(self, pools, name, results, args):
     # If all ranks "joined", issue reintegrate for all pool on all ranks and wait for
     #    rebuild to complete
     # Update multiprocessing queue with results and args
+    # pylint: disable=too-many-nested-blocks,too-many-branches
     status = False
     params = {}
     ranks = None
+    reboot_host = None
+    ranklist = None
     if name == "REBOOT":
         reboot_host = self.random.choice(self.hostlist_servers)
         ranklist = self.server_managers[0].get_host_ranks(reboot_host)
@@ -666,67 +670,81 @@ def launch_reboot(self, pools, name, results, args):
                 rebuild_status &= wait_for_pool_rebuild(self, pool, name)
             status = rebuild_status
 
-    elif name == "REBOOT_REINTEGRATE" and self.harasser_results["REBOOT"]:
-        reboot_host = self.harasser_args["REBOOT"]["host"]
-        ranklist = self.harasser_args["REBOOT"]["ranks"]
-        ranks = ",".join(str(rank) for rank in ranklist)
-        self.log.info("<<<PASS %s: %s started on host %s at %s>>>\n", self.loop, name, reboot_host,
-                      time.ctime())
-        status = True
-        self.dmg_command.system_query()
-        # wait for node to complete rebooting
-        if not wait_for_result(self.log, check_ping, 60, 5, True, host=reboot_host,
-                               expected_ping=True, cmd_timeout=60, verbose=True):
-            self.log.error(f"<<<FAILED: {name} - {reboot_host} failed to reboot")
-            status = False
-        if not wait_for_result(self.log, check_ssh, 120, 2, True, hosts=reboot_host,
-                               cmd_timeout=30, verbose=True):
-            self.log.error(f"<<<FAILED: {name} - {reboot_host} failed to reboot")
-            status = False
-        if status:
-            # issue a restart
-            self.log.info("<<<PASS %s: Issue systemctl restart daos_server on %s at %s>>>\n",
-                          self.loop, name, reboot_host, time.ctime())
-            cmd_results = run_remote(
-                self.log, reboot_host, command_as_user("systemctl restart daos_server", "root"))
-            if cmd_results.passed:
-                self.dmg_command.system_query()
-                for pool in pools:
-                    self.dmg_command.pool_query(pool.identifier)
-                # wait server to be started
-                try:
-                    self.dmg_command.system_start(ranks=ranks)
-                except CommandFailure as error:
-                    self.log.error("<<<FAILED:dmg system start failed", exc_info=error)
-                    status = False
-                for pool in pools:
-                    self.dmg_command.pool_query(pool.identifier)
-                self.dmg_command.system_query()
-            else:
-                self.log.error("<<<FAILED:systemctl start daos_server failed")
+    elif name == "REBOOT_REINTEGRATE":
+        if self.harasser_results["REBOOT"]:
+            reboot_host = self.harasser_args["REBOOT"]["host"]
+            ranklist = self.harasser_args["REBOOT"]["ranks"]
+            ranks = ",".join(str(rank) for rank in ranklist)
+            self.log.info("<<<PASS %s: %s started on host %s at %s>>>\n", self.loop, name,
+                          reboot_host, time.ctime())
+            status = True
+            self.dmg_command.system_query()
+            # wait for node to complete rebooting
+            if not wait_for_result(self.log, check_ping, 60, 5, True, host=reboot_host,
+                                   expected_ping=True, cmd_timeout=60, verbose=True):
+                self.log.error(f"<<<FAILED: {name} - {reboot_host} failed to reboot")
                 status = False
-        if status:
-            # reintegrate ranks
-            reintegrate_status = True
-            for pool in pools:
-                for rank in ranklist:
+            if not wait_for_result(self.log, check_ssh, 120, 2, True, hosts=reboot_host,
+                                   cmd_timeout=30, verbose=True):
+                self.log.error(f"<<<FAILED: {name} - {reboot_host} failed to reboot")
+                status = False
+            if status:
+                # issue a restart
+                self.log.info("<<<PASS %s: Issue systemctl restart daos_server on %s at %s>>>\n",
+                              self.loop, name, reboot_host, time.ctime())
+                cmd_results = run_remote(
+                    self.log, reboot_host, command_as_user("systemctl restart daos_server", "root"))
+                if cmd_results.passed:
+                    self.dmg_command.system_query()
+                    for pool in pools:
+                        pool.query()
+                    # wait server to be started
                     try:
-                        pool.reintegrate(rank)
-                        status = True
-                    except TestFail as error:
-                        self.log.error(
-                            f"<<<FAILED: dmg pool {pool.identifier} reintegrate failed on rank"
-                            "{rank}", exc_info=error)
+                        self.dmg_command.system_start(ranks=ranks)
+                    except CommandFailure as error:
+                        self.log.error("<<<FAILED:dmg system start failed", exc_info=error)
                         status = False
-                    reintegrate_status &= status
-                    if reintegrate_status:
-                        reintegrate_status &= wait_for_pool_rebuild(self, pool, name)
-                        status = reintegrate_status
-                    else:
-                        status = False
-    else:
-        self.log.error("<<<PASS %s: %s failed due to REBOOT failure >>>", self.loop, name)
-        status = False
+                    if status:
+                        # Check the servers are in joined state.
+                        all_joined = False
+                        retry = 0
+                        while not all_joined and retry < 10:
+                            all_joined = check_system_query_status(
+                                self.get_dmg_command().system_query())
+                            retry += 1
+                            time.sleep(10)
+                        if not all_joined:
+                            self.log.error("<<<FAILED: One or more servers failed to join")
+                            status = False
+                    for pool in pools:
+                        pool.query()
+                    self.dmg_command.system_query()
+                else:
+                    self.log.error("<<<FAILED: systemctl start daos_server failed")
+                    status = False
+            if status:
+                # reintegrate ranks
+                reintegrate_status = True
+                for pool in pools:
+                    for rank in ranklist:
+                        try:
+                            pool.reintegrate(rank)
+                            status = True
+                        except TestFail as error:
+                            self.log.error(
+                                f"<<<FAILED: dmg pool {pool.identifier} reintegrate failed on rank"
+                                "{rank}", exc_info=error)
+                            status = False
+                        reintegrate_status &= status
+                        if reintegrate_status:
+                            reintegrate_status &= wait_for_pool_rebuild(self, pool, name)
+                            status = reintegrate_status
+                        else:
+                            status = False
+                        self.dmg_command.system_query()
+        else:
+            self.log.error("<<<PASS %s: %s failed due to REBOOT failure >>>", self.loop, name)
+            status = False
 
     params = {"name": name,
               "status": status,
