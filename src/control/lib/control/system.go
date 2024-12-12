@@ -589,7 +589,6 @@ type SystemDrainResp struct {
 	Results     []*SystemOsaResult `json:"results"`
 }
 
-// TODO: implement on the results type
 // Errors returns a single error combining all error messages associated with a system drain
 // response. Doesn't retrieve errors from sysResponse because missing ranks or hosts will not be
 // populated in SystemDrainResp.

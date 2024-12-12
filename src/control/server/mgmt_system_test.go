@@ -1853,7 +1853,7 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 	}{
 		"nil req": {
 			req:    (*mgmtpb.SystemDrainReq)(nil),
-			expErr: errors.New("nil request"),
+			expErr: errors.New("nil *mgmt.SystemDrainReq"),
 		},
 		"not system leader": {
 			req: &mgmtpb.SystemDrainReq{
@@ -1895,7 +1895,22 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				test.MockUUID(1): "0-4",
 				test.MockUUID(2): "1-7",
 			},
-			expErr: errors.New("not responding on dRPC"),
+			expResp: &mgmtpb.SystemDrainResp{
+				Results: []*mgmtpb.SystemOsaResult{
+					{
+						PoolId: test.MockUUID(1),
+						Ranks:  "0-1",
+						Status: -1025,
+						Msg:    FaultDataPlaneNotStarted.Error(),
+					},
+					{
+						PoolId: test.MockUUID(2),
+						Ranks:  "1",
+						Status: -1025,
+						Msg:    FaultDataPlaneNotStarted.Error(),
+					},
+				},
+			},
 		},
 		"matching ranks; multiple pools": {
 			req: &mgmtpb.SystemDrainReq{Ranks: "0,1"},
@@ -2096,7 +2111,7 @@ func TestServer_MgmtSvc_SystemReint(t *testing.T) {
 	}{
 		"nil req": {
 			req:    (*mgmtpb.SystemReintReq)(nil),
-			expErr: errors.New("nil request"),
+			expErr: errors.New("nil *mgmt.SystemReintReq"),
 		},
 		"not system leader": {
 			req: &mgmtpb.SystemReintReq{
@@ -2138,7 +2153,22 @@ func TestServer_MgmtSvc_SystemReint(t *testing.T) {
 				test.MockUUID(1): "0-4",
 				test.MockUUID(2): "1-7",
 			},
-			expErr: errors.New("not responding on dRPC"),
+			expResp: &mgmtpb.SystemReintResp{
+				Results: []*mgmtpb.SystemOsaResult{
+					{
+						PoolId: test.MockUUID(1),
+						Ranks:  "0-1",
+						Status: -1025,
+						Msg:    FaultDataPlaneNotStarted.Error(),
+					},
+					{
+						PoolId: test.MockUUID(2),
+						Ranks:  "1",
+						Status: -1025,
+						Msg:    FaultDataPlaneNotStarted.Error(),
+					},
+				},
+			},
 		},
 		"matching ranks; multiple pools": {
 			req: &mgmtpb.SystemReintReq{Ranks: "0,1"},

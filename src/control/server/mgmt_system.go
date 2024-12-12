@@ -23,6 +23,7 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
@@ -1095,78 +1096,6 @@ func (svc *mgmtSvc) refuseMissingRanks(hosts, ranks string) (*ranklist.RankSet, 
 	return hitRanks, nil
 }
 
-func osaResultsFromRanks(id string, succeeded *ranklist.RankSet, failed poolRanksMap) []*mgmtpb.SystemOsaResult {
-	results := []*mgmtpb.SystemOsaResult{}
-
-	// Single result generated for all ranks operated on successfully.
-	if succeeded.Count() > 0 {
-		results = append(results, &mgmtpb.SystemOsaResult{
-			PoolId: id,
-			Ranks:  succeeded.String(),
-		})
-	}
-
-	var msgs []string
-	for msg := range failed {
-		msgs = append(msgs, msg)
-	}
-	sort.Strings(msgs)
-
-	// Result generated for each failure message rank-group.
-	for _, msg := range msgs {
-		results = append(results, &mgmtpb.SystemOsaResult{
-			// Status already included in error message.
-			Status: int32(daos.MiscError),
-			Msg:    msg,
-			PoolId: id,
-			Ranks:  failed[msg].String(),
-		})
-	}
-
-	return results
-}
-
-type poolRanksMap map[string]*ranklist.RankSet
-
-type osaPoolRankOpSig func(*mgmtSvc, context.Context, string, string, ranklist.Rank) (int32, string, error)
-
-// Generate OSA operation results by iterating through pool's ranks and calling supplied fn on each.
-func (svc *mgmtSvc) getOsaResults(ctx context.Context, sys string, poolIDs []string, poolRanks poolRanksMap, drpcCall osaPoolRankOpSig) ([]*mgmtpb.SystemOsaResult, error) {
-	results := []*mgmtpb.SystemOsaResult{}
-
-	for _, id := range poolIDs {
-		rs := poolRanks[id]
-		if rs.Count() == 0 {
-			continue
-		}
-		succeeded := ranklist.MustCreateRankSet("")
-		failed := make(poolRanksMap)
-
-		// TODO DAOS-6611: Drain multiple pool-ranks per call when drpc.MethodPoolDrain API
-		//                 supports it.
-		for _, r := range rs.Ranks() {
-			status, errMsg, err := drpcCall(svc, ctx, sys, id, r)
-			if err != nil {
-				return nil, err
-			}
-
-			// Each rank-drain failure message will produce a single result.
-			if status != 0 {
-				if _, exists := failed[errMsg]; !exists {
-					failed[errMsg] = ranklist.MustCreateRankSet("")
-				}
-				failed[errMsg].Add(r)
-			} else {
-				succeeded.Add(r)
-			}
-		}
-
-		results = append(results, osaResultsFromRanks(id, succeeded, failed)...)
-	}
-
-	return results, nil
-}
-
 // Build mappings of pools to any ranks that match the input filter by iterating through the pool
 // service list. Identify pools by label if possible.
 func (svc *mgmtSvc) getPoolsRanks(ranks *ranklist.RankSet) ([]string, poolRanksMap, error) {
@@ -1212,42 +1141,128 @@ func (svc *mgmtSvc) getPoolsRanks(ranks *ranklist.RankSet) ([]string, poolRanksM
 	return poolIDs, poolRanks, nil
 }
 
-// Drain rank on a pool by calling over dRPC.
-func drainPoolRank(svc *mgmtSvc, ctx context.Context, sys, id string, rank ranklist.Rank) (int32, string, error) {
-	var errMsg string
-	drainReq := &mgmtpb.PoolDrainReq{
+func osaResultsFromRanks(id string, succeeded *ranklist.RankSet, failed poolRanksMap) []*mgmtpb.SystemOsaResult {
+	results := []*mgmtpb.SystemOsaResult{}
+
+	// Single result generated for all ranks operated on successfully.
+	if succeeded.Count() > 0 {
+		results = append(results, &mgmtpb.SystemOsaResult{
+			PoolId: id,
+			Ranks:  succeeded.String(),
+		})
+	}
+
+	var msgs []string
+	for msg := range failed {
+		msgs = append(msgs, msg)
+	}
+	sort.Strings(msgs)
+
+	// Result generated for each failure message rank-group.
+	for _, msg := range msgs {
+		results = append(results, &mgmtpb.SystemOsaResult{
+			// Status already included in error message.
+			Status: int32(daos.MiscError),
+			Msg:    msg,
+			PoolId: id,
+			Ranks:  failed[msg].String(),
+		})
+	}
+
+	return results
+}
+
+type poolRanksMap map[string]*ranklist.RankSet
+
+type osaPoolRankOpSig func(*mgmtSvc, context.Context, string, string, ranklist.Rank) (int32, string)
+
+// Generate OSA operation results by iterating through pool's ranks and calling supplied fn on each.
+func (svc *mgmtSvc) getOsaResults(ctx context.Context, sys string, poolIDs []string, poolRanks poolRanksMap, drpcCall osaPoolRankOpSig) ([]*mgmtpb.SystemOsaResult, error) {
+	results := []*mgmtpb.SystemOsaResult{}
+
+	for _, id := range poolIDs {
+		rs := poolRanks[id]
+		if rs.Count() == 0 {
+			continue
+		}
+		succeeded := ranklist.MustCreateRankSet("")
+		failed := make(poolRanksMap)
+
+		svc.log.Tracef("operating on ranks %v on pool %s", rs, id)
+
+		// TODO DAOS-6611: Operate on multiple pool-ranks per call when
+		//                 drpc.MethodPool{Drain|Reint} API supports it.
+		for _, r := range rs.Ranks() {
+			status, errMsg := drpcCall(svc, ctx, sys, id, r)
+
+			// Each rank-drain failure message will produce a single result.
+			if status != int32(daos.Success) {
+				if _, exists := failed[errMsg]; !exists {
+					failed[errMsg] = ranklist.MustCreateRankSet("")
+				}
+				failed[errMsg].Add(r)
+			} else {
+				succeeded.Add(r)
+			}
+		}
+
+		results = append(results, osaResultsFromRanks(id, succeeded, failed)...)
+	}
+
+	return results, nil
+}
+
+// Drain rank on a pool by calling over dRPC. Function signature satisfies osaPoolRankOpSig type.
+func drainPoolRank(svc *mgmtSvc, ctx context.Context, sys, id string, rank ranklist.Rank) (int32, string) {
+	pbReq := &mgmtpb.PoolDrainReq{
 		Sys:  sys,
 		Rank: rank.Uint32(),
 		Id:   id,
 	}
-	drainResp := &mgmtpb.PoolDrainResp{}
 
-	drpcResp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolDrain, drainReq)
+	pbResp, err := svc.PoolDrain(ctx, pbReq)
 	if err != nil {
-		return 0, "", err
+		return int32(daos.MiscError), err.Error()
+	}
+	if pbResp.Status != int32(daos.Success) {
+		return pbResp.Status, daos.Status(pbResp.Status).Error()
 	}
 
-	if err := svc.unmarshalPB(drpcResp.Body, drainResp); err != nil {
-		drainResp.Status = int32(daos.MiscError)
-		errMsg = err.Error()
-	} else if drainResp.Status != int32(daos.Success) {
-		errMsg = daos.Status(drainResp.Status).Error()
-	}
+	svc.log.Tracef("pool-drain triggered from system-drain: %+v (req: %+v)", pbResp, pbReq)
 
-	svc.log.Tracef("pool-drain triggered from system-drain: %+v (req: %+v)",
-		drainResp, drainReq)
-
-	return drainResp.Status, errMsg, nil
+	return int32(daos.Success), ""
 }
 
-// SystemDrain marks specified ranks on all pools as being in a drain state.
-func (svc *mgmtSvc) SystemDrain(ctx context.Context, req *mgmtpb.SystemDrainReq) (*mgmtpb.SystemDrainResp, error) {
+// Reint rank on a pool by calling over dRPC. Function signature satisfies osaPoolRankOpSig type.
+func reintPoolRank(svc *mgmtSvc, ctx context.Context, sys, id string, rank ranklist.Rank) (int32, string) {
+	pbReq := &mgmtpb.PoolReintReq{
+		Sys:  sys,
+		Rank: rank.Uint32(),
+		Id:   id,
+	}
+
+	pbResp, err := svc.PoolReint(ctx, pbReq)
+	if err != nil {
+		return int32(daos.MiscError), err.Error()
+	}
+	if pbResp.Status != int32(daos.Success) {
+		return pbResp.Status, daos.Status(pbResp.Status).Error()
+	}
+
+	svc.log.Tracef("pool-reint triggered from system-reint: %+v (req: %+v)", pbResp, pbReq)
+
+	return int32(daos.Success), ""
+}
+
+// Perform leader and requested ranks checks before mapping ranks to existing pools and generating
+// results from the relevant dRPC calls to operate on the pool-ranks.
+func (svc *mgmtSvc) doSysOsaOp(ctx context.Context, req proto.Message, hosts, ranks, sys string, opCall osaPoolRankOpSig) ([]*mgmtpb.SystemOsaResult, error) {
 	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
 
 	// Validate requested hosts or ranks exist and fail if any are missing.
-	hitRanks, err := svc.refuseMissingRanks(req.Hosts, req.Ranks)
+	hitRanks, err := svc.refuseMissingRanks(hosts, ranks)
 	if err != nil {
 		return nil, err
 	}
@@ -1259,7 +1274,16 @@ func (svc *mgmtSvc) SystemDrain(ctx context.Context, req *mgmtpb.SystemDrainReq)
 	}
 
 	// Generate results from dRPC calls.
-	results, err := svc.getOsaResults(ctx, req.Sys, poolIDs, poolRanks, drainPoolRank)
+	return svc.getOsaResults(ctx, sys, poolIDs, poolRanks, opCall)
+}
+
+// SystemDrain marks specified ranks on all pools as being in a drain state.
+func (svc *mgmtSvc) SystemDrain(ctx context.Context, req *mgmtpb.SystemDrainReq) (*mgmtpb.SystemDrainResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T", req)
+	}
+
+	results, err := svc.doSysOsaOp(ctx, req, req.Hosts, req.Ranks, req.Sys, drainPoolRank)
 	if err != nil {
 		return nil, err
 	}
@@ -1269,54 +1293,13 @@ func (svc *mgmtSvc) SystemDrain(ctx context.Context, req *mgmtpb.SystemDrainReq)
 	}, nil
 }
 
-// Reint rank on a pool by calling over dRPC.
-func reintPoolRank(svc *mgmtSvc, ctx context.Context, sys, id string, rank ranklist.Rank) (int32, string, error) {
-	var errMsg string
-	reintReq := &mgmtpb.PoolReintReq{
-		Sys:  sys,
-		Rank: rank.Uint32(),
-		Id:   id,
-	}
-	reintResp := &mgmtpb.PoolReintResp{}
-
-	drpcResp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolReint, reintReq)
-	if err != nil {
-		return 0, "", err
-	}
-
-	if err := svc.unmarshalPB(drpcResp.Body, reintResp); err != nil {
-		reintResp.Status = int32(daos.MiscError)
-		errMsg = err.Error()
-	} else if reintResp.Status != int32(daos.Success) {
-		errMsg = daos.Status(reintResp.Status).Error()
-	}
-
-	svc.log.Tracef("pool-reint triggered from system-reint: %+v (req: %+v)",
-		reintResp, reintReq)
-
-	return reintResp.Status, errMsg, nil
-}
-
 // SystemReint marks specified ranks on all pools as being in a reint state.
 func (svc *mgmtSvc) SystemReint(ctx context.Context, req *mgmtpb.SystemReintReq) (*mgmtpb.SystemReintResp, error) {
-	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
-		return nil, err
+	if req == nil {
+		return nil, errors.Errorf("nil %T", req)
 	}
 
-	// Validate requested hosts or ranks exist and fail if any are missing.
-	hitRanks, err := svc.refuseMissingRanks(req.Hosts, req.Ranks)
-	if err != nil {
-		return nil, err
-	}
-
-	// Retrieve rank-to-pool mappings.
-	poolIDs, poolRanks, err := svc.getPoolsRanks(hitRanks)
-	if err != nil {
-		return nil, err
-	}
-
-	// Generate results from dRPC calls.
-	results, err := svc.getOsaResults(ctx, req.Sys, poolIDs, poolRanks, reintPoolRank)
+	results, err := svc.doSysOsaOp(ctx, req, req.Hosts, req.Ranks, req.Sys, drainPoolRank)
 	if err != nil {
 		return nil, err
 	}
