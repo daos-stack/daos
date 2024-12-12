@@ -121,12 +121,12 @@ func (r *PoolDrainReq) SetUUID(id uuid.UUID) {
 }
 
 // SetSvcRanks sets the request's Pool Service Ranks.
-func (r *PoolReintegrateReq) SetSvcRanks(rl []uint32) {
+func (r *PoolReintReq) SetSvcRanks(rl []uint32) {
 	r.SvcRanks = rl
 }
 
 // SetUUID sets the request's ID to a UUID.
-func (r *PoolReintegrateReq) SetUUID(id uuid.UUID) {
+func (r *PoolReintReq) SetUUID(id uuid.UUID) {
 	r.Id = id.String()
 }
 

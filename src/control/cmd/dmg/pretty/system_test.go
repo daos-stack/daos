@@ -612,23 +612,15 @@ Unknown 3 hosts: foo[7-9]
 	}
 }
 
-func TestPretty_PrintSystemDrainResp(t *testing.T) {
+func TestPretty_printSysOsaResp(t *testing.T) {
 	for name, tc := range map[string]struct {
-		resp   *control.SystemDrainResp
-		expOut string
+		results []*control.SystemOsaResult
+		expOut  string
 	}{
-		"empty response": {
-			resp: &control.SystemDrainResp{},
-			expOut: `
-No pool ranks drained
-`,
-		},
 		"normal response": {
-			resp: &control.SystemDrainResp{
-				Results: []*control.DrainResult{
-					{PoolID: test.MockUUID(1), Ranks: "0-3"},
-					{PoolID: test.MockUUID(2), Ranks: "1-4"},
-				},
+			results: []*control.SystemOsaResult{
+				{PoolID: test.MockUUID(1), Ranks: "0-3"},
+				{PoolID: test.MockUUID(2), Ranks: "1-4"},
 			},
 			expOut: `
 Pool                                 Ranks Result Reason 
@@ -639,11 +631,9 @@ Pool                                 Ranks Result Reason
 `,
 		},
 		"normal response; use labels": {
-			resp: &control.SystemDrainResp{
-				Results: []*control.DrainResult{
-					{PoolID: "label1", Ranks: "0-3"},
-					{PoolID: "label2", Ranks: "1-4"},
-				},
+			results: []*control.SystemOsaResult{
+				{PoolID: "label1", Ranks: "0-3"},
+				{PoolID: "label2", Ranks: "1-4"},
 			},
 			expOut: `
 Pool   Ranks Result Reason 
@@ -654,14 +644,12 @@ label2 1-4   OK     N/A
 `,
 		},
 		"response with failures": {
-			resp: &control.SystemDrainResp{
-				Results: []*control.DrainResult{
-					{PoolID: test.MockUUID(1), Ranks: "1-2"},
-					{PoolID: test.MockUUID(2), Ranks: "0"},
-					{
-						PoolID: test.MockUUID(2), Ranks: "1-2",
-						Status: -1, Msg: "fail1",
-					},
+			results: []*control.SystemOsaResult{
+				{PoolID: test.MockUUID(1), Ranks: "1-2"},
+				{PoolID: test.MockUUID(2), Ranks: "0"},
+				{
+					PoolID: test.MockUUID(2), Ranks: "1-2",
+					Status: -1, Msg: "fail1",
 				},
 			},
 			expOut: `
@@ -676,7 +664,7 @@ Pool                                 Ranks Result Reason
 	} {
 		t.Run(name, func(t *testing.T) {
 			var out strings.Builder
-			PrintSystemDrainResponse(&out, tc.resp)
+			printSysOsaResults(&out, tc.results)
 
 			if diff := cmp.Diff(strings.TrimLeft(tc.expOut, "\n"), out.String()); diff != "" {
 				t.Fatalf("unexpected stdout (-want, +got):\n%s\n", diff)
