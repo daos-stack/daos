@@ -845,6 +845,7 @@ out:
 
 	mgmt__pool_drain_req__free_unpacked(req, &alloc.alloc);
 }
+
 void
 ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
