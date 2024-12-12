@@ -49,6 +49,7 @@ dma_alloc_chunk(unsigned int cnt)
 	}
 
 	if (chunk->bdc_ptr == NULL) {
+		D_ERROR("Failed to allocate %zu DMA buffer\n", bytes);
 		D_FREE(chunk);
 		return NULL;
 	}
@@ -88,6 +89,7 @@ dma_buffer_grow(struct bio_dma_buffer *buf, unsigned int cnt)
 	for (i = 0; i < cnt; i++) {
 		chunk = dma_alloc_chunk(bio_chk_sz);
 		if (chunk == NULL) {
+			D_ERROR("Failed to grow DMA buffer (%u chunks)\n", buf->bdb_tot_cnt);
 			rc = -DER_NOMEM;
 			break;
 		}
