@@ -1781,7 +1781,7 @@ def run_daos_cmd(conf,
 
 # pylint: disable-next=too-many-arguments
 def create_cont(conf, pool=None, ctype=None, label=None, path=None, oclass=None, dir_oclass=None,
-                file_oclass=None, hints=None, valgrind=False, log_check=True, cwd=None):
+                file_oclass=None, hints=None, valgrind=False, log_check=True, cwd=None, attrs=None):
     """Use 'daos' command to create a new container.
 
     Args:
@@ -1798,6 +1798,7 @@ def create_cont(conf, pool=None, ctype=None, label=None, path=None, oclass=None,
         valgrind (bool, optional): Whether to run command under valgrind.  Defaults to True.
         log_check (bool, optional): Whether to run log analysis to check for leaks.
         cwd (str, optional): Path to run daos command from.
+        attrs (dict, optional): Dictionary of user attributes to set.
 
     Returns:
         DaosCont: Newly created container as DaosCont object.
@@ -1831,6 +1832,9 @@ def create_cont(conf, pool=None, ctype=None, label=None, path=None, oclass=None,
 
     if hints:
         cmd.extend(['--hints', hints])
+
+    if attrs:
+        cmd.extend(['--attrs', ','.join([f"{name}:{val}" for name, val in attrs.items()])])
 
     def _create_cont():
         """Helper function for create_cont"""
@@ -3098,12 +3102,12 @@ class PosixTests():
         assert rc.returncode == 0
 
         # Create a second new container which is not linked
-        container2 = create_cont(self.conf, self.pool, ctype="POSIX", label='mycont_uns_link2')
         cont_attrs = {'dfuse-attr-time': '5m',
                       'dfuse-dentry-time': '5m',
                       'dfuse-dentry-dir-time': '5m',
                       'dfuse-ndentry-time': '5m'}
-        container2.set_attrs(cont_attrs)
+        container2 = create_cont(self.conf, self.pool, ctype="POSIX", label='mycont_uns_link2',
+                                 attrs=cont_attrs)
 
         # Link and then destroy the first container
         path = join(self.dfuse.dir, 'uns_link1')
@@ -6177,7 +6181,15 @@ def test_alloc_fail_cont_create(server, conf):
                 '--type',
                 'POSIX',
                 '--path',
-                join(dfuse.dir, f'container_{cont_id}')]
+                join(dfuse.dir, f'container_{cont_id}'),
+                '--attrs',
+                ','.join([
+                    'dfuse-attr-time:5m',
+                    'dfuse-dentry-time:4m',
+                    'dfuse-dentry-dir-time:3m',
+                    'dfuse-ndentry-time:2m',
+                    'dfuse-data-cache:off',
+                    'dfuse-direct-io-disable:off'])]
 
     test_cmd = AllocFailTest(conf, 'cont-create', get_cmd)
     test_cmd.check_post_stdout = False
