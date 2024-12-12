@@ -719,6 +719,7 @@ def launch_reboot(self, pools, name, results, args):
                             all_joined = check_system_query_status(
                                 self.get_dmg_command().system_query())
                             retry += 1
+                            time.sleep(10)
                         if not all_joined:
                             self.log.error("<<<FAILED: One or more servers failed to join")
                             status = False
