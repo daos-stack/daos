@@ -1479,7 +1479,7 @@ crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 			  DP_HG_RC(hg_ret));
 		/* should success as addref above */
 		RPC_DECREF(rpc_priv);
-		rc = crt_hgret_2_der(hg_ret);
+		D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 	}
 
 	/* Release input buffer */
@@ -1492,6 +1492,7 @@ crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 		}
 	}
 
+out:
 	return rc;
 }
 
