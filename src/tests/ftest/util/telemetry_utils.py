@@ -967,6 +967,32 @@ class ClientTelemetryUtils(TelemetryUtils):
         _gen_stats_metrics("client_io_ops_tgt_update_active")
     CLIENT_IO_OPS_UPDATE_ACTIVE_METRICS = \
         _gen_stats_metrics("client_io_ops_update_active")
+    CLIENT_DFS_OPS_METRICS = [
+        "client_dfs_ops_CHMOD",
+        "client_dfs_ops_CHOWN",
+        "client_dfs_ops_CREATE",
+        "client_dfs_ops_GETSIZE",
+        "client_dfs_ops_GETXATTR",
+        "client_dfs_ops_LSXATTR",
+        "client_dfs_ops_MKDIR",
+        "client_dfs_ops_OPEN",
+        "client_dfs_ops_OPENDIR",
+        "client_dfs_ops_READ",
+        "client_dfs_ops_READDIR",
+        "client_dfs_ops_READLINK",
+        "client_dfs_ops_RENAME",
+        "client_dfs_ops_RMXATTR",
+        "client_dfs_ops_SETATTR",
+        "client_dfs_ops_SETXATTR",
+        "client_dfs_ops_STAT",
+        "client_dfs_ops_SYMLINK",
+        "client_dfs_ops_SYNC",
+        "client_dfs_ops_TRUNCATE",
+        "client_dfs_ops_UNLINK",
+        "client_dfs_ops_WRITE"]
+    CLIENT_DFS_IO_METRICS = [
+        "client_dfs_read_bytes",
+        "client_dfs_write_bytes"]
     CLIENT_IO_METRICS = CLIENT_IO_LATENCY_FETCH_METRICS +\
         CLIENT_IO_LATENCY_UPDATE_METRICS +\
         CLIENT_IO_OPS_AKEY_ENUM_ACTIVE_METRICS +\
@@ -1009,7 +1035,9 @@ class ClientTelemetryUtils(TelemetryUtils):
         CLIENT_IO_OPS_TGT_PUNCH_ACTIVE_METRICS +\
         CLIENT_IO_OPS_TGT_PUNCH_LATENCY_METRICS +\
         CLIENT_IO_OPS_TGT_UPDATE_ACTIVE_METRICS +\
-        CLIENT_IO_OPS_UPDATE_ACTIVE_METRICS
+        CLIENT_IO_OPS_UPDATE_ACTIVE_METRICS +\
+        CLIENT_DFS_OPS_METRICS +\
+        CLIENT_DFS_IO_METRICS
 
     def __init__(self, dmg, servers, clients):
         """Create a ClientTelemetryUtils object.
