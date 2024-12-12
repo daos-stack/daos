@@ -38,6 +38,7 @@ pool:
   nvme_size: 54000000000
   svcn: 4
 container:
+  control_method: API
   properties:
     enable_checksum: true
 test_sequence:

@@ -59,3 +59,7 @@ src/pool/ @daos-stack/metadata-owners @daos-stack/metadata-watchers
 src/container/ @daos-stack/metadata-owners @daos-stack/metadata-watchers
 src/rdb/ @daos-stack/metadata-owners @daos-stack/metadata-watchers
 src/rsvc/ @daos-stack/metadata-owners @daos-stack/metadata-watchers
+
+# PRs that touch GitHub actions
+.github/workflows/ @daos-stack/actions-watchers
+.github/actions/ @daos-stack/actions-watchers
