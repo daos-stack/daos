@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2015-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -128,6 +129,12 @@ struct ds_cont_child {
 	 * if it needs to do EC aggregate.
 	 */
 	uint64_t		sc_ec_update_timestamp;
+
+	/*
+	 * The gap between the max allowed aggregation epoch and current HLC. The modification
+	 * with older epoch out of range may cause conflict with aggregation as to be rejected.
+	 */
+	uint64_t		 sc_agg_eph_gap;
 
 	/* The objects with committable DTXs in DRAM. */
 	daos_handle_t		 sc_dtx_cos_hdl;

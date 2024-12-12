@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -196,17 +197,6 @@ enum {
 };
 
 static int	sched_policy;
-
-/*
- * Time threshold for giving IO up throttling. If space pressure stays in the
- * highest level for enough long time, we assume that no more space can be
- * reclaimed and choose to give up IO throttling, so that ENOSPACE error could
- * be returned to client earlier.
- *
- * To make time for aggregation reclaiming overwriteen space, this threshold
- * should be longer than the DAOS_AGG_THRESHOLD.
- */
-#define SCHED_DELAY_THRESH	40000	/* msecs */
 
 struct pressure_ratio {
 	unsigned int	pr_free;	/* free space ratio */
@@ -943,12 +933,21 @@ is_gc_pending(struct sched_pool_info *spi)
 	return spi->spi_gc_ults && (spi->spi_gc_ults > spi->spi_gc_sleeping);
 }
 
-/* Just run into this space pressure situation recently? */
+/*
+ * Just run into this space pressure situation recently?
+ *
+ * If space pressure stays in the highest level for enough long time, we assume
+ * that no more space can be reclaimed and choose to give up IO throttling, so
+ * that ENOSPACE error could be returned to client earlier.
+ *
+ * To make time for aggregation reclaiming overwriteen space, this threshold
+ * should be longer than VOS aggregation epoch gap against current HLC.
+ */
 static inline bool
 is_pressure_recent(struct sched_info *info, struct sched_pool_info *spi)
 {
 	D_ASSERT(info->si_cur_ts >= spi->spi_pressure_ts);
-	return (info->si_cur_ts - spi->spi_pressure_ts) < SCHED_DELAY_THRESH;
+	return (info->si_cur_ts - spi->spi_pressure_ts) < info->si_agg_gap;
 }
 
 static inline uint64_t
@@ -2240,6 +2239,8 @@ sched_run(ABT_sched sched)
 		D_ERROR("Get ABT pools error: %d\n", ret);
 		return;
 	}
+
+	dx->dx_sched_info.si_agg_gap = (vos_get_agg_gap() + 10) * 1000; /* msecs */
 
 	while (1) {
 		/* Try to pick network poll ULT */

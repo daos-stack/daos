@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -321,7 +322,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 		     DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG_PEER_FAIL)))
 		interval = 0;
 	else
-		interval = d_sec2hlc(DAOS_AGG_THRESHOLD);
+		interval = cont->sc_agg_eph_gap;
 
 	D_ASSERT(hlc > (interval * 2));
 	/*
@@ -409,6 +410,9 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 			tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
 
+		if (!param->ap_vos_agg)
+			vos_cont_set_mod_bound(cont->sc_hdl, epoch_range.epr_hi);
+
 		flags |= VOS_AGG_FL_FORCE_MERGE;
 		rc = agg_cb(cont, &epoch_range, flags, param);
 		if (rc)
@@ -424,6 +428,9 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating {"DF_X64" -> "DF_X64"}\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 		tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
+
+	if (!param->ap_vos_agg)
+		vos_cont_set_mod_bound(cont->sc_hdl, epoch_range.epr_hi);
 
 	if (dss_xstream_is_busy())
 		flags &= ~VOS_AGG_FL_FORCE_MERGE;
