@@ -8,7 +8,7 @@ import os
 import shutil
 
 from apricot import TestWithServers
-from cmocka_utils import CmockaUtils
+from cmocka_utils import CmockaUtils, get_cmocka_command
 from general_utils import get_log_file
 from job_manager_utils import get_job_manager
 from test_utils_pool import POOL_TIMEOUT_INCREMENT
@@ -51,8 +51,15 @@ class DaosCoreBase(TestWithServers):
         path = "/".join(["/run/daos_tests", name, "*"])
         return self.params.get(self.get_test_name(), path, default)
 
-    def run_subtest(self):
-        """Run daos_test with a subtest argument."""
+    def run_subtest(self, command=None):
+        """Run the executable with a subtest argument.
+
+        Args:
+            command (str, optional): command to run. Defaults to None which will yield daos_test.
+        """
+        if command is None:
+            command = os.path.join(self.bin, "daos_test")
+
         subtest = self.get_test_param("daos_test")
         num_clients = self.get_test_param("num_clients")
         if num_clients is None:
@@ -81,8 +88,7 @@ class DaosCoreBase(TestWithServers):
         daos_test_env["COVFILE"] = "/tmp/test.cov"
         daos_test_env["POOL_SCM_SIZE"] = str(scm_size)
         daos_test_env["POOL_NVME_SIZE"] = str(nvme_size)
-        daos_test_cmd = cmocka_utils.get_cmocka_command(
-            " ".join([self.daos_test, "-n", dmg_config_file, "".join(["-", subtest]), str(args)]))
+        daos_test_cmd = get_cmocka_command(command, f"-n {dmg_config_file} -{subtest} {str(args)}")
         job = get_job_manager(self, "Orterun", daos_test_cmd, mpi_type="openmpi")
         job.assign_hosts(cmocka_utils.hosts, self.workdir, None)
         job.assign_processes(num_clients)

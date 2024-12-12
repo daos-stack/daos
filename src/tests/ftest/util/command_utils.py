@@ -72,6 +72,9 @@ class ExecutableCommand(CommandWithParameters):
         # used to check on the progress or terminate the command.
         self._exe_names = [self.command]
 
+        # If set use the full command string when returning the 'command_regex' property
+        self.full_command_regex = False
+
         # Define an attribute to store the CmdResult from the last run() call.
         # A CmdResult object has the following properties:
         #   command         - command string
