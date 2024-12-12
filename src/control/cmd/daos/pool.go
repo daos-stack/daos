@@ -364,28 +364,27 @@ func queryPool(poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (*daos.Poo
 	}
 
 	// Preprocess queryMask, select one option for the first query
-	var firstOption string
-	if originalMask.HasOption(daos.PoolQueryOptionEnabledEngines) {
-		firstOption = daos.PoolQueryOptionEnabledEngines
-	} else if originalMask.HasOption(daos.PoolQueryOptionDisabledEngines) {
-		firstOption = daos.PoolQueryOptionDisabledEngines
-	} else if originalMask.HasOption(daos.PoolQueryOptionSuspectEngines) {
-		firstOption = daos.PoolQueryOptionSuspectEngines
-	}
-
-	// Perform the first query to get basic information
-	if err := queryAndUpdate(firstOption); err != nil {
-		return nil, err
-	}
-
-	// Check the original query mask and update fields as needed
 	queryOptions := []string{
 		daos.PoolQueryOptionEnabledEngines,
 		daos.PoolQueryOptionDisabledEngines,
 		daos.PoolQueryOptionSuspectEngines,
 	}
+	var firstOption string = ""
+	for _, opt := range queryOptions {
+		if queryMask.HasOption(opt) && firstOption != "" {
+			firstOption = opt
+			continue
+		}
+		queryMask.ClearOptions(opt)
+	}
 
-	// Process each option sequentially
+	// Perform the first query to get basic information
+	poolInfo, err := queryPoolRankLists(poolHdl, queryMask)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check the original query mask and update fields as needed
 	for _, opt := range queryOptions {
 		if originalMask.HasOption(opt) && opt != firstOption {
 			if err := queryAndUpdate(opt); err != nil {
@@ -393,6 +392,7 @@ func queryPool(poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (*daos.Poo
 			}
 		}
 	}
+	poolInfo.QueryMask = originalMask
 
 	return poolInfo, nil
 }
