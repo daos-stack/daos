@@ -122,6 +122,11 @@ struct rebuild_global_pool_tracker {
 
 	/** rebuild status for each server */
 	struct rebuild_server_status *rgt_servers;
+	double                         *rgt_servers_last_update;
+	double                          rgt_last_warn;
+
+	/** indirect indices for binary search by rank */
+	struct rebuild_server_status  **rgt_servers_sorted;
 
 	/** the current version being rebuilt */
 	uint32_t	rgt_rebuild_ver;
