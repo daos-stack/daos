@@ -155,7 +155,7 @@ jobs:
       - name: Install extra python packages
         run: python3 -m pip install --requirement utils/cq/requirements.txt
       - name: Run check
-        uses: codespell-project/actions-codespell@3174815d6231f5bdc24dbfb6fc3b8caec73d521c  # master
+        uses: codespell-project/actions-codespell@406322ec52dd7b488e48c1c4b82e2a8b3a1bf630  # master
         with:
           skip: ./src/control/vendor,./src/control/go.sum,./.git
           ignore_words_file: ci/codespell.ignores
