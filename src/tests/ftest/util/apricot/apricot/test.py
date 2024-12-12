@@ -504,7 +504,6 @@ class TestWithoutServers(Test):
 
         self.client_mca = None
         self.bin = None
-        self.daos_test = None
         self.cart_prefix = None
         self.cart_bin = None
         self.tmp = None
@@ -522,7 +521,6 @@ class TestWithoutServers(Test):
         """Set up run before each test."""
         super().setUp()
         self.bin = os.path.join(self.prefix, 'bin')
-        self.daos_test = os.path.join(self.prefix, 'bin', 'daos_test')
 
         # set the shared directory for daos tests
         self.tmp = self.test_env.shared_dir
