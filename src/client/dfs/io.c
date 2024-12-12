@@ -308,7 +308,7 @@ dfs_writex(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl, daos_ev
 		daos_event_errno_rc(ev);
 
 	buf_size = 0;
-	if (sgl)
+	if (dfs->metrics != NULL && sgl != NULL)
 		for (i = 0; i < sgl->sg_nr; i++)
 			buf_size += sgl->sg_iovs[i].iov_len;
 
