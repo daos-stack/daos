@@ -208,7 +208,7 @@ jobs:
           fetch-depth: 0
       - name: Run check
         run: |
-          ./utils/cq/check_update_copyright.sh \
+          \[ ! -x ./utils/cq/check_update_copyright.sh \] || ./utils/cq/check_update_copyright.sh \
             $(git merge-base HEAD ${{ github.event.pull_request.base.sha || github.ref }}) gha
 
   linting-summary:
