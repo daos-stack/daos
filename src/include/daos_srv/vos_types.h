@@ -58,6 +58,8 @@ enum dtx_entry_flags {
 	 * on all yet, need to be re-committed.
 	 */
 	DTE_PARTIAL_COMMITTED	= (1 << 5),
+	/* The DTX epoch is sorted locally. */
+	DTE_EPOCH_SORTED	= (1 << 6),
 };
 
 struct dtx_entry {

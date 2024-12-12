@@ -129,6 +129,12 @@ struct ds_cont_child {
 	 */
 	uint64_t		sc_ec_update_timestamp;
 
+	/*
+	 * The gap between the max allowed aggregation epoch and current HLC. The modification
+	 * with older epoch out of range may cause conflict with aggregation as to be rejected.
+	 */
+	uint64_t		 sc_agg_eph_gap;
+
 	/* The objects with committable DTXs in DRAM. */
 	daos_handle_t		 sc_dtx_cos_hdl;
 	/* The DTX COS-btree. */
