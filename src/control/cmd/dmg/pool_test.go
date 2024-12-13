@@ -15,6 +15,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
@@ -232,7 +233,7 @@ func TestPoolCommands(t *testing.T) {
 			"Create pool with missing size",
 			"pool create label",
 			"",
-			errors.New("must be set"),
+			errPoolCreateIncompatOpts,
 		},
 		{
 			"Create pool with missing label",
@@ -244,13 +245,13 @@ func TestPoolCommands(t *testing.T) {
 			"Create pool with incompatible arguments (auto nvme-size)",
 			fmt.Sprintf("pool create label --size %s --nvme-size %s", testSizeStr, testSizeStr),
 			"",
-			errors.New("may not be mixed"),
+			errPoolCreateIncompatOpts,
 		},
 		{
 			"Create pool with incompatible arguments (auto scm-size)",
 			fmt.Sprintf("pool create label --size %s --scm-size %s", testSizeStr, testSizeStr),
 			"",
-			errors.New("may not be mixed"),
+			errPoolCreateIncompatOpts,
 		},
 		{
 			"Create pool with incompatible arguments (% size nranks)",
@@ -281,6 +282,24 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool create label --size %s --nranks 16 --ranks 1,2,3", testSizeStr),
 			"",
 			errors.New("may not be mixed"),
+		},
+		{
+			"Create pool with incompatible arguments (auto with meta-size)",
+			fmt.Sprintf("pool create label --size %s --meta-size 32G", testSizeStr),
+			"",
+			errPoolCreateIncompatOpts,
+		},
+		{
+			"Create pool with incompatible arguments (scm-size with meta-size)",
+			fmt.Sprintf("pool create label --scm-size %s --meta-size 32G", testSizeStr),
+			"",
+			errPoolCreateIncompatOpts,
+		},
+		{
+			"Create pool with incompatible arguments (scm-size with data-size)",
+			fmt.Sprintf("pool create label --scm-size %s --data-size 32G", testSizeStr),
+			"",
+			errPoolCreateIncompatOpts,
 		},
 		{
 			"Create pool with too-large tier-ratio (auto)",
@@ -361,7 +380,7 @@ func TestPoolCommands(t *testing.T) {
 			"Create pool with incompatible arguments (-n without -s)",
 			fmt.Sprintf("pool create label --nvme-size %s", testSizeStr),
 			"",
-			errors.New("must be set"),
+			errors.New("cannot be set without --scm-size"),
 		},
 		{
 			"Create pool with minimal arguments",
@@ -373,6 +392,104 @@ func TestPoolCommands(t *testing.T) {
 					UserGroup:  eGrp.Name + "@",
 					Ranks:      []ranklist.Rank{},
 					TierBytes:  []uint64{uint64(testSize), 0},
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with manual memory file ratio; legacy syntax",
+			fmt.Sprintf("pool create label --scm-size %s --mem-ratio 0.25",
+				testSizeStr),
+			"",
+			errors.New("may not be mixed"),
+		},
+		{
+			"Create pool with default memory file ratio; MD-on-SSD syntax",
+			fmt.Sprintf("pool create label --meta-size %s --data-size 1024G",
+				testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					User:      eUsr.Username + "@",
+					UserGroup: eGrp.Name + "@",
+					Ranks:     []ranklist.Rank{},
+					TierBytes: []uint64{
+						uint64(testSize),
+						1024 * humanize.GByte,
+					},
+					MemRatio: 1,
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with manual memory file ratio; MD-on-SSD syntax; single value",
+			fmt.Sprintf("pool create label --meta-size %s --data-size 1024G --mem-ratio 25.5",
+				testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					User:      eUsr.Username + "@",
+					UserGroup: eGrp.Name + "@",
+					Ranks:     []ranklist.Rank{},
+					TierBytes: []uint64{
+						uint64(testSize),
+						1024 * humanize.GByte,
+					},
+					MemRatio: 0.255,
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with manual memory file ratio; MD-on-SSD syntax; both tiers",
+			fmt.Sprintf("pool create label --meta-size %s --data-size 1024G --mem-ratio 25.5,74.5",
+				testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					User:      eUsr.Username + "@",
+					UserGroup: eGrp.Name + "@",
+					Ranks:     []ranklist.Rank{},
+					TierBytes: []uint64{
+						uint64(testSize),
+						1024 * humanize.GByte,
+					},
+					MemRatio: 0.255,
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with manual memory file ratio; MD-on-SSD syntax; three tiers",
+			fmt.Sprintf("pool create label --meta-size %s --data-size 1024G --mem-ratio 25.5,25.5,49",
+				testSizeStr),
+			"",
+			errors.New("unexpected mem-ratio"),
+		},
+		{
+			"Create pool with manual memory file ratio; MD-on-SSD syntax; 100% tier",
+			fmt.Sprintf("pool create label --meta-size %s --data-size 1024G --mem-ratio 100",
+				testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					User:      eUsr.Username + "@",
+					UserGroup: eGrp.Name + "@",
+					Ranks:     []ranklist.Rank{},
+					TierBytes: []uint64{
+						uint64(testSize),
+						1024 * humanize.GByte,
+					},
+					MemRatio: 1,
 					Properties: []*daos.PoolProperty{
 						propWithVal("label", "label"),
 					},
@@ -995,54 +1112,6 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
-			"Query pool with UUID and disabled ranks",
-			"pool query --show-disabled 12345678-1234-1234-1234-1234567890ab",
-			strings.Join([]string{
-				printRequest(t, &control.PoolQueryReq{
-					ID:        "12345678-1234-1234-1234-1234567890ab",
-					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) { qm.SetOptions(daos.PoolQueryOptionDisabledEngines) }),
-				}),
-			}, " "),
-			nil,
-		},
-		{
-			"Query pool with UUID and disabled ranks",
-			"pool query -b 12345678-1234-1234-1234-1234567890ab",
-			strings.Join([]string{
-				printRequest(t, &control.PoolQueryReq{
-					ID:        "12345678-1234-1234-1234-1234567890ab",
-					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) { qm.SetOptions(daos.PoolQueryOptionDisabledEngines) }),
-				}),
-			}, " "),
-			nil,
-		},
-		{
-			"Query pool with UUID, enabled ranks and disabled ranks",
-			"pool query --show-disabled --show-enabled 12345678-1234-1234-1234-1234567890ab",
-			strings.Join([]string{
-				printRequest(t, &control.PoolQueryReq{
-					ID: "12345678-1234-1234-1234-1234567890ab",
-					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) {
-						qm.SetOptions(daos.PoolQueryOptionEnabledEngines, daos.PoolQueryOptionDisabledEngines)
-					}),
-				}),
-			}, " "),
-			nil,
-		},
-		{
-			"Query pool with UUID, enabled ranks and disabled ranks",
-			"pool query -b -e 12345678-1234-1234-1234-1234567890ab",
-			strings.Join([]string{
-				printRequest(t, &control.PoolQueryReq{
-					ID: "12345678-1234-1234-1234-1234567890ab",
-					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) {
-						qm.SetOptions(daos.PoolQueryOptionEnabledEngines, daos.PoolQueryOptionDisabledEngines)
-					}),
-				}),
-			}, " "),
-			nil,
-		},
-		{
 			"Query pool for health only",
 			"pool query --health-only 12345678-1234-1234-1234-1234567890ab",
 			strings.Join([]string{
@@ -1203,12 +1272,12 @@ func TestDmg_PoolListCmd_Errors(t *testing.T) {
 				UnaryResponseSet: responses,
 			})
 
-			PoolListCmd := new(PoolListCmd)
-			PoolListCmd.setInvoker(mi)
-			PoolListCmd.SetLog(log)
-			PoolListCmd.setConfig(tc.ctlCfg)
+			cmd := new(poolListCmd)
+			cmd.setInvoker(mi)
+			cmd.SetLog(log)
+			cmd.setConfig(tc.ctlCfg)
 
-			gotErr := PoolListCmd.Execute(nil)
+			gotErr := cmd.Execute(nil)
 			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}

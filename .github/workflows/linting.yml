@@ -26,7 +26,7 @@ jobs:
       - uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d  # v5.1.0
         with:
           python-version: '3'
-      - uses: isort/isort-action@master
+      - uses: isort/isort-action@f14e57e1d457956c45a19c05a89cccdf087846e5  # v1.1.0
         with:
           requirementsFiles: "requirements.txt"
       - name: Run on SConstruct file.
@@ -36,7 +36,7 @@ jobs:
 
   shell-check:
     name: ShellCheck
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -54,7 +54,7 @@ jobs:
 
   log-check:
     name: Logging macro checking
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -65,7 +65,7 @@ jobs:
 
   ftest-tags:
     name: Ftest tag check
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -73,7 +73,7 @@ jobs:
         run: \[ ! -x src/tests/ftest/tags.py \] || ./src/tests/ftest/tags.py lint --verbose
 
   flake8-lint:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     name: Flake8 check
     steps:
       - name: Check out source repository
@@ -107,7 +107,7 @@ jobs:
 
   doxygen:
     name: Doxygen
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -128,7 +128,7 @@ jobs:
 
   pylint:
     name: Pylint check
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -148,14 +148,14 @@ jobs:
 
   codespell:
     name: Codespell
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
       - name: Install extra python packages
         run: python3 -m pip install --requirement utils/cq/requirements.txt
       - name: Run check
-        uses: codespell-project/actions-codespell@3174815d6231f5bdc24dbfb6fc3b8caec73d521c  # master
+        uses: codespell-project/actions-codespell@406322ec52dd7b488e48c1c4b82e2a8b3a1bf630  # master
         with:
           skip: ./src/control/vendor,./src/control/go.sum,./.git
           ignore_words_file: ci/codespell.ignores
@@ -163,7 +163,7 @@ jobs:
 
   clang-format:
     name: Clang Format
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -182,7 +182,7 @@ jobs:
 
   yaml-lint:
     name: Yamllint check
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out source repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -197,9 +197,23 @@ jobs:
       - name: Run check
         run: yamllint --format github .
 
+  copyright:
+    name: Copyright check
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Run check
+        run: |
+          \[ ! -x ./utils/cq/check_update_copyright.sh \] || ./utils/cq/check_update_copyright.sh \
+            $(git merge-base HEAD ${{ github.event.pull_request.base.sha || github.ref }}) gha
+
   linting-summary:
     name: Linting Summary
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs:
       - isort
       - shell-check

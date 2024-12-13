@@ -26,6 +26,7 @@ Its subcommands can be grouped into the following areas:
 * An upgrade command to upgrade a pool's format version
   after a DAOS software upgrade.
 
+
 ### Creating a Pool
 
 A DAOS pool can be created through the `dmg pool create` command.
@@ -170,6 +171,407 @@ on pool size, but also on number of targets, target size, object class,
 storage redundancy factor, etc.
 
 
+#### Creating a pool in MD-on-SSD mode
+
+In MD-on-SSD mode, a pool is made up of a single component in memory (RAM-disk
+associated with each engine) and three components on storage (NVMe SSD). The
+components in storage are related to "roles" WAL, META and DATA and roles are
+assigned to hardware devices in the
+[server configuration file](https://docs.daos.io/v2.6/admin/deployment/#server-configuration-file).
+
+In MD-on-SSD mode pools are by default created with equal allocations for
+metadata-in-memory and metadata-on-SSD but it is possible to change this. To
+create a pool with a metadata-on-SSD allocation size that is double what is
+allocated in memory, set `dmg pool create --mem-ratio` option to `50%`. This
+implies that the ratio of metadata on memory and on storage should be 0.5 and
+therefore metadata-on-SSD allocation is twice that of metadata-in-memory.
+
+#### MD-on-SSD dmg pool create --mem-ratio examples
+
+These examples cover the recommended way to create a pool in MD-on-SSD
+mode with a fractional mem-ratio and using the `--size` percentage option.
+
+1. The first simplistic example is run on a single host with a single
+rank/engine where bdev roles META and DATA are not shared.
+
+This is a snippet of the server config file engine section showing storage
+definitions with `bdev_roles` "meta" and "data" assigned to separate tiers:
+```bash
+    storage:
+      -
+        class: ram
+        scm_mount: /mnt/daos
+      -
+        class: nvme
+        bdev_list: ["0000:81:00.0"]
+        bdev_roles: [wal,meta]
+      -
+        class: nvme
+        bdev_list: ["0000:82:00.0"]
+        bdev_roles: [data]
+```
+
+This pool command requests to use all available storage and maintain a 1:1
+Memory-File to Metadata-Storage size ratio (mem-ratio):
+```bash
+$ dmg pool create bob --size 100% --mem-ratio 100%
+
+Pool created with 15.91%,84.09% storage tier ratio
+--------------------------------------------------
+  UUID             : cf70ac58-a9cd-4efd-8a96-a53697353633
+  Service Leader   : 0
+  Service Ranks    : 0
+  Storage Ranks    : 0
+  Total Size       : 951 GB
+  Metadata Storage : 151 GB (151 GB / rank)
+  Data Storage     : 800 GB (800 GB / rank)
+  Memory File Size : 151 GB (151 GB / rank)
+```
+
+Rough calculations: `dmg storage scan` shows that for each rank, one 800GB SSD
+is assigned for each tier (first: WAL+META, second: DATA). `df -h /mnt/daos*`
+reports usable ramdisk capacity for the single rank is 142 GiB (152 GB).
+- Expected Data storage would then be 800GB for the pool (one rank).
+- Expected Meta storage at 100% mem-ratio would be the total ramdisk capacity.
+- Expected Memory-File size would be identical to Meta storage size.
+
+
+2. If the `--mem-ratio` is reduced to 50% in the above example, we end up with
+double the Metadata-Storage size compared to Memory-File size (because a larger
+proportion of META is allocated due to the change in mem-ratio) and this results
+in a larger total pool size:
+
+```bash
+$ dmg pool create bob --size 100% --mem-ratio 50%
+
+Pool created with 27.46%,72.54% storage tier ratio
+--------------------------------------------------
+  UUID             : 8e2cf446-3382-4d69-9b84-51e4e9a20c08
+  Service Leader   : 0
+  Service Ranks    : 0
+  Storage Ranks    : 0
+  Total Size       : 1.1 TB
+  Metadata Storage : 303 GB (303 GB / rank)
+  Data Storage     : 800 GB (800 GB / rank)
+  Memory File Size : 151 GB (151 GB / rank)
+```
+
+
+3. If we then try the same with bdev roles META and DATA are shared. Here we
+can illustrate how metadata overheads are accommodated for when the same
+devices share roles (and will be used to store both metadata and data).
+
+This is a snippet of the server config file engine section showing storage
+definitions with `bdev_roles` "meta" and "data" assigned to the same (single)
+tier:
+```bash
+    storage:
+      -
+        class: ram
+        scm_mount: /mnt/daos
+      -
+        class: nvme
+        bdev_list: ["0000:81:00.0", "0000:82:00.0"]
+        bdev_roles: [wal,meta,data]
+```
+
+This pool command requests to use all available storage and maintain a 1:1
+Memory-File to Metadata-Storage size ratio (mem-ratio):
+```bash
+$ dmg pool create bob --size 100% --mem-ratio 100%
+
+Pool created with 17.93%,82.07% storage tier ratio
+--------------------------------------------------
+  UUID             : b24df7a5-17d5-4e87-9986-2dff18078b6e
+  Service Leader   : 0
+  Service Ranks    : 0
+  Storage Ranks    : 0
+  Total Size       : 1.5 TB
+  Metadata Storage : 151 GB (151 GB / rank)
+  Data Storage     : 1.3 TB (1.3 TB / rank)
+  Memory File Size : 151 GB (151 GB / rank)
+```
+
+Looking at this output and comparing with example no. 1 we observe that
+because both SSDs are sharing META and DATA roles, more capacity is available
+for DATA.
+
+
+4. If the `--mem-ratio` is then reduced to 50% in the above example, we end up
+with double the Metadata-Storage size which detracts from the DATA capacity.
+
+```bash
+$ dmg -i pool create bob -z 100% --mem-ratio 50%
+
+Creating DAOS pool with 100% of all storage
+Pool created with 20.32%,79.68% storage tier ratio
+--------------------------------------------------
+  UUID             : 2b4147eb-ade3-4d76-82c4-b9c2c377f8d1
+  Service Leader   : 0
+  Service Ranks    : 0
+  Storage Ranks    : 0
+  Total Size       : 1.5 TB
+  Metadata Storage : 303 GB (303 GB / rank)
+  Data Storage     : 1.2 TB (1.2 TB / rank)
+  Memory File Size : 151 GB (151 GB / rank)
+```
+
+META has been doubled at the cost of DATA capacity.
+
+
+5. Adding another engine/rank on the same host results in more than double DATA
+capacity because RAM-disk capacity is halved across two engines/ranks on the same
+host and this results in a reduction of META and increase in DATA per-rank sizes.
+The RAM-disk capacity for each engine is based on half of the available system
+RAM. When only one engine exists on the host, all of the available system RAM
+(less some calculated reserve) is used for the engine RAM-disk.
+
+```bash
+$ dmg -i pool create bob -z 100% --mem-ratio 50%
+
+Creating DAOS pool with 100% of all storage
+Pool created with 8.65%,91.35% storage tier ratio
+-------------------------------------------------
+  UUID             : ee7af142-3d72-45bf-9dc2-e1060c0de5be
+  Service Leader   : 1
+  Service Ranks    : [0-1]
+  Storage Ranks    : [0-1]
+  Total Size       : 3.0 TB
+  Metadata Storage : 258 GB (129 GB / rank)
+  Data Storage     : 2.7 TB (1.4 TB / rank)
+  Memory File Size : 129 GB (64 GB / rank)
+```
+
+
+6. A larger pool with 6 engines/ranks across 3 hosts using the same shared-role
+configuration and pool-create commandline as the previous example.
+
+```bash
+$ dmg -i pool create bob -z 100% --mem-ratio 50%
+
+Creating DAOS pool with 100% of all storage
+Pool created with 8.65%,91.35% storage tier ratio
+-------------------------------------------------
+  UUID             : 678833f3-ba0a-4947-a2e8-cef45c3c3977
+  Service Leader   : 3
+  Service Ranks    : [0-1,3-5]
+  Storage Ranks    : [0-5]
+  Total Size       : 8.9 TB
+  Metadata Storage : 773 GB (129 GB / rank)
+  Data Storage     : 8.2 TB (1.4 TB / rank)
+  Memory File Size : 386 GB (64 GB / rank)
+```
+
+Here the size has increased linearly with the per-rank sizes remaining the
+same.
+
+
+7. Now for a more involved example with shared roles. Create two pools of
+roughly equal size each using half available capacity and a `--mem-ratio` of
+50%.
+
+An administrator can use the `dmg storage query usage` command to gauge
+available capacity across ranks and tiers. Adding `--show-usable` flag shows
+capacity that could be used to store DATA once META overheads of a new pool
+have been taken into account:
+
+```bash
+$ dmg -i storage query usage --show-usable --mem-ratio 50% -l wolf-[310-312]
+
+Tier Roles
+---- -----
+T1   data,meta,wal
+
+Rank T1-Total T1-Usable T1-Usage
+---- -------- --------- --------
+0    1.6 TB   1.4 TB    14 %
+1    1.6 TB   1.4 TB    14 %
+2    1.6 TB   1.4 TB    14 %
+3    1.6 TB   1.4 TB    14 %
+4    1.6 TB   1.4 TB    14 %
+5    1.6 TB   1.4 TB    14 %
+```
+
+The last column indicates the percentage of the total capacity that is not
+usable for new pool data.
+
+First create a pool using 50% of available capacity:
+
+```bash
+$ dmg -i pool create bob -z 50% --mem-ratio 50%
+
+Creating DAOS pool with 50% of all storage
+Pool created with 8.65%,91.35% storage tier ratio
+-------------------------------------------------
+  UUID             : 11b9dd1f-edc9-47c7-a61f-cee52d0e7ed4
+  Service Leader   : 3
+  Service Ranks    : [1-5]
+  Storage Ranks    : [0-5]
+  Total Size       : 4.5 TB
+  Metadata Storage : 386 GB (64 GB / rank)
+  Data Storage     : 4.1 TB (681 GB / rank)
+  Memory File Size : 193 GB (32 GB / rank)
+```
+
+`dmg storage query usage` can be used to show available capacity on each
+rank and tier after the first pool has been created:
+
+```bash
+$ dmg -i storage query usage -l wolf-[310-312]
+
+Tier Roles
+---- -----
+T1   data,meta,wal
+
+Rank T1-Total T1-Free T1-Usage
+---- -------- ------- --------
+0    1.6 TB   749 GB  53 %
+1    1.6 TB   749 GB  53 %
+2    1.6 TB   749 GB  53 %
+3    1.6 TB   752 GB  53 %
+4    1.6 TB   749 GB  53 %
+5    1.6 TB   749 GB  53 %
+```
+
+`dmg storage query usage --show-usable` can show usable capacity taking into
+account META overheads:
+
+```bash
+$ dmg -i storage query usage --show-usable --mem-ratio 50% -l wolf-[310-312]
+
+Tier Roles
+---- -----
+T1   data,meta,wal
+
+Rank T1-Total T1-Usable T1-Usage
+---- -------- --------- --------
+0    1.6 TB   573 GB    64 %
+1    1.6 TB   573 GB    64 %
+2    1.6 TB   573 GB    64 %
+3    1.6 TB   578 GB    63 %
+4    1.6 TB   573 GB    64 %
+5    1.6 TB   573 GB    64 %
+```
+
+Second create a pool using 100% of remaining capacity:
+
+```bash
+$ dmg -i pool create ben -z 100% --mem-ratio 50%
+
+Creating DAOS pool with 100% of all storage
+Pool created with 9.80%,90.20% storage tier ratio
+-------------------------------------------------
+  UUID             : 48391eed-71b2-47b4-9ad1-780c7143c027
+  Service Leader   : 5
+  Service Ranks    : [0,2-5]
+  Storage Ranks    : [0-5]
+  Total Size       : 3.8 TB
+  Metadata Storage : 374 GB (62 GB / rank)
+  Data Storage     : 3.4 TB (573 GB / rank)
+  Memory File Size : 187 GB (31 GB / rank)
+```
+
+The Memory-File-Size is roughly half the dual-rank-per-host RAM-disk size of 64
+GB. The META per-rank size is double the Memory-File-Size as expected for a 50%
+mem-ratio.
+
+Comparing per-rank values with example no. 6 & 7, we can see that the first
+pool has roughly 50% META and DATA pe-rank values as expected. The second
+created pool is slightly smaller meaning the total cumulative pool size reading
+`4.5+3.8 == 8.3 TB` rather than `8.9 TB` which can be partly explained because
+of extra per-pool overheads and possible rounding in size calculations.
+
+
+8. Now for a similar experiment as example no. 8 but with separate META and
+DATA roles.
+
+```bash
+$ dmg -i storage query usage --show-usable --mem-ratio 50% -l wolf-[310-312]
+Tier Roles
+---- -----
+T1   meta,wal
+T2   data
+
+Rank T1-Total T1-Usable T1-Usage T2-Total T2-Usable T2-Usage
+---- -------- --------- -------- -------- --------- --------
+0    800 GB   800 GB    0 %      800 GB   800 GB    0 %
+1    800 GB   800 GB    0 %      800 GB   800 GB    0 %
+2    800 GB   800 GB    0 %      800 GB   800 GB    0 %
+3    800 GB   800 GB    0 %      800 GB   800 GB    0 %
+4    800 GB   800 GB    0 %      800 GB   800 GB    0 %
+5    800 GB   800 GB    0 %      800 GB   800 GB    0 %
+```
+
+Because META and DATA roles exist on separate tiers, usable space is the same
+as free.
+
+First create a pool using 50% of available capacity:
+
+```bash
+$ dmg -i pool create bob -z 50% --mem-ratio 50%
+
+Creating DAOS pool with 50% of all storage
+Pool created with 13.87%,86.13% storage tier ratio
+--------------------------------------------------
+  UUID             : 0b8a7b40-25d6-44a6-9c1b-23cea0aa3ea2
+  Service Leader   : 0
+  Service Ranks    : [0-2,4-5]
+  Storage Ranks    : [0-5]
+  Total Size       : 2.8 TB
+  Metadata Storage : 386 GB (64 GB / rank)
+  Data Storage     : 2.4 TB (400 GB / rank)
+  Memory File Size : 193 GB (32 GB / rank)
+```
+
+Pool size is now much smaller because DATA is confined to a single SSD on
+single tier and META is limited by Memory-File-Size.
+
+`dmg storage query usage` can be used to show available capacity on each rank
+and tier after the first pool has been created:
+
+```bash
+$ dmg -i storage query usage -l wolf-[310-312]
+Tier Roles
+---- -----
+T1   meta,wal
+T2   data
+
+Rank T1-Total T1-Free T1-Usage T2-Total T2-Free T2-Usage
+---- -------- ------- -------- -------- ------- --------
+0    800 GB   629 GB  21 %     800 GB   400 GB  49 %
+1    800 GB   629 GB  21 %     800 GB   400 GB  49 %
+2    800 GB   629 GB  21 %     800 GB   400 GB  49 %
+3    800 GB   632 GB  20 %     800 GB   400 GB  49 %
+4    800 GB   629 GB  21 %     800 GB   400 GB  49 %
+5    800 GB   629 GB  21 %     800 GB   400 GB  49 %
+```
+
+Second create a pool using 100% of remaining capacity:
+
+```bash
+$ dmg -i pool create ben -z 100% --mem-ratio 50%
+
+Creating DAOS pool with 100% of all storage
+Pool created with 13.47%,86.53% storage tier ratio
+--------------------------------------------------
+  UUID             : ac90de4b-522e-40de-ab50-da4c85b1000d
+  Service Leader   : 5
+  Service Ranks    : [0-2,4-5]
+  Storage Ranks    : [0-5]
+  Total Size       : 2.8 TB
+  Metadata Storage : 374 GB (62 GB / rank)
+  Data Storage     : 2.4 TB (400 GB / rank)
+  Memory File Size : 187 GB (31 GB / rank)
+```
+
+It should be noted that this example is only with one SSD per tier and is not
+necessarily representative of a production environment. The purpose is to give
+some idea of how to use the tool commands.
+
+Capacity can be best utilized by understanding assignment of roles and SSDs
+across tiers and the tuning of the mem-ratio pool create option.
+
+
 ### Listing Pools
 
 To see a list of the pools in the DAOS system:
@@ -183,24 +585,34 @@ tank     47 GB  0%   0%        0/32
 
 This returns a table of pool labels (or UUIDs if no label was specified)
 with the following information for each pool:
-- the total pool size
-- the percentage of used space (i.e., 100 * used space  / total space)
-- the imbalance percentage indicating whether data distribution across
+- The total pool size (NVMe or DATA tier, not including Metadata tier).
+- The percentage of used space (i.e., 100 * used space  / total space)
+  for the NVMe or DATA tier.
+- The imbalance percentage indicating whether data distribution across
   the difference storage targets is well balanced. 0% means that there is
   no imbalance and 100% means that out-of-space errors might be returned
-  by some storage targets while space is still available on others.
-- the number of disabled targets (0 here) and the number of targets that
+  by some storage targets while space is still available on others. Applies
+  only for the NVMe or DATA tier.
+- The number of disabled targets (0 here) and the number of targets that
   the pool was originally configured with (total).
 
 The --verbose option provides more detailed information including the
 number of service replicas, the full UUIDs and space distribution
-between SCM and NVMe for each pool:
+between SCM and NVMe (or META and DATA in MD-on-SSD mode) for each pool:
 
 ```bash
 $ dmg pool list --verbose
 Label UUID                                 SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled
 ----- ----                                 ------- -------- -------- ------------- --------- --------- -------------- --------
-tank  8a05bf3a-a088-4a77-bb9f-df989fce7cc8 1-3      3 GB    10 kB    0%            47 GB     0 B       0%             0/32
+tank  8a05bf3a-a088-4a77-bb9f-df989fce7cc8 1-3     3 GB     10 kB    0%            47 GB     0 B       0%             0/32
+```
+
+In MD-on-SSD mode:
+```bash
+$ dmg pool list --verbose
+Label UUID                                 SvcReps Meta Size Meta Used Meta Imbalance DATA Size DATA Used DATA Imbalance Disabled
+----- ----                                 ------- --------- --------- -------------- --------- --------- -------------- --------
+tank  8a05bf3a-a088-4a77-bb9f-df989fce7cc8 1-3     3 GB      10 kB     0%             47 GB     0 B       0%             0/32
 ```
 
 ### Destroying a Pool
@@ -284,6 +696,28 @@ The example below shows a rebuild in progress and NVMe space allocated.
         Total size: 56GB
         Free: 28GB, min:470MB, max:512MB, mean:509MB
     Rebuild busy, 75 objs, 9722 recs
+```
+
+After experiencing significant failures, the pool may retain some "dead"
+engines that have been marked as DEAD by the SWIM protocol but were not excluded
+from the pool to prevent potential data inconsistency. An administrator can bring
+these engines back online by restarting them. The example below illustrates the
+system’s status with dead and disabled engines.
+
+```bash
+$ dmg pool query tank -t
+```
+
+NB: The --health-only/-t option is necessary to conduct pool health-related queries only.
+This is important because dead ranks may cause commands to hang and timeout so identifying
+and restarting them is a useful procedure.
+
+```bash
+Pool 6f450a68-8c7d-4da9-8900-02691650f6a2, ntarget=8, disabled=2, leader=3, version=4, state=Degraded
+    Pool health info:
+    - Disabled ranks: 1
+    - Dead ranks: 2
+    - Rebuild busy, 0 objs, 0 recs
 ```
 
 Additional status and telemetry data is planned to be exported through
@@ -826,6 +1260,23 @@ The pool target drain command accepts 2 parameters:
 * The engine rank of the target(s) to be drained.
 * The target indices of the targets to be drained from that engine rank (optional).
 
+#### System Drain
+
+To drain ranks or hosts from all pools that they belong to, the 'dmg system drain'
+command can be used. The command takes either a host-set or rank-set:
+
+To drain a set of hosts from all pools (drains all ranks on selected hosts):
+
+```Bash
+$ dmg system drain --rank-hosts foo-[001-100]
+```
+
+To drain a set of ranks from all pools:
+
+```Bash
+$ dmg system drain --ranks 1-100
+```
+
 ### Reintegration
 
 After an engine failure and exclusion, an operator can fix the underlying issue
@@ -930,15 +1381,10 @@ Administrator can set the default pool redundancy factor by environment variable
 dead and the number of failed fault domain exceeds or is going to exceed the pool
 redundancy factor, it will not change pool map immediately. Instead, it will give
 critical log message:
+```
 intolerable unavailability: engine rank x
-In this case, the system administrator should check and try to recover those
-failed engines and bring them back with:
-dmg system start --ranks=x
-one by one. A reintegrate call is not needed.
-
-For true unrecoverable failures, the administrator can still exclude engines.
-However, data loss is expected as the number of unrecoverable failures exceeds
-the pool redundancy factor.
+```
+To recover, see [Servers or engines become unavailable](troubleshooting.md#engines-become-unavailable).
 
 ## Recovering Container Ownership
 

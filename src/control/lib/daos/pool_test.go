@@ -130,19 +130,20 @@ func TestDaos_PoolQueryMask(t *testing.T) {
 			testMask: genTestMask(func(pqm *PoolQueryMask) {
 				*pqm = DefaultPoolQueryMask
 			}),
-			expString: genOptsStr(PoolQueryOptionRebuild, PoolQueryOptionSpace),
+			expString: genOptsStr(PoolQueryOptionDisabledEngines, PoolQueryOptionRebuild, PoolQueryOptionSpace),
 		},
 		"health-only query mask": {
 			testMask: genTestMask(func(pqm *PoolQueryMask) {
 				*pqm = HealthOnlyPoolQueryMask
 			}),
-			expString: genOptsStr(PoolQueryOptionDisabledEngines, PoolQueryOptionRebuild),
+			expString: genOptsStr(PoolQueryOptionDeadEngines, PoolQueryOptionDisabledEngines, PoolQueryOptionRebuild),
 		},
 		"set query all=true": {
 			testMask: genTestMask(func(pqm *PoolQueryMask) {
 				pqm.SetAll()
 			}),
-			expString: genOptsStr(PoolQueryOptionDisabledEngines, PoolQueryOptionEnabledEngines, PoolQueryOptionRebuild, PoolQueryOptionSpace),
+			expString: genOptsStr(PoolQueryOptionDeadEngines, PoolQueryOptionDisabledEngines, PoolQueryOptionEnabledEngines,
+				PoolQueryOptionRebuild, PoolQueryOptionSpace),
 		},
 		"set query all=false": {
 			testMask: genTestMask(func(pqm *PoolQueryMask) {
@@ -162,7 +163,8 @@ func TestDaos_PoolQueryMask(t *testing.T) {
 				pqm.SetAll()
 				pqm.ClearOptions(PoolQueryOptionSpace)
 			}),
-			expString: genOptsStr(PoolQueryOptionDisabledEngines, PoolQueryOptionEnabledEngines, PoolQueryOptionRebuild),
+			expString: genOptsStr(PoolQueryOptionDeadEngines, PoolQueryOptionDisabledEngines, PoolQueryOptionEnabledEngines,
+				PoolQueryOptionRebuild),
 		},
 		"set query space=false (already false)": {
 			testMask: genTestMask(func(pqm *PoolQueryMask) {
@@ -181,7 +183,7 @@ func TestDaos_PoolQueryMask(t *testing.T) {
 				pqm.SetAll()
 				pqm.ClearOptions(PoolQueryOptionRebuild)
 			}),
-			expString: genOptsStr(PoolQueryOptionDisabledEngines, PoolQueryOptionEnabledEngines, PoolQueryOptionSpace),
+			expString: genOptsStr(PoolQueryOptionDeadEngines, PoolQueryOptionDisabledEngines, PoolQueryOptionEnabledEngines, PoolQueryOptionSpace),
 		},
 		"set query enabled_engines=true": {
 			testMask: genTestMask(func(pqm *PoolQueryMask) {
@@ -194,7 +196,7 @@ func TestDaos_PoolQueryMask(t *testing.T) {
 				pqm.SetAll()
 				pqm.ClearOptions(PoolQueryOptionEnabledEngines)
 			}),
-			expString: genOptsStr(PoolQueryOptionDisabledEngines, PoolQueryOptionRebuild, PoolQueryOptionSpace),
+			expString: genOptsStr(PoolQueryOptionDeadEngines, PoolQueryOptionDisabledEngines, PoolQueryOptionRebuild, PoolQueryOptionSpace),
 		},
 		"set query disabled_engines=true": {
 			testMask: genTestMask(func(pqm *PoolQueryMask) {
@@ -207,7 +209,7 @@ func TestDaos_PoolQueryMask(t *testing.T) {
 				pqm.SetAll()
 				pqm.ClearOptions(PoolQueryOptionDisabledEngines)
 			}),
-			expString: genOptsStr(PoolQueryOptionEnabledEngines, PoolQueryOptionRebuild, PoolQueryOptionSpace),
+			expString: genOptsStr(PoolQueryOptionDeadEngines, PoolQueryOptionEnabledEngines, PoolQueryOptionRebuild, PoolQueryOptionSpace),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -232,7 +234,7 @@ func TestDaos_PoolQueryMaskMarshalJSON(t *testing.T) {
 			testMask: genTestMask(func(pqm *PoolQueryMask) {
 				pqm.SetAll()
 			}),
-			expJSON: []byte(`"disabled_engines,enabled_engines,rebuild,space"`),
+			expJSON: []byte(`"dead_engines,disabled_engines,enabled_engines,rebuild,space"`),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -262,7 +264,7 @@ func TestDaos_PoolQueryMaskUnmarshalJSON(t *testing.T) {
 		},
 		"uint64 value": {
 			testData:  []byte("18446744073709551603"),
-			expString: "rebuild,space",
+			expString: "dead_engines,rebuild,space",
 		},
 		"string values": {
 			testData:  []byte("rebuild,disabled_engines"),

@@ -30,7 +30,7 @@
 /* FD_FILE_BASE - The base number of the file descriptor for a directory.
  * The fd allocate from this lib is always larger than FD_FILE_BASE.
  */
-#define FD_DIR_BASE     (0x40000000)
+#define FD_DIR_BASE     (FD_FILE_BASE + MAX_OPENED_FILE)
 
 /* structure allocated for a FD for a file */
 struct file_obj {

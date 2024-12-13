@@ -73,6 +73,7 @@ struct ds_cont_child {
 				 sc_dtx_registered:1,
 				 sc_props_fetched:1,
 				 sc_stopping:1,
+				 sc_destroying:1,
 				 sc_vos_agg_active:1,
 				 sc_ec_agg_active:1,
 				 /* flag of CONT_CAPA_READ_DATA/_WRITE_DATA disabled */
@@ -107,6 +108,9 @@ struct ds_cont_child {
 	uint32_t		 sc_dtx_committable_count;
 	uint32_t		 sc_dtx_committable_coll_count;
 
+	/* Last timestamp when EC aggregation reports -DER_INPROGRESS. */
+	uint64_t		 sc_ec_agg_busy_ts;
+
 	/* The global minimum EC aggregation epoch, which will be upper
 	 * limit for VOS aggregation, i.e. EC object VOS aggregation can
 	 * not cross this limit. For simplification purpose, all objects
@@ -133,6 +137,8 @@ struct ds_cont_child {
 	d_list_t		 sc_dtx_cos_list;
 	/* The global list for committable collective DTXs. */
 	d_list_t		 sc_dtx_coll_list;
+	/* The list for current DTX batched commit. */
+	d_list_t		 sc_dtx_batched_list;
 	/* the pool map version of updating DAOS_PROP_CO_STATUS prop */
 	uint32_t		 sc_status_pm_ver;
 };

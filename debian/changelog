@@ -1,3 +1,63 @@
+daos (2.7.101-2) unstable; urgency=medium
+  [ Denis Barakhtanov ]
+  * Add pydaos.torch module to daos-client package
+
+ -- Denis Barakhtanov <dbarahtanov@enakta.com>  Thu, 14 Nov 2024 22:27:00 +1100
+
+daos (2.7.101-1) unstable; urgency=medium
+  [ Phillip Henderson ]
+  * Bump version to 2.7.101
+
+ -- Phillip Henderson <phillip.henderson@intel.com>  Fri, 08 Nov 2024 13:05:00 -0500
+
+daos (2.7.100-11) unstable; urgency=medium
+  [ Michael MacDonald ]
+  * Move daos_metrics utility to daos package for use on both clients
+    and servers.
+
+ -- Michael MacDonald <mjmac@google.com>  Tue, 5 Nov 2024 12:00:00 -0500
+
+daos (2.7.100-10) unstable; urgency=medium
+
+  [ Sherin T George ]
+  * Add DAV v2 lib
+
+ -- Sherin T George <sherin-t.george@hpe.com>  Fri, 1 Nov 2024 11:54:00 +0530
+
+daos (2.7.100-9) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Remove Build-Depends: for UCX as they were obsoleted as of e01970d
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Tue, 15 Oct 2024 10:49:37 -0400
+
+daos (2.7.100-8) unstable; urgency=medium
+  [ Cedric Koch-Hofer]
+  * Update BR: argobots to 1.2
+
+ -- Cedric Koch-Hofer <cedric.koch-hofer@intel.com>  Mon, 07 Oct 2024 11:06:00 -0700
+
+daos (2.7.100-7) unstable; urgency=medium
+  [ Tomasz Gromadzki ]
+  * Add support of the PMDK package 2.1.0 with NDCTL enabled.
+    * Increase the default ULT stack size to 20KiB if the engine uses
+      the DCPM storage class.
+    * Prevent using the RAM storage class (simulated PMem) when
+      the shutdown state (SDS) is active.
+      * Automatically disable SDS for the RAM storage class on engine startup.
+      * Force explicitly setting the PMEMOBJ_CONF='sds.at_create=0'
+        environment variable to deactivate SDS for the DAOS tools
+        (ddb, daos_perf, vos_perf, etc.) when used WITHOUT DCPM.
+        Otherwise, a user is supposed to be stopped by an error
+        like: "Unsafe shutdown count is not supported for this source".
+
+ -- Tomasz Gromadzki <tomasz.gromadzki@intel.com>  Tue, 02 Oct 2024 12:00:00 +0200
+
+daos (2.7.100-6) unstable; urgency=medium
+  [ Kris Jacque ]
+  * Bump minimum golang-go version to 1.21
+
+ -- Kris Jacque <kris.jacque@intel.com>  Mon, 23 Sep 2024 11:06:00 -0700
+
 daos (2.7.100-5) unstable; urgency=medium
   [ Michael MacDonald ]
   * Add libdaos_self_test.so to client package
@@ -21,7 +81,7 @@ daos (2.7.100-2) unstable; urgency=medium
   * Add pciutils runtime dep for daos_server lspci call
   * Add libpci-dev build dep for pciutils CGO bindings
 
- -- Tom Nabarro <tom.nabarro@intel.com>>  Thu, 24 Jun 2024 16:55:00 -0000
+ -- Tom Nabarro <tom.nabarro@intel.com>>  Mon, 24 Jun 2024 16:55:00 -0000
 
 daos (2.7.100-1) unstable; urgency=medium
   [ Phillip Henderson ]
@@ -96,6 +156,7 @@ daos (2.5.100-12) unstable; urgency=medium
 
  -- Tomasz Gromadzki <tomasz.gromadzki@intel.com>  Fri, 17 Nov 2023 12:52:00 -0400
 
+daos (2.5.100-11) unstable; urgency=medium
   [ Jerome Soumagne ]
   * Bump mercury min version to 2.3.1
 

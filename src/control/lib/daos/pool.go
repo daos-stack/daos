@@ -77,8 +77,10 @@ type (
 		TierStats        []*StorageUsageStats `json:"tier_stats"`
 		EnabledRanks     *ranklist.RankSet    `json:"enabled_ranks,omitempty"`
 		DisabledRanks    *ranklist.RankSet    `json:"disabled_ranks,omitempty"`
+		DeadRanks        *ranklist.RankSet    `json:"dead_ranks,omitempty"`
 		PoolLayoutVer    uint32               `json:"pool_layout_ver"`
 		UpgradeLayoutVer uint32               `json:"upgrade_layout_ver"`
+		MemFileBytes     uint64               `json:"mem_file_bytes"`
 	}
 
 	PoolQueryTargetType  int32
@@ -86,9 +88,10 @@ type (
 
 	// PoolQueryTargetInfo contains information about a single target
 	PoolQueryTargetInfo struct {
-		Type  PoolQueryTargetType  `json:"target_type"`
-		State PoolQueryTargetState `json:"target_state"`
-		Space []*StorageUsageStats `json:"space"`
+		Type         PoolQueryTargetType  `json:"target_type"`
+		State        PoolQueryTargetState `json:"target_state"`
+		Space        []*StorageUsageStats `json:"space"`
+		MemFileBytes uint64               `json:"mem_file_bytes"`
 	}
 
 	// StorageTargetUsage represents DAOS target storage usage
@@ -104,7 +107,7 @@ type (
 
 const (
 	// DefaultPoolQueryMask defines the default pool query mask.
-	DefaultPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_ENGINES_DISABLED))
+	DefaultPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_ENGINES_DEAD))
 	// HealthOnlyPoolQueryMask defines the mask for health-only queries.
 	HealthOnlyPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_SPACE))
 
@@ -116,6 +119,8 @@ const (
 	PoolQueryOptionEnabledEngines = "enabled_engines"
 	// PoolQueryOptionDisabledEngines retrieves disabled engines as part of the pool query.
 	PoolQueryOptionDisabledEngines = "disabled_engines"
+	// PoolQueryOptionDeadEngines retrieves dead engines as part of the pool query.
+	PoolQueryOptionDeadEngines = "dead_engines"
 
 	// PoolConnectFlagReadOnly indicates that the connection is read-only.
 	PoolConnectFlagReadOnly = C.DAOS_PC_RO
@@ -130,6 +135,7 @@ var poolQueryOptMap = map[C.int]string{
 	C.DPI_REBUILD_STATUS:   PoolQueryOptionRebuild,
 	C.DPI_ENGINES_ENABLED:  PoolQueryOptionEnabledEngines,
 	C.DPI_ENGINES_DISABLED: PoolQueryOptionDisabledEngines,
+	C.DPI_ENGINES_DEAD:     PoolQueryOptionDeadEngines,
 }
 
 func resolvePoolQueryOpt(name string) (C.int, error) {
@@ -351,6 +357,8 @@ const (
 	StorageMediaTypeScm = StorageMediaType(mgmtpb.StorageMediaType_SCM)
 	// StorageMediaTypeNvme indicates that the media is NVMe SSD
 	StorageMediaTypeNvme = StorageMediaType(mgmtpb.StorageMediaType_NVME)
+	// StorageMediaTypeMax indicates the end of the StorageMediaType array
+	StorageMediaTypeMax = StorageMediaType(StorageMediaTypeNvme + 1)
 )
 
 func (smt StorageMediaType) String() string {
