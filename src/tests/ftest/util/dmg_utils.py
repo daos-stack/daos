@@ -625,13 +625,13 @@ class DmgCommand(DmgCommandBase):
 
         return data
 
-    def pool_query(self, pool, show_enabled=False, show_disabled=False):
+    def pool_query(self, pool, show_enabled=False, health_only=False):
         """Query a pool with the dmg command.
 
         Args:
             pool (str): Pool UUID or label to query.
             show_enabled (bool, optional): Display enabled ranks.
-            show_disabled (bool, optional): Display disabled ranks.
+            health_only (bool, optional): Only perform pool health related queries.
 
         Raises:
             CommandFailure: if the dmg pool query command fails.
@@ -678,7 +678,7 @@ class DmgCommand(DmgCommandBase):
         #     "status": 0
         # }
         return self._get_json_result(("pool", "query"), pool=pool,
-                                     show_enabled=show_enabled, show_disabled=show_disabled)
+                                     show_enabled=show_enabled, health_only=health_only)
 
     def pool_query_targets(self, pool, rank=None, target_idx=None):
         """Call dmg pool query-targets.
