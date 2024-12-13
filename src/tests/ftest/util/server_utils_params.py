@@ -5,7 +5,7 @@
 """
 import os
 
-from command_utils_base import (BasicParameter, LogParameter, TelemetryConfig,
+from command_utils_base import (BasicParameter, LogParameter, TelemetryCredentials,
                                 TransportCredentials, YamlParameters)
 
 MAX_STORAGE_TIERS = 5
@@ -57,12 +57,12 @@ class DaosServerTransportCredentials(TransportCredentials):
         return DaosServerTransportCredentials(self._log_dir)
 
 
-class DaosServerTelemetryConfig(TelemetryConfig):
+class DaosServerTelemetryCredentials(TelemetryCredentials):
     # pylint: disable=too-few-public-methods
     """Telemetry credentials listing certificates for secure communication."""
 
     def __init__(self, log_dir=os.path.join(os.sep, "tmp")):
-        """Initialize a DaosServerTelemetryConfig object."""
+        """Initialize a DaosServerTelemetryCredentials object."""
         super().__init__("/run/server_config/telemetry_config/*", None, log_dir)
 
         # Additional daos_server telemetry credential parameters:
@@ -78,9 +78,9 @@ class DaosServerTelemetryConfig(TelemetryConfig):
         """Get a new object based upon this one.
 
         Returns:
-            DaosServerTelemetryConfig: a new DaosServerTelemetryConfig object
+            DaosServerTelemetryCredentials: a new DaosServerTelemetryCredentials object
         """
-        return DaosServerTelemetryConfig(self._log_dir)
+        return DaosServerTelemetryCredentials(self._log_dir)
 
 
 class DaosServerYamlParameters(YamlParameters):

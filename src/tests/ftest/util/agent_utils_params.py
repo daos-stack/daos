@@ -5,7 +5,7 @@
 """
 import os
 
-from command_utils_base import (BasicParameter, LogParameter, TelemetryConfig,
+from command_utils_base import (BasicParameter, LogParameter, TelemetryCredentials,
                                 TransportCredentials, YamlParameters)
 
 
@@ -33,12 +33,12 @@ class DaosAgentTransportCredentials(TransportCredentials):
         return DaosAgentTransportCredentials(self._log_dir)
 
 
-class DaosAgentTelemetryConfig(TelemetryConfig):
+class DaosAgentTelemetryCredentials(TelemetryCredentials):
     # pylint: disable=too-few-public-methods
     """Telemetry credentials listing certificates for secure communication."""
 
     def __init__(self, log_dir=os.path.join(os.sep, "tmp")):
-        """Initialize a TelemetryConfig object."""
+        """Initialize a TelemetryCredentials object."""
         super().__init__("/run/agent_config/telemetry_config/*", None, log_dir)
 
         self.telemetry_port = BasicParameter(None, 9192)
@@ -51,9 +51,9 @@ class DaosAgentTelemetryConfig(TelemetryConfig):
         """Get a new object based upon this one.
 
         Returns:
-            DaosServerTelemetryConfig: a new DaosServerTelemetryConfig object
+            DaosServerTelemetryCredentials: a new DaosServerTelemetryCredentials object
         """
-        return DaosAgentTelemetryConfig(self._log_dir)
+        return DaosAgentTelemetryCredentials(self._log_dir)
 
 
 class DaosAgentYamlParameters(YamlParameters):

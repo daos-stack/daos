@@ -8,7 +8,7 @@ import os
 import yaml
 from apricot import TestWithServers
 from command_utils_base import CommonConfig
-from server_utils import (DaosServerTelemetryConfig, DaosServerTransportCredentials,
+from server_utils import (DaosServerTelemetryCredentials, DaosServerTransportCredentials,
                           DaosServerYamlParameters)
 
 
@@ -68,7 +68,7 @@ class StorageTiers(TestWithServers):
 
         common_config = CommonConfig("daos_server", DaosServerTransportCredentials())
         config = DaosServerYamlParameters(None, common_config)
-        config.telemetry_config = DaosServerTelemetryConfig()
+        config.telemetry_config = DaosServerTelemetryCredentials()
         config.namespace = self.server_config_namespace
         config.get_params(self)
         data = config.get_yaml_data()
