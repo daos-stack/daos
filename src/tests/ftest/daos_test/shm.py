@@ -10,6 +10,7 @@ from apricot import TestWithServers
 from cmocka_utils import CmockaUtils
 from job_manager_utils import get_job_manager
 
+
 class DaosCoreTestShm(TestWithServers):
     """Runs DAOS shared memory tests.
 
