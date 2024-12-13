@@ -47,7 +47,6 @@ type httpReq struct {
 	url            *url.URL
 	getFn          httpGetFn
 	allowInsecure  bool
-	cacertpath     *string
 	httpsException bool
 	getBodyFn      func(context.Context, *url.URL, httpGetFn, time.Duration, bool, bool) ([]byte, error)
 }
