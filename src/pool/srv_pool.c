@@ -51,11 +51,23 @@
 uint32_t
 ds_pool_get_vos_df_version(uint32_t pool_global_version)
 {
-	if (pool_global_version >= 3)
+	if (pool_global_version == 4)
+		return VOS_POOL_DF_2_8;
+	if (pool_global_version == 3)
 		return VOS_POOL_DF_2_6;
 	else if (pool_global_version == 2)
 		return VOS_POOL_DF_2_4;
 	return 0;
+}
+
+/** Return the VOS DF version for the default pool global version. */
+uint32_t
+ds_pool_get_vos_df_version_default(void)
+{
+	uint32_t v = ds_pool_get_vos_df_version(DAOS_POOL_GLOBAL_VERSION);
+
+	D_ASSERT(v != 0);
+	return v;
 }
 
 #define DUP_OP_MIN_RDB_SIZE                       (1 << 30)
@@ -1023,7 +1035,7 @@ ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
 	d_iov_set(&psid, (void *)pool_uuid, sizeof(uuid_t));
 	rc = ds_rsvc_dist_start(DS_RSVC_CLASS_POOL, &psid, pool_uuid, ranks, RDB_NIL_TERM,
 				DS_RSVC_CREATE, true /* bootstrap */, ds_rsvc_get_md_cap(),
-				0 /* vos_df_version */);
+				ds_pool_get_vos_df_version_default());
 	if (rc != 0)
 		D_GOTO(out_ranks, rc);
 
@@ -1458,6 +1470,43 @@ resume_event_handling(struct pool_svc *svc)
 	ABT_mutex_unlock(events->pse_mutex);
 }
 
+/*
+ * Restart rebuild if the rank is UPIN in pool map and is in rebuilding.
+ *
+ * This function only used when PS leader gets CRT_EVT_ALIVE event of engine \a rank,
+ * if that rank is UPIN in pool map and with unfinished rebuilding should be massive
+ * failure case -
+ * 1. some engines down and triggered rebuild.
+ * 2. the engine \a rank participated the rebuild, not finished yet, it became down again,
+ *    the #failures exceeds pool RF and will not change pool map.
+ * 3. That engine restarted by administrator.
+ *
+ * In that case should recover the rebuild task on engine \a rank, to simplify it now just
+ * abort and retry the global rebuild task.
+ */
+static void
+pool_restart_rebuild_if_rank_wip(struct ds_pool *pool, d_rank_t rank)
+{
+	struct pool_domain	*dom;
+
+	dom = pool_map_find_dom_by_rank(pool->sp_map, rank);
+	if (dom == NULL) {
+		D_DEBUG(DB_MD, DF_UUID": rank %d non-exist on pool map.\n",
+			DP_UUID(pool->sp_uuid), rank);
+		return;
+	}
+
+	if (dom->do_comp.co_status != PO_COMP_ST_UPIN) {
+		D_INFO(DF_UUID": rank %d status %d in pool map, got CRT_EVT_ALIVE.\n",
+		       DP_UUID(pool->sp_uuid), rank, dom->do_comp.co_status);
+		return;
+	}
+
+	ds_rebuild_restart_if_rank_wip(pool->sp_uuid, rank);
+
+	return;
+}
+
 static int pool_svc_exclude_ranks(struct pool_svc *svc, struct pool_svc_event_set *event_set);
 
 static int
@@ -1487,8 +1536,13 @@ handle_event(struct pool_svc *svc, struct pool_svc_event_set *event_set)
 	for (i = 0; i < event_set->pss_len; i++) {
 		struct pool_svc_event *event = &event_set->pss_buf[i];
 
-		if (event->psv_src != CRT_EVS_SWIM || event->psv_type != CRT_EVT_ALIVE)
+		if (event->psv_type != CRT_EVT_ALIVE)
 			continue;
+
+		D_DEBUG(DB_MD, DF_UUID ": got CRT_EVT_ALIVE event, psv_src %d, psv_rank %d\n",
+		       DP_UUID(svc->ps_uuid), event->psv_src, event->psv_rank);
+		pool_restart_rebuild_if_rank_wip(svc->ps_pool, event->psv_rank);
+
 		if (ds_pool_map_rank_up(svc->ps_pool->sp_map, event->psv_rank)) {
 			/*
 			 * The rank is up in the pool map. Request a pool map

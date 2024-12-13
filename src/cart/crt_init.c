@@ -18,6 +18,10 @@ static volatile int     gdata_init_flag;
 struct crt_plugin_gdata crt_plugin_gdata;
 static bool             g_prov_settings_applied[CRT_PROV_COUNT];
 
+#define X(a, b) b,
+static const char *const crt_tc_name[] = {CRT_TRAFFIC_CLASSES};
+#undef X
+
 static void
 crt_lib_init(void) __attribute__((__constructor__));
 
@@ -87,6 +91,8 @@ dump_opt(crt_init_options_t *opt)
 	/* Handle similar to D_PROVIDER_AUTH_KEY */
 	if (opt->cio_auth_key)
 		D_INFO("auth_key is set\n");
+	if (opt->cio_thread_mode_single)
+		D_INFO("thread mode single is set\n");
 }
 
 static int
@@ -228,6 +234,17 @@ crt_gdata_dump(void)
 	DUMP_GDATA_FIELD("%d", cg_rpc_quota);
 }
 
+static enum crt_traffic_class
+crt_str_to_tc(const char *str)
+{
+	enum crt_traffic_class i = 0;
+
+	while (str != NULL && strcmp(crt_tc_name[i], str) != 0 && i < CRT_TC_UNKNOWN)
+		i++;
+
+	return i == CRT_TC_UNKNOWN ? CRT_TC_UNSPEC : i;
+}
+
 /* first step init - for initializing crt_gdata */
 static int
 data_init(int server, crt_init_options_t *opt)
@@ -238,9 +255,10 @@ data_init(int server, crt_init_options_t *opt)
 	uint32_t     mem_pin_enable = 0;
 	uint32_t     is_secondary;
 	uint32_t     post_init = CRT_HG_POST_INIT, post_incr = CRT_HG_POST_INCR;
-	unsigned int mrecv_buf      = CRT_HG_MRECV_BUF;
-	unsigned int mrecv_buf_copy = 0; /* buf copy disabled by default */
-	int          rc             = 0;
+	unsigned int mrecv_buf          = CRT_HG_MRECV_BUF;
+	unsigned int mrecv_buf_copy     = 0; /* buf copy disabled by default */
+	char        *swim_traffic_class = NULL;
+	int          rc                 = 0;
 
 	crt_env_dump();
 
@@ -253,6 +271,8 @@ data_init(int server, crt_init_options_t *opt)
 	crt_gdata.cg_mrecv_buf = mrecv_buf;
 	crt_env_get(D_MRECV_BUF_COPY, &mrecv_buf_copy);
 	crt_gdata.cg_mrecv_buf_copy = mrecv_buf_copy;
+	crt_env_get(SWIM_TRAFFIC_CLASS, &swim_traffic_class);
+	crt_gdata.cg_swim_tc = crt_str_to_tc(swim_traffic_class);
 
 	is_secondary = 0;
 	/* Apply CART-890 workaround for server side only */
@@ -684,6 +704,14 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 					path, rc);
 			else
 				D_DEBUG(DB_ALL, "set group_config_path as %s.\n", path);
+		}
+
+		if (opt && opt->cio_thread_mode_single) {
+			crt_gdata.cg_thread_mode_single = opt->cio_thread_mode_single;
+		} else {
+			bool thread_mode_single = false;
+			crt_env_get(D_THREAD_MODE_SINGLE, &thread_mode_single);
+			crt_gdata.cg_thread_mode_single = thread_mode_single;
 		}
 
 		if (opt && opt->cio_auth_key)

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -30,18 +30,29 @@ int umempobj_settings_init(bool md_on_ssd);
 /* convert backend type to umem class id */
 int umempobj_backend_type2class_id(int backend);
 
+/* get page size for the backend */
+size_t
+umempobj_pgsz(int backend);
+
 /* umem persistent object property flags */
 #define	UMEMPOBJ_ENABLE_STATS	0x1
 
 #ifdef DAOS_PMEM_BUILD
+
+/* The backend type is stored in meta blob header, don't change the value */
 enum {
 	DAOS_MD_PMEM	= 0,
 	DAOS_MD_BMEM	= 1,
 	DAOS_MD_ADMEM	= 2,
+	DAOS_MD_BMEM_V2	= 3,
 };
 
 /* return umem backend type */
 int umempobj_get_backend_type(void);
+
+/* returns whether bmem_v2 pools are allowed */
+bool
+umempobj_allow_md_bmem_v2();
 
 #endif
 
@@ -108,7 +119,12 @@ struct umem_store_iod {
 struct umem_store;
 
 struct umem_store_ops {
-	int	(*so_load)(struct umem_store *store, char *start);
+	int	(*so_waitqueue_create)(void **wq);
+	void	(*so_waitqueue_destroy)(void *wq);
+	void	(*so_waitqueue_wait)(void *wq, bool yield_only);
+	void	(*so_waitqueue_wakeup)(void *wq, bool wakeup_all);
+	int	(*so_load)(struct umem_store *store, char *start_addr, daos_off_t offset,
+			   daos_size_t len);
 	int	(*so_read)(struct umem_store *store, struct umem_store_iod *iod,
 			   d_sg_list_t *sgl);
 	int	(*so_write)(struct umem_store *store, struct umem_store_iod *iod,
@@ -151,6 +167,8 @@ struct umem_store {
 	struct umem_store_ops	*stor_ops;
 	/* backend type */
 	int			 store_type;
+	/* whether the store has evictable zones */
+	bool			 store_evictable;
 	/* standalone store */
 	bool			 store_standalone;
 	/* backend SSD is in faulty state */
@@ -169,6 +187,310 @@ struct umem_pool {
 	struct umem_slab_desc	 up_slabs[0];
 };
 
+#ifdef DAOS_PMEM_BUILD
+#define UMEM_CACHE_PAGE_SZ_SHIFT  24 /* 16MB */
+#define UMEM_CACHE_PAGE_SZ        (1 << UMEM_CACHE_PAGE_SZ_SHIFT)
+
+#define UMEM_CACHE_CHUNK_SZ_SHIFT 12 /* 4KB */
+#define UMEM_CACHE_CHUNK_SZ       (1 << UMEM_CACHE_CHUNK_SZ_SHIFT)
+#define UMEM_CACHE_CHUNK_SZ_MASK  (UMEM_CACHE_CHUNK_SZ - 1)
+
+#define UMEM_CACHE_MIN_EVICTABLE_PAGES	2
+
+enum umem_page_event_types {
+	UMEM_CACHE_EVENT_PGLOAD = 0,
+	UMEM_CACHE_EVENT_PGEVICT
+};
+
+struct umem_page_info;
+/* MD page */
+struct umem_page {
+	/** Pointing to memory page when it's mapped */
+	struct umem_page_info *pg_info;
+};
+
+enum umem_page_stats {
+	UMEM_PG_STATS_NONEVICTABLE = 0,
+	UMEM_PG_STATS_PINNED,
+	UMEM_PG_STATS_FREE,
+	UMEM_PG_STATS_MAX,
+};
+
+enum umem_cache_stats {
+	/* How many page cache hit */
+	UMEM_CACHE_STATS_HIT	= 0,
+	/* How many page cache miss */
+	UMEM_CACHE_STATS_MISS,
+	/* How many pages are evicted */
+	UMEM_CACHE_STATS_EVICT,
+	/* How many dirty pages are flushed on evicting */
+	UMEM_CACHE_STATS_FLUSH,
+	/* How many pages are loaded on cache miss */
+	UMEM_CACHE_STATS_LOAD,
+	UMEM_CACHE_STATS_MAX,
+};
+
+/** Global cache status for each umem_store */
+struct umem_cache {
+	struct umem_store *ca_store;
+	/** Base address of the page cache */
+	void            *ca_base;
+	/** Offset of first page */
+	uint32_t         ca_base_off;
+	/** Cache Mode */
+	uint32_t         ca_mode;
+	/** WAL replay status */
+	uint32_t         ca_replay_done;
+	/** Total MD pages */
+	uint32_t         ca_md_pages;
+	/** Total memory pages in cache */
+	uint32_t         ca_mem_pages;
+	/** Maximum non-evictable memory pages */
+	uint32_t         ca_max_ne_pages;
+	/** Page size */
+	uint32_t         ca_page_sz;
+	/** Page size shift */
+	uint32_t         ca_page_shift;
+	/** Page size mask */
+	uint32_t         ca_page_mask;
+	/** Per-page Bitmap size (in uint64_t) */
+	uint32_t         ca_bmap_sz;
+	/** Free list for unmapped page info */
+	d_list_t         ca_pgs_free;
+	/** Non-evictable & evictable dirty pages */
+	d_list_t         ca_pgs_dirty;
+	/** All Non-evictable[0] & evictable[1] pages */
+	d_list_t         ca_pgs_lru[2];
+	/** all the pages in the progress of flushing */
+	d_list_t         ca_pgs_flushing;
+	/** all the pages waiting for commit */
+	d_list_t         ca_pgs_wait_commit;
+	/** all the pages being pinned */
+	d_list_t         ca_pgs_pinned;
+	/** Highest committed transaction ID */
+	uint64_t         ca_commit_id;
+	/** Callback to tell if a page is evictable */
+	bool		 (*ca_evictable_fn)(void *arg, uint32_t pg_id);
+	/** Callback being called on page loaded/evicted */
+	int		 (*ca_evtcb_fn)(int event_type, void *arg, uint32_t pg_id);
+	/** Argument to the callback function */
+	void            *ca_fn_arg;
+	/** Page stats */
+	uint32_t         ca_pgs_stats[UMEM_PG_STATS_MAX];
+	/** Cache stats */
+	uint64_t	 ca_cache_stats[UMEM_CACHE_STATS_MAX];
+	/** How many waiters waiting on free page reserve */
+	uint32_t         ca_reserve_waiters;
+	/** Waitqueue for free page reserve: umem_cache_reserve() */
+	void            *ca_reserve_wq;
+	/** TODO: some other global status */
+	/** MD page array, array index is page ID */
+	struct umem_page ca_pages[0];
+};
+
+struct umem_cache_chkpt_stats {
+	/** Number of pages processed */
+	unsigned int       uccs_nr_pages;
+	/** Number of dirty chunks copied */
+	unsigned int       uccs_nr_dchunks;
+	/** Number of sgl iovs used to copy dirty chunks */
+	unsigned int       uccs_nr_iovs;
+};
+
+/** Allocate global cache for umem store.
+ *
+ * \param[in]	store		The umem store
+ * \param[in]	page_sz		Page size
+ * \param[in]	md_pgs		Total MD pages
+ * \param[in]	mem_pgs		Total memory pages
+ * \param[in]	max_ne_pgs	Maximum Non-evictable pages
+ * \param[in]	base_off	Offset of the umem cache base
+ * \param[in]	base		Start address of the page cache
+ * \param[in]	is_evictable_fn	Callback function to check if page is evictable
+ * \param[in]	pageload_fn	Callback called on page being loaded
+ * \param[in]	arg		Argument to callback functions.
+ *
+ * \return 0 on success
+ */
+int
+umem_cache_alloc(struct umem_store *store, uint32_t page_sz, uint32_t md_pgs, uint32_t mem_pgs,
+		 uint32_t max_ne_pgs, uint32_t base_off, void *base,
+		 bool (*is_evictable_fn)(void *arg, uint32_t pg_id),
+		 int (*evtcb_fn)(int evt_flag, void *arg, uint32_t pg_id), void *arg);
+
+/** Free global cache for umem store.
+ *
+ * \param[in]	store	Store for which to free cache
+ *
+ * \return 0 on success
+ */
+int
+umem_cache_free(struct umem_store *store);
+
+/** Check MD-blob offset is already loaded onto umem cache.
+ *
+ * \param[in]	store	The umem store
+ * \param[in]	offset	MD-blob offset to be converted
+ *
+ * \return	true or false
+ */
+bool
+umem_cache_offisloaded(struct umem_store *store, umem_off_t offset);
+
+/** Convert MD-blob offset to memory pointer, the corresponding page must be mapped already.
+ *
+ * \param[in]	store	The umem store
+ * \param[in]	offset	MD-blob offset to be converted
+ *
+ * \return	Memory pointer
+ */
+void *
+umem_cache_off2ptr(struct umem_store *store, umem_off_t offset);
+
+/** Convert memory pointer to MD-blob offset, the corresponding page must be mapped already.
+ *
+ * \param[in]	store	The umem store
+ * \param[in]	ptr	Memory pointer to be converted
+ *
+ * \return	MD-blob offset
+ */
+umem_off_t
+umem_cache_ptr2off(struct umem_store *store, const void *ptr);
+
+/** Update umem_cache post WAL replay. This routine is called after
+ *  WAL replay and the evictability of all pages are determined.
+ *
+ * \param[in]	store	The umem store
+ *
+ * \return      None
+ */
+void
+umem_cache_post_replay(struct umem_store *store);
+
+struct umem_cache_range {
+	umem_off_t  cr_off;
+	daos_size_t cr_size;
+};
+
+/** Map MD pages in specified range to memory pages. The range to be mapped should be empty
+ *  (no page loading required). If caller tries to map non-evictable pages, page eviction
+ *  won't be triggered when there are not enough free pages; If caller tries to map evictable
+ *  page, page eviction could be triggered, but it can only map single evictable page at a time.
+ *
+ * \param[in]	store		The umem store
+ * \param[in]	ranges		Ranges to be mapped
+ * \param[in]	range_nr	Number of ranges
+ *
+ * \return	0		: On success
+ *		-DER_BUSY	: Not enough free pages
+ *		-ve		: Errors
+ */
+int
+umem_cache_map(struct umem_store *store, struct umem_cache_range *ranges, int range_nr);
+
+/** Load & map MD pages in specified range to memory pages.
+ *
+ * \param[in]	store		The umem store
+ * \param[in]	ranges		Ranges to be mapped
+ * \param[in]	range_nr	Number of ranges
+ * \param[in]	for_sys		Internal access from system ULTs (aggregation etc.)
+ *
+ * \return	0 on success, negative value on error.
+ */
+int
+umem_cache_load(struct umem_store *store, struct umem_cache_range *ranges, int range_nr,
+		bool for_sys);
+
+struct umem_pin_handle;
+
+/** Load & map MD pages in specified range to memory pages, then take a reference on the mapped
+ *  memory pages, so that the pages won't be evicted until unpin is called. It's usually for the
+ *  cases where we need the pages stay loaded across a yield.
+ *
+ *  \param[in]	store		The umem store
+ *  \param[in]	ranges		Ranges to be pinned
+ *  \param[in]	range_nr	Number of ranges
+ *  \param[in]	for_sys		Internal access from system ULTs (aggregation etc.)
+ *  \param[out] pin_handle	Returned pin handle
+ *
+ *  \return 0 on success
+ */
+int
+umem_cache_pin(struct umem_store *store, struct umem_cache_range *rangs, int range_nr, bool for_sys,
+	       struct umem_pin_handle **pin_handle);
+
+/** Unpin the pages pinned by prior umem_cache_pin().
+ *
+ *  \param[in]	store		The umem store
+ *  \param[in]	pin_handle	Pin handle got from umem_cache_pin()
+ *  \param[in]	range_nr	Number of ranges
+ */
+void
+umem_cache_unpin(struct umem_store *store, struct umem_pin_handle *pin_handle);
+
+/** Reserve few free pages for potential non-evictable zone grow within a transaction.
+ *  Caller needs to ensure there is no CPU yielding after this call till transaction
+ *  start.
+ *
+ *  \param[in]	store		The umem store
+ *
+ *  \return 0 on success
+ */
+int
+umem_cache_reserve(struct umem_store *store);
+
+/** Inform umem cache the last committed ID.
+ *
+ * \param[in]	store		The umem store
+ * \param[in]	commit_id	The last committed ID
+ */
+void
+umem_cache_commit(struct umem_store *store, uint64_t commit_id);
+
+/**
+ * Touched the region identified by @addr and @size, it will mark pages in this region as
+ * dirty (also set bitmap within each page), and put it on dirty list
+ *
+ * This function is called by allocator(probably VOS as well) each time it creates memory
+ * snapshot (calls tx_snap) or just to mark a region to be flushed.
+ *
+ * \param[in]	store	The umem store
+ * \param[in]	wr_tx	The writing transaction
+ * \param[in]	addr	The start address
+ * \param[in]	size	size of dirty region
+ *
+ * \return 0 on success, -DER_CHKPT_BUSY if a checkpoint is in progress on the page. The calling
+ *         transaction must either abort or find another location to modify.
+ */
+int
+umem_cache_touch(struct umem_store *store, uint64_t wr_tx, umem_off_t addr, daos_size_t size);
+
+/** Callback for checkpoint to wait for the commit of chkpt_tx.
+ *
+ * \param[in]	arg		Argument passed to umem_cache_checkpoint
+ * \param[in]	chkpt_tx	The WAL transaction ID we are waiting to commit to WAL
+ * \param[out]	committed_tx	The WAL tx ID of the last transaction committed to WAL
+ */
+typedef void
+umem_cache_wait_cb_t(void *arg, uint64_t chkpt_tx, uint64_t *committed_tx);
+
+/**
+ * This function can yield internally, it is called by checkpoint service of upper level stack.
+ *
+ * \param[in]		store		The umem store
+ * \param[in]		wait_cb		Callback for to wait for wal commit completion
+ * \param[in]		arg		argument for wait_cb
+ * \param[in,out]	chkpt_id	Input is last committed id, output is checkpointed id
+ * \param[out]		chkpt_stats	check point stats
+ *
+ * \return 0 on success
+ */
+int
+umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, void *arg,
+		      uint64_t *chkpt_id, struct umem_cache_chkpt_stats *chkpt_stats);
+
+#endif /*DAOS_PMEM_BUILD*/
+
 /* umem persistent object functions */
 struct umem_pool *umempobj_create(const char *path, const char *layout_name,
 				  int prop_flags, size_t poolsize,
@@ -179,6 +501,9 @@ void  umempobj_close(struct umem_pool *pool);
 void *umempobj_get_rootptr(struct umem_pool *pool, size_t size);
 int   umempobj_get_heapusage(struct umem_pool *pool,
 			     daos_size_t *cur_allocated);
+int
+      umempobj_get_mbusage(struct umem_pool *pool, uint32_t mb_id, daos_size_t *cur_allocated,
+			   daos_size_t *maxsz);
 void  umempobj_log_fraginfo(struct umem_pool *pool);
 
 /** Number of flag bits to reserve for encoding extra information in
@@ -273,6 +598,8 @@ typedef enum {
 	UMEM_CLASS_BMEM,
 	/** ad-hoc memory */
 	UMEM_CLASS_ADMEM,
+	/** blob backed memory v2 */
+	UMEM_CLASS_BMEM_V2,
 	/** unknown */
 	UMEM_CLASS_UNKNOWN,
 } umem_class_id_t;
@@ -314,6 +641,9 @@ struct umem_instance;
 #define UMEM_FLAG_NO_FLUSH	(((uint64_t)1) << 1)
 #define UMEM_XADD_NO_SNAPSHOT	(((uint64_t)1) << 2)
 
+/* Macros associated with Memory buckets */
+#define	UMEM_DEFAULT_MBKT_ID	0
+
 /* type num used by umem ops */
 enum {
 	UMEM_TYPE_ANY,
@@ -334,11 +664,12 @@ typedef struct {
 	 *
 	 * \param umm	   [IN]	umem class instance.
 	 * \param size	   [IN]	size to allocate.
-	 * \param flags	   [IN]	flags like zeroing, noflush (for PMDK)
-	 * \param type_num [IN]	struct type (for PMDK)
+	 * \param flags	   [IN]	flags like zeroing, noflush (for PMDK and BMEM)
+	 * \param type_num [IN]	struct type (for PMDK and BMEM)
+	 * \param mbkt_id  [IN]	memory bucket id (for BMEM)
 	 */
-	umem_off_t	 (*mo_tx_alloc)(struct umem_instance *umm, size_t size,
-					uint64_t flags, unsigned int type_num);
+	umem_off_t (*mo_tx_alloc)(struct umem_instance *umm, size_t size, uint64_t flags,
+				  unsigned int type_num, unsigned int mbkt_id);
 	/**
 	 * Add the specified range of umoff to current memory transaction.
 	 *
@@ -361,7 +692,7 @@ typedef struct {
 	 * \param offset [IN]	start offset of \a umoff tracked by the
 	 *			transaction.
 	 * \param size	[IN]	size of \a umoff tracked by the transaction.
-	 * \param flags [IN]	PMDK flags
+	 * \param flags [IN]	PMDK and BMEM flags
 	 */
 	int		 (*mo_tx_xadd)(struct umem_instance *umm,
 				       umem_off_t umoff, uint64_t offset,
@@ -394,9 +725,10 @@ typedef struct {
 	 * \param act	[IN|OUT]	action used for later cancel/publish.
 	 * \param size	[IN]		size to be reserved.
 	 * \param type_num [IN]		struct type (for PMDK)
+	 * \param mbkt_id  [IN]		memory bucket id (for BMEM)
 	 */
-	umem_off_t	 (*mo_reserve)(struct umem_instance *umm, void *act, size_t size,
-				       unsigned int type_num);
+	umem_off_t (*mo_reserve)(struct umem_instance *umm, void *act, size_t size,
+				 unsigned int type_num, unsigned int mbkt_id);
 
 	/**
 	 * Defer free til commit.  For use with reserved extents that are not
@@ -446,13 +778,14 @@ typedef struct {
 	/**
 	 * allocate umoff with the specified size & flags atomically
 	 *
-	 * \param umm	[IN]	umem class instance.
-	 * \param size	[IN]	size to allocate.
-	 * \param flags	[IN]	flags like zeroing, noflush (for PMDK)
-	 * \param type_num [IN]	struct type (for PMDK)
+	 * \param umm	   [IN]	 umem class instance.
+	 * \param size	   [IN]	 size to allocate.
+	 * \param flags	   [IN]	 flags like zeroing, noflush (for PMDK)
+	 * \param type_num [IN]	 struct type (for PMDK)
+	 * \param mbkt_id  [IN]	 memory bucket id (for BMEM)
 	 */
-	umem_off_t	 (*mo_atomic_alloc)(struct umem_instance *umm, size_t size,
-					    unsigned int type_num);
+	umem_off_t (*mo_atomic_alloc)(struct umem_instance *umm, size_t size, unsigned int type_num,
+				      unsigned int mbkt_id);
 
 	/**
 	 * flush data at specific offset to persistent store.
@@ -463,6 +796,14 @@ typedef struct {
 	 */
 	void		(*mo_atomic_flush)(struct umem_instance *umm, void *addr,
 					   size_t size);
+
+	/**
+	 * returns an evictable memory bucket for tasks like new object creation etc.
+	 *
+	 * \param umm	   [IN]	 umem class instance.
+	 * \param flags	   [IN]	 flags for MB selection criteria. Currently unused.
+	 */
+	uint32_t (*mo_allot_evictable_mb)(struct umem_instance *umm, int flags);
 
 #endif
 	/**
@@ -522,6 +863,10 @@ umem_off2ptr(const struct umem_instance *umm, umem_off_t umoff)
 	if (UMOFF_IS_NULL(umoff))
 		return NULL;
 
+#ifdef DAOS_PMEM_BUILD
+	if (umm->umm_pool && (umm->umm_pool->up_store.store_type == DAOS_MD_BMEM_V2))
+		return umem_cache_off2ptr(&umm->umm_pool->up_store, umem_off2offset(umoff));
+#endif
 	return (void *)(umm->umm_base + umem_off2offset(umoff));
 }
 
@@ -538,7 +883,12 @@ umem_ptr2off(const struct umem_instance *umm, void *ptr)
 	if (ptr == NULL)
 		return UMOFF_NULL;
 
-	return (umem_off_t)ptr - umm->umm_base;
+#ifdef DAOS_PMEM_BUILD
+	if (umm->umm_pool && (umm->umm_pool->up_store.store_type == DAOS_MD_BMEM_V2)) {
+			return umem_cache_ptr2off(&umm->umm_pool->up_store, ptr);
+	} else
+#endif
+		return (umem_off_t)ptr - umm->umm_base;
 }
 
 /**
@@ -558,11 +908,11 @@ umem_has_tx(struct umem_instance *umm)
 	return umm->umm_ops->mo_tx_add != NULL;
 }
 
-#define umem_alloc_verb(umm, flags, size)			                                   \
+#define umem_alloc_verb(umm, flags, size, mbkt_id)                                                 \
 	({                                                                                         \
 		umem_off_t __umoff;                                                                \
                                                                                                    \
-		__umoff = (umm)->umm_ops->mo_tx_alloc(umm, size, flags, UMEM_TYPE_ANY);   \
+		__umoff = (umm)->umm_ops->mo_tx_alloc(umm, size, flags, UMEM_TYPE_ANY, mbkt_id);   \
 		D_ASSERTF(umem_off2flags(__umoff) == 0,                                            \
 			  "Invalid assumption about allocnot using flag bits");                    \
 		D_DEBUG(DB_MEM,                                                                    \
@@ -573,14 +923,17 @@ umem_has_tx(struct umem_instance *umm)
 		__umoff;                                                                           \
 	})
 
-#define umem_alloc(umm, size)						\
-	umem_alloc_verb(umm, 0, size)
+#define umem_alloc(umm, size)  umem_alloc_verb(umm, 0, size, UMEM_DEFAULT_MBKT_ID)
 
-#define umem_zalloc(umm, size)						\
-	umem_alloc_verb(umm, UMEM_FLAG_ZERO, size)
+#define umem_alloc_from_bucket(umm, size, mbkt_id)  umem_alloc_verb(umm, 0, size, mbkt_id)
 
-#define umem_alloc_noflush(umm, size)					\
-	umem_alloc_verb(umm, UMEM_FLAG_NO_FLUSH, size)
+#define umem_zalloc(umm, size) umem_alloc_verb(umm, UMEM_FLAG_ZERO, size, UMEM_DEFAULT_MBKT_ID)
+
+#define umem_zalloc_from_bucket(umm, size, mbkt_id)						   \
+	umem_alloc_verb(umm, UMEM_FLAG_ZERO, size, mbkt_id)
+
+#define umem_alloc_noflush(umm, size)								   \
+	umem_alloc_verb(umm, UMEM_FLAG_NO_FLUSH, size, UMEM_DEFAULT_MBKT_ID)
 
 #define umem_free(umm, umoff)                                                                      \
 	({                                                                                         \
@@ -736,13 +1089,20 @@ int umem_rsrvd_act_realloc(struct umem_instance *umm, struct umem_rsrvd_act **ac
 /* Free up the array of reserved actions */
 int umem_rsrvd_act_free(struct umem_rsrvd_act **act);
 
-umem_off_t umem_reserve(struct umem_instance *umm,
-			struct umem_rsrvd_act *rsrvd_act, size_t size);
-void umem_defer_free(struct umem_instance *umm, umem_off_t off,
-		     struct umem_rsrvd_act *rsrvd_act);
-void umem_cancel(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_act);
-int umem_tx_publish(struct umem_instance *umm,
-		    struct umem_rsrvd_act *rsrvd_act);
+umem_off_t
+umem_reserve_common(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_act, size_t size,
+	     unsigned int mbkt_id);
+#define umem_reserve(umm, rsrvd_act, size)							\
+	umem_reserve_common(umm, rsrvd_act, size, UMEM_DEFAULT_MBKT_ID)
+#define umem_reserve_from_bucket(umm, rsrvd_act, size, mbkt_id)					\
+	umem_reserve_common(umm, rsrvd_act, size, mbkt_id)
+
+void
+umem_defer_free(struct umem_instance *umm, umem_off_t off, struct umem_rsrvd_act *rsrvd_act);
+void
+umem_cancel(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_act);
+int
+umem_tx_publish(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_act);
 
 static inline void *
 umem_atomic_copy(struct umem_instance *umm, void *dest, void *src, size_t len,
@@ -756,7 +1116,15 @@ static inline umem_off_t
 umem_atomic_alloc(struct umem_instance *umm, size_t len, unsigned int type_num)
 {
 	D_ASSERT(umm->umm_ops->mo_atomic_alloc != NULL);
-	return umm->umm_ops->mo_atomic_alloc(umm, len, type_num);
+	return umm->umm_ops->mo_atomic_alloc(umm, len, type_num, UMEM_DEFAULT_MBKT_ID);
+}
+
+static inline umem_off_t
+umem_atomic_alloc_from_bucket(struct umem_instance *umm, size_t len, unsigned int type_num,
+		  unsigned int mbkt_id)
+{
+	D_ASSERT(umm->umm_ops->mo_atomic_alloc != NULL);
+	return umm->umm_ops->mo_atomic_alloc(umm, len, type_num, mbkt_id);
 }
 
 static inline int
@@ -785,6 +1153,48 @@ umem_tx_add_callback(struct umem_instance *umm, struct umem_tx_stage_data *txd,
 	D_ASSERT(umm->umm_ops->mo_tx_add_callback != NULL);
 	return umm->umm_ops->mo_tx_add_callback(umm, txd, stage, cb, data);
 }
+
+/**
+ * Allot an evictable memory bucket for tasks like new object creation etc.
+ *
+ * \param[in]		umm		umem instance pointer.
+ * \param[in]		flags		MB selection criteria.
+ *
+ * \return id > 0, memory bucket id.
+ *	   id = 0, no evictable memory was be chosen.
+ */
+static inline uint32_t
+umem_allot_mb_evictable(struct umem_instance *umm, int flags)
+{
+	if (umm->umm_ops->mo_allot_evictable_mb)
+		return umm->umm_ops->mo_allot_evictable_mb(umm, flags);
+	else
+		return 0;
+}
+
+/**
+ * Get memory bucket id associated with the offset.
+ *
+ * \param[in]		umm		umem instance pointer.
+ * \param[in]		off		offset within the umem pool
+ *
+ * \return id > 0, id of evictable memory bucket.
+ *         id = 0, Memory bucket is non-evictable.
+ */
+uint32_t
+umem_get_mb_from_offset(struct umem_instance *umm, umem_off_t off);
+
+/**
+ * Get base offset of the memory bucket
+ *
+ * \param[in]		umm		umem instance pointer.
+ * \param[in]		mb_id		memory bucket id.
+ *
+ * \return off > 0, base offset of evictable memory bucket.
+ *         off = 0, base offset of non-evictable memory bucket.
+ */
+umem_off_t
+umem_get_mb_base_offset(struct umem_instance *umm, uint32_t mb_id);
 
 /*********************************************************************************/
 
@@ -855,219 +1265,5 @@ struct umem_action {
 	};
 };
 
-#define UMEM_CACHE_PAGE_SZ_SHIFT  24 /* 16MB */
-#define UMEM_CACHE_PAGE_SZ        (1 << UMEM_CACHE_PAGE_SZ_SHIFT)
-#define UMEM_CACHE_PAGE_SZ_MASK   (UMEM_CACHE_PAGE_SZ - 1)
-
-#define UMEM_CACHE_CHUNK_SZ_SHIFT 12 /* 4KB */
-#define UMEM_CACHE_CHUNK_SZ       (1 << UMEM_CACHE_CHUNK_SZ_SHIFT)
-#define UMEM_CACHE_CHUNK_SZ_MASK  (UMEM_CACHE_CHUNK_SZ - 1)
-
-#define UMEM_CACHE_BMAP_SZ        (1 << (UMEM_CACHE_PAGE_SZ_SHIFT - UMEM_CACHE_CHUNK_SZ_SHIFT - 6))
-
-struct umem_page_info;
-/** 16 MB page */
-struct umem_page {
-	/** page ID */
-	unsigned int		 pg_id;
-	/** refcount */
-	int			 pg_ref;
-	/** page info */
-	struct umem_page_info   *pg_info;
-};
-
-/** Global cache status for each umem_store */
-struct umem_cache {
-	struct umem_store	*ca_store;
-	/** Total pages store */
-	uint64_t                 ca_num_pages;
-	/** Total pages in cache */
-	uint64_t                 ca_mapped;
-	/** Maximum number of cached pages */
-	uint64_t                 ca_max_mapped;
-	/** Free list for mapped page info */
-	d_list_t                 ca_pi_free;
-	/** all the dirty pages */
-	d_list_t                 ca_pgs_dirty;
-	/** Pages waiting for copy to DMA buffer */
-	d_list_t                 ca_pgs_copying;
-	/** LRU list all pages not in one of the other states for future eviction support */
-	d_list_t                 ca_pgs_lru;
-	/** TODO: some other global status */
-	/** All pages, sorted by umem_page::pg_id */
-	struct umem_page         ca_pages[0];
-};
-
-struct umem_cache_chkpt_stats {
-	/** Last committed checkpoint id */
-	uint64_t	*uccs_chkpt_id;
-	/** Number of pages processed */
-	int		 uccs_nr_pages;
-	/** Number of dirty chunks copied */
-	int		 uccs_nr_dchunks;
-	/** Number of sgl iovs used to copy dirty chunks */
-	int		 uccs_nr_iovs;
-};
-
-static inline uint64_t
-umem_cache_size2pages(uint64_t len)
-{
-	D_ASSERT((len & UMEM_CACHE_PAGE_SZ_MASK) == 0);
-
-	return len >> UMEM_CACHE_PAGE_SZ_SHIFT;
-}
-
-static inline uint64_t
-umem_cache_size_round(uint64_t len)
-{
-	return (len + UMEM_CACHE_PAGE_SZ_MASK) & ~UMEM_CACHE_PAGE_SZ_MASK;
-}
-
-static inline struct umem_page *
-umem_cache_off2page(struct umem_cache *cache, umem_off_t offset)
-{
-	uint64_t idx = offset >> UMEM_CACHE_PAGE_SZ_SHIFT;
-
-	D_ASSERTF(idx < cache->ca_num_pages,
-		  "offset=" DF_U64 ", num_pages=" DF_U64 ", idx=" DF_U64 "\n", offset,
-		  cache->ca_num_pages, idx);
-
-	return &cache->ca_pages[idx];
-}
-
-/** From a mapped page address, return the umem_cache it belongs to */
-static inline struct umem_cache *
-umem_page2cache(struct umem_page *page)
-{
-	return (struct umem_cache *)container_of(&page[-page->pg_id], struct umem_cache, ca_pages);
-}
-
-/** From a mapped page address, return the umem_store it belongs to */
-static inline struct umem_store *
-umem_page2store(struct umem_page *page)
-{
-	return umem_page2cache(page)->ca_store;
-}
-
-/** Allocate global cache for umem store.  All 16MB pages are initially unmapped
- *
- * \param[in]	store		The umem store
- * \param[in]	max_mapped	0 or Maximum number of mapped 16MB pages (must be 0 for now)
- *
- * \return 0 on success
- */
-int
-umem_cache_alloc(struct umem_store *store, uint64_t max_mapped);
-
-/** Free global cache for umem store.  Pages must be unmapped first
- *
- * \param[in]	store	Store for which to free cache
- *
- * \return 0 on success
- */
-int
-umem_cache_free(struct umem_store *store);
-
-/** Query if the page cache has enough space to map a range
- *
- * \param[in]	store		The store
- * \param[in]	num_pages	Number of pages to bring into cache
- *
- * \return number of pages that need eviction to support mapping the range
- */
-int
-umem_cache_check(struct umem_store *store, uint64_t num_pages);
-
-/** Evict the pages.   This invokes the unmap callback. (XXX: not yet implemented)
- *
- * \param[in]	store		The store
- * \param[in]	num_pages	Number of pages to evict
- *
- * \return 0 on success, -DER_BUSY means a checkpoint is needed to evict the pages
- */
-int
-umem_cache_evict(struct umem_store *store, uint64_t num_pages);
-
-/** Adds a mapped range of pages to the page cache.
- *
- * \param[in]	store		The store
- * \param[in]	offset		The offset in the umem cache
- * \param[in]	start_addr	Start address of mapping
- * \param[in]	num_pages	Number of consecutive 16MB pages to being cached
- *
- * \return 0 on success
- */
-int
-umem_cache_map_range(struct umem_store *store, umem_off_t offset, void *start_addr,
-		     uint64_t num_pages);
-
-/** Take a reference on the pages in the range.   Only needed for cases where we need the page to
- *  stay loaded across a yield, such as the VOS object cache.  Pages in the range must be mapped.
- *
- *  \param[in]	store	The umem store
- *  \param[in]	addr	The address of the hold
- *  \param[in]	size	The size of the hold
- *
- *  \return 0 on success
- */
-int
-umem_cache_pin(struct umem_store *store, umem_off_t addr, daos_size_t size);
-
-/** Release a reference on pages in the range.  Pages in the range must be mapped and held.
- *
- *  \param[in]	store	The umem store
- *  \param[in]	addr	The address of the hold
- *  \param[in]	size	The size of the hold
- *
- *  \return 0 on success
- */
-int
-umem_cache_unpin(struct umem_store *store, umem_off_t addr, daos_size_t size);
-
-/**
- * Touched the region identified by @addr and @size, it will mark pages in this region as
- * dirty (also set bitmap within each page), and put it on dirty list
- *
- * This function is called by allocator(probably VOS as well) each time it creates memory
- * snapshot (calls tx_snap) or just to mark a region to be flushed.
- *
- * \param[in]	store	The umem store
- * \param[in]	wr_tx	The writing transaction
- * \param[in]	addr	The start address
- * \param[in]	size	size of dirty region
- *
- * \return 0 on success, -DER_CHKPT_BUSY if a checkpoint is in progress on the page. The calling
- *         transaction must either abort or find another location to modify.
- */
-int
-umem_cache_touch(struct umem_store *store, uint64_t wr_tx, umem_off_t addr, daos_size_t size);
-
-/** Callback for checkpoint to wait for the commit of chkpt_tx.
- *
- * \param[in]	arg		Argument passed to umem_cache_checkpoint
- * \param[in]	chkpt_tx	The WAL transaction ID we are waiting to commit to WAL
- * \param[out]	committed_tx	The WAL tx ID of the last transaction committed to WAL
- */
-typedef void
-umem_cache_wait_cb_t(void *arg, uint64_t chkpt_tx, uint64_t *committed_tx);
-
-/**
- * Write all dirty pages before @wal_tx to MD blob. (XXX: not yet implemented)
- *
- * This function can yield internally, it is called by checkpoint service of upper level stack.
- *
- * \param[in]		store		The umem store
- * \param[in]		wait_cb		Callback for to wait for wal commit completion
- * \param[in]		arg		argument for wait_cb
- * \param[in,out]	chkpt_id	Input is last committed id, output is checkpointed id
- * \param[out]		chkpt_stats	check point stats
- *
- * \return 0 on success
- */
-int
-umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, void *arg,
-		      uint64_t *chkpt_id, struct umem_cache_chkpt_stats *chkpt_stats);
-
 #endif /** DAOS_PMEM_BUILD */
-
 #endif /* __DAOS_MEM_H__ */

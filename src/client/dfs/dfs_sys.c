@@ -11,13 +11,13 @@
 #include <linux/xattr.h>
 #include <daos/common.h>
 #include <daos/event.h>
-
 #include <gurt/atomic.h>
 
 #include <daos.h>
 #include <daos_fs.h>
-
 #include <daos_fs_sys.h>
+
+#include "dfs_internal.h"
 
 /** Number of entries for readdir */
 #define DFS_SYS_NUM_DIRENTS 24
@@ -1318,6 +1318,12 @@ dfs_sys_remove_type(dfs_sys_t *dfs_sys, const char *path, bool force,
 		return EINVAL;
 	if (path == NULL)
 		return EINVAL;
+	/*
+	 * since we are not evicting child entries from the dfs sys cache in case of force removal
+	 * of a dir, just disallow force removal if cache is enabled on the dfs sys mount.
+	 */
+	if (dfs_sys->hash && force)
+		return ENOTSUP;
 
 	rc = sys_path_parse(dfs_sys, &sys_path, path);
 	if (rc != 0)
@@ -1396,6 +1402,63 @@ dfs_sys_mkdir(dfs_sys_t *dfs_sys, const char *dir, mode_t mode,
 
 out_free_path:
 	sys_path_free(dfs_sys, &sys_path);
+	return rc;
+}
+
+int
+dfs_sys_mkdir_p(dfs_sys_t *dfs_sys, const char *dir_path, mode_t mode, daos_oclass_id_t cid)
+{
+	size_t     path_len;
+	char      *_path = NULL;
+	char      *sptr  = NULL;
+	char      *tok;
+	dfs_obj_t *parent;
+	int        rc = 0;
+
+	if (dfs_sys == NULL)
+		return EINVAL;
+	if (dir_path == NULL)
+		return EINVAL;
+	if (dir_path[0] != '/')
+		return EINVAL;
+
+	path_len = strnlen(dir_path, PATH_MAX);
+	if (path_len == PATH_MAX)
+		return ENAMETOOLONG;
+
+	D_STRNDUP(_path, dir_path, path_len);
+	if (_path == NULL)
+		return ENOMEM;
+
+	parent = NULL;
+	/* iterate through the parent directories and create them if necessary */
+	for (tok = strtok_r(_path, "/", &sptr); tok != NULL; tok = strtok_r(NULL, "/", &sptr)) {
+		dfs_obj_t *cur;
+
+		rc = dfs_open(dfs_sys->dfs, parent, tok, mode | S_IFDIR, O_RDWR | O_CREAT, cid, 0,
+			      NULL, &cur);
+		if (rc != 0) {
+			/*
+			 * If this is the last entry and dfs_open returns ENOTDIR, change that err
+			 * code to EEXISTS to match what posix mkdir does.
+			 */
+			if (rc == ENOTDIR) {
+				tok = strtok_r(NULL, "/", &sptr);
+				if (tok == NULL)
+					rc = EEXIST;
+			}
+			D_GOTO(out_free, rc);
+		}
+
+		if (parent)
+			dfs_release(parent);
+		parent = cur;
+	}
+
+out_free:
+	if (parent)
+		dfs_release(parent);
+	D_FREE(_path);
 	return rc;
 }
 

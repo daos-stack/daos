@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -228,7 +229,7 @@ func (tc *TierConfig) WithBdevBusidRange(rangeStr string) *TierConfig {
 
 // WithBdevDeviceRoles sets the role assignments for the bdev tier.
 func (tc *TierConfig) WithBdevDeviceRoles(bits int) *TierConfig {
-	tc.Bdev.DeviceRoles = BdevRoles{OptionBits(bits)}
+	tc.Bdev.DeviceRoles = BdevRolesFromBits(bits)
 	return tc
 }
 
@@ -319,8 +320,7 @@ func (tcs TierConfigs) HasBdevRoleMeta() bool {
 	}
 
 	for _, bc := range tcs.BdevConfigs() {
-		bits := bc.Bdev.DeviceRoles.OptionBits
-		if (bits & BdevRoleMeta) != 0 {
+		if bc.Bdev.DeviceRoles.HasMeta() {
 			return true
 		}
 	}
@@ -403,10 +403,9 @@ func (tcs TierConfigs) validateBdevRoles() error {
 			return FaultBdevConfigRolesMissing
 		}
 
-		bits := roles.OptionBits
-		hasWAL := (bits & BdevRoleWAL) != 0
-		hasMeta := (bits & BdevRoleMeta) != 0
-		hasData := (bits & BdevRoleData) != 0
+		hasWAL := roles.HasWAL()
+		hasMeta := roles.HasMeta()
+		hasData := roles.HasData()
 
 		// Disallow having both wal and data only on a tier.
 		if hasWAL && hasData && !hasMeta {
@@ -848,7 +847,7 @@ func (ofm optFlagMap) keys() []string {
 	return keys.ToSlice()
 }
 
-// toStrings returns a slice of option names that have been set.
+// toStrings returns a sorted slice of option names that have been set.
 func (obs OptionBits) toStrings(optStr2Flag optFlagMap) []string {
 	opts := common.NewStringSet()
 	for str, flag := range optStr2Flag {
@@ -857,7 +856,9 @@ func (obs OptionBits) toStrings(optStr2Flag optFlagMap) []string {
 		}
 	}
 
-	return opts.ToSlice()
+	outOpts := opts.ToSlice()
+	sort.Strings(outOpts)
+	return outOpts
 }
 
 // toString returns a comma separated list of option names that have been set.
@@ -940,6 +941,47 @@ func (bdr *BdevRoles) String() string {
 	}
 
 	return bdr.toString(roleOptFlags)
+}
+
+// HasDataRole returns true if BdevRoles has DATA role set.
+func (bdr *BdevRoles) HasData() bool {
+	if bdr == nil {
+		return false
+	}
+
+	return bdr.OptionBits&BdevRoleData != 0
+}
+
+// HasMetaRole returns true if BdevRoles has META role set.
+func (bdr *BdevRoles) HasMeta() bool {
+	if bdr == nil {
+		return false
+	}
+
+	return bdr.OptionBits&BdevRoleMeta != 0
+}
+
+// HasWALRole returns true if BdevRoles has WAL role set.
+func (bdr *BdevRoles) HasWAL() bool {
+	if bdr == nil {
+		return false
+	}
+
+	return bdr.OptionBits&BdevRoleWAL != 0
+}
+
+// IsEmpty returns true if no options have been set.
+func (bdr *BdevRoles) IsEmpty() bool {
+	return bdr == nil || bdr.OptionBits.IsEmpty()
+}
+
+// BdevRolesFromBits returns BdevRoles initialized with supplied option bitset.
+func BdevRolesFromBits(bits int) BdevRoles {
+	if bits <= 0 {
+		return BdevRoles{}
+	}
+
+	return BdevRoles{OptionBits(bits)}
 }
 
 // BdevConfig represents a Block Device (NVMe, etc.) configuration entry.
@@ -1105,6 +1147,7 @@ type BdevAutoFaulty struct {
 	MaxCsumErrs uint32 `yaml:"max_csum_errs,omitempty" json:"max_csum_errs"`
 }
 
+// Config defines engine storage.
 type Config struct {
 	ControlMetadata  ControlMetadata `yaml:"-"` // inherited from server
 	EngineIdx        uint            `yaml:"-"`
@@ -1118,6 +1161,7 @@ type Config struct {
 	AutoFaultyProps  BdevAutoFaulty  `yaml:"bdev_auto_faulty,omitempty"`
 }
 
+// SetNUMAAffinity enables the assignment of NUMA affinity to tier configs.
 func (c *Config) SetNUMAAffinity(node uint) {
 	c.NumaNodeIndex = node
 	for _, tier := range c.Tiers {
@@ -1125,14 +1169,12 @@ func (c *Config) SetNUMAAffinity(node uint) {
 	}
 }
 
+// GetBdevs retrieves bdev device list of storage tiers.
 func (c *Config) GetBdevs() *BdevDeviceList {
 	return c.Tiers.Bdevs()
 }
 
-func (c *Config) GetNVMeBdevs() *BdevDeviceList {
-	return c.Tiers.NVMeBdevs()
-}
-
+// Validate checks the validity of the storage config.
 func (c *Config) Validate() error {
 	if err := c.Tiers.Validate(); err != nil {
 		return err

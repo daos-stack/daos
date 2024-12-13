@@ -1448,6 +1448,33 @@ class TestPool(TestDaosApiBase):
                 status = False
         return status
 
+    def wait_pool_dead_ranks(self, expected, interval=1, timeout=30):
+        """Wait for the pool dead ranks.
+
+        Args:
+            expected (list): dead ranks check to wait.
+            interval (int, optional): number of seconds to wait in between pool query checks
+            timeout(int, optional): time to fail test if it could not match
+                expected values.
+
+        Raises:
+            DaosTestError: if waiting for timeout.
+
+        """
+        self.log.info("waiting for pool ranks %s to be marked dead", expected)
+
+        start = time()
+        data = self.dmg.pool_query(self.identifier, health_only=True)
+        while data['response'].get('dead_ranks') != expected:
+            self.log.info("  dead ranks is %s ...", data['response'].get('dead_ranks'))
+            if time() - start > timeout:
+                raise DaosTestError("TIMEOUT detected after {} seconds while for waiting "
+                                    "for ranks {} dead".format(timeout, expected))
+            sleep(interval)
+            data = self.dmg.pool_query(self.identifier, health_only=True)
+
+        self.log.info("Wait for dead ranks complete: dead ranks %s", expected)
+
     def verify_uuid_directory(self, host, scm_mount):
         """Check if pool folder exist on server.
 

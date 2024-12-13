@@ -337,7 +337,7 @@ out:
 	dout->do_status = rc;
 	/* For DTX_COMMIT, it is the count of real committed DTX entries. */
 	dout->do_misc = committed;
-	rc = crt_reply_send(rpc);
+	rc            = crt_reply_send_input_free(rpc);
 	if (rc != 0)
 		D_ERROR("send reply failed for DTX rpc %u: rc = "DF_RC"\n", opc,
 			DP_RC(rc));
@@ -474,8 +474,9 @@ dtx_coll_handler(crt_rpc_t *rpc)
 
 out:
 	D_CDEBUG(rc < 0, DLOG_ERR, DB_TRACE,
-		 "Handled collective DTX PRC %u on rank %u for "DF_DTI": "DF_RC"\n",
-		 opc, myrank, DP_DTI(&dci->dci_xid), DP_RC(rc));
+		 "Handled collective DTX PRC %u on rank %u for "DF_DTI" in "
+		 DF_UUID"/"DF_UUID": "DF_RC"\n", opc, myrank, DP_DTI(&dci->dci_xid),
+		 DP_UUID(dci->dci_po_uuid), DP_UUID(dci->dci_co_uuid), DP_RC(rc));
 
 	dco->dco_status = rc;
 	rc = crt_reply_send(rpc);

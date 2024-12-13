@@ -601,8 +601,11 @@ class DmgCommand(DmgCommandBase):
         #     0,
         #     1
         #   ],
-        #   "scm_bytes": 256000000,
-        #   "nvme_bytes": 0
+        #   "tier_bytes": [
+        #     256000000,
+        #     0
+        #   ],
+        #   "mem_file_bytes": 0
         # },
         # "error": null,
         # "status": 0
@@ -622,15 +625,17 @@ class DmgCommand(DmgCommandBase):
         data["ranks"] = ",".join([str(r) for r in output["response"]["tgt_ranks"]])
         data["scm_per_rank"] = output["response"]["tier_bytes"][0]
         data["nvme_per_rank"] = output["response"]["tier_bytes"][1]
+        data["memfile_per_rank"] = output["response"]["mem_file_bytes"]
 
         return data
 
-    def pool_query(self, pool, show_enabled=False):
+    def pool_query(self, pool, show_enabled=False, health_only=False):
         """Query a pool with the dmg command.
 
         Args:
             pool (str): Pool UUID or label to query.
             show_enabled (bool, optional): Display enabled ranks.
+            health_only (bool, optional): Only perform pool health related queries.
 
         Raises:
             CommandFailure: if the dmg pool query command fails.
@@ -676,7 +681,8 @@ class DmgCommand(DmgCommandBase):
         #     "error": null,
         #     "status": 0
         # }
-        return self._get_json_result(("pool", "query"), pool=pool, show_enabled=show_enabled)
+        return self._get_json_result(("pool", "query"), pool=pool,
+                                     show_enabled=show_enabled, health_only=health_only)
 
     def pool_query_targets(self, pool, rank=None, target_idx=None):
         """Call dmg pool query-targets.

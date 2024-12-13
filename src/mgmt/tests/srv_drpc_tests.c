@@ -1408,12 +1408,13 @@ test_drpc_pool_query_success(void **state)
 	Drpc__Response		resp = DRPC__RESPONSE__INIT;
 	uuid_t			exp_uuid;
 	daos_pool_info_t	exp_info = {0};
+	uint64_t flags = DPI_ENGINES_ENABLED | DPI_ENGINES_DISABLED | DPI_ENGINES_DEAD;
 
 	init_test_pool_info(&exp_info);
 	init_test_rebuild_status(&exp_info.pi_rebuild_st);
 	ds_mgmt_pool_query_info_out = exp_info;
 
-	setup_pool_query_drpc_call(&call, TEST_UUID, DPI_ENGINES_ENABLED | DPI_ENGINES_DISABLED);
+	setup_pool_query_drpc_call(&call, TEST_UUID, flags);
 
 	ds_mgmt_drpc_pool_query(&call, &resp);
 
@@ -1424,8 +1425,9 @@ test_drpc_pool_query_success(void **state)
 	assert_non_null(ds_mgmt_pool_query_info_ptr);
 	assert_non_null(ds_mgmt_pool_query_enabled_ranks_out);
 	assert_non_null(ds_mgmt_pool_query_disabled_ranks_out);
-	assert_int_equal(ds_mgmt_pool_query_info_in.pi_bits,
-			 DEFAULT_QUERY_BITS | DPI_ENGINES_ENABLED | DPI_ENGINES_DISABLED);
+	assert_non_null(ds_mgmt_pool_query_dead_ranks_out);
+	flags |= DEFAULT_QUERY_BITS;
+	assert_int_equal(ds_mgmt_pool_query_info_in.pi_bits, DEFAULT_QUERY_BITS | flags);
 
 	expect_query_resp_with_info(&exp_info,
 				    MGMT__POOL_REBUILD_STATUS__STATE__IDLE,

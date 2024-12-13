@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -36,6 +36,14 @@ func TestDmg_SystemCommands(t *testing.T) {
 	withHosts := func(req control.UnaryRequest, hosts ...string) control.UnaryRequest {
 		if rs, ok := req.(interface{ SetHosts(*hostlist.HostSet) }); ok {
 			rs.SetHosts(hostlist.MustCreateSet(strings.Join(hosts, ",")))
+		}
+
+		return req
+	}
+
+	withSystem := func(req control.UnaryRequest, sys string) control.UnaryRequest {
+		if rs, ok := req.(interface{ SetSystem(string) }); ok {
+			rs.SetSystem(sys)
 		}
 
 		return req
@@ -237,6 +245,62 @@ func TestDmg_SystemCommands(t *testing.T) {
 			errors.New("--ranks and --rank-hosts options cannot be set together"),
 		},
 		{
+			"system exclude with multiple ranks",
+			"system exclude --ranks 0,1,4",
+			strings.Join([]string{
+				printRequest(t, withRanks(&control.SystemExcludeReq{}, 0, 1, 4)),
+			}, " "),
+			nil,
+		},
+		{
+			"system exclude with no ranks",
+			"system exclude",
+			"",
+			errNoRanks,
+		},
+		{
+			"system drain with multiple hosts",
+			"system drain --rank-hosts foo-[0,1,4]",
+			strings.Join([]string{
+				printRequest(t, withSystem(
+					withHosts(&control.SystemDrainReq{}, "foo-[0-1,4]"),
+					"daos_server")),
+			}, " "),
+			nil,
+		},
+		{
+			"system drain with multiple ranks",
+			"system drain --ranks 0,1,4",
+			strings.Join([]string{
+				printRequest(t, withSystem(
+					withRanks(&control.SystemDrainReq{}, 0, 1, 4),
+					"daos_server")),
+			}, " "),
+			nil,
+		},
+		{
+			"system drain without ranks",
+			"system drain",
+			"",
+			errNoRanks,
+		},
+		{
+			"system cleanup with machine name",
+			"system cleanup foo1",
+			strings.Join([]string{
+				printRequest(t, withSystem(&control.SystemCleanupReq{
+					Machine: "foo1",
+				}, "daos_server")),
+			}, " "),
+			nil,
+		},
+		{
+			"system cleanup without machine name",
+			"system cleanup -v",
+			"",
+			errors.New("not provided"),
+		},
+		{
 			"leader query",
 			"system leader-query",
 			strings.Join([]string{
@@ -317,26 +381,26 @@ func TestDmg_SystemCommands(t *testing.T) {
 	})
 }
 
-func TestDmg_LeaderQueryCmd_Errors(t *testing.T) {
+func TestDmg_leaderQueryCmd(t *testing.T) {
 	for name, tc := range map[string]struct {
 		ctlCfg *control.Config
 		resp   *mgmtpb.LeaderQueryResp
 		msErr  error
 		expErr error
 	}{
-		"list pools no config": {
+		"no config": {
 			resp:   &mgmtpb.LeaderQueryResp{},
 			expErr: errors.New("leader query failed: no configuration loaded"),
 		},
-		"list pools success": {
+		"success": {
 			ctlCfg: &control.Config{},
 			resp:   &mgmtpb.LeaderQueryResp{},
 		},
-		"list pools ms failures": {
+		"ms failures": {
 			ctlCfg: &control.Config{},
 			resp:   &mgmtpb.LeaderQueryResp{},
-			msErr:  errors.New("remote failed"),
-			expErr: errors.New("remote failed"),
+			msErr:  errors.New("failed"),
+			expErr: errors.New("failed"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -359,135 +423,16 @@ func TestDmg_LeaderQueryCmd_Errors(t *testing.T) {
 	}
 }
 
-func TestDmg_systemQueryCmd_Errors(t *testing.T) {
-	for name, tc := range map[string]struct {
-		resp   *mgmtpb.SystemQueryResp
-		msErr  error
-		expErr error
-	}{
-		"system query success": {
-			resp: &mgmtpb.SystemQueryResp{
-				Members: []*mgmtpb.SystemMember{
-					{
-						Rank:  1,
-						Uuid:  test.MockUUID(1),
-						State: system.MemberStateReady.String(),
-						Addr:  "10.0.0.1:10001",
-					},
-					{
-						Rank:  2,
-						Uuid:  test.MockUUID(2),
-						State: system.MemberStateReady.String(),
-						Addr:  "10.0.0.1:10001",
-					},
-				},
-			},
-		},
-		"system query ms failures": {
-			msErr:  errors.New("remote failed"),
-			expErr: errors.New("remote failed"),
-		},
-		"system query absent hosts": {
-			resp: &mgmtpb.SystemQueryResp{
-				Absenthosts: "foo[1-23]",
-			},
-			expErr: errors.New("system query failed: non-existent hosts"),
-		},
-		"system query absent ranks": {
-			resp: &mgmtpb.SystemQueryResp{
-				Absentranks: "1-23",
-			},
-			expErr: errors.New("system query failed: non-existent ranks"),
-		},
-		"system query absent hosts and ranks": {
-			resp: &mgmtpb.SystemQueryResp{
-				Absenthosts: "foo[1-23]",
-				Absentranks: "1-23",
-			},
-			expErr: errors.New("system query failed: non-existent hosts foo[1-23], " +
-				"non-existent ranks 1-23"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer test.ShowBufferOnFailure(t, buf)
-
-			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
-				UnaryResponse: control.MockMSResponse("10.0.0.1:10001",
-					tc.msErr, tc.resp),
-			})
-
-			queryCmd := new(systemQueryCmd)
-			queryCmd.setInvoker(mi)
-			queryCmd.SetLog(log)
-
-			gotErr := queryCmd.Execute(nil)
-			test.CmpErr(t, tc.expErr, gotErr)
-		})
-	}
-}
-
-func TestDmg_systemStartCmd_Errors(t *testing.T) {
+// TestDmg_systemStartCmd covers case where duplicate rank result is detected when constructing
+// rank groups, this applies across start stop exclude and any other commands that receive rank
+// results in response but the test case isn't run individually for all those commands that share
+// the behavior.
+func TestDmg_systemStartCmd(t *testing.T) {
 	for name, tc := range map[string]struct {
 		resp   *mgmtpb.SystemStartResp
 		msErr  error
 		expErr error
 	}{
-		"system start success": {
-			resp: &mgmtpb.SystemStartResp{
-				Results: []*sharedpb.RankResult{
-					{
-						Rank: 2, Action: "start",
-						State: system.MemberStateReady.String(),
-					},
-					{
-						Rank: 3, Action: "start",
-						State: system.MemberStateReady.String(),
-					},
-				},
-			},
-		},
-		"system start ms failures": {
-			resp: &mgmtpb.SystemStartResp{
-				Absenthosts: "foo[1-23]",
-				Absentranks: "1-23",
-				Results: []*sharedpb.RankResult{
-					{
-						Rank: 24, Action: "start",
-						Errored: true, Msg: "uh ohh",
-						State: system.MemberStateErrored.String(),
-					},
-				},
-			},
-			msErr:  errors.New("remote failed"),
-			expErr: errors.New("remote failed"),
-		},
-		"system start rank failures": {
-			resp: &mgmtpb.SystemStartResp{
-				Results: []*sharedpb.RankResult{
-					{
-						Rank: 2, Action: "start",
-						State: system.MemberStateReady.String(),
-					},
-					{
-						Rank: 3, Action: "start",
-						Errored: true, Msg: "uh oh",
-						State: system.MemberStateErrored.String(),
-					},
-					{
-						Rank: 5, Action: "start",
-						Errored: true, Msg: "uh ohh",
-						State: system.MemberStateErrored.String(),
-					},
-					{
-						Rank: 4, Action: "start",
-						Errored: true, Msg: "uh ohh",
-						State: system.MemberStateErrored.String(),
-					},
-				},
-			},
-			expErr: errors.New("system start failed: check results for failed ranks 3-5"),
-		},
 		"system start duplicate rank results": {
 			resp: &mgmtpb.SystemStartResp{
 				Results: []*sharedpb.RankResult{
@@ -504,38 +449,6 @@ func TestDmg_systemStartCmd_Errors(t *testing.T) {
 			},
 			expErr: errors.New("duplicate result for rank"),
 		},
-		"system start absent hosts": {
-			resp: &mgmtpb.SystemStartResp{
-				Absenthosts: "foo[1-23]",
-			},
-			expErr: errors.New("system start failed: non-existent hosts"),
-		},
-		"system start absent ranks": {
-			resp: &mgmtpb.SystemStartResp{
-				Absentranks: "1-23",
-			},
-			expErr: errors.New("system start failed: non-existent ranks"),
-		},
-		"system start absent hosts and ranks and failed ranks": {
-			resp: &mgmtpb.SystemStartResp{
-				Absenthosts: "foo[1-23]",
-				Absentranks: "1-23",
-				Results: []*sharedpb.RankResult{
-					{
-						Rank: 24, Action: "start",
-						Errored: true, Msg: "uh ohh",
-						State: system.MemberStateErrored.String(),
-					},
-					{
-						Rank: 25, Action: "start",
-						Errored: true, Msg: "uh ohh",
-						State: system.MemberStateErrored.String(),
-					},
-				},
-			},
-			expErr: errors.New("system start failed: non-existent hosts foo[1-23], " +
-				"non-existent ranks 1-23, check results for failed ranks 24-2"),
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -551,135 +464,6 @@ func TestDmg_systemStartCmd_Errors(t *testing.T) {
 			startCmd.SetLog(log)
 
 			gotErr := startCmd.Execute(nil)
-			test.CmpErr(t, tc.expErr, gotErr)
-		})
-	}
-}
-
-func TestDmg_systemStopCmd_Errors(t *testing.T) {
-	for name, tc := range map[string]struct {
-		resp   *mgmtpb.SystemStopResp
-		msErr  error
-		expErr error
-	}{
-		"system stop success": {
-			resp: &mgmtpb.SystemStopResp{
-				Results: []*sharedpb.RankResult{
-					{
-						Rank: 2, Action: "stop",
-						State: system.MemberStateStopped.String(),
-					},
-					{
-						Rank: 3, Action: "stop",
-						State: system.MemberStateStopped.String(),
-					},
-				},
-			},
-		},
-		"system stop ms failures": {
-			resp: &mgmtpb.SystemStopResp{
-				Absenthosts: "foo[1-23]",
-				Absentranks: "1-23",
-				Results: []*sharedpb.RankResult{
-					{
-						Rank: 24, Action: "stop",
-						Errored: true, Msg: "uh ohh",
-						State: system.MemberStateErrored.String(),
-					},
-				},
-			},
-			msErr:  errors.New("remote failed"),
-			expErr: errors.New("remote failed"),
-		},
-		"system stop rank failures": {
-			resp: &mgmtpb.SystemStopResp{
-				Results: []*sharedpb.RankResult{
-					{
-						Rank: 2, Action: "stop",
-						State: system.MemberStateStopped.String(),
-					},
-					{
-						Rank: 3, Action: "stop",
-						Errored: true, Msg: "uh oh",
-						State: system.MemberStateErrored.String(),
-					},
-					{
-						Rank: 5, Action: "stop",
-						Errored: true, Msg: "uh ohh",
-						State: system.MemberStateErrored.String(),
-					},
-					{
-						Rank: 4, Action: "stop",
-						Errored: true, Msg: "uh ohh",
-						State: system.MemberStateErrored.String(),
-					},
-				},
-			},
-			expErr: errors.New("system stop failed: check results for failed ranks 3-5"),
-		},
-		"system stop duplicate rank results": {
-			resp: &mgmtpb.SystemStopResp{
-				Results: []*sharedpb.RankResult{
-					{
-						Rank: 2, Action: "stop",
-						State: system.MemberStateStopped.String(),
-					},
-					{
-						Rank: 2, Action: "stop",
-						Errored: true, Msg: "uh oh",
-						State: system.MemberStateErrored.String(),
-					},
-				},
-			},
-			expErr: errors.New("duplicate result for rank"),
-		},
-		"system stop absent hosts": {
-			resp: &mgmtpb.SystemStopResp{
-				Absenthosts: "foo[1-23]",
-			},
-			expErr: errors.New("system stop failed: non-existent hosts"),
-		},
-		"system stop absent ranks": {
-			resp: &mgmtpb.SystemStopResp{
-				Absentranks: "1-23",
-			},
-			expErr: errors.New("system stop failed: non-existent ranks"),
-		},
-		"system stop absent hosts and ranks and failed ranks": {
-			resp: &mgmtpb.SystemStopResp{
-				Absenthosts: "foo[1-23]",
-				Absentranks: "1-23",
-				Results: []*sharedpb.RankResult{
-					{
-						Rank: 24, Action: "stop",
-						Errored: true, Msg: "uh ohh",
-						State: system.MemberStateErrored.String(),
-					},
-					{
-						Rank: 25, Action: "stop",
-						Errored: true, Msg: "uh ohh",
-						State: system.MemberStateErrored.String(),
-					},
-				},
-			},
-			expErr: errors.New("system stop failed: non-existent hosts foo[1-23], " +
-				"non-existent ranks 1-23, check results for failed ranks 24-2"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer test.ShowBufferOnFailure(t, buf)
-
-			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
-				UnaryResponse: control.MockMSResponse("10.0.0.1:10001",
-					tc.msErr, tc.resp),
-			})
-
-			stopCmd := new(systemStopCmd)
-			stopCmd.setInvoker(mi)
-			stopCmd.SetLog(log)
-
-			gotErr := stopCmd.Execute(nil)
 			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}

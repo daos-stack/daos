@@ -974,8 +974,11 @@ dtx_refresh_internal(struct ds_cont_child *cont, int *check_count, d_list_t *che
 		if (dsp->dsp_mbs == NULL) {
 			rc = vos_dtx_load_mbs(cont->sc_hdl, &dsp->dsp_xid, NULL, &dsp->dsp_mbs);
 			if (rc != 0) {
-				if (rc < 0 && rc != -DER_NONEXIST && for_io)
+				if (rc < 0 && rc != -DER_NONEXIST && for_io) {
+					D_ERROR("Failed to load mbs for "DF_DTI": "DF_RC"\n",
+						DP_DTI(&dsp->dsp_xid), DP_RC(rc));
 					goto out;
+				}
 
 				drop = true;
 				goto next;
@@ -1654,8 +1657,9 @@ dtx_coll_commit(struct ds_cont_child *cont, struct dtx_coll_entry *dce, struct d
 	}
 
 	D_CDEBUG(rc != 0 || rc1 != 0 || rc2 != 0, DLOG_ERR, DB_TRACE,
-		 "Collectively commit DTX "DF_DTI": %d/%d/%d\n",
-		 DP_DTI(&dce->dce_xid), rc, rc1, rc2);
+		 "Collectively commit DTX "DF_DTI" in "DF_UUID"/"DF_UUID": %d/%d/%d\n",
+		 DP_DTI(&dce->dce_xid), DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid),
+		 rc, rc1, rc2);
 
 	return rc != 0 ? rc : rc1 != 0 ? rc1 : rc2;
 }
@@ -1714,8 +1718,9 @@ dtx_coll_abort(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoc
 		rc2 = 0;
 
 	D_CDEBUG(rc != 0 || rc1 != 0 || rc2 != 0, DLOG_ERR, DB_TRACE,
-		 "Collectively abort DTX "DF_DTI": %d/%d/%d\n",
-		 DP_DTI(&dce->dce_xid), rc, rc1, rc2);
+		 "Collectively abort DTX "DF_DTI" with epoch "DF_X64" in "
+		 DF_UUID"/"DF_UUID": %d/%d/%d\n", DP_DTI(&dce->dce_xid), epoch,
+		 DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid), rc, rc1, rc2);
 
 	return rc != 0 ? rc : rc1 != 0 ? rc1 : rc2;
 }
@@ -1763,8 +1768,9 @@ dtx_coll_check(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoc
 	}
 
 	D_CDEBUG((rc < 0 && rc != -DER_NONEXIST) || (rc1 < 0 && rc1 != -DER_NONEXIST), DLOG_ERR,
-		 DB_TRACE, "Collectively check DTX "DF_DTI": %d/%d/\n",
-		 DP_DTI(&dce->dce_xid), rc, rc1);
+		 DB_TRACE, "Collectively check DTX "DF_DTI" in "DF_UUID"/"DF_UUID": %d/%d/\n",
+		 DP_DTI(&dce->dce_xid), DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid),
+		 rc, rc1);
 
 	return dce->dce_ranks != NULL  ? rc : rc1;
 }

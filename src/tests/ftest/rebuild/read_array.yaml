@@ -23,6 +23,7 @@ pool:
   pool_query_timeout: 30
   properties: rd_fac:2
 container:
+  control_method: API
   object_qty: 10
   record_qty: 10
   akey_size: 5

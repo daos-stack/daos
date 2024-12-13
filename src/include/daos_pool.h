@@ -162,6 +162,8 @@ enum daos_pool_info_bit {
 	DPI_ENGINES_ENABLED = 1ULL << 2,
 	/** true to include (in \a ranks) engines with some or all targets disabled (down). */
 	DPI_ENGINES_DISABLED = 1ULL << 3,
+	/** true to include (in \a ranks) engines marked DEAD by SWIM. */
+	DPI_ENGINES_DEAD = 1ULL << 4,
 	/** query all above optional info */
 	DPI_ALL = -1,
 };

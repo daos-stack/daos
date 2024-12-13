@@ -211,8 +211,10 @@ extern "C" {
 	ACTION(DER_CHKPT_BUSY, Page is temporarily read only due to checkpointing)                 \
 	ACTION(DER_DIV_BY_ZERO,	Division by zero)						   \
 	/** Target is overload, retry RPC */							   \
-	ACTION(DER_OVERLOAD_RETRY, "retry later because of overloaded service")			   \
+	ACTION(DER_OVERLOAD_RETRY, retry later because of overloaded service)			   \
 	ACTION(DER_NOT_RESUME, Cannot resume former DAOS check instance)
+
+/* clang-format on */
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\

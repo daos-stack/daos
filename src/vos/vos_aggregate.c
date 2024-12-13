@@ -117,6 +117,7 @@ struct agg_io_context {
 	d_list_t		 ic_nvme_exts;
 };
 
+#define EV_TRACE_MAX 1024
 /* Merge window for evtree aggregation */
 struct agg_merge_window {
 	/* Record size */
@@ -142,6 +143,10 @@ struct agg_merge_window {
 	/* I/O context for transferring data on flush */
 	struct agg_io_context		 mw_io_ctxt;
 	uint16_t			 mw_csum_type;
+	/* Recxs trace for debugging */
+	vos_iter_entry_t		 mw_evt_trace[EV_TRACE_MAX];
+	unsigned int			 mw_trace_start;
+	unsigned int			 mw_trace_count;
 };
 
 struct vos_agg_credits {
@@ -150,11 +155,7 @@ struct vos_agg_credits {
 	uint32_t	vac_creds_merge;	/* # of merging operations */
 };
 
-#define EV_TRACE_MAX 1024
 struct vos_agg_param {
-	vos_iter_entry_t        ap_evt_trace[EV_TRACE_MAX];
-	int                     ap_trace_start;
-	int                     ap_trace_count;
 	struct vos_agg_credits	ap_credits;
 	daos_handle_t		ap_coh;		/* container handle */
 	daos_unit_oid_t		ap_oid;		/* current object ID */
@@ -343,8 +344,7 @@ vos_agg_filter(daos_handle_t ih, vos_iter_desc_t *desc, void *cb_arg, unsigned i
 	struct vos_agg_param	*agg_param = cb_arg;
 	int			 rc = 0;
 
-	rc = need_aggregate(ih, agg_param, desc);
-	if (rc == 0) {
+	if (!need_aggregate(ih, agg_param, desc)) {
 		if (desc->id_type == VOS_ITER_OBJ) {
 			D_DEBUG(DB_EPC, "Skip untouched oid:"DF_UOID"\n",
 				DP_UOID(desc->id_oid));
@@ -359,9 +359,6 @@ vos_agg_filter(daos_handle_t ih, vos_iter_desc_t *desc, void *cb_arg, unsigned i
 		D_GOTO(out, rc = 0);
 	}
 
-	if (rc < 0) /** Ignore the filter error, let iterator handle it on actual probe */
-		D_GOTO(out, rc = 0);
-
 	if (desc->id_type == VOS_ITER_OBJ)
 		rc = oi_iter_check_punch(ih);
 	else
@@ -373,8 +370,14 @@ vos_agg_filter(daos_handle_t ih, vos_iter_desc_t *desc, void *cb_arg, unsigned i
 		inc_agg_counter(agg_param, desc->id_type, AGG_OP_DEL);
 		D_GOTO(out, rc = 0);
 	}
-out:
 
+	/* This MUST be the last check */
+	if (desc->id_type == VOS_ITER_OBJ && vos_bkt_iter_skip(ih, desc)) {
+		credits_consume(&agg_param->ap_credits, AGG_OP_SCAN);
+		*acts |= VOS_ITER_CB_SKIP;
+		D_GOTO(out, rc = 0);
+	}
+out:
 	if (credits_exhausted(&agg_param->ap_credits) ||
 	    (DAOS_FAIL_CHECK(DAOS_VOS_AGG_RANDOM_YIELD) && (rand() % 2))) {
 		D_DEBUG(DB_EPC, "Credits exhausted, type:%u, acts:%u\n", desc->id_type, *acts);
@@ -984,7 +987,7 @@ reserve_segment(struct vos_object *obj, struct agg_io_context *io,
 
 	if (vos_io_scm(vos_obj2pool(obj), DAOS_IOD_ARRAY, size, VOS_IOS_AGGREGATION)) {
 		/** Store on SCM */
-		off = vos_reserve_scm(obj->obj_cont, io->ic_rsrvd_scm, size);
+		off = vos_reserve_scm(obj->obj_cont, io->ic_rsrvd_scm, size, obj);
 		if (UMOFF_IS_NULL(off)) {
 			now = daos_gettime_coarse();
 			if (now - obj->obj_cont->vc_agg_nospc_ts > VOS_NOSPC_ERROR_INTVL) {
@@ -1284,28 +1287,27 @@ fill_segments(daos_handle_t ih, struct vos_agg_param *agg_param, unsigned int *a
 static void
 dump_trace(struct agg_merge_window *mw)
 {
-	struct vos_agg_param *agg_param = container_of(mw, struct vos_agg_param, ap_window);
 	vos_iter_entry_t     *entry;
 	int                   i;
 	int                   last;
 
-	if (agg_param->ap_trace_count == 0)
+	if (mw->mw_trace_count == 0)
 		return;
 
-	if (agg_param->ap_trace_count < EV_TRACE_MAX) {
+	if (mw->mw_trace_count < EV_TRACE_MAX) {
 		D_ERROR("Assertion will trigger, dumping all %d evt_trace entries\n",
-			agg_param->ap_trace_count);
-		last = agg_param->ap_trace_count;
+			mw->mw_trace_count);
+		last = mw->mw_trace_count;
 	} else {
 		D_ERROR("Assertion will trigger, dumping the last %d of %d total evt_trace"
 			" entries\n",
-			EV_TRACE_MAX, agg_param->ap_trace_count);
-		last = agg_param->ap_trace_start;
+			EV_TRACE_MAX, mw->mw_trace_count);
+		last = mw->mw_trace_start;
 	}
 
-	i = agg_param->ap_trace_start;
+	i = mw->mw_trace_start;
 	do {
-		entry = &agg_param->ap_evt_trace[i];
+		entry = &mw->mw_evt_trace[i];
 		D_ERROR("  0x" DF_X64 " recs@0x" DF_X64 " (0x" DF_X64 " recs@0x" DF_X64
 			")@0x" DF_X64 ".%d tx=%d hole=%d flg=%x rsz=0x" DF_X64 " gsz=0x" DF_X64
 			"\n",
@@ -1955,6 +1957,10 @@ close_merge_window(struct agg_merge_window *mw, int rc)
 		io->ic_csum_buf = NULL;
 		io->ic_csum_buf_len = 0;
 	}
+
+	/* Reset trace on window close */
+	mw->mw_trace_start = 0;
+	mw->mw_trace_count = 0;
 }
 
 static struct agg_phy_ent *
@@ -2167,6 +2173,7 @@ set_window_size(struct agg_merge_window *mw, vos_iter_entry_t *entry)
 {
 	struct dcs_csum_info	*csum_info = &entry->ie_csum;
 	daos_size_t		 rsize = entry->ie_rsize;
+	unsigned int		 next_idx;
 
 	if (rsize == 0) {
 		D_DEBUG(DB_TRACE, "EV tree 0 iod_size could be caused by "
@@ -2197,6 +2204,9 @@ set_window_size(struct agg_merge_window *mw, vos_iter_entry_t *entry)
 		/* Set csum support flag on processing first entry */
 		mw->mw_csum_type = csum_info->cs_type;
 
+		/* Reset trace on window open */
+		mw->mw_trace_start = 0;
+		mw->mw_trace_count = 0;
 	} else if (mw->mw_rsize != rsize) {
 		D_CRIT("Mismatched iod_size "DF_U64" != "DF_U64"\n",
 		       mw->mw_rsize, rsize);
@@ -2206,6 +2216,15 @@ set_window_size(struct agg_merge_window *mw, vos_iter_entry_t *entry)
 		       mw->mw_csum_type, csum_info->cs_type);
 		return -DER_INVAL;
 	}
+
+	if (mw->mw_trace_count >= EV_TRACE_MAX) {
+		next_idx = mw->mw_trace_start;
+		mw->mw_trace_start = (mw->mw_trace_start + 1) % EV_TRACE_MAX;
+	} else {
+		next_idx = mw->mw_trace_start + mw->mw_trace_count;
+	}
+	mw->mw_trace_count++;
+	memcpy(&mw->mw_evt_trace[next_idx], entry, sizeof(*entry));
 
 	return 0;
 }
@@ -2217,22 +2236,12 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 	struct agg_merge_window	*mw = &agg_param->ap_window;
 	struct evt_extent	 phy_ext, lgc_ext;
 	int			 rc = 0;
-	int                      next_idx;
 	struct vos_container	*cont = vos_hdl2cont(agg_param->ap_coh);
 
 	D_ASSERT(agg_param != NULL);
 	D_ASSERT(acts != NULL);
 	recx2ext(&entry->ie_recx, &lgc_ext);
 	recx2ext(&entry->ie_orig_recx, &phy_ext);
-
-	if (agg_param->ap_trace_count >= EV_TRACE_MAX) {
-		next_idx                  = agg_param->ap_trace_start;
-		agg_param->ap_trace_start = (agg_param->ap_trace_start + 1) % EV_TRACE_MAX;
-	} else {
-		next_idx = agg_param->ap_trace_start + agg_param->ap_trace_count;
-	}
-	agg_param->ap_trace_count++;
-	memcpy(&agg_param->ap_evt_trace[next_idx], entry, sizeof(*entry));
 
 	credits_consume(&agg_param->ap_credits, AGG_OP_SCAN);
 
@@ -2311,8 +2320,6 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		break;
 	case VOS_ITER_AKEY:
 		rc = vos_agg_akey(ih, entry, agg_param, acts);
-		agg_param->ap_trace_start = 0;
-		agg_param->ap_trace_count = 0;
 		break;
 	case VOS_ITER_RECX:
 		rc = vos_agg_ev(ih, entry, agg_param, acts);
@@ -2416,8 +2423,6 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			agg_param->ap_skip_akey = false;
 			break;
 		}
-		agg_param->ap_trace_start = 0;
-		agg_param->ap_trace_count = 0;
 		rc = vos_obj_iter_aggregate(ih, agg_param->ap_discard_obj);
 		break;
 	case VOS_ITER_SINGLE:
@@ -2707,9 +2712,8 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 
 	ad->ad_iter_param.ip_flags |= VOS_IT_FOR_PURGE | VOS_IT_FOR_AGG;
 retry:
-	rc = vos_iterate(&ad->ad_iter_param, VOS_ITER_OBJ, true, &ad->ad_anchors,
-			 vos_aggregate_pre_cb, vos_aggregate_post_cb,
-			 &ad->ad_agg_param, NULL);
+	rc = vos_iterate_obj(&ad->ad_iter_param, true, &ad->ad_anchors, vos_aggregate_pre_cb,
+			     vos_aggregate_post_cb, &ad->ad_agg_param, NULL);
 	if (rc == -DER_BUSY) {
 		/** Hit a conflict with obj_discard.   Rather than exiting, let's
 		 * yield and try again.
