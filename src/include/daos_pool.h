@@ -342,6 +342,52 @@ daos_pool_query(daos_handle_t poh, d_rank_list_t **ranks, daos_pool_info_t *info
 		daos_prop_t *pool_prop, daos_event_t *ev);
 
 /**
+ * Query pool information, including multiple rank lists (enabled, disabled). User
+ * should provide at least one of \a info or the \a *disabled_ranks list as output buffer.
+ *
+ * \param[in]	poh	Pool connection handle.
+ * \param[out]	enabled_ranks
+ * 			Optional, returned enabled pool storage engine ranks. This list will
+ * 			be populated if #info is not NULL and #pi_bits has DPI_ENGINES_ENABLED set.
+ *			The caller is responsible for freeing the list with d_rank_list_free().
+ * \param[out]	disabled_ranks
+ * 			Optional, returned disabled pool storage engine ranks.
+ *			If #info is NULL, this list will be populated with the ranks of
+ * 			all engines with any targets disabled. If #info is not NULL, this
+ * 			list will be populated if #pi_bits has DPI_ENGINES_DISABLED set.
+ *			The caller is responsible for freeing the list with d_rank_list_free().
+ * \param[in,out]
+ *		info	Optional, returned pool information,
+ *			see daos_pool_info_bit.
+ * \param[out]	pool_prop
+ *			Optional, returned pool properties.
+ *			If it is NULL, then needs not query the properties.
+ *			If pool_prop is non-NULL but its dpp_entries is NULL,
+ *			will query all pool properties, DAOS internally
+ *			allocates the needed buffers and assign pointer to
+ *			dpp_entries.
+ *			If pool_prop's dpp_nr > 0 and dpp_entries is non-NULL,
+ *			will query the properties for specific dpe_type(s), DAOS
+ *			internally allocates the needed buffer for dpe_str or
+ *			dpe_val_ptr, if the dpe_type with immediate value then
+ *			will directly assign it to dpe_val.
+ *			User can free the associated buffer by calling
+ *			daos_prop_free().
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_HDL	Invalid pool handle
+ */
+int
+daos_pool_query_v2(daos_handle_t poh, d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ranks,
+		   daos_pool_info_t *info, daos_prop_t *pool_prop, daos_event_t *ev);
+
+/**
  * Query information of storage targets within a DAOS pool.
  *
  * \param[in]	poh	Pool connection handle.

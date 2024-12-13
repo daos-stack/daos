@@ -491,6 +491,8 @@ process_query_result(d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ran
 			DP_UUID(pool_uuid), dead_rank_list->rl_nr);
 	}
 
+	/* remove dead ranks from enabled list */
+	d_rank_list_filter(dead_rank_list, enabled_rank_list, true);
 	pool_query_reply_to_info(pool_uuid, map_buf, map_version, leader_rank, ps, rs, info);
 	info->pi_ndisabled = num_disabled;
 	if (enabled_rank_list != NULL)
