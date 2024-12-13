@@ -21,7 +21,7 @@ from general_utils import (get_default_config_file, get_display_size, get_log_fi
 from host_utils import get_local_host
 from run_utils import run_remote, stop_processes
 from server_utils_base import DaosServerCommand, DaosServerInformation, ServerFailed
-from server_utils_params import (DaosServerTelemetryCredentials, DaosServerTransportCredentials,
+from server_utils_params import (DaosServerTelemetryConfig, DaosServerTransportCredentials,
                                  DaosServerYamlParameters)
 from user_utils import get_chown_command
 
@@ -46,7 +46,7 @@ def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):
     transport_config = DaosServerTransportCredentials(cert_dir)
     common_config = CommonConfig(group, transport_config)
     config = DaosServerYamlParameters(config_file, common_config)
-    config.telemetry_config = DaosServerTelemetryCredentials(cert_dir)
+    config.telemetry_config = DaosServerTelemetryConfig(cert_dir)
 
     command = DaosServerCommand(bin_dir, config, None)
 

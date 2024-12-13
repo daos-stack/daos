@@ -799,11 +799,11 @@ class TransportCredentials(YamlParameters):
         return TransportCredentials(self.namespace, self.title, self._log_dir)
 
 
-class TelemetryCredentials(YamlParameters):
+class TelemetryConfig(YamlParameters):
     """Telemetry credentials listing certificates for secure communication."""
 
     def __init__(self, namespace, title, log_dir):
-        """Initialize a TelemetryCredentials object.
+        """Initialize a TelemetryConfig object.
 
         Args:
             namespace (str): yaml namespace (path to parameters)
@@ -864,9 +864,9 @@ class TelemetryCredentials(YamlParameters):
         """Get a new object based upon this one.
 
         Returns:
-            TelemetryCredentials: a new TelemetryCredentials object
+            TelemetryConfig: a new TelemetryConfig object
         """
-        return TelemetryCredentials(self.namespace, self.title, self._log_dir)
+        return TelemetryConfig(self.namespace, self.title, self._log_dir)
 
 
 class CommonConfig(YamlParameters):
