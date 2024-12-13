@@ -17,8 +17,8 @@ def scons():
     shm_test_env.compiler_setup()
     shm_test_env.AppendUnique(LIBPATH=[Dir('../../gurt')])
     shm_test_env.AppendUnique(LIBPATH=[Dir('../../common')])
-    shmtest = shm_test_env.d_program(File("shm_test.c"), LIBS=['gurt', 'daos_common', 'cmocka',
-        'rt', 'pthread'])
+    shmtest = shm_test_env.d_program(File("shm_test.c"), LIBS=['gurt', 'daos_common', 'cart',
+        'cmocka', 'rt', 'pthread'])
     denv.Install('$PREFIX/bin/', shmtest)
 
     denv.AppendUnique(LIBPATH=[Dir('../../client/dfs')])
