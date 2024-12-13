@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -91,15 +91,54 @@ daos_pool_query(daos_handle_t poh, d_rank_list_t **ranks, daos_pool_info_t *info
 		return -DER_INVAL;
 	}
 
+	if (ranks != NULL && info != NULL &&
+	    (info->pi_bits & (DPI_ENGINES_ENABLED | DPI_ENGINES_DISABLED)) ==
+		(DPI_ENGINES_ENABLED | DPI_ENGINES_DISABLED)) {
+		D_ERROR("enabled and disabled not supported in v1 query\n");
+		return -DER_NOTSUPPORTED;
+	}
+
 	rc = dc_task_create(dc_pool_query, NULL, ev, &task);
 	if (rc)
 		return rc;
 
 	args = dc_task_get_args(task);
-	args->poh	= poh;
-	args->ranks	= ranks;
+	args->poh       = poh;
 	args->info	= info;
 	args->prop	= pool_prop;
+	if (info != NULL && (info->pi_bits & DPI_ENGINES_ENABLED) != 0)
+		args->enabled_ranks = ranks;
+	else
+		args->disabled_ranks = ranks;
+
+	return dc_task_schedule(task, true);
+}
+
+int
+daos_pool_query_v2(daos_handle_t poh, d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ranks,
+		   daos_pool_info_t *info, daos_prop_t *pool_prop, daos_event_t *ev)
+{
+	daos_pool_query_t *args;
+	tse_task_t        *task;
+	int                rc;
+
+	DAOS_API_ARG_ASSERT(*args, POOL_QUERY);
+
+	if (pool_prop != NULL && !daos_prop_valid(pool_prop, true, false)) {
+		D_ERROR("invalid pool_prop parameter.\n");
+		return -DER_INVAL;
+	}
+
+	rc = dc_task_create(dc_pool_query, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args                 = dc_task_get_args(task);
+	args->poh            = poh;
+	args->enabled_ranks  = enabled_ranks;
+	args->disabled_ranks = disabled_ranks;
+	args->info           = info;
+	args->prop           = pool_prop;
 
 	return dc_task_schedule(task, true);
 }

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -676,7 +676,7 @@ pool_op_retry(void **state)
 	test_set_engine_fail_loc(arg, leader_rank, DAOS_POOL_QUERY_FAIL_CORPC | DAOS_FAIL_ONCE);
 	print_message("querying pool info... ");
 	memset(&info, 'D', sizeof(info));
-	info.pi_bits = DPI_ALL;
+	info.pi_bits = DPI_ALL ^ (DPI_ENGINES_ENABLED | DPI_ENGINES_DEAD);
 	rc = daos_pool_query(poh, &engine_ranks, &info, NULL, NULL /* ev */);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(info.pi_ndisabled, 0);

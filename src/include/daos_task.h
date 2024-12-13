@@ -206,8 +206,10 @@ typedef struct {
 typedef struct {
 	/** Pool open handle. */
 	daos_handle_t		poh;
-	/** Optional, returned storage ranks in this pool. */
-	d_rank_list_t	      **ranks;
+	/** Optional, returned enabled storage ranks in this pool. */
+	d_rank_list_t         **enabled_ranks;
+	/** Optional, returned disabled storage ranks in this pool. */
+	d_rank_list_t         **disabled_ranks;
 	/** Optional, returned pool information. */
 	daos_pool_info_t       *info;
 	/** Optional, returned pool properties. */
