@@ -241,7 +241,7 @@ message PoolQueryResp {
 	repeated uint32 svc_reps = 19; // service replica ranks
 	uint64                     query_mask         = 20; // Bitmask of pool query options used
 	uint64 mem_file_bytes = 21; // per-pool accumulated value of memory file sizes
-	string                     suspect_ranks      = 22; // optional set of suspect ranks
+	string dead_ranks     = 22; // optional set of dead ranks
 }
 
 message PoolProperty {
