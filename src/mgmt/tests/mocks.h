@@ -111,7 +111,7 @@ extern uint64_t                          ds_mgmt_pool_query_mem_bytes;
 extern void                             *ds_mgmt_pool_query_info_ptr;
 extern d_rank_list_t                    *ds_mgmt_pool_query_enabled_ranks_out;
 extern d_rank_list_t                    *ds_mgmt_pool_query_disabled_ranks_out;
-extern d_rank_list_t                    *ds_mgmt_pool_query_suspect_ranks_out;
+extern d_rank_list_t                    *ds_mgmt_pool_query_dead_ranks_out;
 
 void mock_ds_mgmt_pool_query_setup(void);
 

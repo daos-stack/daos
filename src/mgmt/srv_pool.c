@@ -389,6 +389,7 @@ ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
  * \param[in]		svc_ranks	   Ranks of pool svc replicas.
  * \param[out]		enabled_ranks	   Optional, returned storage ranks with enabled targets.
  * \param[out]		disabled_ranks	   Optional, returned storage ranks with disabled targets.
+ * \param[out]		dead_ranks	   Optional, returned storage ranks marked DEAD by SWIM.
  * \param[in][out]	pool_info	   Query results
  * \param[in][out]	pool_layout_ver	   Pool global version
  * \param[in][out]	upgrade_layout_ver Latest pool global version this pool might be upgraded
@@ -399,7 +400,7 @@ ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
  */
 int
 ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **enabled_ranks,
-		   d_rank_list_t **disabled_ranks, d_rank_list_t **suspect_ranks,
+		   d_rank_list_t **disabled_ranks, d_rank_list_t **dead_ranks,
 		   daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
 		   uint32_t *upgrade_layout_ver, uint64_t *mem_file_bytes)
 {
@@ -411,7 +412,7 @@ ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **e
 	D_DEBUG(DB_MGMT, "Querying pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
 	return dsc_pool_svc_query(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), enabled_ranks,
-				  disabled_ranks, suspect_ranks, pool_info, pool_layout_ver,
+				  disabled_ranks, dead_ranks, pool_info, pool_layout_ver,
 				  upgrade_layout_ver, mem_file_bytes);
 }
 
