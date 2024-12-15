@@ -7,7 +7,7 @@
 import os
 
 from apricot import TestWithServers
-from cmocka_utils import CmockaUtils
+from cmocka_utils import CmockaUtils, get_cmocka_command
 from job_manager_utils import get_job_manager
 
 
@@ -35,7 +35,7 @@ class DaosCoreTestShm(TestWithServers):
         cmocka_utils = CmockaUtils(
             self.hostlist_clients, "shm", self.outputdir, self.test_dir, self.log)
         daos_test_env = cmocka_utils.get_cmocka_env()
-        job = get_job_manager(self, "Clush", cmocka_utils.get_cmocka_command(daos_test))
+        job = get_job_manager(self, "Clush", get_cmocka_command(daos_test))
         job.assign_hosts(cmocka_utils.hosts)
         job.assign_environment(daos_test_env)
 

@@ -10,6 +10,7 @@
 #include <pthread.h>
 #include <errno.h>
 
+#include <gurt/atomic.h>
 #include <gurt/common.h>
 #include <gurt/shm_dict.h>
 #include <gurt/shm_utils.h>
@@ -182,29 +183,15 @@ shm_ht_rec_delete_at(struct d_shm_ht_head *ht_head, struct shm_ht_rec *link)
 }
 
 void
-shm_ht_rec_decref(struct d_shm_ht_head *ht_head, struct shm_ht_rec *link)
+shm_ht_rec_decref(struct shm_ht_rec *link)
 {
-	int idx_lock = link->idx_lock;
-	pthread_mutex_t *p_ht_lock;
-
-	// Use atomic OP instead????
-	p_ht_lock = (pthread_mutex_t *)((char *)ht_head + sizeof(struct d_shm_ht_head));
-	shm_mutex_lock(&(p_ht_lock[idx_lock]));
-	link->ref_count--;
-	shm_mutex_unlock(&(p_ht_lock[idx_lock]));
+	atomic_fetch_add_relaxed(&(link->ref_count), -1);
 }
 
 void
-shm_ht_rec_addref(struct d_shm_ht_head *ht_head, struct shm_ht_rec *link)
+shm_ht_rec_addref(struct shm_ht_rec *link)
 {
-	int idx_lock = link->idx_lock;
-	pthread_mutex_t *p_ht_lock;
-
-	// Use atomic OP instead????
-	p_ht_lock = (pthread_mutex_t *)((char *)ht_head + sizeof(struct d_shm_ht_head));
-	shm_mutex_lock(&(p_ht_lock[idx_lock]));
-	link->ref_count++;
-	shm_mutex_unlock(&(p_ht_lock[idx_lock]));
+	atomic_fetch_add_relaxed(&(link->ref_count), 1);
 }
 
 int
@@ -319,6 +306,7 @@ shm_ht_rec_find(struct d_shm_ht_head *ht_head, const char *key, const int len_ke
 			if (memcmp(key, (char *)rec + sizeof(struct shm_ht_rec), len_key) == 0) {
 				value = (char *)rec + sizeof(struct shm_ht_rec) + len_key + rec->len_padding;
 				D_ASSERT(((uint64_t)value & (SHM_MEM_ALIGN - 1)) == 0);
+				atomic_fetch_add_relaxed(&(rec->ref_count), 1);
 				shm_mutex_unlock(&(p_ht_lock[idx_lock]));
 				if (link)
 					*link = rec;
@@ -362,6 +350,7 @@ shm_ht_rec_find_insert(struct d_shm_ht_head *ht_head, const char *key, const int
 					/* found the key, then return value */
 					value = (char *)rec + sizeof(struct shm_ht_rec) + len_key +
 					       rec->len_padding;
+					atomic_fetch_add_relaxed(&(rec->ref_count), 1);
 					shm_mutex_unlock(&(p_ht_lock[idx_lock]));
 					D_ASSERT(((uint64_t)value & (SHM_MEM_ALIGN - 1)) == 0);
 					if (link)
@@ -415,6 +404,7 @@ shm_ht_rec_find_insert(struct d_shm_ht_head *ht_head, const char *key, const int
 		p_off_list[idx] = (long int)((char *)new_rec - (char *)d_shm_head);
 	}
 	new_rec->idx_lock = idx_lock;
+	atomic_store_relaxed(&(new_rec->ref_count), 1);
 
 	shm_mutex_unlock(&(p_ht_lock[idx_lock]));
 	if (link)

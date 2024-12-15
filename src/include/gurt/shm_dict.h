@@ -18,19 +18,19 @@
 /* struct of the record in the hash table stored in shared memory */
 struct shm_ht_rec {
 	/* length of key */
-	int      len_key;
+	int         len_key;
 	/* length of value */
-	int      len_value;
+	int         len_value;
 	/* length of padding. Padding may be needed when value is a mutex!!!! */
-	int      len_padding;
+	int         len_padding;
 	/* reference count of this record */
-	int      ref_count;
+	_Atomic int ref_count;
 	/* the index of the mutex to be locked when updating this record */
-	int      idx_lock;
+	int         idx_lock;
 	/* offset pointer to the previous record in record link list */
-	long int prev;
+	long int    prev;
 	/* offset pointer to the next record in record link list */
-	long int next;
+	long int    next;
 
 	/* char key[len_key] will be stored here */
 	/* char value[len_value] will be stored here */
@@ -116,7 +116,7 @@ shm_ht_rec_delete(struct d_shm_ht_head *ht_head, const char *key, const int ksiz
  * This record will be freed if hop_rec_free() is defined and the hash table
  * holds the last refcount.
  *
- * \param[in] htable		Pointer to the hash table
+ * \param[in] ht_head		Pointer to the hash table
  * \param[in] link		The link chain of the record
  *
  * \retval			true	Successfully deleted the record
@@ -131,17 +131,15 @@ shm_ht_rec_delete_at(struct d_shm_ht_head *ht_head, struct shm_ht_rec *link);
  * The record will be freed if hop_decref() returns true and the EPHEMERAL bit
  * is set.
  *
- * \param[in] htable		Pointer to the hash table
  * \param[in] link		Chain link of the hash record
  */
 void
-shm_ht_rec_decref(struct d_shm_ht_head *ht_head, struct shm_ht_rec *link);
+shm_ht_rec_decref(struct shm_ht_rec *link);
 
 /**
  * Increase the refcount of the record.
  *
- * \param[in] htable		Pointer to the hash table
  * \param[in] link		The link chain of the record
  */
 void
-shm_ht_rec_addref(struct d_shm_ht_head *ht_head, struct shm_ht_rec *link);
+shm_ht_rec_addref(struct shm_ht_rec *link);
