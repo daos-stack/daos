@@ -15,7 +15,7 @@ jobs:
   # from scratch, but do not save them.
   Build-and-test:
     name: Run DAOS/NLT tests
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     permissions:
       # https://github.com/EnricoMi/publish-unit-test-result-action#permissions
       checks: write
@@ -26,7 +26,7 @@ jobs:
         include:
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:mantic
+            with: ubuntu:oracular
     env:
       DEPS_JOBS: 10
       COMPILER: clang
@@ -76,7 +76,7 @@ jobs:
 
   Build:
     name: Build DAOS
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:

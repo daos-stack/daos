@@ -830,7 +830,7 @@ d_tm_init_with_name(int id, uint64_t mem_size, int flags, const char *root_name)
 {
 	struct d_tm_shmem_hdr   *new_shmem = NULL;
 	key_t			 key;
-	int                      shmid;
+	int                      shmid = 0;
 	int			 rc = DER_SUCCESS;
 
 	if (root_name == NULL || strnlen(root_name, D_TM_MAX_NAME_LEN) == 0) {

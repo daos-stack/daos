@@ -113,9 +113,7 @@ func TestDmg_JsonOutput(t *testing.T) {
 				testArgs = append(testArgs, "foo:bar")
 			case "system del-attr":
 				testArgs = append(testArgs, "foo")
-			case "system exclude":
-				testArgs = append(testArgs, "--ranks", "0")
-			case "system clear-exclude":
+			case "system exclude", "system clear-exclude", "system drain":
 				testArgs = append(testArgs, "--ranks", "0")
 			}
 

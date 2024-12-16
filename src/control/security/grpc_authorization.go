@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -51,6 +51,7 @@ var methodAuthorizations = map[string][]Component{
 	"/mgmt.MgmtSvc/SystemStart":              {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemStop":               {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemExclude":            {ComponentAdmin},
+	"/mgmt.MgmtSvc/SystemDrain":              {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolCreate":               {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolDestroy":              {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolQuery":                {ComponentAdmin},
