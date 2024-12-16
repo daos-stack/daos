@@ -11,6 +11,12 @@ ARG BASE_DISTRO=ubuntu:22.04
 FROM $BASE_DISTRO
 LABEL maintainer="daos@daos.groups.io"
 
+# Set environment variables for proxy
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+
+
 # Intermittent cache-bust.  Used to reduce load on the actual CB1 later.
 ARG CB0
 
