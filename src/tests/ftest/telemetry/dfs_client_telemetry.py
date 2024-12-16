@@ -56,7 +56,7 @@ class DFSClientTelemetry(TestWithClientTelemetry):
             msum = sum(after_metrics[metric].values())
             self.assertGreater(msum, 0, f'{metric} value not greater than zero after I/O')
         for metric in bkt_metric_names:
-            msum = sum([hist['sample_sum'] for hist in after_metrics[metric].values()])
+            msum = sum(hist['sample_sum'] for hist in after_metrics[metric].values())
             self.assertGreater(msum, 0, f'{metric} sample_sum not greater than zero after I/O')
 
         self.log_step('Test passed')
