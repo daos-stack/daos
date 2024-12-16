@@ -12,7 +12,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -318,7 +317,7 @@ func cpOutputToFile(target string, log logging.Logger, cp ...logCopy) (string, e
 	cmd = strings.ReplaceAll(cmd, " ", "_")
 	log.Debugf("Collecting DAOS command output = %s > %s ", runCmd, filepath.Join(target, cmd))
 
-	if err := ioutil.WriteFile(filepath.Join(target, cmd), out, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(target, cmd), out, 0644); err != nil {
 		return "", errors.Wrapf(err, "failed to write %s", filepath.Join(target, cmd))
 	}
 
@@ -611,7 +610,7 @@ func collectAgentLog(log logging.Logger, opts ...CollectLogsParams) error {
 		return err
 	}
 
-	agentFile, err := ioutil.ReadFile(opts[0].Config)
+	agentFile, err := os.ReadFile(opts[0].Config)
 	if err != nil {
 		return err
 	}

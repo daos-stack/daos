@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,7 +9,6 @@ package sysfs
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -46,7 +45,7 @@ func TestSysfs_isNetvscDevice(t *testing.T) {
 		}
 
 		filePath := path.Join(dirPath, "uevent")
-		if err := ioutil.WriteFile(filePath, []byte(content), 0644); err != nil {
+		if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -181,7 +180,7 @@ func TestSysfs_Provider_GetNetDevClass(t *testing.T) {
 func writeTestFile(t *testing.T, path, contents string) {
 	t.Helper()
 
-	if err := ioutil.WriteFile(path, []byte(contents), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(contents), 0644); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -279,7 +278,7 @@ func setupNetvscDev(t *testing.T, root, devName, backingDevName string) {
 	}
 
 	filePath := path.Join(dirPath, "uevent")
-	if err := ioutil.WriteFile(filePath, []byte("DRIVER=hv_netvsc"), 0644); err != nil {
+	if err := os.WriteFile(filePath, []byte("DRIVER=hv_netvsc"), 0644); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -775,7 +774,7 @@ func TestSysfs_Provider_GetNetDevState(t *testing.T) {
 			}
 
 			statePath := filepath.Join(portPath, "state")
-			if err := ioutil.WriteFile(statePath, []byte(state), 0644); err != nil {
+			if err := os.WriteFile(statePath, []byte(state), 0644); err != nil {
 				t.Fatal(err)
 			}
 		}
