@@ -14,6 +14,7 @@
 #include <daos/common.h>
 #include <daos/container.h>
 #include <daos/metrics.h>
+#include <daos/pool.h>
 #include <daos/job.h>
 #include <gurt/telemetry_common.h>
 #include <gurt/telemetry_producer.h>
@@ -28,11 +29,12 @@
 #define FILE_METRICS_SIZE (((D_TM_METRIC_SIZE * NR_SIZE_BUCKETS) * 2) + D_TM_METRIC_SIZE * 2)
 #define DFS_METRICS_SIZE  (STAT_METRICS_SIZE + FILE_METRICS_SIZE)
 
-#define SPRINTF_CONT_PATH(buf, cont_uuid, path)                                                    \
-	snprintf(buf, sizeof(buf), "container/" DF_UUIDF "/%s", DP_UUID(cont_uuid), path);
+#define SPRINTF_TM_PATH(buf, pool_uuid, cont_uuid, path)                                           \
+	snprintf(buf, sizeof(buf), "pool/" DF_UUIDF "/container/" DF_UUIDF "/%s",                  \
+		 DP_UUID(pool_uuid), DP_UUID(cont_uuid), path);
 
 #define ADD_STAT_METRIC(name, ...)                                                                 \
-	SPRINTF_CONT_PATH(tmp_path, cont_uuid, DFS_METRICS_ROOT "/ops/" #name);                    \
+	SPRINTF_TM_PATH(tmp_path, pool_uuid, cont_uuid, DFS_METRICS_ROOT "/ops/" #name);           \
 	rc = d_tm_add_metric(&metrics->dm_op_stats[i], D_TM_COUNTER, "Count of " #name " calls",   \
 			     "calls", tmp_path);                                                   \
 	if (rc != 0) {                                                                             \
@@ -42,7 +44,7 @@
 	i++;
 
 static void
-op_stats_init(struct dfs_metrics *metrics, uuid_t cont_uuid)
+op_stats_init(struct dfs_metrics *metrics, uuid_t pool_uuid, uuid_t cont_uuid)
 {
 	char tmp_path[D_TM_MAX_NAME_LEN] = {0};
 	int  i                           = 0;
@@ -55,7 +57,7 @@ op_stats_init(struct dfs_metrics *metrics, uuid_t cont_uuid)
 }
 
 static void
-cont_stats_init(struct dfs_metrics *metrics, uuid_t cont_uuid)
+cont_stats_init(struct dfs_metrics *metrics, uuid_t pool_uuid, uuid_t cont_uuid)
 {
 	char tmp_path[D_TM_MAX_NAME_LEN] = {0};
 	int  rc                          = 0;
@@ -63,7 +65,7 @@ cont_stats_init(struct dfs_metrics *metrics, uuid_t cont_uuid)
 	if (metrics == NULL)
 		return;
 
-	SPRINTF_CONT_PATH(tmp_path, cont_uuid, "mount_time");
+	SPRINTF_TM_PATH(tmp_path, pool_uuid, cont_uuid, "mount_time");
 	rc = d_tm_add_metric(&metrics->dm_mount_time, D_TM_TIMESTAMP, "container mount time", NULL,
 			     tmp_path);
 	if (rc != 0)
@@ -71,7 +73,7 @@ cont_stats_init(struct dfs_metrics *metrics, uuid_t cont_uuid)
 }
 
 static void
-file_stats_init(struct dfs_metrics *metrics, uuid_t cont_uuid)
+file_stats_init(struct dfs_metrics *metrics, uuid_t pool_uuid, uuid_t cont_uuid)
 {
 	char tmp_path[D_TM_MAX_NAME_LEN] = {0};
 	int  rc                          = 0;
@@ -79,7 +81,7 @@ file_stats_init(struct dfs_metrics *metrics, uuid_t cont_uuid)
 	if (metrics == NULL)
 		return;
 
-	SPRINTF_CONT_PATH(tmp_path, cont_uuid, DFS_METRICS_ROOT "/read_bytes");
+	SPRINTF_TM_PATH(tmp_path, pool_uuid, cont_uuid, DFS_METRICS_ROOT "/read_bytes");
 	rc = d_tm_add_metric(&metrics->dm_read_bytes, D_TM_STATS_GAUGE, "dfs read bytes", "bytes",
 			     tmp_path);
 	if (rc != 0)
@@ -89,7 +91,7 @@ file_stats_init(struct dfs_metrics *metrics, uuid_t cont_uuid)
 	if (rc)
 		DL_ERROR(rc, "Failed to init dfs read size histogram");
 
-	SPRINTF_CONT_PATH(tmp_path, cont_uuid, DFS_METRICS_ROOT "/write_bytes");
+	SPRINTF_TM_PATH(tmp_path, pool_uuid, cont_uuid, DFS_METRICS_ROOT "/write_bytes");
 	rc = d_tm_add_metric(&metrics->dm_write_bytes, D_TM_STATS_GAUGE, "dfs write bytes", "bytes",
 			     tmp_path);
 	if (rc != 0)
@@ -110,6 +112,7 @@ dfs_metrics_enabled()
 void
 dfs_metrics_init(dfs_t *dfs)
 {
+	uuid_t pool_uuid;
 	uuid_t cont_uuid;
 	char   root_name[D_TM_MAX_NAME_LEN];
 	pid_t  pid       = getpid();
@@ -118,6 +121,12 @@ dfs_metrics_init(dfs_t *dfs)
 
 	if (dfs == NULL)
 		return;
+
+	rc = dc_pool_hdl2uuid(dfs->poh, NULL, &pool_uuid);
+	if (rc != 0) {
+		DL_ERROR(rc, "failed to get pool UUID");
+		goto error;
+	}
 
 	rc = dc_cont_hdl2uuid(dfs->coh, NULL, &cont_uuid);
 	if (rc != 0) {
@@ -139,16 +148,16 @@ dfs_metrics_init(dfs_t *dfs)
 		goto error;
 	}
 
-	SPRINTF_CONT_PATH(root_name, cont_uuid, DFS_METRICS_ROOT);
+	SPRINTF_TM_PATH(root_name, pool_uuid, cont_uuid, DFS_METRICS_ROOT);
 	rc = d_tm_add_ephemeral_dir(NULL, DFS_METRICS_SIZE, root_name);
 	if (rc != 0) {
 		DL_ERROR(rc, "failed to add DFS metrics dir");
 		goto error;
 	}
 
-	cont_stats_init(dfs->metrics, cont_uuid);
-	op_stats_init(dfs->metrics, cont_uuid);
-	file_stats_init(dfs->metrics, cont_uuid);
+	cont_stats_init(dfs->metrics, pool_uuid, cont_uuid);
+	op_stats_init(dfs->metrics, pool_uuid, cont_uuid);
+	file_stats_init(dfs->metrics, pool_uuid, cont_uuid);
 
 	d_tm_record_timestamp(dfs->metrics->dm_mount_time);
 	return;
