@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -185,10 +185,10 @@ func PrintSystemStopResponse(out, outErr io.Writer, resp *control.SystemStopResp
 	return printSystemResults(out, outErr, resp.Results, &resp.AbsentHosts, &resp.AbsentRanks)
 }
 
-func printSystemCleanupRespVerbose(out io.Writer, resp *control.SystemCleanupResp) error {
+func printSystemCleanupRespVerbose(out io.Writer, resp *control.SystemCleanupResp) {
 	if len(resp.Results) == 0 {
 		fmt.Fprintln(out, "no handles cleaned up")
-		return nil
+		return
 	}
 
 	titles := []string{"Pool", "Handles Revoked"}
@@ -204,28 +204,52 @@ func printSystemCleanupRespVerbose(out io.Writer, resp *control.SystemCleanupRes
 	}
 
 	fmt.Fprintln(out, formatter.Format(table))
-
-	return nil
 }
 
 // PrintSystemCleanupResponse generates a human-readable representation of the
 // supplied SystemCleanupResp struct and writes it to the supplied io.Writer.
-func PrintSystemCleanupResponse(out, outErr io.Writer, resp *control.SystemCleanupResp, verbose bool) error {
-	err := resp.Errors()
-
-	if err != nil {
-		fmt.Fprintln(outErr, err.Error())
-	}
-
+func PrintSystemCleanupResponse(out io.Writer, resp *control.SystemCleanupResp, verbose bool) {
 	if len(resp.Results) == 0 {
 		fmt.Fprintln(out, "No handles cleaned up")
-		return nil
+		return
 	}
 
 	if verbose {
-		return printSystemCleanupRespVerbose(out, resp)
+		printSystemCleanupRespVerbose(out, resp)
+		return
 	}
 
 	fmt.Fprintln(out, "System Cleanup Success")
-	return nil
+}
+
+// PrintSystemDrainResponse generates a human-readable representation of the supplied
+// SystemDrainResp struct and writes it to the supplied io.Writer. Result related errors written to
+// error io.Writer.
+func PrintSystemDrainResponse(out io.Writer, resp *control.SystemDrainResp) {
+	if len(resp.Results) == 0 {
+		fmt.Fprintln(out, "No pool ranks drained")
+		return
+	}
+
+	titles := []string{"Pool", "Ranks", "Result", "Reason"}
+	formatter := txtfmt.NewTableFormatter(titles...)
+
+	var table []txtfmt.TableRow
+	for _, r := range resp.Results {
+		result := "OK"
+		reason := "N/A"
+		if r.Status != 0 {
+			result = "Failed"
+			reason = r.Msg
+		}
+		row := txtfmt.TableRow{
+			"Pool":   r.PoolID,
+			"Ranks":  r.Ranks,
+			"Result": result,
+			"Reason": reason,
+		}
+		table = append(table, row)
+	}
+
+	fmt.Fprintln(out, formatter.Format(table))
 }
