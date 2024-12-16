@@ -229,6 +229,7 @@ chunk_cb(struct dfuse_event *ev)
 	struct read_chunk_data *cd = ev->de_cd;
 	struct active_inode    *ia = cd->ia;
 	struct read_chunk_req  *cr;
+	d_list_t                tmp_list = cd->req_list;
 	struct read_chunk_req  *crn;
 
 	cd->rc = ev->de_ev.ev_error;
@@ -254,7 +255,7 @@ chunk_cb(struct dfuse_event *ev)
 
 	D_SPIN_UNLOCK(&ia->lock);
 
-	d_list_for_each_entry_safe(cr, crn, &cd->req_list, req_list) {
+	d_list_for_each_entry_safe(cr, crn, &tmp_list, req_list) {
 		size_t position = (cd->bucket * CHUNK_SIZE) + (cr->slot * K128);
 		size_t len;
 
