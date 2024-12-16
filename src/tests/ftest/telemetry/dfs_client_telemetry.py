@@ -26,7 +26,7 @@ class DFSClientTelemetry(TestWithClientTelemetry):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=telemetry
+        :avocado: tags=dfs,telemetry
         :avocado: tags=DFSClientTelemetry,test_dfs_metrics
         """
         # create pool and container
