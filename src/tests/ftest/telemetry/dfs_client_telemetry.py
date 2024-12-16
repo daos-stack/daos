@@ -53,14 +53,10 @@ class DFSClientTelemetry(TestWithClientTelemetry):
         self.log_step('Reading dfs telemetry')
         after_metrics = self.telemetry.collect_client_data(val_metric_names + bkt_metric_names)
         for metric in val_metric_names:
-            msum = 0
-            for value in after_metrics[metric].values():
-                msum += value
-            self.assertGreater(msum, 0)
+            msum = sum(after_metrics[metric].values())
+            self.assertGreater(msum, 0, f'{metric} value not greater than zero after I/O')
         for metric in bkt_metric_names:
-            msum = 0
-            for hist in after_metrics[metric].values():
-                msum += hist['sample_sum']
-            self.assertGreater(msum, 0)
+            msum = sum([hist['sample_sum'] for hist in after_metrics[metric].values()])
+            self.assertGreater(msum, 0, f'{metric} sample_sum not greater than zero after I/O')
 
         self.log_step('Test passed')
