@@ -155,7 +155,7 @@ jobs:
       - name: Install extra python packages
         run: python3 -m pip install --requirement utils/cq/requirements.txt
       - name: Run check
-        uses: codespell-project/actions-codespell@3174815d6231f5bdc24dbfb6fc3b8caec73d521c  # master
+        uses: codespell-project/actions-codespell@406322ec52dd7b488e48c1c4b82e2a8b3a1bf630  # master
         with:
           skip: ./src/control/vendor,./src/control/go.sum,./.git
           ignore_words_file: ci/codespell.ignores
@@ -196,6 +196,20 @@ jobs:
         run: python3 -m pip install --requirement utils/cq/requirements.txt
       - name: Run check
         run: yamllint --format github .
+
+  copyright:
+    name: Copyright check
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Run check
+        run: |
+          \[ ! -x ./utils/cq/check_update_copyright.sh \] || ./utils/cq/check_update_copyright.sh \
+            $(git merge-base HEAD ${{ github.event.pull_request.base.sha || github.ref }}) gha
 
   linting-summary:
     name: Linting Summary

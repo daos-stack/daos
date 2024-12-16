@@ -589,6 +589,10 @@ static inline void
 reset_anchors(vos_iter_type_t type, struct vos_iter_anchors *anchors)
 {
 	switch (type) {
+	case VOS_ITER_OBJ:
+		daos_anchor_set_zero(&anchors->ia_obj);
+		anchors->ia_reprobe_obj = 0;
+		/* fall through */
 	case VOS_ITER_DKEY:
 		daos_anchor_set_zero(&anchors->ia_dkey);
 		anchors->ia_reprobe_dkey = 0;
@@ -1111,6 +1115,7 @@ vos_iterate_obj(vos_iter_param_t *param, bool recursive, struct vos_iter_anchors
 			DL_ERROR(rc, "Iterate bucket:%u failed.", i);
 			break;
 		}
+		reset_anchors(VOS_ITER_OBJ, anchors);
 	}
 	D_DEBUG(DB_TRACE, "Iterate %u/%u buckets.\n", iter_cnt, bkt_iter->bi_bkt_tot);
 

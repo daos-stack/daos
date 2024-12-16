@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -777,6 +777,7 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 	struct crt_opc_info	*opc_info;
 	struct crt_corpc_ops	*co_ops;
 	bool			 ver_match;
+	bool			 co_failout = false;
 	int			 i, rc = 0;
 
 	co_info = rpc_priv->crp_corpc_info;
@@ -906,18 +907,18 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 	}
 
 forward_done:
-	if (rc != 0 && rpc_priv->crp_flags & CRT_RPC_FLAG_CO_FAILOUT) {
-		crt_corpc_complete(rpc_priv);
-		goto out;
-	}
+	if (rc != 0 && rpc_priv->crp_flags & CRT_RPC_FLAG_CO_FAILOUT)
+		co_failout = true;
 
 	/* NOOP bcast (no child and root excluded) */
-	if (co_info->co_child_num == 0 && co_info->co_root_excluded)
+	if (co_info->co_child_num == 0 && (co_info->co_root_excluded || co_failout))
 		crt_corpc_complete(rpc_priv);
 
-	if (co_info->co_root_excluded == 1) {
+	if (co_info->co_root_excluded == 1 || co_failout) {
 		if (co_info->co_grp_priv->gp_self == co_info->co_root) {
-			/* don't return error for root */
+			/* don't return error for root to avoid RPC_DECREF in
+			 * fail case in crt_req_send.
+			 */
 			rc = 0;
 		}
 		D_GOTO(out, rc);
