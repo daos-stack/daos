@@ -175,7 +175,7 @@ function cleanup
 			mountpoint="/mnt/daos$index"
 			if run ssh $host sudo mountpoint -q "$mountpoint" ; then
 				info "Cleaning mount points $mountpoint of host $host"
-				run ssh $host sudo m -fr $mountpoint/*
+				run ssh $host sudo rm -fr $mountpoint/*
 				run ssh $host sudo umount $mountpoint
 			fi
 		done

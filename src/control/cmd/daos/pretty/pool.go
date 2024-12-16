@@ -76,9 +76,9 @@ func PrintPoolInfo(pi *daos.PoolInfo, out io.Writer) error {
 	if pi.DisabledRanks.Count() > 0 {
 		fmt.Fprintf(w, "- Disabled ranks: %s\n", pi.DisabledRanks)
 	}
-	if pi.QueryMask.HasOption(daos.PoolQueryOptionSuspectEngines) &&
-		pi.SuspectRanks != nil && pi.SuspectRanks.Count() > 0 {
-		fmt.Fprintf(w, "- Suspect ranks: %s\n", pi.SuspectRanks)
+	if pi.QueryMask.HasOption(daos.PoolQueryOptionDeadEngines) &&
+		pi.DeadRanks != nil && pi.DeadRanks.Count() > 0 {
+		fmt.Fprintf(w, "- Dead ranks: %s\n", pi.DeadRanks)
 	}
 	if pi.Rebuild != nil {
 		if pi.Rebuild.Status == 0 {
