@@ -1318,6 +1318,12 @@ dfs_sys_remove_type(dfs_sys_t *dfs_sys, const char *path, bool force,
 		return EINVAL;
 	if (path == NULL)
 		return EINVAL;
+	/*
+	 * since we are not evicting child entries from the dfs sys cache in case of force removal
+	 * of a dir, just disallow force removal if cache is enabled on the dfs sys mount.
+	 */
+	if (dfs_sys->hash && force)
+		return ENOTSUP;
 
 	rc = sys_path_parse(dfs_sys, &sys_path, path);
 	if (rc != 0)
