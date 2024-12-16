@@ -30,13 +30,8 @@ jobs:
           python-version: '3'
       - name: Install extra python packages
         run: python3 -m pip install --requirement utils/cq/requirements.txt
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-      - uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d  # v5.1.0
-        with:
-          python-version: '3'
-      - uses: isort/isort-action@24d8a7a51d33ca7f36c3f23598dafa33f7071326  # v1.1.1
+      - name: Run isort
+        uses: isort/isort-action@24d8a7a51d33ca7f36c3f23598dafa33f7071326  # v1.1.1
         with:
           requirementsFiles: "requirements.txt"
       - name: Run on SConstruct file.
