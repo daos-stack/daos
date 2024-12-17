@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1131,18 +1131,20 @@ err_link:
 int
 duns_link_cont(daos_handle_t poh, const char *cont, const char *path)
 {
-	daos_handle_t		coh;
-	daos_prop_t		*prop;
-	struct daos_prop_entry	*entry;
-	daos_pool_info_t	pinfo = {0};
-	daos_cont_info_t	cinfo = {0};
-	daos_cont_layout_t	type;
-	char			pool_str[DAOS_UUID_STR_SIZE];
-	char			cont_str[DAOS_UUID_STR_SIZE];
-	int			len;
-	char			str[DUNS_MAX_XATTR_LEN];
-	char			type_str[10];
-	int			rc, rc2;
+	daos_handle_t           coh;
+	daos_prop_t            *prop;
+	struct daos_prop_entry *entry;
+	daos_pool_info_t        pinfo = {0};
+	daos_cont_info_t        cinfo = {0};
+	daos_cont_layout_t      type;
+	char                    pool_str[DAOS_UUID_STR_SIZE];
+	char                    cont_str[DAOS_UUID_STR_SIZE];
+	int                     len;
+	char                    str[DUNS_MAX_XATTR_LEN];
+	char                    type_str[10];
+	bool                    backend_dfuse = false;
+	int                     rc2;
+	int                     rc;
 
 	if (path == NULL) {
 		D_ERROR("Invalid path\n");
@@ -1155,7 +1157,7 @@ duns_link_cont(daos_handle_t poh, const char *cont, const char *path)
 		return daos_der2errno(rc);
 	}
 
-	rc = daos_cont_open(poh, cont, DAOS_COO_RO, &coh, &cinfo, NULL);
+	rc = daos_cont_open(poh, cont, DAOS_COO_RW, &coh, &cinfo, NULL);
 	if (rc) {
 		D_ERROR("daos_cont_open() failed "DF_RC"\n", DP_RC(rc));
 		return daos_der2errno(rc);
@@ -1203,7 +1205,6 @@ duns_link_cont(daos_handle_t poh, const char *cont, const char *path)
 			D_FREE(dir);
 			D_GOTO(out_cont, rc = err);
 		}
-		D_FREE(dir);
 #ifdef LUSTRE_INCLUDE
 		if (fs.f_type == LL_SUPER_MAGIC) {
 			rc = duns_link_lustre_path(pool_str, cont_str, type, path, mode);
@@ -1218,6 +1219,7 @@ duns_link_cont(daos_handle_t poh, const char *cont, const char *path)
 		if (rc == -1) {
 			rc = errno;
 			D_ERROR("Failed to create dir %s: %d (%s)\n", path, rc, strerror(rc));
+			D_FREE(dir);
 			D_GOTO(out_cont, rc);
 		}
 
@@ -1225,21 +1227,38 @@ duns_link_cont(daos_handle_t poh, const char *cont, const char *path)
 		 * to discover the user running dfuse.
 		 */
 		if (fs.f_type == FUSE_SUPER_MAGIC) {
-			struct stat finfo;
-			/*
-			 * This next stat will cause dfuse to lookup the entry point and perform a
-			 * container connect, therefore this data will be read from root of the new
-			 * container, not the directory.
-			 *
-			 * TODO: This could call getxattr to verify success.
-			 */
-			rc = stat(path, &finfo);
-			if (rc) {
-				rc = errno;
-				D_ERROR("Failed to access container: %d (%s)\n", rc, strerror(rc));
+			int                     fd;
+			struct dfuse_user_reply dur = {};
+
+			fd = open(dirp, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+			if (fd == -1) {
+				int err = errno;
+
+				DS_ERROR(err, "Dfuse open failed '%s", dirp);
+				D_FREE(dir);
+				D_GOTO(err_link, err);
+			}
+
+			rc = ioctl(fd, DFUSE_IOCTL_DFUSE_USER, &dur);
+			close(fd);
+			if (rc == -1) {
+				int err = errno;
+
+				DS_ERROR(err, "Dfuse ioctl failed %s", dirp);
+				D_FREE(dir);
+				D_GOTO(err_link, err);
+			}
+
+			rc = duns_set_fuse_acl(dur.uid, coh);
+			if (rc != -DER_SUCCESS) {
+				DS_ERROR(rc, "Dfuse set acl failed %s", dirp);
+				D_FREE(dir);
 				D_GOTO(err_link, rc);
 			}
+
+			backend_dfuse = true;
 		}
+		D_FREE(dir);
 	} else if (type != DAOS_PROP_CO_LAYOUT_UNKNOWN) {
 		/** create a new file for other container types */
 		int fd;
@@ -1304,11 +1323,33 @@ duns_link_cont(daos_handle_t poh, const char *cont, const char *path)
 		}
 		D_GOTO(err_link, rc);
 	}
+	if (backend_dfuse) {
+		struct stat finfo;
+		/*
+		 * This next stat will cause dfuse to lookup the entry point and perform a
+		 * container connect, therefore this data will be read from root of the new
+		 * container, not the directory.
+		 *
+		 * TODO: This could call getxattr to verify success.
+		 */
+		rc = stat(path, &finfo);
+		if (rc) {
+			rc = errno;
+			DS_ERROR(rc, "Failed to access container bind at '%s'", path);
+			goto err_link;
+		}
+	}
 
 out_cont:
 	rc2 = daos_cont_close(coh, NULL);
-	if (rc == 0)
-		rc = rc2;
+	if (rc2 != -DER_SUCCESS) {
+		DL_ERROR(rc2, "failed to close container");
+		if (rc2 == -DER_NOMEM)
+			/* Second close to properly handle fault injection */
+			daos_cont_close(coh, NULL);
+		else if (rc == -DER_SUCCESS)
+			rc = daos_der2errno(rc2);
+	}
 	return rc;
 err_link:
 	if (type == DAOS_PROP_CO_LAYOUT_POSIX)
