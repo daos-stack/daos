@@ -81,7 +81,7 @@ BuildRequires: libyaml-devel
 BuildRequires: libcmocka-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
-BuildRequires: go >= 1.17
+BuildRequires: go >= 1.21
 BuildRequires: pciutils-devel
 %if (0%{?rhel} >= 8)
 BuildRequires: numactl-devel
@@ -218,7 +218,7 @@ Requires: dbench
 Requires: lbzip2
 Requires: attr
 Requires: ior
-Requires: go >= 1.18
+Requires: go >= 1.21
 %if (0%{?suse_version} >= 1315)
 Requires: lua-lmod
 Requires: libcapstone-devel
@@ -598,6 +598,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Wed Dec 11 2024 Kris Jacque <kristin.jacque@hpe.com> 2.6.2-3
+- Bump min supported go version to 1.21
 
 * Wed Nov 06 2024 Phillip Henderson <phillip.henderson@intel.com> 2.6.2-2
 - Second test build for 2.6.2
