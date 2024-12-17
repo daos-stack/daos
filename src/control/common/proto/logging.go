@@ -92,7 +92,7 @@ func Debug(msg proto.Message) string {
 		fmt.Fprintf(&bld, "ranks:%s ", ranks.String())
 		fmt.Fprint(&bld, "tiers:")
 		for i, b := range m.TierBytes {
-			fmt.Fprintf(&bld, "%d: %d ", i, b)
+			fmt.Fprintf(&bld, "%d: %s (%d)", i, humanize.Bytes(b), b)
 			if len(m.TierRatio) > i+1 {
 				fmt.Fprintf(&bld, "(%.02f%%) ", m.TierRatio[i])
 			}
@@ -112,9 +112,10 @@ func Debug(msg proto.Message) string {
 		fmt.Fprintf(&bld, "tgt_ranks:%s ", ranks.String())
 		fmt.Fprint(&bld, "tiers:")
 		for i, b := range m.TierBytes {
-			fmt.Fprintf(&bld, "%d:%d ", i, b)
+			fmt.Fprintf(&bld, "%d: %s (%d)", i, humanize.Bytes(b), b)
 		}
-		fmt.Fprintf(&bld, "meta-file-size:%s", humanize.Bytes(m.MemFileBytes))
+		fmt.Fprintf(&bld, "meta-file-size: %s (%d)", humanize.Bytes(m.MemFileBytes),
+			m.MemFileBytes)
 	case *mgmtpb.PoolEvictReq:
 		fmt.Fprintf(&bld, "%T pool:%s", m, m.Id)
 		if len(m.Handles) > 0 {

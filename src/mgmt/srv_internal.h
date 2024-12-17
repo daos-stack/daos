@@ -123,9 +123,11 @@ int
     ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **enabled_ranks,
 		       d_rank_list_t **disabled_ranks, d_rank_list_t **dead_ranks,
 		       daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
-		       uint32_t *upgrade_layout_ver);
-int ds_mgmt_pool_query_targets(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_t rank,
-			       d_rank_list_t *tgts, daos_target_info_t **infos);
+		       uint32_t *upgrade_layout_ver, uint64_t *mem_file_bytes);
+int
+    ds_mgmt_pool_query_targets(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_t rank,
+			       d_rank_list_t *tgts, daos_target_info_t **infos,
+			       uint64_t *mem_file_bytes);
 
 int
      ds_mgmt_cont_set_owner(uuid_t pool_uuid, d_rank_list_t *svc_ranks, const char *cont_id,
