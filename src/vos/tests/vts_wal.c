@@ -1833,6 +1833,10 @@ nemb_unused(void **state)
 	cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
 	umm  = vos_cont2umm(cont);
 
+	/* Force GC */
+	umem_heap_gc(umm);
+	umem_heap_gc(umm);
+
 	rc = umempobj_get_mbusage(umm->umm_pool, 0, &cur_allocated, &maxsz);
 	assert_true(rc == 0);
 	print_message("phase6: nemb space utilization is %lu max is %lu\n", cur_allocated, maxsz);

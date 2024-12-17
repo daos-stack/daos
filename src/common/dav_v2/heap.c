@@ -2325,9 +2325,9 @@ heap_force_recycle(struct palloc_heap *heap)
 	heap_populate_nemb_unused(heap);
 	mb->prev_usage = mb->space_usage;
 
-	if (heap->rt->empty_nemb_cnt >= heap->rt->empty_nemb_gcth)
-		D_ERROR("Force GC failed to free up enough nembs, cnt = %d",
-			heap->rt->empty_nemb_cnt);
+	if (max_reclaim && (heap->rt->empty_nemb_cnt >= heap->rt->empty_nemb_gcth))
+		D_WARN("Force GC failed to free up enough nembs, cnt = %d",
+		       heap->rt->empty_nemb_cnt);
 
 	return 0;
 }
