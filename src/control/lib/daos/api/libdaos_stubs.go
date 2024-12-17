@@ -18,8 +18,25 @@ import (
 /*
 #include <daos_errno.h>
 #include <daos_mgmt.h>
+#include <daos/pool.h>
+
+#include "util.h"
+
 */
 import "C"
+
+// ResetTestStubs will call the reset functions for all test stubs in order
+// to reset state between tests.
+func ResetTestStubs() {
+	reset_daos_pool_connect()
+	reset_daos_pool_query()
+	reset_daos_pool_query_target()
+	reset_daos_pool_list_attr()
+	reset_daos_pool_get_attr()
+	reset_daos_pool_set_attr()
+	reset_daos_pool_del_attr()
+	reset_daos_mgmt_list_pools()
+}
 
 var (
 	daos_init_RC C.int = 0
@@ -32,6 +49,14 @@ func daos_init() C.int {
 func daos_fini() {}
 
 func dc_agent_fini() {}
+
+var (
+	daos_handle_is_valid_Bool C.bool = true
+)
+
+func daos_handle_is_valid(handle C.daos_handle_t) C.bool {
+	return daos_handle_is_valid_Bool
+}
 
 var (
 	defaultSystemInfo *daos.SystemInfo = &daos.SystemInfo{

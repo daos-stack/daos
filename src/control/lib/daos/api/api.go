@@ -26,10 +26,6 @@ type (
 	}
 )
 
-func daosError(rc C.int) error {
-	return daos.ErrorFromRC(int(rc))
-}
-
 func (api *api) isInitialized() bool {
 	api.RLock()
 	defer api.RUnlock()

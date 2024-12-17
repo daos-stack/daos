@@ -106,6 +106,9 @@ type (
 
 	// PoolQueryMask implements a bitmask for pool query options.
 	PoolQueryMask C.uint64_t
+
+	// PoolConnectFlag represents DAOS pool connect options.
+	PoolConnectFlag uint
 )
 
 const (
@@ -126,11 +129,11 @@ const (
 	PoolQueryOptionDeadEngines PoolQueryOption = "dead_engines"
 
 	// PoolConnectFlagReadOnly indicates that the connection is read-only.
-	PoolConnectFlagReadOnly = C.DAOS_PC_RO
+	PoolConnectFlagReadOnly PoolConnectFlag = C.DAOS_PC_RO
 	// PoolConnectFlagReadWrite indicates that the connection is read-write.
-	PoolConnectFlagReadWrite = C.DAOS_PC_RW
+	PoolConnectFlagReadWrite PoolConnectFlag = C.DAOS_PC_RW
 	// PoolConnectFlagExclusive indicates that the connection is exclusive.
-	PoolConnectFlagExclusive = C.DAOS_PC_EX
+	PoolConnectFlagExclusive PoolConnectFlag = C.DAOS_PC_EX
 )
 
 func (pqo PoolQueryOption) String() string {
