@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,6 +19,9 @@ import (
 /*
 #include <daos_errno.h>
 #include <daos_mgmt.h>
+
+#include "util.h"
+
 */
 import "C"
 
@@ -32,6 +36,14 @@ func daos_init() C.int {
 func daos_fini() {}
 
 func dc_agent_fini() {}
+
+var (
+	daos_handle_is_valid_Bool C.bool = true
+)
+
+func daos_handle_is_valid(handle C.daos_handle_t) C.bool {
+	return daos_handle_is_valid_Bool
+}
 
 var (
 	defaultSystemInfo *daos.SystemInfo = &daos.SystemInfo{
