@@ -34,7 +34,7 @@ printf "LogSyslog yes\n" >> /etc/clamd.d/scan.conf
 
 lmd_tarball='maldetect-current.tar.gz'
 : "${REPO_FILE_URL:=https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/}"
-lmd_base_url="$(dirname $REPO_FILE_URL)"
+lmd_base_url="$(dirname "$REPO_FILE_URL")"
 lmd_base="${lmd_base_url#*://}"
 lmd_url="${lmd_base_url}/maldetect/downloads/${lmd_tarball}"
 curl "${lmd_url}" --silent --show-error --fail -o "/var/tmp/${lmd_tarball}"

@@ -633,8 +633,8 @@ rebuild_object(struct rebuild_tgt_pool_tracker *rpt, uuid_t co_uuid, daos_unit_o
 
 	if (myrank == target->ta_comp.co_rank && mytarget == target->ta_comp.co_index &&
 	    (shard == oid.id_shard) && rpt->rt_rebuild_op != RB_OP_UPGRADE) {
-		D_DEBUG(DB_REBUILD, DF_UOID" %u/%u already on the target shard\n",
-			DP_UOID(oid), myrank, mytarget);
+		D_DEBUG(DB_REBUILD, DF_RB ": " DF_UOID " %u/%u already on the target shard\n",
+			DP_RB_RPT(rpt), DP_UOID(oid), myrank, mytarget);
 		return 0;
 	}
 
