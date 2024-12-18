@@ -574,6 +574,23 @@ type SystemOsaResult struct {
 	Ranks  string `json:"ranks"`   // RankSet of ranks that should be operated on
 }
 
+// SystemOsaResults is an alias for a SystemOsaResult slice.
+type SystemOsaResults []*SystemOsaResult
+
+// Errors returns a single error combining all error messages associated with system-OSA results.
+// Doesn't retrieve errors from sysResponse because missing ranks or hosts will not be populated in
+// system-OSA operation response.
+func (sors SystemOsaResults) Errors() (err error) {
+	for _, r := range sors {
+		if r.Status != int32(daos.Success) {
+			err = concatErrs(err,
+				errors.Errorf("pool %s ranks %s: %s", r.PoolID, r.Ranks, r.Msg))
+		}
+	}
+
+	return
+}
+
 // SystemDrainReq contains the inputs for the system drain request.
 type SystemDrainReq struct {
 	unaryRequest
@@ -586,21 +603,12 @@ type SystemDrainReq struct {
 // in the response so decoding is not required.
 type SystemDrainResp struct {
 	sysResponse `json:"-"`
-	Results     []*SystemOsaResult `json:"results"`
+	Results     SystemOsaResults `json:"results"`
 }
 
-// Errors returns a single error combining all error messages associated with a system drain
-// response. Doesn't retrieve errors from sysResponse because missing ranks or hosts will not be
-// populated in SystemDrainResp.
-func (sdr *SystemDrainResp) Errors() (errOut error) {
-	for _, r := range sdr.Results {
-		if r.Status != int32(daos.Success) {
-			errOut = concatErrs(errOut,
-				errors.Errorf("pool %s ranks %s: %s", r.PoolID, r.Ranks, r.Msg))
-		}
-	}
-
-	return
+// Errors returns error if any of the results indicate a failure.
+func (resp *SystemDrainResp) Errors() error {
+	return resp.Results.Errors()
 }
 
 // SystemDrain will drain either hosts or ranks from all pools that they are members of. When hosts
@@ -642,21 +650,12 @@ type SystemReintReq struct {
 // in the response so decoding is not required.
 type SystemReintResp struct {
 	sysResponse `json:"-"`
-	Results     []*SystemOsaResult `json:"results"`
+	Results     SystemOsaResults `json:"results"`
 }
 
-// Errors returns a single error combining all error messages associated with a system drain
-// response. Doesn't retrieve errors from sysResponse because missing ranks or hosts will not be
-// populated in SystemReintResp.
-func (sdr *SystemReintResp) Errors() (errOut error) {
-	for _, r := range sdr.Results {
-		if r.Status != int32(daos.Success) {
-			errOut = concatErrs(errOut,
-				errors.Errorf("pool %s ranks %s: %s", r.PoolID, r.Ranks, r.Msg))
-		}
-	}
-
-	return
+// Errors returns error if any of the results indicate a failure.
+func (resp *SystemReintResp) Errors() error {
+	return resp.Results.Errors()
 }
 
 // SystemReint will reintegrate either hosts or ranks to all pools that they are members of. When hosts

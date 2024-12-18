@@ -285,6 +285,32 @@ func TestDmg_SystemCommands(t *testing.T) {
 			errNoRanks,
 		},
 		{
+			"system reintegrate with multiple hosts",
+			"system reintegrate --rank-hosts foo-[0,1,4]",
+			strings.Join([]string{
+				printRequest(t, withSystem(
+					withHosts(&control.SystemReintReq{}, "foo-[0-1,4]"),
+					"daos_server")),
+			}, " "),
+			nil,
+		},
+		{
+			"system reintegrate with multiple ranks",
+			"system reintegrate --ranks 0,1,4",
+			strings.Join([]string{
+				printRequest(t, withSystem(
+					withRanks(&control.SystemReintReq{}, 0, 1, 4),
+					"daos_server")),
+			}, " "),
+			nil,
+		},
+		{
+			"system reintegrate without ranks",
+			"system reint", // Verify alias is accepted.
+			"",
+			errNoRanks,
+		},
+		{
 			"system cleanup with machine name",
 			"system cleanup foo1",
 			strings.Join([]string{
