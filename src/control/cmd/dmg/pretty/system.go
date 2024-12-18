@@ -229,9 +229,9 @@ func printSysOsaResults(out io.Writer, results []*control.SystemOsaResult) {
 	var table []txtfmt.TableRow
 	for _, r := range results {
 		result := "OK"
-		reason := "N/A"
+		reason := "-"
 		if r.Status != 0 {
-			result = "Failed"
+			result = "FAIL"
 			reason = r.Msg
 		}
 		row := txtfmt.TableRow{
