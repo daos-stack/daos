@@ -41,6 +41,7 @@ active_ie_init(struct dfuse_inode_entry *ie, bool *preread)
 		goto out;
 	}
 	D_INIT_LIST_HEAD(&ie->ie_active->chunks);
+	D_INIT_LIST_HEAD(&ie->ie_active->open_reads);
 	if (preread && *preread) {
 		D_ALLOC_PTR(ie->ie_active->readahead);
 		if (ie->ie_active->readahead) {
@@ -96,7 +97,7 @@ active_oh_decref(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh)
 	if (oc != 1)
 		goto out;
 
-	rcb = read_chunk_close(oh->doh_ie->ie_active);
+	rcb = read_chunk_close(oh->doh_ie);
 
 	ah_free(dfuse_info, oh->doh_ie);
 out:
@@ -118,7 +119,7 @@ active_ie_decref(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 	if (oc != 1)
 		goto out;
 
-	read_chunk_close(ie->ie_active);
+	read_chunk_close(ie);
 
 	ah_free(dfuse_info, ie);
 out:
