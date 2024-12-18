@@ -1560,17 +1560,17 @@ class DFuse():
         return rc
 
     def check_usage(self, ino=None, inodes=None, open_files=None, pools=None, containers=None,
-                    qpath=None):
+                    qpath=None, old=None):
         """Query and verify the dfuse statistics.
 
+        Optionally verify numbers are as expected/defined or return a delta to a previous sample.
         Returns the raw numbers in a dict.
         """
         cmd = ['filesystem', 'query', qpath or self.dir]
 
         if ino is not None:
             cmd.extend(['--inode', str(ino)])
-        rc = run_daos_cmd(self.conf, cmd, use_json=True)
-        print(rc)
+        rc = run_daos_cmd(self.conf, cmd, use_json=True, valgrind=False, log_check=False)
         assert rc.returncode == 0, rc
 
         if inodes:
@@ -1581,6 +1581,16 @@ class DFuse():
             assert rc.json['response']['pools'] == pools, rc
         if containers:
             assert rc.json['response']['containers'] == containers, rc
+
+        # If a prior version of the statistics was supplied then take a delta, but take a delta of
+        # the prior version as it came from daos, not as it was reported.
+        if 'statistics' in rc.json['response']:
+            rc.json['response']['raw'] = copy.deepcopy(rc.json['response']['statistics'])
+        if old:
+            for key in rc.json['response']['statistics']:
+                rc.json['response']['statistics'][key] -= old['raw'].get(key, 0)
+
+        print(f"Usage: {rc.json['response']}")
         return rc.json['response']
 
     def _evict_path(self, path):
@@ -1604,7 +1614,7 @@ class DFuse():
         for inode in inodes:
             found = True
             while found:
-                rc = self.check_usage(inode, qpath=qpath)
+                rc = self.check_usage(ino=inode, qpath=qpath)
                 print(rc)
                 found = rc['resident']
                 if not found:
@@ -2312,7 +2322,7 @@ class PosixTests():
     def test_pre_read(self):
         """Test the pre-read code.
 
-        Test reading a file which is previously unknown to fuse with caching on.  This should go
+        Test reading a files which are previously unknown to fuse with caching on.  This should go
         into the pre_read code and load the file contents automatically after the open call.
         """
         dfuse = DFuse(self.server, self.conf, container=self.container)
@@ -2341,32 +2351,57 @@ class PosixTests():
         dfuse = DFuse(self.server, self.conf, caching=True, container=self.container)
         dfuse.start(v_hint='pre_read_1')
 
+        # Open a file and read in one go.
         with open(join(dfuse.dir, 'file0'), 'r') as fd:
             data0 = fd.read()
+        res = dfuse.check_usage()
+        assert res['statistics']['pre_read'] == 1, res
 
+        # Open a file and read in one go.
         with open(join(dfuse.dir, 'file1'), 'r') as fd:
             data1 = fd.read(16)
+        res = dfuse.check_usage(old=res)
+        assert res['statistics']['pre_read'] == 1, res
 
-        with open(join(dfuse.dir, 'file2'), 'r') as fd:
-            data2 = fd.read(2)
+        # Open a file and read two bytes at a time.  Despite disabling buffering python will try and
+        # read a whole page the first time.
+        fd = os.open(join(dfuse.dir, 'file2'), os.O_RDONLY)
+        data2 = os.read(fd, 2)
+        res = dfuse.check_usage(old=res)
+        assert res['statistics']['pre_read'] == 1, res
+        _ = os.read(fd, 2)
+        res = dfuse.check_usage(old=res)
+        assert res['statistics']['pre_read'] == 0, res
+        os.close(fd)
 
+        # Open a MB file.  This reads 8 128k chunks and 1 EOF.
         with open(join(dfuse.dir, 'file3'), 'r') as fd:
             data3 = fd.read()
+        res = dfuse.check_usage(old=res)
+        assert res['statistics']['pre_read'] == 9, res
 
+        # Open a (1MB-1) file.  This reads 8 128k chunks, the last is truncated.  There is no EOF
+        # returned by dfuse here, just a truncated read but I assume python is interpreting a
+        # truncated read at the expected file size as an EOF.
         with open(join(dfuse.dir, 'file4'), 'r') as fd:
             data4 = fd.read()
             data5 = fd.read()
 
-        # This should not use the pre-read feature, to be validated via the logs.
+        res = dfuse.check_usage(old=res)
+        assert res['statistics']['pre_read'] == 8, res
+
+        # This should now be read from cache.
         with open(join(dfuse.dir, 'file4'), 'r') as fd:
             data6 = fd.read()
+        res = dfuse.check_usage(old=res)
+        assert res['statistics']['read'] == 0, res
 
         if dfuse.stop():
             self.fatal_errors = True
         print(data0)
         assert data0 == 'test'
         assert data1 == 'test'
-        assert data2 == 'te'
+        assert data2 == b'te', data2
         assert raw_data0 == data3
         assert raw_data1 == data4
         assert len(data5) == 0
