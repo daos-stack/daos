@@ -1574,6 +1574,23 @@ out:
 	return rc;
 }
 
+int
+dc_pool_hdl2uuid(daos_handle_t poh, uuid_t *hdl_uuid, uuid_t *uuid)
+{
+	struct dc_pool *dp;
+
+	dp = dc_hdl2pool(poh);
+	if (dp == NULL)
+		return -DER_NO_HDL;
+
+	if (hdl_uuid != NULL)
+		uuid_copy(*hdl_uuid, dp->dp_pool_hdl);
+	if (uuid != NULL)
+		uuid_copy(*uuid, dp->dp_pool);
+	dc_pool_put(dp);
+	return 0;
+}
+
 struct pool_update_state {
 	struct rsvc_client	client;
 	struct dc_mgmt_sys     *sys;
