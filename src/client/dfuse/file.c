@@ -96,7 +96,7 @@ active_oh_decref(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh)
 	if (oc != 1)
 		goto out;
 
-	rcb = read_chunk_close(oh->doh_ie);
+	rcb = read_chunk_close(oh->doh_ie->ie_active);
 
 	ah_free(dfuse_info, oh->doh_ie);
 out:
@@ -118,7 +118,7 @@ active_ie_decref(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 	if (oc != 1)
 		goto out;
 
-	read_chunk_close(ie);
+	read_chunk_close(ie->ie_active);
 
 	ah_free(dfuse_info, ie);
 out:
