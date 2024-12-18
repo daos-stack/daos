@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -296,5 +296,40 @@ the path must include the extent, otherwise, it must not.`,
 			return ddbDtxActAbort(ctx, c.Args.String("path"), c.Args.String("dtx_id"))
 		},
 		Completer: nil,
+	})
+	// Command: feature
+	app.AddCommand(&grumble.Command{
+		Name:      "feature",
+		Aliases:   nil,
+		Help:      "Manage vos pool features",
+		LongHelp:  "",
+		HelpGroup: "vos",
+		Flags: func(f *grumble.Flags) {
+			f.String("e", "enable", "", "Enable vos pool features")
+			f.String("d", "disable", "", "Disable vos pool features")
+			f.Bool("s", "show", false, "Show current features")
+		},
+		Args: func(a *grumble.Args) {
+			a.String("path", "Optional, Path to the vos file", grumble.Default(""))
+		},
+		Run: func(c *grumble.Context) error {
+			return ddbFeature(ctx, c.Args.String("path"), c.Flags.String("enable"), c.Flags.String("disable"), c.Flags.Bool("show"))
+		},
+		Completer: featureCompleter,
+	})
+	// Command: rm_pool
+	app.AddCommand(&grumble.Command{
+		Name:      "rm_pool",
+		Aliases:   nil,
+		Help:      "Remove a vos pool.",
+		LongHelp:  "",
+		HelpGroup: "vos",
+		Args: func(a *grumble.Args) {
+			a.String("path", "Optional, Path to the vos file", grumble.Default(""))
+		},
+		Run: func(c *grumble.Context) error {
+			return ddbRmPool(ctx, c.Args.String("path"))
+		},
+		Completer: rmPoolCompleter,
 	})
 }

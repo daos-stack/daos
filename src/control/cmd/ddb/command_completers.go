@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,7 +16,7 @@ const (
 	defMntPrefix = "/mnt"
 )
 
-func listDir(match string) (result []string) {
+func listDirVos(match string) (result []string) {
 	if strings.HasSuffix(match, "vos-") {
 		match = filepath.Dir(match)
 	}
@@ -33,9 +33,9 @@ func listDir(match string) (result []string) {
 	return
 }
 
-func openCompleter(prefix string, args []string) []string {
-	suggestions := []string{"-h", "-w", "--write_mode"}
-	suggestions = append(suggestions, listDir(defMntPrefix)...)
+func filterSuggestions(prefix string, initialSuggestions, additionalSuggestions []string) []string {
+	suggestions := append([]string{}, initialSuggestions...)
+	suggestions = append(suggestions, additionalSuggestions...)
 
 	if len(prefix) > 0 {
 		var newSuggestions []string
@@ -49,5 +49,32 @@ func openCompleter(prefix string, args []string) []string {
 	}
 
 	return suggestions
+}
 
+func openCompleter(prefix string, args []string) []string {
+	return filterSuggestions(prefix, []string{"-h", "-w", "--write_mode"}, listDirVos(defMntPrefix))
+}
+
+func featureCompleter(prefix string, args []string) []string {
+	return filterSuggestions(prefix, []string{"-h", "-e", "--enable", "-d", "--disable", "-s", "--show"},
+		listDirVos(defMntPrefix))
+}
+
+func listDirPool(match string) (result []string) {
+	if strings.HasSuffix(match, "vos-") {
+		match = filepath.Dir(match)
+	}
+	filepath.Walk(match, func(path string, info fs.FileInfo, err error) error {
+		if err != nil {
+			/* ignore error */
+			return nil
+		}
+		result = append(result, path)
+		return nil
+	})
+	return
+}
+
+func rmPoolCompleter(prefix string, args []string) []string {
+	return filterSuggestions(prefix, []string{"-h"}, listDirPool(defMntPrefix))
 }
