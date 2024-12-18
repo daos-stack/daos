@@ -148,8 +148,10 @@ dfuse_readahead_reply(fuse_req_t req, size_t len, off_t position, struct dfuse_o
 		 * later checks will determine if the file is read to the end.
 		 */
 		oh->doh_linear_read_pos = max(oh->doh_linear_read_pos, position + len);
-	} else if (oh->doh_linear_read_pos != position) {
-		DFUSE_TRA_DEBUG(oh, "disabling pre read");
+	} else if ((position + len) <= active->readahead->dra_ev->de_readahead_len) {
+		DFUSE_TRA_DEBUG(oh, "disabling pre read %llu  pos %zu != %zu",
+				(unsigned long long)oh->doh_ie->ie_stat.st_ino,
+				oh->doh_linear_read_pos, position);
 		return false;
 	} else {
 		oh->doh_linear_read_pos = position + len;
