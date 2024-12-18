@@ -1,0 +1,45 @@
+hosts:
+  test_servers: 1
+  test_clients: 1
+
+timeout: 180
+
+server_config:
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+  system_ram_reserved: 1
+
+agent_config:
+  telemetry_port: 9191
+  telemetry_retain: 30s
+  telemetry_enabled: true
+
+pool:
+  scm_size: 2G
+
+container:
+  type: POSIX
+  dfs_oclass: SX
+
+ior: &ior_base
+  ppn: 4
+  api: DFS
+  transfer_size: 512K
+  block_size: 1M
+  dfs_oclass: SX
+
+ior_write:
+  <<: *ior_base
+  flags: "-k -v -w -W -G 1"
+
+ior_read:
+  <<: *ior_base
+  flags: "-v -r -R -G 1"
