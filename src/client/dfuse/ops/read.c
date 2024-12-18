@@ -570,6 +570,16 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	}
 	D_SPIN_UNLOCK(&active->lock);
 
+	if (oh->doh_obj == NULL) {
+		/** duplicate the file handle for the fuse handle */
+		rc = dfs_dup(oh->doh_dfs, oh->doh_ie->ie_obj, oh->doh_flags, &oh->doh_obj);
+		if (rc) {
+			ev->de_ev.ev_error = rc;
+			dfuse_cb_read_complete(ev);
+			return;
+		}
+	}
+
 	rc = dfs_read(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, position, &ev->de_len, &ev->de_ev);
 	if (rc != 0) {
 		D_GOTO(err, rc);
@@ -694,6 +704,14 @@ dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh, struct d
 	int              rc;
 
 	eqt       = pick_eqt(dfuse_info);
+
+	if (oh->doh_obj == NULL) {
+		/** duplicate the file handle for the fuse handle */
+		rc = dfs_dup(oh->doh_dfs, oh->doh_ie->ie_obj, oh->doh_flags, &oh->doh_obj);
+		if (rc)
+			D_GOTO(err, rc);
+	}
+
 	ev->de_oh = oh;
 	ev->de_di = dfuse_info;
 

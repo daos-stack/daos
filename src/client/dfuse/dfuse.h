@@ -207,6 +207,8 @@ struct dfuse_obj_hdl {
 	bool                      doh_evict_on_close;
 	/* the handle is doing readhead for the moment */
 	bool                      doh_readahead_inflight;
+
+	int                       doh_flags;
 };
 
 /* Readdir support.

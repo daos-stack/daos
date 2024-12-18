@@ -45,14 +45,10 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	LOG_FLAGS(ie, fi->flags);
 
 	flags = fi->flags;
+	oh->doh_flags = flags;
 
 	if (flags & O_APPEND)
 		flags &= ~O_APPEND;
-
-	/** duplicate the file handle for the fuse handle */
-	rc = dfs_dup(ie->ie_dfs->dfs_ns, ie->ie_obj, flags, &oh->doh_obj);
-	if (rc)
-		D_GOTO(err, rc);
 
 	if ((fi->flags & O_ACCMODE) != O_RDONLY)
 		oh->doh_writeable = true;
@@ -159,7 +155,7 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
 	struct dfuse_obj_hdl     *oh         = (struct dfuse_obj_hdl *)fi->fh;
 	struct dfuse_inode_entry *ie         = NULL;
-	int                       rc;
+	int                       rc         = 0;
 	uint32_t                  il_calls;
 
 	/* Perform the opposite of what the ioctl call does, always change the open handle count
@@ -226,7 +222,9 @@ wait_readahead:
 
 	active_oh_decref(dfuse_info, oh);
 
-	rc = dfs_release(oh->doh_obj);
+	if (oh->doh_obj != NULL)
+		rc = dfs_release(oh->doh_obj);
+
 	if (rc == 0) {
 		DFUSE_REPLY_ZERO_OH(oh, req);
 	} else {
