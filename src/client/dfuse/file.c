@@ -14,7 +14,7 @@ static pthread_mutex_t alock = PTHREAD_MUTEX_INITIALIZER;
 
 /* Perhaps combine with dfuse_open_handle_init? */
 int
-active_ie_init(struct dfuse_inode_entry *ie, bool *preread)
+active_ie_init(struct dfuse_inode_entry *ie)
 {
 	uint32_t oc;
 	int      rc = -DER_SUCCESS;
@@ -25,11 +25,8 @@ active_ie_init(struct dfuse_inode_entry *ie, bool *preread)
 
 	DFUSE_TRA_DEBUG(ie, "Addref to %d", oc + 1);
 
-	if (oc != 0) {
-		if (preread && *preread)
-			*preread = false;
+	if (oc != 0)
 		goto out;
-	}
 
 	D_ALLOC_PTR(ie->ie_active);
 	if (!ie->ie_active)
@@ -43,18 +40,30 @@ active_ie_init(struct dfuse_inode_entry *ie, bool *preread)
 	D_INIT_LIST_HEAD(&ie->ie_active->chunks);
 	D_INIT_LIST_HEAD(&ie->ie_active->open_reads);
 	atomic_init(&ie->ie_active->read_count, 0);
-	if (preread && *preread) {
-		D_ALLOC_PTR(ie->ie_active->readahead);
-		if (ie->ie_active->readahead) {
-			D_INIT_LIST_HEAD(&ie->ie_active->readahead->req_list);
-			atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
-		}
-	}
 	/* Take a reference on the inode to prevent it being released */
 	atomic_fetch_add_relaxed(&ie->ie_ref, 1);
 out:
 	D_MUTEX_UNLOCK(&alock);
 	return rc;
+}
+
+int
+active_ie_readahead_init(struct dfuse_inode_entry *ie)
+{
+	struct active_inode *ie_active = ie->ie_active;
+
+	D_ASSERT(ie_active != NULL);
+	if (ie_active->readahead != NULL)
+		return 0;
+
+	D_ALLOC_PTR(ie_active->readahead);
+	if (ie_active->readahead == NULL)
+		return -DER_NOMEM;
+
+	D_INIT_LIST_HEAD(&ie_active->readahead->req_list);
+	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
+
+	return 0;
 }
 
 static void

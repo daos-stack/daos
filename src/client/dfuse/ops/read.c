@@ -46,30 +46,40 @@ release:
 	daos_event_fini(&ev->de_ev);
 }
 
+/* read slave complete */
 static void
-dfuse_cb_read_complete(struct dfuse_event *ev)
+dfuse_cb_slave_read_complete(struct dfuse_event *ev)
 {
 	struct dfuse_event *evs, *evn;
+	d_list_t            cblist;
+	char               *buf = ev->de_iov.iov_buf;
 
+	D_INIT_LIST_HEAD(&cblist);
 	D_SPIN_LOCK(&ev->de_oh->doh_ie->ie_active->lock);
 	d_list_del(&ev->de_read_list);
+	d_list_for_each_entry_safe(evs, evn, &ev->de_read_slaves, de_read_list)
+		d_list_move(&evs->de_read_list, &cblist);
 	D_SPIN_UNLOCK(&ev->de_oh->doh_ie->ie_active->lock);
 
-	d_list_for_each_entry(evs, &ev->de_read_slaves, de_read_list) {
+	d_list_for_each_entry(evs, &cblist, de_read_list) {
 		DFUSE_TRA_DEBUG(ev->de_oh, "concurrent network read %p", evs->de_oh);
+		d_list_del(&evs->de_read_list);
 		evs->de_len         = min(ev->de_len, evs->de_req_len);
 		evs->de_ev.ev_error = ev->de_ev.ev_error;
-		cb_read_helper(evs, ev->de_iov.iov_buf);
-	}
-
-	cb_read_helper(ev, ev->de_iov.iov_buf);
-
-	d_list_for_each_entry_safe(evs, evn, &ev->de_read_slaves, de_read_list) {
-		d_list_del(&evs->de_read_list);
+		D_ASSERT(evs->de_req_position >= ev->de_req_position);
+		cb_read_helper(evs, buf + (evs->de_req_position - ev->de_req_position));
 		d_slab_restock(evs->de_eqt->de_read_slab);
 		d_slab_release(evs->de_eqt->de_read_slab, evs);
 	}
+}
 
+static void
+dfuse_cb_read_complete(struct dfuse_event *ev)
+{
+	char *buf = ev->de_iov.iov_buf;
+
+	dfuse_cb_slave_read_complete(ev);
+	cb_read_helper(ev, buf);
 	d_slab_restock(ev->de_eqt->de_read_slab);
 	d_slab_release(ev->de_eqt->de_read_slab, ev);
 }
@@ -121,32 +131,14 @@ dfuse_readahead_reply(fuse_req_t req, size_t len, off_t position, struct dfuse_o
 {
 	struct active_inode *active = oh->doh_ie->ie_active;
 
-	D_SPIN_LOCK(&active->lock);
-	if (!active->readahead->complete) {
-		struct read_req *rr;
-
-		D_ALLOC_PTR(rr);
-		if (!rr) {
-			D_SPIN_UNLOCK(&active->lock);
-			return false;
-		}
-		rr->req      = req;
-		rr->len      = len;
-		rr->position = position;
-		rr->oh       = oh;
-		d_list_add_tail(&rr->list, &active->readahead->req_list);
-		D_SPIN_UNLOCK(&active->lock);
-		return true;
-	}
-	D_SPIN_UNLOCK(&active->lock);
-
 	if (active->readahead->dra_rc) {
 		DFUSE_REPLY_ERR_RAW(oh, req, active->readahead->dra_rc);
 		return true;
 	}
 
-	if (!oh->doh_linear_read || active->readahead->dra_ev == NULL) {
-		DFUSE_TRA_DEBUG(oh, "Pre read disabled");
+	if (!oh->doh_linear_read || active->readahead->dra_ev == NULL ||
+	    !active->readahead->complete) {
+		DFUSE_TRA_DEBUG(oh, "Pre read disabled or not completed");
 		return false;
 	}
 
@@ -490,7 +482,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	struct active_inode  *active     = oh->doh_ie->ie_active;
 	struct dfuse_info    *dfuse_info = fuse_req_userdata(req);
 	bool                  mock_read  = false;
-	struct dfuse_eq      *eqt;
+	struct dfuse_eq      *eqt        = NULL;
 	int                   rc;
 	struct dfuse_event   *ev;
 
@@ -508,6 +500,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 		return;
 	}
 
+	/* Then check if the request can be filled by readahead */
 	if (active->readahead && dfuse_readahead_reply(req, len, position, oh))
 		return;
 
@@ -538,6 +531,8 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 		       ev->de_iov.iov_buf_len);
 	}
 
+	if (position + len > oh->doh_ie->ie_stat.st_size)
+		len = oh->doh_ie->ie_stat.st_size - position;
 	ev->de_iov.iov_len  = len;
 	ev->de_req          = req;
 	ev->de_sgl.sg_nr    = 1;
@@ -564,11 +559,11 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 		struct dfuse_event *evc;
 
 		d_list_for_each_entry(evc, &active->open_reads, de_read_list) {
-			if (ev->de_req_position == evc->de_req_position &&
+			if (ev->de_req_position >= evc->de_req_position &&
 			    ev->de_req_len <= evc->de_req_len) {
 				d_list_add(&ev->de_read_list, &evc->de_read_slaves);
 				D_SPIN_UNLOCK(&active->lock);
-				return;
+				goto out;
 			}
 		}
 		d_list_add_tail(&ev->de_read_list, &active->open_reads);
@@ -580,7 +575,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 		D_GOTO(err, rc);
 		return;
 	}
-
+out:
 	/* Send a message to the async thread to wake it up and poll for events */
 	sem_post(&eqt->de_sem);
 
@@ -599,29 +594,19 @@ err:
 static void
 pre_read_mark_done(struct active_inode *active)
 {
-	struct read_req *rr, *rrn;
-
 	D_SPIN_LOCK(&active->lock);
 	active->readahead->complete = true;
 	D_SPIN_UNLOCK(&active->lock);
-
-	/* No lock is held here as after complete is set then nothing further is added */
-	d_list_for_each_entry_safe(rr, rrn, &active->readahead->req_list, list) {
-		d_list_del(&rr->list);
-		readahead_actual_reply(active, rr);
-		D_FREE(rr);
-	}
 }
 
 static void
 dfuse_cb_pre_read_complete(struct dfuse_event *ev)
 {
 	struct dfuse_info        *dfuse_info = ev->de_di;
-	struct dfuse_inode_entry *ie         = ev->de_ie;
+	struct dfuse_inode_entry *ie         = ev->de_oh->doh_ie;
 	struct active_inode      *active     = ie->ie_active;
 
 	active->readahead->dra_rc = ev->de_ev.ev_error;
-
 	if (ev->de_ev.ev_error != 0) {
 		active->readahead->dra_rc = ev->de_ev.ev_error;
 		daos_event_fini(&ev->de_ev);
@@ -639,34 +624,78 @@ dfuse_cb_pre_read_complete(struct dfuse_event *ev)
 		active->readahead->dra_ev = NULL;
 	}
 	pre_read_mark_done(active);
+	ev->de_oh->doh_readahead_inflight = 0;
+
+	dfuse_cb_slave_read_complete(ev);
 	/* Drop the extra ref on active, the file could be closed before this read completes */
 	active_ie_decref(dfuse_info, ie);
 }
 
-void
-dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh)
+int
+dfuse_pre_read_init(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
+		    struct dfuse_event **evp)
 {
-	struct active_inode *active = oh->doh_ie->ie_active;
-	struct dfuse_eq    *eqt;
-	int                 rc;
+	struct active_inode *active = ie->ie_active;
+	struct dfuse_eq     *eqt;
 	struct dfuse_event *ev;
-	size_t              len = oh->doh_ie->ie_stat.st_size;
+	size_t               len = ie->ie_stat.st_size;
 
 	eqt = pick_eqt(dfuse_info);
 	ev = d_slab_acquire(eqt->de_pre_read_slab);
 	if (ev == NULL)
-		D_GOTO(err, rc = ENOMEM);
+		return ENOMEM;
 
 	ev->de_iov.iov_len   = len;
 	ev->de_req           = 0;
 	ev->de_sgl.sg_nr     = 1;
-	ev->de_ie            = oh->doh_ie;
 	ev->de_readahead_len = len;
 	ev->de_req_position  = 0;
-	ev->de_di            = dfuse_info;
 
 	ev->de_complete_cb        = dfuse_cb_pre_read_complete;
+
+	if (active->readahead == NULL) {
+		int rc;
+
+		rc = active_ie_readahead_init(ie);
+		if (rc != 0)
+			return rc;
+	}
 	active->readahead->dra_ev = ev;
+
+	/* NB: the inode_entry has been locked by ie_read_lock */
+	d_list_add_tail(&ev->de_read_list, &active->open_reads);
+
+	*evp = ev;
+	return 0;
+}
+
+void
+dfuse_pre_read_abort(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh,
+		     struct dfuse_event *ev, int rc)
+{
+	struct dfuse_eq     *eqt    = pick_eqt(dfuse_info);
+	struct active_inode *active = oh->doh_ie->ie_active;
+
+	oh->doh_readahead_inflight = 0;
+	active->readahead->dra_rc  = rc;
+	if (ev) {
+		daos_event_fini(&ev->de_ev);
+		d_slab_release(eqt->de_pre_read_slab, ev);
+		active->readahead->dra_ev = NULL;
+	}
+	active_ie_decref(dfuse_info, oh->doh_ie);
+	pre_read_mark_done(active);
+}
+
+void
+dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh, struct dfuse_event *ev)
+{
+	struct dfuse_eq *eqt;
+	int              rc;
+
+	eqt       = pick_eqt(dfuse_info);
+	ev->de_oh = oh;
+	ev->de_di = dfuse_info;
 
 	rc = dfs_read(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, 0, &ev->de_len, &ev->de_ev);
 	if (rc != 0)
@@ -680,12 +709,5 @@ dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh)
 
 	return;
 err:
-	active->readahead->dra_rc = rc;
-	if (ev) {
-		daos_event_fini(&ev->de_ev);
-		d_slab_release(eqt->de_pre_read_slab, ev);
-		active->readahead->dra_ev = NULL;
-	}
-	active_ie_decref(dfuse_info, oh->doh_ie);
-	pre_read_mark_done(active);
+	dfuse_pre_read_abort(dfuse_info, oh, ev, rc);
 }
