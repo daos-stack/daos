@@ -35,7 +35,7 @@ def generate_agent_config(args):
     config = DaosAgentYamlParameters(args.agent_file, common_cfg)
     config.telemetry_config = DaosAgentTelemetryConfig()
     # Update the configuration file access points
-    config.other_params.access_points.value = args.node_list.split(",")
+    config.access_points.value = args.node_list.split(",")
     return create_config(args, config)
 
 
@@ -55,8 +55,8 @@ def generate_server_config(args):
     config.engine_params[0].storage.storage_tiers[0].storage_class.value = "ram"
     config.engine_params[0].storage.storage_tiers[0].scm_mount.value = "/mnt/daos"
     config.engine_params[0].storage.storage_tiers[0].scm_size.value = 0
-    # Update the configuration file access points
-    config.other_params.access_points.value = args.node_list.split(",")
+    # Update the configuration file MS replicas
+    config.mgmt_svc_replicas.value = args.node_list.split(",")
     return create_config(args, config)
 
 
@@ -158,13 +158,13 @@ def main():
         action="store",
         type=str,
         default=None,
-        help="comma-separated list of node names to use as the access points")
+        help="comma-separated list of node names to use as the MS replicas")
     parser.add_argument(
         "-p", "--port",
         action="store",
         type=int,
         default=None,
-        help="the access point port")
+        help="the MS replica port")
     parser.add_argument(
         "-s", "--server_file",
         action="store",

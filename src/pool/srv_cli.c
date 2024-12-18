@@ -343,6 +343,7 @@ struct pool_query_arg {
 	uint32_t         *pqa_upgrade_layout_ver;
 	crt_bulk_t        pqa_bulk;
 	struct pool_buf  *pqa_map_buf;
+	uint64_t	 *pqa_mem_file_bytes;
 	uint32_t          pqa_map_size;
 };
 
@@ -541,6 +542,8 @@ pool_query_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 		*arg->pqa_layout_ver = out->pqo_pool_layout_ver;
 	if (arg->pqa_upgrade_layout_ver)
 		*arg->pqa_upgrade_layout_ver = out->pqo_upgrade_layout_ver;
+	if (arg->pqa_mem_file_bytes)
+		*arg->pqa_mem_file_bytes = out->pqo_mem_file_bytes;
 	if (rc != 0)
 		D_ERROR(DF_UUID": failed to process pool query results, "DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
@@ -589,7 +592,8 @@ int
 dsc_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_t deadline,
 		   d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ranks,
 		   d_rank_list_t **dead_ranks, daos_pool_info_t *pool_info,
-		   uint32_t *pool_layout_ver, uint32_t *upgrade_layout_ver)
+		   uint32_t *pool_layout_ver, uint32_t *upgrade_layout_ver,
+		   uint64_t *mem_file_bytes)
 {
 	struct pool_query_arg arg = {
 	    .pqa_enabled_ranks      = enabled_ranks,
@@ -598,6 +602,7 @@ dsc_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_t deadline,
 	    .pqa_info               = pool_info,
 	    .pqa_layout_ver         = pool_layout_ver,
 	    .pqa_upgrade_layout_ver = upgrade_layout_ver,
+	    .pqa_mem_file_bytes     = mem_file_bytes,
 	    .pqa_map_size           = 127 /* 4 KB */
 	};
 
@@ -608,6 +613,7 @@ struct pool_query_target_arg {
 	d_rank_t            pqta_rank;
 	uint32_t            pqta_tgt_idx;
 	daos_target_info_t *pqta_info;
+	uint64_t	   *pqta_mem_file_bytes;
 };
 
 static int
@@ -642,6 +648,8 @@ pool_query_target_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 		arg->pqta_info->ta_space.s_total[i] = out->pqio_space.s_total[i];
 		arg->pqta_info->ta_space.s_free[i]  = out->pqio_space.s_free[i];
 	}
+	if (arg->pqta_mem_file_bytes)
+		*arg->pqta_mem_file_bytes = out->pqio_mem_file_bytes;
 
 	return 0;
 }
@@ -669,12 +677,14 @@ static struct dsc_pool_svc_call_cbs pool_query_target_cbs = {
  */
 int
 dsc_pool_svc_query_target(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_t deadline,
-			  d_rank_t rank, uint32_t tgt_idx, daos_target_info_t *ti)
+			  d_rank_t rank, uint32_t tgt_idx, daos_target_info_t *ti,
+			  uint64_t *mem_file_bytes)
 {
 	struct pool_query_target_arg arg = {
 		.pqta_rank	= rank,
 		.pqta_tgt_idx	= tgt_idx,
-		.pqta_info	= ti
+		.pqta_info	= ti,
+		.pqta_mem_file_bytes = mem_file_bytes
 	};
 
 	if (ti == NULL)

@@ -1217,13 +1217,13 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_result(("pool", "evict"), pool=pool)
 
-    def config_generate(self, access_points, num_engines=None, scm_only=False,
+    def config_generate(self, mgmt_svc_replicas, num_engines=None, scm_only=False,
                         net_class=None, net_provider=None, use_tmpfs_scm=False,
                         control_metadata_path=None):
         """Produce a server configuration.
 
         Args:
-            access_points (str): Comma separated list of access point addresses.
+            mgmt_svc_replicas (str): Comma separated list of MS replica addresses.
             num_pmem (int): Number of SCM (pmem) devices required per
                 storage host in DAOS system. Defaults to None.
             scm_only (bool, option): Whether to omit NVMe from generated config.
@@ -1243,7 +1243,7 @@ class DmgCommand(DmgCommandBase):
 
         """
         return self._get_result(
-            ("config", "generate"), access_points=access_points,
+            ("config", "generate"), mgmt_svc_replicas=mgmt_svc_replicas,
             num_engines=num_engines, scm_only=scm_only, net_class=net_class,
             net_provider=net_provider, use_tmpfs_scm=use_tmpfs_scm,
             control_metadata_path=control_metadata_path)

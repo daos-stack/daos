@@ -24,7 +24,7 @@ dmg:
 setup:
   start_servers_once: False
 config_generate_params: !mux
-  # 1. Access points only. Use default for others.
+  # 1. MS replicas only. Use default for others.
   all_default:
     net_provider: ofi+tcp
   # 2. Use one engine.

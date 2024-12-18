@@ -44,6 +44,7 @@ var (
 		cmpopts.SortSlices(func(x, y string) bool { return x < y }),
 		cmpopts.IgnoreUnexported(
 			security.CertificateConfig{},
+			Server{},
 		),
 		cmpopts.IgnoreFields(Server{}, "Path"),
 		cmp.Comparer(func(x, y *storage.BdevDeviceList) bool {
@@ -55,10 +56,10 @@ var (
 	}
 )
 
-func baseCfg(t *testing.T, testFile string) *Server {
+func baseCfg(t *testing.T, log logging.Logger, testFile string) *Server {
 	t.Helper()
 
-	config, err := mockConfigFromFile(t, testFile)
+	config, err := mockConfigFromFile(t, log, testFile)
 	if err != nil {
 		t.Fatalf("failed to load %s: %s", testFile, err)
 	}
@@ -125,12 +126,12 @@ func uncommentServerConfig(t *testing.T, outFile string) {
 
 // mockConfigFromFile returns a populated server config file from the
 // file at the given path.
-func mockConfigFromFile(t *testing.T, path string) (*Server, error) {
+func mockConfigFromFile(t *testing.T, log logging.Logger, path string) (*Server, error) {
 	t.Helper()
 	c := DefaultServer()
 	c.Path = path
 
-	return c, c.Load()
+	return c, c.Load(log)
 }
 
 func TestServerConfig_MarshalUnmarshal(t *testing.T) {
@@ -163,7 +164,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 
 			configA := DefaultServer()
 			configA.Path = tt.inPath
-			err := configA.Load()
+			err := configA.Load(log)
 			if err == nil {
 				err = configA.Validate(log)
 			}
@@ -194,7 +195,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			err = configB.Load()
+			err = configB.Load(log)
 			if err == nil {
 				err = configB.Validate(log)
 			}
@@ -220,10 +221,13 @@ func TestServerConfig_Constructed(t *testing.T) {
 	testDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
 	// First, load a config based on the server config with all options uncommented.
 	testFile := filepath.Join(testDir, sConfigUncomment)
 	uncommentServerConfig(t, testFile)
-	defaultCfg, err := mockConfigFromFile(t, testFile)
+	defaultCfg, err := mockConfigFromFile(t, log, testFile)
 	if err != nil {
 		t.Fatalf("failed to load %s: %s", testFile, err)
 	}
@@ -255,7 +259,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithSocketDir("./.daos/daos_server").
 		WithFabricProvider("ofi+verbs;ofi_rxm").
 		WithCrtTimeout(30).
-		WithAccessPoints("hostname1").
+		WithMgmtSvcReplicas("hostname1", "hostname2", "hostname3").
 		WithFaultCb("./.daos/fd_callback").
 		WithFaultPath("/vcdu0/rack1/hostname").
 		WithClientEnvVars([]string{"foo=bar"}).
@@ -411,7 +415,7 @@ func TestServerConfig_MDonSSD_Constructed(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	mdOnSSDCfg, err := mockConfigFromFile(t, mdOnSSDExample)
+	mdOnSSDCfg, err := mockConfigFromFile(t, log, mdOnSSDExample)
 	if err != nil {
 		t.Fatalf("failed to load %s: %s", mdOnSSDExample, err)
 	}
@@ -427,7 +431,7 @@ func TestServerConfig_MDonSSD_Constructed(t *testing.T) {
 			HttpsCert:     "/etc/daos/certs/telemetry.crt",
 			HttpsKey:      "/etc/daos/certs/telemetry.key"}).
 		WithFabricProvider("ofi+tcp").
-		WithAccessPoints("example")
+		WithMgmtSvcReplicas("example1", "example2", "example3")
 
 	constructed.Engines = []*engine.Config{
 		engine.MockConfig().
@@ -479,6 +483,9 @@ func TestServerConfig_Validation(t *testing.T) {
 	testDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
 	// First, load a config based on the server config with all options uncommented.
 	testFile := filepath.Join(testDir, sConfigUncomment)
 	uncommentServerConfig(t, testFile)
@@ -511,90 +518,90 @@ func TestServerConfig_Validation(t *testing.T) {
 			},
 			expErr: FaultConfigNoProvider,
 		},
-		"no access point": {
+		"no MS replica": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithAccessPoints()
+				return c.WithMgmtSvcReplicas()
 			},
-			expErr: FaultConfigBadAccessPoints,
+			expErr: FaultConfigBadMgmtSvcReplicas,
 		},
-		"single access point": {
+		"single MS replica": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithAccessPoints("1.2.3.4:1234")
-			},
-		},
-		"multiple access points (even)": {
-			extraConfig: func(c *Server) *Server {
-				return c.WithAccessPoints("1.2.3.4:1234", "5.6.7.8:5678")
-			},
-			expErr: FaultConfigEvenAccessPoints,
-		},
-		"multiple access points (odd)": {
-			extraConfig: func(c *Server) *Server {
-				return c.WithAccessPoints("1.2.3.4:1234", "5.6.7.8:5678", "1.5.3.8:6247")
+				return c.WithMgmtSvcReplicas("1.2.3.4:1234")
 			},
 		},
-		"multiple access points (dupes)": {
+		"multiple MS replicas (even)": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithAccessPoints("1.2.3.4", "5.6.7.8", "1.2.3.4")
+				return c.WithMgmtSvcReplicas("1.2.3.4:1234", "5.6.7.8:5678")
 			},
-			expErr: FaultConfigBadAccessPoints,
+			expErr: FaultConfigEvenMgmtSvcReplicas,
 		},
-		"multiple access points (dupes with ports)": {
+		"multiple MS replicas (odd)": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithAccessPoints("1.2.3.4:1234", "5.6.7.8:5678", "1.2.3.4:1234")
-			},
-			expErr: FaultConfigBadAccessPoints,
-		},
-		"multiple access points (dupes with and without ports)": {
-			extraConfig: func(c *Server) *Server {
-				return c.WithAccessPoints("1.2.3.4:10001", "5.6.7.8:5678", "1.2.3.4")
-			},
-			expErr: FaultConfigBadAccessPoints,
-		},
-		"multiple access points (dupes with different ports)": {
-			extraConfig: func(c *Server) *Server {
-				return c.WithAccessPoints("1.2.3.4:10002", "5.6.7.8:5678", "1.2.3.4")
+				return c.WithMgmtSvcReplicas("1.2.3.4:1234", "5.6.7.8:5678", "1.5.3.8:6247")
 			},
 		},
-		"no access points": {
+		"multiple MS replicas (dupes)": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithAccessPoints()
+				return c.WithMgmtSvcReplicas("1.2.3.4", "5.6.7.8", "1.2.3.4")
 			},
-			expErr: FaultConfigBadAccessPoints,
+			expErr: FaultConfigBadMgmtSvcReplicas,
 		},
-		"single access point no port": {
+		"multiple MS replicas (dupes with ports)": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithAccessPoints("1.2.3.4")
+				return c.WithMgmtSvcReplicas("1.2.3.4:1234", "5.6.7.8:5678", "1.2.3.4:1234")
+			},
+			expErr: FaultConfigBadMgmtSvcReplicas,
+		},
+		"multiple MS replicas (dupes with and without ports)": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithMgmtSvcReplicas("1.2.3.4:10001", "5.6.7.8:5678", "1.2.3.4")
+			},
+			expErr: FaultConfigBadMgmtSvcReplicas,
+		},
+		"multiple MS replicas (dupes with different ports)": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithMgmtSvcReplicas("1.2.3.4:10002", "5.6.7.8:5678", "1.2.3.4")
 			},
 		},
-		"single access point invalid port": {
+		"no MS replicas": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithAccessPoints("1.2.3.4").
+				return c.WithMgmtSvcReplicas()
+			},
+			expErr: FaultConfigBadMgmtSvcReplicas,
+		},
+		"single MS replica no port": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithMgmtSvcReplicas("1.2.3.4")
+			},
+		},
+		"single MS replica invalid port": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithMgmtSvcReplicas("1.2.3.4").
 					WithControlPort(0)
 			},
 			expErr: FaultConfigBadControlPort,
 		},
-		"single access point including invalid port (alphanumeric)": {
+		"single MS replica including invalid port (alphanumeric)": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithAccessPoints("1.2.3.4:0a0")
+				return c.WithMgmtSvcReplicas("1.2.3.4:0a0")
 			},
 			expErr: FaultConfigBadControlPort,
 		},
-		"single access point including invalid port (zero)": {
+		"single MS replica including invalid port (zero)": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithAccessPoints("1.2.3.4:0")
+				return c.WithMgmtSvcReplicas("1.2.3.4:0")
 			},
 			expErr: FaultConfigBadControlPort,
 		},
-		"single access point including negative port": {
+		"single MS replica including negative port": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithAccessPoints("1.2.3.4:-10002")
+				return c.WithMgmtSvcReplicas("1.2.3.4:-10002")
 			},
 			expErr: FaultConfigBadControlPort,
 		},
-		"single access point hostname including negative port": {
+		"single MS replica hostname including negative port": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithAccessPoints("hostX:-10002")
+				return c.WithMgmtSvcReplicas("hostX:-10002")
 			},
 			expErr: FaultConfigBadControlPort,
 		},
@@ -711,8 +718,8 @@ func TestServerConfig_Validation(t *testing.T) {
 							),
 					)
 			},
-			expConfig: baseCfg(t, testFile).
-				WithAccessPoints("hostname1:10001").
+			expConfig: baseCfg(t, log, testFile).
+				WithMgmtSvcReplicas("hostname1:10001", "hostname2:10001", "hostname3:10001").
 				WithControlMetadata(storage.ControlMetadata{
 					Path:       testMetadataDir,
 					DevicePath: "/dev/something",
@@ -786,8 +793,8 @@ func TestServerConfig_Validation(t *testing.T) {
 							),
 					)
 			},
-			expConfig: baseCfg(t, testFile).
-				WithAccessPoints("hostname1:10001").
+			expConfig: baseCfg(t, log, testFile).
+				WithMgmtSvcReplicas("hostname1:10001", "hostname2:10001", "hostname3:10001").
 				WithControlMetadata(storage.ControlMetadata{
 					Path:       testMetadataDir,
 					DevicePath: "/dev/something",
@@ -871,8 +878,8 @@ func TestServerConfig_Validation(t *testing.T) {
 							),
 					)
 			},
-			expConfig: baseCfg(t, testFile).
-				WithAccessPoints("hostname1:10001").
+			expConfig: baseCfg(t, log, testFile).
+				WithMgmtSvcReplicas("hostname1:10001", "hostname2:10001", "hostname3:10001").
 				WithControlMetadata(storage.ControlMetadata{
 					Path: testMetadataDir,
 				}).
@@ -964,7 +971,7 @@ func TestServerConfig_Validation(t *testing.T) {
 			}
 
 			// Apply test case changes to basic config
-			cfg := tt.extraConfig(baseCfg(t, testFile))
+			cfg := tt.extraConfig(baseCfg(t, log, testFile))
 
 			log.Debugf("baseCfg metadata: %+v", cfg.Metadata)
 
@@ -1173,7 +1180,7 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			// Apply test case changes to basic config
-			cfg := tc.extraConfig(baseCfg(t, testFile))
+			cfg := tc.extraConfig(baseCfg(t, log, testFile))
 
 			mi := &common.MemInfo{
 				HugepageSizeKiB: defHpSizeKb,
@@ -1365,7 +1372,7 @@ func TestServerConfig_SetRamdiskSize(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			// Apply test case changes to basic config
-			cfg := tc.extraConfig(baseCfg(t, testFile))
+			cfg := tc.extraConfig(baseCfg(t, log, testFile))
 
 			val := tc.memTotBytes / humanize.KiByte
 			if val > math.MaxInt {
@@ -1464,7 +1471,7 @@ func replaceFile(t *testing.T, name, oldTxt, newTxt string) {
 func TestServerConfig_Parsing(t *testing.T) {
 	noopExtra := func(c *Server) *Server { return c }
 
-	cfgFromFile := func(t *testing.T, testFile string, matchText, replaceText []string) (*Server, error) {
+	cfgFromFile := func(t *testing.T, log logging.Logger, testFile string, matchText, replaceText []string) (*Server, error) {
 		t.Helper()
 
 		if len(matchText) != len(replaceText) {
@@ -1478,17 +1485,17 @@ func TestServerConfig_Parsing(t *testing.T) {
 			replaceFile(t, testFile, m, replaceText[i])
 		}
 
-		return mockConfigFromFile(t, testFile)
+		return mockConfigFromFile(t, log, testFile)
 	}
 
 	// load a config based on the server config with all options uncommented.
-	loadFromFile := func(t *testing.T, testDir string, matchText, replaceText []string) (*Server, error) {
+	loadFromFile := func(t *testing.T, log logging.Logger, testDir string, matchText, replaceText []string) (*Server, error) {
 		t.Helper()
 
 		defaultConfigFile := filepath.Join(testDir, sConfigUncomment)
 		uncommentServerConfig(t, defaultConfigFile)
 
-		return cfgFromFile(t, defaultConfigFile, matchText, replaceText)
+		return cfgFromFile(t, log, defaultConfigFile, matchText, replaceText)
 	}
 
 	for name, tt := range map[string]struct {
@@ -1601,7 +1608,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 				tt.outTxtList = []string{tt.outTxt}
 			}
 
-			config, errParse := loadFromFile(t, testDir, tt.inTxtList, tt.outTxtList)
+			config, errParse := loadFromFile(t, log, testDir, tt.inTxtList, tt.outTxtList)
 			test.CmpErr(t, tt.expParseErr, errParse)
 			if tt.expParseErr != nil {
 				return

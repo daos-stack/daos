@@ -1,7 +1,7 @@
 # For a single-server system
 
 name: daos_server
-access_points: ['localhost']
+mgmt_svc_replicas: ['localhost']
 provider: ofi+tcp
 control_log_file: /tmp/daos_server.log
 transport_config:
