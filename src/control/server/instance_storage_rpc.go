@@ -349,7 +349,11 @@ func scanEngineBdevsOverDrpc(ctx context.Context, engine Engine, pbReq *ctlpb.Sc
 		addr := sd.Ctrlr.PciAddr
 		if addr == "" {
 			// Mock identifier for emulated NVMe mode where devices have no PCI-address.
-			addr = fmt.Sprintf("0000:00:0.%d", i)
+			// Allows for 256 unique identifiers per-host and formatted string template
+			// ensures no collisions with real device addresses. Note that this mock
+			// identifier address is not used outside of this loop and is only used for
+			// the purpose of mapping SMD records to NVMe (emulated) device details.
+			addr = fmt.Sprintf("FFFF:00:%X.F", i)
 		}
 
 		if _, exists := seenCtrlrs[addr]; !exists {
