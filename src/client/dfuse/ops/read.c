@@ -229,7 +229,8 @@ chunk_free(struct read_chunk_data *cd)
 }
 
 /* Called when the last open file handle on a inode is closed.  This needs to free everything which
- * is complete and for anything that isn't flag it for deletion in the callback.
+ * is complete and for anything that isn't flag it for deletion in the callback.  No locking is
+ * needed here as this is only called as active is being released.
  *
  * Returns true if the feature was used.
  */
@@ -495,10 +496,11 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 
 	DFUSE_IE_STAT_ADD(oh->doh_ie, DS_READ);
 
+	atomic_fetch_add_relaxed(&oh->doh_ie->ie_active->read_count, 1);
+
 	if (oh->doh_linear_read_eof && position == oh->doh_linear_read_pos) {
 		DFUSE_TRA_DEBUG(oh, "Returning EOF early without round trip %#zx", position);
 		oh->doh_linear_read_eof = false;
-		oh->doh_linear_read     = false;
 
 		if (active->readahead)
 			DFUSE_IE_STAT_ADD(oh->doh_ie, DS_PRE_READ);
@@ -515,10 +517,8 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	eqt = pick_eqt(dfuse_info);
 
 	ev = d_slab_acquire(eqt->de_read_slab);
-	if (ev == NULL) {
-		DFUSE_REPLY_ERR_RAW(oh, req, ENOMEM);
-		return;
-	}
+	if (ev == NULL)
+		D_GOTO(err, rc = ENOMEM);
 
 	if (oh->doh_ie->ie_truncated && position + len < oh->doh_ie->ie_stat.st_size &&
 	    ((oh->doh_ie->ie_start_off == 0 && oh->doh_ie->ie_end_off == 0) ||
@@ -577,8 +577,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 
 	rc = dfs_read(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, position, &ev->de_len, &ev->de_ev);
 	if (rc != 0) {
-		ev->de_ev.ev_error = rc;
-		dfuse_cb_read_complete(ev);
+		D_GOTO(err, rc);
 		return;
 	}
 
@@ -589,6 +588,12 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	d_slab_restock(eqt->de_read_slab);
 
 	return;
+err:
+	DFUSE_REPLY_ERR_RAW(oh, req, rc);
+	if (ev) {
+		daos_event_fini(&ev->de_ev);
+		d_slab_release(eqt->de_read_slab, ev);
+	}
 }
 
 static void

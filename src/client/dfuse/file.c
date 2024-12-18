@@ -42,6 +42,7 @@ active_ie_init(struct dfuse_inode_entry *ie, bool *preread)
 	}
 	D_INIT_LIST_HEAD(&ie->ie_active->chunks);
 	D_INIT_LIST_HEAD(&ie->ie_active->open_reads);
+	atomic_init(&ie->ie_active->read_count, 0);
 	if (preread && *preread) {
 		D_ALLOC_PTR(ie->ie_active->readahead);
 		if (ie->ie_active->readahead) {
@@ -81,11 +82,10 @@ ah_free(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 	dfuse_inode_decref(dfuse_info, ie);
 }
 
-bool
+void
 active_oh_decref(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh)
 {
 	uint32_t oc;
-	bool     rcb = true;
 
 	D_MUTEX_LOCK(&alock);
 
@@ -94,15 +94,27 @@ active_oh_decref(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh)
 
 	DFUSE_TRA_DEBUG(oh->doh_ie, "Decref to %d", oc - 1);
 
+	/* Leave set_linear_read as false in this case */
 	if (oc != 1)
 		goto out;
 
-	rcb = read_chunk_close(oh->doh_ie);
+	if (read_chunk_close(oh->doh_ie))
+		oh->doh_linear_read = true;
+
+	/* Do not set linear read in the case where there's no reads or writes, this could be
+	 * simple open/close calls but it could also be cache use so leave the setting unchanged
+	 * in this case.
+	 */
+	if (oh->doh_linear_read) {
+		if (oh->doh_ie->ie_active->read_count != 0)
+			oh->doh_set_linear_read = true;
+	} else {
+		oh->doh_set_linear_read = true;
+	}
 
 	ah_free(dfuse_info, oh->doh_ie);
 out:
 	D_MUTEX_UNLOCK(&alock);
-	return rcb;
 }
 
 void
