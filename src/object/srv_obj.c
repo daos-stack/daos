@@ -4844,14 +4844,14 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 out:
 	if (rc != 0) {
 		if (bulks != NULL) {
-			for (i = 0;
-			     i < dcde->dcde_write_cnt && rma_idx < rma; i++) {
+			for (i = 0; i < dcde->dcde_write_cnt; i++) {
 				if (!bulks[i].inited)
 					continue;
 
-				ABT_eventual_wait(bulks[i].eventual, NULL);
-				ABT_eventual_free(&bulks[i].eventual);
-				rma_idx++;
+				if (bulks[i].eventual != ABT_EVENTUAL_NULL) {
+					ABT_eventual_wait(bulks[i].eventual, NULL);
+					ABT_eventual_free(&bulks[i].eventual);
+				}
 			}
 		}
 

@@ -55,7 +55,7 @@ class ConfigGenerateRun(TestWithServers):
         self.log_step("Generating server configuration")
         server_host = self.hostlist_servers[0]
         result = self.get_dmg_command().config_generate(
-            access_points=server_host, num_engines=num_engines, scm_only=scm_only,
+            mgmt_svc_replicas=server_host, num_engines=num_engines, scm_only=scm_only,
             net_class=net_class, net_provider=net_provider, use_tmpfs_scm=use_tmpfs_scm,
             control_metadata_path=control_metadata)
 

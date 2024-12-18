@@ -132,7 +132,7 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 	return resp, nil
 }
 
-// LeaderQuery returns the system leader and access point replica details.
+// LeaderQuery returns the system leader and MS replica details.
 func (svc *mgmtSvc) LeaderQuery(ctx context.Context, req *mgmtpb.LeaderQueryReq) (*mgmtpb.LeaderQueryResp, error) {
 	if err := svc.checkSystemRequest(req); err != nil {
 		return nil, err
