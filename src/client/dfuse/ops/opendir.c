@@ -19,7 +19,7 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_
 	if (!oh)
 		D_GOTO(err, rc = ENOMEM);
 
-	rc = active_ie_init(ie, NULL);
+	rc = active_ie_init(ie);
 	if (rc != -DER_SUCCESS)
 		D_GOTO(free, rc = daos_der2errno(rc));
 

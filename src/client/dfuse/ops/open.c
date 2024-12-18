@@ -1,5 +1,6 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2025 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,9 +15,9 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	struct dfuse_inode_entry *ie;
 	struct dfuse_obj_hdl     *oh;
 	struct fuse_file_info     fi_out = {0};
+	struct dfuse_event       *ev;
+	bool                      preread = false;
 	int                       rc;
-	bool                      prefetch = false;
-	bool                      preread  = false;
 	int                       flags;
 
 	ie = dfuse_inode_lookup_nf(dfuse_info, ino);
@@ -57,6 +58,10 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	if ((fi->flags & O_ACCMODE) != O_RDONLY)
 		oh->doh_writeable = true;
 
+	rc = active_ie_init(ie);
+	if (rc)
+		goto err;
+
 	if (ie->ie_dfs->dfc_data_timeout != 0) {
 		if (fi->flags & O_DIRECT)
 			fi_out.direct_io = 1;
@@ -68,12 +73,37 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		 */
 
 		/* TODO: This probably wants reflowing to not reference ie_open_count */
-		if (atomic_load_relaxed(&ie->ie_open_count) > 0 ||
+		if (atomic_load_relaxed(&ie->ie_open_count) > 1 ||
 		    ((ie->ie_dcache_last_update.tv_sec != 0) &&
 		     dfuse_dcache_get_valid(ie, ie->ie_dfs->dfc_data_timeout))) {
 			fi_out.keep_cache = 1;
-		} else {
-			prefetch = true;
+		} else if (!(fi->flags & O_TRUNC)) {
+			D_SPIN_LOCK(&ie->ie_active->lock);
+			/**
+			 * size > 4M no pre-read
+			 * 1M <= size <= 4M depend on other files under the directory.
+			 * size <= 1M pre-read in any case.
+			 */
+			if ((oh->doh_parent_dir &&
+			     atomic_load_relaxed(&oh->doh_parent_dir->ie_linear_read) &&
+			     ie->ie_stat.st_size > 0 &&
+			     ie->ie_stat.st_size <= DFUSE_MAX_PRE_READ) ||
+			    (ie->ie_stat.st_size > 0 &&
+			     ie->ie_stat.st_size <= DFUSE_MAX_PRE_READ_ONCE)) {
+				/* Add the read extent to the list to make sure the following read
+				 * will check the readahead list first.
+				 */
+				rc = dfuse_pre_read_init(dfuse_info, ie, &ev);
+				if (rc != 0) {
+					D_SPIN_UNLOCK(&ie->ie_active->lock);
+					D_GOTO(decref, rc);
+				}
+				/* Decreased in pre_read_complete_cb() */
+				preread = true;
+				atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
+				oh->doh_readahead_inflight = 1;
+			}
+			D_SPIN_UNLOCK(&ie->ie_active->lock);
 		}
 	} else if (ie->ie_dfs->dfc_data_otoc) {
 		/* Open to close caching, this allows the use of shared mmap */
@@ -93,18 +123,6 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		oh->doh_caching = true;
 
 	fi_out.fh = (uint64_t)oh;
-
-	/* Pre-read this for files up to the max read size. */
-	if (prefetch && oh->doh_parent_dir &&
-	    atomic_load_relaxed(&oh->doh_parent_dir->ie_linear_read) && ie->ie_stat.st_size > 0 &&
-	    ie->ie_stat.st_size <= DFUSE_MAX_PRE_READ) {
-		preread = true;
-	}
-
-	rc = active_ie_init(ie, &preread);
-	if (rc)
-		goto err;
-
 	/*
 	 * dfs_dup() just locally duplicates the file handle. If we have
 	 * O_TRUNC flag, we need to truncate the file manually.
@@ -112,7 +130,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	if (fi->flags & O_TRUNC) {
 		rc = dfs_punch(ie->ie_dfs->dfs_ns, ie->ie_obj, 0, DFS_MAX_FSIZE);
 		if (rc)
-			D_GOTO(decref, rc);
+			D_GOTO(preread_abort, rc);
 		dfuse_dcache_evict(oh->doh_ie);
 	}
 
@@ -122,9 +140,12 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	 * release from completing which also holds open the inode.
 	 */
 	if (preread)
-		dfuse_pre_read(dfuse_info, ie);
+		dfuse_pre_read(dfuse_info, oh, ev);
 
 	return;
+preread_abort:
+	if (preread)
+		dfuse_pre_read_abort(dfuse_info, oh, ev, rc);
 decref:
 	active_ie_decref(dfuse_info, ie);
 err:
@@ -148,8 +169,6 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	/* Perform the opposite of what the ioctl call does, always change the open handle count
 	 * but the inode only tracks number of open handles with non-zero ioctl counts
 	 */
-
-	D_ASSERT(oh->doh_ie->ie_active);
 
 	DFUSE_TRA_DEBUG(oh, "Closing %d", oh->doh_caching);
 
@@ -189,8 +208,18 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		}
 	}
 	DFUSE_TRA_DEBUG(oh, "il_calls %d, caching %d,", il_calls, oh->doh_caching);
-	if (il_calls != 0) {
+	if (il_calls != 0)
 		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_il_count, 1);
+
+	/* Wait inflight readahead RPC finished before release */
+	if (oh->doh_ie->ie_active != NULL) {
+wait_readahead:
+		D_SPIN_LOCK(&oh->doh_ie->ie_active->lock);
+		if (oh->doh_readahead_inflight) {
+			D_SPIN_UNLOCK(&oh->doh_ie->ie_active->lock);
+			goto wait_readahead;
+		}
+		D_SPIN_UNLOCK(&oh->doh_ie->ie_active->lock);
 	}
 
 	if (oh->doh_evict_on_close) {

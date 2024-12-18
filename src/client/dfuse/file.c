@@ -14,7 +14,7 @@ static pthread_mutex_t alock = PTHREAD_MUTEX_INITIALIZER;
 
 /* Perhaps combine with dfuse_open_handle_init? */
 int
-active_ie_init(struct dfuse_inode_entry *ie, bool *preread)
+active_ie_init(struct dfuse_inode_entry *ie)
 {
 	uint32_t oc;
 	int      rc = -DER_SUCCESS;
@@ -25,11 +25,8 @@ active_ie_init(struct dfuse_inode_entry *ie, bool *preread)
 
 	DFUSE_TRA_DEBUG(ie, "Addref to %d", oc + 1);
 
-	if (oc != 0) {
-		if (preread && *preread)
-			*preread = false;
+	if (oc != 0)
 		goto out;
-	}
 
 	D_ALLOC_PTR(ie->ie_active);
 	if (!ie->ie_active)
@@ -43,13 +40,6 @@ active_ie_init(struct dfuse_inode_entry *ie, bool *preread)
 	D_INIT_LIST_HEAD(&ie->ie_active->chunks);
 	D_INIT_LIST_HEAD(&ie->ie_active->open_reads);
 	atomic_init(&ie->ie_active->read_count, 0);
-	if (preread && *preread) {
-		D_ALLOC_PTR(ie->ie_active->readahead);
-		if (ie->ie_active->readahead) {
-			D_INIT_LIST_HEAD(&ie->ie_active->readahead->req_list);
-			atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
-		}
-	}
 	/* Take a reference on the inode to prevent it being released */
 	atomic_fetch_add_relaxed(&ie->ie_ref, 1);
 out:
@@ -100,6 +90,15 @@ active_oh_decref(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh)
 
 	if (read_chunk_close(oh->doh_ie))
 		oh->doh_linear_read = true;
+
+	/* Invalid readahead cache */
+	if (oh->doh_ie->ie_active->readahead && oh->doh_ie->ie_active->readahead->dra_ev) {
+		struct dfuse_event *ev = oh->doh_ie->ie_active->readahead->dra_ev;
+
+		daos_event_fini(&ev->de_ev);
+		d_slab_release(ev->de_eqt->de_pre_read_slab, ev);
+		oh->doh_ie->ie_active->readahead->dra_ev = NULL;
+	}
 
 	/* Do not set linear read in the case where there's no reads or writes, this could be
 	 * simple open/close calls but it could also be cache use so leave the setting unchanged

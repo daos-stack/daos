@@ -1,5 +1,6 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2025 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -46,30 +47,45 @@ release:
 	daos_event_fini(&ev->de_ev);
 }
 
+/* read slave complete */
+static void
+dfuse_cb_slave_list_read_complete(struct dfuse_event *ev, struct dfuse_inode_entry *ie)
+{
+	struct dfuse_event  *evs, *evn;
+	d_list_t             cblist;
+	char                *buf = ev->de_iov.iov_buf;
+	struct active_inode *ia  = ie->ie_active;
+
+	D_INIT_LIST_HEAD(&cblist);
+	D_SPIN_LOCK(&ia->lock);
+	d_list_del(&ev->de_read_list);
+	d_list_for_each_entry_safe(evs, evn, &ev->de_read_slaves, de_read_list) {
+		d_list_move(&evs->de_read_list, &cblist);
+	}
+	D_SPIN_UNLOCK(&ia->lock);
+
+	d_list_for_each_entry(evs, &cblist, de_read_list) {
+		DFUSE_TRA_DEBUG(ev->de_oh, "concurrent network read %p", evs->de_oh);
+		d_list_del(&evs->de_read_list);
+		evs->de_len         = min(ev->de_len, evs->de_req_len);
+		evs->de_ev.ev_error = ev->de_ev.ev_error;
+		if (ia->readahead && ia->readahead->complete)
+			DFUSE_IE_STAT_ADD(ie, DS_PRE_READ);
+		D_ASSERT(evs->de_req_position >= ev->de_req_position);
+		memcpy(evs->de_iov.iov_buf, buf + (evs->de_req_position - ev->de_req_position),
+		       evs->de_len);
+		evs->de_complete_cb(evs);
+	}
+}
+
 static void
 dfuse_cb_read_complete(struct dfuse_event *ev)
 {
-	struct dfuse_event *evs, *evn;
+	/* check slave list first */
+	dfuse_cb_slave_list_read_complete(ev, ev->de_oh->doh_ie);
 
-	D_SPIN_LOCK(&ev->de_oh->doh_ie->ie_active->lock);
-	d_list_del(&ev->de_read_list);
-	D_SPIN_UNLOCK(&ev->de_oh->doh_ie->ie_active->lock);
-
-	d_list_for_each_entry(evs, &ev->de_read_slaves, de_read_list) {
-		DFUSE_TRA_DEBUG(ev->de_oh, "concurrent network read %p", evs->de_oh);
-		evs->de_len         = min(ev->de_len, evs->de_req_len);
-		evs->de_ev.ev_error = ev->de_ev.ev_error;
-		cb_read_helper(evs, ev->de_iov.iov_buf);
-	}
-
+	/* Then complete itself */
 	cb_read_helper(ev, ev->de_iov.iov_buf);
-
-	d_list_for_each_entry_safe(evs, evn, &ev->de_read_slaves, de_read_list) {
-		d_list_del(&evs->de_read_list);
-		d_slab_restock(evs->de_eqt->de_read_slab);
-		d_slab_release(evs->de_eqt->de_read_slab, evs);
-	}
-
 	d_slab_restock(ev->de_eqt->de_read_slab);
 	d_slab_release(ev->de_eqt->de_read_slab, ev);
 }
@@ -121,32 +137,14 @@ dfuse_readahead_reply(fuse_req_t req, size_t len, off_t position, struct dfuse_o
 {
 	struct active_inode *active = oh->doh_ie->ie_active;
 
-	D_SPIN_LOCK(&active->lock);
-	if (!active->readahead->complete) {
-		struct read_req *rr;
-
-		D_ALLOC_PTR(rr);
-		if (!rr) {
-			D_SPIN_UNLOCK(&active->lock);
-			return false;
-		}
-		rr->req      = req;
-		rr->len      = len;
-		rr->position = position;
-		rr->oh       = oh;
-		d_list_add_tail(&rr->list, &active->readahead->req_list);
-		D_SPIN_UNLOCK(&active->lock);
-		return true;
-	}
-	D_SPIN_UNLOCK(&active->lock);
-
 	if (active->readahead->dra_rc) {
 		DFUSE_REPLY_ERR_RAW(oh, req, active->readahead->dra_rc);
 		return true;
 	}
 
-	if (!oh->doh_linear_read || active->readahead->dra_ev == NULL) {
-		DFUSE_TRA_DEBUG(oh, "Pre read disabled");
+	if (!oh->doh_linear_read || active->readahead->dra_ev == NULL ||
+	    !active->readahead->complete) {
+		DFUSE_TRA_DEBUG(oh, "Pre read disabled or not completed");
 		return false;
 	}
 
@@ -156,8 +154,10 @@ dfuse_readahead_reply(fuse_req_t req, size_t len, off_t position, struct dfuse_o
 		 * later checks will determine if the file is read to the end.
 		 */
 		oh->doh_linear_read_pos = max(oh->doh_linear_read_pos, position + len);
-	} else if (oh->doh_linear_read_pos != position) {
-		DFUSE_TRA_DEBUG(oh, "disabling pre read");
+	} else if ((position + len) <= active->readahead->dra_ev->de_readahead_len) {
+		DFUSE_TRA_DEBUG(oh, "disabling pre read %llu  pos %zu != %zu",
+				(unsigned long long)oh->doh_ie->ie_stat.st_ino,
+				oh->doh_linear_read_pos, position);
 		return false;
 	} else {
 		oh->doh_linear_read_pos = position + len;
@@ -183,6 +183,37 @@ pick_eqt(struct dfuse_info *dfuse_info)
 	return &dfuse_info->di_eqt[eqt_idx % dfuse_info->di_eq_count];
 }
 
+/**
+ * Check for open matching reads, if there are multiple readers of the same file offset
+ * then chain future requests off the first one to avoid extra network round-trips.  This
+ * can and does happen even with caching enabled if there are multiple client processes.
+ *
+ * Return true if there are inflight reads can satisfy the read, otherwise return false.
+ */
+static bool
+check_inflight_fetch(struct active_inode *active, struct dfuse_event *ev)
+{
+	struct dfuse_event *evc;
+
+	if (active == NULL)
+		return false;
+
+	D_SPIN_LOCK(&active->lock);
+	d_list_for_each_entry(evc, &active->open_reads, de_read_list) {
+		if (ev->de_req_position >= evc->de_req_position &&
+		    (ev->de_req_len + ev->de_req_position) <=
+			(evc->de_req_len + evc->de_req_position)) {
+			d_list_add(&ev->de_read_list, &evc->de_read_slaves);
+			D_SPIN_UNLOCK(&active->lock);
+			return true;
+		}
+	}
+	d_list_add_tail(&ev->de_read_list, &active->open_reads);
+	D_SPIN_UNLOCK(&active->lock);
+
+	return false;
+}
+
 /* Chunk read and coalescing
  *
  * This code attempts to predict application and kernel I/O patterns and preemptively read file
@@ -206,18 +237,18 @@ pick_eqt(struct dfuse_info *dfuse_info)
 #define CHUNK_SIZE (1024 * 1024)
 
 struct read_chunk_data {
-	struct dfuse_event   *ev;
-	struct active_inode  *ia;
-	fuse_req_t            reqs[8];
-	struct dfuse_obj_hdl *ohs[8];
-	d_list_t              list;
-	uint64_t              bucket;
-	struct dfuse_eq      *eqt;
-	int                   rc;
-	int                   entered;
-	ATOMIC int            exited;
-	bool                  exiting;
-	bool                  complete;
+	struct dfuse_event       *ev;
+	struct dfuse_inode_entry *ie;
+	fuse_req_t                reqs[8];
+	struct dfuse_obj_hdl     *ohs[8];
+	d_list_t                  list;
+	uint64_t                  bucket;
+	struct dfuse_eq          *eqt;
+	int                       rc;
+	int                       entered;
+	ATOMIC int                exited;
+	bool                      exiting;
+	bool                      complete;
 };
 
 static void
@@ -261,10 +292,11 @@ out:
 static void
 chunk_cb(struct dfuse_event *ev)
 {
-	struct read_chunk_data *cd = ev->de_cd;
-	struct active_inode    *ia = cd->ia;
-	fuse_req_t              req;
-	bool                    done = false;
+	struct read_chunk_data   *cd = ev->de_cd;
+	struct dfuse_inode_entry *ie = cd->ie;
+	struct active_inode      *ia = ie->ie_active;
+	fuse_req_t                req;
+	bool                      done = false;
 
 	cd->rc = ev->de_ev.ev_error;
 
@@ -274,6 +306,7 @@ chunk_cb(struct dfuse_event *ev)
 			cd->bucket, cd->bucket * CHUNK_SIZE, CHUNK_SIZE, ev->de_len);
 	}
 
+	dfuse_cb_slave_list_read_complete(ev, ie);
 	daos_event_fini(&ev->de_ev);
 
 	do {
@@ -344,23 +377,29 @@ chunk_fetch(fuse_req_t req, struct dfuse_obj_hdl *oh, struct read_chunk_data *cd
 		return false;
 	}
 
-	ev->de_iov.iov_len = CHUNK_SIZE;
-	ev->de_req         = req;
-	ev->de_cd          = cd;
-	ev->de_sgl.sg_nr   = 1;
-	ev->de_len         = 0;
-	ev->de_complete_cb = chunk_cb;
+	ev->de_iov.iov_len  = CHUNK_SIZE;
+	ev->de_req          = req;
+	ev->de_cd           = cd;
+	ev->de_sgl.sg_nr    = 1;
+	ev->de_len          = 0;
+	ev->de_complete_cb  = chunk_cb;
+	ev->de_req_len      = CHUNK_SIZE;
+	ev->de_req_position = position;
 
 	cd->ev         = ev;
 	cd->eqt        = eqt;
 	cd->reqs[slot] = req;
 	cd->ohs[slot]  = oh;
 
+	if (check_inflight_fetch(ie->ie_active, ev))
+		goto out;
+
 	rc = dfs_read(ie->ie_dfs->dfs_ns, ie->ie_obj, &ev->de_sgl, position, &ev->de_len,
 		      &ev->de_ev);
 	if (rc != 0)
 		goto err;
 
+out:
 	/* Send a message to the async thread to wake it up and poll for events */
 	sem_post(&eqt->de_sem);
 
@@ -423,7 +462,7 @@ chunk_read(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
 	if (cd == NULL)
 		goto err;
 
-	cd->ia     = ie->ie_active;
+	cd->ie     = ie;
 	cd->bucket = bucket;
 	submit     = true;
 
@@ -465,6 +504,7 @@ found:
 				 */
 				rcb = false;
 			} else {
+				DFUSE_IE_STAT_ADD(ie, DS_PRE_READ);
 				DFUSE_TRA_DEBUG(oh, "%#zx-%#zx read", position,
 						position + K128 - 1);
 				DFUSE_REPLY_BUFQ(oh, req, ev->de_iov.iov_buf + (slot * K128), K128);
@@ -490,7 +530,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	struct active_inode  *active     = oh->doh_ie->ie_active;
 	struct dfuse_info    *dfuse_info = fuse_req_userdata(req);
 	bool                  mock_read  = false;
-	struct dfuse_eq      *eqt;
+	struct dfuse_eq      *eqt        = NULL;
 	int                   rc;
 	struct dfuse_event   *ev;
 
@@ -504,10 +544,12 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 
 		if (active->readahead)
 			DFUSE_IE_STAT_ADD(oh->doh_ie, DS_PRE_READ);
+
 		DFUSE_REPLY_BUFQ(oh, req, NULL, 0);
 		return;
 	}
 
+	/* Then check if the request can be filled by readahead */
 	if (active->readahead && dfuse_readahead_reply(req, len, position, oh))
 		return;
 
@@ -552,35 +594,17 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	}
 
 	ev->de_complete_cb = dfuse_cb_read_complete;
-
 	DFUSE_IE_WFLUSH(oh->doh_ie);
 
-	/* Check for open matching reads, if there are multiple readers of the same file offset
-	 * then chain future requests off the first one to avoid extra network round-trips.  This
-	 * can and does happen even with caching enabled if there are multiple client processes.
-	 */
-	D_SPIN_LOCK(&active->lock);
-	{
-		struct dfuse_event *evc;
-
-		d_list_for_each_entry(evc, &active->open_reads, de_read_list) {
-			if (ev->de_req_position == evc->de_req_position &&
-			    ev->de_req_len <= evc->de_req_len) {
-				d_list_add(&ev->de_read_list, &evc->de_read_slaves);
-				D_SPIN_UNLOCK(&active->lock);
-				return;
-			}
-		}
-		d_list_add_tail(&ev->de_read_list, &active->open_reads);
-	}
-	D_SPIN_UNLOCK(&active->lock);
+	if (check_inflight_fetch(active, ev))
+		goto out;
 
 	rc = dfs_read(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, position, &ev->de_len, &ev->de_ev);
 	if (rc != 0) {
 		D_GOTO(err, rc);
 		return;
 	}
-
+out:
 	/* Send a message to the async thread to wake it up and poll for events */
 	sem_post(&eqt->de_sem);
 
@@ -599,29 +623,19 @@ err:
 static void
 pre_read_mark_done(struct active_inode *active)
 {
-	struct read_req *rr, *rrn;
-
 	D_SPIN_LOCK(&active->lock);
 	active->readahead->complete = true;
 	D_SPIN_UNLOCK(&active->lock);
-
-	/* No lock is held here as after complete is set then nothing further is added */
-	d_list_for_each_entry_safe(rr, rrn, &active->readahead->req_list, list) {
-		d_list_del(&rr->list);
-		readahead_actual_reply(active, rr);
-		D_FREE(rr);
-	}
 }
 
 static void
 dfuse_cb_pre_read_complete(struct dfuse_event *ev)
 {
 	struct dfuse_info        *dfuse_info = ev->de_di;
-	struct dfuse_inode_entry *ie         = ev->de_ie;
+	struct dfuse_inode_entry *ie         = ev->de_oh->doh_ie;
 	struct active_inode      *active     = ie->ie_active;
 
 	active->readahead->dra_rc = ev->de_ev.ev_error;
-
 	if (ev->de_ev.ev_error != 0) {
 		active->readahead->dra_rc = ev->de_ev.ev_error;
 		daos_event_fini(&ev->de_ev);
@@ -639,36 +653,98 @@ dfuse_cb_pre_read_complete(struct dfuse_event *ev)
 		active->readahead->dra_ev = NULL;
 	}
 	pre_read_mark_done(active);
+
+	dfuse_cb_slave_list_read_complete(ev, ie);
 	/* Drop the extra ref on active, the file could be closed before this read completes */
 	active_ie_decref(dfuse_info, ie);
+	ev->de_oh->doh_readahead_inflight = 0;
 }
 
-void
-dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
+static int
+active_ie_readahead_init(struct dfuse_inode_entry *ie)
+{
+	struct active_inode *ie_active = ie->ie_active;
+
+	D_ASSERT(ie_active != NULL);
+	if (ie_active->readahead != NULL)
+		return 0;
+
+	D_ALLOC_PTR(ie_active->readahead);
+	if (ie_active->readahead == NULL)
+		return -DER_NOMEM;
+
+	D_INIT_LIST_HEAD(&ie_active->readahead->req_list);
+
+	return 0;
+}
+
+int
+dfuse_pre_read_init(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
+		    struct dfuse_event **evp)
 {
 	struct active_inode *active = ie->ie_active;
-	struct dfuse_eq    *eqt;
-	int                 rc;
-	struct dfuse_event *ev;
+	struct dfuse_eq     *eqt;
+	struct dfuse_event  *ev;
 	size_t               len = ie->ie_stat.st_size;
 
 	eqt = pick_eqt(dfuse_info);
 	ev = d_slab_acquire(eqt->de_pre_read_slab);
 	if (ev == NULL)
-		D_GOTO(err, rc = ENOMEM);
+		return ENOMEM;
 
 	ev->de_iov.iov_len   = len;
 	ev->de_req           = 0;
 	ev->de_sgl.sg_nr     = 1;
-	ev->de_ie            = ie;
 	ev->de_readahead_len = len;
 	ev->de_req_position  = 0;
-	ev->de_di            = dfuse_info;
 
-	ev->de_complete_cb        = dfuse_cb_pre_read_complete;
+	ev->de_complete_cb = dfuse_cb_pre_read_complete;
+
+	if (active->readahead == NULL) {
+		int rc;
+
+		rc = active_ie_readahead_init(ie);
+		if (rc != 0) {
+			d_slab_release(ev->de_eqt->de_pre_read_slab, ev);
+			return rc;
+		}
+	}
 	active->readahead->dra_ev = ev;
 
-	rc = dfs_read(ie->ie_dfs->dfs_ns, ie->ie_obj, &ev->de_sgl, 0, &ev->de_len, &ev->de_ev);
+	/* NB: the inode_entry has been locked by ie_read_lock */
+	d_list_add_tail(&ev->de_read_list, &active->open_reads);
+
+	*evp = ev;
+	return 0;
+}
+
+void
+dfuse_pre_read_abort(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh,
+		     struct dfuse_event *ev, int rc)
+{
+	struct active_inode *active = oh->doh_ie->ie_active;
+
+	oh->doh_readahead_inflight = 0;
+	active->readahead->dra_rc  = rc;
+	if (ev) {
+		daos_event_fini(&ev->de_ev);
+		d_slab_release(ev->de_eqt->de_pre_read_slab, ev);
+		active->readahead->dra_ev = NULL;
+	}
+	active_ie_decref(dfuse_info, oh->doh_ie);
+	pre_read_mark_done(active);
+}
+
+void
+dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh, struct dfuse_event *ev)
+{
+	struct dfuse_eq *eqt = ev->de_eqt;
+	int              rc;
+
+	ev->de_oh = oh;
+	ev->de_di = dfuse_info;
+
+	rc = dfs_read(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, 0, &ev->de_len, &ev->de_ev);
 	if (rc != 0)
 		goto err;
 
@@ -680,12 +756,5 @@ dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 
 	return;
 err:
-	active->readahead->dra_rc = rc;
-	if (ev) {
-		daos_event_fini(&ev->de_ev);
-		d_slab_release(eqt->de_pre_read_slab, ev);
-		active->readahead->dra_ev = NULL;
-	}
-	active_ie_decref(dfuse_info, ie);
-	pre_read_mark_done(active);
+	dfuse_pre_read_abort(dfuse_info, oh, ev, rc);
 }
