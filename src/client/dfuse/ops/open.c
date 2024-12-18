@@ -198,8 +198,7 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		atomic_fetch_add_relaxed(&ie->ie_ref, 1);
 	}
 
-	if (active_oh_decref(dfuse_info, oh))
-		oh->doh_linear_read = true;
+	active_oh_decref(dfuse_info, oh);
 
 	rc = dfs_release(oh->doh_obj);
 	if (rc == 0) {
@@ -209,25 +208,13 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		oh->doh_ie = NULL;
 	}
 	if (oh->doh_parent_dir) {
-		bool use_linear_read = false;
-		bool set_linear_read = true;
-
-		if (oh->doh_linear_read) {
-			/* If the file was not read from then this could indicate a cached read
-			 * so do not disable pre-read for the directory.
-			 */
-			if (!oh->doh_linear_read_eof)
-				set_linear_read = false;
-			use_linear_read = true;
-		}
-
-		if (set_linear_read) {
+		if (oh->doh_set_linear_read) {
 			DFUSE_TRA_DEBUG(oh->doh_parent_dir, "Setting linear_read to %d",
-					use_linear_read);
+					oh->doh_linear_read);
 
-			atomic_store_relaxed(&oh->doh_parent_dir->ie_linear_read, use_linear_read);
+			atomic_store_relaxed(&oh->doh_parent_dir->ie_linear_read,
+					     oh->doh_linear_read);
 		}
-
 		dfuse_inode_decref(dfuse_info, oh->doh_parent_dir);
 	}
 	if (ie) {

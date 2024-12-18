@@ -168,16 +168,23 @@ struct dfuse_obj_hdl {
 	/* Pointer to the last returned drc entry */
 	struct dfuse_readdir_c   *doh_rd_nextc;
 
-	/* Linear read function, if a file is read from start to end then this normally requires
-	 * a final read request at the end of the file that returns zero bytes.  Detect this case
-	 * and when the final read is detected then just return without a round trip.
-	 * Store a flag for this being enabled (starts as true, but many I/O patterns will set it
-	 * to false), the expected position of the next read and a boolean for if EOF has been
-	 * detected.
+	/* Linear read tracking.  If a file is opened and read from start to finish then this is
+	 * called a linear read, linear reads however may or may not read EOF at the end of a file,
+	 * as the reader may be checking the file size.
+	 *
+	 * Detect this case and track it at the file handle level, this is then used in two places:
+	 *  For read of EOF it means the round-trip can be avoided.
+	 *  On release we can use this flag to apply a setting to the directory inode.
+	 *
+	 * This flag starts enabled and many I/O patterns will disable it.  We also store the next
+	 * expected read position and if EOF has been reached.
 	 */
+
 	off_t                     doh_linear_read_pos;
 	bool                      doh_linear_read;
 	bool                      doh_linear_read_eof;
+
+	bool                      doh_set_linear_read;
 
 	/** True if caching is enabled for this file. */
 	bool                      doh_caching;
@@ -1027,6 +1034,7 @@ struct active_inode {
 	d_list_t               chunks;
 	d_list_t               open_reads;
 	pthread_spinlock_t     lock;
+	ATOMIC uint64_t        read_count;
 	struct dfuse_pre_read *readahead;
 };
 
@@ -1035,7 +1043,7 @@ int
 active_ie_init(struct dfuse_inode_entry *ie, bool *preread);
 
 /* Mark a oh as closing and drop the ref on inode active */
-bool
+void
 active_oh_decref(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh);
 
 /* Decrease active count on inode, called on error where there is no oh */
