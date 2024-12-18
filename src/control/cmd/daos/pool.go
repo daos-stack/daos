@@ -310,6 +310,7 @@ func queryPool(poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (*daos.Poo
 	if queryMask.HasOption(daos.PoolQueryOptionEnabledEngines) && queryMask.HasOption(daos.PoolQueryOptionDisabledEngines) {
 		enaQm := queryMask
 		enaQm.ClearOptions(daos.PoolQueryOptionDisabledEngines)
+		cPoolInfo.pi_bits = C.uint64_t(enaQm)
 		rc = C.daos_pool_query(poolHdl, &enabledRanks, &cPoolInfo, nil, nil)
 		if err := daosError(rc); err != nil {
 			return nil, err
