@@ -1,0 +1,660 @@
+name: Bullseye Code Coverage
+
+env:
+  # TODO: Surely this is a GH variable of some sort for the name of the repo
+  NAME: daos
+  NEXT_VERSION_master: 1000
+  # Which distros to build for
+  COVFN_DISABLED: false
+  # see https://github.com/organizations/daos-stack/settings/variables/actions for
+  # the organizational defaults values for these variables
+  # TODO: we really need to define a list of supported versions (ideally it's no more than 2)
+  #       build is done on the lowest version and test on the highest with a "sanity test"
+  #       stage done on all versions in the list ecept the highest
+  EL8_BUILD_VERSION: ${{ vars.EL8_BUILD_VERSION_MASTER }}
+  EL8_VERSION: ${{ vars.EL8_VERSION_MASTER }}
+  EL9_BUILD_VERSION: ${{ vars.EL9_BUILD_VERSION_MASTER }}
+  EL9_VERSION: ${{ vars.EL9_VERSION_MASTER }}
+  LEAP15_VERSION: ${{ vars.LEAP15_VERSION_MASTER }}
+  # Which distros to build for
+  TEST_TAG: ${{ vars.TEST_TAG }}
+  PACKAGING_DIR: ${{ vars.PACKAGING_DIR }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr-repos:
+        description: 'Any PR-repos that you want included in this build'
+        required: false
+      commit-message:
+        description: 'Commit message to use rather than the one from git'
+        required: false
+      rpm-test-version:
+        description: 'RPM version to test'
+        required: false
+      test-tag:
+        description: 'Test tag to use'
+        required: false
+      functional-test-distros-json:
+        # yamllint disable-line rule:line-length
+        description: 'Distros to run Functional testing on in a JSON array (i.e. ["el8", "el9", "leap15", "etc."])'
+        required: false
+      functional-test-distros:
+        description: 'Distros to run Functional testing on (i.e. el8 el9 leap15, etc.)'
+        required: false
+  schedule:
+    - cron: "0 0 * * 6"     # Every Saturday
+
+
+concurrency:
+  group: bullseye-coverage-${{ github.head_ref  || github.run_id }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -ueo pipefail {0}
+
+permissions: {}
+
+jobs:
+  Variables:
+    # What a dumb jobs this is
+    # Needed because of https://github.com/orgs/community/discussions/26671
+    # Ideally want to be able to use:
+    # with:
+    #    NAME: ${{ env.NAME }}
+    # in the Call-RPM-Build job but the above issue prevents it
+    name: Compute outputs
+    runs-on: [self-hosted, light]
+    outputs:
+      NAME: ${{ env.NAME }}
+      DISTROS: ${{ env.COVFN_DISABLED == 'true' && vars.DISTROS_MASTER ||
+                                                   vars.COVERAGE_DISTROS_MASTER }}
+      EL8_BUILD_VERSION: ${{ env.EL8_BUILD_VERSION }}
+      EL9_BUILD_VERSION: ${{ env.EL9_BUILD_VERSION }}
+      LEAP15_VERSION: ${{ env.LEAP15_VERSION }}
+      PACKAGING_DIR: ${{ env.PACKAGING_DIR }}
+      COVFN_DISABLED: ${{ env.COVFN_DISABLED }}
+      TEST_TAG: ${{ env.TEST_TAG }}
+    steps:
+      - name: Make outputs from env variables
+        run: echo "Make outputs from env variables"
+
+  Call-RPM-Build:
+    name: Build RPM
+    needs: Variables
+    if: inputs.rpm-test-version == ''
+    permissions:
+      statuses: write
+    uses: daos-stack/actions-lib/.github/workflows/rpm-build.yml@v1
+    secrets: inherit
+    with:
+      NAME: ${{ needs.Variables.outputs.NAME }}
+      DISTROS: ${{ needs.Variables.outputs.DISTROS }}
+      EL8_BUILD_VERSION: ${{ needs.Variables.outputs.EL8_BUILD_VERSION }}
+      EL9_BUILD_VERSION: ${{ needs.Variables.outputs.EL9_BUILD_VERSION }}
+      LEAP15_VERSION: ${{ needs.Variables.outputs.LEAP15_VERSION }}
+      PACKAGING_DIR: ${{ needs.Variables.outputs.PACKAGING_DIR }}
+      COVFN_DISABLED: ${{ fromJSON(needs.Variables.outputs.COVFN_DISABLED) }}
+
+  Calc-functional-matrix:
+    name: Calculate Functional Testing Matrix
+    runs-on: [self-hosted, wolf]
+    needs: Call-RPM-Build
+    if: |
+        (needs.Call-RPM-Build.outputs.run-gha == 'true' ||
+         github.event_name == 'workflow_dispatch') &&
+        ((!cancelled()) || success() || failure())
+    outputs:
+      matrix: ${{ steps.matrix.outputs.text }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Import commit pragmas
+        uses: daos-stack/action-import-commit-pragmas@v1
+        with:
+          commit-message: ${{ needs.Call-RPM-Build.outputs.dequoted-commit-message }}
+      - name: Calculate Functional Testing Matrix
+        id: matrix
+        run: |  # do not use the non-| format for this script
+             . ci/gha_functions.sh
+             set -eu
+             # it might seem tempting to factor in the result of the build for this
+             # distro here and not include a failed build in the test matrix but
+             # the problem with that is that if/when the user asks GHA to rebuild
+             # all failed jobs and a previously failed RPM job is successful, the
+             # test matrix won't include testing it since it was calculated and was
+             # successful on the previous run without the failed build stage in it
+             # Use inputs.functional-test-distros-json if it was given
+             if [ -n '${{ inputs.functional-test-distros-json }}' ]; then
+                 echo 'text=${{ inputs.functional-test-distros-json }}' >> $GITHUB_OUTPUT
+                 echo 'Using JSON input parameter instead of calculating'
+                 cat $GITHUB_OUTPUT
+                 exit 0
+             fi
+             l=()
+             trap 'echo "text=[$(IFS=","; echo "${l[*]}")]" >> $GITHUB_OUTPUT; \
+                   cat $GITHUB_OUTPUT' EXIT
+             # Use inputs.functional-test-distros if it was given
+             if [ -n '${{ inputs.functional-test-distros }}' ]; then
+                 ds=(${{ inputs.functional-test-distros }})
+                 for d in "${ds[@]}"; do
+                     l+=("\"$d\"")
+                 done
+                 echo 'Using input parameter instead of calculating'
+                 exit 0
+             fi
+             if ${CP_SKIP_FUNC_TEST:-false}; then
+                 exit 0
+             fi
+             if ! cd src/tests/ftest; then
+                 echo "src/tests/ftest doesn't exist."
+                 echo "Could not determine if tests exist for this stage, assuming they do."
+                 exit 0
+             fi
+
+             if ./launch.py --list "$(get_test_tags "vm")"; then
+                 if ! ${CP_SKIP_BUILD_EL8_RPM:-false} &&
+                    ! ${CP_SKIP_FUNC_TEST_EL8:-false}; then
+                     # it would definitely be nicer to get these into the environment
+                     # as unquoted strings so that we didn't have to double quote here
+                     l+=('"el8"')
+                 fi
+                 if ${{ github.event_name == 'push' }} ||
+                    (${{ github.event_name == 'pull_request' }} &&
+                    ! ${CP_SKIP_BUILD_EL9_RPM:-false} &&
+                    ! ${CP_SKIP_FUNC_TEST_EL9:-true}); then
+                     l+=('"el9"')
+                 fi
+                 if ${{ github.event_name == 'push' }} ||
+                    (${{ github.event_name == 'pull_request' }} &&
+                    ! ${CP_SKIP_BUILD_LEAP15_RPM:-false} &&
+                    ! ${CP_SKIP_FUNC_TEST_LEAP15:-true}); then
+                     l+=('"leap15"')
+                 fi
+             fi
+
+  Functional:
+    name: Functional Testing
+    runs-on: [self-hosted, wolf]
+    permissions:
+      statuses: write
+      # https://github.com/EnricoMi/publish-unit-test-result-action#permissions
+      checks: write
+      pull-requests: write
+    timeout-minutes: 7200
+    needs: [Calc-functional-matrix, Call-RPM-Build]
+    strategy:
+      matrix:
+        distro: ${{ fromJSON(needs.Calc-functional-matrix.outputs.matrix) }}
+      fail-fast: false
+    # https://github.com/actions/runner/issues/491#issuecomment-926924523
+    if: |
+        (needs.Call-RPM-Build.outputs.run-gha == 'true' ||
+         github.event_name == 'workflow_dispatch') &&
+        needs.Calc-functional-matrix.outputs.matrix != '[]' &&
+        (!cancelled()) &&
+        (needs.Call-RPM-Build.result == 'success' ||
+         needs.Call-RPM-Build.result == 'skipped')
+    env:
+      CONFIG_POWER_ONLY: false
+      PRAGMA_SUFFIX: -vm
+      OPERATIONS_EMAIL: brian.murrell@intel.com
+      TEST_RPMS: true
+      COMMIT_MESSAGE: ${{ needs.Call-RPM-Build.outputs.commit-message }}
+      JENKINS_URL: https://build.hpdd.intel.com/
+      REPOSITORY_URL: https://repo.dc.hpdd.intel.com/
+      REMOVE_EXISTING_RPMS: false
+      # TODO -- this should be on stable, backedup storage
+      ARTIFACTS_URL: file:///scratch/job_repos/
+      REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
+      # keep VS Code's GHA linting happy
+      NODESTRING:
+      CP_PR_REPOS:
+      CP_FEATURES:
+      CP_TEST_TAG:
+      CP_EL8_VM9_LABEL:
+      CP_EL9_VM9_LABEL:
+      CP_LEAP15_VM9_LABEL:
+      CP_PRIORITY:
+      CP_EL8_VERSION:
+      CP_EL9_VERSION:
+      CP_LEAP15_VERSION:
+      CP_RPM_TEST_VERSION:
+      DISTRO:
+      CLUSTER_REQUEST_reqid:
+      STAGE_NAME:
+      QUEUE_URL:
+      LABEL:
+      STAGE_TAGS:
+      FTEST_ARG:
+      DISTRO_NAME:
+      DISTRO_VERSION:
+      COMMIT_STATUS_DISTRO_VERSION:
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 500
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Import commit pragmas
+        uses: daos-stack/action-import-commit-pragmas@v1
+        with:
+          commit-message: ${{ needs.Call-RPM-Build.outputs.dequoted-commit-message }}
+      - name: Set variables
+        run: |
+            set -eux
+            env
+            STAGE_TAGS="vm"
+            FTEST_ARG=""
+            TARGET=${{ github.event_name == 'pull_request' &&
+                       github.event.pull_request.base.ref || github.ref }}
+            echo ${{ format('{0}', github.event.pull_request.base.ref) }}
+            echo "NEXT_VERSION == \"${{ env.NEXT_VERSION_[format('{0}',
+                                                         github.event.pull_request.base.ref)] }}\""
+            TARGET="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+            INST_RPMS=daos-{server,client,tests{,-internal},serialize}
+            # TODO: replace 'master' below with the actual [target, in the case of PRs] branch name
+            if [ -n '${{ inputs.rpm-test-version }}' ]; then
+                DAOS_VERSION='-${{ inputs.rpm-test-version }}'
+            elif [ -n "${{ env.CP_RPM_TEST_VERSION }}" ]; then
+                DAOS_VERSION="-${{ env.CP_RPM_TEST_VERSION }}"
+            else
+                DAOS_VERSION=" < ${{ env.NEXT_VERSION_master }}"
+            fi
+            case '${{ matrix.distro }}' in
+                'el8')
+                    CHROOT_NAME="rocky+epel-8-x86_64"
+                    DISTRO_NAME="EL"
+                    DISTRO_NAME_UPPER="EL"
+                    DISTRO_NAME_LOWER="el"
+                    DISTRO_VERSION='${{ env.CP_EL8_VERSION &&
+                                        env.CP_EL8_VERSION || env.EL8_VERSION }}'
+                    DISTRO_VERSION_MAJOR="8"
+                    OPENMPI="openmpi"
+                    LABEL='${{ env.CP_EL8_VM9_LABEL &&
+                               env.CP_EL8_VM9_LABEL || 'all_vm9' }}'
+                    ;;
+                'el9')
+                    CHROOT_NAME="rocky+epel-9-x86_64"
+                    DISTRO_NAME="EL"
+                    DISTRO_NAME_UPPER="EL"
+                    DISTRO_NAME_LOWER="el"
+                    DISTRO_VERSION='${{ env.CP_EL9_VERSION &&
+                                        env.CP_EL9_VERSION || env.EL9_VERSION }}'
+                    DISTRO_VERSION_MAJOR="9"
+                    PROV_DISTRO_VERSION_MAJOR="8"
+                    OPENMPI="openmpi"
+                    LABEL='${{ env.CP_EL9_VM9_LABEL &&
+                               env.CP_EL9_VM9_LABEL || 'all_vm9' }}'
+                    ;;
+                'leap15')
+                    CHROOT_NAME='opensuse-leap-${{ env.CP_LEAP15_VERSION &&
+                                                   env.CP_LEAP15_VERSION ||
+                                                   env.LEAP15_VERSION }}-x86_64'
+                    DISTRO_NAME="Leap"
+                    DISTRO_NAME_UPPER="LEAP"
+                    DISTRO_NAME_LOWER="leap"
+                    DISTRO_VERSION='${{ env.CP_LEAP15_VERSION &&
+                                        env.CP_LEAP15_VERSION || env.LEAP15_VERSION }}'
+                    DISTRO_VERSION_MAJOR="15"
+                    OPENMPI="openmpi3"
+                    LABEL='${{ env.CP_LEAP15_VM9_LABEL &&
+                               env.CP_LEAP15_VM9_LABEL || 'all_vm9' }}'
+                    ;;
+            esac
+            echo "CHROOT_NAME=$CHROOT_NAME" >> $GITHUB_ENV
+            echo "DISTRO_NAME=$DISTRO_NAME" >> $GITHUB_ENV
+            echo "DISTRO_VERSION=$DISTRO_VERSION" >> $GITHUB_ENV
+            echo "DISTRO_WITH_VERSION=$DISTRO_NAME_LOWER$DISTRO_VERSION" >> $GITHUB_ENV
+            echo "BUILD_CHROOT=/var/lib/mock/$CHROOT_NAME"'-${{ github.run_id }}/' >> $GITHUB_ENV
+            echo "STAGE_NAME=Functional on $DISTRO_NAME $DISTRO_VERSION" >> $GITHUB_ENV
+            echo "STAGE_TAGS=$STAGE_TAGS" >> $GITHUB_ENV
+            echo "FTEST_ARG=$FTEST_ARG" >> $GITHUB_ENV
+            echo "DISTRO=${DISTRO_NAME_UPPER}_$DISTRO_VERSION_MAJOR" >> $GITHUB_ENV
+            echo -n "PROVISION_DISTRO=${DISTRO_NAME_UPPER}_" >> $GITHUB_ENV
+            echo "${PROV_DISTRO_VERSION_MAJOR:-$DISTRO_VERSION_MAJOR}" >> $GITHUB_ENV
+            echo -n "DAOS_STACK_${DISTRO_NAME_UPPER}_" >> $GITHUB_ENV
+            echo "${PROV_DISTRO_VERSION_MAJOR:-$DISTRO_VERSION_MAJOR}_LOCAL_REPO=not_used" >> \
+                 $GITHUB_ENV
+            echo "LABEL=$LABEL" >> $GITHUB_ENV
+            echo "INST_RPMS=$INST_RPMS" >> $GITHUB_ENV
+            echo "DAOS_VERSION=$DAOS_VERSION" >> $GITHUB_ENV
+      - name: Request and Provision a Cluster
+        timeout-minutes: 7200
+        uses: ./.github/actions/provision-cluster
+        with:
+          condition: env.CP_SKIP_FUNC_TEST-${{ env.DISTRO }} != 'true' && \
+                     env.CP_SKIP_FUNC_TEST != 'true'
+      - name: Run Test
+        timeout-minutes: 7200
+        if: env.CP_SKIP_FUNC_TEST-${{ env.DISTRO }} != 'true' && env.CP_SKIP_FUNC_TEST != 'true'
+        id: run-test
+        run: |
+          . ci/gha_functions.sh
+          if [ -n '${{ inputs.test-tag }}' ]; then
+              REQ_TEST_TAG='${{ inputs.test-tag }}'
+          elif [ -n '${{ env.CP_TEST_TAG }}' ]; then
+              REQ_TEST_TAG='${{ env.CP_TEST_TAG }}'
+          fi
+          NODE_COUNT="$NODE_COUNT"                                   \
+          TEST_TAG="$(get_test_tags ${{ env.STAGE_TAGS}})"           \
+          FTEST_ARG='${{ env.FTEST_ARG }}' ci/functional/test_main.sh
+      - name: Cancel cluster request (if cancelled after requesting)
+        if: cancelled()
+        run: |
+          set -eux
+          . ci/gha_functions.sh
+          if ! JENKINS_URL='${{ env.JENKINS_URL }}' QUEUE_URL='${{ env.QUEUE_URL }}' \
+               cancel_provision; then
+              # probably already provisioned and needs unprovisioning
+              if ! cleanup_provision_request '${{ env.CLUSTER_REQUEST_reqid }}'; then
+                  exit 1
+              fi
+          fi
+      - name: Job cleanup
+        if: (!cancelled() && (success() || failure()))
+        run: |
+          set -eux
+          . ci/gha_functions.sh
+          NODELIST=${{ env.NODESTRING }} ci/functional/job_cleanup.sh || true
+          cleanup_provision_request '${{ env.CLUSTER_REQUEST_reqid }}'
+      - name: Publish test results
+        if: (!cancelled()) && (success() || failure()) &&
+            steps.run-test.outcome != 'skipped'
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          check_name: ${{ env.STAGE_NAME }} Test Results
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          junit_files: ${{ env.STAGE_NAME }}/**/results.xml
+      - name: Publish artifacts
+        if: (!cancelled()) && (success() || failure()) &&
+            steps.run-test.outcome != 'skipped'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.STAGE_NAME }} artifacts
+          path: ${{ env.STAGE_NAME }}/**
+      - name: Upload test results
+        if: (success() || failure()) &&
+            steps.run-test.outcome != 'skipped'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.STAGE_NAME }} test-results
+          path: ${{ env.STAGE_NAME }}/**/results.xml
+      - name: Update commit status
+        if: contains(fromJSON('["push", "pull_request"]'), github.event_name)
+        uses: ouzi-dev/commit-status-updater@v2
+        with:
+          # yamllint disable-line rule:line-length
+          name: 'test/Functional on ${{ env.DISTRO_NAME }} ${{ env.COMMIT_STATUS_DISTRO_VERSION && env.COMMIT_STATUS_DISTRO_VERSION || env.DISTRO_VERSION }}'
+          status: "${{ job.status }}"
+          ignoreForks: false
+
+  Calc-functional-hardware-matrix:
+    name: Calculate Functional Hardware Testing Matrix
+    runs-on: [self-hosted, wolf]
+    needs: Call-RPM-Build
+    if: |
+        (needs.Call-RPM-Build.outputs.run-gha == 'true' ||
+         github.event_name == 'workflow_dispatch') &&
+        ((!cancelled()) || success() || failure())
+    env:
+      # keep VS Code's GHA linting happy
+      CP_TEST_TAG:
+    outputs:
+      matrix: ${{ steps.matrix.outputs.text }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Import commit pragmas
+        uses: daos-stack/action-import-commit-pragmas@v1
+        with:
+          commit-message: ${{ needs.Call-RPM-Build.outputs.dequoted-commit-message }}
+      - name: Calculate Functional Testing Matrix
+        id: matrix
+        run: |  # do not use the non-| format for this script
+             . ci/gha_functions.sh
+             set -eux
+             # it might seem tempting to factor in the result of the build for this
+             # distro here and not include a failed build in the test matrix but
+             # the problem with that is that if/when the user asks GHA to rebuild
+             # all faiiled jobs and a previously failed RPM job is successful, the
+             # test matrix won't include testing it since it was calculated and was
+             # successful on the previous run without the failed build stage in it
+             l=()
+             trap 'echo "text=[$(IFS=","; echo "${l[*]}")]" >> $GITHUB_OUTPUT; \
+                   cat $GITHUB_OUTPUT' EXIT
+             if ${CP_SKIP_FUNC_HW_TEST:-false}; then
+                 exit 0
+             fi
+             if ! cd src/tests/ftest; then
+                 echo "src/tests/ftest doesn't exist."
+                 echo "Could not determine if tests exist for this stage, assuming they do."
+                 exit 0
+             fi
+             if [ -n '${{ inputs.test-tag }}' ]; then
+                 REQ_TEST_TAG='${{ inputs.test-tag }}'
+             elif [ -n '${{ env.CP_TEST_TAG }}' ]; then
+                 REQ_TEST_TAG='${{ env.CP_TEST_TAG }}'
+             fi
+             if ! "${CP_SKIP_FUNC_HW_TEST_LARGE:-false}" &&
+                ./launch.py --list "$(get_test_tags "hw,large,-provider")"; then
+                 # it would definitely be nicer to get these into the environment
+                 # as unquoted strings so that we didn't have to double quote here
+                 l+=('"Large"')
+             fi
+             if ! ${CP_SKIP_FUNC_HW_TEST_MEDIUM:-false} &&
+                ./launch.py --list "$(get_test_tags "hw,medium,-provider")"; then
+                 l+=('"Medium"')
+             fi
+             if ! ${CP_SKIP_FUNC_HW_TEST_MEDIUM_VERBS_PROVIDER:-false} &&
+                ./launch.py --list "$(get_test_tags "hw,medium,provider")"; then
+                 l+=('"Medium Verbs Provider"')
+             fi
+             if ${{ github.event_name == 'push' }} &&
+                ! ${CP_SKIP_FUNC_HW_TEST_MEDIUM_UCX_PROVIDER:-false} &&
+                ./launch.py --list "$(get_test_tags "hw,medium,provider")"; then
+                 l+=('"Medium UCX Provider"')
+             fi
+
+  Functional_Hardware:
+    name: Functional Testing on Hardware
+    runs-on: [self-hosted, wolf]
+    permissions:
+      statuses: write
+      # https://github.com/EnricoMi/publish-unit-test-result-action#permissions
+      checks: write
+      pull-requests: write
+    timeout-minutes: 7200
+    needs: [Calc-functional-hardware-matrix,
+            Call-RPM-Build, Functional]
+    strategy:
+      matrix:
+        stage: ${{ fromJSON(needs.Calc-functional-hardware-matrix.outputs.matrix) }}
+      fail-fast: false
+    # https://github.com/actions/runner/issues/491#issuecomment-926924523
+    if: |
+        (needs.Call-RPM-Build.outputs.run-gha == 'true' ||
+         github.event_name == 'workflow_dispatch') &&
+        needs.Calc-functional-hardware-matrix.outputs.matrix != '[]' &&
+        (!cancelled()) &&
+        (needs.Call-RPM-Build.result == 'success' ||
+         needs.Call-RPM-Build.result == 'skipped') &&
+        (needs.Functional.result == 'success' ||
+         needs.Functional.result == 'skipped')
+    env:
+      CONFIG_POWER_ONLY: false
+      PRAGMA_SUFFIX: -vm
+      OPERATIONS_EMAIL: brian.murrell@intel.com
+      TEST_RPMS: true
+      COMMIT_MESSAGE: ${{ needs.Call-RPM-Build.outputs.commit-message }}
+      JENKINS_URL: https://build.hpdd.intel.com/
+      REPOSITORY_URL: https://repo.dc.hpdd.intel.com/
+      REMOVE_EXISTING_RPMS: false
+      # TODO -- this should be on stable, backedup storage
+      ARTIFACTS_URL: file:///scratch/job_repos/
+      REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
+      # keep VS Code's GHA linting happy
+      NODESTRING:
+      CP_PR_REPOS:
+      CP_TEST_TAG:
+      CP_HW_MEDIUM_LABEL:
+      CP_HW_LARGE_LABEL:
+      CP_PRIORITY:
+      CP_EL8_VERSION:
+      CP_EL8_TARGET:
+      CLUSTER_REQUEST_reqid:
+      STAGE_NAME:
+      QUEUE_URL:
+      LABEL:
+      COMMIT_STATUS_DISTRO_VERSION:
+      FTEST_ARG:
+      STAGE_TAGS:
+      SIZE:
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 500
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Import commit pragmas
+        uses: daos-stack/action-import-commit-pragmas@v1
+        with:
+          commit-message: ${{ needs.Call-RPM-Build.outputs.dequoted-commit-message }}
+      - name: Set variables
+        run: |
+            STAGE_TAGS="hw"
+            FTEST_ARG="--nvme=auto:-3DNAND"
+            INST_RPMS=daos-{server,client,tests{,-internal},serialize}
+            # TODO: replace 'master' below with the actual [target, in the case of PRs] branch name
+            if [ -n '${{ inputs.rpm-test-version }}' ]; then
+                DAOS_VERSION='-${{ inputs.rpm-test-version }}'
+            else
+                DAOS_VERSION=" < ${{ env.NEXT_VERSION_master }}"
+            fi
+            CHROOT_NAME="rocky+epel-8-x86_64"
+            DISTRO_NAME="EL"
+            DISTRO_NAME_UPPER="EL"
+            DISTRO_NAME_LOWER="el"
+            DISTRO_VERSION='${{ env.CP_EL8_TARGET &&
+                                env.CP_EL8_TARGET ||
+                                env.CP_EL8_VERSION &&
+                                env.CP_EL8_VERSION || env.EL8_VERSION }}'
+            DISTRO_VERSION_MAJOR="8"
+            if [[ '${{ matrix.stage }}' = Medium* ]]; then
+                LABEL=${{ env.CP_HW_MEDIUM_LABEL &&
+                          env.CP_HW_MEDIUM_LABEL || 'ci_nvme5' }}
+                STAGE_TAGS+=",medium"
+                SIZE="MEDIUM"
+            elif [[ '${{ matrix.stage }}' = Large* ]]; then
+                LABEL=${{ env.CP_HW_LARGE_LABEL &&
+                          env.CP_HW_LARGE_LABEL || 'ci_nvme9' }}
+                STAGE_TAGS+=",large"
+                SIZE="LARGE"
+            fi
+            if [[ '${{ matrix.stage }}' = *\ Provider ]]; then
+                STAGE_TAGS+=",provider"
+                if [[ '${{ matrix.stage }}' = *\ Verbs\ * ]]; then
+                  FTEST_ARG+=' --provider ofi+verbs'
+                elif [[ '${{ matrix.stage }}' = *\ UCX\ * ]]; then
+                  FTEST_ARG+=' --provider ucx+dc_x'
+                  INST_RPMS+=' mercury-ucx'
+                elif [[ '${{ matrix.stage }}' = *\ TCP\ * ]]; then
+                  FTEST_ARG+=' --provider ofi+tcp'
+                else
+                    echo 'Unknown provider in ${{ matrix.stage }}'
+                    exit 1
+                fi
+            else
+                STAGE_TAGS+=",-provider"
+            fi
+            echo "DISTRO_NAME=$DISTRO_NAME" >> $GITHUB_ENV
+            echo "DISTRO_VERSION=$DISTRO_VERSION" >> $GITHUB_ENV
+            echo "DISTRO_WITH_VERSION=$DISTRO_NAME_LOWER$DISTRO_VERSION" >> $GITHUB_ENV
+            echo 'STAGE_NAME=Functional Hardware ${{ matrix.stage }}' >> $GITHUB_ENV
+            echo "STAGE_TAGS=$STAGE_TAGS" >> $GITHUB_ENV
+            echo "FTEST_ARG=$FTEST_ARG" >> $GITHUB_ENV
+            echo "DISTRO=${DISTRO_NAME_UPPER}_$DISTRO_VERSION_MAJOR" >> $GITHUB_ENV
+            echo -n "PROVISION_DISTRO=${DISTRO_NAME_UPPER}_" >> $GITHUB_ENV
+            echo "${PROV_DISTRO_VERSION_MAJOR:-$DISTRO_VERSION_MAJOR}" >> $GITHUB_ENV
+            echo -n "DAOS_STACK_${DISTRO_NAME_UPPER}_" >> $GITHUB_ENV
+            echo "${PROV_DISTRO_VERSION_MAJOR:-$DISTRO_VERSION_MAJOR}_LOCAL_REPO=not_used" >> \
+                 $GITHUB_ENV
+            echo "LABEL=$LABEL" >> $GITHUB_ENV
+            echo "INST_RPMS=$INST_RPMS" >> $GITHUB_ENV
+            echo "DAOS_VERSION=$DAOS_VERSION" >> $GITHUB_ENV
+            echo "SIZE=$SIZE" >> $GITHUB_ENV
+      - name: Request and Provision a Cluster
+        timeout-minutes: 7200
+        uses: ./.github/actions/provision-cluster
+        with:
+          condition: env.CP_SKIP_FUNC_HW_TEST-${{ env.SIZE }} != 'true' && \
+                     env.CP_SKIP_FUNC_HW_TEST != 'true'
+      - name: Run Test
+        timeout-minutes: 7200
+        if: env.CP_SKIP_FUNC_HW_TEST-${{ env.SIZE }} != 'true' && env.CP_SKIP_FUNC_HW_TEST != 'true'
+        id: run-test
+        run: |
+          . ci/gha_functions.sh
+          if [ -n '${{ inputs.test-tag }}' ]; then
+              REQ_TEST_TAG='${{ inputs.test-tag }}'
+          elif [ -n '${{ env.CP_TEST_TAG }}' ]; then
+              REQ_TEST_TAG='${{ env.CP_TEST_TAG }}'
+          fi
+          NODE_COUNT="$NODE_COUNT"                                   \
+          TEST_TAG="$(get_test_tags ${{ env.STAGE_TAGS}})"           \
+          FTEST_ARG='${{ env.FTEST_ARG }}' ci/functional/test_main.sh
+      - name: Cancel cluster request (if cancelled after requesting)
+        if: cancelled()
+        run: |
+          set -eux
+          . ci/gha_functions.sh
+          if ! JENKINS_URL='${{ env.JENKINS_URL }}' QUEUE_URL='${{ env.QUEUE_URL }}' \
+               cancel_provision; then
+              # probably already provisioned and needs unprovisioning
+              if ! cleanup_provision_request '${{ env.CLUSTER_REQUEST_reqid }}'; then
+                  exit 1
+              fi
+          fi
+      - name: Job cleanup
+        if: (!cancelled() && (success() || failure()))
+        run: |
+          set -eux
+          . ci/gha_functions.sh
+          cleanup_provision_request '${{ env.CLUSTER_REQUEST_reqid }}'
+          NODELIST=${{ env.NODESTRING }} ci/functional/job_cleanup.sh
+      - name: Publish test results
+        if: (!cancelled()) && (success() || failure()) &&
+            steps.run-test.outcome != 'skipped'
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          check_name: ${{ env.STAGE_NAME }} Test Results
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          junit_files: ${{ env.STAGE_NAME }}/**/results.xml
+      - name: Publish artifacts
+        if: (!cancelled()) && (success() || failure()) &&
+            steps.run-test.outcome != 'skipped'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.STAGE_NAME }} artifacts
+          path: ${{ env.STAGE_NAME }}/**
+      - name: Upload test results
+        if: (success() || failure()) &&
+            steps.run-test.outcome != 'skipped'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.STAGE_NAME }} test-results
+          path: ${{ env.STAGE_NAME }}/**/results.xml
+      - name: Update commit status
+        if: contains(fromJSON('["push", "pull_request"]'), github.event_name)
+        uses: ouzi-dev/commit-status-updater@v2
+        with:
+          name: 'test/Functional Hardware ${{ matrix.stage }}'
+          status: "${{ job.status }}"
+          ignoreForks: false
