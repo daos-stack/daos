@@ -95,6 +95,9 @@ struct dfuse_eq {
  * memory consumption */
 #define DFUSE_MAX_PRE_READ (1024 * 1024 * 4)
 
+/* Maximum file-size for pre-read in all cases */
+#define DFUSE_MAX_PRE_READ_ONCE (1024 * 1024 * 1)
+
 /* Launch fuse, and do not return until complete */
 int
 dfuse_launch_fuse(struct dfuse_info *dfuse_info, struct fuse_args *args);
@@ -202,6 +205,8 @@ struct dfuse_obj_hdl {
 	bool                      doh_kreaddir_finished;
 
 	bool                      doh_evict_on_close;
+	/* the handle is doing readhead for the moment */
+	bool                      doh_readahead_inflight;
 };
 
 /* Readdir support.
@@ -1039,7 +1044,7 @@ struct active_inode {
 
 /* Increase active count on inode.  This takes a reference and allocates ie->active as required */
 int
-active_ie_init(struct dfuse_inode_entry *ie, bool *preread);
+active_ie_init(struct dfuse_inode_entry *ie);
 
 /* Mark a oh as closing and drop the ref on inode active */
 void
@@ -1214,7 +1219,15 @@ bool
 dfuse_dcache_get_valid(struct dfuse_inode_entry *ie, double max_age);
 
 void
-dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie);
+dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh, struct dfuse_event *ev);
+
+int
+dfuse_pre_read_init(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
+		    struct dfuse_event **evp);
+
+void
+dfuse_pre_read_abort(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh,
+		     struct dfuse_event *ev, int rc);
 
 int
 check_for_uns_ep(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, char *attr,
