@@ -91,6 +91,8 @@ dump_opt(crt_init_options_t *opt)
 	/* Handle similar to D_PROVIDER_AUTH_KEY */
 	if (opt->cio_auth_key)
 		D_INFO("auth_key is set\n");
+	if (opt->cio_thread_mode_single)
+		D_INFO("thread mode single is set\n");
 }
 
 static int
@@ -661,6 +663,14 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 					"rc: %d, ignore the ENV.\n", path, rc);
 			else
 				D_DEBUG(DB_ALL, "set group_config_path as %s.\n", path);
+		}
+
+		if (opt && opt->cio_thread_mode_single) {
+			crt_gdata.cg_thread_mode_single = opt->cio_thread_mode_single;
+		} else {
+			bool thread_mode_single = false;
+			crt_env_get(D_THREAD_MODE_SINGLE, &thread_mode_single);
+			crt_gdata.cg_thread_mode_single = thread_mode_single;
 		}
 
 		if (opt && opt->cio_auth_key)

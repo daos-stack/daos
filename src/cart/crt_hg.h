@@ -114,13 +114,14 @@ struct crt_hg_pool {
 /** HG context */
 struct crt_hg_context {
 	/* Flag indicating whether hg class is shared; true for SEP mode */
-	bool			 chc_shared_hg_class;
-	hg_class_t		*chc_hgcla; /* HG class */
-	hg_context_t		*chc_hgctx; /* HG context */
-	hg_class_t		*chc_bulkcla; /* bulk class */
-	hg_context_t		*chc_bulkctx; /* bulk context */
-	struct crt_hg_pool	 chc_hg_pool; /* HG handle pool */
-	int			 chc_provider; /* provider */
+	bool               chc_shared_hg_class;
+	hg_class_t        *chc_hgcla;              /* HG class */
+	hg_context_t      *chc_hgctx;              /* HG context */
+	hg_class_t        *chc_bulkcla;            /* bulk class */
+	hg_context_t      *chc_bulkctx;            /* bulk context */
+	struct crt_hg_pool chc_hg_pool;            /* HG handle pool */
+	int                chc_provider;           /* provider */
+	bool               chc_thread_mode_single; /* thread safety */
 };
 
 /* crt_hg.c */
