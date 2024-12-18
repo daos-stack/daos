@@ -663,7 +663,7 @@ dfuse_pre_read_init(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 	ev->de_readahead_len = len;
 	ev->de_req_position  = 0;
 
-	ev->de_complete_cb        = dfuse_cb_pre_read_complete;
+	ev->de_complete_cb = dfuse_cb_pre_read_complete;
 
 	if (active->readahead == NULL) {
 		int rc;
@@ -705,7 +705,7 @@ dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh, struct d
 	struct dfuse_eq *eqt;
 	int              rc;
 
-	eqt       = pick_eqt(dfuse_info);
+	eqt = pick_eqt(dfuse_info);
 
 	if (oh->doh_obj == NULL) {
 		/** duplicate the file handle for the fuse handle */
