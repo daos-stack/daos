@@ -76,6 +76,7 @@ class FileCountTestBase(IorTestBase, MdtestBase):
         intercept = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
         ior_oclass = self.params.get("ior_oclass", '/run/largefilecount/object_class/*')
         mdtest_oclass = self.params.get("mdtest_oclass", '/run/largefilecount/object_class/*')
+        #cont_props = self.params.get("properties", '/run/container/*')
 
         # create pool
         self.add_pool(connect=False)
