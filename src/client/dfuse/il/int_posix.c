@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -43,24 +44,24 @@ static __thread daos_handle_t ioil_eqh;
 #define IOIL_MAX_EQ 64
 
 struct ioil_pool {
-	daos_handle_t	iop_poh;
-	uuid_t		iop_uuid;
-	d_list_t	iop_container_head;
-	d_list_t	iop_pools;
+	daos_handle_t iop_poh;
+	uuid_t        iop_uuid;
+	d_list_t      iop_container_head;
+	d_list_t      iop_pools;
 };
 
 struct ioil_global {
-	pthread_mutex_t	iog_lock;
-	d_list_t	iog_pools_head;
-	daos_handle_t	iog_main_eqh;
-	daos_handle_t	iog_eqs[IOIL_MAX_EQ];
-	uint16_t	iog_eq_count_max;
-	uint16_t	iog_eq_count;
-	uint16_t	iog_eq_idx;
+	pthread_mutex_t iog_lock;
+	d_list_t        iog_pools_head;
+	daos_handle_t   iog_main_eqh;
+	daos_handle_t   iog_eqs[IOIL_MAX_EQ];
+	uint16_t        iog_eq_count_max;
+	uint16_t        iog_eq_count;
+	uint16_t        iog_eq_idx;
 	pid_t           iog_init_tid;
-	bool		iog_initialized;
-	bool		iog_no_daos;
-	bool		iog_daos_init;
+	bool            iog_initialized;
+	bool            iog_no_daos;
+	bool            iog_daos_init;
 
 	bool		iog_show_summary;	/**< Should a summary be shown at teardown */
 	bool		iog_fini_done;		/**< Whether destructor function is finished */
@@ -72,11 +73,11 @@ struct ioil_global {
 	ATOMIC uint64_t iog_fstat_count; /**< Number of fstat operations intercepted */
 };
 
-static vector_t	fd_table;
+static vector_t           fd_table;
 
 static struct ioil_global ioil_iog;
 
-static __thread int saved_errno;
+static __thread int       saved_errno;
 
 static void *(*real_mmap)(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
 static void *
@@ -88,10 +89,10 @@ dfuse_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 			saved_errno = errno; \
 	} while (0)
 
-#define RESTORE_ERRNO(is_error)              \
-	do {                                 \
-		if (is_error)                \
-			errno = saved_errno; \
+#define RESTORE_ERRNO(is_error)                                                                    \
+	do {                                                                                       \
+		if (is_error)                                                                      \
+			errno = saved_errno;                                                       \
 	} while (0)
 
 static const char *const bypass_status[] = {
@@ -126,8 +127,8 @@ ioil_shrink_pool(struct ioil_pool *pool)
 static int
 ioil_shrink_cont(struct ioil_cont *cont, bool shrink_pool, bool force)
 {
-	struct ioil_pool	*pool;
-	int			rc;
+	struct ioil_pool *pool;
+	int               rc;
 
 	if (cont->ioc_open_count != 0 && !force)
 		return 0;
@@ -165,7 +166,8 @@ ioil_shrink_cont(struct ioil_cont *cont, bool shrink_pool, bool force)
 }
 
 static void
-entry_array_close(void *arg) {
+entry_array_close(void *arg)
+{
 	struct fd_entry *entry = arg;
 
 	DFUSE_TRA_DOWN(entry->fd_dfsoh);
@@ -183,11 +185,10 @@ ioil_initialize_fd_table(int max_fds)
 {
 	int rc;
 
-	rc = vector_init(&fd_table, sizeof(struct fd_entry), max_fds,
-			 entry_array_close);
+	rc = vector_init(&fd_table, sizeof(struct fd_entry), max_fds, entry_array_close);
 	if (rc != 0)
 		DFUSE_LOG_ERROR("Could not allocate file descriptor table"
-				", disabling kernel bypass: rc = "DF_RC,
+				", disabling kernel bypass: rc = " DF_RC,
 				DP_RC(rc));
 	return rc;
 }
@@ -196,8 +197,8 @@ static ssize_t
 pread_rpc(struct fd_entry *entry, char *buff, size_t len, off_t offset)
 {
 	ssize_t bytes_read;
-	int errcode;
-	int counter;
+	int     errcode;
+	int     counter;
 
 	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_read_count, 1);
 
@@ -213,12 +214,11 @@ pread_rpc(struct fd_entry *entry, char *buff, size_t len, off_t offset)
 
 /* Start simple and just loop */
 static ssize_t
-preadv_rpc(struct fd_entry *entry, const struct iovec *iov, int count,
-	   off_t offset)
+preadv_rpc(struct fd_entry *entry, const struct iovec *iov, int count, off_t offset)
 {
 	ssize_t bytes_read;
-	int errcode;
-	int counter;
+	int     errcode;
+	int     counter;
 
 	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_read_count, 1);
 
@@ -226,8 +226,7 @@ preadv_rpc(struct fd_entry *entry, const struct iovec *iov, int count,
 		__real_fprintf(stderr, "[libioil] Intercepting read\n");
 
 	/* Just get rpc working then work out how to really do this */
-	bytes_read = ioil_do_preadv(iov, count, offset, entry,
-				    &errcode);
+	bytes_read = ioil_do_preadv(iov, count, offset, entry, &errcode);
 	if (bytes_read < 0)
 		saved_errno = errcode;
 	return bytes_read;
@@ -237,8 +236,8 @@ static ssize_t
 pwrite_rpc(struct fd_entry *entry, const char *buff, size_t len, off_t offset)
 {
 	ssize_t bytes_written;
-	int errcode;
-	int counter;
+	int     errcode;
+	int     counter;
 
 	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_write_count, 1);
 
@@ -246,8 +245,7 @@ pwrite_rpc(struct fd_entry *entry, const char *buff, size_t len, off_t offset)
 		__real_fprintf(stderr, "[libioil] Intercepting write of size %zi\n", len);
 
 	/* Just get rpc working then work out how to really do this */
-	bytes_written = ioil_do_writex(buff, len, offset, entry,
-				       &errcode);
+	bytes_written = ioil_do_writex(buff, len, offset, entry, &errcode);
 	if (bytes_written < 0)
 		saved_errno = errcode;
 
@@ -256,12 +254,11 @@ pwrite_rpc(struct fd_entry *entry, const char *buff, size_t len, off_t offset)
 
 /* Start simple and just loop */
 static ssize_t
-pwritev_rpc(struct fd_entry *entry, const struct iovec *iov, int count,
-	    off_t offset)
+pwritev_rpc(struct fd_entry *entry, const struct iovec *iov, int count, off_t offset)
 {
 	ssize_t bytes_written;
-	int errcode;
-	int counter;
+	int     errcode;
+	int     counter;
 
 	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_write_count, 1);
 
@@ -269,8 +266,7 @@ pwritev_rpc(struct fd_entry *entry, const struct iovec *iov, int count,
 		__real_fprintf(stderr, "[libioil] Intercepting write\n");
 
 	/* Just get rpc working then work out how to really do this */
-	bytes_written = ioil_do_pwritev(iov, count, offset, entry,
-					&errcode);
+	bytes_written = ioil_do_pwritev(iov, count, offset, entry, &errcode);
 	if (bytes_written < 0)
 		saved_errno = errcode;
 
@@ -293,9 +289,9 @@ static __attribute__((constructor)) void
 ioil_init(void)
 {
 	struct rlimit rlimit;
-	int rc;
-	uint64_t report_count = 0;
-	uint64_t eq_count = 0;
+	int           rc;
+	uint64_t      report_count = 0;
+	uint64_t      eq_count     = 0;
 
 	pthread_once(&init_links_flag, init_links);
 
@@ -329,7 +325,7 @@ ioil_init(void)
 	rc = ioil_initialize_fd_table(rlimit.rlim_max);
 	if (rc != 0) {
 		DFUSE_LOG_ERROR("Could not create fd_table, "
-				"disabling kernel bypass, rc = "DF_RC,
+				"disabling kernel bypass, rc = " DF_RC,
 				DP_RC(rc));
 		return;
 	}
@@ -341,7 +337,7 @@ ioil_init(void)
 	rc = d_getenv_uint64_t("D_IL_MAX_EQ", &eq_count);
 	if (rc != -DER_NONEXIST) {
 		if (eq_count > IOIL_MAX_EQ) {
-			DFUSE_LOG_WARNING("Max EQ count (%"PRIu64") should not exceed: %d",
+			DFUSE_LOG_WARNING("Max EQ count (%" PRIu64 ") should not exceed: %d",
 					  eq_count, IOIL_MAX_EQ);
 			eq_count = IOIL_MAX_EQ;
 		}
@@ -400,11 +396,8 @@ ioil_fini(void)
 	ioil_show_summary();
 
 	/* Tidy up any open connections */
-	d_list_for_each_entry_safe(pool, pnext,
-				   &ioil_iog.iog_pools_head, iop_pools) {
-		d_list_for_each_entry_safe(cont, cnext,
-					   &pool->iop_container_head,
-					   ioc_containers) {
+	d_list_for_each_entry_safe(pool, pnext, &ioil_iog.iog_pools_head, iop_pools) {
+		d_list_for_each_entry_safe(cont, cnext, &pool->iop_container_head, ioc_containers) {
 			/* Retry disconnect on out of memory errors, this is mainly for fault
 			 * injection testing.  Do not attempt to shrink the pool here as that
 			 * is tried later, and if the container close succeeds but pool close
@@ -452,17 +445,17 @@ ioil_get_eqh(daos_handle_t *eqh)
 	rc = pthread_mutex_lock(&ioil_iog.iog_lock);
 	/** create a new EQ if the EQ pool is not full; otherwise round robin EQ use from pool */
 	if (ioil_iog.iog_eq_count >= ioil_iog.iog_eq_count_max) {
-		ioil_eqh = ioil_iog.iog_eqs[ioil_iog.iog_eq_idx ++];
+		ioil_eqh = ioil_iog.iog_eqs[ioil_iog.iog_eq_idx++];
 		if (ioil_iog.iog_eq_idx == ioil_iog.iog_eq_count_max)
 			ioil_iog.iog_eq_idx = 0;
 	} else {
 		rc = daos_eq_create(&ioil_eqh);
 		if (rc) {
-			pthread_mutex_unlock(&ioil_iog.iog_lock); 
+			pthread_mutex_unlock(&ioil_iog.iog_lock);
 			return -1;
 		}
 		ioil_iog.iog_eqs[ioil_iog.iog_eq_count] = ioil_eqh;
-		ioil_iog.iog_eq_count ++;
+		ioil_iog.iog_eq_count++;
 	}
 	pthread_mutex_unlock(&ioil_iog.iog_lock);
 	*eqh = ioil_eqh;
@@ -473,13 +466,13 @@ ioil_get_eqh(daos_handle_t *eqh)
 static int
 fetch_dfs_obj_handle(int fd, struct fd_entry *entry)
 {
-	struct dfuse_hsd_reply	hsd_reply;
-	d_iov_t			iov = {};
-	int			cmd;
-	int			rc;
+	struct dfuse_hsd_reply hsd_reply;
+	d_iov_t                iov = {};
+	int                    cmd;
+	int                    rc;
 
 	errno = 0;
-	rc = ioctl(fd, DFUSE_IOCTL_IL_DSIZE, &hsd_reply);
+	rc    = ioctl(fd, DFUSE_IOCTL_IL_DSIZE, &hsd_reply);
 	if (rc != 0) {
 		int err = errno;
 
@@ -490,8 +483,8 @@ fetch_dfs_obj_handle(int fd, struct fd_entry *entry)
 
 	if (hsd_reply.fsr_version != DFUSE_IOCTL_VERSION) {
 		DFUSE_LOG_WARNING("ioctl version mismatch (fd=%d): expected "
-				  "%d got %d", fd, DFUSE_IOCTL_VERSION,
-				  hsd_reply.fsr_version);
+				  "%d got %d",
+				  fd, DFUSE_IOCTL_VERSION, hsd_reply.fsr_version);
 		return EIO;
 	}
 
@@ -499,11 +492,10 @@ fetch_dfs_obj_handle(int fd, struct fd_entry *entry)
 	if (!iov.iov_buf)
 		return ENOMEM;
 
-	cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE,
-		   DFUSE_IOCTL_REPLY_DOOH, hsd_reply.fsr_dobj_size);
+	cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE, DFUSE_IOCTL_REPLY_DOOH, hsd_reply.fsr_dobj_size);
 
 	errno = 0;
-	rc = ioctl(fd, cmd, iov.iov_buf);
+	rc    = ioctl(fd, cmd, iov.iov_buf);
 	if (rc != 0) {
 		rc = errno;
 
@@ -513,21 +505,16 @@ fetch_dfs_obj_handle(int fd, struct fd_entry *entry)
 	}
 
 	iov.iov_buf_len = hsd_reply.fsr_dobj_size;
-	iov.iov_len = iov.iov_buf_len;
+	iov.iov_len     = iov.iov_buf_len;
 
-	rc = dfs_obj_global2local(entry->fd_cont->ioc_dfs,
-				  0,
-				  iov,
-				  &entry->fd_dfsoh);
+	rc = dfs_obj_global2local(entry->fd_cont->ioc_dfs, 0, iov, &entry->fd_dfsoh);
 	if (rc)
 		DFUSE_LOG_WARNING("Failed to use dfs object handle: %d (%s)", rc, strerror(rc));
 
 	D_FREE(iov.iov_buf);
 
 	if (entry->fd_dfsoh)
-		DFUSE_TRA_UP(entry->fd_dfsoh,
-			     entry->fd_cont->ioc_dfs,
-			     "open file");
+		DFUSE_TRA_UP(entry->fd_dfsoh, entry->fd_cont->ioc_dfs, "open file");
 
 	return rc;
 }
@@ -540,13 +527,12 @@ fetch_dfs_obj_handle(int fd, struct fd_entry *entry)
  * via ioctl if possible, or if not via a file in /tmp.
  */
 static int
-ioil_fetch_pool_handle(int fd, struct dfuse_hs_reply *hs_reply,
-		       struct ioil_pool *pool)
+ioil_fetch_pool_handle(int fd, struct dfuse_hs_reply *hs_reply, struct ioil_pool *pool)
 {
-	d_iov_t	iov = {};
-	int	rc;
-	int	cmd;
-	ssize_t	rsize;
+	d_iov_t iov = {};
+	int     rc;
+	int     cmd;
+	ssize_t rsize;
 
 	D_ALLOC(iov.iov_buf, hs_reply->fsr_pool_size);
 	if (!iov.iov_buf)
@@ -556,11 +542,10 @@ ioil_fetch_pool_handle(int fd, struct dfuse_hs_reply *hs_reply,
 	if (hs_reply->fsr_pool_size >= (16 * 1024)) {
 		char fname[NAME_LEN];
 
-		cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE,
-			   DFUSE_IOCTL_REPLY_PFILE, NAME_LEN);
+		cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE, DFUSE_IOCTL_REPLY_PFILE, NAME_LEN);
 
 		errno = 0;
-		rc = ioctl(fd, cmd, fname);
+		rc    = ioctl(fd, cmd, fname);
 		if (rc != 0) {
 			rc = errno;
 
@@ -568,7 +553,7 @@ ioil_fetch_pool_handle(int fd, struct dfuse_hs_reply *hs_reply,
 			goto out;
 		}
 		errno = 0;
-		fd = __real_open(fname, O_RDONLY);
+		fd    = __real_open(fname, O_RDONLY);
 		if (fd == -1)
 			D_GOTO(out, rc = errno);
 		rsize = __real_read(fd, iov.iov_buf, hs_reply->fsr_pool_size);
@@ -576,11 +561,11 @@ ioil_fetch_pool_handle(int fd, struct dfuse_hs_reply *hs_reply,
 			D_GOTO(out, rc = EAGAIN);
 		unlink(fname);
 	} else {
-		cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE,
-			   DFUSE_IOCTL_REPLY_POH, hs_reply->fsr_pool_size);
+		cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE, DFUSE_IOCTL_REPLY_POH,
+			   hs_reply->fsr_pool_size);
 
 		errno = 0;
-		rc = ioctl(fd, cmd, iov.iov_buf);
+		rc    = ioctl(fd, cmd, iov.iov_buf);
 		if (rc != 0) {
 			rc = errno;
 
@@ -590,7 +575,7 @@ ioil_fetch_pool_handle(int fd, struct dfuse_hs_reply *hs_reply,
 	}
 
 	iov.iov_buf_len = hs_reply->fsr_pool_size;
-	iov.iov_len = iov.iov_buf_len;
+	iov.iov_len     = iov.iov_buf_len;
 
 	rc = daos_pool_global2local(iov, &pool->iop_poh);
 	if (rc) {
@@ -610,37 +595,33 @@ out:
 static int
 ioil_fetch_cont_handles(int fd, struct ioil_cont *cont)
 {
-	struct ioil_pool       *pool = cont->ioc_pool;
-	struct dfuse_hs_reply	hs_reply;
-	d_iov_t			iov = {};
-	int			cmd;
-	int			rc;
+	struct ioil_pool     *pool = cont->ioc_pool;
+	struct dfuse_hs_reply hs_reply;
+	d_iov_t               iov = {};
+	int                   cmd;
+	int                   rc;
 
 	errno = 0;
-	rc = ioctl(fd, DFUSE_IOCTL_IL_SIZE, &hs_reply);
+	rc    = ioctl(fd, DFUSE_IOCTL_IL_SIZE, &hs_reply);
 	if (rc != 0) {
 		int err = errno;
 
 		if (err == EPERM)
-			DFUSE_LOG_DEBUG("ioctl call on %d failed %d %s", fd,
-					err, strerror(err));
+			DFUSE_LOG_DEBUG("ioctl call on %d failed %d %s", fd, err, strerror(err));
 		else
-			DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd,
-					  err, strerror(err));
+			DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd, err, strerror(err));
 
 		return err;
 	}
 
 	if (hs_reply.fsr_version != DFUSE_IOCTL_VERSION) {
 		DFUSE_LOG_WARNING("ioctl version mismatch (fd=%d): expected "
-				  "%d got %d", fd, DFUSE_IOCTL_VERSION,
-				  hs_reply.fsr_version);
+				  "%d got %d",
+				  fd, DFUSE_IOCTL_VERSION, hs_reply.fsr_version);
 		return EIO;
 	}
 
-	DFUSE_LOG_DEBUG("ioctl returned %zi %zi",
-			hs_reply.fsr_pool_size,
-			hs_reply.fsr_cont_size);
+	DFUSE_LOG_DEBUG("ioctl returned %zi %zi", hs_reply.fsr_pool_size, hs_reply.fsr_cont_size);
 
 	if (daos_handle_is_inval(pool->iop_poh)) {
 		/* Fetch the pool handle via the ioctl or file.  Both dfuse
@@ -658,28 +639,25 @@ ioil_fetch_cont_handles(int fd, struct ioil_cont *cont)
 	if (!iov.iov_buf)
 		return ENOMEM;
 
-	cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE,
-		   DFUSE_IOCTL_REPLY_COH, hs_reply.fsr_cont_size);
+	cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE, DFUSE_IOCTL_REPLY_COH, hs_reply.fsr_cont_size);
 
 	errno = 0;
-	rc = ioctl(fd, cmd, iov.iov_buf);
+	rc    = ioctl(fd, cmd, iov.iov_buf);
 	if (rc != 0) {
 		int err = errno;
 
-		DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd,
-				  err, strerror(err));
+		DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd, err, strerror(err));
 
 		D_FREE(iov.iov_buf);
 		return err;
 	}
 
 	iov.iov_buf_len = hs_reply.fsr_cont_size;
-	iov.iov_len = iov.iov_buf_len;
+	iov.iov_len     = iov.iov_buf_len;
 
 	rc = daos_cont_global2local(pool->iop_poh, iov, &cont->ioc_coh);
 	if (rc) {
-		DFUSE_LOG_WARNING("Failed to use cont handle "DF_RC,
-				  DP_RC(rc));
+		DFUSE_LOG_WARNING("Failed to use cont handle " DF_RC, DP_RC(rc));
 		D_FREE(iov.iov_buf);
 		return daos_der2errno(rc);
 	}
@@ -689,28 +667,23 @@ ioil_fetch_cont_handles(int fd, struct ioil_cont *cont)
 	D_ALLOC(iov.iov_buf, hs_reply.fsr_dfs_size);
 	if (!iov.iov_buf)
 		return ENOMEM;
-	cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE,
-		   DFUSE_IOCTL_REPLY_DOH, hs_reply.fsr_dfs_size);
+	cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE, DFUSE_IOCTL_REPLY_DOH, hs_reply.fsr_dfs_size);
 
 	errno = 0;
-	rc = ioctl(fd, cmd, iov.iov_buf);
+	rc    = ioctl(fd, cmd, iov.iov_buf);
 	if (rc != 0) {
 		int err = errno;
 
-		DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd,
-				  err, strerror(err));
+		DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd, err, strerror(err));
 
 		D_FREE(iov.iov_buf);
 		return err;
 	}
 
 	iov.iov_buf_len = hs_reply.fsr_dfs_size;
-	iov.iov_len = iov.iov_buf_len;
+	iov.iov_len     = iov.iov_buf_len;
 
-	rc = dfs_global2local(pool->iop_poh,
-			      cont->ioc_coh,
-			      0,
-			      iov, &cont->ioc_dfs);
+	rc = dfs_global2local(pool->iop_poh, cont->ioc_coh, 0, iov, &cont->ioc_dfs);
 	if (rc) {
 		DFUSE_LOG_WARNING("Failed to use dfs handle: %d (%s)", rc, strerror(rc));
 		D_FREE(iov.iov_buf);
@@ -726,10 +699,10 @@ ioil_fetch_cont_handles(int fd, struct ioil_cont *cont)
 static bool
 ioil_open_cont_handles(int fd, struct dfuse_il_reply *il_reply, struct ioil_cont *cont)
 {
-	int			rc;
-	struct ioil_pool       *pool = cont->ioc_pool;
-	char			uuid_str[37];
-	int			dfs_flags = O_RDWR;
+	int               rc;
+	struct ioil_pool *pool = cont->ioc_pool;
+	char              uuid_str[37];
+	int               dfs_flags = O_RDWR;
 
 	if (daos_handle_is_inval(pool->iop_poh)) {
 		uuid_unparse(il_reply->fir_pool, uuid_str);
@@ -853,13 +826,12 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags)
 	}
 
 	errno = 0;
-	rc = ioctl(fd, DFUSE_IOCTL_IL, &il_reply);
+	rc    = ioctl(fd, DFUSE_IOCTL_IL, &il_reply);
 	if (rc != 0) {
 		int err = errno;
 
 		if (err != ENOTTY)
-			DFUSE_LOG_DEBUG("ioctl call on %d failed %d %s", fd,
-					err, strerror(err));
+			DFUSE_LOG_DEBUG("ioctl call on %d failed %d %s", fd, err, strerror(err));
 		return false;
 	}
 
@@ -879,7 +851,7 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags)
 		if (ioil_iog.iog_eq_count_max) {
 			rc = daos_eq_create(&ioil_eqh);
 			if (rc) {
-				DFUSE_LOG_WARNING("daos_eq_create() failed: "DF_RC, DP_RC(rc));
+				DFUSE_LOG_WARNING("daos_eq_create() failed: " DF_RC, DP_RC(rc));
 				D_GOTO(err, rc = daos_der2errno(rc));
 			}
 			ioil_iog.iog_main_eqh = ioil_eqh;
@@ -946,10 +918,10 @@ open_cont:
 	}
 
 get_file:
-	entry->fd_pos = 0;
-	entry->fd_flags = flags;
+	entry->fd_pos    = 0;
+	entry->fd_flags  = flags;
 	entry->fd_status = DFUSE_IO_BYPASS;
-	entry->fd_cont = cont;
+	entry->fd_cont   = cont;
 
 	/* Only intercept fstat if caching is not on for this file */
 	if ((il_reply.fir_flags & DFUSE_IOCTL_FLAGS_MCACHE) == 0)
@@ -1013,9 +985,8 @@ drop_reference_if_disabled(struct fd_entry *entry)
 static bool
 dfuse_check_valid_path(const char *path)
 {
-	if ((strncmp(path, "/sys/", 5) == 0) ||
-		(strncmp(path, "/dev/", 5) == 0) ||
-		strncmp(path, "/proc/", 6) == 0) {
+	if ((strncmp(path, "/sys/", 5) == 0) || (strncmp(path, "/dev/", 5) == 0) ||
+	    strncmp(path, "/proc/", 6) == 0) {
 		return false;
 	}
 	return true;
@@ -1107,7 +1078,7 @@ dfuse_open(const char *pathname, int flags, ...)
 
 		fd = __real_open(pathname, flags, mode);
 	} else {
-		fd = __real_open(pathname, flags);
+		fd   = __real_open(pathname, flags);
 		mode = 0;
 	}
 
@@ -1161,7 +1132,7 @@ dfuse_openat(int dirfd, const char *pathname, int flags, ...)
 
 		fd = __real_openat(dirfd, pathname, flags, mode);
 	} else {
-		fd = __real_openat(dirfd, pathname, flags);
+		fd   = __real_openat(dirfd, pathname, flags);
 		mode = 0;
 	}
 
@@ -1221,8 +1192,8 @@ dfuse_mkstemp(char *template)
 
 	atomic_fetch_add_relaxed(&ioil_iog.iog_file_count, 1);
 
-	DFUSE_LOG_DEBUG("mkstemp(template=%s) = %d. intercepted, fstat=%d, bypass=%s",
-			template, fd, entry.fd_fstat, bypass_status[entry.fd_status]);
+	DFUSE_LOG_DEBUG("mkstemp(template=%s) = %d. intercepted, fstat=%d, bypass=%s", template, fd,
+			entry.fd_fstat, bypass_status[entry.fd_status]);
 
 	return fd;
 }
@@ -1231,7 +1202,7 @@ DFUSE_PUBLIC int
 dfuse_creat(const char *pathname, mode_t mode)
 {
 	struct fd_entry entry = {0};
-	int fd;
+	int             fd;
 
 	/* Same as open with O_CREAT|O_WRONLY|O_TRUNC */
 	fd = __real_open(pathname, O_CREAT | O_WRONLY | O_TRUNC, mode);
@@ -1251,8 +1222,8 @@ dfuse_creat(const char *pathname, mode_t mode)
 
 	atomic_fetch_add_relaxed(&ioil_iog.iog_file_count, 1);
 
-	DFUSE_LOG_DEBUG("creat(pathname=%s, mode=0%o) = %d. intercepted, bypass=%s",
-			pathname, mode, fd, bypass_status[entry.fd_status]);
+	DFUSE_LOG_DEBUG("creat(pathname=%s, mode=0%o) = %d. intercepted, bypass=%s", pathname, mode,
+			fd, bypass_status[entry.fd_status]);
 
 	return fd;
 }
@@ -1261,15 +1232,14 @@ DFUSE_PUBLIC int
 dfuse_close(int fd)
 {
 	struct fd_entry *entry;
-	int rc;
+	int              rc;
 
 	rc = vector_remove(&fd_table, fd, &entry);
 
 	if (rc != 0)
 		goto do_real_close;
 
-	DFUSE_LOG_DEBUG("close(fd=%d) intercepted, bypass=%s",
-			fd, bypass_status[entry->fd_status]);
+	DFUSE_LOG_DEBUG("close(fd=%d) intercepted, bypass=%s", fd, bypass_status[entry->fd_status]);
 
 	/* This will drop a reference which will cause the array to be closed
 	 * when the last duplicated fd is closed
@@ -1299,7 +1269,7 @@ dfuse_read(int fd, void *buf, size_t len)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_read;
 
-	oldpos = entry->fd_pos;
+	oldpos     = entry->fd_pos;
 	bytes_read = pread_rpc(entry, buf, len, oldpos);
 	if (bytes_read < 0)
 		goto disable_file;
@@ -1335,17 +1305,16 @@ DFUSE_PUBLIC ssize_t
 dfuse_pread(int fd, void *buf, size_t count, off_t offset)
 {
 	struct fd_entry *entry;
-	ssize_t bytes_read;
-	int rc;
+	ssize_t          bytes_read;
+	int              rc;
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
 		goto do_real_pread;
 
 	DFUSE_LOG_DEBUG("pread(fd=%d, buf=%p, count=%zu, "
-			"offset=%zd) intercepted, bypass=%s", fd,
-			buf, count, offset,
-			bypass_status[entry->fd_status]);
+			"offset=%zd) intercepted, bypass=%s",
+			fd, buf, count, offset, bypass_status[entry->fd_status]);
 
 	if (drop_reference_if_disabled(entry))
 		goto do_real_pread;
@@ -1366,9 +1335,9 @@ DFUSE_PUBLIC ssize_t
 dfuse_write(int fd, const void *buf, size_t len)
 {
 	struct fd_entry *entry;
-	ssize_t bytes_written;
-	off_t oldpos;
-	int rc;
+	ssize_t          bytes_written;
+	off_t            oldpos;
+	int              rc;
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
@@ -1381,10 +1350,10 @@ dfuse_write(int fd, const void *buf, size_t len)
 	 * after the disabled check above or the logging will recurse and deadlock.
 	 */
 	DFUSE_LOG_DEBUG("write(fd=%d, buf=%p, len=%zu) "
-			"intercepted, bypass=%s", fd,
-			buf, len, bypass_status[entry->fd_status]);
+			"intercepted, bypass=%s",
+			fd, buf, len, bypass_status[entry->fd_status]);
 
-	oldpos = entry->fd_pos;
+	oldpos        = entry->fd_pos;
 	bytes_written = pwrite_rpc(entry, buf, len, entry->fd_pos);
 	if (bytes_written > 0)
 		entry->fd_pos = oldpos + bytes_written;
@@ -1402,17 +1371,16 @@ DFUSE_PUBLIC ssize_t
 dfuse_pwrite(int fd, const void *buf, size_t count, off_t offset)
 {
 	struct fd_entry *entry;
-	ssize_t bytes_written;
-	int rc;
+	ssize_t          bytes_written;
+	int              rc;
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
 		goto do_real_pwrite;
 
 	DFUSE_LOG_DEBUG("pwrite(fd=%d, buf=%p, count=%zu, "
-			"offset=%zd) intercepted, bypass=%s", fd,
-			buf, count, offset,
-			bypass_status[entry->fd_status]);
+			"offset=%zd) intercepted, bypass=%s",
+			fd, buf, count, offset, bypass_status[entry->fd_status]);
 
 	if (drop_reference_if_disabled(entry))
 		goto do_real_pwrite;
@@ -1433,8 +1401,8 @@ DFUSE_PUBLIC off_t
 dfuse_lseek(int fd, off_t offset, int whence)
 {
 	struct fd_entry *entry;
-	off_t new_offset = -1;
-	int rc;
+	off_t            new_offset = -1;
+	int              rc;
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
@@ -1468,7 +1436,7 @@ dfuse_lseek(int fd, off_t offset, int whence)
 
 	if (new_offset < 0) {
 		new_offset = (off_t)-1;
-		errno = EINVAL;
+		errno      = EINVAL;
 	} else {
 		entry->fd_pos = new_offset;
 	}
@@ -1657,9 +1625,9 @@ DFUSE_PUBLIC ssize_t
 dfuse_readv(int fd, const struct iovec *vector, int iovcnt)
 {
 	struct fd_entry *entry;
-	ssize_t bytes_read;
-	off_t oldpos;
-	int rc;
+	ssize_t          bytes_read;
+	off_t            oldpos;
+	int              rc;
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
@@ -1672,7 +1640,7 @@ dfuse_readv(int fd, const struct iovec *vector, int iovcnt)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_readv;
 
-	oldpos = entry->fd_pos;
+	oldpos     = entry->fd_pos;
 	bytes_read = preadv_rpc(entry, vector, iovcnt, entry->fd_pos);
 	if (bytes_read > 0)
 		entry->fd_pos = oldpos + bytes_read;
@@ -1690,16 +1658,16 @@ DFUSE_PUBLIC ssize_t
 dfuse_preadv(int fd, const struct iovec *vector, int iovcnt, off_t offset)
 {
 	struct fd_entry *entry;
-	ssize_t bytes_read;
-	int rc;
+	ssize_t          bytes_read;
+	int              rc;
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
 		goto do_real_preadv;
 
 	DFUSE_LOG_DEBUG("preadv(fd=%d, vector=%p, iovcnt=%d, "
-			"offset=%zd) intercepted, bypass=%s", fd, vector,
-			iovcnt, offset, bypass_status[entry->fd_status]);
+			"offset=%zd) intercepted, bypass=%s",
+			fd, vector, iovcnt, offset, bypass_status[entry->fd_status]);
 
 	if (drop_reference_if_disabled(entry))
 		goto do_real_preadv;
@@ -1719,9 +1687,9 @@ DFUSE_PUBLIC ssize_t
 dfuse_writev(int fd, const struct iovec *vector, int iovcnt)
 {
 	struct fd_entry *entry;
-	ssize_t bytes_written;
-	off_t oldpos;
-	int rc;
+	ssize_t          bytes_written;
+	off_t            oldpos;
+	int              rc;
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
@@ -1734,7 +1702,7 @@ dfuse_writev(int fd, const struct iovec *vector, int iovcnt)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_writev;
 
-	oldpos = entry->fd_pos;
+	oldpos        = entry->fd_pos;
 	bytes_written = pwritev_rpc(entry, vector, iovcnt, entry->fd_pos);
 	if (bytes_written > 0)
 		entry->fd_pos = oldpos + bytes_written;
@@ -1752,8 +1720,8 @@ DFUSE_PUBLIC ssize_t
 dfuse_pwritev(int fd, const struct iovec *vector, int iovcnt, off_t offset)
 {
 	struct fd_entry *entry;
-	ssize_t bytes_written;
-	int rc;
+	ssize_t          bytes_written;
+	int              rc;
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
@@ -1761,8 +1729,7 @@ dfuse_pwritev(int fd, const struct iovec *vector, int iovcnt, off_t offset)
 
 	DFUSE_LOG_DEBUG("pwritev(fd=%d, vector=%p, iovcnt=%d, "
 			"offset=%zd) intercepted, bypass=%s",
-			fd, vector, iovcnt, offset,
-			bypass_status[entry->fd_status]);
+			fd, vector, iovcnt, offset, bypass_status[entry->fd_status]);
 
 	if (drop_reference_if_disabled(entry))
 		goto do_real_pwritev;
@@ -1779,11 +1746,11 @@ do_real_pwritev:
 	return __real_pwritev(fd, vector, iovcnt, offset);
 }
 
-static void *
+DFUSE_PUBLIC void *
 dfuse_mmap(void *address, size_t length, int prot, int flags, int fd, off_t offset)
 {
 	struct fd_entry *entry;
-	int rc;
+	int              rc;
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc == 0) {
@@ -1791,8 +1758,8 @@ dfuse_mmap(void *address, size_t length, int prot, int flags, int fd, off_t offs
 
 		DFUSE_LOG_DEBUG("mmap(address=%p, length=%zu, prot=%d, flags=%d,"
 				" fd=%d, offset=%zd) "
-				"intercepted, disabling kernel bypass ", address,
-				length, prot, flags, fd, offset);
+				"intercepted, disabling kernel bypass ",
+				address, length, prot, flags, fd, offset);
 
 		if (entry->fd_pos != 0)
 			__real_lseek(fd, entry->fd_pos, SEEK_SET);
@@ -1844,7 +1811,7 @@ DFUSE_PUBLIC int
 dfuse_fsync(int fd)
 {
 	struct fd_entry *entry;
-	int rc;
+	int              rc;
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
@@ -1853,8 +1820,7 @@ dfuse_fsync(int fd)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
-	DFUSE_LOG_DEBUG("fsync(fd=%d) intercepted, bypass=%s",
-			fd, bypass_status[entry->fd_status]);
+	DFUSE_LOG_DEBUG("fsync(fd=%d) intercepted, bypass=%s", fd, bypass_status[entry->fd_status]);
 
 	vector_decref(&fd_table, entry);
 
@@ -1866,7 +1832,7 @@ DFUSE_PUBLIC int
 dfuse_fdatasync(int fd)
 {
 	struct fd_entry *entry;
-	int rc;
+	int              rc;
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
@@ -1875,8 +1841,8 @@ dfuse_fdatasync(int fd)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
-	DFUSE_LOG_DEBUG("fdatasync(fd=%d) intercepted, bypass=%s",
-			fd, bypass_status[entry->fd_status]);
+	DFUSE_LOG_DEBUG("fdatasync(fd=%d) intercepted, bypass=%s", fd,
+			bypass_status[entry->fd_status]);
 
 	vector_decref(&fd_table, entry);
 
@@ -1884,19 +1850,20 @@ do_real_fn:
 	return __real_fdatasync(fd);
 }
 
-DFUSE_PUBLIC int dfuse_dup(int oldfd)
+DFUSE_PUBLIC int
+dfuse_dup(int oldfd)
 {
 	struct fd_entry *entry = NULL;
-	int rc;
-	int newfd = __real_dup(oldfd);
+	int              rc;
+	int              newfd = __real_dup(oldfd);
 
 	if (newfd == -1)
 		return -1;
 
 	rc = vector_dup(&fd_table, oldfd, newfd, &entry);
 	if (rc == 0 && entry != NULL) {
-		DFUSE_LOG_DEBUG("dup(oldfd=%d) = %d intercepted, bypass=%s",
-				oldfd, newfd, bypass_status[entry->fd_status]);
+		DFUSE_LOG_DEBUG("dup(oldfd=%d) = %d intercepted, bypass=%s", oldfd, newfd,
+				bypass_status[entry->fd_status]);
 		vector_decref(&fd_table, entry);
 	}
 
@@ -1906,9 +1873,9 @@ DFUSE_PUBLIC int dfuse_dup(int oldfd)
 DFUSE_PUBLIC int
 dfuse_dup2(int oldfd, int newfd)
 {
-	struct fd_entry *entry = NULL;
-	int realfd = __real_dup2(oldfd, newfd);
-	int rc;
+	struct fd_entry *entry  = NULL;
+	int              realfd = __real_dup2(oldfd, newfd);
+	int              rc;
 
 	if (realfd == -1)
 		return -1;
@@ -1916,8 +1883,8 @@ dfuse_dup2(int oldfd, int newfd)
 	rc = vector_dup(&fd_table, oldfd, realfd, &entry);
 	if (rc == 0 && entry != NULL) {
 		DFUSE_LOG_DEBUG("dup2(oldfd=%d, newfd=%d) = %d."
-				" intercepted, bypass=%s", oldfd, newfd,
-				realfd, bypass_status[entry->fd_status]);
+				" intercepted, bypass=%s",
+				oldfd, newfd, realfd, bypass_status[entry->fd_status]);
 		vector_decref(&fd_table, entry);
 	}
 
@@ -2000,12 +1967,12 @@ do_real_fn:
 DFUSE_PUBLIC int
 dfuse_fcntl(int fd, int cmd, ...)
 {
-	va_list ap;
-	void *arg;
+	va_list          ap;
+	void            *arg;
 	struct fd_entry *entry = NULL;
-	int rc;
-	int newfd = -1;
-	int fdarg;
+	int              rc;
+	int              newfd = -1;
+	int              fdarg;
 
 	va_start(ap, cmd);
 	arg = va_arg(ap, void *);
@@ -2017,7 +1984,8 @@ dfuse_fcntl(int fd, int cmd, ...)
 
 	if (cmd == F_SETFL) { /* We don't support this flag for interception */
 		DFUSE_LOG_DEBUG("Removed IL entry for fd=%d: "
-				"F_SETFL not supported for kernel bypass", fd);
+				"F_SETFL not supported for kernel bypass",
+				fd);
 
 		if (!drop_reference_if_disabled(entry)) {
 			/* Disable kernel bypass */
@@ -2045,8 +2013,7 @@ dfuse_fcntl(int fd, int cmd, ...)
 	if (rc == 0 && entry != NULL) {
 		DFUSE_LOG_DEBUG("fcntl(fd=%d, cmd=%d "
 				"/* F_DUPFD* */, arg=%d) intercepted, bypass=%s",
-				fd, cmd, fdarg,
-				bypass_status[entry->fd_status]);
+				fd, cmd, fdarg, bypass_status[entry->fd_status]);
 		vector_decref(&fd_table, entry);
 	}
 
@@ -2110,12 +2077,12 @@ dfuse_fopen(const char *path, const char *mode)
 DFUSE_PUBLIC FILE *
 dfuse_freopen(const char *path, const char *mode, FILE *stream)
 {
-	FILE *newstream;
-	struct fd_entry new_entry = {0};
+	FILE            *newstream;
+	struct fd_entry  new_entry = {0};
 	struct fd_entry *old_entry = {0};
-	int oldfd;
-	int newfd;
-	int rc;
+	int              oldfd;
+	int              newfd;
+	int              rc;
 
 	if (!ioil_iog.iog_initialized)
 		return __real_freopen(path, mode, stream);
@@ -2160,8 +2127,8 @@ DFUSE_PUBLIC int
 dfuse_fclose(FILE *stream)
 {
 	struct fd_entry *entry = NULL;
-	int fd;
-	int rc;
+	int              fd;
+	int              rc;
 
 	if (!ioil_iog.iog_initialized)
 		goto do_real_fclose;
@@ -2940,9 +2907,9 @@ do_real_fn:
 DFUSE_PUBLIC int
 dfuse___fxstat(int ver, int fd, struct stat *buf)
 {
-	struct fd_entry	*entry = NULL;
-	int		counter;
-	int		rc;
+	struct fd_entry *entry = NULL;
+	int              counter;
+	int              rc;
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
@@ -2970,7 +2937,7 @@ dfuse___fxstat(int ver, int fd, struct stat *buf)
 	 * through the kernel, then save these two entries for next time.
 	 */
 	if (entry->fd_dev == 0) {
-		rc =  __real___fxstat(ver, fd, buf);
+		rc = __real___fxstat(ver, fd, buf);
 
 		DFUSE_TRA_DEBUG(entry->fd_dfsoh, "initial fstat() returned %d", rc);
 
@@ -3007,7 +2974,7 @@ DFUSE_PUBLIC int
 dfuse_get_bypass_status(int fd)
 {
 	struct fd_entry *entry;
-	int rc;
+	int              rc;
 
 	rc = vector_get(&fd_table, fd, &entry);
 
