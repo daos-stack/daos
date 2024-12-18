@@ -122,7 +122,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	 * release from completing which also holds open the inode.
 	 */
 	if (preread)
-		dfuse_pre_read(dfuse_info, oh);
+		dfuse_pre_read(dfuse_info, ie);
 
 	return;
 decref:

@@ -600,13 +600,13 @@ dfuse_cb_pre_read_complete(struct dfuse_event *ev)
 }
 
 void
-dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh)
+dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 {
-	struct active_inode *active = oh->doh_ie->ie_active;
+	struct active_inode *active = ie->ie_active;
 	struct dfuse_eq    *eqt;
 	int                 rc;
 	struct dfuse_event *ev;
-	size_t              len = oh->doh_ie->ie_stat.st_size;
+	size_t               len = ie->ie_stat.st_size;
 
 	eqt = pick_eqt(dfuse_info);
 	ev = d_slab_acquire(eqt->de_pre_read_slab);
@@ -616,7 +616,7 @@ dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh)
 	ev->de_iov.iov_len   = len;
 	ev->de_req           = 0;
 	ev->de_sgl.sg_nr     = 1;
-	ev->de_ie            = oh->doh_ie;
+	ev->de_ie            = ie;
 	ev->de_readahead_len = len;
 	ev->de_req_position  = 0;
 	ev->de_di            = dfuse_info;
@@ -624,7 +624,7 @@ dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh)
 	ev->de_complete_cb        = dfuse_cb_pre_read_complete;
 	active->readahead->dra_ev = ev;
 
-	rc = dfs_read(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, 0, &ev->de_len, &ev->de_ev);
+	rc = dfs_read(ie->ie_dfs->dfs_ns, ie->ie_obj, &ev->de_sgl, 0, &ev->de_len, &ev->de_ev);
 	if (rc != 0)
 		goto err;
 
@@ -642,6 +642,6 @@ err:
 		d_slab_release(eqt->de_pre_read_slab, ev);
 		active->readahead->dra_ev = NULL;
 	}
-	active_ie_decref(dfuse_info, oh->doh_ie);
+	active_ie_decref(dfuse_info, ie);
 	pre_read_mark_done(active);
 }
