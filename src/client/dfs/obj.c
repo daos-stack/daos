@@ -412,6 +412,12 @@ open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, int flag
 
 out:
 	if (rc == 0) {
+		if (flags & O_CREAT) {
+			DFS_OP_STAT_INCR(dfs, DOS_CREATE);
+		} else {
+			DFS_OP_STAT_INCR(dfs, DOS_OPEN);
+		}
+
 		if (stbuf) {
 			stbuf->st_size         = file_size;
 			stbuf->st_nlink        = 1;
@@ -786,6 +792,8 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf)
 		oh = parent->oh;
 	}
 
+	DFS_OP_STAT_INCR(dfs, DOS_STAT);
+
 	return entry_stat(dfs, dfs->th, oh, name, len, NULL, true, stbuf, NULL);
 }
 
@@ -810,6 +818,9 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf)
 		D_GOTO(out, rc);
 
 out:
+	if (rc == 0)
+		DFS_OP_STAT_INCR(dfs, DOS_OSTAT);
+
 	daos_obj_close(oh, NULL);
 	return rc;
 }
@@ -1013,6 +1024,9 @@ err2_out:
 err1_out:
 	D_FREE(op_args);
 	daos_obj_close(args->parent_oh, NULL);
+
+	if (rc == 0)
+		DFS_OP_STAT_INCR(args->dfs, DOS_OSTATX);
 	return rc;
 }
 
@@ -1243,6 +1257,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
+	DFS_OP_STAT_INCR(dfs, DOS_CHMOD);
 out:
 	if (S_ISLNK(entry.mode)) {
 		dfs_release(sym);
@@ -1378,6 +1393,7 @@ dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid,
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
+	DFS_OP_STAT_INCR(dfs, DOS_CHOWN);
 out:
 	if (!(flags & O_NOFOLLOW) && S_ISLNK(entry.mode)) {
 		dfs_release(sym);
@@ -1598,6 +1614,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		D_GOTO(out_obj, rc = daos_der2errno(rc));
 	}
 
+	DFS_OP_STAT_INCR(dfs, DOS_SETATTR);
 out_stat:
 	*stbuf = rstat;
 out_obj:
@@ -1662,6 +1679,7 @@ dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len)
 		return daos_der2errno(rc);
 	}
 
+	DFS_OP_STAT_INCR(dfs, DOS_PUNCH);
 	return rc;
 }
 
@@ -1708,6 +1726,7 @@ dfs_sync(dfs_t *dfs)
 	if (dfs->amode != O_RDWR)
 		return EPERM;
 
+	DFS_OP_STAT_INCR(dfs, DOS_SYNC);
 	/** Take a snapshot here and allow rollover to that when supported. */
 
 	return 0;
