@@ -334,8 +334,6 @@ daos_fini(void)
 		D_GOTO(unlock, rc);
 	}
 
-	daos_hhash_fini();
-
 	/** clean up all registered per-module metrics */
 	daos_metrics_fini();
 #if BUILD_PIPELINE
@@ -356,6 +354,7 @@ daos_fini(void)
 	dc_job_fini();
 
 	pl_fini();
+	daos_hhash_fini();
 	daos_debug_fini();
 	module_initialized = 0;
 unlock:
