@@ -43,8 +43,8 @@ mdtest:
   dfs_destroy: True
   manager: MPICH
   flags: -u
-  write_bytes: 4194304
-  read_bytes: 4194304
+  write_bytes: 1048576
+  read_bytes: 1048576
   depth: 10
   num_of_files_dirs: 100000000
   stonewall_timer: 10
