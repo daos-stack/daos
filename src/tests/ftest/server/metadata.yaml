@@ -53,7 +53,6 @@ pool:
 #  properties: svc_ops_entry_age:300
 #  properties: svc_ops_entry_age:600
 container:
-  control_method: API
   silent: true
 ior:
   clientslots:
