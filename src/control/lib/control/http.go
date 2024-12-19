@@ -11,7 +11,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -202,7 +202,7 @@ func httpGetBody(ctx context.Context, url *url.URL, get httpGetFn, timeout time.
 			return nil, errors.Errorf("HTTP response error: %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
 		}
 
-		result, err := ioutil.ReadAll(resp.Body)
+		result, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return nil, errors.Wrap(err, "reading HTTP response body")
 		}

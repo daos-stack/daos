@@ -8,7 +8,6 @@ package config
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math"
 	"net"
 	"os"
@@ -357,7 +356,7 @@ func (cfg *Server) Load(log logging.Logger) error {
 		return FaultConfigNoPath
 	}
 
-	bytes, err := ioutil.ReadFile(cfg.Path)
+	bytes, err := os.ReadFile(cfg.Path)
 	if err != nil {
 		return errors.WithMessage(err, "reading file")
 	}
@@ -403,7 +402,7 @@ func (cfg *Server) SaveToFile(filename string) error {
 		return err
 	}
 
-	return ioutil.WriteFile(filename, bytes, 0644)
+	return os.WriteFile(filename, bytes, 0644)
 }
 
 // SetPath sets the default path to the configuration file.

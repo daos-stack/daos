@@ -8,7 +8,6 @@ package control
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 
@@ -82,7 +81,7 @@ func LoadConfig(cfgPath string) (*Config, error) {
 		return nil, ErrNoConfigFile
 	}
 
-	data, err := ioutil.ReadFile(cfgPath)
+	data, err := os.ReadFile(cfgPath)
 	if err != nil {
 		return nil, err
 	}
