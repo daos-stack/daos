@@ -112,6 +112,22 @@ func Debug(msg proto.Message) string {
 		for i, b := range m.TierBytes {
 			fmt.Fprintf(&bld, "%d:%d ", i, b)
 		}
+	case *mgmtpb.PoolQueryReq:
+		fmt.Fprintf(&bld, "%T id:%s qm:%s", m, m.Id, daos.PoolQueryMask(m.QueryMask))
+	case *mgmtpb.PoolQueryResp:
+		fmt.Fprintf(&bld, "%T status:%s uuid:%s qm:%s map:%d tot(eng/tgts):%d/%d ver(p/u):%d/%d svc_ldr:%d ",
+			m, daos.Status(m.Status), m.Uuid, daos.PoolQueryMask(m.QueryMask), m.Version,
+			m.TotalEngines, m.TotalTargets, m.PoolLayoutVer, m.UpgradeLayoutVer, m.SvcLdr)
+		ranks := &ranklist.RankSet{}
+		for _, r := range m.SvcReps {
+			ranks.Add(ranklist.Rank(r))
+		}
+		fmt.Fprintf(&bld, "svc_ranks:%s ", ranks.String())
+		fmt.Fprintf(&bld, "ena_ranks:%s ", m.EnabledRanks)
+		fmt.Fprintf(&bld, "dis_ranks:%s ", m.DisabledRanks)
+		fmt.Fprintf(&bld, "dead_ranks:%s ", m.DeadRanks)
+		fmt.Fprintf(&bld, "rebuild:%+v ", m.Rebuild)
+		fmt.Fprintf(&bld, "tier_stats:%+v ", m.TierStats)
 	case *mgmtpb.PoolEvictReq:
 		fmt.Fprintf(&bld, "%T pool:%s", m, m.Id)
 		if len(m.Handles) > 0 {
