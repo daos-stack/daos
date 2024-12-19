@@ -58,4 +58,5 @@ mdtest:
       #- [EC_Object_Class, Minimum number of servers]
       - ["EC_2P2GX", 6]
       - ["EC_4P2GX", 8]
+      - ["EC_4P3GX", 9]
       - ["EC_8P2GX", 12]
