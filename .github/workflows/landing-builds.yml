@@ -138,7 +138,8 @@ jobs:
         run: docker cp build-post:/home/daos/daos/nlt-junit.xml ./
       - name: Publish NLT test results
         if: always()
-        uses: EnricoMi/publish-unit-test-result-action@v1.17
+        # yamllint disable-line rule:line-length
+        uses: EnricoMi/publish-unit-test-result-action@4e7013f9576bd22ffdae979dc6e68cb9ec2aeece  # v2.7.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           files: nlt-junit.xml
