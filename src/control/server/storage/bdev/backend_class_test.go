@@ -7,7 +7,6 @@
 package bdev
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -744,7 +743,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				return
 			}
 
-			gotOut, err := ioutil.ReadFile(cfgOutputPath)
+			gotOut, err := os.ReadFile(cfgOutputPath)
 			if err != nil {
 				t.Fatal(err)
 			}
