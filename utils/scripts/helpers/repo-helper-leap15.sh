@@ -7,7 +7,7 @@ set -uex
 # for custom packages if present.
 
 : "${REPO_FILE_URL:=}"
-: "${BASE_DISTRO:=opensuse/leap:15.5}"
+: "${BASE_DISTRO:=opensuse/leap:15.6}"
 : "${JENKINS_URL:=}"
 : "${REPOS:=}"
 

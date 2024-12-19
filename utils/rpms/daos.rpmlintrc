@@ -51,6 +51,6 @@ addFilter("daos-client-tests\.x86_64: E: devel-dependency protobuf-c-devel")
 
 # a functional test builds daos from source, so it needs the various *-devel packages for daos' build dependencies.
 addFilter("daos-client-tests\.x86_64: E: devel-dependency capstone-devel")
-addFilter("daos-client-tests\.x86_64: E: explicit-lib-dependency lib(capstone|ndctl)-devel")
+addFilter("daos-client-tests\.x86_64: E: explicit-lib-dependency lib(capstone|ndctl|protobuf-c)-devel")
 addFilter("daos-client-tests\.x86_64: E: devel-dependency libcapstone-devel")
 addFilter("daos-client-tests\.x86_64: E: devel-dependency fuse3-devel")
