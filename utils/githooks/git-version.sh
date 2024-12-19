@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 VERSION=$(git --version | sed -ne 's/^[^0-9]*\([[0-9\.]*\).*/\1/p')
 if [ -z "$VERSION" ]; then
