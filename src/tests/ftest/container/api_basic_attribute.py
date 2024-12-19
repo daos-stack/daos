@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -165,8 +165,8 @@ class ContainerAPIBasicAttributeTest(TestWithServers):
             if set_exp_result == 'FAIL':
                 self.fail("set_attr() was expected to fail but it worked!")
         except DaosApiError as error:
-            print(error)
-            print(traceback.format_exc())
+            self.log.error(error)
+            self.log.error(traceback.format_exc())
             if self.expected_result == "PASS":
                 self.fail(
                     "set_attr was supposed to work, but failed! name-value = {}".format(
@@ -176,8 +176,8 @@ class ContainerAPIBasicAttributeTest(TestWithServers):
         try:
             size, buf = self.container.container.list_attr()
         except DaosApiError as excep:
-            print(excep)
-            print(traceback.format_exc())
+            self.log.error(excep)
+            self.log.error(traceback.format_exc())
             self.fail("list_attr failed!")
 
         if self.expected_result == 'PASS':
@@ -195,8 +195,8 @@ class ContainerAPIBasicAttributeTest(TestWithServers):
             if self.expected_result == 'FAIL':
                 self.fail("get_attr() was expected to fail but it worked!")
         except (DaosApiError, DaosTestError) as excep:
-            print(excep)
-            print(traceback.format_exc())
+            self.log.error(excep)
+            self.log.error(traceback.format_exc())
             if self.expected_result == 'PASS':
                 msg = "get_attr was supposed to work, but failed! attr_name = {}".format(
                     self.attr_name)
@@ -238,8 +238,8 @@ class ContainerAPIBasicAttributeTest(TestWithServers):
                 ret_code=callback_handler.ret_code, expected_result=set_exp_result,
                 method_name="set_attr")
         except DaosApiError as error:
-            print(error)
-            print(traceback.format_exc())
+            self.log.error(error)
+            self.log.error(traceback.format_exc())
             if self.expected_result == "PASS":
                 self.fail(
                     "set_attr was supposed to work, but failed! name-value = {}".format(
@@ -256,8 +256,8 @@ class ContainerAPIBasicAttributeTest(TestWithServers):
             if ret_code != 0:
                 self.fail("Unexpected RC after list_attr! {}".format(ret_code))
         except DaosApiError as excep:
-            print(excep)
-            print(traceback.format_exc())
+            self.log.error(excep)
+            self.log.error(traceback.format_exc())
             self.fail("list_attr failed!")
 
         if self.expected_result == 'PASS':
@@ -281,8 +281,8 @@ class ContainerAPIBasicAttributeTest(TestWithServers):
                 ret_code=callback_handler.ret_code, expected_result=self.expected_result,
                 method_name="get_attr")
         except DaosApiError as excep:
-            print(excep)
-            print(traceback.format_exc())
+            self.log.error(excep)
+            self.log.error(traceback.format_exc())
             if self.expected_result == 'PASS':
                 msg = "get_attr was supposed to work, but failed! attr_name = {}".format(
                     self.attr_name)
