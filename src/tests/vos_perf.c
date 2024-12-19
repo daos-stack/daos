@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -24,7 +24,6 @@
 #include <daos_test.h>
 #include <daos/dts.h>
 #include "perf_internal.h"
-#include <daos/stack_mmap.h>
 
 uint64_t	ts_flags;
 bool                    ts_flat = false;
@@ -38,10 +37,6 @@ daos_unit_oid_t	*ts_uoids;	/* object shard IDs */
 bool		ts_in_ult;	/* Run tests in ULT mode */
 static ABT_xstream	abt_xstream;
 
-#ifdef ULT_MMAP_STACK
-struct stack_pool *sp;
-#endif
-
 static int
 ts_abt_init(void)
 {
@@ -51,7 +46,7 @@ ts_abt_init(void)
 
 	rc = ABT_init(0, NULL);
 	if (rc != ABT_SUCCESS) {
-		fprintf(stderr, "ABT init failed: %d\n", rc);
+		fprintf(stderr, "Failed to init ABT: " AF_RC "\n", AP_RC(rc));
 		return -1;
 	}
 
@@ -63,7 +58,7 @@ ts_abt_init(void)
 
 	rc = ABT_xstream_get_cpubind(abt_xstream, &cpuid);
 	if (rc != ABT_SUCCESS) {
-		fprintf(stderr, "get cpubind failed: %d\n", rc);
+		fprintf(stderr, "get cpubind failed: " AF_RC "\n", AP_RC(rc));
 		fprintf(stderr, "No CPU affinity for this test.\n");
 		fprintf(stderr, "Build ABT by --enable-affinity if"
 			" you want to try CPU affinity.\n");
@@ -72,7 +67,7 @@ ts_abt_init(void)
 
 	rc = ABT_xstream_get_affinity(abt_xstream, 0, NULL, &num_cpus);
 	if (rc != ABT_SUCCESS) {
-		fprintf(stderr, "get num_cpus: %d\n", rc);
+		fprintf(stderr, "get num_cpus: " AF_RC "\n", AP_RC(rc));
 		fprintf(stderr, "No CPU affinity for this test.\n");
 		fprintf(stderr, "Build ABT by --enable-affinity if"
 			" you want to try CPU affinity.\n");
@@ -82,7 +77,7 @@ ts_abt_init(void)
 	cpuid = (cpuid + 1) % num_cpus;
 	rc = ABT_xstream_set_cpubind(abt_xstream, cpuid);
 	if (rc != ABT_SUCCESS) {
-		fprintf(stderr, "set affinity: %d\n", rc);
+		fprintf(stderr, "set affinity: " AF_RC "\n", AP_RC(rc));
 		fprintf(stderr, "No CPU affinity for this test.\n");
 		fprintf(stderr, "Build ABT by --enable-affinity if"
 			" you want to try CPU affinity.\n");
@@ -206,10 +201,8 @@ vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 	ult_arg.epoch = epoch;
 	ult_arg.duration = duration;
 	ult_arg.obj_idx = obj_idx;
-	rc = daos_abt_thread_create_on_xstream(sp, NULL, abt_xstream,
-					       vos_update_or_fetch_ult,
-					       &ult_arg, ABT_THREAD_ATTR_NULL,
-					       &thread);
+	rc = ABT_thread_create_on_xstream(abt_xstream, vos_update_or_fetch_ult, &ult_arg,
+					  ABT_THREAD_ATTR_NULL, &thread);
 	if (rc != ABT_SUCCESS)
 		return rc;
 
@@ -759,7 +752,7 @@ const struct option perf_vos_opts[] = {
     {"flat_dkey", no_argument, NULL, 'f'},
     {"const_akey", no_argument, NULL, 'I'},
     {"abt_ult", no_argument, NULL, 'x'},
-    {NULL, 0, NULL, 0},
+    {NULL, -1, NULL, 0},
 };
 
 const char perf_vos_optstr[] = "D:zifIx";
@@ -912,12 +905,6 @@ main(int argc, char **argv)
 
 	ts_update_or_fetch_fn = vos_update_or_fetch;
 
-#ifdef ULT_MMAP_STACK
-	rc = stack_pool_create(&sp);
-	if (rc)
-		return -1;
-#endif
-
 	rc = dts_ctx_init(&ts_ctx, &vos_engine);
 	if (rc)
 		return -1;
@@ -980,9 +967,6 @@ main(int argc, char **argv)
 	stride_buf_fini();
 	dts_ctx_fini(&ts_ctx);
 
-#ifdef ULT_MMAP_STACK
-	stack_pool_destroy(sp);
-#endif
 	par_fini();
 
 	if (ts_uoids)

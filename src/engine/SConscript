@@ -34,9 +34,6 @@ def scons():
                'sched.c', 'ult.c', 'event.pb-c.c',
                'srv_metrics.c'] + libdaos_tgts
 
-    if denv["STACK_MMAP"] == 1:
-        denv.Append(CCFLAGS=['-DULT_MMAP_STACK'])
-
     # Generate I/O Engine program
     engine = denv.d_program('daos_engine', sources, LIBS=libraries)
     denv.Install('$PREFIX/bin', engine)
