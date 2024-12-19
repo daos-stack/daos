@@ -107,13 +107,12 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         return pool_usage
 
     def display_pool_stats(self, pool_space, pool_space_metrics):
-        """Display statistics on pool usage.
+        """Display usage statistics of a given pool.
 
         Args:
             pool_space (object): space usage information of a pool.
             pool_space_metrics (dict): dict of metrics on space usage of a pool.
         """
-
         title = f"{' Pool Space Usage ':-^80}"
         self.log.debug(title)
 
@@ -163,6 +162,13 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
                         align_op = ">"
                     row[idx] = f"{elt:{align_op}{cols_size[idx]}}"
                 self.log.debug(" | ".join(row))
+
+    def display_stats(self):
+        """Display usage statistics of the tested pool."""
+        self.pool.get_info()
+        pool_space = self.pool.info.pi_space
+        pool_space_metrics = self.get_pool_space_metrics(self.pool.uuid)
+        self.display_pool_stats(pool_space, pool_space_metrics)
 
     def verify_enospace_log(self, log_file):
         """Function checking logs consistency.
@@ -295,13 +301,17 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         # Fill 75% of current SCM free space. Aggregation is Enabled so NVMe space will
         # start to fill up.
         self.log.info('--Filling 75% of the current SCM free space--')
-        self.start_ior_load(storage='SCM', operation="Auto_Write", percent=75)
-        self.log.info(self.pool.pool_percentage_used())
+        try:
+            self.start_ior_load(storage='SCM', operation="Auto_Write", percent=75)
+        finally:
+            self.display_stats()
 
         # Fill 50% of current SCM free space. Aggregation is Enabled so NVMe space will
         # continue to fill up.
-        self.start_ior_load(storage='SCM', operation="Auto_Write", percent=50)
-        self.log.info(self.pool.pool_percentage_used())
+        try:
+            self.start_ior_load(storage='SCM', operation="Auto_Write", percent=50)
+        finally:
+            self.display_stats()
 
         # Fill 60% of current SCM free space. This time, NVMe will be Full so data will
         # not be moved to NVMe and continue to fill up SCM. SCM will be full and this
@@ -314,12 +324,11 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             self.log.info('Test is expected to fail because of DER_NOSPACE')
         else:
             self.fail('This test is suppose to FAIL because of DER_NOSPACE but it Passed')
-
-        # Display the pool statistics
-        self.pool.get_info()
-        pool_space = self.pool.info.pi_space
-        pool_space_metrics = self.get_pool_space_metrics(self.pool.uuid)
-        self.display_pool_stats(pool_space, pool_space_metrics)
+        finally:
+            self.pool.get_info()
+            pool_space = self.pool.info.pi_space
+            pool_space_metrics = self.get_pool_space_metrics(self.pool.uuid)
+            self.display_pool_stats(pool_space, pool_space_metrics)
 
         # verify the DER_NO_SPACE error count is expected and no other Error in client log
         self.verify_enospace_log(log_file)
