@@ -61,6 +61,7 @@ struct sched_info {
 	/* Number of kicked requests for each type in current cycle */
 	uint32_t		 si_kicked_req_cnt[SCHED_REQ_MAX];
 	unsigned int		 si_stop:1;
+	uint64_t		 si_agg_gap;
 };
 
 struct mem_stats {
