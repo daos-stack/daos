@@ -265,7 +265,7 @@ func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
 
 // newTestMgmtSvcMulti creates a mgmtSvc that contains the requested
 // number of EngineInstances. If requested, the first instance is
-// configured as an access point.
+// configured as a MS replica.
 func newTestMgmtSvcMulti(t *testing.T, log logging.Logger, count int, isAP bool) *mgmtSvc {
 	harness := NewEngineHarness(log)
 	provider := storage.MockProvider(log, 0, nil, nil, nil, nil, nil)

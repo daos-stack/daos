@@ -44,24 +44,24 @@ server_config_val: !mux
       - "name"
       - "amjustin, 12345, abcdef"
       - "FAIL"
-  access_point_noport:
+  mgt_svc_replica_noport:
     config_val:
-      - "access_points"
+      - "mgmt_svc_replicas"
       - [localhost]
       - "PASS"
-  # access_point_repeated:
+  # mgmt_svc_replica_repeated:
   #   config_val:
-  #     - "access_points"
+  #     - "mgmt_svc_replicas"
   #     - [localhost:10001, localhost:10001]
   #     - "FAIL"
-  # access_point_wrong_port:
+  # mgmt_svc_replica_wrong_port:
   #   config_val:
-  #     - "access_points"
+  #     - "mgmt_svc_replicas"
   #     - [localhost:12345]
   #     - "FAIL"
-  # access_point_wrong_name:
+  # mgmt_svc_replica_wrong_name:
   #   config_val:
-  #     - "access_points"
+  #     - "mgmt_svc_replicas"
   #     - [wrongName:10001]
   #     - "FAIL"
   control_log_file_does_not_exist:

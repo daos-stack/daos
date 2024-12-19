@@ -1464,6 +1464,7 @@ gc_reclaim_pool_p2(struct vos_pool *pool, int *credits, bool *empty_ret)
 		*credits = creds;
 
 	gc_update_stats(pool);
+	umem_heap_gc(vos_pool2umm(pool));
 	return rc;
 }
 

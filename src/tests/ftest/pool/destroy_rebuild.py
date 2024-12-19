@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -54,27 +54,27 @@ class DestroyRebuild(TestWithServers):
         # 3.
         self.log_step("Start rebuild, system stop")
         all_ranks = self.server_managers[0].ranks.keys()
-        ap_ranks = self.server_managers[0].get_host_ranks(self.access_points)
-        non_ap_ranks = list(set(all_ranks) - set(ap_ranks))
+        ms_ranks = self.server_managers[0].get_host_ranks(self.mgmt_svc_replicas)
+        non_ms_ranks = list(set(all_ranks) - set(ms_ranks))
 
         # Get the pool leader rank
         pool.set_query_data()
         leader_rank = pool.query_data["response"]["svc_ldr"]
-        if leader_rank in ap_ranks:
-            ap_ranks.remove(leader_rank)
-        elif leader_rank in non_ap_ranks:
-            non_ap_ranks.remove(leader_rank)
+        if leader_rank in ms_ranks:
+            ms_ranks.remove(leader_rank)
+        elif leader_rank in non_ms_ranks:
+            non_ms_ranks.remove(leader_rank)
 
         # Select the following ranks to stop
         #  - the pool leader rank
-        #  - a random rank that is not an access point
-        #  - a random rank this is an access point and not the pool leader
+        #  - a random rank that is not a MS replica
+        #  - a random rank this is a MS replica and not the pool leader
         self.log.debug(
-            "Engine ranks:  pool leader=%s, access points=%s, other=%s",
-            leader_rank, ap_ranks, non_ap_ranks)
+            "Engine ranks:  pool leader=%s, MS replicas=%s, other=%s",
+            leader_rank, ms_ranks, non_ms_ranks)
         ranks = [leader_rank]
-        ranks.append(random.choice(ap_ranks))  # nosec
-        ranks.append(random.choice(non_ap_ranks))  # nosec
+        ranks.append(random.choice(ms_ranks))  # nosec
+        ranks.append(random.choice(non_ms_ranks))  # nosec
         self.log.info("ranks to rebuild: %s", ranks)
 
         self.server_managers[0].stop_ranks(ranks, self.d_log, force=True)

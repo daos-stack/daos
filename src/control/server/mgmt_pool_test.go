@@ -48,6 +48,7 @@ var (
 			MemRatio:           mockMemRatio,
 		},
 	}
+	errNotReplica = errors.New("not a MS replica")
 )
 
 func getPoolLockCtx(t *testing.T, parent context.Context, sysdb poolDatabase, poolUUID uuid.UUID) (*raft.PoolLock, context.Context) {
@@ -442,9 +443,9 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				TierBytes:  []uint64{100 * humanize.GiByte, 0},
 				Properties: testPoolLabelProp(),
 			},
-			expErr: errors.New("not an access point"),
+			expErr: errNotReplica,
 		},
-		"not access point": {
+		"not MS replica": {
 			mgmtSvc:     notAP,
 			targetCount: 8,
 			req: &mgmtpb.PoolCreateReq{
@@ -452,7 +453,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				TierBytes:  []uint64{100 * humanize.GiByte, 0},
 				Properties: testPoolLabelProp(),
 			},
-			expErr: errors.New("not an access point"),
+			expErr: errNotReplica,
 		},
 		"dRPC send fails": {
 			targetCount: 8,
@@ -873,7 +874,7 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 			drpcResps: []*mockDrpcResponse{
 				&mockDrpcResponse{
 					Message: &mgmtpb.ListContResp{},
-					Error:   errors.New("not an access point"),
+					Error:   errNotReplica,
 				},
 			},
 			expDrpcListContReq: &mgmtpb.ListContReq{
@@ -881,7 +882,7 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 				Id:       mockUUID,
 				SvcRanks: []uint32{0, 1, 2},
 			},
-			expErr: errors.New("not an access point"),
+			expErr: errNotReplica,
 		},
 		// Note: evict dRPC fails as no pool service alive, remains in creating state.
 		// getPoolService() returns TryAgain in resp before list-cont dRPC is issued.
@@ -1392,11 +1393,11 @@ func TestServer_MgmtSvc_PoolExtend(t *testing.T) {
 		},
 		"missing superblock": {
 			mgmtSvc: missingSB,
-			expErr:  errors.New("not an access point"),
+			expErr:  errNotReplica,
 		},
-		"not access point": {
+		"not MS replica": {
 			mgmtSvc: notAP,
-			expErr:  errors.New("not an access point"),
+			expErr:  errNotReplica,
 		},
 		"dRPC send fails": {
 			expErr: errors.New("send failure"),
@@ -1508,11 +1509,11 @@ func TestServer_MgmtSvc_PoolReintegrate(t *testing.T) {
 		},
 		"missing superblock": {
 			mgmtSvc: missingSB,
-			expErr:  errors.New("not an access point"),
+			expErr:  errNotReplica,
 		},
-		"not access point": {
+		"not MS replica": {
 			mgmtSvc: notAP,
-			expErr:  errors.New("not an access point"),
+			expErr:  errNotReplica,
 		},
 		"dRPC send fails": {
 			expErr: errors.New("send failure"),
@@ -1624,12 +1625,12 @@ func TestServer_MgmtSvc_PoolExclude(t *testing.T) {
 		"missing superblock": {
 			mgmtSvc: missingSB,
 			req:     &mgmtpb.PoolExcludeReq{Id: mockUUID, Rank: 2, TargetIdx: []uint32{1, 2}},
-			expErr:  errors.New("not an access point"),
+			expErr:  errNotReplica,
 		},
-		"not access point": {
+		"not MS replica": {
 			mgmtSvc: notAP,
 			req:     &mgmtpb.PoolExcludeReq{Id: mockUUID, Rank: 2, TargetIdx: []uint32{1, 2}},
-			expErr:  errors.New("not an access point"),
+			expErr:  errNotReplica,
 		},
 		"dRPC send fails": {
 			req:    &mgmtpb.PoolExcludeReq{Id: mockUUID, Rank: 2, TargetIdx: []uint32{1, 2}},
@@ -1720,12 +1721,12 @@ func TestServer_MgmtSvc_PoolDrain(t *testing.T) {
 		"missing superblock": {
 			mgmtSvc: missingSB,
 			req:     &mgmtpb.PoolDrainReq{Id: mockUUID, Rank: 2, TargetIdx: []uint32{1, 2}},
-			expErr:  errors.New("not an access point"),
+			expErr:  errNotReplica,
 		},
-		"not access point": {
+		"not MS replica": {
 			mgmtSvc: notAP,
 			req:     &mgmtpb.PoolDrainReq{Id: mockUUID, Rank: 2, TargetIdx: []uint32{1, 2}},
-			expErr:  errors.New("not an access point"),
+			expErr:  errNotReplica,
 		},
 		"dRPC send fails": {
 			req:    &mgmtpb.PoolDrainReq{Id: mockUUID, Rank: 2, TargetIdx: []uint32{1, 2}},
@@ -1816,12 +1817,12 @@ func TestServer_MgmtSvc_PoolEvict(t *testing.T) {
 		"missing superblock": {
 			mgmtSvc: missingSB,
 			req:     &mgmtpb.PoolEvictReq{Id: mockUUID},
-			expErr:  errors.New("not an access point"),
+			expErr:  errNotReplica,
 		},
-		"not access point": {
+		"not MS replica": {
 			mgmtSvc: notAP,
 			req:     &mgmtpb.PoolEvictReq{Id: mockUUID},
-			expErr:  errors.New("not an access point"),
+			expErr:  errNotReplica,
 		},
 		"dRPC send fails": {
 			req:    &mgmtpb.PoolEvictReq{Id: mockUUID},
@@ -2339,7 +2340,7 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 			req: &mgmtpb.PoolQueryReq{
 				Id: mockUUID,
 			},
-			expErr: errors.New("not an access point"),
+			expErr: errNotReplica,
 		},
 		"dRPC send fails": {
 			req: &mgmtpb.PoolQueryReq{
@@ -2708,12 +2709,12 @@ func TestServer_MgmtSvc_PoolUpgrade(t *testing.T) {
 		"missing superblock": {
 			mgmtSvc: missingSB,
 			req:     &mgmtpb.PoolUpgradeReq{Id: mockUUID},
-			expErr:  errors.New("not an access point"),
+			expErr:  errNotReplica,
 		},
-		"not access point": {
+		"not MS replica": {
 			mgmtSvc: notAP,
 			req:     &mgmtpb.PoolUpgradeReq{Id: mockUUID},
-			expErr:  errors.New("not an access point"),
+			expErr:  errNotReplica,
 		},
 		"dRPC send fails": {
 			req:    &mgmtpb.PoolUpgradeReq{Id: mockUUID},
