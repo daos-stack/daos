@@ -46,7 +46,7 @@ service MgmtSvc {
 	// Extend a pool.
 	rpc PoolExtend(PoolExtendReq) returns (PoolExtendResp) {}
 	// Reintegrate a pool target.
-	rpc PoolReintegrate(PoolReintegrateReq) returns (PoolReintegrateResp) {}
+	rpc PoolReint(PoolReintReq) returns (PoolReintResp) {}
 	// PoolQuery queries a DAOS pool.
 	rpc PoolQuery(PoolQueryReq) returns (PoolQueryResp) {}
 	// PoolQueryTarget queries a DAOS storage target.
@@ -81,6 +81,8 @@ service MgmtSvc {
 	rpc SystemExclude(SystemExcludeReq) returns(SystemExcludeResp) {}
 	// Drain DAOS ranks from all pools
 	rpc SystemDrain(SystemDrainReq) returns (SystemDrainResp) {}
+	// Reintegrate DAOS ranks to all pools
+	rpc SystemReint(SystemReintReq) returns (SystemReintResp) {}
 	// Erase DAOS system database prior to reformat
 	rpc SystemErase(SystemEraseReq) returns(SystemEraseResp) {}
 	// Clean up leaked resources for a given node
