@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/pkg/errors"
@@ -31,6 +32,70 @@ const (
 	defaultServer        = "server"
 	defaultInsecure      = false
 )
+
+// MappedClientUser represents a client user that is mapped to a uid.
+type MappedClientUser struct {
+	User   string   `yaml:"user"`
+	Group  string   `yaml:"group"`
+	Groups []string `yaml:"groups"`
+}
+
+const (
+	defaultMapUser = "default"
+	defaultMapKey  = ^uint32(0)
+)
+
+// ClientUserMap is a map of uids to mapped client users.
+type ClientUserMap map[uint32]*MappedClientUser
+
+func (cm *ClientUserMap) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	strKeyMap := make(map[string]*MappedClientUser)
+	if err := unmarshal(&strKeyMap); err != nil {
+		return err
+	}
+
+	tmp := make(ClientUserMap)
+	for strKey, value := range strKeyMap {
+		var key uint32
+		switch strKey {
+		case defaultMapUser:
+			key = defaultMapKey
+		default:
+			parsedKey, err := strconv.ParseUint(strKey, 10, 32)
+			if err != nil {
+				return errors.Wrapf(err, "invalid uid %s", strKey)
+			}
+
+			switch parsedKey {
+			case uint64(defaultMapKey):
+				return errors.Errorf("uid %d is reserved", parsedKey)
+			default:
+				key = uint32(parsedKey)
+			}
+		}
+
+		tmp[key] = value
+	}
+	*cm = tmp
+
+	return nil
+}
+
+// Lookup attempts to resolve the supplied uid to a mapped
+// client user. If the uid is not in the map, the default map key
+// is returned. If the default map key is not found, nil is returned.
+func (cm ClientUserMap) Lookup(uid uint32) *MappedClientUser {
+	if mu, found := cm[uid]; found {
+		return mu
+	}
+	return cm[defaultMapKey]
+}
+
+// CredentialConfig contains configuration details for managing user
+// credentials.
+type CredentialConfig struct {
+	ClientUserMap ClientUserMap `yaml:"client_user_map,omitempty"`
+}
 
 // TransportConfig contains all the information on whether or not to use
 // certificates and their location if their use is specified.
