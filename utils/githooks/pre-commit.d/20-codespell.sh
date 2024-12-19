@@ -20,4 +20,4 @@ then
 fi
 
 echo "Checking for spelling mistakes"
-_git_diff_cached_files | xargs codespell
+_git_diff_cached_files | grep -v "src/control/vendor" | xargs codespell
