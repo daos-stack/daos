@@ -57,6 +57,7 @@ lookup_rel_path(dfs_t *dfs, dfs_obj_t *root, const char *path, int flags, dfs_ob
 	obj->d.oclass     = root->d.oclass;
 	obj->d.chunk_size = root->d.chunk_size;
 	obj->mode         = root->mode;
+	obj->dfs          = dfs;
 	strncpy(obj->name, root->name, DFS_MAX_NAME + 1);
 
 	rc = daos_obj_open(dfs->coh, obj->oid, daos_mode, &obj->oh, NULL);
