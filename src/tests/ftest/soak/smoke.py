@@ -26,6 +26,9 @@ class SoakSmoke(SoakTestBase):
         :avocado: tags=hw,large,24
         :avocado: tags=soak,soak_smoke
         :avocado: tags=SoakSmoke,test_soak_smoke
+
+        nothing
+
         """
         test_param = "/run/smoke/"
         self.run_soak(test_param)
