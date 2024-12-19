@@ -212,6 +212,8 @@ palloc_reservation_create(struct palloc_heap *heap, size_t size, palloc_constr c
 		return -1;
 	}
 
+	heap_soemb_active_iter_init(heap);
+
 retry:
 	mb = heap_mbrt_get_mb(heap, mb_id);
 	if (mb == NULL) {
@@ -288,7 +290,7 @@ out:
 	 */
 	if ((mb_id != 0) && (err == ENOMEM)) {
 		heap_mbrt_log_alloc_failure(heap, mb_id);
-		mb_id = 0;
+		mb_id = heap_soemb_active_get(heap);
 		goto retry;
 	}
 
