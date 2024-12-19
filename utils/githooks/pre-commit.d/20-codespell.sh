@@ -20,4 +20,5 @@ then
 fi
 
 echo "Checking for spelling mistakes"
-_git_diff_cached_files | grep -v "src/control/vendor" | xargs codespell
+# Convert file names to relative path format that codespell expects. I.e. "./path"
+_git_diff_cached_files | xargs -r -n 1 -I% echo "./%" | xargs -r codespell
