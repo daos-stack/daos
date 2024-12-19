@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -88,7 +88,12 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	DFUSE_TRA_INFO(dfuse_info, "kernel readdir cache support compiled in");
 
 	conn->want |= FUSE_CAP_READDIRPLUS;
-	conn->want |= FUSE_CAP_READDIRPLUS_AUTO;
+	/* Temporarily force readdir plus for all cases now, which can
+	 * help to save some lookup RPC for some cases. Though this can be
+	 * removed once we use object enumeration to replace the normal key
+	 * enumeration for readdir. XXX
+	 */
+	conn->want &= ~FUSE_CAP_READDIRPLUS_AUTO;
 
 #ifdef FUSE_CAP_CACHE_SYMLINKS
 	conn->want |= FUSE_CAP_CACHE_SYMLINKS;
