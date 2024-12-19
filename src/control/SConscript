@@ -36,6 +36,8 @@ def get_build_flags(benv):
     """Return string of build flags"""
     if is_release_build(benv):
         return '-buildmode=pie'
+    if 'SANITIZERS' in benv and benv['SANITIZERS'] != "":
+        return '-asan'
     # enable race detector for non-release builds
     return '-race'
 
