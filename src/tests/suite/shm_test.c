@@ -213,7 +213,7 @@ do_lock_mutex_child(bool lock_only)
 	struct d_shm_ht_head *ht_head_lock;
 	const char            ht_name[] = "shm_lock_test";
 	const char            key[]     = "mutex";
-	pthread_mutex_t      *mutex;
+	d_shm_mutex_t        *mutex;
 
 	/* test lock a mutex in shared memory in a child process */
 	rc = shm_init();
@@ -223,10 +223,10 @@ do_lock_mutex_child(bool lock_only)
 	rc = get_ht_with_name(ht_name, &ht_head_lock);
 	assert_true(rc == 0);
 
-	mutex = (pthread_mutex_t *)shm_ht_rec_find(ht_head_lock, key, strlen(key), &link);
+	mutex = (d_shm_mutex_t *)shm_ht_rec_find(ht_head_lock, key, strlen(key), &link);
 	assert_true(mutex != NULL);
 
-	shm_mutex_lock(mutex);
+	shm_mutex_lock(mutex, NULL);
 	sleep(TIME_SLEEP);
 	if (!lock_only)
 		shm_mutex_unlock(mutex);
@@ -237,7 +237,7 @@ do_lock(void **state)
 {
 	int                   rc;
 	int                   status;
-	pthread_mutex_t      *mutex;
+	d_shm_mutex_t        *mutex;
 	/* the hash table in shared memory */
 	struct d_shm_ht_head *ht_head_lock;
 	const char            ht_name[] = "shm_lock_test";
@@ -249,10 +249,11 @@ do_lock(void **state)
 	char                 *argv2[3] = {"shm_test", "--lockonly", NULL};
 	char                 *exe_path;
 	pid_t                 pid;
+	bool                  owner_dead;
 
 	/**
 	 * create shared memory, create a hash table, insert a key whose value is a struct of
-	 * pthread_mutex_t
+	 * d_shm_mutex_t
 	 */
 	rc = shm_init();
 	assert_true(rc == 0);
@@ -261,8 +262,8 @@ do_lock(void **state)
 	rc = shm_ht_create(ht_name, 8, 16, &ht_head_lock);
 	assert_true(rc == 0);
 
-	mutex = (pthread_mutex_t *)shm_ht_rec_find_insert(ht_head_lock, key, strlen(key),
-		KEY_VALUE_PTHREAD_LOCK, sizeof(pthread_mutex_t), &link);
+	mutex = (d_shm_mutex_t *)shm_ht_rec_find_insert(ht_head_lock, key, strlen(key),
+		INIT_KEY_VALUE_MUTEX, sizeof(d_shm_mutex_t), &link);
 	assert_true(mutex != NULL);
 
 	/* start a child process to lock this mutex */
@@ -280,11 +281,12 @@ do_lock(void **state)
 		usleep(18000);
 
 	gettimeofday(&tm1, NULL);
-	shm_mutex_lock(mutex);
+	shm_mutex_lock(mutex, &owner_dead);
 	gettimeofday(&tm2, NULL);
 	dt = (tm2.tv_sec - tm1.tv_sec) + (tm2.tv_usec - tm1.tv_usec) * 0.000001;
 	assert_true(fabs(dt - TIME_SLEEP) < 0.02);
 	shm_mutex_unlock(mutex);
+	assert_true(owner_dead == false);
 
 	waitpid(pid, &status, 0);
 	if (WIFEXITED(status))
@@ -303,8 +305,9 @@ do_lock(void **state)
 	if (WIFEXITED(status))
 		assert_int_equal(WEXITSTATUS(status), 0);
 
-	shm_mutex_lock(mutex);
+	shm_mutex_lock(mutex, &owner_dead);
 	shm_mutex_unlock(mutex);
+	assert_true(owner_dead);
 }
 
 static int

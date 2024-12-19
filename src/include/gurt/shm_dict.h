@@ -9,11 +9,8 @@
 /* the max length allowed for a hash table name */
 #define MAX_HT_NAME_LEN 16
 
-/* reserved string for pthread_rwlockattr_t as ht record value */
-#define KEY_VALUE_PTHREAD_RWLOCK "INIT_PTHREAD_RWLOCK"
-
-/* reserved string for pthread_mutexattr_t as ht record value */
-#define KEY_VALUE_PTHREAD_LOCK   "INIT_PTHREAD_LOCK"
+/* reserved string for d_shm_mutex_t as ht record value */
+#define INIT_KEY_VALUE_MUTEX   "INIT_MUTEX"
 
 /* struct of the record in the hash table stored in shared memory */
 struct shm_ht_rec {
@@ -45,8 +42,8 @@ struct d_shm_ht_head {
 	long int next;  /* offset to find the next d_shm_ht_head */
 
 	/**
-	 * pthread_mutex_t locks[n_lock] will be stored here. Multiple mutexes to alleviate lock
-	 *  contention
+	 * d_shm_mutex_t locks[n_lock] will be stored here. Multiple mutexes to alleviate lock
+	 * contention.
 	 */
 	/**
 	 * long int off_next[n_bucket] will be stored here. The array of offset to next shm_ht_rec
@@ -54,7 +51,7 @@ struct d_shm_ht_head {
 };
 
 /* the address of shared memory region */
-extern struct d_shm_alloc *d_shm_head;
+extern struct d_shm_hdr *d_shm_head;
 
 int
 shm_ht_create(const char name[], int bits, int n_lock, struct d_shm_ht_head **ht_head);

@@ -51,10 +51,6 @@
 #include <daos/common.h>
 #include <daos/dfs_lib_int.h>
 
-#include <gurt/list.h>
-#include <gurt/shm_alloc.h>
-#include <gurt/shm_dict.h>
-
 #include "hook.h"
 #include "pil4dfs_int.h"
 
@@ -96,12 +92,6 @@ static int                    fd_dummy = -1;
 #define DCACHE_GC_RECLAIM_MAX 1000
 /* Default dir cache garbage collector time-out in seconds */
 #define DCACHE_GC_PERIOD      120
-
-/* the pointer to global shared memory buffer across processes */
-//static struct d_shm_buf_loc *p_shm_buf;
-
-/* the hash table in shared memory for flock() across processes */
-static struct d_shm_ht_head *ht_head_flock;
 
 /* the number of low fd reserved */
 static uint16_t               low_fd_count;
@@ -966,8 +956,6 @@ static void
 child_hdlr(void)
 {
 	int rc;
-
-	shm_inc_ref();
 
 	/* daos is not initialized yet */
 	if (atomic_load_relaxed(&d_daos_inited) == false)
@@ -4574,8 +4562,6 @@ reset_daos_env_before_exec(void)
 {
 	int rc;
 
-	shm_dec_ref();
-
 	/* bash does fork(), then close opened files before exec(),
 	 * so the fd for log file probably is invalid now.
 	 */
@@ -6622,13 +6608,7 @@ posix_fadvise64(int fd, off_t offset, off_t len, int advice)
 int
 flock(int fd, int operation)
 {
-	int                fd_directed;
-	daos_obj_id_t      obj_id;
-	/* obj_id.hi + obj_id.low + item_name */
-	char               key[DFS_MAX_NAME + sizeof(daos_obj_id_t)*2];
-	pthread_rwlock_t  *p_locks;
-	int                rc;
-	struct shm_ht_rec *link;
+	int fd_directed;
 
 	if (next_flock == NULL) {
 		next_flock = dlsym(RTLD_NEXT, "flock");
@@ -6643,32 +6623,11 @@ flock(int fd, int operation)
 	if (d_compatible_mode && fd < FD_FILE_BASE)
 		return next_flock(fd, operation);
 
-	if (shm_inited() == false)
-		/* shared memory is not properly setup */
-		return ENOTSUP;
-
-	rc = dfs_obj2id(d_file_list[fd_directed - FD_FILE_BASE]->file, &obj_id);
-	D_ASSERT(rc == 0);
-	rc = snprintf(key, DFS_MAX_NAME + sizeof(daos_obj_id_t), "%lx%lx%s", obj_id.hi, obj_id.lo,
-		 d_file_list[fd_directed - FD_FILE_BASE]->item_name);
-	D_ASSERT((rc < (DFS_MAX_NAME + sizeof(daos_obj_id_t)*2)) && (rc > 0));
-	p_locks = (pthread_rwlock_t *)shm_ht_rec_find_insert(ht_head_flock, key, rc,
-		KEY_VALUE_PTHREAD_RWLOCK, sizeof(pthread_rwlock_t), &link);
-
-	if (operation == LOCK_SH) {
-		/* use read lock to mimic shared file lock */
-		rc = pthread_rwlock_rdlock(p_locks);
-	} else if (operation == LOCK_EX) {
-		/* use write lock to mimic exclusive file lock */
-		rc = pthread_rwlock_wrlock(p_locks);
-	} else if (operation == LOCK_UN) {
-		rc = pthread_rwlock_unlock(p_locks);
-	} else {
-		errno = EINVAL;
-		return -1;
-	}
-
-	return rc;
+	/* We output the message only if env "D_IL_REPORT" is set. */
+	if (report)
+		DS_ERROR(ENOTSUP, "flock() is not implemented yet");
+	errno = ENOTSUP;
+	return -1;
 }
 
 int
@@ -7174,27 +7133,6 @@ init_myhook(void)
 	else
 		daos_debug_inited = true;
 
-	rc = shm_init();
-	if (rc == 0) {
-		rc = shm_ht_create("shm_ht_flock", 8, 16, &ht_head_flock);
-		if (rc) {
-			/* decrease shared memory reference */
-			shm_dec_ref();
-			DS_ERROR(rc, "failed to create shm_ht_flock in shared memory");
-		}
-	} else {
-		/* shared memory cache will not be used. */
-		DS_ERROR(rc, "failed to initialize shared memory");
-	}
-
-	rc = d_agetenv_str(&env_log, "D_IL_REPORT");
-	if (env_log) {
-		report = true;
-		if (strncmp(env_log, "0", 2) == 0 || strncasecmp(env_log, "false", 6) == 0)
-			report = false;
-		d_freeenv_str(&env_log);
-	}
-
 	d_compatible_mode = false;
 	d_getenv_bool("D_IL_COMPATIBLE", &d_compatible_mode);
 
@@ -7444,9 +7382,6 @@ finalize_myhook(void)
 {
 	int       rc;
 	d_list_t *rlink;
-
-	if (shm_inited())
-		shm_dec_ref();
 
 	if (bypass)
 		return;

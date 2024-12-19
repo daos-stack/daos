@@ -9,6 +9,7 @@
 
 #include <stdint.h>
 #include <stdatomic.h>
+#include <gurt/shm_utils.h>
 #include <gurt/shm_tlsf.h>
 
 /* default value for invalid offset pointer */
@@ -38,14 +39,11 @@
  */
 #define LARGE_MEM       (64 * 1024)
 
-/* the address of shared memory region */
-extern struct d_shm_alloc *d_shm_head;
-
-/* Local info about a shm buffer. Each process has its own copy. */
-struct d_shm_alloc {
+/* Head of shared memory region */
+struct d_shm_hdr {
 	/* magic not equal DSM_MAGIC means shared memory is not initialized yet */
 	int              magic;
-	pthread_mutex_t  g_lock;
+	d_shm_mutex_t    g_lock;
 	/* the count of how many processes are mapping the shared memory region */
 	_Atomic int      ref_count;
 	/* global counter used for round robin picking memory allocator for large memory request */
@@ -53,10 +51,10 @@ struct d_shm_alloc {
 	/* array of pointors to memory allocators */
 	tlsf_t           tlsf[N_SHM_POOL];
 	/* lock for accessing one individual memory allocator */
-	pthread_mutex_t  mem_lock[N_SHM_POOL];
+	d_shm_mutex_t    mem_lock[N_SHM_POOL];
 
 	/* the lock needed when a hash table to be created or destroyed */
-	pthread_mutex_t  ht_lock;
+	d_shm_mutex_t    ht_lock;
 	/* the offset to the first hash table head */
 	long int         off_ht_head;
 
@@ -66,8 +64,11 @@ struct d_shm_alloc {
 	char             reserved[256];
 };
 
+/* the address of shared memory region */
+extern struct d_shm_hdr *d_shm_head;
+
 /* the total size of shared memory that will be allocated */
-#define SHM_SIZE_REQ  (SHM_POOL_SIZE * N_SHM_POOL + sizeof(struct d_shm_alloc))
+#define SHM_SIZE_REQ  (SHM_POOL_SIZE * N_SHM_POOL + sizeof(struct d_shm_hdr))
 
 
 /**

@@ -22,14 +22,14 @@
 /* the name of shared memory used for mmap which will be found under /dev/shm/ */
 #define daos_shm_name "daos_shm_cache"
 
+/* pid of current process */
+static int          pid;
+
 /* the memory allocator that will be used to handle small memory allocation */
 static __thread int idx_small = -1;
 
 /* the address of shared memory region */
-struct d_shm_alloc *d_shm_head;
-
-/* the attribute set for rwlock located inside shared memory */
-pthread_rwlockattr_t d_shm_rwlock_attr;
+struct d_shm_hdr *d_shm_head;
 
 /* the attribute set for mutex located inside shared memory */
 pthread_mutexattr_t  d_shm_mutex_attr;
@@ -44,14 +44,6 @@ pthread_mutexattr_t  d_shm_mutex_attr;
  */
 static int pid_shm_creator;
 
-#ifndef PTHREAD_MUTEXATTR_FLAG_ROBUST
-#define PTHREAD_MUTEXATTR_FLAG_ROBUST           0x40000000
-#endif
-
-#ifndef PTHREAD_MUTEXATTR_FLAG_PSHARED
-#define PTHREAD_MUTEXATTR_FLAG_PSHARED          0x80000000
-#endif
-
 int
 shm_init(void)
 {
@@ -62,18 +54,15 @@ shm_init(void)
 	int   rc;
 	char  daos_shm_name_buf[64];
 
+	if (pid == 0)
+		pid = getpid();
 	/* shared memory already initlized in current process */
 	if (d_shm_head)
 		return 0;
 
-	rc = pthread_rwlockattr_init(&d_shm_rwlock_attr);
-	D_ASSERT(rc == 0);
-	rc = pthread_rwlockattr_setpshared(&d_shm_rwlock_attr, PTHREAD_PROCESS_SHARED);
-	D_ASSERT(rc == 0);
-
 	rc = pthread_mutexattr_init(&d_shm_mutex_attr);
 	D_ASSERT(rc == 0);
-	rc = pthread_mutexattr_settype(&d_shm_mutex_attr, PTHREAD_MUTEX_ERRORCHECK);
+	rc = pthread_mutexattr_settype(&d_shm_mutex_attr, PTHREAD_MUTEX_NORMAL);
 	D_ASSERT(rc == 0);
 	rc = pthread_mutexattr_setpshared(&d_shm_mutex_attr, PTHREAD_PROCESS_SHARED);
 	D_ASSERT(rc == 0);
@@ -110,7 +99,7 @@ shm_init(void)
 		DS_ERROR(errno, "mmap failed to map at desired address");
 		goto err;
 	}
-	d_shm_head = (struct d_shm_alloc *)shm_addr;
+	d_shm_head = (struct d_shm_hdr *)shm_addr;
 	/* wait until the shared memory initlization finished */
 	while (d_shm_head->magic != DSM_MAGIC)
 		usleep(1);
@@ -143,28 +132,28 @@ create_shm:
 		DS_ERROR(errno, "mmap() failed to map at desired address");
 		goto err;
 	}
-	d_shm_head = (struct d_shm_alloc *)shm_addr;
+	d_shm_head = (struct d_shm_hdr *)shm_addr;
 	for (i = 0; i < N_SHM_POOL; i++) {
-		d_shm_head->tlsf[i] = tlsf_create_with_pool(shm_addr + sizeof(struct d_shm_alloc) +
+		d_shm_head->tlsf[i] = tlsf_create_with_pool(shm_addr + sizeof(struct d_shm_hdr) +
 				      (i * SHM_POOL_SIZE), SHM_POOL_SIZE);
 	}
 
-	if(pthread_mutex_init(&(d_shm_head->g_lock), &d_shm_mutex_attr) != 0) {
-		DS_ERROR(errno, "pthread_mutex_init() failed");
+	if(shm_mutex_init(&(d_shm_head->g_lock)) != 0) {
+		DS_ERROR(errno, "shm_mutex_init() failed");
 		goto err_unmap;
 	}
 	for (i = 0; i < N_SHM_POOL; i++) {
-		if(pthread_mutex_init(&(d_shm_head->mem_lock[i]), &d_shm_mutex_attr) != 0) {
-			DS_ERROR(errno, "pthread_mutex_init() failed");
+		if(shm_mutex_init(&(d_shm_head->mem_lock[i])) != 0) {
+			DS_ERROR(errno, "shm_mutex_init() failed");
 			goto err_unmap;
 		}
 	}
-	if(pthread_mutex_init(&(d_shm_head->ht_lock), &d_shm_mutex_attr) != 0) {
-		DS_ERROR(errno, "pthread_mutex_init() failed");
+	if(shm_mutex_init(&(d_shm_head->ht_lock)) != 0) {
+		DS_ERROR(errno, "shm_mutex_init() failed");
 		goto err_unmap;
 	}
 
-	pid_shm_creator = getpid();
+	pid_shm_creator = pid;
 	d_shm_head->off_ht_head = INVALID_OFFSET;
 
 	atomic_store_relaxed(&(d_shm_head->ref_count), 1);
@@ -203,7 +192,7 @@ shm_alloc_comm(size_t align, size_t size)
 		/* pick the allocator for large memery request with round-robin */
 		idx_allocator =  oldref % N_SHM_POOL;
 	}
-	shm_mutex_lock(&(d_shm_head->mem_lock[idx_allocator]));
+	shm_mutex_lock(&(d_shm_head->mem_lock[idx_allocator]), NULL);
 	if (align == 0)
 		buf = tlsf_malloc(d_shm_head->tlsf[idx_allocator], size);
 	else
@@ -243,7 +232,7 @@ shm_free(void *ptr)
 		return;
 	}
 
-	shm_mutex_lock(&(d_shm_head->mem_lock[idx_allocator]));
+	shm_mutex_lock(&(d_shm_head->mem_lock[idx_allocator]), NULL);
 	tlsf_free(d_shm_head->tlsf[idx_allocator], ptr);
 	shm_mutex_unlock(&(d_shm_head->mem_lock[idx_allocator]));
 }
@@ -262,7 +251,7 @@ shm_dec_ref(void)
 {
 	D_ASSERT(d_shm_head != NULL);
 	atomic_fetch_add_relaxed(&(d_shm_head->ref_count), -1);
-	if (getpid() != pid_shm_creator)
+	if (pid != pid_shm_creator)
 		munmap(d_shm_head, SHM_SIZE_REQ);
 	d_shm_head = NULL;
 }

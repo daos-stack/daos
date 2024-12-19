@@ -16,34 +16,28 @@
 #include <gurt/shm_utils.h>
 
 /* the address of shared memory region */
-extern struct d_shm_alloc *d_shm_head;
-
-/* the attribute set for rwlock located inside shared memory */
-extern pthread_rwlockattr_t d_shm_rwlock_attr;
-
-/* the attribute set for mutex located inside shared memory */
-extern pthread_mutexattr_t  d_shm_mutex_attr;
+extern struct d_shm_hdr *d_shm_head;
 
 int
 shm_ht_create(const char name[], int bits, int n_lock, struct d_shm_ht_head **ht_head)
 {
 	int i;
 	struct d_shm_ht_head *ht_head_loc;
-	long int *off_next;
-	long int offset;
-	pthread_mutex_t *p_locks;
-	int len_name;
-	int n_bucket;
+	long int             *off_next;
+	long int              offset;
+	d_shm_mutex_t        *p_locks;
+	int                   len_name;
+	int                   n_bucket;
 
 	*ht_head = NULL;
 	len_name = strnlen(name, MAX_HT_NAME_LEN);
 	if (len_name >= MAX_HT_NAME_LEN) {
-		printf("hash table name is longer than %d bytes.\n", MAX_HT_NAME_LEN - 1);
+		DS_ERROR(EINVAL, "hash table name is longer than %d bytes", MAX_HT_NAME_LEN - 1);
 		return EINVAL;
 	}
 
 	n_bucket = 1 << bits;
-	shm_mutex_lock(&(d_shm_head->ht_lock));
+	shm_mutex_lock(&(d_shm_head->ht_lock), NULL);
 
 	/* loop over existing hash tables to check whether it exists or not */
 	if (d_shm_head->off_ht_head != INVALID_OFFSET) {
@@ -70,7 +64,7 @@ shm_ht_create(const char name[], int bits, int n_lock, struct d_shm_ht_head **ht
 	}
 
 	/* This hash table does not exist, then create it. */
-	*ht_head = shm_alloc(sizeof(struct d_shm_ht_head) + (sizeof(pthread_mutex_t) * n_lock) +
+	*ht_head = shm_alloc(sizeof(struct d_shm_ht_head) + (sizeof(d_shm_mutex_t) * n_lock) +
 			     (sizeof(long int) * n_bucket));
 	if (*ht_head == NULL)
 		return ENOMEM;
@@ -80,15 +74,15 @@ shm_ht_create(const char name[], int bits, int n_lock, struct d_shm_ht_head **ht
 	ht_head_loc->n_bucket = n_bucket;
 	ht_head_loc->n_lock = n_lock;
 
-	p_locks = (pthread_mutex_t *)((char *)ht_head_loc + sizeof(struct d_shm_ht_head));
+	p_locks = (d_shm_mutex_t *)((char *)ht_head_loc + sizeof(struct d_shm_ht_head));
 	for (i = 0; i < n_lock; i++) {
-		if(pthread_mutex_init(&(p_locks[i]), &d_shm_mutex_attr) != 0) {
-			perror("pthread_mutex_init");
+		if(shm_mutex_init(&(p_locks[i])) != 0) {
+			DS_ERROR(errno, "shm_mutex_init() failed");
 			return errno;
 		}
 	}
 	off_next = (long int *)((char *)ht_head_loc + sizeof(struct d_shm_ht_head) +
-		(sizeof(pthread_mutex_t) * n_lock));
+		(sizeof(d_shm_mutex_t) * n_lock));
 	for (i = 0; i < n_bucket; i++)
 		off_next[i] = INVALID_OFFSET;
 	/* insert the new hash table as the first one */
@@ -102,12 +96,12 @@ shm_ht_create(const char name[], int bits, int n_lock, struct d_shm_ht_head **ht
 int
 shm_ht_rec_delete(struct d_shm_ht_head *ht_head, const char *key, const int ksize)
 {
-	unsigned int hash;
-	unsigned int idx;
-	unsigned int idx_lock;
-	pthread_mutex_t *p_ht_lock;
-	long int off_next;
-	long int *p_off_list;
+	unsigned int       hash;
+	unsigned int       idx;
+	unsigned int       idx_lock;
+	d_shm_mutex_t     *p_ht_lock;
+	long int           off_next;
+	long int          *p_off_list;
 	struct shm_ht_rec *rec;
 	struct shm_ht_rec *rec_prev = NULL;
 	struct shm_ht_rec *rec_next = NULL;
@@ -115,9 +109,9 @@ shm_ht_rec_delete(struct d_shm_ht_head *ht_head, const char *key, const int ksiz
 	hash = d_hash_string_u32(key, ksize);
 	idx = hash & (ht_head->n_bucket - 1);
 	idx_lock = (unsigned int)(idx * ht_head->n_lock * 1.0f / ht_head->n_bucket);
-	p_ht_lock = (pthread_mutex_t *)((char *)ht_head + sizeof(struct d_shm_ht_head));
-	p_off_list = (long int *)((char *)p_ht_lock + sizeof(pthread_mutex_t) * ht_head->n_lock);
-	shm_mutex_lock(&(p_ht_lock[idx_lock]));
+	p_ht_lock = (d_shm_mutex_t *)((char *)ht_head + sizeof(struct d_shm_ht_head));
+	p_off_list = (long int *)((char *)p_ht_lock + sizeof(d_shm_mutex_t) * ht_head->n_lock);
+	shm_mutex_lock(&(p_ht_lock[idx_lock]), NULL);
 	if (p_off_list[idx] < 0) {
 		/* empty bucket */
 		shm_mutex_unlock(&(p_ht_lock[idx_lock]));
@@ -160,13 +154,13 @@ shm_ht_rec_delete_at(struct d_shm_ht_head *ht_head, struct shm_ht_rec *link)
 	int idx_lock = link->idx_lock;
 	struct shm_ht_rec *rec_prev = NULL;
 	struct shm_ht_rec *rec_next = NULL;
-	pthread_mutex_t *p_ht_lock;
+	d_shm_mutex_t *p_ht_lock;
 
 	assert(link != NULL);
 	idx_lock = link->idx_lock;
-	p_ht_lock = (pthread_mutex_t *)((char *)ht_head + sizeof(struct d_shm_ht_head));
+	p_ht_lock = (d_shm_mutex_t *)((char *)ht_head + sizeof(struct d_shm_ht_head));
 
-	shm_mutex_lock(&(p_ht_lock[idx_lock]));
+	shm_mutex_lock(&(p_ht_lock[idx_lock]), NULL);
 	if (link->prev != INVALID_OFFSET) {
 		rec_prev = (struct shm_ht_rec *)((char *)d_shm_head + link->prev);
 		rec_prev->next = link->next;
@@ -197,21 +191,21 @@ shm_ht_rec_addref(struct shm_ht_rec *link)
 int
 shm_ht_destroy(struct d_shm_ht_head *ht_head, int force)
 {
-	int i;
-	int n_bucket = ht_head->n_bucket;
-	int n_lock = ht_head->n_lock;
-	pthread_mutex_t *p_ht_lock;
-	long int off_next;
-	long int *p_off_list;
-	struct shm_ht_rec *rec;
+	int                   i;
+	int                   n_bucket = ht_head->n_bucket;
+	int                   n_lock = ht_head->n_lock;
+	d_shm_mutex_t        *p_ht_lock;
+	long int              off_next;
+	long int             *p_off_list;
+	struct shm_ht_rec    *rec;
 	struct d_shm_ht_head *ht_head_prev;
 	struct d_shm_ht_head *ht_head_next;
 
 	/* free record in buckets of hash table */
 	for (i = 0; i < n_bucket; i++) {
-		p_ht_lock = (pthread_mutex_t *)((char *)ht_head + sizeof(struct d_shm_ht_head));
-		p_off_list = (long int *)((char *)p_ht_lock + sizeof(pthread_mutex_t) * n_lock);
-		shm_mutex_lock(&(p_ht_lock[i]));
+		p_ht_lock = (d_shm_mutex_t *)((char *)ht_head + sizeof(struct d_shm_ht_head));
+		p_off_list = (long int *)((char *)p_ht_lock + sizeof(d_shm_mutex_t) * n_lock);
+		shm_mutex_lock(&(p_ht_lock[i]), NULL);
 
 		off_next = p_off_list[i];
 		while (off_next != INVALID_OFFSET) {
@@ -278,23 +272,23 @@ void *
 shm_ht_rec_find(struct d_shm_ht_head *ht_head, const char *key, const int len_key, struct shm_ht_rec
 		**link)
 {
-	unsigned int hash;
-	unsigned int idx;
-	unsigned int idx_lock;
-	pthread_mutex_t *p_ht_lock;
-	long int off_next;
-	long int *p_off_list;
+	unsigned int       hash;
+	unsigned int       idx;
+	unsigned int       idx_lock;
+	d_shm_mutex_t     *p_ht_lock;
+	long int           off_next;
+	long int          *p_off_list;
 	struct shm_ht_rec *rec;
-	char *value = NULL;
+	char              *value = NULL;
 
 	if (link)
 		*link = NULL;
 	hash = d_hash_string_u32(key, len_key);
 	idx = hash & (ht_head->n_bucket - 1);
 	idx_lock = (unsigned int)(idx * ht_head->n_lock * 1.0f / ht_head->n_bucket);
-	p_ht_lock = (pthread_mutex_t *)((char *)ht_head + sizeof(struct d_shm_ht_head));
-	p_off_list = (long int *)((char *)p_ht_lock + sizeof(pthread_mutex_t) * ht_head->n_lock);
-	shm_mutex_lock(&(p_ht_lock[idx_lock]));
+	p_ht_lock = (d_shm_mutex_t *)((char *)ht_head + sizeof(struct d_shm_ht_head));
+	p_off_list = (long int *)((char *)p_ht_lock + sizeof(d_shm_mutex_t) * ht_head->n_lock);
+	shm_mutex_lock(&(p_ht_lock[idx_lock]), NULL);
 	if (p_off_list[idx] < 0) {
 		shm_mutex_unlock(&(p_ht_lock[idx_lock]));
 		return NULL;
@@ -326,7 +320,7 @@ shm_ht_rec_find_insert(struct d_shm_ht_head *ht_head, const char *key, const int
 	unsigned int       hash;
 	unsigned int       idx;
 	unsigned int       idx_lock;
-	pthread_mutex_t   *p_ht_lock;
+	d_shm_mutex_t     *p_ht_lock;
 	long int           off_next;
 	long int          *p_off_list;
 	struct shm_ht_rec *rec = NULL;
@@ -338,9 +332,9 @@ shm_ht_rec_find_insert(struct d_shm_ht_head *ht_head, const char *key, const int
 	hash = d_hash_string_u32(key, len_key);
 	idx = hash & (ht_head->n_bucket - 1);
 	idx_lock = (unsigned int)(idx * ht_head->n_lock * 1.0f / ht_head->n_bucket);
-	p_ht_lock = (pthread_mutex_t *)((char *)ht_head + sizeof(struct d_shm_ht_head));
-	p_off_list = (long int *)((char *)p_ht_lock + sizeof(pthread_mutex_t) * ht_head->n_lock);
-	shm_mutex_lock(&(p_ht_lock[idx_lock]));
+	p_ht_lock = (d_shm_mutex_t *)((char *)ht_head + sizeof(struct d_shm_ht_head));
+	p_off_list = (long int *)((char *)p_ht_lock + sizeof(d_shm_mutex_t) * ht_head->n_lock);
+	shm_mutex_lock(&(p_ht_lock[idx_lock]), NULL);
 	if (p_off_list[idx] != INVALID_OFFSET) {
 		off_next = p_off_list[idx];
 		while (off_next != INVALID_OFFSET) {
@@ -377,16 +371,10 @@ shm_ht_rec_find_insert(struct d_shm_ht_head *ht_head, const char *key, const int
 	value = (char *)new_rec + sizeof(struct shm_ht_rec) + len_key + new_rec->len_padding;
 	D_ASSERT(((uint64_t)value & (SHM_MEM_ALIGN - 1)) == 0);
 
-	if ((strcmp(val, KEY_VALUE_PTHREAD_LOCK) == 0) && (len_value == sizeof(pthread_mutex_t))) {
+	if (strcmp(val, INIT_KEY_VALUE_MUTEX) == 0) {
 		/* value holds a pthread mutex lock */
-		if (pthread_mutex_init((pthread_mutex_t *)value, &d_shm_mutex_attr) != 0) {
-			perror("pthread_mutex_init");
-			return NULL;
-		}
-	} else if ((strcmp(val, KEY_VALUE_PTHREAD_RWLOCK) == 0) && (len_value == sizeof(pthread_rwlock_t))) {
-		/* value holds a pthread read-write mutex lock */
-		if (pthread_rwlock_init((pthread_rwlock_t *)value, &d_shm_rwlock_attr) != 0) {
-			perror("pthread_rwlock_init");
+		if (shm_mutex_init((d_shm_mutex_t *)value) != 0) {
+			DS_ERROR(errno, "shm_mutex_init() failed");
 			return NULL;
 		}
 	} else {
