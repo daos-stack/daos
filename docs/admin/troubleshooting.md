@@ -313,7 +313,7 @@ sudo ipcrm -M 0x10242049
 1. Format the SCMs defined in the config file.
 1. Generate the config file using `dmg config generate`. The various requirements will be populated without a syntax error.
 1. Try starting with `allow_insecure: true`. This will rule out the credential certificate issue.
-1. Verify that the `access_points` host is accessible and the port is not used.
+1. Verify that the `mgmt_svc_replicas` host is accessible and the port is not used.
 1. Check the `provider` entry. See the "Network Scan and Configuration" section of the admin guide for determining the right provider to use.
 1. Check `fabric_iface` in `engines`. They should be available and enabled.
 1. Check that `socket_dir` is writable by the daos_server.
@@ -327,7 +327,7 @@ sudo ipcrm -M 0x10242049
 1. When the server configuration is changed, it's necessary to restart the agent.
 1. `DER_UNREACH(-1006)`: Check the socket ID consistency between PMem and NVMe. First, determine which socket you're using with `daos_server network scan -p all`. e.g., if the interface you're using in the engine section is eth0, find which NUMA Socket it belongs to. Next, determine the disks you can use with this socket by calling `daos_server nvme scan` or `dmg storage scan`. e.g., if eth0 belongs to NUMA Socket 0, use only the disks with 0 in the Socket ID column.
 1. Check the interface used in the server config (`fabric_iface`) also exists in the client and can communicate with the server.
-1. Check the access_points of the agent config points to the correct server host.
+1. Check the `access_points` of the agent config points to the correct server hosts.
 1. Call `daos pool query` and check that the pool exists and has free space.
 
 ### Applications run slow
@@ -512,7 +512,7 @@ fabric providers.
 
 After starting `daos_server`, ranks will be unable to join if their configuration's fabric provider
 does not match that of the system. The system configuration is determined by the management service
-(MS) leader node, which may be arbitrarily chosen from the configured access points.
+(MS) leader node, which may be arbitrarily chosen from the configured MS replicas.
 
 The error message will include the string: `fabric provider <provider1> does not match system provider <provider2>`
 
