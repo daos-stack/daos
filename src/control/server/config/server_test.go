@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
@@ -184,7 +183,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			bytes, err := ioutil.ReadFile(testFile)
+			bytes, err := os.ReadFile(testFile)
 			if err != nil {
 				t.Fatal(errors.WithMessage(err, "reading file"))
 			}
@@ -1429,7 +1428,7 @@ func replaceFile(t *testing.T, name, oldTxt, newTxt string) {
 	defer f.Close()
 
 	// create temp file
-	tmp, err := ioutil.TempFile("", "replace-*")
+	tmp, err := os.CreateTemp("", "replace-*")
 	if err != nil {
 		t.Fatal(err)
 	}
