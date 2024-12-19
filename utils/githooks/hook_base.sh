@@ -31,6 +31,7 @@ export -f _git_diff_cached_files
 hook=${0##*/}
 rm -f ".${hook}"
 
+skip_list=()
 IFS=', ' read -r -a skip_list <<< "${DAOS_GITHOOK_SKIP:-}"
 
 run-parts() {
