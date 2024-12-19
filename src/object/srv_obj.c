@@ -2896,8 +2896,10 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 	rc = process_epoch(&orw->orw_epoch, &orw->orw_epoch_first,
 			   &orw->orw_flags);
-	if (rc == PE_OK_LOCAL)
+	if (rc == PE_OK_LOCAL) {
 		orw->orw_flags &= ~ORF_EPOCH_UNCERTAIN;
+		dtx_flags |= DTX_EPOCH_OWNER;
+	}
 
 	if (obj_rpc_is_fetch(rpc)) {
 		struct dtx_handle	*dth;
@@ -3856,8 +3858,10 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 
 	rc = process_epoch(&opi->opi_epoch, NULL /* epoch_first */,
 			   &opi->opi_flags);
-	if (rc == PE_OK_LOCAL)
+	if (rc == PE_OK_LOCAL) {
 		opi->opi_flags &= ~ORF_EPOCH_UNCERTAIN;
+		dtx_flags |= DTX_EPOCH_OWNER;
+	}
 
 	version = opi->opi_map_ver;
 	max_ver = opi->opi_map_ver;
@@ -5110,6 +5114,7 @@ ds_obj_dtx_leader(struct daos_cpd_args *dca)
 			   &dcsh->dcsh_epoch.oe_first,
 			   &dcsh->dcsh_epoch.oe_rpc_flags);
 	if (rc == PE_OK_LOCAL) {
+		dtx_flags |= DTX_EPOCH_OWNER;
 		/*
 		 * In this case, writes to local RDGs can use the chosen epoch
 		 * without any uncertainty. This optimization is left to future
@@ -5701,8 +5706,10 @@ ds_obj_coll_punch_handler(crt_rpc_t *rpc)
 
 	if (ocpi->ocpi_flags & ORF_LEADER) {
 		rc = process_epoch(&ocpi->ocpi_epoch, NULL /* epoch_first */, &ocpi->ocpi_flags);
-		if (rc == PE_OK_LOCAL)
+		if (rc == PE_OK_LOCAL) {
 			ocpi->ocpi_flags &= ~ORF_EPOCH_UNCERTAIN;
+			dtx_flags |= DTX_EPOCH_OWNER;
+		}
 	} else if (dct_nr == 1) {
 		rc = obj_coll_local(rpc, dcts[0].dct_shards, dce, &version, &ioc, NULL,
 				    odm->odm_mbs, obj_coll_tgt_punch);
