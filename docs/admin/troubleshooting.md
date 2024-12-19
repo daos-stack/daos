@@ -554,6 +554,21 @@ To resolve the issue:
 
 Alternately, the administrator may erase and re-format the DAOS system to start over fresh using the new addresses.
 
+### Engines become unavailable
+
+Engines may become unavailable due to server power losses and reboots, network switch failures, etc. After staying unavailable for a certain period of time, these engines may become "excluded" or "errored" in `dmg system query` output. Once the states of all engines stabilize (see [`CRT_EVENT_DELAY`](env_variables.md)), each pool will check whether there is enough redundancy (see [Pool RF](pool_operations.md#pool-redundancy-factor)) to tolerate the unavailability of the "excluded" or "errored" engines. If there is enough redundancy, these engines will be excluded from the pool ("Disabled ranks" in `dmg pool query --health-only` output); otherwise, the pool will perform no exclusion ("Dead ranks" in `dmg pool query --health-only` output as described in [Querying a Pool](pool_operations.md#querying-a-pool)) and may become temporarily unavailable (as seen by timeouts of `dmg pool query`, `dmg pool list`, etc.). Similarly, when engines become available, whenever the states of all engines stabilize, each pool will perform the aforementioned check for any unavailable engines that remain.
+
+To restore availability as well as capacity and performance, try to start all "excluded" or "errored" engines. Starting all of them at the same time minimizes the chance of triggering rebuild jobs. In many cases, the following command suffices:
+```
+$ dmg system start
+```
+If some pools remain unavailable (e.g., `dmg pool list` keeps timing out) after the previous step, restart the whole system:
+```
+$ dmg system stop --force
+$ dmg system start
+```
+If some engines have been excluded from certain pools, and they are available again, reintegrate them to the pools.
+
 ## Diagnostic and Recovery Tools
 
 !!! WARNING : Please be careful and use this tool under supervision of DAOS support team.

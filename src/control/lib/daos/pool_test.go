@@ -114,8 +114,12 @@ func genTestMask(modifyFn func(pqm *PoolQueryMask)) PoolQueryMask {
 	return testMask
 }
 
-func genOptsStr(queryOpts ...string) string {
-	return strings.Join(queryOpts, ",")
+func genOptsStr(queryOpts ...PoolQueryOption) string {
+	optStrs := make([]string, 0, len(queryOpts))
+	for _, opt := range queryOpts {
+		optStrs = append(optStrs, opt.String())
+	}
+	return strings.Join(optStrs, ",")
 }
 
 func TestDaos_PoolQueryMask(t *testing.T) {
@@ -156,7 +160,7 @@ func TestDaos_PoolQueryMask(t *testing.T) {
 			testMask: genTestMask(func(pqm *PoolQueryMask) {
 				pqm.SetOptions(PoolQueryOptionSpace)
 			}),
-			expString: PoolQueryOptionSpace,
+			expString: PoolQueryOptionSpace.String(),
 		},
 		"set query space=false": {
 			testMask: genTestMask(func(pqm *PoolQueryMask) {
@@ -176,7 +180,7 @@ func TestDaos_PoolQueryMask(t *testing.T) {
 			testMask: genTestMask(func(pqm *PoolQueryMask) {
 				pqm.SetOptions(PoolQueryOptionRebuild)
 			}),
-			expString: PoolQueryOptionRebuild,
+			expString: PoolQueryOptionRebuild.String(),
 		},
 		"set query rebuild=false": {
 			testMask: genTestMask(func(pqm *PoolQueryMask) {
@@ -189,7 +193,7 @@ func TestDaos_PoolQueryMask(t *testing.T) {
 			testMask: genTestMask(func(pqm *PoolQueryMask) {
 				pqm.SetOptions(PoolQueryOptionEnabledEngines)
 			}),
-			expString: PoolQueryOptionEnabledEngines,
+			expString: PoolQueryOptionEnabledEngines.String(),
 		},
 		"set query enabled_engines=false": {
 			testMask: genTestMask(func(pqm *PoolQueryMask) {
@@ -202,7 +206,7 @@ func TestDaos_PoolQueryMask(t *testing.T) {
 			testMask: genTestMask(func(pqm *PoolQueryMask) {
 				pqm.SetOptions(PoolQueryOptionDisabledEngines)
 			}),
-			expString: PoolQueryOptionDisabledEngines,
+			expString: PoolQueryOptionDisabledEngines.String(),
 		},
 		"set query disabled_engines=false": {
 			testMask: genTestMask(func(pqm *PoolQueryMask) {
@@ -216,6 +220,33 @@ func TestDaos_PoolQueryMask(t *testing.T) {
 			if diff := cmp.Diff(tc.expString, tc.testMask.String()); diff != "" {
 				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
 			}
+		})
+	}
+}
+
+func TestDaos_PoolQueryMaskHasOption(t *testing.T) {
+	for name, tc := range map[string]struct {
+		testMask  PoolQueryMask
+		testOpt   PoolQueryOption
+		expHasOpt bool
+	}{
+		"empty shouldn't match anything": {
+			testOpt:   PoolQueryOptionSpace,
+			expHasOpt: false,
+		},
+		"health-only shouldn't match space": {
+			testMask:  HealthOnlyPoolQueryMask,
+			testOpt:   PoolQueryOptionSpace,
+			expHasOpt: false,
+		},
+		"default should match space": {
+			testMask:  DefaultPoolQueryMask,
+			testOpt:   PoolQueryOptionSpace,
+			expHasOpt: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.AssertEqual(t, tc.expHasOpt, tc.testMask.HasOption(tc.testOpt), "unexpected HasOption result")
 		})
 	}
 }
