@@ -59,6 +59,7 @@ struct dtx_req_args {
 	int				 dra_length;
 	/* The collective RPC result. */
 	int				 dra_result;
+	uint32_t			 dra_local_fail:1;
 	/* Pointer to the committed DTX list, used for DTX_REFRESH case. */
 	d_list_t			*dra_cmt_list;
 	/* Pointer to the aborted DTX list, used for DTX_REFRESH case. */
@@ -81,6 +82,7 @@ struct dtx_req_rec {
 	int				 drr_count; /* DTX count */
 	int				 drr_result; /* The RPC result */
 	uint32_t			 drr_comp:1,
+					 drr_local_fail:1,
 					 drr_single_dti:1;
 	uint32_t			 drr_inline_flags;
 	struct dtx_id			*drr_dti; /* The DTX array */
@@ -290,10 +292,13 @@ dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 		  "DTX req for opc %x to %d/%d (req %p future %p) sent epoch "DF_X64,
 		  dra->dra_opc, drr->drr_rank, drr->drr_tag, req, dra->dra_future, epoch);
 
-	if (rc != 0 && drr->drr_comp == 0) {
-		drr->drr_comp = 1;
-		drr->drr_result = rc;
-		ABT_future_set(dra->dra_future, drr);
+	if (rc != 0) {
+		drr->drr_local_fail = 1;
+		if (drr->drr_comp == 0) {
+			drr->drr_comp = 1;
+			drr->drr_result = rc;
+			ABT_future_set(dra->dra_future, drr);
+		}
 	}
 
 	return rc;
@@ -309,6 +314,8 @@ dtx_req_list_cb(void **args)
 	if (dra->dra_opc == DTX_CHECK) {
 		for (i = 0; i < dra->dra_length; i++) {
 			drr = args[i];
+			if (drr->drr_local_fail)
+				dra->dra_local_fail = 1;
 			dtx_merge_check_result(&dra->dra_result, drr->drr_result);
 			D_DEBUG(DB_TRACE, "The DTX "DF_DTI" RPC req result %d, status is %d.\n",
 				DP_DTI(&drr->drr_dti[0]), drr->drr_result, dra->dra_result);
@@ -316,6 +323,8 @@ dtx_req_list_cb(void **args)
 	} else {
 		for (i = 0; i < dra->dra_length; i++) {
 			drr = args[i];
+			if (drr->drr_local_fail)
+				dra->dra_local_fail = 1;
 			if (dra->dra_result == 0 || dra->dra_result == -DER_NONEXIST)
 				dra->dra_result = drr->drr_result;
 		}
@@ -382,7 +391,12 @@ dtx_req_list_send(struct dtx_common_args *dca, bool is_reentrance)
 		if (rc != ABT_SUCCESS) {
 			D_ERROR("ABT_future_create failed for opc %x, len %d: rc %d.\n",
 				dra->dra_opc, dca->dca_steps, rc);
-			return dss_abterr2der(rc);
+			dra->dra_local_fail = 1;
+			if (dra->dra_opc == DTX_CHECK)
+				dtx_merge_check_result(&dra->dra_result, dss_abterr2der(rc));
+			else if (dra->dra_result == 0 || dra->dra_result == -DER_NONEXIST)
+				dra->dra_result = dss_abterr2der(rc);
+			return DSS_CHORE_DONE;
 		}
 
 		D_DEBUG(DB_TRACE, "%p: DTX req for opc %x, future %p (%d) start.\n",
@@ -750,7 +764,12 @@ dtx_rpc(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **dtes,
 		switch (opc) {
 		case DTX_COMMIT:
 		case DTX_ABORT:
-			if (rc != -DER_EXCLUDED && rc != -DER_OOG)
+			/*
+			 * Continue to send out more RPCs as long as there is no local failure,
+			 * then other healthy participants can commit/abort related DTX entries
+			 * without being affected by the bad one(s).
+			 */
+			if (dca->dca_dra.dra_local_fail)
 				goto out;
 			break;
 		case DTX_CHECK:
@@ -826,17 +845,8 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 	if (rc > 0 || rc == -DER_NONEXIST || rc == -DER_EXCLUDED || rc == -DER_OOG)
 		rc = 0;
 
-	if (rc != 0) {
-		/*
-		 * Some DTX entries may have been committed on some participants. Then mark all
-		 * the DTX entries (in the dtis) as "PARTIAL_COMMITTED" and re-commit them later.
-		 * It is harmless to re-commit the DTX that has ever been committed.
-		 */
-		if (dra->dra_committed > 0)
-			rc1 = vos_dtx_set_flags(cont->sc_hdl, dca.dca_dtis, count,
-						DTE_PARTIAL_COMMITTED);
-	} else {
-		if (has_cos) {
+	if (rc == 0 || dra->dra_committed > 0) {
+		if (rc == 0 && has_cos) {
 			if (count > 1) {
 				D_ALLOC_ARRAY(rm_cos, count);
 				if (rm_cos == NULL)
@@ -846,7 +856,12 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 			}
 		}
 
-		rc1 = vos_dtx_commit(cont->sc_hdl, dca.dca_dtis, count, rm_cos);
+		/*
+		 * Some DTX entries may have been committed on some participants. Then mark all
+		 * the DTX entries (in the dtis) as "PARTIAL_COMMITTED" and re-commit them later.
+		 * It is harmless to re-commit the DTX that has ever been committed.
+		 */
+		rc1 = vos_dtx_commit(cont->sc_hdl, dca.dca_dtis, count, rc != 0, rm_cos);
 		if (rc1 > 0) {
 			dra->dra_committed += rc1;
 			rc1 = 0;
@@ -855,13 +870,28 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 			rc1 = 0;
 		}
 
-		if (rc1 == 0 && rm_cos != NULL) {
+		/*
+		 * For partial commit case, move related DTX entries to the tail of the
+		 * committable list, then the next batched commit can commit others and
+		 * retry those partial committed sometime later instead of blocking the
+		 * others committable with continuously retry the failed ones.
+		 *
+		 * The side-effect of such behavior is that the DTX which is committable
+		 * earlier maybe delay committed than the later ones.
+		 */
+		if (rc1 == 0 && has_cos) {
 			if (dcks != NULL) {
-				for (i = 0; i < count; i++) {
-					if (rm_cos[i]) {
-						D_ASSERT(!daos_oid_is_null(dcks[i].oid.id_pub));
+				if (rm_cos != NULL) {
+					for (i = 0; i < count; i++) {
+						if (!rm_cos[i])
+							continue;
 						dtx_cos_del(cont, &dca.dca_dtis[i], &dcks[i].oid,
-							    dcks[i].dkey_hash);
+							    dcks[i].dkey_hash, false);
+					}
+				} else {
+					for (i = 0; i < count; i++) {
+						dtx_cos_del(cont, &dca.dca_dtis[i], &dcks[i].oid,
+							    dcks[i].dkey_hash, true);
 					}
 				}
 			} else {
@@ -1141,7 +1171,7 @@ next2:
 			 * It has been committed/committable on leader, we may miss
 			 * related DTX commit request, so let's commit it locally.
 			 */
-			rc1 = vos_dtx_commit(cont->sc_hdl, &dsp->dsp_xid, 1, NULL);
+			rc1 = vos_dtx_commit(cont->sc_hdl, &dsp->dsp_xid, 1, false, NULL);
 			if (rc1 == 0 || rc1 == -DER_NONEXIST || !for_io /* cleanup case */) {
 				d_list_del(&dsp->dsp_link);
 				dtx_dsp_free(dsp);
@@ -1636,24 +1666,29 @@ dtx_coll_commit(struct ds_cont_child *cont, struct dtx_coll_entry *dce, struct d
 		committed += dcra.dcra_committed;
 	}
 
-	if (rc == 0 && rc1 == 0)
-		rc2 = vos_dtx_commit(cont->sc_hdl, &dce->dce_xid, 1, NULL);
-	else if (committed > 0)
+	if ((rc == 0 && rc1 == 0) || committed > 0) {
 		/* Mark the DTX as "PARTIAL_COMMITTED" and re-commit it later via cleanup logic. */
-		rc2 = vos_dtx_set_flags(cont->sc_hdl, &dce->dce_xid, 1, DTE_PARTIAL_COMMITTED);
-	if (rc2 > 0 || rc2 == -DER_NONEXIST)
-		rc2 = 0;
+		rc2 = vos_dtx_commit(cont->sc_hdl, &dce->dce_xid, 1, rc != 0 || rc1 != 0, NULL);
+		if (rc2 > 0 || rc2 == -DER_NONEXIST)
+			rc2 = 0;
+	}
 
 	/*
-	 * NOTE: Currently, we commit collective DTX one by one with high priority. So here we have
-	 *	 to remove the collective DTX entry from the CoS even if the commit failed remotely.
-	 *	 Otherwise, the batched commit ULT may be blocked by such "bad" entry.
+	 * For partial commit case, move related DTX entries to the tail of the
+	 * committable list, then the next batched commit can commit others and
+	 * retry those partial committed sometime later instead of blocking the
+	 * others committable with continuously retry the failed ones.
+	 *
+	 * The side-effect of such behavior is that the DTX which is committable
+	 * earlier maybe delay committed than the later ones.
 	 */
 	if (rc2 == 0 && has_cos) {
 		if (dck != NULL)
-			dtx_cos_del(cont, &dce->dce_xid, &dck->oid, dck->dkey_hash);
+			dtx_cos_del(cont, &dce->dce_xid, &dck->oid, dck->dkey_hash,
+				    rc != 0 || rc1 != 0);
 		else
-			dtx_cos_batched_del(cont, &dce->dce_xid, &cos, 1);
+			dtx_cos_batched_del(cont, &dce->dce_xid,
+					    rc != 0 || rc1 != 0 ? NULL : &cos, 1);
 	}
 
 	D_CDEBUG(rc != 0 || rc1 != 0 || rc2 != 0, DLOG_ERR, DB_TRACE,
