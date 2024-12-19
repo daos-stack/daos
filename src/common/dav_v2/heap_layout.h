@@ -82,8 +82,9 @@ enum chunk_type {
 	MAX_CHUNK_TYPE
 };
 
-/* zone header flags */
+/* zone header bit flags */
 #define ZONE_EVICTABLE_MB 0x0001
+#define ZONE_SOE_MB       0x0002
 
 struct chunk {
 	uint8_t data[CHUNKSIZE];
