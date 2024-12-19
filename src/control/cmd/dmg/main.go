@@ -262,6 +262,7 @@ and access control settings, along with system wide operations.`
 
 		if opts.Insecure {
 			ctlCfg.TransportConfig.AllowInsecure = true
+			ctlCfg.TelemetryConfig.AllowInsecure = true
 		}
 		if err := ctlCfg.TransportConfig.PreLoadCertData(); err != nil {
 			return errors.Wrap(err, "Unable to load Certificate Data")
