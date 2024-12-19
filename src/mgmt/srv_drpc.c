@@ -394,7 +394,7 @@ static int pool_create_fill_resp(Mgmt__PoolCreateResp *resp, uuid_t uuid, d_rank
 
 	D_DEBUG(DB_MGMT, "%d service replicas\n", svc_ranks->rl_nr);
 
-	rc = ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, &pool_info, NULL, NULL);
+	rc = ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, NULL, &pool_info, NULL, NULL);
 	if (rc != 0) {
 		D_ERROR("Failed to query created pool: rc=%d\n", rc);
 		D_GOTO(out, rc);
@@ -1744,10 +1744,14 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	uuid_t			uuid;
 	daos_pool_info_t	pool_info = {0};
 	d_rank_list_t		*svc_ranks;
-	d_rank_list_t		*ranks;
-	d_rank_range_list_t	*range_list;
+	d_rank_list_t           *ranks             = NULL;
+	d_rank_range_list_t     *range_list        = NULL;
+	d_rank_range_list_t     *range_list1       = NULL;
+	d_rank_list_t           *suspect_ranks     = NULL;
 	char			*range_list_str = NULL;
+	char                    *suspect_ranks_str = NULL;
 	bool			truncated;
+	bool                     truncated1;
 	size_t			len;
 	uint8_t			*body;
 
@@ -1778,8 +1782,8 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	pool_info.pi_bits = req->query_mask;
-	rc = ds_mgmt_pool_query(uuid, svc_ranks, &ranks, &pool_info, &resp.pool_layout_ver,
-				&resp.upgrade_layout_ver);
+	rc                = ds_mgmt_pool_query(uuid, svc_ranks, &ranks, &suspect_ranks, &pool_info,
+					       &resp.pool_layout_ver, &resp.upgrade_layout_ver);
 	if (rc != 0) {
 		D_ERROR("Failed to query the pool, rc=%d\n", rc);
 		goto out_svc_ranks;
@@ -1792,9 +1796,19 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	range_list_str = d_rank_range_list_str(range_list, &truncated);
 	if (range_list_str == NULL)
 		D_GOTO(out_ranges, rc = -DER_NOMEM);
-	D_DEBUG(DB_MGMT, DF_UUID": %s ranks: %s%s\n", DP_UUID(uuid),
+	range_list1 = d_rank_range_list_create_from_ranks(suspect_ranks);
+	if (range_list1 == NULL)
+		D_GOTO(out_suspect, rc = -DER_NOMEM);
+	suspect_ranks_str = d_rank_range_list_str(range_list1, &truncated1);
+	if (suspect_ranks_str == NULL) {
+		DL_ERROR(rc, DF_UUID ": Failed to serialize the list of suspect ranks",
+			 DP_UUID(uuid));
+		D_GOTO(out_suspect, rc = -DER_NOMEM);
+	}
+	D_DEBUG(DB_MGMT, DF_UUID ": %s ranks: %s%s, suspect_ranks: %s%s\n", DP_UUID(uuid),
 		pool_info.pi_bits & DPI_ENGINES_ENABLED ? "ENABLED" : "DISABLED", range_list_str,
-		truncated ? " ...(TRUNCATED)" : "");
+		truncated ? " ...(TRUNCATED)" : "", suspect_ranks_str,
+		truncated1 ? "...(TRUNCATED)" : "");
 
 	/* Populate the response */
 	resp.query_mask       = pool_info.pi_bits;
@@ -1809,11 +1823,12 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp.version = pool_info.pi_map_ver;
 	resp.enabled_ranks    = (req->query_mask & DPI_ENGINES_ENABLED) ? range_list_str : "";
 	resp.disabled_ranks   = (req->query_mask & DPI_ENGINES_DISABLED) ? range_list_str : "";
+	if (suspect_ranks_str != NULL)
+		resp.suspect_ranks = suspect_ranks_str;
 
 	D_ALLOC_ARRAY(resp.tier_stats, DAOS_MEDIA_MAX);
-	if (resp.tier_stats == NULL) {
-		D_GOTO(out_ranges, rc = -DER_NOMEM);
-	}
+	if (resp.tier_stats == NULL)
+		D_GOTO(out_suspect, rc = -DER_NOMEM);
 
 	storage_usage_stats_from_pool_space(&scm, &pool_info.pi_space,
 					    DAOS_MEDIA_SCM);
@@ -1828,6 +1843,9 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	pool_rebuild_status_from_info(&rebuild, &pool_info.pi_rebuild_st);
 	resp.rebuild = &rebuild;
 
+out_suspect:
+	d_rank_range_list_free(range_list1);
+	d_rank_list_free(suspect_ranks);
 out_ranges:
 	d_rank_range_list_free(range_list);
 out_ranks:
@@ -1848,6 +1866,7 @@ out:
 	}
 
 	D_FREE(range_list_str);
+	D_FREE(suspect_ranks_str);
 
 	mgmt__pool_query_req__free_unpacked(req, &alloc.alloc);
 
