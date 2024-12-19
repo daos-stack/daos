@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # /*
 #  * (C) Copyright 2024 Intel Corporation.
 #  *

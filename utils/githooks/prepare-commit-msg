@@ -1,3 +1,3 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 . utils/githooks/hook_base.sh
