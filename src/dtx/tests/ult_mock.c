@@ -80,7 +80,7 @@ dss_chore_diy(struct dss_chore *chore, dss_chore_func_t func)
 }
 
 int
-dss_chore_delegate(struct dss_chore *chore, dss_chore_func_t func)
+dss_chore_delegate(struct dss_chore *chore, dss_chore_func_t func, bool iofw)
 {
 	assert_true(false);
 	return -DER_NOMEM;
