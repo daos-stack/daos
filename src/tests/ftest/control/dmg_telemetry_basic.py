@@ -1,5 +1,5 @@
 """
-(C) Copyright 2021-2023 Intel Corporation.
+(C) Copyright 2021-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -91,7 +91,7 @@ class TestWithTelemetryBasic(TestWithTelemetry):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
-        :avocado: tags=control,telemetry,container
+        :avocado: tags=control,telemetry,container,secure_telemetry
         :avocado: tags=TestWithTelemetryBasic,test_container_telemetry
         """
         container_qty = self.params.get("container_qty", "/run/test/*", 1)
