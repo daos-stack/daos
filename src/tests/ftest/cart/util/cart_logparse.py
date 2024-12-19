@@ -1,5 +1,5 @@
 # /*
-#  * (C) Copyright 2016-2023 Intel Corporation.
+#  * (C) Copyright 2016-2024 Intel Corporation.
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 # */
@@ -104,7 +104,8 @@ class LogLine():
         except KeyError as error:
             raise InvalidLogFile(fields[4]) from error
 
-        # self.time_stamp = fields[0]
+        self.time_stamp = fields[0]
+        self.hostname = fields[1]
         self._fields = fields[5:]
         try:
             if self._fields[1][-2:] == '()':
@@ -368,7 +369,6 @@ class LogLine():
     def free_pointer(self):
         """Return the memory address freed"""
         return self.get_field(-1).rstrip('.')
-
 
 class StateIter():
     """Helper class for LogIter to add a state-full iterator.
