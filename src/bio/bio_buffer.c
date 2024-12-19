@@ -231,6 +231,7 @@ dma_buffer_create(unsigned int init_cnt, int tgt_id)
 
 	rc = dma_buffer_grow(buf, init_cnt);
 	if (rc != 0) {
+		D_ERROR("Failed to grow DMA buffer (%u chunks)\n", buf->bdb_tot_cnt);
 		dma_buffer_destroy(buf);
 		return NULL;
 	}
@@ -867,8 +868,10 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 	 */
 	if (pg_cnt > bio_chk_sz) {
 		chk = dma_alloc_chunk(pg_cnt);
-		if (chk == NULL)
+		if (chk == NULL) {
+			D_ERROR("Failed to allocate %u pages DMA buffer\n", pg_cnt);
 			return -DER_NOMEM;
+		}
 
 		chk->bdc_type = biod->bd_chk_type;
 		rc = iod_add_chunk(biod, chk);
