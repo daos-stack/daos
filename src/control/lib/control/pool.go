@@ -846,21 +846,19 @@ func PoolExtend(ctx context.Context, rpcClient UnaryInvoker, req *PoolExtendReq)
 	return errors.Wrap(ur.getMSError(), "pool extend failed")
 }
 
-// PoolReintegrateReq struct contains request
-type PoolReintegrateReq struct {
+// PoolReintReq struct contains request
+type PoolReintReq struct {
 	poolRequest
 	ID        string
 	Rank      ranklist.Rank
 	TargetIdx []uint32
 }
 
-// ReintegrateResp has no other parameters other than success/failure for now.
-
-// PoolReintegrate will set a pool target for a specific rank back to up.
+// PoolReint will set a pool target for a specific rank back to up.
 // This should automatically start the reintegration process.
 // Returns an error (including any DER code from DAOS).
-func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolReintegrateReq) error {
-	pbReq := &mgmtpb.PoolReintegrateReq{
+func PoolReint(ctx context.Context, rpcClient UnaryInvoker, req *PoolReintReq) error {
+	pbReq := &mgmtpb.PoolReintReq{
 		Sys:       req.getSystem(rpcClient),
 		Id:        req.ID,
 		Rank:      req.Rank.Uint32(),
@@ -868,7 +866,7 @@ func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolReint
 	}
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).PoolReintegrate(ctx, pbReq)
+		return mgmtpb.NewMgmtSvcClient(conn).PoolReint(ctx, pbReq)
 	})
 
 	rpcClient.Debugf("Reintegrate DAOS pool target request: %s\n", pbUtil.Debug(pbReq))
