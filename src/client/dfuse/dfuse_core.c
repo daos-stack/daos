@@ -1274,6 +1274,7 @@ dfuse_ie_close(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 		  atomic_load_relaxed(&ie->ie_il_count));
 	D_ASSERTF(atomic_load_relaxed(&ie->ie_open_count) == 0, "open_count is %d",
 		  atomic_load_relaxed(&ie->ie_open_count));
+	D_ASSERT(!ie->ie_active);
 
 	if (ie->ie_obj) {
 		rc = dfs_release(ie->ie_obj);
@@ -1316,6 +1317,8 @@ dfuse_read_event_size(void *arg, size_t size)
 		ev->de_sgl.sg_iovs     = &ev->de_iov;
 		ev->de_sgl.sg_nr       = 1;
 	}
+
+	D_INIT_LIST_HEAD(&ev->de_read_slaves);
 
 	rc = daos_event_init(&ev->de_ev, ev->de_eqt->de_eq, NULL);
 	if (rc != -DER_SUCCESS) {
