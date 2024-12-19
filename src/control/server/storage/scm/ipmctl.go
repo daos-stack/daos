@@ -201,16 +201,12 @@ func (cr *cmdRunner) handleFreeCapacity(sockSelector int, nrNsPerSock uint, regi
 		return nil, nil, errors.Wrap(err, "createNamespaces")
 	}
 
-	switch len(numaIDs) {
-	case 0:
+	if len(numaIDs) == 0 {
 		return nil, nil, errors.New("no namespaces created on regions with free capacity")
-	case 1:
-	default:
-		if sockSelector != sockAny {
-			return nil, nil,
-				errors.Errorf("unexpected number of numa nodes processed, want 1 got %d",
-					len(numaIDs))
-		}
+	}
+	if len(numaIDs) > 1 && sockSelector != sockAny {
+		return nil, nil, errors.Errorf("unexpected number of numa nodes processed, want 1 got %d",
+			len(numaIDs))
 	}
 	cr.log.Tracef("namespaces created on %v numa-nodes, fetching updated region details", numaIDs)
 
