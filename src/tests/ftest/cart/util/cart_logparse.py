@@ -370,6 +370,7 @@ class LogLine():
         """Return the memory address freed"""
         return self.get_field(-1).rstrip('.')
 
+
 class StateIter():
     """Helper class for LogIter to add a state-full iterator.
 
