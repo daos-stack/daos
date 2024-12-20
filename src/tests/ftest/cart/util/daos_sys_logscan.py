@@ -7,16 +7,16 @@
 """Scan daos_engine log files to get a summary of pools activity."""
 
 import argparse
-import cart_logparse
 import re
 import sys
 
+import cart_logparse
 
 class SysPools():
     """Directory of Pools and Summary Activities Found in Engine Log Files"""
 
-    # TODO
-    # diagram of nested dictionaries constructed
+    # Future possibilities include:
+    # diagram of nested dictionaries constructed in the comments
     # system map update events (output outside if pool-specific context)
     # SWIM events seen by PS leader?
     # add/remove target events on PS leader?
@@ -30,7 +30,7 @@ class SysPools():
     re_step_up = re.compile(r"rdb_raft_step_up.*([0-9a-fA-F]{8}).*leader of term (\d+)")
     re_step_down = re.compile(r"rdb_raft_step_down.*([0-9a-fA-F]{8}).*leader of term (\d+)")
 
-    # TODO: target state change events
+    # Future possibility: target state change events
     # update_one_tgt(), update_tgt_down_drain_to_downout()
     #   "change Target.*rank (\d+) idx (\d+).*to (\w+)"
     #   need those functions to print pool UUID. Then here, store a list of target change events in
@@ -44,8 +44,8 @@ class SysPools():
     # uniform rebuild string identifier rb=<pool_uuid>/<rebuild_ver>/<rebuild_gen>/<opcode_string>
     rbid_re = r"rb=([0-9a-fA-F]{8})/(\d+)/(\d+)/(\w+)"
 
-    # Rebuild preliminary steps
-    # TODO/FIXME rebuild_task_ult() wait for scheduling, and map dist needs uniform rb= string.
+    # Future possibility: match the rebuild preliminary steps
+    # rebuild_task_ult() wait for scheduling, and map dist - both would info to match on.
     # re.compile(r"rebuild_task_ult\(\).*rebuild task sleep (\d+) second")
     # re.compile(r"rebuild_task_ult\(\).*map_dist_ver (\d+) map ver (\d+)")
 
@@ -79,7 +79,7 @@ class SysPools():
         self._check_rb_legacy_fmt = True
         self._debug = False
 
-    def _warn(self, wmsg, fname, line):
+    def _warn(self, wmsg, fname, line=None):
         full_msg = f"WARN file={fname}"
         if line:
             full_msg += f", line={line.lineno}"
@@ -88,7 +88,11 @@ class SysPools():
         self._warnings.append(full_msg)
         print(full_msg)
 
-    def find_rank(self, log_iter):
+    def get_warnings(self):
+        """Return all warnings stored when scanning engine log files"""
+        return self._warnings
+
+    def _find_rank(self, log_iter):
         print(f"INFO: searching for rank in file {log_iter.fname}")
         found = False
         for line in log_iter.new_iter():
@@ -99,7 +103,7 @@ class SysPools():
                 found = True
                 break
 
-            # TODO: what about log rotation (not an engine start scenario)?
+            # Future enhancement: what about log rotation (not an engine start scenario)?
         return found
 
     # return log-message, hostname, and date/timestamp components of the line
@@ -107,14 +111,14 @@ class SysPools():
         return line.get_msg(), line.hostname, line.time_stamp
 
     # is this rank, pid the leader of the pool with uuid puuid?
-    def is_leader(self, puuid, rank, pid):
+    def _is_leader(self, puuid, rank, pid):
         if puuid not in self._pools:
             return False
         if self._cur_ldr_rank[puuid] == rank and self._cur_ldr_pid[puuid] == pid:
             return True
         return False
 
-    def match_ps_step_up(self, fname, line, pid, rank):
+    def _match_ps_step_up(self, fname, line, pid, rank):
         msg, host, datetime = self.get_line_components(line)
         match = self.re_step_up.match(msg)
         if match:
@@ -153,7 +157,7 @@ class SysPools():
             return True
         return False
 
-    def match_ps_step_down(self, fname, line, pid, rank):
+    def _match_ps_step_down(self, fname, line, pid, rank):
         msg, host, datetime = self.get_line_components(line)
         match = self.re_step_down.match(msg)
         if match:
@@ -171,7 +175,7 @@ class SysPools():
             return True
         return False
 
-    def match_ps_pmap_update(self, fname, line, pid, rank):
+    def _match_ps_pmap_update(self, fname, line, pid, rank):
         msg, host, datetime = self.get_line_components(line)
         match = self.re_pmap_update.match(msg)
         if match:
@@ -179,7 +183,7 @@ class SysPools():
             from_ver = int(match.group(2))
             to_ver = int(match.group(3))
             # ignore if this engine is not the leader
-            if not self.is_leader(puuid, rank, pid):
+            if not self._is_leader(puuid, rank, pid):
                 return True
             term = self._cur_term[puuid]
             self._pools[puuid][term]["maps"][to_ver] = {
@@ -194,10 +198,10 @@ class SysPools():
             return True
         return False
 
-    def get_rb_components(self, match):
+    def _get_rb_components(self, match):
         return match.group(1), int(match.group(2)), int(match.group(3)), match.group(4)
 
-    def match_ps_rb_start(self, fname, line, pid, rank):
+    def _match_ps_rb_start(self, fname, line, pid, rank):
         # Do not match on new rebuild log format if we found legacy format
         if not self._check_rb_new_fmt:
             return False
@@ -206,8 +210,8 @@ class SysPools():
         if match:
             # Disable checking for legacy rebuild log format, to save execution time
             self._check_rb_legacy_fmt = False
-            puuid, ver, gen, op = self.get_rb_components(match)
-            if not self.is_leader(puuid, rank, pid):
+            puuid, ver, gen, op = self._get_rb_components(match)
+            if not self._is_leader(puuid, rank, pid):
                 return True
             term = self._cur_term[puuid]
             if term < 1:
@@ -215,8 +219,7 @@ class SysPools():
                 return True
             if gen in self._pools[puuid][term]["maps"][ver]["rb_gens"]:
                 self._warn(f"pool {puuid} term {term} ver {ver} already has gen {gen}", fname, line)
-            # TODO: keep timestamps for overall/scan start, pull start, completed
-            #       convert to float and store component durations too
+            # Future possibility: keep timestamps, durations for scan start, pull start, completed
             self._pools[puuid][term]["maps"][ver]["rb_gens"][gen] = {
                 "op": op,
                 "start_time": datetime,
@@ -234,7 +237,7 @@ class SysPools():
             return True
         return False
 
-    def match_legacy_ps_rb_start(self, fname, line, pid, rank):
+    def _match_legacy_ps_rb_start(self, fname, line, pid, rank):
         # Do not match on legacy rebuild log format if we found new format
         if not self._check_rb_legacy_fmt:
             return False
@@ -247,7 +250,7 @@ class SysPools():
             ver = int(match.group(2))
             gen = int(match.group(3))
             op = match.group(4)
-            if not self.is_leader(puuid, rank, pid):
+            if not self._is_leader(puuid, rank, pid):
                 return True
             term = self._cur_term[puuid]
             if term < 1:
@@ -255,8 +258,6 @@ class SysPools():
                 return True
             if gen in self._pools[puuid][term]["maps"][ver]["rb_gens"]:
                 self._warn(f"pool {puuid} term {term} ver {ver} already has gen {gen}", fname, line)
-            # TODO: keep timestamps for overall/scan start, pull start, completed
-            #       convert to float and store component durations too
             self._pools[puuid][term]["maps"][ver]["rb_gens"][gen] = {
                 "op": op,
                 "start_time": datetime,
@@ -274,7 +275,7 @@ class SysPools():
             return True
         return False
 
-    def match_ps_rb_status(self, fname, line, pid, rank):
+    def _match_ps_rb_status(self, fname, line, pid, rank):
         # Do not match on new rebuild log format if we found legacy format
         if not self._check_rb_new_fmt:
             return False
@@ -283,10 +284,10 @@ class SysPools():
         if match:
             # Disable checking for legacy rebuild log format, to save execution time
             self._check_rb_legacy_fmt = False
-            puuid, ver, gen, op = self.get_rb_components(match)
+            puuid, ver, gen, op = self._get_rb_components(match)
             status = match.group(5)
             dur = int(match.group(6))
-            if not self.is_leader(puuid, rank, pid):
+            if not self._is_leader(puuid, rank, pid):
                 return True
             term = self._cur_term[puuid]
             if term < 1:
@@ -332,7 +333,7 @@ class SysPools():
             return True
         return False
 
-    def match_legacy_ps_rb_status(self, fname, line, pid, rank):
+    def _match_legacy_ps_rb_status(self, fname, line, pid, rank):
         # Do not match on legacy rebuild log format if we found new format
         if not self._check_rb_legacy_fmt:
             return False
@@ -349,7 +350,7 @@ class SysPools():
             ver = int(match.group(6))
             gen = int(match.group(7))
             dur = int(match.group(8))
-            if not self.is_leader(puuid, rank, pid):
+            if not self._is_leader(puuid, rank, pid):
                 return True
             if rank != log_ldr:
                 self._warn(f"pool {puuid} my rank {rank} != leader {log_ldr}", fname, line)
@@ -382,13 +383,13 @@ class SysPools():
                 existing_op = self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["op"]
                 if op != existing_op:
                     self._warn(f"rb={puuid}/{ver}/{gen}/{existing_op} != line op {op}", fname, line)
-            if (status == "scanning"):
+            if status == "scanning":
                 self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["scanning"] = True
-            elif (status == "pulling"):
+            elif status == "pulling":
                 self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["pulling"] = True
-            elif (status == "completed"):
+            elif status == "completed":
                 self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["completed"] = True
-            elif (status == "aborted"):
+            elif status == "aborted":
                 self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["aborted"] = True
             self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["time"] = datetime
             self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["duration"] = dur
@@ -399,11 +400,12 @@ class SysPools():
         return False
 
     def scan_file(self, log_iter, rank=-1):
+        """Scan a daos engine log file and insert important pool events into a nested dictionary"""
         fname = log_iter.fname
 
         # Find rank assignment log line for this file. Can't do much without it.
         self._file_to_rank[fname] = rank
-        if rank == -1 and not self.find_rank(log_iter):
+        if rank == -1 and not self._find_rank(log_iter):
             self._warn("cannot find rank assignment in log file - skipping", fname)
             return
         rank = self._file_to_rank[fname]
@@ -412,38 +414,35 @@ class SysPools():
             print(f"INFO: scanning file {fname} rank {rank}, PID {pid}")
             for line in log_iter.new_iter(pid=pid):
                 # Find pool term begin (PS leader step_up)
-                if self.match_ps_step_up(fname, line, pid, rank):
+                if self._match_ps_step_up(fname, line, pid, rank):
                     continue
 
                 # Find pool term end (PS leader step_down)
-                if self.match_ps_step_down(fname, line, pid, rank):
+                if self._match_ps_step_down(fname, line, pid, rank):
                     continue
 
-                # TODO: find target status updates (precursor to pool map updates)
-
                 # Find pool map updates
-                if self.match_ps_pmap_update(fname, line, pid, rank):
+                if self._match_ps_pmap_update(fname, line, pid, rank):
                     continue
 
                 # Find rebuild start by the PS leader
-                if self.match_ps_rb_start(fname, line, pid, rank):
+                if self._match_ps_rb_start(fname, line, pid, rank):
                     continue
 
-                if self.match_legacy_ps_rb_start(fname, line, pid, rank):
+                if self._match_legacy_ps_rb_start(fname, line, pid, rank):
                     continue
 
-                if self.match_ps_rb_status(fname, line, pid, rank):
+                if self._match_ps_rb_status(fname, line, pid, rank):
                     continue
 
-                if self.match_legacy_ps_rb_status(fname, line, pid, rank):
+                if self._match_legacy_ps_rb_status(fname, line, pid, rank):
                     continue
 
-                # TODO: look for scan/migrate activity on all pool engines, count and correlate
-                #       to PS leader activity?
-            # TODO: For a PID that is killed, clear any associated cur_ldr_rank / cur_ldr_pid.
+            # Future: for a PID that is killed, clear any associated cur_ldr_rank / cur_ldr_pid.
             # At logfile end, it could be due to engine killed, or could just be log rotation.
 
     def print_pools(self):
+        """Print all pools important events found in a nested dictionary"""
         for puuid in self._pools:
             print(f"===== Pool {puuid}:")
             for term in self._pools[puuid]:
@@ -458,7 +457,7 @@ class SysPools():
 
                 # Print pool map updates that happened within the term
                 for v in self._pools[puuid][term]["maps"]:
-                    # TODO: print tgt state changes
+                    # Future: print tgt state changes before corresponding map updates
 
                     # Print map updates
                     t = self._pools[puuid][term]["maps"][v]["time"]
@@ -469,20 +468,15 @@ class SysPools():
                     for g in self._pools[puuid][term]["maps"][v]["rb_gens"]:
                         op = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["op"]
                         dur = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["duration"]
-                        strt = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["started"]
-                        # TODO: scan_done, pull_done booleans
                         scan = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["scanning"]
                         pull = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["pulling"]
-                        # line len
                         comp = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["completed"]
                         abrt = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["aborted"]
-                        # line len
                         st = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["start_time"]
                         ut = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["time"]
-                        if strt:
-                            status = "started"
 
                         # status is latest status reached for the given rebuild
+                        status = "started"
                         if abrt:
                             status = "aborted"
                         elif comp:
@@ -503,6 +497,7 @@ class SysPools():
                     print(" " * 18 + f"{puuid} END    term {term}\trank {r}\t{h}\tPID {p}\t{f}")
 
     def sort(self):
+        """Sort the nested dictionary of pools by pool service term"""
         for puuid in self._pools:
             tmp = dict(sorted(self._pools[puuid].items()))
             self._pools[puuid] = tmp
@@ -543,7 +538,7 @@ def run():
             sys.exit(1)
         sp.scan_file(log_iter, rank=rank)
 
-    print(f"\n========== Pools Report ({len(sp._warnings)} warnings during scanning) ==========\n")
+    print(f"\n======== Pools Report ({len(sp.get_warnings())} warnings from scanning) ========\n")
     sp.sort()
     sp.print_pools()
 
