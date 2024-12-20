@@ -90,9 +90,11 @@ typedef struct crt_init_options {
 	char		*cio_port;
 
 	/** If set, used as the authentication key instead of D_PROVIDER_AUTH_KEY env */
-	char		*cio_auth_key;
-} crt_init_options_t;
+	char            *cio_auth_key;
 
+	/** use single thread to access context */
+	bool             cio_thread_mode_single;
+} crt_init_options_t;
 
 typedef int		crt_status_t;
 /**

@@ -179,6 +179,29 @@ class JobManager(ExecutableCommand):
             hostfile (bool, optional): whether or not to also update any host related command
                 parameters to keep them in sync with the hosts. Defaults to True.
         """
+        # pylint: disable=unused-argument
+        self._hosts = hosts.copy()
+
+    def _setup_hostfile(self, path=None, slots=None, hostfile=True):
+        """Setup the hostfile to use with the command.
+
+        Args:
+            path (str, optional): path to use when specifying the hosts through
+                a hostfile. Defaults to None.
+            slots (int, optional): number of slots per host to specify in the
+                optional hostfile. Defaults to None.
+            hostfile (bool, optional): whether or not to also update any host related command
+                parameters to keep them in sync with the hosts. Defaults to True.
+
+        Returns:
+            str: the full path of the written hostfile; None if one is not written
+        """
+        if not hostfile:
+            return None
+        kwargs = {"hosts": self._hosts, "slots": slots}
+        if path is not None:
+            kwargs["path"] = path
+        return write_host_file(**kwargs)
 
     def assign_processes(self, processes):
         """Assign the number of processes.
@@ -297,7 +320,10 @@ class JobManager(ExecutableCommand):
         if not self.job:
             return
         regex = self.job.command_regex
-        detected, running = stop_processes(self.log, self._hosts, regex)
+        if self.job.full_command_regex:
+            regex = f"'{str(self.job)}'"
+        detected, running = stop_processes(
+            self.log, self._hosts, regex, full_command=self.job.full_command_regex)
         if not detected:
             self.log.info(
                 "No remote %s processes killed on %s (none found), done.", regex, self._hosts)
@@ -366,13 +392,8 @@ class Orterun(JobManager):
             hostfile (bool, optional): whether or not to also update any host related command
                 parameters to keep them in sync with the hosts. Defaults to True.
         """
-        self._hosts = hosts.copy()
-        if not hostfile:
-            return
-        kwargs = {"hosts": self._hosts, "slots": slots}
-        if path is not None:
-            kwargs["path"] = path
-        self.hostfile.value = write_host_file(**kwargs)
+        super().assign_hosts(hosts, path, slots, hostfile)
+        self.hostfile.value = self._setup_hostfile(path, slots, hostfile)
 
     def assign_processes(self, processes):
         """Assign the number of processes (-np).
@@ -473,6 +494,7 @@ class Mpirun(JobManager):
         self.tmpdir_base = FormattedParameter("--mca orte_tmpdir_base {}", None)
         self.args = BasicParameter(None, None)
         self.mpi_type = mpi_type
+        self.hostlist = FormattedParameter("-hosts {}", None)
 
     def assign_hosts(self, hosts, path=None, slots=None, hostfile=True):
         """Assign the hosts to use with the command (-f).
@@ -485,13 +507,8 @@ class Mpirun(JobManager):
             hostfile (bool, optional): whether or not to also update any host related command
                 parameters to keep them in sync with the hosts. Defaults to True.
         """
-        self._hosts = hosts.copy()
-        if not hostfile:
-            return
-        kwargs = {"hosts": self._hosts, "slots": slots}
-        if path is not None:
-            kwargs["path"] = path
-        self.hostfile.value = write_host_file(**kwargs)
+        super().assign_hosts(hosts, path, slots, hostfile)
+        self.hostfile.value = self._setup_hostfile(path, slots, hostfile)
 
     def assign_processes(self, processes=None, ppn=None):
         """Assign the number of processes (-np) and processes per node (-ppn).
@@ -589,13 +606,8 @@ class Srun(JobManager):
             hostfile (bool, optional): whether or not to also update any host related command
                 parameters to keep them in sync with the hosts. Defaults to True.
         """
-        self._hosts = hosts.copy()
-        if not hostfile:
-            return
-        kwargs = {"hosts": self._hosts, "slots": None}
-        if path is not None:
-            kwargs["path"] = path
-        self.nodefile.value = write_host_file(**kwargs)
+        super().assign_hosts(hosts, path, slots, hostfile)
+        self.nodefile.value = self._setup_hostfile(path, slots, hostfile)
         self.ntasks_per_node.value = slots
 
     def assign_processes(self, processes):
@@ -755,19 +767,6 @@ class Systemctl(JobManager):
         return self.check_logs(
             self.job.pattern, self.timestamps["start"], None,
             self.job.pattern_count, self.job.pattern_timeout.value)
-
-    def assign_hosts(self, hosts, path=None, slots=None, hostfile=True):
-        """Assign the hosts to use with the command.
-
-        Set the appropriate command line parameter with the specified value.
-
-        Args:
-            hosts (NodeSet): hosts to specify on the command line
-            path (str, optional): not used. Defaults to None.
-            slots (int, optional): not used. Defaults to None.
-            hostfile (bool, optional): not used. Defaults to True.
-        """
-        self._hosts = hosts.copy()
 
     def assign_environment(self, env_vars, append=False):
         """Assign or add environment variables to the command.
@@ -1213,17 +1212,6 @@ class Clush(JobManager):
         commands = [super().__str__(), "-w {}".format(self.hosts), str(self.job)]
         return " ".join(commands)
 
-    def assign_hosts(self, hosts, path=None, slots=None, hostfile=True):
-        """Assign the hosts to use with the command (--hostfile).
-
-        Args:
-            hosts (NodeSet): hosts to specify in the hostfile
-            path (str, optional): not used. Defaults to None.
-            slots (int, optional): not used. Defaults to None.
-            hostfile (bool, optional): not used. Defaults to True.
-        """
-        self._hosts = hosts.copy()
-
     def assign_environment(self, env_vars, append=False):
         """Assign or add environment variables to the command.
 
@@ -1252,6 +1240,11 @@ class Clush(JobManager):
         """
         if raise_exception is None:
             raise_exception = self.exit_status_exception
+
+        if callable(self.register_cleanup_method):
+            # Stop any running processes started by this job manager when the test completes
+            # pylint: disable=not-callable
+            self.register_cleanup_method(stop_job_manager, job_manager=self)
 
         command = " ".join([self.env.to_export_str(), str(self.job)]).strip()
         self.result = run_remote(self.log, self._hosts, command, self.verbose, self.timeout)

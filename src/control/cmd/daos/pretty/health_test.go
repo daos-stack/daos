@@ -291,12 +291,47 @@ var healthyContainer = &daos.ContainerInfo{
 
 func TestPretty_printContainerHealth(t *testing.T) {
 	for name, tc := range map[string]struct {
+		pi          *daos.PoolInfo
 		ci          *daos.ContainerInfo
 		verbose     bool
 		expPrintStr string
 	}{
 		"nil ContainerInfo": {},
-		"healthy": {
+		"unhealthy pool, healthy container": {
+			pi: &daos.PoolInfo{
+				DisabledTargets: 1,
+			},
+			ci: healthyContainer,
+			expPrintStr: fmt.Sprintf(`
+%s: Healthy (Pool Degraded)
+`, healthyContainer.ContainerLabel),
+		},
+		"unhealthy pool, unhealthy container": {
+			pi: &daos.PoolInfo{
+				DisabledTargets: 1,
+			},
+			ci: func() *daos.ContainerInfo {
+				clone := *healthyContainer
+				clone.Health = "UNHEALTHY"
+				return &clone
+			}(),
+			expPrintStr: fmt.Sprintf(`
+%s: Unhealthy (Pool Degraded)
+`, healthyContainer.ContainerLabel),
+		},
+		"healthy pool, unhealthy container": {
+			pi: healthyPool,
+			ci: func() *daos.ContainerInfo {
+				clone := *healthyContainer
+				clone.Health = "UNHEALTHY"
+				return &clone
+			}(),
+			expPrintStr: fmt.Sprintf(`
+%s: Unhealthy
+`, healthyContainer.ContainerLabel),
+		},
+		"healthy pool, healthy container": {
+			pi: healthyPool,
 			ci: healthyContainer,
 			expPrintStr: fmt.Sprintf(`
 %s: Healthy
@@ -305,7 +340,7 @@ func TestPretty_printContainerHealth(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			var bld strings.Builder
-			printContainerHealth(&bld, tc.ci, tc.verbose)
+			printContainerHealth(&bld, tc.pi, tc.ci, tc.verbose)
 
 			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
 				t.Fatalf("unexpected pretty-printed string (-want, +got):\n%s\n", diff)

@@ -20,6 +20,7 @@
 #include <spdk/blob_bdev.h>
 #include <spdk/blob.h>
 #include <spdk/rpc.h>
+#include <spdk/env_dpdk.h>
 #include "bio_internal.h"
 #include <daos_srv/smd.h>
 
@@ -30,8 +31,8 @@
 /* SPDK blob parameters */
 #define DAOS_BS_CLUSTER_SZ	(1ULL << 25)	/* 32MB */
 /* DMA buffer parameters */
-#define DAOS_DMA_CHUNK_CNT_INIT	24	/* Per-xstream init chunks, 192MB */
-#define DAOS_DMA_CHUNK_CNT_MAX	128	/* Per-xstream max chunks, 1GB */
+#define DAOS_DMA_CHUNK_INIT_PCT	60	/* Default pre-xstream init chunks, in percentage */
+#define DAOS_DMA_CHUNK_CNT_MAX	128	/* Default per-xstream max chunks, 1GB */
 #define DAOS_DMA_CHUNK_CNT_MIN	32	/* Per-xstream min chunks, 256MB */
 
 /* Max in-flight blob IOs per io channel */
@@ -47,8 +48,8 @@ unsigned int bio_chk_sz;
 unsigned int bio_chk_cnt_max;
 /* NUMA node affinity */
 unsigned int bio_numa_node;
-/* Per-xstream initial DMA buffer size (in chunk count) */
-static unsigned int bio_chk_cnt_init;
+/* Per-xstream initial DMA buffer size (in percentage) */
+static unsigned int bio_chk_init_pct;
 /* Diret RDMA over SCM */
 bool bio_scm_rdma;
 /* Whether SPDK inited */
@@ -174,7 +175,9 @@ bio_spdk_env_init(void)
 	if (geteuid() != 0) {
 		opts.iova_mode = "va"; // workaround for spdk issue #2683 when running as non-root
 	}
-	rc = spdk_env_init(&opts);
+
+	/* Don't pass opt for reinitialization, otherwise it will fail */
+	rc = spdk_env_init(spdk_env_dpdk_external_init() ? &opts : NULL);
 	if (rc != 0) {
 		rc = -DER_INVAL; /* spdk_env_init() returns -1 */
 		D_ERROR("Failed to initialize SPDK env, "DF_RC"\n", DP_RC(rc));
@@ -198,6 +201,14 @@ bool
 bypass_health_collect()
 {
 	return nvme_glb.bd_bypass_health_collect;
+}
+
+static inline unsigned int
+init_chk_cnt()
+{
+	unsigned init_cnt = (bio_chk_cnt_max * bio_chk_init_pct / 100);
+
+	return (init_cnt == 0) ? 1 : init_cnt;
 }
 
 int
@@ -246,7 +257,7 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	 */
 	glb_criteria.fc_max_csum_errs = UINT32_MAX;
 
-	bio_chk_cnt_init = DAOS_DMA_CHUNK_CNT_INIT;
+	bio_chk_init_pct = DAOS_DMA_CHUNK_INIT_PCT;
 	bio_chk_cnt_max = DAOS_DMA_CHUNK_CNT_MAX;
 	bio_chk_sz = ((uint64_t)size_mb << 20) >> BIO_DMA_PAGE_SHIFT;
 
@@ -288,8 +299,13 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 			mem_size, tgt_nr);
 		return -DER_INVAL;
 	}
-	D_INFO("Set per-xstream DMA buffer upper bound to %u %uMB chunks\n",
-	       bio_chk_cnt_max, size_mb);
+
+	d_getenv_uint("DAOS_DMA_INIT_PCT", &bio_chk_init_pct);
+	if (bio_chk_init_pct == 0 || bio_chk_init_pct >= 100)
+		bio_chk_init_pct = DAOS_DMA_CHUNK_INIT_PCT;
+
+	D_INFO("Set per-xstream DMA buffer upper bound to %u %uMB chunks, prealloc %u chunks\n",
+	       bio_chk_cnt_max, size_mb, init_chk_cnt());
 
 	spdk_bs_opts_init(&nvme_glb.bd_bs_opts, sizeof(nvme_glb.bd_bs_opts));
 	nvme_glb.bd_bs_opts.cluster_sz = DAOS_BS_CLUSTER_SZ;
@@ -1557,7 +1573,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 
 	/* Skip NVMe context setup if the daos_nvme.conf isn't present */
 	if (!bio_nvme_configured(SMD_DEV_TYPE_MAX)) {
-		ctxt->bxc_dma_buf = dma_buffer_create(bio_chk_cnt_init, tgt_id);
+		ctxt->bxc_dma_buf = dma_buffer_create(init_chk_cnt(), tgt_id);
 		if (ctxt->bxc_dma_buf == NULL) {
 			D_FREE(ctxt);
 			*pctxt = NULL;
@@ -1670,7 +1686,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 		D_ASSERT(d_bdev != NULL);
 	}
 
-	ctxt->bxc_dma_buf = dma_buffer_create(bio_chk_cnt_init, tgt_id);
+	ctxt->bxc_dma_buf = dma_buffer_create(init_chk_cnt(), tgt_id);
 	if (ctxt->bxc_dma_buf == NULL) {
 		D_ERROR("failed to initialize dma buffer\n");
 		rc = -DER_NOMEM;

@@ -7,13 +7,13 @@
 package pretty
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
@@ -134,12 +134,300 @@ host1 3.0 TB    750 GB   75 %     36 TB      27 TB     25 %
 			if err := PrintResponseErrors(resp, &bld); err != nil {
 				t.Fatal(err)
 			}
-			if err := PrintHostStorageUsageMap(resp.HostStorage, &bld); err != nil {
-				t.Fatal(err)
-			}
+			PrintHostStorageUsageMap(resp.HostStorage, &bld)
 
 			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
 				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestPretty_getTierRolesForHost(t *testing.T) {
+	for name, tc := range map[string]struct {
+		nvme          storage.NvmeControllers
+		metaRolesLast storage.BdevRoles
+		dataRolesLast storage.BdevRoles
+		expErr        error
+		expMetaRoles  string
+		expDataRoles  string
+	}{
+		"no roles": {
+			expErr: errNoMetaRole,
+		},
+		"no smd on controller": {
+			nvme:   storage.NvmeControllers{storage.MockNvmeController(1)},
+			expErr: errNoMetaRole,
+		},
+		"shared roles": {
+			nvme: storage.NvmeControllers{
+				func() *storage.NvmeController {
+					c := storage.MockNvmeController(1)
+					c.SmdDevices = []*storage.SmdDevice{storage.MockSmdDevice(nil, 1)}
+					return c
+				}(),
+			},
+			expMetaRoles: "data,meta,wal",
+		},
+		"separate meta,data roles": {
+			nvme: storage.NvmeControllers{
+				func() *storage.NvmeController {
+					c := storage.MockNvmeController(1)
+					sd := storage.MockSmdDevice(nil, 1)
+					sd.Roles = storage.BdevRolesFromBits(
+						storage.BdevRoleMeta | storage.BdevRoleWAL)
+					c.SmdDevices = []*storage.SmdDevice{sd}
+					return c
+				}(),
+				func() *storage.NvmeController {
+					c := storage.MockNvmeController(2)
+					sd := storage.MockSmdDevice(nil, 2)
+					sd.Roles = storage.BdevRolesFromBits(storage.BdevRoleData)
+					c.SmdDevices = []*storage.SmdDevice{sd}
+					return c
+				}(),
+			},
+			expMetaRoles: "meta,wal",
+			expDataRoles: "data",
+		},
+		"separate wal,meta,data roles": {
+			nvme: storage.NvmeControllers{
+				func() *storage.NvmeController {
+					c := storage.MockNvmeController(1)
+					sd := storage.MockSmdDevice(nil, 1)
+					sd.Roles = storage.BdevRolesFromBits(storage.BdevRoleWAL)
+					c.SmdDevices = []*storage.SmdDevice{sd}
+					return c
+				}(),
+				func() *storage.NvmeController {
+					c := storage.MockNvmeController(2)
+					sd := storage.MockSmdDevice(nil, 2)
+					sd.Roles = storage.BdevRolesFromBits(storage.BdevRoleMeta)
+					c.SmdDevices = []*storage.SmdDevice{sd}
+					return c
+				}(),
+				func() *storage.NvmeController {
+					c := storage.MockNvmeController(3)
+					sd := storage.MockSmdDevice(nil, 3)
+					sd.Roles = storage.BdevRolesFromBits(storage.BdevRoleData)
+					c.SmdDevices = []*storage.SmdDevice{sd}
+					return c
+				}(),
+			},
+			expMetaRoles: "meta",
+			expDataRoles: "data",
+		},
+		"different meta roles from last seen": {
+			nvme: storage.NvmeControllers{
+				func() *storage.NvmeController {
+					c := storage.MockNvmeController(1)
+					c.SmdDevices = []*storage.SmdDevice{storage.MockSmdDevice(nil, 1)}
+					return c
+				}(),
+			},
+			metaRolesLast: storage.BdevRolesFromBits(
+				storage.BdevRoleMeta | storage.BdevRoleWAL),
+			expErr: errInconsistentRoles,
+		},
+		"different data roles from last seen": {
+			nvme: storage.NvmeControllers{
+				func() *storage.NvmeController {
+					c := storage.MockNvmeController(1)
+					c.SmdDevices = []*storage.SmdDevice{storage.MockSmdDevice(nil, 1)}
+					return c
+				}(),
+			},
+			metaRolesLast: storage.BdevRolesFromBits(storage.BdevRoleAll),
+			dataRolesLast: storage.BdevRolesFromBits(storage.BdevRoleData),
+			expErr:        errInconsistentRoles,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotErr := getTierRolesForHost(tc.nvme, &tc.metaRolesLast, &tc.dataRolesLast)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if tc.expMetaRoles == "" {
+				tc.expMetaRoles = "NA"
+			}
+			if tc.expDataRoles == "" {
+				tc.expDataRoles = "NA"
+			}
+
+			if diff := cmp.Diff(tc.expMetaRoles, tc.metaRolesLast.String()); diff != "" {
+				t.Fatalf("unexpected output meta roles (-want, +got):\n%s\n", diff)
+			}
+			if diff := cmp.Diff(tc.expDataRoles, tc.dataRolesLast.String()); diff != "" {
+				t.Fatalf("unexpected output data roles (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestPretty_PrintHostStorageUsageMapMdOnSsd(t *testing.T) {
+	var (
+		noStorage                    = control.MockServerScanResp(t, "noStorage")
+		withSpaceUsage               = control.MockServerScanResp(t, "withSpaceUsage")
+		withSpaceUsageRolesSeparate1 = control.MockServerScanResp(t,
+			"withSpaceUsageRolesSeparate1")
+		withSpaceUsageRolesSeparate2 = control.MockServerScanResp(t,
+			"withSpaceUsageRolesSeparate2")
+		bothFailed = control.MockServerScanResp(t, "bothFailed")
+	)
+
+	for name, tc := range map[string]struct {
+		mic         *control.MockInvokerConfig
+		showUsable  bool
+		expErr      error
+		expPrintStr string
+	}{
+		"failed scans": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1",
+							Message: bothFailed,
+						},
+					},
+				},
+			},
+			expErr: errors.Errorf("hosts \"host1\": %s", errNoMetaRole.Error()),
+		},
+		"no storage": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1",
+							Message: noStorage,
+						},
+					},
+				},
+			},
+			expErr: errNoMetaRole,
+		},
+		"single host with space usage; shared roles so single tier": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1",
+							Message: withSpaceUsage,
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Tier Roles         
+---- -----         
+T1   data,meta,wal 
+
+Rank T1-Total T1-Free T1-Usage 
+---- -------- ------- -------- 
+0    36 TB    27 TB   25 %     
+`,
+		},
+		"multiple hosts with space usage; inconsistent roles between hosts": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1",
+							Message: withSpaceUsage,
+						},
+						{
+							Addr:    "host2",
+							Message: withSpaceUsageRolesSeparate1,
+						},
+					},
+				},
+			},
+			expErr: errInconsistentRoles,
+		},
+		"multiple hosts with space available; separate roles; two-tiers per rank": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1",
+							Message: withSpaceUsageRolesSeparate1,
+						},
+						{
+							Addr:    "host2",
+							Message: withSpaceUsageRolesSeparate2,
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Tier Roles    
+---- -----    
+T1   meta,wal 
+T2   data     
+
+Rank T1-Total T1-Free T1-Usage T2-Total T2-Free T2-Usage 
+---- -------- ------- -------- -------- ------- -------- 
+0    2.0 TB   1.0 TB  50 %     2.0 TB   1.5 TB  25 %     
+1    2.0 TB   500 GB  75 %     2.0 TB   1.0 TB  50 %     
+2    1.0 TB   500 GB  50 %     1.0 TB   750 GB  25 %     
+3    1.0 TB   250 GB  75 %     1.0 TB   500 GB  50 %     
+`,
+		},
+		// META tier separate so print available rather than usable (which would be zero).
+		"multiple hosts with space usable; separate roles; two-tiers per rank": {
+			showUsable: true,
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1",
+							Message: withSpaceUsageRolesSeparate1,
+						},
+						{
+							Addr:    "host2",
+							Message: withSpaceUsageRolesSeparate2,
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Tier Roles    
+---- -----    
+T1   meta,wal 
+T2   data     
+
+Rank T1-Total T1-Usable T1-Usage T2-Total T2-Usable T2-Usage 
+---- -------- --------- -------- -------- --------- -------- 
+0    2.0 TB   1.0 TB    50 %     2.0 TB   1.0 TB    50 %     
+1    2.0 TB   500 GB    75 %     2.0 TB   500 GB    75 %     
+2    1.0 TB   500 GB    50 %     1.0 TB   500 GB    50 %     
+3    1.0 TB   250 GB    75 %     1.0 TB   250 GB    75 %     
+`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			ctx := test.Context(t)
+			mi := control.NewMockInvoker(log, tc.mic)
+
+			resp, err := control.StorageScan(ctx, mi, &control.StorageScanReq{})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			var out, dbg strings.Builder
+			gotErr := PrintHostStorageUsageMapMdOnSsd(resp.HostStorage, &out, &dbg, tc.showUsable)
+			test.CmpErr(t, tc.expErr, gotErr)
+
+			t.Logf("DBG: %s", dbg.String())
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), out.String()); diff != "" {
+				t.Fatalf("unexpected output string (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

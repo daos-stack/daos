@@ -235,7 +235,7 @@ class DmgCommandBase(YamlCommand):
                 super(
                     DmgCommandBase.ConfigSubCommand.GenerateSubCommand,
                     self).__init__("/run/dmg/config/generate/*", "generate")
-                self.access_points = FormattedParameter("--access-points={}", None)
+                self.mgmt_svc_replicas = FormattedParameter("--ms-replicas={}", None)
                 self.num_engines = FormattedParameter("--num-engines={}", None)
                 self.scm_only = FormattedParameter("--scm-only", False)
                 self.net_class = FormattedParameter("--net-class={}", None)
@@ -533,6 +533,7 @@ class DmgCommandBase(YamlCommand):
                 super().__init__("/run/dmg/pool/query/*", "query")
                 self.pool = BasicParameter(None, position=1)
                 self.show_enabled = FormattedParameter("--show-enabled", False)
+                self.health_only = FormattedParameter("--health-only", False)
 
         class QueryTargetsSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool query-targets command."""

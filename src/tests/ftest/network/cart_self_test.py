@@ -62,7 +62,7 @@ class CartSelfTest(TestWithServers):
             self.server_managers[-1],
             self.hostlist_servers,
             self.hostfile_servers_slots,
-            self.access_points)
+            self.mgmt_svc_replicas)
 
         # Setup additional environment variables for the server orterun command
         self.cart_env["CRT_CTX_NUM"] = "8"
@@ -77,6 +77,7 @@ class CartSelfTest(TestWithServers):
 
         # Start the daos server
         self.start_server_managers()
+        self.register_cleanup(self.stop_servers)
 
     def test_self_test(self):
         """Run a few CaRT self-test scenarios.

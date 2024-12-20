@@ -162,7 +162,7 @@ obj_rw_complete(crt_rpc_t *rpc, struct obj_io_context *ioc,
 }
 
 static void
-obj_rw_reply(crt_rpc_t *rpc, int status, uint64_t epoch,
+obj_rw_reply(crt_rpc_t *rpc, int status, uint64_t epoch, bool release_input,
 	     struct obj_io_context *ioc)
 {
 	struct obj_rw_out	*orwo = crt_reply_get(rpc);
@@ -187,7 +187,11 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint64_t epoch,
 		ioc->ioc_map_ver, orwo->orw_epoch, status);
 
 	if (!ioc->ioc_lost_reply) {
-		rc = crt_reply_send(rpc);
+		if (release_input)
+			rc = crt_reply_send_input_free(rpc);
+		else
+			rc = crt_reply_send(rpc);
+
 		if (rc != 0)
 			D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
 	} else {
@@ -2079,6 +2083,8 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, crt_rpc_t *rpc
 
 	D_ASSERT(ioc != NULL);
 	memset(ioc, 0, sizeof(*ioc));
+
+	crt_req_addref(rpc);
 	ioc->ioc_rpc = rpc;
 	ioc->ioc_opc = opc_get(rpc->cr_opc);
 	rc = ds_cont_find_hdl(pool_uuid, coh_uuid, &coh);
@@ -2153,6 +2159,10 @@ obj_ioc_fini(struct obj_io_context *ioc, int err)
 			ds_cont_ec_timestamp_update(ioc->ioc_coc);
 		ds_cont_child_put(ioc->ioc_coc);
 		ioc->ioc_coc = NULL;
+	}
+	if (ioc->ioc_rpc) {
+		crt_req_decref(ioc->ioc_rpc);
+		ioc->ioc_rpc = NULL;
 	}
 }
 
@@ -2352,8 +2362,9 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc,
 {
 	if (opc == DAOS_OBJ_RPC_ENUMERATE && flags & ORF_FOR_MIGRATION) {
 		if (child->sc_ec_agg_active) {
-			D_ERROR(DF_UUID" ec aggregate still active\n",
-				DP_UUID(child->sc_pool->spc_uuid));
+			D_ERROR(DF_CONT" ec aggregate still active, rebuilding %d\n",
+				DP_CONT(child->sc_pool->spc_uuid, child->sc_uuid),
+				child->sc_pool->spc_pool->sp_rebuilding);
 			return -DER_UPDATE_AGAIN;
 		}
 	}
@@ -2508,7 +2519,7 @@ remove_parity:
 	rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oer->er_oid, &oer->er_epoch_range, dkey,
 				  &iod->iod_name, &recx);
 out:
-	obj_rw_reply(rpc, rc, 0, &ioc);
+	obj_rw_reply(rpc, rc, 0, false, &ioc);
 	obj_ioc_end(&ioc, rc);
 }
 
@@ -2604,7 +2615,7 @@ end:
 		D_ERROR(DF_UOID ": array_remove failed: " DF_RC "\n", DP_UOID(oea->ea_oid),
 			DP_RC(rc1));
 out:
-	obj_rw_reply(rpc, rc, 0, &ioc);
+	obj_rw_reply(rpc, rc, 0, false, &ioc);
 	obj_ioc_end(&ioc, rc);
 }
 
@@ -2733,7 +2744,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 out:
 	if (dth != NULL)
 		rc = dtx_end(dth, ioc.ioc_coc, rc);
-	obj_rw_reply(rpc, rc, 0, &ioc);
+	obj_rw_reply(rpc, rc, 0, true, &ioc);
 	D_FREE(mbs);
 	obj_ioc_end(&ioc, rc);
 }
@@ -2943,8 +2954,11 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 		d_tm_inc_counter(opm->opm_update_resent, 1);
 
-again1:
-		e = 0;
+again:
+		if (flags & ORF_RESEND)
+			e = orw->orw_epoch;
+		else
+			e = 0;
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_dti,
 				       &e, &version);
 		switch (rc) {
@@ -2955,8 +2969,13 @@ again1:
 			orw->orw_epoch = e;
 			/* TODO: Also recover the epoch uncertainty. */
 			break;
+		case -DER_MISMATCH:
+			rc = vos_dtx_abort(ioc.ioc_vos_coh, &orw->orw_dti, e);
+			if (rc < 0 && rc != -DER_NONEXIST)
+				D_GOTO(out, rc);
+			/* Fall through */
 		case -DER_NONEXIST:
-			rc = 0;
+			flags = 0;
 			break;
 		default:
 			D_GOTO(out, rc);
@@ -2966,7 +2985,6 @@ again1:
 		D_GOTO(out, rc);
 	}
 
-again2:
 	/* For leader case, we need to find out the potential conflict
 	 * (or share the same non-committed object/dkey) DTX(s) in the
 	 * CoS (committable) cache, piggyback them via the dispdatched
@@ -3011,7 +3029,7 @@ again2:
 
 	exec_arg.rpc = rpc;
 	exec_arg.ioc = &ioc;
-	exec_arg.flags = flags;
+	exec_arg.flags |= flags;
 	exec_arg.start = orw->orw_start_shard;
 
 	/* Execute the operation on all targets */
@@ -3026,28 +3044,25 @@ again2:
 	case -DER_TX_RESTART:
 		/*
 		 * If this is a standalone operation, we can restart the
-		 * internal transaction right here. Otherwise, we have to defer
-		 * the restart to the RPC client.
+		 * internal transaction right here. Otherwise we have to
+		 * defer the restart to the RPC sponsor.
 		 */
-		if (opc == DAOS_OBJ_RPC_UPDATE) {
-			/*
-			 * Only standalone updates use this RPC. Retry with
-			 * newer epoch.
-			 */
-			orw->orw_epoch = d_hlc_get();
-			orw->orw_flags &= ~ORF_RESEND;
-			flags = 0;
-			d_tm_inc_counter(opm->opm_update_restart, 1);
-			goto again2;
-		}
+		if (opc != DAOS_OBJ_RPC_UPDATE)
+			break;
 
-		break;
+		/* Only standalone updates use this RPC. Retry with newer epoch. */
+		orw->orw_epoch = d_hlc_get();
+		exec_arg.flags |= ORF_RESEND;
+		flags = ORF_RESEND;
+		d_tm_inc_counter(opm->opm_update_restart, 1);
+		goto again;
 	case -DER_AGAIN:
-		orw->orw_flags |= ORF_RESEND;
 		need_abort = true;
+		exec_arg.flags |= ORF_RESEND;
+		flags = ORF_RESEND;
 		d_tm_inc_counter(opm->opm_update_retry, 1);
 		ABT_thread_yield();
-		goto again1;
+		goto again;
 	default:
 		break;
 	}
@@ -3073,7 +3088,7 @@ out:
 	if (ioc.ioc_map_ver < max_ver)
 		ioc.ioc_map_ver = max_ver;
 
-	obj_rw_reply(rpc, rc, epoch.oe_value, &ioc);
+	obj_rw_reply(rpc, rc, epoch.oe_value, false, &ioc);
 	D_FREE(mbs);
 	D_FREE(dti_cos);
 	obj_ioc_end(&ioc, rc);
@@ -3865,8 +3880,11 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	if (opi->opi_flags & ORF_RESEND) {
 		daos_epoch_t	e;
 
-again1:
-		e = 0;
+again:
+		if (flags & ORF_RESEND)
+			e = opi->opi_epoch;
+		else
+			e = 0;
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &opi->opi_dti,
 				       &e, &version);
 		switch (rc) {
@@ -3877,8 +3895,13 @@ again1:
 			flags |= ORF_RESEND;
 			/* TODO: Also recovery the epoch uncertainty. */
 			break;
+		case -DER_MISMATCH:
+			rc = vos_dtx_abort(ioc.ioc_vos_coh, &opi->opi_dti, e);
+			if (rc < 0 && rc != -DER_NONEXIST)
+				D_GOTO(out, rc);
+			/* Fall through */
 		case -DER_NONEXIST:
-			rc = 0;
+			flags = 0;
 			break;
 		default:
 			D_GOTO(out, rc);
@@ -3888,7 +3911,6 @@ again1:
 		goto cleanup;
 	}
 
-again2:
 	/* For leader case, we need to find out the potential conflict
 	 * (or share the same non-committed object/dkey) DTX(s) in the
 	 * CoS (committable) cache, piggyback them via the dispdatched
@@ -3933,7 +3955,7 @@ again2:
 
 	exec_arg.rpc = rpc;
 	exec_arg.ioc = &ioc;
-	exec_arg.flags = flags;
+	exec_arg.flags |= flags;
 
 	/* Execute the operation on all shards */
 	if (opi->opi_api_flags & DAOS_COND_PUNCH)
@@ -3949,19 +3971,17 @@ again2:
 	rc = dtx_leader_end(dlh, ioc.ioc_coh, rc);
 	switch (rc) {
 	case -DER_TX_RESTART:
-		/*
-		 * Only standalone punches use this RPC. Retry with newer
-		 * epoch.
-		 */
+		/* Only standalone punches use this RPC. Retry with newer epoch. */
 		opi->opi_epoch = d_hlc_get();
-		opi->opi_flags &= ~ORF_RESEND;
-		flags = 0;
-		goto again2;
+		exec_arg.flags |= ORF_RESEND;
+		flags = ORF_RESEND;
+		goto again;
 	case -DER_AGAIN:
-		opi->opi_flags |= ORF_RESEND;
 		need_abort = true;
+		exec_arg.flags |= ORF_RESEND;
+		flags = ORF_RESEND;
 		ABT_thread_yield();
-		goto again1;
+		goto again;
 	default:
 		break;
 	}
@@ -4391,6 +4411,44 @@ cleanup:
 	oco->oco_sub_epochs.ca_count = 0;
 }
 
+static inline void
+cpd_unpin_objects(daos_handle_t coh, struct vos_pin_handle *pin_hdl)
+{
+	if (pin_hdl != NULL)
+		vos_unpin_objects(coh, pin_hdl);
+}
+
+static int
+cpd_pin_objects(daos_handle_t coh, struct daos_cpd_sub_req *dcsrs,
+		struct daos_cpd_req_idx *dcri, int count, struct vos_pin_handle **pin_hdl)
+{
+	struct daos_cpd_sub_req	*dcsr;
+	daos_unit_oid_t		*oids;
+	int			 i, rc;
+
+	if (count == 0)
+		return 0;
+
+	D_ALLOC_ARRAY(oids, count);
+	if (oids == NULL)
+		return -DER_NOMEM;
+
+	for (i = 0; i < count; i++) {
+		dcsr = &dcsrs[dcri[i].dcri_req_idx];
+		dcsr->dcsr_oid.id_shard = dcri[i].dcri_shard_id;
+
+		D_ASSERT(dcsr->dcsr_opc != DCSO_READ);
+		oids[i] = dcsr->dcsr_oid;
+	}
+
+	rc = vos_pin_objects(coh, oids, count, pin_hdl);
+	if (rc)
+		DL_ERROR(rc, "Failed to pin CPD objects.");
+
+	D_FREE(oids);
+	return rc;
+}
+
 /* Locally process the operations belong to one DTX.
  * Common logic, shared by both leader and non-leader.
  */
@@ -4428,6 +4486,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 	int                      i;
 	uint64_t                 update_flags;
 	uint64_t                 sched_seq = sched_cur_seq();
+	struct vos_pin_handle	*pin_hdl = NULL;
 
 	if (dth->dth_flags & DTE_LEADER &&
 	    DAOS_FAIL_CHECK(DAOS_DTX_RESTART))
@@ -4488,6 +4547,12 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 			poffs[i] = &local_offs[i];
 			pskips[i] = (uint8_t *)&local_skips[i];
 		}
+	}
+
+	rc = cpd_pin_objects(ioc->ioc_vos_coh, dcsrs, dcri, dcde->dcde_write_cnt, &pin_hdl);
+	if (rc) {
+		DL_ERROR(rc, "Failed to pin objects.");
+		goto out;
 	}
 
 	/* P2: vos_update_begin. */
@@ -4779,14 +4844,14 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 out:
 	if (rc != 0) {
 		if (bulks != NULL) {
-			for (i = 0;
-			     i < dcde->dcde_write_cnt && rma_idx < rma; i++) {
+			for (i = 0; i < dcde->dcde_write_cnt; i++) {
 				if (!bulks[i].inited)
 					continue;
 
-				ABT_eventual_wait(bulks[i].eventual, NULL);
-				ABT_eventual_free(&bulks[i].eventual);
-				rma_idx++;
+				if (bulks[i].eventual != ABT_EVENTUAL_NULL) {
+					ABT_eventual_wait(bulks[i].eventual, NULL);
+					ABT_eventual_free(&bulks[i].eventual);
+				}
 			}
 		}
 
@@ -4809,6 +4874,8 @@ out:
 			}
 		}
 	}
+
+	cpd_unpin_objects(ioc->ioc_vos_coh, pin_hdl);
 
 	D_FREE(iohs);
 	D_FREE(biods);
@@ -5605,12 +5672,12 @@ ds_obj_coll_punch_handler(crt_rpc_t *rpc)
 
 	D_DEBUG(DB_IO, "(%s) handling collective punch RPC %p for obj "
 		DF_UOID" on XS %u/%u epc "DF_X64" pmv %u, with dti "
-		DF_DTI", forward width %u, forward depth %u\n",
+		DF_DTI", forward width %u, forward depth %u, flags %x\n",
 		(ocpi->ocpi_flags & ORF_LEADER) ? "leader" :
 		(ocpi->ocpi_tgts.ca_count == 1 ? "non-leader" : "relay-engine"),
 		rpc, DP_UOID(ocpi->ocpi_oid), dmi->dmi_xs_id, dmi->dmi_tgt_id,
 		ocpi->ocpi_epoch, ocpi->ocpi_map_ver, DP_DTI(&ocpi->ocpi_xid),
-		ocpi->ocpi_disp_width, ocpi->ocpi_disp_depth);
+		ocpi->ocpi_disp_width, ocpi->ocpi_disp_depth, ocpi->ocpi_flags);
 
 	D_ASSERT(dmi->dmi_xs_id != 0);
 
@@ -5653,8 +5720,11 @@ ds_obj_coll_punch_handler(crt_rpc_t *rpc)
 
 	if (ocpi->ocpi_flags & ORF_RESEND) {
 
-again1:
-		tmp = 0;
+again:
+		if (!(ocpi->ocpi_flags & ORF_LEADER) || (flags & ORF_RESEND))
+			tmp = ocpi->ocpi_epoch;
+		else
+			tmp = 0;
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &ocpi->ocpi_xid, &tmp, &version);
 		switch (rc) {
 		case -DER_ALREADY:
@@ -5664,7 +5734,13 @@ again1:
 			flags |= ORF_RESEND;
 			/* TODO: Also recovery the epoch uncertainty. */
 			break;
+		case -DER_MISMATCH:
+			rc = vos_dtx_abort(ioc.ioc_vos_coh, &ocpi->ocpi_xid, tmp);
+			if (rc < 0 && rc != -DER_NONEXIST)
+				D_GOTO(out, rc);
+			/* Fall through */
 		case -DER_NONEXIST:
+			flags = 0;
 			break;
 		default:
 			D_GOTO(out, rc);
@@ -5673,7 +5749,6 @@ again1:
 		dce->dce_ver = version;
 	}
 
-again2:
 	epoch.oe_value = ocpi->ocpi_epoch;
 	epoch.oe_first = epoch.oe_value;
 	epoch.oe_flags = orf_to_dtx_epoch_flags(ocpi->ocpi_flags);
@@ -5685,7 +5760,7 @@ again2:
 
 	exec_arg.rpc = rpc;
 	exec_arg.ioc = &ioc;
-	exec_arg.flags = flags;
+	exec_arg.flags |= flags;
 	exec_arg.coll_shards = dcts[0].dct_shards;
 	exec_arg.coll_tgts = dcts;
 	obj_coll_disp_init(dct_nr, ocpi->ocpi_max_tgt_sz,
@@ -5718,14 +5793,15 @@ again2:
 	switch (rc) {
 	case -DER_TX_RESTART:
 		ocpi->ocpi_epoch = d_hlc_get();
-		ocpi->ocpi_flags &= ~ORF_RESEND;
-		flags = 0;
-		goto again2;
+		exec_arg.flags |= ORF_RESEND;
+		flags = ORF_RESEND;
+		goto again;
 	case -DER_AGAIN:
-		ocpi->ocpi_flags |= ORF_RESEND;
 		need_abort = true;
+		exec_arg.flags |= ORF_RESEND;
+		flags = ORF_RESEND;
 		ABT_thread_yield();
-		goto again1;
+		goto again;
 	default:
 		break;
 	}
@@ -5745,15 +5821,17 @@ out:
 		max_ver = version;
 
 	DL_CDEBUG(rc != 0 && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART, DLOG_ERR, DB_IO, rc,
-		  "(%s) handled collective punch RPC %p for obj "DF_UOID" on XS %u/%u epc "
-		  DF_X64" pmv %u/%u, with dti "DF_DTI", bulk_tgt_sz %u, bulk_tgt_nr %u, "
-		  "tgt_nr %u, forward width %u, forward depth %u",
+		  "(%s) handled collective punch RPC %p for obj "DF_UOID" on XS %u/%u in "DF_UUID"/"
+		  DF_UUID"/"DF_UUID" with epc "DF_X64", pmv %u/%u, dti "DF_DTI", bulk_tgt_sz %u, "
+		  "bulk_tgt_nr %u, tgt_nr %u, forward width %u, forward depth %u, flags %x",
 		  (ocpi->ocpi_flags & ORF_LEADER) ? "leader" :
 		  (ocpi->ocpi_tgts.ca_count == 1 ? "non-leader" : "relay-engine"), rpc,
-		  DP_UOID(ocpi->ocpi_oid), dmi->dmi_xs_id, dmi->dmi_tgt_id, ocpi->ocpi_epoch,
+		  DP_UOID(ocpi->ocpi_oid), dmi->dmi_xs_id, dmi->dmi_tgt_id,
+		  DP_UUID(ocpi->ocpi_po_uuid), DP_UUID(ocpi->ocpi_co_hdl),
+		  DP_UUID(ocpi->ocpi_co_uuid), ocpi->ocpi_epoch,
 		  ocpi->ocpi_map_ver, max_ver, DP_DTI(&ocpi->ocpi_xid), ocpi->ocpi_bulk_tgt_sz,
 		  ocpi->ocpi_bulk_tgt_nr, (unsigned int)ocpi->ocpi_tgts.ca_count,
-		  ocpi->ocpi_disp_width, ocpi->ocpi_disp_depth);
+		  ocpi->ocpi_disp_width, ocpi->ocpi_disp_depth, ocpi->ocpi_flags);
 
 	obj_punch_complete(rpc, rc, max_ver);
 

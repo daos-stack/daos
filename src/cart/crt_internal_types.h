@@ -147,6 +147,9 @@ struct crt_gdata {
 	/** whether we are on a primary provider */
 	unsigned int             cg_provider_is_primary : 1;
 
+	/** use single thread to access context */
+	bool                     cg_thread_mode_single;
+
 	ATOMIC uint64_t		cg_rpcid; /* rpc id */
 
 	/* protects crt_gdata (see the lock order comment on crp_mutex) */
@@ -224,6 +227,7 @@ struct crt_event_cb_priv {
 	ENV(D_POLL_TIMEOUT)                                                                        \
 	ENV_STR(D_PORT)                                                                            \
 	ENV(D_PORT_AUTO_ADJUST)                                                                    \
+	ENV(D_THREAD_MODE_SINGLE)                                                                  \
 	ENV(D_POST_INCR)                                                                           \
 	ENV(D_POST_INIT)                                                                           \
 	ENV(D_MRECV_BUF)                                                                           \

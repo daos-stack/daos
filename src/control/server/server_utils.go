@@ -112,12 +112,12 @@ func getBdevCfgsFromSrvCfg(cfg *config.Server) storage.TierConfigs {
 
 func cfgGetReplicas(cfg *config.Server, lookup ipLookupFn) ([]*net.TCPAddr, error) {
 	var dbReplicas []*net.TCPAddr
-	for _, ap := range cfg.AccessPoints {
-		apAddr, err := resolveFirstAddr(ap, lookup)
+	for _, rep := range cfg.MgmtSvcReplicas {
+		repAddr, err := resolveFirstAddr(rep, lookup)
 		if err != nil {
-			return nil, config.FaultConfigBadAccessPoints
+			return nil, config.FaultConfigBadMgmtSvcReplicas
 		}
-		dbReplicas = append(dbReplicas, apAddr)
+		dbReplicas = append(dbReplicas, repAddr)
 	}
 
 	return dbReplicas, nil

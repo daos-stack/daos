@@ -633,8 +633,8 @@ rebuild_object(struct rebuild_tgt_pool_tracker *rpt, uuid_t co_uuid, daos_unit_o
 
 	if (myrank == target->ta_comp.co_rank && mytarget == target->ta_comp.co_index &&
 	    (shard == oid.id_shard) && rpt->rt_rebuild_op != RB_OP_UPGRADE) {
-		D_DEBUG(DB_REBUILD, DF_UOID" %u/%u already on the target shard\n",
-			DP_UOID(oid), myrank, mytarget);
+		D_DEBUG(DB_REBUILD, DF_RB ": " DF_UOID " %u/%u already on the target shard\n",
+			DP_RB_RPT(rpt), DP_UOID(oid), myrank, mytarget);
 		return 0;
 	}
 
@@ -876,9 +876,9 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	       rpt->rt_rebuild_op != RB_OP_FAIL_RECLAIM) {
 		D_ASSERTF(rpt->rt_pool->sp_rebuilding >= 0, DF_UUID" rebuilding %d\n",
 			  DP_UUID(rpt->rt_pool_uuid), rpt->rt_pool->sp_rebuilding);
-			/* Wait for EC aggregation to abort before discard the object */
-		D_INFO(DF_RB " " DF_UUID " wait for ec agg abort.\n", DP_RB_RPT(rpt),
-		       DP_UUID(entry->ie_couuid));
+		/* Wait for EC aggregation to abort before discard the object */
+		D_INFO(DF_RB " " DF_UUID " wait for ec agg abort, rebuilding %d.\n", DP_RB_RPT(rpt),
+		       DP_UUID(entry->ie_couuid), rpt->rt_pool->sp_rebuilding);
 		dss_sleep(1000);
 		if (rpt->rt_abort || rpt->rt_finishing) {
 			D_DEBUG(DB_REBUILD, DF_RB " " DF_UUID " rebuild abort %u/%u.\n",
@@ -1051,6 +1051,7 @@ rebuild_scan_leader(void *data)
 	struct rebuild_tgt_pool_tracker *rpt = data;
 	struct rebuild_pool_tls	  *tls;
 	int			   rc;
+	bool			   wait = false;
 
 	D_DEBUG(DB_REBUILD, DF_RB " check resync %u/%u < %u\n", DP_RB_RPT(rpt),
 		rpt->rt_pool->sp_dtx_resync_version, rpt->rt_global_dtx_resync_version,
@@ -1063,6 +1064,7 @@ rebuild_scan_leader(void *data)
 			if (rpt->rt_global_dtx_resync_version < rpt->rt_rebuild_ver) {
 				D_INFO(DF_RB " wait for global dtx %u\n", DP_RB_RPT(rpt),
 				       rpt->rt_global_dtx_resync_version);
+				       wait = true;
 				ABT_cond_wait(rpt->rt_global_dtx_wait_cond, rpt->rt_lock);
 			}
 			ABT_mutex_unlock(rpt->rt_lock);
@@ -1073,7 +1075,10 @@ rebuild_scan_leader(void *data)
 		}
 	}
 
-	D_DEBUG(DB_REBUILD, DF_RB " scan collective begin\n", DP_RB_RPT(rpt));
+	if (wait)
+		D_INFO(DF_RB " scan collective begin\n", DP_RB_RPT(rpt));
+	else
+		D_DEBUG(DB_REBUILD, DF_RB " scan collective begin\n", DP_RB_RPT(rpt));
 
 	rc = ds_pool_thread_collective(rpt->rt_pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
 				       PO_COMP_ST_DOWNOUT, rebuild_scanner, rpt,
@@ -1081,7 +1086,10 @@ rebuild_scan_leader(void *data)
 	if (rc)
 		D_GOTO(out, rc);
 
-	D_DEBUG(DB_REBUILD, DF_RB "rebuild scan collective done\n", DP_RB_RPT(rpt));
+	if (wait)
+		D_INFO(DF_RB "rebuild scan collective done\n", DP_RB_RPT(rpt));
+	else
+		D_DEBUG(DB_REBUILD, DF_RB "rebuild scan collective done\n", DP_RB_RPT(rpt));
 
 	ABT_mutex_lock(rpt->rt_lock);
 	rc = ds_pool_task_collective(rpt->rt_pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
@@ -1156,6 +1164,24 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 			  "rsi_rebuild_ver %d != rt_rebuild_ver %d\n",
 			  rsi->rsi_rebuild_ver, rpt->rt_rebuild_ver);
 
+		/* The same PS leader request rebuild with higher rsi_rebuild_gen.
+		 * Is the case of massive failure case, see pool_restart_rebuild_if_rank_wip().
+		 */
+		if (rpt->rt_leader_rank == rsi->rsi_master_rank &&
+		    rpt->rt_leader_term == rsi->rsi_leader_term &&
+		    rpt->rt_rebuild_gen < rsi->rsi_rebuild_gen) {
+			/* rebuild_leader_status_notify(LAZY rebuild_iv_update),
+			 * it will set rpt->rt_global_done to abort rpt.
+			 * set rt_abort here just for safe.
+			 */
+			rpt->rt_abort = 1;
+			D_INFO(DF_RBF ", start new rebuild, gen %d -> %d.\n",
+			       DP_RBF_RPT(rpt), rpt->rt_rebuild_gen, rsi->rsi_rebuild_gen);
+			rpt_put(rpt);
+			rpt = NULL;
+			goto tls_lookup;
+		}
+
 		D_DEBUG(DB_REBUILD, "already started, existing " DF_RBF ", req " DF_RBF "\n",
 			DP_RBF_RPT(rpt), DP_RBF_RSI(rsi));
 
@@ -1186,6 +1212,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		rpt = NULL;
 	}
 
+tls_lookup:
 	tls = rebuild_pool_tls_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver,
 				      rsi->rsi_rebuild_gen);
 	if (tls != NULL) {

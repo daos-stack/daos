@@ -32,6 +32,7 @@ message PoolCreateReq {
 	uint32          num_ranks  = 11; // Number of target ranks to use
 	repeated uint32 ranks      = 12; // target ranks
 	repeated uint64 tier_bytes = 13; // Size in bytes of storage tier
+	float           mem_ratio = 14; // Fraction of meta-blob-sz to use as mem-file-sz
 }
 
 // PoolCreateResp returns created pool uuid and ranks.
@@ -40,7 +41,8 @@ message PoolCreateResp {
 	uint32 svc_ldr = 2; // Current service leader rank
 	repeated uint32 svc_reps = 3; // pool service replica ranks
 	repeated uint32 tgt_ranks = 4; // pool target ranks
-	repeated uint64 tier_bytes = 5; // storage tiers allocated to pool
+	repeated uint64 tier_bytes     = 5; // per-rank storage tier sizes allocated in pool
+	uint64          mem_file_bytes = 6; // per-rank accumulated value of memory file sizes
 }
 
 // PoolDestroyReq supplies pool identifier and force flag.
@@ -110,6 +112,7 @@ message PoolExtendReq {
 	repeated uint32 svc_ranks = 4; // List of pool service ranks
 	repeated uint64 tier_bytes    = 5; // Size in bytes of storage tiers
 	repeated uint32 fault_domains = 6; // fault domain tree, minimal format
+	float           mem_ratio     = 7; // Fraction of meta-blob-sz to use as mem-file-sz
 }
 
 // PoolExtendResp returns resultant state of Extend operation.
@@ -126,6 +129,7 @@ message PoolReintegrateReq {
 	repeated uint32 target_idx = 4; // target ranks
 	repeated uint32 svc_ranks = 5; // List of pool service ranks
 	repeated uint64 tier_bytes = 6; // Size in bytes of storage tiers
+	float           mem_ratio  = 7; // Fraction of meta-blob-sz to use as mem-file-sz
 }
 
 // PoolReintegrateResp returns resultant state of Reintegrate operation.
@@ -235,7 +239,9 @@ message PoolQueryResp {
 	PoolServiceState state = 17; // pool state
 	uint32 svc_ldr = 18; // current raft leader (2.6+)
 	repeated uint32 svc_reps = 19; // service replica ranks
-	uint64 query_mask = 20; // Bitmask of pool query options used
+	uint64                     query_mask         = 20; // Bitmask of pool query options used
+	uint64 mem_file_bytes = 21; // per-pool accumulated value of memory file sizes
+	string dead_ranks     = 22; // optional set of dead ranks
 }
 
 message PoolProperty {
@@ -326,6 +332,7 @@ message PoolQueryTargetInfo {
 	TargetState state = 2; // target state see enum daos_target_state_t
 	// TODO: target performance data
 	repeated StorageTargetUsage space = 3; // this target's usage per storage tier
+	uint64                      mem_file_bytes = 4; // per-target value of memory file size
 }
 
 // PoolQueryTargetResp represents a pool target query response

@@ -126,7 +126,7 @@ vos_space_query(struct vos_pool *pool, struct vos_pool_space *vps, bool slow)
 	struct vos_pool_df	*df = pool->vp_pool_df;
 	struct vea_attr		*attr = &vps->vps_vea_attr;
 	struct vea_stat		*stat = slow ? &vps->vps_vea_stat : NULL;
-	daos_size_t		 scm_used;
+	daos_size_t		 scm_used, ne_used;
 	int			 rc;
 
 	SCM_TOTAL(vps) = df->pd_scm_sz;
@@ -141,6 +141,33 @@ vos_space_query(struct vos_pool *pool, struct vos_pool_space *vps, bool slow)
 		D_ERROR("Query pool:"DF_UUID" SCM space failed. "DF_RC"\n",
 			DP_UUID(pool->vp_id), DP_RC(rc));
 		return rc;
+	}
+
+	/* Query non-evictable zones usage when the phase2 pool is evictable */
+	if (vos_pool_is_evictable(pool)) {
+		struct vos_pool_ext_df *pd_ext_df = umem_off2ptr(vos_pool2umm(pool), df->pd_ext);
+
+		D_ASSERT(pd_ext_df != NULL);
+		vps->vps_mem_bytes = pd_ext_df->ped_mem_sz;
+
+		rc = umempobj_get_mbusage(vos_pool2umm(pool)->umm_pool, UMEM_DEFAULT_MBKT_ID,
+					  &ne_used, &vps->vps_ne_total);
+		if (rc) {
+			rc = umem_tx_errno(rc);
+			DL_ERROR(rc, "Query pool:"DF_UUID" NE space usage failed.",
+				 DP_UUID(pool->vp_id));
+			return rc;
+		}
+		if (ne_used > vps->vps_ne_total) {
+			D_ERROR("NE used:"DF_U64" > NE total:"DF_U64"\n",
+				ne_used, vps->vps_ne_total);
+			return -DER_INVAL;
+		}
+		vps->vps_ne_free = vps->vps_ne_total - ne_used;
+	} else {
+		vps->vps_mem_bytes = SCM_TOTAL(vps);
+		vps->vps_ne_total = 0;
+		vps->vps_ne_free = 0;
 	}
 
 	/*

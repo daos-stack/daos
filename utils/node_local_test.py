@@ -18,6 +18,7 @@ import argparse
 import copy
 import errno
 import functools
+import importlib
 import json
 import os
 import pickle  # nosec
@@ -778,7 +779,7 @@ class DaosServer():
         agent_config = join(self.agent_dir, 'nlt_agent.yaml')
         with open(agent_config, 'w') as fd:
             agent_data = {
-                'access_points': scyaml['access_points'],
+                'access_points': scyaml['mgmt_svc_replicas'],
                 'control_log_mask': 'NOTICE',  # INFO logs every client process connection
             }
             json.dump(agent_data, fd)
@@ -1336,7 +1337,7 @@ class DFuse():
 
         return f'DFuse instance at {self.dir} ({running})'
 
-    def start(self, v_hint=None, single_threaded=False, use_oopt=False):
+    def start(self, v_hint=None, use_oopt=False):
         """Start a dfuse instance"""
         # pylint: disable=too-many-branches
         dfuse_bin = join(self.conf['PREFIX'], 'bin', 'dfuse')
@@ -1384,9 +1385,7 @@ class DFuse():
         if self.multi_user:
             cmd.append('--multi-user')
 
-        if single_threaded:
-            cmd.append('--singlethread')
-        elif not self.cores:
+        if not self.cores:
             # Use a lower default thread-count for NLT due to running tests in parallel.
             cmd.extend(['--thread-count', '4'])
 
@@ -1758,7 +1757,7 @@ def run_daos_cmd(conf,
 
 # pylint: disable-next=too-many-arguments
 def create_cont(conf, pool=None, ctype=None, label=None, path=None, oclass=None, dir_oclass=None,
-                file_oclass=None, hints=None, valgrind=False, log_check=True, cwd=None):
+                file_oclass=None, hints=None, valgrind=False, log_check=True, cwd=None, attrs=None):
     """Use 'daos' command to create a new container.
 
     Args:
@@ -1775,6 +1774,7 @@ def create_cont(conf, pool=None, ctype=None, label=None, path=None, oclass=None,
         valgrind (bool, optional): Whether to run command under valgrind.  Defaults to True.
         log_check (bool, optional): Whether to run log analysis to check for leaks.
         cwd (str, optional): Path to run daos command from.
+        attrs (dict, optional): Dictionary of user attributes to set.
 
     Returns:
         DaosCont: Newly created container as DaosCont object.
@@ -1808,6 +1808,9 @@ def create_cont(conf, pool=None, ctype=None, label=None, path=None, oclass=None,
 
     if hints:
         cmd.extend(['--hints', hints])
+
+    if attrs:
+        cmd.extend(['--attrs', ','.join([f"{name}:{val}" for name, val in attrs.items()])])
 
     def _create_cont():
         """Helper function for create_cont"""
@@ -1979,11 +1982,9 @@ class needs_dfuse_with_opt():
     wrapping_lock = threading.Lock()
 
     # pylint: disable=too-few-public-methods
-    def __init__(self, caching_variants=None, wbcache=True, single_threaded=False,
-                 dfuse_inval=True, ro=False):
+    def __init__(self, caching_variants=None, wbcache=True, dfuse_inval=True, ro=False):
         self.caching_variants = caching_variants if caching_variants else [False, True]
         self.wbcache = wbcache
-        self.single_threaded = single_threaded
         self.dfuse_inval = dfuse_inval
         self.ro = ro
 
@@ -2010,6 +2011,12 @@ class needs_dfuse_with_opt():
                               'dfuse-dentry-dir-time': '5m',
                               'dfuse-ndentry-time': '5m'}
                 obj.container.set_attrs(cont_attrs)
+            elif caching:
+                cont_attrs = {'dfuse-attr-time': '1m',
+                              'dfuse-dentry-time': '1m',
+                              'dfuse-dentry-dir-time': '1m',
+                              'dfuse-ndentry-time': '1m'}
+                obj.container.set_attrs(cont_attrs)
 
             if self.ro:
                 args["ro"] = True
@@ -2019,7 +2026,7 @@ class needs_dfuse_with_opt():
                               caching=caching,
                               wbcache=self.wbcache,
                               **args)
-            obj.dfuse.start(v_hint=method.__name__, single_threaded=self.single_threaded)
+            obj.dfuse.start(v_hint=method.__name__)
             try:
                 rc = method(obj)
             finally:
@@ -2677,11 +2684,6 @@ class PosixTests():
         assert len(post_files) == len(files) - 1
         assert post_files == files[:-2] + [files[-1]]
 
-    @needs_dfuse_with_opt(single_threaded=True, caching_variants=[True])
-    def test_single_threaded(self):
-        """Test single-threaded mode"""
-        self.readdir_test(10)
-
     @needs_dfuse
     def test_open_replaced(self):
         """Test that fstat works on file clobbered by rename"""
@@ -3066,12 +3068,12 @@ class PosixTests():
         assert rc.returncode == 0
 
         # Create a second new container which is not linked
-        container2 = create_cont(self.conf, self.pool, ctype="POSIX", label='mycont_uns_link2')
         cont_attrs = {'dfuse-attr-time': '5m',
                       'dfuse-dentry-time': '5m',
                       'dfuse-dentry-dir-time': '5m',
                       'dfuse-ndentry-time': '5m'}
-        container2.set_attrs(cont_attrs)
+        container2 = create_cont(self.conf, self.pool, ctype="POSIX", label='mycont_uns_link2',
+                                 attrs=cont_attrs)
 
         # Link and then destroy the first container
         path = join(self.dfuse.dir, 'uns_link1')
@@ -3377,7 +3379,7 @@ class PosixTests():
         print(os.listdir(self.dfuse.dir))
         print(os.listdir(dfuse.dir))
 
-        # Rename file 0 to file 0 in the background, this will remove file 1
+        # Rename file 0 to file 1 in the background, this will remove the old file 1
         os.rename(join(dfuse.dir, 'file.0'), join(dfuse.dir, 'file.1'))
 
         # Perform the unlink, this will unlink the other file.
@@ -3393,6 +3395,45 @@ class PosixTests():
 
         for fd in fds:
             fd.close()
+
+    @needs_dfuse_with_opt(caching_variants=[False])
+    def test_create_exists(self):
+        """Test creating a file.
+
+        This tests for create where the dentry being created already exists and is a file that's
+        known to dfuse.
+
+        To do this make a file in dfuse, use a back channel to rename it and then create a file
+        using the new name."""
+
+        filename = join(self.dfuse.dir, 'myfile')
+
+        with open(filename, 'w') as fd:
+            fd.write('hello')
+
+        filename = join(self.dfuse.dir, 'newfile')
+        try:
+            os.stat(filename)
+            raise NLTestFail("File exists")
+        except FileNotFoundError:
+            pass
+
+        # Start another dfuse instance to move the files around without the kernel knowing.
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      container=self.container,
+                      caching=False)
+        dfuse.start(v_hint='create_exists_1')
+
+        os.rename(join(dfuse.dir, 'myfile'), join(dfuse.dir, 'newfile'))
+
+        filename = join(self.dfuse.dir, 'newfile')
+
+        with open(filename, 'w') as fd:
+            fd.write('hello')
+
+        if dfuse.stop():
+            self.fatal_errors = True
 
     def test_cont_rw(self):
         """Test write access to another users container"""
@@ -4495,6 +4536,73 @@ class PosixTests():
                 return
             raise
 
+    def import_torch(self, server):
+        """Return a handle to the pydaos.torch module"""
+        os.environ['D_LOG_MASK'] = 'INFO'
+        os.environ['DAOS_AGENT_DRPC_DIR'] = server.agent_dir
+
+        return importlib.import_module('pydaos.torch')
+
+    @needs_dfuse_with_opt(caching_variants=[False])
+    def test_torch_map_dataset(self):
+        """Check that all files in container are read regardless of the directory level"""
+        test_files = [
+            {"name": "0.txt", "content": b"0", "seen": 0},
+            {"name": "1/l1.txt", "content": b"1", "seen": 0},
+            {"name": "1/2/l2.txt", "content": b"2", "seen": 0},
+            {"name": "1/2/3/l3.txt", "content": b"3", "seen": 0},
+        ]
+
+        for tf in test_files:
+            file = join(self.dfuse.dir, tf["name"])
+            os.makedirs(os.path.dirname(file), exist_ok=True)
+            with open(file, 'wb') as f:
+                f.write(tf["content"])
+
+        torch = self.import_torch(self.server)
+        dataset = torch.Dataset(pool=self.pool.uuid, cont=self.container.uuid)
+
+        assert len(dataset) == len(test_files)
+
+        for _, content in enumerate(dataset):
+            for f in test_files:
+                if f["content"] == content:
+                    f["seen"] += 1
+
+        for f in test_files:
+            assert f["seen"] == 1
+
+        del dataset
+
+    @needs_dfuse_with_opt(caching_variants=[False])
+    def test_torch_iter_dataset(self):
+        """Check that all files in container are read regardless of the directory level"""
+        test_files = [
+            {"name": "0.txt", "content": b"0", "seen": 0},
+            {"name": "1/l1.txt", "content": b"1", "seen": 0},
+            {"name": "1/2/l2.txt", "content": b"2", "seen": 0},
+            {"name": "1/2/3/l3.txt", "content": b"3", "seen": 0},
+        ]
+
+        for tf in test_files:
+            file = join(self.dfuse.dir, tf["name"])
+            os.makedirs(os.path.dirname(file), exist_ok=True)
+            with open(file, 'wb') as f:
+                f.write(tf["content"])
+
+        torch = self.import_torch(self.server)
+        dataset = torch.IterableDataset(pool=self.pool.uuid, cont=self.container.uuid)
+
+        for content in dataset:
+            for f in test_files:
+                if f["content"] == content:
+                    f["seen"] += 1
+
+        for f in test_files:
+            assert f["seen"] == 1
+
+        del dataset
+
 
 class NltStdoutWrapper():
     """Class for capturing stdout from threads"""
@@ -5419,6 +5527,7 @@ def test_pydaos_kv_obj_class(server, conf):
     daos._cleanup()
     log_test(conf, log_name)
 
+
 # Fault injection testing.
 #
 # This runs two different commands under fault injection, although it allows
@@ -5919,7 +6028,7 @@ def test_dfuse_start(server, conf, wf):
 
     cmd = [join(conf['PREFIX'], 'bin', 'dfuse'),
            '--mountpoint', mount_point,
-           '--pool', pool.id(), '--cont', container.id(), '--foreground', '--singlethread']
+           '--pool', pool.id(), '--cont', container.id(), '--foreground', '--thread-count=2']
 
     test_cmd = AllocFailTest(conf, 'dfuse', cmd)
     test_cmd.wf = wf
@@ -6099,7 +6208,15 @@ def test_alloc_fail_cont_create(server, conf):
                 '--type',
                 'POSIX',
                 '--path',
-                join(dfuse.dir, f'container_{cont_id}')]
+                join(dfuse.dir, f'container_{cont_id}'),
+                '--attrs',
+                ','.join([
+                    'dfuse-attr-time:5m',
+                    'dfuse-dentry-time:4m',
+                    'dfuse-dentry-dir-time:3m',
+                    'dfuse-ndentry-time:2m',
+                    'dfuse-data-cache:off',
+                    'dfuse-direct-io-disable:off'])]
 
     test_cmd = AllocFailTest(conf, 'cont-create', get_cmd)
     test_cmd.check_post_stdout = False
