@@ -227,6 +227,13 @@ extern unsigned _On_memcheck;
 		VALGRIND_DESTROY_MEMPOOL(heap);\
 } while (0)
 
+#define VALGRIND_DO_DESTROY_MEMPOOL_COND(heap)                                                     \
+	do {                                                                                       \
+		if (On_memcheck)                                                                   \
+			if (VALGRIND_MEMPOOL_EXISTS(heap))                                         \
+				VALGRIND_DESTROY_MEMPOOL(heap);                                    \
+	} while (0)
+
 #define VALGRIND_DO_MEMPOOL_ALLOC(heap, addr, size) do {\
 	if (On_memcheck)\
 		VALGRIND_MEMPOOL_ALLOC(heap, addr, size);\
@@ -269,6 +276,8 @@ extern unsigned _On_memcheck;
 	do { (void) (heap); (void) (rzB); (void) (is_zeroed); } while (0)
 
 #define VALGRIND_DO_DESTROY_MEMPOOL(heap) { (void) (heap); }
+
+#define VALGRIND_DO_DESTROY_MEMPOOL_COND(heap) { (void) (heap); }
 
 #define VALGRIND_DO_MEMPOOL_ALLOC(heap, addr, size)\
 	do { (void) (heap); (void) (addr); (void) (size); } while (0)

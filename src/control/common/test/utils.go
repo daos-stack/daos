@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -250,7 +249,7 @@ func CreateTestDir(t *testing.T) (string, func()) {
 	t.Helper()
 
 	name := strings.Replace(t.Name(), "/", "-", -1)
-	tmpDir, err := ioutil.TempDir("", name)
+	tmpDir, err := os.MkdirTemp("", name)
 	if err != nil {
 		t.Fatalf("Couldn't create temporary directory: %v", err)
 	}
@@ -268,7 +267,7 @@ func CreateTestDir(t *testing.T) (string, func()) {
 func CreateTestFile(t *testing.T, dir, content string) string {
 	t.Helper()
 
-	file, err := ioutil.TempFile(dir, "")
+	file, err := os.CreateTemp(dir, "")
 	if err != nil {
 		t.Fatal(err)
 	}
