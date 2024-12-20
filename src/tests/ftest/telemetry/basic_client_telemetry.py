@@ -46,9 +46,7 @@ class BasicClientTelemetry(TestWithClientTelemetry):
         self.log_step('Reading client telemetry (reads & writes should be > 0)')
         after_metrics = self.telemetry.collect_client_data(metric_names)
         for metric in metric_names:
-            msum = 0
-            for value in after_metrics[metric].values():
-                msum += value
-            self.assertGreater(msum, 0)
+            msum = sum(after_metrics[metric].values())
+            self.assertGreater(msum, 0, f'{metric} value not greater than zero after I/O')
 
         self.log_step('Test passed')
