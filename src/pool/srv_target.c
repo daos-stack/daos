@@ -1223,6 +1223,7 @@ ds_pool_start(uuid_t uuid, bool aft_chk, bool immutable)
 	else
 		pool->sp_immutable = 0;
 
+	pool->sp_starting = 1;
 	rc = pool_child_add_all(pool);
 	if (rc != 0)
 		goto failure_pool;
@@ -1249,6 +1250,7 @@ ds_pool_start(uuid_t uuid, bool aft_chk, bool immutable)
 	}
 
 	ds_iv_ns_start(pool->sp_iv_ns);
+	pool->sp_starting = 0;
 
 	/* Ignore errors, for other PS replicas may work. */
 	rc = ds_pool_svc_start(uuid);
