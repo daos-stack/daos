@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -75,7 +75,7 @@ class DaosCommand(DaosCommandBase):
 
     def container_create(self, pool, sys_name=None, path=None, cont_type=None,
                          oclass=None, dir_oclass=None, file_oclass=None, chunk_size=None,
-                         properties=None, acl_file=None, label=None):
+                         properties=None, acl_file=None, label=None, attrs=None):
         # pylint: disable=too-many-arguments
         """Create a container.
 
@@ -96,6 +96,8 @@ class DaosCommand(DaosCommandBase):
                 pairs defining the container properties. Defaults to None
             acl_file (str, optional): ACL file. Defaults to None.
             label (str, optional): Container label. Defaults to None.
+            attrs (str, optional): String of comma-separated <name>:<value> pairs defining the
+                container user attributes.  Defaults to None.
 
         Returns:
             dict: the daos json command output converted to a python dictionary
@@ -110,10 +112,12 @@ class DaosCommand(DaosCommandBase):
                 properties += ',rd_lvl:1'
         else:
             properties = 'rd_lvl:1'
+
         return self._get_json_result(
             ("container", "create"), pool=pool, sys_name=sys_name, path=path,
             type=cont_type, oclass=oclass, dir_oclass=dir_oclass, file_oclass=file_oclass,
-            chunk_size=chunk_size, properties=properties, acl_file=acl_file, label=label)
+            chunk_size=chunk_size, properties=properties, acl_file=acl_file, label=label,
+            attrs=attrs)
 
     def container_clone(self, src, dst):
         """Clone a container to a new container.
@@ -194,7 +198,7 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos container get-acl command fails.
 
         """
-        return self._get_result(
+        return self._get_json_result(
             ("container", "get-acl"), pool=pool, cont=cont,
             verbose=verbose, outfile=outfile)
 
@@ -385,6 +389,96 @@ class DaosCommand(DaosCommandBase):
         """
         return self._get_json_result(
             ("pool", "list-containers"), pool=pool, sys_name=sys_name)
+
+    def pool_list(self, no_query=False, verbose=False):
+        """List pools.
+
+        Args:
+            no_query (bool, optional): If True, do not query for pool stats.
+            verbose (bool, optional): If True, use verbose mode.
+
+        Raises:
+            CommandFailure: if the daos pool list command fails.
+
+        Returns:
+            dict: the daos json command output converted to a python dictionary
+
+        """
+        # Sample verbose JSON Output:
+        # {
+        #     "response": {
+        #         "status": 0,
+        #         "pools": [
+        #         {
+        #             "uuid": "517217db-47c4-4bb9-aae5-e38ca7b3dafc",
+        #             "label": "mkp1",
+        #             "svc_reps": [
+        #             0
+        #             ],
+        #             "total_targets": 8,
+        #             "disabled_targets": 0,
+        #             "usage": [
+        #             {
+        #                 "tier_name": "SCM",
+        #                 "size": 3000000000,
+        #                 "free": 2995801112,
+        #                 "imbalance": 0
+        #             },
+        #             {
+        #                 "tier_name": "NVME",
+        #                 "size": 47000000000,
+        #                 "free": 26263322624,
+        #                 "imbalance": 36
+        #             }
+        #             ]
+        #         }
+        #         ]
+        #     },
+        #     "error": null,
+        #     "status": 0
+        # }
+        return self._get_json_result(
+            ("pool", "list"), no_query=no_query, verbose=verbose)
+
+    def _parse_pool_list(self, key=None, **kwargs):
+        """Parse the daos pool list json output for the requested information.
+
+        Args:
+            key (str, optional): pool list json dictionary key in
+                ["response"]["pools"]. Defaults to None.
+
+        Raises:
+            CommandFailure: if the daos pool list command fails.
+
+        Returns:
+            list: list of all the pool items in the daos pool list json output
+                for the requested json dictionary key. This will be an empty
+                list if the key does not exist or the json output was not in
+                the expected format.
+
+        """
+        pool_list = self.pool_list(**kwargs)
+        try:
+            if pool_list["response"]["pools"] is None:
+                return []
+            if key:
+                return [pool[key] for pool in pool_list["response"]["pools"]]
+            return pool_list["response"]["pools"]
+        except KeyError:
+            return []
+
+    def get_pool_list_all(self, **kwargs):
+        """Get a list of all the pool information from daos pool list.
+
+        Raises:
+            CommandFailure: if the daos pool list command fails.
+
+        Returns:
+            list: a list of dictionaries containing information for each pool
+                from the daos pool list json output
+
+        """
+        return self._parse_pool_list(**kwargs)
 
     def container_query(self, pool, cont, sys_name=None):
         """Query a container.
@@ -592,7 +686,8 @@ class DaosCommand(DaosCommandBase):
         return self._get_json_result(
             ("container", "get-prop"), pool=pool, cont=cont, prop=props)
 
-    def container_set_owner(self, pool, cont, user, group):
+    def container_set_owner(self, pool, cont, user=None, group=None, uid=None, gid=None,
+                            no_check=False):
         """Call daos container set-owner.
 
         Args:
@@ -600,6 +695,9 @@ class DaosCommand(DaosCommandBase):
             cont (str): container UUID or label
             user (str): New-user who will own the container.
             group (str): New-group who will own the container.
+            uid (int): with no_check=True, UID to use for user on POSIX container
+            gid (int): with no_check=True, GID to use for group on POSIX container
+            no_check (bool): Skip checking if user and group exist locally
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -611,7 +709,7 @@ class DaosCommand(DaosCommandBase):
         """
         return self._get_result(
             ("container", "set-owner"),
-            pool=pool, cont=cont, user=user, group=group)
+            pool=pool, cont=cont, user=user, group=group, uid=uid, gid=gid, no_check=no_check)
 
     def container_set_attr(self, pool, cont, attrs, sys_name=None):
         """Call daos container set-attr.
@@ -786,16 +884,16 @@ class DaosCommand(DaosCommandBase):
         # Sample daos object query output.
         # oid: 1152922453794619396.1 ver 0 grp_nr: 2
         # grp: 0
-        # replica 0 1
-        # replica 1 0
+        # replica 0 1:?
+        # replica 1 0:?
         # grp: 1
-        # replica 0 0
-        # replica 1 1
+        # replica 0 0:?
+        # replica 1 1:?
         data = {}
         vals = re.findall(
             r"oid:\s+([\d.]+)\s+ver\s+(\d+)\s+grp_nr:\s+(\d+)|"
             r"grp:\s+(\d+)\s+|"
-            r"replica\s+(\d+)\s+(\d+)\s*", self.result.stdout_text)
+            r"replica\s+(\d+)\s+(\d+):\d+\s*", self.result.stdout_text)
 
         try:
             oid_vals = vals[0][0]
@@ -866,6 +964,26 @@ class DaosCommand(DaosCommandBase):
         """
         return self._get_result(
             ("filesystem", "copy"), src=src, dst=dst, preserve_props=preserve_props)
+
+    def filesystem_evict(self, path):
+        """Evict local resources of a DFuse mounted path.
+
+        Args:
+            path (str): The source, formatted as
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Todo:
+            As for the container create with path, this command should have a given list of host on
+            which to apply.  This should be done in the context of the ticket DAOS-7164.
+
+        Raises:
+            CommandFailure: if the daos filesystem copy command fails.
+
+        """
+        return self._get_result(("filesystem", "evict"), path=path)
 
     def version(self):
         """Call daos version.

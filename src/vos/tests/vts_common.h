@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -95,6 +95,8 @@ vts_pool_fallocate(char **fname);
 int
 vts_ctx_init(struct vos_test_ctx *tcx,
 	     size_t pool_size);
+int
+vts_ctx_init_ex(struct vos_test_ctx *tcx, size_t pool_size, size_t meta_size);
 
 void
 vts_ctx_fini(struct vos_test_ctx *tcx);

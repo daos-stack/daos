@@ -12,7 +12,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,7 +24,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
-	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
+	"github.com/daos-stack/daos/src/control/lib/hardware/defaults/topology"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 )
@@ -47,14 +46,15 @@ const (
 )
 
 type CollectLogSubCmd struct {
-	StopOnError  bool   `short:"s" long:"stop-on-error" description:"Stop the collect-log command on very first error"`
-	TargetFolder string `short:"t" long:"target-folder" description:"Target Folder location where log will be copied"`
-	Archive      bool   `short:"z" long:"archive" description:"Archive the log/config files"`
-	ExtraLogsDir string `short:"c" long:"extra-logs-dir" description:"Collect the Logs from given directory"`
-	LogStartDate string `short:"D" long:"start-date" description:"Specify the start date, the day from log will be collected, Format: MM-DD"`
-	LogEndDate   string `short:"F" long:"end-date" description:"Specify the end date, the day till the log will be collected, Format: MM-DD"`
-	LogStartTime string `short:"S" long:"log-start-time" description:"Specify the log collection start time, Format: HH:MM:SS"`
-	LogEndTime   string `short:"E" long:"log-end-time" description:"Specify the log collection end time, Format: HH:MM:SS"`
+	StopOnError          bool   `short:"s" long:"stop-on-error" description:"Stop the collect-log command on very first error"`
+	TargetFolder         string `short:"t" long:"target-folder" description:"Target Folder location where log will be copied"`
+	Archive              bool   `short:"z" long:"archive" description:"Archive the log/config files"`
+	ExtraLogsDir         string `short:"c" long:"extra-logs-dir" description:"Collect the Logs from given directory"`
+	LogStartDate         string `short:"D" long:"start-date" description:"Specify the start date, the day from log will be collected, Format: MM-DD"`
+	LogEndDate           string `short:"F" long:"end-date" description:"Specify the end date, the day till the log will be collected, Format: MM-DD"`
+	LogStartTime         string `short:"S" long:"log-start-time" description:"Specify the log collection start time, Format: HH:MM:SS"`
+	LogEndTime           string `short:"E" long:"log-end-time" description:"Specify the log collection end time, Format: HH:MM:SS"`
+	FileTransferExecArgs string `short:"T" long:"transfer-args" description:"Extra arguments for alternate file transfer tool"`
 }
 
 type LogTypeSubCmd struct {
@@ -86,7 +86,7 @@ const (
 )
 
 const DmgListDeviceCmd = "dmg storage query list-devices"
-const DmgDeviceHealthCmd = "dmg storage query device-health"
+const DmgDeviceHealthCmd = "dmg storage query list-devices --health"
 
 var DmgCmd = []string{
 	"dmg system get-prop",
@@ -140,19 +140,20 @@ type ProgressBar struct {
 }
 
 type CollectLogsParams struct {
-	Config       string
-	Hostlist     string
-	TargetFolder string
-	AdminNode    string
-	ExtraLogsDir string
-	JsonOutput   bool
-	LogFunction  int32
-	LogCmd       string
-	LogStartDate string
-	LogEndDate   string
-	LogStartTime string
-	LogEndTime   string
-	StopOnError  bool
+	Config               string
+	Hostlist             string
+	TargetFolder         string
+	AdminNode            string
+	ExtraLogsDir         string
+	JsonOutput           bool
+	LogFunction          int32
+	LogCmd               string
+	LogStartDate         string
+	LogEndDate           string
+	LogStartTime         string
+	LogEndTime           string
+	StopOnError          bool
+	FileTransferExecArgs string
 }
 
 type logCopy struct {
@@ -316,7 +317,7 @@ func cpOutputToFile(target string, log logging.Logger, cp ...logCopy) (string, e
 	cmd = strings.ReplaceAll(cmd, " ", "_")
 	log.Debugf("Collecting DAOS command output = %s > %s ", runCmd, filepath.Join(target, cmd))
 
-	if err := ioutil.WriteFile(filepath.Join(target, cmd), out, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(target, cmd), out, 0644); err != nil {
 		return "", errors.Wrapf(err, "failed to write %s", filepath.Join(target, cmd))
 	}
 
@@ -435,8 +436,40 @@ func getSysNameFromQuery(configPath string, log logging.Logger) ([]string, error
 	return hostNames, nil
 }
 
+func customCopy(log logging.Logger, opts CollectLogsParams, fileTransferExec string) error {
+	cmd := strings.Join([]string{
+		fileTransferExec,
+		opts.TargetFolder,
+		opts.FileTransferExecArgs},
+		" ")
+
+	out, err := exec.Command("sh", "-c", cmd).Output()
+	if err != nil {
+		return errors.Wrapf(err, "Error running command %s %s", cmd, string(out))
+	}
+	log.Infof("customCopy:= %s stdout:\n%s\n\n", cmd, string(out))
+	return nil
+}
+
 // R sync logs from individual servers to Admin node
 func rsyncLog(log logging.Logger, opts ...CollectLogsParams) error {
+	var cfgPath string
+	if opts[0].Config != "" {
+		cfgPath = opts[0].Config
+	} else {
+		cfgPath, _ = getServerConf(log)
+	}
+
+	if cfgPath != "" {
+		serverConfig := config.DefaultServer()
+		serverConfig.SetPath(cfgPath)
+		if err := serverConfig.Load(log); err == nil {
+			if serverConfig.SupportConfig.FileTransferExec != "" {
+				return customCopy(log, opts[0], serverConfig.SupportConfig.FileTransferExec)
+			}
+		}
+	}
+
 	targetLocation, err := createHostFolder(opts[0].TargetFolder, log)
 	if err != nil {
 		return err
@@ -577,7 +610,7 @@ func collectAgentLog(log logging.Logger, opts ...CollectLogsParams) error {
 		return err
 	}
 
-	agentFile, err := ioutil.ReadFile(opts[0].Config)
+	agentFile, err := os.ReadFile(opts[0].Config)
 	if err != nil {
 		return err
 	}
@@ -648,7 +681,7 @@ func copyServerConfig(log logging.Logger, opts ...CollectLogsParams) error {
 
 	serverConfig := config.DefaultServer()
 	serverConfig.SetPath(cfgPath)
-	serverConfig.Load()
+	serverConfig.Load(log)
 	// Create the individual folder on each server
 	targetConfig, err := createHostLogFolder(DaosServerConfig, log, opts...)
 	if err != nil {
@@ -828,7 +861,7 @@ func collectServerLog(log logging.Logger, opts ...CollectLogsParams) error {
 	}
 	serverConfig := config.DefaultServer()
 	serverConfig.SetPath(cfgPath)
-	serverConfig.Load()
+	serverConfig.Load(log)
 
 	switch opts[0].LogCmd {
 	case "EngineLog":
@@ -894,7 +927,7 @@ func collectDaosMetrics(daosNodeLocation string, log logging.Logger, opts ...Col
 		}
 		serverConfig := config.DefaultServer()
 		serverConfig.SetPath(cfgPath)
-		serverConfig.Load()
+		serverConfig.Load(log)
 
 		for i := range serverConfig.Engines {
 			engineId := fmt.Sprintf("%d", i)
@@ -927,7 +960,7 @@ func collectDaosServerCmd(log logging.Logger, opts ...CollectLogsParams) error {
 		}
 	case "dump-topology":
 		hwlog := logging.NewCommandLineLogger()
-		hwProv := hwprov.DefaultTopologyProvider(hwlog)
+		hwProv := topology.DefaultProvider(hwlog)
 		topo, err := hwProv.GetTopology(context.Background())
 		if err != nil {
 			return err

@@ -9,6 +9,7 @@ package engine
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -28,6 +29,8 @@ const (
 	envLogMasks      = "D_LOG_MASK"
 	envLogDbgStreams = "DD_MASK"
 	envLogSubsystems = "DD_SUBSYS"
+
+	minABTThreadStackSizeDCPM = 20480
 )
 
 // FabricConfig encapsulates networking fabric configuration.
@@ -37,7 +40,6 @@ type FabricConfig struct {
 	InterfacePort   int    `yaml:"fabric_iface_port,omitempty" cmdEnv:"D_PORT,nonzero"`
 	NumaNodeIndex   uint   `yaml:"-"`
 	BypassHealthChk *bool  `yaml:"bypass_health_chk,omitempty" cmdLongFlag:"--bypass_health_chk" cmdShortFlag:"-b"`
-	CrtCtxShareAddr uint32 `yaml:"crt_ctx_share_addr,omitempty" cmdEnv:"CRT_CTX_SHARE_ADDR"`
 	CrtTimeout      uint32 `yaml:"crt_timeout,omitempty" cmdEnv:"CRT_TIMEOUT"`
 	// NumSecondaryEndpoints configures the number of cart endpoints per secondary provider.
 	NumSecondaryEndpoints []int  `yaml:"secondary_provider_endpoints,omitempty" cmdLongFlag:"--nr_sec_ctx,nonzero" cmdShortFlag:"-S,nonzero"`
@@ -143,9 +145,6 @@ func (fc *FabricConfig) Update(other FabricConfig) {
 	if fc.InterfacePort == 0 {
 		fc.InterfacePort = other.InterfacePort
 	}
-	if fc.CrtCtxShareAddr == 0 {
-		fc.CrtCtxShareAddr = other.CrtCtxShareAddr
-	}
 	if fc.CrtTimeout == 0 {
 		fc.CrtTimeout = other.CrtTimeout
 	}
@@ -247,12 +246,11 @@ type Config struct {
 	Modules           string         `yaml:"modules,omitempty" cmdLongFlag:"--modules" cmdShortFlag:"-m"`
 	TargetCount       int            `yaml:"targets,omitempty" cmdLongFlag:"--targets,nonzero" cmdShortFlag:"-t,nonzero"`
 	HelperStreamCount int            `yaml:"nr_xs_helpers" cmdLongFlag:"--xshelpernr" cmdShortFlag:"-x"`
-	ServiceThreadCore int            `yaml:"first_core" cmdLongFlag:"--firstcore,nonzero" cmdShortFlag:"-f,nonzero"`
+	ServiceThreadCore *int           `yaml:"first_core,omitempty" cmdLongFlag:"--firstcore" cmdShortFlag:"-f"`
 	SystemName        string         `yaml:"-" cmdLongFlag:"--group" cmdShortFlag:"-g"`
 	SocketDir         string         `yaml:"-" cmdLongFlag:"--socket_dir" cmdShortFlag:"-d"`
 	LogMask           string         `yaml:"log_mask,omitempty" cmdEnv:"D_LOG_MASK"`
 	LogFile           string         `yaml:"log_file,omitempty" cmdEnv:"D_LOG_FILE"`
-	LegacyStorage     LegacyStorage  `yaml:",inline,omitempty"`
 	Storage           storage.Config `yaml:",inline,omitempty"`
 	Fabric            FabricConfig   `yaml:",inline"`
 	EnvVars           []string       `yaml:"env_vars,omitempty"`
@@ -293,7 +291,7 @@ func (c *Config) ReadLogSubsystems() (string, error) {
 
 // Validate ensures that the configuration meets minimum standards.
 func (c *Config) Validate() error {
-	if c.PinnedNumaNode != nil && c.ServiceThreadCore != 0 {
+	if c.PinnedNumaNode != nil && c.ServiceThreadCore != nil && *c.ServiceThreadCore != 0 {
 		return errors.New("cannot specify both pinned_numa_node and first_core")
 	}
 
@@ -306,7 +304,7 @@ func (c *Config) Validate() error {
 	if c.HelperStreamCount < 0 {
 		return errNegative("helper stream count")
 	}
-	if c.ServiceThreadCore < 0 {
+	if c.ServiceThreadCore != nil && *c.ServiceThreadCore < 0 {
 		return errNegative("service thread core index")
 	}
 	if c.MemSize < 0 {
@@ -347,7 +345,80 @@ func (c *Config) Validate() error {
 	if err := ValidateLogSubsystems(subsystems); err != nil {
 		return errors.Wrap(err, "validate engine log subsystems")
 	}
+	return nil
+}
 
+// Ensure at least 20KiB ABT stack size for an engine with DCPM storage class.
+func (c *Config) UpdatePMDKEnvarsStackSizeDCPM() error {
+	stackSizeStr, err := c.GetEnvVar("ABT_THREAD_STACKSIZE")
+	if err != nil {
+		c.EnvVars = append(c.EnvVars, fmt.Sprintf("ABT_THREAD_STACKSIZE=%d",
+			minABTThreadStackSizeDCPM))
+		return nil
+	}
+	// Ensure at least 20KiB ABT stack size for an engine with DCPM storage class.
+	stackSizeValue, err := strconv.Atoi(stackSizeStr)
+	if err != nil {
+		return errors.Errorf("env_var ABT_THREAD_STACKSIZE has invalid value: %s",
+			stackSizeStr)
+	}
+	if stackSizeValue < minABTThreadStackSizeDCPM {
+		return errors.Errorf("env_var ABT_THREAD_STACKSIZE should be >= %d "+
+			"for DCPM storage class, found %d", minABTThreadStackSizeDCPM,
+			stackSizeValue)
+	}
+	return nil
+}
+
+// Ensure proper configuration of shutdown (SDS) state
+func (c *Config) UpdatePMDKEnvarsPMemobjConf(isDCPM bool) error {
+	pmemobjConfStr, pmemobjConfErr := c.GetEnvVar("PMEMOBJ_CONF")
+	//also work for empty string
+	hasSdsAtCreate := strings.Contains(pmemobjConfStr, "sds.at_create")
+	if isDCPM {
+		if !hasSdsAtCreate {
+			return nil
+		}
+		// Confirm default handling of shutdown state (SDS) for DCPM storage class.
+		return errors.New("env_var PMEMOBJ_CONF should NOT contain 'sds.at_create=?' " +
+			"for DCPM storage class, found '" + pmemobjConfStr + "'")
+	}
+
+	// Disable shutdown state (SDS) (part of RAS) for RAM-based simulated SCM.
+	if pmemobjConfErr != nil {
+		c.EnvVars = append(c.EnvVars, "PMEMOBJ_CONF=sds.at_create=0")
+		return nil
+	}
+	if !hasSdsAtCreate {
+		envVars, _ := common.DeleteKeyValue(c.EnvVars, "PMEMOBJ_CONF")
+		c.EnvVars = append(envVars, "PMEMOBJ_CONF="+pmemobjConfStr+
+			";sds.at_create=0")
+		return nil
+	}
+	if strings.Contains(pmemobjConfStr, "sds.at_create=1") {
+		return errors.New("env_var PMEMOBJ_CONF should contain 'sds.at_create=0' " +
+			"for non-DCPM storage class, found '" + pmemobjConfStr + "'")
+	}
+	return nil
+}
+
+// Ensure proper environment variables for PMDK w/ NDCTL enabled based on
+// the actual configuration of the storage class.
+func (c *Config) UpdatePMDKEnvars() error {
+
+	if len(c.Storage.Tiers) == 0 {
+		return errors.New("Invalid config - no tier 0 defined")
+	}
+
+	isDCPM := c.Storage.Tiers[0].Class == storage.ClassDcpm
+
+	if err := c.UpdatePMDKEnvarsPMemobjConf(isDCPM); err != nil {
+		return err
+	}
+
+	if isDCPM {
+		return c.UpdatePMDKEnvarsStackSizeDCPM()
+	}
 	return nil
 }
 
@@ -374,7 +445,7 @@ func IsNUMAMismatch(err error) bool {
 // SetNUMAAffinity sets the NUMA affinity for the engine,
 // if not already set in the configuration.
 func (c *Config) SetNUMAAffinity(node uint) error {
-	if c.PinnedNumaNode != nil && c.ServiceThreadCore != 0 {
+	if c.PinnedNumaNode != nil && c.ServiceThreadCore != nil && *c.ServiceThreadCore != 0 {
 		return errors.New("cannot set both NUMA node and service core")
 	}
 
@@ -590,12 +661,6 @@ func (c *Config) WithBypassHealthChk(bypass *bool) *Config {
 	return c
 }
 
-// WithCrtCtxShareAddr defines the CRT_CTX_SHARE_ADDR for this instance
-func (c *Config) WithCrtCtxShareAddr(addr uint32) *Config {
-	c.Fabric.CrtCtxShareAddr = addr
-	return c
-}
-
 // WithCrtTimeout defines the CRT_TIMEOUT for this instance
 func (c *Config) WithCrtTimeout(timeout uint32) *Config {
 	c.Fabric.CrtTimeout = timeout
@@ -622,7 +687,7 @@ func (c *Config) WithHelperStreamCount(count int) *Config {
 
 // WithServiceThreadCore sets the core index to be used for running DAOS service threads.
 func (c *Config) WithServiceThreadCore(idx int) *Config {
-	c.ServiceThreadCore = idx
+	c.ServiceThreadCore = &idx
 	return c
 }
 
@@ -700,4 +765,14 @@ func (c *Config) WithIndex(i uint32) *Config {
 func (c *Config) WithStorageIndex(i uint32) *Config {
 	c.Storage.EngineIdx = uint(i)
 	return c
+}
+
+// WithEnvVarAbtThreadStackSize sets environment variable ABT_THREAD_STACKSIZE.
+func (c *Config) WithEnvVarAbtThreadStackSize(stack_size uint16) *Config {
+	return c.WithEnvVars(fmt.Sprintf("ABT_THREAD_STACKSIZE=%d", stack_size))
+}
+
+// WithEnvVarPMemObjSdsAtCreate sets PMEMOBJ_CONF env. var. to sds.at_create=0/1 value
+func (c *Config) WithEnvVarPMemObjSdsAtCreate(value uint8) *Config {
+	return c.WithEnvVars(fmt.Sprintf("PMEMOBJ_CONF=sds.at_create=%d", value))
 }

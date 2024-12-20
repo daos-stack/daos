@@ -307,22 +307,6 @@ ready:
 }
 
 static int
-evt_iter_skip(struct evt_context *tcx, struct evt_iterator *iter)
-{
-	struct evt_entry_array	*enta;
-	struct evt_entry	*entry;
-
-	if (iter->it_options & (EVT_ITER_SKIP_HOLES | EVT_ITER_SKIP_DATA)) {
-		enta = iter->it_entries;
-		entry = evt_ent_array_get(enta, iter->it_index);
-
-		if (should_skip(entry, iter))
-			return evt_iter_move(tcx, iter);
-	}
-	return 0;
-}
-
-static int
 evt_iter_probe_sorted(struct evt_context *tcx, struct evt_iterator *iter,
 		      int opc, const struct evt_rect *rect,
 		      const daos_anchor_t *anchor)
@@ -369,31 +353,35 @@ evt_iter_probe_sorted(struct evt_context *tcx, struct evt_iterator *iter,
 
 	if (opc == EVT_ITER_FIRST) {
 		index = iter->it_forward ? 0 : enta->ea_ent_nr - 1;
-		iter->it_index = index;
 		/* Mark the last entry */
 		entry = evt_ent_array_get(enta, enta->ea_ent_nr - 1 - index);
 		entry->en_visibility |= EVT_LAST;
-		goto out;
-	}
-
-	if (opc != EVT_ITER_FIND) {
+	} else  if (opc != EVT_ITER_FIND) {
 		D_ERROR("Unknown op code for evt iterator: %d\n", opc);
 		return -DER_NOSYS;
+	} else {
+		/** If entry doesn't exist, it will return next entry */
+		index = evt_iter_probe_find(iter, rect);
+		if (index == -1)
+			return -DER_NONEXIST;
 	}
 
-	/** If entry doesn't exist, it will return next entry */
-	index = evt_iter_probe_find(iter, rect);
-	if (index == -1)
-		return -DER_NONEXIST;
-
 	iter->it_index = index;
-	entry = evt_ent_array_get(iter->it_entries, index);
+	entry = evt_ent_array_get(enta, index);
 
-	D_DEBUG(DB_TRACE, "probe ent "DF_EXT" Update ent "DF_EXT"\n",
-		DP_EXT(&rect->rc_ex), DP_EXT(&entry->en_sel_ext));
-out:
+	if (rect != NULL)
+		D_DEBUG(DB_TRACE, "probe ent "DF_EXT" Update ent "DF_EXT"\n",
+			DP_EXT(&rect->rc_ex), DP_EXT(&entry->en_sel_ext));
+
+	if (entry->en_avail_rc < 0)
+		return entry->en_avail_rc;
+
 	iter->it_state = EVT_ITER_READY;
-	return evt_iter_skip(tcx, iter);
+
+	if (entry->en_avail_rc == ALB_UNAVAILABLE || should_skip(entry, iter))
+		return evt_iter_move(tcx, iter);
+
+	return 0;
 }
 
 static void
@@ -470,8 +458,22 @@ evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc,
 		iter->it_state = EVT_ITER_FINI;
 		rc = -DER_NONEXIST;
 	} else {
+		struct evt_trace	*trace = &tcx->tc_trace[tcx->tc_depth - 1];
+		struct evt_node		*nd = evt_off2node(tcx, trace->tr_node);
+		struct evt_node_entry	*ne = evt_node_entry_at(tcx, nd, trace->tr_at);
+		struct evt_desc		*desc = evt_off2desc(tcx, ne->ne_child);
+
+		rc = evt_desc_log_status(tcx, ne->ne_rect.rd_epc, desc, evt_iter_intent(iter));
+		if (rc < 0)
+			goto out;
+
 		iter->it_state = EVT_ITER_READY;
 		iter->it_skip_move = 0;
+
+		if (rc == ALB_UNAVAILABLE)
+			return evt_iter_move(tcx, iter);
+
+		rc = 0;
 	}
  out:
 	return rc;

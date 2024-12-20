@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -33,11 +33,6 @@ dma_alloc_chunk(unsigned int cnt)
 	int rc;
 
 	D_ASSERT(bytes > 0);
-
-	if (DAOS_FAIL_CHECK(DAOS_NVME_ALLOCBUF_ERR)) {
-		D_ERROR("Injected DMA buffer allocation error.\n");
-		return NULL;
-	}
 
 	D_ALLOC_PTR(chunk);
 	if (chunk == NULL) {
@@ -236,6 +231,7 @@ dma_buffer_create(unsigned int init_cnt, int tgt_id)
 
 	rc = dma_buffer_grow(buf, init_cnt);
 	if (rc != 0) {
+		D_ERROR("Failed to grow DMA buffer (%u chunks)\n", buf->bdb_tot_cnt);
 		dma_buffer_destroy(buf);
 		return NULL;
 	}
@@ -848,6 +844,7 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 		bio_iov_set_raw_buf(biov, NULL);
 		return 0;
 	}
+	D_ASSERT(!BIO_ADDR_IS_GANG(&biov->bi_addr));
 
 	if (direct_scm_access(biod, biov)) {
 		struct umem_instance *umem = biod->bd_umem;
@@ -871,8 +868,10 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 	 */
 	if (pg_cnt > bio_chk_sz) {
 		chk = dma_alloc_chunk(pg_cnt);
-		if (chk == NULL)
+		if (chk == NULL) {
+			D_ERROR("Failed to allocate %u pages DMA buffer\n", pg_cnt);
 			return -DER_NOMEM;
+		}
 
 		chk->bdc_type = biod->bd_chk_type;
 		rc = iod_add_chunk(biod, chk);
@@ -1539,8 +1538,15 @@ bio_iod_post_async(struct bio_desc *biod, int err)
 	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
 		goto out;
 	/*
-	 * When the value on data blob is too large, don't do async post to
-	 * avoid calculating checksum for large values.
+	 * When the I/O to data blob is too large, submitting the large data I/O & small
+	 * WAL I/O simultaneously might case more I/O reordering on SSD (when WAL & DATA
+	 * are sharing the same SSD), that could break the tx pipeline and impact the
+	 * throughput at the end.
+	 *
+	 * Given that async data I/O mode can only reduce latency, which isn't that valuable
+	 * for bandwidth intensive apps, here we turn to sync I/O mode for large I/O size,
+	 * that will mitigate the side effect of I/O reordering, at the same time, avoid the
+	 * unnecessary checksum calculation overhead.
 	 */
 	if (biod->bd_nvme_bytes > bio_max_async_sz)
 		goto out;

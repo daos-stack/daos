@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -130,8 +130,10 @@ struct crt_rpc_priv {
 	crt_rpc_t		crp_pub; /* public part */
 	/* link to crt_ep_inflight::epi_req_q/::epi_req_waitq */
 	d_list_t		crp_epi_link;
-	/* tmp_link used in crt_context_req_untrack */
-	d_list_t		crp_tmp_link;
+	/* link for temp list used during timeout processing */
+	d_list_t                 crp_tmp_link_timeout;
+	/* link for temp list used for wait q processing */
+	d_list_t                 crp_tmp_link_submit;
 	/* link for crt_context::cc_quotas.rpc_waitq */
 	d_list_t		crp_waitq_link;
 	/* link to parent RPC crp_opc_info->co_child_rpcs/co_replied_rpcs */
@@ -151,7 +153,7 @@ struct crt_rpc_priv {
 	hg_handle_t		crp_hg_hdl; /* HG request handle */
 	hg_addr_t		crp_hg_addr; /* target na address */
 	struct crt_hg_hdl	*crp_hdl_reuse; /* reused hg_hdl */
-	crt_phy_addr_t		crp_tgt_uri; /* target uri address */
+	char                    *crp_tgt_uri;   /* target uri address */
 	crt_rpc_t		*crp_ul_req; /* uri lookup request */
 
 	uint32_t		crp_ul_retry; /* uri lookup retry counter */
@@ -164,29 +166,30 @@ struct crt_rpc_priv {
 	 * match with crp_req_hdr.cch_flags.
 	 */
 	uint32_t		crp_flags;
-	uint32_t		crp_srv:1, /* flag of server received request */
-				crp_output_got:1,
-				crp_input_got:1,
-				/* flag of collective RPC request */
-				crp_coll:1,
-				/* flag of crp_tgt_uri need to be freed */
-				crp_uri_free:1,
-				/* flag of forwarded rpc for corpc */
-				crp_forward:1,
-				/* flag of in timeout binheap */
-				crp_in_binheap:1,
-				/* set if a call to crt_req_reply pending */
-				crp_reply_pending:1,
-				/* set to 1 if target ep is set */
-				crp_have_ep:1,
-				/* RPC is tracked by the context */
-				crp_ctx_tracked:1,
-				/* 1 if RPC fails HLC epsilon check */
-				crp_fail_hlc:1,
-				/* RPC completed flag */
-				crp_completed:1,
-				/* RPC originated from a primary provider */
-				crp_src_is_primary:1;
+	uint32_t                 crp_srv : 1, /* flag of server received request */
+	    crp_output_got : 1, crp_input_got : 1,
+	    /* flag of collective RPC request */
+	    crp_coll                : 1,
+	    /* flag of crp_tgt_uri need to be freed */
+	    crp_uri_free            : 1,
+	    /* flag of forwarded rpc for corpc */
+	    crp_forward             : 1,
+	    /* flag of in timeout binheap */
+	    crp_in_binheap          : 1,
+	    /* set if a call to crt_req_reply pending */
+	    crp_reply_pending       : 1,
+	    /* set to 1 if target ep is set */
+	    crp_have_ep             : 1,
+	    /* RPC is tracked by the context */
+	    crp_ctx_tracked         : 1,
+	    /* 1 if RPC fails HLC epsilon check */
+	    crp_fail_hlc            : 1,
+	    /* RPC completed flag */
+	    crp_completed           : 1,
+	    /* RPC originated from a primary provider */
+	    crp_src_is_primary      : 1,
+	    /* release input buffer early */
+	    crp_release_input_early : 1;
 
 	struct crt_opc_info	*crp_opc_info;
 	/* corpc info, only valid when (crp_coll == 1) */
@@ -379,10 +382,8 @@ CRT_GEN_STRUCT(crt_grp_cache, CRT_SEQ_GRP_CACHE)
 	((d_rank_t)		(ul_rank)		CRT_VAR) \
 	((uint32_t)		(ul_tag)		CRT_VAR)
 
-#define CRT_OSEQ_URI_LOOKUP	/* output fields */		 \
-	((crt_phy_addr_t)	(ul_uri)		CRT_VAR) \
-	((uint32_t)		(ul_tag)		CRT_VAR) \
-	((int32_t)		(ul_rc)			CRT_VAR)
+#define CRT_OSEQ_URI_LOOKUP /* output fields */                                                    \
+	((d_string_t)(ul_uri)CRT_VAR)((uint32_t)(ul_tag)CRT_VAR)((int32_t)(ul_rc)CRT_VAR)
 
 CRT_RPC_DECLARE(crt_uri_lookup, CRT_ISEQ_URI_LOOKUP, CRT_OSEQ_URI_LOOKUP)
 

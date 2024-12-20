@@ -11,6 +11,9 @@ timeout: 1000
 setup:
   start_agents_once: False
   start_servers_once: False
+agent_config:
+  #cache_expiration: 1
+  disable_caching: true
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -34,6 +37,11 @@ pool:
 container:
   type: POSIX
   control_method: daos
+daos:
+  container:
+    destroy:
+      env_vars:
+        - CRT_TIMEOUT=10
 ior:
   api: "DFS"
   client_processes:

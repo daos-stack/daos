@@ -2175,6 +2175,7 @@ basic_byte_array(void **state)
 	char		 *bulk_buf_out = NULL;
 	char		 *buf;
 	char		 *buf_out;
+	char		 *buf_out_tmp;
 	int		 buf_len, tmp_len;
 	int		 step = 1;
 	int		 rc;
@@ -2287,8 +2288,10 @@ next_step:
 	assert_memory_equal(buf, buf_out, buf_len);
 
 	print_message("short read should get iov_len with tail hole trimmed\n");
-	memset(buf_out, 0, buf_len);
 	tmp_len = buf_len / 3;
+	buf_out_tmp = buf_out;
+	D_ALLOC(buf_out, max(buf_len, tmp_len + 99));
+	D_ASSERT(buf_out != NULL);
 	sgl.sg_nr_out	= 0;
 	sgl.sg_nr = 1;
 	d_iov_set(&sg_iov[0], buf_out, tmp_len + 99);
@@ -2306,6 +2309,8 @@ next_step:
 	assert_int_equal(sgl.sg_nr_out, 1);
 	assert_int_equal(sgl.sg_iovs[0].iov_len, tmp_len);
 	assert_memory_equal(buf, buf_out, tmp_len);
+	D_FREE(buf_out);
+	buf_out = buf_out_tmp;
 
 	if (step++ == 1)
 		goto next_step;
@@ -2431,7 +2436,7 @@ fetch_size(void **state)
 	char		*akey[NUM_AKEYS];
 	const char	*akey_fmt = "akey%d";
 	int		 i, rc;
-	daos_size_t	 size = 131071;
+	daos_size_t	 size = 131071, tmp_sz;
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
@@ -2480,6 +2485,17 @@ fetch_size(void **state)
 	for (i = 0; i < NUM_AKEYS; i++)
 		assert_int_equal(iod[i].iod_size, size * (i+1));
 
+	print_message("fetch with invalid sgl - NULL sg_iovs with non-zero sg_nr\n");
+	sgl->sg_iovs = NULL;
+	tmp_sz = iod->iod_size;
+	iod->iod_size = 0;
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, NUM_AKEYS, iod, sgl,
+			    NULL, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	iod->iod_size = tmp_sz;
+	for (i = 0; i < NUM_AKEYS; i++)
+		sgl[i].sg_iovs		= &sg_iov[i];
 	print_message("fetch with unknown iod_size and less buffer\n");
 	for (i = 0; i < NUM_AKEYS; i++) {
 		d_iov_set(&sg_iov[i], buf[i], size * (i+1) - 1);

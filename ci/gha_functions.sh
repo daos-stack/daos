@@ -6,15 +6,6 @@ error_exit() {
     exit 1
 }
 
-get_repo_path() {
-    # shellcheck disable=SC2153
-    local repo_path="$REPO_PATH$GITHUB_RUN_NUMBER/artifact/artifacts/"
-    mkdir -p "$repo_path"
-
-    echo "$repo_path"
-
-}
-
 cleanup_provision_request () {
     local reqid="$1"
     local file="/scratch/Get a cluster/$reqid"
@@ -58,8 +49,8 @@ get_test_tags() {
     local test_tags=()
     local tags
     # Test-tag: has higher priority
-    if [ -n "${CP_TEST_TAG:-}" ]; then
-        tags="$CP_TEST_TAG"
+    if [ -n "${REQ_TEST_TAG:-}" ]; then
+        tags="$REQ_TEST_TAG"
     else
         tags="pr"
         if [ -n "${CP_FEATURES:-}" ]; then
@@ -75,14 +66,6 @@ get_test_tags() {
     echo "${test_tags[@]}"
 }
 
-
-get_commit_pragmas() {
-    sed -Ene 's/^([-[:alnum:]]+): *([-\._ [:alnum:]]+)$/\1 \2/p' | while read -r a b; do
-        echo -n "${a//-/_}" | tr '[:lower:]' '[:upper:]'
-        # escape special characters in the value
-        echo "=$b" | sed -e 's/\([<> ]\)/\\\1/g'
-    done
-}
 
 wait_nodes_ready() {
 
@@ -102,10 +85,6 @@ wait_nodes_ready() {
           fi;
     done;
     exit 1
-}
-
-escape_single_quotes() {
-    sed -e "s/'/'\"'\"'/g"
 }
 
 # Persist these across calls
@@ -199,7 +178,7 @@ provision_cluster() {
         while [ $((SECONDS-START)) -lt $wait_seconds ]; do
             if clush -B -S -l root -w "$nodestring" '[ -d /var/chef/reports ]'; then
                 # shellcheck disable=SC2016
-                clush -B -S -l root -w "$nodestring" --connect_timeout 30 --command_timeout 600 "if [ -e /root/job_info ]; then
+                clush -B -S -l root -w "$nodestring" --connect_timeout 30 --command_timeout 900 "if [ -e /root/job_info ]; then
                         cat /root/job_info
                     fi
                     echo \"Last provisioning run info:
@@ -243,50 +222,15 @@ Stage Name: $stage_name\" > /root/job_info
 # I.e. ../bash_unit/bash_unit ci/gha_functions.sh
 test_test_tag_and_features() {
     # Simple Test-tag: test
-    assert_equals "$(CP_TEST_TAG="always_passes always_fails" get_test_tags "-hw")" "always_passes,-hw always_fails,-hw"
+    assert_equals "$(REQ_TEST_TAG="always_passes always_fails" get_test_tags "-hw")" "always_passes,-hw always_fails,-hw"
     # Simple Features: test (no Test-tag:)
     assert_equals "$(CP_FEATURES="always_passes" get_test_tags "-hw")" \
                   "pr,-hw daily_regression,always_passes,-hw full_regression,always_passes,-hw"
     assert_equals "$(CP_FEATURES="foo bar" get_test_tags "-hw")" \
                   "pr,-hw daily_regression,foo,-hw full_regression,foo,-hw daily_regression,bar,-hw full_regression,bar,-hw"
     # Features: and Test-tag:
-    assert_equals "$(CP_TEST_TAG="always_passes always_fails"
+    assert_equals "$(REQ_TEST_TAG="always_passes always_fails"
                      CP_FEATURES="foo bar" get_test_tags "-hw")" "always_passes,-hw always_fails,-hw"
-}
-
-test_get_commit_pragmas() {
-    local msg='Escape spaces also
-
-'"'"'Will-not-be-a-pragma: false'"'"' should not be considered a commit
-pragma, but:
-Should-not-be-a-pragma: bar will be because it was not quoted.
-
-Skip-func-test-leap15: false
-RPM-test-version: 2.5.100-13.10036.g65926e32
-Skip-PR-comments: true
-Test-tag: always_passes always_fails
-EL8-VM9-label: all_vm9
-EL9-VM9-label: all_vm9
-Leap15-VM9-label: all_vm9
-HW-medium-label: new_icx5
-HW-large-label: new_icx9
-
-Required-githooks: true
-
-Signed-off-by: Brian J. Murrell <brian.murrell@intel.com>
-'
-    assert_equals "$(echo "$msg" | get_commit_pragmas)" 'SHOULD_NOT_BE_A_PRAGMA=bar\ will\ be\ because\ it\ was\ not\ quoted.
-SKIP_FUNC_TEST_LEAP15=false
-RPM_TEST_VERSION=2.5.100-13.10036.g65926e32
-SKIP_PR_COMMENTS=true
-TEST_TAG=always_passes\ always_fails
-EL8_VM9_LABEL=all_vm9
-EL9_VM9_LABEL=all_vm9
-LEAP15_VM9_LABEL=all_vm9
-HW_MEDIUM_LABEL=new_icx5
-HW_LARGE_LABEL=new_icx9
-REQUIRED_GITHOOKS=true'
-
 }
 
 test_jenkins_curl() {

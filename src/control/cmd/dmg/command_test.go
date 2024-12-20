@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -134,6 +134,8 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 		resp = control.MockMSResponse("", nil, &mgmtpb.SystemStartResp{})
 	case *control.SystemExcludeReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.SystemExcludeResp{})
+	case *control.SystemDrainReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.SystemDrainResp{})
 	case *control.SystemQueryReq:
 		if req.FailOnUnavailable {
 			resp = control.MockMSResponse("", system.ErrRaftUnavail, nil)
@@ -147,7 +149,7 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 	case *control.ListPoolsReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.ListPoolsResp{})
 	case *control.ContSetOwnerReq:
-		resp = control.MockMSResponse("", nil, &mgmtpb.ContSetOwnerResp{})
+		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
 	case *control.PoolQueryReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolQueryResp{})
 	case *control.PoolQueryTargetReq:
@@ -189,6 +191,8 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
 	case *control.SystemGetPropReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.SystemGetPropResp{})
+	case *control.GetAttachInfoReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.GetAttachInfoResp{})
 	case *control.NetworkScanReq:
 		resp = &control.UnaryResponse{
 			Responses: []*control.HostResponse{

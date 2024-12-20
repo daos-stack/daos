@@ -1,5 +1,5 @@
 """
-(C) Copyright 2018-2023 Intel Corporation.
+(C) Copyright 2018-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -53,13 +53,13 @@ class DestroyTests(TestWithServers):
                 using the config_file specification. Defaults to None.
 
         Returns:
-            dict: a dictionary identifying the hosts and access points for the
+            dict: a dictionary identifying the hosts and MS replicas for the
                 server group dictionary
 
         """
         return {
             "hosts": hosts,
-            "access_points": hosts[:1],
+            "mgmt_svc_replicas": hosts[:1],
             "svr_config_file": svr_config_file,
             "dmg_config_file": dmg_config_file,
             "svr_config_temp": svr_config_temp,
@@ -98,7 +98,6 @@ class DestroyTests(TestWithServers):
         self.log.info("Create a pool")
         self.add_pool(create=False)
         self.pool.create()
-        self.log.info("Pool UUID is %s", self.pool.uuid)
 
         # Check that the pool was created.
         self.assertTrue(
@@ -362,10 +361,11 @@ class DestroyTests(TestWithServers):
         server_group_b = self.server_group + "_b"
 
         # Prepare and configure dmg config files for a and b.
-        dmg_config_file_a = get_default_config_file(name="control_a")
+        config_path = os.path.dirname(self.test_env.control_config)
+        dmg_config_file_a = get_default_config_file(name="control_a", path=config_path)
         dmg_config_temp_a = self.get_config_file(
             name=server_group_a, command="dmg", path=self.test_dir)
-        dmg_config_file_b = get_default_config_file(name="control_b")
+        dmg_config_file_b = get_default_config_file(name="control_b", path=config_path)
         dmg_config_temp_b = self.get_config_file(
             name=server_group_b, command="dmg", path=self.test_dir)
 
@@ -393,7 +393,7 @@ class DestroyTests(TestWithServers):
 
         # Get dmg_c instance that uses daos_control_c.yml. Server group is b.
         cert_dir = os.path.join(os.sep, "etc", "daos", "certs")
-        dmg_config_file_c = get_default_config_file(name="control_c")
+        dmg_config_file_c = get_default_config_file(name="control_c", path=config_path)
         dmg_config_temp_c = self.get_config_file(
             name=server_group_b, command="dmg", path=self.test_dir)
         dmg_c = get_dmg_command(
@@ -472,7 +472,7 @@ class DestroyTests(TestWithServers):
         self.log.info("Check if files still exist")
         self.assertTrue(
             self.pool.check_files(hostlist_servers, scm_mount),
-            "Pool UUID {} should not be removed when connected".format(self.pool.uuid))
+            "{} should not be removed when connected".format(str(self.pool)))
 
         self.assertTrue(
             exception_detected, "No exception when deleting a connected pool")
@@ -562,7 +562,7 @@ class DestroyTests(TestWithServers):
         self.log.info("Check if files still exist")
         self.assertTrue(
             self.pool.check_files(hostlist_servers, scm_mount),
-            "Pool UUID {} should not be removed when containers exist".format(self.pool.uuid))
+            "{} should not be removed when containers exist".format(str(self.pool)))
 
         self.assertTrue(
             exception_detected, "No exception when deleting a pool with containers")

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -44,10 +44,13 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 		r := engine.NewRunner(log, cfg)
 		msc := &sysprov.MockSysConfig{
 			IsMountedBool: true,
+			RealReadFile:  true,
 		}
 		mbc := &scm.MockBackendConfig{}
-		mp := storage.NewProvider(log, 0, &cfg.Storage, sysprov.NewMockSysProvider(log, msc), scm.NewMockProvider(log, mbc, msc), nil, nil)
-		ei := NewEngineInstance(log, mp, nil, r).
+		mp := storage.NewProvider(log, 0, &cfg.Storage,
+			sysprov.NewMockSysProvider(log, msc),
+			scm.NewMockProvider(log, mbc, msc), nil, nil)
+		ei := NewEngineInstance(log, mp, nil, r, nil).
 			WithHostFaultDomain(system.MustCreateFaultDomainFromString("/host1"))
 		ei.fsRoot = testDir
 		if err := h.AddInstance(ei); err != nil {

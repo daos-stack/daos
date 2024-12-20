@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -162,7 +162,7 @@ query_normal_recx(struct open_query *query, daos_recx_t *recx)
 	uint32_t		inob;
 
 
-	vos_evt_desc_cbs_init(&cbs, query->qt_pool, query->qt_coh);
+	vos_evt_desc_cbs_init(&cbs, query->qt_pool, query->qt_coh, query->qt_obj);
 	rc = evt_open(query->qt_recx_root, &query->qt_pool->vp_uma, &cbs, &toh);
 	if (rc != 0)
 		return rc;
@@ -344,7 +344,7 @@ query_ec_recx(struct open_query *query, daos_recx_t *recx)
 	bool			prefresh = true;
 
 
-	vos_evt_desc_cbs_init(&cbs, query->qt_pool, query->qt_coh);
+	vos_evt_desc_cbs_init(&cbs, query->qt_pool, query->qt_coh, query->qt_obj);
 	rc = evt_open(query->qt_recx_root, &query->qt_pool->vp_uma, &cbs, &toh);
 	if (rc != 0)
 		return rc;
@@ -517,7 +517,7 @@ open_and_query_key(struct open_query *query, daos_key_t *key,
 		return -DER_NONEXIST;
 
 	rc = dbtree_open_inplace_ex(to_open, &query->qt_pool->vp_uma,
-				    query->qt_coh, query->qt_pool, toh);
+				    query->qt_coh, query->qt_obj, toh);
 	if (rc != 0)
 		return rc;
 
@@ -676,8 +676,7 @@ query_write:
 	D_ASSERT(rc == 0);
 
 	query->qt_bound = MAX(obj_epr.epr_hi, bound);
-	rc = vos_obj_hold(vos_obj_cache_current(is_sysdb), vos_hdl2cont(coh), oid,
-			  &obj_epr, query->qt_bound, VOS_OBJ_VISIBLE,
+	rc = vos_obj_hold(cont, oid, &obj_epr, query->qt_bound, VOS_OBJ_VISIBLE,
 			  DAOS_INTENT_DEFAULT, &obj, query->qt_ts_set);
 	if (rc != 0) {
 		LOG_RC(rc, "Could not hold object: " DF_RC "\n", DP_RC(rc));
@@ -794,7 +793,7 @@ out:
 		*max_write = obj->obj_df->vo_max_write;
 
 	if (obj != NULL)
-		vos_obj_release(vos_obj_cache_current(is_sysdb), obj, false);
+		vos_obj_release(obj, 0, false);
 
 	if (rc == 0 || rc == -DER_NONEXIST) {
 		if (vos_ts_wcheck(query->qt_ts_set, obj_epr.epr_hi,

@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2023 Intel Corporation.
+  (C) Copyright 2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -45,8 +45,6 @@ class RecoveryTestBase(TestWithServers):
             if "vos" in file:
                 self.log.info("vos_file: %s", file)
                 return file
-
-        self.fail("vos file wasn't found in {}/{}".format(scm_mount, pool.uuid.lower()))
 
         return None  # to appease pylint
 

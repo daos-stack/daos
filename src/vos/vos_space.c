@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -126,7 +126,7 @@ vos_space_query(struct vos_pool *pool, struct vos_pool_space *vps, bool slow)
 	struct vos_pool_df	*df = pool->vp_pool_df;
 	struct vea_attr		*attr = &vps->vps_vea_attr;
 	struct vea_stat		*stat = slow ? &vps->vps_vea_stat : NULL;
-	daos_size_t		 scm_used;
+	daos_size_t		 scm_used, ne_used;
 	int			 rc;
 
 	SCM_TOTAL(vps) = df->pd_scm_sz;
@@ -141,6 +141,33 @@ vos_space_query(struct vos_pool *pool, struct vos_pool_space *vps, bool slow)
 		D_ERROR("Query pool:"DF_UUID" SCM space failed. "DF_RC"\n",
 			DP_UUID(pool->vp_id), DP_RC(rc));
 		return rc;
+	}
+
+	/* Query non-evictable zones usage when the phase2 pool is evictable */
+	if (vos_pool_is_evictable(pool)) {
+		struct vos_pool_ext_df *pd_ext_df = umem_off2ptr(vos_pool2umm(pool), df->pd_ext);
+
+		D_ASSERT(pd_ext_df != NULL);
+		vps->vps_mem_bytes = pd_ext_df->ped_mem_sz;
+
+		rc = umempobj_get_mbusage(vos_pool2umm(pool)->umm_pool, UMEM_DEFAULT_MBKT_ID,
+					  &ne_used, &vps->vps_ne_total);
+		if (rc) {
+			rc = umem_tx_errno(rc);
+			DL_ERROR(rc, "Query pool:"DF_UUID" NE space usage failed.",
+				 DP_UUID(pool->vp_id));
+			return rc;
+		}
+		if (ne_used > vps->vps_ne_total) {
+			D_ERROR("NE used:"DF_U64" > NE total:"DF_U64"\n",
+				ne_used, vps->vps_ne_total);
+			return -DER_INVAL;
+		}
+		vps->vps_ne_free = vps->vps_ne_total - ne_used;
+	} else {
+		vps->vps_mem_bytes = SCM_TOTAL(vps);
+		vps->vps_ne_total = 0;
+		vps->vps_ne_free = 0;
 	}
 
 	/*
@@ -212,6 +239,7 @@ estimate_space(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
 	struct dcs_csum_info	*csums, *recx_csum;
 	daos_iod_t		*iod;
 	daos_recx_t		*recx;
+	struct vos_rec_bundle	 rbund = { 0 };
 	daos_size_t		 size, scm, nvme = 0 /* in blk */;
 	int			 i, j;
 
@@ -233,16 +261,16 @@ estimate_space(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
 		/* Single value */
 		if (iod->iod_type == DAOS_IOD_SINGLE) {
 			size = iod->iod_size;
+			rbund.rb_csum	= csums;
+			rbund.rb_rsize	= size;
 
 			/* Single value record */
-			if (vos_io_scm(pool, iod->iod_type, size, VOS_IOS_GENERIC)) {
-				/** store data on DAOS_MEDIA_SCM */
-				scm += vos_recx2irec_size(size, csums);
-			} else {
-				scm += vos_recx2irec_size(0, csums);
-				if (iod->iod_size != 0)
-					nvme += vos_byte2blkcnt(iod->iod_size);
-			}
+			scm += vos_irec_msize(pool, &rbund);
+			if (vos_io_scm(pool, iod->iod_type, size, VOS_IOS_GENERIC))
+				scm += size;
+			else
+				nvme += vos_byte2blkcnt(size);
+
 			/* Assume one more SV tree node created */
 			scm += 256;
 			continue;

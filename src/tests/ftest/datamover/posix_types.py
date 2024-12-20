@@ -1,11 +1,12 @@
 '''
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from os.path import basename, join
 
 from data_mover_test_base import DataMoverTestBase
+from dfuse_utils import get_dfuse, start_dfuse
 from duns_utils import format_path, parse_path
 
 
@@ -63,21 +64,22 @@ class DmvrPosixTypesTest(DataMoverTestBase):
         self.set_tool(tool)
 
         # Start dfuse to hold all pools/containers
-        self.start_dfuse(self.dfuse_hosts)
+        dfuse = get_dfuse(self, self.dfuse_hosts)
+        start_dfuse(self, dfuse)
 
         # Create 2 pools
-        pool1 = self.create_pool(label='pool1')
-        pool2 = self.create_pool(label='pool2')
+        pool1 = self.get_pool(label='pool1')
+        pool2 = self.get_pool(label='pool2')
 
         # Create a special container to hold UNS entries
         uns_cont = self.get_container(pool1)
 
         # Create all other containers
-        container1_path = join(self.dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns1')
+        container1_path = join(dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns1')
         container1 = self.get_container(pool1, path=container1_path, label='container1')
-        container2_path = join(self.dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns2')
+        container2_path = join(dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns2')
         container2 = self.get_container(pool1, path=container2_path, label='container2')
-        container3_path = join(self.dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns3')
+        container3_path = join(dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns3')
         container3 = self.get_container(pool2, path=container3_path, label='container3')
 
         # Create each source location

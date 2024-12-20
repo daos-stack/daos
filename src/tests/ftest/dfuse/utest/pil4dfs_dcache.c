@@ -263,6 +263,30 @@ test_rename(void **state)
 	D_FREE(path_old);
 	printf("\n-- END of test_rename --\n");
 
+	printf("\nremoving directory '/a/ccc/foo/bar/e/f'\n");
+	rc = unlinkat(fd, "a/ccc/foo/bar/e/f", AT_REMOVEDIR);
+	assert_return_code(rc, errno);
+
+	printf("\nremoving directory '/a/ccc/foo/bar/e'\n");
+	rc = unlinkat(fd, "a/ccc/foo/bar/e", AT_REMOVEDIR);
+	assert_return_code(rc, errno);
+
+	printf("\nremoving directory '/a/ccc/foo/bar'\n");
+	rc = unlinkat(fd, "a/ccc/foo/bar", AT_REMOVEDIR);
+	assert_return_code(rc, errno);
+
+	printf("\nremoving directory '/a/ccc/foo'\n");
+	rc = unlinkat(fd, "a/ccc/foo", AT_REMOVEDIR);
+	assert_return_code(rc, errno);
+
+	printf("\nremoving directory '/a/ccc'\n");
+	rc = unlinkat(fd, "a/ccc", AT_REMOVEDIR);
+	assert_return_code(rc, errno);
+
+	printf("\nremoving directory '/a'\n");
+	rc = unlinkat(fd, "a", AT_REMOVEDIR);
+	assert_return_code(rc, errno);
+
 	printf("Closing fd of path '%s'\n", mnt_path);
 	rc = close(fd);
 	assert_return_code(rc, errno);
@@ -342,14 +366,66 @@ test_dup(void **state)
 	printf("\n-- END of test_dup --\n");
 }
 
+static void
+test_garbage_collector(void **state)
+{
+	int fd;
+	int rc;
+
+	(void)state; /* unused */
+
+	printf("\n-- INIT of test_garbage_collector --\n");
+
+	printf("Opening path '%s'\n", mnt_path);
+	fd = open(mnt_path, O_DIRECTORY, O_RDWR);
+	assert_return_code(fd, errno);
+
+	printf("\n-- START of test_garbage_collector --");
+
+	create_dir_tree(fd);
+
+	sleep(3);
+
+	printf("\ncreating directory '/a/ccc/foo'\n");
+	rc = mkdirat(fd, "a/ccc/foo", 0755);
+	assert_return_code(rc, errno);
+
+	sleep(2);
+
+	printf("\ncreating directory '/a/ccc/foo/bar'\n");
+	rc = mkdirat(fd, "a/ccc/foo/bar", 0755);
+	assert_return_code(rc, errno);
+
+	usleep(1500000);
+
+	printf("\nremoving directory '/a/ccc/foo/bar'\n");
+	rc = unlinkat(fd, "a/ccc/foo/bar", AT_REMOVEDIR);
+	assert_return_code(rc, errno);
+
+	printf("\nremoving directory '/a/ccc/foo'\n");
+	rc = unlinkat(fd, "a/ccc/foo", AT_REMOVEDIR);
+	assert_return_code(rc, errno);
+
+	remove_tree_at(fd);
+
+	printf("\n-- END of test_garbage_collector --\n");
+
+	printf("Closing fd of path '%s'\n", mnt_path);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+}
+
 int
 main(int argc, char *argv[])
 {
 	size_t            test_id;
-	struct CMUnitTest tests[] = {
-	    cmocka_unit_test(test_mkdirat),    cmocka_unit_test(test_unlinkat),
-	    cmocka_unit_test(test_rmdir),      cmocka_unit_test(test_rename),
-	    cmocka_unit_test(test_open_close), cmocka_unit_test(test_dup)};
+	struct CMUnitTest tests[] = {cmocka_unit_test(test_mkdirat),
+				     cmocka_unit_test(test_unlinkat),
+				     cmocka_unit_test(test_rmdir),
+				     cmocka_unit_test(test_rename),
+				     cmocka_unit_test(test_open_close),
+				     cmocka_unit_test(test_dup),
+				     cmocka_unit_test(test_garbage_collector)};
 	struct CMUnitTest test[1];
 
 	d_register_alt_assert(mock_assert);

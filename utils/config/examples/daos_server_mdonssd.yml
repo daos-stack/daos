@@ -1,8 +1,11 @@
 # Example configuration file for Metadata on SSD.
 
-name: daos_server           # sys group daos_server
-access_points: ['example']  # management service leader (bootstrap)
-# port: 10001               # control listen port, default 10001
+# sys group daos_server
+name: daos_server
+# management service replicas
+mgmt_svc_replicas: ['example1', 'example2', 'example3']
+# control listen port, default 10001
+# port: 10001
 provider: ofi+tcp
 control_log_mask: INFO
 control_log_file: /tmp/daos_server.log
@@ -80,11 +83,11 @@ engines:
         # -
         #   class: nvme
         #   bdev_list: ["0000:81:00.0"]
-        #   bdev_roles: [wal]
+        #   bdev_roles: [wal,meta]
         # -
         #   class: nvme
         #   bdev_list: ["0000:82:00.0"]
-        #   bdev_roles: [meta,data]
+        #   bdev_roles: [data]
 
         # To use emulated NVMe, use `class: file` instead of `class: nvme`, see
         # utils/config/daos_server.yml for details on AIO file class.

@@ -1080,7 +1080,8 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	unsigned int		 nr = api_args->nr;
 	d_sg_list_t		*sgls = api_args->sgls;
 	crt_rpc_t		*req = NULL;
-	struct obj_rw_v10_in	*orw;
+	struct obj_rw_in	*orw;
+	struct obj_rw_v10_in	*orw_v10;
 	struct rw_cb_args	 rw_args;
 	crt_endpoint_t		 tgt_ep;
 	uuid_t			 cont_hdl_uuid;
@@ -1187,7 +1188,10 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 					 0 : nr;
 	orw->orw_iod_array.oia_offs = args->offs;
 	/* for retry RPC */
-	orw->orw_comm_in.req_in_enqueue_id = auxi->enqueue_id;
+	if (dc_obj_proto_version >= 10) {
+		orw_v10 = (struct obj_rw_v10_in *)orw;
+		orw_v10->orw_comm_in.req_in_enqueue_id = auxi->enqueue_id;
+	}
 
 	D_DEBUG(DB_IO, "rpc %p opc %d "DF_UOID" "DF_KEY" rank %d tag %d eph "
 		DF_U64", DTI = "DF_DTI" start shard %u ver %u\n", req, opc,
@@ -1334,7 +1338,8 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	daos_obj_punch_t		*obj_args;
 	daos_key_t			*dkey;
 	struct dc_pool			*pool;
-	struct obj_punch_v10_in		*opi;
+	struct obj_punch_in		*opi;
+	struct obj_punch_v10_in		*opi_v10;
 	crt_rpc_t			*req;
 	struct obj_punch_cb_args	 cb_args;
 	daos_unit_oid_t			 oid;
@@ -1400,7 +1405,10 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	opi->opi_flags = args->pa_auxi.flags;
 	opi->opi_dti_cos.ca_count = 0;
 	opi->opi_dti_cos.ca_arrays = NULL;
-	opi->opi_comm_in.req_in_enqueue_id = args->pa_auxi.enqueue_id;
+	if (dc_obj_proto_version >= 10) {
+		opi_v10 = (struct obj_punch_v10_in *)opi;
+		opi_v10->opi_comm_in.req_in_enqueue_id = args->pa_auxi.enqueue_id;
+	}
 
 	rc = daos_rpc_send(req, task);
 	return rc;
@@ -1443,11 +1451,15 @@ obj_shard_coll_punch_cb(tse_task_t *task, void *data)
 			shard_args->pa_auxi.obj_auxi->max_delay = timeout;
 	}
 
-	DL_CDEBUG(task->dt_result < 0, DLOG_ERR, DB_IO, task->dt_result,
-		  "DAOS_OBJ_RPC_COLL_PUNCH RPC %p for "DF_UOID" with DTX "
-		  DF_DTI" for task %p, map_ver %u/%u, flags %lx/%x", rpc, DP_UOID(ocpi->ocpi_oid),
-		  DP_DTI(&ocpi->ocpi_xid), task, ocpi->ocpi_map_ver, *cb_args->cpca_ver,
-		  (unsigned long)ocpi->ocpi_api_flags, ocpi->ocpi_flags);
+	DL_CDEBUG(task->dt_result < 0 && task->dt_result != -DER_INPROGRESS,
+		  DLOG_ERR, DB_IO, task->dt_result,
+		  "DAOS_OBJ_RPC_COLL_PUNCH RPC %p for "DF_UOID" in "DF_UUID"/"DF_UUID"/"
+		  DF_UUID" with DTX "DF_DTI" for task %p, map_ver %u/%u, flags %lx/%x, %s layout",
+		  rpc, DP_UOID(ocpi->ocpi_oid), DP_UUID(ocpi->ocpi_po_uuid),
+		  DP_UUID(ocpi->ocpi_co_hdl), DP_UUID(ocpi->ocpi_co_uuid), DP_DTI(&ocpi->ocpi_xid),
+		  task, ocpi->ocpi_map_ver, *cb_args->cpca_ver,
+		  (unsigned long)ocpi->ocpi_api_flags, ocpi->ocpi_flags,
+		  cb_args->cpca_shard_args->pa_coa.coa_raw_sparse ? "sparse" : "continuous");
 
 	crt_req_decref(rpc);
 
@@ -1923,7 +1935,8 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	crt_rpc_t			*req;
 	uuid_t				 cont_hdl_uuid;
 	uuid_t				 cont_uuid;
-	struct obj_key_enum_v10_in	*oei;
+	struct obj_key_enum_in		*oei;
+	struct obj_key_enum_v10_in	*oei_v10;
 	struct obj_enum_args		 enum_args;
 	daos_size_t			 sgl_size = 0;
 	int				 rc;
@@ -1985,7 +1998,10 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 
 	oei->oei_nr		= args->la_nr;
 	oei->oei_rec_type	= obj_args->type;
-	oei->oei_comm_in.req_in_enqueue_id = args->la_auxi.enqueue_id;
+	if (dc_obj_proto_version >= 10) {
+		oei_v10 = (struct obj_key_enum_v10_in *)oei;
+		oei_v10->oei_comm_in.req_in_enqueue_id = args->la_auxi.enqueue_id;
+	}
 	uuid_copy(oei->oei_pool_uuid, pool->dp_pool);
 	uuid_copy(oei->oei_co_hdl, cont_hdl_uuid);
 	uuid_copy(oei->oei_co_uuid, cont_uuid);
@@ -2158,7 +2174,8 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint
 		       uint32_t *max_delay, uint64_t *queue_id)
 {
 	struct dc_pool			*pool = obj_shard_ptr2pool(shard);
-	struct obj_query_key_v10_in	*okqi;
+	struct obj_query_key_in		*okqi;
+	struct obj_query_key_v10_in	*okqi_v10;
 	crt_rpc_t			*req;
 	struct obj_query_key_cb_args	 cb_args = { 0 };
 	crt_endpoint_t			 tgt_ep;
@@ -2219,7 +2236,10 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint
 	uuid_copy(okqi->okqi_co_hdl, coh_uuid);
 	uuid_copy(okqi->okqi_co_uuid, cont_uuid);
 	daos_dti_copy(&okqi->okqi_dti, dti);
-	okqi->okqi_comm_in.req_in_enqueue_id = *queue_id;
+	if (dc_obj_proto_version >= 10) {
+		okqi_v10 = (struct obj_query_key_v10_in *)okqi;
+		okqi_v10->okqi_comm_in.req_in_enqueue_id = *queue_id;
+	}
 
 	return daos_rpc_send(req, task);
 
@@ -2288,7 +2308,7 @@ obj_shard_coll_query_cb(tse_task_t *task, void *data)
 
 	/*
 	 * Merge (L4) the results from engine that may be single shard or aggregated results from
-	 * multuple shards from single or multiple engines.
+	 * multiple shards from single or multiple engines.
 	 */
 	D_SPIN_LOCK(&cb_args->obj->cob_spin);
 	rc = daos_obj_query_merge(&oqma);
@@ -2476,7 +2496,8 @@ dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	struct dc_pool			*pool = NULL;
 	uuid_t				 cont_hdl_uuid;
 	uuid_t				 cont_uuid;
-	struct obj_sync_v10_in		*osi;
+	struct obj_sync_in		*osi;
+	struct obj_sync_v10_in		*osi_v10;
 	crt_rpc_t			*req;
 	struct obj_shard_sync_cb_args	 cb_args;
 	crt_endpoint_t			 tgt_ep;
@@ -2525,7 +2546,10 @@ dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	osi->osi_oid			   = shard->do_id;
 	osi->osi_epoch			   = args->sa_auxi.epoch.oe_value;
 	osi->osi_map_ver		   = args->sa_auxi.map_ver;
-	osi->osi_comm_in.req_in_enqueue_id = args->sa_auxi.enqueue_id;
+	if (dc_obj_proto_version >= 10) {
+		osi_v10 = (struct obj_sync_v10_in *)osi;
+		osi_v10->osi_comm_in.req_in_enqueue_id = args->sa_auxi.enqueue_id;
+	}
 
 	return daos_rpc_send(req, task);
 
@@ -2639,7 +2663,8 @@ dc_obj_shard_key2anchor(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	crt_rpc_t			*req;
 	uuid_t				cont_hdl_uuid;
 	uuid_t				cont_uuid;
-	struct obj_key2anchor_v10_in	*oki;
+	struct obj_key2anchor_in	*oki;
+	struct obj_key2anchor_v10_in	*oki_v10;
 	struct obj_k2a_args		cb_args;
 	int				rc;
 
@@ -2675,7 +2700,10 @@ dc_obj_shard_key2anchor(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 		oki->oki_akey = *obj_args->akey;
 	oki->oki_oid		= obj_shard->do_id;
 	oki->oki_map_ver	= args->ka_auxi.map_ver;
-	oki->oki_comm_in.req_in_enqueue_id = args->ka_auxi.enqueue_id;
+	if (dc_obj_proto_version >= 10) {
+		oki_v10 = (struct obj_key2anchor_v10_in *)oki;
+		oki_v10->oki_comm_in.req_in_enqueue_id = args->ka_auxi.enqueue_id;
+	}
 	uuid_copy(oki->oki_pool_uuid, pool->dp_pool);
 	uuid_copy(oki->oki_co_hdl, cont_hdl_uuid);
 	uuid_copy(oki->oki_co_uuid, cont_uuid);

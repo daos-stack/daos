@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dustin/go-humanize"
 	"google.golang.org/protobuf/proto"
 
 	grpcpb "github.com/Jille/raft-grpc-transport/proto"
@@ -80,7 +81,7 @@ func Debug(msg proto.Message) string {
 			fmt.Fprintf(&bld, "%s:%s ", state, set.String())
 		}
 	case *mgmtpb.PoolCreateReq:
-		fmt.Fprintf(&bld, "%T uuid:%s u:%s g:%s ", m, m.Uuid, m.User, m.Usergroup)
+		fmt.Fprintf(&bld, "%T uuid:%s u:%s g:%s ", m, m.Uuid, m.User, m.UserGroup)
 		if len(m.Properties) > 0 {
 			fmt.Fprintf(&bld, "p:%+v ", m.Properties)
 		}
@@ -90,12 +91,13 @@ func Debug(msg proto.Message) string {
 		}
 		fmt.Fprintf(&bld, "ranks:%s ", ranks.String())
 		fmt.Fprint(&bld, "tiers:")
-		for i, b := range m.Tierbytes {
-			fmt.Fprintf(&bld, "%d: %d ", i, b)
-			if len(m.Tierratio) > i+1 {
-				fmt.Fprintf(&bld, "(%.02f%%) ", m.Tierratio[i])
+		for i, b := range m.TierBytes {
+			fmt.Fprintf(&bld, "%d: %s (%d)", i, humanize.Bytes(b), b)
+			if len(m.TierRatio) > i+1 {
+				fmt.Fprintf(&bld, "(%.02f%%) ", m.TierRatio[i])
 			}
 		}
+		fmt.Fprintf(&bld, "mem-ratio: %.02f ", m.MemRatio)
 	case *mgmtpb.PoolCreateResp:
 		fmt.Fprintf(&bld, "%T svc_ldr:%d ", m, m.SvcLdr)
 		ranks := &ranklist.RankSet{}
@@ -110,8 +112,26 @@ func Debug(msg proto.Message) string {
 		fmt.Fprintf(&bld, "tgt_ranks:%s ", ranks.String())
 		fmt.Fprint(&bld, "tiers:")
 		for i, b := range m.TierBytes {
-			fmt.Fprintf(&bld, "%d:%d ", i, b)
+			fmt.Fprintf(&bld, "%d: %s (%d)", i, humanize.Bytes(b), b)
 		}
+		fmt.Fprintf(&bld, "meta-file-size: %s (%d)", humanize.Bytes(m.MemFileBytes),
+			m.MemFileBytes)
+	case *mgmtpb.PoolQueryReq:
+		fmt.Fprintf(&bld, "%T id:%s qm:%s", m, m.Id, daos.PoolQueryMask(m.QueryMask))
+	case *mgmtpb.PoolQueryResp:
+		fmt.Fprintf(&bld, "%T status:%s uuid:%s qm:%s map:%d tot(eng/tgts):%d/%d ver(p/u):%d/%d svc_ldr:%d ",
+			m, daos.Status(m.Status), m.Uuid, daos.PoolQueryMask(m.QueryMask), m.Version,
+			m.TotalEngines, m.TotalTargets, m.PoolLayoutVer, m.UpgradeLayoutVer, m.SvcLdr)
+		ranks := &ranklist.RankSet{}
+		for _, r := range m.SvcReps {
+			ranks.Add(ranklist.Rank(r))
+		}
+		fmt.Fprintf(&bld, "svc_ranks:%s ", ranks.String())
+		fmt.Fprintf(&bld, "ena_ranks:%s ", m.EnabledRanks)
+		fmt.Fprintf(&bld, "dis_ranks:%s ", m.DisabledRanks)
+		fmt.Fprintf(&bld, "dead_ranks:%s ", m.DeadRanks)
+		fmt.Fprintf(&bld, "rebuild:%+v ", m.Rebuild)
+		fmt.Fprintf(&bld, "tier_stats:%+v ", m.TierStats)
 	case *mgmtpb.PoolEvictReq:
 		fmt.Fprintf(&bld, "%T pool:%s", m, m.Id)
 		if len(m.Handles) > 0 {
@@ -143,7 +163,7 @@ func Debug(msg proto.Message) string {
 		for _, ru := range m.RankUris {
 			uriRanks.Add(ranklist.Rank(ru.Rank))
 		}
-		fmt.Fprintf(&bld, "%T@%d ms:%s ranks:%s client:%+v", m, m.DataVersion, msRanks.String(), uriRanks.String(), m.ClientNetHint)
+		fmt.Fprintf(&bld, "%T@%d ms:%s ranks:%s client:%+v build:%s", m, m.DataVersion, msRanks.String(), uriRanks.String(), m.ClientNetHint, m.BuildInfo.BuildString())
 	case *mgmtpb.LeaderQueryResp:
 		fmt.Fprintf(&bld, "%T leader:%s Replica Set:%s Down Replicas:%s", m, m.CurrentLeader, strings.Join(m.Replicas, ","), strings.Join(m.DownReplicas, ","))
 	case *sharedpb.ClusterEventReq:

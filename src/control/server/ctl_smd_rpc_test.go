@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,6 +17,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/hardware/pciutils"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -88,6 +89,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 		drpcResps      map[int][]*mockDrpcResponse
 		harnessStopped bool
 		ioStopped      bool
+		pciDevErr      error
 		expResp        *ctlpb.SmdQueryResp
 		expErr         error
 	}{
@@ -485,7 +487,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 			},
 			expErr: daos.Busy,
 		},
-		"device-health": {
+		"list-devices; with health": {
 			req: &ctlpb.SmdQueryReq{
 				OmitPools:        true,
 				Rank:             uint32(ranklist.NilRank),
@@ -531,7 +533,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				},
 			},
 		},
-		"device-health; no uuid in request": {
+		"list-devices; with health; no uuid in request": {
 			req: &ctlpb.SmdQueryReq{
 				OmitPools:        true,
 				Rank:             uint32(ranklist.NilRank),
@@ -589,7 +591,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				},
 			},
 		},
-		"device-health (NEW SMD); skip health collection": {
+		"list-devices; with health (NEW SMD); skip health collection": {
 			req: &ctlpb.SmdQueryReq{
 				OmitPools:        true,
 				Rank:             uint32(ranklist.NilRank),
@@ -628,7 +630,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				},
 			},
 		},
-		"device-health; DAOS Failure": {
+		"list-devices; with health; DAOS failure": {
 			req: &ctlpb.SmdQueryReq{
 				OmitPools:        true,
 				Rank:             uint32(ranklist.NilRank),
@@ -658,6 +660,46 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 			},
 			expErr: daos.FreeMemError,
 		},
+		"list-devices; with health; update link stats": {
+			req: &ctlpb.SmdQueryReq{
+				OmitPools:        true,
+				Rank:             uint32(ranklist.NilRank),
+				Uuid:             test.MockUUID(1),
+				IncludeBioHealth: true,
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevice{pbNormDev(0)},
+						},
+					},
+				},
+				1: {
+					{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevice{
+								func() *ctlpb.SmdDevice {
+									sd := pbFaultDev(1)
+									sd.Ctrlr.PciCfg = "ABCD"
+									return sd
+								}(),
+							},
+						},
+					},
+					{
+						Message: &ctlpb.BioHealthResp{
+							Temperature: 1000000,
+							TempWarn:    true,
+						},
+					},
+				},
+			},
+			// Prove mock link stats provider gets called when IncludeBioHealth
+			// flag is set and Ctrlr.PciCfg string is not empty.
+			pciDevErr: errors.New("link stats provider fail"),
+			expErr:    errors.New("link stats provider fail"),
+		},
 		"ambiguous UUID": {
 			req: &ctlpb.SmdQueryReq{
 				Rank: uint32(ranklist.NilRank),
@@ -679,6 +721,13 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
+
+			linkStatsProv = &mockPCIeLinkStatsProvider{
+				pciDevErr: tc.pciDevErr,
+			}
+			defer func() {
+				linkStatsProv = pciutils.NewPCIeLinkStatsProvider()
+			}()
 
 			engineCount := len(tc.drpcResps)
 			if engineCount == 0 {
@@ -702,7 +751,10 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						cfg.setSendMsgResponseList(t, mock)
 					}
 				}
-				srv.setDrpcClient(newMockDrpcClient(cfg))
+				mdc := newMockDrpcClient(cfg)
+				srv.getDrpcClientFn = func(s string) drpc.DomainSocketClient {
+					return mdc
+				}
 				srv.ready.SetTrue()
 			}
 			if tc.harnessStopped {
@@ -1305,9 +1357,7 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 			expResp: &ctlpb.SmdManageResp{
 				Ranks: []*ctlpb.SmdManageResp_RankResp{
 					{
-						Results: []*ctlpb.SmdManageResp_Result{
-							{Device: pbFaultDev(1)},
-						},
+						Results: []*ctlpb.SmdManageResp_Result{{}},
 					},
 				},
 			},
@@ -1344,10 +1394,8 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 			expResp: &ctlpb.SmdManageResp{
 				Ranks: []*ctlpb.SmdManageResp_RankResp{
 					{
-						Rank: 1,
-						Results: []*ctlpb.SmdManageResp_Result{
-							{Device: pbFaultDev(1)},
-						},
+						Rank:    1,
+						Results: []*ctlpb.SmdManageResp_Result{{}},
 					},
 				},
 			},
@@ -1397,9 +1445,7 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 			expResp: &ctlpb.SmdManageResp{
 				Ranks: []*ctlpb.SmdManageResp_RankResp{
 					{
-						Results: []*ctlpb.SmdManageResp_Result{
-							{Device: pbNormDev(2)},
-						},
+						Results: []*ctlpb.SmdManageResp_Result{{}},
 					},
 				},
 			},
@@ -1437,9 +1483,7 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 			expResp: &ctlpb.SmdManageResp{
 				Ranks: []*ctlpb.SmdManageResp_RankResp{
 					{
-						Results: []*ctlpb.SmdManageResp_Result{
-							{Device: pbNormDev(2)},
-						},
+						Results: []*ctlpb.SmdManageResp_Result{{}},
 					},
 				},
 			},
@@ -1468,9 +1512,7 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 			expResp: &ctlpb.SmdManageResp{
 				Ranks: []*ctlpb.SmdManageResp_RankResp{
 					{
-						Results: []*ctlpb.SmdManageResp_Result{
-							{Device: pbNormDev(2)},
-						},
+						Results: []*ctlpb.SmdManageResp_Result{{}},
 					},
 				},
 			},
@@ -1506,7 +1548,6 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 					{
 						Results: []*ctlpb.SmdManageResp_Result{
 							{
-								Device: pbNormDev(1),
 								Status: int32(daos.TimedOut),
 							},
 						},
@@ -1542,7 +1583,6 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 					{
 						Results: []*ctlpb.SmdManageResp_Result{
 							{
-								Device: pbNormDev(1),
 								Status: int32(daos.Busy),
 							},
 						},
@@ -1589,7 +1629,10 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 						cfg.setSendMsgResponseList(t, mock)
 					}
 				}
-				ei.setDrpcClient(newMockDrpcClient(cfg))
+				mdc := newMockDrpcClient(cfg)
+				ei.getDrpcClientFn = func(s string) drpc.DomainSocketClient {
+					return mdc
+				}
 				ei.ready.SetTrue()
 			}
 			if tc.harnessStopped {

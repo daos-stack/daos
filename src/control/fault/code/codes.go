@@ -61,6 +61,7 @@ const (
 	StorageDeviceAlreadyMounted
 	StorageTargetAlreadyMounted
 	StoragePathAccessDenied
+	StorageDeviceWithFsNoMountpoint
 )
 
 // SCM fault codes
@@ -153,6 +154,8 @@ const (
 	ServerNoCompatibilityInsecure
 	ServerPoolHasContainers
 	ServerHugepagesDisabled
+	ServerPoolMemRatioNoRoles
+	ServerBadFaultDomainLabels
 )
 
 // server config fault codes
@@ -162,8 +165,8 @@ const (
 	ServerNoConfigPath
 	ServerConfigBadControlPort
 	ServerConfigBadTelemetryPort
-	ServerConfigBadAccessPoints
-	ServerConfigEvenAccessPoints
+	ServerConfigBadMgmtSvcReplicas
+	ServerConfigEvenMgmtSvcReplicas
 	ServerConfigBadProvider
 	ServerConfigNoEngines
 	ServerConfigDuplicateFabric

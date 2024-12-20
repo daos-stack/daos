@@ -90,6 +90,8 @@ class DmgSystemCleanupTest(TestWithServers):
         # Clear pool and container list to avoid trying to destroy them.
         for pool in self.pool:
             pool.skip_cleanup()
+        for cont in self.container:
+            cont.skip_cleanup()
         self.pool = []
         self.container = []
 

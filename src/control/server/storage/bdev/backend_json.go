@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -155,10 +156,6 @@ func defaultSpdkConfig() *SpdkConfig {
 				NvmeAdminqPollPeriodUsec: 100 * 1000,
 				ActionOnTimeout:          "none",
 			},
-		},
-		{
-			Method: storage.ConfBdevNvmeSetHotplug,
-			Params: NvmeSetHotplugParams{},
 		},
 	}
 
@@ -329,32 +326,34 @@ func newSpdkConfig(log logging.Logger, req *storage.BdevWriteConfigRequest) (*Sp
 		}
 	}
 
-	if req.HotplugEnabled {
-		var found bool
-		for _, ss := range sc.Subsystems {
-			if ss.Name != "bdev" {
-				continue
-			}
-			for _, bsc := range ss.Configs {
-				if bsc.Method == storage.ConfBdevNvmeSetHotplug {
-					bsc.Params = NvmeSetHotplugParams{
-						Enable:     true,
-						PeriodUsec: uint64(hotplugPeriod.Microseconds()),
-					}
-					found = true
-					break
-				}
-			}
-			if found {
-				break
-			}
-		}
-		hotplugPropSet(req, sc.DaosData)
-	}
-
 	accelPropSet(req, sc.DaosData)
 	rpcSrvSet(req, sc.DaosData)
 	autoFaultySet(req, sc.DaosData)
+	sc.WithBdevConfigs(log, req)
 
-	return sc.WithBdevConfigs(log, req), nil
+	// SPDK-3370: Ensure hotplug config appears after attach directives to avoid race when VMD
+	// with hotplug is enabled with multiple domains.
+	hpParams := NvmeSetHotplugParams{}
+	if req.HotplugEnabled {
+		hpParams.Enable = true
+		hpParams.PeriodUsec = uint64(hotplugPeriod.Microseconds())
+		hotplugPropSet(req, sc.DaosData)
+	}
+	var found bool
+	for _, ss := range sc.Subsystems {
+		if ss.Name != "bdev" {
+			continue
+		}
+		found = true
+		ss.Configs = append(ss.Configs, &SpdkSubsystemConfig{
+			Method: storage.ConfBdevNvmeSetHotplug,
+			Params: hpParams,
+		})
+		break
+	}
+	if !found {
+		return nil, errors.New("no bdev subsystem section found in generated spdk config")
+	}
+
+	return sc, nil
 }

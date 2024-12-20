@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -71,16 +71,61 @@ type addrFI interface {
 	Addrs() ([]net.Addr, error)
 }
 
+// NUMAFabricMap is an iterable map type that maps from a NUMA node ID to a set of FabricInterfaces.
+type NUMAFabricMap map[int][]*FabricInterface
+
+// MaxNUMANode gets the maximum NUMA node ID in the map.
+func (nfm NUMAFabricMap) MaxNUMANode() int {
+	max := -1
+	for numa := range nfm {
+		if numa > max {
+			max = numa
+		}
+	}
+	return max
+}
+
+type filterMode int
+
+const (
+	// filterModeExclude indicates that devices in the set should be excluded
+	filterModeExclude filterMode = 0
+	// filterModeInclude indicates that only devices in the set should be included
+	filterModeInclude filterMode = 1
+)
+
+type deviceFilter struct {
+	deviceSet common.StringSet
+	mode      filterMode
+}
+
+func (df *deviceFilter) ShouldIgnore(devName string) bool {
+	if df == nil || df.deviceSet == nil {
+		return false
+	}
+	if df.mode == filterModeExclude {
+		return df.deviceSet.Has(devName)
+	}
+	return !df.deviceSet.Has(devName)
+}
+
+func newDeviceFilter(deviceSet common.StringSet, mode filterMode) *deviceFilter {
+	return &deviceFilter{
+		deviceSet: deviceSet,
+		mode:      mode,
+	}
+}
+
 // NUMAFabric represents a set of fabric interfaces organized by NUMA node.
 type NUMAFabric struct {
 	log   logging.Logger
 	mutex sync.RWMutex
 
-	numaMap map[int][]*FabricInterface
+	numaMap NUMAFabricMap
 
-	currentNumaDevIdx map[int]int // current device idx to use on each NUMA node
-	currentNUMANode   int         // current NUMA node to search
-	ignoreIfaces      common.StringSet
+	currentNumaDevIdx map[int]int   // current device idx to use on each NUMA node
+	currentNUMANode   int           // current NUMA node to search
+	ifaceFilter       *deviceFilter // set of interface names for filtering
 
 	getAddrInterface func(name string) (addrFI, error)
 }
@@ -98,12 +143,12 @@ func (n *NUMAFabric) Add(numaNode int, fi *FabricInterface) error {
 	return nil
 }
 
-// WithIgnoredDevices adds a set of fabric interface names that should be ignored when
-// selecting a device.
-func (n *NUMAFabric) WithIgnoredDevices(ifaces common.StringSet) *NUMAFabric {
-	n.ignoreIfaces = ifaces
-	if len(ifaces) > 0 {
-		n.log.Tracef("ignoring fabric devices: %s", n.ignoreIfaces)
+// WithDeviceFilter adds a set of fabric interface names that should be used for
+// filtering when selecting a device.
+func (n *NUMAFabric) WithDeviceFilter(filter *deviceFilter) *NUMAFabric {
+	if filter != nil {
+		n.ifaceFilter = filter
+		n.log.Tracef("fabric device filter: %+v", n.ifaceFilter)
 	}
 	return n
 }
@@ -141,6 +186,34 @@ func (n *NUMAFabric) NumNUMANodes() int {
 
 func (n *NUMAFabric) getNumNUMANodes() int {
 	return len(n.numaMap)
+}
+
+// RLockedMap read-locks the map and returns it, along with a release function.
+func (n *NUMAFabric) RLockedMap() (NUMAFabricMap, func(), error) {
+	if n == nil {
+		return nil, nil, errors.New("nil NUMAFabric")
+	}
+
+	n.mutex.RLock()
+	if n.numaMap == nil {
+		n.mutex.RUnlock()
+		return nil, nil, errors.New("NUMAFabric is uninitialized")
+	}
+	return n.numaMap, n.mutex.RUnlock, nil
+}
+
+// LockedMap write-locks the map and returns it, along with a release function.
+func (n *NUMAFabric) LockedMap() (NUMAFabricMap, func(), error) {
+	if n == nil {
+		return nil, nil, errors.New("nil NUMAFabric")
+	}
+
+	n.mutex.Lock()
+	if n.numaMap == nil {
+		n.mutex.Unlock()
+		return nil, nil, errors.New("NUMAFabric is uninitialized")
+	}
+	return n.numaMap, n.mutex.Unlock, nil
 }
 
 // FabricIfaceParams is a set of parameters associated with a fabric interface.
@@ -192,8 +265,8 @@ func (n *NUMAFabric) getDeviceFromNUMA(numaNode int, netDevClass hardware.NetDev
 	for checked := 0; checked < n.getNumDevices(numaNode); checked++ {
 		fabricIF := n.getNextDevice(numaNode)
 
-		if n.ignoreIfaces.Has(fabricIF.Name) {
-			n.log.Tracef("device %s: ignored (ignore list %s)", fabricIF, n.ignoreIfaces)
+		if n.ifaceFilter.ShouldIgnore(fabricIF.Name) {
+			n.log.Tracef("device %s: ignored (filter: %+v)", fabricIF, n.ifaceFilter)
 			continue
 		}
 
@@ -320,7 +393,7 @@ func (n *NUMAFabric) Find(name string) ([]*FabricInterface, error) {
 }
 
 // FindDevice looks up a fabric device with a given name, domain, and provider.
-// NB: The domain and provider are optional. All other parameters are required. If there is more
+// NB: The name is required. All other parameters are optional. If there is more
 // than one match, all of them are returned.
 func (n *NUMAFabric) FindDevice(params *FabricIfaceParams) ([]*FabricInterface, error) {
 	if params == nil {
@@ -364,7 +437,7 @@ func filterDomain(domain string, fiList []*FabricInterface) []*FabricInterface {
 func filterProvider(provider string, fiList []*FabricInterface) []*FabricInterface {
 	result := make([]*FabricInterface, 0, len(fiList))
 	for _, fi := range fiList {
-		if fi.HasProvider(provider) {
+		if fi.HasProvider(provider) || fi.NetDevClass == FabricDevClassManual {
 			result = append(result, fi)
 		}
 	}
@@ -412,12 +485,9 @@ func fabricInterfacesFromHardware(fi *hardware.FabricInterface) []*FabricInterfa
 	for netIF := range fi.NetInterfaces {
 		newFI := &FabricInterface{
 			Name:        netIF,
+			Domain:      fi.Name,
 			NetDevClass: fi.DeviceClass,
 			hw:          fi,
-		}
-
-		if fi.Name != netIF {
-			newFI.Domain = fi.Name
 		}
 
 		fis = append(fis, newFI)
@@ -433,12 +503,15 @@ func NUMAFabricFromConfig(log logging.Logger, cfg []*NUMAFabricConfig) *NUMAFabr
 	for _, fc := range cfg {
 		node := fc.NUMANode
 		for _, fi := range fc.Interfaces {
-			fabric.numaMap[node] = append(fabric.numaMap[node],
-				&FabricInterface{
-					Name:        fi.Interface,
-					Domain:      fi.Domain,
-					NetDevClass: FabricDevClassManual,
-				})
+			newFI := &FabricInterface{
+				Name:        fi.Interface,
+				Domain:      fi.Domain,
+				NetDevClass: FabricDevClassManual,
+			}
+			if newFI.Domain == "" {
+				newFI.Domain = newFI.Name
+			}
+			fabric.numaMap[node] = append(fabric.numaMap[node], newFI)
 		}
 	}
 

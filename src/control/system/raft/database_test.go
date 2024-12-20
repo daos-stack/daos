@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,7 +11,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"net"
 	"sort"
@@ -228,7 +227,7 @@ func (tss *testSnapshotSink) Write(data []byte) (int, error) {
 	return int(w), err
 }
 func (tss *testSnapshotSink) Reader() io.ReadCloser {
-	return ioutil.NopCloser(tss.contents)
+	return io.NopCloser(tss.contents)
 }
 
 func TestSystem_Database_SnapshotRestore(t *testing.T) {
@@ -272,7 +271,7 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 		ps := &PoolService{
 			PoolUUID:  uuid.New(),
 			PoolLabel: fmt.Sprintf("pool%04d", i),
-			State:     PoolServiceStateReady,
+			State:     system.PoolServiceStateReady,
 			Replicas:  <-replicas,
 			Storage: &PoolServiceStorage{
 				CreationRankStr:    fmt.Sprintf("[0-%d]", maxRanks),
@@ -735,7 +734,7 @@ func TestSystem_Database_OnEvent(t *testing.T) {
 				{
 					PoolUUID:   puuid,
 					PoolLabel:  "pool0001",
-					State:      PoolServiceStateReady,
+					State:      system.PoolServiceStateReady,
 					Replicas:   []Rank{1, 2, 3, 4, 5},
 					LastUpdate: time.Now(),
 				},
@@ -746,7 +745,7 @@ func TestSystem_Database_OnEvent(t *testing.T) {
 				{
 					PoolUUID:   puuid,
 					PoolLabel:  "pool0001",
-					State:      PoolServiceStateReady,
+					State:      system.PoolServiceStateReady,
 					Replicas:   []Rank{1, 2, 3, 4, 5},
 					LastUpdate: time.Now(),
 				},
@@ -757,7 +756,7 @@ func TestSystem_Database_OnEvent(t *testing.T) {
 				{
 					PoolUUID:   puuid,
 					PoolLabel:  "pool0001",
-					State:      PoolServiceStateReady,
+					State:      system.PoolServiceStateReady,
 					Replicas:   []Rank{1, 2, 3, 4, 5},
 					LastUpdate: time.Now(),
 				},
@@ -768,7 +767,7 @@ func TestSystem_Database_OnEvent(t *testing.T) {
 				{
 					PoolUUID:   puuid,
 					PoolLabel:  "pool0001",
-					State:      PoolServiceStateReady,
+					State:      system.PoolServiceStateReady,
 					Replicas:   []Rank{2, 3, 5, 6, 7},
 					LastUpdate: time.Now(),
 				},
@@ -824,21 +823,21 @@ func TestSystemDatabase_PoolServiceList(t *testing.T) {
 	ready := &PoolService{
 		PoolUUID:   uuid.New(),
 		PoolLabel:  "pool0001",
-		State:      PoolServiceStateReady,
+		State:      system.PoolServiceStateReady,
 		Replicas:   []Rank{1, 2, 3, 4, 5},
 		LastUpdate: time.Now(),
 	}
 	creating := &PoolService{
 		PoolUUID:   uuid.New(),
 		PoolLabel:  "pool0002",
-		State:      PoolServiceStateCreating,
+		State:      system.PoolServiceStateCreating,
 		Replicas:   []Rank{1, 2, 3, 4, 5},
 		LastUpdate: time.Now(),
 	}
 	destroying := &PoolService{
 		PoolUUID:   uuid.New(),
 		PoolLabel:  "pool0003",
-		State:      PoolServiceStateDestroying,
+		State:      system.PoolServiceStateDestroying,
 		Replicas:   []Rank{1, 2, 3, 4, 5},
 		LastUpdate: time.Now(),
 	}

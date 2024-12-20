@@ -98,7 +98,7 @@ class TestWithTelemetryBasic(TestWithTelemetry):
         open_close_qty = self.params.get("open_close_qty", "/run/test/*", 2)
         self.add_pool(connect=False)
         self.pool.set_query_data()
-        pool_leader_rank = self.pool.query_data["response"]["leader"]
+        pool_leader_rank = self.pool.query_data["response"]["svc_ldr"]
         self.pool_leader_host = self.server_managers[0].get_host(pool_leader_rank)
         self.log.info(
             "Pool leader host: %s (rank: %s)",

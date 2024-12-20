@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -123,12 +123,14 @@ class OSAUtils(MdtestBase, IorTestBase):
                 elif port_num == str(expected_ports[1]):
                     port_val = 1
                 else:
+                    port_val = None  # To appease pylint
                     self.log.info("port_number: %s", port_num)
                     self.fail("Invalid port number")
                 cmd = "/usr/bin/ssh {} -oStrictHostKeyChecking=no \
                       sudo rm -rf /mnt/daos{}/{}/vos-*". \
                       format(ip_addr, port_val, self.pool.uuid)
             else:
+                cmd = None  # To appease pylint
                 self.fail("Not supported engine per server configuration")
             run_command(cmd)
 
@@ -372,7 +374,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.cleanup_queue()
         self.pool = pool
         self.ior_cmd.get_params(self)
-        self.ior_cmd.set_daos_params(self.server_group, self.pool, None)
+        self.ior_cmd.set_daos_params(self.pool, None)
         self.log.info("Redundancy Factor : %s", self.test_with_rf)
         self.ior_cmd.dfs_oclass.update(oclass)
         self.ior_cmd.dfs_dir_oclass.update(oclass)
@@ -390,7 +392,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         except CommandFailure as err_msg:
             self.out_queue.put(err_msg)
             self.assert_on_exception()
-        job_manager.job.dfs_cont.update(self.container.uuid)
+        job_manager.job.dfs_cont.update(self.container.identifier)
         self.ior_cmd.transfer_size.update(test[2])
         self.ior_cmd.block_size.update(test[3])
         self.ior_cmd.flags.update(flags)
@@ -431,7 +433,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         if create_container == 1:
             self.container.create()
         job_manager = self.get_mdtest_job_manager_command(self.manager)
-        job_manager.job.dfs_cont.update(self.container.uuid)
+        job_manager.job.dfs_cont.update(self.container.identifier)
         # Add a thread for these IOR arguments
         process = threading.Thread(target=self.execute_mdtest)
         # Launch the MDtest thread

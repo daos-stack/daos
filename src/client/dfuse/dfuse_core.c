@@ -53,7 +53,7 @@ cont:
 				return NULL;
 		}
 
-		rc = daos_eq_poll(eqt->de_eq, 1, DAOS_EQ_WAIT, 128, &dev[0]);
+		rc = daos_eq_poll(eqt->de_eq, 1, DAOS_EQ_NOWAIT, 128, &dev[0]);
 		if (rc >= 1) {
 			for (i = 0; i < rc; i++) {
 				struct dfuse_event *ev;
@@ -777,7 +777,7 @@ dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc)
  */
 int
 dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const char *label,
-		struct dfuse_cont **_dfc)
+		daos_epoch_t snap_epoch, const char *snap_name, struct dfuse_cont **_dfc)
 {
 	struct dfuse_cont *dfc;
 	d_list_t          *rlink;
@@ -867,7 +867,11 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 			D_GOTO(err_free, rc = daos_der2errno(rc));
 		}
 
-		rc = dfs_mount(dfp->dfp_poh, dfc->dfs_coh, dfs_flags, &dfc->dfs_ns);
+		if (snap_epoch != 0 || snap_name != NULL)
+			rc = dfs_mount_snap(dfp->dfp_poh, dfc->dfs_coh, dfs_flags, snap_epoch,
+					    snap_name, &dfc->dfs_ns);
+		else
+			rc = dfs_mount(dfp->dfp_poh, dfc->dfs_coh, dfs_flags, &dfc->dfs_ns);
 		if (rc) {
 			DHS_ERROR(dfc, rc, "dfs mount() failed");
 			D_GOTO(err_close, rc);
@@ -987,12 +991,12 @@ dfuse_cont_get_handle(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uui
 	}
 
 	if (uuid_is_null(cont)) {
-		return dfuse_cont_open(dfuse_info, dfp, NULL, _dfc);
+		return dfuse_cont_open(dfuse_info, dfp, NULL, 0, NULL, _dfc);
 	} else {
 		char uuid_str[37];
 
 		uuid_unparse(cont, uuid_str);
-		return dfuse_cont_open(dfuse_info, dfp, uuid_str, _dfc);
+		return dfuse_cont_open(dfuse_info, dfp, uuid_str, 0, NULL, _dfc);
 	}
 }
 
@@ -1274,6 +1278,7 @@ dfuse_ie_close(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 		  atomic_load_relaxed(&ie->ie_il_count));
 	D_ASSERTF(atomic_load_relaxed(&ie->ie_open_count) == 0, "open_count is %d",
 		  atomic_load_relaxed(&ie->ie_open_count));
+	D_ASSERT(!ie->ie_active);
 
 	if (ie->ie_obj) {
 		rc = dfs_release(ie->ie_obj);
@@ -1401,7 +1406,7 @@ dfuse_fs_start(struct dfuse_info *dfuse_info, struct dfuse_cont *dfs)
 	 * standard allocation macros
 	 */
 	args.allocated = 1;
-	args.argv = calloc(sizeof(*args.argv), args.argc);
+	args.argv      = calloc(args.argc, sizeof(*args.argv));
 	if (!args.argv)
 		D_GOTO(err, rc = -DER_NOMEM);
 

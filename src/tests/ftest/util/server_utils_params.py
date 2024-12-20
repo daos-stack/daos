@@ -107,6 +107,10 @@ class DaosServerYamlParameters(YamlParameters):
         #       is set for the running process. If group look up fails or user
         #       is not member, use uid return from user lookup.
         #
+        #   - mgmt_svc_replicas: <list>, e.g.  ["hostname1:10001"]
+        #       Hosts can be specified with or without port, default port below
+        #       assumed if not specified. Defaults to the hostname of this node
+        #       at port 10000 for local testing.
         default_provider = os.environ.get("D_PROVIDER", "ofi+tcp")
 
         # All log files should be placed in the same directory on each host to
@@ -114,7 +118,6 @@ class DaosServerYamlParameters(YamlParameters):
         log_dir = os.environ.get("DAOS_TEST_LOG_DIR", os.path.join(os.sep, "tmp"))
 
         self.provider = BasicParameter(None, default_provider)
-        self.crt_ctx_share_addr = BasicParameter(None)
         self.crt_timeout = BasicParameter(None)
         self.disable_srx = BasicParameter(None)
         self.fabric_auth_key = BasicParameter(None)
@@ -134,6 +137,7 @@ class DaosServerYamlParameters(YamlParameters):
         self.helper_log_file = LogParameter(log_dir, None, "daos_server_helper.log")
         self.telemetry_port = BasicParameter(None, 9191)
         self.client_env_vars = BasicParameter(None)
+        self.mgmt_svc_replicas = BasicParameter(None, ["localhost"])
 
         # Used to drop privileges before starting data plane
         # (if started as root to perform hardware provisioning)
@@ -435,6 +439,8 @@ class EngineYamlParameters(YamlParameters):
     REQUIRED_ENV_VARS = {
         "common": [
             "D_LOG_FILE_APPEND_PID=1",
+            "DAOS_POOL_RF=4",
+            "CRT_EVENT_DELAY=1",
             "COVFILE=/tmp/test.cov"],
         "ofi+tcp": [],
         "ofi+tcp;ofi_rxm": [],
@@ -466,7 +472,6 @@ class EngineYamlParameters(YamlParameters):
         # Use environment variables to get default parameters
         default_interface = os.environ.get("DAOS_TEST_FABRIC_IFACE", "eth0")
         default_port = int(os.environ.get("D_PORT", 31416))
-        default_share_addr = int(os.environ.get("CRT_CTX_SHARE_ADDR", 0))
 
         # All log files should be placed in the same directory on each host
         # to enable easy log file archiving by launch.py
@@ -481,9 +486,6 @@ class EngineYamlParameters(YamlParameters):
         #   log_mask:               map to D_LOG_MASK env
         #   log_file:               map to D_LOG_FILE env
         #   env_vars:               influences DAOS I/O Engine behavior
-        #       Add to enable scalable endpoint:
-        #           - CRT_CTX_SHARE_ADDR=1
-        #           - CRT_CTX_NUM=8
         self.targets = BasicParameter(None, 8)
         self.first_core = BasicParameter(None, 0)
         self.nr_xs_helpers = BasicParameter(None, 4)
@@ -506,9 +508,6 @@ class EngineYamlParameters(YamlParameters):
             if name in self.REQUIRED_ENV_VARS:
                 default_env_vars.extend(self.REQUIRED_ENV_VARS[name])
         self.env_vars = BasicParameter(None, default_env_vars)
-
-        # global CRT_CTX_SHARE_ADDR shared with client
-        self.crt_ctx_share_addr = BasicParameter(None, default_share_addr)
 
         # the storage configuration for this engine
         self.storage = StorageYamlParameters(self.namespace, max_storage_tiers)
@@ -545,9 +544,11 @@ class EngineYamlParameters(YamlParameters):
 
         # Update the env vars with any missing or different required setting
         update = False
-        env_var_dict = {env.split("=")[0]: env.split("=")[1] for env in self.env_vars.value}
+        env_var_dict = {
+            env.split("=", maxsplit=1)[0]: env.split("=", maxsplit=1)[1]
+            for env in self.env_vars.value}
         for key in sorted(required_env_vars):
-            if key not in env_var_dict or env_var_dict[key] != required_env_vars[key]:
+            if key not in env_var_dict:
                 env_var_dict[key] = required_env_vars[key]
                 update = True
         if update:

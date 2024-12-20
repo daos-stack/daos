@@ -17,6 +17,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/lib/telemetry"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -25,6 +26,8 @@ func TestPromExp_extractClientLabels(t *testing.T) {
 	jobID := "testJob"
 	pid := "12345"
 	tid := "67890"
+	poolUUID := test.MockPoolUUID(1)
+	contUUID := test.MockPoolUUID(2)
 
 	testPath := func(suffix string) string {
 		return fmt.Sprintf("ID: %d/%s/%s/%s/%s", shmID, jobID, pid, tid, suffix)
@@ -50,36 +53,56 @@ func TestPromExp_extractClientLabels(t *testing.T) {
 			input:   testPath("io/ops/update/active"),
 			expName: "io_ops_update_active",
 			expLabels: labelMap{
-				"job": jobID,
-				"pid": pid,
-				"tid": tid,
+				"jobid": jobID,
+				"pid":   pid,
+				"tid":   tid,
 			},
 		},
 		"fetch latency 1MB": {
 			input:   testPath("io/latency/fetch/1MB"),
 			expName: "io_latency_fetch",
 			expLabels: labelMap{
-				"job":  jobID,
-				"pid":  pid,
-				"tid":  tid,
-				"size": "1MB",
+				"jobid": jobID,
+				"pid":   pid,
+				"tid":   tid,
+				"size":  "1MB",
 			},
 		},
 		"started_at": {
 			input:   fmt.Sprintf("ID: %d/%s/%s/started_at", shmID, jobID, pid),
 			expName: "started_at",
 			expLabels: labelMap{
-				"job": jobID,
-				"pid": pid,
+				"jobid": jobID,
+				"pid":   pid,
 			},
 		},
 		"pool ops": {
-			input:   fmt.Sprintf("ID: %d/%s/%s/pool/%s/ops/foo", shmID, jobID, pid, test.MockPoolUUID(1)),
+			input:   fmt.Sprintf("ID: %d/%s/%s/pool/%s/ops/foo", shmID, jobID, pid, poolUUID),
 			expName: "pool_ops_foo",
 			expLabels: labelMap{
-				"job":  jobID,
-				"pid":  pid,
-				"pool": test.MockPoolUUID(1).String(),
+				"jobid": jobID,
+				"pid":   pid,
+				"pool":  poolUUID.String(),
+			},
+		},
+		"dfs ops": {
+			input:   fmt.Sprintf("ID: %d/%s/%s/pool/%s/container/%s/dfs/ops/CHMOD", shmID, jobID, pid, poolUUID, contUUID),
+			expName: "dfs_ops_chmod",
+			expLabels: labelMap{
+				"jobid":     jobID,
+				"pid":       pid,
+				"pool":      poolUUID.String(),
+				"container": contUUID.String(),
+			},
+		},
+		"dfs read bytes": {
+			input:   fmt.Sprintf("ID: %d/%s/%s/pool/%s/container/%s/dfs/read_bytes", shmID, jobID, pid, poolUUID, contUUID),
+			expName: "dfs_read_bytes",
+			expLabels: labelMap{
+				"jobid":     jobID,
+				"pid":       pid,
+				"pool":      poolUUID.String(),
+				"container": contUUID.String(),
 			},
 		},
 	} {
@@ -131,11 +154,12 @@ func TestPromExp_NewClientCollector(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			ctx := test.MustLogContext(t, log)
-			cs, err := NewClientSource(ctx)
+			parent := test.MustLogContext(t, log)
+			ctx, cs, err := NewClientSource(parent)
 			if err != nil {
 				t.Fatal(err)
 			}
+			defer telemetry.Fini()
 			result, err := NewClientCollector(ctx, log, cs, tc.opts)
 
 			test.CmpErr(t, tc.expErr, err)

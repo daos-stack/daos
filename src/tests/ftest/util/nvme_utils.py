@@ -44,7 +44,7 @@ def set_device_faulty(test, dmg, server, uuid, pool=None, has_sys_xs=False, **kw
     Args:
         test (Test): avocado test class
         dmg (DmgCommand): a DmgCommand class instance
-        server (NodeSet): host on which to issue the dmg storage set nvme-faulty
+        server (NodeSet): host on which to issue the dmg storage set nvme-faulty. Must be one host.
         uuid (str): the device UUID
         pool (TestPool, optional): pool used to wait for rebuild to start/complete if specified.
             Defaults to None.
@@ -52,24 +52,30 @@ def set_device_faulty(test, dmg, server, uuid, pool=None, has_sys_xs=False, **kw
         kwargs (dict, optional): named arguments to pass to the DmgCommand.storage_set_faulty.
 
     Returns:
-        dict: the json response from the dmg storage set-faulty command.
-
+        dict: the json response from the dmg storage set-faulty command. None if has_sys_xs is True.
     """
-    dmg.hostlist = server
+    kwargs['host'] = server
     kwargs['uuid'] = uuid
+    response = None
     try:
         response = get_dmg_response(dmg.storage_set_faulty, **kwargs)
+        if has_sys_xs:
+            test.fail("Setting a sys_xs device faulty should fail.")
     except CommandFailure as error:
         if not has_sys_xs:
             test.fail(str(error))
 
     # Update the expected status of the any stopped/excluded ranks
     if has_sys_xs:
-        ranks = [test.server_managers[-1].ranks[server]]
+        rank_to_host = test.server_managers[-1].ranks
+        ranks = []
+        for rank, host in rank_to_host.items():
+            if host == str(server):
+                ranks.append(rank)
         test.server_managers[-1].update_expected_states(ranks, ["stopped", "excluded"])
-
-    # Add a tearDown method to reset the faulty device
-    test.register_cleanup(reset_fault_device, dmg=dmg, server=server, uuid=uuid)
+    else:
+        # Add a tearDown method to reset the faulty device
+        test.register_cleanup(reset_fault_device, dmg=dmg, server=server, uuid=uuid)
 
     if pool:
         # Wait for rebuild to start
@@ -131,7 +137,7 @@ class ServerFillUp(IorTestBase):
         # Start the servers and agents
         super().setUp()
         self.hostfile_clients = None
-        self.ior_local_cmd = IorCommand()
+        self.ior_local_cmd = IorCommand(self.test_env.log_dir)
         self.ior_local_cmd.get_params(self)
         self.ior_default_flags = self.ior_local_cmd.flags.value
         self.ior_scm_xfersize = self.params.get("transfer_size",
@@ -179,7 +185,7 @@ class ServerFillUp(IorTestBase):
             create_cont = False
             self.ior_local_cmd.flags.value = self.ior_read_flags
 
-        self.ior_local_cmd.set_daos_params(self.server_group, self.pool, None)
+        self.ior_local_cmd.set_daos_params(self.pool, None)
         self.ior_local_cmd.test_file.update('/testfile')
 
         # Created new container or use the existing container for reading
@@ -223,6 +229,7 @@ class ServerFillUp(IorTestBase):
             free_space = self.pool.get_pool_daos_space()["s_total"][1]
             self.ior_local_cmd.transfer_size.value = self.ior_nvme_xfersize
         else:
+            free_space = None  # To appease pylint
             self.fail('Provide storage type (SCM/NVMe) to be filled')
 
         # Get the block size based on the capacity to be filled. For example
@@ -298,13 +305,13 @@ class ServerFillUp(IorTestBase):
         if nvme or scm:
             sizes = self.get_max_storage_sizes(percentage)
 
-        # If NVMe is True get the max NVMe size from servers
-        if nvme:
-            self.pool.nvme_size.update(str(sizes[1]))
+            # If NVMe is True get the max NVMe size from servers
+            if nvme:
+                self.pool.nvme_size.update(str(sizes[1]))
 
-        # If SCM is True get the max SCM size from servers
-        if scm:
-            self.pool.scm_size.update(str(sizes[0]))
+            # If SCM is True get the max SCM size from servers
+            if scm:
+                self.pool.scm_size.update(str(sizes[0]))
 
         # Create the Pool
         self.pool.create()

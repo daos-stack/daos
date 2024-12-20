@@ -7,7 +7,7 @@ import random
 import time
 
 from apricot import TestWithServers
-from dfuse_utils import get_dfuse, start_dfuse, stop_dfuse
+from dfuse_utils import get_dfuse, start_dfuse
 from general_utils import join
 from ior_utils import read_data, write_data
 from test_utils_pool import add_pool
@@ -137,7 +137,7 @@ class ReplayTests(TestWithServers):
         ior = write_data(self, container, dfuse=dfuse)
 
         self.log_step('After the read has completed, unmount dfuse')
-        stop_dfuse(self, dfuse)
+        dfuse.stop()
 
         self.stop_engines()
         self.restart_engines()

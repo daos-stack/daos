@@ -63,7 +63,7 @@ type (
 		// Generate a config without NVMe.
 		SCMOnly bool `json:"SCMOnly"`
 		// Hosts to run the management service.
-		AccessPoints []string `json:"-"`
+		MgmtSvcReplicas []string `json:"-"`
 		// Ports to use for fabric comms (one needed per engine).
 		FabricPorts []int `json:"-"`
 		// Generate config with a tmpfs RAM-disk SCM.
@@ -101,9 +101,9 @@ type (
 func (cgr *ConfGenerateReq) UnmarshalJSON(data []byte) error {
 	type Alias ConfGenerateReq
 	aux := &struct {
-		AccessPoints string
-		FabricPorts  string
-		NetClass     string
+		MgmtSvcReplicas string
+		FabricPorts     string
+		NetClass        string
 		*Alias
 	}{
 		Alias: (*Alias)(cgr),
@@ -113,7 +113,7 @@ func (cgr *ConfGenerateReq) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	cgr.AccessPoints = strings.Split(aux.AccessPoints, ",")
+	cgr.MgmtSvcReplicas = strings.Split(aux.MgmtSvcReplicas, ",")
 	fabricPorts := strings.Split(aux.FabricPorts, ",")
 	for _, s := range fabricPorts {
 		if s == "" {
@@ -194,7 +194,7 @@ func ConfGenerate(req ConfGenerateReq, newEngineCfg newEngineCfgFn, hf *HostFabr
 	}
 
 	// populate server config using engine configs
-	sc, err := genServerConfig(req, ecs, sd.MemInfo, tc)
+	sc, err := genServerConfig(req, ecs, tc)
 	if err != nil {
 		return nil, err
 	}
@@ -212,8 +212,8 @@ func ConfGenerateRemote(ctx context.Context, req ConfGenerateRemoteReq) (*ConfGe
 		return nil, errors.New("no hosts specified")
 	}
 
-	if len(req.AccessPoints) == 0 {
-		return nil, errors.New("no access points specified")
+	if len(req.MgmtSvcReplicas) == 0 {
+		return nil, errors.New("no MS replicas specified")
 	}
 
 	ns, err := getNetworkSet(ctx, req)
@@ -1190,24 +1190,24 @@ func getThreadCounts(log logging.Logger, nodeSet []int, coresPerEngine int, numa
 	return &tc, nil
 }
 
-// check that all access points either have no port specified or have the same port number.
-func checkAccessPointPorts(log logging.Logger, aps []string) (int, error) {
-	if len(aps) == 0 {
-		return 0, errors.New("no access points")
+// check that all MS replicas either have no port specified or have the same port number.
+func checkReplicaPorts(log logging.Logger, replicas []string) (int, error) {
+	if len(replicas) == 0 {
+		return 0, errors.New("no MS replicas")
 	}
 
 	port := -1
-	for _, ap := range aps {
-		apPort, err := config.GetAccessPointPort(log, ap)
+	for _, ap := range replicas {
+		apPort, err := config.GetMSReplicaPort(log, ap)
 		if err != nil {
-			return 0, errors.Wrapf(err, "access point %q", ap)
+			return 0, errors.Wrapf(err, "MS replica %q", ap)
 		}
 		if port == -1 {
 			port = apPort
 			continue
 		}
 		if apPort != port {
-			return 0, errors.New("access point port numbers do not match")
+			return 0, errors.New("MS replica port numbers do not match")
 		}
 	}
 
@@ -1217,7 +1217,7 @@ func checkAccessPointPorts(log logging.Logger, aps []string) (int, error) {
 // Generate a server config file from the constituent hardware components. Enforce consistent
 // target and helper count across engine configs necessary for optimum performance and populate
 // config parameters. Set NUMA affinity on the generated config and then run through validation.
-func genServerConfig(req ConfGenerateReq, ecs []*engine.Config, mi *common.MemInfo, tc *threadCounts) (*config.Server, error) {
+func genServerConfig(req ConfGenerateReq, ecs []*engine.Config, tc *threadCounts) (*config.Server, error) {
 	if len(ecs) == 0 {
 		return nil, errors.New("expected non-zero number of engine configs")
 	}
@@ -1228,7 +1228,7 @@ func genServerConfig(req ConfGenerateReq, ecs []*engine.Config, mi *common.MemIn
 	}
 
 	cfg := config.DefaultServer().
-		WithAccessPoints(req.AccessPoints...).
+		WithMgmtSvcReplicas(req.MgmtSvcReplicas...).
 		WithFabricProvider(ecs[0].Fabric.Provider).
 		WithEngines(ecs...).
 		WithControlLogFile(defaultControlLogFile)
@@ -1247,25 +1247,17 @@ func genServerConfig(req ConfGenerateReq, ecs []*engine.Config, mi *common.MemIn
 		}
 	}
 
-	portNum, err := checkAccessPointPorts(req.Log, cfg.AccessPoints)
+	portNum, err := checkReplicaPorts(req.Log, cfg.MgmtSvcReplicas)
 	if err != nil {
 		return nil, err
 	}
 	if portNum != 0 {
-		// Custom access point port number specified so set server port to the same.
+		// Custom MS replica port number specified so set server port to the same.
 		cfg.WithControlPort(portNum)
 	}
 
 	if err := cfg.Validate(req.Log); err != nil {
 		return nil, errors.Wrap(err, "validating engine config")
-	}
-
-	if err := cfg.SetNrHugepages(req.Log, mi); err != nil {
-		return nil, err
-	}
-
-	if err := cfg.SetRamdiskSize(req.Log, mi); err != nil {
-		return nil, err
 	}
 
 	return cfg, nil

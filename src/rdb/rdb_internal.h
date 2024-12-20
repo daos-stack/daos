@@ -493,6 +493,11 @@ int rdb_scm_left(struct rdb *db, daos_size_t *scm_left_outp);
 /* rdb_tx.c *******************************************************************/
 
 int rdb_tx_count_vops(struct rdb *db, const void *buf, size_t len);
+
+enum rdb_tx_apply_err {
+	RDB_TX_APPLY_ERR_DETERMINISTIC = 1
+};
+
 int rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len, void *result,
 		 bool *critp, rdb_vos_tx_t vtx);
 

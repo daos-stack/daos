@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path"
 
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
@@ -21,7 +20,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/atm"
-	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 )
@@ -41,7 +39,6 @@ type execTestFn func() error
 type mainOpts struct {
 	AllowProxy bool `long:"allow-proxy" description:"Allow proxy configuration via environment"`
 	// Minimal set of top-level options
-	ConfigPath string `short:"o" long:"config" description:"Server config file path"`
 	// TODO(DAOS-3129): This should be -d, but it conflicts with the start
 	// subcommand's -d flag when we default to running it.
 	Debug   bool `short:"b" long:"debug" description:"Enable debug output"`
@@ -50,15 +47,15 @@ type mainOpts struct {
 	Syslog  bool `long:"syslog" description:"Enable logging to syslog"`
 
 	// Define subcommands
-	SCM      scmStorageCmd          `command:"scm" description:"Perform tasks related to locally-attached SCM storage"`
-	NVMe     nvmeStorageCmd         `command:"nvme" description:"Perform tasks related to locally-attached NVMe storage"`
-	Start    startCmd               `command:"start" description:"Start daos_server"`
-	Network  networkCmd             `command:"network" description:"Perform network device scan based on fabric provider"`
-	Version  versionCmd             `command:"version" description:"Print daos_server version"`
-	MgmtSvc  msCmdRoot              `command:"ms" description:"Perform tasks related to management service replicas"`
-	DumpTopo hwprov.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
-	Support  supportCmd             `command:"support" description:"Perform debug tasks to help support team"`
-	Config   configCmd              `command:"config" alias:"cfg" description:"Perform tasks related to configuration of hardware on the local server"`
+	SCM      scmStorageCmd           `command:"scm" description:"Perform tasks related to locally-attached SCM storage"`
+	NVMe     nvmeStorageCmd          `command:"nvme" description:"Perform tasks related to locally-attached NVMe storage"`
+	Start    startCmd                `command:"start" description:"Start daos_server"`
+	Network  networkCmd              `command:"network" description:"Perform network device scan based on fabric provider"`
+	Version  versionCmd              `command:"version" description:"Print daos_server version"`
+	MgmtSvc  msCmdRoot               `command:"ms" description:"Perform tasks related to management service replicas"`
+	DumpTopo cmdutil.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
+	Support  supportCmd              `command:"support" description:"Perform debug tasks to help support team"`
+	Config   configCmd               `command:"config" alias:"cfg" description:"Perform tasks related to configuration of hardware on the local server"`
 
 	// Allow a set of tests to be run before executing commands.
 	preExecTests []execTestFn
@@ -167,27 +164,23 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 		}
 
 		if cfgCmd, ok := cmd.(cfgLoader); ok {
-			if opts.ConfigPath == "" {
-				log.Debugf("Using build config directory %q", build.ConfigDir)
-				opts.ConfigPath = path.Join(build.ConfigDir, defaultConfigFile)
+			if optCfgCmd, ok := cmd.(optionalCfgLoader); ok {
+				optCfgCmd.setOptional()
 			}
 
-			if err := cfgCmd.loadConfig(opts.ConfigPath); err != nil {
+			if err := cfgCmd.loadConfig(log); err != nil {
 				return errors.Wrapf(err, "failed to load config from %s",
 					cfgCmd.configPath())
-			}
-			if _, err := os.Stat(opts.ConfigPath); err == nil {
+			} else if cfgCmd.configPath() != "" {
 				log.Infof("DAOS Server config loaded from %s", cfgCmd.configPath())
-			}
 
-			if ovrCmd, ok := cfgCmd.(cliOverrider); ok {
-				if err := ovrCmd.setCLIOverrides(); err != nil {
-					return errors.Wrap(err, "failed to set CLI config overrides")
+				if ovrCmd, ok := cfgCmd.(cliOverrider); ok {
+					if err := ovrCmd.setCLIOverrides(); err != nil {
+						return errors.Wrap(err,
+							"failed to set CLI config overrides")
+					}
 				}
 			}
-		} else if opts.ConfigPath != "" {
-			return errors.Errorf("DAOS Server config filepath has been supplied but " +
-				"this command will not use it")
 		}
 
 		if err := cmd.Execute(cmdArgs); err != nil {

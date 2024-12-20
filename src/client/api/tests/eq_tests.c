@@ -1257,7 +1257,7 @@ eq_ut_setup(void **state)
 		return rc;
 	}
 
-	rc = daos_eq_lib_init();
+	rc = daos_eq_lib_init(daos_crt_init_opt_get(false, 1));
 	if (rc != 0) {
 		print_error("Failed daos_eq_lib_init: %d\n", rc);
 		return rc;

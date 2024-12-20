@@ -118,7 +118,7 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 
 err:
 	if (wb_cache)
-		D_RWLOCK_UNLOCK(&ev->de_oh->doh_ie->ie_wlock);
+		D_RWLOCK_UNLOCK(&oh->doh_ie->ie_wlock);
 	DFUSE_REPLY_ERR_RAW(oh, req, rc);
 	if (ev) {
 		daos_event_fini(&ev->de_ev);

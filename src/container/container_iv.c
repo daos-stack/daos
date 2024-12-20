@@ -511,8 +511,15 @@ again:
 					}
 					prop_entry = daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS);
 					D_ASSERT(prop_entry != NULL);
-
 					daos_prop_val_2_co_status(prop_entry->dpe_val, &stat);
+
+					rc = ds_cont_tgt_open(entry->ns->iv_pool_uuid,
+							      civ_key->cont_uuid, chdl.ch_cont,
+							      chdl.ch_flags, chdl.ch_sec_capas,
+							      stat.dcs_pm_ver);
+					if (rc != 0)
+						D_GOTO(out, rc);
+
 					iv_entry.iv_capa.status_pm_ver = stat.dcs_pm_ver;
 					daos_prop_free(prop);
 					/* Only happens on xstream 0 */
@@ -524,6 +531,11 @@ again:
 					rc = dbtree_update(root_hdl, &key_iov, &val_iov);
 					if (rc == 0)
 						goto again;
+					/*
+					 * It seems that not rolling back the ds_cont_tgt_open call
+					 * above is harmless. Also, an error from the dbtree_update
+					 * call should be rare.
+					 */
 				} else {
 					rc = -DER_NONEXIST;
 				}
@@ -1006,6 +1018,7 @@ cont_iv_hdl_fetch(uuid_t cont_hdl_uuid, uuid_t pool_uuid,
 	D_DEBUG(DB_TRACE, "Can not find "DF_UUID" hdl\n",
 		DP_UUID(cont_hdl_uuid));
 
+invalidate_retry:
 	/* Fetch the capability from the leader. To avoid extra locks,
 	 * all metadatas are maintained by xstream 0, so let's create
 	 * an ULT on xstream 0 to let xstream 0 to handle capa fetch
@@ -1034,6 +1047,19 @@ cont_iv_hdl_fetch(uuid_t cont_hdl_uuid, uuid_t pool_uuid,
 	if (*cont_hdl == NULL) {
 		D_DEBUG(DB_TRACE, "Can not find "DF_UUID" hdl\n",
 			DP_UUID(cont_hdl_uuid));
+		/* In reintegrate with case that the IC_CONT_CAPA cache is valid locally
+		 * but cont open handle invalid (not in dt_cont_hdl_hash). For this case
+		 * invalidate local IV cache first and retry again, to avoid in-flight
+		 * UPDATE's failure. (IV locally valid then the IV fetch will not trigger
+		 * cont_iv_ent_update() callback).
+		 */
+		if (!invalidate_current) {
+			invalidate_current = true;
+			ABT_eventual_free(&eventual);
+			D_DEBUG(DB_TRACE, DF_UUID" invalidate_current and retry\n",
+				DP_UUID(cont_hdl_uuid));
+			goto invalidate_retry;
+		}
 		D_GOTO(out_eventual, rc = -DER_NONEXIST);
 	}
 

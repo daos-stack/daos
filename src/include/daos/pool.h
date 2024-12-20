@@ -82,8 +82,9 @@
  * Version 1 corresponds to 2.2 (aggregation optimizations)
  * Version 2 corresponds to 2.4 (dynamic evtree, checksum scrubbing)
  * Version 3 corresponds to 2.6 (root embedded values, pool service operations tracking KVS)
+ * Version 4 corresponds to 2.8 (SV gang allocation)
  */
-#define DAOS_POOL_GLOBAL_VERSION 3
+#define DAOS_POOL_GLOBAL_VERSION 4
 
 int dc_pool_init(void);
 void dc_pool_fini(void);
@@ -157,6 +158,8 @@ void dc_pool_put(struct dc_pool *pool);
 
 int dc_pool_local2global(daos_handle_t poh, d_iov_t *glob);
 int dc_pool_global2local(d_iov_t glob, daos_handle_t *poh);
+int
+    dc_pool_hdl2uuid(daos_handle_t poh, uuid_t *hdl_uuid, uuid_t *pool_uuid);
 int dc_pool_connect(tse_task_t *task);
 int dc_pool_disconnect(tse_task_t *task);
 int dc_pool_query(tse_task_t *task);
@@ -197,5 +200,8 @@ int dc_pool_choose_svc_rank(const char *label, uuid_t puuid,
 int dc_pool_create_map_refresh_task(daos_handle_t pool_hdl, uint32_t map_version,
 				    tse_sched_t *sched, tse_task_t **task);
 void dc_pool_abandon_map_refresh_task(tse_task_t *task);
+
+int
+dc_pool_mark_all_slave(void);
 
 #endif /* __DD_POOL_H__ */

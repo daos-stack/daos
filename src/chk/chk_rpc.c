@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -694,7 +694,7 @@ out:
 int
 chk_mark_remote(d_rank_list_t *rank_list, uint64_t gen, d_rank_t rank, uint32_t version)
 {
-	crt_rpc_t		*req;
+	crt_rpc_t		*req = NULL;
 	struct chk_mark_in	*cmi;
 	struct chk_mark_out	*cmo;
 	int			 rc;
@@ -730,7 +730,7 @@ int
 chk_act_remote(d_rank_list_t *rank_list, uint64_t gen, uint64_t seq, uint32_t cla,
 	       uint32_t act, d_rank_t rank, bool for_all)
 {
-	crt_rpc_t		*req;
+	crt_rpc_t		*req = NULL;
 	struct chk_act_in	*cai;
 	struct chk_act_out	*cao;
 	int			 rc;
@@ -825,7 +825,7 @@ int
 chk_pool_start_remote(d_rank_list_t *rank_list, uint64_t gen, uuid_t uuid, uint32_t phase,
 		      uint32_t flags)
 {
-	crt_rpc_t			*req;
+	crt_rpc_t			*req = NULL;
 	struct chk_pool_start_in	*cpsi;
 	struct chk_pool_start_out	*cpso;
 	int				 rc;
@@ -861,9 +861,9 @@ out:
 int
 chk_pool_mbs_remote(d_rank_t rank, uint32_t phase, uint64_t gen, uuid_t uuid, char *label,
 		    uint64_t seq, uint32_t flags, uint32_t mbs_nr, struct chk_pool_mbs *mbs_array,
-		    struct rsvc_hint *hint)
+		    int *svc_rc, struct rsvc_hint *svc_hint)
 {
-	crt_rpc_t		*req;
+	crt_rpc_t		*req = NULL;
 	struct chk_pool_mbs_in	*cpmi;
 	struct chk_pool_mbs_out	*cpmo;
 	int			 rc;
@@ -887,17 +887,17 @@ chk_pool_mbs_remote(d_rank_t rank, uint32_t phase, uint64_t gen, uuid_t uuid, ch
 		goto out;
 
 	cpmo = crt_reply_get(req);
-	rc = cpmo->cpmo_status;
-	*hint = cpmo->cpmo_hint;
+	*svc_rc = cpmo->cpmo_status;
+	*svc_hint = cpmo->cpmo_hint;
 
 out:
 	if (req != NULL)
 		crt_req_decref(req);
 
-	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
+	D_CDEBUG(rc != 0 || *svc_rc != 0, DLOG_ERR, DLOG_INFO,
 		 "Sent pool ("DF_UUIDF") members and label %s ("
-		 DF_X64") to rank %u with phase %d gen "DF_X64": "DF_RC"\n",
-		 DP_UUID(uuid), label != NULL ? label : "(null)", seq, rank, phase, gen, DP_RC(rc));
+		 DF_X64") to rank %u with phase %d gen "DF_X64": %d/%d\n", DP_UUID(uuid),
+		 label != NULL ? label : "(null)", seq, rank, phase, gen, rc, *svc_rc);
 
 	return rc;
 }
@@ -908,7 +908,7 @@ int chk_report_remote(d_rank_t leader, uint64_t gen, uint32_t cla, uint32_t act,
 		      char *msg, uint32_t option_nr, uint32_t *options, uint32_t detail_nr,
 		      d_sg_list_t *details, uint64_t seq)
 {
-	crt_rpc_t		*req;
+	crt_rpc_t		*req = NULL;
 	struct chk_report_in	*cri;
 	struct chk_report_out	*cro;
 	int			 rc;
@@ -984,7 +984,7 @@ int
 chk_rejoin_remote(d_rank_t leader, uint64_t gen, d_rank_t rank, uuid_t iv_uuid, uint32_t *flags,
 		  uint32_t *pool_nr, uuid_t **pools)
 {
-	crt_rpc_t		*req;
+	crt_rpc_t		*req = NULL;
 	struct chk_rejoin_in	*cri;
 	struct chk_rejoin_out	*cro;
 	uuid_t			*tmp;

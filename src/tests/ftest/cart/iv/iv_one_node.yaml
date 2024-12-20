@@ -3,17 +3,12 @@
 
 ENV:
   default:
-    # !filter-only : /run/env_CRT_CTX_SHARE_ADDR/no_sep
     # !filter-only : /run/tests/iv
     - D_LOG_MASK: "WARN,IV=DEBUG"
     - D_INTERFACE: "eth0"
     - test_servers_CRT_CTX_NUM: "2"
     - test_clients_CRT_CTX_NUM: "2"
     - CRT_TEST_CONT: "1"
-env_CRT_CTX_SHARE_ADDR: !mux
-  no_sep:
-    env: no_sep
-    CRT_CTX_SHARE_ADDR: "0"
 env_D_PROVIDER: !mux
   sm:
     D_PROVIDER: "sm"

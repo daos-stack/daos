@@ -11,8 +11,10 @@ CompletedProcess
 DArray
 DDict
 DFS
+DataLoader
 Datamover
 EL
+Enakta
 EOF
 FPP
 FS
@@ -138,6 +140,7 @@ debian
 debuginfo
 defusedxml
 del
+dentry
 deps
 dereference
 dereferencing
@@ -165,6 +168,8 @@ dsync
 dtx
 eg
 enablement
+endian
+endianness
 endswith
 enospace
 enum
@@ -227,6 +232,7 @@ io
 iod
 iodepth
 ioengine
+ioengines
 ior
 ioreqs
 iotype
@@ -235,6 +241,7 @@ ip
 iptable
 iptables
 iteratively
+IterableDataset
 jira
 journalctl
 json
@@ -247,6 +254,7 @@ ldflags
 len
 libaio
 libdaos
+libdfs
 libdts
 libduns
 libfabric
@@ -339,6 +347,7 @@ posix
 postfix
 pparent
 ppn
+pragmas
 prebuild
 prebuilding
 prebuilt
@@ -356,10 +365,12 @@ procs
 profiler
 protoc
 ps
+psync
 puuid
 py
 pydaos
 pytest
+pytorch
 ramdisk
 randrw
 ranklist
@@ -504,6 +515,7 @@ vm
 vos
 wildcard
 wipefs
+workset
 xargs
 xattr
 xattrs

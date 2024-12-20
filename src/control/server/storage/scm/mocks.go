@@ -428,12 +428,16 @@ func DefaultMockBackend() *MockBackend {
 	return NewMockBackend(nil)
 }
 
+// NewMockProvider stubs os calls by mocking system and mount providers. scm provider functions
+// call into system and mount providers for any os access.
 func NewMockProvider(log logging.Logger, mbc *MockBackendConfig, msc *system.MockSysConfig) *Provider {
 	sysProv := system.NewMockSysProvider(log, msc)
 	mountProv := mount.NewProvider(log, sysProv)
 	return NewProvider(log, NewMockBackend(mbc), sysProv, mountProv)
 }
 
+// DefaultMockProvider stubs os calls by mocking system and mount providers. scm provider functions
+// call into system and mount providers for any os access.
 func DefaultMockProvider(log logging.Logger) *Provider {
 	sysProv := system.DefaultMockSysProvider(log)
 	mountProv := mount.NewProvider(log, sysProv)

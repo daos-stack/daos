@@ -29,7 +29,6 @@ struct dfuse_info {
 	char                *di_mountpoint;
 	int32_t              di_thread_count;
 	uint32_t             di_eq_count;
-	bool                 di_threaded;
 	bool                 di_foreground;
 	bool                 di_caching;
 	bool                 di_multi_user;
@@ -136,10 +135,11 @@ struct dfuse_inode_entry;
  * this buffer is kept as long as it's needed but released as soon as possible, either on error or
  * when EOF is returned to the kernel.  If it's still present on release then it's freed then.
  */
-struct dfuse_read_ahead {
-	pthread_mutex_t     dra_lock;
+struct dfuse_pre_read {
+	d_list_t            req_list;
 	struct dfuse_event *dra_ev;
 	int                 dra_rc;
+	bool                complete;
 };
 
 /** what is returned as the handle for fuse fuse_file_info on create/open/opendir */
@@ -148,8 +148,6 @@ struct dfuse_obj_hdl {
 	dfs_t                    *doh_dfs;
 	/** the DFS object handle.  Not created for directories. */
 	dfs_obj_t                *doh_obj;
-
-	struct dfuse_read_ahead  *doh_readahead;
 
 	/** the inode entry for the file */
 	struct dfuse_inode_entry *doh_ie;
@@ -405,7 +403,9 @@ struct dfuse_event {
 	union {
 		struct dfuse_obj_hdl     *de_oh;
 		struct dfuse_inode_entry *de_ie;
+		struct read_chunk_data   *de_cd;
 	};
+	struct dfuse_info *de_di;
 	off_t  de_req_position; /**< The file position requested by fuse */
 	union {
 		size_t de_req_len;
@@ -560,7 +560,7 @@ dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc);
  */
 int
 dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const char *label,
-		struct dfuse_cont **_dfs);
+		daos_epoch_t snap_epoch, const char *snap_name, struct dfuse_cont **_dfs);
 
 /* Returns a connection for a container uuid, connecting as required.
  * Takes a ref on the container and returns a system error code.
@@ -1009,9 +1009,29 @@ struct dfuse_inode_entry {
 	 */
 	ATOMIC bool               ie_linear_read;
 
+	struct active_inode      *ie_active;
+
 	/* Entry on the evict list */
 	d_list_t                  ie_evict_entry;
 };
+
+struct active_inode {
+	d_list_t               chunks;
+	pthread_spinlock_t     lock;
+	struct dfuse_pre_read *readahead;
+};
+
+/* Increase active count on inode.  This takes a reference and allocates ie->active as required */
+int
+active_ie_init(struct dfuse_inode_entry *ie, bool *preread);
+
+/* Mark a oh as closing and drop the ref on inode active */
+bool
+active_oh_decref(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh);
+
+/* Decrease active count on inode, called on error where there is no oh */
+void
+active_ie_decref(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie);
 
 /* Flush write-back cache writes to a inode.  It does this by waiting for and then releasing an
  * exclusive lock on the inode.  Writes take a shared lock so this will block until all pending
@@ -1108,6 +1128,13 @@ dfuse_compute_inode(struct dfuse_cont *dfs,
 void
 dfuse_cache_evict_dir(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie);
 
+/* Free any read chunk data for an inode.
+ *
+ * Returns true if feature was used.
+ */
+bool
+read_chunk_close(struct dfuse_inode_entry *ie);
+
 /* Metadata caching functions. */
 
 /* Mark the cache as up-to-date from now */
@@ -1171,7 +1198,7 @@ bool
 dfuse_dcache_get_valid(struct dfuse_inode_entry *ie, double max_age);
 
 void
-dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh);
+dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie);
 
 int
 check_for_uns_ep(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, char *attr,

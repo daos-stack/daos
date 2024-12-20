@@ -60,7 +60,7 @@ func extractClientLabels(log logging.Logger, in string) (labels labelMap, name s
 		compsIdx++
 	}
 
-	for i, label := range []string{"job", "pid", "tid"} {
+	for i, label := range []string{"jobid", "pid", "tid"} {
 		if i > 0 {
 			// After jobid, we should have a pid and/or tid, and
 			// then move on to the engine labels.
@@ -99,10 +99,10 @@ func newClientMetric(log logging.Logger, m telemetry.Metric) *sourceMetric {
 }
 
 // NewClientSource creates a new ClientSource for client metrics.
-func NewClientSource(parent context.Context) (*ClientSource, error) {
+func NewClientSource(parent context.Context) (context.Context, *ClientSource, error) {
 	ctx, err := telemetry.InitClientRoot(parent)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to init telemetry")
+		return nil, nil, errors.Wrap(err, "failed to init telemetry")
 	}
 
 	go func(outer, inner context.Context) {
@@ -110,7 +110,7 @@ func NewClientSource(parent context.Context) (*ClientSource, error) {
 		telemetry.Detach(inner)
 	}(parent, ctx)
 
-	return &ClientSource{
+	return ctx, &ClientSource{
 		MetricSource: MetricSource{
 			ctx:      ctx,
 			enabled:  atm.NewBool(true),

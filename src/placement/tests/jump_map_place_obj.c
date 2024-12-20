@@ -1119,7 +1119,7 @@ one_is_being_reintegrated(void **state)
 		 * so find_reint() and find_addition() might both find
 		 * some candidates if there are UP targets in the pool map,
 		 * no matter these UP targets are from NEW or DOWNOUT.
-		 * But reintegration and extening will never happen at the
+		 * But reintegration and extending will never happen at the
 		 * same time, so it is ok for now. To satisfy the test,
 		 * let's set both reint and new number as 1 for now.
 		 */
@@ -1441,7 +1441,7 @@ drain_target_same_shard_repeatedly_for_all_shards(void **state)
 	int			i;
 	uint32_t		shard_id = 0;
 	uint32_t		target;
-	uint32_t		new_target;
+	uint32_t                new_target = 0;
 
 	for (shard_id = 0; shard_id < 18; shard_id++) {
 		jtc_init_with_layout(&ctx, 18 * 2, 1, 4, OC_EC_16P2G1,

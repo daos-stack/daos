@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -29,58 +29,58 @@ func TestContSetOwnerCommand(t *testing.T) {
 			"Set owner with no arguments",
 			"cont set-owner",
 			"",
-			errMissingFlag,
+			errors.New("required arguments"),
 		},
 		{
 			"Set owner user",
-			fmt.Sprintf("cont set-owner --pool=%s --cont=%s --user=%s", testPoolUUID, testContUUID, testUser),
+			fmt.Sprintf("cont set-owner --user=%s %s %s", testUser, testPoolUUID, testContUUID),
 			strings.Join([]string{
 				printRequest(t, &control.ContSetOwnerReq{
-					PoolUUID: testPoolUUID.String(),
-					ContUUID: testContUUID.String(),
-					User:     testUser,
-					Group:    "",
+					PoolID: testPoolUUID.String(),
+					ContID: testContUUID.String(),
+					User:   testUser,
+					Group:  "",
 				}),
 			}, " "),
 			nil,
 		},
 		{
 			"Set owner group",
-			fmt.Sprintf("cont set-owner --pool=%s --cont=%s --group=%s", testPoolUUID, testContUUID, testGroup),
+			fmt.Sprintf("cont set-owner --group=%s %s %s", testGroup, testPoolUUID, testContUUID),
 			strings.Join([]string{
 				printRequest(t, &control.ContSetOwnerReq{
-					PoolUUID: testPoolUUID.String(),
-					ContUUID: testContUUID.String(),
-					User:     "",
-					Group:    testGroup,
+					PoolID: testPoolUUID.String(),
+					ContID: testContUUID.String(),
+					User:   "",
+					Group:  testGroup,
 				}),
 			}, " "),
 			nil,
 		},
 		{
 			"Set owner user and group",
-			fmt.Sprintf("cont set-owner --pool=%s --cont=%s --user=%s --group=%s",
-				testPoolUUID, testContUUID, testUser, testGroup),
+			fmt.Sprintf("cont set-owner --user=%s --group=%s %s %s", testUser, testGroup,
+				testPoolUUID, testContUUID),
 			strings.Join([]string{
 				printRequest(t, &control.ContSetOwnerReq{
-					PoolUUID: testPoolUUID.String(),
-					ContUUID: testContUUID.String(),
-					User:     testUser,
-					Group:    testGroup,
+					PoolID: testPoolUUID.String(),
+					ContID: testContUUID.String(),
+					User:   testUser,
+					Group:  testGroup,
 				}),
 			}, " "),
 			nil,
 		},
 		{
 			"Bad owner principal",
-			fmt.Sprintf("cont set-owner --pool=%s --cont=%s --user=%s --group=%s",
-				testPoolUUID, testContUUID, "bad@@", testGroup),
+			fmt.Sprintf("cont set-owner --user=%s --group=%s %s %s", "bad@@", testGroup,
+				testPoolUUID, testContUUID),
 			"", errors.New("invalid ACL principal"),
 		},
 		{
 			"Bad group principal",
-			fmt.Sprintf("cont set-owner --pool=%s --cont=%s --user=%s --group=%s",
-				testPoolUUID, testContUUID, testUser, "bad@@"),
+			fmt.Sprintf("cont set-owner --user=%s --group=%s %s %s", testUser, "bad@@",
+				testPoolUUID, testContUUID),
 			"", errors.New("invalid ACL principal"),
 		},
 	})

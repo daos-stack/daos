@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -75,6 +75,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	params.LogEndDate = cmd.LogEndDate
 	params.LogStartTime = cmd.LogStartTime
 	params.LogEndTime = cmd.LogEndTime
+
 	for logFunc, logCmdSet := range LogCollection {
 		for _, logCmd := range logCmdSet {
 			cmd.Debugf("Log Function Enum = %d -- Log Collect Cmd = %s ", logFunc, logCmd)
@@ -89,7 +90,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 				}
 			}
 		}
-		fmt.Printf(progress.Display())
+		fmt.Print(progress.Display())
 	}
 
 	if cmd.Archive {
@@ -105,7 +106,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		}
 	}
 
-	fmt.Printf(progress.Display())
+	fmt.Print(progress.Display())
 
 	return nil
 }

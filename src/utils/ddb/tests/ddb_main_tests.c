@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -241,7 +241,7 @@ ddb_main_suit_setup(void **state)
 
 	/* test setup creates the pool, but doesn't open it ... leave it open for these tests */
 	tctx = *state;
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, &tctx->dvt_poh));
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, &tctx->dvt_poh, 0));
 
 	return 0;
 }
@@ -251,8 +251,11 @@ ddb_main_suit_teardown(void **state)
 {
 	struct dt_vos_pool_ctx *tctx = *state;
 
-	if (tctx == NULL)
+	if (tctx == NULL) {
 		fail_msg("Test not setup correctly");
+		return -DER_UNKNOWN;
+	}
+
 	assert_success(dv_pool_close(tctx->dvt_poh));
 	ddb_teardown_vos(state);
 

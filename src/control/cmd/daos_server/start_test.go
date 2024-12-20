@@ -261,6 +261,7 @@ func TestStartOptions(t *testing.T) {
 			cmpOpts := []cmp.Option{
 				cmpopts.IgnoreUnexported(
 					security.CertificateConfig{},
+					config.Server{},
 				),
 				cmpopts.SortSlices(func(a, b string) bool { return a < b }),
 			}
@@ -417,9 +418,9 @@ func TestStartLoggingConfiguration(t *testing.T) {
 // TestDaosServer_Start_Commands_JSON verifies that the JSON-output flag is disabled fora the start
 // command.
 func TestDaosServer_Start_Commands_JSON(t *testing.T) {
-	log := logging.NewCommandLineLogger()
+	log, buf := logging.NewTestCommandLineLogger()
 
-	runJSONCmdTests(t, log, []jsonCmdTest{
+	runJSONCmdTests(t, log, buf, []jsonCmdTest{
 		{
 			"Start; JSON",
 			"start -j",

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -212,9 +212,7 @@ func TestControl_SmdQuery(t *testing.T) {
 									NvmeState: storage.NvmeStateNormal,
 									LedState:  storage.LedStateNormal,
 								},
-								Roles: storage.BdevRoles{
-									storage.OptionBits(storage.BdevRoleAll),
-								},
+								Roles:    storage.BdevRolesFromBits(storage.BdevRoleAll),
 								HasSysXS: true,
 							},
 							{
@@ -226,9 +224,7 @@ func TestControl_SmdQuery(t *testing.T) {
 									NvmeState: storage.NvmeStateFaulty,
 									LedState:  storage.LedStateFaulty,
 								},
-								Roles: storage.BdevRoles{
-									storage.OptionBits(storage.BdevRoleData),
-								},
+								Roles: storage.BdevRolesFromBits(storage.BdevRoleData),
 							},
 						},
 						Pools: make(map[string][]*SmdPool),
@@ -412,7 +408,7 @@ func TestControl_SmdQuery(t *testing.T) {
 					for i, gotDev := range sqr.HostStorage.SmdInfo.Devices {
 						hs := tc.expResp.HostStorage
 						expDev := hs[hs.Keys()[0]].HostStorage.SmdInfo.Devices[i]
-						t.Logf(cmp.Diff(expDev, gotDev, defResCmpOpts()...))
+						t.Log(cmp.Diff(expDev, gotDev, defResCmpOpts()...))
 					}
 				}
 				t.Fatalf("unexpected resp (-want, +got):\n%s\n", diff)
@@ -442,6 +438,13 @@ func TestControl_packPBSmdManageReq(t *testing.T) {
 			req: &SmdManageReq{
 				Operation: SetFaultyOp,
 				IDs:       "bad",
+			},
+			expErr: errors.New("invalid UUID"),
+		},
+		"set-faulty; multiple ids": {
+			req: &SmdManageReq{
+				Operation: SetFaultyOp,
+				IDs:       fmt.Sprintf(test.MockUUID(1), test.MockPCIAddr(1)),
 			},
 			expErr: errors.New("invalid UUID"),
 		},
@@ -488,19 +491,25 @@ func TestControl_packPBSmdManageReq(t *testing.T) {
 				},
 			},
 		},
+		"dev-replace; multiple ids": {
+			req: &SmdManageReq{
+				Operation:   DevReplaceOp,
+				IDs:         fmt.Sprintf(test.MockUUID(1), test.MockPCIAddr(1)),
+				ReplaceUUID: test.MockUUID(2),
+			},
+			expErr: errors.New("invalid UUID"),
+		},
 		"dev-replace": {
 			req: &SmdManageReq{
-				Operation:      DevReplaceOp,
-				IDs:            test.MockUUID(1),
-				ReplaceUUID:    test.MockUUID(2),
-				ReplaceNoReint: true,
+				Operation:   DevReplaceOp,
+				IDs:         test.MockUUID(1),
+				ReplaceUUID: test.MockUUID(2),
 			},
 			expPBReq: &ctlpb.SmdManageReq{
 				Op: &ctlpb.SmdManageReq_Replace{
 					Replace: &ctlpb.DevReplaceReq{
 						OldDevUuid: test.MockUUID(1),
 						NewDevUuid: test.MockUUID(2),
-						NoReint:    true,
 					},
 				},
 			},
@@ -646,6 +655,92 @@ func TestControl_SmdManage(t *testing.T) {
 				IDs:       test.MockUUID(1),
 			},
 			mic: newMockInvokerWRankResps(&ctlpb.SmdManageResp_RankResp{
+				Rank:    0,
+				Results: []*ctlpb.SmdManageResp_Result{{}},
+			}),
+			expResp: &SmdResp{
+				HostStorage: mockSmdQueryMap(t, &mockSmdResp{Hosts: "host-0"}),
+			},
+		},
+		"set-faulty; rank failure": {
+			req: &SmdManageReq{
+				Operation: SetFaultyOp,
+				IDs:       test.MockUUID(1),
+			},
+			mic: newMockInvokerWRankResps(&ctlpb.SmdManageResp_RankResp{
+				Rank: 0,
+				Results: []*ctlpb.SmdManageResp_Result{
+					{Status: int32(daos.Busy)},
+				},
+			}),
+			expResp: &SmdResp{
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{
+					Hosts: "host-0",
+					Error: "rank 0: DER_BUSY(-1012): Device or resource busy",
+				}),
+				HostStorage: mockSmdQueryMap(t, &mockSmdResp{Hosts: "host-0"}),
+			},
+		},
+		"dev-replace with > 1 host": {
+			req: &SmdManageReq{
+				unaryRequest: unaryRequest{
+					request: request{
+						HostList: mockHostList("one", "two"),
+					},
+				},
+				Operation:   DevReplaceOp,
+				IDs:         test.MockUUID(2),
+				ReplaceUUID: test.MockUUID(1),
+			},
+			expErr: errors.New("> 1 host"),
+		},
+		// dev-replace API calls do not return SMD info.
+		"dev-replace": {
+			req: &SmdManageReq{
+				Operation:   DevReplaceOp,
+				IDs:         test.MockUUID(2),
+				ReplaceUUID: test.MockUUID(1),
+			},
+			mic: newMockInvokerWRankResps(&ctlpb.SmdManageResp_RankResp{
+				Rank:    0,
+				Results: []*ctlpb.SmdManageResp_Result{{}},
+			}),
+			expResp: &SmdResp{
+				HostStorage: mockSmdQueryMap(t, &mockSmdResp{Hosts: "host-0"}),
+			},
+		},
+		"dev-replace; rank failure": {
+			req: &SmdManageReq{
+				Operation:   DevReplaceOp,
+				IDs:         test.MockUUID(2),
+				ReplaceUUID: test.MockUUID(1),
+			},
+			mic: newMockInvokerWRankResps(&ctlpb.SmdManageResp_RankResp{
+				Rank: 0,
+				Results: []*ctlpb.SmdManageResp_Result{
+					{Status: int32(daos.Busy)},
+				},
+			}),
+			expResp: &SmdResp{
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{
+					Hosts: "host-0",
+					Error: "rank 0: DER_BUSY(-1012): Device or resource busy",
+				}),
+				HostStorage: mockSmdQueryMap(t, &mockSmdResp{Hosts: "host-0"}),
+			},
+		},
+		// LED manage API calls return SMD info.
+		"led-identify": {
+			req: &SmdManageReq{
+				unaryRequest: unaryRequest{
+					request: request{
+						HostList: mockHostList("one", "two"),
+					},
+				},
+				Operation: LedBlinkOp,
+				IDs:       test.MockUUID(1),
+			},
+			mic: newMockInvokerWRankResps(&ctlpb.SmdManageResp_RankResp{
 				Rank: 0,
 				Results: []*ctlpb.SmdManageResp_Result{
 					{
@@ -672,19 +767,17 @@ func TestControl_SmdManage(t *testing.T) {
 								Rank:      ranklist.Rank(0),
 								TargetIDs: []int32{1, 2, 3},
 								Ctrlr:     defMockCtrlr,
-								Roles: storage.BdevRoles{
-									storage.OptionBits(storage.BdevRoleAll),
-								},
-								HasSysXS: true,
+								Roles:     storage.BdevRolesFromBits(storage.BdevRoleAll),
+								HasSysXS:  true,
 							},
 						},
 					},
 				}),
 			},
 		},
-		"set-faulty; drpc failure": {
+		"led-identify; rank failure": {
 			req: &SmdManageReq{
-				Operation: SetFaultyOp,
+				Operation: LedBlinkOp,
 				IDs:       test.MockUUID(1),
 			},
 			mic: newMockInvokerWRankResps(&ctlpb.SmdManageResp_RankResp{
@@ -745,12 +838,13 @@ func TestControl_SmdManage(t *testing.T) {
 				for _, sqr := range gotResp.HostStorage {
 					hs := tc.expResp.HostStorage
 					keys := hs.Keys()
-					if len(keys) == 0 {
+					si := sqr.HostStorage.SmdInfo
+					if len(keys) == 0 || si == nil || si.Devices == nil {
 						continue
 					}
 					for i, gotDev := range sqr.HostStorage.SmdInfo.Devices {
 						expDev := hs[keys[0]].HostStorage.SmdInfo.Devices[i]
-						t.Logf(cmp.Diff(expDev, gotDev, defResCmpOpts()...))
+						t.Log(cmp.Diff(expDev, gotDev, defResCmpOpts()...))
 					}
 				}
 				t.Fatalf("unexpected resp (-want, +got):\n%s\n", diff)

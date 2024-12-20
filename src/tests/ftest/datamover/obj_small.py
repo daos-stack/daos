@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -58,8 +58,7 @@ class DmvrObjSmallTest(DataMoverTestBase):
         self.set_tool(tool)
 
         # Create pool1
-        pool1 = self.create_pool()
-        pool1.connect(2)
+        pool1 = self.get_pool()
 
         # Create cont1
         cont1 = self.get_container(pool1)
@@ -85,8 +84,7 @@ class DmvrObjSmallTest(DataMoverTestBase):
             self.num_akeys_array, self.akey_sizes, self.akey_extents)
 
         # Create pool2
-        pool2 = self.create_pool()
-        pool2.connect(2)
+        pool2 = self.get_pool()
 
         # Clone cont1 to a new cont3 in pool2
         result = self.run_datamover(
@@ -100,13 +98,6 @@ class DmvrObjSmallTest(DataMoverTestBase):
             obj_list, cont3,
             self.num_objs, self.num_dkeys, self.num_akeys_single,
             self.num_akeys_array, self.akey_sizes, self.akey_extents)
-
-        # Must destroy before closing pools
-        cont1.destroy()
-        cont2.destroy()
-        cont3.destroy()
-        pool1.disconnect()
-        pool2.disconnect()
 
     @avocado.fail_on(DaosApiError)
     def test_dm_obj_small_dcp(self):

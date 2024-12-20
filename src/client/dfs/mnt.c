@@ -324,9 +324,9 @@ dfs_free_sb_layout(daos_iod_t *iods[])
 	D_FREE(*iods);
 }
 
-int
-dfs_connect(const char *pool, const char *sys, const char *cont, int flags, dfs_attr_t *attr,
-	    dfs_t **_dfs)
+static int
+dfs_connect_int(const char *pool, const char *sys, const char *cont, int flags, dfs_attr_t *attr,
+		daos_epoch_t epoch, const char *name, dfs_t **_dfs)
 {
 	daos_handle_t        poh         = {0};
 	daos_handle_t        coh         = {0};
@@ -396,7 +396,10 @@ mount:
 			 * few times to mount with some backoff.
 			 */
 			for (b = 0; b < 7; b++) {
-				rc = dfs_mount(poh, coh, amode, &dfs);
+				if (epoch == DAOS_EPOCH_MAX)
+					rc = dfs_mount(poh, coh, amode, &dfs);
+				else
+					rc = dfs_mount_snap(poh, coh, amode, epoch, name, &dfs);
 				if (rc == ENOENT)
 					usleep(pow(10, b));
 				else
@@ -416,7 +419,10 @@ mount:
 			D_GOTO(err, rc);
 	} else {
 		cont_h_bump = true;
-		rc          = dfs_mount(poh, cont_hdl->handle, amode, &dfs);
+		if (epoch == DAOS_EPOCH_MAX)
+			rc = dfs_mount(poh, cont_hdl->handle, amode, &dfs);
+		else
+			rc = dfs_mount_snap(poh, cont_hdl->handle, amode, epoch, name, &dfs);
 		if (rc) {
 			D_ERROR("Failed to mount DFS: %d (%s)\n", rc, strerror(rc));
 			D_GOTO(err, rc);
@@ -454,6 +460,20 @@ err:
 	}
 
 	return rc;
+}
+
+int
+dfs_connect(const char *pool, const char *sys, const char *cont, int flags, dfs_attr_t *attr,
+	    dfs_t **_dfs)
+{
+	return dfs_connect_int(pool, sys, cont, flags, attr, DAOS_EPOCH_MAX, NULL, _dfs);
+}
+
+int
+dfs_connect_snap(const char *pool, const char *sys, const char *cont, int flags, daos_epoch_t epoch,
+		 const char *name, dfs_t **_dfs)
+{
+	return dfs_connect_int(pool, sys, cont, O_RDONLY, NULL, epoch, name, _dfs);
 }
 
 int
@@ -539,8 +559,8 @@ err:
 	return rc;
 }
 
-int
-dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
+static int
+dfs_mount_int(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epoch, dfs_t **_dfs)
 {
 	dfs_t                     *dfs;
 	daos_prop_t               *prop;
@@ -584,9 +604,19 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	if (dfs == NULL)
 		D_GOTO(err_prop, rc = ENOMEM);
 
-	dfs->poh   = poh;
-	dfs->coh   = coh;
-	dfs->amode = amode;
+	dfs->poh      = poh;
+	dfs->coh      = coh;
+	dfs->th_epoch = epoch;
+	if (epoch == DAOS_EPOCH_MAX) {
+		dfs->th	   = DAOS_TX_NONE;
+		dfs->amode = amode;
+	} else {
+		/** Mount a snapshot */
+		dfs->amode = O_RDONLY;
+		rc = daos_tx_open_snap(coh, epoch, &dfs->th, NULL);
+		if (rc != 0)
+			D_GOTO(err_dfs, rc = daos_der2errno(rc));
+	}
 
 	rc = D_MUTEX_INIT(&dfs->lock, NULL);
 	if (rc != 0)
@@ -683,21 +713,24 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 
 	/** if RW, allocate an OID for the namespace */
 	if (amode == O_RDWR) {
+		dfs->last_hi = (unsigned int)d_rand();
+		/** Avoid potential conflict with SB or ROOT */
+		if (dfs->last_hi <= 1)
+			dfs->last_hi = 2;
+
 		rc = daos_cont_alloc_oids(coh, 1, &dfs->oid.lo, NULL);
 		if (rc) {
 			D_ERROR("daos_cont_alloc_oids() Failed, " DF_RC "\n", DP_RC(rc));
 			D_GOTO(err_root, rc = daos_der2errno(rc));
 		}
 
-		/*
-		 * if this is the first time we allocate on this container,
-		 * account 0 for SB, 1 for root obj.
-		 */
-		if (dfs->oid.lo == RESERVED_LO)
-			dfs->oid.hi = ROOT_HI + 1;
-		else
-			dfs->oid.hi = 0;
+		dfs->oid.hi = dfs->last_hi;
+		/** Increment so that dfs->last_hi is the last value */
+		daos_obj_oid_cycle(&dfs->oid);
 	}
+
+	if (dfs_metrics_enabled())
+		dfs_metrics_init(dfs);
 
 	dfs->mounted = DFS_MOUNT;
 	*_dfs        = dfs;
@@ -713,6 +746,76 @@ err_dfs:
 err_prop:
 	daos_prop_free(prop);
 	return rc;
+}
+
+int
+dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
+{
+	return dfs_mount_int(poh, coh, flags, DAOS_EPOCH_MAX, _dfs);
+}
+
+/** Number of snapshots to fetch in one list call */
+#define	DFS_SNAP_NR	10
+
+int
+dfs_mount_snap(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epoch,
+	       const char *name, dfs_t **dfs)
+{
+	daos_epoch_t ep = 0;
+
+	if (epoch == DAOS_EPOCH_MAX) {
+		D_ERROR("DAOS_EPOCH_MAX not supported for dfs_mount_snap()\n");
+		/** cannot be right */
+		return EINVAL;
+	}
+
+	if (epoch == 0) {
+		/** Look up epoch associated with snapshot name */
+		char		names[DFS_SNAP_NR][DAOS_SNAPSHOT_MAX_LEN];
+		daos_epoch_t	eps[DFS_SNAP_NR];
+		int		nr;
+		daos_anchor_t	anchor = {0};
+		int		rc;
+
+		if (name == NULL)
+			return EINVAL;
+
+		/** iterate until we (hopefully) find a matching name */
+		while (!daos_anchor_is_eof(&anchor)) {
+			int i;
+
+			nr = DFS_SNAP_NR;
+			for (i = 0; i < nr; i++)
+				names[i][0] = '\0';
+
+			rc = daos_cont_list_snap(coh, &nr, eps, (char **)names, &anchor, NULL);
+			if (rc)
+				return EINVAL;
+
+			/** check if we find a match */
+			for (i = 0; i < nr; i++) {
+				if (!strncmp(names[i], name, DAOS_SNAPSHOT_MAX_LEN)) {
+					ep = eps[i];
+					break;
+				}
+			}
+
+			if (ep != 0)
+				break;
+		}
+
+		if (ep == 0) {
+			D_ERROR("No matching snapshot name found.\n");
+			/** no match found */
+			return ENOENT;
+		}
+		D_DEBUG(DB_ALL, "Snapshot name %s associated with epoch "DF_U64"\n", name, epoch);
+	} else {
+		/** We are provided a epoch, let's use it */
+		ep = epoch;
+	}
+
+	return dfs_mount_int(poh, coh, O_RDONLY, ep, dfs);
 }
 
 int
@@ -738,8 +841,13 @@ dfs_umount(dfs_t *dfs)
 	}
 	D_MUTEX_UNLOCK(&dfs->lock);
 
+	if (daos_handle_is_valid(dfs->th))
+		daos_tx_close(dfs->th, NULL);
+
 	daos_obj_close(dfs->root.oh, NULL);
 	daos_obj_close(dfs->super_oh, NULL);
+
+	dfs_metrics_fini(dfs);
 
 	D_FREE(dfs->prefix);
 	D_MUTEX_DESTROY(&dfs->lock);
@@ -848,6 +956,7 @@ struct dfs_glob {
 	uuid_t           coh_uuid;
 	daos_obj_id_t    super_oid;
 	daos_obj_id_t    root_oid;
+	daos_epoch_t     th_epoch;
 };
 
 static inline void
@@ -937,6 +1046,7 @@ dfs_local2global(dfs_t *dfs, d_iov_t *glob)
 	dfs_params->oclass      = dfs->attr.da_oclass_id;
 	dfs_params->dir_oclass  = dfs->attr.da_dir_oclass_id;
 	dfs_params->file_oclass = dfs->attr.da_file_oclass_id;
+	dfs_params->th_epoch    = dfs->th_epoch;
 	uuid_copy(dfs_params->coh_uuid, coh_uuid);
 	uuid_copy(dfs_params->cont_uuid, cont_uuid);
 
@@ -1016,7 +1126,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob, 
 
 	/** allocate a new oid on the next file or dir creation */
 	dfs->oid.lo = 0;
-	dfs->oid.hi = MAX_OID_HI;
+	dfs->oid.hi = dfs->last_hi;
 
 	rc = D_MUTEX_INIT(&dfs->lock, NULL);
 	if (rc != 0) {
@@ -1041,6 +1151,20 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob, 
 		D_ERROR("daos_obj_open() failed, " DF_RC "\n", DP_RC(rc));
 		daos_obj_close(dfs->super_oh, NULL);
 		D_GOTO(err_dfs, rc = daos_der2errno(rc));
+	}
+
+	/** Create transaction handle */
+	dfs->th_epoch = dfs_params->th_epoch;
+	if (dfs->th_epoch == DAOS_EPOCH_MAX) {
+		dfs->th = DAOS_TX_NONE;
+	} else {
+		rc = daos_tx_open_snap(coh, dfs->th_epoch, &dfs->th, NULL);
+		if (rc) {
+			D_ERROR("daos_tx_open_snap() failed, " DF_RC "\n", DP_RC(rc));
+			daos_obj_close(dfs->super_oh, NULL);
+			daos_obj_close(dfs->root.oh, NULL);
+			D_GOTO(err_dfs, rc = daos_der2errno(rc));
+		}
 	}
 
 	dfs->mounted = DFS_MOUNT;

@@ -625,12 +625,14 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 		stbuf->st_atim.tv_sec  = stbuf->st_mtim.tv_sec;
 		stbuf->st_atim.tv_nsec = stbuf->st_mtim.tv_nsec;
 	}
+
+	DFS_OP_STAT_INCR(dfs, DOS_STAT);
 	return 0;
 }
 
 /*
- * create a dir object. If caller passes parent obj, we check for existence of
- * object first.
+ * Create a dir object. If caller passes parent obj, and cid is not set,
+ * the child oclass is taken from the parent.
  */
 int
 create_dir(dfs_t *dfs, dfs_obj_t *parent, daos_oclass_id_t cid, dfs_obj_t *dir)
@@ -710,13 +712,14 @@ open_dir(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, struct 
 			D_ASSERT(rc == 0);
 			dir->d.chunk_size = entry->chunk_size;
 			dir->d.oclass     = entry->oclass;
+			DFS_OP_STAT_INCR(dfs, DOS_MKDIR);
 			return 0;
 		}
 	}
 
 	/* Check if parent has the dirname entry */
-	rc = fetch_entry(dfs->layout_v, parent_oh, DAOS_TX_NONE, dir->name, len, false, &exists,
-			 entry, 0, NULL, NULL, NULL);
+	rc = fetch_entry(dfs->layout_v, parent_oh, dfs->th, dir->name, len, false, &exists, entry,
+			 0, NULL, NULL, NULL);
 	if (rc) {
 		D_DEBUG(DB_TRACE, "fetch_entry %s failed %d.\n", dir->name, rc);
 		return rc;
@@ -742,6 +745,7 @@ open_dir(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, struct 
 	oid_cp(&dir->oid, entry->oid);
 	dir->d.chunk_size = entry->chunk_size;
 	dir->d.oclass     = entry->oclass;
+	DFS_OP_STAT_INCR(dfs, DOS_OPENDIR);
 	return 0;
 }
 

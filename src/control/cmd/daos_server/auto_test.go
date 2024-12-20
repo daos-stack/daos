@@ -13,7 +13,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
@@ -33,11 +32,11 @@ import (
 func TestDaosServer_Auto_Commands(t *testing.T) {
 	runCmdTests(t, []cmdTest{
 		{
-			"Generate with no access point",
+			"Generate with no MS replica",
 			"config generate",
 			printCommand(t, func() *configGenCmd {
 				cmd := &configGenCmd{}
-				cmd.AccessPoints = "localhost"
+				cmd.MgmtSvcReplicas = "localhost"
 				cmd.NetClass = "infiniband"
 				return cmd
 			}()),
@@ -45,10 +44,10 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 		},
 		{
 			"Generate with defaults",
-			"config generate -a foo",
+			"config generate -r foo",
 			printCommand(t, func() *configGenCmd {
 				cmd := &configGenCmd{}
-				cmd.AccessPoints = "foo"
+				cmd.MgmtSvcReplicas = "foo"
 				cmd.NetClass = "infiniband"
 				return cmd
 			}()),
@@ -56,10 +55,10 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 		},
 		{
 			"Generate with no nvme",
-			"config generate -a foo --scm-only",
+			"config generate -r foo --scm-only",
 			printCommand(t, func() *configGenCmd {
 				cmd := &configGenCmd{}
-				cmd.AccessPoints = "foo"
+				cmd.MgmtSvcReplicas = "foo"
 				cmd.NetClass = "infiniband"
 				cmd.SCMOnly = true
 				return cmd
@@ -68,10 +67,10 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 		},
 		{
 			"Generate with storage parameters",
-			"config generate -a foo --num-engines 2",
+			"config generate -r foo --num-engines 2",
 			printCommand(t, func() *configGenCmd {
 				cmd := &configGenCmd{}
-				cmd.AccessPoints = "foo"
+				cmd.MgmtSvcReplicas = "foo"
 				cmd.NetClass = "infiniband"
 				cmd.NrEngines = 2
 				return cmd
@@ -80,10 +79,10 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 		},
 		{
 			"Generate with short option storage parameters",
-			"config generate -a foo -e 2 -s",
+			"config generate -r foo -e 2 -s",
 			printCommand(t, func() *configGenCmd {
 				cmd := &configGenCmd{}
-				cmd.AccessPoints = "foo"
+				cmd.MgmtSvcReplicas = "foo"
 				cmd.NetClass = "infiniband"
 				cmd.NrEngines = 2
 				cmd.SCMOnly = true
@@ -93,10 +92,10 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 		},
 		{
 			"Generate with ethernet network device class",
-			"config generate -a foo --net-class ethernet",
+			"config generate -r foo --net-class ethernet",
 			printCommand(t, func() *configGenCmd {
 				cmd := &configGenCmd{}
-				cmd.AccessPoints = "foo"
+				cmd.MgmtSvcReplicas = "foo"
 				cmd.NetClass = "ethernet"
 				return cmd
 			}()),
@@ -104,10 +103,10 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 		},
 		{
 			"Generate with infiniband network device class",
-			"config generate -a foo --net-class infiniband",
+			"config generate -r foo --net-class infiniband",
 			printCommand(t, func() *configGenCmd {
 				cmd := &configGenCmd{}
-				cmd.AccessPoints = "foo"
+				cmd.MgmtSvcReplicas = "foo"
 				cmd.NetClass = "infiniband"
 				return cmd
 			}()),
@@ -115,22 +114,22 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 		},
 		{
 			"Generate with deprecated network device class",
-			"config generate -a foo --net-class best-available",
+			"config generate -r foo --net-class best-available",
 			"",
 			errors.New("Invalid value"),
 		},
 		{
 			"Generate with unsupported network device class",
-			"config generate -a foo --net-class loopback",
+			"config generate -r foo --net-class loopback",
 			"",
 			errors.New("Invalid value"),
 		},
 		{
 			"Generate tmpfs non-MD-on-SSD config",
-			"config generate -a foo --use-tmpfs-scm",
+			"config generate -r foo --use-tmpfs-scm",
 			printCommand(t, func() *configGenCmd {
 				cmd := &configGenCmd{}
-				cmd.AccessPoints = "foo"
+				cmd.MgmtSvcReplicas = "foo"
 				cmd.NetClass = "infiniband"
 				cmd.UseTmpfsSCM = true
 				return cmd
@@ -139,10 +138,10 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 		},
 		{
 			"Generate MD-on-SSD config",
-			"config generate -a foo --use-tmpfs-scm --control-metadata-path /opt/daos_md",
+			"config generate -r foo --use-tmpfs-scm --control-metadata-path /opt/daos_md",
 			printCommand(t, func() *configGenCmd {
 				cmd := &configGenCmd{}
-				cmd.AccessPoints = "foo"
+				cmd.MgmtSvcReplicas = "foo"
 				cmd.NetClass = "infiniband"
 				cmd.UseTmpfsSCM = true
 				cmd.ExtMetadataPath = "/opt/daos_md"
@@ -156,6 +155,12 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 			"",
 			errors.New("Unknown command"),
 		},
+		{
+			"Config flag unsupported",
+			"config generate -o /foo",
+			"",
+			errors.New("unknown flag"),
+		},
 	})
 }
 
@@ -164,7 +169,7 @@ func TestDaosServer_Auto_confGenCmd_Convert(t *testing.T) {
 	cmd.NrEngines = 1
 	cmd.NetProvider = "ofi+tcp"
 	cmd.SCMOnly = true
-	cmd.AccessPoints = "foo,bar"
+	cmd.MgmtSvcReplicas = "foo,bar"
 	cmd.NetClass = "infiniband"
 	cmd.UseTmpfsSCM = true
 	cmd.ExtMetadataPath = "/opt/daos_md"
@@ -179,7 +184,7 @@ func TestDaosServer_Auto_confGenCmd_Convert(t *testing.T) {
 		NrEngines:       1,
 		NetProvider:     "ofi+tcp",
 		SCMOnly:         true,
-		AccessPoints:    []string{"foo", "bar"},
+		MgmtSvcReplicas: []string{"foo", "bar"},
 		NetClass:        hardware.Infiniband,
 		UseTmpfsSCM:     true,
 		ExtMetadataPath: "/opt/daos_md",
@@ -210,20 +215,10 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 	e1 := control.MockEngineCfg(1, 1, 3).WithTargetCount(18).WithHelperStreamCount(4)
 	exmplEngineCfgs := []*engine.Config{e0, e1}
 
-	engRsvdGiB := 2 /* calculated based on 18 targets */
-	sysRsvdGiB := storage.DefaultSysMemRsvd / humanize.GiByte
-	ramdiskGiB := storage.MinRamdiskMem / humanize.GiByte
-	// Nr hugepages expected with 18 targets * 2 engines * 512 pages-per-target.
-	defNrHugepages := 18 * 2 * 512
-	tmpfsHugeMemGiB := (humanize.MiByte * 2 * defNrHugepages) / humanize.GiByte
-	// Total mem to meet requirements 38GiB hugeMem, 2GiB per engine rsvd, 6GiB sys rsvd, 4GiB
-	// per engine RAM-disk.
-	tmpfsMemTotalGiB := humanize.GiByte * (tmpfsHugeMemGiB + (2 * engRsvdGiB) + sysRsvdGiB +
-		(2 * ramdiskGiB) + 1 /* add 1GiB buffer */)
 	tmpfsEngineCfgs := []*engine.Config{
-		control.MockEngineCfgTmpfs(0, ramdiskGiB, control.MockBdevTier(0, 2, 4)).
+		control.MockEngineCfgTmpfs(0, 0, control.MockBdevTier(0, 2, 4)).
 			WithTargetCount(18).WithHelperStreamCount(4),
-		control.MockEngineCfgTmpfs(1, ramdiskGiB, control.MockBdevTier(1, 1, 3)).
+		control.MockEngineCfgTmpfs(1, 0, control.MockBdevTier(1, 1, 3)).
 			WithTargetCount(18).WithHelperStreamCount(4),
 	}
 
@@ -231,16 +226,8 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 	controlMetadata := storage.ControlMetadata{
 		Path: metadataMountPath,
 	}
-	// Nr hugepages expected with 18+1 (extra MD-on-SSD sys-xstream) targets * 2 engines * 512
-	// pages-per-target.
-	mdOnSSDNrHugepages := 19 * 2 * 512
-	mdOnSSDHugeMemGiB := (humanize.MiByte * 2 * mdOnSSDNrHugepages) / humanize.GiByte
-	// Total mem to meet requirements 39GiB hugeMem, 2GiB per engine rsvd, 6GiB sys rsvd, 4GiB
-	// per engine RAM-disk.
-	mdOnSSDMemTotalGiB := humanize.GiByte * (mdOnSSDHugeMemGiB + (2 * engRsvdGiB) + sysRsvdGiB +
-		(2 * ramdiskGiB) + 1 /* add 1GiB buffer */)
 	mdOnSSDEngineCfgs := []*engine.Config{
-		control.MockEngineCfgTmpfs(0, ramdiskGiB,
+		control.MockEngineCfgTmpfs(0, 0,
 			control.MockBdevTierWithRole(0, storage.BdevRoleWAL, 2),
 			control.MockBdevTierWithRole(0, storage.BdevRoleMeta|storage.BdevRoleData, 4)).
 			WithStorageControlMetadataPath(metadataMountPath).
@@ -248,7 +235,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				filepath.Join(controlMetadata.EngineDirectory(0), storage.BdevOutConfName),
 			).
 			WithTargetCount(18).WithHelperStreamCount(4),
-		control.MockEngineCfgTmpfs(1, ramdiskGiB,
+		control.MockEngineCfgTmpfs(1, 0,
 			control.MockBdevTierWithRole(1, storage.BdevRoleWAL, 1),
 			control.MockBdevTierWithRole(1, storage.BdevRoleMeta|storage.BdevRoleData, 3)).
 			WithStorageControlMetadataPath(metadataMountPath).
@@ -260,7 +247,10 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 
 	var defCoresPerNuma uint32 = 26
 	var defNumaCount uint32 = 2
-	defMemInfo := common.MemInfo{HugepageSizeKiB: 2048}
+	defMemInfo := common.MemInfo{
+		HugepageSizeKiB: 2048,
+		MemTotalKiB:     1, // Avoid failing non-zero check.
+	}
 	defHostFabric := &control.HostFabric{
 		Interfaces: []*control.HostFabricInterface{
 			eth0, eth1, ib0, ib1,
@@ -283,7 +273,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		accessPoints    string
+		msReplicas      string
 		nrEngines       int
 		scmOnly         bool
 		netClass        string
@@ -348,18 +338,16 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			hf: defHostFabric,
 			hs: defHostStorage,
 			expCfg: control.MockServerCfg("ofi+psm2", exmplEngineCfgs).
-				WithNrHugepages(defNrHugepages).
-				WithAccessPoints("localhost:10001").
+				WithMgmtSvcReplicas("localhost:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
 		},
-		"access points set": {
-			accessPoints: "moon-111,mars-115,jupiter-119",
-			hf:           defHostFabric,
-			hs:           defHostStorage,
+		"MS replicas set": {
+			msReplicas: "moon-111,mars-115,jupiter-119",
+			hf:         defHostFabric,
+			hs:         defHostStorage,
 			expCfg: control.MockServerCfg("ofi+psm2", exmplEngineCfgs).
-				WithNrHugepages(defNrHugepages).
-				WithAccessPoints("localhost:10001").
-				WithAccessPoints("moon-111:10001", "mars-115:10001", "jupiter-119:10001").
+				WithMgmtSvcReplicas("localhost:10001").
+				WithMgmtSvcReplicas("moon-111:10001", "mars-115:10001", "jupiter-119:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
 		},
 		"unmet min nr ssds": {
@@ -394,10 +382,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				MemInfo: &common.MemInfo{
-					HugepageSizeKiB: 2048,
-					MemTotalKiB:     tmpfsMemTotalGiB / humanize.KiByte,
-				},
+				MemInfo: &defMemInfo,
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
 					storage.MockNvmeController(2),
@@ -406,8 +391,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				},
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", tmpfsEngineCfgs).
-				WithNrHugepages(defNrHugepages).
-				WithAccessPoints("localhost:10001").
+				WithMgmtSvcReplicas("localhost:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
 		},
 		"dcpm scm; control_metadata path set": {
@@ -415,28 +399,6 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			hf:              defHostFabric,
 			hs:              defHostStorage,
 			expErr:          errors.New("only supported with scm class ram"),
-		},
-		"tmpfs scm; md-on-ssd; low mem": {
-			tmpfsSCM:        true,
-			extMetadataPath: metadataMountPath,
-			hf:              defHostFabric,
-			hs: &control.HostStorage{
-				ScmNamespaces: storage.ScmNamespaces{
-					storage.MockScmNamespace(0),
-					storage.MockScmNamespace(1),
-				},
-				MemInfo: &common.MemInfo{
-					HugepageSizeKiB: 2048,
-					MemTotalKiB:     (humanize.GiByte * 12) / humanize.KiByte,
-				},
-				NvmeDevices: storage.NvmeControllers{
-					storage.MockNvmeController(1),
-					storage.MockNvmeController(2),
-					storage.MockNvmeController(3),
-					storage.MockNvmeController(4),
-				},
-			},
-			expErr: errors.New("insufficient ram"),
 		},
 		"tmpfs scm; md-on-ssd": {
 			tmpfsSCM:        true,
@@ -447,10 +409,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				MemInfo: &common.MemInfo{
-					HugepageSizeKiB: 2048,
-					MemTotalKiB:     mdOnSSDMemTotalGiB / humanize.KiByte,
-				},
+				MemInfo: &defMemInfo,
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
 					storage.MockNvmeController(2),
@@ -459,8 +418,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				},
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", mdOnSSDEngineCfgs).
-				WithNrHugepages(mdOnSSDNrHugepages).
-				WithAccessPoints("localhost:10001").
+				WithMgmtSvcReplicas("localhost:10001").
 				WithControlLogFile("/tmp/daos_server.log").
 				WithControlMetadata(controlMetadata),
 		},
@@ -473,10 +431,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				MemInfo: &common.MemInfo{
-					HugepageSizeKiB: 2048,
-					MemTotalKiB:     mdOnSSDMemTotalGiB / humanize.KiByte,
-				},
+				MemInfo: &defMemInfo,
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
 					storage.MockNvmeController(2),
@@ -555,8 +510,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 							WithBdevDeviceList("0000:97:00.5", "0000:e2:00.5"),
 					),
 			}).
-				WithNrHugepages(16 /* tgts */ * 2 /* engines */ * 512 /* pages-per-tgt */).
-				WithAccessPoints("localhost:10001").
+				WithMgmtSvcReplicas("localhost:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
 		},
 	} {
@@ -568,12 +522,12 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			if tc.netClass == "" {
 				tc.netClass = "infiniband"
 			}
-			if tc.accessPoints == "" {
-				tc.accessPoints = "localhost"
+			if tc.msReplicas == "" {
+				tc.msReplicas = "localhost"
 			}
 
 			cmd := &configGenCmd{}
-			cmd.AccessPoints = tc.accessPoints
+			cmd.MgmtSvcReplicas = tc.msReplicas
 			cmd.NrEngines = tc.nrEngines
 			cmd.SCMOnly = tc.scmOnly
 			cmd.NetClass = tc.netClass
@@ -619,7 +573,10 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					}
 					return x.Equals(y)
 				}),
-				cmpopts.IgnoreUnexported(security.CertificateConfig{}),
+				cmpopts.IgnoreUnexported(
+					security.CertificateConfig{},
+					config.Server{},
+				),
 			}
 
 			if diff := cmp.Diff(tc.expCfg, gotCfg, cmpOpts...); diff != "" {
@@ -632,9 +589,9 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 // TestDaosServer_Auto_Commands_JSON verifies that the JSON-output flag is disabled for config
 // generate commands.
 func TestDaosServer_Auto_Commands_JSON(t *testing.T) {
-	log := logging.NewCommandLineLogger()
+	log, buf := logging.NewTestCommandLineLogger()
 
-	runJSONCmdTests(t, log, []jsonCmdTest{
+	runJSONCmdTests(t, log, buf, []jsonCmdTest{
 		{
 			"Config generate; JSON",
 			"config generate -j",

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -85,7 +85,7 @@ dtx_resync_commit(struct ds_cont_child *cont,
 		 * committed or aborted the DTX during we handling other
 		 * DTXs. So double check the status before current commit.
 		 */
-		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid, NULL, NULL, NULL, NULL, false);
+		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid, NULL, NULL, NULL, false);
 
 		/* Skip this DTX since it has been committed or aggregated. */
 		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE || rc == -DER_NONEXIST)
@@ -115,7 +115,7 @@ next:
 	}
 
 	if (j > 0) {
-		rc = dtx_commit(cont, dtes, dcks, j);
+		rc = dtx_commit(cont, dtes, dcks, j, true);
 		if (rc < 0)
 			D_ERROR("Failed to commit the DTXs: rc = "DF_RC"\n",
 				DP_RC(rc));
@@ -301,7 +301,7 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 		 * committed or aborted the DTX during we handling other
 		 * DTXs. So double check the status before next action.
 		 */
-		rc = vos_dtx_check(cont->sc_hdl, &dte->dte_xid, NULL, NULL, NULL, NULL, false);
+		rc = vos_dtx_check(cont->sc_hdl, &dte->dte_xid, NULL, NULL, NULL, false);
 
 		/* Skip the DTX that may has been committed or aborted. */
 		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE || rc == -DER_NONEXIST)
@@ -359,7 +359,7 @@ out:
 
 		dck.oid = oid;
 		dck.dkey_hash = dkey_hash;
-		rc = dtx_coll_commit(cont, dce, &dck);
+		rc = dtx_coll_commit(cont, dce, &dck, true);
 	}
 
 	dtx_coll_entry_put(dce);
@@ -393,6 +393,7 @@ dtx_status_handle(struct dtx_resync_args *dra)
 	if (tgt_array == NULL)
 		D_GOTO(out, err = -DER_NOMEM);
 
+again:
 	d_list_for_each_entry_safe(dre, next, &drh->drh_list, dre_link) {
 		if (dre->dre_dte.dte_ver < dra->discard_version) {
 			err = vos_dtx_abort(cont->sc_hdl, &dre->dre_xid, dre->dre_epoch);
@@ -475,7 +476,12 @@ commit:
 		rc = dtx_resync_commit(cont, drh, count);
 		if (rc < 0)
 			err = rc;
+		count = 0;
 	}
+
+	/* The last DTX entry may be re-added to the list because of DSHR_NEED_RETRY. */
+	if (unlikely(!d_list_empty(&drh->drh_list)))
+		goto again;
 
 out:
 	D_FREE(tgt_array);
@@ -612,6 +618,12 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, b
 	crt_group_rank(NULL, &myrank);
 
 	pool = cont->sc_pool->spc_pool;
+	if (pool->sp_disable_dtx_resync) {
+		D_DEBUG(DB_MD, "Skip DTX resync (%s) for " DF_UUID "/" DF_UUID " with ver %u\n",
+			block ? "block" : "non-block", DP_UUID(po_uuid), DP_UUID(co_uuid), ver);
+		goto out;
+	}
+
 	ABT_rwlock_rdlock(pool->sp_lock);
 	rc = pool_map_find_target_by_rank_idx(pool->sp_map, myrank,
 					      dss_get_module_info()->dmi_tgt_id, &target);
@@ -700,9 +712,6 @@ fail:
 	ABT_mutex_unlock(cont->sc_mutex);
 
 out:
-	if (!dtx_cont_opened(cont))
-		stop_dtx_reindex_ult(cont);
-
 	D_DEBUG(DB_MD, "Exit DTX resync (%s) for "DF_UUID"/"DF_UUID" with ver %u, rc = %d\n",
 		block ? "block" : "non-block", DP_UUID(po_uuid), DP_UUID(co_uuid), ver, rc);
 
@@ -747,8 +756,8 @@ dtx_resync_one(void *data)
 {
 	struct dtx_scan_args		*arg = data;
 	struct ds_pool_child		*child;
-	vos_iter_param_t		 param = { 0 };
-	struct vos_iter_anchors		 anchor = { 0 };
+	vos_iter_param_t		*param = NULL;
+	struct vos_iter_anchors		*anchor = NULL;
 	struct dtx_container_scan_arg	 cb_arg = { 0 };
 	int				 rc;
 
@@ -757,17 +766,28 @@ dtx_resync_one(void *data)
 		D_GOTO(out, rc = -DER_NONEXIST);
 
 	if (unlikely(child->spc_no_storage))
-		D_GOTO(put, rc = 0);
+		D_GOTO(out, rc = 0);
+
+	D_ALLOC_PTR(param);
+	if (param == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	D_ALLOC_PTR(anchor);
+	if (anchor == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	cb_arg.arg = *arg;
-	param.ip_hdl = child->spc_hdl;
-	param.ip_flags = VOS_IT_FOR_MIGRATION;
-	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
+	param->ip_hdl = child->spc_hdl;
+	param->ip_flags = VOS_IT_FOR_MIGRATION;
+	rc = vos_iterate(param, VOS_ITER_COUUID, false, anchor,
 			 container_scan_cb, NULL, &cb_arg, NULL);
 
-put:
-	ds_pool_child_put(child);
 out:
+	D_FREE(param);
+	D_FREE(anchor);
+	if (child != NULL)
+		ds_pool_child_put(child);
+
 	D_DEBUG(DB_TRACE, DF_UUID" iterate pool done: rc %d\n",
 		DP_UUID(arg->pool_uuid), rc);
 
@@ -778,16 +798,21 @@ void
 dtx_resync_ult(void *data)
 {
 	struct dtx_scan_args	*arg = data;
-	struct ds_pool		*pool;
-	int			rc = 0;
+	struct ds_pool		*pool = NULL;
+	int			rc;
 
 	rc = ds_pool_lookup(arg->pool_uuid, &pool);
-	D_ASSERTF(pool != NULL, DF_UUID" rc %d\n", DP_UUID(arg->pool_uuid), rc);
+	if (rc != 0) {
+		D_WARN("Cannot find the pool "DF_UUID" for DTX resync: "DF_RC"\n",
+		       DP_UUID(arg->pool_uuid), DP_RC(rc));
+		goto out;
+	}
+
 	if (pool->sp_dtx_resync_version >= arg->version) {
 		D_DEBUG(DB_MD, DF_UUID" ignore dtx resync version %u/%u\n",
 			DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version,
 			arg->version);
-		D_GOTO(out_put, rc);
+		goto out;
 	}
 	D_DEBUG(DB_MD, DF_UUID" update dtx resync version %u->%u\n",
 		DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version,
@@ -808,7 +833,9 @@ dtx_resync_ult(void *data)
 			DP_UUID(arg->pool_uuid), rc);
 	}
 	pool->sp_dtx_resync_version = arg->version;
-out_put:
-	ds_pool_put(pool);
+
+out:
+	if (pool != NULL)
+		ds_pool_put(pool);
 	D_FREE(arg);
 }

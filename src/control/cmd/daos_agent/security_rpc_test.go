@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,11 +7,18 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"net"
+	"os/user"
+	"syscall"
 	"testing"
+	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
@@ -25,7 +32,7 @@ func TestAgentSecurityModule_ID(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	mod := NewSecurityModule(log, nil)
+	mod := NewSecurityModule(log, defaultTestSecurityConfig())
 
 	test.AssertEqual(t, mod.ID(), drpc.ModuleSecurityAgent, "wrong drpc module")
 }
@@ -35,15 +42,18 @@ func newTestSession(t *testing.T, log logging.Logger, conn net.Conn) *drpc.Sessi
 	return drpc.NewSession(conn, svc)
 }
 
-func defaultTestTransportConfig() *security.TransportConfig {
-	return &security.TransportConfig{AllowInsecure: true}
+func defaultTestSecurityConfig() *securityConfig {
+	return &securityConfig{
+		transport:   &security.TransportConfig{AllowInsecure: true},
+		credentials: &security.CredentialConfig{},
+	}
 }
 
 func TestAgentSecurityModule_BadMethod(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	mod := NewSecurityModule(log, nil)
+	mod := NewSecurityModule(log, defaultTestSecurityConfig())
 	method, err := mod.ID().GetMethod(-1)
 	if method != nil {
 		t.Errorf("Expected no method, got %+v", method)
@@ -73,7 +83,8 @@ func setupTestUnixConn(t *testing.T) (*net.UnixConn, func()) {
 	return newConn, cleanup
 }
 
-func getClientConn(t *testing.T, path string) *drpc.ClientConnection {
+func getClientConn(t *testing.T, path string) drpc.DomainSocketClient {
+	t.Helper()
 	client := drpc.NewClientConnection(path)
 	if err := client.Connect(test.Context(t)); err != nil {
 		t.Fatalf("Failed to connect: %v", err)
@@ -82,6 +93,8 @@ func getClientConn(t *testing.T, path string) *drpc.ClientConnection {
 }
 
 func expectCredResp(t *testing.T, respBytes []byte, expStatus int32, expCred bool) {
+	t.Helper()
+
 	if respBytes == nil {
 		t.Error("Expected non-nil response")
 	}
@@ -104,8 +117,7 @@ func TestAgentSecurityModule_RequestCreds_OK(t *testing.T) {
 	conn, cleanup := setupTestUnixConn(t)
 	defer cleanup()
 
-	mod := NewSecurityModule(log, defaultTestTransportConfig())
-	mod.ext = auth.NewMockExtWithUser("agent-test", 0, 0)
+	mod := NewSecurityModule(log, defaultTestSecurityConfig())
 	respBytes, err := callRequestCreds(mod, t, log, conn)
 
 	if err != nil {
@@ -119,7 +131,7 @@ func TestAgentSecurityModule_RequestCreds_NotUnixConn(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	mod := NewSecurityModule(log, defaultTestTransportConfig())
+	mod := NewSecurityModule(log, defaultTestSecurityConfig())
 	respBytes, err := callRequestCreds(mod, t, log, &net.TCPConn{})
 
 	test.CmpErr(t, drpc.NewFailureWithMessage("connection is not a unix socket"), err)
@@ -138,7 +150,7 @@ func TestAgentSecurityModule_RequestCreds_NotConnected(t *testing.T) {
 	defer cleanup()
 	conn.Close() // can't get uid/gid from a closed connection
 
-	mod := NewSecurityModule(log, defaultTestTransportConfig())
+	mod := NewSecurityModule(log, defaultTestSecurityConfig())
 	respBytes, err := callRequestCreds(mod, t, log, conn)
 
 	if err != nil {
@@ -157,7 +169,10 @@ func TestAgentSecurityModule_RequestCreds_BadConfig(t *testing.T) {
 	defer cleanup()
 
 	// Empty TransportConfig is incomplete
-	mod := NewSecurityModule(log, &security.TransportConfig{})
+	mod := NewSecurityModule(log, &securityConfig{
+		transport:   &security.TransportConfig{},
+		credentials: &security.CredentialConfig{},
+	})
 	respBytes, err := callRequestCreds(mod, t, log, conn)
 
 	if err != nil {
@@ -175,10 +190,9 @@ func TestAgentSecurityModule_RequestCreds_BadUid(t *testing.T) {
 	conn, cleanup := setupTestUnixConn(t)
 	defer cleanup()
 
-	mod := NewSecurityModule(log, defaultTestTransportConfig())
-	mod.ext = &auth.MockExt{
-		LookupUserIDErr:  errors.New("LookupUserID"),
-		LookupGroupIDErr: errors.New("LookupGroupID"),
+	mod := NewSecurityModule(log, defaultTestSecurityConfig())
+	mod.signCredential = func(_ context.Context, _ *auth.CredentialRequest) (*auth.Credential, error) {
+		return nil, errors.New("LookupUserID")
 	}
 	respBytes, err := callRequestCreds(mod, t, log, conn)
 
@@ -187,4 +201,218 @@ func TestAgentSecurityModule_RequestCreds_BadUid(t *testing.T) {
 	}
 
 	expectCredResp(t, respBytes, int32(daos.MiscError), false)
+}
+
+type signCredentialResp struct {
+	cred *auth.Credential
+	err  error
+}
+
+func TestAgent_SecurityRPC_getCredential(t *testing.T) {
+	testCred := &auth.Credential{
+		Token:  &auth.Token{Flavor: auth.Flavor_AUTH_SYS, Data: []byte("test-token")},
+		Origin: "test-origin",
+	}
+	miscErrBytes, err := proto.Marshal(
+		&auth.GetCredResp{
+			Status: int32(daos.MiscError),
+		},
+	)
+	if err != nil {
+		t.Fatalf("Couldn't marshal misc error: %v", err)
+	}
+	successBytes, err := proto.Marshal(
+		&auth.GetCredResp{
+			Status: 0,
+			Cred:   testCred,
+		},
+	)
+	if err != nil {
+		t.Fatalf("Couldn't marshal success: %v", err)
+	}
+
+	for name, tc := range map[string]struct {
+		secCfg    *securityConfig
+		responses []signCredentialResp
+		expBytes  []byte
+		expErr    error
+	}{
+		"lookup miss": {
+			secCfg: defaultTestSecurityConfig(),
+			responses: []signCredentialResp{
+				{
+					cred: nil,
+					err:  user.UnknownUserIdError(unix.Getuid()),
+				},
+			},
+			expBytes: miscErrBytes,
+		},
+		"lookup OK": {
+			secCfg: func() *securityConfig {
+				cfg := defaultTestSecurityConfig()
+				cfg.credentials.ClientUserMap = security.ClientUserMap{
+					uint32(unix.Getuid()): &security.MappedClientUser{
+						User: "test-user",
+					},
+				}
+				return cfg
+			}(),
+			responses: []signCredentialResp{
+				{
+					cred: nil,
+					err:  user.UnknownUserIdError(unix.Getuid()),
+				},
+				{
+					cred: testCred,
+					err:  nil,
+				},
+			},
+			expBytes: successBytes,
+		},
+		"lookup OK, but retried request fails": {
+			secCfg: func() *securityConfig {
+				cfg := defaultTestSecurityConfig()
+				cfg.credentials.ClientUserMap = security.ClientUserMap{
+					uint32(unix.Getuid()): &security.MappedClientUser{
+						User: "test-user",
+					},
+				}
+				return cfg
+			}(),
+			responses: []signCredentialResp{
+				{
+					cred: nil,
+					err:  user.UnknownUserIdError(unix.Getuid()),
+				},
+				{
+					cred: nil,
+					err:  errors.New("oops"),
+				},
+			},
+			expBytes: miscErrBytes,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			// Set up a real unix socket so we can make a real connection
+			conn, cleanup := setupTestUnixConn(t)
+			defer cleanup()
+
+			mod := NewSecurityModule(log, tc.secCfg)
+			mod.signCredential = func() credSignerFn {
+				var idx int
+				return func(_ context.Context, req *auth.CredentialRequest) (*auth.Credential, error) {
+					defer func() {
+						if idx < len(tc.responses)-1 {
+							idx++
+						}
+					}()
+					t.Logf("returning response %d: %+v", idx, tc.responses[idx])
+					return tc.responses[idx].cred, tc.responses[idx].err
+				}
+			}()
+
+			respBytes, gotErr := callRequestCreds(mod, t, log, conn)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+			if diff := cmp.Diff(tc.expBytes, respBytes); diff != "" {
+				t.Errorf("unexpected response (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestAgent_SecurityCachedCredentials(t *testing.T) {
+	cred0 := &auth.Credential{
+		Token:  &auth.Token{Flavor: auth.Flavor_AUTH_SYS, Data: []byte("user,group1,group2")},
+		Origin: "test-origin",
+	}
+	cred1 := &auth.Credential{
+		Token:  &auth.Token{Flavor: auth.Flavor_AUTH_SYS, Data: []byte("user,group1,group3")},
+		Origin: "test-origin",
+	}
+
+	for name, tc := range map[string]struct {
+		lifetime  time.Duration
+		req       *auth.CredentialRequest
+		responses []signCredentialResp
+		exp       *auth.Credential
+	}{
+		"cache hit": {
+			lifetime: time.Second,
+			req: &auth.CredentialRequest{
+				DomainInfo: security.InitDomainInfo(&syscall.Ucred{Uid: 1234, Gid: 5678}, ""),
+			},
+			responses: []signCredentialResp{
+				{
+					cred: cred0,
+					err:  nil,
+				},
+				{
+					cred: cred1,
+					err:  nil,
+				},
+			},
+			exp: cred0,
+		},
+		"expired entry": {
+			lifetime: time.Nanosecond,
+			req: &auth.CredentialRequest{
+				DomainInfo: security.InitDomainInfo(&syscall.Ucred{Uid: 1234, Gid: 5678}, ""),
+			},
+			responses: []signCredentialResp{
+				{
+					cred: cred0,
+					err:  nil,
+				},
+				{
+					cred: cred1,
+					err:  nil,
+				},
+			},
+			exp: cred1,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			cfg := defaultTestSecurityConfig()
+			cfg.credentials.CacheExpiration = tc.lifetime
+			mod := NewSecurityModule(log, cfg)
+			mod.credCache.cacheMissFn = func() func(_ context.Context, req *auth.CredentialRequest) (*auth.Credential, error) {
+				var idx int
+				return func(_ context.Context, req *auth.CredentialRequest) (*auth.Credential, error) {
+					defer func() {
+						if idx < len(tc.responses)-1 {
+							idx++
+						}
+					}()
+					t.Logf("returning response %d: %+v", idx, tc.responses[idx])
+					return tc.responses[idx].cred, tc.responses[idx].err
+				}
+			}()
+
+			// Prime the cache with a single entry.
+			_, err := mod.credCache.getSignedCredential(test.Context(t), tc.req)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			// Request a second time with the same credentials.
+			cred, err := mod.credCache.getSignedCredential(test.Context(t), tc.req)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			cmpOpts := cmp.Options{
+				protocmp.Transform(),
+			}
+			if diff := cmp.Diff(tc.exp, cred, cmpOpts...); diff != "" {
+				t.Errorf("unexpected credential (-want +got):\n%s", diff)
+			}
+		})
+	}
 }

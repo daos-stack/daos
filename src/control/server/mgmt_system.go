@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -35,12 +37,17 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/system"
 	"github.com/daos-stack/daos/src/control/system/checker"
 	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
 const fabricProviderProp = "fabric_providers"
+const groupUpdatePauseProp = "group_update_paused"
+const domainLabelsProp = "domain_labels"
+
+const domainLabelsSep = "=" // invalid in a label name
 
 // GetAttachInfo handles a request to retrieve a map of ranks to fabric URIs, in addition
 // to client network autoconfiguration hints.
@@ -113,10 +120,19 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 
 	resp.Sys = svc.sysdb.SystemName()
 
+	if dv, err := build.NewVersion(build.DaosVersion); err == nil {
+		resp.BuildInfo = &mgmtpb.BuildInfo{
+			Major: uint32(dv.Major),
+			Minor: uint32(dv.Minor),
+			Patch: uint32(dv.Patch),
+			Tag:   build.BuildInfo,
+		}
+	}
+
 	return resp, nil
 }
 
-// LeaderQuery returns the system leader and access point replica details.
+// LeaderQuery returns the system leader and MS replica details.
 func (svc *mgmtSvc) LeaderQuery(ctx context.Context, req *mgmtpb.LeaderQueryReq) (*mgmtpb.LeaderQueryResp, error) {
 	if err := svc.checkSystemRequest(req); err != nil {
 		return nil, err
@@ -171,9 +187,9 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 		return nil, errors.Wrapf(err, "invalid uuid %q", req.Uuid)
 	}
 
-	fd, err := system.NewFaultDomainFromString(req.SrvFaultDomain)
+	fd, err := svc.verifyFaultDomain(req)
 	if err != nil {
-		return nil, errors.Wrapf(err, "invalid server fault domain %q", req.SrvFaultDomain)
+		return nil, err
 	}
 
 	if err := svc.checkReqFabricProvider(req, peerAddr, svc.events); err != nil {
@@ -193,6 +209,9 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 		CheckMode:               req.CheckMode,
 	})
 	if err != nil {
+		if system.IsJoinFailure(err) {
+			publishJoinFailedEvent(req, peerAddr, svc.events, err.Error())
+		}
 		return nil, errors.Wrap(err, "failed to join system")
 	}
 
@@ -215,6 +234,13 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 		MapVersion: joinResponse.MapVersion,
 	}
 
+	if svc.isGroupUpdatePaused() && svc.allRanksJoined() {
+		if err := svc.resumeGroupUpdate(); err != nil {
+			svc.log.Errorf("failed to resume group update: %s", err.Error())
+		}
+		// join loop will trigger a new group update after this
+	}
+
 	// If the rank is local to the MS leader, then we need to wire up at least
 	// one in order to perform a CaRT group update.
 	if common.IsLocalAddr(peerAddr) && req.Idx == 0 {
@@ -234,6 +260,90 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 	return resp, nil
 }
 
+func (svc *mgmtSvc) verifyFaultDomain(req *mgmtpb.JoinReq) (*system.FaultDomain, error) {
+	fd, err := system.NewFaultDomainFromString(req.SrvFaultDomain)
+	if err != nil {
+		return nil, config.FaultConfigFaultDomainInvalid(err)
+	}
+
+	if fd.Empty() {
+		return nil, errors.New("no fault domain in join request")
+	}
+
+	labels := fd.Labels
+	if !fd.HasLabels() {
+		// While saving the labels, an unlabeled fault domain sets the labels to empty
+		// strings. This allows us to distinguish between unset and unlabeled.
+		labels = make([]string, fd.NumLevels())
+	}
+
+	sysLabels, err := svc.getDomainLabels()
+	if system.IsErrSystemAttrNotFound(err) {
+		svc.log.Debugf("setting fault domain labels for the first time: %+v", labels)
+		if err := svc.setDomainLabels(labels); err != nil {
+			return nil, errors.Wrap(err, "failed to set fault domain labels")
+		}
+		return fd, nil
+	}
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get current fault domain labels")
+	}
+
+	// If system labels are all empty strings, that indicates an unlabeled system. In errors
+	// and logging, clearer to present this as a completely empty array.
+	var printSysLabels []string
+	if sysLabels[0] != "" {
+		printSysLabels = sysLabels
+	}
+
+	svc.log.Tracef("system labels: [%s], request labels: [%s]", strings.Join(printSysLabels, ", "), strings.Join(labels, ", "))
+	if len(sysLabels) != len(labels) {
+		return nil, FaultBadFaultDomainLabels(req.SrvFaultDomain, req.Uri, fd.Labels, printSysLabels)
+	}
+	for i := range sysLabels {
+		if labels[i] != sysLabels[i] {
+			return nil, FaultBadFaultDomainLabels(req.SrvFaultDomain, req.Uri, fd.Labels, printSysLabels)
+		}
+	}
+	return fd, nil
+}
+
+func (svc *mgmtSvc) getDomainLabels() ([]string, error) {
+	propStr, err := system.GetMgmtProperty(svc.sysdb, domainLabelsProp)
+	if err != nil {
+		return nil, err
+	}
+	return strings.Split(propStr, domainLabelsSep), nil
+}
+
+func (svc *mgmtSvc) setDomainLabels(labels []string) error {
+	propStr := strings.Join(labels, domainLabelsSep)
+	return system.SetMgmtProperty(svc.sysdb, domainLabelsProp, propStr)
+}
+
+// allRanksJoined checks whether all ranks that the system knows about, and that are not admin
+// excluded, are joined.
+//
+// NB: This checks the state to determine if the rank is joined. There is a potential hole here,
+// in a case where the system was killed with ranks in the joined state, rather than stopping the
+// ranks first. In that case we may fire this off too early.
+func (svc *mgmtSvc) allRanksJoined() bool {
+	var total int
+	var joined int
+	var err error
+	if total, err = svc.sysdb.MemberCount(); err != nil {
+		svc.log.Errorf("failed to get total member count: %s", err)
+		return false
+	}
+
+	if joined, err = svc.sysdb.MemberCount(system.MemberStateJoined, system.MemberStateAdminExcluded); err != nil {
+		svc.log.Errorf("failed to get joined member count: %s", err)
+		return false
+	}
+
+	return total == joined
+}
+
 func (svc *mgmtSvc) checkReqFabricProvider(req *mgmtpb.JoinReq, peerAddr *net.TCPAddr, publisher events.Publisher) error {
 	joinProv, err := getProviderFromURI(req.Uri)
 	if err != nil {
@@ -242,18 +352,26 @@ func (svc *mgmtSvc) checkReqFabricProvider(req *mgmtpb.JoinReq, peerAddr *net.TC
 
 	sysProv, err := svc.getFabricProvider()
 	if err != nil {
-		return errors.Wrapf(err, "fetching system fabric provider")
+		if system.IsErrSystemAttrNotFound(err) {
+			svc.log.Debugf("error fetching system fabric provider: %s", err.Error())
+			return system.ErrLeaderStepUpInProgress
+		}
+		return errors.Wrap(err, "fetching system fabric provider")
 	}
 
 	if joinProv != sysProv {
 		msg := fmt.Sprintf("rank %d fabric provider %q does not match system provider %q",
 			req.Rank, joinProv, sysProv)
 
-		publisher.Publish(events.NewEngineJoinFailedEvent(peerAddr.String(), req.Idx, req.Rank, msg))
+		publishJoinFailedEvent(req, peerAddr, publisher, msg)
 		return errors.New(msg)
 	}
 
 	return nil
+}
+
+func publishJoinFailedEvent(req *mgmtpb.JoinReq, peerAddr *net.TCPAddr, publisher events.Publisher, msg string) {
+	publisher.Publish(events.NewEngineJoinFailedEvent(peerAddr.String(), req.Idx, req.Rank, msg))
 }
 
 func getProviderFromURI(uri string) (string, error) {
@@ -270,6 +388,27 @@ func (svc *mgmtSvc) getFabricProvider() (string, error) {
 
 func (svc *mgmtSvc) setFabricProviders(val string) error {
 	return system.SetMgmtProperty(svc.sysdb, fabricProviderProp, val)
+}
+
+func (svc *mgmtSvc) isGroupUpdatePaused() bool {
+	propStr, err := system.GetMgmtProperty(svc.sysdb, groupUpdatePauseProp)
+	if err != nil {
+		return false
+	}
+	result, err := strconv.ParseBool(propStr)
+	if err != nil {
+		svc.log.Errorf("invalid value for mgmt prop %q: %s", groupUpdatePauseProp, err.Error())
+		return false
+	}
+	return result
+}
+
+func (svc *mgmtSvc) pauseGroupUpdate() error {
+	return system.SetMgmtProperty(svc.sysdb, groupUpdatePauseProp, "true")
+}
+
+func (svc *mgmtSvc) resumeGroupUpdate() error {
+	return system.SetMgmtProperty(svc.sysdb, groupUpdatePauseProp, "false")
 }
 
 func (svc *mgmtSvc) updateFabricProviders(provList []string, publisher events.Publisher) error {
@@ -298,7 +437,16 @@ func (svc *mgmtSvc) updateFabricProviders(provList []string, publisher events.Pu
 				curProv, provStr, numJoined)
 		}
 
+		if err := svc.pauseGroupUpdate(); err != nil {
+			return errors.Wrapf(err, "unable to pause group update before provider change")
+		}
+
 		if err := svc.setFabricProviders(provStr); err != nil {
+			if guErr := svc.resumeGroupUpdate(); guErr != nil {
+				// something is very wrong if this happens
+				svc.log.Errorf("unable to resume group update after provider change failed: %s", guErr.Error())
+			}
+
 			return errors.Wrapf(err, "changing fabric provider prop")
 		}
 		publisher.Publish(newFabricProvChangedEvent(curProv, provStr))
@@ -309,9 +457,9 @@ func (svc *mgmtSvc) updateFabricProviders(provList []string, publisher events.Pu
 	return nil
 }
 
-func newFabricProvChangedEvent(old, new string) *events.RASEvent {
+func newFabricProvChangedEvent(o, n string) *events.RASEvent {
 	return events.NewGenericEvent(events.RASSystemFabricProvChanged, events.RASSeverityNotice,
-		fmt.Sprintf("system fabric provider has changed: %s -> %s", old, new), "")
+		fmt.Sprintf("system fabric provider has changed: %s -> %s", o, n), "")
 }
 
 // reqGroupUpdate requests a group update.
@@ -326,6 +474,11 @@ func (svc *mgmtSvc) reqGroupUpdate(ctx context.Context, sync bool) {
 // NB: This method must not be called concurrently, as out-of-order
 // group updates may trigger engine assertions.
 func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, forced bool) error {
+	if svc.isGroupUpdatePaused() {
+		svc.log.Debugf("group update requested (force: %v), but temporarily paused", forced)
+		return nil
+	}
+
 	if forced {
 		if err := svc.sysdb.IncMapVer(); err != nil {
 			return err
@@ -915,6 +1068,150 @@ func (svc *mgmtSvc) SystemExclude(ctx context.Context, req *mgmtpb.SystemExclude
 		})
 	}
 
+	svc.reqGroupUpdate(ctx, false)
+
+	return resp, nil
+}
+
+func (svc *mgmtSvc) SystemDrain(ctx context.Context, req *mgmtpb.SystemDrainReq) (*mgmtpb.SystemDrainResp, error) {
+	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
+		return nil, err
+	}
+
+	if req.Hosts == "" && req.Ranks == "" {
+		return nil, errors.New("no hosts or ranks specified")
+	}
+
+	hitRanks, missRanks, missHosts, err := svc.resolveRanks(req.Hosts, req.Ranks)
+	if err != nil {
+		return nil, err
+	}
+
+	if missHosts.Count() > 0 {
+		return nil, errors.Errorf("invalid host(s): %s", missHosts.String())
+	}
+	if missRanks.Count() > 0 {
+		return nil, errors.Errorf("invalid rank(s): %s", missRanks.String())
+	}
+	if hitRanks.Count() == 0 {
+		return nil, errors.New("no ranks to drain")
+	}
+
+	// Drain rank on each pool it belongs to.
+
+	psList, err := svc.sysdb.PoolServiceList(false)
+	if err != nil {
+		return nil, err
+	}
+
+	ranksMap := make(map[ranklist.Rank]struct{})
+	for _, r := range hitRanks.Ranks() {
+		ranksMap[r] = struct{}{}
+	}
+
+	poolRanks := make(map[string]*ranklist.RankSet)
+	poolIDs := []string{} // Label or UUID.
+	for _, ps := range psList {
+		currentRanks := ps.Storage.CurrentRanks()
+
+		// Label preferred over UUID.
+		poolID := ps.PoolLabel
+		if poolID == "" {
+			poolID = ps.PoolUUID.String()
+		}
+
+		svc.log.Tracef("pool-service detected: id %s, ranks %v", poolID, currentRanks)
+
+		for _, r := range currentRanks {
+			if _, exists := ranksMap[r]; !exists {
+				continue
+			}
+			if _, exists := poolRanks[poolID]; !exists {
+				poolRanks[poolID] = ranklist.MustCreateRankSet("")
+				poolIDs = append(poolIDs, poolID)
+			}
+			poolRanks[poolID].Add(r)
+		}
+	}
+	svc.log.Debugf("pool-ranks to drain: %v", poolRanks)
+
+	sort.Strings(poolIDs)
+
+	resp := new(mgmtpb.SystemDrainResp)
+	drainReq := new(mgmtpb.PoolDrainReq)
+	drainReq.Sys = req.Sys
+
+	for _, id := range poolIDs {
+		rs := poolRanks[id]
+		if rs.Count() == 0 {
+			continue
+		}
+		drained := ranklist.MustCreateRankSet("")
+		failed := make(map[string]*ranklist.RankSet)
+
+		// Use our incoming request and just replace relevant parameters on each iteration.
+		drainReq.Id = id
+
+		// TODO DAOS-6611: Drain multiple pool-ranks per call when drpc.MethodPoolDrain API
+		//                 supports it.
+		for _, r := range rs.Ranks() {
+			var errMsg string
+			drainReq.Rank = r.Uint32()
+
+			drpcResp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolDrain,
+				drainReq)
+			if err != nil {
+				return nil, err
+			}
+
+			drainResp := &mgmtpb.PoolDrainResp{}
+			if err = proto.Unmarshal(drpcResp.Body, drainResp); err != nil {
+				errMsg = errors.Wrap(err, "unmarshal PoolEvict response").Error()
+				drainResp.Status = int32(daos.IOInvalid)
+			} else if drainResp.Status != int32(daos.Success) {
+				errMsg = daos.Status(drainResp.Status).Error()
+			}
+
+			svc.log.Tracef("pool-drain triggered from system-drain: %+v (req: %+v)",
+				drainResp, drainReq)
+
+			// Each rank-drain failure message will produce a single result.
+			if drainResp.Status != 0 {
+				if _, exists := failed[errMsg]; !exists {
+					failed[errMsg] = ranklist.MustCreateRankSet("")
+				}
+				failed[errMsg].Add(r)
+			} else {
+				drained.Add(ranklist.Rank(drainReq.Rank))
+			}
+		}
+
+		// Single result generated for all ranks drained successfully.
+		if drained.Count() > 0 {
+			resp.Results = append(resp.Results, &mgmtpb.SystemDrainResp_DrainResult{
+				PoolId: id,
+				Ranks:  drained.String(),
+			})
+		}
+
+		var msgs []string
+		for msg := range failed {
+			msgs = append(msgs, msg)
+		}
+		sort.Strings(msgs)
+
+		// Result generated for each failure message rank-group.
+		for _, msg := range msgs {
+			resp.Results = append(resp.Results, &mgmtpb.SystemDrainResp_DrainResult{
+				// Status already included in error message.
+				Status: -1,
+				Msg:    msg,
+				PoolId: id,
+				Ranks:  failed[msg].String(),
+			})
+		}
+	}
+
 	return resp, nil
 }
 
@@ -1067,7 +1364,7 @@ func (svc *mgmtSvc) SystemCleanup(ctx context.Context, req *mgmtpb.SystemCleanup
 	evictReq.Machine = req.Machine
 
 	for _, ps := range psList {
-		var errmsg string = ""
+		var errMsg string
 
 		// Use our incoming request and just replace the uuid on each iteration
 		evictReq.Id = ps.PoolUUID.String()
@@ -1080,18 +1377,18 @@ func (svc *mgmtSvc) SystemCleanup(ctx context.Context, req *mgmtpb.SystemCleanup
 		res := &mgmtpb.PoolEvictResp{}
 		if err = proto.Unmarshal(dresp.Body, res); err != nil {
 			res.Status = int32(daos.IOInvalid)
-			errmsg = errors.Wrap(err, "unmarshal PoolEvict response").Error()
+			errMsg = errors.Wrap(err, "unmarshal PoolEvict response").Error()
 			res.Count = 0
 		}
 
 		if res.Status != int32(daos.Success) {
-			errmsg = fmt.Sprintf("Unable to clean up handles for machine %s on pool %s", evictReq.Machine, evictReq.Id)
+			errMsg = fmt.Sprintf("Unable to clean up handles for machine %s on pool %s", evictReq.Machine, evictReq.Id)
 		}
 
 		svc.log.Debugf("Response from pool evict in cleanup: '%+v' (req: '%+v')", res, evictReq)
 		resp.Results = append(resp.Results, &mgmtpb.SystemCleanupResp_CleanupResult{
 			Status: res.Status,
-			Msg:    errmsg,
+			Msg:    errMsg,
 			PoolId: evictReq.Id,
 			Count:  uint32(res.Count),
 		})

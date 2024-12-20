@@ -35,7 +35,11 @@ TEST_PACKAGES ?= ${NAME}
 # unfortunately we cannot always name the repo the same as the project
 REPO_NAME ?= $(NAME)
 
+ifneq ($(CI_PR_REPOS),)
+PR_REPOS                 ?= $(CI_PR_REPOS)
+else
 PR_REPOS                 ?= $(shell git show -s --format=%B | sed -ne 's/^PR-repos: *\(.*\)/\1/p')
+endif
 LEAP_15_PR_REPOS         ?= $(shell git show -s --format=%B | sed -ne 's/^PR-repos-leap15: *\(.*\)/\1/p')
 EL_7_PR_REPOS            ?= $(shell git show -s --format=%B | sed -ne 's/^PR-repos-el7: *\(.*\)/\1/p')
 EL_8_PR_REPOS            ?= $(shell git show -s --format=%B | sed -ne 's/^PR-repos-el8: *\(.*\)/\1/p')
@@ -424,6 +428,8 @@ packaging_check:
 	          --exclude libfabric.spec                      \
 	          --exclude Makefile                            \
 	          --exclude README.md                           \
+	          --exclude SECURITY.md                         \
+	          --exclude LICENSE                             \
 	          --exclude _topdir                             \
 	          --exclude \*.tar.\*                           \
 	          --exclude \*.code-workspace                   \

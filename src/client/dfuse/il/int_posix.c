@@ -34,6 +34,7 @@
 #include "dfuse_common.h"
 
 #include "ioil.h"
+#include "../pil4dfs/hook.h"
 
 FOREACH_INTERCEPT(IOIL_FORWARD_DECL)
 
@@ -62,6 +63,7 @@ struct ioil_global {
 	bool		iog_daos_init;
 
 	bool		iog_show_summary;	/**< Should a summary be shown at teardown */
+	bool		iog_fini_done;		/**< Whether destructor function is finished */
 	unsigned	iog_report_count;	/**< Number of operations that should be logged */
 
 	ATOMIC uint64_t iog_file_count;  /**< Number of file opens intercepted */
@@ -75,6 +77,10 @@ static vector_t	fd_table;
 static struct ioil_global ioil_iog;
 
 static __thread int saved_errno;
+
+static void *(*real_mmap)(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
+static void *
+dfuse_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
 
 #define SAVE_ERRNO(is_error)                 \
 	do {                                 \
@@ -344,14 +350,19 @@ ioil_init(void)
 		ioil_iog.iog_eq_count_max = IOIL_MAX_EQ;
 	}
 
+	register_a_hook("libc", "mmap", (void *)dfuse_mmap, (long int *)(&real_mmap));
+	install_hook();
+
 	ioil_iog.iog_initialized = true;
 }
 
 static void
 ioil_show_summary()
 {
-	D_INFO("Performed %"PRIu64" reads and %"PRIu64" writes from %"PRIu64" files\n",
-	       ioil_iog.iog_read_count, ioil_iog.iog_write_count, ioil_iog.iog_file_count);
+	D_INFO("Performed %" PRIu64 " reads, %" PRIu64 " writes and %" PRIu64
+	       " fstats from %" PRIu64 " files\n",
+	       ioil_iog.iog_read_count, ioil_iog.iog_write_count, ioil_iog.iog_fstat_count,
+	       ioil_iog.iog_file_count);
 
 	if (ioil_iog.iog_file_count == 0 || !ioil_iog.iog_show_summary)
 		return;
@@ -370,11 +381,17 @@ ioil_fini(void)
 	int               rc;
 	pid_t             tid = syscall(SYS_gettid);
 
+	if (ioil_iog.iog_fini_done)
+		return;
 	if (tid != ioil_iog.iog_init_tid) {
 		DFUSE_TRA_INFO(&ioil_iog, "Ignoring destructor from alternate thread");
 		return;
 	}
 
+	if (ioil_iog.iog_initialized)
+		uninstall_hook();
+	else
+		free_memory_in_hook();
 	ioil_iog.iog_initialized = false;
 
 	DFUSE_TRA_DOWN(&ioil_iog);
@@ -415,6 +432,7 @@ ioil_fini(void)
 	}
 	ioil_iog.iog_daos_init = false;
 	daos_debug_fini();
+	ioil_iog.iog_fini_done = true;
 }
 
 int
@@ -802,14 +820,21 @@ child_hdlr(void)
 {
 	int rc;
 
-	daos_eq_lib_reset_after_fork();
-	daos_dti_reset();
-	ioil_eqh = ioil_iog.iog_main_eqh = DAOS_HDL_INVAL;
-	rc = daos_eq_create(&ioil_eqh);
+	rc = daos_reinit();
 	if (rc)
-		DFUSE_LOG_WARNING("daos_eq_create() failed: "DF_RC, DP_RC(rc));
-	else
-		ioil_iog.iog_main_eqh = ioil_eqh;
+		DL_WARN(rc, "daos_reinit() failed in child process");
+
+	/** Reset event queue */
+	ioil_eqh = ioil_iog.iog_main_eqh = DAOS_HDL_INVAL;
+
+	if (ioil_iog.iog_eq_count_max) {
+		rc = daos_eq_create(&ioil_eqh);
+		if (rc)
+			DFUSE_LOG_WARNING("daos_eq_create() failed: " DF_RC, DP_RC(rc));
+		else
+			ioil_iog.iog_main_eqh = ioil_eqh;
+	}
+	ioil_iog.iog_eq_count = 0;
 }
 
 /* Returns true on success */
@@ -858,10 +883,12 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags)
 				D_GOTO(err, rc = daos_der2errno(rc));
 			}
 			ioil_iog.iog_main_eqh = ioil_eqh;
-
-			rc = pthread_atfork(NULL, NULL, &child_hdlr);
-			D_ASSERT(rc == 0);
 		}
+
+		rc = pthread_atfork(NULL, NULL, &child_hdlr);
+		if (rc)
+			DFUSE_LOG_WARNING("Failed to install atfork handler: " DF_RC, DP_RC(rc));
+		rc = 0;
 	}
 
 	d_list_for_each_entry(pool, &ioil_iog.iog_pools_head, iop_pools) {
@@ -1752,9 +1779,8 @@ do_real_pwritev:
 	return __real_pwritev(fd, vector, iovcnt, offset);
 }
 
-DFUSE_PUBLIC void *
-dfuse_mmap(void *address, size_t length, int prot, int flags, int fd,
-	   off_t offset)
+static void *
+dfuse_mmap(void *address, size_t length, int prot, int flags, int fd, off_t offset)
 {
 	struct fd_entry *entry;
 	int rc;
@@ -1781,7 +1807,7 @@ dfuse_mmap(void *address, size_t length, int prot, int flags, int fd,
 			return MAP_FAILED;
 	}
 
-	return __real_mmap(address, length, prot, flags, fd, offset);
+	return real_mmap(address, length, prot, flags, fd, offset);
 }
 
 DFUSE_PUBLIC int
@@ -2505,14 +2531,8 @@ dfuse_fputs(char *__str, FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
-	D_ERROR("Unsupported function\n");
-
-	entry->fd_err = ENOTSUP;
-
+	DISABLE_STREAM(entry, stream);
 	vector_decref(&fd_table, entry);
-
-	errno = ENOTSUP;
-	return EOF;
 
 do_real_fn:
 	return __real_fputs(__str, stream);
@@ -2536,12 +2556,8 @@ dfuse_fputws(const wchar_t *ws, FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
-	entry->fd_err = ENOTSUP;
-
+	DISABLE_STREAM(entry, stream);
 	vector_decref(&fd_table, entry);
-
-	errno = ENOTSUP;
-	return -1;
 
 do_real_fn:
 	return __real_fputws(ws, stream);
@@ -3003,6 +3019,13 @@ dfuse_get_bypass_status(int fd)
 	vector_decref(&fd_table, entry);
 
 	return rc;
+}
+
+DFUSE_PUBLIC void
+dfuse_exit(int rc)
+{
+	ioil_fini();
+	return __real_exit(rc);
 }
 
 FOREACH_INTERCEPT(IOIL_DECLARE_ALIAS)

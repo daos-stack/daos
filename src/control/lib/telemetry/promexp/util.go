@@ -110,6 +110,28 @@ func (m cvMap) set(name string, value float64, labels labelMap) error {
 	return nil
 }
 
+type hvMap map[string]*daosHistogramVec
+
+func (m hvMap) add(name, help string, labels labelMap, buckets []float64) {
+	if _, found := m[name]; !found {
+		hv := newDaosHistogramVec(prometheus.HistogramOpts{
+			Name:    name,
+			Help:    help,
+			Buckets: buckets,
+		}, labels.keys())
+		m[name] = hv
+	}
+}
+
+func (m hvMap) set(name string, labels labelMap, samples, sum uint64, values []uint64) error {
+	hv, found := m[name]
+	if !found {
+		return errors.Errorf("histogram vector %s not found", name)
+	}
+
+	return hv.With(prometheus.Labels(labels)).AddSample(samples, float64(sum), values)
+}
+
 type metricStat struct {
 	name      string
 	desc      string
@@ -141,16 +163,18 @@ func getMetricStats(baseName string, m telemetry.Metric) (stats []*metricStat) {
 			desc: " (mean)",
 		},
 		"sum": {
-			fn:   func() float64 { return float64(ms.Sum()) },
-			desc: " (sum)",
+			fn:        func() float64 { return float64(ms.Sum()) },
+			isCounter: true,
+			desc:      " (sum)",
 		},
 		"stddev": {
 			fn:   ms.StdDev,
 			desc: " (std dev)",
 		},
 		"sumsquares": {
-			fn:   ms.SumSquares,
-			desc: " (sum of squares)",
+			fn:        ms.SumSquares,
+			isCounter: true,
+			desc:      " (sum of squares)",
 		},
 		"samples": {
 			fn:        func() float64 { return float64(ms.SampleSize()) },

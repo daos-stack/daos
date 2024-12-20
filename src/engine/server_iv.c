@@ -482,8 +482,8 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 				     priv_entry ? priv_entry->priv : NULL);
 	}
 	if (rc != 0) {
-		D_DEBUG(DB_MD, "key id %d update failed: rc = %d\n",
-			key.class_id, rc);
+		D_DEBUG(DB_MD, "key id %d update failed: rc = " DF_RC "\n", key.class_id,
+			DP_RC(rc));
 		D_GOTO(output, rc);
 	}
 
@@ -578,7 +578,7 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	struct ds_iv_class	*class;
 	struct ds_iv_key	key;
 	struct iv_priv_entry	*priv_entry;
-	void			*entry_priv_val;
+	void			*entry_priv_val = NULL;
 	bool			alloc_entry = false;
 	int			rc;
 
@@ -978,7 +978,7 @@ ds_iv_done(crt_iv_namespace_t ivns, uint32_t class_id,
 				iv_value->sg_iovs[0].iov_len);
 	}
 
-	ABT_future_set(cb_info->future, &rc);
+	ABT_future_set(cb_info->future, NULL);
 	return ret;
 }
 
@@ -1096,8 +1096,13 @@ retry:
 		 */
 		D_INFO("ns %u retry for class %d opc %d rank %u/%u: " DF_RC "\n", ns->iv_ns_id,
 		       key->class_id, opc, key->rank, ns->iv_master_rank, DP_RC(rc));
-		/* sleep 1sec and retry */
-		dss_sleep(1000);
+		if (key->class_id == IV_OID) {
+			/* sleep 1msec and retry */
+			dss_sleep(1);
+		} else {
+			/* sleep 1sec and retry */
+			dss_sleep(1000);
+		}
 		goto retry;
 	}
 
