@@ -12,6 +12,7 @@ import sys
 
 import cart_logparse
 
+
 class SysPools():
     """Directory of Pools and Summary Activities Found in Engine Log Files"""
 
@@ -107,7 +108,7 @@ class SysPools():
         return found
 
     # return log-message, hostname, and date/timestamp components of the line
-    def get_line_components(self, line):
+    def _get_line_components(self, line):
         return line.get_msg(), line.hostname, line.time_stamp
 
     # is this rank, pid the leader of the pool with uuid puuid?
@@ -119,7 +120,7 @@ class SysPools():
         return False
 
     def _match_ps_step_up(self, fname, line, pid, rank):
-        msg, host, datetime = self.get_line_components(line)
+        msg, host, datetime = self._get_line_components(line)
         match = self.re_step_up.match(msg)
         if match:
             puuid = match.group(1)
@@ -158,7 +159,7 @@ class SysPools():
         return False
 
     def _match_ps_step_down(self, fname, line, pid, rank):
-        msg, host, datetime = self.get_line_components(line)
+        msg, host, datetime = self._get_line_components(line)
         match = self.re_step_down.match(msg)
         if match:
             puuid = match.group(1)
@@ -176,7 +177,7 @@ class SysPools():
         return False
 
     def _match_ps_pmap_update(self, fname, line, pid, rank):
-        msg, host, datetime = self.get_line_components(line)
+        msg, host, datetime = self._get_line_components(line)
         match = self.re_pmap_update.match(msg)
         if match:
             puuid = match.group(1)
@@ -205,7 +206,7 @@ class SysPools():
         # Do not match on new rebuild log format if we found legacy format
         if not self._check_rb_new_fmt:
             return False
-        msg, host, datetime = self.get_line_components(line)
+        msg, host, datetime = self._get_line_components(line)
         match = self.re_rebuild_ldr_start.match(msg)
         if match:
             # Disable checking for legacy rebuild log format, to save execution time
@@ -241,7 +242,7 @@ class SysPools():
         # Do not match on legacy rebuild log format if we found new format
         if not self._check_rb_legacy_fmt:
             return False
-        msg, host, datetime = self.get_line_components(line)
+        msg, host, datetime = self._get_line_components(line)
         match = self.re_old_ldr_start.match(msg)
         if match:
             # Disable checking for new rebuild log format, to save execution time
@@ -279,7 +280,7 @@ class SysPools():
         # Do not match on new rebuild log format if we found legacy format
         if not self._check_rb_new_fmt:
             return False
-        msg, host, datetime = self.get_line_components(line)
+        msg, host, datetime = self._get_line_components(line)
         match = self.re_rebuild_ldr_status.match(msg)
         if match:
             # Disable checking for legacy rebuild log format, to save execution time
@@ -337,7 +338,7 @@ class SysPools():
         # Do not match on legacy rebuild log format if we found new format
         if not self._check_rb_legacy_fmt:
             return False
-        msg, host, datetime = self.get_line_components(line)
+        msg, host, datetime = self._get_line_components(line)
         match = self.re_old_ldr_status.match(msg)
         if match:
             # Disable checking for new rebuild log format, to save execution time
@@ -443,7 +444,7 @@ class SysPools():
 
     def print_pools(self):
         """Print all pools important events found in a nested dictionary"""
-        for puuid in self._pools:
+        for puuid in self._pools.keys():
             print(f"===== Pool {puuid}:")
             for term in self._pools[puuid]:
                 b = self._pools[puuid][term]["begin_time"]
@@ -498,7 +499,7 @@ class SysPools():
 
     def sort(self):
         """Sort the nested dictionary of pools by pool service term"""
-        for puuid in self._pools:
+        for puuid in self._pools.keys():
             tmp = dict(sorted(self._pools[puuid].items()))
             self._pools[puuid] = tmp
         # _pools[puuid][term]["maps"] should have been inserted in ascending order already?
