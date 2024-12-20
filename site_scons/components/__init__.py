@@ -309,9 +309,7 @@ def define_components(reqs):
 
     reqs.define('fused', libs=['fused'], defines=['FUSE_USE_VERSION=35'],
                 retriever=GitRepoRetriever('https://github.com/daos-stack/fused.git'),
-                commands=[['find', '../fused', '-type', 'f', '-name', '*', '-exec', 'sed', '-i',
-                           's/fuse3/fused/g', '{}', ';'],
-                          ['meson', 'setup', '--prefix=$FUSED_PREFIX', '-Ddisable-mtab=True',
+                commands=[['meson', 'setup', '--prefix=$FUSED_PREFIX', '-Ddisable-mtab=True',
                            '-Dudevrulesdir=$FUSED_PREFIX/udev', '-Dutils=False',
                            '--default-library', 'shared', '../fused'],
                           ['ninja', 'install']],
