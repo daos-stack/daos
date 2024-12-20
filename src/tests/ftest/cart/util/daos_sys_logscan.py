@@ -10,9 +10,6 @@ import argparse
 import cart_logparse
 import re
 import sys
-#import time
-#import pprint
-#from collections import Counter, OrderedDict, defaultdict
 
 
 class SysPools():
@@ -49,8 +46,8 @@ class SysPools():
 
     # Rebuild preliminary steps
     # TODO/FIXME rebuild_task_ult() waiting for sched time, and map dist needs uniform rb= string.
-    #re.compile(r"rebuild_task_ult\(\).*rebuild task sleep (\d+) second")
-    #re.compile(r"rebuild_task_ult\(\).*map_dist_ver (\d+) map ver (\d+)")
+    # re.compile(r"rebuild_task_ult\(\).*rebuild task sleep (\d+) second")
+    # re.compile(r"rebuild_task_ult\(\).*map_dist_ver (\d+) map ver (\d+)")
 
     # Rebuild: PS leader engine starting and status checking a given operation
     # statuses: "scanning", "pulling", "completed", "aborted"
@@ -58,6 +55,13 @@ class SysPools():
     ldr_status_re = r"rebuild_leader_status_check\(\).*" + rbid_re + r" \[(\w+)\].*duration=(\d+)"
     re_rebuild_ldr_start = re.compile(ldr_start_re)
     re_rebuild_ldr_status = re.compile(ldr_status_re)
+
+    # Legacy rebuild PS leader logging (before uniform rebuild string)
+    old_ldr_start_re = r"rebuild_leader_start.*([0-9a-fA-F]{8}).*version=(\d+)/(\d+).*op=(\w+)"
+    old_ldr_status_re = (r"rebuild_leader_status_check\(\) (\w+) \[(\w+)\] \(pool ([0-9a-fA-F]{8}) "
+                         r"leader (\d+) term (\d+).*ver=(\d+),gen (\d+).*duration=(\d+) secs")
+    re_old_ldr_start = re.compile(old_ldr_start_re)
+    re_old_ldr_status = re.compile(old_ldr_status_re)
 
     def __init__(self):
         # dictionaries indexed by pool UUID
@@ -73,7 +77,11 @@ class SysPools():
         self._warnings = []
 
     def _warn(self, wmsg, fname, line):
-        full_msg = f"WARN file={fname}, line={line.lineno}: " + wmsg
+        full_msg = f"WARN file={fname}"
+        if line:
+            full_msg += f", line={line.lineno}"
+        full_msg += f": {wmsg}"
+
         self._warnings.append(full_msg)
         print(full_msg)
 
@@ -97,7 +105,7 @@ class SysPools():
 
     # is this rank, pid the leader of the pool with uuid puuid?
     def is_leader(self, puuid, rank, pid):
-        if not puuid in self._pools:
+        if puuid not in self._pools:
             return False
         if self._cur_ldr_rank[puuid] == rank and self._cur_ldr_pid[puuid] == pid:
             return True
@@ -111,7 +119,7 @@ class SysPools():
             term = int(match.group(2))
             if puuid not in self._pools:
                 self._pools[puuid] = {}
-            self._cur_ldr_rank[puuid]= rank
+            self._cur_ldr_rank[puuid] = rank
             self._cur_ldr_pid[puuid] = pid
             self._cur_term[puuid] = term
             old_term = term - 1
@@ -124,7 +132,7 @@ class SysPools():
                     last_mapver = list(self._pools[puuid][old_term]["maps"].keys())[-1]
                     pmap_versions = self._pools[puuid][old_term]["maps"][last_mapver]
                     pmap_versions["carryover"] = True
-                    #pmap_versions["rb_gens"] = {}
+                    # pmap_versions["rb_gens"] = {}
             else:
                 pmap_versions = {}
             self._pools[puuid][term] = {
@@ -135,9 +143,9 @@ class SysPools():
                 "pid": pid,
                 "logfile": fname,
                 "maps": pmap_versions
-                }
+            }
             # DEBUG
-            #print(f"{datetime} FOUND pool {puuid} BEGIN\tterm {term} pmap_versions empty: "
+            # print(f"{datetime} FOUND pool {puuid} BEGIN\tterm {term} pmap_versions empty: "
             #      f"{str(pmap_versions == {})} rank {rank}\t{host}\tPID {pid}\t{fname}")
             return True
         return False
@@ -148,14 +156,14 @@ class SysPools():
         if match:
             puuid = match.group(1)
             term = int(match.group(2))
-            if (term != self._cur_term[puuid]):
+            if term != self._cur_term[puuid]:
                 self._warn(f"step_down term={term} != cur_term={self._cur_term}", fname, line)
             self._cur_ldr_rank[puuid] = -1
             self._cur_ldr_pid[puuid] = -1
             self._cur_term[puuid] = -1
             self._pools[puuid][term]["end_time"] = datetime
             # DEBUG
-            #print(f"{datetime} FOUND pool {puuid} END\tterm {term} rank {rank}\t{host}\t"
+            # print(f"{datetime} FOUND pool {puuid} END\tterm {term} rank {rank}\t{host}\t"
             #      f"PID {pid}\t{fname}")
             return True
         return False
@@ -191,6 +199,42 @@ class SysPools():
         match = self.re_rebuild_ldr_start.match(msg)
         if match:
             puuid, ver, gen, op = self.get_rb_components(match)
+            if not self.is_leader(puuid, rank, pid):
+                return True
+            term = self._cur_term[puuid]
+            if term < 1:
+                self._warn(f"pool {puuid} I don't know what term it is ({term})!", fname, line)
+                return True
+            if gen in self._pools[puuid][term]["maps"][ver]["rb_gens"]:
+                self._warn(f"pool {puuid} term {term} ver {ver} already has gen {gen}", fname, line)
+            # TODO: keep timestamps for overall/scan start, pull start, completed
+            #       convert to float and store component durations too
+            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen] = {
+                "op": op,
+                "start_time": datetime,
+                "time": "xx/xx-xx:xx:xx.xx",
+                "started": True,
+                "scanning": False,
+                "pulling": False,
+                "completed": False,
+                "aborted": False,
+                "duration": 0
+                }
+            # DEBUG
+            #print(f"{datetime} FOUND rebuild start in term {term}, rb={puuid}/{ver}/{gen}/{op} "
+            #      f"rank {rank}\t{host}\tPID {pid}\t{fname}")
+            return True
+        return False
+
+    def match_legacy_ps_rb_start(self, fname, line, pid, rank):
+        #old_ldr_start_re = r"rebuild_leader_start.*([0-9a-fA-F]{8}).*version=(\d+)/(\d+).*op=(\w+)"
+        msg, host, datetime = self.get_line_components(line)
+        match = self.re_old_ldr_start.match(msg)
+        if match:
+            puuid = match.group(1)
+            ver = int(match.group(2))
+            gen = int(match.group(3))
+            op = match.group(4)
             if not self.is_leader(puuid, rank, pid):
                 return True
             term = self._cur_term[puuid]
@@ -255,6 +299,67 @@ class SysPools():
                 existing_op = self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["op"]
                 if op != existing_op:
                     self._warn(f"rb={puuid}/{ver}/{gen}/{existing_op} != line op {op}", fname, line)
+            if status == "scanning":
+                self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["scanning"] = True
+            elif status == "pulling":
+                self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["pulling"] = True
+            elif status == "completed":
+                self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["completed"] = True
+            elif status == "aborted":
+                self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["aborted"] = True
+            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["time"] = datetime
+            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["duration"] = dur
+            # DEBUG
+            # print(f"{datetime} FOUND rebuild UPDATE term={term} rb={puuid}/{ver}/{gen}/{op} "
+            #      f"STATUS={status}, DUR={dur} seconds rank {rank}\t{host}\tPID {pid}\t{fname}")
+            return True
+        return False
+
+    def match_legacy_ps_rb_status(self, fname, line, pid, rank):
+        msg, host, datetime = self.get_line_components(line)
+        match = self.re_old_ldr_status.match(msg)
+        if match:
+            op = match.group(1)
+            status = match.group(2)
+            puuid = match.group(3)
+            log_ldr = int(match.group(4))
+            log_term = int(match.group(5))
+            ver = int(match.group(6))
+            gen = int(match.group(7))
+            dur = int(match.group(8))
+            if not self.is_leader(puuid, rank, pid):
+                return True
+            if rank != log_ldr:
+                self._warn(f"pool {puuid} my rank {rank} != leader {log_ldr}", fname, line)
+            term = self._cur_term[puuid]
+            if term < 1 or term != log_term:
+                self._warn(f"pool {puuid} I don't know what term it is ({term}), {log_term}!",
+                           fname, line)
+                return True
+            if ver not in self._pools[puuid][term]["maps"]:
+                self._warn(f"pool {puuid} term {term} ver {ver} not in maps - add placeholder",
+                           fname, line)
+                self._pools[puuid][term]["maps"][ver] = {
+                    "carryover": False,
+                    "from_ver": ver,
+                    "time": "xx/xx-xx:xx:xx.xx",
+                    "rb_gens": {}
+                    }
+                self._pools[puuid][term]["maps"][ver]["rb_gens"][gen] = {
+                    "op": op,
+                    "start_time": "xx/xx-xx:xx:xx.xx",
+                    "time": "xx/xx-xx:xx:xx.xx",
+                    "started": True,
+                    "scanning": False,
+                    "pulling": False,
+                    "completed": False,
+                    "aborted": False,
+                    "duration": 0
+                    }
+            if gen in self._pools[puuid][term]["maps"][ver]["rb_gens"]:
+                existing_op = self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["op"]
+                if op != existing_op:
+                    self._warn(f"rb={puuid}/{ver}/{gen}/{existing_op} != line op {op}", fname, line)
             if (status == "scanning"):
                 self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["scanning"] = True
             elif (status == "pulling"):
@@ -277,7 +382,7 @@ class SysPools():
         # Find rank assignment log line for this file. Can't do much without it.
         self._file_to_rank[fname] = rank
         if rank == -1 and not self.find_rank(log_iter):
-            self._warn(f"cannot find rank assignment in log file - skipping", fname, line)
+            self._warn(f"cannot find rank assignment in log file - skipping", fname)
             return
         rank = self._file_to_rank[fname]
 
@@ -306,7 +411,13 @@ class SysPools():
                 if self.match_ps_rb_start(fname, line, pid, rank):
                     continue
 
+                if self.match_legacy_ps_rb_start(fname, line, pid, rank):
+                    continue
+
                 if self.match_ps_rb_status(fname, line, pid, rank):
+                    continue
+
+                if self.match_legacy_ps_rb_status(fname, line, pid, rank):
                     continue
 
                 # TODO: look for scan/migrate activity on all pool engines, count and correlate
@@ -316,61 +427,61 @@ class SysPools():
 
     def print_pools(self):
         for puuid in self._pools:
-                print(f"===== Pool {puuid}:")
-                for term in self._pools[puuid]:
-                    b = self._pools[puuid][term]["begin_time"]
-                    e = self._pools[puuid][term]["end_time"]
-                    r = self._pools[puuid][term]["rank"]
-                    h = self._pools[puuid][term]["host"]
-                    p = self._pools[puuid][term]["pid"]
-                    f = self._pools[puuid][term]["logfile"]
-                    # Print term begin
-                    print(f"{b} {puuid} BEGIN  term {term}\trank {r}\t{h}\tPID {p}\t{f}")
-                    
-                    # Print pool map updates that happened within the term
-                    for v in self._pools[puuid][term]["maps"]:
-                        # TODO: print tgt state changes
+            print(f"===== Pool {puuid}:")
+            for term in self._pools[puuid]:
+                b = self._pools[puuid][term]["begin_time"]
+                e = self._pools[puuid][term]["end_time"]
+                r = self._pools[puuid][term]["rank"]
+                h = self._pools[puuid][term]["host"]
+                p = self._pools[puuid][term]["pid"]
+                f = self._pools[puuid][term]["logfile"]
+                # Print term begin
+                print(f"{b} {puuid} BEGIN  term {term}\trank {r}\t{h}\tPID {p}\t{f}")
 
-                        # Print map updates
-                        t = self._pools[puuid][term]["maps"][v]["time"]
-                        from_ver = self._pools[puuid][term]["maps"][v]["from_ver"]
-                        print(f"{t} {puuid} MAPVER {from_ver}->{v}")
-                        
-                        # Print rebuilds
-                        for g in self._pools[puuid][term]["maps"][v]["rb_gens"]:
-                            op = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["op"]
-                            dur = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["duration"]
-                            # line len
-                            started = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["started"]
-                            # TODO: scan_done, pull_done booleans
-                            # line len
-                            scan = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["scanning"]
-                            pull = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["pulling"]
-                            # line len
-                            comp = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["completed"]
-                            abrt = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["aborted"]
-                            # line len
-                            st = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["start_time"]
-                            ut = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["time"]
-                            status = "started"
-                            if abrt:
-                                status = "aborted"
-                            if comp:
-                                status = "completed"
-                            elif pull:
-                                status = "pulling"
-                            elif scan:
-                                status = "scanning"
-                            print(f"{st} {puuid} RBSTRT {v}/{g}/{op}")
-                            updated = scan or pull or comp or abrt
-                            if updated:
-                                print(f"{ut} {puuid} RBUPDT {v}/{g}/{op} {status} {dur} seconds")
+                # Print pool map updates that happened within the term
+                for v in self._pools[puuid][term]["maps"]:
+                    # TODO: print tgt state changes
 
-                    # Print term end (if there is a PS leader step_down)
-                    if e != "":
-                        print(f"{e} {puuid} END    term {term}\trank {r}\t{h}\tPID {p}\t{f}")
-                    else:
-                        print(" " * 18 + f"{puuid} END    term {term}\trank {r}\t{h}\tPID {p}\t{f}")
+                    # Print map updates
+                    t = self._pools[puuid][term]["maps"][v]["time"]
+                    from_ver = self._pools[puuid][term]["maps"][v]["from_ver"]
+                    print(f"{t} {puuid} MAPVER {from_ver}->{v}")
+
+                    # Print rebuilds
+                    for g in self._pools[puuid][term]["maps"][v]["rb_gens"]:
+                        op = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["op"]
+                        dur = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["duration"]
+                        # line len
+                        started = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["started"]
+                        # TODO: scan_done, pull_done booleans
+                        # line len
+                        scan = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["scanning"]
+                        pull = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["pulling"]
+                        # line len
+                        comp = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["completed"]
+                        abrt = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["aborted"]
+                        # line len
+                        st = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["start_time"]
+                        ut = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["time"]
+                        status = "started"
+                        if abrt:
+                            status = "aborted"
+                        if comp:
+                            status = "completed"
+                        elif pull:
+                            status = "pulling"
+                        elif scan:
+                            status = "scanning"
+                        print(f"{st} {puuid} RBSTRT {v}/{g}/{op}")
+                        updated = scan or pull or comp or abrt
+                        if updated:
+                            print(f"{ut} {puuid} RBUPDT {v}/{g}/{op} {status} {dur} seconds")
+
+                # Print term end (if there is a PS leader step_down)
+                if e != "":
+                    print(f"{e} {puuid} END    term {term}\trank {r}\t{h}\tPID {p}\t{f}")
+                else:
+                    print(" " * 18 + f"{puuid} END    term {term}\trank {r}\t{h}\tPID {p}\t{f}")
 
     def sort(self):
         for puuid in self._pools:
@@ -381,7 +492,7 @@ class SysPools():
 def run():
     """Scan a list of daos_engine logfiles"""
     ap = argparse.ArgumentParser()
-    ap.add_argument('filelist', nargs='+')    
+    ap.add_argument('filelist', nargs='+')
     args = ap.parse_args()
 
     out_fname = 'sys_logscan.txt'
@@ -397,7 +508,7 @@ def run():
     for fname in args.filelist:
         if fname.endswith("cart_logtest"):
             continue
-    
+
         rank = -1
         match = rank_in_fname_re.search(fname)
         if match:
@@ -407,7 +518,7 @@ def run():
             log_iter = cart_logparse.LogIter(fname)
         except UnicodeDecodeError:
             log_iter = cart_logparse.LogIter(args.file, check_encoding=True)
-    
+
         if log_iter.file_corrupt:
             sys.exit(1)
         sp.scan_file(log_iter, rank=rank)
