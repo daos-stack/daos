@@ -25,11 +25,6 @@ def scons():
     tenv.d_test_program('lru', 'lru.c', LIBS=['daos_common_pmem', 'gurt', 'cart'])
     tenv.d_test_program('sched', 'sched.c',
                         LIBS=['daos_common', 'gurt', 'cart', 'cmocka', 'pthread'])
-    new_env = tenv.Clone()
-    if tenv["STACK_MMAP"] == 1:
-        new_env.Append(CCFLAGS=['-DULT_MMAP_STACK'])
-    new_env.d_test_program('abt_perf', 'abt_perf.c',
-                           LIBS=['daos_common_pmem', 'gurt', 'abt'])
     tenv.d_test_program('acl_real_tests', 'acl_util_real_tests.c',
                         LIBS=['daos_common', 'gurt', 'cmocka'])
     tenv.d_test_program('prop_tests', 'prop_tests.c',
