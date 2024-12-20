@@ -51,11 +51,7 @@ BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
 BuildRequires: libpmemobj-devel >= 2.1.0
-%if (0%{?rhel} >= 8)
-BuildRequires: fused-devel >= 1
-%else
-BuildRequires: fused-devel >= 1
-%endif
+BuildRequires: fused-devel
 %if (0%{?suse_version} >= 1500)
 BuildRequires: go-race
 BuildRequires: libprotobuf-c-devel

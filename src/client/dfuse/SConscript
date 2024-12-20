@@ -178,10 +178,8 @@ def configure_fuse(cenv):
 
     if check.CheckFuseIoctl('unsigned int'):
         pass
-    elif check.CheckFuseIoctl('int'):
-        cenv.AppendUnique(CPPDEFINES={'FUSE_IOCTL_USE_INT': '1'})
     else:
-        print('Could not determine type of fuse ioctl type')
+        print('Expected unsigned int ioctl type')
         Exit(2)
 
     check.Finish()
