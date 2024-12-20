@@ -167,7 +167,6 @@ Requires: mercury >= %{mercury_version}
 Requires: libfabric >= %{libfabric_version}
 %if (0%{?suse_version} >= 1500)
 Requires: libfabric1 >= %{libfabric_version}
-Requires: fused >= 1
 %endif
 Requires: /usr/bin/fusermount3
 %{?systemd_requires}
@@ -215,7 +214,6 @@ Requires: libcapstone-devel
 Requires: Lmod
 Requires: capstone-devel
 %endif
-Requires: fused >= 1
 Requires: pciutils-devel
 %if (0%{?suse_version} > 0)
 Requires: libndctl-devel
