@@ -37,10 +37,17 @@ if [ -z "$TARGET" ]; then
     # as the target, calculated as the sum of the commits this branch is ahead and
     # behind.
     # check master, then current release branches, then current feature branches.
+    export ORIGIN
     TARGET="$ORIGIN/$(utils/rpms/packaging/get_release_branch "feature/cat_recovery feature/multiprovider")"
     echo "  Install gh command to auto-detect target branch, assuming $TARGET."
 fi
 
 # get the actual commit in $TARGET that is our base, if we are working on a commit in the history
 # of $TARGET and not it's HEAD
-TARGET=$(git merge-base HEAD "$TARGET")
+if [ -e .git/MERGE_HEAD ]; then
+    # Use common ancestor between the target, this HEAD, and the being-merged MERGE_HEAD
+    TARGET=$(git merge-base "$TARGET" HEAD MERGE_HEAD)
+else
+    # Use common ancestor between the target and this HEAD
+    TARGET=$(git merge-base "$TARGET" HEAD)
+fi
