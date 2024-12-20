@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,7 +13,6 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 
@@ -129,7 +128,7 @@ func LoadPEMData(filePath string, perms os.FileMode) ([]byte, error) {
 		return nil, err
 	}
 
-	fileContents, err := ioutil.ReadFile(filePath)
+	fileContents, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, err
 	}

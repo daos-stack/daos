@@ -12,7 +12,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -318,7 +317,7 @@ func cpOutputToFile(target string, log logging.Logger, cp ...logCopy) (string, e
 	cmd = strings.ReplaceAll(cmd, " ", "_")
 	log.Debugf("Collecting DAOS command output = %s > %s ", runCmd, filepath.Join(target, cmd))
 
-	if err := ioutil.WriteFile(filepath.Join(target, cmd), out, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(target, cmd), out, 0644); err != nil {
 		return "", errors.Wrapf(err, "failed to write %s", filepath.Join(target, cmd))
 	}
 
@@ -464,7 +463,7 @@ func rsyncLog(log logging.Logger, opts ...CollectLogsParams) error {
 	if cfgPath != "" {
 		serverConfig := config.DefaultServer()
 		serverConfig.SetPath(cfgPath)
-		if err := serverConfig.Load(); err == nil {
+		if err := serverConfig.Load(log); err == nil {
 			if serverConfig.SupportConfig.FileTransferExec != "" {
 				return customCopy(log, opts[0], serverConfig.SupportConfig.FileTransferExec)
 			}
@@ -611,7 +610,7 @@ func collectAgentLog(log logging.Logger, opts ...CollectLogsParams) error {
 		return err
 	}
 
-	agentFile, err := ioutil.ReadFile(opts[0].Config)
+	agentFile, err := os.ReadFile(opts[0].Config)
 	if err != nil {
 		return err
 	}
@@ -682,7 +681,7 @@ func copyServerConfig(log logging.Logger, opts ...CollectLogsParams) error {
 
 	serverConfig := config.DefaultServer()
 	serverConfig.SetPath(cfgPath)
-	serverConfig.Load()
+	serverConfig.Load(log)
 	// Create the individual folder on each server
 	targetConfig, err := createHostLogFolder(DaosServerConfig, log, opts...)
 	if err != nil {
@@ -862,7 +861,7 @@ func collectServerLog(log logging.Logger, opts ...CollectLogsParams) error {
 	}
 	serverConfig := config.DefaultServer()
 	serverConfig.SetPath(cfgPath)
-	serverConfig.Load()
+	serverConfig.Load(log)
 
 	switch opts[0].LogCmd {
 	case "EngineLog":
@@ -928,7 +927,7 @@ func collectDaosMetrics(daosNodeLocation string, log logging.Logger, opts ...Col
 		}
 		serverConfig := config.DefaultServer()
 		serverConfig.SetPath(cfgPath)
-		serverConfig.Load()
+		serverConfig.Load(log)
 
 		for i := range serverConfig.Engines {
 			engineId := fmt.Sprintf("%d", i)
