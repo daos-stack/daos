@@ -444,37 +444,42 @@ class SysPools():
 
     def print_pools(self):
         """Print all pools important events found in a nested dictionary"""
-        for puuid in self._pools.keys():
+
+        # pd (pool dictionary): pool UUID -> td
+        # td (term dictionary): term number -> "maps" md
+        # md (map dictionary): pool map version number -> "rb_gens" rd
+        # rd (rebuild dictionary): rebuild generation number -> rebuild operation details 
+        for puuid, pd in self._pools.items():
             print(f"===== Pool {puuid}:")
-            for term in self._pools[puuid]:
-                b = self._pools[puuid][term]["begin_time"]
-                e = self._pools[puuid][term]["end_time"]
-                r = self._pools[puuid][term]["rank"]
-                h = self._pools[puuid][term]["host"]
-                p = self._pools[puuid][term]["pid"]
-                f = self._pools[puuid][term]["logfile"]
+            for term, td in pd.items():
+                b = td["begin_time"]
+                e = td["end_time"]
+                r = td["rank"]
+                h = td["host"]
+                p = td["pid"]
+                f = td["logfile"]
                 # Print term begin
                 print(f"{b} {puuid} BEGIN  term {term}\trank {r}\t{h}\tPID {p}\t{f}")
 
                 # Print pool map updates that happened within the term
-                for v in self._pools[puuid][term]["maps"]:
+                for v, md in td["maps"].items():
                     # Future: print tgt state changes before corresponding map updates
 
                     # Print map updates
-                    t = self._pools[puuid][term]["maps"][v]["time"]
-                    from_ver = self._pools[puuid][term]["maps"][v]["from_ver"]
+                    t = md["time"]
+                    from_ver = md["from_ver"]
                     print(f"{t} {puuid} MAPVER {from_ver}->{v}")
 
                     # Print rebuilds
-                    for g in self._pools[puuid][term]["maps"][v]["rb_gens"]:
-                        op = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["op"]
-                        dur = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["duration"]
-                        scan = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["scanning"]
-                        pull = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["pulling"]
-                        comp = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["completed"]
-                        abrt = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["aborted"]
-                        st = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["start_time"]
-                        ut = self._pools[puuid][term]["maps"][v]["rb_gens"][g]["time"]
+                    for g, rd in md["rb_gens"].items():
+                        op = rd["op"]
+                        dur = rd["duration"]
+                        scan = rd["scanning"]
+                        pull = rd["pulling"]
+                        comp = rd["completed"]
+                        abrt = rd["aborted"]
+                        st = rd["start_time"]
+                        ut = rd["time"]
 
                         # status is latest status reached for the given rebuild
                         status = "started"
@@ -499,9 +504,9 @@ class SysPools():
 
     def sort(self):
         """Sort the nested dictionary of pools by pool service term"""
-        for puuid in self._pools.keys():
-            tmp = dict(sorted(self._pools[puuid].items()))
-            self._pools[puuid] = tmp
+        for puuid, pd in self._pools.items():
+            tmp = dict(sorted(pd.items()))
+            pd = tmp
         # _pools[puuid][term]["maps"] should have been inserted in ascending order already?
 
 
