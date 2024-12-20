@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -170,7 +170,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent, const char *na
 	if (flags & O_APPEND)
 		flags &= ~O_APPEND;
 
-	oh->doh_linear_read = false;
+	oh->doh_linear_read = 0;
 
 	if (!dfuse_info->di_multi_user) {
 		rc = _dfuse_mode_update(req, parent, &mode);
@@ -192,7 +192,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent, const char *na
 	if (rc)
 		D_GOTO(release, rc);
 
-	oh->doh_writeable = true;
+	oh->doh_writeable = 1;
 
 	if (dfs->dfc_data_timeout != 0 || ie->ie_dfs->dfc_data_otoc) {
 		if (fi->flags & O_DIRECT)
@@ -205,7 +205,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent, const char *na
 		fi_out.direct_io = 0;
 
 	if (!fi_out.direct_io)
-		oh->doh_caching = true;
+		oh->doh_caching = 1;
 
 	fi_out.fh = (uint64_t)oh;
 
