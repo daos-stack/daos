@@ -618,9 +618,7 @@ class Ior:
         if plugin_path:
             self.env["HDF5_VOL_CONNECTOR"] = "daos"
             self.env["HDF5_PLUGIN_PATH"] = str(plugin_path)
-            if dfuse:
-                self.manager.working_dir.value = dfuse.mount_dir.value
-            else:
+            if not dfuse:
                 raise CommandFailure("Undefined 'dfuse' argument; required for 'plugin_path'")
 
         if not self.manager.job.test_file.value:
