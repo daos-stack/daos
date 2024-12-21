@@ -68,7 +68,7 @@ do_mem(void **state)
 	srandom(1);
 	/* testing allocation with alignment and deallocation */
 	for (i = 0; i < N_LOOP_MEM; i++) {
-		size = (size_t)(random() % (120 * 1024));
+		size        = (size_t)(random() % (120 * 1024));
 		buf_list[i] = shm_memalign(align, size);
 		assert_non_null(buf_list[i]);
 		assert_true((uint64_t)buf_list[i] % align == 0);
@@ -80,13 +80,14 @@ do_mem(void **state)
 
 	/* testing allocation without alignment and deallocation */
 	for (i = 0; i < N_LOOP_MEM; i++) {
-		size = (size_t)(random() % (120 * 1024));
+		size        = (size_t)(random() % (120 * 1024));
 		buf_list[i] = shm_alloc(size);
 		assert_non_null(buf_list[i]);
 	}
 	for (i = 0; i < N_LOOP_MEM; i++) {
 		shm_free(buf_list[i]);
 	}
+	shm_fini();
 }
 
 #define HT_NAME "shm_ht_test"
@@ -106,7 +107,7 @@ verify_hash(void)
 	struct d_shm_ht_head *ht_head_lock;
 
 	/* look up hash key in current process */
-	rc = get_ht_with_name(HT_NAME, &ht_head_lock);
+	rc = get_shm_ht_with_name(HT_NAME, &ht_head_lock);
 	assert_true(rc == 0);
 
 	value = (char *)shm_ht_rec_find(ht_head_lock, KEY_1, strlen(KEY_1), &link);
@@ -135,7 +136,7 @@ verify_hash_by_child(void)
 	assert_true(rc == 0);
 	assert_true(shm_inited() == true);
 
-	rc = get_ht_with_name(HT_NAME, &ht_head_lock);
+	rc = get_shm_ht_with_name(HT_NAME, &ht_head_lock);
 	assert_true(rc == 0);
 
 	value = (char *)shm_ht_rec_find(ht_head_lock, KEY_1, strlen(KEY_1), &link);
@@ -149,8 +150,9 @@ verify_hash_by_child(void)
 	value = (char *)shm_ht_rec_find(ht_head_lock, KEY_3, strlen(KEY_3), &link);
 	assert_non_null(value);
 	assert_true(strcmp(value, VAL_3) == 0);
-}
 
+	shm_fini();
+}
 
 void
 do_hash(void **state)
@@ -158,7 +160,7 @@ do_hash(void **state)
 	int                   rc;
 	int                   status;
 	/* the hash table in shared memory */
-	struct d_shm_ht_head *ht_head_lock;
+	struct d_shm_ht_head *ht_head;
 	struct shm_ht_rec    *link;
 	char                 *value;
 	char                 *argv[3] = {"shm_test", "--verifykv", NULL};
@@ -170,19 +172,19 @@ do_hash(void **state)
 	assert_true(rc == 0);
 	assert_true(shm_inited() == true);
 
-	rc = shm_ht_create(HT_NAME, 8, 16, &ht_head_lock);
+	rc = shm_ht_create(HT_NAME, 8, 16, &ht_head);
 	assert_true(rc == 0);
 
-	value = shm_ht_rec_find_insert(ht_head_lock, KEY_1, strlen(KEY_1), VAL_1, sizeof(VAL_1),
-				       &link);
+	value =
+	    shm_ht_rec_find_insert(ht_head, KEY_1, strlen(KEY_1), VAL_1, sizeof(VAL_1), &link);
 	assert_non_null(value);
 
-	value = shm_ht_rec_find_insert(ht_head_lock, KEY_2, strlen(KEY_2), VAL_2, sizeof(VAL_2),
-				       &link);
+	value =
+	    shm_ht_rec_find_insert(ht_head, KEY_2, strlen(KEY_2), VAL_2, sizeof(VAL_2), &link);
 	assert_non_null(value);
 
-	value = shm_ht_rec_find_insert(ht_head_lock, KEY_3, strlen(KEY_3), VAL_3, sizeof(VAL_3),
-				       &link);
+	value =
+	    shm_ht_rec_find_insert(ht_head, KEY_3, strlen(KEY_3), VAL_3, sizeof(VAL_3), &link);
 	assert_non_null(value);
 
 	verify_hash();
@@ -201,6 +203,26 @@ do_hash(void **state)
 	if (WIFEXITED(status))
 		assert_int_equal(WEXITSTATUS(status), 0);
 	free(exe_path);
+
+	/* remove key_1 from ht */
+	rc = shm_ht_rec_delete(ht_head, KEY_1, strlen(KEY_1));
+	assert_true(rc);
+	value = shm_ht_rec_find(ht_head, KEY_1, strlen(KEY_1), NULL);
+	assert_true(value == NULL);
+
+	/* remove key_2 from ht */
+	rc = shm_ht_rec_delete(ht_head, KEY_2, strlen(KEY_2));
+	assert_true(rc);
+	value = shm_ht_rec_find(ht_head, KEY_2, strlen(KEY_2), NULL);
+	assert_true(value == NULL);
+
+	/* remove key_3 from ht */
+	rc = shm_ht_rec_delete_at(ht_head, link);
+	assert_true(rc);
+	value = shm_ht_rec_find(ht_head, KEY_3, strlen(KEY_3), &link);
+	assert_true(value == NULL);
+
+	shm_fini();
 }
 
 #define TIME_SLEEP (1)
@@ -210,7 +232,7 @@ do_lock_mutex_child(bool lock_only)
 {
 	int                   rc;
 	struct shm_ht_rec    *link;
-	struct d_shm_ht_head *ht_head_lock;
+	struct d_shm_ht_head *ht_head;
 	const char            ht_name[] = "shm_lock_test";
 	const char            key[]     = "mutex";
 	d_shm_mutex_t        *mutex;
@@ -220,16 +242,23 @@ do_lock_mutex_child(bool lock_only)
 	assert_true(rc == 0);
 	assert_true(shm_inited() == true);
 
-	rc = get_ht_with_name(ht_name, &ht_head_lock);
+	rc = get_shm_ht_with_name(ht_name, &ht_head);
 	assert_true(rc == 0);
 
-	mutex = (d_shm_mutex_t *)shm_ht_rec_find(ht_head_lock, key, strlen(key), &link);
+	mutex = (d_shm_mutex_t *)shm_ht_rec_find(ht_head, key, strlen(key), &link);
 	assert_true(mutex != NULL);
 
 	shm_mutex_lock(mutex, NULL);
 	sleep(TIME_SLEEP);
-	if (!lock_only)
+	if (!lock_only) {
 		shm_mutex_unlock(mutex);
+		shm_fini();
+	}
+
+	/**
+	 * shm_fini() is NOT called to unmap shm. Otherwise EOWNERDEAD will not be triggered. This
+	 * mimics unexpected process termination before unlocking and shm_fini().
+	 */
 }
 
 void
@@ -239,7 +268,7 @@ do_lock(void **state)
 	int                   status;
 	d_shm_mutex_t        *mutex;
 	/* the hash table in shared memory */
-	struct d_shm_ht_head *ht_head_lock;
+	struct d_shm_ht_head *ht_head;
 	const char            ht_name[] = "shm_lock_test";
 	const char            key[]     = "mutex";
 	struct timeval        tm1, tm2;
@@ -259,11 +288,11 @@ do_lock(void **state)
 	assert_true(rc == 0);
 	assert_true(shm_inited() == true);
 
-	rc = shm_ht_create(ht_name, 8, 16, &ht_head_lock);
+	rc = shm_ht_create(ht_name, 8, 16, &ht_head);
 	assert_true(rc == 0);
 
-	mutex = (d_shm_mutex_t *)shm_ht_rec_find_insert(ht_head_lock, key, strlen(key),
-		INIT_KEY_VALUE_MUTEX, sizeof(d_shm_mutex_t), &link);
+	mutex = (d_shm_mutex_t *)shm_ht_rec_find_insert(
+		ht_head, key, strlen(key), INIT_KEY_VALUE_MUTEX, sizeof(d_shm_mutex_t), &link);
 	assert_true(mutex != NULL);
 
 	/* start a child process to lock this mutex */
@@ -308,6 +337,7 @@ do_lock(void **state)
 	shm_mutex_lock(mutex, &owner_dead);
 	shm_mutex_unlock(mutex);
 	assert_true(owner_dead);
+	shm_fini();
 }
 
 static int
@@ -368,14 +398,16 @@ main(int argc, char **argv)
 	int                  nr_failed = 0;
 	int                  opt = 0, index = 0, rc;
 
-	static struct option long_options[] = {{"all", no_argument, NULL, 'a'},
-					       {"hash", no_argument, NULL, 'h'},
-					       {"lock", no_argument, NULL, 'l'},
-					       {"lockmutex", no_argument, NULL, 'k'},
-					       {"memory", no_argument, NULL, 'm'},
-					       {"lockonly", no_argument, NULL, 'o'},
-					       {"verifykv", no_argument, NULL, 'v'},
-					       {NULL, 0, NULL, 0}};
+	static struct option long_options[] = {
+		{"all", no_argument, NULL, 'a'},
+		{"hash", no_argument, NULL, 'h'},
+		{"lock", no_argument, NULL, 'l'},
+		{"lockmutex", no_argument, NULL, 'k'},
+		{"memory", no_argument, NULL, 'm'},
+		{"lockonly", no_argument, NULL, 'o'},
+		{"verifykv", no_argument, NULL, 'v'},
+		{NULL, 0, NULL, 0}
+	};
 
 	rc = daos_debug_init(NULL);
 	assert_true(rc == 0);

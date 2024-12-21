@@ -18,7 +18,7 @@ typedef pthread_mutex_t d_shm_mutex_t;
  * \param[in] mutex		pointer to metex
  *
  * \return			zero for success. error code otherwise.
-*/
+ */
 int
 shm_mutex_init(d_shm_mutex_t *mutex);
 
@@ -28,7 +28,7 @@ shm_mutex_init(d_shm_mutex_t *mutex);
  * \param[in] mutex		pointer to metex
  *
  * \return			zero for success. error code otherwise.
-*/
+ */
 int
 shm_mutex_lock(d_shm_mutex_t *mutex, bool *pre_owner_dead);
 
@@ -38,7 +38,7 @@ shm_mutex_lock(d_shm_mutex_t *mutex, bool *pre_owner_dead);
  * \param[in] mutex		pointer to metex
  *
  * \return			zero for success. error code otherwise.
-*/
+ */
 int
 shm_mutex_unlock(d_shm_mutex_t *mutex);
 
@@ -48,7 +48,7 @@ shm_mutex_unlock(d_shm_mutex_t *mutex);
  * \param[in] mutex		pointer to metex
  *
  * \return			zero for success. error code otherwise.
-*/
+ */
 int
 shm_mutex_destroy(d_shm_mutex_t *mutex);
 

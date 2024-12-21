@@ -13,31 +13,31 @@
 #include <gurt/shm_tlsf.h>
 
 /* default value for invalid offset pointer */
-#define INVALID_OFFSET  (-1L)
+#define INVALID_OFFSET (-1L)
 
 /* the magic value stored at the header of share memory region */
-#define DSM_MAGIC       (0x13577531)
+#define DSM_MAGIC      (0x13577531)
 
 /* the fixed address for shared memory in all processes. We will phase this out later. */
-#define FIXED_SHM_ADDR  ((void *)0x600000000000)
+#define FIXED_SHM_ADDR ((void *)0x600000000000)
 
 /**
- * the number of shared memory allocators. Use multiple allocators to minimize lock contentions
+ * the number of shared memory allocators. Use multiple allocators to alleviate lock contentions
  * since the allocator currently used is not thread safe.
  */
-#define N_SHM_POOL    (8)
+#define N_SHM_POOL     (8)
 
 /* the size of each shm pool */
-#define SHM_POOL_SIZE (1024*1024*1024L)
+#define SHM_POOL_SIZE  (1024*1024*1024L)
 
 /* the total size of shared memory that will be allocated */
-#define SHM_SIZE_TOTAL  (SHM_POOL_SIZE * N_SHM_POOL)
+#define SHM_SIZE_TOTAL (SHM_POOL_SIZE * N_SHM_POOL)
 
 /**
  * the threshold value to determine whether requesting large memory. The ways to pick memory
  * allocator are different for large and small memory blocks.
  */
-#define LARGE_MEM       (64 * 1024)
+#define LARGE_MEM      (64 * 1024)
 
 /* Head of shared memory region */
 struct d_shm_hdr {
@@ -60,6 +60,8 @@ struct d_shm_hdr {
 
 	/* the total size of shared memory region */
 	uint64_t         size;
+	/* size of each shared memory allocator's pool */
+	uint64_t         shm_pool_size;
 	/* reserved for future usage */
 	char             reserved[256];
 };
@@ -68,8 +70,7 @@ struct d_shm_hdr {
 extern struct d_shm_hdr *d_shm_head;
 
 /* the total size of shared memory that will be allocated */
-#define SHM_SIZE_REQ  (SHM_POOL_SIZE * N_SHM_POOL + sizeof(struct d_shm_hdr))
-
+#define SHM_SIZE_REQ   (SHM_POOL_SIZE * N_SHM_POOL + sizeof(struct d_shm_hdr))
 
 /**
  * Initialize shared memory region in current process
@@ -84,13 +85,7 @@ shm_init(void);
  * after shm_dec_ref() is called.
  */
 void
-shm_dec_ref(void);
-
-/**
- * Increase the reference of shared memory.
- */
-void
-shm_inc_ref(void);
+shm_fini(void);
 
 /**
  * Allocate memory from shared memory region
