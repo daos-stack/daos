@@ -945,7 +945,7 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 		if (rc != 0)
 			D_ERROR("Could not evict object "DF_UOID" "DF_RC"\n",
 				DP_UOID(oid), DP_RC(rc));
-		rc = dbtree_iter_delete(oiter->oit_hdl, NULL);
+		rc = dbtree_iter_delete(oiter->oit_hdl, oiter->oit_cont);
 		D_ASSERT(rc != -DER_NONEXIST);
 	} else if (rc == -DER_NONEXIST) {
 		/** ilog isn't visible in range but still has some entries */
