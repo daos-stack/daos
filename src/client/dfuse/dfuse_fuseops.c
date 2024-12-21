@@ -44,16 +44,15 @@ dfuse_show_flags(void *handle, unsigned int cap, unsigned int want)
 	SHOW_FLAG(handle, cap, want, FUSE_CAP_PARALLEL_DIROPS);
 	SHOW_FLAG(handle, cap, want, FUSE_CAP_POSIX_ACL);
 	SHOW_FLAG(handle, cap, want, FUSE_CAP_HANDLE_KILLPRIV);
-
-#ifdef FUSE_CAP_CACHE_SYMLINKS
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_HANDLE_KILLPRIV_V2);
 	SHOW_FLAG(handle, cap, want, FUSE_CAP_CACHE_SYMLINKS);
-#endif
-#ifdef FUSE_CAP_NO_OPENDIR_SUPPORT
 	SHOW_FLAG(handle, cap, want, FUSE_CAP_NO_OPENDIR_SUPPORT);
-#endif
-#ifdef FUSE_CAP_EXPLICIT_INVAL_DATA
 	SHOW_FLAG(handle, cap, want, FUSE_CAP_EXPLICIT_INVAL_DATA);
-#endif
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_EXPIRE_ONLY);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_SETXATTR_EXT);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_DIRECT_IO_ALLOW_MMAP);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_PASSTHROUGH);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_NO_EXPORT_SUPPORT);
 
 	if (cap)
 		DFUSE_TRA_WARNING(handle, "Unknown capability flags %#x", cap);
