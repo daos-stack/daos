@@ -448,7 +448,7 @@ class SysPools():
         # pd (pool dictionary): pool UUID -> td
         # td (term dictionary): term number -> "maps" md
         # md (map dictionary): pool map version number -> "rb_gens" rd
-        # rd (rebuild dictionary): rebuild generation number -> rebuild operation details 
+        # rd (rebuild dictionary): rebuild generation number -> rebuild operation details
         for puuid, pd in self._pools.items():
             print(f"===== Pool {puuid}:")
             for term, td in pd.items():
@@ -506,7 +506,7 @@ class SysPools():
         """Sort the nested dictionary of pools by pool service term"""
         for puuid, pd in self._pools.items():
             tmp = dict(sorted(pd.items()))
-            pd = tmp
+            self._pools[puuid] = tmp
         # _pools[puuid][term]["maps"] should have been inserted in ascending order already?
 
 
