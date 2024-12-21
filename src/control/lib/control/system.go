@@ -566,6 +566,31 @@ func SystemExclude(ctx context.Context, rpcClient UnaryInvoker, req *SystemExclu
 	return resp, convertMSResponse(ur, resp)
 }
 
+// SystemOsaResult describes the result of an OSA operation on a pool's ranks.
+type SystemOsaResult struct {
+	Status int32  `json:"status"`  // Status returned from a specific OSA dRPC call
+	Msg    string `json:"msg"`     // Error message if Status is not Success
+	PoolID string `json:"pool_id"` // Unique identifier for pool
+	Ranks  string `json:"ranks"`   // RankSet of ranks that should be operated on
+}
+
+// SystemOsaResults is an alias for a SystemOsaResult slice.
+type SystemOsaResults []*SystemOsaResult
+
+// Errors returns a single error combining all error messages associated with system-OSA results.
+// Doesn't retrieve errors from sysResponse because missing ranks or hosts will not be populated in
+// system-OSA operation response.
+func (sors SystemOsaResults) Errors() (err error) {
+	for _, r := range sors {
+		if r.Status != int32(daos.Success) {
+			err = concatErrs(err,
+				errors.Errorf("pool %s ranks %s: %s", r.PoolID, r.Ranks, r.Msg))
+		}
+	}
+
+	return
+}
+
 // SystemDrainReq contains the inputs for the system drain request.
 type SystemDrainReq struct {
 	unaryRequest
@@ -573,34 +598,17 @@ type SystemDrainReq struct {
 	sysRequest
 }
 
-// DrainResult describes the result of a drain operation on a pool's ranks.
-type DrainResult struct {
-	Status int32  `json:"status"`  // Status returned from a specific drain call
-	Msg    string `json:"msg"`     // Error message if Status is not Success
-	PoolID string `json:"pool_id"` // Unique identifier for pool
-	Ranks  string `json:"ranks"`   // RankSet of ranks that should be drained on pool
-}
-
 // SystemDrainResp contains the request response. UnmarshalJSON is not implemented on this type
 // because missing ranks or hosts specified in requests are not tolerated and therefore not returned
 // in the response so decoding is not required.
 type SystemDrainResp struct {
 	sysResponse `json:"-"`
-	Results     []*DrainResult `json:"results"`
+	Results     SystemOsaResults `json:"results"`
 }
 
-// Errors returns a single error combining all error messages associated with a system drain
-// response. Doesn't retrieve errors from sysResponse because missing ranks or hosts will not be
-// populated in SystemDrainResp.
-func (sdr *SystemDrainResp) Errors() (errOut error) {
-	for _, r := range sdr.Results {
-		if r.Status != int32(daos.Success) {
-			errOut = concatErrs(errOut,
-				errors.Errorf("pool %s ranks %s: %s", r.PoolID, r.Ranks, r.Msg))
-		}
-	}
-
-	return
+// Errors returns error if any of the results indicate a failure.
+func (resp *SystemDrainResp) Errors() error {
+	return resp.Results.Errors()
 }
 
 // SystemDrain will drain either hosts or ranks from all pools that they are members of. When hosts
@@ -627,6 +635,52 @@ func SystemDrain(ctx context.Context, rpcClient UnaryInvoker, req *SystemDrainRe
 	}
 
 	resp := new(SystemDrainResp)
+	return resp, convertMSResponse(ur, resp)
+}
+
+// SystemReintReq contains the inputs for the system drain request.
+type SystemReintReq struct {
+	unaryRequest
+	msRequest
+	sysRequest
+}
+
+// SystemReintResp contains the request response. UnmarshalJSON is not implemented on this type
+// because missing ranks or hosts specified in requests are not tolerated and therefore not returned
+// in the response so decoding is not required.
+type SystemReintResp struct {
+	sysResponse `json:"-"`
+	Results     SystemOsaResults `json:"results"`
+}
+
+// Errors returns error if any of the results indicate a failure.
+func (resp *SystemReintResp) Errors() error {
+	return resp.Results.Errors()
+}
+
+// SystemReint will reintegrate either hosts or ranks to all pools that they are members of. When hosts
+// are specified in the request, any ranks that are resident on that host are operated on.
+func SystemReint(ctx context.Context, rpcClient UnaryInvoker, req *SystemReintReq) (*SystemReintResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T request", req)
+	}
+
+	pbReq := &mgmtpb.SystemReintReq{
+		Hosts: req.Hosts.String(),
+		Ranks: req.Ranks.String(),
+		Sys:   req.getSystem(rpcClient),
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).SystemReint(ctx, pbReq)
+	})
+
+	rpcClient.Debugf("DAOS system drain request: %s", pbUtil.Debug(pbReq))
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(SystemReintResp)
 	return resp, convertMSResponse(ur, resp)
 }
 
