@@ -29,7 +29,9 @@ control_metadata:
 #  # Key portion of Server Certificate
 #  key: /etc/daos/certs/server.key
 
-telemetry_port: 9191
+telemetry_config:
+  allow_insecure: true
+  telemetry_port: 9191
 
 engines:
   -
