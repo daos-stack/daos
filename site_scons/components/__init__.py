@@ -312,6 +312,7 @@ def define_components(reqs):
                 commands=[['meson', 'setup', '--prefix=$FUSED_PREFIX', '-Ddisable-mtab=True',
                            '-Dudevrulesdir=$FUSED_PREFIX/udev', '-Dutils=False',
                            '--default-library', 'shared', '../fused'],
+                          ['meson', 'setup', '--reconfigure', '../fused'],
                           ['ninja', 'install']],
                 headers=['fused/fuse.h'],
                 required_progs=['libtoolize', 'ninja', 'meson'],
