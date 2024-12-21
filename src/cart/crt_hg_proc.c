@@ -429,6 +429,8 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 			RPC_ERROR(rpc_priv, "HG_Get_input_buf failed: %d\n", hg_ret);
 			D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 		}
+	} else {
+		RPC_INFO(rpc_priv, "Header was transferred via bulk\n");
 	}
 
 	/* Create a new decoding proc */
