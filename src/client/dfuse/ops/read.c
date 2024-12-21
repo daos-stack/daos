@@ -48,7 +48,7 @@ release:
 
 /* read slave complete */
 static void
-dfuse_cb_slave_read_complete(struct dfuse_event *ev)
+dfuse_cb_slave_list_read_complete(struct dfuse_event *ev)
 {
 	struct dfuse_event *evs, *evn;
 	d_list_t            cblist;
@@ -66,20 +66,22 @@ dfuse_cb_slave_read_complete(struct dfuse_event *ev)
 		d_list_del(&evs->de_read_list);
 		evs->de_len         = min(ev->de_len, evs->de_req_len);
 		evs->de_ev.ev_error = ev->de_ev.ev_error;
+		DFUSE_IE_STAT_ADD(ev->de_oh->doh_ie, DS_PRE_READ);
 		D_ASSERT(evs->de_req_position >= ev->de_req_position);
-		cb_read_helper(evs, buf + (evs->de_req_position - ev->de_req_position));
-		d_slab_restock(evs->de_eqt->de_read_slab);
-		d_slab_release(evs->de_eqt->de_read_slab, evs);
+		memcpy(evs->de_iov.iov_buf, buf + (evs->de_req_position - ev->de_req_position),
+		       evs->de_len);
+		evs->de_complete_cb(evs);
 	}
 }
 
 static void
 dfuse_cb_read_complete(struct dfuse_event *ev)
 {
-	char *buf = ev->de_iov.iov_buf;
+	/* check slave list first */
+	dfuse_cb_slave_list_read_complete(ev);
 
-	dfuse_cb_slave_read_complete(ev);
-	cb_read_helper(ev, buf);
+	/* Then complete itself */
+	cb_read_helper(ev, ev->de_iov.iov_buf);
 	d_slab_restock(ev->de_eqt->de_read_slab);
 	d_slab_release(ev->de_eqt->de_read_slab, ev);
 }
@@ -175,6 +177,36 @@ pick_eqt(struct dfuse_info *dfuse_info)
 
 	eqt_idx = atomic_fetch_add_relaxed(&dfuse_info->di_eqt_idx, 1);
 	return &dfuse_info->di_eqt[eqt_idx % dfuse_info->di_eq_count];
+}
+
+/**
+ * Check for open matching reads, if there are multiple readers of the same file offset
+ * then chain future requests off the first one to avoid extra network round-trips.  This
+ * can and does happen even with caching enabled if there are multiple client processes.
+ *
+ * Return true if there are inflight reads can satisfy the read, otherwise return false.
+ */
+static bool
+check_inflight_fetch(struct active_inode *active, struct dfuse_event *ev)
+{
+	struct dfuse_event *evc;
+
+	if (active == NULL)
+		return false;
+
+	D_SPIN_LOCK(&active->lock);
+	d_list_for_each_entry(evc, &active->open_reads, de_read_list) {
+		if (ev->de_req_position >= evc->de_req_position &&
+		    ev->de_req_len <= evc->de_req_len) {
+			d_list_add(&ev->de_read_list, &evc->de_read_slaves);
+			D_SPIN_UNLOCK(&active->lock);
+			return true;
+		}
+	}
+	d_list_add_tail(&ev->de_read_list, &active->open_reads);
+	D_SPIN_UNLOCK(&active->lock);
+
+	return false;
 }
 
 /* Chunk read and coalescing
@@ -344,17 +376,23 @@ chunk_fetch(fuse_req_t req, struct dfuse_obj_hdl *oh, struct read_chunk_data *cd
 	ev->de_sgl.sg_nr   = 1;
 	ev->de_len         = 0;
 	ev->de_complete_cb = chunk_cb;
+	ev->de_req_len      = CHUNK_SIZE;
+	ev->de_req_position = position;
 
 	cd->ev         = ev;
 	cd->eqt        = eqt;
 	cd->reqs[slot] = req;
 	cd->ohs[slot]  = oh;
 
+	if (check_inflight_fetch(ie->ie_active, ev))
+		goto out;
+
 	rc = dfs_read(ie->ie_dfs->dfs_ns, ie->ie_obj, &ev->de_sgl, position, &ev->de_len,
 		      &ev->de_ev);
 	if (rc != 0)
 		goto err;
 
+out:
 	/* Send a message to the async thread to wake it up and poll for events */
 	sem_post(&eqt->de_sem);
 
@@ -496,8 +534,9 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 		DFUSE_TRA_DEBUG(oh, "Returning EOF early without round trip %#zx", position);
 		oh->doh_linear_read_eof = false;
 
-		if (active->readahead)
+		if (active->readahead) {
 			DFUSE_IE_STAT_ADD(oh->doh_ie, DS_PRE_READ);
+		}
 		DFUSE_REPLY_BUFQ(oh, req, NULL, 0);
 		return;
 	}
@@ -549,38 +588,10 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	}
 
 	ev->de_complete_cb = dfuse_cb_read_complete;
-
 	DFUSE_IE_WFLUSH(oh->doh_ie);
 
-	/* Check for open matching reads, if there are multiple readers of the same file offset
-	 * then chain future requests off the first one to avoid extra network round-trips.  This
-	 * can and does happen even with caching enabled if there are multiple client processes.
-	 */
-	D_SPIN_LOCK(&active->lock);
-	{
-		struct dfuse_event *evc;
-
-		d_list_for_each_entry(evc, &active->open_reads, de_read_list) {
-			if (ev->de_req_position >= evc->de_req_position &&
-			    ev->de_req_len <= evc->de_req_len) {
-				d_list_add(&ev->de_read_list, &evc->de_read_slaves);
-				D_SPIN_UNLOCK(&active->lock);
-				goto out;
-			}
-		}
-		d_list_add_tail(&ev->de_read_list, &active->open_reads);
-	}
-	D_SPIN_UNLOCK(&active->lock);
-
-	if (oh->doh_obj == NULL) {
-		/** duplicate the file handle for the fuse handle */
-		rc = dfs_dup(oh->doh_dfs, oh->doh_ie->ie_obj, oh->doh_flags, &oh->doh_obj);
-		if (rc) {
-			ev->de_ev.ev_error = rc;
-			dfuse_cb_read_complete(ev);
-			return;
-		}
-	}
+	if (check_inflight_fetch(active, ev))
+		goto out;
 
 	rc = dfs_read(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, position, &ev->de_len, &ev->de_ev);
 	if (rc != 0) {
@@ -638,7 +649,7 @@ dfuse_cb_pre_read_complete(struct dfuse_event *ev)
 	pre_read_mark_done(active);
 	ev->de_oh->doh_readahead_inflight = 0;
 
-	dfuse_cb_slave_read_complete(ev);
+	dfuse_cb_slave_list_read_complete(ev);
 	/* Drop the extra ref on active, the file could be closed before this read completes */
 	active_ie_decref(dfuse_info, ie);
 }
@@ -706,13 +717,6 @@ dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh, struct d
 	int              rc;
 
 	eqt = pick_eqt(dfuse_info);
-
-	if (oh->doh_obj == NULL) {
-		/** duplicate the file handle for the fuse handle */
-		rc = dfs_dup(oh->doh_dfs, oh->doh_ie->ie_obj, oh->doh_flags, &oh->doh_obj);
-		if (rc)
-			D_GOTO(err, rc);
-	}
 
 	ev->de_oh = oh;
 	ev->de_di = dfuse_info;
