@@ -7396,6 +7396,7 @@ pool_update_handler(crt_rpc_t *rpc, int handler_version)
 	struct pool_svc		       *svc;
 	struct pool_target_addr_list	list = { 0 };
 	struct pool_target_addr_list	inval_list_out = { 0 };
+	bool				exclude_rank = false;
 	int				rc;
 
 	pool_tgt_update_in_get_data(rpc, &list.pta_addrs, &list.pta_number);
@@ -7403,8 +7404,23 @@ pool_update_handler(crt_rpc_t *rpc, int handler_version)
 	if (list.pta_addrs == NULL || list.pta_number == 0)
 		D_GOTO(out, rc = -DER_INVAL);
 
-	D_DEBUG(DB_MD, DF_UUID ": processing rpc: %p ntargets=%zu\n", DP_UUID(in->pti_op.pi_uuid),
-		rpc, (size_t)list.pta_number);
+	if (opc_get(rpc->cr_opc) == POOL_EXCLUDE) {
+		int i;
+
+		/* Currently, the exclude_rank mode must apply to all ranks. */
+		if (list.pta_addrs[0].pta_target == -1)
+			exclude_rank = true;
+		for (i = 1; i < list.pta_number; i++) {
+			if ((exclude_rank && list.pta_addrs[i].pta_target != -1) ||
+			    (!exclude_rank && list.pta_addrs[i].pta_target == -1)) {
+				rc = -DER_INVAL;
+				goto out;
+			}
+		}
+	}
+
+	D_DEBUG(DB_MD, DF_UUID ": processing rpc: %p ntargets=%zu exclude_rank=%d\n",
+		DP_UUID(in->pti_op.pi_uuid), rpc, (size_t)list.pta_number, exclude_rank);
 
 	rc = pool_svc_lookup_leader(in->pti_op.pi_uuid, &svc,
 				    &out->pto_op.po_hint);
@@ -7418,9 +7434,8 @@ pool_update_handler(crt_rpc_t *rpc, int handler_version)
 			goto out_svc;
 	}
 
-	rc = pool_svc_update_map(svc, pool_opc_2map_opc(opc_get(rpc->cr_opc)),
-				 false /* exclude_rank */, NULL, NULL, 0, &list,
-				 &inval_list_out, &out->pto_op.po_map_version,
+	rc = pool_svc_update_map(svc, pool_opc_2map_opc(opc_get(rpc->cr_opc)), exclude_rank, NULL,
+				 NULL, 0, &list, &inval_list_out, &out->pto_op.po_map_version,
 				 &out->pto_op.po_hint, MUS_DMG);
 	if (rc != 0)
 		goto out_svc;
