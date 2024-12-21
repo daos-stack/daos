@@ -281,6 +281,15 @@ gc_drain_cont(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 	int			 i;
 	int			 rc;
 
+	/*
+	 * When we prepaer to drain the container, we do not need DTX entry any long.
+	 * Then destroy DTX table firstly to avoid dangling DXT records during drain
+	 * the container (that may yield).
+	 */
+	rc = vos_dtx_table_destroy(&pool->vp_umm, cont);
+	if (rc != 0)
+		return rc;
+
 	/** Move any leftover bags to the pool gc */
 	for (i = GC_AKEY; i < GC_CONT; i++) {
 		src_bin = &cont->cd_gc_bins[i];
@@ -305,13 +314,7 @@ gc_drain_cont(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 static int
 gc_free_cont(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh, struct vos_gc_item *item)
 {
-	int	rc;
-
-	rc = vos_dtx_table_destroy(&pool->vp_umm, umem_off2ptr(&pool->vp_umm, item->it_addr));
-	if (rc == 0)
-		rc = umem_free(&pool->vp_umm, item->it_addr);
-
-	return rc;
+	return umem_free(&pool->vp_umm, item->it_addr);
 }
 
 static struct vos_gc gc_table[] = {

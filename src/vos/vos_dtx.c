@@ -1557,7 +1557,6 @@ vos_dtx_deregister_record(struct umem_instance *umm, daos_handle_t coh,
 			  uint32_t entry, daos_epoch_t epoch, umem_off_t record)
 {
 	struct dtx_handle		*dth = vos_dth_get(false);
-	struct vos_container		*cont;
 	struct vos_dtx_act_ent		*dae;
 	struct vos_dtx_act_ent_df	*dae_df;
 	umem_off_t			*rec_df;
@@ -1566,20 +1565,19 @@ vos_dtx_deregister_record(struct umem_instance *umm, daos_handle_t coh,
 	int				 rc;
 	int				 i;
 
+	/*
+	 * If @coh is empty handle, then we are destroying the container. Under such case,
+	 * both the in-DRAM and on-dish DTX entry have already been released or destroyed.
+	 */
+	if (daos_handle_is_inval(coh))
+		return 0;
+
 	if (!vos_dtx_is_normal_entry(entry))
 		return 0;
 
 	D_ASSERT(entry >= DTX_LID_RESERVED);
 
-	cont = vos_hdl2cont(coh);
-	/* If "cont" is NULL, then we are destroying the container.
-	 * Under such case, the DTX entry in DRAM has been removed,
-	 * The on-disk entry will be destroyed soon.
-	 */
-	if (cont == NULL)
-		return 0;
-
-	found = lrua_lookupx(cont->vc_dtx_array, entry - DTX_LID_RESERVED,
+	found = lrua_lookupx(vos_hdl2cont(coh)->vc_dtx_array, entry - DTX_LID_RESERVED,
 			     epoch, &dae);
 	if (!found) {
 		D_WARN("Could not find active DTX record for lid=%d, epoch="
