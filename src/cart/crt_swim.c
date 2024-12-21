@@ -1045,7 +1045,7 @@ static int64_t crt_swim_progress_cb(crt_context_t crt_ctx, int64_t timeout_us, v
 		if (grp_priv->gp_size > 1)
 			D_ERROR("SWIM shutdown\n");
 		swim_self_set(ctx, SWIM_ID_INVALID);
-	} else if (rc == -DER_TIMEDOUT || rc == -DER_CANCELED) {
+	} else if (rc == -DER_TIMEDOUT || rc == -DER_CANCELED || rc == -DER_DEADLINE_EXPIRED) {
 		uint64_t now = swim_now_ms();
 
 		crt_swim_update_last_unpack_hlc(csm);
