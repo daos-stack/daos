@@ -249,7 +249,7 @@ stop_tx(daos_handle_t coh, struct tx_helper *txh, bool success, bool write)
 		vts_dtx_end(dth);
 		if (txh->th_nr_mods != 0) {
 			if (success && !txh->th_skip_commit) {
-				err = vos_dtx_commit(coh, &xid, 1, NULL);
+				err = vos_dtx_commit(coh, &xid, 1, false, NULL);
 				assert(err >= 0);
 			} else {
 				if (!success)
@@ -1297,7 +1297,7 @@ conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 	if (!daos_is_zero_dti(&txh1.th_saved_xid)) {
 		if (txh1.th_skip_commit) {
 			rc = vos_dtx_commit(arg->ctx.tc_co_hdl,
-					    &txh1.th_saved_xid, 1, NULL);
+					    &txh1.th_saved_xid, 1, false, NULL);
 			assert(rc >= 0);
 		}
 		if (expect_inprogress) {
@@ -1563,7 +1563,7 @@ out:
 	if (!daos_is_zero_dti(&wtx->th_saved_xid)) {
 		if (wtx->th_skip_commit) {
 			rc = vos_dtx_commit(arg->ctx.tc_co_hdl,
-					    &wtx->th_saved_xid, 1, NULL);
+					    &wtx->th_saved_xid, 1, false, NULL);
 			assert(rc >= 0);
 		}
 	}
@@ -1571,7 +1571,7 @@ out:
 	if (!daos_is_zero_dti(&atx->th_saved_xid)) {
 		if (atx->th_skip_commit) {
 			rc = vos_dtx_commit(arg->ctx.tc_co_hdl,
-					    &atx->th_saved_xid, 1, NULL);
+					    &atx->th_saved_xid, 1, false, NULL);
 			assert(rc >= 0);
 		}
 	}
