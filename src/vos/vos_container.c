@@ -185,7 +185,8 @@ cont_cmp(struct d_ulink *ulink, void *cmp_args)
 static void
 cont_free_internal(struct vos_container *cont)
 {
-	int i;
+	struct vos_pool	*pool = cont->vc_pool;
+	int		 i;
 
 	D_ASSERT(cont->vc_open_count == 0);
 
@@ -193,9 +194,6 @@ cont_free_internal(struct vos_container *cont)
 		dbtree_destroy(cont->vc_dtx_active_hdl, NULL);
 	if (daos_handle_is_valid(cont->vc_dtx_committed_hdl))
 		dbtree_destroy(cont->vc_dtx_committed_hdl, NULL);
-
-	if (cont->vc_dtx_array)
-		lrua_array_free(cont->vc_dtx_array);
 
 	D_ASSERT(d_list_empty(&cont->vc_dtx_act_list));
 
@@ -215,6 +213,8 @@ cont_free_internal(struct vos_container *cont)
 		       cont->vc_dtx_committed_count);
 
 	D_FREE(cont);
+
+	lrua_array_aggregate(pool->vp_dtx_array);
 }
 
 /**
@@ -327,11 +327,6 @@ exit:
 	return rc;
 }
 
-static const struct lru_callbacks lru_cont_cbs = {
-	.lru_on_alloc = vos_lru_alloc_track,
-	.lru_on_free = vos_lru_free_track,
-};
-
 /**
  * Open a container within a VOSP
  */
@@ -413,16 +408,6 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
-
-	rc = lrua_array_alloc(&cont->vc_dtx_array, DTX_ARRAY_LEN, DTX_ARRAY_NR,
-			      sizeof(struct vos_dtx_act_ent),
-			      LRU_FLAG_REUSE_UNIQUE, &lru_cont_cbs,
-			      vos_tls_get(cont->vc_pool->vp_sysdb));
-	if (rc != 0) {
-		D_ERROR("Failed to create DTX active array: rc = "DF_RC"\n",
-			DP_RC(rc));
-		D_GOTO(exit, rc);
-	}
 
 	rc = dbtree_create_inplace_ex(VOS_BTR_DTX_ACT_TABLE, 0,
 				      DTX_BTREE_ORDER, &uma,
