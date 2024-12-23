@@ -647,11 +647,29 @@ dfuse_cb_pre_read_complete(struct dfuse_event *ev)
 		active->readahead->dra_ev = NULL;
 	}
 	pre_read_mark_done(active);
-	ev->de_oh->doh_readahead_inflight = 0;
 
 	dfuse_cb_slave_list_read_complete(ev);
 	/* Drop the extra ref on active, the file could be closed before this read completes */
 	active_ie_decref(dfuse_info, ie);
+	ev->de_oh->doh_readahead_inflight = 0;
+}
+
+static int
+active_ie_readahead_init(struct dfuse_inode_entry *ie)
+{
+	struct active_inode *ie_active = ie->ie_active;
+
+	D_ASSERT(ie_active != NULL);
+	if (ie_active->readahead != NULL)
+		return 0;
+
+	D_ALLOC_PTR(ie_active->readahead);
+	if (ie_active->readahead == NULL)
+		return -DER_NOMEM;
+
+	D_INIT_LIST_HEAD(&ie_active->readahead->req_list);
+
+	return 0;
 }
 
 int

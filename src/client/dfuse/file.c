@@ -47,25 +47,6 @@ out:
 	return rc;
 }
 
-int
-active_ie_readahead_init(struct dfuse_inode_entry *ie)
-{
-	struct active_inode *ie_active = ie->ie_active;
-
-	D_ASSERT(ie_active != NULL);
-	if (ie_active->readahead != NULL)
-		return 0;
-
-	D_ALLOC_PTR(ie_active->readahead);
-	if (ie_active->readahead == NULL)
-		return -DER_NOMEM;
-
-	D_INIT_LIST_HEAD(&ie_active->readahead->req_list);
-	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
-
-	return 0;
-}
-
 static void
 ah_free(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 {

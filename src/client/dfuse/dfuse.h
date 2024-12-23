@@ -1046,9 +1046,6 @@ struct active_inode {
 int
 active_ie_init(struct dfuse_inode_entry *ie);
 
-int
-active_ie_readahead_init(struct dfuse_inode_entry *ie);
-
 /* Mark a oh as closing and drop the ref on inode active */
 void
 active_oh_decref(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh);

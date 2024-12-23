@@ -89,7 +89,6 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 			     ie->ie_stat.st_size <= DFUSE_MAX_PRE_READ) ||
 			    (ie->ie_stat.st_size > 0 &&
 			     ie->ie_stat.st_size <= DFUSE_MAX_PRE_READ_ONCE)) {
-				preread = true;
 				/* Add the read extent to the list to make sure the following read
 				 * will check the readahead list first.
 				 */
@@ -98,6 +97,9 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 					D_SPIN_UNLOCK(&ie->ie_active->lock);
 					D_GOTO(decref, rc);
 				}
+				/* Descreased in pre_read_complete_cb() */
+				preread = true;
+				atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
 				oh->doh_readahead_inflight = 1;
 			}
 			D_SPIN_UNLOCK(&ie->ie_active->lock);
@@ -127,7 +129,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	if (fi->flags & O_TRUNC) {
 		rc = dfs_punch(ie->ie_dfs->dfs_ns, ie->ie_obj, 0, DFS_MAX_FSIZE);
 		if (rc)
-			D_GOTO(ie_decref, rc);
+			D_GOTO(preread_abort, rc);
 		dfuse_dcache_evict(oh->doh_ie);
 	}
 
@@ -140,8 +142,9 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		dfuse_pre_read(dfuse_info, oh, ev);
 
 	return;
-ie_decref:
-	dfuse_pre_read_abort(dfuse_info, oh, ev, rc);
+preread_abort:
+	if (preread)
+		dfuse_pre_read_abort(dfuse_info, oh, ev, rc);
 decref:
 	active_ie_decref(dfuse_info, ie);
 err:
@@ -204,9 +207,8 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		}
 	}
 	DFUSE_TRA_DEBUG(oh, "il_calls %d, caching %d,", il_calls, oh->doh_caching);
-	if (il_calls != 0) {
+	if (il_calls != 0)
 		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_il_count, 1);
-	}
 
 	/* Wait inflight readahead RPC finished before release */
 	if (oh->doh_ie->ie_active != NULL) {
