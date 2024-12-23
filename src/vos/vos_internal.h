@@ -1396,7 +1396,7 @@ gc_add_item(struct vos_pool *pool, daos_handle_t coh,
 int
 vos_gc_pool_tight(daos_handle_t poh, int *credits);
 void
-gc_reserve_space(daos_size_t *rsrvd);
+gc_reserve_space(struct vos_pool *pool, daos_size_t *rsrvd);
 int
 gc_open_pool(struct vos_pool *pool);
 void

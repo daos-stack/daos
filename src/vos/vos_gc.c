@@ -24,11 +24,11 @@ enum {
 };
 
 /**
- * Default garbage bag size consumes <= 4K space
+ * Default garbage bag size consumes <= 16K space
  * - header of vos_gc_bag_df is 64 bytes
  * - PMDK allocation overhead is 16 bytes,
- * - each item consumes 16 bytes, 250 * 16 = 4000 bytes
- * - together is 4080 bytes, reserve 16 bytes for future use
+ * - each item consumes 16 bytes, (250 + 3 * 256) * 16 = 16288 bytes
+ * - together is 16368 bytes, reserve 16 bytes for future use
  */
 static int gc_bag_size	= 250 + 3 * 256;
 
@@ -1979,9 +1979,38 @@ vos_gc_pool_idle(daos_handle_t poh)
 }
 
 inline void
-gc_reserve_space(daos_size_t *rsrvd)
+gc_reserve_space(struct vos_pool *pool, daos_size_t *rsrvd)
 {
-	rsrvd[DAOS_MEDIA_SCM]	+= gc_bag_size * (daos_size_t)GC_CREDS_MAX;
+	daos_size_t	bag_bytes = offsetof(struct vos_gc_bag_df, bag_items[gc_bag_size]);
+	uint32_t	bag_cnt;
+
+	/*
+	 * It's hard to estimate how many GC bags will be required during GC run,
+	 * since the GC bags could be allocated for each container or each bucket
+	 * (in the md-on-ssd phase2 mode).
+	 *
+	 * GC run in pmem or md-on-ssd phase1 mode (see gc_reclaim_pool()) always
+	 * tries to reclaim space as long as any akey is flattened, so the consumed
+	 * GC bags is usually minimal and we can choose to reserve small number of
+	 * GC bags for these two modes.
+	 *
+	 * However, there will be much more GC bags required for the phase2 mode,
+	 * since all objects need be flattened before space reclaiming (to minimize
+	 * unnecessary page eviction, see gc_reclaim_pool_p2()).
+	 */
+	if (pool->vp_small) {
+		bag_cnt	= GC_MAX;
+	} else if (vos_pool_is_evictable(pool)) {
+		/*
+		 * Each 16MB bucket can roughly contain at most 47662 objects, that requires
+		 * (47662 / gc_bag_size) = 46 GC bags, let's reserve 50 GC bags per bucket.
+		 */
+		bag_cnt = vos_pool2store(pool)->cache->ca_md_pages * 50;
+	} else {
+		bag_cnt = GC_MAX * 10;
+	}
+
+	rsrvd[DAOS_MEDIA_SCM]	+= (bag_bytes * bag_cnt);
 	rsrvd[DAOS_MEDIA_NVME]	+= 0;
 }
 
