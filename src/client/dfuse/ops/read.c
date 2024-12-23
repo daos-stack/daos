@@ -370,12 +370,12 @@ chunk_fetch(fuse_req_t req, struct dfuse_obj_hdl *oh, struct read_chunk_data *cd
 		return false;
 	}
 
-	ev->de_iov.iov_len = CHUNK_SIZE;
-	ev->de_req         = req;
-	ev->de_cd          = cd;
-	ev->de_sgl.sg_nr   = 1;
-	ev->de_len         = 0;
-	ev->de_complete_cb = chunk_cb;
+	ev->de_iov.iov_len  = CHUNK_SIZE;
+	ev->de_req          = req;
+	ev->de_cd           = cd;
+	ev->de_sgl.sg_nr    = 1;
+	ev->de_len          = 0;
+	ev->de_complete_cb  = chunk_cb;
 	ev->de_req_len      = CHUNK_SIZE;
 	ev->de_req_position = position;
 
@@ -678,7 +678,7 @@ dfuse_pre_read_init(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 {
 	struct active_inode *active = ie->ie_active;
 	struct dfuse_eq     *eqt;
-	struct dfuse_event *ev;
+	struct dfuse_event  *ev;
 	size_t               len = ie->ie_stat.st_size;
 
 	eqt = pick_eqt(dfuse_info);
