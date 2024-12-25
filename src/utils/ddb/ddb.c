@@ -6,6 +6,7 @@
 #include <ctype.h>
 #include <getopt.h>
 #include <gurt/debug.h>
+#include <daos_srv/vos.h>
 
 #include "ddb.h"
 #include "ddb_common.h"
@@ -34,6 +35,8 @@
 #define COMMAND_NAME_VEA_UPDATE "vea_update"
 #define COMMAND_NAME_DTX_ACT_COMMIT "dtx_act_commit"
 #define COMMAND_NAME_DTX_ACT_ABORT "dtx_act_abort"
+#define COMMAND_NAME_FEATURE         "feature"
+#define COMMAND_NAME_RM_POOL         "rm_pool"
 
 /* Parse command line options for the 'ls' command */
 static int
@@ -630,6 +633,137 @@ dtx_act_abort_option_parse(struct ddb_ctx *ctx, struct dtx_act_abort_options *cm
 }
 
 int
+ddb_feature_string2flags(struct ddb_ctx *ctx, const char *string, uint64_t *compat_flags,
+			 uint64_t *incompat_flags)
+{
+	char    *tmp;
+	char    *tok;
+	int      rc = 0;
+	uint64_t flag;
+	uint64_t ret_compat_flags   = 0;
+	uint64_t ret_incompat_flags = 0;
+	bool     compat_feature;
+
+	tmp = strndup(string, PATH_MAX);
+	if (tmp == NULL)
+		return -DER_NOMEM;
+	tok = strtok(tmp, ",");
+	while (tok != NULL) {
+		flag = vos_pool_name2flag(tok, &compat_feature);
+		if (flag == 0) {
+			ddb_printf(ctx, "Unknown flag: '%s'\n", tok);
+			rc = -DER_INVAL;
+			break;
+		}
+		if (compat_feature)
+			ret_compat_flags |= flag;
+		else
+			ret_incompat_flags |= flag;
+		tok = strtok(NULL, ",");
+	}
+
+	free(tmp);
+	if (rc == 0) {
+		*compat_flags   = ret_compat_flags;
+		*incompat_flags = ret_incompat_flags;
+	}
+
+	return rc;
+}
+
+static int
+feature_option_parse(struct ddb_ctx *ctx, struct feature_options *cmd_args, uint32_t argc,
+		     char **argv)
+{
+	char         *options_short  = "e:d:s";
+	int           index          = 0, opt;
+	int           rc             = 0;
+	struct option options_long[] = {{"enable", required_argument, NULL, 'e'},
+					{"disable", required_argument, NULL, 'd'},
+					{"show", no_argument, NULL, 's'},
+					{NULL}};
+
+	memset(cmd_args, 0, sizeof(*cmd_args));
+	/* Restart getopt */
+	optind = 1;
+	opterr = 0;
+	while ((opt = getopt_long(argc, argv, options_short, options_long, &index)) != -1) {
+		switch (opt) {
+		case 'e':
+			rc = ddb_feature_string2flags(ctx, optarg, &cmd_args->set_compat_flags,
+						      &cmd_args->set_incompat_flags);
+			if (rc)
+				return rc;
+			break;
+		case 'd':
+			rc = ddb_feature_string2flags(ctx, optarg, &cmd_args->clear_compat_flags,
+						      &cmd_args->clear_incompat_flags);
+			if (rc)
+				return rc;
+			break;
+		case 's':
+			cmd_args->show_features = true;
+			break;
+		case '?':
+			ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
+			break;
+		default:
+			return -DER_INVAL;
+		}
+	}
+
+	index = optind;
+	if (argc - index > 0) {
+		cmd_args->path = argv[index];
+		index++;
+	} else if (ctx->dc_pool_path) {
+		cmd_args->path = ctx->dc_pool_path;
+	}
+
+	if (argc - index > 0) {
+		ddb_printf(ctx, "Unexpected argument: %s\n", argv[index]);
+		return -DER_INVAL;
+	}
+
+	return 0;
+}
+
+/* Parse command line options for the 'rm_pool' command */
+static int
+rm_pool_option_parse(struct ddb_ctx *ctx, struct rm_pool_options *cmd_args, uint32_t argc,
+		     char **argv)
+{
+	char         *options_short  = "";
+	int           index          = 0;
+	struct option options_long[] = {{NULL}};
+
+	memset(cmd_args, 0, sizeof(*cmd_args));
+
+	/* Restart getopt */
+	optind = 1;
+	opterr = 0;
+	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
+		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
+		return -DER_INVAL;
+	}
+
+	index = optind;
+	if (argc - index > 0) {
+		cmd_args->path = argv[index];
+		index++;
+	} else if (ctx->dc_pool_path) {
+		cmd_args->path = ctx->dc_pool_path;
+	}
+
+	if (argc - index > 0) {
+		ddb_printf(ctx, "Unexpected argument: %s\n", argv[index]);
+		return -DER_INVAL;
+	}
+
+	return 0;
+}
+
+int
 ddb_parse_cmd_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct ddb_cmd_info *info)
 {
 	char *cmd = argv[0];
@@ -728,42 +862,91 @@ ddb_parse_cmd_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct ddb_c
 		return dtx_act_abort_option_parse(ctx, &info->dci_cmd_option.dci_dtx_act_abort,
 		       argc, argv);
 	}
+	if (same(cmd, COMMAND_NAME_RM_POOL)) {
+		info->dci_cmd = DDB_CMD_RM_POOL;
+		return rm_pool_option_parse(ctx, &info->dci_cmd_option.dci_rm_pool, argc, argv);
+	}
+	if (same(cmd, COMMAND_NAME_FEATURE)) {
+		info->dci_cmd = DDB_CMD_FEATURE;
+		return feature_option_parse(ctx, &info->dci_cmd_option.dci_feature, argc, argv);
+	}
 
-	ddb_errorf(ctx, "'%s' is not a valid command. Available commands are:"
-			"'help', "
-			"'quit', "
-			"'ls', "
-			"'open', "
-			"'version', "
-			"'close', "
-			"'superblock_dump', "
-			"'value_dump', "
-			"'rm', "
-			"'value_load', "
-			"'ilog_dump', "
-			"'ilog_commit', "
-			"'ilog_clear', "
-			"'dtx_dump', "
-			"'dtx_cmt_clear', "
-			"'smd_sync', "
-			"'vea_dump', "
-			"'vea_update', "
-			"'dtx_act_commit', "
-			"'dtx_act_abort'\n", cmd);
+	ddb_errorf(ctx,
+		   "'%s' is not a valid command. Available commands are:"
+		   "'help', "
+		   "'quit', "
+		   "'ls', "
+		   "'open', "
+		   "'version', "
+		   "'close', "
+		   "'superblock_dump', "
+		   "'value_dump', "
+		   "'rm', "
+		   "'value_load', "
+		   "'ilog_dump', "
+		   "'ilog_commit', "
+		   "'ilog_clear', "
+		   "'dtx_dump', "
+		   "'dtx_cmt_clear', "
+		   "'smd_sync', "
+		   "'vea_dump', "
+		   "'vea_update', "
+		   "'dtx_act_commit', "
+		   "'dtx_act_abort', "
+		   "'feature', "
+		   "'rm_pool'\n",
+		   cmd);
 
 	return -DER_INVAL;
 }
 
 int
-ddb_run_cmd(struct ddb_ctx *ctx, const char *cmd_str, bool write_mode)
+ddb_parse_cmd_str(struct ddb_ctx *ctx, const char *cmd_str, bool *open)
 {
-	struct argv_parsed	 parse_args = {0};
-	struct ddb_cmd_info	 info = {0};
+	struct argv_parsed       parse_args = {0};
 	int			 rc;
 	char                    *cmd_copy;
 
 	D_STRNDUP(cmd_copy, cmd_str, MAX_COMMAND_LEN);
+	if (cmd_copy == NULL)
+		return -DER_NOMEM;
 
+	/* Remove newline if needed */
+	if (cmd_copy[strlen(cmd_copy) - 1] == '\n')
+		cmd_copy[strlen(cmd_copy) - 1] = '\0';
+
+	rc = ddb_str2argv_create(cmd_copy, &parse_args);
+	if (!SUCCESS(rc)) {
+		D_FREE(cmd_copy);
+		return rc;
+	}
+
+	if (parse_args.ap_argc == 0) {
+		D_ERROR("Nothing parsed\n");
+		D_GOTO(done, rc = -DER_INVAL);
+	}
+
+	if (same(parse_args.ap_argv[0], COMMAND_NAME_RM_POOL) ||
+	    same(parse_args.ap_argv[0], COMMAND_NAME_FEATURE))
+		*open = false;
+	else
+		*open = true;
+done:
+	ddb_str2argv_free(&parse_args);
+	D_FREE(cmd_copy);
+
+	return rc;
+}
+
+int
+ddb_run_cmd(struct ddb_ctx *ctx, const char *cmd_str)
+{
+	struct ddb_cmd_info info = {0};
+	int                 rc;
+	struct argv_parsed  parse_args = {0};
+	char               *cmd_copy;
+
+	D_STRNDUP(cmd_copy, cmd_str, MAX_COMMAND_LEN);
 	if (cmd_copy == NULL)
 		return -DER_NOMEM;
 
@@ -787,7 +970,6 @@ ddb_run_cmd(struct ddb_ctx *ctx, const char *cmd_str, bool write_mode)
 		D_GOTO(done, rc);
 
 	switch (info.dci_cmd) {
-
 	case DDB_CMD_HELP:
 		rc = ddb_run_help(ctx);
 		break;
@@ -868,18 +1050,26 @@ ddb_run_cmd(struct ddb_ctx *ctx, const char *cmd_str, bool write_mode)
 		rc = ddb_run_dtx_act_abort(ctx, &info.dci_cmd_option.dci_dtx_act_abort);
 		break;
 
+	case DDB_CMD_FEATURE:
+		rc = ddb_run_feature(ctx, &info.dci_cmd_option.dci_feature);
+		break;
+
+	case DDB_CMD_RM_POOL:
+		rc = ddb_run_rm_pool(ctx, &info.dci_cmd_option.dci_rm_pool);
+		break;
+
 	case DDB_CMD_UNKNOWN:
 		ddb_error(ctx, "Unknown command\n");
 		rc = -DER_INVAL;
 		break;
 	}
+
 done:
 	ddb_str2argv_free(&parse_args);
 	D_FREE(cmd_copy);
 
 	return rc;
 }
-
 
 void
 ddb_commands_help(struct ddb_ctx *ctx)
@@ -1036,6 +1226,24 @@ ddb_commands_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "    <dtx_id>\n");
 	ddb_print(ctx, "\tDTX id of the entry to abort.\n");
 	ddb_print(ctx, "\n");
+
+	/* Command: rm_pool */
+	ddb_print(ctx, "rm_pool <path>\n");
+	ddb_print(ctx, "\tremove pool shard\n");
+	ddb_print(ctx, "    <path>\n");
+	ddb_print(ctx, "\n");
+
+	/* Command: feature */
+	ddb_print(ctx, "feature\n");
+	ddb_print(ctx, "\tManage vos pool features\n");
+	ddb_print(ctx, "Options:\n");
+	ddb_print(ctx, "    -e, --enable\n");
+	ddb_print(ctx, "\tEnable vos pool features\n");
+	ddb_print(ctx, "    -d, --disable\n");
+	ddb_print(ctx, "\tDisable vos pool features\n");
+	ddb_print(ctx, "    -s, --show\n");
+	ddb_print(ctx, "\tShow current features\n");
+	ddb_print(ctx, "\n");
 }
 
 void
@@ -1099,4 +1307,6 @@ ddb_program_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "   vea_update        Alter the VEA tree to mark a region as free.\n");
 	ddb_print(ctx, "   dtx_act_commit    Mark the active dtx entry as committed\n");
 	ddb_print(ctx, "   dtx_act_abort     Mark the active dtx entry as aborted\n");
+	ddb_print(ctx, "   feature	     Manage vos pool features\n");
+	ddb_print(ctx, "   rm_pool	     Remove pool shard\n");
 }
