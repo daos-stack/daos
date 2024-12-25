@@ -97,7 +97,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 					D_SPIN_UNLOCK(&ie->ie_active->lock);
 					D_GOTO(decref, rc);
 				}
-				/* Descreased in pre_read_complete_cb() */
+				/* Decreased in pre_read_complete_cb() */
 				preread = true;
 				atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
 				oh->doh_readahead_inflight = 1;

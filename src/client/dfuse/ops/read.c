@@ -235,18 +235,18 @@ check_inflight_fetch(struct active_inode *active, struct dfuse_event *ev)
 #define CHUNK_SIZE (1024 * 1024)
 
 struct read_chunk_data {
-	struct dfuse_event   *ev;
+	struct dfuse_event       *ev;
 	struct dfuse_inode_entry *ie;
-	fuse_req_t            reqs[8];
-	struct dfuse_obj_hdl *ohs[8];
-	d_list_t              list;
-	uint64_t              bucket;
-	struct dfuse_eq      *eqt;
-	int                   rc;
-	int                   entered;
-	ATOMIC int            exited;
-	bool                  exiting;
-	bool                  complete;
+	fuse_req_t                reqs[8];
+	struct dfuse_obj_hdl     *ohs[8];
+	d_list_t                  list;
+	uint64_t                  bucket;
+	struct dfuse_eq          *eqt;
+	int                       rc;
+	int                       entered;
+	ATOMIC int                exited;
+	bool                      exiting;
+	bool                      complete;
 };
 
 static void
@@ -290,11 +290,11 @@ out:
 static void
 chunk_cb(struct dfuse_event *ev)
 {
-	struct read_chunk_data *cd = ev->de_cd;
+	struct read_chunk_data   *cd = ev->de_cd;
 	struct dfuse_inode_entry *ie = cd->ie;
 	struct active_inode      *ia = ie->ie_active;
-	fuse_req_t              req;
-	bool                    done = false;
+	fuse_req_t                req;
+	bool                      done = false;
 
 	cd->rc = ev->de_ev.ev_error;
 
