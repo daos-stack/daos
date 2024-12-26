@@ -458,7 +458,7 @@ sched_ult2xs(int xs_type, int tgt_id)
 		break;
 	case DSS_XS_OFFLOAD:
 		if (dss_numa_nr > 1)
-			xs_id = sched_ult2xs_multisocket(xs_type, tgt_id);
+			return sched_ult2xs_multisocket(xs_type, tgt_id);
 		if (!dss_helper_pool) {
 			if (dss_tgt_offload_xs_nr > 0)
 				xs_id = DSS_MAIN_XS_ID(tgt_id) + dss_tgt_offload_xs_nr / dss_tgt_nr;
@@ -879,9 +879,8 @@ dss_chore_queue_start(struct dss_xstream *dx)
 	struct dss_chore_queue *queue = &dx->dx_chore_queue;
 	int                     rc;
 
-	rc = daos_abt_thread_create(dx->dx_sp, dss_free_stack_cb, dx->dx_pools[DSS_POOL_GENERIC],
-				    dss_chore_queue_ult, queue, ABT_THREAD_ATTR_NULL,
-				    &queue->chq_ult);
+	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_GENERIC], dss_chore_queue_ult, queue,
+			       ABT_THREAD_ATTR_NULL, &queue->chq_ult);
 	if (rc != 0) {
 		D_ERROR("failed to create chore queue ULT: %d\n", rc);
 		return dss_abterr2der(rc);

@@ -140,8 +140,6 @@ static _Atomic uint32_t        daos_init_cnt;
  * true.
  */
 static bool             report;
-/* always load libpil4dfs related env variables in exec() */
-static bool             enforce_exec_env;
 /* current application is bash/sh or not */
 static bool             is_bash;
 /* "no_dcache_in_bash" is a flag to control whether turns off directory caching inside sh/bash
@@ -161,12 +159,32 @@ static long int         page_size;
 #define DAOS_INIT_RUNNING     1
 
 static _Atomic uint64_t mpi_init_count;
+static _Atomic int64_t  zeInit_count;
 
 static long int         daos_initing;
 _Atomic bool            d_daos_inited;
 static bool             daos_debug_inited;
 static int              num_dfs;
 static struct dfs_mt    dfs_list[MAX_DAOS_MT];
+
+/* libpil4dfs include two scenarios / code paths, 1) interception disabled (let fuse to handle I/O)
+ * and 2) interception enabled. The code path is chosen by determining whether application's name
+ * is in bypass list (built-in and user supplied). Bypass is allowed as default.
+ * An env "D_IL_NO_BYPASS" can be set 1 to disable bypass and always enable interception in CI
+ * testing. Please be aware that this env is not documented for users since it is ONLY for testing.
+ */
+bool                    bypass_allowed = true;
+/* bypass interception in current process. */
+static bool             bypass;
+/* base name of the current application name */
+static char            *exe_short_name;
+static char            *first_arg;
+
+/* the list of apps provided by user including all child processes to be skipped for interception */
+static char            *bypass_user_cmd_list;
+
+static void
+extract_exe_name_1st_arg(void);
 
 static int
 init_dfs(int idx);
@@ -470,6 +488,10 @@ static int (*next_tcgetattr)(int fd, void *termios_p);
 /* end NOT supported by DAOS */
 
 static int (*next_mpi_init)(int *argc, char ***argv);
+static int (*next_pmpi_init)(int *argc, char ***argv);
+static int (*next_ze_init)(int flags);
+static void *(*next_dlsym)(void *handle, const char *symbol);
+static void *(*new_dlsym)(void *handle, const char *symbol);
 
 /* to do!! */
 /**
@@ -939,12 +961,12 @@ child_hdlr(void)
 	if (atomic_load_relaxed(&d_daos_inited) == false)
 		return;
 
-	rc = daos_eq_lib_reset_after_fork();
+	rc = daos_reinit();
 	if (rc)
-		DL_WARN(rc, "daos_eq_lib_init() failed in child process");
-	daos_dti_reset();
+		DL_WARN(rc, "daos_reinit() failed in child process");
 	td_eqh = main_eqh = DAOS_HDL_INVAL;
 	context_reset = true;
+	d_eq_count    = 0;
 }
 
 /* only free the reserved low fds when application exits or encounters error */
@@ -1039,6 +1061,157 @@ MPI_Init(int *argc, char ***argv)
 	atomic_fetch_add_relaxed(&mpi_init_count, -1);
 	return rc;
 }
+
+int
+PMPI_Init(int *argc, char ***argv)
+{
+	int rc;
+
+	if (next_pmpi_init == NULL) {
+		next_pmpi_init = dlsym(RTLD_NEXT, "PMPI_Init");
+		D_ASSERT(next_pmpi_init != NULL);
+	}
+
+	atomic_fetch_add_relaxed(&mpi_init_count, 1);
+	rc = next_pmpi_init(argc, argv);
+	atomic_fetch_add_relaxed(&mpi_init_count, -1);
+	return rc;
+}
+
+int
+zeInit(int flags)
+{
+	int rc;
+
+	if (next_ze_init == NULL) {
+		if (d_hook_enabled)
+			next_ze_init = next_dlsym(RTLD_NEXT, "zeInit");
+		else
+			next_ze_init = dlsym(RTLD_NEXT, "zeInit");
+	}
+	D_ASSERT(next_ze_init != NULL);
+	atomic_fetch_add_relaxed(&zeInit_count, 1);
+	rc = next_ze_init(flags);
+	atomic_fetch_add_relaxed(&zeInit_count, -1);
+	return rc;
+}
+
+#if defined(__x86_64__)
+/* This is used to work around compiling warning and limitations of using asm function. */
+static void *
+query_new_dlsym_addr(void *addr)
+{
+	int i;
+
+	/* assume little endian */
+	for (i = 0; i < 64; i++) {
+		/* 0x56579090 is corresponding to the first four instructions at new_dlsym_asm.
+		 * 0x90 - nop, 0x90 - nop, 0x57 - push %rdi, 0x56 - push %rsi
+		 */
+		if (*((int *)(addr + i)) == 0x56579090) {
+			/* two nop are added for easier positioning. offset +2 here to skip two
+			 * nop and start from the real entry.
+			 */
+			return ((void *)(addr + i + 2));
+		}
+	}
+	return NULL;
+}
+
+_Pragma("GCC diagnostic push")
+_Pragma("GCC diagnostic ignored \"-Wunused-function\"")
+_Pragma("GCC diagnostic ignored \"-Wunused-variable\"")
+_Pragma("GCC push_options")
+_Pragma("GCC optimize(\"-O0\")")
+static char str_zeinit[] = "zeInit";
+
+static int
+is_hook_enabled(void)
+{
+	return (d_hook_enabled ? 1 : 0);
+}
+
+/* This wrapper function is introduced to avoid compiling issue with Intel-C on Leap 15.5 */
+static int
+my_strcmp(const char *s1, const char *s2)
+{
+	return strcmp(s1, s2);
+}
+
+static void *
+get_zeinit_addr(void)
+{
+	return (void *)zeInit;
+}
+
+__attribute__((aligned(16))) static void
+new_dlsym_marker(void)
+{
+}
+
+__asm__(
+	"new_dlsym_asm:\n"
+	"nop\n"
+	"nop\n"
+	"push %rdi\n"
+	"push %rsi\n"
+
+	"call is_hook_enabled\n"
+	"test %eax,%eax\n"
+	"je org_dlsym\n"
+
+	"mov %rsi, %rdi\n"
+	"lea str_zeinit(%rip), %rsi\n"
+	"call my_strcmp\n"
+	"test %eax,%eax\n"
+	"jne org_dlsym\n"
+
+	"pop %rsi\n"
+	"pop %rdi\n"
+	"call *next_dlsym(%rip)\n"
+	"mov %rax, next_ze_init(%rip)\n"
+
+	"test %eax,%eax\n"
+	"jne found\n"
+	"ret\n"
+
+	"found:\n"
+	"call get_zeinit_addr\n"
+	"ret\n"
+
+	"org_dlsym:\n"
+	"pop %rsi\n"
+	"pop %rdi\n"
+	"jmp *next_dlsym(%rip)\n"
+);
+_Pragma("GCC pop_options")
+_Pragma("GCC diagnostic pop")
+
+#else
+/* c code for other architecture. caller info could be wrong inside libc dlsym() when handle is set
+ * RTLD_NEXT. Assembly version implementation similar to above is needed to fix the issue by using
+ * jump instead of call instruction. 
+ */
+static void *
+new_dlsym_c(void *handle, const char *symbol)
+{
+	if (!d_hook_enabled)
+		goto org_dlsym;
+	if (strcmp(symbol, "zeInit") != 0)
+		goto org_dlsym;
+
+	next_ze_init = next_dlsym(handle, symbol);
+	if (next_ze_init)
+		/* dlsym() finished successfully, then intercept zeInit() */
+		return zeInit;
+	else
+		return next_ze_init;
+
+org_dlsym:
+	/* Ideally we need to adjust stack and jump to next_dlsym(). */
+	return next_dlsym(handle, symbol);
+}
+#endif
 
 /** determine whether a path (both relative and absolute) is on DAOS or not. If yes,
  *  returns parent object, item name, full path of parent dir, full absolute path, and
@@ -1146,6 +1319,15 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 				goto out_normal;
 			}
 
+			/* Check whether zeInit() is running. If yes, pass to the original
+			 * libc functions. Avoid possible zeInit reentrancy/nested call.
+			 */
+
+			if (atomic_load_relaxed(&zeInit_count) > 0) {
+				*is_target_path = 0;
+				goto out_normal;
+			}
+
 			/* daos_init() is expensive to call. We call it only when necessary. */
 
 			/* Check whether daos_init() is running. If yes, pass to the original
@@ -1166,6 +1348,7 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 			}
 
 			rc = daos_init();
+			/* This message is used by ftest "il_whitelist.py" */
 			if (rc) {
 				DL_ERROR(rc, "daos_init() failed");
 				*is_target_path = 0;
@@ -2016,6 +2199,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 
 	if (!is_target_path)
 		goto org_func;
+	atomic_fetch_add_relaxed(&num_open, 1);
 	if (oflags & O_CREAT && (oflags & O_DIRECTORY || oflags & O_PATH)) {
 		/* Create a dir is not supported. */
 		errno = ENOENT;
@@ -2043,7 +2227,6 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 		}
 
 		/* Need to create a fake fd and associate with fd_kernel */
-		atomic_fetch_add_relaxed(&num_open, 1);
 		dfs_get_mode(dfs_obj, &mode_query);
 
 		/* regular file */
@@ -2219,7 +2402,6 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 
 		return (idx_dirfd + FD_DIR_BASE);
 	}
-	atomic_fetch_add_relaxed(&num_open, 1);
 
 	rc = find_next_available_fd(NULL, &idx_fd);
 	if (rc)
@@ -2359,7 +2541,7 @@ new_close_common(int (*next_close)(int fd), int fd)
 
 	if (d_compatible_mode && fd < FD_FILE_BASE) {
 		remove_fd_compatible(fd);
-		if (fd < DAOS_MIN_FD && d_daos_inited) {
+		if (fd < DAOS_MIN_FD && d_daos_inited && (fd_dummy >= 0)) {
 			rc = dup2(fd_dummy, fd);
 			if (rc != -1)
 				return 0;
@@ -4077,12 +4259,28 @@ out_readdir:
 	return &mydir->ents[mydir->num_ents];
 }
 
+/* Bypass is allowed by default. Env "D_IL_NO_BYPASS" is ONLY used for testing purpose.
+ * "D_IL_NO_BYPASS=1" enforces that interception by libpil4dfs is on in current process and
+ * children processes. This is needed to thoroughly test interception related code in CI.
+ */
+static char env_str_no_bypass_on[]  = "D_IL_NO_BYPASS=1";
+static char env_str_no_bypass_off[] = "D_IL_NO_BYPASS=0";
+
 /* This is the number of environmental variables that would be forced to set in child process.
  * "LD_PRELOAD" is a special case and it is not included in the list.
  */
-static char  *env_list[] = {"D_IL_REPORT", "D_IL_MOUNT_POINT", "D_IL_POOL", "D_IL_CONTAINER",
-			    "D_IL_MAX_EQ", "D_LOG_FILE", "D_IL_ENFORCE_EXEC_ENV",  "DD_MASK",
-			    "DD_SUBSYS", "D_LOG_MASK", "D_IL_COMPATIBLE", "D_IL_NO_DCACHE_BASH"};
+static char *env_list[] = {"D_IL_REPORT",
+			   "D_IL_MOUNT_POINT",
+			   "D_IL_POOL",
+			   "D_IL_CONTAINER",
+			   "D_IL_MAX_EQ",
+			   "D_LOG_FILE",
+			   "DD_MASK",
+			   "DD_SUBSYS",
+			   "D_LOG_MASK",
+			   "D_IL_COMPATIBLE",
+			   "D_IL_NO_DCACHE_BASH",
+			   "D_IL_BYPASS_LIST"};
 
 /* Environmental variables could be cleared in some applications. To make sure all libpil4dfs
  * related env properly set, we intercept execve and its variants to check envp[] and append our
@@ -4108,6 +4306,7 @@ pre_envp(char *const envp[], char ***new_envp)
 	bool   preload_included                   = false;
 	/* whether pil4dfs in LD_PRELOAD in envp[] */
 	bool   pil4dfs_in_preload                 = false;
+	bool   no_bypass_included                 = false;
 	/* whether env_list entry exists in envp[] */
 	bool   env_found[ARRAY_SIZE(env_list)]    = {false};
 	/* whether env_list entry exists in environ */
@@ -4120,11 +4319,6 @@ pre_envp(char *const envp[], char ***new_envp)
 
 	/* simply return for environ. append pil4dfs env only for stripped env list. */
 	if (envp == environ)
-		return 0;
-
-	/* check D_IL_ENFORCE_EXEC_ENV env in case it was updated. */
-	rc = d_getenv_bool("D_IL_ENFORCE_EXEC_ENV", &enforce_exec_env);
-	if (rc == -DER_NONEXIST || enforce_exec_env == false)
 		return 0;
 
 	/* the number of env in env_list[] that are set in environ */
@@ -4146,6 +4340,9 @@ pre_envp(char *const envp[], char ***new_envp)
 	/* libpil4dfs.so is not in LD_PRELOAD, do not append env. */
 	if (!pil4dfs_set_preload)
 		return 0;
+	if (bypass_allowed == false)
+		/* "D_IL_NO_BYPASS" needs to be appended. */
+		num_env_append++;
 
 	/* check whether env_list entries exist in environ */
 	for (i = 0; i < ARRAY_SIZE(env_list); i++) {
@@ -4177,6 +4374,10 @@ pre_envp(char *const envp[], char ***new_envp)
 				num_entry_found++;
 				if (strstr(envp[num_entry], "libpil4dfs.so"))
 					pil4dfs_in_preload = true;
+			} else if (memcmp(envp[num_entry], STR_AND_SIZE_M1("D_IL_NO_BYPASS")) ==
+				   0 && no_bypass_included == false) {
+				no_bypass_included = true;
+				num_entry_found++;
 			}
 			/* The list of env is not too long. We use a simple loop to lookup for
 			 * simplicity. This function is not performance critical.
@@ -4244,6 +4445,14 @@ pre_envp(char *const envp[], char ***new_envp)
 			goto err_out1;
 		}
 		(*new_envp)[i] = new_preload_str;
+		i++;
+	}
+	/* append D_IL_NO_BYPASS env */
+	if (!no_bypass_included) {
+		if (bypass_allowed == false)
+			(*new_envp)[i] = env_str_no_bypass_on;
+		else
+			(*new_envp)[i] = env_str_no_bypass_off;
 		i++;
 	}
 
@@ -4359,10 +4568,14 @@ reset_daos_env_before_exec(void)
 	d_log_disable_logging();
 
 	/* close fd 255 and fd_dummy before exec(). */
-	if (fd_255_reserved)
+	if (fd_255_reserved) {
 		libc_close(255);
-	if (fd_dummy >= 0)
+		fd_255_reserved = false;
+	}
+	if (fd_dummy >= 0) {
 		libc_close(fd_dummy);
+		fd_dummy = -1;
+	}
 
 	rc = setup_fd_0_1_2();
 	if (rc)
@@ -4380,6 +4593,7 @@ reset_daos_env_before_exec(void)
 	return 0;
 }
 
+/* Now we always make sure important pil4dfs env variables are appended in new child processes. */
 int
 execve(const char *filename, char *const argv[], char *const envp[])
 {
@@ -4390,24 +4604,23 @@ execve(const char *filename, char *const argv[], char *const envp[])
 		next_execve = dlsym(RTLD_NEXT, "execve");
 		D_ASSERT(next_execve != NULL);
 	}
-	if (!d_hook_enabled)
-		return next_execve(filename, argv, envp);
-
-	rc = reset_daos_env_before_exec();
-	if (rc) {
-		errno = rc;
-		return (-1);
-	}
-
-	if (!enforce_exec_env)
-		return next_execve(filename, argv, envp);
 
 	rc = pre_envp(envp, &new_envp);
-	if (rc) {
-		errno = rc;
-		return (-1);
-	}
+	if (rc)
+		goto err;
+
+	if (bypass)
+		return next_execve(filename, argv, new_envp);
+
+	rc = reset_daos_env_before_exec();
+	if (rc)
+		goto err;
+
 	return next_execve(filename, argv, new_envp);
+
+err:
+	errno = rc;
+	return (-1);
 }
 
 int
@@ -4420,25 +4633,22 @@ execvpe(const char *filename, char *const argv[], char *const envp[])
 		next_execvpe = dlsym(RTLD_NEXT, "execvpe");
 		D_ASSERT(next_execvpe != NULL);
 	}
-	if (!d_hook_enabled)
-		return next_execvpe(filename, argv, envp);
-
-	rc = reset_daos_env_before_exec();
-	if (rc) {
-		errno = rc;
-		return (-1);
-	}
-
-	if (!enforce_exec_env)
-		return next_execvpe(filename, argv, envp);
 
 	rc = pre_envp(envp, &new_envp);
-	if (rc) {
-		errno = rc;
-		return (-1);
-	}
+	if (rc)
+		goto err;
+	if (bypass)
+		return next_execvpe(filename, argv, new_envp);
+
+	rc = reset_daos_env_before_exec();
+	if (rc)
+		goto err;
 
 	return next_execvpe(filename, argv, new_envp);
+
+err:
+	errno = rc;
+	return (-1);
 }
 
 int
@@ -4493,25 +4703,22 @@ fexecve(int fd, char *const argv[], char *const envp[])
 		next_fexecve = dlsym(RTLD_NEXT, "fexecve");
 		D_ASSERT(next_fexecve != NULL);
 	}
-	if (!d_hook_enabled)
-		return next_fexecve(fd, argv, envp);
-
-	rc = reset_daos_env_before_exec();
-	if (rc) {
-		errno = rc;
-		return (-1);
-	}
-
-	if (!enforce_exec_env)
-		return next_fexecve(fd, argv, envp);
 
 	rc = pre_envp(envp, &new_envp);
-	if (rc) {
-		errno = rc;
-		return (-1);
-	}
+	if (rc)
+		goto err;
+	if (bypass)
+		return next_fexecve(fd, argv, new_envp);
+
+	rc = reset_daos_env_before_exec();
+	if (rc)
+		goto err;
 
 	return next_fexecve(fd, argv, new_envp);
+
+err:
+	errno = rc;
+	return (-1);
 }
 
 pid_t
@@ -6014,7 +6221,7 @@ ioctl(int fd, unsigned long request, ...)
 	va_list                         arg;
 	void                           *param;
 	struct dfuse_user_reply        *reply;
-	int                             fd_directed;
+	int                             fd_directed = fd;
 
 	va_start(arg, request);
 	param = va_arg(arg, void *);
@@ -6040,12 +6247,11 @@ ioctl(int fd, unsigned long request, ...)
 		return next_ioctl(fd, request, param);
 
 	fd_directed = d_get_fd_redirected(fd);
-	if (fd_directed < FD_FILE_BASE)
+	if ((fd_directed < FD_FILE_BASE) || (fd_directed >= (FD_DIR_BASE + MAX_OPENED_DIR)))
 		return next_ioctl(fd, request, param);
 
 	errno = ENOTSUP;
-
-	return -1;
+	return (-1);
 }
 
 int
@@ -6240,6 +6446,14 @@ new_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 		return next_mmap(addr, length, prot, flags, fd, offset);
 
 	atomic_fetch_add_relaxed(&num_mmap, 1);
+
+	if ((fd < FD_FILE_BASE) && (fd_directed >= FD_FILE_BASE) && d_compatible_mode) {
+		/* DAOS-14494: Force the kernel to update the size before mapping. */
+		rc = next_fxstat(1, fd, &stat_buf);
+		if (rc == -1)
+			return MAP_FAILED;
+		return next_mmap(addr, length, prot, flags, fd, offset);
+	}
 
 	addr_ret = next_mmap(addr, length, prot, flags | MAP_ANONYMOUS, -1, offset);
 	if (addr_ret == MAP_FAILED)
@@ -6675,39 +6889,191 @@ register_handler(int sig, struct sigaction *old_handler)
 }
 
 /* Check whether current executable is sh/bash or not. Flag is_bash is set. */
-static void
+static inline void
 check_exe_sh_bash(void)
 {
-	int   readsize;
-	/* the exe name extract from /proc/self/exe */
-	char *exe_path;
-	/* the short exe name from exe_path */
-	char *exe_short = NULL;
-
-	D_ALLOC(exe_path, DFS_MAX_PATH);
-	if (exe_path == NULL)
-		return;
-
-	readsize = readlink("/proc/self/exe", exe_path, DFS_MAX_PATH);
-	if (readsize >= DFS_MAX_PATH) {
-		DS_ERROR(ENAMETOOLONG, "path from readlink() is too long");
-		goto out;
-	} else if (readsize < 0) {
-		DS_ERROR(errno, "readlink() failed");
-		goto out;
-	}
-
-	exe_short = basename(exe_path);
-	if (exe_short == NULL) {
-		DS_ERROR(errno, "basename() failed");
-		goto out;
-	}
-	if (strncmp(exe_short, "bash", 5) == 0 || strncmp(exe_short, "sh", 3) == 0)
+	if (memcmp(exe_short_name, "bash", 5) == 0 || memcmp(exe_short_name, "sh", 3) == 0)
 		is_bash = true;
+}
 
-out:
-	D_FREE(exe_path);
+#define CMDLINE_BUF_SIZE (2 * DFS_MAX_PATH + 2)
+
+static void
+extract_exe_name_1st_arg(void)
+{
+	FILE *f;
+	int   readsize;
+	int   count = 0;
+	char *buf, *p, *end;
+
+	f = fopen("/proc/self/cmdline", "r");
+	if (f == NULL) {
+		fprintf(stderr, "Fail to open file: /proc/self/cmdline. %d (%s)\n", errno,
+			strerror(errno));
+		exit(1);
+	}
+	buf = malloc(CMDLINE_BUF_SIZE);
+	if (buf == NULL) {
+		fprintf(stderr, "Fail to allocate memory for buf %d (%s)\n", errno,
+			strerror(errno));
+		exit(1);
+	}
+	readsize = fread(buf, 1, CMDLINE_BUF_SIZE, f);
+	if (readsize <= 0) {
+		fprintf(stderr, "Fail to read /proc/self/cmdline %d (%s)\n", errno,
+			strerror(errno));
+		fclose(f);
+		exit(1);
+	}
+
+	fclose(f);
+
+	exe_short_name = basename(buf);
+	if (exe_short_name == NULL) {
+		fprintf(stderr, "Fail to determine exe_short_name %d (%s)\n", errno,
+			strerror(errno));
+		exit(1);
+	}
+	exe_short_name = strndup(exe_short_name, DFS_MAX_NAME);
+	if (exe_short_name == NULL) {
+		printf("Fail to allocate exe_short_name %d (%s)\n", errno, strerror(errno));
+		exit(1);
+	}
+	first_arg = NULL;
+	end       = buf + readsize;
+
+	for (p = buf; p < end;) {
+		if (count == 1) {
+			if (p[0] == '/' || memcmp(p, "./", 2) == 0 || memcmp(p, "../", 3) == 0) {
+				/* Extract the first argument in command line */
+				first_arg = basename(p);
+				if (first_arg == NULL) {
+					fprintf(stderr, "Fail to determine first_arg %d (%s)\n",
+						errno, strerror(errno));
+					exit(1);
+				}
+				first_arg = strndup(first_arg, DFS_MAX_NAME);
+				if (first_arg == NULL) {
+					fprintf(stderr, "Fail to allocate first_arg %d (%s)\n",
+						errno, strerror(errno));
+					exit(1);
+				}
+			}
+			break;
+		}
+		count++;
+		while (*p++)
+			;
+	}
+	free(buf);
+	/* We allocated buffers for exe_short_name and first_arg. Now buf can be deallocated. */
+}
+
+static char *bypass_bash_cmd_list[] = {"autoconf", "configure", "libtool", "libtoolize",
+				       "lsb_release"};
+
+static char *bypass_python3_cmd_list[] = {"scons", "scons-3", "dnf", "dnf-3", "meson"};
+
+static char *bypass_app_list[] = {"arch", "as", "awk", "basename", "bc", "cal", "cat", "chmod",
+				      "chown", "clang", "clear", "cmake", "cmake3", "cp", "cpp",
+				      "daos", "daos_agent", "daos_engine", "daos_server", "df",
+				      "dfuse", "dmg", "expr", "f77", "f90", "f95", "file", "gawk",
+				      "gcc", "gfortran", "gmake", "go", "gofmt", "grep", "g++",
+				      "head", "link", "ln", "ls", "kill", "m4", "make", "mkdir",
+				      "mktemp", "mv", "nasm", "yasm", "nm",  "numactl", "patchelf",
+				      "ping", "pkg-config", "ps", "pwd", "ranlib", "readelf",
+				      "readlink", "rename", "rm", "rmdir", "rpm", "sed", "seq",
+				      "size", "sleep", "sort", "ssh", "stat", "strace", "strip",
+				      "su", "sudo", "tail", "tee", "telnet", "time", "top", "touch",
+				      "tr", "truncate", "uname", "vi", "vim", "whoami", "yes"};
+
+static void
+check_bypasslist(void)
+{
+	int   i;
+	char *saveptr, *str, *token;
+
+	d_agetenv_str(&bypass_user_cmd_list, "D_IL_BYPASS_LIST");
+
+	/* Normally the list of app is not very long. strncmp() is used for simplicity. */
+
+	if (is_bash && first_arg != NULL) {
+		/* built-in list of bash scripts to skip */
+		for (i = 0; i < ARRAY_SIZE(bypass_bash_cmd_list); i++) {
+			if (strncmp(first_arg, bypass_bash_cmd_list[i],
+				    strlen(bypass_bash_cmd_list[i]) + 1) == 0)
+				goto set_bypass;
+		}
+		/* user provided list to skip */
+		if (bypass_user_cmd_list) {
+			for (str = bypass_user_cmd_list;; str = NULL) {
+				token = strtok_r(str, ":", &saveptr);
+				if (token == NULL)
+					break;
+				if (strncmp(first_arg, token, strlen(token) + 1) == 0)
+					goto set_bypass;
+			}
+		}
+	}
+
+	if ((memcmp(exe_short_name, STR_AND_SIZE("python")) == 0 ||
+	     memcmp(exe_short_name, STR_AND_SIZE("python3")) == 0) &&
+	    first_arg) {
+		/* built-in list of python scripts to skip */
+		for (i = 0; i < ARRAY_SIZE(bypass_python3_cmd_list); i++) {
+			if (strncmp(first_arg, bypass_python3_cmd_list[i],
+				    strlen(bypass_python3_cmd_list[i]) + 1) == 0)
+				goto set_bypass;
+		}
+		/* user provided list to skip */
+		if (bypass_user_cmd_list) {
+			for (str = bypass_user_cmd_list;; str = NULL) {
+				token = strtok_r(str, ":", &saveptr);
+				if (token == NULL)
+					break;
+				if (strncmp(first_arg, token, strlen(token) + 1) == 0)
+					goto set_bypass;
+			}
+		}
+	}
+
+	for (i = 0; i < ARRAY_SIZE(bypass_app_list); i++) {
+		if (strncmp(exe_short_name, bypass_app_list[i], strlen(bypass_app_list[i]) + 1) ==
+		    0)
+			goto set_bypass;
+	}
+
+	if (bypass_user_cmd_list) {
+		for (str = bypass_user_cmd_list;; str = NULL) {
+			token = strtok_r(str, ":", &saveptr);
+			if (token == NULL)
+				break;
+			if (strncmp(exe_short_name, token, strlen(token) + 1) == 0)
+				goto set_bypass;
+		}
+	}
+
+	if (bypass_user_cmd_list)
+		d_freeenv_str(&bypass_user_cmd_list);
 	return;
+
+set_bypass:
+	bypass = true;
+	if (bypass_user_cmd_list)
+		d_freeenv_str(&bypass_user_cmd_list);
+	return;
+}
+
+#define SMALL_DIFF (0.0001)
+static int
+libc_ver_cmp(float ver_a, float ver_b)
+{
+	if ((ver_a + SMALL_DIFF) < ver_b)
+		return (-1);
+	else if (ver_a > (ver_b + SMALL_DIFF))
+		return (1);
+	else
+		return (0);
 }
 
 static __attribute__((constructor)) void
@@ -6715,8 +7081,45 @@ init_myhook(void)
 {
 	mode_t   umask_old;
 	char    *env_log;
+	char    *env_no_bypass;
 	int      rc;
 	uint64_t eq_count_loc = 0;
+	float    libc_version;
+
+	/* D_IL_NO_BYPASS is ONLY for testing. It always keeps function interception enabled in
+	 * current process and children processes. This is needed to thoroughly test interception
+	 * related code in CI. The code related to interception disabled is tested by a few tests in
+	 * "test_bashcmd_pil4dfs" and "test_whitelist_pil4dfs". Most tests in CI run with
+	 * "D_IL_NO_BYPASS=1" to test the code with interception enabled.
+	 */
+	d_agetenv_str(&env_no_bypass, "D_IL_NO_BYPASS");
+	if (env_no_bypass) {
+		if (strncmp(env_no_bypass, "1", 2) == 0) {
+			bypass_allowed = false;
+			bypass         = false;
+		}
+		d_freeenv_str(&env_no_bypass);
+	}
+
+	rc = d_agetenv_str(&env_log, "D_IL_REPORT");
+	if (env_log) {
+		report = true;
+		if (strncmp(env_log, "0", 2) == 0 || strncasecmp(env_log, "false", 6) == 0)
+			report = false;
+		d_freeenv_str(&env_log);
+	}
+
+	extract_exe_name_1st_arg();
+
+	/* Need to check whether current process is bash or not under regular & compatible modes.*/
+	check_exe_sh_bash();
+
+	if (bypass_allowed)
+		check_bypasslist();
+	if (report)
+		fprintf(stderr, "app %s interception %s\n", exe_short_name, bypass ? "OFF" : "ON");
+	if (bypass)
+		return;
 
 	umask_old = umask(0);
 	umask(umask_old);
@@ -6729,16 +7132,6 @@ init_myhook(void)
 			strerror(daos_der2errno(rc)));
 	else
 		daos_debug_inited = true;
-
-	rc = d_agetenv_str(&env_log, "D_IL_REPORT");
-	if (env_log) {
-		report = true;
-		if (strncmp(env_log, "0", 2) == 0 || strncasecmp(env_log, "false", 6) == 0)
-			report = false;
-		d_freeenv_str(&env_log);
-	}
-	enforce_exec_env = false;
-	d_getenv_bool("D_IL_ENFORCE_EXEC_ENV", &enforce_exec_env);
 
 	d_compatible_mode = false;
 	d_getenv_bool("D_IL_COMPATIBLE", &d_compatible_mode);
@@ -6859,19 +7252,27 @@ init_myhook(void)
 
 	register_a_hook("libc", "fcntl", (void *)new_fcntl, (long int *)(&libc_fcntl));
 
-	if (d_compatible_mode == false) {
-		register_a_hook("libc", "mmap", (void *)new_mmap, (long int *)(&next_mmap));
-		register_a_hook("libc", "munmap", (void *)new_munmap, (long int *)(&next_munmap));
-	}
+	register_a_hook("libc", "mmap", (void *)new_mmap, (long int *)(&next_mmap));
+	register_a_hook("libc", "munmap", (void *)new_munmap, (long int *)(&next_munmap));
 
 	register_a_hook("libc", "exit", (void *)new_exit, (long int *)(&next_exit));
 	register_a_hook("libc", "dup3", (void *)new_dup3, (long int *)(&libc_dup3));
 	register_a_hook("libc", "readlink", (void *)new_readlink, (long int *)(&libc_readlink));
 
+#if defined(__x86_64__)
+	new_dlsym = query_new_dlsym_addr(new_dlsym_marker);
+#else
+	new_dlsym = new_dlsym_c;
+#endif
+	D_ASSERT(new_dlsym != NULL);
+	libc_version = query_libc_version();
+	if (libc_ver_cmp(libc_version, 2.34) < 0)
+		register_a_hook("libdl", "dlsym", (void *)new_dlsym, (long int *)(&next_dlsym));
+	else
+		register_a_hook("libc", "dlsym", (void *)new_dlsym, (long int *)(&next_dlsym));
+
 	init_fd_dup2_list();
 
-	/* Need to check whether current process is bash or not under regular & compatible modes.*/
-	check_exe_sh_bash();
 	if (is_bash && no_dcache_in_bash)
 		/* Disable directory caching inside bash. bash could remove a dir then recreate
 		 * it which causes cache inconsistency. Observed such issue in "configure" in ucx.
@@ -6879,6 +7280,10 @@ init_myhook(void)
 		dcache_rec_timeout = 0;
 
 	install_hook();
+
+	/* Check it here to minimize the work in function new_dlsym() written in assembly */
+	D_ASSERT(next_dlsym != NULL);
+
 	d_hook_enabled   = 1;
 	hook_enabled_bak = d_hook_enabled;
 }
@@ -6977,6 +7382,9 @@ finalize_myhook(void)
 {
 	int       rc;
 	d_list_t *rlink;
+
+	if (bypass)
+		return;
 
 	if (context_reset) {
 		/* child processes after fork() */

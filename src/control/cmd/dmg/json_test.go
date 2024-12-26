@@ -76,10 +76,11 @@ func TestDmg_JsonOutput(t *testing.T) {
 				testArgs = append(testArgs, "-l", "foo.com", "-a",
 					test.MockPCIAddr(), "-e", "0")
 			case "storage set nvme-faulty":
-				testArgs = append(testArgs, "--force", "-u", test.MockUUID())
+				testArgs = append(testArgs, "--host", "foo.com", "--force", "-u",
+					test.MockUUID())
 			case "storage replace nvme":
-				testArgs = append(testArgs, "--old-uuid", test.MockUUID(),
-					"--new-uuid", test.MockUUID())
+				testArgs = append(testArgs, "--host", "foo.com", "--old-uuid",
+					test.MockUUID(), "--new-uuid", test.MockUUID())
 			case "storage led identify", "storage led check", "storage led clear":
 				testArgs = append(testArgs, test.MockUUID())
 			case "pool create":
@@ -112,9 +113,7 @@ func TestDmg_JsonOutput(t *testing.T) {
 				testArgs = append(testArgs, "foo:bar")
 			case "system del-attr":
 				testArgs = append(testArgs, "foo")
-			case "system exclude":
-				testArgs = append(testArgs, "--ranks", "0")
-			case "system clear-exclude":
+			case "system exclude", "system clear-exclude", "system drain":
 				testArgs = append(testArgs, "--ranks", "0")
 			}
 

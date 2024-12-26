@@ -40,7 +40,7 @@ if ipmctl show -dimm; then
     ipmctl show -region
     find /dev -name 'pmem*'
 
-    daos_server scm $STORAGE_PREP_OPT --force
+    daos_server scm "$STORAGE_PREP_OPT"  --force
 
     if [ -n "$STORAGE_SCAN" ]; then
       # if we don't have pmem here, then we have a problem.

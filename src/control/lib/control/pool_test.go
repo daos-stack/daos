@@ -368,6 +368,7 @@ func TestControl_PoolCreateReq_Convert(t *testing.T) {
 		NumRanks:   3,
 		Ranks:      []ranklist.Rank{1, 2, 3},
 		TierBytes:  []uint64{humanize.GiByte, 10 * humanize.GiByte},
+		MemRatio:   0.55,
 		Properties: []*daos.PoolProperty{
 			{
 				Name:   "label",
@@ -389,6 +390,7 @@ func TestControl_PoolCreateReq_Convert(t *testing.T) {
 		NumRanks:   3,
 		Ranks:      []uint32{1, 2, 3},
 		TierBytes:  []uint64{humanize.GiByte, 10 * humanize.GiByte},
+		MemRatio:   0.55,
 		Properties: []*mgmtpb.PoolProperty{
 			{Number: 1, Value: &mgmtpb.PoolProperty_Strval{"foo"}},
 		},
@@ -481,7 +483,7 @@ func TestControl_poolCreateReqChkSizes(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			nrGetMaxCalls := 0
-			getMaxPoolSz := func() (uint64, uint64, error) {
+			getMaxPoolSz := func(createReq *PoolCreateReq) (uint64, uint64, error) {
 				nrGetMaxCalls++
 				return tc.getMaxScm, tc.getMaxNvme, tc.getMaxErr
 			}
@@ -516,11 +518,13 @@ func TestControl_PoolCreate(t *testing.T) {
 			humanize.GiByte * 10,
 		},
 	}
+	customPoolUUID := test.MockPoolUUID()
 
 	for name, tc := range map[string]struct {
 		mic     *MockInvokerConfig
 		req     *PoolCreateReq
 		expResp *PoolCreateResp
+		cmpUUID bool
 		expErr  error
 	}{
 		"local failure": {
@@ -687,6 +691,36 @@ func TestControl_PoolCreate(t *testing.T) {
 				TgtRanks: []uint32{0, 1, 2},
 			},
 		},
+		"custom UUID": {
+			req: &PoolCreateReq{
+				UUID:       customPoolUUID,
+				TierRatio:  mockTierRatios,
+				TotalBytes: humanize.GiByte * 20,
+				Properties: []*daos.PoolProperty{
+					{
+						Name:   "label",
+						Number: daos.PoolPropertyLabel,
+						Value:  strVal("foo"),
+					},
+				},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolCreateResp{
+						SvcLdr:   1,
+						SvcReps:  []uint32{0, 1, 2},
+						TgtRanks: []uint32{0, 1, 2},
+					},
+				),
+			},
+			expResp: &PoolCreateResp{
+				UUID:     customPoolUUID.String(),
+				Leader:   1,
+				SvcReps:  []uint32{0, 1, 2},
+				TgtRanks: []uint32{0, 1, 2},
+			},
+			cmpUUID: true,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -706,8 +740,11 @@ func TestControl_PoolCreate(t *testing.T) {
 				return
 			}
 
-			cmpOpt := cmpopts.IgnoreFields(PoolCreateResp{}, "UUID")
-			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpt); diff != "" {
+			var cmpOpts cmp.Options
+			if !tc.cmpUUID {
+				cmpOpts = append(cmpOpts, cmpopts.IgnoreFields(PoolCreateResp{}, "UUID"))
+			}
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
@@ -805,9 +842,9 @@ func TestControl_PoolQueryResp_MarshalJSON(t *testing.T) {
 					UpgradeLayoutVer: 8,
 				},
 			},
-			exp: `{"query_mask":"rebuild,space","state":"Ready","uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":[0,1,2],"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8,"status":42}`,
+			exp: `{"query_mask":"disabled_engines,rebuild,space","state":"Ready","uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":[0,1,2],"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8,"mem_file_bytes":0,"status":42}`,
 		},
-		"valid rankset": {
+		"valid rankset default query": {
 			pqr: &PoolQueryResp{
 				Status: 42,
 				PoolInfo: daos.PoolInfo{
@@ -825,9 +862,32 @@ func TestControl_PoolQueryResp_MarshalJSON(t *testing.T) {
 					DisabledRanks:    &ranklist.RankSet{},
 					PoolLayoutVer:    7,
 					UpgradeLayoutVer: 8,
+					MemFileBytes:     1000,
 				},
 			},
-			exp: `{"query_mask":"rebuild,space","state":"Ready","uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":[0,1,2],"rebuild":null,"tier_stats":null,"enabled_ranks":[0,1,2,3,5],"disabled_ranks":[],"pool_layout_ver":7,"upgrade_layout_ver":8,"status":42}`,
+			exp: `{"query_mask":"disabled_engines,rebuild,space","state":"Ready","uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":[0,1,2],"rebuild":null,"tier_stats":null,"enabled_ranks":[0,1,2,3,5],"disabled_ranks":[],"pool_layout_ver":7,"upgrade_layout_ver":8,"mem_file_bytes":1000,"status":42}`,
+		},
+		"valid rankset health query": {
+			pqr: &PoolQueryResp{
+				Status: 42,
+				PoolInfo: daos.PoolInfo{
+					QueryMask:        daos.HealthOnlyPoolQueryMask,
+					State:            daos.PoolServiceStateReady,
+					UUID:             poolUUID,
+					TotalTargets:     1,
+					ActiveTargets:    2,
+					TotalEngines:     3,
+					DisabledTargets:  4,
+					Version:          5,
+					ServiceLeader:    6,
+					ServiceReplicas:  []ranklist.Rank{0, 1, 2},
+					DisabledRanks:    &ranklist.RankSet{},
+					DeadRanks:        ranklist.MustCreateRankSet("[7,8,9]"),
+					PoolLayoutVer:    7,
+					UpgradeLayoutVer: 8,
+				},
+			},
+			exp: `{"query_mask":"dead_engines,disabled_engines,rebuild","state":"Ready","uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":[0,1,2],"rebuild":null,"tier_stats":null,"disabled_ranks":[],"dead_ranks":[7,8,9],"pool_layout_ver":7,"upgrade_layout_ver":8,"mem_file_bytes":0,"status":42}`,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -869,7 +929,7 @@ func TestControl_PoolQueryResp_UnmarshalJSON(t *testing.T) {
 			},
 		},
 		"valid rankset": {
-			data: `{"enabled_ranks":"[0,1-3,5]","disabled_ranks":"[]","status":0,"uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":null,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
+			data: `{"enabled_ranks":"[0,1-3,5]","dead_ranks":"[4]","disabled_ranks":"[]","status":0,"uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":null,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8,"mem_file_bytes":1000}`,
 			expResp: PoolQueryResp{
 				Status: 0,
 				PoolInfo: daos.PoolInfo{
@@ -882,8 +942,10 @@ func TestControl_PoolQueryResp_UnmarshalJSON(t *testing.T) {
 					ServiceLeader:    6,
 					EnabledRanks:     ranklist.MustCreateRankSet("[0-3,5]"),
 					DisabledRanks:    &ranklist.RankSet{},
+					DeadRanks:        ranklist.MustCreateRankSet("[4]"),
 					PoolLayoutVer:    7,
 					UpgradeLayoutVer: 8,
+					MemFileBytes:     1000,
 				},
 			},
 		},
@@ -1149,6 +1211,80 @@ func TestControl_PoolQuery(t *testing.T) {
 						},
 					},
 					DisabledRanks: &ranklist.RankSet{},
+				},
+			},
+		},
+		"query succeeds dead ranks": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolQueryResp{
+						Uuid:             poolUUID.String(),
+						TotalTargets:     42,
+						ActiveTargets:    16,
+						DisabledTargets:  17,
+						PoolLayoutVer:    1,
+						UpgradeLayoutVer: 2,
+						State:            mgmtpb.PoolServiceState_Degraded,
+						Rebuild: &mgmtpb.PoolRebuildStatus{
+							State:   mgmtpb.PoolRebuildStatus_BUSY,
+							Objects: 1,
+							Records: 2,
+						},
+						TierStats: []*mgmtpb.StorageUsageStats{
+							{
+								Total:     123456,
+								Free:      0,
+								Min:       1,
+								Max:       2,
+								Mean:      3,
+								MediaType: mgmtpb.StorageMediaType(daos.StorageMediaTypeScm),
+							},
+							{
+								Total:     123456,
+								Free:      0,
+								Min:       1,
+								Max:       2,
+								Mean:      3,
+								MediaType: mgmtpb.StorageMediaType(daos.StorageMediaTypeNvme),
+							},
+						},
+						DeadRanks: "[1,2,3,7]",
+					},
+				),
+			},
+			expResp: &PoolQueryResp{
+				PoolInfo: daos.PoolInfo{
+					UUID:             poolUUID,
+					TotalTargets:     42,
+					ActiveTargets:    16,
+					DisabledTargets:  17,
+					PoolLayoutVer:    1,
+					UpgradeLayoutVer: 2,
+					State:            daos.PoolServiceStateDegraded,
+					Rebuild: &daos.PoolRebuildStatus{
+						State:   daos.PoolRebuildStateBusy,
+						Objects: 1,
+						Records: 2,
+					},
+					TierStats: []*daos.StorageUsageStats{
+						{
+							Total:     123456,
+							Free:      0,
+							Min:       1,
+							Max:       2,
+							Mean:      3,
+							MediaType: daos.StorageMediaTypeScm,
+						},
+						{
+							Total:     123456,
+							Free:      0,
+							Min:       1,
+							Max:       2,
+							Mean:      3,
+							MediaType: daos.StorageMediaTypeNvme,
+						},
+					},
+					DeadRanks: ranklist.MustCreateRankSet("[1-3,7]"),
 				},
 			},
 		},
@@ -2029,205 +2165,196 @@ func TestControl_ListPools(t *testing.T) {
 	}
 }
 
+// Helper to generate typical SCM configs with rank and optional size params.
+func newScmCfg(rank int, size ...uint64) MockScmConfig {
+	sz := uint64(100) * humanize.GByte
+	if len(size) > 0 {
+		sz = size[0]
+	}
+	return MockScmConfig{
+		MockStorageConfig: MockStorageConfig{
+			TotalBytes:  sz,
+			AvailBytes:  sz,
+			UsableBytes: sz,
+		},
+		Rank: ranklist.Rank(rank),
+	}
+}
+
+// Helper to generate typical NVMe configs with rank, roles and optional size params.
+func newNvmeCfg(rank int, roles storage.OptionBits, size ...uint64) MockNvmeConfig {
+	sz := uint64(humanize.TByte)
+	if len(size) > 0 {
+		sz = size[0]
+	}
+	return MockNvmeConfig{
+		MockStorageConfig: MockStorageConfig{
+			TotalBytes:  sz,
+			AvailBytes:  sz,
+			UsableBytes: sz,
+			NvmeRole:    &storage.BdevRoles{OptionBits: roles},
+		},
+		Rank: ranklist.Rank(rank),
+	}
+}
+
 func TestControl_getMaxPoolSize(t *testing.T) {
 	devStateFaulty := storage.NvmeStateFaulty
 	devStateNew := storage.NvmeStateNew
-	type ExpectedOutput struct {
-		ScmBytes   uint64
-		NvmeBytes  uint64
-		Error      error
-		QueryError error
-		Debug      string
-	}
 
 	for name, tc := range map[string]struct {
-		HostsConfigArray []MockHostStorageConfig
-		TgtRanks         []ranklist.Rank
-		ExpectedOutput   ExpectedOutput
+		hostsConfigArray []MockHostStorageConfig
+		tgtRanks         []ranklist.Rank
+		memRatio         float32
+		queryError       error
+		expScmBytes      uint64
+		expNvmeBytes     uint64
+		expError         error
+		expDebug         string
 	}{
 		"single server": {
-			HostsConfigArray: []MockHostStorageConfig{
+			hostsConfigArray: []MockHostStorageConfig{
 				{
-					HostName: "foo",
-					ScmConfig: []MockScmConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  100 * humanize.GByte,
-								AvailBytes:  100 * humanize.GByte,
-								UsableBytes: 100 * humanize.GByte,
-							},
-							Rank: 0,
-						},
-					},
-					NvmeConfig: []MockNvmeConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
-								AvailBytes:  1 * humanize.TByte,
-								UsableBytes: 1 * humanize.TByte,
-							},
-							Rank: 0,
-						},
-					},
+					HostName:   "foo",
+					ScmConfig:  []MockScmConfig{newScmCfg(0)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(0, 0)},
 				},
 			},
-			ExpectedOutput: ExpectedOutput{
-				ScmBytes:  100 * humanize.GByte,
-				NvmeBytes: 1 * humanize.TByte,
-			},
+			expScmBytes:  100 * humanize.GByte,
+			expNvmeBytes: humanize.TByte,
 		},
-		"single MD-on-SSD server": {
-			HostsConfigArray: []MockHostStorageConfig{
+		"single MD-on-SSD server; no mem-ratio specified; defaults to 1.0": {
+			hostsConfigArray: []MockHostStorageConfig{
 				{
-					HostName: "foo",
-					ScmConfig: []MockScmConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  100 * humanize.GByte,
-								AvailBytes:  100 * humanize.GByte,
-								UsableBytes: 100 * humanize.GByte,
-							},
-							Rank: 0,
-						},
-					},
+					HostName:  "foo",
+					ScmConfig: []MockScmConfig{newScmCfg(0)},
 					NvmeConfig: []MockNvmeConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
-								AvailBytes:  1 * humanize.TByte,
-								UsableBytes: 1 * humanize.TByte,
-								NvmeRole: &storage.BdevRoles{
-									storage.OptionBits(storage.BdevRoleData),
-								},
-							},
-							Rank: 0,
-						},
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  2 * humanize.TByte,
-								AvailBytes:  2 * humanize.TByte,
-								UsableBytes: 2 * humanize.TByte,
-								NvmeRole: &storage.BdevRoles{
-									storage.OptionBits(storage.BdevRoleWAL | storage.BdevRoleMeta),
-								},
-							},
-							Rank: 0,
-						},
+						newNvmeCfg(0, storage.BdevRoleData),
+						newNvmeCfg(0,
+							storage.BdevRoleWAL|storage.BdevRoleMeta,
+							2*humanize.TByte),
 					},
 				},
 			},
-			ExpectedOutput: ExpectedOutput{
-				ScmBytes:  100 * humanize.GByte,
-				NvmeBytes: 1 * humanize.TByte,
-			},
+			expScmBytes:  100 * humanize.GByte,
+			expNvmeBytes: humanize.TByte,
 		},
-		"single Ephemeral server": {
-			HostsConfigArray: []MockHostStorageConfig{
+		"single MD-on-SSD server; invalid mem-ratio; high": {
+			hostsConfigArray: []MockHostStorageConfig{
 				{
-					HostName: "foo",
-					ScmConfig: []MockScmConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  100 * humanize.GByte,
-								AvailBytes:  100 * humanize.GByte,
-								UsableBytes: 100 * humanize.GByte,
-							},
-							Rank: 0,
-						},
-					},
+					HostName:  "foo",
+					ScmConfig: []MockScmConfig{newScmCfg(0)},
 					NvmeConfig: []MockNvmeConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
-								AvailBytes:  1 * humanize.TByte,
-								UsableBytes: 1 * humanize.TByte,
-								NvmeRole:    &storage.BdevRoles{storage.OptionBits(0)},
-							},
-							Rank: 0,
-						},
+						newNvmeCfg(0, storage.BdevRoleData),
+						newNvmeCfg(0,
+							storage.BdevRoleWAL|storage.BdevRoleMeta,
+							2*humanize.TByte),
 					},
 				},
 			},
-			ExpectedOutput: ExpectedOutput{
-				ScmBytes:  100 * humanize.GByte,
-				NvmeBytes: 1 * humanize.TByte,
+			memRatio: 1.1,
+			expError: errors.New("invalid mem-ratio"),
+		},
+		"single MD-on-SSD server; invalid mem-ratio; low": {
+			hostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName:  "foo",
+					ScmConfig: []MockScmConfig{newScmCfg(0)},
+					NvmeConfig: []MockNvmeConfig{
+						newNvmeCfg(0, storage.BdevRoleData),
+						newNvmeCfg(0,
+							storage.BdevRoleWAL|storage.BdevRoleMeta,
+							2*humanize.TByte),
+					},
+				},
 			},
+			memRatio: -1.1,
+			expError: errors.New("invalid mem-ratio"),
+		},
+		"single MD-on-SSD server; phase-1 mode (mem-file-sz == meta-blob-sz)": {
+			hostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName:  "foo",
+					ScmConfig: []MockScmConfig{newScmCfg(0)},
+					NvmeConfig: []MockNvmeConfig{
+						newNvmeCfg(0, storage.BdevRoleData),
+						newNvmeCfg(0,
+							storage.BdevRoleWAL|storage.BdevRoleMeta,
+							2*humanize.TByte),
+					},
+				},
+			},
+			memRatio:     1,
+			expScmBytes:  100 * humanize.GByte,
+			expNvmeBytes: humanize.TByte,
+		},
+		"single MD-on-SSD server; phase-2 mode (mem-file-sz < meta-blob-sz)": {
+			hostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName:  "foo",
+					ScmConfig: []MockScmConfig{newScmCfg(0)},
+					NvmeConfig: []MockNvmeConfig{
+						newNvmeCfg(0, storage.BdevRoleData),
+						newNvmeCfg(0,
+							storage.BdevRoleWAL|storage.BdevRoleMeta,
+							2*humanize.TByte),
+					},
+				},
+			},
+			memRatio:     0.5,
+			expScmBytes:  200 * humanize.GByte, // Double meta-blob-sz due to mem-ratio.
+			expNvmeBytes: humanize.TByte,
+		},
+		"single ephemeral server": {
+			hostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName:   "foo",
+					ScmConfig:  []MockScmConfig{newScmCfg(0)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(0, 0)},
+				},
+			},
+			expScmBytes:  100 * humanize.GByte,
+			expNvmeBytes: humanize.TByte,
 		},
 		"double server": {
-			HostsConfigArray: []MockHostStorageConfig{
+			hostsConfigArray: []MockHostStorageConfig{
 				{
-					HostName: "foo",
-					ScmConfig: []MockScmConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  100 * humanize.GByte,
-								AvailBytes:  100 * humanize.GByte,
-								UsableBytes: 100 * humanize.GByte,
-							},
-							Rank: 0,
-						},
-					},
-					NvmeConfig: []MockNvmeConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
-								AvailBytes:  1 * humanize.TByte,
-								UsableBytes: 1 * humanize.TByte,
-							},
-							Rank: 0,
-						},
-					},
+					HostName:   "foo",
+					ScmConfig:  []MockScmConfig{newScmCfg(0)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(0, 0)},
 				},
 				{
 					HostName: "bar[1,3]",
 					ScmConfig: []MockScmConfig{
+						newScmCfg(1, humanize.TByte),
+						newScmCfg(2),
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
-								AvailBytes:  1 * humanize.TByte,
-								UsableBytes: 1 * humanize.TByte,
-							},
-							Rank: 1,
-						},
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  100 * humanize.GByte,
-								AvailBytes:  100 * humanize.GByte,
-								UsableBytes: 100 * humanize.GByte,
-							},
-							Rank: 2,
-						},
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
+								TotalBytes:  humanize.TByte,
 								AvailBytes:  50 * humanize.GByte,
 								UsableBytes: 50 * humanize.GByte,
+								NvmeRole:    &storage.BdevRoles{},
 							},
 							Rank: 3,
 						},
 					},
 					NvmeConfig: []MockNvmeConfig{
+						newNvmeCfg(1, 0),
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
-								AvailBytes:  1 * humanize.TByte,
-								UsableBytes: 1 * humanize.TByte,
-							},
-							Rank: 1,
-						},
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
+								TotalBytes:  humanize.TByte,
 								AvailBytes:  400 * humanize.GByte,
 								UsableBytes: 400 * humanize.GByte,
+								NvmeRole:    &storage.BdevRoles{},
 							},
 							Rank: 2,
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
+								TotalBytes:  humanize.TByte,
 								AvailBytes:  300 * humanize.GByte,
 								UsableBytes: 300 * humanize.GByte,
+								NvmeRole:    &storage.BdevRoles{},
 							},
 							Rank: 2,
 						},
@@ -2236,124 +2363,67 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 								TotalBytes:  3 * humanize.TByte,
 								AvailBytes:  2 * humanize.TByte,
 								UsableBytes: 2 * humanize.TByte,
+								NvmeRole:    &storage.BdevRoles{},
 							},
 							Rank: 3,
 						},
 					},
 				},
 			},
-			ExpectedOutput: ExpectedOutput{
-				ScmBytes:  50 * humanize.GByte,
-				NvmeBytes: 700 * humanize.GByte,
-			},
+			expScmBytes:  50 * humanize.GByte,
+			expNvmeBytes: 700 * humanize.GByte,
 		},
 		"double server; rank filter": {
-			HostsConfigArray: []MockHostStorageConfig{
+			hostsConfigArray: []MockHostStorageConfig{
 				{
-					HostName: "foo",
-					ScmConfig: []MockScmConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  100 * humanize.GByte,
-								AvailBytes:  100 * humanize.GByte,
-								UsableBytes: 100 * humanize.GByte,
-							},
-							Rank: 0,
-						},
-					},
-					NvmeConfig: []MockNvmeConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
-								AvailBytes:  1 * humanize.TByte,
-								UsableBytes: 1 * humanize.TByte,
-							},
-							Rank: 0,
-						},
-					},
+					HostName:   "foo",
+					ScmConfig:  []MockScmConfig{newScmCfg(0)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(0, 0)},
 				},
 				{
 					HostName: "bar[1,3]",
 					ScmConfig: []MockScmConfig{
+						newScmCfg(1, humanize.TByte),
+						newScmCfg(2, humanize.TByte),
+						newScmCfg(3, humanize.GByte),
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
-								AvailBytes:  1 * humanize.TByte,
-								UsableBytes: 1 * humanize.TByte,
-							},
-							Rank: 1,
-						},
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
-								AvailBytes:  1 * humanize.TByte,
-								UsableBytes: 1 * humanize.TByte,
-							},
-							Rank: 2,
-						},
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.GByte,
-								AvailBytes:  1 * humanize.GByte,
-								UsableBytes: 1 * humanize.GByte,
-							},
-							Rank: 3,
-						},
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
+								TotalBytes:  humanize.TByte,
 								AvailBytes:  50 * humanize.GByte,
 								UsableBytes: 50 * humanize.GByte,
+								NvmeRole:    &storage.BdevRoles{},
 							},
 							Rank: 4,
 						},
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.GByte,
-								AvailBytes:  1 * humanize.GByte,
-								UsableBytes: 1 * humanize.GByte,
-							},
-							Rank: 5,
-						},
+						newScmCfg(5, humanize.GByte),
 					},
 					NvmeConfig: []MockNvmeConfig{
+						newNvmeCfg(1, 0),
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
-								AvailBytes:  1 * humanize.TByte,
-								UsableBytes: 1 * humanize.TByte,
-							},
-							Rank: 1,
-						},
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
+								TotalBytes:  humanize.TByte,
 								AvailBytes:  400 * humanize.GByte,
 								UsableBytes: 400 * humanize.GByte,
+								NvmeRole:    &storage.BdevRoles{},
 							},
 							Rank: 2,
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
+								TotalBytes:  humanize.TByte,
 								AvailBytes:  300 * humanize.GByte,
 								UsableBytes: 300 * humanize.GByte,
+								NvmeRole:    &storage.BdevRoles{},
 							},
 							Rank: 2,
 						},
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.GByte,
-								AvailBytes:  1 * humanize.GByte,
-								UsableBytes: 1 * humanize.GByte,
-							},
-							Rank: 3,
-						},
+						newNvmeCfg(3, 0, humanize.GByte),
 						{
 							MockStorageConfig: MockStorageConfig{
 								TotalBytes:  3 * humanize.TByte,
 								AvailBytes:  2 * humanize.TByte,
 								UsableBytes: 2 * humanize.TByte,
+								NvmeRole:    &storage.BdevRoles{},
 							},
 							Rank: 4,
 						},
@@ -2362,139 +2432,78 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 								TotalBytes:  3 * humanize.TByte,
 								AvailBytes:  2 * humanize.TByte,
 								UsableBytes: 2 * humanize.TByte,
+								NvmeRole:    &storage.BdevRoles{},
 							},
 							Rank: 5,
 						},
 					},
 				},
 			},
-			TgtRanks: []ranklist.Rank{0, 1, 2, 4},
-			ExpectedOutput: ExpectedOutput{
-				ScmBytes:  50 * humanize.GByte,
-				NvmeBytes: 700 * humanize.GByte,
-			},
+			tgtRanks:     []ranklist.Rank{0, 1, 2, 4},
+			expScmBytes:  50 * humanize.GByte,
+			expNvmeBytes: 700 * humanize.GByte,
 		},
 		"No NVMe; single server": {
-			HostsConfigArray: []MockHostStorageConfig{
+			hostsConfigArray: []MockHostStorageConfig{
 				{
-					HostName: "foo",
-					ScmConfig: []MockScmConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  100 * humanize.GByte,
-								AvailBytes:  100 * humanize.GByte,
-								UsableBytes: 100 * humanize.GByte,
-							},
-							Rank: 0,
-						},
-					},
+					HostName:   "foo",
+					ScmConfig:  []MockScmConfig{newScmCfg(0)},
 					NvmeConfig: []MockNvmeConfig{},
 				},
 			},
-			ExpectedOutput: ExpectedOutput{
-				ScmBytes:  100 * humanize.GByte,
-				NvmeBytes: uint64(0),
-			},
+			expScmBytes:  100 * humanize.GByte,
+			expNvmeBytes: uint64(0),
 		},
 		"No NVMe; double server": {
-			HostsConfigArray: []MockHostStorageConfig{
+			hostsConfigArray: []MockHostStorageConfig{
 				{
-					HostName: "foo",
-					ScmConfig: []MockScmConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  100 * humanize.GByte,
-								AvailBytes:  100 * humanize.GByte,
-								UsableBytes: 100 * humanize.GByte,
-							},
-							Rank: 0,
-						},
-					},
-					NvmeConfig: []MockNvmeConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
-								AvailBytes:  1 * humanize.TByte,
-								UsableBytes: 1 * humanize.TByte,
-							},
-							Rank: 0,
-						},
-					},
+					HostName:   "foo",
+					ScmConfig:  []MockScmConfig{newScmCfg(0)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(0, 0)},
 				},
 				{
 					HostName: "bar",
 					ScmConfig: []MockScmConfig{
+						newScmCfg(1, humanize.TByte),
+						newScmCfg(2, humanize.TByte),
+						newScmCfg(3, humanize.GByte),
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
-								AvailBytes:  1 * humanize.TByte,
-								UsableBytes: 1 * humanize.TByte,
-							},
-							Rank: 1,
-						},
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
-								AvailBytes:  1 * humanize.TByte,
-								UsableBytes: 1 * humanize.TByte,
-							},
-							Rank: 2,
-						},
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.GByte,
-								AvailBytes:  1 * humanize.GByte,
-								UsableBytes: 1 * humanize.GByte,
-							},
-							Rank: 3,
-						},
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
+								TotalBytes:  humanize.TByte,
 								AvailBytes:  50 * humanize.GByte,
 								UsableBytes: 50 * humanize.GByte,
+								NvmeRole:    &storage.BdevRoles{},
 							},
 							Rank: 4,
 						},
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.GByte,
-								AvailBytes:  1 * humanize.GByte,
-								UsableBytes: 1 * humanize.GByte,
-							},
-							Rank: 5,
-						},
+						newScmCfg(5, humanize.GByte),
 					},
 					NvmeConfig: []MockNvmeConfig{
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
+								TotalBytes:  humanize.TByte,
 								AvailBytes:  400 * humanize.GByte,
 								UsableBytes: 400 * humanize.GByte,
+								NvmeRole:    &storage.BdevRoles{},
 							},
 							Rank: 2,
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
+								TotalBytes:  humanize.TByte,
 								AvailBytes:  300 * humanize.GByte,
 								UsableBytes: 300 * humanize.GByte,
+								NvmeRole:    &storage.BdevRoles{},
 							},
 							Rank: 2,
 						},
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.GByte,
-								AvailBytes:  1 * humanize.GByte,
-								UsableBytes: 1 * humanize.GByte,
-							},
-							Rank: 3,
-						},
+						newNvmeCfg(3, 0, humanize.GByte),
 						{
 							MockStorageConfig: MockStorageConfig{
 								TotalBytes:  3 * humanize.TByte,
 								AvailBytes:  2 * humanize.TByte,
 								UsableBytes: 2 * humanize.TByte,
+								NvmeRole:    &storage.BdevRoles{},
 							},
 							Rank: 4,
 						},
@@ -2503,226 +2512,132 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 								TotalBytes:  3 * humanize.TByte,
 								AvailBytes:  2 * humanize.TByte,
 								UsableBytes: 2 * humanize.TByte,
+								NvmeRole:    &storage.BdevRoles{},
 							},
 							Rank: 5,
 						},
 					},
 				},
 			},
-			TgtRanks: []ranklist.Rank{0, 1, 2, 4},
-			ExpectedOutput: ExpectedOutput{
-				ScmBytes:  50 * humanize.GByte,
-				NvmeBytes: uint64(0),
-			},
+			tgtRanks:     []ranklist.Rank{0, 1, 2, 4},
+			expScmBytes:  50 * humanize.GByte,
+			expNvmeBytes: uint64(0),
 		},
 		"SCM:NVMe ratio": {
-			HostsConfigArray: []MockHostStorageConfig{
+			hostsConfigArray: []MockHostStorageConfig{
 				{
-					HostName: "foo",
-					ScmConfig: []MockScmConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  100 * humanize.GByte,
-								AvailBytes:  100 * humanize.GByte,
-								UsableBytes: 100 * humanize.GByte,
-							},
-							Rank: 0,
-						},
-					},
+					HostName:  "foo",
+					ScmConfig: []MockScmConfig{newScmCfg(0)},
 					NvmeConfig: []MockNvmeConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  100 * humanize.TByte,
-								AvailBytes:  100 * humanize.TByte,
-								UsableBytes: 100 * humanize.TByte,
-							},
-							Rank: 0,
-						},
+						newNvmeCfg(0, 0, 100*humanize.TByte),
 					},
 				},
 			},
-			ExpectedOutput: ExpectedOutput{
-				ScmBytes:  100 * humanize.GByte,
-				NvmeBytes: 100 * humanize.TByte,
-			},
+			expScmBytes:  100 * humanize.GByte,
+			expNvmeBytes: 100 * humanize.TByte,
 		},
-		"Invalid response message": {
-			HostsConfigArray: []MockHostStorageConfig{{}},
-			ExpectedOutput: ExpectedOutput{
-				Error: errors.New("unable to unpack message"),
-			},
+		"invalid response message": {
+			hostsConfigArray: []MockHostStorageConfig{{}},
+			expError:         errors.New("unable to unpack message"),
 		},
 		"empty response": {
-			HostsConfigArray: []MockHostStorageConfig{},
-			ExpectedOutput: ExpectedOutput{
-				Error: errors.New("host storage response"),
-			},
+			hostsConfigArray: []MockHostStorageConfig{},
+			expError:         errors.New("host storage response"),
 		},
 		"query fails": {
-			HostsConfigArray: []MockHostStorageConfig{},
-			ExpectedOutput: ExpectedOutput{
-				QueryError: errors.New("query whoops"),
-				Error:      errors.New("query whoops"),
-			},
+			hostsConfigArray: []MockHostStorageConfig{},
+			queryError:       errors.New("query whoops"),
+			expError:         errors.New("query whoops"),
 		},
-		"No SCM storage": {
-			HostsConfigArray: []MockHostStorageConfig{
+		"no SCM storage": {
+			hostsConfigArray: []MockHostStorageConfig{
 				{
 					HostName:   "foo",
 					ScmConfig:  []MockScmConfig{},
 					NvmeConfig: []MockNvmeConfig{},
 				},
 			},
-			ExpectedOutput: ExpectedOutput{
-				Error: errors.New("Host without SCM storage"),
-			},
+			expError: errors.New("Host without SCM storage"),
 		},
-		"Engine with two SCM storage": {
-			HostsConfigArray: []MockHostStorageConfig{
+		"engine with two SCM storage": {
+			hostsConfigArray: []MockHostStorageConfig{
 				{
 					HostName: "foo",
 					ScmConfig: []MockScmConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
-								AvailBytes:  1 * humanize.TByte,
-								UsableBytes: 1 * humanize.TByte,
-							},
-							Rank: 0,
-						},
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
-								AvailBytes:  1 * humanize.TByte,
-								UsableBytes: 1 * humanize.TByte,
-							},
-							Rank: 0,
-						},
+						newScmCfg(0, humanize.TByte),
+						newScmCfg(0, humanize.TByte),
 					},
 					NvmeConfig: []MockNvmeConfig{},
 				},
 			},
-			ExpectedOutput: ExpectedOutput{
-				Error: errors.New("Multiple SCM devices found for rank"),
-			},
+			expError: errors.New("Multiple SCM devices found for rank"),
 		},
-		"Unusable NVMe device": {
-			HostsConfigArray: []MockHostStorageConfig{
+		"unusable NVMe device": {
+			hostsConfigArray: []MockHostStorageConfig{
 				{
-					HostName: "foo",
-					ScmConfig: []MockScmConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  100 * humanize.GByte,
-								AvailBytes:  100 * humanize.GByte,
-								UsableBytes: 100 * humanize.GByte,
-							},
-							Rank: 0,
-						},
-					},
+					HostName:  "foo",
+					ScmConfig: []MockScmConfig{newScmCfg(0)},
 					NvmeConfig: []MockNvmeConfig{
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
-								AvailBytes:  1 * humanize.TByte,
-								UsableBytes: 1 * humanize.TByte,
+								TotalBytes:  humanize.TByte,
+								AvailBytes:  humanize.TByte,
+								UsableBytes: humanize.TByte,
 								NvmeState:   &devStateFaulty,
+								NvmeRole:    &storage.BdevRoles{},
 							},
 							Rank: 0,
 						},
 					},
 				},
 			},
-			ExpectedOutput: ExpectedOutput{
-				Error: errors.New("not usable"),
-			},
+			expError: errors.New("not usable"),
 		},
-		"New NVMe device": {
-			HostsConfigArray: []MockHostStorageConfig{
+		"new NVMe device": {
+			hostsConfigArray: []MockHostStorageConfig{
 				{
-					HostName: "foo",
-					ScmConfig: []MockScmConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  100 * humanize.GByte,
-								AvailBytes:  100 * humanize.GByte,
-								UsableBytes: 100 * humanize.GByte,
-							},
-							Rank: 0,
-						},
-					},
+					HostName:  "foo",
+					ScmConfig: []MockScmConfig{newScmCfg(0)},
 					NvmeConfig: []MockNvmeConfig{
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
-								AvailBytes:  1 * humanize.TByte,
-								UsableBytes: 1 * humanize.TByte,
+								TotalBytes:  humanize.TByte,
+								AvailBytes:  humanize.TByte,
+								UsableBytes: humanize.TByte,
 								NvmeState:   &devStateNew,
+								NvmeRole:    &storage.BdevRoles{},
 							},
 							Rank: 0,
 						},
 					},
 				},
 			},
-			ExpectedOutput: ExpectedOutput{
-				ScmBytes:  100 * humanize.GByte,
-				NvmeBytes: uint64(0),
-			},
+			expScmBytes:  100 * humanize.GByte,
+			expNvmeBytes: uint64(0),
 		},
-		"Unmounted SCM device": {
-			HostsConfigArray: []MockHostStorageConfig{
+		"unmounted SCM device": {
+			hostsConfigArray: []MockHostStorageConfig{
 				{
-					HostName: "foo",
-					ScmConfig: []MockScmConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  100 * humanize.GByte,
-								AvailBytes:  100 * humanize.GByte,
-								UsableBytes: 100 * humanize.GByte,
-							},
-							Rank: 0,
-						},
-					},
-					NvmeConfig: []MockNvmeConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
-								AvailBytes:  1 * humanize.TByte,
-								UsableBytes: 1 * humanize.TByte,
-							},
-							Rank: 0,
-						},
-					},
+					HostName:   "foo",
+					ScmConfig:  []MockScmConfig{newScmCfg(0)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(0, 0)},
 				},
 				{
 					HostName: "bar[1,3]",
 					ScmConfig: []MockScmConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
-								AvailBytes:  1 * humanize.TByte,
-								UsableBytes: 1 * humanize.TByte,
-							},
-							Rank: 1,
-						},
+						newScmCfg(1, humanize.TByte),
 						{
 							MockStorageConfig: MockStorageConfig{
 								TotalBytes:  uint64(0),
 								AvailBytes:  uint64(0),
 								UsableBytes: uint64(0),
+								NvmeRole:    &storage.BdevRoles{},
 							},
 						},
+						newScmCfg(2),
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  100 * humanize.GByte,
-								AvailBytes:  100 * humanize.GByte,
-								UsableBytes: 100 * humanize.GByte,
-							},
-							Rank: 2,
-						},
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
+								TotalBytes:  humanize.TByte,
 								AvailBytes:  50 * humanize.GByte,
 								UsableBytes: 50 * humanize.GByte,
 							},
@@ -2730,17 +2645,10 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 						},
 					},
 					NvmeConfig: []MockNvmeConfig{
+						newNvmeCfg(1, 0),
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
-								AvailBytes:  1 * humanize.TByte,
-								UsableBytes: 1 * humanize.TByte,
-							},
-							Rank: 1,
-						},
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
+								TotalBytes:  humanize.TByte,
 								AvailBytes:  400 * humanize.GByte,
 								UsableBytes: 400 * humanize.GByte,
 							},
@@ -2748,7 +2656,7 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
+								TotalBytes:  humanize.TByte,
 								AvailBytes:  300 * humanize.GByte,
 								UsableBytes: 300 * humanize.GByte,
 							},
@@ -2765,70 +2673,28 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 					},
 				},
 			},
-			ExpectedOutput: ExpectedOutput{
-				Error: errors.New("is not mounted"),
-			},
+			expError: errors.New("is not mounted"),
 		},
 		"SMD without SCM": {
-			HostsConfigArray: []MockHostStorageConfig{
+			hostsConfigArray: []MockHostStorageConfig{
 				{
-					HostName: "foo",
-					ScmConfig: []MockScmConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  100 * humanize.GByte,
-								AvailBytes:  100 * humanize.GByte,
-								UsableBytes: 100 * humanize.GByte,
-							},
-							Rank: 0,
-						},
-					},
-					NvmeConfig: []MockNvmeConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
-								AvailBytes:  1 * humanize.TByte,
-								UsableBytes: 1 * humanize.TByte,
-							},
-							Rank: 1,
-						},
-					},
+					HostName:   "foo",
+					ScmConfig:  []MockScmConfig{newScmCfg(0)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(1, 0)},
 				},
 			},
-			ExpectedOutput: ExpectedOutput{
-				Error: errors.New("without SCM device and at least one SMD device"),
-			},
+			expError: errors.New("without SCM device and at least one SMD device"),
 		},
 		"no SCM": {
-			HostsConfigArray: []MockHostStorageConfig{
+			hostsConfigArray: []MockHostStorageConfig{
 				{
-					HostName: "foo",
-					ScmConfig: []MockScmConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  100 * humanize.GByte,
-								AvailBytes:  100 * humanize.GByte,
-								UsableBytes: 100 * humanize.GByte,
-							},
-							Rank: 0,
-						},
-					},
-					NvmeConfig: []MockNvmeConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
-								AvailBytes:  1 * humanize.TByte,
-								UsableBytes: 1 * humanize.TByte,
-							},
-							Rank: 0,
-						},
-					},
+					HostName:   "foo",
+					ScmConfig:  []MockScmConfig{newScmCfg(0)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(0, 0)},
 				},
 			},
-			TgtRanks: []ranklist.Rank{1},
-			ExpectedOutput: ExpectedOutput{
-				Error: errors.New("No SCM storage space available"),
-			},
+			tgtRanks: []ranklist.Rank{1},
+			expError: errors.New("No SCM storage space available"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -2842,7 +2708,7 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 							{
 								Addr:    "foo",
 								Message: &mgmtpb.SystemQueryResp{},
-								Error:   tc.ExpectedOutput.QueryError,
+								Error:   tc.queryError,
 							},
 						},
 					},
@@ -2851,7 +2717,8 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 					},
 				},
 			}
-			for _, hostStorageConfig := range tc.HostsConfigArray {
+
+			for _, hostStorageConfig := range tc.hostsConfigArray {
 				var hostResponse *HostResponse
 				if hostStorageConfig.HostName == "" {
 					hostResponse = new(HostResponse)
@@ -2869,32 +2736,26 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 			}
 			mockInvoker := NewMockInvoker(log, mockInvokerConfig)
 
-			scmBytes, nvmeBytes, err := getMaxPoolSize(test.Context(t), mockInvoker, tc.TgtRanks)
+			createReq := &PoolCreateReq{Ranks: tc.tgtRanks, MemRatio: tc.memRatio}
+			scmBytes, nvmeBytes, gotErr := getMaxPoolSize(test.Context(t), mockInvoker,
+				createReq)
 
-			if tc.ExpectedOutput.Error != nil {
-				test.AssertTrue(t, err != nil, "Expected error")
-				test.CmpErr(t, tc.ExpectedOutput.Error, err)
+			test.CmpErr(t, tc.expError, gotErr)
+			if gotErr != nil {
 				return
 			}
 
-			test.AssertTrue(t, err == nil,
-				fmt.Sprintf("Expected no error: err=%q", err))
-			test.AssertEqual(t,
-				tc.ExpectedOutput.ScmBytes,
-				scmBytes,
-				fmt.Sprintf("Invalid SCM pool size: expected=%d got=%d",
-					tc.ExpectedOutput.ScmBytes,
-					scmBytes))
+			test.AssertEqual(t, tc.expScmBytes, scmBytes,
+				fmt.Sprintf("Invalid SCM pool size, want %s got %s",
+					humanize.Bytes(tc.expScmBytes), humanize.Bytes(scmBytes)))
 
-			test.AssertEqual(t,
-				tc.ExpectedOutput.NvmeBytes,
-				nvmeBytes,
-				fmt.Sprintf("Invalid NVMe pool size: expected=%d got=%d",
-					tc.ExpectedOutput.NvmeBytes,
-					nvmeBytes))
-			if tc.ExpectedOutput.Debug != "" {
-				test.AssertTrue(t, strings.Contains(buf.String(), tc.ExpectedOutput.Debug),
-					"Missing log message: "+tc.ExpectedOutput.Debug)
+			test.AssertEqual(t, tc.expNvmeBytes, nvmeBytes,
+				fmt.Sprintf("Invalid NVMe pool size, want %s got %s",
+					humanize.Bytes(tc.expNvmeBytes), humanize.Bytes(nvmeBytes)))
+
+			if tc.expDebug != "" {
+				test.AssertTrue(t, strings.Contains(buf.String(), tc.expDebug),
+					"Missing log message: "+tc.expDebug)
 			}
 		})
 	}
@@ -2911,135 +2772,59 @@ func (invoker *MockRequestsRecorderInvoker) InvokeUnaryRPC(context context.Conte
 }
 
 func TestControl_PoolCreateAllCmd(t *testing.T) {
-	type ExpectedOutput struct {
-		PoolConfig MockPoolRespConfig
-		WarningMsg string
-		Error      error
-	}
-
 	for name, tc := range map[string]struct {
-		StorageRatio     float64
-		HostsConfigArray []MockHostStorageConfig
-		TgtRanks         string
-		ExpectedOutput   ExpectedOutput
+		hostsConfigArray []MockHostStorageConfig
+		storageRatio     float64
+		tgtRanks         string
+		expPoolConfig    MockPoolRespConfig
+		expError         error
+		expWarning       string
 	}{
 		"single server": {
-			StorageRatio: 1,
-			HostsConfigArray: []MockHostStorageConfig{
+			storageRatio: 1,
+			hostsConfigArray: []MockHostStorageConfig{
 				{
-					HostName: "foo",
-					ScmConfig: []MockScmConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  100 * humanize.GByte,
-								AvailBytes:  100 * humanize.GByte,
-								UsableBytes: 100 * humanize.GByte,
-							},
-							Rank: 0,
-						},
-					},
-					NvmeConfig: []MockNvmeConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
-								AvailBytes:  1 * humanize.TByte,
-								UsableBytes: 1 * humanize.TByte,
-							},
-							Rank: 0,
-						},
-					},
+					HostName:   "foo",
+					ScmConfig:  []MockScmConfig{newScmCfg(0)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(0, 0)},
 				},
 			},
-			ExpectedOutput: ExpectedOutput{
-				PoolConfig: MockPoolRespConfig{
-					HostName:  "foo",
-					Ranks:     "0",
-					ScmBytes:  100 * humanize.GByte,
-					NvmeBytes: 1 * humanize.TByte,
-				},
+			expPoolConfig: MockPoolRespConfig{
+				HostName:  "foo",
+				Ranks:     "0",
+				ScmBytes:  100 * humanize.GByte,
+				NvmeBytes: 1 * humanize.TByte,
 			},
 		},
 		"single server 30%": {
-			StorageRatio: 0.3,
-			HostsConfigArray: []MockHostStorageConfig{
+			storageRatio: 0.3,
+			hostsConfigArray: []MockHostStorageConfig{
 				{
-					HostName: "foo",
-					ScmConfig: []MockScmConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  100 * humanize.GByte,
-								AvailBytes:  100 * humanize.GByte,
-								UsableBytes: 100 * humanize.GByte,
-							},
-							Rank: 0,
-						},
-					},
-					NvmeConfig: []MockNvmeConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
-								AvailBytes:  1 * humanize.TByte,
-								UsableBytes: 1 * humanize.TByte,
-							},
-							Rank: 0,
-						},
-					},
+					HostName:   "foo",
+					ScmConfig:  []MockScmConfig{newScmCfg(0)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(0, 0)},
 				},
 			},
-			ExpectedOutput: ExpectedOutput{
-				PoolConfig: MockPoolRespConfig{
-					HostName:  "foo",
-					Ranks:     "0",
-					ScmBytes:  30 * humanize.GByte,
-					NvmeBytes: 300 * humanize.GByte,
-				},
+			expPoolConfig: MockPoolRespConfig{
+				HostName:  "foo",
+				Ranks:     "0",
+				ScmBytes:  30 * humanize.GByte,
+				NvmeBytes: 300 * humanize.GByte,
 			},
 		},
 		"double server": {
-			StorageRatio: 1,
-			HostsConfigArray: []MockHostStorageConfig{
+			storageRatio: 1,
+			hostsConfigArray: []MockHostStorageConfig{
 				{
-					HostName: "foo",
-					ScmConfig: []MockScmConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  100 * humanize.GByte,
-								AvailBytes:  100 * humanize.GByte,
-								UsableBytes: 100 * humanize.GByte,
-							},
-							Rank: 0,
-						},
-					},
-					NvmeConfig: []MockNvmeConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
-								AvailBytes:  1 * humanize.TByte,
-								UsableBytes: 1 * humanize.TByte,
-							},
-							Rank: 0,
-						},
-					},
+					HostName:   "foo",
+					ScmConfig:  []MockScmConfig{newScmCfg(0)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(0, 0)},
 				},
 				{
 					HostName: "bar",
 					ScmConfig: []MockScmConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
-								AvailBytes:  1 * humanize.TByte,
-								UsableBytes: 1 * humanize.TByte,
-							},
-							Rank: 1,
-						},
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  100 * humanize.GByte,
-								AvailBytes:  100 * humanize.GByte,
-								UsableBytes: 100 * humanize.GByte,
-							},
-							Rank: 2,
-						},
+						newScmCfg(1, humanize.TByte),
+						newScmCfg(2),
 						{
 							MockStorageConfig: MockStorageConfig{
 								TotalBytes:  1 * humanize.TByte,
@@ -3050,19 +2835,13 @@ func TestControl_PoolCreateAllCmd(t *testing.T) {
 						},
 					},
 					NvmeConfig: []MockNvmeConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
-								AvailBytes:  1 * humanize.TByte,
-								UsableBytes: 1 * humanize.TByte,
-							},
-							Rank: 1,
-						},
+						newNvmeCfg(1, 0),
 						{
 							MockStorageConfig: MockStorageConfig{
 								TotalBytes:  1 * humanize.TByte,
 								AvailBytes:  400 * humanize.GByte,
 								UsableBytes: 400 * humanize.GByte,
+								NvmeRole:    &storage.BdevRoles{},
 							},
 							Rank: 2,
 						},
@@ -3071,6 +2850,7 @@ func TestControl_PoolCreateAllCmd(t *testing.T) {
 								TotalBytes:  1 * humanize.TByte,
 								AvailBytes:  300 * humanize.GByte,
 								UsableBytes: 300 * humanize.GByte,
+								NvmeRole:    &storage.BdevRoles{},
 							},
 							Rank: 2,
 						},
@@ -3079,66 +2859,33 @@ func TestControl_PoolCreateAllCmd(t *testing.T) {
 								TotalBytes:  3 * humanize.TByte,
 								AvailBytes:  2 * humanize.TByte,
 								UsableBytes: 2 * humanize.TByte,
+								NvmeRole:    &storage.BdevRoles{},
 							},
 							Rank: 3,
 						},
 					},
 				},
 			},
-			ExpectedOutput: ExpectedOutput{
-				PoolConfig: MockPoolRespConfig{
-					HostName:  "foo",
-					Ranks:     "0,1,2,3",
-					ScmBytes:  50 * humanize.GByte,
-					NvmeBytes: 700 * humanize.GByte,
-				},
+			expPoolConfig: MockPoolRespConfig{
+				HostName:  "foo",
+				Ranks:     "0,1,2,3",
+				ScmBytes:  50 * humanize.GByte,
+				NvmeBytes: 700 * humanize.GByte,
 			},
 		},
-		"double server;rank filter": {
-			StorageRatio: 1,
-			HostsConfigArray: []MockHostStorageConfig{
+		"double server; rank filter": {
+			storageRatio: 1,
+			hostsConfigArray: []MockHostStorageConfig{
 				{
-					HostName: "foo",
-					ScmConfig: []MockScmConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  100 * humanize.GByte,
-								AvailBytes:  100 * humanize.GByte,
-								UsableBytes: 100 * humanize.GByte,
-							},
-							Rank: 0,
-						},
-					},
-					NvmeConfig: []MockNvmeConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
-								AvailBytes:  1 * humanize.TByte,
-								UsableBytes: 1 * humanize.TByte,
-							},
-							Rank: 0,
-						},
-					},
+					HostName:   "foo",
+					ScmConfig:  []MockScmConfig{newScmCfg(0)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(0, 0)},
 				},
 				{
 					HostName: "bar",
 					ScmConfig: []MockScmConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
-								AvailBytes:  1 * humanize.TByte,
-								UsableBytes: 1 * humanize.TByte,
-							},
-							Rank: 1,
-						},
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  100 * humanize.GByte,
-								AvailBytes:  100 * humanize.GByte,
-								UsableBytes: 100 * humanize.GByte,
-							},
-							Rank: 2,
-						},
+						newScmCfg(1, humanize.TByte),
+						newScmCfg(2),
 						{
 							MockStorageConfig: MockStorageConfig{
 								TotalBytes:  1 * humanize.TByte,
@@ -3157,19 +2904,13 @@ func TestControl_PoolCreateAllCmd(t *testing.T) {
 						},
 					},
 					NvmeConfig: []MockNvmeConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
-								AvailBytes:  1 * humanize.TByte,
-								UsableBytes: 1 * humanize.TByte,
-							},
-							Rank: 1,
-						},
+						newNvmeCfg(1, 0),
 						{
 							MockStorageConfig: MockStorageConfig{
 								TotalBytes:  1 * humanize.TByte,
 								AvailBytes:  400 * humanize.GByte,
 								UsableBytes: 400 * humanize.GByte,
+								NvmeRole:    &storage.BdevRoles{},
 							},
 							Rank: 2,
 						},
@@ -3178,6 +2919,7 @@ func TestControl_PoolCreateAllCmd(t *testing.T) {
 								TotalBytes:  1 * humanize.TByte,
 								AvailBytes:  300 * humanize.GByte,
 								UsableBytes: 300 * humanize.GByte,
+								NvmeRole:    &storage.BdevRoles{},
 							},
 							Rank: 2,
 						},
@@ -3186,6 +2928,7 @@ func TestControl_PoolCreateAllCmd(t *testing.T) {
 								TotalBytes:  3 * humanize.TByte,
 								AvailBytes:  2 * humanize.TByte,
 								UsableBytes: 2 * humanize.TByte,
+								NvmeRole:    &storage.BdevRoles{},
 							},
 							Rank: 3,
 						},
@@ -3194,90 +2937,60 @@ func TestControl_PoolCreateAllCmd(t *testing.T) {
 								TotalBytes:  3 * humanize.TByte,
 								AvailBytes:  1 * humanize.GByte,
 								UsableBytes: 1 * humanize.GByte,
+								NvmeRole:    &storage.BdevRoles{},
 							},
 							Rank: 4,
 						},
 					},
 				},
 			},
-			TgtRanks: "0,1,2,3",
-			ExpectedOutput: ExpectedOutput{
-				PoolConfig: MockPoolRespConfig{
-					HostName:  "foo",
-					Ranks:     "0,1,2,3",
-					ScmBytes:  50 * humanize.GByte,
-					NvmeBytes: 700 * humanize.GByte,
-				},
+			tgtRanks: "0,1,2,3",
+			expPoolConfig: MockPoolRespConfig{
+				HostName:  "foo",
+				Ranks:     "0,1,2,3",
+				ScmBytes:  50 * humanize.GByte,
+				NvmeBytes: 700 * humanize.GByte,
 			},
 		},
 		"No NVME": {
-			StorageRatio: 1,
-			HostsConfigArray: []MockHostStorageConfig{
+			storageRatio: 1,
+			hostsConfigArray: []MockHostStorageConfig{
 				{
-					HostName: "foo",
-					ScmConfig: []MockScmConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  100 * humanize.GByte,
-								AvailBytes:  100 * humanize.GByte,
-								UsableBytes: 100 * humanize.GByte,
-							},
-							Rank: 0,
-						},
-					},
+					HostName:   "foo",
+					ScmConfig:  []MockScmConfig{newScmCfg(0)},
 					NvmeConfig: []MockNvmeConfig{},
 				},
 			},
-			ExpectedOutput: ExpectedOutput{
-				PoolConfig: MockPoolRespConfig{
-					HostName:  "foo",
-					Ranks:     "0",
-					ScmBytes:  100 * humanize.GByte,
-					NvmeBytes: uint64(0),
-				},
-				WarningMsg: "Creating DAOS pool without NVME storage",
+			expPoolConfig: MockPoolRespConfig{
+				HostName:  "foo",
+				Ranks:     "0",
+				ScmBytes:  100 * humanize.GByte,
+				NvmeBytes: uint64(0),
 			},
+			expWarning: "Creating DAOS pool without NVME storage",
 		},
 		"SCM:NVME ratio": {
-			StorageRatio: 1,
-			HostsConfigArray: []MockHostStorageConfig{
+			storageRatio: 1,
+			hostsConfigArray: []MockHostStorageConfig{
 				{
-					HostName: "foo",
-					ScmConfig: []MockScmConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  100 * humanize.GByte,
-								AvailBytes:  100 * humanize.GByte,
-								UsableBytes: 100 * humanize.GByte,
-							},
-							Rank: 0,
-						},
-					},
-					NvmeConfig: []MockNvmeConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  100 * humanize.TByte,
-								AvailBytes:  100 * humanize.TByte,
-								UsableBytes: 100 * humanize.TByte,
-							},
-							Rank: 0,
-						},
-					},
-				},
-			},
-			ExpectedOutput: ExpectedOutput{
-				PoolConfig: MockPoolRespConfig{
 					HostName:  "foo",
-					Ranks:     "0",
-					ScmBytes:  100 * humanize.GByte,
-					NvmeBytes: 100 * humanize.TByte,
+					ScmConfig: []MockScmConfig{newScmCfg(0)},
+					NvmeConfig: []MockNvmeConfig{
+						newNvmeCfg(0, 0, 100*humanize.TByte),
+					},
 				},
-				WarningMsg: "SCM:NVMe ratio is less than",
 			},
+			expPoolConfig: MockPoolRespConfig{
+				HostName:  "foo",
+				Ranks:     "0",
+				ScmBytes:  100 * humanize.GByte,
+				NvmeBytes: 100 * humanize.TByte,
+			},
+			expWarning: "SCM:NVMe ratio is less than",
 		},
 		"single server error 1%": {
-			StorageRatio: 0.01,
-			HostsConfigArray: []MockHostStorageConfig{
+			storageRatio: 0.01,
+			hostsConfigArray: []MockHostStorageConfig{
 				{
 					HostName: "foo",
 					ScmConfig: []MockScmConfig{
@@ -3290,21 +3003,10 @@ func TestControl_PoolCreateAllCmd(t *testing.T) {
 							Rank: 0,
 						},
 					},
-					NvmeConfig: []MockNvmeConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes:  1 * humanize.TByte,
-								AvailBytes:  1 * humanize.TByte,
-								UsableBytes: 1 * humanize.TByte,
-							},
-							Rank: 0,
-						},
-					},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(0, 0)},
 				},
 			},
-			ExpectedOutput: ExpectedOutput{
-				Error: errors.New("Not enough SCM storage available with ratio 1%"),
-			},
+			expError: errors.New("Not enough SCM storage available with ratio 1%"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -3325,7 +3027,7 @@ func TestControl_PoolCreateAllCmd(t *testing.T) {
 			}
 
 			unaryResponse := new(UnaryResponse)
-			for _, hostStorageConfig := range tc.HostsConfigArray {
+			for _, hostStorageConfig := range tc.hostsConfigArray {
 				storageScanResp := MockStorageScanResp(t,
 					hostStorageConfig.ScmConfig,
 					hostStorageConfig.NvmeConfig)
@@ -3337,10 +3039,10 @@ func TestControl_PoolCreateAllCmd(t *testing.T) {
 			}
 			mockInvokerConfig.UnaryResponseSet = append(mockInvokerConfig.UnaryResponseSet, unaryResponse)
 
-			if tc.ExpectedOutput.PoolConfig.Ranks != "" {
-				poolCreateResp := MockPoolCreateResp(t, &tc.ExpectedOutput.PoolConfig)
+			if tc.expPoolConfig.Ranks != "" {
+				poolCreateResp := MockPoolCreateResp(t, &tc.expPoolConfig)
 				hostResponse := &HostResponse{
-					Addr:    tc.ExpectedOutput.PoolConfig.HostName,
+					Addr:    tc.expPoolConfig.HostName,
 					Message: poolCreateResp,
 				}
 				unaryResponse = new(UnaryResponse)
@@ -3355,15 +3057,15 @@ func TestControl_PoolCreateAllCmd(t *testing.T) {
 
 			req := &PoolCreateReq{}
 
-			if tc.StorageRatio != 0 {
-				req.TierRatio = []float64{tc.StorageRatio, tc.StorageRatio}
+			if tc.storageRatio != 0 {
+				req.TierRatio = []float64{tc.storageRatio, tc.storageRatio}
 			}
-			if tc.TgtRanks != "" {
-				req.Ranks = ranklist.RanksFromUint32(mockRanks(tc.TgtRanks))
+			if tc.tgtRanks != "" {
+				req.Ranks = ranklist.RanksFromUint32(mockRanks(tc.tgtRanks))
 			}
 
 			_, gotErr := PoolCreate(context.Background(), mockInvoker, req)
-			test.CmpErr(t, tc.ExpectedOutput.Error, gotErr)
+			test.CmpErr(t, tc.expError, gotErr)
 			if gotErr != nil {
 				return
 			}
@@ -3384,20 +3086,20 @@ func TestControl_PoolCreateAllCmd(t *testing.T) {
 			poolCreateRequest := mockInvoker.Requests[2].(*PoolCreateReq)
 			test.AssertEqual(t,
 				poolCreateRequest.TierBytes[0],
-				tc.ExpectedOutput.PoolConfig.ScmBytes,
+				tc.expPoolConfig.ScmBytes,
 				"Invalid size of allocated SCM")
 			test.AssertEqual(t,
 				poolCreateRequest.TierBytes[1],
-				tc.ExpectedOutput.PoolConfig.NvmeBytes,
+				tc.expPoolConfig.NvmeBytes,
 				"Invalid size of allocated NVME")
 			test.AssertEqual(t,
 				poolCreateRequest.TotalBytes,
 				uint64(0),
 				"Invalid size of TotalBytes attribute: disabled with manual allocation")
-			if tc.TgtRanks != "" {
+			if tc.tgtRanks != "" {
 				test.AssertEqual(t,
 					ranklist.RankList(poolCreateRequest.Ranks).String(),
-					tc.ExpectedOutput.PoolConfig.Ranks,
+					tc.expPoolConfig.Ranks,
 					"Invalid list of Ranks")
 			} else {
 				test.AssertEqual(t,

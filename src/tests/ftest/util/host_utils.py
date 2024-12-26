@@ -1,5 +1,5 @@
 """
-(C) Copyright 2018-2023 Intel Corporation.
+(C) Copyright 2018-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -75,7 +75,7 @@ class HostInfo():
         """Initialize a HostInfo object."""
         self._servers = HostRole()
         self._clients = HostRole()
-        self.access_points = NodeSet()
+        self.mgmt_svc_replicas = NodeSet()
 
     @property
     def all_hosts(self):
@@ -119,7 +119,7 @@ class HostInfo():
         log.info("client_partition:    %s", self.clients.partition.name)
         log.info("server_reservation:  %s", self.servers.partition.reservation)
         log.info("client_reservation:  %s", self.clients.partition.reservation)
-        log.info("access_points:       %s", self.access_points)
+        log.info("mgmt_svc_replicas:   %s", self.mgmt_svc_replicas)
 
     def set_hosts(self, log, control_host, server_hosts, server_partition, server_reservation,
                   client_hosts, client_partition, client_reservation, include_local_host=False):

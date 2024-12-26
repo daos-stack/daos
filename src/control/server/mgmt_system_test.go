@@ -18,6 +18,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	uuid "github.com/google/uuid"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/protobuf/proto"
@@ -25,6 +26,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/common/test"
@@ -1765,6 +1767,7 @@ func TestServer_MgmtSvc_SystemExclude(t *testing.T) {
 				mockMember(t, 3, 2, "joined"),
 			},
 		},
+
 		"unexclude hosts": {
 			req: &mgmtpb.SystemExcludeReq{Hosts: test.MockHostAddr(1).String(), Clear: true},
 			members: system.Members{
@@ -1795,14 +1798,275 @@ func TestServer_MgmtSvc_SystemExclude(t *testing.T) {
 			if tc.req != nil && tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName
 			}
+
+			startMapVer, err := svc.sysdb.CurMapVersion()
+			if err != nil {
+				t.Fatalf("startMapVer CurMapVersion() failed\n")
+				return
+			}
 			gotResp, gotAPIErr := svc.SystemExclude(ctx, tc.req)
 			test.CmpErr(t, tc.expAPIErr, gotAPIErr)
 			if tc.expAPIErr != nil {
 				return
 			}
 
+			// Check for any system map version increase by the (asynchronous) update.
+			// Test will time out if it never happens, thus choice of an infinite loop here.
+			for {
+				curMapVer, err := svc.sysdb.CurMapVersion()
+				if err != nil {
+					t.Fatalf("CurMapVersion() failed\n")
+					return
+				}
+
+				if curMapVer > startMapVer {
+					break
+				}
+			}
+
 			checkRankResults(t, tc.expResults, gotResp.Results)
 			checkMembers(t, tc.expMembers, svc.membership)
+		})
+	}
+}
+
+func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
+	dReq := func(id, rank int) *mgmtpb.PoolDrainReq {
+		return &mgmtpb.PoolDrainReq{
+			Sys:      "daos_server",
+			Id:       test.MockUUID(int32(id)),
+			Rank:     uint32(rank),
+			SvcRanks: []uint32{0},
+		}
+	}
+
+	for name, tc := range map[string]struct {
+		members     system.Members
+		req         *mgmtpb.SystemDrainReq
+		expDrpcReqs []*mgmt.PoolDrainReq
+		drpcResp    *mgmtpb.PoolDrainResp
+		drpcErr     error
+		poolRanks   map[string]string
+		useLabels   bool
+		expResp     *mgmtpb.SystemDrainResp
+		expErr      error
+	}{
+		"nil req": {
+			req:    (*mgmtpb.SystemDrainReq)(nil),
+			expErr: errors.New("nil request"),
+		},
+		"not system leader": {
+			req: &mgmtpb.SystemDrainReq{
+				Sys: "quack",
+			},
+			expErr: FaultWrongSystem("quack", build.DefaultSystemName),
+		},
+		"no hosts or ranks": {
+			req:    &mgmtpb.SystemDrainReq{},
+			expErr: errors.New("no hosts or ranks"),
+		},
+		"hosts and ranks": {
+			req: &mgmtpb.SystemDrainReq{
+				Hosts: "host1,host2",
+				Ranks: "0,1",
+			},
+			expErr: errors.New("ranklist and hostlist"),
+		},
+		"invalid ranks": {
+			req:    &mgmtpb.SystemDrainReq{Ranks: "41,42"},
+			expErr: errors.New("invalid rank(s)"),
+		},
+		"invalid hosts": {
+			req:    &mgmtpb.SystemDrainReq{Hosts: "host-[1-2]"},
+			expErr: errors.New("invalid host(s)"),
+		},
+		"no matching ranks": {
+			req: &mgmtpb.SystemDrainReq{Ranks: "0,1"},
+			poolRanks: map[string]string{
+				test.MockUUID(1): "2-5",
+			},
+			expResp: &mgmtpb.SystemDrainResp{},
+		},
+		"matching ranks; multiple pools; no drpc response": {
+			req: &mgmtpb.SystemDrainReq{Ranks: "0,1"},
+			poolRanks: map[string]string{
+				test.MockUUID(1): "0-4",
+				test.MockUUID(2): "1-7",
+			},
+			expErr: errors.New("not responding on dRPC"),
+		},
+		"matching ranks; multiple pools": {
+			req: &mgmtpb.SystemDrainReq{Ranks: "0,1"},
+			poolRanks: map[string]string{
+				test.MockUUID(1): "0-4",
+				test.MockUUID(2): "1-7",
+			},
+			drpcResp: &mgmtpb.PoolDrainResp{},
+			expDrpcReqs: []*mgmtpb.PoolDrainReq{
+				dReq(1, 0), dReq(1, 1), dReq(2, 1),
+			},
+			expResp: &mgmtpb.SystemDrainResp{
+				Results: []*mgmtpb.SystemDrainResp_DrainResult{
+					{PoolId: test.MockUUID(1), Ranks: "0-1"},
+					{PoolId: test.MockUUID(2), Ranks: "1"},
+				},
+			},
+		},
+		"matching hosts; multiple pools": {
+			req: &mgmtpb.SystemDrainReq{
+				// Resolves to ranks 0-3.
+				Hosts: fmt.Sprintf("%s,%s", test.MockHostAddr(1),
+					test.MockHostAddr(2)),
+			},
+			poolRanks: map[string]string{
+				test.MockUUID(1): "0-4",
+				test.MockUUID(2): "1-7",
+			},
+			drpcResp: &mgmtpb.PoolDrainResp{},
+			expDrpcReqs: []*mgmtpb.PoolDrainReq{
+				dReq(1, 0), dReq(1, 1), dReq(1, 2), dReq(1, 3),
+				dReq(2, 1), dReq(2, 2), dReq(2, 3),
+			},
+			expResp: &mgmtpb.SystemDrainResp{
+				Results: []*mgmtpb.SystemDrainResp_DrainResult{
+					{PoolId: test.MockUUID(1), Ranks: "0-3"},
+					{PoolId: test.MockUUID(2), Ranks: "1-3"},
+				},
+			},
+		},
+		"matching hosts; multiple pools; pool labels": {
+			req: &mgmtpb.SystemDrainReq{
+				// Resolves to ranks 0-3.
+				Hosts: fmt.Sprintf("%s,%s", test.MockHostAddr(1),
+					test.MockHostAddr(2)),
+			},
+			poolRanks: map[string]string{
+				test.MockUUID(1): "0-4",
+				test.MockUUID(2): "1-7",
+			},
+			useLabels: true,
+			drpcResp:  &mgmtpb.PoolDrainResp{},
+			expDrpcReqs: []*mgmtpb.PoolDrainReq{
+				dReq(1, 0), dReq(1, 1), dReq(1, 2), dReq(1, 3),
+				dReq(2, 1), dReq(2, 2), dReq(2, 3),
+			},
+			expResp: &mgmtpb.SystemDrainResp{
+				Results: []*mgmtpb.SystemDrainResp_DrainResult{
+					{PoolId: "00000001", Ranks: "0-3"},
+					{PoolId: "00000002", Ranks: "1-3"},
+				},
+			},
+		},
+		"matching ranks; variable states; drpc fails": {
+			members: system.Members{
+				mockMember(t, 2, 0, "errored"),
+				mockMember(t, 1, 0, "excluded"),
+			},
+			req: &mgmtpb.SystemDrainReq{Ranks: "1-2"},
+			poolRanks: map[string]string{
+				test.MockUUID(1): "0-4",
+				test.MockUUID(2): "1-7",
+			},
+			drpcResp: &mgmtpb.PoolDrainResp{Status: -1},
+			expDrpcReqs: []*mgmtpb.PoolDrainReq{
+				dReq(1, 1), dReq(1, 2), dReq(2, 1), dReq(2, 2),
+			},
+			expResp: &mgmtpb.SystemDrainResp{
+				Results: []*mgmtpb.SystemDrainResp_DrainResult{
+					{
+						PoolId: test.MockUUID(1),
+						Ranks:  "1-2",
+						Status: -1,
+						Msg:    "DER_UNKNOWN(-1): Unknown error code -1",
+					},
+					{
+						PoolId: test.MockUUID(2),
+						Ranks:  "1-2",
+						Status: -1,
+						Msg:    "DER_UNKNOWN(-1): Unknown error code -1",
+					},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			if tc.members == nil {
+				tc.members = system.Members{
+					mockMember(t, 0, 1, "joined"),
+					mockMember(t, 1, 2, "joined"),
+					mockMember(t, 2, 2, "joined"),
+					mockMember(t, 3, 1, "joined"),
+					mockMember(t, 4, 3, "joined"),
+					mockMember(t, 5, 3, "joined"),
+					mockMember(t, 6, 4, "joined"),
+					mockMember(t, 7, 4, "joined"),
+				}
+			}
+			svc := mgmtSystemTestSetup(t, log, tc.members, nil)
+
+			for uuidStr, ranksStr := range tc.poolRanks {
+				var label string
+				if tc.useLabels {
+					label = uuidStr[:8]
+				}
+				addTestPoolService(t, svc.sysdb, &system.PoolService{
+					PoolUUID:  uuid.MustParse(uuidStr),
+					PoolLabel: label,
+					State:     system.PoolServiceStateReady,
+					Storage: &system.PoolServiceStorage{
+						CurrentRankStr: ranksStr,
+					},
+					Replicas: []ranklist.Rank{0},
+				})
+			}
+
+			var mockDrpc *mockDrpcClient
+			if tc.drpcResp != nil {
+				mockDrpc = getMockDrpcClient(tc.drpcResp, tc.drpcErr)
+				setupSvcDrpcClient(svc, 0, mockDrpc)
+			}
+
+			if tc.req != nil && tc.req.Sys == "" {
+				tc.req.Sys = build.DefaultSystemName
+			}
+
+			gotResp, gotErr := svc.SystemDrain(test.MustLogContext(t, log), tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			cmpOpts := []cmp.Option{
+				cmpopts.IgnoreUnexported(mgmtpb.SystemDrainResp{},
+					mgmtpb.SystemDrainResp_DrainResult{}),
+			}
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+
+			if mockDrpc == nil {
+				return
+			}
+
+			gotDrpcCalls := mockDrpc.calls.get()
+			test.AssertEqual(t, len(tc.expDrpcReqs), len(gotDrpcCalls),
+				"unexpected number of drpc calls")
+
+			for i := range gotDrpcCalls {
+				gotReq := new(mgmtpb.PoolDrainReq)
+				err := proto.Unmarshal(gotDrpcCalls[i].Body, gotReq)
+				if err != nil {
+					t.Fatal(err)
+				}
+				opt := cmpopts.IgnoreUnexported(mgmtpb.PoolDrainReq{})
+				diff := cmp.Diff(tc.expDrpcReqs[i], gotReq, opt)
+				if diff != "" {
+					t.Fatalf("want-, got+:\n%s", diff)
+				}
+			}
 		})
 	}
 }
@@ -1953,7 +2217,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 			req: &mgmtpb.JoinReq{
 				SrvFaultDomain: "bad fault domain",
 			},
-			expErr: errors.New("bad fault domain"),
+			expErr: errors.New("invalid fault domain"),
 		},
 		"dupe host same rank diff uuid": {
 			req: &mgmtpb.JoinReq{
@@ -2341,6 +2605,154 @@ func TestServer_MgmtSvc_doGroupUpdate(t *testing.T) {
 					t.Fatalf("want-, got+:\n%s", diff)
 				}
 			}
+		})
+	}
+}
+
+func TestMgmtSvc_verifyFaultDomain(t *testing.T) {
+	testURI := "tcp://localhost:10001"
+	for name, tc := range map[string]struct {
+		getSvc         func(*testing.T, logging.Logger) *mgmtSvc
+		curLabels      []string
+		req            *mgmtpb.JoinReq
+		expFaultDomain *system.FaultDomain
+		expErr         error
+		expLabels      []string
+	}{
+		"no fault domain": {
+			req:    &mgmtpb.JoinReq{},
+			expErr: errors.New("no fault domain"),
+		},
+		"invalid fault domain": {
+			req:    &mgmtpb.JoinReq{SrvFaultDomain: "junk"},
+			expErr: errors.New("invalid fault domain"),
+		},
+		"failed to get system domain labels": {
+			getSvc: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				svc := newTestMgmtSvcMulti(t, log, maxEngines, false)
+				// not a replica
+				svc.sysdb = raft.MockDatabaseWithCfg(t, log, &raft.DatabaseConfig{
+					SystemName: build.DefaultSystemName,
+				})
+
+				return svc
+			},
+			req:    &mgmt.JoinReq{SrvFaultDomain: "/rack=r1/node=n2"},
+			expErr: &system.ErrNotReplica{},
+		},
+		"failed to set system domain labels": {
+			getSvc: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				svc := newTestMgmtSvcMulti(t, log, maxEngines, true)
+				svc.sysdb = raft.MockDatabaseWithCfg(t, log, &raft.DatabaseConfig{
+					SystemName: build.DefaultSystemName,
+					Replicas:   []*net.TCPAddr{common.LocalhostCtrlAddr()},
+				})
+				if err := svc.sysdb.ResignLeadership(errors.New("test")); err != nil {
+					t.Fatal(err)
+				}
+
+				return svc
+			},
+			req:    &mgmt.JoinReq{SrvFaultDomain: "/rack=r1/node=n2"},
+			expErr: &system.ErrNotLeader{},
+		},
+		"first success with labels": {
+			req:            &mgmt.JoinReq{SrvFaultDomain: "/rack=r1/node=n2"},
+			expFaultDomain: system.MustCreateFaultDomainFromString("/rack=r1/node=n2"),
+			expLabels:      []string{"rack", "node"},
+		},
+		"first success with no labels": {
+			req:            &mgmt.JoinReq{SrvFaultDomain: "/r1/n2"},
+			expFaultDomain: system.MustCreateFaultDomainFromString("/r1/n2"),
+			expLabels:      []string{"", ""},
+		},
+		"success with labels": {
+			curLabels:      []string{"rack", "node"},
+			req:            &mgmt.JoinReq{SrvFaultDomain: "/rack=r1/node=n2"},
+			expFaultDomain: system.MustCreateFaultDomainFromString("/rack=r1/node=n2"),
+			expLabels:      []string{"rack", "node"},
+		},
+		"success with no labels": {
+			curLabels:      []string{"", ""},
+			req:            &mgmt.JoinReq{SrvFaultDomain: "/r1/n2"},
+			expFaultDomain: system.MustCreateFaultDomainFromString("/r1/n2"),
+			expLabels:      []string{"", ""},
+		},
+		"labeled request with unlabeled system": {
+			curLabels: []string{"", ""},
+			req: &mgmt.JoinReq{
+				SrvFaultDomain: "/rack=r1/node=n2",
+				Uri:            testURI,
+			},
+			expErr:    FaultBadFaultDomainLabels("/rack=r1/node=n2", testURI, []string{"rack", "node"}, nil),
+			expLabels: []string{"", ""},
+		},
+		"unlabeled request with labeled system": {
+			curLabels: []string{"rack", "node"},
+			req: &mgmt.JoinReq{
+				SrvFaultDomain: "/r1/n2",
+				Uri:            testURI,
+			},
+			expErr:    FaultBadFaultDomainLabels("/r1/n2", testURI, nil, []string{"rack", "node"}),
+			expLabels: []string{"rack", "node"},
+		},
+		"mismatched labels": {
+			curLabels: []string{"rack", "node"},
+			req: &mgmt.JoinReq{
+				SrvFaultDomain: "/rack=r1/host=n2",
+				Uri:            testURI,
+			},
+			expErr:    FaultBadFaultDomainLabels("/rack=r1/host=n2", testURI, []string{"rack", "host"}, []string{"rack", "node"}),
+			expLabels: []string{"rack", "node"},
+		},
+		"mismatched length": {
+			curLabels: []string{"rack"},
+			req: &mgmt.JoinReq{
+				SrvFaultDomain: "/rack=r1/node=n2",
+				Uri:            testURI,
+			},
+			expErr:    FaultBadFaultDomainLabels("/rack=r1/node=n2", testURI, []string{"rack", "node"}, []string{"rack"}),
+			expLabels: []string{"rack"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			if tc.getSvc == nil {
+				tc.getSvc = func(t *testing.T, l logging.Logger) *mgmtSvc {
+					svc := mgmtSystemTestSetup(t, l,
+						system.Members{
+							mockMember(t, 1, 1, "stopped"),
+							mockMember(t, 2, 2, "stopped"),
+						},
+						[]*control.HostResponse{})
+					return svc
+				}
+			}
+			svc := tc.getSvc(t, log)
+			if tc.curLabels != nil {
+				if err := svc.setDomainLabels(tc.curLabels); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			fd, err := svc.verifyFaultDomain(tc.req)
+
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertTrue(t, fd.Equals(tc.expFaultDomain), fmt.Sprintf("want %q, got %q", tc.expFaultDomain, fd))
+
+			if tc.expLabels == nil {
+				return
+			}
+
+			newLabels, labelErr := svc.getDomainLabels()
+			if len(tc.expLabels) == 0 {
+				test.AssertTrue(t, system.IsErrSystemAttrNotFound(labelErr), "")
+			} else if labelErr != nil {
+				t.Fatal(labelErr)
+			}
+			test.CmpAny(t, "", tc.expLabels, newLabels)
 		})
 	}
 }

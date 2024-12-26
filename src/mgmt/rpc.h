@@ -19,7 +19,7 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See daos_rpc.h.
  */
-#define DAOS_MGMT_VERSION 3
+#define DAOS_MGMT_VERSION 4
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
@@ -46,16 +46,6 @@
 	X(MGMT_TGT_SHARD_DESTROY, 0, &CQF_mgmt_tgt_shard_destroy, ds_mgmt_hdlr_tgt_shard_destroy,  \
 	  NULL)
 
-#define MGMT_PROTO_SRV_RPC_LIST_V2                                                                    \
-	X(MGMT_TGT_CREATE, 0, &CQF_mgmt_tgt_create, ds_mgmt_hdlr_tgt_create,                       \
-	  &ds_mgmt_hdlr_tgt_create_co_ops)                                                         \
-	X(MGMT_TGT_DESTROY, 0, &CQF_mgmt_tgt_destroy, ds_mgmt_hdlr_tgt_destroy, NULL)              \
-	X(MGMT_TGT_PARAMS_SET, 0, &CQF_mgmt_tgt_params_set, ds_mgmt_tgt_params_set_hdlr, NULL)     \
-	X(MGMT_TGT_PROFILE, 0, &CQF_mgmt_profile, ds_mgmt_tgt_profile_hdlr, NULL)                  \
-	X(MGMT_TGT_MAP_UPDATE, 0, &CQF_mgmt_tgt_map_update, ds_mgmt_hdlr_tgt_map_update,           \
-	  &ds_mgmt_hdlr_tgt_map_update_co_ops)                                                     \
-	X(MGMT_TGT_MARK, 0, &CQF_mgmt_mark, ds_mgmt_tgt_mark_hdlr, NULL)
-
 /* Define for RPC enum population below */
 #define X(a, ...) a,
 
@@ -75,7 +65,7 @@ enum mgmt_profile_op {
 /* clang-format off */
 
 extern struct crt_proto_format mgmt_proto_fmt_v3;
-extern struct crt_proto_format mgmt_proto_fmt_v2;
+extern struct crt_proto_format mgmt_proto_fmt_v4;
 extern int dc_mgmt_proto_version;
 
 #define DAOS_OSEQ_MGMT_OP /* output fields */                    \
@@ -164,9 +154,9 @@ CRT_RPC_DECLARE(mgmt_pool_list, DAOS_ISEQ_MGMT_POOL_LIST, DAOS_OSEQ_MGMT_POOL_LI
 
 #define DAOS_ISEQ_MGMT_TGT_CREATE /* input fields */		 \
 	((uuid_t)		(tc_pool_uuid)		CRT_VAR) \
-	((d_string_t)		(tc_tgt_dev)		CRT_VAR) \
 	((daos_size_t)		(tc_scm_size)		CRT_VAR) \
-	((daos_size_t)		(tc_nvme_size)		CRT_VAR)
+	((daos_size_t)		(tc_nvme_size)		CRT_VAR) \
+	((daos_size_t)		(tc_meta_size)		CRT_VAR)
 
 #define DAOS_OSEQ_MGMT_TGT_CREATE /* output fields */		   \
 	((d_rank_t)		(tc_ranks)		CRT_ARRAY) \

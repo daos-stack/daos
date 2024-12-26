@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -153,13 +153,31 @@ func (hsm HostStorageMap) HostCount() (nrHosts int) {
 	return nrHosts
 }
 
+// IsMdOnSsdEnabled returns true when bdev MD-on-SSD roles have been set on a NVMe SSD within a
+// HostStorageMap's host storage set's NvmeDevices. Assumes that no roles exist if mode is PMem.
+func (hsm HostStorageMap) IsMdOnSsdEnabled() bool {
+	for _, hss := range hsm {
+		hs := hss.HostStorage
+		if hs == nil {
+			continue
+		}
+		if hs.NvmeDevices.HaveMdOnSsdRoles() {
+			return true
+		}
+		break
+	}
+
+	return false
+}
+
 type (
 	// StorageScanReq contains the parameters for a storage scan request.
 	StorageScanReq struct {
 		unaryRequest
-		Usage      bool
-		NvmeHealth bool
-		NvmeBasic  bool
+		Usage      bool    `json:"usage"`
+		NvmeHealth bool    `json:"nvme_health"`
+		NvmeBasic  bool    `json:"nvme_basic"`
+		MemRatio   float32 `json:"mem_ratio"`
 	}
 
 	// StorageScanResp contains the response from a storage scan request.
@@ -256,8 +274,11 @@ func StorageScan(ctx context.Context, rpcClient UnaryInvoker, req *StorageScanRe
 			Nvme: &ctlpb.ScanNvmeReq{
 				Basic: req.NvmeBasic,
 				// Health and meta details required to populate usage statistics.
-				Health: req.NvmeHealth || req.Usage,
-				Meta:   req.Usage,
+				Health:   req.NvmeHealth || req.Usage,
+				Meta:     req.Usage,
+				MemRatio: req.MemRatio,
+				// Only request link stats if health explicitly requested.
+				LinkStats: req.NvmeHealth,
 			},
 		})
 	})
@@ -288,7 +309,7 @@ type (
 	// StorageFormatReq contains the parameters for a storage format request.
 	StorageFormatReq struct {
 		unaryRequest
-		Reformat bool
+		Reformat bool `json:"reformat"`
 	}
 
 	// StorageFormatResp contains the response from a storage format request.
@@ -324,11 +345,7 @@ func (sfr *StorageFormatResp) addHostResponse(hr *HostResponse) (err error) {
 				Info:    info,
 				PciAddr: nr.GetPciAddr(),
 				SmdDevices: []*storage.SmdDevice{
-					{
-						Roles: storage.BdevRoles{
-							storage.OptionBits(nr.RoleBits),
-						},
-					},
+					{Roles: storage.BdevRolesFromBits(int(nr.RoleBits))},
 				},
 			})
 		default:

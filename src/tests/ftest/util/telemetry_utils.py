@@ -90,6 +90,7 @@ class TelemetryUtils():
         "engine_pool_ops_dtx_coll_commit",
         "engine_pool_ops_dtx_commit",
         "engine_pool_ops_dtx_refresh",
+        "engine_pool_ops_dtx_sync_commit",
         "engine_pool_ops_ec_agg",
         "engine_pool_ops_ec_rep",
         "engine_pool_ops_fetch",
@@ -200,6 +201,8 @@ class TelemetryUtils():
         "engine_dmabuff_queued_reqs",
         "engine_dmabuff_grab_errs",
         *_gen_stats_metrics("engine_dmabuff_grab_retries")]
+    ENGINE_IO_DTX_ASYNC_CMT_LAT_METRICS = \
+        _gen_stats_metrics("engine_io_dtx_async_cmt_lat")
     ENGINE_IO_DTX_COMMITTABLE_METRICS = \
         _gen_stats_metrics("engine_io_dtx_committable")
     ENGINE_IO_DTX_COMMITTED_METRICS = \
@@ -304,7 +307,8 @@ class TelemetryUtils():
         _gen_stats_metrics("engine_io_ops_tgt_update_active")
     ENGINE_IO_OPS_UPDATE_ACTIVE_METRICS = \
         _gen_stats_metrics("engine_io_ops_update_active")
-    ENGINE_IO_METRICS = ENGINE_IO_DTX_COMMITTABLE_METRICS +\
+    ENGINE_IO_METRICS = ENGINE_IO_DTX_ASYNC_CMT_LAT_METRICS +\
+        ENGINE_IO_DTX_COMMITTABLE_METRICS +\
         ENGINE_IO_DTX_COMMITTED_METRICS +\
         ENGINE_IO_LATENCY_FETCH_METRICS +\
         ENGINE_IO_LATENCY_BULK_FETCH_METRICS +\
@@ -423,7 +427,7 @@ class TelemetryUtils():
         ENGINE_NVME_CRIT_WARN_METRICS +\
         ENGINE_NVME_INTEL_VENDOR_METRICS
     ENGINE_MEM_USAGE_METRICS = [
-        "engine_mem_vos_vos_obj_360",
+        "engine_mem_vos_vos_obj_408",
         "engine_mem_vos_vos_lru_size",
         "engine_mem_dtx_dtx_leader_handle_360"]
     ENGINE_MEM_TOTAL_USAGE_METRICS = [
@@ -1006,6 +1010,34 @@ class ClientTelemetryUtils(TelemetryUtils):
         CLIENT_IO_OPS_TGT_PUNCH_LATENCY_METRICS +\
         CLIENT_IO_OPS_TGT_UPDATE_ACTIVE_METRICS +\
         CLIENT_IO_OPS_UPDATE_ACTIVE_METRICS
+    CLIENT_DFS_OPS_METRICS = [
+        "client_dfs_ops_chmod",
+        "client_dfs_ops_chown",
+        "client_dfs_ops_create",
+        "client_dfs_ops_getsize",
+        "client_dfs_ops_getxattr",
+        "client_dfs_ops_lsxattr",
+        "client_dfs_ops_mkdir",
+        "client_dfs_ops_open",
+        "client_dfs_ops_opendir",
+        "client_dfs_ops_read",
+        "client_dfs_ops_readdir",
+        "client_dfs_ops_readlink",
+        "client_dfs_ops_rename",
+        "client_dfs_ops_rmxattr",
+        "client_dfs_ops_setattr",
+        "client_dfs_ops_setxattr",
+        "client_dfs_ops_stat",
+        "client_dfs_ops_symlink",
+        "client_dfs_ops_sync",
+        "client_dfs_ops_truncate",
+        "client_dfs_ops_unlink",
+        "client_dfs_ops_write"]
+    CLIENT_DFS_IO_METRICS = [
+        "client_dfs_read_bytes",
+        "client_dfs_write_bytes"]
+    CLIENT_DFS_METRICS = CLIENT_DFS_OPS_METRICS +\
+        CLIENT_DFS_IO_METRICS
 
     def __init__(self, dmg, servers, clients):
         """Create a ClientTelemetryUtils object.
@@ -1019,11 +1051,12 @@ class ClientTelemetryUtils(TelemetryUtils):
         super().__init__(dmg, servers)
         self.clients = NodeSet.fromlist(clients)
 
-    def get_all_client_metrics_names(self, with_pools=False):
+    def get_all_client_metrics_names(self, with_pools=False, with_dfs=False):
         """Get all the telemetry metrics names for this client.
 
         Args:
             with_pools (bool): if True, include pool metrics in the results
+            with_dfs (bool): if True, include DFS metrics in the results
 
         Returns:
             list: all of the telemetry metrics names for this client
@@ -1033,6 +1066,8 @@ class ClientTelemetryUtils(TelemetryUtils):
         all_metrics_names.extend(self.CLIENT_IO_METRICS)
         if with_pools:
             all_metrics_names.extend(self.CLIENT_POOL_METRICS)
+        if with_dfs:
+            all_metrics_names.extend(self.CLIENT_DFS_METRICS)
 
         return all_metrics_names
 
@@ -1213,13 +1248,21 @@ class MetricData():
                 if name not in data:
                     data[name] = {}
                 for metric in metrics[name]['metrics']:
-                    if 'labels' not in metric or 'value' not in metric:
+                    if 'labels' not in metric or \
+                            ('value' not in metric and 'buckets' not in metric):
                         continue
                     labels = [f'host:{host}']
                     for key, value in metric['labels'].items():
                         labels.append(":".join([str(key), str(value)]))
                     label_key = ",".join(sorted(labels))
-                    data[name][label_key] = metric['value']
+                    if 'value' in metric:
+                        data[name][label_key] = metric['value']
+                    else:
+                        data[name][label_key] = {
+                            'sample_count': metric['sample_count'],
+                            'sample_sum': metric['sample_sum'],
+                            'buckets': metric['buckets'],
+                        }
         return data
 
     def _set_display(self, compare=None):

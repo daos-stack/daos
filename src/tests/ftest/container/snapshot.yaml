@@ -18,7 +18,6 @@ server_config:
   system_ram_reserved: 1
 pool:
   scm_size: 5G
-  control_method: dmg
 snapshot:
   dkey: "dkey"
   akey: "akey"
@@ -36,3 +35,6 @@ object_class: !mux
     obj_class: OC_SX
   OC_RP_2GX:
     obj_class: OC_RP_2GX
+
+container:
+  control_method: API

@@ -63,7 +63,7 @@ cont_df_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	cont_df = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	vos_ts_evict(&cont_df->cd_ts_idx, VOS_TS_TYPE_CONT, vos_pool->vp_sysdb);
 
-	return gc_add_item(vos_pool, DAOS_HDL_INVAL, GC_CONT, rec->rec_off, 0);
+	return gc_add_item(vos_pool, DAOS_HDL_INVAL, GC_CONT, rec->rec_off, NULL);
 }
 
 static int
@@ -92,6 +92,17 @@ cont_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	cont_df = umem_off2ptr(&tins->ti_umm, offset);
 	uuid_copy(cont_df->cd_id, ukey->uuid);
 
+	cont_df->cd_ext = umem_zalloc(&tins->ti_umm, sizeof(struct vos_cont_ext_df));
+	if (UMOFF_IS_NULL(cont_df->cd_ext)) {
+		D_ERROR("Failed to allocate cont df extension.\n");
+		rc = -DER_NOSPACE;
+		goto failed;
+	}
+
+	rc = gc_init_cont(&tins->ti_umm, cont_df);
+	if (rc)
+		goto failed;
+
 	rc = dbtree_create_inplace_ex(VOS_BTR_OBJ_TABLE, 0, VOS_OBJ_ORDER,
 				      &pool->vp_uma, &cont_df->cd_obj_root,
 				      DAOS_HDL_INVAL, pool, &hdl);
@@ -101,12 +112,13 @@ cont_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	}
 	dbtree_close(hdl);
 
-	gc_init_cont(&tins->ti_umm, cont_df);
 	args->ca_cont_df = cont_df;
 	rec->rec_off = offset;
 	return 0;
 failed:
 	/* Ignore umem_free failure. */
+	if (!UMOFF_IS_NULL(cont_df->cd_ext))
+		umem_free(&tins->ti_umm, cont_df->cd_ext);
 	umem_free(&tins->ti_umm, offset);
 	return rc;
 }
@@ -191,6 +203,7 @@ cont_free_internal(struct vos_container *cont)
 
 	if (!d_list_empty(&cont->vc_gc_link))
 		d_list_del(&cont->vc_gc_link);
+	gc_close_cont(cont);
 
 	for (i = 0; i < VOS_IOS_CNT; i++) {
 		if (cont->vc_hint_ctxt[i])
@@ -384,6 +397,9 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	D_INIT_LIST_HEAD(&cont->vc_dtx_act_list);
 	cont->vc_dtx_committed_count = 0;
 	cont->vc_solo_dtx_epoch = d_hlc_get();
+	rc = gc_open_cont(cont);
+	if (rc)
+		D_GOTO(exit, rc);
 	gc_check_cont(cont);
 
 	/* Cache this btr object ID in container handle */

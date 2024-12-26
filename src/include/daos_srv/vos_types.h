@@ -79,19 +79,21 @@ D_CASSERT(sizeof(struct dtx_entry) ==
 /** Pool open flags (for vos_pool_create and vos_pool_open) */
 enum vos_pool_open_flags {
 	/** Pool is small (for sys space reservation); implies VOS_POF_EXCL */
-	VOS_POF_SMALL	= (1 << 0),
+	VOS_POF_SMALL = (1 << 0),
 	/** Exclusive (-DER_BUSY if already opened) */
-	VOS_POF_EXCL	= (1 << 1),
+	VOS_POF_EXCL = (1 << 1),
 	/** Ignore the pool uuid passed into vos_pool_open */
 	VOS_POF_SKIP_UUID_CHECK = (1 << 2),
 	/** Caller does VEA flush periodically */
-	VOS_POF_EXTERNAL_FLUSH	= (1 << 3),
+	VOS_POF_EXTERNAL_FLUSH = (1 << 3),
 	/** RDB pool */
-	VOS_POF_RDB	= (1 << 4),
+	VOS_POF_RDB = (1 << 4),
 	/** SYS DB pool */
-	VOS_POF_SYSDB	= (1 << 5),
+	VOS_POF_SYSDB = (1 << 5),
 	/** Open the pool for daos check query, that will bypass EXEL flags. */
 	VOS_POF_FOR_CHECK_QUERY = (1 << 6),
+	/** Open the pool for feature fetch/update, that will skip VEA load */
+	VOS_POF_FOR_FEATURE_FLAG = (1 << 7),
 };
 
 enum vos_oi_attr {
@@ -125,6 +127,11 @@ struct vos_pool_space {
 	struct vea_attr		vps_vea_attr;
 	/** NVMe block allocator statistics */
 	struct vea_stat		vps_vea_stat;
+	/** Total & free non-evictable space for md-on-ssd phase2 pool */
+	uint64_t		vps_ne_total;
+	uint64_t		vps_ne_free;
+	/* Memory file size for md-on-ssd pool */
+	uint64_t		vps_mem_bytes;
 };
 
 #define SCM_TOTAL(vps)	((vps)->vps_space.s_total[DAOS_MEDIA_SCM])
@@ -385,8 +392,12 @@ enum {
 
 typedef struct {
 	union {
-		/** The object id of the entry */
-		daos_unit_oid_t	 id_oid;
+		struct {
+			/** The object id of the entry */
+			daos_unit_oid_t		id_oid;
+			/** The bucket id of the object (for md-on-ssd phase2) */
+			uint32_t		id_bkt;
+		};
 		/** The key for the entry */
 		d_iov_t		 id_key;
 	};
@@ -440,6 +451,8 @@ typedef struct {
 	vos_iter_filter_cb_t	ip_filter_cb;
 	/** filter callback argument (vos_iterate only) */
 	void			*ip_filter_arg;
+	/** auxiliary data for md-on-ssd phase2 OI iterator */
+	void			*ip_bkt_iter;
 	/** flags for for iterator */
 	uint32_t		ip_flags;
 } vos_iter_param_t;

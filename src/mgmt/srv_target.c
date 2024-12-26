@@ -576,7 +576,9 @@ recreate_pooltgts()
 				DP_UUID(pool_info->spi_id), DP_RC(rc));
 			goto out;
 		}
-		rc = tgt_recreate(pool_info->spi_id, pool_info->spi_blob_sz[SMD_DEV_TYPE_META],
+
+		D_ASSERT(pool_info->spi_scm_sz > 0);
+		rc = tgt_recreate(pool_info->spi_id, pool_info->spi_scm_sz,
 				  pool_info->spi_tgt_cnt[SMD_DEV_TYPE_META], rdb_blob_sz);
 		if (rc)
 			goto out;
@@ -719,6 +721,7 @@ struct vos_pool_arg {
 	uuid_t		vpa_uuid;
 	daos_size_t	vpa_scm_size;
 	daos_size_t	vpa_nvme_size;
+	daos_size_t	vpa_meta_size;
 };
 
 static int
@@ -735,7 +738,8 @@ tgt_vos_create_one(void *varg)
 		return rc;
 
 	rc = vos_pool_create(path, (unsigned char *)vpa->vpa_uuid, vpa->vpa_scm_size,
-			     vpa->vpa_nvme_size, 0, 0 /* version */, NULL);
+			     vpa->vpa_nvme_size, vpa->vpa_meta_size, 0 /* flags */,
+			     ds_pool_get_vos_df_version_default(), NULL);
 	if (rc)
 		D_ERROR(DF_UUID": failed to init vos pool %s: %d\n",
 			DP_UUID(vpa->vpa_uuid), path, rc);
@@ -755,7 +759,8 @@ tgt_vos_preallocate(uuid_t uuid, daos_size_t scm_size, int tgt_id)
 	if (rc)
 		goto out;
 
-	D_DEBUG(DB_MGMT, DF_UUID": creating vos file %s\n", DP_UUID(uuid), path);
+	D_DEBUG(DB_MGMT, DF_UUID ": creating vos file %s (%ld bytes)\n", DP_UUID(uuid), path,
+		scm_size);
 
 	fd = open(path, O_CREAT|O_RDWR, 0600);
 	if (fd < 0) {
@@ -1043,15 +1048,14 @@ tgt_create_preallocate(void *arg)
 		 * 16MB minimum per pmemobj file (SCM partition)
 		 */
 		D_ASSERT(dss_tgt_nr > 0);
+		D_ASSERT((tca->tca_scm_size / dss_tgt_nr) >= (1 << 24));
 		if (!bio_nvme_configured(SMD_DEV_TYPE_META)) {
-			rc = tgt_vos_preallocate_sequential(tca->tca_ptrec->dptr_uuid,
-							    max(tca->tca_scm_size / dss_tgt_nr,
-								1 << 24), dss_tgt_nr);
+			rc = tgt_vos_preallocate_sequential(
+			    tca->tca_ptrec->dptr_uuid, tca->tca_scm_size / dss_tgt_nr, dss_tgt_nr);
 		} else {
-			rc = tgt_vos_preallocate_parallel(tca->tca_ptrec->dptr_uuid,
-							  max(tca->tca_scm_size / dss_tgt_nr,
-							      1 << 24), dss_tgt_nr,
-							  &tca->tca_ptrec->cancel_create);
+			rc = tgt_vos_preallocate_parallel(
+			    tca->tca_ptrec->dptr_uuid, tca->tca_scm_size / dss_tgt_nr, dss_tgt_nr,
+			    &tca->tca_ptrec->cancel_create);
 		}
 		if (rc)
 			goto out;
@@ -1078,6 +1082,8 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	pthread_t			 thread;
 	bool				 canceled_thread = false;
 	int				 rc = 0;
+	size_t                           tgt_scm_sz;
+	size_t                           tgt_meta_sz;
 
 	/** incoming request buffer */
 	tc_in = crt_req_get(tc_req);
@@ -1113,6 +1119,17 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	}
 	D_DEBUG(DB_MGMT, DF_UUID": record inserted to dpt_creates_ht\n",
 		DP_UUID(tca.tca_ptrec->dptr_uuid));
+
+	tgt_scm_sz  = tc_in->tc_scm_size / dss_tgt_nr;
+	tgt_meta_sz = tc_in->tc_meta_size / dss_tgt_nr;
+	rc          = vos_pool_roundup_size(&tgt_scm_sz, &tgt_meta_sz);
+	if (rc) {
+		D_ERROR(DF_UUID": failed to roundup the vos size: "DF_RC"\n",
+			DP_UUID(tc_in->tc_pool_uuid), DP_RC(rc));
+		goto out_rec;
+	}
+	tc_in->tc_scm_size  = tgt_scm_sz * dss_tgt_nr;
+	tc_in->tc_meta_size = tgt_meta_sz * dss_tgt_nr;
 
 	tca.tca_scm_size  = tc_in->tc_scm_size;
 	tca.tca_nvme_size = tc_in->tc_nvme_size;
@@ -1178,9 +1195,10 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 		D_ASSERT(dss_tgt_nr > 0);
 		uuid_copy(vpa.vpa_uuid, tc_in->tc_pool_uuid);
 		/* A zero size accommodates the existing file */
-		vpa.vpa_scm_size = 0;
+		vpa.vpa_scm_size  = 0;
 		vpa.vpa_nvme_size = tc_in->tc_nvme_size / dss_tgt_nr;
-		rc = dss_thread_collective(tgt_vos_create_one, &vpa, 0);
+		vpa.vpa_meta_size = tc_in->tc_meta_size / dss_tgt_nr;
+		rc = dss_thread_collective(tgt_vos_create_one, &vpa, DSS_ULT_DEEP_STACK);
 		if (rc) {
 			D_ERROR(DF_UUID": thread collective tgt_vos_create_one failed, "DF_RC"\n",
 				DP_UUID(tc_in->tc_pool_uuid), DP_RC(rc));
@@ -1212,7 +1230,7 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	tc_out->tc_ranks.ca_arrays = rank;
 	tc_out->tc_ranks.ca_count  = 1;
 
-	rc = ds_pool_start(tc_in->tc_pool_uuid, false);
+	rc = ds_pool_start(tc_in->tc_pool_uuid, false, false);
 	if (rc) {
 		D_ERROR(DF_UUID": failed to start pool: "DF_RC"\n",
 			DP_UUID(tc_in->tc_pool_uuid), DP_RC(rc));

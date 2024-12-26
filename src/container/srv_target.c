@@ -181,7 +181,6 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 	}
 
 	if (pool->sp_rebuilding && !vos_agg) {
-		cont->sc_ec_agg_active = 0;
 		D_DEBUG(DB_EPC, DF_CONT": skip EC aggregation during rebuild %d.\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 			pool->sp_rebuilding);
@@ -192,12 +191,10 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 		if (!cont->sc_vos_agg_active)
 			D_DEBUG(DB_EPC, DF_CONT": resume VOS aggregation after reintegration.\n",
 				DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
-		cont->sc_vos_agg_active = 1;
 	} else {
 		if (!cont->sc_ec_agg_active)
 			D_DEBUG(DB_EPC, DF_CONT": resume EC aggregation after reintegration.\n",
 				DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
-		cont->sc_ec_agg_active = 1;
 	}
 
 	if (!cont->sc_props_fetched)
@@ -471,11 +468,16 @@ cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 		if (!cont_aggregate_runnable(cont, req, param->ap_vos_agg))
 			goto next;
 
+		if (param->ap_vos_agg)
+			cont->sc_vos_agg_active = 1;
+		else
+			cont->sc_ec_agg_active = 1;
+
 		rc = cont_child_aggregate(cont, cb, param);
 		if (rc == -DER_SHUTDOWN) {
 			break;	/* pool destroyed */
 		} else if (rc < 0) {
-			DL_CDEBUG(rc == -DER_BUSY, DB_EPC, DLOG_ERR, rc,
+			DL_CDEBUG(rc == -DER_BUSY || rc == -DER_INPROGRESS, DB_EPC, DLOG_ERR, rc,
 				  DF_CONT ": %s aggregate failed",
 				  DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 				  param->ap_vos_agg ? "VOS" : "EC");
@@ -483,9 +485,21 @@ cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 			/* Don't sleep too long when there is space pressure */
 			msecs = 2ULL * 100;
 		}
+
+		if (param->ap_vos_agg)
+			cont->sc_vos_agg_active = 0;
+		else
+			cont->sc_ec_agg_active = 0;
+
 next:
 		if (dss_ult_exiting(req))
 			break;
+
+		/* sleep 18 seconds for EC aggregation ULT if the pool is in rebuilding,
+		 * if no space pressure.
+		 */
+		if (cont->sc_pool->spc_pool->sp_rebuilding && !param->ap_vos_agg && msecs != 200)
+			msecs = 18000;
 
 		sched_req_sleep(req, msecs);
 	}
@@ -669,6 +683,7 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 	cont->sc_dtx_committable_coll_count = 0;
 	D_INIT_LIST_HEAD(&cont->sc_dtx_cos_list);
 	D_INIT_LIST_HEAD(&cont->sc_dtx_coll_list);
+	D_INIT_LIST_HEAD(&cont->sc_dtx_batched_list);
 
 	*link = &cont->sc_list;
 	return 0;
@@ -929,12 +944,13 @@ cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 	 * 2. Pool is going to be destroyed, or;
 	 * 3. Pool service is going to be stopped;
 	 */
-	if (cont_child->sc_stopping) {
-		D_ERROR(DF_CONT"[%d]: Container is in stopping\n",
-			DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id);
+	if (cont_child->sc_stopping || cont_child->sc_destroying) {
+		D_ERROR(DF_CONT"[%d]: Container is being stopped or destroyed (s=%d, d=%d)\n",
+			DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id,
+			cont_child->sc_stopping, cont_child->sc_destroying);
 		rc = -DER_SHUTDOWN;
 	} else if (!cont_child_started(cont_child)) {
-		if (!ds_pool_skip_for_check(pool_child->spc_pool)) {
+		if (!ds_pool_restricted(pool_child->spc_pool, false)) {
 			rc = cont_start_agg(cont_child);
 			if (rc != 0)
 				goto out;
@@ -1200,71 +1216,58 @@ cont_child_destroy_one(void *vin)
 	struct dsm_tls		       *tls = dsm_tls_get();
 	struct cont_tgt_destroy_in     *in = vin;
 	struct ds_pool_child	       *pool;
-	int				rc, retry_cnt = 0;
+	struct ds_cont_child	       *cont;
+	int				rc;
 
 	pool = ds_pool_child_lookup(in->tdi_pool_uuid);
 	if (pool == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
-	while (1) {
-		struct ds_cont_child *cont;
+	rc = cont_child_lookup(tls->dt_cont_cache, in->tdi_uuid,
+			       in->tdi_pool_uuid, false /* create */, &cont);
+	if (rc == -DER_NONEXIST)
+		D_GOTO(out_pool, rc = 0);
 
-		rc = cont_child_lookup(tls->dt_cont_cache, in->tdi_uuid,
-				       in->tdi_pool_uuid, false /* create */,
-				       &cont);
-		if (rc == -DER_NONEXIST)
-			break;
+	if (rc != 0)
+		D_GOTO(out_pool, rc);
 
-		if (rc != 0)
-			D_GOTO(out_pool, rc);
-
-		if (cont->sc_open > 0) {
-			if (retry_cnt > 0)
-				D_ERROR(DF_CONT": Container is re-opened (%d) by race\n",
-					DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-					cont->sc_open);
-			else
-				D_ERROR(DF_CONT": Container is still in open(%d)\n",
-					DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-					cont->sc_open);
-			cont_child_put(tls->dt_cont_cache, cont);
-			D_GOTO(out_pool, rc = -DER_BUSY);
-		}
-
-		cont_child_stop(cont);
-
-		ABT_mutex_lock(cont->sc_mutex);
-		if (cont->sc_dtx_resyncing)
-			ABT_cond_wait(cont->sc_dtx_resync_cond, cont->sc_mutex);
-		ABT_mutex_unlock(cont->sc_mutex);
-
-		/* Make sure checksum scrubbing has stopped */
-		ABT_mutex_lock(cont->sc_mutex);
-		if (cont->sc_scrubbing) {
-			sched_req_wakeup(cont->sc_pool->spc_scrubbing_req);
-			ABT_cond_wait(cont->sc_scrub_cond, cont->sc_mutex);
-		}
-		ABT_mutex_unlock(cont->sc_mutex);
-
-		/* Make sure rebuild has stopped */
-		ABT_mutex_lock(cont->sc_mutex);
-		if (cont->sc_rebuilding)
-			ABT_cond_wait(cont->sc_rebuild_cond, cont->sc_mutex);
-		ABT_mutex_unlock(cont->sc_mutex);
-
-		retry_cnt++;
-		if (retry_cnt > 1) {
-			D_ERROR("container is still in-use: open %u, resync %s, reindex %s\n",
-				cont->sc_open, cont->sc_dtx_resyncing ? "yes" : "no",
-				cont->sc_dtx_reindex ? "yes" : "no");
-			cont_child_put(tls->dt_cont_cache, cont);
-			D_GOTO(out_pool, rc = -DER_BUSY);
-		} /* else: resync should have completed, try again */
-
-		/* nobody should see it again after eviction */
-		daos_lru_ref_evict_wait(tls->dt_cont_cache, &cont->sc_list);
-		daos_lru_ref_release(tls->dt_cont_cache, &cont->sc_list);
+	if (cont->sc_open > 0) {
+		D_ERROR(DF_CONT": Container is still in open(%d)\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), cont->sc_open);
+		cont_child_put(tls->dt_cont_cache, cont);
+		D_GOTO(out_pool, rc = -DER_BUSY);
 	}
+
+	if (cont->sc_destroying) {
+		cont_child_put(tls->dt_cont_cache, cont);
+		D_GOTO(out_pool, rc = -DER_BUSY);
+	}
+	cont->sc_destroying = 1; /* nobody can take refcount anymore */
+
+	cont_child_stop(cont);
+
+	ABT_mutex_lock(cont->sc_mutex);
+	if (cont->sc_dtx_resyncing)
+		ABT_cond_wait(cont->sc_dtx_resync_cond, cont->sc_mutex);
+	ABT_mutex_unlock(cont->sc_mutex);
+
+	/* Make sure checksum scrubbing has stopped */
+	ABT_mutex_lock(cont->sc_mutex);
+	if (cont->sc_scrubbing) {
+		sched_req_wakeup(cont->sc_pool->spc_scrubbing_req);
+		ABT_cond_wait(cont->sc_scrub_cond, cont->sc_mutex);
+	}
+	ABT_mutex_unlock(cont->sc_mutex);
+
+	/* Make sure rebuild has stopped */
+	ABT_mutex_lock(cont->sc_mutex);
+	if (cont->sc_rebuilding)
+		ABT_cond_wait(cont->sc_rebuild_cond, cont->sc_mutex);
+	ABT_mutex_unlock(cont->sc_mutex);
+
+	/* nobody should see it again after eviction */
+	daos_lru_ref_evict_wait(tls->dt_cont_cache, &cont->sc_list);
+	cont_child_put(tls->dt_cont_cache, cont);
 
 	D_DEBUG(DB_MD, DF_CONT": destroying vos container\n",
 		DP_CONT(pool->spc_uuid, in->tdi_uuid));
@@ -1375,7 +1378,7 @@ ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 	if (rc != 0)
 		return rc;
 
-	if ((*ds_cont)->sc_stopping) {
+	if ((*ds_cont)->sc_stopping || (*ds_cont)->sc_destroying) {
 		cont_child_put(tls->dt_cont_cache, *ds_cont);
 		*ds_cont = NULL;
 		return -DER_SHUTDOWN;
@@ -1603,10 +1606,14 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		 *     but for creating rebuild global container handle.
 		 */
 		D_ASSERT(hdl->sch_cont != NULL);
+		D_ASSERT(hdl->sch_cont->sc_pool != NULL);
 		hdl->sch_cont->sc_open++;
 
 		if (hdl->sch_cont->sc_open > 1)
 			goto opened;
+
+		if (ds_pool_restricted(hdl->sch_cont->sc_pool->spc_pool, false))
+			goto csum_init;
 
 		rc = dtx_cont_open(hdl->sch_cont);
 		if (rc != 0) {
@@ -1635,10 +1642,8 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 			D_GOTO(err_dtx, rc);
 		}
 
-		D_ASSERT(hdl->sch_cont != NULL);
-		D_ASSERT(hdl->sch_cont->sc_pool != NULL);
+csum_init:
 		rc = ds_cont_csummer_init(hdl->sch_cont);
-
 		if (rc != 0)
 			D_GOTO(err_dtx, rc);
 	}
@@ -2603,6 +2608,13 @@ cont_child_prop_update(void *data)
 		return rc;
 	}
 	D_ASSERT(child != NULL);
+	if (child->sc_stopping || child->sc_destroying) {
+		D_ERROR(DF_CONT" is being stopping or destroyed (s=%d, d=%d)\n",
+			DP_CONT(arg->cpa_pool_uuid, arg->cpa_cont_uuid),
+			child->sc_stopping, child->sc_destroying);
+		rc = -DER_SHUTDOWN;
+		goto out;
+	}
 	daos_props_2cont_props(arg->cpa_prop, &child->sc_props);
 
 	iv_entry = daos_prop_entry_get(arg->cpa_prop, DAOS_PROP_CO_STATUS);

@@ -25,13 +25,10 @@ server_config:
 
 pool_size_ratio_80:
   size: 80%
-  control_method: dmg
 pool_size_ratio_40:
   size: 40%
-  control_method: dmg
 pool_size_ratio_66:
   size: 66%
-  control_method: dmg
 
 container_wo_rf:
   type: POSIX

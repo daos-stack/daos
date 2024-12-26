@@ -18,9 +18,9 @@ timeout: 170
 
 pool:
   scm_size: 1G
-  control_method: dmg
 
 container:
+  control_method: API
   akey_size: 5
   dkey_size: 5
   data_size: 32

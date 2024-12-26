@@ -17,4 +17,6 @@ server_config:
 
 pool:
   scm_size: 1G
-  control_method: dmg
+
+container:
+  control_method: API

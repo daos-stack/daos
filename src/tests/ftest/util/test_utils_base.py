@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -64,7 +64,6 @@ class TestDaosApiBase(ObjectWithParameters):
     # Constants to define whether to use API or a command to create and destroy
     # pools and containers.
     USE_API = "API"
-    USE_DMG = "dmg"
     USE_DAOS = "daos"
 
     def __init__(self, namespace):
@@ -79,9 +78,8 @@ class TestDaosApiBase(ObjectWithParameters):
 
         # Test yaml parameter used to define the control method:
         #   USE_API    - use the API methods to create/destroy containers
-        #   USE_DMG    - use the dmg command to create/destroy pools/containers
         #   USE_DAOS   - use the daos command to create/destroy pools/containers
-        self.control_method = BasicParameter(self.USE_API, self.USE_API)
+        self.control_method = BasicParameter(self.USE_DAOS, self.USE_DAOS)
 
     def _log_method(self, name, kwargs):
         """Log the method call with its arguments.

@@ -192,7 +192,7 @@ class TestContainerData():
                 "Error writing {}data (dkey={}, akey={}, data={}) to "
                 "container {}: {}".format(
                     "array " if isinstance(data, list) else "", dkey, akey,
-                    data, container.uuid, error)) from error
+                    data, str(container), error)) from error
 
     def write_object(self, container, record_qty, akey_size, dkey_size,
                      data_size, rank=None, obj_class=None, data_array_size=0):
@@ -272,7 +272,7 @@ class TestContainerData():
                 "Error reading {}data (dkey={}, akey={}, size={}) from "
                 "container {}: {}".format(
                     "array " if data_array_size > 0 else "", dkey, akey,
-                    data_size, container.uuid, error)) from error
+                    data_size, str(container), error)) from error
         return [data[:-1] for data in read_data] \
             if data_array_size > 0 else read_data.value
 
@@ -371,6 +371,7 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         self.daos_timeout = BasicParameter(None)
         self.label = BasicParameter(None, "TestContainer")
         self.label_generator = label_generator
+        self.attrs = BasicParameter(None)
 
         self.register_cleanup = BasicParameter(True, True)  # call register_cleanup by default
 
@@ -523,7 +524,8 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
                 "chunk_size": self.chunk_size.value,
                 "properties": self.properties.value,
                 "acl_file": self.acl_file.value,
-                "label": self.label.value
+                "label": self.label.value,
+                "attrs": self.attrs.value
             }
             self._log_method("daos.container_create", kwargs)
             result = self.daos.container_create(**kwargs)

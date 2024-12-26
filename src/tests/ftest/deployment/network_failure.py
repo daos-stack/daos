@@ -227,7 +227,7 @@ class NetworkFailureTest(IorTestBase):
 
         # 6. Call dmg pool query -b to find the disabled ranks.
         self.log_step("Find the disabled ranks.")
-        output = dmg_cmd.pool_query(pool=self.pool.identifier, show_disabled=True)
+        output = dmg_cmd.pool_query(pool=self.pool.identifier)
         disabled_ranks = output["response"].get("disabled_ranks")
         self.log.info("Disabled ranks = %s", disabled_ranks)
 

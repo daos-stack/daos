@@ -252,16 +252,18 @@ class DmgCommand(DmgCommandBase):
         self.timeout = saved_timeout
         return self.result
 
-    def storage_set_faulty(self, uuid, force=True):
+    def storage_set_faulty(self, host, uuid, force=True):
         """Get the result of the 'dmg storage set nvme-faulty' command.
 
         Args:
+            host (str): Identifier of host on which action should be performed.
             uuid (str): Device UUID to query.
             force (bool, optional): Force setting device state to FAULTY.
                 Defaults to True.
         """
         return self._get_json_result(
-            ("storage", "set", "nvme-faulty"), uuid=uuid, force=force)
+            ("storage", "set", "nvme-faulty"), host=host, uuid=uuid,
+            force=force)
 
     def storage_query_list_devices(self, rank=None, health=False, uuid=None):
         """Get the result of the 'dmg storage query list-devices' command.
@@ -338,13 +340,13 @@ class DmgCommand(DmgCommandBase):
         return self._get_json_result(
             ("storage", "led", "check"), ids=ids)
 
-    def storage_replace_nvme(self, old_uuid, new_uuid, no_reint=False):
+    def storage_replace_nvme(self, host, old_uuid, new_uuid):
         """Get the result of the 'dmg storage replace nvme' command.
 
         Args:
+            host (str): Identifier of host on which action should be performed.
             old_uuid (str): Old NVME Device ID.
             new_uuid (str): New NVME Device ID replacing the old device.
-            no_reint (bool, optional): Don't perform reintegration. Defaults to False.
 
         Returns:
             dict: JSON formatted dmg command result.
@@ -354,8 +356,8 @@ class DmgCommand(DmgCommandBase):
 
         """
         return self._get_json_result(
-            ("storage", "replace", "nvme"), old_uuid=old_uuid,
-            new_uuid=new_uuid, no_reint=no_reint)
+            ("storage", "replace", "nvme"), host=host, old_uuid=old_uuid,
+            new_uuid=new_uuid)
 
     def storage_scan_nvme_health(self):
         """Get the result of the 'dmg storage scan --nvme-health' command.
@@ -599,8 +601,11 @@ class DmgCommand(DmgCommandBase):
         #     0,
         #     1
         #   ],
-        #   "scm_bytes": 256000000,
-        #   "nvme_bytes": 0
+        #   "tier_bytes": [
+        #     256000000,
+        #     0
+        #   ],
+        #   "mem_file_bytes": 0
         # },
         # "error": null,
         # "status": 0
@@ -620,16 +625,17 @@ class DmgCommand(DmgCommandBase):
         data["ranks"] = ",".join([str(r) for r in output["response"]["tgt_ranks"]])
         data["scm_per_rank"] = output["response"]["tier_bytes"][0]
         data["nvme_per_rank"] = output["response"]["tier_bytes"][1]
+        data["memfile_per_rank"] = output["response"]["mem_file_bytes"]
 
         return data
 
-    def pool_query(self, pool, show_enabled=False, show_disabled=False):
+    def pool_query(self, pool, show_enabled=False, health_only=False):
         """Query a pool with the dmg command.
 
         Args:
             pool (str): Pool UUID or label to query.
             show_enabled (bool, optional): Display enabled ranks.
-            show_disabled (bool, optional): Display disabled ranks.
+            health_only (bool, optional): Only perform pool health related queries.
 
         Raises:
             CommandFailure: if the dmg pool query command fails.
@@ -676,7 +682,7 @@ class DmgCommand(DmgCommandBase):
         #     "status": 0
         # }
         return self._get_json_result(("pool", "query"), pool=pool,
-                                     show_enabled=show_enabled, show_disabled=show_disabled)
+                                     show_enabled=show_enabled, health_only=health_only)
 
     def pool_query_targets(self, pool, rank=None, target_idx=None):
         """Call dmg pool query-targets.
@@ -1210,13 +1216,13 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_result(("pool", "evict"), pool=pool)
 
-    def config_generate(self, access_points, num_engines=None, scm_only=False,
+    def config_generate(self, mgmt_svc_replicas, num_engines=None, scm_only=False,
                         net_class=None, net_provider=None, use_tmpfs_scm=False,
                         control_metadata_path=None):
         """Produce a server configuration.
 
         Args:
-            access_points (str): Comma separated list of access point addresses.
+            mgmt_svc_replicas (str): Comma separated list of MS replica addresses.
             num_pmem (int): Number of SCM (pmem) devices required per
                 storage host in DAOS system. Defaults to None.
             scm_only (bool, option): Whether to omit NVMe from generated config.
@@ -1236,7 +1242,7 @@ class DmgCommand(DmgCommandBase):
 
         """
         return self._get_result(
-            ("config", "generate"), access_points=access_points,
+            ("config", "generate"), mgmt_svc_replicas=mgmt_svc_replicas,
             num_engines=num_engines, scm_only=scm_only, net_class=net_class,
             net_provider=net_provider, use_tmpfs_scm=use_tmpfs_scm,
             control_metadata_path=control_metadata_path)

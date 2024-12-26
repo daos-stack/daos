@@ -579,51 +579,6 @@ abt_init(int argc, char *argv[])
 		return dss_abterr2der(rc);
 	}
 
-#ifdef ULT_MMAP_STACK
-	FILE *fp;
-
-	/* read vm.max_map_count from /proc instead of using sysctl() API
-	 * as it seems the preferred way ...
-	 */
-	fp = fopen("/proc/sys/vm/max_map_count", "r");
-	if (fp == NULL) {
-		D_ERROR("Unable to open /proc/sys/vm/max_map_count: %s\n",
-			strerror(errno));
-	} else {
-		int n;
-
-		n = fscanf(fp, "%d", &max_nb_mmap_stacks);
-		if (n == EOF) {
-			D_ERROR("Unable to read vm.max_map_count value: %s\n",
-				strerror(errno));
-			/* just in case, to ensure value can be later safely
-			 * compared and thus no ULT stack be mmap()'ed
-			 */
-			max_nb_mmap_stacks = 0;
-		} else {
-			/* need a minimum value to start mmap() ULT stacks */
-			if (max_nb_mmap_stacks < MIN_VM_MAX_MAP_COUNT) {
-				D_WARN("vm.max_map_count (%d) value is too low (< %d) to start mmap() ULT stacks\n",
-				       max_nb_mmap_stacks, MIN_VM_MAX_MAP_COUNT);
-				max_nb_mmap_stacks = 0;
-			} else {
-				/* consider half can be used to mmap() ULT
-				 * stacks
-				 */
-				max_nb_mmap_stacks /= 2;
-				D_INFO("Will be able to mmap() %d ULT stacks\n",
-				       max_nb_mmap_stacks);
-			}
-		}
-	}
-
-	rc = ABT_key_create(free_stack, &stack_key);
-	if (rc != ABT_SUCCESS) {
-		D_ERROR("ABT key for stack create failed: %d\n", rc);
-		ABT_finalize();
-		return dss_abterr2der(rc);
-	}
-#endif
 	dss_abt_init = true;
 
 	return 0;
@@ -632,9 +587,6 @@ abt_init(int argc, char *argv[])
 static void
 abt_fini(void)
 {
-#ifdef ULT_MMAP_STACK
-	ABT_key_free(&stack_key);
-#endif
 	dss_abt_init = false;
 	ABT_finalize();
 }
@@ -1191,6 +1143,7 @@ main(int argc, char **argv)
 	sigdelset(&set, SIGFPE);
 	sigdelset(&set, SIGBUS);
 	sigdelset(&set, SIGSEGV);
+	sigdelset(&set, SIGTRAP);
 	/** also allow abort()/assert() to trigger */
 	sigdelset(&set, SIGABRT);
 
@@ -1281,6 +1234,8 @@ main(int argc, char **argv)
 		if (sig == SIGUSR1) {
 			D_INFO("got SIGUSR1, dumping Argobots infos and ULTs stacks\n");
 			dss_dump_ABT_state(abt_infos);
+			/* re-add SIGUSR1 to set */
+			sigaddset(&set, SIGUSR1);
 			continue;
 		}
 
@@ -1292,6 +1247,8 @@ main(int argc, char **argv)
 			ABT_info_trigger_print_all_thread_stacks(abt_infos,
 								 10.0, NULL,
 								 NULL);
+			/* re-add SIGUSR2 to set */
+			sigaddset(&set, SIGUSR2);
 			continue;
 		}
 
