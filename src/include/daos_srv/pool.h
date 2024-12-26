@@ -86,17 +86,13 @@ struct ds_pool {
 				sp_cr_checked:1,
 				sp_immutable:1,
 				sp_fetch_hdls:1,
-				sp_need_discard:1,
 				sp_disable_rebuild:1,
 				sp_disable_dtx_resync:1;
 	/* pool_uuid + map version + leader term + rebuild generation define a
 	 * rebuild job.
 	 */
 	uint32_t		sp_rebuild_gen;
-
 	int			sp_rebuilding;
-
-	int			sp_discard_status;
 	/** path to ephemeral metrics */
 	char			sp_path[D_TM_MAX_NAME_LEN];
 
@@ -183,8 +179,7 @@ struct ds_pool_child {
 	int		spc_ref;
 	ABT_eventual	spc_ref_eventual;
 
-	uint64_t	spc_discard_done:1,
-			spc_no_storage:1; /* The pool shard has no storage. */
+	uint64_t	spc_no_storage:1; /* The pool shard has no storage. */
 
 	uint32_t	spc_reint_mode;
 	uint32_t	*spc_state;	/* Pointer to ds_pool->sp_states[i] */

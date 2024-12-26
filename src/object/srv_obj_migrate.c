@@ -3251,27 +3251,6 @@ migrate_obj_ult(void *data)
 		D_GOTO(free_notls, rc);
 	}
 
-	/* Only reintegrating targets/pool needs to discard the object,
-	 * if sp_need_discard is 0, either the target does not need to
-	 * discard, or discard has been done. spc_discard_done means
-	 * discarding has been done in the current VOS target.  lxzlxz
-	 */
-	if (tls->mpt_pool->spc_pool->sp_need_discard) {
-		while(!tls->mpt_pool->spc_discard_done) {
-			D_DEBUG(DB_REBUILD, DF_RB ": wait for discard to finish.\n",
-				DP_RB_MPT(tls));
-			dss_sleep(2 * 1000);
-			if (tls->mpt_fini)
-				D_GOTO(free_notls, rc);
-		}
-		if (tls->mpt_pool->spc_pool->sp_discard_status) {
-			rc = tls->mpt_pool->spc_pool->sp_discard_status;
-			D_DEBUG(DB_REBUILD, DF_RB ": discard failure: " DF_RC "\n", DP_RB_MPT(tls),
-				DP_RC(rc));
-			D_GOTO(out, rc);
-		}
-	}
-
 	if (!tls->mpt_reintegrating_check) {
 		struct pool_target *target;
 		struct ds_pool *pool = tls->mpt_pool->spc_pool;
