@@ -612,6 +612,29 @@ func CollectMetrics(ctx context.Context, s *Schema, out chan<- Metric) error {
 	return nil
 }
 
+type pruneMap map[string]struct{}
+
+func (pm pruneMap) add(path string) {
+	pm[path] = struct{}{}
+}
+
+func (pm pruneMap) removeParents(path string) {
+	for parent := range pm {
+		if strings.HasPrefix(path, parent) {
+			delete(pm, parent)
+		}
+	}
+}
+
+func (pm pruneMap) toPrune() []string {
+	var paths []string
+	for path := range pm {
+		paths = append(paths, path)
+	}
+	sort.Sort(sort.Reverse(sort.StringSlice(paths)))
+	return paths
+}
+
 // PruneUnusedSegments removes shared memory segments associated with
 // unused ephemeral subdirectories.
 func PruneUnusedSegments(ctx context.Context, maxSegAge time.Duration) error {
@@ -628,7 +651,7 @@ func PruneUnusedSegments(ctx context.Context, maxSegAge time.Duration) error {
 		return errors.New("invalid handle")
 	}
 
-	var toPrune []string
+	pruneCandidates := make(pruneMap)
 	procNode := func(hdl *handle, id string, node *C.struct_d_tm_node_t) {
 		if node == nil || node.dtn_type != C.D_TM_DIRECTORY {
 			return
@@ -652,21 +675,22 @@ func PruneUnusedSegments(ctx context.Context, maxSegAge time.Duration) error {
 		// If the creator process was someone other than us, and it's still
 		// around, don't mess with the segment.
 		if _, err := common.GetProcName(st.Cpid()); err == nil && st.Cpid() != unix.Getpid() {
+			pruneCandidates.removeParents(path)
 			return
 		}
 
 		if time.Since(st.Ctime()) <= maxSegAge {
+			pruneCandidates.removeParents(path)
 			return
 		}
 
-		log.Tracef("adding %s to prune list", path)
-		toPrune = append(toPrune, path)
+		log.Tracef("adding %s to prune candidates list", path)
+		pruneCandidates.add(path)
 	}
 
 	visit(hdl, hdl.root, "", true, procNode)
 
-	sort.Sort(sort.Reverse(sort.StringSlice(toPrune)))
-	for _, path := range toPrune {
+	for _, path := range pruneCandidates.toPrune() {
 		log.Tracef("pruning %s", path)
 		if err := removeLink(hdl, path); err != nil {
 			log.Errorf("failed to prune %s: %s", path, err)
