@@ -663,21 +663,9 @@
    fun:runtime/internal/syscall.Syscall6
 }
 {
-   __tsan_go_atomic32_load
+   __tsan_go_ all
    Memcheck:Addr4
-   fun:__tsan_go_atomic32_load
-   fun:racecall
-}
-{
-   __tsan_go_atomic32_store
-   Memcheck:Addr4
-   fun:__tsan_go_atomic32_store
-   fun:racecall
-}
-{
-   __tsan_go_atomic32_compare_exchange
-   Memcheck:Addr4
-   fun:__tsan_go_atomic32_compare_exchange
+   fun:__tsan_go*
    fun:racecall
 }
 {
