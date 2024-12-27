@@ -922,6 +922,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t xoh, struct dtx_epoch *epoch, 
 	dth->dth_for_migration = (flags & DTX_FOR_MIGRATION) ? 1 : 0;
 	dth->dth_ignore_uncommitted = (flags & DTX_IGNORE_UNCOMMITTED) ? 1 : 0;
 	dth->dth_prepared = (flags & DTX_PREPARED) ? 1 : 0;
+	dth->dth_epoch_owner = (flags & DTX_EPOCH_OWNER) ? 1 : 0;
 	dth->dth_aborted = 0;
 	dth->dth_already = 0;
 	dth->dth_need_validation = 0;
@@ -1852,6 +1853,8 @@ dtx_cont_register(struct ds_cont_child *cont)
 			DP_RC(rc));
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
+
+	cont->sc_agg_eph_gap = d_sec2hlc(vos_get_agg_gap());
 
 	ds_cont_child_get(cont);
 	dbca->dbca_refs = 0;
