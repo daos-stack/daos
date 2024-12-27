@@ -29,7 +29,6 @@ struct dfuse_info {
 	char                *di_mountpoint;
 	int32_t              di_thread_count;
 	uint32_t             di_eq_count;
-	bool                 di_threaded;
 	bool                 di_foreground;
 	bool                 di_caching;
 	bool                 di_multi_user;
@@ -137,9 +136,10 @@ struct dfuse_inode_entry;
  * when EOF is returned to the kernel.  If it's still present on release then it's freed then.
  */
 struct dfuse_pre_read {
-	pthread_mutex_t     dra_lock;
+	d_list_t            req_list;
 	struct dfuse_event *dra_ev;
 	int                 dra_rc;
+	bool                complete;
 };
 
 /** what is returned as the handle for fuse fuse_file_info on create/open/opendir */
@@ -148,8 +148,6 @@ struct dfuse_obj_hdl {
 	dfs_t                    *doh_dfs;
 	/** the DFS object handle.  Not created for directories. */
 	dfs_obj_t                *doh_obj;
-
-	struct dfuse_pre_read    *doh_readahead;
 
 	/** the inode entry for the file */
 	struct dfuse_inode_entry *doh_ie;
@@ -169,16 +167,23 @@ struct dfuse_obj_hdl {
 	/* Pointer to the last returned drc entry */
 	struct dfuse_readdir_c   *doh_rd_nextc;
 
-	/* Linear read function, if a file is read from start to end then this normally requires
-	 * a final read request at the end of the file that returns zero bytes.  Detect this case
-	 * and when the final read is detected then just return without a round trip.
-	 * Store a flag for this being enabled (starts as true, but many I/O patterns will set it
-	 * to false), the expected position of the next read and a boolean for if EOF has been
-	 * detected.
+	/* Linear read tracking.  If a file is opened and read from start to finish then this is
+	 * called a linear read, linear reads however may or may not read EOF at the end of a file,
+	 * as the reader may be checking the file size.
+	 *
+	 * Detect this case and track it at the file handle level, this is then used in two places:
+	 *  For read of EOF it means the round-trip can be avoided.
+	 *  On release we can use this flag to apply a setting to the directory inode.
+	 *
+	 * This flag starts enabled and many I/O patterns will disable it.  We also store the next
+	 * expected read position and if EOF has been reached.
 	 */
+
 	off_t                     doh_linear_read_pos;
 	bool                      doh_linear_read;
 	bool                      doh_linear_read_eof;
+
+	bool                      doh_set_linear_read;
 
 	/** True if caching is enabled for this file. */
 	bool                      doh_caching;
@@ -401,11 +406,20 @@ struct dfuse_event {
 	d_iov_t          de_iov;
 	d_sg_list_t      de_sgl;
 	d_list_t         de_list;
+
+	/* Position in a list of events, this will either be off active->open_reads or
+	 * de->de_read_slaves.
+	 */
+	d_list_t         de_read_list;
+	/* List of slave events */
+	d_list_t         de_read_slaves;
 	struct dfuse_eq *de_eqt;
 	union {
 		struct dfuse_obj_hdl     *de_oh;
 		struct dfuse_inode_entry *de_ie;
+		struct read_chunk_data   *de_cd;
 	};
+	struct dfuse_info *de_di;
 	off_t  de_req_position; /**< The file position requested by fuse */
 	union {
 		size_t de_req_len;
@@ -1009,9 +1023,31 @@ struct dfuse_inode_entry {
 	 */
 	ATOMIC bool               ie_linear_read;
 
+	struct active_inode      *ie_active;
+
 	/* Entry on the evict list */
 	d_list_t                  ie_evict_entry;
 };
+
+struct active_inode {
+	d_list_t               chunks;
+	d_list_t               open_reads;
+	pthread_spinlock_t     lock;
+	ATOMIC uint64_t        read_count;
+	struct dfuse_pre_read *readahead;
+};
+
+/* Increase active count on inode.  This takes a reference and allocates ie->active as required */
+int
+active_ie_init(struct dfuse_inode_entry *ie, bool *preread);
+
+/* Mark a oh as closing and drop the ref on inode active */
+void
+active_oh_decref(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh);
+
+/* Decrease active count on inode, called on error where there is no oh */
+void
+active_ie_decref(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie);
 
 /* Flush write-back cache writes to a inode.  It does this by waiting for and then releasing an
  * exclusive lock on the inode.  Writes take a shared lock so this will block until all pending
@@ -1107,6 +1143,13 @@ dfuse_compute_inode(struct dfuse_cont *dfs,
  */
 void
 dfuse_cache_evict_dir(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie);
+
+/* Free any read chunk data for an inode.
+ *
+ * Returns true if feature was used.
+ */
+bool
+read_chunk_close(struct dfuse_inode_entry *ie);
 
 /* Metadata caching functions. */
 
