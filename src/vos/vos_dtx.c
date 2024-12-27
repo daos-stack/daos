@@ -175,7 +175,7 @@ out:
 
 static void
 dtx_act_ent_cleanup(struct vos_container *cont, struct vos_dtx_act_ent *dae,
-		    struct dtx_handle *dth, bool evict)
+		    struct dtx_handle *dth, bool evict, bool keep_df)
 {
 	if (evict) {
 		daos_unit_oid_t	*oids;
@@ -211,8 +211,10 @@ dtx_act_ent_cleanup(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 	dae->dae_rec_cap = 0;
 	DAE_REC_CNT(dae) = 0;
 
-	dae->dae_df_off = UMOFF_NULL;
-	dae->dae_dbd = NULL;
+	if (!keep_df) {
+		dae->dae_df_off = UMOFF_NULL;
+		dae->dae_dbd = NULL;
+	}
 }
 
 static int
@@ -271,7 +273,7 @@ dtx_act_ent_free(struct btr_instance *tins, struct btr_record *rec,
 		D_ASSERT(dae != NULL);
 		*(struct vos_dtx_act_ent **)args = dae;
 	} else if (dae != NULL) {
-		dtx_act_ent_cleanup(tins->ti_priv, dae, NULL, true);
+		dtx_act_ent_cleanup(tins->ti_priv, dae, NULL, true, false);
 	}
 
 	return 0;
@@ -645,8 +647,7 @@ do_dtx_rec_release(struct umem_instance *umm, struct vos_container *cont,
 }
 
 static int
-dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae,
-		bool abort)
+dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae, bool abort, bool keep_act)
 {
 	struct umem_instance		*umm = vos_cont2umm(cont);
 	struct vos_dtx_act_ent_df	*dae_df;
@@ -679,13 +680,6 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 		   abort ? "abort" : "commit", DP_DTI(&DAE_XID(dae)), dbd,
 		   DP_UUID(cont->vc_pool->vp_id), DP_UUID(cont->vc_id));
 
-	if (!UMOFF_IS_NULL(dae_df->dae_mbs_off)) {
-		/* dae_mbs_off will be invalid via flag DTE_INVALID. */
-		rc = umem_free(umm, dae_df->dae_mbs_off);
-		if (rc != 0)
-			return rc;
-	}
-
 	if (dae->dae_records != NULL) {
 		D_ASSERT(DAE_REC_CNT(dae) > DTX_INLINE_REC_CNT);
 
@@ -711,6 +705,35 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 
 	if (!UMOFF_IS_NULL(dae_df->dae_rec_off)) {
 		rc = umem_free(umm, dae_df->dae_rec_off);
+		if (rc != 0)
+			return rc;
+	}
+
+	if (keep_act) {
+		/*
+		 * If it is required to keep the active DTX entry, then it must be for partial
+		 * commit. Let's mark it as DTE_PARTIAL_COMMITTED.
+		 */
+		if ((DAE_FLAGS(dae) & DTE_PARTIAL_COMMITTED))
+			return 0;
+
+		rc = umem_tx_add_ptr(umm, &dae_df->dae_rec_off, sizeof(dae_df->dae_rec_off));
+		if (rc != 0)
+			return rc;
+
+		rc = umem_tx_add_ptr(umm, &dae_df->dae_flags, sizeof(dae_df->dae_flags));
+		if (rc != 0)
+			return rc;
+
+		dae_df->dae_rec_off = UMOFF_NULL;
+		dae_df->dae_flags |= DTE_PARTIAL_COMMITTED;
+
+		return 0;
+	}
+
+	if (!UMOFF_IS_NULL(dae_df->dae_mbs_off)) {
+		/* dae_mbs_off will be invalid via flag DTE_INVALID. */
+		rc = umem_free(umm, dae_df->dae_mbs_off);
 		if (rc != 0)
 			return rc;
 	}
@@ -786,7 +809,7 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 
 static int
 vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti, daos_epoch_t epoch,
-		   daos_epoch_t cmt_time, struct vos_dtx_cmt_ent **dce_p,
+		   daos_epoch_t cmt_time, bool keep_act, struct vos_dtx_cmt_ent **dce_p,
 		   struct vos_dtx_act_ent **dae_p, bool *rm_cos)
 {
 	struct vos_dtx_act_ent		*dae = NULL;
@@ -835,7 +858,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti, daos_epoch_t 
 			rc = dbtree_delete(cont->vc_dtx_active_hdl,
 					   BTR_PROBE_BYPASS, &kiov, &dae);
 			if (rc == 0) {
-				dtx_act_ent_cleanup(cont, dae, NULL, false);
+				dtx_act_ent_cleanup(cont, dae, NULL, false, false);
 				dtx_evict_lid(cont, dae);
 			}
 
@@ -849,43 +872,48 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti, daos_epoch_t 
 			D_GOTO(out, rc = -DER_ALREADY);
 	}
 
-	D_ALLOC_PTR(dce);
-	if (dce == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+	/* Generate committed DTX entry when it is not required to keep the active DTX entry. */
+	if (!keep_act) {
+		D_ALLOC_PTR(dce);
+		if (dce == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
 
-	DCE_CMT_TIME(dce) = cmt_time;
-	if (dae != NULL) {
-		DCE_XID(dce) = DAE_XID(dae);
-		DCE_EPOCH(dce) = DAE_EPOCH(dae);
+		DCE_CMT_TIME(dce) = cmt_time;
+		if (dae != NULL) {
+			DCE_XID(dce) = DAE_XID(dae);
+			DCE_EPOCH(dce) = DAE_EPOCH(dae);
+		} else {
+			struct dtx_handle	*dth = vos_dth_get(false);
+
+			D_ASSERT(!cont->vc_pool->vp_sysdb);
+			D_ASSERT(dtx_is_valid_handle(dth));
+			D_ASSERT(dth->dth_solo);
+
+			dae = dth->dth_ent;
+			D_ASSERT(dae != NULL);
+
+			DCE_XID(dce) = *dti;
+			DCE_EPOCH(dce) = dth->dth_epoch;
+		}
+
+		d_iov_set(&riov, dce, sizeof(*dce));
+		rc = dbtree_upsert(cont->vc_dtx_committed_hdl, BTR_PROBE_EQ,
+				   DAOS_INTENT_UPDATE, &kiov, &riov, NULL);
+		if (rc != 0)
+			goto out;
+
+		*dce_p = dce;
+		dce = NULL;
 	} else {
-		struct dtx_handle	*dth = vos_dth_get(false);
-
-		D_ASSERT(!cont->vc_pool->vp_sysdb);
-		D_ASSERT(dtx_is_valid_handle(dth));
-		D_ASSERT(dth->dth_solo);
-
-		dae = dth->dth_ent;
-		D_ASSERT(dae != NULL);
-
-		DCE_XID(dce) = *dti;
-		DCE_EPOCH(dce) = dth->dth_epoch;
+		D_ASSERT(rm_cos == NULL);
 	}
-
-	d_iov_set(&riov, dce, sizeof(*dce));
-	rc = dbtree_upsert(cont->vc_dtx_committed_hdl, BTR_PROBE_EQ,
-			   DAOS_INTENT_UPDATE, &kiov, &riov, NULL);
-	if (rc != 0)
-		goto out;
-
-	*dce_p = dce;
-	dce = NULL;
 
 	dae->dae_committing = 1;
 
 	if (epoch != 0)
 		goto out;
 
-	rc = dtx_rec_release(cont, dae, false);
+	rc = dtx_rec_release(cont, dae, false, keep_act);
 	if (rc != 0)
 		goto out;
 
@@ -1692,7 +1720,7 @@ vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p)
 			dae->dae_committing = 1;
 		else
 			rc = vos_dtx_commit_internal(cont, &dth->dth_xid, 1,
-						     dth->dth_epoch, NULL, NULL, dce_p);
+						     dth->dth_epoch, false, NULL, NULL, dce_p);
 		dth->dth_active = 0;
 		dth->dth_pinned = 0;
 		if (rc >= 0) {
@@ -2008,7 +2036,7 @@ vos_dtx_load_mbs(daos_handle_t coh, struct dtx_id *dti, daos_unit_oid_t *oid,
 
 int
 vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id dtis[],
-			int count, daos_epoch_t epoch, bool rm_cos[],
+			int count, daos_epoch_t epoch, bool keep_act, bool rm_cos[],
 			struct vos_dtx_act_ent **daes, struct vos_dtx_cmt_ent **dces)
 {
 	struct vos_cont_df		*cont_df = cont->vc_cont_df;
@@ -2041,7 +2069,7 @@ vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id dtis[],
 
 again:
 	for (j = dbd->dbd_count; j < dbd->dbd_cap && i < count; i++) {
-		rc = vos_dtx_commit_one(cont, &dtis[i], epoch, cmt_time, &dces[i],
+		rc = vos_dtx_commit_one(cont, &dtis[i], epoch, cmt_time, keep_act, &dces[i],
 					daes != NULL ? &daes[i] : NULL,
 					rm_cos != NULL ? &rm_cos[i] : NULL);
 		if (rc == 0 && (daes == NULL || daes[i] != NULL))
@@ -2142,7 +2170,7 @@ void
 vos_dtx_post_handle(struct vos_container *cont,
 		    struct vos_dtx_act_ent **daes,
 		    struct vos_dtx_cmt_ent **dces,
-		    int count, bool abort, bool rollback)
+		    int count, bool abort, bool rollback, bool keep_act)
 {
 	d_iov_t		kiov;
 	int		rc;
@@ -2201,6 +2229,18 @@ vos_dtx_post_handle(struct vos_container *cont,
 		if (daes[i] == NULL)
 			continue;
 
+		/*
+		 * If it is required to keep the active DTX entry, then it must be for partial
+		 * commit. Let's mark it as DTE_PARTIAL_COMMITTED.
+		 */
+		if (!abort && keep_act) {
+			DAE_FLAGS(daes[i]) |= DTE_PARTIAL_COMMITTED;
+
+			daes[i]->dae_committing = 0;
+			dtx_act_ent_cleanup(cont, daes[i], NULL, false, true);
+			continue;
+		}
+
 		d_iov_set(&kiov, &DAE_XID(daes[i]), sizeof(DAE_XID(daes[i])));
 		rc = dbtree_delete(cont->vc_dtx_active_hdl, BTR_PROBE_EQ,
 				   &kiov, NULL);
@@ -2223,13 +2263,13 @@ vos_dtx_post_handle(struct vos_container *cont,
 
 				daes[i]->dae_aborted = 1;
 				daes[i]->dae_aborting = 0;
-				dtx_act_ent_cleanup(cont, daes[i], NULL, true);
+				dtx_act_ent_cleanup(cont, daes[i], NULL, true, false);
 			} else {
 				D_ASSERT(daes[i]->dae_aborting == 0);
 
 				daes[i]->dae_committed = 1;
 				daes[i]->dae_committing = 0;
-				dtx_act_ent_cleanup(cont, daes[i], NULL, false);
+				dtx_act_ent_cleanup(cont, daes[i], NULL, false, false);
 			}
 			DAE_FLAGS(daes[i]) &= ~(DTE_CORRUPTED | DTE_ORPHAN | DTE_PARTIAL_COMMITTED);
 		}
@@ -2361,7 +2401,7 @@ out:
 }
 
 int
-vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool rm_cos[])
+vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool keep_act, bool rm_cos[])
 {
 	struct vos_dtx_act_ent	**daes = NULL;
 	struct vos_dtx_cmt_ent	**dces = NULL;
@@ -2396,7 +2436,7 @@ pin_objects:
 	/* Commit multiple DTXs via single local transaction. */
 	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
 	if (rc == 0) {
-		committed = vos_dtx_commit_internal(cont, &dtis[idx], pinned, 0,
+		committed = vos_dtx_commit_internal(cont, &dtis[idx], pinned, 0, keep_act,
 						    rm_cos != NULL ? &rm_cos[idx] : NULL,
 						    &daes[idx], &dces[idx]);
 		if (committed >= 0) {
@@ -2406,7 +2446,7 @@ pin_objects:
 		} else {
 			rc = umem_tx_abort(vos_cont2umm(cont), committed);
 		}
-		vos_dtx_post_handle(cont, &daes[idx], &dces[idx], pinned, false, rc != 0);
+		vos_dtx_post_handle(cont, &daes[idx], &dces[idx], pinned, false, rc != 0, keep_act);
 	}
 
 	dtx_unpin(cont, pin_hdl);
@@ -2477,7 +2517,7 @@ vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, 
 		dth->dth_need_validation = 1;
 	}
 
-	rc = dtx_rec_release(cont, dae, true);
+	rc = dtx_rec_release(cont, dae, true, false);
 	dae->dae_preparing = 0;
 	if (rc == 0) {
 		dae->dae_aborting = 1;
@@ -2507,7 +2547,7 @@ out:
 	dtx_unpin(cont, pin_hdl);
 
 	if (rc == 0 || force)
-		vos_dtx_post_handle(cont, &dae, NULL, 1, true, false);
+		vos_dtx_post_handle(cont, &dae, NULL, 1, true, false, false);
 	else if (rc != 0)
 		dae->dae_aborting = 0;
 
@@ -2553,7 +2593,7 @@ vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch)
 		 * table at that time, then need to be removed again via vos_dtx_post_handle.
 		 */
 		if (dae->dae_aborted)
-			vos_dtx_post_handle(cont, &dae, NULL, 1, true, false);
+			vos_dtx_post_handle(cont, &dae, NULL, 1, true, false, false);
 
 		D_GOTO(out, rc = -DER_ALREADY);
 	}
@@ -2634,9 +2674,6 @@ out:
 	DL_CDEBUG(rc != 0, DLOG_ERR, DLOG_WARN, rc, "Mark the DTX entry " DF_DTI " as %s",
 		  DP_DTI(dti), vos_dtx_flags2name(flags));
 
-	if ((rc == -DER_NO_PERM || rc == -DER_NONEXIST) && flags == DTE_PARTIAL_COMMITTED)
-		rc = 0;
-
 	return rc;
 }
 
@@ -2655,7 +2692,7 @@ vos_dtx_set_flags(daos_handle_t coh, struct dtx_id dtis[], int count, uint32_t f
 	D_ASSERT(cont != NULL);
 
 	/* Only allow set single flags. */
-	if (flags != DTE_CORRUPTED && flags != DTE_ORPHAN && flags != DTE_PARTIAL_COMMITTED) {
+	if (flags != DTE_CORRUPTED && flags != DTE_ORPHAN) {
 		D_ERROR("Try to set unrecognized flags %x on DTX "DF_DTI", count %u\n",
 			flags, DP_DTI(&dtis[0]), count);
 		D_GOTO(out, rc = -DER_INVAL);
@@ -3147,7 +3184,7 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth)
 		 */
 		if (dae != NULL) {
 			D_ASSERT(!vos_dae_is_prepare(dae));
-			dtx_act_ent_cleanup(cont, dae, dth, true);
+			dtx_act_ent_cleanup(cont, dae, dth, true, false);
 		}
 	} else {
 		d_iov_set(&kiov, &dth->dth_xid, sizeof(dth->dth_xid));
@@ -3170,7 +3207,7 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth)
 		if (DAE_EPOCH(dae) != dth->dth_epoch)
 			goto out;
 
-		dtx_act_ent_cleanup(cont, dae, dth, true);
+		dtx_act_ent_cleanup(cont, dae, dth, true, false);
 
 		rc = dbtree_delete(cont->vc_dtx_active_hdl,
 				   riov.iov_buf != NULL ? BTR_PROBE_BYPASS : BTR_PROBE_EQ,
@@ -3308,7 +3345,7 @@ out:
 
 			dae->dae_preparing = 0;
 			if (dth->dth_solo)
-				vos_dtx_post_handle(cont, &dae, &dce, 1, false, rc != 0);
+				vos_dtx_post_handle(cont, &dae, &dce, 1, false, rc != 0, false);
 			else if (rc == 0)
 				dae->dae_prepared = 1;
 		}
