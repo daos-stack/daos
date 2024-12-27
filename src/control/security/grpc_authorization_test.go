@@ -77,7 +77,6 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		"/mgmt.MgmtSvc/SystemStart":              {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemExclude":            {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemDrain":              {ComponentAdmin},
-		"/mgmt.MgmtSvc/SystemReint":              {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolCreate":               {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolDestroy":              {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolQuery":                {ComponentAdmin},

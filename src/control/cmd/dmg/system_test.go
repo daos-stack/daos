@@ -289,7 +289,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system reintegrate --rank-hosts foo-[0,1,4]",
 			strings.Join([]string{
 				printRequest(t, withSystem(
-					withHosts(&control.SystemReintReq{}, "foo-[0-1,4]"),
+					withHosts(&control.SystemDrainReq{Reint: true}, "foo-[0-1,4]"),
 					"daos_server")),
 			}, " "),
 			nil,
@@ -299,7 +299,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system reintegrate --ranks 0,1,4",
 			strings.Join([]string{
 				printRequest(t, withSystem(
-					withRanks(&control.SystemReintReq{}, 0, 1, 4),
+					withRanks(&control.SystemDrainReq{Reint: true}, 0, 1, 4),
 					"daos_server")),
 			}, " "),
 			nil,

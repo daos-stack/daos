@@ -1089,13 +1089,13 @@ func TestControl_SystemDrain(t *testing.T) {
 		"dual pools; single rank": {
 			req: new(SystemDrainReq),
 			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemDrainResp{
-				Results: []*mgmtpb.SystemOsaResult{
+				Results: []*mgmtpb.PoolRankResult{
 					{PoolId: test.MockUUID(1), Ranks: "1"},
 					{PoolId: test.MockUUID(2), Ranks: "1"},
 				},
 			}),
 			expResp: &SystemDrainResp{
-				Results: []*SystemOsaResult{
+				Results: []*PoolRankResult{
 					{PoolID: test.MockUUID(1), Ranks: "1"},
 					{PoolID: test.MockUUID(2), Ranks: "1"},
 				},
@@ -1104,7 +1104,7 @@ func TestControl_SystemDrain(t *testing.T) {
 		"dual pools; single rank; with errors": {
 			req: new(SystemDrainReq),
 			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemDrainResp{
-				Results: []*mgmtpb.SystemOsaResult{
+				Results: []*mgmtpb.PoolRankResult{
 					{
 						PoolId: test.MockUUID(1), Ranks: "1",
 						Status: -1, Msg: "fail1",
@@ -1116,7 +1116,7 @@ func TestControl_SystemDrain(t *testing.T) {
 				},
 			}),
 			expResp: &SystemDrainResp{
-				Results: []*SystemOsaResult{
+				Results: []*PoolRankResult{
 					{
 						PoolID: test.MockUUID(1), Ranks: "1",
 						Status: -1, Msg: "fail1",
@@ -1147,100 +1147,6 @@ func TestControl_SystemDrain(t *testing.T) {
 
 			cmpOpts := []cmp.Option{
 				cmpopts.IgnoreUnexported(SystemDrainResp{}),
-			}
-			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
-				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
-			}
-
-			test.CmpErr(t, tc.expRespErr, gotResp.Errors())
-		})
-	}
-}
-
-func TestControl_SystemReint(t *testing.T) {
-	for name, tc := range map[string]struct {
-		req        *SystemReintReq
-		uErr       error
-		uResp      *UnaryResponse
-		expErr     error
-		expResp    *SystemReintResp
-		expRespErr error
-	}{
-		"nil req": {
-			req:    nil,
-			expErr: errors.New("nil *control.SystemReintReq request"),
-		},
-		"local failure": {
-			req:    new(SystemReintReq),
-			uErr:   errors.New("local failed"),
-			expErr: errors.New("local failed"),
-		},
-		"remote failure": {
-			req:    new(SystemReintReq),
-			uResp:  MockMSResponse("host1", errors.New("remote failed"), nil),
-			expErr: errors.New("remote failed"),
-		},
-		"dual pools; single rank": {
-			req: new(SystemReintReq),
-			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemReintResp{
-				Results: []*mgmtpb.SystemOsaResult{
-					{PoolId: test.MockUUID(1), Ranks: "1"},
-					{PoolId: test.MockUUID(2), Ranks: "1"},
-				},
-			}),
-			expResp: &SystemReintResp{
-				Results: []*SystemOsaResult{
-					{PoolID: test.MockUUID(1), Ranks: "1"},
-					{PoolID: test.MockUUID(2), Ranks: "1"},
-				},
-			},
-		},
-		"dual pools; single rank; with errors": {
-			req: new(SystemReintReq),
-			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemReintResp{
-				Results: []*mgmtpb.SystemOsaResult{
-					{
-						PoolId: test.MockUUID(1), Ranks: "1",
-						Status: -1, Msg: "fail1",
-					},
-					{
-						PoolId: test.MockUUID(2), Ranks: "1",
-						Status: -1, Msg: "fail2",
-					},
-				},
-			}),
-			expResp: &SystemReintResp{
-				Results: []*SystemOsaResult{
-					{
-						PoolID: test.MockUUID(1), Ranks: "1",
-						Status: -1, Msg: "fail1",
-					},
-					{
-						PoolID: test.MockUUID(2), Ranks: "1",
-						Status: -1, Msg: "fail2",
-					},
-				},
-			},
-			expRespErr: errors.New("pool 00000001-0001-0001-0001-000000000001 ranks 1: fail1, pool 00000002-0002-0002-0002-000000000002 ranks 1: fail2"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer test.ShowBufferOnFailure(t, buf)
-
-			mi := NewMockInvoker(log, &MockInvokerConfig{
-				UnaryError:    tc.uErr,
-				UnaryResponse: tc.uResp,
-			})
-
-			gotResp, gotErr := SystemReint(test.Context(t), mi, tc.req)
-			test.CmpErr(t, tc.expErr, gotErr)
-			if tc.expErr != nil {
-				return
-			}
-
-			cmpOpts := []cmp.Option{
-				cmpopts.IgnoreUnexported(SystemReintResp{}),
 			}
 			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)

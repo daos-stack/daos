@@ -309,9 +309,13 @@ type systemDrainCmd struct {
 	baseRankListCmd
 }
 
-func (cmd *systemDrainCmd) Execute(_ []string) (errOut error) {
+func (cmd *systemDrainCmd) execute(reint bool) (errOut error) {
 	defer func() {
-		errOut = errors.Wrap(errOut, "system drain failed")
+		op := "drain"
+		if reint {
+			op = "reintegrate"
+		}
+		errOut = errors.Wrapf(errOut, "system %s failed", op)
 	}()
 
 	if err := cmd.validateHostsRanks(); err != nil {
@@ -325,6 +329,7 @@ func (cmd *systemDrainCmd) Execute(_ []string) (errOut error) {
 	req.SetSystem(cmd.config.SystemName)
 	req.Hosts.Replace(&cmd.Hosts.HostSet)
 	req.Ranks.Replace(&cmd.Ranks.RankSet)
+	req.Reint = reint
 
 	resp, err := control.SystemDrain(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -336,47 +341,22 @@ func (cmd *systemDrainCmd) Execute(_ []string) (errOut error) {
 	}
 
 	var out strings.Builder
-	pretty.PrintSystemDrainResponse(&out, resp)
+	pretty.PrintPoolRankResults(&out, resp.Results)
 	cmd.Info(out.String())
 
 	return resp.Errors()
+}
+
+func (cmd *systemDrainCmd) Execute(_ []string) error {
+	return cmd.execute(false)
 }
 
 type systemReintCmd struct {
-	baseRankListCmd
+	systemDrainCmd
 }
 
-func (cmd *systemReintCmd) Execute(_ []string) (errOut error) {
-	defer func() {
-		errOut = errors.Wrap(errOut, "system drain failed")
-	}()
-
-	if err := cmd.validateHostsRanks(); err != nil {
-		return err
-	}
-	if cmd.Ranks.Count() == 0 && cmd.Hosts.Count() == 0 {
-		return errNoRanks
-	}
-
-	req := new(control.SystemReintReq)
-	req.SetSystem(cmd.config.SystemName)
-	req.Hosts.Replace(&cmd.Hosts.HostSet)
-	req.Ranks.Replace(&cmd.Ranks.RankSet)
-
-	resp, err := control.SystemReint(cmd.MustLogCtx(), cmd.ctlInvoker, req)
-	if err != nil {
-		return err // control api returned an error, disregard response
-	}
-
-	if cmd.JSONOutputEnabled() {
-		return cmd.OutputJSON(resp, resp.Errors())
-	}
-
-	var out strings.Builder
-	pretty.PrintSystemReintResponse(&out, resp)
-	cmd.Info(out.String())
-
-	return resp.Errors()
+func (cmd *systemReintCmd) Execute(_ []string) error {
+	return cmd.execute(true)
 }
 
 type systemCleanupCmd struct {

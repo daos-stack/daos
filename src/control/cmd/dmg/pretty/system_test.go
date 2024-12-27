@@ -614,11 +614,11 @@ Unknown 3 hosts: foo[7-9]
 
 func TestPretty_printSysOsaResp(t *testing.T) {
 	for name, tc := range map[string]struct {
-		results []*control.SystemOsaResult
+		results []*control.PoolRankResult
 		expOut  string
 	}{
 		"normal response": {
-			results: []*control.SystemOsaResult{
+			results: []*control.PoolRankResult{
 				{PoolID: test.MockUUID(1), Ranks: "0-3"},
 				{PoolID: test.MockUUID(2), Ranks: "1-4"},
 			},
@@ -631,7 +631,7 @@ Pool                                 Ranks Result Reason
 `,
 		},
 		"normal response; use labels": {
-			results: []*control.SystemOsaResult{
+			results: []*control.PoolRankResult{
 				{PoolID: "label1", Ranks: "0-3"},
 				{PoolID: "label2", Ranks: "1-4"},
 			},
@@ -644,7 +644,7 @@ label2 1-4   OK     -
 `,
 		},
 		"response with failures": {
-			results: []*control.SystemOsaResult{
+			results: []*control.PoolRankResult{
 				{PoolID: test.MockUUID(1), Ranks: "1-2"},
 				{PoolID: test.MockUUID(2), Ranks: "0"},
 				{
@@ -664,7 +664,7 @@ Pool                                 Ranks Result Reason
 	} {
 		t.Run(name, func(t *testing.T) {
 			var out strings.Builder
-			printSysOsaResults(&out, tc.results)
+			PrintPoolRankResults(&out, tc.results)
 
 			if diff := cmp.Diff(strings.TrimLeft(tc.expOut, "\n"), out.String()); diff != "" {
 				t.Fatalf("unexpected stdout (-want, +got):\n%s\n", diff)
