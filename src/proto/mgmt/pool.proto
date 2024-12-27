@@ -83,6 +83,7 @@ message PoolExcludeReq {
 	uint32 rank = 3; // target to move to the down state
 	repeated uint32 target_idx = 4; // target ranks
 	repeated uint32 svc_ranks = 5; // List of pool service ranks
+	bool            force      = 6; // force to exclude potentially leading to data loss
 }
 
 // PoolExcludeResp returns resultant state of Exclude operation.

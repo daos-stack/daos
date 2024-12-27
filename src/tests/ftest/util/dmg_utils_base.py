@@ -477,6 +477,7 @@ class DmgCommandBase(YamlCommand):
                 self.pool = BasicParameter(None, position=1)
                 self.rank = FormattedParameter("--rank={}", None)
                 self.tgt_idx = FormattedParameter("--target-idx={}", None)
+                self.force = FormattedParameter("--force", False)
 
         class ExtendSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool extend command."""

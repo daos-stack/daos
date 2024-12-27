@@ -603,7 +603,7 @@ class TestPool(TestDaosApiBase):
             CmdResult: Object that contains exit status, stdout, and other information.
 
         """
-        return self.dmg.pool_exclude(self.identifier, ranks, tgt_idx)
+        return self.dmg.pool_exclude(self.identifier, ranks, tgt_idx, force=True)
 
     @fail_on(CommandFailure)
     def extend(self, ranks):
