@@ -863,6 +863,7 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 	struct vos_container    *cont  = oiter->oit_cont;
 	struct vos_obj_df	*obj;
 	daos_unit_oid_t		 oid;
+	struct oi_delete_arg	 del_arg;
 	d_iov_t			 rec_iov;
 	bool			 delete = false, invisible = false;
 	int			 rc;
@@ -915,7 +916,9 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 		if (rc != 0)
 			D_ERROR("Could not evict object "DF_UOID" "DF_RC"\n",
 				DP_UOID(oid), DP_RC(rc));
-		rc = dbtree_iter_delete(oiter->oit_hdl, NULL);
+		del_arg.cont = oiter->oit_cont;
+		del_arg.only_delete_entry = 0;
+		rc = dbtree_iter_delete(oiter->oit_hdl, &del_arg);
 		D_ASSERT(rc != -DER_NONEXIST);
 	} else if (rc == -DER_NONEXIST) {
 		/** ilog isn't visible in range but still has some entries */
