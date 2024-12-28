@@ -8,9 +8,7 @@
 package main
 
 import (
-	"fmt"
 	"strings"
-	"unsafe"
 
 	"github.com/google/uuid"
 
@@ -92,7 +90,7 @@ func (cmd *healthCheckCmd) Execute([]string) error {
 
 	pools, err := api.GetPoolList(ctx, api.GetPoolListReq{
 		SysName: cmd.SysName,
-		Query:   true,
+		Query:   false,
 	})
 	if err != nil {
 		cmd.Errorf("failed to get pool list: %v", err)
@@ -131,50 +129,14 @@ func (cmd *healthCheckCmd) Execute([]string) error {
 		pool.DisabledRanks = tpi.DisabledRanks
 		pool.DeadRanks = tpi.DeadRanks
 
-		/* temporary, until we get the container API bindings */
-		var poolHdl C.daos_handle_t
-		if err := pcResp.Connection.FillHandle(unsafe.Pointer(&poolHdl)); err != nil {
-			cmd.Errorf("failed to fill handle for pool %s: %v", pool.Label, err)
-			continue
-		}
-
-		poolConts, err := listContainers(poolHdl)
+		poolConts, err := pcResp.Connection.ListContainers(ctx, true)
 		if err != nil {
 			cmd.Errorf("failed to list containers on pool %s: %v", pool.Label, err)
 			continue
 		}
 
-		for _, cont := range poolConts {
-			openFlags := uint(daos.ContainerOpenFlagReadOnly | daos.ContainerOpenFlagForce | daos.ContainerOpenFlagReadOnlyMetadata)
-			contHdl, contInfo, err := containerOpen(poolHdl, cont.UUID.String(), openFlags, true)
-			if err != nil {
-				cmd.Errorf("failed to connect to container %s: %v", cont.Label, err)
-				ci := &daos.ContainerInfo{
-					PoolUUID:       pool.UUID,
-					ContainerUUID:  cont.UUID,
-					ContainerLabel: cont.Label,
-					Health:         fmt.Sprintf("Unknown (%s)", err),
-				}
-				systemHealth.Containers[pool.UUID] = append(systemHealth.Containers[pool.UUID], ci)
-				continue
-			}
-			ci := convertContainerInfo(pool.UUID, cont.UUID, contInfo)
-			ci.ContainerLabel = cont.Label
-
-			props, freeProps, err := getContainerProperties(contHdl, "status")
-			if err != nil || len(props) == 0 {
-				cmd.Errorf("failed to get container properties for %s: %v", cont.Label, err)
-				ci.Health = fmt.Sprintf("Unknown (%s)", err)
-			} else {
-				ci.Health = props[0].String()
-			}
-			freeProps()
-
-			if err := containerCloseAPI(contHdl); err != nil {
-				cmd.Errorf("failed to close container %s: %v", cont.Label, err)
-			}
-
-			systemHealth.Containers[pool.UUID] = append(systemHealth.Containers[pool.UUID], ci)
+		for _, contInfo := range poolConts {
+			systemHealth.Containers[pool.UUID] = append(systemHealth.Containers[pool.UUID], contInfo)
 		}
 	}
 

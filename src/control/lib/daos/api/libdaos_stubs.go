@@ -19,6 +19,7 @@ import (
 /*
 #include <daos_errno.h>
 #include <daos_mgmt.h>
+#include <daos_obj_class.h>
 
 #include "util.h"
 
@@ -37,12 +38,9 @@ func daos_fini() {}
 
 func dc_agent_fini() {}
 
-var (
-	daos_handle_is_valid_Bool C.bool = true
-)
-
 func daos_handle_is_valid(handle C.daos_handle_t) C.bool {
-	return daos_handle_is_valid_Bool
+	// No real beneft to stubbing this out...
+	return C.daos_handle_is_valid(handle)
 }
 
 var (
@@ -125,4 +123,33 @@ func daos_mgmt_put_sys_info(sys_info *C.struct_daos_sys_info) {
 	if sys_info.dsi_ms_ranks != nil {
 		C.free(unsafe.Pointer(sys_info.dsi_ms_ranks))
 	}
+}
+
+var (
+	daos_oclass_name2id_Default C.daos_oclass_id_t = C.OC_UNKNOWN
+	daos_oclass_name2id_Map                        = map[string]C.daos_oclass_id_t{}
+)
+
+func daos_oclass_name2id(cName *C.char) C.daos_oclass_id_t {
+	name := C.GoString(cName)
+	if id, ok := daos_oclass_name2id_Map[name]; ok {
+		return id
+	}
+
+	return daos_oclass_name2id_Default
+}
+
+var (
+	daos_oclass_id2name_Default = C.OC_UNKNOWN
+	daos_oclass_id2name_Map     = map[C.daos_oclass_id_t]string{}
+)
+
+func daos_oclass_id2name(id C.daos_oclass_id_t, cName *C.char) C.int {
+	if name, ok := daos_oclass_id2name_Map[id]; ok {
+		nameSlice := unsafe.Slice(cName, len(name))
+		for i, c := range name {
+			nameSlice[i] = C.char(c)
+		}
+	}
+	return 0
 }
