@@ -5,7 +5,7 @@
 
 %global mercury_version   2.4
 %global libfabric_version 1.15.1-1
-%global argobots_version 1.2
+%global argobots_version 1.1
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -42,11 +42,11 @@ BuildRequires: hwloc-devel
 BuildRequires: bullseye
 %endif
 %if (0%{?rhel} >= 8)
-BuildRequires: argobots-devel >= %{argobots_version}
+BuildRequires: argobots-devel == %{argobots_version}
 BuildRequires: json-c-devel
 BuildRequires: boost-python3-devel
 %else
-BuildRequires: libabt-devel >= %{argobots_version}
+BuildRequires: libabt-devel == %{argobots_version}
 BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
@@ -153,6 +153,7 @@ Requires(postun): /sbin/ldconfig
 Requires: numactl
 Requires: pciutils
 %{?systemd_requires}
+Requires: argobots == %{argobots_version}
 
 %description server
 This is the package needed to run a DAOS server

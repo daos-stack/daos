@@ -152,7 +152,7 @@ class DaosServerTest(TestWithServers):
         self.verify_pool_list(pool_list)
         hosts = self.hostlist_servers
         self.hostlist_servers = hosts[-1]
-        self.log.info("(5) Restart daos io server for the last server on the cluster.")
+        self.log.info("(5) Restart daos engine for the last server on the cluster.")
         self.log.info("    self.hostlist_servers= %s", self.hostlist_servers)
         self.restart_engine()
         self.verify_pool_list(pool_list)
