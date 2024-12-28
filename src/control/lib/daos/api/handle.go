@@ -24,7 +24,9 @@ import (
 import "C"
 
 const (
-	MissingPoolLabel      = "<no pool label supplied>"
+	// MissingPoolLabel defines a default label set when a pool connection was made by UUID.
+	MissingPoolLabel = "<no pool label supplied>"
+	// MissingContainerLabel defines a default label set when a container connection was made by UUID.
 	MissingContainerLabel = "<no container label supplied>"
 )
 
@@ -37,6 +39,7 @@ type (
 		UUID       uuid.UUID
 		Label      string
 		daosHandle C.daos_handle_t
+		fromCtx    bool
 	}
 )
 
@@ -57,8 +60,11 @@ func (ch *connHandle) invalidate() {
 // it is provided for compatibility with older code that calls
 // into libdaos directly.
 func (ch *connHandle) FillHandle(cHandle unsafe.Pointer) error {
-	if ch == nil || cHandle == nil {
+	if !ch.IsValid() {
 		return errors.New("invalid handle")
+	}
+	if cHandle == nil {
+		return errors.New("nil DAOS handle pointer")
 	}
 	(*C.daos_handle_t)(cHandle).cookie = ch.daosHandle.cookie
 
@@ -70,11 +76,22 @@ func (ch *connHandle) IsValid() bool {
 	if ch == nil {
 		return false
 	}
+	if (ch.Label == "" || ch.Label == MissingPoolLabel || ch.Label == MissingContainerLabel) && ch.UUID == uuid.Nil {
+		return false
+	}
+
 	return bool(daos_handle_is_valid(ch.daosHandle))
 }
 
 // ID returns the label if available, otherwise the UUID.
 func (ch *connHandle) ID() string {
+	if ch == nil {
+		return "<nil>"
+	}
+	if !ch.IsValid() {
+		return "<invalid>"
+	}
+
 	id := ch.Label
 	if id == "" || id == MissingPoolLabel || id == MissingContainerLabel {
 		id = ch.UUID.String()
@@ -84,6 +101,13 @@ func (ch *connHandle) ID() string {
 }
 
 func (ch *connHandle) String() string {
+	if ch == nil {
+		return "<nil>:false"
+	}
+	if !ch.IsValid() {
+		return "<invalid>:false"
+	}
+
 	id := ch.Label
 	if id == "" || id == MissingPoolLabel || id == MissingContainerLabel {
 		id = logging.ShortUUID(ch.UUID)

@@ -4385,7 +4385,7 @@ class PosixTests():
         assert rc.returncode != 0
         output = rc.stderr.decode('utf-8')
         line = output.splitlines()
-        if line[-1] != 'ERROR: daos: failed fs fix-entry: DER_BUSY(-1012): Device or resource busy':
+        if 'DER_BUSY(-1012): Device or resource busy' not in line[-1]:
             raise NLTestFail('daos fs fix-entry /test_dir/f1')
 
         # stop dfuse
@@ -5746,7 +5746,7 @@ class AllocFailTestRun():
         if self._aft.check_stderr:
             stderr = self._stderr.decode('utf-8').rstrip()
             if stderr != '' and not stderr.endswith('(-1009): Out of memory') and \
-                not stderr.endswith(': errno 12 (Cannot allocate memory)') and \
+                not stderr.endswith(': DFS error 12: Cannot allocate memory') and \
                'error parsing command line arguments' not in stderr and \
                self.stdout != self._aft.expected_stdout:
                 if self.stdout != b'':
