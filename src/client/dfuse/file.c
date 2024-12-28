@@ -92,8 +92,13 @@ active_oh_decref(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh)
 		oh->doh_linear_read = true;
 
 	/* Invalid readahead cache */
-	if (oh->doh_ie->ie_active->readahead)
+	if (oh->doh_ie->ie_active->readahead && oh->doh_ie->ie_active->readahead->dra_ev) {
+		struct dfuse_event *ev = oh->doh_ie->ie_active->readahead->dra_ev;
+
+		daos_event_fini(&ev->de_ev);
+		d_slab_release(ev->de_eqt->de_pre_read_slab, ev);
 		oh->doh_ie->ie_active->readahead->dra_ev = NULL;
+	}
 
 	/* Do not set linear read in the case where there's no reads or writes, this could be
 	 * simple open/close calls but it could also be cache use so leave the setting unchanged

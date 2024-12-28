@@ -715,8 +715,10 @@ dfuse_pre_read_init(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 		int rc;
 
 		rc = active_ie_readahead_init(ie);
-		if (rc != 0)
+		if (rc != 0) {
+			d_slab_release(ev->de_eqt->de_pre_read_slab, ev);
 			return rc;
+		}
 	}
 	active->readahead->dra_ev = ev;
 
