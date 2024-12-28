@@ -1475,6 +1475,40 @@ class TestPool(TestDaosApiBase):
 
         self.log.info("Wait for dead ranks complete: dead ranks %s", expected)
 
+    def wait_for_aggregation(self, verify_scm=None, verify_nvme=None,
+                             retries=4, interval=30):
+        """Wait for aggregation to finish.
+
+        Args:
+            verify_scm (callable, optional): function(current_scm) to verify scm free space.
+                Defaults to None. Must supply at least one of verify_scm or verify_nvme.
+            verify_nvme (callable, optional): function(current_nvme) to verify nvme free space.
+                Defaults to None. Must supply at least one of verify_scm or verify_nvme.
+            retries (int, optional): number of times to retry. Default is 4.
+            interval (int, optional): seconds to wait before retrying. Default is 60.
+
+        Returns:
+            bool: whether aggregation completed within the time limit
+
+        Raises:
+            ValueError: if neither verify_scm nor verify_nvme are given
+
+        """
+        if verify_scm is None and verify_nvme is None:
+            raise ValueError("verify_scm or verify_nvme is required")
+        for _ in range(retries):
+            current_space = self.get_pool_daos_space()
+            current_free_scm = current_space["s_free"][0]
+            current_free_nvme = current_space["s_free"][1]
+            self.log.info("current_free_scm  = %s", current_free_scm)
+            self.log.info("current_free_nvme = %s", current_free_nvme)
+            if (verify_scm is None or verify_scm(current_free_scm)) and \
+                    (verify_nvme is None or verify_nvme(current_free_scm)):
+                return True
+            sleep(interval)
+
+        return False
+
     def verify_uuid_directory(self, host, scm_mount):
         """Check if pool folder exist on server.
 
