@@ -50,9 +50,9 @@ release:
 static void
 dfuse_cb_slave_list_read_complete(struct dfuse_event *ev, struct dfuse_inode_entry *ie)
 {
-	struct dfuse_event *evs, *evn;
-	d_list_t            cblist;
-	char               *buf = ev->de_iov.iov_buf;
+	struct dfuse_event  *evs, *evn;
+	d_list_t             cblist;
+	char                *buf = ev->de_iov.iov_buf;
 	struct active_inode *ia  = ie->ie_active;
 
 	D_INIT_LIST_HEAD(&cblist);

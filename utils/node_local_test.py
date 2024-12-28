@@ -2374,7 +2374,7 @@ class PosixTests():
         assert res['statistics']['pre_read'] == 0, res
         os.close(fd)
 
-        # Open a MB file.  This reads 8 128k chunks.
+        # Open a MB file.  This reads 8 128k chunks and 1 EOF.
         with open(join(dfuse.dir, 'file3'), 'r') as fd:
             data3 = fd.read()
         res = dfuse.check_usage(old=res)
