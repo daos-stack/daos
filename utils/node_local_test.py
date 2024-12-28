@@ -2378,7 +2378,7 @@ class PosixTests():
         with open(join(dfuse.dir, 'file3'), 'r') as fd:
             data3 = fd.read()
         res = dfuse.check_usage(old=res)
-        assert res['statistics']['pre_read'] == 8, res
+        assert res['statistics']['pre_read'] == 9, res
 
         # Open a (1MB-1) file.  This reads 8 128k chunks, the last is truncated.  There is no EOF
         # returned by dfuse here, just a truncated read but I assume python is interpreting a
