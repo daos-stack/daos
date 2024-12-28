@@ -58,8 +58,17 @@ func phFromCtx(ctx context.Context) (*PoolHandle, error) {
 	if !ok {
 		return nil, errNoCtxHdl
 	}
+	ph.fromCtx = true
 
 	return ph, nil
+}
+
+// IsValid returns true if the pool handle is valid.
+func (ph *PoolHandle) IsValid() bool {
+	if ph == nil {
+		return false
+	}
+	return ph.connHandle.IsValid()
 }
 
 // toCtx returns a new context with the PoolHandle stashed in it.
@@ -180,7 +189,7 @@ func poolInfoFromProps(pi *daos.PoolInfo, propEntries []C.struct_daos_prop_entry
 // connection and that it is safe to release resources allocated for
 // the connection.
 func (ph *PoolHandle) Disconnect(ctx context.Context) error {
-	if ph == nil {
+	if !ph.IsValid() {
 		return ErrInvalidPoolHandle
 	}
 	logging.FromContext(ctx).Debugf("PoolHandle.Disconnect(%s)", ph)
@@ -307,8 +316,7 @@ func getPoolConn(ctx context.Context, sysName, poolID string, flags daos.PoolCon
 	}
 
 	cleanup := func() {
-		err := resp.Connection.Disconnect(ctx)
-		if err != nil {
+		if err := resp.Connection.Disconnect(ctx); err != nil {
 			logging.FromContext(ctx).Error(err.Error())
 		}
 	}
@@ -317,7 +325,7 @@ func getPoolConn(ctx context.Context, sysName, poolID string, flags daos.PoolCon
 
 // Query is a convenience wrapper around the PoolQuery() function.
 func (ph *PoolHandle) Query(ctx context.Context, mask daos.PoolQueryMask) (*daos.PoolInfo, error) {
-	if ph == nil {
+	if !ph.IsValid() {
 		return nil, ErrInvalidPoolHandle
 	}
 	return PoolQuery(ph.toCtx(ctx), "", "", mask)
@@ -423,7 +431,7 @@ func newPoolTargetInfo(ptinfo *C.daos_target_info_t) *daos.PoolQueryTargetInfo {
 
 // QueryTargets is a convenience wrapper around the PoolQueryTargets() function.
 func (ph *PoolHandle) QueryTargets(ctx context.Context, rank ranklist.Rank, targets *ranklist.RankSet) ([]*daos.PoolQueryTargetInfo, error) {
-	if ph == nil {
+	if !ph.IsValid() {
 		return nil, ErrInvalidPoolHandle
 	}
 	return PoolQueryTargets(ph.toCtx(ctx), "", "", rank, targets)
@@ -472,7 +480,7 @@ func PoolQueryTargets(ctx context.Context, sysName, poolID string, rank ranklist
 
 // ListAttributes is a convenience wrapper around the PoolListAttributes() function.
 func (ph *PoolHandle) ListAttributes(ctx context.Context) ([]string, error) {
-	if ph == nil {
+	if !ph.IsValid() {
 		return nil, ErrInvalidPoolHandle
 	}
 	return PoolListAttributes(ph.toCtx(ctx), "", "")
@@ -496,7 +504,7 @@ func PoolListAttributes(ctx context.Context, sysName, poolID string) ([]string, 
 
 // GetAttributes is a convenience wrapper around the PoolGetAttributes() function.
 func (ph *PoolHandle) GetAttributes(ctx context.Context, attrNames ...string) (daos.AttributeList, error) {
-	if ph == nil {
+	if !ph.IsValid() {
 		return nil, ErrInvalidPoolHandle
 	}
 	return PoolGetAttributes(ph.toCtx(ctx), "", "", attrNames...)
@@ -521,7 +529,7 @@ func PoolGetAttributes(ctx context.Context, sysName, poolID string, names ...str
 
 // SetAttributes is a convenience wrapper around the PoolSetAttributes() function.
 func (ph *PoolHandle) SetAttributes(ctx context.Context, attrs ...*daos.Attribute) error {
-	if ph == nil {
+	if !ph.IsValid() {
 		return ErrInvalidPoolHandle
 	}
 	return PoolSetAttributes(ph.toCtx(ctx), "", "", attrs...)
@@ -545,7 +553,7 @@ func PoolSetAttributes(ctx context.Context, sysName, poolID string, attrs ...*da
 
 // DeleteAttributes is a convenience wrapper around the PoolDeleteAttributes() function.
 func (ph *PoolHandle) DeleteAttributes(ctx context.Context, attrNames ...string) error {
-	if ph == nil {
+	if !ph.IsValid() {
 		return ErrInvalidPoolHandle
 	}
 	return PoolDeleteAttributes(ph.toCtx(ctx), "", "", attrNames...)
@@ -565,6 +573,80 @@ func PoolDeleteAttributes(ctx context.Context, sysName, poolID string, attrNames
 	}
 
 	return delDaosAttributes(poolConn.daosHandle, poolAttr, attrNames)
+}
+
+func (ph *PoolHandle) ListContainers(ctx context.Context, query bool) ([]*daos.ContainerInfo, error) {
+	if !ph.IsValid() {
+		return nil, ErrInvalidPoolHandle
+	}
+
+	return PoolListContainers(ph.toCtx(ctx), "", "", query)
+}
+
+// PoolListContainers returns a list of information about containers in the pool.
+func PoolListContainers(ctx context.Context, sysName, poolID string, query bool) ([]*daos.ContainerInfo, error) {
+	poolConn, disconnect, err := getPoolConn(ctx, sysName, poolID, daos.PoolConnectFlagReadOnly)
+	if err != nil {
+		return nil, err
+	}
+	defer disconnect()
+	logging.FromContext(ctx).Debugf("PoolListContainers(%s:%t)", poolConn, query)
+
+	if err := ctx.Err(); err != nil {
+		return nil, ctxErr(err)
+	}
+
+	extra_cont_margin := C.size_t(16)
+
+	// First call gets the current number of containers.
+	var ncont C.daos_size_t
+	rc := daos_pool_list_cont(poolConn.daosHandle, &ncont, nil, nil)
+	if err := daosError(rc); err != nil {
+		return nil, errors.Wrap(err, "pool list containers failed")
+	}
+
+	// No containers.
+	if ncont == 0 {
+		return nil, nil
+	}
+
+	var cConts *C.struct_daos_pool_cont_info
+	// Extend ncont with a safety margin to account for containers
+	// that might have been created since the first API call.
+	ncont += extra_cont_margin
+	cConts = (*C.struct_daos_pool_cont_info)(C.calloc(C.sizeof_struct_daos_pool_cont_info, ncont))
+	if cConts == nil {
+		return nil, errors.New("calloc() for containers failed")
+	}
+	dpciSlice := unsafe.Slice(cConts, ncont)
+	defer func() {
+		C.free(unsafe.Pointer(cConts))
+	}()
+
+	rc = daos_pool_list_cont(poolConn.daosHandle, &ncont, cConts, nil)
+	if err := daosError(rc); err != nil {
+		return nil, err
+	}
+
+	out := make([]*daos.ContainerInfo, ncont)
+	for i := range out {
+		out[i] = new(daos.ContainerInfo)
+		out[i].ContainerUUID = uuid.Must(uuidFromC(dpciSlice[i].pci_uuid))
+		out[i].ContainerLabel = C.GoString(&dpciSlice[i].pci_label[0])
+	}
+
+	if query {
+		for i := range out {
+			qc, err := poolConn.QueryContainer(ctx, out[i].ContainerUUID.String())
+			if err != nil {
+				logging.FromContext(ctx).Errorf("failed to query container %s: %s", out[i].Name(), err)
+				continue
+			}
+			out[i] = qc
+		}
+	}
+
+	return out, nil
 }
 
 type (
