@@ -1337,7 +1337,7 @@ class DFuse():
 
         return f'DFuse instance at {self.dir} ({running})'
 
-    def start(self, v_hint=None, single_threaded=False, use_oopt=False):
+    def start(self, v_hint=None, use_oopt=False):
         """Start a dfuse instance"""
         # pylint: disable=too-many-branches
         dfuse_bin = join(self.conf['PREFIX'], 'bin', 'dfuse')
@@ -1385,9 +1385,7 @@ class DFuse():
         if self.multi_user:
             cmd.append('--multi-user')
 
-        if single_threaded:
-            cmd.append('--singlethread')
-        elif not self.cores:
+        if not self.cores:
             # Use a lower default thread-count for NLT due to running tests in parallel.
             cmd.extend(['--thread-count', '4'])
 
@@ -1562,17 +1560,17 @@ class DFuse():
         return rc
 
     def check_usage(self, ino=None, inodes=None, open_files=None, pools=None, containers=None,
-                    qpath=None):
+                    qpath=None, old=None):
         """Query and verify the dfuse statistics.
 
+        Optionally verify numbers are as expected/defined or return a delta to a previous sample.
         Returns the raw numbers in a dict.
         """
         cmd = ['filesystem', 'query', qpath or self.dir]
 
         if ino is not None:
             cmd.extend(['--inode', str(ino)])
-        rc = run_daos_cmd(self.conf, cmd, use_json=True)
-        print(rc)
+        rc = run_daos_cmd(self.conf, cmd, use_json=True, valgrind=False, log_check=False)
         assert rc.returncode == 0, rc
 
         if inodes:
@@ -1583,6 +1581,16 @@ class DFuse():
             assert rc.json['response']['pools'] == pools, rc
         if containers:
             assert rc.json['response']['containers'] == containers, rc
+
+        # If a prior version of the statistics was supplied then take a delta, but take a delta of
+        # the prior version as it came from daos, not as it was reported.
+        if 'statistics' in rc.json['response']:
+            rc.json['response']['raw'] = copy.deepcopy(rc.json['response']['statistics'])
+        if old:
+            for key in rc.json['response']['statistics']:
+                rc.json['response']['statistics'][key] -= old['raw'].get(key, 0)
+
+        print(f"Usage: {rc.json['response']}")
         return rc.json['response']
 
     def _evict_path(self, path):
@@ -1606,7 +1614,7 @@ class DFuse():
         for inode in inodes:
             found = True
             while found:
-                rc = self.check_usage(inode, qpath=qpath)
+                rc = self.check_usage(ino=inode, qpath=qpath)
                 print(rc)
                 found = rc['resident']
                 if not found:
@@ -1980,11 +1988,9 @@ class needs_dfuse_with_opt():
     wrapping_lock = threading.Lock()
 
     # pylint: disable=too-few-public-methods
-    def __init__(self, caching_variants=None, wbcache=True, single_threaded=False,
-                 dfuse_inval=True, ro=False):
+    def __init__(self, caching_variants=None, wbcache=True, dfuse_inval=True, ro=False):
         self.caching_variants = caching_variants if caching_variants else [False, True]
         self.wbcache = wbcache
-        self.single_threaded = single_threaded
         self.dfuse_inval = dfuse_inval
         self.ro = ro
 
@@ -2011,6 +2017,12 @@ class needs_dfuse_with_opt():
                               'dfuse-dentry-dir-time': '5m',
                               'dfuse-ndentry-time': '5m'}
                 obj.container.set_attrs(cont_attrs)
+            elif caching:
+                cont_attrs = {'dfuse-attr-time': '1m',
+                              'dfuse-dentry-time': '1m',
+                              'dfuse-dentry-dir-time': '1m',
+                              'dfuse-ndentry-time': '1m'}
+                obj.container.set_attrs(cont_attrs)
 
             if self.ro:
                 args["ro"] = True
@@ -2020,7 +2032,7 @@ class needs_dfuse_with_opt():
                               caching=caching,
                               wbcache=self.wbcache,
                               **args)
-            obj.dfuse.start(v_hint=method.__name__, single_threaded=self.single_threaded)
+            obj.dfuse.start(v_hint=method.__name__)
             try:
                 rc = method(obj)
             finally:
@@ -2310,7 +2322,7 @@ class PosixTests():
     def test_pre_read(self):
         """Test the pre-read code.
 
-        Test reading a file which is previously unknown to fuse with caching on.  This should go
+        Test reading a files which are previously unknown to fuse with caching on.  This should go
         into the pre_read code and load the file contents automatically after the open call.
         """
         dfuse = DFuse(self.server, self.conf, container=self.container)
@@ -2339,32 +2351,57 @@ class PosixTests():
         dfuse = DFuse(self.server, self.conf, caching=True, container=self.container)
         dfuse.start(v_hint='pre_read_1')
 
+        # Open a file and read in one go.
         with open(join(dfuse.dir, 'file0'), 'r') as fd:
             data0 = fd.read()
+        res = dfuse.check_usage()
+        assert res['statistics']['pre_read'] == 1, res
 
+        # Open a file and read in one go.
         with open(join(dfuse.dir, 'file1'), 'r') as fd:
             data1 = fd.read(16)
+        res = dfuse.check_usage(old=res)
+        assert res['statistics']['pre_read'] == 1, res
 
-        with open(join(dfuse.dir, 'file2'), 'r') as fd:
-            data2 = fd.read(2)
+        # Open a file and read two bytes at a time.  Despite disabling buffering python will try and
+        # read a whole page the first time.
+        fd = os.open(join(dfuse.dir, 'file2'), os.O_RDONLY)
+        data2 = os.read(fd, 2)
+        res = dfuse.check_usage(old=res)
+        assert res['statistics']['pre_read'] == 1, res
+        _ = os.read(fd, 2)
+        res = dfuse.check_usage(old=res)
+        assert res['statistics']['pre_read'] == 0, res
+        os.close(fd)
 
+        # Open a MB file.  This reads 8 128k chunks and 1 EOF.
         with open(join(dfuse.dir, 'file3'), 'r') as fd:
             data3 = fd.read()
+        res = dfuse.check_usage(old=res)
+        assert res['statistics']['pre_read'] == 9, res
 
+        # Open a (1MB-1) file.  This reads 8 128k chunks, the last is truncated.  There is no EOF
+        # returned by dfuse here, just a truncated read but I assume python is interpreting a
+        # truncated read at the expected file size as an EOF.
         with open(join(dfuse.dir, 'file4'), 'r') as fd:
             data4 = fd.read()
             data5 = fd.read()
 
-        # This should not use the pre-read feature, to be validated via the logs.
+        res = dfuse.check_usage(old=res)
+        assert res['statistics']['pre_read'] == 8, res
+
+        # This should now be read from cache.
         with open(join(dfuse.dir, 'file4'), 'r') as fd:
             data6 = fd.read()
+        res = dfuse.check_usage(old=res)
+        assert res['statistics']['read'] == 0, res
 
         if dfuse.stop():
             self.fatal_errors = True
         print(data0)
         assert data0 == 'test'
         assert data1 == 'test'
-        assert data2 == 'te'
+        assert data2 == b'te', data2
         assert raw_data0 == data3
         assert raw_data1 == data4
         assert len(data5) == 0
@@ -2677,11 +2714,6 @@ class PosixTests():
         assert len(files) == count
         assert len(post_files) == len(files) - 1
         assert post_files == files[:-2] + [files[-1]]
-
-    @needs_dfuse_with_opt(single_threaded=True, caching_variants=[True])
-    def test_single_threaded(self):
-        """Test single-threaded mode"""
-        self.readdir_test(10)
 
     @needs_dfuse
     def test_open_replaced(self):
@@ -3378,7 +3410,7 @@ class PosixTests():
         print(os.listdir(self.dfuse.dir))
         print(os.listdir(dfuse.dir))
 
-        # Rename file 0 to file 0 in the background, this will remove file 1
+        # Rename file 0 to file 1 in the background, this will remove the old file 1
         os.rename(join(dfuse.dir, 'file.0'), join(dfuse.dir, 'file.1'))
 
         # Perform the unlink, this will unlink the other file.
@@ -3394,6 +3426,45 @@ class PosixTests():
 
         for fd in fds:
             fd.close()
+
+    @needs_dfuse_with_opt(caching_variants=[False])
+    def test_create_exists(self):
+        """Test creating a file.
+
+        This tests for create where the dentry being created already exists and is a file that's
+        known to dfuse.
+
+        To do this make a file in dfuse, use a back channel to rename it and then create a file
+        using the new name."""
+
+        filename = join(self.dfuse.dir, 'myfile')
+
+        with open(filename, 'w') as fd:
+            fd.write('hello')
+
+        filename = join(self.dfuse.dir, 'newfile')
+        try:
+            os.stat(filename)
+            raise NLTestFail("File exists")
+        except FileNotFoundError:
+            pass
+
+        # Start another dfuse instance to move the files around without the kernel knowing.
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      container=self.container,
+                      caching=False)
+        dfuse.start(v_hint='create_exists_1')
+
+        os.rename(join(dfuse.dir, 'myfile'), join(dfuse.dir, 'newfile'))
+
+        filename = join(self.dfuse.dir, 'newfile')
+
+        with open(filename, 'w') as fd:
+            fd.write('hello')
+
+        if dfuse.stop():
+            self.fatal_errors = True
 
     def test_cont_rw(self):
         """Test write access to another users container"""
@@ -5987,7 +6058,7 @@ def test_dfuse_start(server, conf, wf):
 
     cmd = [join(conf['PREFIX'], 'bin', 'dfuse'),
            '--mountpoint', mount_point,
-           '--pool', pool.id(), '--cont', container.id(), '--foreground', '--singlethread']
+           '--pool', pool.id(), '--cont', container.id(), '--foreground', '--thread-count=2']
 
     test_cmd = AllocFailTest(conf, 'dfuse', cmd)
     test_cmd.wf = wf
