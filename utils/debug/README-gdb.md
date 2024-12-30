@@ -429,7 +429,6 @@ Dump of assembler code for function vos_space_sys_init:
    ...
 End of assembler dump.
 ```
-
 At the line 0x7ffc465caff0 we could indeed find the return address of the caller of the function.
 
 
@@ -496,3 +495,27 @@ Referents: Jerome, Alex
 ## Pmdk
 
 Referents: Jonas
+
+## Gcore
+
+The `gcore` is used to generate core file of a running process.  It should be used with the `-a`
+option.
+
+## Core File congfiguration
+
+By default, `mmaped` areas are not dumped in corefiles.
+But this may be of interest in some cases, this page describes how to configure in order to make it
+happen.
+
+Default wide `coredump_filters` mask value is 0x33 (i.e.
+`MMF_DUMP_ANON_PRIVATE | MMF_DUMP_ANON_SHARED | MMF_DUMP_ELF_HEADERS | MMF_DUMP_HUGETLB_PRIVATE`
+bits).
+All available bits are described in `include/linux/sched.h`.
+It can be changed without recompiling Kernel by using `coredump_filter=<newvalue>` boot parameter.
+It can also be changed per-process using `/proc/<PID>/coredump_filter`.
+In order to allow for mmap()'ed areas to also be dumped in corefiles, both `MMF_DUMP_MAPPED_SHARED`
+and `MMF_DUMP_MAPPED_PRIVATE` bits must also be present.
+This can be achieved by running `echo 0x1f > /proc/<PID>/coredump_filter` command and the new mask
+will be immediately active for `<PID>` process and be inherited by any forked child.
+
+Notes: Niu should be a good person to contact on this topic.
