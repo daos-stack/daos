@@ -338,3 +338,33 @@ func PrintPoolList(pools []*daos.PoolInfo, out io.Writer, verbose bool) error {
 
 	return printPoolList(pools, out)
 }
+
+func PrintAttributes(out io.Writer, header string, attrs ...*daos.Attribute) {
+	fmt.Fprintf(out, "%s\n", header)
+
+	if len(attrs) == 0 {
+		fmt.Fprintln(out, "  No attributes found.")
+		return
+	}
+
+	nameTitle := "Name"
+	valueTitle := "Value"
+	titles := []string{nameTitle}
+
+	table := []txtfmt.TableRow{}
+	for _, attr := range attrs {
+		row := txtfmt.TableRow{}
+		row[nameTitle] = attr.Name
+		if len(attr.Value) != 0 {
+			row[valueTitle] = string(attr.Value)
+			if len(titles) == 1 {
+				titles = append(titles, valueTitle)
+			}
+		}
+		table = append(table, row)
+	}
+
+	tf := txtfmt.NewTableFormatter(titles...)
+	tf.InitWriter(out)
+	tf.Format(table)
+}

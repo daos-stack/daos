@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,74 +7,16 @@
 package main
 
 import (
-	"fmt"
-	"io"
 	"unsafe"
 
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/pkg/errors"
-
-	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
 
 /*
 #include "util.h"
 */
 import "C"
-
-type (
-	attribute struct {
-		Name  string `json:"name"`
-		Value []byte `json:"value,omitempty"`
-	}
-
-	attrList []*attribute
-)
-
-func (al attrList) asMap() map[string][]byte {
-	m := make(map[string][]byte)
-	for _, a := range al {
-		m[a.Name] = a.Value
-	}
-	return m
-}
-
-func (al attrList) asList() []string {
-	names := make([]string, len(al))
-	for i, a := range al {
-		names[i] = a.Name
-	}
-	return names
-}
-
-func printAttributes(out io.Writer, header string, attrs ...*attribute) {
-	fmt.Fprintf(out, "%s\n", header)
-
-	if len(attrs) == 0 {
-		fmt.Fprintln(out, "  No attributes found.")
-		return
-	}
-
-	nameTitle := "Name"
-	valueTitle := "Value"
-	titles := []string{nameTitle}
-
-	table := []txtfmt.TableRow{}
-	for _, attr := range attrs {
-		row := txtfmt.TableRow{}
-		row[nameTitle] = attr.Name
-		if len(attr.Value) != 0 {
-			row[valueTitle] = string(attr.Value)
-			if len(titles) == 1 {
-				titles = append(titles, valueTitle)
-			}
-		}
-		table = append(table, row)
-	}
-
-	tf := txtfmt.NewTableFormatter(titles...)
-	tf.InitWriter(out)
-	tf.Format(table)
-}
 
 type attrType int
 
@@ -83,13 +25,11 @@ const (
 	contAttr
 )
 
-func listDaosAttributes(hdl C.daos_handle_t, at attrType, verbose bool) (attrList, error) {
+func listDaosAttributes(hdl C.daos_handle_t, at attrType, verbose bool) (daos.AttributeList, error) {
 	var rc C.int
 	expectedSize, totalSize := C.size_t(0), C.size_t(0)
 
 	switch at {
-	case poolAttr:
-		rc = C.daos_pool_list_attr(hdl, nil, &totalSize, nil)
 	case contAttr:
 		rc = C.daos_cont_list_attr(hdl, nil, &totalSize, nil)
 	default:
@@ -109,8 +49,6 @@ func listDaosAttributes(hdl C.daos_handle_t, at attrType, verbose bool) (attrLis
 	defer C.free(buf)
 
 	switch at {
-	case poolAttr:
-		rc = C.daos_pool_list_attr(hdl, (*C.char)(buf), &totalSize, nil)
 	case contAttr:
 		rc = C.daos_cont_list_attr(hdl, (*C.char)(buf), &totalSize, nil)
 	default:
@@ -130,9 +68,9 @@ func listDaosAttributes(hdl C.daos_handle_t, at attrType, verbose bool) (attrLis
 		return getDaosAttributes(hdl, at, attrNames)
 	}
 
-	attrs := make([]*attribute, len(attrNames))
+	attrs := make(daos.AttributeList, len(attrNames))
 	for i, name := range attrNames {
-		attrs[i] = &attribute{Name: name}
+		attrs[i] = &daos.Attribute{Name: name}
 	}
 
 	return attrs, nil
@@ -141,7 +79,7 @@ func listDaosAttributes(hdl C.daos_handle_t, at attrType, verbose bool) (attrLis
 
 // getDaosAttributes fetches the values for the given list of attribute names.
 // Uses the bulk attribute fetch API to minimize roundtrips.
-func getDaosAttributes(hdl C.daos_handle_t, at attrType, names []string) (attrList, error) {
+func getDaosAttributes(hdl C.daos_handle_t, at attrType, names []string) (daos.AttributeList, error) {
 	if len(names) == 0 {
 		attrList, err := listDaosAttributes(hdl, at, false)
 		if err != nil {
@@ -171,8 +109,6 @@ func getDaosAttributes(hdl C.daos_handle_t, at attrType, names []string) (attrLi
 	attrSizes := make([]C.size_t, numAttr)
 	var rc C.int
 	switch at {
-	case poolAttr:
-		rc = C.daos_pool_get_attr(hdl, C.int(numAttr), &attrNames[0], nil, &attrSizes[0], nil)
 	case contAttr:
 		rc = C.daos_cont_get_attr(hdl, C.int(numAttr), &attrNames[0], nil, &attrSizes[0], nil)
 	default:
@@ -199,8 +135,6 @@ func getDaosAttributes(hdl C.daos_handle_t, at attrType, names []string) (attrLi
 
 	// Do the actual fetch of all values in one go.
 	switch at {
-	case poolAttr:
-		rc = C.daos_pool_get_attr(hdl, C.int(numAttr), &attrNames[0], &attrValues[0], &attrSizes[0], nil)
 	case contAttr:
 		rc = C.daos_cont_get_attr(hdl, C.int(numAttr), &attrNames[0], &attrValues[0], &attrSizes[0], nil)
 	default:
@@ -214,9 +148,9 @@ func getDaosAttributes(hdl C.daos_handle_t, at attrType, names []string) (attrLi
 	// Note that we are copying the values into Go-managed byte slices
 	// for safety and simplicity so that we can free the C memory as soon
 	// as this function exits.
-	attrs := make([]*attribute, numAttr)
+	attrs := make(daos.AttributeList, numAttr)
 	for i, name := range names {
-		attrs[i] = &attribute{
+		attrs[i] = &daos.Attribute{
 			Name:  name,
 			Value: C.GoBytes(attrValues[i], C.int(attrSizes[i])),
 		}
@@ -228,7 +162,7 @@ func getDaosAttributes(hdl C.daos_handle_t, at attrType, names []string) (attrLi
 // getDaosAttribute fetches the value for the given attribute name.
 // NB: For operations involving multiple attributes, the getDaosAttributes()
 // function is preferred for efficiency.
-func getDaosAttribute(hdl C.daos_handle_t, at attrType, name string) (*attribute, error) {
+func getDaosAttribute(hdl C.daos_handle_t, at attrType, name string) (*daos.Attribute, error) {
 	attrs, err := getDaosAttributes(hdl, at, []string{name})
 	if err != nil {
 		return nil, err
@@ -241,7 +175,7 @@ func getDaosAttribute(hdl C.daos_handle_t, at attrType, name string) (*attribute
 
 // setDaosAttributes sets the values for the given list of attribute names.
 // Uses the bulk attribute set API to minimize roundtrips.
-func setDaosAttributes(hdl C.daos_handle_t, at attrType, attrs attrList) error {
+func setDaosAttributes(hdl C.daos_handle_t, at attrType, attrs daos.AttributeList) error {
 	if len(attrs) == 0 {
 		return nil
 	}
@@ -277,8 +211,6 @@ func setDaosAttributes(hdl C.daos_handle_t, at attrType, attrs attrList) error {
 	attrCount := C.int(len(attrs))
 	var rc C.int
 	switch at {
-	case poolAttr:
-		rc = C.daos_pool_set_attr(hdl, attrCount, &attrNames[0], &valBufs[0], &valSizes[0], nil)
 	case contAttr:
 		rc = C.daos_cont_set_attr(hdl, attrCount, &attrNames[0], &valBufs[0], &valSizes[0], nil)
 	default:
@@ -291,12 +223,12 @@ func setDaosAttributes(hdl C.daos_handle_t, at attrType, attrs attrList) error {
 // setDaosAttribute sets the value for the given attribute name.
 // NB: For operations involving multiple attributes, the setDaosAttributes()
 // function is preferred for efficiency.
-func setDaosAttribute(hdl C.daos_handle_t, at attrType, attr *attribute) error {
+func setDaosAttribute(hdl C.daos_handle_t, at attrType, attr *daos.Attribute) error {
 	if attr == nil {
 		return errors.Errorf("nil %T", attr)
 	}
 
-	return setDaosAttributes(hdl, at, attrList{attr})
+	return setDaosAttributes(hdl, at, daos.AttributeList{attr})
 }
 
 func delDaosAttribute(hdl C.daos_handle_t, at attrType, name string) error {
@@ -305,8 +237,6 @@ func delDaosAttribute(hdl C.daos_handle_t, at attrType, name string) error {
 
 	var rc C.int
 	switch at {
-	case poolAttr:
-		rc = C.daos_pool_del_attr(hdl, 1, &attrName, nil)
 	case contAttr:
 		rc = C.daos_cont_del_attr(hdl, 1, &attrName, nil)
 	default:

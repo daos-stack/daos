@@ -336,3 +336,11 @@ func _writeDunsPath(path, ct string, poolUUID uuid.UUID, contUUID uuid.UUID) err
 
 	return nil
 }
+
+func attrListFromNames(names []string) daos.AttributeList {
+	attrs := make(daos.AttributeList, len(names))
+	for i, name := range names {
+		attrs[i] = &daos.Attribute{Name: name}
+	}
+	return attrs
+}
