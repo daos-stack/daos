@@ -1373,8 +1373,8 @@ ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 	struct dsm_tls		*tls = dsm_tls_get();
 	int			 rc;
 
-	rc = cont_child_lookup(tls->dt_cont_cache, cont_uuid, pool_uuid,
-			       true /* create */, ds_cont);
+	rc = cont_child_lookup(tls->dt_cont_cache, cont_uuid, pool_uuid, false /* create */,
+			       ds_cont);
 	if (rc != 0)
 		return rc;
 
