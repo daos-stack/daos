@@ -31,6 +31,8 @@
 
 #include <daos_pool.h>
 
+/* Only for test. */
+
 static void
 vos_iod2bsgl(struct umem_store *store, struct umem_store_iod *iod, struct bio_sglist *bsgl)
 {
