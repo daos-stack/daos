@@ -7329,65 +7329,6 @@ out:
 	crt_reply_send(rpc);
 }
 
-static int
-pool_discard(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr_list *list)
-{
-	struct pool_tgt_discard_in	*ptdi_in;
-	struct pool_tgt_discard_out	*ptdi_out;
-	crt_rpc_t			*rpc;
-	d_rank_list_t			*rank_list = NULL;
-	crt_opcode_t			opc;
-	int				i;
-	int				rc;
-
-	rank_list = d_rank_list_alloc(list->pta_number);
-	if (rank_list == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	rank_list->rl_nr = 0;
-	/* remove the duplicate ranks from list, see reintegrate target case */
-	for (i = 0; i < list->pta_number; i++) {
-		if (daos_rank_in_rank_list(rank_list, list->pta_addrs[i].pta_rank))
-			continue;
-
-		rank_list->rl_ranks[rank_list->rl_nr++] = list->pta_addrs[i].pta_rank;
-		D_DEBUG(DB_MD, DF_UUID": discard rank %u\n",
-			DP_UUID(svc->ps_pool->sp_uuid), list->pta_addrs[i].pta_rank);
-	}
-
-	if (rank_list->rl_nr == 0) {
-		D_DEBUG(DB_MD, DF_UUID" discard 0 rank.\n", DP_UUID(svc->ps_pool->sp_uuid));
-		D_GOTO(out, rc = 0);
-	}
-
-	opc = DAOS_RPC_OPCODE(POOL_TGT_DISCARD, DAOS_POOL_MODULE, DAOS_POOL_VERSION);
-	rc = crt_corpc_req_create(ctx, NULL, rank_list, opc, NULL,
-				  NULL, CRT_RPC_FLAG_FILTER_INVERT,
-				  crt_tree_topo(CRT_TREE_KNOMIAL, 32), &rpc);
-	if (rc)
-		D_GOTO(out, rc);
-
-	ptdi_in = crt_req_get(rpc);
-	ptdi_in->ptdi_addrs.ca_arrays = list->pta_addrs;
-	ptdi_in->ptdi_addrs.ca_count = list->pta_number;
-	uuid_copy(ptdi_in->ptdi_uuid, svc->ps_pool->sp_uuid);
-	rc = dss_rpc_send(rpc);
-
-	ptdi_out = crt_reply_get(rpc);
-	D_ASSERT(ptdi_out != NULL);
-	rc = ptdi_out->ptdo_rc;
-	if (rc != 0)
-		D_ERROR(DF_UUID": pool discard failed: rc: %d\n",
-			DP_UUID(svc->ps_pool->sp_uuid), rc);
-
-	crt_req_decref(rpc);
-
-out:
-	if (rank_list)
-		d_rank_list_free(rank_list);
-	return rc;
-}
-
 static void
 pool_update_handler(crt_rpc_t *rpc, int handler_version)
 {
@@ -7410,13 +7351,6 @@ pool_update_handler(crt_rpc_t *rpc, int handler_version)
 				    &out->pto_op.po_hint);
 	if (rc != 0)
 		goto out;
-
-	if (opc_get(rpc->cr_opc) == POOL_REINT &&
-	    svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_DATA_SYNC) {
-		rc = pool_discard(rpc->cr_ctx, svc, &list);
-		if (rc)
-			goto out_svc;
-	}
 
 	rc = pool_svc_update_map(svc, pool_opc_2map_opc(opc_get(rpc->cr_opc)),
 				 false /* exclude_rank */, NULL, NULL, 0, &list,
@@ -8465,6 +8399,22 @@ is_pool_from_srv(uuid_t pool_uuid, uuid_t poh_uuid)
 	}
 
 	return rc ? true : false;
+}
+
+/* Query the target(by id)'s status */
+int
+ds_pool_target_status(struct ds_pool *pool, uint32_t id)
+{
+	struct pool_target *target;
+	int		   rc;
+
+	ABT_rwlock_rdlock(pool->sp_lock);
+	rc = pool_map_find_target(pool->sp_map, id, &target);
+	ABT_rwlock_unlock(pool->sp_lock);
+	if (rc <= 0)
+		return rc == 0 ? -DER_NONEXIST : rc;
+
+	return (int)target->ta_comp.co_status;
 }
 
 /* Check if the target(by id) matched the status */
