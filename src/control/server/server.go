@@ -240,7 +240,7 @@ func (srv *server) createServices(ctx context.Context) (err error) {
 	// Create event distribution primitives.
 	srv.pubSub = events.NewPubSub(ctx, srv.log)
 	srv.OnShutdown(srv.pubSub.Close)
-	srv.evtForwarder = control.NewEventForwarder(rpcClient, srv.cfg.AccessPoints)
+	srv.evtForwarder = control.NewEventForwarder(rpcClient, srv.cfg.MgmtSvcReplicas)
 	srv.evtLogger = control.NewEventLogger(srv.log)
 
 	srv.ctlSvc = NewControlService(srv.log, srv.harness, srv.cfg, srv.pubSub,
@@ -321,7 +321,7 @@ func (srv *server) initNetwork() error {
 func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config) (*EngineInstance, error) {
 	// Closure to join an engine instance to a system using control API.
 	joinFn := func(ctxIn context.Context, req *control.SystemJoinReq) (*control.SystemJoinResp, error) {
-		req.SetHostList(srv.cfg.AccessPoints)
+		req.SetHostList(srv.cfg.MgmtSvcReplicas)
 		req.SetSystem(srv.cfg.SystemName)
 		req.ControlAddr = srv.ctlAddr
 

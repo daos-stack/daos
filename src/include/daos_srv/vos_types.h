@@ -130,6 +130,8 @@ struct vos_pool_space {
 	/** Total & free non-evictable space for md-on-ssd phase2 pool */
 	uint64_t		vps_ne_total;
 	uint64_t		vps_ne_free;
+	/* Memory file size for md-on-ssd pool */
+	uint64_t		vps_mem_bytes;
 };
 
 #define SCM_TOTAL(vps)	((vps)->vps_space.s_total[DAOS_MEDIA_SCM])

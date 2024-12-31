@@ -483,8 +483,8 @@ func (tcs TierConfigs) AssignBdevTierRoles(extMetadataPath string) error {
 	if scs[0].Class == ClassDcpm {
 		return errors.New("external metadata path for md-on-ssd invalid with dcpm scm-class")
 	}
-	// Skip role assignment and validation if no real NVMe tiers exist.
-	if !tcs.HaveRealNVMe() {
+	// Skip role assignment and validation if no bdev tiers exist.
+	if !tcs.HaveBdevs() {
 		return nil
 	}
 

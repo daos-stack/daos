@@ -20,13 +20,18 @@ jobs:
     name: Python isort
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+      - name: Checkout code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-      - uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d  # v5.1.0
+      - name: Set up Python environment
+        uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d  # v5.1.0
         with:
           python-version: '3'
-      - uses: isort/isort-action@f14e57e1d457956c45a19c05a89cccdf087846e5  # v1.1.0
+      - name: Install extra python packages
+        run: python3 -m pip install --requirement utils/cq/requirements.txt
+      - name: Run isort
+        uses: isort/isort-action@24d8a7a51d33ca7f36c3f23598dafa33f7071326  # v1.1.1
         with:
           requirementsFiles: "requirements.txt"
       - name: Run on SConstruct file.
@@ -155,7 +160,7 @@ jobs:
       - name: Install extra python packages
         run: python3 -m pip install --requirement utils/cq/requirements.txt
       - name: Run check
-        uses: codespell-project/actions-codespell@3174815d6231f5bdc24dbfb6fc3b8caec73d521c  # master
+        uses: codespell-project/actions-codespell@406322ec52dd7b488e48c1c4b82e2a8b3a1bf630  # master
         with:
           skip: ./src/control/vendor,./src/control/go.sum,./.git
           ignore_words_file: ci/codespell.ignores
@@ -197,6 +202,20 @@ jobs:
       - name: Run check
         run: yamllint --format github .
 
+  copyright:
+    name: Copyright check
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Run check
+        run: |
+          \[ ! -x ./utils/cq/check_update_copyright.sh \] || ./utils/cq/check_update_copyright.sh \
+            $(git merge-base HEAD ${{ github.event.pull_request.base.sha || github.ref }}) gha
+
   linting-summary:
     name: Linting Summary
     runs-on: ubuntu-24.04
@@ -211,6 +230,7 @@ jobs:
       - codespell
       # - clang-format  # not required
       - yaml-lint
+      - copyright
     if: (!cancelled())
     steps:
       - name: Check if any job failed

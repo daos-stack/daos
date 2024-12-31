@@ -511,7 +511,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 			D_GOTO(reset, rc = -DER_NOMEM);
 
 		rc = vos_dtx_commit_internal(cont, dth->dth_dti_cos,
-					     dth->dth_dti_cos_count, 0, NULL, daes, dces);
+					     dth->dth_dti_cos_count, 0, false, NULL, daes, dces);
 		if (rc < 0)
 			goto reset;
 		if (rc == 0)
@@ -584,7 +584,7 @@ reset:
 
 		if (daes != NULL)
 			vos_dtx_post_handle(cont, daes, dces, dth->dth_dti_cos_count,
-					    false, rc != 0);
+					    false, rc != 0, false);
 	}
 
 	if (obj != NULL)
@@ -2599,7 +2599,7 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard)
 		 *	be aborted. Then it will be added and handled via GC when ktr_rec_free().
 		 */
 
-		rc = dbtree_iter_delete(oiter->it_hdl, NULL);
+		rc = dbtree_iter_delete(oiter->it_hdl, obj->obj_cont);
 		D_ASSERT(rc != -DER_NONEXIST);
 	} else if (rc == -DER_NONEXIST) {
 		/* Key no longer exists at epoch but isn't empty */

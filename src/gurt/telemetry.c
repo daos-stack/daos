@@ -804,6 +804,12 @@ destroy_shmem_with_key(key_t key)
 	return 0;
 }
 
+static bool
+is_initialized(void)
+{
+	return tm_shmem.ctx != NULL && tm_shmem.ctx->shmem_root != NULL;
+}
+
 /**
  * Initialize an instance of the telemetry and metrics API for the producer
  * process with the root set to the provided name.
@@ -832,6 +838,9 @@ d_tm_init_with_name(int id, uint64_t mem_size, int flags, const char *root_name)
 	key_t			 key;
 	int                      shmid = 0;
 	int			 rc = DER_SUCCESS;
+
+	if (is_initialized())
+		return -DER_ALREADY;
 
 	if (root_name == NULL || strnlen(root_name, D_TM_MAX_NAME_LEN) == 0) {
 		D_ERROR("root name cannot be empty\n");
@@ -2251,13 +2260,6 @@ d_tm_find_metric(struct d_tm_context *ctx, char *path)
 		node = d_tm_follow_link(ctx, node);
 
 	return node;
-}
-
-static bool
-is_initialized(void)
-{
-	return tm_shmem.ctx != NULL &&
-	       tm_shmem.ctx->shmem_root != NULL;
 }
 
 /*
