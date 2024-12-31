@@ -1754,6 +1754,12 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 		return -DER_INVAL;
 	}
 
+	if (unlikely(flags & VOS_POF_SKIP_UUID_CHECK)) {
+		D_ERROR("Do not support SKIP_UUID_CHECK flags (%x) via regular pool open API\n",
+			VOS_POF_SKIP_UUID_CHECK);
+		return -DER_NOTSUPPORTED;
+	}
+
 	D_DEBUG(DB_MGMT, "Pool Path: %s, UUID: "DF_UUID"\n", path,
 		DP_UUID(uuid));
 
@@ -1817,7 +1823,7 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 		goto out;
 	}
 
-	if (!(flags & VOS_POF_SKIP_UUID_CHECK) && uuid_compare(uuid, pool_df->pd_id)) {
+	if (uuid_compare(uuid, pool_df->pd_id)) {
 		D_ERROR("Mismatch uuid, user="DF_UUIDF", pool="DF_UUIDF"\n",
 			DP_UUID(uuid), DP_UUID(pool_df->pd_id));
 		rc = -DER_ID_MISMATCH;
