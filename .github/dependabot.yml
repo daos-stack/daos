@@ -11,6 +11,8 @@ updates:
       python-packages:
         patterns:
           - "*"
+    ignore:
+      - dependency-name: "avocado*"
   - package-ecosystem: github-actions
     directory: /
     schedule:
