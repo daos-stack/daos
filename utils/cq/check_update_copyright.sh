@@ -1,6 +1,7 @@
 #!/bin/bash
 #
 #  Copyright 2024 Intel Corporation.
+#  Copyright 2025 Hewlett Packard Enterprise Development LP.
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -26,7 +27,8 @@ PARENT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 cd "$PARENT_DIR"/../../
 
 
-regex='(^[[:blank:]]*[\*/]*.*)((Copyright[[:blank:]]*)([0-9]{4})(-([0-9]{4}))?)([[:blank:]]*(Intel.*$))'
+regex_intel='(^[[:blank:]]*[\*/]*.*)((Copyright[[:blank:]]*)([0-9]{4})(-([0-9]{4}))?)([[:blank:]]*(Intel.*$))'
+regex_hpe='(^[[:blank:]]*[\*/]*.*)((Copyright[[:blank:]]*)([0-9]{4})(-([0-9]{4}))?)([[:blank:]]*(Hewlett Packard Enterprise Development LP.*$))'
 year=$(date +%Y)
 errors=0
 targets=(
@@ -75,11 +77,15 @@ for file in $files; do
          [ "$(git diff --cached -I Copyright "$file")" = '' ]; }; then
         continue
     fi
-    read -r y1 y2 <<< "$(sed -nre "s/^.*$regex.*$/\4 \6/p" "$file")"
-    if [[ -z $y1 ]] ; then
-        # Print warning but don't error on non-existent copyright 
-        echo "  Copyright Information not found in: $file"
-    elif [[ $y1 -ne $year && $year -ne $y2 ]] ; then
+    # Check for existing HPE copyright
+    read -r y1_hpe y2_hpe <<< "$(sed -nre "s/^.*$regex_hpe.*$/\4 \6/p" "$file")"
+    if [[ $y1_hpe -eq $year ]] || [[ $y2_hpe -eq $year ]]; then
+        # no update needed
+        continue
+    fi
+
+    if [[ -n $y1_hpe ]] ; then
+        # HPE copyright needs to be updated
         if [[ "$mode" == "githook" ]]; then
             # Update copyright in place
             if ! git reset "$file"; then
@@ -87,9 +93,9 @@ for file in $files; do
                 errors=$((errors + 1))
             fi
             if [[ "$os" == 'Linux' ]]; then
-                sed -i -re "s/$regex/\1Copyright $y1-$year \8/" "$file"
+                sed -i -re "s/$regex_hpe/\1Copyright $y1_hpe-$year \8/" "$file"
             else
-                sed -i '' -re "s/$regex/\1Copyright $y1-$year \8/" "$file"
+                sed -i '' -re "s/$regex_hpe/\1Copyright $y1_hpe-$year \8/" "$file"
             fi
 
             if ! git add "$file"; then
@@ -98,10 +104,47 @@ for file in $files; do
             fi
         elif [[ "$mode" == "gha" ]]; then
             # Print error but do not update
-            lineno="$(grep -nE "$regex" "$file" | cut -f1 -d:)"
+            lineno="$(grep -nE "$regex_hpe" "$file" | cut -f1 -d:)"
             echo "::error file=$file,line=$lineno::Copyright out of date"
             errors=$((errors + 1))
         fi
+        continue
+    fi
+
+    # No HPE copyright, so try to add it after the Intel copyright
+    read -r y1_intel y2_intel <<< "$(sed -nre "s/^.*$regex_intel.*$/\4 \6/p" "$file")"
+    if [[ -z $y1_intel ]] ; then
+        # Print warning but don't error on non-existent copyright
+        echo "  Copyright Information not found in: $file"
+        continue
+    fi
+
+    if [[ "$mode" == "githook" ]]; then
+        # Add copyright in place
+        if ! git reset "$file"; then
+            echo "  Unable to un-stage $file"
+            errors=$((errors + 1))
+            continue
+        fi
+        if [[ -z "$y2_intel" ]]; then
+            if [[ "$os" == 'Linux' ]]; then
+                sed -i -re "s/$regex_intel/\1Copyright $y1_intel \8\n\1Copyright $year Hewlett Packard Enterprise Development LP./" "$file"
+            else
+                sed -i '' -re "s/$regex_intel/\1Copyright $y1_intel \8\n\1Copyright $year Hewlett Packard Enterprise Development LP./" "$file"
+            fi
+        else
+            
+            if [[ "$os" == 'Linux' ]]; then
+                sed -i -re "s/$regex_intel/\1Copyright $y1_intel-$year \8\n\1Copyright $year Hewlett Packard Enterprise Development LP./" "$file"
+            else
+                sed -i '' -re "s/$regex_intel/\1Copyright $y1_intel-$year \8\n\1Copyright $year Hewlett Packard Enterprise Development LP./" "$file"
+            fi
+        fi
+    elif [[ "$mode" == "gha" ]]; then
+        # Print error but do not add
+        lineno="$(grep -nE "$regex_intel" "$file" | cut -f1 -d:)"
+        echo "::error file=$file,line=$lineno::Copyright out of date"
+        errors=$((errors + 1))
     fi
 done
 
