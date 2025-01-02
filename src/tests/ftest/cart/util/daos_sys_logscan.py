@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# (C) Copyright 2024 Intel Corporation
+# (C) Copyright 2025 Intel Corporation
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -346,7 +346,7 @@ class SysPools():
         # rebuild-op, status, puuid, leader rank, term, map version, rebuild-gen, duration
         # see re_old_ldr_status
         return match.group(1), match.group(2), match.group(3), int(match.group(4)), \
-               int(match.group(5)), int(match.group(6)), int(match.group(7)), int(match.group(8))
+            int(match.group(5)), int(match.group(6)), int(match.group(7)), int(match.group(8))
 
     def _match_legacy_ps_rb_status(self, fname, line, pid, rank):
         # Do not match on legacy rebuild log format if we found new format
