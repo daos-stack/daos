@@ -9,8 +9,6 @@
 #include <spdk/thread.h>
 #include "bio_internal.h"
 
-
-/** Dummy comment */
 static void
 dma_free_chunk(struct bio_dma_chunk *chunk)
 {
