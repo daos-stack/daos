@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1686,7 +1687,9 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 		D_ASSERT(d_bdev != NULL);
 	}
 
-	ctxt->bxc_dma_buf = dma_buffer_create(init_chk_cnt(), tgt_id);
+	/* Sys target only needs very limited DMA buffer for the WAL of RDB */
+	ctxt->bxc_dma_buf = dma_buffer_create(tgt_id == BIO_SYS_TGT_ID ? 1 : init_chk_cnt(),
+					      tgt_id);
 	if (ctxt->bxc_dma_buf == NULL) {
 		D_ERROR("failed to initialize dma buffer\n");
 		rc = -DER_NOMEM;
