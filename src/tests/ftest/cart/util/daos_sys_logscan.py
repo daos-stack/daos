@@ -93,7 +93,7 @@ class SysPools():
         """Return all warnings stored when scanning engine log files"""
         return self._warnings
 
-    def _find_rank(self, log_iter):
+    def _set_rank(self, log_iter):
         print(f"INFO: searching for rank in file {log_iter.fname}")
         found = False
         for line in log_iter.new_iter():
@@ -119,12 +119,16 @@ class SysPools():
             return True
         return False
 
+    def _get_ps_leader_components(self, match):
+        # puuid, term
+        # see re_step_up and re_step_down
+        return match.group(1), int(match.group(2))
+
     def _match_ps_step_up(self, fname, line, pid, rank):
         msg, host, datetime = self._get_line_components(line)
         match = self.re_step_up.match(msg)
         if match:
-            puuid = match.group(1)
-            term = int(match.group(2))
+            puuid, term = self._get_ps_leader_components(match)
             if puuid not in self._pools:
                 self._pools[puuid] = {}
             self._cur_ldr_rank[puuid] = rank
@@ -137,10 +141,9 @@ class SysPools():
             # carry over most recent map version into the new term, avoid later KeyError
             if old_term in self._pools:
                 if self._pools and self._pools[puuid][old_term]["maps"] != {}:
-                    last_mapver = list(self._pools[puuid][old_term]["maps"].keys())[-1]
+                    last_mapver = max(self._pools[puuid][old_term]["maps"].keys())
                     pmap_versions = self._pools[puuid][old_term]["maps"][last_mapver]
                     pmap_versions["carryover"] = True
-                    # pmap_versions["rb_gens"] = {}
             else:
                 pmap_versions = {}
             self._pools[puuid][term] = {
@@ -162,8 +165,7 @@ class SysPools():
         msg, host, datetime = self._get_line_components(line)
         match = self.re_step_down.match(msg)
         if match:
-            puuid = match.group(1)
-            term = int(match.group(2))
+            puuid, term = self._get_ps_leader_components(match)
             if term != self._cur_term[puuid]:
                 self._warn(f"step_down term={term} != cur_term={self._cur_term}", fname, line)
             self._cur_ldr_rank[puuid] = -1
@@ -176,13 +178,16 @@ class SysPools():
             return True
         return False
 
+    def _get_pmap_update_components(self, match):
+        # puuid, from_version, to_version
+        # see re_pmap_update
+        return match.group(1), int(match.group(2)), int(match.group(3))
+
     def _match_ps_pmap_update(self, fname, line, pid, rank):
         msg, host, datetime = self._get_line_components(line)
         match = self.re_pmap_update.match(msg)
         if match:
-            puuid = match.group(1)
-            from_ver = int(match.group(2))
-            to_ver = int(match.group(3))
+            puuid, from_ver, to_ver = self._get_pmap_update_components(match)
             # ignore if this engine is not the leader
             if not self._is_leader(puuid, rank, pid):
                 return True
@@ -200,6 +205,9 @@ class SysPools():
         return False
 
     def _get_rb_components(self, match):
+        # puuid, map version number, rebuild generation number, rebuild operation string
+        # same for new uniform identifier format and legacy log line format
+        # see re_rebuild_ldr_start, re_old_ldr_start
         return match.group(1), int(match.group(2)), int(match.group(3)), match.group(4)
 
     def _match_ps_rb_start(self, fname, line, pid, rank):
@@ -247,10 +255,7 @@ class SysPools():
         if match:
             # Disable checking for new rebuild log format, to save execution time
             self._check_rb_new_fmt = False
-            puuid = match.group(1)
-            ver = int(match.group(2))
-            gen = int(match.group(3))
-            op = match.group(4)
+            puuid, ver, gen, op = self._get_rb_components(match)
             if not self._is_leader(puuid, rank, pid):
                 return True
             term = self._cur_term[puuid]
@@ -276,6 +281,11 @@ class SysPools():
             return True
         return False
 
+    def _get_ps_rb_status_components(self, match):
+        # puuid, map version, rebuild-generation, operation, status, duration
+        # see re_rebuild_ldr_status
+        return self._get_rb_components(match) + (match.group(5), int(match.group(6)))
+
     def _match_ps_rb_status(self, fname, line, pid, rank):
         # Do not match on new rebuild log format if we found legacy format
         if not self._check_rb_new_fmt:
@@ -285,9 +295,7 @@ class SysPools():
         if match:
             # Disable checking for legacy rebuild log format, to save execution time
             self._check_rb_legacy_fmt = False
-            puuid, ver, gen, op = self._get_rb_components(match)
-            status = match.group(5)
-            dur = int(match.group(6))
+            puuid, ver, gen, op, status, dur = self._get_ps_rb_status_components(match)
             if not self._is_leader(puuid, rank, pid):
                 return True
             term = self._cur_term[puuid]
@@ -334,6 +342,12 @@ class SysPools():
             return True
         return False
 
+    def _get_legacy_ps_rb_status_components(self, match):
+        # rebuild-op, status, puuid, leader rank, term, map version, rebuild-gen, duration
+        # see re_old_ldr_status
+        return match.group(1), match.group(2), match.group(3), int(match.group(4)), \
+               int(match.group(5)), int(match.group(6)), int(match.group(7)), int(match.group(8))
+
     def _match_legacy_ps_rb_status(self, fname, line, pid, rank):
         # Do not match on legacy rebuild log format if we found new format
         if not self._check_rb_legacy_fmt:
@@ -343,14 +357,8 @@ class SysPools():
         if match:
             # Disable checking for new rebuild log format, to save execution time
             self._check_rb_new_fmt = False
-            op = match.group(1)
-            status = match.group(2)
-            puuid = match.group(3)
-            log_ldr = int(match.group(4))
-            log_term = int(match.group(5))
-            ver = int(match.group(6))
-            gen = int(match.group(7))
-            dur = int(match.group(8))
+            op, status, puuid, log_ldr, log_term, ver, gen, dur = \
+                self._get_legacy_ps_rb_status_components(match)
             if not self._is_leader(puuid, rank, pid):
                 return True
             if rank != log_ldr:
@@ -406,7 +414,7 @@ class SysPools():
 
         # Find rank assignment log line for this file. Can't do much without it.
         self._file_to_rank[fname] = rank
-        if rank == -1 and not self._find_rank(log_iter):
+        if rank == -1 and not self._set_rank(log_iter):
             self._warn("cannot find rank assignment in log file - skipping", fname)
             return
         rank = self._file_to_rank[fname]
