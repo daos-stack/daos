@@ -56,6 +56,8 @@ class DirTree():
         self._needles_prefix = ""
         self._needles_count = 0
         self._needles_paths = []
+        self._file_size_min = 0
+        self._file_size_max = 0
 
     def create(self):
         """Populate the directory-tree.
@@ -110,6 +112,10 @@ class DirTree():
         needle_name = os.path.basename(needle_path)
         return needle_name, needle_path
 
+    def set_file_size(self, min=0, max=0):
+        self._file_size_min = min
+        self._file_size_max = max
+
     def _create_dir_tree(self, current_path, current_height):
         """Create the actual directory tree using depth-first search approach.
 
@@ -124,8 +130,7 @@ class DirTree():
 
         # create files
         for _ in range(self._files_per_node):
-            fd, _ = tempfile.mkstemp(dir=current_path, suffix=".file")
-            os.close(fd)
+            self._mktemp_file(dir=current_path, suffix=".file")
 
         # create nested directories
         for _ in range(self._subdirs_per_node):
@@ -144,8 +149,7 @@ class DirTree():
         for count in range(self._needles_count):
             new_path = os.path.dirname(random.choice(self._needles_paths))  # nosec
             suffix = f"_{count:05d}.needle"
-            fd, _ = tempfile.mkstemp(dir=new_path, prefix=self._needles_prefix, suffix=suffix)
-            os.close(fd)
+            self._mktemp_file(dir=new_path, prefix=self._needles_prefix, suffix=suffix)
 
     def _create_needle(self, current_path, current_height):
         """Create a *.needle file if we reach the bottom of the tree.
@@ -162,14 +166,23 @@ class DirTree():
 
         self._needles_count -= 1
         suffix = "_{:05d}.needle".format(self._needles_count)
-        fd, file_name = tempfile.mkstemp(
-            dir=current_path, prefix=self._needles_prefix, suffix=suffix)
-        os.close(fd)
-
+        file_name = self._mktemp_file(dir=current_path, prefix=self._needles_prefix, suffix=suffix)
         self._needles_paths.append(file_name)
 
+    def _mktemp_file(self, dir=None, prefix=None, suffix=None):
+        fd, fname = tempfile.mkstemp(dir=dir, prefix=prefix, suffix=suffix)
+        if self._file_size_min == 0:
+            close(fd)
+            return fname
 
-def _populate_dir_tree(path, height, subdirs_per_node, files_per_node, needles, prefix):
+        size = random.randrange(self._file_size_min, self._file_size_max)
+        with os.fdopen(fd, 'wb') as f:
+            f.write(os.urandom(size))
+        return fname
+
+
+
+def _populate_dir_tree(path, height, subdirs_per_node, files_per_node, needles, prefix, file_size_min, file_size_max):
     """Create a directory tree and its needle files.
 
     Args:
@@ -179,11 +192,14 @@ def _populate_dir_tree(path, height, subdirs_per_node, files_per_node, needles, 
         files_per_node (int): number of files created per directory
         needles (int): number of needles
         prefix (str): needle prefix
+        file_size_min (int): min size of the files (0 for empty file)
+        file_size_max (int): max size of the files
     """
     logger.info('Populating: %s', path)
     dir_tree = DirTree(path, height, subdirs_per_node, files_per_node)
     dir_tree.set_needles_prefix(prefix)
     dir_tree.set_number_of_needles(needles)
+    dir_tree.set_file_size(file_size_min, file_size_max)
     tree_path = dir_tree.create()
     logger.info('Directory tree created at: %s', tree_path)
 
@@ -203,11 +219,16 @@ def main():
         '--needles', type=int, default=1, help='number of files in the bottom directory')
     parser.add_argument(
         '--prefix', type=str, required=True, help='bottom directory file prefix')
+    parser.add_argument(
+        '--file-size-min', type=int, default=0, help='min size of the files')
+    parser.add_argument(
+        '--file-size-max', type=int, default=0, help='max size of the files')
     args = parser.parse_args()
 
     try:
         _populate_dir_tree(
-            args.path, args.height, args.subdirs, args.files, args.needles, args.prefix)
+            args.path, args.height, args.subdirs, args.files, args.needles,
+            args.prefix, args.file_size_min, args.file_size_max)
     except Exception as error:      # pylint: disable=broad-except
         logger.error('Error detected: %s', str(error))
         logger.debug("Stacktrace", exc_info=True)
