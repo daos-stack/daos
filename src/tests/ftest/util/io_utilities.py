@@ -357,6 +357,8 @@ class DirectoryTreeCommand(ExecutableCommand):
         self.files = FormattedParameter("--files {}")
         self.needles = FormattedParameter("--needles {}")
         self.prefix = FormattedParameter("--prefix {}")
+        self.file_size_min = FormattedParameter("--file-size-min {}")
+        self.file_size_max = FormattedParameter("--file-size-max {}")
 
         # run options
         self.hosts = hosts.copy()
