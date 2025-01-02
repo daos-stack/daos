@@ -12,7 +12,7 @@ updates:
         patterns:
           - "*"
     ignore:
-      - avocado-*
+      - dependency-name: "avocado*"
   - package-ecosystem: github-actions
     directory: /
     schedule:
