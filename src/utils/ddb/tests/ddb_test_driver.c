@@ -509,7 +509,7 @@ dvt_vos_insert_dtx_records(daos_handle_t coh, uint32_t nr, uint32_t committed_nr
 
 	/* commit */
 	for (i = 0; i < committed_nr; i++)
-		assert_int_equal(1, vos_dtx_commit(coh, &dth[i]->dth_xid, 1, NULL));
+		assert_int_equal(1, vos_dtx_commit(coh, &dth[i]->dth_xid, 1, false, NULL));
 
 	/* end each dtx */
 	for (i = 0; i < nr; i++)
