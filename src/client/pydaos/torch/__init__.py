@@ -9,8 +9,6 @@
 PyTorch DAOS Module allowing using DFS as Dataset
 """
 
-import atexit
-
 from . import torch_shim  # pylint: disable=relative-beyond-top-level,import-self
 
 DAOS_MAGIC = 0x7A8B
@@ -20,13 +18,6 @@ DAOS_MAGIC = 0x7A8B
 _rc = torch_shim.module_init()
 if _rc != 0:
     raise ValueError(f"Could not initialize DAOS module: rc={_rc}")
-
-
-@atexit.register
-def _fini():
-    rc = torch_shim.module_fini()
-    if rc != 0:
-        raise ValueError(f"Could not finalize DAOS module, rc={rc}")
 
 
 from .torch_api import *  # noqa: F403,E402
