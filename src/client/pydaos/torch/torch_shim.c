@@ -65,14 +65,7 @@ atfork_handler(void)
 static PyObject *
 __shim_handle__module_init(PyObject *self, PyObject *args)
 {
-	int rc = daos_init();
-	if (rc) {
-		PyErr_Format(PyExc_TypeError, "Could not initialize DAOS module %s (rc=%d)",
-			     d_errstr(rc), rc);
-		return NULL;
-	}
-
-	rc = pthread_atfork(NULL, NULL, &atfork_handler);
+	int rc = pthread_atfork(NULL, NULL, &atfork_handler);
 	if (rc) {
 		PyErr_Format(PyExc_TypeError, "Could not set atfork handler %s (rc=%d)",
 			     strerror(rc), rc);
@@ -83,20 +76,10 @@ __shim_handle__module_init(PyObject *self, PyObject *args)
 }
 
 static PyObject *
-__shim_handle__module_fini(PyObject *self, PyObject *args)
-{
-	int rc = daos_fini();
-	if (rc) {
-		rc = daos_der2errno(rc);
-	}
-
-	return PyLong_FromLong(rc);
-}
-
-static PyObject *
 __shim_handle__torch_connect(PyObject *self, PyObject *args)
 {
 	int                rc      = 0;
+	int                rc2     = 0;
 	char              *pool    = NULL;
 	char              *cont    = NULL;
 	int                rd_only = 1;
@@ -109,18 +92,29 @@ __shim_handle__torch_connect(PyObject *self, PyObject *args)
 
 	RETURN_NULL_IF_FAILED_TO_PARSE(args, "ssp", &pool, &cont, &rd_only);
 
+	rc = daos_init();
+	if (rc) {
+		D_ERROR("Could not initialize DAOS: %s (rc=%d)", d_errstr(rc), rc);
+		rc = daos_der2errno(rc);
+		return PyLong_FromLong(rc);
+	}
+
+	rc = dfs_init();
+	if (rc) {
+		D_ERROR("Could not initialize DFS: %s (rc=%d)", strerror(rc), rc);
+		rc2 = daos_fini();
+		if (rc2) {
+			D_ERROR("Could not finalize DAOS: %s (rc=%d)", d_errstr(rc2), rc2);
+		}
+		return PyLong_FromLong(rc);
+	}
+
 	D_ALLOC_PTR(hdl);
 	if (hdl == NULL) {
 		rc = ENOMEM;
 		goto out;
 	}
 	hdl->flags = rd_only ? O_RDONLY : O_RDWR;
-
-	rc = dfs_init();
-	if (rc) {
-		D_ERROR("Could not initialize DFS: %s (rc=%d)", strerror(rc), rc);
-		goto out;
-	}
 
 	rc = dfs_connect(pool, NULL, cont, hdl->flags, NULL, &hdl->dfs);
 	if (rc) {
@@ -157,17 +151,32 @@ __shim_handle__torch_connect(PyObject *self, PyObject *args)
 	}
 	hdl->eq_owner_pid = getpid();
 
-out:
-	if (rc) {
-		dfs_disconnect(hdl->dfs);
+	PyList_SetItem(result, 0, PyLong_FromLong(rc));
+	PyList_SetItem(result, 1, PyLong_FromVoidPtr(hdl));
 
-		D_FREE(hdl->global.iov_buf);
-		D_FREE(hdl);
-		hdl = NULL;
+	return result;
+
+out:
+	rc2 = dfs_disconnect(hdl->dfs);
+	if (rc2) {
+		D_ERROR("Could not disconnect DFS: %s (rc=%d)", strerror(rc2), rc2);
+	}
+
+	D_FREE(hdl->global.iov_buf);
+	D_FREE(hdl);
+
+	rc2 = dfs_fini();
+	if (rc2) {
+		D_ERROR("Could not finalize DFS: %s (rc=%d)", strerror(rc2), rc2);
+	}
+
+	rc2 = daos_fini();
+	if (rc2) {
+		D_ERROR("Could not finalize DAOS: %s (rc=%d)", d_errstr(rc2), rc2);
 	}
 
 	PyList_SetItem(result, 0, PyLong_FromLong(rc));
-	PyList_SetItem(result, 1, PyLong_FromVoidPtr(hdl));
+	PyList_SetItem(result, 1, PyLong_FromVoidPtr(NULL));
 
 	return result;
 }
@@ -202,6 +211,12 @@ __shim_handle__torch_disconnect(PyObject *self, PyObject *args)
 	if (rc) {
 		D_ERROR("Could not finalize DFS: %s (rc=%d)", strerror(rc), rc);
 		goto out;
+	}
+
+	rc = daos_fini();
+	if (rc) {
+		D_ERROR("Could not finalize DAOS: %s (rc=%d)", d_errstr(rc), rc);
+		rc = daos_der2errno(rc);
 	}
 
 out:
@@ -699,7 +714,6 @@ static PyMethodDef torchMethods[] = {
     EXPORT_PYTHON_METHOD(torch_list_with_anchor),
 
     EXPORT_PYTHON_METHOD(module_init),
-    EXPORT_PYTHON_METHOD(module_fini),
 
     {NULL, NULL},
 };
