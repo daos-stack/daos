@@ -11,6 +11,8 @@ updates:
       python-packages:
         patterns:
           - "*"
+    ignore:
+      - avocado-*
   - package-ecosystem: github-actions
     directory: /
     schedule:
