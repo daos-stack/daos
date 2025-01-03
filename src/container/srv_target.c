@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2025 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1607,10 +1607,19 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		 */
 		D_ASSERT(hdl->sch_cont != NULL);
 		D_ASSERT(hdl->sch_cont->sc_pool != NULL);
-		hdl->sch_cont->sc_open++;
 
-		if (hdl->sch_cont->sc_open > 1)
+		hdl->sch_cont->sc_open++;
+		if (hdl->sch_cont->sc_open > 1) {
+			/* If there is an inflight open being stucked in get prop, then
+			 * let's retry later.
+			 */
+			if (!hdl->sch_cont->sc_props_fetched) {
+				hdl->sch_cont->sc_open--;
+				D_GOTO(err_cont, rc = -DER_BUSY);
+			}
+
 			goto opened;
+		}
 
 		if (ds_pool_restricted(hdl->sch_cont->sc_pool->spc_pool, false))
 			goto csum_init;
