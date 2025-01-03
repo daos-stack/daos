@@ -168,13 +168,14 @@ vos_dtx_load_mbs(daos_handle_t coh, struct dtx_id *dti, daos_unit_oid_t *oid,
  * \param coh	[IN]	Container open handle.
  * \param dtis	[IN]	The array for DTX identifiers to be committed.
  * \param count [IN]	The count of DTXs to be committed.
+ * \param keep_act [IN]	Keep DTX entry or not.
  * \param rm_cos [OUT]	The array for whether remove entry from CoS cache.
  *
  * \return		Negative value if error.
  * \return		Others are for the count of committed DTXs.
  */
 int
-vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool rm_cos[]);
+vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool keep_act, bool rm_cos[]);
 
 /**
  * Abort the specified DTXs.
@@ -1211,6 +1212,40 @@ int
 vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	    struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb,
 	    vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth);
+
+/**
+ * Iterate VOS objects and subtrees when recursive mode is specified. When it's
+ * called against md-on-ssd phase2 pool, it iterates objects in bucket ID order
+ * instead of OID order to minimize bucket eviction/load.
+ *
+ * \param[in]		param		iteration parameters
+ * \param[in]		recursive	iterate in lower level recursively
+ * \param[in]		anchors		array of anchors, one for each
+ *					iteration level
+ * \param[in]		pre_cb		pre subtree iteration callback
+ * \param[in]		post_cb		post subtree iteration callback
+ * \param[in]		arg		callback argument
+ * \param[in]		dth		DTX handle
+ *
+ * \retval		0	iteration complete
+ * \retval		> 0	callback return value
+ * \retval		-DER_*	error (but never -DER_NONEXIST)
+ */
+int
+vos_iterate_obj(vos_iter_param_t *param, bool recursive, struct vos_iter_anchors *anchors,
+		vos_iter_cb_t pre_cb, vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth);
+
+/**
+ * Skip the object not located on specified bucket (for md-on-ssd phase2).
+ *
+ * \param ih[IN]	Iterator handle
+ * \param desc[IN]	Iterator desc for current OI entry
+ *
+ * \return		true:	current entry is skipped
+ *			false:	current entry isn't skipped
+ */
+bool
+vos_bkt_iter_skip(daos_handle_t ih, vos_iter_desc_t *desc);
 
 /**
  * Retrieve the largest or smallest integer DKEY, AKEY, and array offset from an

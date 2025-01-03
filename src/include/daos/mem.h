@@ -289,14 +289,12 @@ struct umem_cache {
 };
 
 struct umem_cache_chkpt_stats {
-	/** Last committed checkpoint id */
-	uint64_t *uccs_chkpt_id;
 	/** Number of pages processed */
-	int       uccs_nr_pages;
+	unsigned int       uccs_nr_pages;
 	/** Number of dirty chunks copied */
-	int       uccs_nr_dchunks;
+	unsigned int       uccs_nr_dchunks;
 	/** Number of sgl iovs used to copy dirty chunks */
-	int       uccs_nr_iovs;
+	unsigned int       uccs_nr_iovs;
 };
 
 /** Allocate global cache for umem store.
@@ -1197,6 +1195,18 @@ umem_get_mb_from_offset(struct umem_instance *umm, umem_off_t off);
  */
 umem_off_t
 umem_get_mb_base_offset(struct umem_instance *umm, uint32_t mb_id);
+
+/**
+ * Force GC within the heap to optimize umem_cache usage with DAV
+ *  v2 allocator.
+ *
+ * \param[in]		umm		umem instance pointer.
+ *
+ * \return 0, success
+ *         < 0, error
+ */
+int
+umem_heap_gc(struct umem_instance *umm);
 
 /*********************************************************************************/
 

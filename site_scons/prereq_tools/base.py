@@ -172,6 +172,18 @@ class BuildRequired(Exception):
         return f'{self.component} needs to be built, use --build-deps=yes'
 
 
+class RunnerResult():
+    """Helper class for Runner that allows returning extra values without changing the API"""
+
+    # pylint: disable=too-few-public-methods
+    def __init__(self, rc):
+        self.rc = rc
+
+    def __bool__(self):
+        """Add a truth function"""
+        return self.rc == 0
+
+
 class Runner():
     """Runs commands in a specified environment"""
 
@@ -185,10 +197,13 @@ class Runner():
         self.__dry_run = env.GetOption('no_exec')
 
     def run_commands(self, commands, subdir=None, env=None):
-        """Runs a set of commands in specified directory"""
+        """Runs a set of commands in specified directory
+
+        Returns a RunnerResult object that resolves to True on process failure.
+        """
         # Check that PreReqComponent is initialized
         assert self.env
-        retval = True
+        retval = RunnerResult(0)
 
         passed_env = env or self.env
 
@@ -203,11 +218,11 @@ class Runner():
                     cmd.append(self.env.subst(part))
             if self.__dry_run:
                 print(f"Would RUN: {' '.join(cmd)}")
-                retval = True
             else:
                 print(f"RUN: {' '.join(cmd)}")
-                if subprocess.call(cmd, shell=False, cwd=subdir, env=passed_env['ENV']) != 0:
-                    retval = False
+                rc = subprocess.call(cmd, shell=False, cwd=subdir, env=passed_env['ENV'])
+                if rc != 0:
+                    retval = RunnerResult(rc)
                     break
         return retval
 
@@ -446,7 +461,6 @@ class PreReqComponent():
         opts.Add('USE_INSTALLED', 'Comma separated list of preinstalled dependencies', 'none')
         opts.Add(('MPI_PKG', 'Specifies name of pkg-config to load for MPI', None))
         opts.Add(BoolVariable('FIRMWARE_MGMT', 'Build in device firmware management.', False))
-        opts.Add(BoolVariable('STACK_MMAP', 'Allocate ABT ULTs stacks with mmap()', False))
         opts.Add(BoolVariable('STATIC_FUSE', "Build with static libfuse library", False))
         opts.Add(EnumVariable('BUILD_TYPE', "Set the build type", 'release',
                               ['dev', 'debug', 'release'], ignorecase=1))
@@ -1417,8 +1431,12 @@ class _Component():
                     continue
                 full_lib = os.path.join(path, lib)
                 cmd = ['patchelf', '--set-rpath', ':'.join(rpath), full_lib]
-                if not RUNNER.run_commands([cmd]):
-                    print(f'Skipped patching {full_lib}')
+                res = RUNNER.run_commands([cmd])
+                if not res:
+                    if lib == 'libspdk.so' and res.rc == 1:
+                        print(f'Skipped patching {full_lib}')
+                    else:
+                        raise BuildFailure(f'Error running patchelf on {full_lib} ({res.rc})')
 
     def build(self, env, needed_libs):
         """Build the component, if necessary

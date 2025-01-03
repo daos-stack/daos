@@ -7,7 +7,6 @@
 package bdev
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -180,10 +179,8 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				Tier:  tierID,
 				Class: storage.ClassNvme,
 				Bdev: storage.BdevConfig{
-					DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddrs(1, 2)...),
-					DeviceRoles: storage.BdevRoles{
-						OptionBits: storage.OptionBits(storage.BdevRoleAll),
-					},
+					DeviceList:  storage.MustNewBdevDeviceList(test.MockPCIAddrs(1, 2)...),
+					DeviceRoles: storage.BdevRolesFromBits(storage.BdevRoleAll),
 				},
 			}),
 			expOut: `
@@ -744,7 +741,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				return
 			}
 
-			gotOut, err := ioutil.ReadFile(cfgOutputPath)
+			gotOut, err := os.ReadFile(cfgOutputPath)
 			if err != nil {
 				t.Fatal(err)
 			}

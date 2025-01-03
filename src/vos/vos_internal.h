@@ -783,7 +783,7 @@ vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p);
 
 int
 vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id dtis[],
-			int count, daos_epoch_t epoch, bool rm_cos[],
+			int count, daos_epoch_t epoch, bool keep_act, bool rm_cos[],
 			struct vos_dtx_act_ent **daes, struct vos_dtx_cmt_ent **dces);
 
 int
@@ -793,7 +793,7 @@ void
 vos_dtx_post_handle(struct vos_container *cont,
 		    struct vos_dtx_act_ent **daes,
 		    struct vos_dtx_cmt_ent **dces,
-		    int count, bool abort, bool rollback);
+		    int count, bool abort, bool rollback, bool keep_act);
 
 /**
  * Establish indexed active DTX table in DRAM.
@@ -1396,7 +1396,7 @@ gc_add_item(struct vos_pool *pool, daos_handle_t coh,
 int
 vos_gc_pool_tight(daos_handle_t poh, int *credits);
 void
-gc_reserve_space(daos_size_t *rsrvd);
+gc_reserve_space(struct vos_pool *pool, daos_size_t *rsrvd);
 int
 gc_open_pool(struct vos_pool *pool);
 void
@@ -1405,6 +1405,12 @@ int
 gc_open_cont(struct vos_container *cont);
 void
 gc_close_cont(struct vos_container *cont);
+
+struct vos_bkt_iter {
+	uint32_t	bi_bkt_tot;
+	uint32_t	bi_bkt_cur;
+	uint8_t		bi_skipped[0];
+};
 
 /**
  * If the object is fully punched, bypass normal aggregation and move it to container

@@ -20,6 +20,7 @@ pool:
   pool_query_timeout: 30
   properties: rd_fac:2
 container:
+  control_method: API
   akey_size: 5
   dkey_size: 5
   sizes: !mux

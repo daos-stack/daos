@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -21,10 +21,29 @@
 #include "srv_layout.h"
 
 bool		ec_agg_disabled;
-uint32_t	pw_rf; /* pool wise RF */
-#define PW_RF_DEFAULT	(2)
-#define PW_RF_MIN	(1)
-#define PW_RF_MAX	(4)
+uint32_t        pw_rf = -1; /* pool wise redundancy factor */
+#define PW_RF_DEFAULT (2)
+#define PW_RF_MIN     (0)
+#define PW_RF_MAX     (4)
+
+static inline bool
+check_pool_redundancy_factor(const char *variable)
+{
+	d_getenv_uint32_t(variable, &pw_rf);
+	if (pw_rf == -1)
+		return false;
+
+	D_INFO("Checked threshold %s=%d\n", variable, pw_rf);
+
+	if (pw_rf <= PW_RF_MAX)
+		return true;
+
+	D_INFO("pw_rf %d is out of range [%d, %d], take default %d\n", pw_rf, PW_RF_MIN, PW_RF_MAX,
+	       PW_RF_DEFAULT);
+	pw_rf = PW_RF_DEFAULT;
+
+	return true;
+}
 
 static int
 init(void)
@@ -52,14 +71,10 @@ init(void)
 	if (unlikely(ec_agg_disabled))
 		D_WARN("EC aggregation is disabled.\n");
 
-	pw_rf = PW_RF_DEFAULT;
-	d_getenv_uint32_t("DAOS_POOL_RF", &pw_rf);
-	if (pw_rf < PW_RF_MIN || pw_rf > PW_RF_MAX) {
-		D_INFO("pw_rf %d is out of range [%d, %d], take default %d\n",
-		       pw_rf, PW_RF_MIN, PW_RF_MAX, PW_RF_DEFAULT);
+	pw_rf = -1;
+	if (!check_pool_redundancy_factor("DAOS_POOL_RF"))
 		pw_rf = PW_RF_DEFAULT;
-	}
-	D_INFO("pool wise RF %d\n", pw_rf);
+	D_INFO("pool redundancy factor %d\n", pw_rf);
 
 	ds_pool_rsvc_class_register();
 
@@ -118,6 +133,11 @@ static struct crt_corpc_ops ds_pool_tgt_disconnect_co_ops = {
 	.co_pre_forward	= NULL,
 };
 
+static struct crt_corpc_ops ds_pool_tgt_query_co_ops_v6 = {
+    .co_aggregate   = ds_pool_tgt_query_aggregator_v6,
+    .co_pre_forward = NULL,
+};
+
 static struct crt_corpc_ops ds_pool_tgt_query_co_ops = {
 	.co_aggregate	= ds_pool_tgt_query_aggregator,
 	.co_pre_forward	= NULL,
@@ -133,11 +153,11 @@ static struct crt_corpc_ops ds_pool_tgt_query_co_ops = {
 	.dr_corpc_ops = e,	\
 },
 
-static struct daos_rpc_handler pool_handlers_v5[] = {POOL_PROTO_CLI_RPC_LIST(5)
-							 POOL_PROTO_SRV_RPC_LIST};
-
 static struct daos_rpc_handler pool_handlers_v6[] = {POOL_PROTO_CLI_RPC_LIST(6)
-							 POOL_PROTO_SRV_RPC_LIST};
+							 POOL_PROTO_SRV_RPC_LIST(6)};
+
+static struct daos_rpc_handler pool_handlers_v7[] = {POOL_PROTO_CLI_RPC_LIST(7)
+							 POOL_PROTO_SRV_RPC_LIST(7)};
 
 #undef X
 
@@ -204,9 +224,9 @@ struct dss_module pool_module = {
     .sm_fini        = fini,
     .sm_setup       = setup,
     .sm_cleanup     = cleanup,
-    .sm_proto_fmt   = {&pool_proto_fmt_v5, &pool_proto_fmt_v6},
+    .sm_proto_fmt   = {&pool_proto_fmt_v6, &pool_proto_fmt_v7},
     .sm_cli_count   = {POOL_PROTO_CLI_COUNT, POOL_PROTO_CLI_COUNT},
-    .sm_handlers    = {pool_handlers_v5, pool_handlers_v6},
+    .sm_handlers    = {pool_handlers_v6, pool_handlers_v7},
     .sm_key         = &pool_module_key,
     .sm_metrics     = &pool_metrics,
 };

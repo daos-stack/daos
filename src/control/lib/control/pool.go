@@ -533,7 +533,7 @@ func poolQueryInt(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq
 	return resp, err
 }
 
-// UpdateState update the pool state.
+// UpdateState updates the pool state based on response field values.
 func (pqr *PoolQueryResp) UpdateState() error {
 	// Update the state as Ready if DAOS return code is 0.
 	if pqr.Status == 0 {
@@ -785,9 +785,8 @@ type PoolDrainReq struct {
 
 // DrainResp has no other parameters other than success/failure for now.
 
-// PoolDrain will set a pool target for a specific rank to the drain status.
-// This should automatically start the rebuildiing process.
-// Returns an error (including any DER code from DAOS).
+// PoolDrain will set a pool target for a specific rank in to the drain state which should
+// automatically start the rebuildiing process. Returns an error (including any DER code from DAOS).
 func PoolDrain(ctx context.Context, rpcClient UnaryInvoker, req *PoolDrainReq) error {
 	pbReq := &mgmtpb.PoolDrainReq{
 		Sys:       req.getSystem(rpcClient),
@@ -1129,22 +1128,6 @@ func processNVMeSpaceStats(log debugLogger, filterRank filterRankFn, nvmeControl
 
 // Return the maximal SCM and NVMe size of a pool which could be created with all the storage nodes.
 func getMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker, createReq *PoolCreateReq) (uint64, uint64, error) {
-	isMdOnSsdEnabled := func(log debugLogger, hsm HostStorageMap) bool {
-		for _, hss := range hsm {
-			hs := hss.HostStorage
-			if hs == nil {
-				continue
-			}
-			nvme := hs.NvmeDevices
-			if nvme.Len() > 0 && !nvme[0].Roles().IsEmpty() {
-				log.Debugf("fetch max pool size in md-on-size mode")
-				return true
-			}
-		}
-
-		return false
-	}
-
 	if createReq.MemRatio < 0 {
 		return 0, 0, errors.New("invalid mem-ratio, should be greater than zero")
 	}
@@ -1209,12 +1192,13 @@ func getMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker, createReq *Pool
 		}
 	}
 
-	if !isMdOnSsdEnabled(rpcClient, scanResp.HostStorage) {
+	if !scanResp.HostStorage.IsMdOnSsdEnabled() {
 		rpcClient.Debugf("Maximal size of a pool: scmBytes=%s (%d B) nvmeBytes=%s (%d B)",
 			humanize.Bytes(scmBytes), scmBytes, humanize.Bytes(nvmeBytes), nvmeBytes)
 
 		return scmBytes, nvmeBytes, nil
 	}
+	rpcClient.Debugf("md-on-ssd mode detected")
 
 	// In MD-on-SSD mode calculate metaBytes based on the minimum ramdisk (called scm here)
 	// availability across ranks. NVMe sizes returned in StorageScan response at the beginning

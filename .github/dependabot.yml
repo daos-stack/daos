@@ -1,0 +1,19 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directories:
+      - /utils/ansible/ftest/
+      - /utils/cq/
+      - /
+    schedule:
+      interval: daily
+    groups:
+      python-packages:
+        patterns:
+          - "*"
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    assignees:
+      - daos-stack/actions-watchers

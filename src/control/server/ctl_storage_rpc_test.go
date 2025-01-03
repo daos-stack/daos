@@ -652,7 +652,6 @@ func TestServer_bdevScan(t *testing.T) {
 					func() *ctlpb.NvmeController {
 						nc := proto.MockNvmeController(1)
 						sd := mockSmd(storage.BdevRoleWAL | storage.BdevRoleMeta)
-						sd.AvailBytes = 0
 						nc.SmdDevices = []*ctlpb.SmdDevice{sd}
 						return nc
 					}(),
@@ -3574,17 +3573,17 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 					320 * clusterSize,
 					320 * clusterSize,
 					320 * clusterSize,
-					0 * humanize.GiByte,
-					0 * humanize.GiByte,
-					0 * humanize.GiByte,
+					320 * clusterSize,
+					320 * clusterSize,
+					320 * clusterSize,
 				},
 				availableBytes: []uint64{
 					320 * clusterSize,
 					320 * clusterSize,
 					320 * clusterSize,
-					0 * humanize.GiByte,
-					0 * humanize.GiByte,
-					0 * humanize.GiByte,
+					320 * clusterSize,
+					320 * clusterSize,
+					320 * clusterSize,
 				},
 				usableBytes: []uint64{
 					// 5tgts * 64mib = 320mib of meta on SSD (10 clusters)
@@ -3958,120 +3957,19 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 				test.AssertEqual(t, tc.output.availableBytes[index], namespace.GetMount().GetAvailBytes(),
 					fmt.Sprintf("Invalid SCM available bytes: nsp=%s, want=%s (%d bytes), got=%s (%d bytes)",
 						namespace.GetMount().GetPath(),
-						humanize.Bytes(tc.output.availableBytes[index]), tc.output.availableBytes[index],
-						humanize.Bytes(namespace.GetMount().GetAvailBytes()), namespace.GetMount().GetAvailBytes()))
+						humanize.IBytes(tc.output.availableBytes[index]), tc.output.availableBytes[index],
+						humanize.IBytes(namespace.GetMount().GetAvailBytes()), namespace.GetMount().GetAvailBytes()))
 				test.AssertEqual(t, tc.output.usableBytes[index], namespace.GetMount().GetUsableBytes(),
 					fmt.Sprintf("Invalid SCM usable bytes: nsp=%s, want=%s (%d bytes), got=%s (%d bytes)",
 						namespace.GetMount().GetPath(),
-						humanize.Bytes(tc.output.usableBytes[index]), tc.output.usableBytes[index],
-						humanize.Bytes(namespace.GetMount().GetUsableBytes()), namespace.GetMount().GetUsableBytes()))
+						humanize.IBytes(tc.output.usableBytes[index]), tc.output.usableBytes[index],
+						humanize.IBytes(namespace.GetMount().GetUsableBytes()), namespace.GetMount().GetUsableBytes()))
 			}
 			if tc.output.message != "" {
 				test.AssertTrue(t,
 					strings.Contains(buf.String(), tc.output.message),
 					"missing message: "+tc.output.message)
 			}
-		})
-	}
-}
-
-func TestServer_CtlSvc_getEngineCfgFromNvmeCtl(t *testing.T) {
-	type dataInput struct {
-		tierCfgs storage.TierConfigs
-		nvmeCtlr *ctl.NvmeController
-	}
-	type expectedOutput struct {
-		res bool
-		msg string
-	}
-
-	newTierCfgs := func(tierCfgsSize int32) storage.TierConfigs {
-		tierCfgs := make(storage.TierConfigs, tierCfgsSize)
-		for idx := range tierCfgs {
-			tierCfgs[idx] = storage.NewTierConfig().
-				WithStorageClass(storage.ClassNvme.String()).
-				WithBdevDeviceList(test.MockPCIAddr(int32(idx + 1)))
-		}
-
-		return tierCfgs
-	}
-
-	for name, tc := range map[string]struct {
-		input  dataInput
-		output expectedOutput
-	}{
-		"find NVME Ctlr": {
-			input: dataInput{
-				tierCfgs: newTierCfgs(5),
-				nvmeCtlr: &ctl.NvmeController{
-					PciAddr: test.MockPCIAddr(3),
-				},
-			},
-			output: expectedOutput{res: true},
-		},
-		"not find NVME Ctlr": {
-			input: dataInput{
-				tierCfgs: newTierCfgs(5),
-				nvmeCtlr: &ctl.NvmeController{
-					PciAddr: test.MockPCIAddr(13),
-				},
-			},
-			output: expectedOutput{
-				res: false,
-				msg: "unknown PCI device",
-			},
-		},
-		"find VMD device": {
-			input: dataInput{
-				tierCfgs: storage.TierConfigs{
-					storage.NewTierConfig().
-						WithStorageClass(storage.ClassNvme.String()).
-						WithBdevDeviceList("0000:04:06.3"),
-				},
-				nvmeCtlr: &ctl.NvmeController{
-					PciAddr: "040603:02:00.0",
-				},
-			},
-			output: expectedOutput{res: true},
-		},
-		"Invalid address": {
-			input: dataInput{
-				tierCfgs: storage.TierConfigs{
-					storage.NewTierConfig().
-						WithStorageClass(storage.ClassNvme.String()).
-						WithBdevDeviceList("0000:04:06.3"),
-				},
-				nvmeCtlr: &ctl.NvmeController{
-					PciAddr: "666",
-				},
-			},
-			output: expectedOutput{
-				res: false,
-				msg: "Invalid PCI address",
-			},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer test.ShowBufferOnFailure(t, buf)
-
-			engineCfg := engine.MockConfig().WithStorage(tc.input.tierCfgs...)
-			serverCfg := config.DefaultServer().WithEngines(engineCfg)
-			cs := mockControlService(t, log, serverCfg, nil, nil, nil)
-
-			ec, err := cs.getEngineCfgFromNvmeCtl(tc.input.nvmeCtlr)
-
-			if tc.output.res {
-				test.AssertEqual(t, engineCfg, ec,
-					fmt.Sprintf("Invalid engine config: want=%v got=%v", engineCfg, ec))
-				return
-			}
-
-			test.AssertEqual(t, (*engine.Config)(nil), ec,
-				fmt.Sprintf("Invalid engine config: wait nil"))
-			test.AssertTrue(t,
-				strings.Contains(err.Error(), tc.output.msg),
-				fmt.Sprintf("Invalid error message: %q not contains %q", err, tc.output.msg))
 		})
 	}
 }

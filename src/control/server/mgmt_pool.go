@@ -200,7 +200,7 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 		nvmeBytes := req.TierBytes[1]
 		if nvmeMissing && nvmeBytes > 0 {
 			return errors.Errorf("%s NVMe requested for pool but config has zero bdevs",
-				humanize.Bytes(nvmeBytes))
+				humanize.IBytes(nvmeBytes))
 		}
 
 	// Pool tier sizes to be populated based on total-size and ratio.
@@ -216,8 +216,8 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 			req.TierBytes[tierIdx] =
 				uint64(float64(req.TotalBytes)*req.TierRatio[tierIdx]) /
 					uint64(len(req.GetRanks()))
-			svc.log.Infof("%s = (%s*%f) / %d", humanize.Bytes(req.TierBytes[tierIdx]),
-				humanize.Bytes(req.TotalBytes), req.TierRatio[tierIdx],
+			svc.log.Infof("%s = (%s*%f) / %d", humanize.IBytes(req.TierBytes[tierIdx]),
+				humanize.IBytes(req.TotalBytes), req.TierRatio[tierIdx],
 				len(req.GetRanks()))
 		}
 
@@ -416,7 +416,8 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		return nil, err
 	}
 
-	ps = system.NewPoolService(poolUUID, req.TierBytes, ranklist.RanksFromUint32(req.GetRanks()))
+	ps = system.NewPoolService(poolUUID, req.TierBytes, req.MemRatio,
+		ranklist.RanksFromUint32(req.GetRanks()))
 	ps.PoolLabel = poolLabel
 	if err := svc.sysdb.AddPoolService(ctx, ps); err != nil {
 		return nil, err
@@ -479,6 +480,14 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal PoolCreate response")
+	}
+
+	// Zero mem_file_bytes in non-MD-on-SSD mode.
+	if !svc.harness.Instances()[0].GetStorage().BdevRoleMetaConfigured() {
+		resp.MemFileBytes = 0
+	} else {
+		svc.log.Tracef("%T mem_file_bytes: %s (%d)", resp,
+			humanize.Bytes(resp.MemFileBytes), resp.MemFileBytes)
 	}
 
 	if resp.GetStatus() != 0 {
@@ -878,6 +887,7 @@ func (svc *mgmtSvc) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq) (
 		return nil, err
 	}
 	req.TierBytes = ps.Storage.PerRankTierStorage
+	req.MemRatio = ps.Storage.MemRatio
 
 	svc.log.Debugf("MgmtSvc.PoolExtend forwarding modified req:%+v\n", req)
 
@@ -920,6 +930,7 @@ func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReinteg
 	}
 
 	req.TierBytes = ps.Storage.PerRankTierStorage
+	req.MemRatio = ps.Storage.MemRatio
 
 	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolReintegrate, req)
 	if err != nil {
@@ -957,11 +968,12 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 	// Preserve compatibility with pre-2.6 callers.
 	resp.Leader = resp.SvcLdr
 
-	// TODO DAOS-16209: After VOS query API is updated, zero-value mem_file_bytes will be
-	//                  returned in non-MD-on-SSD mode and this hack can be removed.
-	storage := svc.harness.Instances()[0].GetStorage()
-	if !storage.ControlMetadataPathConfigured() {
+	// Zero mem_file_bytes in non-MD-on-SSD mode.
+	if !svc.harness.Instances()[0].GetStorage().BdevRoleMetaConfigured() {
 		resp.MemFileBytes = 0
+	} else {
+		svc.log.Tracef("%T mem_file_bytes: %s (%d)", resp,
+			humanize.Bytes(resp.MemFileBytes), resp.MemFileBytes)
 	}
 
 	return resp, nil
@@ -983,12 +995,16 @@ func (svc *mgmtSvc) PoolQueryTarget(ctx context.Context, req *mgmtpb.PoolQueryTa
 		return nil, errors.Wrap(err, "unmarshal PoolQueryTarget response")
 	}
 
-	// TODO DAOS-16209: After VOS query API is updated, zero-value mem_file_bytes will be
-	//                  returned in non-MD-on-SSD mode and this hack can be removed.
-	storage := svc.harness.Instances()[0].GetStorage()
-	if !storage.ControlMetadataPathConfigured() {
+	// Zero mem_file_bytes in non-MD-on-SSD mode.
+	if !svc.harness.Instances()[0].GetStorage().BdevRoleMetaConfigured() {
 		for _, tgtInfo := range resp.Infos {
 			tgtInfo.MemFileBytes = 0
+		}
+	} else {
+		for _, tgtInfo := range resp.Infos {
+			svc.log.Tracef("%T mem_file_bytes: %s (%d)", resp,
+				humanize.Bytes(tgtInfo.MemFileBytes), tgtInfo.MemFileBytes)
+			break
 		}
 	}
 

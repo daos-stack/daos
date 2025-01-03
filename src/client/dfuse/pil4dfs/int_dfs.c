@@ -1121,7 +1121,6 @@ query_new_dlsym_addr(void *addr)
 _Pragma("GCC diagnostic push")
 _Pragma("GCC diagnostic ignored \"-Wunused-function\"")
 _Pragma("GCC diagnostic ignored \"-Wunused-variable\"")
-
 _Pragma("GCC push_options")
 _Pragma("GCC optimize(\"-O0\")")
 static char str_zeinit[] = "zeInit";
@@ -1129,7 +1128,7 @@ static char str_zeinit[] = "zeInit";
 static int
 is_hook_enabled(void)
 {
-	return (d_hook_enabled ? (1) : (0));
+	return (d_hook_enabled ? 1 : 0);
 }
 
 /* This wrapper function is introduced to avoid compiling issue with Intel-C on Leap 15.5 */
@@ -1198,7 +1197,6 @@ new_dlsym_c(void *handle, const char *symbol)
 {
 	if (!d_hook_enabled)
 		goto org_dlsym;
-	printf("Inside my dlsym().\n");
 	if (strcmp(symbol, "zeInit") != 0)
 		goto org_dlsym;
 
@@ -4618,13 +4616,7 @@ execve(const char *filename, char *const argv[], char *const envp[])
 	if (rc)
 		goto err;
 
-	rc = next_execve(filename, argv, new_envp);
-	if (rc == -1)
-		/* d_hook_enabled could be set false in reset_daos_env_before_exec(). Need to be
-		 * restored if exec() failed for some reason.
-		 */
-		d_hook_enabled = true;
-	return rc;
+	return next_execve(filename, argv, new_envp);
 
 err:
 	errno = rc;
@@ -4652,10 +4644,7 @@ execvpe(const char *filename, char *const argv[], char *const envp[])
 	if (rc)
 		goto err;
 
-	rc = next_execvpe(filename, argv, new_envp);
-	if (rc == -1)
-		d_hook_enabled = true;
-	return rc;
+	return next_execvpe(filename, argv, new_envp);
 
 err:
 	errno = rc;
@@ -4680,10 +4669,7 @@ execv(const char *filename, char *const argv[])
 		return (-1);
 	}
 
-	rc = next_execv(filename, argv);
-	if (rc == -1)
-		d_hook_enabled = true;
-	return rc;
+	return next_execv(filename, argv);
 }
 
 int
@@ -4704,10 +4690,7 @@ execvp(const char *filename, char *const argv[])
 		return (-1);
 	}
 
-	rc = next_execvp(filename, argv);
-	if (rc == -1)
-		d_hook_enabled = true;
-	return rc;
+	return next_execvp(filename, argv);
 }
 
 int
@@ -4731,10 +4714,7 @@ fexecve(int fd, char *const argv[], char *const envp[])
 	if (rc)
 		goto err;
 
-	rc = next_fexecve(fd, argv, new_envp);
-	if (rc == -1)
-		d_hook_enabled = true;
-	return rc;
+	return next_fexecve(fd, argv, new_envp);
 
 err:
 	errno = rc;

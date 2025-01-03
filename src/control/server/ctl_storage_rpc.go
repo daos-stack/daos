@@ -362,23 +362,6 @@ func (cs *ControlService) scanScm(ctx context.Context, req *ctlpb.ScanScmReq) (*
 	return resp, nil
 }
 
-// Returns the engine configuration managing the given NVMe controller
-func (cs *ControlService) getEngineCfgFromNvmeCtl(nc *ctlpb.NvmeController) (*engine.Config, error) {
-	pciAddrStr, err := ctrlrToPciStr(nc)
-	if err != nil {
-		return nil, err
-	}
-
-	for index := range cs.srvCfg.Engines {
-		if findBdevTier(pciAddrStr, cs.srvCfg.Engines[index].Storage.Tiers) != nil {
-			return cs.srvCfg.Engines[index], nil
-		}
-	}
-
-	return nil, errors.Errorf("unknown PCI device, scanned ctrlr %q not found in cfg",
-		pciAddrStr)
-}
-
 // Returns the engine configuration managing the given SCM name-space
 func (cs *ControlService) getEngineCfgFromScmNsp(nsp *ctlpb.ScmNamespace) (*engine.Config, error) {
 	mountPoint := nsp.GetMount().Path
@@ -398,7 +381,7 @@ func (cs *ControlService) getRdbSize(engineCfg *engine.Config) (uint64, error) {
 	mdCapStr, err := engineCfg.GetEnvVar(daos.DaosMdCapEnv)
 	if err != nil {
 		cs.log.Debugf("using default RDB file size with engine %d: %s (%d Bytes)",
-			engineCfg.Index, humanize.Bytes(daos.DefaultDaosMdCapSize),
+			engineCfg.Index, humanize.IBytes(daos.DefaultDaosMdCapSize),
 			daos.DefaultDaosMdCapSize)
 		return uint64(daos.DefaultDaosMdCapSize), nil
 	}
@@ -410,7 +393,7 @@ func (cs *ControlService) getRdbSize(engineCfg *engine.Config) (uint64, error) {
 	}
 	rdbSize = rdbSize << 20
 	cs.log.Debugf("using custom RDB size with engine %d: %s (%d Bytes)",
-		engineCfg.Index, humanize.Bytes(rdbSize), rdbSize)
+		engineCfg.Index, humanize.IBytes(rdbSize), rdbSize)
 
 	return rdbSize, nil
 }
@@ -531,7 +514,7 @@ func getClusterCount(sizeBytes uint64, tgtCount int, clusterSize uint64) uint64 
 	return clusterCount * uint64(tgtCount)
 }
 
-func (cs *ControlService) getMetaClusterCount(engineCfg *engine.Config, devToAdjust deviceToAdjust) (subtrClusterCount uint64) {
+func (cs *ControlService) getMetaClusterCount(devToAdjust deviceToAdjust) (subtrClusterCount uint64) {
 	dev := devToAdjust.ctlr.GetSmdDevices()[devToAdjust.idx]
 	clusterSize := uint64(dev.GetClusterSize())
 	// Calculate MD cluster overhead based on the number of targets allocated to the device
@@ -540,15 +523,21 @@ func (cs *ControlService) getMetaClusterCount(engineCfg *engine.Config, devToAdj
 
 	if dev.GetRoleBits()&storage.BdevRoleMeta != 0 {
 		clusterCount := getClusterCount(dev.GetMetaSize(), devTgtCount, clusterSize)
-		cs.log.Tracef("Removing %d Metadata clusters (cluster size: %d, dev tgts: %d) from the usable size of the SMD device %s (rank %d, ctlr %s): ",
-			clusterCount, clusterSize, devTgtCount, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
+		cs.log.Tracef("Removing %d Metadata clusters (meta_size: %s, cluster size: %s, dev tgts: %d - "+
+			"%s) from the usable size of the SMD device %s (rank %d, ctlr %q): ", clusterCount,
+			humanize.IBytes(dev.GetMetaSize()), humanize.IBytes(clusterSize), devTgtCount,
+			humanize.IBytes(clusterSize*clusterCount), dev.GetUuid(), devToAdjust.rank,
+			devToAdjust.ctlr.GetPciAddr())
 		subtrClusterCount += clusterCount
 	}
 
 	if dev.GetRoleBits()&storage.BdevRoleWAL != 0 {
 		clusterCount := getClusterCount(dev.GetMetaWalSize(), devTgtCount, clusterSize)
-		cs.log.Tracef("Removing %d Metadata WAL clusters (cluster size: %d, dev tgts: %d) from the usable size of the SMD device %s (rank %d, ctlr %s): ",
-			clusterCount, clusterSize, devTgtCount, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
+		cs.log.Tracef("Removing %d Metadata WAL clusters (meta_wal_size: %s, cluster size: %s, "+
+			"dev tgts: %d - %s) from the usable size of the SMD device %s (rank %d, ctlr %q): ",
+			clusterCount, humanize.IBytes(dev.GetMetaWalSize()), humanize.IBytes(clusterSize),
+			devTgtCount, humanize.IBytes(clusterSize*clusterCount), dev.GetUuid(), devToAdjust.rank,
+			devToAdjust.ctlr.GetPciAddr())
 		subtrClusterCount += clusterCount
 	}
 
@@ -558,15 +547,21 @@ func (cs *ControlService) getMetaClusterCount(engineCfg *engine.Config, devToAdj
 
 	if dev.GetRoleBits()&storage.BdevRoleMeta != 0 {
 		clusterCount := getClusterCount(dev.GetRdbSize(), 1, clusterSize)
-		cs.log.Tracef("Removing %d RDB clusters (cluster size: %d) from the usable size of the SMD device %s (rank %d, ctlr %s)",
-			clusterCount, clusterSize, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
+		cs.log.Tracef("Removing %d RDB clusters (rdb_size: %s, cluster size: %s - %s) from the usable "+
+			"size of the SMD device %s (rank %d, ctlr %q): ", clusterCount,
+			humanize.IBytes(dev.GetRdbSize()), humanize.IBytes(clusterSize),
+			humanize.IBytes(clusterSize*clusterCount), dev.GetUuid(), devToAdjust.rank,
+			devToAdjust.ctlr.GetPciAddr())
 		subtrClusterCount += clusterCount
 	}
 
 	if dev.GetRoleBits()&storage.BdevRoleWAL != 0 {
 		clusterCount := getClusterCount(dev.GetRdbWalSize(), 1, clusterSize)
-		cs.log.Tracef("Removing %d RDB WAL clusters (cluster size: %d) from the usable size of the SMD device %s (rank %d, ctlr %s)",
-			clusterCount, clusterSize, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
+		cs.log.Tracef("Removing %d RDB WAL clusters (rdb_size: %s, cluster size: %s - %s) from the usable "+
+			"size of the SMD device %s (rank %d, ctlr %q): ", clusterCount,
+			humanize.IBytes(dev.GetRdbWalSize()), humanize.IBytes(clusterSize),
+			humanize.IBytes(clusterSize*clusterCount), dev.GetUuid(), devToAdjust.rank,
+			devToAdjust.ctlr.GetPciAddr())
 		subtrClusterCount += clusterCount
 	}
 
@@ -578,12 +573,6 @@ func (cs *ControlService) getMetaClusterCount(engineCfg *engine.Config, devToAdj
 func (cs *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 	devsStat := make(map[uint32]*deviceSizeStat, 0)
 	for _, ctlr := range resp.GetCtrlrs() {
-		engineCfg, err := cs.getEngineCfgFromNvmeCtl(ctlr)
-		if err != nil {
-			cs.log.Noticef("Skipping NVME controller %s: %s", ctlr.GetPciAddr(), err.Error())
-			continue
-		}
-
 		for idx, dev := range ctlr.GetSmdDevices() {
 			rank := dev.GetRank()
 			devTgtCount := getSmdTgtCount(cs.log, dev)
@@ -591,8 +580,6 @@ func (cs *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 			if dev.GetRoleBits() != 0 && (dev.GetRoleBits()&storage.BdevRoleData) == 0 {
 				cs.log.Debugf("SMD device %s (rank %d, ctlr %s) not used to store data (Role bits 0x%X)",
 					dev.GetUuid(), rank, ctlr.GetPciAddr(), dev.GetRoleBits())
-				dev.TotalBytes = 0
-				dev.AvailBytes = 0
 				dev.UsableBytes = 0
 				continue
 			}
@@ -614,15 +601,16 @@ func (cs *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 			}
 
 			cs.log.Tracef("Initial available size of SMD device %s (rank %d, ctlr %s): %s (%d bytes)",
-				dev.GetUuid(), rank, ctlr.GetPciAddr(), humanize.Bytes(dev.GetAvailBytes()), dev.GetAvailBytes())
+				dev.GetUuid(), rank, ctlr.GetPciAddr(), humanize.IBytes(dev.GetAvailBytes()),
+				dev.GetAvailBytes())
 
 			clusterSize := uint64(dev.GetClusterSize())
 			availBytes := (dev.GetAvailBytes() / clusterSize) * clusterSize
 			if dev.GetAvailBytes() != availBytes {
 				cs.log.Tracef("Rounding available size of SMD device %s based on cluster size (rank %d, ctlr %s): from %s (%d Bytes) to %s (%d bytes)",
 					dev.GetUuid(), rank, ctlr.GetPciAddr(),
-					humanize.Bytes(dev.GetAvailBytes()), dev.GetAvailBytes(),
-					humanize.Bytes(availBytes), availBytes)
+					humanize.IBytes(dev.GetAvailBytes()), dev.GetAvailBytes(),
+					humanize.IBytes(availBytes), availBytes)
 				dev.AvailBytes = availBytes
 			}
 
@@ -640,7 +628,7 @@ func (cs *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 				continue
 			}
 
-			subtrClusterCount := cs.getMetaClusterCount(engineCfg, devToAdjust)
+			subtrClusterCount := cs.getMetaClusterCount(devToAdjust)
 			if subtrClusterCount >= dataClusterCount {
 				cs.log.Debugf("No more usable space in SMD device %s (rank %d, ctlr %s)",
 					dev.GetUuid(), rank, ctlr.GetPciAddr())
@@ -661,7 +649,7 @@ func (cs *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 			smdDev.UsableBytes = clusters * smdDev.GetClusterSize()
 			cs.log.Debugf("Defining usable size of the SMD device %s (rank %d, ctlr %s) as %s (%d bytes)",
 				smdDev.GetUuid(), rank, dev.ctlr.GetPciAddr(),
-				humanize.Bytes(smdDev.GetUsableBytes()), smdDev.GetUsableBytes())
+				humanize.IBytes(smdDev.GetUsableBytes()), smdDev.GetUsableBytes())
 		}
 	}
 }
@@ -673,7 +661,7 @@ func (cs *ControlService) adjustScmSize(resp *ctlpb.ScanScmResp) {
 		mountPath := mnt.GetPath()
 		mnt.UsableBytes = mnt.GetAvailBytes()
 		cs.log.Debugf("Initial usable size of SCM %s: %s (%d bytes)", mountPath,
-			humanize.Bytes(mnt.GetUsableBytes()), mnt.GetUsableBytes())
+			humanize.IBytes(mnt.GetUsableBytes()), mnt.GetUsableBytes())
 
 		engineCfg, err := cs.getEngineCfgFromScmNsp(scmNamespace)
 		if err != nil {
@@ -691,7 +679,7 @@ func (cs *ControlService) adjustScmSize(resp *ctlpb.ScanScmResp) {
 			continue
 		}
 		cs.log.Tracef("Removing RDB (%s, %d bytes) from the usable size of the SCM device %q",
-			humanize.Bytes(mdBytes), mdBytes, mountPath)
+			humanize.IBytes(mdBytes), mdBytes, mountPath)
 		if mdBytes >= mnt.GetUsableBytes() {
 			cs.log.Debugf("No more usable space in SCM device %s", mountPath)
 			mnt.UsableBytes = 0
@@ -703,7 +691,7 @@ func (cs *ControlService) adjustScmSize(resp *ctlpb.ScanScmResp) {
 			mountPath := m.GetPath()
 
 			cs.log.Tracef("Removing control plane metadata (%s, %d bytes) from the usable size of the SCM device %q",
-				humanize.Bytes(mdDaosScmBytes), mdDaosScmBytes, mountPath)
+				humanize.IBytes(mdDaosScmBytes), mdDaosScmBytes, mountPath)
 			if mdDaosScmBytes >= m.GetUsableBytes() {
 				cs.log.Debugf("No more usable space in SCM device %s", mountPath)
 				m.UsableBytes = 0
@@ -731,12 +719,12 @@ func (cs *ControlService) adjustScmSize(resp *ctlpb.ScanScmResp) {
 		}
 
 		cs.log.Tracef("Removing (%s, %d bytes) of usable size from the SCM device %q: space used by the file system metadata",
-			humanize.Bytes(mdFsScmBytes), mdFsScmBytes, mountPath)
+			humanize.IBytes(mdFsScmBytes), mdFsScmBytes, mountPath)
 		mnt.UsableBytes -= mdFsScmBytes
 
 		usableBytes := scmNamespace.Mount.GetUsableBytes()
 		cs.log.Debugf("Usable size of SCM device %q: %s (%d bytes)",
-			scmNamespace.Mount.GetPath(), humanize.Bytes(usableBytes), usableBytes)
+			scmNamespace.Mount.GetPath(), humanize.IBytes(usableBytes), usableBytes)
 	}
 }
 

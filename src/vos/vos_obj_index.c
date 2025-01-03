@@ -34,6 +34,8 @@ struct vos_oi_iter {
 	struct vos_ilog_info	 oit_ilog_info;
 	/** punched epoch for current entry */
 	daos_epoch_t		 oit_punched;
+	/** auxiliary data for md-on-ssd phase2 OI iterator */
+	struct vos_bkt_iter	*oit_bkt_iter;
 	/** cached iterator flags */
 	uint32_t		 oit_flags;
 };
@@ -580,6 +582,7 @@ oi_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	oiter->oit_iter.it_filter_cb = param->ip_filter_cb;
 	oiter->oit_iter.it_filter_arg = param->ip_filter_arg;
 	oiter->oit_flags = param->ip_flags;
+	oiter->oit_bkt_iter = param->ip_bkt_iter;
 	if (param->ip_flags & VOS_IT_FOR_PURGE)
 		oiter->oit_iter.it_for_purge = 1;
 	if (param->ip_flags & VOS_IT_FOR_DISCARD)
@@ -635,6 +638,11 @@ oi_iter_match_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t f
 			desc.id_type = VOS_ITER_OBJ;
 			desc.id_oid = obj->vo_id;
 			desc.id_parent_punch = 0;
+			if (vos_pool_is_evictable(oiter->oit_cont->vc_pool)) {
+				struct vos_obj_p2_df *p2 = (struct vos_obj_p2_df *)obj;
+
+				desc.id_bkt = p2->p2_bkt_ids[0];
+			}
 
 			feats = dbtree_feats_get(&obj->vo_tree);
 
@@ -887,6 +895,7 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
 	struct vos_container    *cont  = oiter->oit_cont;
 	struct vos_obj_df	*obj;
+	struct oi_delete_arg	 del_arg;
 	daos_unit_oid_t		 oid;
 	d_iov_t			 rec_iov;
 	bool			 delete = false, invisible = false;
@@ -937,7 +946,9 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 		if (rc != 0)
 			D_ERROR("Could not evict object "DF_UOID" "DF_RC"\n",
 				DP_UOID(oid), DP_RC(rc));
-		rc = dbtree_iter_delete(oiter->oit_hdl, NULL);
+		del_arg.cont = oiter->oit_cont;
+		del_arg.only_delete_entry = 0;
+		rc = dbtree_iter_delete(oiter->oit_hdl, &del_arg);
 		D_ASSERT(rc != -DER_NONEXIST);
 	} else if (rc == -DER_NONEXIST) {
 		/** ilog isn't visible in range but still has some entries */
@@ -962,6 +973,42 @@ struct vos_iter_ops vos_oi_iter_ops = {
 	.iop_fetch		= oi_iter_fetch,
 	.iop_process		= oi_iter_process,
 };
+
+bool
+vos_bkt_iter_skip(daos_handle_t ih, vos_iter_desc_t *desc)
+{
+	struct vos_iterator	*iter = vos_hdl2iter(ih);
+	struct vos_oi_iter	*oiter;
+	struct vos_bkt_iter	*bkt_iter;
+
+	D_ASSERT(desc->id_type == VOS_ITER_OBJ);
+	oiter = iter2oiter(iter);
+
+	if (!vos_pool_is_evictable(oiter->oit_cont->vc_pool))
+		return false;
+
+	/* Called from the common vos_iterate() */
+	if (oiter->oit_bkt_iter == NULL)
+		return false;
+
+	bkt_iter = oiter->oit_bkt_iter;
+	D_ASSERT(bkt_iter->bi_bkt_cur < bkt_iter->bi_bkt_tot);
+	D_ASSERT(desc->id_bkt < bkt_iter->bi_bkt_tot);
+
+	/* Lower bucket ID is already iterated */
+	if (desc->id_bkt < bkt_iter->bi_bkt_cur)
+		return true;
+	else if (desc->id_bkt == bkt_iter->bi_bkt_cur)
+		return false;
+
+	/*
+	 * Mark the skipped bitmap for higher bucket ID, vos_iterate_obj() will skip the
+	 * the bucket if it's not marked in bitmap.
+	 */
+	if (!isset(&bkt_iter->bi_skipped[0], desc->id_bkt))
+		setbit(&bkt_iter->bi_skipped[0], desc->id_bkt);
+	return true;
+}
 
 /**
  * Internal usage APIs
