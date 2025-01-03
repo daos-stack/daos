@@ -2,7 +2,8 @@
 /* groovylint-disable-next-line LineLength */
 /* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral */
 /* groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName */
-/* Copyright 2019-2024 Intel Corporation
+/* Copyright 2019-2025 Intel Corporation
+/* Copyright 2025 Hewlett Packard Enterprise Development LP
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -16,6 +17,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@hendersp/DAOS-16500') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -959,7 +961,8 @@ pipeline {
                             functionalTest(
                                 inst_repos: daosRepos(),
                                 inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
-                                test_function: 'runTestFunctionalV2'))
+                                test_function: 'runTestFunctionalV2',
+                                image_version: 'leap15.6'))
                     }
                     post {
                         always {
