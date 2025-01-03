@@ -89,23 +89,22 @@ class SysPools():
         self._warnings.append(full_msg)
         print(full_msg)
 
-    def get_warnings(self):
+    @property
+    def warnings(self):
         """Return all warnings stored when scanning engine log files"""
         return self._warnings
 
     def _set_rank(self, log_iter):
         print(f"INFO: searching for rank in file {log_iter.fname}")
-        found = False
         for line in log_iter.new_iter():
             # when a rank assignment log line found (engine start)
             match = self.re_rank_assign.match(line.get_msg())
             if match:
                 self._file_to_rank[log_iter.fname] = int(match.group(1))
-                found = True
-                break
+                return True
 
             # Future enhancement: what about log rotation (not an engine start scenario)?
-        return found
+        return False
 
     # return log-message, hostname, and date/timestamp components of the line
     def _get_line_components(self, line):
@@ -127,56 +126,58 @@ class SysPools():
     def _match_ps_step_up(self, fname, line, pid, rank):
         msg, host, datetime = self._get_line_components(line)
         match = self.re_step_up.match(msg)
-        if match:
-            puuid, term = self._get_ps_leader_components(match)
-            if puuid not in self._pools:
-                self._pools[puuid] = {}
-            self._cur_ldr_rank[puuid] = rank
-            self._cur_ldr_pid[puuid] = pid
-            self._cur_term[puuid] = term
-            old_term = term - 1
-            # if term already exists, error?
-            if term in self._pools[puuid]:
-                self._warn(f"pool {puuid} term {term} already seen!", fname, line)
-            # carry over most recent map version into the new term, avoid later KeyError
-            if old_term in self._pools:
-                if self._pools and self._pools[puuid][old_term]["maps"] != {}:
-                    last_mapver = max(self._pools[puuid][old_term]["maps"].keys())
-                    pmap_versions = self._pools[puuid][old_term]["maps"][last_mapver]
-                    pmap_versions["carryover"] = True
-            else:
-                pmap_versions = {}
-            self._pools[puuid][term] = {
-                "rank": rank,
-                "begin_time": datetime,
-                "end_time": "",
-                "host": host,
-                "pid": pid,
-                "logfile": fname,
-                "maps": pmap_versions
-            }
-            if self._debug:
-                print(f"{datetime} FOUND pool {puuid} BEGIN\tterm {term} pmap_versions empty: "
-                      f"{str(pmap_versions == {})} rank {rank}\t{host}\tPID {pid}\t{fname}")
-            return True
-        return False
+        if not match:
+            return False
+
+        puuid, term = self._get_ps_leader_components(match)
+        if puuid not in self._pools:
+            self._pools[puuid] = {}
+        self._cur_ldr_rank[puuid] = rank
+        self._cur_ldr_pid[puuid] = pid
+        self._cur_term[puuid] = term
+        old_term = term - 1
+        # if term already exists, error?
+        if term in self._pools[puuid]:
+            self._warn(f"pool {puuid} term {term} already seen!", fname, line)
+        # carry over most recent map version into the new term, avoid later KeyError
+        if old_term in self._pools:
+            if self._pools and self._pools[puuid][old_term]["maps"] != {}:
+                last_mapver = max(self._pools[puuid][old_term]["maps"].keys())
+                pmap_versions = self._pools[puuid][old_term]["maps"][last_mapver]
+                pmap_versions["carryover"] = True
+        else:
+            pmap_versions = {}
+        self._pools[puuid][term] = {
+            "rank": rank,
+            "begin_time": datetime,
+            "end_time": "",
+            "host": host,
+            "pid": pid,
+            "logfile": fname,
+            "maps": pmap_versions
+        }
+        if self._debug:
+            print(f"{datetime} FOUND pool {puuid} BEGIN\tterm {term} pmap_versions empty: "
+                    f"{str(pmap_versions == {})} rank {rank}\t{host}\tPID {pid}\t{fname}")
+        return True
 
     def _match_ps_step_down(self, fname, line, pid, rank):
         msg, host, datetime = self._get_line_components(line)
         match = self.re_step_down.match(msg)
-        if match:
-            puuid, term = self._get_ps_leader_components(match)
-            if term != self._cur_term[puuid]:
-                self._warn(f"step_down term={term} != cur_term={self._cur_term}", fname, line)
-            self._cur_ldr_rank[puuid] = -1
-            self._cur_ldr_pid[puuid] = -1
-            self._cur_term[puuid] = -1
-            self._pools[puuid][term]["end_time"] = datetime
-            if self._debug:
-                print(f"{datetime} FOUND pool {puuid} END\tterm {term} rank {rank}\t{host}\t"
-                      f"PID {pid}\t{fname}")
-            return True
-        return False
+        if not match:
+            return False
+
+        puuid, term = self._get_ps_leader_components(match)
+        if term != self._cur_term[puuid]:
+            self._warn(f"step_down term={term} != cur_term={self._cur_term}", fname, line)
+        self._cur_ldr_rank[puuid] = -1
+        self._cur_ldr_pid[puuid] = -1
+        self._cur_term[puuid] = -1
+        self._pools[puuid][term]["end_time"] = datetime
+        if self._debug:
+            print(f"{datetime} FOUND pool {puuid} END\tterm {term} rank {rank}\t{host}\t"
+                    f"PID {pid}\t{fname}")
+        return True
 
     def _get_pmap_update_components(self, match):
         # puuid, from_version, to_version
@@ -186,23 +187,24 @@ class SysPools():
     def _match_ps_pmap_update(self, fname, line, pid, rank):
         msg, host, datetime = self._get_line_components(line)
         match = self.re_pmap_update.match(msg)
-        if match:
-            puuid, from_ver, to_ver = self._get_pmap_update_components(match)
-            # ignore if this engine is not the leader
-            if not self._is_leader(puuid, rank, pid):
-                return True
-            term = self._cur_term[puuid]
-            self._pools[puuid][term]["maps"][to_ver] = {
-                "carryover": False,
-                "from_ver": from_ver,
-                "time": datetime,
-                "rb_gens": {}
-            }
-            if self._debug:
-                print(f"FOUND pool {puuid} map update {from_ver}->{to_ver} rank {rank}\t{host}\t"
-                      f"PID {pid}\t{fname}")
+        if not match:
+            return False
+
+        puuid, from_ver, to_ver = self._get_pmap_update_components(match)
+        # ignore if this engine is not the leader
+        if not self._is_leader(puuid, rank, pid):
             return True
-        return False
+        term = self._cur_term[puuid]
+        self._pools[puuid][term]["maps"][to_ver] = {
+            "carryover": False,
+            "from_ver": from_ver,
+            "time": datetime,
+            "rb_gens": {}
+        }
+        if self._debug:
+            print(f"FOUND pool {puuid} map update {from_ver}->{to_ver} rank {rank}\t{host}\t"
+                    f"PID {pid}\t{fname}")
+        return True
 
     def _get_rb_components(self, match):
         # puuid, map version number, rebuild generation number, rebuild operation string
@@ -216,35 +218,36 @@ class SysPools():
             return False
         msg, host, datetime = self._get_line_components(line)
         match = self.re_rebuild_ldr_start.match(msg)
-        if match:
-            # Disable checking for legacy rebuild log format, to save execution time
-            self._check_rb_legacy_fmt = False
-            puuid, ver, gen, op = self._get_rb_components(match)
-            if not self._is_leader(puuid, rank, pid):
-                return True
-            term = self._cur_term[puuid]
-            if term < 1:
-                self._warn(f"pool {puuid} I don't know what term it is ({term})!", fname, line)
-                return True
-            if gen in self._pools[puuid][term]["maps"][ver]["rb_gens"]:
-                self._warn(f"pool {puuid} term {term} ver {ver} already has gen {gen}", fname, line)
-            # Future possibility: keep timestamps, durations for scan start, pull start, completed
-            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen] = {
-                "op": op,
-                "start_time": datetime,
-                "time": "xx/xx-xx:xx:xx.xx",
-                "started": True,
-                "scanning": False,
-                "pulling": False,
-                "completed": False,
-                "aborted": False,
-                "duration": 0
-            }
-            if self._debug:
-                print(f"{datetime} FOUND rebuild start in term {term}, rb={puuid}/{ver}/{gen}/{op} "
-                      f"rank {rank}\t{host}\tPID {pid}\t{fname}")
+        if not match:
+            return False
+
+        # Disable checking for legacy rebuild log format, to save execution time
+        self._check_rb_legacy_fmt = False
+        puuid, ver, gen, op = self._get_rb_components(match)
+        if not self._is_leader(puuid, rank, pid):
             return True
-        return False
+        term = self._cur_term[puuid]
+        if term < 1:
+            self._warn(f"pool {puuid} I don't know what term it is ({term})!", fname, line)
+            return True
+        if gen in self._pools[puuid][term]["maps"][ver]["rb_gens"]:
+            self._warn(f"pool {puuid} term {term} ver {ver} already has gen {gen}", fname, line)
+        # Future possibility: keep timestamps, durations for scan start, pull start, completed
+        self._pools[puuid][term]["maps"][ver]["rb_gens"][gen] = {
+            "op": op,
+            "start_time": datetime,
+            "time": "xx/xx-xx:xx:xx.xx",
+            "started": True,
+            "scanning": False,
+            "pulling": False,
+            "completed": False,
+            "aborted": False,
+            "duration": 0
+        }
+        if self._debug:
+            print(f"{datetime} FOUND rebuild start in term {term}, rb={puuid}/{ver}/{gen}/{op} "
+                    f"rank {rank}\t{host}\tPID {pid}\t{fname}")
+        return True
 
     def _match_legacy_ps_rb_start(self, fname, line, pid, rank):
         # Do not match on legacy rebuild log format if we found new format
@@ -252,34 +255,35 @@ class SysPools():
             return False
         msg, host, datetime = self._get_line_components(line)
         match = self.re_old_ldr_start.match(msg)
-        if match:
-            # Disable checking for new rebuild log format, to save execution time
-            self._check_rb_new_fmt = False
-            puuid, ver, gen, op = self._get_rb_components(match)
-            if not self._is_leader(puuid, rank, pid):
-                return True
-            term = self._cur_term[puuid]
-            if term < 1:
-                self._warn(f"pool {puuid} I don't know what term it is ({term})!", fname, line)
-                return True
-            if gen in self._pools[puuid][term]["maps"][ver]["rb_gens"]:
-                self._warn(f"pool {puuid} term {term} ver {ver} already has gen {gen}", fname, line)
-            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen] = {
-                "op": op,
-                "start_time": datetime,
-                "time": "xx/xx-xx:xx:xx.xx",
-                "started": True,
-                "scanning": False,
-                "pulling": False,
-                "completed": False,
-                "aborted": False,
-                "duration": 0
-            }
-            if self._debug:
-                print(f"{datetime} FOUND rebuild start in term {term}, rb={puuid}/{ver}/{gen}/{op} "
-                      f"rank {rank}\t{host}\tPID {pid}\t{fname}")
+        if not match:
+            return False
+
+        # Disable checking for new rebuild log format, to save execution time
+        self._check_rb_new_fmt = False
+        puuid, ver, gen, op = self._get_rb_components(match)
+        if not self._is_leader(puuid, rank, pid):
             return True
-        return False
+        term = self._cur_term[puuid]
+        if term < 1:
+            self._warn(f"pool {puuid} I don't know what term it is ({term})!", fname, line)
+            return True
+        if gen in self._pools[puuid][term]["maps"][ver]["rb_gens"]:
+            self._warn(f"pool {puuid} term {term} ver {ver} already has gen {gen}", fname, line)
+        self._pools[puuid][term]["maps"][ver]["rb_gens"][gen] = {
+            "op": op,
+            "start_time": datetime,
+            "time": "xx/xx-xx:xx:xx.xx",
+            "started": True,
+            "scanning": False,
+            "pulling": False,
+            "completed": False,
+            "aborted": False,
+            "duration": 0
+        }
+        if self._debug:
+            print(f"{datetime} FOUND rebuild start in term {term}, rb={puuid}/{ver}/{gen}/{op} "
+                    f"rank {rank}\t{host}\tPID {pid}\t{fname}")
+        return True
 
     def _get_ps_rb_status_components(self, match):
         # puuid, map version, rebuild-generation, operation, status, duration
@@ -292,55 +296,56 @@ class SysPools():
             return False
         msg, host, datetime = self._get_line_components(line)
         match = self.re_rebuild_ldr_status.match(msg)
-        if match:
-            # Disable checking for legacy rebuild log format, to save execution time
-            self._check_rb_legacy_fmt = False
-            puuid, ver, gen, op, status, dur = self._get_ps_rb_status_components(match)
-            if not self._is_leader(puuid, rank, pid):
-                return True
-            term = self._cur_term[puuid]
-            if term < 1:
-                self._warn(f"pool {puuid} I don't know what term it is ({term})!", fname, line)
-                return True
-            if ver not in self._pools[puuid][term]["maps"]:
-                self._warn(f"pool {puuid} term {term} ver {ver} not in maps - add placeholder",
-                           fname, line)
-                self._pools[puuid][term]["maps"][ver] = {
-                    "carryover": False,
-                    "from_ver": ver,
-                    "time": "xx/xx-xx:xx:xx.xx",
-                    "rb_gens": {}
-                }
-                self._pools[puuid][term]["maps"][ver]["rb_gens"][gen] = {
-                    "op": op,
-                    "start_time": "xx/xx-xx:xx:xx.xx",
-                    "time": "xx/xx-xx:xx:xx.xx",
-                    "started": True,
-                    "scanning": False,
-                    "pulling": False,
-                    "completed": False,
-                    "aborted": False,
-                    "duration": 0
-                }
-            if gen in self._pools[puuid][term]["maps"][ver]["rb_gens"]:
-                existing_op = self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["op"]
-                if op != existing_op:
-                    self._warn(f"rb={puuid}/{ver}/{gen}/{existing_op} != line op {op}", fname, line)
-            if status == "scanning":
-                self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["scanning"] = True
-            elif status == "pulling":
-                self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["pulling"] = True
-            elif status == "completed":
-                self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["completed"] = True
-            elif status == "aborted":
-                self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["aborted"] = True
-            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["time"] = datetime
-            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["duration"] = dur
-            if self._debug:
-                print(f"{datetime} FOUND rebuild UPDATE term={term} rb={puuid}/{ver}/{gen}/{op} "
-                      f"STATUS={status}, DUR={dur} seconds rank {rank}\t{host}\tPID {pid}\t{fname}")
+        if not match:
+            return False
+
+        # Disable checking for legacy rebuild log format, to save execution time
+        self._check_rb_legacy_fmt = False
+        puuid, ver, gen, op, status, dur = self._get_ps_rb_status_components(match)
+        if not self._is_leader(puuid, rank, pid):
             return True
-        return False
+        term = self._cur_term[puuid]
+        if term < 1:
+            self._warn(f"pool {puuid} I don't know what term it is ({term})!", fname, line)
+            return True
+        if ver not in self._pools[puuid][term]["maps"]:
+            self._warn(f"pool {puuid} term {term} ver {ver} not in maps - add placeholder",
+                        fname, line)
+            self._pools[puuid][term]["maps"][ver] = {
+                "carryover": False,
+                "from_ver": ver,
+                "time": "xx/xx-xx:xx:xx.xx",
+                "rb_gens": {}
+            }
+            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen] = {
+                "op": op,
+                "start_time": "xx/xx-xx:xx:xx.xx",
+                "time": "xx/xx-xx:xx:xx.xx",
+                "started": True,
+                "scanning": False,
+                "pulling": False,
+                "completed": False,
+                "aborted": False,
+                "duration": 0
+            }
+        if gen in self._pools[puuid][term]["maps"][ver]["rb_gens"]:
+            existing_op = self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["op"]
+            if op != existing_op:
+                self._warn(f"rb={puuid}/{ver}/{gen}/{existing_op} != line op {op}", fname, line)
+        if status == "scanning":
+            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["scanning"] = True
+        elif status == "pulling":
+            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["pulling"] = True
+        elif status == "completed":
+            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["completed"] = True
+        elif status == "aborted":
+            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["aborted"] = True
+        self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["time"] = datetime
+        self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["duration"] = dur
+        if self._debug:
+            print(f"{datetime} FOUND rebuild UPDATE term={term} rb={puuid}/{ver}/{gen}/{op} "
+                    f"STATUS={status}, DUR={dur} seconds rank {rank}\t{host}\tPID {pid}\t{fname}")
+        return True
 
     def _get_legacy_ps_rb_status_components(self, match):
         # rebuild-op, status, puuid, leader rank, term, map version, rebuild-gen, duration
@@ -354,59 +359,60 @@ class SysPools():
             return False
         msg, host, datetime = self._get_line_components(line)
         match = self.re_old_ldr_status.match(msg)
-        if match:
-            # Disable checking for new rebuild log format, to save execution time
-            self._check_rb_new_fmt = False
-            op, status, puuid, log_ldr, log_term, ver, gen, dur = \
-                self._get_legacy_ps_rb_status_components(match)
-            if not self._is_leader(puuid, rank, pid):
-                return True
-            if rank != log_ldr:
-                self._warn(f"pool {puuid} my rank {rank} != leader {log_ldr}", fname, line)
-            term = self._cur_term[puuid]
-            if term < 1 or term != log_term:
-                self._warn(f"pool {puuid} I don't know what term it is ({term}), {log_term}!",
-                           fname, line)
-                return True
-            if ver not in self._pools[puuid][term]["maps"]:
-                self._warn(f"pool {puuid} term {term} ver {ver} not in maps - add placeholder",
-                           fname, line)
-                self._pools[puuid][term]["maps"][ver] = {
-                    "carryover": False,
-                    "from_ver": ver,
-                    "time": "xx/xx-xx:xx:xx.xx",
-                    "rb_gens": {}
-                }
-                self._pools[puuid][term]["maps"][ver]["rb_gens"][gen] = {
-                    "op": op,
-                    "start_time": "xx/xx-xx:xx:xx.xx",
-                    "time": "xx/xx-xx:xx:xx.xx",
-                    "started": True,
-                    "scanning": False,
-                    "pulling": False,
-                    "completed": False,
-                    "aborted": False,
-                    "duration": 0
-                }
-            if gen in self._pools[puuid][term]["maps"][ver]["rb_gens"]:
-                existing_op = self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["op"]
-                if op != existing_op:
-                    self._warn(f"rb={puuid}/{ver}/{gen}/{existing_op} != line op {op}", fname, line)
-            if status == "scanning":
-                self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["scanning"] = True
-            elif status == "pulling":
-                self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["pulling"] = True
-            elif status == "completed":
-                self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["completed"] = True
-            elif status == "aborted":
-                self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["aborted"] = True
-            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["time"] = datetime
-            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["duration"] = dur
-            if self._debug:
-                print(f"{datetime} FOUND rebuild UPDATE term={term} rb={puuid}/{ver}/{gen}/{op} "
-                      f"STATUS={status}, DUR={dur} seconds rank {rank}\t{host}\tPID {pid}\t{fname}")
+        if not match:
+            return False
+
+        # Disable checking for new rebuild log format, to save execution time
+        self._check_rb_new_fmt = False
+        op, status, puuid, log_ldr, log_term, ver, gen, dur = \
+            self._get_legacy_ps_rb_status_components(match)
+        if not self._is_leader(puuid, rank, pid):
             return True
-        return False
+        if rank != log_ldr:
+            self._warn(f"pool {puuid} my rank {rank} != leader {log_ldr}", fname, line)
+        term = self._cur_term[puuid]
+        if term < 1 or term != log_term:
+            self._warn(f"pool {puuid} I don't know what term it is ({term}), {log_term}!",
+                        fname, line)
+            return True
+        if ver not in self._pools[puuid][term]["maps"]:
+            self._warn(f"pool {puuid} term {term} ver {ver} not in maps - add placeholder",
+                        fname, line)
+            self._pools[puuid][term]["maps"][ver] = {
+                "carryover": False,
+                "from_ver": ver,
+                "time": "xx/xx-xx:xx:xx.xx",
+                "rb_gens": {}
+            }
+            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen] = {
+                "op": op,
+                "start_time": "xx/xx-xx:xx:xx.xx",
+                "time": "xx/xx-xx:xx:xx.xx",
+                "started": True,
+                "scanning": False,
+                "pulling": False,
+                "completed": False,
+                "aborted": False,
+                "duration": 0
+            }
+        if gen in self._pools[puuid][term]["maps"][ver]["rb_gens"]:
+            existing_op = self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["op"]
+            if op != existing_op:
+                self._warn(f"rb={puuid}/{ver}/{gen}/{existing_op} != line op {op}", fname, line)
+        if status == "scanning":
+            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["scanning"] = True
+        elif status == "pulling":
+            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["pulling"] = True
+        elif status == "completed":
+            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["completed"] = True
+        elif status == "aborted":
+            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["aborted"] = True
+        self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["time"] = datetime
+        self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["duration"] = dur
+        if self._debug:
+            print(f"{datetime} FOUND rebuild UPDATE term={term} rb={puuid}/{ver}/{gen}/{op} "
+                    f"STATUS={status}, DUR={dur} seconds rank {rank}\t{host}\tPID {pid}\t{fname}")
+        return True
 
     def scan_file(self, log_iter, rank=-1):
         """Scan a daos engine log file and insert important pool events into a nested dictionary"""
@@ -552,7 +558,7 @@ def run():
             sys.exit(1)
         sp.scan_file(log_iter, rank=rank)
 
-    print(f"\n======== Pools Report ({len(sp.get_warnings())} warnings from scanning) ========\n")
+    print(f"\n======== Pools Report ({len(sp.warnings)} warnings from scanning) ========\n")
     sp.sort()
     sp.print_pools()
 
