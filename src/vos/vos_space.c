@@ -54,7 +54,7 @@ vos_space_sys_init(struct vos_pool *pool)
 	const daos_size_t scm_tot  = pool->vp_pool_df->pd_scm_sz;
 	const daos_size_t nvme_tot = pool->vp_pool_df->pd_nvme_sz;
 
-	gc_reserve_space(&pool->vp_space_sys[0]);
+	gc_reserve_space(pool, &pool->vp_space_sys[0]);
 	agg_reserve_space(&pool->vp_space_sys[0]);
 
 	if (nvme_tot == 0)
@@ -145,6 +145,11 @@ vos_space_query(struct vos_pool *pool, struct vos_pool_space *vps, bool slow)
 
 	/* Query non-evictable zones usage when the phase2 pool is evictable */
 	if (vos_pool_is_evictable(pool)) {
+		struct vos_pool_ext_df *pd_ext_df = umem_off2ptr(vos_pool2umm(pool), df->pd_ext);
+
+		D_ASSERT(pd_ext_df != NULL);
+		vps->vps_mem_bytes = pd_ext_df->ped_mem_sz;
+
 		rc = umempobj_get_mbusage(vos_pool2umm(pool)->umm_pool, UMEM_DEFAULT_MBKT_ID,
 					  &ne_used, &vps->vps_ne_total);
 		if (rc) {
@@ -160,6 +165,7 @@ vos_space_query(struct vos_pool *pool, struct vos_pool_space *vps, bool slow)
 		}
 		vps->vps_ne_free = vps->vps_ne_total - ne_used;
 	} else {
+		vps->vps_mem_bytes = SCM_TOTAL(vps);
 		vps->vps_ne_total = 0;
 		vps->vps_ne_free = 0;
 	}

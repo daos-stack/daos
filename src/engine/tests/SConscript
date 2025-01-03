@@ -34,6 +34,16 @@ def scons():
                             LIBS=['daos_common', 'protobuf-c', 'gurt', 'cmocka',
                                   'uuid', 'pthread', 'abt', 'cart'])
 
+    abt_tenv = denv.Clone()
+    abt_tenv.AppendUnique(OBJPREFIX='utest_')
+    abt_tenv.AppendUnique(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
+    libraries = ['abt', 'daos_common_pmem', 'gurt']
+    abt_tenv.require('argobots')
+
+    abt_tenv.d_test_program('abt_perf', 'abt_perf.c', LIBS=libraries)
+
+    abt_tenv.d_test_program('abt_stack', 'abt_stack.c', LIBS=libraries)
+
 
 if __name__ == "SCons.Script":
     scons()

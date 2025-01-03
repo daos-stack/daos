@@ -364,25 +364,6 @@ pipeline {
         stage('Check PR') {
             when { changeRequest() }
             parallel {
-                stage('Used Required Git Hooks') {
-                    steps {
-                        catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS',
-                                   message: 'PR did not get committed with required git hooks.  ' +
-                                            'Please see utils/githooks/README.md.') {
-                            sh 'if ! ' + cachedCommitPragma('Required-githooks', 'false') + '''; then
-                                   echo 'PR did not get committed with required git hooks.  ' +
-                                        'Please see utils/githooks/README.md.'
-                                   exit 1
-                                fi'''
-                        }
-                    }
-                    post {
-                        unsuccessful {
-                            echo 'PR did not get committed with required git hooks.  ' +
-                                 'Please see utils/githooks/README.md.'
-                        }
-                    }
-                } // stage('Used Required Git Hooks')
                 stage('Branch name check') {
                     when { changeRequest() }
                     steps {
@@ -965,7 +946,7 @@ pipeline {
                         }
                     }
                 } // stage('Functional on EL 9')
-                stage('Functional on Leap 15.5') {
+                stage('Functional on Leap 15.6') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -986,7 +967,7 @@ pipeline {
                             job_status_update()
                         }
                     } // post
-                } // stage('Functional on Leap 15.5')
+                } // stage('Functional on Leap 15.6')
                 stage('Functional on Ubuntu 20.04') {
                     when {
                         beforeAgent true
@@ -1061,7 +1042,7 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Fault inection testing on EL 8.8')
+                } // stage('Fault injection testing on EL 8.8')
                 stage('Test RPMs on EL 8.6') {
                     when {
                         beforeAgent true
@@ -1081,8 +1062,8 @@ pipeline {
                             rpm_test_post(env.STAGE_NAME, env.NODELIST)
                         }
                     }
-                } // stage('Test CentOS 7 RPMs')
-                stage('Test RPMs on Leap 15.4') {
+                } // stage('Test RPMs on EL 8.6')
+                stage('Test RPMs on Leap 15.5') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
@@ -1096,8 +1077,8 @@ pipeline {
                          * additionally for this use-case, can't override
                            ftest_arg with this :-(
                         script {
-                            'Test RPMs on Leap 15.4': getFunctionalTestStage(
-                                name: 'Test RPMs on Leap 15.4',
+                            'Test RPMs on Leap 15.5': getFunctionalTestStage(
+                                name: 'Test RPMs on Leap 15.5',
                                 pragma_suffix: '',
                                 label: params.CI_UNIT_VM1_LABEL,
                                 next_version: next_version,
@@ -1133,7 +1114,7 @@ pipeline {
                             rpm_test_post(env.STAGE_NAME, env.NODELIST)
                         }
                     }
-                } // stage('Test Leap 15 RPMs')
+                } // stage('Test RPMs on Leap 15.5')
             } // parallel
         } // stage('Test')
         stage('Test Storage Prep on EL 8.8') {

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -490,6 +490,39 @@ func TestControl_SystemQueryReq_getStateMask(t *testing.T) {
 	}
 }
 
+func TestControl_sysResponse_getErrors(t *testing.T) {
+	for name, tc := range map[string]struct {
+		absentHosts string
+		absentRanks string
+		expErr      error
+	}{
+		"no errors": {},
+		"absent hosts": {
+			absentHosts: "foo-[1-23]",
+			expErr:      errors.New("non-existent hosts foo-[1-23]"),
+		},
+		"absent ranks": {
+			absentRanks: "1-23",
+			expErr:      errors.New("non-existent ranks 1-23"),
+		},
+		"both absent hosts and ranks": {
+			absentHosts: "foo-[1-23]",
+			absentRanks: "1-23",
+			expErr:      errors.New("non-existent hosts foo-[1-23], non-existent ranks 1-23"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			resp := new(sysResponse)
+			ahs := hostlist.MustCreateSet(tc.absentHosts)
+			resp.AbsentHosts.Replace(ahs)
+			ars := ranklist.MustCreateRankSet(tc.absentRanks)
+			resp.AbsentRanks.Replace(ars)
+
+			test.CmpErr(t, tc.expErr, resp.getErrors(nil))
+		})
+	}
+}
+
 func TestControl_SystemQuery(t *testing.T) {
 	testHS := hostlist.MustCreateSet("foo-[1-23]")
 	testReqHS := new(SystemQueryReq)
@@ -510,11 +543,12 @@ func TestControl_SystemQuery(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		req     *SystemQueryReq
-		uErr    error
-		uResp   *UnaryResponse
-		expResp *SystemQueryResp
-		expErr  error
+		req        *SystemQueryReq
+		uErr       error
+		uResp      *UnaryResponse
+		expErr     error
+		expResp    *SystemQueryResp
+		expRespErr error
 	}{
 		"nil req": {
 			req:    nil,
@@ -532,56 +566,54 @@ func TestControl_SystemQuery(t *testing.T) {
 		},
 		"request absent host set": {
 			req: testReqHS,
-			uResp: MockMSResponse("0.0.0.0", nil,
-				&mgmtpb.SystemQueryResp{
-					Absenthosts: "foo-[1-23]",
-				}),
-			expResp: testRespHS,
+			uResp: MockMSResponse("0.0.0.0", nil, &mgmtpb.SystemQueryResp{
+				Absenthosts: "foo-[1-23]",
+			}),
+			expResp:    testRespHS,
+			expRespErr: errors.New("non-existent hosts foo-[1-23]"),
 		},
 		"request absent rank set": {
 			req: testReqRS,
-			uResp: MockMSResponse("0.0.0.0", nil,
-				&mgmtpb.SystemQueryResp{
-					Absentranks: "1-23",
-				}),
-			expResp: testRespRS,
+			uResp: MockMSResponse("0.0.0.0", nil, &mgmtpb.SystemQueryResp{
+				Absentranks: "1-23",
+			}),
+			expResp:    testRespRS,
+			expRespErr: errors.New("non-existent ranks 1-23"),
 		},
-		"dual host dual rank": {
+		"multiple members": {
 			req: new(SystemQueryReq),
-			uResp: MockMSResponse("10.0.0.1:10001", nil,
-				&mgmtpb.SystemQueryResp{
-					Members: []*mgmtpb.SystemMember{
-						{
-							Rank:        1,
-							Uuid:        test.MockUUID(1),
-							State:       system.MemberStateReady.String(),
-							Addr:        "10.0.0.1:10001",
-							FaultDomain: fdStrs[1],
-						},
-						{
-							Rank:        2,
-							Uuid:        test.MockUUID(2),
-							State:       system.MemberStateReady.String(),
-							Addr:        "10.0.0.1:10001",
-							FaultDomain: fdStrs[2],
-						},
-						{
-							Rank:        0,
-							Uuid:        test.MockUUID(0),
-							State:       system.MemberStateStopped.String(),
-							Addr:        "10.0.0.2:10001",
-							FaultDomain: fdStrs[0],
-						},
-						{
-							Rank:        3,
-							Uuid:        test.MockUUID(3),
-							State:       system.MemberStateStopped.String(),
-							Addr:        "10.0.0.2:10001",
-							FaultDomain: fdStrs[3],
-						},
+			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemQueryResp{
+				Members: []*mgmtpb.SystemMember{
+					{
+						Rank:        1,
+						Uuid:        test.MockUUID(1),
+						State:       system.MemberStateReady.String(),
+						Addr:        "10.0.0.1:10001",
+						FaultDomain: fdStrs[1],
+					},
+					{
+						Rank:        2,
+						Uuid:        test.MockUUID(2),
+						State:       system.MemberStateReady.String(),
+						Addr:        "10.0.0.1:10001",
+						FaultDomain: fdStrs[2],
+					},
+					{
+						Rank:        0,
+						Uuid:        test.MockUUID(0),
+						State:       system.MemberStateStopped.String(),
+						Addr:        "10.0.0.2:10001",
+						FaultDomain: fdStrs[0],
+					},
+					{
+						Rank:        3,
+						Uuid:        test.MockUUID(3),
+						State:       system.MemberStateStopped.String(),
+						Addr:        "10.0.0.2:10001",
+						FaultDomain: fdStrs[3],
 					},
 				},
-			),
+			}),
 			expResp: &SystemQueryResp{
 				Members: system.Members{
 					system.MockMemberFullSpec(t, 1, test.MockUUID(1), "",
@@ -598,6 +630,20 @@ func TestControl_SystemQuery(t *testing.T) {
 						WithFaultDomain(fds[3]),
 				},
 			},
+		},
+		"multiple members; with errors": {
+			req: new(SystemQueryReq),
+			uResp: MockMSResponse("host1", nil, &mgmtpb.SystemQueryResp{
+				Absenthosts: "foo-[1-23]",
+				Absentranks: "1-23",
+			}),
+			expResp: func() *SystemQueryResp {
+				resp := new(SystemQueryResp)
+				resp.AbsentHosts.Replace(testHS)
+				resp.AbsentRanks.Replace(testRS)
+				return resp
+			}(),
+			expRespErr: errors.New("non-existent hosts foo-[1-23], non-existent ranks 1-23"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -622,45 +668,8 @@ func TestControl_SystemQuery(t *testing.T) {
 			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
-			if diff := cmp.Diff(tc.expResp.AbsentHosts.String(), gotResp.AbsentHosts.String()); diff != "" {
-				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
-			}
-			if diff := cmp.Diff(tc.expResp.AbsentRanks.String(), gotResp.AbsentRanks.String()); diff != "" {
-				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
-			}
-		})
-	}
-}
 
-func TestControl_SystemQueryRespErrors(t *testing.T) {
-	for name, tc := range map[string]struct {
-		absentHosts string
-		absentRanks string
-		expErr      error
-	}{
-		"no errors": {},
-		"absent hosts": {
-			absentHosts: "foo-[1-23]",
-			expErr:      errors.New("non-existent hosts foo-[1-23]"),
-		},
-		"absent ranks": {
-			absentRanks: "1-23",
-			expErr:      errors.New("non-existent ranks 1-23"),
-		},
-		"both absent hosts and ranks": {
-			absentHosts: "foo-[1-23]",
-			absentRanks: "1-23",
-			expErr:      errors.New("non-existent hosts foo-[1-23], non-existent ranks 1-23"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			resp := new(SystemQueryResp)
-			ahs := hostlist.MustCreateSet(tc.absentHosts)
-			resp.AbsentHosts.Replace(ahs)
-			ars := ranklist.MustCreateRankSet(tc.absentRanks)
-			resp.AbsentRanks.Replace(ars)
-
-			test.CmpErr(t, tc.expErr, resp.Errors())
+			test.CmpErr(t, tc.expRespErr, gotResp.Errors())
 		})
 	}
 }
@@ -679,11 +688,12 @@ func TestControl_SystemStart(t *testing.T) {
 	testRespRS.AbsentRanks.Replace(testRS)
 
 	for name, tc := range map[string]struct {
-		req     *SystemStartReq
-		uErr    error
-		uResp   *UnaryResponse
-		expResp *SystemStartResp
-		expErr  error
+		req        *SystemStartReq
+		uErr       error
+		uResp      *UnaryResponse
+		expErr     error
+		expResp    *SystemStartResp
+		expRespErr error
 	}{
 		"nil req": {
 			req:    nil,
@@ -701,52 +711,87 @@ func TestControl_SystemStart(t *testing.T) {
 		},
 		"request absent host set": {
 			req: testReqHS,
-			uResp: MockMSResponse("0.0.0.0", nil,
-				&mgmtpb.SystemStartResp{
-					Absenthosts: "foo-[1-23]",
-				}),
-			expResp: testRespHS,
+			uResp: MockMSResponse("0.0.0.0", nil, &mgmtpb.SystemStartResp{
+				Absenthosts: "foo-[1-23]",
+			}),
+			expResp:    testRespHS,
+			expRespErr: errors.New("non-existent hosts foo-[1-23]"),
 		},
 		"request absent rank set": {
 			req: testReqRS,
-			uResp: MockMSResponse("0.0.0.0", nil,
-				&mgmtpb.SystemStartResp{
-					Absentranks: "1-23",
-				}),
-			expResp: testRespRS,
+			uResp: MockMSResponse("0.0.0.0", nil, &mgmtpb.SystemStartResp{
+				Absentranks: "1-23",
+			}),
+			expResp:    testRespRS,
+			expRespErr: errors.New("non-existent ranks 1-23"),
 		},
-		"dual host dual rank": {
+		"multiple members": {
 			req: new(SystemStartReq),
-			uResp: MockMSResponse("10.0.0.1:10001", nil,
-				&mgmtpb.SystemStartResp{
-					Results: []*sharedpb.RankResult{
-						{
-							Rank:  1,
-							State: system.MemberStateReady.String(),
-						},
-						{
-							Rank:  2,
-							State: system.MemberStateReady.String(),
-						},
-						{
-							Rank:  0,
-							State: system.MemberStateStopped.String(),
-						},
-						{
-							Rank:  3,
-							State: system.MemberStateStopped.String(),
-						},
+			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemStartResp{
+				Results: []*sharedpb.RankResult{
+					{
+						Rank:  1,
+						State: system.MemberStateReady.String(),
+					},
+					{
+						Rank:  2,
+						State: system.MemberStateReady.String(),
+					},
+					{
+						Rank:  0,
+						State: system.MemberStateReady.String(),
+					},
+					{
+						Rank:  3,
+						State: system.MemberStateReady.String(),
 					},
 				},
-			),
+			}),
 			expResp: &SystemStartResp{
 				Results: system.MemberResults{
 					system.NewMemberResult(1, nil, system.MemberStateReady),
 					system.NewMemberResult(2, nil, system.MemberStateReady),
-					system.NewMemberResult(0, nil, system.MemberStateStopped),
-					system.NewMemberResult(3, nil, system.MemberStateStopped),
+					system.NewMemberResult(0, nil, system.MemberStateReady),
+					system.NewMemberResult(3, nil, system.MemberStateReady),
 				},
 			},
+		},
+		"multiple members; with errors": {
+			req: new(SystemStartReq),
+			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemStartResp{
+				Absenthosts: "foo-[1-23]",
+				Absentranks: "1-23",
+				Results: []*sharedpb.RankResult{
+					{
+						Rank:  24,
+						State: system.MemberStateReady.String(),
+					},
+					{
+						Rank: 25, Errored: true, Msg: "fail",
+						State: system.MemberStateErrored.String(),
+					},
+					{
+						Rank: 0, Errored: true, Msg: "failed",
+						State: system.MemberStateErrored.String(),
+					},
+					{
+						Rank:  26,
+						State: system.MemberStateReady.String(),
+					},
+				},
+			}),
+			expResp: &SystemStartResp{
+				Results: system.MemberResults{
+					system.NewMemberResult(24, nil, system.MemberStateReady),
+					system.NewMemberResult(25, errors.New("fail"),
+						system.MemberStateReady),
+					system.NewMemberResult(0, errors.New("failed"),
+						system.MemberStateReady),
+					system.NewMemberResult(26, nil, system.MemberStateReady),
+				},
+			},
+			expRespErr: errors.New("non-existent hosts foo-[1-23], " +
+				"non-existent ranks 1-23, check results for failed ranks 0,2"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -764,74 +809,14 @@ func TestControl_SystemStart(t *testing.T) {
 				return
 			}
 
-			cmpOpts := []cmp.Option{cmpopts.IgnoreUnexported(SystemStartResp{}, system.MemberResult{})}
+			cmpOpts := []cmp.Option{
+				cmpopts.IgnoreUnexported(SystemStartResp{}, system.MemberResult{}),
+			}
 			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
-			if diff := cmp.Diff(tc.expResp.AbsentHosts.String(), gotResp.AbsentHosts.String()); diff != "" {
-				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
-			}
-			if diff := cmp.Diff(tc.expResp.AbsentRanks.String(), gotResp.AbsentRanks.String()); diff != "" {
-				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
-			}
-		})
-	}
-}
 
-func TestControl_SystemStartRespErrors(t *testing.T) {
-	successResults := system.MemberResults{
-		system.NewMemberResult(1, nil, system.MemberStateReady),
-		system.NewMemberResult(2, nil, system.MemberStateReady),
-		system.NewMemberResult(0, nil, system.MemberStateStopped),
-		system.NewMemberResult(3, nil, system.MemberStateStopped),
-	}
-	failedResults := system.MemberResults{
-		system.NewMemberResult(1, nil, system.MemberStateReady),
-		system.NewMemberResult(2, errors.New("fail"), system.MemberStateReady),
-		system.NewMemberResult(0, errors.New("failed"), system.MemberStateStopped),
-		system.NewMemberResult(3, nil, system.MemberStateStopped),
-	}
-
-	for name, tc := range map[string]struct {
-		absentHosts string
-		absentRanks string
-		results     system.MemberResults
-		expErr      error
-	}{
-		"no errors": {
-			results: successResults,
-		},
-		"absent hosts": {
-			absentHosts: "foo-[1-23]",
-			results:     successResults,
-			expErr:      errors.New("non-existent hosts foo-[1-23]"),
-		},
-		"absent ranks": {
-			absentRanks: "1-23",
-			results:     successResults,
-			expErr:      errors.New("non-existent ranks 1-23"),
-		},
-		"failed ranks": {
-			results: failedResults,
-			expErr:  errors.New("check results for failed ranks 0,2"),
-		},
-		"absent hosts and ranks with failed ranks": {
-			absentHosts: "foo-[1-23]",
-			absentRanks: "1-23",
-			results:     failedResults,
-			expErr: errors.New("non-existent hosts foo-[1-23], " +
-				"non-existent ranks 1-23, check results for failed ranks 0,2"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			resp := new(SystemStartResp)
-			ahs := hostlist.MustCreateSet(tc.absentHosts)
-			resp.AbsentHosts.Replace(ahs)
-			ars := ranklist.MustCreateRankSet(tc.absentRanks)
-			resp.AbsentRanks.Replace(ars)
-			resp.Results = tc.results
-
-			test.CmpErr(t, tc.expErr, resp.Errors())
+			test.CmpErr(t, tc.expRespErr, gotResp.Errors())
 		})
 	}
 }
@@ -850,11 +835,12 @@ func TestControl_SystemStop(t *testing.T) {
 	testRespRS.AbsentRanks.Replace(testRS)
 
 	for name, tc := range map[string]struct {
-		req     *SystemStopReq
-		uErr    error
-		uResp   *UnaryResponse
-		expResp *SystemStopResp
-		expErr  error
+		req        *SystemStopReq
+		uErr       error
+		uResp      *UnaryResponse
+		expErr     error
+		expResp    *SystemStopResp
+		expRespErr error
 	}{
 		"nil req": {
 			req:    nil,
@@ -872,52 +858,87 @@ func TestControl_SystemStop(t *testing.T) {
 		},
 		"request absent host set": {
 			req: testReqHS,
-			uResp: MockMSResponse("0.0.0.0", nil,
-				&mgmtpb.SystemStopResp{
-					Absenthosts: "foo-[1-23]",
-				}),
-			expResp: testRespHS,
+			uResp: MockMSResponse("0.0.0.0", nil, &mgmtpb.SystemStopResp{
+				Absenthosts: "foo-[1-23]",
+			}),
+			expResp:    testRespHS,
+			expRespErr: errors.New("non-existent hosts foo-[1-23]"),
 		},
 		"request absent rank set": {
 			req: testReqRS,
-			uResp: MockMSResponse("0.0.0.0", nil,
-				&mgmtpb.SystemStopResp{
-					Absentranks: "1-23",
-				}),
-			expResp: testRespRS,
+			uResp: MockMSResponse("0.0.0.0", nil, &mgmtpb.SystemStopResp{
+				Absentranks: "1-23",
+			}),
+			expResp:    testRespRS,
+			expRespErr: errors.New("non-existent ranks 1-23"),
 		},
-		"dual host dual rank": {
+		"multiple member results": {
 			req: new(SystemStopReq),
-			uResp: MockMSResponse("10.0.0.1:10001", nil,
-				&mgmtpb.SystemStopResp{
-					Results: []*sharedpb.RankResult{
-						{
-							Rank:  1,
-							State: system.MemberStateReady.String(),
-						},
-						{
-							Rank:  2,
-							State: system.MemberStateReady.String(),
-						},
-						{
-							Rank:  0,
-							State: system.MemberStateStopped.String(),
-						},
-						{
-							Rank:  3,
-							State: system.MemberStateStopped.String(),
-						},
+			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemStopResp{
+				Results: []*sharedpb.RankResult{
+					{
+						Rank:  1,
+						State: system.MemberStateStopped.String(),
+					},
+					{
+						Rank:  2,
+						State: system.MemberStateStopped.String(),
+					},
+					{
+						Rank:  0,
+						State: system.MemberStateStopped.String(),
+					},
+					{
+						Rank:  3,
+						State: system.MemberStateStopped.String(),
 					},
 				},
-			),
+			}),
 			expResp: &SystemStopResp{
 				Results: system.MemberResults{
-					system.NewMemberResult(1, nil, system.MemberStateReady),
-					system.NewMemberResult(2, nil, system.MemberStateReady),
+					system.NewMemberResult(1, nil, system.MemberStateStopped),
+					system.NewMemberResult(2, nil, system.MemberStateStopped),
 					system.NewMemberResult(0, nil, system.MemberStateStopped),
 					system.NewMemberResult(3, nil, system.MemberStateStopped),
 				},
 			},
+		},
+		"multiple member results; with errors": {
+			req: new(SystemStopReq),
+			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemStopResp{
+				Absenthosts: "foo-[1-23]",
+				Absentranks: "1-23",
+				Results: []*sharedpb.RankResult{
+					{
+						Rank:  25,
+						State: system.MemberStateStopped.String(),
+					},
+					{
+						Rank: 26, Errored: true, Msg: "fail",
+						State: system.MemberStateErrored.String(),
+					},
+					{
+						Rank: 0, Errored: true, Msg: "failed",
+						State: system.MemberStateErrored.String(),
+					},
+					{
+						Rank:  27,
+						State: system.MemberStateStopped.String(),
+					},
+				},
+			}),
+			expResp: &SystemStopResp{
+				Results: system.MemberResults{
+					system.NewMemberResult(25, nil, system.MemberStateStopped),
+					system.NewMemberResult(26, errors.New("fail"),
+						system.MemberStateStopped),
+					system.NewMemberResult(0, errors.New("failed"),
+						system.MemberStateStopped),
+					system.NewMemberResult(27, nil, system.MemberStateStopped),
+				},
+			},
+			expRespErr: errors.New("non-existent hosts foo-[1-23], " +
+				"non-existent ranks 1-23, check results for failed ranks 0,2"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -935,85 +956,26 @@ func TestControl_SystemStop(t *testing.T) {
 				return
 			}
 
-			cmpOpts := []cmp.Option{cmpopts.IgnoreUnexported(SystemStopResp{}, system.MemberResult{})}
+			cmpOpts := []cmp.Option{
+				cmpopts.IgnoreUnexported(SystemStopResp{}, system.MemberResult{}),
+			}
 			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
-			if diff := cmp.Diff(tc.expResp.AbsentHosts.String(), gotResp.AbsentHosts.String()); diff != "" {
-				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
-			}
-			if diff := cmp.Diff(tc.expResp.AbsentRanks.String(), gotResp.AbsentRanks.String()); diff != "" {
-				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
-			}
-		})
-	}
-}
 
-func TestControl_SystemStopRespErrors(t *testing.T) {
-	successResults := system.MemberResults{
-		system.NewMemberResult(1, nil, system.MemberStateReady),
-		system.NewMemberResult(2, nil, system.MemberStateReady),
-		system.NewMemberResult(0, nil, system.MemberStateStopped),
-		system.NewMemberResult(3, nil, system.MemberStateStopped),
-	}
-	failedResults := system.MemberResults{
-		system.NewMemberResult(1, nil, system.MemberStateReady),
-		system.NewMemberResult(2, errors.New("fail"), system.MemberStateReady),
-		system.NewMemberResult(0, errors.New("failed"), system.MemberStateStopped),
-		system.NewMemberResult(3, nil, system.MemberStateStopped),
-	}
-
-	for name, tc := range map[string]struct {
-		absentHosts string
-		absentRanks string
-		results     system.MemberResults
-		expErr      error
-	}{
-		"no errors": {
-			results: successResults,
-		},
-		"absent hosts": {
-			absentHosts: "foo-[1-23]",
-			results:     successResults,
-			expErr:      errors.New("non-existent hosts foo-[1-23]"),
-		},
-		"absent ranks": {
-			absentRanks: "1-23",
-			results:     successResults,
-			expErr:      errors.New("non-existent ranks 1-23"),
-		},
-		"failed ranks": {
-			results: failedResults,
-			expErr:  errors.New("check results for failed ranks 0,2"),
-		},
-		"absent hosts and ranks with failed ranks": {
-			absentHosts: "foo-[1-23]",
-			absentRanks: "1-23",
-			results:     failedResults,
-			expErr: errors.New("non-existent hosts foo-[1-23], " +
-				"non-existent ranks 1-23, check results for failed ranks 0,2"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			resp := new(SystemStopResp)
-			ahs := hostlist.MustCreateSet(tc.absentHosts)
-			resp.AbsentHosts.Replace(ahs)
-			ars := ranklist.MustCreateRankSet(tc.absentRanks)
-			resp.AbsentRanks.Replace(ars)
-			resp.Results = tc.results
-
-			test.CmpErr(t, tc.expErr, resp.Errors())
+			test.CmpErr(t, tc.expRespErr, gotResp.Errors())
 		})
 	}
 }
 
 func TestControl_SystemExclude(t *testing.T) {
 	for name, tc := range map[string]struct {
-		req     *SystemExcludeReq
-		uErr    error
-		uResp   *UnaryResponse
-		expResp *SystemExcludeResp
-		expErr  error
+		req        *SystemExcludeReq
+		uErr       error
+		uResp      *UnaryResponse
+		expErr     error
+		expResp    *SystemExcludeResp
+		expRespErr error
 	}{
 		"nil req": {
 			req:    nil,
@@ -1029,38 +991,50 @@ func TestControl_SystemExclude(t *testing.T) {
 			uResp:  MockMSResponse("host1", errors.New("remote failed"), nil),
 			expErr: errors.New("remote failed"),
 		},
-		"dual host dual rank": {
+		"dual rank": {
 			req: new(SystemExcludeReq),
-			uResp: MockMSResponse("10.0.0.1:10001", nil,
-				&mgmtpb.SystemExcludeResp{
-					Results: []*sharedpb.RankResult{
-						{
-							Rank:  1,
-							State: system.MemberStateReady.String(),
-						},
-						{
-							Rank:  2,
-							State: system.MemberStateReady.String(),
-						},
-						{
-							Rank:  0,
-							State: system.MemberStateStopped.String(),
-						},
-						{
-							Rank:  3,
-							State: system.MemberStateStopped.String(),
-						},
+			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemExcludeResp{
+				Results: []*sharedpb.RankResult{
+					{
+						Rank:  1,
+						State: system.MemberStateAdminExcluded.String(),
+					},
+					{
+						Rank:  0,
+						State: system.MemberStateAdminExcluded.String(),
 					},
 				},
-			),
+			}),
 			expResp: &SystemExcludeResp{
 				Results: system.MemberResults{
-					system.NewMemberResult(1, nil, system.MemberStateReady),
-					system.NewMemberResult(2, nil, system.MemberStateReady),
-					system.NewMemberResult(0, nil, system.MemberStateStopped),
-					system.NewMemberResult(3, nil, system.MemberStateStopped),
+					system.NewMemberResult(1, nil, system.MemberStateAdminExcluded),
+					system.NewMemberResult(0, nil, system.MemberStateAdminExcluded),
 				},
 			},
+		},
+		"dual rank; with errors": {
+			req: new(SystemExcludeReq),
+			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemExcludeResp{
+				Results: []*sharedpb.RankResult{
+					{
+						Rank: 24, Errored: true, Msg: "fail",
+						State: system.MemberStateErrored.String(),
+					},
+					{
+						Rank: 0, Errored: true, Msg: "failed",
+						State: system.MemberStateErrored.String(),
+					},
+				},
+			}),
+			expResp: &SystemExcludeResp{
+				Results: system.MemberResults{
+					system.NewMemberResult(24, errors.New("fail"),
+						system.MemberStateStopped),
+					system.NewMemberResult(0, errors.New("failed"),
+						system.MemberStateStopped),
+				},
+			},
+			expRespErr: errors.New("failed ranks 0,24"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1078,15 +1052,219 @@ func TestControl_SystemExclude(t *testing.T) {
 				return
 			}
 
-			cmpOpts := []cmp.Option{cmpopts.IgnoreUnexported(SystemExcludeResp{}, system.MemberResult{})}
+			cmpOpts := []cmp.Option{cmpopts.IgnoreUnexported(SystemExcludeResp{},
+				system.MemberResult{})}
 			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
+
+			test.CmpErr(t, tc.expRespErr, gotResp.Errors())
 		})
 	}
 }
 
-func TestDmg_System_checkSystemErase(t *testing.T) {
+func TestControl_SystemDrain(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req        *SystemDrainReq
+		uErr       error
+		uResp      *UnaryResponse
+		expErr     error
+		expResp    *SystemDrainResp
+		expRespErr error
+	}{
+		"nil req": {
+			req:    nil,
+			expErr: errors.New("nil *control.SystemDrainReq request"),
+		},
+		"local failure": {
+			req:    new(SystemDrainReq),
+			uErr:   errors.New("local failed"),
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			req:    new(SystemDrainReq),
+			uResp:  MockMSResponse("host1", errors.New("remote failed"), nil),
+			expErr: errors.New("remote failed"),
+		},
+		"dual pools; single rank": {
+			req: new(SystemDrainReq),
+			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemDrainResp{
+				Results: []*mgmtpb.SystemDrainResp_DrainResult{
+					{PoolId: test.MockUUID(1), Ranks: "1"},
+					{PoolId: test.MockUUID(2), Ranks: "1"},
+				},
+			}),
+			expResp: &SystemDrainResp{
+				Results: []*DrainResult{
+					{PoolID: test.MockUUID(1), Ranks: "1"},
+					{PoolID: test.MockUUID(2), Ranks: "1"},
+				},
+			},
+		},
+		"dual pools; single rank; with errors": {
+			req: new(SystemDrainReq),
+			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemDrainResp{
+				Results: []*mgmtpb.SystemDrainResp_DrainResult{
+					{
+						PoolId: test.MockUUID(1), Ranks: "1",
+						Status: -1, Msg: "fail1",
+					},
+					{
+						PoolId: test.MockUUID(2), Ranks: "1",
+						Status: -1, Msg: "fail2",
+					},
+				},
+			}),
+			expResp: &SystemDrainResp{
+				Results: []*DrainResult{
+					{
+						PoolID: test.MockUUID(1), Ranks: "1",
+						Status: -1, Msg: "fail1",
+					},
+					{
+						PoolID: test.MockUUID(2), Ranks: "1",
+						Status: -1, Msg: "fail2",
+					},
+				},
+			},
+			expRespErr: errors.New("pool 00000001-0001-0001-0001-000000000001 ranks 1: fail1, pool 00000002-0002-0002-0002-000000000002 ranks 1: fail2"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mi := NewMockInvoker(log, &MockInvokerConfig{
+				UnaryError:    tc.uErr,
+				UnaryResponse: tc.uResp,
+			})
+
+			gotResp, gotErr := SystemDrain(test.Context(t), mi, tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			cmpOpts := []cmp.Option{
+				cmpopts.IgnoreUnexported(SystemDrainResp{}),
+			}
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+
+			test.CmpErr(t, tc.expRespErr, gotResp.Errors())
+		})
+	}
+}
+
+func TestControl_SystemCleanup(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req        *SystemCleanupReq
+		uErr       error
+		uResp      *UnaryResponse
+		expErr     error
+		expResp    *SystemCleanupResp
+		expRespErr error
+	}{
+		"nil req": {
+			req:    nil,
+			expErr: errors.New("nil *control.SystemCleanupReq request"),
+		},
+		"missing machine name": {
+			req:    new(SystemCleanupReq),
+			expErr: errors.New("requires a machine name"),
+		},
+		"local failure": {
+			req:    &SystemCleanupReq{Machine: "foo"},
+			uErr:   errors.New("local failed"),
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			req:    &SystemCleanupReq{Machine: "foo"},
+			uResp:  MockMSResponse("host1", errors.New("remote failed"), nil),
+			expErr: errors.New("remote failed"),
+		},
+		"no cleanup": {
+			req: &SystemCleanupReq{Machine: "foo"},
+			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemCleanupResp{
+				Results: []*mgmtpb.SystemCleanupResp_CleanupResult{},
+			}),
+			expResp: &SystemCleanupResp{},
+		},
+		"cleanup multiple handles": {
+			req: &SystemCleanupReq{Machine: "foo"},
+			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemCleanupResp{
+				Results: []*mgmtpb.SystemCleanupResp_CleanupResult{
+					{PoolId: test.MockUUID(1), Count: 10},
+					{PoolId: test.MockUUID(2), Count: 20},
+				},
+			}),
+			expResp: &SystemCleanupResp{
+				Results: []*CleanupResult{
+					{PoolID: test.MockUUID(1), Count: 10},
+					{PoolID: test.MockUUID(2), Count: 20},
+				},
+			},
+		},
+		"cleanup multiple handles; with errors": {
+			req: &SystemCleanupReq{Machine: "foo"},
+			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemCleanupResp{
+				Results: []*mgmtpb.SystemCleanupResp_CleanupResult{
+					{
+						PoolId: test.MockUUID(1),
+						Status: -1, Msg: "fail1",
+					},
+					{
+						PoolId: test.MockUUID(3),
+						Status: -1, Msg: "fail3",
+					},
+					{PoolId: test.MockUUID(2), Count: 20},
+				},
+			}),
+			expResp: &SystemCleanupResp{
+				Results: []*CleanupResult{
+					{
+						PoolID: test.MockUUID(1),
+						Status: -1, Msg: "fail1",
+					},
+					{
+						PoolID: test.MockUUID(3),
+						Status: -1, Msg: "fail3",
+					},
+					{PoolID: test.MockUUID(2), Count: 20},
+				},
+			},
+			expRespErr: errors.New("fail1, fail3"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mi := NewMockInvoker(log, &MockInvokerConfig{
+				UnaryError:    tc.uErr,
+				UnaryResponse: tc.uResp,
+			})
+
+			gotResp, gotErr := SystemCleanup(test.Context(t), mi, tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			cmpOpts := []cmp.Option{
+				cmpopts.IgnoreUnexported(SystemCleanupResp{}),
+			}
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+
+			test.CmpErr(t, tc.expRespErr, gotResp.Errors())
+		})
+	}
+}
+
+func TestControl_System_checkSystemErase(t *testing.T) {
 	for name, tc := range map[string]struct {
 		uErr, expErr error
 		members      []*mgmtpb.SystemMember
@@ -1185,22 +1363,20 @@ func TestControl_SystemErase(t *testing.T) {
 		},
 		"single host dual rank": {
 			req: new(SystemEraseReq),
-			uResp: MockMSResponse("10.0.0.1:10001", nil,
-				&mgmtpb.SystemEraseResp{
-					Results: []*sharedpb.RankResult{
-						{
-							Rank: member1.Rank.Uint32(), Action: "system erase",
-							State: system.MemberStateAwaitFormat.String(),
-							Addr:  member1.Addr.String(),
-						},
-						{
-							Rank: member2.Rank.Uint32(), Action: "system erase",
-							State: system.MemberStateAwaitFormat.String(),
-							Addr:  member2.Addr.String(),
-						},
+			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemEraseResp{
+				Results: []*sharedpb.RankResult{
+					{
+						Rank: member1.Rank.Uint32(), Action: "system erase",
+						State: system.MemberStateAwaitFormat.String(),
+						Addr:  member1.Addr.String(),
+					},
+					{
+						Rank: member2.Rank.Uint32(), Action: "system erase",
+						State: system.MemberStateAwaitFormat.String(),
+						Addr:  member2.Addr.String(),
 					},
 				},
-			),
+			}),
 			expResp: &SystemEraseResp{
 				Results: system.MemberResults{
 					mockMemberResult(member1, "system erase", nil, system.MemberStateAwaitFormat),
@@ -1210,23 +1386,21 @@ func TestControl_SystemErase(t *testing.T) {
 		},
 		"single host dual rank one failed": {
 			req: new(SystemEraseReq),
-			uResp: MockMSResponse("10.0.0.1:10001", nil,
-				&mgmtpb.SystemEraseResp{
-					Results: []*sharedpb.RankResult{
-						{
-							Rank: member1.Rank.Uint32(), Action: "system erase",
-							State:   system.MemberStateErrored.String(),
-							Addr:    member1.Addr.String(),
-							Errored: true, Msg: "erase failed",
-						},
-						{
-							Rank: member2.Rank.Uint32(), Action: "system erase",
-							State: system.MemberStateAwaitFormat.String(),
-							Addr:  member2.Addr.String(),
-						},
+			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemEraseResp{
+				Results: []*sharedpb.RankResult{
+					{
+						Rank: member1.Rank.Uint32(), Action: "system erase",
+						State:   system.MemberStateErrored.String(),
+						Addr:    member1.Addr.String(),
+						Errored: true, Msg: "erase failed",
+					},
+					{
+						Rank: member2.Rank.Uint32(), Action: "system erase",
+						State: system.MemberStateAwaitFormat.String(),
+						Addr:  member2.Addr.String(),
 					},
 				},
-			),
+			}),
 			expResp: &SystemEraseResp{
 				HostErrorsResp: MockHostErrorsResp(t,
 					&MockHostError{
@@ -1242,57 +1416,55 @@ func TestControl_SystemErase(t *testing.T) {
 		},
 		"multiple hosts dual rank mixed results": {
 			req: new(SystemEraseReq),
-			uResp: MockMSResponse("10.0.0.1:10001", nil,
-				&mgmtpb.SystemEraseResp{
-					Results: []*sharedpb.RankResult{
-						{
-							Rank: member1.Rank.Uint32(), Action: "system erase",
-							State:   system.MemberStateErrored.String(),
-							Addr:    member1.Addr.String(),
-							Errored: true, Msg: "erase failed",
-						},
-						{
-							Rank: member2.Rank.Uint32(), Action: "system erase",
-							State: system.MemberStateAwaitFormat.String(),
-							Addr:  member2.Addr.String(),
-						},
-						{
-							Rank: member3.Rank.Uint32(), Action: "system erase",
-							State: system.MemberStateAwaitFormat.String(),
-							Addr:  member3.Addr.String(),
-						},
-						{
-							Rank: member4.Rank.Uint32(), Action: "system erase",
-							State: system.MemberStateAwaitFormat.String(),
-							Addr:  member4.Addr.String(),
-						},
-						{
-							Rank: member5.Rank.Uint32(), Action: "system erase",
-							State:   system.MemberStateErrored.String(),
-							Addr:    member5.Addr.String(),
-							Errored: true, Msg: "erase failed",
-						},
-						{
-							Rank: member6.Rank.Uint32(), Action: "system erase",
-							State:   system.MemberStateErrored.String(),
-							Addr:    member6.Addr.String(),
-							Errored: true, Msg: "something bad",
-						},
-						{
-							Rank: member7.Rank.Uint32(), Action: "system erase",
-							State:   system.MemberStateErrored.String(),
-							Addr:    member7.Addr.String(),
-							Errored: true, Msg: "erase failed",
-						},
-						{
-							Rank: member8.Rank.Uint32(), Action: "system erase",
-							State:   system.MemberStateErrored.String(),
-							Addr:    member8.Addr.String(),
-							Errored: true, Msg: "erase failed",
-						},
+			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemEraseResp{
+				Results: []*sharedpb.RankResult{
+					{
+						Rank: member1.Rank.Uint32(), Action: "system erase",
+						State:   system.MemberStateErrored.String(),
+						Addr:    member1.Addr.String(),
+						Errored: true, Msg: "erase failed",
+					},
+					{
+						Rank: member2.Rank.Uint32(), Action: "system erase",
+						State: system.MemberStateAwaitFormat.String(),
+						Addr:  member2.Addr.String(),
+					},
+					{
+						Rank: member3.Rank.Uint32(), Action: "system erase",
+						State: system.MemberStateAwaitFormat.String(),
+						Addr:  member3.Addr.String(),
+					},
+					{
+						Rank: member4.Rank.Uint32(), Action: "system erase",
+						State: system.MemberStateAwaitFormat.String(),
+						Addr:  member4.Addr.String(),
+					},
+					{
+						Rank: member5.Rank.Uint32(), Action: "system erase",
+						State:   system.MemberStateErrored.String(),
+						Addr:    member5.Addr.String(),
+						Errored: true, Msg: "erase failed",
+					},
+					{
+						Rank: member6.Rank.Uint32(), Action: "system erase",
+						State:   system.MemberStateErrored.String(),
+						Addr:    member6.Addr.String(),
+						Errored: true, Msg: "something bad",
+					},
+					{
+						Rank: member7.Rank.Uint32(), Action: "system erase",
+						State:   system.MemberStateErrored.String(),
+						Addr:    member7.Addr.String(),
+						Errored: true, Msg: "erase failed",
+					},
+					{
+						Rank: member8.Rank.Uint32(), Action: "system erase",
+						State:   system.MemberStateErrored.String(),
+						Addr:    member8.Addr.String(),
+						Errored: true, Msg: "erase failed",
 					},
 				},
-			),
+			}),
 			expResp: &SystemEraseResp{
 				HostErrorsResp: MockHostErrorsResp(t,
 					&MockHostError{
@@ -1333,6 +1505,90 @@ func TestControl_SystemErase(t *testing.T) {
 			})
 
 			gotResp, gotErr := SystemErase(test.Context(t), mi, tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp, defResCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestControl_LeaderQuery(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req     *LeaderQueryReq
+		uErr    error
+		uResp   *UnaryResponse
+		expResp *LeaderQueryResp
+		expErr  error
+	}{
+		"nil req": {
+			req:    nil,
+			expErr: errors.New("nil *control.LeaderQueryReq request"),
+		},
+		"local failure": {
+			req:    new(LeaderQueryReq),
+			uErr:   errors.New("local failed"),
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			req:    new(LeaderQueryReq),
+			uResp:  MockMSResponse("host1", errors.New("remote failed"), nil),
+			expErr: errors.New("remote failed"),
+		},
+		"success": {
+			req:     new(LeaderQueryReq),
+			uResp:   MockMSResponse("host1", nil, &mgmtpb.LeaderQueryResp{}),
+			expResp: &LeaderQueryResp{},
+		},
+		"success; multiple replicas": {
+			req: new(LeaderQueryReq),
+			uResp: &UnaryResponse{
+				Responses: []*HostResponse{
+					{
+						Addr:    "host1",
+						Message: &mgmtpb.LeaderQueryResp{},
+					},
+					{
+						Addr:    "host2",
+						Message: &mgmtpb.LeaderQueryResp{},
+					},
+				},
+			},
+			expResp: &LeaderQueryResp{},
+		},
+		"replica failure": {
+			req: new(LeaderQueryReq),
+			uResp: &UnaryResponse{
+				Responses: []*HostResponse{
+					{
+						Addr:  "host1",
+						Error: errors.New("remote failed"),
+					},
+					{
+						Addr:    "host2",
+						Message: &mgmtpb.LeaderQueryResp{},
+					},
+				},
+			},
+			expResp: &LeaderQueryResp{
+				DownReplicas: []string{"host1"},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mi := NewMockInvoker(log, &MockInvokerConfig{
+				UnaryError:    tc.uErr,
+				UnaryResponse: tc.uResp,
+			})
+
+			gotResp, gotErr := LeaderQuery(test.Context(t), mi, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
