@@ -28,7 +28,7 @@ cd "$PARENT_DIR"/../../
 
 
 regex_intel='(^[[:blank:]]*[\*/]*.*)((Copyright[[:blank:]]*)([0-9]{4})(-([0-9]{4}))?)([[:blank:]]*(Intel.*$))'
-shortname_intel="Intel Corporation."
+# shortname_intel="Intel Corporation."
 regex_hpe='(^[[:blank:]]*[\*/]*.*)((Copyright[[:blank:]]*)([0-9]{4})(-([0-9]{4}))?)([[:blank:]]*(Hewlett Packard Enterprise Development LP.*$))'
 shortname_hpe="Hewlett Packard Enterprise Development LP"
 year=$(date +%Y)
