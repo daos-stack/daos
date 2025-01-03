@@ -63,5 +63,7 @@ mdtest:
       - "EC_4P1GX"
       - "EC_4P2G1"
       - "EC_4P2GX"
+      - "EC_4P3G1"
+      - "EC_4P3GX"
       - "EC_8P2G1"
       - "EC_8P2GX"
