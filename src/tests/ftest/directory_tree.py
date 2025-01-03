@@ -170,12 +170,21 @@ class DirTree():
         self._needles_paths.append(file_name)
 
     def _mktemp_file(self, dir=None, prefix=None, suffix=None):
+        """Create a temporary file.
+        If the file size is 0, the file will be empty.
+        If the file size is greater than 0, the file will be filled with random data.
+        If min and max file size are different, the file size will be a random between min and max.
+        """
+
         fd, fname = tempfile.mkstemp(dir=dir, prefix=prefix, suffix=suffix)
         if self._file_size_min == 0:
-            close(fd)
+            os.close(fd)
             return fname
 
-        size = random.randrange(self._file_size_min, self._file_size_max)
+        size = self._file_size_min
+        if self._file_size_max > self._file_size_min:
+            size = random.randrange(self._file_size_min, self._file_size_max)
+
         with os.fdopen(fd, 'wb') as f:
             f.write(os.urandom(size))
         return fname
