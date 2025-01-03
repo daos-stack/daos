@@ -18,7 +18,7 @@ from torch.utils.data import Dataset as TorchDataset
 from torch.utils.data import IterableDataset as TorchIterableDataset
 from torch.utils.data import get_worker_info
 
-from . import DAOS_MAGIC, torch_shim
+from . import DAOS_MAGIC, DaosClient, torch_shim
 
 ITER_BATCH_SIZE = 32
 READDIR_BATCH_SIZE = 128
@@ -82,6 +82,7 @@ class Dataset(TorchDataset):
 
         self._pool = pool
         self._cont = cont
+        self._dc = DaosClient()
         self._dfs = _Dfs(pool=pool, cont=cont)
         self._transform_fn = transform_fn
         self._readdir_batch_size = readdir_batch_size
@@ -191,6 +192,7 @@ class IterableDataset(TorchIterableDataset):
 
         self._pool = pool
         self._cont = cont
+        self._dc = DaosClient()
         self._dfs = _Dfs(pool=pool, cont=cont)
         self._transform_fn = transform_fn
         self._readdir_batch_size = readdir_batch_size
