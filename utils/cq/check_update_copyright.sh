@@ -81,28 +81,31 @@ function git_add() {
     return 0
 }
 
-if [[ "$mode" == "githook" ]]; then
-    # Extract domain from configured email
-    user_domain="$(git config user.email | sed -n 's/^.*@\([-0-9a-zA-Z]*\).*/\1/p')"
-else
-    # Extract domain from the first Signed-off-by
-    user_domain="$(git log -1 | grep 'Signed-off-by' | head -n 1 | sed -n 's/^.*@\([-0-9a-zA-Z]*\).*/\1/p')"
-fi
 
-# Toggle copyright regex based on user
-case "$user_domain" in
-    "hpe")
-        regex_user="$regex_hpe"
-        shortname_user="$shortname_hpe"
-        ;;
-    "intel")
-        regex_user="$regex_intel"
-        shortname_user="$shortname_intel"
-        ;;
-    *)
-        echo "  Unsupported email domain: $user_domain"
-        exit 1
-esac
+# Use HPE copyright for all users
+# See below example to toggle copyright regex based on user
+regex_user="$regex_hpe"
+shortname_user="$shortname_hpe"
+# if [[ "$mode" == "githook" ]]; then
+#     # Extract domain from configured email
+#     user_domain="$(git config user.email | sed -n 's/^.*@\([-0-9a-zA-Z]*\).*/\1/p')"
+# else
+#     # Extract domain from the first Signed-off-by
+#     user_domain="$(git log -1 | grep 'Signed-off-by' | head -n 1 | sed -n 's/^.*@\([-0-9a-zA-Z]*\).*/\1/p')"
+# fi
+# case "$user_domain" in
+#     "hpe")
+#         regex_user="$regex_hpe"
+#         shortname_user="$shortname_hpe"
+#         ;;
+#     "intel")
+#         regex_user="$regex_intel"
+#         shortname_user="$shortname_intel"
+#         ;;
+#     *)
+#         echo "  Unsupported email domain: $user_domain"
+#         exit 1
+# esac
 
 # Generate list of all copyright regex except the user's domain.
 # Used to add a new copyright header to files.
