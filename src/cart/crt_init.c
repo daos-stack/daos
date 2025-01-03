@@ -518,6 +518,61 @@ out:
 	return rc;
 }
 
+#define CRT_MIN_TCP_FD 131072
+
+/** For some providers, we require a file descriptor for every connection
+ * and some platforms set the soft limit too low meaning and we run out. We can
+ * set the limit up to the configured max by default to avoid this and warn
+ * when that isn't possible.
+ */
+static void
+file_limit_bump(void)
+{
+	int           rc;
+	struct rlimit rlim;
+
+	/* Bump file descriptor limit if low and if possible */
+	rc = getrlimit(RLIMIT_NOFILE, &rlim);
+	if (rc != 0) {
+		DS_ERROR(errno, "getrlimit() failed. Unable to check file descriptor limit");
+		/** Per the man page, this can only fail if rlim is invalid */
+		D_ASSERT(0);
+		return;
+	}
+
+	if (rlim.rlim_cur >= CRT_MIN_TCP_FD)
+		return;
+
+	if (rlim.rlim_max < CRT_MIN_TCP_FD) {
+		if (getuid() != 0) {
+			D_WARN("File descriptor hard limit should be at least %d, limit is %lu\n",
+			       CRT_MIN_TCP_FD, rlim.rlim_max);
+		} else {
+			/** root should be able to change it */
+			D_INFO("Super user attempting to update hard file descriptor limit to %d,"
+			       " limit was %lu\n",
+			       CRT_MIN_TCP_FD, rlim.rlim_max);
+			rlim.rlim_max = CRT_MIN_TCP_FD;
+		}
+
+		if (rlim.rlim_cur >= rlim.rlim_max)
+			return;
+
+		/* May as well bump it as much as we can */
+	}
+
+	rlim.rlim_cur = rlim.rlim_max;
+	rc            = setrlimit(RLIMIT_NOFILE, &rlim);
+	if (rc != 0) {
+		DS_ERROR(errno,
+			 "setrlimit() failed. Unable to bump file descriptor"
+			 " limit to value >= %d, limit is %lu",
+			 CRT_MIN_TCP_FD, rlim.rlim_max);
+		return;
+	}
+	D_INFO("Updated soft file descriptor limit to %lu\n", rlim.rlim_max);
+}
+
 static void
 prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 {
@@ -544,6 +599,9 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 		if (prov == CRT_PROV_OFI_TCP_RXM && crt_is_service())
 			d_setenv("FI_OFI_RXM_DEF_TCP_WAIT_OBJ", "pollfd", 0);
 	}
+
+	if (prov == CRT_PROV_OFI_TCP || prov == CRT_PROV_OFI_TCP_RXM)
+		file_limit_bump();
 
 	if (prov == CRT_PROV_OFI_CXI)
 		mrc_enable = 1;

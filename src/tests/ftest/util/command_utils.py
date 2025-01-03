@@ -72,6 +72,9 @@ class ExecutableCommand(CommandWithParameters):
         # used to check on the progress or terminate the command.
         self._exe_names = [self.command]
 
+        # If set use the full command string when returning the 'command_regex' property
+        self.full_command_regex = False
+
         # Define an attribute to store the CmdResult from the last run() call.
         # A CmdResult object has the following properties:
         #   command         - command string
@@ -714,6 +717,9 @@ class CommandWithSubCommand(ExecutableCommand):
             self.output_check = prev_output_check
             if json_err:
                 self.exit_status_exception = prev_exit_exception
+        if not self.result.stdout:
+            # Avoid expected json.decode("") exception when there is nothing to decode
+            return {}
         return json.loads(self.result.stdout)
 
     def _get_new(self):
