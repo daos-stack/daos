@@ -1,6 +1,7 @@
 #!/bin/bash
 #
 #  Copyright 2024 Intel Corporation.
+#  Copyright 2025 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -26,7 +27,10 @@ PARENT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 cd "$PARENT_DIR"/../../
 
 
-regex='(^[[:blank:]]*[\*/]*.*)((Copyright[[:blank:]]*)([0-9]{4})(-([0-9]{4}))?)([[:blank:]]*(Intel.*$))'
+regex_intel='(^[[:blank:]]*[\*/]*.*)((Copyright[[:blank:]]*)([0-9]{4})(-([0-9]{4}))?)([[:blank:]]*(Intel.*$))'
+# shortname_intel="Intel Corporation."
+regex_hpe='(^[[:blank:]]*[\*/]*.*)((Copyright[[:blank:]]*)([0-9]{4})(-([0-9]{4}))?)([[:blank:]]*(Hewlett Packard Enterprise Development LP.*$))'
+shortname_hpe="Hewlett Packard Enterprise Development LP"
 year=$(date +%Y)
 errors=0
 targets=(
@@ -57,6 +61,62 @@ targets=(
     '.env'
 )
 
+function git_reset() {
+    local file="$1"
+    if ! git reset "$file"; then
+        echo "  Unable to un-stage $file"
+        errors=$((errors + 1))
+        return 1
+    fi
+    return 0
+}
+
+function git_add() {
+    local file="$1"
+    if ! git add "$file"; then
+        echo "  Unable to re-stage $file"
+        errors=$((errors + 1))
+        return 1
+    fi
+    return 0
+}
+
+
+# Use HPE copyright for all users
+# See below example to toggle copyright regex based on user
+regex_user="$regex_hpe"
+shortname_user="$shortname_hpe"
+# if [[ "$mode" == "githook" ]]; then
+#     # Extract domain from configured email
+#     user_domain="$(git config user.email | sed -n 's/^.*@\([-0-9a-zA-Z]*\).*/\1/p')"
+# else
+#     # Extract domain from the first Signed-off-by
+#     user_domain="$(git log -1 | grep 'Signed-off-by' | head -n 1 | sed -n 's/^.*@\([-0-9a-zA-Z]*\).*/\1/p')"
+# fi
+# case "$user_domain" in
+#     "hpe")
+#         regex_user="$regex_hpe"
+#         shortname_user="$shortname_hpe"
+#         ;;
+#     "intel")
+#         regex_user="$regex_intel"
+#         shortname_user="$shortname_intel"
+#         ;;
+#     *)
+#         echo "  Unsupported email domain: $user_domain"
+#         exit 1
+# esac
+
+# Generate list of all copyright regex except the user's domain.
+# Used to add a new copyright header to files.
+all_regex_except_user=()
+for _regex in "$regex_intel" "$regex_hpe"; do
+    if [[ "$_regex" != "$regex_user" ]]; then
+        all_regex_except_user+=("$_regex")
+    fi
+done
+
+
 if [ -z "$files" ]; then
     files=$(git diff "$git_target" --cached --diff-filter=AM --name-only -- "${targets[@]}")
 else
@@ -75,33 +135,71 @@ for file in $files; do
          [ "$(git diff --cached -I Copyright "$file")" = '' ]; }; then
         continue
     fi
-    read -r y1 y2 <<< "$(sed -nre "s/^.*$regex.*$/\4 \6/p" "$file")"
-    if [[ -z $y1 ]] ; then
-        # Print warning but don't error on non-existent copyright 
-        echo "  Copyright Information not found in: $file"
-    elif [[ $y1 -ne $year && $year -ne $y2 ]] ; then
+    
+    # Check for existing copyright in user's domain
+    # If it exists and is updated, nothing to do
+    read -r y1_user y2_user <<< "$(sed -nre "s/^.*$regex_user.*$/\4 \6/p" "$file")"
+    if [[ $y1_user -eq $year ]] || [[ $y2_user -eq $year ]]; then
+        continue
+    fi
+
+    # If user's domain copyright exists but is outdated, it needs to be updated
+    if [[ -n $y1_user ]] ; then
         if [[ "$mode" == "githook" ]]; then
             # Update copyright in place
-            if ! git reset "$file"; then
-                echo "  Unable to un-stage $file"
-                errors=$((errors + 1))
-            fi
+            git_reset "$file" || continue
             if [[ "$os" == 'Linux' ]]; then
-                sed -i -re "s/$regex/\1Copyright $y1-$year \8/" "$file"
+                sed -i -re "s/$regex_user/\1Copyright $y1_user-$year \8/" "$file"
             else
-                sed -i '' -re "s/$regex/\1Copyright $y1-$year \8/" "$file"
+                sed -i '' -re "s/$regex_user/\1Copyright $y1_user-$year \8/" "$file"
             fi
-
-            if ! git add "$file"; then
-                echo "  Unable to re-stage $file"
-                errors=$((errors + 1))
-            fi
+            git_add "$file" || continue
         elif [[ "$mode" == "gha" ]]; then
             # Print error but do not update
-            lineno="$(grep -nE "$regex" "$file" | cut -f1 -d:)"
+            lineno="$(grep -nE "$regex_user" "$file" | cut -f1 -d:)"
             echo "::error file=$file,line=$lineno::Copyright out of date"
             errors=$((errors + 1))
         fi
+        continue
+    fi
+
+    # User domain copyright does not exist so add it after an existing copyright
+    did_add_copyright=false
+    for _regex in "${all_regex_except_user[@]}"; do
+        read -r y1_other y2_other <<< "$(sed -nre "s/^.*$_regex.*$/\4 \6/p" "$file")"
+        if [[ -z $y1_other ]] ; then
+            continue
+        fi
+
+        if [[ "$mode" == "githook" ]]; then
+            # Add copyright in place, mimicking the format of existing copyright
+            git_reset "$file" || continue
+            if [[ -z "$y2_other" ]]; then
+                y1_y2_other="$y1_other"
+            else
+                y1_y2_other="$y1_other-$y2_other"
+            fi
+            if [[ "$os" == 'Linux' ]]; then
+                sed -i -re "s/$_regex/\1Copyright $y1_y2_other \8\n\1Copyright $year $shortname_user/" "$file"
+            else
+                sed -i '' -re "s/$_regex/\1Copyright $y1_y2_other \8\n\1Copyright $year $shortname_user/" "$file"
+            fi
+            git_add "$file" || continue
+        elif [[ "$mode" == "gha" ]]; then
+            # Print error but do not add
+            lineno="$(grep -nE "$_regex" "$file" | cut -f1 -d:)"
+            echo "::error file=$file,line=$lineno::Copyright out of date"
+            errors=$((errors + 1))
+        fi
+
+        did_add_copyright=true
+        break
+    done
+
+    if ! $did_add_copyright; then
+        # Print warning but don't error on non-existent copyright since it's not easy to
+        # determine the format and where to put it
+        echo "  Copyright Information not found in: $file"
     fi
 done
 
