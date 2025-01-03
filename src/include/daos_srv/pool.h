@@ -285,9 +285,10 @@ int ds_pool_start(uuid_t uuid, bool aft_chk, bool immutable);
 int ds_pool_stop(uuid_t uuid);
 int dsc_pool_svc_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uint64_t deadline, int ntargets,
 			const d_rank_list_t *rank_list, int ndomains, const uint32_t *domains);
-int dsc_pool_svc_update_target_state(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline,
-				     struct pool_target_addr_list *target_list,
-				     pool_comp_state_t state);
+int
+	 dsc_pool_svc_update_target_state(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline,
+					  struct pool_target_addr_list *target_list, pool_comp_state_t state,
+					  bool skip_rf_check);
 
 uint32_t ds_pool_get_vos_df_version_default(void);
 int ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,

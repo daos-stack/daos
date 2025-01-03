@@ -621,30 +621,33 @@ func TestPoolCommands(t *testing.T) {
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
 					TargetIdx: []uint32{1},
+					Force:     false,
 				}),
 			}, " "),
 			nil,
 		},
 		{
 			"Exclude a target with multiple idx",
-			"pool exclude 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1,2,3",
+			"pool exclude -f 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1,2,3",
 			strings.Join([]string{
 				printRequest(t, &control.PoolExcludeReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
 					TargetIdx: []uint32{1, 2, 3},
+					Force:     true,
 				}),
 			}, " "),
 			nil,
 		},
 		{
 			"Exclude a target with no idx given",
-			"pool exclude 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0",
+			"pool exclude -f 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0",
 			strings.Join([]string{
 				printRequest(t, &control.PoolExcludeReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
 					TargetIdx: []uint32{},
+					Force:     true,
 				}),
 			}, " "),
 			nil,
