@@ -151,4 +151,11 @@ heap_off2mbid(struct palloc_heap *heap, uint64_t offset);
 
 struct heap_zone_limits
 heap_get_zone_limits(uint64_t heap_size, uint64_t cache_size, uint32_t nemb_pct);
+
+int
+heap_force_recycle(struct palloc_heap *heap);
+int
+heap_incr_empty_nemb_cnt(struct palloc_heap *heap);
+int
+heap_decr_empty_nemb_cnt(struct palloc_heap *heap);
 #endif /* __DAOS_COMMON_HEAP_H */

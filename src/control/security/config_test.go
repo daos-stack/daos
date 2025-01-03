@@ -12,7 +12,6 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -81,7 +80,7 @@ func SetupTCFilePerms(t *testing.T, conf *TransportConfig) {
 }
 
 func getCert(t *testing.T, path string) *x509.Certificate {
-	buf, err := ioutil.ReadFile(path)
+	buf, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}

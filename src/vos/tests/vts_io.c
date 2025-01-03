@@ -2822,7 +2822,7 @@ io_query_key(void **state)
 	xid = dth->dth_xid;
 	vts_dtx_end(dth);
 
-	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, NULL);
+	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, false, NULL);
 	assert_rc_equal(rc, 1);
 
 	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid, DAOS_GET_DKEY |

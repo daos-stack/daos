@@ -109,7 +109,7 @@ if [ -n "$DISTRO_VERSION" ]; then
     releasever_opt=("--config-opts=releasever=$DISTRO_VERSION")
 fi
 
-bs_dir=/scratch/mock/cache/"${CHROOT_NAME}"-bootstrap
+bs_dir=/scratch/mock/cache/"${CHROOT_NAME}"-bootstrap-$(id -u)
 if ls -l "$bs_dir"/root_cache/cache.tar.gz; then
     mkdir -p "/var/cache/mock/${CHROOT_NAME}-bootstrap/"
     flock "$bs_dir" -c "cp -a $bs_dir/root_cache /var/cache/mock/${CHROOT_NAME}-bootstrap"
@@ -129,10 +129,16 @@ fi
 # Save the ccache
 if [ -d /scratch/ ]; then
     mkdir -p "$bs_dir"/
-    flock "$bs_dir" -c "tar -czf $bs_dir/ccache-$CHROOT_NAME-$PACKAGE.tar.gz /var/cache/mock/${CHROOT_NAME}/ccache"
+    if ! flock "$bs_dir" -c "tar -czf $bs_dir/ccache-$CHROOT_NAME-$PACKAGE.tar.gz /var/cache/mock/${CHROOT_NAME}/ccache"; then
+        echo "Failed to save ccache.  Plowing onward."
+        echo "I am $(id)"
+    fi
     if ls -l /var/cache/mock/"${CHROOT_NAME}"-bootstrap/root_cache/cache.tar.gz; then
         if ! cmp /var/cache/mock/"${CHROOT_NAME}"-bootstrap/root_cache/cache.tar.gz "$bs_dir"/root_cache/cache.tar.gz; then
-            flock "$bs_dir" -c "cp -a /var/cache/mock/${CHROOT_NAME}-bootstrap/root_cache $bs_dir/"
+            if ! flock "$bs_dir" -c "cp -a /var/cache/mock/${CHROOT_NAME}-bootstrap/root_cache $bs_dir/"; then
+                echo "Failed to save root_cache.  Plowing onward."
+                echo "I am $(id)"
+            fi
         fi
     fi
 fi

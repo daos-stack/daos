@@ -16,7 +16,7 @@
 
 Name:          daos
 Version:       2.7.101
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -204,7 +204,11 @@ Summary: The DAOS test suite
 Requires: %{name}-client%{?_isa} = %{version}-%{release}
 Requires: %{name}-admin%{?_isa} = %{version}-%{release}
 Requires: %{name}-devel%{?_isa} = %{version}-%{release}
+%if (0%{?suse_version} >= 1500)
+Requires: libprotobuf-c-devel
+%else
 Requires: protobuf-c-devel
+%endif
 Requires: fio
 Requires: git
 Requires: dbench
@@ -598,6 +602,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Dec 19 2024 Phillip Henderson <phillip.henderson@intel.com> 2.7.101-3
+- Fix protobuf-c requiremnent for daos-client-tests on Leap.
+
 * Tue Nov 13 2024 Denis Barakhtanov <dbarahtanov@enakta.com> 2.7.101-2
 - Add pydaos.torch module to daos-client rpm.
 
