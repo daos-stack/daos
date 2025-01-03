@@ -92,6 +92,9 @@ environment variables allow to customize the Docker image to build:
    (default "")
 - `DAOS_VERSION`: Version of DAOS to use (default "2.4.1-2.el8")
 - `DAOS_AUTH`: Enable DAOS authentication when set to "yes" (default "yes")
+- `HTTP_PROXY`: HTTP used during image building (default "")
+- `HTTP_PROXY`: HTTPS used during image building (default "")
+- `NO_PROXY`: comma-separated list of addresses for which the proxy should not be used (default "")
 
 When the environment file has been properly filled, run the following command to build the base DAOS
 docker image.
@@ -119,6 +122,9 @@ The `daos-server` image is also using the following environment variables:
 - `DAOS_BDEV_SIZE`: Size in GB of the file created to emulate NVMe devices (default 16)
 - `DAOS_IFACE_NAME`: Fabric network interface used by the DAOS engine (default "eth0")
 - `DAOS_MD_ON_SSD`: Enable DAOS MD-on-SSD feature when set to "yes" (default "no")
+- `HTTP_PROXY`: HTTP used during image building (default "")
+- `HTTP_PROXY`: HTTPS used during image building (default "")
+- `NO_PROXY`: comma-separated list of addresses for which the proxy should not be used (default "")
 
 !!! note
     The IP address of the network interface referenced by the `DAOS_IFACE_NAME` argument will be
