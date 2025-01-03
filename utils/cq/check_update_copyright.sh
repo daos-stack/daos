@@ -81,8 +81,8 @@ function git_add() {
     return 0
 }
 
-# Extract domain from configured email
-user_domain="$(git config user.email | sed -n 's/^.*@\([-0-9a-zA-Z]*\).*/\1/p')"
+# Extract domain from the first Signed-off-by
+user_domain="$(git log -1 | grep 'Signed-off-by' | head -n 1 | sed -n 's/^.*@\([-0-9a-zA-Z]*\).*/\1/p')"
 
 # Toggle copyright regex based on user
 case "$user_domain" in
