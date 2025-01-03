@@ -8,7 +8,6 @@ package config
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math"
 	"net"
 	"os"
@@ -39,6 +38,10 @@ const (
 // SupportConfig is defined here to avoid a import cycle
 type SupportConfig struct {
 	FileTransferExec string `yaml:"file_transfer_exec,omitempty"`
+}
+
+type deprecatedParams struct {
+	AccessPoints []string `yaml:"access_points,omitempty"` // deprecated in 2.8
 }
 
 // Server describes configuration options for DAOS control plane.
@@ -72,7 +75,7 @@ type Server struct {
 	Fabric     engine.FabricConfig `yaml:",inline"`
 	Modules    string              `yaml:"-"`
 
-	AccessPoints []string `yaml:"access_points"`
+	MgmtSvcReplicas []string `yaml:"mgmt_svc_replicas"`
 
 	Metadata storage.ControlMetadata `yaml:"control_metadata,omitempty"`
 
@@ -84,6 +87,8 @@ type Server struct {
 
 	// Behavior flags
 	AutoFormat bool `yaml:"-"`
+
+	deprecatedParams `yaml:",inline"`
 }
 
 // WithCoreDumpFilter sets the core dump filter written to /proc/self/coredump_filter.
@@ -200,9 +205,9 @@ func (cfg *Server) WithEngines(engineList ...*engine.Config) *Server {
 	return cfg
 }
 
-// WithAccessPoints sets the access point list.
-func (cfg *Server) WithAccessPoints(aps ...string) *Server {
-	cfg.AccessPoints = aps
+// WithMgmtSvcReplicas sets the MS replicas list.
+func (cfg *Server) WithMgmtSvcReplicas(reps ...string) *Server {
+	cfg.MgmtSvcReplicas = reps
 	return cfg
 }
 
@@ -324,7 +329,7 @@ func DefaultServer() *Server {
 	return &Server{
 		SystemName:        build.DefaultSystemName,
 		SocketDir:         defaultRuntimeDir,
-		AccessPoints:      []string{fmt.Sprintf("localhost:%d", build.DefaultControlPort)},
+		MgmtSvcReplicas:   []string{fmt.Sprintf("localhost:%d", build.DefaultControlPort)},
 		ControlPort:       build.DefaultControlPort,
 		TransportConfig:   security.DefaultServerTransportConfig(),
 		Hyperthreads:      false,
@@ -338,12 +343,12 @@ func DefaultServer() *Server {
 }
 
 // Load reads the serialized configuration from disk and validates file syntax.
-func (cfg *Server) Load() error {
+func (cfg *Server) Load(log logging.Logger) error {
 	if cfg.Path == "" {
 		return FaultConfigNoPath
 	}
 
-	bytes, err := ioutil.ReadFile(cfg.Path)
+	bytes, err := os.ReadFile(cfg.Path)
 	if err != nil {
 		return errors.WithMessage(err, "reading file")
 	}
@@ -372,6 +377,12 @@ func (cfg *Server) Load() error {
 		cfg.ClientEnvVars = common.MergeKeyValues(cfg.ClientEnvVars, []string{cfg.Fabric.GetAuthKeyEnv()})
 	}
 
+	if len(cfg.deprecatedParams.AccessPoints) > 0 {
+		log.Notice("access_points is deprecated; please use mgmt_svc_replicas instead")
+		cfg.MgmtSvcReplicas = cfg.deprecatedParams.AccessPoints
+		cfg.deprecatedParams.AccessPoints = nil
+	}
+
 	return nil
 }
 
@@ -383,7 +394,7 @@ func (cfg *Server) SaveToFile(filename string) error {
 		return err
 	}
 
-	return ioutil.WriteFile(filename, bytes, 0644)
+	return os.WriteFile(filename, bytes, 0644)
 }
 
 // SetPath sets the default path to the configuration file.
@@ -413,22 +424,22 @@ func (cfg *Server) SaveActiveConfig(log logging.Logger) {
 	log.Debugf("active config saved to %s (read-only)", activeConfig)
 }
 
-// GetAccessPointPort returns port number suffixed to AP address after its validation or 0 if no
+// GetMSReplicaPort returns port number suffixed to replicas address after its validation or 0 if no
 // port number specified. Error returned if validation fails.
-func GetAccessPointPort(log logging.Logger, addr string) (int, error) {
+func GetMSReplicaPort(log logging.Logger, addr string) (int, error) {
 	if !common.HasPort(addr) {
 		return 0, nil
 	}
 
 	_, port, err := net.SplitHostPort(addr)
 	if err != nil {
-		log.Errorf("invalid access point %q: %s", addr, err)
-		return 0, FaultConfigBadAccessPoints
+		log.Errorf("invalid MS replica %q: %s", addr, err)
+		return 0, FaultConfigBadMgmtSvcReplicas
 	}
 
 	portNum, err := strconv.Atoi(port)
 	if err != nil {
-		log.Errorf("invalid access point port: %s", err)
+		log.Errorf("invalid MS replica port: %s", err)
 		return 0, FaultConfigBadControlPort
 	}
 	if portNum <= 0 {
@@ -436,17 +447,17 @@ func GetAccessPointPort(log logging.Logger, addr string) (int, error) {
 		if portNum < 0 {
 			m = "negative"
 		}
-		log.Errorf("access point port cannot be %s", m)
+		log.Errorf("MS replica port cannot be %s", m)
 		return 0, FaultConfigBadControlPort
 	}
 
 	return portNum, nil
 }
 
-// getAccessPointAddrWithPort appends default port number to address if custom port is not
+// getReplicaAddrWithPort appends default port number to address if custom port is not
 // specified, otherwise custom specified port is validated.
-func getAccessPointAddrWithPort(log logging.Logger, addr string, portDefault int) (string, error) {
-	portNum, err := GetAccessPointPort(log, addr)
+func getReplicaAddrWithPort(log logging.Logger, addr string, portDefault int) (string, error) {
+	portNum, err := GetMSReplicaPort(log, addr)
 	if err != nil {
 		return "", err
 	}
@@ -454,9 +465,9 @@ func getAccessPointAddrWithPort(log logging.Logger, addr string, portDefault int
 		return fmt.Sprintf("%s:%d", addr, portDefault), nil
 	}
 
-	// Warn if access point port differs from config control port.
+	// Warn if MS replica port differs from config control port.
 	if portDefault != portNum {
-		log.Debugf("access point %q port differs from default port %q",
+		log.Debugf("ms replica %q port differs from default port %q",
 			addr, portDefault)
 	}
 
@@ -653,20 +664,20 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 	log.Debugf("vfio=%v hotplug=%v vmd=%v requested in config", !cfg.DisableVFIO,
 		cfg.EnableHotplug, !(*cfg.DisableVMD))
 
-	// Update access point addresses with control port if port is not supplied.
-	newAPs := make([]string, 0, len(cfg.AccessPoints))
-	for _, ap := range cfg.AccessPoints {
-		newAP, err := getAccessPointAddrWithPort(log, ap, cfg.ControlPort)
+	// Update MS replica addresses with control port if port is not supplied.
+	newReps := make([]string, 0, len(cfg.MgmtSvcReplicas))
+	for _, rep := range cfg.MgmtSvcReplicas {
+		newAP, err := getReplicaAddrWithPort(log, rep, cfg.ControlPort)
 		if err != nil {
 			return err
 		}
-		newAPs = append(newAPs, newAP)
+		newReps = append(newReps, newAP)
 	}
-	if common.StringSliceHasDuplicates(newAPs) {
-		log.Error("duplicate access points addresses")
-		return FaultConfigBadAccessPoints
+	if common.StringSliceHasDuplicates(newReps) {
+		log.Error("duplicate MS replica addresses")
+		return FaultConfigBadMgmtSvcReplicas
 	}
-	cfg.AccessPoints = newAPs
+	cfg.MgmtSvcReplicas = newReps
 
 	if cfg.Metadata.DevicePath != "" && cfg.Metadata.Path == "" {
 		return FaultConfigControlMetadataNoPath
@@ -686,13 +697,13 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 	}
 
 	switch {
-	case len(cfg.AccessPoints) < 1:
-		return FaultConfigBadAccessPoints
-	case len(cfg.AccessPoints)%2 == 0:
-		return FaultConfigEvenAccessPoints
-	case len(cfg.AccessPoints) == 1:
-		log.Noticef("Configuration includes only one access point. This provides no redundancy " +
-			"in the event of an access point failure.")
+	case len(cfg.MgmtSvcReplicas) < 1:
+		return FaultConfigBadMgmtSvcReplicas
+	case len(cfg.MgmtSvcReplicas)%2 == 0:
+		return FaultConfigEvenMgmtSvcReplicas
+	case len(cfg.MgmtSvcReplicas) == 1:
+		log.Noticef("Configuration includes only one MS replica. This provides no redundancy " +
+			"in the event of a MS replica failure.")
 	}
 
 	switch {

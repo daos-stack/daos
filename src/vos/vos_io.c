@@ -2599,7 +2599,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 			D_GOTO(abort, err = -DER_NOMEM);
 
 		err = vos_dtx_commit_internal(ioc->ic_cont, dth->dth_dti_cos,
-					      dth->dth_dti_cos_count, 0, NULL, daes, dces);
+					      dth->dth_dti_cos_count, 0, false, NULL, daes, dces);
 		if (err < 0)
 			goto abort;
 		if (err == 0)
@@ -2678,7 +2678,7 @@ abort:
 
 		if (daes != NULL)
 			vos_dtx_post_handle(ioc->ic_cont, daes, dces, dth->dth_dti_cos_count,
-					    false, err != 0);
+					    false, err != 0, false);
 	}
 
 	if (err != 0)

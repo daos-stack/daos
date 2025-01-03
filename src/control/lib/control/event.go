@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -68,11 +68,11 @@ func eventNotify(ctx context.Context, rpcClient UnaryInvoker, seq uint64, evt *e
 }
 
 // EventForwarder implements the events.Handler interface, increments sequence
-// number for each event forwarded and distributes requests to MS access points.
+// number for each event forwarded and distributes requests to MS replicas.
 type EventForwarder struct {
-	seq       <-chan uint64
-	client    UnaryInvoker
-	accessPts []string
+	seq        <-chan uint64
+	client     UnaryInvoker
+	msReplicas []string
 }
 
 // OnEvent implements the events.Handler interface.
@@ -81,21 +81,21 @@ func (ef *EventForwarder) OnEvent(ctx context.Context, evt *events.RASEvent) {
 	case evt == nil:
 		ef.client.Debug("skip event forwarding, nil event")
 		return
-	case len(ef.accessPts) == 0:
-		ef.client.Debug("skip event forwarding, missing access points")
+	case len(ef.msReplicas) == 0:
+		ef.client.Debug("skip event forwarding, missing MS replicas")
 		return
 	case !evt.ShouldForward():
 		ef.client.Debugf("forwarding disabled for %s event", evt.ID)
 		return
 	}
 
-	if err := eventNotify(ctx, ef.client, <-ef.seq, evt, ef.accessPts); err != nil {
+	if err := eventNotify(ctx, ef.client, <-ef.seq, evt, ef.msReplicas); err != nil {
 		ef.client.Debugf("failed to forward event to MS: %s", err)
 	}
 }
 
 // NewEventForwarder returns an initialized EventForwarder.
-func NewEventForwarder(rpcClient UnaryInvoker, accessPts []string) *EventForwarder {
+func NewEventForwarder(rpcClient UnaryInvoker, replicas []string) *EventForwarder {
 	seqCh := make(chan uint64)
 	go func(ch chan<- uint64) {
 		for i := uint64(1); ; i++ {
@@ -104,9 +104,9 @@ func NewEventForwarder(rpcClient UnaryInvoker, accessPts []string) *EventForward
 	}(seqCh)
 
 	return &EventForwarder{
-		seq:       seqCh,
-		client:    rpcClient,
-		accessPts: accessPts,
+		seq:        seqCh,
+		client:     rpcClient,
+		msReplicas: replicas,
 	}
 }
 
