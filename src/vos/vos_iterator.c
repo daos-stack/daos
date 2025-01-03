@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2025 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1046,7 +1046,7 @@ vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
 
 	D_FREE(anchors);
 
-	return rc;
+	return rc == ITER_EXIT ? 0 : rc;
 }
 
 static inline void
@@ -1088,9 +1088,11 @@ vos_iterate_obj(vos_iter_param_t *param, bool recursive, struct vos_iter_anchors
 	D_ASSERT(!dtx_is_valid_handle(dth));
 
 	cont = vos_hdl2cont(param->ip_hdl);
-	if (!vos_pool_is_evictable(cont->vc_pool))
-		return vos_iterate_internal(param, VOS_ITER_OBJ, recursive, false, anchors,
-					    pre_cb, post_cb, arg, dth);
+	if (!vos_pool_is_evictable(cont->vc_pool)) {
+		rc = vos_iterate_internal(param, VOS_ITER_OBJ, recursive, false, anchors,
+					  pre_cb, post_cb, arg, dth);
+		goto out;
+	}
 
 	/* The caller must provide a filter callback and call the oi_bkt_iter_skip() properly */
 	D_ASSERT(param->ip_filter_cb != NULL && param->ip_bkt_iter == NULL);
@@ -1111,7 +1113,9 @@ vos_iterate_obj(vos_iter_param_t *param, bool recursive, struct vos_iter_anchors
 		iter_cnt++;
 		rc = vos_iterate_internal(param, VOS_ITER_OBJ, recursive, false, anchors,
 					  pre_cb, post_cb, arg, dth);
-		if (rc) {
+		if (rc == ITER_EXIT) {
+			break;
+		} else if (rc) {
 			DL_ERROR(rc, "Iterate bucket:%u failed.", i);
 			break;
 		}
@@ -1121,8 +1125,8 @@ vos_iterate_obj(vos_iter_param_t *param, bool recursive, struct vos_iter_anchors
 
 	bkt_iter_free(bkt_iter);
 	param->ip_bkt_iter = NULL;
-
-	return rc;
+out:
+	return rc == ITER_EXIT ? 0 : rc;
 }
 
 /**
@@ -1134,8 +1138,12 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	    struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb,
 	    vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth)
 {
+	int	rc;
+
 	D_ASSERT((param->ip_flags & VOS_IT_KEY_TREE) == 0);
 
-	return vos_iterate_internal(param, type, recursive, false, anchors,
-				    pre_cb, post_cb, arg, dth);
+	rc = vos_iterate_internal(param, type, recursive, false, anchors, pre_cb, post_cb,
+				  arg, dth);
+
+	return rc == ITER_EXIT ? 0 : rc;
 }
