@@ -65,13 +65,32 @@ atfork_handler(void)
 static PyObject *
 __shim_handle__module_init(PyObject *self, PyObject *args)
 {
-	int rc = pthread_atfork(NULL, NULL, &atfork_handler);
+	int rc = daos_init();
+	if (rc) {
+		PyErr_Format(PyExc_TypeError, "Could not initialize DAOS: %s (rc=%d)", d_errstr(rc),
+			     rc);
+		return NULL;
+	}
+
+	rc = pthread_atfork(NULL, NULL, &atfork_handler);
 	if (rc) {
 		PyErr_Format(PyExc_TypeError, "Could not set atfork handler %s (rc=%d)",
 			     strerror(rc), rc);
 		return NULL;
 	}
 
+	return PyLong_FromLong(rc);
+}
+
+static PyObject *
+__shim_handle__module_fini(PyObject *self, PyObject *args)
+{
+	int rc = daos_fini();
+	if (rc) {
+		PyErr_Format(PyExc_TypeError, "Could not finalize DAOS: %s (rc=%d)", d_errstr(rc),
+			     rc);
+		return NULL;
+	}
 	return PyLong_FromLong(rc);
 }
 
@@ -92,20 +111,9 @@ __shim_handle__torch_connect(PyObject *self, PyObject *args)
 
 	RETURN_NULL_IF_FAILED_TO_PARSE(args, "ssp", &pool, &cont, &rd_only);
 
-	rc = daos_init();
-	if (rc) {
-		D_ERROR("Could not initialize DAOS: %s (rc=%d)", d_errstr(rc), rc);
-		rc = daos_der2errno(rc);
-		return PyLong_FromLong(rc);
-	}
-
 	rc = dfs_init();
 	if (rc) {
 		D_ERROR("Could not initialize DFS: %s (rc=%d)", strerror(rc), rc);
-		rc2 = daos_fini();
-		if (rc2) {
-			D_ERROR("Could not finalize DAOS: %s (rc=%d)", d_errstr(rc2), rc2);
-		}
 		return PyLong_FromLong(rc);
 	}
 
@@ -170,11 +178,6 @@ out:
 		D_ERROR("Could not finalize DFS: %s (rc=%d)", strerror(rc2), rc2);
 	}
 
-	rc2 = daos_fini();
-	if (rc2) {
-		D_ERROR("Could not finalize DAOS: %s (rc=%d)", d_errstr(rc2), rc2);
-	}
-
 	PyList_SetItem(result, 0, PyLong_FromLong(rc));
 	PyList_SetItem(result, 1, PyLong_FromVoidPtr(NULL));
 
@@ -211,12 +214,6 @@ __shim_handle__torch_disconnect(PyObject *self, PyObject *args)
 	if (rc) {
 		D_ERROR("Could not finalize DFS: %s (rc=%d)", strerror(rc), rc);
 		goto out;
-	}
-
-	rc = daos_fini();
-	if (rc) {
-		D_ERROR("Could not finalize DAOS: %s (rc=%d)", d_errstr(rc), rc);
-		rc = daos_der2errno(rc);
 	}
 
 out:
@@ -714,6 +711,7 @@ static PyMethodDef torchMethods[] = {
     EXPORT_PYTHON_METHOD(torch_list_with_anchor),
 
     EXPORT_PYTHON_METHOD(module_init),
+    EXPORT_PYTHON_METHOD(module_fini),
 
     {NULL, NULL},
 };
