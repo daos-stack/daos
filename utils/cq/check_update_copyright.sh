@@ -156,12 +156,10 @@ for file in $files; do
     fi
 
     # User domain copyright does not exist so add it after an existing copyright
+    did_add_copyright=false
     for _regex in "${all_regex_except_user[@]}"; do
         read -r y1_other y2_other <<< "$(sed -nre "s/^.*$_regex.*$/\4 \6/p" "$file")"
         if [[ -z $y1_other ]] ; then
-            # Print warning but don't error on non-existent copyright since it's not easy to
-            # determine the format and where to put it
-            echo "  Copyright Information not found in: $file"
             continue
         fi
 
@@ -185,7 +183,16 @@ for file in $files; do
             echo "::error file=$file,line=$lineno::Copyright out of date"
             errors=$((errors + 1))
         fi
+
+        did_add_copyright=true
+        break
     done
+
+    if ! $did_add_copyright; then
+        # Print warning but don't error on non-existent copyright since it's not easy to
+        # determine the format and where to put it
+        echo "  Copyright Information not found in: $file"
+    fi
 done
 
 if [[ $errors -ne 0 ]]; then
