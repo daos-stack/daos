@@ -158,7 +158,7 @@ class SysPools():
         }
         if self._debug:
             print(f"{datetime} FOUND pool {puuid} BEGIN\tterm {term} pmap_versions empty: "
-                    f"{str(pmap_versions == {})} rank {rank}\t{host}\tPID {pid}\t{fname}")
+                  f"{str(pmap_versions == {})} rank {rank}\t{host}\tPID {pid}\t{fname}")
         return True
 
     def _match_ps_step_down(self, fname, line, pid, rank):
@@ -176,7 +176,7 @@ class SysPools():
         self._pools[puuid][term]["end_time"] = datetime
         if self._debug:
             print(f"{datetime} FOUND pool {puuid} END\tterm {term} rank {rank}\t{host}\t"
-                    f"PID {pid}\t{fname}")
+                  f"PID {pid}\t{fname}")
         return True
 
     def _get_pmap_update_components(self, match):
@@ -203,7 +203,7 @@ class SysPools():
         }
         if self._debug:
             print(f"FOUND pool {puuid} map update {from_ver}->{to_ver} rank {rank}\t{host}\t"
-                    f"PID {pid}\t{fname}")
+                  f"PID {pid}\t{fname}")
         return True
 
     def _get_rb_components(self, match):
@@ -246,7 +246,7 @@ class SysPools():
         }
         if self._debug:
             print(f"{datetime} FOUND rebuild start in term {term}, rb={puuid}/{ver}/{gen}/{op} "
-                    f"rank {rank}\t{host}\tPID {pid}\t{fname}")
+                  f"rank {rank}\t{host}\tPID {pid}\t{fname}")
         return True
 
     def _match_legacy_ps_rb_start(self, fname, line, pid, rank):
@@ -282,7 +282,7 @@ class SysPools():
         }
         if self._debug:
             print(f"{datetime} FOUND rebuild start in term {term}, rb={puuid}/{ver}/{gen}/{op} "
-                    f"rank {rank}\t{host}\tPID {pid}\t{fname}")
+                  f"rank {rank}\t{host}\tPID {pid}\t{fname}")
         return True
 
     def _get_ps_rb_status_components(self, match):
@@ -310,7 +310,7 @@ class SysPools():
             return True
         if ver not in self._pools[puuid][term]["maps"]:
             self._warn(f"pool {puuid} term {term} ver {ver} not in maps - add placeholder",
-                        fname, line)
+                       fname, line)
             self._pools[puuid][term]["maps"][ver] = {
                 "carryover": False,
                 "from_ver": ver,
@@ -344,7 +344,7 @@ class SysPools():
         self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["duration"] = dur
         if self._debug:
             print(f"{datetime} FOUND rebuild UPDATE term={term} rb={puuid}/{ver}/{gen}/{op} "
-                    f"STATUS={status}, DUR={dur} seconds rank {rank}\t{host}\tPID {pid}\t{fname}")
+                  f"STATUS={status}, DUR={dur} seconds rank {rank}\t{host}\tPID {pid}\t{fname}")
         return True
 
     def _get_legacy_ps_rb_status_components(self, match):
@@ -373,11 +373,11 @@ class SysPools():
         term = self._cur_term[puuid]
         if term < 1 or term != log_term:
             self._warn(f"pool {puuid} I don't know what term it is ({term}), {log_term}!",
-                        fname, line)
+                       fname, line)
             return True
         if ver not in self._pools[puuid][term]["maps"]:
             self._warn(f"pool {puuid} term {term} ver {ver} not in maps - add placeholder",
-                        fname, line)
+                       fname, line)
             self._pools[puuid][term]["maps"][ver] = {
                 "carryover": False,
                 "from_ver": ver,
@@ -411,7 +411,7 @@ class SysPools():
         self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["duration"] = dur
         if self._debug:
             print(f"{datetime} FOUND rebuild UPDATE term={term} rb={puuid}/{ver}/{gen}/{op} "
-                    f"STATUS={status}, DUR={dur} seconds rank {rank}\t{host}\tPID {pid}\t{fname}")
+                  f"STATUS={status}, DUR={dur} seconds rank {rank}\t{host}\tPID {pid}\t{fname}")
         return True
 
     def scan_file(self, log_iter, rank=-1):
