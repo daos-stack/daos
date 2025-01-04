@@ -1605,7 +1605,7 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 			 *	 and can be committed next time.
 			 */
 			rc = vos_dtx_commit(cont->sc_hdl, dth->dth_dti_cos,
-					    dth->dth_dti_cos_count, NULL);
+					    dth->dth_dti_cos_count, false, NULL);
 			if (rc < 0)
 				D_ERROR(DF_UUID": Fail to DTX CoS commit: %d\n",
 					DP_UUID(cont->sc_uuid), rc);

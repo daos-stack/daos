@@ -408,7 +408,7 @@ func TestControl_SmdQuery(t *testing.T) {
 					for i, gotDev := range sqr.HostStorage.SmdInfo.Devices {
 						hs := tc.expResp.HostStorage
 						expDev := hs[hs.Keys()[0]].HostStorage.SmdInfo.Devices[i]
-						t.Logf(cmp.Diff(expDev, gotDev, defResCmpOpts()...))
+						t.Log(cmp.Diff(expDev, gotDev, defResCmpOpts()...))
 					}
 				}
 				t.Fatalf("unexpected resp (-want, +got):\n%s\n", diff)
@@ -844,7 +844,7 @@ func TestControl_SmdManage(t *testing.T) {
 					}
 					for i, gotDev := range sqr.HostStorage.SmdInfo.Devices {
 						expDev := hs[keys[0]].HostStorage.SmdInfo.Devices[i]
-						t.Logf(cmp.Diff(expDev, gotDev, defResCmpOpts()...))
+						t.Log(cmp.Diff(expDev, gotDev, defResCmpOpts()...))
 					}
 				}
 				t.Fatalf("unexpected resp (-want, +got):\n%s\n", diff)

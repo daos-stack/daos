@@ -1196,6 +1196,18 @@ umem_get_mb_from_offset(struct umem_instance *umm, umem_off_t off);
 umem_off_t
 umem_get_mb_base_offset(struct umem_instance *umm, uint32_t mb_id);
 
+/**
+ * Force GC within the heap to optimize umem_cache usage with DAV
+ *  v2 allocator.
+ *
+ * \param[in]		umm		umem instance pointer.
+ *
+ * \return 0, success
+ *         < 0, error
+ */
+int
+umem_heap_gc(struct umem_instance *umm);
+
 /*********************************************************************************/
 
 /* Type of memory actions */
