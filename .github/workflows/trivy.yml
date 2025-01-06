@@ -58,8 +58,7 @@ jobs:
           trivy-config: 'utils/trivy/trivy.yaml'
 
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@afb54ba388a7dca6ecae48f608c4ff05ff4cc77a
-        # 3.25.15 (v3)
+        uses: github/codeql-action/upload-sarif@df409f7d9260372bd5f19e5b04e83cb3c43714ae  # v3.27.9
         with:
           sarif_file: 'trivy-results.sarif'
 

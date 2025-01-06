@@ -208,6 +208,7 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 			return rc;
 		} else {
 			D_ASSERT(rc == 0);
+			DFS_OP_STAT_INCR(dfs, DOS_CREATE);
 			return 0;
 		}
 	}
@@ -261,6 +262,7 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 		}
 	}
 	oid_cp(&file->oid, entry->oid);
+	DFS_OP_STAT_INCR(dfs, DOS_OPEN);
 	return 0;
 }
 
@@ -320,6 +322,8 @@ open_symlink(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, con
 			D_FREE(sym->value);
 			D_ERROR("Inserting entry '%s' failed: %d (%s)\n", sym->name, rc,
 				strerror(rc));
+		} else if (rc == 0) {
+			DFS_OP_STAT_INCR(dfs, DOS_SYMLINK);
 		}
 		return rc;
 	}
@@ -926,6 +930,8 @@ out:
 	rc2 = daos_obj_close(args->parent_oh, NULL);
 	if (rc == 0)
 		rc = rc2;
+	if (rc == 0)
+		DFS_OP_STAT_INCR(args->dfs, DOS_STAT);
 	return rc;
 }
 
@@ -1057,6 +1063,7 @@ err2_out:
 err1_out:
 	D_FREE(op_args);
 	daos_obj_close(args->parent_oh, NULL);
+
 	return rc;
 }
 
@@ -1287,6 +1294,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
+	DFS_OP_STAT_INCR(dfs, DOS_CHMOD);
 out:
 	if (S_ISLNK(entry.mode)) {
 		dfs_release(sym);
@@ -1422,6 +1430,7 @@ dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid,
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
+	DFS_OP_STAT_INCR(dfs, DOS_CHOWN);
 out:
 	if (!(flags & O_NOFOLLOW) && S_ISLNK(entry.mode)) {
 		dfs_release(sym);
@@ -1642,6 +1651,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		D_GOTO(out_obj, rc = daos_der2errno(rc));
 	}
 
+	DFS_OP_STAT_INCR(dfs, DOS_SETATTR);
 out_stat:
 	*stbuf = rstat;
 out_obj:
@@ -1706,6 +1716,7 @@ dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len)
 		return daos_der2errno(rc);
 	}
 
+	DFS_OP_STAT_INCR(dfs, DOS_TRUNCATE);
 	return rc;
 }
 
@@ -1741,6 +1752,7 @@ dfs_get_symlink_value(dfs_obj_t *obj, char *buf, daos_size_t *size)
 		strcpy(buf, obj->value);
 
 	*size = val_size;
+	DFS_OP_STAT_INCR(obj->dfs, DOS_READLINK);
 	return 0;
 }
 
@@ -1753,6 +1765,7 @@ dfs_sync(dfs_t *dfs)
 		return EPERM;
 
 	/** Take a snapshot here and allow rollover to that when supported. */
+	/** Uncomment this when supported. DFS_OP_STAT_INCR(dfs, DOS_SYNC); */
 
 	return 0;
 }

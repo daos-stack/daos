@@ -624,6 +624,8 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 		stbuf->st_atim.tv_sec  = stbuf->st_mtim.tv_sec;
 		stbuf->st_atim.tv_nsec = stbuf->st_mtim.tv_nsec;
 	}
+
+	DFS_OP_STAT_INCR(dfs, DOS_STAT);
 	return 0;
 }
 
@@ -709,6 +711,7 @@ open_dir(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, struct 
 			D_ASSERT(rc == 0);
 			dir->d.chunk_size = entry->chunk_size;
 			dir->d.oclass     = entry->oclass;
+			DFS_OP_STAT_INCR(dfs, DOS_MKDIR);
 			return 0;
 		}
 	}
@@ -741,6 +744,7 @@ open_dir(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, struct 
 	oid_cp(&dir->oid, entry->oid);
 	dir->d.chunk_size = entry->chunk_size;
 	dir->d.oclass     = entry->oclass;
+	DFS_OP_STAT_INCR(dfs, DOS_OPENDIR);
 	return 0;
 }
 

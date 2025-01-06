@@ -15,6 +15,8 @@
 #include <daos.h>
 #include <daos_fs.h>
 
+#include "metrics.h"
+
 /** D-key name of SB metadata */
 #define SB_DKEY            "DFS_SB_METADATA"
 
@@ -220,6 +222,8 @@ struct dfs {
 	struct dfs_mnt_hdls *cont_hdl;
 	/** the root dir stat buf */
 	struct stat          root_stbuf;
+	/** DFS top-level metrics */
+	struct dfs_metrics  *metrics;
 	/** optional dentry and stat cache */
 	dfs_dcache_t        *dcache;
 	/** Root object info */

@@ -1,38 +1,63 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-#define D_LOGFAC	DD_FAC(tests)
+#define D_LOGFAC DD_FAC(tests)
 
-#include <abt.h>
-#include <daos/common.h>
 #include <getopt.h>
 #include <time.h>
-#ifdef ULT_MMAP_STACK
-#include <daos/stack_mmap.h>
-#endif
+#include <abt.h>
 
-static unsigned long	abt_cntr;
-static int		abt_ults;
-static bool		abt_waiting;
-static bool		abt_exiting;
+#include <daos/common.h>
+#include <gurt/common.h>
+#include <daos_srv/daos_engine.h>
 
-static ABT_pool		abt_pool;
-static ABT_cond		abt_cond;
-static ABT_mutex	abt_lock;
-static ABT_xstream	abt_xstream;
-static ABT_thread_attr	abt_attr = ABT_THREAD_ATTR_NULL;
-static char		*abt_name;
+static unsigned long   abt_cntr;
+static int             abt_ults;
+static bool            abt_waiting;
+static bool            abt_exiting;
 
-static int		opt_concur = 1;
-static int		opt_secs;
-static int		opt_stack;
-static int		opt_cr_type;
-#ifdef ULT_MMAP_STACK
-static int		opt_mmap;
-static struct stack_pool *sp;
-#endif
+static ABT_pool        abt_pool;
+static ABT_cond        abt_cond;
+static ABT_mutex       abt_lock;
+static ABT_xstream     abt_xstream;
+static ABT_thread_attr abt_attr = ABT_THREAD_ATTR_NULL;
+static char           *abt_name;
+
+static int             opt_concur = 1;
+static int             opt_secs   = 0;
+static ssize_t         opt_stack  = -1;
+static int             opt_cr_type;
+
+static void
+usage(char *name, FILE *out)
+{
+	fprintf(out,
+		"Usage:\n"
+		"\t%s -t test_id -s sec [-n num_ult] [-S stack_size]\n"
+		"\t%s -h\n"
+		"\n"
+		"Options:\n"
+		"\t--test=<test id>, -t <test id>\n"
+		"\t\tIdentifier of the test to run:\n"
+		"\t\t\tc: ULT creation test\n"
+		"\t\t\ts: ULT scheduling test\n"
+		"\t\t\tm: mutex creation test\n"
+		"\t\t\tw: rwlock creation test\n"
+		"\t\t\te: eventual creation test\n"
+		"\t\t\td: condition creation test\n"
+		"\t--sec=<sec>, sn <sec>\n"
+		"\t\tDuration in seconds of the test\n"
+		"\t--num=<number of ult>, -n <number of ult>\n"
+		"\t\tNumber of concurrent creation for ULT creation test\n"
+		"\t\tNumber of ULT to schedule for ULT scheduling test\n"
+		"\t--stack=<stack size>, -S <stack size>\n"
+		"\t\tULT stack size\n"
+		"\t--help, -h\n"
+		"\t\tPrint this description\n",
+		name, name);
+}
 
 static inline uint64_t
 abt_current_ms(void)
@@ -53,12 +78,6 @@ abt_thread_1(void *arg)
 		abt_cntr++;
 		ABT_mutex_unlock(abt_lock);
 
-#ifdef ULT_MMAP_STACK
-		if (opt_mmap)
-			mmap_stack_thread_create(sp, NULL, abt_pool, abt_thread_1, NULL,
-						 abt_attr, NULL);
-		else
-#endif
 		ABT_thread_create(abt_pool, abt_thread_1, NULL, abt_attr, NULL);
 
 		ABT_mutex_lock(abt_lock);
@@ -79,11 +98,11 @@ abt_thread_1(void *arg)
 static void
 abt_ult_create_rate(void)
 {
-	uint64_t	then;
-	uint64_t	now;
-	uint64_t	prt;
-	int		rc;
-	int		nsec = 0;
+	uint64_t then;
+	uint64_t now;
+	uint64_t prt;
+	int      rc;
+	int      nsec = 0;
 
 	prt = now = then = abt_current_ms();
 	while (1) {
@@ -116,23 +135,15 @@ abt_ult_create_rate(void)
 		abt_cntr++;
 		ABT_mutex_unlock(abt_lock);
 
-#ifdef ULT_MMAP_STACK
-		if (opt_mmap)
-			rc = mmap_stack_thread_create(sp, NULL, abt_pool, abt_thread_1,
-						      NULL, abt_attr, NULL);
-		else
-#endif
-		rc = ABT_thread_create(abt_pool, abt_thread_1, NULL,
-				       abt_attr, NULL);
+		rc = ABT_thread_create(abt_pool, abt_thread_1, NULL, abt_attr, NULL);
 		if (rc != ABT_SUCCESS) {
-			printf("ABT thread create failed: %d\n", rc);
+			fprintf(stderr, "ABT thread create failed: " AF_RC "\n", AP_RC(rc));
 			return;
 		}
 
 		if (now - prt >= 1000) {
 			nsec++;
-			printf("Created %lu threads in %d seconds\n",
-			       abt_cntr, nsec);
+			printf("Created %lu threads in %d seconds\n", abt_cntr, nsec);
 			prt = now;
 		}
 		ABT_thread_yield();
@@ -162,9 +173,9 @@ abt_thread_2(void *arg)
 static void
 abt_sched_rate(void)
 {
-	uint64_t	then = 0;
-	uint64_t	now;
-	int		rc;
+	uint64_t then = 0;
+	uint64_t now;
+	int      rc;
 
 	while (1) {
 		if (then && !abt_exiting) {
@@ -199,16 +210,7 @@ abt_sched_rate(void)
 		abt_ults++;
 		ABT_mutex_unlock(abt_lock);
 
-#ifdef ULT_MMAP_STACK
-		if (opt_mmap)
-			rc = mmap_stack_thread_create(sp, NULL, abt_pool, abt_thread_2,
-						      NULL,
-						      ABT_THREAD_ATTR_NULL,
-						      NULL);
-		else
-#endif
-		rc = ABT_thread_create(abt_pool, abt_thread_2, NULL,
-				       ABT_THREAD_ATTR_NULL, NULL);
+		rc = ABT_thread_create(abt_pool, abt_thread_2, NULL, ABT_THREAD_ATTR_NULL, NULL);
 		if (rc != ABT_SUCCESS) {
 			printf("ABT thread create failed: %d\n", rc);
 			ABT_mutex_lock(abt_lock);
@@ -230,13 +232,13 @@ enum {
 static void
 abt_lock_create_rate(void *arg)
 {
-	ABT_mutex	mutex;
-	ABT_cond	cond;
-	ABT_rwlock	rwlock;
-	ABT_eventual	eventual;
-	uint64_t	then;
-	uint64_t	now;
-	int		rc;
+	ABT_mutex    mutex;
+	ABT_cond     cond;
+	ABT_rwlock   rwlock;
+	ABT_eventual eventual;
+	uint64_t     then;
+	uint64_t     now;
+	int          rc;
 
 	then = abt_current_ms();
 	while (1) {
@@ -276,8 +278,7 @@ abt_lock_create_rate(void *arg)
 		}
 		abt_cntr++;
 	}
-	printf("ABT %s creation rate = %lu/sec.\n",
-		abt_name, abt_cntr / opt_secs);
+	printf("ABT %s creation rate = %lu/sec.\n", abt_name, abt_cntr / opt_secs);
 
 	ABT_mutex_lock(abt_lock);
 	if (abt_waiting) {
@@ -290,46 +291,26 @@ abt_lock_create_rate(void *arg)
 static void
 abt_reset(void)
 {
-	abt_cntr	= 0;
-	abt_ults	= 0;
-	abt_exiting	= false;
-	abt_waiting	= false;
+	abt_cntr    = 0;
+	abt_ults    = 0;
+	abt_exiting = false;
+	abt_waiting = false;
 }
 
 static struct option abt_ops[] = {
-	/**
-	 * test-id:
-	 * m = mutext creation
-	 * e = eventual creation
-	 * d = condition creation
-	 */
-	{ "test",	required_argument,	NULL,	't'	},
-	/**
-	 * if test-id is 'c', it is the number of concurrent creation
-	 * if test-id is 's', it is the total number of running ULTs
-	 */
-	{ "num",	required_argument,	NULL,	'n'	},
-	/** test duration in seconds.  */
-	{ "sec",	required_argument,	NULL,	's'	},
-	/** stack size (kilo-bytes) */
-	{ "stack",	required_argument,	NULL,	'S'	},
-#ifdef ULT_MMAP_STACK
-	{ "mmap",	no_argument,	NULL,	'm'	},
-#endif
-};
+    {"test", required_argument, NULL, 't'}, {"num", required_argument, NULL, 'n'},
+    {"sec", required_argument, NULL, 's'},  {"stack", required_argument, NULL, 'S'},
+    {"help", no_argument, NULL, 'h'},       {0, 0, 0, 0}};
 
 int
 main(int argc, char **argv)
 {
-	char	test_id = 0;
-	int	rc;
+	char        test_id = 0;
+	const char *optstr  = "t:n:s:S:m:h";
+	int         rc;
 
-	while ((rc = getopt_long(argc, argv, "t:n:s:S:",
-				 abt_ops, NULL)) != -1) {
+	while ((rc = getopt_long(argc, argv, optstr, abt_ops, NULL)) != -1) {
 		switch (rc) {
-		default:
-			fprintf(stderr, "unknown opc=%c\n", rc);
-			exit(-1);
 		case 't':
 			test_id = *optarg;
 			break;
@@ -343,140 +324,122 @@ main(int argc, char **argv)
 			opt_stack = atoi(optarg);
 			opt_stack <<= 10; /* kilo-byte */
 			break;
-#ifdef ULT_MMAP_STACK
-		case 'm':
-			opt_mmap = true;
+		case 'h':
+			usage(argv[0], stdout);
+			exit(EXIT_SUCCESS);
 			break;
-#endif
+		default:
+			usage(argv[0], stderr);
+			exit(EXIT_FAILURE);
+			break;
 		}
 	}
 
-	if (opt_secs == 0) {
-		printf("invalid sec=%s\n", argv[1]);
-		return -1;
+	if ((test_id == 'c' || test_id == 's') && opt_secs <= 0) {
+		fprintf(stderr, "Missing test duration or invalid value.\n");
+		usage(argv[0], stderr);
+		exit(EXIT_FAILURE);
 	}
 
-	if (opt_concur == 0) {
-		printf("invalid ABT threads=%s\n", argv[2]);
-		return -1;
+	if (opt_concur <= 0) {
+		fprintf(stderr, "Missing number of ULTs or invalid value.\n");
+		usage(argv[0], stderr);
+		exit(EXIT_FAILURE);
 	}
 
-	printf("Create ABT threads for %d seconds, concur=%d\n",
-	       opt_secs, opt_concur);
+	rc = daos_debug_init_ex("/dev/stdout", DLOG_INFO);
+	if (rc != 0) {
+		fprintf(stderr, "unable to create DAOS debug facities: " DF_RC "\n", DP_RC(rc));
+		exit(EXIT_FAILURE);
+	}
 
 	rc = ABT_init(0, NULL);
 	if (rc != ABT_SUCCESS) {
-		printf("ABT init failed: %d\n", rc);
-		return -1;
+		fprintf(stderr, "Failed to init ABT: " AF_RC "\n", AP_RC(rc));
+		exit(EXIT_FAILURE);
 	}
 
 	rc = ABT_xstream_self(&abt_xstream);
 	if (rc != ABT_SUCCESS) {
-		printf("ABT get self xstream failed: %d\n", rc);
-		return -1;
+		fprintf(stderr, "ABT get self xstream failed: " AF_RC "\n", AP_RC(rc));
+		exit(EXIT_FAILURE);
 	}
 
 	rc = ABT_xstream_get_main_pools(abt_xstream, 1, &abt_pool);
 	if (rc != ABT_SUCCESS) {
-		printf("ABT pool get failed: %d\n", rc);
-		return -1;
+		fprintf(stderr, "ABT pool get failed: " AF_RC "\n", AP_RC(rc));
+		exit(EXIT_FAILURE);
 	}
 
 	rc = ABT_cond_create(&abt_cond);
 	if (rc != ABT_SUCCESS) {
-		printf("ABT cond create failed: %d\n", rc);
-		return -1;
+		fprintf(stderr, "ABT cond create failed: " AF_RC "\n", AP_RC(rc));
+		exit(EXIT_FAILURE);
 	}
 
 	rc = ABT_mutex_create(&abt_lock);
 	if (rc != ABT_SUCCESS) {
-		printf("ABT mutex create failed: %d\n", rc);
-		return -1;
+		fprintf(stderr, "ABT mutex create failed: " AF_RC "\n", AP_RC(rc));
+		exit(EXIT_FAILURE);
 	}
 
 	if (opt_stack > 0) {
 		rc = ABT_thread_attr_create(&abt_attr);
 		if (rc != ABT_SUCCESS) {
-			printf("ABT thread attr create failed: %d\n", rc);
-			return -1;
+			fprintf(stderr, "ABT thread attr create failed: " AF_RC "\n", AP_RC(rc));
+			exit(EXIT_FAILURE);
 		}
 
 		rc = ABT_thread_attr_set_stacksize(abt_attr, opt_stack);
-		D_ASSERT(rc == ABT_SUCCESS);
-#ifdef ULT_MMAP_STACK
-		if (opt_mmap)
-			printf("mmap()'ed ULT stack size = %d\n",
-			       max(opt_stack, MMAPED_ULT_STACK_SIZE));
-		else
-			printf("ULT stack size = %d\n", opt_stack);
-#else
-		printf("ULT stack size = %d\n", opt_stack);
-#endif
+		if (rc != ABT_SUCCESS) {
+			fprintf(stderr, "Setting ABT thread stack size to %zd failed: " AF_RC "\n",
+				opt_stack, AP_RC(rc));
+			exit(EXIT_FAILURE);
+		}
+		printf("ULT stack size = %zd\n", opt_stack);
 	} else {
-#ifdef ULT_MMAP_STACK
-		if (opt_mmap)
-			printf("mmap()'ed ULT stack size = %d\n",
-			       MMAPED_ULT_STACK_SIZE);
-		else
-			printf("ULT stack size = default ABT ULT stack size\n");
-#else
 		printf("ULT stack size = default ABT ULT stack size\n");
-#endif
 	}
 
-#ifdef ULT_MMAP_STACK
-	rc = stack_pool_create(&sp);
-	if (rc) {
-		fprintf(stderr, "unable to create stack pool: %d\n", rc);
-		return -1;
-	}
-#endif
 	switch (test_id) {
 	default:
 		break;
 	case 'c':
-		printf("ULT create rate test (concur=%d, secs=%d)\n",
-		       opt_concur, opt_secs);
+		printf("ULT create rate test (concur=%d, secs=%d)\n", opt_concur, opt_secs);
 		abt_ult_create_rate();
 		goto out;
 	case 's':
-		printf("ULT scheduling rate test (ULTs=%d, secs=%d)\n",
-		       opt_concur, opt_secs);
+		printf("ULT scheduling rate test (ULTs=%d, secs=%d)\n", opt_concur, opt_secs);
 		abt_sched_rate();
 		goto out;
 	case 'm':
 		printf("mutex creation rate test (secs=%d)\n", opt_secs);
 		opt_cr_type = CR_MUTEX;
-		abt_name = "mutex";
+		abt_name    = "mutex";
 		break;
 	case 'w':
 		printf("rwlock creation rate test (secs=%d)\n", opt_secs);
 		opt_cr_type = CR_RWLOCK;
-		abt_name = "rwlock";
+		abt_name    = "rwlock";
 		break;
 	case 'e':
-		printf("eventual creation rate test within ULT (secs=%d)\n",
-		       opt_secs);
+		printf("eventual creation rate test within ULT (secs=%d)\n", opt_secs);
 		opt_cr_type = CR_EVENTUAL;
-		abt_name = "eventual";
+		abt_name    = "eventual";
 		break;
 	case 'd':
-		printf("condition creation rate test within ULT (secs=%d)\n",
-		       opt_secs);
+		printf("condition creation rate test within ULT (secs=%d)\n", opt_secs);
 		opt_cr_type = CR_COND;
-		abt_name = "cond";
+		abt_name    = "cond";
 		break;
 	}
 
 	abt_waiting = true;
-#ifdef ULT_MMAP_STACK
-	if (opt_mmap)
-		rc = mmap_stack_thread_create(sp, NULL, abt_pool, abt_lock_create_rate,
-					      NULL, ABT_THREAD_ATTR_NULL, NULL);
-	else
-#endif
-	rc = ABT_thread_create(abt_pool, abt_lock_create_rate, NULL,
-			       ABT_THREAD_ATTR_NULL, NULL);
+	rc = ABT_thread_create(abt_pool, abt_lock_create_rate, NULL, ABT_THREAD_ATTR_NULL, NULL);
+	if (rc != ABT_SUCCESS) {
+		fprintf(stderr, "ABT thread create failed: " AF_RC "\n", AP_RC(rc));
+		exit(EXIT_FAILURE);
+	}
 
 	ABT_mutex_lock(abt_lock);
 	if (abt_waiting)
@@ -490,8 +453,7 @@ out:
 	ABT_mutex_free(&abt_lock);
 	ABT_cond_free(&abt_cond);
 	ABT_finalize();
-#ifdef ULT_MMAP_STACK
-	stack_pool_destroy(sp);
-#endif
+	daos_debug_fini();
+
 	return 0;
 }

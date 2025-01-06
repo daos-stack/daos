@@ -42,9 +42,8 @@ def scons():
     configure_lustre(denv)
 
     libraries = ['daos_common', 'daos', 'uuid', 'gurt']
-
     dfs_src = ['common.c', 'cont.c', 'dcache.c', 'dir.c', 'file.c', 'io.c', 'lookup.c', 'mnt.c',
-               'obj.c', 'pipeline.c', 'readdir.c', 'rename.c', 'xattr.c', 'dfs_sys.c']
+               'obj.c', 'pipeline.c', 'readdir.c', 'rename.c', 'xattr.c', 'dfs_sys.c', 'metrics.c']
     dfs = denv.d_library('dfs', dfs_src, LIBS=libraries)
     denv.Install('$PREFIX/lib64/', dfs)
 
