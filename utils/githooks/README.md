@@ -50,7 +50,6 @@ the version output, it will fail. Try running
 5. `yamllint`
 6. `gofmt`
 7. `codespell`
-8. `scons`
 
 ### Optional tools
 
