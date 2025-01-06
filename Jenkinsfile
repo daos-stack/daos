@@ -3,7 +3,7 @@
 /* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral */
 /* groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName */
 /* Copyright 2019-2024 Intel Corporation
-/* Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2025 Hewlett Packard Enterprise Development LP
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
