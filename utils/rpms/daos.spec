@@ -594,7 +594,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Mon Jan 06 2024 Phillip Henderson <phillip.henderson@intel.com> 2.6.2-5
+* Mon Jan 06 2025 Phillip Henderson <phillip.henderson@intel.com> 2.6.2-5
 - Fix protobuf-c requiremnent for daos-client-tests on Leap.
 
 * Mon Dec 16 2024 Brian J. Murrell <brian.murrell@intel.com> - 2.6.2-4
