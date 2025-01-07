@@ -352,7 +352,7 @@ class Checkpoint():
         """ Reads the checkpoint file and returns its content as BytesIO object """
 
         if fname is None:
-            raise ValueError("file name is required")
+            raise ValueError("fname is required")
 
         fpath = os.path.join(self._prefix, fname)
 
@@ -364,7 +364,7 @@ class Checkpoint():
         """ Returns write buffer to save the checkpoint file """
 
         if fname is None:
-            raise ValueError("file name is required")
+            raise ValueError("fname is required")
 
         fpath = os.path.join(self._prefix, fname)
         return WriteBuffer(self._dfs, fpath)
