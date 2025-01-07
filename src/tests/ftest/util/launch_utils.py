@@ -25,7 +25,8 @@ from util.run_utils import RunException, command_as_user, run_local, run_remote
 from util.slurm_utils import create_partition, delete_partition, show_partition
 from util.storage_utils import StorageException, StorageInfo
 from util.systemctl_utils import SystemctlFailure, create_override_config
-from util.user_utils import get_group_id, get_user_groups, groupadd, useradd, userdel
+from util.user_utils import (get_group_id, get_next_uid_gid, get_user_groups, groupadd, useradd,
+                             userdel)
 from util.yaml_utils import YamlUpdater, get_yaml_data
 
 D_TM_SHARED_MEMORY_KEY = 0x10242048
@@ -639,6 +640,15 @@ class TestRunner():
         # Keep track of queried groups to avoid redundant work
         group_gid = {}
 
+        # Get the next common UID and GID amongst all clients
+        next_uid, next_gid = None, None
+        if create:
+            try:
+                next_uid, next_gid = get_next_uid_gid(logger, clients)
+            except Exception as error:  # pylint: disable=broad-except
+                self.test_result.fail_test(logger, "Prepare", str(error), sys.exc_info())
+                return 128
+
         # Query and optionally create all groups and users
         for _user in users:
             user, *group = _user.split(':')
@@ -647,14 +657,16 @@ class TestRunner():
             # Save the group's gid
             if group and group not in group_gid:
                 try:
-                    group_gid[group] = self._query_create_group(logger, clients, group, create)
+                    group_gid[group] = self._query_create_group(
+                        logger, clients, group, create, next_gid)
+                    next_gid += 1
                 except LaunchException as error:
                     self.test_result.fail_test(logger, "Prepare", str(error), sys.exc_info())
                     return 128
 
-            gid = group_gid.get(group, None)
             try:
-                self._query_create_user(logger, clients, user, gid, create)
+                self._query_create_user(logger, clients, user, group_gid[group], create, next_uid)
+                next_uid += 1
             except LaunchException as error:
                 self.test_result.fail_test(logger, "Prepare", str(error), sys.exc_info())
                 return 128
@@ -662,7 +674,7 @@ class TestRunner():
         return 0
 
     @staticmethod
-    def _query_create_group(logger, hosts, group, create=False):
+    def _query_create_group(logger, hosts, group, create=False, gid=None):
         """Query and optionally create a group on remote hosts.
 
         Args:
@@ -670,6 +682,7 @@ class TestRunner():
             hosts (NodeSet): hosts on which to query and create the group
             group (str): group to query and create
             create (bool, optional): whether to create the group if non-existent
+            gid (int, optional): GID for the new group when creating. Default is None
 
         Raises:
             LaunchException: if there is an error querying or creating the group
@@ -689,7 +702,7 @@ class TestRunner():
 
         # Create the group
         logger.info('Creating group %s', group)
-        if not groupadd(logger, hosts, group, True).passed:
+        if not groupadd(logger, hosts, group, gid, True).passed:
             raise LaunchException(f'Error creating group {group}')
 
         # Get the group id on each node
@@ -702,7 +715,7 @@ class TestRunner():
         raise LaunchException(f'Group not setup correctly: {group}')
 
     @staticmethod
-    def _query_create_user(logger, hosts, user, gid=None, create=False):
+    def _query_create_user(logger, hosts, user, gid=None, create=False, uid=None):
         """Query and optionally create a user on remote hosts.
 
         Args:
@@ -711,6 +724,7 @@ class TestRunner():
             user (str): user to query and create
             gid (str, optional): user's primary gid. Default is None
             create (bool, optional): whether to create the group if non-existent. Default is False
+            uid (int, optional): GID for the new group when creating. Default is None
 
         Raises:
             LaunchException: if there is an error querying or creating the user
@@ -731,7 +745,7 @@ class TestRunner():
 
         logger.info('Creating user %s in group %s', user, gid)
         test_env = TestEnvironment()
-        if not useradd(logger, hosts, user, gid, test_env.user_dir).passed:
+        if not useradd(logger, hosts, user, gid, test_env.user_dir, uid).passed:
             raise LaunchException(f'Error creating user {user}')
 
     def _clear_mount_points(self, logger, test, clear_mounts):
