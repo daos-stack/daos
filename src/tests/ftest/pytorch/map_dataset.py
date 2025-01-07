@@ -27,7 +27,7 @@ class PytorchMapStyleDatasetTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=pytorch
+        :avocado: tags=dfuse,pytorch
         :avocado: tags=PytorchMapStyleDatasetTest,test_map_style_dataset
         """
         pool = self.get_pool()
@@ -83,7 +83,7 @@ class PytorchMapStyleDatasetTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=pytorch
+        :avocado: tags=dfuse,pytorch
         :avocado: tags=PytorchMapStyleDatasetTest,test_dataloader
         """
         pool = self.get_pool()

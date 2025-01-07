@@ -2,15 +2,15 @@
 
 PyTorch is fully featured framework for building deep learning models and training them.
 It is widely used in the research community and in the industry.
-PyTroch allows loading data from various sources and DAOS can be used as a storage backend for training data and model's checkpoints.
+PyTorch allows loading data from various sources and DAOS can be used as a storage backend for training data and models' checkpoints.
 
-[DFS plugin](https://github.com/daos-stack/daos/tree/master/src/client/pydaos/torch) implements PyTroch interfaces for loading data from DAOS: Map and Iterable style datasets.
-This allows to use all features of `torch.utils.data.DataLoader` to load data from DAOS POSIX container, including parallel data loading, batching, shuffling, etc.
+[DFS plugin](https://github.com/daos-stack/daos/tree/master/src/client/pydaos/torch) implements PyTorch interfaces for loading data from DAOS: Map and Iterable style datasets.
+This allows to use all features of `torch.utils.data.DataLoader` to load data from DAOS POSIX containers, including parallel data loading, batching, shuffling, etc.
 
 ## Installation
 
-To install the plugin, you need to have PyTorch installed, please follow official [PyTorch installation guide](https://pytorch.org/get-started/).
-`pydoas.torch` module comes with DAOS client package, please refer to DAOS installation guide for your distribution.
+To install the plugin, you need to have PyTorch installed. Please follow the official [PyTorch installation guide](https://pytorch.org/get-started/).
+`pydoas.torch` module comes with DAOS client package. Please refer to DAOS installation guide for your distribution.
 
 
 ## Usage
