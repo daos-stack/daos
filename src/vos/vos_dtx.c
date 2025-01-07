@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1221,21 +1222,26 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	}
 
 	if (intent == DAOS_INTENT_PURGE) {
-		uint64_t	now = daos_gettime_coarse();
+		uint32_t	age = d_hlc_age2sec(DAE_XID(dae).dti_hlc);
+		uint64_t	now;
 
 		/*
-		 * The DTX entry still references related data record,
-		 * then we cannot (vos) aggregate related data record.
-		 * Report warning per each 10 seconds to avoid log flood.
+		 * Don't print warning message for fresh record, since INTENT_PURGE could
+		 * be used for fresh record in normal cases. (see vos_ilog_is_punched()).
 		 */
-		if (now - cont->vc_agg_busy_ts > 10) {
-			D_WARN("DTX "DF_DTI" (state:%u, flags:%x, age:%u) still references "
-			       "the modification, cannot be (VOS) aggregated\n",
-			       DP_DTI(&DAE_XID(dae)), vos_dtx_status(dae), DAE_FLAGS(dae),
-			       (unsigned int)d_hlc_age2sec(DAE_XID(dae).dti_hlc));
-			cont->vc_agg_busy_ts = now;
-		}
+		if (age <= 10)
+			return ALB_AVAILABLE_DIRTY;
 
+		/* Rate limit on such warning messages */
+		now = daos_gettime_coarse();
+		if (now <= cont->vc_agg_busy_ts + 10)
+			return ALB_AVAILABLE_DIRTY;
+
+		/* VOS aggregation is trying to reclaim data record being referenced by DTX */
+		D_WARN("DTX "DF_DTI" (state:%u, flags:%x, age:%u, type:%u) is still inuse!\n",
+		       DP_DTI(&DAE_XID(dae)), vos_dtx_status(dae), DAE_FLAGS(dae), age, type);
+
+		cont->vc_agg_busy_ts = now;
 		return ALB_AVAILABLE_DIRTY;
 	}
 
@@ -1584,7 +1590,6 @@ vos_dtx_deregister_record(struct umem_instance *umm, daos_handle_t coh,
 			  uint32_t entry, daos_epoch_t epoch, umem_off_t record)
 {
 	struct dtx_handle		*dth = vos_dth_get(false);
-	struct vos_container		*cont;
 	struct vos_dtx_act_ent		*dae;
 	struct vos_dtx_act_ent_df	*dae_df;
 	umem_off_t			*rec_df;
@@ -1593,20 +1598,19 @@ vos_dtx_deregister_record(struct umem_instance *umm, daos_handle_t coh,
 	int				 rc;
 	int				 i;
 
+	/*
+	 * If @coh is empty handle, then we are destroying the container. Under such case,
+	 * both the in-DRAM and on-dish DTX entry have already been released or destroyed.
+	 */
+	if (daos_handle_is_inval(coh))
+		return 0;
+
 	if (!vos_dtx_is_normal_entry(entry))
 		return 0;
 
 	D_ASSERT(entry >= DTX_LID_RESERVED);
 
-	cont = vos_hdl2cont(coh);
-	/* If "cont" is NULL, then we are destroying the container.
-	 * Under such case, the DTX entry in DRAM has been removed,
-	 * The on-disk entry will be destroyed soon.
-	 */
-	if (cont == NULL)
-		return 0;
-
-	found = lrua_lookupx(cont->vc_dtx_array, entry - DTX_LID_RESERVED,
+	found = lrua_lookupx(vos_hdl2cont(coh)->vc_dtx_array, entry - DTX_LID_RESERVED,
 			     epoch, &dae);
 	if (!found) {
 		D_WARN("Could not find active DTX record for lid=%d, epoch="
