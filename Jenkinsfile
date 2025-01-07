@@ -297,10 +297,11 @@ pipeline {
                             run_if_landing: false,
                             job_status: job_status_internal
                         ),
-                        'Functional on Leap 15.5': getFunctionalTestStage(
-                            name: 'Functional on Leap 15.5',
+                        'Functional on Leap 15.6': getFunctionalTestStage(
+                            name: 'Functional on Leap 15.6',
                             pragma_suffix: '-vm',
                             distro: 'leap15',
+                            image_version: 'leap15.6',
                             base_branch: params.BaseBranch,
                             label: vm9_label('Leap15'),
                             next_version: test_branch,
