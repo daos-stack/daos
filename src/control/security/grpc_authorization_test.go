@@ -89,7 +89,7 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		"/mgmt.MgmtSvc/PoolDeleteACL":            {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolExclude":              {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolDrain":                {ComponentAdmin},
-		"/mgmt.MgmtSvc/PoolReint":                {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolReintegrate":          {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolEvict":                {ComponentAdmin, ComponentAgent},
 		"/mgmt.MgmtSvc/PoolExtend":               {ComponentAdmin},
 		"/mgmt.MgmtSvc/GetAttachInfo":            {ComponentAgent},
