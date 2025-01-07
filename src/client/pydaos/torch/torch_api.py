@@ -331,7 +331,7 @@ class Checkpoint():
     ----------
     pool : string
         Pool label or UUID string
-    container : string
+    cont: string
         Container label or UUID string
     prefix : string (optional)
         Prefix as a directory to store checkpoint files, default is root of the container.
@@ -345,11 +345,11 @@ class Checkpoint():
         Returns write buffer to save the checkpoint file.
     """
 
-    def __init__(self, pool, container, prefix=os.sep):
+    def __init__(self, pool, cont, prefix=os.sep):
         self._pool = pool
-        self._cont = container
+        self._cont = cont
         self._prefix = prefix
-        self._dfs = _Dfs(pool=pool, cont=container, rd_only=False)
+        self._dfs = _Dfs(pool=pool, cont=cont, rd_only=False)
 
     def reader(self, fname):
         """ Reads the checkpoint file and returns its content as BytesIO object """
