@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -296,6 +297,15 @@ gc_drain_cont(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 	int			 i;
 	int			 rc;
 
+	/*
+	 * When we prepaer to drain the container, we do not need DTX entry any long.
+	 * Then destroy DTX table firstly to avoid dangling DXT records during drain
+	 * the container (that may yield).
+	 */
+	rc = vos_dtx_table_destroy(&pool->vp_umm, cont);
+	if (rc != 0)
+		return rc;
+
 	/** Move any leftover bags to the pool gc */
 	for (i = GC_AKEY; i < GC_CONT; i++) {
 		src_bin = &cont->cd_gc_bins[i];
@@ -331,11 +341,7 @@ gc_free_cont(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh, struct
 		}
 	}
 
-	rc = vos_dtx_table_destroy(&pool->vp_umm, cd);
-	if (rc == 0)
-		rc = umem_free(&pool->vp_umm, item->it_addr);
-
-	return rc;
+	return umem_free(&pool->vp_umm, item->it_addr);
 }
 
 static struct vos_gc gc_table[] = {
@@ -1214,6 +1220,16 @@ gc_get_bkt(struct vos_pool *pool, struct vos_container **cont_in, uint32_t *bkt_
 	bool			 try_next = false;
 	int			 rc;
 
+	/*
+	 * Must put the container reference in first place, since it could be the
+	 * last reference and the container will be removed from the 'vp_gc_cont'
+	 * list on last put (see gc_close_cont()).
+	 */
+	if (*cont_in) {
+		vos_cont_decref(*cont_in);
+		*cont_in = NULL;
+	}
+
 switch_bkt:
 	/* Find non-empty gc_bin[GC_CONT] from containers */
 	d_list_for_each_entry_safe(cont, tmp, &pool->vp_gc_cont, vc_gc_link) {
@@ -1238,11 +1254,6 @@ switch_bkt:
 		goto switch_bkt;
 	}
 done:
-	if (*cont_in) {
-		vos_cont_decref(*cont_in);
-		*cont_in = NULL;
-	}
-
 	if (rc == 0 && cont) {
 		vos_cont_addref(cont);
 		*cont_in = cont;
@@ -1509,6 +1520,7 @@ gc_open_pool(struct vos_pool *pool)
 void
 gc_close_cont(struct vos_container *cont)
 {
+	d_list_del_init(&cont->vc_gc_link);
 	return gc_close_bkt(&cont->vc_gc_info);
 }
 

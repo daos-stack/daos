@@ -78,8 +78,6 @@ func (cr *cmdRunner) createNamespaces(regionPerSocket socketRegionMap, nrNsPerSo
 	if len(sockIDs) == 0 {
 		return nil, errors.New("expected non-zero number of pmem regions in input map")
 	}
-	cr.log.Debugf("creating %d namespaces on each of the following socket(s): %v", nrNsPerSock,
-		sockIDs)
 
 	// As the selector is socket, look up the ndctl region with the same ISetID as the ipmctl
 	// region with specified socket ID. This may not work when the ISetID overflows in ndctl
@@ -134,13 +132,20 @@ func (cr *cmdRunner) createNamespaces(regionPerSocket socketRegionMap, nrNsPerSo
 			regionsToPrep = append(regionsToPrep, &NdctlRegion{
 				Dev:           fmt.Sprintf("region%d", sid),
 				AvailableSize: uint64(regionPerSocket[sid].FreeCapacity),
+				NumaNode:      uint32(sid),
 			})
 		}
 	}
 
+	cr.log.Debugf("attempting to create %d namespaces on each of the following socket(s): %v",
+		nrNsPerSock, sockIDs)
+
 	var numaNodesPrepped []int
 	for _, region := range regionsToPrep {
-		cr.log.Debugf("creating namespaces on %q", region.Dev)
+		if region.AvailableSize == 0 {
+			cr.log.Tracef("skipping namespace creation on full region %q", region.Dev)
+			continue
+		}
 
 		// Check value is 2MiB aligned and (TODO) multiples of interleave width.
 		pmemBytes := uint64(region.AvailableSize) / uint64(nrNsPerSock)
@@ -159,8 +164,8 @@ func (cr *cmdRunner) createNamespaces(regionPerSocket socketRegionMap, nrNsPerSo
 			if _, err := cr.runCmd(cmd); err != nil {
 				return nil, errors.WithMessagef(err, "%s", region.Dev)
 			}
-			cr.log.Debugf("created namespace on %s size %s", region.Dev,
-				humanize.IBytes(pmemBytes))
+			cr.log.Debugf("created namespace on %s size %s (numa %d)", region.Dev,
+				humanize.IBytes(pmemBytes), region.NumaNode)
 		}
 
 		numaNodesPrepped = append(numaNodesPrepped, int(region.NumaNode))
