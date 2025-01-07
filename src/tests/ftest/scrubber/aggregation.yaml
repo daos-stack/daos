@@ -43,7 +43,9 @@ ior: &ior_base
   ior_timeout: 60
   test_file: daos:testFile
   dfs_destroy: false
-  flags: "-v -W -w -r -R -k"
+  flags: "-v -w -k"
+  sw_deadline: 15
+  sw_status_file: stoneWallingStatusFile
   api: DFS
   dfs_oclass: RP_2GX
 ior_small_block_size:
