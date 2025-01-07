@@ -1,3 +1,0 @@
-#!/bin/bash
-
-. utils/githooks/hook_base.sh
