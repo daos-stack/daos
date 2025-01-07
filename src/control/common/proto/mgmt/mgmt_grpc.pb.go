@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -53,6 +53,7 @@ const (
 	MgmtSvc_SystemStop_FullMethodName               = "/mgmt.MgmtSvc/SystemStop"
 	MgmtSvc_SystemStart_FullMethodName              = "/mgmt.MgmtSvc/SystemStart"
 	MgmtSvc_SystemExclude_FullMethodName            = "/mgmt.MgmtSvc/SystemExclude"
+	MgmtSvc_SystemDrain_FullMethodName              = "/mgmt.MgmtSvc/SystemDrain"
 	MgmtSvc_SystemErase_FullMethodName              = "/mgmt.MgmtSvc/SystemErase"
 	MgmtSvc_SystemCleanup_FullMethodName            = "/mgmt.MgmtSvc/SystemCleanup"
 	MgmtSvc_SystemCheckEnable_FullMethodName        = "/mgmt.MgmtSvc/SystemCheckEnable"
@@ -130,6 +131,8 @@ type MgmtSvcClient interface {
 	SystemStart(ctx context.Context, in *SystemStartReq, opts ...grpc.CallOption) (*SystemStartResp, error)
 	// Exclude DAOS ranks
 	SystemExclude(ctx context.Context, in *SystemExcludeReq, opts ...grpc.CallOption) (*SystemExcludeResp, error)
+	// Drain DAOS ranks from all pools
+	SystemDrain(ctx context.Context, in *SystemDrainReq, opts ...grpc.CallOption) (*SystemDrainResp, error)
 	// Erase DAOS system database prior to reformat
 	SystemErase(ctx context.Context, in *SystemEraseReq, opts ...grpc.CallOption) (*SystemEraseResp, error)
 	// Clean up leaked resources for a given node
@@ -410,6 +413,15 @@ func (c *mgmtSvcClient) SystemExclude(ctx context.Context, in *SystemExcludeReq,
 	return out, nil
 }
 
+func (c *mgmtSvcClient) SystemDrain(ctx context.Context, in *SystemDrainReq, opts ...grpc.CallOption) (*SystemDrainResp, error) {
+	out := new(SystemDrainResp)
+	err := c.cc.Invoke(ctx, MgmtSvc_SystemDrain_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *mgmtSvcClient) SystemErase(ctx context.Context, in *SystemEraseReq, opts ...grpc.CallOption) (*SystemEraseResp, error) {
 	out := new(SystemEraseResp)
 	err := c.cc.Invoke(ctx, MgmtSvc_SystemErase_FullMethodName, in, out, opts...)
@@ -629,6 +641,8 @@ type MgmtSvcServer interface {
 	SystemStart(context.Context, *SystemStartReq) (*SystemStartResp, error)
 	// Exclude DAOS ranks
 	SystemExclude(context.Context, *SystemExcludeReq) (*SystemExcludeResp, error)
+	// Drain DAOS ranks from all pools
+	SystemDrain(context.Context, *SystemDrainReq) (*SystemDrainResp, error)
 	// Erase DAOS system database prior to reformat
 	SystemErase(context.Context, *SystemEraseReq) (*SystemEraseResp, error)
 	// Clean up leaked resources for a given node
@@ -749,6 +763,9 @@ func (UnimplementedMgmtSvcServer) SystemStart(context.Context, *SystemStartReq) 
 }
 func (UnimplementedMgmtSvcServer) SystemExclude(context.Context, *SystemExcludeReq) (*SystemExcludeResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SystemExclude not implemented")
+}
+func (UnimplementedMgmtSvcServer) SystemDrain(context.Context, *SystemDrainReq) (*SystemDrainResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SystemDrain not implemented")
 }
 func (UnimplementedMgmtSvcServer) SystemErase(context.Context, *SystemEraseReq) (*SystemEraseResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SystemErase not implemented")
@@ -1285,6 +1302,24 @@ func _MgmtSvc_SystemExclude_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MgmtSvc_SystemDrain_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SystemDrainReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).SystemDrain(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MgmtSvc_SystemDrain_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).SystemDrain(ctx, req.(*SystemDrainReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _MgmtSvc_SystemErase_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SystemEraseReq)
 	if err := dec(in); err != nil {
@@ -1719,6 +1754,10 @@ var MgmtSvc_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SystemExclude",
 			Handler:    _MgmtSvc_SystemExclude_Handler,
+		},
+		{
+			MethodName: "SystemDrain",
+			Handler:    _MgmtSvc_SystemDrain_Handler,
 		},
 		{
 			MethodName: "SystemErase",

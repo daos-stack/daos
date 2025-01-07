@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -201,8 +202,6 @@ cont_free_internal(struct vos_container *cont)
 
 	dbtree_close(cont->vc_btr_hdl);
 
-	if (!d_list_empty(&cont->vc_gc_link))
-		d_list_del(&cont->vc_gc_link);
 	gc_close_cont(cont);
 
 	for (i = 0; i < VOS_IOS_CNT; i++) {

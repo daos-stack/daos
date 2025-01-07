@@ -199,10 +199,10 @@ I follow these [steps](https://docs.daos.io/latest/QSG/setup_rhel/) to install b
 
 5.  Update config files.
 
-Update the daos-server config file `/etc/daos/daos_server.yml` on daos-server. You may need to update "access\_points", "fabric\_iface" and "bdev\_list". Update "access\_points" accordingly if you name daos-server differently. Check if the network device has the same name as listed under "fabric\_iface". Look in the output of `lspci` for "bdev\_list". The info for our NVMe controller is like *??:??:? Non-Volatile memory controller: Red Hat, Inc. QEMU NVM Express Controller (rev 02)*. Prefix *??:??.?* is the address of the NVMe devices.
+Update the daos-server config file `/etc/daos/daos_server.yml` on daos-server. You may need to update "mgmt\_svc\_replicas", "fabric\_iface" and "bdev\_list". Update "mgmt\_svc\_replicas" accordingly if you name daos-server differently. Check if the network device has the same name as listed under "fabric\_iface". Look in the output of `lspci` for "bdev\_list". The info for our NVMe controller is like *??:??:? Non-Volatile memory controller: Red Hat, Inc. QEMU NVM Express Controller (rev 02)*. Prefix *??:??.?* is the address of the NVMe devices.
 ```
 name: daos_server
-access_points:
+mgmt_svc_replicas:
 - daos-server
 port: 10001
 

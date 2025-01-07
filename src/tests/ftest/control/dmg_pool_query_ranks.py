@@ -48,17 +48,17 @@ class DmgPoolQueryRanks(ControlTestBase):
         self._verify_ranks([0, 1, 2, 3, 4], data, "enabled_ranks")
         self._verify_ranks([], data, "disabled_ranks")
 
-        self.log_step("Checking pool query with suspect ranks state information")
+        self.log_step("Checking pool query with dead ranks state information")
         data = self.dmg.pool_query(self.pool.identifier, health_only=True)
-        self._verify_ranks([], data, "suspect_ranks")
+        self._verify_ranks([], data, "dead_ranks")
 
     def test_pool_query_ranks_mgmt(self):
         """Test the state of ranks after excluding and reintegrate them.
 
         Test Description:
             Create a pool with 5 engines, first excluded engine marked as "Disabled"
-            second stopped one as “Suspect,” restarting it, ensuring rebuild completes,
-            clearing the “Suspect” status, reintegrating the excluded first engine, and
+            second stopped one as “Dead,” restarting it, ensuring rebuild completes,
+            clearing the “Dead” status, reintegrating the excluded first engine, and
             finally verifying that all engines are enabled with the excluded rank now empty.
 
         :avocado: tags=all,daily_regression
@@ -74,7 +74,7 @@ class DmgPoolQueryRanks(ControlTestBase):
         all_ranks = enabled_ranks.copy()
         self.random.shuffle(all_ranks)
         exclude_rank = all_ranks[0]
-        suspect_rank = all_ranks[1]
+        dead_rank = all_ranks[1]
         self.log_step(f"Excluding pool rank:{exclude_rank} all_ranks={all_ranks}")
         self.pool.exclude([exclude_rank])
         enabled_ranks.remove(exclude_rank)
@@ -89,18 +89,18 @@ class DmgPoolQueryRanks(ControlTestBase):
         self.pool.wait_for_rebuild_to_start()
 
         # kill second rank.
-        self.log_step(f"Stopping rank:{suspect_rank} all_ranks={all_ranks}")
-        self.server_managers[0].stop_ranks([suspect_rank], self.d_log)
+        self.log_step(f"Stopping rank:{dead_rank} all_ranks={all_ranks}")
+        self.server_managers[0].stop_ranks([dead_rank], self.d_log)
 
-        self.log_step(f"Waiting for pool rank {suspect_rank} to be suspected")
-        self.pool.wait_pool_suspect_ranks([suspect_rank], timeout=30)
+        self.log_step(f"Waiting for pool rank {dead_rank} to be dead")
+        self.pool.wait_pool_dead_ranks([dead_rank], timeout=30)
         self._verify_ranks(disabled_ranks, data, "disabled_ranks")
 
-        self.log_step(f"Starting rank {suspect_rank}")
-        self.server_managers[0].start_ranks([suspect_rank], self.d_log)
+        self.log_step(f"Starting rank {dead_rank}")
+        self.server_managers[0].start_ranks([dead_rank], self.d_log)
 
-        self.log_step("Waiting for pool ranks to no longer be suspected")
-        self.pool.wait_pool_suspect_ranks([], timeout=30)
+        self.log_step("Waiting for pool ranks to no longer be dead")
+        self.pool.wait_pool_dead_ranks([], timeout=30)
 
         self.log_step("Waiting for rebuild to complete")
         self.pool.wait_for_rebuild_to_end()

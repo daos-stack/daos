@@ -44,14 +44,8 @@ heap_mbrt_update_alloc_class_buckets(struct palloc_heap *heap, struct mbrt *mb,
 				     struct alloc_class *c);
 int
 heap_extend(struct palloc_heap *heap, struct bucket *defb, size_t size);
-void
-heap_mbrt_setmb_evictable(struct palloc_heap *heap, struct mbrt *mb);
-bool
-heap_mbrt_ismb_initialized(struct palloc_heap *heap, uint32_t zone_id);
 bool
 heap_mbrt_ismb_evictable(struct palloc_heap *heap, uint32_t zone_id);
-void
-heap_mbrt_setmb_nonevictable(struct palloc_heap *heap, uint32_t zone_id);
 void
 heap_mbrt_setmb_usage(struct palloc_heap *heap, uint32_t zone_id, uint64_t usage);
 int
@@ -59,10 +53,12 @@ heap_mbrt_getmb_usage(struct palloc_heap *heap, uint32_t zone_id, uint64_t *allo
 		      uint64_t *maxsz);
 void
 heap_mbrt_incrmb_usage(struct palloc_heap *heap, uint32_t zone_id, int size);
-struct mbrt *
-heap_mbrt_setup_mb(struct palloc_heap *heap, uint32_t zone_id);
-int
-heap_mbrt_mb_reclaim_garbage(struct palloc_heap *heap, uint32_t zid);
+void
+heap_soemb_active_iter_init(struct palloc_heap *heap);
+uint32_t
+heap_soemb_active_get(struct palloc_heap *heap);
+void
+heap_soemb_reserve(struct palloc_heap *heap);
 int
 heap_ensure_zone0_initialized(struct palloc_heap *heap);
 int
@@ -151,4 +147,11 @@ heap_off2mbid(struct palloc_heap *heap, uint64_t offset);
 
 struct heap_zone_limits
 heap_get_zone_limits(uint64_t heap_size, uint64_t cache_size, uint32_t nemb_pct);
+
+int
+heap_force_recycle(struct palloc_heap *heap);
+int
+heap_incr_empty_nemb_cnt(struct palloc_heap *heap);
+int
+heap_decr_empty_nemb_cnt(struct palloc_heap *heap);
 #endif /* __DAOS_COMMON_HEAP_H */

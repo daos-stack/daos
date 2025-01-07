@@ -168,7 +168,7 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 				optCfgCmd.setOptional()
 			}
 
-			if err := cfgCmd.loadConfig(); err != nil {
+			if err := cfgCmd.loadConfig(log); err != nil {
 				return errors.Wrapf(err, "failed to load config from %s",
 					cfgCmd.configPath())
 			} else if cfgCmd.configPath() != "" {

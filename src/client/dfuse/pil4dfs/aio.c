@@ -61,10 +61,29 @@ static int (*next_io_cancel)(io_context_t ctx, struct iocb *iocb, struct io_even
 static int (*next_io_getevents)(io_context_t ctx, long min_nr, long nr, struct io_event *events,
 				struct timespec *timeout);
 
+static int (*next_io_queue_init)(int maxevents, io_context_t *ctxp);
 /* aio functions return negative errno in case of failure */
 
 static int
 create_ev_eq_for_aio(d_aio_ctx_t *aio_ctx);
+
+int
+io_setup(int maxevents, io_context_t *ctxp);
+
+int
+io_queue_init(int maxevents, io_context_t *ctxp)
+{
+	if (next_io_queue_init == NULL) {
+		next_io_queue_init = dlsym(RTLD_NEXT, "io_queue_init");
+		D_ASSERT(next_io_queue_init != NULL);
+	}
+
+	if (maxevents > 0) {
+		return io_setup(maxevents, ctxp);
+	}
+
+	return -EINVAL;
+}
 
 int
 io_setup(int maxevents, io_context_t *ctxp)

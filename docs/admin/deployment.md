@@ -50,7 +50,7 @@ A recommended workflow to get up and running is as follows:
   server config file (default location at `/etc/daos/daos_server.yml`) has not
   yet been populated.
 
-* Run `dmg config generate -l <hostset> -a <access_points>` across the entire
+* Run `dmg config generate -l <hostset> -r <ms_replicas>` across the entire
   hostset (all the storage servers that are now running the `daos_server` service
   after RPM install).
   The command will only generate a config if hardware setups on all the hosts are
@@ -285,7 +285,7 @@ Help Options:
 
 [generate command options]
       -l, --helper-log-file=                Log file location for debug from daos_server_helper binary
-      -a, --access-points=                  Comma separated list of access point addresses
+      -r, --ms-replicas=                    Comma separated list of MS replica addresses
                                             <ipv4addr/hostname> (default: localhost)
       -e, --num-engines=                    Set the number of DAOS Engine sections to be populated in the
                                             config file output. If unset then the value will be set to the
@@ -331,7 +331,7 @@ Help Options:
 
 [generate command options]
       -l, --host-list=                      A comma separated list of addresses <ipv4addr/hostname> to connect to
-      -a, --access-points=                  Comma separated list of access point addresses <ipv4addr/hostname>
+      -r, --ms-replicas=                    Comma separated list of MS replica addresses <ipv4addr/hostname>
                                             to host management service (default: localhost)
       -e, --num-engines=                    Set the number of DAOS Engine sections to be populated in the
                                             config file output. If unset then the value will be set to the
@@ -371,8 +371,8 @@ engines:
 
 The options that can be supplied to the config generate command are as follows:
 
-- `--access-points` specifies the access points (identified storage servers that will host the
-management service for the DAOS system across the cluster).
+- `--ms-replicas` specifies the MS replicas (identified storage servers that will host the
+Management Service for the DAOS system across the cluster).
 
 - `--num-engines` specifies the number of engine sections to populate in the config file output.
 If not set explicitly on the commandline, default is the number of NUMA nodes detected on the host.
@@ -502,7 +502,7 @@ core_dump_filter: 19
 name: daos_server
 socket_dir: /var/run/daos_server
 provider: ofi+tcp
-access_points:
+mgmt_svc_replicas:
 - localhost:10001
 fault_cb: ""
 hyperthreads: false
@@ -515,7 +515,7 @@ and runs until the point where a storage format is required, as expected.
 [user@wolf-226 daos]$ install/bin/daos_server start -i -o ~/configs/tmp.yml
 DAOS Server config loaded from /home/user/configs/tmp.yml
 install/bin/daos_server logging to file /tmp/daos_server.log
-NOTICE: Configuration includes only one access point. This provides no redundancy in the event of an access point failure.
+NOTICE: Configuration includes only one MS replica. This provides no redundancy in the event of a MS replica failure.
 DAOS Control Server v2.3.101 (pid 1211553) listening on 127.0.0.1:10001
 Checking DAOS I/O Engine instance 0 storage ...
 Checking DAOS I/O Engine instance 1 storage ...
@@ -821,8 +821,6 @@ To set the addresses of which DAOS Servers to task, provide either:
 
 Where `<hostlist>` represents a slurm-style hostlist string e.g.
 `foo-1[28-63],bar[256-511]`.
-The first entry in the hostlist (after alphabetic then numeric sorting) will be
-assumed to be the access point as set in the server configuration file.
 
 Local configuration files stored in the user directory will be used in
 preference to the default location e.g. `~/.daos_control.yml`.
@@ -1322,7 +1320,7 @@ as follows to establish 2-tier storage:
 ```yaml
 <snip>
 port: 10001
-access_points: ["wolf-71"] # <----- updated
+mgmt_svc_replicas: ["wolf-71"] # <----- updated
 <snip>
 engines:
 -
@@ -1367,10 +1365,10 @@ information, please refer to the [DAOS build documentation][6].
     DAOS Control Servers will need to be restarted on all hosts after updates to the server
     configuration file.
 
-    Pick an odd number of hosts in the system and set `access_points` to list of that host's
-    hostname or IP address (don't need to specify port).
+    Pick an odd number (3-7) of hosts in the system and set the `mgmt_svc_replicas` list to
+    include the hostnames or IP addresses (don't need to specify port) of those hosts.
 
-    This will be the host which bootstraps the DAOS management service (MS).
+    This will be the set of servers which host the replicated DAOS management service (MS).
 
 >The support of the optional providers is not guarantee and can be removed
 >without further notification.
