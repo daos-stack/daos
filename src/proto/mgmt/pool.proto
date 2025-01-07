@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -43,6 +44,7 @@ message PoolCreateResp {
 	repeated uint32 tgt_ranks = 4; // pool target ranks
 	repeated uint64 tier_bytes     = 5; // per-rank storage tier sizes allocated in pool
 	uint64          mem_file_bytes = 6; // per-rank accumulated value of memory file sizes
+	bool            md_on_ssd_active = 7; // MD-on-SSD mode flag
 }
 
 // PoolDestroyReq supplies pool identifier and force flag.
@@ -242,6 +244,7 @@ message PoolQueryResp {
 	uint64                     query_mask         = 20; // Bitmask of pool query options used
 	uint64 mem_file_bytes = 21; // per-pool accumulated value of memory file sizes
 	string dead_ranks     = 22; // optional set of dead ranks
+	bool   md_on_ssd_active = 23; // MD-on-SSD mode flag
 }
 
 message PoolProperty {
@@ -333,6 +336,7 @@ message PoolQueryTargetInfo {
 	// TODO: target performance data
 	repeated StorageTargetUsage space = 3; // this target's usage per storage tier
 	uint64                      mem_file_bytes = 4; // per-target value of memory file size
+	bool                        md_on_ssd_active = 5; // MD-on-SSD mode flag
 }
 
 // PoolQueryTargetResp represents a pool target query response

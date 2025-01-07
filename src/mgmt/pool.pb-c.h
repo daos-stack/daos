@@ -252,11 +252,23 @@ struct  _Mgmt__PoolCreateResp
    * per-rank accumulated value of memory file sizes
    */
   uint64_t mem_file_bytes;
+  /*
+   * MD-on-SSD mode flag
+   */
+  protobuf_c_boolean md_on_ssd_active;
 };
-#define MGMT__POOL_CREATE_RESP__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_resp__descriptor) \
-    , 0, 0, 0,NULL, 0,NULL, 0,NULL, 0 }
-
+#define MGMT__POOL_CREATE_RESP__INIT                                                               \
+	{PROTOBUF_C_MESSAGE_INIT(&mgmt__pool_create_resp__descriptor),                             \
+	 0,                                                                                        \
+	 0,                                                                                        \
+	 0,                                                                                        \
+	 NULL,                                                                                     \
+	 0,                                                                                        \
+	 NULL,                                                                                     \
+	 0,                                                                                        \
+	 NULL,                                                                                     \
+	 0,                                                                                        \
+	 0}
 
 /*
  * PoolDestroyReq supplies pool identifier and force flag.
@@ -877,11 +889,37 @@ struct  _Mgmt__PoolQueryResp
    * optional set of dead ranks
    */
   char                     *dead_ranks;
+  /*
+   * MD-on-SSD mode flag
+   */
+  protobuf_c_boolean        md_on_ssd_active;
 };
-#define MGMT__POOL_QUERY_RESP__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_resp__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, 0,NULL, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, MGMT__POOL_SERVICE_STATE__Creating, 0, 0,NULL, 0, 0, (char *)protobuf_c_empty_string }
-
+#define MGMT__POOL_QUERY_RESP__INIT                                                                \
+	{PROTOBUF_C_MESSAGE_INIT(&mgmt__pool_query_resp__descriptor),                              \
+	 0,                                                                                        \
+	 (char *)protobuf_c_empty_string,                                                          \
+	 (char *)protobuf_c_empty_string,                                                          \
+	 0,                                                                                        \
+	 0,                                                                                        \
+	 0,                                                                                        \
+	 NULL,                                                                                     \
+	 0,                                                                                        \
+	 NULL,                                                                                     \
+	 0,                                                                                        \
+	 0,                                                                                        \
+	 (char *)protobuf_c_empty_string,                                                          \
+	 (char *)protobuf_c_empty_string,                                                          \
+	 0,                                                                                        \
+	 0,                                                                                        \
+	 0,                                                                                        \
+	 MGMT__POOL_SERVICE_STATE__Creating,                                                       \
+	 0,                                                                                        \
+	 0,                                                                                        \
+	 NULL,                                                                                     \
+	 0,                                                                                        \
+	 0,                                                                                        \
+	 (char *)protobuf_c_empty_string,                                                          \
+	 0}
 
 typedef enum {
   MGMT__POOL_PROPERTY__VALUE__NOT_SET = 0,
@@ -1126,11 +1164,19 @@ struct  _Mgmt__PoolQueryTargetInfo
    * per-target value of memory file size
    */
   uint64_t mem_file_bytes;
+  /*
+   * MD-on-SSD mode flag
+   */
+  protobuf_c_boolean                     md_on_ssd_active;
 };
-#define MGMT__POOL_QUERY_TARGET_INFO__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_target_info__descriptor) \
-    , MGMT__POOL_QUERY_TARGET_INFO__TARGET_TYPE__UNKNOWN, MGMT__POOL_QUERY_TARGET_INFO__TARGET_STATE__STATE_UNKNOWN, 0,NULL, 0 }
-
+#define MGMT__POOL_QUERY_TARGET_INFO__INIT                                                         \
+	{PROTOBUF_C_MESSAGE_INIT(&mgmt__pool_query_target_info__descriptor),                       \
+	 MGMT__POOL_QUERY_TARGET_INFO__TARGET_TYPE__UNKNOWN,                                       \
+	 MGMT__POOL_QUERY_TARGET_INFO__TARGET_STATE__STATE_UNKNOWN,                                \
+	 0,                                                                                        \
+	 NULL,                                                                                     \
+	 0,                                                                                        \
+	 0}
 
 /*
  * PoolQueryTargetResp represents a pool target query response

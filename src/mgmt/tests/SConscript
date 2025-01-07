@@ -11,7 +11,7 @@ def scons():
     # Isolated unit tests
     denv.d_test_program('srv_drpc_tests',
                         source=[pb_objs, mocks, 'srv_drpc_tests.c', '../srv_drpc.c'],
-                        LIBS=['cmocka', 'protobuf-c', 'daos_common_pmem', 'gurt', 'uuid'])
+                        LIBS=['cmocka', 'protobuf-c', 'daos_common_pmem', 'gurt', 'uuid', 'bio'])
 
 
 if __name__ == "SCons.Script":

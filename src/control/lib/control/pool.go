@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -228,12 +229,13 @@ type (
 
 	// PoolCreateResp contains the response from a pool create request.
 	PoolCreateResp struct {
-		UUID         string   `json:"uuid"`
-		Leader       uint32   `json:"svc_ldr"`
-		SvcReps      []uint32 `json:"svc_reps"`
-		TgtRanks     []uint32 `json:"tgt_ranks"`
-		TierBytes    []uint64 `json:"tier_bytes"`     // Per-rank storage tier sizes.
-		MemFileBytes uint64   `json:"mem_file_bytes"` // Per-rank. MD-on-SSD mode only.
+		UUID          string   `json:"uuid"`
+		Leader        uint32   `json:"svc_ldr"`
+		SvcReps       []uint32 `json:"svc_reps"`
+		TgtRanks      []uint32 `json:"tgt_ranks"`
+		TierBytes     []uint64 `json:"tier_bytes"`       // Per-rank storage tier sizes.
+		MemFileBytes  uint64   `json:"mem_file_bytes"`   // Per-rank. MD-on-SSD mode only.
+		MdOnSsdActive bool     `json:"md_on_ssd_active"` // MD-on-SSD mode.
 	}
 )
 
