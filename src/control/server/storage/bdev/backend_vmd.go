@@ -132,7 +132,7 @@ func substituteVMDAddresses(log logging.Logger, inPCIAddrs *hardware.PCIAddressS
 
 	dl, err := substVMDAddrs(inPCIAddrs, ctrlrs)
 	if err != nil {
-		return nil, errors.Wrapf(err, msg)
+		return nil, errors.Wrap(err, msg)
 	}
 	log.Debugf("%s: new %s", msg, dl)
 

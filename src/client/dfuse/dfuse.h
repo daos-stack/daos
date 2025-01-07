@@ -560,7 +560,7 @@ dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc);
  */
 int
 dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const char *label,
-		struct dfuse_cont **_dfs);
+		daos_epoch_t snap_epoch, const char *snap_name, struct dfuse_cont **_dfs);
 
 /* Returns a connection for a container uuid, connecting as required.
  * Takes a ref on the container and returns a system error code.
@@ -1198,7 +1198,7 @@ bool
 dfuse_dcache_get_valid(struct dfuse_inode_entry *ie, double max_age);
 
 void
-dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh);
+dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie);
 
 int
 check_for_uns_ep(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, char *attr,

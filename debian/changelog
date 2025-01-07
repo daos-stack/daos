@@ -1,8 +1,20 @@
-daos (2.7.101-2) unstable; urgency=medium
+daos (2.7.101-4) unstable; urgency=medium
   [ Tomasz Gromadzki ]
   * pmemobj errors and warnings reported via DAOS logging system
 
  -- Tomasz Gromadzki <tomasz.gromadzki@intel.com>  Mon, 18 Nov 2024 12:00:00 +0200
+
+daos (2.7.101-3) unstable; urgency=medium
+  [ Phillip Henderson ]
+  * Fix protobuf-c requiremnent for daos-client-tests on Leap.
+
+ -- Phillip Henderson <phillip.henderson@intel.com>  Thu, 19 Dec 2024 13:05:00 -0500
+
+daos (2.7.101-2) unstable; urgency=medium
+  [ Denis Barakhtanov ]
+  * Add pydaos.torch module to daos-client package
+
+ -- Denis Barakhtanov <dbarahtanov@enakta.com>  Thu, 14 Nov 2024 22:27:00 +1100
 
 daos (2.7.101-1) unstable; urgency=medium
   [ Phillip Henderson ]

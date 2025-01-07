@@ -107,6 +107,10 @@ class DaosServerYamlParameters(YamlParameters):
         #       is set for the running process. If group look up fails or user
         #       is not member, use uid return from user lookup.
         #
+        #   - mgmt_svc_replicas: <list>, e.g.  ["hostname1:10001"]
+        #       Hosts can be specified with or without port, default port below
+        #       assumed if not specified. Defaults to the hostname of this node
+        #       at port 10000 for local testing.
         default_provider = os.environ.get("D_PROVIDER", "ofi+tcp")
 
         # All log files should be placed in the same directory on each host to
@@ -133,6 +137,7 @@ class DaosServerYamlParameters(YamlParameters):
         self.helper_log_file = LogParameter(log_dir, None, "daos_server_helper.log")
         self.telemetry_port = BasicParameter(None, 9191)
         self.client_env_vars = BasicParameter(None)
+        self.mgmt_svc_replicas = BasicParameter(None, ["localhost"])
 
         # Used to drop privileges before starting data plane
         # (if started as root to perform hardware provisioning)

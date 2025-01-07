@@ -4,3 +4,5 @@ pyxattr
 PyYAML
 # Disabled for now because of DAOS-14688
 # pytest
+# for pydaos.torch module
+torch

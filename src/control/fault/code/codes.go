@@ -165,8 +165,8 @@ const (
 	ServerNoConfigPath
 	ServerConfigBadControlPort
 	ServerConfigBadTelemetryPort
-	ServerConfigBadAccessPoints
-	ServerConfigEvenAccessPoints
+	ServerConfigBadMgmtSvcReplicas
+	ServerConfigEvenMgmtSvcReplicas
 	ServerConfigBadProvider
 	ServerConfigNoEngines
 	ServerConfigDuplicateFabric

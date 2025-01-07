@@ -409,7 +409,7 @@ cancel:
 				    cont->vc_solo_dtx_epoch < dth->dth_epoch)
 					cont->vc_solo_dtx_epoch = dth->dth_epoch;
 
-				vos_dtx_post_handle(cont, &dae, &dce, 1, false, err != 0);
+				vos_dtx_post_handle(cont, &dae, &dce, 1, false, err != 0, false);
 			} else {
 				D_ASSERT(dce == NULL);
 				if (err == 0 && dth->dth_active) {

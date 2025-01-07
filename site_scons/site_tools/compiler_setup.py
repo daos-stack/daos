@@ -4,6 +4,7 @@ from SCons.Script import Configure, Exit, GetOption
 
 DESIRED_FLAGS = ['-fstack-usage',
                  '-Wno-sign-compare',
+                 '-Wno-missing-attributes',
                  '-Wno-unused-parameter',
                  '-Wno-missing-field-initializers',
                  '-Wno-implicit-fallthrough',

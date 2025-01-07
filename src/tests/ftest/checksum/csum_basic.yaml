@@ -20,6 +20,7 @@ pool:
   scm_size: 3000000000
   svcn: 1
 container: !mux
+  control_method: API
   properties:
     enable_checksum: true
 dkeys: !mux

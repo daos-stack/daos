@@ -17,14 +17,28 @@ import os
 
 from setuptools import Extension, find_packages, setup
 
-args = {"sources": ["pydaos/pydaos_shim.c"], "libraries": ["daos", "duns"]}
 
-prefix_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..")
+def append_paths(args):
+    """
+    Append necessary paths to the headers and DAOS shared libraries
+    to build and load C extensions
+    """
 
-if os.path.exists(os.path.join(prefix_dir, "include", "daos.h")):
-    args["include_dirs"] = [os.path.join(prefix_dir, "include")]
-    args["library_dirs"] = [os.path.join(prefix_dir, "lib64")]
-    args["runtime_library_dirs"] = args["library_dirs"]
+    prefix_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..")
+
+    if os.path.exists(os.path.join(prefix_dir, "include", "daos.h")):
+        args["include_dirs"] = [os.path.join(prefix_dir, "include")]
+        args["library_dirs"] = [os.path.join(prefix_dir, "lib64")]
+        args["runtime_library_dirs"] = args["library_dirs"]
+
+    return args
+
+
+pydaos_args = {"sources": ["pydaos/pydaos_shim.c"], "libraries": ["daos", "duns"]}
+torch_args = {"sources": ["pydaos/torch/torch_shim.c"], "libraries": ["daos", "dfs"]}
+
+pydaos_args = append_paths(pydaos_args)
+torch_args = append_paths(torch_args)
 
 
 setup(
@@ -32,5 +46,6 @@ setup(
     version="0.3",
     packages=find_packages(),
     description="DAOS interface",
-    ext_modules=[Extension("pydaos.pydaos_shim", **args)],
+    ext_modules=[Extension("pydaos.pydaos_shim", **pydaos_args),
+                 Extension("pydaos.torch.torch_shim", **torch_args)],
 )
