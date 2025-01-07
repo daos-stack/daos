@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2019-2025 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -633,13 +633,13 @@ func (cmd *poolReintCmd) Execute(args []string) error {
 		return err
 	}
 
-	req := &control.PoolReintReq{
+	req := &control.PoolReintegrateReq{
 		ID:        cmd.PoolID().String(),
 		Rank:      ranklist.Rank(cmd.Rank),
 		TargetIdx: idxList,
 	}
 
-	err := control.PoolReint(cmd.MustLogCtx(), cmd.ctlInvoker, req)
+	err := control.PoolReintegrate(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}

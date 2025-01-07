@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2020-2025 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -1256,7 +1256,7 @@ func reintPoolRank(svc *mgmtSvc, ctx context.Context, sys, id string, rank rankl
 		Id:   id,
 	}
 
-	pbResp, err := svc.PoolReint(ctx, pbReq)
+	pbResp, err := svc.PoolReintegrate(ctx, pbReq)
 	if err != nil {
 		return int32(daos.MiscError), err
 	}

@@ -584,7 +584,7 @@ struct _Mgmt__PoolReintReq {
 	 0}
 
 /*
- * PoolReintResp returns resultant state of Reintegrate operation.
+ * PoolReintResp returns resultant state of reintegrate operation.
  */
 struct _Mgmt__PoolReintResp {
 	ProtobufCMessage base;

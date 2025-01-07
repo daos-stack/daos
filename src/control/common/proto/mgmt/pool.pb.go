@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2019-2025 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -1320,7 +1320,7 @@ func (x *PoolReintReq) GetMemRatio() float32 {
 	return 0
 }
 
-// PoolReintResp returns resultant state of Reintegrate operation.
+// PoolReintResp returns resultant state of reintegrate operation.
 type PoolReintResp struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache

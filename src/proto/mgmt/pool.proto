@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2019-2025 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -133,7 +133,7 @@ message PoolReintReq
 	float           mem_ratio  = 7; // Fraction of meta-blob-sz to use as mem-file-sz
 }
 
-// PoolReintResp returns resultant state of Reintegrate operation.
+// PoolReintResp returns resultant state of reintegrate operation.
 message PoolReintResp
 {
 	int32 status = 1; // DAOS error code

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2020-2025 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -905,8 +905,8 @@ func (svc *mgmtSvc) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq) (
 	return resp, nil
 }
 
-// PoolReint implements the method defined for the Management Service.
-func (svc *mgmtSvc) PoolReint(ctx context.Context, req *mgmtpb.PoolReintReq) (*mgmtpb.PoolReintResp, error) {
+// PoolReintegrate implements the method defined for the Management Service.
+func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReintReq) (*mgmtpb.PoolReintResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}

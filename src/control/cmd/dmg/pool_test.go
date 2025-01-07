@@ -718,7 +718,7 @@ func TestPoolCommands(t *testing.T) {
 			"Reintegrate a target with single target idx",
 			"pool reintegrate 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1",
 			strings.Join([]string{
-				printRequest(t, &control.PoolReintReq{
+				printRequest(t, &control.PoolReintegrateReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
 					TargetIdx: []uint32{1},
@@ -730,7 +730,7 @@ func TestPoolCommands(t *testing.T) {
 			"Reintegrate a target with multiple idx",
 			"pool reintegrate 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1,2,3",
 			strings.Join([]string{
-				printRequest(t, &control.PoolReintReq{
+				printRequest(t, &control.PoolReintegrateReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
 					TargetIdx: []uint32{1, 2, 3},
@@ -742,7 +742,7 @@ func TestPoolCommands(t *testing.T) {
 			"Reintegrate a target with no idx given",
 			"pool reintegrate 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0",
 			strings.Join([]string{
-				printRequest(t, &control.PoolReintReq{
+				printRequest(t, &control.PoolReintegrateReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
 					TargetIdx: []uint32{},

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2020-2025 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -846,18 +846,18 @@ func PoolExtend(ctx context.Context, rpcClient UnaryInvoker, req *PoolExtendReq)
 	return errors.Wrap(ur.getMSError(), "pool extend failed")
 }
 
-// PoolReintReq struct contains request
-type PoolReintReq struct {
+// PoolReintegrateReq struct contains request
+type PoolReintegrateReq struct {
 	poolRequest
 	ID        string
 	Rank      ranklist.Rank
 	TargetIdx []uint32
 }
 
-// PoolReint will set a pool target for a specific rank back to up.
+// PoolReintegrate will set a pool target for a specific rank back to up.
 // This should automatically start the reintegration process.
 // Returns an error (including any DER code from DAOS).
-func PoolReint(ctx context.Context, rpcClient UnaryInvoker, req *PoolReintReq) error {
+func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolReintegrateReq) error {
 	pbReq := &mgmtpb.PoolReintReq{
 		Sys:       req.getSystem(rpcClient),
 		Id:        req.ID,
@@ -866,7 +866,7 @@ func PoolReint(ctx context.Context, rpcClient UnaryInvoker, req *PoolReintReq) e
 	}
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).PoolReint(ctx, pbReq)
+		return mgmtpb.NewMgmtSvcClient(conn).PoolReintegrate(ctx, pbReq)
 	})
 
 	rpcClient.Debugf("Reintegrate DAOS pool target request: %s\n", pbUtil.Debug(pbReq))

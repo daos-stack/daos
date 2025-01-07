@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2019-2025 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -36,7 +36,7 @@ const (
 	MgmtSvc_PoolExclude_FullMethodName              = "/mgmt.MgmtSvc/PoolExclude"
 	MgmtSvc_PoolDrain_FullMethodName                = "/mgmt.MgmtSvc/PoolDrain"
 	MgmtSvc_PoolExtend_FullMethodName               = "/mgmt.MgmtSvc/PoolExtend"
-	MgmtSvc_PoolReint_FullMethodName                = "/mgmt.MgmtSvc/PoolReint"
+	MgmtSvc_PoolReintegrate_FullMethodName          = "/mgmt.MgmtSvc/PoolReintegrate"
 	MgmtSvc_PoolQuery_FullMethodName                = "/mgmt.MgmtSvc/PoolQuery"
 	MgmtSvc_PoolQueryTarget_FullMethodName          = "/mgmt.MgmtSvc/PoolQueryTarget"
 	MgmtSvc_PoolSetProp_FullMethodName              = "/mgmt.MgmtSvc/PoolSetProp"
@@ -98,7 +98,7 @@ type MgmtSvcClient interface {
 	// Extend a pool.
 	PoolExtend(ctx context.Context, in *PoolExtendReq, opts ...grpc.CallOption) (*PoolExtendResp, error)
 	// Reintegrate a pool target.
-	PoolReint(ctx context.Context, in *PoolReintReq, opts ...grpc.CallOption) (*PoolReintResp, error)
+	PoolReintegrate(ctx context.Context, in *PoolReintReq, opts ...grpc.CallOption) (*PoolReintResp, error)
 	// PoolQuery queries a DAOS pool.
 	PoolQuery(ctx context.Context, in *PoolQueryReq, opts ...grpc.CallOption) (*PoolQueryResp, error)
 	// PoolQueryTarget queries a DAOS storage target.
@@ -260,9 +260,9 @@ func (c *mgmtSvcClient) PoolExtend(ctx context.Context, in *PoolExtendReq, opts 
 	return out, nil
 }
 
-func (c *mgmtSvcClient) PoolReint(ctx context.Context, in *PoolReintReq, opts ...grpc.CallOption) (*PoolReintResp, error) {
+func (c *mgmtSvcClient) PoolReintegrate(ctx context.Context, in *PoolReintReq, opts ...grpc.CallOption) (*PoolReintResp, error) {
 	out := new(PoolReintResp)
-	err := c.cc.Invoke(ctx, MgmtSvc_PoolReint_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, MgmtSvc_PoolReintegrate_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -608,7 +608,7 @@ type MgmtSvcServer interface {
 	// Extend a pool.
 	PoolExtend(context.Context, *PoolExtendReq) (*PoolExtendResp, error)
 	// Reintegrate a pool target.
-	PoolReint(context.Context, *PoolReintReq) (*PoolReintResp, error)
+	PoolReintegrate(context.Context, *PoolReintReq) (*PoolReintResp, error)
 	// PoolQuery queries a DAOS pool.
 	PoolQuery(context.Context, *PoolQueryReq) (*PoolQueryResp, error)
 	// PoolQueryTarget queries a DAOS storage target.
@@ -713,8 +713,8 @@ func (UnimplementedMgmtSvcServer) PoolDrain(context.Context, *PoolDrainReq) (*Po
 func (UnimplementedMgmtSvcServer) PoolExtend(context.Context, *PoolExtendReq) (*PoolExtendResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PoolExtend not implemented")
 }
-func (UnimplementedMgmtSvcServer) PoolReint(context.Context, *PoolReintReq) (*PoolReintResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PoolReint not implemented")
+func (UnimplementedMgmtSvcServer) PoolReintegrate(context.Context, *PoolReintReq) (*PoolReintResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PoolReintegrate not implemented")
 }
 func (UnimplementedMgmtSvcServer) PoolQuery(context.Context, *PoolQueryReq) (*PoolQueryResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PoolQuery not implemented")
@@ -996,20 +996,20 @@ func _MgmtSvc_PoolExtend_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
-func _MgmtSvc_PoolReint_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _MgmtSvc_PoolReintegrate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(PoolReintReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(MgmtSvcServer).PoolReint(ctx, in)
+		return srv.(MgmtSvcServer).PoolReintegrate(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: MgmtSvc_PoolReint_FullMethodName,
+		FullMethod: MgmtSvc_PoolReintegrate_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MgmtSvcServer).PoolReint(ctx, req.(*PoolReintReq))
+		return srv.(MgmtSvcServer).PoolReintegrate(ctx, req.(*PoolReintReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1688,8 +1688,8 @@ var MgmtSvc_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _MgmtSvc_PoolExtend_Handler,
 		},
 		{
-			MethodName: "PoolReint",
-			Handler:    _MgmtSvc_PoolReint_Handler,
+			MethodName: "PoolReintegrate",
+			Handler:    _MgmtSvc_PoolReintegrate_Handler,
 		},
 		{
 			MethodName: "PoolQuery",
