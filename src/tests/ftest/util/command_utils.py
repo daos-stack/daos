@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2018-2025 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -1049,7 +1049,7 @@ class YamlCommand(SubProcessCommand):
 
         Args:
             hosts (NodeSet): list of the destination hosts.
-            user (User): User permission set on telemetry certificate file.
+            user (str): User permission set on telemetry certificate file.
                          For server, it's daos_server and for client it's daos_agent.
         """
         data = self.yaml.telemetry_config.get_certificate_data(
@@ -1060,7 +1060,7 @@ class YamlCommand(SubProcessCommand):
             certgen_dir = os.path.abspath(
                 os.path.join(os.getcwd(), "scripts"))
             command = os.path.join(certgen_dir, "gen_telemetry_server_certificate.sh ")
-            command = "sudo " + command + user + " " + destination
+            command = command_as_user(command + user + " " + destination, "root")
             self.log.debug("Generating the telemetry certificate command %s:", command)
             result = run_remote(self.log, hosts, command, 30)
             if not result.passed:

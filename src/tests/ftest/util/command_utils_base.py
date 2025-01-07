@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2020-2025 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -829,7 +829,6 @@ class TelemetryConfig(YamlParameters):
         """
         yaml_data = super().get_yaml_data()
 
-        # Convert the boolean value into a string
         if self.title is not None:
             yaml_data[self.title]["allow_insecure"] = self.allow_insecure.value
         else:
@@ -849,15 +848,16 @@ class TelemetryConfig(YamlParameters):
 
         """
         data = {}
-        if not self.allow_insecure.value:
-            for name in name_list:
-                value = getattr(self, name).value
-                if isinstance(value, str):
-                    dir_name, file_name = os.path.split(value)
-                    if dir_name not in data:
-                        data[dir_name] = [file_name]
-                    else:
-                        data[dir_name].append(file_name)
+        if self.allow_insecure.value:
+            return data
+        for name in name_list:
+            value = getattr(self, name).value
+            if isinstance(value, str):
+                dir_name, file_name = os.path.split(value)
+                if dir_name not in data:
+                    data[dir_name] = [file_name]
+                else:
+                    data[dir_name].append(file_name)
         return data
 
     def _get_new(self):
