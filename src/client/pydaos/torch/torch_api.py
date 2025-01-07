@@ -10,6 +10,7 @@ to access training data on DAOS DFS via POSIX container.
 """
 
 import concurrent
+import io
 import math
 import os
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor
@@ -82,7 +83,6 @@ class Dataset(TorchDataset):
 
         self._pool = pool
         self._cont = cont
-        self._dc = DaosClient()
         self._dfs = _Dfs(pool=pool, cont=cont)
         self._transform_fn = transform_fn
         self._readdir_batch_size = readdir_batch_size
@@ -192,7 +192,6 @@ class IterableDataset(TorchIterableDataset):
 
         self._pool = pool
         self._cont = cont
-        self._dc = DaosClient()
         self._dfs = _Dfs(pool=pool, cont=cont)
         self._transform_fn = transform_fn
         self._readdir_batch_size = readdir_batch_size
@@ -255,6 +254,125 @@ class IterableDataset(TorchIterableDataset):
         return [self._transform_fn(x) for x in result]
 
 
+class WriteBuffer(io.BufferedIOBase):
+    """
+    Class representing stream like write buffer for saving PyTorch model checkpoints to DAOS DFS.
+    """
+
+    def __init__(self, dfs, path):
+        super().__init__()
+
+        self._dfs = dfs
+        self._path = path
+        self._buffer = bytearray()
+        self._position = 0
+        self._closed = False
+
+    def write(self, data):
+        """ Writes data to the buffer.
+        The data is not written to the container until close() is called.
+        """
+
+        if self.closed:
+            raise ValueError("I/O operation on closed file")
+
+        self._buffer.extend(data)
+        self._position = + len(data)
+        return len(data)
+
+    def tell(self):
+        """Return current stream position."""
+        if self.closed:
+            raise ValueError("I/O operation on closed file")
+        return self._position
+
+    def close(self):
+        """Upload buffer to storage and close."""
+        if self.closed:
+            return
+
+        self._write()
+        self._closed = True
+        super().close()
+
+    def _write(self):
+        """ Writes the buffer to the container """
+        if self.closed:
+            raise ValueError("I/O operation on closed file")
+
+        self._dfs.write(self._path, self._buffer)
+
+    @property
+    def closed(self):
+        """Return True if the file is closed."""
+        return self._closed
+
+    @property
+    def writable(self):
+        """Return True if the file is writable."""
+        return True
+
+    @property
+    def readable(self):
+        return False
+
+    @property
+    def seekable(self):
+        """Return True if the file is seekable."""
+        return False
+
+
+class Checkpoint():
+    """
+    Class representing checkpoint interface for pytorch to save and load
+    model's stave over DAOS DFS.
+
+    Attributes
+    ----------
+    pool : string
+        Pool label or UUID string
+    container : string
+        Container label or UUID string
+    prefix : string (optional)
+        Prefix as a directory to store checkpoint files, default is root of the container.
+
+    Methods
+    -------
+    reader(fname):
+        Reads the checkpoint file and returns its content as BytesIO object.
+
+    writer(fname):
+        Returns write buffer to save the checkpoint file.
+    """
+
+    def __init__(self, pool, container, prefix=os.sep):
+        self._pool = pool
+        self._cont = container
+        self._prefix = prefix
+        self._dfs = _Dfs(pool=pool, cont=container, rd_only=False)
+
+    def reader(self, fname):
+        """ Reads the checkpoint file and returns its content as BytesIO object """
+
+        if fname is None:
+            raise ValueError("file name is required")
+
+        fpath = os.path.join(self._prefix, fname)
+
+        size = self._dfs.get_file_size(fpath)
+        buf = self._dfs.read(fpath, size)
+        return io.BytesIO(buf)
+
+    def writer(self, fname):
+        """ Returns write buffer to save the checkpoint file """
+
+        if fname is None:
+            raise ValueError("file name is required")
+
+        fpath = os.path.join(self._prefix, fname)
+        return WriteBuffer(self._dfs, fpath)
+
+
 class _Dfs():
     """
     Class encapsulating libdfs interface to load PyTorch Dataset
@@ -262,9 +380,12 @@ class _Dfs():
     """
 
     def __init__(self, pool=None, cont=None, rd_only=True):
-        if (pool is None or cont is None):
-            raise ValueError("invalid pool or container labels")
+        if pool is None:
+            raise ValueError("pool label or UUID is required")
+        if cont is None:
+            raise ValueError("container label or UUID is required")
 
+        self._dc = DaosClient()
         (ret, dfs) = torch_shim.torch_connect(DAOS_MAGIC, pool, cont, rd_only)
         if ret != 0:
             raise OSError(ret, os.strerror(ret), f"could not connect to {pool}:{cont}")
@@ -368,6 +489,13 @@ class _Dfs():
 
         return buf
 
+    def write(self, path, data):
+        """ Writes data to the file """
+
+        ret = torch_shim.torch_write(DAOS_MAGIC, self._dfs, path, data)
+        if ret != 0:
+            raise OSError(ret, os.strerror(ret), path)
+
     def batch_read(self, items):
         """ parallel read of multiple files """
 
@@ -385,3 +513,11 @@ class _Dfs():
         ret = torch_shim.torch_worker_init(DAOS_MAGIC, self._dfs)
         if ret != 0:
             raise OSError(ret, os.strerror(ret), "could not re-initialize DAOS for worker")
+
+    def get_file_size(self, path):
+        """ Returns file size by its path """
+
+        ret, size = torch_shim.torch_get_fsize(DAOS_MAGIC, self._dfs, path)
+        if ret != 0:
+            raise OSError(ret, os.strerror(ret), path)
+        return size

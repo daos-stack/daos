@@ -8,6 +8,7 @@
 
 #include <Python.h>
 
+#include <assert.h>
 #include <fcntl.h>  /* S_ISDIR */
 #include <libgen.h> /* dirname() */
 
@@ -614,9 +615,6 @@ complete_read_op(struct dfs_handle *hdl, struct io_op *op)
 	return rc;
 }
 
-/*
-
- */
 static PyObject *
 __shim_handle__torch_batch_read(PyObject *self, PyObject *args)
 {
@@ -692,6 +690,162 @@ __shim_handle__torch_batch_read(PyObject *self, PyObject *args)
 	return PyLong_FromLong(rc);
 }
 
+static int
+split_path(const char *path, char **dir, char **name)
+{
+	assert(dir != NULL);
+	assert(name != NULL);
+
+	int   rc        = 0;
+	char *cp1       = NULL;
+	char *cp2       = NULL;
+	char *dir_name  = NULL;
+	char *file_name = NULL;
+
+	D_STRNDUP(cp1, path, PATH_MAX);
+	if (cp1 == NULL) {
+		return ENOMEM;
+	}
+	D_STRNDUP(cp2, path, PATH_MAX);
+	if (cp2 == NULL) {
+		rc = ENOMEM;
+		goto out;
+	}
+
+	dir_name  = dirname(cp1);
+	file_name = basename(cp2);
+
+	D_STRNDUP(*dir, dir_name, PATH_MAX);
+	if (*dir == NULL) {
+		rc = ENOMEM;
+		goto out;
+	}
+	D_STRNDUP(*name, file_name, PATH_MAX);
+	if (*name == NULL) {
+		D_FREE(*dir);
+		rc = ENOMEM;
+		goto out;
+	}
+
+out:
+	D_FREE(cp1);
+	D_FREE(cp2);
+
+	return rc;
+}
+
+static PyObject *
+__shim_handle__torch_write(PyObject *self, PyObject *args)
+{
+	int                rc        = 0;
+	int                rc2       = 0;
+	struct dfs_handle *hdl       = NULL;
+	char              *path      = NULL;
+	char              *dir_name  = NULL;
+	char              *file_name = NULL;
+	dfs_obj_t         *dir       = NULL;
+	dfs_obj_t         *obj       = NULL;
+	PyObject          *buffer    = NULL;
+	int                oflags    = O_RDWR | O_CREAT | O_TRUNC;
+	mode_t             mode      = S_IFREG | S_IRWXU | S_IRWXG | S_IRWXO;
+
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LsO", &hdl, &path, &buffer);
+	assert(hdl->dfs != NULL);
+
+	if (!PyObject_CheckBuffer(buffer)) {
+		PyErr_SetString(PyExc_TypeError,
+				"Expected an object that supports the buffer protocol");
+		return NULL;
+	}
+
+	Py_buffer bview;
+	if (PyObject_GetBuffer(buffer, &bview, PyBUF_READ) == -1) {
+		return NULL;
+	}
+
+	if (!PyBuffer_IsContiguous(&bview, 'C')) {
+		PyErr_SetString(PyExc_BufferError, "Buffer is not contiguous");
+		PyBuffer_Release(&bview);
+		return NULL;
+	}
+
+	rc = split_path(path, &dir_name, &file_name);
+	if (rc) {
+		goto out;
+	}
+
+	rc = dfs_lookup(hdl->dfs, dir_name, O_RDWR, &dir, NULL, NULL);
+	if (rc) {
+		D_ERROR("Could not lookup '%s': %s (rc=%d)", dir_name, strerror(rc), rc);
+		goto out;
+	}
+
+	rc = dfs_open(hdl->dfs, dir, file_name, mode, oflags, 0, 0, NULL, &obj);
+	if (rc) {
+		D_ERROR("Could not open '%s': %s (rc=%d)", path, strerror(rc), rc);
+		goto out;
+	}
+
+	d_iov_t iov;
+	d_iov_set(&iov, bview.buf, bview.len);
+
+	d_sg_list_t sgl = {
+	    .sg_nr     = 1,
+	    .sg_nr_out = 0,
+	    .sg_iovs   = &iov,
+	};
+
+	rc = dfs_write(hdl->dfs, obj, &sgl, 0 /* offset */, NULL);
+	if (rc) {
+		D_ERROR("Could not write to '%s': %s (rc=%d)", path, strerror(rc), rc);
+		goto out;
+	}
+
+out:
+	PyBuffer_Release(&bview);
+
+	if (obj) {
+		rc2 = dfs_release(obj);
+		if (rc2) {
+			D_ERROR("Could not release object '%s': %s (rc=%d)", path, strerror(rc2),
+				rc2);
+		}
+	}
+	if (dir) {
+		rc2 = dfs_release(dir);
+		if (rc2) {
+			D_ERROR("Could not release dir '%s': %s (rc=%d)", dir_name, strerror(rc2),
+				rc2);
+		}
+	}
+
+	D_FREE(dir_name);
+	D_FREE(file_name);
+
+	return PyLong_FromLong(rc);
+}
+
+static PyObject *
+__shim_handle__torch_get_fsize(PyObject *self, PyObject *args)
+{
+	struct dfs_handle *hdl  = NULL;
+	char              *path = NULL;
+	dfs_obj_t         *obj  = NULL;
+	struct stat        st   = {0};
+
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "Ls", &hdl, &path);
+
+	assert(hdl->dfs != NULL);
+
+	int rc = dfs_lookup(hdl->dfs, path, O_RDONLY, &obj, NULL, &st);
+	if (rc) {
+		return Py_BuildValue("iK", rc, st.st_size);
+	}
+
+	rc = dfs_release(obj);
+	return Py_BuildValue("iK", rc, st.st_size);
+}
+
 /**
  * Python shim module
  */
@@ -706,9 +860,11 @@ static PyMethodDef torchMethods[] = {
     EXPORT_PYTHON_METHOD(torch_disconnect),
     EXPORT_PYTHON_METHOD(torch_worker_init),
     EXPORT_PYTHON_METHOD(torch_read),
+    EXPORT_PYTHON_METHOD(torch_write),
     EXPORT_PYTHON_METHOD(torch_batch_read),
     EXPORT_PYTHON_METHOD(torch_recommended_dir_split),
     EXPORT_PYTHON_METHOD(torch_list_with_anchor),
+    EXPORT_PYTHON_METHOD(torch_get_fsize),
 
     EXPORT_PYTHON_METHOD(module_init),
     EXPORT_PYTHON_METHOD(module_fini),
