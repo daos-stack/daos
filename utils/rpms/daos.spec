@@ -602,7 +602,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Mon Nov 18 2024 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.7.101-4
+* Tue Jan 07 2025 Tomasz Gromadzki <tomasz.gromadzki@hpe.com> 2.7.101-4
 - pmemobj errors and warnings reported via DAOS logging system
 
 * Thu Dec 19 2024 Phillip Henderson <phillip.henderson@intel.com> 2.7.101-3
