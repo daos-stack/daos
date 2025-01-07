@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -853,6 +854,8 @@ cont_child_stop(struct ds_cont_child *cont_child)
 {
 	struct ds_cont_hdl	*hdl;
 
+	D_ASSERT(cont_child->sc_stopping == 0);
+	cont_child->sc_stopping = 1;
 	while ((hdl = d_list_pop_entry(&cont_child->sc_open_hdls,
 				       struct ds_cont_hdl, sch_link)) != NULL) {
 		D_DEBUG(DB_MD, "Force closing container open handle "DF_UUID"/"DF_UUID"\n",
@@ -861,29 +864,22 @@ cont_child_stop(struct ds_cont_child *cont_child)
 		cont_close_hdl(hdl->sch_uuid);
 	}
 
-	/* Some ds_cont_child will only created by ds_cont_child_lookup().
-	 * never be started at all
-	 */
-	cont_child->sc_stopping = 1;
-
 	/* Stop DTX reindex by force. */
 	stop_dtx_reindex_ult(cont_child, true);
 
-	if (cont_child_started(cont_child)) {
-		D_DEBUG(DB_MD, DF_CONT"[%d]: Stopping container\n",
-			DP_CONT(cont_child->sc_pool->spc_uuid,
-				cont_child->sc_uuid),
-			dss_get_module_info()->dmi_tgt_id);
+	D_DEBUG(DB_MD, DF_CONT "[%d]: Stopping container\n",
+		DP_CONT(cont_child->sc_pool->spc_uuid, cont_child->sc_uuid),
+		dss_get_module_info()->dmi_tgt_id);
 
-		d_list_del_init(&cont_child->sc_link);
+	d_list_del_init(&cont_child->sc_link);
 
-		dtx_cont_deregister(cont_child);
-		D_ASSERT(cont_child->sc_dtx_registered == 0);
+	dtx_cont_deregister(cont_child);
+	D_ASSERT(cont_child->sc_dtx_registered == 0);
 
-		/* cont_stop_agg() may yield */
-		cont_stop_agg(cont_child);
-		ds_cont_child_put(cont_child);
-	}
+	/* cont_stop_agg() may yield */
+	cont_stop_agg(cont_child);
+	D_ASSERT(cont_child_started(cont_child));
+	ds_cont_child_put(cont_child);
 }
 
 void
