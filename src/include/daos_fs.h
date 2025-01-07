@@ -291,7 +291,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **dfs);
  * \param[in]	coh	Container open handle.
  * \param[in]	flags	Mount flags for future use, will be O_RDONLY by definition.
  * \param[in]	epoch	Epoch associated with the snapshot to mount.
- *			If a null epoch is passed, then the snapshot is looked up by \a name.
+ *			If a zero epoch is passed, then the snapshot is looked up by \a name.
  * \param[in]	name	Optional name of the snapshot to mount, only valid when \a epoch is set
  *			to 0.
  * \param[out]	dfs	Pointer to the file system object created.
