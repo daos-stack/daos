@@ -612,7 +612,7 @@ Unknown 3 hosts: foo[7-9]
 	}
 }
 
-func TestPretty_printSysOsaResp(t *testing.T) {
+func TestPretty_PrintPoolRankResults(t *testing.T) {
 	for name, tc := range map[string]struct {
 		results []*control.PoolRankResult
 		expOut  string

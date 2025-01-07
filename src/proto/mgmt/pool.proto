@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2025 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -122,8 +122,7 @@ message PoolExtendResp {
 }
 
 // PoolReintReq supplies pool identifier, rank, and target_idxs.
-message PoolReintReq
-{
+message PoolReintReq {
 	string sys = 1; // DAOS system identifier
 	string id = 2; // uuid or label of pool to add target up to
 	uint32 rank = 3; // target to move to the up state
@@ -134,8 +133,7 @@ message PoolReintReq
 }
 
 // PoolReintResp returns resultant state of reintegrate operation.
-message PoolReintResp
-{
+message PoolReintResp {
 	int32 status = 1; // DAOS error code
 }
 
