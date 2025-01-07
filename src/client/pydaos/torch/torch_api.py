@@ -1,6 +1,6 @@
 #
-# (C) Copyright 2024 Google LLC
-# (C) Copyright 2024 Enakta Labs Ltd
+# (C) Copyright 2024-2025 Google LLC
+# (C) Copyright 2024-2025 Enakta Labs Ltd
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -307,16 +307,13 @@ class WriteBuffer(io.BufferedIOBase):
         """Return True if the file is closed."""
         return self._closed
 
-    @property
     def writable(self):
         """Return True if the file is writable."""
         return True
 
-    @property
     def readable(self):
         return False
 
-    @property
     def seekable(self):
         """Return True if the file is seekable."""
         return False

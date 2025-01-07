@@ -1,4 +1,5 @@
 """
+  (C) Copyright 2025 Intel Corporation.
   (C) Copyright 2025 Google LLC
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -78,7 +79,7 @@ class PytorchMapStyleDatasetTest(TestWithServers):
     def test_dataloader(self):
         """Test Map Style Dataset with DataLoader.
 
-        Test Description: Ensure that the dataloader can read all the samples that were seeded.
+        Test Description: Ensure that the DataLoader can read all the samples that were seeded.
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
@@ -96,7 +97,7 @@ class PytorchMapStyleDatasetTest(TestWithServers):
         subdirs = self.params.get("subdirs", "/run/dataloader/*")
         files_per_node = self.params.get("files_per_node", "/run/dataloader/*")
 
-        # Dataloader requires that samples are of the same size
+        # DataLoader requires that samples are of the same size
         file_min_size = self.params.get("file_min_size", "/run/dataloader/*", 4096)
         file_max_size = self.params.get("file_max_size", "/run/dataloader/*", 4096)
 
@@ -148,10 +149,7 @@ class PytorchMapStyleDatasetTest(TestWithServers):
 
         if hashes != actual:
             self.fail(
-                f"dataloader with nproc={processes} and bs={batch_size} did not fetch all samples")
-        else:
-            self.log.info(
-                f"dataloader with nproc={processes} and bs={batch_size} fetched all samples")
+                f"DataLoader with nproc={processes} and bs={batch_size} did not fetch all samples")
 
     def _create_test_files(self, path, height, subdirs, files_per_node, min_size, max_size):
         """Create a directory tree"""

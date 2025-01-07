@@ -1,4 +1,5 @@
 """
+  (C) Copyright 2025 Intel Corporation.
   (C) Copyright 2025 Google LLC
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -19,7 +20,7 @@ class PytorchCheckpointTest(TestWithServers):
     def test_checkpoint(self):
         """Test Pytorch Checkpoint interface
 
-        Test Description: Ensure that wirting and reading a checkpoint works as expected.
+        Test Description: Ensure that writing and reading a checkpoint works as expected.
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm

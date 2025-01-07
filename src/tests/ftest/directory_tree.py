@@ -112,9 +112,11 @@ class DirTree():
         needle_name = os.path.basename(needle_path)
         return needle_name, needle_path
 
-    def set_file_size(self, min=0, max=0):
-        self._file_size_min = min
-        self._file_size_max = max
+    def set_file_size(self, fmin=0, fmax=0):
+        """ Set the minimum and maximum file size """
+
+        self._file_size_min = fmin
+        self._file_size_max = fmax
 
     def _create_dir_tree(self, current_path, current_height):
         """Create the actual directory tree using depth-first search approach.
@@ -130,7 +132,7 @@ class DirTree():
 
         # create files
         for _ in range(self._files_per_node):
-            self._mktemp_file(dir=current_path, suffix=".file")
+            self._mktemp_file(where=current_path, suffix=".file")
 
         # create nested directories
         for _ in range(self._subdirs_per_node):
@@ -149,7 +151,7 @@ class DirTree():
         for count in range(self._needles_count):
             new_path = os.path.dirname(random.choice(self._needles_paths))  # nosec
             suffix = f"_{count:05d}.needle"
-            self._mktemp_file(dir=new_path, prefix=self._needles_prefix, suffix=suffix)
+            self._mktemp_file(where=new_path, prefix=self._needles_prefix, suffix=suffix)
 
     def _create_needle(self, current_path, current_height):
         """Create a *.needle file if we reach the bottom of the tree.
@@ -166,17 +168,17 @@ class DirTree():
 
         self._needles_count -= 1
         suffix = "_{:05d}.needle".format(self._needles_count)
-        file_name = self._mktemp_file(dir=current_path, prefix=self._needles_prefix, suffix=suffix)
-        self._needles_paths.append(file_name)
+        fname = self._mktemp_file(where=current_path, prefix=self._needles_prefix, suffix=suffix)
+        self._needles_paths.append(fname)
 
-    def _mktemp_file(self, dir=None, prefix=None, suffix=None):
+    def _mktemp_file(self, where=None, prefix=None, suffix=None):
         """Create a temporary file.
         If the file size is 0, the file will be empty.
         If the file size is greater than 0, the file will be filled with random data.
         If min and max file size are different, the file size will be a random between min and max.
         """
 
-        fd, fname = tempfile.mkstemp(dir=dir, prefix=prefix, suffix=suffix)
+        fd, fname = tempfile.mkstemp(dir=where, prefix=prefix, suffix=suffix)
         if self._file_size_min == 0:
             os.close(fd)
             return fname
@@ -190,8 +192,8 @@ class DirTree():
         return fname
 
 
-
-def _populate_dir_tree(path, height, subdirs_per_node, files_per_node, needles, prefix, file_size_min, file_size_max):
+def _populate_dir_tree(path, height, subdirs_per_node, files_per_node, needles, prefix,
+                       file_size_min, file_size_max):
     """Create a directory tree and its needle files.
 
     Args:

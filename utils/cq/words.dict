@@ -409,6 +409,7 @@ scancel
 scm
 scons
 scontrol
+seekable
 sharedctypes
 shlex
 simul
