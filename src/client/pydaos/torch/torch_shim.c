@@ -738,20 +738,27 @@ out:
 static PyObject *
 __shim_handle__torch_write(PyObject *self, PyObject *args)
 {
-	int                rc        = 0;
-	int                rc2       = 0;
-	struct dfs_handle *hdl       = NULL;
-	char              *path      = NULL;
-	char              *dir_name  = NULL;
-	char              *file_name = NULL;
-	dfs_obj_t         *dir       = NULL;
-	dfs_obj_t         *obj       = NULL;
-	PyObject          *buffer    = NULL;
-	int                oflags    = O_RDWR | O_CREAT | O_TRUNC;
-	mode_t             mode      = S_IFREG | S_IRWXU | S_IRWXG | S_IRWXO;
+	int                rc         = 0;
+	int                rc2        = 0;
+	struct dfs_handle *hdl        = NULL;
+	char              *path       = NULL;
+	char              *dir_name   = NULL;
+	char              *file_name  = NULL;
+	dfs_obj_t         *dir        = NULL;
+	dfs_obj_t         *obj        = NULL;
+	PyObject          *buffer     = NULL;
+	int                oflags     = 0;
+	mode_t             mode       = 0;
+	int                chunk_size = 0;
+	char              *class_name = NULL;
+	daos_oclass_id_t   cid        = OC_UNKNOWN;
 
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LsO", &hdl, &path, &buffer);
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LsIisiO", &hdl, &path, &mode, &oflags, &class_name,
+				       &chunk_size, &buffer);
 	assert(hdl->dfs != NULL);
+
+	mode |= S_IFREG; /* In case when only acl bits were set */
+	cid = daos_oclass_name2id(class_name);
 
 	if (!PyObject_CheckBuffer(buffer)) {
 		PyErr_SetString(PyExc_TypeError,
@@ -781,7 +788,7 @@ __shim_handle__torch_write(PyObject *self, PyObject *args)
 		goto out;
 	}
 
-	rc = dfs_open(hdl->dfs, dir, file_name, mode, oflags, 0, 0, NULL, &obj);
+	rc = dfs_open(hdl->dfs, dir, file_name, mode, oflags, cid, chunk_size, NULL, &obj);
 	if (rc) {
 		D_ERROR("Could not open '%s': %s (rc=%d)", path, strerror(rc), rc);
 		goto out;

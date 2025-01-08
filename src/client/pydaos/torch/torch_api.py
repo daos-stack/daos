@@ -13,6 +13,7 @@ import concurrent
 import io
 import math
 import os
+import stat
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor
 
 from torch.utils.data import Dataset as TorchDataset
@@ -259,7 +260,8 @@ class WriteBuffer(io.BufferedIOBase):
     Class representing stream like write buffer for saving PyTorch model checkpoints to DAOS DFS.
     """
 
-    def __init__(self, dfs, path):
+    # pylint: disable=too-many-arguments,too-many-instance-attributes
+    def __init__(self, dfs, path, mode, oflags, class_name, chunk_size):
         super().__init__()
 
         self._dfs = dfs
@@ -267,6 +269,10 @@ class WriteBuffer(io.BufferedIOBase):
         self._buffer = bytearray()
         self._position = 0
         self._closed = False
+        self._mode = mode
+        self._oflags = oflags
+        self._class_name = class_name
+        self._chunk_size = chunk_size
 
     def write(self, data):
         """ Writes data to the buffer.
@@ -300,7 +306,8 @@ class WriteBuffer(io.BufferedIOBase):
         if self.closed:
             raise ValueError("I/O operation on closed file")
 
-        self._dfs.write(self._path, self._buffer)
+        self._dfs.write(self._path, self._mode, self._oflags,
+                        self._class_name, self._chunk_size, self._buffer)
 
     @property
     def closed(self):
@@ -332,6 +339,14 @@ class Checkpoint():
         Container label or UUID string
     prefix : string (optional)
         Prefix as a directory to store checkpoint files, default is root of the container.
+    mode : int (optional)
+        File mode to be used for checkpoint files, default is 0o744.
+    oflags : int (optional)
+        Open flags to be used for checkpoint files, default is to create and truncate the file.
+    class_name : string (optional)
+        Object class name to be used for checkpoint files, default is OC_UNKNOWN.
+    chunk_size : int (optional)
+        Chunk size to be used for checkpoint files, default is 0.
 
     Methods
     -------
@@ -342,10 +357,20 @@ class Checkpoint():
         Returns write buffer to save the checkpoint file.
     """
 
-    def __init__(self, pool, cont, prefix=os.sep):
+    # pylint: disable=too-many-arguments,too-many-instance-attributes
+    def __init__(self, pool, cont, prefix=os.sep,
+                 mode=stat.S_IFREG | stat.S_IRWXU | stat.S_IRGRP | stat.S_IROTH,
+                 oflags=os.O_CREAT | os.O_TRUNC | os.O_RDWR,
+                 class_name="OC_UNKNOWN",
+                 chunk_size=0,
+                 ):
         self._pool = pool
         self._cont = cont
         self._prefix = prefix
+        self._mode = mode
+        self._oflags = oflags
+        self._class_name = class_name
+        self._chunk_size = chunk_size
         self._dfs = _Dfs(pool=pool, cont=cont, rd_only=False)
 
     def reader(self, fname):
@@ -367,7 +392,8 @@ class Checkpoint():
             raise ValueError("fname is required")
 
         fpath = os.path.join(self._prefix, fname)
-        return WriteBuffer(self._dfs, fpath)
+        return WriteBuffer(self._dfs, fpath, self._mode, self._oflags,
+                           self._class_name, self._chunk_size)
 
 
 class _Dfs():
@@ -486,10 +512,12 @@ class _Dfs():
 
         return buf
 
-    def write(self, path, data):
+    # pylint: disable=too-many-arguments
+    def write(self, path, mode, oflags, class_name, chunk_size, data):
         """ Writes data to the file """
 
-        ret = torch_shim.torch_write(DAOS_MAGIC, self._dfs, path, data)
+        ret = torch_shim.torch_write(DAOS_MAGIC, self._dfs, path, mode,
+                                     oflags, class_name, chunk_size, data)
         if ret != 0:
             raise OSError(ret, os.strerror(ret), path)
 
