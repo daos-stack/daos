@@ -2378,10 +2378,6 @@ class PosixTests():
         with open(join(dfuse.dir, 'file3'), 'r') as fd:
             data3 = fd.read()
 
-	# Disable pre read counter for 1MB/4MB the moment
-        #res = dfuse.check_usage(old=res)
-        #assert res['statistics']['pre_read'] == 9, res
-
         # Open a (1MB-1) file.  This reads 8 128k chunks, the last is truncated.  There is no EOF
         # returned by dfuse here, just a truncated read but I assume python is interpreting a
         # truncated read at the expected file size as an EOF.
@@ -2389,14 +2385,9 @@ class PosixTests():
             data4 = fd.read()
             data5 = fd.read()
 
-        #res = dfuse.check_usage(old=res)
-        #assert res['statistics']['pre_read'] == 8, res
-
         # This should now be read from cache.
         with open(join(dfuse.dir, 'file4'), 'r') as fd:
             data6 = fd.read()
-        #res = dfuse.check_usage(old=res)
-        #assert res['statistics']['read'] == 0, res
 
         if dfuse.stop():
             self.fatal_errors = True
