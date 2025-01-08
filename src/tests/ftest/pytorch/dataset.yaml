@@ -24,9 +24,21 @@ map_style_dataset:
   subdirs: 3
   files_per_node: 5
 
-dataloader:
+iterable_dataset:
   tree_height: 3
   subdirs: 3
-  files_per_node: 8
+  files_per_node: 6
+
+map_dataset_with_dataloader:
+  tree_height: 3
+  subdirs: 5
+  files_per_node: 7
+  processes: [0, 1, 2, 3, 4, 8]
+  batch_size: [2, 4, 8, 16]
+
+iterable_dataset_with_dataloader:
+  tree_height: 3
+  subdirs: 5
+  files_per_node: 7
   processes: [0, 1, 2, 3, 4, 8]
   batch_size: [2, 4, 8, 16]
