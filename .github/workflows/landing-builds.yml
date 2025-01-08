@@ -139,7 +139,7 @@ jobs:
       - name: Publish NLT test results
         if: always()
         # yamllint disable-line rule:line-length
-        uses: EnricoMi/publish-unit-test-result-action@4e7013f9576bd22ffdae979dc6e68cb9ec2aeece  # v2.7.0
+        uses: EnricoMi/publish-unit-test-result-action@170bf24d20d201b842d7a52403b73ed297e6645b  # v2.18.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           files: nlt-junit.xml
