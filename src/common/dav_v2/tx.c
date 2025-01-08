@@ -559,6 +559,7 @@ dav_tx_begin_v2(dav_obj_t *pop, jmp_buf env, ...)
 			sizeof(struct tx_range_def));
 		tx->first_snapshot = 1;
 		tx->pop = pop;
+		heap_soemb_reserve(pop->do_heap);
 	} else {
 		FATAL("Invalid stage %d to begin new transaction", tx->stage);
 	}
