@@ -1610,17 +1610,20 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 
 		hdl->sch_cont->sc_open++;
 		if (hdl->sch_cont->sc_open > 1) {
-			/* If there is an inflight open being stuck in get prop, then
-			 * let's retry later.
+			/* If there is an inflight open being stuck, then
+			 * let's retry and wait until it finished.
 			 */
-			if (!hdl->sch_cont->sc_props_fetched) {
+			if (hdl->sch_cont->sc_open_initializing) {
 				hdl->sch_cont->sc_open--;
-				D_GOTO(err_cont, rc = -DER_BUSY);
+				D_GOTO(err_cont, rc = -DER_AGAIN);
 			}
 
-			goto opened;
+			/* Only go through if the 1st open suceeds */
+			if (hdl->sch_cont->sc_props_fetched)
+				goto opened;
 		}
 
+		hdl->sch_cont->sc_open_initializing = 1;
 		if (ds_pool_restricted(hdl->sch_cont->sc_pool->spc_pool, false))
 			goto csum_init;
 
@@ -1655,6 +1658,8 @@ csum_init:
 		rc = ds_cont_csummer_init(hdl->sch_cont);
 		if (rc != 0)
 			D_GOTO(err_dtx, rc);
+
+		hdl->sch_cont->sc_open_initializing = 0;
 	}
 opened:
 	if (cont_hdl != NULL) {
@@ -1672,6 +1677,7 @@ err_dtx:
 	dtx_cont_close(hdl->sch_cont, true);
 
 err_cont:
+	hdl->sch_cont->sc_open_initializing = 0;
 	if (daos_handle_is_valid(poh)) {
 		int rc_tmp;
 
@@ -1759,9 +1765,13 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 	D_DEBUG(DB_TRACE, "open pool/cont/hdl "DF_UUID"/"DF_UUID"/"DF_UUID"\n",
 		DP_UUID(pool_uuid), DP_UUID(cont_uuid), DP_UUID(cont_hdl_uuid));
 
+retry:
 	rc = ds_pool_thread_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
 				       PO_COMP_ST_DOWNOUT, cont_open_one, &arg, 0);
-	if (rc != 0)
+	if (rc != 0) {
+		if (rc == -DER_AGAIN)
+			goto retry;
+
 		/* Once it exclude the target from the pool, since the target
 		 * might still in the cart group, so IV cont open might still
 		 * come to this target, especially if cont open/close will be
@@ -1771,6 +1781,7 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 		D_ERROR("open "DF_UUID"/"DF_UUID"/"DF_UUID":"DF_RC"\n",
 			DP_UUID(pool_uuid), DP_UUID(cont_uuid),
 			DP_UUID(cont_hdl_uuid), DP_RC(rc));
+	}
 
 	return rc;
 }
