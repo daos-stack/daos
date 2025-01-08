@@ -187,6 +187,8 @@ if "$FORCE_INSTALL" ; then
 			fatal "Old install directory $dir could not be removed"
 		fi
 	done
+	info "Removing old DAOS building settings"
+	run /bin/rm -f "$DAOS_SOURCE_DIR/daos.conf"
 fi
 
 if [[ ! -d "$DAOS_INSTALL_DIR" ]] ; then
