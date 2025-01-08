@@ -503,7 +503,7 @@ option.
 
 ## Core File congfiguration
 
-By default, `mmaped` areas are not dumped in corefiles.
+By default, `mmap'ed` areas are not dumped in corefiles.
 But this may be of interest in some cases, this page describes how to configure in order to make it
 happen.
 
