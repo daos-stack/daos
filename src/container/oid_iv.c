@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -31,6 +32,8 @@ struct oid_iv_entry {
 	struct oid_iv_range	rg;
 	/** protect the entry */
 	ABT_mutex		lock;
+	/** flag to indicate the entry is being refreshed */
+	bool                    in_flight;
 	void                   *current_req;
 };
 
@@ -77,9 +80,16 @@ oid_iv_ent_refresh(struct ds_iv_entry *iv_entry, struct ds_iv_key *key,
 	struct oid_iv_range	*oids;
 	struct oid_iv_range	*avail;
 
+	entry = iv_entry->iv_value.sg_iovs[0].iov_buf;
+	D_ASSERT(entry != NULL);
+
+	ABT_mutex_lock(entry->lock);
+
 	if (src == NULL) {
 		D_DEBUG(DB_MD, "delete entry iv_entry %p\n", iv_entry);
 		iv_entry->iv_to_delete = 1;
+		ABT_mutex_unlock(entry->lock);
+		entry->in_flight = false;
 		return 0;
 	}
 
@@ -88,9 +98,6 @@ oid_iv_ent_refresh(struct ds_iv_entry *iv_entry, struct ds_iv_key *key,
 	D_DEBUG(DB_MD, "%u: ON REFRESH: num_oids = %zu, REF_RC = " DF_RC "\n", dss_self_rank(),
 		num_oids, DP_RC(ref_rc));
 	D_ASSERT(num_oids != 0);
-
-	entry = iv_entry->iv_value.sg_iovs[0].iov_buf;
-	D_ASSERT(entry != NULL);
 
 	/** if iv op failed, just release the entry lock acquired in update */
 	if (ref_rc != 0)
@@ -114,6 +121,7 @@ oid_iv_ent_refresh(struct ds_iv_entry *iv_entry, struct ds_iv_key *key,
 
 out:
 	ABT_mutex_unlock(entry->lock);
+	entry->in_flight = false;
 	return ref_rc;
 }
 
@@ -131,11 +139,15 @@ oid_iv_ent_update(struct ds_iv_entry *ns_entry, struct ds_iv_key *iv_key,
 
 	D_ASSERT(priv != NULL);
 	entry = ns_entry->iv_value.sg_iovs[0].iov_buf;
+
+	while (entry->in_flight)
+		dss_sleep(1);
 	rc = ABT_mutex_trylock(entry->lock);
 	/** For retry requests, from _iv_op(), the lock may not be released in some cases. */
 	if (rc == ABT_ERR_MUTEX_LOCKED && entry->current_req != src)
 		return -DER_BUSY;
 
+	entry->in_flight   = true;
 	entry->current_req = src;
 	avail = &entry->rg;
 
@@ -159,13 +171,14 @@ oid_iv_ent_update(struct ds_iv_entry *ns_entry, struct ds_iv_key *iv_key,
 		if (rc) {
 			D_ERROR("failed to fetch and update max_oid "DF_RC"\n",
 				DP_RC(rc));
-			D_GOTO(err_lock, rc);
+			D_GOTO(out_lock, rc);
 		}
 		oids->oid = avail->oid;
 		oids->num_oids = num_oids;
 		D_DEBUG(DB_MD, "%u: ROOT MAX_OID = %"PRIu64"\n", myrank, avail->oid);
 		priv->num_oids = 0;
 		ABT_mutex_unlock(entry->lock);
+		entry->in_flight = false;
 		return 0;
 	}
 
@@ -181,6 +194,7 @@ oid_iv_ent_update(struct ds_iv_entry *ns_entry, struct ds_iv_key *iv_key,
 
 		priv->num_oids = 0;
 		ABT_mutex_unlock(entry->lock);
+		entry->in_flight = false;
 		return 0;
 	}
 
@@ -194,11 +208,8 @@ oid_iv_ent_update(struct ds_iv_entry *ns_entry, struct ds_iv_key *iv_key,
 	priv->num_oids = num_oids;
 
 	D_DEBUG(DB_MD, "%u: IDs not available, FORWARD %zu oids\n", myrank, oids->num_oids);
-
-	/** entry->lock will be released in on_refresh() */
-	return -DER_IVCB_FORWARD;
-
-err_lock:
+	rc = -DER_IVCB_FORWARD;
+out_lock:
 	ABT_mutex_unlock(entry->lock);
 	return rc;
 }
