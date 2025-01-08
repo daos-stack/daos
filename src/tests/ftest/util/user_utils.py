@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -113,6 +114,27 @@ def groupadd(log, hosts, group, force=False, sudo=False):
     return run_remote(log, hosts, command)
 
 
+def groupdel(log, hosts, group, force=False, sudo=False):
+    """Run groupdel remotely.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts on which to run the command
+        group (str): the group to delete
+        force (bool, optional): whether to use the force option. Default is False
+        sudo (bool, optional): whether to execute commands with sudo. Default is False
+
+    Returns:
+        CommandResult: groups of command results from the same hosts with the same return status
+    """
+    command = ' '.join(filter(None, [
+        'sudo -n' if sudo else None,
+        'groupdel',
+        '-f' if force else None,
+        group]))
+    return run_remote(log, hosts, command)
+
+
 def useradd(log, hosts, user, group=None, parent_dir=None, sudo=False):
     """Run useradd remotely.
 
@@ -155,6 +177,27 @@ def userdel(log, hosts, user, sudo=False):
         '-f',
         '-r',
         user]))
+    return run_remote(log, hosts, command)
+
+
+def usermod(log, hosts, login, groups, sudo=False):
+    """Run usermod remotely.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts on which to run the command
+        login (str): login username
+        groups (list): list of new groups
+        sudo (bool): whether to execute commands with sudo. Default is False
+
+    Returns:
+        CommandResult: groups of command results from the same hosts with the same return status
+    """
+    command = ' '.join(filter(None, [
+        'sudo -n' if sudo else None,
+        'usermod',
+        f'-G {",".join(groups)}',
+        login]))
     return run_remote(log, hosts, command)
 
 

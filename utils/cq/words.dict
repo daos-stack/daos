@@ -204,6 +204,7 @@ getfattr
 getxattr
 gid
 groupadd
+groupdel
 groupname
 grp
 hackery
@@ -498,6 +499,7 @@ uri
 url
 useradd
 userdel
+usermod
 username
 ushort
 usr
