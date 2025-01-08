@@ -1610,7 +1610,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 
 		hdl->sch_cont->sc_open++;
 		if (hdl->sch_cont->sc_open > 1) {
-			/* If there is an inflight open being stucked in get prop, then
+			/* If there is an inflight open being stuck in get prop, then
 			 * let's retry later.
 			 */
 			if (!hdl->sch_cont->sc_props_fetched) {
