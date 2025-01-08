@@ -1237,10 +1237,10 @@ to restore redundancy on the remaining engines.
 
 !!! note
     Exclusion may compromise the Pool Redundancy Factor (RF), potentially leading
-    to data loss. If this occurs, the command will return the error code -DER_RF.
-    In such cases, you can proceed with the exclusion by specifying the --force option.
-    Please note that forcing the operation may result in data loss, and it is strongly
-    recommended to verify the RF status before proceeding.
+    to data loss. If this is the case, the command will refuse to perform the exclusion
+    and return the error code -DER_RF. You can proceed with the exclusion by specifying
+    the --force option. Please note that forcing the operation may result in data loss,
+    and it is strongly recommended to verify the RF status before proceeding.
 
 ### Drain
 

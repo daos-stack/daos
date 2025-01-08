@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -895,7 +896,7 @@ class DmgCommand(DmgCommandBase):
             pool (str): Pool uuid.
             rank (int): Rank of the daos_server to exclude
             tgt_idx (int): target to be excluded from the pool
-            force (bool): force exclusion regardless of data loss
+            force (bool, optional): force exclusion regardless of data loss. Defaults to False
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
