@@ -280,20 +280,16 @@ __shim_handle__torch_recommended_dir_split(PyObject *self, PyObject *args)
 
 	int rc = dfs_lookup(hdl->dfs, path, O_RDONLY, &obj, NULL, NULL);
 	if (rc) {
-		return PyLong_FromLong(-rc);
+		return Py_BuildValue("iI", rc, nr);
 	}
 
 	rc = dfs_obj_anchor_split(obj, &nr, NULL);
 	if (rc) {
-		return PyLong_FromLong(-rc);
+		return Py_BuildValue("iI", rc, nr);
 	}
 
 	rc = dfs_release(obj);
-	if (rc) {
-		return PyLong_FromLong(-rc);
-	}
-
-	return PyLong_FromLong(nr);
+	return Py_BuildValue("iI", rc, nr);
 }
 
 static PyObject *

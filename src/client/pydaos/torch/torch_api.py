@@ -455,11 +455,11 @@ class _Dfs():
         It returns list of tuples (dirname, anchor index) to be consumed by worker function
         """
 
-        ret = torch_shim.torch_recommended_dir_split(DAOS_MAGIC, self._dfs, path)
-        if ret < 0:
-            raise OSError(-ret, os.strerror(-ret), path)
+        ret, splits = torch_shim.torch_recommended_dir_split(DAOS_MAGIC, self._dfs, path)
+        if ret != 0:
+            raise OSError(ret, os.strerror(ret), path)
 
-        return [(path, idx) for idx in range(0, ret)]
+        return [(path, idx) for idx in range(0, splits)]
 
     def parallel_list(self, path=None,
                       readdir_batch_size=READDIR_BATCH_SIZE,
