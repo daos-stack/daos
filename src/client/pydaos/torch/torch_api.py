@@ -261,7 +261,7 @@ class WriteBuffer(io.BufferedIOBase):
     """
 
     # pylint: disable=too-many-arguments,too-many-instance-attributes
-    def __init__(self, dfs, path, mode, oflags, class_name, chunk_size):
+    def __init__(self, dfs, path, mode, open_flags, class_name, chunk_size):
         super().__init__()
 
         self._dfs = dfs
@@ -270,7 +270,7 @@ class WriteBuffer(io.BufferedIOBase):
         self._position = 0
         self._closed = False
         self._mode = mode
-        self._oflags = oflags
+        self._oflags = open_flags
         self._class_name = class_name
         self._chunk_size = chunk_size
 
@@ -341,7 +341,7 @@ class Checkpoint():
         Prefix as a directory to store checkpoint files, default is root of the container.
     mode : int (optional)
         File mode to be used for checkpoint files, default is 0o744.
-    oflags : int (optional)
+    open_flags : int (optional)
         Open flags to be used for checkpoint files, default is to create and truncate the file.
     class_name : string (optional)
         Object class name to be used for checkpoint files, default is OC_UNKNOWN.
@@ -360,7 +360,7 @@ class Checkpoint():
     # pylint: disable=too-many-arguments,too-many-instance-attributes
     def __init__(self, pool, cont, prefix=os.sep,
                  mode=stat.S_IFREG | stat.S_IRWXU | stat.S_IRGRP | stat.S_IROTH,
-                 oflags=os.O_CREAT | os.O_TRUNC | os.O_RDWR,
+                 open_flags=os.O_CREAT | os.O_TRUNC | os.O_RDWR,
                  class_name="OC_UNKNOWN",
                  chunk_size=0,
                  ):
@@ -368,7 +368,7 @@ class Checkpoint():
         self._cont = cont
         self._prefix = prefix
         self._mode = mode
-        self._oflags = oflags
+        self._oflags = open_flags
         self._class_name = class_name
         self._chunk_size = chunk_size
         self._dfs = _Dfs(pool=pool, cont=cont, rd_only=False)
@@ -513,11 +513,11 @@ class _Dfs():
         return buf
 
     # pylint: disable=too-many-arguments
-    def write(self, path, mode, oflags, class_name, chunk_size, data):
+    def write(self, path, mode, open_flags, class_name, chunk_size, data):
         """ Writes data to the file """
 
         ret = torch_shim.torch_write(DAOS_MAGIC, self._dfs, path, mode,
-                                     oflags, class_name, chunk_size, data)
+                                     open_flags, class_name, chunk_size, data)
         if ret != 0:
             raise OSError(ret, os.strerror(ret), path)
 
