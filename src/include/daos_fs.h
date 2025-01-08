@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -47,6 +48,8 @@ extern "C" {
 typedef struct dfs_obj dfs_obj_t;
 /** DFS mount handle struct */
 typedef struct dfs dfs_t;
+/** DFS readdir anchor for dfs_readdir_s() */
+typedef struct dfs_dir_anchor dfs_dir_anchor_t;
 
 /*
  * Consistency modes of the DFS container. A container created with balanced
@@ -740,6 +743,76 @@ dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr, str
 int
 dfs_readdirplus(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
 		struct dirent *dirs, struct stat *stbufs);
+
+/**
+ * Initialize a readdir anchor for dfs_readdir_s().
+ *
+ * \param[in]   dir     Opened directory object for readdir.
+ * \param[out]	anchor	Pointer to initialized anchor. This muse be freed with
+ *			dfs_dir_anchor_destroy().
+ *
+ * \return              0 on success, errno code on failure.
+ */
+int
+dfs_dir_anchor_init(dfs_obj_t *dir, dfs_dir_anchor_t **anchor);
+
+/**
+ * Reset an anchor the beginning of dir stream.
+ *
+ * \param[in]  anchor  anchor to reset
+ *
+ */
+void
+dfs_dir_anchor_reset(dfs_dir_anchor_t *anchor);
+
+/**
+ * check if the anchor is at EOF.
+ *
+ * \param[in]	anchor	anchor to check
+ *
+ * \return		true if anchor is at EOF, false otherwise.
+ */
+bool
+dfs_dir_anchor_is_eof(dfs_dir_anchor_t *anchor);
+
+/**
+ * Destroy/free a DFS readdir anchor.
+ *
+ * \param[in]  anchor  anchor to free
+ *
+ */
+void
+dfs_dir_anchor_destroy(dfs_dir_anchor_t *anchor);
+
+/**
+ * Directory readdir that just returns the next entry in the directory anchor stream. The stream is
+ * actually determined by the anchor which can be reset at anytime to start from the beginning. For
+ * every call of this function with the anchor, it returns 0 with the d_name of the dirent struct
+ * populated for the next entry. The function returns -1 if it reaches the end of stream and sets
+ * anchor to EOF. It is possible to get the last entry in the stream and the anchor being set to EOF
+ * in that call. It is also possible to get the last entry in the stream and the anchor still not
+ * set to EOF in that readdir call. In both situations the return code of the readdir call is 0
+ * (success) and the entry is valid and should be consumed. In the latter case, the caller does not
+ * know that we reached the end of the directory and should make another readdir call. The next call
+ * in both scenarios will return -1 and the anchor will be set to EOF in that call. Further calls
+ * will behave similarly until the anchor is reset to the beginning.
+ *
+ * If caching is enabled on this dfs mount, this readdir call will utilize the readdir cache and may
+ * pull in an entire bucket of entries at once if the current stream is not in the cache.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	obj	Opened directory object.
+ * \param[in,out]
+ *		anchor	Anchor for the next call, it should initialized before first use.
+ * \param[out]	dir	returned dirent. Unlike the libc call, this dirent pointer is provided by
+ *			the caller and not an internal pointer.
+ *
+ * \return		0 on success
+ *			-1 on end of dir stream (no more entries to enumerate)
+ *			errno code on failure
+ */
+int
+dfs_readdir_s(dfs_t *dfs, dfs_obj_t *obj, dfs_dir_anchor_t *anchor, struct dirent *dir);
 
 /**
  * User callback defined for dfs_readdir_size.

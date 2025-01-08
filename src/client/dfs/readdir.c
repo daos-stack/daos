@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,6 +10,7 @@
 #define D_LOGFAC DD_FAC(dfs)
 
 #include <daos/common.h>
+#include <daos/object.h>
 
 #include "dfs_internal.h"
 
@@ -111,6 +113,78 @@ dfs_readdirplus(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
 		struct dirent *dirs, struct stat *stbufs)
 {
 	return readdir_int(dfs, obj, anchor, nr, dirs, stbufs);
+}
+
+int
+dfs_dir_anchor_init(dfs_obj_t *obj, dfs_dir_anchor_t **_anchor)
+{
+	dfs_dir_anchor_t *anchor;
+
+	if (obj == NULL || !S_ISDIR(obj->mode))
+		return ENOTDIR;
+
+	D_ALLOC_PTR(anchor);
+	if (anchor == NULL)
+		return ENOMEM;
+
+	anchor->dda_dir = obj;
+	daos_anchor_init(&anchor->dda_anchor_int, 0);
+	anchor->dda_bucket_id     = 0;
+	anchor->dda_bucket_offset = 0;
+	*_anchor                  = anchor;
+	return 0;
+}
+
+void
+dfs_dir_anchor_reset(dfs_dir_anchor_t *anchor)
+{
+	daos_anchor_init(&anchor->dda_anchor_int, 0);
+	anchor->dda_bucket_id     = 0;
+	anchor->dda_bucket_offset = 0;
+}
+
+bool
+dfs_dir_anchor_is_eof(dfs_dir_anchor_t *anchor)
+{
+	return daos_anchor_is_eof(&anchor->dda_anchor_int);
+}
+
+void
+dfs_dir_anchor_destroy(dfs_dir_anchor_t *anchor)
+{
+	D_FREE(anchor);
+}
+
+int
+dfs_readdir_s(dfs_t *dfs, dfs_obj_t *dir, dfs_dir_anchor_t *anchor, struct dirent *entry)
+{
+	uint32_t nr = 1;
+	int      rc;
+
+	if (daos_oid_cmp(dir->oid, anchor->dda_dir->oid) != 0)
+		return EINVAL;
+	if (daos_anchor_is_eof(&anchor->dda_anchor_int))
+		return -1;
+
+	rc = readdir_int(dfs, dir, &anchor->dda_anchor_int, &nr, entry, NULL);
+	if (rc)
+		return rc;
+
+	/** if we did not enumerate anything, try again to make sure we hit EOF */
+	if (nr == 0) {
+		if (daos_anchor_is_eof(&anchor->dda_anchor_int))
+			return -1; /** typically EOF code */
+		else
+			return EIO;
+	}
+	return rc;
+#if 0
+	/** if no caching, just use the internal anchor with 1 entry */
+	if (dfs->dcache == NULL)
+		return readdir_int(dfs, obj, &anchor->dda_anchor_int, 1, &dir, NULL);
+	else
+		dcache_readdir(dfs->dcache, obj, anchor, dir);
+#endif
 }
 
 int
