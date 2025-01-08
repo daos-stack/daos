@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1221,21 +1222,26 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	}
 
 	if (intent == DAOS_INTENT_PURGE) {
-		uint64_t	now = daos_gettime_coarse();
+		uint32_t	age = d_hlc_age2sec(DAE_XID(dae).dti_hlc);
+		uint64_t	now;
 
 		/*
-		 * The DTX entry still references related data record,
-		 * then we cannot (vos) aggregate related data record.
-		 * Report warning per each 10 seconds to avoid log flood.
+		 * Don't print warning message for fresh record, since INTENT_PURGE could
+		 * be used for fresh record in normal cases. (see vos_ilog_is_punched()).
 		 */
-		if (now - cont->vc_agg_busy_ts > 10) {
-			D_WARN("DTX "DF_DTI" (state:%u, flags:%x, age:%u) still references "
-			       "the modification, cannot be (VOS) aggregated\n",
-			       DP_DTI(&DAE_XID(dae)), vos_dtx_status(dae), DAE_FLAGS(dae),
-			       (unsigned int)d_hlc_age2sec(DAE_XID(dae).dti_hlc));
-			cont->vc_agg_busy_ts = now;
-		}
+		if (age <= 10)
+			return ALB_AVAILABLE_DIRTY;
 
+		/* Rate limit on such warning messages */
+		now = daos_gettime_coarse();
+		if (now <= cont->vc_agg_busy_ts + 10)
+			return ALB_AVAILABLE_DIRTY;
+
+		/* VOS aggregation is trying to reclaim data record being referenced by DTX */
+		D_WARN("DTX "DF_DTI" (state:%u, flags:%x, age:%u, type:%u) is still inuse!\n",
+		       DP_DTI(&DAE_XID(dae)), vos_dtx_status(dae), DAE_FLAGS(dae), age, type);
+
+		cont->vc_agg_busy_ts = now;
 		return ALB_AVAILABLE_DIRTY;
 	}
 

@@ -15,5 +15,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    groups:
+      gha-versions:
+        patterns:
+          - "*"
     assignees:
       - daos-stack/actions-watchers
