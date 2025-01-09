@@ -6,7 +6,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
-import random
 import uuid
 
 from apricot import TestWithServers
