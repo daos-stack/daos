@@ -104,10 +104,6 @@ case "$user_domain" in
     "intel")
         regex_user="$regex_intel"
         shortname_user="$shortname_intel"
-        echo "  ***********************************************************"
-        echo "  If you are no longer an Intel employee, change your email"
-        echo "  address using git config user.email <address>"
-        echo "  ***********************************************************"
         ;;
     "google")
         regex_user="$regex_google"
