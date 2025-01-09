@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2024 Intel Corporation.
+ * (C) Copyright 2024-2025 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -44,101 +44,24 @@ pthread_mutexattr_t d_shm_mutex_attr;
  */
 static int          pid_shm_creator;
 
-int
-shm_init(void)
+static uint64_t     page_size;
+
+static int
+create_shm_region(uint64_t shm_size, uint64_t shm_pool_size)
 {
 	int      i;
 	int      shm_ht_fd;
 	int      shmopen_perm = 0600;
 	void    *shm_addr;
-	int      rc;
 	char     daos_shm_name_buf[64];
-	uint64_t shm_size;
-	uint64_t shm_pool_size;
-
-	if (pid == 0)
-		pid = getpid();
-	if (d_shm_head) {
-		while (d_shm_head->magic != DSM_MAGIC)
-			usleep(1);
-		/* shared memory already initlized in current process */
-		return 0;
-	}
-
-	rc = d_getenv_uint64_t("DAOS_SHM_SIZE", &shm_size);
-	if (rc != -DER_NONEXIST) {
-		/* set parameter from env */
-		shm_pool_size = shm_size / N_SHM_POOL;
-		if (shm_pool_size % 4096)
-			/* make shm_pool_size 4K aligned */
-			shm_pool_size += (4096 - (shm_pool_size % 4096));
-		shm_size = shm_pool_size * N_SHM_POOL + sizeof(struct d_shm_hdr);
-	} else {
-		shm_pool_size = SHM_POOL_SIZE;
-		shm_size      = SHM_SIZE_REQ;
-	}
-
-	rc = pthread_mutexattr_init(&d_shm_mutex_attr);
-	D_ASSERT(rc == 0);
-	rc = pthread_mutexattr_settype(&d_shm_mutex_attr, PTHREAD_MUTEX_NORMAL);
-	D_ASSERT(rc == 0);
-	rc = pthread_mutexattr_setpshared(&d_shm_mutex_attr, PTHREAD_PROCESS_SHARED);
-	D_ASSERT(rc == 0);
-	pthread_mutexattr_setrobust(&d_shm_mutex_attr, PTHREAD_MUTEX_ROBUST);
-	D_ASSERT(rc == 0);
 
 	/* the shared memory only accessible for individual user for now */
 	sprintf(daos_shm_name_buf, "%s_%d", daos_shm_name, getuid());
-open_rw:
-	shm_ht_fd = shm_open(daos_shm_name_buf, O_RDWR, shmopen_perm);
-	/* failed to open */
-	if (shm_ht_fd == -1) {
-		if (errno == ENOENT) {
-			goto create_shm;
-		} else {
-			DS_ERROR(errno, "unexpected error shm_open()");
-			for (i = 0; i < RETRY; i++) {
-				/* take a short nap to wait for the creation of shm */
-				usleep(10);
-				shm_ht_fd = shm_open(daos_shm_name_buf, O_RDWR, shmopen_perm);
-				if (shm_ht_fd >= 0)
-					break;
-			}
-			if (i >= RETRY) {
-				DS_ERROR(errno, "failed to open shared memory after %d retries",
-					 RETRY);
-				goto err;
-			}
-		}
-	}
-
-	/* map existing shared memory */
-	shm_addr = mmap(FIXED_SHM_ADDR, shm_size, PROT_READ | PROT_WRITE,
-			MAP_SHARED | MAP_FIXED, shm_ht_fd, 0);
-	if (shm_addr != FIXED_SHM_ADDR) {
-		DS_ERROR(errno, "mmap failed to map at desired address");
-		goto err;
-	}
-	/* wait until the shared memory initialization finished */
-	while (((struct d_shm_hdr *)shm_addr)->magic != DSM_MAGIC)
-		usleep(1);
-	if (((struct d_shm_hdr *)shm_addr)->size != shm_size) {
-		/* EBADRQC - Invalid request code */
-		errno = EBADRQC;
-		DS_ERROR(errno, "unexpected shared memory size. Multiple versions of daos or env?");
-		goto err_unmap;
-	}
-	atomic_fetch_add_relaxed(&(((struct d_shm_hdr *)shm_addr)->ref_count), 1);
-	d_shm_head = (struct d_shm_hdr *)shm_addr;
-	close(shm_ht_fd);
-	return 0;
-
-create_shm:
 	shm_ht_fd = shm_open(daos_shm_name_buf, O_RDWR | O_CREAT | O_EXCL, shmopen_perm);
 	/* failed to create */
 	if (shm_ht_fd == -1) {
 		if (errno == EEXIST)
-			goto open_rw;
+			return errno;
 		DS_ERROR(errno, "shm_open() failed to create shared memory");
 		return errno;
 	}
@@ -186,6 +109,110 @@ create_shm:
 	d_shm_head->shm_pool_size  = shm_pool_size;
 	d_shm_head->magic          = DSM_MAGIC;
 	/* initialization is finished now. */
+	return 0;
+
+err_unmap:
+	d_shm_head = NULL;
+	munmap(shm_addr, shm_size);
+
+err:
+	close(shm_ht_fd);
+	return errno;
+}
+
+int
+shm_init(void)
+{
+	int      i;
+	int      shm_ht_fd;
+	int      shmopen_perm = 0600;
+	void    *shm_addr;
+	int      rc;
+	char     daos_shm_name_buf[64];
+	uint64_t shm_size;
+	uint64_t shm_pool_size;
+
+	if (page_size == 0)
+		page_size = sysconf(_SC_PAGESIZE);
+	if (pid == 0)
+		pid = getpid();
+	if (d_shm_head) {
+		while (d_shm_head->magic != DSM_MAGIC)
+			usleep(1);
+		/* shared memory already initlized in current process */
+		return 0;
+	}
+
+	rc = d_getenv_uint64_t("DAOS_SHM_SIZE", &shm_size);
+	if (rc != -DER_NONEXIST) {
+		/* set parameter from env */
+		shm_pool_size = shm_size / N_SHM_POOL;
+		if (shm_pool_size % page_size)
+			/* make shm_pool_size 4K aligned */
+			shm_pool_size += (page_size - (shm_pool_size % page_size));
+		shm_size = shm_pool_size * N_SHM_POOL + sizeof(struct d_shm_hdr);
+	} else {
+		shm_pool_size = SHM_POOL_SIZE;
+		shm_size      = SHM_SIZE_REQ;
+	}
+
+	rc = pthread_mutexattr_init(&d_shm_mutex_attr);
+	D_ASSERT(rc == 0);
+	rc = pthread_mutexattr_settype(&d_shm_mutex_attr, PTHREAD_MUTEX_NORMAL);
+	D_ASSERT(rc == 0);
+	rc = pthread_mutexattr_setpshared(&d_shm_mutex_attr, PTHREAD_PROCESS_SHARED);
+	D_ASSERT(rc == 0);
+	pthread_mutexattr_setrobust(&d_shm_mutex_attr, PTHREAD_MUTEX_ROBUST);
+	D_ASSERT(rc == 0);
+
+	/* the shared memory only accessible for individual user for now */
+	sprintf(daos_shm_name_buf, "%s_%d", daos_shm_name, getuid());
+open_rw:
+	shm_ht_fd = shm_open(daos_shm_name_buf, O_RDWR, shmopen_perm);
+	/* failed to open */
+	if (shm_ht_fd == -1) {
+		if (errno == ENOENT) {
+			rc = create_shm_region(shm_size, shm_pool_size);
+			if (rc == EEXIST)
+				goto open_rw;
+			else
+				return rc;
+		} else {
+			DS_ERROR(errno, "unexpected error shm_open()");
+			for (i = 0; i < RETRY; i++) {
+				/* take a short nap to wait for the creation of shm */
+				usleep(10);
+				shm_ht_fd = shm_open(daos_shm_name_buf, O_RDWR, shmopen_perm);
+				if (shm_ht_fd >= 0)
+					break;
+			}
+			if (i >= RETRY) {
+				DS_ERROR(errno, "failed to open shared memory after %d retries",
+					 RETRY);
+				goto err;
+			}
+		}
+	}
+
+	/* map existing shared memory */
+	shm_addr = mmap(FIXED_SHM_ADDR, shm_size, PROT_READ | PROT_WRITE,
+			MAP_SHARED | MAP_FIXED, shm_ht_fd, 0);
+	if (shm_addr != FIXED_SHM_ADDR) {
+		DS_ERROR(errno, "mmap failed to map at desired address");
+		goto err;
+	}
+	/* wait until the shared memory initialization finished */
+	while (((struct d_shm_hdr *)shm_addr)->magic != DSM_MAGIC)
+		usleep(1);
+	if (((struct d_shm_hdr *)shm_addr)->size != shm_size) {
+		/* EBADRQC - Invalid request code */
+		errno = EBADRQC;
+		DS_ERROR(errno, "unexpected shared memory size. Multiple versions of daos or env?");
+		goto err_unmap;
+	}
+	atomic_fetch_add_relaxed(&(((struct d_shm_hdr *)shm_addr)->ref_count), 1);
+	d_shm_head = (struct d_shm_hdr *)shm_addr;
+	close(shm_ht_fd);
 	return 0;
 
 err_unmap:

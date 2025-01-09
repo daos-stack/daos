@@ -527,7 +527,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/drpc_engine_test
 %{_bindir}/drpc_test
 %{_bindir}/dfuse_test
-%{_bindir}/shm_test
 %{_bindir}/eq_tests
 %{_bindir}/job_tests
 %{_bindir}/security_test

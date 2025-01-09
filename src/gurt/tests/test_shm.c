@@ -27,33 +27,15 @@
 #include <sys/wait.h>
 #include <linux/limits.h>
 
+#include <gurt/debug.h>
 #include <gurt/shm_alloc.h>
 #include <gurt/shm_dict.h>
 #include <gurt/shm_utils.h>
-#include <daos/debug.h>
-
-/* Tests can be run by specifying the appropriate argument for a test or all will be run if no test
- * is specified.
- */
-static const char *all_tests = "hlm";
-
-static void
-print_usage()
-{
-	print_message("\n\nShared memory tests\n=============================\n");
-	print_message("Tests: Use one of these arg(s) for specific test\n");
-	print_message("shm_test -a|--all\n");
-	print_message("shm_test -h|--hash\n");
-	print_message("shm_test -l|--lock\n");
-	print_message("shm_test -m|--memory\n");
-	print_message("Default <shm_test> runs all tests\n");
-	print_message("\n=============================\n");
-}
 
 #define N_LOOP_MEM (8)
 
 void
-do_mem(void **state)
+test_mem(void **state)
 {
 	int    i;
 	int    rc;
@@ -155,7 +137,7 @@ verify_hash_by_child(void)
 }
 
 void
-do_hash(void **state)
+test_hash(void **state)
 {
 	int                   rc;
 	int                   status;
@@ -163,7 +145,7 @@ do_hash(void **state)
 	struct d_shm_ht_head *ht_head;
 	struct shm_ht_rec    *link;
 	char                 *value;
-	char                 *argv[3] = {"shm_test", "--verifykv", NULL};
+	char                 *argv[3] = {"test_shm", "--verifykv", NULL};
 	char                 *exe_path;
 	pid_t                 pid;
 
@@ -189,7 +171,7 @@ do_hash(void **state)
 
 	verify_hash();
 
-	/* start a child process and run shm_test & verify key-value pairs */
+	/* start a child process and run test_shm & verify key-value pairs */
 	exe_path = malloc(PATH_MAX);
 	assert_non_null(exe_path);
 	rc = readlink("/proc/self/exe", exe_path, PATH_MAX - 1);
@@ -262,7 +244,7 @@ do_lock_mutex_child(bool lock_only)
 }
 
 void
-do_lock(void **state)
+test_lock(void **state)
 {
 	int                   rc;
 	int                   status;
@@ -274,8 +256,8 @@ do_lock(void **state)
 	struct timeval        tm1, tm2;
 	double                dt;
 	struct shm_ht_rec    *link;
-	char                 *argv[3]  = {"shm_test", "--lockmutex", NULL};
-	char                 *argv2[3] = {"shm_test", "--lockonly", NULL};
+	char                 *argv[3]  = {"test_shm", "--lockmutex", NULL};
+	char                 *argv2[3] = {"test_shm", "--lockonly", NULL};
 	char                 *exe_path;
 	pid_t                 pid;
 	bool                  owner_dead;
@@ -341,64 +323,31 @@ do_lock(void **state)
 }
 
 static int
-run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
+init_tests(void **state)
 {
-	int nr_failed = 0;
+	return d_log_init();
+}
 
-	if (strlen(tests) == 0)
-		tests = all_tests;
+static int
+fini_tests(void **state)
+{
+        /* unlink shared memory file under /dev/shm/ */
+	shm_destroy();
+	d_log_fini();
 
-	while (*tests != '\0') {
-		switch (*tests) {
-		case 'h':
-			printf("\n\n=================");
-			printf("shm hash table tests");
-			printf("=====================\n");
-			const struct CMUnitTest ht_tests[] = {
-			    cmocka_unit_test(do_hash),
-			};
-			nr_failed += cmocka_run_group_tests(ht_tests, NULL, NULL);
-			break;
-
-		case 'l':
-			printf("\n\n=================");
-			printf("shm lock/unlock tests");
-			printf("=====================\n");
-			const struct CMUnitTest lock_tests[] = {
-			    cmocka_unit_test(do_lock),
-			};
-			nr_failed += cmocka_run_group_tests(lock_tests, NULL, NULL);
-			break;
-
-		case 'm':
-			printf("\n\n=================");
-			printf("shm allocation/deallocation tests");
-			printf("=====================\n");
-			const struct CMUnitTest mem_tests[] = {
-			    cmocka_unit_test(do_mem),
-			};
-			nr_failed += cmocka_run_group_tests(mem_tests, NULL, NULL);
-			break;
-
-		default:
-			assert_true(0);
-		}
-
-		tests++;
-	}
-
-	return nr_failed;
+	return 0;
 }
 
 int
 main(int argc, char **argv)
 {
-	char                 tests[64] = {};
-	int                  ntests    = 0;
-	int                  nr_failed = 0;
-	int                  opt = 0, index = 0, rc;
+	int                     opt = 0, index = 0, rc;
+	const struct CMUnitTest tests[] = {
+		cmocka_unit_test(test_hash),
+		cmocka_unit_test(test_lock),
+		cmocka_unit_test(test_mem)};
 
-	static struct option long_options[] = {
+	static struct option    long_options[] = {
 		{"all", no_argument, NULL, 'a'},
 		{"hash", no_argument, NULL, 'h'},
 		{"lock", no_argument, NULL, 'l'},
@@ -409,15 +358,7 @@ main(int argc, char **argv)
 		{NULL, 0, NULL, 0}
 	};
 
-	rc = daos_debug_init(NULL);
-	assert_true(rc == 0);
-
 	while ((opt = getopt_long(argc, argv, ":ahlkmov", long_options, &index)) != -1) {
-		if (strchr(all_tests, opt) != NULL) {
-			tests[ntests] = opt;
-			ntests++;
-			continue;
-		}
 		switch (opt) {
 		case 'a':
 			break;
@@ -435,26 +376,18 @@ main(int argc, char **argv)
 			goto exit_child;
 		default:
 			printf("Unknown Option\n");
-			print_usage();
 			return 1;
 		}
 	}
 
-	nr_failed = run_specified_tests(tests, NULL, 0);
-
-	print_message("\n============ Summary %s\n", __FILE__);
-	if (nr_failed == 0)
-		print_message("OK - NO TEST FAILURES\n");
-	else
-		print_message("ERROR, %i TEST(S) FAILED\n", nr_failed);
+	d_register_alt_assert(mock_assert);
+	rc = cmocka_run_group_tests_name("test_shm", tests, init_tests, fini_tests);
 
 	/* unlink shared memory file under /dev/shm/ */
 	shm_destroy();
-	daos_debug_fini();
 
-	return nr_failed;
+	return rc;
 
 exit_child:
-	daos_debug_fini();
 	return 0;
 }
