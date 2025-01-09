@@ -104,20 +104,25 @@ case "$user_domain" in
     "intel")
         regex_user="$regex_intel"
         shortname_user="$shortname_intel"
-        echo "***********************************************************"
-        echo "If you are no longer an Intel employee, change your email"
-        echo "address using git config user.email <address>"
-        echo "***********************************************************"
+        echo "  ***********************************************************"
+        echo "  If you are no longer an Intel employee, change your email"
+        echo "  address using git config user.email <address>"
+        echo "  ***********************************************************"
         ;;
     "google")
         regex_user="$regex_google"
         shortname_user="$shortname_google"
         ;;
     *)
+        echo "  ************************************************************"
         echo "  Unsupported email domain: $user_domain for copyright check."
         echo "  Update utils/cq/check_update_copyright.sh or configure email"
         echo "  with git config user.email <address>."
-        exit 1
+        echo "  Defaulting to $shortname_hpe"
+        echo "  ************************************************************"
+        regex_user="$regex_hpe"
+        shortname_user="$shortname_hpe"
+        ;;
 esac
 
 # Generate list of all copyright regex except the user's domain.
