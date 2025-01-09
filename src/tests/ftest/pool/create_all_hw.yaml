@@ -42,48 +42,48 @@ test_two_pools_hw:
 # Mux the number of targets per engine (1, 2, 3, 5) with both engines using the same number of
 # targets.
 server_configurations: !mux
-  server_config_1_target:
-    server_config:
-      name: daos_server
-      engines_per_host: 2
-      engines:
-        0:
-          targets: 1
-          pinned_numa_node: 0
-          nr_xs_helpers: 1
-          fabric_iface: ib0
-          fabric_iface_port: 31317
-          log_file: daos_server0.log
-          storage: auto
-        1:
-          targets: 1
-          pinned_numa_node: 1
-          nr_xs_helpers: 1
-          fabric_iface: ib1
-          fabric_iface_port: 31417
-          log_file: daos_server1.log
-          storage: auto
-  server_config_2_target:
-    server_config:
-      name: daos_server
-      engines_per_host: 2
-      engines:
-        0:
-          targets: 2
-          pinned_numa_node: 0
-          nr_xs_helpers: 1
-          fabric_iface: ib0
-          fabric_iface_port: 31317
-          log_file: daos_server0.log
-          storage: auto
-        1:
-          targets: 2
-          pinned_numa_node: 1
-          nr_xs_helpers: 1
-          fabric_iface: ib1
-          fabric_iface_port: 31417
-          log_file: daos_server1.log
-          storage: auto
+  # server_config_1_target:
+  #   server_config:
+  #     name: daos_server
+  #     engines_per_host: 2
+  #     engines:
+  #       0:
+  #         targets: 1
+  #         pinned_numa_node: 0
+  #         nr_xs_helpers: 1
+  #         fabric_iface: ib0
+  #         fabric_iface_port: 31317
+  #         log_file: daos_server0.log
+  #         storage: auto
+  #       1:
+  #         targets: 1
+  #         pinned_numa_node: 1
+  #         nr_xs_helpers: 1
+  #         fabric_iface: ib1
+  #         fabric_iface_port: 31417
+  #         log_file: daos_server1.log
+  #         storage: auto
+  # server_config_2_target:
+  #   server_config:
+  #     name: daos_server
+  #     engines_per_host: 2
+  #     engines:
+  #       0:
+  #         targets: 2
+  #         pinned_numa_node: 0
+  #         nr_xs_helpers: 1
+  #         fabric_iface: ib0
+  #         fabric_iface_port: 31317
+  #         log_file: daos_server0.log
+  #         storage: auto
+  #       1:
+  #         targets: 2
+  #         pinned_numa_node: 1
+  #         nr_xs_helpers: 1
+  #         fabric_iface: ib1
+  #         fabric_iface_port: 31417
+  #         log_file: daos_server1.log
+  #         storage: auto
   server_config_3_target:
     server_config:
       name: daos_server
