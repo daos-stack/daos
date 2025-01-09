@@ -1018,6 +1018,7 @@ cont_iv_hdl_fetch(uuid_t cont_hdl_uuid, uuid_t pool_uuid,
 	D_DEBUG(DB_TRACE, "Can not find "DF_UUID" hdl\n",
 		DP_UUID(cont_hdl_uuid));
 
+invalidate_retry:
 	/* Fetch the capability from the leader. To avoid extra locks,
 	 * all metadatas are maintained by xstream 0, so let's create
 	 * an ULT on xstream 0 to let xstream 0 to handle capa fetch
@@ -1046,6 +1047,19 @@ cont_iv_hdl_fetch(uuid_t cont_hdl_uuid, uuid_t pool_uuid,
 	if (*cont_hdl == NULL) {
 		D_DEBUG(DB_TRACE, "Can not find "DF_UUID" hdl\n",
 			DP_UUID(cont_hdl_uuid));
+		/* In reintegrate with case that the IC_CONT_CAPA cache is valid locally
+		 * but cont open handle invalid (not in dt_cont_hdl_hash). For this case
+		 * invalidate local IV cache first and retry again, to avoid in-flight
+		 * UPDATE's failure. (IV locally valid then the IV fetch will not trigger
+		 * cont_iv_ent_update() callback).
+		 */
+		if (!invalidate_current) {
+			invalidate_current = true;
+			ABT_eventual_free(&eventual);
+			D_DEBUG(DB_TRACE, DF_UUID" invalidate_current and retry\n",
+				DP_UUID(cont_hdl_uuid));
+			goto invalidate_retry;
+		}
 		D_GOTO(out_eventual, rc = -DER_NONEXIST);
 	}
 

@@ -22,6 +22,9 @@ RUN echo "APT::Get::Assume-Yes \"true\";" > /etc/apt/apt.conf.d/no-prompt
 RUN echo "APT::Install-Recommends \"false\";" > /etc/apt/apt.conf.d/no-recommends
 RUN apt-get update && \
     apt-get upgrade && \
+    apt-get install gpg-agent software-properties-common && \
+    add-apt-repository ppa:longsleep/golang-backports && \
+    apt-get update && \
     chmod +x /tmp/install.sh && \
     /tmp/install.sh && \
     apt-get clean all

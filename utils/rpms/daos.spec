@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.6.2
-Release:       2%{?relval}%{?dist}
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -81,7 +81,7 @@ BuildRequires: libyaml-devel
 BuildRequires: libcmocka-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
-BuildRequires: go >= 1.17
+BuildRequires: go >= 1.21
 BuildRequires: pciutils-devel
 %if (0%{?rhel} >= 8)
 BuildRequires: numactl-devel
@@ -112,14 +112,6 @@ BuildRequires: systemd-rpm-macros
 %endif
 %endif
 BuildRequires: libuuid-devel
-
-%if (0%{?suse_version} > 0)
-BuildRequires: libucp-devel
-BuildRequires: libucs-devel
-BuildRequires: libuct-devel
-%else
-BuildRequires: ucx-devel
-%endif
 
 Requires: openssl
 # This should only be temporary until we can get a stable upstream release
@@ -211,14 +203,18 @@ Summary: The DAOS test suite
 Requires: %{name}-client%{?_isa} = %{version}-%{release}
 Requires: %{name}-admin%{?_isa} = %{version}-%{release}
 Requires: %{name}-devel%{?_isa} = %{version}-%{release}
+%if (0%{?suse_version} >= 1500)
+Requires: libprotobuf-c-devel
+%else
 Requires: protobuf-c-devel
+%endif
 Requires: fio
 Requires: git
 Requires: dbench
 Requires: lbzip2
 Requires: attr
 Requires: ior
-Requires: go >= 1.18
+Requires: go >= 1.21
 %if (0%{?suse_version} >= 1315)
 Requires: lua-lmod
 Requires: libcapstone-devel
@@ -323,7 +319,7 @@ This is the package that bridges the difference between the MOFED openmpi
 %endif
 
 %prep
-%autosetup
+%autosetup -p1
 
 %build
 
@@ -598,6 +594,14 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Mon Jan 06 2025 Phillip Henderson <phillip.henderson@intel.com> 2.6.2-5
+- Fix protobuf-c requiremnent for daos-client-tests on Leap.
+
+* Mon Dec 16 2024 Brian J. Murrell <brian.murrell@intel.com> - 2.6.2-4
+- Drop BRs for UCX as they were obsoleted as of e01970d
+
+* Wed Dec 11 2024 Kris Jacque <kristin.jacque@hpe.com> 2.6.2-3
+- Bump min supported go version to 1.21
 
 * Wed Nov 06 2024 Phillip Henderson <phillip.henderson@intel.com> 2.6.2-2
 - Second test build for 2.6.2
