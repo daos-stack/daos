@@ -238,6 +238,7 @@ message PoolQueryResp {
 	uint32 svc_ldr = 18; // current raft leader (2.6+)
 	repeated uint32 svc_reps = 19; // service replica ranks
 	uint64 query_mask = 20; // Bitmask of pool query options used
+	string                     suspect_ranks      = 21; // optional set of suspect ranks
 }
 
 message PoolProperty {
