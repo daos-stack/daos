@@ -320,6 +320,7 @@ test_lock(void **state)
 	shm_mutex_lock(mutex, &owner_dead);
 	shm_mutex_unlock(mutex);
 	assert_true(owner_dead);
+	free(exe_path);
 	shm_fini();
 }
 
