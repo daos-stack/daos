@@ -37,7 +37,7 @@ class PytorchCheckpointTest(TestWithServers):
         num_writes = self.params.get("writes", "/run/checkpoint_no_chunking/*", 7)
 
         writes = []
-        for n in range(num_writes):
+        for _ in range(num_writes):
             writes.append(os.urandom(random.randint(min_size, max_size)))
             self._test_checkpoint(pool.identifier, container.identifier, writes)
 
@@ -66,7 +66,7 @@ class PytorchCheckpointTest(TestWithServers):
             self.fail("chunk_sizes, chunks_limits and workers must be provided")
 
         writes = []
-        for n in range(1, num_writes):
+        for _ in range(num_writes):
             writes.append(os.urandom(random.randint(min_size, max_size)))
             for chunk_size in chunk_sizes:
                 for chunks_limit in chunks_limits:
