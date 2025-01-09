@@ -110,12 +110,6 @@ case "$user_domain" in
         shortname_user="$shortname_google"
         ;;
     *)
-        echo "  ************************************************************"
-        echo "  Unsupported email domain: $user_domain for copyright check."
-        echo "  Update utils/cq/check_update_copyright.sh or configure email"
-        echo "  with git config user.email <address>."
-        echo "  Defaulting to $shortname_hpe"
-        echo "  ************************************************************"
         regex_user="$regex_hpe"
         shortname_user="$shortname_hpe"
         ;;
