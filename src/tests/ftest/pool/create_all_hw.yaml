@@ -39,7 +39,8 @@ test_two_pools_hw:
       scm: 2147483648   # 2GiB
       nvme: 0
 
-# Mux the number of targets per engine (1-4) with both engines using the same number of targets
+# Mux the number of targets per engine (1, 2, 3, 5) with both engines using the same number of
+# targets.
 server_configurations: !mux
   server_config_1_target:
     server_config:
@@ -53,14 +54,7 @@ server_configurations: !mux
           fabric_iface: ib0
           fabric_iface_port: 31317
           log_file: daos_server0.log
-          storage:
-            0:
-              class: dcpm
-              scm_list: ["/dev/pmem0"]
-              scm_mount: /mnt/daos0
-            1:
-              class: nvme
-              bdev_list: ["aaaa:aa:aa.a"]
+          storage: auto
         1:
           targets: 1
           pinned_numa_node: 1
@@ -68,14 +62,7 @@ server_configurations: !mux
           fabric_iface: ib1
           fabric_iface_port: 31417
           log_file: daos_server1.log
-          storage:
-            0:
-              class: dcpm
-              scm_list: ["/dev/pmem1"]
-              scm_mount: /mnt/daos1
-            1:
-              class: nvme
-              bdev_list: ["bbbb:bb:bb.b"]
+          storage: auto
   server_config_2_target:
     server_config:
       name: daos_server
@@ -88,14 +75,7 @@ server_configurations: !mux
           fabric_iface: ib0
           fabric_iface_port: 31317
           log_file: daos_server0.log
-          storage:
-            0:
-              class: dcpm
-              scm_list: ["/dev/pmem0"]
-              scm_mount: /mnt/daos0
-            1:
-              class: nvme
-              bdev_list: ["aaaa:aa:aa.a"]
+          storage: auto
         1:
           targets: 2
           pinned_numa_node: 1
@@ -103,14 +83,7 @@ server_configurations: !mux
           fabric_iface: ib1
           fabric_iface_port: 31417
           log_file: daos_server1.log
-          storage:
-            0:
-              class: dcpm
-              scm_list: ["/dev/pmem1"]
-              scm_mount: /mnt/daos1
-            1:
-              class: nvme
-              bdev_list: ["bbbb:bb:bb.b"]
+          storage: auto
   server_config_3_target:
     server_config:
       name: daos_server
@@ -123,14 +96,7 @@ server_configurations: !mux
           fabric_iface: ib0
           fabric_iface_port: 31317
           log_file: daos_server0.log
-          storage:
-            0:
-              class: dcpm
-              scm_list: ["/dev/pmem0"]
-              scm_mount: /mnt/daos0
-            1:
-              class: nvme
-              bdev_list: ["aaaa:aa:aa.a"]
+          storage: auto
         1:
           targets: 3
           pinned_numa_node: 1
@@ -138,14 +104,7 @@ server_configurations: !mux
           fabric_iface: ib1
           fabric_iface_port: 31417
           log_file: daos_server1.log
-          storage:
-            0:
-              class: dcpm
-              scm_list: ["/dev/pmem1"]
-              scm_mount: /mnt/daos1
-            1:
-              class: nvme
-              bdev_list: ["bbbb:bb:bb.b"]
+          storage: auto
   server_config_5_target:
     server_config:
       name: daos_server
@@ -158,14 +117,7 @@ server_configurations: !mux
           fabric_iface: ib0
           fabric_iface_port: 31317
           log_file: daos_server0.log
-          storage:
-            0:
-              class: dcpm
-              scm_list: ["/dev/pmem0"]
-              scm_mount: /mnt/daos0
-            1:
-              class: nvme
-              bdev_list: ["aaaa:aa:aa.a"]
+          storage: auto
         1:
           targets: 5
           pinned_numa_node: 1
@@ -173,11 +125,4 @@ server_configurations: !mux
           fabric_iface: ib1
           fabric_iface_port: 31417
           log_file: daos_server1.log
-          storage:
-            0:
-              class: dcpm
-              scm_list: ["/dev/pmem1"]
-              scm_mount: /mnt/daos1
-            1:
-              class: nvme
-              bdev_list: ["bbbb:bb:bb.b"]
+          storage: auto
