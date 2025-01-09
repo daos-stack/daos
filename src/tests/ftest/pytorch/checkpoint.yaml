@@ -14,10 +14,18 @@ server_config:
           scm_mount: /mnt/daos
   system_ram_reserved: 1
 pool:
-  size: 1G
+  size: 32G
 container:
   type: POSIX
   control_method: daos
 
-checkpoint:
-  writes: 100
+checkpoint_no_chunking:
+  writes: 16
+
+# There are fair amount of writes in this test, it takes about 8 minutes to run
+timeout: 600
+checkpoint_chunking:
+  writes: 8
+  chunk_sizes: [32, 449, 1024, 4096, 131072, 1048576, 4194304]
+  chunks_limits: [0, 1, 2, 3, 4, 8, 32]
+  workers: [1, 2, 3, 4, 5, 8]

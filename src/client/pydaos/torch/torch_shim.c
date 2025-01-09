@@ -747,10 +747,11 @@ __shim_handle__torch_write(PyObject *self, PyObject *args)
 	mode_t             mode       = 0;
 	int                chunk_size = 0;
 	char              *class_name = NULL;
+	daos_size_t        offset     = 0;
 	daos_oclass_id_t   cid        = OC_UNKNOWN;
 
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LsIisiO", &hdl, &path, &mode, &oflags, &class_name,
-				       &chunk_size, &buffer);
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LsIisiKO", &hdl, &path, &mode, &oflags, &class_name,
+				       &chunk_size, &offset, &buffer);
 	assert(hdl->dfs != NULL);
 
 	mode |= S_IFREG; /* In case when only acl bits were set */
@@ -799,7 +800,7 @@ __shim_handle__torch_write(PyObject *self, PyObject *args)
 	    .sg_iovs   = &iov,
 	};
 
-	rc = dfs_write(hdl->dfs, obj, &sgl, 0 /* offset */, NULL);
+	rc = dfs_write(hdl->dfs, obj, &sgl, offset, NULL);
 	if (rc) {
 		D_ERROR("Could not write to '%s': %s (rc=%d)", path, strerror(rc), rc);
 		goto out;

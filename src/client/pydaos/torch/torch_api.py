@@ -258,33 +258,77 @@ class IterableDataset(TorchIterableDataset):
 class WriteBuffer(io.BufferedIOBase):
     """
     Class representing stream like write buffer for saving PyTorch model checkpoints to DAOS DFS.
+
+    It provides two ways of writing data:
+
+    In-memory buffer: all data will be written to the buffer
+    and flushed to the storage on close() call. To use this mode set transfer_chunk_size to 0.
+
+    Chunked write: data will be written in chunks and saved to the storage in parallel,
+    using multiple workers. To use this mode set transfer_chunk_size to non-zero value.
+
+    chunks_limit parameter is used to limit memory usage (only in chunked write mode):
+    no more than chunks_limit chunks will be in progress at the same time.
+
+    This class is not intended to be used directly: Checkpoint class is the main interface.
     """
 
     # pylint: disable=too-many-arguments,too-many-instance-attributes
-    def __init__(self, dfs, path, mode, open_flags, class_name, chunk_size):
+    def __init__(self, dfs, path, mode, open_flags, class_name,
+                 file_chunk_size, transfer_chunk_size, chunks_limit, workers):
         super().__init__()
 
         self._dfs = dfs
         self._path = path
         self._buffer = bytearray()
+        # offset is used to track the offset in the file for chunked writes
+        self._offset = 0
+        # position is used to track how much was written in the buffer
         self._position = 0
         self._closed = False
         self._mode = mode
         self._oflags = open_flags
         self._class_name = class_name
-        self._chunk_size = chunk_size
+        self._file_chunk_size = file_chunk_size
+        self._chunks_limit = chunks_limit
+        self._transfer_chunk_size = transfer_chunk_size
+        self._inprogress = set()
+
+        if self._transfer_chunk_size > 0:
+            self._executor = ProcessPoolExecutor(
+                max_workers=workers, initializer=self._dfs.worker_init)
 
     def write(self, data):
-        """ Writes data to the buffer.
-        The data is not written to the container until close() is called.
-        """
+        """ Writes data to the buffer."""
 
         if self.closed:
             raise ValueError("I/O operation on closed file")
 
-        self._buffer.extend(data)
-        self._position = + len(data)
-        return len(data)
+        # In case of no chunking, we just extend the existing buffer without any limits
+        if self._transfer_chunk_size == 0:
+            self._buffer.extend(data)
+            self._position += len(data)
+            return len(data)
+
+        written = len(data)
+        while len(data) > 0:
+            if self._reached_memory_usage_limit():
+                self._wait_for_completion()
+                continue
+
+            fit = min(len(data), self._transfer_chunk_size - len(self._buffer))
+            chunk = data[:fit]
+            self._buffer.extend(chunk)
+            self._position += len(chunk)
+
+            if len(self._buffer) == self._transfer_chunk_size:
+                self._submit_chunk(self._offset, self._buffer)
+                self._offset += len(self._buffer)
+                self._buffer = bytearray()
+
+            data = data[len(chunk):]
+
+        return written
 
     def tell(self):
         """Return current stream position."""
@@ -293,21 +337,59 @@ class WriteBuffer(io.BufferedIOBase):
         return self._position
 
     def close(self):
-        """Upload buffer to storage and close."""
+        """Upload any data left in buffer to storage and close."""
         if self.closed:
             return
 
-        self._write()
+        self._flush()
         self._closed = True
+        if self._transfer_chunk_size > 0:
+            self._executor.shutdown(wait=True)
+
         super().close()
 
-    def _write(self):
-        """ Writes the buffer to the container """
+    def _flush(self):
+        """Write if anything left and wait for any outstanding transfers"""
         if self.closed:
             raise ValueError("I/O operation on closed file")
 
-        self._dfs.write(self._path, self._mode, self._oflags,
-                        self._class_name, self._chunk_size, self._buffer)
+        if len(self._buffer) == 0 and len(self._inprogress) == 0:
+            return
+
+        if self._transfer_chunk_size == 0:
+            self._dfs.write(self._path, self._mode, self._oflags,
+                            self._class_name, self._file_chunk_size, 0, self._buffer)
+            return
+
+        if len(self._buffer) > 0:
+            self._submit_chunk(self._offset, self._buffer)
+            self._offset += len(self._buffer)
+
+        while len(self._inprogress) > 0:
+            self._wait_for_completion()
+
+    def _submit_chunk(self, offset, chunk):
+        """ Submits chunk for writing to the container """
+
+        self._inprogress.add(self._executor.submit(
+            self._dfs.write,
+            self._path, self._mode, self._oflags,
+            self._class_name, self._file_chunk_size, offset, chunk
+        ))
+
+    def _wait_for_completion(self):
+        """ Waits for at least one of the in-progress writes to complete """
+
+        (completed, inprogress) = concurrent.futures.wait(
+            self._inprogress, return_when=FIRST_COMPLETED)
+        for future in completed:
+            future.result()
+
+        self._inprogress = inprogress
+
+    def _reached_memory_usage_limit(self):
+        """ Returns True if we reached the memory usage limit """
+        return self._chunks_limit > 0 and len(self._inprogress) >= self._chunks_limit
 
     @property
     def closed(self):
@@ -342,11 +424,21 @@ class Checkpoint():
     mode : int (optional)
         File mode to be used for checkpoint files, default is 0o744.
     open_flags : int (optional)
-        Open flags to be used for checkpoint files, default is to create and truncate the file.
+        Open flags to be used for checkpoint files, default is to create a file.
     class_name : string (optional)
         Object class name to be used for checkpoint files, default is OC_UNKNOWN.
-    chunk_size : int (optional)
+    file_chunk_size : int (optional)
         Chunk size to be used for checkpoint files, default is 0.
+    transfer_chunk_size : int (optional)
+        Chunk size for data buffering/transfer, default is 0, which means no chunking:
+        All writes go to in memory buffer and actual flush to storage will happen on close() call.
+    chunks_limits: int (optional)
+        Number of chunks to be used for buffering and transfer, default is 0, which means no limit.
+        It's used only when transfer_chunk_size is set to non-zero value and provides the mechanism
+        to limit memory usage.
+    workers: int (optional)
+        Number of workers to be used for parallel chunked writes.
+        This parameter is used only when transfer_chunk_size is set to non-zero value.
 
     Methods
     -------
@@ -360,9 +452,12 @@ class Checkpoint():
     # pylint: disable=too-many-arguments,too-many-instance-attributes
     def __init__(self, pool, cont, prefix=os.sep,
                  mode=stat.S_IFREG | stat.S_IRWXU | stat.S_IRGRP | stat.S_IROTH,
-                 open_flags=os.O_CREAT | os.O_TRUNC | os.O_RDWR,
+                 open_flags=os.O_CREAT | os.O_RDWR,
                  class_name="OC_UNKNOWN",
-                 chunk_size=0,
+                 file_chunk_size=0,
+                 transfer_chunk_size=0,
+                 chunks_limit=0,
+                 workers=4,
                  ):
         self._pool = pool
         self._cont = cont
@@ -370,8 +465,19 @@ class Checkpoint():
         self._mode = mode
         self._oflags = open_flags
         self._class_name = class_name
-        self._chunk_size = chunk_size
+        self._file_chunk_size = file_chunk_size
+        self._transfer_chunk_size = transfer_chunk_size
+        self._chunks_limit = chunks_limit
+        self._workers = workers
         self._dfs = _Dfs(pool=pool, cont=cont, rd_only=False)
+
+    def __del__(self):
+        """ Cleanups the used resources and connection """
+
+        if self._dfs is None:
+            return
+        self._dfs.disconnect()
+        self._dfs = None
 
     def reader(self, fname):
         """ Reads the checkpoint file and returns its content as BytesIO object """
@@ -393,7 +499,8 @@ class Checkpoint():
 
         fpath = os.path.join(self._prefix, fname)
         return WriteBuffer(self._dfs, fpath, self._mode, self._oflags,
-                           self._class_name, self._chunk_size)
+                           self._class_name, self._file_chunk_size, self._transfer_chunk_size,
+                           self._chunks_limit, self._workers)
 
 
 class _Dfs():
@@ -513,11 +620,11 @@ class _Dfs():
         return buf
 
     # pylint: disable=too-many-arguments
-    def write(self, path, mode, open_flags, class_name, chunk_size, data):
+    def write(self, path, mode, open_flags, class_name, chunk_size, offset, data):
         """ Writes data to the file """
 
         ret = torch_shim.torch_write(DAOS_MAGIC, self._dfs, path, mode,
-                                     open_flags, class_name, chunk_size, data)
+                                     open_flags, class_name, chunk_size, offset, data)
         if ret != 0:
             raise OSError(ret, os.strerror(ret), path)
 
