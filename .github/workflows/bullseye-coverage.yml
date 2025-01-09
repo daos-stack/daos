@@ -10,7 +10,7 @@ env:
   # the organizational defaults values for these variables
   # TODO: we really need to define a list of supported versions (ideally it's no more than 2)
   #       build is done on the lowest version and test on the highest with a "sanity test"
-  #       stage done on all versions in the list ecept the highest
+  #       stage done on all versions in the list except the highest
   EL8_BUILD_VERSION: ${{ vars.EL8_BUILD_VERSION_MASTER }}
   EL8_VERSION: ${{ vars.EL8_VERSION_MASTER }}
   EL9_BUILD_VERSION: ${{ vars.EL9_BUILD_VERSION_MASTER }}
@@ -365,7 +365,8 @@ jobs:
       - name: Publish test results
         if: (!cancelled()) && (success() || failure()) &&
             steps.run-test.outcome != 'skipped'
-        uses: EnricoMi/publish-unit-test-result-action@v2
+        # yamllint disable-line rule:line-length
+        uses: EnricoMi/publish-unit-test-result-action@170bf24d20d201b842d7a52403b73ed297e6645b  # v2.18.0
         with:
           check_name: ${{ env.STAGE_NAME }} Test Results
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -632,7 +633,8 @@ jobs:
       - name: Publish test results
         if: (!cancelled()) && (success() || failure()) &&
             steps.run-test.outcome != 'skipped'
-        uses: EnricoMi/publish-unit-test-result-action@v2
+        # yamllint disable-line rule:line-length
+        uses: EnricoMi/publish-unit-test-result-action@170bf24d20d201b842d7a52403b73ed297e6645b  # v2.18.0
         with:
           check_name: ${{ env.STAGE_NAME }} Test Results
           github_token: ${{ secrets.GITHUB_TOKEN }}
