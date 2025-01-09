@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-
+#
+# Copyright 2025 Hewlett Packard Enterprise Development LP
+#
+# SPDX-License-Identifier: BSD-2-Clause-Patent
+#
 # find the base branch of the current branch
 # base branches can be master, release/2.4+, release/3+
 # or optionally branches passed into $1
