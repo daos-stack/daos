@@ -53,7 +53,7 @@ class PytorchDatasetsTest(TestWithServers):
 
         actual = {}
         for _, content in enumerate(dataset):
-            h = hashlib.md5(content).hexdigest()
+            h = hashlib.md5(content, usedforsecurity=False).hexdigest()
             if h not in actual:
                 actual[h] = 1
             else:
@@ -94,7 +94,7 @@ class PytorchDatasetsTest(TestWithServers):
 
         actual = {}
         for _, content in enumerate(dataset):
-            h = hashlib.md5(content).hexdigest()
+            h = hashlib.md5(content, usedforsecurity=False).hexdigest()
             if h not in actual:
                 actual[h] = 1
             else:
@@ -197,7 +197,7 @@ class PytorchDatasetsTest(TestWithServers):
         actual = {}
         for batch in loader:
             for content in batch:
-                h = hashlib.md5(content).hexdigest()
+                h = hashlib.md5(content, usedforsecurity=False).hexdigest()
                 if h not in actual:
                     actual[h] = 1
                 else:

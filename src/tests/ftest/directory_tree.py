@@ -187,7 +187,7 @@ class DirTree():
 
         size = self._file_size_min
         if self._file_size_max > self._file_size_min:
-            size = random.randrange(self._file_size_min, self._file_size_max)
+            size = random.randrange(self._file_size_min, self._file_size_max)  # nosec
 
         with os.fdopen(fd, 'wb') as f:
             f.write(os.urandom(size))

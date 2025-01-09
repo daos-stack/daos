@@ -38,7 +38,7 @@ class PytorchCheckpointTest(TestWithServers):
 
         writes = []
         for _ in range(num_writes):
-            writes.append(os.urandom(random.randint(min_size, max_size)))
+            writes.append(os.urandom(self.random.randint(min_size, max_size)))
             self._test_checkpoint(pool.identifier, container.identifier, writes)
 
     def test_checkpoint_chunking(self):
@@ -67,7 +67,7 @@ class PytorchCheckpointTest(TestWithServers):
 
         writes = []
         for _ in range(num_writes):
-            writes.append(os.urandom(random.randint(min_size, max_size)))
+            writes.append(os.urandom(self.random.randint(min_size, max_size)))
             for chunk_size in chunk_sizes:
                 for chunks_limit in chunks_limits:
                     for worker in workers:
