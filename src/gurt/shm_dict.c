@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2024 Intel Corporation.
+ * (C) Copyright 2024-2025 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,6 +12,7 @@
 
 #include <gurt/atomic.h>
 #include <gurt/common.h>
+#include <gurt/shm_internal.h>
 #include <gurt/shm_dict.h>
 #include <gurt/shm_utils.h>
 

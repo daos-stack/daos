@@ -16,6 +16,7 @@
 
 #include <gurt/atomic.h>
 #include <gurt/common.h>
+#include <gurt/shm_internal.h>
 #include <gurt/shm_alloc.h>
 #include <gurt/shm_utils.h>
 
@@ -296,7 +297,7 @@ shm_destroy(void)
 	char daos_shm_file_name[128];
 
 	sprintf(daos_shm_file_name, "/dev/shm/%s_%d", daos_shm_name, getuid());
-	unlink(daos_shm_file_name);
+	shm_unlink(daos_shm_file_name);
 }
 
 bool
@@ -320,4 +321,10 @@ shm_fini(void)
 	if (pid != pid_shm_creator)
 		munmap(d_shm_head, d_shm_head->size);
 	d_shm_head = NULL;
+}
+
+void *
+shm_base(void)
+{
+	return (void *)d_shm_head;
 }
