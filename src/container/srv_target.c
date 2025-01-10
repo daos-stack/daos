@@ -1618,7 +1618,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 				D_GOTO(err_cont, rc = -DER_AGAIN);
 			}
 
-			/* Only go through if the 1st open suceeds */
+			/* Only go through if the 1st open succeeds */
 			if (hdl->sch_cont->sc_props_fetched)
 				goto opened;
 		}
