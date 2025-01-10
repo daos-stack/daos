@@ -589,6 +589,10 @@ static inline void
 reset_anchors(vos_iter_type_t type, struct vos_iter_anchors *anchors)
 {
 	switch (type) {
+	case VOS_ITER_OBJ:
+		daos_anchor_set_zero(&anchors->ia_obj);
+		anchors->ia_reprobe_obj = 0;
+		/* fall through */
 	case VOS_ITER_DKEY:
 		daos_anchor_set_zero(&anchors->ia_dkey);
 		anchors->ia_reprobe_dkey = 0;
@@ -1041,6 +1045,82 @@ vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
 				  anchors, cb, NULL, arg, dth);
 
 	D_FREE(anchors);
+
+	return rc;
+}
+
+static inline void
+bkt_iter_free(struct vos_bkt_iter *bkt_iter)
+{
+	D_FREE(bkt_iter);
+}
+
+static struct vos_bkt_iter *
+bkt_iter_alloc(struct vos_pool *pool)
+{
+	struct umem_store	*store = vos_pool2store(pool);
+	struct umem_cache	*cache = store->cache;
+	struct vos_bkt_iter	*bkt_iter;
+	unsigned int		 bitmap_sz;
+
+	D_ASSERT(cache != NULL && cache->ca_md_pages > 0);
+	bitmap_sz = (cache->ca_md_pages + NBBY - 1) / NBBY;
+	D_ALLOC(bkt_iter, sizeof(*bkt_iter) + bitmap_sz);
+	if (bkt_iter == NULL)
+		return NULL;
+
+	bkt_iter->bi_bkt_tot = cache->ca_md_pages;
+	bkt_iter->bi_bkt_cur = UMEM_DEFAULT_MBKT_ID;
+
+	return bkt_iter;
+}
+
+int
+vos_iterate_obj(vos_iter_param_t *param, bool recursive, struct vos_iter_anchors *anchors,
+		vos_iter_cb_t pre_cb, vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth)
+{
+	struct vos_container	*cont;
+	struct vos_bkt_iter	*bkt_iter;
+	uint32_t		 i, iter_cnt = 0;
+	int			 rc = 0;
+
+	/* Not supposed being called by external enumeration which updating read timestamp */
+	D_ASSERT(!dtx_is_valid_handle(dth));
+
+	cont = vos_hdl2cont(param->ip_hdl);
+	if (!vos_pool_is_evictable(cont->vc_pool))
+		return vos_iterate_internal(param, VOS_ITER_OBJ, recursive, false, anchors,
+					    pre_cb, post_cb, arg, dth);
+
+	/* The caller must provide a filter callback and call the oi_bkt_iter_skip() properly */
+	D_ASSERT(param->ip_filter_cb != NULL && param->ip_bkt_iter == NULL);
+
+	bkt_iter = bkt_iter_alloc(cont->vc_pool);
+	if (bkt_iter == NULL)
+		return -DER_NOMEM;
+
+	param->ip_bkt_iter = bkt_iter;
+	for (i = UMEM_DEFAULT_MBKT_ID; i < bkt_iter->bi_bkt_tot; i++) {
+		if (i > UMEM_DEFAULT_MBKT_ID) {
+			/* The bucket wasn't skipped in prior rounds of iterating */
+			if (!isset(&bkt_iter->bi_skipped[0], i))
+				continue;
+			bkt_iter->bi_bkt_cur = i;
+		}
+
+		iter_cnt++;
+		rc = vos_iterate_internal(param, VOS_ITER_OBJ, recursive, false, anchors,
+					  pre_cb, post_cb, arg, dth);
+		if (rc) {
+			DL_ERROR(rc, "Iterate bucket:%u failed.", i);
+			break;
+		}
+		reset_anchors(VOS_ITER_OBJ, anchors);
+	}
+	D_DEBUG(DB_TRACE, "Iterate %u/%u buckets.\n", iter_cnt, bkt_iter->bi_bkt_tot);
+
+	bkt_iter_free(bkt_iter);
+	param->ip_bkt_iter = NULL;
 
 	return rc;
 }

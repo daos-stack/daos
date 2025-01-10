@@ -196,7 +196,7 @@ dtx_handler(crt_rpc_t *rpc)
 				count = din->di_dtx_array.ca_count - i;
 
 			dtis = (struct dtx_id *)din->di_dtx_array.ca_arrays + i;
-			rc1 = vos_dtx_commit(cont->sc_hdl, dtis, count, NULL);
+			rc1 = vos_dtx_commit(cont->sc_hdl, dtis, count, false, NULL);
 			if (rc1 > 0)
 				committed += rc1;
 			else if (rc == 0 && rc1 < 0)
@@ -474,8 +474,9 @@ dtx_coll_handler(crt_rpc_t *rpc)
 
 out:
 	D_CDEBUG(rc < 0, DLOG_ERR, DB_TRACE,
-		 "Handled collective DTX PRC %u on rank %u for "DF_DTI": "DF_RC"\n",
-		 opc, myrank, DP_DTI(&dci->dci_xid), DP_RC(rc));
+		 "Handled collective DTX PRC %u on rank %u for "DF_DTI" in "
+		 DF_UUID"/"DF_UUID": "DF_RC"\n", opc, myrank, DP_DTI(&dci->dci_xid),
+		 DP_UUID(dci->dci_po_uuid), DP_UUID(dci->dci_co_uuid), DP_RC(rc));
 
 	dco->dco_status = rc;
 	rc = crt_reply_send(rpc);

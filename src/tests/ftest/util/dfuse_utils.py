@@ -30,7 +30,6 @@ class DfuseCommand(ExecutableCommand):
         self.sys_name = FormattedParameter("--sys-name {}")
         self.thread_count = FormattedParameter("--thread-count {}")
         self.eq_count = FormattedParameter("--eq-count {}")
-        self.singlethreaded = FormattedParameter("--singlethread", False)
         self.foreground = FormattedParameter("--foreground", False)
         self.enable_caching = FormattedParameter("--enable-caching", False)
         self.enable_wb_cache = FormattedParameter("--enable-wb-cache", False)
@@ -392,12 +391,31 @@ class Dfuse(DfuseCommand):
         cmd = f"daos filesystem query --json {self.mount_dir.value}"
         result = run_remote(self.log, self.hosts, cmd)
         if not result.passed:
-            raise CommandFailure(f'"fs query failed on {result.failed_hosts}')
+            raise CommandFailure(f"fs query failed on {result.failed_hosts}")
 
         data = json.loads("\n".join(result.output[0].stdout))
         if data["status"] != 0 or data["error"] is not None:
             raise CommandFailure("fs query returned bad data.")
         return data["response"]
+
+    def get_log_file_data(self):
+        """Return the content of the log file for each clients
+
+        Returns:
+            list: lines of the the DFuse log file for each clients
+
+        Raises:
+            CommandFailure: on failure to get the DFuse log file
+
+        """
+        if not self.env.get("D_LOG_FILE"):
+            raise CommandFailure("get_log_file_data needs a DFuse log files to be defined")
+
+        log_file = self.env["D_LOG_FILE"]
+        result = run_remote(self.log, self.hosts, f"cat {log_file}")
+        if not result.passed:
+            raise CommandFailure(f"Log file {log_file} can not be open on {result.failed_hosts}")
+        return result
 
 
 def get_dfuse(test, hosts, namespace=None):
@@ -432,6 +450,7 @@ def start_dfuse(test, dfuse, pool=None, container=None, **params):
 
     Args:
         test (Test): the test instance
+        dfuse (Dfuse): the dfuse instance to start
         pool (TestPool, optional): pool to mount. Defaults to None
         container (TestContainer, optional): container to mount. Defaults to None
         params (Object, optional): Dfuse command arguments to update

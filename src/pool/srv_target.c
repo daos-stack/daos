@@ -408,8 +408,17 @@ pool_child_recreate(struct ds_pool_child *child)
 	struct dss_module_info	*info = dss_get_module_info();
 	struct smd_pool_info	*pool_info;
 	struct stat		 lstat;
+	uint32_t		 vos_df_version;
 	char			*path;
 	int			 rc;
+
+	vos_df_version = ds_pool_get_vos_df_version(child->spc_pool->sp_global_version);
+	if (vos_df_version == 0) {
+		rc = -DER_NO_PERM;
+		DL_ERROR(rc, DF_UUID ": pool global version %u not supported",
+			 DP_UUID(child->spc_uuid), child->spc_pool->sp_global_version);
+		return rc;
+	}
 
 	rc = ds_mgmt_tgt_file(child->spc_uuid, VOS_FILE, &info->dmi_tgt_id, &path);
 	if (rc != 0)
@@ -447,8 +456,10 @@ pool_child_recreate(struct ds_pool_child *child)
 		goto pool_info;
 	}
 
-	rc = vos_pool_create(path, child->spc_uuid, 0, pool_info->spi_blob_sz[SMD_DEV_TYPE_DATA],
-			     0, 0 /* version */, NULL);
+	rc = vos_pool_create(path, child->spc_uuid, 0 /* scm_sz */,
+			     pool_info->spi_blob_sz[SMD_DEV_TYPE_DATA],
+			     pool_info->spi_blob_sz[SMD_DEV_TYPE_META],
+			     0 /* flags */, vos_df_version, NULL);
 	if (rc)
 		DL_ERROR(rc, DF_UUID": Create VOS pool failed.", DP_UUID(child->spc_uuid));
 
@@ -505,6 +516,27 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 		child->spc_no_storage = 1;
 		goto done;
 	}
+
+	if (!ds_pool_skip_for_check(child->spc_pool) &&
+	    vos_pool_feature_skip_start(child->spc_hdl)) {
+		D_INFO(DF_UUID ": skipped to start\n", DP_UUID(child->spc_uuid));
+		rc = -DER_SHUTDOWN;
+		goto out_close;
+	}
+
+	if (vos_pool_feature_immutable(child->spc_hdl))
+		child->spc_pool->sp_immutable = 1;
+
+	/*
+	 * Rebuild depends on DTX resync, if DTX resync is skipped,
+	 * then rebuild also needs to be skipped.
+	 */
+	if (vos_pool_feature_skip_rebuild(child->spc_hdl) ||
+	    vos_pool_feature_skip_dtx_resync(child->spc_hdl))
+		child->spc_pool->sp_disable_rebuild = 1;
+
+	if (vos_pool_feature_skip_dtx_resync(child->spc_hdl))
+		child->spc_pool->sp_disable_dtx_resync = 1;
 
 	if (!ds_pool_restricted(child->spc_pool, false)) {
 		rc = start_gc_ult(child);
@@ -1444,8 +1476,8 @@ ds_pool_hdl_put(struct ds_pool_hdl *hdl)
 }
 
 static void
-aggregate_pool_space(struct daos_pool_space *agg_ps,
-		     struct daos_pool_space *ps)
+aggregate_pool_space(struct daos_pool_space *agg_ps, uint64_t *agg_mem_bytes,
+		     struct daos_pool_space *ps, uint64_t *mem_bytes)
 {
 	int	i;
 	bool	first;
@@ -1472,11 +1504,16 @@ aggregate_pool_space(struct daos_pool_space *agg_ps,
 		agg_ps->ps_free_mean[i] = agg_ps->ps_space.s_free[i] /
 					  agg_ps->ps_ntargets;
 	}
+	if (agg_mem_bytes != NULL) {
+		D_ASSERT(mem_bytes != NULL);
+		*agg_mem_bytes += *mem_bytes;
+	}
 }
 
 struct pool_query_xs_arg {
 	struct ds_pool		*qxa_pool;
 	struct daos_pool_space	 qxa_space;
+	uint64_t		 qxa_mem_bytes;
 };
 
 static void
@@ -1489,7 +1526,8 @@ pool_query_xs_reduce(void *agg_arg, void *xs_arg)
 		return;
 
 	D_ASSERT(x_arg->qxa_space.ps_ntargets == 1);
-	aggregate_pool_space(&a_arg->qxa_space, &x_arg->qxa_space);
+	aggregate_pool_space(&a_arg->qxa_space, &a_arg->qxa_mem_bytes, &x_arg->qxa_space,
+			     &x_arg->qxa_mem_bytes);
 }
 
 static int
@@ -1514,7 +1552,7 @@ pool_query_xs_arg_free(struct dss_stream_arg_type *xs)
 }
 
 static int
-pool_query_space(uuid_t pool_uuid, struct daos_pool_space *x_ps)
+pool_query_space(uuid_t pool_uuid, struct daos_pool_space *x_ps, uint64_t *mem_file_bytes)
 {
 	struct dss_module_info	*info = dss_get_module_info();
 	int			 tid = info->dmi_tgt_id;
@@ -1538,6 +1576,8 @@ pool_query_space(uuid_t pool_uuid, struct daos_pool_space *x_ps)
 	x_ps->ps_ntargets = 1;
 	x_ps->ps_space.s_total[DAOS_MEDIA_SCM] = SCM_TOTAL(vps);
 	x_ps->ps_space.s_total[DAOS_MEDIA_NVME] = NVME_TOTAL(vps);
+	if (mem_file_bytes != NULL)
+		*mem_file_bytes = vps->vps_mem_bytes;
 
 	/* Exclude the sys reserved space before reporting to user */
 	if (SCM_FREE(vps) > SCM_SYS(vps))
@@ -1571,11 +1611,11 @@ pool_query_one(void *vin)
 	struct pool_query_xs_arg	*x_arg = streams[tid].st_arg;
 	struct ds_pool			*pool = x_arg->qxa_pool;
 
-	return pool_query_space(pool->sp_uuid, &x_arg->qxa_space);
+	return pool_query_space(pool->sp_uuid, &x_arg->qxa_space, &x_arg->qxa_mem_bytes);
 }
 
 static int
-pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps)
+pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps, uint64_t *mem_file_bytes)
 {
 	struct dss_coll_ops		 coll_ops;
 	struct dss_coll_args		 coll_args = { 0 };
@@ -1608,6 +1648,8 @@ pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps)
 	}
 
 	*ps = agg_arg.qxa_space;
+	if (mem_file_bytes != NULL)
+		*mem_file_bytes = agg_arg.qxa_mem_bytes;
 
 out:
 	return rc;
@@ -1920,17 +1962,23 @@ out:
 	return rc;
 }
 
-void
-ds_pool_tgt_query_handler(crt_rpc_t *rpc)
+static void
+pool_tgt_query_handler(crt_rpc_t *rpc, int handler_version)
 {
 	struct pool_tgt_query_in	*in = crt_req_get(rpc);
 	struct pool_tgt_query_out	*out = crt_reply_get(rpc);
 	struct ds_pool			*pool;
+	uint64_t			*mem_file_bytes;
 	int				 rc;
+
+	if (handler_version >= 7)
+		mem_file_bytes = &out->tqo_mem_file_bytes;
+	else
+		mem_file_bytes = NULL;
 
 	/* Single target query */
 	if (dss_get_module_info()->dmi_xs_id != 0) {
-		rc = pool_query_space(in->tqi_op.pi_uuid, &out->tqo_space);
+		rc = pool_query_space(in->tqi_op.pi_uuid, &out->tqo_space, mem_file_bytes);
 		goto out;
 	}
 
@@ -1942,13 +1990,39 @@ ds_pool_tgt_query_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
-	rc = pool_tgt_query(pool, &out->tqo_space);
+	rc = pool_tgt_query(pool, &out->tqo_space, mem_file_bytes);
 	if (rc != 0)
 		rc = 1;	/* For query aggregator */
 	ds_pool_put(pool);
 out:
 	out->tqo_rc = rc;
 	crt_reply_send(rpc);
+}
+
+void
+ds_pool_tgt_query_handler_v6(crt_rpc_t *rpc)
+{
+	pool_tgt_query_handler(rpc, 6);
+}
+
+void
+ds_pool_tgt_query_handler(crt_rpc_t *rpc)
+{
+	pool_tgt_query_handler(rpc, DAOS_POOL_VERSION);
+}
+
+int
+ds_pool_tgt_query_aggregator_v6(crt_rpc_t *source, crt_rpc_t *result, void *priv)
+{
+	struct pool_tgt_query_v6_out *out_source = crt_reply_get(source);
+	struct pool_tgt_query_v6_out *out_result = crt_reply_get(result);
+
+	out_result->tqo_rc += out_source->tqo_rc;
+	if (out_source->tqo_rc != 0)
+		return 0;
+
+	aggregate_pool_space(&out_result->tqo_space, NULL, &out_source->tqo_space, NULL);
+	return 0;
 }
 
 int
@@ -1961,7 +2035,8 @@ ds_pool_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	if (out_source->tqo_rc != 0)
 		return 0;
 
-	aggregate_pool_space(&out_result->tqo_space, &out_source->tqo_space);
+	aggregate_pool_space(&out_result->tqo_space, &out_result->tqo_mem_file_bytes,
+			     &out_source->tqo_space, &out_source->tqo_mem_file_bytes);
 	return 0;
 }
 

@@ -3,6 +3,7 @@
 /* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral */
 /* groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName */
 /* Copyright 2019-2024 Intel Corporation
+ * Copyright 2025 Hewlett Packard Enterprise Development LP
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -364,25 +365,6 @@ pipeline {
         stage('Check PR') {
             when { changeRequest() }
             parallel {
-                stage('Used Required Git Hooks') {
-                    steps {
-                        catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS',
-                                   message: 'PR did not get committed with required git hooks.  ' +
-                                            'Please see utils/githooks/README.md.') {
-                            sh 'if ! ' + cachedCommitPragma('Required-githooks', 'false') + '''; then
-                                   echo 'PR did not get committed with required git hooks.  ' +
-                                        'Please see utils/githooks/README.md.'
-                                   exit 1
-                                fi'''
-                        }
-                    }
-                    post {
-                        unsuccessful {
-                            echo 'PR did not get committed with required git hooks.  ' +
-                                 'Please see utils/githooks/README.md.'
-                        }
-                    }
-                } // stage('Used Required Git Hooks')
                 stage('Branch name check') {
                     when { changeRequest() }
                     steps {
@@ -876,7 +858,7 @@ pipeline {
                     }
                     steps {
                         job_step_update(
-                            unitTest(timeout_time: 60,
+                            unitTest(timeout_time: 180,
                                      unstash_opt: true,
                                      ignore_failure: true,
                                      inst_repos: prRepos(),
@@ -965,7 +947,7 @@ pipeline {
                         }
                     }
                 } // stage('Functional on EL 9')
-                stage('Functional on Leap 15.5') {
+                stage('Functional on Leap 15.6') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -978,7 +960,8 @@ pipeline {
                             functionalTest(
                                 inst_repos: daosRepos(),
                                 inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
-                                test_function: 'runTestFunctionalV2'))
+                                test_function: 'runTestFunctionalV2',
+                                image_version: 'leap15.6'))
                     }
                     post {
                         always {
@@ -986,7 +969,7 @@ pipeline {
                             job_status_update()
                         }
                     } // post
-                } // stage('Functional on Leap 15.5')
+                } // stage('Functional on Leap 15.6')
                 stage('Functional on Ubuntu 20.04') {
                     when {
                         beforeAgent true
@@ -1061,7 +1044,7 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Fault inection testing on EL 8.8')
+                } // stage('Fault injection testing on EL 8.8')
                 stage('Test RPMs on EL 8.6') {
                     when {
                         beforeAgent true
@@ -1081,8 +1064,8 @@ pipeline {
                             rpm_test_post(env.STAGE_NAME, env.NODELIST)
                         }
                     }
-                } // stage('Test CentOS 7 RPMs')
-                stage('Test RPMs on Leap 15.4') {
+                } // stage('Test RPMs on EL 8.6')
+                stage('Test RPMs on Leap 15.5') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
@@ -1096,8 +1079,8 @@ pipeline {
                          * additionally for this use-case, can't override
                            ftest_arg with this :-(
                         script {
-                            'Test RPMs on Leap 15.4': getFunctionalTestStage(
-                                name: 'Test RPMs on Leap 15.4',
+                            'Test RPMs on Leap 15.5': getFunctionalTestStage(
+                                name: 'Test RPMs on Leap 15.5',
                                 pragma_suffix: '',
                                 label: params.CI_UNIT_VM1_LABEL,
                                 next_version: next_version,
@@ -1133,7 +1116,7 @@ pipeline {
                             rpm_test_post(env.STAGE_NAME, env.NODELIST)
                         }
                     }
-                } // stage('Test Leap 15 RPMs')
+                } // stage('Test RPMs on Leap 15.5')
             } // parallel
         } // stage('Test')
         stage('Test Storage Prep on EL 8.8') {
@@ -1167,6 +1150,7 @@ pipeline {
                         'Functional Hardware Medium': getFunctionalTestStage(
                             name: 'Functional Hardware Medium',
                             pragma_suffix: '-hw-medium',
+                            base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,-provider',
@@ -1179,6 +1163,7 @@ pipeline {
                         'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium MD on SSD',
                             pragma_suffix: '-hw-medium-md-on-ssd',
+                            base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,-provider',
@@ -1192,6 +1177,7 @@ pipeline {
                         'Functional Hardware Medium VMD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium VMD',
                             pragma_suffix: '-hw-medium-vmd',
+                            base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw_vmd,medium',
@@ -1205,6 +1191,7 @@ pipeline {
                         'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider',
                             pragma_suffix: '-hw-medium-verbs-provider',
+                            base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,provider',
@@ -1218,6 +1205,7 @@ pipeline {
                         'Functional Hardware Medium Verbs Provider MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider MD on SSD',
                             pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
+                            base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,provider',
@@ -1232,6 +1220,7 @@ pipeline {
                         'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium UCX Provider',
                             pragma_suffix: '-hw-medium-ucx-provider',
+                            base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,provider',
@@ -1245,6 +1234,7 @@ pipeline {
                         'Functional Hardware Large': getFunctionalTestStage(
                             name: 'Functional Hardware Large',
                             pragma_suffix: '-hw-large',
+                            base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,large',
@@ -1257,6 +1247,7 @@ pipeline {
                         'Functional Hardware Large MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Large MD on SSD',
                             pragma_suffix: '-hw-large-md-on-ssd',
+                            base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,large',

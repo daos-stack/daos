@@ -107,9 +107,11 @@ extern int                               ds_mgmt_pool_query_return;
 extern uuid_t                            ds_mgmt_pool_query_uuid;
 extern daos_pool_info_t                  ds_mgmt_pool_query_info_in;
 extern daos_pool_info_t                  ds_mgmt_pool_query_info_out;
+extern uint64_t                          ds_mgmt_pool_query_mem_bytes;
 extern void                             *ds_mgmt_pool_query_info_ptr;
 extern d_rank_list_t                    *ds_mgmt_pool_query_enabled_ranks_out;
 extern d_rank_list_t                    *ds_mgmt_pool_query_disabled_ranks_out;
+extern d_rank_list_t                    *ds_mgmt_pool_query_dead_ranks_out;
 
 void mock_ds_mgmt_pool_query_setup(void);
 
@@ -119,6 +121,7 @@ void mock_ds_mgmt_pool_query_setup(void);
 extern int			ds_mgmt_pool_query_targets_return;
 extern uuid_t			ds_mgmt_pool_query_targets_uuid;
 extern daos_target_info_t	*ds_mgmt_pool_query_targets_info_out;
+extern uint64_t                 ds_mgmt_pool_query_targets_mem_bytes;
 void mock_ds_mgmt_pool_query_targets_setup(void);
 void mock_ds_mgmt_pool_query_targets_teardown(void);
 

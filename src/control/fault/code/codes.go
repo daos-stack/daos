@@ -154,6 +154,7 @@ const (
 	ServerNoCompatibilityInsecure
 	ServerPoolHasContainers
 	ServerHugepagesDisabled
+	ServerPoolMemRatioNoRoles
 	ServerBadFaultDomainLabels
 )
 
@@ -164,8 +165,8 @@ const (
 	ServerNoConfigPath
 	ServerConfigBadControlPort
 	ServerConfigBadTelemetryPort
-	ServerConfigBadAccessPoints
-	ServerConfigEvenAccessPoints
+	ServerConfigBadMgmtSvcReplicas
+	ServerConfigEvenMgmtSvcReplicas
 	ServerConfigBadProvider
 	ServerConfigNoEngines
 	ServerConfigDuplicateFabric

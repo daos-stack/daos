@@ -32,6 +32,9 @@
 /* Standard max length of addresses e.g. URI, PCI */
 #define ADDR_STR_MAX_LEN 128
 
+#define AF_RC            "%s(%d): '%s'"
+#define AP_RC(rc)        dss_abterr2str(rc), rc, dss_abterr2desc(rc)
+
 /** DAOS system name (corresponds to crt group ID) */
 extern char             *daos_sysname;
 
@@ -550,11 +553,36 @@ static inline int
 dss_abterr2der(int abt_errno)
 {
 	switch (abt_errno) {
-	case ABT_SUCCESS:	return 0;
-	case ABT_ERR_MEM:	return -DER_NOMEM;
-	default:		return -DER_INVAL;
+	case ABT_SUCCESS:
+		return 0;
+	case ABT_ERR_MEM:
+		return -DER_NOMEM;
+	default:
+		return -DER_INVAL;
 	}
 }
+
+/* Convert DAOS errno to Argobots ones. */
+static inline int
+dss_der2abterr(int der)
+{
+	switch (der) {
+	case -DER_SUCCESS:
+		return ABT_SUCCESS;
+	case -DER_NOMEM:
+		return ABT_ERR_MEM;
+	default:
+		return ABT_ERR_OTHER;
+	}
+}
+
+/** Helper converting ABT error code into human readable string */
+const char *
+dss_abterr2str(int rc);
+
+/** Helper converting ABT error code into meaningful message */
+const char *
+dss_abterr2desc(int rc);
 
 /** RPC counter types */
 enum dss_rpc_cntr_id {

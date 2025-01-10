@@ -408,7 +408,7 @@ cancel:
 				    cont->vc_solo_dtx_epoch < dth->dth_epoch)
 					cont->vc_solo_dtx_epoch = dth->dth_epoch;
 
-				vos_dtx_post_handle(cont, &dae, &dce, 1, false, err != 0);
+				vos_dtx_post_handle(cont, &dae, &dce, 1, false, err != 0, false);
 			} else {
 				D_ASSERT(dce == NULL);
 				if (err == 0 && dth->dth_active) {
@@ -693,8 +693,7 @@ static inline int
 vos_metrics_count(void)
 {
 	return vea_metrics_count() +
-	       (sizeof(struct vos_agg_metrics) + sizeof(struct vos_space_metrics) +
-		sizeof(struct vos_chkpt_metrics)) / sizeof(struct d_tm_node_t *);
+		sizeof(struct vos_pool_metrics) / sizeof(struct d_tm_node_t *);
 }
 
 static void
@@ -873,6 +872,9 @@ vos_metrics_alloc(const char *path, int tgt_id)
 
 	/* Initialize metrics for WAL */
 	vos_wal_metrics_init(&vp_metrics->vp_wal_metrics, path, tgt_id);
+
+	/* Initialize metrcis for umem cache */
+	vos_cache_metrics_init(&vp_metrics->vp_cache_metrics, path, tgt_id);
 
 	return vp_metrics;
 }

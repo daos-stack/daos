@@ -81,9 +81,11 @@ dtx_coll_prep_ult(void *arg)
 	}
 
 	if (dcpa->dcpa_result != 0) {
-		if (dcpa->dcpa_result != -DER_INPROGRESS && dcpa->dcpa_result != -DER_NONEXIST)
-			D_ERROR("Failed to load mbs for "DF_DTI", opc %u: "DF_RC"\n",
-				DP_DTI(&dci->dci_xid), opc, DP_RC(rc));
+		if (dcpa->dcpa_result < 0 &&
+		    dcpa->dcpa_result != -DER_INPROGRESS && dcpa->dcpa_result != -DER_NONEXIST)
+			D_ERROR("Failed to load mbs for "DF_DTI" in "DF_UUID"/"DF_UUID", opc %u: "
+				DF_RC"\n", DP_DTI(&dci->dci_xid), DP_UUID(dci->dci_po_uuid),
+				DP_UUID(dci->dci_co_uuid), opc, DP_RC(dcpa->dcpa_result));
 		goto out;
 	}
 
@@ -304,7 +306,7 @@ dtx_coll_local_one(void *args)
 
 	switch (opc) {
 	case DTX_COLL_COMMIT:
-		rc = vos_dtx_commit(cont->sc_hdl, &dcla->dcla_xid, 1, NULL);
+		rc = vos_dtx_commit(cont->sc_hdl, &dcla->dcla_xid, 1, false, NULL);
 		break;
 	case DTX_COLL_ABORT:
 		rc = vos_dtx_abort(cont->sc_hdl, &dcla->dcla_xid, dcla->dcla_epoch);

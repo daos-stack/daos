@@ -496,9 +496,12 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (rc != 0)
 		goto reset;
 
-	/* Commit the CoS DTXs via the PUNCH PMDK transaction. */
-	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0 &&
-	    !dth->dth_cos_done) {
+	/* Commit the CoS DTXs via the PUNCH PMDK transaction.
+	 *
+	 * It's guaranteed that no other objects are involved in the CoS DTXs, so we don't
+	 * need to pin extra objects here.
+	 */
+	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0 && !dth->dth_cos_done) {
 		D_ALLOC_ARRAY(daes, dth->dth_dti_cos_count);
 		if (daes == NULL)
 			D_GOTO(reset, rc = -DER_NOMEM);
@@ -508,7 +511,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 			D_GOTO(reset, rc = -DER_NOMEM);
 
 		rc = vos_dtx_commit_internal(cont, dth->dth_dti_cos,
-					     dth->dth_dti_cos_count, 0, NULL, daes, dces);
+					     dth->dth_dti_cos_count, 0, false, NULL, daes, dces);
 		if (rc < 0)
 			goto reset;
 		if (rc == 0)
@@ -581,7 +584,7 @@ reset:
 
 		if (daes != NULL)
 			vos_dtx_post_handle(cont, daes, dces, dth->dth_dti_cos_count,
-					    false, rc != 0);
+					    false, rc != 0, false);
 	}
 
 	if (obj != NULL)
@@ -1065,7 +1068,8 @@ key_iter_fetch_root(struct vos_obj_iter *oiter, vos_iter_type_t type,
 		 * subtree
 		 */
 		if (krec->kr_bmap & KREC_BF_EVT) {
-			vos_evt_desc_cbs_init(&cbs, vos_obj2pool(obj), vos_cont2hdl(obj->obj_cont));
+			vos_evt_desc_cbs_init(&cbs, vos_obj2pool(obj), vos_cont2hdl(obj->obj_cont),
+					      obj);
 			rc = evt_open(&krec->kr_evt, info->ii_uma, &cbs, &info->ii_tree_hdl);
 			if (rc) {
 				D_DEBUG(DB_TRACE,
@@ -1077,7 +1081,7 @@ key_iter_fetch_root(struct vos_obj_iter *oiter, vos_iter_type_t type,
 			info->ii_fake_akey_flag = VOS_IT_DKEY_EV;
 		} else {
 			rc = dbtree_open_inplace_ex(&krec->kr_btr, info->ii_uma,
-						    vos_cont2hdl(obj->obj_cont), vos_obj2pool(obj),
+						    vos_cont2hdl(obj->obj_cont), obj,
 						    &info->ii_tree_hdl);
 			if (rc) {
 				D_DEBUG(DB_TRACE,
@@ -2040,7 +2044,7 @@ vos_obj_akey_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 	}
 
 	rc = dbtree_open_inplace_ex(info->ii_btr, info->ii_uma, vos_cont2hdl(obj->obj_cont),
-				    vos_obj2pool(obj), &toh);
+				    obj, &toh);
 	if (rc) {
 		D_DEBUG(DB_TRACE,
 			"Failed to open tree for iterator:"
@@ -2097,7 +2101,7 @@ vos_obj_iter_sv_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 	}
 
 	rc = dbtree_open_inplace_ex(info->ii_btr, info->ii_uma, vos_cont2hdl(obj->obj_cont),
-				    vos_obj2pool(obj), &toh);
+				    obj, &toh);
 	if (rc) {
 		D_DEBUG(DB_TRACE,
 			"Failed to open tree for iterator:"
@@ -2157,7 +2161,7 @@ vos_obj_ev_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 		goto prepare;
 	}
 
-	vos_evt_desc_cbs_init(&cbs, vos_obj2pool(obj), vos_cont2hdl(obj->obj_cont));
+	vos_evt_desc_cbs_init(&cbs, vos_obj2pool(obj), vos_cont2hdl(obj->obj_cont), obj);
 	rc = evt_open(info->ii_evt, info->ii_uma, &cbs, &toh);
 	if (rc) {
 		D_DEBUG(DB_TRACE,
@@ -2595,7 +2599,7 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard)
 		 *	be aborted. Then it will be added and handled via GC when ktr_rec_free().
 		 */
 
-		rc = dbtree_iter_delete(oiter->it_hdl, NULL);
+		rc = dbtree_iter_delete(oiter->it_hdl, obj->obj_cont);
 		D_ASSERT(rc != -DER_NONEXIST);
 	} else if (rc == -DER_NONEXIST) {
 		/* Key no longer exists at epoch but isn't empty */

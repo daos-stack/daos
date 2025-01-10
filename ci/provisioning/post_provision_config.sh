@@ -57,9 +57,11 @@ if ! retry_cmd 2400 clush -B -S -l root -w "$NODESTRING" \
            BRANCH_NAME=\"${BRANCH_NAME:-}\"
            CHANGE_TARGET=\"${CHANGE_TARGET:-}\"
            CI_RPM_TEST_VERSION=\"${CI_RPM_TEST_VERSION:-}\"
+           DAOS_VERSION=\"${DAOS_VERSION:-}\"
            CI_PR_REPOS=\"${CI_PR_REPOS:-}\"
            REPO_PATH=\"${REPO_PATH:-}\"
            ARTIFACTS_URL=\"${ARTIFACTS_URL:-}\"
+           COVFN_DISABLED=\"${COVFN_DISABLED:-true}\"
            $(cat ci/stacktrace.sh)
            $(cat ci/junit.sh)
            $(cat ci/provisioning/post_provision_config_common_functions.sh)

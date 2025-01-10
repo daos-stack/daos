@@ -15,8 +15,8 @@
 %endif
 
 Name:          daos
-Version:       2.7.100
-Release:       9%{?relval}%{?dist}
+Version:       2.7.101
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -204,7 +204,11 @@ Summary: The DAOS test suite
 Requires: %{name}-client%{?_isa} = %{version}-%{release}
 Requires: %{name}-admin%{?_isa} = %{version}-%{release}
 Requires: %{name}-devel%{?_isa} = %{version}-%{release}
+%if (0%{?suse_version} >= 1500)
+Requires: libprotobuf-c-devel
+%else
 Requires: protobuf-c-devel
+%endif
 Requires: fio
 Requires: git
 Requires: dbench
@@ -366,7 +370,7 @@ install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
 mkdir -p %{buildroot}/%{conf_dir}/certs/clients
 mv %{buildroot}/%{conf_dir}/bash_completion.d %{buildroot}/%{_sysconfdir}
 # fixup env-script-interpreters
-sed -i -e '1s/env //' %{buildroot}{%{daoshome}/TESTING/ftest/{cart/cart_logtest,config_file_gen,launch,slurm_setup,tags,verify_perms}.py,%{_bindir}/daos_storage_estimator.py}
+sed -i -e '1s/env //' %{buildroot}{%{daoshome}/TESTING/ftest/{cart/cart_logtest,cart/daos_sys_logscan,config_file_gen,launch,slurm_setup,tags,verify_perms}.py,%{_bindir}/daos_storage_estimator.py}
 
 # shouldn't have source files in a non-devel RPM
 rm -f %{buildroot}%{daoshome}/TESTING/ftest/cart/{test_linkage.cpp,utest_{hlc,portnumber,protocol,swim}.c,wrap_cmocka.h}
@@ -418,6 +422,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_sysconfdir}/bash_completion.d/daos.bash
 # Certificate generation files
 %dir %{_libdir}/%{name}
+%{_bindir}/daos_metrics
 %{_libdir}/%{name}/certgen/
 %{_libdir}/%{name}/VERSION
 %{_libdir}/libcart.so.*
@@ -434,7 +439,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # and/or daos_firmware_helper
 %attr(2755,root,daos_server) %{_bindir}/daos_server
 %{_bindir}/daos_engine
-%{_bindir}/daos_metrics
 %{_bindir}/ddb
 %{_sysconfdir}/ld.so.conf.d/daos.conf
 %dir %{_libdir}/daos_srv
@@ -457,6 +461,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/daos_srv/libplacement.so
 %{_libdir}/daos_srv/libpipeline.so
 %{_libdir}/libdaos_common_pmem.so
+%{_libdir}/libdav_v2.so
 %config(noreplace) %{conf_dir}/vos_size_input.yaml
 %{_bindir}/daos_storage_estimator.py
 %{python3_sitearch}/storage_estimator/*.py
@@ -497,13 +502,18 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{python3_sitearch}/pydaos/*.py
 %dir %{python3_sitearch}/pydaos/raw
 %{python3_sitearch}/pydaos/raw/*.py
+%dir %{python3_sitearch}/pydaos/torch
+%{python3_sitearch}/pydaos/torch/*.py
 %if (0%{?rhel} >= 8)
 %dir %{python3_sitearch}/pydaos/__pycache__
 %{python3_sitearch}/pydaos/__pycache__/*.pyc
 %dir %{python3_sitearch}/pydaos/raw/__pycache__
 %{python3_sitearch}/pydaos/raw/__pycache__/*.pyc
+%dir %{python3_sitearch}/pydaos/torch/__pycache__
+%{python3_sitearch}/pydaos/torch/__pycache__/*.pyc
 %endif
 %{python3_sitearch}/pydaos/pydaos_shim.so
+%{python3_sitearch}/pydaos/torch/torch_shim.so
 %{_datarootdir}/%{name}/ioil-ld-opts
 %config(noreplace) %{conf_dir}/daos_agent.yml
 %{_unitdir}/%{agent_svc_name}
@@ -592,6 +602,23 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Dec 19 2024 Phillip Henderson <phillip.henderson@intel.com> 2.7.101-3
+- Fix protobuf-c requiremnent for daos-client-tests on Leap.
+
+* Tue Nov 13 2024 Denis Barakhtanov <dbarahtanov@enakta.com> 2.7.101-2
+- Add pydaos.torch module to daos-client rpm.
+
+* Fri Nov 08 2024 Phillip Henderson <phillip.henderson@intel.com> 2.7.101-1
+- Bump version to 2.7.100
+
+* Tue Nov 5 2024 Michael MacDonald <mjmac@google.com> 2.7.100-11
+- Move daos_metrics tool to daos package for use on both clients
+  and servers.
+
+* Fri Nov 1 2024 Sherin T George <sherin-t.george@hpe.com> 2.7.100-10
+- The modified DAV allocator with memory bucket support for md_on_ssd
+  phase-2 is delivered as dav_v2.so.
+
 * Tue Oct 15 2024 Brian J. Murrell <brian.murrell@intel.com> - 2.7.100-9
 - Drop BRs for UCX as they were obsoleted as of e01970d
 

@@ -804,6 +804,12 @@ destroy_shmem_with_key(key_t key)
 	return 0;
 }
 
+static bool
+is_initialized(void)
+{
+	return tm_shmem.ctx != NULL && tm_shmem.ctx->shmem_root != NULL;
+}
+
 /**
  * Initialize an instance of the telemetry and metrics API for the producer
  * process with the root set to the provided name.
@@ -830,8 +836,11 @@ d_tm_init_with_name(int id, uint64_t mem_size, int flags, const char *root_name)
 {
 	struct d_tm_shmem_hdr   *new_shmem = NULL;
 	key_t			 key;
-	int                      shmid;
+	int                      shmid = 0;
 	int			 rc = DER_SUCCESS;
+
+	if (is_initialized())
+		return -DER_ALREADY;
 
 	if (root_name == NULL || strnlen(root_name, D_TM_MAX_NAME_LEN) == 0) {
 		D_ERROR("root name cannot be empty\n");
@@ -1826,21 +1835,42 @@ void
 d_tm_compute_histogram(struct d_tm_node_t *node, uint64_t value)
 {
 	struct d_tm_histogram_t	*dtm_histogram;
-	struct d_tm_node_t	*bucket;
-	int			i;
+	struct d_tm_node_t      *bucket = NULL;
+	int                      initial_width;
+	int                      num_buckets;
+	int                      i;
 
 	if (!node || !node->dtn_metric || !node->dtn_metric->dtm_histogram)
 		return;
 
 	dtm_histogram = node->dtn_metric->dtm_histogram;
+	initial_width = dtm_histogram->dth_initial_width;
+	num_buckets   = dtm_histogram->dth_num_buckets;
 
-	for (i = 0; i < dtm_histogram->dth_num_buckets; i++) {
-		if (value <= dtm_histogram->dth_buckets[i].dtb_max) {
-			bucket = dtm_histogram->dth_buckets[i].dtb_bucket;
-			d_tm_inc_counter(bucket, 1);
-			break;
+	/* first and last buckets are easy special cases */
+	if (value <= dtm_histogram->dth_buckets[0].dtb_max) {
+		bucket = dtm_histogram->dth_buckets[0].dtb_bucket;
+	} else if (value >= dtm_histogram->dth_buckets[num_buckets - 1].dtb_min) {
+		bucket = dtm_histogram->dth_buckets[num_buckets - 1].dtb_bucket;
+	} else if (dtm_histogram->dth_fast_bucketing) {
+		/* fast path for bucketing by powers of 2 */
+		i      = __builtin_clzl(initial_width - 1) - __builtin_clzl(value);
+		bucket = dtm_histogram->dth_buckets[i].dtb_bucket;
+	} else {
+		/* slow path */
+		for (i = 0; i < dtm_histogram->dth_num_buckets; i++) {
+			if (value <= dtm_histogram->dth_buckets[i].dtb_max) {
+				bucket = dtm_histogram->dth_buckets[i].dtb_bucket;
+				break;
+			}
 		}
 	}
+
+	if (unlikely(bucket == NULL)) {
+		D_ERROR("Unable to find bucket for value %lu\n", value);
+		return;
+	}
+	d_tm_inc_counter(bucket, 1);
 }
 
 /**
@@ -2232,13 +2262,6 @@ d_tm_find_metric(struct d_tm_context *ctx, char *path)
 	return node;
 }
 
-static bool
-is_initialized(void)
-{
-	return tm_shmem.ctx != NULL &&
-	       tm_shmem.ctx->shmem_root != NULL;
-}
-
 /*
  * Get a pointer to the last token in the path without modifying the original
  * string.
@@ -2490,11 +2513,14 @@ int d_tm_add_metric(struct d_tm_node_t **node, int metric_type, char *desc,
 		return DER_SUCCESS;
 	}
 
+	D_DEBUG(DB_TRACE, "adding item: [%s] ", path);
 	rc = add_metric(tm_shmem.ctx, node, metric_type, desc, units, path);
-	if (rc != 0)
+	if (rc != 0) {
+		D_DEBUG(DB_TRACE, "failed\n");
 		D_GOTO(failure, rc);
+	}
 
-	D_DEBUG(DB_TRACE, "successfully added item: [%s]\n", path);
+	D_DEBUG(DB_TRACE, "succeeded\n");
 	d_tm_unlock_shmem();
 	return DER_SUCCESS;
 
@@ -3128,6 +3154,7 @@ node_is_readable(struct d_tm_node_t *node)
  *				A multiplier of 2 creates buckets that are
  *				twice the size of the previous bucket.
  *				Must be > 0.
+ * \param[in]	unit		Optional unit for the bucketed values.
  *
  * \return			DER_SUCCESS		Success
  *				-DER_INVAL		node, path, num_buckets,
@@ -3139,18 +3166,19 @@ node_is_readable(struct d_tm_node_t *node)
  *				-DER_NOMEM		Out of heap
  */
 int
-d_tm_init_histogram(struct d_tm_node_t *node, char *path, int num_buckets,
-		    int initial_width, int multiplier)
+d_tm_init_histogram(struct d_tm_node_t *node, char *path, int num_buckets, int initial_width,
+		    int multiplier, const char *unit)
 {
 	struct d_tm_metric_t	*metric;
 	struct d_tm_histogram_t	*histogram;
 	struct d_tm_bucket_t	*dth_buckets;
 	struct d_tm_shmem_hdr	*shmem;
-	uint64_t		min = 0;
-	uint64_t		max = 0;
-	uint64_t		prev_width = 0;
-	int			rc = DER_SUCCESS;
-	int			i;
+	uint64_t                 min = 0;
+	uint64_t                 max = 0;
+	char                    *max_str;
+	char                     max_str_buf[20] = {0};
+	int                      rc              = DER_SUCCESS;
+	int                      i;
 	char			*meta_data;
 	char			*fullpath;
 
@@ -3200,6 +3228,8 @@ d_tm_init_histogram(struct d_tm_node_t *node, char *path, int num_buckets,
 		rc = -DER_NO_SHMEM;
 		goto failure;
 	}
+	histogram->dth_fast_bucketing =
+	    (multiplier == 2 && (initial_width & (initial_width - 1)) == 0);
 	histogram->dth_num_buckets = num_buckets;
 	histogram->dth_initial_width = initial_width;
 	histogram->dth_value_multiplier = multiplier;
@@ -3212,16 +3242,24 @@ d_tm_init_histogram(struct d_tm_node_t *node, char *path, int num_buckets,
 
 	min = 0;
 	max = initial_width - 1;
-	prev_width = initial_width;
 	for (i = 0; i < num_buckets; i++) {
-		D_ASPRINTF(meta_data, "histogram bucket %d [%lu .. %lu]",
-			   i, min, max);
+		if (max == UINT64_MAX && i == (num_buckets - 1)) {
+			max_str = "inf";
+		} else {
+			snprintf(max_str_buf, sizeof(max_str_buf), "%lu", max);
+			max_str = &max_str_buf[0];
+		}
+
+		D_ASPRINTF(meta_data, "histogram bucket %d [%lu .. %s]", i, min, max_str);
 		if (meta_data == NULL) {
 			rc = -DER_NOMEM;
 			goto failure;
 		}
 
-		D_ASPRINTF(fullpath, "%s/bucket %d", path, i);
+		if (unit == NULL)
+			D_ASPRINTF(fullpath, "%s/%lu_%s", path, min, max_str);
+		else
+			D_ASPRINTF(fullpath, "%s/%lu_%s_%s", path, min, max_str, unit);
 		if (fullpath == NULL) {
 			rc = -DER_NOMEM;
 			goto failure;
@@ -3244,9 +3282,8 @@ d_tm_init_histogram(struct d_tm_node_t *node, char *path, int num_buckets,
 		} else if (multiplier == 1) {
 			max += initial_width;
 		} else {
-			max = min + (prev_width * multiplier) - 1;
+			max = (min * multiplier) - 1;
 		}
-		prev_width = (max - min) + 1;
 	}
 
 	D_DEBUG(DB_TRACE, "Successfully added histogram for: [%s]\n", path);
@@ -3254,7 +3291,7 @@ d_tm_init_histogram(struct d_tm_node_t *node, char *path, int num_buckets,
 
 failure:
 
-	D_ERROR("Failed to histogram for [%s]: " DF_RC "\n", path, DP_RC(rc));
+	D_ERROR("Failed to create histogram for [%s]: " DF_RC "\n", path, DP_RC(rc));
 	return rc;
 }
 
@@ -3968,6 +4005,18 @@ key_t
 d_tm_get_srv_key(int srv_idx)
 {
 	return D_TM_SHARED_MEMORY_KEY + srv_idx;
+}
+
+key_t
+d_tm_cli_pid_key(pid_t pid)
+{
+	/*
+	 * Set the key based the pid so that it can be easily found.
+	 * NB: This is the inverse of d_tm_get_srv_key() above; we
+	 * do it this way to hide the implementation details and avoid
+	 * unnecessary code changes.
+	 */
+	return pid - D_TM_SHARED_MEMORY_KEY;
 }
 
 /**
