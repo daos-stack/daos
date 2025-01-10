@@ -1,7 +1,5 @@
 """Build daos mgmt tests"""
 
-LIBPATH = [Dir('../../'), Dir('../../bio')]
-
 
 def scons():
     """Execute build"""
@@ -10,7 +8,7 @@ def scons():
     mocks = denv.Object("mocks.c")
 
     denv.Append(CPPDEFINES={'DRPC_TEST': '1'})
-    denv.AppendUnique(RPATH_FULL=LIBPATH)
+    denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     denv.d_test_program('srv_drpc_tests',
                         source=[pb_objs, mocks, 'srv_drpc_tests.c', '../srv_drpc.c'],
                         LIBS=['cmocka', 'protobuf-c', 'daos_common_pmem', 'gurt', 'uuid', 'bio'])
