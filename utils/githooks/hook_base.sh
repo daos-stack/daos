@@ -32,7 +32,6 @@ export -f _git_diff_cached_files
 hook=${0##*/}
 rm -f ".${hook}"
 
-skip_list=()
 IFS=', ' read -r -a skip_list <<< "${DAOS_GITHOOK_SKIP:-}"
 
 run-parts() {
@@ -43,7 +42,7 @@ run-parts() {
         # don't run vim .swp files
         [ "${i%.sw?}" != "${i}" ] && continue
         skip_item=false
-        for skip in "${skip_list[@]}"; do
+        for skip in "${skip_list[@]:-}"; do
             if [[ "${i}" =~ ${skip} ]]; then
                 skip_item=true
                 echo "Skipping ${i}"
