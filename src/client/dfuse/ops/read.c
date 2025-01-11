@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2025 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -200,7 +200,8 @@ check_inflight_fetch(struct active_inode *active, struct dfuse_event *ev)
 	D_SPIN_LOCK(&active->lock);
 	d_list_for_each_entry(evc, &active->open_reads, de_read_list) {
 		if (ev->de_req_position >= evc->de_req_position &&
-		    ev->de_req_len <= evc->de_req_len) {
+		    (ev->de_req_len + ev->de_req_position) <=
+			(evc->de_req_len + evc->de_req_position)) {
 			d_list_add(&ev->de_read_list, &evc->de_read_slaves);
 			D_SPIN_UNLOCK(&active->lock);
 			return true;
