@@ -297,4 +297,20 @@ the path must include the extent, otherwise, it must not.`,
 		},
 		Completer: nil,
 	})
+	// Command: dtx_act_discard
+	app.AddCommand(&grumble.Command{
+		Name:      "dtx_act_discard",
+		Aliases:   nil,
+		Help:      "XXX",
+		LongHelp:  "",
+		HelpGroup: "vos",
+		Args: func(a *grumble.Args) {
+			a.String("path", "VOS tree path to a container.")
+			a.String("dtx_id", "DTX id of the entry to abort. ")
+		},
+		Run: func(c *grumble.Context) error {
+			return ddbDtxActDiscard(ctx, c.Args.String("path"), c.Args.String("dtx_id"))
+		},
+		Completer: nil,
+	})
 }

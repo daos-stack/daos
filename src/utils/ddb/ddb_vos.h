@@ -178,6 +178,7 @@ int dv_dtx_get_act_table(daos_handle_t coh, dv_dtx_act_handler handler_cb, void 
 int dv_dtx_clear_cmt_table(daos_handle_t coh);
 int dv_dtx_commit_active_entry(daos_handle_t coh, struct dtx_id *dti);
 int dv_dtx_abort_active_entry(daos_handle_t coh, struct dtx_id *dti);
+int dv_dtx_active_entry_discard(daos_handle_t coh, struct dtx_id *dti, int *discarded);
 
 /* Sync the smd table with information saved in blobs */
 typedef int (*dv_smd_sync_complete)(void *cb_args, uuid_t pool_id, uint32_t vos_id,

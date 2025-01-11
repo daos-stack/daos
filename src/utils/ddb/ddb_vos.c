@@ -1396,6 +1396,12 @@ dv_dtx_abort_active_entry(daos_handle_t coh, struct dtx_id *dti)
 }
 
 int
+dv_dtx_active_entry_discard(daos_handle_t coh, struct dtx_id *dti, int *discarded)
+{
+	return vos_dtx_discard(coh, dti, discarded);
+}
+
+int
 dv_delete(daos_handle_t poh, struct dv_tree_path *vtp)
 {
 	daos_handle_t	coh;

@@ -34,6 +34,7 @@
 #define COMMAND_NAME_VEA_UPDATE "vea_update"
 #define COMMAND_NAME_DTX_ACT_COMMIT "dtx_act_commit"
 #define COMMAND_NAME_DTX_ACT_ABORT "dtx_act_abort"
+#define COMMAND_NAME_DTX_ACT_DISCARD "dtx_act_discard"
 
 /* Parse command line options for the 'ls' command */
 static int
@@ -728,6 +729,11 @@ ddb_parse_cmd_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct ddb_c
 		return dtx_act_abort_option_parse(ctx, &info->dci_cmd_option.dci_dtx_act_abort,
 		       argc, argv);
 	}
+	if (same(cmd, COMMAND_NAME_DTX_ACT_DISCARD)) {
+		info->dci_cmd = DDB_CMD_DTX_ACT_DISCARD;
+		return dtx_act_abort_option_parse(ctx, &info->dci_cmd_option.dci_dtx_act_abort,
+		       argc, argv);
+	}
 
 	ddb_errorf(ctx, "'%s' is not a valid command. Available commands are:"
 			"'help', "
@@ -866,6 +872,10 @@ ddb_run_cmd(struct ddb_ctx *ctx, const char *cmd_str, bool write_mode)
 
 	case DDB_CMD_DTX_ACT_ABORT:
 		rc = ddb_run_dtx_act_abort(ctx, &info.dci_cmd_option.dci_dtx_act_abort);
+		break;
+
+	case DDB_CMD_DTX_ACT_DISCARD:
+		rc = ddb_run_dtx_act_discard(ctx, &info.dci_cmd_option.dci_dtx_act_abort);
 		break;
 
 	case DDB_CMD_UNKNOWN:

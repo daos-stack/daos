@@ -223,3 +223,14 @@ func ddbDtxActAbort(ctx *DdbContext, path string, dtx_id string) error {
 	/* Run the c code command */
 	return daosError(C.ddb_run_dtx_act_abort(&ctx.ctx, &options))
 }
+
+func ddbDtxActDiscard(ctx *DdbContext, path string, dtx_id string) error {
+	/* Set up the options */
+	options := C.struct_dtx_act_abort_options{}
+	options.path = C.CString(path)
+	defer freeString(options.path)
+	options.dtx_id = C.CString(dtx_id)
+	defer freeString(options.dtx_id)
+	/* Run the c code command */
+	return daosError(C.ddb_run_dtx_act_discard(&ctx.ctx, &options))
+}

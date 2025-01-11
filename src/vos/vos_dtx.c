@@ -14,6 +14,7 @@
 #include <daos/common.h>
 #include "vos_layout.h"
 #include "vos_internal.h"
+#include "evt_priv.h"
 
 /* 128 KB per SCM blob */
 #define DTX_BLOB_SIZE		(1 << 17)
@@ -2378,6 +2379,160 @@ out:
 		rc = 0;
 	else if (rc != -DER_NONEXIST)
 		DL_CDEBUG(rc != 0, DLOG_ERR, DB_IO, rc, "Abort the DTX " DF_DTI, DP_DTI(dti));
+
+	return rc;
+}
+
+/* 4 bit magic number + version */
+#define ILOG_MAGIC		0x00000006
+#define ILOG_MAGIC_BITS		4
+#define ILOG_MAGIC_MASK		((1 << ILOG_MAGIC_BITS) - 1)
+#define ILOG_MAGIC_VALID(magic)	(((magic) & ILOG_MAGIC_MASK) == ILOG_MAGIC)
+
+struct ilog_tree {
+	umem_off_t	it_root;
+	uint64_t	it_embedded;
+};
+
+struct ilog_root {
+	union {
+		struct ilog_id		lr_id;
+		struct ilog_tree	lr_tree;
+	};
+	uint32_t			lr_ts_idx;
+	uint32_t			lr_magic;
+};
+
+static void
+do_dtx_rec_discard(struct umem_instance *umm, umem_off_t *rec, int *discarded)
+{
+	if (UMOFF_IS_NULL(*rec))
+		return;
+
+	switch (dtx_umoff_flag2type(*rec)) {
+	case DTX_RT_ILOG: {
+		struct ilog_root *ilog = umem_off2ptr(umm, umem_off2offset(*rec));
+		// !ILOG_ASSERT_VALID(ilog)
+		if (ilog == NULL || !ILOG_MAGIC_VALID(ilog->lr_magic)) {
+			*rec = UMOFF_NULL;
+			*discarded += 1;
+		}
+		break;
+	}
+	case DTX_RT_SVT: {
+		/* No way to validate the record */
+		break;
+	}
+	case DTX_RT_EVT: {
+		struct evt_desc *evt = umem_off2ptr(umm, umem_off2offset(*rec));
+		if (evt == NULL || evt->dc_magic != EVT_DESC_MAGIC) {
+			*rec = UMOFF_NULL;
+			*discarded += 1;
+		}
+		break;
+	}
+	default:
+		/* On-disk data corruption case. */
+		*rec = UMOFF_NULL;
+		*discarded += 1;
+		break;
+	}
+}
+
+static int
+vos_dtx_discard_internal(struct vos_container *cont, struct dtx_id dti,
+			struct vos_dtx_act_ent *dae)
+{
+	struct umem_instance *umm = vos_cont2umm(cont);
+	int discarded_noninline = 0;
+	int discarded_inline = 0;
+	int	count;
+	int i;
+
+	/* go thorough the non-inlined records first if present */
+	if (dae->dae_records != NULL) {
+		D_ASSERT(DAE_REC_CNT(dae) > DTX_INLINE_REC_CNT);
+
+		count = DAE_REC_CNT(dae) - DTX_INLINE_REC_CNT;
+		for (i = 0; i < count; i++) {
+			do_dtx_rec_discard(umm, &dae->dae_records[i], &discarded_noninline);
+		}
+
+		if (discarded_noninline > 0) {
+			/* copy the whole array to durable format */
+			size_t size = sizeof(umem_off_t) * count;
+			void *rec_df = umem_off2ptr(umm, DAE_REC_OFF(dae));
+			int rc = umem_tx_add_ptr(umm, rec_df, size);
+			if (rc != 0) {
+				return 0; /* abort */
+			}
+			memcpy(rec_df, dae->dae_records, size);
+		}
+
+		count = DTX_INLINE_REC_CNT;
+	} else {
+		count = DAE_REC_CNT(dae);
+	}
+
+	/* go through the inlined records */
+	for (i = 0; i < count; i++) {
+		do_dtx_rec_discard(umm, &DAE_REC_INLINE(dae)[i], &discarded_inline);
+	}
+
+	if (discarded_inline > 0) {
+		/* copy the whole array to durable format */
+		struct vos_dtx_act_ent_df *dae_df = umem_off2ptr(umm, dae->dae_df_off);
+		size_t size = sizeof(umem_off_t) * count;
+		int rc = umem_tx_add_ptr(umm, &dae_df->dae_rec_inline, size);
+		if (rc != 0) {
+			return 0; /* abort */
+		}
+		memcpy(&dae_df->dae_rec_inline, &DAE_REC_INLINE(dae), size);
+	}
+
+	return discarded_inline + discarded_noninline;
+}
+
+int
+vos_dtx_discard(daos_handle_t coh, struct dtx_id *dti, int *discarded)
+{
+	struct vos_container *cont;
+	struct vos_dtx_act_ent *dae = NULL;
+	d_iov_t riov;
+	d_iov_t kiov;
+	int rc;
+
+	cont = vos_hdl2cont(coh);
+	D_ASSERT(cont != NULL);
+
+	d_iov_set(&kiov, dti, sizeof(*dti));
+	d_iov_set(&riov, NULL, 0);
+	rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
+	if (rc != 0)
+		goto out;
+
+	dae = riov.iov_buf;
+
+	if (vos_dae_is_abort(dae)) {
+		/* If it is already aborted I do not expect to be processed. */
+		D_GOTO(out, rc = -DER_ALREADY);
+	}
+
+	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
+	if (rc == 0) {
+		*discarded = vos_dtx_discard_internal(cont, *dti, dae);
+		if (*discarded > 0) {
+			rc = umem_tx_commit(vos_cont2umm(cont));
+			D_ASSERT(rc == 0);
+		} else {
+			rc = umem_tx_abort(vos_cont2umm(cont), rc);
+		}
+	}
+
+out:
+	if (rc == -DER_ALREADY || rc == -DER_CANCELED) {
+		rc = 0;
+	}
 
 	return rc;
 }

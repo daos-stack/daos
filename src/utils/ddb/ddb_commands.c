@@ -990,3 +990,32 @@ int ddb_run_dtx_act_abort(struct ddb_ctx *ctx, struct dtx_act_abort_options *opt
 	dtx_modify_fini(&args);
 	return rc;
 }
+
+int ddb_run_dtx_act_discard(struct ddb_ctx *ctx, struct dtx_act_abort_options *opt)
+{
+	struct dtx_modify_args args = {0};
+	int discarded = 0;
+	int rc;
+
+	if (!ctx->dc_write_mode) {
+		ddb_error(ctx, error_msg_write_mode_only);
+		return -DER_INVAL;
+	}
+
+	rc = dtx_modify_init(ctx, opt->path, opt->dtx_id, &args);
+	if (!SUCCESS(rc))
+		return rc;
+
+	rc = dv_dtx_active_entry_discard(args.coh, &args.dti, &discarded);
+	if (SUCCESS(rc)) {
+		ddb_printf(ctx, "Entry's record(s) discarded: %d\n", discarded);
+	} else if (rc == -DER_NONEXIST) {
+		ddb_print(ctx, "No entry found\n");
+		rc = 0;
+	} else {
+		ddb_errorf(ctx, "Error: "DF_RC"\n", DP_RC(rc));
+	}
+
+	dtx_modify_fini(&args);
+	return rc;
+}

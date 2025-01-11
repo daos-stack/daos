@@ -114,6 +114,7 @@ enum ddb_cmd {
 	DDB_CMD_VEA_UPDATE = 18,
 	DDB_CMD_DTX_ACT_COMMIT = 19,
 	DDB_CMD_DTX_ACT_ABORT = 20,
+	DDB_CMD_DTX_ACT_DISCARD = 21,
 };
 
 /* option and argument structures for commands that need them */
@@ -228,6 +229,7 @@ int ddb_run_vea_dump(struct ddb_ctx *ctx);
 int ddb_run_vea_update(struct ddb_ctx *ctx, struct vea_update_options *opt);
 int ddb_run_dtx_act_commit(struct ddb_ctx *ctx, struct dtx_act_commit_options *opt);
 int ddb_run_dtx_act_abort(struct ddb_ctx *ctx, struct dtx_act_abort_options *opt);
+int ddb_run_dtx_act_discard(struct ddb_ctx *ctx, struct dtx_act_abort_options *opt);
 
 
 void ddb_program_help(struct ddb_ctx *ctx);
