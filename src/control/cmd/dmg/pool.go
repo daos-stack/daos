@@ -38,7 +38,7 @@ type PoolCmd struct {
 	Extend       poolExtendCmd       `command:"extend" description:"Extend a DAOS pool to include new ranks."`
 	Exclude      poolExcludeCmd      `command:"exclude" description:"Exclude targets from a rank"`
 	Drain        poolDrainCmd        `command:"drain" description:"Drain targets from a rank"`
-	Reint        poolReintCmd        `command:"reintegrate" alias:"reint" description:"Reintegrate targets for a rank"`
+	Reintegrate  poolReintegrateCmd  `command:"reintegrate" alias:"reint" description:"Reintegrate targets for a rank"`
 	Query        poolQueryCmd        `command:"query" description:"Query a DAOS pool"`
 	QueryTargets poolQueryTargetsCmd `command:"query-targets" description:"Query pool target info"`
 	GetACL       poolGetACLCmd       `command:"get-acl" description:"Get a DAOS pool's Access Control List"`
@@ -617,15 +617,15 @@ func (cmd *poolExtendCmd) Execute(args []string) error {
 	return err
 }
 
-// poolReintCmd is the struct representing the command to Add a DAOS target.
-type poolReintCmd struct {
+// poolReintegrateCmd is the struct representing the command to Add a DAOS target.
+type poolReintegrateCmd struct {
 	poolCmd
 	Rank      uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be reintegrated"`
 	TargetIdx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be reintegrated into the rank"`
 }
 
-// Execute is run when PoolReintCmd subcommand is activated
-func (cmd *poolReintCmd) Execute(args []string) error {
+// Execute is run when poolReintegrateCmd subcommand is activated
+func (cmd *poolReintegrateCmd) Execute(args []string) error {
 	msg := "succeeded"
 
 	var idxList []uint32

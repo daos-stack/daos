@@ -35,7 +35,7 @@ type SystemCmd struct {
 	Exclude      systemExcludeCmd      `command:"exclude" description:"Exclude ranks from DAOS system"`
 	ClearExclude systemClearExcludeCmd `command:"clear-exclude" description:"Clear excluded state for ranks"`
 	Drain        systemDrainCmd        `command:"drain" description:"Drain ranks or hosts from all relevant pools in DAOS system"`
-	Reint        systemReintCmd        `command:"reintegrate" alias:"reint" description:"Reintegrate ranks or hosts into all relevant pools in DAOS system"`
+	Reintegrate  systemReintegrateCmd  `command:"reintegrate" alias:"reint" description:"Reintegrate ranks or hosts into all relevant pools in DAOS system"`
 	Erase        systemEraseCmd        `command:"erase" description:"Erase system metadata prior to reformat"`
 	ListPools    poolListCmd           `command:"list-pools" description:"List all pools in the DAOS system"`
 	Cleanup      systemCleanupCmd      `command:"cleanup" description:"Clean up all resources associated with the specified machine"`
@@ -352,11 +352,11 @@ func (cmd *systemDrainCmd) Execute(_ []string) error {
 	return cmd.execute(false)
 }
 
-type systemReintCmd struct {
+type systemReintegrateCmd struct {
 	systemDrainCmd
 }
 
-func (cmd *systemReintCmd) Execute(_ []string) error {
+func (cmd *systemReintegrateCmd) Execute(_ []string) error {
 	return cmd.execute(true)
 }
 

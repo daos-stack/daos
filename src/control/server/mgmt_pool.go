@@ -934,7 +934,7 @@ func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReintRe
 	req.TierBytes = ps.Storage.PerRankTierStorage
 	req.MemRatio = ps.Storage.MemRatio
 
-	dResp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolReint, req)
+	dResp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolReintegrate, req)
 	if err != nil {
 		return nil, err
 	}
