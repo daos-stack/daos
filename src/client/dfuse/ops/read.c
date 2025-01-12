@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2025 Intel Corporation.
  * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -513,17 +513,6 @@ found:
 				d_slab_release(cd->eqt->de_read_slab, cd->ev);
 				D_FREE(cd);
 			}
-		} else {
-			struct dfuse_info *dfuse_info = fuse_req_userdata(req);
-			struct dfuse_eq   *eqt;
-
-			eqt = pick_eqt(dfuse_info);
-
-			/* Send a message to the async thread to wake it up and poll for events */
-			sem_post(&eqt->de_sem);
-
-			/* Now ensure there are more descriptors for the next request */
-			d_slab_restock(eqt->de_read_slab);
 		}
 	}
 
@@ -735,14 +724,13 @@ void
 dfuse_pre_read_abort(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh,
 		     struct dfuse_event *ev, int rc)
 {
-	struct dfuse_eq     *eqt    = pick_eqt(dfuse_info);
 	struct active_inode *active = oh->doh_ie->ie_active;
 
 	oh->doh_readahead_inflight = 0;
 	active->readahead->dra_rc  = rc;
 	if (ev) {
 		daos_event_fini(&ev->de_ev);
-		d_slab_release(eqt->de_pre_read_slab, ev);
+		d_slab_release(ev->de_eqt->de_pre_read_slab, ev);
 		active->readahead->dra_ev = NULL;
 	}
 	active_ie_decref(dfuse_info, oh->doh_ie);
@@ -752,10 +740,8 @@ dfuse_pre_read_abort(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh,
 void
 dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh, struct dfuse_event *ev)
 {
-	struct dfuse_eq *eqt;
+	struct dfuse_eq *eqt = ev->de_eqt;
 	int              rc;
-
-	eqt = pick_eqt(dfuse_info);
 
 	ev->de_oh = oh;
 	ev->de_di = dfuse_info;

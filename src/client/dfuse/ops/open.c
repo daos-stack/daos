@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2025 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -76,7 +76,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		    ((ie->ie_dcache_last_update.tv_sec != 0) &&
 		     dfuse_dcache_get_valid(ie, ie->ie_dfs->dfc_data_timeout))) {
 			fi_out.keep_cache = 1;
-		} else {
+		} else if (!(fi->flags & O_TRUNC)) {
 			D_SPIN_LOCK(&ie->ie_active->lock);
 			/**
 			 * size > 4M no pre-read
