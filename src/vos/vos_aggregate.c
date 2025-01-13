@@ -2765,6 +2765,7 @@ free_agg_data:
 		if (vam && vam->vam_fail_count)
 			d_tm_inc_counter(vam->vam_fail_count, 1);
 	}
+	umem_heap_gc(&cont->vc_pool->vp_umm);
 
 	return rc;
 }

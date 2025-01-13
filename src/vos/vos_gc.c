@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -24,11 +25,11 @@ enum {
 };
 
 /**
- * Default garbage bag size consumes <= 4K space
+ * Default garbage bag size consumes <= 16K space
  * - header of vos_gc_bag_df is 64 bytes
  * - PMDK allocation overhead is 16 bytes,
- * - each item consumes 16 bytes, 250 * 16 = 4000 bytes
- * - together is 4080 bytes, reserve 16 bytes for future use
+ * - each item consumes 16 bytes, (250 + 3 * 256) * 16 = 16288 bytes
+ * - together is 16368 bytes, reserve 16 bytes for future use
  */
 static int gc_bag_size	= 250 + 3 * 256;
 
@@ -296,6 +297,15 @@ gc_drain_cont(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 	int			 i;
 	int			 rc;
 
+	/*
+	 * When we prepaer to drain the container, we do not need DTX entry any long.
+	 * Then destroy DTX table firstly to avoid dangling DXT records during drain
+	 * the container (that may yield).
+	 */
+	rc = vos_dtx_table_destroy(&pool->vp_umm, cont);
+	if (rc != 0)
+		return rc;
+
 	/** Move any leftover bags to the pool gc */
 	for (i = GC_AKEY; i < GC_CONT; i++) {
 		src_bin = &cont->cd_gc_bins[i];
@@ -331,11 +341,7 @@ gc_free_cont(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh, struct
 		}
 	}
 
-	rc = vos_dtx_table_destroy(&pool->vp_umm, cd);
-	if (rc == 0)
-		rc = umem_free(&pool->vp_umm, item->it_addr);
-
-	return rc;
+	return umem_free(&pool->vp_umm, item->it_addr);
 }
 
 static struct vos_gc gc_table[] = {
@@ -1214,6 +1220,16 @@ gc_get_bkt(struct vos_pool *pool, struct vos_container **cont_in, uint32_t *bkt_
 	bool			 try_next = false;
 	int			 rc;
 
+	/*
+	 * Must put the container reference in first place, since it could be the
+	 * last reference and the container will be removed from the 'vp_gc_cont'
+	 * list on last put (see gc_close_cont()).
+	 */
+	if (*cont_in) {
+		vos_cont_decref(*cont_in);
+		*cont_in = NULL;
+	}
+
 switch_bkt:
 	/* Find non-empty gc_bin[GC_CONT] from containers */
 	d_list_for_each_entry_safe(cont, tmp, &pool->vp_gc_cont, vc_gc_link) {
@@ -1238,11 +1254,6 @@ switch_bkt:
 		goto switch_bkt;
 	}
 done:
-	if (*cont_in) {
-		vos_cont_decref(*cont_in);
-		*cont_in = NULL;
-	}
-
 	if (rc == 0 && cont) {
 		vos_cont_addref(cont);
 		*cont_in = cont;
@@ -1464,6 +1475,7 @@ gc_reclaim_pool_p2(struct vos_pool *pool, int *credits, bool *empty_ret)
 		*credits = creds;
 
 	gc_update_stats(pool);
+	umem_heap_gc(vos_pool2umm(pool));
 	return rc;
 }
 
@@ -1508,6 +1520,7 @@ gc_open_pool(struct vos_pool *pool)
 void
 gc_close_cont(struct vos_container *cont)
 {
+	d_list_del_init(&cont->vc_gc_link);
 	return gc_close_bkt(&cont->vc_gc_info);
 }
 
@@ -1978,9 +1991,38 @@ vos_gc_pool_idle(daos_handle_t poh)
 }
 
 inline void
-gc_reserve_space(daos_size_t *rsrvd)
+gc_reserve_space(struct vos_pool *pool, daos_size_t *rsrvd)
 {
-	rsrvd[DAOS_MEDIA_SCM]	+= gc_bag_size * (daos_size_t)GC_CREDS_MAX;
+	daos_size_t	bag_bytes = offsetof(struct vos_gc_bag_df, bag_items[gc_bag_size]);
+	uint32_t	bag_cnt;
+
+	/*
+	 * It's hard to estimate how many GC bags will be required during GC run,
+	 * since the GC bags could be allocated for each container or each bucket
+	 * (in the md-on-ssd phase2 mode).
+	 *
+	 * GC run in pmem or md-on-ssd phase1 mode (see gc_reclaim_pool()) always
+	 * tries to reclaim space as long as any akey is flattened, so the consumed
+	 * GC bags is usually minimal and we can choose to reserve small number of
+	 * GC bags for these two modes.
+	 *
+	 * However, there will be much more GC bags required for the phase2 mode,
+	 * since all objects need be flattened before space reclaiming (to minimize
+	 * unnecessary page eviction, see gc_reclaim_pool_p2()).
+	 */
+	if (pool->vp_small) {
+		bag_cnt	= GC_MAX;
+	} else if (vos_pool_is_evictable(pool)) {
+		/*
+		 * Each 16MB bucket can roughly contain at most 47662 objects, that requires
+		 * (47662 / gc_bag_size) = 46 GC bags, let's reserve 50 GC bags per bucket.
+		 */
+		bag_cnt = vos_pool2store(pool)->cache->ca_md_pages * 50;
+	} else {
+		bag_cnt = GC_MAX * 10;
+	}
+
+	rsrvd[DAOS_MEDIA_SCM]	+= (bag_bytes * bag_cnt);
 	rsrvd[DAOS_MEDIA_NVME]	+= 0;
 }
 

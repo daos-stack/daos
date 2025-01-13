@@ -44,7 +44,7 @@ func (mp *mockPCIeLinkStatsProvider) PCIeCapsFromConfig(cfgBytes []byte, dev *ha
 	return nil
 }
 
-func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
+func TestServer_populateCtrlrHealth(t *testing.T) {
 	healthWithLinkStats := func(maxSpd, spd float32, maxWdt, wdt uint32) *ctlpb.BioHealthResp {
 		bhr := proto.MockNvmeHealth()
 		bhr.LinkMaxSpeed = maxSpd
@@ -459,7 +459,7 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 	}
 }
 
-func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
+func TestServer_bdevScanEngine(t *testing.T) {
 	c := storage.MockNvmeController(2)
 	withState := func(ctrlr *ctlpb.NvmeController, state ctlpb.NvmeDevState) *ctlpb.NvmeController {
 		ctrlr.DevState = state
@@ -792,6 +792,85 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 			healthRes: healthRespWithUsage(),
 			// Prove link stat provider gets called without Meta flag.
 			expErr: errors.New("link stats provider fail"),
+		},
+		"scan over drpc; aio file emulated nvme; no pci addresses": {
+			smdRes: &ctlpb.SmdDevResp{
+				Devices: []*ctlpb.SmdDevice{
+					{
+						Uuid: "b80b4653-af58-47b3-aa3b-8ad12965f440",
+						TgtIds: []int32{
+							1024, 1024, 0, 0, 0, 4, 4, 4, 8, 8, 8, 12,
+							12, 12,
+						},
+						RoleBits: 7,
+						Ctrlr: &ctlpb.NvmeController{
+							DevState: ctlpb.NvmeDevState_NORMAL,
+						},
+					},
+					{
+						Uuid: "3c7a8e22-38c0-4e6f-8776-d703d049ae6f",
+						TgtIds: []int32{
+							1024, 1024, 1, 1, 1, 5, 5, 5, 9, 9, 9, 13,
+							13, 13,
+						},
+						RoleBits: 7,
+						Ctrlr: &ctlpb.NvmeController{
+							DevState: ctlpb.NvmeDevState_NORMAL,
+						},
+					},
+					{
+						Uuid: "40ba7b18-3a0e-4d68-9e8f-c4fc556eb506",
+						TgtIds: []int32{
+							1024, 1024, 2, 2, 2, 6, 6, 6, 10, 10, 10,
+							14, 14, 14,
+						},
+						RoleBits: 7,
+						Ctrlr: &ctlpb.NvmeController{
+							DevState: ctlpb.NvmeDevState_NORMAL,
+						},
+					},
+					{
+						Uuid: "d78c849f-fd9e-4a20-9746-b0335e3618da",
+						TgtIds: []int32{
+							1024, 1024, 3, 3, 3, 7, 7, 7, 11, 11, 11,
+							15, 15, 15,
+						},
+						RoleBits: 7,
+						Ctrlr: &ctlpb.NvmeController{
+							DevState: ctlpb.NvmeDevState_NORMAL,
+						},
+					},
+				},
+			},
+			expResp: &ctlpb.ScanNvmeResp{
+				Ctrlrs: proto.NvmeControllers{
+					&ctlpb.NvmeController{
+						DevState: ctlpb.NvmeDevState_NORMAL,
+						SmdDevices: []*ctlpb.SmdDevice{
+							{RoleBits: 7},
+						},
+					},
+					&ctlpb.NvmeController{
+						DevState: ctlpb.NvmeDevState_NORMAL,
+						SmdDevices: []*ctlpb.SmdDevice{
+							{RoleBits: 7},
+						},
+					},
+					&ctlpb.NvmeController{
+						DevState: ctlpb.NvmeDevState_NORMAL,
+						SmdDevices: []*ctlpb.SmdDevice{
+							{RoleBits: 7},
+						},
+					},
+					&ctlpb.NvmeController{
+						DevState: ctlpb.NvmeDevState_NORMAL,
+						SmdDevices: []*ctlpb.SmdDevice{
+							{RoleBits: 7},
+						},
+					},
+				},
+				State: new(ctlpb.ResponseState),
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
