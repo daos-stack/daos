@@ -201,26 +201,19 @@ func (cr *cmdRunner) handleFreeCapacity(sockSelector int, nrNsPerSock uint, regi
 		return nil, nil, errors.Wrap(err, "createNamespaces")
 	}
 
-	numaSelector := sockAny
-	switch len(numaIDs) {
-	case 0:
-		return nil, nil, errors.New("no numa nodes were processed")
-	case 1:
-		numaSelector = numaIDs[0]
-	default:
-		if sockSelector != sockAny {
-			return nil, nil,
-				errors.Errorf("unexpected number of numa nodes processed, want 1 got %d",
-					len(numaIDs))
-		}
+	if len(numaIDs) == 0 {
+		return nil, nil, errors.New("no namespaces created on regions with free capacity")
 	}
+	if len(numaIDs) > 1 && sockSelector != sockAny {
+		return nil, nil, errors.Errorf("unexpected number of numa nodes processed, want 1 got %d",
+			len(numaIDs))
+	}
+	cr.log.Tracef("namespaces created on %v numa-nodes, fetching updated region details", numaIDs)
 
-	nss, err := cr.getNamespaces(numaSelector)
+	nss, err := cr.getNamespaces(sockSelector)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "getNamespaces")
 	}
-
-	cr.log.Debug("namespaces created, fetching updated region details")
 
 	rs, err := cr.getRegions(sockSelector)
 	if err != nil {
@@ -279,14 +272,14 @@ func (cr *cmdRunner) processActionableState(req storage.ScmPrepareRequest, state
 		}
 		resp.RebootRequired = true
 	case storage.ScmFreeCap:
-		// Regions exist but no namespaces, create block devices on PMem regions and
-		// populate response with namespace details.
+		// At least one region exists without a namespace so create block devices on those PMem regions
+		// with available capacity and populate response with namespace details.
 		cr.log.Info("Creating PMem namespaces...")
 		nss, sockState, err := cr.handleFreeCapacity(sockSelector, req.NrNamespacesPerSocket, regions)
 		if err != nil {
 			return nil, errors.Wrap(err, "handleFreeCapacity")
 		}
-		resp.Namespaces = nss
+		resp.Namespaces = nss // Return only namespaces created.
 		resp.Socket = sockState
 	case storage.ScmNoFreeCap:
 		// Regions and namespaces exist so no changes to response necessary.
