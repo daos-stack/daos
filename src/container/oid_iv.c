@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2017-2025 Intel Corporation.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -130,17 +130,23 @@ oid_iv_ent_update(struct ds_iv_entry *ns_entry, struct ds_iv_key *iv_key,
 	d_rank_t		myrank = dss_self_rank();
 	int			rc;
 
+	if (src == NULL) {
+		D_DEBUG(DB_MD, "%u: ON UPDATE delete entry iv_entry %p\n", myrank, ns_entry);
+		ns_entry->iv_to_delete = 1;
+		return 0;
+	}
+
 	D_ASSERT(priv != NULL);
+	oids  = src->sg_iovs[0].iov_buf;
 	entry = ns_entry->iv_value.sg_iovs[0].iov_buf;
+
 	rc = ABT_mutex_trylock(entry->lock);
 	/** For retry requests, from _iv_op(), the lock may not be released in some cases. */
-	if (rc == ABT_ERR_MUTEX_LOCKED && entry->current_req != priv)
+	if (rc == ABT_ERR_MUTEX_LOCKED && entry->current_req != oids)
 		return -DER_BUSY;
 
-	entry->current_req = priv;
-	avail = &entry->rg;
-
-	oids = src->sg_iovs[0].iov_buf;
+	entry->current_req = oids;
+	avail              = &entry->rg;
 
 	if (myrank == oids->req_rank)
 		num_oids = oids->req_num_oids;
