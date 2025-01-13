@@ -7167,7 +7167,7 @@ pool_update_map_internal(uuid_t pool_uuid, unsigned int opc, bool exclude_rank,
 
 	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, NULL, 0, NULL, tgts, tgt_addrs,
 					  hint, p_updated, map_version_p, tgt_map_ver,
-					  inval_tgt_addrs, false);
+					  inval_tgt_addrs, true);
 
 	pool_svc_put_leader(svc);
 	return rc;
@@ -7178,13 +7178,6 @@ ds_pool_tgt_exclude_out(uuid_t pool_uuid, struct pool_target_id_list *list)
 {
 	return pool_update_map_internal(pool_uuid, pool_opc_2map_opc(POOL_EXCLUDE_OUT), false,
 					list, NULL, NULL, NULL, NULL, NULL, NULL);
-}
-
-int
-ds_pool_tgt_exclude(uuid_t pool_uuid, struct pool_target_id_list *list)
-{
-	return pool_update_map_internal(pool_uuid, pool_opc_2map_opc(POOL_EXCLUDE), false, list,
-					NULL, NULL, NULL, NULL, NULL, NULL);
 }
 
 int

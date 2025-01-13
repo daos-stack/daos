@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -270,8 +271,8 @@ int ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 
 int ds_pool_map_buf_get(uuid_t uuid, d_iov_t *iov, uint32_t *map_ver);
 
-int ds_pool_tgt_exclude_out(uuid_t pool_uuid, struct pool_target_id_list *list);
-int ds_pool_tgt_exclude(uuid_t pool_uuid, struct pool_target_id_list *list);
+int
+     ds_pool_tgt_exclude_out(uuid_t pool_uuid, struct pool_target_id_list *list);
 int ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list);
 
 int ds_pool_tgt_revert_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list);
