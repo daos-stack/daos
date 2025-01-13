@@ -1,3 +1,15 @@
+daos (2.6.2-4) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Remove Build-Depends: for UCX as they were obsoleted as of e01970d
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Mon, 15 Dec 2024 10:49:37 -0400
+
+daos (2.6.2-3) unstable; urgency=medium
+  [ Kris Jacque ]
+  * Bump minimum golang-go version to 1.21
+
+ -- Kris Jacque <kristin.jacque@hpe.com>  Wed, 11 Dec 2024 11:43:00 -0700
+
 daos (2.6.2-2) unstable; urgency=medium
   [ Phillip Henderson ]
   * Second test build for 2.6.2

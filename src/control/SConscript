@@ -140,6 +140,7 @@ def scons():
 
     # Sets CGO_LDFLAGS for rpath options
     denv.d_add_rpaths("..", True, True)
+    denv.require('protobufc')
     denv.AppendENVPath("CGO_CFLAGS", denv.subst("$_CPPINCFLAGS"), sep=" ")
     if prereqs.client_requested():
         install_go_bin(denv, "daos_agent")
