@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -133,10 +134,10 @@ oid_iv_ent_update(struct ds_iv_entry *ns_entry, struct ds_iv_key *iv_key,
 	entry = ns_entry->iv_value.sg_iovs[0].iov_buf;
 	rc = ABT_mutex_trylock(entry->lock);
 	/** For retry requests, from _iv_op(), the lock may not be released in some cases. */
-	if (rc == ABT_ERR_MUTEX_LOCKED && entry->current_req != src)
+	if (rc == ABT_ERR_MUTEX_LOCKED && entry->current_req != priv)
 		return -DER_BUSY;
 
-	entry->current_req = src;
+	entry->current_req = priv;
 	avail = &entry->rg;
 
 	oids = src->sg_iovs[0].iov_buf;
