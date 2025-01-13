@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -110,6 +111,7 @@ struct oid_iv_range {
 	daos_size_t	num_oids;
 	daos_size_t     req_num_oids;
 	d_rank_t        req_rank;
+	void           *req_ptr;
 };
 
 /* Container IV structure */
