@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2025 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -229,7 +229,7 @@ chunk_cb(struct dfuse_event *ev)
 	struct read_chunk_data *cd = ev->de_cd;
 	struct active_inode    *ia = cd->ia;
 	struct read_chunk_req  *cr;
-	d_list_t                tmp_list = cd->req_list;
+	d_list_t                tmp_list = D_LIST_HEAD_INIT(tmp_list);
 	struct read_chunk_req  *crn;
 
 	cd->rc = ev->de_ev.ev_error;
@@ -252,6 +252,8 @@ chunk_cb(struct dfuse_event *ev)
 	 */
 	d_list_for_each_entry(cr, &cd->req_list, req_list)
 		cd->slot_done[cr->slot] = true;
+
+	d_list_splice_init(@cd->req_list, &tmp_list);
 
 	D_SPIN_UNLOCK(&ia->lock);
 
