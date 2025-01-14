@@ -66,6 +66,12 @@ func runCmdTest(t *testing.T, args []string, expCmd any, expErr error, cmdPath s
 		cmp.Comparer(func(a, b ui.ByteSizeFlag) bool {
 			return a.String() == b.String()
 		}),
+		cmp.Comparer(func(a, b PoolID) bool {
+			return a.String() == b.String()
+		}),
+		cmp.Comparer(func(a, b ContainerID) bool {
+			return a.String() == b.String()
+		}),
 	}...)
 	test.CmpAny(t, fmt.Sprintf("%s args", cmdPath), expCmd, testCmd.Interface(), cmpOpts...)
 }

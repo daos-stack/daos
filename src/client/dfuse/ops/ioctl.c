@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,6 +10,7 @@
 
 #include <sys/ioctl.h>
 
+#include <daos/metrics.h>
 #include <dfuse_ioctl.h>
 
 #define MAX_IOCTL_SIZE ((1024 * 16) - 1)
@@ -70,6 +72,15 @@ err:
 	DFUSE_REPLY_ERR_RAW(oh, req, rc);
 }
 
+static bool
+dfc_metrics_enabled(struct dfuse_cont *dfc)
+{
+	if (dfc == NULL)
+		return false;
+
+	return atomic_load_relaxed(&dfc->dfc_metrics_enabled);
+}
+
 static void
 handle_size_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 {
@@ -100,6 +111,9 @@ handle_size_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 	hs_reply.fsr_dfs_size = iov.iov_buf_len;
 	if (hs_reply.fsr_dfs_size > MAX_IOCTL_SIZE)
 		D_GOTO(err, rc = EOVERFLOW);
+
+	if (dfc_metrics_enabled(oh->doh_ie->ie_dfs))
+		hs_reply.fsr_flags |= DFUSE_IOCTL_FLAGS_METRICS;
 
 	DFUSE_REPLY_IOCTL(oh, req, hs_reply);
 	return;
@@ -333,6 +347,24 @@ handle_cont_qe_ioctl_helper(struct dfuse_obj_hdl *oh, fuse_req_t req,
 }
 
 static void
+handle_cont_metrics_ioctl(fuse_req_t req, struct dfuse_obj_hdl *oh, const void *in_buf,
+			  size_t in_bufsz)
+{
+	struct dfuse_info *dfuse_info = fuse_req_userdata(req);
+	int                rc         = 0;
+
+	if (in_buf == NULL || in_bufsz != sizeof(bool))
+		D_GOTO(err, rc = EIO);
+
+	atomic_store_relaxed(&oh->doh_ie->ie_dfs->dfc_metrics_enabled, *((bool *)in_buf));
+	DFUSE_REPLY_OK(oh, req);
+	return;
+
+err:
+	DFUSE_REPLY_ERR_RAW(dfuse_info, req, rc);
+}
+
+static void
 handle_cont_query_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req, const void *in_buf,
 			size_t in_bufsz)
 {
@@ -415,6 +447,9 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 	}
 
 	DFUSE_TRA_DEBUG(oh, "ioctl cmd=%#x out_size=%zi", cmd, out_bufsz);
+
+	if (cmd == DFUSE_IOCTL_METRICS_TOGGLE)
+		return handle_cont_metrics_ioctl(req, oh, in_buf, in_bufsz);
 
 	if (cmd == DFUSE_IOCTL_COUNT_QUERY)
 		return handle_cont_query_ioctl(oh, req, in_buf, in_bufsz);
