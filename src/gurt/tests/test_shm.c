@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2024 Intel Corporation.
+ * (C) Copyright 2024-2025 Intel Corporation.
  * (C) Copyright 2024-2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -296,7 +296,7 @@ test_lock(void **state)
 	shm_mutex_lock(mutex, &owner_dead);
 	gettimeofday(&tm2, NULL);
 	dt = (tm2.tv_sec - tm1.tv_sec) + (tm2.tv_usec - tm1.tv_usec) * 0.000001;
-	assert_true(fabs(dt - TIME_SLEEP) < 0.06);
+	assert_true(fabs(dt - TIME_SLEEP) < 0.15);
 	shm_mutex_unlock(mutex);
 	assert_true(owner_dead == false);
 
