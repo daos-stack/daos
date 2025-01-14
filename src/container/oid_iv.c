@@ -142,10 +142,19 @@ oid_iv_ent_update(struct ds_iv_entry *ns_entry, struct ds_iv_key *iv_key,
 
 	rc = ABT_mutex_trylock(entry->lock);
 	/** For retry requests, from _iv_op(), the lock may not be released in some cases. */
-	if (rc == ABT_ERR_MUTEX_LOCKED && entry->current_req != oids)
+	if (rc == ABT_ERR_MUTEX_LOCKED) {
+		if (entry->current_req == src)
+			D_DEBUG(DB_MD,
+				"%u: ON UPDATE src %p; priv %p; oids %p; SAME req detected\n",
+				myrank, src, priv, oids);
+	} else {
+		D_DEBUG(DB_MD, "%u: ON UPDATE src %p; priv %p; oids %p; UNLOCKED Mutex\n", myrank,
+			src, priv, oids);
+	}
+	if (rc == ABT_ERR_MUTEX_LOCKED && entry->current_req != src)
 		return -DER_BUSY;
 
-	entry->current_req = oids;
+	entry->current_req = src;
 	avail              = &entry->rg;
 
 	if (myrank == oids->req_rank)
@@ -290,13 +299,13 @@ oid_iv_alloc(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	rc = d_sgl_init(sgl, 1);
 	if (rc)
 		return rc;
-
 	D_ALLOC(sgl->sg_iovs[0].iov_buf, sizeof(struct oid_iv_range));
 	if (sgl->sg_iovs[0].iov_buf == NULL)
 		D_GOTO(free, rc = -DER_NOMEM);
 	sgl->sg_iovs[0].iov_buf_len = sizeof(struct oid_iv_range);
 	sgl->sg_iovs[0].iov_len = sizeof(struct oid_iv_range);
 
+	D_DEBUG(DB_MD, "%u: IV ALLOC: oids = %p\n", dss_self_rank(), sgl->sg_iovs[0].iov_buf);
 free:
 	if (rc)
 		d_sgl_fini(sgl, true);
@@ -321,7 +330,7 @@ oid_iv_reserve(void *ns, uuid_t po_uuid, uuid_t co_uuid, uint64_t num_oids, d_sg
 	struct oid_iv_key	*oid_key;
 	struct ds_iv_key        key;
 	struct oid_iv_range	*oids;
-	int		rc;
+	int                      rc;
 
 	D_DEBUG(DB_MD, "%d: OID alloc CUUID " DF_UUIDF "/" DF_UUIDF " num_oids %" PRIu64 "\n",
 		dss_self_rank(), DP_UUID(po_uuid), DP_UUID(co_uuid), num_oids);
@@ -338,8 +347,7 @@ oid_iv_reserve(void *ns, uuid_t po_uuid, uuid_t co_uuid, uint64_t num_oids, d_sg
 	oids->req_rank     = dss_self_rank();
 	oids->req_num_oids = num_oids;
 
-	rc = ds_iv_update(ns, &key, value, 0, CRT_IV_SYNC_NONE,
-			  CRT_IV_SYNC_BIDIRECTIONAL, true /* retry */);
+	rc = ds_iv_update(ns, &key, value, 0, CRT_IV_SYNC_NONE, CRT_IV_SYNC_BIDIRECTIONAL, true);
 	if (rc)
 		D_ERROR("iv update failed "DF_RC"\n", DP_RC(rc));
 
