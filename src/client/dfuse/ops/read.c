@@ -580,8 +580,6 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 		       ev->de_iov.iov_buf_len);
 	}
 
-	if (position + len > oh->doh_ie->ie_stat.st_size)
-		len = oh->doh_ie->ie_stat.st_size - position;
 	ev->de_iov.iov_len  = len;
 	ev->de_req          = req;
 	ev->de_sgl.sg_nr    = 1;
