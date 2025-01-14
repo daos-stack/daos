@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -429,4 +430,10 @@ update_stbuf_times(struct dfs_entry entry, daos_epoch_t max_epoch, struct stat *
 int
 lookup_rel_path(dfs_t *dfs, dfs_obj_t *root, const char *path, int flags, dfs_obj_t **_obj,
 		mode_t *mode, struct stat *stbuf, size_t depth);
+
+int
+csv_file_path(pid_t pid, const char *root_dir, char **file_dir, char **file_name);
+int
+write_tm_csv(const char *tm_pool, const char *tm_cont, const char *csv_file_dir,
+	     const char *csv_file_name, const char *csv_buf, size_t csv_buf_sz);
 #endif /* __DFS_INTERNAL_H__ */
