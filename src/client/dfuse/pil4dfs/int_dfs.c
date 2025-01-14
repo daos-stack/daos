@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -898,6 +899,11 @@ retrieve_handles_from_fuse(int idx)
 			"daos_pool_global2local(): %d (%s)\n",
 			errno_saved, strerror(errno_saved));
 		goto err;
+	}
+
+	if ((hs_reply.fsr_flags & DFUSE_IOCTL_FLAGS_METRICS) != 0) {
+		dfs_list[idx].metrics_enabled = true;
+		dfs_metrics_init(dfs_list[idx].dfs);
 	}
 
 	D_FREE(buff);
@@ -7159,6 +7165,9 @@ finalize_dfs(void)
 			D_FREE(dfs_list[i].cont);
 			continue;
 		}
+
+		if (dfs_list[i].metrics_enabled)
+			dfs_metrics_fini(dfs_list[i].dfs);
 
 		rc = dcache_destroy(dfs_list[i].dcache);
 		if (rc != 0) {
