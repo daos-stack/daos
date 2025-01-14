@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -90,6 +91,7 @@ struct dfs_mt {
 	_Atomic uint32_t inited;
 	char            *pool, *cont;
 	char            *fs_root;
+	bool             metrics_enabled;
 };
 
 #endif

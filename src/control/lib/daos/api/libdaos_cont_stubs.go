@@ -124,21 +124,43 @@ func daos_cont_destroy(poolHdl C.daos_handle_t, contID *C.char, force C.int, ev 
 	return daos_cont_destroy_RC
 }
 
+type openContainer struct {
+	Handle    C.daos_handle_t
+	Info      *daos.ContainerInfo
+	OpenFlags daos.ContainerOpenFlag
+	OpenCount int
+}
+
+type openContainerMap map[string]*openContainer
+
+func (cm openContainerMap) clear() {
+	for k := range cm {
+		delete(cm, k)
+	}
+}
+
+func (cm openContainerMap) add(hdl C.daos_handle_t, info *daos.ContainerInfo) {
+	cont := &openContainer{
+		Handle: hdl,
+		Info:   info,
+	}
+	cm[info.ContainerLabel] = cont
+	cm[info.ContainerUUID.String()] = cont
+}
+
 var (
-	daos_cont_open_SetContainerID string
-	daos_cont_open_SetFlags       daos.ContainerOpenFlag
-	daos_cont_open_Handle         = defaultContHdl()
-	daos_cont_open_ContainerInfo  = defaultContainerInfo()
-	daos_cont_open_Count          int
-	daos_cont_open_RC             C.int = 0
+	daos_cont_open_Containers openContainerMap
+	daos_cont_open_Count      int
+	daos_cont_open_Strict     bool
+	daos_cont_open_RC         C.int = 0
 )
 
 func reset_daos_cont_open() {
-	daos_cont_open_SetContainerID = ""
-	daos_cont_open_SetFlags = 0
-	daos_cont_open_Handle = defaultContHdl()
-	daos_cont_open_ContainerInfo = defaultContainerInfo()
+	daos_cont_open_Containers = nil
+	daos_cont_open_Containers = make(openContainerMap)
+	daos_cont_open_Containers.add(defaultContHdl(), defaultContainerInfo())
 	daos_cont_open_Count = 0
+	daos_cont_open_Strict = false
 	daos_cont_open_RC = 0
 }
 
@@ -148,14 +170,28 @@ func daos_cont_open(poolHdl C.daos_handle_t, contID *C.char, flags C.uint, contH
 		return daos_cont_open_RC
 	}
 
+	cont, found := daos_cont_open_Containers[C.GoString(contID)]
+	if !found {
+		// If the test has specified that the container must exist, return an error.
+		if daos_cont_open_Strict {
+			return -C.DER_NONEXIST
+		}
+		// Otherwise, just make one up.
+		cont = &openContainer{
+			Handle: defaultContHdl(),
+			Info:   defaultContainerInfo(),
+		}
+		daos_cont_open_Containers[C.GoString(contID)] = cont
+	}
+
 	// capture the parameters set by the test
-	daos_cont_open_SetContainerID = C.GoString(contID)
-	daos_cont_open_SetFlags = daos.ContainerOpenFlag(flags)
+	cont.OpenFlags = daos.ContainerOpenFlag(flags)
+	cont.OpenCount++
 
 	// set the return values
-	contHdl.cookie = daos_cont_open_Handle.cookie
+	contHdl.cookie = cont.Handle.cookie
 	if contInfo != nil {
-		*contInfo = *daos_gci2cci(daos_cont_open_ContainerInfo)
+		*contInfo = *daos_gci2cci(cont.Info)
 	}
 
 	return daos_cont_open_RC

@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -1315,6 +1316,32 @@ dfs_readdir_with_filter(dfs_t *dfs, dfs_obj_t *obj, dfs_pipeline_t *dpipe, daos_
  */
 int
 dfs_cont_scan(daos_handle_t poh, const char *cont, uint64_t flags, const char *name);
+
+/**
+ * Enable metrics for the DFS namespace.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ */
+void
+dfs_metrics_init(dfs_t *dfs);
+
+/**
+ * Check to see if metrics are enabled for the DFS namespace.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ *
+ * \return		true if metrics are enabled, false otherwise.
+ */
+bool
+dfs_metrics_enabled(dfs_t *dfs);
+
+/**
+ * Finalize metrics for the DFS namespace.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ */
+void
+dfs_metrics_fini(dfs_t *dfs);
 
 #if defined(__cplusplus)
 }

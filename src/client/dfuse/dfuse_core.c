@@ -963,6 +963,13 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 		DFUSE_TRA_DEBUG(dfc, "Returning dfs for " DF_UUID " ref %d", DP_UUID(dfc->dfc_uuid),
 				dfc->dfs_ref);
 	}
+
+	/* If DFS metrics are enabled via container attributes, then enable them
+	 * for IL clients. Can also be toggled via ioctl at runtime.
+	 */
+	if (dfs_metrics_enabled(dfc->dfs_ns))
+		atomic_store_relaxed(&dfc->dfc_metrics_enabled, true);
+
 	*_dfc = dfc;
 
 	return rc;
