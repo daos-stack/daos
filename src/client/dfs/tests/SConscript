@@ -1,0 +1,16 @@
+"""Build DFS tests"""
+
+
+def scons():
+    """Execute build"""
+    Import('denv')
+
+    metrics_tests = denv.d_test_program('metrics_tests', 'metrics_tests.c',
+                                        LIBS=['daos', 'daos_common', 'gurt', 'cart', 'dfs',
+                                              'pthread', 'cmocka', 'uuid'])
+
+    denv.Install('$PREFIX/bin/', [metrics_tests])
+
+
+if __name__ == "SCons.Script":
+    scons()

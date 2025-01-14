@@ -811,6 +811,7 @@ func TestAPI_PoolHandleMethods(t *testing.T) {
 		method := thType.Method(i)
 		methArgs := make([]reflect.Value, 0)
 		var expResults int
+		defaultContLabel := daos_default_ContainerInfo.ContainerLabel
 
 		switch method.Name {
 		case "Disconnect":
@@ -836,13 +837,13 @@ func TestAPI_PoolHandleMethods(t *testing.T) {
 			methArgs = append(methArgs, reflect.ValueOf(true))
 			expResults = 2
 		case "DestroyContainer":
-			methArgs = append(methArgs, reflect.ValueOf("foo"), reflect.ValueOf(true))
+			methArgs = append(methArgs, reflect.ValueOf(defaultContLabel), reflect.ValueOf(true))
 			expResults = 1
 		case "QueryContainer":
-			methArgs = append(methArgs, reflect.ValueOf("foo"))
+			methArgs = append(methArgs, reflect.ValueOf(defaultContLabel))
 			expResults = 2
 		case "OpenContainer":
-			methArgs = append(methArgs, reflect.ValueOf(ContainerOpenReq{ID: "foo"}))
+			methArgs = append(methArgs, reflect.ValueOf(ContainerOpenReq{ID: defaultContLabel}))
 			expResults = 2
 		case "FillHandle", "IsValid", "String", "UUID", "ID":
 			// No tests for these. The main point of this suite is to ensure that the
