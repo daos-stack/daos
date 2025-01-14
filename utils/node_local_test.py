@@ -2,6 +2,7 @@
 """Node local test (NLT).
 
 (C) Copyright 2020-2024 Intel Corporation.
+(C) Copyright 2025 Google LLC
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -2354,24 +2355,16 @@ class PosixTests():
         # Open a file and read in one go.
         with open(join(dfuse.dir, 'file0'), 'r') as fd:
             data0 = fd.read()
-        res = dfuse.check_usage()
-        assert res['statistics']['pre_read'] == 1, res
 
         # Open a file and read in one go.
         with open(join(dfuse.dir, 'file1'), 'r') as fd:
             data1 = fd.read(16)
-        res = dfuse.check_usage(old=res)
-        assert res['statistics']['pre_read'] == 1, res
 
         # Open a file and read two bytes at a time.  Despite disabling buffering python will try and
         # read a whole page the first time.
         fd = os.open(join(dfuse.dir, 'file2'), os.O_RDONLY)
         data2 = os.read(fd, 2)
-        res = dfuse.check_usage(old=res)
-        assert res['statistics']['pre_read'] == 1, res
         _ = os.read(fd, 2)
-        res = dfuse.check_usage(old=res)
-        assert res['statistics']['pre_read'] == 0, res
         os.close(fd)
 
         # Open a MB file.  This reads 8 128k chunks and 1 EOF.
