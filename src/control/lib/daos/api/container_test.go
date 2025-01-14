@@ -9,6 +9,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"testing"
@@ -25,6 +26,101 @@ import (
 var (
 	testContName = "test-container"
 )
+
+func TestAPI_ContainerHandleMethods(t *testing.T) {
+	thType := reflect.TypeOf(defaultContainerHandle())
+	for i := 0; i < thType.NumMethod(); i++ {
+		method := thType.Method(i)
+		methArgs := make([]reflect.Value, 0)
+		ctx := test.Context(t)
+		var expResults int
+
+		switch method.Name {
+		case "Close":
+			expResults = 1
+		case "Query":
+			expResults = 2
+		case "ListAttributes":
+			expResults = 2
+		case "GetAttributes":
+			methArgs = append(methArgs, reflect.ValueOf(daos_default_AttrList[0].Name))
+			expResults = 2
+		case "SetAttributes":
+			methArgs = append(methArgs, reflect.ValueOf(daos_default_AttrList[0]))
+			expResults = 1
+		case "DeleteAttributes":
+			methArgs = append(methArgs, reflect.ValueOf(daos_default_AttrList[0].Name))
+			expResults = 1
+		case "GetProperties":
+			methArgs = append(methArgs, reflect.ValueOf(daos.ContainerPropLabel.String()))
+			expResults = 2
+		case "SetProperties":
+			propList, err := daos.AllocateContainerPropertyList(1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer propList.Free()
+			methArgs = append(methArgs, reflect.ValueOf(propList))
+			expResults = 1
+		case "EnableTelemetry":
+			dumpCont := defaultContainerInfo()
+			dumpCont.ContainerLabel = "dump-cont"
+			daos_cont_open_Containers.add(defaultContHdl(), dumpCont)
+			daos_cont_open_Strict = true
+			methArgs = append(methArgs, reflect.ValueOf(ContainerTelemetryRequest{
+				DumpContainerID: dumpCont.ContainerLabel,
+			}))
+			expResults = 1
+		case "DisableTelemetry":
+			methArgs = append(methArgs, reflect.ValueOf(new(string)))
+			expResults = 1
+		case "FillHandle", "IsValid", "String", "UUID", "ID":
+			// No tests for these. The main point of this suite is to ensure that the
+			// convenience wrappers handle inputs as expected.
+			continue
+		default:
+			// If you're here, you need to add a case to test your new method.
+			t.Fatalf("unhandled method %q", method.Name)
+		}
+
+		// Not intended to be exhaustive; just verify that they accept the parameters
+		// we expect and return something sensible for errors.
+		for name, tc := range map[string]struct {
+			setup  func(t *testing.T)
+			th     *ContainerHandle
+			expErr error
+		}{
+			fmt.Sprintf("%s: nil handle", method.Name): {
+				th:     nil,
+				expErr: ErrInvalidContainerHandle,
+			},
+			fmt.Sprintf("%s: success", method.Name): {
+				th: defaultContainerHandle(),
+			},
+		} {
+			t.Run(name, func(t *testing.T) {
+				thArg := reflect.ValueOf(tc.th)
+				if tc.th == nil {
+					thArg = reflect.New(thType).Elem()
+				}
+				ctxArg := reflect.ValueOf(ctx)
+				testArgs := append([]reflect.Value{thArg, ctxArg}, methArgs...)
+				t.Logf("\nargs: %+v", testArgs)
+
+				retVals := method.Func.Call(testArgs)
+				if len(retVals) != expResults {
+					t.Fatalf("expected %d return values, got %d", expResults, len(retVals))
+				}
+
+				if err, ok := retVals[len(retVals)-1].Interface().(error); ok {
+					test.CmpErr(t, tc.expErr, err)
+				} else {
+					test.CmpErr(t, tc.expErr, nil)
+				}
+			})
+		}
+	}
+}
 
 func TestAPI_ContainerOpen(t *testing.T) {
 	defaultReq := ContainerOpenReq{
@@ -84,8 +180,9 @@ func TestAPI_ContainerOpen(t *testing.T) {
 			openReq: defaultReq,
 			checkParams: func(t *testing.T) {
 				test.CmpAny(t, "pool connect count", 1, daos_pool_connect_Count)
-				test.CmpAny(t, "contID", defaultReq.ID, daos_cont_open_SetContainerID)
-				test.CmpAny(t, "flags", defaultReq.Flags, daos_cont_open_SetFlags)
+				oc := daos_cont_open_Containers[defaultReq.ID]
+				test.CmpAny(t, "flags", defaultReq.Flags, oc.OpenFlags)
+				test.CmpAny(t, "count", 1, oc.OpenCount)
 			},
 			expResp: &ContainerOpenResp{
 				Connection: &ContainerHandle{
@@ -108,8 +205,9 @@ func TestAPI_ContainerOpen(t *testing.T) {
 			},
 			checkParams: func(t *testing.T) {
 				test.CmpAny(t, "pool connect count", 0, daos_pool_connect_Count)
-				test.CmpAny(t, "contID", defaultReq.ID, daos_cont_open_SetContainerID)
-				test.CmpAny(t, "flags", defaultReq.Flags, daos_cont_open_SetFlags)
+				oc := daos_cont_open_Containers[defaultReq.ID]
+				test.CmpAny(t, "flags", defaultReq.Flags, oc.OpenFlags)
+				test.CmpAny(t, "count", 1, oc.OpenCount)
 			},
 			expResp: &ContainerOpenResp{
 				Connection: &ContainerHandle{
@@ -367,8 +465,8 @@ func TestAPI_getContConn(t *testing.T) {
 				test.CmpAny(t, "pool connect count", 0, daos_pool_connect_Count)
 
 				test.CmpAny(t, "cont open count", 1, daos_cont_open_Count)
-				test.CmpAny(t, "contID", testContName, daos_cont_open_SetContainerID)
-				test.CmpAny(t, "open flags", daos.ContainerOpenFlagReadOnly, daos_cont_open_SetFlags)
+				oc := daos_cont_open_Containers[testContName]
+				test.CmpAny(t, "flags", daos.ContainerOpenFlagReadOnly, oc.OpenFlags)
 			},
 			expHdl: defaultContainerHandle(),
 		},
@@ -385,8 +483,8 @@ func TestAPI_getContConn(t *testing.T) {
 				test.CmpAny(t, "pool query", daos.PoolQueryMask(0), daos_pool_connect_QueryMask)
 
 				test.CmpAny(t, "cont open count", 1, daos_cont_open_Count)
-				test.CmpAny(t, "contID", testContName, daos_cont_open_SetContainerID)
-				test.CmpAny(t, "open flags", daos.ContainerOpenFlagReadOnly, daos_cont_open_SetFlags)
+				oc := daos_cont_open_Containers[testContName]
+				test.CmpAny(t, "flags", daos.ContainerOpenFlagReadOnly, oc.OpenFlags)
 			},
 			expHdl: defaultContainerHandle(),
 		},
@@ -402,8 +500,8 @@ func TestAPI_getContConn(t *testing.T) {
 				test.CmpAny(t, "pool query", daos.PoolQueryMask(0), daos_pool_connect_QueryMask)
 
 				test.CmpAny(t, "cont open count", 1, daos_cont_open_Count)
-				test.CmpAny(t, "contID", testContName, daos_cont_open_SetContainerID)
-				test.CmpAny(t, "open flags", daos.ContainerOpenFlagReadOnly, daos_cont_open_SetFlags)
+				oc := daos_cont_open_Containers[testContName]
+				test.CmpAny(t, "flags", daos.ContainerOpenFlagReadOnly, oc.OpenFlags)
 			},
 			expHdl: defaultContainerHandle(),
 		},
@@ -826,85 +924,206 @@ func TestAPI_ContainerDeleteAttributes(t *testing.T) {
 	}
 }
 
-func TestAPI_ContainerHandleMethods(t *testing.T) {
-	thType := reflect.TypeOf(defaultContainerHandle())
-	for i := 0; i < thType.NumMethod(); i++ {
-		method := thType.Method(i)
-		methArgs := make([]reflect.Value, 0)
-		ctx := test.Context(t)
-		var expResults int
+func TestAPI_ContainerEnableTelemetry(t *testing.T) {
+	dumpPool := "dump-pool"
+	dumpCont := "dump-container"
+	dumpRoot := "dump-root//path"
+	cleanDumpRoot := filepath.Clean("/" + dumpRoot)
 
-		switch method.Name {
-		case "Close":
-			expResults = 1
-		case "Query":
-			expResults = 2
-		case "ListAttributes":
-			expResults = 2
-		case "GetAttributes":
-			methArgs = append(methArgs, reflect.ValueOf(daos_default_AttrList[0].Name))
-			expResults = 2
-		case "SetAttributes":
-			methArgs = append(methArgs, reflect.ValueOf(daos_default_AttrList[0]))
-			expResults = 1
-		case "DeleteAttributes":
-			methArgs = append(methArgs, reflect.ValueOf(daos_default_AttrList[0].Name))
-			expResults = 1
-		case "GetProperties":
-			methArgs = append(methArgs, reflect.ValueOf(daos.ContainerPropLabel.String()))
-			expResults = 2
-		case "SetProperties":
-			propList, err := daos.AllocateContainerPropertyList(1)
-			if err != nil {
-				t.Fatal(err)
+	for name, tc := range map[string]struct {
+		setup        func(t *testing.T)
+		ctx          context.Context
+		req          ContainerTelemetryRequest
+		checkParams  func(t *testing.T)
+		expContAttrs daos.AttributeList
+		expErr       error
+	}{
+		"nil context": {
+			expErr: errNilCtx,
+		},
+		"missing either DumpContainerID or DumpPathRoot": {
+			ctx:    defaultContainerHandle().toCtx(test.Context(t)),
+			req:    ContainerTelemetryRequest{},
+			expErr: errors.New("either DumpContainerID or DumpPathRoot must be set"),
+		},
+		"DumpContainerID must be set if DumpPoolID is set": {
+			ctx: defaultContainerHandle().toCtx(test.Context(t)),
+			req: ContainerTelemetryRequest{
+				DumpPoolID: dumpPool,
+			},
+			expErr: errors.New("DumpContainerID must be set if DumpPoolID is set"),
+		},
+		"DumpContainerID may not be the same as the source container": {
+			ctx: defaultContainerHandle().toCtx(test.Context(t)),
+			req: ContainerTelemetryRequest{
+				DumpContainerID: daos_default_ContainerInfo.ContainerLabel,
+				DumpPathRoot:    dumpRoot,
+			},
+			expErr: errors.New("DumpContainerID may not be the same as the source container"),
+		},
+		"DumpContainerID may not be the same as the source container (UUID)": {
+			ctx: defaultContainerHandle().toCtx(test.Context(t)),
+			req: ContainerTelemetryRequest{
+				DumpContainerID: daos_default_ContainerInfo.ContainerUUID.String(),
+				DumpPathRoot:    dumpRoot,
+			},
+			expErr: errors.New("DumpContainerID may not be the same as the source container"),
+		},
+		"dump container not found": {
+			setup: func(t *testing.T) {
+				daos_cont_open_Strict = true
+			},
+			ctx: defaultContainerHandle().toCtx(test.Context(t)),
+			req: ContainerTelemetryRequest{
+				DumpPoolID:      dumpPool,
+				DumpContainerID: dumpCont,
+				DumpPathRoot:    dumpRoot,
+			},
+			expErr: errors.New("failed to find dump container dump-pool/dump-container"),
+		},
+		"fail to clear existing telemetry attributes before enabling": {
+			setup: func(t *testing.T) {
+				daos_cont_del_attr_RC = _Ctype_int(daos.IOError)
+			},
+			ctx: defaultContainerHandle().toCtx(test.Context(t)),
+			req: ContainerTelemetryRequest{
+				DumpPoolID:      dumpPool,
+				DumpContainerID: dumpCont,
+				DumpPathRoot:    dumpRoot,
+			},
+			checkParams: func(t *testing.T) {
+				test.CmpAny(t, "set attributes", 0, len(daos_cont_set_attr_AttrList))
+			},
+			expErr: errors.New("failed to clear existing telemetry attributes"),
+		},
+		"setting telemetry attributes fails": {
+			setup: func(t *testing.T) {
+				daos_cont_set_attr_RC = _Ctype_int(daos.IOError)
+			},
+			ctx: defaultContainerHandle().toCtx(test.Context(t)),
+			req: ContainerTelemetryRequest{
+				DumpPoolID:      dumpPool,
+				DumpContainerID: dumpCont,
+				DumpPathRoot:    dumpRoot,
+			},
+			checkParams: func(t *testing.T) {
+				test.CmpAny(t, "set attributes", 0, len(daos_cont_set_attr_AttrList))
+			},
+			expErr: errors.New("failed to set container attributes"),
+		},
+		"dfuse telemetry ioctl fails": {
+			setup: func(t *testing.T) {
+				call_dfuse_telemetry_ioctl_Error = errors.New("dfuse ioctl failed")
+			},
+			ctx: defaultContainerHandle().toCtx(test.Context(t)),
+			req: ContainerTelemetryRequest{
+				DumpPoolID:      dumpPool,
+				DumpContainerID: dumpCont,
+				DumpPathRoot:    dumpRoot,
+				DfuseMountPath:  "/mnt/daos",
+			},
+			expErr: errors.New("failed to enable container telemetry for dfuse at \"/mnt/daos\": dfuse ioctl failed"),
+		},
+		"success with all dest parameters": {
+			ctx: defaultContainerHandle().toCtx(test.Context(t)),
+			req: ContainerTelemetryRequest{
+				DumpPoolID:      dumpPool,
+				DumpContainerID: dumpCont,
+				DumpPathRoot:    dumpRoot,
+			},
+			expContAttrs: daos.AttributeList{
+				{Name: daos.ClientMetricsDumpPoolAttr, Value: []byte(dumpPool)},
+				{Name: daos.ClientMetricsDumpContAttr, Value: []byte(dumpCont)},
+				{Name: daos.ClientMetricsDumpDirAttr, Value: []byte(cleanDumpRoot)},
+			},
+		},
+		"source pool used if not supplied": {
+			ctx: defaultContainerHandle().toCtx(test.Context(t)),
+			req: ContainerTelemetryRequest{
+				DumpContainerID: dumpCont,
+				DumpPathRoot:    dumpRoot,
+			},
+			expContAttrs: daos.AttributeList{
+				{Name: daos.ClientMetricsDumpPoolAttr, Value: []byte(daos_default_PoolInfo.Label)},
+				{Name: daos.ClientMetricsDumpContAttr, Value: []byte(dumpCont)},
+				{Name: daos.ClientMetricsDumpDirAttr, Value: []byte(cleanDumpRoot)},
+			},
+		},
+		"only dump dir set": {
+			ctx: defaultContainerHandle().toCtx(test.Context(t)),
+			req: ContainerTelemetryRequest{
+				DumpPathRoot: dumpRoot,
+			},
+			expContAttrs: daos.AttributeList{
+				{Name: daos.ClientMetricsDumpDirAttr, Value: []byte(cleanDumpRoot)},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Cleanup(ResetTestStubs)
+			if tc.setup != nil {
+				tc.setup(t)
 			}
-			defer propList.Free()
-			methArgs = append(methArgs, reflect.ValueOf(propList))
-			expResults = 1
-		case "FillHandle", "IsValid", "String", "UUID", "ID":
-			// No tests for these. The main point of this suite is to ensure that the
-			// convenience wrappers handle inputs as expected.
-			continue
-		default:
-			// If you're here, you need to add a case to test your new method.
-			t.Fatalf("unhandled method %q", method.Name)
-		}
 
-		// Not intended to be exhaustive; just verify that they accept the parameters
-		// we expect and return something sensible for errors.
-		for name, tc := range map[string]struct {
-			setup  func(t *testing.T)
-			th     *ContainerHandle
-			expErr error
-		}{
-			fmt.Sprintf("%s: nil handle", method.Name): {
-				th:     nil,
-				expErr: ErrInvalidContainerHandle,
+			if tc.checkParams != nil {
+				defer tc.checkParams(t)
+			}
+
+			err := ContainerEnableTelemetry(test.MustLogContext(t, tc.ctx), tc.req)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			test.CmpAny(t, "ContainerEnableTelemetry() telemetry attributes", tc.expContAttrs, daos_cont_set_attr_AttrList)
+		})
+	}
+}
+
+func TestAPI_ContainerDisableTelemetry(t *testing.T) {
+	for name, tc := range map[string]struct {
+		setup  func(t *testing.T)
+		ctx    context.Context
+		req    ContainerTelemetryRequest
+		expErr error
+	}{
+		"nil context": {
+			expErr: errNilCtx,
+		},
+		"fail to delete telemetry attributes": {
+			setup: func(t *testing.T) {
+				daos_cont_del_attr_RC = _Ctype_int(daos.IOError)
 			},
-			fmt.Sprintf("%s: success", method.Name): {
-				th: defaultContainerHandle(),
+			ctx:    defaultContainerHandle().toCtx(test.Context(t)),
+			req:    ContainerTelemetryRequest{},
+			expErr: errors.New("failed to delete container attributes"),
+		},
+		"dfuse telemetry ioctl fails": {
+			setup: func(t *testing.T) {
+				call_dfuse_telemetry_ioctl_Error = errors.New("dfuse ioctl failed")
 			},
-		} {
-			t.Run(name, func(t *testing.T) {
-				thArg := reflect.ValueOf(tc.th)
-				if tc.th == nil {
-					thArg = reflect.New(thType).Elem()
-				}
-				ctxArg := reflect.ValueOf(ctx)
-				testArgs := append([]reflect.Value{thArg, ctxArg}, methArgs...)
-				t.Logf("\nargs: %+v", testArgs)
+			ctx: defaultContainerHandle().toCtx(test.Context(t)),
+			req: ContainerTelemetryRequest{
+				DfuseMountPath: "/mnt/daos",
+			},
+			expErr: errors.New("failed to disable container telemetry for dfuse at \"/mnt/daos\": dfuse ioctl failed"),
+		},
+		"success": {
+			ctx: defaultContainerHandle().toCtx(test.Context(t)),
+			req: ContainerTelemetryRequest{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Cleanup(ResetTestStubs)
+			if tc.setup != nil {
+				tc.setup(t)
+			}
 
-				retVals := method.Func.Call(testArgs)
-				if len(retVals) != expResults {
-					t.Fatalf("expected %d return values, got %d", expResults, len(retVals))
-				}
-
-				if err, ok := retVals[len(retVals)-1].Interface().(error); ok {
-					test.CmpErr(t, tc.expErr, err)
-				} else {
-					test.CmpErr(t, tc.expErr, nil)
-				}
-			})
-		}
+			err := ContainerDisableTelemetry(test.MustLogContext(t, tc.ctx), tc.req)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+		})
 	}
 }
