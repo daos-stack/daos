@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -406,7 +407,7 @@ class ErasureCodeSingle(TestWithServers):
 
         # Verify the queue and make sure no FAIL for any run
         while not self.out_queue.empty():
-            if self.out_queue.get() == "FAIL":
+            if (self.out_queue.get() == "FAIL" or self.out_queue.get() == "ERR"):
                 self.fail("FAIL")
 
 
