@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -279,10 +280,13 @@ struct vos_pool {
 	/** VOS uuid hash-link with refcnt */
 	struct d_ulink		vp_hlink;
 	/** number of openers */
-	uint32_t                 vp_opened : 30;
-	uint32_t                 vp_dying  : 1;
+	uint32_t                vp_opened;
+	uint32_t                vp_dying:1,
+				vp_opening:1,
 	/** exclusive handle (see VOS_POF_EXCL) */
-	int			vp_excl:1;
+				vp_excl:1;
+	ABT_mutex		vp_mutex;
+	ABT_cond		vp_cond;
 	/* this pool is for sysdb */
 	bool			vp_sysdb;
 	/** this pool is for rdb */

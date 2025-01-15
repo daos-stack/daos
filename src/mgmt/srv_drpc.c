@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -936,8 +937,8 @@ void
 ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	struct drpc_alloc		alloc = PROTO_ALLOCATOR_INIT(alloc);
-	Mgmt__PoolReintegrateReq	*req = NULL;
-	Mgmt__PoolReintegrateResp	resp;
+	Mgmt__PoolReintReq              *req   = NULL;
+	Mgmt__PoolReintResp              resp;
 	d_rank_list_t			*svc_ranks = NULL;
 	uint8_t				*body;
 	size_t				len;
@@ -945,12 +946,10 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	uint64_t			nvme_bytes = 0;
 	int				rc;
 
-	mgmt__pool_reintegrate_resp__init(&resp);
+	mgmt__pool_reint_resp__init(&resp);
 
 	/* Unpack the inner request from the drpc call body */
-	req = mgmt__pool_reintegrate_req__unpack(&alloc.alloc,
-						 drpc_req->body.len,
-						 drpc_req->body.data);
+	req = mgmt__pool_reint_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
 
 	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
@@ -982,17 +981,17 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 out:
 	resp.status = rc;
-	len = mgmt__pool_reintegrate_resp__get_packed_size(&resp);
+	len         = mgmt__pool_reint_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 	} else {
-		mgmt__pool_reintegrate_resp__pack(&resp, body);
+		mgmt__pool_reint_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
 		drpc_resp->body.data = body;
 	}
 
-	mgmt__pool_reintegrate_req__free_unpacked(req, &alloc.alloc);
+	mgmt__pool_reint_req__free_unpacked(req, &alloc.alloc);
 }
 
 void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
