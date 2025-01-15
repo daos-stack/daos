@@ -1666,7 +1666,10 @@ err_cont:
 			DP_CONT(pool_uuid, cont_uuid));
 
 		D_ASSERT(hdl != NULL);
-		cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
+		if (added)
+			cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
+		else
+			D_FREE(hdl);
 		hdl = NULL;
 
 		D_ASSERT(cont != NULL);
