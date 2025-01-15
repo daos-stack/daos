@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -781,7 +782,7 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
 	struct vos_pool_space	 vps = { 0 };
-	uint64_t		 scm_left, nvme_left, ne_left, ne_sys;
+	uint64_t                 scm_left, nvme_left, ne_left;
 	struct pressure_ratio	*pr;
 	int			 orig_pressure, rc;
 
@@ -817,12 +818,8 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 	if (vps.vps_ne_total == 0) {
 		ne_left = UINT64_MAX;
 	} else {
-		D_ASSERT(vps.vps_ne_total < SCM_TOTAL(&vps));
-		ne_sys = SCM_SYS(&vps) * vps.vps_ne_total / SCM_TOTAL(&vps);
-		if (vps.vps_ne_free > ne_sys)
-			ne_left = vps.vps_ne_free - ne_sys;
-		else
-			ne_left = 0;
+		ne_left = vps.vps_ne_free;
+		D_ASSERT(ne_left <= vps.vps_ne_total);
 	}
 
 	if (NVME_TOTAL(&vps) == 0)      /* NVMe not enabled */
