@@ -1769,8 +1769,10 @@ retry:
 	rc = ds_pool_thread_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
 				       PO_COMP_ST_DOWNOUT, cont_open_one, &arg, 0);
 	if (rc != 0) {
-		if (rc == -DER_AGAIN)
+		if (rc == -DER_AGAIN) {
+			dss_sleep(50);
 			goto retry;
+		}
 
 		/* Once it exclude the target from the pool, since the target
 		 * might still in the cart group, so IV cont open might still
