@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2374,6 +2375,18 @@ int crt_context_quota_limit_get(crt_context_t crt_ctx, crt_quota_type_t quota, i
  */
 int
 crt_req_get_proto_ver(crt_rpc_t *req);
+
+void
+crt_hg_reset_log_level();
+
+void
+crt_hg_set_log_level(const char *level);
+
+void
+crt_hg_reset_log_subsys();
+
+void
+crt_hg_set_log_subsys(const char *subsys);
 
 /** @}
  */
