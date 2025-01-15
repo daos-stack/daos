@@ -44,7 +44,7 @@ mdtest:
   test_dir: /
   dfs_destroy: True
   manager: MPICH
-  flags: -u
+  flags: "-u -F -C"
   write_bytes: 524288
   read_bytes: 524288
   depth: 10
@@ -59,9 +59,9 @@ mdtest:
     8_server_ec4p2gx:
       !filter-only : "/run/hosts/servers/8_server"  # yamllint disable-line rule:colons
       dfs_oclass: EC_4P2GX
-    12_server_ec4p3gx:
+    12_server_ec4p2gx:
       !filter-only : "/run/hosts/servers/12_server"  # yamllint disable-line rule:colons
-      dfs_oclass: EC_4P3GX
+      dfs_oclass: EC_4P2GX
     12_server_ec8p2gx:
       !filter-only : "/run/hosts/servers/12_server"  # yamllint disable-line rule:colons
       dfs_oclass: EC_8P2GX
