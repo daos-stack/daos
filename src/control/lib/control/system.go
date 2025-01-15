@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -566,19 +567,23 @@ func SystemExclude(ctx context.Context, rpcClient UnaryInvoker, req *SystemExclu
 	return resp, convertMSResponse(ur, resp)
 }
 
+// PoolRankResult describes the result of an OSA operation on a pool's ranks.
+type PoolRankResult struct {
+	Status int32  `json:"status"`  // Status returned from a specific OSA dRPC call
+	Msg    string `json:"msg"`     // Error message if Status is not Success
+	PoolID string `json:"pool_id"` // Unique identifier for pool
+	Ranks  string `json:"ranks"`   // RankSet of ranks that should be operated on
+}
+
+// PoolRankResults is an alias for a PoolRankResult slice.
+type PoolRankResults []*PoolRankResult
+
 // SystemDrainReq contains the inputs for the system drain request.
 type SystemDrainReq struct {
 	unaryRequest
 	msRequest
 	sysRequest
-}
-
-// DrainResult describes the result of a drain operation on a pool's ranks.
-type DrainResult struct {
-	Status int32  `json:"status"`  // Status returned from a specific drain call
-	Msg    string `json:"msg"`     // Error message if Status is not Success
-	PoolID string `json:"pool_id"` // Unique identifier for pool
-	Ranks  string `json:"ranks"`   // RankSet of ranks that should be drained on pool
+	Reint bool
 }
 
 // SystemDrainResp contains the request response. UnmarshalJSON is not implemented on this type
@@ -586,20 +591,18 @@ type DrainResult struct {
 // in the response so decoding is not required.
 type SystemDrainResp struct {
 	sysResponse `json:"-"`
-	Results     []*DrainResult `json:"results"`
+	Results     PoolRankResults `json:"results"`
 }
 
-// Errors returns a single error combining all error messages associated with a system drain
-// response. Doesn't retrieve errors from sysResponse because missing ranks or hosts will not be
-// populated in SystemDrainResp.
-func (sdr *SystemDrainResp) Errors() (errOut error) {
-	for _, r := range sdr.Results {
+// Errors returns a single error combining all error messages associated with pool-rank results.
+// Doesn't retrieve errors from sysResponse because missing ranks or hosts will not be returned.
+func (resp *SystemDrainResp) Errors() (err error) {
+	for _, r := range resp.Results {
 		if r.Status != int32(daos.Success) {
-			errOut = concatErrs(errOut,
+			err = concatErrs(err,
 				errors.Errorf("pool %s ranks %s: %s", r.PoolID, r.Ranks, r.Msg))
 		}
 	}
-
 	return
 }
 
@@ -615,6 +618,7 @@ func SystemDrain(ctx context.Context, rpcClient UnaryInvoker, req *SystemDrainRe
 		Hosts: req.Hosts.String(),
 		Ranks: req.Ranks.String(),
 		Sys:   req.getSystem(rpcClient),
+		Reint: req.Reint,
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemDrain(ctx, pbReq)
