@@ -4,20 +4,28 @@ inputs:
   condition:
     description: Condition this should run on
     required: true
+  ref:
+    description: Ref for code checkout
+    default: "${{ github.event.pull_request.head.sha }}"
+    required: false
 runs:
   using: "composite"
   steps:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
-        ref: ${{ github.event.pull_request.head.sha }}
+        ref: ${{ inputs.ref }}
     - name: Request and Provision a Cluster
       if: ${{ inputs.condition }}
       shell: bash
       run: |
           . ci/gha_functions.sh
           STAGE_NAME='${{ env.STAGE_NAME }}'
-          REQID='${{ github.event.pull_request.number }}-${{ github.run_number }}'
+          if "${{ github.event.schedule }}"; then
+            REQID='${{ github.run_id }}-${{ github.run_number }}'
+          else
+            REQID='${{ github.event.pull_request.number }}-${{ github.run_number }}'
+          fi
           CP_PRIORITY=${{ env.CP_PRIORITY }}
           if ! JENKINS_URL='${{ env.JENKINS_URL }}'                   \
                LABEL='${{ env.LABEL }}'                               \

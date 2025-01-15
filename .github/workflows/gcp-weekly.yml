@@ -310,6 +310,11 @@ jobs:
       - name: Request and Provision a Cluster
         timeout-minutes: 7200
         uses: ./.github/actions/provision-cluster
+        with:
+          condition: true
+          # DO NOT LAND THIS. This is for testing only
+          ref: ${{ github.event.pull_request.head.sha }}
+          # ref: ${{ env.GCP_BRANCH }}
       - name: Run Test
         timeout-minutes: 7200
         id: run-test
@@ -467,6 +472,11 @@ jobs:
       - name: Request and Provision a Cluster
         timeout-minutes: 7200
         uses: ./.github/actions/provision-cluster
+        with:
+          condition: true
+          # DO NOT LAND THIS. This is for testing only
+          ref: ${{ github.event.pull_request.head.sha }}
+          # ref: ${{ env.GCP_BRANCH }}
       - name: Run Test
         timeout-minutes: 7200
         id: run-test
@@ -544,8 +554,8 @@ jobs:
             --build-arg DAOS_JAVA_BUILD=yes
             --tag gha-amd-${{github.run_id}}-${{github.run_attempt}}
       - name: Run Unit Testing with bdev
-        run: docker run gha-amd-${{github.run_id}}-${{github.run_attempt}}
+        run: docker run --privileged=true gha-amd-${{github.run_id}}-${{github.run_attempt}}
             cd daos && BDEV_TEST=true ./ci/unit/test_main_node.sh
       - name: Run Unit Testing with bdev and memcheck
-        run: docker run gha-amd-${{github.run_id}}-${{github.run_attempt}}
+        run: docker run --privileged=true gha-amd-${{github.run_id}}-${{github.run_attempt}}
             cd daos && WITH_VALGRIND=true BDEV_TEST=true ./ci/unit/test_main_node.sh
