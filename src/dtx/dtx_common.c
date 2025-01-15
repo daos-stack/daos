@@ -1855,8 +1855,6 @@ dtx_cont_register(struct ds_cont_child *cont)
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
-	cont->sc_agg_eph_gap = d_sec2hlc(vos_get_agg_gap());
-
 	ds_cont_child_get(cont);
 	dbca->dbca_refs = 0;
 	dbca->dbca_cont = cont;

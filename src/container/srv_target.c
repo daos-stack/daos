@@ -322,7 +322,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 		     DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG_PEER_FAIL)))
 		interval = 0;
 	else
-		interval = cont->sc_agg_eph_gap;
+		interval = d_sec2hlc(vos_get_agg_gap());
 
 	D_ASSERT(hlc > (interval * 2));
 	/*

@@ -947,7 +947,8 @@ static inline bool
 is_pressure_recent(struct sched_info *info, struct sched_pool_info *spi)
 {
 	D_ASSERT(info->si_cur_ts >= spi->spi_pressure_ts);
-	return (info->si_cur_ts - spi->spi_pressure_ts) < info->si_agg_gap;
+	return (info->si_cur_ts - spi->spi_pressure_ts) <
+	       (vos_get_agg_gap() + 10) * 1000; /* msecs */
 }
 
 static inline uint64_t
@@ -2239,8 +2240,6 @@ sched_run(ABT_sched sched)
 		D_ERROR("Get ABT pools error: %d\n", ret);
 		return;
 	}
-
-	dx->dx_sched_info.si_agg_gap = (vos_get_agg_gap() + 10) * 1000; /* msecs */
 
 	while (1) {
 		/* Try to pick network poll ULT */

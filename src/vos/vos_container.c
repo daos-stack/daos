@@ -925,7 +925,7 @@ vos_cont_get_local_stable_epoch(daos_handle_t coh)
  * epoch when reintegrate into the system.
  */
 daos_epoch_t
-vos_cont_get_globla_stable_epoch(daos_handle_t coh)
+vos_cont_get_global_stable_epoch(daos_handle_t coh)
 {
 	struct vos_container	*cont;
 	struct vos_cont_ext_df	*cont_ext;
