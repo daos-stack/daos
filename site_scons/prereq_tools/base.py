@@ -448,71 +448,25 @@ class PreReqComponent:
 
         RUNNER.initialize(self.__env)
 
-        opts.Add(
-            PathVariable(
-                "PREFIX", "Installation path", install_dir, PathVariable.PathIsDirCreate
-            )
-        )
-        opts.Add(
-            "ALT_PREFIX",
-            f"Specifies {os.pathsep} separated list of alternative paths to add",
-            None,
-        )
-        opts.Add(
-            PathVariable(
-                "BUILD_ROOT",
-                "Alternative build root directory",
-                "build",
-                PathVariable.PathIsDirCreate,
-            )
-        )
-        opts.Add(
-            "USE_INSTALLED", "Comma separated list of preinstalled dependencies", "none"
-        )
-        opts.Add(("MPI_PKG", "Specifies name of pkg-config to load for MPI", None))
-        opts.Add(
-            BoolVariable("FIRMWARE_MGMT", "Build in device firmware management.", False)
-        )
-        opts.Add(
-            BoolVariable("STACK_MMAP", "Allocate ABT ULTs stacks with mmap()", False)
-        )
-        opts.Add(BoolVariable("STATIC_FUSE", "Build with static libfuse library", True))
-        opts.Add(
-            EnumVariable(
-                "BUILD_TYPE",
-                "Set the build type",
-                "release",
-                ["dev", "debug", "release"],
-                ignorecase=1,
-            )
-        )
-        opts.Add(
-            EnumVariable(
-                "TARGET_TYPE",
-                "Set the prerequisite type",
-                "default",
-                ["default", "dev", "debug", "release"],
-                ignorecase=1,
-            )
-        )
-        opts.Add(
-            EnumVariable(
-                "COMPILER",
-                "Set the compiler family to use",
-                "gcc",
-                ["gcc", "covc", "clang", "icc"],
-                ignorecase=2,
-            )
-        )
-        opts.Add(
-            EnumVariable(
-                "WARNING_LEVEL",
-                "Set default warning level",
-                "error",
-                ["warning", "warn", "error"],
-                ignorecase=2,
-            )
-        )
+        opts.Add(PathVariable('PREFIX', 'Installation path', install_dir,
+                              PathVariable.PathAccept))
+        opts.Add('ALT_PREFIX', f'Specifies {os.pathsep} separated list of alternative paths to add',
+                 None)
+        opts.Add(PathVariable('BUILD_ROOT', 'Alternative build root directory', "build",
+                              PathVariable.PathIsDirCreate))
+        opts.Add('USE_INSTALLED', 'Comma separated list of preinstalled dependencies', 'none')
+        opts.Add(('MPI_PKG', 'Specifies name of pkg-config to load for MPI', None))
+        opts.Add(BoolVariable('FIRMWARE_MGMT', 'Build in device firmware management.', False))
+        opts.Add(BoolVariable("STACK_MMAP", "Allocate ABT ULTs stacks with mmap()", False))
+
+        opts.Add(EnumVariable('BUILD_TYPE', "Set the build type", 'release',
+                              ['dev', 'debug', 'release'], ignorecase=1))
+        opts.Add(EnumVariable('TARGET_TYPE', "Set the prerequisite type", 'default',
+                              ['default', 'dev', 'debug', 'release'], ignorecase=1))
+        opts.Add(EnumVariable('COMPILER', "Set the compiler family to use", 'gcc',
+                              ['gcc', 'covc', 'clang', 'icc'], ignorecase=2))
+        opts.Add(EnumVariable('WARNING_LEVEL', "Set default warning level", 'error',
+                              ['warning', 'warn', 'error'], ignorecase=2))
 
         opts.Update(self.__env)
 
@@ -584,21 +538,11 @@ class PreReqComponent:
 
     def run_build(self, opts):
         """Build and dependencies"""
-        common_reqs = [
-            "ofi",
-            "hwloc",
-            "mercury",
-            "boost",
-            "uuid",
-            "crypto",
-            "protobufc",
-            "lz4",
-            "isal",
-            "isal_crypto",
-        ]
-        client_reqs = ["fuse", "json-c", "capstone", "aio"]
-        server_reqs = ["argobots", "pmdk", "spdk", "ipmctl"]
-        test_reqs = ["cmocka"]
+        common_reqs = ['ofi', 'hwloc', 'mercury', 'boost', 'uuid', 'crypto', 'protobufc',
+                       'lz4', 'isal', 'isal_crypto']
+        client_reqs = ['fused', 'json-c', 'capstone', 'aio']
+        server_reqs = ['argobots', 'pmdk', 'spdk', 'ipmctl']
+        test_reqs = ['cmocka']
 
         reqs = []
         reqs = common_reqs
@@ -945,7 +889,7 @@ class PreReqComponent:
             if not os.path.exists(ipath):
                 ipath = None
             lpath = None
-            for lib in ["lib64", "lib"]:
+            for lib in comp.lib_path:
                 lpath = os.path.join(path, lib)
                 if not os.path.exists(lpath):
                     lpath = None
@@ -1202,7 +1146,7 @@ class _Component:
             and not self.component_prefix == "/usr"
         ):
             path_found = False
-            for path in ["lib", "lib64"]:
+            for path in self.lib_path:
                 config = os.path.join(self.component_prefix, path, "pkgconfig")
                 if not os.path.exists(config):
                     continue
@@ -1439,7 +1383,7 @@ class _Component:
         if not os.path.exists(comp_path):
             return
 
-        for libdir in ["lib64", "lib"]:
+        for libdir in self.lib_path:
             path = os.path.join(comp_path, libdir)
             if os.path.exists(path):
                 norigin.append(os.path.normpath(path))
@@ -1451,14 +1395,14 @@ class _Component:
                 comp = self.prereqs.get_component(prereq)
                 subpath = comp.component_prefix
                 if subpath and not subpath.startswith("/usr"):
-                    for libdir in ["lib64", "lib"]:
+                    for libdir in self.lib_path:
                         lpath = os.path.join(subpath, libdir)
                         if not os.path.exists(lpath):
                             continue
                         rpath.append(lpath)
                 continue
 
-            for libdir in ["lib64", "lib"]:
+            for libdir in self.lib_path:
                 path = os.path.join(rootpath, libdir)
                 if not os.path.exists(path):
                     continue
