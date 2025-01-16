@@ -593,18 +593,19 @@ class TestPool(TestDaosApiBase):
                 self.connected = False
 
     @fail_on(CommandFailure)
-    def exclude(self, ranks, tgt_idx=None):
+    def exclude(self, ranks, tgt_idx=None, force=True):
         """Manually exclude a rank from this pool.
 
         Args:
             ranks (list): a list daos server ranks (int) to exclude
             tgt_idx (string, optional): targets to exclude on ranks, ex: "1,2". Defaults to None.
+            force (bool, optional): force exclusion regardless of data loss. Defaults to true
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other information.
 
         """
-        return self.dmg.pool_exclude(self.identifier, ranks, tgt_idx, force=True)
+        return self.dmg.pool_exclude(self.identifier, ranks, tgt_idx, force=force)
 
     @fail_on(CommandFailure)
     def extend(self, ranks):

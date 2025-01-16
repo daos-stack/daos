@@ -37,21 +37,16 @@ class DmgPoolExcludeRanks(ControlTestBase):
         """
         self.log.info("Basic tests of pool exclude command that break Pool RF")
 
-        enabled_ranks = list(range(len(self.hostlist_servers)))
-
-        all_ranks = enabled_ranks.copy()
-        self.random.shuffle(all_ranks)
-        exclude_rank = all_ranks[0]
+        all_ranks = list(self.server_managers[0].ranks.keys())
+        exclude_rank = self.random.choice(all_ranks)
 
         # Disable failing the test if pool exclude fail
-        self.pool.dmg.exit_status_exception = False
-        # exclude second rank without force should fail
-        self.log_step(f"Excluding rank:{exclude_rank} all_ranks={all_ranks}")
-        self.dmg.pool_exclude(self.pool.identifier, [exclude_rank], tgt_idx=None, force=False)
-        self.assertTrue(
-            self.pool.dmg.result.exit_status != 0,
-            "exclude pool without force should fail"
-        )
-        # Restore to fail the test
-        self.pool.dmg.exit_status_exception = True
-        self.dmg.pool_exclude(self.pool.identifier, [exclude_rank], tgt_idx=None, force=True)
+        with self.pool.dmg.no_exception():
+            # exclude second rank without force should fail
+            self.log_step(f"Excluding rank:{exclude_rank} all_ranks={all_ranks}")
+            self.pool.exclude([exclude_rank], tgt_idx=None, force=False)
+            self.assertNotEqual(
+                self.pool.dmg.result.exit_status, 0,
+                "exclude pool without force should fail"
+            )
+        self.pool.exclude([exclude_rank], tgt_idx=None, force=True)
