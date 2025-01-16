@@ -59,9 +59,9 @@ mdtest:
     8_server_ec4p2gx:
       !filter-only : "/run/hosts/servers/8_server"  # yamllint disable-line rule:colons
       dfs_oclass: EC_4P2GX
-    12_server_ec4p2gx:
+    12_server_ec4p3gx:
       !filter-only : "/run/hosts/servers/12_server"  # yamllint disable-line rule:colons
-      dfs_oclass: EC_4P2GX
+      dfs_oclass: EC_4P3GX
     12_server_ec8p2gx:
       !filter-only : "/run/hosts/servers/12_server"  # yamllint disable-line rule:colons
       dfs_oclass: EC_8P2GX
