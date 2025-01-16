@@ -1,8 +1,14 @@
-daos (2.7.101-4) unstable; urgency=medium
+daos (2.7.101-5) unstable; urgency=medium
   [ Tomasz Gromadzki ]
   * pmemobj errors and warnings reported via DAOS logging system
 
- -- Tomasz Gromadzki <tomasz.gromadzki@hpe.com>  Tue, 07 Jan 2025 12:00:00 +0200
+ -- Tomasz Gromadzki <tomasz.gromadzki@hpe.com>  Tue, 14 Jan 2025 12:00:00 +0200
+
+daos (2.7.101-4) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Switch from libfuse3 to libfused
+
+ -- Jeff Olivier <jeffolivier@google.com>  Fri, 20 Dec 2024 20:15:00 +0000
 
 daos (2.7.101-3) unstable; urgency=medium
   [ Phillip Henderson ]
