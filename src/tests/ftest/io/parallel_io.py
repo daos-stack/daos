@@ -170,8 +170,7 @@ class ParallelIo(FioBase, IorTestBase):
         try:
             self.fio_cmd.update_directory(os.path.join(dfuse.mount_dir.value, container_to_destroy))
             self.execute_fio()
-            self.fail(
-                "Fio was able to access destroyed container: {}".format(self.container[0].uuid))
+            self.fail(f"Fio was able to access destroyed container: {self.container[0]}")
         except CommandFailure:
             self.log.info("fio failed as expected")
             # check dfuse is still running after attempting to access deleted container

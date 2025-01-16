@@ -6319,7 +6319,9 @@ obj_ec_get_parity_or_alldata_shard(struct obj_auxi_args *obj_auxi, unsigned int 
 			shard_idx = grp_start + i;
 			if (obj_shard_is_invalid(obj, shard_idx, DAOS_OBJ_RPC_ENUMERATE)) {
 				if (++fail_cnt > obj_ec_parity_tgt_nr(oca)) {
-					D_ERROR(DF_OID" reach max failure "DF_RC"\n",
+					D_ERROR(DF_CONT", obj "DF_OID" reach max failure "DF_RC"\n",
+						DP_CONT(obj->cob_pool->dp_pool,
+							obj->cob_co->dc_uuid),
 						DP_OID(obj->cob_md.omd_id), DP_RC(-DER_DATA_LOSS));
 					D_GOTO(out, shard = -DER_DATA_LOSS);
 				}
@@ -6466,7 +6468,8 @@ obj_list_shards_get(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 	}
 
 	if (rc < 0) {
-		D_ERROR(DF_OID" Can not find shard grp %d: "DF_RC"\n",
+		D_ERROR(DF_CONT", obj "DF_OID" Can not find shard grp %d: "DF_RC"\n",
+			DP_CONT(obj->cob_pool->dp_pool, obj->cob_co->dc_uuid),
 			DP_OID(obj->cob_md.omd_id), grp_idx, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
