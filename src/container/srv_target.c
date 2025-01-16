@@ -878,7 +878,7 @@ cont_child_stop(struct ds_cont_child *cont_child)
 
 	/* cont_stop_agg() may yield */
 	cont_stop_agg(cont_child);
-	D_ASSERT(cont_child_started(cont_child));
+	D_ASSERT(cont_child_started(cont_child) == false);
 	ds_cont_child_put(cont_child);
 }
 
