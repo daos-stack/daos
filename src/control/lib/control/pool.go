@@ -856,13 +856,11 @@ type PoolReintegrateReq struct {
 	TargetIdx []uint32
 }
 
-// ReintegrateResp has no other parameters other than success/failure for now.
-
 // PoolReintegrate will set a pool target for a specific rank back to up.
 // This should automatically start the reintegration process.
 // Returns an error (including any DER code from DAOS).
 func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolReintegrateReq) error {
-	pbReq := &mgmtpb.PoolReintegrateReq{
+	pbReq := &mgmtpb.PoolReintReq{
 		Sys:       req.getSystem(rpcClient),
 		Id:        req.ID,
 		Rank:      req.Rank.Uint32(),
