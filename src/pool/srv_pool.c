@@ -6983,7 +6983,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclud
 	 * Do not change the pool map if the `pw_rf` is broken or is about to break,
 	 * unless the force option is given.
 	 */
-	if (!skip_rf_check) {
+	if (!skip_rf_check && opc == MAP_EXCLUDE) {
 		int failed_cnt;
 
 		rc = pool_map_update_failed_cnt(map);
