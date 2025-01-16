@@ -531,31 +531,3 @@ jobs:
         with:
           name: 'test/Functional Hardware ${{ matrix.stage }}'
           status: "${{ job.status }}"
-
-  Run-unit-tests:
-    runs-on: [self-hosted, docker]
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          # DO NOT LAND THIS. This is for testing only
-          ref: ${{ github.event.pull_request.head.sha }}
-          # ref: ${{ env.GCP_BRANCH }}
-          submodules: true
-      - name: Build deps in Docker
-        run: docker build . --file utils/docker/Dockerfile.el.9
-            --build-arg DAOS_BUILD=no
-            --build-arg DEPS_JOBS=50
-      - name: Build daos in Docker
-        run: docker build . --file utils/docker/Dockerfile.el.9
-            --build-arg DEPS_JOBS=50
-            --build-arg DAOS_KEEP_SRC=yes
-            --build-arg DAOS_TARGET_TYPE=debug
-            --build-arg DAOS_JAVA_BUILD=yes
-            --tag gha-amd-${{github.run_id}}-${{github.run_attempt}}
-      - name: Run Unit Testing with bdev
-        run: docker run --privileged=true gha-amd-${{github.run_id}}-${{github.run_attempt}}
-            cd daos && BDEV_TEST=true ./ci/unit/test_main_node.sh
-      - name: Run Unit Testing with bdev and memcheck
-        run: docker run --privileged=true gha-amd-${{github.run_id}}-${{github.run_attempt}}
-            cd daos && WITH_VALGRIND=true BDEV_TEST=true ./ci/unit/test_main_node.sh
