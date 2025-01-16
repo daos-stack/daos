@@ -7316,7 +7316,7 @@ ds_pool_extend_handler(crt_rpc_t *rpc)
 	rc =
 	    pool_svc_update_map(svc, pool_opc_2map_opc(opc_get(rpc->cr_opc)),
 				false /* exclude_rank */, &rank_list, domains, ndomains, NULL, NULL,
-				&out->peo_op.po_map_version, &out->peo_op.po_hint, MUS_DMG, false);
+				&out->peo_op.po_map_version, &out->peo_op.po_hint, MUS_DMG, true);
 
 	pool_svc_put_leader(svc);
 out:
