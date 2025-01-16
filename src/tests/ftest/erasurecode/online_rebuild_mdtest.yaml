@@ -56,7 +56,8 @@ mdtest:
   dfs_dir_oclass: "RP_3G1"
   objectclass:
     dfs_oclass_list:
-      #- [EC_Object_Class, Minimum number of servers]
+      #- [EC_Object_Class, Exact number of servers]
       - ["EC_2P2GX", 6]
       - ["EC_4P2GX", 8]
+      - ["EC_4P3GX", 12]
       - ["EC_8P2GX", 12]
