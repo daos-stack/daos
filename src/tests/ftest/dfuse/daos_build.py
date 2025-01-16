@@ -1,5 +1,7 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025 Google LLC
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -233,8 +235,9 @@ class DaosBuild(TestWithServers):
 
         preload_cmd = remote_env.to_export_str()
 
+        daos_url = 'https://github.com/daos-stack/daos.git'
         cmds = ['python3 -m venv {}/venv'.format(mount_dir),
-                f'git clone https://github.com/daos-stack/daos.git {build_dir}',
+                f'git clone {daos_url} {build_dir} --recurse-submodules',
                 f'git -C {build_dir} checkout {self._get_daos_build_checkout()}',
                 f'git -C {build_dir} submodule init',
                 f'git -C {build_dir} submodule update',

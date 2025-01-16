@@ -1,4 +1,6 @@
 # Copyright 2016-2024 Intel Corporation
+# Copyright 2025 Google LLC
+# Copyright 2025 Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,7 +25,7 @@
 import platform
 
 import distro
-from prereq_tools import GitRepoRetriever
+from prereq_tools import CopyRetriever, GitRepoRetriever
 from SCons.Script import GetOption
 
 # Check if this is an ARM platform
@@ -127,7 +129,7 @@ def define_mercury(reqs):
         ofi_build.append('--disable-debug')
 
     reqs.define('ofi',
-                retriever=GitRepoRetriever(),
+                retriever=CopyRetriever(),
                 commands=[['./autogen.sh'],
                           ofi_build,
                           ['make'],
@@ -152,7 +154,7 @@ def define_mercury(reqs):
         ucx_configure.extend(['--disable-debug', '--disable-logging'])
 
     reqs.define('ucx',
-                retriever=GitRepoRetriever(),
+                retriever=CopyRetriever(),
                 libs=['ucs', 'ucp', 'uct'],
                 functions={'ucs': ['ucs_debug_disable_signal']},
                 headers=['uct/api/uct.h'],
@@ -189,7 +191,7 @@ def define_mercury(reqs):
         mercury_build.append('-DMERCURY_ENABLE_DEBUG:BOOL=OFF')
 
     reqs.define('mercury',
-                retriever=GitRepoRetriever(True),
+                retriever=CopyRetriever(),
                 commands=[mercury_build,
                           ['make'],
                           ['make', 'install']],
@@ -246,14 +248,14 @@ def define_components(reqs):
     define_ompi(reqs)
 
     reqs.define('isal',
-                retriever=GitRepoRetriever(),
+                retriever=CopyRetriever(),
                 commands=[['./autogen.sh'],
                           ['./configure', '--prefix=$ISAL_PREFIX', '--libdir=$ISAL_PREFIX/lib'],
                           ['make'],
                           ['make', 'install']],
                 libs=['isal'])
     reqs.define('isal_crypto',
-                retriever=GitRepoRetriever(),
+                retriever=CopyRetriever(),
                 commands=[['./autogen.sh'],
                           ['./configure',
                            '--prefix=$ISAL_CRYPTO_PREFIX',
@@ -263,7 +265,7 @@ def define_components(reqs):
                 libs=['isal_crypto'])
 
     reqs.define('pmdk',
-                retriever=GitRepoRetriever(),
+                retriever=CopyRetriever(),
                 commands=[['make',
                            'all',
                            'BUILD_EXAMPLES=n',
@@ -287,9 +289,8 @@ def define_components(reqs):
         abt_build.append('--enable-valgrind')
 
     reqs.define('argobots',
-                retriever=GitRepoRetriever(True),
-                commands=[['git', 'clean', '-dxf'],
-                          ['./autogen.sh'],
+                retriever=CopyRetriever(),
+                commands=[['./autogen.sh'],
                           abt_build,
                           ['make'],
                           ['make', 'install']],
@@ -304,6 +305,18 @@ def define_components(reqs):
                            '--default-library', 'both', '../fuse'],
                           ['ninja', 'install']],
                 headers=['fuse3/fuse.h'],
+                required_progs=['libtoolize', 'ninja', 'meson'],
+                out_of_src_build=True)
+
+    reqs.define('fused', libs=['fused'], defines=['FUSE_USE_VERSION=35'],
+                retriever=CopyRetriever(),
+                commands=[['meson', 'setup', '--prefix=$FUSED_PREFIX', '-Ddisable-mtab=True',
+                           '-Dudevrulesdir=$FUSED_PREFIX/udev', '-Dutils=False',
+                           '--default-library', 'static', '../fused'],
+                          ['meson', 'setup', '--reconfigure', '../fused'],
+                          ['ninja', 'install']],
+                pkgconfig='fused',
+                headers=['fused/fuse.h'],
                 required_progs=['libtoolize', 'ninja', 'meson'],
                 out_of_src_build=True)
 
@@ -327,7 +340,7 @@ def define_components(reqs):
         spdk_arch = 'haswell'
 
     reqs.define('spdk',
-                retriever=GitRepoRetriever(True),
+                retriever=CopyRetriever(),
                 commands=[['./configure',
                            '--prefix=$SPDK_PREFIX',
                            '--disable-tests',
@@ -356,7 +369,7 @@ def define_components(reqs):
                 patch_rpath=['lib', 'bin'])
 
     reqs.define('protobufc',
-                retriever=GitRepoRetriever(),
+                retriever=CopyRetriever(),
                 commands=[['./autogen.sh'],
                           ['./configure', '--prefix=$PROTOBUFC_PREFIX', '--disable-protoc'],
                           ['make'],

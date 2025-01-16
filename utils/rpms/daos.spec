@@ -23,7 +23,7 @@
 
 Name:          daos
 Version:       2.6.3
-Release:       8%{?relval}%{?dist}
+Release:       9%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -59,12 +59,7 @@ BuildRequires: boost-devel
 %endif
 %if %{with server}
 BuildRequires: libpmemobj-devel >= 2.1.0
-%endif
-%if (0%{?rhel} >= 8)
-BuildRequires: fuse3-devel >= 3
-%else
-BuildRequires: fuse3-devel >= 3.4.2
-%endif
+BuildRequires: fused-devel
 %if (0%{?suse_version} >= 1500)
 BuildRequires: go-race
 BuildRequires: libprotobuf-c-devel
@@ -187,7 +182,6 @@ Requires: mercury >= %{mercury_version}
 Requires: libfabric >= %{libfabric_version}
 %if (0%{?suse_version} >= 1500)
 Requires: libfabric1 >= %{libfabric_version}
-Requires: libfuse3-3 >= 3.4.2
 %endif
 Requires: /usr/bin/fusermount3
 %{?systemd_requires}
@@ -239,11 +233,6 @@ Requires: libcapstone-devel
 %else
 Requires: Lmod >= 8.7.36
 Requires: capstone-devel
-%endif
-%if (0%{?rhel} >= 8)
-Requires: fuse3-devel >= 3
-%else
-Requires: fuse3-devel >= 3.4.2
 %endif
 Requires: pciutils-devel
 %if (0%{?suse_version} > 0)
@@ -632,6 +621,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Wed Dec 21 2025 Jeff Olivier <jeffolivier@google.com> 2.6.3-9
+- Switch libfuse3 to libfused
+
 * Mon May 12 2025  Tomasz Gromadzki <tomasz.gromadzki@hpe.com> 2.6.3-8
 - Bump lua-lmod version to >=8.7.36
 - Bump lmod version to >=8.7.36
