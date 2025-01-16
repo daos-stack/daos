@@ -2385,6 +2385,18 @@ crt_req_get_proto_ver(crt_rpc_t *req);
 char *
 crt_req_origin_addr_get(crt_rpc_t *rpc);
 
+void
+crt_hg_reset_log_level();
+
+void
+crt_hg_set_log_level(const char *level);
+
+void
+crt_hg_reset_log_subsys();
+
+void
+crt_hg_set_log_subsys(const char *subsys);
+
 /** @}
  */
 
