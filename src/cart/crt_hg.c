@@ -768,6 +768,44 @@ crt_hg_free_protocol_info(struct na_protocol_info *na_protocol_info)
 	HG_Free_na_protocol_info(na_protocol_info);
 }
 
+void
+crt_hg_reset_log_level()
+{
+	char *e_loglev = NULL;
+
+	if (d_agetenv_str(&e_loglev, "HG_LOG_LEVEL") == 0) {
+		HG_Set_log_subsys(e_loglev);
+		d_freeenv_str(&e_loglev);
+		return;
+	}
+	HG_Set_log_level("warning");
+}
+
+void
+crt_hg_set_log_level(const char *level)
+{
+	HG_Set_log_level(level);
+}
+
+void
+crt_hg_reset_log_subsys()
+{
+	char *e_subsys = NULL;
+
+	if (d_agetenv_str(&e_subsys, "HG_LOG_SUBSYS") == 0) {
+		HG_Set_log_subsys(e_subsys);
+		d_freeenv_str(&e_subsys);
+		return;
+	}
+	HG_Set_log_subsys("hg,na");
+}
+
+void
+crt_hg_set_log_subsys(const char *subsys)
+{
+	HG_Set_log_subsys(subsys);
+}
+
 /* to be called only in crt_init */
 int
 crt_hg_init(void)
@@ -783,8 +821,8 @@ crt_hg_init(void)
 
 	if (!d_isenv_def("HG_LOG_SUBSYS")) {
 		if (!d_isenv_def("HG_LOG_LEVEL"))
-			HG_Set_log_level("warning");
-		HG_Set_log_subsys("hg,na");
+			crt_hg_reset_log_level();
+		crt_hg_reset_log_subsys();
 	}
 
 	/* import HG log */
