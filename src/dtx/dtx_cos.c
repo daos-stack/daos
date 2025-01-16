@@ -360,6 +360,16 @@ dtx_cos_del_one(struct ds_cont_child *cont, struct dtx_cos_rec_child *dcrc)
 	return rc;
 }
 
+static void
+dtx_cos_demote_one(struct ds_cont_child *cont, struct dtx_cos_rec_child *dcrc)
+{
+	d_list_del(&dcrc->dcrc_gl_committable);
+	if (dcrc->dcrc_coll)
+		d_list_add_tail(&dcrc->dcrc_gl_committable, &cont->sc_dtx_coll_list);
+	else
+		d_list_add_tail(&dcrc->dcrc_gl_committable, &cont->sc_dtx_cos_list);
+}
+
 int
 dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
 		      daos_unit_oid_t *oid, daos_epoch_t epoch, bool force,
@@ -622,7 +632,7 @@ dtx_cos_add(struct ds_cont_child *cont, void *entry, daos_unit_oid_t *oid,
 
 int
 dtx_cos_del(struct ds_cont_child *cont, struct dtx_id *xid,
-	    daos_unit_oid_t *oid, uint64_t dkey_hash)
+	    daos_unit_oid_t *oid, uint64_t dkey_hash, bool demote)
 {
 	struct dtx_cos_key		 key;
 	d_iov_t				 kiov;
@@ -645,35 +655,40 @@ dtx_cos_del(struct ds_cont_child *cont, struct dtx_id *xid,
 
 	d_list_for_each_entry(dcrc, &dcr->dcr_prio_list, dcrc_lo_link) {
 		if (memcmp(&dcrc->dcrc_dte->dte_xid, xid, sizeof(*xid)) == 0) {
-			rc = dtx_cos_del_one(cont, dcrc);
+			if (demote)
+				dtx_cos_demote_one(cont, dcrc);
+			else
+				rc = dtx_cos_del_one(cont, dcrc);
 			D_GOTO(out, found = 1);
 		}
 	}
 
 	d_list_for_each_entry(dcrc, &dcr->dcr_reg_list, dcrc_lo_link) {
 		if (memcmp(&dcrc->dcrc_dte->dte_xid, xid, sizeof(*xid)) == 0) {
-			rc = dtx_cos_del_one(cont, dcrc);
+			if (demote)
+				dtx_cos_demote_one(cont, dcrc);
+			else
+				rc = dtx_cos_del_one(cont, dcrc);
 			D_GOTO(out, found = 2);
 		}
 	}
 
 	d_list_for_each_entry(dcrc, &dcr->dcr_expcmt_list, dcrc_lo_link) {
 		if (memcmp(&dcrc->dcrc_dte->dte_xid, xid, sizeof(*xid)) == 0) {
-			rc = dtx_cos_del_one(cont, dcrc);
+			if (demote)
+				dtx_cos_demote_one(cont, dcrc);
+			else
+				rc = dtx_cos_del_one(cont, dcrc);
 			D_GOTO(out, found = 3);
 		}
 	}
 
 out:
-	if (found > 0)
+	if (found > 0 && !demote)
 		d_tm_dec_gauge(dtx_tls_get()->dt_committable, 1);
 
 	if (rc == 0 && found == 0)
 		rc = -DER_NONEXIST;
-
-	DL_CDEBUG(rc != 0 && rc != -DER_NONEXIST, DLOG_ERR, DB_TRACE, rc,
-		  "Remove DTX from CoS cache "DF_UOID", key %lu",
-		  DP_UOID(*oid), (unsigned long)dkey_hash);
 
 	return rc == -DER_NONEXIST ? 0 : rc;
 }
@@ -778,10 +793,14 @@ dtx_cos_batched_del(struct ds_cont_child *cont, struct dtx_id xid[], bool rm[], 
 			if (memcmp(&dcrc->dcrc_dte->dte_xid, &xid[i], sizeof(struct dtx_id)) == 0) {
 				found = true;
 
-				if (rm[i]) {
-					rc = dtx_cos_del_one(cont, dcrc);
-					if (rc == 0)
-						del++;
+				if (rm != NULL) {
+					if (rm[i]) {
+						rc = dtx_cos_del_one(cont, dcrc);
+						if (rc == 0)
+							del++;
+					}
+				} else {
+					dtx_cos_demote_one(cont, dcrc);
 				}
 			}
 		}

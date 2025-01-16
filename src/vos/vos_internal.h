@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -279,10 +280,13 @@ struct vos_pool {
 	/** VOS uuid hash-link with refcnt */
 	struct d_ulink		vp_hlink;
 	/** number of openers */
-	uint32_t                 vp_opened : 30;
-	uint32_t                 vp_dying  : 1;
+	uint32_t                vp_opened;
+	uint32_t                vp_dying:1,
+				vp_opening:1,
 	/** exclusive handle (see VOS_POF_EXCL) */
-	int			vp_excl:1;
+				vp_excl:1;
+	ABT_mutex		vp_mutex;
+	ABT_cond		vp_cond;
 	/* this pool is for sysdb */
 	bool			vp_sysdb;
 	/** this pool is for rdb */
@@ -783,7 +787,7 @@ vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p);
 
 int
 vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id dtis[],
-			int count, daos_epoch_t epoch, bool rm_cos[],
+			int count, daos_epoch_t epoch, bool keep_act, bool rm_cos[],
 			struct vos_dtx_act_ent **daes, struct vos_dtx_cmt_ent **dces);
 
 int
@@ -793,7 +797,7 @@ void
 vos_dtx_post_handle(struct vos_container *cont,
 		    struct vos_dtx_act_ent **daes,
 		    struct vos_dtx_cmt_ent **dces,
-		    int count, bool abort, bool rollback);
+		    int count, bool abort, bool rollback, bool keep_act);
 
 /**
  * Establish indexed active DTX table in DRAM.
@@ -1396,7 +1400,7 @@ gc_add_item(struct vos_pool *pool, daos_handle_t coh,
 int
 vos_gc_pool_tight(daos_handle_t poh, int *credits);
 void
-gc_reserve_space(daos_size_t *rsrvd);
+gc_reserve_space(struct vos_pool *pool, daos_size_t *rsrvd);
 int
 gc_open_pool(struct vos_pool *pool);
 void

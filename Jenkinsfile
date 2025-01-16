@@ -3,6 +3,7 @@
 /* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral */
 /* groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName */
 /* Copyright 2019-2024 Intel Corporation
+ * Copyright 2025 Hewlett Packard Enterprise Development LP
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -946,7 +947,7 @@ pipeline {
                         }
                     }
                 } // stage('Functional on EL 9')
-                stage('Functional on Leap 15.5') {
+                stage('Functional on Leap 15.6') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -959,7 +960,8 @@ pipeline {
                             functionalTest(
                                 inst_repos: daosRepos(),
                                 inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
-                                test_function: 'runTestFunctionalV2'))
+                                test_function: 'runTestFunctionalV2',
+                                image_version: 'leap15.6'))
                     }
                     post {
                         always {
@@ -967,7 +969,7 @@ pipeline {
                             job_status_update()
                         }
                     } // post
-                } // stage('Functional on Leap 15.5')
+                } // stage('Functional on Leap 15.6')
                 stage('Functional on Ubuntu 20.04') {
                     when {
                         beforeAgent true
@@ -1042,7 +1044,7 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Fault inection testing on EL 8.8')
+                } // stage('Fault injection testing on EL 8.8')
                 stage('Test RPMs on EL 8.6') {
                     when {
                         beforeAgent true
@@ -1062,8 +1064,8 @@ pipeline {
                             rpm_test_post(env.STAGE_NAME, env.NODELIST)
                         }
                     }
-                } // stage('Test CentOS 7 RPMs')
-                stage('Test RPMs on Leap 15.4') {
+                } // stage('Test RPMs on EL 8.6')
+                stage('Test RPMs on Leap 15.5') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
@@ -1077,8 +1079,8 @@ pipeline {
                          * additionally for this use-case, can't override
                            ftest_arg with this :-(
                         script {
-                            'Test RPMs on Leap 15.4': getFunctionalTestStage(
-                                name: 'Test RPMs on Leap 15.4',
+                            'Test RPMs on Leap 15.5': getFunctionalTestStage(
+                                name: 'Test RPMs on Leap 15.5',
                                 pragma_suffix: '',
                                 label: params.CI_UNIT_VM1_LABEL,
                                 next_version: next_version,
@@ -1114,7 +1116,7 @@ pipeline {
                             rpm_test_post(env.STAGE_NAME, env.NODELIST)
                         }
                     }
-                } // stage('Test Leap 15 RPMs')
+                } // stage('Test RPMs on Leap 15.5')
             } // parallel
         } // stage('Test')
         stage('Test Storage Prep on EL 8.8') {

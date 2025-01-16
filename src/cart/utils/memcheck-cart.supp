@@ -695,3 +695,9 @@
    ...
    fun:runtime.rt0_go.abi0
 }
+{
+   tsan::MemoryAccessRange
+   Memcheck:Value8
+   fun:_ZN6__tsan18MemoryAccessRangeTILb1EEEvPNS_11ThreadStateEmmm
+   fun:racecall
+}
