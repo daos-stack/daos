@@ -54,7 +54,7 @@ readdir_int(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr, str
 		d_iov_set(&iov, enum_buf, (*nr) * DFS_MAX_NAME);
 		sgl.sg_iovs = &iov;
 
-		rc = daos_obj_list_dkey(obj->oh, DAOS_TX_NONE, &number, kds, &sgl, anchor, NULL);
+		rc = daos_obj_list_dkey(obj->oh, dfs->th, &number, kds, &sgl, anchor, NULL);
 		if (rc)
 			D_GOTO(out, rc = daos_der2errno(rc));
 
@@ -65,7 +65,7 @@ readdir_int(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr, str
 
 			/** stat the entry if requested */
 			if (stbufs) {
-				rc = entry_stat(dfs, DAOS_TX_NONE, obj->oh, dirs[key_nr].d_name,
+				rc = entry_stat(dfs, dfs->th, obj->oh, dirs[key_nr].d_name,
 						kds[i].kd_key_len, NULL, true, &stbufs[key_nr],
 						NULL);
 				if (rc) {
@@ -81,6 +81,7 @@ readdir_int(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr, str
 			break;
 	}
 	*nr = key_nr;
+	DFS_OP_STAT_INCR(dfs, DOS_READDIR);
 
 out:
 	D_FREE(enum_buf);
@@ -147,7 +148,7 @@ dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr, siz
 		 * list num or less entries, but not more than we can fit in
 		 * enum_buf
 		 */
-		rc = daos_obj_list_dkey(obj->oh, DAOS_TX_NONE, &num, kds, &sgl, anchor, NULL);
+		rc = daos_obj_list_dkey(obj->oh, dfs->th, &num, kds, &sgl, anchor, NULL);
 		if (rc)
 			D_GOTO(out, rc = daos_der2errno(rc));
 
@@ -180,6 +181,7 @@ dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr, siz
 	}
 
 	*nr = keys_nr;
+	DFS_OP_STAT_INCR(dfs, DOS_READDIR);
 out:
 	D_FREE(kds);
 	D_FREE(enum_buf);
