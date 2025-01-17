@@ -316,6 +316,17 @@ def define_components(reqs):
                 required_progs=['libtoolize', 'ninja', 'meson'],
                 out_of_src_build=True)
 
+    reqs.define('fused', libs=['fused'], defines=['FUSE_USE_VERSION=35'],
+                retriever=GitRepoRetriever(),
+                commands=[['meson', 'setup', '--prefix=$FUSED_PREFIX', '-Ddisable-mtab=True',
+                           '-Dudevrulesdir=$FUSED_PREFIX/udev', '-Dutils=False',
+                           '--default-library', 'static', '../fused'],
+                          ['meson', 'setup', '--reconfigure', '../fused'],
+                          ['ninja', 'install']],
+                headers=['fused/fuse.h'],
+                required_progs=['libtoolize', 'ninja', 'meson'],
+                out_of_src_build=True)
+
     # Tell SPDK which CPU to optimize for, by default this is native which works well unless you
     # are relocating binaries across systems, for example in CI under GitHub actions etc.  There
     # isn't a minimum value needed here, but getting this wrong will cause daos server to exit

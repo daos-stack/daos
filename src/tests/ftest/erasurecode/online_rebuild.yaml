@@ -62,7 +62,8 @@ ior:
         - [32M, 512M, 2K]
   objectclass:
     dfs_oclass_list:
-      #- [EC_Object_Class, Minimum number of servers]
+      #- [EC_Object_Class, Exact number of servers]
       - ["EC_2P2G1", 6]
       - ["EC_4P2G1", 8]
+      - ["EC_4P3G1", 12]
       - ["EC_8P2G1", 12]
