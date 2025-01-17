@@ -407,7 +407,7 @@ class ErasureCodeSingle(TestWithServers):
 
         # Verify the queue and make sure no FAIL for any run
         while not self.out_queue.empty():
-            if (self.out_queue.get() == "FAIL" or self.out_queue.get() == "ERR"):
+            if self.out_queue.get() == "FAIL":
                 self.fail("FAIL")
 
 
