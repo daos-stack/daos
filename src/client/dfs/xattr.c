@@ -122,6 +122,7 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, const void *value, da
 		}
 	}
 
+	DFS_OP_STAT_INCR(dfs, DOS_SETXATTR);
 out:
 	daos_obj_close(oh, NULL);
 free:
@@ -179,13 +180,13 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value, daos_siz
 		sgl.sg_nr_out = 0;
 		sgl.sg_iovs   = &sg_iov;
 
-		rc = daos_obj_fetch(oh, DAOS_TX_NONE, DAOS_COND_AKEY_FETCH, &dkey, 1, &iod, &sgl,
-				    NULL, NULL);
+		rc = daos_obj_fetch(oh, dfs->th, DAOS_COND_AKEY_FETCH, &dkey, 1, &iod, &sgl, NULL,
+				    NULL);
 	} else {
 		iod.iod_size = DAOS_REC_ANY;
 
-		rc = daos_obj_fetch(oh, DAOS_TX_NONE, DAOS_COND_AKEY_FETCH, &dkey, 1, &iod, NULL,
-				    NULL, NULL);
+		rc = daos_obj_fetch(oh, dfs->th, DAOS_COND_AKEY_FETCH, &dkey, 1, &iod, NULL, NULL,
+				    NULL);
 	}
 	if (rc) {
 		DL_CDEBUG(rc == -DER_NONEXIST, DLOG_DBG, DLOG_ERR, rc, "Failed to fetch xattr '%s'",
@@ -194,6 +195,7 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value, daos_siz
 	}
 
 	*size = iod.iod_size;
+	DFS_OP_STAT_INCR(dfs, DOS_GETXATTR);
 
 close:
 	daos_obj_close(oh, NULL);
@@ -277,6 +279,7 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
+	DFS_OP_STAT_INCR(dfs, DOS_RMXATTR);
 out:
 	daos_obj_close(oh, NULL);
 free:
@@ -325,7 +328,7 @@ dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size)
 		d_iov_set(&iov, enum_buf, ENUM_DESC_BUF);
 		sgl.sg_iovs = &iov;
 
-		rc = daos_obj_list_akey(oh, DAOS_TX_NONE, &dkey, &number, kds, &sgl, &anchor, NULL);
+		rc = daos_obj_list_akey(oh, dfs->th, &dkey, &number, kds, &sgl, &anchor, NULL);
 		if (rc)
 			D_GOTO(out, rc = daos_der2errno(rc));
 
@@ -354,6 +357,7 @@ dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size)
 	}
 
 	*size = ret_size;
+	DFS_OP_STAT_INCR(dfs, DOS_LSXATTR);
 out:
 	daos_obj_close(oh, NULL);
 	return rc;
