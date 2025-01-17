@@ -17,7 +17,7 @@ on:
 
   # schedule:
   #     # temporarily run more frequently so we can validate it works
-  #     - cron: "15 * * * *" # runs at minute 15 of every hour of every day
+  #     - cron: "0 12 * * 6" # runs every Saturday at 12pm (UTC)
 
 # shouldn't need this, should only ever have one running at a time. But just in case
 concurrency:
@@ -116,7 +116,7 @@ jobs:
             echo "FVERSION=$FVERSION" >> $GITHUB_ENV
             echo "COMMIT_STATUS_DISTRO_VERSION=$COMMIT_STATUS_DISTRO_VERSION" >> $GITHUB_ENV
       - name: Checkout code
-        uses: actions/checkout@v4@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
         with:
           # DO NOT LAND THIS. This is for testing only
           ref: ${{ github.event.pull_request.head.sha }}
@@ -300,7 +300,7 @@ jobs:
             echo "LABEL=$LABEL" >> $GITHUB_ENV
             echo "INST_RPMS=$INST_RPMS" >> $GITHUB_ENV
       - name: Checkout code
-        uses: actions/checkout@v4@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
         with:
           submodules: true
           fetch-depth: 500
@@ -345,7 +345,7 @@ jobs:
       - name: Publish test results
         if: (!cancelled()) && (success() || failure()) &&
             steps.run-test.outcome != 'skipped'
-        uses: EnricoMi/publish-unit-test-result-action@v2
+        uses: EnricoMi/publish-unit-test-result-action@170bf24d20d201b842d7a52403b73ed297e6645b  # v2.18.0
         with:
           check_name: ${{ env.STAGE_NAME }} Test Results (old)
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -365,7 +365,7 @@ jobs:
           name: ${{ env.STAGE_NAME }} test-results
           path: ${{ env.STAGE_NAME }}/**/results.xml
       - name: Update commit status
-        uses: ouzi-dev/commit-status-updater@v2
+        uses: ouzi-dev/commit-status-updater@26588d166ff273fc4c0664517359948f7cdc9bf1  # v2.0.2
         with:
           # yamllint disable-line rule:line-length
           name: 'test/Functional on ${{ env.DISTRO_NAME }} ${{ env.COMMIT_STATUS_DISTRO_VERSION && env.COMMIT_STATUS_DISTRO_VERSION || env.DISTRO_VERSION }}'
@@ -462,7 +462,7 @@ jobs:
             echo "INST_RPMS=$INST_RPMS" >> $GITHUB_ENV
             echo "SIZE=$SIZE" >> $GITHUB_ENV
       - name: Checkout code
-        uses: actions/checkout@v4@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
         with:
           submodules: true
           fetch-depth: 500
@@ -527,7 +527,7 @@ jobs:
           name: ${{ env.STAGE_NAME }} test-results
           path: ${{ env.STAGE_NAME }}/**/results.xml
       - name: Update commit status
-        uses: ouzi-dev/commit-status-updater@v2
+        uses: ouzi-dev/commit-status-updater@26588d166ff273fc4c0664517359948f7cdc9bf1  # v2.0.2
         with:
           name: 'test/Functional Hardware ${{ matrix.stage }}'
           status: "${{ job.status }}"
