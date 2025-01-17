@@ -2601,7 +2601,7 @@ cont_tgt_track_eph_init_ult(void *data)
 	rc = dss_ult_execute(cont_track_eph_init_ult, &arg, NULL, NULL, DSS_XS_SYS,
 			     0, 0);
 	if (rc) {
-		DL_ERROR(rc, DF_CONT " init track eph failed.\n",
+		DL_ERROR(rc, DF_CONT " init track eph failed.",
 			 DP_CONT(cont_child->sc_pool->spc_uuid, cont_child->sc_uuid));
 		ds_cont_child_put(cont_child);
 		return;
@@ -2702,10 +2702,11 @@ ds_cont_track_eph_query_ult(void *data)
 			    (min_ec_agg_eph <= ec_eph->cte_last_ec_agg_epoch &&
 			     min_stable_eph <= ec_eph->cte_last_stable_epoch)) {
 				if (min_ec_agg_eph > 0 && min_stable_eph > 0 &&
-				    min_ec_agg_eph <= ec_eph->cte_last_ec_agg_epoch &&
-				    min_stable_eph <= ec_eph->cte_last_stable_epoch)
-					D_ERROR("ignore for now "DF_X64" <= "DF_X64
-						", "DF_X64" <= "DF_X64 ", "DF_UUID"\n",
+				    (min_ec_agg_eph < ec_eph->cte_last_ec_agg_epoch ||
+				     min_stable_eph < ec_eph->cte_last_stable_epoch))
+					D_ERROR("ignore for now, min_ec_agg_eph "DF_X64" < "DF_X64
+						", or min_stable_eph "DF_X64" <"DF_X64
+						", "DF_UUID"\n",
 						min_ec_agg_eph, ec_eph->cte_last_ec_agg_epoch,
 						min_stable_eph, ec_eph->cte_last_stable_epoch,
 						DP_UUID(ec_eph->cte_cont_uuid));

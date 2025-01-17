@@ -3345,12 +3345,12 @@ migrate_obj_ult(void *data)
 				" < stable " DF_X64 "\n", DP_CONT(arg->pool_uuid, arg->cont_uuid),
 				DP_UOID(arg->oid), arg->snaps[i], stable_epoch);
 			continue;
-		} else {
-			if (i == 0)
-				lower_epoch = stable_epoch;
-			else
-				lower_epoch = max(stable_epoch, arg->snaps[i - 1]);
 		}
+
+		if (i == 0)
+			lower_epoch = stable_epoch;
+		else
+			lower_epoch = max(stable_epoch, arg->snaps[i - 1]);
 
 		epr.epr_lo = lower_epoch;
 		epr.epr_hi = arg->snaps[i];
@@ -4126,7 +4126,7 @@ reint_post_process_ult(void *data)
 	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
 			 reint_post_cont_iter_cb, NULL, &iter_arg, NULL);
 	if (rc)
-		DL_ERROR(rc, DF_RB" vos_iterate failed.\n", DP_RB_MPT(tls));
+		DL_ERROR(rc, DF_RB" vos_iterate failed.", DP_RB_MPT(tls));
 
 out:
 	if (pool_child != NULL)

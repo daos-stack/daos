@@ -1847,7 +1847,6 @@ ds_cont_tgt_refresh_track_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 	} else {
 		D_ALLOC_ARRAY(arg.tgt_status, dss_tgt_nr);
 		if (arg.tgt_status == NULL) {
-			ds_pool_put(pool);
 			return -DER_NOMEM;
 		}
 	}
@@ -1954,6 +1953,14 @@ cont_track_eph_leader_ult(void *arg)
 			new_eph = d_hlc2sec(min_ec_agg_eph);
 			if (cur_eph && new_eph > cur_eph && (new_eph - cur_eph) >= 600)
 				D_WARN(DF_CONT": Sluggish EC boundary reporting. "
+				       "cur:"DF_U64" new:"DF_U64" gap:"DF_U64"\n",
+				       DP_CONT(svc->cs_pool_uuid, eph_ldr->ea_cont_uuid),
+				       cur_eph, new_eph, new_eph - cur_eph);
+
+			cur_eph = d_hlc2sec(eph_ldr->ea_current_stable_eph);
+			new_eph = d_hlc2sec(min_stable_eph);
+			if (cur_eph && new_eph > cur_eph && (new_eph - cur_eph) >= 600)
+				D_WARN(DF_CONT": Sluggish stable epoch reporting. "
 				       "cur:"DF_U64" new:"DF_U64" gap:"DF_U64"\n",
 				       DP_CONT(svc->cs_pool_uuid, eph_ldr->ea_cont_uuid),
 				       cur_eph, new_eph, new_eph - cur_eph);
