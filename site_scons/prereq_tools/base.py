@@ -1,4 +1,5 @@
 # Copyright 2016-2024 Intel Corporation
+# Copyright 2025 Google LLC
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +25,6 @@ import configparser
 import datetime
 import errno
 import json
-
 # pylint: disable=too-many-lines
 import os
 import shutil
