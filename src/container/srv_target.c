@@ -1615,28 +1615,25 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		 */
 		D_ASSERT(hdl->sch_cont != NULL);
 		D_ASSERT(hdl->sch_cont->sc_pool != NULL);
-
 		hdl->sch_cont->sc_open++;
-		if (hdl->sch_cont->sc_open > 1) {
-			/* If there is an inflight open being stuck, then
-			 * let's retry and wait until it finished.
-			 */
-			if (hdl->sch_cont->sc_open_initializing) {
-				hdl->sch_cont->sc_open--;
-				D_GOTO(err_cont, rc = -DER_AGAIN);
-			}
 
-			/* Only go through if the 1st open succeeds */
-			if (hdl->sch_cont->sc_props_fetched)
-				goto opened;
-		}
+		if (hdl->sch_cont->sc_open > 1 && hdl->sch_cont->sc_props_fetched)
+			goto opened;
 
-		hdl->sch_cont->sc_open_initializing = 1;
 		if (ds_pool_restricted(hdl->sch_cont->sc_pool->spc_pool, false))
 			goto csum_init;
 
+		/* Since the open process might be yield, and concurrent open might cause
+		 * some issues, so let's serialize the process */
+		ABT_mutex_lock(hdl->sch_cont->sc_mutex);
+		if (hdl->sch_cont->sc_open > 1 && hdl->sch_cont->sc_props_fetched) {
+			ABT_mutex_unlock(hdl->sch_cont->sc_mutex);
+			goto opened;
+		}
+
 		rc = dtx_cont_open(hdl->sch_cont);
 		if (rc != 0) {
+			ABT_mutex_unlock(hdl->sch_cont->sc_mutex);
 			D_ASSERTF(hdl->sch_cont->sc_open == 1, "Unexpected open count for cont "
 				  DF_UUID": %d\n", DP_UUID(cont_uuid), hdl->sch_cont->sc_open);
 
@@ -1645,11 +1642,14 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		}
 
 		D_ALLOC_PTR(ddra);
-		if (ddra == NULL)
+		if (ddra == NULL) {
+			ABT_mutex_unlock(hdl->sch_cont->sc_mutex);
 			D_GOTO(err_dtx, rc = -DER_NOMEM);
+		}
 
 		ddra->pool = ds_pool_child_lookup(hdl->sch_cont->sc_pool->spc_uuid);
 		if (ddra->pool == NULL) {
+			ABT_mutex_unlock(hdl->sch_cont->sc_mutex);
 			D_FREE(ddra);
 			D_GOTO(err_dtx, rc = -DER_NO_HDL);
 		}
@@ -1657,6 +1657,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		rc = dss_ult_create(ds_dtx_resync, ddra, DSS_XS_SELF,
 				    0, 0, NULL);
 		if (rc != 0) {
+			ABT_mutex_unlock(hdl->sch_cont->sc_mutex);
 			ds_pool_child_put(hdl->sch_cont->sc_pool);
 			D_FREE(ddra);
 			D_GOTO(err_dtx, rc);
@@ -1664,10 +1665,9 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 
 csum_init:
 		rc = ds_cont_csummer_init(hdl->sch_cont);
+		ABT_mutex_unlock(hdl->sch_cont->sc_mutex);
 		if (rc != 0)
 			D_GOTO(err_dtx, rc);
-
-		hdl->sch_cont->sc_open_initializing = 0;
 	}
 opened:
 	if (cont_hdl != NULL) {
@@ -1685,7 +1685,6 @@ err_dtx:
 	dtx_cont_close(hdl->sch_cont, true);
 
 err_cont:
-	hdl->sch_cont->sc_open_initializing = 0;
 	if (daos_handle_is_valid(poh)) {
 		int rc_tmp;
 
@@ -1773,25 +1772,17 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 	D_DEBUG(DB_TRACE, "open pool/cont/hdl "DF_UUID"/"DF_UUID"/"DF_UUID"\n",
 		DP_UUID(pool_uuid), DP_UUID(cont_uuid), DP_UUID(cont_hdl_uuid));
 
-retry:
 	rc = ds_pool_thread_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
 				       PO_COMP_ST_DOWNOUT, cont_open_one, &arg, 0);
-	if (rc != 0) {
-		if (rc == -DER_AGAIN) {
-			dss_sleep(50);
-			goto retry;
-		}
-
+	if (rc != 0)
 		/* Once it exclude the target from the pool, since the target
 		 * might still in the cart group, so IV cont open might still
 		 * come to this target, especially if cont open/close will be
 		 * done by IV asynchronously, so this cont_open_one might return
 		 * -DER_NO_HDL if it can not find pool handle. (DAOS-3185)
 		 */
-		D_ERROR("open "DF_UUID"/"DF_UUID"/"DF_UUID":"DF_RC"\n",
-			DP_UUID(pool_uuid), DP_UUID(cont_uuid),
-			DP_UUID(cont_hdl_uuid), DP_RC(rc));
-	}
+		D_ERROR("open " DF_UUID "/" DF_UUID "/" DF_UUID ":" DF_RC "\n", DP_UUID(pool_uuid),
+			DP_UUID(cont_uuid), DP_UUID(cont_hdl_uuid), DP_RC(rc));
 
 	return rc;
 }
