@@ -1832,7 +1832,7 @@ int
 ds_cont_tgt_refresh_track_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 			      daos_epoch_t ec_agg_eph, daos_epoch_t stable_eph)
 {
-	struct ds_pool			*pool;
+	struct ds_pool			*pool = NULL;
 	struct pool_target		*tgts;
 	struct refresh_track_eph_arg	 arg;
 	d_rank_t			 rank;
@@ -1861,9 +1861,8 @@ ds_cont_tgt_refresh_track_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 	rank = dss_self_rank();
 	rc = pool_map_find_target_by_rank_idx(pool->sp_map, rank, -1, &tgts);
 	D_ASSERT(rc == dss_tgt_nr);
-	for (i = 0; i < dss_tgt_nr; i++) {
+	for (i = 0; i < dss_tgt_nr; i++)
 		arg.tgt_status[i] = tgts[i].ta_comp.co_status;
-	}
 	ds_pool_put(pool);
 
 	rc = ds_pool_task_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
@@ -1871,7 +1870,7 @@ ds_cont_tgt_refresh_track_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 				     &arg, DSS_ULT_FL_PERIODIC);
 
 out:
-	if (arg.tgt_status != arg.tgt_status_inline)
+	if (arg.tgt_status != NULL && arg.tgt_status != arg.tgt_status_inline)
 		D_FREE(arg.tgt_status);
 	return rc;
 }

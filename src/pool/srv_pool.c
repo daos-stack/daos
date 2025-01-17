@@ -7389,6 +7389,12 @@ pool_discard(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr_li
 	int				i;
 	int				rc;
 
+	if (daos_incr_reint_enabled) {
+		D_DEBUG(DB_MD, DF_UUID": incremental reint enabled, no pool_discard.\n",
+			DP_UUID(svc->ps_pool->sp_uuid));
+		return 0;
+	}
+
 	rank_list = d_rank_list_alloc(list->pta_number);
 	if (rank_list == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);

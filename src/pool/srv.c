@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -21,6 +22,7 @@
 #include "srv_layout.h"
 
 bool		ec_agg_disabled;
+bool		daos_incr_reint_enabled;
 uint32_t        pw_rf = -1; /* pool wise redundancy factor */
 #define PW_RF_DEFAULT (2)
 #define PW_RF_MIN     (0)
@@ -70,6 +72,11 @@ init(void)
 	d_getenv_bool("DAOS_EC_AGG_DISABLE", &ec_agg_disabled);
 	if (unlikely(ec_agg_disabled))
 		D_WARN("EC aggregation is disabled.\n");
+
+	daos_incr_reint_enabled = false;
+	d_getenv_bool("DAOS_INCR_REINT_ENABLE", &daos_incr_reint_enabled);
+	if (daos_incr_reint_enabled)
+		D_INFO("Incremental reintegration enabled.\n");
 
 	pw_rf = -1;
 	if (!check_pool_redundancy_factor("DAOS_POOL_RF"))

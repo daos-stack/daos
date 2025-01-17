@@ -103,8 +103,8 @@ struct migrate_pool_tls {
 	unsigned int		mpt_ult_running:1,
 				mpt_init_tls:1,
 				mpt_fini:1,
-				mpt_reintegrating_check:1,
-				mpt_reintegrating:1;
+				mpt_reintegrating:1, /* incremental reint flag */
+				mpt_post_process_started:1; /* reint post process started flag */
 
 	/* migration init error */
 	int			mpt_init_err;

@@ -397,6 +397,7 @@ void ds_pool_disable_exclude(void);
 void ds_pool_enable_exclude(void);
 
 extern bool ec_agg_disabled;
+extern bool daos_incr_reint_enabled;
 
 int dsc_pool_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		       unsigned int flags, const char *grp,
