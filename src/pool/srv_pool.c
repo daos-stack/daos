@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2113,11 +2114,11 @@ pool_svc_check_node_status(struct pool_svc *svc)
 }
 
 /*
- * Log a NOTE of as well as print a message. Arguments may be evaluated more
+ * Log as well as print a message. Arguments may be evaluated more
  * than once.
  */
-#define DS_POOL_NOTE_PRINT(fmt, ...) do {							\
-	D_NOTE(fmt, ## __VA_ARGS__);								\
+#define DS_POOL_LOG_PRINT(log, fmt, ...) do {							\
+	D_##log(fmt, ## __VA_ARGS__);								\
 	D_PRINT(fmt, ## __VA_ARGS__);								\
 } while (0)
 
@@ -2369,9 +2370,10 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 		D_GOTO(out, rc);
 	}
 
-	DS_POOL_NOTE_PRINT(DF_UUID": rank %u became pool service leader "DF_U64": srv_pool_hdl="
-			   DF_UUID" srv_cont_hdl="DF_UUID"\n", DP_UUID(svc->ps_uuid), rank,
-			   svc->ps_rsvc.s_term, DP_UUID(pool_hdl_uuid), DP_UUID(cont_hdl_uuid));
+	DS_POOL_LOG_PRINT(NOTE, DF_UUID": rank %u became pool service leader "DF_U64
+			  ": srv_pool_hdl="DF_UUID" srv_cont_hdl="DF_UUID"\n",
+			  DP_UUID(svc->ps_uuid), rank, svc->ps_rsvc.s_term, DP_UUID(pool_hdl_uuid),
+			  DP_UUID(cont_hdl_uuid));
 out:
 	if (rc != 0) {
 		if (events_initialized)
@@ -2404,8 +2406,8 @@ pool_svc_step_down_cb(struct ds_rsvc *rsvc)
 	sched_cancel_and_wait(&svc->ps_rfcheck_sched);
 	ds_cont_svc_step_down(svc->ps_cont_svc);
 
-	DS_POOL_NOTE_PRINT(DF_UUID": rank %u no longer pool service leader "DF_U64"\n",
-			   DP_UUID(svc->ps_uuid), rank, svc->ps_rsvc.s_term);
+	DS_POOL_LOG_PRINT(NOTE, DF_UUID": rank %u no longer pool service leader "DF_U64"\n",
+			  DP_UUID(svc->ps_uuid), rank, svc->ps_rsvc.s_term);
 }
 
 static void
@@ -6937,7 +6939,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 	 * before and after. If the version hasn't changed, we are done.
 	 */
 	map_version_before = pool_map_get_version(map);
-	rc = ds_pool_map_tgts_update(map, tgts, opc, exclude_rank, tgt_map_ver, true);
+	rc = ds_pool_map_tgts_update(svc->ps_uuid, map, tgts, opc, exclude_rank, tgt_map_ver, true);
 	if (rc != 0)
 		D_GOTO(out_map, rc);
 	map_version = pool_map_get_version(map);
@@ -7031,6 +7033,8 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 		goto out_map_buf;
 	}
 
+	DS_POOL_LOG_PRINT(INFO, DF_UUID ": committed pool map: version=%u->%u map=%p\n",
+			  DP_UUID(svc->ps_uuid), map_version_before, map_version, map);
 	updated = true;
 
 	/* Update svc->ps_pool to match the new pool map. */
