@@ -419,7 +419,22 @@ class ErasureCodeMdtest(MdtestBase):
         super().setUp()
         # Create Pool
         self.add_pool()
+        self.container = None
         self.out_queue = queue.Queue()
+
+    def _start_execute_mdtest(self, mdtest_result_queue):
+        """Run the execute_mdtest method
+
+        Args:
+            mdtest_result_queue(Queue) : Queue for passing errors.
+        Returns:
+            result(object) : mdtest run result
+        """
+        try:
+            result = self.execute_mdtest(mdtest_result_queue)
+        except (CommandFailure, DaosApiError, DaosTestError):
+            mdtest_result_queue.put('Mdtest Failed')
+        return result
 
     def start_online_mdtest(self, ranks_to_stop):
         """Run mdtest and stop ranks while mdtest is running.
@@ -427,10 +442,14 @@ class ErasureCodeMdtest(MdtestBase):
         Args:
             ranks_to_stop (list): ranks to stop while mdtest is running
         """
+        # Create the container and check the status
+        self.container = self.get_mdtest_container(self.pool)
+        if self.container is None:
+            self.fail("Container Create Failed")
         # Create the MDtest run thread
         job = threading.Thread(
-            target=self.execute_mdtest,
-            kwargs={"out_queue": self.out_queue})
+            target=self._start_execute_mdtest,
+            kwargs={"mdtest_result_queue": self.out_queue})
 
         # Launch the MDtest thread
         job.start()
