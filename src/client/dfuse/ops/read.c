@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2025 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -253,7 +254,7 @@ chunk_cb(struct dfuse_event *ev)
 	d_list_for_each_entry(cr, &cd->req_list, req_list)
 		cd->slot_done[cr->slot] = true;
 
-	d_list_splice_init(@cd->req_list, &tmp_list);
+	d_list_splice_init(&cd->req_list, &tmp_list);
 
 	D_SPIN_UNLOCK(&ia->lock);
 
