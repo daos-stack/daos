@@ -79,7 +79,7 @@ class PytorchCheckpointTest(TestWithServers):
         then reads written data back from it and compares it with the expected writes.
         """
 
-        self.log.info("Run checkpoint: writes=%s, chunk_size=%s, chunks_limit=%s, workers=%s",
+        self.log.info("Checkpoint test: writes=%s, chunk_size=%s, chunks_limit=%s, workers=%s",
                       len(writes), chunk_size, chunks_limit, workers)
         chkp = Checkpoint(pool, cont, transfer_chunk_size=chunk_size, chunks_limit=chunks_limit,
                           workers=workers)
