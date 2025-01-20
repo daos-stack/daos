@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -605,7 +606,7 @@ class DmgCommand(DmgCommandBase):
         #     256000000,
         #     0
         #   ],
-        #   "mem_file_bytes": 0
+        #   "mem_file_bytes": 256000000
         # },
         # "error": null,
         # "status": 0
