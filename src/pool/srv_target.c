@@ -2116,6 +2116,9 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 	else
 		pool->sp_disable_rebuild = 1;
 
+	if (iv_prop->pip_reint_mode == DAOS_REINT_MODE_INCREMENTAL)
+		pool->sp_incr_reint = 1;
+
 	D_DEBUG(DB_CSUM, "Updating pool to sched: %lu\n",
 		iv_prop->pip_scrub_mode);
 	pool->sp_scrub_mode = iv_prop->pip_scrub_mode;

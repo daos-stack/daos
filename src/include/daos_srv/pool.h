@@ -89,7 +89,8 @@ struct ds_pool {
 				sp_fetch_hdls:1,
 				sp_need_discard:1,
 				sp_disable_rebuild:1,
-				sp_disable_dtx_resync:1;
+				sp_disable_dtx_resync:1,
+				sp_incr_reint:1;
 	/* pool_uuid + map version + leader term + rebuild generation define a
 	 * rebuild job.
 	 */
@@ -397,7 +398,6 @@ void ds_pool_disable_exclude(void);
 void ds_pool_enable_exclude(void);
 
 extern bool ec_agg_disabled;
-extern bool daos_incr_reint_enabled;
 
 int dsc_pool_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		       unsigned int flags, const char *grp,

@@ -427,6 +427,7 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 		case DAOS_PROP_PO_CHECKPOINT_MODE:
 		case DAOS_PROP_PO_CHECKPOINT_THRESH:
 		case DAOS_PROP_PO_CHECKPOINT_FREQ:
+		case DAOS_PROP_PO_REINT_MODE:
 			entry_def->dpe_val = entry->dpe_val;
 			break;
 		case DAOS_PROP_PO_ACL:
@@ -7389,11 +7390,7 @@ pool_discard(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr_li
 	int				i;
 	int				rc;
 
-	if (daos_incr_reint_enabled) {
-		D_DEBUG(DB_MD, DF_UUID": incremental reint enabled, no pool_discard.\n",
-			DP_UUID(svc->ps_pool->sp_uuid));
-		return 0;
-	}
+	D_ASSERTF(svc->ps_pool->sp_incr_reint == 0, "incremental reint should not get here\n");
 
 	rank_list = d_rank_list_alloc(list->pta_number);
 	if (rank_list == NULL)

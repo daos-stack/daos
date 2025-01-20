@@ -557,7 +557,7 @@ migrate_pool_tls_create_one(void *data)
 		pool_tls->mpt_tgt_obj_ult_cnt = &arg->obj_ult_cnts[tgt_id];
 		pool_tls->mpt_tgt_dkey_ult_cnt = &arg->dkey_ult_cnts[tgt_id];
 
-		if (daos_incr_reint_enabled && arg->opc == RB_OP_REBUILD &&
+		if (pool_child->spc_pool->sp_incr_reint && arg->opc == RB_OP_REBUILD &&
 		    arg->tgt_status[tgt_id] == PO_COMP_ST_UP &&
 		    arg->tgt_in_ver[tgt_id] <= pool_tls->mpt_version)
 			pool_tls->mpt_reintegrating = 1;
@@ -3941,6 +3941,8 @@ obj_tree_lookup_cont(daos_handle_t toh, uuid_t co_uuid, daos_handle_t *cont_toh)
 	d_iov_t			key_iov;
 	d_iov_t			tmp_iov;
 	int			rc;
+
+	D_ASSERT(daos_handle_is_valid(toh));
 
 	d_iov_set(&key_iov, co_uuid, sizeof(uuid_t));
 	d_iov_set(&tmp_iov, NULL, 0);
