@@ -585,8 +585,7 @@ vos_tls_init(int tags, int xs_id, int tgt_id)
 				     "Total missing dtx records since start", NULL,
 				     "io/dtx/record_missing/tgt_%u", tgt_id);
 		if (rc)
-			D_WARN("Failed to create record missing sensor: "DF_RC"\n",
-			       DP_RC(rc));
+			D_WARN("Failed to create record missing sensor: "DF_RC"\n", DP_RC(rc));
 
 		rc = d_tm_add_metric(&tls->vtl_obj_cnt, D_TM_GAUGE,
 				     "Number of cached vos object", "entry",

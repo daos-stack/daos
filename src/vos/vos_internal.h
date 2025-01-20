@@ -514,7 +514,7 @@ struct vos_dtx_cmt_ent {
 #define DCE_EPOCH(dce)		((dce)->dce_base.dce_epoch)
 #define DCE_CMT_TIME(dce)	((dce)->dce_base.dce_cmt_time)
 
-#define EVT_DESC_MAGIC 0xbeefdead
+#define EVT_DESC_MAGIC          0xbeefdead
 
 extern uint64_t vos_evt_feats;
 

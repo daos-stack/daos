@@ -534,9 +534,8 @@ ilog_test_update(void **state)
 	/* Test non-existent tx */
 	id.id_epoch = epoch;
 	id.id_tx_id = current_tx_id.id_tx_id + 4000;
-	rc = ilog_persist(loh, &id);
+	rc          = ilog_persist(loh, &id);
 	assert_rc_equal(rc, -DER_NONEXIST);
-
 
 	/* Commit the punch ilog. */
 	id.id_epoch = epoch;

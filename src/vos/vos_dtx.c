@@ -659,8 +659,8 @@ do_dtx_rec_release(struct umem_instance *umm, struct vos_container *cont,
 	}
 
 	if (rc == -DER_NONEXIST) {
-		D_WARN("record no longer exists, may indicate some corruption: "DF_DTI" type %u\n",
-		       DP_DTI(&DAE_XID(dae)), dtx_umoff_flag2type(rec));
+		D_WARN("record no longer exists, may indicate some corruption: " DF_DTI
+		       " type %u\n", DP_DTI(&DAE_XID(dae)), dtx_umoff_flag2type(rec));
 		d_tm_inc_counter(vos_tls_get(false)->vtl_dtx_rec_missing, 1);
 		rc = 0;
 	}
