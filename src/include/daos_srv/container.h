@@ -108,7 +108,7 @@ struct ds_cont_child {
 	/* The global minimum stable epoch. All data @lower epoch should has been globally
 	 * stable (committed or aborted). Used as the start epoch for incremental reintegration.
 	 */
-	uint64_t		sc_stable_epoch;
+	uint64_t		sc_global_stable_eph;
 
 	/* The global minimum EC aggregation epoch, which will be upper
 	 * limit for VOS aggregation, i.e. EC object VOS aggregation can

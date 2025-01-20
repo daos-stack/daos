@@ -1654,10 +1654,10 @@ cont_track_eph_leader_lookup(struct cont_svc *cont_svc, uuid_t cont_uuid)
 {
 	struct cont_track_eph_leader *eph_ldr;
 
-	d_list_for_each_entry(eph_ldr, &cont_svc->cs_cont_ephs_leader_list, ea_list) {
-		if (eph_ldr->ea_deleted)
+	d_list_for_each_entry(eph_ldr, &cont_svc->cs_cont_ephs_leader_list, cte_list) {
+		if (eph_ldr->cte_deleted)
 			continue;
-		if (uuid_compare(eph_ldr->ea_cont_uuid, cont_uuid) == 0)
+		if (uuid_compare(eph_ldr->cte_cont_uuid, cont_uuid) == 0)
 			return eph_ldr;
 	}
 	return NULL;
@@ -1682,24 +1682,24 @@ cont_track_eph_leader_alloc(struct cont_svc *cont_svc, uuid_t cont_uuid,
 	if (rank_nr < 0)
 		D_GOTO(out, rc = rank_nr);
 
-	D_ALLOC_ARRAY(eph_ldr->ea_server_ephs, rank_nr);
-	if (eph_ldr->ea_server_ephs == NULL)
+	D_ALLOC_ARRAY(eph_ldr->cte_server_ephs, rank_nr);
+	if (eph_ldr->cte_server_ephs == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	uuid_copy(eph_ldr->ea_cont_uuid, cont_uuid);
-	eph_ldr->ea_servers_num = rank_nr;
-	eph_ldr->ea_current_ec_agg_eph = 0;
+	uuid_copy(eph_ldr->cte_cont_uuid, cont_uuid);
+	eph_ldr->cte_servers_num = rank_nr;
+	eph_ldr->cte_current_ec_agg_eph = 0;
 	for (i = 0; i < rank_nr; i++) {
-		eph_ldr->ea_server_ephs[i].re_rank = doms[i].do_comp.co_rank;
-		eph_ldr->ea_server_ephs[i].re_ec_agg_eph = 0;
-		eph_ldr->ea_server_ephs[i].re_stable_eph = 0;
+		eph_ldr->cte_server_ephs[i].re_rank = doms[i].do_comp.co_rank;
+		eph_ldr->cte_server_ephs[i].re_ec_agg_eph = 0;
+		eph_ldr->cte_server_ephs[i].re_stable_eph = 0;
 	}
-	d_list_add(&eph_ldr->ea_list, &cont_svc->cs_cont_ephs_leader_list);
+	d_list_add(&eph_ldr->cte_list, &cont_svc->cs_cont_ephs_leader_list);
 	*leader_p = eph_ldr;
 out:
 	if (rc) {
 		if (eph_ldr)
-			D_FREE(eph_ldr->ea_server_ephs);
+			D_FREE(eph_ldr->cte_server_ephs);
 		D_FREE(eph_ldr);
 	}
 
@@ -1715,10 +1715,10 @@ cont_track_eph_leader_delete(struct cont_svc *svc, uuid_t cont_uuid)
 	if (eph_ldr == NULL)
 		return;
 
-	/* Set ea_deleted flag to destroy it inside cont_track_eph_leader_ult()
+	/* Set cte_deleted flag to destroy it inside cont_track_eph_leader_ult()
 	 * to avoid list iteration broken.
 	 */
-	eph_ldr->ea_deleted = 1;
+	eph_ldr->cte_deleted = 1;
 }
 
 /**
@@ -1747,23 +1747,23 @@ retry:
 			D_GOTO(out_put, rc);
 	}
 
-	for (i = 0; i < eph_ldr->ea_servers_num; i++) {
-		if (eph_ldr->ea_server_ephs[i].re_rank == rank) {
-			if (eph_ldr->ea_server_ephs[i].re_ec_agg_eph < ec_agg_eph)
-				eph_ldr->ea_server_ephs[i].re_ec_agg_eph = ec_agg_eph;
-			if (eph_ldr->ea_server_ephs[i].re_stable_eph < stable_eph)
-				eph_ldr->ea_server_ephs[i].re_stable_eph = stable_eph;
+	for (i = 0; i < eph_ldr->cte_servers_num; i++) {
+		if (eph_ldr->cte_server_ephs[i].re_rank == rank) {
+			if (eph_ldr->cte_server_ephs[i].re_ec_agg_eph < ec_agg_eph)
+				eph_ldr->cte_server_ephs[i].re_ec_agg_eph = ec_agg_eph;
+			if (eph_ldr->cte_server_ephs[i].re_stable_eph < stable_eph)
+				eph_ldr->cte_server_ephs[i].re_stable_eph = stable_eph;
 			break;
 		}
 	}
 
-	if (i == eph_ldr->ea_servers_num) {
+	if (i == eph_ldr->cte_servers_num) {
 		if (!retried) {
 			D_DEBUG(DB_MD, "rank %u ec_agg_eph "DF_X64", stable_eph "DF_X64
 				" retry for"DF_CONT"\n", rank, ec_agg_eph, stable_eph,
 				DP_CONT(pool_uuid, cont_uuid));
 			retried = true;
-			eph_ldr->ea_deleted = 1;
+			eph_ldr->cte_deleted = 1;
 			goto retry;
 		} else {
 			D_WARN("rank %u ec_agg_eph "DF_X64", stable_eph "DF_X64
@@ -1808,18 +1808,18 @@ cont_refresh_track_eph_one(void *data)
 		DP_CONT(arg->pool_uuid, arg->cont_uuid),
 		cont_child->sc_ec_agg_eph_boundary < arg->min_ec_agg_eph ? "update" : "ignore",
 		cont_child->sc_ec_agg_eph_boundary, arg->min_ec_agg_eph,
-		cont_child->sc_stable_epoch < arg->min_stable_eph ? "update" : "ignore",
-		cont_child->sc_stable_epoch, arg->min_stable_eph);
+		cont_child->sc_global_stable_eph < arg->min_stable_eph ? "update" : "ignore",
+		cont_child->sc_global_stable_eph, arg->min_stable_eph);
 
 	if (cont_child->sc_ec_agg_eph_boundary < arg->min_ec_agg_eph)
 		cont_child->sc_ec_agg_eph_boundary = arg->min_ec_agg_eph;
 
 	/* Only should update local stable epoch if the target is in UPIN status */
-	if (cont_child->sc_stable_epoch < arg->min_stable_eph &&
+	if (cont_child->sc_global_stable_eph < arg->min_stable_eph &&
 	    (arg->tgt_status[idx] & PO_COMP_ST_UPIN)) {
 		rc = vos_cont_set_global_stable_epoch(cont_child->sc_hdl, arg->min_stable_eph);
 		if (rc == 0)
-			cont_child->sc_stable_epoch = arg->min_stable_eph;
+			cont_child->sc_global_stable_eph = arg->min_stable_eph;
 		else
 			rc = 0;
 	}
@@ -1904,72 +1904,72 @@ cont_track_eph_leader_ult(void *arg)
 			goto yield;
 		}
 
-		d_list_for_each_entry_safe(eph_ldr, tmp, &svc->cs_cont_ephs_leader_list, ea_list) {
+		d_list_for_each_entry_safe(eph_ldr, tmp, &svc->cs_cont_ephs_leader_list, cte_list) {
 			daos_epoch_t min_ec_agg_eph = DAOS_EPOCH_MAX;
 			daos_epoch_t min_stable_eph = DAOS_EPOCH_MAX;
 			int	     i;
 
-			if (eph_ldr->ea_deleted) {
-				d_list_del(&eph_ldr->ea_list);
-				D_FREE(eph_ldr->ea_server_ephs);
+			if (eph_ldr->cte_deleted) {
+				d_list_del(&eph_ldr->cte_list);
+				D_FREE(eph_ldr->cte_server_ephs);
 				D_FREE(eph_ldr);
 				continue;
 			}
 
-			for (i = 0; i < eph_ldr->ea_servers_num; i++) {
-				d_rank_t rank = eph_ldr->ea_server_ephs[i].re_rank;
+			for (i = 0; i < eph_ldr->cte_servers_num; i++) {
+				d_rank_t rank = eph_ldr->cte_server_ephs[i].re_rank;
 
 				if (d_rank_in_rank_list(&fail_ranks, rank)) {
 					D_DEBUG(DB_MD, DF_CONT" skip %u\n",
 						DP_CONT(svc->cs_pool_uuid,
-							eph_ldr->ea_cont_uuid),
+							eph_ldr->cte_cont_uuid),
 						rank);
 					continue;
 				}
 
-				if (eph_ldr->ea_server_ephs[i].re_ec_agg_eph < min_ec_agg_eph)
-					min_ec_agg_eph = eph_ldr->ea_server_ephs[i].re_ec_agg_eph;
-				if (eph_ldr->ea_server_ephs[i].re_stable_eph < min_stable_eph)
-					min_stable_eph = eph_ldr->ea_server_ephs[i].re_stable_eph;
+				if (eph_ldr->cte_server_ephs[i].re_ec_agg_eph < min_ec_agg_eph)
+					min_ec_agg_eph = eph_ldr->cte_server_ephs[i].re_ec_agg_eph;
+				if (eph_ldr->cte_server_ephs[i].re_stable_eph < min_stable_eph)
+					min_stable_eph = eph_ldr->cte_server_ephs[i].re_stable_eph;
 			}
 
-			if (min_ec_agg_eph == eph_ldr->ea_current_ec_agg_eph &&
-			    min_stable_eph == eph_ldr->ea_current_stable_eph)
+			if (min_ec_agg_eph == eph_ldr->cte_current_ec_agg_eph &&
+			    min_stable_eph == eph_ldr->cte_current_stable_eph)
 				continue;
 
 			/**
 			 * NB: during extending or reintegration, the new
 			 * server might cause the minimum epoch is less than
-			 * ea_current_ec_agg_eph.
+			 * cte_current_ec_agg_eph.
 			 */
 			D_DEBUG(DB_MD, DF_CONT" min_ec_agg_eph "DF_X64" current "DF_X64
 				", min_stable_eph "DF_X64" current "DF_X64".\n",
-				DP_CONT(svc->cs_pool_uuid, eph_ldr->ea_cont_uuid),
-				min_ec_agg_eph, eph_ldr->ea_current_ec_agg_eph,
-				min_stable_eph, eph_ldr->ea_current_stable_eph);
+				DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid),
+				min_ec_agg_eph, eph_ldr->cte_current_ec_agg_eph,
+				min_stable_eph, eph_ldr->cte_current_stable_eph);
 
-			cur_eph = d_hlc2sec(eph_ldr->ea_current_ec_agg_eph);
+			cur_eph = d_hlc2sec(eph_ldr->cte_current_ec_agg_eph);
 			new_eph = d_hlc2sec(min_ec_agg_eph);
 			if (cur_eph && new_eph > cur_eph && (new_eph - cur_eph) >= 600)
 				D_WARN(DF_CONT": Sluggish EC boundary reporting. "
 				       "cur:"DF_U64" new:"DF_U64" gap:"DF_U64"\n",
-				       DP_CONT(svc->cs_pool_uuid, eph_ldr->ea_cont_uuid),
+				       DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid),
 				       cur_eph, new_eph, new_eph - cur_eph);
 
-			cur_eph = d_hlc2sec(eph_ldr->ea_current_stable_eph);
+			cur_eph = d_hlc2sec(eph_ldr->cte_current_stable_eph);
 			new_eph = d_hlc2sec(min_stable_eph);
 			if (cur_eph && new_eph > cur_eph && (new_eph - cur_eph) >= 600)
 				D_WARN(DF_CONT": Sluggish stable epoch reporting. "
 				       "cur:"DF_U64" new:"DF_U64" gap:"DF_U64"\n",
-				       DP_CONT(svc->cs_pool_uuid, eph_ldr->ea_cont_uuid),
+				       DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid),
 				       cur_eph, new_eph, new_eph - cur_eph);
 
-			rc = cont_iv_track_eph_refresh(pool->sp_iv_ns, eph_ldr->ea_cont_uuid,
+			rc = cont_iv_track_eph_refresh(pool->sp_iv_ns, eph_ldr->cte_cont_uuid,
 						       min_ec_agg_eph, min_stable_eph);
 			if (rc) {
 				DL_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR, rc,
 					  DF_CONT ": refresh failed",
-					  DP_CONT(svc->cs_pool_uuid, eph_ldr->ea_cont_uuid));
+					  DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid));
 
 				/* If there are network error or pool map inconsistency,
 				 * let's skip the following eph sync, which will fail
@@ -1983,8 +1983,8 @@ cont_track_eph_leader_ult(void *arg)
 
 				continue;
 			}
-			eph_ldr->ea_current_ec_agg_eph = min_ec_agg_eph;
-			eph_ldr->ea_current_stable_eph = min_stable_eph;
+			eph_ldr->cte_current_ec_agg_eph = min_ec_agg_eph;
+			eph_ldr->cte_current_stable_eph = min_stable_eph;
 			if (pool->sp_rebuilding)
 				break;
 		}
@@ -2001,9 +2001,9 @@ out:
 	D_DEBUG(DB_MD, DF_UUID": stop eph ult: rc %d\n",
 		DP_UUID(svc->cs_pool_uuid), rc);
 
-	d_list_for_each_entry_safe(eph_ldr, tmp, &svc->cs_cont_ephs_leader_list, ea_list) {
-		d_list_del(&eph_ldr->ea_list);
-		D_FREE(eph_ldr->ea_server_ephs);
+	d_list_for_each_entry_safe(eph_ldr, tmp, &svc->cs_cont_ephs_leader_list, cte_list) {
+		d_list_del(&eph_ldr->cte_list);
+		D_FREE(eph_ldr->cte_server_ephs);
 		D_FREE(eph_ldr);
 	}
 }
@@ -2015,8 +2015,6 @@ cont_svc_eph_track_leader_start(struct cont_svc *svc)
 	uuid_t			anonym_uuid;
 
 	D_INIT_LIST_HEAD(&svc->cs_cont_ephs_leader_list);
-	if (unlikely(ec_agg_disabled))
-		return 0;
 
 	D_ASSERT(svc->cs_cont_ephs_leader_req == NULL);
 	uuid_clear(anonym_uuid);

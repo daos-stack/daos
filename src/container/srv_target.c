@@ -2423,9 +2423,9 @@ struct cont_track_eph {
 	uuid_t		cte_cont_uuid;
 	d_list_t	cte_list;
 	/* each target's stable epoch */
-	daos_epoch_t	*cte_stable_ephs;
+	daos_epoch_t	*cte_tgt_stable_ephs;
 	/* each target's EC aggregation epoch */
-	daos_epoch_t	*cte_ec_agg_ephs;
+	daos_epoch_t	*cte_tgt_ec_agg_ephs;
 	/* last reported (through IV) stable epoch */
 	daos_epoch_t	cte_last_stable_epoch;
 	/* last reported (through IV) EC aggregation epoch */
@@ -2460,14 +2460,14 @@ cont_track_eph_alloc(d_list_t *ec_list, uuid_t cont_uuid)
 		return NULL;
 
 	uuid_copy(new_ec->cte_cont_uuid, cont_uuid);
-	D_ALLOC_ARRAY(new_ec->cte_stable_ephs, dss_tgt_nr);
-	if (new_ec->cte_stable_ephs == NULL) {
+	D_ALLOC_ARRAY(new_ec->cte_tgt_stable_ephs, dss_tgt_nr);
+	if (new_ec->cte_tgt_stable_ephs == NULL) {
 		D_FREE(new_ec);
 		return NULL;
 	}
-	D_ALLOC_ARRAY(new_ec->cte_ec_agg_ephs, dss_tgt_nr);
-	if (new_ec->cte_ec_agg_ephs == NULL) {
-		D_FREE(new_ec->cte_stable_ephs);
+	D_ALLOC_ARRAY(new_ec->cte_tgt_ec_agg_ephs, dss_tgt_nr);
+	if (new_ec->cte_tgt_ec_agg_ephs == NULL) {
+		D_FREE(new_ec->cte_tgt_stable_ephs);
 		D_FREE(new_ec);
 		return NULL;
 	}
@@ -2497,10 +2497,10 @@ cont_track_eph_insert(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx,
 	D_DEBUG(DB_MD, DF_UUID "add %d tgt to epoch query list %d\n",
 		DP_UUID(cont_uuid), tgt_idx, new_eph->cte_ref);
 	D_ASSERT(tgt_idx < new_eph->cte_ephs_cnt);
-	new_eph->cte_ec_agg_ephs[tgt_idx] = 0;
-	new_eph->cte_stable_ephs[tgt_idx] = 0;
-	*ec_agg_epoch_p = &new_eph->cte_ec_agg_ephs[tgt_idx];
-	*stable_epoch_p = &new_eph->cte_stable_ephs[tgt_idx];
+	new_eph->cte_tgt_ec_agg_ephs[tgt_idx] = 0;
+	new_eph->cte_tgt_stable_ephs[tgt_idx] = 0;
+	*ec_agg_epoch_p = &new_eph->cte_tgt_ec_agg_ephs[tgt_idx];
+	*stable_epoch_p = &new_eph->cte_tgt_stable_ephs[tgt_idx];
 out:
 	return rc;
 }
@@ -2528,8 +2528,8 @@ cont_track_eph_destroy(struct cont_track_eph *ec_eph)
 {
 	D_ASSERT(ec_eph->cte_ref == 0);
 	d_list_del(&ec_eph->cte_list);
-	D_FREE(ec_eph->cte_stable_ephs);
-	D_FREE(ec_eph->cte_ec_agg_ephs);
+	D_FREE(ec_eph->cte_tgt_stable_ephs);
+	D_FREE(ec_eph->cte_tgt_ec_agg_ephs);
 	D_FREE(ec_eph);
 }
 
@@ -2674,9 +2674,9 @@ ds_cont_track_eph_query_ult(void *data)
 
 				if (!is_failed_tgts) {
 					min_ec_agg_eph = min(min_ec_agg_eph,
-							     ec_eph->cte_ec_agg_ephs[i]);
+							     ec_eph->cte_tgt_ec_agg_ephs[i]);
 					min_stable_eph = min(min_stable_eph,
-							     ec_eph->cte_stable_ephs[i]);
+							     ec_eph->cte_tgt_stable_ephs[i]);
 				}
 			}
 
@@ -2694,8 +2694,8 @@ ds_cont_track_eph_query_ult(void *data)
 						min_stable_eph, ec_eph->cte_last_stable_epoch,
 						DP_UUID(ec_eph->cte_cont_uuid));
 				else
-					D_DEBUG(DB_MD, "Skip eph "DF_X64"/"DF_X64
-						", "DF_X64"/"DF_X64", "DF_UUID"\n",
+					D_DEBUG(DB_MD, "Skip ec_agg_eph "DF_X64"/"DF_X64
+						", stable_eph "DF_X64"/"DF_X64", "DF_UUID"\n",
 						min_ec_agg_eph, ec_eph->cte_last_ec_agg_epoch,
 						min_stable_eph, ec_eph->cte_last_stable_epoch,
 						DP_UUID(ec_eph->cte_cont_uuid));

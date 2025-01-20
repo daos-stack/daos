@@ -66,13 +66,13 @@ struct rank_eph {
 
 /* container EC aggregation epoch and stable epoch control descriptor, which is only on leader */
 struct cont_track_eph_leader {
-	uuid_t			ea_cont_uuid;
-	daos_epoch_t		ea_current_ec_agg_eph;
-	daos_epoch_t		ea_current_stable_eph;
-	struct rank_eph		*ea_server_ephs;
-	d_list_t		ea_list;
-	int			ea_servers_num;
-	uint32_t		ea_deleted:1;
+	uuid_t			cte_cont_uuid;
+	daos_epoch_t		cte_current_ec_agg_eph;
+	daos_epoch_t		cte_current_stable_eph;
+	struct rank_eph		*cte_server_ephs;
+	d_list_t		cte_list;
+	int			cte_servers_num;
+	uint32_t		cte_deleted:1;
 };
 
 /*

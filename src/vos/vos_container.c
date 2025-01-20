@@ -969,11 +969,11 @@ vos_cont_set_global_stable_epoch(daos_handle_t coh, daos_epoch_t epoch)
 
 	/*
 	 * Either the leader gives wrong global stable epoch or current target does not participant
-	 * in the calculating new globle stable epoch. Then do not allow to set globle stable epoch.
+	 * in the calculating new global stable epoch. Then do not allow to set global stable epoch.
 	 */
-	if (unlikely(cont->vc_local_stable_epoch < epoch)) {
-		D_WARN("Invalid global stable epoch: " DF_X64" vs " DF_X64 " for container "
-		       DF_UUID "\n", cont->vc_local_stable_epoch, epoch, DP_UUID(cont->vc_id));
+	if (unlikely(epoch > cont->vc_local_stable_epoch)) {
+		D_WARN("Invalid global stable epoch: " DF_X64" > local " DF_X64 " for container "
+		       DF_UUID "\n", epoch, cont->vc_local_stable_epoch, DP_UUID(cont->vc_id));
 		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 
