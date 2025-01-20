@@ -1,4 +1,5 @@
 # Copyright 2016-2024 Intel Corporation
+# Copyright 2025 Google LLC
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -1156,7 +1157,7 @@ class _Component():
         if (not self.use_installed and real_comp_path is not None
            and not real_comp_path == "/usr"):
             path_found = False
-            for path in ["lib", "lib64"]:
+            for path in self.lib_path:
                 config = os.path.join(real_comp_path, path, "pkgconfig")
                 if not os.path.exists(config):
                     continue
