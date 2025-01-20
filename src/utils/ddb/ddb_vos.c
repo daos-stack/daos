@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1422,6 +1423,12 @@ int
 dv_dtx_abort_active_entry(daos_handle_t coh, struct dtx_id *dti)
 {
 	return vos_dtx_abort(coh, dti, DAOS_EPOCH_MAX);
+}
+
+int
+dv_dtx_active_entry_discard_invalid(daos_handle_t coh, struct dtx_id *dti, int *discarded)
+{
+	return vos_dtx_discard_invalid(coh, dti, discarded);
 }
 
 int

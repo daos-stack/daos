@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1855,5 +1856,45 @@ vos_io_scm(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size, enum v
  */
 int
 vos_insert_oid(struct dtx_handle *dth, struct vos_container *cont, daos_unit_oid_t *oid);
+
+/** Validate the provided svt.
+ *
+ * Note: It is designed for catastrophic recovery. Not to perform at run-time.
+ *
+ * \param svt[in]
+ * \param dtx_lid[in]	local id of the DTX entry the evt is supposed to belong to
+ *
+ * \return true if svt is valid.
+ **/
+bool
+vos_irec_is_valid(const struct vos_irec_df *svt, uint32_t dtx_lid);
+
+enum {
+	DTX_UMOFF_ILOG = (1 << 0),
+	DTX_UMOFF_SVT  = (1 << 1),
+	DTX_UMOFF_EVT  = (1 << 2),
+};
+
+static inline void
+dtx_type2umoff_flag(umem_off_t *rec, uint32_t type)
+{
+	uint8_t flag = 0;
+
+	switch (type) {
+	case DTX_RT_ILOG:
+		flag = DTX_UMOFF_ILOG;
+		break;
+	case DTX_RT_SVT:
+		flag = DTX_UMOFF_SVT;
+		break;
+	case DTX_RT_EVT:
+		flag = DTX_UMOFF_EVT;
+		break;
+	default:
+		D_ASSERT(0);
+	}
+
+	umem_off_set_flags(rec, flag);
+}
 
 #endif /* __VOS_INTERNAL_H__ */
