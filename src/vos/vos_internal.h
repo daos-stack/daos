@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -512,6 +513,8 @@ struct vos_dtx_cmt_ent {
 #define DCE_XID(dce)		((dce)->dce_base.dce_xid)
 #define DCE_EPOCH(dce)		((dce)->dce_base.dce_epoch)
 #define DCE_CMT_TIME(dce)	((dce)->dce_base.dce_cmt_time)
+
+#define EVT_DESC_MAGIC 0xbeefdead
 
 extern uint64_t vos_evt_feats;
 

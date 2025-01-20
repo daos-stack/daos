@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -578,6 +579,13 @@ vos_tls_init(int tags, int xs_id, int tgt_id)
 				     "io/dtx/committed/tgt_%u", tgt_id);
 		if (rc)
 			D_WARN("Failed to create committed cnt sensor: "DF_RC"\n",
+			       DP_RC(rc));
+
+		rc = d_tm_add_metric(&tls->vtl_dtx_rec_missing, D_TM_COUNTER,
+				     "Total missing dtx records since start", NULL,
+				     "io/dtx/record_missing/tgt_%u", tgt_id);
+		if (rc)
+			D_WARN("Failed to create record missing sensor: "DF_RC"\n",
 			       DP_RC(rc));
 
 		rc = d_tm_add_metric(&tls->vtl_obj_cnt, D_TM_GAUGE,

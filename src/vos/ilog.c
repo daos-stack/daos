@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -390,16 +391,18 @@ ilog_create(struct umem_instance *umm, struct ilog_df *root)
 	return rc;
 }
 
-#define ILOG_ASSERT_VALID(root_df)					\
-	do {								\
-		struct ilog_root	*_root;				\
-									\
-		_root = (struct ilog_root *)(root_df);			\
-		D_ASSERTF((_root != NULL) &&				\
-			  ILOG_MAGIC_VALID(_root->lr_magic),		\
-			  "Invalid ilog root detected %p magic=%#x\n",	\
-			  _root, _root == NULL ? 0 : _root->lr_magic);	\
-	} while (0)
+#define ILOG_CHECK_VALID(root_df)                                   \
+({                                                                  \
+	struct ilog_root	*_root = NULL;                      \
+	D_ASSERT((root_df) != NULL);                                \
+	_root = (struct ilog_root *)(root_df);                      \
+	if (!ILOG_MAGIC_VALID(_root->lr_magic)) {                   \
+		D_WARN("Invalid ilog root detected %p magic=%#x\n", \
+		       _root, _root == NULL ? 0 : _root->lr_magic); \
+		_root = NULL;                                       \
+	}                                                           \
+	_root != NULL;                                              \
+})
 
 int
 ilog_open(struct umem_instance *umm, struct ilog_df *root,
@@ -408,7 +411,8 @@ ilog_open(struct umem_instance *umm, struct ilog_df *root,
 	struct ilog_context	*lctx;
 	int			 rc;
 
-	ILOG_ASSERT_VALID(root);
+	if (!ILOG_CHECK_VALID(root))
+		return -DER_NONEXIST;
 
 	rc = ilog_ctx_create(umm, (struct ilog_root *)root, cbs, &lctx);
 	if (rc != 0)
@@ -474,7 +478,7 @@ ilog_destroy(struct umem_instance *umm,
 	int			 rc = 0;
 	struct ilog_array_cache	 cache = {0};
 
-	ILOG_ASSERT_VALID(root);
+	D_ASSERT(ILOG_CHECK_VALID(root));
 
 	rc = ilog_tx_begin(&lctx);
 	if (rc != 0) {
@@ -984,8 +988,12 @@ done:
 		"%s in incarnation log " DF_X64 " status: rc=" DF_RC " tree_version: %d\n",
 		opc_str[opc], id_in->id_epoch, DP_RC(rc), ilog_mag2ver(lctx->ic_root->lr_magic));
 
-	if (rc == 0 && version != ilog_mag2ver(lctx->ic_root->lr_magic) &&
-	    (opc == ILOG_OP_PERSIST || opc == ILOG_OP_ABORT)) {
+	if (rc == 0 && opc != ILOG_OP_UPDATE) {
+		if (version == ilog_mag2ver(lctx->ic_root->lr_magic)) {
+			D_WARN("ilog entry on %s doesn't exist\n", opc_str[opc]);
+			return -DER_NONEXIST;
+		}
+
 		/** If we persisted or aborted an entry successfully,
 		 *  invoke the callback, if applicable but without
 		 *  deregistration
@@ -1213,7 +1221,7 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 	int			 rc = 0;
 	bool			 retry;
 
-	ILOG_ASSERT_VALID(root_df);
+	ILOG_CHECK_VALID(root_df);
 
 	root = (struct ilog_root *)root_df;
 
@@ -1539,7 +1547,7 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 
 	root = lctx->ic_root;
 
-	ILOG_ASSERT_VALID(root);
+	D_ASSERT(ILOG_CHECK_VALID(root));
 
 	D_ASSERT(!ilog_empty(root)); /* ilog_fetch should have failed */
 

@@ -1,5 +1,6 @@
-/**
+/**RY
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -571,7 +572,7 @@ dtx_ilog_rec_release(struct umem_instance *umm, struct vos_container *cont,
 
 	ilog_close(loh);
 
-	if (rc != 0)
+	if (rc != 0 && rc != -DER_NONEXIST)
 		D_ERROR("Failed to release ilog rec for "DF_DTI", abort %s: "DF_RC"\n",
 			DP_DTI(&DAE_XID(dae)), abort ? "yes" : "no", DP_RC(rc));
 
@@ -596,6 +597,11 @@ do_dtx_rec_release(struct umem_instance *umm, struct vos_container *cont,
 		struct vos_irec_df	*svt;
 
 		svt = umem_off2ptr(umm, umem_off2offset(rec));
+
+		if (svt->ir_dtx != DAE_LID(dae)) {
+			rc = -DER_NONEXIST;
+			break;
+		}
 		if (abort) {
 			if (DAE_INDEX(dae) != DTX_INDEX_INVAL) {
 				rc = umem_tx_add_ptr(umm, &svt->ir_dtx,
@@ -619,6 +625,12 @@ do_dtx_rec_release(struct umem_instance *umm, struct vos_container *cont,
 		struct evt_desc		*evt;
 
 		evt = umem_off2ptr(umm, umem_off2offset(rec));
+
+		if (evt->dc_magic != EVT_DESC_MAGIC || evt->dc_dtx != DAE_LID(dae)) {
+			rc = -DER_NONEXIST;
+			break;
+		}
+
 		if (abort) {
 			if (DAE_INDEX(dae) != DTX_INDEX_INVAL) {
 				rc = umem_tx_add_ptr(umm, &evt->dc_dtx,
@@ -644,6 +656,13 @@ do_dtx_rec_release(struct umem_instance *umm, struct vos_container *cont,
 		D_ERROR("Unknown DTX "DF_DTI" type %u\n",
 			DP_DTI(&DAE_XID(dae)), dtx_umoff_flag2type(rec));
 		break;
+	}
+
+	if (rc == -DER_NONEXIST) {
+		D_WARN("record no longer exists, may indicate some corruption: "DF_DTI" type %u\n",
+		       DP_DTI(&DAE_XID(dae)), dtx_umoff_flag2type(rec));
+		d_tm_inc_counter(vos_tls_get(false)->vtl_dtx_rec_missing, 1);
+		rc = 0;
 	}
 
 	return rc;
