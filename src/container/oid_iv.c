@@ -271,7 +271,7 @@ oid_iv_ent_destroy(d_sg_list_t *sgl)
 	entry = sgl->sg_iovs[0].iov_buf;
 	ABT_mutex_free(&entry->lock);
 	d_sgl_fini(sgl, true);
-
+	D_FREE(entry);
 	return 0;
 }
 
