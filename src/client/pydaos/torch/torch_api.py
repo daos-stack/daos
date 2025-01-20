@@ -607,15 +607,15 @@ class _Dfs():
 
         queued = 0
         processed = 0
-        for dir in self.split_dir_for_parallel_scan(path):
-            work.put(dir)
+        for anchored_dir in self.split_dir_for_parallel_scan(path):
+            work.put(anchored_dir)
             queued += 1
 
         while processed < queued:
             (scanned, to_scan) = dirs.get()
             processed += scanned
-            for dir in to_scan:
-                work.put(dir)
+            for d in to_scan:
+                work.put(d)
                 queued += 1
 
         result = []
