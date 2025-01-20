@@ -1125,11 +1125,27 @@ class TestGroup():
                         "storage: auto not supported for varying engines_per_host")
                 engines = engines[0]
                 yaml_file = os.path.join(yaml_dir, f"extra_yaml_storage_{engines}_engine.yaml")
+
+
+                server_config_namespace = dict_extract_values(
+                    yaml_data, ["setup", "server_config_namespace"])
+                logger.debug("## server_config_namespace = %s", server_config_namespace)
+                server_config_path = server_config_namespace[0].split("/")
+                server_config_0 = server_config_path[2]
+                logger.debug("## server_config_0 = %s", server_config_0)
+                server_config_1 = dict_extract_values(yaml_data, [server_config_0])
+                logger.debug("## server_config_1 = %s", server_config_1)
+                server_config_targets = []
+                for server_config_target in server_config_1[0]:
+                    server_config_targets.append(server_config_target)
+                logger.debug("## server_config_targets = %s", server_config_targets)
+
+
                 if engines not in engine_storage_yaml:
                     logger.debug("-" * 80)
                     storage_info.write_storage_yaml(
                         yaml_file, engines, tier_0_type, scm_size, scm_mount, max_nvme_tiers,
-                        control_metadata)
+                        control_metadata, server_config_targets)
                     engine_storage_yaml[engines] = yaml_file
                 logger.debug(
                     "  - Adding auto-storage extra yaml %s for %s",
