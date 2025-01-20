@@ -10,8 +10,8 @@
 
 #include <semaphore.h>
 
-#include <fuse3/fuse.h>
-#include <fuse3/fuse_lowlevel.h>
+#include <fused/fuse.h>
+#include <fused/fuse_lowlevel.h>
 
 #include <gurt/list.h>
 #include <gurt/hash.h>
