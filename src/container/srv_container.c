@@ -1853,8 +1853,7 @@ ds_cont_tgt_refresh_track_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 
 	rc = ds_pool_lookup(pool_uuid, &pool);
 	if (rc != 0) {
-		D_DEBUG(DB_MD, DF_UUID" lookup pool failed: %d\n",
-			DP_UUID(pool_uuid), rc);
+		D_ERROR(DF_UUID" lookup pool failed: %d\n", DP_UUID(pool_uuid), rc);
 		goto out;
 	}
 	rank = dss_self_rank();

@@ -2588,10 +2588,9 @@ cont_track_eph_init_ult(void *data)
 	return rc;
 }
 
-static void
-cont_tgt_track_eph_init_ult(void *data)
+static int
+cont_tgt_track_eph_init(struct ds_cont_child *cont_child)
 {
-	struct ds_cont_child		*cont_child = data;
 	struct track_eph_ult_arg	arg;
 	int				rc;
 
@@ -2603,29 +2602,13 @@ cont_tgt_track_eph_init_ult(void *data)
 	if (rc) {
 		DL_ERROR(rc, DF_CONT " init track eph failed.",
 			 DP_CONT(cont_child->sc_pool->spc_uuid, cont_child->sc_uuid));
-		ds_cont_child_put(cont_child);
-		return;
+		return rc;
 	}
 
 	D_DEBUG(DB_MD, DF_UUID " update init track %u\n",
 		DP_UUID(cont_child->sc_uuid), arg.tgt_idx);
 	cont_child->sc_query_ec_agg_eph = arg.ec_agg_eph;
 	cont_child->sc_query_stable_eph = arg.stable_eph;
-
-	ds_cont_child_put(cont_child);
-}
-
-static int
-cont_tgt_track_eph_init(struct ds_cont_child *cont_child)
-{
-	int rc;
-
-	ds_cont_child_get(cont_child);
-
-	rc = dss_ult_create(cont_tgt_track_eph_init_ult, cont_child, DSS_XS_SELF,
-			    0, 0, NULL);
-	if (rc != 0)
-		ds_cont_child_put(cont_child);
 
 	return rc;
 }

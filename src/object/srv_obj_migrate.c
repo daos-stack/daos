@@ -4038,7 +4038,7 @@ reint_post_cont_iter_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	vos_iter_param_t		 param = { 0 };
 	struct vos_iter_anchors		 anchor = { 0 };
 	daos_handle_t			 toh = arg->ria_migrated_tree_hdl;
-	daos_handle_t			 coh;
+	struct ds_cont_child		*cont_child = NULL;
 	int				 rc;
 
 	rc = obj_tree_lookup_cont(toh, entry->ie_couuid, &arg->ria_cont_toh);
@@ -4063,24 +4063,30 @@ reint_post_cont_iter_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	D_ASSERT(daos_handle_is_valid(arg->ria_cont_toh));
 
-	rc = vos_cont_open(iter_param->ip_hdl, entry->ie_couuid, &coh);
-	if (rc != 0) {
-		DL_ERROR(rc, DF_RB " Open container " DF_UUID " failed", DP_RB_MPT(tls),
-			 DP_UUID(entry->ie_couuid));
+	rc = ds_cont_child_lookup(tls->mpt_pool_uuid, entry->ie_couuid, &cont_child);
+	if (rc == -DER_NONEXIST || rc == -DER_SHUTDOWN) {
+		D_DEBUG(DB_REBUILD, DF_RB" co_uuid "DF_UUID" already destroyed or destroying, "
+			DF_RC"\n", DP_RB_MPT(tls), DP_UUID(entry->ie_couuid), DP_RC(rc));
+		rc = 0;
 		goto out;
 	}
+	if (rc != 0) {
+		DL_ERROR(rc, DF_RB " Container " DF_UUID ", ds_cont_child_lookup failed",
+			 DP_RB_MPT(tls), DP_UUID(entry->ie_couuid));
+		D_GOTO(out, rc);
+	}
 
-	param.ip_hdl = coh;
+	param.ip_hdl = cont_child->sc_hdl;
 	param.ip_epr.epr_lo = 0;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	param.ip_flags = VOS_IT_FOR_MIGRATION;
 	uuid_copy(arg->ria_co_uuid, entry->ie_couuid);
 	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchor,
 			 reint_post_obj_iter_cb, NULL, arg, NULL);
-	vos_cont_close(coh);
 	if (rc)
 		DL_ERROR(rc, DF_RB " iterate container " DF_UUID " failed", DP_RB_MPT(tls),
 			 DP_UUID(entry->ie_couuid));
+	ds_cont_child_put(cont_child);
 
 out:
 	if (--arg->ria_yield_cnt <= 0) {
