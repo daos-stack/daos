@@ -393,12 +393,12 @@ ilog_create(struct umem_instance *umm, struct ilog_df *root)
 
 #define ILOG_CHECK_VALID(root_df)                                                                  \
 	({                                                                                         \
-		struct ilog_root	*_root = NULL;                                             \
+		struct ilog_root *_root = NULL;                                                    \
 		D_ASSERT((root_df) != NULL);                                                       \
 		_root = (struct ilog_root *)(root_df);                                             \
 		if (!ILOG_MAGIC_VALID(_root->lr_magic)) {                                          \
-			D_WARN("Invalid ilog root detected %p magic=%#x\n",                        \
-			       _root, _root == NULL ? 0 : _root->lr_magic);                        \
+			D_WARN("Invalid ilog root detected %p magic=%#x\n", _root,                 \
+			       _root == NULL ? 0 : _root->lr_magic);                               \
 			_root = NULL;                                                              \
 		}                                                                                  \
 		_root != NULL;                                                                     \
