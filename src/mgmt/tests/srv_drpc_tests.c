@@ -1789,7 +1789,8 @@ setup_exclude_drpc_call(Drpc__Call *call, char *uuid, uint32_t rank)
 
 	req.id = uuid;
 	req.n_target_idx = 3;
-	req.rank = rank;
+	req.n_ranks      = 3;
+	req.ranks        = TEST_RANKS;
 	req.target_idx   = TEST_IDXS;
 	pack_pool_exclude_req(call, &req);
 }
@@ -1894,7 +1895,8 @@ setup_drain_drpc_call(Drpc__Call *call, char *uuid, uint32_t rank)
 
 	req.id = uuid;
 	req.n_target_idx = 3;
-	req.rank = rank;
+	req.n_ranks      = 3;
+	req.ranks        = TEST_RANKS;
 	req.target_idx   = TEST_IDXS;
 	pack_pool_drain_req(call, &req);
 }

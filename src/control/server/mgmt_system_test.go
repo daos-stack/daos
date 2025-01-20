@@ -1832,19 +1832,19 @@ func TestServer_MgmtSvc_SystemExclude(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
-	dReq := func(id, rank int) *mgmtpb.PoolDrainReq {
+	dReq := func(id int32, ranks ...uint32) *mgmtpb.PoolDrainReq {
 		return &mgmtpb.PoolDrainReq{
 			Sys:      "daos_server",
-			Id:       test.MockUUID(int32(id)),
-			Rank:     uint32(rank),
+			Id:       test.MockUUID(id),
+			Ranks:    ranks,
 			SvcRanks: []uint32{0},
 		}
 	}
-	rReq := func(id, rank int) *mgmtpb.PoolReintReq {
+	rReq := func(id int32, ranks ...uint32) *mgmtpb.PoolReintReq {
 		return &mgmtpb.PoolReintReq{
 			Sys:      "daos_server",
-			Id:       test.MockUUID(int32(id)),
-			Rank:     uint32(rank),
+			Id:       test.MockUUID(id),
+			Ranks:    ranks,
 			SvcRanks: []uint32{0},
 		}
 	}
@@ -1896,7 +1896,7 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				test.MockUUID(1): "2-5",
 			},
 			expResp: &mgmtpb.SystemDrainResp{
-				Results: []*mgmtpb.PoolRankResult{},
+				Results: []*mgmtpb.PoolRanksResult{},
 			},
 		},
 		"matching ranks; multiple pools; no drpc response": {
@@ -1906,7 +1906,7 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				test.MockUUID(2): "1-7",
 			},
 			expResp: &mgmtpb.SystemDrainResp{
-				Results: []*mgmtpb.PoolRankResult{
+				Results: []*mgmtpb.PoolRanksResult{
 					{
 						PoolId: test.MockUUID(1),
 						Ranks:  "0-1",
@@ -1933,7 +1933,7 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				dReq(1, 0), dReq(1, 1), dReq(2, 1),
 			},
 			expResp: &mgmtpb.SystemDrainResp{
-				Results: []*mgmtpb.PoolRankResult{
+				Results: []*mgmtpb.PoolRanksResult{
 					{PoolId: test.MockUUID(1), Ranks: "0-1"},
 					{PoolId: test.MockUUID(2), Ranks: "1"},
 				},
@@ -1955,7 +1955,7 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				dReq(2, 1), dReq(2, 2), dReq(2, 3),
 			},
 			expResp: &mgmtpb.SystemDrainResp{
-				Results: []*mgmtpb.PoolRankResult{
+				Results: []*mgmtpb.PoolRanksResult{
 					{PoolId: test.MockUUID(1), Ranks: "0-3"},
 					{PoolId: test.MockUUID(2), Ranks: "1-3"},
 				},
@@ -1978,7 +1978,7 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				dReq(2, 1), dReq(2, 2), dReq(2, 3),
 			},
 			expResp: &mgmtpb.SystemDrainResp{
-				Results: []*mgmtpb.PoolRankResult{
+				Results: []*mgmtpb.PoolRanksResult{
 					{PoolId: "00000001", Ranks: "0-3"},
 					{PoolId: "00000002", Ranks: "1-3"},
 				},
@@ -1999,7 +1999,7 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				dReq(1, 1), dReq(1, 2), dReq(2, 1), dReq(2, 2),
 			},
 			expResp: &mgmtpb.SystemDrainResp{
-				Results: []*mgmtpb.PoolRankResult{
+				Results: []*mgmtpb.PoolRanksResult{
 					{
 						PoolId: test.MockUUID(1),
 						Ranks:  "1-2",
@@ -2030,7 +2030,7 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 			},
 			expResp: &mgmtpb.SystemDrainResp{
 				Reint: true,
-				Results: []*mgmtpb.PoolRankResult{
+				Results: []*mgmtpb.PoolRanksResult{
 					{PoolId: test.MockUUID(1), Ranks: "0-1"},
 					{PoolId: test.MockUUID(2), Ranks: "1"},
 				},
@@ -2048,14 +2048,17 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				test.MockUUID(2): "1-7",
 			},
 			useLabels: true,
-			drpcResp:  &mgmtpb.PoolReintResp{},
+			drpcResps: []*mgmtpb.PoolReintResp{
+				{ReintedRanks: []uint32{0, 1, 2, 3}},
+				{ReintedRanks: []uint32{1, 2, 3}},
+			},
 			expReintReqs: []*mgmtpb.PoolReintReq{
 				rReq(1, 0), rReq(1, 1), rReq(1, 2), rReq(1, 3),
 				rReq(2, 1), rReq(2, 2), rReq(2, 3),
 			},
 			expResp: &mgmtpb.SystemDrainResp{
 				Reint: true,
-				Results: []*mgmtpb.PoolRankResult{
+				Results: []*mgmtpb.PoolRanksResult{
 					{PoolId: "00000001", Ranks: "0-3"},
 					{PoolId: "00000002", Ranks: "1-3"},
 				},
@@ -2084,7 +2087,7 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 			},
 			expResp: &mgmtpb.SystemDrainResp{
 				Reint: true,
-				Results: []*mgmtpb.PoolRankResult{
+				Results: []*mgmtpb.PoolRanksResult{
 					{
 						PoolId: test.MockUUID(1),
 						Ranks:  "3",
@@ -2165,7 +2168,7 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 
 			cmpOpts := []cmp.Option{
 				cmpopts.IgnoreUnexported(mgmtpb.SystemDrainResp{},
-					mgmtpb.PoolRankResult{}),
+					mgmtpb.PoolRanksResult{}),
 			}
 			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)

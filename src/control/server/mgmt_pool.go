@@ -912,25 +912,29 @@ func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReintRe
 		return nil, err
 	}
 
-	// Look up the pool service record to find the storage allocations
-	// used at creation.
+	// Refuse call if any requested rank is not in a valid state.
+	invalid := []ranklist.Rank{}
+	for _, rank := range req.Ranks {
+		r := ranklist.Rank(rank)
+
+		m, err := svc.membership.Get(r)
+		if err != nil {
+			return nil, err
+		}
+
+		if m.State&system.AvailableMemberFilter == 0 {
+			invalid = append(invalid, r)
+		}
+	}
+	if len(invalid) != 0 {
+		return nil, FaultPoolInvalidRanks(invalid)
+	}
+
+	// Look up the pool service record to find the storage allocations used at creation.
 	ps, err := svc.getPoolService(req.GetId())
 	if err != nil {
 		return nil, err
 	}
-
-	r := ranklist.Rank(req.Rank)
-
-	m, err := svc.membership.Get(r)
-	if err != nil {
-		return nil, err
-	}
-
-	if m.State&system.AvailableMemberFilter == 0 {
-		invalid := []ranklist.Rank{r}
-		return nil, FaultPoolInvalidRanks(invalid)
-	}
-
 	req.TierBytes = ps.Storage.PerRankTierStorage
 	req.MemRatio = ps.Storage.MemRatio
 

@@ -567,16 +567,16 @@ func SystemExclude(ctx context.Context, rpcClient UnaryInvoker, req *SystemExclu
 	return resp, convertMSResponse(ur, resp)
 }
 
-// PoolRankResult describes the result of an OSA operation on a pool's ranks.
-type PoolRankResult struct {
+// PoolRanksResult describes the result of an OSA operation on a pool's ranks.
+type PoolRanksResult struct {
 	Status int32  `json:"status"`  // Status returned from a specific OSA dRPC call
 	Msg    string `json:"msg"`     // Error message if Status is not Success
 	PoolID string `json:"pool_id"` // Unique identifier for pool
 	Ranks  string `json:"ranks"`   // RankSet of ranks that should be operated on
 }
 
-// PoolRankResults is an alias for a PoolRankResult slice.
-type PoolRankResults []*PoolRankResult
+// PoolRanksResults is an alias for a PoolRanksResult slice.
+type PoolRanksResults []*PoolRanksResult
 
 // SystemDrainReq contains the inputs for the system drain request.
 type SystemDrainReq struct {
@@ -591,7 +591,7 @@ type SystemDrainReq struct {
 // in the response so decoding is not required.
 type SystemDrainResp struct {
 	sysResponse `json:"-"`
-	Results     PoolRankResults `json:"results"`
+	Results     PoolRanksResults `json:"results"`
 }
 
 // Errors returns a single error combining all error messages associated with pool-rank results.
