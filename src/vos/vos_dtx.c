@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -24,12 +24,6 @@
 #define DTX_ACT_BLOB_MAGIC	0x14130a2b
 #define DTX_CMT_BLOB_MAGIC	0x2502191c
 
-enum {
-	DTX_UMOFF_ILOG		= (1 << 0),
-	DTX_UMOFF_SVT		= (1 << 1),
-	DTX_UMOFF_EVT		= (1 << 2),
-};
-
 #define DTX_UMOFF_TYPES		(DTX_UMOFF_ILOG | DTX_UMOFF_SVT | DTX_UMOFF_EVT)
 #define DTX_INDEX_INVAL		(int32_t)(-1)
 
@@ -46,28 +40,6 @@ enum {
 			    (DAE_LID(dae) & DTX_LID_SOLO_MASK) - DTX_LID_RESERVED,	\
 			    DAE_EPOCH(dae));						\
 	} while (0)
-
-static inline void
-dtx_type2umoff_flag(umem_off_t *rec, uint32_t type)
-{
-	uint8_t		flag = 0;
-
-	switch (type) {
-	case DTX_RT_ILOG:
-		flag = DTX_UMOFF_ILOG;
-		break;
-	case DTX_RT_SVT:
-		flag = DTX_UMOFF_SVT;
-		break;
-	case DTX_RT_EVT:
-		flag = DTX_UMOFF_EVT;
-		break;
-	default:
-		D_ASSERT(0);
-	}
-
-	umem_off_set_flags(rec, flag);
-}
 
 static inline uint32_t
 dtx_umoff_flag2type(umem_off_t umoff)
@@ -2702,6 +2674,144 @@ out:
 		rc = 0;
 	else if (rc != -DER_NONEXIST)
 		DL_CDEBUG(rc != 0, DLOG_ERR, DB_IO, rc, "Abort the DTX " DF_DTI, DP_DTI(dti));
+
+	return rc;
+}
+
+static void
+do_dtx_rec_discard_invalid(struct umem_instance *umm, struct vos_dtx_act_ent *dae, umem_off_t *rec,
+			   int *discarded)
+{
+	bool valid;
+
+	if (UMOFF_IS_NULL(*rec))
+		return;
+
+	switch (dtx_umoff_flag2type(*rec)) {
+	case DTX_RT_ILOG: {
+		valid = ilog_is_valid(umm, *rec, DAE_LID(dae), DAE_EPOCH(dae));
+		break;
+	}
+	case DTX_RT_SVT: {
+		struct vos_irec_df *svt = umem_off2ptr(umm, *rec);
+		valid                   = vos_irec_is_valid(svt, DAE_LID(dae));
+		break;
+	}
+	case DTX_RT_EVT: {
+		struct evt_desc *evt = umem_off2ptr(umm, *rec);
+		valid                = evt_desc_is_valid(evt, DAE_LID(dae));
+		break;
+	}
+	default:
+		/* On-disk data corruption case. */
+		valid = false;
+		break;
+	}
+
+	if (!valid) {
+		*rec = UMOFF_NULL;
+		*discarded += 1;
+	}
+}
+
+static int
+vos_dtx_discard_invalid_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae,
+				 int *discarded)
+{
+	struct umem_instance *umm                 = vos_cont2umm(cont);
+	int                   discarded_noninline = 0;
+	int                   discarded_inline    = 0;
+	int                   count;
+	int                   i;
+
+	/* go through the non-inlined records first if present */
+	if (dae->dae_records != NULL) {
+		D_ASSERT(DAE_REC_CNT(dae) > DTX_INLINE_REC_CNT);
+
+		count = DAE_REC_CNT(dae) - DTX_INLINE_REC_CNT;
+		for (i = 0; i < count; i++) {
+			do_dtx_rec_discard_invalid(umm, dae, &dae->dae_records[i],
+						   &discarded_noninline);
+		}
+
+		if (discarded_noninline > 0) {
+			/* copy the whole array to the durable format */
+			size_t size   = sizeof(umem_off_t) * count;
+			void  *rec_df = umem_off2ptr(umm, DAE_REC_OFF(dae));
+			int    rc     = umem_tx_add_ptr(umm, rec_df, size);
+			if (rc != 0) {
+				return rc;
+			}
+			memcpy(rec_df, dae->dae_records, size);
+		}
+
+		count = DTX_INLINE_REC_CNT;
+	} else {
+		count = DAE_REC_CNT(dae);
+	}
+
+	/* go through the inlined records */
+	for (i = 0; i < count; i++) {
+		do_dtx_rec_discard_invalid(umm, dae, &DAE_REC_INLINE(dae)[i], &discarded_inline);
+	}
+
+	if (discarded_inline > 0) {
+		/* copy the whole array to durable format */
+		struct vos_dtx_act_ent_df *dae_df = umem_off2ptr(umm, dae->dae_df_off);
+		size_t                     size   = sizeof(umem_off_t) * count;
+		int                        rc = umem_tx_add_ptr(umm, &dae_df->dae_rec_inline, size);
+		if (rc != 0) {
+			return rc;
+		}
+		memcpy(&dae_df->dae_rec_inline, &DAE_REC_INLINE(dae), size);
+	}
+
+	*discarded = discarded_inline + discarded_noninline;
+
+	return 0;
+}
+
+int
+vos_dtx_discard_invalid(daos_handle_t coh, struct dtx_id *dti, int *discarded)
+{
+	struct vos_container   *cont;
+	struct vos_dtx_act_ent *dae = NULL;
+	d_iov_t                 riov;
+	d_iov_t                 kiov;
+	int                     rc;
+
+	cont = vos_hdl2cont(coh);
+	D_ASSERT(cont != NULL);
+
+	D_ASSERT(dti != NULL);
+	D_ASSERT(discarded != NULL);
+
+	/* lookup the DTX entry */
+	d_iov_set(&kiov, dti, sizeof(*dti));
+	d_iov_set(&riov, NULL, 0);
+	rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
+	if (rc != 0) {
+		return rc;
+	}
+	dae = riov.iov_buf;
+
+	if (vos_dae_is_abort(dae)) {
+		/* Only not aborted transactions are considered. */
+		return 0;
+	}
+
+	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
+	if (rc == 0) {
+		rc = vos_dtx_discard_invalid_internal(cont, dae, discarded);
+		if (rc == 0 && *discarded > 0) {
+			rc = umem_tx_commit(vos_cont2umm(cont));
+		} else {
+			rc = umem_tx_abort(vos_cont2umm(cont), rc);
+			if (rc == -DER_CANCELED) {
+				rc = 0;
+			}
+		}
+	}
 
 	return rc;
 }

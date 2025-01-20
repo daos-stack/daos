@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -331,5 +332,21 @@ the path must include the extent, otherwise, it must not.`,
 			return ddbRmPool(ctx, c.Args.String("path"))
 		},
 		Completer: rmPoolCompleter,
+	})
+	// Command: dtx_act_discard_invalid
+	app.AddCommand(&grumble.Command{
+		Name:      "dtx_act_discard_invalid",
+		Aliases:   nil,
+		Help:      "Discard the active DTX entry's records if invalid.",
+		LongHelp:  "Committing or aborting the DTX entry with discarded records may result in inconsistencies. Allow DTX to resync instead.",
+		HelpGroup: "vos",
+		Args: func(a *grumble.Args) {
+			a.String("path", "VOS tree path to a container.")
+			a.String("dtx_id", "DTX id of the entry to validate.")
+		},
+		Run: func(c *grumble.Context) error {
+			return ddbDtxActDiscardInvalid(ctx, c.Args.String("path"), c.Args.String("dtx_id"))
+		},
+		Completer: nil,
 	})
 }
