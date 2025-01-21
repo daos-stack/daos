@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -236,14 +237,15 @@ func TestControl_PoolUpgrade(t *testing.T) {
 
 func TestControl_PoolDrain(t *testing.T) {
 	for name, tc := range map[string]struct {
-		mic    *MockInvokerConfig
-		req    *PoolDrainReq
-		expErr error
+		mic     *MockInvokerConfig
+		req     *PoolDrainReq
+		expErr  error
+		expResp *PoolDrainResp
 	}{
 		"local failure": {
 			req: &PoolDrainReq{
 				ID:        test.MockUUID(),
-				Rank:      2,
+				Ranks:     []ranklist.Rank{2},
 				TargetIdx: []uint32{1, 2, 3},
 			},
 			mic: &MockInvokerConfig{
@@ -254,7 +256,7 @@ func TestControl_PoolDrain(t *testing.T) {
 		"remote failure": {
 			req: &PoolDrainReq{
 				ID:        test.MockUUID(),
-				Rank:      2,
+				Ranks:     []ranklist.Rank{2},
 				TargetIdx: []uint32{1, 2, 3},
 			},
 			mic: &MockInvokerConfig{
@@ -265,13 +267,39 @@ func TestControl_PoolDrain(t *testing.T) {
 		"success": {
 			req: &PoolDrainReq{
 				ID:        test.MockUUID(),
-				Rank:      2,
+				Ranks:     []ranklist.Rank{1, 2, 3},
 				TargetIdx: []uint32{1, 2, 3},
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
-					&mgmtpb.PoolDrainResp{},
+					&mgmtpb.PoolDrainResp{
+						DrainedRanks: []uint32{1, 2, 3},
+					},
 				),
+			},
+			expResp: &PoolDrainResp{
+				DrainedRanks: []ranklist.Rank{1, 2, 3},
+			},
+		},
+		"partial failure": {
+			req: &PoolDrainReq{
+				ID:        test.MockUUID(),
+				Ranks:     []ranklist.Rank{1, 2, 3},
+				TargetIdx: []uint32{1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolDrainResp{
+						DrainedRanks: []uint32{1},
+						FailedRank:   2,
+						Status:       -1,
+					},
+				),
+			},
+			expResp: &PoolDrainResp{
+				DrainedRanks: []ranklist.Rank{1},
+				FailedRank:   ranklist.Rank(2),
+				Status:       -1,
 			},
 		},
 	} {
@@ -287,10 +315,15 @@ func TestControl_PoolDrain(t *testing.T) {
 			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
-			gotErr := PoolDrain(ctx, mi, tc.req)
+			resp, gotErr := PoolDrain(ctx, mi, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
+			}
+
+			cmpOpt := cmpopts.IgnoreUnexported(mgmtpb.PoolDrainResp{})
+			if diff := cmp.Diff(tc.expResp, resp, cmpOpt); diff != "" {
+				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

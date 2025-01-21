@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -888,13 +889,13 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_json_result(("pool", "get-prop"), pool=pool, name=name)
 
-    def pool_exclude(self, pool, rank, tgt_idx=None):
+    def pool_exclude(self, pool, ranks, tgt_idx=None):
         """Exclude a daos_server from the pool.
 
         Args:
             pool (str): Pool uuid.
-            rank (int): Rank of the daos_server to exclude
-            tgt_idx (int): target to be excluded from the pool
+            ranks (int): Ranks of the daos_server to exclude
+            tgt_idx (int): target to be excluded from each pool
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -905,7 +906,7 @@ class DmgCommand(DmgCommandBase):
 
         """
         return self._get_result(
-            ("pool", "exclude"), pool=pool, rank=rank, tgt_idx=tgt_idx)
+            ("pool", "exclude"), pool=pool, ranks=ranks, tgt_idx=tgt_idx)
 
     def pool_extend(self, pool, ranks):
         """Extend the daos_server pool.
@@ -925,13 +926,13 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("pool", "extend"), pool=pool, ranks=ranks)
 
-    def pool_drain(self, pool, rank, tgt_idx=None):
+    def pool_drain(self, pool, ranks, tgt_idx=None):
         """Drain a daos_server from the pool.
 
         Args:
             pool (str): Pool uuid.
-            rank (int): Rank of the daos_server to drain
-            tgt_idx (int): target to be excluded from the pool
+            ranks (int): Ranks of the daos_server to drain
+            tgt_idx (int): target to be drained from each pool
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -942,15 +943,15 @@ class DmgCommand(DmgCommandBase):
 
         """
         return self._get_result(
-            ("pool", "drain"), pool=pool, rank=rank, tgt_idx=tgt_idx)
+            ("pool", "drain"), pool=pool, ranks=ranks, tgt_idx=tgt_idx)
 
-    def pool_reintegrate(self, pool, rank, tgt_idx=None):
+    def pool_reintegrate(self, pool, ranks, tgt_idx=None):
         """Reintegrate a daos_server to the pool.
 
         Args:
             pool (str): Pool uuid.
-            rank (int): Rank of the daos_server to reintegrate
-            tgt_idx (int): target to be reintegrated to the pool
+            ranks (int): Ranks of the daos_server to reintegrate
+            tgt_idx (int): target to be reintegrated from each pool
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -961,7 +962,7 @@ class DmgCommand(DmgCommandBase):
 
         """
         return self._get_result(
-            ("pool", "reintegrate"), pool=pool, rank=rank, tgt_idx=tgt_idx)
+            ("pool", "reintegrate"), pool=pool, ranks=ranks, tgt_idx=tgt_idx)
 
     def cont_set_owner(self, pool, cont, user=None, group=None):
         """Dmg container set-owner to the specified new user/group.

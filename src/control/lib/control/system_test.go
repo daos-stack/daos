@@ -1090,26 +1090,28 @@ func TestControl_SystemDrain(t *testing.T) {
 		"dual pools; single rank": {
 			req: new(SystemDrainReq),
 			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemDrainResp{
-				Results: []*mgmtpb.PoolRankResult{
+				Results: []*mgmtpb.PoolRanksResult{
 					{PoolId: test.MockUUID(1), Ranks: "1"},
 					{PoolId: test.MockUUID(2), Ranks: "1"},
 				},
 			}),
 			expResp: &SystemDrainResp{
-				Results: []*PoolRankResult{
+				Results: []*PoolRanksResult{
 					{PoolID: test.MockUUID(1), Ranks: "1"},
 					{PoolID: test.MockUUID(2), Ranks: "1"},
 				},
 			},
 		},
-		"dual pools; single rank; with errors": {
+		"dual pools; multiple ranks; with errors": {
 			req: new(SystemDrainReq),
 			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemDrainResp{
-				Results: []*mgmtpb.PoolRankResult{
+				Results: []*mgmtpb.PoolRanksResult{
+					{PoolId: test.MockUUID(1), Ranks: "0"},
 					{
 						PoolId: test.MockUUID(1), Ranks: "1",
 						Status: -1, Msg: "fail1",
 					},
+					{PoolId: test.MockUUID(2), Ranks: "0"},
 					{
 						PoolId: test.MockUUID(2), Ranks: "1",
 						Status: -1, Msg: "fail2",
@@ -1117,11 +1119,13 @@ func TestControl_SystemDrain(t *testing.T) {
 				},
 			}),
 			expResp: &SystemDrainResp{
-				Results: []*PoolRankResult{
+				Results: []*PoolRanksResult{
+					{PoolID: test.MockUUID(1), Ranks: "0"},
 					{
 						PoolID: test.MockUUID(1), Ranks: "1",
 						Status: -1, Msg: "fail1",
 					},
+					{PoolID: test.MockUUID(2), Ranks: "0"},
 					{
 						PoolID: test.MockUUID(2), Ranks: "1",
 						Status: -1, Msg: "fail2",

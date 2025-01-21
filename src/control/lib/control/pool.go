@@ -747,7 +747,7 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 type PoolExcludeReq struct {
 	poolRequest
 	ID        string
-	Rank      ranklist.Rank
+	Ranks     []ranklist.Rank
 	TargetIdx []uint32
 }
 
@@ -757,12 +757,11 @@ type PoolExcludeReq struct {
 // This should automatically start the rebuildiing process.
 // Returns an error (including any DER code from DAOS).
 func PoolExclude(ctx context.Context, rpcClient UnaryInvoker, req *PoolExcludeReq) error {
-	pbReq := &mgmtpb.PoolExcludeReq{
-		Sys:       req.getSystem(rpcClient),
-		Id:        req.ID,
-		Rank:      req.Rank.Uint32(),
-		TargetIdx: req.TargetIdx,
+	pbReq := new(mgmtpb.PoolExcludeReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return errors.Wrapf(err, "convert %T->%T", req, pbReq)
 	}
+
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolExclude(ctx, pbReq)
 	})
@@ -780,21 +779,26 @@ func PoolExclude(ctx context.Context, rpcClient UnaryInvoker, req *PoolExcludeRe
 type PoolDrainReq struct {
 	poolRequest
 	ID        string
-	Rank      ranklist.Rank
+	Ranks     []ranklist.Rank
 	TargetIdx []uint32
 }
 
-// DrainResp has no other parameters other than success/failure for now.
+// PoolDrainResp contains the status of the request and, if successful, the list of drained ranks.
+// If a rank could not be drained the rank that failed is returned along with the DAOS error.
+type PoolDrainResp struct {
+	Status       int32           `json:"status"` // DAOS error for failed rank.
+	FailedRank   ranklist.Rank   `json:"failed_rank"`
+	DrainedRanks []ranklist.Rank `json:"drained_ranks"`
+}
 
 // PoolDrain will set a pool target for a specific rank in to the drain state which should
 // automatically start the rebuildiing process. Returns an error (including any DER code from DAOS).
-func PoolDrain(ctx context.Context, rpcClient UnaryInvoker, req *PoolDrainReq) error {
-	pbReq := &mgmtpb.PoolDrainReq{
-		Sys:       req.getSystem(rpcClient),
-		Id:        req.ID,
-		Rank:      req.Rank.Uint32(),
-		TargetIdx: req.TargetIdx,
+func PoolDrain(ctx context.Context, rpcClient UnaryInvoker, req *PoolDrainReq) (*PoolDrainResp, error) {
+	pbReq := new(mgmtpb.PoolDrainReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return nil, errors.Wrapf(err, "convert %T->%T", req, pbReq)
 	}
+
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolDrain(ctx, pbReq)
 	})
@@ -802,19 +806,18 @@ func PoolDrain(ctx context.Context, rpcClient UnaryInvoker, req *PoolDrainReq) e
 	rpcClient.Debugf("Drain DAOS pool target request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
-		return err
+		return nil, err
+	}
+	if msErr := ur.getMSError(); err != nil {
+		return nil, errors.Wrap(msErr, "pool drain failed")
 	}
 
-	return errors.Wrap(ur.getMSError(), "pool drain failed")
-}
-
-func genPoolExtendRequest(in *PoolExtendReq) (out *mgmtpb.PoolExtendReq, err error) {
-	out = new(mgmtpb.PoolExtendReq)
-	if err = convert.Types(in, out); err != nil {
+	resp := new(PoolDrainResp)
+	if err := convertMSResponse(ur, resp); err != nil {
 		return nil, err
 	}
 
-	return
+	return resp, nil
 }
 
 // PoolExtendReq struct contains request
@@ -828,9 +831,9 @@ type PoolExtendReq struct {
 // This should automatically start the rebalance process.
 // Returns an error (including any DER code from DAOS).
 func PoolExtend(ctx context.Context, rpcClient UnaryInvoker, req *PoolExtendReq) error {
-	pbReq, err := genPoolExtendRequest(req)
-	if err != nil {
-		return errors.Wrap(err, "failed to generate PoolExtend request")
+	pbReq := new(mgmtpb.PoolExtendReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return errors.Wrapf(err, "convert %T->%T", req, pbReq)
 	}
 	pbReq.Sys = req.getSystem(rpcClient)
 
@@ -851,7 +854,7 @@ func PoolExtend(ctx context.Context, rpcClient UnaryInvoker, req *PoolExtendReq)
 type PoolReintegrateReq struct {
 	poolRequest
 	ID        string
-	Rank      ranklist.Rank
+	Ranks     []ranklist.Rank
 	TargetIdx []uint32
 }
 
@@ -859,11 +862,9 @@ type PoolReintegrateReq struct {
 // This should automatically start the reintegration process.
 // Returns an error (including any DER code from DAOS).
 func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolReintegrateReq) error {
-	pbReq := &mgmtpb.PoolReintReq{
-		Sys:       req.getSystem(rpcClient),
-		Id:        req.ID,
-		Rank:      req.Rank.Uint32(),
-		TargetIdx: req.TargetIdx,
+	pbReq := new(mgmtpb.PoolReintReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return errors.Wrapf(err, "convert %T->%T", req, pbReq)
 	}
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {

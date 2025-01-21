@@ -380,15 +380,16 @@ struct  _Mgmt__PoolExcludeReq
    */
   char *sys;
   /*
-   * uuid or label of pool to exclude some targets
+   * uuid or label of pool to exclude some targets on each selected rank
    */
-  char *id;
+  char            *id;
   /*
-   * target to move to the down state
+   * Ranks to operate on
    */
-  uint32_t rank;
+  size_t           n_ranks;
+  uint32_t        *ranks;
   /*
-   * target ranks
+   * Targets to move to the down state on each selected rank
    */
   size_t n_target_idx;
   uint32_t *target_idx;
@@ -398,10 +399,16 @@ struct  _Mgmt__PoolExcludeReq
   size_t n_svc_ranks;
   uint32_t *svc_ranks;
 };
-#define MGMT__POOL_EXCLUDE_REQ__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_exclude_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0,NULL, 0,NULL }
-
+#define MGMT__POOL_EXCLUDE_REQ__INIT                                                               \
+	{PROTOBUF_C_MESSAGE_INIT(&mgmt__pool_exclude_req__descriptor),                             \
+	 (char *)protobuf_c_empty_string,                                                          \
+	 (char *)protobuf_c_empty_string,                                                          \
+	 0,                                                                                        \
+	 NULL,                                                                                     \
+	 0,                                                                                        \
+	 NULL,                                                                                     \
+	 0,                                                                                        \
+	 NULL}
 
 /*
  * PoolExcludeResp returns resultant state of Exclude operation.
@@ -430,15 +437,16 @@ struct  _Mgmt__PoolDrainReq
    */
   char *sys;
   /*
-   * uuid or label of pool to drain some targets
+   * uuid or label of pool to drain some targets on each selected rank
    */
   char *id;
   /*
-   * rank to move to the down state
+   * Ranks to operate on
    */
-  uint32_t rank;
+  size_t           n_ranks;
+  uint32_t        *ranks;
   /*
-   * rank targets
+   * Targets to move to the drain state on each selected rank
    */
   size_t n_target_idx;
   uint32_t *target_idx;
@@ -448,10 +456,16 @@ struct  _Mgmt__PoolDrainReq
   size_t n_svc_ranks;
   uint32_t *svc_ranks;
 };
-#define MGMT__POOL_DRAIN_REQ__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_drain_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0,NULL, 0,NULL }
-
+#define MGMT__POOL_DRAIN_REQ__INIT                                                                 \
+	{PROTOBUF_C_MESSAGE_INIT(&mgmt__pool_drain_req__descriptor),                               \
+	 (char *)protobuf_c_empty_string,                                                          \
+	 (char *)protobuf_c_empty_string,                                                          \
+	 0,                                                                                        \
+	 NULL,                                                                                     \
+	 0,                                                                                        \
+	 NULL,                                                                                     \
+	 0,                                                                                        \
+	 NULL}
 
 /*
  * PoolDrainResp returns resultant state of Drain operation.
@@ -460,14 +474,21 @@ struct  _Mgmt__PoolDrainResp
 {
   ProtobufCMessage base;
   /*
-   * DAOS error code
+   * DAOS error code for failed rank drain attempt
    */
   int32_t status;
+  /*
+   * Rank ID that failed to drain
+   */
+  uint32_t         failed_rank;
+  /*
+   * Pool-ranks that were successfully drained
+   */
+  size_t           n_drained_ranks;
+  uint32_t        *drained_ranks;
 };
-#define MGMT__POOL_DRAIN_RESP__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_drain_resp__descriptor) \
-    , 0 }
-
+#define MGMT__POOL_DRAIN_RESP__INIT                                                                \
+	{PROTOBUF_C_MESSAGE_INIT(&mgmt__pool_drain_resp__descriptor), 0, 0, 0, NULL}
 
 /*
  * PoolExtendReq supplies pool identifier and rank list.
@@ -484,7 +505,7 @@ struct  _Mgmt__PoolExtendReq
    */
   char *id;
   /*
-   * ranks
+   * Ranks to operate on
    */
   size_t n_ranks;
   uint32_t *ranks;
@@ -543,15 +564,16 @@ struct _Mgmt__PoolReintReq {
 	 */
 	char            *sys;
 	/*
-	 * uuid or label of pool to add target up to
+	 * uuid or label of pool to reintegrate some targets on each selected rank
 	 */
 	char            *id;
 	/*
-	 * target to move to the up state
+	 * Ranks to operate on
 	 */
-	uint32_t         rank;
+	size_t           n_ranks;
+	uint32_t        *ranks;
 	/*
-	 * target ranks
+	 * Targets to move to the reintegrate state on each rank
 	 */
 	size_t           n_target_idx;
 	uint32_t        *target_idx;
@@ -575,6 +597,7 @@ struct _Mgmt__PoolReintReq {
 	 (char *)protobuf_c_empty_string,                                                          \
 	 (char *)protobuf_c_empty_string,                                                          \
 	 0,                                                                                        \
+	 NULL,                                                                                     \
 	 0,                                                                                        \
 	 NULL,                                                                                     \
 	 0,                                                                                        \
@@ -584,16 +607,26 @@ struct _Mgmt__PoolReintReq {
 	 0}
 
 /*
- * PoolReintResp returns resultant state of reintegrate operation.
+ * PoolReintResp returns resultant state of Reintegrate operation.
  */
 struct _Mgmt__PoolReintResp {
 	ProtobufCMessage base;
 	/*
-	 * DAOS error code
+	 * DAOS error code for failed rank reintegrate attempt
 	 */
 	int32_t          status;
+	/*
+	 * Rank ID that failed to be reintegrated
+	 */
+	uint32_t         failed_rank;
+	/*
+	 * Pool-ranks that were successfully reintegrated
+	 */
+	size_t           n_reinted_ranks;
+	uint32_t        *reinted_ranks;
 };
-#define MGMT__POOL_REINT_RESP__INIT {PROTOBUF_C_MESSAGE_INIT(&mgmt__pool_reint_resp__descriptor), 0}
+#define MGMT__POOL_REINT_RESP__INIT                                                                \
+	{PROTOBUF_C_MESSAGE_INIT(&mgmt__pool_reint_resp__descriptor), 0, 0, 0, NULL}
 
 /*
  * ListPoolsReq represents a request to list pools on a given DAOS system.
