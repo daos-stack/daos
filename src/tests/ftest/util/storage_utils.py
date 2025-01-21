@@ -714,8 +714,8 @@ class StorageInfo():
                 lines.append(f'  {server_config}:')
                 lines.append('    server_config:')
                 if control_metadata and bdev_list:
-                    lines.append('    control_metadata:')
-                    lines.append(f'      path: {control_metadata}')
+                    lines.append('      control_metadata:')
+                    lines.append(f'        path: {control_metadata}')
                 lines.append('      engines:')
                 for engine in range(engines):
                     lines.append(f'        {str(engine)}:')
