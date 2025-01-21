@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -938,6 +939,56 @@ vos_update_renew_epoch(daos_handle_t ioh, struct dtx_handle *dth);
  */
 void
 vos_dtx_renew_epoch(struct dtx_handle *dth);
+
+/**
+ * Calculate current locally known stable epoch for the given container.
+ *
+ * \param coh	[IN]	Container open handle
+ *
+ * \return		The epoch on success, negative value if error.
+ */
+daos_epoch_t
+vos_cont_get_local_stable_epoch(daos_handle_t coh);
+
+/**
+ * Get global stable epoch for the given container.
+ *
+ * \param coh	[IN]	Container open handle
+ *
+ * \return		The epoch on success, negative value if error.
+ */
+daos_epoch_t
+vos_cont_get_global_stable_epoch(daos_handle_t coh);
+
+/**
+ * Set global stable epoch for the given container.
+ *
+ * \param coh	[IN]	Container open handle
+ * \param epoch	[IN]	The epoch to be used as the new global stable epoch.
+ *
+ * \return		Zero on success, negative value if error.
+ */
+int
+vos_cont_set_global_stable_epoch(daos_handle_t coh, daos_epoch_t epoch);
+
+/**
+ * Set the lowest allowed modification epoch for the given container.
+ *
+ * \param coh	[IN]	Container open handle
+ * \param epoch	[IN]	The lowest allowed epoch for modification.
+ *
+ * \return		Zero on success, negative value if error.
+ */
+int
+vos_cont_set_mod_bound(daos_handle_t coh, uint64_t epoch);
+
+/**
+ * Query the gap between the max allowed aggregation epoch and current HLC.
+ *
+ * \return		The gap value in seconds.
+ */
+uint32_t
+vos_get_agg_gap(void);
 
 /**
  * Get the recx/epoch list.
