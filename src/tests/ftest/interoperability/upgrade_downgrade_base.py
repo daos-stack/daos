@@ -473,7 +473,7 @@ class UpgradeDowngradeBase(IorTestBase):
             self.log.info("Mounting dfuse")
             cmd = " ".join([
                 "/usr/bin/dfuse",
-                "disable-caching",
+                "--disable-caching",
                 dfuse_mount_dir,
                 container.pool.identifier,
                 container.identifier
