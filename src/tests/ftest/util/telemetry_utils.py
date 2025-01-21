@@ -208,7 +208,7 @@ class TelemetryUtils():
         _gen_stats_metrics("engine_io_dtx_committable")
     ENGINE_IO_DTX_COMMITTED_METRICS = \
         _gen_stats_metrics("engine_io_dtx_committed")
-    ENGINE_IO_DTX_RECORD_MISSING_METRICS=["engine_io_dtx_record_missing"]
+    ENGINE_IO_DTX_RECORD_MISSING_METRICS = ["engine_io_dtx_record_missing"]
     ENGINE_IO_LATENCY_FETCH_METRICS = \
         _gen_stats_metrics("engine_io_latency_fetch")
     ENGINE_IO_LATENCY_BULK_FETCH_METRICS = \
@@ -312,7 +312,7 @@ class TelemetryUtils():
     ENGINE_IO_METRICS = ENGINE_IO_DTX_ASYNC_CMT_LAT_METRICS +\
         ENGINE_IO_DTX_COMMITTABLE_METRICS +\
         ENGINE_IO_DTX_COMMITTED_METRICS +\
-        ENGINE_IO_DTX_RECORD_MISSING_METRIC +\
+        ENGINE_IO_DTX_RECORD_MISSING_METRICS +\
         ENGINE_IO_LATENCY_FETCH_METRICS +\
         ENGINE_IO_LATENCY_BULK_FETCH_METRICS +\
         ENGINE_IO_LATENCY_VOS_FETCH_METRICS +\
