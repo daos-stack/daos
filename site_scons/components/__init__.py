@@ -1,4 +1,5 @@
 # Copyright 2016-2024 Intel Corporation
+# Copyright 2025 Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -304,6 +305,17 @@ def define_components(reqs):
                            '--default-library', 'both', '../fuse'],
                           ['ninja', 'install']],
                 headers=['fuse3/fuse.h'],
+                required_progs=['libtoolize', 'ninja', 'meson'],
+                out_of_src_build=True)
+
+    reqs.define('fused', libs=['fused'], defines=['FUSE_USE_VERSION=35'],
+                retriever=GitRepoRetriever(),
+                commands=[['meson', 'setup', '--prefix=$FUSED_PREFIX', '-Ddisable-mtab=True',
+                           '-Dudevrulesdir=$FUSED_PREFIX/udev', '-Dutils=False',
+                           '--default-library', 'static', '../fused'],
+                          ['meson', 'setup', '--reconfigure', '../fused'],
+                          ['ninja', 'install']],
+                headers=['fused/fuse.h'],
                 required_progs=['libtoolize', 'ninja', 'meson'],
                 out_of_src_build=True)
 
