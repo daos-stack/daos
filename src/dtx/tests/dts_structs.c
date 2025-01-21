@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -70,8 +71,9 @@ struct_dtx_handle(void **state)
 	SET_BITFIELD_1(dummy, dth_need_validation);
 	SET_BITFIELD_1(dummy, dth_ignore_uncommitted);
 	SET_BITFIELD_1(dummy, dth_local);
+	SET_BITFIELD_1(dummy, dth_epoch_owner);
 	SET_BITFIELD_1(dummy, dth_local_complete);
-	SET_BITFIELD(dummy, padding1, 13);
+	SET_BITFIELD(dummy, padding1, 12);
 
 	SET_FIELD(dummy, dth_dti_cos_count);
 	SET_FIELD(dummy, dth_dti_cos);
