@@ -1,6 +1,7 @@
 #!/bin/bash
 #
 # Copyright 2022-2024 Intel Corporation.
+# Copyright 2025 Hewlett Packard Enterprise Development LP
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -13,11 +14,11 @@ if [ -e .git/MERGE_HEAD ]; then
 fi
 
 if ! command -v git-clang-format > /dev/null 2>&1; then
-    echo "git-clang-format not installed. Skipping"
+    echo "git-clang-format not installed. See ./utils/githooks/README.md for instructions"
     exit 0
 fi
 if ! command -v clang-format > /dev/null 2>&1; then
-    echo "clang-format not installed. Skipping"
+    echo "clang-format not installed. See ./utils/githooks/README.md for instructions"
     exit 0
 fi
 

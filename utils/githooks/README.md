@@ -73,8 +73,8 @@ any one of the required tools is missing.
 4. `yamllint` - Linter for modified YAML configs
 5. `clang-format` - Automatically formats for C/C++ files modified. If anything changed it will exit,
 allowing the user to inspect the changes and retry the commit.
-6. `gofmt` - Automatically formats for modified GO files
    - See [.clang-format](../../.clang-format) for configuration
+6. `gofmt` - Automatically formats for modified GO files
 7. `isort` - Linter for python imports on modified python files
 8. `flake8` - Linter for python files
 9. `pylint` - Additional linter for modified python files
