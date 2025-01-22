@@ -28,7 +28,7 @@
 int
 dsc_pool_close(daos_handle_t ph)
 {
-	struct dc_pool	*pool;
+	struct dc_pool *pool;
 
 	pool = dc_hdl2pool(ph);
 	if (pool == NULL)
@@ -36,19 +36,18 @@ dsc_pool_close(daos_handle_t ph)
 
 	pl_map_disconnect(pool->dp_pool);
 	dc_pool_hdl_unlink(pool); /* -1 ref from dc_pool_hdl_link(pool); */
-	dc_pool_put(pool);	  /* -1 ref from dc_pool2hdl(pool, ph); */
+	dc_pool_put(pool);        /* -1 ref from dc_pool2hdl(pool, ph); */
 
 	dc_pool_put(pool);
 	return 0;
 }
 
 int
-dsc_pool_open(uuid_t pool_uuid, uuid_t poh_uuid, unsigned int flags,
-	      const char *grp, struct pool_map *map, d_rank_list_t *svc_list,
-	      daos_handle_t *ph)
+dsc_pool_open(uuid_t pool_uuid, uuid_t poh_uuid, unsigned int flags, const char *grp,
+	      struct pool_map *map, d_rank_list_t *svc_list, daos_handle_t *ph)
 {
-	struct dc_pool	*pool;
-	int		rc = 0;
+	struct dc_pool *pool;
+	int             rc = 0;
 
 	if (daos_handle_is_valid(*ph)) {
 		pool = dc_hdl2pool(*ph);
@@ -61,7 +60,7 @@ dsc_pool_open(uuid_t pool_uuid, uuid_t poh_uuid, unsigned int flags,
 	if (pool == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	D_DEBUG(DB_TRACE, "after alloc "DF_UUIDF"\n", DP_UUID(pool_uuid));
+	D_DEBUG(DB_TRACE, "after alloc " DF_UUIDF "\n", DP_UUID(pool_uuid));
 	uuid_copy(pool->dp_pool, pool_uuid);
 	uuid_copy(pool->dp_pool_hdl, poh_uuid);
 	pool->dp_capas = flags;
@@ -76,13 +75,13 @@ dsc_pool_open(uuid_t pool_uuid, uuid_t poh_uuid, unsigned int flags,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	D_DEBUG(DB_TRACE, "before update "DF_UUIDF"\n", DP_UUID(pool_uuid));
+	D_DEBUG(DB_TRACE, "before update " DF_UUIDF "\n", DP_UUID(pool_uuid));
 	rc = dc_pool_map_update(pool, map, true);
 	if (rc)
 		D_GOTO(out, rc);
 
-	D_DEBUG(DB_MD, DF_UUID": create: hdl="DF_UUIDF" flags=%x\n",
-		DP_UUID(pool_uuid), DP_UUID(pool->dp_pool_hdl), flags);
+	D_DEBUG(DB_MD, DF_UUID ": create: hdl=" DF_UUIDF " flags=%x\n", DP_UUID(pool_uuid),
+		DP_UUID(pool->dp_pool_hdl), flags);
 
 	dc_pool_hdl_link(pool); /* +1 ref */
 	dc_pool2hdl(pool, ph);  /* +1 ref */
@@ -95,12 +94,12 @@ out:
 }
 
 int
-dsc_pool_tgt_exclude(const uuid_t uuid, const char *grp,
-		     const d_rank_list_t *svc, struct d_tgt_list *tgts)
+dsc_pool_tgt_exclude(const uuid_t uuid, const char *grp, const d_rank_list_t *svc,
+		     struct d_tgt_list *tgts)
 {
-	daos_pool_update_t	*args;
-	tse_task_t		*task;
-	int			 rc;
+	daos_pool_update_t *args;
+	tse_task_t         *task;
+	int                 rc;
 
 	DAOS_API_ARG_ASSERT(*args, POOL_EXCLUDE);
 
@@ -108,22 +107,22 @@ dsc_pool_tgt_exclude(const uuid_t uuid, const char *grp,
 	if (rc)
 		return rc;
 
-	args = dc_task_get_args(task);
-	args->grp	= grp;
-	args->svc	= (d_rank_list_t *)svc;
-	args->tgts	= tgts;
+	args       = dc_task_get_args(task);
+	args->grp  = grp;
+	args->svc  = (d_rank_list_t *)svc;
+	args->tgts = tgts;
 	uuid_copy((unsigned char *)args->uuid, uuid);
 
 	return dsc_task_run(task, NULL, NULL, 0, true);
 }
 
 int
-dsc_pool_tgt_reint(const uuid_t uuid, const char *grp,
-		   const d_rank_list_t *svc, struct d_tgt_list *tgts)
+dsc_pool_tgt_reint(const uuid_t uuid, const char *grp, const d_rank_list_t *svc,
+		   struct d_tgt_list *tgts)
 {
-	daos_pool_update_t	*args;
-	tse_task_t		*task;
-	int			 rc;
+	daos_pool_update_t *args;
+	tse_task_t         *task;
+	int                 rc;
 
 	DAOS_API_ARG_ASSERT(*args, POOL_EXCLUDE);
 
@@ -131,19 +130,16 @@ dsc_pool_tgt_reint(const uuid_t uuid, const char *grp,
 	if (rc)
 		return rc;
 
-	args = dc_task_get_args(task);
-	args->grp	= grp;
-	args->svc	= (d_rank_list_t *)svc;
-	args->tgts	= tgts;
+	args       = dc_task_get_args(task);
+	args->grp  = grp;
+	args->svc  = (d_rank_list_t *)svc;
+	args->tgts = tgts;
 	uuid_copy((unsigned char *)args->uuid, uuid);
 
 	return dsc_task_run(task, NULL, NULL, 0, true);
 }
 
-enum dsc_pool_svc_call_consume_cb_rc {
-	DSC_POOL_SVC_CALL_AGAIN		= 1,
-	DSC_POOL_SVC_CALL_AGAIN_NOW
-};
+enum dsc_pool_svc_call_consume_cb_rc { DSC_POOL_SVC_CALL_AGAIN = 1, DSC_POOL_SVC_CALL_AGAIN_NOW };
 
 struct dsc_pool_svc_call_cbs {
 	/* Pool service operation. */
@@ -194,20 +190,20 @@ static int
 dsc_pool_svc_call(uuid_t uuid, d_rank_list_t *ranks, struct dsc_pool_svc_call_cbs *cbs, void *arg,
 		  uint64_t deadline)
 {
-#define DF_PRE DF_UUID": %s"
+#define DF_PRE            DF_UUID ": %s"
 #define DP_PRE(uuid, cbs) DP_UUID(uuid), dc_pool_op_str(cbs->pscc_op)
 
-	struct rsvc_client	client;
-	struct d_backoff_seq	backoff_seq;
+	struct rsvc_client      client;
+	struct d_backoff_seq    backoff_seq;
 	uint64_t                req_time = 0;
 	uuid_t                  no_uuid;
 	struct dss_module_info *info = dss_get_module_info();
-	int			rc;
+	int                     rc;
 
 	uuid_clear(no_uuid);
 	rc = rsvc_client_init(&client, ranks);
 	if (rc != 0) {
-		D_ERROR(DF_PRE": initialize replicated service client: "DF_RC"\n",
+		D_ERROR(DF_PRE ": initialize replicated service client: " DF_RC "\n",
 			DP_PRE(uuid, cbs), DP_RC(rc));
 		return rc;
 	}
@@ -218,23 +214,23 @@ dsc_pool_svc_call(uuid_t uuid, d_rank_list_t *ranks, struct dsc_pool_svc_call_cb
 	 */
 	rc = d_backoff_seq_init(&backoff_seq, 1 /* nzeros */, 16 /* factor */, 8 /* next (ms) */,
 				1 << 12 /* max (ms) */);
-	D_ASSERTF(rc == 0, DF_PRE": initialize backoff sequence: "DF_RC"\n", DP_PRE(uuid, cbs),
+	D_ASSERTF(rc == 0, DF_PRE ": initialize backoff sequence: " DF_RC "\n", DP_PRE(uuid, cbs),
 		  DP_RC(rc));
 
 	/* Retry until the deadline. */
 	for (;;) {
-		crt_endpoint_t		ep;
-		crt_rpc_t	       *rpc;
-		uint32_t		rpc_timeout;
-		uint64_t		t;
-		struct pool_op_out     *out;
-		uint32_t		backoff = d_backoff_seq_next(&backoff_seq);
+		crt_endpoint_t      ep;
+		crt_rpc_t          *rpc;
+		uint32_t            rpc_timeout;
+		uint64_t            t;
+		struct pool_op_out *out;
+		uint32_t            backoff = d_backoff_seq_next(&backoff_seq);
 
 		ep.ep_grp = NULL;
-		rc = rsvc_client_choose(&client, &ep);
+		rc        = rsvc_client_choose(&client, &ep);
 		if (rc != 0) {
-			D_ERROR(DF_PRE": choose pool service replica: "DF_RC"\n", DP_PRE(uuid, cbs),
-				DP_RC(rc));
+			D_ERROR(DF_PRE ": choose pool service replica: " DF_RC "\n",
+				DP_PRE(uuid, cbs), DP_RC(rc));
 			break;
 		}
 
@@ -263,7 +259,7 @@ dsc_pool_svc_call(uuid_t uuid, d_rank_list_t *ranks, struct dsc_pool_svc_call_cb
 			goto time_out;
 		}
 		rc = crt_req_get_timeout(rpc, &rpc_timeout);
-		D_ASSERTF(rc == 0, DF_PRE": get RPC timeout: "DF_RC"\n", DP_PRE(uuid, cbs),
+		D_ASSERTF(rc == 0, DF_PRE ": get RPC timeout: " DF_RC "\n", DP_PRE(uuid, cbs),
 			  DP_RC(rc));
 		if (t + rpc_timeout * 1000 > deadline) {
 			/* We know that t < deadline here. See above. */
@@ -279,18 +275,18 @@ dsc_pool_svc_call(uuid_t uuid, d_rank_list_t *ranks, struct dsc_pool_svc_call_cb
 				goto time_out;
 			}
 			rc = crt_req_set_timeout(rpc, rpc_timeout);
-			D_ASSERTF(rc == 0, DF_PRE": set RPC timeout: "DF_RC"\n", DP_PRE(uuid, cbs),
-				  DP_RC(rc));
+			D_ASSERTF(rc == 0, DF_PRE ": set RPC timeout: " DF_RC "\n",
+				  DP_PRE(uuid, cbs), DP_RC(rc));
 		}
 
 		rc = dss_rpc_send(rpc);
 
 		out = crt_reply_get(rpc);
-		rc = rsvc_client_complete_rpc(&client, &ep, rc, rc == 0 ? out->po_rc : 0,
-					      rc == 0 ? &out->po_hint : NULL);
+		rc  = rsvc_client_complete_rpc(&client, &ep, rc, rc == 0 ? out->po_rc : 0,
+                                              rc == 0 ? &out->po_hint : NULL);
 		if (rc == RSVC_CLIENT_PROCEED && !daos_rpc_retryable_rc(out->po_rc)) {
 			rc = cbs->pscc_consume(uuid, rpc, arg);
-			D_DEBUG(DB_TRACE, DF_PRE": consume: %d\n", DP_PRE(uuid, cbs), rc);
+			D_DEBUG(DB_TRACE, DF_PRE ": consume: %d\n", DP_PRE(uuid, cbs), rc);
 			if (rc == DSC_POOL_SVC_CALL_AGAIN_NOW) {
 				backoff = 0;
 			} else if (rc != DSC_POOL_SVC_CALL_AGAIN) {
@@ -318,7 +314,7 @@ time_out:
 			if (t < deadline)
 				dss_sleep(deadline - t);
 			rc = -DER_TIMEDOUT;
-			D_ERROR(DF_PRE": "DF_RC"\n", DP_PRE(uuid, cbs), DP_RC(rc));
+			D_ERROR(DF_PRE ": " DF_RC "\n", DP_PRE(uuid, cbs), DP_RC(rc));
 			break;
 		}
 
@@ -514,9 +510,9 @@ out:
 static int
 pool_query_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 {
-	struct pool_query_arg	       *arg = varg;
-	struct pool_query_out          *out = crt_reply_get(rpc);
-	int				rc = out->pqo_op.po_rc;
+	struct pool_query_arg *arg = varg;
+	struct pool_query_out *out = crt_reply_get(rpc);
+	int                    rc  = out->pqo_op.po_rc;
 
 	if (rc == -DER_TRUNC) {
 		/*
@@ -527,11 +523,12 @@ pool_query_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 		arg->pqa_map_size = out->pqo_map_buf_size;
 		return DSC_POOL_SVC_CALL_AGAIN_NOW;
 	} else if (rc != 0) {
-		D_ERROR(DF_UUID": failed to query pool, "DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
+		D_ERROR(DF_UUID ": failed to query pool, " DF_RC "\n", DP_UUID(pool_uuid),
+			DP_RC(rc));
 		return rc < 0 ? rc : -DER_PROTO;
 	}
 
-	D_DEBUG(DB_MGMT, DF_UUID": Successfully queried pool\n", DP_UUID(pool_uuid));
+	D_DEBUG(DB_MGMT, DF_UUID ": Successfully queried pool\n", DP_UUID(pool_uuid));
 
 	rc = process_query_result(
 	    arg->pqa_enabled_ranks, arg->pqa_disabled_ranks, arg->pqa_dead_ranks, arg->pqa_info,
@@ -542,7 +539,7 @@ pool_query_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 	if (arg->pqa_upgrade_layout_ver)
 		*arg->pqa_upgrade_layout_ver = out->pqo_upgrade_layout_ver;
 	if (rc != 0)
-		D_ERROR(DF_UUID": failed to process pool query results, "DF_RC"\n",
+		D_ERROR(DF_UUID ": failed to process pool query results, " DF_RC "\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
 
 	return rc;
@@ -557,12 +554,10 @@ pool_query_fini(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 	arg->pqa_map_buf = NULL;
 }
 
-static struct dsc_pool_svc_call_cbs pool_query_cbs = {
-	.pscc_op	= POOL_QUERY,
-	.pscc_init	= pool_query_init,
-	.pscc_consume	= pool_query_consume,
-	.pscc_fini	= pool_query_fini
-};
+static struct dsc_pool_svc_call_cbs pool_query_cbs = {.pscc_op      = POOL_QUERY,
+						      .pscc_init    = pool_query_init,
+						      .pscc_consume = pool_query_consume,
+						      .pscc_fini    = pool_query_fini};
 
 /**
  * Query the pool without holding a pool handle.
@@ -646,12 +641,11 @@ pool_query_target_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 	return 0;
 }
 
-static struct dsc_pool_svc_call_cbs pool_query_target_cbs = {
-	.pscc_op	= POOL_QUERY_INFO,
-	.pscc_init	= pool_query_target_init,
-	.pscc_consume	= pool_query_target_consume,
-	.pscc_fini	= NULL
-};
+static struct dsc_pool_svc_call_cbs pool_query_target_cbs = {.pscc_op   = POOL_QUERY_INFO,
+							     .pscc_init = pool_query_target_init,
+							     .pscc_consume =
+								 pool_query_target_consume,
+							     .pscc_fini = NULL};
 
 /**
  * Query pool target information without holding a pool handle.
@@ -672,10 +666,7 @@ dsc_pool_svc_query_target(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_t de
 			  d_rank_t rank, uint32_t tgt_idx, daos_target_info_t *ti)
 {
 	struct pool_query_target_arg arg = {
-		.pqta_rank	= rank,
-		.pqta_tgt_idx	= tgt_idx,
-		.pqta_info	= ti
-	};
+	    .pqta_rank = rank, .pqta_tgt_idx = tgt_idx, .pqta_info = ti};
 
 	if (ti == NULL)
 		return -DER_INVAL;
@@ -724,12 +715,10 @@ pool_evict_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 	return rc;
 }
 
-static struct dsc_pool_svc_call_cbs pool_evict_cbs = {
-	.pscc_op	= POOL_EVICT,
-	.pscc_init	= pool_evict_init,
-	.pscc_consume	= pool_evict_consume,
-	.pscc_fini	= NULL
-};
+static struct dsc_pool_svc_call_cbs pool_evict_cbs = {.pscc_op      = POOL_EVICT,
+						      .pscc_init    = pool_evict_init,
+						      .pscc_consume = pool_evict_consume,
+						      .pscc_fini    = NULL};
 
 /**
  * Test and (if applicable based on destroy and force option) evict all open
@@ -754,14 +743,12 @@ dsc_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadli
 			 size_t n_handles, uint32_t destroy, uint32_t force, char *machine,
 			 uint32_t *count)
 {
-	struct pool_evict_arg arg = {
-		.pea_handles	= handles,
-		.pea_n_handles	= n_handles,
-		.pea_machine	= machine,
-		.pea_destroy	= destroy,
-		.pea_force	= force,
-		.pea_count	= count
-	};
+	struct pool_evict_arg arg = {.pea_handles   = handles,
+				     .pea_n_handles = n_handles,
+				     .pea_machine   = machine,
+				     .pea_destroy   = destroy,
+				     .pea_force     = force,
+				     .pea_count     = count};
 
 	D_DEBUG(DB_MGMT, DF_UUID ": destroy=%u force=%u\n", DP_UUID(pool_uuid), destroy, force);
 	return dsc_pool_svc_call(pool_uuid, ranks, &pool_evict_cbs, &arg, deadline);
@@ -795,12 +782,10 @@ pool_get_prop_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 	return daos_prop_copy(arg->pgpa_prop, out->pgo_prop);
 }
 
-static struct dsc_pool_svc_call_cbs pool_get_prop_cbs = {
-	.pscc_op	= POOL_PROP_GET,
-	.pscc_init	= pool_get_prop_init,
-	.pscc_consume	= pool_get_prop_consume,
-	.pscc_fini	= NULL
-};
+static struct dsc_pool_svc_call_cbs pool_get_prop_cbs = {.pscc_op      = POOL_PROP_GET,
+							 .pscc_init    = pool_get_prop_init,
+							 .pscc_consume = pool_get_prop_consume,
+							 .pscc_fini    = NULL};
 
 /**
  * Get the ACL pool property.
@@ -817,9 +802,7 @@ static struct dsc_pool_svc_call_cbs pool_get_prop_cbs = {
 int
 dsc_pool_svc_get_prop(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline, daos_prop_t *prop)
 {
-	struct pool_get_prop_arg arg = {
-		.pgpa_prop	= prop
-	};
+	struct pool_get_prop_arg arg = {.pgpa_prop = prop};
 
 	D_DEBUG(DB_MGMT, DF_UUID ": Getting prop\n", DP_UUID(pool_uuid));
 	return dsc_pool_svc_call(pool_uuid, ranks, &pool_get_prop_cbs, &arg, deadline);
@@ -849,12 +832,10 @@ pool_set_prop_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 	return rc;
 }
 
-static struct dsc_pool_svc_call_cbs pool_set_prop_cbs = {
-	.pscc_op	= POOL_PROP_SET,
-	.pscc_init	= pool_set_prop_init,
-	.pscc_consume	= pool_set_prop_consume,
-	.pscc_fini	= NULL
-};
+static struct dsc_pool_svc_call_cbs pool_set_prop_cbs = {.pscc_op      = POOL_PROP_SET,
+							 .pscc_init    = pool_set_prop_init,
+							 .pscc_consume = pool_set_prop_consume,
+							 .pscc_fini    = NULL};
 
 /**
  * Set the requested pool properties.
@@ -869,9 +850,7 @@ static struct dsc_pool_svc_call_cbs pool_set_prop_cbs = {
 int
 dsc_pool_svc_set_prop(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline, daos_prop_t *prop)
 {
-	struct pool_set_prop_arg arg ={
-		.pspa_prop	= prop
-	};
+	struct pool_set_prop_arg arg = {.pspa_prop = prop};
 
 	D_DEBUG(DB_MGMT, DF_UUID ": Setting pool prop\n", DP_UUID(pool_uuid));
 
@@ -963,23 +942,19 @@ pool_extend_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 	return rc;
 }
 
-static struct dsc_pool_svc_call_cbs pool_extend_cbs = {
-	.pscc_op	= POOL_EXTEND,
-	.pscc_init	= pool_extend_init,
-	.pscc_consume	= pool_extend_consume,
-	.pscc_fini	= NULL
-};
+static struct dsc_pool_svc_call_cbs pool_extend_cbs = {.pscc_op      = POOL_EXTEND,
+						       .pscc_init    = pool_extend_init,
+						       .pscc_consume = pool_extend_consume,
+						       .pscc_fini    = NULL};
 
 int
 dsc_pool_svc_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uint64_t deadline, int ntargets,
 		    const d_rank_list_t *rank_list, int ndomains, const uint32_t *domains)
 {
-	struct pool_extend_arg arg = {
-		.pea_ntargets	= ntargets,
-		.pea_rank_list	= rank_list,
-		.pea_ndomains	= ndomains,
-		.pea_domains	= domains
-	};
+	struct pool_extend_arg arg = {.pea_ntargets  = ntargets,
+				      .pea_rank_list = rank_list,
+				      .pea_ndomains  = ndomains,
+				      .pea_domains   = domains};
 
 	return dsc_pool_svc_call(pool_uuid, svc_ranks, &pool_extend_cbs, &arg, deadline);
 }
@@ -1014,36 +989,31 @@ pool_update_target_state_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 	return rc;
 }
 
-static struct dsc_pool_svc_call_cbs pool_exclude_cbs = {
-	.pscc_op	= POOL_EXCLUDE,
-	.pscc_init	= pool_update_target_state_init,
-	.pscc_consume	= pool_update_target_state_consume,
-	.pscc_fini	= NULL
-};
+static struct dsc_pool_svc_call_cbs pool_exclude_cbs = {.pscc_op   = POOL_EXCLUDE,
+							.pscc_init = pool_update_target_state_init,
+							.pscc_consume =
+							    pool_update_target_state_consume,
+							.pscc_fini = NULL};
 
-static struct dsc_pool_svc_call_cbs pool_reint_cbs = {
-	.pscc_op	= POOL_REINT,
-	.pscc_init	= pool_update_target_state_init,
-	.pscc_consume	= pool_update_target_state_consume,
-	.pscc_fini	= NULL
-};
+static struct dsc_pool_svc_call_cbs pool_reint_cbs = {.pscc_op   = POOL_REINT,
+						      .pscc_init = pool_update_target_state_init,
+						      .pscc_consume =
+							  pool_update_target_state_consume,
+						      .pscc_fini = NULL};
 
-static struct dsc_pool_svc_call_cbs pool_drain_cbs = {
-	.pscc_op	= POOL_DRAIN,
-	.pscc_init	= pool_update_target_state_init,
-	.pscc_consume	= pool_update_target_state_consume,
-	.pscc_fini	= NULL
-};
+static struct dsc_pool_svc_call_cbs pool_drain_cbs = {.pscc_op   = POOL_DRAIN,
+						      .pscc_init = pool_update_target_state_init,
+						      .pscc_consume =
+							  pool_update_target_state_consume,
+						      .pscc_fini = NULL};
 
 int
 dsc_pool_svc_update_target_state(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline,
 				 struct pool_target_addr_list *target_addrs,
-				 pool_comp_state_t state)
+				 pool_comp_state_t             state)
 {
-	struct pool_update_target_state_arg arg = {
-		.puta_target_addrs	= target_addrs,
-		.puta_state		= state
-	};
+	struct pool_update_target_state_arg arg = {.puta_target_addrs = target_addrs,
+						   .puta_state        = state};
 	struct dsc_pool_svc_call_cbs       *cbs;
 
 	switch (state) {
@@ -1087,12 +1057,10 @@ pool_update_acl_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 	return rc;
 }
 
-static struct dsc_pool_svc_call_cbs pool_update_acl_cbs = {
-	.pscc_op	= POOL_ACL_UPDATE,
-	.pscc_init	= pool_update_acl_init,
-	.pscc_consume	= pool_update_acl_consume,
-	.pscc_fini	= NULL
-};
+static struct dsc_pool_svc_call_cbs pool_update_acl_cbs = {.pscc_op      = POOL_ACL_UPDATE,
+							   .pscc_init    = pool_update_acl_init,
+							   .pscc_consume = pool_update_acl_consume,
+							   .pscc_fini    = NULL};
 
 /**
  * Update the pool ACL by adding and updating entries.
@@ -1108,9 +1076,7 @@ int
 dsc_pool_svc_update_acl(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline,
 			struct daos_acl *acl)
 {
-	struct pool_update_acl_arg arg = {
-		.puaa_acl = acl
-	};
+	struct pool_update_acl_arg arg = {.puaa_acl = acl};
 
 	D_DEBUG(DB_MGMT, DF_UUID ": Updating pool ACL\n", DP_UUID(pool_uuid));
 	return dsc_pool_svc_call(pool_uuid, ranks, &pool_update_acl_cbs, &arg, deadline);
@@ -1144,12 +1110,10 @@ pool_delete_acl_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 	return rc;
 }
 
-static struct dsc_pool_svc_call_cbs pool_delete_acl_cbs = {
-	.pscc_op	= POOL_ACL_DELETE,
-	.pscc_init	= pool_delete_acl_init,
-	.pscc_consume	= pool_delete_acl_consume,
-	.pscc_fini	= NULL
-};
+static struct dsc_pool_svc_call_cbs pool_delete_acl_cbs = {.pscc_op      = POOL_ACL_DELETE,
+							   .pscc_init    = pool_delete_acl_init,
+							   .pscc_consume = pool_delete_acl_consume,
+							   .pscc_fini    = NULL};
 
 /**
  * Remove an entry by principal from the pool's ACL.
@@ -1166,10 +1130,8 @@ int
 dsc_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline,
 			enum daos_acl_principal_type principal_type, const char *principal_name)
 {
-	struct pool_delete_acl_arg arg = {
-		.pdaa_principal_type = principal_type,
-		.pdaa_name_buf       = NULL
-	};
+	struct pool_delete_acl_arg arg = {.pdaa_principal_type = principal_type,
+					  .pdaa_name_buf       = NULL};
 	size_t                     name_buf_len;
 	int                        rc;
 
@@ -1202,12 +1164,10 @@ pool_upgrade_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 	return rc;
 }
 
-static struct dsc_pool_svc_call_cbs pool_upgrade_cbs = {
-	.pscc_op	= POOL_UPGRADE,
-	.pscc_init	= NULL,
-	.pscc_consume	= pool_upgrade_consume,
-	.pscc_fini	= NULL
-};
+static struct dsc_pool_svc_call_cbs pool_upgrade_cbs = {.pscc_op      = POOL_UPGRADE,
+							.pscc_init    = NULL,
+							.pscc_consume = pool_upgrade_consume,
+							.pscc_fini    = NULL};
 
 int
 dsc_pool_svc_upgrade(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline)

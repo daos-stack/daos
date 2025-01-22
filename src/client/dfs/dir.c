@@ -65,6 +65,7 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, daos_ocl
 	if (rc != 0)
 		return daos_der2errno(rc);
 
+	DFS_OP_STAT_INCR(dfs, DOS_MKDIR);
 	return rc;
 }
 
@@ -220,6 +221,7 @@ restart:
 	if (oid)
 		oid_cp(oid, entry.oid);
 
+	DFS_OP_STAT_INCR(dfs, DOS_UNLINK);
 out:
 	rc = check_tx(th, rc);
 	if (rc == ERESTART)
@@ -326,6 +328,6 @@ dfs_dir_anchor_set(dfs_obj_t *obj, const char name[], daos_anchor_t *anchor)
 		return rc;
 
 	d_iov_set(&dkey, (void *)name, len);
-	rc = daos_obj_key2anchor(obj->oh, DAOS_TX_NONE, &dkey, NULL, anchor, NULL);
+	rc = daos_obj_key2anchor(obj->oh, obj->dfs->th, &dkey, NULL, anchor, NULL);
 	return daos_der2errno(rc);
 }
