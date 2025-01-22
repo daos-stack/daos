@@ -432,7 +432,7 @@ class ErasureCodeMdtest(MdtestBase):
         """
         try:
             result = self.execute_mdtest(mdtest_result_queue)
-        except (CommandFailure, DaosApiError, DaosTestError):
+        except Exception:  # pylint: disable=broad-except
             mdtest_result_queue.put('Mdtest Failed')
         return result
 
@@ -444,8 +444,6 @@ class ErasureCodeMdtest(MdtestBase):
         """
         # Create the container and check the status
         self.container = self.get_mdtest_container(self.pool)
-        if self.container is None:
-            self.fail("Container Create Failed")
         # Create the MDtest run thread
         job = threading.Thread(
             target=self._start_execute_mdtest,

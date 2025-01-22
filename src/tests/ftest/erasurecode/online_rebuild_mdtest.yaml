@@ -48,7 +48,7 @@ mdtest:
   write_bytes: 524288
   read_bytes: 524288
   depth: 10
-  num_of_files_dirs: 100000009
+  num_of_files_dirs: 10000000
   stonewall_timer: 30
   # EC does not supported for directory so for now running with RP
   dfs_dir_oclass: RP_3G1
