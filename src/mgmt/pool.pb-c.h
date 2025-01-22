@@ -397,10 +397,14 @@ struct  _Mgmt__PoolExcludeReq
    */
   size_t n_svc_ranks;
   uint32_t *svc_ranks;
+  /*
+   * force to exclude potentially leading to data loss
+   */
+  protobuf_c_boolean force;
 };
 #define MGMT__POOL_EXCLUDE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_exclude_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0,NULL, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0,NULL, 0,NULL, 0 }
 
 
 /*
@@ -864,7 +868,7 @@ struct  _Mgmt__PoolQueryResp
   /*
    * optional set of dead ranks
    */
-  char                     *dead_ranks;
+  char *dead_ranks;
 };
 #define MGMT__POOL_QUERY_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_resp__descriptor) \
