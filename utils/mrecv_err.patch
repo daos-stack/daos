@@ -1,0 +1,60 @@
+diff --git a/src/mercury_core.c b/src/mercury_core.c
+index 3c177630..c6150852 100644
+--- a/src/mercury_core.c
++++ b/src/mercury_core.c
+@@ -4727,11 +4727,13 @@ hg_core_multi_recv_input_cb(const struct na_cb_info *callback_info)
+     } else if (callback_info->ret == NA_CANCELED) {
+         HG_LOG_SUBSYS_DEBUG(
+             rpc, "NA_CANCELED event on multi-recv op %d", multi_recv_op->id);
+-        hg_atomic_decr32(&context->multi_recv_op_count);
++        if (na_cb_info_multi_recv_unexpected->last)
++            hg_atomic_decr32(&context->multi_recv_op_count);
+     } else {
+         HG_LOG_SUBSYS_ERROR(rpc, "NA callback returned error (%s)",
+             NA_Error_to_string(callback_info->ret));
+-        hg_atomic_decr32(&context->multi_recv_op_count);
++        if (na_cb_info_multi_recv_unexpected->last)
++            hg_atomic_decr32(&context->multi_recv_op_count);
+         /* TODO can an unexpected multi-recv operation ever fail? */
+     }
+ 
+diff --git a/src/na/na_ofi.c b/src/na/na_ofi.c
+index 92ddacc4..ea1187be 100644
+--- a/src/na/na_ofi.c
++++ b/src/na/na_ofi.c
+@@ -6558,9 +6558,21 @@ na_ofi_cq_readerr(struct fid_cq *cq, struct fi_cq_tagged_entry *cq_event,
+                 !(hg_atomic_get32(&na_ofi_op_id->status) & NA_OFI_OP_CANCELED),
+                 "Operation ID was not canceled by user");
+             */
++            // if (na_ofi_op_id->type == NA_CB_MULTI_RECV_UNEXPECTED) {
++            //     if (cq_err.flags & FI_MULTI_RECV)
++            //         NA_LOG_SUBSYS_WARNING(
++            //             op, "FI_ECANCELED reported on multi-recv (completed)");
++            //     else
++            //         NA_LOG_SUBSYS_WARNING(op,
++            //             "FI_ECANCELED reported on multi-recv (not completed)");
++            // }
+ 
+             /* Complete operation in canceled state */
+-            na_ofi_op_id->complete(na_ofi_op_id, true, NA_CANCELED);
++            na_ofi_op_id->complete(na_ofi_op_id,
++                (na_ofi_op_id->type == NA_CB_MULTI_RECV_UNEXPECTED)
++                    ? cq_err.flags & FI_MULTI_RECV
++                    : true,
++                NA_CANCELED);
+         } break;
+ 
+         case FI_EADDRNOTAVAIL:
+@@ -6623,7 +6635,11 @@ na_ofi_cq_readerr(struct fid_cq *cq, struct fi_cq_tagged_entry *cq_event,
+                         na_ofi_op_id->addr->fi_addr, NA_HOSTUNREACH);
+ 
+                 /* Complete operation in error state */
+-                na_ofi_op_id->complete(na_ofi_op_id, true, na_ret);
++                na_ofi_op_id->complete(na_ofi_op_id,
++                    (na_ofi_op_id->type == NA_CB_MULTI_RECV_UNEXPECTED)
++                        ? cq_err.flags & FI_MULTI_RECV
++                        : true,
++                    na_ret);
+             }
+             break;
+     }
