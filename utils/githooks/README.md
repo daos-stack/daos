@@ -9,6 +9,7 @@ to help developers conform to DAOS community coding standards and practices
 and to avoid some common mistakes in the development cycle.
 
 ## Install DAOS Git Hooks
+
 Installing is a two-step process:
 
 ### 1. Install the hooks
@@ -23,7 +24,7 @@ git config core.hookspath utils/githooks
 
 Additionally, one can copy the files into an already configured path.
 
-### 2. Install the required tools
+### 2. Install the tools
 
 The Githooks framework in DAOS is such that the hooks will all run.
 However, some hooks will simply check for required software and are
@@ -36,9 +37,11 @@ python3 -m pip install -r utils/cq/requirements.txt
 ```
 To install system packages with your package manager - for example:
 ```sh
-dnf install git-clang-format
+sudo dnf install git-clang-format -y
 ```
-### Installed tools
+
+#### Installed tools
+
 The following packages are used by built-in githooks.
 
 1. `clang-format` version 14.0.5 or higher - Formatter for C code. If the check is unable to parse
@@ -51,7 +54,7 @@ the version output, it will fail. Try running
 6. `gofmt`
 7. `codespell`
 
-### Optional tools
+#### Optional tools
 
 Additionally, [find_base.sh](find_base.sh) attempts to determine the base
 branch using `gh`, the Github CLI. If this isn't installed, it will use
@@ -65,19 +68,25 @@ checked than expected.
 It is important to check the output on commit for any errors that may indicate
 any one of the required tools is missing.
 
-1. copyright - Custom tool that automatically updates copyrights in modified files.
-2. `codespell` - Linter for spelling mistakes in modified files
+1. update-copyright - Custom tool that automatically updates copyrights in modified files.
+2. codespell - Linter for spelling mistakes in modified files
    - See [codespell.ignores](../../ci/codespell.ignores) for ignored words.
    - See [words.dict](../../utils/cq/words.dict) for words added to the DAOS project.
 3. Jenkinsfile - Custom linter if the Jenkinsfile is modified
-4. `yamllint` - Linter for modified YAML configs
-5. `clang-format` - Automatically formats for C/C++ files modified. If anything changed it will exit,
+4. yamllint - Linter for modified YAML configs
+5. clang-format - Automatically formats for C/C++ files modified. If anything changed it will exit,
 allowing the user to inspect the changes and retry the commit.
    - See [.clang-format](../../.clang-format) for configuration
-6. `gofmt` - Automatically formats for modified GO files
-7. `isort` - Linter for python imports on modified python files
-8. `flake8` - Linter for python files
-9. `pylint` - Additional linter for modified python files
+   - In some cases unwanted formatting changes are made. To disable formatting, for example:
+     ```
+     /* clang-format off */
+     ...
+     /* clang-format on */
+     ```
+6. gofmt - Automatically formats for modified GO files
+7. isort - Linter for python imports on modified python files
+8. flake - Linter for python files
+9. pylint - Additional linter for modified python files
    - See [daos_pylint.py](../../utils/cq/daos_pylint.py) for a custom wrapper around `pylint` which manages `PYTHONPATH` setup internally.
 10. ftest - Custom linter for modified ftest files
 
