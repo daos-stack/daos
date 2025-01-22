@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 (C) Copyright 2018-2022 Intel Corporation.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -20,6 +21,18 @@ from SCons.Script import WhereIs
 # Minimum version of clang-format that we use the configuration file for.  With clang-format
 # versions older than this it's still used, but without loading our config.
 MIN_FORMAT_VERSION = 12
+
+
+def _get_version_string():
+    clang_exe = WhereIs('clang-format')
+    if clang_exe is None:
+        return None
+    try:
+        rawbytes = subprocess.check_output([clang_exe, "-version"])
+        match = re.search(r"version ((\d+)(\.\d+)+)", rawbytes.decode('utf-8'))
+        return match.group(1)
+    except subprocess.CalledProcessError:
+        return None
 
 
 def _supports_custom_format(clang_exe):
@@ -42,18 +55,13 @@ def _supports_custom_format(clang_exe):
     return False
 
 
-def _supports_correct_style(clang_exe):
+def _supports_correct_style(version):
     """Checks if the version of clang-format is 14.0.5 or newer.
 
     Older versions contain bugs so will generate incorrectly formatted code on occasion.
     """
-    try:
-        rawbytes = subprocess.check_output([clang_exe, "-version"])
-        output = rawbytes.decode('utf-8')
-    except subprocess.CalledProcessError:
-        return False
 
-    match = re.search(r'version ([\d+\.]+)', output)
+    match = re.search(r'([\d+\.]+)', version)
     if match:
         parts = match.group(1).split('.')
         if int(parts[0]) != 14:
@@ -102,10 +110,11 @@ def _preprocess_emitter(source, target, env):
 
 def main():
     """Check for a supported version of clang-format"""
-    supported = _supports_correct_style(WhereIs('clang-format'))
-    if not supported:
+    version = _get_version_string()
+    if (version is None) or (not _supports_correct_style(version)):
         print('Install clang-format version 14.0.5 or newer to reformat code')
         sys.exit(1)
+    print(f"Clang-format version {version} installed")
     sys.exit(0)
 
 
