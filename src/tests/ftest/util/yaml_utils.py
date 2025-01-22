@@ -1,5 +1,6 @@
 """
 (C) Copyright 2020-2024 Intel Corporation.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -68,6 +69,29 @@ def get_yaml_data(yaml_file):
             return yaml.load(open_file.read(), Loader=DaosLoader)
         except yaml.YAMLError as error:
             raise YamlException(f"Error reading {yaml_file}") from error
+
+
+def write_yaml_file(logger, yaml_file, lines):
+    """Write the contents to a yaml file.
+
+    Args:
+        logger (logger): logger for the messages produced by this method
+        yaml_file (str): yaml file to write
+        lines (list): yaml file contents
+
+    Raises:
+        YamlException: if there is an error writing the yaml file.
+    """
+    logger.debug('  Creating %s', yaml_file)
+    for line in lines:
+        logger.debug('    %s', line)
+    try:
+        with open(yaml_file, "w", encoding="utf-8") as yaml_handle:
+            yaml_handle.writelines(f'{line}\n' for line in lines)
+    except IOError as error:
+        message = f"Error writing yaml file {yaml_file}"
+        logger.error(message)
+        raise YamlException(message) from error
 
 
 class YamlUpdater():

@@ -1,5 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -25,7 +26,7 @@ from util.slurm_utils import create_partition, delete_partition, show_partition
 from util.storage_utils import StorageException, StorageInfo
 from util.systemctl_utils import SystemctlFailure, create_override_config
 from util.user_utils import get_group_id, get_user_groups, groupadd, useradd, userdel
-from util.yaml_utils import YamlUpdater, get_yaml_data
+from util.yaml_utils import YamlUpdater, get_yaml_data, write_yaml_file
 
 D_TM_SHARED_MEMORY_KEY = 0x10242048
 
@@ -1071,6 +1072,9 @@ class TestGroup():
             logger, storage_info, self._yaml_directory, tier_0_type, scm_size, scm_mount,
             max_nvme_tiers, control_metadata)
 
+        # Generate launch parameter branch extra yaml file
+        self._add_launch_param_yaml(logger, self._yaml_directory)
+
         # Replace any placeholders in the test yaml file
         for test in self.tests:
             new_yaml_file = updater.update(test.yaml_file, self._yaml_directory)
@@ -1097,6 +1101,7 @@ class TestGroup():
         """Add extra storage yaml definitions for tests requesting automatic storage configurations.
 
         Args:
+            logger (Logger): logger for the messages produced by this method
             storage_info (StorageInfo): the collected storage information from the hosts
             yaml_dir (str): path in which to create the extra storage yaml files
             tier_0_type (str): storage tier 0 type to define; 'pmem' or 'ram'
@@ -1136,6 +1141,30 @@ class TestGroup():
                     engine_storage_yaml[engines], str(test))
                 # Allow extra yaml files to be to override the generated storage yaml
                 test.extra_yaml.insert(0, engine_storage_yaml[engines])
+
+    def _add_launch_param_yaml(self, logger, yaml_dir):
+        """Add extra yaml for muxed launch parameter branches.
+
+        Args:
+            logger (Logger): logger for the messages produced by this method
+            yaml_dir (str): path in which to create the extra storage yaml files
+
+        Raises:
+            YamlException: if there was an error writing the yaml file
+        """
+        yaml_file = os.path.join(yaml_dir, f"extra_yaml_launch_params.yaml")
+        lines = ['launch']
+        lines.append('  nvme: !mux')
+        labels = ['default']
+        if self._nvme.startswith("auto_md_on_ssd"):
+            labels.append('md_on_ssd_p2')
+        for label in labels:
+            lines.append(f'    {label}')
+            lines.append('      on: true')
+        write_yaml_file(logger, yaml_file, lines)
+
+        for test in self.tests:
+            test.extra_yaml.insert(0, yaml_file)
 
     def setup_slurm(self, logger, setup, install, user, result):
         """Set up slurm on the hosts if any tests are using partitions.

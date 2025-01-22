@@ -431,6 +431,7 @@ class DmgCommandBase(YamlCommand):
                 self.sys = FormattedParameter("--sys={}", None)
                 self.properties = FormattedParameter("--properties={}", None)
                 self.nranks = FormattedParameter("--nranks={}", None)
+                self.mem_ratio = FormattedParameter("--mem-ratio={}", None)
 
         class DeleteAclSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool delete-acl command."""

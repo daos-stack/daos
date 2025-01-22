@@ -1,5 +1,6 @@
 """
   (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -14,6 +15,7 @@ import yaml
 from ClusterShell.NodeSet import NodeSet
 # pylint: disable=import-error,no-name-in-module
 from util.run_utils import run_remote
+from util.yaml_utils import YamlException, write_yaml_file
 
 
 def find_pci_address(value, *flags):
@@ -648,6 +650,7 @@ class StorageInfo():
 
         Raises:
             StorageException: if an invalid storage type was specified
+            YamlException: if there was an error writing the yaml file
 
         """
         tiers = 1
@@ -730,14 +733,7 @@ class StorageInfo():
                         lines.append(
                             f'          bdev_roles: [{", ".join(get_tier_roles(tier, tiers))}]')
 
-        self._log.debug('  Creating %s', yaml_file)
-        for line in lines:
-            self._log.debug('    %s', line)
-        try:
-            with open(yaml_file, "w", encoding="utf-8") as config_handle:
-                config_handle.writelines(f'{line}\n' for line in lines)
-        except IOError as error:
-            self._raise_error(f"Error writing avocado config file {yaml_file}", error)
+        write_yaml_file(self._log, yaml_file, lines)
 
     @staticmethod
     def _get_numa_devices(devices):
