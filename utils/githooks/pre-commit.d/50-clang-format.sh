@@ -16,12 +16,12 @@ fi
 if ! command -v git-clang-format > /dev/null 2>&1; then
     echo "git-clang-format not installed."
     echo "See ./utils/githooks/README.md#2-install-the-required-tools for instructions."
-    exit 0
+    exit 1
 fi
 if ! command -v clang-format > /dev/null 2>&1; then
     echo "clang-format not installed."
     echo "See ./utils/githooks/README.md#2-install-the-required-tools for instructions."
-    exit 0
+    exit 1
 fi
 
 echo "Formatting C files"
