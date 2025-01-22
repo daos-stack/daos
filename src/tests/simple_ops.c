@@ -59,7 +59,7 @@ void *create_func(void *data) {
 	mode_t create_mode = S_IWUSR | S_IRUSR;
 	int create_flags = O_RDWR | O_CREAT;
 
-	const size_t wsz = 1048576;
+	const size_t wsz = 1048576 * 4;
 	char *wbuf = malloc(wsz);
 
 	d_sg_list_t sgl;
@@ -73,7 +73,7 @@ void *create_func(void *data) {
 		dfs_obj_t *f;
 
 		sprintf(fn, "%d", i);
-		rc = dfs_open(arg->dfs, arg->dir, fn, create_mode | S_IFREG, create_flags, 0, 0, NULL, &f);
+		rc = dfs_open(arg->dfs, arg->dir, fn, create_mode | S_IFREG, create_flags, OC_S8, 0, NULL, &f);
 		ASSERT(rc == 0, "create /dir/%s failed\n", fn);
 
 		rc = dfs_write(arg->dfs, f, &sgl, 0, NULL);
