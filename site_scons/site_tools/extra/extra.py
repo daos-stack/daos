@@ -35,19 +35,16 @@ def _get_version_string():
         return None
 
 
-def _supports_custom_format(clang_exe):
+def _supports_custom_format(version):
     """Checks if the version of clang-format is new enough.
 
     Older versions complain about some of the options used so enforce a minimum version.
     """
-    try:
-        rawbytes = subprocess.check_output([clang_exe, "-version"])
-        output = rawbytes.decode('utf-8')
-    except subprocess.CalledProcessError:
+    if version is None:
         print("Unsupported clang-format for custom style.  Using Mozilla style.")
         return False
 
-    match = re.search(r"version (\d+)\.", output)
+    match = re.search(r"(\d+)\.", version)
     if match and int(match.group(1)) >= MIN_FORMAT_VERSION:
         return True
 
@@ -80,7 +77,7 @@ def _find_indent():
     indent = WhereIs("clang-format")
     if indent is None:
         return None
-    if _supports_custom_format(indent):
+    if _supports_custom_format(_get_version_string()):
         style = "file"
     else:
         style = "Mozilla"
