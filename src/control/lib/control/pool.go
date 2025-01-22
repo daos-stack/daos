@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -748,6 +749,7 @@ type PoolExcludeReq struct {
 	ID        string
 	Rank      ranklist.Rank
 	TargetIdx []uint32
+	Force     bool
 }
 
 // ExcludeResp has no other parameters other than success/failure for now.
@@ -761,6 +763,7 @@ func PoolExclude(ctx context.Context, rpcClient UnaryInvoker, req *PoolExcludeRe
 		Id:        req.ID,
 		Rank:      req.Rank.Uint32(),
 		TargetIdx: req.TargetIdx,
+		Force:     req.Force,
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolExclude(ctx, pbReq)
@@ -854,13 +857,11 @@ type PoolReintegrateReq struct {
 	TargetIdx []uint32
 }
 
-// ReintegrateResp has no other parameters other than success/failure for now.
-
 // PoolReintegrate will set a pool target for a specific rank back to up.
 // This should automatically start the reintegration process.
 // Returns an error (including any DER code from DAOS).
 func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolReintegrateReq) error {
-	pbReq := &mgmtpb.PoolReintegrateReq{
+	pbReq := &mgmtpb.PoolReintReq{
 		Sys:       req.getSystem(rpcClient),
 		Id:        req.ID,
 		Rank:      req.Rank.Uint32(),

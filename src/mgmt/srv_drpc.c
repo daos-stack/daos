@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -709,7 +710,7 @@ out:
 static int
 pool_change_target_state(char *id, d_rank_list_t *svc_ranks, size_t n_target_idx,
 			 uint32_t *target_idx, uint32_t rank, pool_comp_state_t state,
-			 size_t scm_size, size_t nvme_size, size_t meta_size)
+			 size_t scm_size, size_t nvme_size, size_t meta_size, bool skip_rf_check)
 {
 	uuid_t				uuid;
 	struct pool_target_addr_list	target_addr_list;
@@ -738,7 +739,7 @@ pool_change_target_state(char *id, d_rank_list_t *svc_ranks, size_t n_target_idx
 	}
 
 	rc = ds_mgmt_pool_target_update_state(uuid, svc_ranks, &target_addr_list, state, scm_size,
-					      nvme_size, meta_size);
+					      nvme_size, meta_size, skip_rf_check);
 	if (rc != 0) {
 		D_ERROR("Failed to set pool target up "DF_UUID": "DF_RC"\n",
 			DP_UUID(uuid), DP_RC(rc));
@@ -778,7 +779,7 @@ ds_mgmt_drpc_pool_exclude(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	rc = pool_change_target_state(req->id, svc_ranks, req->n_target_idx, req->target_idx,
 				      req->rank, PO_COMP_ST_DOWN, 0 /* scm_size */,
-				      0 /* nvme_size */, 0 /* meta_size */);
+				      0 /* nvme_size */, 0 /* meta_size */, req->force);
 
 	d_rank_list_free(svc_ranks);
 
@@ -827,7 +828,7 @@ ds_mgmt_drpc_pool_drain(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	rc = pool_change_target_state(req->id, svc_ranks, req->n_target_idx, req->target_idx,
 				      req->rank, PO_COMP_ST_DRAIN, 0 /* scm_size */,
-				      0 /* nvme_size */, 0 /* meta_size */);
+				      0 /* nvme_size */, 0 /* meta_size */, false);
 
 	d_rank_list_free(svc_ranks);
 
@@ -936,8 +937,8 @@ void
 ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	struct drpc_alloc		alloc = PROTO_ALLOCATOR_INIT(alloc);
-	Mgmt__PoolReintegrateReq	*req = NULL;
-	Mgmt__PoolReintegrateResp	resp;
+	Mgmt__PoolReintReq              *req   = NULL;
+	Mgmt__PoolReintResp              resp;
 	d_rank_list_t			*svc_ranks = NULL;
 	uint8_t				*body;
 	size_t				len;
@@ -945,12 +946,10 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	uint64_t			nvme_bytes = 0;
 	int				rc;
 
-	mgmt__pool_reintegrate_resp__init(&resp);
+	mgmt__pool_reint_resp__init(&resp);
 
 	/* Unpack the inner request from the drpc call body */
-	req = mgmt__pool_reintegrate_req__unpack(&alloc.alloc,
-						 drpc_req->body.len,
-						 drpc_req->body.data);
+	req = mgmt__pool_reint_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
 
 	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
@@ -976,23 +975,23 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	rc = pool_change_target_state(req->id, svc_ranks, req->n_target_idx, req->target_idx,
 				      req->rank, PO_COMP_ST_UP, scm_bytes, nvme_bytes,
-				      req->tier_bytes[DAOS_MEDIA_SCM] /* meta_size */);
+				      req->tier_bytes[DAOS_MEDIA_SCM] /* meta_size */, false);
 
 	d_rank_list_free(svc_ranks);
 
 out:
 	resp.status = rc;
-	len = mgmt__pool_reintegrate_resp__get_packed_size(&resp);
+	len         = mgmt__pool_reint_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 	} else {
-		mgmt__pool_reintegrate_resp__pack(&resp, body);
+		mgmt__pool_reint_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
 		drpc_resp->body.data = body;
 	}
 
-	mgmt__pool_reintegrate_req__free_unpacked(req, &alloc.alloc);
+	mgmt__pool_reint_req__free_unpacked(req, &alloc.alloc);
 }
 
 void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
