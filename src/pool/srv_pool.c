@@ -3820,8 +3820,6 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	struct pool_connect_in         *in  = crt_req_get(rpc);
 	struct pool_connect_out        *out = crt_reply_get(rpc);
 	struct pool_svc		       *svc;
-	struct pool_buf		       *map_buf = NULL;
-	uint32_t			map_version;
 	uint32_t			connectable;
 	uint32_t			global_ver;
 	uint32_t			obj_layout_ver;
@@ -4043,12 +4041,6 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 		goto out_map_version;
 	}
 
-	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to read pool map: "DF_RC"\n",
-			DP_UUID(svc->ps_uuid), DP_RC(rc));
-		D_GOTO(out_map_version, rc);
-	}
 	transfer_map = true;
 	if (skip_update)
 		D_GOTO(out_map_version, rc = 0);
@@ -4156,13 +4148,20 @@ out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 	if (rc == 0 && transfer_map) {
-		rc = ds_pool_transfer_map_buf(map_buf, map_version, rpc, bulk,
-					      &out->pco_map_buf_size);
+		struct ds_pool_map_bc *map_bc;
+		uint32_t               map_version;
+
+		rc = ds_pool_lookup_map_bc(svc->ps_pool, rpc->cr_ctx, &map_bc, &map_version);
+		if (rc == 0) {
+			rc = ds_pool_transfer_map_buf(map_bc, rpc, bulk, &out->pco_map_buf_size);
+			ds_pool_put_map_bc(map_bc);
+			/* Ensure the map version matches the map buffer. */
+			out->pco_op.po_map_version = map_version;
+		}
 		/** TODO: roll back tx if transfer fails? Perhaps rdb_tx_discard()? */
 	}
 	if (rc == 0)
 		rc = op_val.ov_rc;
-	D_FREE(map_buf);
 	D_FREE(hdl);
 	D_FREE(machine);
 	if (prop)
@@ -4927,7 +4926,7 @@ ds_pool_query_handler(crt_rpc_t *rpc, int handler_version)
 	struct pool_query_in     *in   = crt_req_get(rpc);
 	struct pool_query_out    *out  = crt_reply_get(rpc);
 	daos_prop_t		 *prop = NULL;
-	struct pool_buf		 *map_buf;
+	struct ds_pool_map_bc	 *map_bc;
 	uint32_t		  map_version = 0;
 	struct pool_svc		 *svc;
 	struct pool_metrics	 *metrics;
@@ -5092,19 +5091,18 @@ ds_pool_query_handler(crt_rpc_t *rpc, int handler_version)
 		}
 	}
 
-	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
-	if (rc != 0)
-		D_ERROR(DF_UUID": failed to read pool map: "DF_RC"\n",
-			DP_UUID(svc->ps_uuid), DP_RC(rc));
-
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 	if (rc != 0)
 		goto out_svc;
 
-	rc = ds_pool_transfer_map_buf(map_buf, map_version, rpc, bulk, &out->pqo_map_buf_size);
-	D_FREE(map_buf);
+
+	rc = ds_pool_lookup_map_bc(svc->ps_pool, rpc->cr_ctx, &map_bc, &map_version);
+	if (rc != 0)
+		goto out_svc;
+	rc = ds_pool_transfer_map_buf(map_bc, rpc, bulk, &out->pqo_map_buf_size);
+	ds_pool_put_map_bc(map_bc);
 	if (rc != 0)
 		goto out_svc;
 
