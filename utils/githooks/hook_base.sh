@@ -43,7 +43,7 @@ run-parts() {
         [ "${i%.sw?}" != "${i}" ] && continue
         skip_item=false
         for skip in "${skip_list[@]:-}"; do
-            if [[ ! -z "${skip}" ]] && [[ "${i}" =~ "${skip}" ]]; then
+            if [[ -n "${skip}" ]] && [[ "${i}" =~ ${skip} ]]; then
                 skip_item=true
                 echo "Skipping ${i}"
                 break
