@@ -1581,15 +1581,6 @@ crt_reply_send(crt_rpc_t *req)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	int opc = opc_get(req->cr_opc);
-        if (opc == DAOS_OBJ_RPC_TGT_PUNCH || opc == DAOS_OBJ_RPC_TGT_UPDATE || opc == DAOS_OBJ_RPC_CPD) {
-                int n = rand() % 1000;
-                if (n == 0) {
-                        D_ERROR("dropping a reply for remote request: opc = %d\n", opc);
-                        crt_reply_set_drop(req);
-                }
-        }
-
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 
 	if (rpc_priv->crp_coll == 1) {
@@ -1612,14 +1603,6 @@ crt_reply_send(crt_rpc_t *req)
 	rpc_priv->crp_reply_pending = 0;
 out:
 	return rc;
-}
-
-void crt_reply_set_drop(crt_rpc_t *req) {
-	if (req != NULL) {
-		struct crt_rpc_priv	*rpc_priv = NULL;
-		rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
-		rpc_priv->crp_drop_reply = 1;
-	}
 }
 
 /*

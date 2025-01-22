@@ -189,8 +189,7 @@ struct crt_rpc_priv {
 	    /* RPC originated from a primary provider */
 	    crp_src_is_primary      : 1,
 	    /* release input buffer early */
-	    crp_release_input_early : 1,
-	    crp_drop_reply          : 1;
+	    crp_release_input_early : 1;
 
 	struct crt_opc_info	*crp_opc_info;
 	/* corpc info, only valid when (crp_coll == 1) */

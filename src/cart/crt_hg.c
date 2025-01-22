@@ -1471,17 +1471,15 @@ crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 
 	D_ASSERT(rpc_priv != NULL);
 
-	if (!rpc_priv->crp_drop_reply) {
-		RPC_ADDREF(rpc_priv);
-		hg_ret = HG_Respond(rpc_priv->crp_hg_hdl, crt_hg_reply_send_cb,
-				rpc_priv, &rpc_priv->crp_pub.cr_output);
-		if (hg_ret != HG_SUCCESS) {
-			RPC_ERROR(rpc_priv, "HG_Respond failed, hg_ret: " DF_HG_RC "\n",
-					DP_HG_RC(hg_ret));
-			/* should success as addref above */
-			RPC_DECREF(rpc_priv);
-			rc = crt_hgret_2_der(hg_ret);
-		}
+	RPC_ADDREF(rpc_priv);
+	hg_ret = HG_Respond(rpc_priv->crp_hg_hdl, crt_hg_reply_send_cb,
+			    rpc_priv, &rpc_priv->crp_pub.cr_output);
+	if (hg_ret != HG_SUCCESS) {
+		RPC_ERROR(rpc_priv, "HG_Respond failed, hg_ret: " DF_HG_RC "\n",
+			  DP_HG_RC(hg_ret));
+		/* should success as addref above */
+		RPC_DECREF(rpc_priv);
+		rc = crt_hgret_2_der(hg_ret);
 	}
 
 	/* Release input buffer */
