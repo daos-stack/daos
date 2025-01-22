@@ -31,7 +31,8 @@ However, some hooks will simply check for required software and are
 effectively a noop if such is not installed.
 
 Requirements come from a combination of `pip` and system packages and can usually be installed through standard means.  
-To install `pip` packages specified in [utils/cq/requirements.txt](../../utils/cq/requirements.txt):
+To install `pip` packages specified in [utils/cq/requirements.txt](../../utils/cq/requirements.txt) it is recommended to setup a virtual environment and install with pip.  
+If you already have a [virtual environment for building](../../docs/QSG/build_from_scratch.md#python-packages) you can simply install the requirements:
 ```sh
 python3 -m pip install -r utils/cq/requirements.txt
 ```
