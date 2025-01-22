@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -926,7 +927,7 @@ pool_free_ref(struct daos_llink *llink)
 
 	D_ASSERT(d_list_empty(&pool->sp_hdls));
 
-	ds_cont_ec_eph_free(pool);
+	ds_cont_track_eph_free(pool);
 
 	pl_map_disconnect(pool->sp_uuid);
 	if (pool->sp_map != NULL)
@@ -1090,13 +1091,13 @@ out:
 }
 
 static void
-tgt_ec_eph_query_ult(void *data)
+tgt_track_eph_query_ult(void *data)
 {
-	ds_cont_tgt_ec_eph_query_ult(data);
+	ds_cont_track_eph_query_ult(data);
 }
 
 static int
-ds_pool_start_ec_eph_query_ult(struct ds_pool *pool)
+ds_pool_start_track_eph_query_ult(struct ds_pool *pool)
 {
 	struct sched_req_attr	attr;
 	uuid_t			anonym_uuid;
@@ -1107,7 +1108,7 @@ ds_pool_start_ec_eph_query_ult(struct ds_pool *pool)
 	D_ASSERT(pool->sp_ec_ephs_req == NULL);
 	uuid_clear(anonym_uuid);
 	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);
-	pool->sp_ec_ephs_req = sched_create_ult(&attr, tgt_ec_eph_query_ult, pool,
+	pool->sp_ec_ephs_req = sched_create_ult(&attr, tgt_track_eph_query_ult, pool,
 						DSS_DEEP_STACK_SZ);
 	if (pool->sp_ec_ephs_req == NULL) {
 		D_ERROR(DF_UUID": failed create ec eph equery ult.\n",
@@ -1240,7 +1241,7 @@ ds_pool_start(uuid_t uuid, bool aft_chk, bool immutable)
 	}
 
 	if (!ds_pool_restricted(pool, false)) {
-		rc = ds_pool_start_ec_eph_query_ult(pool);
+		rc = ds_pool_start_track_eph_query_ult(pool);
 		if (rc != 0) {
 			D_ERROR(DF_UUID": failed to start ec eph query ult: "DF_RC"\n",
 				DP_UUID(uuid), DP_RC(rc));

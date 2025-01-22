@@ -473,7 +473,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	 * current container reopen (such as for engine restart without related pool service
 	 * down), but related RPC was not forwarded to current engine in time. After current
 	 * engine re-opening the container (shard), it will reject such old modification and
-	 * ask related DTX leader to restart the transaction. It only may affect inflight IO
+	 * ask related DTX leader to restart the transaction. It only may affect in-flight IO
 	 * during re-opening container without restarting pool service.
 	 *
 	 * With the assignment, we also do not need to consider former EC/VOS aggregation up
@@ -933,6 +933,13 @@ vos_cont_get_global_stable_epoch(daos_handle_t coh)
 
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
+
+	if (cont->vc_pool->vp_pool_df->pd_version < VOS_POOL_DF_2_8) {
+		D_DEBUG(DB_MD, DF_CONT" return 0 stable epoch for lower pool version %d\n",
+			DP_CONT(cont->vc_pool->vp_pool_df->pd_id, cont->vc_id),
+			cont->vc_pool->vp_pool_df->pd_version);
+		return 0;
+	}
 
 	cont_ext = umem_off2ptr(vos_cont2umm(cont), cont->vc_cont_df->cd_ext);
 	if (cont_ext != NULL)
