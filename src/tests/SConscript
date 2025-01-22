@@ -113,10 +113,11 @@ def scons():
     denv.AppendUnique(LIBPATH=[Dir('../client/dfs')])
 
     libs_client = ['daos_tests', 'daos', 'daos_common', 'cart', 'gurt', 'uuid', 'dfs']
+    libs_clientx = ['daos', 'daos_common', 'cart', 'gurt', 'uuid', 'dfs']
 
     denv.d_program('simple_array', 'simple_array.c', LIBS=libs_client)
     denv.d_program('simple_obj', 'simple_obj.c', LIBS=libs_client)
-    denv.d_program('simple_dfs', 'simple_dfs.c', LIBS=libs_client)
+    denv.d_program('simple_dfs', 'simple_dfs.c', LIBS=libs_clientx)
 
 
 if __name__ == "SCons.Script":
