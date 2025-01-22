@@ -225,6 +225,8 @@ jobs:
       JENKINS_URL: https://build.hpdd.intel.com/
       REPOSITORY_URL: https://repo.dc.hpdd.intel.com/
       REMOVE_EXISTING_RPMS: false
+      TARGET: ${{ matrix.distro }}
+      REPO_PATH: /scratch/job_repos/daos-stack/job/daos/job/gcp-weekly-${{ github.run_id }}/
       # TODO -- this should be on stable, backedup storage
       ARTIFACTS_URL: file:///scratch/job_repos/
       REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
@@ -393,6 +395,7 @@ jobs:
       (needs.Functional.result == 'success' ||
        needs.Functional.result == 'skipped')
     env:
+      TARGET: el8
       CONFIG_POWER_ONLY: false
       PRAGMA_SUFFIX: -vm
       OPERATIONS_EMAIL: brian.murrell@intel.com

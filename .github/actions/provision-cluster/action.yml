@@ -53,6 +53,8 @@ runs:
             inst_repos+=" daos@PR-${{ github.event.pull_request.number }}"
             inst_repos+=":${{ github.run_number }}"
         fi
+        REPO_PATH=$(get_repo_path)$TARGET"
         ARTIFACTS_URL=$ARTIFACTS_URL                                      \
         INST_REPOS="$(eval echo "$inst_repos")"                           \
+        REPO_PATH=$REPO_PATH                                              \
         DISTRO=$PROVISION_DISTRO ci/provisioning/post_provision_config.sh
