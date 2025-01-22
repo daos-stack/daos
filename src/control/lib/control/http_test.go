@@ -127,14 +127,13 @@ func TestControl_httpGetBody(t *testing.T) {
 	falseAllowInsecure := false
 
 	for name, tc := range map[string]struct {
-		url            *url.URL
-		timeout        time.Duration
-		cancelCtx      bool
-		getFn          httpGetFn
-		allowInsecure  bool
-		httpsException bool
-		expResult      []byte
-		expErr         error
+		url           *url.URL
+		timeout       time.Duration
+		cancelCtx     bool
+		getFn         httpGetFn
+		allowInsecure bool
+		expResult     []byte
+		expErr        error
 	}{
 		"nil url": {
 			expErr: errors.New("nil URL"),
@@ -252,7 +251,7 @@ func TestControl_httpGetBody(t *testing.T) {
 				tc.timeout = time.Second
 			}
 
-			result, err := httpGetBody(ctx, tc.url, tc.getFn, tc.timeout, tc.allowInsecure, tc.httpsException)
+			result, err := httpGetBody(ctx, tc.url, tc.getFn, tc.timeout, tc.allowInsecure)
 
 			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
@@ -270,7 +269,6 @@ type mockHTTPGetter struct {
 	getBodyErr      error
 	getBodyCalled   uint
 	getBodyFailures uint
-	httpsException  bool
 }
 
 func (r *mockHTTPGetter) canRetry(err error, cur uint) bool {
@@ -298,10 +296,6 @@ func (r *mockHTTPGetter) getURL() *url.URL {
 }
 
 func (r *mockHTTPGetter) getAllowInsecure() bool {
-	return true
-}
-
-func (r *mockHTTPGetter) getHttpsException() bool {
 	return true
 }
 

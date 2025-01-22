@@ -759,12 +759,10 @@ transport_config:
   key: /etc/daos/certs/admin.key
 ```
 
-#### Telemetry Certificate Configuration
+#### Telemetry Endpoint Configuration
 
-The DAOS Telemetry framework has option to use certificates to authenticate
-between server/client and admin node.
-Creating of certificate is not part of DAOS scope and it is up to Admin to
-generate the certificate and add it to the DAOS server and client system.
+DAOS telemetry is accessed via an HTTP endpoint. This endpoint may be secured with over-the-wire transport security by configuring an HTTPS certificate and key. This must be a standard HTTPS certificate. DAOS server/agent/admin authentication certificates *cannot* be reused for this purpose.
+If the server has an existing HTTPS certificate for its domain, it may be reused for the telemetry endpoint. Otherwise the administrator must acquire a certificate from an accepted Certificate Authority (CA).
 
 #### Telemetry Yaml Example
 
@@ -805,8 +803,6 @@ telemetry_config:
 telemetry_config:
   # To use telemetry in secure mode
   allow_insecure: false
-  # Skip the Server certificate verification. Recomendate for testing purpose only. 
-  https_exception: true
 ```
 
 ### Server Startup

@@ -814,9 +814,7 @@ class TelemetryConfig(YamlParameters):
         """
         super().__init__(namespace, None, title)
         self._log_dir = log_dir
-        default_insecure = str(os.environ.get("DAOS_TEST_INSECURE_MODE", True))
-        default_insecure = default_insecure.lower() == "true"
-        self.allow_insecure = BasicParameter(None, default_insecure)
+        self.allow_insecure = BasicParameter(None, True)
         self.telemetry_port = BasicParameter(None, 9191)
         self.telemetry_retain = None
         self.telemetry_enabled = None
@@ -836,30 +834,6 @@ class TelemetryConfig(YamlParameters):
             yaml_data["allow_insecure"] = self.allow_insecure.value
 
         return yaml_data
-
-    def get_certificate_data(self, name_list):
-        """Get certificate data by name_list.
-
-        Args:
-            name_list (list): list of certificate attribute names.
-
-        Returns:
-            data (dict): a dictionary of parameter directory name keys and
-                value.
-
-        """
-        data = {}
-        if self.allow_insecure.value:
-            return data
-        for name in name_list:
-            value = getattr(self, name).value
-            if isinstance(value, str):
-                dir_name, file_name = os.path.split(value)
-                if dir_name not in data:
-                    data[dir_name] = [file_name]
-                else:
-                    data[dir_name].append(file_name)
-        return data
 
     def _get_new(self):
         """Get a new object based upon this one.

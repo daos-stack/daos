@@ -196,17 +196,12 @@ type (
 		Targets []string `yaml:"targets,omitempty"`
 	}
 
-	tlsConfig struct {
-		InsecureSkipVerify bool `yaml:"insecure_skip_verify,omitempty"`
-	}
-
 	scrapeConfig struct {
 		JobName        string          `yaml:"job_name"`
 		ScrapeInterval time.Duration   `yaml:"scrape_interval,omitempty"`
 		ScrapeTimeout  time.Duration   `yaml:"scrape_timeout,omitempty"`
 		StaticConfigs  []*staticConfig `yaml:"static_configs,omitempty"`
 		Scheme         string          `yaml:"scheme,omitempty"`
-		TlsConfig      tlsConfig       `yaml:"tls_config,omitempty"`
 	}
 
 	promCfg struct {
@@ -264,11 +259,9 @@ func (cmd *telemConfigCmd) configurePrometheus() (*installInfo, error) {
 		return nil, err
 	}
 
-	tc := tlsConfig{}
 	scheme := ""
 	if !cmd.cfgCmd.config.TelemetryConfig.AllowInsecure {
 		cmd.Infof("Prometheus configuration is setup as Secure (https) mode")
-		tc.InsecureSkipVerify = cmd.cfgCmd.config.TelemetryConfig.HttpsException
 		scheme = "https"
 	} else {
 		cmd.Infof("Prometheus configuration is setup as insecure (http) mode")
@@ -280,7 +273,6 @@ func (cmd *telemConfigCmd) configurePrometheus() (*installInfo, error) {
 			ScrapeInterval: 5 * time.Second,
 			StaticConfigs:  []*staticConfig{sc},
 			Scheme:         scheme,
-			TlsConfig:      tc,
 		},
 	}
 
@@ -334,7 +326,6 @@ func (cmd *metricsListCmd) Execute(args []string) error {
 	req := new(control.MetricsListReq)
 	req.Port = cmd.Port
 	req.Host = host
-	req.HttpsException = cmd.cfgCmd.config.TelemetryConfig.HttpsException
 
 	if !cmd.JSONOutputEnabled() {
 		cmd.Info(getConnectingMsg(req.Host, req.Port))
@@ -406,7 +397,6 @@ func (cmd *metricsQueryCmd) Execute(args []string) error {
 	req := new(control.MetricsQueryReq)
 	req.Port = cmd.Port
 	req.Host = host
-	req.HttpsException = cmd.cfgCmd.config.TelemetryConfig.HttpsException
 	req.MetricNames = common.TokenizeCommaSeparatedString(cmd.Metrics)
 
 	if !cmd.JSONOutputEnabled() {

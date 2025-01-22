@@ -40,6 +40,13 @@ func (rm refreshMinutes) Duration() time.Duration {
 	return time.Duration(rm)
 }
 
+// Support Old config options.
+type LegacyConfig struct {
+	TelemetryPort    int           `yaml:"telemetry_port,omitempty"`
+	TelemetryEnabled bool          `yaml:"telemetry_enabled,omitempty"`
+	TelemetryRetain  time.Duration `yaml:"telemetry_retain,omitempty"`
+}
+
 // Config defines the agent configuration.
 type Config struct {
 	SystemName          string                     `yaml:"name"`
@@ -59,10 +66,7 @@ type Config struct {
 	FabricInterfaces    []*NUMAFabricConfig        `yaml:"fabric_ifaces,omitempty"`
 	ProviderIdx         uint                       // TODO SRS-31: Enable with multiprovider functionality
 	TelemetryConfig     *security.TelemetryConfig  `yaml:"telemetry_config"`
-	// Support Old config options.
-	TelemetryPort    int           `yaml:"telemetry_port,omitempty"`
-	TelemetryEnabled bool          `yaml:"telemetry_enabled,omitempty"`
-	TelemetryRetain  time.Duration `yaml:"telemetry_retain,omitempty"`
+	Legacy              LegacyConfig               `yaml:",inline"`
 }
 
 // Validate performs basic validation of the configuration.
@@ -76,16 +80,16 @@ func (c *Config) Validate() error {
 	}
 
 	// Support Old config options and copy it to the underline new structure value.
-	if c.TelemetryRetain > 0 {
-		c.TelemetryConfig.Retain = c.TelemetryRetain
+	if c.Legacy.TelemetryRetain > 0 {
+		c.TelemetryConfig.Retain = c.Legacy.TelemetryRetain
 	}
 
-	if c.TelemetryPort != 0 {
-		c.TelemetryConfig.Port = c.TelemetryPort
+	if c.Legacy.TelemetryPort != 0 {
+		c.TelemetryConfig.Port = c.Legacy.TelemetryPort
 	}
 
-	if c.TelemetryEnabled {
-		c.TelemetryConfig.Enabled = c.TelemetryEnabled
+	if c.Legacy.TelemetryEnabled {
+		c.TelemetryConfig.Enabled = c.Legacy.TelemetryEnabled
 	}
 
 	if c.TelemetryConfig.Retain > 0 && c.TelemetryConfig.Port == 0 {

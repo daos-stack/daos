@@ -45,6 +45,3 @@
 #  # In order to enabled transport security, uncomment and set allow_insecure
 #  # to false.
 #  allow_insecure: true
-#
-#  # Skip the Server certificate verification. Recommended for testing purpose only.
-#  https_exception: true
