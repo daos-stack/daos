@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -186,7 +187,7 @@ struct vea_space_info {
 	struct vea_hint_context		*vsi_bitmap_hint_context;
 	/* Index for searching free extent by size & age */
 	struct vea_free_class		 vsi_class;
-	/* LRU to aggergate just recent freed extents or bitmap blocks */
+	/* LRU to aggregate just recent freed extents or bitmap blocks */
 	d_list_t			 vsi_agg_lru;
 	/*
 	 * Free entries sorted by offset, for coalescing the just recent
