@@ -1,6 +1,5 @@
 //
 // (C) Copyright 2021-2023 Intel Corporation.
-// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -139,7 +138,7 @@ var (
 		"PLACEMENT", "REBUILD", "MGMT", "BIO", "TESTS", "DFS", "DUNS",
 		"DRPC", "SECURITY", "DTX", "DFUSE", "IL", "CSUM", "STACK",
 		"MISC", "MEM", "SWIM", "FI", "TELEM", // Common subsystems (GURT)
-		"CRT", "RPC", "BULK", "CORPC", "GRP", "LM", "HG", "MERCURY", // CaRT subsystems
+		"CRT", "RPC", "BULK", "CORPC", "GRP", "LM", "HG", // CaRT subsystems
 		"EXTERNAL", "ST", "IV", "CTL",
 	}
 	errLogNameAllWithOther = errors.New("'all' identifier can not be used with any other log identifier")
