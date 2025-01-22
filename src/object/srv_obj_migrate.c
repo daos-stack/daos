@@ -4104,7 +4104,7 @@ out:
 
 struct reint_post_ult_arg {
 	struct migrate_pool_tls		*rpa_tls;
-	daos_handle_t			 rpa_migrated_tree_hdl;
+	struct btr_root			*rpa_migrated_root;
 };
 
 static void
@@ -4116,6 +4116,8 @@ reint_post_process_ult(void *data)
 	struct reint_post_iter_arg	 iter_arg = { 0 };
 	vos_iter_param_t		 param = { 0 };
 	struct vos_iter_anchors		 anchor = { 0 };
+	daos_handle_t			 toh = { 0 };
+	struct umem_attr		 uma;
 	int				 rc = 0;
 
 	tls = arg->rpa_tls;
@@ -4126,17 +4128,27 @@ reint_post_process_ult(void *data)
 		goto out;
 	}
 
+	memset(&uma, 0, sizeof(uma));
+	uma.uma_id = UMEM_CLASS_VMEM;
+	rc = dbtree_open_inplace(arg->rpa_migrated_root, &uma, &toh);
+	if (rc) {
+		DL_ERROR(rc, DF_RB" migrated tree open failed", DP_RB_MPT(tls));
+		goto out;
+	}
+
 	param.ip_hdl = pool_child->spc_hdl;
 	param.ip_flags = VOS_IT_FOR_MIGRATION;
 	iter_arg.ria_tls = tls;
 	iter_arg.ria_yield_cnt = REINT_ITER_YIELD_CNT;
-	iter_arg.ria_migrated_tree_hdl = arg->rpa_migrated_tree_hdl;
+	iter_arg.ria_migrated_tree_hdl = toh;
 	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
 			 reint_post_cont_iter_cb, NULL, &iter_arg, NULL);
 	if (rc)
 		DL_ERROR(rc, DF_RB" vos_iterate failed.", DP_RB_MPT(tls));
 
 out:
+	if (daos_handle_is_valid(toh))
+		dbtree_close(toh);
 	if (pool_child != NULL)
 		ds_pool_child_put(pool_child);
 	if (tls->mpt_status == 0)
@@ -4149,7 +4161,7 @@ out:
 struct migrate_query_arg {
 	uuid_t				pool_uuid;
 	ABT_mutex			status_lock;
-	daos_handle_t			mpt_migrated_root_hdl;
+	struct btr_root			*mpt_migrated_root;
 	struct ds_migrate_status	dms;
 	uint32_t			version;
 	uint32_t			total_ult_cnt;
@@ -4215,7 +4227,7 @@ migrate_check_one(void *data)
 			D_GOTO(out, rc = -DER_NOMEM);
 
 		ult_arg->rpa_tls = tls;
-		ult_arg->rpa_migrated_tree_hdl = arg->mpt_migrated_root_hdl;
+		ult_arg->rpa_migrated_root = arg->mpt_migrated_root;
 		rc = dss_ult_create(reint_post_process_ult, ult_arg, DSS_XS_SELF, 0,
 				    MIGRATE_STACK_SIZE, NULL);
 		if (rc) {
@@ -4251,7 +4263,7 @@ ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver, unsigned int generation,
 	arg.version = ver;
 	arg.generation = generation;
 	arg.rebuild_op = op;
-	arg.mpt_migrated_root_hdl = tls->mpt_migrated_root_hdl;
+	arg.mpt_migrated_root = &tls->mpt_migrated_root;
 	rc = ABT_mutex_create(&arg.status_lock);
 	if (rc != ABT_SUCCESS)
 		D_GOTO(out, rc);
