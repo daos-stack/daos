@@ -38,12 +38,12 @@ pool: !mux
   default:
     size: 50G
     svcn: 1
-    !filter-only : /run/launch/nvme/default
+    !filter-only : /run/launch/nvme/default       # yamllint disable-line rule:colons
   md_on_ssd_p2:
     size: 50G
     svcn: 1
     mem_ratio: 100
-    !filter-only : /run/launch/nvme/md_on_ssd_p2
+    !filter-only : /run/launch/nvme/md_on_ssd_p2  # yamllint disable-line rule:colons
 
 container:
   type: POSIX
