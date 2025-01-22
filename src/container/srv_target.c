@@ -702,9 +702,18 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 	D_INIT_LIST_HEAD(&cont->sc_dtx_coll_list);
 	D_INIT_LIST_HEAD(&cont->sc_dtx_batched_list);
 
+	rc = cont_tgt_track_eph_init(cont);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_CONT " init track eph failed.",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
+		goto out_cont;
+	}
+
 	*link = &cont->sc_list;
 	return 0;
 
+out_cont:
+	vos_cont_close(cont->sc_hdl);
 out_pool:
 	ds_pool_child_put(cont->sc_pool);
 out_finish_cond:
@@ -734,6 +743,7 @@ cont_child_free_ref(struct daos_llink *llink)
 	D_DEBUG(DB_MD, DF_CONT": freeing\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
 
+	cont_tgt_track_eph_fini(cont);
 	vos_cont_close(cont->sc_hdl);
 	ds_pool_child_put(cont->sc_pool);
 	daos_csummer_destroy(&cont->sc_csummer);
@@ -892,8 +902,6 @@ cont_child_stop(struct ds_cont_child *cont_child)
 	dtx_cont_deregister(cont_child);
 	D_ASSERT(cont_child->sc_dtx_registered == 0);
 
-	cont_tgt_track_eph_fini(cont_child);
-
 	/* cont_stop_agg() may yield */
 	cont_stop_agg(cont_child);
 	D_ASSERT(cont_child_started(cont_child) == false);
@@ -965,19 +973,13 @@ cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 		rc = -DER_SHUTDOWN;
 	} else if (!cont_child_started(cont_child)) {
 		if (!ds_pool_restricted(pool_child->spc_pool, false)) {
-			rc = cont_tgt_track_eph_init(cont_child);
-			if (rc != 0)
-				goto out;
-
 			rc = cont_start_agg(cont_child);
 			if (rc != 0) {
-				cont_tgt_track_eph_fini(cont_child);
 				goto out;
 			}
 
 			rc = dtx_cont_register(cont_child);
 			if (rc != 0) {
-				cont_tgt_track_eph_fini(cont_child);
 				cont_stop_agg(cont_child);
 				goto out;
 			}
