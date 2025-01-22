@@ -631,7 +631,7 @@ func (svc *mgmtSvc) resolveRanks(hosts, ranks string) (hitRS, missRS *ranklist.R
 	return
 }
 
-// synthesise "Stopped" rank results for any harness host errors
+// synthesize "Stopped" rank results for any harness host errors
 func addUnresponsiveResults(log logging.Logger, hostRanks map[string][]ranklist.Rank, rr *control.RanksResp, resp *fanoutResponse) {
 	for _, hes := range rr.HostErrors {
 		for _, addr := range strings.Split(hes.HostSet.DerangedString(), ",") {
