@@ -172,7 +172,13 @@ jobs:
         id: create-repo
         if: steps.build-rpm.outcome == 'success'
         continue-on-error: true
-        run: CHROOT_NAME=$CHROOT_NAME ci/rpm/create_repo.sh
+        run: |
+             set -eux
+             repo_path="$REPO_PATH$GITHUB_RUN_NUMBER/artifact/artifacts/"
+             mkdir -p "$repo_path$TARGET"
+             cp -a mock_result/*.rpm "$repo_path$TARGET"
+             cd "$repo_path$TARGET"
+             createrepo .
       - name: Test repo
         id: test-repo
         if: steps.create-repo.outcome == 'success'
