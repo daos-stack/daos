@@ -2122,7 +2122,7 @@ const ProtobufCMessageDescriptor mgmt__pool_evict_resp__descriptor =
   (ProtobufCMessageInit) mgmt__pool_evict_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_exclude_req__field_descriptors[5] =
+static const ProtobufCFieldDescriptor mgmt__pool_exclude_req__field_descriptors[6] =
 {
   {
     "sys",
@@ -2184,8 +2184,21 @@ static const ProtobufCFieldDescriptor mgmt__pool_exclude_req__field_descriptors[
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "force",
+    6,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BOOL,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PoolExcludeReq, force),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__pool_exclude_req__field_indices_by_name[] = {
+  5,   /* field[5] = force */
   1,   /* field[1] = id */
   2,   /* field[2] = rank */
   4,   /* field[4] = svc_ranks */
@@ -2195,7 +2208,7 @@ static const unsigned mgmt__pool_exclude_req__field_indices_by_name[] = {
 static const ProtobufCIntRange mgmt__pool_exclude_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 5 }
+  { 0, 6 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_exclude_req__descriptor =
 {
@@ -2205,7 +2218,7 @@ const ProtobufCMessageDescriptor mgmt__pool_exclude_req__descriptor =
   "Mgmt__PoolExcludeReq",
   "mgmt",
   sizeof(Mgmt__PoolExcludeReq),
-  5,
+  6,
   mgmt__pool_exclude_req__field_descriptors,
   mgmt__pool_exclude_req__field_indices_by_name,
   1,  mgmt__pool_exclude_req__number_ranges,
