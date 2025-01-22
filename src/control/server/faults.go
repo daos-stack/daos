@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -110,8 +111,8 @@ func FaultPoolInvalidRanks(invalid []ranklist.Rank) *fault.Fault {
 
 	return serverFault(
 		code.ServerPoolInvalidRanks,
-		fmt.Sprintf("pool request contains invalid ranks: %s", strings.Join(rs, ",")),
-		"retry the request with a valid set of ranks",
+		fmt.Sprintf("pool request contains ranks with invalid state: %s", strings.Join(rs, ",")),
+		"retry the request with a set of ranks that have valid states",
 	)
 }
 

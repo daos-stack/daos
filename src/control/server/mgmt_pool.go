@@ -851,7 +851,7 @@ func (svc *mgmtSvc) PoolExclude(ctx context.Context, req *mgmtpb.PoolExcludeReq)
 }
 
 // PoolDrain implements the method defined for the Management Service.
-func (svc *mgmtSvc) PoolDrain(ctx context.Context, req *mgmtpb.PoolDrainReq) (*mgmtpb.PoolDrainResp, error) {
+func (svc *mgmtSvc) PoolDrain(ctx context.Context, req *mgmtpb.PoolDrainReq) (*mgmtpb.PoolRanksResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
@@ -861,7 +861,7 @@ func (svc *mgmtSvc) PoolDrain(ctx context.Context, req *mgmtpb.PoolDrainReq) (*m
 		return nil, err
 	}
 
-	resp := &mgmtpb.PoolDrainResp{}
+	resp := &mgmtpb.PoolRanksResp{}
 	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
 		return nil, err
 	}
@@ -907,30 +907,34 @@ func (svc *mgmtSvc) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq) (
 }
 
 // PoolReintegrate implements the method defined for the Management Service.
-func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReintReq) (*mgmtpb.PoolReintResp, error) {
+func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReintReq) (*mgmtpb.PoolRanksResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
 
-	// Look up the pool service record to find the storage allocations
-	// used at creation.
+	// Refuse call if any requested rank is not in a valid state.
+	invalid := []ranklist.Rank{}
+	for _, rank := range req.Ranks {
+		r := ranklist.Rank(rank)
+
+		m, err := svc.membership.Get(r)
+		if err != nil {
+			return nil, err
+		}
+
+		if m.State&system.AvailableMemberFilter == 0 {
+			invalid = append(invalid, r)
+		}
+	}
+	if len(invalid) != 0 {
+		return nil, FaultPoolInvalidRanks(invalid)
+	}
+
+	// Look up the pool service record to find the storage allocations used at creation.
 	ps, err := svc.getPoolService(req.GetId())
 	if err != nil {
 		return nil, err
 	}
-
-	r := ranklist.Rank(req.Rank)
-
-	m, err := svc.membership.Get(r)
-	if err != nil {
-		return nil, err
-	}
-
-	if m.State&system.AvailableMemberFilter == 0 {
-		invalid := []ranklist.Rank{r}
-		return nil, FaultPoolInvalidRanks(invalid)
-	}
-
 	req.TierBytes = ps.Storage.PerRankTierStorage
 	req.MemRatio = ps.Storage.MemRatio
 
@@ -939,7 +943,7 @@ func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReintRe
 		return nil, err
 	}
 
-	resp := &mgmtpb.PoolReintResp{}
+	resp := &mgmtpb.PoolRanksResp{}
 	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
 		return nil, err
 	}

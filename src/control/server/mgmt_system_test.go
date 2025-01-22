@@ -1832,19 +1832,19 @@ func TestServer_MgmtSvc_SystemExclude(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
-	dReq := func(id, rank int) *mgmtpb.PoolDrainReq {
+	dReq := func(id int32, ranks ...uint32) *mgmtpb.PoolDrainReq {
 		return &mgmtpb.PoolDrainReq{
 			Sys:      "daos_server",
-			Id:       test.MockUUID(int32(id)),
-			Rank:     uint32(rank),
+			Id:       test.MockUUID(id),
+			Ranks:    ranks,
 			SvcRanks: []uint32{0},
 		}
 	}
-	rReq := func(id, rank int) *mgmtpb.PoolReintReq {
+	rReq := func(id int32, ranks ...uint32) *mgmtpb.PoolReintReq {
 		return &mgmtpb.PoolReintReq{
 			Sys:      "daos_server",
-			Id:       test.MockUUID(int32(id)),
-			Rank:     uint32(rank),
+			Id:       test.MockUUID(id),
+			Ranks:    ranks,
 			SvcRanks: []uint32{0},
 		}
 	}
@@ -1852,14 +1852,13 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 	for name, tc := range map[string]struct {
 		members      system.Members
 		req          *mgmtpb.SystemDrainReq
-		expDrainReqs []*mgmt.PoolDrainReq
-		expReintReqs []*mgmt.PoolReintReq
-		drpcResp     proto.Message
-		drpcErr      error
 		poolRanks    map[string]string
 		useLabels    bool
-		expResp      *mgmtpb.SystemDrainResp
+		expDrainReqs []*mgmt.PoolDrainReq
+		expReintReqs []*mgmt.PoolReintReq
+		drpcResps    []*mockDrpcResponse // Sequential list of dRPC responses.
 		expErr       error
+		expResp      *mgmtpb.SystemDrainResp
 	}{
 		"nil req": {
 			req:    (*mgmtpb.SystemDrainReq)(nil),
@@ -1896,7 +1895,7 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				test.MockUUID(1): "2-5",
 			},
 			expResp: &mgmtpb.SystemDrainResp{
-				Results: []*mgmtpb.PoolRankResult{},
+				Results: []*mgmtpb.PoolRanksResult{},
 			},
 		},
 		"matching ranks; multiple pools; no drpc response": {
@@ -1905,19 +1904,77 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				test.MockUUID(1): "0-4",
 				test.MockUUID(2): "1-7",
 			},
+			expDrainReqs: []*mgmtpb.PoolDrainReq{
+				dReq(1, 0, 1), dReq(2, 1),
+			},
 			expResp: &mgmtpb.SystemDrainResp{
-				Results: []*mgmtpb.PoolRankResult{
+				Results: []*mgmtpb.PoolRanksResult{
 					{
-						PoolId: test.MockUUID(1),
+						Id:     test.MockUUID(1),
 						Ranks:  "0-1",
 						Status: -1025,
-						Msg:    FaultDataPlaneNotStarted.Error(),
+						Msg:    "validate response: dRPC returned no response",
 					},
 					{
-						PoolId: test.MockUUID(2),
+						Id:     test.MockUUID(2),
 						Ranks:  "1",
 						Status: -1025,
-						Msg:    FaultDataPlaneNotStarted.Error(),
+						Msg:    "validate response: dRPC returned no response",
+					},
+				},
+			},
+		},
+		"matching ranks; multiple pools; empty drpc response": {
+			req: &mgmtpb.SystemDrainReq{Ranks: "0,1"},
+			poolRanks: map[string]string{
+				test.MockUUID(1): "0-4",
+				test.MockUUID(2): "1-7",
+			},
+			drpcResps: []*mockDrpcResponse{
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolRanksResp{},
+				},
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolRanksResp{},
+				},
+			},
+			expDrainReqs: []*mgmtpb.PoolDrainReq{
+				dReq(1, 0, 1),
+			},
+			expErr: errors.New("no ranks were operated on"),
+		},
+		"matching ranks; multiple pools; errored drpc response": {
+			req: &mgmtpb.SystemDrainReq{Ranks: "0,1"},
+			poolRanks: map[string]string{
+				test.MockUUID(1): "0-4",
+				test.MockUUID(2): "1-7",
+			},
+			drpcResps: []*mockDrpcResponse{
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolRanksResp{},
+					Error:   errNotReplica,
+				},
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolRanksResp{},
+					Error:   errNotReplica,
+				},
+			},
+			expDrainReqs: []*mgmtpb.PoolDrainReq{
+				dReq(1, 0, 1), dReq(2, 1),
+			},
+			expResp: &mgmtpb.SystemDrainResp{
+				Results: []*mgmtpb.PoolRanksResult{
+					{
+						Id:     test.MockUUID(1),
+						Ranks:  "0-1",
+						Status: -1025,
+						Msg:    errNotReplica.Error(),
+					},
+					{
+						Id:     test.MockUUID(2),
+						Ranks:  "1",
+						Status: -1025,
+						Msg:    errNotReplica.Error(),
 					},
 				},
 			},
@@ -1928,14 +1985,25 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				test.MockUUID(1): "0-4",
 				test.MockUUID(2): "1-7",
 			},
-			drpcResp: &mgmtpb.PoolDrainResp{},
+			drpcResps: []*mockDrpcResponse{
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolRanksResp{
+						SuccessRanks: []uint32{0, 1},
+					},
+				},
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolRanksResp{
+						SuccessRanks: []uint32{1},
+					},
+				},
+			},
 			expDrainReqs: []*mgmtpb.PoolDrainReq{
-				dReq(1, 0), dReq(1, 1), dReq(2, 1),
+				dReq(1, 0, 1), dReq(2, 1),
 			},
 			expResp: &mgmtpb.SystemDrainResp{
-				Results: []*mgmtpb.PoolRankResult{
-					{PoolId: test.MockUUID(1), Ranks: "0-1"},
-					{PoolId: test.MockUUID(2), Ranks: "1"},
+				Results: []*mgmtpb.PoolRanksResult{
+					{Id: test.MockUUID(1), Ranks: "0-1"},
+					{Id: test.MockUUID(2), Ranks: "1"},
 				},
 			},
 		},
@@ -1949,15 +2017,26 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				test.MockUUID(1): "0-4",
 				test.MockUUID(2): "1-7",
 			},
-			drpcResp: &mgmtpb.PoolDrainResp{},
+			drpcResps: []*mockDrpcResponse{
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolRanksResp{
+						SuccessRanks: []uint32{0, 1, 2, 3},
+					},
+				},
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolRanksResp{
+						SuccessRanks: []uint32{1, 2, 3},
+					},
+				},
+			},
 			expDrainReqs: []*mgmtpb.PoolDrainReq{
-				dReq(1, 0), dReq(1, 1), dReq(1, 2), dReq(1, 3),
-				dReq(2, 1), dReq(2, 2), dReq(2, 3),
+				dReq(1, 0, 1, 2, 3),
+				dReq(2, 1, 2, 3),
 			},
 			expResp: &mgmtpb.SystemDrainResp{
-				Results: []*mgmtpb.PoolRankResult{
-					{PoolId: test.MockUUID(1), Ranks: "0-3"},
-					{PoolId: test.MockUUID(2), Ranks: "1-3"},
+				Results: []*mgmtpb.PoolRanksResult{
+					{Id: test.MockUUID(1), Ranks: "0-3"},
+					{Id: test.MockUUID(2), Ranks: "1-3"},
 				},
 			},
 		},
@@ -1972,44 +2051,68 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				test.MockUUID(2): "1-7",
 			},
 			useLabels: true,
-			drpcResp:  &mgmtpb.PoolDrainResp{},
+			drpcResps: []*mockDrpcResponse{
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolRanksResp{
+						SuccessRanks: []uint32{0, 1, 2, 3},
+					},
+				},
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolRanksResp{
+						SuccessRanks: []uint32{1, 2, 3},
+					},
+				},
+			},
 			expDrainReqs: []*mgmtpb.PoolDrainReq{
-				dReq(1, 0), dReq(1, 1), dReq(1, 2), dReq(1, 3),
-				dReq(2, 1), dReq(2, 2), dReq(2, 3),
+				dReq(1, 0, 1, 2, 3), dReq(2, 1, 2, 3),
 			},
 			expResp: &mgmtpb.SystemDrainResp{
-				Results: []*mgmtpb.PoolRankResult{
-					{PoolId: "00000001", Ranks: "0-3"},
-					{PoolId: "00000002", Ranks: "1-3"},
+				Results: []*mgmtpb.PoolRanksResult{
+					{Id: "00000001", Ranks: "0-3"},
+					{Id: "00000002", Ranks: "1-3"},
 				},
 			},
 		},
-		"matching ranks; variable states; drpc fails": {
-			members: system.Members{
-				mockMember(t, 2, 0, "errored"),
-				mockMember(t, 1, 0, "excluded"),
-			},
+		"matching ranks; drpc resp missing failed rank id": {
 			req: &mgmtpb.SystemDrainReq{Ranks: "1-2"},
 			poolRanks: map[string]string{
 				test.MockUUID(1): "0-4",
-				test.MockUUID(2): "1-7",
 			},
-			drpcResp: &mgmtpb.PoolDrainResp{Status: -1},
+			drpcResps: []*mockDrpcResponse{
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolRanksResp{
+						Status:     -1,
+						FailedRank: uint32(ranklist.NilRank),
+					},
+				},
+			},
 			expDrainReqs: []*mgmtpb.PoolDrainReq{
-				dReq(1, 1), dReq(1, 2), dReq(2, 1), dReq(2, 2),
+				dReq(1, 1, 2),
+			},
+			expErr: errors.New("invalid rank returned"),
+		},
+		"matching ranks; drpc fails": {
+			req: &mgmtpb.SystemDrainReq{Ranks: "1-2"},
+			poolRanks: map[string]string{
+				test.MockUUID(1): "0-4",
+			},
+			drpcResps: []*mockDrpcResponse{
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolRanksResp{
+						Status:     -1,
+						FailedRank: 1,
+					},
+				},
+			},
+			expDrainReqs: []*mgmtpb.PoolDrainReq{
+				dReq(1, 1, 2),
 			},
 			expResp: &mgmtpb.SystemDrainResp{
-				Results: []*mgmtpb.PoolRankResult{
+				Results: []*mgmtpb.PoolRanksResult{
 					{
-						PoolId: test.MockUUID(1),
-						Ranks:  "1-2",
-						Status: -1025,
-						Msg:    "DER_UNKNOWN(-1): Unknown error code -1",
-					},
-					{
-						PoolId: test.MockUUID(2),
-						Ranks:  "1-2",
-						Status: -1025,
+						Id:     test.MockUUID(1),
+						Ranks:  "1",
+						Status: -1,
 						Msg:    "DER_UNKNOWN(-1): Unknown error code -1",
 					},
 				},
@@ -2024,44 +2127,65 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				test.MockUUID(1): "0-4",
 				test.MockUUID(2): "1-7",
 			},
-			drpcResp: &mgmtpb.PoolReintResp{},
+			drpcResps: []*mockDrpcResponse{
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolRanksResp{
+						SuccessRanks: []uint32{0, 1},
+					},
+				},
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolRanksResp{
+						SuccessRanks: []uint32{1},
+					},
+				},
+			},
 			expReintReqs: []*mgmtpb.PoolReintReq{
-				rReq(1, 0), rReq(1, 1), rReq(2, 1),
+				rReq(1, 0, 1), rReq(2, 1),
 			},
 			expResp: &mgmtpb.SystemDrainResp{
 				Reint: true,
-				Results: []*mgmtpb.PoolRankResult{
-					{PoolId: test.MockUUID(1), Ranks: "0-1"},
-					{PoolId: test.MockUUID(2), Ranks: "1"},
+				Results: []*mgmtpb.PoolRanksResult{
+					{Id: test.MockUUID(1), Ranks: "0-1"},
+					{Id: test.MockUUID(2), Ranks: "1"},
 				},
 			},
 		},
 		"reintegrate; matching hosts; multiple pools; pool labels": {
 			req: &mgmtpb.SystemDrainReq{
+				Reint: true,
 				// Resolves to ranks 0-3.
 				Hosts: fmt.Sprintf("%s,%s", test.MockHostAddr(1),
 					test.MockHostAddr(2)),
-				Reint: true,
 			},
 			poolRanks: map[string]string{
 				test.MockUUID(1): "0-4",
 				test.MockUUID(2): "1-7",
 			},
 			useLabels: true,
-			drpcResp:  &mgmtpb.PoolReintResp{},
+			drpcResps: []*mockDrpcResponse{
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolRanksResp{
+						SuccessRanks: []uint32{0, 1, 2, 3},
+					},
+				},
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolRanksResp{
+						SuccessRanks: []uint32{1, 2, 3},
+					},
+				},
+			},
 			expReintReqs: []*mgmtpb.PoolReintReq{
-				rReq(1, 0), rReq(1, 1), rReq(1, 2), rReq(1, 3),
-				rReq(2, 1), rReq(2, 2), rReq(2, 3),
+				rReq(1, 0, 1, 2, 3), rReq(2, 1, 2, 3),
 			},
 			expResp: &mgmtpb.SystemDrainResp{
 				Reint: true,
-				Results: []*mgmtpb.PoolRankResult{
-					{PoolId: "00000001", Ranks: "0-3"},
-					{PoolId: "00000002", Ranks: "1-3"},
+				Results: []*mgmtpb.PoolRanksResult{
+					{Id: "00000001", Ranks: "0-3"},
+					{Id: "00000002", Ranks: "1-3"},
 				},
 			},
 		},
-		"reintegrate; matching ranks; variable states; drpc failed": {
+		"reintegrate; matching ranks; some invalid states; drpc not made": {
 			members: system.Members{
 				// Only ranks in joined states can be reintegrated.
 				mockMember(t, 4, 0, "adminexcluded"),
@@ -2077,37 +2201,22 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				test.MockUUID(1): "0-4",
 				test.MockUUID(2): "1-7",
 			},
-			drpcResp: &mgmtpb.PoolReintResp{Status: -1},
-			expReintReqs: []*mgmtpb.PoolReintReq{
-				// dRPC only called for joined rank
-				rReq(1, 3), rReq(2, 3),
-			},
+			// Reint dRPC not made because of ranks with invalid state in request.
+			expReintReqs: []*mgmtpb.PoolReintReq{},
 			expResp: &mgmtpb.SystemDrainResp{
 				Reint: true,
-				Results: []*mgmtpb.PoolRankResult{
+				Results: []*mgmtpb.PoolRanksResult{
 					{
-						PoolId: test.MockUUID(1),
-						Ranks:  "3",
+						Id:     test.MockUUID(1),
+						Ranks:  "1-4",
 						Status: -1025,
-						Msg:    "DER_UNKNOWN(-1): Unknown error code -1",
+						Msg:    "ranks with invalid state: 1,2,4",
 					},
 					{
-						PoolId: test.MockUUID(1),
-						Ranks:  "1-2,4",
+						Id:     test.MockUUID(2),
+						Ranks:  "1-4",
 						Status: -1025,
-						Msg:    msgInvalidRank,
-					},
-					{
-						PoolId: test.MockUUID(2),
-						Ranks:  "3",
-						Status: -1025,
-						Msg:    "DER_UNKNOWN(-1): Unknown error code -1",
-					},
-					{
-						PoolId: test.MockUUID(2),
-						Ranks:  "1-2,4",
-						Status: -1025,
-						Msg:    msgInvalidRank,
+						Msg:    "ranks with invalid state: 1,2,4",
 					},
 				},
 			},
@@ -2147,11 +2256,10 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				})
 			}
 
-			var mockDrpc *mockDrpcClient
-			if tc.drpcResp != nil {
-				mockDrpc = getMockDrpcClient(tc.drpcResp, tc.drpcErr)
-				setupSvcDrpcClient(svc, 0, mockDrpc)
-			}
+			dcc := new(mockDrpcClientConfig)
+			dcc.setSendMsgResponseList(t, tc.drpcResps...)
+			mdc := newMockDrpcClient(dcc)
+			setupSvcDrpcClient(svc, 0, mdc)
 
 			if tc.req != nil && tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName
@@ -2159,23 +2267,28 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 
 			gotResp, gotErr := svc.SystemDrain(test.MustLogContext(t, log), tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
-			if tc.expErr != nil {
-				return
+
+			if tc.expErr == nil {
+				cmpOpts := []cmp.Option{
+					cmpopts.IgnoreUnexported(mgmtpb.SystemDrainResp{},
+						mgmtpb.PoolRanksResult{}),
+					cmpopts.IgnoreFields(mgmtpb.PoolRanksResult{},
+						"Msg"),
+				}
+				if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
+					t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+				}
+				// Compare errors are approximate.
+				for i, r := range tc.expResp.Results {
+					if r.Msg != "" {
+						e1 := errors.New(r.Msg)
+						e2 := errors.New(gotResp.Results[i].Msg)
+						test.CmpErr(t, e1, e2)
+					}
+				}
 			}
 
-			cmpOpts := []cmp.Option{
-				cmpopts.IgnoreUnexported(mgmtpb.SystemDrainResp{},
-					mgmtpb.PoolRankResult{}),
-			}
-			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
-				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
-			}
-
-			if mockDrpc == nil {
-				return
-			}
-
-			gotDrpcCalls := mockDrpc.calls.get()
+			gotDrpcCalls := mdc.calls.get()
 
 			nrDrpcCalls := len(gotDrpcCalls)
 			nrDrainReqs := len(tc.expDrainReqs)

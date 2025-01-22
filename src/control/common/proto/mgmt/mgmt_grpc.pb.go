@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -94,11 +95,11 @@ type MgmtSvcClient interface {
 	// Exclude a pool target.
 	PoolExclude(ctx context.Context, in *PoolExcludeReq, opts ...grpc.CallOption) (*PoolExcludeResp, error)
 	// Drain a pool target.
-	PoolDrain(ctx context.Context, in *PoolDrainReq, opts ...grpc.CallOption) (*PoolDrainResp, error)
+	PoolDrain(ctx context.Context, in *PoolDrainReq, opts ...grpc.CallOption) (*PoolRanksResp, error)
 	// Extend a pool.
 	PoolExtend(ctx context.Context, in *PoolExtendReq, opts ...grpc.CallOption) (*PoolExtendResp, error)
 	// Reintegrate a pool target.
-	PoolReintegrate(ctx context.Context, in *PoolReintReq, opts ...grpc.CallOption) (*PoolReintResp, error)
+	PoolReintegrate(ctx context.Context, in *PoolReintReq, opts ...grpc.CallOption) (*PoolRanksResp, error)
 	// PoolQuery queries a DAOS pool.
 	PoolQuery(ctx context.Context, in *PoolQueryReq, opts ...grpc.CallOption) (*PoolQueryResp, error)
 	// PoolQueryTarget queries a DAOS storage target.
@@ -242,8 +243,8 @@ func (c *mgmtSvcClient) PoolExclude(ctx context.Context, in *PoolExcludeReq, opt
 	return out, nil
 }
 
-func (c *mgmtSvcClient) PoolDrain(ctx context.Context, in *PoolDrainReq, opts ...grpc.CallOption) (*PoolDrainResp, error) {
-	out := new(PoolDrainResp)
+func (c *mgmtSvcClient) PoolDrain(ctx context.Context, in *PoolDrainReq, opts ...grpc.CallOption) (*PoolRanksResp, error) {
+	out := new(PoolRanksResp)
 	err := c.cc.Invoke(ctx, MgmtSvc_PoolDrain_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -260,8 +261,8 @@ func (c *mgmtSvcClient) PoolExtend(ctx context.Context, in *PoolExtendReq, opts 
 	return out, nil
 }
 
-func (c *mgmtSvcClient) PoolReintegrate(ctx context.Context, in *PoolReintReq, opts ...grpc.CallOption) (*PoolReintResp, error) {
-	out := new(PoolReintResp)
+func (c *mgmtSvcClient) PoolReintegrate(ctx context.Context, in *PoolReintReq, opts ...grpc.CallOption) (*PoolRanksResp, error) {
+	out := new(PoolRanksResp)
 	err := c.cc.Invoke(ctx, MgmtSvc_PoolReintegrate_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -604,11 +605,11 @@ type MgmtSvcServer interface {
 	// Exclude a pool target.
 	PoolExclude(context.Context, *PoolExcludeReq) (*PoolExcludeResp, error)
 	// Drain a pool target.
-	PoolDrain(context.Context, *PoolDrainReq) (*PoolDrainResp, error)
+	PoolDrain(context.Context, *PoolDrainReq) (*PoolRanksResp, error)
 	// Extend a pool.
 	PoolExtend(context.Context, *PoolExtendReq) (*PoolExtendResp, error)
 	// Reintegrate a pool target.
-	PoolReintegrate(context.Context, *PoolReintReq) (*PoolReintResp, error)
+	PoolReintegrate(context.Context, *PoolReintReq) (*PoolRanksResp, error)
 	// PoolQuery queries a DAOS pool.
 	PoolQuery(context.Context, *PoolQueryReq) (*PoolQueryResp, error)
 	// PoolQueryTarget queries a DAOS storage target.
@@ -707,13 +708,13 @@ func (UnimplementedMgmtSvcServer) PoolEvict(context.Context, *PoolEvictReq) (*Po
 func (UnimplementedMgmtSvcServer) PoolExclude(context.Context, *PoolExcludeReq) (*PoolExcludeResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PoolExclude not implemented")
 }
-func (UnimplementedMgmtSvcServer) PoolDrain(context.Context, *PoolDrainReq) (*PoolDrainResp, error) {
+func (UnimplementedMgmtSvcServer) PoolDrain(context.Context, *PoolDrainReq) (*PoolRanksResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PoolDrain not implemented")
 }
 func (UnimplementedMgmtSvcServer) PoolExtend(context.Context, *PoolExtendReq) (*PoolExtendResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PoolExtend not implemented")
 }
-func (UnimplementedMgmtSvcServer) PoolReintegrate(context.Context, *PoolReintReq) (*PoolReintResp, error) {
+func (UnimplementedMgmtSvcServer) PoolReintegrate(context.Context, *PoolReintReq) (*PoolRanksResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PoolReintegrate not implemented")
 }
 func (UnimplementedMgmtSvcServer) PoolQuery(context.Context, *PoolQueryReq) (*PoolQueryResp, error) {

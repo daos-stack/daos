@@ -79,13 +79,13 @@ message SystemExcludeResp {
 	repeated shared.RankResult results = 1;
 }
 
-// Results for system OSA calls on multiple pool-ranks.
-message PoolRankResult
+// Results for operations on multiple pool-ranks.
+message PoolRanksResult
 {
 	int32  status  = 1; // Status of the OSA operation on a specific pool
 	string msg     = 2; // Error message if status indicates an error
-	string pool_id = 3; // Label or uuid of pool
-	string ranks   = 4; // Rank-set that has encountered this result
+	string id      = 3; // Label or uuid of pool
+	string ranks   = 4; // rankset that has encountered this result
 }
 
 // SystemDrainReq supplies system-drain parameters.
@@ -101,7 +101,7 @@ message SystemDrainReq
 message SystemDrainResp
 {
 	bool                    reint   = 1; // Flag to indicate if results are for drain or reint.
-	repeated PoolRankResult results = 2; // Results for drain or reint calls on pool-ranks.
+	repeated PoolRanksResult results = 2; // Results for drain or reint calls on pool-ranks.
 }
 
 // SystemQueryReq supplies system query parameters.
