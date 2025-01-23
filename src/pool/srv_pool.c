@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -190,6 +191,11 @@ sched_cancel_and_wait(struct pool_svc_sched *sched)
 	sched_wait(sched);
 }
 
+struct pool_space_cache {
+	struct daos_pool_space psc_space;
+	uint64_t               psc_timestamp;
+};
+
 /* Pool service */
 struct pool_svc {
 	struct ds_rsvc		ps_rsvc;
@@ -202,6 +208,7 @@ struct pool_svc {
 	rdb_path_t              ps_user;     /* pool user attributes KVS */
 	rdb_path_t              ps_ops;      /* metadata ops KVS */
 	struct pool_svc_events	ps_events;
+	struct pool_space_cache ps_space_cache;
 	uint32_t		ps_global_version;
 	int			ps_svc_rf;
 	bool                    ps_force_notify; /* MS of PS membership */
@@ -4434,7 +4441,17 @@ pool_space_query_bcast(crt_context_t ctx, struct pool_svc *svc, uuid_t pool_hdl,
 	struct pool_tgt_query_in	*in;
 	struct pool_tgt_query_out	*out;
 	crt_rpc_t			*rpc;
+	struct pool_space_cache         *cache    = &svc->ps_space_cache;
+	uint64_t                         cur_time = 0;
 	int				 rc;
+
+	if (ps_cache_intvl > 0) {
+		cur_time = daos_gettime_coarse();
+		if (cur_time < cache->psc_timestamp + ps_cache_intvl) {
+			*ps = cache->psc_space;
+			return 0;
+		}
+	}
 
 	D_DEBUG(DB_MD, DF_UUID": bcasting\n", DP_UUID(svc->ps_uuid));
 
@@ -4463,6 +4480,10 @@ pool_space_query_bcast(crt_context_t ctx, struct pool_svc *svc, uuid_t pool_hdl,
 	} else {
 		D_ASSERT(ps != NULL);
 		*ps = out->tqo_space;
+		if (ps_cache_intvl > 0 && cur_time > cache->psc_timestamp) {
+			cache->psc_timestamp = cur_time;
+			cache->psc_space     = *ps;
+		}
 	}
 
 out_rpc:
