@@ -428,8 +428,6 @@ jobs:
       LABEL:
       COMMIT_STATUS_DISTRO_VERSION:
     steps:
-      - name: Import commit pragmas
-        uses: ./.github/actions/import-commit-pragmas
       - name: Set variables
         run: |
             STAGE_TAGS=""
