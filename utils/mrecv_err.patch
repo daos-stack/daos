@@ -1,0 +1,132 @@
+diff --git a/src/mercury_core.c b/src/mercury_core.c
+index 3c177630..e56539f1 100644
+--- a/src/mercury_core.c
++++ b/src/mercury_core.c
+@@ -4727,12 +4727,23 @@ hg_core_multi_recv_input_cb(const struct na_cb_info *callback_info)
+     } else if (callback_info->ret == NA_CANCELED) {
+         HG_LOG_SUBSYS_DEBUG(
+             rpc, "NA_CANCELED event on multi-recv op %d", multi_recv_op->id);
+-        hg_atomic_decr32(&context->multi_recv_op_count);
++        if (na_cb_info_multi_recv_unexpected->last) {
++            HG_LOG_SUBSYS_DEBUG(rpc,
++                "This is the last buffer of multi-recv op %d, marking as last",
++                multi_recv_op->id);
++            hg_atomic_set32(&multi_recv_op->last, true);
++            hg_atomic_decr32(&context->multi_recv_op_count);
++        }
+     } else {
+         HG_LOG_SUBSYS_ERROR(rpc, "NA callback returned error (%s)",
+             NA_Error_to_string(callback_info->ret));
+-        hg_atomic_decr32(&context->multi_recv_op_count);
+-        /* TODO can an unexpected multi-recv operation ever fail? */
++        if (na_cb_info_multi_recv_unexpected->last) {
++            HG_LOG_SUBSYS_DEBUG(rpc,
++                "This is the last buffer of multi-recv op %d, marking as last",
++                multi_recv_op->id);
++            hg_atomic_set32(&multi_recv_op->last, true);
++            hg_atomic_decr32(&context->multi_recv_op_count);
++        }
+     }
+ 
+     return;
+diff --git a/src/na/na_ofi.c b/src/na/na_ofi.c
+index 92ddacc4..5b955ce0 100644
+--- a/src/na/na_ofi.c
++++ b/src/na/na_ofi.c
+@@ -1629,6 +1629,14 @@ na_ofi_cq_process_multi_recv_unexpected(struct na_ofi_class *na_ofi_class,
+     void *buf, size_t len, struct na_ofi_addr *na_ofi_addr, uint64_t tag,
+     bool last);
+ 
++/**
++ * Multi-recv unexpected operation events (error).
++ */
++static NA_INLINE void
++na_ofi_cq_process_error_multi_recv_unexpected(
++    struct na_cb_info_multi_recv_unexpected *multi_recv_unexpected_info,
++    bool last);
++
+ /**
+  * Recv expected operation events.
+  */
+@@ -6537,6 +6545,7 @@ na_ofi_cq_readerr(struct fid_cq *cq, struct fi_cq_tagged_entry *cq_event,
+     switch (cq_err.err) {
+         case FI_ECANCELED: {
+             struct na_ofi_op_id *na_ofi_op_id = NULL;
++            bool complete;
+ 
+             NA_CHECK_SUBSYS_ERROR(op, cq_err.op_context == NULL, out, ret,
+                 NA_INVALID_ARG, "Invalid operation context");
+@@ -6559,8 +6568,23 @@ na_ofi_cq_readerr(struct fid_cq *cq, struct fi_cq_tagged_entry *cq_event,
+                 "Operation ID was not canceled by user");
+             */
+ 
++            /* Multi-recv buffers may still be used even after an error has been
++             * reported, hence we can only complete the operation if the
++             * FI_MULTI_RECV flag is set. */
++            if (na_ofi_op_id->type == NA_CB_MULTI_RECV_UNEXPECTED) {
++                complete = cq_err.flags & FI_MULTI_RECV;
++                NA_LOG_SUBSYS_DEBUG(op,
++                    "FI_ECANCELED reported on multi-recv (completed=%d)",
++                    complete);
++                na_ofi_cq_process_error_multi_recv_unexpected(
++                    &na_ofi_op_id->completion_data->callback_info.info
++                         .multi_recv_unexpected,
++                    complete);
++            } else
++                complete = true;
++
+             /* Complete operation in canceled state */
+-            na_ofi_op_id->complete(na_ofi_op_id, true, NA_CANCELED);
++            na_ofi_op_id->complete(na_ofi_op_id, complete, NA_CANCELED);
+         } break;
+ 
+         case FI_EADDRNOTAVAIL:
+@@ -6601,6 +6625,7 @@ na_ofi_cq_readerr(struct fid_cq *cq, struct fi_cq_tagged_entry *cq_event,
+                 struct na_ofi_op_id *na_ofi_op_id = container_of(
+                     cq_err.op_context, struct na_ofi_op_id, fi_ctx);
+                 na_return_t na_ret = na_ofi_errno_to_na(cq_err.err);
++                bool complete;
+ 
+                 NA_CHECK_SUBSYS_ERROR(op, na_ofi_op_id == NULL, out, ret,
+                     NA_INVALID_ARG, "Invalid operation ID");
+@@ -6622,8 +6647,23 @@ na_ofi_cq_readerr(struct fid_cq *cq, struct fi_cq_tagged_entry *cq_event,
+                         NA_OFI_CONTEXT(na_ofi_op_id->context),
+                         na_ofi_op_id->addr->fi_addr, NA_HOSTUNREACH);
+ 
++                /* Multi-recv buffers may still be used even after an error has
++                 * been reported, hence we can only complete the operation if
++                 * the FI_MULTI_RECV flag is set. */
++                if (na_ofi_op_id->type == NA_CB_MULTI_RECV_UNEXPECTED) {
++                    complete = cq_err.flags & FI_MULTI_RECV;
++                    NA_LOG_SUBSYS_DEBUG(op,
++                        "error reported on multi-recv (completed=%d)",
++                        complete);
++                    na_ofi_cq_process_error_multi_recv_unexpected(
++                        &na_ofi_op_id->completion_data->callback_info.info
++                             .multi_recv_unexpected,
++                        complete);
++                } else
++                    complete = true;
++
+                 /* Complete operation in error state */
+-                na_ofi_op_id->complete(na_ofi_op_id, true, na_ret);
++                na_ofi_op_id->complete(na_ofi_op_id, complete, na_ret);
+             }
+             break;
+     }
+@@ -6913,6 +6953,15 @@ na_ofi_cq_process_multi_recv_unexpected(struct na_ofi_class *na_ofi_class,
+     return ret;
+ }
+ 
++/*---------------------------------------------------------------------------*/
++static NA_INLINE void
++na_ofi_cq_process_error_multi_recv_unexpected(
++    struct na_cb_info_multi_recv_unexpected *multi_recv_unexpected_info,
++    bool last)
++{
++    multi_recv_unexpected_info->last = last;
++}
++
+ /*---------------------------------------------------------------------------*/
+ static NA_INLINE na_return_t
+ na_ofi_cq_process_recv_expected(const struct na_ofi_msg_info *msg_info,
