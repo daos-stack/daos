@@ -427,6 +427,7 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 		case DAOS_PROP_PO_CHECKPOINT_MODE:
 		case DAOS_PROP_PO_CHECKPOINT_THRESH:
 		case DAOS_PROP_PO_CHECKPOINT_FREQ:
+		case DAOS_PROP_PO_REINT_MODE:
 			entry_def->dpe_val = entry->dpe_val;
 			break;
 		case DAOS_PROP_PO_ACL:
@@ -7389,6 +7390,8 @@ pool_discard(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr_li
 	int				i;
 	int				rc;
 
+	D_ASSERTF(svc->ps_pool->sp_incr_reint == 0, "incremental reint should not get here\n");
+
 	rank_list = d_rank_list_alloc(list->pta_number);
 	if (rank_list == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
@@ -8515,6 +8518,22 @@ is_pool_from_srv(uuid_t pool_uuid, uuid_t poh_uuid)
 	}
 
 	return rc ? true : false;
+}
+
+/* Query the target(by id)'s status */
+int
+ds_pool_target_status(struct ds_pool *pool, uint32_t id)
+{
+	struct pool_target *target;
+	int		   rc;
+
+	ABT_rwlock_rdlock(pool->sp_lock);
+	rc = pool_map_find_target(pool->sp_map, id, &target);
+	ABT_rwlock_unlock(pool->sp_lock);
+	if (rc <= 0)
+		return rc == 0 ? -DER_NONEXIST : rc;
+
+	return (int)target->ta_comp.co_status;
 }
 
 /* Check if the target(by id) matched the status */
