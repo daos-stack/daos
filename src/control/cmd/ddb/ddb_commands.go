@@ -342,7 +342,7 @@ the path must include the extent, otherwise, it must not.`,
 		HelpGroup: "vos",
 		Args: func(a *grumble.Args) {
 			a.String("path", "VOS tree path to a container.")
-			a.String("dtx_id", "DTX id of the entry to validate.")
+			a.String("dtx_id", "DTX id of the entry to validate or 'all' to validate all active DTX entries.")
 		},
 		Run: func(c *grumble.Context) error {
 			return ddbDtxActDiscardInvalid(ctx, c.Args.String("path"), c.Args.String("dtx_id"))
