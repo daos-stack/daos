@@ -56,6 +56,8 @@ def scons():
     vos_src = Glob('../../../vos/*.c')
 
     mock_src = Glob('../../../dtx/tests/*_mock.c')
+    # Pylint does not like the exclude keyword below, but it works.
+    # pylint: disable=unexpected-keyword-arg
     ddb_src = Glob('../*.c', exclude=['../ddb_entry.c'])
     src = ['ddb_ut.c', 'ddb_vos_ut.c']
     ddb_ut = denv.d_program('ddb_ut', src + vos_src + mock_src + ddb_src, LIBS=libs + spdk_libs)
