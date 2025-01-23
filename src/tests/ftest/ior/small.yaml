@@ -36,13 +36,11 @@ dmg:
 
 pool: !mux
   default:
-    scm_size: 3000000000
-    nvme_size: 9000000000
+    size: 50G
     !filter-only : /run/launch/nvme/default       # yamllint disable-line rule:colons
   md_on_ssd_p2:
-    scm_size: 3G
-    nvme_size: 9G
-    mem_ratio: 100
+    size: 50G
+    mem_ratio: 50
     !filter-only : /run/launch/nvme/md_on_ssd_p2  # yamllint disable-line rule:colons
 
 container:

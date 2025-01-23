@@ -42,7 +42,7 @@ pool: !mux
   md_on_ssd_p2:
     size: 50G
     svcn: 1
-    mem_ratio: 100
+    mem_ratio: 50
     !filter-only : /run/launch/nvme/md_on_ssd_p2  # yamllint disable-line rule:colons
 
 container:
