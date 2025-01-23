@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -427,6 +428,7 @@ update:
 
 	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
 	rc = ilog_open(vos_cont2umm(cont), ilog, &cbs, dth == NULL, &loh);
+	D_ASSERTF(rc != -DER_NONEXIST, "Uncorrectable incarnation log corruption detected");
 	if (rc != 0) {
 		D_ERROR("Could not open incarnation log: "DF_RC"\n", DP_RC(rc));
 		return rc;
@@ -522,6 +524,7 @@ vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
 punch_log:
 	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
 	rc = ilog_open(vos_cont2umm(cont), ilog, &cbs, dth == NULL, &loh);
+	D_ASSERTF(rc != -DER_NONEXIST, "Uncorrectable incarnation log corruption detected");
 	if (rc != 0) {
 		D_ERROR("Could not open incarnation log: "DF_RC"\n", DP_RC(rc));
 		return rc;
