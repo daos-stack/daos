@@ -903,7 +903,7 @@ class PreReqComponent():
             if not os.path.exists(ipath):
                 ipath = None
             lpath = None
-            for lib in ['lib64', 'lib']:
+            for lib in self.lib_path:
                 lpath = os.path.join(path, lib)
                 if os.path.exists(lpath):
                     break
@@ -1394,7 +1394,7 @@ class _Component():
         if not os.path.exists(comp_path):
             return
 
-        for libdir in ['lib64', 'lib']:
+        for libdir in self.lib_path:
             path = os.path.join(comp_path, libdir)
             if os.path.exists(path):
                 norigin.append(os.path.normpath(path))
@@ -1406,14 +1406,14 @@ class _Component():
                 comp = self.prereqs.get_component(prereq)
                 subpath = comp.component_prefix
                 if subpath and not subpath.startswith("/usr"):
-                    for libdir in ['lib64', 'lib']:
+                    for libdir in self.lib_path:
                         lpath = os.path.join(subpath, libdir)
                         if not os.path.exists(lpath):
                             continue
                         rpath.append(lpath)
                 continue
 
-            for libdir in ['lib64', 'lib']:
+            for libdir in self.lib_path:
                 path = os.path.join(rootpath, libdir)
                 if not os.path.exists(path):
                     continue
