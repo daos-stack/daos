@@ -15,7 +15,7 @@ import yaml
 from ClusterShell.NodeSet import NodeSet
 # pylint: disable=import-error,no-name-in-module
 from util.run_utils import run_remote
-from util.yaml_utils import YamlException, write_yaml_file
+from util.yaml_utils import write_yaml_file
 
 
 def find_pci_address(value, *flags):

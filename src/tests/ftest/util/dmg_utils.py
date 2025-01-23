@@ -535,7 +535,7 @@ class DmgCommand(DmgCommandBase):
 
         return self._get_json_result(("support", "collect-log"), **kwargs)
 
-    def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None, 
+    def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
                     target_list=None, svcn=None, acl_file=None, size=None,
                     tier_ratio=None, properties=None, label=None, nranks=None,
                     mem_ratio=None):

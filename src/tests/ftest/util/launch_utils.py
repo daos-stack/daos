@@ -1143,7 +1143,7 @@ class TestGroup():
                 test.extra_yaml.insert(0, engine_storage_yaml[engines])
 
     def _add_launch_param_yaml(self, logger, yaml_dir):
-        """Add extra yaml for muxed launch parameter branches.
+        """Add extra yaml for multiplexation launch parameter branches.
 
         Args:
             logger (Logger): logger for the messages produced by this method
@@ -1152,14 +1152,14 @@ class TestGroup():
         Raises:
             YamlException: if there was an error writing the yaml file
         """
-        yaml_file = os.path.join(yaml_dir, f"extra_yaml_launch_params.yaml")
-        lines = ['launch']
+        yaml_file = os.path.join(yaml_dir, "extra_yaml_launch_params.yaml")
+        lines = ['launch:']
         lines.append('  nvme: !mux')
         labels = ['default']
         if self._nvme.startswith("auto_md_on_ssd"):
             labels.append('md_on_ssd_p2')
         for label in labels:
-            lines.append(f'    {label}')
+            lines.append(f'    {label}:')
             lines.append('      on: true')
         write_yaml_file(logger, yaml_file, lines)
 
