@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 (C) Copyright 2018-2022 Intel Corporation.
-(C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -23,6 +23,12 @@ from SCons.Script import WhereIs
 MIN_FORMAT_VERSION = 12
 
 
+def errprint(*args, **kwargs):
+    """Print message on stderr.
+    """
+    print(*args, file=sys.stderr, **kwargs)
+
+
 def _get_version_string():
     clang_exe = WhereIs('clang-format')
     if clang_exe is None:
@@ -41,14 +47,14 @@ def _supports_custom_format(version):
     Older versions complain about some of the options used so enforce a minimum version.
     """
     if version is None:
-        print("Unsupported clang-format for custom style.  Using Mozilla style.")
+        errprint("Unsupported clang-format for custom style.  Using Mozilla style.")
         return False
 
     match = re.search(r"(\d+)\.", version)
     if match and int(match.group(1)) >= MIN_FORMAT_VERSION:
         return True
 
-    print(f'Custom .clang-format wants version {MIN_FORMAT_VERSION}+. Using Mozilla style.')
+    errprint(f'Custom .clang-format wants version {MIN_FORMAT_VERSION}+. Using Mozilla style.')
     return False
 
 
@@ -109,7 +115,7 @@ def main():
     """Check for a supported version of clang-format"""
     version = _get_version_string()
     if (version is None) or (not _supports_correct_style(version)):
-        print('Install clang-format version 14.0.5 or newer to reformat code')
+        errprint('Install clang-format version 14.0.5 or newer to reformat code')
         sys.exit(1)
     print(f"Clang-format version {version} installed")
     sys.exit(0)
