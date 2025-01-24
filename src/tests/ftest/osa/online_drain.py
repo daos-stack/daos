@@ -31,6 +31,7 @@ class OSAOnlineDrain(OSAUtils):
         self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir)
         self.dmg_command.exit_status_exception = True
         self.pool = None
+        self.multiple_ranks = None
 
     def run_online_drain_test(self, num_pool, oclass=None, app_name="ior"):
         """Run the Online drain without data.
@@ -52,6 +53,9 @@ class OSAOnlineDrain(OSAUtils):
 
         # Drain one of the ranks (or server)
         rank = self.random.choice(list(self.server_managers[0].ranks.keys()))
+        # For testing with multiple ranks as dmg parameters, use a list of ranks.
+        if self.test_with_multiple_ranks is True:
+            rank = self.multiple_ranks
 
         for val in range(0, num_pool):
             pool[val] = add_pool(self, connect=False)
