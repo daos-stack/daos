@@ -194,6 +194,7 @@ sched_cancel_and_wait(struct pool_svc_sched *sched)
 struct pool_space_cache {
 	struct daos_pool_space psc_space;
 	uint64_t               psc_timestamp;
+	ABT_mutex              psc_lock;
 };
 
 /* Pool service */
@@ -1240,9 +1241,16 @@ pool_svc_alloc_cb(d_iov_t *id, struct ds_rsvc **rsvc)
 		goto err_pool;
 	}
 
+	rc = ABT_mutex_create(&svc->ps_space_cache.psc_lock);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("failed to create psc_lock: %d\n", rc);
+		rc = dss_abterr2der(rc);
+		goto err_lock;
+	}
+
 	rc = rdb_path_init(&svc->ps_root);
 	if (rc != 0)
-		goto err_lock;
+		goto err_psc_lock;
 	rc = rdb_path_push(&svc->ps_root, &rdb_path_root_key);
 	if (rc != 0)
 		goto err_root;
@@ -1311,6 +1319,8 @@ err_handles:
 	rdb_path_fini(&svc->ps_handles);
 err_root:
 	rdb_path_fini(&svc->ps_root);
+err_psc_lock:
+	ABT_mutex_free(&svc->ps_space_cache.psc_lock);
 err_lock:
 	ABT_rwlock_free(&svc->ps_lock);
 err_pool:
@@ -4443,14 +4453,19 @@ pool_space_query_bcast(crt_context_t ctx, struct pool_svc *svc, uuid_t pool_hdl,
 	crt_rpc_t			*rpc;
 	struct pool_space_cache         *cache    = &svc->ps_space_cache;
 	uint64_t                         cur_time = 0;
+	bool                             unlock   = false;
 	int				 rc;
 
 	if (ps_cache_intvl > 0) {
+		ABT_mutex_lock(cache->psc_lock);
+
 		cur_time = daos_gettime_coarse();
 		if (cur_time < cache->psc_timestamp + ps_cache_intvl) {
 			*ps = cache->psc_space;
+			ABT_mutex_unlock(cache->psc_lock);
 			return 0;
 		}
+		unlock = true;
 	}
 
 	D_DEBUG(DB_MD, DF_UUID": bcasting\n", DP_UUID(svc->ps_uuid));
@@ -4489,6 +4504,9 @@ pool_space_query_bcast(crt_context_t ctx, struct pool_svc *svc, uuid_t pool_hdl,
 out_rpc:
 	crt_req_decref(rpc);
 out:
+	if (unlock)
+		ABT_mutex_unlock(cache->psc_lock);
+
 	D_DEBUG(DB_MD, DF_UUID": bcasted: "DF_RC"\n", DP_UUID(svc->ps_uuid),
 		DP_RC(rc));
 	return rc;
