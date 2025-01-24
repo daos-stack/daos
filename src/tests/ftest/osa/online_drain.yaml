@@ -90,3 +90,6 @@ rebuild:
   test_with_rebuild: true
 checksum:
   test_with_checksum: false
+mutliple_ranks:
+  test_with_multiple_ranks: true
+  rank_list: ["1, 2"]

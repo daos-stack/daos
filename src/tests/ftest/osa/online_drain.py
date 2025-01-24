@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -186,3 +187,19 @@ class OSAOnlineDrain(OSAUtils):
         """
         self.log.info("Online Drain : With Mdtest")
         self.run_online_drain_test(1, app_name="mdtest")
+
+    def test_osa_online_drain_with_multiple_ranks(self):
+        """Test ID: DAOS-4753.
+
+        Test Description: Drain multiple ranks at the same time.
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=osa,osa_drain,online_drain
+        :avocado: tags=OSAOnlineDrain,test_osa_online_drain_with_multiple_ranks
+        """
+        self.log.info("Online Drain : Test with mutiple ranks")
+        self.test_with_multiple_ranks = self.params.get("test_with_multiple_ranks",
+                                                        '/run/multiple_ranks/*')
+        self.multiple_ranks = self.params.get("rank_list", '/run/multiple_ranks/*')
+        self.run_online_drain_test(1, data=True)

@@ -1,4 +1,9 @@
-#!/bin/bash
+#!/usr/bin/env bash
+#
+#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
 
 VERSION=$(git --version | sed -ne 's/^[^0-9]*\([[0-9\.]*\).*/\1/p')
 if [ -z "$VERSION" ]; then
