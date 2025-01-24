@@ -1648,9 +1648,6 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		rc = dtx_cont_open(hdl->sch_cont);
 		if (rc != 0) {
 			ABT_mutex_unlock(hdl->sch_cont->sc_mutex);
-			D_ASSERTF(hdl->sch_cont->sc_open == 1, "Unexpected open count for cont "
-				  DF_UUID": %d\n", DP_UUID(cont_uuid), hdl->sch_cont->sc_open);
-
 			hdl->sch_cont->sc_open--;
 			D_GOTO(err_cont, rc);
 		}
@@ -1692,9 +1689,6 @@ opened:
 	return 0;
 
 err_dtx:
-	D_ASSERTF(hdl->sch_cont->sc_open == 1, "Unexpected open count for cont "
-		  DF_UUID": %d\n", DP_UUID(cont_uuid), hdl->sch_cont->sc_open);
-
 	hdl->sch_cont->sc_open--;
 	dtx_cont_close(hdl->sch_cont, true);
 
