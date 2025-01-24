@@ -364,13 +364,13 @@ class PoolSecurityTestBase(TestWithServers):
         for uid in range(num_user):
             username = user_prefix + "_tester_" + str(uid + 1)
             new_user = "A::" + username + "@:" + PERMISSIONS[uid % 4]
-            if not useradd(self.log, self.hostlist_clients, username, sudo=True).passed:
+            if not useradd(self.log, self.hostlist_clients, username).passed:
                 self.fail(f"Failed to useradd {username}")
             user_list.append(new_user)
         for gid in range(num_group):
             groupname = user_prefix + "_testGrp_" + str(gid + 1)
             new_group = "A:G:" + groupname + "@:" + PERMISSIONS[(gid + 2) % 4]
-            if not groupadd(self.log, self.hostlist_clients, groupname, sudo=True).passed:
+            if not groupadd(self.log, self.hostlist_clients, groupname).passed:
                 self.fail(f"Failed to groupadd {groupname}")
             group_list.append(new_group)
         permission_list = group_list + user_list + current_user_acl
@@ -389,11 +389,11 @@ class PoolSecurityTestBase(TestWithServers):
         user_prefix = self.params.get("user_prefix", "/run/pool_acl/*")
         for uid in range(num_user):
             username = user_prefix + "_tester_" + str(uid + 1)
-            if not userdel(self.log, self.hostlist_clients, username, sudo=True).passed:
+            if not userdel(self.log, self.hostlist_clients, username).passed:
                 self.log.error("Failed to userdel %s", username)
         for gid in range(num_group):
             groupname = user_prefix + "_testGrp_" + str(gid + 1)
-            if not groupdel(self.log, self.hostlist_clients, groupname, sudo=True).passed:
+            if not groupdel(self.log, self.hostlist_clients, groupname).passed:
                 self.log.error("Failed to groupdel %s", groupname)
 
     def verify_pool_acl_prim_sec_groups(self, pool_acl_list, acl_file):
@@ -421,10 +421,10 @@ class PoolSecurityTestBase(TestWithServers):
             "sg_read_write", "/run/pool_acl/primary_secondary_group_test/*")
         l_group = grp.getgrgid(os.getegid())[0]
         for group in sec_group:
-            if not groupadd(self.log, self.hostlist_clients, group, sudo=True).passed:
+            if not groupadd(self.log, self.hostlist_clients, group).passed:
                 self.fail(f"Failed to groupadd {group}")
         self.log.info("  (8-1)verify_pool_acl_prim_sec_groups, cmd=usermod")
-        if not usermod(self.log, self.hostlist_clients, l_group, sec_group, sudo=True).passed:
+        if not usermod(self.log, self.hostlist_clients, l_group, sec_group).passed:
             self.fail(f"Failed to usermod {l_group}")
 
         self.log.info(
@@ -470,7 +470,7 @@ class PoolSecurityTestBase(TestWithServers):
         self.verify_pool_readwrite(self.pool, "write", expect=exp_write)
 
         for group in sec_group:
-            if not groupdel(self.log, self.hostlist_clients, group, sudo=True).passed:
+            if not groupdel(self.log, self.hostlist_clients, group).passed:
                 self.log.error("Failed to groupdel %s", group)
 
     def pool_acl_verification(self, current_user_acl, read, write,
