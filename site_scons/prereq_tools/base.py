@@ -903,7 +903,7 @@ class PreReqComponent():
             if not os.path.exists(ipath):
                 ipath = None
             lpath = None
-            for lib in self.lib_path:
+            for lib in comp.lib_path:
                 lpath = os.path.join(path, lib)
                 if os.path.exists(lpath):
                     break
