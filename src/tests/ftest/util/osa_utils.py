@@ -52,7 +52,6 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.test_with_rf = False
         self.test_with_blank_node = False
         self.test_with_snapshot = False
-        self.test_with_multiple_ranks = False
 
     @fail_on(CommandFailure)
     def assert_on_rebuild_failure(self):

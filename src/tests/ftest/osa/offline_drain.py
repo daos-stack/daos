@@ -31,9 +31,8 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
             "ior_test_sequence", '/run/ior/iorflags/*')
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir)
-        self.multiple_ranks = None
 
-    def run_offline_drain_test(self, num_pool, data=False, oclass=None, pool_fillup=0):
+    def run_offline_drain_test(self, num_pool, data=False, oclass=None, pool_fillup=0, multiple_ranks=False):
         """Run the offline drain without data.
 
         Args:
@@ -41,6 +40,8 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
             data (bool) : whether pool has no data or to create some data in pool.
                 Defaults to False.
             oclass (str): DAOS object class (eg: RP_2G1,etc)
+            pool_fillup (int): Fill up the pool to a desired percent value.
+            multiple_ranks (bool) : Perform multiple ranks testing (Default: False)
         """
         # Create a pool
         pool = {}
@@ -50,7 +51,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
             oclass = self.ior_cmd.dfs_oclass.value
         
         # For testing multiple ranks as dmg parameters, use a list of ranks.
-        if self.test_with_multiple_ranks is True:
+        if multiple_ranks is True:
             self.ranks = self.multiple_ranks
         
         # Exclude target : random two targets  (target idx : 0-7)
@@ -276,7 +277,5 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         :avocado: tags=OSAOfflineDrain,test_osa_offline_drain_with_multiple_ranks
         """
         self.log.info("Offline Drain : Test with mutiple ranks")
-        self.test_with_multiple_ranks = self.params.get("test_with_multiple_ranks",
-                                                        '/run/multiple_ranks/*')
         self.multiple_ranks = self.params.get("rank_list", '/run/multiple_ranks/*')
-        self.run_offline_drain_test(1, data=True)
+        self.run_offline_drain_test(1, data=True, multiple_ranks=True)
