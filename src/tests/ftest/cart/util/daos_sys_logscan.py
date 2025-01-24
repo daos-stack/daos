@@ -54,8 +54,14 @@ class SysPools():
     # statuses: "scanning", "pulling", "completed", "aborted"
     ldr_start_re = "rebuild_leader_start.*" + rbid_re + "$"
     ldr_status_re = r"rebuild_leader_status_check\(\).*" + rbid_re + r" \[(\w+)\].*duration=(\d+)"
+    ldr_scan_hung_re = r"update_and_warn_for_slow_engines\(\).*" + rbid_re + \
+        r".*scan hung.*waiting for (\d+)/(\d+) engines"
+    ldr_pull_hung_re = r"update_and_warn_for_slow_engines\(\).*" + rbid_re + \
+        r".*pull hung.*waiting for (\d+)/(\d+) engines"
     re_rebuild_ldr_start = re.compile(ldr_start_re)
     re_rebuild_ldr_status = re.compile(ldr_status_re)
+    re_rebuild_ldr_scan_hung = re.compile(ldr_scan_hung_re)
+    re_rebuild_ldr_pull_hung = re.compile(ldr_pull_hung_re)
 
     # Legacy rebuild PS leader logging (before uniform rebuild string)
     old_ldr_start_re = r"rebuild_leader_start.*([0-9a-fA-F]{8}).*version=(\d+)/(\d+).*op=(\w+)"
@@ -239,7 +245,13 @@ class SysPools():
             "time": "xx/xx-xx:xx:xx.xx",
             "started": True,
             "scanning": False,
+            "scan_hung": False,
+            "scan_hung_time": "xx/xx-xx:xx:xx.xx",
+            "scan_num_eng_wait": 0,
             "pulling": False,
+            "pull_hung": False,
+            "pull_hung_time": "xx/xx-xx:xx:xx.xx",
+            "pull_num_eng_wait": 0,
             "completed": False,
             "aborted": False,
             "duration": 0
@@ -275,11 +287,18 @@ class SysPools():
             "time": "xx/xx-xx:xx:xx.xx",
             "started": True,
             "scanning": False,
+            "scan_hung": False,
+            "scan_hung_time": "xx/xx-xx:xx:xx.xx",
+            "scan_num_eng_wait": 0,
             "pulling": False,
+            "pull_hung": False,
+            "pull_hung_time": "xx/xx-xx:xx:xx.xx",
+            "pull_num_eng_wait": 0,
             "completed": False,
             "aborted": False,
             "duration": 0
         }
+
         if self._debug:
             print(f"{datetime} FOUND rebuild start in term {term}, rb={puuid}/{ver}/{gen}/{op} "
                   f"rank {rank}\t{host}\tPID {pid}\t{fname}")
@@ -323,11 +342,18 @@ class SysPools():
                 "time": "xx/xx-xx:xx:xx.xx",
                 "started": True,
                 "scanning": False,
+                "scan_hung": False,
+                "scan_hung_time": "xx/xx-xx:xx:xx.xx",
+                "scan_num_eng_wait": 0,
                 "pulling": False,
+                "pull_hung": False,
+                "pull_hung_time": "xx/xx-xx:xx:xx.xx",
+                "pull_num_eng_wait": 0,
                 "completed": False,
                 "aborted": False,
                 "duration": 0
             }
+
         if gen in self._pools[puuid][term]["maps"][ver]["rb_gens"]:
             existing_op = self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["op"]
             if op != existing_op:
@@ -390,11 +416,18 @@ class SysPools():
                 "time": "xx/xx-xx:xx:xx.xx",
                 "started": True,
                 "scanning": False,
+                "scan_hung": False,
+                "scan_hung_time": "xx/xx-xx:xx:xx.xx",
+                "scan_num_eng_wait": 0,
                 "pulling": False,
+                "pull_hung": False,
+                "pull_hung_time": "xx/xx-xx:xx:xx.xx",
+                "pull_num_eng_wait": 0,
                 "completed": False,
                 "aborted": False,
                 "duration": 0
             }
+
         if gen in self._pools[puuid][term]["maps"][ver]["rb_gens"]:
             existing_op = self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["op"]
             if op != existing_op:
@@ -412,6 +445,40 @@ class SysPools():
         if self._debug:
             print(f"{datetime} FOUND rebuild UPDATE term={term} rb={puuid}/{ver}/{gen}/{op} "
                   f"STATUS={status}, DUR={dur} seconds rank {rank}\t{host}\tPID {pid}\t{fname}")
+        return True
+
+    def _get_ps_rb_hung_warn_components(self, match):
+        # puuid, map version, rebuild-generation, operation, status, duration
+        # see re_rebuild_ldr_scan_hung and re_rebuild_ldr_pull_hung
+        return self._get_rb_components(match) + (int(match.group(5)), int(match.group(6)))
+
+    def _match_ps_rb_hung_warn(self, fname, line, pid, rank):
+        msg, host, datetime = self._get_line_components(line)
+        match1 = self.re_rebuild_ldr_scan_hung.match(msg)
+        match2 = self.re_rebuild_ldr_pull_hung.match(msg)
+        if not match1 and not match2:
+            return False
+
+        if match1:
+            puuid, ver, gen, op, compl_eng, tot_eng = self._get_ps_rb_hung_warn_components(match1)
+            term = self._cur_term[puuid]
+            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["scan_hung"] = True
+            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["scan_num_eng_wait"] = compl_eng
+            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["scan_hung_time"] = datetime
+            if self._debug:
+                print(f"{datetime} FOUND rebuild SCAN hung term={term} rb={puuid}/{ver}/{gen}/{op} "
+                      f"{compl_eng} / {tot_eng} done, rank {rank}\t{host}\tPID {pid}\t{fname}")
+
+        if match2:
+            puuid, ver, gen, op, compl_eng, tot_eng = self._get_ps_rb_hung_warn_components(match2)
+            term = self._cur_term[puuid]
+            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["pull_hung"] = True
+            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["pull_num_eng_wait"] = compl_eng
+            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["pull_hung_time"] = datetime
+            if self._debug:
+                print(f"{datetime} FOUND rebuild PULL hung term={term} rb={puuid}/{ver}/{gen}/{op} "
+                      f"{compl_eng} / {tot_eng} done, rank {rank}\t{host}\tPID {pid}\t{fname}")
+
         return True
 
     def scan_file(self, log_iter, rank=-1):
@@ -447,10 +514,15 @@ class SysPools():
                 if self._match_legacy_ps_rb_start(fname, line, pid, rank):
                     continue
 
+                # Find rebuild status updates
                 if self._match_ps_rb_status(fname, line, pid, rank):
                     continue
 
                 if self._match_legacy_ps_rb_status(fname, line, pid, rank):
+                    continue
+
+                # Find rebuild scan or pull phase hung warnings
+                if self._match_ps_rb_hung_warn(fname, line, pid, rank):
                     continue
 
             # Future: for a PID that is killed, clear any associated cur_ldr_rank / cur_ldr_pid.
@@ -489,7 +561,11 @@ class SysPools():
                         op = rd["op"]
                         dur = rd["duration"]
                         scan = rd["scanning"]
+                        scan_hung = rd["scan_hung"]
+                        scan_num_eng_wait = rd["scan_num_eng_wait"]
                         pull = rd["pulling"]
+                        pull_hung = rd["pull_hung"]
+                        pull_num_eng_wait = rd["pull_num_eng_wait"]
                         comp = rd["completed"]
                         abrt = rd["aborted"]
                         st = rd["start_time"]
@@ -505,7 +581,26 @@ class SysPools():
                             status = "pulling"
                         elif scan:
                             status = "scanning"
+
+                        # hung_status
+                        hung_status = ""
+                        if scan_hung:
+                            hung_status += "scan-hung"
+                            scan_hung_time = rd["scan_hung_time"]
+                        if pull_hung:
+                            if hung_status != "":
+                                hung_status += ","
+                            hung_status += "pull-hung"
+                            pull_hung_time = rd["pull_hung_time"]
+
+                        # Print rebuild start, any hang warnings, and latest status updates
                         print(f"{st} {puuid} RBSTRT {v}/{g}/{op}")
+                        if scan_hung:
+                            print(f"{scan_hung_time} {puuid} RBHUNG {v}/{g}/{op} {hung_status}: "
+                                  f"{scan_num_eng_wait} engines not done scanning")
+                        if pull_hung:
+                            print(f"{pull_hung_time} {puuid} RBHUNG {v}/{g}/{op} {hung_status}: "
+                                  f"{pull_num_eng_wait} engines not done pulling")
                         updated = scan or pull or comp or abrt
                         if updated:
                             print(f"{ut} {puuid} RBUPDT {v}/{g}/{op} {status} {dur} seconds")
