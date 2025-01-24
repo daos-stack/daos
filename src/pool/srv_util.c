@@ -143,6 +143,10 @@ bulk_cb(const struct crt_bulk_cb_info *cb_info)
 	return 0;
 }
 
+static uint64_t n_map_bulks;
+static uint64_t n_map_bulks_max;
+static const uint64_t n_map_bulks_per_message = 100;
+
 /*
  * Transfer the pool map buffer to "remote_bulk". If the remote bulk buffer is
  * too small, then return -DER_TRUNC and set "required_buf_size" to the local
@@ -184,6 +188,12 @@ ds_pool_transfer_map_buf(struct pool_buf *map_buf, uint32_t map_version,
 	rc = crt_bulk_create(rpc->cr_ctx, &map_sgl, CRT_BULK_RO, &bulk);
 	if (rc != 0)
 		goto out;
+	n_map_bulks++;
+	if (n_map_bulks > n_map_bulks_max)
+		n_map_bulks_max = n_map_bulks;
+	if (n_map_bulks % n_map_bulks_per_message == 0)
+		D_INFO("++: n_map_bulks=" DF_U64 " n_map_bulks_max=" DF_U64 "\n", n_map_bulks,
+		       n_map_bulks_max);
 
 	/* Prepare "map_desc" for crt_bulk_transfer(). */
 	map_desc.bd_rpc = rpc;
@@ -216,6 +226,10 @@ out_eventual:
 	ABT_eventual_free(&eventual);
 out_bulk:
 	crt_bulk_free(bulk);
+	n_map_bulks--;
+	if (n_map_bulks % n_map_bulks_per_message == 0)
+		D_INFO("--: n_map_bulks=" DF_U64 " n_map_bulks_max=" DF_U64 "\n", n_map_bulks,
+		       n_map_bulks_max);
 out:
 	return rc;
 }
