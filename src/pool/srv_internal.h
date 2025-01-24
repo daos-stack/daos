@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,6 +18,7 @@
 #include <gurt/telemetry_common.h>
 
 extern uint32_t pw_rf;
+extern uint32_t ps_cache_intvl;
 
 /**
  * Global pool metrics
@@ -223,7 +225,12 @@ int ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic);
 void ds_pool_tgt_query_map_handler(crt_rpc_t *rpc);
 void ds_pool_tgt_discard_handler(crt_rpc_t *rpc);
 void
-     ds_pool_tgt_warmup_handler(crt_rpc_t *rpc);
+ds_pool_tgt_warmup_handler(crt_rpc_t *rpc);
+int
+ds_pool_lookup_map_bc(struct ds_pool *pool, crt_context_t ctx, struct ds_pool_map_bc **map_bc_out,
+		      uint32_t *map_version_out);
+void
+     ds_pool_put_map_bc(struct ds_pool_map_bc *map_bc);
 
 /*
  * srv_util.c
@@ -232,9 +239,9 @@ bool ds_pool_map_rank_up(struct pool_map *map, d_rank_t rank);
 int ds_pool_plan_svc_reconfs(int svc_rf, struct pool_map *map, d_rank_list_t *replicas,
 			     d_rank_t self, bool filter_only, d_rank_list_t **to_add_out,
 			     d_rank_list_t **to_remove_out);
-int ds_pool_transfer_map_buf(struct pool_buf *map_buf, uint32_t map_version,
-			     crt_rpc_t *rpc, crt_bulk_t remote_bulk,
-			     uint32_t *required_buf_size);
+int
+ds_pool_transfer_map_buf(struct ds_pool_map_bc *map_bc, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
+			 uint32_t *required_buf_size);
 extern struct bio_reaction_ops nvme_reaction_ops;
 
 /*
