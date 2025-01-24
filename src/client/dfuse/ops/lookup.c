@@ -92,7 +92,7 @@ dfuse_reply_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 		if (ie->ie_active) {
 			D_ASSERT(atomic_load_relaxed(&ie->ie_open_count) == 1);
 			active_ie_decref(dfuse_info, ie);
-			rc = active_ie_init(inode, NULL);
+			rc = active_ie_init(inode);
 			if (rc != -DER_SUCCESS) {
 				atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
 				dfuse_ie_close(dfuse_info, ie);
