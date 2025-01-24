@@ -64,12 +64,6 @@ class PoolCreateAllHwTests(PoolCreateAllTestBase):
         """
         deltas_bytes = self.get_deltas("test_one_pool_hw")
         self.log.info("Test basic pool creation with full storage")
-
-        # Debug
-        pool = self.get_pool()
-        pool.query()
-        pool.destroy()
-
         self.log_deltas(*deltas_bytes)
 
         self.check_pool_full_storage(*deltas_bytes)
