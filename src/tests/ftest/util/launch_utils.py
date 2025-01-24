@@ -867,6 +867,7 @@ class TestRunner():
             message = "Error generating certificates"
             self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
             return 128
+
         return 0
 
     def _collect_crash_files(self, logger):

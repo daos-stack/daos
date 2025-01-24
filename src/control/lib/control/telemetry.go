@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/pkg/errors"
 	pclient "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
@@ -32,9 +33,14 @@ func (m pbMetricMap) Keys() []string {
 	return keys
 }
 
-func getMetricsURL(host string, port uint32) *url.URL {
+func getMetricsURL(host string, port uint32, allowinsecure bool) *url.URL {
+	scheme := "https"
+	if allowinsecure {
+		scheme = "http"
+	}
+
 	return &url.URL{
-		Scheme: "http",
+		Scheme: scheme,
 		Host:   fmt.Sprintf("%s:%d", host, port),
 		Path:   "metrics",
 	}
@@ -78,8 +84,11 @@ type (
 	// MetricsListReq is used to request the list of metrics.
 	MetricsListReq struct {
 		httpReq
-		Host string // Host to query for telemetry data
-		Port uint32 // Port to use for collecting telemetry data
+		Host           string         // Host to query for telemetry data
+		Port           uint32         // Port to use for collecting telemetry data
+		AllowInsecure  bool           // Set the https end point secure
+		HttpsException bool           // Use the Https with Exception (Insecure)
+		Log            logging.Logger // Logging the info
 	}
 
 	// MetricsListResp contains the list of available metrics.
@@ -102,8 +111,9 @@ func MetricsList(ctx context.Context, req *MetricsListReq) (*MetricsListResp, er
 		return nil, errors.New("port must be specified")
 	}
 
-	req.url = getMetricsURL(req.Host, req.Port)
-
+	req.allowInsecure = req.AllowInsecure
+	req.httpsException = req.HttpsException
+	req.url = getMetricsURL(req.Host, req.Port, req.allowInsecure)
 	scraped, err := scrapeMetrics(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to list metrics")
@@ -130,9 +140,11 @@ type (
 	// MetricsQueryReq is used to query telemetry values.
 	MetricsQueryReq struct {
 		httpReq
-		Host        string   // host to query for telemetry data
-		Port        uint32   // port to use for collecting telemetry data
-		MetricNames []string // if empty, collects all metrics
+		Host           string   // host to query for telemetry data
+		Port           uint32   // port to use for collecting telemetry data
+		AllowInsecure  bool     // Set the https end point secure
+		HttpsException bool     // Use the Https with Exception (Insecure)
+		MetricNames    []string // if empty, collects all metrics
 	}
 
 	// MetricsQueryResp contains the list of telemetry values per host.
@@ -155,8 +167,9 @@ func MetricsQuery(ctx context.Context, req *MetricsQueryReq) (*MetricsQueryResp,
 		return nil, errors.New("port must be specified")
 	}
 
-	req.url = getMetricsURL(req.Host, req.Port)
-
+	req.allowInsecure = req.AllowInsecure
+	req.httpsException = req.HttpsException
+	req.url = getMetricsURL(req.Host, req.Port, req.allowInsecure)
 	scraped, err := scrapeMetrics(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to query metrics")
