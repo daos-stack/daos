@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -5140,6 +5141,11 @@ obj_csum_update(struct dc_object *obj, daos_obj_update_t *args, struct obj_auxi_
 	if (!obj_csum_dedup_candidate(&obj->cob_co->dc_props, args->iods, args->nr))
 		return 0;
 
+	if (obj_auxi->csum_retry) {
+		/* Release old checksum result and prepare for new calculation */
+		daos_csummer_free_ic(obj->cob_co->dc_csummer, &obj_auxi->rw_args.iod_csums);
+	}
+
 	return dc_obj_csum_update(obj->cob_co->dc_csummer, obj->cob_co->dc_props,
 				  obj->cob_md.omd_id, args->dkey, args->iods, args->sgls, args->nr,
 				  obj_auxi->reasb_req.orr_singv_los, &obj_auxi->rw_args.dkey_csum,
@@ -5150,6 +5156,11 @@ static int
 obj_csum_fetch(const struct dc_object *obj, daos_obj_fetch_t *args,
 	       struct obj_auxi_args *obj_auxi)
 {
+	if (obj_auxi->csum_retry) {
+		/* Release old checksum result and prepare for new calculation */
+		daos_csummer_free_ic(obj->cob_co->dc_csummer, &obj_auxi->rw_args.iod_csums);
+	}
+
 	return dc_obj_csum_fetch(obj->cob_co->dc_csummer, args->dkey, args->iods, args->sgls,
 				 args->nr, obj_auxi->reasb_req.orr_singv_los,
 				 &obj_auxi->rw_args.dkey_csum, &obj_auxi->rw_args.iod_csums);
