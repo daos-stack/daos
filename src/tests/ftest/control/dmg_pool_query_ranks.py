@@ -53,6 +53,7 @@ class DmgPoolQueryRanks(ControlTestBase):
         self.log_step("Checking pool query with dead ranks state information")
         data = self.dmg.pool_query(self.pool.identifier, health_only=True)
         self._verify_ranks([], data, "dead_ranks")
+        self._verify_ranks([], data, "disabled_ranks")
 
         data = self.dmg.pool_query(self.pool.identifier, show_disabled=True)
         self._verify_ranks(None, data, "enabled_ranks")
@@ -119,13 +120,13 @@ class DmgPoolQueryRanks(ControlTestBase):
         self.log_step(f"Stopping rank:{dead_rank} all_ranks={all_ranks}")
         self.server_managers[0].stop_ranks([dead_rank], self.d_log)
 
-        self.log_step(f"Waiting for pool rank {dead_rank} to be deaded")
+        self.log_step(f"Waiting for pool rank {dead_rank} to be dead")
         self.pool.wait_pool_dead_ranks([dead_rank], timeout=30)
 
         self.log_step(f"Starting rank {dead_rank}")
         self.server_managers[0].start_ranks([dead_rank], self.d_log)
 
-        self.log_step("Waiting for pool ranks to no longer be deaded")
+        self.log_step("Waiting for pool ranks to no longer be dead")
         self.pool.wait_pool_dead_ranks([], timeout=30)
 
         self.log_step("Waiting for rebuild to complete")
