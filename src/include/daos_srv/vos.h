@@ -1713,4 +1713,16 @@ vos_unpin_objects(daos_handle_t coh, struct vos_pin_handle *hdl);
 int
 vos_pin_objects(daos_handle_t coh, daos_unit_oid_t oids[], int count, struct vos_pin_handle **hdl);
 
+/**
+ * Check if the oid exist in current vos.
+ *
+ * \param[in]	coh	container open handle.
+ * \param[in]	oid	oid to be checked.
+ *
+ * \return	true	exist.
+ *		false	does not exist.
+ */
+bool
+vos_oi_exist(daos_handle_t coh, daos_unit_oid_t oid);
+
 #endif /* __VOS_API_H */

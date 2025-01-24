@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -21,36 +22,44 @@ import (
 
 const msgNoPools = "No pools in system"
 
-func printPoolTiers(memFileBytes uint64, suss []*daos.StorageUsageStats, w *txtfmt.ErrWriter, fullStats bool) {
-	mdOnSSD := memFileBytes != 0
+func printPoolTierStats(tierStats *daos.StorageUsageStats, w *txtfmt.ErrWriter, fullStats bool) {
+	fmt.Fprintf(w, "  Total size: %s\n", humanize.Bytes(tierStats.Total))
+	if fullStats {
+		fmt.Fprintf(w, "  Free: %s, min:%s, max:%s, mean:%s\n",
+			humanize.Bytes(tierStats.Free), humanize.Bytes(tierStats.Min),
+			humanize.Bytes(tierStats.Max), humanize.Bytes(tierStats.Mean))
+		return
+	}
+
+	fmt.Fprintf(w, "  Free: %s\n", humanize.Bytes(tierStats.Free))
+}
+
+func printPoolTiersPMem(suss []*daos.StorageUsageStats, w *txtfmt.ErrWriter, fullStats bool) {
 	for tierIdx, tierStats := range suss {
-		if mdOnSSD {
-			if tierIdx == 0 {
-				if fullStats {
-					fmt.Fprintf(w, "- Total memory-file size: %s\n",
-						humanize.Bytes(memFileBytes))
-				}
-				fmt.Fprintf(w, "- Metadata storage:\n")
-			} else {
-				fmt.Fprintf(w, "- Data storage:\n")
+		if tierIdx >= int(daos.StorageMediaTypeMax) {
+			// Print unknown type tiers.
+			tierStats.MediaType = daos.StorageMediaTypeMax
+		}
+		fmt.Fprintf(w, "- Storage tier %d (%s):\n", tierIdx,
+			strings.ToUpper(tierStats.MediaType.String()))
+
+		printPoolTierStats(tierStats, w, fullStats)
+	}
+}
+
+func printPoolTiersMdOnSsd(memFileBytes uint64, suss []*daos.StorageUsageStats, w *txtfmt.ErrWriter, fullStats bool) {
+	for tierIdx, tierStats := range suss {
+		if tierIdx == 0 {
+			if fullStats {
+				fmt.Fprintf(w, "- Total memory-file size: %s\n",
+					humanize.Bytes(memFileBytes))
 			}
+			fmt.Fprintf(w, "- Metadata storage:\n")
 		} else {
-			if tierIdx >= int(daos.StorageMediaTypeMax) {
-				// Print unknown type tiers.
-				tierStats.MediaType = daos.StorageMediaTypeMax
-			}
-			fmt.Fprintf(w, "- Storage tier %d (%s):\n", tierIdx,
-				strings.ToUpper(tierStats.MediaType.String()))
+			fmt.Fprintf(w, "- Data storage:\n")
 		}
 
-		fmt.Fprintf(w, "  Total size: %s\n", humanize.Bytes(tierStats.Total))
-		if fullStats {
-			fmt.Fprintf(w, "  Free: %s, min:%s, max:%s, mean:%s\n",
-				humanize.Bytes(tierStats.Free), humanize.Bytes(tierStats.Min),
-				humanize.Bytes(tierStats.Max), humanize.Bytes(tierStats.Mean))
-		} else {
-			fmt.Fprintf(w, "  Free: %s\n", humanize.Bytes(tierStats.Free))
-		}
+		printPoolTierStats(tierStats, w, fullStats)
 	}
 }
 
@@ -95,7 +104,11 @@ func PrintPoolInfo(pi *daos.PoolInfo, out io.Writer) error {
 	if pi.QueryMask.HasOption(daos.PoolQueryOptionSpace) && pi.TierStats != nil {
 		fmt.Fprintln(w, "Pool space info:")
 		fmt.Fprintf(w, "- Target count:%d\n", pi.ActiveTargets)
-		printPoolTiers(pi.MemFileBytes, pi.TierStats, w, true)
+		if pi.MdOnSsdActive {
+			printPoolTiersMdOnSsd(pi.MemFileBytes, pi.TierStats, w, true)
+		} else {
+			printPoolTiersPMem(pi.TierStats, w, true)
+		}
 	}
 	return w.Err
 }
@@ -111,7 +124,11 @@ func PrintPoolQueryTargetInfo(pqti *daos.PoolQueryTargetInfo, out io.Writer) err
 	// Maintain output compatibility with the `daos pool query-targets` output.
 	fmt.Fprintf(w, "Target: type %s, state %s\n", pqti.Type, pqti.State)
 	if pqti.Space != nil {
-		printPoolTiers(pqti.MemFileBytes, pqti.Space, w, false)
+		if pqti.MdOnSsdActive {
+			printPoolTiersMdOnSsd(pqti.MemFileBytes, pqti.Space, w, false)
+		} else {
+			printPoolTiersPMem(pqti.Space, w, false)
+		}
 	}
 
 	return w.Err
@@ -292,7 +309,7 @@ func printVerbosePoolList(pools []*daos.PoolInfo, out io.Writer) error {
 		if pool.QueryMask.HasOption(daos.PoolQueryOptionSpace) {
 			hasSpaceQuery = true
 			// All pools will have the same PMem/MD-on-SSD mode.
-			hasMdOnSsd = pool.MemFileBytes != 0
+			hasMdOnSsd = pool.MdOnSsdActive
 		}
 		if pool.QueryMask.HasOption(daos.PoolQueryOptionRebuild) {
 			hasRebuildQuery = true
