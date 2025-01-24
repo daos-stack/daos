@@ -1,13 +1,26 @@
 """
   (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 import os
 
-from env_modules import get_module_list, show_avail
-from general_utils import run_command
+# pylint: disable=import-error,no-name-in-module
+try:
+    from util.env_modules import get_module_list, show_avail
+except (ImportError, ModuleNotFoundError):
+    try:
+        from env_modules import get_module_list, show_avail
+    except (ImportError, ModuleNotFoundError):
+        get_module_list = None
+        show_avail = None
+
+try:
+    from util.general_utils import run_command
+except (ImportError, ModuleNotFoundError):
+    from general_utils import run_command
 
 
 class CommandFailure(Exception):
