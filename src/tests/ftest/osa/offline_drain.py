@@ -32,7 +32,8 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir)
 
-    def run_offline_drain_test(self, num_pool, data=False, oclass=None, pool_fillup=0, multiple_ranks=False):
+    def run_offline_drain_test(self, num_pool, data=False, oclass=None, pool_fillup=0,
+                               multiple_ranks=False):
         """Run the offline drain without data.
 
         Args:
@@ -49,11 +50,11 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
 
         if oclass is None:
             oclass = self.ior_cmd.dfs_oclass.value
-        
+
         # For testing multiple ranks as dmg parameters, use a list of ranks.
         if multiple_ranks is True:
             self.ranks = self.multiple_ranks
-        
+
         # Exclude target : random two targets  (target idx : 0-7)
         exc = random.randint(0, 6)  # nosec
         target_list.append(exc)
@@ -276,6 +277,6 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         :avocado: tags=osa,osa_drain,offline_drain,offline_drain_full
         :avocado: tags=OSAOfflineDrain,test_osa_offline_drain_with_multiple_ranks
         """
-        self.log.info("Offline Drain : Test with mutiple ranks")
+        self.log.info("Offline Drain : Test with multiple ranks")
         self.multiple_ranks = self.params.get("rank_list", '/run/multiple_ranks/*')
         self.run_offline_drain_test(1, data=True, multiple_ranks=True)
