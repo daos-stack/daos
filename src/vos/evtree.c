@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -4088,3 +4089,12 @@ evt_feats_set(struct evt_root *root, struct umem_instance *umm, uint64_t feats)
 	return rc;
 }
 
+bool
+evt_desc_is_valid(const struct evt_desc *evt, uint32_t dtx_lid)
+{
+	if (evt == NULL || evt->dc_magic != EVT_DESC_MAGIC) {
+		return false;
+	}
+
+	return (evt->dc_dtx == dtx_lid);
+}
