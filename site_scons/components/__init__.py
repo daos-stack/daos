@@ -1,4 +1,5 @@
 # Copyright 2016-2024 Intel Corporation
+# Copyright 2025 Google LLC
 # Copyright 2025 Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -315,6 +316,7 @@ def define_components(reqs):
                            '--default-library', 'static', '../fused'],
                           ['meson', 'setup', '--reconfigure', '../fused'],
                           ['ninja', 'install']],
+                pkgconfig='fused',
                 headers=['fused/fuse.h'],
                 required_progs=['libtoolize', 'ninja', 'meson'],
                 out_of_src_build=True)
