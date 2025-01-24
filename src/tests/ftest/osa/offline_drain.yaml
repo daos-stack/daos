@@ -101,6 +101,7 @@ checksum:
 snapshot:
   test_with_snapshot: true
 mutliple_ranks:
+  # For multiple ranks
   test_with_multiple_ranks: true
   rank_list: ["1, 2"]
 test_ranks:

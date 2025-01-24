@@ -49,7 +49,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         if oclass is None:
             oclass = self.ior_cmd.dfs_oclass.value
         
-        # For testing with multiple ranks as dmg parameters, use a list of ranks.
+        # For testing multiple ranks as dmg parameters, use a list of ranks.
         if self.test_with_multiple_ranks is True:
             self.ranks = self.multiple_ranks
         
