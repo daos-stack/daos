@@ -27,6 +27,7 @@ IOR
 ISA
 KVM
 Launchable
+LLC
 Lustre
 MPI
 Makefile

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,8 +10,8 @@
 
 #include <semaphore.h>
 
-#include <fuse3/fuse.h>
-#include <fuse3/fuse_lowlevel.h>
+#include <fused/fuse.h>
+#include <fused/fuse_lowlevel.h>
 
 #include <gurt/list.h>
 #include <gurt/hash.h>
