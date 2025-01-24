@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -81,6 +82,7 @@ type (
 		PoolLayoutVer    uint32               `json:"pool_layout_ver"`
 		UpgradeLayoutVer uint32               `json:"upgrade_layout_ver"`
 		MemFileBytes     uint64               `json:"mem_file_bytes"`
+		MdOnSsdActive    bool                 `json:"md_on_ssd_active"`
 	}
 
 	PoolQueryTargetType  int32
@@ -88,10 +90,11 @@ type (
 
 	// PoolQueryTargetInfo contains information about a single target
 	PoolQueryTargetInfo struct {
-		Type         PoolQueryTargetType  `json:"target_type"`
-		State        PoolQueryTargetState `json:"target_state"`
-		Space        []*StorageUsageStats `json:"space"`
-		MemFileBytes uint64               `json:"mem_file_bytes"`
+		Type          PoolQueryTargetType  `json:"target_type"`
+		State         PoolQueryTargetState `json:"target_state"`
+		Space         []*StorageUsageStats `json:"space"`
+		MemFileBytes  uint64               `json:"mem_file_bytes"`
+		MdOnSsdActive bool                 `json:"md_on_ssd_active"`
 	}
 
 	// StorageTargetUsage represents DAOS target storage usage
