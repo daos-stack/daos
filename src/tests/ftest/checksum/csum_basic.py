@@ -1,5 +1,6 @@
 """
   (C) Copyright 2019-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -33,17 +34,14 @@ class CsumContainerValidation(TestWithServers):
         :avocado: tags=checksum
         :avocado: tags=CsumContainerValidation,test_single_object_with_checksum
         """
-        no_of_dkeys = self.params.get("no_of_dkeys", '/run/dkeys/*')[0]
-        no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')[0]
+        no_of_dkeys = self.params.get("no_of_dkeys", '/run/dkeys/*')
+        no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')
         record_length = self.params.get("length", '/run/record/*')
 
         pool = add_pool(self, connect=False)
         pool.connect(2)
 
-        enable_checksum = self.params.get("enable_checksum", '/run/container/*')
-        container = add_container(self, pool, create=False)
-        container.input_params.enable_chksum = enable_checksum
-        container.create()
+        container = add_container(self, pool)
         container.open()
 
         obj = DaosObj(self.context, container.container)
@@ -51,7 +49,7 @@ class CsumContainerValidation(TestWithServers):
         obj.open()
         ioreq = IORequest(self.context, container.container, obj, objtype=4)
 
-        self.d_log.info("Writing the Single Dataset")
+        self.log_step("Write single dataset")
         record_index = 0
         for dkey in range(no_of_dkeys):
             for akey in range(no_of_akeys):
@@ -66,7 +64,7 @@ class CsumContainerValidation(TestWithServers):
                 if record_index == len(record_length):
                     record_index = 0
 
-        self.d_log.info("Single Dataset Verification -- Started")
+        self.log_step("Verify single dataset")
         record_index = 0
         for dkey in range(no_of_dkeys):
             for akey in range(no_of_akeys):
@@ -79,7 +77,7 @@ class CsumContainerValidation(TestWithServers):
                         "ERROR:Data mismatch for dkey={}, akey={}: indata={}, "
                         "val={}".format(
                             dkey, akey, indata, val.value.decode('utf-8')))
-                    self.d_log.error(message)
+                    self.log.error(message)
                     self.fail(message)
                 record_index = record_index + 1
                 if record_index == len(record_length):
