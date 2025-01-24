@@ -1035,6 +1035,7 @@ class _Component:
             if "^" in raw:
                 (patch_subdir, raw) = raw.split("^")
             if "https://" not in raw:
+                raw = os.path.join(Dir('#').abspath, raw)
                 patches[raw] = patch_subdir
                 continue
             patch_name = f"{self.name}_{self._sanitize_patch_path(raw)}_{patchnum:d}"
