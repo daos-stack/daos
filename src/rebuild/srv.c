@@ -613,7 +613,7 @@ ds_rebuild_query(uuid_t pool_uuid, struct daos_rebuild_status *status)
 			 * rebuild/exclude process, so let's check pool_map_version
 			 * for now.
 			 */
-			rc = ds_pool_lookup(pool_uuid, &pool);
+			rc = DS_POOL_LOOKUP(pool_uuid, &pool);
 			if (pool == NULL || pool->sp_map_version < 2) {
 				status->rs_state = DRS_NOT_STARTED;
 			} else {
@@ -621,7 +621,7 @@ ds_rebuild_query(uuid_t pool_uuid, struct daos_rebuild_status *status)
 				status->rs_version = ds_pool_get_version(pool);
 			}
 			if (pool != NULL)
-				ds_pool_put(pool);
+				DS_POOL_PUT(&pool);
 			rc = 0;
 		}
 	} else {
@@ -1183,7 +1183,7 @@ rpt_destroy(struct rebuild_tgt_pool_tracker *rpt)
 
 	uuid_clear(rpt->rt_pool_uuid);
 	if (rpt->rt_pool != NULL)
-		ds_pool_put(rpt->rt_pool);
+		DS_POOL_PUT(&rpt->rt_pool);
 
 	if (rpt->rt_svc_list)
 		d_rank_list_free(rpt->rt_svc_list);
@@ -1241,7 +1241,7 @@ rpt_put(struct rebuild_tgt_pool_tracker *rpt)
 		rpt_destroy(rpt);
 	} else {
 		/* Possibly triggered by VOS target XS by obj_inflight_io_check() ->
-		 * ds_rebuild_running_query(), but rpt_destroy() -> ds_pool_put() can only
+		 * ds_rebuild_running_query(), but rpt_destroy() -> DS_POOL_PUT() can only
 		 * be called in system XS.
 		 * If dss_ult_execute failed that due to fatal system error (no memory
 		 * or ABT failure), throw an ERR log.
@@ -1672,7 +1672,7 @@ rebuild_task_ult(void *arg)
 		dss_sleep((task->dst_schedule_time - cur_ts) * 1000);
 	}
 
-	rc = ds_pool_lookup(task->dst_pool_uuid, &pool);
+	rc = DS_POOL_LOOKUP(task->dst_pool_uuid, &pool);
 	if (pool == NULL) {
 		D_ERROR(DF_UUID": failed to look up pool: %d\n",
 			DP_UUID(task->dst_pool_uuid), rc);
@@ -1819,7 +1819,7 @@ output:
 			DP_UUID(task->dst_pool_uuid));
 
 out_pool:
-	ds_pool_put(pool);
+	DS_POOL_PUT(&pool);
 	if (rgt) {
 		ABT_mutex_lock(rgt->rgt_lock);
 		ABT_cond_signal(rgt->rgt_done_cond);
@@ -2317,7 +2317,7 @@ rebuild_fini_one(void *arg)
 	/* close the opened local ds_cont on main XS */
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
 
-	dpc = ds_pool_child_lookup(rpt->rt_pool_uuid);
+	DS_POOL_CHILD_LOOKUP(rpt->rt_pool_uuid, &dpc);
 	/* The pool child could be stopped */
 	if (dpc == NULL)
 		return 0;
@@ -2338,7 +2338,7 @@ rebuild_fini_one(void *arg)
 			DP_RB_RPT(rpt), rpt->rt_rebuild_fence, dpc->spc_rebuild_fence);
 	}
 
-	ds_pool_child_put(dpc);
+	DS_POOL_CHILD_PUT(&dpc);
 
 	return 0;
 }
@@ -2547,7 +2547,7 @@ rebuild_prepare_one(void *data)
 	struct ds_pool_child		*dpc;
 	int				 rc = 0;
 
-	dpc = ds_pool_child_lookup(rpt->rt_pool_uuid);
+	DS_POOL_CHILD_LOOKUP(rpt->rt_pool_uuid, &dpc);
 	/* The pool child could be stopped */
 	if (dpc == NULL)
 		return 0;
@@ -2570,7 +2570,7 @@ rebuild_prepare_one(void *data)
 		DP_RB_RPT(rpt), DP_UUID(rpt->rt_coh_uuid), rpt->rt_rebuild_fence);
 
 put:
-	ds_pool_child_put(dpc);
+	DS_POOL_CHILD_PUT(&dpc);
 
 	return rc;
 }
@@ -2642,7 +2642,7 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 
 	D_DEBUG(DB_REBUILD, DF_RB " prepare rebuild\n", DP_RB_RSI(rsi));
 
-	rc = ds_pool_lookup(rsi->rsi_pool_uuid, &pool);
+	rc = DS_POOL_LOOKUP(rsi->rsi_pool_uuid, &pool);
 	if (rc) {
 		DL_ERROR(rc, DF_RB " cannot find pool", DP_RB_RSI(rsi));
 		return rc;
@@ -2718,7 +2718,7 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	}
 
 	ABT_mutex_lock(rpt->rt_lock);
-	rpt->rt_pool = pool; /* pin it */
+	D_REF_TRACKER_MOVE(&pool->sp_ref_tracker, &rpt->rt_pool, &pool);
 	ABT_mutex_unlock(rpt->rt_lock);
 
 	*p_rpt = rpt;
@@ -2731,10 +2731,10 @@ out:
 			}
 			rpt_put(rpt);
 		}
-		ds_pool_put(pool);
 	}
 	daos_prop_fini(&prop);
-
+	if (pool != NULL)
+		DS_POOL_PUT(&pool);
 	return rc;
 }
 
