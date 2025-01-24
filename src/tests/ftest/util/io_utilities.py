@@ -1,5 +1,7 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025 Google LLC
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -357,6 +359,8 @@ class DirectoryTreeCommand(ExecutableCommand):
         self.files = FormattedParameter("--files {}")
         self.needles = FormattedParameter("--needles {}")
         self.prefix = FormattedParameter("--prefix {}")
+        self.file_size_min = FormattedParameter("--file-size-min {}")
+        self.file_size_max = FormattedParameter("--file-size-max {}")
 
         # run options
         self.hosts = hosts.copy()

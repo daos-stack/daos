@@ -2,6 +2,7 @@
 """Node local test (NLT).
 
 (C) Copyright 2020-2024 Intel Corporation.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -4542,66 +4543,6 @@ class PosixTests():
         os.environ['DAOS_AGENT_DRPC_DIR'] = server.agent_dir
 
         return importlib.import_module('pydaos.torch')
-
-    @needs_dfuse_with_opt(caching_variants=[False])
-    def test_torch_map_dataset(self):
-        """Check that all files in container are read regardless of the directory level"""
-        test_files = [
-            {"name": "0.txt", "content": b"0", "seen": 0},
-            {"name": "1/l1.txt", "content": b"1", "seen": 0},
-            {"name": "1/2/l2.txt", "content": b"2", "seen": 0},
-            {"name": "1/2/3/l3.txt", "content": b"3", "seen": 0},
-        ]
-
-        for tf in test_files:
-            file = join(self.dfuse.dir, tf["name"])
-            os.makedirs(os.path.dirname(file), exist_ok=True)
-            with open(file, 'wb') as f:
-                f.write(tf["content"])
-
-        torch = self.import_torch(self.server)
-        dataset = torch.Dataset(pool=self.pool.uuid, cont=self.container.uuid)
-
-        assert len(dataset) == len(test_files)
-
-        for _, content in enumerate(dataset):
-            for f in test_files:
-                if f["content"] == content:
-                    f["seen"] += 1
-
-        for f in test_files:
-            assert f["seen"] == 1
-
-        del dataset
-
-    @needs_dfuse_with_opt(caching_variants=[False])
-    def test_torch_iter_dataset(self):
-        """Check that all files in container are read regardless of the directory level"""
-        test_files = [
-            {"name": "0.txt", "content": b"0", "seen": 0},
-            {"name": "1/l1.txt", "content": b"1", "seen": 0},
-            {"name": "1/2/l2.txt", "content": b"2", "seen": 0},
-            {"name": "1/2/3/l3.txt", "content": b"3", "seen": 0},
-        ]
-
-        for tf in test_files:
-            file = join(self.dfuse.dir, tf["name"])
-            os.makedirs(os.path.dirname(file), exist_ok=True)
-            with open(file, 'wb') as f:
-                f.write(tf["content"])
-
-        torch = self.import_torch(self.server)
-        dataset = torch.IterableDataset(pool=self.pool.uuid, cont=self.container.uuid)
-
-        for content in dataset:
-            for f in test_files:
-                if f["content"] == content:
-                    f["seen"] += 1
-
-        for f in test_files:
-            assert f["seen"] == 1
-
-        del dataset
 
 
 class NltStdoutWrapper():
