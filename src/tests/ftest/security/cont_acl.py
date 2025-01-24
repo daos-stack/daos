@@ -1,12 +1,12 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 
 import security_test_base as secTestBase
-from agent_utils import include_local_host
 from cont_security_test_base import ContSecurityTestBase
 from pool_security_test_base import PoolSecurityTestBase
 
@@ -74,10 +74,6 @@ class DaosContainerSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
             "attribute", "/run/container_acl/*")
         property_name, property_value = self.params.get(
             "property", "/run/container_acl/*")
-        secTestBase.add_del_user(
-            include_local_host(self.hostlist_clients), "useradd", new_test_user)
-        secTestBase.add_del_user(
-            include_local_host(self.hostlist_clients), "groupadd", new_test_group)
         acl_file_name = self._get_acl_file_name()
         test_user = self.params.get(
             "testuser", "/run/container_acl/daos_user/*")
@@ -204,7 +200,3 @@ class DaosContainerSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
         # Restore pool permissions in case they were altered
         self.update_pool_acl_entry(
             "update", secTestBase.acl_entry("user", "OWNER", "rctd"))
-        secTestBase.add_del_user(
-            self.hostlist_clients, "userdel", new_test_user)
-        secTestBase.add_del_user(
-            self.hostlist_clients, "groupdel", new_test_group)
