@@ -13,6 +13,7 @@
     - cmd: ["src/common/tests/acl_real_tests"]
     - cmd: ["src/common/tests/prop_tests"]
     - cmd: ["src/common/tests/fault_domain_tests"]
+    - cmd: ["src/common/tests/common_test"]
 - name: common_md_on_ssd
   base: "BUILD_DIR"
   required_src: ["src/common/tests/ad_mem_tests.c"]
