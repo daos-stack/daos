@@ -633,8 +633,7 @@ class StorageInfo():
         return list(addresses)
 
     def write_storage_yaml(self, yaml_file, engines, tier_0_type, scm_size=0,
-                           scm_mount='/mnt/daos', max_nvme_tiers=1, control_metadata=None,
-                           server_configs=None):
+                           scm_mount='/mnt/daos', max_nvme_tiers=1, control_metadata=None):
         """Generate a storage test yaml sub-section.
 
         Args:
@@ -646,7 +645,6 @@ class StorageInfo():
             max_nvme_tiers (int): maximum number of nvme storage tiers. Defaults to 1.
             control_metadata (str, optional): directory to store control plane metadata when using
                 metadata on SSD. Defaults to None.
-            server_configs (list):
 
         Raises:
             StorageException: if an invalid storage type was specified
@@ -707,64 +705,30 @@ class StorageInfo():
                     bdev_list[engine][tier].append(f'"{device}"')
             self._log.debug('  NVMe/VMD bdev_list:      %s', bdev_list)
 
-
-        if server_configs:
-            lines = ["server_configurations:"]
-            for server_config in server_configs:
-                lines.append(f'  {server_config}:')
-                lines.append('    server_config:')
-                if control_metadata and bdev_list:
-                    lines.append('      control_metadata:')
-                    lines.append(f'        path: {control_metadata}')
-                lines.append('      engines:')
-                for engine in range(engines):
-                    lines.append(f'        {str(engine)}:')
-                    lines.append('          storage:')
-                    for tier in range(tiers):
-                        lines.append(f'            {str(tier)}:')
-                        if tier == 0 and pmem_list:
-                            lines.append('              class: dcpm')
-                            lines.append(f'              scm_list: ["{pmem_list[engine]}"]')
-                            lines.append(f'              scm_mount: {scm_mount}{engine}')
-                        elif tier == 0:
-                            lines.append('              class: ram')
-                            lines.append(f'              scm_mount: {scm_mount}{engine}')
-                            lines.append(f'              scm_size: {scm_size}')
-                        else:
-                            lines.append('              class: nvme')
-                            bdev_address = ", ".join(bdev_list[engine][tier])
-                            lines.append(f'              bdev_list: [{bdev_address}]')
-                            if control_metadata:
-                                tier_roles = ", ".join(get_tier_roles(tier, tiers))
-                                lines.append(
-                                    f'              bdev_roles: [{tier_roles}]')
-
-
-        else:
-            lines = ['server_config:']
-            if control_metadata and bdev_list:
-                lines.append('  control_metadata:')
-                lines.append(f'    path: {control_metadata}')
-            lines.append('  engines:')
-            for engine in range(engines):
-                lines.append(f'    {str(engine)}:')
-                lines.append('      storage:')
-                for tier in range(tiers):
-                    lines.append(f'        {str(tier)}:')
-                    if tier == 0 and pmem_list:
-                        lines.append('          class: dcpm')
-                        lines.append(f'          scm_list: ["{pmem_list[engine]}"]')
-                        lines.append(f'          scm_mount: {scm_mount}{engine}')
-                    elif tier == 0:
-                        lines.append('          class: ram')
-                        lines.append(f'          scm_mount: {scm_mount}{engine}')
-                        lines.append(f'          scm_size: {scm_size}')
-                    else:
-                        lines.append('          class: nvme')
-                        lines.append(f'          bdev_list: [{", ".join(bdev_list[engine][tier])}]')
-                        if control_metadata:
-                            lines.append(
-                                f'          bdev_roles: [{", ".join(get_tier_roles(tier, tiers))}]')
+        lines = ['server_config:']
+        if control_metadata and bdev_list:
+            lines.append('  control_metadata:')
+            lines.append(f'    path: {control_metadata}')
+        lines.append('  engines:')
+        for engine in range(engines):
+            lines.append(f'    {str(engine)}:')
+            lines.append('      storage:')
+            for tier in range(tiers):
+                lines.append(f'        {str(tier)}:')
+                if tier == 0 and pmem_list:
+                    lines.append('          class: dcpm')
+                    lines.append(f'          scm_list: ["{pmem_list[engine]}"]')
+                    lines.append(f'          scm_mount: {scm_mount}{engine}')
+                elif tier == 0:
+                    lines.append('          class: ram')
+                    lines.append(f'          scm_mount: {scm_mount}{engine}')
+                    lines.append(f'          scm_size: {scm_size}')
+                else:
+                    lines.append('          class: nvme')
+                    lines.append(f'          bdev_list: [{", ".join(bdev_list[engine][tier])}]')
+                    if control_metadata:
+                        lines.append(
+                            f'          bdev_roles: [{", ".join(get_tier_roles(tier, tiers))}]')
 
         self._log.debug('  Creating %s', yaml_file)
         for line in lines:
