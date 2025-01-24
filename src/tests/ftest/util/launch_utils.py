@@ -1125,7 +1125,6 @@ class TestGroup():
                         "storage: auto not supported for varying engines_per_host")
                 engines = engines[0]
                 yaml_file = os.path.join(yaml_dir, f"extra_yaml_storage_{engines}_engine.yaml")
-
                 if engines not in engine_storage_yaml:
                     logger.debug("-" * 80)
                     storage_info.write_storage_yaml(

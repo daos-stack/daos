@@ -59,10 +59,10 @@ server_config:
       target_mux: !mux
         3_target:
           targets: 3
-          !filter-only : /run/server_config/engines/0/target_mux/3_target
+          !filter-only : /run/server_config/engines/0/target_mux/3_target # yamllint disable-line rule:colons
         5_targets:
           targets: 5
-          !filter-only : /run/server_config/engines/0/target_mux/5_targets
+          !filter-only : /run/server_config/engines/0/target_mux/5_targets # yamllint disable-line rule:colons
       pinned_numa_node: 1
       nr_xs_helpers: 1
       fabric_iface: ib1
