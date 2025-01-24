@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -662,8 +663,8 @@ dfs_test_rm(const char *name)
 	assert_int_equal(rc, 0);
 }
 
-int dfs_test_thread_nr		= 8;
-#define DFS_TEST_MAX_THREAD_NR	(16)
+int dfs_test_thread_nr = 16;
+#define DFS_TEST_MAX_THREAD_NR (16)
 pthread_t dfs_test_tid[DFS_TEST_MAX_THREAD_NR];
 
 struct dfs_test_thread_arg {
@@ -3335,6 +3336,11 @@ dfs_test_pipeline_find(void **state)
 	assert_int_equal(rc, 0);
 }
 
+static const struct CMUnitTest dfs_unit_tests1[] = {
+    {"DFS_UNIT_TEST14: multi-threads connect to same container", dfs_test_mt_connect, async_disable,
+     test_case_teardown},
+};
+
 static const struct CMUnitTest dfs_unit_tests[] = {
 	{ "DFS_UNIT_TEST1: DFS mount / umount",
 	  dfs_test_mount, async_disable, test_case_teardown},
@@ -3456,8 +3462,9 @@ run_dfs_unit_test(int rank, int size)
 {
 	int rc = 0;
 
+	printf("tmp %p\n", dfs_unit_tests);
 	par_barrier(PAR_COMM_WORLD);
-	rc = cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Unit", dfs_unit_tests, dfs_setup,
+	rc = cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Unit", dfs_unit_tests1, dfs_setup,
 					 dfs_teardown);
 	par_barrier(PAR_COMM_WORLD);
 
@@ -3465,7 +3472,7 @@ run_dfs_unit_test(int rank, int size)
 	d_setenv("DFS_USE_DTX", "1", 1);
 
 	par_barrier(PAR_COMM_WORLD);
-	rc += cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Unit_DTX", dfs_unit_tests,
+	rc += cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Unit_DTX", dfs_unit_tests1,
 					  dfs_setup, dfs_teardown);
 	par_barrier(PAR_COMM_WORLD);
 	return rc;
