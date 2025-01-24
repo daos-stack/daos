@@ -16,7 +16,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@dinghwah/DAOS-15116-BtestPipeline') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -1286,7 +1286,12 @@ pipeline {
                                 coverage_stashes: ['el8-covc-unit-cov',
                                                    'func-vm-cov',
                                                    'func-hw-medium-cov',
-                                                   'func-hw-large-cov'],
+                                                   'func-hw-medium-md-on-ssd-cov',
+                                                   'func-hw-medium-verbs-provider-cov',
+                                                   'func-hw-medium-verbs-provider-md-on-ssd-cov',
+                                                   'func-hw-medium-ucx-provider-cov',
+                                                   'func-hw-large-cov',
+                                                   'func-hw-large-md-on-ssd-cov'],
                                 coverage_healthy: [methodCoverage: 0,
                                                    conditionalCoverage: 0,
                                                    statementCoverage: 0],
