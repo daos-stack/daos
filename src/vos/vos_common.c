@@ -726,6 +726,18 @@ vos_mod_init(void)
 	}
 	D_INFO("Set DAOS VOS aggregation gap as %u (second)\n", vos_agg_gap);
 
+	vos_dtx_array_size_bits = VOS_DTX_ARRAY_MIN;
+	d_getenv_uint("DAOS_VOS_DTX_ARRAY", &vos_dtx_array_size_bits);
+	if (vos_dtx_array_size_bits < VOS_DTX_ARRAY_MIN ||
+	    vos_dtx_array_size_bits > VOS_DTX_ARRAY_MAX) {
+		D_WARN("Invalid DAOS_VOS_DTX_ARRAY value, "
+		       "valid range [%u, %u], set it as default %u\n",
+		       VOS_DTX_ARRAY_MIN, VOS_DTX_ARRAY_MAX, VOS_DTX_ARRAY_MIN);
+		vos_dtx_array_size_bits = VOS_DTX_ARRAY_MIN;
+	}
+	D_INFO("Set DAOS DTX array size as %u (1 << %u)\n",
+		1 << vos_dtx_array_size_bits, vos_dtx_array_size_bits);
+
 	return rc;
 }
 

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -243,7 +244,7 @@ entries_init(struct entries *entries)
 	entries->entry_count = 0;
 	entries->alloc_count = MAX_ILOG_LEN;
 
-	rc = lrua_array_alloc(&entries->array, DTX_ARRAY_LEN, 1,
+	rc = lrua_array_alloc(&entries->array, 1 << vos_dtx_array_size_bits, 1,
 			      sizeof(struct fake_tx_entry), 0, &cbs, NULL);
 	if (rc != 0)
 		D_FREE(entries->entries);
