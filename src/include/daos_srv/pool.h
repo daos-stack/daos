@@ -46,6 +46,7 @@ struct ds_pool_svc;
  */
 struct ds_pool {
 	struct daos_llink	sp_entry;
+	struct d_ref_tracker	sp_ref_tracker;
 	uuid_t			sp_uuid;	/* pool UUID */
 	d_list_t		sp_hdls;
 	ABT_rwlock		sp_lock;
@@ -120,6 +121,48 @@ struct ds_pool {
 	uint32_t		 sp_reint_mode;
 };
 
+/**
+ * Look up the ds_pool object with \a uuid and assign a reference to *\a pool.
+ * Upon errors, *\a pool is set to NULL.
+ *
+ * \param[in]	uuid	pool UUID (uuid_t)
+ * \param[out]	pool	pool (struct ds_pool **)
+ *
+ * \return error code
+ */
+#define DS_POOL_LOOKUP(uuid, pool)                                                                 \
+	({                                                                                         \
+		int ds_pool_lookup_rc = ds_pool_lookup(uuid, pool);                                \
+		if (ds_pool_lookup_rc == 0)                                                        \
+			D_REF_TRACKER_TRACK(&(*pool)->sp_ref_tracker, pool);                       \
+		ds_pool_lookup_rc;                                                                 \
+	})
+
+/**
+ * Put the ds_pool reference and assign NULL to *\a pool.
+ *
+ * \param[in]	pool	pool (struct ds_pool **)
+ */
+#define DS_POOL_PUT(pool)                                                                          \
+	do {                                                                                       \
+		D_REF_TRACKER_UNTRACK(&(*pool)->sp_ref_tracker, pool);                             \
+		ds_pool_put(*pool);                                                                \
+		*pool = NULL;                                                                      \
+	} while (0)
+
+/**
+ * Get a new ds_pool reference from \a from and store it in *\a to.
+ *
+ * \param[out]	to	pool (struct ds_pool **)
+ * \param[in]	from	pool (struct ds_pool *)
+ */
+#define DS_POOL_GET(to, from)                                                                      \
+	do {                                                                                       \
+		ds_pool_get(from);                                                                 \
+		*to = from;                                                                        \
+		D_REF_TRACKER_TRACK(&(from)->sp_ref_tracker, to);                                  \
+	} while (0)
+
 int ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool);
 void ds_pool_put(struct ds_pool *pool);
 void ds_pool_get(struct ds_pool *pool);
@@ -180,10 +223,13 @@ struct ds_pool_child {
 	/* The HLC when current rebuild ends, which will be used to compare
 	 * with the aggregation full scan start HLC to know whether the
 	 * aggregation needs to be restarted from 0. */
-	uint64_t	spc_rebuild_end_hlc;
-	uint32_t	spc_map_version;
-	int		spc_ref;
-	ABT_eventual	spc_ref_eventual;
+	uint64_t		spc_rebuild_end_hlc;
+	uint32_t		spc_map_version;
+	int			spc_ref;
+#ifdef DAOS_WITH_REF_TRACKER
+	struct d_ref_tracker	spc_ref_tracker;
+#endif
+	ABT_eventual		spc_ref_eventual;
 
 	uint64_t	spc_discard_done:1,
 			spc_no_storage:1; /* The pool shard has no storage. */
@@ -252,17 +298,53 @@ int
 ds_pool_svc_ops_save(struct rdb_tx *tx, void *pool_svc, uuid_t pool_uuid, uuid_t *cli_uuidp,
 		     uint64_t cli_time, bool dup_op, int rc_in, struct ds_pool_svc_op_val *op_valp);
 
-/* Find ds_pool_child in cache, hold one reference */
+/**
+ * Look up the ds_pool_child object with \a uuid, regardless of its state, and
+ * assign a reference to *\a child.
+ *
+ * \param[in]	uuid	pool UUID (uuid_t)
+ * \param[out]	child	pool child (struct ds_pool_child **)
+ */
+#define DS_POOL_CHILD_FIND(uuid, child)                                                            \
+	do {                                                                                       \
+		*child = ds_pool_child_find(uuid);                                                 \
+		if (*child == NULL)                                                                \
+			break;                                                                     \
+		D_REF_TRACKER_TRACK(&(*child)->spc_ref_tracker, child);                            \
+	} while (0)
+
+/**
+ * Look up the ds_pool_child object with \a uuid and assign a reference to
+ * *\a child.
+ *
+ * \param[in]	uuid	pool UUID (uuid_t)
+ * \param[out]	child	pool child (struct ds_pool_child **)
+ */
+#define DS_POOL_CHILD_LOOKUP(uuid, child)                                                          \
+	do {                                                                                       \
+		*child = ds_pool_child_lookup(uuid);                                               \
+		if (*child == NULL)                                                                \
+			break;                                                                     \
+		D_REF_TRACKER_TRACK(&(*child)->spc_ref_tracker, child);                            \
+	} while (0)
+
+/**
+ * Put the ds_pool_child reference and assign NULL to *\a child.
+ *
+ * \param[in]	child	pool child (struct ds_pool_child **)
+ */
+#define DS_POOL_CHILD_PUT(child)                                                                   \
+	do {                                                                                       \
+		D_REF_TRACKER_UNTRACK(&(*child)->spc_ref_tracker, child);                          \
+		ds_pool_child_put(*child);                                                         \
+		*child = NULL;                                                                     \
+	} while (0)
+
 struct ds_pool_child *ds_pool_child_find(const uuid_t uuid);
-/* Find ds_pool_child in STARTING or STARTED state, hold one reference */
 struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);
-/* Put the reference held by ds_pool_child_lookup() */
 void ds_pool_child_put(struct ds_pool_child *child);
-/* Start ds_pool child */
 int ds_pool_child_start(uuid_t pool_uuid, bool recreate);
-/* Stop ds_pool_child */
 int ds_pool_child_stop(uuid_t pool_uuid, bool free);
-/* Query pool child state */
 uint32_t ds_pool_child_state(uuid_t pool_uuid, uint32_t tgt_id);
 
 int ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,

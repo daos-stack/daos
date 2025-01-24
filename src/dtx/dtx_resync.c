@@ -761,7 +761,7 @@ dtx_resync_one(void *data)
 	struct dtx_container_scan_arg	 cb_arg = { 0 };
 	int				 rc;
 
-	child = ds_pool_child_lookup(arg->pool_uuid);
+	DS_POOL_CHILD_LOOKUP(arg->pool_uuid, &child);
 	if (child == NULL)
 		D_GOTO(out, rc = -DER_NONEXIST);
 
@@ -786,7 +786,7 @@ out:
 	D_FREE(param);
 	D_FREE(anchor);
 	if (child != NULL)
-		ds_pool_child_put(child);
+		DS_POOL_CHILD_PUT(&child);
 
 	D_DEBUG(DB_TRACE, DF_UUID" iterate pool done: rc %d\n",
 		DP_UUID(arg->pool_uuid), rc);
@@ -801,7 +801,7 @@ dtx_resync_ult(void *data)
 	struct ds_pool		*pool = NULL;
 	int			rc;
 
-	rc = ds_pool_lookup(arg->pool_uuid, &pool);
+	rc = DS_POOL_LOOKUP(arg->pool_uuid, &pool);
 	if (rc != 0) {
 		D_WARN("Cannot find the pool "DF_UUID" for DTX resync: "DF_RC"\n",
 		       DP_UUID(arg->pool_uuid), DP_RC(rc));
@@ -836,6 +836,6 @@ dtx_resync_ult(void *data)
 
 out:
 	if (pool != NULL)
-		ds_pool_put(pool);
+		DS_POOL_PUT(&pool);
 	D_FREE(arg);
 }

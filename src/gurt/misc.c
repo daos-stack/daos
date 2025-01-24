@@ -1662,53 +1662,134 @@ d_stand_div(double *array, int nr)
 	return sqrt(std);
 }
 
-int
-d_vec_pointers_init(struct d_vec_pointers *pointers, uint32_t cap)
-{
-	void **buf = NULL;
+D_VEC_DEFINE(pointers, void *, elem, D_)
 
-	if (cap > 0) {
-		D_ALLOC_ARRAY(buf, cap);
-		if (buf == NULL)
-			return -DER_NOMEM;
-	}
+#ifdef DAOS_WITH_REF_TRACKER
 
-	pointers->p_buf = buf;
-	pointers->p_cap = cap;
-	pointers->p_len = 0;
-	return 0;
-}
+/* Reference tracker record */
+struct d_ref_tracker_rec {
+	void       *rftr_addr;
+	const char *rftr_func;
+	int         rftr_line;
+};
 
+D_VEC_DEFINE(ref_tracker_rec, struct d_ref_tracker_rec, *elem, D_VEC_A_)
+
+/** Initialize \a tracker. */
 void
-d_vec_pointers_fini(struct d_vec_pointers *pointers)
+d_ref_tracker_init(struct d_ref_tracker *tracker)
 {
-	D_FREE(pointers->p_buf);
-	pointers->p_cap = 0;
-	pointers->p_len = 0;
+	int rc;
+
+	rc = d_vec_ref_tracker_rec_init(&tracker->rft_vec, 0);
+	D_ASSERTF(rc == 0, "d_vec_ref_tracker_rec_init(0): " DF_RC "\n", DP_RC(rc));
 }
 
-int
-d_vec_pointers_append(struct d_vec_pointers *pointers, void *pointer)
+/** Finalize \a tracker. */
+void
+d_ref_tracker_fini(struct d_ref_tracker *tracker)
 {
-	if (pointers->p_len == pointers->p_cap) {
-		void		**buf;
-		uint32_t	  cap;
+	D_REF_TRACKER_DUMP(tracker);
+	D_ASSERT(tracker->rft_vec.p_len == 0);
+	d_vec_ref_tracker_rec_fini(&tracker->rft_vec);
+}
 
-		if (pointers->p_cap == 0)
-			cap = 1;
-		else
-			cap = 2 * pointers->p_cap;
+/** Use D_REF_TRACKER_DUMP instead. */
+void
+d_ref_tracker_dump(struct d_ref_tracker *tracker, const char *func, int line)
+{
+	int i;
 
-		D_REALLOC_ARRAY(buf, pointers->p_buf, pointers->p_cap, cap);
-		if (buf == NULL)
-			return -DER_NOMEM;
+	if (tracker->rft_vec.p_len > 0)
+		D_INFO("%s@%d: dumping %d references:\n", func, line, tracker->rft_vec.p_len);
+	for (i = 0; i < tracker->rft_vec.p_len; i++) {
+		struct d_ref_tracker_rec *ref = &tracker->rft_vec.p_buf[i];
 
-		pointers->p_buf = buf;
-		pointers->p_cap = cap;
+		D_INFO("  %p: %s@%d\n", ref->rftr_addr, ref->rftr_func, ref->rftr_line);
 	}
-
-	D_ASSERTF(pointers->p_len < pointers->p_cap, "%u < %u\n", pointers->p_len, pointers->p_cap);
-	pointers->p_buf[pointers->p_len] = pointer;
-	pointers->p_len++;
-	return 0;
 }
+
+static int
+d_ref_tracker_find(struct d_ref_tracker *tracker, void *addr)
+{
+	int i;
+
+	for (i = 0; i < tracker->rft_vec.p_len; i++)
+		if (tracker->rft_vec.p_buf[i].rftr_addr == addr)
+			return i;
+	return -1;
+}
+
+/** Use D_REF_TRACKER_TRACK instead. */
+void
+d_ref_tracker_track(struct d_ref_tracker *tracker, void *addr, const char *func, int line)
+{
+	struct d_ref_tracker_rec ref = {.rftr_addr = addr, .rftr_func = func, .rftr_line = line};
+	int                      i;
+	int                      rc;
+
+	D_ASSERT(addr != NULL);
+
+	/*
+	 * If the address is already used by an existing reference, then the
+	 * usual reason is that the variable storing the reference was
+	 * destructed without a d_ref_tracker_untrack call---we have very likely leaked
+	 * that reference.
+	 */
+	i = d_ref_tracker_find(tracker, addr);
+	D_ASSERTF(i == -1, "addr %p already used by %s@%d\n", addr,
+		  tracker->rft_vec.p_buf[i].rftr_func, tracker->rft_vec.p_buf[i].rftr_line);
+
+	rc = d_vec_ref_tracker_rec_append(&tracker->rft_vec, &ref);
+	D_ASSERTF(rc == 0, "d_vec_ref_tracker_rec_append: " DF_RC "\n", DP_RC(rc));
+}
+
+/** Use D_REF_TRACKER_UNTRACK instead. */
+void
+d_ref_tracker_untrack(struct d_ref_tracker *tracker, void *addr)
+{
+	int i;
+	int rc;
+
+	D_ASSERT(addr != NULL);
+
+	/*
+	 * If the address is not found, then the usual reason is that we have
+	 * copied a reference from the original variable to a new one without a
+	 * d_ref_tracker_retrack call.
+	 */
+	i = d_ref_tracker_find(tracker, addr);
+	D_ASSERTF(i != -1, "addr not found\n");
+
+	rc = d_vec_ref_tracker_rec_delete_at(&tracker->rft_vec, i,
+					     D_VEC_F_REORDER | D_VEC_F_SHRINK);
+	D_ASSERTF(rc == 0, "d_vec_ref_tracker_rec_delete_at: " DF_RC "\n", DP_RC(rc));
+}
+
+/** Use D_REF_TRACKER_MOVE instead. */
+void
+d_ref_tracker_retrack(struct d_ref_tracker *tracker, void *new_addr, void *old_addr,
+		      const char *func, int line)
+{
+	int                       i;
+	int                       j;
+	struct d_ref_tracker_rec *ref;
+
+	D_ASSERT(old_addr != NULL);
+	D_ASSERT(new_addr != NULL);
+	D_ASSERT(old_addr != new_addr);
+
+	i = d_ref_tracker_find(tracker, old_addr);
+	D_ASSERTF(i != -1, "old_addr not found\n");
+
+	j = d_ref_tracker_find(tracker, new_addr);
+	D_ASSERTF(j == -1, "new_addr %p already used by %s@%d\n", new_addr,
+		  tracker->rft_vec.p_buf[j].rftr_func, tracker->rft_vec.p_buf[j].rftr_line);
+
+	ref            = &tracker->rft_vec.p_buf[i];
+	ref->rftr_addr = new_addr;
+	ref->rftr_func = func;
+	ref->rftr_line = line;
+}
+
+#endif /* DAOS_WITH_REF_TRACKER */
