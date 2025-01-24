@@ -45,6 +45,10 @@ server_config:
   engines:
     0:
       target_mux: !mux
+        1_target:
+          targets: 1
+        2_targets:
+          targets: 2
         3_target:
           targets: 3
         5_targets:
@@ -57,6 +61,12 @@ server_config:
       storage: auto
     1:
       target_mux: !mux
+        1_target:
+          targets: 1
+          !filter-only : /run/server_config/engines/0/target_mux/1_target # yamllint disable-line rule:colons
+        2_targets:
+          targets: 2
+          !filter-only : /run/server_config/engines/0/target_mux/2_targets # yamllint disable-line rule:colons
         3_target:
           targets: 3
           !filter-only : /run/server_config/engines/0/target_mux/3_target # yamllint disable-line rule:colons
