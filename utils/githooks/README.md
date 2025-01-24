@@ -36,7 +36,7 @@ If you already have a [virtual environment for building](../../docs/QSG/build_fr
 ```sh
 python3 -m pip install -r utils/cq/requirements.txt
 ```
-To install system packages with your package manager - for example:
+Install system packages with your package manager - for example:
 ```sh
 sudo dnf install git-clang-format -y
 ```
@@ -45,8 +45,8 @@ sudo dnf install git-clang-format -y
 
 The following packages are used by built-in githooks.
 
-1. `clang-format` version 14.0.5 or higher - Formatter for C code. If the check is unable to parse
-the version output, it will fail. Try running
+1. `git-clang-format` and `clang-format` version 14.0.5 or higher - Formatter for C code.
+If the check is unable to parse the version output, it will fail. Try running
 `<root>/site_scons/site_tools/extra/extra.py` to check.
 2. `pylint`
 3. `flake8`
