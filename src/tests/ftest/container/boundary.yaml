@@ -7,6 +7,7 @@ server_config:
   engines:
     0:
       targets: 1
+      log_mask: DEBUG,MEM=ERR
       env_vars:
         - DD_MASK=group_metadata_only
         - DAOS_MD_CAP=1024
