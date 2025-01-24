@@ -17,7 +17,6 @@ class SysPools():
     """Directory of Pools and Summary Activities Found in Engine Log Files"""
 
     # Future possibilities include:
-    # diagram of nested dictionaries constructed in the comments
     # system map update events (output outside if pool-specific context)
     # SWIM events seen by PS leader?
     # add/remove target events on PS leader?
@@ -86,6 +85,52 @@ class SysPools():
         self._check_rb_legacy_fmt = True
         self._debug = False
 
+        # other nested dictionaries within self._pools will be built-up
+        # pool leadership terms dictionary indexed by integer term number
+        # self._pools[puuid][term] -> {rank, begin_time, end_time, host, pid, logfile, maps={}}
+        #
+        # pool map versions dictionary indexed by integer pool map version
+        # self._pools[puuid][term]["maps"][mapver] = {carryover, from_ver, time, rb_gens={}}
+        #
+        # rebuild generations dictionary indexed by integer rebuild generation number
+        # contains: rebuild operation, start time, duration,
+        #           status(started/completed/aborted/scanning/pulling),
+        #           and if any scan or pull hang warnings were logged by PS leader
+        # self._pools[puuid][term]["maps"][mapver]["rb_gens"][gen] =
+        #  {op, start_time, time, started, scanning, scan_hung, scan_hung_time, scan_num_eng_wait,
+        #   pulling, pull_hung, pull_hung_time, pull_num_eng_wait, completed, aborted, duration}
+
+    def _create_mapver(self, ver, carryover=False, tm="xx/xx-xx:xx:xx.xx"):
+        return {
+            "carryover": carryover,
+            "from_ver": ver,
+            "time": tm,
+            "rb_gens": {}
+        }
+
+    def _create_rbgen(self, op, start_time="xx/xx-xx:xx:xx.xx", tm="xx/xx-xx:xx:xx.xx",
+                      started=True, scanning=False, scan_hung=False,
+                      scan_hung_time="xx/xx-xx:xx:xx.xx", scan_num_eng_wait=0, pulling=False,
+                      pull_hung=False, pull_hung_time="xx/xx-xx:xx:xx.xx", pull_num_eng_wait=0,
+                      completed=False, aborted=False, duration=0):
+        return {
+            "op": op,
+            "start_time": start_time,
+            "time": tm,
+            "started": started,
+            "scanning": scanning,
+            "scan_hung": scan_hung,
+            "scan_hung_time": scan_hung_time,
+            "scan_num_eng_wait": scan_num_eng_wait,
+            "pulling": pulling,
+            "pull_hung": pull_hung,
+            "pull_hung_time": pull_hung_time,
+            "pull_num_eng_wait": pull_num_eng_wait,
+            "completed": completed,
+            "aborted": aborted,
+            "duration": duration
+        }
+
     def _warn(self, wmsg, fname, line=None):
         full_msg = f"WARN file={fname}"
         if line:
@@ -146,13 +191,12 @@ class SysPools():
         if term in self._pools[puuid]:
             self._warn(f"pool {puuid} term {term} already seen!", fname, line)
         # carry over most recent map version into the new term, avoid later KeyError
-        if old_term in self._pools:
+        pmap_versions = {}
+        if old_term in self._pools[puuid]:
             if self._pools and self._pools[puuid][old_term]["maps"] != {}:
                 last_mapver = max(self._pools[puuid][old_term]["maps"].keys())
-                pmap_versions = self._pools[puuid][old_term]["maps"][last_mapver]
-                pmap_versions["carryover"] = True
-        else:
-            pmap_versions = {}
+                pmap_versions[last_mapver] = self._pools[puuid][old_term]["maps"][last_mapver]
+                pmap_versions[last_mapver]["carryover"] = True
         self._pools[puuid][term] = {
             "rank": rank,
             "begin_time": datetime,
@@ -201,12 +245,8 @@ class SysPools():
         if not self._is_leader(puuid, rank, pid):
             return True
         term = self._cur_term[puuid]
-        self._pools[puuid][term]["maps"][to_ver] = {
-            "carryover": False,
-            "from_ver": from_ver,
-            "time": datetime,
-            "rb_gens": {}
-        }
+        self._pools[puuid][term]["maps"][to_ver] = \
+            self._create_mapver(from_ver, carryover=False, tm=datetime)
         if self._debug:
             print(f"FOUND pool {puuid} map update {from_ver}->{to_ver} rank {rank}\t{host}\t"
                   f"PID {pid}\t{fname}")
@@ -239,23 +279,8 @@ class SysPools():
         if gen in self._pools[puuid][term]["maps"][ver]["rb_gens"]:
             self._warn(f"pool {puuid} term {term} ver {ver} already has gen {gen}", fname, line)
         # Future possibility: keep timestamps, durations for scan start, pull start, completed
-        self._pools[puuid][term]["maps"][ver]["rb_gens"][gen] = {
-            "op": op,
-            "start_time": datetime,
-            "time": "xx/xx-xx:xx:xx.xx",
-            "started": True,
-            "scanning": False,
-            "scan_hung": False,
-            "scan_hung_time": "xx/xx-xx:xx:xx.xx",
-            "scan_num_eng_wait": 0,
-            "pulling": False,
-            "pull_hung": False,
-            "pull_hung_time": "xx/xx-xx:xx:xx.xx",
-            "pull_num_eng_wait": 0,
-            "completed": False,
-            "aborted": False,
-            "duration": 0
-        }
+        self._pools[puuid][term]["maps"][ver]["rb_gens"][gen] = \
+            self._create_rbgen(op, start_time=datetime)
         if self._debug:
             print(f"{datetime} FOUND rebuild start in term {term}, rb={puuid}/{ver}/{gen}/{op} "
                   f"rank {rank}\t{host}\tPID {pid}\t{fname}")
@@ -281,23 +306,8 @@ class SysPools():
             return True
         if gen in self._pools[puuid][term]["maps"][ver]["rb_gens"]:
             self._warn(f"pool {puuid} term {term} ver {ver} already has gen {gen}", fname, line)
-        self._pools[puuid][term]["maps"][ver]["rb_gens"][gen] = {
-            "op": op,
-            "start_time": datetime,
-            "time": "xx/xx-xx:xx:xx.xx",
-            "started": True,
-            "scanning": False,
-            "scan_hung": False,
-            "scan_hung_time": "xx/xx-xx:xx:xx.xx",
-            "scan_num_eng_wait": 0,
-            "pulling": False,
-            "pull_hung": False,
-            "pull_hung_time": "xx/xx-xx:xx:xx.xx",
-            "pull_num_eng_wait": 0,
-            "completed": False,
-            "aborted": False,
-            "duration": 0
-        }
+        self._pools[puuid][term]["maps"][ver]["rb_gens"][gen] = \
+            self._create_rbgen(op, start_time=datetime)
 
         if self._debug:
             print(f"{datetime} FOUND rebuild start in term {term}, rb={puuid}/{ver}/{gen}/{op} "
@@ -330,29 +340,8 @@ class SysPools():
         if ver not in self._pools[puuid][term]["maps"]:
             self._warn(f"pool {puuid} term {term} ver {ver} not in maps - add placeholder",
                        fname, line)
-            self._pools[puuid][term]["maps"][ver] = {
-                "carryover": False,
-                "from_ver": ver,
-                "time": "xx/xx-xx:xx:xx.xx",
-                "rb_gens": {}
-            }
-            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen] = {
-                "op": op,
-                "start_time": "xx/xx-xx:xx:xx.xx",
-                "time": "xx/xx-xx:xx:xx.xx",
-                "started": True,
-                "scanning": False,
-                "scan_hung": False,
-                "scan_hung_time": "xx/xx-xx:xx:xx.xx",
-                "scan_num_eng_wait": 0,
-                "pulling": False,
-                "pull_hung": False,
-                "pull_hung_time": "xx/xx-xx:xx:xx.xx",
-                "pull_num_eng_wait": 0,
-                "completed": False,
-                "aborted": False,
-                "duration": 0
-            }
+            self._pools[puuid][term]["maps"][ver] = self._create_mapver(ver)
+            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen] = self._create_rbgen(op)
 
         if gen in self._pools[puuid][term]["maps"][ver]["rb_gens"]:
             existing_op = self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["op"]
@@ -404,29 +393,8 @@ class SysPools():
         if ver not in self._pools[puuid][term]["maps"]:
             self._warn(f"pool {puuid} term {term} ver {ver} not in maps - add placeholder",
                        fname, line)
-            self._pools[puuid][term]["maps"][ver] = {
-                "carryover": False,
-                "from_ver": ver,
-                "time": "xx/xx-xx:xx:xx.xx",
-                "rb_gens": {}
-            }
-            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen] = {
-                "op": op,
-                "start_time": "xx/xx-xx:xx:xx.xx",
-                "time": "xx/xx-xx:xx:xx.xx",
-                "started": True,
-                "scanning": False,
-                "scan_hung": False,
-                "scan_hung_time": "xx/xx-xx:xx:xx.xx",
-                "scan_num_eng_wait": 0,
-                "pulling": False,
-                "pull_hung": False,
-                "pull_hung_time": "xx/xx-xx:xx:xx.xx",
-                "pull_num_eng_wait": 0,
-                "completed": False,
-                "aborted": False,
-                "duration": 0
-            }
+            self._pools[puuid][term]["maps"][ver] = self._create_mapver(ver)
+            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen] = self._create_rbgen(op)
 
         if gen in self._pools[puuid][term]["maps"][ver]["rb_gens"]:
             existing_op = self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["op"]
