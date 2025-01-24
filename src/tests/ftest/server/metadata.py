@@ -1,5 +1,6 @@
 """
   (C) Copyright 2019-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -63,28 +64,12 @@ class ObjectMetadata(TestWithServers):
     def __init__(self, *args, **kwargs):
         """Initialize a TestWithServers object."""
         super().__init__(*args, **kwargs)
-        self.ior_managers = []
 
         # Minimum number of containers that should be able to be created
         self.created_containers_min = self.params.get("created_cont_min", "/run/metadata/*")
 
         # Number of created containers that should not be possible
         self.created_containers_limit = self.params.get("created_cont_max", "/run/metadata/*")
-
-    def pre_tear_down(self):
-        """Tear down steps to optionally run before tearDown().
-
-        Returns:
-            list: a list of error strings to report at the end of tearDown().
-
-        """
-        error_list = []
-        if self.ior_managers:
-            self.test_log.info("Stopping IOR job managers")
-            error_list = self._stop_managers(self.ior_managers, "IOR job manager")
-        else:
-            self.log.debug("no pre-teardown steps defined")
-        return error_list
 
     def create_pool(self, svc_ops_enabled=True):
         """Create a pool and display the svc ranks.
@@ -469,6 +454,7 @@ class ObjectMetadata(TestWithServers):
         self.create_pool()
         files_per_thread = 400
         total_ior_threads = 5
+        ior_managers = []
 
         processes = self.params.get("slots", "/run/ior/clientslots/*")
 
@@ -487,17 +473,22 @@ class ObjectMetadata(TestWithServers):
                 ior_cmd.flags.value = self.params.get("ior{}flags".format(operation), "/run/ior/*")
 
                 # Define the job manager for the IOR command
-                self.ior_managers.append(
+                ior_managers.append(
                     get_job_manager(self, "Clush", ior_cmd))
-                env = ior_cmd.get_default_env(str(self.ior_managers[-1]))
-                self.ior_managers[-1].assign_hosts(self.hostlist_clients, self.workdir, None)
-                self.ior_managers[-1].assign_processes(processes)
-                self.ior_managers[-1].assign_environment(env)
-                self.ior_managers[-1].verbose = False
+                env = ior_cmd.get_default_env(str(ior_managers[-1]))
+                ior_managers[-1].assign_hosts(self.hostlist_clients, self.workdir, None)
+                ior_managers[-1].assign_processes(processes)
+                ior_managers[-1].assign_environment(env)
+                ior_managers[-1].verbose = False
+
+                # Disable cleanup methods for all ior commands except the first one. The cleanup
+                # command for one ior command will handle all of the ior commands.
+                if index > 0:
+                    ior_managers[-1].register_cleanup_method = None
 
                 # Add a thread for these IOR arguments
                 thread_manager.add(
-                    test=self, manager=self.ior_managers[-1], loops=files_per_thread)
+                    test=self, manager=ior_managers[-1], loops=files_per_thread)
                 self.log.info("Created %s thread %s", operation, index)
 
             # Launch the IOR threads
