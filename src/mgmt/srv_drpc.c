@@ -13,6 +13,7 @@
 #include <signal.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/pool.h>
+#include <daos_srv/bio.h>
 #include <daos_api.h>
 #include <daos_security.h>
 
@@ -427,6 +428,7 @@ static int pool_create_fill_resp(Mgmt__PoolCreateResp *resp, uuid_t uuid, d_rank
 			pool_info.pi_space.ps_space.s_total[index] / resp->n_tgt_ranks;
 	}
 	resp->mem_file_bytes = mem_file_bytes / resp->n_tgt_ranks;
+	resp->md_on_ssd_active = bio_nvme_configured(SMD_DEV_TYPE_META);
 
 out:
 	d_rank_list_free(enabled_ranks);
@@ -1844,6 +1846,7 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		resp.disabled_ranks = disabled_ranks_str;
 	if (dead_ranks_str != NULL)
 		resp.dead_ranks = dead_ranks_str;
+	resp.md_on_ssd_active = bio_nvme_configured(SMD_DEV_TYPE_META);
 
 	D_ALLOC_ARRAY(resp.tier_stats, DAOS_MEDIA_MAX);
 	if (resp.tier_stats == NULL)
@@ -1903,6 +1906,7 @@ ds_mgmt_drpc_pool_query_targets(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	daos_target_info_t		*infos = NULL;
 	Mgmt__PoolQueryTargetInfo	*resp_infos = NULL;
 	uint64_t			 mem_file_bytes = 0;
+	bool                             md_on_ssd_active;
 
 	req = mgmt__pool_query_target_req__unpack(&alloc.alloc, drpc_req->body.len,
 						  drpc_req->body.data);
@@ -1934,6 +1938,7 @@ ds_mgmt_drpc_pool_query_targets(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			req->id, req->rank, DP_RC(rc));
 		goto out_tgts;
 	}
+	md_on_ssd_active = bio_nvme_configured(SMD_DEV_TYPE_META);
 
 	/* Populate the response */
 	/* array of pointers to Mgmt__PoolQueryTargetInfo */
@@ -1974,6 +1979,7 @@ ds_mgmt_drpc_pool_query_targets(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			resp.infos[i]->space[j]->media_type = j;
 		}
 		resp.infos[i]->mem_file_bytes = mem_file_bytes;
+		resp.infos[i]->md_on_ssd_active = md_on_ssd_active;
 	}
 
 out_infos:
