@@ -50,11 +50,7 @@ BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
 BuildRequires: libpmemobj-devel >= 2.1.0
-%if (0%{?rhel} >= 8)
-BuildRequires: fuse3-devel >= 3
-%else
-BuildRequires: fuse3-devel >= 3.4.2
-%endif
+BuildRequires: fused-devel
 %if (0%{?suse_version} >= 1500)
 BuildRequires: go-race
 BuildRequires: libprotobuf-c-devel
@@ -170,7 +166,6 @@ Requires: mercury >= %{mercury_version}
 Requires: libfabric >= %{libfabric_version}
 %if (0%{?suse_version} >= 1500)
 Requires: libfabric1 >= %{libfabric_version}
-Requires: libfuse3-3 >= 3.4.2
 %endif
 Requires: /usr/bin/fusermount3
 %{?systemd_requires}
@@ -221,11 +216,6 @@ Requires: libcapstone-devel
 %else
 Requires: Lmod
 Requires: capstone-devel
-%endif
-%if (0%{?rhel} >= 8)
-Requires: fuse3-devel >= 3
-%else
-Requires: fuse3-devel >= 3.4.2
 %endif
 Requires: pciutils-devel
 %if (0%{?suse_version} > 0)
