@@ -175,6 +175,7 @@ struct sched_request {
 
 bool		sched_prio_disabled;
 unsigned int	sched_relax_intvl = SCHED_RELAX_INTVL_DEFAULT;
+unsigned int    sched_max_req_num = SCHED_REQ_NUM_MAX_DEFAULT;
 unsigned int	sched_relax_mode;
 unsigned int	sched_unit_runtime_max = 32; /* ms */
 bool		sched_watchdog_all;
@@ -1340,7 +1341,6 @@ req_enqueue(struct dss_xstream *dx, struct sched_request *req)
 	return rc;
 }
 
-#define MAX_SCHED_REQ_NUM	(1 << 20)
 #define RPC_ROUND_TRIP_TIME	(100)	/* in msecs */
 
 static bool
@@ -1376,7 +1376,7 @@ req_need_reject(struct sched_req_attr *attr, struct sched_info *info)
 	if (estimated_time > attr->sra_timeout)
 		return true;
 
-	if (req_num > MAX_SCHED_REQ_NUM)
+	if (req_num > sched_max_req_num)
 		return true;
 
 	return false;
