@@ -3962,6 +3962,7 @@ obj_tree_lookup_cont(daos_handle_t toh, uuid_t co_uuid, daos_handle_t *cont_toh)
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
 	cont_root = tmp_iov.iov_buf;
+	D_ASSERT(daos_handle_is_valid(cont_root->tcr_root_hdl));
 	rc = dbtree_open_inplace(&cont_root->tcr_btr_root, &uma, &migrated_toh);
 	if (rc == 0)
 		*cont_toh = migrated_toh;
