@@ -1,6 +1,5 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
- * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -64,7 +63,6 @@ struct vos_tls {
 		bool			 vtl_hash_set;
 	};
 	struct d_tm_node_t		 *vtl_committed;
-	struct d_tm_node_t               *vtl_dtx_rec_missing;
 	struct d_tm_node_t		 *vtl_obj_cnt;
 	struct d_tm_node_t		 *vtl_lru_alloc_size;
 };
