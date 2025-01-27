@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -335,4 +336,12 @@ func _writeDunsPath(path, ct string, poolUUID uuid.UUID, contUUID uuid.UUID) err
 	}
 
 	return nil
+}
+
+func attrListFromNames(names []string) daos.AttributeList {
+	attrs := make(daos.AttributeList, len(names))
+	for i, name := range names {
+		attrs[i] = &daos.Attribute{Name: name}
+	}
+	return attrs
 }
