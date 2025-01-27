@@ -759,6 +759,56 @@ transport_config:
   key: /etc/daos/certs/admin.key
 ```
 
+#### Telemetry Certificate Configuration
+
+The DAOS Telemetry framework has option to use certificates to authenticate
+between server/client and admin node.
+Creating of certificate is not part of DAOS scope and it is up to Admin to
+generate the certificate and add it to the DAOS server and client system.
+
+#### Telemetry Yaml Example
+
+Information on telelmetry config parameters in respective yaml file.
+
+```yaml
+# /etc/daos/daos_server.yml (servers)
+telemetry_config:
+  # To use telemetry in secure mode
+  allow_insecure: false
+  # Set the server telemetry endpoint port number
+  port: 9191
+  # Server certificate for use in TLS handshakes
+  https_cert: /etc/daos/certs/telemetry.crt
+  # Key portion of Server Certificate
+  https_key: /etc/daos/certs/telemetry.key
+```
+
+```yaml
+# /etc/daos/daos_agent.yml (clients)
+telemetry_config:
+  # To use telemetry in secure mode
+  allow_insecure: false
+  # Enable client telemetry for all DAOS clients.
+  enabled: true
+  # Set the client telemetry endpoint port number
+  port: 9192
+  # Retain client telemetry for a period of time after the client process exits.
+  retain: 30s
+  # Server certificate for use in TLS handshakes
+  https_cert: /etc/daos/certs/telemetry.crt
+  # Key portion of Server Certificate
+  https_key: /etc/daos/certs/telemetry.key
+```
+
+```yaml
+# /etc/daos/daos_control.yml (dmg/admin)
+telemetry_config:
+  # To use telemetry in secure mode
+  allow_insecure: false
+  # Skip the Server certificate verification. Recomendate for testing purpose only. 
+  https_exception: true
+```
+
 ### Server Startup
 
 The DAOS Server is started as a systemd service. The DAOS Server

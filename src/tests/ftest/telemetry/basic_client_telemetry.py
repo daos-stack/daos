@@ -26,7 +26,7 @@ class BasicClientTelemetry(TestWithClientTelemetry):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=telemetry
+        :avocado: tags=telemetry,secure_telemetry
         :avocado: tags=BasicClientTelemetry,test_client_metrics_exist
         """
         # create pool and container

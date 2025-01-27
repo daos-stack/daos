@@ -196,11 +196,17 @@ type (
 		Targets []string `yaml:"targets,omitempty"`
 	}
 
+	tlsConfig struct {
+		InsecureSkipVerify bool `yaml:"insecure_skip_verify,omitempty"`
+	}
+
 	scrapeConfig struct {
 		JobName        string          `yaml:"job_name"`
 		ScrapeInterval time.Duration   `yaml:"scrape_interval,omitempty"`
 		ScrapeTimeout  time.Duration   `yaml:"scrape_timeout,omitempty"`
 		StaticConfigs  []*staticConfig `yaml:"static_configs,omitempty"`
+		Scheme         string          `yaml:"scheme,omitempty"`
+		TlsConfig      tlsConfig       `yaml:"tls_config,omitempty"`
 	}
 
 	promCfg struct {
@@ -258,11 +264,23 @@ func (cmd *telemConfigCmd) configurePrometheus() (*installInfo, error) {
 		return nil, err
 	}
 
+	tc := tlsConfig{}
+	scheme := ""
+	if !cmd.cfgCmd.config.TelemetryConfig.AllowInsecure {
+		cmd.Infof("Prometheus configuration is setup as Secure (https) mode")
+		tc.InsecureSkipVerify = cmd.cfgCmd.config.TelemetryConfig.HttpsException
+		scheme = "https"
+	} else {
+		cmd.Infof("Prometheus configuration is setup as insecure (http) mode")
+	}
+
 	cfg.ScrapeConfigs = []*scrapeConfig{
 		{
 			JobName:        "daos",
 			ScrapeInterval: 5 * time.Second,
 			StaticConfigs:  []*staticConfig{sc},
+			Scheme:         scheme,
+			TlsConfig:      tc,
 		},
 	}
 
@@ -300,6 +318,7 @@ type metricsCmd struct {
 // metricsListCmd provides a list of metrics available from the requested DAOS servers.
 type metricsListCmd struct {
 	baseCmd
+	cfgCmd
 	cmdutil.JSONOutputCmd
 	singleHostCmd
 	Port uint32 `short:"p" long:"port" default:"9191" description:"Telemetry port on the host"`
@@ -315,14 +334,30 @@ func (cmd *metricsListCmd) Execute(args []string) error {
 	req := new(control.MetricsListReq)
 	req.Port = cmd.Port
 	req.Host = host
+	req.HttpsException = cmd.cfgCmd.config.TelemetryConfig.HttpsException
 
 	if !cmd.JSONOutputEnabled() {
 		cmd.Info(getConnectingMsg(req.Host, req.Port))
 	}
 
+	// Trying Secure Mode First, It will ignore the certificate if it's not provided
+	// or request with the certificate.
+	if req.AllowInsecure {
+		cmd.Debug("Trying Secure Mode (HTTPS) with Exception")
+	} else {
+		cmd.Debug("Trying Secure Mode (HTTPS) with system certificate")
+	}
+
 	resp, err := control.MetricsList(cmd.MustLogCtx(), req)
 	if err != nil {
-		return err
+		cmd.Errorf("Secure Mode (HTTPS) failed: %s", err.Error())
+		//Trying Insecure Mode
+		req.AllowInsecure = !req.AllowInsecure
+		cmd.Debug("Trying Insecure Mode (HTTP)")
+		resp, err = control.MetricsList(cmd.MustLogCtx(), req)
+		if err != nil {
+			return err
+		}
 	}
 
 	if cmd.JSONOutputEnabled() {
@@ -354,6 +389,7 @@ func getConnectingMsg(host string, port uint32) string {
 // metricsQueryCmd collects the requested metrics from the requested DAOS servers.
 type metricsQueryCmd struct {
 	baseCmd
+	cfgCmd
 	cmdutil.JSONOutputCmd
 	singleHostCmd
 	Port    uint32 `short:"p" long:"port" default:"9191" description:"Telemetry port on the host"`
@@ -370,15 +406,28 @@ func (cmd *metricsQueryCmd) Execute(args []string) error {
 	req := new(control.MetricsQueryReq)
 	req.Port = cmd.Port
 	req.Host = host
+	req.HttpsException = cmd.cfgCmd.config.TelemetryConfig.HttpsException
 	req.MetricNames = common.TokenizeCommaSeparatedString(cmd.Metrics)
 
 	if !cmd.JSONOutputEnabled() {
 		cmd.Info(getConnectingMsg(req.Host, req.Port))
 	}
 
+	// Trying Secure Mode First, It will ignore the certificate if it's not provided
+	// or request with the certificate.
+	req.AllowInsecure = false
+	cmd.Debug("Trying Secure Mode (HTTPS) first, with system certificate")
+
 	resp, err := control.MetricsQuery(cmd.MustLogCtx(), req)
 	if err != nil {
-		return err
+		cmd.Errorf("Secure Mode (HTTPS) failed: %s", err.Error())
+		//Trying Insecure Mode
+		req.AllowInsecure = !req.AllowInsecure
+		cmd.Debug("Trying Insecure Mode (HTTP)")
+		resp, err = control.MetricsQuery(cmd.MustLogCtx(), req)
+		if err != nil {
+			return err
+		}
 	}
 
 	if cmd.JSONOutputEnabled() {
