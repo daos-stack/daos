@@ -1,4 +1,4 @@
-/**RY
+/**
  * (C) Copyright 2019-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
