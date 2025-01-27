@@ -67,11 +67,20 @@ struct ds_cont_child {
 	ABT_cond		 sc_scrub_cond;
 	ABT_cond		 sc_rebuild_cond;
 	ABT_cond		 sc_fini_cond;
-	uint32_t                 sc_dtx_resyncing : 1, sc_dtx_reindex : 1, sc_dtx_reindex_abort : 1,
-	    sc_dtx_delay_reset : 1, sc_dtx_registered : 1, sc_props_fetched : 1, sc_stopping : 1,
-	    sc_destroying : 1, sc_vos_agg_active : 1, sc_ec_agg_active : 1,
-	    /* flag of CONT_CAPA_READ_DATA/_WRITE_DATA disabled */
-	    sc_rw_disabled : 1, sc_scrubbing : 1, sc_rebuilding : 1, sc_open_initializing : 1;
+	uint32_t                 sc_dtx_resyncing     : 1;
+	uint32_t                 sc_dtx_reindex       : 1;
+	uint32_t                 sc_dtx_reindex_abort : 1;
+	uint32_t                 sc_dtx_delay_reset   : 1;
+	uint32_t                 sc_dtx_registered    : 1;
+	uint32_t                 sc_props_fetched     : 1;
+	uint32_t                 sc_stopping          : 1;
+	uint32_t                 sc_destroying        : 1;
+	uint32_t                 sc_vos_agg_active    : 1;
+	uint32_t                 sc_ec_agg_active     : 1;
+	/* flag of CONT_CAPA_READ_DATA/_WRITE_DATA disabled */
+	uint32_t                 sc_rw_disabled       : 1;
+	uint32_t                 sc_scrubbing         : 1;
+	uint32_t                 sc_rebuilding        : 1;
 	uint32_t		 sc_dtx_batched_gen;
 	/* Tracks the schedule request for aggregation ULT */
 	struct sched_request	*sc_agg_req;
