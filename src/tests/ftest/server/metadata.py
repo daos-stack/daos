@@ -305,13 +305,14 @@ class ObjectMetadata(TestWithServers):
             "Successfully created %d containers in %d loops)", len(self.container), loop + 1)
 
         # Phase 2 clean up some containers (expected to succeed)
-        msg = "Cleaning up {}/{} containers after pool is full.".format(num_cont_to_destroy)
+        msg = (f"Cleaning up {num_cont_to_destroy}/{len(self.container)} containers after pool "
+               "is full.")
         self.log_step(msg)
         if not self.destroy_num_containers(num_cont_to_destroy):
             self.fail("Fail (unexpected container destroy error)")
 
-        # Containers not destroyed in teardown (destroy pool while metadata rdb is full) due to
-        # register_cleanup: False test yaml entry
+        # The remaining containers are not directly destroyed in teardown due to 
+        # 'register_cleanup: False' test yaml entry.  They are handled by the pool destroy.
         self.log.info("Leaving pool metadata rdb full (containers will not be destroyed)")
         self.log.info("Test passed")
 
