@@ -1,11 +1,12 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import errno
 import os
 import re
+import time
 
 from ClusterShell.NodeSet import NodeSet
 # pylint: disable=import-error,no-name-in-module
@@ -17,12 +18,12 @@ SUPPORTED_PROVIDERS = (
     "ofi+verbs;ofi_rxm",
     "ucx+dc_x",
     "ucx+ud_x",
+    "ofi+tcp",
     "ofi+tcp;ofi_rxm",
     "ofi+opx"
 )
 PROVIDER_ALIAS = {
-    "ofi+verbs": "ofi+verbs;ofi_rxm",
-    "ofi+tcp": "ofi+tcp;ofi_rxm"
+    "ofi+verbs": "ofi+verbs;ofi_rxm"
 }
 
 
@@ -404,11 +405,12 @@ def get_fastest_interface(logger, hosts, verbose=True):
     for interface in common_interfaces:
         detected_speeds = get_interface_speeds(logger, hosts, interface, verbose)
         speed_list = []
+        speed_hosts = NodeSet()
         for speed, node_set in detected_speeds.items():
-            if node_set == hosts:
-                # Only include detected homogeneous interface speeds
-                speed_list.append(speed)
-        if speed_list:
+            speed_list.append(speed)
+            speed_hosts.add(node_set)
+        if speed_list and speed_hosts == hosts:
+            # Only include interface speeds if a speed is detected on all the hosts
             interface_speeds[interface] = min(speed_list)
 
     logger.info("Active network interface speeds on %s:", hosts)
@@ -515,18 +517,79 @@ def get_network_information(logger, hosts, supported=None, verbose=True):
     return network_devices
 
 
-def update_network_interface(logger, interface, state, hosts, errors=None):
-    """Turn on or off the given network interface.
+class NetworkInterface():
+    "A class representing a network interface."
 
-    Args:
-        logger (Logger): logger for the messages produced by this method
-        interface (str): Interface name such as ib0.
-        state (str): "up" or "down".
-        hosts (NodeSet): Hosts on which the interface will be updated.
-        errors (list): List to store the error message, if the command fails.
-            Defaults to None.
-    """
-    command = f"sudo ip link set {interface} {state}"
-    result = run_remote(logger, hosts, command)
-    if errors is not None and not result.passed:
-        errors.append(f"{command} didn't return succeed on {result.failed_hosts}")
+    def __init__(self, name, hosts, execute=True):
+        """Initialize the network interface object.
+
+        Args:
+            name (str): the network interface name, e.g. ib0
+            hosts (NodeSet): hosts on which the interface will be updated.
+            execute (bool, optional): should the command be executed or just displayed. Defaults to
+                True.
+        """
+        self.__name = name
+        self.__hosts = hosts
+        self.__execute = execute
+        # Assume device is down until bring_up() is successful when commands will be executed
+        self.__up = not self.__execute
+
+    def bring_up(self, logger):
+        """Bring up the network interface.
+
+        Args:
+            logger (Logger): logger for the messages produced by this method
+
+        Returns:
+            list: any errors detected setting the link state of the interface
+        """
+        return self.__set_state(logger, 'up')
+
+    def bring_down(self, logger):
+        """Bring down the network interface.
+
+        Args:
+            logger (Logger): logger for the messages produced by this method
+
+        Returns:
+            list: any errors detected setting the link state of the interface
+        """
+        return self.__set_state(logger, 'down')
+
+    def restore(self, logger):
+        """Bring up the network interface only if it is down.
+
+        Args:
+            logger (Logger): logger for the messages produced by this method
+
+        Returns:
+            list: any errors detected setting the link state of the interface
+        """
+        if self.__up:
+            logger.debug(f'Interface {self.__name} is already up and does not need to be restored')
+            return []
+        return self.bring_up(logger)
+
+    def __set_state(self, logger, state):
+        """Set the network interface state.
+
+        Args:
+            logger (Logger): logger for the messages produced by this method
+            state (str): "up" or "down".
+
+        Returns:
+            list: any errors detected setting the link state of the interface
+        """
+        errors = []
+        command = f'sudo -n ip link set {self.__name} {state}'
+        if self.__execute:
+            result = run_remote(logger, self.__hosts, command)
+            if not result.passed:
+                errors.append(f'Error setting {self.__name} {state} on {result.failed_hosts}')
+            else:
+                self.__up = bool(state == 'up')
+        else:
+            logger.debug('>>> Run "%s" on %s within 20 seconds <<<', command, self.__hosts)
+            time.sleep(20)
+        return errors

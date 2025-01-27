@@ -8,9 +8,7 @@ import os
 import shutil
 
 from apricot import TestWithServers
-from avocado import fail_on
-from cmocka_utils import CmockaUtils
-from exception_utils import CommandFailure
+from cmocka_utils import CmockaUtils, get_cmocka_command
 from general_utils import get_log_file
 from job_manager_utils import get_job_manager
 from test_utils_pool import POOL_TIMEOUT_INCREMENT
@@ -35,7 +33,7 @@ class DaosCoreBase(TestWithServers):
         self.subtest_name = self.subtest_name.replace(" ", "_")
 
         # obtain separate logs
-        self.update_log_file_names(self.subtest_name)
+        self.update_log_file_names(f"{self.name.str_uid}-{self.subtest_name}")
 
         super().setUp()
 
@@ -53,62 +51,15 @@ class DaosCoreBase(TestWithServers):
         path = "/".join(["/run/daos_tests", name, "*"])
         return self.params.get(self.get_test_name(), path, default)
 
-    @fail_on(CommandFailure)
-    def start_server_managers(self, force=False):
-        """Start the daos_server processes on each specified list of hosts.
-
-        Enable scalable endpoint if requested with a test-specific
-        'scalable_endpoint' yaml parameter.
+    def run_subtest(self, command=None):
+        """Run the executable with a subtest argument.
 
         Args:
-            force (bool, optional): whether or not to force starting the
-                servers. Defaults to False.
-
-        Returns:
-            bool: whether or not to force the starting of the agents
-
+            command (str, optional): command to run. Defaults to None which will yield daos_test.
         """
-        # Enable scalable endpoint (if requested) prior to starting the servers
-        scalable_endpoint = self.get_test_param("scalable_endpoint")
-        if scalable_endpoint:
-            for server_mgr in self.server_managers:
-                for engine_params in server_mgr.manager.job.yaml.engine_params:
-                    # Number of CaRT contexts should equal or be greater than
-                    # the number of DAOS targets
-                    targets = engine_params.get_value("targets")
+        if command is None:
+            command = os.path.join(self.bin, "daos_test")
 
-                    # Convert the list of variable assignments into a dictionary
-                    # of variable names and their values
-                    env_vars = engine_params.get_value("env_vars")
-                    env_dict = {
-                        item.split("=")[0]: item.split("=")[1]
-                        for item in env_vars}
-                    env_dict["CRT_CTX_SHARE_ADDR"] = "1"
-                    env_dict["COVFILE"] = "/tmp/test.cov"
-                    env_dict["D_LOG_FILE_APPEND_PID"] = "1"
-                    env_dict["D_LOG_FILE_APPEND_RANK"] = "1"
-                    if "CRT_CTX_NUM" not in env_dict or \
-                            int(env_dict["CRT_CTX_NUM"]) < int(targets):
-                        env_dict["CRT_CTX_NUM"] = str(targets)
-                    engine_params.set_value("crt_ctx_share_addr", 1)
-                    engine_params.set_value(
-                        "env_vars",
-                        ["=".join(items) for items in list(env_dict.items())]
-                    )
-
-        # Update any other server settings unique to this test method
-        for setting in ["crt_timeout"]:
-            value = self.get_test_param(setting)
-            if value:
-                for server_mgr in self.server_managers:
-                    for engine_params in server_mgr.manager.job.yaml.engine_params:
-                        engine_params.set_value(setting, value)
-
-        # Start the servers
-        return super().start_server_managers(force=force)
-
-    def run_subtest(self):
-        """Run daos_test with a subtest argument."""
         subtest = self.get_test_param("daos_test")
         num_clients = self.get_test_param("num_clients")
         if num_clients is None:
@@ -137,8 +88,7 @@ class DaosCoreBase(TestWithServers):
         daos_test_env["COVFILE"] = "/tmp/test.cov"
         daos_test_env["POOL_SCM_SIZE"] = str(scm_size)
         daos_test_env["POOL_NVME_SIZE"] = str(nvme_size)
-        daos_test_cmd = cmocka_utils.get_cmocka_command(
-            " ".join([self.daos_test, "-n", dmg_config_file, "".join(["-", subtest]), str(args)]))
+        daos_test_cmd = get_cmocka_command(command, f"-n {dmg_config_file} -{subtest} {str(args)}")
         job = get_job_manager(self, "Orterun", daos_test_cmd, mpi_type="openmpi")
         job.assign_hosts(cmocka_utils.hosts, self.workdir, None)
         job.assign_processes(num_clients)

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -46,6 +46,13 @@ control_log_mask: debug
 disable_caching: true
 cache_expiration: 30
 disable_auto_evict: true
+credential_config:
+  cache_expiration: 10m
+  client_user_map:
+    1000:
+      user: frodo
+      group: baggins
+      groups: ["ringbearers"]
 transport_config:
   allow_insecure: true
 exclude_fabric_ifaces: ["ib3"]
@@ -81,13 +88,25 @@ transport_config:
   allow_insecure: true
 `)
 
+	badFilterCfg := test.CreateTestFile(t, dir, `
+name: shire
+access_points: ["one:10001", "two:10001"]
+port: 4242
+runtime_dir: /tmp/runtime
+log_file: /home/frodo/logfile
+transport_config:
+  allow_insecure: true
+include_fabric_ifaces: ["ib0"]
+exclude_fabric_ifaces: ["ib3"]
+`)
+
 	for name, tc := range map[string]struct {
 		path      string
 		expResult *Config
 		expErr    error
 	}{
 		"empty path": {
-			expErr: errors.New("no path"),
+			expErr: errors.New("no config path"),
 		},
 		"bad path": {
 			path:   "/not/real/path",
@@ -104,12 +123,13 @@ transport_config:
 		"without optional items": {
 			path: withoutOptCfg,
 			expResult: &Config{
-				SystemName:   "shire",
-				AccessPoints: []string{"one:10001", "two:10001"},
-				ControlPort:  4242,
-				RuntimeDir:   "/tmp/runtime",
-				LogFile:      "/home/frodo/logfile",
-				LogLevel:     common.DefaultControlLogLevel,
+				SystemName:       "shire",
+				AccessPoints:     []string{"one:10001", "two:10001"},
+				ControlPort:      4242,
+				RuntimeDir:       "/tmp/runtime",
+				LogFile:          "/home/frodo/logfile",
+				LogLevel:         common.DefaultControlLogLevel,
+				CredentialConfig: &security.CredentialConfig{},
 				TransportConfig: &security.TransportConfig{
 					AllowInsecure:     true,
 					CertificateConfig: DefaultConfig().TransportConfig.CertificateConfig,
@@ -119,6 +139,10 @@ transport_config:
 		"bad log mask": {
 			path:   badLogMaskCfg,
 			expErr: errors.New("not a valid log level"),
+		},
+		"bad filter config": {
+			path:   badFilterCfg,
+			expErr: errors.New("cannot specify both exclude_fabric_ifaces and include_fabric_ifaces"),
 		},
 		"all options": {
 			path: optCfg,
@@ -132,6 +156,16 @@ transport_config:
 				DisableCache:     true,
 				CacheExpiration:  refreshMinutes(30 * time.Minute),
 				DisableAutoEvict: true,
+				CredentialConfig: &security.CredentialConfig{
+					CacheExpiration: time.Minute * 10,
+					ClientUserMap: map[uint32]*security.MappedClientUser{
+						1000: {
+							User:   "frodo",
+							Group:  "baggins",
+							Groups: []string{"ringbearers"},
+						},
+					},
+				},
 				TransportConfig: &security.TransportConfig{
 					AllowInsecure:     true,
 					CertificateConfig: DefaultConfig().TransportConfig.CertificateConfig,

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,6 +20,8 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/daos/api"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -42,6 +44,7 @@ init_op_vals(struct cmd_args_s *ap)
 	ap->o_op = -1;
 	ap->fs_op = -1;
 	ap->sh_op = -1;
+	ap->sysname = NULL;
 }
 
 void
@@ -62,11 +65,27 @@ func apiVersion() string {
 	)
 }
 
-func daosError(rc C.int) error {
-	if rc == 0 {
-		return nil
+func srvBuildInfo() (*build.Info, error) {
+	var major uint32
+	var minor uint32
+	var patch uint32
+	var tagPtr *C.char
+
+	rc := C.dc_mgmt_srv_version((*C.uint)(&major), (*C.uint)(&minor), (*C.uint)(&patch), &tagPtr)
+	if err := daosError(rc); err != nil {
+		return nil, err
 	}
-	return daos.Status(rc)
+	tagStr := C.GoString(tagPtr)
+
+	return &build.Info{
+		Name:      build.ControlPlaneName,
+		Version:   (&build.Version{Major: int(major), Minor: int(minor), Patch: int(patch)}).String(),
+		BuildInfo: tagStr,
+	}, nil
+}
+
+func daosError(rc C.int) error {
+	return daos.ErrorFromRC(int(rc))
 }
 
 func goBool2int(in bool) (out C.int) {
@@ -98,6 +117,20 @@ func uuidToC(in uuid.UUID) (out C.uuid_t) {
 
 func uuidFromC(cUUID C.uuid_t) (uuid.UUID, error) {
 	return uuid.FromBytes(C.GoBytes(unsafe.Pointer(&cUUID[0]), C.int(len(cUUID))))
+}
+
+func rankSetFromC(cRankList *C.d_rank_list_t) (*ranklist.RankSet, error) {
+	if cRankList == nil {
+		return nil, errors.New("nil ranklist")
+	}
+
+	cRankSlice := unsafe.Slice(cRankList.rl_ranks, cRankList.rl_nr)
+	rs := ranklist.NewRankSet()
+	for _, cRank := range cRankSlice {
+		rs.Add(ranklist.Rank(cRank))
+	}
+
+	return rs, nil
 }
 
 func iterStringsBuf(cBuf unsafe.Pointer, expected C.size_t, cb func(string)) error {
@@ -184,8 +217,6 @@ func freeCmdArgs(ap *C.struct_cmd_args_s) {
 		return
 	}
 
-	freeString(ap.sysname)
-
 	C.free(unsafe.Pointer(ap.dfs_path))
 	C.free(unsafe.Pointer(ap.dfs_prefix))
 
@@ -213,7 +244,6 @@ func allocCmdArgs(log logging.Logger) (ap *C.struct_cmd_args_s, cleanFn func(), 
 	// allocate the struct using C memory to avoid any issues with Go GC
 	ap = (*C.struct_cmd_args_s)(C.calloc(1, C.sizeof_struct_cmd_args_s))
 	C.init_op_vals(ap)
-	ap.sysname = C.CString(build.DefaultSystemName)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	outStream, outCleanup, err := createWriteStream(ctx, log.Info)
@@ -245,34 +275,30 @@ type daosCaller interface {
 	initDAOS() (func(), error)
 }
 
+type sysCmd struct {
+	SysName string
+}
+
+func (sc *sysCmd) setSysName(sysName string) {
+	sc.SysName = sysName
+}
+
 type daosCmd struct {
 	cmdutil.NoArgsCmd
 	cmdutil.JSONOutputCmd
 	cmdutil.LogCmd
+	sysCmd
+	apiProvider *api.Provider
 }
 
 func (dc *daosCmd) initDAOS() (func(), error) {
-	if rc := C.daos_init(); rc != 0 {
-		// Do some inspection of the RC to display an informative error to the user
-		// e.g. "No DAOS Agent detected"...
-		return nil, errors.Wrap(daosError(rc), "daos_init() failed")
+	provider, err := api.NewProvider(dc.Logger, false)
+	if err != nil {
+		return func() {}, err
 	}
+	dc.apiProvider = provider
 
-	return func() {
-		if rc := C.daos_fini(); rc != 0 {
-			dc.Errorf("daos_fini() failed: %s", daosError(rc))
-		}
-	}, nil
-}
-
-func initDaosDebug() (func(), error) {
-	if rc := C.daos_debug_init(nil); rc != 0 {
-		return nil, errors.Wrap(daosError(rc), "daos_debug_init() failed")
-	}
-
-	return func() {
-		C.daos_debug_fini()
-	}, nil
+	return provider.Cleanup, nil
 }
 
 func resolveDunsPath(path string, ap *C.struct_cmd_args_s) error {

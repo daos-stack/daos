@@ -21,7 +21,8 @@ from util.avocado_utils import AvocadoException, AvocadoInfo
 from util.code_coverage_utils import CodeCoverage
 from util.environment_utils import TestEnvironment, TestEnvironmentException, set_test_environment
 from util.host_utils import get_local_host
-from util.launch_utils import LaunchException, TestGroup, setup_fuse_config, summarize_run
+from util.launch_utils import (LaunchException, TestGroup, setup_fuse_config, setup_systemctl,
+                               summarize_run)
 from util.logger_utils import LOG_FILE_FORMAT, get_console_handler, get_file_handler
 from util.network_utils import PROVIDER_ALIAS, SUPPORTED_PROVIDERS
 from util.package_utils import find_packages
@@ -32,6 +33,10 @@ from util.yaml_utils import YamlException
 
 DEFAULT_LOGS_THRESHOLD = "2150M"    # 2.1G
 MAX_CI_REPETITIONS = 10
+
+
+class LaunchError(Exception):
+    """Error when launching Avocado"""
 
 
 class Launch():
@@ -136,9 +141,10 @@ class Launch():
         self.avocado.set_config(overwrite_config)
 
         # Configure the logfile
-        self.avocado.set_version(logger)
-        self.logdir = self.avocado.get_directory(
-            logger, os.path.join("launch", self.name.lower()), False)
+        self.avocado.set_version()
+        if self.avocado.major < 82:
+            raise LaunchError("Avocado version 82 or above required")
+        self.logdir = self.avocado.get_directory(os.path.join("launch", self.name.lower()))
         self.logfile = os.path.join(self.logdir, "job.log")
 
         # Rename the launch log directory if one exists
@@ -153,7 +159,7 @@ class Launch():
         logger.info("-" * 80)
         logger.info("DAOS functional test launcher")
         logger.info("")
-        logger.info("Running with %s", self.avocado)
+        logger.info("Running with %s on python %s", self.avocado, sys.version)
         logger.info("Launch job results directory:  %s", self.logdir)
         if renamed_log_dir is not None:
             logger.info("  Renamed existing launch job results directory to %s", renamed_log_dir)
@@ -161,8 +167,8 @@ class Launch():
         logger.info("-" * 80)
 
         # Results tracking settings
-        self.job_results_dir = self.avocado.get_logs_dir(logger)
-        max_chars = self.avocado.get_setting(logger, "job.run.result.xunit", "max_test_log_chars")
+        self.job_results_dir = self.avocado.get_logs_dir()
+        max_chars = self.avocado.get_setting("job.run.result.xunit", "max_test_log_chars")
         self.job = Job(
             self.name, xml_enabled="on", html_enabled="on", log_dir=self.logdir,
             max_chars=max_chars)
@@ -199,7 +205,6 @@ class Launch():
         return old_launch_log_dir
 
     def run(self, args):
-        # pylint: disable=too-many-return-statements
         """Perform the actions specified by the command line arguments.
 
         Args:
@@ -210,6 +215,8 @@ class Launch():
         """
         try:
             status = self._run(args)
+        except LaunchError as error:
+            return self.get_exit_status(1, error, error)
         except Exception as error:      # pylint: disable=broad-except
             message = f"Unknown exception raised during launch.py execution: {error}"
             status = self.get_exit_status(1, message, "Unknown", sys.exc_info())
@@ -264,7 +271,8 @@ class Launch():
         # pylint: disable=unsupported-binary-operation
         all_hosts = args.test_servers | args.test_clients | self.local_host
         self.details["installed packages"] = find_packages(
-            logger, all_hosts, "'^(daos|libfabric|mercury|ior|openmpi|mpifileutils)-'")
+            logger, all_hosts,
+            "'^(daos|libfabric|mercury|ior|openmpi|mpifileutils|mlnx-ofed-basic)-'")
 
         # Setup the test environment
         test_env = TestEnvironment()
@@ -319,6 +327,15 @@ class Launch():
             message = "Issue detected setting up the fuse configuration"
             setup_result.warn_test(logger, "Setup", message, sys.exc_info())
 
+        # Setup override systemctl files
+        try:
+            clients = args.test_clients if args.test_clients else args.test_servers
+            cleanup_files = setup_systemctl(
+                logger, args.test_servers, clients | self.local_host, test_env)
+        except LaunchException:
+            message = "Issue detected setting up the systemctl configuration"
+            return self.get_exit_status(1, message, "Setup", sys.exc_info())
+
         # Get the core file pattern information
         core_files = {}
         if args.process_cores:
@@ -341,8 +358,8 @@ class Launch():
             group.update_test_yaml(
                 logger, args.scm_size, args.scm_mount, args.extra_yaml,
                 args.timeout_multiplier, args.override, args.verbose, args.include_localhost)
-        except (RunException, YamlException):
-            message = "Error modifying the test yaml files"
+        except (RunException, YamlException) as e:
+            message = "Error modifying the test yaml files: {}".format(e)
             status |= self.get_exit_status(1, message, "Setup", sys.exc_info())
         except StorageException:
             message = "Error detecting storage information for test yaml files"
@@ -364,7 +381,7 @@ class Launch():
             logger, self.result, self.repeat, self.slurm_setup, args.sparse, args.failfast,
             not args.disable_stop_daos, args.archive, args.rename, args.jenkinslog, core_files,
             args.logs_threshold, args.user_create, code_coverage, self.job_results_dir,
-            self.logdir)
+            self.logdir, args.clear_mounts, cleanup_files)
 
         # Convert the test status to a launch.py status
         status |= summarize_run(logger, self.mode, test_status)
@@ -429,6 +446,28 @@ def __arg_type_find_size(val):
     """
     if not re.match(r'^[0-9]+[bcwkMG]?$', val):
         raise ArgumentTypeError(f'Invalid find -size argument: {val}')
+    return val
+
+
+def __arg_type_mount_point(val):
+    """Parse a mount point argument.
+
+    The mount point does not need to exist on this host.
+
+    Args:
+        val (str): the mount point to parse
+
+    Raises:
+        ArgumentTypeError: if the value is not a string starting with '/'
+
+    Returns:
+        str: the mount point
+    """
+    try:
+        if not val.startswith(os.sep):
+            raise ValueError(f'Mount point does not start with {os.sep}')
+    except Exception as err:  # pylint: disable=broad-except
+        raise ArgumentTypeError(f'Invalid mount point: {val}') from err
     return val
 
 
@@ -501,6 +540,12 @@ def main():
         "-a", "--archive",
         action="store_true",
         help="archive host log files in the avocado job-results directory")
+    parser.add_argument(
+        "-c", "--clear_mounts",
+        action="append",
+        default=[],
+        type=__arg_type_mount_point,
+        help="mount points to remove before running each test")
     parser.add_argument(
         "-dsd", "--disable_stop_daos",
         action="store_true",
@@ -699,6 +744,9 @@ def main():
         args.slurm_install = True
         args.slurm_setup = True
         args.user_create = True
+        args.clear_mounts.append("/mnt/daos")
+        args.clear_mounts.append("/mnt/daos0")
+        args.clear_mounts.append("/mnt/daos1")
 
     # Setup the Launch object
     launch = Launch(args.name, args.mode, args.slurm_install, args.slurm_setup)

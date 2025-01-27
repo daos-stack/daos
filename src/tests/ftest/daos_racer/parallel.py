@@ -8,6 +8,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 from apricot import TestWithServers
 from daos_racer_utils import DaosRacerCommand
 from exception_utils import CommandFailure
+from job_manager_utils import get_job_manager
 
 
 class DaosRacerParallelTest(TestWithServers):
@@ -37,17 +38,18 @@ class DaosRacerParallelTest(TestWithServers):
         daos_racer.get_params(self)
 
         # Create the orterun command
-        self.job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
-        self.job_manager.assign_processes(len(self.hostlist_clients))
-        self.job_manager.assign_environment(daos_racer.env)
-        self.job_manager.job = daos_racer
-        self.job_manager.check_results_list = ["<stderr>"]
-        self.job_manager.timeout = daos_racer.clush_timeout.value
-        self.log.info("Multi-process command: %s", str(self.job_manager))
+        job_manager = get_job_manager(self)
+        job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
+        job_manager.assign_processes(len(self.hostlist_clients))
+        job_manager.assign_environment(daos_racer.env)
+        job_manager.job = daos_racer
+        job_manager.check_results_list = ["<stderr>"]
+        job_manager.timeout = daos_racer.clush_timeout.value
+        self.log.info("Multi-process command: %s", str(job_manager))
 
         # Run the daos_racer command and check for errors
         try:
-            self.job_manager.run()
+            job_manager.run()
 
         except CommandFailure as error:
             self.log.error("DAOS Racer Failed: %s", str(error))

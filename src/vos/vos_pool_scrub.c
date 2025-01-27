@@ -372,12 +372,13 @@ sc_handle_corruption(struct scrub_ctx *ctx)
 		rc = 0;
 	}
 	ctx->sc_pool_tgt_corrupted_detected++;
-	D_ERROR("[tgt_id: %d]Checksum scrubber found corruption. %d so far.\n",
+	D_ERROR("[tgt_id: %d] Checksum scrubber found corruption. %d so far.\n",
 		ctx->sc_dmi->dmi_tgt_id,
 		ctx->sc_pool_tgt_corrupted_detected);
 	if (sc_should_evict(ctx)) {
-		D_ERROR("Corruption threshold reached. %d >= %d\n",
-			ctx->sc_pool_tgt_corrupted_detected, sc_thresh(ctx));
+		D_ERROR("[tgt_id: %d] Corruption threshold reached. %d >= %d\n",
+			ctx->sc_dmi->dmi_tgt_id, ctx->sc_pool_tgt_corrupted_detected,
+			sc_thresh(ctx));
 		d_tm_set_counter(ctx->sc_metrics.scm_csum_calcs, 0);
 		d_tm_set_counter(ctx->sc_metrics.scm_csum_calcs_last, 0);
 		rc = sc_pool_drain(ctx);

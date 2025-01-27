@@ -1,5 +1,5 @@
 #
-# Copyright 2018-2023 Intel Corporation
+# Copyright 2018-2024 Intel Corporation
 #
 # 'recipe' for Docker to build an RPM
 #
@@ -48,16 +48,24 @@ RUN dnf -y upgrade && \
 # https://github.com/rpm-software-management/rpmlint/pull/795 in it
 # But make sure to patch after dnf upgrade so that an upgraded rpmlint
 # RPM doesn't wipe out our patch
+# Ditto for the patch to zero and display ccache stats
+# https://github.com/rpm-software-management/mock/pull/1299
 ARG PACKAGINGDIR=packaging
-COPY ${PACKAGINGDIR}/rpmlint--ignore-unused-rpmlintrc.patch .
+COPY ${PACKAGINGDIR}/*.patch ./
 RUN (cd $(python3 -c 'import site; print(site.getsitepackages()[-1])') &&                      \
      if ! grep -e --ignore-unused-rpmlintrc rpmlint/cli.py; then                               \
-         if ! patch -p1; then                                                                  \
+         if ! patch -p1 < $OLDPWD/rpmlint--ignore-unused-rpmlintrc.patch; then                 \
              exit 1;                                                                           \
          fi;                                                                                   \
          rm -f rpmlint/__pycache__/{cli,lint}.*.pyc;                                           \
-     fi) < rpmlint--ignore-unused-rpmlintrc.patch;                                             \
-    rm -f  rpmlint--ignore-unused-rpmlintrc.patch
+     fi;                                                                                       \
+     if ! grep _ccachePostBuildHook mockbuild/plugins/ccache.py; then                          \
+         if ! patch -p3 < $OLDPWD/ccache-stats.patch; then                                     \
+             exit 1;                                                                           \
+         fi;                                                                                   \
+         rm -f mockbuild/plugins/__pycache__/ccache.*.pyc;                                     \
+     fi);                                                                                      \
+     rm -f rpmlint--ignore-unused-rpmlintrc.patch ccache-stats.patch
 
 # show the release that was built
 ARG CACHEBUST

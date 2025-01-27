@@ -40,10 +40,9 @@ pool:
   scm_size: 6000000000
   nvme_size: 54000000000
   svcn: 4
-  control_method: dmg
   rebuild_timeout: 120
   pool_query_timeout: 30
-  properties: "scrub:timed,scrub-freq:1"
+  properties: "scrub:timed,scrub_freq:1"
 container:
   type: POSIX
   control_method: daos

@@ -96,13 +96,13 @@ func TestLogging_StandardFormat(t *testing.T) {
 		expected  *regexp.Regexp
 	}{
 		"Trace": {fn: logger.Trace, fnInput: "test",
-			expected: regexp.MustCompile(`^TRACE \d{2}:\d{2}:\d{2}\.\d{6} [^:]+:\d+: test\n$`)},
+			expected: regexp.MustCompile(`^TRACE \d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}\.\d{6} [^:]+:\d+: test\n$`)},
 		"Tracef": {fmtFn: logger.Tracef, fmtFnFmt: "test: %d", fmtFnArgs: []interface{}{42},
-			expected: regexp.MustCompile(`^TRACE \d{2}:\d{2}:\d{2}\.\d{6} [^:]+:\d+: test: 42\n$`)},
+			expected: regexp.MustCompile(`^TRACE \d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}\.\d{6} [^:]+:\d+: test: 42\n$`)},
 		"Debug": {fn: logger.Debug, fnInput: "test",
-			expected: regexp.MustCompile(`^DEBUG \d{2}:\d{2}:\d{2}\.\d{6} [^:]+:\d+: test\n$`)},
+			expected: regexp.MustCompile(`^DEBUG \d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}\.\d{6} [^:]+:\d+: test\n$`)},
 		"Debugf": {fmtFn: logger.Debugf, fmtFnFmt: "test: %d", fmtFnArgs: []interface{}{42},
-			expected: regexp.MustCompile(`^DEBUG \d{2}:\d{2}:\d{2}\.\d{6} [^:]+:\d+: test: 42\n$`)},
+			expected: regexp.MustCompile(`^DEBUG \d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}\.\d{6} [^:]+:\d+: test: 42\n$`)},
 		"Info": {fn: logger.Info, fnInput: "test",
 			expected: regexp.MustCompile(`^testPrefix INFO \d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} test\n$`)},
 		"Infof": {fmtFn: logger.Infof, fmtFnFmt: "test: %d", fmtFnArgs: []interface{}{42},
@@ -217,10 +217,10 @@ func TestLogging_MultipleFormats(t *testing.T) {
 		expectedJSON *regexp.Regexp
 	}{
 		"Debug": {fn: logger.Debug, fnInput: "test",
-			expectedStd:  regexp.MustCompile(`^DEBUG \d{2}:\d{2}:\d{2}\.\d{6} [^:]+:\d+: test\n$`),
+			expectedStd:  regexp.MustCompile(`^DEBUG \d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}\.\d{6} [^:]+:\d+: test\n$`),
 			expectedJSON: regexp.MustCompile(`^\{\"level\":\"DEBUG\",\"time\":\"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}[-+Z]\d{0,4}\",\"source\":\"[^:]+:\d+\",\"message\":\"test\"\}\n$`)},
 		"Debugf": {fmtFn: logger.Debugf, fmtFnFmt: "test: %d", fmtFnArgs: []interface{}{42},
-			expectedStd:  regexp.MustCompile(`^DEBUG \d{2}:\d{2}:\d{2}\.\d{6} [^:]+:\d+: test: 42\n$`),
+			expectedStd:  regexp.MustCompile(`^DEBUG \d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}\.\d{6} [^:]+:\d+: test: 42\n$`),
 			expectedJSON: regexp.MustCompile(`^\{\"level\":\"DEBUG\",\"time\":\"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}[-+Z]\d{0,4}\",\"source\":\"[^:]+:\d+\",\"message\":\"test: 42\"\}\n$`)},
 		"Info": {fn: logger.Info, fnInput: "test",
 			expectedStd:  regexp.MustCompile(`^testPrefix INFO \d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} test\n$`),

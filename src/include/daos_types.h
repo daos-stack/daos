@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,6 +18,8 @@ extern "C" {
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
+#include <ctype.h>
+#include <limits.h>
 
 /** uuid_t */
 #include <uuid/uuid.h>
@@ -143,6 +145,12 @@ typedef struct {
 
 typedef d_iov_t daos_key_t;
 
+static inline bool
+daos_key_is_null(daos_key_t key)
+{
+	return key.iov_buf_len == 0 || key.iov_buf == NULL;
+}
+
 /**
  * Event and event queue
  */
@@ -226,6 +234,29 @@ typedef struct {
 	uint64_t	hi;
 } daos_obj_id_t;
 
+#define DAOS_UUID_STR_SIZE 37	/* 36 + 1 for '\0' */
+
+static inline bool
+daos_is_valid_uuid_string(const char *uuid)
+{
+	const char	*p;
+	int		 len = DAOS_UUID_STR_SIZE - 1; /* Not include the terminated '\0' */
+	int		 i;
+
+	if (strnlen(uuid, len) != len)
+		return false;
+
+	for (i = 0, p = uuid; i < len; i++, p++) {
+		if (i == 8 || i == 13 || i == 18 || i == 23) {
+			if (*p != '-')
+				return false;
+		} else if (!isxdigit(*p)) {
+			return false;
+		}
+	}
+
+	return true;
+}
 /**
  * Corresponding rank and URI for a DAOS engine
  */
@@ -244,10 +275,16 @@ struct daos_sys_info {
 	char			 dsi_system_name[DAOS_SYS_INFO_STRING_MAX + 1];
 	/** fabric provider in use by this system */
 	char			 dsi_fabric_provider[DAOS_SYS_INFO_STRING_MAX + 1];
+	/** path to agent socket */
+	char                     dsi_agent_path[PATH_MAX];
 	/** length of ranks array */
 	uint32_t		 dsi_nr_ranks;
 	/** ranks and their client-accessible URIs */
 	struct daos_rank_uri	*dsi_ranks;
+	/** length of MS ranks array */
+	uint32_t                 dsi_nr_ms_ranks;
+	/** MS rank numbers */
+	uint32_t                *dsi_ms_ranks;
 };
 
 /** max pool/cont attr size */

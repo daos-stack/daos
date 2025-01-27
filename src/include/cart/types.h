@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -45,15 +45,8 @@ typedef struct crt_init_options {
 	 * evnironment variable.
 	 */
 	int		cio_crt_timeout;
-	/**
-	 * if cio_sep_override is 0, the two fields following it won't be used.
-	 */
-	uint32_t	cio_sep_override:1,
-			/**
-			 * overrides the value of the environment variable
-			 * CRT_CTX_SHARE_ADDR
-			 */
-			cio_use_sep:1,
+	uint32_t	cio_sep_override:1,	/**< Deprecated */
+			cio_use_sep:1,		/**< Deprecated */
 			/** whether or not to inject faults */
 			cio_fault_inject:1,
 			/**
@@ -67,10 +60,7 @@ typedef struct crt_init_options {
 			/** whether or not to use expected sizes */
 			cio_use_expected_size:1,
 			cio_use_unexpected_size:1;
-	/**
-	 * overrides the value of the environment variable
-	 * CRT_CTX_NUM
-	 */
+	/** overrides the value of the environment variable CRT_CTX_NUM */
 	int		cio_ctx_max_num;
 
 	/** Used with cio_use_credits to set credit limit */
@@ -85,22 +75,26 @@ typedef struct crt_init_options {
 			/** swim crt index */
 	int		cio_swim_crt_idx;
 
-	/** if set, used as a provider value instead of CRT_PHY_ADDR_STR env */
+	/* see src/cart/README.env for details about the format of the fields below */
+
+	/** if set, used as a provider value instead of D_PROVIDER env */
 	char		*cio_provider;
 
-	/** If set, used as an interface setting instead of OFI_INTERFACE env */
+	/** If set, used as an interface setting instead of D_INTERFACE env  */
 	char		*cio_interface;
 
-	/** If set, used as a domain setting instead of OFI_DOMAIN env */
+	/** If set, used as a domain setting instead of D_DOMAIN env */
 	char		*cio_domain;
 
-	/** If set, used as a port setting instead of OFI_PORT env */
+	/** If set, used as a port setting instead of D_PORT env */
 	char		*cio_port;
 
 	/** If set, used as the authentication key instead of D_PROVIDER_AUTH_KEY env */
-	char		*cio_auth_key;
-} crt_init_options_t;
+	char            *cio_auth_key;
 
+	/** use single thread to access context */
+	bool             cio_thread_mode_single;
+} crt_init_options_t;
 
 typedef int		crt_status_t;
 /**
@@ -144,10 +138,6 @@ typedef struct {
 /** CaRT context handle */
 typedef void *crt_context_t;
 
-/** Physical address string, e.g., "bmi+tcp://localhost:3344". */
-typedef d_string_t crt_phy_addr_t;
-#define CRT_PHY_ADDR_ENV	"CRT_PHY_ADDR_STR"
-
 /**
  * RPC is identified by opcode. All the opcodes with the highest 16 bits as 1
  * are reserved for internal usage, such as group maintenance etc. If user
@@ -182,7 +172,9 @@ typedef void *crt_bulk_array_t; /**< abstract bulk array handle */
 /** RPC flags enumeration */
 enum crt_rpc_flags {
 	/** send CORPC to filter_ranks only */
-	CRT_RPC_FLAG_FILTER_INVERT	= (1U << 1)
+	CRT_RPC_FLAG_FILTER_INVERT	= (1U << 1),
+	/** Do not invoke RPC handler on local node when fail to forward corpc to children. */
+	CRT_RPC_FLAG_CO_FAILOUT		= (1U << 2),
 };
 
 struct crt_rpc;

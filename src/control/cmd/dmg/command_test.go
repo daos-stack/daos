@@ -1,5 +1,6 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -134,6 +135,8 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 		resp = control.MockMSResponse("", nil, &mgmtpb.SystemStartResp{})
 	case *control.SystemExcludeReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.SystemExcludeResp{})
+	case *control.SystemDrainReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.SystemDrainResp{})
 	case *control.SystemQueryReq:
 		if req.FailOnUnavailable {
 			resp = control.MockMSResponse("", system.ErrRaftUnavail, nil)
@@ -147,7 +150,7 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 	case *control.ListPoolsReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.ListPoolsResp{})
 	case *control.ContSetOwnerReq:
-		resp = control.MockMSResponse("", nil, &mgmtpb.ContSetOwnerResp{})
+		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
 	case *control.PoolQueryReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolQueryResp{})
 	case *control.PoolQueryTargetReq:
@@ -164,7 +167,23 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 	case *control.PoolExtendReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolExtendResp{})
 	case *control.PoolReintegrateReq:
-		resp = control.MockMSResponse("", nil, &mgmtpb.PoolReintegrateResp{})
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolReintResp{})
+	case *control.SystemCheckEnableReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
+	case *control.SystemCheckDisableReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
+	case *control.SystemCheckStartReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
+	case *control.SystemCheckStopReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
+	case *control.SystemCheckQueryReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.CheckQueryResp{})
+	case *control.SystemCheckGetPolicyReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.CheckGetPolicyResp{})
+	case *control.SystemCheckSetPolicyReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
+	case *control.SystemCheckRepairReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
 	case *control.SystemSetAttrReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
 	case *control.SystemGetAttrReq:
@@ -173,6 +192,8 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
 	case *control.SystemGetPropReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.SystemGetPropResp{})
+	case *control.GetAttachInfoReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.GetAttachInfoResp{})
 	case *control.NetworkScanReq:
 		resp = &control.UnaryResponse{
 			Responses: []*control.HostResponse{

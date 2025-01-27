@@ -1,5 +1,5 @@
 """
-(C) Copyright 2022-2023 Intel Corporation.
+(C) Copyright 2022-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,6 +8,7 @@ import time
 
 from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
+from command_utils_base import CommandFailure
 from general_utils import bytes_to_human
 
 
@@ -118,7 +119,7 @@ class PoolCreateAllTestBase(TestWithServers):
         if ranks is not None:
             wait_ranks = sorted(ranks)
             data = self.dmg.pool_query(self.pool[pool_idx].identifier, show_enabled=True)
-            got_ranks = sorted(data['response']['enabled_ranks'])
+            got_ranks = sorted(data['response'].get('enabled_ranks'))
             self.assertListEqual(
                 wait_ranks,
                 got_ranks,
@@ -232,6 +233,21 @@ class PoolCreateAllTestBase(TestWithServers):
                 "Pool %d created: scm_size=%d, nvme_size=%d", index, *pool_size)
             self.pool[index].destroy()
 
+            # Creating a pool immediately after destroy intermittently causes an error during the
+            # create. Wait for a few seconds and check that the pool was destroyed.
+            count = 0
+            while True:
+                self.log.info("Wait for a few seconds for the pool to be destroyed...")
+                time.sleep(5)
+                try:
+                    self.dmg.pool_query(pool=self.pool[index].identifier)
+                    self.log.info(
+                        "Pool query worked. Pool hasn't been destroyed. Try again. %d", count)
+                    count += 1
+                except CommandFailure as error:
+                    self.log.info("Pool query failed. Pool should have been destroyed. %s", error)
+                    break
+
             self.log.info("Checking SCM available storage")
             timeout = 3
             while timeout > 0:
@@ -291,8 +307,7 @@ class PoolCreateAllTestBase(TestWithServers):
         result = self.dmg.storage_query_usage()
 
         scm_used_bytes = [sys.maxsize, 0]
-        if nvme_delta_bytes is not None:
-            nvme_used_bytes = [sys.maxsize, 0]
+        nvme_used_bytes = [sys.maxsize, 0]
         for host_storage in result["response"]["HostStorage"].values():
             scm_bytes = 0
             for scm_devices in host_storage["storage"]["scm_namespaces"]:

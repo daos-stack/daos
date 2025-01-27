@@ -46,7 +46,7 @@ class FullPoolContainerCreate(TestWithServers):
         threshold_percent = self.params.get("threshold_percent", "/run/pool/*")
 
         # create pool and connect
-        self.prepare_pool()
+        self.add_pool()
 
         # query the pool
         self.log.info("Pool Query before write")

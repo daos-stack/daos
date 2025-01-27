@@ -1,9 +1,10 @@
 """
-  (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2019-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+import json
 import os
 import time
 
@@ -29,13 +30,13 @@ class DfuseCommand(ExecutableCommand):
         self.sys_name = FormattedParameter("--sys-name {}")
         self.thread_count = FormattedParameter("--thread-count {}")
         self.eq_count = FormattedParameter("--eq-count {}")
-        self.singlethreaded = FormattedParameter("--singlethread", False)
         self.foreground = FormattedParameter("--foreground", False)
         self.enable_caching = FormattedParameter("--enable-caching", False)
         self.enable_wb_cache = FormattedParameter("--enable-wb-cache", False)
         self.disable_caching = FormattedParameter("--disable-caching", False)
         self.disable_wb_cache = FormattedParameter("--disable-wb-cache", False)
         self.multi_user = FormattedParameter("--multi-user", False)
+        self.read_only = FormattedParameter("--read-only", False)
 
     def set_dfuse_exports(self, log_file):
         """Set exports to issue before the dfuse command.
@@ -90,8 +91,7 @@ class Dfuse(DfuseCommand):
                 Defaults to 120 seconds.
 
         Returns:
-            RemoteCommandResult: result of the command
-
+            CommandResult: result of the command
         """
         return run_remote(
             self.log, hosts, command_as_user(command, self.run_user), timeout=timeout)
@@ -231,7 +231,7 @@ class Dfuse(DfuseCommand):
 
         Args:
             check (bool): Check if dfuse mounted properly after mount is executed.
-            mount_callback (method, optional): method to pass RemoteCommandResult to
+            mount_callback (method, optional): method to pass CommandResult to
                 after mount. Default simply raises an exception on failure.
 
         Raises:
@@ -379,6 +379,44 @@ class Dfuse(DfuseCommand):
         # Only assume clean if nothing above failed
         self.__need_cleanup = False
 
+    def get_stats(self):
+        """Return the I/O stats for the filesystem
+
+        Only works if there is one entry in the client list.
+        """
+
+        if len(self.hosts) != 1:
+            raise CommandFailure("get_stats only supports one host")
+
+        cmd = f"daos filesystem query --json {self.mount_dir.value}"
+        result = run_remote(self.log, self.hosts, cmd)
+        if not result.passed:
+            raise CommandFailure(f"fs query failed on {result.failed_hosts}")
+
+        data = json.loads("\n".join(result.output[0].stdout))
+        if data["status"] != 0 or data["error"] is not None:
+            raise CommandFailure("fs query returned bad data.")
+        return data["response"]
+
+    def get_log_file_data(self):
+        """Return the content of the log file for each clients
+
+        Returns:
+            list: lines of the the DFuse log file for each clients
+
+        Raises:
+            CommandFailure: on failure to get the DFuse log file
+
+        """
+        if not self.env.get("D_LOG_FILE"):
+            raise CommandFailure("get_log_file_data needs a DFuse log files to be defined")
+
+        log_file = self.env["D_LOG_FILE"]
+        result = run_remote(self.log, self.hosts, f"cat {log_file}")
+        if not result.passed:
+            raise CommandFailure(f"Log file {log_file} can not be open on {result.failed_hosts}")
+        return result
+
 
 def get_dfuse(test, hosts, namespace=None):
     """Get a new Dfuse instance.
@@ -412,6 +450,7 @@ def start_dfuse(test, dfuse, pool=None, container=None, **params):
 
     Args:
         test (Test): the test instance
+        dfuse (Dfuse): the dfuse instance to start
         pool (TestPool, optional): pool to mount. Defaults to None
         container (TestContainer, optional): container to mount. Defaults to None
         params (Object, optional): Dfuse command arguments to update
@@ -423,7 +462,7 @@ def start_dfuse(test, dfuse, pool=None, container=None, **params):
     if pool:
         params['pool'] = pool.identifier
     if container:
-        params['cont'] = container.uuid
+        params['cont'] = container.identifier
     if params:
         dfuse.update_params(**params)
 
@@ -483,7 +522,7 @@ class VerifyPermsCommand(ExecutableCommand):
 
         # run options
         self.hosts = hosts.copy()
-        self.timeout = 120
+        self.timeout = 240
 
         # Most usage requires root permission
         self.run_user = 'root'
@@ -496,11 +535,63 @@ class VerifyPermsCommand(ExecutableCommand):
             CommandFailure: If the command fails
 
         Returns:
-            RemoteCommandResult: result from run_remote
-
+            CommandResult: result from run_remote
         """
         self.log.info('Running verify_perms.py on %s', str(self.hosts))
         result = run_remote(self.log, self.hosts, self.with_exports, timeout=self.timeout)
         if not result.passed:
             raise CommandFailure(f'verify_perms.py failed on: {result.failed_hosts}')
+        return result
+
+
+class Pil4dfsDcacheCmd(ExecutableCommand):
+    """Defines an object representing a pil4dfs_dcache unit test command."""
+
+    def __init__(self, host, path):
+        """Create a Pil4dfsDcacheCmd object.
+
+        Args:
+            host (NodeSet): host on which to remotely run the command
+            path (str): path of the DAOS install directory
+        """
+        if len(host) != 1:
+            raise ValueError(f"Invalid nodeset '{host}': waiting one client host.")
+
+        test_dir = os.path.join(path, "lib", "daos", "TESTING", "tests")
+        super().__init__("/run/pil4dfs_dcache/*", "pil4dfs_dcache", test_dir)
+
+        self._host = host
+        self.test_id = BasicParameter(None)
+
+    @property
+    def host(self):
+        """Get the host on which to remotely run the command via run().
+
+        Returns:
+            NodeSet: remote host on which the command will run
+
+        """
+        return self._host
+
+    def _run_process(self, raise_exception=None):
+        """Run the command remotely as a foreground process.
+
+        Args:
+            raise_exception (bool, optional): whether or not to raise an exception if the command
+                fails. This overrides the self.exit_status_exception setting if defined.
+                Defaults to None.
+
+        Raises:
+            CommandFailure: if there is an error running the command
+
+        Returns:
+            CommandResult: groups of command results from the same hosts with the same return status
+        """
+        if raise_exception is None:
+            raise_exception = self.exit_status_exception
+
+        # Run pil4dfs_dcache remotely
+        result = run_remote(self.log, self._host, self.with_exports, timeout=None)
+        if raise_exception and not result.passed:
+            raise CommandFailure(f"Error running pil4dfs_dcache on host: {result.failed_hosts}\n")
         return result

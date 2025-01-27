@@ -1,4 +1,4 @@
-#  (C) Copyright 2023 Intel Corporation.
+#  (C) Copyright 2023-2024 Intel Corporation.
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 - name: common
@@ -52,6 +52,10 @@
   tests:
     - cmd: ["src/gurt/tests/test_gurt"]
     - cmd: ["src/gurt/tests/test_gurt_telem_producer"]
+- name: DTX
+  base: "PREFIX"
+  tests:
+    - cmd: ["bin/dtx_tests"]
 - name: placement
   base: "PREFIX"
   tests:
@@ -60,6 +64,10 @@
   memcheck: False
   tests:
     - cmd: ["src/rdb/raft_tests/raft_tests.py"]
+- name: rsvc
+  base: "BUILD_DIR"
+  tests:
+    - cmd: ["src/common/tests/rsvc_tests"]
 - name: security
   base: "BUILD_DIR"
   tests:
@@ -123,6 +131,11 @@
   required_src: ["src/vos/tests/bio_ut.c"]
   tests:
     - cmd: ["bin/vos_tests", "-A", "50"]
+      env_vars:
+        DAOS_MD_ON_SSD_MODE: "3"
+      aio: "AIO_7"
+      size: 13
+    - cmd: ["bin/vos_tests", "-A", "50"]
       aio: "AIO_7"
       size: 13
     - cmd: ["bin/bio_ut"]
@@ -169,6 +182,30 @@
       warn_if_missing: "bin/nvme_control_ctests is missing, SPDK_SRC not available when built?"
 - name: ddb
   base: "PREFIX"
-  required_src: ["src/ddb/tests/SConscript"]
   tests:
     - cmd: ["bin/ddb_tests"]
+- name: Source metadata testing
+  gha: True
+  memcheck: False
+  tests:
+    - cmd: ["src/tests/ftest/tags.py", "unit"]
+    - cmd: ["utils/unit/include_test.py"]
+- name: Argobot performance testing
+  base: "BUILD_DIR"
+  tests:
+    - cmd: ["src/engine/tests/abt_perf", "--test=c", "--sec=10", "--num=100", "--stack=16"]
+    - cmd: ["src/engine/tests/abt_perf", "--test=s", "--sec=10", "--num=100"]
+    - cmd: ["src/engine/tests/abt_perf", "--test=m", "--sec=10"]
+    - cmd: ["src/engine/tests/abt_perf", "--test=w", "--sec=10"]
+    - cmd: ["src/engine/tests/abt_perf", "--test=e", "--sec=10"]
+    - cmd: ["src/engine/tests/abt_perf", "--test=d", "--sec=10"]
+- name: Argobot stack overflow testing
+  base: "BUILD_DIR"
+  memcheck: False
+  tests:
+    - cmd: ["src/engine/tests/abt_stack", "--check-overflow"]
+      env_vars:
+        ABT_STACK_OVERFLOW_CHECK: "mprotect_strict"
+    - cmd: ["src/engine/tests/abt_stack", "--check-overflow", "--on-pool"]
+      env_vars:
+        ABT_STACK_OVERFLOW_CHECK: "mprotect_strict"

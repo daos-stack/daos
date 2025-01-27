@@ -3,12 +3,14 @@ hosts:
   test_clients: 1
 timeout: 60
 setup:
-  access_points_suffix: .wolf.hpdd.intel.com
+  mgmt_svc_replicas_suffix: .wolf.hpdd.intel.com
 server_config:
   name: daos_server
   engines_per_host: 1
   engines:
     0:
+      targets: 4
+      nr_xs_helpers: 0
       storage:
         0:
           class: ram

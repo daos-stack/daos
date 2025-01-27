@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -228,7 +229,7 @@ func (tc *TierConfig) WithBdevBusidRange(rangeStr string) *TierConfig {
 
 // WithBdevDeviceRoles sets the role assignments for the bdev tier.
 func (tc *TierConfig) WithBdevDeviceRoles(bits int) *TierConfig {
-	tc.Bdev.DeviceRoles = BdevRoles{OptionBits(bits)}
+	tc.Bdev.DeviceRoles = BdevRolesFromBits(bits)
 	return tc
 }
 
@@ -319,8 +320,7 @@ func (tcs TierConfigs) HasBdevRoleMeta() bool {
 	}
 
 	for _, bc := range tcs.BdevConfigs() {
-		bits := bc.Bdev.DeviceRoles.OptionBits
-		if (bits & BdevRoleMeta) != 0 {
+		if bc.Bdev.DeviceRoles.HasMeta() {
 			return true
 		}
 	}
@@ -374,8 +374,8 @@ func (tcs TierConfigs) Validate() error {
 //     scenario allow the use of a single NVMe tier co-locating all three roles, three
 //     separate NVMe tiers with each tier dedicated to exactly one role, or two
 //     separate NVMe tiers where two of the three roles are co-located on one of the
-//     two NVMe tiers. In the latter case, all combinations to co-locate two of the
-//     roles shall be allowed, although not all those combinations may be technically
+//     two NVMe tiers. In the latter case, the only combination of two co-located roles
+//     that is not allowed is Wal+Data. Not all combinations may be technically
 //     desirable in production environments.
 func (tcs TierConfigs) validateBdevRoles() error {
 	scmConfs := tcs.ScmConfigs()
@@ -403,10 +403,9 @@ func (tcs TierConfigs) validateBdevRoles() error {
 			return FaultBdevConfigRolesMissing
 		}
 
-		bits := roles.OptionBits
-		hasWAL := (bits & BdevRoleWAL) != 0
-		hasMeta := (bits & BdevRoleMeta) != 0
-		hasData := (bits & BdevRoleData) != 0
+		hasWAL := roles.HasWAL()
+		hasMeta := roles.HasMeta()
+		hasData := roles.HasData()
 
 		// Disallow having both wal and data only on a tier.
 		if hasWAL && hasData && !hasMeta {
@@ -461,10 +460,11 @@ func (tcs TierConfigs) validateBdevRoles() error {
 // Role assignments will be decided based on the following rule set:
 //   - For 1 bdev tier, all roles will be assigned to that tier.
 //   - For 2 bdev tiers, WAL role will be assigned to the first bdev tier and Meta and Data to
-//     the second bdev tier.
-//   - For 3 or more bdev tiers, WAL role will be assigned to the first bdev tier, Meta to the
-//     second bdev tier and Data to all remaining bdev tiers.
-//   - If the scm tier is of class dcpm, the first (and only) bdev tier should have the Data role.
+//     the second bdev tier (Wal+Data is an invalid combination).
+//   - For 3 bdev tiers, WAL role will be assigned to the first bdev tier, Meta to the
+//     second bdev tier and Data to the third bdev tier.
+//   - For any more than 3 bdev tiers, an error will be returned.
+//   - If the scm tier is of class dcpm, no roles should be assigned and error should be returned.
 //   - If emulated NVMe is present in bdev tiers, implicit role assignment is skipped.
 func (tcs TierConfigs) AssignBdevTierRoles(extMetadataPath string) error {
 	if len(tcs) == 0 {
@@ -483,8 +483,8 @@ func (tcs TierConfigs) AssignBdevTierRoles(extMetadataPath string) error {
 	if scs[0].Class == ClassDcpm {
 		return errors.New("external metadata path for md-on-ssd invalid with dcpm scm-class")
 	}
-	// Skip role assignment and validation if no real NVMe tiers exist.
-	if !tcs.HaveRealNVMe() {
+	// Skip role assignment and validation if no bdev tiers exist.
+	if !tcs.HaveBdevs() {
 		return nil
 	}
 
@@ -516,12 +516,12 @@ func (tcs TierConfigs) AssignBdevTierRoles(extMetadataPath string) error {
 	case 2:
 		tcs[1].WithBdevDeviceRoles(BdevRoleWAL)
 		tcs[2].WithBdevDeviceRoles(BdevRoleMeta | BdevRoleData)
-	default:
+	case 3:
 		tcs[1].WithBdevDeviceRoles(BdevRoleWAL)
 		tcs[2].WithBdevDeviceRoles(BdevRoleMeta)
-		for i := 3; i < len(tcs); i++ {
-			tcs[i].WithBdevDeviceRoles(BdevRoleData)
-		}
+		tcs[3].WithBdevDeviceRoles(BdevRoleData)
+	default:
+		return FaultBdevConfigBadNrTiersWithRoles
 	}
 
 	return nil
@@ -586,17 +586,17 @@ func (sc *ScmConfig) Validate(class Class) error {
 	switch class {
 	case ClassDcpm:
 		if sc.RamdiskSize > 0 {
-			return errors.New("scm_size may not be set when scm_class is dcpm")
+			return errors.New("scm_size may not be set when class is dcpm")
 		}
 		if len(sc.DeviceList) == 0 {
-			return errors.New("scm_list must be set when scm_class is dcpm")
+			return errors.New("scm_list must be set when class is dcpm")
 		}
 		if sc.DisableHugepages {
-			return errors.New("scm_hugepages_disabled may not be set when scm_class is dcpm")
+			return errors.New("scm_hugepages_disabled may not be set when class is dcpm")
 		}
 	case ClassRam:
 		if len(sc.DeviceList) > 0 {
-			return errors.New("scm_list may not be set when scm_class is ram")
+			return errors.New("scm_list may not be set when class is ram")
 		}
 		// Note: RAM-disk size can be auto-sized so allow if zero.
 		if sc.RamdiskSize != 0 {
@@ -847,7 +847,7 @@ func (ofm optFlagMap) keys() []string {
 	return keys.ToSlice()
 }
 
-// toStrings returns a slice of option names that have been set.
+// toStrings returns a sorted slice of option names that have been set.
 func (obs OptionBits) toStrings(optStr2Flag optFlagMap) []string {
 	opts := common.NewStringSet()
 	for str, flag := range optStr2Flag {
@@ -856,7 +856,9 @@ func (obs OptionBits) toStrings(optStr2Flag optFlagMap) []string {
 		}
 	}
 
-	return opts.ToSlice()
+	outOpts := opts.ToSlice()
+	sort.Strings(outOpts)
+	return outOpts
 }
 
 // toString returns a comma separated list of option names that have been set.
@@ -941,6 +943,47 @@ func (bdr *BdevRoles) String() string {
 	return bdr.toString(roleOptFlags)
 }
 
+// HasDataRole returns true if BdevRoles has DATA role set.
+func (bdr *BdevRoles) HasData() bool {
+	if bdr == nil {
+		return false
+	}
+
+	return bdr.OptionBits&BdevRoleData != 0
+}
+
+// HasMetaRole returns true if BdevRoles has META role set.
+func (bdr *BdevRoles) HasMeta() bool {
+	if bdr == nil {
+		return false
+	}
+
+	return bdr.OptionBits&BdevRoleMeta != 0
+}
+
+// HasWALRole returns true if BdevRoles has WAL role set.
+func (bdr *BdevRoles) HasWAL() bool {
+	if bdr == nil {
+		return false
+	}
+
+	return bdr.OptionBits&BdevRoleWAL != 0
+}
+
+// IsEmpty returns true if no options have been set.
+func (bdr *BdevRoles) IsEmpty() bool {
+	return bdr == nil || bdr.OptionBits.IsEmpty()
+}
+
+// BdevRolesFromBits returns BdevRoles initialized with supplied option bitset.
+func BdevRolesFromBits(bits int) BdevRoles {
+	if bits <= 0 {
+		return BdevRoles{}
+	}
+
+	return BdevRoles{OptionBits(bits)}
+}
+
 // BdevConfig represents a Block Device (NVMe, etc.) configuration entry.
 type BdevConfig struct {
 	DeviceList    *BdevDeviceList `yaml:"bdev_list,omitempty"`
@@ -953,8 +996,7 @@ type BdevConfig struct {
 
 func (bc *BdevConfig) checkNonZeroDevFileSize(class Class) error {
 	if bc.FileSize == 0 {
-		return errors.Errorf("bdev_class %s requires non-zero bdev_size",
-			class)
+		return errors.Errorf("class %s requires non-zero bdev_size", class)
 	}
 
 	return nil
@@ -962,8 +1004,7 @@ func (bc *BdevConfig) checkNonZeroDevFileSize(class Class) error {
 
 func (bc *BdevConfig) checkNonEmptyDevList(class Class) error {
 	if bc.DeviceList == nil || bc.DeviceList.Len() == 0 {
-		return errors.Errorf("bdev_class %s requires non-empty bdev_list",
-			class)
+		return errors.Errorf("class %s requires non-empty bdev_list", class)
 	}
 
 	return nil
@@ -990,10 +1031,10 @@ func (bc *BdevConfig) Validate(class Class) error {
 	case ClassNvme:
 		// NB: We are specifically checking that the embedded PCIAddressSet is non-empty.
 		if bc.DeviceList == nil || bc.DeviceList.PCIAddressSet.Len() == 0 {
-			return errors.New("bdev_class nvme requires valid PCI addresses in bdev_list")
+			return errors.New("class nvme requires valid PCI addresses in bdev_list")
 		}
 	default:
-		return errors.Errorf("bdev_class value %q not supported (valid: nvme/kdev/file)", class)
+		return errors.Errorf("class value %q not supported (valid: nvme/kdev/file)", class)
 	}
 
 	return nil
@@ -1106,6 +1147,7 @@ type BdevAutoFaulty struct {
 	MaxCsumErrs uint32 `yaml:"max_csum_errs,omitempty" json:"max_csum_errs"`
 }
 
+// Config defines engine storage.
 type Config struct {
 	ControlMetadata  ControlMetadata `yaml:"-"` // inherited from server
 	EngineIdx        uint            `yaml:"-"`
@@ -1119,6 +1161,7 @@ type Config struct {
 	AutoFaultyProps  BdevAutoFaulty  `yaml:"bdev_auto_faulty,omitempty"`
 }
 
+// SetNUMAAffinity enables the assignment of NUMA affinity to tier configs.
 func (c *Config) SetNUMAAffinity(node uint) {
 	c.NumaNodeIndex = node
 	for _, tier := range c.Tiers {
@@ -1126,14 +1169,12 @@ func (c *Config) SetNUMAAffinity(node uint) {
 	}
 }
 
+// GetBdevs retrieves bdev device list of storage tiers.
 func (c *Config) GetBdevs() *BdevDeviceList {
 	return c.Tiers.Bdevs()
 }
 
-func (c *Config) GetNVMeBdevs() *BdevDeviceList {
-	return c.Tiers.NVMeBdevs()
-}
-
+// Validate checks the validity of the storage config.
 func (c *Config) Validate() error {
 	if err := c.Tiers.Validate(); err != nil {
 		return err

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -13,6 +14,7 @@
 
 #include <fcntl.h>
 #include <daos/common.h>
+#include <daos/metrics.h>
 #include <daos/rpc.h>
 #include <daos/lru.h>
 #include <daos/btree_class.h>
@@ -122,6 +124,7 @@ vos_bio_addr_free(struct vos_pool *pool, bio_addr_t *addr, daos_size_t nob)
 	if (bio_addr_is_hole(addr))
 		return 0;
 
+	D_ASSERT(!BIO_ADDR_IS_GANG(addr));
 	if (addr->ba_type == DAOS_MEDIA_SCM) {
 		rc = umem_free(&pool->vp_umm, addr->ba_off);
 	} else {
@@ -143,7 +146,9 @@ vos_bio_addr_free(struct vos_pool *pool, bio_addr_t *addr, daos_size_t nob)
 static int
 vos_tx_publish(struct dtx_handle *dth, bool publish)
 {
-	struct vos_container	*cont = vos_hdl2cont(dth->dth_coh);
+	struct vos_pool         *pool = NULL;
+	struct vos_container    *cont = NULL;
+	struct umem_instance    *umm;
 	struct dtx_rsrvd_uint	*dru;
 	struct umem_rsrvd_act	*scm;
 	int			 rc;
@@ -152,9 +157,17 @@ vos_tx_publish(struct dtx_handle *dth, bool publish)
 	if (dth->dth_rsrvds == NULL)
 		return 0;
 
+	if (dth->dth_local) {
+		pool = vos_hdl2pool(dth->dth_poh);
+		umm  = vos_pool2umm(pool);
+	} else {
+		cont = vos_hdl2cont(dth->dth_coh);
+		umm  = vos_cont2umm(cont);
+	}
+
 	for (i = 0; i < dth->dth_rsrvd_cnt; i++) {
 		dru = &dth->dth_rsrvds[i];
-		rc = vos_publish_scm(cont, dru->dru_scm, publish);
+		rc  = vos_publish_scm(umm, dru->dru_scm, publish);
 		D_FREE(dru->dru_scm);
 
 		/* FIXME: Currently, vos_publish_blocks() will release
@@ -171,6 +184,9 @@ vos_tx_publish(struct dtx_handle *dth, bool publish)
 		if (rc && publish)
 			return rc;
 
+		D_ASSERTF(!dth->dth_local || d_list_empty(&dru->dru_nvme),
+			  "NVMe allocations not supported for local transactions\n");
+
 		/** Function checks if list is empty */
 		rc = vos_publish_blocks(cont, &dru->dru_nvme,
 					publish, VOS_IOS_GENERIC);
@@ -180,13 +196,15 @@ vos_tx_publish(struct dtx_handle *dth, bool publish)
 
 	for (i = 0; i < dth->dth_deferred_cnt; i++) {
 		scm = dth->dth_deferred[i];
-		rc = vos_publish_scm(cont, scm, publish);
+		rc  = vos_publish_scm(umm, scm, publish);
 		D_FREE(dth->dth_deferred[i]);
 
 		if (rc && publish)
 			return rc;
 	}
 
+	D_ASSERTF(!dth->dth_local || d_list_empty(&dth->dth_deferred_nvme),
+		  "NVMe allocations not supported for local transactions\n");
 	/** Handle the deferred NVMe cancellations */
 	vos_publish_blocks(cont, &dth->dth_deferred_nvme, false, VOS_IOS_GENERIC);
 
@@ -221,17 +239,45 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool is_sysdb)
 	return rc;
 }
 
+static inline void
+vos_local_tx_abort(struct dtx_handle *dth)
+{
+	struct dtx_local_oid_record *record = NULL;
+
+	if (dth->dth_local_oid_cnt == 0)
+		return;
+
+	/**
+	 * Since a local transaction spawns always a single pool an eaither one of the containers
+	 * can be used to access the pool.
+	 */
+	record = &dth->dth_local_oid_array[0];
+
+	/**
+	 * Evict all objects touched by the aborted transaction from the object cache to make sure
+	 * no invalid pointer stays there. Not all of the touched objects have to be evicted but
+	 * for simplicity's sake all of them are.
+	 */
+	for (int i = 0; i < dth->dth_local_oid_cnt; ++i) {
+		record = &dth->dth_local_oid_array[i];
+		(void)vos_obj_evict_by_oid(record->dor_cont, record->dor_oid);
+	}
+}
+
 int
 vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 	   struct umem_rsrvd_act **rsrvd_scmp, d_list_t *nvme_exts,
 	   bool started, struct bio_desc *biod, int err)
 {
-	struct dtx_handle	*dth = dth_in;
-	struct vos_dtx_act_ent	*dae;
-	struct dtx_rsrvd_uint	*dru;
-	struct vos_dtx_cmt_ent	*dce = NULL;
-	struct dtx_handle	 tmp = {0};
-	int			 rc;
+	struct vos_pool         	*pool;
+	struct umem_instance		*umm;
+	struct dtx_handle		*dth = dth_in;
+	struct vos_dtx_act_ent		*dae;
+	struct vos_dtx_act_ent_df	*dae_df;
+	struct dtx_rsrvd_uint		*dru;
+	struct vos_dtx_cmt_ent		*dce = NULL;
+	struct dtx_handle		 tmp = {0};
+	int				 rc = 0;
 
 	if (!dtx_is_valid_handle(dth)) {
 		/** Created a dummy dth handle for publishing extents */
@@ -243,8 +289,26 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 		D_INIT_LIST_HEAD(&tmp.dth_deferred_nvme);
 	}
 
+	if (dth->dth_local)
+		pool = vos_hdl2pool(dth_in->dth_poh);
+	else
+		pool = cont->vc_pool;
+	umm = vos_pool2umm(pool);
+
 	if (rsrvd_scmp != NULL) {
 		D_ASSERT(nvme_exts != NULL);
+		if (dth->dth_rsrvd_cnt > 0 && dth->dth_rsrvd_cnt >= dth->dth_modification_cnt) {
+			/*
+			 * Just do your best to release the SCM reservation. Can't handle another
+			 * error while handling one already anyway.
+			 */
+			(void)vos_publish_scm(umm, *rsrvd_scmp, false /* publish */);
+			D_FREE(*rsrvd_scmp);
+			*rsrvd_scmp = NULL;
+			err         = -DER_NOMEM;
+			goto cancel;
+		}
+
 		dru = &dth->dth_rsrvds[dth->dth_rsrvd_cnt++];
 		dru->dru_scm = *rsrvd_scmp;
 		*rsrvd_scmp = NULL;
@@ -256,32 +320,42 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 	if (!dth->dth_local_tx_started)
 		goto cancel;
 
-	/* Not the last modification. */
-	if (err == 0 && dth->dth_modification_cnt > dth->dth_op_seq) {
+	if (err == 0) {
+		if (dth->dth_local) {
+			if (dth_in->dth_local_complete)
+				goto commit;
+		} else if (dth->dth_modification_cnt <= dth->dth_op_seq) {
+			goto commit;
+		}
 		vos_dth_set(NULL, cont->vc_pool->vp_sysdb);
+		/** Just return 0 if it's not the last modification */
 		return 0;
 	}
-
+commit:
 	dth->dth_local_tx_started = 0;
 
-	if (dtx_is_valid_handle(dth_in) && err == 0)
+	if (dtx_is_valid_handle(dth_in) && err == 0 && !dth->dth_local)
 		err = vos_dtx_prepared(dth, &dce);
 
 	if (err == 0)
 		err = vos_tx_publish(dth, true);
 
-	vos_dth_set(NULL, cont->vc_pool->vp_sysdb);
+	vos_dth_set(NULL, pool->vp_sysdb);
 
 	if (bio_nvme_configured(SMD_DEV_TYPE_META) && biod != NULL)
-		err = umem_tx_end_ex(vos_cont2umm(cont), err, biod);
+		err = umem_tx_end_ex(umm, err, biod);
 	else
-		err = umem_tx_end(vos_cont2umm(cont), err);
+		err = umem_tx_end(umm, err);
 
 cancel:
 	if (dtx_is_valid_handle(dth_in)) {
+		if (dth->dth_local && err != 0) {
+			vos_local_tx_abort(dth);
+		}
+
 		dae = dth->dth_ent;
 		if (dae != NULL) {
-			if (err == 0 && unlikely(dae->dae_preparing && dae->dae_aborting)) {
+			if (unlikely(dae->dae_preparing && dae->dae_aborting)) {
 				rc = vos_dtx_abort_internal(cont, dae, true);
 				D_CDEBUG(rc != 0, DLOG_ERR, DB_IO,
 					 "Delay abort DTX "DF_DTI" (1): rc = %d\n",
@@ -331,14 +405,25 @@ cancel:
 			}
 		} else if (dae != NULL) {
 			if (dth->dth_solo) {
-				if (err == 0 && cont->vc_solo_dtx_epoch < dth->dth_epoch)
+				if (err == 0 && dae->dae_committing &&
+				    cont->vc_solo_dtx_epoch < dth->dth_epoch)
 					cont->vc_solo_dtx_epoch = dth->dth_epoch;
 
-				vos_dtx_post_handle(cont, &dae, &dce, 1, false, err != 0);
+				vos_dtx_post_handle(cont, &dae, &dce, 1, false, err != 0, false);
 			} else {
 				D_ASSERT(dce == NULL);
-				if (err == 0)
+				if (err == 0 && dth->dth_active) {
+					D_ASSERTF(!UMOFF_IS_NULL(dae->dae_df_off),
+						  "Non-prepared DTX " DF_DTI "\n",
+						  DP_DTI(&dth->dth_xid));
+
+					dae_df = umem_off2ptr(umm, dae->dae_df_off);
+					D_ASSERTF(!(dae_df->dae_flags & DTE_INVALID),
+						  "Invalid status for DTX " DF_DTI "\n",
+						  DP_DTI(&dth->dth_xid));
+
 					dae->dae_prepared = 1;
+				}
 			}
 		}
 	}
@@ -486,13 +571,6 @@ vos_tls_init(int tags, int xs_id, int tgt_id)
 		}
 	}
 
-	rc = d_tm_add_metric(&tls->vtl_committed, D_TM_STATS_GAUGE,
-			     "Number of committed entries kept around for reply"
-			     " reconstruction", "entries",
-			     "io/dtx/committed/tgt_%u", tgt_id);
-	if (rc)
-		D_WARN("Failed to create committed cnt sensor: "DF_RC"\n",
-		       DP_RC(rc));
 	if (tgt_id >= 0) {
 		rc = d_tm_add_metric(&tls->vtl_committed, D_TM_STATS_GAUGE,
 				     "Number of committed entries kept around for reply"
@@ -500,14 +578,6 @@ vos_tls_init(int tags, int xs_id, int tgt_id)
 				     "io/dtx/committed/tgt_%u", tgt_id);
 		if (rc)
 			D_WARN("Failed to create committed cnt sensor: "DF_RC"\n",
-			       DP_RC(rc));
-
-		rc = d_tm_add_metric(&tls->vtl_dtx_cmt_ent_cnt, D_TM_GAUGE,
-				     "Number of committed entries", "entry",
-				     "mem/vos/dtx_cmt_ent_%u/tgt_%u",
-				     sizeof(struct vos_dtx_cmt_ent), tgt_id);
-		if (rc)
-			D_WARN("Failed to create committed cnt: "DF_RC"\n",
 			       DP_RC(rc));
 
 		rc = d_tm_add_metric(&tls->vtl_obj_cnt, D_TM_GAUGE,
@@ -550,6 +620,42 @@ struct dss_module_key vos_module_key = {
 };
 
 daos_epoch_t	vos_start_epoch = DAOS_EPOCH_MAX;
+
+/*
+ * For standalone transaction, when it is started on the DTX leader, its epoch
+ * is generated by the leader, then the modification RPC will be forwarded to
+ * other related non-leader(s). If the forwarded RPC is delayed for some reason,
+ * such as network congestion or system busy on the non-leader, as to the epoch
+ * for such transaction becomes very old (exceed related threshold), as to VOS
+ * aggregation may has already aggregated related epoch rang. Under such case,
+ * the non-leader will reject such modification to avoid data lost/corruption.
+ *
+ * For distributed transaction, if there is no read (fetch, query, enumerate,
+ * and so on) before client commit_tx, then related DTX leader will generate
+ * epoch for the transaction after client commit_tx. Then it will be the same
+ * as above standalone transaction for epoch handling.
+ *
+ * If the distributed transaction involves some read before client commit_tx,
+ * its epoch will be generated by the first accessed engine for read. If the
+ * transaction takes too long time after that, then when client commit_tx, its
+ * epoch may become very old as to related DTX leader will have to reject the
+ * transaction to avoid above mentioned conflict. And even if the DTX leader
+ * did not reject the transaction, some non-leader may also reject it because
+ * of the very old epoch. So it means that under such framework, the life for
+ * a distributed transaction cannot be too long. That can be adjusted via the
+ * server side environment variable DAOS_VOS_AGG_GAP.
+ *
+ * NOTE: EC/VOS aggregation should avoid aggregating in the epoch range where
+ *	 lots of data records are pending to commit, so the aggregation epoch
+ *	 upper bound is 'current HLC - vos_agg_gap'.
+ */
+uint32_t	vos_agg_gap;
+
+uint32_t
+vos_get_agg_gap(void)
+{
+	return vos_agg_gap;
+}
 
 static int
 vos_mod_init(void)
@@ -610,6 +716,15 @@ vos_mod_init(void)
 	d_getenv_bool("DAOS_DKEY_PUNCH_PROPAGATE", &vos_dkey_punch_propagate);
 	D_INFO("DKEY punch propagation is %s\n", vos_dkey_punch_propagate ? "enabled" : "disabled");
 
+	vos_agg_gap = VOS_AGG_GAP_DEF;
+	d_getenv_uint("DAOS_VOS_AGG_GAP", &vos_agg_gap);
+	if (vos_agg_gap < VOS_AGG_GAP_MIN || vos_agg_gap > VOS_AGG_GAP_MAX) {
+		D_WARN("Invalid DAOS_VOS_AGG_GAP value, "
+		       "valid range [%u, %u], set it as default %u (second)\n",
+		       VOS_AGG_GAP_MIN, VOS_AGG_GAP_MAX, VOS_AGG_GAP_DEF);
+		vos_agg_gap = VOS_AGG_GAP_DEF;
+	}
+	D_INFO("Set DAOS VOS aggregation gap as %u (second)\n", vos_agg_gap);
 
 	return rc;
 }
@@ -624,8 +739,7 @@ static inline int
 vos_metrics_count(void)
 {
 	return vea_metrics_count() +
-	       (sizeof(struct vos_agg_metrics) + sizeof(struct vos_space_metrics) +
-		sizeof(struct vos_chkpt_metrics)) / sizeof(struct d_tm_node_t *);
+		sizeof(struct vos_pool_metrics) / sizeof(struct d_tm_node_t *);
 }
 
 static void
@@ -640,7 +754,6 @@ vos_metrics_free(void *data)
 
 #define VOS_AGG_DIR	"vos_aggregation"
 #define VOS_SPACE_DIR	"vos_space"
-#define VOS_RH_DIR	"vos_rehydration"
 
 static inline char *
 agg_op2str(unsigned int agg_op)
@@ -663,7 +776,6 @@ vos_metrics_alloc(const char *path, int tgt_id)
 	struct vos_pool_metrics		*vp_metrics;
 	struct vos_agg_metrics		*vam;
 	struct vos_space_metrics	*vsm;
-	struct vos_rh_metrics		*brm;
 	char				desc[40];
 	int				i, rc;
 
@@ -681,7 +793,6 @@ vos_metrics_alloc(const char *path, int tgt_id)
 
 	vam = &vp_metrics->vp_agg_metrics;
 	vsm = &vp_metrics->vp_space_metrics;
-	brm = &vp_metrics->vp_rh_metrics;
 
 	/* VOS aggregation EPR scan duration */
 	rc = d_tm_add_metric(&vam->vam_epr_dur, D_TM_DURATION | D_TM_CLOCK_THREAD_CPUTIME,
@@ -753,6 +864,19 @@ vos_metrics_alloc(const char *path, int tgt_id)
 	if (rc)
 		D_WARN("Failed to create 'merged_size' telemetry : "DF_RC"\n", DP_RC(rc));
 
+	/* VOS aggregation conflicts with discard */
+	rc = d_tm_add_metric(&vam->vam_agg_blocked, D_TM_COUNTER, "aggregation blocked by discard",
+			     NULL, "%s/%s/agg_blocked/tgt_%u", path, VOS_AGG_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'agg_blocked' telemetry : " DF_RC "\n", DP_RC(rc));
+
+	/* VOS discard conflicts with aggregation */
+	rc = d_tm_add_metric(&vam->vam_discard_blocked, D_TM_COUNTER,
+			     "discard blocked by aggregation", NULL, "%s/%s/discard_blocked/tgt_%u",
+			     path, VOS_AGG_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'discard_blocked' telemetry : " DF_RC "\n", DP_RC(rc));
+
 	/* VOS aggregation failed */
 	rc = d_tm_add_metric(&vam->vam_fail_count, D_TM_COUNTER, "aggregation failures", NULL,
 			     "%s/%s/fail_count/tgt_%u", path, VOS_AGG_DIR, tgt_id);
@@ -792,40 +916,20 @@ vos_metrics_alloc(const char *path, int tgt_id)
 	/* Initialize the vos_space_metrics timeout counter */
 	vsm->vsm_last_update_ts = 0;
 
-	/* Initialize metrics for vos file rehydration */
-	rc = d_tm_add_metric(&brm->vrh_size, D_TM_GAUGE, "WAL replay size", "bytes",
-			     "%s/%s/replay_size/tgt_%u", path, VOS_RH_DIR, tgt_id);
-	if (rc)
-		D_WARN("Failed to create 'replay_size' telemetry : "DF_RC"\n", DP_RC(rc));
+	/* Initialize metrics for WAL */
+	vos_wal_metrics_init(&vp_metrics->vp_wal_metrics, path, tgt_id);
 
-	rc = d_tm_add_metric(&brm->vrh_time, D_TM_GAUGE, "WAL replay time", "us",
-			     "%s/%s/replay_time/tgt_%u", path, VOS_RH_DIR, tgt_id);
-	if (rc)
-		D_WARN("Failed to create 'replay_time' telemetry : "DF_RC"\n", DP_RC(rc));
-
-	rc = d_tm_add_metric(&brm->vrh_entries, D_TM_COUNTER, "Number of log entries", NULL,
-			     "%s/%s/replay_entries/tgt_%u", path, VOS_RH_DIR, tgt_id);
-	if (rc)
-		D_WARN("Failed to create 'replay_entries' telemetry : "DF_RC"\n", DP_RC(rc));
-
-	rc = d_tm_add_metric(&brm->vrh_count, D_TM_COUNTER, "Number of WAL replays", NULL,
-			     "%s/%s/replay_count/tgt_%u", path, VOS_RH_DIR, tgt_id);
-	if (rc)
-		D_WARN("Failed to create 'replay_count' telemetry : "DF_RC"\n", DP_RC(rc));
-
-	rc = d_tm_add_metric(&brm->vrh_tx_cnt, D_TM_COUNTER, "Number of replayed transactions",
-			     NULL, "%s/%s/replay_transactions/tgt_%u", path, VOS_RH_DIR, tgt_id);
-	if (rc)
-		D_WARN("Failed to create 'replay_transactions' telemetry : "DF_RC"\n", DP_RC(rc));
+	/* Initialize metrcis for umem cache */
+	vos_cache_metrics_init(&vp_metrics->vp_cache_metrics, path, tgt_id);
 
 	return vp_metrics;
 }
 
-struct dss_module_metrics vos_metrics = {
-	.dmm_tags = DAOS_TGT_TAG,
-	.dmm_init = vos_metrics_alloc,
-	.dmm_fini = vos_metrics_free,
-	.dmm_nr_metrics = vos_metrics_count,
+struct daos_module_metrics vos_metrics = {
+    .dmm_tags       = DAOS_TGT_TAG,
+    .dmm_init       = vos_metrics_alloc,
+    .dmm_fini       = vos_metrics_free,
+    .dmm_nr_metrics = vos_metrics_count,
 };
 
 struct dss_module vos_srv_module =  {
@@ -936,7 +1040,7 @@ vos_self_fini(void)
 #define LMMDB_PATH	"/var/daos/"
 
 int
-vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
+vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool nvme_init)
 {
 	char		*evt_mode;
 	int		 rc = 0;
@@ -961,9 +1065,11 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 		goto out;
 	}
 #endif
-	rc = vos_self_nvme_init(db_path);
-	if (rc)
-		goto failed;
+	if (nvme_init) {
+		rc = vos_self_nvme_init(db_path);
+		if (rc)
+			goto failed;
+	}
 
 	rc = vos_mod_init();
 	if (rc)
@@ -1018,4 +1124,10 @@ failed:
 	vos_self_fini_locked();
 	D_MUTEX_UNLOCK(&self_mode.self_lock);
 	return rc;
+}
+
+int
+vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
+{
+	return vos_self_init_ext(db_path, use_sys_db, tgt_id, true);
 }

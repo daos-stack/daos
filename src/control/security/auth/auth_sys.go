@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +8,7 @@ package auth
 
 import (
 	"bytes"
+	"context"
 	"crypto"
 	"os"
 	"os/user"
@@ -17,86 +18,9 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 )
-
-// User is an interface wrapping a representation of a specific system user.
-type User interface {
-	Username() string
-	GroupIDs() ([]uint32, error)
-	Gid() (uint32, error)
-}
-
-// UserExt is an interface that wraps system user-related external functions.
-type UserExt interface {
-	Current() (User, error)
-	LookupUserID(uid uint32) (User, error)
-	LookupGroupID(gid uint32) (*user.Group, error)
-}
-
-// UserInfo is an exported implementation of the security.User interface.
-type UserInfo struct {
-	Info *user.User
-}
-
-// Username is a wrapper for user.Username.
-func (u *UserInfo) Username() string {
-	return u.Info.Username
-}
-
-// GroupIDs is a wrapper for user.GroupIds.
-func (u *UserInfo) GroupIDs() ([]uint32, error) {
-	gidStrs, err := u.Info.GroupIds()
-	if err != nil {
-		return nil, err
-	}
-
-	gids := []uint32{}
-	for _, gstr := range gidStrs {
-		gid, err := strconv.Atoi(gstr)
-		if err != nil {
-			continue
-		}
-		gids = append(gids, uint32(gid))
-	}
-
-	return gids, nil
-}
-
-// Gid is a wrapper for user.Gid.
-func (u *UserInfo) Gid() (uint32, error) {
-	gid, err := strconv.Atoi(u.Info.Gid)
-
-	return uint32(gid), errors.Wrap(err, "user gid")
-}
-
-// External is an exported implementation of the UserExt interface.
-type External struct{}
-
-// LookupUserId is a wrapper for user.LookupId.
-func (e *External) LookupUserID(uid uint32) (User, error) {
-	uidStr := strconv.FormatUint(uint64(uid), 10)
-	info, err := user.LookupId(uidStr)
-	if err != nil {
-		return nil, err
-	}
-	return &UserInfo{Info: info}, nil
-}
-
-// LookupGroupId is a wrapper for user.LookupGroupId.
-func (e *External) LookupGroupID(gid uint32) (*user.Group, error) {
-	gidStr := strconv.FormatUint(uint64(gid), 10)
-	return user.LookupGroupId(gidStr)
-}
-
-// Current is a wrapper for user.Current.
-func (e *External) Current() (User, error) {
-	info, err := user.Current()
-	if err != nil {
-		return nil, err
-	}
-	return &UserInfo{Info: info}, nil
-}
 
 // VerifierFromToken will return a SHA512 hash of the token data. If a signing key
 // is passed in it will additionally sign the hash of the token.
@@ -146,60 +70,196 @@ func sysNameToPrincipalName(name string) string {
 	return name + "@"
 }
 
-// AuthSysRequestFromCreds takes the domain info credentials gathered
-// during the dRPC request and creates an AuthSys security request to obtain
-// a handle from the management service.
-func AuthSysRequestFromCreds(ext UserExt, creds *security.DomainInfo, signing crypto.PrivateKey) (*Credential, error) {
-	if creds == nil {
-		return nil, errors.New("No credentials supplied")
-	}
+func stripHostName(name string) string {
+	return strings.Split(name, ".")[0]
+}
 
-	userInfo, err := ext.LookupUserID(creds.Uid())
-	if err != nil {
-		return nil, errors.Wrapf(err, "Failed to lookup uid %v",
-			creds.Uid())
-	}
-
-	groupInfo, err := ext.LookupGroupID(creds.Gid())
-	if err != nil {
-		return nil, errors.Wrapf(err, "Failed to lookup gid %v",
-			creds.Gid())
-	}
-
-	groups, err := userInfo.GroupIDs()
-	if err != nil {
-		return nil, errors.Wrapf(err, "Failed to get group IDs for user %v",
-			userInfo.Username())
-	}
-
+// GetMachineName returns the "short" hostname by stripping the domain from the FQDN.
+func GetMachineName() (string, error) {
 	name, err := os.Hostname()
 	if err != nil {
-		name = "unavailable"
+		return "", err
 	}
 
-	// Strip the domain off of the Hostname
-	host := strings.Split(name, ".")[0]
+	return stripHostName(name), nil
+}
 
-	var groupList = []string{}
+type (
+	getHostnameFn   func() (string, error)
+	getUserFn       func(string) (*user.User, error)
+	getGroupFn      func(string) (*user.Group, error)
+	getGroupIdsFn   func(*CredentialRequest) ([]string, error)
+	getGroupNamesFn func(*CredentialRequest) ([]string, error)
 
-	// Convert groups to gids
-	for _, gid := range groups {
-		gInfo, err := ext.LookupGroupID(gid)
+	// CredentialRequest defines the request parameters for GetSignedCredential.
+	CredentialRequest struct {
+		DomainInfo    *security.DomainInfo
+		SigningKey    crypto.PrivateKey
+		getHostname   getHostnameFn
+		getUser       getUserFn
+		getGroup      getGroupFn
+		getGroupIds   getGroupIdsFn
+		getGroupNames getGroupNamesFn
+	}
+)
+
+func getGroupIds(req *CredentialRequest) ([]string, error) {
+	u, err := req.user()
+	if err != nil {
+		return nil, err
+	}
+	return u.GroupIds()
+}
+
+func getGroupNames(req *CredentialRequest) ([]string, error) {
+	groupIds, err := req.getGroupIds(req)
+	if err != nil {
+		return nil, err
+	}
+
+	groupNames := make([]string, len(groupIds))
+	for i, gID := range groupIds {
+		g, err := req.getGroup(gID)
 		if err != nil {
-			// Skip this group
-			continue
+			return nil, err
 		}
-		groupList = append(groupList, sysNameToPrincipalName(gInfo.Name))
+		groupNames[i] = g.Name
+	}
+
+	return groupNames, nil
+}
+
+// NewCredentialRequest returns a properly initialized CredentialRequest.
+func NewCredentialRequest(info *security.DomainInfo, key crypto.PrivateKey) *CredentialRequest {
+	return &CredentialRequest{
+		DomainInfo:    info,
+		SigningKey:    key,
+		getHostname:   GetMachineName,
+		getUser:       user.LookupId,
+		getGroup:      user.LookupGroupId,
+		getGroupIds:   getGroupIds,
+		getGroupNames: getGroupNames,
+	}
+}
+
+func (r *CredentialRequest) hostname() (string, error) {
+	if r.getHostname == nil {
+		return "", errors.New("hostname lookup function not set")
+	}
+
+	hostname, err := r.getHostname()
+	if err != nil {
+		return "", errors.Wrap(err, "failed to get hostname")
+	}
+	return stripHostName(hostname), nil
+}
+
+func (r *CredentialRequest) user() (*user.User, error) {
+	if r.getUser == nil {
+		return nil, errors.New("user lookup function not set")
+	}
+	return r.getUser(strconv.Itoa(int(r.DomainInfo.Uid())))
+}
+
+func (r *CredentialRequest) userPrincipal() (string, error) {
+	u, err := r.user()
+	if err != nil {
+		return "", err
+	}
+	return sysNameToPrincipalName(u.Username), nil
+}
+
+func (r *CredentialRequest) group() (*user.Group, error) {
+	if r.getGroup == nil {
+		return nil, errors.New("group lookup function not set")
+	}
+	return r.getGroup(strconv.Itoa(int(r.DomainInfo.Gid())))
+}
+
+func (r *CredentialRequest) groupPrincipal() (string, error) {
+	g, err := r.group()
+	if err != nil {
+		return "", err
+	}
+	return sysNameToPrincipalName(g.Name), nil
+}
+
+func (r *CredentialRequest) groupPrincipals() ([]string, error) {
+	if r.getGroupNames == nil {
+		return nil, errors.New("groupNames function not set")
+	}
+
+	groupNames, err := r.getGroupNames(r)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get group names")
+	}
+
+	for i, g := range groupNames {
+		groupNames[i] = sysNameToPrincipalName(g)
+	}
+	return groupNames, nil
+}
+
+// WithUserAndGroup provides an override to set the user, group, and optional list
+// of group names to be used for the request.
+func (r *CredentialRequest) WithUserAndGroup(userStr, groupStr string, groupStrs ...string) {
+	r.getUser = func(id string) (*user.User, error) {
+		return &user.User{
+			Uid:      id,
+			Gid:      id,
+			Username: userStr,
+		}, nil
+	}
+	r.getGroup = func(id string) (*user.Group, error) {
+		return &user.Group{
+			Gid:  id,
+			Name: groupStr,
+		}, nil
+	}
+	r.getGroupNames = func(*CredentialRequest) ([]string, error) {
+		return groupStrs, nil
+	}
+}
+
+// GetSignedCredential returns a credential based on the provided domain info and
+// signing key.
+func GetSignedCredential(ctx context.Context, req *CredentialRequest) (*Credential, error) {
+	if req == nil {
+		return nil, errors.Errorf("%T is nil", req)
+	}
+
+	if req.DomainInfo == nil {
+		return nil, errors.New("No domain info supplied")
+	}
+
+	hostname, err := req.hostname()
+	if err != nil {
+		return nil, err
+	}
+
+	userPrinc, err := req.userPrincipal()
+	if err != nil {
+		return nil, err
+	}
+
+	groupPrinc, err := req.groupPrincipal()
+	if err != nil {
+		return nil, err
+	}
+
+	groupPrincs, err := req.groupPrincipals()
+	if err != nil {
+		return nil, err
 	}
 
 	// Craft AuthToken
 	sys := Sys{
 		Stamp:       0,
-		Machinename: host,
-		User:        sysNameToPrincipalName(userInfo.Username()),
-		Group:       sysNameToPrincipalName(groupInfo.Name),
-		Groups:      groupList,
-		Secctx:      creds.Ctx()}
+		Machinename: hostname,
+		User:        userPrinc,
+		Group:       groupPrinc,
+		Groups:      groupPrincs,
+		Secctx:      req.DomainInfo.Ctx()}
 
 	// Marshal our AuthSys token into a byte array
 	tokenBytes, err := proto.Marshal(&sys)
@@ -210,7 +270,7 @@ func AuthSysRequestFromCreds(ext UserExt, creds *security.DomainInfo, signing cr
 		Flavor: Flavor_AUTH_SYS,
 		Data:   tokenBytes}
 
-	verifier, err := VerifierFromToken(signing, &token)
+	verifier, err := VerifierFromToken(req.SigningKey, &token)
 	if err != nil {
 		return nil, errors.WithMessage(err, "Unable to generate verifier")
 	}
@@ -224,6 +284,7 @@ func AuthSysRequestFromCreds(ext UserExt, creds *security.DomainInfo, signing cr
 		Verifier: &verifierToken,
 		Origin:   "agent"}
 
+	logging.FromContext(ctx).Tracef("%s: successfully signed credential", req.DomainInfo)
 	return &credential, nil
 }
 

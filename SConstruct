@@ -60,9 +60,15 @@ def add_command_line_options():
     AddOption('--build-deps',
               dest='build_deps',
               type='choice',
-              choices=['yes', 'no', 'only', 'build-only'],
+              choices=['fetch', 'yes', 'no', 'only'],
               default='no',
-              help="Automatically download and build sources.  (yes|no|only|build-only) [no]")
+              help="Automatically download and build sources.  (fetch|yes|no|only) [no]")
+
+    AddOption('--skip-download',
+              dest='skip_download',
+              action='store_true',
+              default=False,
+              help="Assume the source for prerequisites is already downloaded")
 
     # We want to be able to check what dependencies are needed without
     # doing a build, similar to --dry-run.  We can not use --dry-run
@@ -363,7 +369,7 @@ MINIMAL_ENV = ('HOME', 'TERM', 'SSH_AUTH_SOCK', 'http_proxy', 'https_proxy', 'PK
 
 # Environment variables that are also kept when LD_PRELOAD is set.
 PRELOAD_ENV = ('LD_PRELOAD', 'D_LOG_FILE', 'DAOS_AGENT_DRPC_DIR', 'D_LOG_MASK', 'DD_MASK',
-               'DD_SUBSYS', 'D_IL_MAX_EQ')
+               'DD_SUBSYS', 'D_IL_MAX_EQ', 'D_IL_ENFORCE_EXEC_ENV', 'D_IL_COMPATIBLE')
 
 
 def scons():
@@ -372,6 +378,11 @@ def scons():
     check_for_release_target()
 
     deps_env = Environment()
+    # Ensure 'install-sandbox' option is defined early
+    deps_env.Tool('install')
+
+    # Silence deprecation warning so it doesn't fail the build
+    SetOption('warn', ['no-python-version'])
 
     add_command_line_options()
 
@@ -480,9 +491,8 @@ def scons():
     prereqs.save_build_info()
     # also install to $PREFIX/lib to work with existing avocado test code
     if prereqs.test_requested():
-        env.Install('$PREFIX/lib/daos', ['.build_vars.sh', '.build_vars.json'])
         env.Install('$PREFIX/lib/daos/TESTING/ftest/util', ['site_scons/env_modules.py'])
-        env.Install('$PREFIX/lib/daos/TESTING/ftest/', ['ftest.sh'])
+        env.Install('$PREFIX/lib/daos/TESTING/ftest/', ['ftest.sh', "requirements-ftest.txt"])
 
     env.Install("$PREFIX/lib64/daos", "VERSION")
 

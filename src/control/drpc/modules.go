@@ -1,5 +1,6 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -157,6 +158,7 @@ func (m MgmtMethod) String() string {
 		MethodPoolGetProp:          "PoolGetProp",
 		MethodPoolUpgrade:          "PoolUpgrade",
 		MethodLedManage:            "LedManage",
+		MethodSetupClientTelemetry: "SetupClientTelemetry",
 	}[m]; ok {
 		return s
 	}
@@ -190,16 +192,16 @@ const (
 	MethodPoolCreate MgmtMethod = C.DRPC_METHOD_MGMT_POOL_CREATE
 	// MethodPoolDestroy is a ModuleMgmt method
 	MethodPoolDestroy MgmtMethod = C.DRPC_METHOD_MGMT_POOL_DESTROY
-	// MethodPoolEvict is a ModuleMgmt method
+	// MethodPoolEvict is a ModuleMgmt method to evict pool connections
 	MethodPoolEvict MgmtMethod = C.DRPC_METHOD_MGMT_POOL_EVICT
-	// MethodPoolExclude is a ModuleMgmt method
-	MethodPoolExclude MgmtMethod = C.DRPC_METHOD_MGMT_EXCLUDE
-	// MethodPoolDrain is a ModuleMgmt method
-	MethodPoolDrain MgmtMethod = C.DRPC_METHOD_MGMT_DRAIN
-	// MethodPoolExtend is a ModuleMgmt method
-	MethodPoolExtend MgmtMethod = C.DRPC_METHOD_MGMT_EXTEND
-	// MethodPoolReintegrate is a ModuleMgmt method
-	MethodPoolReintegrate MgmtMethod = C.DRPC_METHOD_MGMT_REINTEGRATE
+	// MethodPoolExclude is a ModuleMgmt method for excluding pool ranks
+	MethodPoolExclude MgmtMethod = C.DRPC_METHOD_MGMT_POOL_EXCLUDE
+	// MethodPoolDrain is a ModuleMgmt method for draining pool ranks
+	MethodPoolDrain MgmtMethod = C.DRPC_METHOD_MGMT_POOL_DRAIN
+	// MethodPoolReintegrate is a ModuleMgmt method for reintegrating pool ranks
+	MethodPoolReintegrate MgmtMethod = C.DRPC_METHOD_MGMT_POOL_REINT
+	// MethodPoolExtend is a ModuleMgmt method for extending pool
+	MethodPoolExtend MgmtMethod = C.DRPC_METHOD_MGMT_POOL_EXTEND
 	// MethodBioHealth is a ModuleMgmt method
 	MethodBioHealth MgmtMethod = C.DRPC_METHOD_MGMT_BIO_HEALTH_QUERY
 	// MethodSetUp is a ModuleMgmt method
@@ -240,10 +242,22 @@ const (
 	MethodNotifyExit MgmtMethod = C.DRPC_METHOD_MGMT_NOTIFY_EXIT
 	// MethodPoolGetProp defines a method for getting pool properties
 	MethodPoolGetProp MgmtMethod = C.DRPC_METHOD_MGMT_POOL_GET_PROP
+	// MethodCheckerStart defines a method for starting the checker
+	MethodCheckerStart MgmtMethod = C.DRPC_METHOD_MGMT_CHK_START
+	// MethodCheckerStop defines a method for stopping the checker
+	MethodCheckerStop MgmtMethod = C.DRPC_METHOD_MGMT_CHK_STOP
+	// MethodCheckerQuery defines a method for getting the checker status
+	MethodCheckerQuery MgmtMethod = C.DRPC_METHOD_MGMT_CHK_QUERY
+	// MethodCheckerProp defines a method for getting the checker properties
+	MethodCheckerProp MgmtMethod = C.DRPC_METHOD_MGMT_CHK_PROP
+	// MethodCheckerAction defines a method for specifying a checker action
+	MethodCheckerAction MgmtMethod = C.DRPC_METHOD_MGMT_CHK_ACT
 	// MethodPoolUpgrade defines a method for upgrade pool
 	MethodPoolUpgrade MgmtMethod = C.DRPC_METHOD_MGMT_POOL_UPGRADE
 	// MethodLedManage defines a method to manage a VMD device LED state
 	MethodLedManage MgmtMethod = C.DRPC_METHOD_MGMT_LED_MANAGE
+	// MethodSetupClientTelemetry defines a method to setup client telemetry
+	MethodSetupClientTelemetry MgmtMethod = C.DRPC_METHOD_MGMT_SETUP_CLIENT_TELEM
 )
 
 type srvMethod int32
@@ -258,8 +272,11 @@ func (m srvMethod) ID() int32 {
 
 func (m srvMethod) String() string {
 	if s, ok := map[srvMethod]string{
-		MethodNotifyReady:  "notify ready",
-		MethodClusterEvent: "cluster event",
+		MethodNotifyReady:         "notify ready",
+		MethodClusterEvent:        "cluster event",
+		MethodGetPoolServiceRanks: "get pool service ranks",
+		MethodPoolFindByLabel:     "find pool by label",
+		MethodListPools:           "list pools",
 	}[m]; ok {
 		return s
 	}
@@ -287,6 +304,16 @@ const (
 	MethodPoolFindByLabel srvMethod = C.DRPC_METHOD_SRV_POOL_FIND_BYLABEL
 	// MethodClusterEvent notifies of a cluster event in the I/O Engine.
 	MethodClusterEvent srvMethod = C.DRPC_METHOD_SRV_CLUSTER_EVENT
+	// MethodCheckerListPools requests the list of pools from the MS
+	MethodCheckerListPools srvMethod = C.DRPC_METHOD_CHK_LIST_POOL // TODO (DAOS-16126): Merge with MethodListPools
+	// MethodCheckerRegisterPool registers a pool with the MS
+	MethodCheckerRegisterPool srvMethod = C.DRPC_METHOD_CHK_REG_POOL
+	// MethodCheckerDeregisterPool deregisters a pool with the MS
+	MethodCheckerDeregisterPool srvMethod = C.DRPC_METHOD_CHK_DEREG_POOL
+	// MethodCheckerReport reports a checker finding to the MS
+	MethodCheckerReport srvMethod = C.DRPC_METHOD_CHK_REPORT
+	// MethodListPools requests the list of pools in the system
+	MethodListPools srvMethod = C.DRPC_METHOD_SRV_LIST_POOLS
 )
 
 type securityMethod int32

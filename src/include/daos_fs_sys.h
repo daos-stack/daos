@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -116,6 +116,19 @@ dfs_sys_mount(daos_handle_t poh, daos_handle_t coh, int mflags, int sflags,
  */
 int
 dfs_sys_umount(dfs_sys_t *dfs_sys);
+
+/**
+ * Set a prefix on the DFS mount where all paths passed to dfs_lookup are
+ * trimmed off that prefix.
+ *
+ * \param[in]	dfs_sys	Pointer to the mounted filesystem.
+ * \param[in]	prefix	absolute prefix to trim off path to dfs_lookup.
+ *			Passing NULL unsets the prefix.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_sys_set_prefix(dfs_sys_t *dfs_sys, const char *prefix);
 
 /**
  * Convert a local dfs_sys mount to global representation data which can be
@@ -528,6 +541,19 @@ dfs_sys_remove_type(dfs_sys_t *dfs_sys, const char *path, bool force,
 int
 dfs_sys_mkdir(dfs_sys_t *dfs_sys, const char *dir, mode_t mode,
 	      daos_oclass_id_t cid);
+
+/**
+ * Create a directory and all of its parent directories.
+ *
+ * \param[in]	dfs_sys  Pointer to the mounted file system.
+ * \param[in]	dir_path Link path of new dir.
+ * \param[in]	mode	 mkdir mode.
+ * \param[in]	cid	 DAOS object class id (pass 0 for default MAX_RW).
+ *
+ * \return		 0 on success, errno code on failure.
+ */
+int
+dfs_sys_mkdir_p(dfs_sys_t *dfs_sys, const char *dir_path, mode_t mode, daos_oclass_id_t cid);
 
 /**
  * Open a directory.

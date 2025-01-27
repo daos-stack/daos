@@ -308,12 +308,12 @@ sudo ipcrm -M 0x10242049
 
     !!! note
         A server must be started with minimum setup.
-        You can also obtain the addresses with `daos_server storage scan`.
+        You can also obtain the addresses with `daos_server nvme scan`.
 
 1. Format the SCMs defined in the config file.
 1. Generate the config file using `dmg config generate`. The various requirements will be populated without a syntax error.
 1. Try starting with `allow_insecure: true`. This will rule out the credential certificate issue.
-1. Verify that the `access_points` host is accessible and the port is not used.
+1. Verify that the `mgmt_svc_replicas` host is accessible and the port is not used.
 1. Check the `provider` entry. See the "Network Scan and Configuration" section of the admin guide for determining the right provider to use.
 1. Check `fabric_iface` in `engines`. They should be available and enabled.
 1. Check that `socket_dir` is writable by the daos_server.
@@ -325,9 +325,9 @@ sudo ipcrm -M 0x10242049
 ### Problems creating a container
 1. Check that the path to daos is your intended binary. It's usually `/usr/bin/daos`.
 1. When the server configuration is changed, it's necessary to restart the agent.
-1. `DER_UNREACH(-1006)`: Check the socket ID consistency between PMem and NVMe. First, determine which socket you're using with `daos_server network scan -p all`. e.g., if the interface you're using in the engine section is eth0, find which NUMA Socket it belongs to. Next, determine the disks you can use with this socket by calling `daos_server storage scan` or `dmg storage scan`. e.g., if eth0 belongs to NUMA Socket 0, use only the disks with 0 in the Socket ID column.
+1. `DER_UNREACH(-1006)`: Check the socket ID consistency between PMem and NVMe. First, determine which socket you're using with `daos_server network scan -p all`. e.g., if the interface you're using in the engine section is eth0, find which NUMA Socket it belongs to. Next, determine the disks you can use with this socket by calling `daos_server nvme scan` or `dmg storage scan`. e.g., if eth0 belongs to NUMA Socket 0, use only the disks with 0 in the Socket ID column.
 1. Check the interface used in the server config (`fabric_iface`) also exists in the client and can communicate with the server.
-1. Check the access_points of the agent config points to the correct server host.
+1. Check the `access_points` of the agent config points to the correct server hosts.
 1. Call `daos pool query` and check that the pool exists and has free space.
 
 ### Applications run slow
@@ -365,7 +365,7 @@ failed to initialize daos: Miscellaneous error (-1025)
 
 # Work around to check for daos_agent certification and start daos_agent
 	#check for /etc/daos/certs/daosCA.crt, agent.crt and agent.key
-	$ sudo systemctl enable daos_agent.service
+	$ sudo systemctl stop daos_agent.service
 	$ sudo systemctl start daos_agent.service
 	$ sudo systemctl status daos_agent.service
 ```
@@ -472,6 +472,102 @@ If this happens, the `daos` tool (as well as other I/O or `libdaos` operations) 
 
 To resolve the issue, a privileged user may send a `SIGUSR2` signal to the `daos_agent` process to
 force an immediate cache refresh.
+
+### Ranks fail to join the system
+
+DAOS engine ranks may fail to join or re-join the system for a number of reasons.
+
+To diagnose the issue, use `dmg system query`. Using verbose mode (`-v`) for the errored ranks
+will show the detailed errors as seen in the example below.
+
+```
+$ dmg system query
+Rank  State
+----  -----
+[1,3] Errored
+[0,2] Joined
+
+$ dmg system query -v -r 1,3
+Rank UUID                                 Control Address Fault Domain State   Reason
+---- ----                                 --------------- ------------ -----   ------
+1    1ad01ebe-08f2-4b20-aa39-80faf14bc373 10.7.1.75:10001 /boro-75     Errored DAOS engine 0 exited unexpectedly: rpc error: code = Unknown desc = rank 1 fabric provider "ofi+tcp" does not match system provider "ofi+tcp;ofi_rxm"
+3    15e53aa7-fc0c-42eb-93de-8b485d96c63e 10.7.1.75:10001 /boro-75     Errored DAOS engine 1 exited unexpectedly: rpc error: code = Unknown desc = rank 3 fabric provider "ofi+tcp" does not match system provider "ofi+tcp;ofi_rxm"
+```
+
+Alternately, monitoring RAS events will alert you to these failures. `engine_join_failed` events will appear
+with detailed reasons for each failure.
+
+Example RAS events from syslog:
+
+```
+daos_server[3302185]: id: [engine_join_failed] ts: [2024-02-13T20:08:57.607+00:00] host: [10.7.1.75:10001] type: [INFO] sev: [ERROR] msg: [DAOS engine 0 (rank 1) was not allowed to join the system] pid: [3302185] rank: [1] data: [rank 1 fabric provider "ofi+tcp" does not match system provider "ofi+tcp;ofi_rxm"]
+daos_server[3302185]: id: [engine_join_failed] ts: [2024-02-13T20:08:57.869+00:00] host: [10.7.1.75:10001] type: [INFO] sev: [ERROR] msg: [DAOS engine 1 (rank 3) was not allowed to join the system] pid: [3302185] rank: [3] data: [rank 3 fabric provider "ofi+tcp" does not match system provider "ofi+tcp;ofi_rxm"]
+```
+
+#### Reason: rank fabric provider does not match the system's fabric provider
+
+This issue may be encountered after changing the system fabric provider in the `daos_server`
+configuration files, or if the initial configuration files for the servers don't have matching
+fabric providers.
+
+After starting `daos_server`, ranks will be unable to join if their configuration's fabric provider
+does not match that of the system. The system configuration is determined by the management service
+(MS) leader node, which may be arbitrarily chosen from the configured MS replicas.
+
+The error message will include the string: `fabric provider <provider1> does not match system provider <provider2>`
+
+In addition to running `dmg system query -v` to check rank status and monitoring for `engine_join_failed` RAS events,
+you may monitor for `system_fabric_provider_changed` RAS events. These events indicate when the DAOS management service
+updated its system fabric provider.
+
+Example `system_fabric_provider_changed` RAS event from syslog:
+
+```
+daos_server[3302185]: id: [system_fabric_provider_changed] ts: [2024-02-13T20:08:50.956+00:00] host: [boro-74.boro.hpdd.intel.com] type: [INFO] sev: [NOTICE] msg: [system fabric provider has changed: ofi+tcp -> ofi+tcp;ofi_rxm] pid: [3302185]
+```
+
+To resolve the issue:
+
+- Determine which `daos_server` hosts need their fabric provider updated by analyzing which ranks were errored.
+- Stop all `daos_server` processes.
+- Update the configuration files with the correct fabric provider.
+- Start all `daos_server` processes.
+- Verify that all ranks were able to re-join via `dmg system query`.
+
+#### Reason: rank control address has changed
+
+Inter-node communication in the DAOS system takes place over two separate networks.
+Data-related operations, including client I/O, take place over the high-speed fabric.
+However, control-related operations take place over a TCP/IP network, which is often separate from the data network.
+
+DAOS does not currently support changing the control plane address of an existing node.
+When the node with the changed address attempts to re-join, it will fail.
+
+The error message will include the string: `control addr changed from <old IP> -> <new IP>`
+
+To resolve the issue:
+- Stop all `daos_server` processes.
+- Ensure static IP addresses are set for TCP/IP networks on all DAOS nodes.
+- Revert the IP addresses of the affected nodes back to their old values.
+- Start all `daos_server` processes.
+- Verify that all ranks were able to re-join via `dmg system query`.
+
+Alternately, the administrator may erase and re-format the DAOS system to start over fresh using the new addresses.
+
+### Engines become unavailable
+
+Engines may become unavailable due to server power losses and reboots, network switch failures, etc. After staying unavailable for a certain period of time, these engines may become "excluded" or "errored" in `dmg system query` output. Once the states of all engines stabilize (see [`CRT_EVENT_DELAY`](env_variables.md)), each pool will check whether there is enough redundancy (see [Pool RF](pool_operations.md#pool-redundancy-factor)) to tolerate the unavailability of the "excluded" or "errored" engines. If there is enough redundancy, these engines will be excluded from the pool ("Disabled ranks" in `dmg pool query --health-only` output); otherwise, the pool will perform no exclusion ("Dead ranks" in `dmg pool query --health-only` output as described in [Querying a Pool](pool_operations.md#querying-a-pool)) and may become temporarily unavailable (as seen by timeouts of `dmg pool query`, `dmg pool list`, etc.). Similarly, when engines become available, whenever the states of all engines stabilize, each pool will perform the aforementioned check for any unavailable engines that remain.
+
+To restore availability as well as capacity and performance, try to start all "excluded" or "errored" engines. Starting all of them at the same time minimizes the chance of triggering rebuild jobs. In many cases, the following command suffices:
+```
+$ dmg system start
+```
+If some pools remain unavailable (e.g., `dmg pool list` keeps timing out) after the previous step, restart the whole system:
+```
+$ dmg system stop --force
+$ dmg system start
+```
+If some engines have been excluded from certain pools, and they are available again, reintegrate them to the pools.
 
 ## Diagnostic and Recovery Tools
 

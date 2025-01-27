@@ -40,6 +40,7 @@
 #include <daos/sys_debug.h>
 #include <daos/tests_lib.h>
 #include <daos.h>
+#include <daos_mgmt.h>
 
 #if D_HAS_WARNING(4, "-Wframe-larger-than=")
 	#pragma GCC diagnostic ignored "-Wframe-larger-than="
@@ -89,6 +90,7 @@ struct test_pool {
 	 * can not be changed.
 	 */
 	d_rank_list_t		*svc;
+	char			*label;
 	/* flag of slave that share the pool of other test_arg_t */
 	bool			slave;
 	bool			destroyed;
@@ -133,7 +135,8 @@ typedef struct {
 	uint32_t		overlap:1,
 				not_check_result:1,
 				idx_no_jump:1,
-				no_rebuild:1;
+				no_rebuild:1,
+				delay_rebuild:1;
 	int			expect_result;
 	daos_size_t		size;
 	int			nr;
@@ -333,6 +336,7 @@ int run_daos_ec_io_test(int rank, int size, int *sub_tests, int sub_tests_size);
 int run_daos_epoch_io_test(int rank, int size, int *tests, int test_size);
 int run_daos_obj_array_test(int rank, int size);
 int run_daos_array_test(int rank, int size, int *sub_tests, int sub_tests_size);
+int run_daos_cr_test(int rank, int size, int *sub_tests, int sub_tests_size);
 int run_daos_kv_test(int rank, int size);
 int run_daos_epoch_test(int rank, int size);
 int run_daos_epoch_recovery_test(int rank, int size);
@@ -449,6 +453,8 @@ int rebuild_sub_teardown(void **state);
 int rebuild_small_sub_setup(void **state);
 int rebuild_small_sub_rf1_setup(void **state);
 int rebuild_small_sub_rf0_setup(void **state);
+int rebuild_sub_3nodes_rf0_setup(void **state);
+int rebuild_sub_6nodes_rf1_setup(void **state);
 int rebuild_sub_setup_common(void **state, daos_size_t pool_size, int node_nr, uint32_t rf);
 
 int get_server_config(char *host, char *server_config_file);
@@ -672,7 +678,26 @@ out:
 	return rc;
 }
 
+/* Zero out uuids, free svc rank lists in pool info returned by DAOS API */
+static inline void
+clean_pool_info(daos_size_t npools, daos_mgmt_pool_info_t *pools)
+{
+	int	i;
+
+	if (pools) {
+		for (i = 0; i < npools; i++) {
+			uuid_clear(pools[i].mgpi_uuid);
+			if (pools[i].mgpi_svc) {
+				d_rank_list_free(pools[i].mgpi_svc);
+				pools[i].mgpi_svc = NULL;
+			}
+		}
+	}
+}
+
 void test_set_engine_fail_loc(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_loc);
+void
+     test_set_engine_fail_loc_quiet(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_loc);
 void test_set_engine_fail_value(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_value);
 void test_set_engine_fail_num(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_num);
 

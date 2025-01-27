@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -156,6 +156,9 @@ char *DP_UUID(const void *uuid);
 #define DF_DE        "de[%zi]"
 #define DP_DE(_de)   strnlen(_de, NAME_MAX)
 
+#define DF_PATH        "path[%zi]"
+#define DP_PATH(_path) strnlen((_path), PATH_MAX)
+
 #else
 
 char *
@@ -169,6 +172,12 @@ daos_de2str(const char *de);
 
 #define DF_DE       "de'%s'"
 #define DP_DE(_de)  daos_de2str(_de)
+
+char *
+daos_path2str(const char *path);
+
+#define DF_PATH        "path'%s'"
+#define DP_PATH(_path) daos_path2str(_path)
 
 #endif
 
@@ -497,6 +506,13 @@ int daos_sgl_processor(d_sg_list_t *sgl, bool check_buf,
 		       daos_sgl_process_cb process_cb, void *cb_args);
 
 char *daos_str_trimwhite(char *str);
+
+static inline bool
+daos_iov_empty(d_iov_t *iov)
+{
+	return iov == NULL || iov->iov_buf == NULL || iov->iov_len == 0;
+}
+
 int daos_iov_copy(d_iov_t *dst, d_iov_t *src);
 int daos_iov_alloc(d_iov_t *iov, daos_size_t size, bool set_full);
 void daos_iov_free(d_iov_t *iov);
@@ -544,8 +560,6 @@ void daos_iov_append(d_iov_t *iov, void *buf, uint64_t buf_len);
 #define max_t(type, x, y) \
 	     ({ type __x = (x); type __y = (y); __x > __y ? __x : __y; })
 #endif
-
-#define DAOS_UUID_STR_SIZE 37	/* 36 + 1 for '\0' */
 
 /* byte swapper */
 #define D_SWAP16(x)	bswap_16(x)
@@ -831,10 +845,13 @@ enum {
 #define DAOS_DTX_RESYNC_DELAY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x4a)
 #define DAOS_DTX_FAIL_COMMIT		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x4b)
 
+#define DAOS_OBJ_SYNC_RETRY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x4c)
+#define DAOS_OBJ_COLL_SPARSE		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x4d)
+
 #define DAOS_NVME_FAULTY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x50)
 #define DAOS_NVME_WRITE_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x51)
 #define DAOS_NVME_READ_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x52)
-#define DAOS_NVME_ALLOCBUF_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x53)
+#define DAOS_NVME_ALLOCBUF_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x53)	/* deprecated */
 #define DAOS_NVME_WAL_TX_LOST		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x54)
 
 #define DAOS_POOL_CREATE_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x60)
@@ -865,6 +882,7 @@ enum {
 #define DAOS_SHARD_OBJ_RW_DROP_REPLY (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x80)
 #define DAOS_OBJ_FETCH_DATA_LOST	(DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x81)
 #define DAOS_OBJ_TRY_SPECIAL_SHARD	(DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x82)
+#define DAOS_OBJ_EC_AGG_LEADER_DIFF	(DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x83)
 
 #define DAOS_VOS_AGG_RANDOM_YIELD	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x90)
 #define DAOS_VOS_AGG_MW_THRESH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x91)
@@ -884,6 +902,20 @@ enum {
 #define DAOS_FAIL_POOL_CREATE_VERSION	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9d)
 #define DAOS_FORCE_OBJ_UPGRADE		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9e)
 #define DAOS_OBJ_FAIL_NVME_IO		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9f)
+
+#define DAOS_POOL_EVICT_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa0)
+#define DAOS_POOL_RFCHECK_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa1)
+
+#define DAOS_CHK_CONT_ORPHAN		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb0)
+#define DAOS_CHK_CONT_BAD_LABEL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb1)
+#define DAOS_CHK_LEADER_BLOCK		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb2)
+#define DAOS_CHK_LEADER_FAIL_REGPOOL	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb3)
+#define DAOS_CHK_PS_NOTIFY_LEADER	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb4)
+#define DAOS_CHK_PS_NOTIFY_ENGINE	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb5)
+#define DAOS_CHK_SYNC_ORPHAN_PROCESS	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb6)
+#define DAOS_CHK_FAIL_REPORT_POOL1	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb7)
+#define DAOS_CHK_FAIL_REPORT_POOL2	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb8)
+#define DAOS_CHK_ENGINE_DEATH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb9)
 
 /* WAL && checkpoint failure inject */
 #define DAOS_WAL_NO_REPLAY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x100)
@@ -926,6 +958,10 @@ bool daos_hhash_link_delete(struct d_hlink *hlink);
 #define daos_hhash_hlink_init(hlink, ops)	d_hhash_hlink_init(hlink, ops)
 #define daos_hhash_link_empty(hlink)		d_hhash_link_empty(hlink)
 #define daos_hhash_link_key(hlink, key)		d_hhash_link_key(hlink, key)
+
+typedef int (*daos_hhash_traverse_cb_t)(struct d_hlink *link, void *arg);
+int
+daos_hhash_traverse(int type, daos_hhash_traverse_cb_t cb, void *arg);
 
 /* daos_recx_t overlap detector */
 #define DAOS_RECX_OVERLAP(recx_1, recx_2)				\
@@ -1003,6 +1039,7 @@ int crt_proc_daos_prop_t(crt_proc_t proc, crt_proc_op_t proc_op,
 			 daos_prop_t **data);
 int crt_proc_struct_daos_acl(crt_proc_t proc, crt_proc_op_t proc_op,
 			     struct daos_acl **data);
+int crt_proc_d_sg_list_t(crt_proc_t proc, crt_proc_op_t proc_op, d_sg_list_t *p);
 
 bool daos_prop_valid(daos_prop_t *prop, bool pool, bool input);
 daos_prop_t *daos_prop_dup(daos_prop_t *prop, bool pool, bool input);

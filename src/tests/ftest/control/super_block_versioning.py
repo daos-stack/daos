@@ -29,7 +29,7 @@ class SuperBlockVersioning(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=control,basic
-        :avocado: tags=ds_versioning,test_super_block_version_basic
+        :avocado: tags=SuperBlockVersioning,test_super_block_version_basic
         """
         # Check that the superblock file exists under the scm_mount dir.
         scm_mount = self.server_managers[0].get_config_value("scm_mount")

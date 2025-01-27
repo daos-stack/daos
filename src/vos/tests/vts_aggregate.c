@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -22,10 +22,9 @@
 
 static bool slow_test;
 
-static void
+static inline void
 cleanup(void)
 {
-	daos_fail_loc_set(DAOS_VOS_GC_CONT_NULL | DAOS_FAIL_ALWAYS);
 	gc_wait();
 }
 
@@ -208,11 +207,10 @@ lookup_object(struct io_test_args *arg, daos_unit_oid_t oid)
 	 *  tree.   If this returns 0, we need to release the object though
 	 *  this is only presently used to check existence
 	 */
-	rc = vos_obj_hold(vos_obj_cache_current(true),
-			  vos_hdl2cont(arg->ctx.tc_co_hdl), oid, &epr, 0,
+	rc = vos_obj_hold(vos_hdl2cont(arg->ctx.tc_co_hdl), oid, &epr, 0,
 			  VOS_OBJ_VISIBLE, DAOS_INTENT_DEFAULT, &obj, 0);
 	if (rc == 0)
-		vos_obj_release(vos_obj_cache_current(true), obj, false);
+		vos_obj_release(obj, 0, false);
 	return rc;
 }
 
@@ -1315,24 +1313,19 @@ agg_punches_test(void **state, int record_type, bool discard)
 			}
 		}
 	}
-	/** cleanup() sets the flag to assert if there are items in container garbage collection
-	 *  heap which will always be the case for these punch tests.  So let's run garbage
-	 *  collection before cleanup in this case.
-	 */
-	gc_wait();
+
+	cleanup();
 }
 static void
 discard_14(void **state)
 {
 	agg_punches_test(state, DAOS_IOD_SINGLE, true);
-	cleanup();
 }
 
 static void
 discard_15(void **state)
 {
 	agg_punches_test(state, DAOS_IOD_ARRAY, true);
-	cleanup();
 }
 
 static void

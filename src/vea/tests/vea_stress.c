@@ -793,7 +793,8 @@ vs_setup_pool(void)
 
 	if (!loading_test) {
 		rc = vea_format(&vs_pool->vsp_umm, &vs_pool->vsp_txd, vs_pool->vsp_vsd,
-				VS_BLK_SIZE, 1, /* hdr blks */ pool_capacity, NULL, NULL, false);
+				VS_BLK_SIZE, 1, /* hdr blks */ pool_capacity, NULL, NULL, false,
+				VEA_COMPAT_MASK);
 		if (rc) {
 			fprintf(stderr, "failed to format\n");
 			goto error;

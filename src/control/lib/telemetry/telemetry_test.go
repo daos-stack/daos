@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,13 +9,18 @@ package telemetry
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func TestTelemetry_Init(t *testing.T) {
@@ -50,7 +55,7 @@ func TestTelemetry_Init(t *testing.T) {
 					t.Fatalf("can't get handle from result ctx: %v", err)
 				}
 
-				test.AssertEqual(t, uint32(producerID), hdl.idx, "handle.idx doesn't match shmem ID")
+				test.AssertEqual(t, uint32(producerID), hdl.id, "handle.idx doesn't match shmem ID")
 
 				hdl.RLock()
 				defer hdl.RUnlock()
@@ -176,6 +181,106 @@ func TestTelemetry_GetRank(t *testing.T) {
 			test.CmpErr(t, tc.expErr, err)
 			test.AssertEqual(t, tc.expResult, result, "rank result")
 		})
+	}
+}
+
+func childErrExit(err error) {
+	if err == nil {
+		err = errors.New("unknown error")
+	}
+	fmt.Fprintf(os.Stderr, "CHILD ERROR: %s\n", err)
+	os.Exit(1)
+}
+
+const (
+	childModeEnvVar   = "TEST_CHILD_MODE"
+	childModeLinkTest = "CHILD_MODE_LINK_TEST"
+	childShmIDEnvVar  = "TEST_CHILD_SHM_ID"
+)
+
+func TestMain(m *testing.M) {
+	mode := os.Getenv(childModeEnvVar)
+	switch mode {
+	case "":
+		// default; run the test binary
+		os.Exit(m.Run())
+	case childModeLinkTest:
+		runChildTelemProc()
+	default:
+		childErrExit(errors.Errorf("Unknown child mode: %q", mode))
+	}
+}
+
+func runChildTelemProc() {
+	pid := os.Getpid()
+	shmID, err := strconv.Atoi(os.Getenv(childShmIDEnvVar))
+	if err != nil {
+		childErrExit(err)
+	}
+
+	jobDir := TestMetricsMap{
+		MetricTypeDirectory: &TestMetric{
+			Name: "job",
+		},
+	}
+	pidLink := TestMetricsMap{
+		MetricTypeLink: &TestMetric{
+			Name: fmt.Sprintf("job/%d", pid),
+		},
+	}
+	startedAt := TestMetricsMap{
+		MetricTypeTimestamp: &TestMetric{
+			Name: fmt.Sprintf("job/%d/started_at", pid),
+		},
+	}
+
+	t := &testing.T{}
+
+	InitTestMetricsProducer(t, shmID, 1024)
+
+	AddTestMetrics(t, jobDir)
+	AddTestMetrics(t, pidLink)
+	AddTestMetrics(t, startedAt)
+
+	if t.Failed() {
+		childErrExit(errors.New("test failed"))
+	}
+}
+
+func TestTelemetry_PruneSegments(t *testing.T) {
+	shmID := uint32(NextTestID())
+
+	cmd := exec.Command(os.Args[0])
+	cmd.Env = append(os.Environ(),
+		fmt.Sprintf("%s=%s", childModeEnvVar, childModeLinkTest),
+		fmt.Sprintf("%s=%d", childShmIDEnvVar, shmID),
+	)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Errorf("child failed: %s", out)
+		t.Fatal(err)
+	}
+
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	ctx, err := initClientRoot(test.MustLogContext(t, log), shmID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		Fini()
+	}()
+
+	path := fmt.Sprintf("job/%d/started_at", cmd.Process.Pid)
+	_, err = GetTimestamp(ctx, path)
+	test.CmpErr(t, nil, err)
+
+	err = PruneUnusedSegments(ctx, time.Nanosecond)
+	test.CmpErr(t, nil, err)
+
+	_, err = GetTimestamp(ctx, path)
+	if err == nil {
+		t.Fatal("expected GetTimestamp() to fail after prune")
 	}
 }
 
@@ -353,6 +458,59 @@ func TestTelemetry_garbageCollection(t *testing.T) {
 			elapsed := end.Sub(start)
 			if elapsed >= testTimeout {
 				t.Fatalf("expected immediate return, took %v", elapsed)
+			}
+		})
+	}
+}
+
+func TestTelemetry_pruneMap(t *testing.T) {
+	type inputPath struct {
+		path        string
+		shouldPrune bool
+	}
+	for name, tc := range map[string]struct {
+		inputPaths []inputPath
+		expToPrune []string
+	}{
+		"empty": {},
+		"no shared parents": {
+			inputPaths: []inputPath{
+				{"/a", true},
+				{"/b", true},
+				{"/c", true},
+			},
+			expToPrune: []string{"/c", "/b", "/a"},
+		},
+		"deeply nested should not be pruned": {
+			inputPaths: []inputPath{
+				{"/a", true},
+				{"/a/b", true},
+				{"/a/b/c", false},
+			},
+			expToPrune: nil,
+		},
+		"deeply nested should be pruned": {
+			inputPaths: []inputPath{
+				{"/a", true},
+				{"/a/b", true},
+				{"/a/b/c", true},
+			},
+			expToPrune: []string{"/a/b/c", "/a/b", "/a"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			pm := make(pruneMap)
+
+			for _, ip := range tc.inputPaths {
+				if ip.shouldPrune {
+					pm.add(ip.path)
+				} else {
+					pm.removeParents(ip.path)
+				}
+			}
+
+			if diff := cmp.Diff(tc.expToPrune, pm.toPrune()); diff != "" {
+				t.Fatalf("unexpected toPrune list (-want, +got): %s", diff)
 			}
 		})
 	}

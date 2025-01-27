@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1500,7 +1500,7 @@ run_array_pipeline(daos_handle_t coh, daos_handle_t oh, daos_pipeline_t *pipelin
 
 	/** until anchor is EOF we call pipeline run */
 	while (!daos_anchor_is_eof(&anchor)) {
-		/** restorin value for in/out parameters */
+		/** restoring value for in/out parameters */
 		nr_kds  = 64; /** trying to read 64 in each iteration */
 		nr_iods = 1;
 

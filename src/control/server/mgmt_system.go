@@ -1,5 +1,6 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,6 +15,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,7 +24,6 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/peer"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
@@ -30,12 +32,26 @@ import (
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/checker"
+	"github.com/daos-stack/daos/src/control/system/raft"
+)
+
+const (
+	fabricProviderProp   = "fabric_providers"
+	groupUpdatePauseProp = "group_update_paused"
+	domainLabelsProp     = "domain_labels"
+	domainLabelsSep      = "=" // invalid in a label name
+
+	msgInvalidRank = "invalid ranks: check rank status"
 )
 
 // GetAttachInfo handles a request to retrieve a map of ranks to fabric URIs, in addition
@@ -48,7 +64,7 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 	if err := svc.checkReplicaRequest(req); err != nil {
 		return nil, err
 	}
-	if svc.clientNetworkHint == nil {
+	if len(svc.clientNetworkHint) == 0 {
 		return nil, errors.New("clientNetworkHint is missing")
 	}
 
@@ -58,25 +74,47 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 	}
 
 	resp := new(mgmtpb.GetAttachInfoResp)
-	if req.GetAllRanks() {
-		for rank, entry := range groupMap.RankEntries {
-			resp.RankUris = append(resp.RankUris, &mgmtpb.GetAttachInfoResp_RankUri{
-				Rank: rank.Uint32(),
-				Uri:  entry.URI,
-			})
-		}
-	} else {
+	rankURIs := groupMap.RankEntries
+	if !req.GetAllRanks() {
+		rankURIs = make(map[ranklist.Rank]raft.RankEntry)
+
 		// If the request does not indicate that all ranks should be returned,
 		// it may be from an older client, in which case we should just return
 		// the MS ranks.
 		for _, rank := range groupMap.MSRanks {
-			resp.RankUris = append(resp.RankUris, &mgmtpb.GetAttachInfoResp_RankUri{
-				Rank: rank.Uint32(),
-				Uri:  groupMap.RankEntries[rank].URI,
-			})
+			rankURIs[rank] = groupMap.RankEntries[rank]
 		}
 	}
-	resp.ClientNetHint = svc.clientNetworkHint
+
+	for rank, entry := range rankURIs {
+		if len(svc.clientNetworkHint) < len(entry.SecondaryURIs)+1 {
+			return nil, errors.Errorf("not enough client network hints (%d) for rank %d URIs (%d)",
+				len(svc.clientNetworkHint), rank, len(entry.SecondaryURIs)+1)
+		}
+
+		resp.RankUris = append(resp.RankUris, &mgmtpb.GetAttachInfoResp_RankUri{
+			Rank:    rank.Uint32(),
+			Uri:     entry.PrimaryURI,
+			NumCtxs: entry.NumPrimaryCtxs,
+		})
+
+		for i, uri := range entry.SecondaryURIs {
+			rankURI := &mgmtpb.GetAttachInfoResp_RankUri{
+				Rank:        rank.Uint32(),
+				Uri:         uri,
+				ProviderIdx: uint32(i + 1),
+				NumCtxs:     entry.NumSecondaryCtxs[i],
+			}
+
+			resp.SecondaryRankUris = append(resp.SecondaryRankUris, rankURI)
+		}
+	}
+
+	resp.ClientNetHint = svc.clientNetworkHint[0]
+	if len(svc.clientNetworkHint) > 1 {
+		resp.SecondaryClientNetHints = svc.clientNetworkHint[1:]
+	}
+
 	resp.MsRanks = ranklist.RanksToUint32(groupMap.MSRanks)
 
 	v, err := svc.sysdb.DataVersion()
@@ -87,10 +125,19 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 
 	resp.Sys = svc.sysdb.SystemName()
 
+	if dv, err := build.NewVersion(build.DaosVersion); err == nil {
+		resp.BuildInfo = &mgmtpb.BuildInfo{
+			Major: uint32(dv.Major),
+			Minor: uint32(dv.Minor),
+			Patch: uint32(dv.Patch),
+			Tag:   build.BuildInfo,
+		}
+	}
+
 	return resp, nil
 }
 
-// LeaderQuery returns the system leader and access point replica details.
+// LeaderQuery returns the system leader and MS replica details.
 func (svc *mgmtSvc) LeaderQuery(ctx context.Context, req *mgmtpb.LeaderQueryReq) (*mgmtpb.LeaderQueryResp, error) {
 	if err := svc.checkSystemRequest(req); err != nil {
 		return nil, err
@@ -145,37 +192,58 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 		return nil, errors.Wrapf(err, "invalid uuid %q", req.Uuid)
 	}
 
-	fd, err := system.NewFaultDomainFromString(req.SrvFaultDomain)
+	fd, err := svc.verifyFaultDomain(req)
 	if err != nil {
-		return nil, errors.Wrapf(err, "invalid server fault domain %q", req.SrvFaultDomain)
+		return nil, err
+	}
+
+	if err := svc.checkReqFabricProvider(req, peerAddr, svc.events); err != nil {
+		return nil, err
 	}
 
 	joinResponse, err := svc.membership.Join(&system.JoinRequest{
-		Rank:           ranklist.Rank(req.Rank),
-		UUID:           uuid,
-		ControlAddr:    peerAddr,
-		FabricURI:      req.Uri,
-		FabricContexts: req.Nctxs,
-		FaultDomain:    fd,
-		Incarnation:    req.Incarnation,
+		Rank:                    ranklist.Rank(req.Rank),
+		UUID:                    uuid,
+		ControlAddr:             peerAddr,
+		PrimaryFabricURI:        req.Uri,
+		SecondaryFabricURIs:     req.SecondaryUris,
+		FabricContexts:          req.Nctxs,
+		SecondaryFabricContexts: req.SecondaryNctxs,
+		FaultDomain:             fd,
+		Incarnation:             req.Incarnation,
+		CheckMode:               req.CheckMode,
 	})
 	if err != nil {
+		if system.IsJoinFailure(err) {
+			publishJoinFailedEvent(req, peerAddr, svc.events, err.Error())
+		}
 		return nil, errors.Wrap(err, "failed to join system")
 	}
 
 	member := joinResponse.Member
 	if joinResponse.Created {
-		svc.log.Debugf("new system member: rank %d, addr %s, uri %s",
-			member.Rank, peerAddr, member.FabricURI)
+		svc.log.Debugf("new system member: rank %d, addr %s, primary uri %s, secondary uris %s",
+			member.Rank, peerAddr, member.PrimaryFabricURI, member.SecondaryFabricURIs)
 	} else {
-		svc.log.Debugf("updated system member: rank %d, uri %s, %s->%s",
-			member.Rank, member.FabricURI, joinResponse.PrevState, member.State)
+		svc.log.Debugf("updated system member: rank %d, primary uri %s, secondary uris %s, %s->%s",
+			member.Rank, member.PrimaryFabricURI, member.SecondaryFabricURIs, joinResponse.PrevState, member.State)
 	}
 
+	joinState := mgmtpb.JoinResp_IN
+	if svc.checkerIsEnabled() {
+		joinState = mgmtpb.JoinResp_CHECK
+	}
 	resp := &mgmtpb.JoinResp{
-		State:      mgmtpb.JoinResp_IN,
+		State:      joinState,
 		Rank:       member.Rank.Uint32(),
 		MapVersion: joinResponse.MapVersion,
+	}
+
+	if svc.isGroupUpdatePaused() && svc.allRanksJoined() {
+		if err := svc.resumeGroupUpdate(); err != nil {
+			svc.log.Errorf("failed to resume group update: %s", err.Error())
+		}
+		// join loop will trigger a new group update after this
 	}
 
 	// If the rank is local to the MS leader, then we need to wire up at least
@@ -197,6 +265,208 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 	return resp, nil
 }
 
+func (svc *mgmtSvc) verifyFaultDomain(req *mgmtpb.JoinReq) (*system.FaultDomain, error) {
+	fd, err := system.NewFaultDomainFromString(req.SrvFaultDomain)
+	if err != nil {
+		return nil, config.FaultConfigFaultDomainInvalid(err)
+	}
+
+	if fd.Empty() {
+		return nil, errors.New("no fault domain in join request")
+	}
+
+	labels := fd.Labels
+	if !fd.HasLabels() {
+		// While saving the labels, an unlabeled fault domain sets the labels to empty
+		// strings. This allows us to distinguish between unset and unlabeled.
+		labels = make([]string, fd.NumLevels())
+	}
+
+	sysLabels, err := svc.getDomainLabels()
+	if system.IsErrSystemAttrNotFound(err) {
+		svc.log.Debugf("setting fault domain labels for the first time: %+v", labels)
+		if err := svc.setDomainLabels(labels); err != nil {
+			return nil, errors.Wrap(err, "failed to set fault domain labels")
+		}
+		return fd, nil
+	}
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get current fault domain labels")
+	}
+
+	// If system labels are all empty strings, that indicates an unlabeled system. In errors
+	// and logging, clearer to present this as a completely empty array.
+	var printSysLabels []string
+	if sysLabels[0] != "" {
+		printSysLabels = sysLabels
+	}
+
+	svc.log.Tracef("system labels: [%s], request labels: [%s]", strings.Join(printSysLabels, ", "), strings.Join(labels, ", "))
+	if len(sysLabels) != len(labels) {
+		return nil, FaultBadFaultDomainLabels(req.SrvFaultDomain, req.Uri, fd.Labels, printSysLabels)
+	}
+	for i := range sysLabels {
+		if labels[i] != sysLabels[i] {
+			return nil, FaultBadFaultDomainLabels(req.SrvFaultDomain, req.Uri, fd.Labels, printSysLabels)
+		}
+	}
+	return fd, nil
+}
+
+func (svc *mgmtSvc) getDomainLabels() ([]string, error) {
+	propStr, err := system.GetMgmtProperty(svc.sysdb, domainLabelsProp)
+	if err != nil {
+		return nil, err
+	}
+	return strings.Split(propStr, domainLabelsSep), nil
+}
+
+func (svc *mgmtSvc) setDomainLabels(labels []string) error {
+	propStr := strings.Join(labels, domainLabelsSep)
+	return system.SetMgmtProperty(svc.sysdb, domainLabelsProp, propStr)
+}
+
+// allRanksJoined checks whether all ranks that the system knows about, and that are not admin
+// excluded, are joined.
+//
+// NB: This checks the state to determine if the rank is joined. There is a potential hole here,
+// in a case where the system was killed with ranks in the joined state, rather than stopping the
+// ranks first. In that case we may fire this off too early.
+func (svc *mgmtSvc) allRanksJoined() bool {
+	var total int
+	var joined int
+	var err error
+	if total, err = svc.sysdb.MemberCount(); err != nil {
+		svc.log.Errorf("failed to get total member count: %s", err)
+		return false
+	}
+
+	if joined, err = svc.sysdb.MemberCount(system.MemberStateJoined, system.MemberStateAdminExcluded); err != nil {
+		svc.log.Errorf("failed to get joined member count: %s", err)
+		return false
+	}
+
+	return total == joined
+}
+
+func (svc *mgmtSvc) checkReqFabricProvider(req *mgmtpb.JoinReq, peerAddr *net.TCPAddr, publisher events.Publisher) error {
+	joinProv, err := getProviderFromURI(req.Uri)
+	if err != nil {
+		return err
+	}
+
+	sysProv, err := svc.getFabricProvider()
+	if err != nil {
+		if system.IsErrSystemAttrNotFound(err) {
+			svc.log.Debugf("error fetching system fabric provider: %s", err.Error())
+			return system.ErrLeaderStepUpInProgress
+		}
+		return errors.Wrap(err, "fetching system fabric provider")
+	}
+
+	if joinProv != sysProv {
+		msg := fmt.Sprintf("rank %d fabric provider %q does not match system provider %q",
+			req.Rank, joinProv, sysProv)
+
+		publishJoinFailedEvent(req, peerAddr, publisher, msg)
+		return errors.New(msg)
+	}
+
+	return nil
+}
+
+func publishJoinFailedEvent(req *mgmtpb.JoinReq, peerAddr *net.TCPAddr, publisher events.Publisher, msg string) {
+	publisher.Publish(events.NewEngineJoinFailedEvent(peerAddr.String(), req.Idx, req.Rank, msg))
+}
+
+func getProviderFromURI(uri string) (string, error) {
+	uriParts := strings.Split(uri, "://")
+	if len(uriParts) < 2 {
+		return "", fmt.Errorf("unable to parse fabric provider from URI %q", uri)
+	}
+	return uriParts[0], nil
+}
+
+func (svc *mgmtSvc) getFabricProvider() (string, error) {
+	return system.GetMgmtProperty(svc.sysdb, fabricProviderProp)
+}
+
+func (svc *mgmtSvc) setFabricProviders(val string) error {
+	return system.SetMgmtProperty(svc.sysdb, fabricProviderProp, val)
+}
+
+func (svc *mgmtSvc) isGroupUpdatePaused() bool {
+	propStr, err := system.GetMgmtProperty(svc.sysdb, groupUpdatePauseProp)
+	if err != nil {
+		return false
+	}
+	result, err := strconv.ParseBool(propStr)
+	if err != nil {
+		svc.log.Errorf("invalid value for mgmt prop %q: %s", groupUpdatePauseProp, err.Error())
+		return false
+	}
+	return result
+}
+
+func (svc *mgmtSvc) pauseGroupUpdate() error {
+	return system.SetMgmtProperty(svc.sysdb, groupUpdatePauseProp, "true")
+}
+
+func (svc *mgmtSvc) resumeGroupUpdate() error {
+	return system.SetMgmtProperty(svc.sysdb, groupUpdatePauseProp, "false")
+}
+
+func (svc *mgmtSvc) updateFabricProviders(provList []string, publisher events.Publisher) error {
+	provStr := strings.Join(provList, ",")
+
+	curProv, err := svc.getFabricProvider()
+	if system.IsErrSystemAttrNotFound(err) {
+		svc.log.Debugf("setting system fabric providers (%s) for the first time", provStr)
+
+		if err := svc.setFabricProviders(provStr); err != nil {
+			return errors.Wrapf(err, "setting fabric provider for the first time")
+		}
+		return nil
+	}
+	if err != nil {
+		return errors.Wrapf(err, "fetching current mgmt property %q", fabricProviderProp)
+	}
+
+	if provStr != curProv {
+		numJoined, err := svc.sysdb.MemberCount(system.MemberStateJoined)
+		if err != nil {
+			return errors.Wrapf(err, "getting number of joined members")
+		}
+		if numJoined > 0 {
+			return errors.Errorf("cannot change system provider %q to %q: %d member(s) already joined",
+				curProv, provStr, numJoined)
+		}
+
+		if err := svc.pauseGroupUpdate(); err != nil {
+			return errors.Wrapf(err, "unable to pause group update before provider change")
+		}
+
+		if err := svc.setFabricProviders(provStr); err != nil {
+			if guErr := svc.resumeGroupUpdate(); guErr != nil {
+				// something is very wrong if this happens
+				svc.log.Errorf("unable to resume group update after provider change failed: %s", guErr.Error())
+			}
+
+			return errors.Wrapf(err, "changing fabric provider prop")
+		}
+		publisher.Publish(newFabricProvChangedEvent(curProv, provStr))
+		return nil
+	}
+
+	svc.log.Tracef("system fabric provider value has not changed (%s)", provStr)
+	return nil
+}
+
+func newFabricProvChangedEvent(o, n string) *events.RASEvent {
+	return events.NewGenericEvent(events.RASSystemFabricProvChanged, events.RASSeverityNotice,
+		fmt.Sprintf("system fabric provider has changed: %s -> %s", o, n), "")
+}
+
 // reqGroupUpdate requests a group update.
 func (svc *mgmtSvc) reqGroupUpdate(ctx context.Context, sync bool) {
 	select {
@@ -209,6 +479,11 @@ func (svc *mgmtSvc) reqGroupUpdate(ctx context.Context, sync bool) {
 // NB: This method must not be called concurrently, as out-of-order
 // group updates may trigger engine assertions.
 func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, forced bool) error {
+	if svc.isGroupUpdatePaused() {
+		svc.log.Debugf("group update requested (force: %v), but temporarily paused", forced)
+		return nil
+	}
+
 	if forced {
 		if err := svc.sysdb.IncMapVer(); err != nil {
 			return err
@@ -237,7 +512,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, forced bool) error {
 	for rank, entry := range gm.RankEntries {
 		req.Engines = append(req.Engines, &mgmtpb.GroupUpdateReq_Engine{
 			Rank:        rank.Uint32(),
-			Uri:         entry.URI,
+			Uri:         entry.PrimaryURI,
 			Incarnation: entry.Incarnation,
 		})
 		rankSet.Add(rank)
@@ -260,8 +535,8 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, forced bool) error {
 	svc.lastMapVer = gm.Version
 
 	resp := new(mgmtpb.GroupUpdateResp)
-	if err = proto.Unmarshal(dResp.Body, resp); err != nil {
-		return errors.Wrap(err, "unmarshal GroupUpdate response")
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return err
 	}
 
 	if resp.GetStatus() != 0 {
@@ -285,7 +560,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, forced bool) error {
 // with listening port from joining instance's host addr contained in the
 // provided request.
 func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (resp *mgmtpb.JoinResp, err error) {
-	if err := svc.checkLeaderRequest(req); err != nil {
+	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
 
@@ -306,6 +581,7 @@ type (
 		Ranks      *ranklist.RankSet
 		Force      bool
 		FullSystem bool
+		CheckMode  bool
 	}
 
 	fanoutResponse struct {
@@ -355,7 +631,7 @@ func (svc *mgmtSvc) resolveRanks(hosts, ranks string) (hitRS, missRS *ranklist.R
 	return
 }
 
-// synthesise "Stopped" rank results for any harness host errors
+// synthesize "Stopped" rank results for any harness host errors
 func addUnresponsiveResults(log logging.Logger, hostRanks map[string][]ranklist.Rank, rr *control.RanksResp, resp *fanoutResponse) {
 	for _, hes := range rr.HostErrors {
 		for _, addr := range strings.Split(hes.HostSet.DerangedString(), ",") {
@@ -419,7 +695,9 @@ func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fan
 	}
 
 	ranksReq := &control.RanksReq{
-		Ranks: req.Ranks.String(), Force: req.Force,
+		Ranks:     req.Ranks.String(),
+		Force:     req.Force,
+		CheckMode: req.CheckMode,
 	}
 
 	funcName := func(i interface{}) string {
@@ -440,7 +718,14 @@ func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fan
 			finished.Add(ranklist.Rank(rr.Rank))
 		}
 
-		svc.log.Infof("%s: finished: %s; waiting: %s", funcName(req.Method), finished, waiting)
+		msg := fmt.Sprintf("%s: ", funcName(req.Method))
+		if finished.Count() != 0 {
+			msg = fmt.Sprintf(" finished: %q", finished)
+		}
+		if waiting.Count() != 0 {
+			msg = fmt.Sprintf(" waiting: %q", waiting)
+		}
+		svc.log.Infof(msg)
 	})
 
 	// Not strictly necessary but helps with debugging.
@@ -483,7 +768,7 @@ func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fan
 // same name in lib/control/system.go and returns results from all selected
 // ranks.
 func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq) (*mgmtpb.SystemQueryResp, error) {
-	if err := svc.checkReplicaRequest(req); err != nil {
+	if err := svc.checkReplicaRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
 
@@ -506,12 +791,21 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 		return resp, nil
 	}
 
+	if req.StateMask == 0 {
+		req.StateMask = uint32(system.AllMemberFilter)
+	}
+
 	members, err := svc.membership.Members(hitRanks, system.MemberState(req.StateMask))
 	if err != nil {
 		return nil, errors.Wrap(err, "get membership")
 	}
+
 	if err := convert.Types(members, &resp.Members); err != nil {
 		return nil, err
+	}
+
+	for _, hint := range svc.clientNetworkHint {
+		resp.Providers = append(resp.Providers, hint.Provider)
 	}
 
 	v, err := svc.sysdb.DataVersion()
@@ -598,7 +892,7 @@ func (svc *mgmtSvc) getFanout(req systemReq) (*fanoutRequest, *fanoutResponse, e
 // This control service method is triggered from the control API method of the
 // same name in lib/control/system.go and returns results from all selected ranks.
 func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (*mgmtpb.SystemStopResp, error) {
-	if err := svc.checkLeaderRequest(req); err != nil {
+	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
 	svc.log.Debug("Received SystemStop RPC")
@@ -665,6 +959,41 @@ func processStartResp(fr *fanoutResponse, publisher events.Publisher) (*mgmtpb.S
 	return sr, nil
 }
 
+func (svc *mgmtSvc) checkMemberStates(requiredStates ...system.MemberState) error {
+	var stateMask system.MemberState
+	for _, state := range requiredStates {
+		stateMask |= state
+	}
+
+	allMembers, err := svc.sysdb.AllMembers()
+	if err != nil {
+		return err
+	}
+	invalidMembers := &ranklist.RankSet{}
+
+	svc.log.Tracef("checking %d members", len(allMembers))
+	for _, m := range allMembers {
+		svc.log.Tracef("member %d: %s", m.Rank.Uint32(), m.State)
+		if m.State&stateMask == 0 {
+			invalidMembers.Add(m.Rank)
+		}
+	}
+
+	stopRequired := false
+	if stateMask&system.MemberStateStopped != 0 {
+		stopRequired = true
+	}
+	if invalidMembers.Count() > 0 {
+		states := make([]string, len(requiredStates))
+		for i, state := range requiredStates {
+			states[i] = state.String()
+		}
+		return checker.FaultIncorrectMemberStates(stopRequired, invalidMembers.String(), strings.Join(states, "|"))
+	}
+
+	return nil
+}
+
 // SystemStart implements the method defined for the Management Service.
 //
 // Initiate controlled start of DAOS system instances (system members)
@@ -674,7 +1003,7 @@ func processStartResp(fr *fanoutResponse, publisher events.Publisher) (*mgmtpb.S
 // This control service method is triggered from the control API method of the
 // same name in lib/control/system.go and returns results from all selected ranks.
 func (svc *mgmtSvc) SystemStart(ctx context.Context, req *mgmtpb.SystemStartReq) (*mgmtpb.SystemStartResp, error) {
-	if err := svc.checkLeaderRequest(req); err != nil {
+	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
 	svc.log.Debug("Received SystemStart RPC")
@@ -684,6 +1013,7 @@ func (svc *mgmtSvc) SystemStart(ctx context.Context, req *mgmtpb.SystemStartReq)
 		return nil, err
 	}
 
+	fReq.CheckMode = req.CheckMode
 	fReq.Method = control.StartRanks
 	fResp, _, err = svc.rpcFanout(ctx, fReq, fResp, true)
 	if err != nil {
@@ -700,7 +1030,7 @@ func (svc *mgmtSvc) SystemStart(ctx context.Context, req *mgmtpb.SystemStartReq)
 
 // SystemExclude marks the specified ranks as administratively excluded from the system.
 func (svc *mgmtSvc) SystemExclude(ctx context.Context, req *mgmtpb.SystemExcludeReq) (*mgmtpb.SystemExcludeResp, error) {
-	if err := svc.checkLeaderRequest(req); err != nil {
+	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
 
@@ -743,14 +1073,247 @@ func (svc *mgmtSvc) SystemExclude(ctx context.Context, req *mgmtpb.SystemExclude
 		})
 	}
 
+	svc.reqGroupUpdate(ctx, false)
+
 	return resp, nil
+}
+
+func (svc *mgmtSvc) refuseMissingRanks(hosts, ranks string) (*ranklist.RankSet, error) {
+	if hosts == "" && ranks == "" {
+		return nil, errors.New("no hosts or ranks specified")
+	}
+
+	hitRanks, missRanks, missHosts, err := svc.resolveRanks(hosts, ranks)
+	if err != nil {
+		return nil, err
+	}
+
+	if missHosts.Count() > 0 {
+		return nil, errors.Errorf("invalid host(s): %s", missHosts.String())
+	}
+	if missRanks.Count() > 0 {
+		return nil, errors.Errorf("invalid rank(s): %s", missRanks.String())
+	}
+	if hitRanks.Count() == 0 {
+		return nil, errors.New("no ranks to drain")
+	}
+
+	return hitRanks, nil
+}
+
+// Build mappings of pools to any ranks that match the input filter by iterating through the pool
+// service list. Identify pools by label if possible.
+// TODO: on reintegrate dont allow selection of AdminExcluded ranks?
+func (svc *mgmtSvc) getPoolsRanks(ranks *ranklist.RankSet) ([]string, poolRanksMap, error) {
+	poolRanks := make(poolRanksMap)
+	poolIDs := []string{} // Label or UUID.
+
+	psList, err := svc.sysdb.PoolServiceList(false)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	ranksMap := make(map[ranklist.Rank]struct{})
+	for _, r := range ranks.Ranks() {
+		ranksMap[r] = struct{}{}
+	}
+
+	for _, ps := range psList {
+		currentRanks := ps.Storage.CurrentRanks()
+
+		// Label preferred over UUID.
+		poolID := ps.PoolLabel
+		if poolID == "" {
+			poolID = ps.PoolUUID.String()
+		}
+
+		svc.log.Tracef("pool-service detected: id %s, ranks %v", poolID, currentRanks)
+
+		for _, r := range currentRanks {
+			if _, exists := ranksMap[r]; !exists {
+				continue
+			}
+			if _, exists := poolRanks[poolID]; !exists {
+				poolRanks[poolID] = ranklist.MustCreateRankSet("")
+				poolIDs = append(poolIDs, poolID)
+			}
+			poolRanks[poolID].Add(r)
+		}
+	}
+	svc.log.Debugf("pool-ranks to operate on: %v", poolRanks)
+
+	sort.Strings(poolIDs)
+
+	return poolIDs, poolRanks, nil
+}
+
+func resultsFromPoolRanks(id string, succeeded *ranklist.RankSet, failed poolRanksMap) []*mgmtpb.PoolRankResult {
+	results := []*mgmtpb.PoolRankResult{}
+
+	// Single result generated for all ranks operated on successfully.
+	if succeeded.Count() > 0 {
+		results = append(results, &mgmtpb.PoolRankResult{
+			PoolId: id,
+			Ranks:  succeeded.String(),
+		})
+	}
+
+	var msgs []string
+	for msg := range failed {
+		msgs = append(msgs, msg)
+	}
+	sort.Strings(msgs)
+
+	// Result generated for each failure message rank-group.
+	for _, msg := range msgs {
+		results = append(results, &mgmtpb.PoolRankResult{
+			// Status already included in error message.
+			Status: int32(daos.MiscError),
+			Msg:    msg,
+			PoolId: id,
+			Ranks:  failed[msg].String(),
+		})
+	}
+
+	return results
+}
+
+type poolRanksMap map[string]*ranklist.RankSet
+
+type poolRankOpSig func(*mgmtSvc, context.Context, string, string, ranklist.Rank) (int32, error)
+
+// Generate operation results by iterating through pool's ranks and calling supplied fn on each.
+func (svc *mgmtSvc) getPoolRankResults(ctx context.Context, sys string, poolIDs []string, poolRanks poolRanksMap, drpcCall poolRankOpSig) ([]*mgmtpb.PoolRankResult, error) {
+	results := []*mgmtpb.PoolRankResult{}
+
+	for _, id := range poolIDs {
+		rs := poolRanks[id]
+		if rs.Count() == 0 {
+			continue
+		}
+		svc.log.Tracef("operating on ranks %v on pool %s", rs, id)
+
+		succeeded := ranklist.MustCreateRankSet("")
+		failed := make(poolRanksMap)
+
+		// TODO DAOS-6611: Operate on multiple pool-ranks per call when
+		//                 drpc.MethodPool{Drain|Reint} API supports it.
+		for _, r := range rs.Ranks() {
+			status, err := drpcCall(svc, ctx, sys, id, r)
+
+			if status == int32(daos.Success) {
+				succeeded.Add(r)
+				continue
+			}
+
+			msgErr := err.Error()
+
+			// Check fault code to aggregate invalid rank results.
+			f, ok := errors.Cause(err).(*fault.Fault)
+			if ok && f.Code == code.ServerPoolInvalidRanks {
+				msgErr = msgInvalidRank
+			}
+
+			// Each rank-drain failure message will produce a single result.
+			if _, exists := failed[msgErr]; !exists {
+				failed[msgErr] = ranklist.MustCreateRankSet("")
+			}
+			failed[msgErr].Add(r)
+		}
+
+		results = append(results, resultsFromPoolRanks(id, succeeded, failed)...)
+		svc.log.Tracef("results %+v", results)
+	}
+
+	return results, nil
+}
+
+// Drain rank on a pool by calling over dRPC. Function signature satisfies poolRankOpSig type.
+func drainPoolRank(svc *mgmtSvc, ctx context.Context, sys, id string, rank ranklist.Rank) (int32, error) {
+	pbReq := &mgmtpb.PoolDrainReq{
+		Sys:  sys,
+		Rank: rank.Uint32(),
+		Id:   id,
+	}
+
+	pbResp, err := svc.PoolDrain(ctx, pbReq)
+	if err != nil {
+		return int32(daos.MiscError), err
+	}
+	if pbResp.Status != int32(daos.Success) {
+		return pbResp.Status, daos.Status(pbResp.Status)
+	}
+
+	svc.log.Tracef("pool-drain triggered from system-drain: %+v (req: %+v)", pbResp, pbReq)
+
+	return int32(daos.Success), nil
+}
+
+// Reint rank on a pool by calling over dRPC. Function signature satisfies poolRankOpSig type.
+func reintPoolRank(svc *mgmtSvc, ctx context.Context, sys, id string, rank ranklist.Rank) (int32, error) {
+	pbReq := &mgmtpb.PoolReintReq{
+		Sys:  sys,
+		Rank: rank.Uint32(),
+		Id:   id,
+	}
+
+	pbResp, err := svc.PoolReintegrate(ctx, pbReq)
+	if err != nil {
+		return int32(daos.MiscError), err
+	}
+	if pbResp.Status != int32(daos.Success) {
+		return pbResp.Status, daos.Status(pbResp.Status)
+	}
+
+	svc.log.Tracef("pool-reint triggered from system-reint: %+v (req: %+v)", pbResp, pbReq)
+
+	return int32(daos.Success), nil
+}
+
+// SystemDrain marks specified ranks on all pools as being in a drain state.
+func (svc *mgmtSvc) SystemDrain(ctx context.Context, req *mgmtpb.SystemDrainReq) (*mgmtpb.SystemDrainResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T", req)
+	}
+
+	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
+		return nil, err
+	}
+
+	// Validate requested hosts or ranks exist and fail if any are missing.
+	hitRanks, err := svc.refuseMissingRanks(req.Hosts, req.Ranks)
+	if err != nil {
+		svc.log.Errorf("refuse missing ranks: %s", err)
+		return nil, err
+	}
+
+	// Retrieve rank-to-pool mappings.
+	poolIDs, poolRanks, err := svc.getPoolsRanks(hitRanks)
+	if err != nil {
+		return nil, err
+	}
+
+	// Generate results from dRPC calls.
+	var opCall poolRankOpSig = drainPoolRank
+	if req.Reint {
+		opCall = reintPoolRank
+	}
+	results, err := svc.getPoolRankResults(ctx, req.Sys, poolIDs, poolRanks, opCall)
+	if err != nil {
+		return nil, err
+	}
+
+	return &mgmtpb.SystemDrainResp{
+		Reint:   req.Reint,
+		Results: results,
+	}, nil
 }
 
 // ClusterEvent management service gRPC handler receives ClusterEvent requests
 // from control-plane instances attempting to notify the MS of a cluster event
 // in the DAOS system (this handler should only get called on the MS leader).
 func (svc *mgmtSvc) ClusterEvent(ctx context.Context, req *sharedpb.ClusterEventReq) (*sharedpb.ClusterEventResp, error) {
-	if err := svc.checkLeaderRequest(req); err != nil {
+	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
 
@@ -889,39 +1452,38 @@ func (svc *mgmtSvc) SystemCleanup(ctx context.Context, req *mgmtpb.SystemCleanup
 	}
 
 	resp := new(mgmtpb.SystemCleanupResp)
-	evictReq := new(mgmtpb.PoolEvictReq)
-
-	evictReq.Sys = req.Sys
-	evictReq.Machine = req.Machine
 
 	for _, ps := range psList {
-		var errmsg string = ""
+		var errMsg string
 
-		// Use our incoming request and just replace the uuid on each iteration
-		evictReq.Id = ps.PoolUUID.String()
+		evictReq := &mgmtpb.PoolEvictReq{
+			Sys:     req.Sys,
+			Machine: req.Machine,
+			Id:      ps.PoolUUID.String(),
+		}
 
-		dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolEvict, evictReq)
+		dResp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolEvict, evictReq)
 		if err != nil {
 			return nil, err
 		}
 
-		res := &mgmtpb.PoolEvictResp{}
-		if err = proto.Unmarshal(dresp.Body, res); err != nil {
-			res.Status = int32(daos.IOInvalid)
-			errmsg = errors.Wrap(err, "unmarshal PoolEvict response").Error()
-			res.Count = 0
+		evictResp := &mgmtpb.PoolEvictResp{}
+		if err := svc.unmarshalPB(dResp.Body, evictResp); err != nil {
+			evictResp.Status = int32(daos.MiscError)
+			evictResp.Count = 0
+			errMsg = err.Error()
+		} else if evictResp.Status != int32(daos.Success) {
+			errMsg = fmt.Sprintf("Unable to clean up handles for machine %s on pool %s",
+				evictReq.Machine, evictReq.Id)
 		}
 
-		if res.Status != int32(daos.Success) {
-			errmsg = fmt.Sprintf("Unable to clean up handles for machine %s on pool %s", evictReq.Machine, evictReq.Id)
-		}
-
-		svc.log.Debugf("Response from pool evict in cleanup: %+v", res)
+		svc.log.Debugf("Response from pool evict in cleanup: '%+v' (req: '%+v')", evictResp,
+			evictReq)
 		resp.Results = append(resp.Results, &mgmtpb.SystemCleanupResp_CleanupResult{
-			Status: res.Status,
-			Msg:    errmsg,
+			Status: evictResp.Status,
+			Msg:    errMsg,
 			PoolId: evictReq.Id,
-			Count:  uint32(res.Count),
+			Count:  uint32(evictResp.Count),
 		})
 	}
 
@@ -964,7 +1526,7 @@ func sp2pp(sp *daos.SystemProperty) (*daos.PoolProperty, bool) {
 }
 
 // SystemSetProp sets user-visible system properties.
-func (svc *mgmtSvc) SystemSetProp(ctx context.Context, req *mgmtpb.SystemSetPropReq) (resp *mgmtpb.DaosResp, err error) {
+func (svc *mgmtSvc) SystemSetProp(ctx context.Context, req *mgmtpb.SystemSetPropReq) (*mgmtpb.DaosResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
@@ -973,33 +1535,34 @@ func (svc *mgmtSvc) SystemSetProp(ctx context.Context, req *mgmtpb.SystemSetProp
 		return nil, err
 	}
 
-	if resp, err = svc.updatePoolPropsWithSysProps(ctx, req.GetProperties(), req.Sys); err != nil {
+	if err := svc.updatePoolPropsWithSysProps(ctx, req.GetProperties(), req.Sys); err != nil {
 		return nil, err
 	}
-	return
+
+	// Indicate success.
+	return new(mgmtpb.DaosResp), nil
 }
 
 // updatePoolPropsWithSysProps This function will take systemProperties and
 // update each associated pool property (if one exists) on each pool
-func (svc *mgmtSvc) updatePoolPropsWithSysProps(ctx context.Context, systemProperties map[string]string, sys string) (resp *mgmtpb.DaosResp, err error) {
-	resp = new(mgmtpb.DaosResp)
+func (svc *mgmtSvc) updatePoolPropsWithSysProps(ctx context.Context, systemProperties map[string]string, sys string) error {
 	// Get the properties from the request, convert to pool prop, then put into poolSysProps
 	var poolSysProps []*daos.PoolProperty
 	for k, v := range systemProperties {
 		p, ok := svc.systemProps.Get(k)
 		if !ok {
-			return nil, errors.Errorf("unknown property %q", k)
+			return errors.Errorf("unknown property %q", k)
 		}
 		if pp, ok := sp2pp(p); ok {
 			if err := pp.SetValue(v); err != nil {
-				return nil, errors.Wrapf(err, "invalid value %q for property %q", v, k)
+				return errors.Wrapf(err, "invalid value %q for property %q", v, k)
 			}
 			poolSysProps = append(poolSysProps, pp)
 		}
 	}
 
 	if len(poolSysProps) == 0 {
-		return
+		return nil
 	}
 
 	// Create the request for updating the pools. The request will have all pool properties
@@ -1020,29 +1583,31 @@ func (svc *mgmtSvc) updatePoolPropsWithSysProps(ctx context.Context, systemPrope
 
 	pools, err := svc.sysdb.PoolServiceList(false)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	for _, ps := range pools {
 		pspr.Id = ps.PoolUUID.String()
 		pspr.SvcRanks = ranklist.RanksToUint32(ps.Replicas)
 		dResp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolSetProp, pspr)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		if err = proto.Unmarshal(dResp.Body, resp); err != nil {
-			return nil, errors.Wrap(err, "unmarshal PoolSetProp response")
+		resp := new(mgmtpb.DaosResp)
+		if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+			return err
 		}
 		if resp.Status != 0 {
-			return nil, errors.Errorf("SystemSetProp: %d\n", resp.Status)
+			return errors.Errorf("SystemSetProp: %d\n", resp.Status)
 		}
 	}
-	return resp, nil
+
+	return nil
 }
 
 // SystemGetProp gets user-visible system properties.
-func (svc *mgmtSvc) SystemGetProp(ctx context.Context, req *mgmtpb.SystemGetPropReq) (resp *mgmtpb.SystemGetPropResp, err error) {
-	if err := svc.checkReplicaRequest(req); err != nil {
+func (svc *mgmtSvc) SystemGetProp(ctx context.Context, req *mgmtpb.SystemGetPropReq) (*mgmtpb.SystemGetPropResp, error) {
+	if err := svc.checkReplicaRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
 
@@ -1051,6 +1616,5 @@ func (svc *mgmtSvc) SystemGetProp(ctx context.Context, req *mgmtpb.SystemGetProp
 		return nil, err
 	}
 
-	resp = &mgmtpb.SystemGetPropResp{Properties: props}
-	return
+	return &mgmtpb.SystemGetPropResp{Properties: props}, nil
 }

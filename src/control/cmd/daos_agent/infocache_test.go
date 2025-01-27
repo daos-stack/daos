@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,9 +8,14 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
@@ -18,10 +23,8 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/cache"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/telemetry"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/pkg/errors"
 )
 
 type testInfoCacheParams struct {
@@ -32,6 +35,8 @@ type testInfoCacheParams struct {
 	mockNetDevStateGetter  hardware.NetDevStateProvider
 	disableFabricCache     bool
 	disableAttachInfoCache bool
+	enableClientTelemetry  bool
+	retainClientTelemetry  bool
 	ctlInvoker             control.Invoker
 	cachedItems            []cache.Item
 }
@@ -43,15 +48,18 @@ func newTestInfoCache(t *testing.T, log logging.Logger, params testInfoCachePara
 	}
 
 	ic := &InfoCache{
-		log:            log,
-		getAttachInfo:  params.mockGetAttachInfo,
-		fabricScan:     params.mockScanFabric,
-		devClassGetter: params.mockNetDevClassGetter,
-		devStateGetter: params.mockNetDevStateGetter,
-		netIfaces:      params.mockNetIfaces,
-		client:         params.ctlInvoker,
-		cache:          c,
+		log:             log,
+		getAttachInfoCb: params.mockGetAttachInfo,
+		fabricScan:      params.mockScanFabric,
+		devClassGetter:  params.mockNetDevClassGetter,
+		devStateGetter:  params.mockNetDevStateGetter,
+		netIfaces:       params.mockNetIfaces,
+		client:          params.ctlInvoker,
+		cache:           c,
 	}
+
+	ic.clientTelemetryEnabled.Store(params.enableClientTelemetry)
+	ic.clientTelemetryRetain.Store(params.retainClientTelemetry)
 
 	if ic.netIfaces == nil {
 		ic.netIfaces = func() ([]net.Interface, error) {
@@ -141,14 +149,22 @@ func TestAgent_cachedAttachInfo_Key(t *testing.T) {
 	}
 }
 
-func TestAgent_cachedAttachInfo_NeedsRefresh(t *testing.T) {
+func TestAgent_cachedAttachInfo_RefreshIfNeeded(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+	mockClient := control.NewMockInvoker(log, &control.MockInvokerConfig{})
+
+	noopGetAttachInfo := func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
+		return nil, nil
+	}
+
 	for name, tc := range map[string]struct {
 		ai        *cachedAttachInfo
 		expResult bool
 	}{
 		"nil": {},
 		"never cached": {
-			ai:        newCachedAttachInfo(0, "test", nil, nil),
+			ai:        newCachedAttachInfo(0, "test", mockClient, noopGetAttachInfo),
 			expResult: true,
 		},
 		"no refresh": {
@@ -156,6 +172,8 @@ func TestAgent_cachedAttachInfo_NeedsRefresh(t *testing.T) {
 				cacheItem: cacheItem{
 					lastCached: time.Now().Add(-time.Minute),
 				},
+				rpcClient:    mockClient,
+				fetch:        noopGetAttachInfo,
 				lastResponse: &control.GetAttachInfoResp{},
 			},
 		},
@@ -165,6 +183,8 @@ func TestAgent_cachedAttachInfo_NeedsRefresh(t *testing.T) {
 					lastCached:      time.Now().Add(-time.Minute),
 					refreshInterval: time.Second,
 				},
+				rpcClient:    mockClient,
+				fetch:        noopGetAttachInfo,
 				lastResponse: &control.GetAttachInfoResp{},
 			},
 			expResult: true,
@@ -175,12 +195,15 @@ func TestAgent_cachedAttachInfo_NeedsRefresh(t *testing.T) {
 					lastCached:      time.Now().Add(-time.Second),
 					refreshInterval: time.Minute,
 				},
+				rpcClient:    mockClient,
+				fetch:        noopGetAttachInfo,
 				lastResponse: &control.GetAttachInfoResp{},
 			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			test.AssertEqual(t, tc.expResult, tc.ai.NeedsRefresh(), "")
+			refreshed, _ := tc.ai.RefreshIfNeeded(test.Context(t))
+			test.AssertEqual(t, tc.expResult, refreshed, "")
 		})
 	}
 }
@@ -264,7 +287,6 @@ func TestAgent_cachedAttachInfo_Refresh(t *testing.T) {
 			}
 
 			err := ai.Refresh(test.Context(t))
-
 			test.CmpErr(t, tc.expErr, err)
 
 			if ai == nil {
@@ -279,15 +301,14 @@ func TestAgent_cachedAttachInfo_Refresh(t *testing.T) {
 }
 
 func TestAgent_newCachedFabricInfo(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
-
-	cfi := newCachedFabricInfo(log, func(ctx context.Context, providers ...string) (*NUMAFabric, error) {
+	cfi := newCachedFabricInfo(func(ctx context.Context, providers ...string) (*NUMAFabric, error) {
 		return nil, nil
-	})
+	}, hardware.Ether, "one", "two")
 
 	test.AssertEqual(t, time.Duration(0), cfi.refreshInterval, "")
 	test.AssertEqual(t, time.Time{}, cfi.lastCached, "")
+	test.AssertEqual(t, hardware.Ether, cfi.devClass, "")
+	test.AssertEqual(t, []string{"one", "two"}, cfi.providers, "")
 	if cfi.lastResults != nil {
 		t.Fatalf("expected nothing cached, found:\n%+v", cfi.lastResults)
 	}
@@ -302,7 +323,7 @@ func TestAgent_cachedFabricInfo_Key(t *testing.T) {
 	}{
 		"nil": {},
 		"normal": {
-			cfi: newCachedFabricInfo(nil, nil),
+			cfi: newCachedFabricInfo(nil, hardware.Netrom),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -312,7 +333,7 @@ func TestAgent_cachedFabricInfo_Key(t *testing.T) {
 	}
 }
 
-func TestAgent_cachedFabricInfo_NeedsRefresh(t *testing.T) {
+func TestAgent_cachedFabricInfo_RefreshIfNeeded(t *testing.T) {
 	for name, tc := range map[string]struct {
 		nilCache  bool
 		cacheTime time.Time
@@ -329,43 +350,81 @@ func TestAgent_cachedFabricInfo_NeedsRefresh(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer test.ShowBufferOnFailure(t, buf)
-
 			var cfi *cachedFabricInfo
 			if !tc.nilCache {
-				cfi = newCachedFabricInfo(log, nil)
+				cfi = newCachedFabricInfo(func(_ context.Context, _ ...string) (*NUMAFabric, error) {
+					return nil, nil
+				}, hardware.Netrom)
 				cfi.cacheItem.lastCached = tc.cacheTime
 			}
 
-			test.AssertEqual(t, tc.expResult, cfi.NeedsRefresh(), "")
+			refreshed, _ := cfi.RefreshIfNeeded(test.Context(t))
+			test.AssertEqual(t, tc.expResult, refreshed, "")
 		})
 	}
 }
 
+func copyNUMAFabricMap(in NUMAFabricMap) NUMAFabricMap {
+	out := make(NUMAFabricMap)
+	for key, val := range in {
+		out[key] = make([]*FabricInterface, len(val))
+		copy(out[key], val)
+	}
+	return out
+}
+
 func TestAgent_cachedFabricInfo_Refresh(t *testing.T) {
-	scan1 := map[int][]*FabricInterface{
+	scan1 := NUMAFabricMap{
 		2: {
-			{Name: "two"},
+			{
+				Name:        "two",
+				NetDevClass: hardware.Ether,
+			},
 		},
 	}
-	scan2 := map[int][]*FabricInterface{
+	scan2 := NUMAFabricMap{
 		1: {
-			{Name: "one"},
+			{
+				Name:        "one",
+				NetDevClass: hardware.Ether,
+			},
 		},
 		3: {
-			{Name: "three"},
+			{
+				Name:        "three",
+				NetDevClass: hardware.Ether,
+			},
+		},
+	}
+	scan3 := NUMAFabricMap{
+		1: {
+			{
+				Name:        "one",
+				NetDevClass: hardware.Ether,
+			},
+		},
+		2: {
+			{
+				Name:        "two",
+				NetDevClass: hardware.Infiniband,
+			},
+		},
+		3: {
+			{
+				Name:        "three",
+				NetDevClass: hardware.Ether,
+			},
 		},
 	}
 
 	for name, tc := range map[string]struct {
 		nilCache      bool
 		disabled      bool
-		fabricResult  map[int][]*FabricInterface
+		fabricResult  NUMAFabricMap
 		fabricErr     error
-		alreadyCached map[int][]*FabricInterface
+		alreadyCached NUMAFabricMap
 		expErr        error
-		expCached     map[int][]*FabricInterface
+		expCached     NUMAFabricMap
 	}{
 		"nil": {
 			nilCache: true,
@@ -384,32 +443,32 @@ func TestAgent_cachedFabricInfo_Refresh(t *testing.T) {
 			alreadyCached: scan1,
 			expCached:     scan2,
 		},
+		"filter out dev class": {
+			fabricResult: scan3,
+			expCached:    scan2,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer test.ShowBufferOnFailure(t, buf)
-
 			var cfi *cachedFabricInfo
 			if !tc.nilCache {
-				cfi = newCachedFabricInfo(log, nil)
+				cfi = newCachedFabricInfo(nil, hardware.Ether)
 				cfi.fetch = func(_ context.Context, _ ...string) (*NUMAFabric, error) {
 					if tc.fabricResult != nil {
 						return &NUMAFabric{
-							numaMap: tc.fabricResult,
+							numaMap: copyNUMAFabricMap(tc.fabricResult),
 						}, nil
 					}
 					return nil, tc.fabricErr
 				}
 				if tc.alreadyCached != nil {
 					cfi.lastResults = &NUMAFabric{
-						numaMap: tc.alreadyCached,
+						numaMap: copyNUMAFabricMap(tc.alreadyCached),
 					}
 					cfi.lastCached = time.Now()
 				}
 			}
 
 			err := cfi.Refresh(test.Context(t))
-
 			test.CmpErr(t, tc.expErr, err)
 
 			if cfi == nil {
@@ -714,6 +773,14 @@ func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
 			NetDevClass: uint32(hardware.Ether),
 		},
 	}
+	telemEnabledResp := copyGetAttachInfoResp(ctlResp)
+	telemEnabledResp.ClientNetHint.EnvVars = append(telemEnabledResp.ClientNetHint.EnvVars,
+		fmt.Sprintf("%s=1", telemetry.ClientMetricsEnabledEnv),
+	)
+	telemRetainedResp := copyGetAttachInfoResp(telemEnabledResp)
+	telemRetainedResp.ClientNetHint.EnvVars = append(telemRetainedResp.ClientNetHint.EnvVars,
+		fmt.Sprintf("%s=1", telemetry.ClientMetricsRetainEnv),
+	)
 
 	for name, tc := range map[string]struct {
 		getInfoCache func(logging.Logger) *InfoCache
@@ -734,7 +801,7 @@ func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
 					disableAttachInfoCache: true,
 				})
 			},
-			remoteResp: ctlResp,
+			remoteResp: copyGetAttachInfoResp(ctlResp),
 			expResp:    ctlResp,
 			expRemote:  true,
 		},
@@ -748,11 +815,45 @@ func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
 			expErr:    errors.New("mock remote"),
 			expRemote: true,
 		},
+		"cache disabled; client telemetry enabled": {
+			getInfoCache: func(l logging.Logger) *InfoCache {
+				return newTestInfoCache(t, l, testInfoCacheParams{
+					disableAttachInfoCache: true,
+					enableClientTelemetry:  true,
+				})
+			},
+			remoteResp: copyGetAttachInfoResp(ctlResp),
+			expResp:    telemEnabledResp,
+			expRemote:  true,
+		},
+		"cache enabled; client telemetry enabled": {
+			getInfoCache: func(l logging.Logger) *InfoCache {
+				return newTestInfoCache(t, l, testInfoCacheParams{
+					enableClientTelemetry: true,
+				})
+			},
+			remoteResp: copyGetAttachInfoResp(ctlResp),
+			expResp:    telemEnabledResp,
+			expRemote:  true,
+			expCached:  true,
+		},
+		"cache enabled; client telemetry enabled; client telemetry retained": {
+			getInfoCache: func(l logging.Logger) *InfoCache {
+				return newTestInfoCache(t, l, testInfoCacheParams{
+					enableClientTelemetry: true,
+					retainClientTelemetry: true,
+				})
+			},
+			remoteResp: copyGetAttachInfoResp(ctlResp),
+			expResp:    telemRetainedResp,
+			expRemote:  true,
+			expCached:  true,
+		},
 		"enabled but empty": {
 			getInfoCache: func(l logging.Logger) *InfoCache {
 				return newTestInfoCache(t, l, testInfoCacheParams{})
 			},
-			remoteResp: ctlResp,
+			remoteResp: copyGetAttachInfoResp(ctlResp),
 			expResp:    ctlResp,
 			expRemote:  true,
 			expCached:  true,
@@ -772,7 +873,7 @@ func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
 					fetch: func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
 						return nil, errors.New("shouldn't call cached remote")
 					},
-					lastResponse: ctlResp,
+					lastResponse: copyGetAttachInfoResp(ctlResp),
 					cacheItem:    cacheItem{lastCached: time.Now()},
 					system:       "test",
 				})
@@ -790,7 +891,7 @@ func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
 					fetch: func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
 						return nil, errors.New("shouldn't call cached remote")
 					},
-					lastResponse: ctlResp,
+					lastResponse: copyGetAttachInfoResp(ctlResp),
 					cacheItem:    cacheItem{lastCached: time.Now()},
 					system:       build.DefaultSystemName,
 				})
@@ -814,7 +915,7 @@ func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
 				return ic
 			},
 			system:     "somethingelse",
-			remoteResp: ctlResp,
+			remoteResp: copyGetAttachInfoResp(ctlResp),
 			expResp:    ctlResp,
 			expCached:  true,
 			expRemote:  true,
@@ -831,7 +932,7 @@ func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
 
 			calledRemote := false
 			if ic != nil {
-				ic.getAttachInfo = func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
+				ic.getAttachInfoCb = func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
 					calledRemote = true
 					return tc.remoteResp, tc.remoteErr
 				}
@@ -878,17 +979,25 @@ func mockGetAddrInterface(name string) (addrFI, error) {
 }
 
 func TestAgent_InfoCache_GetFabricDevice(t *testing.T) {
-	testSet := hardware.NewFabricInterfaceSet(&hardware.FabricInterface{
-		Name:          "dev0",
-		NetInterfaces: common.NewStringSet("test0"),
-		DeviceClass:   hardware.Ether,
-		Providers:     hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "testprov"}),
-	})
+	testSet := hardware.NewFabricInterfaceSet(
+		&hardware.FabricInterface{
+			Name:          "dev0",
+			NetInterfaces: common.NewStringSet("test0"),
+			DeviceClass:   hardware.Ether,
+			Providers:     hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "testprov"}),
+		},
+		&hardware.FabricInterface{
+			Name:          "dev1",
+			NetInterfaces: common.NewStringSet("test1"),
+			DeviceClass:   hardware.Ether,
+			Providers:     hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "testprov"}),
+		})
 
 	for name, tc := range map[string]struct {
 		getInfoCache    func(logging.Logger) *InfoCache
 		devClass        hardware.NetDevClass
 		provider        string
+		iface           string
 		fabricResp      *hardware.FabricInterfaceSet
 		fabricErr       error
 		expResult       *FabricInterface
@@ -1001,12 +1110,7 @@ func TestAgent_InfoCache_GetFabricDevice(t *testing.T) {
 				Domain:      "dev0",
 				NetDevClass: hardware.Ether,
 			},
-			expCachedFabric: hardware.NewFabricInterfaceSet(&hardware.FabricInterface{
-				Name:          "dev0",
-				NetInterfaces: common.NewStringSet("test0"),
-				DeviceClass:   hardware.Ether,
-				Providers:     hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "testprov"}),
-			}),
+			expCachedFabric: testSet,
 		},
 		"requested not found": {
 			getInfoCache: func(l logging.Logger) *InfoCache {
@@ -1022,16 +1126,36 @@ func TestAgent_InfoCache_GetFabricDevice(t *testing.T) {
 				})
 				return ic
 			},
+			devClass:        hardware.Ether,
+			provider:        "bad",
+			fabricErr:       errors.New("shouldn't call scan"),
+			expErr:          errors.New("no suitable fabric interface"),
+			expCachedFabric: testSet,
+		},
+		"specific interface": {
+			getInfoCache: func(l logging.Logger) *InfoCache {
+				ic := newTestInfoCache(t, l, testInfoCacheParams{})
+				nf := NUMAFabricFromScan(test.Context(t), l, testSet)
+				nf.getAddrInterface = mockGetAddrInterface
+				ic.cache.Set(&cachedFabricInfo{
+					fetch: func(ctx context.Context, providers ...string) (*NUMAFabric, error) {
+						return nil, errors.New("shouldn't call cached fetch")
+					},
+					lastResults: nf,
+					cacheItem:   cacheItem{lastCached: time.Now()},
+				})
+				return ic
+			},
 			devClass:  hardware.Ether,
-			provider:  "bad",
+			provider:  "testprov",
+			iface:     "test1",
 			fabricErr: errors.New("shouldn't call scan"),
-			expErr:    errors.New("no suitable fabric interface"),
-			expCachedFabric: hardware.NewFabricInterfaceSet(&hardware.FabricInterface{
-				Name:          "dev0",
-				NetInterfaces: common.NewStringSet("test0"),
-				DeviceClass:   hardware.Ether,
-				Providers:     hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "testprov"}),
-			}),
+			expResult: &FabricInterface{
+				Name:        "test1",
+				Domain:      "dev1",
+				NetDevClass: hardware.Ether,
+			},
+			expCachedFabric: testSet,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1056,7 +1180,11 @@ func TestAgent_InfoCache_GetFabricDevice(t *testing.T) {
 				}
 			}
 
-			result, err := ic.GetFabricDevice(test.Context(t), 0, tc.devClass, tc.provider)
+			result, err := ic.GetFabricDevice(test.Context(t), &FabricIfaceParams{
+				DevClass:  tc.devClass,
+				Provider:  tc.provider,
+				Interface: tc.iface,
+			})
 
 			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result, cmpopts.IgnoreUnexported(FabricInterface{})); diff != "" {
@@ -1084,6 +1212,149 @@ func TestAgent_InfoCache_GetFabricDevice(t *testing.T) {
 					t.Fatalf("want-, got+:\n%s", diff)
 				}
 			}
+		})
+	}
+}
+
+func TestAgent_InfoCache_GetNUMAFabricMap(t *testing.T) {
+	testMap := NUMAFabricMap{
+		0: {
+			{
+				Name:        "t1",
+				Domain:      "t1",
+				NetDevClass: hardware.Ether,
+				hw: &hardware.FabricInterface{
+					Providers: hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "p1"}),
+				},
+			},
+			{
+				Name:        "t2",
+				Domain:      "t2",
+				NetDevClass: hardware.Infiniband,
+				hw: &hardware.FabricInterface{
+					Providers: hardware.NewFabricProviderSet(
+						&hardware.FabricProvider{Name: "p1"},
+					),
+				},
+			},
+			{
+				Name:        "t2",
+				Domain:      "d2",
+				NetDevClass: hardware.Infiniband,
+				hw: &hardware.FabricInterface{
+					Providers: hardware.NewFabricProviderSet(
+						&hardware.FabricProvider{Name: "p2"},
+						&hardware.FabricProvider{Name: "p3"},
+					),
+				},
+			},
+		},
+	}
+
+	for name, tc := range map[string]struct {
+		getInfoCache func(logging.Logger) *InfoCache
+		providers    []string
+		devClass     hardware.NetDevClass
+		expErr       error
+		expResult    NUMAFabricMap
+		expFunc      bool
+	}{
+		"nil": {
+			expErr: errors.New("nil"),
+		},
+		"fabric scan failed": {
+			getInfoCache: func(l logging.Logger) *InfoCache {
+				return newTestInfoCache(t, l, testInfoCacheParams{
+					mockScanFabric: func(_ context.Context, _ ...string) (*NUMAFabric, error) {
+						return nil, errors.New("mock fabric scan")
+					},
+				})
+			},
+			expErr: errors.New("mock fabric scan"),
+		},
+		"success": {
+			getInfoCache: func(l logging.Logger) *InfoCache {
+				return newTestInfoCache(t, l, testInfoCacheParams{
+					mockScanFabric: func(_ context.Context, _ ...string) (*NUMAFabric, error) {
+						return &NUMAFabric{
+							log:     l,
+							numaMap: testMap,
+						}, nil
+					},
+				})
+			},
+			expResult: testMap,
+			expFunc:   true,
+		},
+		"providers passed through": {
+			providers: []string{"p1", "p2"},
+			getInfoCache: func(l logging.Logger) *InfoCache {
+				return newTestInfoCache(t, l, testInfoCacheParams{
+					mockScanFabric: func(_ context.Context, gotProv ...string) (*NUMAFabric, error) {
+						t.Helper()
+
+						wantProv := []string{"p1", "p2"}
+						test.AssertEqual(t, len(wantProv), len(gotProv), "wantProv and gotProv are different lengths")
+						for i, prov := range wantProv {
+							test.AssertEqual(t, prov, gotProv[i], "")
+						}
+						return &NUMAFabric{
+							log:     l,
+							numaMap: testMap,
+						}, nil
+					},
+				})
+			},
+			expResult: testMap,
+			expFunc:   true,
+		},
+		"filter on dev class": {
+			devClass: hardware.Ether,
+			getInfoCache: func(l logging.Logger) *InfoCache {
+				return newTestInfoCache(t, l, testInfoCacheParams{
+					mockScanFabric: func(_ context.Context, gotProv ...string) (*NUMAFabric, error) {
+						return &NUMAFabric{
+							log:     l,
+							numaMap: testMap,
+						}, nil
+					},
+				})
+			},
+			expResult: NUMAFabricMap{
+				0: {
+					{
+						Name:        "t1",
+						Domain:      "t1",
+						NetDevClass: hardware.Ether,
+						hw: &hardware.FabricInterface{
+							Providers: hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "p1"}),
+						},
+					},
+				},
+			},
+			expFunc: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			var ic *InfoCache
+			if tc.getInfoCache != nil {
+				ic = tc.getInfoCache(log)
+			}
+
+			result, release, err := ic.GetNUMAFabricMap(test.Context(t), hardware.Ether, tc.providers...)
+			if release != nil {
+				defer release()
+			}
+
+			test.CmpErr(t, tc.expErr, err)
+			if diff := cmp.Diff(tc.expResult, result, fiCmpOpt); diff != "" {
+				t.Fatalf("-want, +got:\n%s", diff)
+			}
+
+			test.AssertEqual(t, tc.expFunc, release != nil, "expected release function")
 		})
 	}
 }
@@ -1139,10 +1410,10 @@ func TestAgent_InfoCache_Refresh(t *testing.T) {
 							func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
 								return ctlResp, nil
 							}),
-						newCachedFabricInfo(l,
+						newCachedFabricInfo(
 							func(_ context.Context, _ ...string) (*NUMAFabric, error) {
 								return NUMAFabricFromScan(test.Context(t), l, testSet), nil
-							}),
+							}, hardware.Ether),
 					},
 				})
 			},
@@ -1158,10 +1429,10 @@ func TestAgent_InfoCache_Refresh(t *testing.T) {
 							func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
 								return ctlResp, nil
 							}),
-						newCachedFabricInfo(l,
+						newCachedFabricInfo(
 							func(_ context.Context, _ ...string) (*NUMAFabric, error) {
 								return nil, errors.New("shouldn't call fabric")
-							}),
+							}, hardware.Ether),
 					},
 				})
 			},
@@ -1176,10 +1447,10 @@ func TestAgent_InfoCache_Refresh(t *testing.T) {
 							func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
 								return nil, errors.New("shouldn't call GetAttachInfo")
 							}),
-						newCachedFabricInfo(l,
+						newCachedFabricInfo(
 							func(_ context.Context, _ ...string) (*NUMAFabric, error) {
 								return NUMAFabricFromScan(test.Context(t), l, testSet), nil
-							}),
+							}, hardware.Ether),
 					},
 				})
 			},
@@ -1310,6 +1581,7 @@ func TestAgent_InfoCache_waitFabricReady(t *testing.T) {
 			netDevClass: hardware.Infiniband,
 			expChecked:  []string{"t0", "t1"},
 		},
+		"nothing to wait for": {},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())

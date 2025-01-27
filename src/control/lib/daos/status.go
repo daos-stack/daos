@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -28,6 +28,17 @@ func (ds Status) Error() string {
 
 func (ds Status) Int32() int32 {
 	return int32(ds)
+}
+
+// ErrorFromRC converts a simple DAOS return code into an error.
+func ErrorFromRC(rc int) error {
+	if rc == 0 {
+		return nil
+	}
+	if rc > 0 {
+		rc = -rc
+	}
+	return Status(rc)
 }
 
 const (
@@ -105,6 +116,8 @@ const (
 	BadTarget Status = -C.DER_BAD_TARGET
 	// GroupVersionMismatch indicates that group versions didn't match
 	GroupVersionMismatch Status = -C.DER_GRPVER
+	// MercuryFatalError indicates a fatal (non-retryable) Mercury error
+	MercuryFatalError Status = -C.DER_HG_FATAL
 	// NoService indicates the pool service is not up and didn't process the pool request
 	NoService Status = -C.DER_NO_SERVICE
 )
@@ -158,4 +171,8 @@ const (
 	NoCert Status = -C.DER_NO_CERT
 	// BadCert indicates that an invalid certificate was detected.
 	BadCert Status = -C.DER_BAD_CERT
+	// RedundancyFactorExceeded indicates that the maximum number of failed components was exceeded.
+	RedundancyFactorExceeded Status = -C.DER_RF
+	// AgentCommFailed indicates that client/agent communication failed.
+	AgentCommFailed Status = -C.DER_AGENT_COMM
 )

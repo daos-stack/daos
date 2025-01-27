@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -56,6 +56,11 @@ var (
 		"cannot destroy a pool with existing containers",
 		"retry the operation with the recursive flag set to remove containers along with the pool",
 	)
+	FaultHugepagesDisabled = serverFault(
+		code.ServerHugepagesDisabled,
+		"the use of hugepages has been disabled in the server config",
+		"set false (or remove) disable_hugepages parameter in config and reformat storage, then retry the operation",
+	)
 )
 
 func FaultPoolInvalidServiceReps(maxSvcReps uint32) *fault.Fault {
@@ -80,7 +85,7 @@ func FaultPoolNvmeTooSmall(minTotal, minNVMe uint64) *fault.Fault {
 		fmt.Sprintf("requested NVMe capacity too small (min %s per target)",
 			humanize.IBytes(engine.NvmeMinBytesPerTarget)),
 		fmt.Sprintf("retry the request with a pool size of at least %s, with at least %s NVMe",
-			humanize.Bytes(minTotal+humanize.MiByte), humanize.Bytes(minNVMe+humanize.MiByte),
+			humanize.IBytes(minTotal+humanize.MiByte), humanize.IBytes(minNVMe+humanize.MiByte),
 		),
 	)
 }
@@ -91,7 +96,7 @@ func FaultPoolScmTooSmall(minTotal, minSCM uint64) *fault.Fault {
 		fmt.Sprintf("requested SCM capacity is too small (min %s per target)",
 			humanize.IBytes(engine.ScmMinBytesPerTarget)),
 		fmt.Sprintf("retry the request with a pool size of at least %s, with at least %s SCM",
-			humanize.Bytes(minTotal+humanize.MiByte), humanize.Bytes(minSCM+humanize.MiByte),
+			humanize.IBytes(minTotal+humanize.MiByte), humanize.IBytes(minSCM+humanize.MiByte),
 		),
 	)
 }
@@ -138,7 +143,7 @@ func FaultScmUnmanaged(mntPoint string) *fault.Fault {
 	return serverFault(
 		code.ServerScmUnmanaged,
 		fmt.Sprintf("the SCM mountpoint at %s is unavailable and can't be created/mounted", mntPoint),
-		fmt.Sprintf("manually create %s or remove --recreate-superblocks from the server arguments", mntPoint),
+		fmt.Sprintf("manually create %s and retry", mntPoint),
 	)
 }
 
@@ -163,6 +168,23 @@ func FaultNoCompatibilityInsecure(self, other build.Version) *fault.Fault {
 		code.ServerNoCompatibilityInsecure,
 		fmt.Sprintf("versions %s and %s are not compatible in insecure mode", self, other),
 		"enable certificates or use identical component versions",
+	)
+}
+
+// FaultPoolMemRatioNoRoles indicates a fault when pool create request contains MD-on-SSD
+// parameters but MD-on-SSD has not been enabled on the server.
+var FaultPoolMemRatioNoRoles = serverFault(
+	code.ServerPoolMemRatioNoRoles,
+	"pool create request contains MD-on-SSD parameters but MD-on-SSD has not been enabled",
+	"either remove MD-on-SSD-specific options from the command request or set bdev_roles in "+
+		"server config file to enable MD-on-SSD")
+
+func FaultBadFaultDomainLabels(faultPath, addr string, reqLabels, systemLabels []string) *fault.Fault {
+	return serverFault(
+		code.ServerBadFaultDomainLabels,
+		fmt.Sprintf("labels in join request [%s] don't match system labels [%s] for server %s (fault path: %s)",
+			strings.Join(reqLabels, ", "), strings.Join(systemLabels, ", "), addr, faultPath),
+		"update the 'fault_path' or executable specified in 'fault_cb' in the affected server's configuration file to match the system labels",
 	)
 }
 

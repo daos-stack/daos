@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -267,7 +267,7 @@ func TestServer_Harness_Start(t *testing.T) {
 					}, nil
 				}
 
-				ei := NewEngineInstance(log, provider, joinFn, runner)
+				ei := NewEngineInstance(log, provider, joinFn, runner, nil)
 				var isAP bool
 				if tc.isAP && i == 0 { // first instance will be AP & bootstrap MS
 					isAP = true
@@ -294,13 +294,17 @@ func TestServer_Harness_Start(t *testing.T) {
 			}
 
 			instances := harness.Instances()
-
+			mockDrpcClients := make([]*mockDrpcClient, 0, len(instances))
 			// set mock dRPC client to record call details
 			for _, e := range instances {
 				ei := e.(*EngineInstance)
-				ei.setDrpcClient(newMockDrpcClient(&mockDrpcClientConfig{
+				cli := newMockDrpcClient(&mockDrpcClientConfig{
 					SendMsgResponse: &drpc.Response{},
-				}))
+				})
+				mockDrpcClients = append(mockDrpcClients, cli)
+				ei.getDrpcClientFn = func(s string) drpc.DomainSocketClient {
+					return cli
+				}
 			}
 
 			ctx, cancel := context.WithCancel(test.Context(t))
@@ -417,13 +421,10 @@ func TestServer_Harness_Start(t *testing.T) {
 			defer joinMu.Unlock()
 			// verify expected RPCs were made, ranks allocated and
 			// members added to membership
-			for _, e := range instances {
+			for i, e := range instances {
 				ei := e.(*EngineInstance)
-				dc, err := ei.getDrpcClient()
-				if err != nil {
-					t.Fatal(err)
-				}
-				gotDrpcCalls := dc.(*mockDrpcClient).CalledMethods()
+				dc := mockDrpcClients[i]
+				gotDrpcCalls := dc.CalledMethods()
 				AssertEqual(t, tc.expDrpcCalls[ei.Index()], gotDrpcCalls,
 					fmt.Sprintf("%s: unexpected dRPCs for instance %d", name, ei.Index()))
 

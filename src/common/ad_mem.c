@@ -1893,9 +1893,6 @@ arena_reserve_grp(struct ad_arena *arena, daos_size_t size, int *pos,
 		return -DER_NOSPACE;
 
 	D_ASSERT(bits >= bits_min);
-	grp = alloc_group(arena, false);
-	if (!grp)
-		return -DER_NOMEM;
 
 	/* find an unused one */
 	for (grp_idx = arena->ar_last_grp; grp_idx < ARENA_GRP_MAX; grp_idx++) {
@@ -1908,9 +1905,14 @@ arena_reserve_grp(struct ad_arena *arena, daos_size_t size, int *pos,
 	/* run out of ad groups */
 	if (grp_idx == ARENA_GRP_MAX) {
 		D_DEBUG(DB_TRACE, "Arena=%d, no group found\n", arena2id(arena));
-		arena_decref(arena);
 		return -DER_NOSPACE;
 	}
+
+	/* allocate group as we know there is a space in arena group idx */
+	grp = alloc_group(arena, false);
+	if (!grp)
+		return -DER_NOMEM;
+
 	arena->ar_last_grp = max(arena->ar_last_grp, grp_idx);
 
 	gd = &ad->ad_groups[grp_idx];

@@ -1,0 +1,53 @@
+# pylint: disable-next=wrong-spelling-in-comment
+"""Build tests"""
+
+
+def scons():
+    """Execute build"""
+    Import('env', 'prereqs')
+
+    denv = env.Clone()
+
+    # Add runtime paths for daos libraries
+    denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
+    denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64'])
+
+    prereqs.require(denv, 'argobots', 'protobufc', 'pmdk', 'spdk')
+
+    # for ddb includes
+    denv.AppendUnique(CPPPATH=[Dir('../').srcnode()])
+    denv.AppendUnique(LIBPATH=[Dir('../')])
+
+    # Add include directory for vos internal headers
+    denv.AppendUnique(CPPPATH=[Dir('../../../vos/').srcnode()])
+    denv.AppendUnique(CPPPATH=[Dir('../../../vos/')])
+    denv.AppendUnique(CPPDEFINES='_GNU_SOURCE')
+
+    libs = ['vos', 'daos_common_pmem', 'abt', 'gurt', 'uuid', 'bio', 'cart',
+            'cmocka', 'ddb']
+    # spdk libraries
+    libs += ['spdk_event', 'spdk_log']
+    libs += ['spdk_bdev', 'spdk_blob', 'spdk_blob_bdev', 'spdk_json']
+    libs += ['spdk_nvme', 'spdk_init', 'spdk_thread', 'spdk_log']
+    libs += ['spdk_env_dpdk', 'spdk_thread', 'spdk_bdev', 'rte_mempool']
+    libs += ['rte_mempool_ring', 'rte_bus_pci', 'rte_pci', 'rte_ring']
+    libs += ['rte_mbuf', 'rte_eal', 'rte_kvargs', 'spdk_bdev_aio']
+    libs += ['spdk_bdev_nvme', 'spdk_blob', 'spdk_nvme', 'spdk_util']
+    libs += ['spdk_json', 'spdk_jsonrpc', 'spdk_rpc', 'spdk_trace']
+    libs += ['spdk_sock', 'spdk_log', 'spdk_notify', 'spdk_blob_bdev']
+    libs += ['spdk_vmd', 'spdk_event_bdev', 'spdk_init', 'rte_power']
+    src = ['ddb_cmd_options_tests.c',
+           'ddb_commands_tests.c',
+           'ddb_main_tests.c',
+           'ddb_parse_tests.c',
+           'ddb_path_tests.c',
+           'ddb_test_driver.c',
+           'ddb_vos_tests.c',
+           'ddb_commands_print_tests.c']
+    ddb_tests = denv.d_program('ddb_tests', [src], LIBS=libs)
+
+    denv.Install('$PREFIX/bin/', ddb_tests)
+
+
+if __name__ == "SCons.Script":
+    scons()

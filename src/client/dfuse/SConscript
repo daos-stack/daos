@@ -7,6 +7,7 @@ DFUSE_SRC = ['dfuse_core.c',
              'dfuse_main.c',
              'dfuse_fuseops.c',
              'inval.c',
+             'file.c',
              'dfuse_cont.c',
              'dfuse_thread.c',
              'dfuse_pool.c']
@@ -33,7 +34,7 @@ OPS_SRC = ['create',
            'statfs']
 
 IOIL_SRC = ['int_posix.c', 'int_read.c', 'int_write.c']
-PIL4DFS_SRC = ['int_dfs.c', 'hook.c']
+PIL4DFS_SRC = ['int_dfs.c', 'dfs_dcache.c', 'aio.c']
 
 
 def build_common(env, files, is_shared):
@@ -52,30 +53,43 @@ def build_common(env, files, is_shared):
 def build_client_libs_shared(env, prereqs):
     """build the shared interception library"""
 
+    # Both libioil and libpil4dfs need hook.c. Compile hook.c first.
+    hookenv = env.Clone()
+    if '-fvisibility=hidden' in hookenv['CFLAGS']:
+        hookenv['CFLAGS'].remove('-fvisibility=hidden')
+    hookenv.AppendUnique(CFLAGS=['-fPIC'])
+    hookenv.require('capstone')
+    hook_obj = hookenv.SharedObject(os.path.join('pil4dfs', 'hook.c'), SHOBJPREFIX='s_')
+
     ilenv = env.Clone()
     ilenv.AppendUnique(CFLAGS=['-fPIC'])
     ilenv.AppendUnique(CPPDEFINES=['IOIL_PRELOAD'])
     ilenv.AppendUnique(LIBPATH=[Dir('../dfs')])
     ilenv.AppendUnique(LIBPATH=[Dir('../api')])
     ilenv.AppendUnique(LIBS=['dfs'])
+    ilenv.require('capstone')
     penv = ilenv.Clone()
     penv.AppendUnique(CPPDEFINES=['_FILE_OFFSET_BITS=64'])
 
     il_obj = []
     for src in IOIL_SRC:
         il_obj += ilenv.SharedObject(os.path.join('il', src), SHOBJPREFIX='s_')
+    il_obj += hook_obj
 
     pil4dfsenv = env.Clone()
     if '-fvisibility=hidden' in pil4dfsenv['CFLAGS']:
         pil4dfsenv['CFLAGS'].remove('-fvisibility=hidden')
     pil4dfsenv.AppendUnique(LIBPATH=[Dir('../dfs')])
     pil4dfsenv.AppendUnique(CPPPATH=[Dir('../dfs').srcnode()])
+    pil4dfsenv.AppendUnique(LIBPATH=[Dir('../../gurt')])
+    pil4dfsenv.AppendUnique(CPPPATH=[Dir('../../gurt').srcnode()])
     pil4dfsenv.AppendUnique(LIBPATH=[Dir('../api')])
-    pil4dfsenv.AppendUnique(LIBS=['pthread', 'daos', 'dfs', 'duns', 'dl'])
+    pil4dfsenv.AppendUnique(LIBS=['pthread', 'daos', 'dfs', 'duns', 'gurt', 'dl'])
     pil4dfsenv.require('capstone')
     pil4dfs_obj = []
     for src in PIL4DFS_SRC:
         pil4dfs_obj += pil4dfsenv.SharedObject(os.path.join('pil4dfs', src))
+    pil4dfs_obj += hook_obj
 
     common = build_common(penv, COMMON_SRC, True)
 
@@ -138,7 +152,7 @@ def check_ioctl_def(context, ctype):
     context.Message(f'Checking if fuse ioctl is type {ctype} ')
 
     # pylint: disable-next=consider-using-f-string
-    src = """#include <fuse3/fuse_lowlevel.h>
+    src = """#include <fused/fuse_lowlevel.h>
 
 extern void
 my_ioctl (fuse_req_t req, fuse_ino_t ino, %s cmd,
@@ -164,10 +178,8 @@ def configure_fuse(cenv):
 
     if check.CheckFuseIoctl('unsigned int'):
         pass
-    elif check.CheckFuseIoctl('int'):
-        cenv.AppendUnique(CPPDEFINES={'FUSE_IOCTL_USE_INT': '1'})
     else:
-        print('Could not determine type of fuse ioctl type')
+        print('Expected unsigned int ioctl type')
         Exit(2)
 
     check.Finish()
@@ -208,11 +220,11 @@ def scons():
 
     cenv = dfuse_env.Clone()
     cenv.AppendUnique(LIBPATH=[Dir('../dfs')])
-    cenv.AppendUnique(CPPPATH=[Dir('../dfs').srcnode()])
-
     cenv.AppendUnique(LIBS=['dfs', 'duns'])
 
-    cenv.require('hwloc', 'fuse')
+    cenv.require('hwloc')
+    cenv.require('fused')
+    extra_libs = ['dl']
 
     configure_fuse(cenv)
 
@@ -221,7 +233,7 @@ def scons():
         dfuse_obj += cenv.Object(src)
     for src in OPS_SRC:
         dfuse_obj += cenv.Object(os.path.join('ops', f'{src}.c'))
-    cenv.AppendUnique(LIBS=['gurt'])
+    cenv.AppendUnique(LIBS=['gurt'] + extra_libs)
     dfuse_bin = cenv.d_program('dfuse/dfuse', common + dfuse_obj)
 
     Default(dfuse_bin)

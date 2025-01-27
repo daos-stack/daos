@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -1419,7 +1419,28 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 					},
 				},
 			},
-			expErr: errors.New("no fabric interfaces found"),
+			expErr: errors.New("no fabric interfaces could be found"),
+		},
+		"nothing found with empty provider string": {
+			config: &FabricScannerConfig{
+				TopologyProvider: &MockTopologyProvider{
+					GetTopoReturn: testTopo,
+				},
+				FabricInterfaceProviders: []FabricInterfaceProvider{
+					&MockFabricInterfaceProvider{
+						GetFabricReturn: NewFabricInterfaceSet(),
+					},
+				},
+				NetDevClassProvider: &MockNetDevClassProvider{
+					GetNetDevClassReturn: []MockGetNetDevClassResult{
+						{
+							NDC: Infiniband,
+						},
+					},
+				},
+			},
+			providers: []string{""},
+			expErr:    errors.New("no fabric interfaces could be found"),
 		},
 		"nothing found with provider": {
 			config: &FabricScannerConfig{
@@ -1440,7 +1461,7 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 				},
 			},
 			providers: []string{"ofi+tcp"},
-			expErr:    errors.New("no fabric interfaces found with providers: ofi+tcp"),
+			expErr:    errors.New("no fabric interfaces found with provider ofi+tcp"),
 		},
 		"already initialized": {
 			config: GetMockFabricScannerConfig(),
@@ -1449,7 +1470,7 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 				&MockFabricInterfaceSetBuilder{},
 				&MockFabricInterfaceSetBuilder{},
 			},
-			expErr: errors.New("no fabric interfaces found"),
+			expErr: errors.New("no fabric interfaces could be found"),
 		},
 		"topology fails": {
 			config: &FabricScannerConfig{

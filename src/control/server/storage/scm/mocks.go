@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,12 +12,13 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/lib/ipmctl"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/mount"
+	"github.com/dustin/go-humanize"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -79,6 +80,12 @@ func mockXMLRegions(t *testing.T, variant string) string {
 		rl.Regions[1].ID = 2
 		rl.Regions[1].SocketID = 1
 		rl.Regions[1].ISetID++
+	case "dual-sock-one-free":
+		rl.Regions = append(rl.Regions, rl.Regions[0])
+		rl.Regions[1].ID = 2
+		rl.Regions[1].SocketID = 1
+		rl.Regions[1].ISetID++
+		rl.Regions[1].FreeCapacity = rl.Regions[1].Capacity
 	case "dual-sock-isetid-switch":
 		rl.Regions[0].FreeCapacity = rl.Regions[0].Capacity
 		rl.Regions = append(rl.Regions, rl.Regions[0])
@@ -261,13 +268,55 @@ const (
   }
 ]
 `
+
+	// JSON output from "ndctl list -Rv" showing single namespace on dual socket.
+	ndctlRegionsOneFree = `[
+    {
+      "dev":"region1",
+      "size":1078036791296,
+      "align":16777216,
+      "available_size":1078036791296,
+      "max_available_extent":1078036791296,
+      "type":"pmem",
+      "numa_node":1,
+      "target_node":3,
+      "iset_id":-3098214067285580732,
+      "persistence_domain":"memory_controller"
+    },
+    {
+      "dev":"region0",
+      "size":1078036791296,
+      "align":16777216,
+      "available_size":0,
+      "max_available_extent":0,
+      "type":"pmem",
+      "numa_node":0,
+      "target_node":2,
+      "iset_id":7845533025580426308,
+      "persistence_domain":"memory_controller",
+      "namespaces":[
+        {
+          "dev":"namespace0.0",
+          "mode":"fsdax",
+          "map":"dev",
+          "size":1061190369280,
+          "uuid":"d7804a1c-954a-48f5-bc4a-1fc76c6b60ee",
+          "raw_uuid":"83c04060-109d-40a3-8867-6664c277c958",
+          "sector_size":512,
+          "align":2097152,
+          "blockdev":"pmem0",
+          "numa_node":0,
+          "target_node":2
+        }
+      ]
+    }
+  ]
+`
 )
 
 type (
 	mockIpmctlCfg struct {
 		initErr           error
-		getModulesErr     error
-		modules           []ipmctl.DeviceDiscovery
 		delGoalsErr       error
 		getRegionsErr     error
 		regions           []ipmctl.PMemRegion
@@ -286,7 +335,7 @@ func (m *mockIpmctl) Init(_ logging.Logger) error {
 }
 
 func (m *mockIpmctl) GetModules(_ logging.Logger) ([]ipmctl.DeviceDiscovery, error) {
-	return m.cfg.modules, m.cfg.getModulesErr
+	return nil, errors.New("GetModules ipmctl library call not used")
 }
 
 func (m *mockIpmctl) DeleteConfigGoals(_ logging.Logger) error {
@@ -315,49 +364,26 @@ func newMockIpmctl(cfg *mockIpmctlCfg) *mockIpmctl {
 	}
 }
 
-// mockDiscovery returns a mock SCM module of type exported from ipmctl.
-func mockDiscovery(sockID ...int) ipmctl.DeviceDiscovery {
-	m := proto.MockScmModule()
-
-	sid := m.Socketid
-	if len(sockID) > 0 {
-		sid = uint32(sockID[0])
+func mustParseBytes(s string) uint64 {
+	sz, err := humanize.ParseBytes(s)
+	if err != nil {
+		panic(err)
 	}
-
-	result := ipmctl.DeviceDiscovery{
-		Physical_id:          uint16(m.Physicalid),
-		Channel_id:           uint16(m.Channelid),
-		Channel_pos:          uint16(m.Channelposition),
-		Memory_controller_id: uint16(m.Controllerid),
-		Socket_id:            uint16(sid),
-		Capacity:             m.Capacity,
-	}
-
-	_ = copy(result.Uid[:], m.Uid)
-	_ = copy(result.Part_number[:], m.PartNumber)
-	_ = copy(result.Fw_revision[:], m.FirmwareRevision)
-
-	return result
+	return sz
 }
 
-// mockModule converts ipmctl type SCM module and returns storage/scm
-// internal type.
-func mockModule(dIn ...ipmctl.DeviceDiscovery) *storage.ScmModule {
-	d := mockDiscovery()
-	if len(dIn) > 0 {
-		d = dIn[0]
-	}
-
+func mockModule(uid string, pi, si, ci, chi, chp uint32) *storage.ScmModule {
 	return &storage.ScmModule{
-		PhysicalID:       uint32(d.Physical_id),
-		ChannelID:        uint32(d.Channel_id),
-		ChannelPosition:  uint32(d.Channel_pos),
-		ControllerID:     uint32(d.Memory_controller_id),
-		SocketID:         uint32(d.Socket_id),
-		Capacity:         d.Capacity,
-		UID:              d.Uid.String(),
-		PartNumber:       d.Part_number.String(),
-		FirmwareRevision: d.Fw_revision.String(),
+		Capacity:         mustParseBytes("502.599 GiB"),
+		HealthState:      "Healthy",
+		FirmwareRevision: "01.00.00.5127",
+		PartNumber:       "NMA1XXD512GQS",
+		UID:              uid,
+		PhysicalID:       pi,
+		SocketID:         si,
+		ControllerID:     ci,
+		ChannelID:        chi,
+		ChannelPosition:  chp,
 	}
 }
 
@@ -452,12 +478,16 @@ func DefaultMockBackend() *MockBackend {
 	return NewMockBackend(nil)
 }
 
+// NewMockProvider stubs os calls by mocking system and mount providers. scm provider functions
+// call into system and mount providers for any os access.
 func NewMockProvider(log logging.Logger, mbc *MockBackendConfig, msc *system.MockSysConfig) *Provider {
 	sysProv := system.NewMockSysProvider(log, msc)
 	mountProv := mount.NewProvider(log, sysProv)
 	return NewProvider(log, NewMockBackend(mbc), sysProv, mountProv)
 }
 
+// DefaultMockProvider stubs os calls by mocking system and mount providers. scm provider functions
+// call into system and mount providers for any os access.
 func DefaultMockProvider(log logging.Logger) *Provider {
 	sysProv := system.DefaultMockSysProvider(log)
 	mountProv := mount.NewProvider(log, sysProv)

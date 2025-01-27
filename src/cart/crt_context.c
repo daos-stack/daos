@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -187,29 +187,12 @@ out:
 }
 
 int
-crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, bool primary);
-
-int
-crt_context_create_on_provider(crt_context_t *crt_ctx, const char *provider, bool primary)
-{
-	int	provider_idx = -1;
-
-	provider_idx = crt_str_to_provider(provider);
-	if (provider_idx == -1) {
-		D_ERROR("Invalid requested provider '%s'\n", provider);
-		return -DER_INVAL;
-	}
-
-	return crt_context_provider_create(crt_ctx, provider_idx, primary);
-}
-
-int
 crt_context_uri_get(crt_context_t crt_ctx, char **uri)
 {
 	struct crt_context	*ctx = NULL;
 
 	if (crt_ctx == NULL || uri == NULL) {
-		D_ERROR("Invalid null parameters\n");
+		D_ERROR("Invalid null parameters (%p) (%p)\n", crt_ctx, uri);
 		return -DER_INVAL;
 	}
 
@@ -221,8 +204,9 @@ crt_context_uri_get(crt_context_t crt_ctx, char **uri)
 	return DER_SUCCESS;
 }
 
-int
-crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, bool primary)
+static int
+crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, bool primary,
+			    int iface_idx)
 {
 	struct crt_context	*ctx = NULL;
 	int			rc = 0;
@@ -266,8 +250,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 	ctx->cc_primary = primary;
 	ctx->cc_idx = ctx_idx;
 
-	rc = crt_hg_ctx_init(&ctx->cc_hg_ctx, provider, ctx_idx, primary);
-
+	rc = crt_hg_ctx_init(&ctx->cc_hg_ctx, provider, ctx_idx, primary, iface_idx);
 	if (rc != 0) {
 		D_ERROR("crt_hg_ctx_init() failed, " DF_RC "\n", DP_RC(rc));
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
@@ -275,15 +258,12 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 		D_GOTO(out, rc);
 	}
 
-	if (crt_is_service()) {
-		rc = crt_hg_get_addr(ctx->cc_hg_ctx.chc_hgcla,
-				     ctx->cc_self_uri, &uri_len);
-		if (rc != 0) {
-			D_ERROR("ctx_hg_get_addr() failed; rc: %d.\n", rc);
-			D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
-			crt_context_destroy(ctx, true);
-			D_GOTO(out, rc);
-		}
+	rc = crt_hg_get_addr(ctx->cc_hg_ctx.chc_hgcla, ctx->cc_self_uri, &uri_len);
+	if (rc != 0) {
+		D_ERROR("ctx_hg_get_addr() failed; rc: %d.\n", rc);
+		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
+		crt_context_destroy(ctx, true);
+		D_GOTO(out, rc);
 	}
 
 	ctx_list = crt_provider_get_ctx_list(primary, provider);
@@ -322,18 +302,42 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 		if (ret)
 			D_WARN("Failed to create failed addr counter: "DF_RC
 			       "\n", DP_RC(ret));
+
+		ret = d_tm_add_metric(&ctx->cc_net_glitches, D_TM_COUNTER,
+				      "Total number of network glitch errors", "errors",
+				      "net/%s/glitch/ctx_%u", prov, ctx->cc_idx);
+		if (ret)
+			DL_WARN(rc, "Failed to create network glitch counter");
+
+		ret = d_tm_add_metric(&ctx->cc_swim_delay, D_TM_STATS_GAUGE,
+				      "SWIM delay measurements", "delay",
+				      "net/%s/swim_delay/ctx_%u", prov, ctx->cc_idx);
+		if (ret)
+			DL_WARN(rc, "Failed to create SWIM delay gauge");
+
+		ret = d_tm_add_metric(&ctx->cc_quotas.rpc_waitq_depth, D_TM_GAUGE,
+				      "Current count of enqueued RPCs", "rpcs",
+				      "net/%s/waitq_depth/ctx_%u", prov, ctx->cc_idx);
+		if (ret)
+			DL_WARN(rc, "Failed to create rpc waitq gauge");
+
+		ret = d_tm_add_metric(&ctx->cc_quotas.rpc_quota_exceeded, D_TM_COUNTER,
+				      "Total number of exceeded RPC quota errors", "errors",
+				      "net/%s/quota_exceeded/ctx_%u", prov, ctx->cc_idx);
+		if (ret)
+			DL_WARN(rc, "Failed to create quota exceeded counter");
 	}
 
-	if (crt_is_service() &&
-	    crt_gdata.cg_auto_swim_disable == 0 &&
-	    ctx->cc_idx == crt_gdata.cg_swim_crt_idx) {
-		rc = crt_swim_init(crt_gdata.cg_swim_crt_idx);
+	if (crt_is_service() && crt_gdata.cg_auto_swim_disable == 0 &&
+	    ctx->cc_idx == crt_gdata.cg_swim_ctx_idx) {
+		rc = crt_swim_init(crt_gdata.cg_swim_ctx_idx);
 		if (rc) {
 			D_ERROR("crt_swim_init() failed rc: %d.\n", rc);
 			crt_context_destroy(ctx, true);
 			D_GOTO(out, rc);
 		}
 
+		/* TODO: Address this hack */
 		if (provider == CRT_PROV_OFI_SOCKETS || provider == CRT_PROV_OFI_TCP_RXM) {
 			struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 			struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
@@ -358,9 +362,7 @@ out:
 bool
 crt_context_is_primary(crt_context_t crt_ctx)
 {
-	struct crt_context *ctx;
-
-	ctx = crt_ctx;
+	struct crt_context *ctx = crt_ctx;
 
 	return ctx->cc_primary;
 }
@@ -368,9 +370,83 @@ crt_context_is_primary(crt_context_t crt_ctx)
 int
 crt_context_create(crt_context_t *crt_ctx)
 {
-	return crt_context_provider_create(crt_ctx, crt_gdata.cg_primary_prov, true);
+	return crt_context_provider_create(crt_ctx, crt_gdata.cg_primary_prov, true, 0);
 }
 
+uint32_t
+crt_num_ifaces_get(void)
+{
+	return crt_provider_num_ifaces_get(true, crt_gdata.cg_primary_prov);
+}
+
+int
+crt_context_create_on_iface_idx(uint32_t iface_index, crt_context_t *crt_ctx)
+{
+	uint32_t num_ifaces;
+
+	if (crt_is_service()) {
+		D_ERROR("API not available on servers\n");
+		return -DER_NOSYS;
+	}
+
+	num_ifaces = crt_num_ifaces_get();
+	if (num_ifaces == 0) {
+		D_ERROR("No interfaces specified at startup\n");
+		return -DER_INVAL;
+	}
+
+	if (iface_index >= num_ifaces) {
+		D_ERROR("interface index %d outside of range [0-%d]\n",
+			iface_index, num_ifaces - 1);
+		return -DER_INVAL;
+	}
+
+	return crt_context_provider_create(crt_ctx, crt_gdata.cg_primary_prov, true, iface_index);
+}
+
+int
+crt_iface_name2idx(const char *iface_name, int *idx)
+{
+	uint32_t	num_ifaces;
+	int		i;
+	char		*name;
+
+	num_ifaces = crt_provider_num_ifaces_get(true, crt_gdata.cg_primary_prov);
+
+	for (i = 0; i < num_ifaces; i++) {
+		name = crt_provider_iface_str_get(true, crt_gdata.cg_primary_prov, i);
+
+		if (!name)
+			return -DER_INVAL;
+
+		if (strcmp(name, iface_name) == 0) {
+			*idx = i;
+			return DER_SUCCESS;
+		}
+	}
+
+	return -DER_INVAL;
+}
+
+int
+crt_context_create_on_iface(const char *iface_name, crt_context_t *crt_ctx)
+{
+	int idx;
+	int rc;
+
+	rc = crt_iface_name2idx(iface_name, &idx);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	D_DEBUG(DB_ALL, "%s resolved to index=%d\n", iface_name, idx);
+
+	return crt_context_create_on_iface_idx(idx, crt_ctx);
+out:
+	return rc;
+}
+
+
+/* TODO: Add crt_context_create_secondary_on_iface_idx() if needed */
 int
 crt_context_create_secondary(crt_context_t *crt_ctx, int idx)
 {
@@ -388,7 +464,7 @@ crt_context_create_secondary(crt_context_t *crt_ctx, int idx)
 		return -DER_INVAL;
 	}
 
-	return crt_context_provider_create(crt_ctx, sec_prov, false);
+	return crt_context_provider_create(crt_ctx, sec_prov, false, 0 /* interface index */);
 }
 
 int
@@ -458,8 +534,8 @@ crt_rpc_complete_and_unlock(struct crt_rpc_priv *rpc_priv, int rc)
 			cbinfo.cci_rc = *rpc_priv->crp_header.p_rc;
 
 		if (cbinfo.cci_rc != 0)
-			RPC_CERROR(crt_quiet_error(cbinfo.cci_rc), DB_NET, rpc_priv,
-				   "failed, " DF_RC "\n", DP_RC(cbinfo.cci_rc));
+			RPC_CWARN(crt_quiet_error(cbinfo.cci_rc), DB_NET, rpc_priv,
+				  "failed, " DF_RC "\n", DP_RC(cbinfo.cci_rc));
 
 		RPC_TRACE(DB_TRACE, rpc_priv,
 			  "Invoking RPC callback (rank %d tag %d) rc: "
@@ -682,10 +758,12 @@ int
 crt_context_destroy(crt_context_t crt_ctx, int force)
 {
 	struct crt_context	*ctx;
-	uint32_t		 timeout_sec;
-	int			 provider;
-	int			 rc = 0;
-	int			 i;
+	uint32_t                 timeout_sec;
+	int                      ctx_idx;
+	int                      provider;
+	int                      rc    = 0;
+	int                      hg_rc = 0;
+	int                      i;
 
 	D_RWLOCK_RDLOCK(&crt_context_destroy_lock);
 
@@ -706,6 +784,22 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 	}
 
 	ctx = crt_ctx;
+
+	rc = crt_context_idx(crt_ctx, &ctx_idx);
+	if (rc != 0) {
+		D_ERROR("crt_context_idx() failed: " DF_RC "\n", DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	hg_rc = HG_Context_unpost(ctx->cc_hg_ctx.chc_hgctx);
+	if (hg_rc != 0) {
+		if (!force)
+			D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (crt_gdata.cg_swim_inited && crt_gdata.cg_swim_ctx_idx == ctx_idx)
+		crt_swim_disable_all();
+
 	rc = crt_grp_ctx_invalid(ctx, false /* locked */);
 	if (rc) {
 		DL_ERROR(rc, "crt_grp_ctx_invalid() failed");
@@ -736,6 +830,9 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 
 	if (!force && rc && i == CRT_SWIM_FLUSH_ATTEMPTS)
 		D_GOTO(out, rc);
+
+	if (crt_gdata.cg_swim_inited && crt_gdata.cg_swim_ctx_idx == ctx_idx)
+		crt_swim_fini();
 
 	D_MUTEX_LOCK(&ctx->cc_mutex);
 
@@ -962,9 +1059,7 @@ crt_req_timeout_track(struct crt_rpc_priv *rpc_priv)
 	if (rc == 0) {
 		rpc_priv->crp_in_binheap = 1;
 	} else {
-		RPC_ERROR(rpc_priv,
-			  "d_binheap_insert failed, rc: %d\n",
-			  rc);
+		RPC_ERROR(rpc_priv, "d_binheap_insert failed, rc: %d\n", rc);
 		RPC_DECREF(rpc_priv);
 	}
 
@@ -1064,9 +1159,12 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		d_tm_inc_counter(crt_ctx->cc_timedout, 1);
 
 	switch (rpc_priv->crp_state) {
+	case RPC_STATE_INITED:
 	case RPC_STATE_QUEUED:
-		RPC_ERROR(rpc_priv, "aborting waiting to group %s, rank %d, tgt_uri %s\n",
-			  grp_priv->gp_pub.cg_grpid, tgt_ep->ep_rank, rpc_priv->crp_tgt_uri);
+		RPC_INFO(rpc_priv, "aborting %s rpc to group %s, tgt %d:%d, tgt_uri %s\n",
+			 rpc_priv->crp_state == RPC_STATE_QUEUED ? "queued" : "inited",
+			 grp_priv->gp_pub.cg_grpid, tgt_ep->ep_rank, tgt_ep->ep_tag,
+			 rpc_priv->crp_tgt_uri);
 		crt_context_req_untrack(rpc_priv);
 		crt_rpc_complete_and_unlock(rpc_priv, -DER_TIMEDOUT);
 		break;
@@ -1074,13 +1172,11 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		ul_req = rpc_priv->crp_ul_req;
 		D_ASSERT(ul_req != NULL);
 		ul_in = crt_req_get(ul_req);
-		RPC_ERROR(rpc_priv,
-			  "failed due to URI_LOOKUP(rpc_priv %p) to group %s,"
-			  "rank %d through PSR %d timedout\n",
-			  container_of(ul_req, struct crt_rpc_priv, crp_pub),
-			  ul_in->ul_grp_id,
-			  ul_in->ul_rank,
-			  ul_req->cr_ep.ep_rank);
+		RPC_INFO(rpc_priv,
+			 "failed due to URI_LOOKUP(rpc_priv %p) to group %s,"
+			 "rank %d through PSR %d timedout\n",
+			 container_of(ul_req, struct crt_rpc_priv, crp_pub), ul_in->ul_grp_id,
+			 ul_in->ul_rank, ul_req->cr_ep.ep_rank);
 
 		if (crt_gdata.cg_use_sensors)
 			d_tm_inc_counter(crt_ctx->cc_timedout_uri, 1);
@@ -1095,11 +1191,9 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		crt_rpc_unlock(rpc_priv);
 		break;
 	case RPC_STATE_FWD_UNREACH:
-		RPC_ERROR(rpc_priv,
-			  "failed due to group %s, rank %d, tgt_uri %s can't reach the target\n",
-			  grp_priv->gp_pub.cg_grpid,
-			  tgt_ep->ep_rank,
-			  rpc_priv->crp_tgt_uri);
+		RPC_INFO(rpc_priv,
+			 "failed due to group %s, rank %d, tgt_uri %s can't reach the target\n",
+			 grp_priv->gp_pub.cg_grpid, tgt_ep->ep_rank, rpc_priv->crp_tgt_uri);
 		crt_context_req_untrack(rpc_priv);
 		crt_rpc_complete_and_unlock(rpc_priv, -DER_UNREACH);
 		break;
@@ -1107,12 +1201,14 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		/* At this point, RPC should always be completed by
 		 * Mercury
 		 */
-		RPC_ERROR(rpc_priv, "aborting in-flight to group %s, rank %d, tgt_uri %s\n",
-			  grp_priv->gp_pub.cg_grpid, tgt_ep->ep_rank, rpc_priv->crp_tgt_uri);
+		RPC_INFO(rpc_priv, "aborting in-flight to group %s, rank %d, tgt_uri %s\n",
+			 grp_priv->gp_pub.cg_grpid, tgt_ep->ep_rank, rpc_priv->crp_tgt_uri);
 		rc = crt_hg_req_cancel(rpc_priv);
 		if (rc != 0) {
-			RPC_ERROR(rpc_priv, "crt_hg_req_cancel failed, rc: %d, "
-				  "opc: %#x.\n", rc, rpc_priv->crp_pub.cr_opc);
+			RPC_WARN(rpc_priv,
+				 "crt_hg_req_cancel failed, rc: %d, "
+				 "opc: %#x.\n",
+				 rc, rpc_priv->crp_pub.cr_opc);
 			crt_context_req_untrack(rpc_priv);
 		}
 		crt_rpc_unlock(rpc_priv);
@@ -1131,6 +1227,7 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 	struct d_binheap_node		*bh_node;
 	d_list_t			 timeout_list;
 	uint64_t			 ts_now;
+	bool                             print_once = false;
 
 	D_ASSERT(crt_ctx != NULL);
 
@@ -1152,22 +1249,33 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 		crt_req_timeout_untrack(rpc_priv);
 		rpc_priv->crp_timeout_ts = 0;
 
-		d_list_add_tail(&rpc_priv->crp_tmp_link, &timeout_list);
+		D_ASSERTF(d_list_empty(&rpc_priv->crp_tmp_link_timeout),
+			  "already on timeout list\n");
+		d_list_add_tail(&rpc_priv->crp_tmp_link_timeout, &timeout_list);
 	};
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
 	/* handle the timeout RPCs */
-	while ((rpc_priv = d_list_pop_entry(&timeout_list,
-					    struct crt_rpc_priv,
-					    crp_tmp_link))) {
-		RPC_ERROR(rpc_priv,
-			  "ctx_id %d, (status: %#x) timed out (%d seconds), "
-			  "target (%d:%d)\n",
-			  crt_ctx->cc_idx,
-			  rpc_priv->crp_state,
-			  rpc_priv->crp_timeout_sec,
-			  rpc_priv->crp_pub.cr_ep.ep_rank,
-			  rpc_priv->crp_pub.cr_ep.ep_tag);
+	while ((rpc_priv =
+		    d_list_pop_entry(&timeout_list, struct crt_rpc_priv, crp_tmp_link_timeout))) {
+		/* NB: The reason that the error message is printed at INFO
+		 * level is because the user should know how serious the error
+		 * is and they will print the RPC error at appropriate level */
+		if (!print_once) {
+			print_once = true;
+
+			RPC_WARN(rpc_priv,
+				 "ctx_id %d, (status: %#x) timed out (%d seconds), "
+				 "target (%d:%d)\n",
+				 crt_ctx->cc_idx, rpc_priv->crp_state, rpc_priv->crp_timeout_sec,
+				 rpc_priv->crp_pub.cr_ep.ep_rank, rpc_priv->crp_pub.cr_ep.ep_tag);
+		} else {
+			RPC_INFO(rpc_priv,
+				 "ctx_id %d, (status: %#x) timed out (%d seconds), "
+				 "target (%d:%d)\n",
+				 crt_ctx->cc_idx, rpc_priv->crp_state, rpc_priv->crp_timeout_sec,
+				 rpc_priv->crp_pub.cr_ep.ep_rank, rpc_priv->crp_pub.cr_ep.ep_tag);
+		}
 
 		crt_req_timeout_hdlr(rpc_priv);
 		RPC_DECREF(rpc_priv);
@@ -1289,8 +1397,10 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
 	d_hash_rec_decref(&crt_ctx->cc_epi_table, &epi->epi_link);
 
-	if (quota_rc == -DER_QUOTA_LIMIT)
+	if (quota_rc == -DER_QUOTA_LIMIT) {
 		d_list_add_tail(&rpc_priv->crp_waitq_link, &crt_ctx->cc_quotas.rpc_waitq);
+		d_tm_inc_gauge(crt_ctx->cc_quotas.rpc_waitq_depth, 1);
+	}
 
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
@@ -1378,6 +1488,12 @@ dispatch_rpc(struct crt_rpc_priv *rpc) {
 
 	crt_rpc_lock(rpc);
 
+	/* RPC got cancelled or timed out before it got here, it got already completed*/
+	if (rpc->crp_timeout_ts == 0) {
+		crt_rpc_unlock(rpc);
+		return;
+	}
+
 	rc = crt_req_send_internal(rpc);
 	if (rc == 0) {
 		crt_rpc_unlock(rpc);
@@ -1414,10 +1530,12 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 				   struct crt_rpc_priv, crp_waitq_link);
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
-	if (tmp_rpc != NULL)
+	if (tmp_rpc != NULL) {
 		dispatch_rpc(tmp_rpc);
-	else
+		d_tm_dec_gauge(crt_ctx->cc_quotas.rpc_waitq_depth, 1);
+	} else {
 		put_quota_resource(rpc_priv->crp_pub.cr_ctx, CRT_QUOTA_RPCS);
+	}
 
 	crt_context_req_untrack_internal(rpc_priv);
 
@@ -1439,14 +1557,22 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 		crt_rpc_lock(tmp_rpc);
 		D_MUTEX_LOCK(&epi->epi_mutex);
 		if (tmp_rpc->crp_state == RPC_STATE_QUEUED && credits_available(epi) > 0) {
-			tmp_rpc->crp_state = RPC_STATE_INITED;
-			crt_set_timeout(tmp_rpc);
+			bool submit_rpc = true;
 
-			D_MUTEX_LOCK(&crt_ctx->cc_mutex);
-			rc = crt_req_timeout_track(tmp_rpc);
-			D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
-			if (rc != 0)
-				RPC_ERROR(tmp_rpc, "crt_req_timeout_track failed, rc: %d.\n", rc);
+			tmp_rpc->crp_state = RPC_STATE_INITED;
+			/* RPC got cancelled or timed out before it got here */
+			if (tmp_rpc->crp_timeout_ts == 0) {
+				submit_rpc = false;
+			} else {
+				crt_set_timeout(tmp_rpc);
+
+				D_MUTEX_LOCK(&crt_ctx->cc_mutex);
+				rc = crt_req_timeout_track(tmp_rpc);
+				D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
+				if (rc != 0)
+					RPC_ERROR(tmp_rpc,
+						  "crt_req_timeout_track failed, rc: %d.\n", rc);
+			}
 
 			/* remove from waitq and add to in-flight queue */
 			d_list_move_tail(&tmp_rpc->crp_epi_link, &epi->epi_req_q);
@@ -1455,8 +1581,15 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 			epi->epi_req_num++;
 			D_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
 
-			/* add to resend list */
-			d_list_add_tail(&tmp_rpc->crp_tmp_link, &submit_list);
+			/* add to submit list if not cancelled or timed out already  */
+			if (submit_rpc) {
+				/* prevent rpc from being released before it is dispatched below */
+				RPC_ADDREF(tmp_rpc);
+
+				D_ASSERTF(d_list_empty(&tmp_rpc->crp_tmp_link_submit),
+					  "already on submit list\n");
+				d_list_add_tail(&tmp_rpc->crp_tmp_link_submit, &submit_list);
+			}
 		}
 		D_MUTEX_UNLOCK(&epi->epi_mutex);
 		crt_rpc_unlock(tmp_rpc);
@@ -1468,8 +1601,12 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 	D_MUTEX_UNLOCK(&epi->epi_mutex);
 
 	/* re-submit the rpc req */
-	while ((tmp_rpc = d_list_pop_entry(&submit_list, struct crt_rpc_priv, crp_tmp_link)))
+	while (
+	    (tmp_rpc = d_list_pop_entry(&submit_list, struct crt_rpc_priv, crp_tmp_link_submit))) {
 		dispatch_rpc(tmp_rpc);
+		/* addref done above during d_list_add_tail */
+		RPC_DECREF(tmp_rpc);
+	}
 }
 
 /* TODO: Need per-provider call */
@@ -1605,7 +1742,6 @@ crt_self_uri_get(int tag, char **uri)
 	}
 
 	D_STRNDUP(tmp_uri, tmp_crt_ctx->cc_self_uri, CRT_ADDR_STR_MAX_LEN - 1);
-
 	*uri = tmp_uri;
 
 out:
@@ -1625,7 +1761,7 @@ crt_context_num(int *ctx_num)
 }
 
 bool
-crt_context_empty(int provider, int locked)
+crt_context_empty(crt_provider_t provider, int locked)
 {
 	bool rc = false;
 
@@ -1926,6 +2062,24 @@ exit:
 	return rc;
 }
 
+int
+crt_context_get_timeout(crt_context_t crt_ctx, uint32_t *timeout_sec)
+{
+	struct crt_context	*ctx = crt_ctx;
+	int			 rc = 0;
+
+	if (crt_ctx == CRT_CONTEXT_NULL) {
+		D_ERROR("NULL context passed\n");
+		rc = -DER_INVAL;
+	} else if (ctx->cc_timeout_sec != 0) {
+		*timeout_sec = ctx->cc_timeout_sec;
+	} else {
+		*timeout_sec = crt_gdata.cg_timeout;
+	}
+
+	return rc;
+}
+
 /* Force complete the rpc. Used for handling of unreachable rpcs */
 void
 crt_req_force_completion(struct crt_rpc_priv *rpc_priv)
@@ -2066,6 +2220,7 @@ get_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota)
 	} else {
 		D_DEBUG(DB_TRACE, "Quota limit (%d) reached for quota_type=%d\n",
 			ctx->cc_quotas.limit[quota], quota);
+		d_tm_inc_counter(ctx->cc_quotas.rpc_quota_exceeded, 1);
 		rc = -DER_QUOTA_LIMIT;
 	}
 

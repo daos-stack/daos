@@ -1,5 +1,6 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +9,7 @@ package mgmt
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/google/uuid"
 )
@@ -120,12 +122,12 @@ func (r *PoolDrainReq) SetUUID(id uuid.UUID) {
 }
 
 // SetSvcRanks sets the request's Pool Service Ranks.
-func (r *PoolReintegrateReq) SetSvcRanks(rl []uint32) {
+func (r *PoolReintReq) SetSvcRanks(rl []uint32) {
 	r.SvcRanks = rl
 }
 
 // SetUUID sets the request's ID to a UUID.
-func (r *PoolReintegrateReq) SetUUID(id uuid.UUID) {
+func (r *PoolReintReq) SetUUID(id uuid.UUID) {
 	r.Id = id.String()
 }
 
@@ -196,12 +198,12 @@ func (r *ContSetOwnerReq) SetSvcRanks(rl []uint32) {
 
 // SetUUID sets the request's ID to a UUID.
 func (r *ContSetOwnerReq) SetUUID(id uuid.UUID) {
-	r.PoolUUID = id.String()
+	r.PoolId = id.String()
 }
 
 // GetId fetches the pool ID.
 func (r *ContSetOwnerReq) GetId() string {
-	return r.PoolUUID
+	return r.PoolId
 }
 
 // SetSvcRanks sets the request's Pool Service Ranks.
@@ -212,4 +214,24 @@ func (r *ListContReq) SetSvcRanks(rl []uint32) {
 // SetUUID sets the request's ID to a UUID.
 func (r *ListContReq) SetUUID(id uuid.UUID) {
 	r.Id = id.String()
+}
+
+func (bi *BuildInfo) BuildString() string {
+	if bi == nil {
+		return ""
+	}
+
+	baseString := bi.VersionString()
+	if bi.Tag != "" {
+		baseString += " (" + bi.Tag + ")"
+	}
+	return baseString
+}
+
+func (bi *BuildInfo) VersionString() string {
+	if bi == nil {
+		return ""
+	}
+
+	return fmt.Sprintf("%d.%d.%d", bi.Major, bi.Minor, bi.Patch)
 }

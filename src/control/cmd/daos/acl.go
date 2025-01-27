@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,6 +17,18 @@ free_ace_list(char **str, size_t str_count)
 	for (i = 0; i < str_count; i++)
 		D_FREE(str[i]);
 	D_FREE(str);
+}
+
+uid_t
+invalid_uid(void)
+{
+	return (uid_t)-1;
+}
+
+gid_t
+invalid_gid(void)
+{
+	return (gid_t)-1;
 }
 */
 import "C"
@@ -339,29 +351,40 @@ func (cmd *containerGetACLCmd) Execute(args []string) error {
 		return errors.Wrapf(err, "failed to query ACL for container %s", cmd.contUUID)
 	}
 
-	output := os.Stdout
 	if cmd.File != "" {
 		flags := os.O_CREATE | os.O_WRONLY
 		if !cmd.Force {
 			flags |= os.O_EXCL
 		}
 
-		output, err = os.OpenFile(cmd.File, flags, 0644)
+		output, err := os.OpenFile(cmd.File, flags, 0644)
 		if err != nil {
 			return errors.Wrap(err,
 				"failed to open ACL output file")
 		}
 		defer output.Close()
+
+		if _, err := fmt.Fprint(output, control.FormatACL(acl, cmd.Verbose)); err != nil {
+			return errors.Wrapf(err, "failed to write ACL output file")
+		}
 	}
 
-	return cmd.outputACL(output, acl, cmd.Verbose)
+	var buf strings.Builder
+	if err := cmd.outputACL(&buf, acl, cmd.Verbose); err != nil {
+		return err
+	}
+	cmd.Info(buf.String())
+	return nil
 }
 
 type containerSetOwnerCmd struct {
 	existingContainerCmd
 
-	User  string `long:"user" short:"u" description:"user who will own the container"`
-	Group string `long:"group" short:"g" description:"group who will own the container"`
+	User    string `long:"user" short:"u" description:"user who will own the container"`
+	Uid     *int   `long:"uid" description:"with --no-check, specify a uid for POSIX container ownership"`
+	Group   string `long:"group" short:"g" description:"group who will own the container"`
+	Gid     *int   `long:"gid" description:"with --no-check, specify a gid for POSIX container ownership"`
+	NoCheck bool   `long:"no-check" description:"don't check whether the user/group exists on the local system"`
 }
 
 func (cmd *containerSetOwnerCmd) Execute(args []string) error {
@@ -398,11 +421,60 @@ func (cmd *containerSetOwnerCmd) Execute(args []string) error {
 		defer C.free(unsafe.Pointer(group))
 	}
 
-	rc := C.daos_cont_set_owner(ap.cont, user, group, nil)
+	props, entries, err := allocProps(3)
+	if err != nil {
+		return err
+	}
+	entries[0].dpe_type = C.DAOS_PROP_CO_LAYOUT_TYPE
+	props.dpp_nr++
+	defer func() { C.daos_prop_free(props) }()
+
+	rc := C.daos_cont_query(cmd.cContHandle, nil, props, nil)
 	if err := daosError(rc); err != nil {
-		return errors.Wrapf(err,
-			"failed to set owner for container %s",
-			cmd.ContainerID())
+		return errors.Wrapf(err, "failed to query container %s", cmd.ContainerID())
+	}
+
+	lType := C.get_dpe_val(&entries[0])
+	if lType == C.DAOS_PROP_CO_LAYOUT_POSIX {
+		uid := C.invalid_uid()
+		gid := C.invalid_gid()
+		if cmd.NoCheck {
+			if cmd.User != "" {
+				if cmd.Uid == nil {
+					return errors.New("POSIX container requires --uid to use --no-check")
+				}
+				uid = C.uid_t(*cmd.Uid)
+			}
+
+			if cmd.Group != "" {
+				if cmd.Gid == nil {
+					return errors.New("POSIX container requires --gid to use --no-check")
+				}
+				gid = C.gid_t(*cmd.Gid)
+			}
+		} else if cmd.Uid != nil || cmd.Gid != nil {
+			return errors.New("--no-check is required to use the --uid and --gid options")
+		}
+
+		if err := dfsError(C.dfs_cont_set_owner(ap.cont, user, uid, group, gid)); err != nil {
+			return errors.Wrapf(err, "failed to set owner for POSIX container %s",
+				cmd.ContainerID())
+		}
+	} else {
+		if cmd.Uid != nil || cmd.Gid != nil {
+			return errors.New("--uid and --gid options apply for POSIX containers only")
+		}
+
+		var rc C.int
+		if cmd.NoCheck {
+			rc = C.daos_cont_set_owner_no_check(ap.cont, user, group, nil)
+		} else {
+			rc = C.daos_cont_set_owner(ap.cont, user, group, nil)
+		}
+		if err := daosError(rc); err != nil {
+			return errors.Wrapf(err, "failed to set owner for container %s",
+				cmd.ContainerID())
+		}
 	}
 
 	if cmd.JSONOutputEnabled() {

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -274,5 +274,29 @@ func (f *FsCheckFlag) UnmarshalFlag(fv string) error {
 	}
 
 	f.Set = true
+	return nil
+}
+
+type ModeBitsFlag struct {
+	Set  bool
+	Mode C.mode_t
+}
+
+func (f *ModeBitsFlag) UnmarshalFlag(fv string) error {
+	if fv == "" {
+		return errors.New("empty file mode flag")
+	}
+
+	mode, err := strconv.ParseInt(fv, 8, 0)
+	if err != nil {
+		return errors.Errorf("invalid mode: %q", fv)
+	}
+	if mode < 0 {
+		return errors.Errorf("invalid mode: %q", fv)
+	}
+
+	f.Mode = C.mode_t(mode)
+	f.Set = true
+
 	return nil
 }

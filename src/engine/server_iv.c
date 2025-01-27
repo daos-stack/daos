@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -162,7 +163,7 @@ iv_key_unpack(struct ds_iv_key *key_iv, crt_iv_key_t *key_iov)
 	return rc;
 }
 
-static void
+void
 ds_iv_ns_get(struct ds_iv_ns *ns)
 {
 	ns->iv_refcount++;
@@ -181,7 +182,7 @@ ds_iv_ns_put(struct ds_iv_ns *ns)
 	D_DEBUG(DB_TRACE, DF_UUID" ns ref %u\n",
 		DP_UUID(ns->iv_pool_uuid), ns->iv_refcount);
 	if (ns->iv_refcount == 1)
-		ABT_eventual_set(ns->iv_done_eventual, NULL, 0);
+		ABT_cond_broadcast(ns->iv_done_cond);
 	else if (ns->iv_refcount == 0)
 		ds_iv_ns_destroy(ns);
 }
@@ -482,8 +483,8 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 				     priv_entry ? priv_entry->priv : NULL);
 	}
 	if (rc != 0) {
-		D_DEBUG(DB_MD, "key id %d update failed: rc = %d\n",
-			key.class_id, rc);
+		D_DEBUG(DB_MD, "key id %d update failed: rc = " DF_RC "\n", key.class_id,
+			DP_RC(rc));
 		D_GOTO(output, rc);
 	}
 
@@ -578,7 +579,7 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	struct ds_iv_class	*class;
 	struct ds_iv_key	key;
 	struct iv_priv_entry	*priv_entry;
-	void			*entry_priv_val;
+	void			*entry_priv_val = NULL;
 	bool			alloc_entry = false;
 	int			rc;
 
@@ -731,7 +732,8 @@ iv_ns_destroy_cb(crt_iv_namespace_t iv_ns, void *arg)
 
 	D_ASSERT(d_list_empty(&ns->iv_entry_list));
 	d_list_del(&ns->iv_ns_link);
-	ABT_eventual_free(&ns->iv_done_eventual);
+	ABT_cond_free(&ns->iv_done_cond);
+	ABT_mutex_free(&ns->iv_mutex);
 	D_FREE(ns);
 }
 
@@ -774,8 +776,14 @@ iv_ns_create_internal(unsigned int ns_id, uuid_t pool_uuid,
 	D_INIT_LIST_HEAD(&ns->iv_entry_list);
 	ns->iv_ns_id = ns_id;
 	ns->iv_master_rank = master_rank;
-	rc = ABT_eventual_create(0, &ns->iv_done_eventual);
+	rc = ABT_mutex_create(&ns->iv_mutex);
 	if (rc != ABT_SUCCESS) {
+		D_FREE(ns);
+		return dss_abterr2der(rc);
+	}
+	rc = ABT_cond_create(&ns->iv_done_cond);
+	if (rc != ABT_SUCCESS) {
+		ABT_mutex_free(&ns->iv_mutex);
 		D_FREE(ns);
 		return dss_abterr2der(rc);
 	}
@@ -858,28 +866,35 @@ ds_iv_ns_leader_stop(struct ds_iv_ns *ns)
 }
 
 void
-ds_iv_ns_stop(struct ds_iv_ns *ns)
+ds_iv_ns_cleanup(struct ds_iv_ns *ns)
 {
 	struct ds_iv_entry *entry;
 	struct ds_iv_entry *tmp;
-
-	ns->iv_stop = 1;
-	ds_iv_ns_put(ns);
-	if (ns->iv_refcount > 1) {
-		int rc;
-
-		D_DEBUG(DB_MGMT, DF_UUID" ns stop wait ref %u\n",
-			DP_UUID(ns->iv_pool_uuid), ns->iv_refcount);
-		rc = ABT_eventual_wait(ns->iv_done_eventual, NULL);
-		D_ASSERT(rc == ABT_SUCCESS);
-		D_DEBUG(DB_MGMT, DF_UUID" ns stopped\n",
-			DP_UUID(ns->iv_pool_uuid));
-	}
 
 	d_list_for_each_entry_safe(entry, tmp, &ns->iv_entry_list, iv_link) {
 		d_list_del(&entry->iv_link);
 		iv_entry_free(entry);
 	}
+}
+
+void
+ds_iv_ns_stop(struct ds_iv_ns *ns)
+{
+	ns->iv_stop = 1;
+	ds_iv_ns_put(ns);
+	ABT_mutex_lock(ns->iv_mutex); /* only for ABT_cond_wait; unnecessary otherwise */
+	while (ns->iv_refcount > 1) {
+		int rc;
+
+		D_DEBUG(DB_MGMT, DF_UUID" ns stop wait ref %u\n",
+			DP_UUID(ns->iv_pool_uuid), ns->iv_refcount);
+		rc = ABT_cond_wait(ns->iv_done_cond, ns->iv_mutex);
+		D_ASSERT(rc == ABT_SUCCESS);
+	}
+	ABT_mutex_unlock(ns->iv_mutex);
+	D_DEBUG(DB_MGMT, DF_UUID " ns stopped\n", DP_UUID(ns->iv_pool_uuid));
+
+	ds_iv_ns_cleanup(ns);
 
 	D_INFO(DF_UUID" ns stopped\n", DP_UUID(ns->iv_pool_uuid));
 }
@@ -964,7 +979,7 @@ ds_iv_done(crt_iv_namespace_t ivns, uint32_t class_id,
 				iv_value->sg_iovs[0].iov_len);
 	}
 
-	ABT_future_set(cb_info->future, &rc);
+	ABT_future_set(cb_info->future, NULL);
 	return ret;
 }
 
@@ -1046,14 +1061,27 @@ static int
 _iv_op(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
        crt_iv_sync_t *sync, unsigned int shortcut, bool retry, int opc)
 {
-	int rc;
+	int	sleep_ms, total_ms = 0, rc;
 
 	if (ns->iv_stop)
 		return -DER_SHUTDOWN;
+
+	/* Sleep 1 ms before retry for IV_OID, sleep 1 sec before retry for other IV */
+	sleep_ms = key->class_id == IV_OID ? 1 : 1000;
 retry:
 	rc = iv_op_internal(ns, key, value, sync, shortcut, opc);
 	if (retry && !ns->iv_stop &&
 	    (daos_rpc_retryable_rc(rc) || rc == -DER_NOTLEADER || rc == -DER_BUSY)) {
+		if (rc == -DER_GRPVER && engine_in_check()) {
+			/*
+			 * Under check mode, the pool shard on peer rank/target does
+			 * not exist, then it will reply "-DER_GRPVER" that is normal
+			 * for check. Return the errno to the caller instead of retry.
+			 */
+			D_WARN("IV for DAOS check hit unmatched GRP version %d\n", rc);
+			return rc;
+		}
+
 		if (rc == -DER_NOTLEADER && key->rank != (d_rank_t)(-1) &&
 		    sync && (sync->ivs_mode == CRT_IV_SYNC_LAZY ||
 			     sync->ivs_mode == CRT_IV_SYNC_EAGER)) {
@@ -1070,10 +1098,13 @@ retry:
 		 * but in-flight fetch request return IVCB_FORWARD, then queued RPC will
 		 * reply IVCB_FORWARD.
 		 */
-		D_INFO("ns %u retry for class %d opc %d rank %u/%u: " DF_RC "\n", ns->iv_ns_id,
-		       key->class_id, opc, key->rank, ns->iv_master_rank, DP_RC(rc));
-		/* sleep 1sec and retry */
-		dss_sleep(1000);
+		if (total_ms % 10000 == 0)
+			D_DEBUG(DB_TRACE, "ns %u retry for class %d opc %d rank %u/%u: " DF_RC "\n",
+				ns->iv_ns_id, key->class_id, opc, key->rank, ns->iv_master_rank,
+				DP_RC(rc));
+
+		dss_sleep(sleep_ms);
+		total_ms += sleep_ms;
 		goto retry;
 	}
 
@@ -1127,7 +1158,7 @@ iv_op_async(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
 	ds_iv_ns_get(ns);
 	ult_arg->ns = ns;
 	ult_arg->opc = opc;
-	rc = dss_ult_create(iv_op_ult, ult_arg, DSS_XS_SYS, 0, 0, NULL);
+	rc = dss_ult_create(iv_op_ult, ult_arg, DSS_XS_SYS, 0, DSS_DEEP_STACK_SZ, NULL);
 	if (rc != 0) {
 		ds_iv_ns_put(ult_arg->ns);
 		d_sgl_fini(&ult_arg->iv_value, true);

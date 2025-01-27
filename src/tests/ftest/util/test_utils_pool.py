@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -194,7 +195,7 @@ class TestPool(TestDaosApiBase):
                 self.context when calling from a test.
             dmg_command (DmgCommand): DmgCommand used to call dmg command. This
                 value can be obtained by calling self.get_dmg_command() from a
-                test. It'll return the object with -l <Access Point host:port>
+                test. It'll return the object with -l <MS replica host:port>
                 and --insecure.
             label_generator (LabelGenerator, optional): Generates label by
                 adding number to the end of the prefix set in self.label.
@@ -242,6 +243,7 @@ class TestPool(TestDaosApiBase):
         self.pool = None
         self.info = None
         self.svc_ranks = None
+        self.svc_leader = None
         self.connected = False
         # Flag to allow the non-create operations to use UUID. e.g., if you want
         # to destroy the pool with UUID, set this to False, then call destroy().
@@ -454,6 +456,7 @@ class TestPool(TestDaosApiBase):
             self.svc_ranks = [
                 int(self.pool.svc.rl_ranks[index])
                 for index in range(self.pool.svc.rl_nr)]
+            self.svc_leader = int(data["leader"])
 
     @fail_on(DaosApiError)
     def connect(self, permission=2):
@@ -590,18 +593,19 @@ class TestPool(TestDaosApiBase):
                 self.connected = False
 
     @fail_on(CommandFailure)
-    def exclude(self, ranks, tgt_idx=None):
+    def exclude(self, ranks, tgt_idx=None, force=True):
         """Manually exclude a rank from this pool.
 
         Args:
             ranks (list): a list daos server ranks (int) to exclude
             tgt_idx (string, optional): targets to exclude on ranks, ex: "1,2". Defaults to None.
+            force (bool, optional): force exclusion regardless of data loss. Defaults to true
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other information.
 
         """
-        return self.dmg.pool_exclude(self.identifier, ranks, tgt_idx)
+        return self.dmg.pool_exclude(self.identifier, ranks, tgt_idx, force=force)
 
     @fail_on(CommandFailure)
     def extend(self, ranks):
@@ -698,12 +702,11 @@ class TestPool(TestDaosApiBase):
             self.log.error("self.acl_file isn't defined!")
 
     @fail_on(CommandFailure)
-    def query(self, show_enabled=False, show_disabled=False):
+    def query(self, show_enabled=False):
         """Execute dmg pool query.
 
         Args:
             show_enabled (bool, optional): Display enabled ranks.
-            show_disabled (bool, optional): Display disabled ranks.
 
         Returns:
             dict: the dmg json command output converted to a python dictionary
@@ -718,7 +721,7 @@ class TestPool(TestDaosApiBase):
 
         while True:
             try:
-                return self.dmg.pool_query(self.identifier, show_enabled, show_disabled)
+                return self.dmg.pool_query(self.identifier, show_enabled)
 
             except CommandFailure as error:
                 if end_time is None:
@@ -1044,7 +1047,7 @@ class TestPool(TestDaosApiBase):
             rank_result = self.query_targets(rank=rank, target_idx=target_idx)
             for target, target_info in enumerate(rank_result['response']['Infos']):
                 rank_target_tier_space[rank][target] = {}
-                for tier in target_info['Space']:
+                for tier in target_info['space']:
                     rank_target_tier_space[rank][target][tier['media_type']] = {
                         'total': tier['total'],
                         'free': tier['free'],
@@ -1117,19 +1120,18 @@ class TestPool(TestDaosApiBase):
         }
         return pool_percent
 
-    def set_query_data(self, show_enabled=False, show_disabled=False):
+    def set_query_data(self, show_enabled=False):
         """Execute dmg pool query and store the results.
 
         Args:
             show_enabled (bool, optional): Display enabled ranks.
-            show_disabled (bool, optional): Display disabled ranks.
 
         Raises:
             TestFail: if the dmg pool query command failed
 
         """
         self.query_data = {}
-        self.query_data = self.query(show_enabled, show_disabled)
+        self.query_data = self.query(show_enabled)
 
     def _get_query_data_keys(self, *keys, refresh=False):
         """Get the pool version from the dmg pool query output.
@@ -1447,6 +1449,33 @@ class TestPool(TestDaosApiBase):
                 self.log.error("%s: %s not found", result[1], filename)
                 status = False
         return status
+
+    def wait_pool_dead_ranks(self, expected, interval=1, timeout=30):
+        """Wait for the pool dead ranks.
+
+        Args:
+            expected (list): dead ranks check to wait.
+            interval (int, optional): number of seconds to wait in between pool query checks
+            timeout(int, optional): time to fail test if it could not match
+                expected values.
+
+        Raises:
+            DaosTestError: if waiting for timeout.
+
+        """
+        self.log.info("waiting for pool ranks %s to be marked dead", expected)
+
+        start = time()
+        data = self.dmg.pool_query(self.identifier, health_only=True)
+        while data['response'].get('dead_ranks') != expected:
+            self.log.info("  dead ranks is %s ...", data['response'].get('dead_ranks'))
+            if time() - start > timeout:
+                raise DaosTestError("TIMEOUT detected after {} seconds while for waiting "
+                                    "for ranks {} dead".format(timeout, expected))
+            sleep(interval)
+            data = self.dmg.pool_query(self.identifier, health_only=True)
+
+        self.log.info("Wait for dead ranks complete: dead ranks %s", expected)
 
     def verify_uuid_directory(self, host, scm_mount):
         """Check if pool folder exist on server.

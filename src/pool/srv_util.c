@@ -1,5 +1,6 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -21,19 +22,19 @@ int
 map_ranks_init(const struct pool_map *map, unsigned int status, d_rank_list_t *ranks)
 {
 	struct pool_domain     *domains = NULL;
-	int			nnodes;
+	int			nranks;
 	int			n = 0;
 	int			i;
 	d_rank_t	       *rs;
 
-	nnodes = pool_map_find_nodes((struct pool_map *)map,
+	nranks = pool_map_find_ranks((struct pool_map *)map,
 				      PO_COMP_ID_ALL, &domains);
-	if (nnodes == 0) {
+	if (nranks == 0) {
 		D_ERROR("no nodes in pool map\n");
 		return -DER_IO;
 	}
 
-	for (i = 0; i < nnodes; i++) {
+	for (i = 0; i < nranks; i++) {
 		if (status & domains[i].do_comp.co_status)
 			n++;
 	}
@@ -52,7 +53,7 @@ map_ranks_init(const struct pool_map *map, unsigned int status, d_rank_list_t *r
 	ranks->rl_ranks = rs;
 
 	n = 0;
-	for (i = 0; i < nnodes; i++) {
+	for (i = 0; i < nranks; i++) {
 		if (status & domains[i].do_comp.co_status) {
 			D_ASSERT(n < ranks->rl_nr);
 			ranks->rl_ranks[n] = domains[i].do_comp.co_rank;
@@ -85,19 +86,19 @@ ds_pool_map_rank_up(struct pool_map *map, d_rank_t rank)
 	struct pool_domain     *node;
 	int			rc;
 
-	rc = pool_map_find_nodes(map, rank, &node);
+	rc = pool_map_find_ranks(map, rank, &node);
 	if (rc == 0)
 		return false;
 	D_ASSERTF(rc == 1, "%d\n", rc);
 
-	return node->do_comp.co_status & POOL_GROUP_MAP_STATES;
+	return node->do_comp.co_status & DC_POOL_GROUP_MAP_STATES;
 }
 
 int
 ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 		     enum daos_module_id module, crt_opcode_t opcode,
 		     uint32_t version, crt_rpc_t **rpc, crt_bulk_t bulk_hdl,
-		     d_rank_list_t *excluded_list)
+		     d_rank_list_t *excluded_list, void *priv)
 {
 	d_rank_list_t	excluded;
 	crt_opcode_t		opc;
@@ -124,7 +125,7 @@ ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 	opc = DAOS_RPC_OPCODE(opcode, module, version);
 	rc = crt_corpc_req_create(ctx, pool->sp_group,
 			  excluded.rl_nr == 0 ? NULL : &excluded,
-			  opc, bulk_hdl/* co_bulk_hdl */, NULL /* priv */,
+			  opc, bulk_hdl/* co_bulk_hdl */, priv,
 			  0 /* flags */, crt_tree_topo(CRT_TREE_KNOMIAL, 32),
 			  rpc);
 
@@ -149,22 +150,18 @@ bulk_cb(const struct crt_bulk_cb_info *cb_info)
  * pool map buffer size.
  */
 int
-ds_pool_transfer_map_buf(struct pool_buf *map_buf, uint32_t map_version,
-			 crt_rpc_t *rpc, crt_bulk_t remote_bulk,
+ds_pool_transfer_map_buf(struct ds_pool_map_bc *map_bc, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 			 uint32_t *required_buf_size)
 {
 	size_t			map_buf_size;
-	daos_size_t		remote_bulk_size;
-	d_iov_t			map_iov;
-	d_sg_list_t		map_sgl;
-	crt_bulk_t		bulk;
+	daos_size_t             remote_bulk_size;
 	struct crt_bulk_desc	map_desc;
 	crt_bulk_opid_t		map_opid;
 	ABT_eventual		eventual;
 	int		       *status;
 	int			rc;
 
-	map_buf_size = pool_buf_size(map_buf->pb_nr);
+	map_buf_size = pool_buf_size(map_bc->pmc_buf->pb_nr);
 
 	/* Check if the client bulk buffer is large enough. */
 	rc = crt_bulk_get_len(remote_bulk, &remote_bulk_size);
@@ -176,28 +173,19 @@ ds_pool_transfer_map_buf(struct pool_buf *map_buf, uint32_t map_version,
 		goto out;
 	}
 
-	d_iov_set(&map_iov, map_buf, map_buf_size);
-	map_sgl.sg_nr = 1;
-	map_sgl.sg_nr_out = 0;
-	map_sgl.sg_iovs = &map_iov;
-
-	rc = crt_bulk_create(rpc->cr_ctx, &map_sgl, CRT_BULK_RO, &bulk);
-	if (rc != 0)
-		goto out;
-
 	/* Prepare "map_desc" for crt_bulk_transfer(). */
 	map_desc.bd_rpc = rpc;
 	map_desc.bd_bulk_op = CRT_BULK_PUT;
 	map_desc.bd_remote_hdl = remote_bulk;
 	map_desc.bd_remote_off = 0;
-	map_desc.bd_local_hdl = bulk;
+	map_desc.bd_local_hdl  = map_bc->pmc_bulk;
 	map_desc.bd_local_off = 0;
-	map_desc.bd_len = map_iov.iov_len;
+	map_desc.bd_len        = map_buf_size;
 
 	rc = ABT_eventual_create(sizeof(*status), &eventual);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
-		goto out_bulk;
+		goto out;
 	}
 
 	rc = crt_bulk_transfer(&map_desc, bulk_cb, &eventual, &map_opid);
@@ -214,8 +202,6 @@ ds_pool_transfer_map_buf(struct pool_buf *map_buf, uint32_t map_version,
 
 out_eventual:
 	ABT_eventual_free(&eventual);
-out_bulk:
-	crt_bulk_free(bulk);
 out:
 	return rc;
 }
@@ -240,22 +226,14 @@ compute_svc_reconf_objective(int svc_rf, d_rank_list_t *replicas)
 	return ds_pool_svc_rf_to_nreplicas(svc_rf);
 }
 
-static void
-rank_list_del_at(d_rank_list_t *list, int index)
-{
-	D_ASSERTF(0 <= index && index < list->rl_nr, "index=%d rl_nr=%u\n", index, list->rl_nr);
-	memmove(&list->rl_ranks[index], &list->rl_ranks[index + 1],
-		(list->rl_nr - index - 1) * sizeof(list->rl_ranks[0]));
-	list->rl_nr--;
-}
-
 /*
  * Ephermal "reconfiguration domain" used by ds_pool_plan_svc_reconfs to track
- * aspects of domains that include at least one engine in POOL_SVC_MAP_STATES.
+ * aspects of domains that include at least one engine in
+ * DC_POOL_SVC_MAP_STATES.
  *
  * The rcd_n_replicas field is the number of replicas in this domain.
  *
- * The rcd_n_engines field is the number of POOL_SVC_MAP_STATES engines.
+ * The rcd_n_engines field is the number of DC_POOL_SVC_MAP_STATES engines.
  *
  * The number of vacant engines is therefore rcd_n_engines - rcd_n_replicas. We
  * always have 0 <= rcd_n_replicas <= rcd_n_engines and rcd_n_engines > 0.
@@ -271,7 +249,7 @@ struct reconf_domain {
  * aspects of the pool map and the replicas.
  *
  * The rcm_domains field points to a shuffle of all domains that include at
- * least one engine in POOL_SVC_MAP_STATES.
+ * least one engine in DC_POOL_SVC_MAP_STATES.
  *
  * The rcm_domains_n_engines_max field stores the maximum of the rcd_n_engines
  * field across rcm_domains.
@@ -342,14 +320,14 @@ init_reconf_map(struct pool_map *map, d_rank_list_t *replicas, d_rank_t self,
 			int                 k;
 			d_rank_list_t      *list;
 
-			is_desired = engine->do_comp.co_status & POOL_SVC_MAP_STATES;
+			is_desired = engine->do_comp.co_status & DC_POOL_SVC_MAP_STATES;
 			if (is_desired)
 				n_engines++;
 
 			if (!d_rank_list_find(replicas_left, engine->do_comp.co_rank, &k))
 				continue;
 
-			rank_list_del_at(replicas_left, k);
+			d_rank_list_del_at(replicas_left, k);
 			if (is_desired) {
 				list = rmap.rcm_replicas;
 				n_replicas++;
@@ -392,7 +370,7 @@ init_reconf_map(struct pool_map *map, d_rank_list_t *replicas, d_rank_t self,
 
 	/* Shuffle rmap.rcm_domains for randomness in replica placement. */
 	for (i = 0; i < rmap.rcm_domains_len; i++) {
-		int j = i + d_randn(rmap.rcm_domains_len - i);
+		int j = i + d_rand() % (rmap.rcm_domains_len - i);
 
 		D_ASSERTF(i <= j && j < rmap.rcm_domains_len, "i=%d j=%d len=%d\n", i, j,
 			  rmap.rcm_domains_len);
@@ -438,10 +416,10 @@ find_vacancy_in_domain(struct reconf_domain *rdomain, d_rank_list_t *replicas)
 	for (i = 0; i < rdomain->rcd_domain->do_comp.co_nr; i++) {
 		struct pool_domain *engine = &rdomain->rcd_domain->do_children[i];
 
-		if ((engine->do_comp.co_status & POOL_SVC_MAP_STATES) &&
+		if ((engine->do_comp.co_status & DC_POOL_SVC_MAP_STATES) &&
 		    !d_rank_list_find(replicas, engine->do_comp.co_rank, NULL /* idx */)) {
 			/* Pick this vacant engine with a probability of 1/n. */
-			if (d_randn(n) == 0)
+			if (d_rand() % n == 0)
 				return engine->do_comp.co_rank;
 			n--;
 		}
@@ -475,10 +453,10 @@ find_replica_in_domain(struct reconf_domain *rdomain, d_rank_list_t *replicas, d
 	for (i = 0; i < rdomain->rcd_domain->do_comp.co_nr; i++) {
 		struct pool_domain *engine = &rdomain->rcd_domain->do_children[i];
 
-		if ((engine->do_comp.co_status & POOL_SVC_MAP_STATES) &&
+		if ((engine->do_comp.co_status & DC_POOL_SVC_MAP_STATES) &&
 		    engine->do_comp.co_rank != self &&
 		    d_rank_list_find(replicas, engine->do_comp.co_rank, NULL /* idx */)) {
-			if (d_randn(n) == 0)
+			if (d_rand() % n == 0)
 				return engine->do_comp.co_rank;
 			n--;
 		}
@@ -562,7 +540,7 @@ remove_replica_in_domain(struct reconf_domain *rdomain, d_rank_list_t *replicas,
 
 	found = d_rank_list_find(replicas, rank, &k);
 	D_ASSERT(found);
-	rank_list_del_at(replicas, k);
+	d_rank_list_del_at(replicas, k);
 
 	rdomain->rcd_n_replicas--;
 	return 0;
@@ -673,8 +651,8 @@ balance_replicas(struct reconf_map *rmap, d_rank_t self, d_rank_list_t *to_add,
  * caller is responsible for freeing \a to_add_out and \a to_remove_out with
  * d_rank_list_free.
  *
- * We desire replicas in POOL_SVC_MAP_STATES. The \a self replica must be in a
- * desired state in \a map, or this function will return -DER_INVAL. All
+ * We desire replicas in DC_POOL_SVC_MAP_STATES. The \a self replica must be in
+ * a desired state in \a map, or this function will return -DER_INVAL. All
  * undesired replicas, if any, will be appended to \a to_remove, so that no
  * replica is outside the pool group.
  *
@@ -691,7 +669,7 @@ balance_replicas(struct reconf_map *rmap, d_rank_t self, d_rank_list_t *to_add,
  * \param[in]	map		pool map
  * \param[in]	replicas	current PS membership (may be empty if \a svc_rf >= 0)
  * \param[in]	self		self replica rank (may be CRT_NO_RANK if we're not a replica)
- * \param[in]	filter_only	only filter out replicas not in POOL_SVC_MAP_STATES
+ * \param[in]	filter_only	only filter out replicas not in DC_POOL_SVC_MAP_STATES
  * \param[out]	to_add_out	PS replicas to add
  * \param[out]	to_remove_out	PS replicas to remove
  */
@@ -827,7 +805,7 @@ testu_rank_sets_subtract(d_rank_t *x_ranks, int x_ranks_len, d_rank_list_t *y)
 		int j;
 
 		if (d_rank_list_find(z, y->rl_ranks[i], &j))
-			rank_list_del_at(z, j);
+			d_rank_list_del_at(z, j);
 	}
 
 	return z;
@@ -929,7 +907,7 @@ testu_create_pool_map(d_rank_t *ranks, int n_ranks, d_rank_t *down_ranks, int n_
 	for (i = 0; i < n_down_ranks; i++) {
 		struct pool_domain *d;
 
-		d = pool_map_find_node_by_rank(map, down_ranks[i]);
+		d = pool_map_find_dom_by_rank(map, down_ranks[i]);
 		D_ASSERT(d != NULL);
 		d->do_comp.co_status = PO_COMP_ST_DOWN;
 	}
@@ -1710,7 +1688,7 @@ manage_target(bool start)
 		if (start)
 			rc = ds_pool_child_start(pool_info->spi_id, true);
 		else
-			rc = ds_pool_child_stop(pool_info->spi_id);
+			rc = ds_pool_child_stop(pool_info->spi_id, false);
 
 		if (rc < 0) {
 			DL_ERROR(rc, DF_UUID": Failed to %s pool child.",

@@ -1,5 +1,6 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -67,7 +68,7 @@ func TestDmg_JsonOutput(t *testing.T) {
 			testArgs := append([]string{"-i", "--json"}, args...)
 			switch strings.Join(args, " ") {
 			case "version", "telemetry config", "telemetry run", "config generate",
-				"manpage", "system set-prop", "support collect-log":
+				"manpage", "system set-prop", "support collect-log", "check repair":
 				return
 			case "storage nvme-rebind":
 				testArgs = append(testArgs, "-l", "foo.com", "-a",
@@ -75,13 +76,12 @@ func TestDmg_JsonOutput(t *testing.T) {
 			case "storage nvme-add-device":
 				testArgs = append(testArgs, "-l", "foo.com", "-a",
 					test.MockPCIAddr(), "-e", "0")
-			case "storage query device-health":
-				testArgs = append(testArgs, "-u", test.MockUUID())
 			case "storage set nvme-faulty":
-				testArgs = append(testArgs, "--force", "-u", test.MockUUID())
+				testArgs = append(testArgs, "--host", "foo.com", "--force", "-u",
+					test.MockUUID())
 			case "storage replace nvme":
-				testArgs = append(testArgs, "--old-uuid", test.MockUUID(),
-					"--new-uuid", test.MockUUID())
+				testArgs = append(testArgs, "--host", "foo.com", "--old-uuid",
+					test.MockUUID(), "--new-uuid", test.MockUUID())
 			case "storage led identify", "storage led check", "storage led clear":
 				testArgs = append(testArgs, test.MockUUID())
 			case "pool create":
@@ -103,19 +103,19 @@ func TestDmg_JsonOutput(t *testing.T) {
 			case "pool query-targets":
 				testArgs = append(testArgs, test.MockUUID(), "--rank", "0", "--target-idx", "1,3,5,7")
 			case "container set-owner":
-				testArgs = append(testArgs, "--user", "foo", "--pool", test.MockUUID(),
-					"--cont", test.MockUUID())
+				testArgs = append(testArgs, "--user", "foo", test.MockUUID(), test.MockUUID())
 			case "telemetry metrics list", "telemetry metrics query":
 				return // These commands query via http directly
 			case "system cleanup":
 				testArgs = append(testArgs, "hostname")
+			case "check set-policy":
+				testArgs = append(testArgs, "POOL_BAD_LABEL:IGNORE")
 			case "system set-attr":
 				testArgs = append(testArgs, "foo:bar")
 			case "system del-attr":
 				testArgs = append(testArgs, "foo")
-			case "system exclude":
-				testArgs = append(testArgs, "--ranks", "0")
-			case "system clear-exclude":
+			case "system exclude", "system clear-exclude", "system drain",
+				"system reintegrate":
 				testArgs = append(testArgs, "--ranks", "0")
 			}
 

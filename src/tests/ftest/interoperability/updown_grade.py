@@ -54,7 +54,7 @@ class UpgradeDowngradeTest(UpgradeDowngradeBase):
 
         :avocado: tags=manual
         :avocado: tags=interop
-        :avocado: tags=test_upgrade_downgrade
+        :avocado: tags=UpgradeDowngradeTest,test_upgrade_downgrade
         """
         self.upgrade_and_downgrade()
 
@@ -68,6 +68,6 @@ class UpgradeDowngradeTest(UpgradeDowngradeBase):
 
         :avocado: tags=manual
         :avocado: tags=interop
-        :avocado: tags=test_pool_upgrade_sys_stop_resume
+        :avocado: tags=UpgradeDowngradeTest,test_pool_upgrade_sys_stop_resume
         """
         self.upgrade_and_downgrade(fault_on_pool_upgrade=True)

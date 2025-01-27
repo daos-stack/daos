@@ -1,5 +1,6 @@
 /**
- * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -19,6 +20,56 @@
 #include <daos/placement.h>
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/vos_types.h>
+
+#define VOS_POOL_COMPAT_FLAG_IMMUTABLE (1ULL << 0)
+#define VOS_POOL_COMPAT_FLAG_SKIP_START      (1ULL << 1)
+#define VOS_POOL_COMPAT_FLAG_SKIP_REBUILD    (1ULL << 2)
+#define VOS_POOL_COMPAT_FLAG_SKIP_DTX_RESYNC (1ULL << 3)
+
+#define VOS_POOL_COMPAT_FLAG_SUPP                                                                  \
+	(VOS_POOL_COMPAT_FLAG_IMMUTABLE | VOS_POOL_COMPAT_FLAG_SKIP_START |                        \
+	 VOS_POOL_COMPAT_FLAG_SKIP_REBUILD | VOS_POOL_COMPAT_FLAG_SKIP_DTX_RESYNC)
+
+#define VOS_POOL_INCOMPAT_FLAG_SUPP    0
+
+#define VOS_MAX_FLAG_NAME_LEN          32
+
+static inline uint64_t
+vos_pool_name2flag(const char *name, bool *compat_feature)
+{
+	*compat_feature = false;
+
+	if (strncmp(name, "immutable", VOS_MAX_FLAG_NAME_LEN) == 0) {
+		*compat_feature = true;
+		return VOS_POOL_COMPAT_FLAG_IMMUTABLE;
+	}
+	if (strncmp(name, "skip_start", VOS_MAX_FLAG_NAME_LEN) == 0) {
+		*compat_feature = true;
+		return VOS_POOL_COMPAT_FLAG_SKIP_START;
+	}
+	if (strncmp(name, "skip_rebuild", VOS_MAX_FLAG_NAME_LEN) == 0) {
+		*compat_feature = true;
+		return VOS_POOL_COMPAT_FLAG_SKIP_REBUILD;
+	}
+	if (strncmp(name, "skip_dtx_resync", VOS_MAX_FLAG_NAME_LEN) == 0) {
+		*compat_feature = true;
+		return VOS_POOL_COMPAT_FLAG_SKIP_DTX_RESYNC;
+	}
+
+	return 0;
+}
+
+bool
+vos_pool_feature_skip_start(daos_handle_t poh);
+
+bool
+vos_pool_feature_immutable(daos_handle_t poh);
+
+bool
+vos_pool_feature_skip_rebuild(daos_handle_t poh);
+
+bool
+vos_pool_feature_skip_dtx_resync(daos_handle_t poh);
 
 /** Initialize the vos reserve/cancel related fields in dtx handle
  *
@@ -74,7 +125,6 @@ vos_dtx_validation(struct dtx_handle *dth);
  * \param[in,out] epoch		Pointer to current epoch, if it is zero and if the DTX exists, then
  *				the DTX's epoch will be saved in it.
  * \param[out] pm_ver		Hold the DTX's pool map version.
- * \param[out] mbs		Pointer to the DTX participants information.
  * \param[out] dck		Pointer to the key for CoS cache.
  * \param[in] for_refresh	It is for DTX_REFRESH or not.
  *
@@ -95,8 +145,7 @@ vos_dtx_validation(struct dtx_handle *dth);
  */
 int
 vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
-	      uint32_t *pm_ver, struct dtx_memberships **mbs, struct dtx_cos_key *dck,
-	      bool for_refresh);
+	      uint32_t *pm_ver, struct dtx_cos_key *dck, bool for_refresh);
 
 /**
  * Load participants information for the given DTX.
@@ -120,13 +169,14 @@ vos_dtx_load_mbs(daos_handle_t coh, struct dtx_id *dti, daos_unit_oid_t *oid,
  * \param coh	[IN]	Container open handle.
  * \param dtis	[IN]	The array for DTX identifiers to be committed.
  * \param count [IN]	The count of DTXs to be committed.
+ * \param keep_act [IN]	Keep DTX entry or not.
  * \param rm_cos [OUT]	The array for whether remove entry from CoS cache.
  *
  * \return		Negative value if error.
  * \return		Others are for the count of committed DTXs.
  */
 int
-vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool rm_cos[]);
+vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool keep_act, bool rm_cos[]);
 
 /**
  * Abort the specified DTXs.
@@ -226,6 +276,32 @@ int
 vos_dtx_cache_reset(daos_handle_t coh, bool force);
 
 /**
+ * Initialize local transaction.
+ *
+ * Note: This entry point is not meant to be used directly. Please use dtx_begin instead.
+ *
+ * \param dth	[IN]	Local DTX handle.
+ * \param poh	[IN]	Pool handle.
+ *
+ * \return	Zero on success, negative value if error.
+ */
+int
+vos_dtx_local_begin(struct dtx_handle *dth, daos_handle_t poh);
+
+/**
+ * Finalize local transaction if no error happened in the meantime.
+ *
+ * Note: This entry point is not meant to be used directly. Please use dtx_end instead.
+ *
+ * \param dth		[IN]	Local DTX handle.
+ * \param result	[IN]	The current result of the transaction.
+ *
+ * \return	Zero on success, negative value if error.
+ */
+int
+vos_dtx_local_end(struct dtx_handle *dth, int result);
+
+/**
  * Initialize the environment for a VOS instance
  * Must be called once before starting a VOS instance
  *
@@ -237,6 +313,9 @@ vos_dtx_cache_reset(daos_handle_t coh, bool force);
  */
 int
 vos_self_init(const char *db_path, bool use_sys_db, int tgt_id);
+
+int
+vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool nvme_init);
 
 /**
  * Finalize the environment for a VOS instance
@@ -261,17 +340,20 @@ vos_self_fini(void);
  * \param path	[IN]	Path of the memory pool
  * \param uuid	[IN]    Pool UUID
  * \param scm_sz [IN]	Size of SCM for the pool
- * \param blob_sz[IN]	Size of blob for the pool
+ * \param data_sz[IN]	Size of data blob for the pool
  * \param wal_sz [IN]	Size of WAL blob for the pool
+ * \param meta_sz[IN]	Size of Meta blob for the pool
  * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
+ * \param version[IN]	Pool version (0 for default version)
  * \param poh	[OUT]	Returned pool handle if not NULL
  *
  * \return              Zero on success, negative value if error
  */
 int
-vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz,
-		   daos_size_t blob_sz, daos_size_t wal_sz,
-		   unsigned int flags, daos_handle_t *poh);
+vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t data_sz,
+		   daos_size_t wal_sz, daos_size_t meta_sz, unsigned int flags, uint32_t version,
+		   daos_handle_t *poh);
+
 /**
  * Create a Versioning Object Storage Pool (VOSP), and open it if \a poh is not
  * NULL
@@ -279,15 +361,17 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz,
  * \param path	[IN]	Path of the memory pool
  * \param uuid	[IN]    Pool UUID
  * \param scm_sz [IN]	Size of SCM for the pool
- * \param blob_sz[IN]	Size of blob for the pool
+ * \param data_sz[IN]	Size of data blob for the pool
+ * \param meta_sz[IN]	Size of Meta blob for the pool
  * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
+ * \param version[IN]	Pool version (0 for default version)
  * \param poh	[OUT]	Returned pool handle if not NULL
  *
  * \return              Zero on success, negative value if error
  */
 int
-vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
-		daos_size_t blob_sz, unsigned int flags, daos_handle_t *poh);
+vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t data_sz,
+		daos_size_t meta_sz, unsigned int flags, uint32_t version, daos_handle_t *poh);
 
 /**
  * Kill a VOS pool before destroy
@@ -486,6 +570,16 @@ enum {
 int
 vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	      int (*yield_func)(void *arg), void *yield_arg, uint32_t flags);
+
+/**
+ * Round up the scm and meta sizes to match the backend requirement.
+ * \param[in/out] scm_sz   SCM size that needs to be aligned up
+ * \param[in/out] meta_sz  META size that needs to be aligned up
+ *
+ * \return 0 on success, error otherwise.
+ */
+int
+vos_pool_roundup_size(size_t *scm_sz, size_t *meta_sz);
 
 /**
  * Discards changes in all epochs with the epoch range \a epr
@@ -847,6 +941,56 @@ void
 vos_dtx_renew_epoch(struct dtx_handle *dth);
 
 /**
+ * Calculate current locally known stable epoch for the given container.
+ *
+ * \param coh	[IN]	Container open handle
+ *
+ * \return		The epoch on success, negative value if error.
+ */
+daos_epoch_t
+vos_cont_get_local_stable_epoch(daos_handle_t coh);
+
+/**
+ * Get global stable epoch for the given container.
+ *
+ * \param coh	[IN]	Container open handle
+ *
+ * \return		The epoch on success, negative value if error.
+ */
+daos_epoch_t
+vos_cont_get_global_stable_epoch(daos_handle_t coh);
+
+/**
+ * Set global stable epoch for the given container.
+ *
+ * \param coh	[IN]	Container open handle
+ * \param epoch	[IN]	The epoch to be used as the new global stable epoch.
+ *
+ * \return		Zero on success, negative value if error.
+ */
+int
+vos_cont_set_global_stable_epoch(daos_handle_t coh, daos_epoch_t epoch);
+
+/**
+ * Set the lowest allowed modification epoch for the given container.
+ *
+ * \param coh	[IN]	Container open handle
+ * \param epoch	[IN]	The lowest allowed epoch for modification.
+ *
+ * \return		Zero on success, negative value if error.
+ */
+int
+vos_cont_set_mod_bound(daos_handle_t coh, uint64_t epoch);
+
+/**
+ * Query the gap between the max allowed aggregation epoch and current HLC.
+ *
+ * \return		The gap value in seconds.
+ */
+uint32_t
+vos_get_agg_gap(void);
+
+/**
  * Get the recx/epoch list.
  *
  * \param ioh	[IN]	The I/O handle.
@@ -1121,6 +1265,40 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	    vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth);
 
 /**
+ * Iterate VOS objects and subtrees when recursive mode is specified. When it's
+ * called against md-on-ssd phase2 pool, it iterates objects in bucket ID order
+ * instead of OID order to minimize bucket eviction/load.
+ *
+ * \param[in]		param		iteration parameters
+ * \param[in]		recursive	iterate in lower level recursively
+ * \param[in]		anchors		array of anchors, one for each
+ *					iteration level
+ * \param[in]		pre_cb		pre subtree iteration callback
+ * \param[in]		post_cb		post subtree iteration callback
+ * \param[in]		arg		callback argument
+ * \param[in]		dth		DTX handle
+ *
+ * \retval		0	iteration complete
+ * \retval		> 0	callback return value
+ * \retval		-DER_*	error (but never -DER_NONEXIST)
+ */
+int
+vos_iterate_obj(vos_iter_param_t *param, bool recursive, struct vos_iter_anchors *anchors,
+		vos_iter_cb_t pre_cb, vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth);
+
+/**
+ * Skip the object not located on specified bucket (for md-on-ssd phase2).
+ *
+ * \param ih[IN]	Iterator handle
+ * \param desc[IN]	Iterator desc for current OI entry
+ *
+ * \return		true:	current entry is skipped
+ *			false:	current entry isn't skipped
+ */
+bool
+vos_bkt_iter_skip(daos_handle_t ih, vos_iter_desc_t *desc);
+
+/**
  * Retrieve the largest or smallest integer DKEY, AKEY, and array offset from an
  * object. If object does not have an array value, 0 is returned in extent. User
  * has to specify what is being queried (dkey, akey, and/or recx) along with the
@@ -1213,8 +1391,8 @@ vos_pool_get_scm_cutoff(void);
 enum vos_pool_opc {
 	/** Reset pool GC statistics */
 	VOS_PO_CTL_RESET_GC,
-	/** Set pool tiering policy */
-	VOS_PO_CTL_SET_POLICY,
+	/** Set pool data threshold size to store data on bdev */
+	VOS_PO_CTL_SET_DATA_THRESH,
 	/** Set space reserve ratio for rebuild */
 	VOS_PO_CTL_SET_SPACE_RB,
 };
@@ -1508,5 +1686,43 @@ vos_aggregate_enter(daos_handle_t coh, daos_epoch_range_t *epr);
  */
 void
 vos_aggregate_exit(daos_handle_t coh);
+
+struct vos_pin_handle;
+
+/**
+ * Unpin the pinned objects in md-on-ssd phase2 mode
+ *
+ * \param[in]	coh	container open handle.
+ * \param[in]	hdl	pin handle.
+ *
+ * \return 0 on success, error otherwise.
+ */
+void
+vos_unpin_objects(daos_handle_t coh, struct vos_pin_handle *hdl);
+
+/**
+ * Pin bunch of objects in md-on-ssd phase2 mode
+ *
+ * \param[in]	coh	container open handle.
+ * \param[in]	oids	object IDs.
+ * \param[in]	count	number of object IDs.
+ * \param[out]	hdl	pin handle.
+ *
+ * \return 0 on success, error otherwise.
+ */
+int
+vos_pin_objects(daos_handle_t coh, daos_unit_oid_t oids[], int count, struct vos_pin_handle **hdl);
+
+/**
+ * Check if the oid exist in current vos.
+ *
+ * \param[in]	coh	container open handle.
+ * \param[in]	oid	oid to be checked.
+ *
+ * \return	true	exist.
+ *		false	does not exist.
+ */
+bool
+vos_oi_exist(daos_handle_t coh, daos_unit_oid_t oid);
 
 #endif /* __VOS_API_H */

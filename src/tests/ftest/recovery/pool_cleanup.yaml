@@ -1,0 +1,17 @@
+hosts:
+  test_servers: 1
+
+timeout: 360
+
+server_config:
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      storage: auto
+  system_ram_reserved: 1
+
+pool:
+  size: 5G

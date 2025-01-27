@@ -16,10 +16,10 @@ server_config:
           scm_mount: /mnt/daos
 pool:
   scm_size: 200M
-  control_method: dmg
   label: pool
   set_logmasks: False
 container:
+  control_method: API
   akey_size: 5
   dkey_size: 5
   data_size: 256

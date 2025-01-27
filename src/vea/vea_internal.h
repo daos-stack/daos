@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,13 +18,6 @@
 #define VEA_MAGIC	(0xea201804)
 #define VEA_BLK_SZ	(4 * 1024)	/* 4K */
 #define VEA_TREE_ODR	20
-
-/* Common free extent structure for both SCM & in-memory index */
-struct vea_free_extent {
-	uint64_t	vfe_blk_off;	/* Block offset of the extent */
-	uint32_t	vfe_blk_cnt;	/* Total blocks of the extent */
-	uint32_t	vfe_age;	/* Monotonic timestamp */
-};
 
 /* Min bitmap allocation class */
 #define VEA_MIN_BITMAP_CLASS	1
@@ -193,7 +187,7 @@ struct vea_space_info {
 	struct vea_hint_context		*vsi_bitmap_hint_context;
 	/* Index for searching free extent by size & age */
 	struct vea_free_class		 vsi_class;
-	/* LRU to aggergate just recent freed extents or bitmap blocks */
+	/* LRU to aggregate just recent freed extents or bitmap blocks */
 	d_list_t			 vsi_agg_lru;
 	/*
 	 * Free entries sorted by offset, for coalescing the just recent

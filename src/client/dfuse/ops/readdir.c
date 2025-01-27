@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -119,6 +119,9 @@ _handle_init(struct dfuse_cont *dfc)
 
 	D_INIT_LIST_HEAD(&hdl->drh_cache_list);
 	atomic_init(&hdl->drh_ref, 1);
+
+	D_RWLOCK_INIT(&hdl->drh_lock, NULL);
+
 	hdl->drh_valid = true;
 	return hdl;
 }
@@ -130,7 +133,7 @@ dfuse_dre_drop(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh)
 	struct dfuse_readdir_hdl *hdl;
 	struct dfuse_readdir_c   *drc, *next;
 	uint32_t                  oldref;
-	off_t                     expected_offset = 2;
+	off_t                     next_offset = 0;
 
 	DFUSE_TRA_DEBUG(oh, "Dropping ref on %p", oh->doh_rd);
 
@@ -158,10 +161,11 @@ dfuse_dre_drop(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh)
 		oh->doh_ie->ie_rd_hdl = NULL;
 
 	d_list_for_each_entry_safe(drc, next, &hdl->drh_cache_list, drc_list) {
-		D_ASSERT(drc->drc_offset == expected_offset);
-		D_ASSERT(drc->drc_next_offset == expected_offset + 1 ||
-			 drc->drc_next_offset == READDIR_EOD);
-		expected_offset = drc->drc_next_offset;
+		/** Verify offset/next_offset are consistent in the entry cache list */
+		D_ASSERTF(next_offset == 0 || next_offset == drc->drc_offset,
+			  "Inconsistent offset list %#lx prev next %#lx " DF_DE,
+			  drc->drc_offset, next_offset, DP_DE(drc->drc_name));
+		next_offset = drc->drc_next_offset;
 		if (drc->drc_rlink)
 			d_hash_rec_decref(&dfuse_info->dpi_iet, drc->drc_rlink);
 		D_FREE(drc);
@@ -199,11 +203,15 @@ create_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *parent, st
 	if (S_ISDIR(ie->ie_stat.st_mode) && attr_len) {
 		/* Check for UNS entry point, this will allocate a new inode number if successful */
 		rc = check_for_uns_ep(dfuse_info, ie, attr, attr_len);
-		if (rc != 0) {
-			DFUSE_TRA_WARNING(ie, "check_for_uns_ep() returned %d, ignoring", rc);
+		if (rc == 0) {
+			ie->ie_root = true;
+		} else {
+			if (rc == ENOLINK)
+				DHS_INFO(ie, rc, "check_for_uns_ep() failed, ignoring");
+			else
+				DHS_WARN(ie, rc, "check_for_uns_ep() failed, ignoring");
 			rc = 0;
 		}
-		ie->ie_root = true;
 	}
 
 	strncpy(ie->ie_name, name, NAME_MAX);
@@ -332,6 +340,7 @@ dfuse_do_readdir(struct dfuse_info *dfuse_info, fuse_req_t req, struct dfuse_obj
 	bool                      to_seek     = false;
 	struct dfuse_readdir_hdl *hdl;
 	size_t                    size = *out_size;
+	bool                      wlock = false;
 
 	rc = ensure_rd_handle(dfuse_info, oh);
 	if (rc != 0)
@@ -350,6 +359,22 @@ dfuse_do_readdir(struct dfuse_info *dfuse_info, fuse_req_t req, struct dfuse_obj
 		oh->doh_kreaddir_started = true;
 	}
 
+	D_RWLOCK_RDLOCK(&hdl->drh_lock);
+
+	/* If this thread is doing readdir plus and not all entries in the cache have hash table
+	 * references then reading from the cache also needs a write handle.  This reader will
+	 * take hash table references however so with multiple readers here only the first one
+	 * through should need this, even in the case where the cache was populated without refs.
+	 */
+	if (plus && hdl->drh_no_ref_count != 0) {
+		DFUSE_TRA_DEBUG(hdl, "Relocking with write lock");
+		D_RWLOCK_UNLOCK(&hdl->drh_lock);
+		D_RWLOCK_WRLOCK(&hdl->drh_lock);
+		wlock = true;
+	}
+
+restart:
+
 	DFUSE_TRA_DEBUG(oh, "plus %d offset %#lx idx %d idx_offset %#lx", plus, offset,
 			hdl->drh_dre_index, hdl->drh_dre[hdl->drh_dre_index].dre_offset);
 
@@ -364,7 +389,7 @@ dfuse_do_readdir(struct dfuse_info *dfuse_info, fuse_req_t req, struct dfuse_obj
 		/* If there is no seekdir but there is valid cache data then use the cache.
 		 *
 		 * Directory handles may not have up-to-date values for doh_rd_nextc in some cases
-		 * so perform a seek here if necessairy.
+		 * so perform a seek here if necessary.
 		 */
 		struct dfuse_readdir_c *drc;
 		size_t                  written     = 0;
@@ -448,7 +473,7 @@ dfuse_do_readdir(struct dfuse_info *dfuse_info, fuse_req_t req, struct dfuse_obj
 
 					if (rc != 0) {
 						DFUSE_TRA_DEBUG(oh, "Problem finding file %d", rc);
-						D_GOTO(reply, 0);
+						D_GOTO(reply, rc);
 					}
 					/* Check oid is the same! */
 
@@ -473,6 +498,7 @@ dfuse_do_readdir(struct dfuse_info *dfuse_info, fuse_req_t req, struct dfuse_obj
 					drc->drc_stbuf = entry.attr;
 					d_hash_rec_addref(&dfuse_info->dpi_iet, rlink);
 					drc->drc_rlink = rlink;
+					hdl->drh_no_ref_count--;
 				}
 
 				set_entry_params(&entry, ie);
@@ -512,6 +538,14 @@ dfuse_do_readdir(struct dfuse_info *dfuse_info, fuse_req_t req, struct dfuse_obj
 		}
 	}
 
+	if (hdl->drh_caching && !wlock) {
+		DFUSE_TRA_DEBUG(hdl, "Relocking with write lock");
+		D_RWLOCK_UNLOCK(&hdl->drh_lock);
+		D_RWLOCK_WRLOCK(&hdl->drh_lock);
+		wlock = true;
+		goto restart;
+	}
+
 	if (!to_seek) {
 		if (hdl->drh_dre_last_index == 0) {
 			if (offset != hdl->drh_dre[hdl->drh_dre_index].dre_offset &&
@@ -537,11 +571,16 @@ dfuse_do_readdir(struct dfuse_info *dfuse_info, fuse_req_t req, struct dfuse_obj
 		/* Drop if shared */
 		if (oh->doh_rd->drh_caching) {
 			DFUSE_TRA_DEBUG(oh, "Switching to private handle");
+			D_RWLOCK_UNLOCK(&hdl->drh_lock);
+
 			dfuse_dre_drop(dfuse_info, oh);
 			oh->doh_rd = _handle_init(oh->doh_ie->ie_dfs);
 			hdl        = oh->doh_rd;
 			if (oh->doh_rd == NULL)
 				D_GOTO(out_reset, rc = ENOMEM);
+
+			D_RWLOCK_WRLOCK(&hdl->drh_lock);
+
 			DFUSE_TRA_UP(oh->doh_rd, oh, "readdir");
 		} else {
 			dfuse_readdir_reset(hdl);
@@ -651,7 +690,8 @@ dfuse_do_readdir(struct dfuse_info *dfuse_info, fuse_req_t req, struct dfuse_obj
 			if (rc == ENOENT) {
 				DFUSE_TRA_DEBUG(oh, "File does not exist");
 				D_FREE(drc);
-				continue;
+				/** legitimate race */
+				D_GOTO(next, rc = 0);
 			} else if (rc != 0) {
 				DFUSE_TRA_DEBUG(oh, "Problem finding file %d", rc);
 				D_FREE(drc);
@@ -710,6 +750,7 @@ dfuse_do_readdir(struct dfuse_info *dfuse_info, fuse_req_t req, struct dfuse_obj
 				if (drc) {
 					drc->drc_stbuf.st_mode = stbuf.st_mode;
 					drc->drc_stbuf.st_ino  = stbuf.st_ino;
+					hdl->drh_no_ref_count++;
 				}
 			}
 			if (written > size - buff_offset) {
@@ -720,6 +761,12 @@ dfuse_do_readdir(struct dfuse_info *dfuse_info, fuse_req_t req, struct dfuse_obj
 			}
 
 			if (drc) {
+				if (oh->doh_rd_nextc != NULL)
+					/**
+					 * Fix next offset of previous cache entry in case some
+					 * dre entries were skipped (e.g. failed stat call).
+					 */
+					oh->doh_rd_nextc->drc_next_offset = drc->drc_offset;
 				oh->doh_rd_nextc = drc;
 				DFUSE_TRA_DEBUG(hdl, "Appending offset %#lx to list, next %#lx",
 						drc->drc_offset, drc->drc_next_offset);
@@ -730,12 +777,15 @@ dfuse_do_readdir(struct dfuse_info *dfuse_info, fuse_req_t req, struct dfuse_obj
 			dre->dre_offset = 0;
 			buff_offset += written;
 			added++;
+next:
 			offset++;
 			oh->doh_rd_offset = dre->dre_next_offset;
 
 			if (dre->dre_next_offset == READDIR_EOD) {
 				DFUSE_TRA_DEBUG(oh, "Reached end of directory");
 				oh->doh_rd_offset = READDIR_EOD;
+				if (hdl->drh_caching && oh->doh_rd_nextc != NULL)
+					oh->doh_rd_nextc->drc_next_offset = READDIR_EOD;
 				D_GOTO(reply, rc = 0);
 			}
 		}
@@ -773,11 +823,15 @@ reply:
 		D_GOTO(out_reset, rc);
 
 	*out_size = buff_offset;
+	D_RWLOCK_UNLOCK(&hdl->drh_lock);
+
 	return 0;
 
 out_reset:
-	if (hdl)
+	if (hdl) {
 		dfuse_readdir_reset(hdl);
+		D_RWLOCK_UNLOCK(&hdl->drh_lock);
+	}
 	D_ASSERT(rc != 0);
 	return rc;
 }
@@ -788,8 +842,6 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 	struct dfuse_info *dfuse_info = fuse_req_userdata(req);
 	char              *reply_buff = NULL;
 	int                rc         = EIO;
-
-	D_MUTEX_LOCK(&oh->doh_ie->ie_lock);
 
 	/* Handle the EOD case, the kernel will keep reading until it receives zero replies so
 	 * reply early in this case.
@@ -817,9 +869,6 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 	rc = dfuse_do_readdir(dfuse_info, req, oh, reply_buff, &size, offset, plus);
 
 out:
-
-	D_MUTEX_UNLOCK(&oh->doh_ie->ie_lock);
-
 	if (rc)
 		DFUSE_REPLY_ERR_RAW(oh, req, rc);
 	else

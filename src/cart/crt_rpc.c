@@ -441,8 +441,7 @@ crt_register_proto_fi(crt_endpoint_t *ep)
 	if (rc != 0)
 		return -DER_MISC;
 
-	rc = crt_proto_query(ep, cpf.cpf_base, &cpf.cpf_ver,
-			     1, crt_pfi_cb, &pfi);
+	rc = crt_proto_query(ep, cpf.cpf_base, &cpf.cpf_ver, 1, 0, crt_pfi_cb, &pfi);
 	if (rc != -DER_SUCCESS)
 		D_GOTO(out, rc);
 
@@ -481,8 +480,7 @@ crt_register_proto_ctl(crt_endpoint_t *ep)
 	if (rc != 0)
 		return -DER_MISC;
 
-	rc = crt_proto_query(ep, cpf.cpf_base, &cpf.cpf_ver,
-			     1, crt_pfi_cb, &pfi);
+	rc = crt_proto_query(ep, cpf.cpf_base, &cpf.cpf_ver, 1, 0, crt_pfi_cb, &pfi);
 	if (rc != -DER_SUCCESS)
 		D_GOTO(out, rc);
 
@@ -798,7 +796,7 @@ crt_req_decref(crt_rpc_t *req)
 }
 
 static inline int
-crt_req_fill_tgt_uri(struct crt_rpc_priv *rpc_priv, crt_phy_addr_t base_uri)
+crt_req_fill_tgt_uri(struct crt_rpc_priv *rpc_priv, char *base_uri)
 {
 	D_ASSERT(rpc_priv != NULL);
 	D_ASSERT(base_uri != NULL);
@@ -895,8 +893,8 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 	ul_out = crt_reply_get(lookup_rpc);
 
 	if (ul_out->ul_rc != 0) {
-		RPC_ERROR(chained_rpc_priv, "URI_LOOKUP returned rc="DF_RC"\n",
-			  DP_RC(ul_out->ul_rc));
+		RPC_WARN(chained_rpc_priv, "URI_LOOKUP returned rc=" DF_RC "\n",
+			 DP_RC(ul_out->ul_rc));
 		D_GOTO(retry, rc = ul_out->ul_rc);
 	}
 
@@ -973,16 +971,20 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 retry:
 
 	if (rc != 0) {
-		if (chained_rpc_priv->crp_ul_retry++ < MAX_URI_LOOKUP_RETRIES) {
-			rc = crt_issue_uri_lookup_retry(lookup_rpc->cr_ctx,
-							grp_priv,
-							ul_in->ul_rank,
-							ul_in->ul_tag,
-							chained_rpc_priv);
-			D_GOTO(out, rc);
+		/* PROTO_QUERY will be retried by the caller, no need to retry URI lookups */
+		if (chained_rpc_priv->crp_pub.cr_opc != CRT_OPC_PROTO_QUERY) {
+			if (chained_rpc_priv->crp_ul_retry++ < MAX_URI_LOOKUP_RETRIES) {
+				rc = crt_issue_uri_lookup_retry(lookup_rpc->cr_ctx, grp_priv,
+								ul_in->ul_rank, ul_in->ul_tag,
+								chained_rpc_priv);
+				D_GOTO(out, rc);
+			} else {
+				D_WARN("URI lookups exceeded %d retries\n",
+				       chained_rpc_priv->crp_ul_retry);
+			}
 		} else {
-			D_ERROR("URI lookups exceeded %d retries\n",
-				chained_rpc_priv->crp_ul_retry);
+			DL_INFO(rc, "URI_LOOKUP for (%d:%d) failed during PROTO_QUERY",
+				ul_in->ul_rank, ul_in->ul_tag);
 		}
 	}
 
@@ -1123,8 +1125,7 @@ crt_issue_uri_lookup(crt_context_t ctx, crt_group_t *group,
 
 	rc = crt_req_create(ctx, &target_ep, CRT_OPC_URI_LOOKUP, &rpc);
 	if (rc != 0) {
-		D_ERROR("URI_LOOKUP rpc create failed; rc="DF_RC"\n",
-			DP_RC(rc));
+		D_ERROR("URI_LOOKUP rpc create failed; rc=" DF_RC "\n", DP_RC(rc));
 		D_GOTO(exit, rc);
 	}
 
@@ -1132,6 +1133,17 @@ crt_issue_uri_lookup(crt_context_t ctx, crt_group_t *group,
 	ul_in->ul_grp_id = group->cg_grpid;
 	ul_in->ul_rank = query_rank;
 	ul_in->ul_tag = query_tag;
+
+	/* Inherit original RPC timeout if set */
+	if (chained_rpc_priv->crp_timeout_sec) {
+		rc = crt_req_set_timeout(rpc, chained_rpc_priv->crp_timeout_sec);
+		if (rc != 0) {
+			D_ERROR("crt_req_set_timeout() failed; rc=" DF_RC "\n", DP_RC(rc));
+			/* destroy the URI_LOOKUP rpc */
+			RPC_PUB_DECREF(rpc);
+			D_GOTO(exit, rc);
+		}
+	}
 
 	RPC_PUB_ADDREF(rpc);
 	chained_rpc_priv->crp_ul_req = rpc;
@@ -1205,9 +1217,9 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 	crt_rpc_t		*req;
 	crt_endpoint_t		*tgt_ep;
 	struct crt_context	*ctx;
-	crt_phy_addr_t		 uri = NULL;
+	char                    *uri       = NULL;
 	int			 rc = 0;
-	crt_phy_addr_t		 base_addr = NULL;
+	char                    *base_addr = NULL;
 	struct crt_prov_gdata	*prov_data;
 	int			 dst_tag;
 
@@ -1260,8 +1272,7 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 	if (base_addr != NULL && rpc_priv->crp_hg_addr == NULL) {
 		rc = crt_req_fill_tgt_uri(rpc_priv, base_addr);
 		if (rc != 0)
-			RPC_ERROR(rpc_priv,
-				  "crt_req_fill_tgt_uri() failed, " DF_RC "\n",
+			RPC_ERROR(rpc_priv, "crt_req_fill_tgt_uri() failed, " DF_RC "\n",
 				  DP_RC(rc));
 		D_GOTO(out, rc);
 	}
@@ -1274,27 +1285,23 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 	 */
 	if (base_addr == NULL && !crt_is_service()) {
 		D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
-		if (tgt_ep->ep_rank == grp_priv->gp_psr_rank &&
-		    dst_tag == 0) {
-			D_STRNDUP(uri, grp_priv->gp_psr_phy_addr,
-				  CRT_ADDR_STR_MAX_LEN);
+		if (tgt_ep->ep_rank == grp_priv->gp_psr_rank && dst_tag == 0) {
+			D_STRNDUP(uri, grp_priv->gp_psr_uri, CRT_ADDR_STR_MAX_LEN);
 			D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
+
 			if (uri == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 
 			base_addr = uri;
-			rc = crt_grp_lc_uri_insert(grp_priv,
-						   tgt_ep->ep_rank, 0, uri);
+			rc        = crt_grp_lc_uri_insert(grp_priv, tgt_ep->ep_rank, 0, uri);
 			if (rc != 0) {
-				D_ERROR("crt_grp_lc_uri_insert() failed, "
-					"rc: %d\n", rc);
+				D_ERROR("crt_grp_lc_uri_insert() failed rc=%d\n", rc);
 				D_GOTO(out, rc);
 			}
 
 			rc = crt_req_fill_tgt_uri(rpc_priv, uri);
 			if (rc != 0) {
-				D_ERROR("crt_req_fill_tgt_uri failed, "
-					"opc: %#x.\n", req->cr_opc);
+				RPC_ERROR(rpc_priv, "tgt_uri='%s' fill failed\n", uri);
 				D_GOTO(out, rc);
 			}
 		} else {
@@ -1545,6 +1552,26 @@ out:
 }
 
 int
+crt_reply_send_input_free(crt_rpc_t *req)
+{
+	struct crt_rpc_priv *rpc_priv = NULL;
+	int                  rc       = 0;
+
+	if (req == NULL) {
+		D_ERROR("invalid parameter (NULL req).\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rpc_priv                          = container_of(req, struct crt_rpc_priv, crp_pub);
+	rpc_priv->crp_release_input_early = 1;
+
+	return crt_reply_send(req);
+
+out:
+	return rc;
+}
+
+int
 crt_reply_send(crt_rpc_t *req)
 {
 	struct crt_rpc_priv	*rpc_priv = NULL;
@@ -1695,7 +1722,8 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv
 	struct crt_context *ctx = crt_ctx;
 
 	D_INIT_LIST_HEAD(&rpc_priv->crp_epi_link);
-	D_INIT_LIST_HEAD(&rpc_priv->crp_tmp_link);
+	D_INIT_LIST_HEAD(&rpc_priv->crp_tmp_link_submit);
+	D_INIT_LIST_HEAD(&rpc_priv->crp_tmp_link_timeout);
 	D_INIT_LIST_HEAD(&rpc_priv->crp_parent_link);
 	rpc_priv->crp_complete_cb = NULL;
 	rpc_priv->crp_arg = NULL;
@@ -1780,10 +1808,9 @@ crt_handle_rpc(void *arg)
 int
 crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 {
-	struct crt_context	*crt_ctx;
-	int			 rc = 0;
-	bool			skip_check = false;
-	d_rank_t		self_rank;
+	struct crt_context *crt_ctx;
+	int                 rc = 0;
+	d_rank_t            self_rank;
 
 	D_ASSERT(rpc_priv != NULL);
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
@@ -1794,10 +1821,7 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 	if (rpc_priv->crp_fail_hlc)
 		D_GOTO(out, rc = -DER_HLC_SYNC);
 
-	if (self_rank == CRT_NO_RANK)
-		skip_check = true;
-
-	/* Skip check when CORPC is sent to self */
+	/* Skip check when CORPC is sent to self, for crp_req_hdr is invalid */
 	if (rpc_priv->crp_coll) {
 		d_rank_t pri_root;
 
@@ -1805,27 +1829,21 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 				rpc_priv->crp_corpc_info->co_grp_priv,
 				rpc_priv->crp_corpc_info->co_root);
 
-		if (pri_root == self_rank)
-			skip_check = true;
+		if (self_rank == CRT_NO_RANK || pri_root == self_rank)
+			goto skip_check;
 	}
 
-	if ((self_rank != *rpc_priv->crp_header.p_dst_rank) ||
-	    (crt_ctx->cc_idx != *rpc_priv->crp_header.p_dst_tag)) {
-		if (!skip_check) {
-			D_ERROR("Mismatch rpc: %p opc: %x rank:%d tag:%d "
-				"self:%d cc_idx:%d ep_rank:%d ep_tag:%d\n",
-				rpc_priv,
-				rpc_priv->crp_pub.cr_opc,
-				*rpc_priv->crp_header.p_dst_rank,
-				*rpc_priv->crp_header.p_dst_tag,
-				self_rank,
-				crt_ctx->cc_idx,
-				rpc_priv->crp_pub.cr_ep.ep_rank,
-				rpc_priv->crp_pub.cr_ep.ep_tag);
+	if ((self_rank != CRT_NO_RANK && self_rank != rpc_priv->crp_req_hdr.cch_dst_rank) ||
+	    crt_ctx->cc_idx != rpc_priv->crp_req_hdr.cch_dst_tag) {
+		D_ERROR("Mismatch rpc: %p opc: %x rank:%d tag:%d "
+			"self:%d cc_idx:%d ep_rank:%d ep_tag:%d\n",
+			rpc_priv, rpc_priv->crp_pub.cr_opc, rpc_priv->crp_req_hdr.cch_dst_rank,
+			rpc_priv->crp_req_hdr.cch_dst_tag, self_rank, crt_ctx->cc_idx,
+			rpc_priv->crp_pub.cr_ep.ep_rank, rpc_priv->crp_pub.cr_ep.ep_tag);
 
-			D_GOTO(out, rc = -DER_BAD_TARGET);
-		}
+		D_GOTO(out, rc = -DER_BAD_TARGET);
 	}
+skip_check:
 
 	/* Set the reply pending bit unless this is a one-way OPCODE */
 	if (!rpc_priv->crp_opc_info->coi_no_reply)

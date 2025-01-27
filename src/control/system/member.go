@@ -47,8 +47,10 @@ const (
 	MemberStateUnresponsive MemberState = 0x0100
 	// MemberStateAdminExcluded indicates that the rank has been administratively excluded.
 	MemberStateAdminExcluded MemberState = 0x0200
+	// MemberStateCheckerStarted indicates that the rank is running in checker mode.
+	MemberStateCheckerStarted MemberState = 0x0400
 	// MemberStateMax is the last entry indicating end of list.
-	MemberStateMax MemberState = 0x0400
+	MemberStateMax MemberState = 0x0800
 
 	// ExcludedMemberFilter defines the state(s) to be used when determining
 	// whether or not a member should be excluded from CaRT group map updates.
@@ -58,6 +60,8 @@ const (
 	AvailableMemberFilter = MemberStateReady | MemberStateJoined
 	// AllMemberFilter will match all valid member states.
 	AllMemberFilter = MemberState(0xFFFF)
+	// NonExcludedMemberFilter matches all members that don't match the ExcludedMemberFilter.
+	NonExcludedMemberFilter = AllMemberFilter ^ ExcludedMemberFilter
 )
 
 func (ms MemberState) String() string {
@@ -82,6 +86,8 @@ func (ms MemberState) String() string {
 		return "Errored"
 	case MemberStateUnresponsive:
 		return "Unresponsive"
+	case MemberStateCheckerStarted:
+		return "CheckerStarted"
 	default:
 		return "Unknown"
 	}
@@ -109,6 +115,8 @@ func MemberStateFromString(in string) MemberState {
 		return MemberStateErrored
 	case "unresponsive":
 		return MemberStateUnresponsive
+	case "checkerstarted":
+		return MemberStateCheckerStarted
 	default:
 		return MemberStateUnknown
 	}
@@ -149,6 +157,10 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 			MemberStateJoined:   true,
 			MemberStateStopping: true,
 		},
+		MemberStateCheckerStarted: {
+			MemberStateReady:  true,
+			MemberStateJoined: true,
+		},
 	}[ms][to]
 }
 
@@ -177,16 +189,18 @@ func MemberStates2Mask(desiredStates ...MemberState) (MemberState, bool) {
 // Member refers to a data-plane instance that is a member of this DAOS
 // system running on host with the control-plane listening at "Addr".
 type Member struct {
-	Rank           ranklist.Rank `json:"rank"`
-	Incarnation    uint64        `json:"incarnation"`
-	UUID           uuid.UUID     `json:"uuid"`
-	Addr           *net.TCPAddr  `json:"addr"`
-	FabricURI      string        `json:"fabric_uri"`
-	FabricContexts uint32        `json:"fabric_contexts"`
-	State          MemberState   `json:"-"`
-	Info           string        `json:"info"`
-	FaultDomain    *FaultDomain  `json:"fault_domain"`
-	LastUpdate     time.Time     `json:"last_update"`
+	Rank                    ranklist.Rank `json:"rank"`
+	Incarnation             uint64        `json:"incarnation"`
+	UUID                    uuid.UUID     `json:"uuid"`
+	Addr                    *net.TCPAddr  `json:"addr"`
+	PrimaryFabricURI        string        `json:"fabric_uri"`
+	SecondaryFabricURIs     []string      `json:"secondary_fabric_uris"`
+	PrimaryFabricContexts   uint32        `json:"fabric_contexts"`
+	SecondaryFabricContexts []uint32      `json:"secondary_fabric_contexts"`
+	State                   MemberState   `json:"-"`
+	Info                    string        `json:"info"`
+	FaultDomain             *FaultDomain  `json:"fault_domain"`
+	LastUpdate              time.Time     `json:"last_update"`
 }
 
 // MarshalJSON marshals system.Member to JSON.
@@ -264,6 +278,36 @@ func (sm *Member) WithInfo(msg string) *Member {
 func (sm *Member) WithFaultDomain(fd *FaultDomain) *Member {
 	sm.FaultDomain = fd
 	return sm
+}
+
+// FabricURIs returns all fabric URIs, with the primary URI first.
+func (sm *Member) FabricURIs() []string {
+	return append([]string{sm.PrimaryFabricURI}, sm.SecondaryFabricURIs...)
+}
+
+// NewMember returns a reference to a new member struct.
+func NewMember(rank ranklist.Rank, uuidStr string, uris []string, addr *net.TCPAddr, state MemberState) *Member {
+	// FIXME: Either require a valid uuid.UUID to be supplied
+	// or else change the return signature to include an error
+	newUUID := uuid.MustParse(uuidStr)
+
+	newMember := &Member{
+		Rank:        rank,
+		UUID:        newUUID,
+		Addr:        addr,
+		State:       state,
+		FaultDomain: MustCreateFaultDomain(),
+		LastUpdate:  time.Now(),
+	}
+
+	if len(uris) > 0 {
+		newMember.PrimaryFabricURI = uris[0]
+	}
+	if len(uris) > 1 {
+		newMember.SecondaryFabricURIs = uris[1:]
+	}
+
+	return newMember
 }
 
 // Members is a type alias for a slice of member references

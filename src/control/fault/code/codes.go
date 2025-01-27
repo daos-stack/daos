@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2023 Intel Corporation.
+// (C) Copyright 2018-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -61,6 +61,7 @@ const (
 	StorageDeviceAlreadyMounted
 	StorageTargetAlreadyMounted
 	StoragePathAccessDenied
+	StorageDeviceWithFsNoMountpoint
 )
 
 // SCM fault codes
@@ -152,6 +153,9 @@ const (
 	ServerIncompatibleComponents
 	ServerNoCompatibilityInsecure
 	ServerPoolHasContainers
+	ServerHugepagesDisabled
+	ServerPoolMemRatioNoRoles
+	ServerBadFaultDomainLabels
 )
 
 // server config fault codes
@@ -161,8 +165,8 @@ const (
 	ServerNoConfigPath
 	ServerConfigBadControlPort
 	ServerConfigBadTelemetryPort
-	ServerConfigBadAccessPoints
-	ServerConfigEvenAccessPoints
+	ServerConfigBadMgmtSvcReplicas
+	ServerConfigEvenMgmtSvcReplicas
 	ServerConfigBadProvider
 	ServerConfigNoEngines
 	ServerConfigDuplicateFabric
@@ -182,7 +186,7 @@ const (
 	ServerConfigFaultCallbackEmpty
 	ServerConfigFaultDomainTooManyLayers
 	ServerConfigNrHugepagesOutOfRange
-	ServerConfigHugepagesDisabled
+	ServerConfigHugepagesDisabledWithBdevs
 	ServerConfigVMDSettingDuplicate
 	ServerConfigEngineNUMAImbalance
 	ServerConfigControlMetadataNoPath
@@ -212,4 +216,12 @@ const (
 const (
 	ControlMetadataUnknown Code = iota + 1000
 	ControlMetadataBadFilesystem
+)
+
+// System Checker codes
+const (
+	SystemCheckerUnknown Code = iota + 1100
+	SystemCheckerInvalidMemberStates
+	SystemCheckerNotEnabled
+	SystemCheckerEnabled
 )

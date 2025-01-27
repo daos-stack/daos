@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -23,6 +23,11 @@
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
 #define DAOS_DTX_VERSION	4
+
+/** VOS reserves highest two minor epoch values for internal use so we must
+ *  limit the number of dtx sub modifications to avoid conflict.
+ */
+#define DTX_SUB_MOD_MAX         (((uint16_t)-1) - 2)
 
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
@@ -88,17 +93,6 @@ CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
 CRT_RPC_DECLARE(dtx_coll, DAOS_ISEQ_COLL_DTX, DAOS_OSEQ_COLL_DTX);
 
 #define DTX_YIELD_CYCLE		(DTX_THRESHOLD_COUNT >> 3)
-
-/* The time threshold for triggering DTX cleanup of stale entries.
- * If the oldest active DTX exceeds such threshold, it will trigger
- * DTX cleanup locally.
- */
-#define DTX_CLEANUP_THD_AGE_UP	90
-
-/* If DTX cleanup for stale entries is triggered, then the DTXs with
- * older ages than this threshold will be cleanup.
- */
-#define DTX_CLEANUP_THD_AGE_LO	75
 
 /* The count threshold (per pool) for triggering DTX aggregation. */
 #define DTX_AGG_THD_CNT_MAX	(1 << 24)
@@ -180,7 +174,20 @@ extern uint32_t dtx_batched_ult_max;
  */
 #define DTX_INLINE_MBS_SIZE		512
 
-#define DTX_COLL_TREE_WIDTH		16
+/*
+ * The branch ratio for the KNOMIAL tree when bcast collective DTX RPC (commit/abort/check)
+ * to related engines. Based on the experience, the value which is not less than 4 may give
+ * relative better performance, cannot be too large (such as more than 10).
+ */
+#define DTX_COLL_TREE_WIDTH		8
+
+/*
+ * If a large transaction has sub-requests to dispatch to a lot of DTX participants,
+ * then we may have to split the dispatch process to multiple steps; otherwise, the
+ * dispatch process may trigger too many in-flight or in-queued RPCs that will hold
+ * too much resource as to server maybe out of memory.
+ */
+#define DTX_RPC_STEP_LENGTH	DTX_THRESHOLD_COUNT
 
 extern struct crt_corpc_ops	dtx_coll_commit_co_ops;
 extern struct crt_corpc_ops	dtx_coll_abort_co_ops;
@@ -197,7 +204,7 @@ struct dtx_coll_prep_args {
 struct dtx_pool_metrics {
 	struct d_tm_node_t	*dpm_batched_degree;
 	struct d_tm_node_t	*dpm_batched_total;
-	struct d_tm_node_t	*dpm_total[DTX_PROTO_SRV_RPC_COUNT];
+	struct d_tm_node_t	*dpm_total[DTX_PROTO_SRV_RPC_COUNT + 1];
 };
 
 /*
@@ -206,6 +213,7 @@ struct dtx_pool_metrics {
 struct dtx_tls {
 	struct d_tm_node_t	*dt_committable;
 	struct d_tm_node_t	*dt_dtx_leader_total;
+	struct d_tm_node_t	*dt_async_cmt_lat;
 	uint64_t		 dt_agg_gen;
 	uint32_t		 dt_batched_ult_cnt;
 };
@@ -239,21 +247,25 @@ int dtx_handle_reinit(struct dtx_handle *dth);
 void dtx_batched_commit(void *arg);
 void dtx_aggregation_main(void *arg);
 int start_dtx_reindex_ult(struct ds_cont_child *cont);
-void stop_dtx_reindex_ult(struct ds_cont_child *cont);
 void dtx_merge_check_result(int *tgt, int src);
 int dtx_leader_get(struct ds_pool *pool, struct dtx_memberships *mbs,
 		   daos_unit_oid_t *oid, uint32_t version, struct pool_target **p_tgt);
 
 /* dtx_cos.c */
 int dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
-			  daos_unit_oid_t *oid, daos_epoch_t epoch,
+			  daos_unit_oid_t *oid, daos_epoch_t epoch, bool force,
 			  struct dtx_entry ***dtes, struct dtx_cos_key **dcks,
 			  struct dtx_coll_entry **p_dce);
-int dtx_add_cos(struct ds_cont_child *cont, void *entry, daos_unit_oid_t *oid,
+int dtx_cos_add(struct ds_cont_child *cont, void *entry, daos_unit_oid_t *oid,
 		uint64_t dkey_hash, daos_epoch_t epoch, uint32_t flags);
-int dtx_del_cos(struct ds_cont_child *cont, struct dtx_id *xid,
-		daos_unit_oid_t *oid, uint64_t dkey_hash);
+int dtx_cos_del(struct ds_cont_child *cont, struct dtx_id *xid,
+		daos_unit_oid_t *oid, uint64_t dkey_hash, bool demote);
 uint64_t dtx_cos_oldest(struct ds_cont_child *cont);
+void dtx_cos_prio(struct ds_cont_child *cont, struct dtx_id *xid,
+		  daos_unit_oid_t *oid, uint64_t dkey_hash);
+
+void dtx_cos_batched_del(struct ds_cont_child *cont, struct dtx_id xid[], bool rm[],
+			 uint32_t count);
 
 /* dtx_rpc.c */
 int dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte,
@@ -282,6 +294,7 @@ enum dtx_status_handle_result {
 
 enum dtx_rpc_flags {
 	DRF_INITIAL_LEADER	= (1 << 0),
+	DRF_SYNC_COMMIT		= (1 << 1),
 };
 
 enum dtx_cos_flags {

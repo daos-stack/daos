@@ -33,7 +33,7 @@ class PoolSvc(TestWithServers):
         self.pool.use_label = True
 
         try:
-            current_leader = int(self.pool.query_data["response"]["leader"])
+            current_leader = int(self.pool.query_data["response"]["svc_ldr"])
         except KeyError as error:
             self.log.error("self.pool.query_data: %s", self.pool.query_data)
             self.fail(

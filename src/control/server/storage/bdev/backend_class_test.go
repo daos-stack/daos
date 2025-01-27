@@ -7,7 +7,6 @@
 package bdev
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -112,18 +111,26 @@ func TestBackend_writeJSONFile(t *testing.T) {
 		expErr    error
 		expOut    string
 	}{
-		"nvme; single ssds": {
+		"nvme; single ssds; hotplug enabled": {
 			confIn: engine.MockConfig().WithStorage(&storage.TierConfig{
 				Tier:  tierID,
 				Class: storage.ClassNvme,
 				Bdev: storage.BdevConfig{
 					DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddrs(1)...),
 				},
-			}),
+			}).WithStorageEnableHotplug(true),
 			expOut: `
 {
   "daos_data": {
-    "config": []
+    "config": [
+      {
+        "params": {
+          "begin": 0,
+          "end": 7
+        },
+        "method": "hotplug_busid_range"
+      }
+    ]
   },
   "subsystems": [
     {
@@ -148,18 +155,18 @@ func TestBackend_writeJSONFile(t *testing.T) {
         },
         {
           "params": {
-            "enable": false,
-            "period_us": 0
-          },
-          "method": "bdev_nvme_set_hotplug"
-        },
-        {
-          "params": {
             "trtype": "PCIe",
             "name": "Nvme_hostfoo_0_84_0",
             "traddr": "0000:01:00.0"
           },
           "method": "bdev_nvme_attach_controller"
+        },
+        {
+          "params": {
+            "enable": true,
+            "period_us": 5000000
+          },
+          "method": "bdev_nvme_set_hotplug"
         }
       ]
     }
@@ -172,10 +179,8 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				Tier:  tierID,
 				Class: storage.ClassNvme,
 				Bdev: storage.BdevConfig{
-					DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddrs(1, 2)...),
-					DeviceRoles: storage.BdevRoles{
-						OptionBits: storage.OptionBits(storage.BdevRoleAll),
-					},
+					DeviceList:  storage.MustNewBdevDeviceList(test.MockPCIAddrs(1, 2)...),
+					DeviceRoles: storage.BdevRolesFromBits(storage.BdevRoleAll),
 				},
 			}),
 			expOut: `
@@ -203,13 +208,6 @@ func TestBackend_writeJSONFile(t *testing.T) {
             "nvme_ioq_poll_period_us": 0
           },
           "method": "bdev_nvme_set_options"
-        },
-        {
-          "params": {
-            "enable": false,
-            "period_us": 0
-          },
-          "method": "bdev_nvme_set_hotplug"
         },
         {
           "params": {
@@ -226,6 +224,13 @@ func TestBackend_writeJSONFile(t *testing.T) {
             "traddr": "0000:02:00.0"
           },
           "method": "bdev_nvme_attach_controller"
+        },
+        {
+          "params": {
+            "enable": false,
+            "period_us": 0
+          },
+          "method": "bdev_nvme_set_hotplug"
         }
       ]
     }
@@ -271,13 +276,6 @@ func TestBackend_writeJSONFile(t *testing.T) {
         },
         {
           "params": {
-            "enable": false,
-            "period_us": 0
-          },
-          "method": "bdev_nvme_set_hotplug"
-        },
-        {
-          "params": {
             "trtype": "PCIe",
             "name": "Nvme_hostfoo_0_84_0",
             "traddr": "0000:01:00.0"
@@ -291,6 +289,13 @@ func TestBackend_writeJSONFile(t *testing.T) {
             "traddr": "0000:02:00.0"
           },
           "method": "bdev_nvme_attach_controller"
+        },
+        {
+          "params": {
+            "enable": false,
+            "period_us": 0
+          },
+          "method": "bdev_nvme_set_hotplug"
         }
       ]
     },
@@ -352,13 +357,6 @@ func TestBackend_writeJSONFile(t *testing.T) {
         },
         {
           "params": {
-            "enable": true,
-            "period_us": 5000000
-          },
-          "method": "bdev_nvme_set_hotplug"
-        },
-        {
-          "params": {
             "trtype": "PCIe",
             "name": "Nvme_hostfoo_0_84_0",
             "traddr": "0000:01:00.0"
@@ -372,6 +370,13 @@ func TestBackend_writeJSONFile(t *testing.T) {
             "traddr": "0000:02:00.0"
           },
           "method": "bdev_nvme_attach_controller"
+        },
+        {
+          "params": {
+            "enable": true,
+            "period_us": 5000000
+          },
+          "method": "bdev_nvme_set_hotplug"
         }
       ]
     }
@@ -424,13 +429,6 @@ func TestBackend_writeJSONFile(t *testing.T) {
         },
         {
           "params": {
-            "enable": true,
-            "period_us": 5000000
-          },
-          "method": "bdev_nvme_set_hotplug"
-        },
-        {
-          "params": {
             "trtype": "PCIe",
             "name": "Nvme_hostfoo_0_84_0",
             "traddr": "0000:01:00.0"
@@ -444,6 +442,13 @@ func TestBackend_writeJSONFile(t *testing.T) {
             "traddr": "0000:02:00.0"
           },
           "method": "bdev_nvme_attach_controller"
+        },
+        {
+          "params": {
+            "enable": true,
+            "period_us": 5000000
+          },
+          "method": "bdev_nvme_set_hotplug"
         }
       ]
     },
@@ -498,18 +503,18 @@ func TestBackend_writeJSONFile(t *testing.T) {
         },
         {
           "params": {
-            "enable": false,
-            "period_us": 0
-          },
-          "method": "bdev_nvme_set_hotplug"
-        },
-        {
-          "params": {
             "trtype": "PCIe",
             "name": "Nvme_hostfoo_0_84_0",
             "traddr": "0000:01:00.0"
           },
           "method": "bdev_nvme_attach_controller"
+        },
+        {
+          "params": {
+            "enable": false,
+            "period_us": 0
+          },
+          "method": "bdev_nvme_set_hotplug"
         }
       ]
     }
@@ -554,18 +559,18 @@ func TestBackend_writeJSONFile(t *testing.T) {
         },
         {
           "params": {
-            "enable": false,
-            "period_us": 0
-          },
-          "method": "bdev_nvme_set_hotplug"
-        },
-        {
-          "params": {
             "trtype": "PCIe",
             "name": "Nvme_hostfoo_0_84_0",
             "traddr": "0000:01:00.0"
           },
           "method": "bdev_nvme_attach_controller"
+        },
+        {
+          "params": {
+            "enable": false,
+            "period_us": 0
+          },
+          "method": "bdev_nvme_set_hotplug"
         }
       ]
     }
@@ -610,18 +615,18 @@ func TestBackend_writeJSONFile(t *testing.T) {
         },
         {
           "params": {
-            "enable": false,
-            "period_us": 0
-          },
-          "method": "bdev_nvme_set_hotplug"
-        },
-        {
-          "params": {
             "trtype": "PCIe",
             "name": "Nvme_hostfoo_0_84_0",
             "traddr": "0000:01:00.0"
           },
           "method": "bdev_nvme_attach_controller"
+        },
+        {
+          "params": {
+            "enable": false,
+            "period_us": 0
+          },
+          "method": "bdev_nvme_set_hotplug"
         }
       ]
     }
@@ -692,18 +697,18 @@ func TestBackend_writeJSONFile(t *testing.T) {
         },
         {
           "params": {
-            "enable": false,
-            "period_us": 0
-          },
-          "method": "bdev_nvme_set_hotplug"
-        },
-        {
-          "params": {
             "trtype": "PCIe",
             "name": "Nvme_hostfoo_0_84_0",
             "traddr": "0000:01:00.0"
           },
           "method": "bdev_nvme_attach_controller"
+        },
+        {
+          "params": {
+            "enable": false,
+            "period_us": 0
+          },
+          "method": "bdev_nvme_set_hotplug"
         }
       ]
     }
@@ -736,7 +741,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				return
 			}
 
-			gotOut, err := ioutil.ReadFile(cfgOutputPath)
+			gotOut, err := os.ReadFile(cfgOutputPath)
 			if err != nil {
 				t.Fatal(err)
 			}

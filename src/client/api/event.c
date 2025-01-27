@@ -14,6 +14,7 @@
 #define D_LOGFAC	DD_FAC(client)
 
 #include "client_internal.h"
+#include <daos/mgmt.h>
 #include <daos/rpc.h>
 
 /** thread-private event */
@@ -66,7 +67,7 @@ static unsigned int eq_ref;
 static tse_sched_t daos_sched_g;
 
 int
-daos_eq_lib_init()
+daos_eq_lib_init(crt_init_options_t *crt_info)
 {
 	int rc;
 
@@ -76,17 +77,30 @@ daos_eq_lib_init()
 		D_GOTO(unlock, rc = 0);
 	}
 
-	rc = crt_init_opt(NULL, 0, daos_crt_init_opt_get(false, 1));
+	rc = crt_init_opt(NULL, 0, crt_info);
 	if (rc != 0) {
 		D_ERROR("failed to initialize crt: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(unlock, rc);
 	}
 
-	/* use a global shared context for all eq for now */
-	rc = crt_context_create(&daos_eq_ctx);
+	if (d_dynamic_ctx_g) {
+		char iface[DAOS_SYS_INFO_STRING_MAX];
+
+		rc = dc_mgmt_get_iface(&iface[0]);
+		if (rc && rc != -DER_NONEXIST) {
+			D_ERROR("failed to get iface: " DF_RC "\n", DP_RC(rc));
+			D_GOTO(crt, rc);
+		}
+		/** if no interface returned, use the default */
+		if (rc == -DER_NONEXIST)
+			rc = crt_context_create(&daos_eq_ctx);
+		else
+			rc = crt_context_create_on_iface(iface, &daos_eq_ctx);
+	} else {
+		rc = crt_context_create(&daos_eq_ctx);
+	}
 	if (rc != 0) {
-		D_ERROR("failed to create client context: "DF_RC"\n",
-			DP_RC(rc));
+		D_ERROR("failed to create client context: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(crt, rc);
 	}
 
@@ -110,9 +124,19 @@ crt:
 int
 daos_eq_lib_reset_after_fork(void)
 {
+	crt_init_options_t *crt_info;
+	int                 rc;
+
 	eq_ref            = 0;
 	ev_thpriv_is_init = false;
-	return daos_eq_lib_init();
+	crt_info          = daos_crt_init_opt_get(false, 1);
+	rc                = dc_mgmt_net_cfg(NULL, crt_info);
+	if (rc == 0)
+		rc = daos_eq_lib_init(crt_info);
+	D_FREE(crt_info->cio_provider);
+	D_FREE(crt_info->cio_interface);
+	D_FREE(crt_info->cio_domain);
+	return rc;
 }
 
 int
@@ -645,7 +669,23 @@ daos_eq_create(daos_handle_t *eqh)
 
 	eqx = daos_eq2eqx(eq);
 
-	rc = crt_context_create(&eqx->eqx_ctx);
+	if (d_dynamic_ctx_g) {
+		char iface[DAOS_SYS_INFO_STRING_MAX];
+
+		rc = dc_mgmt_get_iface(&iface[0]);
+		if (rc && rc != -DER_NONEXIST) {
+			D_ERROR("failed to get iface: " DF_RC "\n", DP_RC(rc));
+			return rc;
+		}
+
+		/** if no interface returned, use the default */
+		if (rc == -DER_NONEXIST)
+			rc = crt_context_create(&eqx->eqx_ctx);
+		else
+			rc = crt_context_create_on_iface(iface, &eqx->eqx_ctx);
+	} else {
+		rc = crt_context_create(&eqx->eqx_ctx);
+	}
 	if (rc) {
 		D_WARN("Failed to create CART context; using the global one, "DF_RC"\n", DP_RC(rc));
 		eqx->eqx_ctx = daos_eq_ctx;
@@ -879,6 +919,7 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 			return rc;
 		}
 	}
+	tse_sched_progress(&eqx->eqx_sched);
 
 	D_MUTEX_LOCK(&eqx->eqx_lock);
 

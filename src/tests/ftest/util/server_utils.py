@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -7,9 +7,7 @@
 
 import os
 import random
-import re
 import time
-from collections import defaultdict
 from getpass import getuser
 
 from avocado import fail_on
@@ -62,9 +60,9 @@ class DaosServerManager(SubprocessManager):
 
     # Mapping of environment variable names to daos_server config param names
     ENVIRONMENT_VARIABLE_MAPPING = {
-        "CRT_PHY_ADDR_STR": "provider",
-        "OFI_INTERFACE": "fabric_iface",
-        "OFI_PORT": "fabric_iface_port",
+        "D_PROVIDER": "provider",
+        "D_INTERFACE": "fabric_iface",
+        "D_PORT": "fabric_iface_port",
     }
 
     # Defined in telemetry_common.h
@@ -73,7 +71,7 @@ class DaosServerManager(SubprocessManager):
     def __init__(self, group, bin_dir,
                  svr_cert_dir, svr_config_file, dmg_cert_dir, dmg_config_file,
                  svr_config_temp=None, dmg_config_temp=None, manager="Orterun",
-                 namespace="/run/server_manager/*", access_points_suffix=None):
+                 namespace="/run/server_manager/*", mgmt_svc_replicas_suffix=None):
         # pylint: disable=too-many-arguments
         """Initialize a DaosServerManager object.
 
@@ -94,7 +92,7 @@ class DaosServerManager(SubprocessManager):
                 manage the YamlCommand defined through the "job" attribute.
                 Defaults to "Orterun".
             namespace (str): yaml namespace (path to parameters)
-            access_points_suffix (str, optional): Suffix to append to each access point name.
+            mgmt_svc_replicas_suffix (str, optional): Suffix to append to each MS replica name.
                 Defaults to None.
         """
         self.group = group
@@ -106,7 +104,8 @@ class DaosServerManager(SubprocessManager):
         # Dmg command to access this group of servers which will be configured
         # to access the daos_servers when they are started
         self.dmg = get_dmg_command(
-            group, dmg_cert_dir, bin_dir, dmg_config_file, dmg_config_temp, access_points_suffix)
+            group, dmg_cert_dir, bin_dir, dmg_config_file, dmg_config_temp,
+            mgmt_svc_replicas_suffix)
 
         # Set the correct certificate file ownership
         if manager == "Systemctl":
@@ -132,7 +131,7 @@ class DaosServerManager(SubprocessManager):
 
         # Parameters to set storage prepare and format timeout
         self.storage_prepare_timeout = BasicParameter(None, 40)
-        self.storage_format_timeout = BasicParameter(None, 40)
+        self.storage_format_timeout = BasicParameter(None, 64)
         self.storage_reset_timeout = BasicParameter(None, 120)
         self.collect_log_timeout = BasicParameter(None, 120)
 
@@ -168,7 +167,7 @@ class DaosServerManager(SubprocessManager):
             NodeSet: the hosts running the management service
 
         """
-        return NodeSet.fromlist(self.get_config_value('access_points'))
+        return NodeSet.fromlist(self.get_config_value('mgmt_svc_replicas'))
 
     @property
     def management_service_ranks(self):
@@ -204,7 +203,7 @@ class DaosServerManager(SubprocessManager):
 
         Args:
             hosts (list, optional): dmg hostlist value. Defaults to None which
-                results in using the 'access_points' host list.
+                results in using the 'mgmt_svc_replicas' host list.
         """
         self._prepare_dmg_certificates()
         self._prepare_dmg_hostlist(hosts)
@@ -395,9 +394,7 @@ class DaosServerManager(SubprocessManager):
                 DaosServerCommand.ScmSubCommand.PrepareSubCommand object
 
         Raises:
-            RemoteCommandResult: a grouping of the command results from the same hosts with the same
-                return status
-
+            CommandResult: groups of command results from the same hosts with the same return status
         """
         cmd = DaosServerCommand(self.manager.job.command_path)
         cmd.sudo = False
@@ -420,9 +417,7 @@ class DaosServerManager(SubprocessManager):
                 DaosServerCommand.ScmSubCommand.ResetSubCommand object
 
         Raises:
-            RemoteCommandResult: a grouping of the command results from the same hosts with the same
-                return status
-
+            CommandResult: groups of command results from the same hosts with the same return status
         """
         cmd = DaosServerCommand(self.manager.job.command_path)
         cmd.sudo = False
@@ -440,9 +435,7 @@ class DaosServerManager(SubprocessManager):
                 DaosServerCommand.NvmeSubCommand.PrepareSubCommand object
 
         Returns:
-            RemoteCommandResult: a grouping of the command results from the same hosts with the same
-                return status
-
+            CommandResult: groups of command results from the same hosts with the same return status
         """
         cmd = DaosServerCommand(self.manager.job.command_path)
         cmd.sudo = False
@@ -460,26 +453,17 @@ class DaosServerManager(SubprocessManager):
                 DaosServerCommand.SupportSubCommand.CollectLogSubCommand object
 
         Returns:
-            RemoteCommandResult: a grouping of the command results from the same hosts with the same
-                return status
-
+            CommandResult: groups of command results from the same hosts with the same return status
         """
         cmd = DaosServerCommand(self.manager.job.command_path)
         cmd.run_user = "daos_server"
         cmd.debug.value = False
-        cmd.config.value = get_default_config_file("server")
-        self.log.info("Support collect-log on servers: %s", str(cmd))
+        kwargs['config'] = get_default_config_file(
+            "server", os.path.dirname(self.manager.job.yaml.filename))
         cmd.set_command(("support", "collect-log"), **kwargs)
+        self.log.info("Support collect-log on servers: %s", str(cmd))
         return run_remote(
             self.log, self._hosts, cmd.with_exports, timeout=self.collect_log_timeout.value)
-
-    def display_memory_info(self):
-        """Display server hosts memory info."""
-        self.log.debug("#" * 80)
-        self.log.debug("<SERVER> Collection debug memory info")
-        run_remote(self.log, self._hosts, "free -m")
-        run_remote(self.log, self._hosts, "ps -eo size,pid,user,command --sort -size | head -n 6")
-        self.log.debug("#" * 80)
 
     def detect_format_ready(self, reformat=False):
         """Detect when all the daos_servers are ready for storage format.
@@ -673,14 +657,11 @@ class DaosServerManager(SubprocessManager):
         self.prepare()
 
         # Start the servers and wait for them to be ready for storage format
-        self.display_memory_info()
         self.detect_format_ready()
 
         # Collect storage and network information from the servers.
-        self.display_memory_info()
         self.information.collect_storage_information()
         self.information.collect_network_information()
-        self.display_memory_info()
 
         # Format storage and wait for server to change ownership
         self.log.info("<SERVER> Formatting hosts: <%s>", self.dmg.hostlist)
@@ -1021,6 +1002,71 @@ class DaosServerManager(SubprocessManager):
         # set stopped servers state to make teardown happy
         self.update_expected_states(None, ["stopped", "excluded", "errored"])
 
+    @fail_on(CommandFailure)
+    def system_exclude(self, ranks, copy=False, rank_hosts=None):
+        """Exclude the specific server ranks.
+
+        Args:
+            ranks (list): a list of daos server ranks (int) to exclude
+            copy (bool, optional): Copy dmg command. Defaults to False.
+            rank_hosts (str): hostlist representing hosts whose managed ranks are to be
+                operated on.
+
+        Raises:
+            avocado.core.exceptions.TestFail: if there is an issue excluding the server
+                ranks.
+
+        """
+        msg = "Excluding DAOS ranks {} from server group {}".format(
+            ranks, self.get_config_value("name"))
+        self.log.info(msg)
+
+        # Exclude desired ranks using dmg.
+        if copy:
+            self.dmg.copy().system_exclude(
+                ranks=list_to_str(value=ranks), rank_hosts=rank_hosts)
+        else:
+            self.dmg.system_exclude(ranks=list_to_str(value=ranks), rank_hosts=rank_hosts)
+
+        # Update the expected status of the excluded ranks
+        self.update_expected_states(ranks, "adminexcluded")
+
+        # Verify current state is adminexcluded.
+        self.check_rank_state(ranks=ranks, valid_states=["adminexcluded"])
+
+    @fail_on(CommandFailure)
+    def system_clear_exclude(self, ranks, copy=False, rank_hosts=None):
+        """Clear the exclusion of the specific server ranks.
+
+        Args:
+            ranks (list): a list of daos server ranks (int) to clear the exclusion
+            copy (bool, optional): Copy dmg command. Defaults to False.
+            rank_hosts (str): hostlist representing hosts whose managed ranks are to be
+                operated on.
+
+        Raises:
+            avocado.core.exceptions.TestFail: if there is an issue clearing the exclusion
+                of the server ranks.
+
+        """
+        msg = "Clear the exclusion for DAOS ranks {} from server group {}".format(
+            ranks, self.get_config_value("name"))
+        self.log.info(msg)
+
+        # Clear the exclusion for desired ranks using dmg.
+        if copy:
+            self.dmg.copy().system_clear_exclude(
+                ranks=list_to_str(value=ranks), rank_hosts=rank_hosts)
+        else:
+            self.dmg.system_clear_exclude(
+                ranks=list_to_str(value=ranks), rank_hosts=rank_hosts)
+
+        # Update the expected status of the excluded ranks
+        self.update_expected_states(ranks, "excluded")
+
+        # Verify current state is excluded.
+        self.check_rank_state(ranks=ranks, valid_states=["excluded"])
+
     def get_host(self, rank):
         """Get the host name that matches the specified rank.
 
@@ -1118,80 +1164,3 @@ class DaosServerManager(SubprocessManager):
                 command="sudo {} -S {} --csv".format(daos_metrics_exe, engine))
             engines.append(results)
         return engines
-
-    def get_host_log_files(self):
-        """Get the active engine log file names on each host.
-
-        Returns:
-            dict: host keys with lists of log files on that host values
-
-        """
-        self.log.debug("Determining the current %s log files", self.manager.job.command)
-
-        # Get a list of engine pids from all of the hosts
-        host_engine_pids = defaultdict(list)
-        result = run_remote(self.log, self.hosts, "pgrep daos_engine", False)
-        for data in result.output:
-            if data.passed:
-                # Search each individual line of output independently to ensure a pid match
-                for line in data.stdout:
-                    match = re.findall(r'(^[0-9]+)', line)
-                    for host in data.hosts:
-                        host_engine_pids[host].extend(match)
-
-        # Find the log files that match the engine pids on each host
-        host_log_files = defaultdict(list)
-        log_files = self.manager.job.get_engine_values("log_file")
-        for host, pid_list in host_engine_pids.items():
-            # Generate a list of all of the possible log files that could exist on this host
-            file_search = []
-            for log_file in log_files:
-                for pid in pid_list:
-                    file_search.append(".".join([log_file, pid]))
-            # Determine which of those log files actually do exist on this host
-            # This matches the engine pid to the engine log file name
-            command = f"ls -1 {' '.join(file_search)} | grep -v 'No such file or directory'"
-            result = run_remote(self.log, host, command, False)
-            for data in result.output:
-                for line in data.stdout:
-                    match = re.findall(fr"^({'|'.join(file_search)})", line)
-                    if match:
-                        host_log_files[host].append(match[0])
-
-        self.log.debug("Engine log files per host")
-        for host in sorted(host_log_files):
-            self.log.debug("  %s:", host)
-            for log_file in sorted(host_log_files[host]):
-                self.log.debug("    %s", log_file)
-
-        return host_log_files
-
-    def search_log(self, pattern):
-        """Search the server log files on the remote hosts for the specified pattern.
-
-        Args:
-            pattern (str): the grep -E pattern to use to search the server log files
-
-        Returns:
-            int: number of patterns found
-
-        """
-        self.log.debug("Searching %s logs for '%s'", self.manager.job.command, pattern)
-        host_log_files = self.get_host_log_files()
-
-        # Search for the pattern in the remote log files
-        matches = 0
-        for host, log_files in host_log_files.items():
-            log_file_matches = 0
-            self.log.debug("Searching for '%s' in %s on %s", pattern, log_files, host)
-            result = run_remote(self.log, host, f"grep -E '{pattern}' {' '.join(log_files)}")
-            for data in result.output:
-                if data.returncode == 0:
-                    matches = re.findall(fr'{pattern}', '\n'.join(data.stdout))
-                    log_file_matches += len(matches)
-            self.log.debug("Found %s matches on %s", log_file_matches, host)
-            matches += log_file_matches
-        self.log.debug(
-            "Found %s total matches for '%s' in the %s logs",
-            matches, pattern, self.manager.job.command)
-        return matches

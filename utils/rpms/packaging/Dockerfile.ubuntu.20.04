@@ -18,26 +18,23 @@ RUN if [ -n "$REPO_FILE_URL" ]; then                                 \
         true > ../sources.list &&                                    \
         mv daos_ci-ubuntu20.04-artifactory.list.tmp                  \
            daos_ci-ubuntu20.04-artifactory.list;                     \
+        url="${REPO_FILE_URL%/*/}/hpe-ilorest-ubuntu-bionic-proxy/"; \
+    else                                                             \
+        url="https://downloads.linux.hpe.com/SDR/repo/ilorest/";     \
     fi;                                                              \
     cd -;                                                            \
+    mkdir -p /usr/local/share/keyrings/;                             \
+    curl -f -O "$url"GPG-KEY-hprest;                                 \
+    gpg --no-default-keyring --keyring ./temp-keyring.gpg            \
+        --import GPG-KEY-hprest;                                     \
+    gpg --no-default-keyring --keyring ./temp-keyring.gpg --export   \
+        --output /usr/local/share/keyrings/hpe-sdr-public.gpg;       \
+    rm ./temp-keyring.gpg;                                           \
     curl -f -O "$REPO_FILE_URL"esad_repo.key;                        \
     gpg --no-default-keyring --keyring ./temp-keyring.gpg            \
         --import esad_repo.key;                                      \
-    mkdir -p /usr/local/share/keyrings/;                             \
     gpg --no-default-keyring --keyring ./temp-keyring.gpg --export   \
-        --output /usr/local/share/keyrings/daos-stack-public.gpg;    \
-    rm ./temp-keyring.gpg;                                           \
-    url_prefix=https://downloads.linux.hpe.com/SDR/;                 \
-    for url in hpPublicKey2048.pub                                   \
-               hpPublicKey2048_key1.pub                              \
-               hpePublicKey2048_key1.pub; do                         \
-        curl -f -O "$url_prefix$url";                                \
-        gpg --no-default-keyring --keyring ./temp-keyring.gpg        \
-            --import "$(basename $url)";                             \
-    done;                                                            \
-    gpg --no-default-keyring --keyring ./temp-keyring.gpg --export   \
-        --output /usr/local/share/keyrings/hpe-sdr-public.gpg;       \
-    rm ./temp-keyring.gpg
+        --output /usr/local/share/keyrings/daos-stack-public.gpg
 
 # Install basic tools
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \

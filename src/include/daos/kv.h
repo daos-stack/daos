@@ -10,6 +10,9 @@
 #ifndef __DAOS_KVX_H__
 #define  __DAOS_KVX_H__
 
+#include <daos_types.h>
+#include <daos/tse.h>
+
 /* task function for HL operations */
 int dc_kv_open(tse_task_t *task);
 int dc_kv_close(tse_task_t *task);

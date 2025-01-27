@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -75,6 +75,7 @@ type (
 		MapVersion    uint32
 		Members       *MemberDatabase
 		Pools         *PoolDatabase
+		Checker       *CheckerDatabase
 		System        *SystemDatabase
 		SchemaVersion uint
 	}
@@ -87,6 +88,7 @@ type (
 		log                logging.Logger
 		cfg                *DatabaseConfig
 		initialized        atm.Bool
+		steppingUp         atm.Bool
 		replicaAddr        *net.TCPAddr
 		raftTransport      raft.Transport
 		raft               syncRaft
@@ -120,8 +122,11 @@ type (
 
 	// RankEntry comprises the information about a rank in GroupMap.
 	RankEntry struct {
-		URI         string
-		Incarnation uint64
+		PrimaryURI       string
+		NumPrimaryCtxs   uint32
+		SecondaryURIs    []string
+		NumSecondaryCtxs []uint32
+		Incarnation      uint64
 	}
 
 	// RaftComponents holds the components required to start a raft instance.
@@ -258,6 +263,9 @@ func NewDatabase(log logging.Logger, cfg *DatabaseConfig) (*Database, error) {
 				Ranks:  make(PoolRankMap),
 				Uuids:  make(PoolUuidMap),
 				Labels: make(PoolLabelMap),
+			},
+			Checker: &CheckerDatabase{
+				Findings: make(CheckerFindingMap),
 			},
 			System: &SystemDatabase{
 				Attributes: make(map[string]string),
@@ -514,26 +522,36 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 			}
 
 			db.log.Debugf("node %s gained MS leader state", db.replicaAddr)
-			if err := db.Barrier(); err != nil {
-				db.log.Errorf("raft Barrier() failed: %s", err)
-				if err = db.ResignLeadership(err); err != nil {
-					db.log.Errorf("raft ResignLeadership() failed: %s", err)
-				}
-				continue // restart the monitoring loop
-			}
 
 			var gainedCtx context.Context
 			gainedCtx, cancelGainedCtx = context.WithCancel(parent)
-			for _, fn := range db.onLeadershipGained {
-				if err := fn(gainedCtx); err != nil {
-					db.log.Errorf("failure in onLeadershipGained callback: %s", err)
-					cancelGainedCtx()
-					if err = db.ResignLeadership(err); err != nil {
-						db.log.Errorf("raft ResignLeadership() failed: %s", err)
-					}
-					break // break out of the inner loop; restart the monitoring loop
-				}
+			db.stepUp(gainedCtx, cancelGainedCtx)
+		}
+	}
+}
+
+func (db *Database) stepUp(ctx context.Context, cancel context.CancelFunc) {
+	db.steppingUp.SetTrue()
+	defer db.steppingUp.SetFalse()
+
+	if err := db.Barrier(); err != nil {
+		db.log.Errorf("raft Barrier() failed: %s", err)
+		if err = db.ResignLeadership(err); err != nil {
+			db.log.Errorf("raft ResignLeadership() failed: %s", err)
+		}
+		return // restart the monitoring loop
+	}
+
+	for i, fn := range db.onLeadershipGained {
+		db.log.Tracef("executing onLeadershipGained[%d]", i)
+
+		if err := fn(ctx); err != nil {
+			db.log.Errorf("failure in onLeadershipGained callback: %s", err)
+			cancel()
+			if err = db.ResignLeadership(err); err != nil {
+				db.log.Errorf("raft ResignLeadership() failed: %s", err)
 			}
+			return
 		}
 	}
 }
@@ -573,11 +591,19 @@ func (db *Database) GroupMap() (*GroupMap, error) {
 		}
 		// Quick sanity-check: Don't include members that somehow have
 		// a nil rank or fabric URI, either.
-		if srv.Rank.Equals(ranklist.NilRank) || srv.FabricURI == "" {
-			db.log.Errorf("member has invalid rank (%d) or URI (%s)", srv.Rank, srv.FabricURI)
+		if srv.Rank.Equals(ranklist.NilRank) || srv.PrimaryFabricURI == "" {
+			db.log.Errorf("member has invalid rank (%d) or URIs (%s)", srv.Rank,
+				srv.PrimaryFabricURI)
 			continue
 		}
-		gm.RankEntries[srv.Rank] = RankEntry{URI: srv.FabricURI, Incarnation: srv.Incarnation}
+
+		gm.RankEntries[srv.Rank] = RankEntry{
+			PrimaryURI:       srv.PrimaryFabricURI,
+			NumPrimaryCtxs:   srv.PrimaryFabricContexts,
+			SecondaryURIs:    srv.SecondaryFabricURIs,
+			NumSecondaryCtxs: srv.SecondaryFabricContexts,
+			Incarnation:      srv.Incarnation,
+		}
 		if db.isReplica(srv.Addr) {
 			gm.MSRanks = append(gm.MSRanks, srv.Rank)
 		}
@@ -785,6 +811,8 @@ func (db *Database) UpdateMember(m *system.Member) error {
 	}
 	db.Lock()
 	defer db.Unlock()
+
+	db.log.Tracef("updating member: %+v", m)
 
 	_, err := db.FindMemberByUUID(m.UUID)
 	if err != nil {
@@ -1055,7 +1083,7 @@ func (db *Database) handlePoolRepsUpdate(evt *events.RASEvent) {
 	ctx := context.Background()
 	lock, err := db.TakePoolLock(ctx, poolUUID)
 	if err != nil {
-		db.log.Errorf("failed to take lock for pool svc update: %s", err)
+		db.log.Noticef("failed to take lock for pool svc update: %s", err)
 		return
 	}
 	defer lock.Release()

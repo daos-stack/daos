@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2023 Intel Corporation.
+// (C) Copyright 2018-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,25 +20,26 @@ import (
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 type cliOptions struct {
-	AllowProxy bool                   `long:"allow-proxy" description:"Allow proxy configuration via environment"`
-	Debug      bool                   `short:"d" long:"debug" description:"Enable debug output"`
-	JSON       bool                   `short:"j" long:"json" description:"Enable JSON output"`
-	JSONLogs   bool                   `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
-	ConfigPath string                 `short:"o" long:"config-path" description:"Path to agent configuration file"`
-	Insecure   bool                   `short:"i" long:"insecure" description:"have agent attempt to connect without certificates"`
-	RuntimeDir string                 `short:"s" long:"runtime_dir" description:"Path to agent communications socket"`
-	LogFile    string                 `short:"l" long:"logfile" description:"Full path and filename for daos agent log file"`
-	Start      startCmd               `command:"start" description:"Start daos_agent daemon (default behavior)"`
-	Version    versionCmd             `command:"version" description:"Print daos_agent version"`
-	DumpInfo   dumpAttachInfoCmd      `command:"dump-attachinfo" description:"Dump system attachinfo"`
-	DumpTopo   hwprov.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
-	NetScan    netScanCmd             `command:"net-scan" description:"Perform local network fabric scan"`
-	Support    supportCmd             `command:"support" description:"Perform debug tasks to help support team"`
+	AllowProxy    bool                    `long:"allow-proxy" description:"Allow proxy configuration via environment"`
+	Debug         bool                    `short:"d" long:"debug" description:"Enable debug output"`
+	JSON          bool                    `short:"j" long:"json" description:"Enable JSON output"`
+	JSONLogs      bool                    `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
+	ConfigPath    string                  `short:"o" long:"config-path" description:"Path to agent configuration file"`
+	Insecure      bool                    `short:"i" long:"insecure" description:"have agent attempt to connect without certificates"`
+	RuntimeDir    string                  `short:"s" long:"runtime_dir" description:"Path to agent communications socket"`
+	LogFile       string                  `short:"l" long:"logfile" description:"Full path and filename for daos agent log file"`
+	Start         startCmd                `command:"start" description:"Start daos_agent daemon (default behavior)"`
+	Version       versionCmd              `command:"version" description:"Print daos_agent version"`
+	ServerVersion serverVersionCmd        `command:"server-version" description:"Print daos_server version"`
+	DumpInfo      dumpAttachInfoCmd       `command:"dump-attachinfo" description:"Dump system attachinfo"`
+	DumpTopo      cmdutil.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
+	NetScan       netScanCmd              `command:"net-scan" description:"Perform local network fabric scan"`
+	Support       supportCmd              `command:"support" description:"Perform debug tasks to help support team"`
 }
 
 type (
@@ -90,6 +91,32 @@ func (cmd *versionCmd) Execute(_ []string) error {
 	return err
 }
 
+type serverVersionCmd struct {
+	attachInfoCmd
+}
+
+func (cmd *serverVersionCmd) Execute(_ []string) error {
+	resp, err := cmd.getAttachInfo(cmd.MustLogCtx())
+	if err != nil {
+		return err
+	}
+
+	if cmd.JSONOutputEnabled() {
+		buf, err := json.Marshal(&build.Info{
+			Name:      build.ControlPlaneName,
+			Version:   resp.BuildInfo.VersionString(),
+			BuildInfo: resp.BuildInfo.Tag,
+		})
+		if err != nil {
+			return err
+		}
+		return cmd.OutputJSON(json.RawMessage(buf), nil)
+	}
+
+	_, err = fmt.Println(build.VersionString(build.ControlPlaneName, resp.BuildInfo.VersionString()))
+	return err
+}
+
 func exitWithError(log logging.Logger, err error) {
 	log.Errorf("%s: %v", path.Base(os.Args[0]), err)
 	os.Exit(1)
@@ -132,22 +159,25 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			logCmd.SetLog(log)
 		}
 
+		daosLogMask := daos.DefaultErrorMask
+		if opts.Debug {
+			log.SetLevel(logging.LogLevelTrace)
+			daosLogMask = daos.DefaultDebugMask
+		}
+		fini, err := daos.InitLogging(daosLogMask)
+		if err != nil {
+			return err
+		}
+		defer fini()
+
 		if jsonCmd, ok := cmd.(cmdutil.JSONOutputter); ok && opts.JSON {
 			jsonCmd.EnableJSONOutput(os.Stdout, &wroteJSON)
 			// disable output on stdout other than JSON
 			log.ClearLevel(logging.LogLevelInfo)
 		}
 
-		if opts.Debug {
-			log.SetLevel(logging.LogLevelTrace)
-		}
-
-		if opts.JSONLogs {
-			log.WithJSONOutput()
-		}
-
 		switch cmd.(type) {
-		case *versionCmd, *netScanCmd, *hwprov.DumpTopologyCmd:
+		case *versionCmd, *netScanCmd, *cmdutil.DumpTopologyCmd:
 			// these commands don't need the rest of the setup
 			return cmd.Execute(args)
 		}
@@ -164,67 +194,13 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			}
 		}
 
-		cfg := DefaultConfig()
-		if cfgPath != "" {
-			var err error
-			if cfg, err = LoadConfig(cfgPath); err != nil {
-				return errors.WithMessage(err, "failed to load agent configuration")
-			}
-
-			// Command line debug option overrides log level in config file
-			if !opts.Debug {
-				log.WithLogLevel(logging.LogLevel(cfg.LogLevel))
-			}
-			log.Debugf("agent config loaded from %s", cfgPath)
+		cfg, err := processConfig(log, cmd, opts, cfgPath)
+		if err != nil {
+			return err
 		}
 
 		if suppCmd, ok := cmd.(supportAgentConfig); ok {
 			suppCmd.setSupportConf(cfgPath)
-		}
-
-		if opts.RuntimeDir != "" {
-			log.Debugf("Overriding socket path from config file with %s", opts.RuntimeDir)
-			cfg.RuntimeDir = opts.RuntimeDir
-		}
-
-		if opts.LogFile != "" {
-			log.Debugf("Overriding LogFile path from config file with %s", opts.LogFile)
-			cfg.LogFile = opts.LogFile
-		}
-
-		if opts.Insecure {
-			log.Debugf("Overriding AllowInsecure from config file with %t", opts.Insecure)
-			cfg.TransportConfig.AllowInsecure = true
-		}
-
-		if cfg.LogFile != "" {
-			f, err := common.AppendFile(cfg.LogFile)
-			if err != nil {
-				log.Errorf("Failure creating log file: %s", err)
-				return err
-			}
-			defer f.Close()
-
-			// Create an additional set of loggers which append everything
-			// to the specified file.
-			log.WithErrorLogger(logging.NewErrorLogger("agent", f)).
-				WithNoticeLogger(logging.NewNoticeLogger("agent", f)).
-				WithInfoLogger(logging.NewInfoLogger("agent", f)).
-				WithDebugLogger(logging.NewDebugLogger(f)).
-				WithTraceLogger(logging.NewTraceLogger(f))
-		}
-
-		if err := cfg.TransportConfig.PreLoadCertData(); err != nil {
-			return errors.Wrap(err, "Unable to load Certificate Data")
-		}
-
-		var err error
-		if cfg.AccessPoints, err = common.ParseHostList(cfg.AccessPoints, cfg.ControlPort); err != nil {
-			return errors.Wrap(err, "Failed to parse config access_points")
-		}
-
-		if cfgCmd, ok := cmd.(configSetter); ok {
-			cfgCmd.setConfig(cfg)
 		}
 
 		if ctlCmd, ok := cmd.(ctlInvoker); ok {
@@ -249,6 +225,75 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 
 	_, err := p.Parse()
 	return err
+}
+
+func processConfig(log logging.Logger, cmd flags.Commander, opts *cliOptions, cfgPath string) (*Config, error) {
+	cfg := DefaultConfig()
+	if cfgPath != "" {
+		var err error
+		if cfg, err = LoadConfig(cfgPath); err != nil {
+			return nil, errors.Wrap(err, "failed to load agent configuration")
+		}
+	}
+
+	if opts.LogFile != "" {
+		log.Debugf("Overriding LogFile path from config file with %s", opts.LogFile)
+		cfg.LogFile = opts.LogFile
+	}
+
+	if opts.Debug {
+		cfg.LogLevel = common.ControlLogLevelTrace
+	}
+
+	if err := configureLogging(log, cmd, cfg, opts); err != nil {
+		return nil, err
+	}
+
+	if opts.RuntimeDir != "" {
+		log.Debugf("Overriding socket path from config file with %s", opts.RuntimeDir)
+		cfg.RuntimeDir = opts.RuntimeDir
+	}
+
+	if opts.Insecure {
+		log.Debugf("Overriding AllowInsecure from config file with %t", opts.Insecure)
+		cfg.TransportConfig.AllowInsecure = true
+	}
+
+	if err := cfg.TransportConfig.PreLoadCertData(); err != nil {
+		return nil, errors.Wrap(err, "Unable to load Certificate Data")
+	}
+
+	var err error
+	if cfg.AccessPoints, err = common.ParseHostList(cfg.AccessPoints, cfg.ControlPort); err != nil {
+		return nil, errors.Wrap(err, "Failed to parse config access_points")
+	}
+
+	if cfgCmd, ok := cmd.(configSetter); ok {
+		cfgCmd.setConfig(cfg)
+	}
+
+	if cfgPath != "" {
+		log.Infof("loaded agent config from path: %s", cfgPath)
+	}
+
+	return cfg, nil
+}
+
+func configureLogging(log logging.Logger, cmd flags.Commander, cfg *Config, opts *cliOptions) error {
+	if logCmd, ok := cmd.(cmdutil.LogSetter); ok {
+		logCmd.SetLog(log)
+
+		logCfg := cmdutil.LogConfig{
+			LogFile:  cfg.LogFile,
+			LogLevel: cfg.LogLevel,
+			JSON:     opts.JSONLogs,
+		}
+		if err := cmdutil.ConfigureLogger(log, logCfg); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func main() {

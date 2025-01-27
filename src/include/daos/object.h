@@ -116,6 +116,12 @@ enum daos_io_mode {
 #define DAOS_OBJ_REPL_MAX	MAX_NUM_GROUPS
 #define DAOS_OBJ_RESIL_MAX	MAX_NUM_GROUPS
 
+static inline bool
+daos_data_thresh_valid(uint32_t size)
+{
+	return true;
+}
+
 /**
  * 192-bit object ID, it can identify a unique bottom level object.
  * (a shard of upper level object).

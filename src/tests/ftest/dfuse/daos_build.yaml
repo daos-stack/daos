@@ -17,7 +17,7 @@ server_config:
         0:
           class: ram
           scm_mount: /mnt/daos
-  system_ram_reserved: 1
+  system_ram_reserved: 3
 pool:
   size: 5GiB
 container:

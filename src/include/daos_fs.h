@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -21,7 +21,14 @@ extern "C" {
 #endif
 
 #include <dirent.h>
+#include <inttypes.h>
 #include <sys/stat.h>
+
+#include <daos_types.h>
+#include <daos_obj.h>
+#include <daos_obj_class.h>
+#include <daos_array.h>
+#include <daos_cont.h>
 
 /** Maximum Name length */
 #define DFS_MAX_NAME		NAME_MAX
@@ -98,6 +105,12 @@ typedef struct {
 	daos_oclass_id_t	doi_oclass_id;
 	/** chunk size */
 	daos_size_t		doi_chunk_size;
+	/** In case of dir, return default object class for dirs created in that dir */
+	daos_oclass_id_t        doi_dir_oclass_id;
+	/** In case of dir, return default object class for files created in that dir */
+	daos_oclass_id_t        doi_file_oclass_id;
+	/** Object id */
+	daos_obj_id_t           doi_oid;
 } dfs_obj_info_t;
 
 /**
@@ -148,6 +161,35 @@ dfs_fini(void);
 int
 dfs_connect(const char *pool, const char *sys, const char *cont, int flags, dfs_attr_t *attr,
 	    dfs_t **dfs);
+
+/**
+ * Same as dfs_connect(), but mount a read-only snapshot of a existing container.
+ * The handle must be released using dfs_disconnect() and not dfs_umount(). Using the latter in this
+ * case will leak open handles for the pool and container.
+ *
+ * The snapshot to mount must have been previously created with daos_cont_create_snap() or
+ * daos_cont_create_snap_opt(). The epoch returned by those functions can be passed as \a epoch
+ * to identify the snapshot to mount.
+ * The snapshot can also be identified by name (provide that one was passed at snapshot creation
+ * time). In this case, an epoch of 0 should be passed and \a name should be set to the snapshot
+ * name. Please note that \a name is valid only w
+ *
+ * \param[in]	pool	Pool label.
+ * \param[in]	sys	DAOS system name to use for the pool connect.
+ *			Pass NULL to use the default system.
+ * \param[in]	cont	Container label.
+ * \param[in]	flags	Mount flags for future use, will be O_RDONLY by definition.
+ * \param[in]	epoch	Epoch associated with the snapshot to mount.
+ *			If a null epoch is passed, then the snapshot is looked up by \a name.
+ * \param[in]	name	Optional name of the snapshot to mount, only valid when \a epoch is set
+ *			to 0.
+ * \param[out]	dfs	Pointer to the created DFS mount point.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_connect_snap(const char *pool, const char *sys, const char *cont, int flags, daos_epoch_t epoch,
+		 const char *name, dfs_t **dfs);
 
 /**
  * Umount the DFS namespace, and release the ref count on the container and pool handles. This
@@ -232,6 +274,33 @@ dfs_cont_create_with_label(daos_handle_t poh, const char *label, dfs_attr_t *att
  */
 int
 dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **dfs);
+
+/**
+ * Same as dfs_mount(), but mount a read-only file system using a container snapshot.
+ * The snapshot to mount must have been previously with daos_cont_create_snap() or
+ * daos_cont_create_snap_opt().
+ *
+ * The snapshot to mount must have been previously created with daos_cont_create_snap() or
+ * daos_cont_create_snap_opt(). The epoch returned by those functions can be passed as \a epoch
+ * to identify the snapshot to mount.
+ * The snapshot can also be identified by name (provide that one was passed at snapshot creation
+ * time). In this case, an epoch of 0 should be passed and \a name should be set to the snapshot
+ * name. Please note that \a name is valid only when \a epoch is set to 0.
+ *
+ * \param[in]	poh	Pool connection handle
+ * \param[in]	coh	Container open handle.
+ * \param[in]	flags	Mount flags for future use, will be O_RDONLY by definition.
+ * \param[in]	epoch	Epoch associated with the snapshot to mount.
+ *			If a null epoch is passed, then the snapshot is looked up by \a name.
+ * \param[in]	name	Optional name of the snapshot to mount, only valid when \a epoch is set
+ *			to 0.
+ * \param[out]	dfs	Pointer to the file system object created.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_mount_snap(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epoch,
+	       const char *name, dfs_t **dfs);
 
 /**
  * Unmount a DAOS file system. This closes open handles to the root object and
@@ -987,9 +1056,12 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf);
 #define DFS_SET_ATTR_GID	(1 << 5)
 
 /**
- * set stat attributes for a file and fetch new values.  If the object is a
+ * Set stat attributes for a file and fetch new values.  If the object is a
  * symlink the link itself is modified.  See dfs_stat() for which entries
  * are filled.
+ * While the set-user/group-id bits in stbuf::st_mode are stored by libdfs, it
+ * up to the caller to implement support for the associated functionality
+ * since libdfs does not provide any way to execute binaries.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	obj	Open object (File, dir or syml) to modify.
@@ -1167,6 +1239,21 @@ enum {
 int
 dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *name);
 
+/**
+ * Update a POSIX's container's owner user and/or owner group. This is the same as calling
+ * daos_cont_set_owner() but will also update the owner of the root directory in the container.
+ *
+ * \param[in]	coh	Open container handle
+ * \param[in]	user	New owner user (NULL if not updating)
+ * \param[in]	uid	New owner uid, if different from user's on local system (-1 otherwise)
+ * \param[in]	group	New owner group (NULL if not updating)
+ * \param[in]	gid	New owner gid, if different from group's on local system (-1 otherwise)
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_cont_set_owner(daos_handle_t coh, d_string_t user, uid_t uid, d_string_t group, gid_t gid);
+
 /*
  * The Pipeline DFS API (everything under this comment) is under heavy development and should not be
  * used in production. The API is subject to change.
@@ -1264,6 +1351,19 @@ int
 dfs_readdir_with_filter(dfs_t *dfs, dfs_obj_t *obj, dfs_pipeline_t *dpipe, daos_anchor_t *anchor,
 			uint32_t *nr, struct dirent *dirs, daos_obj_id_t *oids, daos_size_t *csizes,
 			uint64_t *nr_scanned);
+
+/**
+ * Scan the DFS namespace and report statistics about file/dir size and namespace structure.
+ *
+ * \param[in]	poh	Open pool handle.
+ * \param[in]	cont	POSIX container label.
+ * \param[in]	flags	Unused flag, added for future use.
+ * \param[in]	name	Optional subdirectory path to scan from.
+ *			Start from container root if not specified.
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_cont_scan(daos_handle_t poh, const char *cont, uint64_t flags, const char *name);
 
 #if defined(__cplusplus)
 }

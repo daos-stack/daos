@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -26,14 +26,31 @@ type collectLogCmd struct {
 	cfgCmd
 	cmdutil.LogCmd
 	support.CollectLogSubCmd
+	support.LogTypeSubCmd
 }
 
 func (cmd *collectLogCmd) Execute(_ []string) error {
-	var LogCollection = map[int32][]string{
-		support.CopyServerConfigEnum:     {""},
-		support.CollectSystemCmdEnum:     support.SystemCmd,
-		support.CollectServerLogEnum:     support.ServerLog,
-		support.CollectDaosServerCmdEnum: support.DaosServerCmd,
+	var LogCollection = map[int32][]string{}
+	err := cmd.DateTimeValidate()
+	if err != nil {
+		return err
+	}
+
+	// Only collect the specific logs Admin,Control or Engine.
+	// This will ignore the system information collection.
+	if cmd.LogType != "" {
+		LogCollection[support.CollectServerLogEnum], err = cmd.LogTypeValidate()
+		if err != nil {
+			return err
+		}
+	} else {
+		LogCollection[support.CopyServerConfigEnum] = []string{""}
+		LogCollection[support.CollectSystemCmdEnum] = support.SystemCmd
+		LogCollection[support.CollectDaosServerCmdEnum] = support.DaosServerCmd
+		LogCollection[support.CollectServerLogEnum], err = cmd.LogTypeValidate()
+		if err != nil {
+			return err
+		}
 	}
 
 	// Default 4 steps of log/conf collection.
@@ -63,6 +80,12 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	params.Config = cmd.configPath()
 	params.TargetFolder = cmd.TargetFolder
 	params.ExtraLogsDir = cmd.ExtraLogsDir
+	params.LogStartDate = cmd.LogStartDate
+	params.LogEndDate = cmd.LogEndDate
+	params.LogStartTime = cmd.LogStartTime
+	params.LogEndTime = cmd.LogEndTime
+	params.FileTransferExecArgs = cmd.FileTransferExecArgs
+
 	for logFunc, logCmdSet := range LogCollection {
 		for _, logCmd := range logCmdSet {
 			cmd.Debugf("Log Function Enum = %d -- Log Collect Cmd = %s ", logFunc, logCmd)
@@ -72,12 +95,12 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 			err := support.CollectSupportLog(cmd.Logger, params)
 			if err != nil {
 				fmt.Println(err)
-				if cmd.Stop {
+				if cmd.StopOnError {
 					return err
 				}
 			}
 		}
-		fmt.Printf(progress.Display())
+		fmt.Print(progress.Display())
 	}
 
 	if cmd.Archive {
@@ -93,7 +116,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		}
 	}
 
-	fmt.Printf(progress.Display())
+	fmt.Print(progress.Display())
 
 	return nil
 }

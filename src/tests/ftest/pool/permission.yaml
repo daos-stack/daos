@@ -1,14 +1,8 @@
-# change host names to your reserved nodes, the
-# required quantity is indicated by the placeholders
-# createmode mentioned below is in "Decimal form"
-# Decimal Form    Octal Form
-# 511             777
-# 292             444
-# 146             222
-# 73              111
 hosts:
   test_servers: 2
+
 timeout: 300
+
 server_config:
   name: daos_server
   engines_per_host: 1
@@ -21,9 +15,13 @@ server_config:
           class: ram
           scm_mount: /mnt/daos
   system_ram_reserved: 1
+
 pool:
-  control_method: dmg
   scm_size: 1000000000
+
+container:
+  control_method: API
+
 createtests:
   permissions: !mux
     perm_RO:

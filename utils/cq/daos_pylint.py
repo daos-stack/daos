@@ -88,8 +88,8 @@ class WrapScript():
         new_lineno = 1
         scons_header = False
 
-        def _remap_count():
-            for iline in range(new_lineno, new_lineno + added):
+        def _remap_count(_added):
+            for iline in range(new_lineno, new_lineno + _added):
                 self.line_map[iline] = old_lineno - 1
 
         for line in infile.readlines():
@@ -108,7 +108,7 @@ class WrapScript():
                     newvar = var.strip("\",     '")
                     variables.append(newvar)
                 added = self.write_variables(outfile, match.group(1), variables)
-                _remap_count()
+                _remap_count(added)
                 new_lineno += added
 
             match = re.search(r'^(\s*)Export\(.(.*).\)', line)
@@ -123,7 +123,7 @@ class WrapScript():
                     newvar = var.strip("\",     '")
                     variables.append(newvar)
                 added = self.read_variables(outfile, match.group(1), variables)
-                _remap_count()
+                _remap_count(added)
                 new_lineno += added
 
             if not scons_header:
@@ -134,7 +134,7 @@ class WrapScript():
                 # not universally correct it should be correct for all flake clean code.
                 if line.strip() == '':
                     added = self.write_header(outfile)
-                    _remap_count()
+                    _remap_count(added)
                     new_lineno += added
                     scons_header = True
 
@@ -425,9 +425,10 @@ sys.path.append('site_scons')"""
                 if word_is_allowed(word, code):
                     continue
 
-            # Inserting code can cause wrong-module-order.
-            if scons and msg.msg_id == 'C0411' and 'from SCons.Script import' in msg.msg:
-                continue
+            # Inserting code can cause wrong-import-order.
+            if scons and msg.msg_id == 'C0411':
+                if 'from SCons.Script import' in msg.msg or 'SCons.Script.*' in msg.msg:
+                    continue
 
             failed = True
 

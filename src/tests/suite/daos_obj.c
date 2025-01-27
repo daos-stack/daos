@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2166,7 +2166,7 @@ basic_byte_array(void **state)
 	daos_handle_t	 oh;
 	d_iov_t		 dkey;
 	d_sg_list_t	 sgl;
-	d_iov_t		 sg_iov[2];
+	d_iov_t		 sg_iov[3];
 	daos_iod_t	 iod;
 	daos_recx_t	 recx[5];
 	char		 stack_buf_out[STACK_BUF_LEN];
@@ -2175,6 +2175,7 @@ basic_byte_array(void **state)
 	char		 *bulk_buf_out = NULL;
 	char		 *buf;
 	char		 *buf_out;
+	char		 *buf_out_tmp;
 	int		 buf_len, tmp_len;
 	int		 step = 1;
 	int		 rc;
@@ -2201,9 +2202,10 @@ next_step:
 	D_ASSERT(step == 1 || step == 2);
 	buf = step == 1 ? stack_buf : bulk_buf;
 	buf_len = step == 1 ? STACK_BUF_LEN : TEST_BULK_BUF_LEN;
-	d_iov_set(&sg_iov[0], buf, buf_len);
-	sgl.sg_nr	= 1;
-	sgl.sg_nr_out	= 1;
+	d_iov_set(&sg_iov[0], NULL, 0);
+	d_iov_set(&sg_iov[1], buf, buf_len);
+	sgl.sg_nr	= 2;
+	sgl.sg_nr_out	= 0;
 	sgl.sg_iovs	= sg_iov;
 
 	/** init I/O descriptor */
@@ -2228,11 +2230,13 @@ next_step:
 
 	/** fetch */
 	print_message("fetch with zero iov_len\n");
+	d_iov_set(&sg_iov[0], NULL, 0);
+	d_iov_set(&sg_iov[1], buf, buf_len);
 	iod.iod_size	= 1;
 	recx[0].rx_idx	= 0;
 	recx[0].rx_nr	= tmp_len * 1;
 	iod.iod_nr	= 1;
-	sg_iov[0].iov_len = 0;
+	sg_iov[1].iov_len = 0;
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL,
 			    NULL);
 	assert_rc_equal(rc, 0);
@@ -2284,8 +2288,10 @@ next_step:
 	assert_memory_equal(buf, buf_out, buf_len);
 
 	print_message("short read should get iov_len with tail hole trimmed\n");
-	memset(buf_out, 0, buf_len);
 	tmp_len = buf_len / 3;
+	buf_out_tmp = buf_out;
+	D_ALLOC(buf_out, max(buf_len, tmp_len + 99));
+	D_ASSERT(buf_out != NULL);
 	sgl.sg_nr_out	= 0;
 	sgl.sg_nr = 1;
 	d_iov_set(&sg_iov[0], buf_out, tmp_len + 99);
@@ -2303,6 +2309,8 @@ next_step:
 	assert_int_equal(sgl.sg_nr_out, 1);
 	assert_int_equal(sgl.sg_iovs[0].iov_len, tmp_len);
 	assert_memory_equal(buf, buf_out, tmp_len);
+	D_FREE(buf_out);
+	buf_out = buf_out_tmp;
 
 	if (step++ == 1)
 		goto next_step;
@@ -2428,7 +2436,7 @@ fetch_size(void **state)
 	char		*akey[NUM_AKEYS];
 	const char	*akey_fmt = "akey%d";
 	int		 i, rc;
-	daos_size_t	 size = 131071;
+	daos_size_t	 size = 131071, tmp_sz;
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
@@ -2477,6 +2485,17 @@ fetch_size(void **state)
 	for (i = 0; i < NUM_AKEYS; i++)
 		assert_int_equal(iod[i].iod_size, size * (i+1));
 
+	print_message("fetch with invalid sgl - NULL sg_iovs with non-zero sg_nr\n");
+	sgl->sg_iovs = NULL;
+	tmp_sz = iod->iod_size;
+	iod->iod_size = 0;
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, NUM_AKEYS, iod, sgl,
+			    NULL, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	iod->iod_size = tmp_sz;
+	for (i = 0; i < NUM_AKEYS; i++)
+		sgl[i].sg_iovs		= &sg_iov[i];
 	print_message("fetch with unknown iod_size and less buffer\n");
 	for (i = 0; i < NUM_AKEYS; i++) {
 		d_iov_set(&sg_iov[i], buf[i], size * (i+1) - 1);
@@ -5188,6 +5207,166 @@ io_52(void **state)
 	obj_coll_punch(arg, OC_EC_4P1GX);
 }
 
+static void
+obj_coll_query(test_arg_t *arg, daos_oclass_id_t oclass, bool sparse)
+{
+	daos_obj_id_t	oid;
+	daos_handle_t	oh;
+	daos_iod_t	iod = { 0 };
+	d_sg_list_t	sgl = { 0 };
+	daos_recx_t	recx = { 0 };
+	d_iov_t		val_iov;
+	d_iov_t		dkey;
+	d_iov_t		akey;
+	uint64_t	dkey_val;
+	uint64_t	akey_val;
+	uint32_t	update_var = 0xdeadbeef;
+	uint32_t	flags;
+	int		rc;
+
+	/** init dkey, akey */
+	dkey_val = akey_val = 0;
+	d_iov_set(&dkey, &dkey_val, sizeof(uint64_t));
+	d_iov_set(&akey, &akey_val, sizeof(uint64_t));
+
+	oid = daos_test_oid_gen(arg->coh, oclass, DAOS_OT_MULTI_UINT64, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	dkey_val = 5;
+	akey_val = 10;
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_name = akey;
+	iod.iod_recxs = &recx;
+	iod.iod_nr = 1;
+	iod.iod_size = sizeof(update_var);
+
+	d_iov_set(&val_iov, &update_var, sizeof(update_var));
+	sgl.sg_iovs = &val_iov;
+	sgl.sg_nr = 1;
+
+	recx.rx_idx = 5;
+	recx.rx_nr = 1;
+
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+	assert_rc_equal(rc, 0);
+
+	dkey_val = 10;
+	val_iov.iov_buf_len += 1024;
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+	assert_rc_equal(rc, 0);
+	d_iov_set(&val_iov, &update_var, sizeof(update_var));
+
+	recx.rx_idx = 50;
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+	assert_rc_equal(rc, 0);
+
+	if (sparse) {
+		par_barrier(PAR_COMM_WORLD);
+		daos_fail_num_set(2);
+		daos_fail_loc_set(DAOS_OBJ_COLL_SPARSE | DAOS_FAIL_SOME);
+		par_barrier(PAR_COMM_WORLD);
+	}
+
+	flags = DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_RECX | DAOS_GET_MAX;
+	rc = daos_obj_query_key(oh, DAOS_TX_NONE, flags, &dkey, &akey, &recx, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(*(uint64_t *)dkey.iov_buf, 10);
+	assert_int_equal(*(uint64_t *)akey.iov_buf, 10);
+	assert_int_equal(recx.rx_idx, 50);
+	assert_int_equal(recx.rx_nr, 1);
+
+	flags = DAOS_GET_AKEY | DAOS_GET_RECX | DAOS_GET_MAX;
+	rc = daos_obj_query_key(oh, DAOS_TX_NONE, flags, &dkey, &akey, &recx, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(*(uint64_t *)akey.iov_buf, 10);
+	assert_int_equal(recx.rx_idx, 50);
+	assert_int_equal(recx.rx_nr, 1);
+
+	flags = DAOS_GET_RECX | DAOS_GET_MAX;
+	rc = daos_obj_query_key(oh, DAOS_TX_NONE, flags, &dkey, &akey, &recx, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(recx.rx_idx, 50);
+	assert_int_equal(recx.rx_nr, 1);
+
+	rc = daos_obj_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	if (sparse) {
+		par_barrier(PAR_COMM_WORLD);
+		daos_fail_loc_set(0);
+		daos_fail_num_set(0);
+		par_barrier(PAR_COMM_WORLD);
+	}
+}
+
+static void
+io_53(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	print_message("Collective object query - OC_SX\n");
+
+	if (!test_runable(arg, 2))
+		return;
+
+	obj_coll_query(arg, OC_SX, false);
+}
+
+static void
+io_54(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	print_message("Collective object query - OC_EC_2P1G2\n");
+
+	if (!test_runable(arg, 3))
+		return;
+
+	obj_coll_query(arg, OC_EC_2P1G2, false);
+}
+
+static void
+io_55(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	print_message("Collective object query - OC_EC_4P1GX\n");
+
+	if (!test_runable(arg, 5))
+		return;
+
+	obj_coll_query(arg, OC_EC_4P1GX, false);
+}
+
+static void
+io_56(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	print_message("Collective object query with sparse ranks\n");
+
+	if (!test_runable(arg, 3))
+		return;
+
+	obj_coll_query(arg, OC_RP_3GX, true);
+}
+
+static void
+io_57(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	print_message("Collective object query with rank_0 excluded\n");
+
+	if (!test_runable(arg, 4))
+		return;
+
+	rebuild_single_pool_rank(arg, 0, false);
+	obj_coll_query(arg, OC_EC_2P1GX, false);
+	reintegrate_single_pool_rank(arg, 0, false);
+}
+
 static const struct CMUnitTest io_tests[] = {
 	{ "IO1: simple update/fetch/verify",
 	  io_simple, async_disable, test_case_teardown},
@@ -5292,6 +5471,16 @@ static const struct CMUnitTest io_tests[] = {
 	  io_51, NULL, test_case_teardown},
 	{ "IO52: collective punch object - OC_EC_4P1GX",
 	  io_52, NULL, test_case_teardown},
+	{ "IO53: collective object query - OC_SX",
+	  io_53, async_disable, test_case_teardown},
+	{ "IO54: collective object query - OC_EC_2P1G2",
+	  io_54, async_disable, test_case_teardown},
+	{ "IO55: collective object query - OC_EC_4P1GX",
+	  io_55, async_disable, test_case_teardown},
+	{ "IO56: collective object query with sparse ranks",
+	  io_56, async_disable, test_case_teardown},
+	{ "IO57: collective object query with rank_0 excluded",
+	  io_57, rebuild_sub_rf1_setup, test_teardown},
 };
 
 int

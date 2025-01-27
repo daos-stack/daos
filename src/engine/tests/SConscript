@@ -29,9 +29,20 @@ def scons():
     Depends('drpc_client_tests', common_mock_ld_script)
     unit_env.d_test_program('drpc_client_tests',
                             ['drpc_client_tests.c', drpc_test_utils, '../drpc_client.c',
-                             '../drpc_ras.c', '../srv.pb-c.c', '../event.pb-c.c'],
+                             '../drpc_ras.c', '../srv.pb-c.c', '../event.pb-c.c',
+                             '../../chk/chk.pb-c.c'],
                             LIBS=['daos_common', 'protobuf-c', 'gurt', 'cmocka',
                                   'uuid', 'pthread', 'abt', 'cart'])
+
+    abt_tenv = denv.Clone()
+    abt_tenv.AppendUnique(OBJPREFIX='utest_')
+    abt_tenv.AppendUnique(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
+    libraries = ['abt', 'daos_common_pmem', 'gurt']
+    abt_tenv.require('argobots')
+
+    abt_tenv.d_test_program('abt_perf', 'abt_perf.c', LIBS=libraries)
+
+    abt_tenv.d_test_program('abt_stack', 'abt_stack.c', LIBS=libraries)
 
 
 if __name__ == "SCons.Script":

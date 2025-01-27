@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -115,7 +116,8 @@ struct ec_agg_entry {
 	struct pl_obj_layout	*ae_obj_layout;
 	struct daos_shard_loc	 ae_peer_pshards[OBJ_EC_MAX_P];
 	uint32_t		 ae_grp_idx;
-	uint32_t		ae_is_leader:1;
+	uint32_t		ae_is_leader:1,
+				ae_process_partial:1;
 };
 
 /* Parameters used to drive iterate all.
@@ -125,7 +127,7 @@ struct ec_agg_param {
 	struct ec_agg_entry	 ap_agg_entry;	 /* entry used for each OID   */
 	daos_epoch_range_t	 ap_epr;	 /* hi/lo extent threshold    */
 	daos_epoch_t		 ap_filter_eph;	 /* Aggregatable filter epoch */
-	daos_epoch_t		ap_min_unagg_eph; /* minimum unaggregate epoch */
+	daos_epoch_t		 ap_min_unagg_eph; /* minimum unaggregate epoch */
 	daos_handle_t		 ap_cont_handle; /* VOS container handle */
 	int			(*ap_yield_func)(void *arg); /* yield function*/
 	void			*ap_yield_arg;   /* yield argument            */
@@ -148,6 +150,7 @@ struct ec_agg_stripe_ud {
 	d_iov_t			 asu_csum_iov;
 	struct dcs_iod_csums	*asu_iod_csums; /* iod csums */
 	ABT_eventual		 asu_eventual;  /* Eventual for offload  */
+	bool			 asu_valid_hole; /* with hole epoch >= parity epoch */
 };
 
 /* Represents an replicated data extent.
@@ -500,26 +503,28 @@ agg_count_cells(uint8_t *fcbit_map, uint8_t *tbit_map, uint64_t estart,
  * initialized and share to other servers at higher(pool/container) layer.
  */
 static int
-agg_get_obj_handle(struct ec_agg_entry *entry)
+agg_get_obj_handle(struct ec_agg_entry *entry, bool reset_peer)
 {
 	struct ec_agg_param	*agg_param;
 	uint32_t		grp_start;
 	uint32_t		tgt_ec_idx;
 	struct dc_object	*obj;
 	int			i;
-	int			rc;
+	int			rc = 0;
 
-	if (daos_handle_is_valid(entry->ae_obj_hdl))
+	if (daos_handle_is_valid(entry->ae_obj_hdl) && !reset_peer)
 		return 0;
 
 	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
-	rc = dsc_obj_open(agg_param->ap_pool_info.api_cont_hdl,
-			  entry->ae_oid.id_pub, DAOS_OO_RW,
-			  &entry->ae_obj_hdl);
-	if (rc)
-		goto out;
+	if (!daos_handle_is_valid(entry->ae_obj_hdl)) {
+		rc = dsc_obj_open(agg_param->ap_pool_info.api_cont_hdl,
+				  entry->ae_oid.id_pub, DAOS_OO_RW,
+				  &entry->ae_obj_hdl);
+		if (rc)
+			goto out;
+	}
 
-	if (entry->ae_peer_pshards[0].sd_rank != DAOS_TGT_IGNORE)
+	if (!reset_peer && entry->ae_peer_pshards[0].sd_rank != DAOS_TGT_IGNORE)
 		D_GOTO(out, rc = 0);
 
 	grp_start = entry->ae_grp_idx * entry->ae_obj_layout->ol_grp_size;
@@ -599,7 +604,7 @@ agg_fetch_odata_cells(struct ec_agg_entry *entry, uint8_t *bit_map,
 	for (i = 0; i < cell_cnt; i++)
 		d_iov_set(&sgl.sg_iovs[i], &buf[i * cell_b], cell_b);
 
-	rc = agg_get_obj_handle(entry);
+	rc = agg_get_obj_handle(entry, false);
 	if (rc) {
 		D_ERROR("Failed to open object: "DF_RC"\n", DP_RC(rc));
 		goto out;
@@ -1006,7 +1011,14 @@ agg_diff_preprocess(struct ec_agg_entry *entry, unsigned char *diff,
 	hole_off = 0;
 	d_list_for_each_entry(extent, &entry->ae_cur_stripe.as_dextents,
 			      ae_link) {
-		D_ASSERT(!extent->ae_hole);
+		if (extent->ae_hole) {
+			/* valid hole processed by agg_process_holes_ult() */
+			D_ASSERTF(extent->ae_epoch < entry->ae_par_extent.ape_epoch,
+				  "hole ext epoch " DF_X64 ", parity epoch " DF_X64 "\n",
+				  extent->ae_epoch, entry->ae_par_extent.ape_epoch);
+			continue;
+		}
+
 		if (extent->ae_epoch <= entry->ae_par_extent.ape_epoch)
 			continue;
 		D_ASSERT(extent->ae_recx.rx_idx >= ss);
@@ -1180,7 +1192,13 @@ agg_process_partial_stripe(struct ec_agg_entry *entry)
 	estart = entry->ae_cur_stripe.as_offset;
 	d_list_for_each_entry(extent, &entry->ae_cur_stripe.as_dextents,
 			      ae_link) {
-		D_ASSERT(!extent->ae_hole);
+		if (extent->ae_hole) {
+			/* valid hole processed by agg_process_holes_ult() */
+			D_ASSERTF(extent->ae_epoch < entry->ae_par_extent.ape_epoch,
+				  "hole ext epoch "DF_X64", parity epoch "DF_X64"\n",
+				  extent->ae_epoch, entry->ae_par_extent.ape_epoch);
+			continue;
+		}
 		if (extent->ae_epoch <= entry->ae_par_extent.ape_epoch) {
 			has_old_replicas = true;
 			continue;
@@ -1315,9 +1333,9 @@ retry:
 		rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
 				    DAOS_OBJ_RPC_EC_AGGREGATE, &rpc);
 		if (rc) {
-			D_ERROR(DF_UOID" pidx %d to peer %d, obj_req_create "
+			D_ERROR(DF_UOID" pidx %d to peer %d, rank %d tag %d obj_req_create "
 				DF_RC"\n", DP_UOID(entry->ae_oid), pidx, peer,
-				DP_RC(rc));
+				tgt_ep.ep_rank, tgt_ep.ep_tag, DP_RC(rc));
 			goto out;
 		}
 		ec_agg_in = crt_req_get(rpc);
@@ -1449,14 +1467,22 @@ agg_peer_update(struct ec_agg_entry *entry, bool write_parity)
 
 	D_ASSERT(!write_parity ||
 		 entry->ae_sgl.sg_iovs[AGG_IOV_PARITY].iov_buf);
+	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
 
-	rc = agg_get_obj_handle(entry);
+	/* If rebuild started, abort it before sending RPC to save conflict window with rebuild
+	 * (see obj_inflight_io_check()).
+	 */
+	if (agg_param->ap_pool_info.api_pool->sp_rebuilding > 0) {
+		D_DEBUG(DB_EPC, DF_UOID" abort as rebuild started\n", DP_UOID(entry->ae_oid));
+		return -1;
+	}
+
+	rc = agg_get_obj_handle(entry, false);
 	if (rc) {
 		D_ERROR("Failed to open object: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
-	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
 	rc = pool_map_find_failed_tgts(agg_param->ap_pool_info.api_pool->sp_map,
 				       &targets, &failed_tgts_cnt);
 	if (rc) {
@@ -1539,10 +1565,10 @@ agg_process_holes_ult(void *arg)
 	uint32_t		 pidx = ec_age2pidx(entry);
 	uint32_t		 peer;
 	int			 i, rc = 0;
-	bool			 valid_hole = false;
 	uint32_t		 max_delay = 0;
 	uint64_t		 enqueue_id;
 
+	stripe_ud->asu_valid_hole = false;
 	/* Process extent list to find what to re-replicate -- build recx array
 	 */
 	d_list_for_each_entry(agg_extent,
@@ -1550,7 +1576,7 @@ agg_process_holes_ult(void *arg)
 		if (agg_extent->ae_epoch < entry->ae_par_extent.ape_epoch)
 			continue;
 		if (agg_extent->ae_hole)
-			valid_hole = true;
+			stripe_ud->asu_valid_hole = true;
 		if (agg_extent->ae_recx.rx_idx - ss > last_ext_end) {
 			stripe_ud->asu_recxs[ext_cnt].rx_idx =
 				ss + last_ext_end;
@@ -1566,7 +1592,7 @@ agg_process_holes_ult(void *arg)
 			break;
 	}
 
-	if (!valid_hole)
+	if (!stripe_ud->asu_valid_hole)
 		goto out;
 
 	obj = obj_hdl2ptr(entry->ae_obj_hdl);
@@ -1728,6 +1754,15 @@ agg_process_holes(struct ec_agg_entry *entry)
 	int			 tid, rc = 0;
 	int			*status;
 
+	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
+	/* If rebuild started, abort it before sending RPC to save conflict window with rebuild
+	 * (see obj_inflight_io_check()).
+	 */
+	if (agg_param->ap_pool_info.api_pool->sp_rebuilding > 0) {
+		D_DEBUG(DB_EPC, DF_UOID" abort as rebuild started\n", DP_UOID(entry->ae_oid));
+		return -1;
+	}
+
 	D_ALLOC_ARRAY(stripe_ud.asu_recxs,
 		      entry->ae_cur_stripe.as_extent_cnt + 1);
 	if (stripe_ud.asu_recxs == NULL) {
@@ -1736,7 +1771,7 @@ agg_process_holes(struct ec_agg_entry *entry)
 	}
 
 	stripe_ud.asu_agg_entry = entry;
-	rc = agg_get_obj_handle(entry);
+	rc = agg_get_obj_handle(entry, false);
 	if (rc) {
 		D_ERROR("Failed to open object: "DF_RC"\n", DP_RC(rc));
 		goto out;
@@ -1745,8 +1780,6 @@ agg_process_holes(struct ec_agg_entry *entry)
 	if (rc)
 		goto out;
 
-	agg_param = container_of(entry, struct ec_agg_param,
-				 ap_agg_entry);
 	rc = ABT_eventual_create(sizeof(*status), &stripe_ud.asu_eventual);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
@@ -1765,21 +1798,29 @@ agg_process_holes(struct ec_agg_entry *entry)
 	if (*status != 0)
 		D_GOTO(ev_out, rc = *status);
 
-	/* Update local vos with replicate */
-	entry->ae_sgl.sg_nr = 1;
-	if (iod->iod_nr) {
-		/* write the reps to vos */
-		rc = vos_obj_update(agg_param->ap_cont_handle, entry->ae_oid,
-				    entry->ae_cur_stripe.as_hi_epoch, 0, 0,
-				    &entry->ae_dkey, 1, iod,
-				    stripe_ud.asu_iod_csums,
-				    &entry->ae_sgl);
-		if (rc) {
-			D_ERROR("vos_update_begin failed: "DF_RC"\n",
-				DP_RC(rc));
-			goto ev_out;
+	/* If with valid hole (hole epoch >= parity epoch), update local vos with replicas
+	 * and delete parity.
+	 * For the case without valid hole, the only possibility is with partial replica epoch >
+	 * parity epoch, and all hole epoch < parity epoch, this case set ae_process_partial
+	 * flag and will call agg_process_partial_stripe() later.
+	 */
+	if (stripe_ud.asu_valid_hole) {
+		if (iod->iod_nr) {
+			/* write the reps to vos */
+			entry->ae_sgl.sg_nr = 1;
+			rc = vos_obj_update(agg_param->ap_cont_handle, entry->ae_oid,
+					    entry->ae_cur_stripe.as_hi_epoch, 0, 0,
+					    &entry->ae_dkey, 1, iod,
+					    stripe_ud.asu_iod_csums,
+					    &entry->ae_sgl);
+			if (rc) {
+				D_ERROR("vos_update_begin failed: "DF_RC"\n",
+					DP_RC(rc));
+				goto ev_out;
+			}
 		}
-		/* Delete parity */
+
+		/* Delete parity even when nothing to replicate */
 		epoch_range.epr_lo = agg_param->ap_epr.epr_lo;
 		epoch_range.epr_hi = entry->ae_cur_stripe.as_hi_epoch;
 		recx.rx_nr = ec_age2cs(entry);
@@ -1789,7 +1830,11 @@ agg_process_holes(struct ec_agg_entry *entry)
 					  entry->ae_oid, &epoch_range,
 					  &entry->ae_dkey, &entry->ae_akey,
 					  &recx);
+	} else {
+		D_DEBUG(DB_EPC, "no valid hole, set ae_process_partial flag\n");
+		entry->ae_process_partial = 1;
 	}
+
 ev_out:
 	entry->ae_sgl.sg_nr = AGG_IOV_CNT;
 	ABT_eventual_free(&stripe_ud.asu_eventual);
@@ -1799,6 +1844,7 @@ out:
 	daos_csummer_free_ic(stripe_ud.asu_csummer, &stripe_ud.asu_iod_csums);
 	D_FREE(stripe_ud.asu_csum_iov.iov_buf);
 	daos_csummer_destroy(&stripe_ud.asu_csummer);
+
 	return rc;
 }
 
@@ -1812,7 +1858,6 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	struct vos_iter_anchors	anchors = { 0 };
 	bool			update_vos = true;
 	bool			write_parity = true;
-	bool			process_holes = false;
 	int			rc = 0;
 
 	if (DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG_FAIL))
@@ -1883,16 +1928,23 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 		goto out;
 	}
 
-	/* With parity and some newer partial replicas, possibly holes */
-	if (ec_age_with_hole(entry))
-		process_holes = true;
-	else
-		rc = agg_process_partial_stripe(entry);
+	/* With parity and some newer partial replicas, possibly holes.
+	 * Case 1: with valid hole (hole epoch >= parity epoch), can be handled by
+	 *         agg_process_holes().
+	 * Case 2: without valid hole, must with partial replica, should be handled by
+	 *         agg_process_partial_stripe().
+	 */
+	if (ec_age_with_hole(entry)) {
+		entry->ae_process_partial = 0;
+		rc = agg_process_holes(entry);
+		if (rc != 0 || !entry->ae_process_partial)
+			goto clear_exts;
+	}
+
+	rc = agg_process_partial_stripe(entry);
 
 out:
-	if (process_holes && rc == 0) {
-		rc = agg_process_holes(entry);
-	} else if (update_vos && rc == 0) {
+	if (update_vos && rc == 0) {
 		if (ec_age2p(entry) > 1)  {
 			/* offload of ds_obj_update to push remote parity */
 			rc = agg_peer_update(entry, write_parity);
@@ -1909,6 +1961,7 @@ out:
 		}
 	}
 
+clear_exts:
 	agg_clear_extents(entry);
 	return rc;
 }
@@ -2120,9 +2173,16 @@ agg_shard_is_parity(struct ds_pool *pool, struct ec_agg_entry *agg_entry)
 		uint32_t shard_idx;
 		struct pl_obj_shard *shard;
 
-		ec_tgt_idx = obj_ec_shard_idx_by_layout_ver(agg_entry->ae_oid.id_layout_ver,
-							    agg_entry->ae_dkey_hash, oca,
-							    daos_oclass_grp_size(oca) - i - 1);
+		if (unlikely(DAOS_FAIL_CHECK(DAOS_OBJ_EC_AGG_LEADER_DIFF) &&
+			     agg_entry->ae_dkey_hash % obj_ec_parity_tgt_nr(oca) == 0))
+			ec_tgt_idx = obj_ec_shard_idx_by_layout_ver(agg_entry->ae_oid.id_layout_ver,
+								    agg_entry->ae_dkey_hash, oca,
+								    obj_ec_data_tgt_nr(oca) + i);
+		else
+			ec_tgt_idx = obj_ec_shard_idx_by_layout_ver(agg_entry->ae_oid.id_layout_ver,
+								    agg_entry->ae_dkey_hash, oca,
+								    daos_oclass_grp_size(oca)
+								    - i - 1);
 
 		shard_idx = grp_start + ec_tgt_idx;
 		shard = pl_obj_get_shard(agg_entry->ae_obj_layout, shard_idx);
@@ -2169,6 +2229,8 @@ agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 	 struct ec_agg_param *agg_param, struct ec_agg_entry *agg_entry,
 	 unsigned int *acts)
 {
+	int	rc = 0;
+
 	if (!agg_key_compare(agg_entry->ae_dkey, entry->ie_key)) {
 		D_DEBUG(DB_EPC, "Skip dkey: "DF_KEY" ec agg on re-probe\n",
 			DP_KEY(&entry->ie_key));
@@ -2187,11 +2249,12 @@ agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 			DP_UOID(agg_entry->ae_oid), DP_KEY(&agg_entry->ae_dkey),
 			agg_entry->ae_is_leader ? "yes" : "no");
 		agg_reset_dkey_entry(&agg_param->ap_agg_entry, entry);
+		rc = agg_get_obj_handle(agg_entry, true);
 	} else {
 		*acts |= VOS_ITER_CB_SKIP;
 	}
 
-	return 0;
+	return rc;
 }
 
 /* Handles akeys returned by the iterator. */
@@ -2214,6 +2277,13 @@ static inline bool
 ec_aggregate_yield(struct ec_agg_param *agg_param)
 {
 	int	rc;
+
+	if (agg_param->ap_pool_info.api_pool->sp_rebuilding > 0) {
+		D_INFO(DF_UUID": abort ec aggregation, sp_rebuilding %d\n",
+		       DP_UUID(agg_param->ap_pool_info.api_pool->sp_uuid),
+		       agg_param->ap_pool_info.api_pool->sp_rebuilding);
+		return true;
+	}
 
 	D_ASSERT(agg_param->ap_yield_func != NULL);
 	rc = agg_param->ap_yield_func(agg_param->ap_yield_arg);
@@ -2276,6 +2346,11 @@ agg_reset_entry(struct ec_agg_entry *agg_entry, vos_iter_entry_t *entry,
 	if (oca)
 		agg_entry->ae_oca	= *oca;
 
+	if (agg_entry->ae_obj_layout) {
+		pl_obj_layout_free(agg_entry->ae_obj_layout);
+		agg_entry->ae_obj_layout = NULL;
+	}
+
 	if (daos_handle_is_valid(agg_entry->ae_obj_hdl)) {
 		dsc_obj_close(agg_entry->ae_obj_hdl);
 		agg_entry->ae_obj_hdl = DAOS_HDL_INVAL;
@@ -2331,6 +2406,13 @@ check:
 				agg_param->ap_filter_eph);
 		agg_param->ap_credits++;
 		*acts = VOS_ITER_CB_SKIP;
+		goto done;
+	}
+
+	/* This MUST be the last check */
+	if (desc->id_type == VOS_ITER_OBJ && vos_bkt_iter_skip(ih, desc)) {
+		agg_param->ap_credits++;
+		*acts |= VOS_ITER_CB_SKIP;
 		goto done;
 	}
 done:
@@ -2400,6 +2482,17 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	D_ASSERT(agg_param->ap_initialized);
 
+	/* If rebuild started, abort it to save conflict window with rebuild
+	 * (see obj_inflight_io_check()).
+	 */
+	if (agg_param->ap_pool_info.api_pool->sp_rebuilding > 0) {
+		D_INFO(DF_CONT" abort as rebuild started, sp_rebuilding %d\n",
+			DP_CONT(agg_param->ap_pool_info.api_pool_uuid,
+				agg_param->ap_pool_info.api_cont_uuid),
+			agg_param->ap_pool_info.api_pool->sp_rebuilding);
+		return -1;
+	}
+
 	switch (type) {
 	case VOS_ITER_OBJ:
 		agg_param->ap_epr = param->ip_epr;
@@ -2421,7 +2514,9 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	if (rc < 0) {
-		D_ERROR("EC aggregation failed: "DF_RC"\n", DP_RC(rc));
+		D_ERROR(DF_UUID" EC aggregation (rebuilding %d) failed: "DF_RC"\n",
+			DP_UUID(agg_param->ap_pool_info.api_pool->sp_uuid),
+			agg_param->ap_pool_info.api_pool->sp_rebuilding, DP_RC(rc));
 		return rc;
 	}
 
@@ -2439,30 +2534,17 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	return rc;
 }
 
-struct ec_agg_ult_arg {
-	struct ec_agg_param	*param;
-	daos_epoch_t		*ec_query_p;
-	uint32_t		tgt_idx;
-};
-
 /* Captures the IV values need for pool and container open. Runs in
  * system xstream.
  */
 static	int
 ec_agg_init_ult(void *arg)
 {
-	struct ec_agg_ult_arg	*ult_arg = arg;
-	struct ec_agg_param	*agg_param = ult_arg->param;
+	struct ec_agg_param	*agg_param = arg;
 	struct ds_pool		*pool = agg_param->ap_pool_info.api_pool;
 	struct daos_prop_entry	*entry = NULL;
 	daos_prop_t		*prop = NULL;
 	int			 rc;
-
-	rc = ds_cont_ec_eph_insert(agg_param->ap_pool_info.api_pool,
-				   agg_param->ap_pool_info.api_cont_uuid,
-				   ult_arg->tgt_idx, &ult_arg->ec_query_p);
-	if (rc)
-		D_GOTO(out, rc);
 
 	rc = ds_pool_iv_srv_hdl_fetch(pool, &agg_param->ap_pool_info.api_poh_uuid,
 				      &agg_param->ap_pool_info.api_coh_uuid);
@@ -2496,32 +2578,10 @@ out:
 	return rc;
 }
 
-static	int
-ec_agg_fini_ult(void *arg)
-{
-	struct ec_agg_ult_arg	*ult_arg = arg;
-	struct ec_agg_param	*agg_param = ult_arg->param;
-	int			 rc;
-
-	rc = ds_cont_ec_eph_delete(agg_param->ap_pool_info.api_pool,
-				   agg_param->ap_pool_info.api_cont_uuid,
-				   ult_arg->tgt_idx);
-	D_ASSERT(rc == 0);
-	return 0;
-}
-
 static void
 ec_agg_param_fini(struct ds_cont_child *cont, struct ec_agg_param *agg_param)
 {
 	struct ec_agg_entry	*agg_entry = &agg_param->ap_agg_entry;
-	struct ec_agg_ult_arg	arg;
-
-	arg.param = agg_param;
-	arg.tgt_idx = dss_get_module_info()->dmi_tgt_id;
-	if (cont->sc_ec_query_agg_eph) {
-		dss_ult_execute(ec_agg_fini_ult, &arg, NULL, NULL, DSS_XS_SYS, 0, 0);
-		cont->sc_ec_query_agg_eph = NULL;
-	}
 
 	if (daos_handle_is_valid(agg_param->ap_pool_info.api_cont_hdl))
 		dsc_cont_close(agg_param->ap_pool_info.api_pool_hdl,
@@ -2543,7 +2603,6 @@ ec_agg_param_init(struct ds_cont_child *cont, struct agg_param *param)
 {
 	struct ec_agg_param	*agg_param = param->ap_data;
 	struct ec_agg_pool_info *info = &agg_param->ap_pool_info;
-	struct ec_agg_ult_arg	arg = { 0 };
 	int			rc;
 
 	D_ASSERT(agg_param->ap_initialized == 0);
@@ -2557,11 +2616,7 @@ ec_agg_param_init(struct ds_cont_child *cont, struct agg_param *param)
 	agg_param->ap_credits_max	= EC_AGG_ITERATION_MAX;
 	D_INIT_LIST_HEAD(&agg_param->ap_agg_entry.ae_cur_stripe.as_dextents);
 
-	arg.param = agg_param;
-	arg.tgt_idx = dss_get_module_info()->dmi_tgt_id;
-	rc = dss_ult_execute(ec_agg_init_ult, &arg, NULL, NULL, DSS_XS_SYS, 0, 0);
-	if (arg.ec_query_p != NULL)
-		cont->sc_ec_query_agg_eph = arg.ec_query_p;
+	rc = dss_ult_execute(ec_agg_init_ult, agg_param, NULL, NULL, DSS_XS_SYS, 0, 0);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -2603,9 +2658,16 @@ static int
 cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		     uint32_t flags, struct agg_param *agg_param)
 {
+	struct obj_pool_metrics  *opm;
 	struct ec_agg_param	 *ec_agg_param = agg_param->ap_data;
 	vos_iter_param_t	 iter_param = { 0 };
 	struct vos_iter_anchors  anchors = { 0 };
+	struct dtx_handle	*dth = NULL;
+	struct dtx_share_peer	*dsp;
+	struct dtx_id		 dti = { 0 };
+	struct dtx_epoch	 epoch = { 0 };
+	daos_unit_oid_t		 oid = { 0 };
+	int			 blocks = 0;
 	int			 rc = 0;
 
 	/*
@@ -2622,6 +2684,7 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 			return rc;
 	}
 
+	ec_agg_param->ap_min_unagg_eph = DAOS_EPOCH_MAX;
 	if (flags & VOS_AGG_FL_FORCE_SCAN) {
 		/** We don't want to use the latest container aggregation epoch for the filter
 		 *  in this case.   We instead use the lower bound of the epoch range.
@@ -2639,15 +2702,11 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		goto update_hae;
 	}
 
-	rc = vos_aggregate_enter(cont->sc_hdl, epr);
-	if (rc)
-		goto update_hae;
-
 	iter_param.ip_hdl		= cont->sc_hdl;
 	iter_param.ip_epr.epr_lo	= epr->epr_lo;
 	iter_param.ip_epr.epr_hi	= epr->epr_hi;
 	iter_param.ip_epc_expr		= VOS_IT_EPC_RR;
-	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE;
+	iter_param.ip_flags             = VOS_IT_RECX_VISIBLE | VOS_IT_FOR_AGG;
 	iter_param.ip_recx.rx_idx	= 0ULL;
 	iter_param.ip_recx.rx_nr	= ~PARITY_INDICATOR;
 	iter_param.ip_filter_cb		= agg_filter;
@@ -2655,35 +2714,71 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 
 	agg_reset_entry(&ec_agg_param->ap_agg_entry, NULL, NULL);
 
-	ec_agg_param->ap_min_unagg_eph = DAOS_EPOCH_MAX;
-	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
-			 agg_iterate_pre_cb, agg_iterate_post_cb, ec_agg_param, NULL);
+retry:
+	epoch.oe_value = epr->epr_hi;
+	rc = dtx_begin(cont->sc_hdl, &dti, &epoch, 0, cont->sc_pool->spc_map_version, &oid,
+		       NULL, 0, 0, NULL, &dth);
+	if (rc != 0)
+		goto update_hae;
+
+	rc = vos_iterate_obj(&iter_param, true, &anchors, agg_iterate_pre_cb,
+			     agg_iterate_post_cb, ec_agg_param, dth);
+	if (rc == -DER_INPROGRESS && !d_list_empty(&dth->dth_share_tbd_list)) {
+		uint64_t	now = daos_gettime_coarse();
+
+		/* Report warning per each 10 seconds to avoid log flood. */
+		if (now - cont->sc_ec_agg_busy_ts > 10) {
+			while ((dsp = d_list_pop_entry(&dth->dth_share_tbd_list,
+						       struct dtx_share_peer, dsp_link)) != NULL) {
+				D_WARN(DF_CONT ": EC aggregate hit non-committed DTX " DF_DTI "\n",
+				       DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+				       DP_DTI(&dsp->dsp_xid));
+				dtx_dsp_free(dsp);
+			}
+
+			cont->sc_ec_agg_busy_ts = now;
+		}
+	}
+
+	dtx_end(dth, cont, rc);
 
 	/* Post_cb may not being executed in some cases */
 	agg_clear_extents(&ec_agg_param->ap_agg_entry);
+	agg_reset_entry(&ec_agg_param->ap_agg_entry, NULL, NULL);
 
 	if (daos_handle_is_valid(ec_agg_param->ap_agg_entry.ae_obj_hdl)) {
 		dsc_obj_close(ec_agg_param->ap_agg_entry.ae_obj_hdl);
 		ec_agg_param->ap_agg_entry.ae_obj_hdl = DAOS_HDL_INVAL;
 	}
 
-	if (cont->sc_pool->spc_pool->sp_rebuilding > 0 && !cont->sc_stopping) {
-		/* There is rebuild going on, and we can't proceed EC aggregate boundary,
-		 * Let's wait for 5 seconds for another EC aggregation.
+	if (rc == -DER_BUSY && cont->sc_pool->spc_pool->sp_rebuilding == 0) {
+		/** Hit an object conflict VOS aggregation or discard.   Rather than exiting, let's
+		 * yield and try again.
 		 */
-		D_ASSERT(cont->sc_ec_agg_req != NULL);
-		sched_req_sleep(cont->sc_ec_agg_req, 5 * 1000);
+		opm = cont->sc_pool->spc_metrics[DAOS_OBJ_MODULE];
+		d_tm_inc_counter(opm->opm_ec_agg_blocked, 1);
+		blocks++;
+		/** Warn once if it goes over 20 times */
+		D_CDEBUG(blocks == 20, DLOG_WARN, DB_EPC,
+			 "EC agg hit conflict with VOS agg or discard (nr=%d), retrying...\n",
+			 blocks);
+		ec_aggregate_yield(ec_agg_param);
+		goto retry;
 	}
 
-	vos_aggregate_exit(cont->sc_hdl);
-
 update_hae:
+	/* clear the flag before next turn's cont_aggregate_runnable(), to save conflict
+	 * window with rebuild (see obj_inflight_io_check()).
+	 */
+	if (cont->sc_pool->spc_pool->sp_rebuilding > 0)
+		cont->sc_ec_agg_active = 0;
+
 	if (rc == 0) {
 		cont->sc_ec_agg_eph = max(cont->sc_ec_agg_eph, epr->epr_hi);
-		if (!cont->sc_stopping && cont->sc_ec_query_agg_eph) {
+		if (!cont->sc_stopping && cont->sc_query_ec_agg_eph) {
 			uint64_t orig, cur;
 
-			orig = d_hlc2sec(*cont->sc_ec_query_agg_eph);
+			orig = d_hlc2sec(*cont->sc_query_ec_agg_eph);
 			cur = d_hlc2sec(cont->sc_ec_agg_eph);
 			if (orig && cur > orig && (cur - orig) >= 600)
 				D_WARN(DF_CONT" Sluggish EC boundary bumping: "
@@ -2691,7 +2786,7 @@ update_hae:
 				       DP_CONT(cont->sc_pool_uuid, cont->sc_uuid),
 				       orig, cur, cur - orig);
 
-			*cont->sc_ec_query_agg_eph = min(ec_agg_param->ap_min_unagg_eph,
+			*cont->sc_query_ec_agg_eph = min(ec_agg_param->ap_min_unagg_eph,
 							 cont->sc_ec_agg_eph);
 		}
 	}

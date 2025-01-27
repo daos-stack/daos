@@ -2579,7 +2579,7 @@ basic_scrubbing_test(void **state, char *scrub_freq)
 	rc = dmg_pool_set_prop(dmg_config_file, "scrub", "timed",
 			       ctx.test_arg->pool.pool_uuid);
 	assert_success(rc);
-	rc = dmg_pool_set_prop(dmg_config_file, "scrub-freq", scrub_freq,
+	rc = dmg_pool_set_prop(dmg_config_file, "scrub_freq", scrub_freq,
 			       ctx.test_arg->pool.pool_uuid);
 	assert_success(rc);
 

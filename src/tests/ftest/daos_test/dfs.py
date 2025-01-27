@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -32,10 +32,9 @@ class DaosCoreTestDfs(DaosCoreBase):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,large
         :avocado: tags=daos_test,dfs_test,dfs
-        :avocado: tags=daos_core_test_dfs,test_daos_dfs_unit
+        :avocado: tags=DaosCoreTestDfs,test_daos_dfs_unit
         """
-        self.daos_test = os.path.join(self.bin, 'dfs_test')
-        self.run_subtest()
+        self.run_subtest(os.path.join(self.bin, "dfs_test"))
 
     def test_daos_dfs_parallel(self):
         """Jira ID: DAOS-5409.
@@ -49,10 +48,9 @@ class DaosCoreTestDfs(DaosCoreBase):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,large
         :avocado: tags=daos_test,dfs_test,dfs
-        :avocado: tags=daos_core_test_dfs,test_daos_dfs_parallel
+        :avocado: tags=DaosCoreTestDfs,test_daos_dfs_parallel
         """
-        self.daos_test = os.path.join(self.bin, 'dfs_test')
-        self.run_subtest()
+        self.run_subtest(os.path.join(self.bin, "dfs_test"))
 
     def test_daos_dfs_sys(self):
         """Jira ID: DAOS-7759.
@@ -66,7 +64,6 @@ class DaosCoreTestDfs(DaosCoreBase):
         :avocado: tags=all,pr,full_regression
         :avocado: tags=hw,large
         :avocado: tags=daos_test,dfs_test,dfs
-        :avocado: tags=daos_core_test_dfs,test_daos_dfs_sys
+        :avocado: tags=DaosCoreTestDfs,test_daos_dfs_sys
         """
-        self.daos_test = os.path.join(self.bin, 'dfs_test')
-        self.run_subtest()
+        self.run_subtest(os.path.join(self.bin, "dfs_test"))

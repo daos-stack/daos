@@ -53,11 +53,10 @@ vos_ilog_is_same_tx(struct umem_instance *umm, uint32_t tx_id,
 	*same = false;
 
 	if (dtx_is_committed(tx_id, vos_hdl2cont(coh), epoch)) {
-		/** If it's committed and the current update is not
-		 * transactional, treat it as the same transaction and let the
-		 * minor epoch handle any conflicts.
-		 */
-		if (!dtx_is_valid_handle(dth))
+		/** If it's committed and the current update is not part of a distributed
+		 * transaction (meaning it is not transactional or part of a local transaction),
+		 * treat it as the same transaction and let the minor epoch handle any conflicts. */
+		if (!dtx_is_real_handle(dth))
 			*same = true;
 	} else if (tx_id == dtx) {
 		*same = true;
@@ -83,8 +82,7 @@ vos_ilog_del(struct umem_instance *umm, umem_off_t ilog_off, uint32_t tx_id,
 		return 0;
 
 	coh.cookie = (unsigned long)args;
-	vos_dtx_deregister_record(umm, coh, tx_id, epoch, ilog_off);
-	return 0;
+	return vos_dtx_deregister_record(umm, coh, tx_id, epoch, ilog_off);
 }
 
 void
@@ -434,8 +432,8 @@ update:
 		return rc;
 	}
 
-	rc = ilog_update(loh, &max_epr, epr->epr_hi, dtx_is_valid_handle(dth) ?
-			 dth->dth_op_seq : VOS_SUB_OP_MAX, false);
+	rc = ilog_update(loh, &max_epr, epr->epr_hi,
+			 (dtx_is_valid_handle(dth) ? dth->dth_op_seq : VOS_SUB_OP_MAX), false);
 
 	ilog_close(loh);
 
@@ -496,8 +494,6 @@ vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
 		return 0;
 	}
 
-	/** If we get here, we need to check if the entry exists */
-	D_ASSERT(ts_set->ts_flags & VOS_OF_COND_PUNCH);
 	/** For now, if the state isn't settled, just retry with later
 	 *  timestamp.   The state should get settled quickly when there
 	 *  is conditional update and sharing.
