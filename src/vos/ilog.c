@@ -1221,7 +1221,7 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 	int			 rc = 0;
 	bool			 retry;
 
-	ILOG_CHECK_VALID(root_df);
+	D_ASSERT(ILOG_CHECK_VALID(root_df));
 
 	root = (struct ilog_root *)root_df;
 
