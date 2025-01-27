@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -495,6 +495,9 @@ crt_hg_header_copy(struct crt_rpc_priv *in, struct crt_rpc_priv *out)
 	out->crp_req_hdr = in->crp_req_hdr;
 	out->crp_reply_hdr.cch_hlc = in->crp_reply_hdr.cch_hlc;
 
+	/* Populate rpc_priv fields correctly based on the header copied */
+	out->crp_deadline_sec = in->crp_req_hdr.cch_src_deadline_sec;
+
 	if (!(out->crp_flags & CRT_RPC_FLAG_COLL))
 		return;
 
@@ -576,14 +579,18 @@ crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 		if (ENCODING(proc_op)) {
 			hdr = &rpc_priv->crp_req_hdr;
 
-			hdr->cch_flags = rpc_priv->crp_flags;
+			hdr->cch_flags    = rpc_priv->crp_flags;
 			hdr->cch_dst_rank = crt_grp_priv_get_primary_rank(
-						rpc_priv->crp_grp_priv,
-						rpc_priv->crp_pub.cr_ep.ep_rank
-						);
+			    rpc_priv->crp_grp_priv, rpc_priv->crp_pub.cr_ep.ep_rank);
 			hdr->cch_dst_tag = rpc_priv->crp_pub.cr_ep.ep_tag;
 
-			hdr->cch_src_timeout = rpc_priv->crp_timeout_sec;
+			if (rpc_priv->crp_flags & CRT_RPC_FLAG_DEADLINES_USED) {
+				hdr->cch_src_deadline_sec = rpc_priv->crp_deadline_sec;
+			} else {
+				/* Support forwarding of rpc timeout for deprecated clients */
+				hdr->cch_src_deadline_sec = rpc_priv->crp_timeout_sec;
+			}
+
 			if (crt_is_service()) {
 				hdr->cch_src_rank =
 					crt_grp_priv_get_primary_rank(
