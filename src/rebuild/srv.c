@@ -483,7 +483,8 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 
 	if (rpt->rt_rebuild_op != RB_OP_RECLAIM && rpt->rt_rebuild_op != RB_OP_FAIL_RECLAIM) {
 		rc = ds_migrate_query_status(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
-					     rpt->rt_rebuild_gen, rpt->rt_rebuild_op, &dms);
+					     rpt->rt_rebuild_gen, rpt->rt_rebuild_op,
+					     rpt->rt_global_scan_done, &dms);
 		if (rc)
 			D_GOTO(out, rc);
 	}
