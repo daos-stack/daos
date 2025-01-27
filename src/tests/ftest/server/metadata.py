@@ -481,14 +481,14 @@ class ObjectMetadata(TestWithServers):
                 # Disable cleanup methods for all ior commands.
                 ior_managers[-1].register_cleanup_method = None
 
-                # Manually add one cleanup method for all ior threads
-                if operation == "write" and index == 0:
-                    self.register_cleanup(stop_job_manager, job_manager=ior_managers[-1])
-
                 # Add a thread for these IOR arguments
                 thread_manager.add(
                     test=self, manager=ior_managers[-1], loops=files_per_thread)
                 self.log.info("Created %s thread %s", operation, index)
+
+            # Manually add one cleanup method for all ior threads
+            if operation == "write":
+                self.register_cleanup(stop_job_manager, job_manager=ior_managers[0])
 
             # Launch the IOR threads
             self.log.info("Launching %d IOR %s threads", thread_manager.qty, operation)
