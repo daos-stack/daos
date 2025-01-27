@@ -482,7 +482,7 @@ class ObjectMetadata(TestWithServers):
                 ior_managers[-1].register_cleanup_method = None
 
                 # Manually add one cleanup method for all ior threads
-                if operation == "write" and index > 0:
+                if operation == "write" and index == 0:
                     self.register_cleanup(stop_job_manager, job_manager=ior_managers[-1])
 
                 # Add a thread for these IOR arguments
