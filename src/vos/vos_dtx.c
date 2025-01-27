@@ -2458,10 +2458,26 @@ vos_dtx_discard_invalid_internal(struct vos_container *cont, struct vos_dtx_act_
 	struct umem_instance *umm                 = vos_cont2umm(cont);
 	int                   discarded_noninline = 0;
 	int                   discarded_inline    = 0;
-	int                   count;
+	int                   count               = min(DAE_REC_CNT(dae), DTX_INLINE_REC_CNT);
 	int                   i;
 
-	/* go through the non-inlined records first if present */
+	/* go through the inlined records */
+	for (i = 0; i < count; i++) {
+		do_dtx_rec_discard_invalid(umm, dae, &DAE_REC_INLINE(dae)[i], &discarded_inline);
+	}
+
+	if (discarded_inline > 0) {
+		/* copy the whole array to durable format */
+		struct vos_dtx_act_ent_df *dae_df = umem_off2ptr(umm, dae->dae_df_off);
+		size_t                     size   = sizeof(umem_off_t) * count;
+		int                        rc = umem_tx_add_ptr(umm, &dae_df->dae_rec_inline, size);
+		if (rc != 0) {
+			return rc;
+		}
+		memcpy(&dae_df->dae_rec_inline, &DAE_REC_INLINE(dae), size);
+	}
+
+	/* go through the non-inlined records if present */
 	if (dae->dae_records != NULL) {
 		D_ASSERT(DAE_REC_CNT(dae) > DTX_INLINE_REC_CNT);
 
@@ -2481,26 +2497,6 @@ vos_dtx_discard_invalid_internal(struct vos_container *cont, struct vos_dtx_act_
 			}
 			memcpy(rec_df, dae->dae_records, size);
 		}
-
-		count = DTX_INLINE_REC_CNT;
-	} else {
-		count = DAE_REC_CNT(dae);
-	}
-
-	/* go through the inlined records */
-	for (i = 0; i < count; i++) {
-		do_dtx_rec_discard_invalid(umm, dae, &DAE_REC_INLINE(dae)[i], &discarded_inline);
-	}
-
-	if (discarded_inline > 0) {
-		/* copy the whole array to durable format */
-		struct vos_dtx_act_ent_df *dae_df = umem_off2ptr(umm, dae->dae_df_off);
-		size_t                     size   = sizeof(umem_off_t) * count;
-		int                        rc = umem_tx_add_ptr(umm, &dae_df->dae_rec_inline, size);
-		if (rc != 0) {
-			return rc;
-		}
-		memcpy(&dae_df->dae_rec_inline, &DAE_REC_INLINE(dae), size);
 	}
 
 	*discarded = discarded_inline + discarded_noninline;
@@ -2531,11 +2527,6 @@ vos_dtx_discard_invalid(daos_handle_t coh, struct dtx_id *dti, int *discarded)
 		return rc;
 	}
 	dae = riov.iov_buf;
-
-	if (vos_dae_is_abort(dae)) {
-		/* Only not aborted transactions are considered. */
-		return 0;
-	}
 
 	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
 	if (rc == 0) {
