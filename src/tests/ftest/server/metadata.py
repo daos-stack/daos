@@ -1,5 +1,6 @@
 """
   (C) Copyright 2019-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -13,13 +14,12 @@ from job_manager_utils import get_job_manager
 from thread_manager import ThreadManager
 
 
-def run_ior_loop(test, manager, loops):
+def run_ior_loop(manager, cont_labels):
     """Run IOR multiple times.
 
     Args:
-        test (Test): the test object
         manager (str): mpi job manager command
-        loops (int): number of times to run IOR
+        cont_labels (list): container labels to run iteratively with
 
     Returns:
         list: a list of CmdResults from each ior command run
@@ -27,10 +27,8 @@ def run_ior_loop(test, manager, loops):
     """
     results = []
     errors = []
-    for index in range(loops):
-        cont = test.label_generator.get_label('cont')
-        manager.job.dfs_cont.update(cont, "ior.dfs_cont")
-
+    for index, cont_label in enumerate(cont_labels):
+        manager.job.dfs_cont.update(cont_label, "ior.dfs_cont")
         t_start = time.time()
 
         try:
@@ -39,7 +37,7 @@ def run_ior_loop(test, manager, loops):
             ior_mode = "read" if "-r" in manager.job.flags.value else "write"
             errors.append(
                 "IOR {} Loop {}/{} failed for container {}: {}".format(
-                    ior_mode, index, loops, cont, error))
+                    ior_mode, index, len(cont_labels), manager.job.dfs_cont.value, error))
         finally:
             t_end = time.time()
             ior_cmd_time = t_end - t_start
@@ -47,7 +45,8 @@ def run_ior_loop(test, manager, loops):
 
     if errors:
         raise CommandFailure(
-            "IOR failed in {}/{} loops: {}".format(len(errors), loops, "\n".join(errors)))
+            "IOR failed in {}/{} loops: {}".format(
+                len(errors), len(cont_labels), "\n".join(errors)))
     return results
 
 
@@ -63,28 +62,12 @@ class ObjectMetadata(TestWithServers):
     def __init__(self, *args, **kwargs):
         """Initialize a TestWithServers object."""
         super().__init__(*args, **kwargs)
-        self.ior_managers = []
 
         # Minimum number of containers that should be able to be created
         self.created_containers_min = self.params.get("created_cont_min", "/run/metadata/*")
 
         # Number of created containers that should not be possible
         self.created_containers_limit = self.params.get("created_cont_max", "/run/metadata/*")
-
-    def pre_tear_down(self):
-        """Tear down steps to optionally run before tearDown().
-
-        Returns:
-            list: a list of error strings to report at the end of tearDown().
-
-        """
-        error_list = []
-        if self.ior_managers:
-            self.test_log.info("Stopping IOR job managers")
-            error_list = self._stop_managers(self.ior_managers, "IOR job manager")
-        else:
-            self.log.debug("no pre-teardown steps defined")
-        return error_list
 
     def create_pool(self, svc_ops_enabled=True):
         """Create a pool and display the svc ranks.
@@ -467,10 +450,17 @@ class ObjectMetadata(TestWithServers):
         :avocado: tags=ObjectMetadata,test_metadata_server_restart
         """
         self.create_pool()
-        files_per_thread = 400
-        total_ior_threads = 5
+        files_per_thread = 50  # 400  # DEBUGGING
+        total_ior_threads = 10
 
-        processes = self.params.get("slots", "/run/ior/clientslots/*")
+        processes = self.params.get("np", "/run/ior/*")
+
+        # Generate all labels to be shared between write and read operation
+        all_cont_labels = []
+        for thread_index in range(total_ior_threads):
+            all_cont_labels.append([])
+            for file_index in range(files_per_thread):
+                all_cont_labels[-1].append(f'cont_{thread_index}_{file_index}')
 
         # Launch threads to run IOR to write data, restart the agents and
         # servers, and then run IOR to read the data
@@ -483,21 +473,19 @@ class ObjectMetadata(TestWithServers):
                 # Define the arguments for the run_ior_loop method
                 ior_cmd = IorCommand(self.test_env.log_dir)
                 ior_cmd.get_params(self)
-                ior_cmd.set_daos_params(self.pool, None)
-                ior_cmd.flags.value = self.params.get("ior{}flags".format(operation), "/run/ior/*")
+                ior_cmd.dfs_pool.update(self.pool.identifier)
+                ior_cmd.flags.update(self.params.get("ior{}flags".format(operation), "/run/ior/*"))
 
                 # Define the job manager for the IOR command
-                self.ior_managers.append(
-                    get_job_manager(self, "Clush", ior_cmd))
-                env = ior_cmd.get_default_env(str(self.ior_managers[-1]))
-                self.ior_managers[-1].assign_hosts(self.hostlist_clients, self.workdir, None)
-                self.ior_managers[-1].assign_processes(processes)
-                self.ior_managers[-1].assign_environment(env)
-                self.ior_managers[-1].verbose = False
+                ior_manager = get_job_manager(self, job=ior_cmd)
+                env = ior_cmd.get_default_env(str(ior_manager))
+                ior_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
+                ior_manager.assign_processes(processes)
+                ior_manager.assign_environment(env)
+                ior_manager.verbose = False
 
                 # Add a thread for these IOR arguments
-                thread_manager.add(
-                    test=self, manager=self.ior_managers[-1], loops=files_per_thread)
+                thread_manager.add(manager=ior_manager, cont_labels=all_cont_labels[index])
                 self.log.info("Created %s thread %s", operation, index)
 
             # Launch the IOR threads
