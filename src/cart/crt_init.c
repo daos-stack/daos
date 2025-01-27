@@ -198,6 +198,14 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider, bool p
 	prov_data->cpg_max_unexp_size = max_unexpect_size;
 	prov_data->cpg_primary        = primary;
 
+	if (opt && opt->cio_progress_busy) {
+		prov_data->cpg_progress_busy = opt->cio_progress_busy;
+	} else {
+		bool progress_busy = false;
+		crt_env_get(D_PROGRESS_BUSY, &progress_busy);
+		prov_data->cpg_progress_busy = progress_busy;
+	}
+
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
 		prov_data->cpg_used_idx[i] = false;
 
