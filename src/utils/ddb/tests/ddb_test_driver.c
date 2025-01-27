@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -410,6 +411,7 @@ dvt_dtx_begin_helper(daos_handle_t coh, const daos_unit_oid_t *oid, daos_epoch_t
 	struct dtx_handle	*dth;
 	struct dtx_memberships	*mbs;
 	size_t			 size;
+	int			 rc;
 
 	D_ALLOC_PTR(dth);
 	assert_non_null(dth);
@@ -449,7 +451,8 @@ dvt_dtx_begin_helper(daos_handle_t coh, const daos_unit_oid_t *oid, daos_epoch_t
 	dth->dth_shares_inited = 1;
 
 	vos_dtx_rsrvd_init(dth);
-	vos_dtx_attach(dth, false, false);
+	rc = vos_dtx_attach(dth, false, false);
+	assert_rc_equal(rc, 0);
 
 	*dthp = dth;
 }
@@ -478,7 +481,7 @@ dvt_vos_insert_dtx_records(daos_handle_t coh, uint32_t nr, uint32_t committed_nr
 	daos_recx_t		 recxs[recxs_nr];
 	daos_iod_t		 iod = {0};
 	d_sg_list_t		 sgl = {0};
-	daos_epoch_t		 epoch = 1;
+	daos_epoch_t		 epoch = d_hlc_get();
 	uint64_t		 dkey_hash = 0x123;
 	int			 i;
 
@@ -509,7 +512,7 @@ dvt_vos_insert_dtx_records(daos_handle_t coh, uint32_t nr, uint32_t committed_nr
 
 	/* commit */
 	for (i = 0; i < committed_nr; i++)
-		assert_int_equal(1, vos_dtx_commit(coh, &dth[i]->dth_xid, 1, NULL));
+		assert_int_equal(1, vos_dtx_commit(coh, &dth[i]->dth_xid, 1, false, NULL));
 
 	/* end each dtx */
 	for (i = 0; i < nr; i++)

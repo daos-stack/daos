@@ -54,7 +54,7 @@ vos_space_sys_init(struct vos_pool *pool)
 	const daos_size_t scm_tot  = pool->vp_pool_df->pd_scm_sz;
 	const daos_size_t nvme_tot = pool->vp_pool_df->pd_nvme_sz;
 
-	gc_reserve_space(&pool->vp_space_sys[0]);
+	gc_reserve_space(pool, &pool->vp_space_sys[0]);
 	agg_reserve_space(&pool->vp_space_sys[0]);
 
 	if (nvme_tot == 0)

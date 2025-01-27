@@ -12,7 +12,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -61,7 +60,7 @@ func (cmd *telemConfigCmd) fetchAsset(repo, platform string) (*os.File, error) {
 		return nil, err
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +105,7 @@ func (cmd *telemConfigCmd) fetchAsset(repo, platform string) (*os.File, error) {
 	}
 	defer resp.Body.Close()
 
-	outFile, err := ioutil.TempFile("", dlName)
+	outFile, err := os.CreateTemp("", dlName)
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +212,7 @@ type (
 )
 
 func (cmd *telemConfigCmd) loadPromCfg(cfgPath string) (*promCfg, error) {
-	data, err := ioutil.ReadFile(cfgPath)
+	data, err := os.ReadFile(cfgPath)
 	if err != nil {
 		return nil, err
 	}
@@ -272,7 +271,7 @@ func (cmd *telemConfigCmd) configurePrometheus() (*installInfo, error) {
 		return nil, err
 	}
 
-	if err := ioutil.WriteFile(promInfo.cfgPath, data, 0644); err != nil {
+	if err := os.WriteFile(promInfo.cfgPath, data, 0644); err != nil {
 		return nil, errors.Wrapf(err, "failed to write %s", promInfo.cfgPath)
 	}
 	cmd.Infof("Wrote DAOS monitoring config to %s)", promInfo.cfgPath)

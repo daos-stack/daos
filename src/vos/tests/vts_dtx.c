@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -43,6 +44,7 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	      uint64_t dkey_hash, struct dtx_handle **dthp)
 {
 	struct dtx_handle	*dth;
+	int			 rc;
 
 	D_ALLOC_PTR(dth);
 	assert_non_null(dth);
@@ -66,6 +68,7 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	dth->dth_for_migration = 0;
 	dth->dth_ignore_uncommitted = 0;
 	dth->dth_prepared = 0;
+	dth->dth_epoch_owner = 0;
 	dth->dth_aborted = 0;
 	dth->dth_already = 0;
 	dth->dth_need_validation = 0;
@@ -91,7 +94,8 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	dth->dth_shares_inited = 1;
 
 	vos_dtx_rsrvd_init(dth);
-	vos_dtx_attach(dth, false, false);
+	rc = vos_dtx_attach(dth, false, false);
+	assert_rc_equal(rc, 0);
 
 	*dthp = dth;
 }
@@ -227,7 +231,7 @@ vts_dtx_commit_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	assert_memory_not_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
 
 	/* Commit the update DTX. */
-	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1, NULL);
+	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1, false, NULL);
 	assert_rc_equal(rc, 1);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
@@ -269,7 +273,7 @@ vts_dtx_commit_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
 
 	/* Commit the punch DTX. */
-	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1, NULL);
+	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1, false, NULL);
 	assert_rc_equal(rc, 1);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
@@ -471,11 +475,11 @@ dtx_14(void **state)
 	vts_dtx_end(dth);
 
 	/* Commit the DTX. */
-	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1, NULL);
+	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1, false, NULL);
 	assert_rc_equal(rc, 1);
 
 	/* Double commit the DTX is harmless. */
-	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1, NULL);
+	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1, false, NULL);
 	assert(rc >= 0);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
@@ -570,7 +574,7 @@ dtx_15(void **state)
 	assert_memory_equal(update_buf1, fetch_buf, UPDATE_BUF_SIZE);
 
 	/* Aborted DTX cannot be committed. */
-	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1, NULL);
+	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1, false, NULL);
 	assert(rc >= 0);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
@@ -649,7 +653,7 @@ dtx_16(void **state)
 	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
 
 	/* Commit the DTX. */
-	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &dth->dth_xid, 1, NULL);
+	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &dth->dth_xid, 1, false, NULL);
 	assert_rc_equal(rc, 1);
 
 	vts_dtx_end(dth);
@@ -740,7 +744,7 @@ dtx_17(void **state)
 	}
 
 	/* Commit the first 4 DTXs. */
-	rc = vos_dtx_commit(args->ctx.tc_co_hdl, xid, 4, NULL);
+	rc = vos_dtx_commit(args->ctx.tc_co_hdl, xid, 4, false, NULL);
 	assert_rc_equal(rc, 4);
 
 	param.ip_hdl = args->ctx.tc_co_hdl;
@@ -767,7 +771,7 @@ dtx_17(void **state)
 	}
 
 	/* Commit the others. */
-	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid[4], 6, NULL);
+	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid[4], 6, false, NULL);
 	assert_rc_equal(rc, 6);
 
 	memset(&anchors, 0, sizeof(anchors));
@@ -827,7 +831,7 @@ dtx_18(void **state)
 	}
 
 	/* Commit all DTXs. */
-	rc = vos_dtx_commit(args->ctx.tc_co_hdl, xid, 10, NULL);
+	rc = vos_dtx_commit(args->ctx.tc_co_hdl, xid, 10, false, NULL);
 	assert_rc_equal(rc, 10);
 
 	for (i = 0; i < 10; i++) {
