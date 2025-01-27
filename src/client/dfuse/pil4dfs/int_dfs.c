@@ -574,7 +574,10 @@ discover_daos_mount_with_env(void)
 	char  *fs_root   = NULL;
 	char  *pool      = NULL;
 	char  *container = NULL;
+	char  *snap_name = NULL;
+	size_t len_snap  = 0;
 	size_t len_fs_root, len_pool, len_container;
+	daos_epoch_t snap_epoch = 0;
 
 	/* Add the mount if env D_IL_MOUNT_POINT is set. */
 	rc = d_agetenv_str(&fs_root, "D_IL_MOUNT_POINT");
@@ -628,6 +631,21 @@ discover_daos_mount_with_env(void)
 		D_GOTO(out, rc = ENAMETOOLONG);
 	}
 
+	rc = d_agetenv_str(&snap_name, "D_IL_SNAP");
+	if (snap_name) {
+		D_DEBUG(DB_ANY, "D_IL_SNAP is set to %s.\n", snap_name);
+
+		len_snap = strnlen(snap_name, DAOS_SNAPSHOT_MAX_LEN);
+		if (len_snap >= DAOS_SNAPSHOT_MAX_LEN) {
+			D_FATAL("D_IL_SNAP is too long.\n");
+			D_GOTO(out, rc = ENAMETOOLONG);
+		}
+	}
+
+	rc = d_getenv_uint64_t("D_IL_SNAP_EPOCH", &snap_epoch);
+	if (rc != -DER_NONEXIST)
+		D_DEBUG(DB_ANY, "D_IL_SNAP_EPOCH is set to "DF_U64".\n", snap_epoch);
+
 	D_STRNDUP(dfs_list[num_dfs].fs_root, fs_root, len_fs_root);
 	if (dfs_list[num_dfs].fs_root == NULL)
 		D_GOTO(out, rc = ENOMEM);
@@ -640,6 +658,13 @@ discover_daos_mount_with_env(void)
 	if (dfs_list[num_dfs].cont == NULL)
 		D_GOTO(free_pool, rc = ENOMEM);
 
+	if (snap_name != NULL) {
+		D_STRNDUP(dfs_list[num_dfs].snap_name, snap_name, len_snap);
+		if (dfs_list[num_dfs].snap_name == NULL)
+			D_GOTO(free_pool, rc = ENOMEM);
+	}
+
+	dfs_list[num_dfs].snap_epoch   = snap_epoch;
 	dfs_list[num_dfs].dcache       = NULL;
 	dfs_list[num_dfs].len_fs_root  = (int)len_fs_root;
 	atomic_init(&dfs_list[num_dfs].inited, 0);
@@ -701,6 +726,8 @@ discover_dfuse_mounts(void)
 			atomic_init(&pt_dfs_mt->inited, 0);
 			pt_dfs_mt->pool         = NULL;
 			pt_dfs_mt->cont         = NULL;
+			pt_dfs_mt->snap_name    = NULL;
+			pt_dfs_mt->snap_epoch   = 0;
 			D_STRNDUP(pt_dfs_mt->fs_root, fs_entry->mnt_dir, pt_dfs_mt->len_fs_root);
 			if (pt_dfs_mt->fs_root == NULL)
 				D_GOTO(out, rc = ENOMEM);
@@ -4280,7 +4307,9 @@ static char *env_list[] = {"D_IL_REPORT",
 			   "D_LOG_MASK",
 			   "D_IL_COMPATIBLE",
 			   "D_IL_NO_DCACHE_BASH",
-			   "D_IL_BYPASS_LIST"};
+			   "D_IL_BYPASS_LIST",
+			   "D_IL_SNAP",
+			   "D_IL_SNAP_EPOCH"};
 
 /* Environmental variables could be cleared in some applications. To make sure all libpil4dfs
  * related env properly set, we intercept execve and its variants to check envp[] and append our
@@ -7462,7 +7491,16 @@ init_dfs(int idx)
 		DL_ERROR(rc, "failed to open container");
 		D_GOTO(out_err_cont_open, rc);
 	}
-	rc = dfs_mount(dfs_list[idx].poh, dfs_list[idx].coh, O_RDWR, &dfs_list[idx].dfs);
+
+	/**
+	 * mount a snapshot if an epoch or snapshot name is passed, otherwise just a regular mount
+	 */
+	if (dfs_list[idx].snap_epoch != 0 || dfs_list[idx].snap_name != NULL)
+		rc = dfs_mount_snap(dfs_list[idx].poh, dfs_list[idx].coh, O_RDONLY,
+				    dfs_list[idx].snap_epoch, dfs_list[idx].snap_name,
+				    &dfs_list[idx].dfs);
+	else
+		rc = dfs_mount(dfs_list[idx].poh, dfs_list[idx].coh, O_RDWR, &dfs_list[idx].dfs);
 	if (rc != 0) {
 		DS_ERROR(rc, "failed to mount dfs");
 		D_GOTO(out_err_mt, rc);
