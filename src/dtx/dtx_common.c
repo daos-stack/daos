@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -1914,7 +1915,6 @@ dtx_cont_open(struct ds_cont_child *cont)
 	int				 rc;
 
 	D_ASSERT(cont != NULL);
-	D_ASSERT(cont->sc_open == 1);
 
 	d_list_for_each_entry(dbpa, &dmi->dmi_dtx_batched_pool_list, dbpa_sys_link) {
 		if (dbpa->dbpa_pool != cont->sc_pool)
