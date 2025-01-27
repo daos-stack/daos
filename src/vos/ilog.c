@@ -1596,15 +1596,15 @@ ilog_is_valid(struct umem_instance *umm, umem_off_t rec, uint32_t dtx_lid, daos_
 	if (root->lr_tree.it_embedded) {
 		id = &root->lr_id;
 		return (id->id_tx_id == dtx_lid && id->id_epoch == epoch);
-	} else {
-		array = umem_off2ptr(umm, root->lr_tree.it_root);
-		for (int i = 0; i < array->ia_len; ++i) {
-			id = &array->ia_id[i];
-			if (id->id_tx_id == dtx_lid && id->id_epoch == epoch) {
-				return true;
-			}
-		}
-
-		return false;
 	}
+
+	array = umem_off2ptr(umm, root->lr_tree.it_root);
+	for (int i = 0; i < array->ia_len; ++i) {
+		id = &array->ia_id[i];
+		if (id->id_tx_id == dtx_lid && id->id_epoch == epoch) {
+			return true;
+		}
+	}
+
+	return false;
 }
