@@ -4218,8 +4218,8 @@ out_map_version:
 	}
 
 	if ((rc == 0) && (query_bits & DAOS_PO_QUERY_SPACE))
-		rc = pool_space_query_bcast(rpc->cr_ctx, svc, in->pci_op.pi_hdl, &out->pco_space,
-					    NULL);
+		rc = pool_space_query_bcast(dss_get_module_info()->dmi_ctx, svc, in->pci_op.pi_hdl,
+					    &out->pco_space, NULL);
 
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
@@ -4346,8 +4346,7 @@ pool_disconnect_hdls(struct rdb_tx *tx, struct pool_svc *svc, uuid_t *hdl_uuids,
 	 * TODO: Send POOL_TGT_CLOSE_CONTS and somehow retry until every
 	 * container service has responded (through ds_pool).
 	 */
-	rc = ds_cont_close_by_pool_hdls(svc->ps_uuid, hdl_uuids, n_hdl_uuids,
-					ctx);
+	rc = ds_cont_close_by_pool_hdls(svc->ps_uuid, hdl_uuids, n_hdl_uuids);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -4436,7 +4435,7 @@ pool_disconnect_handler(crt_rpc_t *rpc, int handler_version)
 	}
 
 	rc = pool_disconnect_hdls(&tx, svc, &pdi->pdi_op.pi_hdl,
-				  1 /* n_hdl_uuids */, rpc->cr_ctx);
+				  1 /* n_hdl_uuids */, dss_get_module_info()->dmi_ctx);
 	if (rc != 0)
 		goto out_commit;
 
@@ -5189,8 +5188,8 @@ out_lock:
 	if (query_bits & DAOS_PO_QUERY_SPACE) {
 		uint64_t *mem_file_bytes = handler_version >= 7 ? &out->pqo_mem_file_bytes : NULL;
 
-		rc = pool_space_query_bcast(rpc->cr_ctx, svc, in->pqi_op.pi_hdl, &out->pqo_space,
-					    mem_file_bytes);
+		rc = pool_space_query_bcast(dss_get_module_info()->dmi_ctx, svc, in->pqi_op.pi_hdl,
+					    &out->pqo_space, mem_file_bytes);
 		if (unlikely(rc))
 			goto out_svc;
 
@@ -5336,7 +5335,8 @@ pool_query_info_handler(crt_rpc_t *rpc, int handler_version)
 	if (tgt_state == PO_COMP_ST_UPIN) {
 		uint64_t *mem_file_bytes = handler_version >= 7 ? &out->pqio_mem_file_bytes : NULL;
 
-		rc = pool_query_tgt_space(rpc->cr_ctx, svc, in->pqii_op.pi_hdl, rank, tgt,
+		rc = pool_query_tgt_space(dss_get_module_info()->dmi_ctx, svc, in->pqii_op.pi_hdl,
+					  rank, tgt,
 					  &out->pqio_space, mem_file_bytes);
 		if (rc)
 			DL_ERROR(rc, DF_UUID ": Failed to query rank:%u, tgt:%d",
@@ -5608,7 +5608,7 @@ pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc, uuid_t pool_uuid, cr
 
 	if (n_hdl_uuids > 0) {
 		rc = pool_disconnect_hdls(tx, svc, hdl_uuids, n_hdl_uuids,
-					  rpc->cr_ctx);
+					  dss_get_module_info()->dmi_ctx);
 		if (rc != 0)
 			D_GOTO(out_free, rc);
 		need_commit = true;
@@ -7507,7 +7507,7 @@ pool_update_handler(crt_rpc_t *rpc, int handler_version)
 
 	if (opc_get(rpc->cr_opc) == POOL_REINT &&
 	    svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_DATA_SYNC) {
-		rc = pool_discard(rpc->cr_ctx, svc, &list);
+		rc = pool_discard(dss_get_module_info()->dmi_ctx, svc, &list);
 		if (rc)
 			goto out_svc;
 	}
@@ -7819,7 +7819,7 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 				rc = 0; /* unrealistic */
 			else
 				rc = pool_disconnect_hdls(&tx, svc, hdl_uuids, n_hdl_uuids,
-							  rpc->cr_ctx);
+							  dss_get_module_info()->dmi_ctx);
 			if (rc != 0) {
 				goto out_free;
 			} else {
