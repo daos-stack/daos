@@ -338,7 +338,7 @@ the path must include the extent, otherwise, it must not.`,
 		Name:      "dtx_act_discard_invalid",
 		Aliases:   nil,
 		Help:      "Discard the active DTX entry's records if invalid.",
-		LongHelp:  "Committing or aborting the DTX entry with discarded records may result in inconsistencies. Allow DTX to resync instead.",
+		LongHelp:  "",
 		HelpGroup: "vos",
 		Args: func(a *grumble.Args) {
 			a.String("path", "VOS tree path to a container.")
