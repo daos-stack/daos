@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1833,12 +1834,12 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 			goto skip_check;
 	}
 
-	if ((self_rank != CRT_NO_RANK && self_rank != rpc_priv->crp_req_hdr.cch_dst_rank) ||
-	    crt_ctx->cc_idx != rpc_priv->crp_req_hdr.cch_dst_tag) {
+	if ((self_rank != CRT_NO_RANK && self_rank != *(rpc_priv->crp_header.p_dst_rank)) ||
+	    crt_ctx->cc_idx != *(rpc_priv->crp_header.p_dst_tag)) {
 		D_ERROR("Mismatch rpc: %p opc: %x rank:%d tag:%d "
 			"self:%d cc_idx:%d ep_rank:%d ep_tag:%d\n",
-			rpc_priv, rpc_priv->crp_pub.cr_opc, rpc_priv->crp_req_hdr.cch_dst_rank,
-			rpc_priv->crp_req_hdr.cch_dst_tag, self_rank, crt_ctx->cc_idx,
+			rpc_priv, rpc_priv->crp_pub.cr_opc, *rpc_priv->crp_header.p_dst_rank,
+			*rpc_priv->crp_header.p_dst_tag, self_rank, crt_ctx->cc_idx,
 			rpc_priv->crp_pub.cr_ep.ep_rank, rpc_priv->crp_pub.cr_ep.ep_tag);
 
 		D_GOTO(out, rc = -DER_BAD_TARGET);

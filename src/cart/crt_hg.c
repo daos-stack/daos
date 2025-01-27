@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -426,14 +427,6 @@ crt_provider_ctx0_port_get(bool primary, crt_provider_t provider)
 	return prov_data->cpg_na_config.noc_port;
 }
 
-static char *
-crt_provider_domain_get(bool primary, int provider)
-{
-	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(primary, provider);
-
-	return prov_data->cpg_na_config.noc_domain;
-}
-
 static struct crt_na_dict *
 crt_get_na_dict_entry(crt_provider_t provider)
 {
@@ -455,6 +448,7 @@ crt_provider_name_get(crt_provider_t provider)
 
 	return entry ? entry->nad_str : NULL;
 }
+
 char *
 crt_provider_domain_str_get(bool primary, crt_provider_t provider, int idx)
 {
@@ -674,39 +668,21 @@ crt_get_info_string(bool primary, crt_provider_t provider, int iface_idx,
 
 	/* Special case OPX for now */
 	if (provider == CRT_PROV_OFI_OPX) {
-		rc = crt_get_opx_info_string(provider_str, domain_str, ip_str, string, start_port,
-					     ctx_idx);
+		rc = crt_get_opx_info_string(provider_str, domain_str, iface_str,
+					     string, start_port, ctx_idx);
 		D_GOTO(out, rc);
 	}
 
-	/* TODO: for now pass same info for all providers including CXI */
-	if (crt_provider_is_contig_ep(provider) && start_port != -1) {
-		if (ip_str == NULL) {
-			if (domain_str)
-				D_ASPRINTF(*string, "%s://%s:%d", provider_str, domain_str,
-					   start_port + ctx_idx);
-			else
-				D_ASPRINTF(*string, "%s://:%d", provider_str, start_port + ctx_idx);
-		} else {
-			if (domain_str)
-				D_ASPRINTF(*string, "%s://%s/%s:%d", provider_str, domain_str,
-					   ip_str, start_port + ctx_idx);
-			else
-				D_ASPRINTF(*string, "%s://%s:%d", provider_str, ip_str,
-					   start_port + ctx_idx);
-		}
-	} else {
-		if (ip_str == NULL) {
-			if (domain_str)
-				D_ASPRINTF(*string, "%s://%s", provider_str, domain_str);
-			else
-				D_ASPRINTF(*string, "%s://", provider_str);
-		} else {
-			if (domain_str)
-				D_ASPRINTF(*string, "%s://%s/%s", provider_str, domain_str, ip_str);
-			else
-				D_ASPRINTF(*string, "%s://%s", provider_str, ip_str);
-		}
+	size = strlen(provider_str);
+	if (domain_str)
+		size += strlen(domain_str);
+	if (iface_str)
+		size += strlen(iface_str);
+
+	/* Sanity check to not exceed tmp[] string with strcat()s later on */
+	if (size >= 250) {
+		D_ERROR("info string too large\n");
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	/* Format is <provider>://[domain/][interface][:port] */
@@ -842,7 +818,7 @@ crt_hg_class_init(crt_provider_t provider, int ctx_idx, bool primary, int iface_
 	int                    rc = DER_SUCCESS;
 
 	prov_data = crt_get_prov_gdata(primary, provider);
-	rc        = crt_get_info_string(primary, provider, &info_string, idx);
+	rc        = crt_get_info_string(primary, provider, iface_idx, &info_string, ctx_idx);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -896,7 +872,8 @@ crt_hg_class_init(crt_provider_t provider, int ctx_idx, bool primary, int iface_
 
 	rc = crt_hg_reg_rpcid(hg_class);
 	if (rc != 0) {
-		D_ERROR("crt_hg_reg_rpcid() for prov=%d idx=%d failed; rc=%d\n", provider, idx, rc);
+		D_ERROR("crt_hg_reg_rpcid() for prov=%d idx=%d failed; rc=%d\n",
+			provider, ctx_idx, rc);
 		HG_Finalize(hg_class);
 		D_GOTO(out, rc);
 	}
