@@ -2300,8 +2300,8 @@ class DaosContext():
         ctypes.CDLL(os.path.join(path, 'libdaos_common.so'),
                     mode=ctypes.RTLD_GLOBAL)
 
-        self.libtest = ctypes.CDLL(os.path.join(path, 'libdaos_tests.so'),
-                                   mode=ctypes.DEFAULT_MODE)
+        # self.libtest = ctypes.CDLL(os.path.join(path, 'libdaos_tests.so'),
+        #                            mode=ctypes.DEFAULT_MODE)
         # Note: action-subject format
         self.ftable = {
             'close-cont':      self.libdaos.daos_cont_close,
@@ -2316,7 +2316,7 @@ class DaosContext():
             'create-cont':     self.libdaos.daos_cont_create,
             'create-eq':       self.libdaos.daos_eq_create,
             'create-snap':     self.libdaos.daos_cont_create_snap,
-            'd_log':           self.libtest.dts_log,
+            # 'd_log':           self.libtest.dts_log,
             'destroy-cont':    self.libdaos.daos_cont_destroy,
             'destroy-eq':      self.libdaos.daos_eq_destroy,
             'destroy-snap':    self.libdaos.daos_cont_destroy_snap,
@@ -2352,8 +2352,8 @@ class DaosContext():
             'set-pool-attr':   self.libdaos.daos_pool_set_attr,
             'stop-service':    self.libdaos.daos_pool_stop_svc,
             'test-event':      self.libdaos.daos_event_test,
-            'update-obj':      self.libdaos.daos_obj_update,
-            'oid_gen':         self.libtest.dts_oid_gen}
+            'update-obj':      self.libdaos.daos_obj_update}
+            # 'oid_gen':         self.libtest.dts_oid_gen}
 
     def get_function(self, function):
         """Call a function through the API."""
@@ -2391,6 +2391,7 @@ class DaosLog:
 
     def daos_log(self, msg, level):
         """Write specified message to client daos.log."""
+        return
         func = self.context.get_function("d_log")
 
         caller = inspect.getframeinfo(inspect.stack()[2][0])
