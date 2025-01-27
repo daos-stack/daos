@@ -591,8 +591,8 @@ with the following information for each pool:
 - The imbalance percentage indicating whether data distribution across
   the difference storage targets is well balanced. 0% means that there is
   no imbalance and 100% means that out-of-space errors might be returned
-  by some storage targets while space is still available on others. Again
-  for the NVMe or DATA tier.
+  by some storage targets while space is still available on others. Applies
+  only for the NVMe or DATA tier.
 - The number of disabled targets (0 here) and the number of targets that
   the pool was originally configured with (total).
 
@@ -698,25 +698,25 @@ The example below shows a rebuild in progress and NVMe space allocated.
     Rebuild busy, 75 objs, 9722 recs
 ```
 
-After experiencing significant failures, the pool may retain some suspect
+After experiencing significant failures, the pool may retain some "dead"
 engines that have been marked as DEAD by the SWIM protocol but were not excluded
 from the pool to prevent potential data inconsistency. An administrator can bring
 these engines back online by restarting them. The example below illustrates the
-system’s status with suspect and disabled engines.
+system’s status with dead and disabled engines.
 
 ```bash
 $ dmg pool query tank -t
 ```
 
 NB: The --health-only/-t option is necessary to conduct pool health-related queries only.
-This is important because suspect ranks may cause commands to hang and timeout so identifying
+This is important because dead ranks may cause commands to hang and timeout so identifying
 and restarting them is a useful procedure.
 
 ```bash
 Pool 6f450a68-8c7d-4da9-8900-02691650f6a2, ntarget=8, disabled=2, leader=3, version=4, state=Degraded
     Pool health info:
     - Disabled ranks: 1
-    - Suspect ranks: 2
+    - Dead ranks: 2
     - Rebuild busy, 0 objs, 0 recs
 ```
 
@@ -1053,10 +1053,12 @@ automatically adjusted.
 
 #### Reintegration mode (reintegration)
 
-This property controls how reintegration will recover data. Two options are supported:
-"data_sync" (default strategy) and "no_data_sync". with "data_sync", reintegration will
-discard pool data and trigger rebuild to sync data. While with "no_data_sync", reintegration
-only updates pool map to include rank.
+This property controls how reintegration will recover data. Three options are supported:
+"data_sync" (default strategy) and "no_data_sync", "incremental". with "data_sync", reintegration
+will discard pool data and trigger rebuild to sync data. With "no_data_sync", reintegration only
+updates pool map to include rank. While with "incremental", reintegration will not discard pool
+data but will trigger rebuild to sync data only beyond global stable epoch, the reintegration is
+incremental as old data below global stable epoch need not to be migrated.
 
 NB: with "no_data_sync" enabled, containers will be turned to read-only, daos won't trigger
 rebuild to restore the pool data redundancy on the surviving storage engines if there are
@@ -1235,6 +1237,13 @@ The pool target exclude command accepts 2 parameters:
 Upon successful manual exclusion, the self-healing mechanism will be triggered
 to restore redundancy on the remaining engines.
 
+!!! note
+    Exclusion may compromise the Pool Redundancy Factor (RF), potentially leading
+    to data loss. If this is the case, the command will refuse to perform the exclusion
+    and return the error code -DER_RF. You can proceed with the exclusion by specifying
+    the --force option. Please note that forcing the operation may result in data loss,
+    and it is strongly recommended to verify the RF status before proceeding.
+
 ### Drain
 
 Alternatively, when an operator would like to remove one or more engines or
@@ -1259,6 +1268,23 @@ The pool target drain command accepts 2 parameters:
 
 * The engine rank of the target(s) to be drained.
 * The target indices of the targets to be drained from that engine rank (optional).
+
+#### System Drain
+
+To drain ranks or hosts from all pools that they belong to, the 'dmg system drain'
+command can be used. The command takes either a host-set or rank-set:
+
+To drain a set of hosts from all pools (drains all ranks on selected hosts):
+
+```Bash
+$ dmg system drain --rank-hosts foo-[001-100]
+```
+
+To drain a set of ranks from all pools:
+
+```Bash
+$ dmg system drain --ranks 1-100
+```
 
 ### Reintegration
 

@@ -1,5 +1,6 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -103,7 +104,7 @@ Ranks Action Result
 			}
 
 			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
-				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)
+				t.Fatalf("unexpected string output (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
@@ -357,7 +358,7 @@ Unknown 3 ranks: 7-9
 			}
 
 			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
-				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)
+				t.Fatalf("unexpected string output (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
@@ -451,7 +452,7 @@ Unknown 3 hosts: foo[7-9]
 			}
 
 			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
-				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)
+				t.Fatalf("unexpected string output (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
@@ -606,7 +607,68 @@ Unknown 3 hosts: foo[7-9]
 			}
 
 			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
-				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)
+				t.Fatalf("unexpected string output (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestPretty_PrintPoolRankResults(t *testing.T) {
+	for name, tc := range map[string]struct {
+		results []*control.PoolRankResult
+		expOut  string
+	}{
+		"normal response": {
+			results: []*control.PoolRankResult{
+				{PoolID: test.MockUUID(1), Ranks: "0-3"},
+				{PoolID: test.MockUUID(2), Ranks: "1-4"},
+			},
+			expOut: `
+Pool                                 Ranks Result Reason 
+----                                 ----- ------ ------ 
+00000001-0001-0001-0001-000000000001 0-3   OK     -      
+00000002-0002-0002-0002-000000000002 1-4   OK     -      
+
+`,
+		},
+		"normal response; use labels": {
+			results: []*control.PoolRankResult{
+				{PoolID: "label1", Ranks: "0-3"},
+				{PoolID: "label2", Ranks: "1-4"},
+			},
+			expOut: `
+Pool   Ranks Result Reason 
+----   ----- ------ ------ 
+label1 0-3   OK     -      
+label2 1-4   OK     -      
+
+`,
+		},
+		"response with failures": {
+			results: []*control.PoolRankResult{
+				{PoolID: test.MockUUID(1), Ranks: "1-2"},
+				{PoolID: test.MockUUID(2), Ranks: "0"},
+				{
+					PoolID: test.MockUUID(2), Ranks: "1-2",
+					Status: -1, Msg: "fail1",
+				},
+			},
+			expOut: `
+Pool                                 Ranks Result Reason 
+----                                 ----- ------ ------ 
+00000001-0001-0001-0001-000000000001 1-2   OK     -      
+00000002-0002-0002-0002-000000000002 0     OK     -      
+00000002-0002-0002-0002-000000000002 1-2   FAIL   fail1  
+
+`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var out strings.Builder
+			PrintPoolRankResults(&out, tc.results)
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expOut, "\n"), out.String()); diff != "" {
+				t.Fatalf("unexpected stdout (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

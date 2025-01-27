@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -337,12 +338,13 @@ time_out:
 struct pool_query_arg {
 	d_rank_list_t   **pqa_enabled_ranks;
 	d_rank_list_t   **pqa_disabled_ranks;
-	d_rank_list_t   **pqa_suspect_ranks;
+	d_rank_list_t   **pqa_dead_ranks;
 	daos_pool_info_t *pqa_info;
 	uint32_t         *pqa_layout_ver;
 	uint32_t         *pqa_upgrade_layout_ver;
 	crt_bulk_t        pqa_bulk;
 	struct pool_buf  *pqa_map_buf;
+	uint64_t	 *pqa_mem_file_bytes;
 	uint32_t          pqa_map_size;
 };
 
@@ -369,7 +371,7 @@ pool_query_init(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 }
 
 static int
-pool_map_get_suspect_ranks(struct pool_map *map, d_rank_list_t **ranks)
+pool_map_get_dead_ranks(struct pool_map *map, d_rank_list_t **ranks)
 {
 	crt_group_t        *primary_grp;
 	struct pool_domain *doms;
@@ -418,7 +420,7 @@ err:
 
 static int
 process_query_result(d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ranks,
-		     d_rank_list_t **suspect_ranks, daos_pool_info_t *info, uuid_t pool_uuid,
+		     d_rank_list_t **dead_ranks, daos_pool_info_t *info, uuid_t pool_uuid,
 		     uint32_t map_version, uint32_t leader_rank, struct daos_pool_space *ps,
 		     struct daos_rebuild_status *rs, struct pool_buf *map_buf, uint64_t pi_bits)
 {
@@ -426,7 +428,7 @@ process_query_result(d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ran
 	unsigned int     num_disabled       = 0;
 	d_rank_list_t   *enabled_rank_list  = NULL;
 	d_rank_list_t   *disabled_rank_list = NULL;
-	d_rank_list_t   *suspect_rank_list  = NULL;
+	d_rank_list_t   *dead_rank_list     = NULL;
 	int              rc;
 
 	rc = pool_map_create(map_buf, map_version, &map);
@@ -474,21 +476,21 @@ process_query_result(d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ran
 		D_DEBUG(DB_MD, DF_UUID ": found %" PRIu32 " disabled ranks in pool map\n",
 			DP_UUID(pool_uuid), disabled_rank_list->rl_nr);
 	}
-	if ((pi_bits & DPI_ENGINES_SUSPECT) != 0) {
-		if (suspect_ranks == NULL) {
+	if ((pi_bits & DPI_ENGINES_DEAD) != 0) {
+		if (dead_ranks == NULL) {
 			DL_ERROR(-DER_INVAL,
-				 DF_UUID ": query pool requested suspect ranks, but ptr is NULL",
+				 DF_UUID ": query pool requested dead ranks, but ptr is NULL",
 				 DP_UUID(pool_uuid));
 			D_GOTO(error, rc = -DER_INVAL);
 		}
 
-		rc = pool_map_get_suspect_ranks(map, &suspect_rank_list);
+		rc = pool_map_get_dead_ranks(map, &dead_rank_list);
 		if (rc != 0) {
 			DL_ERROR(rc, DF_UUID ": pool_map_get_ranks() failed", DP_UUID(pool_uuid));
 			D_GOTO(error, rc);
 		}
-		D_DEBUG(DB_MD, DF_UUID ": found %" PRIu32 " suspect ranks in pool map\n",
-			DP_UUID(pool_uuid), suspect_rank_list->rl_nr);
+		D_DEBUG(DB_MD, DF_UUID ": found %" PRIu32 " dead ranks in pool map\n",
+			DP_UUID(pool_uuid), dead_rank_list->rl_nr);
 	}
 
 	pool_query_reply_to_info(pool_uuid, map_buf, map_version, leader_rank, ps, rs, info);
@@ -497,14 +499,14 @@ process_query_result(d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ran
 		*enabled_ranks = enabled_rank_list;
 	if (disabled_rank_list != NULL)
 		*disabled_ranks = disabled_rank_list;
-	if (suspect_rank_list != NULL)
-		*suspect_ranks = suspect_rank_list;
+	if (dead_rank_list != NULL)
+		*dead_ranks = dead_rank_list;
 	D_GOTO(out, rc = -DER_SUCCESS);
 
 error:
 	d_rank_list_free(disabled_rank_list);
 	d_rank_list_free(enabled_rank_list);
-	d_rank_list_free(suspect_rank_list);
+	d_rank_list_free(dead_rank_list);
 out:
 	if (map != NULL)
 		pool_map_decref(map);
@@ -534,13 +536,15 @@ pool_query_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 	D_DEBUG(DB_MGMT, DF_UUID": Successfully queried pool\n", DP_UUID(pool_uuid));
 
 	rc = process_query_result(
-	    arg->pqa_enabled_ranks, arg->pqa_disabled_ranks, arg->pqa_suspect_ranks, arg->pqa_info,
+	    arg->pqa_enabled_ranks, arg->pqa_disabled_ranks, arg->pqa_dead_ranks, arg->pqa_info,
 	    pool_uuid, out->pqo_op.po_map_version, out->pqo_op.po_hint.sh_rank, &out->pqo_space,
 	    &out->pqo_rebuild_st, arg->pqa_map_buf, arg->pqa_info->pi_bits);
 	if (arg->pqa_layout_ver)
 		*arg->pqa_layout_ver = out->pqo_pool_layout_ver;
 	if (arg->pqa_upgrade_layout_ver)
 		*arg->pqa_upgrade_layout_ver = out->pqo_upgrade_layout_ver;
+	if (arg->pqa_mem_file_bytes)
+		*arg->pqa_mem_file_bytes = out->pqo_mem_file_bytes;
 	if (rc != 0)
 		D_ERROR(DF_UUID": failed to process pool query results, "DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
@@ -572,7 +576,7 @@ static struct dsc_pool_svc_call_cbs pool_query_cbs = {
  * \param[in]		deadline		Unix time deadline in milliseconds
  * \param[out]		enabled_ranks		Optional, storage ranks with enabled targets.
  * \param[out]		disabled_ranks		Optional, storage ranks with disabled ranks.
- * \param[out]		suspect_ranks		Optional, suspect ranks marked as DEAD by the SWIM
+ * \param[out]		dead_ranks		Optional, storage ranks marked as DEAD by the SWIM
  *						protocol, but were not excluded from the system.
  * \param[in][out]	pool_info		Results of the pool query
  * \param[in][out]	pool_layout_ver		Results of the current pool global version
@@ -588,16 +592,18 @@ static struct dsc_pool_svc_call_cbs pool_query_cbs = {
 int
 dsc_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_t deadline,
 		   d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ranks,
-		   d_rank_list_t **suspect_ranks, daos_pool_info_t *pool_info,
-		   uint32_t *pool_layout_ver, uint32_t *upgrade_layout_ver)
+		   d_rank_list_t **dead_ranks, daos_pool_info_t *pool_info,
+		   uint32_t *pool_layout_ver, uint32_t *upgrade_layout_ver,
+		   uint64_t *mem_file_bytes)
 {
 	struct pool_query_arg arg = {
 	    .pqa_enabled_ranks      = enabled_ranks,
 	    .pqa_disabled_ranks     = disabled_ranks,
-	    .pqa_suspect_ranks      = suspect_ranks,
+	    .pqa_dead_ranks         = dead_ranks,
 	    .pqa_info               = pool_info,
 	    .pqa_layout_ver         = pool_layout_ver,
 	    .pqa_upgrade_layout_ver = upgrade_layout_ver,
+	    .pqa_mem_file_bytes     = mem_file_bytes,
 	    .pqa_map_size           = 127 /* 4 KB */
 	};
 
@@ -608,6 +614,7 @@ struct pool_query_target_arg {
 	d_rank_t            pqta_rank;
 	uint32_t            pqta_tgt_idx;
 	daos_target_info_t *pqta_info;
+	uint64_t	   *pqta_mem_file_bytes;
 };
 
 static int
@@ -642,6 +649,8 @@ pool_query_target_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 		arg->pqta_info->ta_space.s_total[i] = out->pqio_space.s_total[i];
 		arg->pqta_info->ta_space.s_free[i]  = out->pqio_space.s_free[i];
 	}
+	if (arg->pqta_mem_file_bytes)
+		*arg->pqta_mem_file_bytes = out->pqio_mem_file_bytes;
 
 	return 0;
 }
@@ -669,12 +678,14 @@ static struct dsc_pool_svc_call_cbs pool_query_target_cbs = {
  */
 int
 dsc_pool_svc_query_target(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_t deadline,
-			  d_rank_t rank, uint32_t tgt_idx, daos_target_info_t *ti)
+			  d_rank_t rank, uint32_t tgt_idx, daos_target_info_t *ti,
+			  uint64_t *mem_file_bytes)
 {
 	struct pool_query_target_arg arg = {
 		.pqta_rank	= rank,
 		.pqta_tgt_idx	= tgt_idx,
-		.pqta_info	= ti
+		.pqta_info	= ti,
+		.pqta_mem_file_bytes = mem_file_bytes
 	};
 
 	if (ti == NULL)
@@ -987,15 +998,19 @@ dsc_pool_svc_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uint64_t deadlin
 struct pool_update_target_state_arg {
 	struct pool_target_addr_list *puta_target_addrs;
 	pool_comp_state_t             puta_state;
+	bool                          puta_skip_rf_check;
 };
 
 static int
 pool_update_target_state_init(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 {
 	struct pool_update_target_state_arg *arg = varg;
+	uint32_t                             flags = 0;
 
+	if (arg->puta_skip_rf_check)
+		flags |= POOL_TGT_UPDATE_SKIP_RF_CHECK;
 	pool_tgt_update_in_set_data(rpc, arg->puta_target_addrs->pta_addrs,
-				    (size_t)arg->puta_target_addrs->pta_number);
+				    (size_t)arg->puta_target_addrs->pta_number, flags);
 	return 0;
 }
 
@@ -1038,12 +1053,11 @@ static struct dsc_pool_svc_call_cbs pool_drain_cbs = {
 int
 dsc_pool_svc_update_target_state(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline,
 				 struct pool_target_addr_list *target_addrs,
-				 pool_comp_state_t state)
+				 pool_comp_state_t state, bool skip_rf_check)
 {
-	struct pool_update_target_state_arg arg = {
-		.puta_target_addrs	= target_addrs,
-		.puta_state		= state
-	};
+	struct pool_update_target_state_arg arg = {.puta_target_addrs  = target_addrs,
+						   .puta_state         = state,
+						   .puta_skip_rf_check = skip_rf_check};
 	struct dsc_pool_svc_call_cbs       *cbs;
 
 	switch (state) {

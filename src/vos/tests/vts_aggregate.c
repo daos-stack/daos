@@ -22,10 +22,9 @@
 
 static bool slow_test;
 
-static void
+static inline void
 cleanup(void)
 {
-	daos_fail_loc_set(DAOS_VOS_GC_CONT_NULL | DAOS_FAIL_ALWAYS);
 	gc_wait();
 }
 
@@ -1314,24 +1313,19 @@ agg_punches_test(void **state, int record_type, bool discard)
 			}
 		}
 	}
-	/** cleanup() sets the flag to assert if there are items in container garbage collection
-	 *  heap which will always be the case for these punch tests.  So let's run garbage
-	 *  collection before cleanup in this case.
-	 */
-	gc_wait();
+
+	cleanup();
 }
 static void
 discard_14(void **state)
 {
 	agg_punches_test(state, DAOS_IOD_SINGLE, true);
-	cleanup();
 }
 
 static void
 discard_15(void **state)
 {
 	agg_punches_test(state, DAOS_IOD_ARRAY, true);
-	cleanup();
 }
 
 static void

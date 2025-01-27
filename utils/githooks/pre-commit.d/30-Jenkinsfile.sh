@@ -1,6 +1,7 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 #  Copyright 2023-2024 Intel Corporation.
+#  Copyright 2025 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -23,9 +24,9 @@ echo "Checking syntax"
 HOST="${HOST:-build.hpdd.intel.com}"
 CURL_VERBOSE=${CURL_VERBOSE:-""}
 CURL_PROXY="${CURL_PROXY:+-x }${CURL_PROXY:-}"
-CURL_OPTS="$CURL_PROXY $CURL_VERBOSE -s"
+CURL_OPTS=("$CURL_PROXY" "$CURL_VERBOSE" -s)
 URL="https://$HOST/pipeline-model-converter/validate"
-if ! output=$(curl $CURL_OPTS -s -X POST -F "jenkinsfile=<${1:-Jenkinsfile}" "$URL"); then
+if ! output=$(curl "${CURL_OPTS[@]}" -s -X POST -F "jenkinsfile=<${1:-Jenkinsfile}" "$URL"); then
     echo "  Failed to access $URL. Skipping"
     exit 0
 fi

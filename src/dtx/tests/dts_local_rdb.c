@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2023-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -45,7 +46,7 @@ ut_rdb_mc(void **state)
 	dts_local_commit(dth);
 	DTS_FETCH_EXISTING(coh, la, DKEY_ID0, test_data_1);
 
-	/** In general re-using the same epoch by consecutive local transactions is discouraged e.g.
+	/** In general reusing the same epoch by consecutive local transactions is discouraged e.g.
 	 * in this case, attempting to punch already existing value will result in undefined
 	 * behavior. Updating already existing values at already used epoch may have also undefined
 	 * consequences in regard to snapshotting and aggregation.

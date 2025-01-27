@@ -418,3 +418,12 @@
    ...
    fun:runtime.persistentalloc
 }
+{
+   DAOS-16866
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:mem_map_get_map_1gb
+   fun:spdk_mem_map_set_translation
+   ...
+}
