@@ -38,6 +38,13 @@ struct ds_pool_svc;
 /* age of an entry in svc_ops KVS before it may be evicted */
 #define DEFAULT_SVC_OPS_ENTRY_AGE_SEC_MAX 300ULL
 
+/* Pool map buffer cache */
+struct ds_pool_map_bc {
+	struct pool_buf *pmc_buf;
+	crt_bulk_t       pmc_bulk;
+	uint32_t         pmc_ref;
+};
+
 /*
  * Pool object
  *
@@ -48,7 +55,8 @@ struct ds_pool {
 	uuid_t			sp_uuid;	/* pool UUID */
 	d_list_t		sp_hdls;
 	ABT_rwlock		sp_lock;
-	struct pool_map		*sp_map;
+	struct pool_map	       *sp_map;
+	struct ds_pool_map_bc  *sp_map_bc;
 	uint32_t		sp_map_version;	/* temporary */
 	uint32_t		sp_ec_cell_sz;
 	uint64_t		sp_reclaim;
