@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1373,8 +1374,6 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 		D_ERROR(DF_C_UOID_DKEY"verify_keys error: "DF_RC"\n",
 			DP_C_UOID_DKEY(orw->orw_oid, &orw->orw_dkey),
 			DP_RC(rc));
-		if (rc == -DER_CSUM)
-			obj_log_csum_err();
 		return rc;
 	}
 
