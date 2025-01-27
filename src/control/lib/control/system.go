@@ -474,7 +474,8 @@ func SystemStop(ctx context.Context, rpcClient UnaryInvoker, req *SystemStopReq)
 		Hosts: req.Hosts.String(),
 		Ranks: req.Ranks.String(),
 		Sys:   req.getSystem(rpcClient),
-		Force: req.Force,
+		// DAOS-16312: Always force stop engine processes.
+		Force: true,
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemStop(ctx, pbReq)
