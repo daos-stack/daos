@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1563,6 +1564,42 @@ rebuild_cont_destroy_and_reintegrate(void **state)
 	reintegrate_single_pool_rank(arg, 5, true);
 }
 
+static void
+rebuild_incr_reint_basic(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oids[OBJ_NR];
+	daos_obj_id_t	update_oids[OBJ_NR];
+	int		rc;
+	int		i;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "reintegration", "incremental");
+	assert_rc_equal(rc, 0);
+	for (i = 0; i < OBJ_NR; i++) {
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0, arg->myrank);
+		oids[i] = dts_oid_set_rank(oids[i], 5);
+	}
+
+	dt_no_punch = true;
+	rebuild_io(arg, oids, OBJ_NR);
+	arg->no_rebuild = 0;
+	rebuild_single_pool_rank(arg, 5, true);
+
+	for (i = 0; i < OBJ_NR; i++)
+		update_oids[i] = daos_test_oid_gen(arg->coh, OC_RP_3GX, 0, 0, arg->myrank);
+	rebuild_io(arg, update_oids, OBJ_NR);
+
+	reintegrate_single_pool_rank(arg, 5, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
+	rebuild_io_verify(arg, update_oids, OBJ_NR);
+
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "reintegration", "data_sync");
+	assert_rc_equal(rc, 0);
+	dt_no_punch = false;
+}
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD0: drop rebuild scan reply",
@@ -1654,6 +1691,9 @@ static const struct CMUnitTest rebuild_tests[] = {
 	  rebuild_delay_and_extend, rebuild_sub_6nodes_rf1_setup, rebuild_sub_teardown},
 	{"REBUILD35: destroy container then reintegrate",
 	  rebuild_cont_destroy_and_reintegrate, rebuild_sub_6nodes_rf1_setup,
+	  rebuild_sub_teardown},
+	{"REBUILD36: basic incremental reintegration",
+	  rebuild_incr_reint_basic, rebuild_sub_6nodes_rf1_setup,
 	  rebuild_sub_teardown},
 };
 
