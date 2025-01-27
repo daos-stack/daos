@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -53,12 +54,12 @@ enum drpc_mgmt_method {
 	DRPC_METHOD_MGMT_POOL_QUERY             = 223,
 	DRPC_METHOD_MGMT_POOL_SET_PROP          = 224,
 	DRPC_METHOD_MGMT_PING_RANK              = 225,
-	DRPC_METHOD_MGMT_REINTEGRATE            = 226,
+	DRPC_METHOD_MGMT_POOL_REINT             = 226,
 	DRPC_METHOD_MGMT_CONT_SET_OWNER         = 227,
-	DRPC_METHOD_MGMT_EXCLUDE                = 228,
-	DRPC_METHOD_MGMT_EXTEND                 = 229,
+	DRPC_METHOD_MGMT_POOL_EXCLUDE           = 228,
+	DRPC_METHOD_MGMT_POOL_EXTEND            = 229,
 	DRPC_METHOD_MGMT_POOL_EVICT             = 230,
-	DRPC_METHOD_MGMT_DRAIN                  = 231,
+	DRPC_METHOD_MGMT_POOL_DRAIN             = 231,
 	DRPC_METHOD_MGMT_GROUP_UPDATE           = 232,
 	DRPC_METHOD_MGMT_NOTIFY_EXIT            = 233,
 	DRPC_METHOD_MGMT_NOTIFY_POOL_CONNECT    = 235,

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -198,11 +199,12 @@ cont_free_internal(struct vos_container *cont)
 		lrua_array_free(cont->vc_dtx_array);
 
 	D_ASSERT(d_list_empty(&cont->vc_dtx_act_list));
+	D_ASSERT(d_list_empty(&cont->vc_dtx_sorted_list));
+	D_ASSERT(d_list_empty(&cont->vc_dtx_unsorted_list));
+	D_ASSERT(d_list_empty(&cont->vc_dtx_reindex_list));
 
 	dbtree_close(cont->vc_btr_hdl);
 
-	if (!d_list_empty(&cont->vc_gc_link))
-		d_list_del(&cont->vc_gc_link);
 	gc_close_cont(cont);
 
 	for (i = 0; i < VOS_IOS_CNT; i++) {
@@ -395,6 +397,9 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 		cont->vc_cmt_dtx_indexed = 0;
 	cont->vc_cmt_dtx_reindex_pos = cont->vc_cont_df->cd_dtx_committed_head;
 	D_INIT_LIST_HEAD(&cont->vc_dtx_act_list);
+	D_INIT_LIST_HEAD(&cont->vc_dtx_sorted_list);
+	D_INIT_LIST_HEAD(&cont->vc_dtx_unsorted_list);
+	D_INIT_LIST_HEAD(&cont->vc_dtx_reindex_list);
 	cont->vc_dtx_committed_count = 0;
 	cont->vc_solo_dtx_epoch = d_hlc_get();
 	rc = gc_open_cont(cont);
@@ -460,6 +465,21 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 			}
 		}
 	}
+
+	/*
+	 * Assign vc_mod_epoch_bound with current HLC, then all former reported local stable
+	 * epoch (without persistently stored) before re-opening the container will be older
+	 * than vc_mod_epoch_bound. It is possible that some modification was started before
+	 * current container reopen (such as for engine restart without related pool service
+	 * down), but related RPC was not forwarded to current engine in time. After current
+	 * engine re-opening the container (shard), it will reject such old modification and
+	 * ask related DTX leader to restart the transaction. It only may affect in-flight IO
+	 * during re-opening container without restarting pool service.
+	 *
+	 * With the assignment, we also do not need to consider former EC/VOS aggregation up
+	 * boundary when reopen the container.
+	 */
+	cont->vc_mod_epoch_bound = d_hlc_get();
 
 	rc = vos_dtx_act_reindex(cont);
 	if (rc != 0) {
@@ -815,3 +835,193 @@ struct vos_iter_ops vos_cont_iter_ops = {
 	.iop_fetch   = cont_iter_fetch,
 	.iop_process  = cont_iter_process,
 };
+
+/*
+ * The local stable epoch can be used to calculate global stable epoch: all the container
+ * shards report each own local stable epoch to some leader who will find out the smallest
+ * one as the global stable epoch and dispatch it to all related container shards.
+ */
+daos_epoch_t
+vos_cont_get_local_stable_epoch(daos_handle_t coh)
+{
+	struct vos_container	*cont;
+	struct vos_dtx_act_ent	*dae;
+	uint64_t		 gap = d_sec2hlc(vos_agg_gap);
+	daos_epoch_t		 epoch = d_hlc_get() - gap;
+
+	cont = vos_hdl2cont(coh);
+	D_ASSERT(cont != NULL);
+
+	/*
+	 * If the oldest (that is at the head of the sorted list) sorted DTX's
+	 * epoch is out of the boundary, then use it as the local stable epoch.
+	 */
+	if (!d_list_empty(&cont->vc_dtx_sorted_list)) {
+		dae = d_list_entry(cont->vc_dtx_sorted_list.next,
+				   struct vos_dtx_act_ent, dae_order_link);
+		if (epoch >= DAE_EPOCH(dae))
+			epoch = DAE_EPOCH(dae) - 1;
+	}
+
+	/*
+	 * It is not easy to know which DTX is the oldest one in the unsorted list.
+	 * The one after the header in the list maybe older than the header. But the
+	 * epoch difference will NOT exceed 'vos_agg_gap' since any DTX with older
+	 * epoch will be rejected (and restart with newer epoch).
+	 *
+	 * So "DAE_EPOCH(header) - vos_agg_gap" can be used to estimate the local
+	 * stable epoch for unsorted DTX entries.
+	 */
+	if (!d_list_empty(&cont->vc_dtx_unsorted_list)) {
+		dae = d_list_entry(cont->vc_dtx_unsorted_list.next,
+				   struct vos_dtx_act_ent, dae_order_link);
+		if (epoch > DAE_EPOCH(dae) - gap)
+			epoch = DAE_EPOCH(dae) - gap;
+	}
+
+	/*
+	 * The historical vos_agg_gap for the DTX entries in the reindex list is unknown.
+	 * We use cont->vc_dtx_reindex_eph_diff to estimate the local stable epoch. That
+	 * may be over-estimated. Usually, the count of re-indexed DTX entries is quite
+	 * limited, and will be purged soon after the container opened (via DTX resync).
+	 * So it will not much affect the local stable epoch calculation.
+	 */
+	if (unlikely(!d_list_empty(&cont->vc_dtx_reindex_list))) {
+		dae = d_list_entry(cont->vc_dtx_reindex_list.next,
+				   struct vos_dtx_act_ent, dae_order_link);
+		if (epoch > DAE_EPOCH(dae) - cont->vc_dtx_reindex_eph_diff)
+			epoch = DAE_EPOCH(dae) - cont->vc_dtx_reindex_eph_diff;
+	}
+
+	/*
+	 * vc_mod_epoch_bound guarantee that no modification with older epoch after last
+	 * reporting local stable epoch can be accepted. So if the new calculated result
+	 * is older, then reuse the former one.
+	 */
+	if (unlikely(epoch < cont->vc_local_stable_epoch))
+		epoch = cont->vc_local_stable_epoch;
+	else
+		cont->vc_local_stable_epoch = epoch;
+
+	/*
+	 * Update vc_mod_epoch_bound to guarantee that on update with older epoch can be
+	 * acceptable after reporting the new local stable epoch. The semantics maybe so
+	 * strict as to a lot of DTX restart.
+	 */
+	if (cont->vc_mod_epoch_bound < epoch) {
+		D_DEBUG(DB_TRACE, "Increase acceptable modification boundary from "
+			DF_X64 " to " DF_X64 " for container " DF_UUID "\n",
+			cont->vc_mod_epoch_bound, epoch, DP_UUID(cont->vc_id));
+		cont->vc_mod_epoch_bound = epoch;
+	}
+
+	return epoch;
+}
+
+/*
+ * The global stable epoch can be used for incremental reintegration: all the modifications
+ * involved in current target (container shard) under the global stable epoch have already
+ * been persistently stored globally, only need to care about the modification with newer
+ * epoch when reintegrate into the system.
+ */
+daos_epoch_t
+vos_cont_get_global_stable_epoch(daos_handle_t coh)
+{
+	struct vos_container	*cont;
+	struct vos_cont_ext_df	*cont_ext;
+	daos_epoch_t		 epoch = 0;
+
+	cont = vos_hdl2cont(coh);
+	D_ASSERT(cont != NULL);
+
+	if (cont->vc_pool->vp_pool_df->pd_version < VOS_POOL_DF_2_8) {
+		D_DEBUG(DB_MD, DF_CONT" return 0 stable epoch for lower pool version %d\n",
+			DP_CONT(cont->vc_pool->vp_pool_df->pd_id, cont->vc_id),
+			cont->vc_pool->vp_pool_df->pd_version);
+		return 0;
+	}
+
+	cont_ext = umem_off2ptr(vos_cont2umm(cont), cont->vc_cont_df->cd_ext);
+	if (cont_ext != NULL)
+		epoch = cont_ext->ced_global_stable_epoch;
+
+	return epoch;
+}
+
+int
+vos_cont_set_global_stable_epoch(daos_handle_t coh, daos_epoch_t epoch)
+{
+	struct umem_instance	*umm;
+	struct vos_container	*cont;
+	struct vos_cont_ext_df	*cont_ext;
+	daos_epoch_t		 old = 0;
+	int			 rc = 0;
+
+	cont = vos_hdl2cont(coh);
+	D_ASSERT(cont != NULL);
+
+	umm = vos_cont2umm(cont);
+	cont_ext = umem_off2ptr(umm, cont->vc_cont_df->cd_ext);
+
+	/* Do not allow to set global stable epoch against old container without extension. */
+	if (cont_ext == NULL)
+		D_GOTO(out, rc = -DER_NOTSUPPORTED);
+
+	/*
+	 * Either the leader gives wrong global stable epoch or current target does not participant
+	 * in the calculating new global stable epoch. Then do not allow to set global stable epoch.
+	 */
+	if (unlikely(epoch > cont->vc_local_stable_epoch)) {
+		D_WARN("Invalid global stable epoch: " DF_X64" > local " DF_X64 " for container "
+		       DF_UUID "\n", epoch, cont->vc_local_stable_epoch, DP_UUID(cont->vc_id));
+		D_GOTO(out, rc = -DER_NO_PERM);
+	}
+
+	if (unlikely(cont_ext->ced_global_stable_epoch > epoch)) {
+		D_WARN("Do not allow to rollback global stable epoch from "
+		       DF_X64" to " DF_X64 " for container " DF_UUID "\n",
+		       cont_ext->ced_global_stable_epoch, epoch, DP_UUID(cont->vc_id));
+		D_GOTO(out, rc = -DER_NO_PERM);
+	}
+
+	if (cont_ext->ced_global_stable_epoch == epoch)
+		D_GOTO(out, rc = 0);
+
+	old = cont_ext->ced_global_stable_epoch;
+	rc = umem_tx_begin(umm, NULL);
+	if (rc == 0) {
+		rc = umem_tx_add_ptr(umm, &cont_ext->ced_global_stable_epoch,
+				     sizeof(cont_ext->ced_global_stable_epoch));
+		if (rc == 0) {
+			cont_ext->ced_global_stable_epoch = epoch;
+			rc = umem_tx_commit(vos_cont2umm(cont));
+		} else {
+			rc = umem_tx_abort(umm, rc);
+		}
+	}
+
+	DL_CDEBUG(rc != 0, DLOG_ERR, DB_MGMT, rc,
+		  "Set global stable epoch from "DF_X64" to " DF_X64 " for container " DF_UUID,
+		  old , epoch, DP_UUID(cont->vc_id));
+
+out:
+	return rc;
+}
+
+int
+vos_cont_set_mod_bound(daos_handle_t coh, uint64_t epoch)
+{
+	struct vos_container	*cont;
+
+	cont = vos_hdl2cont(coh);
+	D_ASSERT(cont != NULL);
+
+	if (cont->vc_mod_epoch_bound < epoch) {
+		D_DEBUG(DB_TRACE, "Increase acceptable modification boundary from "
+			DF_X64 " to " DF_X64 " for container " DF_UUID "\n",
+			cont->vc_mod_epoch_bound, epoch, DP_UUID(cont->vc_id));
+		cont->vc_mod_epoch_bound = epoch;
+	}
+
+	return 0;
+}
