@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2007,6 +2008,8 @@ dfs_test_async_io(void **state)
 	par_barrier(PAR_COMM_WORLD);
 }
 
+#define NUM_ENTS 10
+
 static void
 dfs_test_readdir_internal(void **state, daos_oclass_id_t obj_class)
 {
@@ -2016,9 +2019,9 @@ dfs_test_readdir_internal(void **state, daos_oclass_id_t obj_class)
 	char                    name[24];
 	char                    anchor_name[24];
 	daos_anchor_t		anchor = {0};
-	uint32_t		num_ents = 10;
-	struct dirent		ents[10];
-	struct stat		stbufs[10];
+	uint32_t                 num_ents = NUM_ENTS;
+	struct dirent            ents[NUM_ENTS];
+	struct stat              stbufs[NUM_ENTS];
 	int			num_files = 0;
 	int			num_dirs = 0;
 	int			total_entries = 0;
@@ -2067,7 +2070,7 @@ dfs_test_readdir_internal(void **state, daos_oclass_id_t obj_class)
 			}
 			total_entries++;
 		}
-		num_ents = 10;
+		num_ents = NUM_ENTS;
 	}
 
 	assert_true(num_files == 100);
@@ -2089,7 +2092,7 @@ dfs_test_readdir_internal(void **state, daos_oclass_id_t obj_class)
 				check_first = false;
 			}
 		}
-		num_ents = 10;
+		num_ents = NUM_ENTS;
 	}
 	assert_true(total_entries == 150);
 
@@ -2108,9 +2111,31 @@ dfs_test_readdir_internal(void **state, daos_oclass_id_t obj_class)
 		assert_int_equal(rc, 0);
 		for (i = 0; i < num_ents; i++)
 			total_entries++;
-		num_ents = 10;
+		num_ents = NUM_ENTS;
 	}
 	assert_true(total_entries == 149);
+
+	/** use dfs anchor for readdir anchor stream */
+	dfs_dir_anchor_t *dfs_anchor;
+
+	rc = dfs_dir_anchor_init(dir, &dfs_anchor);
+	assert_int_equal(rc, 0);
+	total_entries = 0;
+
+	while (!dfs_dir_anchor_is_eof(dfs_anchor)) {
+		struct dirent ent;
+
+		rc = dfs_readdir_s(dfs_mt, dir, dfs_anchor, &ent);
+		if (rc == EOF)
+			assert_true(dfs_dir_anchor_is_eof(dfs_anchor));
+		else {
+			assert_int_equal(rc, 0);
+			total_entries++;
+		}
+	}
+
+	assert_true(total_entries == 199);
+	dfs_dir_anchor_destroy(dfs_anchor);
 
 	rc = dfs_release(dir);
 	assert_int_equal(rc, 0);
@@ -3336,62 +3361,45 @@ dfs_test_pipeline_find(void **state)
 }
 
 static const struct CMUnitTest dfs_unit_tests[] = {
-	{ "DFS_UNIT_TEST1: DFS mount / umount",
-	  dfs_test_mount, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST2: DFS container modes",
-	  dfs_test_modes, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST3: DFS lookup / lookup_rel",
-	  dfs_test_lookup, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST4: Simple Symlinks",
-	  dfs_test_syml, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST5: Symlinks with / without O_NOFOLLOW",
-	  dfs_test_syml_follow, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST6: multi-threads read shared file",
-	  dfs_test_read_shared_file, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST7: DFS lookupx",
-	  dfs_test_lookupx, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST8: DFS IO sync error code",
-	  dfs_test_io_error_code, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST9: DFS IO async error code",
-	  dfs_test_io_error_code, async_enable, test_case_teardown},
-	{ "DFS_UNIT_TEST10: multi-threads mkdir same dir",
-	  dfs_test_mt_mkdir, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST11: Simple rename",
-	  dfs_test_rename, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST12: DFS API compat",
-	  dfs_test_compat, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST13: DFS l2g/g2l_all",
-	  dfs_test_handles, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST14: multi-threads connect to same container",
-	  dfs_test_mt_connect, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST15: DFS chown",
-	  dfs_test_chown, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST16: DFS stat mtime",
-	  dfs_test_mtime, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST17: multi-threads async IO",
-	  dfs_test_async_io_th, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST18: async IO",
-	  dfs_test_async_io, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST19: DFS readdir",
-	  dfs_test_readdir, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST20: dfs oclass hints",
-	  dfs_test_oclass_hints, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST21: dfs multiple pools",
-	  dfs_test_multiple_pools, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST22: dfs extended attributes",
-	  dfs_test_xattrs, test_case_teardown},
-	{ "DFS_UNIT_TEST23: dfs MWC container checker",
-	  dfs_test_checker, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST24: dfs MWC SB fix",
-	  dfs_test_fix_sb, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST25: dfs MWC root fix",
-	  dfs_test_relink_root, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST26: dfs MWC chunk size fix",
-	  dfs_test_fix_chunk_size, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST27: dfs pipeline find",
-	  dfs_test_pipeline_find, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST28: dfs open/lookup flags",
-	  dfs_test_oflags, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST1: DFS mount / umount", dfs_test_mount, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST2: DFS container modes", dfs_test_modes, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST3: DFS lookup / lookup_rel", dfs_test_lookup, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST4: Simple Symlinks", dfs_test_syml, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST5: Symlinks with / without O_NOFOLLOW", dfs_test_syml_follow, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST6: multi-threads read shared file", dfs_test_read_shared_file, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST7: DFS lookupx", dfs_test_lookupx, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST8: DFS IO sync error code", dfs_test_io_error_code, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST9: DFS IO async error code", dfs_test_io_error_code, async_enable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST10: multi-threads mkdir same dir", dfs_test_mt_mkdir, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST11: Simple rename", dfs_test_rename, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST12: DFS API compat", dfs_test_compat, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST13: DFS l2g/g2l_all", dfs_test_handles, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST14: multi-threads connect to same container", dfs_test_mt_connect, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST15: DFS chown", dfs_test_chown, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST16: DFS stat mtime", dfs_test_mtime, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST17: multi-threads async IO", dfs_test_async_io_th, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST18: async IO", dfs_test_async_io, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST19: DFS readdir", dfs_test_readdir, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST20: dfs oclass hints", dfs_test_oclass_hints, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST21: dfs multiple pools", dfs_test_multiple_pools, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST22: dfs extended attributes", dfs_test_xattrs, test_case_teardown},
+    {"DFS_UNIT_TEST23: dfs MWC container checker", dfs_test_checker, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST24: dfs MWC SB fix", dfs_test_fix_sb, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST25: dfs MWC root fix", dfs_test_relink_root, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST26: dfs MWC chunk size fix", dfs_test_fix_chunk_size, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST27: dfs pipeline find", dfs_test_pipeline_find, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST28: dfs open/lookup flags", dfs_test_oflags, async_disable, test_case_teardown},
 };
 
 static int
