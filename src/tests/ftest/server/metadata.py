@@ -10,7 +10,7 @@ from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
 from exception_utils import CommandFailure
 from ior_utils import IorCommand
-from job_manager_utils import get_job_manager
+from job_manager_utils import get_job_manager, stop_job_manager
 from thread_manager import ThreadManager
 
 
@@ -270,27 +270,24 @@ class ObjectMetadata(TestWithServers):
                 # create errors.  Once the max has been reached stop the loop.
                 if status:
                     sequential_fail_counter = 0
+                    if in_failure:
+                        self.log.info(
+                            "Container: %d - creation successful after %d sequential 'no space' "
+                            "error(s) [no space -> available]", loop + 1, sequential_fail_counter)
+                        in_failure = False
                 else:
                     sequential_fail_counter += 1
+                    if not in_failure:
+                        self.log.info(
+                            "Container: %d - detected first sequential 'no space' error "
+                            "[available -> no space]", loop + 1)
+                    in_failure = True
+
                 if sequential_fail_counter >= sequential_fail_max:
                     self.log.info(
-                        "Container %d - %d/%d sequential no space "
-                        "container create errors", sequential_fail_counter,
-                        sequential_fail_max, loop)
+                        "Container %d - reached %d/%d sequential 'no space' container create error limit",
+                        loop + 1, sequential_fail_counter, sequential_fail_max)
                     break
-
-                if status and in_failure:
-                    self.log.info(
-                        "Container: %d - no space -> available "
-                        "transition, sequential no space failures: %d",
-                        loop, sequential_fail_counter)
-                    in_failure = False
-                elif not status and not in_failure:
-                    self.log.info(
-                        "Container: %d - available -> no space "
-                        "transition, sequential no space failures: %d",
-                        loop, sequential_fail_counter)
-                    in_failure = True
 
             except TestFail as error:
                 self.log.error(str(error))
@@ -305,17 +302,16 @@ class ObjectMetadata(TestWithServers):
                           self.created_containers_min)
             self.fail("Created too few containers")
         self.log.info(
-            "Successfully created %d / %d containers)", len(self.container), loop)
+            "Successfully created %d containers in %d loops)", len(self.container), loop + 1)
 
         # Phase 2 clean up some containers (expected to succeed)
-        msg = "Cleaning up {} containers after pool is full.".format(num_cont_to_destroy)
+        msg = "Cleaning up {}/{} containers after pool is full.".format(num_cont_to_destroy)
         self.log_step(msg)
         if not self.destroy_num_containers(num_cont_to_destroy):
             self.fail("Fail (unexpected container destroy error)")
 
-        # Do not destroy containers in teardown (destroy pool while metadata rdb is full)
-        for container in self.container:
-            container.skip_cleanup()
+        # Containers not destroyed in teardown (destroy pool while metadata rdb is full) due to
+        # register_cleanup: False test yaml entry
         self.log.info("Leaving pool metadata rdb full (containers will not be destroyed)")
         self.log.info("Test passed")
 
@@ -481,10 +477,12 @@ class ObjectMetadata(TestWithServers):
                 ior_managers[-1].assign_environment(env)
                 ior_managers[-1].verbose = False
 
-                # Disable cleanup methods for all ior commands except the first one. The cleanup
-                # command for one ior command will handle all of the ior commands.
-                if index > 0:
-                    ior_managers[-1].register_cleanup_method = None
+                # Disable cleanup methods for all ior commands.
+                ior_managers[-1].register_cleanup_method = None
+
+                # Manually add one cleanup method for all ior threads
+                if operation == "write" and index > 0:
+                    self.register_cleanup(stop_job_manager, job_manager=ior_managers[-1])
 
                 # Add a thread for these IOR arguments
                 thread_manager.add(
