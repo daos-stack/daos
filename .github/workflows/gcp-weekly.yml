@@ -402,6 +402,7 @@ jobs:
        needs.Functional.result == 'skipped')
     env:
       TARGET: el8
+      REPO_PATH: /scratch/job_repos/daos-stack/job/daos/job/gcp-weekly-${{ github.run_id }}/
       CONFIG_POWER_ONLY: false
       PRAGMA_SUFFIX: -vm
       OPERATIONS_EMAIL: brian.murrell@intel.com
