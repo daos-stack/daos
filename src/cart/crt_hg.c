@@ -584,7 +584,7 @@ crt_provider_get_ctx_idx(bool primary, crt_provider_t provider)
 }
 
 d_list_t *
-crt_provider_get_ctx_list(bool primary, int provider)
+crt_provider_get_ctx_list(bool primary, crt_provider_t provider)
 {
 	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(primary, provider);
 
