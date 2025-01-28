@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -353,6 +354,7 @@ func TestPretty_PrintPoolCreateResp(t *testing.T) {
 					600 * humanize.MByte,
 					10 * humanize.GByte,
 				},
+				MemFileBytes: 300 * humanize.MByte,
 			},
 			expPrintStr: fmt.Sprintf(`
 Pool created with 5.66%%,94.34%% storage tier ratio
@@ -367,7 +369,7 @@ Pool created with 5.66%%,94.34%% storage tier ratio
 
 `, test.MockPoolUUID()),
 		},
-		"basic; md-on-ssd": {
+		"basic; MD-on-SSD": {
 			pcr: &control.PoolCreateResp{
 				UUID:     test.MockUUID(),
 				SvcReps:  mockRanks(0, 1, 2),
@@ -376,7 +378,8 @@ Pool created with 5.66%%,94.34%% storage tier ratio
 					600 * humanize.MByte,
 					10 * humanize.GByte,
 				},
-				MemFileBytes: 300 * humanize.MByte, // Non-zero indicates MD-on-SSD.
+				MemFileBytes:  300 * humanize.MByte,
+				MdOnSsdActive: true,
 			},
 			expPrintStr: fmt.Sprintf(`
 Pool created with 5.66%%,94.34%% storage tier ratio

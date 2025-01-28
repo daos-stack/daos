@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -98,10 +99,8 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
                     "size": self.params.get("total", path="/run/exp_vals/nvme/*")
                 }
             ],
-            "mem_file_bytes": (
-                self.params.get("total", path="/run/exp_vals/scm/*") if
-                self.server_managers[0].manager.job.using_control_metadata else
-                0)
+            "md_on_ssd_active": self.server_managers[0].manager.job.using_control_metadata,
+            "mem_file_bytes": self.params.get("total", path="/run/exp_vals/scm/*"),
         }
 
         self.assertDictEqual(

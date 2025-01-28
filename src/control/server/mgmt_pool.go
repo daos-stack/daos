@@ -483,14 +483,6 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		return nil, err
 	}
 
-	// Zero mem_file_bytes in non-MD-on-SSD mode.
-	if !svc.harness.Instances()[0].GetStorage().BdevRoleMetaConfigured() {
-		resp.MemFileBytes = 0
-	} else {
-		svc.log.Tracef("%T mem_file_bytes: %s (%d)", resp,
-			humanize.Bytes(resp.MemFileBytes), resp.MemFileBytes)
-	}
-
 	if resp.GetStatus() != 0 {
 		if err := svc.sysdb.RemovePoolService(ctx, ps.PoolUUID); err != nil {
 			return nil, err
@@ -970,14 +962,6 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 	// Preserve compatibility with pre-2.6 callers.
 	resp.Leader = resp.SvcLdr
 
-	// Zero mem_file_bytes in non-MD-on-SSD mode.
-	if !svc.harness.Instances()[0].GetStorage().BdevRoleMetaConfigured() {
-		resp.MemFileBytes = 0
-	} else {
-		svc.log.Tracef("%T mem_file_bytes: %s (%d)", resp,
-			humanize.Bytes(resp.MemFileBytes), resp.MemFileBytes)
-	}
-
 	return resp, nil
 }
 
@@ -995,19 +979,6 @@ func (svc *mgmtSvc) PoolQueryTarget(ctx context.Context, req *mgmtpb.PoolQueryTa
 	resp := &mgmtpb.PoolQueryTargetResp{}
 	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
 		return nil, err
-	}
-
-	// Zero mem_file_bytes in non-MD-on-SSD mode.
-	if !svc.harness.Instances()[0].GetStorage().BdevRoleMetaConfigured() {
-		for _, tgtInfo := range resp.Infos {
-			tgtInfo.MemFileBytes = 0
-		}
-	} else {
-		for _, tgtInfo := range resp.Infos {
-			svc.log.Tracef("%T mem_file_bytes: %s (%d)", resp,
-				humanize.Bytes(tgtInfo.MemFileBytes), tgtInfo.MemFileBytes)
-			break
-		}
 	}
 
 	return resp, nil

@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -76,7 +77,7 @@ func getPoolCreateRespRows(tierBytes []uint64, tierRatios []float64, numRanks in
 	return
 }
 
-func getPoolCreateRespRowsMDOnSSD(tierBytes []uint64, tierRatios []float64, numRanks int, memFileBytes uint64) (title string, rows []txtfmt.TableRow) {
+func getPoolCreateRespRowsMdOnSsd(tierBytes []uint64, tierRatios []float64, numRanks int, memFileBytes uint64) (title string, rows []txtfmt.TableRow) {
 	title = "Pool created with "
 	tierName := "Metadata"
 
@@ -137,8 +138,8 @@ func PrintPoolCreateResponse(pcr *control.PoolCreateResp, out io.Writer, opts ..
 
 	var title string
 	var tierRows []txtfmt.TableRow
-	if pcr.MemFileBytes > 0 {
-		title, tierRows = getPoolCreateRespRowsMDOnSSD(pcr.TierBytes, tierRatios, numRanks,
+	if pcr.MdOnSsdActive {
+		title, tierRows = getPoolCreateRespRowsMdOnSsd(pcr.TierBytes, tierRatios, numRanks,
 			pcr.MemFileBytes)
 	} else {
 		title, tierRows = getPoolCreateRespRows(pcr.TierBytes, tierRatios, numRanks)
