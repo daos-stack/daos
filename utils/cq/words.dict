@@ -281,6 +281,7 @@ mca
 mdtest
 mem
 memcheck
+memoryview
 metadata
 mgmt
 middleware

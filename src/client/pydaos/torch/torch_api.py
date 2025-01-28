@@ -382,7 +382,7 @@ class WriteBuffer(io.BufferedIOBase):
     def _submit_chunk(self, offset, chunk):
         """ Submits chunk for writing to the container.
 
-        This is blocking methind, if the queue is bounded (via chunks_limit parameter) and full,
+        This is blocking method, if the queue is bounded (via chunks_limit parameter) and full,
         forcing the caller to wait until some of the chunks are written to the storage.
         """
 
