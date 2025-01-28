@@ -50,9 +50,10 @@ class SysPools():
     # re.compile(r"rebuild_task_ult\(\).*map_dist_ver (\d+) map ver (\d+)")
 
     # Rebuild: PS leader engine starting and status checking a given operation
-    # statuses: "scanning", "pulling", "completed", "aborted"
+    # statuses: "scanning", "pulling", "completed", "aborted", "failed"
     ldr_start_re = "rebuild_leader_start.*" + rbid_re + "$"
-    ldr_status_re = r"rebuild_leader_status_check\(\).*" + rbid_re + r" \[(\w+)\].*duration=(\d+)"
+    ldr_status_re = r"rebuild_leader_status_check\(\).*" + rbid_re + r" \[(\w+)\]" + \
+        r".*status (-?\d+)/(\d+) .*duration=(\d+)"
     ldr_scan_hung_re = r"update_and_warn_for_slow_engines\(\).*" + rbid_re + \
         r".*scan hung.*waiting for (\d+)/(\d+) engines"
     ldr_pull_hung_re = r"update_and_warn_for_slow_engines\(\).*" + rbid_re + \
@@ -94,11 +95,11 @@ class SysPools():
         #
         # rebuild generations dictionary indexed by integer rebuild generation number
         # contains: rebuild operation, start time, duration,
-        #           status(started/completed/aborted/scanning/pulling),
+        #           status(started/completed/aborted/failed/scanning/pulling),
         #           and if any scan or pull hang warnings were logged by PS leader
         # self._pools[puuid][term]["maps"][mapver]["rb_gens"][gen] =
         #  {op, start_time, time, started, scanning, scan_hung, scan_hung_time, scan_num_eng_wait,
-        #   pulling, pull_hung, pull_hung_time, pull_num_eng_wait, completed, aborted, duration}
+        #   pulling, pull_hung, pull_hung_time, pull_num_eng_wait, completed, aborted, failed, dur)
 
     def _create_mapver(self, ver, carryover=False, tm="xx/xx-xx:xx:xx.xx"):
         return {
@@ -112,7 +113,7 @@ class SysPools():
                       started=True, scanning=False, scan_hung=False,
                       scan_hung_time="xx/xx-xx:xx:xx.xx", scan_num_eng_wait=0, pulling=False,
                       pull_hung=False, pull_hung_time="xx/xx-xx:xx:xx.xx", pull_num_eng_wait=0,
-                      completed=False, aborted=False, duration=0):
+                      completed=False, aborted=False, failed=False, fail_rank=-1, rc=0, duration=0):
         return {
             "op": op,
             "start_time": start_time,
@@ -128,6 +129,9 @@ class SysPools():
             "pull_num_eng_wait": pull_num_eng_wait,
             "completed": completed,
             "aborted": aborted,
+            "failed": failed,
+            "fail_rank": fail_rank,
+            "rc": rc,
             "duration": duration
         }
 
@@ -315,9 +319,10 @@ class SysPools():
         return True
 
     def _get_ps_rb_status_components(self, match):
-        # puuid, map version, rebuild-generation, operation, status, duration
+        # puuid, map version, rebuild-generation, operation, status, rc, fail_rank, duration
         # see re_rebuild_ldr_status
-        return self._get_rb_components(match) + (match.group(5), int(match.group(6)))
+        return self._get_rb_components(match) + (match.group(5), int(match.group(6)),
+                                                 int(match.group(7)), int(match.group(8)))
 
     def _match_ps_rb_status(self, fname, line, pid, rank):
         # Do not match on new rebuild log format if we found legacy format
@@ -330,7 +335,7 @@ class SysPools():
 
         # Disable checking for legacy rebuild log format, to save execution time
         self._check_rb_legacy_fmt = False
-        puuid, ver, gen, op, status, dur = self._get_ps_rb_status_components(match)
+        puuid, ver, gen, op, status, rc, fail_rank, dur = self._get_ps_rb_status_components(match)
         if not self._is_leader(puuid, rank, pid):
             return True
         term = self._cur_term[puuid]
@@ -355,11 +360,16 @@ class SysPools():
             self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["completed"] = True
         elif status == "aborted":
             self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["aborted"] = True
+        elif status == "failed":
+            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["failed"] = True
         self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["time"] = datetime
+        self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["rc"] = rc
+        self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["fail_rank"] = fail_rank
         self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["duration"] = dur
         if self._debug:
             print(f"{datetime} FOUND rebuild UPDATE term={term} rb={puuid}/{ver}/{gen}/{op} "
-                  f"STATUS={status}, DUR={dur} seconds rank {rank}\t{host}\tPID {pid}\t{fname}")
+                  f"STATUS={status}, rc={rc}, fail_rank={fail_rank}, DUR={dur} seconds "
+                  f"rank {rank}\t{host}\tPID {pid}\t{fname}")
         return True
 
     def _get_legacy_ps_rb_status_components(self, match):
@@ -408,6 +418,8 @@ class SysPools():
             self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["completed"] = True
         elif status == "aborted":
             self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["aborted"] = True
+        elif status == "failed":
+            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["failed"] = True
         self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["time"] = datetime
         self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["duration"] = dur
         if self._debug:
@@ -536,6 +548,9 @@ class SysPools():
                         pull_num_eng_wait = rd["pull_num_eng_wait"]
                         comp = rd["completed"]
                         abrt = rd["aborted"]
+                        fail = rd["failed"]
+                        fail_rank = rd["failed_rank"]
+                        rc = rd["rc"]
                         st = rd["start_time"]
                         ut = rd["time"]
 
@@ -545,6 +560,8 @@ class SysPools():
                             status = "aborted"
                         elif comp:
                             status = "completed"
+                        elif fail:
+                            status = "failed"
                         elif pull:
                             status = "pulling"
                         elif scan:
@@ -569,9 +586,11 @@ class SysPools():
                         if pull_hung:
                             print(f"{pull_hung_time} {puuid} RBHUNG {v}/{g}/{op} {hung_status}: "
                                   f"{pull_num_eng_wait} engines not done pulling")
-                        updated = scan or pull or comp or abrt
-                        if updated:
+                        if scan or pull or comp:
                             print(f"{ut} {puuid} RBUPDT {v}/{g}/{op} {status} {dur} seconds")
+                        elif abrt or fail:
+                            print(f"{ut} {puuid} RBUPDT {v}/{g}/{op} {status} rc={rc} "
+                                  f"fail_rank={fail_rank} {dur} seconds")
 
                 # Print term end (if there is a PS leader step_down)
                 if e != "":

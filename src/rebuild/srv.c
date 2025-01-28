@@ -326,9 +326,9 @@ rebuild_global_status_update(struct rebuild_global_pool_tracker *rgt,
 {
 	rebuild_leader_set_update_time(rgt, iv->riv_rank);
 
-	D_DEBUG(DB_REBUILD, "iv rank %d scan_done %d pull_done %d resync dtx %u\n",
-		iv->riv_rank, iv->riv_scan_done, iv->riv_pull_done,
-		iv->riv_dtx_resyc_version);
+	D_DEBUG(DB_REBUILD, DF_RB ": iv rank %d scan_done %d pull_done %d resync dtx %u\n",
+			DP_RB_RGT(rgt), iv->riv_rank, iv->riv_scan_done, iv->riv_pull_done,
+			iv->riv_dtx_resyc_version);
 
 	if (!iv->riv_scan_done) {
 		rebuild_leader_set_status(rgt, iv->riv_rank, iv->riv_dtx_resyc_version, 0);
@@ -338,8 +338,7 @@ rebuild_global_status_update(struct rebuild_global_pool_tracker *rgt,
 	if (!is_rebuild_global_scan_done(rgt)) {
 		rebuild_leader_set_status(rgt, iv->riv_rank, iv->riv_dtx_resyc_version,
 					  SCAN_DONE);
-		D_DEBUG(DB_REBUILD, "rebuild ver %d tgt %d scan done\n",
-			rgt->rgt_rebuild_ver, iv->riv_rank);
+		D_DEBUG(DB_REBUILD, DF_RB ": rank %d scan done\n", DP_RB_RGT(rgt), iv->riv_rank);
 		/* If global scan is not done, then you can not trust
 		 * pull status. But if the rebuild on that target is
 		 * failed(riv_status != 0), then the target will report
@@ -350,12 +349,12 @@ rebuild_global_status_update(struct rebuild_global_pool_tracker *rgt,
 			return 0;
 	}
 
-	/* Only trust pull done if scan is done globally */
+	/* Only trust pull done if scan errored or is done globally */
 	if (iv->riv_pull_done) {
-		rebuild_leader_set_status(rgt, iv->riv_rank, iv->riv_dtx_resyc_version,
-					  PULL_DONE);
-		D_DEBUG(DB_REBUILD, "rebuild ver %d tgt %d pull done\n",
-			rgt->rgt_rebuild_ver, iv->riv_rank);
+		rebuild_leader_set_status(rgt, iv->riv_rank, iv->riv_dtx_resyc_version, PULL_DONE);
+		D_DEBUG(DB_REBUILD, DF_RB ": rank %d pull done\n", DP_RB_RGT(rgt), iv->riv_rank);
+		if (iv->riv_status != 0)
+			DL_WARN(iv->riv_status, DF_RB ": rank %u update with failure\n", DP_RB_RGT(rgt));
 	}
 
 	return 0;
