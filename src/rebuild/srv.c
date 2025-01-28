@@ -439,8 +439,8 @@ rebuild_global_status_update(struct rebuild_global_pool_tracker *rgt,
 	rebuild_leader_set_update_time(rgt, iv->riv_rank);
 
 	D_DEBUG(DB_REBUILD, DF_RB ": iv rank %d scan_done %d pull_done %d resync dtx %u\n",
-			DP_RB_RGT(rgt), iv->riv_rank, iv->riv_scan_done, iv->riv_pull_done,
-			iv->riv_dtx_resyc_version);
+		DP_RB_RGT(rgt), iv->riv_rank, iv->riv_scan_done, iv->riv_pull_done,
+		iv->riv_dtx_resyc_version);
 
 	if (!iv->riv_scan_done) {
 		rebuild_leader_set_status(rgt, iv->riv_rank, iv->riv_dtx_resyc_version, 0);
@@ -468,8 +468,8 @@ rebuild_global_status_update(struct rebuild_global_pool_tracker *rgt,
 		rebuild_leader_set_status(rgt, iv->riv_rank, iv->riv_dtx_resyc_version, PULL_DONE);
 		D_DEBUG(DB_REBUILD, DF_RB ": rank %d pull done\n", DP_RB_RGT(rgt), iv->riv_rank);
 		if (iv->riv_status != 0)
-			DL_WARN(iv->riv_status, DF_RB ": rank %u update with failure\n", DP_RB_RGT(rgt),
-					iv->riv_rank);
+			DL_WARN(iv->riv_status, DF_RB ": rank %u update with failure",
+				DP_RB_RGT(rgt), iv->riv_rank);
 	}
 
 	/* test only: update_and_warn_for_slow_engines(rgt); */

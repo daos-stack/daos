@@ -109,30 +109,26 @@ class SysPools():
             "rb_gens": {}
         }
 
-    def _create_rbgen(self, op, start_time="xx/xx-xx:xx:xx.xx", tm="xx/xx-xx:xx:xx.xx",
-                      started=True, scanning=False, scan_hung=False,
-                      scan_hung_time="xx/xx-xx:xx:xx.xx", scan_num_eng_wait=0, pulling=False,
-                      pull_hung=False, pull_hung_time="xx/xx-xx:xx:xx.xx", pull_num_eng_wait=0,
-                      completed=False, aborted=False, failed=False, fail_rank=-1, rc=0, duration=0):
+    def _create_rbgen(self, op, start_time="xx/xx-xx:xx:xx.xx"):
         return {
             "op": op,
             "start_time": start_time,
-            "time": tm,
-            "started": started,
-            "scanning": scanning,
-            "scan_hung": scan_hung,
-            "scan_hung_time": scan_hung_time,
-            "scan_num_eng_wait": scan_num_eng_wait,
-            "pulling": pulling,
-            "pull_hung": pull_hung,
-            "pull_hung_time": pull_hung_time,
-            "pull_num_eng_wait": pull_num_eng_wait,
-            "completed": completed,
-            "aborted": aborted,
-            "failed": failed,
-            "fail_rank": fail_rank,
-            "rc": rc,
-            "duration": duration
+            "time": "xx/xx-xx:xx:xx.xx",
+            "started": True,
+            "scanning": False,
+            "scan_hung": False,
+            "scan_hung_time": "xx/xx-xx:xx:xx.xx",
+            "scan_num_eng_wait": 0,
+            "pulling": False,
+            "pull_hung": False,
+            "pull_hung_time": "xx/xx-xx:xx:xx.xx",
+            "pull_num_eng_wait": 0,
+            "completed": False,
+            "aborted": False,
+            "failed": False,
+            "fail_rank": -1,
+            "rc": 0,
+            "duration": 0
         }
 
     def _warn(self, wmsg, fname, line=None):
@@ -212,7 +208,7 @@ class SysPools():
         }
         if self._debug:
             print(f"{datetime} FOUND pool {puuid} BEGIN\tterm {term} pmap_versions empty: "
-                  f"{str(pmap_versions == {})} rank {rank}\t{host}\tPID {pid}\t{fname}")
+                  f"{str(not pmap_versions)} rank {rank}\t{host}\tPID {pid}\t{fname}")
         return True
 
     def _match_ps_step_down(self, fname, line, pid, rank):
@@ -511,6 +507,8 @@ class SysPools():
             # At logfile end, it could be due to engine killed, or could just be log rotation.
 
     def print_pools(self):
+        # pylint: disable=too-many-locals
+        # pylint: disable=too-many-nested-blocks
         """Print all pools important events found in a nested dictionary"""
 
         # pd (pool dictionary): pool UUID -> td
