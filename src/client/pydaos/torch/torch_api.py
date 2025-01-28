@@ -326,6 +326,8 @@ class WriteBuffer(io.BufferedIOBase):
             self._position += len(data)
             return len(data)
 
+        # Creating memoryview to avoid copying the data on chunking
+        data = memoryview(data)
         written = len(data)
         while len(data) > 0:
             fit = min(len(data), self._transfer_chunk_size - len(self._buffer))
@@ -380,8 +382,8 @@ class WriteBuffer(io.BufferedIOBase):
     def _submit_chunk(self, offset, chunk):
         """ Submits chunk for writing to the container.
 
-        It will block if the queue is full and has a size limit, forcing the caller to wait
-        until some of the chunks are written to the storage.
+        This is blocking methind, if the queue is bounded (via chunks_limit parameter) and full,
+        forcing the caller to wait until some of the chunks are written to the storage.
         """
 
         self._queue.put((offset, chunk))
