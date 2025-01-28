@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -592,7 +593,7 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 
 	RPC_TRACE(DB_NET, rpc_priv,
 		  "complete %s with %zu/%zu updates with %u ms delay. %lu: %lu => %lu "
-		  DF_RC" remote: "DF_RC"\n",
+		  DF_RC " remote: " DF_RC "\n",
 		  SWIM_RPC_TYPE_STR[rpc_type], rpc_in->upds.ca_count,
 		  rpc_out->upds.ca_count, rcv_delay, self_id, from_id, to_id,
 		  DP_RC(cb_info->cci_rc), DP_RC(rpc_out->rc));

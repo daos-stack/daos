@@ -543,7 +543,7 @@ crt_provider_get_max_ctx_num(bool primary, crt_provider_t provider)
 }
 
 struct crt_na_config *
-crt_provider_get_na_config(bool primary, int provider)
+crt_provider_get_na_config(bool primary, crt_provider_t provider)
 {
 	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(primary, provider);
 

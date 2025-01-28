@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -437,7 +438,7 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 	}
 
 	/* Decode header */
-	/* TODO:
+	/* TODO
 	 * This is v0 only header decoding. decode the version first and based on that
 	 * decide which decode function to use */
 	rc = crt_proc_common_hdr_v0(hg_proc, &rpc_priv->crp_header_v0.crp_req_hdr);

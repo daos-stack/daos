@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -538,8 +539,7 @@ crt_rpc_complete_and_unlock(struct crt_rpc_priv *rpc_priv, int rc)
 				  "failed, " DF_RC "\n", DP_RC(cbinfo.cci_rc));
 
 		RPC_TRACE(DB_TRACE, rpc_priv,
-			  "Invoking RPC callback (rank %d tag %d) rc: "
-			  DF_RC "\n",
+			  "Invoking RPC callback (rank %d tag %d) rc: " DF_RC "\n",
 			  rpc_priv->crp_pub.cr_ep.ep_rank,
 			  rpc_priv->crp_pub.cr_ep.ep_tag,
 			  DP_RC(cbinfo.cci_rc));

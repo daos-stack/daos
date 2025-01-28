@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -650,6 +651,7 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 			   DP_RC(rc));
 		co_info->co_rc = rc;
 	}
+
 	/* propagate failure rc to parent */
 	if (*child_rpc_priv->crp_header.p_rc != 0)
 		crt_corpc_fail_parent_rpc(parent_rpc_priv,
