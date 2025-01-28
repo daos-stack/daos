@@ -177,7 +177,7 @@ func (cmd *systemEraseCmd) Execute(_ []string) error {
 // systemStopCmd is the struct representing the command to shutdown DAOS system.
 type systemStopCmd struct {
 	baseRankListCmd
-	Force bool `long:"force" description:"Currently ignored"`
+	Force bool `long:"force" description:"Force stop DAOS system members"`
 }
 
 // Execute is run when systemStopCmd activates.
@@ -191,8 +191,7 @@ func (cmd *systemStopCmd) Execute(_ []string) (errOut error) {
 	if err := cmd.validateHostsRanks(); err != nil {
 		return err
 	}
-	// DAOS-16312: Always use force when stopping ranks.
-	req := &control.SystemStopReq{Force: true}
+	req := &control.SystemStopReq{Force: cmd.Force}
 	req.Hosts.Replace(&cmd.Hosts.HostSet)
 	req.Ranks.Replace(&cmd.Ranks.RankSet)
 

@@ -153,7 +153,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system stop with no arguments",
 			"system stop",
 			strings.Join([]string{
-				printRequest(t, &control.SystemStopReq{Force: true}),
+				printRequest(t, &control.SystemStopReq{}),
 			}, " "),
 			nil,
 		},
@@ -169,7 +169,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system stop with single rank",
 			"system stop --ranks 0",
 			strings.Join([]string{
-				printRequest(t, withRanks(&control.SystemStopReq{Force: true}, 0)),
+				printRequest(t, withRanks(&control.SystemStopReq{}, 0)),
 			}, " "),
 			nil,
 		},
@@ -177,8 +177,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system stop with multiple ranks",
 			"system stop --ranks 0,1,4",
 			strings.Join([]string{
-				printRequest(t,
-					withRanks(&control.SystemStopReq{Force: true}, 0, 1, 4)),
+				printRequest(t, withRanks(&control.SystemStopReq{}, 0, 1, 4)),
 			}, " "),
 			nil,
 		},
@@ -186,9 +185,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system stop with multiple hosts",
 			"system stop --rank-hosts bar9,foo-[0-100]",
 			strings.Join([]string{
-				printRequest(t,
-					withHosts(&control.SystemStopReq{Force: true},
-						"foo-[0-100]", "bar9")),
+				printRequest(t, withHosts(&control.SystemStopReq{}, "foo-[0-100]", "bar9")),
 			}, " "),
 			nil,
 		},

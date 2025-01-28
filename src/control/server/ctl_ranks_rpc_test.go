@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -279,7 +280,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 		},
 		"instances successfully stopped": {
 			req:            &ctlpb.RanksReq{Ranks: "0-3"},
-			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGINT, 1: syscall.SIGINT},
+			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGKILL, 1: syscall.SIGKILL},
 			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msStopped},
 				{Rank: 2, State: msStopped},
@@ -296,7 +297,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 		"instances not stopped in time": {
 			req:               &ctlpb.RanksReq{Ranks: "0-3"},
 			timeout:           time.Second,
-			expSignalsSent:    map[uint32]os.Signal{0: syscall.SIGINT, 1: syscall.SIGINT},
+			expSignalsSent:    map[uint32]os.Signal{0: syscall.SIGKILL, 1: syscall.SIGKILL},
 			instancesDontStop: true,
 			expErr:            errors.New("deadline exceeded"),
 		},
