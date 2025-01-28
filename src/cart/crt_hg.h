@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -37,6 +38,9 @@
 struct crt_rpc_priv;
 struct crt_common_hdr;
 struct crt_corpc_hdr;
+struct crt_rpc_header_v0;
+struct crt_rpc_header_v1;
+struct crt_rpc_header_internal;
 
 /**
  * Enumeration specifying providers supported by the library
@@ -131,8 +135,8 @@ int crt_hg_init(void);
 int crt_hg_fini(void);
 int crt_hg_ctx_init(struct crt_hg_context *hg_ctx, crt_provider_t provider, int ctx_idx, bool primary, int iface_idx);
 int crt_hg_ctx_fini(struct crt_hg_context *hg_ctx);
-int crt_hg_req_create(struct crt_hg_context *hg_ctx,
-		      struct crt_rpc_priv *rpc_priv);
+int
+     crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv);
 void crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv);
 void crt_hg_req_send(struct crt_rpc_priv *rpc_priv);
 int crt_hg_reply_send(struct crt_rpc_priv *rpc_priv);
@@ -145,8 +149,8 @@ int crt_hg_get_addr(hg_class_t *hg_class, char *addr_str, size_t *str_size);
 int crt_rpc_handler_common(hg_handle_t hg_hdl);
 
 /* crt_hg_proc.c */
-int crt_hg_unpack_header(hg_handle_t hg_hdl, struct crt_rpc_priv *rpc_priv,
-			 crt_proc_t *proc);
+int
+	  crt_hg_unpack_header(hg_handle_t hg_hdl, struct crt_rpc_priv *rpc_priv, crt_proc_t *proc);
 void crt_hg_header_copy(struct crt_rpc_priv *in, struct crt_rpc_priv *out);
 void crt_hg_unpack_cleanup(crt_proc_t proc);
 int crt_hg_unpack_body(struct crt_rpc_priv *rpc_priv, crt_proc_t proc);
@@ -166,9 +170,8 @@ int crt_provider_get_max_ctx_num(bool primary, crt_provider_t provider);
 d_list_t *crt_provider_get_ctx_list(bool primary, crt_provider_t provider);
 void crt_provider_get_ctx_list_and_num(bool primary, crt_provider_t provider, d_list_t **list, int *num);
 char* crt_provider_iface_str_get(bool primary, crt_provider_t provider, int iface_idx);
-struct crt_na_config*
+struct crt_na_config *
 crt_provider_get_na_config(bool primary, crt_provider_t provider);
-
 
 static inline int
 crt_hgret_2_der(int hg_ret)
