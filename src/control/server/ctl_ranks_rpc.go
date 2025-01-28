@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,10 +9,10 @@ package server
 
 import (
 	"context"
-	"syscall"
 	"time"
 
 	"github.com/pkg/errors"
+	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
@@ -167,10 +168,11 @@ func (svc *ControlService) StopRanks(ctx context.Context, req *ctlpb.RanksReq) (
 		return nil, errors.New("no ranks specified in request")
 	}
 
-	signal := syscall.SIGINT
-	if req.Force {
-		signal = syscall.SIGKILL
-	}
+	// DAOS-16312 NOTE: SIGINT or SIGTERM are more traditional signals to use to terminate *nix
+	//                  processes as they allow the processes to perform cleanup tasks before
+	//                  shutdown. SIGKILL is now being used to avoid potential data loss issues
+	//                  related to problems in clean shutdown of engines. The rationale maybe
+	//                  similar to how STONITH is used in high-availability systems.
 
 	instances, err := svc.harness.FilterInstancesByRankSet(req.GetRanks())
 	if err != nil {
@@ -185,8 +187,8 @@ func (svc *ControlService) StopRanks(ctx context.Context, req *ctlpb.RanksReq) (
 		if !ei.IsStarted() {
 			continue
 		}
-		if err := ei.Stop(signal); err != nil {
-			return nil, errors.Wrapf(err, "sending %s", signal)
+		if err := ei.Stop(unix.SIGKILL); err != nil {
+			return nil, errors.Wrapf(err, "sending kill signal")
 		}
 	}
 
