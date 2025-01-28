@@ -1,6 +1,6 @@
-avocado-framework==82
-avocado-framework-plugin-result-html==82
-avocado-framework-plugin-varianter-yaml-to-mux==82
+avocado-framework==109.0
+avocado-framework-plugin-result-html==109.0
+avocado-framework-plugin-varianter-yaml-to-mux==109.0
 clustershell
 paramiko
 distro
