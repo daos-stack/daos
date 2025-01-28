@@ -360,11 +360,13 @@ class SysPools():
             self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["completed"] = True
         elif status == "aborted":
             self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["aborted"] = True
+            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["fail_rank"] = fail_rank
         elif status == "failed":
             self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["failed"] = True
+            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["fail_rank"] = fail_rank
+
         self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["time"] = datetime
         self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["rc"] = rc
-        self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["fail_rank"] = fail_rank
         self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["duration"] = dur
         if self._debug:
             print(f"{datetime} FOUND rebuild UPDATE term={term} rb={puuid}/{ver}/{gen}/{op} "
@@ -549,7 +551,7 @@ class SysPools():
                         comp = rd["completed"]
                         abrt = rd["aborted"]
                         fail = rd["failed"]
-                        fail_rank = rd["failed_rank"]
+                        fail_rank = rd["fail_rank"]
                         rc = rd["rc"]
                         st = rd["start_time"]
                         ut = rd["time"]
@@ -586,9 +588,7 @@ class SysPools():
                         if pull_hung:
                             print(f"{pull_hung_time} {puuid} RBHUNG {v}/{g}/{op} {hung_status}: "
                                   f"{pull_num_eng_wait} engines not done pulling")
-                        if scan or pull or comp:
-                            print(f"{ut} {puuid} RBUPDT {v}/{g}/{op} {status} {dur} seconds")
-                        elif abrt or fail:
+                        if scan or pull or comp or abrt or fail:
                             print(f"{ut} {puuid} RBUPDT {v}/{g}/{op} {status} rc={rc} "
                                   f"fail_rank={fail_rank} {dur} seconds")
 
