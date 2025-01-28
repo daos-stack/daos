@@ -269,24 +269,24 @@ class ObjectMetadata(TestWithServers):
                 # Keep track of the number of sequential no space container
                 # create errors.  Once the max has been reached stop the loop.
                 if status:
-                    sequential_fail_counter = 0
                     if in_failure:
                         self.log.info(
-                            "Container: %d - creation successful after %d sequential 'no space' "
-                            "error(s) [no space -> available]", loop + 1, sequential_fail_counter)
+                            "Container: %d - [no space -> available] creation successful after %d"
+                            " sequential 'no space' error(s) ", loop + 1, sequential_fail_counter)
                         in_failure = False
+                    sequential_fail_counter = 0
                 else:
                     sequential_fail_counter += 1
                     if not in_failure:
                         self.log.info(
-                            "Container: %d - detected first sequential 'no space' error "
-                            "[available -> no space]", loop + 1)
+                            "Container: %d - [available -> no space] detected new sequential "
+                            "'no space' error", loop + 1)
                     in_failure = True
 
                 if sequential_fail_counter >= sequential_fail_max:
                     self.log.info(
-                        "Container %d - reached %d/%d sequential 'no space' container create error limit",
-                        loop + 1, sequential_fail_counter, sequential_fail_max)
+                        "Container %d - [no space limit] reached %d/%d sequential 'no space' "
+                        "errors", loop + 1, sequential_fail_counter, sequential_fail_max)
                     break
 
             except TestFail as error:
@@ -311,7 +311,7 @@ class ObjectMetadata(TestWithServers):
         if not self.destroy_num_containers(num_cont_to_destroy):
             self.fail("Fail (unexpected container destroy error)")
 
-        # The remaining containers are not directly destroyed in teardown due to 
+        # The remaining containers are not directly destroyed in teardown due to
         # 'register_cleanup: False' test yaml entry.  They are handled by the pool destroy.
         self.log.info("Leaving pool metadata rdb full (containers will not be destroyed)")
         self.log.info("Test passed")
