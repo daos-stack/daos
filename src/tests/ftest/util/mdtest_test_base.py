@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2020-2025 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -162,7 +162,7 @@ class MdtestBase(TestWithServers):
 
         try:
             if display_space:
-                pool.display_pool_daos_space()
+                pool.display_space()
             out = manager.run()
 
             return out
@@ -175,7 +175,7 @@ class MdtestBase(TestWithServers):
             self.fail("Test was expected to pass but it failed.\n")
         finally:
             if not self.subprocess and display_space:
-                pool.display_pool_daos_space()
+                pool.display_space()
 
         return None
 

@@ -1143,7 +1143,7 @@ class TestGroup():
                 test.extra_yaml.insert(0, engine_storage_yaml[engines])
 
     def _add_launch_param_yaml(self, logger, yaml_dir):
-        """Add extra yaml for multiplexation launch parameter branches.
+        """Add extra yaml for mux launch parameter branches.
 
         Args:
             logger (Logger): logger for the messages produced by this method
