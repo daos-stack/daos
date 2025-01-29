@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -3228,13 +3229,16 @@ btr_node_del_rec(struct btr_context *tcx, struct btr_trace *par_tr,
 static int
 btr_root_del_rec(struct btr_context *tcx, struct btr_trace *trace, void *args)
 {
-	struct btr_node		*node;
-	struct btr_root		*root;
-	int			 rc = 0;
-	int                      threshold = 1;
+	struct btr_node *node      = NULL;
+	struct btr_root *root      = tcx->tc_tins.ti_root;
+	int              rc        = 0;
+	int              threshold = 1;
 
-	root = tcx->tc_tins.ti_root;
-	node = btr_off2ptr(tcx, trace->tr_node);
+	if ((tcx->tc_trace.ti_embedded_info & BTR_EMBEDDED_SET) == 0) {
+		node = btr_off2ptr(tcx, trace->tr_node);
+	} else {
+		D_ASSERT(btr_has_embedded_value(tcx));
+	}
 
 	D_DEBUG(DB_TRACE, "Delete record/child from tree root, depth=%d\n",
 		root->tr_depth);
@@ -3249,24 +3253,32 @@ btr_root_del_rec(struct btr_context *tcx, struct btr_trace *trace, void *args)
 			}
 		}
 
-		if (btr_supports_embedded_value(tcx))
+		if (btr_supports_embedded_value(tcx)) {
+			/* If a tree supports embedded values, the minimal number of keys that must
+			 * exist in an actual tree is 2. Below this threshold, the tree is deleted,
+			 * and the remaining key is stored as embedded. */
 			threshold = 2;
+		}
 
-		/* the root is also a leaf node */
-		if (node->tn_keyn > threshold) {
-			/* have more than one record, simply remove the record
-			 * to be deleted.
-			 */
-			if (btr_has_tx(tcx)) {
-				rc = btr_node_tx_add(tcx, trace->tr_node);
-				if (rc != 0)
-					return rc;
+		if (node != NULL) {
+			/* the root is also a leaf node */
+			if (node->tn_keyn > threshold) {
+				/* have more than one record, simply remove the record
+				 * to be deleted.
+				 */
+				if (btr_has_tx(tcx)) {
+					rc = btr_node_tx_add(tcx, trace->tr_node);
+					if (rc != 0)
+						return rc;
+				}
+
+				rc = btr_node_del_leaf_only(tcx, trace, true, args);
+			} else if (node->tn_keyn == threshold) {
+				rc = btr_node_del_embed(tcx, trace, root, args);
 			}
+		}
 
-			rc = btr_node_del_leaf_only(tcx, trace, true, args);
-		} else if (node->tn_keyn == 2) {
-			rc = btr_node_del_embed(tcx, trace, root, args);
-		} else {
+		if (node == NULL || node->tn_keyn < threshold) {
 			rc = btr_node_destroy(tcx, trace->tr_node, args, NULL);
 			if (rc != 0)
 				return rc;
@@ -3784,9 +3796,9 @@ static int
 btr_node_destroy(struct btr_context *tcx, umem_off_t nd_off,
 		 void *args, bool *empty_rc)
 {
-	struct btr_node *nd	= btr_off2ptr(tcx, nd_off);
+	struct btr_node   *nd;
 	struct btr_record *rec;
-	bool		 leaf	= btr_node_is_leaf(tcx, nd_off);
+	bool               leaf;
 	bool		 empty	= true;
 	int		 rc;
 	int		 i;
@@ -3803,6 +3815,10 @@ btr_node_destroy(struct btr_context *tcx, umem_off_t nd_off,
 		}
 		goto out;
 	}
+
+	/* If it is not an embedded value it is a regular node. */
+	nd   = btr_off2ptr(tcx, nd_off);
+	leaf = btr_node_is_leaf(tcx, nd_off);
 
 	/* NB: don't need to call TX_ADD_RANGE(nd_off, ...) because I never
 	 * change it so nothing to undo on transaction failure, I may destroy
