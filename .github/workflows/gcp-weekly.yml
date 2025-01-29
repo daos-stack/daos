@@ -12,12 +12,8 @@ env:
   GCP_BRANCH: google/2.6
 
 on:
-  # DO NOT LAND THIS! Testing per-PR is for testing only
-  pull_request:
-
-  # schedule:
-  #     # temporarily run more frequently so we can validate it works
-  #     - cron: "0 12 * * 6" # runs every Saturday at 12pm (UTC)
+  schedule:
+    - cron: "0 12 * * 6"  # runs every Saturday at 12pm (UTC)
 
 # shouldn't need this, should only ever have one running at a time. But just in case
 concurrency:
@@ -118,9 +114,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
         with:
-          # DO NOT LAND THIS. This is for testing only
-          ref: ${{ github.event.pull_request.head.sha }}
-          # ref: ${{ env.GCP_BRANCH }}
+          ref: ${{ env.GCP_BRANCH }}
       - name: Build RPM Docker image
         id: build-rpm-docker-image
         continue-on-error: true
@@ -312,17 +306,13 @@ jobs:
         with:
           submodules: true
           fetch-depth: 500
-          # DO NOT LAND THIS. This is for testing only
-          ref: ${{ github.event.pull_request.head.sha }}
-          # ref: ${{ env.GCP_BRANCH }}
+          ref: ${{ env.GCP_BRANCH }}
       - name: Request and Provision a Cluster
         timeout-minutes: 7200
         uses: ./.github/actions/provision-cluster
         with:
           condition: true
-          # DO NOT LAND THIS. This is for testing only
-          ref: ${{ github.event.pull_request.head.sha }}
-          # ref: ${{ env.GCP_BRANCH }}
+          ref: ${{ env.GCP_BRANCH }}
       - name: Run Test
         timeout-minutes: 7200
         id: run-test
@@ -474,17 +464,13 @@ jobs:
         with:
           submodules: true
           fetch-depth: 500
-          # DO NOT LAND THIS. This is for testing only
-          ref: ${{ github.event.pull_request.head.sha }}
-          # ref: ${{ env.GCP_BRANCH }}
+          ref: ${{ env.GCP_BRANCH }}
       - name: Request and Provision a Cluster
         timeout-minutes: 7200
         uses: ./.github/actions/provision-cluster
         with:
           condition: true
-          # DO NOT LAND THIS. This is for testing only
-          ref: ${{ github.event.pull_request.head.sha }}
-          # ref: ${{ env.GCP_BRANCH }}
+          ref: ${{ env.GCP_BRANCH }}
       - name: Run Test
         timeout-minutes: 7200
         id: run-test
