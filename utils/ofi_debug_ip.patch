@@ -1,5 +1,5 @@
 diff --git a/prov/tcp/src/xnet.h b/prov/tcp/src/xnet.h
-index ee16d7e3a..ae3567e1f 100644
+index ee16d7e3a..1ee7d77a6 100644
 --- a/prov/tcp/src/xnet.h
 +++ b/prov/tcp/src/xnet.h
 @@ -754,4 +754,26 @@ int xnet_rdm_ops_open(struct fid *fid, const char *name,
@@ -8,23 +8,23 @@ index ee16d7e3a..ae3567e1f 100644
  
 +#define XNET_OUTPUT_ERR_WARN(ep, err)		\
 +do {						\
-+	struct sockaddr *addr;			\
-+	struct sockaddr *src_addr;		\
-+	char buf[48];				\
-+	char src_buf[48];			\
-+	size_t len = 48;			\
-+	size_t src_len = 48;			\
++	struct sockaddr *_addr;			\
++	struct sockaddr *_src_addr;		\
++	char _buf[48];				\
++	char _src_buf[48];			\
++	size_t _len = 48;			\
++	size_t _src_len = 48;			\
 +						\
 +	if (ep == NULL)				\
 +		break;				\
 +						\
-+	addr = &ep->srx->rdm->addr.sa;		\
-+	src_addr = &ep->peer->addr.sa;		\
-+	ofi_straddr(buf, &len, ofi_translate_addr_format(ofi_sa_family(addr)), addr);		\
-+	ofi_straddr(src_buf, &src_len, ofi_translate_addr_format(ofi_sa_family(src_addr)),	\
-+		    src_addr);									\
++	_addr = &ep->srx->rdm->addr.sa;		\
++	_src_addr = &ep->peer->addr.sa;		\
++	ofi_straddr(_buf, &_len, ofi_translate_addr_format(ofi_sa_family(_addr)), _addr);	\
++	ofi_straddr(_src_buf, &_src_len, ofi_translate_addr_format(ofi_sa_family(_src_addr)),	\
++		    _src_addr);									\
 +												\
-+	FI_WARN(&xnet_prov, FI_LOG_EP_CTRL, "error on %s From %s : %s\n", buf, src_buf,		\
++	FI_WARN(&xnet_prov, FI_LOG_EP_CTRL, "error on %s From %s : %s\n", _buf, _src_buf,	\
 +		fi_strerror(err));								\
 +} while(0)
 +
