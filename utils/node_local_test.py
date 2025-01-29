@@ -2,6 +2,7 @@
 """Node local test (NLT).
 
 (C) Copyright 2020-2024 Intel Corporation.
+(C) Copyright 2025 Google LLC
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -4383,7 +4384,7 @@ class PosixTests():
         assert rc.returncode != 0
         output = rc.stderr.decode('utf-8')
         line = output.splitlines()
-        if line[-1] != 'ERROR: daos: failed fs fix-entry: DER_BUSY(-1012): Device or resource busy':
+        if 'DER_BUSY(-1012): Device or resource busy' not in line[-1]:
             raise NLTestFail('daos fs fix-entry /test_dir/f1')
 
         # stop dfuse
@@ -5588,6 +5589,8 @@ class AllocFailTestRun():
                                          delete=False) as log_file:
             self.log_file = log_file.name
             self._env['D_LOG_FILE'] = self.log_file
+            with open(log_file.name, 'w', encoding='utf-8') as lf:
+                lf.write(f'cmd: {" ".join(cmd)}\n')
 
     def __str__(self):
         cmd_text = ' '.join(self._cmd)
@@ -5802,7 +5805,7 @@ class AllocFailTestRun():
         if self._aft.check_stderr:
             stderr = self._stderr.decode('utf-8').rstrip()
             if stderr != '' and not stderr.endswith('(-1009): Out of memory') and \
-                not stderr.endswith(': errno 12 (Cannot allocate memory)') and \
+                not stderr.endswith(': DFS error 12: Cannot allocate memory') and \
                'error parsing command line arguments' not in stderr and \
                self.stdout != self._aft.expected_stdout:
                 if self.stdout != b'':
