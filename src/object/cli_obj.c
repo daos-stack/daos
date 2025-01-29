@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -5816,7 +5817,7 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 
 	rc = obj_update_shards_get(obj, args, map_ver, obj_auxi, &shard, &shard_cnt);
 	if (rc != 0) {
-		D_ERROR(DF_OID" get update shards failure %d\n", DP_OID(obj->cob_md.omd_id), rc);
+		D_WARN(DF_OID " get update shards failure %d\n", DP_OID(obj->cob_md.omd_id), rc);
 		D_GOTO(out_task, rc);
 	}
 

@@ -1,6 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7356,7 +7357,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 
 	entry = daos_prop_entry_get(&prop, DAOS_PROP_PO_SELF_HEAL);
 	D_ASSERT(entry != NULL);
-	if (!(entry->dpe_val & (DAOS_SELF_HEAL_AUTO_REBUILD | DAOS_SELF_HEAL_DELAY_REBUILD))) {
+	if (!(entry->dpe_val & DAOS_SELF_HEAL_AUTO_REBUILD)) {
 		D_DEBUG(DB_MD, "self healing is disabled\n");
 		D_GOTO(out, rc);
 	}
@@ -7373,9 +7374,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		D_GOTO(out, rc);
 	}
 
-	if ((entry->dpe_val & DAOS_SELF_HEAL_DELAY_REBUILD) && exclude_rank)
-		delay = -1;
-	else if (daos_fail_check(DAOS_REBUILD_DELAY))
+	if (daos_fail_check(DAOS_REBUILD_DELAY))
 		delay = 5;
 
 	D_DEBUG(DB_MD, "map ver %u/%u\n", map_version ? *map_version : -1,
