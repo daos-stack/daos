@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -97,19 +98,22 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 		_D_LOG_CHECK(func, __tmp_mask, mask, ##__VA_ARGS__);                               \
 	} while (0)
 
-#define _D_DEBUG(func, flag, ...)					   \
-	do {								   \
-		if (__builtin_expect(DD_FLAG(flag, D_LOGFAC), 0)) {	   \
-			if (DD_FLAG(flag, D_LOGFAC) == (int)DLOG_UNINIT) { \
-				_D_LOG_CHECK(func,			   \
-					     DD_FLAG(flag, D_LOGFAC),	   \
-					     (flag) | D_LOGFAC,		   \
-					     ##__VA_ARGS__);		   \
-				break;					   \
-			}						   \
-			func(DD_FLAG(flag, D_LOGFAC), ##__VA_ARGS__);	   \
-		}							   \
+#define _D_DEBUGX(func, flag, flag_var, ...)				                           \
+	do {								                           \
+		if (__builtin_expect(flag_var, 0)) {	                                           \
+			if ((flag_var) == (int)DLOG_UNINIT) {                                      \
+				_D_LOG_CHECK(func,			                           \
+					     flag_var,	                                           \
+					     (flag) | D_LOGFAC,		                           \
+					     ##__VA_ARGS__);		                           \
+				break;					                           \
+			}						                           \
+			func(flag_var, ##__VA_ARGS__);	                                           \
+		}							                           \
 	} while (0)
+
+#define _D_DEBUG(func, flag, ...)					                           \
+	_D_DEBUGX(func, flag, DD_FLAG(flag, D_LOGFAC), ##__VA_ARGS__)
 
 #define D_LOG_ENABLED(flag)					\
 	({							\
