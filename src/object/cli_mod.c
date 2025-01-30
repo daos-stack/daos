@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -186,7 +187,7 @@ dc_obj_init(void)
 	if (rc != 0)
 		goto out_class;
 
-	obj_coll_thd = OBJ_COLL_THD_MIN;
+	obj_coll_thd = 0;
 	d_getenv_uint("DAOS_OBJ_COLL_THD", &obj_coll_thd);
 	if (obj_coll_thd == 0) {
 		D_INFO("Disable collective operation.\n");

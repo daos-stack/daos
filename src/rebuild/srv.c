@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -488,6 +489,45 @@ ds_rebuild_running_query(uuid_t pool_uuid, uint32_t opc, uint32_t *upper_ver,
 	}
 	if (rpt)
 		rpt_put(rpt);
+}
+
+/*
+ * Restart rebuild if \a rank's rebuild not finished.
+ * Only used for massive failure recovery case, see pool_restart_rebuild_if_rank_wip().
+ */
+void
+ds_rebuild_restart_if_rank_wip(uuid_t pool_uuid, d_rank_t rank)
+{
+	struct rebuild_global_pool_tracker	*rgt;
+	int					 i;
+
+	rgt = rebuild_global_pool_tracker_lookup(pool_uuid, -1, -1);
+	if (rgt == NULL)
+		return;
+
+	if (rgt->rgt_status.rs_state != DRS_IN_PROGRESS) {
+		rgt_put(rgt);
+		return;
+	}
+
+	for (i = 0; i < rgt->rgt_servers_number; i++) {
+		if (rgt->rgt_servers[i].rank == rank) {
+			if (!rgt->rgt_servers[i].pull_done) {
+				rgt->rgt_status.rs_errno = -DER_STALE;
+				rgt->rgt_abort = 1;
+				rgt->rgt_status.rs_fail_rank = rank;
+				D_INFO(DF_RB ": abort rebuild because rank %d WIP\n",
+				       DP_RB_RGT(rgt), rank);
+			}
+			rgt_put(rgt);
+			return;
+		}
+	}
+
+	D_INFO(DF_RB ": rank %d not in rgt_servers,  rgt_servers_number %d\n",
+	       DP_RB_RGT(rgt), rank, rgt->rgt_servers_number);
+	rgt_put(rgt);
+	return;
 }
 
 /* TODO: Add something about what the current operation is for output status */
@@ -2104,10 +2144,20 @@ regenerate_task_of_type(struct ds_pool *pool, pool_comp_state_t match_states, ui
 int
 ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop)
 {
-	struct daos_prop_entry	*entry;
-	int			rc = 0;
+	struct daos_prop_entry *entry;
+	char                   *env;
+	int                     rc = 0;
 
 	rebuild_gst.rg_abort = 0;
+
+	d_agetenv_str(&env, REBUILD_ENV);
+	if (env && !strcasecmp(env, REBUILD_ENV_DISABLED)) {
+		D_DEBUG(DB_REBUILD, DF_UUID ": Rebuild is disabled for all pools\n",
+			DP_UUID(pool->sp_uuid));
+		d_freeenv_str(&env);
+		return DER_SUCCESS;
+	}
+	d_freeenv_str(&env);
 
 	if (pool->sp_reint_mode == DAOS_REINT_MODE_NO_DATA_SYNC) {
 		D_DEBUG(DB_REBUILD, DF_UUID" No data sync for reintegration\n",

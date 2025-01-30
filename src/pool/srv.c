@@ -1,5 +1,6 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -21,10 +22,30 @@
 #include "srv_layout.h"
 
 bool		ec_agg_disabled;
-uint32_t	pw_rf; /* pool wise RF */
-#define PW_RF_DEFAULT	(2)
-#define PW_RF_MIN	(1)
-#define PW_RF_MAX	(4)
+uint32_t        pw_rf = -1; /* pool wise redundancy factor */
+uint32_t        ps_cache_intvl = 2;  /* pool space cache expiration time, in seconds */
+#define PW_RF_DEFAULT (2)
+#define PW_RF_MIN     (0)
+#define PW_RF_MAX     (4)
+
+static inline bool
+check_pool_redundancy_factor(const char *variable)
+{
+	d_getenv_uint32_t(variable, &pw_rf);
+	if (pw_rf == -1)
+		return false;
+
+	D_INFO("Checked threshold %s=%d\n", variable, pw_rf);
+
+	if (pw_rf <= PW_RF_MAX)
+		return true;
+
+	D_INFO("pw_rf %d is out of range [%d, %d], take default %d\n", pw_rf, PW_RF_MIN, PW_RF_MAX,
+	       PW_RF_DEFAULT);
+	pw_rf = PW_RF_DEFAULT;
+
+	return true;
+}
 
 static int
 init(void)
@@ -52,14 +73,18 @@ init(void)
 	if (unlikely(ec_agg_disabled))
 		D_WARN("EC aggregation is disabled.\n");
 
-	pw_rf = PW_RF_DEFAULT;
-	d_getenv_uint32_t("DAOS_POOL_RF", &pw_rf);
-	if (pw_rf < PW_RF_MIN || pw_rf > PW_RF_MAX) {
-		D_INFO("pw_rf %d is out of range [%d, %d], take default %d\n",
-		       pw_rf, PW_RF_MIN, PW_RF_MAX, PW_RF_DEFAULT);
+	pw_rf = -1;
+	if (!check_pool_redundancy_factor("DAOS_POOL_RF"))
 		pw_rf = PW_RF_DEFAULT;
+	D_INFO("pool redundancy factor %d\n", pw_rf);
+
+	d_getenv_uint32_t("DAOS_POOL_SPACE_CACHE_INTVL", &ps_cache_intvl);
+	if (ps_cache_intvl > 20) {
+		D_WARN("pool space cache expiration time %u is too large, use default value\n",
+		       ps_cache_intvl);
+		ps_cache_intvl = 2;
 	}
-	D_INFO("pool wise RF %d\n", pw_rf);
+	D_INFO("pool space cache expiration time set to %u seconds\n", ps_cache_intvl);
 
 	ds_pool_rsvc_class_register();
 

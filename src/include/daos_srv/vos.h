@@ -20,6 +20,56 @@
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/vos_types.h>
 
+#define VOS_POOL_COMPAT_FLAG_IMMUTABLE       (1ULL << 0)
+#define VOS_POOL_COMPAT_FLAG_SKIP_START      (1ULL << 1)
+#define VOS_POOL_COMPAT_FLAG_SKIP_REBUILD    (1ULL << 2)
+#define VOS_POOL_COMPAT_FLAG_SKIP_DTX_RESYNC (1ULL << 3)
+
+#define VOS_POOL_COMPAT_FLAG_SUPP                                                                  \
+	(VOS_POOL_COMPAT_FLAG_IMMUTABLE | VOS_POOL_COMPAT_FLAG_SKIP_START |                        \
+	 VOS_POOL_COMPAT_FLAG_SKIP_REBUILD | VOS_POOL_COMPAT_FLAG_SKIP_DTX_RESYNC)
+
+#define VOS_POOL_INCOMPAT_FLAG_SUPP 0
+
+#define VOS_MAX_FLAG_NAME_LEN       32
+
+static inline uint64_t
+vos_pool_name2flag(const char *name, bool *compat_feature)
+{
+	*compat_feature = false;
+
+	if (strncmp(name, "immutable", VOS_MAX_FLAG_NAME_LEN) == 0) {
+		*compat_feature = true;
+		return VOS_POOL_COMPAT_FLAG_IMMUTABLE;
+	}
+	if (strncmp(name, "skip_start", VOS_MAX_FLAG_NAME_LEN) == 0) {
+		*compat_feature = true;
+		return VOS_POOL_COMPAT_FLAG_SKIP_START;
+	}
+	if (strncmp(name, "skip_rebuild", VOS_MAX_FLAG_NAME_LEN) == 0) {
+		*compat_feature = true;
+		return VOS_POOL_COMPAT_FLAG_SKIP_REBUILD;
+	}
+	if (strncmp(name, "skip_dtx_resync", VOS_MAX_FLAG_NAME_LEN) == 0) {
+		*compat_feature = true;
+		return VOS_POOL_COMPAT_FLAG_SKIP_DTX_RESYNC;
+	}
+
+	return 0;
+}
+
+bool
+vos_pool_feature_skip_start(daos_handle_t poh);
+
+bool
+vos_pool_feature_immutable(daos_handle_t poh);
+
+bool
+vos_pool_feature_skip_rebuild(daos_handle_t poh);
+
+bool
+vos_pool_feature_skip_dtx_resync(daos_handle_t poh);
+
 /** Initialize the vos reserve/cancel related fields in dtx handle
  *
  * \param dth	[IN]	The dtx handle
@@ -118,13 +168,14 @@ vos_dtx_load_mbs(daos_handle_t coh, struct dtx_id *dti, daos_unit_oid_t *oid,
  * \param coh	[IN]	Container open handle.
  * \param dtis	[IN]	The array for DTX identifiers to be committed.
  * \param count [IN]	The count of DTXs to be committed.
+ * \param keep_act [IN]	Keep DTX entry or not.
  * \param rm_cos [OUT]	The array for whether remove entry from CoS cache.
  *
  * \return		Negative value if error.
  * \return		Others are for the count of committed DTXs.
  */
 int
-vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool rm_cos[]);
+vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool keep_act, bool rm_cos[]);
 
 /**
  * Abort the specified DTXs.

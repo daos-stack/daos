@@ -612,6 +612,12 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, b
 	crt_group_rank(NULL, &myrank);
 
 	pool = cont->sc_pool->spc_pool;
+	if (pool->sp_disable_dtx_resync) {
+		D_DEBUG(DB_MD, "Skip DTX resync (%s) for " DF_UUID "/" DF_UUID " with ver %u\n",
+			block ? "block" : "non-block", DP_UUID(po_uuid), DP_UUID(co_uuid), ver);
+		goto out;
+	}
+
 	ABT_rwlock_rdlock(pool->sp_lock);
 	rc = pool_map_find_target_by_rank_idx(pool->sp_map, myrank,
 					      dss_get_module_info()->dmi_tgt_id, &target);

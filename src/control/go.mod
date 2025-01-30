@@ -1,8 +1,10 @@
 module github.com/daos-stack/daos/src/control
 
+// NB: When updating minimum Go build version, don't forget to update:
+// - rpm packaging version checks: utils/rpms/daos.spec
+// - debian packaging version checks: debian/control
+// Scons uses this file to extract the minimum version.
 go 1.21
-
-toolchain go1.22.3
 
 require (
 	github.com/Jille/raft-grpc-transport v1.2.0
@@ -20,8 +22,8 @@ require (
 	github.com/prometheus/client_model v0.2.0
 	github.com/prometheus/common v0.32.1
 	go.etcd.io/bbolt v1.3.5
-	golang.org/x/net v0.26.0
-	golang.org/x/sys v0.21.0
+	golang.org/x/net v0.33.0
+	golang.org/x/sys v0.28.0
 	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1
 	google.golang.org/grpc v1.66.2
 	google.golang.org/protobuf v1.34.1
@@ -48,5 +50,5 @@ require (
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect
-	golang.org/x/text v0.16.0 // indirect
+	golang.org/x/text v0.21.0 // indirect
 )

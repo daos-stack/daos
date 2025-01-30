@@ -286,6 +286,28 @@ The example below shows a rebuild in progress and NVMe space allocated.
     Rebuild busy, 75 objs, 9722 recs
 ```
 
+After experiencing significant failures, the pool may retain some "dead"
+engines that have been marked as DEAD by the SWIM protocol but were not excluded
+from the pool to prevent potential data inconsistency. An administrator can bring
+these engines back online by restarting them. The example below illustrates the
+system’s status with dead and disabled engines.
+
+```bash
+$ dmg pool query tank -t
+```
+
+NB: The --health-only/-t option is necessary to conduct pool health-related queries only.
+This is important because dead ranks may cause commands to hang and timeout so identifying
+and restarting them is a useful procedure.
+
+```bash
+Pool 6f450a68-8c7d-4da9-8900-02691650f6a2, ntarget=8, disabled=2, leader=3, version=4, state=Degraded
+    Pool health info:
+    - Disabled ranks: 1
+    - Dead ranks: 2
+    - Rebuild busy, 0 objs, 0 recs
+```
+
 Additional status and telemetry data is planned to be exported through
 management tools and will be documented here once available.
 
@@ -930,15 +952,10 @@ Administrator can set the default pool redundancy factor by environment variable
 dead and the number of failed fault domain exceeds or is going to exceed the pool
 redundancy factor, it will not change pool map immediately. Instead, it will give
 critical log message:
+```
 intolerable unavailability: engine rank x
-In this case, the system administrator should check and try to recover those
-failed engines and bring them back with:
-dmg system start --ranks=x
-one by one. A reintegrate call is not needed.
-
-For true unrecoverable failures, the administrator can still exclude engines.
-However, data loss is expected as the number of unrecoverable failures exceeds
-the pool redundancy factor.
+```
+To recover, see [Servers or engines become unavailable](troubleshooting.md#engines-become-unavailable).
 
 ## Recovering Container Ownership
 

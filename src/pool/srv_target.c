@@ -505,6 +505,27 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 		goto done;
 	}
 
+	if (!ds_pool_skip_for_check(child->spc_pool) &&
+	    vos_pool_feature_skip_start(child->spc_hdl)) {
+		D_INFO(DF_UUID ": skipped to start\n", DP_UUID(child->spc_uuid));
+		rc = -DER_SHUTDOWN;
+		goto out_close;
+	}
+
+	if (vos_pool_feature_immutable(child->spc_hdl))
+		child->spc_pool->sp_immutable = 1;
+
+	/*
+	 * Rebuild depends on DTX resync, if DTX resync is skipped,
+	 * then rebuild also needs to be skipped.
+	 */
+	if (vos_pool_feature_skip_rebuild(child->spc_hdl) ||
+	    vos_pool_feature_skip_dtx_resync(child->spc_hdl))
+		child->spc_pool->sp_disable_rebuild = 1;
+
+	if (vos_pool_feature_skip_dtx_resync(child->spc_hdl))
+		child->spc_pool->sp_disable_dtx_resync = 1;
+
 	if (!ds_pool_restricted(child->spc_pool, false)) {
 		rc = start_gc_ult(child);
 		if (rc != 0)
@@ -909,6 +930,8 @@ pool_free_ref(struct daos_llink *llink)
 	/** release metrics */
 	ds_pool_metrics_stop(pool);
 
+	if (pool->sp_map_bc != NULL)
+		ds_pool_put_map_bc(pool->sp_map_bc);
 	ABT_cond_free(&pool->sp_fetch_hdls_cond);
 	ABT_cond_free(&pool->sp_fetch_hdls_done_cond);
 	ABT_mutex_free(&pool->sp_mutex);
@@ -1809,6 +1832,110 @@ update_child_map(void *data)
 	return 0;
 }
 
+static int
+map_bc_create(crt_context_t ctx, struct pool_map *map, struct ds_pool_map_bc **map_bc_out)
+{
+	struct ds_pool_map_bc *map_bc;
+	d_iov_t                map_iov;
+	d_sg_list_t            map_sgl;
+	int                    rc;
+
+	D_ALLOC_PTR(map_bc);
+	if (map_bc == NULL) {
+		rc = -DER_NOMEM;
+		goto err;
+	}
+
+	map_bc->pmc_ref = 1;
+
+	rc = pool_buf_extract(map, &map_bc->pmc_buf);
+	if (rc != 0) {
+		DL_ERROR(rc, "failed to extract pool map buffer");
+		goto err_map_bc;
+	}
+
+	d_iov_set(&map_iov, map_bc->pmc_buf, pool_buf_size(map_bc->pmc_buf->pb_nr));
+	map_sgl.sg_nr     = 1;
+	map_sgl.sg_nr_out = 0;
+	map_sgl.sg_iovs   = &map_iov;
+
+	rc = crt_bulk_create(ctx, &map_sgl, CRT_BULK_RO, &map_bc->pmc_bulk);
+	if (rc != 0)
+		goto err_buf;
+
+	*map_bc_out = map_bc;
+	return 0;
+
+err_buf:
+	D_FREE(map_bc->pmc_buf);
+err_map_bc:
+	D_FREE(map_bc);
+err:
+	return rc;
+}
+
+static void
+map_bc_get(struct ds_pool_map_bc *map_bc)
+{
+	map_bc->pmc_ref++;
+}
+
+static void
+map_bc_put(struct ds_pool_map_bc *map_bc)
+{
+	map_bc->pmc_ref--;
+	if (map_bc->pmc_ref == 0) {
+		crt_bulk_free(map_bc->pmc_bulk);
+		D_FREE(map_bc->pmc_buf);
+		D_FREE(map_bc);
+	}
+}
+
+int
+ds_pool_lookup_map_bc(struct ds_pool *pool, crt_context_t ctx, struct ds_pool_map_bc **map_bc_out,
+		      uint32_t *map_version_out)
+{
+	struct ds_pool_map_bc *map_bc;
+	uint32_t               map_version;
+
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+
+	/* For accessing pool->sp_map, but not really necessary. */
+	ABT_rwlock_rdlock(pool->sp_lock);
+
+	if (pool->sp_map == NULL) {
+		ABT_rwlock_unlock(pool->sp_lock);
+		return -DER_NONEXIST;
+	}
+
+	if (pool->sp_map_bc == NULL) {
+		int rc;
+
+		rc = map_bc_create(ctx, pool->sp_map, &pool->sp_map_bc);
+		if (rc != 0) {
+			ABT_rwlock_unlock(pool->sp_lock);
+			return rc;
+		}
+	}
+
+	map_bc_get(pool->sp_map_bc);
+	map_bc = pool->sp_map_bc;
+	map_version = pool_map_get_version(pool->sp_map);
+
+	ABT_rwlock_unlock(pool->sp_lock);
+
+	*map_bc_out = map_bc;
+	*map_version_out = map_version;
+	return 0;
+}
+
+void
+ds_pool_put_map_bc(struct ds_pool_map_bc *map_bc)
+{
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	map_bc_put(map_bc);
+}
+
 int
 ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		       unsigned int map_version)
@@ -1864,6 +1991,12 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		/* Swap pool->sp_map and map. */
 		pool->sp_map = map;
 		map = tmp;
+
+		/* Invalidate pool->sp_map_bc. */
+		if (pool->sp_map_bc != NULL) {
+			map_bc_put(pool->sp_map_bc);
+			pool->sp_map_bc = NULL;
+		}
 
 		map_updated = true;
 		D_INFO(DF_UUID ": updated pool map: version=%u->%u pointer=%p->%p\n",
@@ -2084,7 +2217,7 @@ ds_pool_tgt_query_map_handler(crt_rpc_t *rpc)
 	struct pool_tgt_query_map_in   *in = crt_req_get(rpc);
 	struct pool_tgt_query_map_out  *out = crt_reply_get(rpc);
 	struct ds_pool		       *pool;
-	struct pool_buf		       *buf;
+	struct ds_pool_map_bc	       *bc;
 	unsigned int			version;
 	int				rc;
 
@@ -2134,22 +2267,19 @@ ds_pool_tgt_query_map_handler(crt_rpc_t *rpc)
 	}
 
 	/* Inefficient; better invent some zero-copy IV APIs. */
-	ABT_rwlock_rdlock(pool->sp_lock);
-	version = (pool->sp_map == NULL ? 0 : pool_map_get_version(pool->sp_map));
+	rc = ds_pool_lookup_map_bc(pool, rpc->cr_ctx, &bc, &version);
+	if (rc == -DER_NONEXIST)
+		version = 0;
+	else if (rc != 0)
+		goto out_pool;
 	if (version <= in->tmi_map_version) {
 		rc = 0;
-		ABT_rwlock_unlock(pool->sp_lock);
 		goto out_version;
 	}
-	rc = pool_buf_extract(pool->sp_map, &buf);
-	ABT_rwlock_unlock(pool->sp_lock);
-	if (rc != 0)
-		goto out_version;
 
-	rc = ds_pool_transfer_map_buf(buf, version, rpc, in->tmi_map_bulk,
-				      &out->tmo_map_buf_size);
+	rc = ds_pool_transfer_map_buf(bc, rpc, in->tmi_map_bulk, &out->tmo_map_buf_size);
 
-	D_FREE(buf);
+	ds_pool_put_map_bc(bc);
 out_version:
 	out->tmo_op.po_map_version = version;
 out_pool:

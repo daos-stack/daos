@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -436,6 +437,10 @@ class EngineYamlParameters(YamlParameters):
             "D_LOG_FILE_APPEND_PID=1",
             "DAOS_POOL_RF=4",
             "CRT_EVENT_DELAY=1",
+            # pylint: disable-next=fixme
+            # FIXME disable space cache since some tests need to verify instant pool space
+            # changing, this global setting to individual test setting once in follow-on PR.
+            "DAOS_POOL_SPACE_CACHE_INTVL=0",
             "COVFILE=/tmp/test.cov"],
         "ofi+tcp": [],
         "ofi+tcp;ofi_rxm": [],
@@ -539,9 +544,11 @@ class EngineYamlParameters(YamlParameters):
 
         # Update the env vars with any missing or different required setting
         update = False
-        env_var_dict = {env.split("=")[0]: env.split("=")[1] for env in self.env_vars.value}
+        env_var_dict = {
+            env.split("=", maxsplit=1)[0]: env.split("=", maxsplit=1)[1]
+            for env in self.env_vars.value}
         for key in sorted(required_env_vars):
-            if key not in env_var_dict or env_var_dict[key] != required_env_vars[key]:
+            if key not in env_var_dict:
                 env_var_dict[key] = required_env_vars[key]
                 update = True
         if update:

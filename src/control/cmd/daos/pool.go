@@ -297,19 +297,36 @@ func convertPoolInfo(pinfo *C.daos_pool_info_t) (*daos.PoolInfo, error) {
 }
 
 func queryPool(poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (*daos.PoolInfo, error) {
-	var rlPtr **C.d_rank_list_t = nil
-	var rl *C.d_rank_list_t = nil
+	var enabledRanks *C.d_rank_list_t
+	var disabledRanks *C.d_rank_list_t
+	defer func() {
+		C.d_rank_list_free(enabledRanks)
+		C.d_rank_list_free(disabledRanks)
+	}()
 
-	if queryMask.HasOption(daos.PoolQueryOptionEnabledEngines) || queryMask.HasOption(daos.PoolQueryOptionDisabledEngines) {
-		rlPtr = &rl
-	}
-
+	var rc C.int
 	cPoolInfo := C.daos_pool_info_t{
 		pi_bits: C.uint64_t(queryMask),
 	}
+	if queryMask.HasOption(daos.PoolQueryOptionEnabledEngines) && queryMask.HasOption(daos.PoolQueryOptionDisabledEngines) {
+		enaQm := queryMask
+		enaQm.ClearOptions(daos.PoolQueryOptionDisabledEngines)
+		cPoolInfo.pi_bits = C.uint64_t(enaQm)
+		rc = C.daos_pool_query(poolHdl, &enabledRanks, &cPoolInfo, nil, nil)
+		if err := daosError(rc); err != nil {
+			return nil, err
+		}
 
-	rc := C.daos_pool_query(poolHdl, rlPtr, &cPoolInfo, nil, nil)
-	defer C.d_rank_list_free(rl)
+		/* second query to just get disabled ranks */
+		rc = C.daos_pool_query(poolHdl, &disabledRanks, nil, nil, nil)
+	} else if queryMask.HasOption(daos.PoolQueryOptionEnabledEngines) {
+		rc = C.daos_pool_query(poolHdl, &enabledRanks, &cPoolInfo, nil, nil)
+	} else if queryMask.HasOption(daos.PoolQueryOptionDisabledEngines) {
+		rc = C.daos_pool_query(poolHdl, &disabledRanks, &cPoolInfo, nil, nil)
+	} else {
+		rc = C.daos_pool_query(poolHdl, nil, &cPoolInfo, nil, nil)
+	}
+
 	if err := daosError(rc); err != nil {
 		return nil, err
 	}
@@ -318,17 +335,18 @@ func queryPool(poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (*daos.Poo
 	if err != nil {
 		return nil, err
 	}
+	poolInfo.QueryMask = queryMask
 
-	if rlPtr != nil {
-		rs, err := rankSetFromC(rl)
+	if enabledRanks != nil {
+		poolInfo.EnabledRanks, err = rankSetFromC(enabledRanks)
 		if err != nil {
 			return nil, err
 		}
-		if queryMask.HasOption(daos.PoolQueryOptionEnabledEngines) {
-			poolInfo.EnabledRanks = rs
-		}
-		if queryMask.HasOption(daos.PoolQueryOptionDisabledEngines) {
-			poolInfo.DisabledRanks = rs
+	}
+	if disabledRanks != nil {
+		poolInfo.DisabledRanks, err = rankSetFromC(disabledRanks)
+		if err != nil {
+			return nil, err
 		}
 	}
 
