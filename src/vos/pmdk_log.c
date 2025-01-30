@@ -19,30 +19,28 @@
 #include <libpmemobj/log.h>
 #include <libpmemobj.h>
 
-static uint64_t pmemobj_log_level_2_dlog_prio[] = {
-    [PMEMOBJ_LOG_LEVEL_HARK] = DLOG_INFO,   [PMEMOBJ_LOG_LEVEL_FATAL] = DLOG_CRIT,
-    [PMEMOBJ_LOG_LEVEL_ERROR] = DLOG_ERR,   [PMEMOBJ_LOG_LEVEL_WARNING] = DLOG_WARN,
-    [PMEMOBJ_LOG_LEVEL_NOTICE] = DLOG_NOTE, [PMEMOBJ_LOG_LEVEL_INFO] = DLOG_INFO,
-    [PMEMOBJ_LOG_LEVEL_DEBUG] = DLOG_DBG,
+#define PMDK_LOG_2_DAOS_LOG_INIT(PMDK_LEVEL, DAOS_LEVEL)                                           \
+	[PMDK_LEVEL] = {.level = DAOS_LEVEL, .saved_mask = &DD_FLAG(DAOS_LEVEL, D_LOGFAC)}
+
+static struct {
+	int  level;
+	int *saved_mask;
+} pmemobj_log_level_2_daos_log[] = {
+    PMDK_LOG_2_DAOS_LOG_INIT(PMEMOBJ_LOG_LEVEL_HARK, DLOG_INFO),
+    PMDK_LOG_2_DAOS_LOG_INIT(PMEMOBJ_LOG_LEVEL_FATAL, DLOG_CRIT),
+    PMDK_LOG_2_DAOS_LOG_INIT(PMEMOBJ_LOG_LEVEL_ERROR, DLOG_ERR),
+    PMDK_LOG_2_DAOS_LOG_INIT(PMEMOBJ_LOG_LEVEL_WARNING, DLOG_WARN),
+    PMDK_LOG_2_DAOS_LOG_INIT(PMEMOBJ_LOG_LEVEL_NOTICE, DLOG_NOTE),
+    PMDK_LOG_2_DAOS_LOG_INIT(PMEMOBJ_LOG_LEVEL_INFO, DLOG_INFO),
+    PMDK_LOG_2_DAOS_LOG_INIT(PMEMOBJ_LOG_LEVEL_DEBUG, DLOG_DBG),
 };
 
-static int *pmemobj_log_level_2_dlog_mask[] = {
-    [PMEMOBJ_LOG_LEVEL_HARK]    = &DD_FLAG(DLOG_INFO, D_LOGFAC),
-    [PMEMOBJ_LOG_LEVEL_FATAL]   = &DD_FLAG(DLOG_CRIT, D_LOGFAC),
-    [PMEMOBJ_LOG_LEVEL_ERROR]   = &DD_FLAG(DLOG_ERR, D_LOGFAC),
-    [PMEMOBJ_LOG_LEVEL_WARNING] = &DD_FLAG(DLOG_WARN, D_LOGFAC),
-    [PMEMOBJ_LOG_LEVEL_NOTICE]  = &DD_FLAG(DLOG_NOTE, D_LOGFAC),
-    [PMEMOBJ_LOG_LEVEL_INFO]    = &DD_FLAG(DLOG_INFO, D_LOGFAC),
-    [PMEMOBJ_LOG_LEVEL_DEBUG]   = &DD_FLAG(DLOG_DBG, D_LOGFAC),
-};
+#undef PMDK_LOG_2_DAOS_LOG_INIT
 
 static void
 pmdk_log_function(enum pmemobj_log_level level, const char *file_name, unsigned line_no,
 		  const char *function_name, const char *message)
 {
-	uint64_t dlog_prio = pmemobj_log_level_2_dlog_prio[level];
-	int     *saved_mask = pmemobj_log_level_2_dlog_mask[level];
-
 /*
  * There is a set of handy macros for each of the message priorities
  * that are used normally to report a message. They can't be used here
@@ -65,7 +63,9 @@ pmdk_log_function(enum pmemobj_log_level level, const char *file_name, unsigned 
 #define PMDK_LOG_NOCHECK(mask, fmt, ...)                                                           \
 	d_log(mask, "%s:%d %s() " fmt, file_name, line_no, function_name, ##__VA_ARGS__)
 
-	_D_DEBUG_W_SAVED_MASK(PMDK_LOG_NOCHECK, *saved_mask, dlog_prio, "%s\n", message);
+	int *saved_mask = pmemobj_log_level_2_daos_log[level].saved_mask;
+	_D_DEBUG_W_SAVED_MASK(PMDK_LOG_NOCHECK, *saved_mask,
+			      pmemobj_log_level_2_daos_log[level].level, "%s\n", message);
 
 #undef PMDK_LOG_NOCHECK
 }
