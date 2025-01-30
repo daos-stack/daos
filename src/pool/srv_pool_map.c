@@ -289,7 +289,7 @@ update_one_tgt(uuid_t pool_uuid, struct pool_map *map, struct pool_target *targe
 				target->ta_comp.co_out_ver = ++(*version);
 			}
 			if (print_changes)
-				D_PRINT(DF_MAP ": " DF_TARGET " is excluded.\n",
+				D_PRINT(DF_MAP ": " DF_TARGET " is reverted.\n",
 					DP_MAP(pool_uuid, map), DP_TARGET(target));
 			D_INFO(DF_MAP ": " DF_TARGET " is reverted.\n", DP_MAP(pool_uuid, map),
 			       DP_TARGET(target));
