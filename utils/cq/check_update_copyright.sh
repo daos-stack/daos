@@ -1,7 +1,8 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 #  Copyright 2024 Intel Corporation.
 #  Copyright 2025 Hewlett Packard Enterprise Development LP
+#  Copyright 2025 Google LLC
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -28,9 +29,13 @@ cd "$PARENT_DIR"/../../
 
 
 regex_intel='(^[[:blank:]]*[\*/]*.*)((Copyright[[:blank:]]*)([0-9]{4})(-([0-9]{4}))?)([[:blank:]]*(Intel.*$))'
-# shortname_intel="Intel Corporation."
+shortname_intel="Intel Corporation."
 regex_hpe='(^[[:blank:]]*[\*/]*.*)((Copyright[[:blank:]]*)([0-9]{4})(-([0-9]{4}))?)([[:blank:]]*(Hewlett Packard Enterprise Development LP.*$))'
 shortname_hpe="Hewlett Packard Enterprise Development LP"
+regex_google='(^[[:blank:]]*[\*/]*.*)((Copyright[[:blank:]]*)([0-9]{4})(-([0-9]{4}))?)([[:blank:]]*(Google LLC.*$))'
+shortname_google="Google LLC"
+regex_enakta='(^[[:blank:]]*[\*/]*.*)((Copyright[[:blank:]]*)([0-9]{4})(-([0-9]{4}))?)([[:blank:]]*(Enakta.*$))'
+shortname_enakta="Enakta Labs Ltd"
 year=$(date +%Y)
 errors=0
 targets=(
@@ -86,26 +91,35 @@ function git_add() {
 # See below example to toggle copyright regex based on user
 regex_user="$regex_hpe"
 shortname_user="$shortname_hpe"
-# if [[ "$mode" == "githook" ]]; then
-#     # Extract domain from configured email
-#     user_domain="$(git config user.email | sed -n 's/^.*@\([-0-9a-zA-Z]*\).*/\1/p')"
-# else
-#     # Extract domain from the first Signed-off-by
-#     user_domain="$(git log -1 | grep 'Signed-off-by' | head -n 1 | sed -n 's/^.*@\([-0-9a-zA-Z]*\).*/\1/p')"
-# fi
-# case "$user_domain" in
-#     "hpe")
-#         regex_user="$regex_hpe"
-#         shortname_user="$shortname_hpe"
-#         ;;
-#     "intel")
-#         regex_user="$regex_intel"
-#         shortname_user="$shortname_intel"
-#         ;;
-#     *)
-#         echo "  Unsupported email domain: $user_domain"
-#         exit 1
-# esac
+if [[ "$mode" == "githook" ]]; then
+    # Extract domain from configured email
+    user_domain="$(git config user.email | sed -n 's/^.*@\([-0-9a-zA-Z]*\).*/\1/p')"
+else
+    # Extract domain from the first Signed-off-by
+    user_domain="$(git log -1 | grep 'Signed-off-by' | head -n 1 | sed -n 's/^.*@\([-0-9a-zA-Z]*\).*/\1/p')"
+fi
+case "$user_domain" in
+    "hpe")
+        regex_user="$regex_hpe"
+        shortname_user="$shortname_hpe"
+        ;;
+    "intel")
+        regex_user="$regex_intel"
+        shortname_user="$shortname_intel"
+        ;;
+    "google")
+        regex_user="$regex_google"
+        shortname_user="$shortname_google"
+        ;;
+    "enakta")
+        regex_user="$regex_enakta"
+        shortname_user="$shortname_enakta"
+        ;;
+    *)
+        regex_user="$regex_hpe"
+        shortname_user="$shortname_hpe"
+        ;;
+esac
 
 # Generate list of all copyright regex except the user's domain.
 # Used to add a new copyright header to files.
@@ -135,7 +149,7 @@ for file in $files; do
          [ "$(git diff --cached -I Copyright "$file")" = '' ]; }; then
         continue
     fi
-    
+
     # Check for existing copyright in user's domain
     # If it exists and is updated, nothing to do
     read -r y1_user y2_user <<< "$(sed -nre "s/^.*$regex_user.*$/\4 \6/p" "$file")"

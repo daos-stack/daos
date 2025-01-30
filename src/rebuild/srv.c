@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -482,7 +483,8 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 
 	if (rpt->rt_rebuild_op != RB_OP_RECLAIM && rpt->rt_rebuild_op != RB_OP_FAIL_RECLAIM) {
 		rc = ds_migrate_query_status(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
-					     rpt->rt_rebuild_gen, rpt->rt_rebuild_op, &dms);
+					     rpt->rt_rebuild_gen, rpt->rt_rebuild_op,
+					     rpt->rt_global_scan_done, &dms);
 		if (rc)
 			D_GOTO(out, rc);
 	}
@@ -2245,10 +2247,20 @@ regenerate_task_of_type(struct ds_pool *pool, pool_comp_state_t match_states, ui
 int
 ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop)
 {
-	struct daos_prop_entry	*entry;
-	int			rc = 0;
+	struct daos_prop_entry *entry;
+	char                   *env;
+	int                     rc = 0;
 
 	rebuild_gst.rg_abort = 0;
+
+	d_agetenv_str(&env, REBUILD_ENV);
+	if (env && !strcasecmp(env, REBUILD_ENV_DISABLED)) {
+		D_DEBUG(DB_REBUILD, DF_UUID ": Rebuild is disabled for all pools\n",
+			DP_UUID(pool->sp_uuid));
+		d_freeenv_str(&env);
+		return DER_SUCCESS;
+	}
+	d_freeenv_str(&env);
 
 	if (pool->sp_reint_mode == DAOS_REINT_MODE_NO_DATA_SYNC) {
 		D_DEBUG(DB_REBUILD, DF_UUID" No data sync for reintegration\n",

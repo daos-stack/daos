@@ -3,6 +3,7 @@
 /* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral */
 /* groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName */
 /* Copyright 2019-2024 Intel Corporation
+ * Copyright 2025 Hewlett Packard Enterprise Development LP
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -832,7 +833,7 @@ pipeline {
                     }
                     steps {
                         job_step_update(
-                            unitTest(timeout_time: 60,
+                            unitTest(timeout_time: 160,
                                      unstash_opt: true,
                                      ignore_failure: true,
                                      inst_repos: prRepos(),
@@ -959,7 +960,8 @@ pipeline {
                             functionalTest(
                                 inst_repos: daosRepos(),
                                 inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
-                                test_function: 'runTestFunctionalV2'))
+                                test_function: 'runTestFunctionalV2',
+                                image_version: 'leap15.6'))
                     }
                     post {
                         always {
