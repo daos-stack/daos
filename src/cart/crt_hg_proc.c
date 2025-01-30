@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -346,7 +347,7 @@ out:
 }
 
 static inline int
-crt_proc_common_hdr(crt_proc_t proc, struct crt_common_hdr *hdr)
+crt_proc_common_hdr_v0(crt_proc_t proc, struct crt_common_hdr *hdr)
 {
 	crt_proc_op_t	proc_op;
 	int		rc;
@@ -354,16 +355,11 @@ crt_proc_common_hdr(crt_proc_t proc, struct crt_common_hdr *hdr)
 	if (unlikely(hdr == NULL))
 		D_GOTO(out, rc = -DER_INVAL);
 
-	/*
-	 * D_DEBUG("in crt_proc_common_hdr, opc: %#x.\n", hdr->cch_opc);
-	 */
-
 	rc = crt_proc_get_op(proc, &proc_op);
 	if (unlikely(rc))
 		D_GOTO(out, rc);
 
 	rc = crt_proc_memcpy(proc, proc_op, hdr, sizeof(*hdr));
-
 out:
 	return rc;
 }
@@ -442,32 +438,37 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 	}
 
 	/* Decode header */
-	rc = crt_proc_common_hdr(hg_proc, &rpc_priv->crp_req_hdr);
+	/* TODO
+	 * This is v0 only header decoding. decode the version first and based on that
+	 * decide which decode function to use */
+	rc = crt_proc_common_hdr_v0(hg_proc, &rpc_priv->crp_header_v0.crp_req_hdr);
 	if (rc != 0) {
-		RPC_ERROR(rpc_priv, "crt_proc_common_hdr failed: " DF_RC "\n", DP_RC(rc));
+		RPC_ERROR(rpc_priv, "crt_proc_common_hdr_v0 failed: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
+	crt_rpc_hdr_version_set(rpc_priv, rpc_priv->crp_header_v0.crp_reply_hdr.cch_opc);
+
 	/* Sync the HLC. Clients never decode requests. */
 	D_ASSERT(crt_is_service());
-	rc = d_hlc_get_msg(rpc_priv->crp_req_hdr.cch_hlc,
+	rc = d_hlc_get_msg(*rpc_priv->crp_header.p_src_hlc,
 			     &ctx->cc_last_unpack_hlc, &clock_offset);
 	if (rc != 0) {
 		REPORT_HLC_SYNC_ERR("failed to sync HLC for request: opc=%x ts="
 				    DF_U64" offset="DF_U64" from=%u\n",
-				    rpc_priv->crp_req_hdr.cch_opc,
-				    rpc_priv->crp_req_hdr.cch_hlc,
+				    *rpc_priv->crp_header.p_opc,
+				    *rpc_priv->crp_header.p_src_hlc,
 				    clock_offset,
-				    rpc_priv->crp_req_hdr.cch_src_rank);
+				    *rpc_priv->crp_header.p_src_rank);
 
 		/* Fail all but SWIM requests. */
-		if (!crt_opc_is_swim(rpc_priv->crp_req_hdr.cch_opc))
+		if (!crt_opc_is_swim(*rpc_priv->crp_header.p_opc))
 			rpc_priv->crp_fail_hlc = 1;
 
 		rc = 0;
 	}
 
-	rpc_priv->crp_flags = rpc_priv->crp_req_hdr.cch_flags;
+	rpc_priv->crp_flags = *rpc_priv->crp_header.p_flags;
 	if (rpc_priv->crp_flags & CRT_RPC_FLAG_COLL) {
 		rc = crt_proc_corpc_hdr(hg_proc, &rpc_priv->crp_coreq_hdr);
 		if (rc != 0) {
@@ -492,8 +493,9 @@ crt_hg_header_copy(struct crt_rpc_priv *in, struct crt_rpc_priv *out)
 	out->crp_pub.cr_ctx = in->crp_pub.cr_ctx;
 	out->crp_flags = in->crp_flags;
 
-	out->crp_req_hdr = in->crp_req_hdr;
-	out->crp_reply_hdr.cch_hlc = in->crp_reply_hdr.cch_hlc;
+	/* Note: v0 and other versions of the header are a union */
+	out->crp_header_v0.crp_req_hdr = in->crp_header_v0.crp_req_hdr;
+	*out->crp_header.p_dst_hlc = *in->crp_header.p_dst_hlc;
 
 	if (!(out->crp_flags & CRT_RPC_FLAG_COLL))
 		return;
@@ -573,8 +575,10 @@ crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 	/* D_DEBUG("in crt_proc_in_common, data: %p\n", *data); */
 
 	if (proc_op != CRT_PROC_FREE) {
+
+		/* TODO: This is v0 handling of header; add other versions  */
 		if (ENCODING(proc_op)) {
-			hdr = &rpc_priv->crp_req_hdr;
+			hdr = &rpc_priv->crp_header_v0.crp_req_hdr;
 
 			hdr->cch_flags = rpc_priv->crp_flags;
 			hdr->cch_dst_rank = crt_grp_priv_get_primary_rank(
@@ -602,9 +606,11 @@ crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 				hdr->cch_hlc = d_hlct_get();
 			}
 		}
-		rc = crt_proc_common_hdr(proc, &rpc_priv->crp_req_hdr);
+
+		/* TODO: Decode version first before deciding which unpack function to use */
+		rc = crt_proc_common_hdr_v0(proc, &rpc_priv->crp_header_v0.crp_req_hdr);
 		if (rc != 0) {
-			RPC_ERROR(rpc_priv, "crt_proc_common_hdr failed: "
+			RPC_ERROR(rpc_priv, "crt_proc_common_hdr_v0 failed: "
 				  DF_RC"\n", DP_RC(rc));
 			D_GOTO(out, rc);
 		}
@@ -669,54 +675,56 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 	/* D_DEBUG("in crt_proc_out_common, data: %p\n", *data); */
 
 	if (proc_op != CRT_PROC_FREE) {
+
 		if (ENCODING(proc_op)) {
 			/* Clients never encode replies. */
 			D_ASSERT(crt_is_service());
-			rpc_priv->crp_reply_hdr.cch_hlc = d_hlc_get();
+			*rpc_priv->crp_header.p_dst_hlc = d_hlc_get();
 		}
-		rc = crt_proc_common_hdr(proc, &rpc_priv->crp_reply_hdr);
+
+		/* TODO: Unpack version first and use appropriate header unpack function */
+		rc = crt_proc_common_hdr_v0(proc, &rpc_priv->crp_header_v0.crp_reply_hdr);
 		if (rc != 0) {
-			RPC_ERROR(rpc_priv, "crt_proc_common_hdr failed: "
+			RPC_ERROR(rpc_priv, "crt_proc_common_hdr_v0 failed: "
 				  DF_RC"\n", DP_RC(rc));
 			D_GOTO(out, rc);
 		}
 		if (DECODING(proc_op)) {
-			struct crt_common_hdr *hdr = &rpc_priv->crp_reply_hdr;
+			struct crt_rpc_header_internal *hdr = &rpc_priv->crp_header;
 
 			if (crt_is_service()) {
 				uint64_t clock_offset;
 
-				rc = d_hlc_get_msg(hdr->cch_hlc,
-						     NULL /* hlc_out */,
-						     &clock_offset);
+				rc = d_hlc_get_msg(*hdr->p_dst_hlc,
+						   NULL /* hlc_out */,
+						   &clock_offset);
 				if (rc != 0) {
 					REPORT_HLC_SYNC_ERR("failed to sync "
 							    "HLC for reply: "
 							    "opc=%x ts="DF_U64
 							    " offset="DF_U64
 							    " from=%u\n",
-							    hdr->cch_opc,
-							    hdr->cch_hlc,
+							    *hdr->p_opc,
+							    *hdr->p_dst_hlc,
 							    clock_offset,
-							    hdr->cch_dst_rank);
+							    *hdr->p_dst_rank);
 					/* Fail all but SWIM replies. */
-					if (!crt_opc_is_swim(hdr->cch_opc))
+					if (!crt_opc_is_swim(*hdr->p_opc))
 						rpc_priv->crp_fail_hlc = 1;
 
 					rc = 0;
 				}
 			} else {
-				d_hlct_sync(hdr->cch_hlc);
+				d_hlct_sync(*hdr->p_dst_hlc);
 			}
 		}
 
-		rc2 = rpc_priv->crp_reply_hdr.cch_rc;
+		rc2 = *rpc_priv->crp_header.p_rc;
 		if (rc2 != 0) {
 			RPC_CWARN(crt_quiet_error(rc2), DB_NET, rpc_priv,
 				  "RPC failed to execute on target. "
 				  "error code: " DF_RC "\n",
 				  DP_RC(rc2));
-
 			D_GOTO(out, rc);
 		}
 	}

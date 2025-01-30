@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -396,7 +397,7 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc)
 
 	D_ASSERT(crt_is_service());
 
-	from_id = rpc_priv->crp_req_hdr.cch_src_rank;
+	from_id = *rpc_priv->crp_header.p_src_rank;
 
 	/* Initialize empty array in case of error in reply */
 	rpc_out->upds.ca_arrays = NULL;
@@ -420,8 +421,8 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc)
 	 * crt_hg_unpack_header may have failed to synchronize the HLC with
 	 * this request.
 	 */
-	if (hlc > rpc_priv->crp_req_hdr.cch_hlc)
-		rcv_delay = d_hlc2msec(hlc - rpc_priv->crp_req_hdr.cch_hlc);
+	if (hlc > *rpc_priv->crp_header.p_src_hlc)
+		rcv_delay = d_hlc2msec(hlc - *rpc_priv->crp_header.p_src_hlc);
 
 	RPC_TRACE(DB_NET, rpc_priv,
 		  "incoming %s with %zu updates with %u ms delay. %lu: %lu <= %lu\n",
@@ -587,15 +588,14 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 		break;
 	}
 
-	if (hlc > rpc_priv->crp_reply_hdr.cch_hlc)
-		rcv_delay = d_hlc2msec(hlc - rpc_priv->crp_reply_hdr.cch_hlc);
+	if (hlc > *rpc_priv->crp_header.p_dst_hlc)
+		rcv_delay = d_hlc2msec(hlc - *rpc_priv->crp_header.p_dst_hlc);
 
 	RPC_TRACE(DB_NET, rpc_priv,
-		  "complete %s with %zu/%zu updates with %u ms delay. %lu: %lu => %lu "
-		  DF_RC" remote: "DF_RC"\n",
-		  SWIM_RPC_TYPE_STR[rpc_type], rpc_in->upds.ca_count,
-		  rpc_out->upds.ca_count, rcv_delay, self_id, from_id, to_id,
-		  DP_RC(cb_info->cci_rc), DP_RC(rpc_out->rc));
+		  "complete %s with %zu/%zu updates with %u ms delay. %lu: %lu => %lu " DF_RC
+		  " remote: " DF_RC "\n",
+		  SWIM_RPC_TYPE_STR[rpc_type], rpc_in->upds.ca_count, rpc_out->upds.ca_count,
+		  rcv_delay, self_id, from_id, to_id, DP_RC(cb_info->cci_rc), DP_RC(rpc_out->rc));
 
 	if (self_id == SWIM_ID_INVALID)
 		D_GOTO(out, rc = -DER_UNINIT);
