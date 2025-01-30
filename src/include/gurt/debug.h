@@ -99,19 +99,19 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 		_D_LOG_CHECK(func, __tmp_mask, mask, ##__VA_ARGS__);                               \
 	} while (0)
 
-#define _D_DEBUG_EXPANDED(func, flag, flag_var, ...)                                               \
+#define _D_DEBUG_W_SAVED_MASK(func, saved_mask, level, ...)                                        \
 	do {                                                                                       \
-		if (__builtin_expect(flag_var, 0)) {                                               \
-			if ((flag_var) == (int)DLOG_UNINIT) {                                      \
-				_D_LOG_CHECK(func, flag_var, (flag) | D_LOGFAC, ##__VA_ARGS__);    \
+		if (__builtin_expect(saved_mask, 0)) {                                             \
+			if ((saved_mask) == (int)DLOG_UNINIT) {                                    \
+				_D_LOG_CHECK(func, saved_mask, (level) | D_LOGFAC, ##__VA_ARGS__); \
 				break;                                                             \
 			}                                                                          \
-			func(flag_var, ##__VA_ARGS__);                                             \
+			func(saved_mask, ##__VA_ARGS__);                                           \
 		}                                                                                  \
 	} while (0)
 
 #define _D_DEBUG(func, flag, ...)                                                                  \
-	_D_DEBUG_EXPANDED(func, flag, DD_FLAG(flag, D_LOGFAC), ##__VA_ARGS__)
+	_D_DEBUG_W_SAVED_MASK(func, DD_FLAG(flag, D_LOGFAC), flag, ##__VA_ARGS__)
 
 #define D_LOG_ENABLED(flag)					\
 	({							\
