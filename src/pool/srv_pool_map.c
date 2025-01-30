@@ -106,9 +106,8 @@ update_one_tgt(uuid_t pool_uuid, struct pool_map *map, struct pool_target *targe
 		case PO_COMP_ST_DRAIN:
 		case PO_COMP_ST_DOWNOUT:
 			/* Nothing to do, already excluded / draining */
-			D_INFO(DF_MAP ": Skip drain down target (rank %u idx %u)\n",
-			       DP_MAP(pool_uuid, map), target->ta_comp.co_rank,
-			       target->ta_comp.co_index);
+			D_INFO(DF_MAP ": Skip drain down " DF_TARGET "\n", DP_MAP(pool_uuid, map),
+			       DP_TARGET(target));
 			break;
 		case PO_COMP_ST_NEW:
 			D_ERROR(DF_MAP ": Can't drain new " DF_TARGET "\n", DP_MAP(pool_uuid, map),
@@ -119,8 +118,8 @@ update_one_tgt(uuid_t pool_uuid, struct pool_map *map, struct pool_target *targe
 				DP_MAP(pool_uuid, map), DP_TARGET(target));
 			return -DER_BUSY;
 		case PO_COMP_ST_UPIN:
-			D_DEBUG(DB_MD, DF_MAP ": change " DF_TARGET " to DRAIN %p\n",
-				DP_MAP(pool_uuid, map), DP_TARGET(target), map);
+			D_DEBUG(DB_MD, DF_MAP ": change " DF_TARGET " to DRAIN\n",
+				DP_MAP(pool_uuid, map), DP_TARGET(target));
 			target->ta_comp.co_status = PO_COMP_ST_DRAIN;
 			target->ta_comp.co_fseq = ++(*version);
 			if (print_changes)
@@ -152,8 +151,8 @@ update_one_tgt(uuid_t pool_uuid, struct pool_map *map, struct pool_target *targe
 		case PO_COMP_ST_DOWN:
 			target->ta_comp.co_flags |= PO_COMPF_DOWN2UP;
 		case PO_COMP_ST_DOWNOUT:
-			D_DEBUG(DB_MD, DF_MAP ": change " DF_TARGET " to UP %p\n",
-				DP_MAP(pool_uuid, map), DP_TARGET(target), map);
+			D_DEBUG(DB_MD, DF_MAP ": change " DF_TARGET " to UP\n",
+				DP_MAP(pool_uuid, map), DP_TARGET(target));
 			target->ta_comp.co_status = PO_COMP_ST_UP;
 			target->ta_comp.co_in_ver = ++(*version);
 			if (print_changes)
@@ -200,8 +199,8 @@ update_one_tgt(uuid_t pool_uuid, struct pool_map *map, struct pool_target *targe
 		case PO_COMP_ST_DOWN:
 		case PO_COMP_ST_DRAIN:
 		case PO_COMP_ST_NEW:
-			/* Nothing to do, already UPIN */
-			D_INFO(DF_MAP ": Skip ADD_IN UPIN " DF_TARGET "\n", DP_MAP(pool_uuid, map),
+			/* Nothing to do */
+			D_INFO(DF_MAP ": Skip ADD_IN " DF_TARGET "\n", DP_MAP(pool_uuid, map),
 			       DP_TARGET(target));
 			break;
 		case PO_COMP_ST_UP:
@@ -216,8 +215,8 @@ update_one_tgt(uuid_t pool_uuid, struct pool_map *map, struct pool_target *targe
 		case PO_COMP_ST_DOWNOUT:
 		case PO_COMP_ST_NEW:
 		case PO_COMP_ST_UP:
-			/* Nothing to do, already UPIN */
-			D_INFO(DF_MAP ": Skip ADD_IN UPIN " DF_TARGET "\n", DP_MAP(pool_uuid, map),
+			/* Nothing to do */
+			D_INFO(DF_MAP ": Skip EXCLUDE_OUT " DF_TARGET "\n", DP_MAP(pool_uuid, map),
 			       DP_TARGET(target));
 			break;
 		case PO_COMP_ST_DOWN:
@@ -233,9 +232,9 @@ update_one_tgt(uuid_t pool_uuid, struct pool_map *map, struct pool_target *targe
 		case PO_COMP_ST_UPIN:
 		case PO_COMP_ST_DOWNOUT:
 		case PO_COMP_ST_NEW:
-			/* Nothing to do, already UPIN */
-			D_INFO(DF_MAP ": Skip ADD_IN UPIN " DF_TARGET "\n", DP_MAP(pool_uuid, map),
-			       DP_TARGET(target));
+			/* Nothing to do */
+			D_INFO(DF_MAP ": Skip FINISH_REBUILD " DF_TARGET "\n",
+			       DP_MAP(pool_uuid, map), DP_TARGET(target));
 			break;
 		case PO_COMP_ST_DOWN:
 		case PO_COMP_ST_DRAIN:
@@ -255,8 +254,8 @@ update_one_tgt(uuid_t pool_uuid, struct pool_map *map, struct pool_target *targe
 		case PO_COMP_ST_DOWNOUT:
 		case PO_COMP_ST_DOWN:
 		case PO_COMP_ST_NEW:
-			/* Nothing to do, already UPIN and DOWNOUT. DOWN can not be revert. */
-			D_INFO(DF_MAP ": Skip ADD_IN UPIN DOWN " DF_TARGET "\n",
+			/* Nothing to do. DOWN can not be revert. */
+			D_INFO(DF_MAP ": Skip REVERT_REBUILD " DF_TARGET "\n",
 			       DP_MAP(pool_uuid, map), DP_TARGET(target));
 			break;
 		case PO_COMP_ST_DRAIN: /* revert DRAIN to UPIN */
@@ -273,19 +272,26 @@ update_one_tgt(uuid_t pool_uuid, struct pool_map *map, struct pool_target *targe
 				target->ta_comp.co_in_ver = 0;
 				++(*version);
 			} else {
-				D_DEBUG(DB_MD, DF_MAP ": change " DF_TARGET " to DOWNOUT fseq %u\n",
-					DP_MAP(pool_uuid, map), DP_TARGET(target),
-					target->ta_comp.co_fseq);
-				if (target->ta_comp.co_flags & PO_COMPF_DOWN2UP)
+				if (target->ta_comp.co_flags & PO_COMPF_DOWN2UP) {
+					D_DEBUG(DB_MD,
+						DF_MAP ": change " DF_TARGET " to DOWN fseq %u\n",
+						DP_MAP(pool_uuid, map), DP_TARGET(target),
+						target->ta_comp.co_fseq);
 					target->ta_comp.co_status = PO_COMP_ST_DOWN;
-				else
+				} else {
+					D_DEBUG(DB_MD,
+						DF_MAP ": change " DF_TARGET
+						" to DOWNOUT fseq %u\n",
+						DP_MAP(pool_uuid, map), DP_TARGET(target),
+						target->ta_comp.co_fseq);
 					target->ta_comp.co_status = PO_COMP_ST_DOWNOUT;
+				}
 				target->ta_comp.co_out_ver = ++(*version);
 			}
 			if (print_changes)
 				D_PRINT(DF_MAP ": " DF_TARGET " is excluded.\n",
 					DP_MAP(pool_uuid, map), DP_TARGET(target));
-			D_INFO(DF_MAP ": " DF_TARGET " is excluded.\n", DP_MAP(pool_uuid, map),
+			D_INFO(DF_MAP ": " DF_TARGET " is reverted.\n", DP_MAP(pool_uuid, map),
 			       DP_TARGET(target));
 			rc = 1;
 			break;
@@ -396,7 +402,7 @@ ds_pool_map_tgts_update(uuid_t pool_uuid, struct pool_map *map, struct pool_targ
 		if (rc < 0)
 			return rc;
 
-		/* if the target status does not need to change */
+		/* if the rank status does not need to change */
 		if (rc == 0 && !exclude_rank) {
 			D_DEBUG(DB_MD, DF_MAP ": skip target " DF_TARGET "\n",
 				DP_MAP(pool_uuid, map), DP_TARGET(target));

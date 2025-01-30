@@ -2415,9 +2415,9 @@ out:
 		 * Step up with the error anyway, so that RPCs to the PS
 		 * receive an error instead of timeouts.
 		 */
-		DS_POOL_NOTE_PRINT(DF_UUID": rank %u became pool service leader "DF_U64
-				   " with error: "DF_RC"\n", DP_UUID(svc->ps_uuid), rank,
-				   svc->ps_rsvc.s_term, DP_RC(svc->ps_error));
+		DS_POOL_LOG_PRINT(NOTE, DF_UUID": rank %u became pool service leader "DF_U64
+				  " with error: "DF_RC"\n", DP_UUID(svc->ps_uuid), rank,
+				  svc->ps_rsvc.s_term, DP_RC(svc->ps_error));
 		rc = 0;
 	}
 	return rc;
@@ -2438,10 +2438,9 @@ pool_svc_step_down_cb(struct ds_rsvc *rsvc)
 		DS_POOL_LOG_PRINT(NOTE, DF_UUID": rank %u no longer pool service leader "DF_U64"\n",
 				  DP_UUID(svc->ps_uuid), rank, svc->ps_rsvc.s_term);
 	} else {
-		DS_POOL_LOG_PRINT(NOTE,
-				  DF_UUID": rank %u no longer pool service leader "DF_U64
-				  " with error: "DF_RC"\n", DP_UUID(svc->ps_uuid),
-				  rank, svc->ps_rsvc.s_term, DP_RC(svc->ps_error));
+		DS_POOL_LOG_PRINT(NOTE, DF_UUID": rank %u no longer pool service leader "DF_U64
+				  " with error: "DF_RC"\n", DP_UUID(svc->ps_uuid), rank,
+				  svc->ps_rsvc.s_term, DP_RC(svc->ps_error));
 		svc->ps_error = 0;
 	}
 }
