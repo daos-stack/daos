@@ -1,0 +1,140 @@
+diff --git a/prov/tcp/src/xnet.h b/prov/tcp/src/xnet.h
+index ee16d7e3a..1ee7d77a6 100644
+--- a/prov/tcp/src/xnet.h
++++ b/prov/tcp/src/xnet.h
+@@ -754,4 +754,26 @@ int xnet_rdm_ops_open(struct fid *fid, const char *name,
+ 	FI_WARN(&xnet_prov, subsystem, log_str "%s (%d)\n", \
+ 		fi_strerror((int) -(err)), (int) err)
+ 
++#define XNET_OUTPUT_ERR_WARN(ep, err)		\
++do {						\
++	struct sockaddr *_addr;			\
++	struct sockaddr *_src_addr;		\
++	char _buf[48];				\
++	char _src_buf[48];			\
++	size_t _len = 48;			\
++	size_t _src_len = 48;			\
++						\
++	if (ep == NULL)				\
++		break;				\
++						\
++	_addr = &ep->srx->rdm->addr.sa;		\
++	_src_addr = &ep->peer->addr.sa;		\
++	ofi_straddr(_buf, &_len, ofi_translate_addr_format(ofi_sa_family(_addr)), _addr);	\
++	ofi_straddr(_src_buf, &_src_len, ofi_translate_addr_format(ofi_sa_family(_src_addr)),	\
++		    _src_addr);									\
++												\
++	FI_WARN(&xnet_prov, FI_LOG_EP_CTRL, "error on %s From %s : %s\n", _buf, _src_buf,	\
++		fi_strerror(err));								\
++} while(0)
++
+ #endif //_XNET_H_
+diff --git a/prov/tcp/src/xnet_ep.c b/prov/tcp/src/xnet_ep.c
+index 64772fef0..4c0166ae8 100644
+--- a/prov/tcp/src/xnet_ep.c
++++ b/prov/tcp/src/xnet_ep.c
+@@ -326,7 +326,7 @@ xnet_ep_accept(struct fid_ep *ep_fid, const void *param, size_t paramlen)
+ }
+ 
+ static void
+-xnet_flush_xfer_queue(struct xnet_progress *progress, struct slist *queue,
++xnet_flush_xfer_queue(struct xnet_ep *ep, struct xnet_progress *progress, struct slist *queue,
+ 		      struct ofi_byte_idx *idx)
+ {
+ 	struct xnet_xfer_entry *xfer_entry;
+@@ -341,6 +341,7 @@ xnet_flush_xfer_queue(struct xnet_progress *progress, struct slist *queue,
+ 			ofi_byte_idx_remove(idx, xfer_entry->hdr.base_hdr.op_data);
+ 		}
+ 		slist_remove_head(queue);
++		XNET_OUTPUT_ERR_WARN(ep, FI_ECANCELED);
+ 		xnet_report_error(xfer_entry, FI_ECANCELED);
+ 		xnet_free_xfer(progress, xfer_entry);
+ 	}
+@@ -397,27 +398,29 @@ static void xnet_ep_flush_all_queues(struct xnet_ep *ep)
+ 			ofi_byte_idx_remove(&ep->rts_queue,
+ 					    ep->cur_tx.entry->hdr.base_hdr.op_data);
+ 		}
++		XNET_OUTPUT_ERR_WARN(ep, FI_ECANCELED);
+ 		xnet_report_error(ep->cur_tx.entry, FI_ECANCELED);
+ 		xnet_free_xfer(xnet_ep2_progress(ep), ep->cur_tx.entry);
+ 		ep->cur_tx.entry = NULL;
+ 	}
+ 
+-	xnet_flush_xfer_queue(progress, &ep->tx_queue, &ep->rts_queue);
+-	xnet_flush_xfer_queue(progress, &ep->priority_queue, NULL);
+-	xnet_flush_xfer_queue(progress, &ep->rma_read_queue, NULL);
+-	xnet_flush_xfer_queue(progress, &ep->need_ack_queue, NULL);
+-	xnet_flush_xfer_queue(progress, &ep->async_queue, NULL);
++	xnet_flush_xfer_queue(ep, progress, &ep->tx_queue, &ep->rts_queue);
++	xnet_flush_xfer_queue(ep, progress, &ep->priority_queue, NULL);
++	xnet_flush_xfer_queue(ep, progress, &ep->rma_read_queue, NULL);
++	xnet_flush_xfer_queue(ep, progress, &ep->need_ack_queue, NULL);
++	xnet_flush_xfer_queue(ep, progress, &ep->async_queue, NULL);
+ 	xnet_flush_byte_idx(progress, &ep->rts_queue);
+ 	xnet_flush_byte_idx(progress, &ep->cts_queue);
+ 
+ 	/* Saved messages are on the saved_msg queue and flushed by the srx */
+ 	if (ep->cur_rx.entry &&
+ 	    !(ep->cur_rx.entry->ctrl_flags & XNET_SAVED_XFER)) {
++		XNET_OUTPUT_ERR_WARN(ep, FI_ECANCELED);
+ 		xnet_report_error(ep->cur_rx.entry, FI_ECANCELED);
+ 		xnet_free_xfer(xnet_ep2_progress(ep), ep->cur_rx.entry);
+ 	}
+ 	xnet_reset_rx(ep);
+-	xnet_flush_xfer_queue(progress, &ep->rx_queue, NULL);
++	xnet_flush_xfer_queue(ep, progress, &ep->rx_queue, NULL);
+ 	ep->rx_avail = 0;
+ 	ofi_bsock_discard(&ep->bsock);
+ }
+@@ -561,6 +564,7 @@ static void xnet_ep_cancel_rx(struct xnet_ep *ep, void *context)
+ found:
+ 	slist_remove(&ep->rx_queue, cur, prev);
+ 	ep->rx_avail++;
++	XNET_OUTPUT_ERR_WARN(ep, FI_ECANCELED);
+ 	xnet_report_error(xfer_entry, FI_ECANCELED);
+ 	xnet_free_xfer(xnet_ep2_progress(ep), xfer_entry);
+ }
+diff --git a/prov/tcp/src/xnet_progress.c b/prov/tcp/src/xnet_progress.c
+index aa76968e1..be76c245f 100644
+--- a/prov/tcp/src/xnet_progress.c
++++ b/prov/tcp/src/xnet_progress.c
+@@ -165,6 +165,7 @@ static int xnet_handle_truncate(struct xnet_ep *ep)
+ 	/* TODO: need to report received message size =
+ 	 * base_hdr.size - base_hdr.hdr_size - data_left
+ 	 */
++	XNET_OUTPUT_ERR_WARN(ep, FI_ETRUNC);
+ 	xnet_report_error(rx_entry, FI_ETRUNC);
+ 
+ 	/* Prepare to remove excess msg data from stream to continue */
+@@ -239,6 +240,7 @@ xnet_rts_matched(struct xnet_rdm *rdm, struct xnet_ep *ep,
+ 
+ err_comp:
+ 	xnet_cntr_incerr(rx_entry);
++	XNET_OUTPUT_ERR_WARN(ep, -ret);
+ 	xnet_report_error(rx_entry, -ret);
+ 	xnet_free_xfer(xnet_rdm2_progress(rdm), rx_entry);
+ 	return ret;
+@@ -522,6 +524,7 @@ static void xnet_complete_tx(struct xnet_ep *ep, int ret)
+ 	if (ret) {
+ 		FI_WARN(&xnet_prov, FI_LOG_DOMAIN, "msg send failed\n");
+ 		xnet_cntr_incerr(tx_entry);
++		XNET_OUTPUT_ERR_WARN(ep, -ret);
+ 		xnet_report_error(tx_entry, -ret);
+ 		xnet_free_xfer(xnet_ep2_progress(ep), tx_entry);
+ 	} else if (tx_entry->ctrl_flags & XNET_NEED_CTS) {
+@@ -770,6 +773,7 @@ int xnet_start_recv(struct xnet_ep *ep, struct xnet_xfer_entry *rx_entry)
+ 
+  poll_err:
+ 	xnet_cntr_incerr(rx_entry);
++	XNET_OUTPUT_ERR_WARN(ep, -ret);
+ 	xnet_report_error(rx_entry, -ret);
+ 	xnet_free_xfer(xnet_ep2_progress(ep), rx_entry);
+ 	return ret;
+@@ -1115,6 +1119,7 @@ cq_error:
+ 	FI_WARN(&xnet_prov, FI_LOG_EP_DATA,
+ 		"msg recv failed ret = %zd (%s)\n", ret, fi_strerror((int)-ret));
+ 	xnet_cntr_incerr(rx_entry);
++	XNET_OUTPUT_ERR_WARN(ep, -ret);
+ 	xnet_report_error(rx_entry, (int) -ret);
+ 	xnet_free_xfer(xnet_ep2_progress(ep), rx_entry);
+ 	xnet_reset_rx(ep);
