@@ -94,17 +94,18 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         self.daos_cmd = DaosCommand(self.bin)
         self.create_pool_max_size()
 
-    def get_pool_space_metrics(self, metrics):
-        """Return the metrics on space usage.
+    def get_pool_space_metrics(self, pool, metrics):
+        """Return the metrics on space usage of a given pool.
 
         Args:
+            pool (object): target TestPool.
             metrics (dict): telemetry metrics.
 
         Returns:
             dict: metrics on space usage.
 
         """
-        pool_uuid = self.pool.uuid
+        pool_uuid = pool.uuid
         space_metrics = {}
         for hostname, data in metrics.items():
             for metric_name, entry in data.items():
@@ -134,17 +135,18 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
 
         return space_metrics
 
-    def get_pool_aggr_metrics(self, metrics):
+    def get_pool_aggr_metrics(self, pool, metrics):
         """Return the metrics on aggregation counters and gauges.
 
         Args:
+            pool (object): target TestPool.
             metrics (dict): telemetry metrics.
 
         Returns:
             dict: metrics on aggregation.
 
         """
-        pool_uuid = self.pool.uuid
+        pool_uuid = pool.uuid
         aggr_metrics = {
             "metric_descriptions": {},
             "metric_values": {}
@@ -197,17 +199,20 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
 
         return pool_usage
 
-    def display_table(self, title, table, cols_size, align_idx):
+    def display_table(self, title, table, align_idx):
         """Pretty print table content.
 
         Args:
             title (str): Title of the table.
             table (list): Table to print on stdout.
-            cols_size (list): Size of the table columns.
             align_idx (int): Last column to left align.
         """
+        cols_size = [
+            max(i) for i in [[len(row[j]) for row in table] for j in range(len(table[0]))]]
         line_size = sum(cols_size) + 3 * (len(cols_size) - 1)
-        line = f"\n{' ' + title + ' ':-^{line_size}}"
+
+        self.log.debug("")
+        line = f"{' ' + title + ' ':-^{line_size}}"
         self.log.debug(line)
 
         line = ""
@@ -242,7 +247,8 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             pool_space (object): space usage information of a pool.
             pool_space_metrics (dict): dict of metrics on space usage of a pool.
         """
-        title = f"\n\n{' Pool Space Usage ':-^80}"
+        self.log.debug("")
+        title = f"{' Pool Space Usage ':-^80}"
         self.log.debug(title)
 
         pool_usage = self.get_pool_usage(pool_space)
@@ -263,20 +269,15 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
 
         for metric in pool_space_metrics.values():
             table = [["Hostname", "Rank", "Target", "Size"]]
-            cols_size = []
-            for cell in table[0]:
-                cols_size.append(len(cell))
             for hostname, ranks in metric['hosts'].items():
                 for rank, targets in ranks.items():
                     for target, size in targets.items():
                         row = [hostname, rank, target, get_display_size(size)]
                         table.append(row)
-                        for idx, elt in enumerate(cols_size):
-                            cols_size[idx] = max(elt, len(row[idx]))
                         hostname = ""
                         rank = ""
 
-            self.display_table(metric['description'], table, cols_size, 2)
+            self.display_table(metric['description'], table, 2)
 
     def display_pool_aggregation(self, metrics):
         """Display record aggregation statistics of a given pool.
@@ -287,23 +288,19 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         table = [["Hostname", "Rank", "Target"]]
         for it in self.aggr_metric_names:
             table[0].append(metrics["metric_descriptions"][it])
-        cols_size = [len(it) for it in table[0]]
 
         for hostname in sorted(metrics["metric_values"]):
             row = [hostname]
-            cols_size[0] = max(cols_size[0], len(hostname))
 
             for rank in sorted(metrics["metric_values"][hostname]):
                 if not row:
                     row = [""]
                 row.append(rank)
-                cols_size[1] = max(cols_size[1], len(rank))
 
                 for target in sorted(metrics["metric_values"][hostname][rank]):
                     if not row:
                         row = ["", ""]
                     row.append(target)
-                    cols_size[2] = max(cols_size[2], len(target))
 
                     idx = 3
                     for metric_name in self.aggr_metric_names:
@@ -312,13 +309,12 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
                             row.append(get_display_size(value))
                         else:
                             row.append(str(value))
-                        cols_size[idx] = max(cols_size[idx], len(row[-1]))
                         idx += 1
 
                     table.append(row)
                     row = None
 
-        self.display_table('Pool Aggregation stats', table, cols_size, 2)
+        self.display_table('Pool Aggregation stats', table, 2)
 
     def display_stats(self):
         """Display usage statistics of the tested pool."""
@@ -326,10 +322,10 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         metrics = self.telemetry.get_metrics(",".join(self.metric_names))
 
         pool_space = self.pool.info.pi_space
-        pool_space_metrics = self.get_pool_space_metrics(metrics)
+        pool_space_metrics = self.get_pool_space_metrics(self.pool, metrics)
         self.display_pool_space(pool_space, pool_space_metrics)
 
-        pool_aggr_metrics = self.get_pool_aggr_metrics(metrics)
+        pool_aggr_metrics = self.get_pool_aggr_metrics(self.pool, metrics)
         self.display_pool_aggregation(pool_aggr_metrics)
 
     def verify_enospace_log(self, log_file):
@@ -375,10 +371,14 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
                 "Number of errors %s (%s) is > 0: got=%d",
                 err_to_str(error), error, errors_count[error])
 
-    def delete_all_containers(self):
-        """Delete all the containers."""
+    def delete_all_containers(self, pool):
+        """Delete all the containers of a given pool.
+
+        Args:
+            pool (object): target TestPool.
+        """
         # List all the container
-        kwargs = {"pool": self.pool.uuid}
+        kwargs = {"pool": pool.uuid}
         data = self.daos_cmd.container_list(**kwargs)
         containers = [uuid_label["uuid"] for uuid_label in data["response"]]
 
@@ -582,7 +582,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             log_file = f"-loop_{_loop}".join(os.path.splitext(self.client_log))
             self.run_enospace_foreground(log_file)
             # Delete all the containers
-            self.delete_all_containers()
+            self.delete_all_containers(self.pool)
             # Delete container will take some time to release the space
             time.sleep(60)
 
@@ -644,7 +644,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             log_file = f"-loop_{_loop}".join(os.path.splitext(self.client_log))
             self.run_enospace_with_bg_job(log_file)
             # Delete all the containers
-            self.delete_all_containers()
+            self.delete_all_containers(self.pool)
             # Delete container will take some time to release the space
             time.sleep(60)
 
@@ -740,7 +740,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             self.verify_enospace_log(log_file)
 
             # Delete all the containers
-            self.delete_all_containers()
+            self.delete_all_containers(self.pool)
 
             # Wait for the SCM space to be released. (Usage goes below 60%)
             scm_released = False
