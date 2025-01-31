@@ -2377,7 +2377,7 @@ int
 crt_req_get_proto_ver(crt_rpc_t *req);
 
 /**
- * Get the rpc original address.
+ * Get the rpc origin address.
  *
  * \param[in] rpc		pointer to RPC request
  * \return			the origin address of the RPC
