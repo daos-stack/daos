@@ -1,0 +1,31 @@
+hosts:
+  test_servers: 1
+  test_clients: 1
+server_config:
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+  system_ram_reserved: 1
+pool:
+  size: 8G
+container:
+  type: POSIX
+  control_method: daos
+
+timeout: 2000
+
+checkpoint_no_chunking:
+  writes: 8
+
+checkpoint_chunking:
+  writes: 4
+  chunk_sizes: [449, 4096, 1048576, 4194304]
+  chunks_limits: [0, 1, 2, 3, 8]
+  workers: [1, 2, 3, 4]
