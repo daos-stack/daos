@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1871,4 +1872,13 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 
 out:
 	return rc;
+}
+
+char *
+crt_rpc_get_origin_addr(crt_rpc_t *rpc_pub)
+{
+	struct crt_rpc_priv *rpc_priv;
+
+	rpc_priv = container_of(rpc_pub, struct crt_rpc_priv, crp_pub);
+	return crt_rpc_priv_get_origin_addr(rpc_priv);
 }

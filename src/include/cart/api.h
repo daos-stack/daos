@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2344,6 +2345,15 @@ int crt_context_quota_limit_get(crt_context_t crt_ctx, crt_quota_type_t quota, i
  */
 int
 crt_req_get_proto_ver(crt_rpc_t *req);
+
+/**
+ * Get the rpc origin address.
+ *
+ * \param[in] rpc		pointer to RPC request
+ * \return			the origin address of the RPC
+ */
+char *
+crt_rpc_get_origin_addr(crt_rpc_t *rpc);
 
 /** @}
  */

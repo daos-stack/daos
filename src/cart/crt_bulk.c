@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -183,7 +184,8 @@ crt_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 
 	rc = crt_hg_bulk_transfer(bulk_desc, complete_cb, arg, opid, false);
 	if (rc != 0)
-		DL_ERROR(rc, "crt_hg_bulk_transfer() failed");
+		DL_ERROR(rc, "%p:%s crt_hg_bulk_transfer() failed", bulk_desc->bd_rpc,
+			 crt_rpc_get_origin_addr(bulk_desc->bd_rpc));
 
 out:
 	return rc;
@@ -203,7 +205,8 @@ crt_bulk_bind_transfer(struct crt_bulk_desc *bulk_desc,
 
 	rc = crt_hg_bulk_transfer(bulk_desc, complete_cb, arg, opid, true);
 	if (rc != 0)
-		D_ERROR("crt_hg_bulk_transfer() failed, rc: %d.\n", rc);
+		DL_ERROR(rc, "%p:%s crt_hg_bulk_transfer() failed.\n", bulk_desc->bd_rpc,
+			 crt_rpc_get_origin_addr(bulk_desc->bd_rpc));
 
 out:
 	return rc;

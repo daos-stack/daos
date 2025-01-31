@@ -1,6 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -27,6 +28,34 @@
 #include "crt_self_test.h"
 #include "crt_swim.h"
 
+static inline char *
+crt_rpc_priv_get_origin_addr(struct crt_rpc_priv *rpc_priv)
+{
+	const struct hg_info *hg_info;
+	char                  addr[48];
+	hg_size_t             addr_size = 48;
+	int                   rc;
+
+	if (rpc_priv->crp_orig_uri != NULL)
+		return rpc_priv->crp_orig_uri;
+
+	hg_info = HG_Get_info(rpc_priv->crp_hg_hdl);
+	if (hg_info == NULL)
+		return "None";
+
+	rc = HG_Addr_to_string(hg_info->hg_class, addr, (hg_size_t *)&addr_size, hg_info->addr);
+	if (rc != 0)
+		return "None";
+
+	D_ALLOC(rpc_priv->crp_orig_uri, addr_size);
+	if (rpc_priv->crp_orig_uri == NULL)
+		return "None";
+
+	memcpy(rpc_priv->crp_orig_uri, addr, addr_size);
+
+	return rpc_priv->crp_orig_uri;
+}
+
 /* A wrapper around D_TRACE_DEBUG that ensures the ptr option is a RPC */
 #define RPC_TRACE(mask, rpc, fmt, ...)                                                             \
 	do {                                                                                       \
@@ -38,13 +67,15 @@
                                                                                                    \
 		crt_opc_decode((rpc)->crp_pub.cr_opc, &_module, &_opc);                            \
 		if ((rpc)->crp_coll) {                                                             \
-			D_TRACE_DEBUG(mask, (rpc), "[opc=%#x (%s:%s) rpcid=%#lx CORPC] " fmt,      \
+			D_TRACE_DEBUG(mask, (rpc), "[opc=%#x (%s:%s:%s) rpcid=%#lx CORPC] " fmt,   \
 				      (rpc)->crp_pub.cr_opc, _module, _opc,                        \
+				      crt_rpc_priv_get_origin_addr((rpc)),                         \
 				      (rpc)->crp_req_hdr.cch_rpcid, ##__VA_ARGS__);                \
 		} else {                                                                           \
 			D_TRACE_DEBUG(mask, (rpc),                                                 \
-				      "[opc=%#x (%s:%s) rpcid=%#lx rank:tag=%d:%d] " fmt,          \
+				      "[opc=%#x (%s:%s:%s) rpcid=%#lx rank:tag=%d:%d] " fmt,       \
 				      (rpc)->crp_pub.cr_opc, _module, _opc,                        \
+				      crt_rpc_priv_get_origin_addr((rpc)),                         \
 				      (rpc)->crp_req_hdr.cch_rpcid, (rpc)->crp_pub.cr_ep.ep_rank,  \
 				      (rpc)->crp_pub.cr_ep.ep_tag, ##__VA_ARGS__);                 \
 		}                                                                                  \
@@ -58,12 +89,15 @@
                                                                                                    \
 		crt_opc_decode((rpc)->crp_pub.cr_opc, &_module, &_opc);                            \
 		if ((rpc)->crp_coll) {                                                             \
-			D_TRACE_ERROR((rpc), "[opc=%#x (%s:%s) rpcid=%#lx CORPC] " fmt,            \
+			D_TRACE_ERROR((rpc), "[opc=%#x (%s:%s:%s) rpcid=%#lx CORPC] " fmt,         \
 				      (rpc)->crp_pub.cr_opc, _module, _opc,                        \
+				      crt_rpc_priv_get_origin_addr((rpc)),                         \
 				      (rpc)->crp_req_hdr.cch_rpcid, ##__VA_ARGS__);                \
 		} else {                                                                           \
-			D_TRACE_ERROR((rpc), "[opc=%#x (%s:%s) rpcid=%#lx rank:tag=%d:%d] " fmt,   \
+			D_TRACE_ERROR((rpc),                                                       \
+				      "[opc=%#x (%s:%s:%s) rpcid=%#lx rank:tag=%d:%d] " fmt,       \
 				      (rpc)->crp_pub.cr_opc, _module, _opc,                        \
+				      crt_rpc_priv_get_origin_addr((rpc)),                         \
 				      (rpc)->crp_req_hdr.cch_rpcid, (rpc)->crp_pub.cr_ep.ep_rank,  \
 				      (rpc)->crp_pub.cr_ep.ep_tag, ##__VA_ARGS__);                 \
 		}                                                                                  \
@@ -77,12 +111,14 @@
                                                                                                    \
 		crt_opc_decode((rpc)->crp_pub.cr_opc, &_module, &_opc);                            \
 		if ((rpc)->crp_coll) {                                                             \
-			D_TRACE_WARN((rpc), "[opc=%#x (%s:%s) rpcid=%#lx CORPC] " fmt,             \
+			D_TRACE_WARN((rpc), "[opc=%#x (%s:%s:%s) rpcid=%#lx CORPC] " fmt,          \
 				     (rpc)->crp_pub.cr_opc, _module, _opc,                         \
+				     crt_rpc_priv_get_origin_addr((rpc)),                          \
 				     (rpc)->crp_req_hdr.cch_rpcid, ##__VA_ARGS__);                 \
 		} else {                                                                           \
-			D_TRACE_WARN((rpc), "[opc=%#x (%s:%s) rpcid=%#lx rank:tag=%d:%d] " fmt,    \
+			D_TRACE_WARN((rpc), "[opc=%#x (%s:%s:%s) rpcid=%#lx rank:tag=%d:%d] " fmt, \
 				     (rpc)->crp_pub.cr_opc, _module, _opc,                         \
+				     crt_rpc_priv_get_origin_addr((rpc)),                          \
 				     (rpc)->crp_req_hdr.cch_rpcid, (rpc)->crp_pub.cr_ep.ep_rank,   \
 				     (rpc)->crp_pub.cr_ep.ep_tag, ##__VA_ARGS__);                  \
 		}                                                                                  \
@@ -96,12 +132,14 @@
                                                                                                    \
 		crt_opc_decode((rpc)->crp_pub.cr_opc, &_module, &_opc);                            \
 		if ((rpc)->crp_coll) {                                                             \
-			D_TRACE_INFO((rpc), "[opc=%#x (%s:%s) rpcid=%#lx CORPC] " fmt,             \
+			D_TRACE_INFO((rpc), "[opc=%#x (%s:%s:%s) rpcid=%#lx CORPC] " fmt,          \
 				     (rpc)->crp_pub.cr_opc, _module, _opc,                         \
+				     crt_rpc_priv_get_origin_addr((rpc)),                          \
 				     (rpc)->crp_req_hdr.cch_rpcid, ##__VA_ARGS__);                 \
 		} else {                                                                           \
-			D_TRACE_INFO((rpc), "[opc=%#x (%s:%s) rpcid=%#lx rank:tag=%d:%d] " fmt,    \
+			D_TRACE_INFO((rpc), "[opc=%#x (%s:%s:%s) rpcid=%#lx rank:tag=%d:%d] " fmt, \
 				     (rpc)->crp_pub.cr_opc, _module, _opc,                         \
+				     crt_rpc_priv_get_origin_addr((rpc)),                          \
 				     (rpc)->crp_req_hdr.cch_rpcid, (rpc)->crp_pub.cr_ep.ep_rank,   \
 				     (rpc)->crp_pub.cr_ep.ep_tag, ##__VA_ARGS__);                  \
 		}                                                                                  \
