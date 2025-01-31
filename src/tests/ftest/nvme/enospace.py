@@ -66,10 +66,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             "engine_pool_vos_aggregation_epr_duration_max",
             "engine_pool_vos_aggregation_epr_duration_mean",
             "engine_pool_vos_aggregation_epr_duration_min",
-            # "engine_pool_vos_aggregation_epr_duration_samples",
-            "engine_pool_vos_aggregation_epr_duration_stddev",
-            # "engine_pool_vos_aggregation_epr_duration_sum",
-            # "engine_pool_vos_aggregation_epr_duration_sumsquares"
+            "engine_pool_vos_aggregation_epr_duration_stddev"
         ]
         self.metric_names = self.space_metric_names + self.aggr_metric_names
 
@@ -98,7 +95,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         """Return the metrics on space usage of a given pool.
 
         Args:
-            pool (object): target TestPool.
+            pool (TestPool): target TestPool.
             metrics (dict): telemetry metrics.
 
         Returns:
@@ -139,7 +136,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         """Return the metrics on aggregation counters and gauges.
 
         Args:
-            pool (object): target TestPool.
+            pool (TestPool): target TestPool.
             metrics (dict): telemetry metrics.
 
         Returns:
@@ -327,6 +324,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
 
         pool_aggr_metrics = self.get_pool_aggr_metrics(self.pool, metrics)
         self.display_pool_aggregation(pool_aggr_metrics)
+        self.log.debug("")
 
     def verify_enospace_log(self, log_file):
         """Function checking logs consistency.
@@ -375,7 +373,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         """Delete all the containers of a given pool.
 
         Args:
-            pool (object): target TestPool.
+            pool (TestPool): target TestPool.
         """
         # List all the container
         kwargs = {"pool": pool.uuid}
