@@ -428,6 +428,7 @@ type SystemStopReq struct {
 	msRequest
 	sysRequest
 	Force bool
+	Full  bool
 }
 
 // SystemStopResp contains the request response.
@@ -469,12 +470,18 @@ func SystemStop(ctx context.Context, rpcClient UnaryInvoker, req *SystemStopReq)
 	if req == nil {
 		return nil, errors.Errorf("nil %T request", req)
 	}
+	if req.Force && req.Full {
+		return nil, errors.New("force and full options cannot be mixed")
+	}
+	if req.Full && req.Ranks.String() != "" {
+		return nil, errors.New("full and ranks options cannot be mixed")
+	}
 
 	pbReq := &mgmtpb.SystemStopReq{
 		Hosts: req.Hosts.String(),
 		Ranks: req.Ranks.String(),
 		Sys:   req.getSystem(rpcClient),
-		Force: req.Force,
+		Force: !req.Full, // Force used unless full graceful shutdown requested.
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemStop(ctx, pbReq)

@@ -904,7 +904,11 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (
 
 	// First phase: Prepare the ranks for shutdown, but only if the request is for an unforced
 	// full system stop.
-	if fReq.FullSystem && !fReq.Force {
+	if !fReq.Force {
+		if !fReq.FullSystem {
+			return nil, errors.New("force must be used if not full system stop")
+		}
+
 		fReq.Method = control.PrepShutdownRanks
 		fResp, _, err = svc.rpcFanout(ctx, fReq, fResp, true)
 		if err != nil {
