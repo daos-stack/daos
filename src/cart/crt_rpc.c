@@ -574,13 +574,13 @@ crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv)
 	if (rpc_priv->crp_uri_free != 0)
 		D_FREE(rpc_priv->crp_tgt_uri);
 
-	if (rpc_priv->crp_orig_uri != NULL)
-		D_FREE(rpc_priv->crp_orig_uri);
-
 	D_MUTEX_DESTROY(&rpc_priv->crp_mutex);
 	D_SPIN_DESTROY(&rpc_priv->crp_lock);
 
 	RPC_TRACE(DB_TRACE, rpc_priv, "destroying\n");
+
+	if (rpc_priv->crp_orig_uri != NULL)
+		D_FREE(rpc_priv->crp_orig_uri);
 
 	D_FREE(rpc_priv);
 }
