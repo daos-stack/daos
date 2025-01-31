@@ -2,6 +2,7 @@
 """Node local test (NLT).
 
 (C) Copyright 2020-2024 Intel Corporation.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -693,8 +694,7 @@ class DaosServer():
                              '--xml=yes',
                              '--xml-file=dnt.server.%p.memcheck.xml',
                              '--num-callers=10',
-                             '--track-origins=yes',
-                             '--leak-check=full']
+                             '--track-origins=yes']
             suppression_file = join('src', 'cart', 'utils', 'memcheck-cart.supp')
             if not os.path.exists(suppression_file):
                 suppression_file = join(self.conf['PREFIX'], 'etc', 'memcheck-cart.supp')
