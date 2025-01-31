@@ -33,7 +33,7 @@ from util.storage_utils import StorageException
 from util.yaml_utils import YamlException
 
 DEFAULT_LOGS_THRESHOLD = "2150M"    # 2.1G
-MAX_CI_REPETITIONS = 20
+MAX_CI_REPETITIONS = 40
 
 
 class LaunchError(Exception):
