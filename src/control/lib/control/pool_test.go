@@ -235,16 +235,127 @@ func TestControl_PoolUpgrade(t *testing.T) {
 	}
 }
 
-func TestControl_PoolDrain(t *testing.T) {
+func TestControl_PoolRanksResp_Errors(t *testing.T) {
 	for name, tc := range map[string]struct {
-		mic    *MockInvokerConfig
-		req    *PoolDrainReq
+		resp   *PoolRanksResp
 		expErr error
 	}{
+		"nil resp": {
+			expErr: errors.New("nil"),
+		},
+		"no failure": {
+			resp: &PoolRanksResp{
+				ID:           test.MockUUID(),
+				SuccessRanks: []ranklist.Rank{0},
+				FailedRank:   ranklist.NilRank,
+			},
+		},
+		"failure; nil rank": {
+			resp: &PoolRanksResp{
+				ID:             test.MockUUID(),
+				Status:         int32(daos.MiscError),
+				FailedRank:     ranklist.NilRank,
+				InitialRankset: "0-3",
+			},
+			expErr: errors.Errorf("pool %s ranks 0-3: %s", test.MockUUID(),
+				daos.MiscError),
+		},
+		"failure; failed rank": {
+			resp: &PoolRanksResp{
+				ID:             test.MockUUID(),
+				Status:         int32(daos.MiscError),
+				FailedRank:     1,
+				InitialRankset: "0-3",
+			},
+			expErr: errors.Errorf("pool %s rank 1: %s", test.MockUUID(),
+				daos.MiscError),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.CmpErr(t, tc.expErr, tc.resp.Errors())
+		})
+	}
+}
+
+func TestControl_PoolRanksResp_GetResults(t *testing.T) {
+	for name, tc := range map[string]struct {
+		resp   *PoolRanksResp
+		errIn  error
+		expErr error
+		expRes []*PoolRanksResult
+	}{
+		"nil resp": {
+			expErr: errors.New("nil"),
+		},
+		"no failure; no successes": {
+			resp: &PoolRanksResp{
+				ID:         test.MockUUID(),
+				FailedRank: ranklist.NilRank,
+			},
+			expErr: errors.New("no ranks"),
+		},
+		"no failure; successes": {
+			resp: &PoolRanksResp{
+				ID:           test.MockUUID(),
+				SuccessRanks: []ranklist.Rank{0},
+				FailedRank:   ranklist.NilRank,
+			},
+			expRes: []*PoolRanksResult{
+				{ID: test.MockUUID(), Ranks: "0"},
+			},
+		},
+		"failure; nil rank": {
+			resp: &PoolRanksResp{
+				ID:             test.MockUUID(),
+				Status:         int32(daos.MiscError),
+				FailedRank:     ranklist.NilRank,
+				InitialRankset: "0-3",
+			},
+			expErr: errors.New("invalid rank"),
+		},
+		"failure; failed rank": {
+			resp: &PoolRanksResp{
+				ID:             test.MockUUID(),
+				Status:         int32(daos.MiscError),
+				FailedRank:     1,
+				InitialRankset: "0-3",
+			},
+			expRes: []*PoolRanksResult{
+				{
+					ID:     test.MockUUID(),
+					Ranks:  "1",
+					Status: int32(daos.MiscError),
+					Msg:    daos.MiscError.Error(),
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotRes, gotErr := tc.resp.GetResults(tc.errIn)
+
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expRes, gotRes); diff != "" {
+				t.Fatalf("Unexpected results (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestControl_PoolDrain(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mic     *MockInvokerConfig
+		req     *PoolRanksReq
+		expErr  error
+		expResp *PoolRanksResp
+	}{
 		"local failure": {
-			req: &PoolDrainReq{
+			req: &PoolRanksReq{
 				ID:        test.MockUUID(),
-				Rank:      2,
+				Ranks:     []ranklist.Rank{2},
 				TargetIdx: []uint32{1, 2, 3},
 			},
 			mic: &MockInvokerConfig{
@@ -253,9 +364,9 @@ func TestControl_PoolDrain(t *testing.T) {
 			expErr: errors.New("local failed"),
 		},
 		"remote failure": {
-			req: &PoolDrainReq{
+			req: &PoolRanksReq{
 				ID:        test.MockUUID(),
-				Rank:      2,
+				Ranks:     []ranklist.Rank{2},
 				TargetIdx: []uint32{1, 2, 3},
 			},
 			mic: &MockInvokerConfig{
@@ -264,15 +375,41 @@ func TestControl_PoolDrain(t *testing.T) {
 			expErr: errors.New("remote failed"),
 		},
 		"success": {
-			req: &PoolDrainReq{
+			req: &PoolRanksReq{
 				ID:        test.MockUUID(),
-				Rank:      2,
+				Ranks:     []ranklist.Rank{1, 2, 3},
 				TargetIdx: []uint32{1, 2, 3},
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
-					&mgmtpb.PoolDrainResp{},
+					&mgmtpb.PoolRanksResp{
+						SuccessRanks: []uint32{1, 2, 3},
+					},
 				),
+			},
+			expResp: &PoolRanksResp{
+				SuccessRanks: []ranklist.Rank{1, 2, 3},
+			},
+		},
+		"partial failure": {
+			req: &PoolRanksReq{
+				ID:        test.MockUUID(),
+				Ranks:     []ranklist.Rank{1, 2, 3},
+				TargetIdx: []uint32{1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolRanksResp{
+						SuccessRanks: []uint32{1},
+						FailedRank:   2,
+						Status:       -1,
+					},
+				),
+			},
+			expResp: &PoolRanksResp{
+				SuccessRanks: []ranklist.Rank{1},
+				FailedRank:   ranklist.Rank(2),
+				Status:       -1,
 			},
 		},
 	} {
@@ -288,10 +425,204 @@ func TestControl_PoolDrain(t *testing.T) {
 			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
-			gotErr := PoolDrain(ctx, mi, tc.req)
+			resp, gotErr := PoolDrain(ctx, mi, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
+			}
+
+			cmpOpt := cmpopts.IgnoreUnexported(mgmtpb.PoolRanksResp{})
+			if diff := cmp.Diff(tc.expResp, resp, cmpOpt); diff != "" {
+				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestControl_PoolReintegrate(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mic     *MockInvokerConfig
+		req     *PoolRanksReq
+		expErr  error
+		expResp *PoolRanksResp
+	}{
+		"local failure": {
+			req: &PoolRanksReq{
+				ID:        test.MockUUID(),
+				Ranks:     []ranklist.Rank{2},
+				TargetIdx: []uint32{1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("local failed"),
+			},
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			req: &PoolRanksReq{
+				ID:        test.MockUUID(),
+				Ranks:     []ranklist.Rank{2},
+				TargetIdx: []uint32{1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
+			},
+			expErr: errors.New("remote failed"),
+		},
+		"success": {
+			req: &PoolRanksReq{
+				ID:        test.MockUUID(),
+				Ranks:     []ranklist.Rank{1, 2, 3},
+				TargetIdx: []uint32{1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolRanksResp{
+						SuccessRanks: []uint32{1, 2, 3},
+					},
+				),
+			},
+			expResp: &PoolRanksResp{
+				SuccessRanks: []ranklist.Rank{1, 2, 3},
+			},
+		},
+		"partial failure": {
+			req: &PoolRanksReq{
+				ID:        test.MockUUID(),
+				Ranks:     []ranklist.Rank{1, 2, 3},
+				TargetIdx: []uint32{1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolRanksResp{
+						SuccessRanks: []uint32{1},
+						FailedRank:   2,
+						Status:       -1,
+					},
+				),
+			},
+			expResp: &PoolRanksResp{
+				SuccessRanks: []ranklist.Rank{1},
+				FailedRank:   ranklist.Rank(2),
+				Status:       -1,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mic := tc.mic
+			if mic == nil {
+				mic = DefaultMockInvokerConfig()
+			}
+
+			ctx := test.Context(t)
+			mi := NewMockInvoker(log, mic)
+
+			resp, gotErr := PoolReintegrate(ctx, mi, tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			cmpOpt := cmpopts.IgnoreUnexported(mgmtpb.PoolRanksResp{})
+			if diff := cmp.Diff(tc.expResp, resp, cmpOpt); diff != "" {
+				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestControl_PoolExclude(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mic     *MockInvokerConfig
+		req     *PoolRanksReq
+		expErr  error
+		expResp *PoolRanksResp
+	}{
+		"local failure": {
+			req: &PoolRanksReq{
+				ID:        test.MockUUID(),
+				Ranks:     []ranklist.Rank{2},
+				TargetIdx: []uint32{1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("local failed"),
+			},
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			req: &PoolRanksReq{
+				ID:        test.MockUUID(),
+				Ranks:     []ranklist.Rank{2},
+				TargetIdx: []uint32{1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
+			},
+			expErr: errors.New("remote failed"),
+		},
+		"success; with force": {
+			req: &PoolRanksReq{
+				ID:        test.MockUUID(),
+				Ranks:     []ranklist.Rank{1, 2, 3},
+				TargetIdx: []uint32{1, 2, 3},
+				Force:     true,
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolRanksResp{
+						SuccessRanks: []uint32{1, 2, 3},
+					},
+				),
+			},
+			expResp: &PoolRanksResp{
+				SuccessRanks: []ranklist.Rank{1, 2, 3},
+			},
+		},
+		"partial failure": {
+			req: &PoolRanksReq{
+				ID:        test.MockUUID(),
+				Ranks:     []ranklist.Rank{1, 2, 3},
+				TargetIdx: []uint32{1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolRanksResp{
+						SuccessRanks: []uint32{1},
+						FailedRank:   2,
+						Status:       -1,
+					},
+				),
+			},
+			expResp: &PoolRanksResp{
+				SuccessRanks: []ranklist.Rank{1},
+				FailedRank:   ranklist.Rank(2),
+				Status:       -1,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mic := tc.mic
+			if mic == nil {
+				mic = DefaultMockInvokerConfig()
+			}
+
+			ctx := test.Context(t)
+			mi := NewMockInvoker(log, mic)
+
+			resp, gotErr := PoolExclude(ctx, mi, tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			cmpOpt := cmpopts.IgnoreUnexported(mgmtpb.PoolRanksResp{})
+			if diff := cmp.Diff(tc.expResp, resp, cmpOpt); diff != "" {
+				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

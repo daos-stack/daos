@@ -311,12 +311,13 @@ type systemDrainCmd struct {
 }
 
 func (cmd *systemDrainCmd) execute(reint bool) (errOut error) {
+	var opStr string
 	defer func() {
-		op := "drain"
+		opStr = "drain"
 		if reint {
-			op = "reintegrate"
+			opStr = "reintegrate"
 		}
-		errOut = errors.Wrapf(errOut, "system %s failed", op)
+		errOut = errors.Wrapf(errOut, "system %s failed", opStr)
 	}()
 
 	if err := cmd.validateHostsRanks(); err != nil {
@@ -342,7 +343,7 @@ func (cmd *systemDrainCmd) execute(reint bool) (errOut error) {
 	}
 
 	var out strings.Builder
-	pretty.PrintPoolRankResults(&out, resp.Results)
+	pretty.PrintPoolRankResults(&out, opStr, resp.Results)
 	cmd.Info(out.String())
 
 	return resp.Errors()

@@ -567,17 +567,6 @@ func SystemExclude(ctx context.Context, rpcClient UnaryInvoker, req *SystemExclu
 	return resp, convertMSResponse(ur, resp)
 }
 
-// PoolRankResult describes the result of an OSA operation on a pool's ranks.
-type PoolRankResult struct {
-	Status int32  `json:"status"`  // Status returned from a specific OSA dRPC call
-	Msg    string `json:"msg"`     // Error message if Status is not Success
-	PoolID string `json:"pool_id"` // Unique identifier for pool
-	Ranks  string `json:"ranks"`   // RankSet of ranks that should be operated on
-}
-
-// PoolRankResults is an alias for a PoolRankResult slice.
-type PoolRankResults []*PoolRankResult
-
 // SystemDrainReq contains the inputs for the system drain request.
 type SystemDrainReq struct {
 	unaryRequest
@@ -591,7 +580,7 @@ type SystemDrainReq struct {
 // in the response so decoding is not required.
 type SystemDrainResp struct {
 	sysResponse `json:"-"`
-	Results     PoolRankResults `json:"results"`
+	Results     []*PoolRanksResult `json:"results"`
 }
 
 // Errors returns a single error combining all error messages associated with pool-rank results.
@@ -600,7 +589,7 @@ func (resp *SystemDrainResp) Errors() (err error) {
 	for _, r := range resp.Results {
 		if r.Status != int32(daos.Success) {
 			err = concatErrs(err,
-				errors.Errorf("pool %s ranks %s: %s", r.PoolID, r.Ranks, r.Msg))
+				errors.Errorf("pool %s ranks %s: %s", r.ID, r.Ranks, r.Msg))
 		}
 	}
 	return

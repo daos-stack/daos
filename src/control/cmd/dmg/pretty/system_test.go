@@ -615,57 +615,61 @@ Unknown 3 hosts: foo[7-9]
 
 func TestPretty_PrintPoolRankResults(t *testing.T) {
 	for name, tc := range map[string]struct {
-		results []*control.PoolRankResult
+		op      string
+		results []*control.PoolRanksResult
 		expOut  string
 	}{
 		"normal response": {
-			results: []*control.PoolRankResult{
-				{PoolID: test.MockUUID(1), Ranks: "0-3"},
-				{PoolID: test.MockUUID(2), Ranks: "1-4"},
+			op: "drain",
+			results: []*control.PoolRanksResult{
+				{ID: test.MockUUID(1), Ranks: "0-3"},
+				{ID: test.MockUUID(2), Ranks: "1-4"},
 			},
 			expOut: `
-Pool                                 Ranks Result Reason 
-----                                 ----- ------ ------ 
-00000001-0001-0001-0001-000000000001 0-3   OK     -      
-00000002-0002-0002-0002-000000000002 1-4   OK     -      
+Pool                                 Ranks Result   Reason 
+----                                 ----- ------   ------ 
+00000001-0001-0001-0001-000000000001 0-3   drain OK -      
+00000002-0002-0002-0002-000000000002 1-4   drain OK -      
 
 `,
 		},
 		"normal response; use labels": {
-			results: []*control.PoolRankResult{
-				{PoolID: "label1", Ranks: "0-3"},
-				{PoolID: "label2", Ranks: "1-4"},
+			op: "drain",
+			results: []*control.PoolRanksResult{
+				{ID: "label1", Ranks: "0-3"},
+				{ID: "label2", Ranks: "1-4"},
 			},
 			expOut: `
-Pool   Ranks Result Reason 
-----   ----- ------ ------ 
-label1 0-3   OK     -      
-label2 1-4   OK     -      
+Pool   Ranks Result   Reason 
+----   ----- ------   ------ 
+label1 0-3   drain OK -      
+label2 1-4   drain OK -      
 
 `,
 		},
 		"response with failures": {
-			results: []*control.PoolRankResult{
-				{PoolID: test.MockUUID(1), Ranks: "1-2"},
-				{PoolID: test.MockUUID(2), Ranks: "0"},
+			op: "reintegrate",
+			results: []*control.PoolRanksResult{
+				{ID: test.MockUUID(1), Ranks: "1-2"},
+				{ID: test.MockUUID(2), Ranks: "0"},
 				{
-					PoolID: test.MockUUID(2), Ranks: "1-2",
+					ID: test.MockUUID(2), Ranks: "1-2",
 					Status: -1, Msg: "fail1",
 				},
 			},
 			expOut: `
-Pool                                 Ranks Result Reason 
-----                                 ----- ------ ------ 
-00000001-0001-0001-0001-000000000001 1-2   OK     -      
-00000002-0002-0002-0002-000000000002 0     OK     -      
-00000002-0002-0002-0002-000000000002 1-2   FAIL   fail1  
+Pool                                 Ranks Result           Reason 
+----                                 ----- ------           ------ 
+00000001-0001-0001-0001-000000000001 1-2   reintegrate OK   -      
+00000002-0002-0002-0002-000000000002 0     reintegrate OK   -      
+00000002-0002-0002-0002-000000000002 1-2   reintegrate FAIL fail1  
 
 `,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var out strings.Builder
-			PrintPoolRankResults(&out, tc.results)
+			PrintPoolRankResults(&out, tc.op, tc.results)
 
 			if diff := cmp.Diff(strings.TrimLeft(tc.expOut, "\n"), out.String()); diff != "" {
 				t.Fatalf("unexpected stdout (-want, +got):\n%s\n", diff)

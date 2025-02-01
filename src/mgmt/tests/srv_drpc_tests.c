@@ -1789,7 +1789,8 @@ setup_exclude_drpc_call(Drpc__Call *call, char *uuid, uint32_t rank)
 
 	req.id = uuid;
 	req.n_target_idx = 3;
-	req.rank = rank;
+	req.n_ranks      = 3;
+	req.ranks        = TEST_RANKS;
 	req.target_idx   = TEST_IDXS;
 	pack_pool_exclude_req(call, &req);
 }
@@ -1894,25 +1895,25 @@ setup_drain_drpc_call(Drpc__Call *call, char *uuid, uint32_t rank)
 
 	req.id = uuid;
 	req.n_target_idx = 3;
-	req.rank = rank;
+	req.n_ranks      = 3;
+	req.ranks        = TEST_RANKS;
 	req.target_idx   = TEST_IDXS;
 	pack_pool_drain_req(call, &req);
 }
 
 static void
-expect_drpc_drain_resp_with_error(Drpc__Response *resp, int exp_error)
+expect_drpc_ranks_resp_with_error(Drpc__Response *resp, int exp_error)
 {
-	Mgmt__PoolDrainResp	*pc_resp = NULL;
+	Mgmt__PoolRanksResp *pc_resp = NULL;
 
 	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
 	assert_non_null(resp->body.data);
 
-	pc_resp = mgmt__pool_drain_resp__unpack(NULL, resp->body.len,
-						  resp->body.data);
+	pc_resp = mgmt__pool_ranks_resp__unpack(NULL, resp->body.len, resp->body.data);
 	assert_non_null(pc_resp);
 	assert_int_equal(pc_resp->status, exp_error);
 
-	mgmt__pool_drain_resp__free_unpacked(pc_resp, NULL);
+	mgmt__pool_ranks_resp__free_unpacked(pc_resp, NULL);
 }
 
 static void
@@ -1925,7 +1926,7 @@ test_drpc_drain_bad_uuid(void **state)
 
 	ds_mgmt_drpc_pool_drain(&call, &resp);
 
-	expect_drpc_drain_resp_with_error(&resp, -DER_INVAL);
+	expect_drpc_ranks_resp_with_error(&resp, -DER_INVAL);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
@@ -1941,8 +1942,7 @@ test_drpc_drain_mgmt_svc_fails(void **state)
 	ds_mgmt_target_update_return = -DER_MISC;
 
 	ds_mgmt_drpc_pool_drain(&call, &resp);
-	expect_drpc_drain_resp_with_error(&resp,
-					       ds_mgmt_target_update_return);
+	expect_drpc_ranks_resp_with_error(&resp, ds_mgmt_target_update_return);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
@@ -1957,7 +1957,7 @@ test_drpc_drain_success(void **state)
 	setup_drain_drpc_call(&call, TEST_UUID, 0);
 	ds_mgmt_drpc_pool_drain(&call, &resp);
 
-	expect_drpc_drain_resp_with_error(&resp, 0);
+	expect_drpc_ranks_resp_with_error(&resp, 0);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
@@ -2098,21 +2098,6 @@ setup_reint_drpc_call(Drpc__Call *call, char *uuid)
 }
 
 static void
-expect_drpc_reint_resp_with_error(Drpc__Response *resp, int exp_error)
-{
-	Mgmt__PoolReintResp *pc_resp = NULL;
-
-	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
-	assert_non_null(resp->body.data);
-
-	pc_resp = mgmt__pool_reint_resp__unpack(NULL, resp->body.len, resp->body.data);
-	assert_non_null(pc_resp);
-	assert_int_equal(pc_resp->status, exp_error);
-
-	mgmt__pool_reint_resp__free_unpacked(pc_resp, NULL);
-}
-
-static void
 test_drpc_reint_bad_uuid(void **state)
 {
 	Drpc__Call	call = DRPC__CALL__INIT;
@@ -2122,7 +2107,7 @@ test_drpc_reint_bad_uuid(void **state)
 
 	ds_mgmt_drpc_pool_reintegrate(&call, &resp);
 
-	expect_drpc_reint_resp_with_error(&resp, -DER_INVAL);
+	expect_drpc_ranks_resp_with_error(&resp, -DER_INVAL);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);

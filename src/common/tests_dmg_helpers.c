@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1063,7 +1064,9 @@ dmg_pool_target(const char *cmd, const char *dmg_config_file, const uuid_t uuid,
 			D_GOTO(out, rc = -DER_NOMEM);
 	}
 
-	args = cmd_push_arg(args, &argcount, "--rank=%d ", rank);
+	// Exclude, drain and reintegrate take ranks option which can be either a rank-list range or
+	// a single rank identifier.
+	args = cmd_push_arg(args, &argcount, "--ranks=%d ", rank);
 	if (args == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 

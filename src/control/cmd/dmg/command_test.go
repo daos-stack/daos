@@ -160,14 +160,12 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 	case *control.PoolGetACLReq, *control.PoolOverwriteACLReq,
 		*control.PoolUpdateACLReq, *control.PoolDeleteACLReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.ACLResp{})
-	case *control.PoolExcludeReq:
-		resp = control.MockMSResponse("", nil, &mgmtpb.PoolExcludeResp{})
-	case *control.PoolDrainReq:
-		resp = control.MockMSResponse("", nil, &mgmtpb.PoolDrainResp{})
+	case *control.PoolRanksReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolRanksResp{
+			SuccessRanks: []uint32{0},
+		})
 	case *control.PoolExtendReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolExtendResp{})
-	case *control.PoolReintegrateReq:
-		resp = control.MockMSResponse("", nil, &mgmtpb.PoolReintResp{})
 	case *control.SystemCheckEnableReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
 	case *control.SystemCheckDisableReq:

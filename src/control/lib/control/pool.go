@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2024 Intel Corporation.
+//
 // (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -744,80 +744,157 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 	return resp, nil
 }
 
-// PoolExcludeReq struct contains request
-type PoolExcludeReq struct {
-	poolRequest
-	ID        string
-	Rank      ranklist.Rank
-	TargetIdx []uint32
-	Force     bool
+// PoolRanksResult describes the result of an OSA operation on a pool's ranks.
+type PoolRanksResult struct {
+	Status int32  `json:"status"` // Status returned from a specific OSA dRPC call
+	Msg    string `json:"msg"`    // Error message if Status is not Success
+	ID     string `json:"id"`     // Unique identifier for pool
+	Ranks  string `json:"ranks"`  // RankSet of ranks that should be operated on
 }
 
-// ExcludeResp has no other parameters other than success/failure for now.
+// PoolRanksReq struct contains request for operation on multiple pool-ranks.
+type PoolRanksReq struct {
+	poolRequest
+	ID        string          `json:"id"`
+	Ranks     []ranklist.Rank `json:"ranks"`
+	TargetIdx []uint32        `json:"target_idx"`
+	Force     bool            `json:"force"`
+}
 
-// PoolExclude will set a pool target for a specific rank to down.
-// This should automatically start the rebuildiing process.
-// Returns an error (including any DER code from DAOS).
-func PoolExclude(ctx context.Context, rpcClient UnaryInvoker, req *PoolExcludeReq) error {
-	pbReq := &mgmtpb.PoolExcludeReq{
-		Sys:       req.getSystem(rpcClient),
-		Id:        req.ID,
-		Rank:      req.Rank.Uint32(),
-		TargetIdx: req.TargetIdx,
-		Force:     req.Force,
+// PoolRanksResp struct contains response from operation on multiple pool-ranks.
+type PoolRanksResp struct {
+	Status         int32           `json:"status"`
+	ID             string          `json:"id"`
+	FailedRank     ranklist.Rank   `json:"failed_rank"`
+	SuccessRanks   []ranklist.Rank `json:"success_ranks"`
+	InitialRankset string          `json:"initial_rankset"`
+}
+
+func (resp *PoolRanksResp) Errors() error {
+	if resp == nil {
+		return errors.Errorf("nil %T", resp)
 	}
+	if resp.Status == int32(daos.Success) {
+		return nil
+	}
+	err := daos.Status(resp.Status)
+
+	if resp.FailedRank == ranklist.NilRank {
+		return errors.Wrapf(err, "pool %s ranks %s", resp.ID, resp.InitialRankset)
+	}
+
+	return errors.Wrapf(err, "pool %s rank %d", resp.ID, resp.FailedRank)
+}
+
+// GetResults returns a slice of results from the response and input error.
+func (resp *PoolRanksResp) GetResults(errIn error) ([]*PoolRanksResult, error) {
+	if resp == nil {
+		return nil, errors.Errorf("nil %T", resp)
+	}
+	results := []*PoolRanksResult{}
+
+	if errIn != nil {
+		// Return root cause so rank results can be aggregated if required.
+		msgErr := errIn.Error()
+		if f, ok := errors.Cause(errIn).(*fault.Fault); ok {
+			msgErr = f.Error()
+		}
+		results = append(results, &PoolRanksResult{
+			ID:     resp.ID,
+			Ranks:  resp.InitialRankset,
+			Status: int32(daos.MiscError),
+			Msg:    msgErr,
+		})
+
+		return results, nil
+	}
+
+	if resp.Status != int32(daos.Success) {
+		if resp.FailedRank == ranklist.NilRank {
+			return nil, errors.New("invalid rank returned with non-zero status")
+		}
+		// Add one result for failed rank.
+		results = append(results, &PoolRanksResult{
+			ID:     resp.ID,
+			Ranks:  fmt.Sprintf("%d", resp.FailedRank),
+			Status: resp.Status,
+			Msg:    daos.Status(resp.Status).Error(),
+		})
+	} else if len(resp.SuccessRanks) == 0 {
+		// Expected that at least one result will be generated for each pool.
+		return nil, errors.Errorf("no ranks were operated on for pool %s", resp.ID)
+	}
+
+	if len(resp.SuccessRanks) != 0 {
+		rsSuccess := ranklist.RankSetFromRanks(resp.SuccessRanks)
+		results = append(results, &PoolRanksResult{
+			ID:    resp.ID,
+			Ranks: rsSuccess.String(),
+		})
+	}
+
+	return results, nil
+}
+
+// PoolExclude will set pool targets on specified ranks to down state which should automatically
+// start the rebuildiing process. Returns pool-ranks response and error.
+func PoolExclude(ctx context.Context, rpcClient UnaryInvoker, req *PoolRanksReq) (*PoolRanksResp, error) {
+	pbReq := new(mgmtpb.PoolExcludeReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return nil, errors.Wrapf(err, "convert %T->%T", req, pbReq)
+	}
+
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolExclude(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Exclude DAOS pool target request: %s\n", pbReq)
+	rpcClient.Debugf("Exclude DAOS pool-rank targets request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
-		return err
+		return nil, err
+	}
+	if msErr := ur.getMSError(); err != nil {
+		return nil, errors.Wrap(msErr, "pool exclude failed")
 	}
 
-	return errors.Wrap(ur.getMSError(), "pool exclude failed")
-}
-
-// PoolDrainReq struct contains request
-type PoolDrainReq struct {
-	poolRequest
-	ID        string
-	Rank      ranklist.Rank
-	TargetIdx []uint32
-}
-
-// DrainResp has no other parameters other than success/failure for now.
-
-// PoolDrain will set a pool target for a specific rank in to the drain state which should
-// automatically start the rebuildiing process. Returns an error (including any DER code from DAOS).
-func PoolDrain(ctx context.Context, rpcClient UnaryInvoker, req *PoolDrainReq) error {
-	pbReq := &mgmtpb.PoolDrainReq{
-		Sys:       req.getSystem(rpcClient),
-		Id:        req.ID,
-		Rank:      req.Rank.Uint32(),
-		TargetIdx: req.TargetIdx,
+	resp := new(PoolRanksResp)
+	if err := convertMSResponse(ur, resp); err != nil {
+		return nil, err
 	}
+	rpcClient.Debugf("Exclude DAOS pool-rank targets response: %+v\n", resp)
+
+	return resp, nil
+}
+
+// PoolDrain will set pool targets on specified ranks in to the drain state which should
+// automatically start the rebuildiing process. Returns pool-ranks response and error.
+// Drain engages a cooperative transfer of data before rank gets excluded.
+func PoolDrain(ctx context.Context, rpcClient UnaryInvoker, req *PoolRanksReq) (*PoolRanksResp, error) {
+	pbReq := new(mgmtpb.PoolDrainReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return nil, errors.Wrapf(err, "convert %T->%T", req, pbReq)
+	}
+
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolDrain(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Drain DAOS pool target request: %s\n", pbUtil.Debug(pbReq))
+	rpcClient.Debugf("Drain DAOS pool-rank targets request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
-		return err
-	}
-
-	return errors.Wrap(ur.getMSError(), "pool drain failed")
-}
-
-func genPoolExtendRequest(in *PoolExtendReq) (out *mgmtpb.PoolExtendReq, err error) {
-	out = new(mgmtpb.PoolExtendReq)
-	if err = convert.Types(in, out); err != nil {
 		return nil, err
 	}
+	if msErr := ur.getMSError(); err != nil {
+		return nil, errors.Wrap(msErr, "pool drain failed")
+	}
 
-	return
+	resp := new(PoolRanksResp)
+	if err := convertMSResponse(ur, resp); err != nil {
+		return nil, err
+	}
+	rpcClient.Debugf("Drain DAOS pool-rank targets response: %+v\n", resp)
+
+	return resp, nil
 }
 
 // PoolExtendReq struct contains request
@@ -831,9 +908,9 @@ type PoolExtendReq struct {
 // This should automatically start the rebalance process.
 // Returns an error (including any DER code from DAOS).
 func PoolExtend(ctx context.Context, rpcClient UnaryInvoker, req *PoolExtendReq) error {
-	pbReq, err := genPoolExtendRequest(req)
-	if err != nil {
-		return errors.Wrap(err, "failed to generate PoolExtend request")
+	pbReq := new(mgmtpb.PoolExtendReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return errors.Wrapf(err, "convert %T->%T", req, pbReq)
 	}
 	pbReq.Sys = req.getSystem(rpcClient)
 
@@ -850,36 +927,34 @@ func PoolExtend(ctx context.Context, rpcClient UnaryInvoker, req *PoolExtendReq)
 	return errors.Wrap(ur.getMSError(), "pool extend failed")
 }
 
-// PoolReintegrateReq struct contains request
-type PoolReintegrateReq struct {
-	poolRequest
-	ID        string
-	Rank      ranklist.Rank
-	TargetIdx []uint32
-}
-
-// PoolReintegrate will set a pool target for a specific rank back to up.
-// This should automatically start the reintegration process.
-// Returns an error (including any DER code from DAOS).
-func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolReintegrateReq) error {
-	pbReq := &mgmtpb.PoolReintReq{
-		Sys:       req.getSystem(rpcClient),
-		Id:        req.ID,
-		Rank:      req.Rank.Uint32(),
-		TargetIdx: req.TargetIdx,
+// PoolReintegrate will set pool targets on specified ranks back to up state which should
+// automatically start the reintegration process. Returns pool-ranks response and error.
+func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolRanksReq) (*PoolRanksResp, error) {
+	pbReq := new(mgmtpb.PoolReintReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return nil, errors.Wrapf(err, "convert %T->%T", req, pbReq)
 	}
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolReintegrate(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Reintegrate DAOS pool target request: %s\n", pbUtil.Debug(pbReq))
+	rpcClient.Debugf("Reintegrate DAOS pool-rank targets request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
-		return err
+		return nil, err
+	}
+	if msErr := ur.getMSError(); err != nil {
+		return nil, errors.Wrap(msErr, "pool drain failed")
 	}
 
-	return errors.Wrap(ur.getMSError(), "pool reintegrate failed")
+	resp := new(PoolRanksResp)
+	if err := convertMSResponse(ur, resp); err != nil {
+		return nil, err
+	}
+	rpcClient.Debugf("Reintegrate DAOS pool-rank targets response: %s\n", resp)
+
+	return resp, nil
 }
 
 // ListPoolsReq contains the inputs for the list pools command.
