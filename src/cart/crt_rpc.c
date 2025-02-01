@@ -1601,7 +1601,7 @@ crt_reply_send(crt_rpc_t *req)
 		rc = crt_hg_reply_send(rpc_priv);
 		if (rc != 0)
 			D_ERROR("crt_hg_reply_send failed, rc: %d,opc: %#x.: %s\n", rc,
-				rpc_priv->crp_pub.cr_opc, crt_rpc_get_origin_addr(req));
+				rpc_priv->crp_pub.cr_opc, crt_req_origin_addr_get(req));
 	}
 
 	rpc_priv->crp_reply_pending = 0;

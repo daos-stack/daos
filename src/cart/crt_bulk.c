@@ -185,7 +185,7 @@ crt_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 	rc = crt_hg_bulk_transfer(bulk_desc, complete_cb, arg, opid, false);
 	if (rc != 0)
 		DL_ERROR(rc, "%p:%s crt_hg_bulk_transfer() failed", bulk_desc->bd_rpc,
-			 crt_rpc_get_origin_addr(bulk_desc->bd_rpc));
+			 crt_req_origin_addr_get(bulk_desc->bd_rpc));
 
 out:
 	return rc;
@@ -205,8 +205,8 @@ crt_bulk_bind_transfer(struct crt_bulk_desc *bulk_desc,
 
 	rc = crt_hg_bulk_transfer(bulk_desc, complete_cb, arg, opid, true);
 	if (rc != 0)
-		DL_ERROR(rc, "%p:%s crt_hg_bulk_transfer() failed.\n", bulk_desc->bd_rpc,
-			 crt_rpc_get_origin_addr(bulk_desc->bd_rpc));
+		DL_ERROR(rc, "%p:%s crt_hg_bulk_transfer() failed.", bulk_desc->bd_rpc,
+			 crt_req_origin_addr_get(bulk_desc->bd_rpc));
 
 out:
 	return rc;

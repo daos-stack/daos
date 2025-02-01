@@ -2383,7 +2383,7 @@ crt_req_get_proto_ver(crt_rpc_t *req);
  * \return			the origin address of the RPC
  */
 char *
-crt_rpc_get_origin_addr(crt_rpc_t *rpc);
+crt_req_origin_addr_get(crt_rpc_t *rpc);
 
 /** @}
  */

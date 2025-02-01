@@ -40,15 +40,15 @@ crt_rpc_priv_get_origin_addr(struct crt_rpc_priv *rpc_priv)
 
 	hg_info = HG_Get_info(rpc_priv->crp_hg_hdl);
 	if (hg_info == NULL)
-		return "None";
+		return "NOINFO";
 
 	rc = HG_Addr_to_string(hg_info->hg_class, addr, (hg_size_t *)&addr_size, hg_info->addr);
 	if (rc != 0)
-		return "None";
+		return "NONE";
 
 	D_ALLOC(rpc_priv->crp_orig_uri, addr_size);
 	if (rpc_priv->crp_orig_uri == NULL)
-		return "None";
+		return "NOMEM";
 
 	memcpy(rpc_priv->crp_orig_uri, addr, addr_size);
 
