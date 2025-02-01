@@ -920,7 +920,7 @@ class DaosServer():
             self.conf.wf.issues.append(entry)
             self._add_test_case('server_stop', failure=message)
         start = time.perf_counter()
-        rc = self.run_dmg(['system', 'stop' '--full'])
+        rc = self.run_dmg(['system', 'stop', '--full'])
         if rc.returncode != 0:
             print(rc)
             entry = {}
