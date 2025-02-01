@@ -54,6 +54,8 @@ const (
 	msgInvalidRank = "invalid ranks: check rank status"
 )
 
+var errSysForceNotFull = errors.New("force must be used if not full system stop")
+
 // GetAttachInfo handles a request to retrieve a map of ranks to fabric URIs, in addition
 // to client network autoconfiguration hints.
 //
@@ -906,7 +908,7 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (
 	// full system stop.
 	if !fReq.Force {
 		if !fReq.FullSystem {
-			return nil, errors.New("force must be used if not full system stop")
+			return nil, errSysForceNotFull
 		}
 
 		fReq.Method = control.PrepShutdownRanks

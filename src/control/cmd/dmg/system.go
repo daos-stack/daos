@@ -178,7 +178,7 @@ func (cmd *systemEraseCmd) Execute(_ []string) error {
 type systemStopCmd struct {
 	baseRankListCmd
 	Force bool `long:"force" description:"Force stop DAOS system members"`
-	Full  bool `long:"full" description:"Attempt a full shutdown of DAOS system"`
+	Full  bool `long:"full" description:"Attempt a graceful shutdown of DAOS system. Experimental and not for use in production environments"`
 }
 
 // Execute is run when systemStopCmd activates.
@@ -190,6 +190,9 @@ func (cmd *systemStopCmd) Execute(_ []string) (errOut error) {
 	}()
 	if cmd.Force && cmd.Full {
 		return errIncompatFlags("force", "full")
+	}
+	if cmd.Full && !cmd.Hosts.Empty() {
+		return errIncompatFlags("full", "rank-hosts")
 	}
 	if cmd.Full && !cmd.Ranks.Empty() {
 		return errIncompatFlags("full", "ranks")

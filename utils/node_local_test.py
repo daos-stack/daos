@@ -2,6 +2,7 @@
 """Node local test (NLT).
 
 (C) Copyright 2020-2024 Intel Corporation.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP
 (C) Copyright 2025 Enakta Labs Ltd
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -919,7 +920,7 @@ class DaosServer():
             self.conf.wf.issues.append(entry)
             self._add_test_case('server_stop', failure=message)
         start = time.perf_counter()
-        rc = self.run_dmg(['system', 'stop'])
+        rc = self.run_dmg(['system', 'stop' '--full'])
         if rc.returncode != 0:
             print(rc)
             entry = {}
@@ -927,7 +928,7 @@ class DaosServer():
             # pylint: disable=protected-access
             entry['lineStart'] = sys._getframe().f_lineno
             entry['severity'] = 'ERROR'
-            msg = f'dmg system stop failed with {rc.returncode}'
+            msg = f'dmg system stop --full failed with {rc.returncode}'
             entry['message'] = msg
             self.conf.wf.issues.append(entry)
         if not self.valgrind:

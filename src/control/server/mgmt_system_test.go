@@ -1566,9 +1566,16 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			expInvokeCount: 2,
 		},
 		"stop some ranks": {
-			req:        &mgmtpb.SystemStopReq{Ranks: "0,1"},
-			mResps:     [][]*control.HostResponse{{hr(1, mockRankSuccess("stop", 0), mockRankSuccess("stop", 1))}},
-			expResults: []*sharedpb.RankResult{mockRankSuccess("stop", 0, 1), mockRankSuccess("stop", 1, 1)},
+			req: &mgmtpb.SystemStopReq{Ranks: "0,1", Force: true},
+			mResps: [][]*control.HostResponse{
+				{
+					hr(1, mockRankSuccess("stop", 0), mockRankSuccess("stop", 1)),
+				},
+			},
+			expResults: []*sharedpb.RankResult{
+				mockRankSuccess("stop", 0, 1),
+				mockRankSuccess("stop", 1, 1),
+			},
 			expMembers: func() system.Members {
 				return system.Members{
 					mockMember(t, 0, 1, "stopped"),
@@ -1578,9 +1585,9 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			},
 			expInvokeCount: 1, // prep should not be called
 		},
-		"stop with all ranks (same as full system stop)": {
-			req:        &mgmtpb.SystemStopReq{Ranks: "0,1,3"},
-			mResps:     hostRespSuccess,
+		"stop with all ranks": {
+			req:        &mgmtpb.SystemStopReq{Ranks: "0,1,3", Force: true},
+			mResps:     hostRespStopSuccess,
 			expResults: rankResStopSuccess,
 			expMembers: func() system.Members {
 				return system.Members{
@@ -1589,7 +1596,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 					mockMember(t, 3, 2, "stopped"),
 				}
 			},
-			expInvokeCount: 2, // prep should be called
+			expInvokeCount: 1, // prep should not be called
 		},
 		"full system stop": {
 			req:        &mgmtpb.SystemStopReq{},
@@ -1603,6 +1610,11 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 				}
 			},
 			expInvokeCount: 2, // prep should be called
+		},
+		"full system stop; partial ranks in req": {
+			req:       &mgmtpb.SystemStopReq{Ranks: "0,1"},
+			mResps:    hostRespStopSuccess,
+			expAPIErr: errSysForceNotFull,
 		},
 		"full system stop (forced)": {
 			req:        &mgmtpb.SystemStopReq{Force: true},

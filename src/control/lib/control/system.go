@@ -471,10 +471,13 @@ func SystemStop(ctx context.Context, rpcClient UnaryInvoker, req *SystemStopReq)
 		return nil, errors.Errorf("nil %T request", req)
 	}
 	if req.Force && req.Full {
-		return nil, errors.New("force and full options cannot be mixed")
+		return nil, errors.New("force and full options may not be mixed")
+	}
+	if req.Full && req.Hosts.String() != "" {
+		return nil, errors.New("full and hosts options may not be mixed")
 	}
 	if req.Full && req.Ranks.String() != "" {
-		return nil, errors.New("full and ranks options cannot be mixed")
+		return nil, errors.New("full and ranks options may not be mixed")
 	}
 
 	pbReq := &mgmtpb.SystemStopReq{
