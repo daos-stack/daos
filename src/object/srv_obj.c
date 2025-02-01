@@ -183,10 +183,8 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint64_t epoch, bool release_input,
 		orwo->orw_epoch = max(epoch, orwo->orw_epoch);
 	}
 
-	DL_CDEBUG(status == 0 || obj_retry_error(status), DB_IO, DLOG_ERR, status,
-		  "rpc %p:%s opc %d send reply, pmv %d, epoch " DF_X64 ", status %d\n", rpc,
-		  crt_rpc_get_origin_addr(rpc), opc_get(rpc->cr_opc), ioc->ioc_map_ver,
-		  orwo->orw_epoch, status);
+	D_DEBUG(DB_IO, "rpc %p opc %d send reply, pmv %d, epoch " DF_X64 ", status %d\n", rpc,
+		opc_get(rpc->cr_opc), ioc->ioc_map_ver, orwo->orw_epoch, status);
 
 	if (!ioc->ioc_lost_reply) {
 		if (release_input)
