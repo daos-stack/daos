@@ -1875,7 +1875,7 @@ out:
 }
 
 char *
-crt_rpc_get_origin_addr(crt_rpc_t *rpc_pub)
+crt_req_origin_addr_get(crt_rpc_t *rpc_pub)
 {
 	struct crt_rpc_priv *rpc_priv;
 

@@ -246,7 +246,7 @@ obj_bulk_comp_cb(const struct crt_bulk_cb_info *cb_info)
 	rpc = bulk_desc->bd_rpc;
 
 	if (cb_info->bci_rc != 0)
-		D_ERROR("rpc: %p:%s bulk transfer failed: %d\n", rpc, crt_rpc_get_origin_addr(rpc),
+		D_ERROR("rpc: %p:%s bulk transfer failed: %d\n", rpc, crt_req_origin_addr_get(rpc),
 			cb_info->bci_rc);
 
 	arg = (struct obj_bulk_args *)cb_info->bci_arg;
@@ -5840,7 +5840,7 @@ out:
 		  (ocpi->ocpi_flags & ORF_LEADER)
 		      ? "leader"
 		      : (ocpi->ocpi_tgts.ca_count == 1 ? "non-leader" : "relay-engine"),
-		  rpc, crt_rpc_get_origin_addr(rpc), DP_UOID(ocpi->ocpi_oid), dmi->dmi_xs_id,
+		  rpc, crt_req_origin_addr_get(rpc), DP_UOID(ocpi->ocpi_oid), dmi->dmi_xs_id,
 		  dmi->dmi_tgt_id, DP_UUID(ocpi->ocpi_po_uuid), DP_UUID(ocpi->ocpi_co_hdl),
 		  DP_UUID(ocpi->ocpi_co_uuid), ocpi->ocpi_epoch, ocpi->ocpi_map_ver, max_ver,
 		  DP_DTI(&ocpi->ocpi_xid), ocpi->ocpi_bulk_tgt_sz, ocpi->ocpi_bulk_tgt_nr,
@@ -5981,7 +5981,7 @@ out:
 		"Handled collective query RPC %p:%s %s forwarding for obj " DF_UOID
 		" on rank %u XS %u/%u epc " DF_X64 " pmv %u, with dti " DF_DTI ", dct_nr %u, "
 		"forward width %u, forward depth %u\n: " DF_RC "\n",
-		rpc, crt_rpc_get_origin_addr(rpc),
+		rpc, crt_req_origin_addr_get(rpc),
 		ocqi->ocqi_tgts.ca_count <= 1 ? "without" : "with", DP_UOID(ocqi->ocqi_oid), myrank,
 		dmi->dmi_xs_id, tgt_id, ocqi->ocqi_epoch, ocqi->ocqi_map_ver,
 		DP_DTI(&ocqi->ocqi_xid), (unsigned int)ocqi->ocqi_tgts.ca_count,
