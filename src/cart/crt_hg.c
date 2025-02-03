@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -834,6 +835,7 @@ crt_hg_class_init(crt_provider_t provider, int ctx_idx, bool primary, int iface_
 	char			addr_str[CRT_ADDR_STR_MAX_LEN] = {'\0'};
 	size_t			str_size = CRT_ADDR_STR_MAX_LEN;
 	struct crt_prov_gdata	*prov_data;
+	uint32_t                 retry_count = 0;
 	int			rc = DER_SUCCESS;
 
 	prov_data = crt_get_prov_gdata(primary, provider);
@@ -869,9 +871,17 @@ crt_hg_class_init(crt_provider_t provider, int ctx_idx, bool primary, int iface_
 		init_info.traffic_class = (enum na_traffic_class)crt_gdata.cg_swim_tc;
 	if (thread_mode_single)
 		init_info.na_init_info.thread_mode = NA_THREAD_MODE_SINGLE;
-
+retry:
 	hg_class = HG_Init_opt2(info_string, crt_is_service(), HG_VERSION(2, 4), &init_info);
 	if (hg_class == NULL) {
+		/** workaround for DAOS-16990, DAOS-17009, DAOS-17011 - retry a few times on init */
+		if (provider == CRT_PROV_OFI_CXI && !crt_is_service() &&
+		    retry_count < crt_gdata.cg_hg_init_retry_cnt) {
+			retry_count++;
+			D_WARN("Could not initialize HG class; retrying (%d)\n", retry_count);
+			usleep(retry_count);
+			goto retry;
+		}
 		D_ERROR("Could not initialize HG class.\n");
 		D_GOTO(out, rc = -DER_HG);
 	}
