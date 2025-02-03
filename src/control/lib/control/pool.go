@@ -843,6 +843,7 @@ func PoolExclude(ctx context.Context, rpcClient UnaryInvoker, req *PoolRanksReq)
 	if err := convert.Types(req, pbReq); err != nil {
 		return nil, errors.Wrapf(err, "convert %T->%T", req, pbReq)
 	}
+	pbReq.Sys = req.getSystem(rpcClient)
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolExclude(ctx, pbReq)
@@ -874,6 +875,7 @@ func PoolDrain(ctx context.Context, rpcClient UnaryInvoker, req *PoolRanksReq) (
 	if err := convert.Types(req, pbReq); err != nil {
 		return nil, errors.Wrapf(err, "convert %T->%T", req, pbReq)
 	}
+	pbReq.Sys = req.getSystem(rpcClient)
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolDrain(ctx, pbReq)
@@ -934,6 +936,7 @@ func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolRanks
 	if err := convert.Types(req, pbReq); err != nil {
 		return nil, errors.Wrapf(err, "convert %T->%T", req, pbReq)
 	}
+	pbReq.Sys = req.getSystem(rpcClient)
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolReintegrate(ctx, pbReq)
