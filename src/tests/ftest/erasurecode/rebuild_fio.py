@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2019-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -85,7 +86,7 @@ class EcodFioRebuild(FioBase):
         # ec off-line rebuild fio
         if 'off-line' in rebuild_mode:
             self.log_step(f"Stop the last server rank ({rank_to_kill}) for ec off-line rebuild fio")
-            self.server_managers[0].stop_ranks([rank_to_kill], self.d_log, force=True)
+            self.server_managers[0].stop_ranks([rank_to_kill], force=True)
 
         # Adding unlink option for final read command
         self.log_step("Adding unlink option for final read command")
@@ -103,7 +104,7 @@ class EcodFioRebuild(FioBase):
             rank_to_kill = server_count - 2
             self.log_step(f"Kill one more server rank {rank_to_kill} when RF=2")
             self.fio_cmd._jobs['test'].unlink.value = 1         # pylint: disable=protected-access
-            self.server_managers[0].stop_ranks([rank_to_kill], self.d_log, force=True)
+            self.server_managers[0].stop_ranks([rank_to_kill], force=True)
 
             # Read and verify the original data.
             self.log_step(f"Verify the data is not corrupted after stopping rank {rank_to_kill}.")
@@ -137,7 +138,7 @@ class EcodFioRebuild(FioBase):
         # Kill the server rank while IO operation in progress
         if rank_to_kill is not None:
             time.sleep(30)
-            self.server_managers[0].stop_ranks([rank_to_kill], self.d_log, force=True)
+            self.server_managers[0].stop_ranks([rank_to_kill], force=True)
 
         # Wait to finish the thread
         job.join()

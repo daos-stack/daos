@@ -1,5 +1,6 @@
 """
   (C) Copyright 2019-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -80,7 +81,7 @@ class ObjectMetadata(TestWithServers):
         """
         error_list = []
         if self.ior_managers:
-            self.test_log.info("Stopping IOR job managers")
+            self.log.info("Stopping IOR job managers")
             error_list = self._stop_managers(self.ior_managers, "IOR job manager")
         else:
             self.log.debug("no pre-teardown steps defined")
@@ -506,7 +507,7 @@ class ObjectMetadata(TestWithServers):
             self.log.info("Done %d IOR %s threads", thread_manager.qty, operation)
             if failed_thread_count > 0:
                 msg = "{} FAILED IOR {} Thread(s)".format(failed_thread_count, operation)
-                self.d_log.error(msg)
+                self.log.error(msg)
                 self.fail(msg)
 
             # Restart the agents and servers after the write / before the read
