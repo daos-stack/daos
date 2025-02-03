@@ -874,12 +874,12 @@ crt_hg_class_init(crt_provider_t provider, int ctx_idx, bool primary, int iface_
 retry:
 	hg_class = HG_Init_opt2(info_string, crt_is_service(), HG_VERSION(2, 4), &init_info);
 	if (hg_class == NULL) {
-		/** workaround for DAOS-16990, DAOS-17009, DAOS-17011 - retry a few times on init */
+		/** workaround for DAOS-16990, DAOS-17011 - retry a few times on init */
 		if (provider == CRT_PROV_OFI_CXI && !crt_is_service() &&
 		    retry_count < crt_gdata.cg_hg_init_retry_cnt) {
 			retry_count++;
 			D_WARN("Could not initialize HG class; retrying (%d)\n", retry_count);
-			usleep(retry_count);
+			sleep(retry_count * 5);
 			goto retry;
 		}
 		D_ERROR("Could not initialize HG class.\n");
