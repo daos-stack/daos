@@ -849,6 +849,12 @@ func TestControl_SystemStop(t *testing.T) {
 	testRespRS := new(SystemStopResp)
 	testRespRS.AbsentRanks.Replace(testRS)
 
+	withFull := func(stopReq *SystemStopReq) *SystemStopReq {
+		nr := *stopReq
+		nr.Full = true
+		return &nr
+	}
+
 	for name, tc := range map[string]struct {
 		req     *SystemStopReq
 		uErr    error
@@ -885,6 +891,21 @@ func TestControl_SystemStop(t *testing.T) {
 					Absentranks: "1-23",
 				}),
 			expResp: testRespRS,
+		},
+		"request force and full options": {
+			req: &SystemStopReq{
+				Force: true,
+				Full:  true,
+			},
+			expErr: errors.New("may not be mixed"),
+		},
+		"request full and host set options": {
+			req:    withFull(testReqHS),
+			expErr: errors.New("may not be mixed"),
+		},
+		"request full and rank set options": {
+			req:    withFull(testReqRS),
+			expErr: errors.New("may not be mixed"),
 		},
 		"dual host dual rank": {
 			req: new(SystemStopReq),
