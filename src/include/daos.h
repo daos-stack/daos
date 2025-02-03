@@ -12,6 +12,8 @@
 #ifndef __DAOS_H__
 #define __DAOS_H__
 
+#include <stdint.h>
+
 #include <daos_version.h>
 #include <daos_types.h>
 #include <daos_event.h>
