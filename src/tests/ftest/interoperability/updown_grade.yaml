@@ -55,7 +55,11 @@ ior:
   read_flags: "-C -k -e -r -R -g -G 1 -Q 1 -vv"
 
 hdf5_vol:
-  plugin_path: "/usr/lib64/mpich/lib"
+  # Update depending on where libhdf5_vol_daos.so is installed
+  # E.g. EL8
+  #plugin_path: "/usr/lib64/mpich/lib"
+  # E.g. Leap 15.6
+  plugin_path: /usr/lib64/mpi/gcc/mpich/lib
 
 interop:
   # old_version: "2.6.1-3.el8"

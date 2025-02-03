@@ -66,7 +66,7 @@ clush -S -B -w $DAOS_CLIENTS "sudo dnf install -y daos-2.6.2-2.el8 \
                                                   daos-admin-2.6.2-2.el8  \
                                                   daos-client-2.6.2-2.el8 \
                                                   daos-client-tests-2.6.2-2.el8 \
-                                                  ior mpich" && \
+                                                  ior mpich hdf5-vol-daos-mpich" && \
 clush -S -B -w $DAOS_SERVERS "sudo dnf install -y daos-2.6.2-2.el8 \
                                                   mercury-2.4.0~rc5-4.el8 \
                                                   daos-admin-2.6.2-2.el8 \
