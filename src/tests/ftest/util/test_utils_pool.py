@@ -555,20 +555,22 @@ class TestPool(TestDaosApiBase):
         return self.dmg.pool_delete_acl(self.identifier, principal=principal)
 
     @fail_on(CommandFailure)
-    def drain(self, rank, tgt_idx=None):
+    def drain(self, ranks, tgt_idx=None):
         """Use dmg to drain the rank and targets from this pool.
 
         Only supported with the dmg control method.
 
         Args:
-            rank (str): daos server rank to drain
-            tgt_idx (str, optional): targets to drain on ranks, ex: "1,2". Defaults to None.
+            ranks (str): Comma separated daos_server-rank ranges to drain e.g.
+                "0,2-5".
+            tgt_idx (list, optional): targets to drain on ranks e.g. "1,2".
+                Defaults to None.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other information.
 
         """
-        return self.dmg.pool_drain(self.identifier, rank, tgt_idx)
+        return self.dmg.pool_drain(self.identifier, ranks, tgt_idx)
 
     @fail_on(CommandFailure)
     def disable_aggregation(self):
@@ -597,8 +599,10 @@ class TestPool(TestDaosApiBase):
         """Manually exclude a rank from this pool.
 
         Args:
-            ranks (list): a list daos server ranks (int) to exclude
-            tgt_idx (string, optional): targets to exclude on ranks, ex: "1,2". Defaults to None.
+            ranks (str): Comma separated daos_server-rank ranges to exclude e.g.
+                "0,2-5".
+            tgt_idx (list, optional): targets to exclude on ranks e.g. "1,2".
+                Defaults to None.
             force (bool, optional): force exclusion regardless of data loss. Defaults to true
 
         Returns:
@@ -612,7 +616,8 @@ class TestPool(TestDaosApiBase):
         """Extend the pool to additional ranks.
 
         Args:
-            ranks (str): comma separate list of daos server ranks (int) to extend
+            ranks (str): Comma separated daos_server-rank ranges to extend e.g.
+                "0,2-5".
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other information.
@@ -756,18 +761,20 @@ class TestPool(TestDaosApiBase):
         return self.dmg.pool_query_targets(self.identifier, *args, **kwargs)
 
     @fail_on(CommandFailure)
-    def reintegrate(self, rank, tgt_idx=None):
+    def reintegrate(self, ranks, tgt_idx=None):
         """Use dmg to reintegrate the rank and targets into this pool.
 
         Args:
-            rank (str): daos server rank to reintegrate
-            tgt_idx (str, optional): targets to reintegrate on ranks, ex: "1,2". Defaults to None.
+            ranks (str): Comma separated daos_server-rank ranges to reintegrate
+                e.g. "0,2-5".
+            tgt_idx (list, optional): targets to reintegrate on ranks e.g. "1,2".
+                Defaults to None.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other information.
 
         """
-        return self.dmg.pool_reintegrate(self.identifier, rank, tgt_idx)
+        return self.dmg.pool_reintegrate(self.identifier, ranks, tgt_idx)
 
     @fail_on(CommandFailure)
     def set_property(self, prop_name, prop_value):
@@ -1033,7 +1040,8 @@ class TestPool(TestDaosApiBase):
         """Get space usage per rank, per target using dmg pool query-targets.
 
         Args:
-            ranks (list): List of ranks to be queried
+            ranks (str): Comma separated daos_server-rank ranges to query e.g.
+                "0,2-5".
             target_idx (str): Comma-separated list of target idx(s) to be queried
 
         Returns:

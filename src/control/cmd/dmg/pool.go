@@ -542,7 +542,7 @@ type poolRanksCmd struct {
 type poolExcludeCmd struct {
 	poolRanksCmd
 	Force     bool   `short:"f" long:"force" description:"Force the operation to continue, potentially leading to data loss"`
-	TargetIdx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be excluded from each rank"`
+	TargetIdx string `long:"target-idx" description:"Comma-separated list of target index(es) to be excluded from each rank"`
 }
 
 // Execute is run when PoolExcludeCmd subcommand is activated
@@ -582,7 +582,7 @@ func (cmd *poolExcludeCmd) Execute(args []string) error {
 // poolDrainCmd is the struct representing the command to Drain a DAOS target.
 type poolDrainCmd struct {
 	poolRanksCmd
-	TargetIdx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be drained on each rank"`
+	TargetIdx string `long:"target-idx" description:"Comma-separated list of target index(es) to be drained on each rank"`
 }
 
 // Execute is run when PoolDrainCmd subcommand is activated
@@ -645,7 +645,7 @@ func (cmd *poolExtendCmd) Execute(args []string) error {
 // poolReintegrateCmd is the struct representing the command to Add a DAOS target.
 type poolReintegrateCmd struct {
 	poolRanksCmd
-	TargetIdx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be reintegrated into each rank"`
+	TargetIdx string `long:"target-idx" description:"Comma-separated list of target index(es) to be reintegrated into each rank"`
 }
 
 // Execute is run when poolReintegrateCmd subcommand is activated
@@ -731,7 +731,7 @@ type poolQueryTargetsCmd struct {
 	poolCmd
 
 	Rank    uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be queried"`
-	Targets string `long:"target-idx" description:"Comma-separated list of target idx(s) to be queried"`
+	Targets string `long:"target-idx" description:"Comma-separated list of target index(es) to be queried"`
 }
 
 // Execute is run when PoolQueryTargetsCmd subcommand is activated

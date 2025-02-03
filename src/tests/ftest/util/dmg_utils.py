@@ -894,8 +894,10 @@ class DmgCommand(DmgCommandBase):
 
         Args:
             pool (str): Pool uuid.
-            ranks (int): Ranks of the daos_server to exclude
-            tgt_idx (int): target to be excluded from each pool
+            ranks (str): Comma separated daos_server-rank ranges to exclude e.g.
+                "0,2-5".
+            tgt_idx (list, optional): targets to exclude on ranks e.g. "1,2".
+                Defaults to None.
             force (bool, optional): force exclusion regardless of data loss. Defaults to False
 
         Returns:
@@ -914,7 +916,8 @@ class DmgCommand(DmgCommandBase):
 
         Args:
             pool (str): Pool uuid.
-            ranks (int): Ranks of the daos_server to extend
+            ranks (str): Comma separated daos_server-rank ranges to extend e.g.
+                "0,2-5".
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -932,8 +935,10 @@ class DmgCommand(DmgCommandBase):
 
         Args:
             pool (str): Pool uuid.
-            ranks (int): Ranks of the daos_server to drain
-            tgt_idx (int): target to be drained from each pool
+            ranks (str): Comma separated daos_server-rank ranges to drain e.g.
+                "0,2-5".
+            tgt_idx (list, optional): targets to drain on ranks e.g. "1,2".
+                Defaults to None.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -951,8 +956,10 @@ class DmgCommand(DmgCommandBase):
 
         Args:
             pool (str): Pool uuid.
-            ranks (int): Ranks of the daos_server to reintegrate
-            tgt_idx (int): target to be reintegrated from each pool
+            ranks (str): Comma separated daos_server-rank ranges to reintegrate
+                e.g. "0,2-5".
+            tgt_idx (list, optional): targets to reintegrate on ranks e.g. "1,2".
+                Defaults to None.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -1028,7 +1035,7 @@ class DmgCommand(DmgCommandBase):
         Either ranks or rank_hosts is necessary. Pass in None to one of them.
 
         Args:
-            ranks (str): comma separated ranks to exclude.
+            ranks (str): Comma separated rank-ranges to exclude e.g. "0,2-5".
             rank_hosts (str): hostlist representing hosts whose managed ranks are to be
                 operated on.
 
@@ -1047,7 +1054,7 @@ class DmgCommand(DmgCommandBase):
 
         Args:
             ranks (str): Specify specific ranks to obtain it's status. Use
-                comma separated list for multiple ranks. e.g., 0,1.
+                comma separated rank-ranges for multiple ranks e.g. "0,2-5".
                 Defaults to None, which means report all available ranks.
             verbose (bool): To obtain detailed query report
 
@@ -1131,7 +1138,7 @@ class DmgCommand(DmgCommandBase):
         Either ranks or rank_hosts is necessary. Pass in None to one of them.
 
         Args:
-            ranks (str): comma separated ranks to exclude.
+            ranks (str): Comma separated rank-ranges to exclude e.g. "0,2-5".
             rank_hosts (str): hostlist representing hosts whose managed ranks are to be
                 operated on.
 
@@ -1149,8 +1156,8 @@ class DmgCommand(DmgCommandBase):
         """Start the system.
 
         Args:
-            ranks (str, optional): comma separated ranks to stop. Defaults to
-                None.
+            ranks (str, optional): Comma separated rank-ranges to start e.g.
+                "0,2-5". Defaults to None.
 
         Raises:
             CommandFailure: if the dmg system start command fails.
@@ -1177,8 +1184,8 @@ class DmgCommand(DmgCommandBase):
         Args:
             force (bool, optional): whether to force the stop. Defaults to
                 False.
-            ranks (str, optional): comma separated ranks to stop. Defaults to
-                None.
+            ranks (str, optional): Comma separated rank-ranges to stop e.g.
+                "0,2-5". Defaults to None.
 
         Raises:
             CommandFailure: if the dmg system stop command fails.
