@@ -40,10 +40,6 @@ class DaosAgentTelemetryConfig(TelemetryConfig):
     def __init__(self, log_dir=os.path.join(os.sep, "tmp")):
         """Initialize a TelemetryConfig object."""
         super().__init__("/run/agent_config/telemetry_config/*", None, log_dir)
-
-        self.telemetry_port = BasicParameter(None, 9192)
-        self.telemetry_enabled = BasicParameter(None)
-        self.telemetry_retain = BasicParameter(None)
         self.https_cert = LogParameter(self._log_dir, None, "telemetry.crt")
         self.https_key = LogParameter(self._log_dir, None, "telemetry.key")
 
