@@ -278,7 +278,8 @@ def define_components(reqs):
     abt_build = ['./configure',
                  '--prefix=$ARGOBOTS_PREFIX',
                  'CC=gcc',
-                 '--enable-stack-unwind']
+                 '--enable-stack-unwind',
+                 '--enable-stack-overflow-check=mprotect-strict']
 
     if reqs.target_type == 'debug':
         abt_build.append('--enable-debug=most')
