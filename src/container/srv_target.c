@@ -37,6 +37,9 @@
 #include <daos/cont_props.h>
 #include <daos/dedup.h>
 
+static int cont_tgt_track_eph_init(struct ds_cont_child *cont_child);
+static void cont_tgt_track_eph_fini(struct ds_cont_child *cont);
+
 /* Per VOS container aggregation ULT ***************************************/
 
 static inline struct sched_request *
@@ -473,6 +476,12 @@ cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 		 */
 		uint64_t msecs = 2000;
 
+		/* Reuse the vos aggregation ULT to periodically query the stable epoch,
+		 * ds_cont_track_eph_query_ult() will read it and report through IV.
+		 */
+		if (param->ap_vos_agg && cont->sc_query_stable_eph != NULL)
+			*cont->sc_query_stable_eph = vos_cont_get_local_stable_epoch(cont->sc_hdl);
+
 		if (!cont_aggregate_runnable(cont, req, param->ap_vos_agg))
 			goto next;
 
@@ -693,9 +702,18 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 	D_INIT_LIST_HEAD(&cont->sc_dtx_coll_list);
 	D_INIT_LIST_HEAD(&cont->sc_dtx_batched_list);
 
+	rc = cont_tgt_track_eph_init(cont);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_CONT " init track eph failed.",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
+		goto out_cont;
+	}
+
 	*link = &cont->sc_list;
 	return 0;
 
+out_cont:
+	vos_cont_close(cont->sc_hdl);
 out_pool:
 	ds_pool_child_put(cont->sc_pool);
 out_finish_cond:
@@ -725,6 +743,7 @@ cont_child_free_ref(struct daos_llink *llink)
 	D_DEBUG(DB_MD, DF_CONT": freeing\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
 
+	cont_tgt_track_eph_fini(cont);
 	vos_cont_close(cont->sc_hdl);
 	ds_pool_child_put(cont->sc_pool);
 	daos_csummer_destroy(&cont->sc_csummer);
@@ -861,6 +880,8 @@ cont_child_stop(struct ds_cont_child *cont_child)
 {
 	struct ds_cont_hdl	*hdl;
 
+	D_ASSERT(cont_child->sc_stopping == 0);
+	cont_child->sc_stopping = 1;
 	while ((hdl = d_list_pop_entry(&cont_child->sc_open_hdls,
 				       struct ds_cont_hdl, sch_link)) != NULL) {
 		D_DEBUG(DB_MD, "Force closing container open handle "DF_UUID"/"DF_UUID"\n",
@@ -869,29 +890,22 @@ cont_child_stop(struct ds_cont_child *cont_child)
 		cont_close_hdl(hdl->sch_uuid);
 	}
 
-	/* Some ds_cont_child will only created by ds_cont_child_lookup().
-	 * never be started at all
-	 */
-	cont_child->sc_stopping = 1;
-
 	/* Stop DTX reindex by force. */
 	stop_dtx_reindex_ult(cont_child, true);
 
-	if (cont_child_started(cont_child)) {
-		D_DEBUG(DB_MD, DF_CONT"[%d]: Stopping container\n",
-			DP_CONT(cont_child->sc_pool->spc_uuid,
-				cont_child->sc_uuid),
-			dss_get_module_info()->dmi_tgt_id);
+	D_DEBUG(DB_MD, DF_CONT "[%d]: Stopping container\n",
+		DP_CONT(cont_child->sc_pool->spc_uuid, cont_child->sc_uuid),
+		dss_get_module_info()->dmi_tgt_id);
 
-		d_list_del_init(&cont_child->sc_link);
+	d_list_del_init(&cont_child->sc_link);
 
-		dtx_cont_deregister(cont_child);
-		D_ASSERT(cont_child->sc_dtx_registered == 0);
+	dtx_cont_deregister(cont_child);
+	D_ASSERT(cont_child->sc_dtx_registered == 0);
 
-		/* cont_stop_agg() may yield */
-		cont_stop_agg(cont_child);
-		ds_cont_child_put(cont_child);
-	}
+	/* cont_stop_agg() may yield */
+	cont_stop_agg(cont_child);
+	D_ASSERT(cont_child_started(cont_child) == false);
+	ds_cont_child_put(cont_child);
 }
 
 void
@@ -960,8 +974,9 @@ cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 	} else if (!cont_child_started(cont_child)) {
 		if (!ds_pool_restricted(pool_child->spc_pool, false)) {
 			rc = cont_start_agg(cont_child);
-			if (rc != 0)
+			if (rc != 0) {
 				goto out;
+			}
 
 			rc = dtx_cont_register(cont_child);
 			if (rc != 0) {
@@ -1381,8 +1396,8 @@ ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 	struct dsm_tls		*tls = dsm_tls_get();
 	int			 rc;
 
-	rc = cont_child_lookup(tls->dt_cont_cache, cont_uuid, pool_uuid,
-			       true /* create */, ds_cont);
+	rc = cont_child_lookup(tls->dt_cont_cache, cont_uuid, pool_uuid, false /* create */,
+			       ds_cont);
 	if (rc != 0)
 		return rc;
 
@@ -1618,7 +1633,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 
 		hdl->sch_cont->sc_open++;
 		if (hdl->sch_cont->sc_open > 1) {
-			/* If there is an inflight open being stuck, then
+			/* If there is an in-flight open being stuck, then
 			 * let's retry and wait until it finished.
 			 */
 			if (hdl->sch_cont->sc_open_initializing) {
@@ -1693,7 +1708,10 @@ err_cont:
 			DP_CONT(pool_uuid, cont_uuid));
 
 		D_ASSERT(hdl != NULL);
-		cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
+		if (added)
+			cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
+		else
+			D_FREE(hdl);
 		hdl = NULL;
 
 		D_ASSERT(cont != NULL);
@@ -1774,8 +1792,9 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 		DP_UUID(pool_uuid), DP_UUID(cont_uuid), DP_UUID(cont_hdl_uuid));
 
 retry:
-	rc = ds_pool_thread_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
-				       PO_COMP_ST_DOWNOUT, cont_open_one, &arg, 0);
+	rc = ds_pool_thread_collective(pool_uuid,
+				       PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+				       cont_open_one, &arg, DSS_ULT_DEEP_STACK);
 	if (rc != 0) {
 		if (rc == -DER_AGAIN) {
 			dss_sleep(50);
@@ -2087,9 +2106,9 @@ ds_cont_tgt_snapshots_update(uuid_t pool_uuid, uuid_t cont_uuid,
 	 * the up targets in this scenario. The target property will be updated
 	 * upon initiating container aggregation.
 	 */
-	return ds_pool_thread_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
-					 PO_COMP_ST_DOWNOUT | PO_COMP_ST_UP,
-					 cont_snap_update_one, &args, 0);
+	return ds_pool_thread_collective(
+	    pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT | PO_COMP_ST_UP,
+	    cont_snap_update_one, &args, DSS_ULT_DEEP_STACK);
 }
 
 void
@@ -2402,131 +2421,212 @@ out:
 	crt_reply_send(rpc);
 }
 
-/* Track each container EC aggregation Epoch under ds_pool */
-struct cont_ec_eph {
-	uuid_t		ce_cont_uuid;
-	d_list_t	ce_list;
-	daos_epoch_t	*ce_ephs;
-	daos_epoch_t	ce_last_eph;
-	uint32_t	ce_ephs_cnt;
-	int		ce_ref;
+/* Track each container EC aggregation Epoch and stable epoch under ds_pool */
+struct cont_track_eph {
+	uuid_t		cte_cont_uuid;
+	d_list_t	cte_list;
+	/* each target's stable epoch */
+	daos_epoch_t	*cte_tgt_stable_ephs;
+	/* each target's EC aggregation epoch */
+	daos_epoch_t	*cte_tgt_ec_agg_ephs;
+	/* last reported (through IV) stable epoch */
+	daos_epoch_t	cte_last_stable_epoch;
+	/* last reported (through IV) EC aggregation epoch */
+	daos_epoch_t	cte_last_ec_agg_epoch;
+	/* number of tracked epochs (dss_tgt_nr) */
+	uint32_t	cte_ephs_cnt;
+	int		cte_ref;
 };
 
-/* list for the eph for the pool */
-struct cont_eph_list {
-	uuid_t		ce_pool_uuid;
-	d_list_t	ce_list;
-};
-
-static struct cont_ec_eph *
-cont_ec_eph_lookup(d_list_t *ec_list, uuid_t cont_uuid)
+static struct cont_track_eph *
+cont_track_eph_lookup(d_list_t *ec_list, uuid_t cont_uuid)
 {
-	struct cont_ec_eph	*found = NULL;
+	struct cont_track_eph	*found = NULL;
 
-	d_list_for_each_entry(found, ec_list, ce_list) {
-		if (found->ce_ref == 0)
+	d_list_for_each_entry(found, ec_list, cte_list) {
+		if (found->cte_ref == 0)
 			continue;
-		if (uuid_compare(found->ce_cont_uuid, cont_uuid) == 0)
+		if (uuid_compare(found->cte_cont_uuid, cont_uuid) == 0)
 			return found;
 	}
 
 	return NULL;
 }
 
-static struct cont_ec_eph *
-cont_ec_eph_alloc(d_list_t *ec_list, uuid_t cont_uuid)
+static struct cont_track_eph *
+cont_track_eph_alloc(d_list_t *ec_list, uuid_t cont_uuid)
 {
-	struct cont_ec_eph	*new_ec;
+	struct cont_track_eph	*new_ec;
 
 	D_ALLOC_PTR(new_ec);
 	if (new_ec == NULL)
 		return NULL;
 
-	uuid_copy(new_ec->ce_cont_uuid, cont_uuid);
-	D_ALLOC_ARRAY(new_ec->ce_ephs, dss_tgt_nr);
-	if (new_ec->ce_ephs == NULL) {
+	uuid_copy(new_ec->cte_cont_uuid, cont_uuid);
+	D_ALLOC_ARRAY(new_ec->cte_tgt_stable_ephs, dss_tgt_nr);
+	if (new_ec->cte_tgt_stable_ephs == NULL) {
+		D_FREE(new_ec);
+		return NULL;
+	}
+	D_ALLOC_ARRAY(new_ec->cte_tgt_ec_agg_ephs, dss_tgt_nr);
+	if (new_ec->cte_tgt_ec_agg_ephs == NULL) {
+		D_FREE(new_ec->cte_tgt_stable_ephs);
 		D_FREE(new_ec);
 		return NULL;
 	}
 
-	new_ec->ce_ephs_cnt = dss_tgt_nr;
-	d_list_add(&new_ec->ce_list, ec_list);
-	new_ec->ce_ref = 0;
+	new_ec->cte_ephs_cnt = dss_tgt_nr;
+	d_list_add(&new_ec->cte_list, ec_list);
+	new_ec->cte_ref = 0;
 	return new_ec;
 }
 
-int
-ds_cont_ec_eph_insert(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx,
-		      uint64_t **epoch_p)
+static int
+cont_track_eph_insert(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx,
+		      uint64_t **ec_agg_epoch_p, uint64_t **stable_epoch_p)
 {
-	struct cont_ec_eph	*new_eph;
+	struct cont_track_eph	*new_eph;
 	int			rc = 0;
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
-	new_eph = cont_ec_eph_lookup(&pool->sp_ec_ephs_list, cont_uuid);
+	new_eph = cont_track_eph_lookup(&pool->sp_ec_ephs_list, cont_uuid);
 	if (new_eph == NULL) {
-		new_eph = cont_ec_eph_alloc(&pool->sp_ec_ephs_list, cont_uuid);
+		new_eph = cont_track_eph_alloc(&pool->sp_ec_ephs_list, cont_uuid);
 		if (new_eph == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 	}
 
-	new_eph->ce_ref++;
+	new_eph->cte_ref++;
 	D_DEBUG(DB_MD, DF_UUID "add %d tgt to epoch query list %d\n",
-		DP_UUID(cont_uuid), tgt_idx, new_eph->ce_ref);
-	D_ASSERT(tgt_idx < new_eph->ce_ephs_cnt);
-	new_eph->ce_ephs[tgt_idx] = 0;
-	*epoch_p = &new_eph->ce_ephs[tgt_idx];
+		DP_UUID(cont_uuid), tgt_idx, new_eph->cte_ref);
+	D_ASSERT(tgt_idx < new_eph->cte_ephs_cnt);
+	new_eph->cte_tgt_ec_agg_ephs[tgt_idx] = 0;
+	new_eph->cte_tgt_stable_ephs[tgt_idx] = 0;
+	*ec_agg_epoch_p = &new_eph->cte_tgt_ec_agg_ephs[tgt_idx];
+	*stable_epoch_p = &new_eph->cte_tgt_stable_ephs[tgt_idx];
 out:
 	return rc;
 }
 
-int
-ds_cont_ec_eph_delete(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx)
+static void
+cont_track_eph_delete(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx)
 {
-	struct cont_ec_eph	*ec_eph;
+	struct cont_track_eph	*ec_eph;
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
-	ec_eph = cont_ec_eph_lookup(&pool->sp_ec_ephs_list, cont_uuid);
+	ec_eph = cont_track_eph_lookup(&pool->sp_ec_ephs_list, cont_uuid);
 	if (ec_eph == NULL)
-		return 0;
+		return;
 
-	D_ASSERT(tgt_idx < ec_eph->ce_ephs_cnt);
-	D_ASSERT(ec_eph->ce_ref > 0);
-	ec_eph->ce_ref--;
+	D_ASSERT(tgt_idx < ec_eph->cte_ephs_cnt);
+	D_ASSERT(ec_eph->cte_ref > 0);
+	ec_eph->cte_ref--;
 	D_DEBUG(DB_MD, DF_UUID "delete %d tgt ref %d.\n",
-		DP_UUID(cont_uuid), tgt_idx, ec_eph->ce_ref);
-	return 0;
+		DP_UUID(cont_uuid), tgt_idx, ec_eph->cte_ref);
+	return;
 }
 
 static void
-cont_ec_eph_destroy(struct cont_ec_eph *ec_eph)
+cont_track_eph_destroy(struct cont_track_eph *ec_eph)
 {
-	D_ASSERT(ec_eph->ce_ref == 0);
-	d_list_del(&ec_eph->ce_list);
-	D_FREE(ec_eph->ce_ephs);
+	D_ASSERT(ec_eph->cte_ref == 0);
+	d_list_del(&ec_eph->cte_list);
+	D_FREE(ec_eph->cte_tgt_stable_ephs);
+	D_FREE(ec_eph->cte_tgt_ec_agg_ephs);
 	D_FREE(ec_eph);
 }
 
 void
-ds_cont_ec_eph_free(struct ds_pool *pool)
+ds_cont_track_eph_free(struct ds_pool *pool)
 {
-	struct cont_ec_eph	*ec_eph, *tmp;
+	struct cont_track_eph	*ec_eph, *tmp;
 
-	d_list_for_each_entry_safe(ec_eph, tmp, &pool->sp_ec_ephs_list, ce_list)
-		cont_ec_eph_destroy(ec_eph);
+	d_list_for_each_entry_safe(ec_eph, tmp, &pool->sp_ec_ephs_list, cte_list)
+		cont_track_eph_destroy(ec_eph);
+}
+
+struct track_eph_ult_arg {
+	struct ds_pool	*pool;
+	uuid_t		cont_uuid;
+	uint32_t	tgt_idx;
+	daos_epoch_t	*ec_agg_eph;
+	daos_epoch_t	*stable_eph;
+};
+
+static	int
+cont_track_eph_fini_ult(void *data)
+{
+	struct track_eph_ult_arg	*arg = data;
+
+	cont_track_eph_delete(arg->pool, arg->cont_uuid, arg->tgt_idx);
+	return 0;
+}
+
+static void
+cont_tgt_track_eph_fini(struct ds_cont_child *cont_child)
+{
+	struct track_eph_ult_arg	arg;
+
+	if (cont_child->sc_query_ec_agg_eph == NULL)
+		return;
+	D_ASSERT(cont_child->sc_query_stable_eph != NULL);
+
+	arg.pool = cont_child->sc_pool->spc_pool;
+	uuid_copy(arg.cont_uuid, cont_child->sc_uuid);
+	arg.tgt_idx = dss_get_module_info()->dmi_tgt_id;
+	dss_ult_execute(cont_track_eph_fini_ult, &arg, NULL, NULL, DSS_XS_SYS, 0, 0);
+
+	cont_child->sc_query_ec_agg_eph = NULL;
+	cont_child->sc_query_stable_eph = NULL;
+}
+
+static int
+cont_track_eph_init_ult(void *data)
+{
+	struct track_eph_ult_arg *arg = data;
+	int rc;
+
+	rc = cont_track_eph_insert(arg->pool, arg->cont_uuid, arg->tgt_idx, &arg->ec_agg_eph,
+				   &arg->stable_eph);
+	return rc;
+}
+
+static int
+cont_tgt_track_eph_init(struct ds_cont_child *cont_child)
+{
+	struct track_eph_ult_arg	arg;
+	int				rc;
+
+	arg.pool = cont_child->sc_pool->spc_pool;
+	uuid_copy(arg.cont_uuid, cont_child->sc_uuid);
+	arg.tgt_idx = dss_get_module_info()->dmi_tgt_id;
+	rc = dss_ult_execute(cont_track_eph_init_ult, &arg, NULL, NULL, DSS_XS_SYS,
+			     0, 0);
+	if (rc) {
+		DL_ERROR(rc, DF_CONT " init track eph failed.",
+			 DP_CONT(cont_child->sc_pool->spc_uuid, cont_child->sc_uuid));
+		return rc;
+	}
+
+	D_DEBUG(DB_MD, DF_UUID " update init track %u\n",
+		DP_UUID(cont_child->sc_uuid), arg.tgt_idx);
+	cont_child->sc_query_ec_agg_eph = arg.ec_agg_eph;
+	cont_child->sc_query_stable_eph = arg.stable_eph;
+
+	return rc;
 }
 
 /**
  * This ULT is actually per pool to collect all container EC aggregation
  * epoch, then report to the container service leader.
  */
-#define EC_TGT_AGG_INTV	 (10ULL * 1000)	/* seconds interval to check*/
+#define EC_TGT_EPH_QUERY_INTV	 (5ULL * 1000)	/* seconds interval to check*/
 void
-ds_cont_tgt_ec_eph_query_ult(void *data)
+ds_cont_track_eph_query_ult(void *data)
 {
 	struct ds_pool		*pool = data;
-	struct cont_ec_eph	*ec_eph;
-	struct cont_ec_eph	*tmp;
+	struct cont_track_eph	*ec_eph;
+	struct cont_track_eph	*tmp;
 	int			rc;
 
 	D_DEBUG(DB_MD, DF_UUID" start tgt ec query eph ULT\n",
@@ -2549,19 +2649,22 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 			goto yield;
 		}
 
-		d_list_for_each_entry_safe(ec_eph, tmp, &pool->sp_ec_ephs_list, ce_list) {
-			daos_epoch_t	min_eph = DAOS_EPOCH_MAX;
+		d_list_for_each_entry_safe(ec_eph, tmp, &pool->sp_ec_ephs_list, cte_list) {
+			daos_epoch_t	min_ec_agg_eph;
+			daos_epoch_t	min_stable_eph;
 			int		i;
 
 			if (dss_ult_exiting(pool->sp_ec_ephs_req))
 				break;
 
-			if (ec_eph->ce_ref == 0) {
-				cont_ec_eph_destroy(ec_eph);
+			if (ec_eph->cte_ref == 0) {
+				cont_track_eph_destroy(ec_eph);
 				continue;
 			}
 
-			for (i = 0; i < ec_eph->ce_ephs_cnt; i++) {
+			min_ec_agg_eph = DAOS_EPOCH_MAX;
+			min_stable_eph = DAOS_EPOCH_MAX;
+			for (i = 0; i < ec_eph->cte_ephs_cnt; i++) {
 				bool is_failed_tgts = false;
 				int j;
 
@@ -2572,39 +2675,55 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 					}
 				}
 
-				if (!is_failed_tgts)
-					min_eph = min(min_eph, ec_eph->ce_ephs[i]);
+				if (!is_failed_tgts) {
+					min_ec_agg_eph = min(min_ec_agg_eph,
+							     ec_eph->cte_tgt_ec_agg_ephs[i]);
+					min_stable_eph = min(min_stable_eph,
+							     ec_eph->cte_tgt_stable_ephs[i]);
+				}
 			}
 
-			if (min_eph == 0 || min_eph == DAOS_EPOCH_MAX ||
-			    min_eph <= ec_eph->ce_last_eph) {
-				if (min_eph > 0 && min_eph < ec_eph->ce_last_eph)
-					D_ERROR("ignore for now "DF_X64" < "DF_X64
-						" "DF_UUID"\n", min_eph, ec_eph->ce_last_eph,
-						DP_UUID(ec_eph->ce_cont_uuid));
+			if (min_ec_agg_eph == 0 || min_ec_agg_eph == DAOS_EPOCH_MAX ||
+			    min_stable_eph == 0 || min_stable_eph == DAOS_EPOCH_MAX ||
+			    (min_ec_agg_eph <= ec_eph->cte_last_ec_agg_epoch &&
+			     min_stable_eph <= ec_eph->cte_last_stable_epoch)) {
+				if (min_ec_agg_eph > 0 && min_stable_eph > 0 &&
+				    (min_ec_agg_eph < ec_eph->cte_last_ec_agg_epoch ||
+				     min_stable_eph < ec_eph->cte_last_stable_epoch))
+					D_ERROR("ignore for now, min_ec_agg_eph "DF_X64" < "DF_X64
+						", or min_stable_eph "DF_X64" <"DF_X64
+						", "DF_UUID"\n",
+						min_ec_agg_eph, ec_eph->cte_last_ec_agg_epoch,
+						min_stable_eph, ec_eph->cte_last_stable_epoch,
+						DP_UUID(ec_eph->cte_cont_uuid));
 				else
-					D_DEBUG(DB_MD, "Skip eph "DF_X64"/"DF_X64
-						" "DF_UUID"\n", min_eph, ec_eph->ce_last_eph,
-						DP_UUID(ec_eph->ce_cont_uuid));
+					D_DEBUG(DB_MD, "Skip ec_agg_eph "DF_X64"/"DF_X64
+						", stable_eph "DF_X64"/"DF_X64", "DF_UUID"\n",
+						min_ec_agg_eph, ec_eph->cte_last_ec_agg_epoch,
+						min_stable_eph, ec_eph->cte_last_stable_epoch,
+						DP_UUID(ec_eph->cte_cont_uuid));
 				continue;
 			}
 
-			D_DEBUG(DB_MD, "Update eph "DF_X64" "DF_UUID"\n",
-				min_eph, DP_UUID(ec_eph->ce_cont_uuid));
-			rc = cont_iv_ec_agg_eph_update(pool->sp_iv_ns, ec_eph->ce_cont_uuid,
-						       min_eph);
-			if (rc == 0)
-				ec_eph->ce_last_eph = min_eph;
-			else
+			D_DEBUG(DB_MD, "Update ec_agg_eph "DF_X64", stable_eph "DF_X64", "
+				DF_UUID"\n", min_ec_agg_eph, min_stable_eph,
+				DP_UUID(ec_eph->cte_cont_uuid));
+			rc = cont_iv_track_eph_update(pool->sp_iv_ns, ec_eph->cte_cont_uuid,
+						      min_ec_agg_eph, min_stable_eph);
+			if (rc == 0) {
+				ec_eph->cte_last_ec_agg_epoch = min_ec_agg_eph;
+				ec_eph->cte_last_stable_epoch = min_stable_eph;
+			} else {
 				D_INFO(DF_CONT": Update min epoch: %d\n",
-				       DP_CONT(pool->sp_uuid, ec_eph->ce_cont_uuid), rc);
+				       DP_CONT(pool->sp_uuid, ec_eph->cte_cont_uuid), rc);
+			}
 		}
 		D_FREE(failed_tgts);
 yield:
 		if (dss_ult_exiting(pool->sp_ec_ephs_req))
 			break;
 
-		sched_req_sleep(pool->sp_ec_ephs_req, EC_TGT_AGG_INTV);
+		sched_req_sleep(pool->sp_ec_ephs_req, EC_TGT_EPH_QUERY_INTV);
 	}
 out:
 	D_INFO(DF_UUID" stop tgt ec query eph ULT\n", DP_UUID(pool->sp_uuid));

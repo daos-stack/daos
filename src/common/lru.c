@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -208,12 +209,14 @@ daos_lru_ref_hold(struct daos_lru_cache *lcache, void *key,
 {
 	struct daos_llink	*llink;
 	d_list_t		*link;
+	bool			 retried = false;
 	int			 rc = 0;
 
 	D_ASSERT(lcache != NULL && key != NULL && key_size > 0);
 	if (lcache->dlc_ops->lop_print_key)
 		lcache->dlc_ops->lop_print_key(key, key_size);
 
+lookup_again:
 	link = d_hash_rec_find(&lcache->dlc_htable, key, key_size);
 	if (link != NULL) {
 		llink = link2llink(link);
@@ -242,6 +245,11 @@ daos_lru_ref_hold(struct daos_lru_cache *lcache, void *key,
 			       &llink->ll_link, true);
 	if (rc) {
 		lcache->dlc_ops->lop_free_ref(llink);
+		if (rc == -DER_EXIST && !retried) {
+			retried = true;
+			D_DEBUG(DB_TRACE, "lookup again as insert got -DER_EXIST\n");
+			goto lookup_again;
+		}
 		return rc;
 	}
 	lcache->dlc_count++;

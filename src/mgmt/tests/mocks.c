@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -446,7 +447,7 @@ int
 ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 				 struct pool_target_addr_list *target_addrs,
 				 pool_comp_state_t state, size_t scm_size, size_t nvme_size,
-				 size_t meta_size)
+				 size_t meta_size, bool skip_rf_check)
 {
 	uuid_copy(ds_mgmt_target_update_uuid, pool_uuid);
 	return ds_mgmt_target_update_return;
