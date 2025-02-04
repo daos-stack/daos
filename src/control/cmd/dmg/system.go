@@ -311,9 +311,8 @@ type systemDrainCmd struct {
 }
 
 func (cmd *systemDrainCmd) execute(reint bool) (errOut error) {
-	var opStr string
 	defer func() {
-		opStr = "drain"
+		opStr := "drain"
 		if reint {
 			opStr = "reintegrate"
 		}
@@ -342,8 +341,10 @@ func (cmd *systemDrainCmd) execute(reint bool) (errOut error) {
 		return cmd.OutputJSON(resp, resp.Errors())
 	}
 
+	cmd.Debugf("%T: %+v, %T: %+v", req, req, resp.Results, resp.Results)
+
 	var out strings.Builder
-	pretty.PrintPoolRankResults(&out, opStr, resp.Results)
+	pretty.PrintPoolRankResults(&out, resp.Results)
 	cmd.Info(out.String())
 
 	return resp.Errors()

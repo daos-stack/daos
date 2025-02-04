@@ -565,6 +565,8 @@ func (cmd *poolExcludeCmd) Execute(args []string) error {
 		return cmd.OutputJSON(resp, err)
 	}
 
+	cmd.Debugf("%T: %+v, %T: %+v", req, req, resp, resp)
+
 	// Retrieve PoolRanksResults so we can pretty print output.
 	results, err := resp.GetResults(err)
 	if err != nil {
@@ -572,8 +574,10 @@ func (cmd *poolExcludeCmd) Execute(args []string) error {
 		return err
 	}
 
+	cmd.Debugf("%T: %+v", results, results)
+
 	var out strings.Builder
-	pretty.PrintPoolRankResults(&out, "exclude", results)
+	pretty.PrintPoolRankResults(&out, results)
 	cmd.Info(out.String())
 
 	return resp.Errors()
@@ -604,6 +608,8 @@ func (cmd *poolDrainCmd) Execute(args []string) error {
 		return cmd.OutputJSON(resp, err)
 	}
 
+	cmd.Debugf("%T: %+v, %T: %+v", req, req, resp, resp)
+
 	// Retrieve PoolRanksResults so we can pretty print output.
 	results, err := resp.GetResults(err)
 	if err != nil {
@@ -611,8 +617,10 @@ func (cmd *poolDrainCmd) Execute(args []string) error {
 		return err
 	}
 
+	cmd.Debugf("%T: %+v", results, results)
+
 	var out strings.Builder
-	pretty.PrintPoolRankResults(&out, "drain", results)
+	pretty.PrintPoolRankResults(&out, results)
 	cmd.Info(out.String())
 
 	return resp.Errors()
@@ -667,6 +675,8 @@ func (cmd *poolReintegrateCmd) Execute(args []string) error {
 		return cmd.OutputJSON(resp, err)
 	}
 
+	cmd.Debugf("%T: %+v, %T: %+v", req, req, resp, resp)
+
 	// Retrieve PoolRanksResults so we can pretty print output.
 	results, err := resp.GetResults(err)
 	if err != nil {
@@ -674,8 +684,10 @@ func (cmd *poolReintegrateCmd) Execute(args []string) error {
 		return err
 	}
 
+	cmd.Debugf("%T: %+v", results, results)
+
 	var out strings.Builder
-	pretty.PrintPoolRankResults(&out, "reintegrate", results)
+	pretty.PrintPoolRankResults(&out, results)
 	cmd.Info(out.String())
 
 	return resp.Errors()

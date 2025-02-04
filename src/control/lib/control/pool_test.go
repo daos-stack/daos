@@ -287,6 +287,10 @@ func TestControl_PoolRanksResp_GetResults(t *testing.T) {
 		"nil resp": {
 			expErr: errors.New("nil"),
 		},
+		"empty id": {
+			resp:   &PoolRanksResp{},
+			expErr: errors.New("empty"),
+		},
 		"no failure; no successes": {
 			resp: &PoolRanksResp{
 				ID:         test.MockUUID(),
@@ -388,6 +392,7 @@ func TestControl_PoolDrain(t *testing.T) {
 				),
 			},
 			expResp: &PoolRanksResp{
+				ID:           test.MockUUID(),
 				SuccessRanks: []ranklist.Rank{1, 2, 3},
 			},
 		},
@@ -407,6 +412,7 @@ func TestControl_PoolDrain(t *testing.T) {
 				),
 			},
 			expResp: &PoolRanksResp{
+				ID:           test.MockUUID(),
 				SuccessRanks: []ranklist.Rank{1},
 				FailedRank:   ranklist.Rank(2),
 				Status:       -1,
@@ -482,6 +488,7 @@ func TestControl_PoolReintegrate(t *testing.T) {
 				),
 			},
 			expResp: &PoolRanksResp{
+				ID:           test.MockUUID(),
 				SuccessRanks: []ranklist.Rank{1, 2, 3},
 			},
 		},
@@ -501,6 +508,7 @@ func TestControl_PoolReintegrate(t *testing.T) {
 				),
 			},
 			expResp: &PoolRanksResp{
+				ID:           test.MockUUID(),
 				SuccessRanks: []ranklist.Rank{1},
 				FailedRank:   ranklist.Rank(2),
 				Status:       -1,
@@ -577,6 +585,7 @@ func TestControl_PoolExclude(t *testing.T) {
 				),
 			},
 			expResp: &PoolRanksResp{
+				ID:           test.MockUUID(),
 				SuccessRanks: []ranklist.Rank{1, 2, 3},
 			},
 		},
@@ -596,6 +605,7 @@ func TestControl_PoolExclude(t *testing.T) {
 				),
 			},
 			expResp: &PoolRanksResp{
+				ID:           test.MockUUID(),
 				SuccessRanks: []ranklist.Rank{1},
 				FailedRank:   ranklist.Rank(2),
 				Status:       -1,

@@ -88,6 +88,9 @@ func (resp *sysResponse) setAbsentHostsRanks(inHosts, inRanks string) error {
 }
 
 func (resp *sysResponse) getAbsentHostsRanksErrors() error {
+	if resp == nil {
+		return nil
+	}
 	var errMsgs []string
 
 	if resp.AbsentHosts.Count() > 0 {
@@ -105,6 +108,9 @@ func (resp *sysResponse) getAbsentHostsRanksErrors() error {
 }
 
 func (resp *sysResponse) getErrors(errIn error) error {
+	if resp == nil {
+		return nil
+	}
 	if errIn != nil {
 		errIn = errors.Errorf("check results for %s", errIn.Error())
 	}
@@ -286,6 +292,9 @@ func (resp *SystemQueryResp) UnmarshalJSON(data []byte) error {
 // Errors returns a single error combining all error messages associated with a
 // system query response.
 func (resp *SystemQueryResp) Errors() error {
+	if resp == nil {
+		return nil
+	}
 	return resp.sysResponse.getErrors(nil)
 }
 
@@ -389,6 +398,12 @@ func (resp *SystemStartResp) UnmarshalJSON(data []byte) error {
 // Errors returns a single error combining all error messages associated with a
 // system start response.
 func (resp *SystemStartResp) Errors() error {
+	if resp == nil {
+		return nil
+	}
+	if resp.Results == nil {
+		return resp.sysResponse.getErrors(nil)
+	}
 	return resp.sysResponse.getErrors(resp.Results.Errors())
 }
 
@@ -455,6 +470,12 @@ func (resp *SystemStopResp) UnmarshalJSON(data []byte) error {
 // Errors returns a single error combining all error messages associated with a
 // system stop response.
 func (resp *SystemStopResp) Errors() error {
+	if resp == nil {
+		return nil
+	}
+	if resp.Results == nil {
+		return resp.sysResponse.getErrors(nil)
+	}
 	return resp.sysResponse.getErrors(resp.Results.Errors())
 }
 
@@ -538,6 +559,9 @@ type SystemExcludeResp struct {
 // response. Doesn't retrieve errors from sysResponse because missing ranks or hosts will not be
 // populated in SystemExcludeResp.
 func (resp *SystemExcludeResp) Errors() error {
+	if resp == nil || resp.Results == nil {
+		return nil
+	}
 	return resp.Results.Errors()
 }
 
@@ -586,6 +610,9 @@ type SystemDrainResp struct {
 // Errors returns a single error combining all error messages associated with pool-rank results.
 // Doesn't retrieve errors from sysResponse because missing ranks or hosts will not be returned.
 func (resp *SystemDrainResp) Errors() (err error) {
+	if resp == nil || resp.Results == nil {
+		return
+	}
 	for _, r := range resp.Results {
 		if r.Status != int32(daos.Success) {
 			err = concatErrs(err,
@@ -638,6 +665,9 @@ type SystemEraseResp struct {
 
 // Errors returns error if any of the results indicate a failure.
 func (resp *SystemEraseResp) Errors() error {
+	if resp == nil || resp.Results == nil {
+		return nil
+	}
 	return resp.Results.Errors()
 }
 
@@ -975,8 +1005,11 @@ type SystemCleanupResp struct {
 
 // Errors returns a single error combining all error messages associated with a
 // system cleanup response.
-func (scr *SystemCleanupResp) Errors() (errOut error) {
-	for _, r := range scr.Results {
+func (resp *SystemCleanupResp) Errors() (errOut error) {
+	if resp == nil || resp.Results == nil {
+		return
+	}
+	for _, r := range resp.Results {
 		if r.Status != int32(daos.Success) {
 			errOut = concatErrs(errOut, errors.New(r.Msg))
 		}

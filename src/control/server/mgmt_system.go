@@ -1156,7 +1156,6 @@ func (svc *mgmtSvc) getPoolRankResults(ctx context.Context, sys string, poolIDs 
 		if rs.Count() == 0 {
 			continue
 		}
-		svc.log.Tracef("operating on ranks %v on pool %s", rs, id)
 
 		req := &control.PoolRanksReq{
 			ID:    id,
@@ -1166,20 +1165,24 @@ func (svc *mgmtSvc) getPoolRankResults(ctx context.Context, sys string, poolIDs 
 
 		resp, err := drpcCall(svc, ctx, req)
 
+		svc.log.Tracef("%T: %+v, %T: %+v", req, req, resp, resp)
+
 		newResults, err := resp.GetResults(err)
 		if err != nil {
 			return nil, err
 		}
+
+		svc.log.Tracef("%T: %+v", newResults, newResults)
 
 		pbResults := []*mgmtpb.PoolRanksResult{}
 		if err := convert.Types(newResults, &pbResults); err != nil {
 			return nil, errors.Wrapf(err, "convert %T->%T", newResults, pbResults)
 		}
 
+		svc.log.Tracef("%T: %+v", pbResults, pbResults)
+
 		results = append(results, pbResults...)
 	}
-
-	svc.log.Tracef("pool-rank results %+v", results)
 
 	return results, nil
 }

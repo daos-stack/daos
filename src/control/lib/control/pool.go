@@ -791,6 +791,9 @@ func (resp *PoolRanksResp) GetResults(errIn error) ([]*PoolRanksResult, error) {
 	if resp == nil {
 		return nil, errors.Errorf("nil %T", resp)
 	}
+	if resp.ID == "" {
+		return nil, errors.New("empty pool id")
+	}
 	results := []*PoolRanksResult{}
 
 	if errIn != nil {
@@ -862,6 +865,8 @@ func PoolExclude(ctx context.Context, rpcClient UnaryInvoker, req *PoolRanksReq)
 	if err := convertMSResponse(ur, resp); err != nil {
 		return nil, err
 	}
+	// Fill pool-ID response field from request.
+	resp.ID = req.ID
 	rpcClient.Debugf("Exclude DAOS pool-rank targets response: %+v\n", resp)
 
 	return resp, nil
@@ -894,6 +899,8 @@ func PoolDrain(ctx context.Context, rpcClient UnaryInvoker, req *PoolRanksReq) (
 	if err := convertMSResponse(ur, resp); err != nil {
 		return nil, err
 	}
+	// Fill pool-ID response field from request.
+	resp.ID = req.ID
 	rpcClient.Debugf("Drain DAOS pool-rank targets response: %+v\n", resp)
 
 	return resp, nil
@@ -955,6 +962,8 @@ func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolRanks
 	if err := convertMSResponse(ur, resp); err != nil {
 		return nil, err
 	}
+	// Fill pool-ID response field from request.
+	resp.ID = req.ID
 	rpcClient.Debugf("Reintegrate DAOS pool-rank targets response: %s\n", resp)
 
 	return resp, nil
