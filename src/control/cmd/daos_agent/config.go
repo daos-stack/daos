@@ -82,14 +82,17 @@ func (c *Config) Validate() error {
 	// Support Old config options and copy it to the underline new structure value.
 	if c.Legacy.TelemetryRetain > 0 {
 		c.TelemetryConfig.Retain = c.Legacy.TelemetryRetain
+		fmt.Println(" WARNING - Deprecated:telemetry_retain options can be move under telemetry_config")
 	}
 
 	if c.Legacy.TelemetryPort != 0 {
 		c.TelemetryConfig.Port = c.Legacy.TelemetryPort
+		fmt.Println(" WARNING - Deprecated:telemetry_port options can be move under telemetry_config")
 	}
 
 	if c.Legacy.TelemetryEnabled {
 		c.TelemetryConfig.Enabled = c.Legacy.TelemetryEnabled
+		fmt.Println(" WARNING - Deprecated:telemetry_enabled options can be move under telemetry_config")
 	}
 
 	if c.TelemetryConfig.Retain > 0 && c.TelemetryConfig.Port == 0 {

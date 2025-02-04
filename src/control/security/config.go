@@ -124,8 +124,8 @@ func DefaultClientTelemetryConfig() *TelemetryConfig {
 	return &TelemetryConfig{
 		Enabled:       false,
 		AllowInsecure: true,
-		HttpsCert:     defaultTelemetryCert,
-		HttpsKey:      defaultTelemetryKey,
+		HttpsCert:     "",
+		HttpsKey:      "",
 	}
 }
 

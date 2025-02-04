@@ -91,7 +91,7 @@ class TestWithTelemetryBasic(TestWithTelemetry):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
-        :avocado: tags=control,telemetry,container,secure_telemetry
+        :avocado: tags=control,telemetry,container
         :avocado: tags=TestWithTelemetryBasic,test_container_telemetry
         """
         container_qty = self.params.get("container_qty", "/run/test/*", 1)

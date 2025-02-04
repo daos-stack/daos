@@ -251,7 +251,7 @@ func TestControl_httpGetBody(t *testing.T) {
 				tc.timeout = time.Second
 			}
 
-			result, err := httpGetBody(ctx, tc.url, tc.getFn, tc.timeout, tc.allowInsecure)
+			result, err := httpGetBody(ctx, tc.url, tc.getFn, tc.timeout)
 
 			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {

@@ -331,19 +331,12 @@ func (cmd *metricsListCmd) Execute(args []string) error {
 		cmd.Info(getConnectingMsg(req.Host, req.Port))
 	}
 
-	// Trying Secure Mode First, It will ignore the certificate if it's not provided
-	// or request with the certificate.
-	if req.AllowInsecure {
-		cmd.Debug("Trying Secure Mode (HTTPS) with Exception")
-	} else {
-		cmd.Debug("Trying Secure Mode (HTTPS) with system certificate")
-	}
-
+	// Try Secure Mode
 	resp, err := control.MetricsList(cmd.MustLogCtx(), req)
 	if err != nil {
-		cmd.Errorf("Secure Mode (HTTPS) failed: %s", err.Error())
-		//Trying Insecure Mode
-		req.AllowInsecure = !req.AllowInsecure
+		cmd.Debugf("Secure Mode (HTTPS) failed: %s", err.Error())
+		// Trying Insecure Mode
+		req.AllowInsecure = true
 		cmd.Debug("Trying Insecure Mode (HTTP)")
 		resp, err = control.MetricsList(cmd.MustLogCtx(), req)
 		if err != nil {
@@ -403,16 +396,11 @@ func (cmd *metricsQueryCmd) Execute(args []string) error {
 		cmd.Info(getConnectingMsg(req.Host, req.Port))
 	}
 
-	// Trying Secure Mode First, It will ignore the certificate if it's not provided
-	// or request with the certificate.
-	req.AllowInsecure = false
-	cmd.Debug("Trying Secure Mode (HTTPS) first, with system certificate")
-
 	resp, err := control.MetricsQuery(cmd.MustLogCtx(), req)
 	if err != nil {
-		cmd.Errorf("Secure Mode (HTTPS) failed: %s", err.Error())
+		cmd.Debugf("Secure Mode (HTTPS) failed: %s", err.Error())
 		//Trying Insecure Mode
-		req.AllowInsecure = !req.AllowInsecure
+		req.AllowInsecure = true
 		cmd.Debug("Trying Insecure Mode (HTTP)")
 		resp, err = control.MetricsQuery(cmd.MustLogCtx(), req)
 		if err != nil {
