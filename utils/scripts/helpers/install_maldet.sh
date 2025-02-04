@@ -33,7 +33,7 @@ mkdir -p /etc/clamd.d
 printf "LogSyslog yes\n" >> /etc/clamd.d/scan.conf
 
 lmd_tarball='maldetect-current.tar.gz'
-: "${REPO_FILE_URL:=https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/}"
+: "${REPO_FILE_URL:=https://artifactory/artifactory/repo-files/}"
 lmd_base_url="$(dirname "$REPO_FILE_URL")"
 lmd_base="${lmd_base_url#*://}"
 lmd_url="${lmd_base_url}/maldetect/downloads/${lmd_tarball}"
