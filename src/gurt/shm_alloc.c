@@ -15,11 +15,8 @@
 #include <errno.h>
 #include <pthread.h>
 
-#include <gurt/atomic.h>
-#include <gurt/common.h>
-#include <gurt/shm_internal.h>
+#include "shm_internal.h"
 #include <gurt/shm_alloc.h>
-#include <gurt/shm_utils.h>
 
 /* the name of shared memory used for mmap which will be found under /dev/shm/ */
 #define daos_shm_name "daos_shm_cache"
@@ -72,7 +69,14 @@ create_shm_region(uint64_t shm_size, uint64_t shm_pool_size)
 		DS_ERROR(errno, "ftruncate() failed for shm_ht_fd");
 		goto err;
 	}
-	/* map the shared memory at a fixed address for now. We will remove this limit later. */
+	/* We currently adopt an existing memory allocator that is not designed specifically for
+	 * shared memory. Functions of allocation and deallocation are needed to be called across
+	 * different processes. Since pointers are used in memory allocator, memory pool is
+	 * required to be mapped at the same address in all processes to ensure pointers in
+	 * allocator are always valid. We map the shared memory at a fixed address for now. We will
+	 * implement a memory allocator supporting shared memory natively and remove this limit
+	 * later.
+	 */
 	shm_addr = mmap(FIXED_SHM_ADDR, shm_size, PROT_READ | PROT_WRITE,
 			MAP_SHARED | MAP_FIXED, shm_ht_fd, 0);
 	if (shm_addr != FIXED_SHM_ADDR) {
@@ -125,7 +129,6 @@ err:
 int
 shm_init(void)
 {
-	int      i;
 	int      shm_ht_fd;
 	int      shmopen_perm = 0600;
 	void    *shm_addr;
@@ -181,18 +184,7 @@ open_rw:
 				return rc;
 		} else {
 			DS_ERROR(errno, "unexpected error shm_open()");
-			for (i = 0; i < RETRY; i++) {
-				/* take a short nap to wait for the creation of shm */
-				usleep(10);
-				shm_ht_fd = shm_open(daos_shm_name_buf, O_RDWR, shmopen_perm);
-				if (shm_ht_fd >= 0)
-					break;
-			}
-			if (i >= RETRY) {
-				DS_ERROR(errno, "failed to open shared memory after %d retries",
-					 RETRY);
-				goto err;
-			}
+			goto err;
 		}
 	}
 

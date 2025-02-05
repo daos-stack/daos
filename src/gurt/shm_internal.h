@@ -9,6 +9,8 @@
 #define __DAOS_SHM_ALLOC_INTERNAL_H__
 
 #include <stdatomic.h>
+#include <gurt/atomic.h>
+#include <gurt/common.h>
 #include <gurt/shm_utils.h>
 #include <gurt/shm_tlsf.h>
 
@@ -45,7 +47,7 @@ struct d_shm_hdr {
 	_Atomic int      ref_count;
 	/* global counter used for round robin picking memory allocator for large memory request */
 	_Atomic uint64_t large_mem_count;
-	/* array of pointors to memory allocators */
+	/* array of pointers to memory allocators */
 	tlsf_t           tlsf[N_SHM_POOL];
 	/* lock for accessing one individual memory allocator */
 	d_shm_mutex_t    mem_lock[N_SHM_POOL];

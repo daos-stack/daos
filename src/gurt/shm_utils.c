@@ -8,8 +8,7 @@
 #include <errno.h>
 #include <pthread.h>
 
-#include <gurt/common.h>
-#include <gurt/shm_utils.h>
+#include "shm_internal.h"
 
 /* the attribute set for mutex located inside shared memory */
 extern pthread_mutexattr_t d_shm_mutex_attr;
