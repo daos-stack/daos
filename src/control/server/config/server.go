@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -509,6 +510,8 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 	if cfg.DisableHugepages {
 		return FaultConfigHugepagesDisabledWithBdevs
 	}
+
+	log.Infof("%d total hugepages in system", mi.HugepagesTotal)
 
 	// Calculate minimum number of hugepages for all configured engines.
 	minHugepages, err := storage.CalcMinHugepages(mi.HugepageSizeKiB, cfgTargetCount+sysXSCount)
