@@ -84,7 +84,7 @@ class SysPools():
         self._warnings = []
         self._check_rb_new_fmt = True
         self._check_rb_legacy_fmt = True
-        self._debug = False
+        self._debug = True
 
         # other nested dictionaries within self._pools will be built-up
         # pool leadership terms dictionary indexed by integer term number
@@ -100,6 +100,27 @@ class SysPools():
         # self._pools[puuid][term]["maps"][mapver]["rb_gens"][gen] =
         #  {op, start_time, time, started, scanning, scan_hung, scan_hung_time, scan_num_eng_wait,
         #   pulling, pull_hung, pull_hung_time, pull_num_eng_wait, completed, aborted, failed, dur)
+
+    def _create_term(self, puuid, term, rank, host, pid, logfile, begin_t="xx/xx-xx:xx:xx.xx",
+                     end_t="xx/xx-xx:xx:xx.xx"):
+        # carry over most recent map version into the new term, avoid later KeyError
+        old_term = term - 1
+        pmap_versions = {}
+        if old_term in self._pools[puuid]:
+            if self._pools and self._pools[puuid][old_term]["maps"] != {}:
+                last_mapver = max(self._pools[puuid][old_term]["maps"].keys())
+                pmap_versions[last_mapver] = self._pools[puuid][old_term]["maps"][last_mapver]
+                pmap_versions[last_mapver]["carryover"] = True
+
+        return {
+            "rank": rank,
+            "begin_time": begin_t,
+            "end_time": end_t,
+            "host": host,
+            "pid": pid,
+            "logfile": logfile,
+            "maps": pmap_versions
+        }
 
     def _create_mapver(self, ver, carryover=False, tm="xx/xx-xx:xx:xx.xx"):
         return {
@@ -186,29 +207,14 @@ class SysPools():
         self._cur_ldr_rank[puuid] = rank
         self._cur_ldr_pid[puuid] = pid
         self._cur_term[puuid] = term
-        old_term = term - 1
         # if term already exists, error?
         if term in self._pools[puuid]:
             self._warn(f"pool {puuid} term {term} already seen!", fname, line)
-        # carry over most recent map version into the new term, avoid later KeyError
-        pmap_versions = {}
-        if old_term in self._pools[puuid]:
-            if self._pools and self._pools[puuid][old_term]["maps"] != {}:
-                last_mapver = max(self._pools[puuid][old_term]["maps"].keys())
-                pmap_versions[last_mapver] = self._pools[puuid][old_term]["maps"][last_mapver]
-                pmap_versions[last_mapver]["carryover"] = True
-        self._pools[puuid][term] = {
-            "rank": rank,
-            "begin_time": datetime,
-            "end_time": "",
-            "host": host,
-            "pid": pid,
-            "logfile": fname,
-            "maps": pmap_versions
-        }
+        self._pools[puuid][term] = self._create_term(puuid, term, rank, host, pid, fname,
+                                                     begin_t=datetime)
         if self._debug:
-            print(f"{datetime} FOUND pool {puuid} BEGIN\tterm {term} pmap_versions empty: "
-                  f"{str(not pmap_versions)} rank {rank}\t{host}\tPID {pid}\t{fname}")
+            print(f"{datetime} FOUND pool {puuid} BEGIN\tterm {term} rank {rank}\t{host}"
+                  f"\tPID {pid}\t{fname}")
         return True
 
     def _match_ps_step_down(self, fname, line, pid, rank):
@@ -218,12 +224,22 @@ class SysPools():
             return False
 
         puuid, term = self._get_ps_leader_components(match)
+        if puuid not in self._pools:
+            self._pools[puuid] = {}
+            self._cur_term[puuid] = -1
+
         if term != self._cur_term[puuid]:
-            self._warn(f"step_down term={term} != cur_term={self._cur_term}", fname, line)
+            self._warn(f"pool {puuid} step_down term={term} != cur_term={self._cur_term[puuid]}",
+                       fname, line)
+        if term not in self._pools[puuid]:
+            self._pools[puuid][term] = self._create_term(puuid, term, rank, host, pid, fname,
+                                                         end_t=datetime)
+        else:
+            self._pools[puuid][term]["end_time"] = datetime
+
         self._cur_ldr_rank[puuid] = -1
         self._cur_ldr_pid[puuid] = -1
         self._cur_term[puuid] = -1
-        self._pools[puuid][term]["end_time"] = datetime
         if self._debug:
             print(f"{datetime} FOUND pool {puuid} END\tterm {term} rank {rank}\t{host}\t"
                   f"PID {pid}\t{fname}")
@@ -276,6 +292,12 @@ class SysPools():
         if term < 1:
             self._warn(f"pool {puuid} I don't know what term it is ({term})!", fname, line)
             return True
+
+        if ver not in self._pools[puuid][term]["maps"]:
+            self._warn(f"pool {puuid} term {term} ver {ver} not in maps - add placeholder",
+                       fname, line)
+            self._pools[puuid][term]["maps"][ver] = self._create_mapver(ver)
+
         if gen in self._pools[puuid][term]["maps"][ver]["rb_gens"]:
             self._warn(f"pool {puuid} term {term} ver {ver} already has gen {gen}", fname, line)
         # Future possibility: keep timestamps, durations for scan start, pull start, completed
@@ -304,6 +326,12 @@ class SysPools():
         if term < 1:
             self._warn(f"pool {puuid} I don't know what term it is ({term})!", fname, line)
             return True
+
+        if ver not in self._pools[puuid][term]["maps"]:
+            self._warn(f"pool {puuid} term {term} ver {ver} not in maps - add placeholder",
+                       fname, line)
+            self._pools[puuid][term]["maps"][ver] = self._create_mapver(ver)
+
         if gen in self._pools[puuid][term]["maps"][ver]["rb_gens"]:
             self._warn(f"pool {puuid} term {term} ver {ver} already has gen {gen}", fname, line)
         self._pools[puuid][term]["maps"][ver]["rb_gens"][gen] = \
