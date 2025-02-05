@@ -118,8 +118,7 @@ def generate(env):
         context.Result(go_version)
         return 1
 
-#    env.d_go_bin = env.get("GO_BIN", env.WhereIs(GO_COMPILER))
-    env.d_go_bin = "/usr/local/go/bin/go"
+    env.d_go_bin = env.get("GO_BIN", env.WhereIs(GO_COMPILER))
 
     if GetOption('help') or GetOption('clean'):
         return
