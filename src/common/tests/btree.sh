@@ -40,6 +40,7 @@ EOF
 
 PERF=""
 UINT=""
+DYN=""
 test_conf_pre=""
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -54,7 +55,7 @@ while [ $# -gt 0 ]; do
         test_conf_pre="${test_conf_pre} keys=${BAT_NUM}"
         ;;
     dyn)
-        DYN="-t"
+        DYN="d"
         shift
         test_conf_pre="${test_conf_pre} dyn"
         ;;
@@ -110,7 +111,7 @@ run_test()
         DAOS_DEBUG="$DDEBUG"                        \
         eval "${VCMD}" "$BTR"                       \
         --start-test "'btree functional ${test_conf_pre} ${test_conf} iterate=${IDIR}'" \
-        "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
+        -R "${DYN}" -M "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -c                                          \
         -o                                          \
         -u "$RECORDS"                               \
@@ -130,7 +131,7 @@ run_test()
         echo "B+tree batch operations test..."
         eval "${VCMD}" "$BTR" \
         --start-test "'btree batch operations ${test_conf_pre} ${test_conf}'" \
-        "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
+        -R "${DYN}" -M "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -c                                          \
         -o                                          \
         -b "$BAT_NUM"                               \
@@ -139,14 +140,14 @@ run_test()
         echo "B+tree drain test..."
         eval "${VCMD}" "$BTR" \
         --start-test "'btree drain ${test_conf_pre} ${test_conf}'" \
-        "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
+        -R "${DYN}" -M "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -e -D
 
     else
         echo "B+tree performance test..."
         eval "${VCMD}" "$BTR" \
         --start-test "'btree performance ${test_conf_pre} ${test_conf}'" \
-        "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
+        -R "${DYN}" -M "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -p "$BAT_NUM"                               \
         -D
     fi
@@ -154,7 +155,7 @@ run_test()
 
 for IPL in "i," ""; do
     for IDIR in "f" "b"; do
-        for PMEM in "-m" ""; do
+        for PMEM in "p" ""; do
             run_test
         done
     done

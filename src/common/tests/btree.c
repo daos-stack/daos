@@ -886,10 +886,13 @@ ik_btr_drain(void **state)
 }
 
 static void
-ik_btr_init_mem(bool pmem, int dynamic_flag)
+ik_btr_memory_register(char *pmem_flag)
 {
 	int rc = 0;
-	if (pmem) {
+	if (pmem_flag && *pmem_flag != 'p') {
+		fail_msg("Invalid value of -M parameter: %c\n", *pmem_flag);
+	}
+	if (pmem_flag) {
 		D_PRINT("Using pmem\n");
 		rc = utest_pmem_create(POOL_NAME, POOL_SIZE, sizeof(*ik_root), NULL, &ik_utx);
 		if (rc) {
@@ -902,20 +905,33 @@ ik_btr_init_mem(bool pmem, int dynamic_flag)
 			fail_msg("Cannot setup vmem: %d\n", rc);
 		}
 	}
-	rc = dbtree_class_register(
-	    IK_TREE_CLASS, dynamic_flag | BTR_FEAT_EMBED_FIRST | BTR_FEAT_UINT_KEY, &ik_ops);
-	if (rc) {
-		fail_msg("Cannot register memory class: %d\n", rc);
-	}
 
 	ik_root = utest_utx2root(ik_utx);
 	ik_uma  = utest_utx2uma(ik_utx);
 }
 
+static void
+ik_btr_class_register(char *dynamic_flag)
+{
+	if (dynamic_flag && *dynamic_flag != 'd') {
+		fail_msg("Invalid value of -R parameter: %c\n", *dynamic_flag);
+	}
+	if (dynamic_flag) {
+		D_PRINT("Using dynamic tree order\n");
+	}
+	int rc = dbtree_class_register(IK_TREE_CLASS,
+				       (dynamic_flag ? BTR_FEAT_DYNAMIC_ROOT : 0) |
+					   BTR_FEAT_EMBED_FIRST | BTR_FEAT_UINT_KEY,
+				       &ik_ops);
+	if (rc) {
+		fail_msg("Cannot register memory class: %d\n", rc);
+	}
+}
+
 static struct option btr_ops[] = {
     {"start-test", required_argument, NULL, 'S'},
-    {"dyn_tree", no_argument, NULL, 't'},
-    {"pmem", no_argument, NULL, 'm'},
+    {"reg-class", optional_argument, NULL, 'R'},
+    {"reg-memory", optional_argument, NULL, 'M'},
     {"create", required_argument, NULL, 'C'},
     {"destroy", no_argument, NULL, 'D'},
     {"drain", no_argument, NULL, 'e'},
@@ -932,42 +948,41 @@ static struct option btr_ops[] = {
     {NULL, 0, NULL, 0},
 };
 
-#define BTR_SHORTOPTS "+S:tmC:Deocqu:f:d:r:qi:b:p:"
+#define BTR_SHORTOPTS "+S:R::M::C:Deocqu:f:d:r:qi:b:p:"
 
 /**
  * Execute test based on the given sequence of steps.
  * -S/--start-test parameter is ignored
- * -t parameter shall be provided as the first parameter in the sequence,
- *    otherwise it will be ignored
- * -m parameter shall be provided before any other short parameters,
- *    otherwise it will be ignored
+ * -R and -M parameters must be provided before -C parameter.
  */
 static void
 ts_group(void **state) {
-	struct btr_test_state *test_state    = (struct btr_test_state *)*state;
-	int                    opt           = 0;
-	void                 **st            = NULL;
-	int                    dynamic_flag  = 0;
+	struct btr_test_state *test_state = (struct btr_test_state *)*state;
+	int                    opt        = 0;
+	void                 **st         = NULL;
 
 	while ((opt = getopt_long(test_state->argc, test_state->argv, BTR_SHORTOPTS, btr_ops,
 				  NULL)) != -1) {
 		tst_fn_val.optval = optarg;
 		tst_fn_val.input = true;
 
+		// trim trailing space
+		while (tst_fn_val.optval && *tst_fn_val.optval != '\0' &&
+		       isspace((unsigned char)*tst_fn_val.optval)) {
+			tst_fn_val.optval++;
+		}
+
 		switch (opt) {
 		case 'S':
 			/* not part of the test sequence */
 			break;
-		case 't':
-			D_PRINT("Using dynamic tree order\n");
-			dynamic_flag = BTR_FEAT_DYNAMIC_ROOT;
+		case 'R':
+			ik_btr_class_register(tst_fn_val.optval);
 			break;
-		case 'm':
-			ik_btr_init_mem(true, dynamic_flag);
+		case 'M':
+			ik_btr_memory_register(tst_fn_val.optval);
 			break;
 		case 'C':
-			if (ik_utx == NULL)
-				ik_btr_init_mem(false, dynamic_flag);
 			ik_btr_open_create(st);
 			break;
 		case 'D':
@@ -1053,11 +1068,13 @@ main(int argc, char **argv)
 	while ((opt = getopt_long(argc, argv, BTR_SHORTOPTS, btr_ops, NULL)) != -1) {
 		if (opt == 'S') {
 			test_name = optarg;
+		} else if (opt == '?') {
+			/* unknown parameter */
+			break;
 		}
 	}
 	if (argc != optind) {
-		print_message("Unknown parameter: %s\n", argv[optind]);
-		return -1;
+		fail_msg("Unknown parameter: %s\n", argv[optind]);
 	}
 	/* getopt_long start over */
 	optind = 1;
@@ -1074,8 +1091,7 @@ main(int argc, char **argv)
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0) {
-		print_message("daos_debug_init() failed: %d\n", rc);
-		return rc;
+		fail_msg("daos_debug_init() failed: %d\n", rc);
 	}
 	rc = run_cmd_line_test(test_name, &initial_state);
 	daos_debug_fini();
@@ -1083,8 +1099,8 @@ main(int argc, char **argv)
 		rc += utest_utx_destroy(ik_utx);
 	}
 	if (rc != 0) {
-		print_message("Error: %d\n", rc);
+		fail_msg("Error: %d\n", rc);
 	}
 
-	return rc;
+	return 0;
 }
