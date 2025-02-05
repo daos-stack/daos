@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -558,7 +559,7 @@ obj_coll_tgt_punch(void *args);
 int
 obj_coll_punch_disp(struct dtx_leader_handle *dlh, void *arg, int idx, dtx_sub_comp_cb_t comp_cb);
 int
-obj_coll_punch_bulk(crt_rpc_t *rpc, d_iov_t *iov, crt_proc_t *p_proc,
+obj_coll_punch_bulk(struct obj_io_context *ioc, crt_rpc_t *rpc, d_iov_t *iov, crt_proc_t *p_proc,
 		    struct daos_coll_target **p_dcts, uint32_t *dct_nr);
 int
 obj_coll_punch_prep(struct obj_coll_punch_in *ocpi, struct daos_coll_target *dcts, uint32_t dct_nr,

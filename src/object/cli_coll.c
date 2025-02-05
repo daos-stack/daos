@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -533,7 +534,6 @@ struct obj_coll_punch_cb_args {
 	struct dtx_memberships	*cpca_mbs;
 	struct dc_obj_shard	*cpca_shard;
 	crt_bulk_t		*cpca_bulks;
-	crt_proc_t		 cpca_proc;
 	d_sg_list_t		 cpca_sgl;
 	d_iov_t			 cpca_iov;
 };
@@ -548,9 +548,6 @@ dc_obj_coll_punch_cb(tse_task_t *task, void *data)
 			crt_bulk_free(cpca->cpca_bulks[0]);
 		D_FREE(cpca->cpca_bulks);
 	}
-
-	if (cpca->cpca_proc != NULL)
-		crt_proc_destroy(cpca->cpca_proc);
 
 	D_FREE(cpca->cpca_mbs);
 	D_FREE(cpca->cpca_buf);
@@ -612,6 +609,7 @@ dc_obj_coll_punch_bulk(tse_task_t *task, struct coll_oper_args *coa,
 		       struct obj_coll_punch_cb_args *cpca, uint32_t *p_size)
 {
 	/* The proc function may pack more information inside the buffer, enlarge the size a bit. */
+	crt_proc_t	proc;
 	uint32_t	size = (*p_size * 9) >> 3;
 	uint32_t	used = 0;
 	int		rc = 0;
@@ -622,22 +620,19 @@ again:
 	if (cpca->cpca_buf == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rc = crt_proc_create(daos_task2ctx(task), cpca->cpca_buf, size, CRT_PROC_ENCODE,
-			     &cpca->cpca_proc);
+	rc = crt_proc_create(daos_task2ctx(task), cpca->cpca_buf, size, CRT_PROC_ENCODE, &proc);
 	if (rc != 0)
 		goto out;
 
 	for (i = 0; i < coa->coa_dct_nr; i++) {
-		rc = crt_proc_struct_daos_coll_target(cpca->cpca_proc, CRT_PROC_ENCODE,
-						      &coa->coa_dcts[i]);
+		rc = crt_proc_struct_daos_coll_target(proc, CRT_PROC_ENCODE, &coa->coa_dcts[i]);
 		if (rc != 0)
 			goto out;
 	}
 
-	used = crp_proc_get_size_used(cpca->cpca_proc);
+	used = crp_proc_get_size_used(proc);
+	crt_proc_destroy(proc);
 	if (unlikely(used > size)) {
-		crt_proc_destroy(cpca->cpca_proc);
-		cpca->cpca_proc = NULL;
 		D_FREE(cpca->cpca_buf);
 		size = used;
 		goto again;
@@ -654,15 +649,10 @@ again:
 	rc = obj_bulk_prep(&cpca->cpca_sgl, 1, false, CRT_BULK_RO, task, &cpca->cpca_bulks);
 
 out:
-	if (rc != 0) {
-		if (cpca->cpca_proc != NULL) {
-			crt_proc_destroy(cpca->cpca_proc);
-			cpca->cpca_proc = NULL;
-		}
+	if (rc != 0)
 		D_FREE(cpca->cpca_buf);
-	} else {
+	else
 		*p_size = used;
-	}
 
 	return rc;
 }
@@ -787,11 +777,11 @@ gen_mbs:
 		  "Too much data to be held inside coll punch RPC body: %u vs %u\n",
 		  inline_size, DAOS_BULK_LIMIT);
 
-	if (inline_size + tgt_size >= DAOS_BULK_LIMIT) {
+//	if (inline_size + tgt_size >= DAOS_BULK_LIMIT) {
 		rc = dc_obj_coll_punch_bulk(task, coa, &cpca, &tgt_size);
 		if (rc != 0)
 			goto out;
-	}
+//	}
 
 	cpca.cpca_shard = shard;
 	cpca.cpca_mbs = mbs;
@@ -839,8 +829,6 @@ out:
 		D_FREE(cpca.cpca_bulks);
 	}
 
-	if (cpca.cpca_proc != NULL)
-		crt_proc_destroy(cpca.cpca_proc);
 	D_FREE(cpca.cpca_buf);
 
 	if (shard != NULL)
