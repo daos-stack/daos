@@ -511,6 +511,8 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 		return FaultConfigHugepagesDisabledWithBdevs
 	}
 
+	log.Infof("%d total hugepages in system", mi.HugepagesTotal)
+
 	// Calculate minimum number of hugepages for all configured engines.
 	minHugepages, err := storage.CalcMinHugepages(mi.HugepageSizeKiB, cfgTargetCount+sysXSCount)
 	if err != nil {
