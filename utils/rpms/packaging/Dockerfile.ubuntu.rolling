@@ -7,6 +7,12 @@
 FROM ubuntu:rolling
 Maintainer daos-stack <daos@daos.groups.io>
 
+# Set environment variables for proxy
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+
+
 # use same UID as host and default value of 1000 if not specified
 ARG UID=1000
 

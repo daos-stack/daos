@@ -8,6 +8,12 @@
 ARG BASE_DISTRO=rockylinux/rockylinux:8
 FROM $BASE_DISTRO
 LABEL maintainer="daos@daos.groups.io"
+
+# Set environment variables for proxy
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+
 # Needed for later use of BASE_DISTRO
 ARG BASE_DISTRO
 

@@ -20,6 +20,9 @@ services:
         - "DAOS_REPOS_NOAUTH=${DAOS_REPOS_NOAUTH}"
         - "DAOS_VERSION=${DAOS_VERSION}"
         - "DAOS_AUTH=${DAOS_AUTH}"
+        - "HTTP_PROXY=${HTTP_PROXY:-${http_proxy:-\"\"}}"
+        - "HTTPS_PROXY=${HTTPS_PROXY:-${https_proxy:-\"\"}}"
+        - "NO_PROXY=${NO_PROXY:-${no_proxy:-\"\"}}"
     privileged: true
     cgroup: host
     volumes:
@@ -45,6 +48,9 @@ services:
         - "DAOS_SCM_SIZE=${DAOS_SCM_SIZE}"
         - "DAOS_BDEV_SIZE=${DAOS_BDEV_SIZE}"
         - "DAOS_MD_ON_SSD=${DAOS_MD_ON_SSD}"
+        - "HTTP_PROXY=${HTTP_PROXY:-${http_proxy:-\"\"}}"
+        - "HTTPS_PROXY=${HTTPS_PROXY:-${https_proxy:-\"\"}}"
+        - "NO_PROXY=${NO_PROXY:-${no_proxy:-\"\"}}"
     container_name: daos-server
     hostname: daos-server
     privileged: true
@@ -87,6 +93,9 @@ services:
         - "DAOS_DOCKER_IMAGE_TAG=${DAOS_DOCKER_IMAGE_TAG}"
         - "DAOS_VERSION=${DAOS_VERSION}"
         - "DAOS_AUTH=${DAOS_AUTH}"
+        - "HTTP_PROXY=${HTTP_PROXY:-${http_proxy:-\"\"}}"
+        - "HTTPS_PROXY=${HTTPS_PROXY:-${https_proxy:-\"\"}}"
+        - "NO_PROXY=${NO_PROXY:-${no_proxy:-\"\"}}"
     container_name: daos-admin
     hostname: daos-admin
     privileged: true
@@ -123,6 +132,9 @@ services:
         - "DAOS_AGENT_IFACE_NUMA_NODE=${DAOS_AGENT_IFACE_NUMA_NODE}"
         - "DAOS_AGENT_IFACE_NAME=${DAOS_AGENT_IFACE_NAME}"
         - "DAOS_AGENT_IFACE_DOMAIN_NAME=${DAOS_AGENT_IFACE_DOMAIN_NAME}"
+        - "HTTP_PROXY=${HTTP_PROXY:-${http_proxy:-\"\"}}"
+        - "HTTPS_PROXY=${HTTPS_PROXY:-${https_proxy:-\"\"}}"
+        - "NO_PROXY=${NO_PROXY:-${no_proxy:-\"\"}}"
     container_name: daos-client
     hostname: daos-client
     privileged: true
