@@ -17,11 +17,10 @@ import (
 
 func startPrometheusExporter(ctx context.Context, log logging.Logger, cs *promexp.ClientSource, cfg *Config) (func(), error) {
 	expCfg := &promexp.ExporterConfig{
-		Port:          cfg.TelemetryConfig.Port,
-		Title:         "DAOS Client Telemetry",
-		AllowInsecure: cfg.TelemetryConfig.AllowInsecure,
-		HttpsCert:     cfg.TelemetryConfig.HttpsCert,
-		HttpsKey:      cfg.TelemetryConfig.HttpsKey,
+		Port:      cfg.TelemetryConfig.Port,
+		Title:     "DAOS Client Telemetry",
+		HttpsCert: cfg.TelemetryConfig.HttpsCert,
+		HttpsKey:  cfg.TelemetryConfig.HttpsKey,
 		Register: func(ctx context.Context, log logging.Logger) error {
 			c, err := promexp.NewClientCollector(ctx, log, cs, &promexp.CollectorOpts{
 				RetainDuration: cfg.TelemetryConfig.Retain,

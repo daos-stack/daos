@@ -814,7 +814,6 @@ class TelemetryConfig(YamlParameters):
         """
         super().__init__(namespace, None, title)
         self._log_dir = log_dir
-        self.allow_insecure = BasicParameter(None, True)
         self.telemetry_port = BasicParameter(None, 9191)
         self.telemetry_retain = None
         self.telemetry_enabled = None
@@ -827,12 +826,6 @@ class TelemetryConfig(YamlParameters):
 
         """
         yaml_data = super().get_yaml_data()
-
-        if self.title is not None:
-            yaml_data[self.title]["allow_insecure"] = self.allow_insecure.value
-        else:
-            yaml_data["allow_insecure"] = self.allow_insecure.value
-
         return yaml_data
 
     def _get_new(self):

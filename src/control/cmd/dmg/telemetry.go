@@ -260,7 +260,7 @@ func (cmd *telemConfigCmd) configurePrometheus() (*installInfo, error) {
 	}
 
 	scheme := ""
-	if !cmd.cfgCmd.config.TelemetryConfig.AllowInsecure {
+	if cmd.cfgCmd.config.TelemetryConfig.HttpsCert != "" && cmd.cfgCmd.config.TelemetryConfig.HttpsKey != "" {
 		cmd.Infof("Prometheus configuration is setup as Secure (https) mode")
 		scheme = "https"
 	} else {

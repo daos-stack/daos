@@ -147,12 +147,6 @@ func LoadConfig(cfgPath string) (*Config, error) {
 		return nil, errors.Wrap(err, "agent config validation failed")
 	}
 
-	if !cfg.TelemetryConfig.AllowInsecure {
-		if cfg.TelemetryConfig.HttpsCert == "" || cfg.TelemetryConfig.HttpsKey == "" {
-			return nil, errors.New("For secure mode, https_cert and https_key required under telemetry_config")
-		}
-	}
-
 	return cfg, nil
 }
 
