@@ -158,16 +158,13 @@ test_hash(void **state)
 	rc = shm_ht_create(HT_NAME, 8, 16, &ht_head);
 	assert_true(rc == 0);
 
-	value =
-	    shm_ht_rec_find_insert(ht_head, KEY_1, strlen(KEY_1), VAL_1, sizeof(VAL_1), &link);
+	value = shm_ht_rec_find_insert(ht_head, KEY_1, strlen(KEY_1), VAL_1, sizeof(VAL_1), &link);
 	assert_non_null(value);
 
-	value =
-	    shm_ht_rec_find_insert(ht_head, KEY_2, strlen(KEY_2), VAL_2, sizeof(VAL_2), &link);
+	value = shm_ht_rec_find_insert(ht_head, KEY_2, strlen(KEY_2), VAL_2, sizeof(VAL_2), &link);
 	assert_non_null(value);
 
-	value =
-	    shm_ht_rec_find_insert(ht_head, KEY_3, strlen(KEY_3), VAL_3, sizeof(VAL_3), &link);
+	value = shm_ht_rec_find_insert(ht_head, KEY_3, strlen(KEY_3), VAL_3, sizeof(VAL_3), &link);
 	assert_non_null(value);
 
 	verify_hash();
@@ -275,7 +272,7 @@ test_lock(void **state)
 	assert_true(rc == 0);
 
 	mutex = (d_shm_mutex_t *)shm_ht_rec_find_insert(
-		ht_head, key, strlen(key), INIT_KEY_VALUE_MUTEX, sizeof(d_shm_mutex_t), &link);
+	    ht_head, key, strlen(key), INIT_KEY_VALUE_MUTEX, sizeof(d_shm_mutex_t), &link);
 	assert_true(mutex != NULL);
 
 	/* start a child process to lock this mutex */
@@ -333,7 +330,7 @@ init_tests(void **state)
 static int
 fini_tests(void **state)
 {
-        /* unlink shared memory file under /dev/shm/ */
+	/* unlink shared memory file under /dev/shm/ */
 	shm_destroy();
 	d_log_fini();
 

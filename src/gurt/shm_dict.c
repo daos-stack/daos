@@ -348,7 +348,7 @@ shm_ht_rec_find_insert(struct d_shm_ht_head *ht_head, const char *key, const int
 	d_shm_mutex_t     *p_ht_lock;
 	long int           off_next;
 	long int          *p_off_list;
-	struct shm_ht_rec *rec = NULL;
+	struct shm_ht_rec *rec   = NULL;
 	char              *value = NULL;
 	int                err_save;
 	int                rc;
@@ -383,8 +383,8 @@ shm_ht_rec_find_insert(struct d_shm_ht_head *ht_head, const char *key, const int
 		}
 	}
 	/* record is not found. Insert it at the very beginning of the link list. */
-	rec = (struct shm_ht_rec *)shm_memalign(SHM_MEM_ALIGN, sizeof(struct shm_ht_rec) + len_key +
-							       len_value);
+	rec = (struct shm_ht_rec *)shm_memalign(SHM_MEM_ALIGN,
+						sizeof(struct shm_ht_rec) + len_key + len_value);
 	if (rec == NULL) {
 		err_save = ENOMEM;
 		goto err;

@@ -27,7 +27,7 @@
 #define N_SHM_POOL     (8)
 
 /* the size of each shm pool */
-#define SHM_POOL_SIZE  (1024*1024*1024L)
+#define SHM_POOL_SIZE  (1024 * 1024 * 1024L)
 
 /* the total size of shared memory that will be allocated */
 #define SHM_SIZE_TOTAL (SHM_POOL_SIZE * N_SHM_POOL)
@@ -69,6 +69,6 @@ struct d_shm_hdr {
 extern struct d_shm_hdr *d_shm_head;
 
 /* the total size of shared memory that will be allocated */
-#define SHM_SIZE_REQ   (SHM_POOL_SIZE * N_SHM_POOL + sizeof(struct d_shm_hdr))
+#define SHM_SIZE_REQ (SHM_POOL_SIZE * N_SHM_POOL + sizeof(struct d_shm_hdr))
 
 #endif

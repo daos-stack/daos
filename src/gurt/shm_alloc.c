@@ -41,18 +41,18 @@ pthread_mutexattr_t d_shm_mutex_attr;
  * process exits to keep shm always available. shared memory is unmapped when other processes
  * exit.
  */
-static int          pid_shm_creator;
+static int      pid_shm_creator;
 
-static uint64_t     page_size;
+static uint64_t page_size;
 
 static int
 create_shm_region(uint64_t shm_size, uint64_t shm_pool_size)
 {
-	int      i;
-	int      shm_ht_fd;
-	int      shmopen_perm = 0600;
-	void    *shm_addr;
-	char     daos_shm_name_buf[64];
+	int   i;
+	int   shm_ht_fd;
+	int   shmopen_perm = 0600;
+	void *shm_addr;
+	char  daos_shm_name_buf[64];
 
 	/* the shared memory only accessible for individual user for now */
 	sprintf(daos_shm_name_buf, "%s_%d", daos_shm_name, getuid());
@@ -88,7 +88,7 @@ create_shm_region(uint64_t shm_size, uint64_t shm_pool_size)
 	/* initialize memory allocators */
 	for (i = 0; i < N_SHM_POOL; i++) {
 		d_shm_head->tlsf[i] = tlsf_create_with_pool(
-			shm_addr + sizeof(struct d_shm_hdr) + (i * shm_pool_size), shm_pool_size);
+		    shm_addr + sizeof(struct d_shm_hdr) + (i * shm_pool_size), shm_pool_size);
 	}
 
 	if (shm_mutex_init(&(d_shm_head->g_lock)) != 0) {
@@ -111,9 +111,9 @@ create_shm_region(uint64_t shm_size, uint64_t shm_pool_size)
 
 	atomic_store_relaxed(&(d_shm_head->ref_count), 1);
 	atomic_store_relaxed(&(d_shm_head->large_mem_count), 0);
-	d_shm_head->size           = shm_size;
-	d_shm_head->shm_pool_size  = shm_pool_size;
-	d_shm_head->magic          = DSM_MAGIC;
+	d_shm_head->size          = shm_size;
+	d_shm_head->shm_pool_size = shm_pool_size;
+	d_shm_head->magic         = DSM_MAGIC;
 	/* initialization is finished now. */
 	return 0;
 
@@ -189,8 +189,8 @@ open_rw:
 	}
 
 	/* map existing shared memory */
-	shm_addr = mmap(FIXED_SHM_ADDR, shm_size, PROT_READ | PROT_WRITE,
-			MAP_SHARED | MAP_FIXED, shm_ht_fd, 0);
+	shm_addr = mmap(FIXED_SHM_ADDR, shm_size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED,
+			shm_ht_fd, 0);
 	if (shm_addr != FIXED_SHM_ADDR) {
 		DS_ERROR(errno, "mmap failed to map at desired address");
 		goto err;
