@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -228,12 +229,13 @@ type (
 
 	// PoolCreateResp contains the response from a pool create request.
 	PoolCreateResp struct {
-		UUID         string   `json:"uuid"`
-		Leader       uint32   `json:"svc_ldr"`
-		SvcReps      []uint32 `json:"svc_reps"`
-		TgtRanks     []uint32 `json:"tgt_ranks"`
-		TierBytes    []uint64 `json:"tier_bytes"`     // Per-rank storage tier sizes.
-		MemFileBytes uint64   `json:"mem_file_bytes"` // Per-rank. MD-on-SSD mode only.
+		UUID          string   `json:"uuid"`
+		Leader        uint32   `json:"svc_ldr"`
+		SvcReps       []uint32 `json:"svc_reps"`
+		TgtRanks      []uint32 `json:"tgt_ranks"`
+		TierBytes     []uint64 `json:"tier_bytes"`       // Per-rank storage tier sizes.
+		MemFileBytes  uint64   `json:"mem_file_bytes"`   // Per-rank. MD-on-SSD mode only.
+		MdOnSsdActive bool     `json:"md_on_ssd_active"` // MD-on-SSD mode.
 	}
 )
 
@@ -748,6 +750,7 @@ type PoolExcludeReq struct {
 	ID        string
 	Rank      ranklist.Rank
 	TargetIdx []uint32
+	Force     bool
 }
 
 // ExcludeResp has no other parameters other than success/failure for now.
@@ -761,6 +764,7 @@ func PoolExclude(ctx context.Context, rpcClient UnaryInvoker, req *PoolExcludeRe
 		Id:        req.ID,
 		Rank:      req.Rank.Uint32(),
 		TargetIdx: req.TargetIdx,
+		Force:     req.Force,
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolExclude(ctx, pbReq)
@@ -854,13 +858,11 @@ type PoolReintegrateReq struct {
 	TargetIdx []uint32
 }
 
-// ReintegrateResp has no other parameters other than success/failure for now.
-
 // PoolReintegrate will set a pool target for a specific rank back to up.
 // This should automatically start the reintegration process.
 // Returns an error (including any DER code from DAOS).
 func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolReintegrateReq) error {
-	pbReq := &mgmtpb.PoolReintegrateReq{
+	pbReq := &mgmtpb.PoolReintReq{
 		Sys:       req.getSystem(rpcClient),
 		Id:        req.ID,
 		Rank:      req.Rank.Uint32(),

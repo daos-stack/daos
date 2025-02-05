@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1394,6 +1395,8 @@ expect_query_resp_with_info(daos_pool_info_t *exp_info,
 	expect_storage_usage(&exp_info->pi_space, DAOS_MEDIA_NVME,
 			     pq_resp->tier_stats[DAOS_MEDIA_NVME]);
 
+	assert_int_equal(pq_resp->mem_file_bytes, ds_mgmt_pool_query_mem_bytes);
+
 	assert_non_null(pq_resp->rebuild);
 	expect_rebuild_status(&exp_info->pi_rebuild_st, exp_state,
 			      pq_resp->rebuild);
@@ -1408,11 +1411,12 @@ test_drpc_pool_query_success(void **state)
 	Drpc__Response		resp = DRPC__RESPONSE__INIT;
 	uuid_t			exp_uuid;
 	daos_pool_info_t	exp_info = {0};
-	uint64_t flags = DPI_ENGINES_ENABLED | DPI_ENGINES_DISABLED | DPI_ENGINES_SUSPECT;
+	uint64_t flags = DPI_ENGINES_ENABLED | DPI_ENGINES_DISABLED | DPI_ENGINES_DEAD;
 
 	init_test_pool_info(&exp_info);
 	init_test_rebuild_status(&exp_info.pi_rebuild_st);
 	ds_mgmt_pool_query_info_out = exp_info;
+	ds_mgmt_pool_query_mem_bytes = 11;
 
 	setup_pool_query_drpc_call(&call, TEST_UUID, flags);
 
@@ -1425,7 +1429,7 @@ test_drpc_pool_query_success(void **state)
 	assert_non_null(ds_mgmt_pool_query_info_ptr);
 	assert_non_null(ds_mgmt_pool_query_enabled_ranks_out);
 	assert_non_null(ds_mgmt_pool_query_disabled_ranks_out);
-	assert_non_null(ds_mgmt_pool_query_suspect_ranks_out);
+	assert_non_null(ds_mgmt_pool_query_dead_ranks_out);
 	flags |= DEFAULT_QUERY_BITS;
 	assert_int_equal(ds_mgmt_pool_query_info_in.pi_bits, DEFAULT_QUERY_BITS | flags);
 
@@ -1448,6 +1452,7 @@ test_drpc_pool_query_success_rebuild_busy(void **state)
 	init_test_rebuild_status(&exp_info.pi_rebuild_st);
 	exp_info.pi_rebuild_st.rs_version = 1;
 	ds_mgmt_pool_query_info_out = exp_info;
+	ds_mgmt_pool_query_mem_bytes = 11;
 
 	setup_pool_query_drpc_call(&call, TEST_UUID, 0);
 
@@ -1473,6 +1478,7 @@ test_drpc_pool_query_success_rebuild_done(void **state)
 	exp_info.pi_rebuild_st.rs_version = 1;
 	exp_info.pi_rebuild_st.rs_state = DRS_COMPLETED;
 	ds_mgmt_pool_query_info_out = exp_info;
+	ds_mgmt_pool_query_mem_bytes = 11;
 
 	setup_pool_query_drpc_call(&call, TEST_UUID, 0);
 
@@ -1498,6 +1504,7 @@ test_drpc_pool_query_success_rebuild_err(void **state)
 	exp_info.pi_rebuild_st.rs_errno = -DER_MISC;
 
 	ds_mgmt_pool_query_info_out = exp_info;
+	ds_mgmt_pool_query_mem_bytes = 11;
 	/*
 	 * rebuild results returned to us shouldn't include the number of
 	 * objects/records if there's an error.
@@ -1583,7 +1590,8 @@ expect_drpc_pool_query_targets_resp_with_error(Drpc__Response *resp, int expecte
 static void
 expect_drpc_pool_query_targets_resp_with_targets(Drpc__Response *resp,
 						 daos_target_info_t *infos,
-						 uint32_t exp_infos_len)
+						 uint32_t exp_infos_len,
+						 uint64_t mem_file_bytes)
 {
 	Mgmt__PoolQueryTargetResp	*pqt_resp = NULL;
 	uint32_t			 i;
@@ -1604,6 +1612,7 @@ expect_drpc_pool_query_targets_resp_with_targets(Drpc__Response *resp,
 		assert_int_equal(pqt_resp->infos[i]->type, infos[i].ta_type);
 		assert_int_equal(pqt_resp->infos[i]->state, infos[i].ta_state);
 		assert_int_equal(pqt_resp->infos[i]->n_space, DAOS_MEDIA_MAX);
+		assert_int_equal(pqt_resp->infos[i]->mem_file_bytes, mem_file_bytes);
 
 		for (j = 0; j < DAOS_MEDIA_MAX; j++) {
 			Mgmt__StorageTargetUsage *space = pqt_resp->infos[i]->space[j];
@@ -1666,7 +1675,8 @@ test_drpc_pool_query_targets_with_targets(void **state)
 
 	expect_drpc_pool_query_targets_resp_with_targets(&resp,
 							 ds_mgmt_pool_query_targets_info_out,
-							 n_tgts);
+							 n_tgts,
+							 ds_mgmt_pool_query_targets_mem_bytes);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
@@ -2063,57 +2073,56 @@ test_drpc_extend_success(void **state)
  * dRPC pool reintegrate tests
  */
 static void
-pack_pool_reintegrate_req(Drpc__Call *call, Mgmt__PoolReintegrateReq *req)
+pack_pool_reint_req(Drpc__Call *call, Mgmt__PoolReintReq *req)
 {
 	size_t	len;
 	uint8_t	*body;
 
-	len = mgmt__pool_reintegrate_req__get_packed_size(req);
+	len = mgmt__pool_reint_req__get_packed_size(req);
 	D_ALLOC(body, len);
 	assert_non_null(body);
 
-	mgmt__pool_reintegrate_req__pack(req, body);
+	mgmt__pool_reint_req__pack(req, body);
 
 	call->body.data = body;
 	call->body.len = len;
 }
 
 static void
-setup_reintegrate_drpc_call(Drpc__Call *call, char *uuid)
+setup_reint_drpc_call(Drpc__Call *call, char *uuid)
 {
-	Mgmt__PoolReintegrateReq req = MGMT__POOL_REINTEGRATE_REQ__INIT;
+	Mgmt__PoolReintReq req = MGMT__POOL_REINT_REQ__INIT;
 
 	req.id = uuid;
-	pack_pool_reintegrate_req(call, &req);
+	pack_pool_reint_req(call, &req);
 }
 
 static void
-expect_drpc_reintegrate_resp_with_error(Drpc__Response *resp, int exp_error)
+expect_drpc_reint_resp_with_error(Drpc__Response *resp, int exp_error)
 {
-	Mgmt__PoolReintegrateResp	*pc_resp = NULL;
+	Mgmt__PoolReintResp *pc_resp = NULL;
 
 	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
 	assert_non_null(resp->body.data);
 
-	pc_resp = mgmt__pool_reintegrate_resp__unpack(NULL, resp->body.len,
-						 resp->body.data);
+	pc_resp = mgmt__pool_reint_resp__unpack(NULL, resp->body.len, resp->body.data);
 	assert_non_null(pc_resp);
 	assert_int_equal(pc_resp->status, exp_error);
 
-	mgmt__pool_reintegrate_resp__free_unpacked(pc_resp, NULL);
+	mgmt__pool_reint_resp__free_unpacked(pc_resp, NULL);
 }
 
 static void
-test_drpc_reintegrate_bad_uuid(void **state)
+test_drpc_reint_bad_uuid(void **state)
 {
 	Drpc__Call	call = DRPC__CALL__INIT;
 	Drpc__Response	resp = DRPC__RESPONSE__INIT;
 
-	setup_reintegrate_drpc_call(&call, "BAD");
+	setup_reint_drpc_call(&call, "BAD");
 
 	ds_mgmt_drpc_pool_reintegrate(&call, &resp);
 
-	expect_drpc_reintegrate_resp_with_error(&resp, -DER_INVAL);
+	expect_drpc_reint_resp_with_error(&resp, -DER_INVAL);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
@@ -3022,7 +3031,7 @@ test_drpc_check_act_success(void **state)
 #define POOL_EXTEND_TEST(x)	cmocka_unit_test_setup(x, \
 						drpc_pool_extend_setup)
 
-#define REINTEGRATE_TEST(x)	cmocka_unit_test(x)
+#define REINT_TEST(x)           cmocka_unit_test(x)
 
 #define POOL_CREATE_TEST(x)	cmocka_unit_test(x)
 
@@ -3100,7 +3109,7 @@ main(void)
 	    POOL_EXTEND_TEST(test_drpc_extend_bad_uuid),
 	    POOL_EXTEND_TEST(test_drpc_extend_mgmt_svc_fails),
 	    POOL_EXTEND_TEST(test_drpc_extend_success),
-	    REINTEGRATE_TEST(test_drpc_reintegrate_bad_uuid),
+	    REINT_TEST(test_drpc_reint_bad_uuid),
 	    QUERY_TEST(test_drpc_pool_query_bad_uuid),
 	    QUERY_TEST(test_drpc_pool_query_mgmt_svc_fails),
 	    QUERY_TEST(test_drpc_pool_query_success),

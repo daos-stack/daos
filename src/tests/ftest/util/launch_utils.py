@@ -1,5 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -688,7 +689,7 @@ class TestRunner():
 
         # Create the group
         logger.info('Creating group %s', group)
-        if not groupadd(logger, hosts, group, True, True).passed:
+        if not groupadd(logger, hosts, group, True).passed:
             raise LaunchException(f'Error creating group {group}')
 
         # Get the group id on each node
@@ -726,11 +727,11 @@ class TestRunner():
 
         # Delete and ignore errors, in case user account is inconsistent across nodes
         logger.info('Deleting user %s', user)
-        _ = userdel(logger, hosts, user, True)
+        _ = userdel(logger, hosts, user)
 
         logger.info('Creating user %s in group %s', user, gid)
         test_env = TestEnvironment()
-        if not useradd(logger, hosts, user, gid, test_env.user_dir, True).passed:
+        if not useradd(logger, hosts, user, gid, test_env.user_dir).passed:
             raise LaunchException(f'Error creating user {user}')
 
     def _clear_mount_points(self, logger, test, clear_mounts):

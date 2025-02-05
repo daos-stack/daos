@@ -148,6 +148,13 @@ func extractLabels(log logging.Logger, in string) (labels labelMap, name string)
 			compsIdx++
 			name += "_ops_" + comps[compsIdx]
 			compsIdx++
+		case "container":
+			compsIdx++
+			labels["container"] = comps[compsIdx]
+			compsIdx++
+			if comps[compsIdx] == "dfs" {
+				name = "" // dfs metrics shouldn't go under pool
+			}
 		}
 	case "io":
 		name = "io"
@@ -204,7 +211,7 @@ func extractLabels(log logging.Logger, in string) (labels labelMap, name string)
 		}
 	}
 
-	name = sanitizeMetricName(name)
+	name = strings.ToLower(sanitizeMetricName(name))
 	return
 }
 

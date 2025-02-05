@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -175,7 +176,7 @@ test_args_init(struct io_test_args *args,
 	memset(args, 0, sizeof(*args));
 	memset(&vts_cntr, 0, sizeof(vts_cntr));
 
-	vts_epoch_gen = 1;
+	vts_epoch_gen = d_hlc_get();
 
 	rc = vts_ctx_init(&args->ctx, pool_size);
 	if (rc != 0)
@@ -1590,7 +1591,7 @@ vos_iterate_test(void **state)
 	struct all_info		info = {0};
 	vos_iter_param_t	param = {0};
 	struct vos_iter_anchors	anchors = {0};
-	daos_epoch_t		epoch = 1;
+	daos_epoch_t		epoch = d_hlc_get();
 	int			rc = 0;
 	unsigned long		old_flags = arg->ta_flags;
 
@@ -2038,7 +2039,7 @@ io_simple_one_key_cross_container(void **state)
 	d_sg_list_t		sgl;
 	daos_key_t		dkey;
 	daos_key_t		akey;
-	daos_epoch_t		epoch = gen_rand_epoch();
+	daos_epoch_t		epoch;
 	daos_unit_oid_t		l_oid;
 
 	/* Creating an additional container */
@@ -2087,6 +2088,7 @@ io_simple_one_key_cross_container(void **state)
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	l_oid = gen_oid(arg->otype);
+	epoch = gen_rand_epoch();
 	rc  = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, epoch, 0, 0, &dkey,
 			     1, &iod, NULL, &sgl);
 	if (rc) {
@@ -2526,7 +2528,7 @@ oid_iter_test_with_anchor(void **state)
 #define KEY_INC		127
 #define MAX_INT_KEY	(NUM_KEYS * KEY_INC)
 
-static void gen_query_tree(struct io_test_args *arg, daos_unit_oid_t oid)
+static void gen_query_tree(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch)
 {
 	daos_iod_t		iod = {0};
 	d_sg_list_t		sgl = {0};
@@ -2534,7 +2536,6 @@ static void gen_query_tree(struct io_test_args *arg, daos_unit_oid_t oid)
 	daos_key_t		akey;
 	d_iov_t			val_iov;
 	daos_recx_t		recx;
-	daos_epoch_t		epoch = 1;
 	uint64_t		dkey_value;
 	uint64_t		akey_value;
 	int			i, j;
@@ -2608,7 +2609,7 @@ io_query_key(void **state)
 	int			i, j;
 	struct dtx_handle	*dth;
 	struct dtx_id		xid;
-	daos_epoch_t		epoch = 1;
+	daos_epoch_t		epoch = d_hlc_get();
 	daos_key_t		dkey;
 	daos_key_t		akey;
 	daos_key_t		dkey_read;
@@ -2623,7 +2624,7 @@ io_query_key(void **state)
 
 	oid = gen_oid(arg->otype);
 
-	gen_query_tree(arg, oid);
+	gen_query_tree(arg, oid, epoch);
 
 	for (i = 1; i <= NUM_KEYS; i++) {
 		for (j = 1; j <= NUM_KEYS; j++) {
@@ -2822,7 +2823,7 @@ io_query_key(void **state)
 	xid = dth->dth_xid;
 	vts_dtx_end(dth);
 
-	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, NULL);
+	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, false, NULL);
 	assert_rc_equal(rc, 1);
 
 	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid, DAOS_GET_DKEY |
@@ -2873,7 +2874,7 @@ io_query_key_punch_update(void **state)
 {
 	struct io_test_args	*arg = *state;
 	int			rc = 0;
-	daos_epoch_t		epoch = 1;
+	daos_epoch_t		epoch = d_hlc_get();
 	daos_key_t		dkey = { 0 };
 	daos_key_t		akey;
 	daos_recx_t		recx_read;
@@ -2949,7 +2950,7 @@ io_query_key_negative(void **state)
 			       &recx_read, NULL, 0, 0, NULL);
 	assert_rc_equal(rc, -DER_NONEXIST);
 
-	gen_query_tree(arg, oid);
+	gen_query_tree(arg, oid, d_hlc_get());
 
 	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, arg->oid,
 			       DAOS_GET_DKEY | DAOS_GET_MAX, 4,
@@ -3006,7 +3007,7 @@ gang_sv_test(void **state)
 	char			dkey_buf[UPDATE_DKEY_SIZE], akey_buf[UPDATE_AKEY_SIZE];
 	char			*update_buf, *fetch_buf;
 	daos_size_t		rsize = (27UL << 20);	/* 27MB */
-	daos_epoch_t		epoch = 1;
+	daos_epoch_t		epoch = d_hlc_get();
 	int			rc;
 
 	D_ALLOC(update_buf, rsize);

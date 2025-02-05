@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -128,7 +129,7 @@ Pool space info:
   Free: 1 B, min:0 B, max:0 B, mean:0 B
 `, poolUUID.String()),
 		},
-		"normal response; suspect ranks": {
+		"normal response; dead ranks": {
 			pi: &daos.PoolInfo{
 				QueryMask:        daos.HealthOnlyPoolQueryMask,
 				State:            daos.PoolServiceStateDegraded,
@@ -141,7 +142,7 @@ Pool space info:
 				PoolLayoutVer:    1,
 				UpgradeLayoutVer: 2,
 				DisabledRanks:    ranklist.MustCreateRankSet("[0,1,3]"),
-				SuspectRanks:     ranklist.MustCreateRankSet("[2]"),
+				DeadRanks:        ranklist.MustCreateRankSet("[2]"),
 				Rebuild: &daos.PoolRebuildStatus{
 					State:   daos.PoolRebuildStateBusy,
 					Objects: 42,
@@ -163,7 +164,7 @@ Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool health info:
 - Disabled ranks: 0-1,3
-- Suspect ranks: 2
+- Dead ranks: 2
 - Rebuild busy, 42 objs, 21 recs
 `, poolUUID.String()),
 		},
@@ -291,6 +292,7 @@ Pool space info:
 						MediaType: daos.StorageMediaTypeNvme,
 					},
 				},
+				MemFileBytes: humanize.GiByte,
 			},
 			expPrintStr: fmt.Sprintf(`
 Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
@@ -336,7 +338,8 @@ Pool space info:
 						MediaType: daos.StorageMediaTypeNvme,
 					},
 				},
-				MemFileBytes: 1,
+				MemFileBytes:  humanize.GiByte,
+				MdOnSsdActive: true,
 			},
 			expPrintStr: fmt.Sprintf(`
 Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
@@ -345,7 +348,7 @@ Pool health info:
 - Rebuild busy, 42 objs, 21 recs
 Pool space info:
 - Target count:1
-- Total memory-file size: 1 B
+- Total memory-file size: 1.1 GB
 - Metadata storage:
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
@@ -528,6 +531,7 @@ Target: type unknown, state new
 						MediaType: daos.StorageMediaTypeNvme,
 					},
 				},
+				MemFileBytes: 3000000000,
 			},
 			expPrintStr: `
 Target: type unknown, state drain
@@ -555,7 +559,8 @@ Target: type unknown, state drain
 						MediaType: daos.StorageMediaTypeNvme,
 					},
 				},
-				MemFileBytes: 3000000000,
+				MemFileBytes:  3000000000,
+				MdOnSsdActive: true,
 			},
 			expPrintStr: `
 Target: type unknown, state down_out
@@ -861,7 +866,8 @@ two   00000002-0002-0002-0002-000000000002 Destroying [3-5]   100 GB   80 GB    
 					Rebuild: &daos.PoolRebuildStatus{
 						State: daos.PoolRebuildStateBusy,
 					},
-					QueryMask: daos.DefaultPoolQueryMask,
+					QueryMask:    daos.DefaultPoolQueryMask,
+					MemFileBytes: 1,
 				},
 			},
 			verbose: true,
@@ -872,7 +878,7 @@ one   00000001-0001-0001-0001-000000000001 Degraded [0-2]   100 GB   80 GB    8%
 
 `,
 		},
-		"verbose; one pool; mdonssd": {
+		"verbose; one pool; MD-on-SSD": {
 			pools: []*daos.PoolInfo{
 				{
 					Label:            "one",
@@ -888,8 +894,9 @@ one   00000001-0001-0001-0001-000000000001 Degraded [0-2]   100 GB   80 GB    8%
 					Rebuild: &daos.PoolRebuildStatus{
 						State: daos.PoolRebuildStateDone,
 					},
-					QueryMask:    daos.DefaultPoolQueryMask,
-					MemFileBytes: 1,
+					QueryMask:     daos.DefaultPoolQueryMask,
+					MemFileBytes:  1,
+					MdOnSsdActive: true,
 				},
 			},
 			verbose: true,

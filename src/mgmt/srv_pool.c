@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -337,7 +338,7 @@ int
 ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 				 struct pool_target_addr_list *target_addrs,
 				 pool_comp_state_t state, size_t scm_size, size_t nvme_size,
-				 size_t meta_size)
+				 size_t meta_size, bool skip_rf_check)
 {
 	int			rc;
 
@@ -364,7 +365,7 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	}
 
 	rc = dsc_pool_svc_update_target_state(pool_uuid, svc_ranks, mgmt_ps_call_deadline(),
-					      target_addrs, state);
+					      target_addrs, state, skip_rf_check);
 
 	return rc;
 }
@@ -389,6 +390,7 @@ ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
  * \param[in]		svc_ranks	   Ranks of pool svc replicas.
  * \param[out]		enabled_ranks	   Optional, returned storage ranks with enabled targets.
  * \param[out]		disabled_ranks	   Optional, returned storage ranks with disabled targets.
+ * \param[out]		dead_ranks	   Optional, returned storage ranks marked DEAD by SWIM.
  * \param[in][out]	pool_info	   Query results
  * \param[in][out]	pool_layout_ver	   Pool global version
  * \param[in][out]	upgrade_layout_ver Latest pool global version this pool might be upgraded
@@ -399,9 +401,9 @@ ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
  */
 int
 ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **enabled_ranks,
-		   d_rank_list_t **disabled_ranks, d_rank_list_t **suspect_ranks,
+		   d_rank_list_t **disabled_ranks, d_rank_list_t **dead_ranks,
 		   daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
-		   uint32_t *upgrade_layout_ver)
+		   uint32_t *upgrade_layout_ver, uint64_t *mem_file_bytes)
 {
 	if (pool_info == NULL) {
 		D_ERROR("pool_info was NULL\n");
@@ -411,8 +413,8 @@ ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **e
 	D_DEBUG(DB_MGMT, "Querying pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
 	return dsc_pool_svc_query(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), enabled_ranks,
-				  disabled_ranks, suspect_ranks, pool_info, pool_layout_ver,
-				  upgrade_layout_ver);
+				  disabled_ranks, dead_ranks, pool_info, pool_layout_ver,
+				  upgrade_layout_ver, mem_file_bytes);
 }
 
 /**
@@ -431,7 +433,8 @@ ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **e
  */
 int
 ds_mgmt_pool_query_targets(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_t rank,
-			   d_rank_list_t *tgts, daos_target_info_t **infos)
+			   d_rank_list_t *tgts, daos_target_info_t **infos,
+			   uint64_t *mem_file_bytes)
 {
 	int			rc = 0;
 	uint32_t		i;
@@ -447,14 +450,20 @@ ds_mgmt_pool_query_targets(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_t 
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	for (i = 0; i < tgts->rl_nr; i++) {
+		uint64_t	mem_bytes = 0;
+
 		D_DEBUG(DB_MGMT, "Querying pool "DF_UUID" rank %u tgt %u\n", DP_UUID(pool_uuid),
 			rank, tgts->rl_ranks[i]);
 		rc = dsc_pool_svc_query_target(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), rank,
-					       tgts->rl_ranks[i], &out_infos[i]);
+					       tgts->rl_ranks[i], &out_infos[i], &mem_bytes);
 		if (rc != 0) {
 			D_ERROR(DF_UUID": dsc_pool_svc_query_target() failed rank %u tgt %u\n",
 				DP_UUID(pool_uuid), rank, tgts->rl_ranks[i]);
 			goto out;
+		}
+		if (mem_file_bytes) {
+			D_ASSERT(i == 0 || *mem_file_bytes == mem_bytes);
+			*mem_file_bytes = mem_bytes;
 		}
 	}
 

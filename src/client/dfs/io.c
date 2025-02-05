@@ -15,7 +15,20 @@
 
 #include "dfs_internal.h"
 
+static void
+dfs_update_file_metrics(dfs_t *dfs, daos_size_t read_bytes, daos_size_t write_bytes)
+{
+	if (dfs == NULL || dfs->metrics == NULL)
+		return;
+
+	if (read_bytes > 0)
+		d_tm_inc_gauge(dfs->metrics->dm_read_bytes, read_bytes);
+	if (write_bytes > 0)
+		d_tm_inc_gauge(dfs->metrics->dm_write_bytes, write_bytes);
+}
+
 struct dfs_read_params {
+	dfs_t           *dfs;
 	daos_size_t     *read_size;
 	daos_array_iod_t arr_iod;
 	daos_range_t     rg;
@@ -35,6 +48,8 @@ read_cb(tse_task_t *task, void *data)
 		D_GOTO(out, rc);
 	}
 
+	DFS_OP_STAT_INCR(params->dfs, DOS_READ);
+	dfs_update_file_metrics(params->dfs, params->arr_iod.arr_nr_read, 0);
 	*params->read_size = params->arr_iod.arr_nr_read;
 out:
 	D_FREE(params);
@@ -61,6 +76,7 @@ dfs_read_int(dfs_t *dfs, dfs_obj_t *obj, daos_off_t off, dfs_iod_t *iod, d_sg_li
 	if (params == NULL)
 		D_GOTO(err_task, rc = -DER_NOMEM);
 
+	params->dfs       = dfs;
 	params->read_size = read_size;
 
 	/** set array location */
@@ -90,6 +106,7 @@ dfs_read_int(dfs_t *dfs, dfs_obj_t *obj, daos_off_t off, dfs_iod_t *iod, d_sg_li
 	 * completion cb that frees params in this case, so we can just ignore the rc here.
 	 */
 	dc_task_schedule(task, true);
+
 	return 0;
 
 err_params:
@@ -125,6 +142,7 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off, daos_size
 			daos_event_launch(ev);
 			daos_event_complete(ev, 0);
 		}
+		DFS_OP_STAT_INCR(dfs, DOS_READ);
 		return 0;
 	}
 
@@ -146,7 +164,9 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off, daos_size
 			return daos_der2errno(rc);
 		}
 
+		DFS_OP_STAT_INCR(dfs, DOS_READ);
 		*read_size = iod.arr_nr_read;
+		dfs_update_file_metrics(dfs, iod.arr_nr_read, 0);
 		return 0;
 	}
 
@@ -173,6 +193,7 @@ dfs_readx(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl, daos_siz
 			daos_event_launch(ev);
 			daos_event_complete(ev, 0);
 		}
+		DFS_OP_STAT_INCR(dfs, DOS_READ);
 		return 0;
 	}
 
@@ -189,7 +210,9 @@ dfs_readx(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl, daos_siz
 			return daos_der2errno(rc);
 		}
 
+		DFS_OP_STAT_INCR(dfs, DOS_READ);
 		*read_size = arr_iod.arr_nr_read;
+		dfs_update_file_metrics(dfs, arr_iod.arr_nr_read, 0);
 		return 0;
 	}
 
@@ -223,6 +246,7 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off, daos_eve
 			daos_event_launch(ev);
 			daos_event_complete(ev, 0);
 		}
+		DFS_OP_STAT_INCR(dfs, DOS_WRITE);
 		return 0;
 	}
 
@@ -238,8 +262,12 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off, daos_eve
 		daos_event_errno_rc(ev);
 
 	rc = daos_array_write(obj->oh, DAOS_TX_NONE, &iod, sgl, ev);
-	if (rc)
+	if (rc == 0) {
+		DFS_OP_STAT_INCR(dfs, DOS_WRITE);
+		dfs_update_file_metrics(dfs, 0, buf_size);
+	} else {
 		D_ERROR("daos_array_write() failed, " DF_RC "\n", DP_RC(rc));
+	}
 
 	return daos_der2errno(rc);
 }
@@ -248,6 +276,8 @@ int
 dfs_writex(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl, daos_event_t *ev)
 {
 	daos_array_iod_t arr_iod;
+	daos_size_t      buf_size;
+	int              i;
 	int              rc;
 
 	if (dfs == NULL || !dfs->mounted)
@@ -266,6 +296,7 @@ dfs_writex(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl, daos_ev
 			daos_event_launch(ev);
 			daos_event_complete(ev, 0);
 		}
+		DFS_OP_STAT_INCR(dfs, DOS_WRITE);
 		return 0;
 	}
 
@@ -276,9 +307,18 @@ dfs_writex(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl, daos_ev
 	if (ev)
 		daos_event_errno_rc(ev);
 
+	buf_size = 0;
+	if (dfs->metrics != NULL && sgl != NULL)
+		for (i = 0; i < sgl->sg_nr; i++)
+			buf_size += sgl->sg_iovs[i].iov_len;
+
 	rc = daos_array_write(obj->oh, DAOS_TX_NONE, &arr_iod, sgl, ev);
-	if (rc)
+	if (rc == 0) {
+		DFS_OP_STAT_INCR(dfs, DOS_WRITE);
+		dfs_update_file_metrics(dfs, 0, buf_size);
+	} else {
 		D_ERROR("daos_array_write() failed (%d)\n", rc);
+	}
 
 	return daos_der2errno(rc);
 }

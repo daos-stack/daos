@@ -2,6 +2,7 @@
 """Node local test (NLT).
 
 (C) Copyright 2020-2024 Intel Corporation.
+(C) Copyright 2025 Enakta Labs Ltd
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -779,7 +780,7 @@ class DaosServer():
         agent_config = join(self.agent_dir, 'nlt_agent.yaml')
         with open(agent_config, 'w') as fd:
             agent_data = {
-                'access_points': scyaml['access_points'],
+                'access_points': scyaml['mgmt_svc_replicas'],
                 'control_log_mask': 'NOTICE',  # INFO logs every client process connection
             }
             json.dump(agent_data, fd)
@@ -1757,7 +1758,7 @@ def run_daos_cmd(conf,
 
 # pylint: disable-next=too-many-arguments
 def create_cont(conf, pool=None, ctype=None, label=None, path=None, oclass=None, dir_oclass=None,
-                file_oclass=None, hints=None, valgrind=False, log_check=True, cwd=None):
+                file_oclass=None, hints=None, valgrind=False, log_check=True, cwd=None, attrs=None):
     """Use 'daos' command to create a new container.
 
     Args:
@@ -1774,6 +1775,7 @@ def create_cont(conf, pool=None, ctype=None, label=None, path=None, oclass=None,
         valgrind (bool, optional): Whether to run command under valgrind.  Defaults to True.
         log_check (bool, optional): Whether to run log analysis to check for leaks.
         cwd (str, optional): Path to run daos command from.
+        attrs (dict, optional): Dictionary of user attributes to set.
 
     Returns:
         DaosCont: Newly created container as DaosCont object.
@@ -1807,6 +1809,9 @@ def create_cont(conf, pool=None, ctype=None, label=None, path=None, oclass=None,
 
     if hints:
         cmd.extend(['--hints', hints])
+
+    if attrs:
+        cmd.extend(['--attrs', ','.join([f"{name}:{val}" for name, val in attrs.items()])])
 
     def _create_cont():
         """Helper function for create_cont"""
@@ -3064,12 +3069,12 @@ class PosixTests():
         assert rc.returncode == 0
 
         # Create a second new container which is not linked
-        container2 = create_cont(self.conf, self.pool, ctype="POSIX", label='mycont_uns_link2')
         cont_attrs = {'dfuse-attr-time': '5m',
                       'dfuse-dentry-time': '5m',
                       'dfuse-dentry-dir-time': '5m',
                       'dfuse-ndentry-time': '5m'}
-        container2.set_attrs(cont_attrs)
+        container2 = create_cont(self.conf, self.pool, ctype="POSIX", label='mycont_uns_link2',
+                                 attrs=cont_attrs)
 
         # Link and then destroy the first container
         path = join(self.dfuse.dir, 'uns_link1')
@@ -4538,66 +4543,6 @@ class PosixTests():
         os.environ['DAOS_AGENT_DRPC_DIR'] = server.agent_dir
 
         return importlib.import_module('pydaos.torch')
-
-    @needs_dfuse_with_opt(caching_variants=[False])
-    def test_torch_map_dataset(self):
-        """Check that all files in container are read regardless of the directory level"""
-        test_files = [
-            {"name": "0.txt", "content": b"0", "seen": 0},
-            {"name": "1/l1.txt", "content": b"1", "seen": 0},
-            {"name": "1/2/l2.txt", "content": b"2", "seen": 0},
-            {"name": "1/2/3/l3.txt", "content": b"3", "seen": 0},
-        ]
-
-        for tf in test_files:
-            file = join(self.dfuse.dir, tf["name"])
-            os.makedirs(os.path.dirname(file), exist_ok=True)
-            with open(file, 'wb') as f:
-                f.write(tf["content"])
-
-        torch = self.import_torch(self.server)
-        dataset = torch.Dataset(pool=self.pool.uuid, cont=self.container.uuid)
-
-        assert len(dataset) == len(test_files)
-
-        for _, content in enumerate(dataset):
-            for f in test_files:
-                if f["content"] == content:
-                    f["seen"] += 1
-
-        for f in test_files:
-            assert f["seen"] == 1
-
-        del dataset
-
-    @needs_dfuse_with_opt(caching_variants=[False])
-    def test_torch_iter_dataset(self):
-        """Check that all files in container are read regardless of the directory level"""
-        test_files = [
-            {"name": "0.txt", "content": b"0", "seen": 0},
-            {"name": "1/l1.txt", "content": b"1", "seen": 0},
-            {"name": "1/2/l2.txt", "content": b"2", "seen": 0},
-            {"name": "1/2/3/l3.txt", "content": b"3", "seen": 0},
-        ]
-
-        for tf in test_files:
-            file = join(self.dfuse.dir, tf["name"])
-            os.makedirs(os.path.dirname(file), exist_ok=True)
-            with open(file, 'wb') as f:
-                f.write(tf["content"])
-
-        torch = self.import_torch(self.server)
-        dataset = torch.IterableDataset(pool=self.pool.uuid, cont=self.container.uuid)
-
-        for content in dataset:
-            for f in test_files:
-                if f["content"] == content:
-                    f["seen"] += 1
-
-        for f in test_files:
-            assert f["seen"] == 1
-
-        del dataset
 
 
 class NltStdoutWrapper():
@@ -6204,7 +6149,15 @@ def test_alloc_fail_cont_create(server, conf):
                 '--type',
                 'POSIX',
                 '--path',
-                join(dfuse.dir, f'container_{cont_id}')]
+                join(dfuse.dir, f'container_{cont_id}'),
+                '--attrs',
+                ','.join([
+                    'dfuse-attr-time:5m',
+                    'dfuse-dentry-time:4m',
+                    'dfuse-dentry-dir-time:3m',
+                    'dfuse-ndentry-time:2m',
+                    'dfuse-data-cache:off',
+                    'dfuse-direct-io-disable:off'])]
 
     test_cmd = AllocFailTest(conf, 'cont-create', get_cmd)
     test_cmd.check_post_stdout = False

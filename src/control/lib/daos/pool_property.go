@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -483,6 +484,7 @@ func PoolProperties() PoolPropertyMap {
 			values: map[string]uint64{
 				"data_sync":    PoolReintModeDataSync,
 				"no_data_sync": PoolReintModeNoDataSync,
+				"incremental":  PoolReintModeIncremental,
 			},
 		},
 	}

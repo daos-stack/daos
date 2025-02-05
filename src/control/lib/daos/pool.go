@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -77,10 +78,11 @@ type (
 		TierStats        []*StorageUsageStats `json:"tier_stats"`
 		EnabledRanks     *ranklist.RankSet    `json:"enabled_ranks,omitempty"`
 		DisabledRanks    *ranklist.RankSet    `json:"disabled_ranks,omitempty"`
-		SuspectRanks     *ranklist.RankSet    `json:"suspect_ranks,omitempty"`
+		DeadRanks        *ranklist.RankSet    `json:"dead_ranks,omitempty"`
 		PoolLayoutVer    uint32               `json:"pool_layout_ver"`
 		UpgradeLayoutVer uint32               `json:"upgrade_layout_ver"`
 		MemFileBytes     uint64               `json:"mem_file_bytes"`
+		MdOnSsdActive    bool                 `json:"md_on_ssd_active"`
 	}
 
 	PoolQueryTargetType  int32
@@ -88,10 +90,11 @@ type (
 
 	// PoolQueryTargetInfo contains information about a single target
 	PoolQueryTargetInfo struct {
-		Type         PoolQueryTargetType  `json:"target_type"`
-		State        PoolQueryTargetState `json:"target_state"`
-		Space        []*StorageUsageStats `json:"space"`
-		MemFileBytes uint64               `json:"mem_file_bytes"`
+		Type          PoolQueryTargetType  `json:"target_type"`
+		State         PoolQueryTargetState `json:"target_state"`
+		Space         []*StorageUsageStats `json:"space"`
+		MemFileBytes  uint64               `json:"mem_file_bytes"`
+		MdOnSsdActive bool                 `json:"md_on_ssd_active"`
 	}
 
 	// StorageTargetUsage represents DAOS target storage usage
@@ -101,26 +104,29 @@ type (
 		MediaType StorageMediaType `json:"media_type"`
 	}
 
+	// PoolQueryOption is used to supply pool query options.
+	PoolQueryOption string
+
 	// PoolQueryMask implements a bitmask for pool query options.
 	PoolQueryMask C.uint64_t
 )
 
 const (
 	// DefaultPoolQueryMask defines the default pool query mask.
-	DefaultPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_ENGINES_SUSPECT))
+	DefaultPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_ENGINES_DEAD))
 	// HealthOnlyPoolQueryMask defines the mask for health-only queries.
 	HealthOnlyPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_SPACE))
 
 	// PoolQueryOptionSpace retrieves storage space usage as part of the pool query.
-	PoolQueryOptionSpace = "space"
+	PoolQueryOptionSpace PoolQueryOption = "space"
 	// PoolQueryOptionRebuild retrieves pool rebuild status as part of the pool query.
-	PoolQueryOptionRebuild = "rebuild"
+	PoolQueryOptionRebuild PoolQueryOption = "rebuild"
 	// PoolQueryOptionEnabledEngines retrieves enabled engines as part of the pool query.
-	PoolQueryOptionEnabledEngines = "enabled_engines"
+	PoolQueryOptionEnabledEngines PoolQueryOption = "enabled_engines"
 	// PoolQueryOptionDisabledEngines retrieves disabled engines as part of the pool query.
-	PoolQueryOptionDisabledEngines = "disabled_engines"
-	// PoolQueryOptionSuspectEngines retrieves suspect engines as part of the pool query.
-	PoolQueryOptionSuspectEngines = "suspect_engines"
+	PoolQueryOptionDisabledEngines PoolQueryOption = "disabled_engines"
+	// PoolQueryOptionDeadEngines retrieves dead engines as part of the pool query.
+	PoolQueryOptionDeadEngines PoolQueryOption = "dead_engines"
 
 	// PoolConnectFlagReadOnly indicates that the connection is read-only.
 	PoolConnectFlagReadOnly = C.DAOS_PC_RO
@@ -130,15 +136,19 @@ const (
 	PoolConnectFlagExclusive = C.DAOS_PC_EX
 )
 
-var poolQueryOptMap = map[C.int]string{
+func (pqo PoolQueryOption) String() string {
+	return string(pqo)
+}
+
+var poolQueryOptMap = map[C.int]PoolQueryOption{
 	C.DPI_SPACE:            PoolQueryOptionSpace,
 	C.DPI_REBUILD_STATUS:   PoolQueryOptionRebuild,
 	C.DPI_ENGINES_ENABLED:  PoolQueryOptionEnabledEngines,
 	C.DPI_ENGINES_DISABLED: PoolQueryOptionDisabledEngines,
-	C.DPI_ENGINES_SUSPECT:  PoolQueryOptionSuspectEngines,
+	C.DPI_ENGINES_DEAD:     PoolQueryOptionDeadEngines,
 }
 
-func resolvePoolQueryOpt(name string) (C.int, error) {
+func resolvePoolQueryOpt(name PoolQueryOption) (C.int, error) {
 	for opt, optName := range poolQueryOptMap {
 		if name == optName {
 			return opt, nil
@@ -149,7 +159,7 @@ func resolvePoolQueryOpt(name string) (C.int, error) {
 
 // MustNewPoolQueryMask returns a PoolQueryMask initialized with the specified options.
 // NB: If an error occurs due to an invalid option, it panics.
-func MustNewPoolQueryMask(options ...string) (mask PoolQueryMask) {
+func MustNewPoolQueryMask(options ...PoolQueryOption) (mask PoolQueryMask) {
 	if err := mask.SetOptions(options...); err != nil {
 		panic(err)
 	}
@@ -157,8 +167,8 @@ func MustNewPoolQueryMask(options ...string) (mask PoolQueryMask) {
 }
 
 // SetOptions sets the pool query mask to include the specified options.
-func (pqm *PoolQueryMask) SetOptions(optNames ...string) error {
-	for _, optName := range optNames {
+func (pqm *PoolQueryMask) SetOptions(options ...PoolQueryOption) error {
+	for _, optName := range options {
 		if opt, err := resolvePoolQueryOpt(optName); err != nil {
 			return err
 		} else {
@@ -169,8 +179,8 @@ func (pqm *PoolQueryMask) SetOptions(optNames ...string) error {
 }
 
 // ClearOptions clears the pool query mask of the specified options.
-func (pqm *PoolQueryMask) ClearOptions(optNames ...string) error {
-	for _, optName := range optNames {
+func (pqm *PoolQueryMask) ClearOptions(options ...PoolQueryOption) error {
+	for _, optName := range options {
 		if opt, err := resolvePoolQueryOpt(optName); err != nil {
 			return err
 		} else {
@@ -191,8 +201,8 @@ func (pqm *PoolQueryMask) ClearAll() {
 }
 
 // HasOption returns true if the pool query mask includes the specified option.
-func (pqm PoolQueryMask) HasOption(optName string) bool {
-	return strings.Contains(pqm.String(), optName)
+func (pqm PoolQueryMask) HasOption(option PoolQueryOption) bool {
+	return strings.Contains(pqm.String(), option.String())
 }
 
 func (pqm PoolQueryMask) String() string {
@@ -201,7 +211,7 @@ func (pqm PoolQueryMask) String() string {
 		opt := C.int(1 << i)
 		if flag, ok := poolQueryOptMap[opt]; ok {
 			if pqm&PoolQueryMask(opt) != 0 {
-				flags = append(flags, flag)
+				flags = append(flags, flag.String())
 			}
 		}
 	}
@@ -228,7 +238,7 @@ func (pqm *PoolQueryMask) UnmarshalJSON(data []byte) error {
 	var newVal PoolQueryMask
 	for _, opt := range strings.Split(strings.Trim(string(data), "\""), ",") {
 		for k, v := range poolQueryOptMap {
-			if v == opt {
+			if v.String() == opt {
 				newVal |= PoolQueryMask(k)
 				goto next
 			}

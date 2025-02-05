@@ -1,6 +1,7 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Copyright 2022-2024 Intel Corporation.
+# Copyright 2025 Hewlett Packard Enterprise Development LP
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -48,12 +49,12 @@ else
     rc=0
 
     # non-scons
-    if ! echo "$py_files" | grep -vi scons | xargs flake8 --config .flake8; then
+    if ! echo "$py_files" | grep -vi scons | xargs -r flake8 --config .flake8; then
         rc=1
     fi
 
     # scons
-    if ! echo "$py_files" | grep -i scons | xargs flake8 --config .flake8-scons; then
+    if ! echo "$py_files" | grep -i scons | xargs -r flake8 --config .flake8-scons; then
         rc=1;
     fi
 
