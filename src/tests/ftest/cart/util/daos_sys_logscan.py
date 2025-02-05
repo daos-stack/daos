@@ -84,7 +84,7 @@ class SysPools():
         self._warnings = []
         self._check_rb_new_fmt = True
         self._check_rb_legacy_fmt = True
-        self._debug = True
+        self._debug = False
 
         # other nested dictionaries within self._pools will be built-up
         # pool leadership terms dictionary indexed by integer term number
