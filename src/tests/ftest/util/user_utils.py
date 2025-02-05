@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -12,7 +13,7 @@ from pwd import getpwnam
 
 from ClusterShell.NodeSet import NodeSet
 # pylint: disable=import-error,no-name-in-module
-from util.run_utils import run_remote
+from util.run_utils import command_as_user, run_remote
 
 
 def get_primary_group(user=None):
@@ -70,7 +71,7 @@ def get_chown_command(user=None, group=None, options=None, file=None):
     return " ".join(command)
 
 
-def getent(log, hosts, database, key, sudo=False):
+def getent(log, hosts, database, key, run_user=None):
     """Run getent remotely.
 
     Args:
@@ -78,20 +79,20 @@ def getent(log, hosts, database, key, sudo=False):
         hosts (NodeSet): hosts on which to run the command
         database (str): the administrative database
         key (str): the key/entry to check for
-        sudo (bool): whether to execute commands with sudo
+        run_user (str, optional): user to run the command as.
+            Default is None, which runs as the current user
 
     Returns:
         CommandResult: groups of command results from the same hosts with the same return status
     """
     command = ' '.join(filter(None, [
-        'sudo -n' if sudo else None,
         'getent',
         database,
         key]))
-    return run_remote(log, hosts, command)
+    return run_remote(log, hosts, command_as_user(command, run_user))
 
 
-def groupadd(log, hosts, group, force=False, sudo=False):
+def groupadd(log, hosts, group, force=False, run_user="root"):
     """Run groupadd remotely.
 
     Args:
@@ -99,21 +100,40 @@ def groupadd(log, hosts, group, force=False, sudo=False):
         hosts (NodeSet): hosts on which to run the command
         group (str): the group to create
         force (bool, optional): whether to use the force option. Default is False
-        sudo (bool, optional): whether to execute commands with sudo. Default is False
+        run_user (str, optional): user to run the command as. Default is root
 
     Returns:
         CommandResult: groups of command results from the same hosts with the same return status
     """
     command = ' '.join(filter(None, [
-        'sudo -n' if sudo else None,
         'groupadd',
         '-r',
         '-f' if force else None,
         group]))
-    return run_remote(log, hosts, command)
+    return run_remote(log, hosts, command_as_user(command, run_user))
 
 
-def useradd(log, hosts, user, group=None, parent_dir=None, sudo=False):
+def groupdel(log, hosts, group, force=False, run_user="root"):
+    """Run groupdel remotely.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts on which to run the command
+        group (str): the group to delete
+        force (bool, optional): whether to use the force option. Default is False
+        run_user (str, optional): user to run the command as. Default is root
+
+    Returns:
+        CommandResult: groups of command results from the same hosts with the same return status
+    """
+    command = ' '.join(filter(None, [
+        'groupdel',
+        '-f' if force else None,
+        group]))
+    return run_remote(log, hosts, command_as_user(command, run_user))
+
+
+def useradd(log, hosts, user, group=None, parent_dir=None, run_user="root"):
     """Run useradd remotely.
 
     Args:
@@ -122,57 +142,76 @@ def useradd(log, hosts, user, group=None, parent_dir=None, sudo=False):
         user (str): user to create
         group (str, optional): user group. Default is None
         parent_dir (str, optional): parent home directory. Default is None
-        sudo (bool): whether to execute commands with sudo. Default is False
+        run_user (str, optional): user to run the command as. Default is root
 
     Returns:
         CommandResult: groups of command results from the same hosts with the same return status
     """
     command = ' '.join(filter(None, [
-        'sudo -n' if sudo else None,
         'useradd',
         '-m',
         f'-g {group}' if group else None,
         f'-d {os.path.join(parent_dir, user)}' if parent_dir else None,
         user]))
-    return run_remote(log, hosts, command)
+    return run_remote(log, hosts, command_as_user(command, run_user))
 
 
-def userdel(log, hosts, user, sudo=False):
+def userdel(log, hosts, user, run_user="root"):
     """Run userdel remotely.
 
     Args:
         log (logger): logger for the messages produced by this method
         hosts (NodeSet): hosts on which to run the command
         user (str): user to create
-        sudo (bool): whether to execute commands with sudo. Default is False
+        run_user (str, optional): user to run the command as. Default is root
 
     Returns:
         CommandResult: groups of command results from the same hosts with the same return status
     """
     command = ' '.join(filter(None, [
-        'sudo -n' if sudo else None,
         'userdel',
         '-f',
         '-r',
         user]))
-    return run_remote(log, hosts, command)
+    return run_remote(log, hosts, command_as_user(command, run_user))
 
 
-def get_group_id(log, hosts, group, sudo=False):
+def usermod(log, hosts, login, groups, run_user="root"):
+    """Run usermod remotely.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts on which to run the command
+        login (str): login username
+        groups (list): list of new groups
+        run_user (str, optional): user to run the command as. Default is root
+
+    Returns:
+        CommandResult: groups of command results from the same hosts with the same return status
+    """
+    command = ' '.join(filter(None, [
+        'usermod',
+        f'-G {",".join(groups)}',
+        login]))
+    return run_remote(log, hosts, command_as_user(command, run_user))
+
+
+def get_group_id(log, hosts, group, run_user=None):
     """Get a group's id on remote nodes.
 
     Args:
         log (logger): logger for the messages produced by this method
         hosts (NodeSet): hosts on which to run the command
         group (str): group to get id of
-        sudo (bool): whether to execute commands with sudo. Default is False
+        run_user (str, optional): user to run the command as.
+            Default is None, which runs as the current user
 
     Returns:
         dict: gid:NodeSet mapping for each gid, where gid is None if non-existent
 
     """
     gids = defaultdict(NodeSet)
-    result = getent(log, hosts, 'group', group, sudo)
+    result = getent(log, hosts, 'group', group, run_user)
     for data in result.output:
         if data.returncode == 0:
             gid = re.findall(r'.*:.*:(.*):.*', '\n'.join(data.stdout))[0]
