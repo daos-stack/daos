@@ -1924,7 +1924,7 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				},
 			},
 		},
-		"matching ranks; multiple pools; empty drpc response": {
+		"matching ranks; multiple pools; drpc response missing results": {
 			req: &mgmtpb.SystemDrainReq{Ranks: "0,1"},
 			poolRanks: map[string]string{
 				test.MockUUID(1): "0-4",
@@ -1932,10 +1932,14 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 			},
 			drpcResps: []*mockDrpcResponse{
 				&mockDrpcResponse{
-					Message: &mgmtpb.PoolRanksResp{},
+					Message: &mgmtpb.PoolRanksResp{
+						FailedRank: uint32(ranklist.NilRank),
+					},
 				},
 				&mockDrpcResponse{
-					Message: &mgmtpb.PoolRanksResp{},
+					Message: &mgmtpb.PoolRanksResp{
+						FailedRank: uint32(ranklist.NilRank),
+					},
 				},
 			},
 			expDrainReqs: []*mgmtpb.PoolDrainReq{
@@ -1988,11 +1992,13 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 			drpcResps: []*mockDrpcResponse{
 				&mockDrpcResponse{
 					Message: &mgmtpb.PoolRanksResp{
+						FailedRank:   uint32(ranklist.NilRank),
 						SuccessRanks: []uint32{0, 1},
 					},
 				},
 				&mockDrpcResponse{
 					Message: &mgmtpb.PoolRanksResp{
+						FailedRank:   uint32(ranklist.NilRank),
 						SuccessRanks: []uint32{1},
 					},
 				},
@@ -2020,11 +2026,13 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 			drpcResps: []*mockDrpcResponse{
 				&mockDrpcResponse{
 					Message: &mgmtpb.PoolRanksResp{
+						FailedRank:   uint32(ranklist.NilRank),
 						SuccessRanks: []uint32{0, 1, 2, 3},
 					},
 				},
 				&mockDrpcResponse{
 					Message: &mgmtpb.PoolRanksResp{
+						FailedRank:   uint32(ranklist.NilRank),
 						SuccessRanks: []uint32{1, 2, 3},
 					},
 				},
@@ -2054,11 +2062,13 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 			drpcResps: []*mockDrpcResponse{
 				&mockDrpcResponse{
 					Message: &mgmtpb.PoolRanksResp{
+						FailedRank:   uint32(ranklist.NilRank),
 						SuccessRanks: []uint32{0, 1, 2, 3},
 					},
 				},
 				&mockDrpcResponse{
 					Message: &mgmtpb.PoolRanksResp{
+						FailedRank:   uint32(ranklist.NilRank),
 						SuccessRanks: []uint32{1, 2, 3},
 					},
 				},
@@ -2089,7 +2099,25 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 			expDrainReqs: []*mgmtpb.PoolDrainReq{
 				dReq(1, 1, 2),
 			},
-			expErr: errors.New("invalid rank returned"),
+			expErr: errors.New("no failed rank returned"),
+		},
+		"matching ranks; drpc resp missing failed status": {
+			req: &mgmtpb.SystemDrainReq{Ranks: "1-2"},
+			poolRanks: map[string]string{
+				test.MockUUID(1): "0-4",
+			},
+			drpcResps: []*mockDrpcResponse{
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolRanksResp{
+						Status:     0,
+						FailedRank: 0,
+					},
+				},
+			},
+			expDrainReqs: []*mgmtpb.PoolDrainReq{
+				dReq(1, 1, 2),
+			},
+			expErr: errors.New("failed rank returned with zero status"),
 		},
 		"matching ranks; drpc fails": {
 			req: &mgmtpb.SystemDrainReq{Ranks: "1-2"},
@@ -2130,11 +2158,13 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 			drpcResps: []*mockDrpcResponse{
 				&mockDrpcResponse{
 					Message: &mgmtpb.PoolRanksResp{
+						FailedRank:   uint32(ranklist.NilRank),
 						SuccessRanks: []uint32{0, 1},
 					},
 				},
 				&mockDrpcResponse{
 					Message: &mgmtpb.PoolRanksResp{
+						FailedRank:   uint32(ranklist.NilRank),
 						SuccessRanks: []uint32{1},
 					},
 				},
@@ -2165,11 +2195,13 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 			drpcResps: []*mockDrpcResponse{
 				&mockDrpcResponse{
 					Message: &mgmtpb.PoolRanksResp{
+						FailedRank:   uint32(ranklist.NilRank),
 						SuccessRanks: []uint32{0, 1, 2, 3},
 					},
 				},
 				&mockDrpcResponse{
 					Message: &mgmtpb.PoolRanksResp{
+						FailedRank:   uint32(ranklist.NilRank),
 						SuccessRanks: []uint32{1, 2, 3},
 					},
 				},
@@ -2278,7 +2310,7 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 					t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 				}
-				// Compare errors are approximate.
+				// Make an approximate comparison of error messages.
 				for i, r := range tc.expResp.Results {
 					if r.Msg != "" {
 						e1 := errors.New(r.Msg)

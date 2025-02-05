@@ -762,7 +762,8 @@ ds_mgmt_drpc_pool_exclude(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	d_rank_list_t           *success_ranks = NULL;
 	uint8_t			*body;
 	size_t                   len;
-	int                      rc;
+	int                      rc = 0;
+	int                      rc2;
 	int                      i;
 	int                      j = 0;
 
@@ -798,18 +799,19 @@ ds_mgmt_drpc_pool_exclude(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 					     0 /* nvme_size */, 0 /* meta_size */, req->force);
 		if (rc != 0) {
 			resp.failed_rank = req->ranks[i];
-			goto out_list;
+			break;
 		}
 
 		D_ASSERT(j < success_ranks->rl_nr);
 		success_ranks->rl_ranks[j++] = req->ranks[i];
 	}
 
-out_list:
-	rc = rank_list_to_uint32_array(success_ranks, &resp.success_ranks, &resp.n_success_ranks);
-	if (rc != 0) {
-		D_ERROR("Failed to convert enabled target rank list: rc=%d\n", rc);
+	rc2 = rank_list_to_uint32_array(success_ranks, &resp.success_ranks, &resp.n_success_ranks);
+	if (rc2 != 0) {
+		D_ERROR("Failed to convert success rank list: rc=%d\n", rc);
+		rc = (rc == 0) ? rc2 : rc;
 	}
+
 	d_rank_list_free(success_ranks);
 out_svc:
 	d_rank_list_free(svc_ranks);
@@ -841,7 +843,8 @@ ds_mgmt_drpc_pool_drain(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	d_rank_list_t           *success_ranks = NULL;
 	uint8_t			*body;
 	size_t                   len;
-	int                      rc;
+	int                      rc = 0;
+	int                      rc2;
 	int                      i;
 	int                      j = 0;
 
@@ -874,24 +877,25 @@ ds_mgmt_drpc_pool_drain(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out_svc, rc = -DER_NOMEM);
 
 	for (i = 0; i < req->n_ranks; i++) {
-		rc = pool_change_target_state(
-		    req->id, svc_ranks, req->n_target_idx, req->target_idx, req->ranks[i],
-		    PO_COMP_ST_DRAIN, 0 /* scm_size */, 0 /* nvme_size */, 0 /* meta_size */,
-		    false);
+		rc =
+		    pool_change_target_state(req->id, svc_ranks, req->n_target_idx, req->target_idx,
+					     req->ranks[i], PO_COMP_ST_DRAIN, 0 /* scm_size */,
+					     0 /* nvme_size */, 0 /* meta_size */, false);
 		if (rc != 0) {
 			resp.failed_rank = req->ranks[i];
-			goto out_list;
+			break;
 		}
 
 		D_ASSERT(j < success_ranks->rl_nr);
 		success_ranks->rl_ranks[j++] = req->ranks[i];
 	}
 
-out_list:
-	rc = rank_list_to_uint32_array(success_ranks, &resp.success_ranks, &resp.n_success_ranks);
-	if (rc != 0) {
-		D_ERROR("Failed to convert enabled target rank list: rc=%d\n", rc);
+	rc2 = rank_list_to_uint32_array(success_ranks, &resp.success_ranks, &resp.n_success_ranks);
+	if (rc2 != 0) {
+		D_ERROR("Failed to convert success rank list: rc=%d\n", rc);
+		rc = (rc == 0) ? rc2 : rc;
 	}
+
 	d_rank_list_free(success_ranks);
 out_svc:
 	d_rank_list_free(svc_ranks);
@@ -1011,9 +1015,10 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	size_t                           len;
 	uint64_t                         scm_bytes;
 	uint64_t                         nvme_bytes = 0;
+	int                              rc         = 0;
+	int                              rc2;
 	int                              i;
 	int                              j = 0;
-	int                              rc;
 
 	mgmt__pool_ranks_resp__init(&resp);
 
@@ -1057,18 +1062,19 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		    req->tier_bytes[DAOS_MEDIA_SCM] /* meta_size */, false);
 		if (rc != 0) {
 			resp.failed_rank = req->ranks[i];
-			goto out_list;
+			break;
 		}
 
 		D_ASSERT(j < success_ranks->rl_nr);
 		success_ranks->rl_ranks[j++] = req->ranks[i];
 	}
 
-out_list:
-	rc = rank_list_to_uint32_array(success_ranks, &resp.success_ranks, &resp.n_success_ranks);
-	if (rc != 0) {
-		D_ERROR("Failed to convert enabled target rank list: rc=%d\n", rc);
+	rc2 = rank_list_to_uint32_array(success_ranks, &resp.success_ranks, &resp.n_success_ranks);
+	if (rc2 != 0) {
+		D_ERROR("Failed to convert success rank list: rc=%d\n", rc);
+		rc = (rc == 0) ? rc2 : rc;
 	}
+
 	d_rank_list_free(success_ranks);
 out_svc:
 	d_rank_list_free(svc_ranks);

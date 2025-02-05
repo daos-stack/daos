@@ -770,6 +770,8 @@ type PoolRanksResp struct {
 	InitialRankset string          `json:"initial_rankset"`
 }
 
+// Errors returns either a generic failure based on the requested rankset failure or a rank-specific
+// failure depending on whether or not FailedRank has been set in the response.
 func (resp *PoolRanksResp) Errors() error {
 	if resp == nil {
 		return errors.Errorf("nil %T", resp)
@@ -777,6 +779,7 @@ func (resp *PoolRanksResp) Errors() error {
 	if resp.Status == int32(daos.Success) {
 		return nil
 	}
+
 	err := daos.Status(resp.Status)
 
 	if resp.FailedRank == ranklist.NilRank {
@@ -787,14 +790,16 @@ func (resp *PoolRanksResp) Errors() error {
 }
 
 // GetResults returns a slice of results from the response and input error.
-func (resp *PoolRanksResp) GetResults(errIn error) ([]*PoolRanksResult, error) {
+func (resp *PoolRanksResp) GetResults(errIn error) (results []*PoolRanksResult, err error) {
 	if resp == nil {
 		return nil, errors.Errorf("nil %T", resp)
 	}
 	if resp.ID == "" {
 		return nil, errors.New("empty pool id")
 	}
-	results := []*PoolRanksResult{}
+	defer func() {
+		err = errors.Wrapf(err, "pool %s", resp.ID)
+	}()
 
 	if errIn != nil {
 		// Return root cause so rank results can be aggregated if required.
@@ -814,7 +819,7 @@ func (resp *PoolRanksResp) GetResults(errIn error) ([]*PoolRanksResult, error) {
 
 	if resp.Status != int32(daos.Success) {
 		if resp.FailedRank == ranklist.NilRank {
-			return nil, errors.New("invalid rank returned with non-zero status")
+			return nil, errors.New("no failed rank returned with non-zero status")
 		}
 		// Add one result for failed rank.
 		results = append(results, &PoolRanksResult{
@@ -823,9 +828,14 @@ func (resp *PoolRanksResp) GetResults(errIn error) ([]*PoolRanksResult, error) {
 			Status: resp.Status,
 			Msg:    daos.Status(resp.Status).Error(),
 		})
-	} else if len(resp.SuccessRanks) == 0 {
-		// Expected that at least one result will be generated for each pool.
-		return nil, errors.Errorf("no ranks were operated on for pool %s", resp.ID)
+	} else {
+		if resp.FailedRank != ranklist.NilRank {
+			return nil, errors.New("failed rank returned with zero status")
+		}
+		if len(resp.SuccessRanks) == 0 {
+			// Expected that at least one result will be generated for each pool.
+			return nil, errors.New("no ranks were operated on")
+		}
 	}
 
 	if len(resp.SuccessRanks) != 0 {

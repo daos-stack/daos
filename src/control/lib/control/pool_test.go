@@ -291,6 +291,13 @@ func TestControl_PoolRanksResp_GetResults(t *testing.T) {
 			resp:   &PoolRanksResp{},
 			expErr: errors.New("empty"),
 		},
+		"no failure; failed rank": {
+			resp: &PoolRanksResp{
+				ID:         test.MockUUID(),
+				FailedRank: 1,
+			},
+			expErr: errors.New("failed rank"),
+		},
 		"no failure; no successes": {
 			resp: &PoolRanksResp{
 				ID:         test.MockUUID(),
@@ -298,7 +305,7 @@ func TestControl_PoolRanksResp_GetResults(t *testing.T) {
 			},
 			expErr: errors.New("no ranks"),
 		},
-		"no failure; successes": {
+		"no failure; with successes": {
 			resp: &PoolRanksResp{
 				ID:           test.MockUUID(),
 				SuccessRanks: []ranklist.Rank{0},
@@ -315,7 +322,7 @@ func TestControl_PoolRanksResp_GetResults(t *testing.T) {
 				FailedRank:     ranklist.NilRank,
 				InitialRankset: "0-3",
 			},
-			expErr: errors.New("invalid rank"),
+			expErr: errors.New("no failed rank"),
 		},
 		"failure; failed rank": {
 			resp: &PoolRanksResp{
