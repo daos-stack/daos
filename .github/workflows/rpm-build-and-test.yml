@@ -217,7 +217,7 @@ jobs:
       REMOVE_EXISTING_RPMS: false
       # TODO -- this should be on stable, backedup storage
       ARTIFACTS_URL: file:///scratch/job_repos/
-      REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
+      REPO_FILE_URL: https://artifactory/artifactory/repo-files/
       # keep VS Code's GHA linting happy
       NODESTRING:
       CP_PR_REPOS:
@@ -507,7 +507,7 @@ jobs:
       REMOVE_EXISTING_RPMS: false
       # TODO -- this should be on stable, backedup storage
       ARTIFACTS_URL: file:///scratch/job_repos/
-      REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
+      REPO_FILE_URL: https://artifactory/artifactory/repo-files/
       # keep VS Code's GHA linting happy
       NODESTRING:
       CP_PR_REPOS:
