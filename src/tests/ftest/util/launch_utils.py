@@ -876,7 +876,8 @@ class TestRunner():
         return 0
 
     def _generate_telemetry_certs(self, logger):
-        """Generate the certificates for the test.
+        """Generate the certificates for the test and copy to system default
+           certificate location
         Returns:
             logger (Logger): logger for the messages produced by this method
             int: status code: 0 = success, 128 = failure
@@ -893,6 +894,18 @@ class TestRunner():
             return 128
         if not run_local(logger, f"{command} {test_env.log_dir}").passed:
             message = "Error generating Telemetry certificates"
+            self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
+            return 128
+
+        from_dir = os.path.join(certs_dir, "daosTelemetryCA.crt")
+        to_dir = "/etc/pki/ca-trust/source/anchors/"
+        if not run_local(logger, f"sudo cp -rf {from_dir} {to_dir}").passed:
+            message = "Copy certificate failed"
+            self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
+            return 128
+
+        if not run_local(logger, f"sudo update-ca-trust").passed:
+            message = "Error running update-ca-trust command"
             self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
             return 128
 
