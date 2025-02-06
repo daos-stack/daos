@@ -28,6 +28,17 @@ static int check_status(void *arg)
 static int once = 1;
 static int pause_progress = 0;
 
+static int get_pause(void)
+{
+	return pause_progress;
+}
+
+static void set_pause(int value)
+{
+	pause_progress = value;
+}
+
+
 static void *progress(void *arg)
 {
 	int	*status = (int *)arg;
@@ -36,13 +47,17 @@ static void *progress(void *arg)
 	__sync_fetch_and_add(status, -1);
 
 	do {
-		if (pause_progress) {
-			while (pause_progress) {
+		if (get_pause()) {
+			printf("Progress paused\n");
+			fflush(stdout);
+			while (get_pause()) {
 				sched_yield();
 			}
 			sleep(20);
+			printf("Progress resumed\n");
+			fflush(stdout);
 		}
-		rc = crt_progress_cond(crt_ctx, 0, check_status,
+		rc = crt_progress_cond(crt_ctx, 1, check_status,
 				       status);
 		if (rc == -DER_TIMEDOUT)
 			sched_yield();
@@ -79,13 +94,18 @@ static void rpc_handler(crt_rpc_t *rpc)
 		}
 	}
 
+	if (once) {
+		printf("Telling progress to pause\n");
+		set_pause(1);
+		sleep(5);
+	}
 	printf("Replying....\n");
 	rc = crt_reply_send(rpc);
 	if (once) {
-		pause_progress = 1;
 		printf("You can stop the client now\n");
 		sleep(40);
-		pause_progress = 0;
+		printf("Unpause\n");
+		set_pause(0);
 		once = 0;
 	}
 
