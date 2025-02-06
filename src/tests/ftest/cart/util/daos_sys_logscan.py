@@ -42,7 +42,9 @@ class SysPools():
     re_pmap_update = re.compile(upd_re)
 
     # uniform rebuild string identifier rb=<pool_uuid>/<rebuild_ver>/<rebuild_gen>/<opcode_string>
-    rbid_re = r"rb=([0-9a-fA-F]{8})/(\d+)/(\d+)/(\w+)"
+    # need special "_rf" versions of regex's to match "Reclaim fail" op (as opposed to "Reclaim")
+    rbid_re = r"rb=([0-9a-fA-F]{8})/(\d+)/(\d+)/(Rebuild|Reclaim)"
+    rbid_rf_re = r"rb=([0-9a-fA-F]{8})/(\d+)/(\d+)/(Reclaim fail)"
 
     # Future possibility: match the rebuild preliminary steps
     # rebuild_task_ult() wait for scheduling, and map dist - both would info to match on.
@@ -52,23 +54,45 @@ class SysPools():
     # Rebuild: PS leader engine starting and status checking a given operation
     # statuses: "scanning", "pulling", "completed", "aborted", "failed"
     ldr_start_re = "rebuild_leader_start.*" + rbid_re + "$"
+    ldr_start_rf_re = "rebuild_leader_start.*" + rbid_rf_re + "$"
+
     ldr_status_re = r"rebuild_leader_status_check\(\).*" + rbid_re + r" \[(\w+)\]" + \
+        r".*status (-?\d+)/(\d+) .*duration=(\d+)"
+    ldr_status_rf_re = r"rebuild_leader_status_check\(\).*" + rbid_rf_re + r" \[(\w+)\]" + \
         r".*status (-?\d+)/(\d+) .*duration=(\d+)"
     ldr_scan_hung_re = r"update_and_warn_for_slow_engines\(\).*" + rbid_re + \
         r".*scan hung.*waiting for (\d+)/(\d+) engines"
+    ldr_scan_hung_rf_re = r"update_and_warn_for_slow_engines\(\).*" + rbid_rf_re + \
+        r".*scan hung.*waiting for (\d+)/(\d+) engines"
     ldr_pull_hung_re = r"update_and_warn_for_slow_engines\(\).*" + rbid_re + \
         r".*pull hung.*waiting for (\d+)/(\d+) engines"
+    ldr_pull_hung_rf_re = r"update_and_warn_for_slow_engines\(\).*" + rbid_rf_re + \
+        r".*pull hung.*waiting for (\d+)/(\d+) engines"
     re_rebuild_ldr_start = re.compile(ldr_start_re)
+    re_rebuild_ldr_start_rf = re.compile(ldr_start_rf_re)
+
     re_rebuild_ldr_status = re.compile(ldr_status_re)
+    re_rebuild_ldr_status_rf = re.compile(ldr_status_rf_re)
     re_rebuild_ldr_scan_hung = re.compile(ldr_scan_hung_re)
+    re_rebuild_ldr_scan_hung_rf = re.compile(ldr_scan_hung_rf_re)
     re_rebuild_ldr_pull_hung = re.compile(ldr_pull_hung_re)
+    re_rebuild_ldr_pull_hung_rf = re.compile(ldr_pull_hung_rf_re)
 
     # Legacy rebuild PS leader logging (before uniform rebuild string)
-    old_ldr_start_re = r"rebuild_leader_start.*([0-9a-fA-F]{8}).*version=(\d+)/(\d+).*op=(\w+)"
-    old_ldr_status_re = (r"rebuild_leader_status_check\(\) (\w+) \[(\w+)\] \(pool ([0-9a-fA-F]{8}) "
-                         r"leader (\d+) term (\d+).*ver=(\d+),gen (\d+).*duration=(\d+) secs")
+    old_ldr_start_re = \
+        r"rebuild_leader_start.*([0-9a-fA-F]{8}).*version=(\d+)/(\d+).*op=(Rebuild|Reclaim)"
+    old_ldr_start_rf_re = \
+        r"rebuild_leader_start.*([0-9a-fA-F]{8}).*version=(\d+)/(\d+).*op=(Reclaim fail)"
+    old_ldr_status_re = \
+        (r"rebuild_leader_status_check\(\) (Rebuild|Reclaim) \[(\w+)\] \(pool ([0-9a-fA-F]{8}) "
+         r"leader (\d+) term (\d+).*ver=(\d+),gen (\d+).*duration=(\d+) secs")
+    old_ldr_status_rf_re = \
+        (r"rebuild_leader_status_check\(\) (Reclaim fail) \[(\w+)\] \(pool ([0-9a-fA-F]{8}) "
+         r"leader (\d+) term (\d+).*ver=(\d+),gen (\d+).*duration=(\d+) secs")
     re_old_ldr_start = re.compile(old_ldr_start_re)
+    re_old_ldr_start_rf = re.compile(old_ldr_start_rf_re)
     re_old_ldr_status = re.compile(old_ldr_status_re)
+    re_old_ldr_status_rf = re.compile(old_ldr_status_rf_re)
 
     def __init__(self):
         # dictionaries indexed by pool UUID
@@ -279,9 +303,11 @@ class SysPools():
         if not self._check_rb_new_fmt:
             return False
         msg, host, datetime = self._get_line_components(line)
-        match = self.re_rebuild_ldr_start.match(msg)
+        match = self.re_rebuild_ldr_start_rf.match(msg)
         if not match:
-            return False
+            match = self.re_rebuild_ldr_start.match(msg)
+            if not match:
+                return False
 
         # Disable checking for legacy rebuild log format, to save execution time
         self._check_rb_legacy_fmt = False
@@ -313,9 +339,11 @@ class SysPools():
         if not self._check_rb_legacy_fmt:
             return False
         msg, host, datetime = self._get_line_components(line)
-        match = self.re_old_ldr_start.match(msg)
+        match = self.re_old_ldr_start_rf.match(msg)
         if not match:
-            return False
+            match = match = self.re_old_ldr_start.match(msg)
+            if not match:
+                return False
 
         # Disable checking for new rebuild log format, to save execution time
         self._check_rb_new_fmt = False
@@ -353,9 +381,11 @@ class SysPools():
         if not self._check_rb_new_fmt:
             return False
         msg, host, datetime = self._get_line_components(line)
-        match = self.re_rebuild_ldr_status.match(msg)
+        match = self.re_rebuild_ldr_status_rf.match(msg)
         if not match:
-            return False
+            match = self.re_rebuild_ldr_status.match(msg)
+            if not match:
+                return False
 
         # Disable checking for legacy rebuild log format, to save execution time
         self._check_rb_legacy_fmt = False
@@ -409,9 +439,11 @@ class SysPools():
         if not self._check_rb_legacy_fmt:
             return False
         msg, host, datetime = self._get_line_components(line)
-        match = self.re_old_ldr_status.match(msg)
+        match = self.re_old_ldr_status_rf.match(msg)
         if not match:
-            return False
+            match = self.re_old_ldr_status.match(msg)
+            if not match:
+                return False
 
         # Disable checking for new rebuild log format, to save execution time
         self._check_rb_new_fmt = False
@@ -460,8 +492,12 @@ class SysPools():
 
     def _match_ps_rb_hung_warn(self, fname, line, pid, rank):
         msg, host, datetime = self._get_line_components(line)
-        match1 = self.re_rebuild_ldr_scan_hung.match(msg)
-        match2 = self.re_rebuild_ldr_pull_hung.match(msg)
+        match1 = self.re_rebuild_ldr_scan_hung_rf.match(msg)
+        if not match1:
+            match1 = self.re_rebuild_ldr_scan_hung.match(msg)
+        match2 = self.re_rebuild_ldr_pull_hung_rf.match(msg)
+        if not match2:
+            match2 = self.re_rebuild_ldr_pull_hung.match(msg)
         if not match1 and not match2:
             return False
 
