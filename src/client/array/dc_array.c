@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -68,6 +69,21 @@ struct io_params {
 	bool			user_sgl_used;
 	char			akey_val;
 };
+
+unsigned int array_list_io_limit;
+
+void
+daos_array_env_init()
+{
+	array_list_io_limit = DAOS_ARRAY_LIST_IO_LIMIT;
+	d_getenv_uint("DAOS_ARRAY_LIST_IO_LIMIT", &array_list_io_limit);
+	if (array_list_io_limit > DAOS_ARRAY_LIST_IO_LIMIT) {
+		D_WARN("Setting a high limit for list io descriptors (%u) is not recommended\n",
+		       array_list_io_limit);
+	} else {
+		D_DEBUG(DB_TRACE, "ARRAY List IO limit = %u\n", array_list_io_limit);
+	}
+}
 
 static void
 array_free(struct d_hlink *hlink)
@@ -1434,6 +1450,11 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	if (rg_iod == NULL) {
 		D_ERROR("NULL iod passed\n");
 		D_GOTO(err_task, rc = -DER_INVAL);
+	}
+
+	if (rg_iod->arr_nr > array_list_io_limit) {
+		D_ERROR("List io supports a max of %u offsets", array_list_io_limit);
+		D_GOTO(err_task, rc = -DER_NOTSUPPORTED);
 	}
 
 	array = array_hdl2ptr(array_oh);

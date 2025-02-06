@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -623,7 +624,7 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	obj	Opened file object.
- * \param[in]	iod	IO descriptor for list-io.
+ * \param[in]	iod	IO descriptor for list-io (limit of 64 ranges).
  * \param[in]	sgl	Scatter/Gather list for data buffer.
  * \param[out]	read_size
  *			How much data is actually read.
@@ -657,7 +658,7 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	obj	Opened file object.
- * \param[in]	iod	IO descriptor of file view.
+ * \param[in]	iod	IO descriptor for list-io (limit of 64 ranges).
  * \param[in]	sgl	Scatter/Gather list for data buffer.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.

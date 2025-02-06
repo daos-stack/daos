@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -259,7 +260,7 @@ daos_array_close(daos_handle_t oh, daos_event_t *ev);
  *
  * \param[in]	oh	Array object open handle.
  * \param[in]	th	Transaction handle.
- * \param[in]	iod	IO descriptor of ranges to read from the array.
+ * \param[in]	iod	IO descriptor of ranges to read from the array (limit of 64 Ranges).
  * \param[in]	sgl	A scatter/gather list (sgl) to the store array data.
  *			Buffer sizes do not have to match the individual range
  *			sizes as long as the total size does. User allocates the
@@ -285,7 +286,7 @@ daos_array_read(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
  *
  * \param[in]	oh	Array object open handle.
  * \param[in]	th	Transaction handle.
- * \param[in]	iod	IO descriptor of ranges to write to the array.
+ * \param[in]	iod	IO descriptor of ranges to write to the array (limit of 64 Ranges).
  * \param[in]	sgl	A scatter/gather list (sgl) to the store array data.
  *			Buffer sizes do not have to match the individual range
  *			sizes as long as the total size does.
