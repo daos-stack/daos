@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1155,7 +1156,7 @@ out:
 	return rc;
 }
 
-int
+static int
 crt_proc_struct_daos_coll_target(crt_proc_t proc, crt_proc_op_t proc_op, struct daos_coll_target *dct)
 {
 	int	size;

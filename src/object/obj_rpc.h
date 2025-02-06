@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -737,9 +738,6 @@ enum obj_coll_rep_flags {
 	((uint64_t)			(ocpi_api_flags)		CRT_VAR)	\
 	((uint32_t)			(ocpi_map_ver)			CRT_VAR)	\
 	((uint32_t)			(ocpi_flags)			CRT_VAR)	\
-	((uint32_t)			(ocpi_bulk_tgt_sz)		CRT_VAR)	\
-	((uint32_t)			(ocpi_bulk_tgt_nr)		CRT_VAR)	\
-	((crt_bulk_t)			(ocpi_tgt_bulk)			CRT_VAR)	\
 	((uint32_t)			(ocpi_max_tgt_sz)		CRT_VAR)	\
 	((uint16_t)			(ocpi_disp_width)		CRT_VAR)	\
 	((uint16_t)			(ocpi_disp_depth)		CRT_VAR)	\
@@ -815,8 +813,6 @@ uint32_t obj_reply_map_version_get(crt_rpc_t *rpc);
 
 int crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc, crt_proc_op_t proc_op,
 				     struct daos_cpd_sub_req *dcsr, bool with_oid);
-int crt_proc_struct_daos_coll_target(crt_proc_t proc, crt_proc_op_t proc_op,
-				     struct daos_coll_target *dct);
 
 static inline bool
 obj_is_modification_opc(uint32_t opc)
