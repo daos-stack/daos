@@ -419,7 +419,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
 
-	rc = lrua_array_alloc(&cont->vc_dtx_array, DTX_ARRAY_LEN, DTX_ARRAY_NR,
+	rc = lrua_array_alloc(&cont->vc_dtx_array, 1 << vos_dtx_array_size_bits, DTX_ARRAY_NR,
 			      sizeof(struct vos_dtx_act_ent),
 			      LRU_FLAG_REUSE_UNIQUE, &lru_cont_cbs,
 			      vos_tls_get(cont->vc_pool->vp_sysdb));
