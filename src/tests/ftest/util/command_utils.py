@@ -1045,6 +1045,52 @@ class YamlCommand(SubProcessCommand):
                 self._command, ", ".join(names))
             get_file_listing(hosts, names, self.run_user).log_output(self.log)
 
+    def copy_telemetry_root_certificates(self, source, hosts):
+        """Copy telemetry certificates files from the source to the destination hosts.
+        Args:
+            source (str): source of the certificate files.
+            hosts (NodeSet): list of the destination hosts.
+        """
+        certfiles = ["daosTelemetryCA.crt", "daosTelemetryCA.key"]
+        data = self.yaml.telemetry_config.get_certificate_data(
+            self.yaml.telemetry_config.get_attribute_names(LogParameter))
+        print("----SAMIR----")
+        print(data)
+        print("----SAMIR----")
+        destination = list(data.keys())[0]
+
+        for file_name in certfiles:
+            src_file = os.path.join(source, file_name)
+            dst_file = os.path.join(destination, file_name)
+            self.log.debug("  %s -> %s", src_file, dst_file)
+            result = distribute_files(
+                self.log, hosts, src_file, dst_file, mkdir=False,
+                verbose=False, sudo=True, owner=self.certificate_owner)
+            if not result.passed:
+                self.log.info("    WARNING: %s copy telemetry cert failed on %s",
+                              dst_file, result.failed_hosts)
+
+    def generate_telemetry_server_certificates(self, hosts, user):
+        """Generate the telemetry certificates for the test on server/client.
+
+        Args:
+            hosts (NodeSet): list of the destination hosts.
+            user (User): User permission set on telemetry certificate file.
+                         For server, it's daos_server and for client it's daos_agent.
+        """
+        data = self.yaml.telemetry_config.get_certificate_data(
+            self.yaml.telemetry_config.get_attribute_names(LogParameter))
+        destination = list(data.keys())[0]
+
+        certgen_dir = os.path.abspath(
+            os.path.join(os.getcwd(), "scripts"))
+        command = os.path.join(certgen_dir, "gen_telemetry_server_certificate.sh ")
+        command = "sudo " + command + user + " " + destination
+        self.log.debug("Generating the telemetry certificate command %s:", command)
+        result = run_remote(self.log, hosts, command, 30)
+        if not result.passed:
+            self.log.info("    WARNING: command %s failed", command)
+
     def copy_configuration(self, hosts):
         """Copy the yaml configuration file to the hosts.
 

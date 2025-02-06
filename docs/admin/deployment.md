@@ -771,8 +771,6 @@ Information on telelmetry config parameters in respective yaml file.
 ```yaml
 # /etc/daos/daos_server.yml (servers)
 telemetry_config:
-  # To use telemetry in secure mode
-  allow_insecure: false
   # Set the server telemetry endpoint port number
   port: 9191
   # Server certificate for use in TLS handshakes
@@ -784,8 +782,6 @@ telemetry_config:
 ```yaml
 # /etc/daos/daos_agent.yml (clients)
 telemetry_config:
-  # To use telemetry in secure mode
-  allow_insecure: false
   # Enable client telemetry for all DAOS clients.
   enabled: true
   # Set the client telemetry endpoint port number
