@@ -6998,9 +6998,9 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclud
 	if (opc == MAP_EXTEND) {
 		D_ASSERT(extend_rank_list != NULL);
 		map_version = pool_map_get_version(map) + 1;
-		rc = gen_pool_buf(map, &map_buf, map_version, extend_domains_nr,
-				  extend_rank_list->rl_nr, extend_rank_list->rl_nr * dss_tgt_nr,
-				  extend_domains, dss_tgt_nr);
+		rc          = gen_pool_buf(map, &map_buf, map_version, extend_domains_nr,
+					   extend_rank_list->rl_nr, extend_rank_list->rl_nr * dss_tgt_nr,
+					   extend_domains, dss_tgt_nr);
 		if (rc != 0)
 			D_GOTO(out_map, rc);
 
@@ -7110,6 +7110,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclud
 			goto out_map;
 		}
 
+		/* TODO DAOS-6353: Update to FAULT when supported */
 		failed_cnt = pool_map_get_failed_cnt(map, PO_COMP_TP_NODE);
 		D_INFO(DF_UUID ": Exclude %d ranks, failed NODE %d\n", DP_UUID(svc->ps_uuid),
 		       tgt_addrs->pta_number, failed_cnt);
