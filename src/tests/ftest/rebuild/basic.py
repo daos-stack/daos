@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -75,7 +76,7 @@ class RbldBasic(TestWithServers):
         # Manually exclude the specified rank
         for index, pool in enumerate(pools):
             if index == 0:
-                self.server_managers[0].stop_ranks([rank], self.d_log, True)
+                self.server_managers[0].stop_ranks([rank], True)
             else:
                 # Use the direct dmg pool exclude command to avoid updating the pool version again
                 pool.exclude([rank])

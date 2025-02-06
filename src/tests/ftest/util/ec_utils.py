@@ -400,7 +400,7 @@ class ErasureCodeSingle(TestWithServers):
             time.sleep(10)
             # Kill the server rank
             if self.rank_to_kill is not None:
-                self.server_managers[0].stop_ranks([self.rank_to_kill], self.d_log, force=True)
+                self.server_managers[0].stop_ranks([self.rank_to_kill], force=True)
 
         # Wait to finish the thread
         job.join()
@@ -454,7 +454,7 @@ class ErasureCodeMdtest(MdtestBase):
 
         # Stop the server ranks while IO operation in progress
         time.sleep(self.mdtest_cmd.stonewall_timer.value / 2)
-        self.server_managers[0].stop_ranks(ranks_to_stop, self.d_log, force=True)
+        self.server_managers[0].stop_ranks(ranks_to_stop, force=True)
 
         # Wait to finish the thread
         job.join()

@@ -1,5 +1,6 @@
 """
   (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -19,7 +20,6 @@ class RbldReadArrayTest(RebuildTestBase):
 
         message = "Reading the array objects during rebuild"
         self.log.info(message)
-        self.d_log.info(message)
         self.assertTrue(self.read_data_during_rebuild(), "Error reading data during rebuild")
 
     def read_data_during_rebuild(self):

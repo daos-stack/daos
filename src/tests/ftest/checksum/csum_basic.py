@@ -1,5 +1,6 @@
 """
   (C) Copyright 2019-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -51,7 +52,7 @@ class CsumContainerValidation(TestWithServers):
         obj.open()
         ioreq = IORequest(self.context, container.container, obj, objtype=4)
 
-        self.d_log.info("Writing the Single Dataset")
+        self.log_step("Writing the Single Dataset")
         record_index = 0
         for dkey in range(no_of_dkeys):
             for akey in range(no_of_akeys):
@@ -66,7 +67,7 @@ class CsumContainerValidation(TestWithServers):
                 if record_index == len(record_length):
                     record_index = 0
 
-        self.d_log.info("Single Dataset Verification -- Started")
+        self.log_step("Single Dataset Verification -- Started")
         record_index = 0
         for dkey in range(no_of_dkeys):
             for akey in range(no_of_akeys):
@@ -79,7 +80,7 @@ class CsumContainerValidation(TestWithServers):
                         "ERROR:Data mismatch for dkey={}, akey={}: indata={}, "
                         "val={}".format(
                             dkey, akey, indata, val.value.decode('utf-8')))
-                    self.d_log.error(message)
+                    self.log.error(message)
                     self.fail(message)
                 record_index = record_index + 1
                 if record_index == len(record_length):

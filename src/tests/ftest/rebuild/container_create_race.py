@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -133,7 +134,7 @@ class RbldContainerCreate(IorTestBase):
 
         # Kill the server and trigger rebuild
         self.log.info("=> (2) Starting rebuild by killing rank %s", rank)
-        self.server_managers[0].stop_ranks([rank], self.d_log, force=True)
+        self.server_managers[0].stop_ranks([rank], force=True)
 
         # Wait for rebuild to start.
         self.log.info("=> (3) Wait for rebuild to start for race condition")

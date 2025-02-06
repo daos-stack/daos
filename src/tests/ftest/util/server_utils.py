@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -892,12 +893,11 @@ class DaosServerManager(SubprocessManager):
         return data
 
     @fail_on(CommandFailure)
-    def stop_ranks(self, ranks, daos_log, force=False, copy=False):
+    def stop_ranks(self, ranks, force=False, copy=False):
         """Kill/Stop the specific server ranks using this pool.
 
         Args:
             ranks (list): a list of daos server ranks (int) to kill
-            daos_log (DaosLog): object for logging messages
             force (bool, optional): whether to use --force option to dmg system
                 stop. Defaults to False.
             copy (bool, optional): Copy dmg command. Defaults to False.
@@ -909,7 +909,6 @@ class DaosServerManager(SubprocessManager):
         msg = "Stopping DAOS ranks {} from server group {}".format(
             ranks, self.get_config_value("name"))
         self.log.info(msg)
-        daos_log.info(msg)
 
         # Stop desired ranks using dmg
         if copy:
@@ -920,11 +919,10 @@ class DaosServerManager(SubprocessManager):
         # Update the expected status of the stopped/excluded ranks
         self.update_expected_states(ranks, ["stopped", "excluded"])
 
-    def stop_random_rank(self, daos_log, force=False, exclude_ranks=None):
+    def stop_random_rank(self, force=False, exclude_ranks=None):
         """Kill/Stop a random server rank that is expected to be running.
 
         Args:
-            daos_log (DaosLog): object for logging messages
             force (bool, optional): whether to use --force option to dmg system
                 stop. Defaults to False.
             exclude_ranks (list, optional): ranks to exclude from the random selection.
@@ -954,14 +952,13 @@ class DaosServerManager(SubprocessManager):
 
         # Stop a random rank
         random_rank = random.choice(candidate_ranks)  # nosec
-        return self.stop_ranks([random_rank], daos_log=daos_log, force=force)
+        return self.stop_ranks([random_rank], force=force)
 
-    def start_ranks(self, ranks, daos_log):
+    def start_ranks(self, ranks):
         """Start the specific server ranks.
 
         Args:
             ranks (list): a list of daos server ranks to start
-            daos_log (DaosLog): object for logging messages
 
         Raises:
             CommandFailure: if there is an issue running dmg system start
@@ -973,7 +970,6 @@ class DaosServerManager(SubprocessManager):
         msg = "Start DAOS ranks {} from server group {}".format(
             ranks, self.get_config_value("name"))
         self.log.info(msg)
-        daos_log.info(msg)
 
         # Start desired ranks using dmg
         result = self.dmg.system_start(ranks=list_to_str(value=ranks))
