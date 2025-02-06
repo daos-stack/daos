@@ -27,34 +27,6 @@
 #include "crt_self_test.h"
 #include "crt_swim.h"
 
-static inline char *
-crt_rpc_priv_get_origin_addr(struct crt_rpc_priv *rpc_priv)
-{
-	const struct hg_info *hg_info;
-	char                  addr[48];
-	hg_size_t             addr_size = 48;
-	int                   rc;
-
-	if (rpc_priv->crp_orig_uri != NULL)
-		return rpc_priv->crp_orig_uri;
-
-	hg_info = HG_Get_info(rpc_priv->crp_hg_hdl);
-	if (hg_info == NULL)
-		return "NOINFO";
-
-	rc = HG_Addr_to_string(hg_info->hg_class, addr, (hg_size_t *)&addr_size, hg_info->addr);
-	if (rc != 0)
-		return "NONE";
-
-	D_ALLOC(rpc_priv->crp_orig_uri, addr_size);
-	if (rpc_priv->crp_orig_uri == NULL)
-		return "NOMEM";
-
-	memcpy(rpc_priv->crp_orig_uri, addr, addr_size);
-
-	return rpc_priv->crp_orig_uri;
-}
-
 /* A wrapper around D_TRACE_DEBUG that ensures the ptr option is a RPC */
 #define RPC_TRACE(mask, rpc, fmt, ...)                                                             \
 	do {                                                                                       \
