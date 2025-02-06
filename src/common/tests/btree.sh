@@ -111,7 +111,7 @@ run_test()
         DAOS_DEBUG="$DDEBUG"                        \
         eval "${VCMD}" "$BTR"                       \
         --start-test "'btree functional ${test_conf_pre} ${test_conf} iterate=${IDIR}'" \
-        -R "${DYN}" -M "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
+        -R"${DYN}" -M"${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -c                                          \
         -o                                          \
         -u "$RECORDS"                               \
@@ -131,7 +131,7 @@ run_test()
         echo "B+tree batch operations test..."
         eval "${VCMD}" "$BTR" \
         --start-test "'btree batch operations ${test_conf_pre} ${test_conf}'" \
-        -R "${DYN}" -M "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
+        -R"${DYN}" -M"${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -c                                          \
         -o                                          \
         -b "$BAT_NUM"                               \
@@ -140,14 +140,14 @@ run_test()
         echo "B+tree drain test..."
         eval "${VCMD}" "$BTR" \
         --start-test "'btree drain ${test_conf_pre} ${test_conf}'" \
-        -R "${DYN}" -M "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
+        -R"${DYN}" -M"${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -e -D
 
     else
         echo "B+tree performance test..."
         eval "${VCMD}" "$BTR" \
         --start-test "'btree performance ${test_conf_pre} ${test_conf}'" \
-        -R "${DYN}" -M "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
+        -R"${DYN}" -M"${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -p "$BAT_NUM"                               \
         -D
     fi
