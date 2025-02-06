@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -304,12 +305,15 @@ jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
 	int		ntargets;
 	int		rc, i;
 	d_rank_list_t	rank_list;
-	uint32_t	domains[] = {255, 0, 5, /* root */
-				     1, 101, 1,
+	/* clang-format off */
+	uint32_t	domains[] = {0, /* metadata - no optional layers */
+				     255, 1, 5, /* root */
+				     1, 101, 1, /* nodes */
 				     1, 102, 1,
 				     1, 103, 1,
 				     1, 104, 1,
 				     1, 105, 1};
+	/* clang-format on */
 	const size_t	tuple_size = 3;
 	const size_t	max_domains = 5;
 	uint32_t	domain_tree_len;
@@ -360,8 +364,8 @@ jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
 
 	map_version = pool_map_get_version(ctx->po_map) + 1;
 
-	rc = gen_pool_buf(ctx->po_map, &map_buf, map_version, domain_tree_len, node_count,
-			  ntargets, domain_tree, target_count);
+	rc = gen_pool_buf(ctx->po_map, &map_buf, map_version, domain_tree_len, node_count, ntargets,
+			  domain_tree, target_count);
 	D_FREE(domain_tree);
 	assert_success(rc);
 
