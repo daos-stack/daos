@@ -1,5 +1,6 @@
 """
   (C) Copyright 2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -171,7 +172,7 @@ class ControlLogEntry(TestWithServers):
 
         self.log_step('Stop/start 2 random ranks')
         stop_ranks = self.random.sample(list(self.server_managers[0].ranks), k=2)
-        expected = [fr'rank {rank}.*exited with 0' for rank in stop_ranks] \
+        expected = [fr'rank {rank}.*killed' for rank in stop_ranks] \
             + [fr'process.*started on rank {rank}' for rank in stop_ranks]
         with self.verify_journalctl(expected):
             self.server_managers[0].stop_ranks(stop_ranks, self.d_log)
