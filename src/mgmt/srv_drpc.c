@@ -769,6 +769,9 @@ ds_mgmt_drpc_pool_exclude(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	mgmt__pool_ranks_resp__init(&resp);
 
+	/* UINT32_MAX/CRT_NO_RANK indicates nil rank in daos_{,io_}server */
+	resp.failed_rank = CRT_NO_RANK;
+
 	/* Unpack the inner request from the drpc call body */
 	req = mgmt__pool_exclude_req__unpack(&alloc.alloc,
 					     drpc_req->body.len,
@@ -1021,6 +1024,9 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	int                              j = 0;
 
 	mgmt__pool_ranks_resp__init(&resp);
+
+	/* UINT32_MAX/CRT_NO_RANK indicates nil rank in daos_{,io_}server */
+	resp.failed_rank = CRT_NO_RANK;
 
 	/* Unpack the inner request from the drpc call body */
 	req = mgmt__pool_reint_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
