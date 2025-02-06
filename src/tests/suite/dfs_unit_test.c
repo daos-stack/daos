@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,6 +8,7 @@
 
 #include "dfs_test.h"
 #include <daos/dfs_lib_int.h>
+#include <daos/array.h>
 #include <daos_types.h>
 #include <daos/placement.h>
 #include <pthread.h>
@@ -871,12 +873,14 @@ dfs_test_io_error_code(void **state)
 	test_arg_t	*arg = *state;
 	dfs_obj_t	*file;
 	daos_event_t	ev, *evp;
-	daos_range_t	iod_rgs;
+	daos_range_t     iod_rg;
+	daos_range_t     iod_rgs[DAOS_ARRAY_LIST_IO_LIMIT + 1];
 	dfs_iod_t	iod;
 	d_sg_list_t	sgl;
 	d_iov_t		iov;
-	char		buf[10];
+	char             buf[DAOS_ARRAY_LIST_IO_LIMIT + 1];
 	daos_size_t	read_size;
+	int              i;
 	int		rc;
 
 	if (arg->myrank != 0)
@@ -886,14 +890,30 @@ dfs_test_io_error_code(void **state)
 		      O_RDWR | O_CREAT, 0, 0, NULL, &file);
 	assert_int_equal(rc, 0);
 
+	/** set an IOD with a large nr count that is not supported */
+	iod.iod_nr = DAOS_ARRAY_LIST_IO_LIMIT + 1;
+	for (i = 0; i < DAOS_ARRAY_LIST_IO_LIMIT + 1; i++) {
+		iod_rgs[i].rg_idx = i + 2;
+		iod_rgs[i].rg_len = 1;
+	}
+	iod.iod_rgs = iod_rgs;
+	d_iov_set(&iov, buf, DAOS_ARRAY_LIST_IO_LIMIT + 1);
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs   = &iov;
+	rc            = dfs_writex(dfs_mt, file, &iod, &sgl, NULL);
+	assert_int_equal(rc, ENOTSUP);
+	rc = dfs_readx(dfs_mt, file, &iod, &sgl, &read_size, NULL);
+	assert_int_equal(rc, ENOTSUP);
+
 	/*
 	 * set an IOD that has writes more data than sgl to trigger error in
 	 * array layer.
 	 */
 	iod.iod_nr = 1;
-	iod_rgs.rg_idx = 0;
-	iod_rgs.rg_len = 10;
-	iod.iod_rgs = &iod_rgs;
+	iod_rg.rg_idx = 0;
+	iod_rg.rg_len = 10;
+	iod.iod_rgs   = &iod_rg;
 	d_iov_set(&iov, buf, 5);
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 1;
