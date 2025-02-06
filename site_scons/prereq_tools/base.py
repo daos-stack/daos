@@ -420,6 +420,7 @@ class PreReqComponent:
 
     def __init__(self, env, opts):
         self.__defined = {}
+        self.__ = {}
         self.__required = {}
         self.__errors = {}
         self.__env = env
@@ -427,6 +428,7 @@ class PreReqComponent:
         self.__require_optional = GetOption("require_optional")
         self._has_icx = False
         self.download_deps = False
+        self.fetch_only = False
         self.build_deps = False
         self.__parse_build_deps()
         self._replace_env(LIBTOOLIZE="libtoolize")
@@ -507,6 +509,8 @@ class PreReqComponent:
         self._setup_path_var("GOPATH")
         self.__build_info.update("PREFIX", self.__env.subst("$PREFIX"))
         self.prereq_prefix = self.__env.subst("$PREFIX/prereq/$TTYPE_REAL")
+        if GetOption('install_sandbox'):
+            self.prereq_prefix = f"{GetOption('install_sandbox')}/{self.prereq_prefix}"
 
         if config_file is not None:
             self._configs = configparser.ConfigParser()
@@ -568,7 +572,14 @@ class PreReqComponent:
 
         # Go ahead and prebuild some components
         for comp in reqs:
-            self.__env.Clone().require(comp)
+            if self.fetch_only:
+                self.download(comp)
+            else:
+                self.__env.Clone().require(comp)
+
+        if self.fetch_only:
+            print("--build-deps=fetch was set, so exiting...")
+            sys.exit(0)
 
     def _setup_build_type(self):
         """Set build type"""
@@ -703,12 +714,14 @@ class PreReqComponent:
 
     def __parse_build_deps(self):
         """Parse the build dependencies command line flag"""
-        build_deps = GetOption("build_deps")
-        if build_deps in ("yes", "only"):
-            self.download_deps = True
+        build_deps = GetOption('build_deps')
+        skip_download = GetOption('skip_download')
+        if build_deps in ('fetch',):
+            self.fetch_only = True
+        elif build_deps in ('yes', 'only'):
             self.build_deps = True
-        elif build_deps == "build-only":
-            self.build_deps = True
+            if not skip_download:
+                self.download_deps = True
 
     def _sub_path(self, path):
         """Resolve the real path"""
@@ -776,6 +789,18 @@ class PreReqComponent:
             and not os.path.exists(self.__env.get(f"{comp_def.name.upper()}_PREFIX"))
         ):
             self._save_component_prefix(f"{comp_def.name.upper()}_PREFIX", "/usr")
+
+    def download(self, *comps):
+        """Ensure all components are downloaded"""
+
+        for comp in comps:
+            if comp not in self.__defined:
+                raise MissingDefinition(comp)
+            if comp in self.__errors:
+                raise self.__errors[comp]
+            comp_def = self.__defined[comp]
+            comp_def.configure()
+            comp_def.get()
 
     def require(self, env, *comps, **kw):
         """Ensure a component is built.
@@ -891,8 +916,9 @@ class PreReqComponent:
             lpath = None
             for lib in comp.lib_path:
                 lpath = os.path.join(path, lib)
-                if not os.path.exists(lpath):
-                    lpath = None
+                if os.path.exists(lpath):
+                    break
+                lpath = None
             if ipath is None and lpath is None:
                 continue
             env = self.__env.Clone()
@@ -900,9 +926,10 @@ class PreReqComponent:
                 env.AppendUnique(CPPPATH=[ipath])
             if lpath:
                 env.AppendUnique(LIBPATH=[lpath])
-            if not comp.has_missing_targets(env):
-                self.__prebuilt_path[name] = path
-                return path
+            realpath = os.path.realpath(path)
+            if not comp.has_missing_targets(env, realpath):
+                self.__prebuilt_path[name] = realpath
+                return self.__prebuilt_path[name]
 
         self.__prebuilt_path[name] = None
 
@@ -1089,9 +1116,10 @@ class _Component:
             return
 
         # Source code is retrieved using retriever
-
-        if not self.prereqs.download_deps:
-            raise DownloadRequired(self.name)
+        if not (self.prereqs.download_deps or self.prereqs.fetch_only):
+            if self.prereqs.build_deps:
+                print("Assuming sources have been downloaded already")
+                return
 
         print(f"Downloading source for {self.name}")
         patches = self._resolve_patches()
@@ -1134,21 +1162,23 @@ class _Component:
             env.SetOption("no_exec", True)
         return False
 
-    def _parse_config(self, env, opts):
+    def _parse_config(self, env, opts, comp_path=None):
         """Parse a pkg-config file"""
         if self.pkgconfig is None:
             return
+
+        real_comp_path = self.component_prefix
+        if comp_path:
+            real_comp_path = comp_path
+
         path = os.environ.get("PKG_CONFIG_PATH", None)
         if path and "PKG_CONFIG_PATH" not in env["ENV"]:
             env["ENV"]["PKG_CONFIG_PATH"] = path
-        if (
-            not self.use_installed
-            and self.component_prefix is not None
-            and not self.component_prefix == "/usr"
-        ):
+        if (not self.use_installed and real_comp_path is not None
+           and not real_comp_path == "/usr"):
             path_found = False
             for path in self.lib_path:
-                config = os.path.join(self.component_prefix, path, "pkgconfig")
+                config = os.path.join(real_comp_path, path, "pkgconfig")
                 if not os.path.exists(config):
                     continue
                 path_found = True
@@ -1168,7 +1198,7 @@ class _Component:
             return
         print(msg)
 
-    def has_missing_targets(self, env):
+    def has_missing_targets(self, env, comp_path=None):
         """Check for expected build targets (e.g. libraries or headers)"""
         # pylint: disable=too-many-return-statements
         if self.targets_found:
@@ -1188,7 +1218,10 @@ class _Component:
             return True
 
         # No need to fail here if we can't find the config, it may not always be generated
-        self._parse_config(env, "--cflags")
+        self._parse_config(env, "--cflags --libs-only-L", comp_path=comp_path)
+
+        for define in self.defines:
+            env.AppendUnique(CPPDEFINES=[define])
 
         if GetOption("help"):
             print("help set")
