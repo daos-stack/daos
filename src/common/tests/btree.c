@@ -952,8 +952,9 @@ static struct option btr_ops[] = {
 
 /**
  * Execute test based on the given sequence of steps.
- * -S/--start-test parameter is ignored
- * -R and -M parameters must be provided before -C parameter.
+ * -S/--start-test option is ignored
+ * -R and -M options must be provided before -C option.
+ * Each argument of the -R and -M options must be specified without a space between them (e.g. -Rd).
  */
 static void
 ts_group(void **state) {
@@ -965,12 +966,6 @@ ts_group(void **state) {
 				  NULL)) != -1) {
 		tst_fn_val.optval = optarg;
 		tst_fn_val.input = true;
-
-		// trim trailing space
-		while (tst_fn_val.optval && *tst_fn_val.optval != '\0' &&
-		       isspace((unsigned char)*tst_fn_val.optval)) {
-			tst_fn_val.optval++;
-		}
 
 		switch (opt) {
 		case 'S':
@@ -1069,13 +1064,17 @@ main(int argc, char **argv)
 		if (opt == 'S') {
 			test_name = optarg;
 		} else if (opt == '?') {
-			/* unknown parameter */
 			break;
 		}
 	}
-	if (argc != optind) {
-		fail_msg("Unknown parameter: %s\n", argv[optind]);
+	if (opt == '?') {
+		/* invalid option - error message printed on stderr already */
+		return -1;
+	} else if (argc != optind) {
+		fail_msg("Cannot interpret parameter: \"%s\" at optind: %d.\n", argv[optind],
+			 optind);
 	}
+
 	/* getopt_long start over */
 	optind = 1;
 
