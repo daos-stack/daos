@@ -20,15 +20,11 @@ pool:
   scm_size: 1G
 
 container:
-  control_method: API
+  type: POSIX
+  properties: cksum:crc16,cksum_size:16384,srv_cksum:on
 
-properties:
-  chksum_type:
-    configured: 100  # Default
-    expected: 1
-  srv_verify:
-    configured: true  # Updated
-    expected: 1
-  chunk_size:
-    configured: 0  # Default
-    expected: 16384
+expected_get_prop:
+  layout_type: "POSIX (1)"
+  cksum: "crc16"
+  cksum_size: 16384
+  srv_cksum: "on"
