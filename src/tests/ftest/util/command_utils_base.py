@@ -836,21 +836,16 @@ class TelemetryConfig(YamlParameters):
             data (dict): a dictionary of parameter directory name keys and
                 value.
         """
-        print("-----------SAMIR----------")
         data = {}
-        print(name_list)
+
         for name in name_list:
-            print(name)
             value = getattr(self, name).value
             if isinstance(value, str):
                 dir_name, file_name = os.path.split(value)
-                print(dir_name)
                 if dir_name not in data:
                     data[dir_name] = [file_name]
                 else:
                     data[dir_name].append(file_name)
-                print(data)
-        print("-----------SAMIR----------")
         return data
 
     def _get_new(self):

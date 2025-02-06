@@ -1054,9 +1054,6 @@ class YamlCommand(SubProcessCommand):
         certfiles = ["daosTelemetryCA.crt", "daosTelemetryCA.key"]
         data = self.yaml.telemetry_config.get_certificate_data(
             self.yaml.telemetry_config.get_attribute_names(LogParameter))
-        print("----SAMIR----")
-        print(data)
-        print("----SAMIR----")
         destination = list(data.keys())[0]
 
         for file_name in certfiles:
