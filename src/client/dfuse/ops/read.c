@@ -399,10 +399,10 @@ chunk_fetch(fuse_req_t req, struct dfuse_obj_hdl *oh, struct read_chunk_data *cd
 	if (rc != 0)
 		goto err;
 
-out:
 	/* Send a message to the async thread to wake it up and poll for events */
 	sem_post(&eqt->de_sem);
 
+out:
 	/* Now ensure there are more descriptors for the next request */
 	d_slab_restock(eqt->de_read_slab);
 
@@ -604,10 +604,10 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 		D_GOTO(err, rc);
 		return;
 	}
-out:
+
 	/* Send a message to the async thread to wake it up and poll for events */
 	sem_post(&eqt->de_sem);
-
+out:
 	/* Now ensure there are more descriptors for the next request */
 	d_slab_restock(eqt->de_read_slab);
 
