@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -170,6 +171,8 @@ struct crt_gdata {
 	long			 cg_num_cores;
 	/** Inflight rpc quota limit */
 	uint32_t		cg_rpc_quota;
+	/** Retry count of HG_Init_opt2() on failure when using CXI provider */
+	uint32_t                 cg_hg_init_retry_cnt;
 };
 
 extern struct crt_gdata		crt_gdata;
@@ -197,6 +200,7 @@ struct crt_event_cb_priv {
 	ENV_STR(CRT_ATTACH_INFO_PATH)                                                              \
 	ENV(CRT_CREDIT_EP_CTX)                                                                     \
 	ENV(CRT_CTX_NUM)                                                                           \
+	ENV(CRT_CXI_INIT_RETRY)                                                                    \
 	ENV(CRT_ENABLE_MEM_PIN)                                                                    \
 	ENV_STR(CRT_L_GRP_CFG)                                                                     \
 	ENV(CRT_L_RANK)                                                                            \
