@@ -12,6 +12,19 @@ updates:
         patterns:
           - "*"
   - package-ecosystem: github-actions
+    target-branch: master
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      gha-versions:
+        patterns:
+          - "*"
+    assignees:
+      - daos-stack/actions-watchers
+
+  - package-ecosystem: github-actions
+    target-branch: release/2.6
     directory: /
     schedule:
       interval: weekly
