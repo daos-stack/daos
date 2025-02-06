@@ -225,7 +225,7 @@ func PrintSystemCleanupResponse(out io.Writer, resp *control.SystemCleanupResp, 
 
 // PrintPoolRankResults generates a table showing results of operations on pool ranks. Each row will
 // indicate a result for a group of ranks on a pool.
-func PrintPoolRankResults(out io.Writer, results []*control.PoolRankResult) {
+func PrintPoolRankResults(out io.Writer, results []*control.PoolRanksResult) {
 	if len(results) == 0 {
 		fmt.Fprintln(out, "No pool ranks processed")
 		return
@@ -243,7 +243,7 @@ func PrintPoolRankResults(out io.Writer, results []*control.PoolRankResult) {
 			reason = r.Msg
 		}
 		row := txtfmt.TableRow{
-			"Pool":   r.PoolID,
+			"Pool":   r.ID,
 			"Ranks":  r.Ranks,
 			"Result": result,
 			"Reason": reason,

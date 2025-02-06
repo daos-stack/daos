@@ -615,13 +615,13 @@ Unknown 3 hosts: foo[7-9]
 
 func TestPretty_PrintPoolRankResults(t *testing.T) {
 	for name, tc := range map[string]struct {
-		results []*control.PoolRankResult
+		results []*control.PoolRanksResult
 		expOut  string
 	}{
 		"normal response": {
-			results: []*control.PoolRankResult{
-				{PoolID: test.MockUUID(1), Ranks: "0-3"},
-				{PoolID: test.MockUUID(2), Ranks: "1-4"},
+			results: []*control.PoolRanksResult{
+				{ID: test.MockUUID(1), Ranks: "0-3"},
+				{ID: test.MockUUID(2), Ranks: "1-4"},
 			},
 			expOut: `
 Pool                                 Ranks Result Reason 
@@ -632,9 +632,9 @@ Pool                                 Ranks Result Reason
 `,
 		},
 		"normal response; use labels": {
-			results: []*control.PoolRankResult{
-				{PoolID: "label1", Ranks: "0-3"},
-				{PoolID: "label2", Ranks: "1-4"},
+			results: []*control.PoolRanksResult{
+				{ID: "label1", Ranks: "0-3"},
+				{ID: "label2", Ranks: "1-4"},
 			},
 			expOut: `
 Pool   Ranks Result Reason 
@@ -645,11 +645,11 @@ label2 1-4   OK     -
 `,
 		},
 		"response with failures": {
-			results: []*control.PoolRankResult{
-				{PoolID: test.MockUUID(1), Ranks: "1-2"},
-				{PoolID: test.MockUUID(2), Ranks: "0"},
+			results: []*control.PoolRanksResult{
+				{ID: test.MockUUID(1), Ranks: "1-2"},
+				{ID: test.MockUUID(2), Ranks: "0"},
 				{
-					PoolID: test.MockUUID(2), Ranks: "1-2",
+					ID: test.MockUUID(2), Ranks: "1-2",
 					Status: -1, Msg: "fail1",
 				},
 			},

@@ -616,11 +616,11 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Exclude a target with single target idx",
-			"pool exclude 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1",
+			"pool exclude 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0-2 --target-idx 1",
 			strings.Join([]string{
-				printRequest(t, &control.PoolExcludeReq{
+				printRequest(t, &control.PoolRanksReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Rank:      0,
+					Ranks:     []ranklist.Rank{0, 1, 2},
 					TargetIdx: []uint32{1},
 					Force:     false,
 				}),
@@ -629,11 +629,11 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Exclude a target with multiple idx",
-			"pool exclude -f 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1,2,3",
+			"pool exclude -f 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0-2 --target-idx 1,2,3",
 			strings.Join([]string{
-				printRequest(t, &control.PoolExcludeReq{
+				printRequest(t, &control.PoolRanksReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Rank:      0,
+					Ranks:     []ranklist.Rank{0, 1, 2},
 					TargetIdx: []uint32{1, 2, 3},
 					Force:     true,
 				}),
@@ -642,11 +642,11 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Exclude a target with no idx given",
-			"pool exclude -f 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0",
+			"pool exclude -f 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0-2",
 			strings.Join([]string{
-				printRequest(t, &control.PoolExcludeReq{
+				printRequest(t, &control.PoolRanksReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Rank:      0,
+					Ranks:     []ranklist.Rank{0, 1, 2},
 					TargetIdx: []uint32{},
 					Force:     true,
 				}),
@@ -655,11 +655,11 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Drain a target with single target idx",
-			"pool drain 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1",
+			"pool drain 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0-2 --target-idx 1",
 			strings.Join([]string{
-				printRequest(t, &control.PoolDrainReq{
+				printRequest(t, &control.PoolRanksReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Rank:      0,
+					Ranks:     []ranklist.Rank{0, 1, 2},
 					TargetIdx: []uint32{1},
 				}),
 			}, " "),
@@ -667,11 +667,11 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Drain a target with multiple idx",
-			"pool drain 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1,2,3",
+			"pool drain 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0-2 --target-idx 1,2,3",
 			strings.Join([]string{
-				printRequest(t, &control.PoolDrainReq{
+				printRequest(t, &control.PoolRanksReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Rank:      0,
+					Ranks:     []ranklist.Rank{0, 1, 2},
 					TargetIdx: []uint32{1, 2, 3},
 				}),
 			}, " "),
@@ -679,11 +679,11 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Drain a target with no idx given",
-			"pool drain 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0",
+			"pool drain 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0-2",
 			strings.Join([]string{
-				printRequest(t, &control.PoolDrainReq{
+				printRequest(t, &control.PoolRanksReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Rank:      0,
+					Ranks:     []ranklist.Rank{0, 1, 2},
 					TargetIdx: []uint32{},
 				}),
 			}, " "),
@@ -720,11 +720,11 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Reintegrate a target with single target idx",
-			"pool reintegrate 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1",
+			"pool reintegrate 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0-1 --target-idx 1",
 			strings.Join([]string{
-				printRequest(t, &control.PoolReintegrateReq{
+				printRequest(t, &control.PoolRanksReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Rank:      0,
+					Ranks:     []ranklist.Rank{0, 1},
 					TargetIdx: []uint32{1},
 				}),
 			}, " "),
@@ -732,11 +732,11 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Reintegrate a target with multiple idx",
-			"pool reintegrate 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1,2,3",
+			"pool reintegrate 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0-1 --target-idx 1,2,3",
 			strings.Join([]string{
-				printRequest(t, &control.PoolReintegrateReq{
+				printRequest(t, &control.PoolRanksReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Rank:      0,
+					Ranks:     []ranklist.Rank{0, 1},
 					TargetIdx: []uint32{1, 2, 3},
 				}),
 			}, " "),
@@ -744,11 +744,11 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Reintegrate a target with no idx given",
-			"pool reintegrate 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0",
+			"pool reintegrate 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0-1",
 			strings.Join([]string{
-				printRequest(t, &control.PoolReintegrateReq{
+				printRequest(t, &control.PoolRanksReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Rank:      0,
+					Ranks:     []ranklist.Rank{0, 1},
 					TargetIdx: []uint32{},
 				}),
 			}, " "),
