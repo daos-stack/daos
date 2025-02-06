@@ -29,9 +29,12 @@ type (
 
 	// ExporterConfig defines the configuration for the Prometheus exporter.
 	ExporterConfig struct {
-		Port     int
-		Title    string
-		Register RegMonFn
+		Port          int
+		Title         string
+		Register      RegMonFn
+		AllowInsecure bool
+		HttpsCert     string
+		HttpsKey      string
 	}
 )
 
@@ -82,8 +85,15 @@ func StartExporter(ctx context.Context, log logging.Logger, cfg *ExporterConfig)
 	// http listener is a blocking call
 	go func() {
 		log.Infof("Listening on %s", listenAddress)
-		err := srv.ListenAndServe()
-		log.Infof("Prometheus web exporter stopped: %s", err.Error())
+		if cfg.AllowInsecure {
+			log.Infof("Prometheus web exporter started with insecure (http) mode")
+			err := srv.ListenAndServe()
+			log.Infof("Prometheus web exporter stopped: %s", err.Error())
+		} else {
+			log.Infof("Prometheus web exporter started with secure (https) mode")
+			err := srv.ListenAndServeTLS(cfg.HttpsCert, cfg.HttpsKey)
+			log.Infof("Prometheus web exporter stopped: %s", err.Error())
+		}
 	}()
 
 	return func() {

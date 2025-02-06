@@ -25,6 +25,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/telemetry"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/security"
 )
 
 type testInfoCacheParams struct {
@@ -539,7 +540,7 @@ func TestAgent_NewInfoCache(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
-
+			tc.cfg.TelemetryConfig = security.DefaultClientTelemetryConfig()
 			ic := NewInfoCache(test.Context(t), log, nil, tc.cfg)
 
 			test.AssertEqual(t, tc.expEnabled, ic.IsAttachInfoCacheEnabled(), "")
