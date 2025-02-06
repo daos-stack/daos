@@ -19,6 +19,8 @@ container:
   type: POSIX
   control_method: daos
 
+timeout: 180
+
 map_style_dataset:
   tree_height: 4
   subdirs: 3
