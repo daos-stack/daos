@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -535,9 +536,6 @@ ds_obj_coll_punch_remote(struct dtx_leader_handle *dlh, void *data, int idx,
 	ocpi->ocpi_api_flags = ocpi_parent->ocpi_api_flags;
 	ocpi->ocpi_map_ver = ocpi_parent->ocpi_map_ver;
 	ocpi->ocpi_flags = (exec_arg->flags | ocpi_parent->ocpi_flags) & ~ORF_LEADER;
-	ocpi->ocpi_bulk_tgt_sz = 0;
-	ocpi->ocpi_bulk_tgt_nr = 0;
-	ocpi->ocpi_tgt_bulk = NULL;
 	ocpi->ocpi_max_tgt_sz = ocpi_parent->ocpi_max_tgt_sz;
 	if (cursor->grp_nr < COLL_DISP_WIDTH_MIN) {
 		ocpi->ocpi_disp_width = cursor->grp_nr;

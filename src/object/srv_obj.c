@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -5611,8 +5612,6 @@ ds_obj_coll_punch_handler(crt_rpc_t *rpc)
 	struct obj_io_context		 ioc = { 0 };
 	struct dtx_coll_entry		*dce = NULL;
 	struct daos_coll_target		*dcts = NULL;
-	d_iov_t				 iov = { 0 };
-	crt_proc_t			 proc = NULL;
 	uint32_t			 dct_nr = 0;
 	uint32_t			 flags = 0;
 	uint32_t			 dtx_flags = DTX_TGT_COLL;
@@ -5622,7 +5621,6 @@ ds_obj_coll_punch_handler(crt_rpc_t *rpc)
 	daos_epoch_t			 tmp;
 	int				 rc;
 	int				 rc1;
-	int				 i;
 	bool				 need_abort = false;
 
 	D_DEBUG(DB_IO, "(%s) handling collective punch RPC %p for obj "
@@ -5641,14 +5639,8 @@ ds_obj_coll_punch_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		goto out;
 
-	if (ocpi->ocpi_flags & ORF_LEADER && ocpi->ocpi_bulk_tgt_sz > 0) {
-		rc = obj_coll_punch_bulk(rpc, &iov, &proc, &dcts, &dct_nr);
-		if (rc != 0)
-			goto out;
-	} else {
-		dcts = ocpi->ocpi_tgts.ca_arrays;
-		dct_nr = ocpi->ocpi_tgts.ca_count;
-	}
+	dcts = ocpi->ocpi_tgts.ca_arrays;
+	dct_nr = ocpi->ocpi_tgts.ca_count;
 
 	rc = obj_coll_punch_prep(ocpi, dcts, dct_nr, &dce);
 	if (rc != 0)
@@ -5777,30 +5769,19 @@ out:
 
 	DL_CDEBUG(rc != 0 && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART, DLOG_ERR, DB_IO, rc,
 		  "(%s) handled collective punch RPC %p for obj "DF_UOID" on XS %u/%u in "DF_UUID"/"
-		  DF_UUID"/"DF_UUID" with epc "DF_X64", pmv %u/%u, dti "DF_DTI", bulk_tgt_sz %u, "
-		  "bulk_tgt_nr %u, tgt_nr %u, forward width %u, forward depth %u, flags %x",
+		  DF_UUID"/"DF_UUID" with epc "DF_X64", pmv %u/%u, dti "DF_DTI", "
+		  "tgt_nr %u, forward width %u, forward depth %u, flags %x",
 		  (ocpi->ocpi_flags & ORF_LEADER) ? "leader" :
 		  (ocpi->ocpi_tgts.ca_count == 1 ? "non-leader" : "relay-engine"), rpc,
 		  DP_UOID(ocpi->ocpi_oid), dmi->dmi_xs_id, dmi->dmi_tgt_id,
 		  DP_UUID(ocpi->ocpi_po_uuid), DP_UUID(ocpi->ocpi_co_hdl),
-		  DP_UUID(ocpi->ocpi_co_uuid), ocpi->ocpi_epoch,
-		  ocpi->ocpi_map_ver, max_ver, DP_DTI(&ocpi->ocpi_xid), ocpi->ocpi_bulk_tgt_sz,
-		  ocpi->ocpi_bulk_tgt_nr, (unsigned int)ocpi->ocpi_tgts.ca_count,
+		  DP_UUID(ocpi->ocpi_co_uuid), ocpi->ocpi_epoch, ocpi->ocpi_map_ver, max_ver,
+		  DP_DTI(&ocpi->ocpi_xid), (unsigned int)ocpi->ocpi_tgts.ca_count,
 		  ocpi->ocpi_disp_width, ocpi->ocpi_disp_depth, ocpi->ocpi_flags);
 
 	obj_punch_complete(rpc, rc, max_ver);
 
 	dtx_coll_entry_put(dce);
-	if (proc != NULL) {
-		D_ASSERT(dcts != NULL);
-
-		crt_proc_reset(proc, iov.iov_buf, iov.iov_len, CRT_PROC_FREE);
-		for (i = 0; i < dct_nr; i++)
-			crt_proc_struct_daos_coll_target(proc, CRT_PROC_FREE, &dcts[i]);
-		crt_proc_destroy(proc);
-		D_FREE(dcts);
-		daos_iov_free(&iov);
-	}
 
 	/* It is no matter even if obj_ioc_begin() was not called. */
 	obj_ioc_end(&ioc, rc);

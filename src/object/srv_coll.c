@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -154,72 +155,6 @@ obj_coll_punch_disp(struct dtx_leader_handle *dlh, void *arg, int idx, dtx_sub_c
 
 	if (comp_cb != NULL)
 		comp_cb(dlh, idx, rc);
-
-	return rc;
-}
-
-int
-obj_coll_punch_bulk(crt_rpc_t *rpc, d_iov_t *iov, crt_proc_t *p_proc,
-		    struct daos_coll_target **p_dcts, uint32_t *dct_nr)
-{
-	struct obj_coll_punch_in	*ocpi = crt_req_get(rpc);
-	struct daos_coll_target		*dcts = NULL;
-	crt_proc_t			 proc = NULL;
-	d_sg_list_t			 sgl;
-	d_sg_list_t			*sgls = &sgl;
-	int				 rc = 0;
-	int				 i;
-	int				 j;
-
-	D_ALLOC(iov->iov_buf, ocpi->ocpi_bulk_tgt_sz);
-	if (iov->iov_buf == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	iov->iov_buf_len = ocpi->ocpi_bulk_tgt_sz;
-	iov->iov_len = ocpi->ocpi_bulk_tgt_sz;
-
-	sgl.sg_nr = 1;
-	sgl.sg_nr_out = 1;
-	sgl.sg_iovs = iov;
-
-	rc = obj_bulk_transfer(rpc, CRT_BULK_GET, false, &ocpi->ocpi_tgt_bulk, NULL, NULL,
-			       DAOS_HDL_INVAL, &sgls, 1, 1, NULL, NULL);
-	if (rc != 0) {
-		D_ERROR("Failed to prepare bulk transfer for coll_punch, size %u: "DF_RC"\n",
-			ocpi->ocpi_bulk_tgt_sz, DP_RC(rc));
-		goto out;
-	}
-
-	rc = crt_proc_create(dss_get_module_info()->dmi_ctx, iov->iov_buf, iov->iov_len,
-			     CRT_PROC_DECODE, &proc);
-	if (rc != 0)
-		goto out;
-
-	D_ALLOC_ARRAY(dcts, ocpi->ocpi_bulk_tgt_nr);
-	if (dcts == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	for (i = 0; i < ocpi->ocpi_bulk_tgt_nr; i++) {
-		rc = crt_proc_struct_daos_coll_target(proc, CRT_PROC_DECODE, &dcts[i]);
-		if (rc != 0) {
-			crt_proc_reset(proc, iov->iov_buf, iov->iov_len, CRT_PROC_FREE);
-			for (j = 0; j < i; j++)
-				crt_proc_struct_daos_coll_target(proc, CRT_PROC_FREE, &dcts[j]);
-			goto out;
-		}
-	}
-
-out:
-	if (rc != 0) {
-		D_FREE(dcts);
-		if (proc != NULL)
-			crt_proc_destroy(proc);
-		daos_iov_free(iov);
-	} else {
-		*p_proc = proc;
-		*p_dcts = dcts;
-		*dct_nr = ocpi->ocpi_bulk_tgt_nr;
-	}
 
 	return rc;
 }
