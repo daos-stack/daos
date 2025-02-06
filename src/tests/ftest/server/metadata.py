@@ -1,5 +1,6 @@
 """
   (C) Copyright 2019-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -9,7 +10,7 @@ from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
 from exception_utils import CommandFailure
 from ior_utils import IorCommand
-from job_manager_utils import get_job_manager
+from job_manager_utils import get_job_manager, stop_job_manager
 from thread_manager import ThreadManager
 
 
@@ -63,28 +64,12 @@ class ObjectMetadata(TestWithServers):
     def __init__(self, *args, **kwargs):
         """Initialize a TestWithServers object."""
         super().__init__(*args, **kwargs)
-        self.ior_managers = []
 
         # Minimum number of containers that should be able to be created
         self.created_containers_min = self.params.get("created_cont_min", "/run/metadata/*")
 
         # Number of created containers that should not be possible
         self.created_containers_limit = self.params.get("created_cont_max", "/run/metadata/*")
-
-    def pre_tear_down(self):
-        """Tear down steps to optionally run before tearDown().
-
-        Returns:
-            list: a list of error strings to report at the end of tearDown().
-
-        """
-        error_list = []
-        if self.ior_managers:
-            self.test_log.info("Stopping IOR job managers")
-            error_list = self._stop_managers(self.ior_managers, "IOR job manager")
-        else:
-            self.log.debug("no pre-teardown steps defined")
-        return error_list
 
     def create_pool(self, svc_ops_enabled=True):
         """Create a pool and display the svc ranks.
@@ -284,28 +269,25 @@ class ObjectMetadata(TestWithServers):
                 # Keep track of the number of sequential no space container
                 # create errors.  Once the max has been reached stop the loop.
                 if status:
+                    if in_failure:
+                        self.log.info(
+                            "Container: %d - [no space -> available] creation successful after %d"
+                            " sequential 'no space' error(s) ", loop + 1, sequential_fail_counter)
+                        in_failure = False
                     sequential_fail_counter = 0
                 else:
                     sequential_fail_counter += 1
+                    if not in_failure:
+                        self.log.info(
+                            "Container: %d - [available -> no space] detected new sequential "
+                            "'no space' error", loop + 1)
+                    in_failure = True
+
                 if sequential_fail_counter >= sequential_fail_max:
                     self.log.info(
-                        "Container %d - %d/%d sequential no space "
-                        "container create errors", sequential_fail_counter,
-                        sequential_fail_max, loop)
+                        "Container %d - [no space limit] reached %d/%d sequential 'no space' "
+                        "errors", loop + 1, sequential_fail_counter, sequential_fail_max)
                     break
-
-                if status and in_failure:
-                    self.log.info(
-                        "Container: %d - no space -> available "
-                        "transition, sequential no space failures: %d",
-                        loop, sequential_fail_counter)
-                    in_failure = False
-                elif not status and not in_failure:
-                    self.log.info(
-                        "Container: %d - available -> no space "
-                        "transition, sequential no space failures: %d",
-                        loop, sequential_fail_counter)
-                    in_failure = True
 
             except TestFail as error:
                 self.log.error(str(error))
@@ -320,17 +302,17 @@ class ObjectMetadata(TestWithServers):
                           self.created_containers_min)
             self.fail("Created too few containers")
         self.log.info(
-            "Successfully created %d / %d containers)", len(self.container), loop)
+            "Successfully created %d containers in %d loops)", len(self.container), loop + 1)
 
         # Phase 2 clean up some containers (expected to succeed)
-        msg = "Cleaning up {} containers after pool is full.".format(num_cont_to_destroy)
+        msg = (f"Cleaning up {num_cont_to_destroy}/{len(self.container)} containers after pool "
+               "is full.")
         self.log_step(msg)
         if not self.destroy_num_containers(num_cont_to_destroy):
             self.fail("Fail (unexpected container destroy error)")
 
-        # Do not destroy containers in teardown (destroy pool while metadata rdb is full)
-        for container in self.container:
-            container.skip_cleanup()
+        # The remaining containers are not directly destroyed in teardown due to
+        # 'register_cleanup: False' test yaml entry.  They are handled by the pool destroy.
         self.log.info("Leaving pool metadata rdb full (containers will not be destroyed)")
         self.log.info("Test passed")
 
@@ -469,6 +451,7 @@ class ObjectMetadata(TestWithServers):
         self.create_pool()
         files_per_thread = 400
         total_ior_threads = 5
+        ior_managers = []
 
         processes = self.params.get("slots", "/run/ior/clientslots/*")
 
@@ -487,18 +470,25 @@ class ObjectMetadata(TestWithServers):
                 ior_cmd.flags.value = self.params.get("ior{}flags".format(operation), "/run/ior/*")
 
                 # Define the job manager for the IOR command
-                self.ior_managers.append(
+                ior_managers.append(
                     get_job_manager(self, "Clush", ior_cmd))
-                env = ior_cmd.get_default_env(str(self.ior_managers[-1]))
-                self.ior_managers[-1].assign_hosts(self.hostlist_clients, self.workdir, None)
-                self.ior_managers[-1].assign_processes(processes)
-                self.ior_managers[-1].assign_environment(env)
-                self.ior_managers[-1].verbose = False
+                env = ior_cmd.get_default_env(str(ior_managers[-1]))
+                ior_managers[-1].assign_hosts(self.hostlist_clients, self.workdir, None)
+                ior_managers[-1].assign_processes(processes)
+                ior_managers[-1].assign_environment(env)
+                ior_managers[-1].verbose = False
+
+                # Disable cleanup methods for all ior commands.
+                ior_managers[-1].register_cleanup_method = None
 
                 # Add a thread for these IOR arguments
                 thread_manager.add(
-                    test=self, manager=self.ior_managers[-1], loops=files_per_thread)
+                    test=self, manager=ior_managers[-1], loops=files_per_thread)
                 self.log.info("Created %s thread %s", operation, index)
+
+            # Manually add one cleanup method for all ior threads
+            if operation == "write":
+                self.register_cleanup(stop_job_manager, job_manager=ior_managers[0])
 
             # Launch the IOR threads
             self.log.info("Launching %d IOR %s threads", thread_manager.qty, operation)
