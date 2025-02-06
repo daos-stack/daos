@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,7 +16,7 @@ static int		msg_counts[MSG_COUNT];
 static pthread_mutex_t	lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t	cond = PTHREAD_COND_INITIALIZER;
 
-#define NUM_THREADS 16
+#define NUM_THREADS 1
 #define STOP 1
 
 static int check_status(void *arg)
@@ -24,6 +25,8 @@ static int check_status(void *arg)
 
 	return (*status == STOP);
 }
+static int once = 1;
+static int pause_progress = 0;
 
 static void *progress(void *arg)
 {
@@ -33,7 +36,13 @@ static void *progress(void *arg)
 	__sync_fetch_and_add(status, -1);
 
 	do {
-		rc = crt_progress_cond(crt_ctx, 1000*1000, check_status,
+		if (pause_progress) {
+			while (pause_progress) {
+				sched_yield();
+			}
+			sleep(20);
+		}
+		rc = crt_progress_cond(crt_ctx, 0, check_status,
 				       status);
 		if (rc == -DER_TIMEDOUT)
 			sched_yield();
@@ -70,7 +79,16 @@ static void rpc_handler(crt_rpc_t *rpc)
 		}
 	}
 
+	printf("Replying....\n");
 	rc = crt_reply_send(rpc);
+	if (once) {
+		pause_progress = 1;
+		printf("You can stop the client now\n");
+		sleep(40);
+		pause_progress = 0;
+		once = 0;
+	}
+
 	if (rc != 0)
 		printf("Failed to send reply, rc = %d\n", rc);
 
@@ -108,6 +126,8 @@ int main(int argc, char **argv)
 	int                     rc;
 	int			i;
 	int                     thread_count;
+	crt_group_t		*grp;
+	char			*uri;
 
 	rc = d_log_init();
 	assert(rc == 0);
@@ -116,6 +136,14 @@ int main(int argc, char **argv)
 	if (rc != 0) {
 		printf("Could not start server, rc = %d", rc);
 		goto log_fini;
+	}
+
+	grp = crt_group_lookup("manyserver");
+
+	rc = crt_rank_self_set(0, 1);
+	if (rc != 0) {
+		D_ERROR("failed to set self rank\n");
+		goto fini;
 	}
 
 	rc = crt_proto_register(&my_proto_fmt_threaded_server);
@@ -127,6 +155,20 @@ int main(int argc, char **argv)
 	rc = crt_context_create(&crt_ctx);
 	if (rc != 0) {
 		printf("Failed to create context: " DF_RC "\n", DP_RC(rc));
+		goto fini;
+	}
+
+	rc = crt_rank_uri_get(grp, 0, 0, &uri);
+	if (rc != 0) {
+		D_ERROR("FAiled to get uri; rc=%d\n", rc);
+		goto fini;
+	}
+
+	printf("Server uri: %s\n", uri);
+
+	rc = crt_group_config_save(grp, true);
+	if (rc != 0) {
+		D_ERROR("Failed to save config file; rc = %d\n", rc);
 		goto fini;
 	}
 
