@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1454,8 +1455,8 @@ crt_hg_reply_send_cb(const struct hg_cb_info *hg_cbinfo)
 	 * see CART-146 for details
 	 */
 	if (hg_ret != HG_SUCCESS)
-		D_WARN("hg_cbinfo->ret: " DF_HG_RC ", opc: %#x.\n",
-		       DP_HG_RC(hg_ret), opc);
+		D_WARN("hg_cbinfo->ret: " DF_HG_RC ", opc: %#x from %s.\n", DP_HG_RC(hg_ret), opc,
+		       crt_rpc_priv_get_origin_addr(rpc_priv));
 
 	/* corresponding to the crt_req_addref in crt_hg_reply_send */
 	RPC_DECREF(rpc_priv);
@@ -1866,4 +1867,41 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 
 out:
 	return rc;
+}
+
+char *
+crt_rpc_priv_get_origin_addr(struct crt_rpc_priv *rpc_priv)
+{
+	const struct hg_info *hg_info;
+	char                  addr[48];
+	hg_size_t             addr_size = 48;
+	int                   rc;
+
+	if (rpc_priv->crp_orig_uri != NULL)
+		return rpc_priv->crp_orig_uri;
+
+	hg_info = HG_Get_info(rpc_priv->crp_hg_hdl);
+	if (hg_info == NULL)
+		return "NOINFO";
+
+	rc = HG_Addr_to_string(hg_info->hg_class, addr, (hg_size_t *)&addr_size, hg_info->addr);
+	if (rc != 0)
+		return "NONE";
+
+	D_ALLOC(rpc_priv->crp_orig_uri, addr_size);
+	if (rpc_priv->crp_orig_uri == NULL)
+		return "NOMEM";
+
+	memcpy(rpc_priv->crp_orig_uri, addr, addr_size);
+
+	return rpc_priv->crp_orig_uri;
+}
+
+char *
+crt_req_origin_addr_get(crt_rpc_t *rpc_pub)
+{
+	struct crt_rpc_priv *rpc_priv;
+
+	rpc_priv = container_of(rpc_pub, struct crt_rpc_priv, crp_pub);
+	return crt_rpc_priv_get_origin_addr(rpc_priv);
 }
