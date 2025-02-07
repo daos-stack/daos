@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -432,4 +433,12 @@ func MustLogContext(t *testing.T, log logging.Logger) context.Context {
 		t.Fatal(err)
 	}
 	return ctx
+}
+
+// JoinArgs creates a new string slice from a base string and optional
+// additional string arguments. Does not modify the base string.
+func JoinArgs(base []string, args ...string) []string {
+	joined := make([]string, len(base))
+	copy(joined, base)
+	return append(joined, args...)
 }
