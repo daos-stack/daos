@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2022-2025 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -6129,12 +6129,13 @@ futimens(int fd, const struct timespec times[2])
 static int
 new_fcntl(int fd, int cmd, ...)
 {
-	int     fd_directed, param, OrgFunc = 1;
+	int     fd_directed, OrgFunc = 1;
 	int     next_dirfd, next_fd, rc;
+	void   *param;
 	va_list arg;
 
 	va_start(arg, cmd);
-	param = va_arg(arg, int);
+	param = va_arg(arg, void *);
 	va_end(arg);
 
 	if (fd < FD_FILE_BASE && d_compatible_mode)
@@ -6209,7 +6210,16 @@ new_fcntl(int fd, int cmd, ...)
 		if (!d_hook_enabled)
 			return libc_fcntl(fd, cmd, param);
 
-		return libc_fcntl(fd, cmd, param);
+                if (!d_hook_enabled)
+                        return libc_fcntl(fd, cmd, param);
+
+                fd_directed = d_get_fd_redirected(fd);
+                if (fd_directed >= FD_FILE_BASE) {
+                        errno = ENOTSUP;
+                        return (-1);
+                } else {
+                        return libc_fcntl(fd, cmd, param);
+                }
 	default:
 		return libc_fcntl(fd, cmd);
 	}
