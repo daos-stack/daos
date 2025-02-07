@@ -1,5 +1,5 @@
 avocado-framework==82
-avocado-framework-plugin-result-html==82
+avocado-framework-plugin-result-html==109.0
 avocado-framework-plugin-varianter-yaml-to-mux==82
 clustershell
 paramiko
