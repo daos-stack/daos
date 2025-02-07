@@ -3,10 +3,10 @@ pyenchant
 ## flake8 6 removed --diff option which breaks flake precommit hook.
 ## https://github.com/pycqa/flake8/issues/1389 https://github.com/PyCQA/flake8/pull/1720
 flake8==7.1.1
-isort==5.13.2
-pylint==3.3.2
+isort==6.0.0
+pylint==3.3.4
 yamllint==1.35.1
-codespell==2.3.0
+codespell==2.4.1
 # Used by ci/jira_query.py which pip installs it standalone.
 jira
 torch>=2.2.0
