@@ -26,6 +26,7 @@ static int check_status(void *arg)
 	return (*status == STOP);
 }
 static int once = 1;
+static int freq = 5;
 static int pause_progress = 0;
 
 static int get_pause(void)
@@ -53,7 +54,7 @@ static void *progress(void *arg)
 			while (get_pause()) {
 				sched_yield();
 			}
-			sleep(20);
+			sleep(6);
 			printf("Progress resumed\n");
 			fflush(stdout);
 		}
@@ -94,16 +95,20 @@ static void rpc_handler(crt_rpc_t *rpc)
 		}
 	}
 
+	if (!once && (rand() % freq) == 0) {
+		freq += 50;
+		once = 1;
+	}
+
 	if (once) {
 		printf("Telling progress to pause\n");
 		set_pause(1);
-		sleep(5);
+		sleep(2);
 	}
-	printf("Replying....\n");
 	rc = crt_reply_send(rpc);
 	if (once) {
 		printf("You can stop the client now\n");
-		sleep(40);
+		sleep(10);
 		printf("Unpause\n");
 		set_pause(0);
 		once = 0;
