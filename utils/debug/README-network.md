@@ -64,4 +64,4 @@ To test Mercury:
 On the server a file `port.cfg` is generated which should be copied on the client.
 
 To test CART:
-- `self-test -u --group-name daos_server --message-size '(0 0)' --repetitions 1 --endpoint "0:0-7" `
+- `self-test -u --no-sync --group-name daos_server --message-size '(0 0)' --repetitions 1 --endpoint "0:0-7" `
