@@ -20,6 +20,7 @@ import (
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/cmd/daos/pretty"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/lib/ui"
@@ -222,14 +223,14 @@ func queryContainer(poolUUID, contUUID uuid.UUID, poolHandle, contHandle C.daos_
 	return ci, nil
 }
 
-func (cmd *containerBaseCmd) connectPool(flags C.uint, ap *C.struct_cmd_args_s) (func(), error) {
+func (cmd *containerBaseCmd) connectPool(flags daos.PoolConnectFlag, ap *C.struct_cmd_args_s) (func(), error) {
 	if err := cmd.poolBaseCmd.connectPool(flags); err != nil {
 		return nil, err
 	}
 
 	if ap != nil {
 		ap.pool = cmd.cPoolHandle
-		if err := copyUUID(&ap.p_uuid, cmd.poolUUID); err != nil {
+		if err := copyUUID(&ap.p_uuid, cmd.pool.UUID()); err != nil {
 			cmd.disconnectPool()
 			return nil, err
 		}
@@ -300,7 +301,7 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		cmd.poolBaseCmd.Args.Pool.UUID = pu
 	}
 
-	disconnectPool, err := cmd.connectPool(C.DAOS_PC_RW, ap)
+	disconnectPool, err := cmd.connectPool(daos.PoolConnectFlagReadWrite, ap)
 	if err != nil {
 		return err
 	}
@@ -318,7 +319,7 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	defer cmd.closeContainer()
 
 	var ci *daos.ContainerInfo
-	ci, err = queryContainer(cmd.poolUUID, cmd.contUUID, cmd.cPoolHandle, cmd.cContHandle)
+	ci, err = queryContainer(cmd.pool.UUID(), cmd.contUUID, cmd.cPoolHandle, cmd.cContHandle)
 	if err != nil {
 		if errors.Cause(err) != daos.NoPermission {
 			return errors.Wrapf(err, "failed to query new container %s", contID)
@@ -328,7 +329,7 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		cmd.Errorf("container %s was created, but query failed", contID)
 
 		ci = new(daos.ContainerInfo)
-		ci.PoolUUID = cmd.poolUUID
+		ci.PoolUUID = cmd.pool.UUID()
 		ci.Type = cmd.Type.String()
 		ci.ContainerUUID = cmd.contUUID
 		ci.ContainerLabel = cmd.Args.Label
@@ -407,9 +408,9 @@ func (cmd *containerCreateCmd) contCreate() (string, error) {
 	}
 
 	if len(cmd.Attrs.ParsedProps) != 0 {
-		attrs := make(attrList, 0, len(cmd.Attrs.ParsedProps))
+		attrs := make(daos.AttributeList, 0, len(cmd.Attrs.ParsedProps))
 		for key, val := range cmd.Attrs.ParsedProps {
-			attrs = append(attrs, &attribute{
+			attrs = append(attrs, &daos.Attribute{
 				Name:  key,
 				Value: []byte(val),
 			})
@@ -628,7 +629,7 @@ func (cmd *existingContainerCmd) resolveAndConnect(contFlags C.uint, ap *C.struc
 	}
 
 	var cleanupPool func()
-	cleanupPool, err = cmd.connectPool(C.DAOS_PC_RO, ap)
+	cleanupPool, err = cmd.connectPool(daos.PoolConnectFlagReadOnly, ap)
 	if err != nil {
 		return
 	}
@@ -652,7 +653,7 @@ func (cmd *existingContainerCmd) resolveAndConnect(contFlags C.uint, ap *C.struc
 	}, nil
 }
 
-func (cmd *existingContainerCmd) getAttr(name string) (*attribute, error) {
+func (cmd *existingContainerCmd) getAttr(name string) (*daos.Attribute, error) {
 	return getDaosAttribute(cmd.cContHandle, contAttr, name)
 }
 
@@ -732,7 +733,7 @@ func printContainers(out io.Writer, contIDs []*ContainerID) {
 }
 
 func (cmd *containerListCmd) Execute(_ []string) error {
-	cleanup, err := cmd.resolveAndConnect(C.DAOS_PC_RO, nil)
+	cleanup, err := cmd.resolveAndConnect(daos.PoolConnectFlagReadOnly, nil)
 	if err != nil {
 		return err
 	}
@@ -991,7 +992,7 @@ func (cmd *containerQueryCmd) Execute(_ []string) error {
 	}
 	defer cleanup()
 
-	ci, err := queryContainer(cmd.poolUUID, cmd.contUUID, cmd.cPoolHandle, cmd.cContHandle)
+	ci, err := queryContainer(cmd.pool.UUID(), cmd.contUUID, cmd.cPoolHandle, cmd.cContHandle)
 	if err != nil {
 		return errors.Wrapf(err,
 			"failed to query container %s",
@@ -1124,14 +1125,14 @@ func (cmd *containerListAttrsCmd) Execute(args []string) error {
 
 	if cmd.JSONOutputEnabled() {
 		if cmd.Verbose {
-			return cmd.OutputJSON(attrs.asMap(), nil)
+			return cmd.OutputJSON(attrs.AsMap(), nil)
 		}
-		return cmd.OutputJSON(attrs.asList(), nil)
+		return cmd.OutputJSON(attrs.AsList(), nil)
 	}
 
 	var bld strings.Builder
 	title := fmt.Sprintf("Attributes for container %s:", cmd.ContainerID())
-	printAttributes(&bld, title, attrs...)
+	pretty.PrintAttributes(&bld, title, attrs...)
 
 	cmd.Info(bld.String())
 
@@ -1209,7 +1210,7 @@ func (cmd *containerGetAttrCmd) Execute(args []string) error {
 	}
 	defer cleanup()
 
-	var attrs attrList
+	var attrs daos.AttributeList
 	if len(cmd.Args.Attrs.ParsedProps) == 0 {
 		attrs, err = listDaosAttributes(cmd.cContHandle, contAttr, true)
 	} else {
@@ -1230,7 +1231,7 @@ func (cmd *containerGetAttrCmd) Execute(args []string) error {
 
 	var bld strings.Builder
 	title := fmt.Sprintf("Attributes for container %s:", cmd.ContainerID())
-	printAttributes(&bld, title, attrs...)
+	pretty.PrintAttributes(&bld, title, attrs...)
 
 	cmd.Info(bld.String())
 
@@ -1279,9 +1280,9 @@ func (cmd *containerSetAttrCmd) Execute(args []string) error {
 	}
 	defer cleanup()
 
-	attrs := make(attrList, 0, len(cmd.Args.Attrs.ParsedProps))
+	attrs := make(daos.AttributeList, 0, len(cmd.Args.Attrs.ParsedProps))
 	for key, val := range cmd.Args.Attrs.ParsedProps {
-		attrs = append(attrs, &attribute{
+		attrs = append(attrs, &daos.Attribute{
 			Name:  key,
 			Value: []byte(val),
 		})
@@ -1473,7 +1474,7 @@ func (f *ContainerID) Complete(match string) (comps []flags.Completion) {
 	}
 	defer fini()
 
-	cleanup, err := pf.resolveAndConnect(C.DAOS_PC_RO, nil)
+	cleanup, err := pf.resolveAndConnect(daos.PoolConnectFlagReadOnly, nil)
 	if err != nil {
 		return
 	}

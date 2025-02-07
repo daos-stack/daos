@@ -5562,6 +5562,8 @@ class AllocFailTestRun():
                                          delete=False) as log_file:
             self.log_file = log_file.name
             self._env['D_LOG_FILE'] = self.log_file
+            with open(log_file.name, 'w', encoding='utf-8') as lf:
+                lf.write(f'cmd: {" ".join(cmd)}\n')
 
     def __str__(self):
         cmd_text = ' '.join(self._cmd)
