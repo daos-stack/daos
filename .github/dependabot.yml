@@ -5,14 +5,14 @@ updates:
       - /utils/ansible/ftest/
       - /utils/cq/
       - /
+    ignore:
+      - dependency-name: "avocado-framework*"
     schedule:
       interval: daily
     groups:
       python-packages:
         patterns:
           - "*"
-        exclude-patterns:
-          - "avocado-*"
   - package-ecosystem: github-actions
     directory: /
     schedule:
