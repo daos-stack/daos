@@ -796,6 +796,7 @@ ds_mgmt_drpc_pool_exclude(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out_svc, rc = -DER_NOMEM);
 
 	for (i = 0; i < req->n_ranks; i++) {
+		D_INFO("change_target_state: %d\n", req->ranks[i]);
 		rc =
 		    pool_change_target_state(req->id, svc_ranks, req->n_target_idx, req->target_idx,
 					     req->ranks[i], PO_COMP_ST_DOWN, 0 /* scm_size */,
