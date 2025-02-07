@@ -164,13 +164,13 @@ is_rebuild_global_done(struct rebuild_global_pool_tracker *rgt)
 static bool
 is_rebuild_phase_mostly_done(int engines_done_ct, int engines_total_ct)
 {
-	const int MIN_WAIT_CT = 1;
+	const int MIN_WAIT_CT = 2;
 	const int MAX_WAIT_CT = 20;
 	int       wait_ct_threshold;
 	int       engines_waiting_ct = engines_total_ct - engines_done_ct;
 
 	/* When is the global operation "mostly done" (e.g., waiting for 20 or fewer engines)? */
-	wait_ct_threshold = engines_done_ct - .95 * engines_total_ct;
+	wait_ct_threshold = .05 * engines_total_ct;
 	wait_ct_threshold = max(MIN_WAIT_CT, wait_ct_threshold);
 	wait_ct_threshold = min(MAX_WAIT_CT, wait_ct_threshold);
 
