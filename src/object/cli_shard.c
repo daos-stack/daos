@@ -825,6 +825,10 @@ dc_rw_cb(tse_task_t *task, void *arg)
 			D_INFO("rpc %p got DER_STALE, pool map update needed\n",
 			       rw_args->rpc);
 			D_GOTO(out, rc);
+		} else if (rc == -DER_BULK_CONNECT) {
+			D_INFO("rpc %p got DER_BULK_CONNECT, client needs to ping targets\n",
+			       rw_args->rpc);
+			D_GOTO(out, rc);
 		}
 
 		if (rc == -DER_OVERLOAD_RETRY) {
