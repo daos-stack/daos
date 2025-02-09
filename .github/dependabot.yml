@@ -23,3 +23,5 @@ updates:
           - "*"
     assignees:
       - daos-stack/actions-watchers
+    commit-message:
+      prefix: "Doc-only: true \n"
