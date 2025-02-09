@@ -84,8 +84,10 @@ extern struct dss_module_key vos_module_key;
 #define VOS_BLK_SZ		(1UL << VOS_BLK_SHIFT) /* bytes */
 #define VOS_BLOB_HDR_BLKS	1	/* block */
 
-/** Up to 1 million lid entries split into 2048 expansion slots */
-#define DTX_ARRAY_LEN		(1 << 20) /* Total array slots for DTX lid */
+/** Up to (1 << vos_dtx_array_size_bits) lid entries split into 2048 expansion slots */
+extern uint32_t			vos_dtx_array_size_bits;
+#define VOS_DTX_ARRAY_MIN	20
+#define VOS_DTX_ARRAY_MAX	23
 #define DTX_ARRAY_NR		(1 << 11)  /* Number of expansion arrays */
 
 enum {

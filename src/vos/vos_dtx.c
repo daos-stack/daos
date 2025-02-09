@@ -24,6 +24,8 @@
 #define DTX_ACT_BLOB_MAGIC	0x14130a2b
 #define DTX_CMT_BLOB_MAGIC	0x2502191c
 
+uint32_t	vos_dtx_array_size_bits;
+
 enum {
 	DTX_UMOFF_ILOG		= (1 << 0),
 	DTX_UMOFF_SVT		= (1 << 1),
@@ -3588,7 +3590,7 @@ vos_dtx_cache_reset(daos_handle_t coh, bool force)
 	if (cont->vc_dtx_array)
 		lrua_array_free(cont->vc_dtx_array);
 
-	rc = lrua_array_alloc(&cont->vc_dtx_array, DTX_ARRAY_LEN, DTX_ARRAY_NR,
+	rc = lrua_array_alloc(&cont->vc_dtx_array, 1 << vos_dtx_array_size_bits, DTX_ARRAY_NR,
 			      sizeof(struct vos_dtx_act_ent), LRU_FLAG_REUSE_UNIQUE,
 			      &lru_dtx_cache_cbs, vos_tls_get(false));
 	if (rc != 0) {
