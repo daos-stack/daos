@@ -38,9 +38,7 @@ pool:
   nvme_size: 54000000000
   svcn: 4
 container:
-  control_method: API
-  properties:
-    enable_checksum: true
+  properties: cksum:crc16,cksum_size:16384
 test_sequence:
   dmg_cmd_test:
     # Rank list, target_list, Pass/Fail Condition
