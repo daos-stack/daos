@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1252,7 +1253,7 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 		D_ASSERTF(d_list_empty(&rpc_priv->crp_tmp_link_timeout),
 			  "already on timeout list\n");
 		d_list_add_tail(&rpc_priv->crp_tmp_link_timeout, &timeout_list);
-	};
+	}
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
 	/* handle the timeout RPCs */
@@ -1776,39 +1777,6 @@ crt_context_empty(crt_provider_t provider, int locked)
 	return rc;
 }
 
-static int64_t
-crt_exec_progress_cb(struct crt_context *ctx, int64_t timeout)
-{
-	struct crt_prog_cb_priv	*cbs_prog;
-	crt_progress_cb		 cb_func;
-	void			*cb_args;
-	size_t			 cbs_size, i;
-	int			 ctx_idx;
-	int			 rc;
-
-	if (unlikely(crt_plugin_gdata.cpg_inited == 0 || ctx == NULL))
-		return timeout;
-
-	rc = crt_context_idx(ctx, &ctx_idx);
-	if (unlikely(rc)) {
-		D_ERROR("crt_context_idx() failed, rc: %d.\n", rc);
-		return timeout;
-	}
-
-	cbs_size = crt_plugin_gdata.cpg_prog_size[ctx_idx];
-	cbs_prog = crt_plugin_gdata.cpg_prog_cbs[ctx_idx];
-
-	for (i = 0; i < cbs_size; i++) {
-		cb_func = cbs_prog[i].cpcp_func;
-		cb_args = cbs_prog[i].cpcp_args;
-		/* check for and execute progress callbacks here */
-		if (cb_func != NULL)
-			timeout = cb_func(ctx, timeout, cb_args);
-	}
-
-	return timeout;
-}
-
 int
 crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
 		  crt_progress_cond_cb_t cond_cb, void *arg)
@@ -1858,7 +1826,8 @@ crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
 	/** loop until callback returns non-null value */
 	while ((rc = cond_cb(arg)) == 0) {
 		crt_context_timeout_check(ctx);
-		timeout = crt_exec_progress_cb(ctx, timeout);
+		if (ctx->cc_prog_cb != NULL)
+			timeout = ctx->cc_prog_cb(ctx, timeout, ctx->cc_prog_cb_arg);
 
 		if (timeout < 0) {
 			/**
@@ -1930,7 +1899,8 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout)
 	 * progress
 	 */
 	crt_context_timeout_check(ctx);
-	timeout = crt_exec_progress_cb(ctx, timeout);
+	if (ctx->cc_prog_cb != NULL)
+		timeout = ctx->cc_prog_cb(ctx, timeout, ctx->cc_prog_cb_arg);
 
 	if (timeout != 0 && (rc == 0 || rc == -DER_TIMEDOUT)) {
 		/** call progress once again with the real timeout */
@@ -1950,93 +1920,38 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout)
 int
 crt_register_progress_cb(crt_progress_cb func, int ctx_idx, void *args)
 {
-	struct crt_prog_cb_priv	*cbs_prog;
-	size_t i, cbs_size;
-	int rc = 0;
+	struct crt_context *ctx;
+	int                 rc;
 
 	if (ctx_idx >= CRT_SRV_CONTEXT_NUM) {
 		D_ERROR("ctx_idx %d >= %d\n", ctx_idx, CRT_SRV_CONTEXT_NUM);
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(error, rc = -DER_INVAL);
 	}
 
-	D_MUTEX_LOCK(&crt_plugin_gdata.cpg_mutex);
-
-	cbs_size = crt_plugin_gdata.cpg_prog_size[ctx_idx];
-	cbs_prog = crt_plugin_gdata.cpg_prog_cbs[ctx_idx];
-
-	for (i = 0; i < cbs_size; i++) {
-		if (cbs_prog[i].cpcp_func == func &&
-		    cbs_prog[i].cpcp_args == args) {
-			D_GOTO(out_unlock, rc = -DER_EXIST);
-		}
+	ctx = crt_context_lookup(ctx_idx);
+	if (ctx == NULL) {
+		D_ERROR("crt_context_lookup(%d) failed.\n", ctx_idx);
+		D_GOTO(error, rc = -DER_NONEXIST);
 	}
 
-	for (i = 0; i < cbs_size; i++) {
-		if (cbs_prog[i].cpcp_func == NULL) {
-			cbs_prog[i].cpcp_args = args;
-			cbs_prog[i].cpcp_func = func;
-			D_GOTO(out_unlock, rc = 0);
-		}
-	}
+	D_MUTEX_LOCK(&ctx->cc_mutex);
+	ctx->cc_prog_cb     = func;
+	ctx->cc_prog_cb_arg = args;
+	D_MUTEX_UNLOCK(&ctx->cc_mutex);
 
-	D_FREE(crt_plugin_gdata.cpg_prog_cbs_old[ctx_idx]);
+	return 0;
 
-	crt_plugin_gdata.cpg_prog_cbs_old[ctx_idx] = cbs_prog;
-	cbs_size += CRT_CALLBACKS_NUM;
-
-	D_ALLOC_ARRAY(cbs_prog, cbs_size);
-	if (cbs_prog == NULL) {
-		crt_plugin_gdata.cpg_prog_cbs_old[ctx_idx] = NULL;
-		D_GOTO(out_unlock, rc = -DER_NOMEM);
-	}
-
-	if (i > 0)
-		memcpy(cbs_prog, crt_plugin_gdata.cpg_prog_cbs_old[ctx_idx],
-		       i * sizeof(*cbs_prog));
-	cbs_prog[i].cpcp_args = args;
-	cbs_prog[i].cpcp_func = func;
-
-	crt_plugin_gdata.cpg_prog_cbs[ctx_idx]  = cbs_prog;
-	crt_plugin_gdata.cpg_prog_size[ctx_idx] = cbs_size;
-
-out_unlock:
-	D_MUTEX_UNLOCK(&crt_plugin_gdata.cpg_mutex);
-out:
+error:
 	return rc;
 }
 
 int
 crt_unregister_progress_cb(crt_progress_cb func, int ctx_idx, void *args)
 {
-	struct crt_prog_cb_priv	*cbs_prog;
-	size_t i, cbs_size;
-	int rc = -DER_NONEXIST;
+	(void)func;
+	(void)args;
 
-	if (ctx_idx >= CRT_SRV_CONTEXT_NUM) {
-		D_ERROR("ctx_idx %d >= %d\n", ctx_idx, CRT_SRV_CONTEXT_NUM);
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	D_MUTEX_LOCK(&crt_plugin_gdata.cpg_mutex);
-
-	cbs_size = crt_plugin_gdata.cpg_prog_size[ctx_idx];
-	cbs_prog = crt_plugin_gdata.cpg_prog_cbs[ctx_idx];
-
-	for (i = 0; i < cbs_size; i++) {
-		if (cbs_prog[i].cpcp_func == func &&
-		    cbs_prog[i].cpcp_args == args) {
-			cbs_prog[i].cpcp_func = NULL;
-			cbs_prog[i].cpcp_args = NULL;
-			D_GOTO(out_unlock, rc = 0);
-		}
-	}
-
-out_unlock:
-	D_FREE(crt_plugin_gdata.cpg_prog_cbs_old[ctx_idx]);
-
-	D_MUTEX_UNLOCK(&crt_plugin_gdata.cpg_mutex);
-out:
-	return rc;
+	return crt_register_progress_cb(NULL, ctx_idx, NULL);
 }
 
 int

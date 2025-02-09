@@ -177,11 +177,6 @@ struct crt_gdata {
 
 extern struct crt_gdata		crt_gdata;
 
-struct crt_prog_cb_priv {
-	crt_progress_cb		 cpcp_func;
-	void			*cpcp_args;
-};
-
 struct crt_event_cb_priv {
 	crt_event_cb		 cecp_func;
 	void			*cecp_args;
@@ -355,10 +350,6 @@ crt_env_dump(void)
 
 /* structure of global fault tolerance data */
 struct crt_plugin_gdata {
-	/* list of progress callbacks */
-	size_t				 cpg_prog_size[CRT_SRV_CONTEXT_NUM];
-	struct crt_prog_cb_priv		*cpg_prog_cbs[CRT_SRV_CONTEXT_NUM];
-	struct crt_prog_cb_priv		*cpg_prog_cbs_old[CRT_SRV_CONTEXT_NUM];
 	/* list of event notification callbacks */
 	size_t				 cpg_event_size;
 	struct crt_event_cb_priv	*cpg_event_cbs;
@@ -402,6 +393,10 @@ struct crt_context {
 	void			*cc_rpc_cb_arg;
 	crt_rpc_task_t		 cc_rpc_cb;	/** rpc callback */
 	crt_rpc_task_t		 cc_iv_resp_cb;
+
+	/* progress callback */
+	void                    *cc_prog_cb_arg;
+	crt_progress_cb          cc_prog_cb;
 
 	/** RPC tracking */
 	/** in-flight endpoint tracking hash table */
