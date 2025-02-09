@@ -1610,9 +1610,24 @@ crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
 
 	D_ASSERT(hg_ctx != NULL && hg_ctx->chc_bulkcla != NULL);
 	D_ASSERT(sgl != NULL && bulk_hdl != NULL);
-	D_ASSERT(bulk_perm == CRT_BULK_RW || bulk_perm == CRT_BULK_RO);
 
-	flags = (bulk_perm == CRT_BULK_RW) ? HG_BULK_READWRITE : HG_BULK_READ_ONLY;
+	switch (bulk_perm) {
+	case CRT_BULK_RW:
+		flags = HG_BULK_READWRITE;
+		break;
+	case CRT_BULK_WO:
+		flags = HG_BULK_WRITE_ONLY;
+		break;
+	case CRT_BULK_RO:
+		flags = HG_BULK_READ_ONLY;
+		break;
+	default:
+		D_ASSERT(bulk_perm == CRT_BULK_RW || bulk_perm == CRT_BULK_RO ||
+			 bulk_perm == CRT_BULK_WO);
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Invalid permissions");
+		return rc;
+	}
 
 	if (sgl->sg_nr <= CRT_HG_IOVN_STACK) {
 		buf_sizes = buf_sizes_stack;
