@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -667,7 +668,6 @@ vos_obj_hold(struct vos_container *cont, daos_unit_oid_t oid, daos_epoch_range_t
 		} else if (rc == -DER_NONEXIST) {
 			if (!create)
 				goto failed;
-			rc = 0;
 		} else if (rc) {
 			goto failed;
 		}
