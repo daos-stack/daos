@@ -180,6 +180,7 @@ def define_mercury(reqs):
                      '-DBUILD_TESTING_UNIT:BOOL=OFF',
                      '-DMERCURY_USE_BOOST_PP:BOOL=ON',
                      '-DMERCURY_USE_CHECKSUMS:BOOL=OFF',
+                     '-DMERCURY_ENABLE_COUNTERS:BOOL=ON',
                      '-DNA_USE_SM:BOOL=ON',
                      '-DNA_USE_OFI:BOOL=ON',
                      '-DNA_USE_UCX:BOOL=OFF',
