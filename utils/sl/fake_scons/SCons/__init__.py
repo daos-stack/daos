@@ -19,6 +19,8 @@
 # SOFTWARE.
 """Fake SCons"""
 
+__version__ = []
+
 __all__ = ['Script',
            'Action',
            'Variables',
