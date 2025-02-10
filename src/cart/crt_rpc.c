@@ -1784,9 +1784,9 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv
 				  rpc_priv->crp_req_hdr.cch_src_deadline_sec, timeout);
 
 			/*
-			 * TODO: need a better way in future to handle an edge case where a client can be
-			 * running ahead of the server, but within hlc_epsilon allowed. Also need to
-			 * account for 1 second granularity of deadlines.
+			 * TODO: need a better way in future to handle an edge case where a client
+			 * can be running ahead of the server, but within hlc_epsilon allowed. Also
+			 * need to account for 1 second granularity of deadlines.
 			 */
 			if (timeout == 0)
 				timeout = 1;

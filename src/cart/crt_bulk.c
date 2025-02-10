@@ -183,8 +183,7 @@ crt_bulk_desc_expired(struct crt_bulk_desc *bulk_desc)
 
 	/* Deadline expired */
 	if (now.tv_sec > rpc_priv->crp_req_hdr.cch_src_deadline_sec) {
-		RPC_TRACE(DB_NET, rpc_priv,
-			  "Deadline expired for bulk. Deadline=%d, now=%ld\n",
+		RPC_TRACE(DB_NET, rpc_priv, "Deadline expired for bulk. Deadline=%d, now=%ld\n",
 			  rpc_priv->crp_req_hdr.cch_src_deadline_sec, now.tv_sec);
 		return true;
 	}
