@@ -1,5 +1,5 @@
 """
-(C) Copyright 2019-2024 Intel Corporation.
+(C) Copyright 2019-2025 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -22,8 +22,7 @@ from command_utils_base import EnvironmentVariables
 from daos_racer_utils import DaosRacerCommand
 from data_mover_utils import DcpCommand, FsCopy
 from dfuse_utils import get_dfuse
-from dmg_utils import (check_system_query_status, get_storage_query_device_info,
-                       get_storage_query_device_uuids)
+from dmg_utils import (check_system_query_status, get_storage_query_device_info)
 from duns_utils import format_path
 from exception_utils import CommandFailure
 from fio_utils import FioCommand
