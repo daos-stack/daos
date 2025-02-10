@@ -3938,9 +3938,11 @@ static int
 obj_tree_lookup_cont(daos_handle_t toh, uuid_t co_uuid, daos_handle_t *cont_toh)
 {
 	struct tree_cache_root	*cont_root = NULL;
-	d_iov_t			key_iov;
-	d_iov_t			tmp_iov;
-	int			rc;
+	d_iov_t			 key_iov;
+	d_iov_t			 tmp_iov;
+	daos_handle_t		 migrated_toh;
+	struct umem_attr	 uma;
+	int			 rc;
 
 	D_ASSERT(daos_handle_is_valid(toh));
 
@@ -3957,9 +3959,17 @@ obj_tree_lookup_cont(daos_handle_t toh, uuid_t co_uuid, daos_handle_t *cont_toh)
 		return rc;
 	}
 
+	memset(&uma, 0, sizeof(uma));
+	uma.uma_id = UMEM_CLASS_VMEM;
 	cont_root = tmp_iov.iov_buf;
-	*cont_toh = cont_root->tcr_root_hdl;
-	return 0;
+	D_ASSERT(daos_handle_is_valid(cont_root->tcr_root_hdl));
+	rc = dbtree_open_inplace(&cont_root->tcr_btr_root, &uma, &migrated_toh);
+	if (rc == 0)
+		*cont_toh = migrated_toh;
+	else
+		DL_ERROR(rc, DF_UUID" failed to open cont migrated tree", DP_UUID(co_uuid));
+
+	return rc;
 }
 
 static int
@@ -4040,10 +4050,11 @@ reint_post_cont_iter_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	vos_iter_param_t		 param = { 0 };
 	struct vos_iter_anchors		 anchor = { 0 };
 	daos_handle_t			 toh = arg->ria_migrated_tree_hdl;
+	daos_handle_t			 cont_toh = { 0 };
 	struct ds_cont_child		*cont_child = NULL;
 	int				 rc;
 
-	rc = obj_tree_lookup_cont(toh, entry->ie_couuid, &arg->ria_cont_toh);
+	rc = obj_tree_lookup_cont(toh, entry->ie_couuid, &cont_toh);
 	if (rc) {
 		if (rc == -DER_NONEXIST) {
 			D_DEBUG(DB_TRACE, DF_RB": cont "DF_UUID" non-exist in migrate tree, "
@@ -4063,7 +4074,7 @@ reint_post_cont_iter_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		goto out;
 	}
 
-	D_ASSERT(daos_handle_is_valid(arg->ria_cont_toh));
+	D_ASSERT(daos_handle_is_valid(cont_toh));
 
 	rc = ds_cont_child_lookup(tls->mpt_pool_uuid, entry->ie_couuid, &cont_child);
 	if (rc == -DER_NONEXIST || rc == -DER_SHUTDOWN) {
@@ -4083,6 +4094,7 @@ reint_post_cont_iter_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	param.ip_flags = VOS_IT_FOR_MIGRATION;
 	uuid_copy(arg->ria_co_uuid, entry->ie_couuid);
+	arg->ria_cont_toh = cont_toh;
 	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchor,
 			 reint_post_obj_iter_cb, NULL, arg, NULL);
 	if (rc)
@@ -4091,6 +4103,8 @@ reint_post_cont_iter_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	ds_cont_child_put(cont_child);
 
 out:
+	if (daos_handle_is_valid(cont_toh))
+		dbtree_close(cont_toh);
 	if (--arg->ria_yield_cnt <= 0) {
 		D_DEBUG(DB_REBUILD, DF_RB " rebuild yield: %d\n", DP_RB_MPT(tls), rc);
 		arg->ria_yield_cnt = REINT_ITER_YIELD_CNT;

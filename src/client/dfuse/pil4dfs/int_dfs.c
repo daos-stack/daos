@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -6129,13 +6130,17 @@ futimens(int fd, const struct timespec times[2])
 static int
 new_fcntl(int fd, int cmd, ...)
 {
-	int     fd_directed, param, OrgFunc = 1;
+	int     fd_directed, OrgFunc = 1;
 	int     next_dirfd, next_fd, rc;
+	void   *param;
 	va_list arg;
 
 	va_start(arg, cmd);
-	param = va_arg(arg, int);
+	param = va_arg(arg, void *);
 	va_end(arg);
+
+	if (!d_hook_enabled)
+		return libc_fcntl(fd, cmd, param);
 
 	if (fd < FD_FILE_BASE && d_compatible_mode)
 		return libc_fcntl(fd, cmd, param);
@@ -6154,9 +6159,6 @@ new_fcntl(int fd, int cmd, ...)
 	case F_SETPIPE_SZ:
 	case F_ADD_SEALS:
 		fd_directed = d_get_fd_redirected(fd);
-
-		if (!d_hook_enabled)
-			return libc_fcntl(fd, cmd, param);
 
 		if (cmd == F_GETFL) {
 			if (fd_directed >= FD_DIR_BASE)
@@ -6206,12 +6208,15 @@ new_fcntl(int fd, int cmd, ...)
 	case F_OFD_GETLK:
 	case F_GETOWN_EX:
 	case F_SETOWN_EX:
-		if (!d_hook_enabled)
+		fd_directed = d_get_fd_redirected(fd);
+		if (fd_directed >= FD_FILE_BASE) {
+			errno = ENOTSUP;
+			return (-1);
+		} else {
 			return libc_fcntl(fd, cmd, param);
-
-		return libc_fcntl(fd, cmd, param);
+		}
 	default:
-		return libc_fcntl(fd, cmd);
+		return libc_fcntl(fd, cmd, param);
 	}
 }
 

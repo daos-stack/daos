@@ -16,7 +16,7 @@
 
 Name:          daos
 Version:       2.7.101
-Release:       5%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -547,6 +547,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files server-tests
 %doc README.md
 %{_bindir}/dtx_tests
+%{_bindir}/dtx_ut
 %{_bindir}/evt_ctl
 %{_bindir}/jump_pl_map
 %{_bindir}/pl_bench
@@ -558,6 +559,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/vos_tests
 %{_bindir}/vea_stress
 %{_bindir}/ddb_tests
+%{_bindir}/ddb_ut
 %{_bindir}/obj_ctl
 %{_bindir}/vos_perf
 
@@ -592,8 +594,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Tue Jan 14 2025 Tomasz Gromadzki <tomasz.gromadzki@hpe.com> 2.7.101-5
+* Mon Feb 10 2025 Tomasz Gromadzki <tomasz.gromadzki@hpe.com> 2.7.101-6
 - pmemobj errors and warnings reported via DAOS logging system
+
+* Wed Jan 22 2025 Jan Michalski <jan-marian.michalski@hpe.com> 2.7.101-5
+- Add ddb_ut and dtx_ut to the server-tests package
 
 * Fri Dec 20 2024 Jeff Olivier <jeffolivier@google.com> 2.7.101-4
 - Switch libfuse3 to libfused
