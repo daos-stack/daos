@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1049,7 +1050,6 @@ static int64_t crt_swim_progress_cb(crt_context_t crt_ctx, int64_t timeout_us, v
 		uint64_t now = swim_now_ms();
 
 		crt_swim_update_last_unpack_hlc(csm);
-
 		/*
 		 * Check for network idle in all contexts.
 		 * If the time passed from last received RPC till now is more
