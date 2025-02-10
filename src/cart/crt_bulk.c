@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -170,6 +171,7 @@ out:
 	return rc;
 }
 
+/* Helper function to check for bulk expiration */
 static inline bool
 crt_bulk_desc_expired(struct crt_bulk_desc *bulk_desc)
 {
@@ -181,8 +183,9 @@ crt_bulk_desc_expired(struct crt_bulk_desc *bulk_desc)
 
 	/* Deadline expired */
 	if (now.tv_sec > rpc_priv->crp_req_hdr.cch_src_deadline_sec) {
-		RPC_INFO(rpc_priv, "Deadline expired for bulk. Deadline=%d, now=%ld\n",
-			 rpc_priv->crp_req_hdr.cch_src_deadline_sec, now.tv_sec);
+		RPC_TRACE(DB_NET, rpc_priv,
+			  "Deadline expired for bulk. Deadline=%d, now=%ld\n",
+			  rpc_priv->crp_req_hdr.cch_src_deadline_sec, now.tv_sec);
 		return true;
 	}
 

@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -35,7 +36,7 @@ enum crt_rpc_flags_internal {
 	CRT_RPC_FLAG_COLL = (1U << 16),
 	/* flag of targeting primary group */
 	CRT_RPC_FLAG_PRIMARY_GRP = (1U << 17),
-	/* flag of using deadlines instead of timeouts in rpc headers */
+	/* flag of using deadlines instead of timeouts in RPC headers */
 	CRT_RPC_FLAG_DEADLINES_USED = (1U << 18),
 };
 

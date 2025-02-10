@@ -172,9 +172,6 @@ struct crt_gdata {
 	/** Inflight rpc quota limit */
 	uint32_t		cg_rpc_quota;
 
-	/** Absolute start time in seconds, used for debug of deadlines */
-	uint32_t                 cg_start_time_sec;
-
 	/** Retry count of HG_Init_opt2() on failure when using CXI provider */
 	uint32_t                 cg_hg_init_retry_cnt;
 };

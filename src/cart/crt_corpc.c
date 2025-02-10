@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -131,8 +132,8 @@ crt_corpc_initiate(struct crt_rpc_priv *rpc_priv)
 		/* Inherit a deadline from a source */
 		src_timeout = crt_deadline_to_timeout(rpc_priv->crp_req_hdr.cch_src_deadline_sec);
 
-		RPC_INFO(rpc_priv, "Converted deadline %d to timeout %d\n",
-			 rpc_priv->crp_req_hdr.cch_src_deadline_sec, src_timeout);
+		RPC_TRACE(DB_NET, rpc_priv, "Converted deadline %d to timeout %d\n",
+			  rpc_priv->crp_req_hdr.cch_src_deadline_sec, src_timeout);
 
 		if (src_timeout > 0) {
 			rpc_priv->crp_timeout_sec = src_timeout;

@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -495,7 +496,7 @@ crt_hg_header_copy(struct crt_rpc_priv *in, struct crt_rpc_priv *out)
 	out->crp_req_hdr = in->crp_req_hdr;
 	out->crp_reply_hdr.cch_hlc = in->crp_reply_hdr.cch_hlc;
 
-	/* Populate rpc_priv fields correctly based on the header copied */
+	/* Populate rpc_priv fields correctly based on the input header */
 	out->crp_deadline_sec = in->crp_req_hdr.cch_src_deadline_sec;
 
 	if (!(out->crp_flags & CRT_RPC_FLAG_COLL))

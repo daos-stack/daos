@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1265,14 +1266,14 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 			print_once = true;
 
 			RPC_WARN(rpc_priv,
-				 "ctx_id %d, (status: %#x) timed out (%d seconds) [deadline:%d], "
+				 "ctx_id %d, (status: %#x) timed out (%d seconds) [deadline: %d], "
 				 "target (%d:%d)\n",
 				 crt_ctx->cc_idx, rpc_priv->crp_state, rpc_priv->crp_timeout_sec,
 				 rpc_priv->crp_deadline_sec, rpc_priv->crp_pub.cr_ep.ep_rank,
 				 rpc_priv->crp_pub.cr_ep.ep_tag);
 		} else {
 			RPC_INFO(rpc_priv,
-				 "ctx_id %d, (status: %#x) timed out (%d seconds) [deadline:%d], "
+				 "ctx_id %d, (status: %#x) timed out (%d seconds) [deadline: %d], "
 				 "target (%d:%d)\n",
 				 crt_ctx->cc_idx, rpc_priv->crp_state, rpc_priv->crp_timeout_sec,
 				 rpc_priv->crp_deadline_sec, rpc_priv->crp_pub.cr_ep.ep_rank,

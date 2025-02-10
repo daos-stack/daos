@@ -1802,6 +1802,7 @@ crt_hg_bulk_transfer_cb(const struct hg_cb_info *hg_cbinfo)
 		D_DEBUG(DB_NET, "No bulk completion callback registered.\n");
 		D_GOTO(out, hg_ret);
 	}
+
 	crt_bulk_cbinfo.bci_arg = bulk_cbinfo->bci_arg;
 	crt_bulk_cbinfo.bci_rc = rc;
 	crt_bulk_cbinfo.bci_bulk_desc = bulk_desc;

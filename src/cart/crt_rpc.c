@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -740,7 +741,7 @@ crt_req_set_timeout(crt_rpc_t *req, uint32_t timeout_sec)
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 	rpc_priv->crp_timeout_sec = timeout_sec;
 
-	RPC_INFO(rpc_priv, "Caller set explicit timeout to %d\n", timeout_sec);
+	RPC_TRACE(DB_NET, rpc_priv, "Caller set explicit timeout to %d\n", timeout_sec);
 out:
 	return rc;
 }
@@ -1779,11 +1780,11 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv
 			timeout =
 			    crt_deadline_to_timeout(rpc_priv->crp_req_hdr.cch_src_deadline_sec);
 
-			RPC_INFO(rpc_priv, "Converted deadline %d to timeout %d\n",
-				 rpc_priv->crp_req_hdr.cch_src_deadline_sec, timeout);
+			RPC_TRACE(DB_NET, rpc_priv, "Converted deadline %d to timeout %d\n",
+				  rpc_priv->crp_req_hdr.cch_src_deadline_sec, timeout);
 
 			/*
-			 * TODO: need a better way to handle an edge case where a client can be
+			 * TODO: need a better way in future to handle an edge case where a client can be
 			 * running ahead of the server, but within hlc_epsilon allowed. Also need to
 			 * account for 1 second granularity of deadlines.
 			 */
@@ -1794,8 +1795,8 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv
 				struct timespec now;
 
 				clock_gettime(CLOCK_REALTIME, &now);
-				RPC_WARN(
-				    rpc_priv,
+				RPC_TRACE(
+				    DB_NET, rpc_priv,
 				    "Incoming rpc deadline expired. Deadline = %d, now = %ld\n",
 				    rpc_priv->crp_req_hdr.cch_src_deadline_sec, now.tv_sec);
 				D_GOTO(out, rc = -DER_DEADLINE_EXPIRED);

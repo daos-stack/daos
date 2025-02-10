@@ -61,9 +61,6 @@ crt_lib_init(void)
 
 	/* envs not inited until crt_init() time */
 	memset(&crt_genvs, 0x0, sizeof(crt_genvs));
-
-	/* helpful for debug of deadlines */
-	crt_gdata.cg_start_time_sec = now.tv_sec;
 }
 
 /* Library deinit */
@@ -236,7 +233,6 @@ crt_gdata_dump(void)
 	DUMP_GDATA_FIELD("0x%lx", cg_rpcid);
 	DUMP_GDATA_FIELD("%ld", cg_num_cores);
 	DUMP_GDATA_FIELD("%d", cg_rpc_quota);
-	DUMP_GDATA_FIELD("%d", cg_start_time_sec);
 }
 
 static enum crt_traffic_class
