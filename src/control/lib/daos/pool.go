@@ -1,5 +1,7 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -81,6 +83,7 @@ type (
 		PoolLayoutVer    uint32               `json:"pool_layout_ver"`
 		UpgradeLayoutVer uint32               `json:"upgrade_layout_ver"`
 		MemFileBytes     uint64               `json:"mem_file_bytes"`
+		MdOnSsdActive    bool                 `json:"md_on_ssd_active"`
 	}
 
 	PoolQueryTargetType  int32
@@ -88,10 +91,11 @@ type (
 
 	// PoolQueryTargetInfo contains information about a single target
 	PoolQueryTargetInfo struct {
-		Type         PoolQueryTargetType  `json:"target_type"`
-		State        PoolQueryTargetState `json:"target_state"`
-		Space        []*StorageUsageStats `json:"space"`
-		MemFileBytes uint64               `json:"mem_file_bytes"`
+		Type          PoolQueryTargetType  `json:"target_type"`
+		State         PoolQueryTargetState `json:"target_state"`
+		Space         []*StorageUsageStats `json:"space"`
+		MemFileBytes  uint64               `json:"mem_file_bytes"`
+		MdOnSsdActive bool                 `json:"md_on_ssd_active"`
 	}
 
 	// StorageTargetUsage represents DAOS target storage usage
@@ -106,6 +110,9 @@ type (
 
 	// PoolQueryMask implements a bitmask for pool query options.
 	PoolQueryMask C.uint64_t
+
+	// PoolConnectFlag represents DAOS pool connect options.
+	PoolConnectFlag uint
 )
 
 const (
@@ -126,11 +133,11 @@ const (
 	PoolQueryOptionDeadEngines PoolQueryOption = "dead_engines"
 
 	// PoolConnectFlagReadOnly indicates that the connection is read-only.
-	PoolConnectFlagReadOnly = C.DAOS_PC_RO
+	PoolConnectFlagReadOnly PoolConnectFlag = C.DAOS_PC_RO
 	// PoolConnectFlagReadWrite indicates that the connection is read-write.
-	PoolConnectFlagReadWrite = C.DAOS_PC_RW
+	PoolConnectFlagReadWrite PoolConnectFlag = C.DAOS_PC_RW
 	// PoolConnectFlagExclusive indicates that the connection is exclusive.
-	PoolConnectFlagExclusive = C.DAOS_PC_EX
+	PoolConnectFlagExclusive PoolConnectFlag = C.DAOS_PC_EX
 )
 
 func (pqo PoolQueryOption) String() string {

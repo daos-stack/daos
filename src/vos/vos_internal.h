@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -140,6 +140,12 @@ enum {
 
 /* Throttle ENOSPACE error message */
 #define VOS_NOSPC_ERROR_INTVL	60	/* seconds */
+
+extern uint32_t vos_agg_gap;
+
+#define VOS_AGG_GAP_MIN		20 /* seconds */
+#define VOS_AGG_GAP_DEF		60
+#define VOS_AGG_GAP_MAX		180
 
 extern unsigned int vos_agg_nvme_thresh;
 extern bool vos_dkey_punch_propagate;
@@ -363,6 +369,31 @@ struct vos_container {
 	struct btr_root		vc_dtx_committed_btr;
 	/* The list for active DTXs, roughly ordered in time. */
 	d_list_t		vc_dtx_act_list;
+	/* The list for the active DTX entries with epoch sorted. */
+	d_list_t		vc_dtx_sorted_list;
+	/* The list for the active DTX entries (but not re-indexed) with epoch unsorted. */
+	d_list_t		vc_dtx_unsorted_list;
+	/* The list for the active DTX entries that are re-indexed when open the container. */
+	d_list_t		vc_dtx_reindex_list;
+	/* The largest epoch difference for re-indexed DTX entries max/min pairs. */
+	uint64_t		vc_dtx_reindex_eph_diff;
+	/* The latest calculated local stable epoch. */
+	daos_epoch_t		vc_local_stable_epoch;
+	/*
+	 * The lowest epoch boundary for current acceptable modification. It cannot be lower than
+	 * vc_local_stable_epoch, otherwise, it may break stable epoch semantics. Because current
+	 * target reported local stable epoch may be used as global stable epoch. There is window
+	 * between current target reporting the local stable epoch and related leader setting the
+	 * global stable epoch. If the modification with older epoch arrives during such internal,
+	 * we have to reject it to avoid potential conflict.
+	 *
+	 * On the other hand, it must be higher than EC/VOS aggregation up boundary. Under space
+	 * pressure, the EC/VOS aggregation up boundary may be higher than vc_local_stable_epoch,
+	 * then it will cause vc_mod_epoch_bound > vc_local_stable_epoch.
+	 */
+	daos_epoch_t		vc_mod_epoch_bound;
+	/* Last timestamp when VOS reject DTX because of stale epoch. */
+	uint64_t		vc_dtx_reject_ts;
 	/* The count of committed DTXs. */
 	uint32_t		vc_dtx_committed_count;
 	/** Index for timestamp lookup */
@@ -432,6 +463,8 @@ struct vos_dtx_act_ent {
 	daos_unit_oid_t			*dae_oids;
 	/* The time (hlc) when the DTX entry is created. */
 	uint64_t			 dae_start_time;
+	/* Link into container::vc_dtx_{sorted,unsorted,reindex}_list. */
+	d_list_t			 dae_order_link;
 	/* Link into container::vc_dtx_act_list. */
 	d_list_t			 dae_link;
 	/* Back pointer to the DTX handle. */
@@ -2033,5 +2066,45 @@ bool vos_bkt_array_subset(struct vos_bkt_array *super, struct vos_bkt_array *sub
 int vos_bkt_array_add(struct vos_bkt_array *bkts, uint32_t bkt_id);
 int vos_bkt_array_pin(struct vos_pool *pool, struct vos_bkt_array *bkts,
 		      struct umem_pin_handle **pin_hdl);
+
+/** Validate the provided svt.
+ *
+ * Note: It is designed for catastrophic recovery. Not to perform at run-time.
+ *
+ * \param svt[in]
+ * \param dtx_lid[in]	local id of the DTX entry the evt is supposed to belong to
+ *
+ * \return true if svt is valid.
+ **/
+bool
+vos_irec_is_valid(const struct vos_irec_df *svt, uint32_t dtx_lid);
+
+enum {
+	DTX_UMOFF_ILOG = (1 << 0),
+	DTX_UMOFF_SVT  = (1 << 1),
+	DTX_UMOFF_EVT  = (1 << 2),
+};
+
+static inline void
+dtx_type2umoff_flag(umem_off_t *rec, uint32_t type)
+{
+	uint8_t flag = 0;
+
+	switch (type) {
+	case DTX_RT_ILOG:
+		flag = DTX_UMOFF_ILOG;
+		break;
+	case DTX_RT_SVT:
+		flag = DTX_UMOFF_SVT;
+		break;
+	case DTX_RT_EVT:
+		flag = DTX_UMOFF_EVT;
+		break;
+	default:
+		D_ASSERT(0);
+	}
+
+	umem_off_set_flags(rec, flag);
+}
 
 #endif /* __VOS_INTERNAL_H__ */

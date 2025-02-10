@@ -1,6 +1,7 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
 // (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -534,6 +535,7 @@ func (cmd *poolEvictCmd) Execute(args []string) error {
 // poolExcludeCmd is the struct representing the command to exclude a DAOS target.
 type poolExcludeCmd struct {
 	poolCmd
+	Force     bool   `short:"f" long:"force" description:"Force the operation to continue, potentially leading to data loss"`
 	Rank      uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be excluded"`
 	TargetIdx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be excluded from the rank"`
 }
@@ -547,7 +549,7 @@ func (cmd *poolExcludeCmd) Execute(args []string) error {
 		return errors.WithMessage(err, "parsing target list")
 	}
 
-	req := &control.PoolExcludeReq{ID: cmd.PoolID().String(), Rank: ranklist.Rank(cmd.Rank), TargetIdx: idxList}
+	req := &control.PoolExcludeReq{ID: cmd.PoolID().String(), Rank: ranklist.Rank(cmd.Rank), TargetIdx: idxList, Force: cmd.Force}
 
 	err := control.PoolExclude(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -699,8 +701,8 @@ func (cmd *poolQueryCmd) Execute(args []string) error {
 type poolQueryTargetsCmd struct {
 	poolCmd
 
-	Rank    uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be queried"`
-	Targets string `long:"target-idx" description:"Comma-separated list of target idx(s) to be queried"`
+	Rank    uint32         `long:"rank" required:"1" description:"Engine rank of the target(s) to be queried"`
+	Targets ui.RankSetFlag `long:"target-idx" description:"Comma-separated list of target index(es) to be queried (default: all)"`
 }
 
 // Execute is run when PoolQueryTargetsCmd subcommand is activated
@@ -708,11 +710,7 @@ func (cmd *poolQueryTargetsCmd) Execute(args []string) error {
 	ctx := cmd.MustLogCtx()
 
 	var tgtsList []uint32
-	if len(cmd.Targets) > 0 {
-		if err := common.ParseNumberList(cmd.Targets, &tgtsList); err != nil {
-			return errors.WithMessage(err, "parsing target list")
-		}
-	} else {
+	if cmd.Targets.RankSet.Count() == 0 {
 		pi, err := control.PoolQuery(ctx, cmd.ctlInvoker, &control.PoolQueryReq{
 			ID:        cmd.PoolID().String(),
 			QueryMask: daos.DefaultPoolQueryMask,
@@ -726,6 +724,11 @@ func (cmd *poolQueryTargetsCmd) Execute(args []string) error {
 		tgtCount := pi.TotalTargets / pi.TotalEngines
 		for i := uint32(0); i < tgtCount; i++ {
 			tgtsList = append(tgtsList, i)
+		}
+	} else {
+		tgtsList = make([]uint32, cmd.Targets.RankSet.Count())
+		for i, rank := range cmd.Targets.RankSet.Ranks() {
+			tgtsList[i] = uint32(rank)
 		}
 	}
 

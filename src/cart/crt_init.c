@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -285,11 +286,17 @@ data_init(int server, crt_init_options_t *opt)
 		if (mem_pin_enable == 1)
 			mem_pin_workaround();
 	} else {
+		int retry_count = 3;
+
 		/*
 		 * Client-side envariable to indicate that the cluster
 		 * is running using a secondary provider
 		 */
 		crt_env_get(CRT_SECONDARY_PROVIDER, &is_secondary);
+
+		/** Client side env for hg_init() retries */
+		crt_env_get(CRT_CXI_INIT_RETRY, &retry_count);
+		crt_gdata.cg_hg_init_retry_cnt = retry_count;
 	}
 	crt_gdata.cg_provider_is_primary = (is_secondary) ? 0 : 1;
 

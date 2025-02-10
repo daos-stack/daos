@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -25,10 +26,6 @@ type (
 		initialized bool
 	}
 )
-
-func daosError(rc C.int) error {
-	return daos.ErrorFromRC(int(rc))
-}
 
 func (api *api) isInitialized() bool {
 	api.RLock()
