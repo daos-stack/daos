@@ -1,5 +1,6 @@
 '''
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -14,11 +15,6 @@ class EcodOnlineRebuildMdtest(ErasureCodeMdtest):
 
     :avocado: recursive
     """
-    def __init__(self, *args, **kwargs):
-        """Initialize a EcOnlineRebuild object."""
-        super().__init__(*args, **kwargs)
-        self.set_online_rebuild = True
-
     def test_ec_online_rebuild_mdtest(self):
         """Jira ID: DAOS-7320.
 
@@ -35,13 +31,6 @@ class EcodOnlineRebuildMdtest(ErasureCodeMdtest):
         :avocado: tags=ec,ec_array,mdtest,ec_online_rebuild
         :avocado: tags=EcodOnlineRebuildMdtest,test_ec_online_rebuild_mdtest
         """
-        # Kill last server rank
-        self.rank_to_kill = self.server_count - 1
-
-        # Run only object type which matches the server count and
-        # remove other objects
-        for oclass in self.obj_class:
-            if oclass[1] == self.server_count:
-                self.obj_class = oclass[0]
-
-        self.start_online_mdtest()
+        # Stop one random rank while mdtest is running
+        ranks_to_stop = self.random.sample(list(self.server_managers[0].ranks), k=1)
+        self.start_online_mdtest(ranks_to_stop)
