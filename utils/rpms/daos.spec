@@ -14,8 +14,8 @@
 %endif
 
 Name:          daos
-Version:       2.6.2
-Release:       5%{?relval}%{?dist}
+Version:       2.6.3
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -594,6 +594,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Feb 04 2025 Phillip Henderson <phillip.henderson@intel.com> 2.6.3-2
+- Second release candidate for 2.6.3
+
+* Fri Jan 24 2025 Dalton Bohning <dalton.bohning@hpe.com> 2.6.3-1
+- First release candidate for 2.6.3
+
 * Mon Jan 06 2025 Phillip Henderson <phillip.henderson@intel.com> 2.6.2-5
 - Fix protobuf-c requiremnent for daos-client-tests on Leap.
 

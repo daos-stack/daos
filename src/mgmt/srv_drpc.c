@@ -1747,9 +1747,9 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	d_rank_list_t           *ranks             = NULL;
 	d_rank_range_list_t     *range_list        = NULL;
 	d_rank_range_list_t     *range_list1       = NULL;
-	d_rank_list_t           *suspect_ranks     = NULL;
+	d_rank_list_t           *dead_ranks     = NULL;
 	char			*range_list_str = NULL;
-	char                    *suspect_ranks_str = NULL;
+	char                    *dead_ranks_str = NULL;
 	bool			truncated;
 	bool                     truncated1;
 	size_t			len;
@@ -1782,7 +1782,7 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	pool_info.pi_bits = req->query_mask;
-	rc                = ds_mgmt_pool_query(uuid, svc_ranks, &ranks, &suspect_ranks, &pool_info,
+	rc                = ds_mgmt_pool_query(uuid, svc_ranks, &ranks, &dead_ranks, &pool_info,
 					       &resp.pool_layout_ver, &resp.upgrade_layout_ver);
 	if (rc != 0) {
 		D_ERROR("Failed to query the pool, rc=%d\n", rc);
@@ -1796,18 +1796,18 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	range_list_str = d_rank_range_list_str(range_list, &truncated);
 	if (range_list_str == NULL)
 		D_GOTO(out_ranges, rc = -DER_NOMEM);
-	range_list1 = d_rank_range_list_create_from_ranks(suspect_ranks);
+	range_list1 = d_rank_range_list_create_from_ranks(dead_ranks);
 	if (range_list1 == NULL)
 		D_GOTO(out_suspect, rc = -DER_NOMEM);
-	suspect_ranks_str = d_rank_range_list_str(range_list1, &truncated1);
-	if (suspect_ranks_str == NULL) {
+	dead_ranks_str = d_rank_range_list_str(range_list1, &truncated1);
+	if (dead_ranks_str == NULL) {
 		DL_ERROR(rc, DF_UUID ": Failed to serialize the list of suspect ranks",
 			 DP_UUID(uuid));
 		D_GOTO(out_suspect, rc = -DER_NOMEM);
 	}
-	D_DEBUG(DB_MGMT, DF_UUID ": %s ranks: %s%s, suspect_ranks: %s%s\n", DP_UUID(uuid),
+	D_DEBUG(DB_MGMT, DF_UUID ": %s ranks: %s%s, dead_ranks: %s%s\n", DP_UUID(uuid),
 		pool_info.pi_bits & DPI_ENGINES_ENABLED ? "ENABLED" : "DISABLED", range_list_str,
-		truncated ? " ...(TRUNCATED)" : "", suspect_ranks_str,
+		truncated ? " ...(TRUNCATED)" : "", dead_ranks_str,
 		truncated1 ? "...(TRUNCATED)" : "");
 
 	/* Populate the response */
@@ -1823,8 +1823,8 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp.version = pool_info.pi_map_ver;
 	resp.enabled_ranks    = (req->query_mask & DPI_ENGINES_ENABLED) ? range_list_str : "";
 	resp.disabled_ranks   = (req->query_mask & DPI_ENGINES_DISABLED) ? range_list_str : "";
-	if (suspect_ranks_str != NULL)
-		resp.suspect_ranks = suspect_ranks_str;
+	if (dead_ranks_str != NULL)
+		resp.dead_ranks = dead_ranks_str;
 
 	D_ALLOC_ARRAY(resp.tier_stats, DAOS_MEDIA_MAX);
 	if (resp.tier_stats == NULL)
@@ -1845,7 +1845,7 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 out_suspect:
 	d_rank_range_list_free(range_list1);
-	d_rank_list_free(suspect_ranks);
+	d_rank_list_free(dead_ranks);
 out_ranges:
 	d_rank_range_list_free(range_list);
 out_ranks:
@@ -1866,7 +1866,7 @@ out:
 	}
 
 	D_FREE(range_list_str);
-	D_FREE(suspect_ranks_str);
+	D_FREE(dead_ranks_str);
 
 	mgmt__pool_query_req__free_unpacked(req, &alloc.alloc);
 

@@ -862,9 +862,9 @@ struct  _Mgmt__PoolQueryResp
    */
   uint64_t query_mask;
   /*
-   * optional set of suspect ranks
+   * optional set of dead ranks
    */
-  char *suspect_ranks;
+  char                     *dead_ranks;
 };
 #define MGMT__POOL_QUERY_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_resp__descriptor) \

@@ -96,7 +96,7 @@ func (cmd *healthCheckCmd) Execute([]string) error {
 		}()
 
 		queryMask := daos.MustNewPoolQueryMask(daos.PoolQueryOptionEnabledEngines,
-			daos.PoolQueryOptionSuspectEngines)
+			daos.PoolQueryOptionDeadEngines)
 		if pool.DisabledTargets > 0 {
 			queryMask.SetOptions(daos.PoolQueryOptionDisabledEngines)
 		}
@@ -107,7 +107,7 @@ func (cmd *healthCheckCmd) Execute([]string) error {
 		}
 		pool.EnabledRanks = tpi.EnabledRanks
 		pool.DisabledRanks = tpi.DisabledRanks
-		pool.SuspectRanks = tpi.SuspectRanks
+		pool.DeadRanks = tpi.DeadRanks
 
 		poolConts, err := listContainers(poolHdl)
 		if err != nil {

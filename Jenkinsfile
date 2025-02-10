@@ -835,7 +835,7 @@ pipeline {
                     }
                     steps {
                         job_step_update(
-                            unitTest(timeout_time: 60,
+                            unitTest(timeout_time: 160,
                                      unstash_opt: true,
                                      ignore_failure: true,
                                      inst_repos: prRepos(),
@@ -860,7 +860,7 @@ pipeline {
                     }
                     steps {
                         job_step_update(
-                            unitTest(timeout_time: 60,
+                            unitTest(timeout_time: 180,
                                      unstash_opt: true,
                                      ignore_failure: true,
                                      inst_repos: prRepos(),
@@ -1041,7 +1041,8 @@ pipeline {
                             stash name: 'fault-inject-valgrind',
                                   includes: '*.memcheck.xml',
                                   allowEmpty: true
-                            archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/'
+                            archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/',
+                                             allowEmptyArchive: true
                             job_status_update()
                         }
                     }

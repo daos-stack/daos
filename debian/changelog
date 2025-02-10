@@ -1,4 +1,16 @@
-daos (2.6.2-4) unstable; urgency=medium
+daos (2.6.3-2) unstable; urgency=medium
+  [ Phillip Henderson ]
+  * Second release candidate for 2.6.3
+
+ -- Phillip Henderson <phillip.henderson@hpe.com>  Tue, 04 Feb 2025 17:42:00 -0500
+
+daos (2.6.3-1) unstable; urgency=medium
+  [ Dalton Bohning ]
+  * First release candidate for 2.6.3
+
+ -- Dalton Bohning <dalton.bohning@hpe.com>  Fri, 24 Jan 2025 09:48:00 -0700
+ 
+ daos (2.6.2-4) unstable; urgency=medium
   [ Brian J. Murrell ]
   * Remove Build-Depends: for UCX as they were obsoleted as of e01970d
 
