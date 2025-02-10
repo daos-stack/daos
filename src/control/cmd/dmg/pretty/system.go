@@ -244,7 +244,7 @@ func PrintPoolRankResults(out io.Writer, results []*control.PoolRanksResult) {
 		}
 		row := txtfmt.TableRow{
 			"Pool":   r.ID,
-			"Ranks":  r.Ranks,
+			"Ranks":  ranklist.RankSetFromRanks(r.Ranks).String(),
 			"Result": result,
 			"Reason": reason,
 		}

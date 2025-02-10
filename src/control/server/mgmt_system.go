@@ -610,8 +610,8 @@ func (svc *mgmtSvc) resolveRanks(hosts, ranks string) (hitRS, missRS *ranklist.R
 			return
 		}
 	default:
-		// empty rank/host sets implies include all ranks so pass empty
-		// string to CheckRanks()
+		// Empty rank/host sets implies include all ranks so pass empty
+		// string to CheckRanks() to retrieve full rankset.
 		if hitRS, missRS, err = svc.membership.CheckRanks(""); err != nil {
 			return
 		}
@@ -1167,7 +1167,7 @@ func (svc *mgmtSvc) getPoolRankResults(ctx context.Context, sys string, poolIDs 
 
 		svc.log.Tracef("%T: %+v, %T: %+v", req, req, resp, resp)
 
-		newResults, err := resp.GetResults(err)
+		newResults, err := resp.GetResults(id, rs.Ranks(), err)
 		if err != nil {
 			return nil, err
 		}
@@ -1195,8 +1195,8 @@ func drainPoolRanks(svc *mgmtSvc, ctx context.Context, req *control.PoolRanksReq
 	}
 
 	resp := &control.PoolRanksResp{
-		ID:             req.ID,
-		InitialRankset: ranklist.RankSetFromRanks(req.Ranks).String(),
+		ID:           req.ID,
+		InitialRanks: req.Ranks,
 	}
 
 	pbResp, err := svc.PoolDrain(ctx, pbReq)
@@ -1222,8 +1222,8 @@ func reintPoolRanks(svc *mgmtSvc, ctx context.Context, req *control.PoolRanksReq
 	}
 
 	resp := &control.PoolRanksResp{
-		ID:             req.ID,
-		InitialRankset: ranklist.RankSetFromRanks(req.Ranks).String(),
+		ID:           req.ID,
+		InitialRanks: req.Ranks,
 	}
 
 	pbResp, err := svc.PoolReintegrate(ctx, pbReq)

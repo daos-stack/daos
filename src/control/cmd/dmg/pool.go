@@ -552,9 +552,11 @@ func (cmd *poolExcludeCmd) Execute(args []string) error {
 		return errors.WithMessage(err, "parsing target list")
 	}
 
+	poolID := cmd.PoolID().String()
+	ranks := cmd.RankList.Ranks()
 	req := &control.PoolRanksReq{
-		ID:        cmd.PoolID().String(),
-		Ranks:     cmd.RankList.Ranks(),
+		ID:        poolID,
+		Ranks:     ranks,
 		TargetIdx: idxList,
 		Force:     cmd.Force,
 	}
@@ -568,7 +570,7 @@ func (cmd *poolExcludeCmd) Execute(args []string) error {
 	cmd.Debugf("%T: %+v, %T: %+v", req, req, resp, resp)
 
 	// Retrieve PoolRanksResults so we can pretty print output.
-	results, err := resp.GetResults(err)
+	results, err := resp.GetResults(poolID, ranks, err)
 	if err != nil {
 		cmd.Errorf(errors.WithMessage(err, "Pool exclude failed").Error())
 		return err
@@ -596,9 +598,11 @@ func (cmd *poolDrainCmd) Execute(args []string) error {
 		return errors.WithMessage(err, "parsing target list")
 	}
 
+	poolID := cmd.PoolID().String()
+	ranks := cmd.RankList.Ranks()
 	req := &control.PoolRanksReq{
-		ID:        cmd.PoolID().String(),
-		Ranks:     cmd.RankList.Ranks(),
+		ID:        poolID,
+		Ranks:     ranks,
 		TargetIdx: idxList,
 	}
 
@@ -611,7 +615,7 @@ func (cmd *poolDrainCmd) Execute(args []string) error {
 	cmd.Debugf("%T: %+v, %T: %+v", req, req, resp, resp)
 
 	// Retrieve PoolRanksResults so we can pretty print output.
-	results, err := resp.GetResults(err)
+	results, err := resp.GetResults(poolID, ranklist.RankSetFromRanks(ranks), err)
 	if err != nil {
 		cmd.Errorf(errors.WithMessage(err, "Pool drain failed").Error())
 		return err
@@ -663,10 +667,13 @@ func (cmd *poolReintegrateCmd) Execute(args []string) error {
 		return errors.WithMessage(err, "parsing target list")
 	}
 
+	poolID := cmd.PoolID().String()
+	ranks := cmd.RankList.Ranks()
 	req := &control.PoolRanksReq{
-		ID:        cmd.PoolID().String(),
-		Ranks:     cmd.RankList.Ranks(),
+		ID:        poolID,
+		Ranks:     ranks,
 		TargetIdx: idxList,
+		Force:     cmd.Force,
 	}
 
 	resp, err := control.PoolReintegrate(cmd.MustLogCtx(), cmd.ctlInvoker, req)
@@ -678,7 +685,7 @@ func (cmd *poolReintegrateCmd) Execute(args []string) error {
 	cmd.Debugf("%T: %+v, %T: %+v", req, req, resp, resp)
 
 	// Retrieve PoolRanksResults so we can pretty print output.
-	results, err := resp.GetResults(err)
+	results, err := resp.GetResults(poolID, ranklist.RankSetFromRanks(ranks), err)
 	if err != nil {
 		cmd.Errorf(errors.WithMessage(err, "Pool reintegrate failed").Error())
 		return err

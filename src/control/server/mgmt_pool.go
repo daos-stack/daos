@@ -828,6 +828,9 @@ func (svc *mgmtSvc) PoolExclude(ctx context.Context, req *mgmtpb.PoolExcludeReq)
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
+	if err := svc.checkRanksExist(req.Ranks); err != nil {
+		return nil, err
+	}
 
 	dResp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolExclude, req)
 	if err != nil {
@@ -845,6 +848,9 @@ func (svc *mgmtSvc) PoolExclude(ctx context.Context, req *mgmtpb.PoolExcludeReq)
 // PoolDrain implements the method defined for the Management Service.
 func (svc *mgmtSvc) PoolDrain(ctx context.Context, req *mgmtpb.PoolDrainReq) (*mgmtpb.PoolRanksResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
+	}
+	if err := svc.checkRanksExist(req.Ranks); err != nil {
 		return nil, err
 	}
 
@@ -898,28 +904,27 @@ func (svc *mgmtSvc) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq) (
 	return resp, nil
 }
 
+// Return error if any requested rank is not in a valid state.
+func (svc *mgmtSvc) checkRanksExist(rl []uint32) error {
+	rs := ranklist.RankSetFromRanks(ranklist.RanksFromUint32(rl))
+	_, miss, err := svc.membership.CheckRanks(rs.String())
+	if err != nil {
+		return err
+	}
+	if miss.Count() != 0 {
+		return FaultPoolInvalidRanks(miss.Ranks())
+	}
+
+	return nil
+}
+
 // PoolReintegrate implements the method defined for the Management Service.
 func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReintReq) (*mgmtpb.PoolRanksResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
-
-	// Refuse call if any requested rank is not in a valid state.
-	invalid := []ranklist.Rank{}
-	for _, rank := range req.Ranks {
-		r := ranklist.Rank(rank)
-
-		m, err := svc.membership.Get(r)
-		if err != nil {
-			return nil, err
-		}
-
-		if m.State&system.AvailableMemberFilter == 0 {
-			invalid = append(invalid, r)
-		}
-	}
-	if len(invalid) != 0 {
-		return nil, FaultPoolInvalidRanks(invalid)
+	if err := svc.checkRanksExist(req.Ranks); err != nil {
+		return nil, err
 	}
 
 	// Look up the pool service record to find the storage allocations used at creation.

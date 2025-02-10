@@ -83,7 +83,7 @@ message PoolEvictResp {
 message PoolRanksResp
 {
 	int32           status        = 1; // DAOS error code for failed rank attempt
-	uint32          failed_rank   = 2; // Rank ID that failed operation
+	repeated uint32 failed_ranks  = 2; // Pool-ranks that failed operation
 	repeated uint32 success_ranks = 3; // Pool-ranks that were successfully operated on
 }
 
@@ -93,7 +93,7 @@ message PoolDrainReq {
 	string id  = 2; // uuid or label of pool to exclude some targets on each selected rank
 	repeated uint32 ranks      = 3; // Ranks to operate on
 	repeated uint32 target_idx = 4; // Targets to move to the down state on each selected rank
-	repeated uint32 svc_ranks = 5; // List of pool service ranks
+	repeated uint32 svc_ranks  = 5; // List of pool service ranks
 }
 
 // PoolExcludeReq supplies pool identifier, rank, target_idxs list and force.
@@ -112,7 +112,7 @@ message PoolExtendReq {
 	string sys = 1; // DAOS system identifier
 	string id = 2; // uuid or label of pool to add target up to
 	repeated uint32 ranks         = 3; // Ranks to operate on
-	repeated uint32 svc_ranks = 4; // List of pool service ranks
+	repeated uint32 svc_ranks     = 4; // List of pool service ranks
 	repeated uint64 tier_bytes    = 5; // Size in bytes of storage tiers
 	repeated uint32 fault_domains = 6; // fault domain tree, minimal format
 	float           mem_ratio     = 7; // Fraction of meta-blob-sz to use as mem-file-sz

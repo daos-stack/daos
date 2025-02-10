@@ -20,10 +20,10 @@ typedef struct _Mgmt__PoolCreateResp Mgmt__PoolCreateResp;
 typedef struct _Mgmt__PoolDestroyReq Mgmt__PoolDestroyReq;
 typedef struct _Mgmt__PoolDestroyResp Mgmt__PoolDestroyResp;
 typedef struct _Mgmt__PoolEvictReq Mgmt__PoolEvictReq;
-typedef struct _Mgmt__PoolEvictResp       Mgmt__PoolEvictResp;
+typedef struct _Mgmt__PoolEvictResp Mgmt__PoolEvictResp;
 typedef struct _Mgmt__PoolRanksResp Mgmt__PoolRanksResp;
-typedef struct _Mgmt__PoolDrainReq        Mgmt__PoolDrainReq;
-typedef struct _Mgmt__PoolExcludeReq      Mgmt__PoolExcludeReq;
+typedef struct _Mgmt__PoolDrainReq Mgmt__PoolDrainReq;
+typedef struct _Mgmt__PoolExcludeReq Mgmt__PoolExcludeReq;
 typedef struct _Mgmt__PoolExtendReq Mgmt__PoolExtendReq;
 typedef struct _Mgmt__PoolExtendResp Mgmt__PoolExtendResp;
 typedef struct _Mgmt__PoolReintReq Mgmt__PoolReintReq;
@@ -370,113 +370,107 @@ struct  _Mgmt__PoolEvictResp
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_evict_resp__descriptor) \
     , 0, 0 }
 
+
 /*
  * PoolRanksResp returns response from operation on multiple pool-ranks. Used in drain,
  * reintegrate and exclude.
  */
-struct _Mgmt__PoolRanksResp {
-	ProtobufCMessage base;
-	/*
-	 * DAOS error code for failed rank attempt
-	 */
-	int32_t          status;
-	/*
-	 * Rank ID that failed operation
-	 */
-	uint32_t         failed_rank;
-	/*
-	 * Pool-ranks that were successfully operated on
-	 */
-	size_t           n_success_ranks;
-	uint32_t        *success_ranks;
+struct  _Mgmt__PoolRanksResp
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS error code for failed rank attempt
+   */
+  int32_t status;
+  /*
+   * Pool-ranks that failed operation
+   */
+  size_t n_failed_ranks;
+  uint32_t *failed_ranks;
+  /*
+   * Pool-ranks that were successfully operated on
+   */
+  size_t n_success_ranks;
+  uint32_t *success_ranks;
 };
-#define MGMT__POOL_RANKS_RESP__INIT                                                                \
-	{PROTOBUF_C_MESSAGE_INIT(&mgmt__pool_ranks_resp__descriptor), 0, 0, 0, NULL}
+#define MGMT__POOL_RANKS_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_ranks_resp__descriptor) \
+    , 0, 0,NULL, 0,NULL }
+
 
 /*
  * PoolDrainReq supplies pool identifier, rank and target_idxs list.
  */
-struct _Mgmt__PoolDrainReq {
-	ProtobufCMessage base;
-	/*
-	 * DAOS system identifier
-	 */
-	char            *sys;
-	/*
-	 * uuid or label of pool to exclude some targets on each selected rank
-	 */
-	char            *id;
-	/*
-	 * Ranks to operate on
-	 */
-	size_t           n_ranks;
-	uint32_t        *ranks;
-	/*
-	 * Targets to move to the down state on each selected rank
-	 */
-	size_t           n_target_idx;
-	uint32_t        *target_idx;
-	/*
-	 * List of pool service ranks
-	 */
-	size_t           n_svc_ranks;
-	uint32_t        *svc_ranks;
+struct  _Mgmt__PoolDrainReq
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS system identifier
+   */
+  char *sys;
+  /*
+   * uuid or label of pool to exclude some targets on each selected rank
+   */
+  char *id;
+  /*
+   * Ranks to operate on
+   */
+  size_t n_ranks;
+  uint32_t *ranks;
+  /*
+   * Targets to move to the down state on each selected rank
+   */
+  size_t n_target_idx;
+  uint32_t *target_idx;
+  /*
+   * List of pool service ranks
+   */
+  size_t n_svc_ranks;
+  uint32_t *svc_ranks;
 };
-#define MGMT__POOL_DRAIN_REQ__INIT                                                                 \
-	{PROTOBUF_C_MESSAGE_INIT(&mgmt__pool_drain_req__descriptor),                               \
-	 (char *)protobuf_c_empty_string,                                                          \
-	 (char *)protobuf_c_empty_string,                                                          \
-	 0,                                                                                        \
-	 NULL,                                                                                     \
-	 0,                                                                                        \
-	 NULL,                                                                                     \
-	 0,                                                                                        \
-	 NULL}
+#define MGMT__POOL_DRAIN_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_drain_req__descriptor) \
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0,NULL }
+
 
 /*
  * PoolExcludeReq supplies pool identifier, rank, target_idxs list and force.
  */
-struct _Mgmt__PoolExcludeReq {
-	ProtobufCMessage   base;
-	/*
-	 * DAOS system identifier
-	 */
-	char              *sys;
-	/*
-	 * uuid or label of pool to exclude some targets on each selected rank
-	 */
-	char              *id;
-	/*
-	 * Ranks to exclude targets on
-	 */
-	size_t             n_ranks;
-	uint32_t          *ranks;
-	/*
-	 * Targets to move to the down state on each selected rank
-	 */
-	size_t             n_target_idx;
-	uint32_t          *target_idx;
-	/*
-	 * List of pool service ranks
-	 */
-	size_t             n_svc_ranks;
-	uint32_t          *svc_ranks;
-	/*
-	 * Force exclude, potentially leading to data loss
-	 */
-	protobuf_c_boolean force;
+struct  _Mgmt__PoolExcludeReq
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS system identifier
+   */
+  char *sys;
+  /*
+   * uuid or label of pool to exclude some targets on each selected rank
+   */
+  char *id;
+  /*
+   * Ranks to exclude targets on
+   */
+  size_t n_ranks;
+  uint32_t *ranks;
+  /*
+   * Targets to move to the down state on each selected rank
+   */
+  size_t n_target_idx;
+  uint32_t *target_idx;
+  /*
+   * List of pool service ranks
+   */
+  size_t n_svc_ranks;
+  uint32_t *svc_ranks;
+  /*
+   * Force exclude, potentially leading to data loss
+   */
+  protobuf_c_boolean force;
 };
-#define MGMT__POOL_EXCLUDE_REQ__INIT                                                               \
-	{PROTOBUF_C_MESSAGE_INIT(&mgmt__pool_exclude_req__descriptor),                             \
-	 (char *)protobuf_c_empty_string,                                                          \
-	 (char *)protobuf_c_empty_string,                                                          \
-	 0,                                                                                        \
-	 NULL,                                                                                     \
-	 0,                                                                                        \
-	 NULL,                                                                                     \
-	 0,                                                                                        \
-	 NULL,                                                                                     \
-	 0}
+#define MGMT__POOL_EXCLUDE_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_exclude_req__descriptor) \
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0,NULL, 0 }
+
 
 /*
  * PoolExtendReq supplies pool identifier and rank list.
@@ -541,6 +535,7 @@ struct  _Mgmt__PoolExtendResp
 #define MGMT__POOL_EXTEND_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_extend_resp__descriptor) \
     , 0, 0,NULL }
+
 
 /*
  * PoolReintReq supplies pool identifier, rank, target_idxs list and pool space details.
@@ -1269,18 +1264,24 @@ void   mgmt__pool_evict_resp__free_unpacked
                      (Mgmt__PoolEvictResp *message,
                       ProtobufCAllocator *allocator);
 /* Mgmt__PoolRanksResp methods */
-void
-mgmt__pool_ranks_resp__init(Mgmt__PoolRanksResp *message);
-size_t
-mgmt__pool_ranks_resp__get_packed_size(const Mgmt__PoolRanksResp *message);
-size_t
-mgmt__pool_ranks_resp__pack(const Mgmt__PoolRanksResp *message, uint8_t *out);
-size_t
-mgmt__pool_ranks_resp__pack_to_buffer(const Mgmt__PoolRanksResp *message, ProtobufCBuffer *buffer);
+void   mgmt__pool_ranks_resp__init
+                     (Mgmt__PoolRanksResp         *message);
+size_t mgmt__pool_ranks_resp__get_packed_size
+                     (const Mgmt__PoolRanksResp   *message);
+size_t mgmt__pool_ranks_resp__pack
+                     (const Mgmt__PoolRanksResp   *message,
+                      uint8_t             *out);
+size_t mgmt__pool_ranks_resp__pack_to_buffer
+                     (const Mgmt__PoolRanksResp   *message,
+                      ProtobufCBuffer     *buffer);
 Mgmt__PoolRanksResp *
-mgmt__pool_ranks_resp__unpack(ProtobufCAllocator *allocator, size_t len, const uint8_t *data);
-void
-mgmt__pool_ranks_resp__free_unpacked(Mgmt__PoolRanksResp *message, ProtobufCAllocator *allocator);
+       mgmt__pool_ranks_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__pool_ranks_resp__free_unpacked
+                     (Mgmt__PoolRanksResp *message,
+                      ProtobufCAllocator *allocator);
 /* Mgmt__PoolDrainReq methods */
 void   mgmt__pool_drain_req__init
                      (Mgmt__PoolDrainReq         *message);
@@ -1301,19 +1302,24 @@ void   mgmt__pool_drain_req__free_unpacked
                      (Mgmt__PoolDrainReq *message,
                       ProtobufCAllocator *allocator);
 /* Mgmt__PoolExcludeReq methods */
-void
-mgmt__pool_exclude_req__init(Mgmt__PoolExcludeReq *message);
-size_t
-mgmt__pool_exclude_req__get_packed_size(const Mgmt__PoolExcludeReq *message);
-size_t
-mgmt__pool_exclude_req__pack(const Mgmt__PoolExcludeReq *message, uint8_t *out);
-size_t
-mgmt__pool_exclude_req__pack_to_buffer(const Mgmt__PoolExcludeReq *message,
-				       ProtobufCBuffer            *buffer);
+void   mgmt__pool_exclude_req__init
+                     (Mgmt__PoolExcludeReq         *message);
+size_t mgmt__pool_exclude_req__get_packed_size
+                     (const Mgmt__PoolExcludeReq   *message);
+size_t mgmt__pool_exclude_req__pack
+                     (const Mgmt__PoolExcludeReq   *message,
+                      uint8_t             *out);
+size_t mgmt__pool_exclude_req__pack_to_buffer
+                     (const Mgmt__PoolExcludeReq   *message,
+                      ProtobufCBuffer     *buffer);
 Mgmt__PoolExcludeReq *
-mgmt__pool_exclude_req__unpack(ProtobufCAllocator *allocator, size_t len, const uint8_t *data);
-void
-mgmt__pool_exclude_req__free_unpacked(Mgmt__PoolExcludeReq *message, ProtobufCAllocator *allocator);
+       mgmt__pool_exclude_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__pool_exclude_req__free_unpacked
+                     (Mgmt__PoolExcludeReq *message,
+                      ProtobufCAllocator *allocator);
 /* Mgmt__PoolExtendReq methods */
 void   mgmt__pool_extend_req__init
                      (Mgmt__PoolExtendReq         *message);
@@ -1758,12 +1764,15 @@ typedef void (*Mgmt__PoolEvictReq_Closure)
 typedef void (*Mgmt__PoolEvictResp_Closure)
                  (const Mgmt__PoolEvictResp *message,
                   void *closure_data);
-typedef void (*Mgmt__PoolRanksResp_Closure)(const Mgmt__PoolRanksResp *message, void *closure_data);
+typedef void (*Mgmt__PoolRanksResp_Closure)
+                 (const Mgmt__PoolRanksResp *message,
+                  void *closure_data);
 typedef void (*Mgmt__PoolDrainReq_Closure)
                  (const Mgmt__PoolDrainReq *message,
                   void *closure_data);
-typedef void (*Mgmt__PoolExcludeReq_Closure)(const Mgmt__PoolExcludeReq *message,
-					     void                       *closure_data);
+typedef void (*Mgmt__PoolExcludeReq_Closure)
+                 (const Mgmt__PoolExcludeReq *message,
+                  void *closure_data);
 typedef void (*Mgmt__PoolExtendReq_Closure)
                  (const Mgmt__PoolExtendReq *message,
                   void *closure_data);

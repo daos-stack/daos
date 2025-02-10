@@ -746,10 +746,10 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 
 // PoolRanksResult describes the result of an OSA operation on a pool's ranks.
 type PoolRanksResult struct {
-	Status int32  `json:"status"` // Status returned from a specific OSA dRPC call
-	Msg    string `json:"msg"`    // Error message if Status is not Success
-	ID     string `json:"id"`     // Unique identifier for pool
-	Ranks  string `json:"ranks"`  // RankSet of ranks that should be operated on
+	Status int32           `json:"status"` // Status returned from a specific OSA dRPC call
+	Msg    string          `json:"msg"`    // Error message if Status is not Success
+	ID     string          `json:"id"`     // Unique identifier for pool
+	Ranks  []ranklist.Rank `json:"ranks"`  // Ranks that should be operated on
 }
 
 // PoolRanksReq struct contains request for operation on multiple pool-ranks.
@@ -763,11 +763,11 @@ type PoolRanksReq struct {
 
 // PoolRanksResp struct contains response from operation on multiple pool-ranks.
 type PoolRanksResp struct {
-	Status         int32           `json:"status"`
-	ID             string          `json:"id"`
-	FailedRank     ranklist.Rank   `json:"failed_rank"`
-	SuccessRanks   []ranklist.Rank `json:"success_ranks"`
-	InitialRankset string          `json:"initial_rankset"`
+	Status       int32           `json:"status"`
+	ID           string          `json:"id"`
+	FailedRanks  []ranklist.Rank `json:"failed_ranks"`
+	SuccessRanks []ranklist.Rank `json:"success_ranks"`
+	InitialRanks []ranklist.Rank `json:"initial_ranks"`
 }
 
 // Errors returns either a generic failure based on the requested rankset failure or a rank-specific
@@ -782,34 +782,38 @@ func (resp *PoolRanksResp) Errors() error {
 
 	err := daos.Status(resp.Status)
 
-	if resp.FailedRank == ranklist.NilRank {
-		return errors.Wrapf(err, "pool %s ranks %s", resp.ID, resp.InitialRankset)
+	if len(resp.FailedRanks) > 0 {
+		rs := ranklist.RankSetFromRanks(resp.InitialRanks)
+		return errors.Wrapf(err, "pool %s ranks %s", resp.ID, rs.String())
 	}
 
-	return errors.Wrapf(err, "pool %s rank %d", resp.ID, resp.FailedRank)
+	rs := ranklist.RankSetFromRanks(resp.FailedRanks)
+	return errors.Wrapf(err, "pool %s ranks %s", resp.ID, rs.String())
 }
 
 // GetResults returns a slice of results from the response and input error.
-func (resp *PoolRanksResp) GetResults(errIn error) (results []*PoolRanksResult, err error) {
-	if resp == nil {
-		return nil, errors.Errorf("nil %T", resp)
+func (resp *PoolRanksResp) GetResults(poolID string, reqRanks []ranklist.Rank, errIn error) (results []*PoolRanksResult, err error) {
+	if poolID == "" {
+		return nil, errors.New("pool id is missing")
 	}
-	if resp.ID == "" {
-		return nil, errors.New("empty pool id")
-	}
+
 	defer func() {
 		err = errors.Wrapf(err, "pool %s", resp.ID)
 	}()
 
 	if errIn != nil {
+		if len(reqRanks) == 0 {
+			return nil, errors.New("reqRanks is missing")
+		}
+
 		// Return root cause so rank results can be aggregated if required.
 		msgErr := errIn.Error()
 		if f, ok := errors.Cause(errIn).(*fault.Fault); ok {
 			msgErr = f.Error()
 		}
 		results = append(results, &PoolRanksResult{
-			ID:     resp.ID,
-			Ranks:  resp.InitialRankset,
+			ID:     poolID,
+			Ranks:  reqRanks,
 			Status: int32(daos.MiscError),
 			Msg:    msgErr,
 		})
@@ -817,19 +821,23 @@ func (resp *PoolRanksResp) GetResults(errIn error) (results []*PoolRanksResult, 
 		return results, nil
 	}
 
+	if resp == nil {
+		return nil, errors.Errorf("nil %T", resp)
+	}
+
 	if resp.Status != int32(daos.Success) {
-		if resp.FailedRank == ranklist.NilRank {
+		if len(resp.FailedRanks) == 0 {
 			return nil, errors.New("no failed rank returned with non-zero status")
 		}
-		// Add one result for failed rank.
+		// Add one result for failed ranks. Note same status applies to all failed ranks.
 		results = append(results, &PoolRanksResult{
-			ID:     resp.ID,
-			Ranks:  fmt.Sprintf("%d", resp.FailedRank),
+			ID:     poolID,
+			Ranks:  resp.FailedRanks,
 			Status: resp.Status,
 			Msg:    daos.Status(resp.Status).Error(),
 		})
 	} else {
-		if resp.FailedRank != ranklist.NilRank {
+		if len(resp.FailedRanks) > 0 {
 			return nil, errors.New("failed rank returned with zero status")
 		}
 		if len(resp.SuccessRanks) == 0 {
@@ -839,10 +847,9 @@ func (resp *PoolRanksResp) GetResults(errIn error) (results []*PoolRanksResult, 
 	}
 
 	if len(resp.SuccessRanks) != 0 {
-		rsSuccess := ranklist.RankSetFromRanks(resp.SuccessRanks)
 		results = append(results, &PoolRanksResult{
-			ID:    resp.ID,
-			Ranks: rsSuccess.String(),
+			ID:    poolID,
+			Ranks: resp.SuccessRanks,
 		})
 	}
 
