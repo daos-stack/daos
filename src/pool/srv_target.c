@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2197,8 +2198,9 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 		arg.uvp_checkpoint_props_changed = 1;
 	}
 
-	ret = ds_pool_thread_collective(pool->sp_uuid, PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT |
-					PO_COMP_ST_NEW, update_vos_prop_on_targets, &arg, 0);
+	ret = ds_pool_thread_collective(pool->sp_uuid,
+					PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT | PO_COMP_ST_NEW,
+					update_vos_prop_on_targets, &arg, DSS_ULT_DEEP_STACK);
 	if (ret != 0)
 		return ret;
 
