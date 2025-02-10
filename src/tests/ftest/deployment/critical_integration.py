@@ -175,7 +175,7 @@ class CriticalIntegrationWithServers(TestWithServers):
         # gather journalctl logs for each server host, verify system stop event was sent to logs
         results = get_journalctl(hosts=self.hostlist_servers, since=since,
                                  until=until, journalctl_type="daos_server")
-        str_to_match = "daos_engine exited: process killed"
+        str_to_match = "daos_engine exited: signal: killed"
         for count, host in enumerate(self.hostlist_servers):
             occurrence = results[count]["data"].count(str_to_match)
             if occurrence != 2:
