@@ -26,27 +26,43 @@ def scons():
     libs = ['vos', 'daos_common_pmem', 'abt', 'gurt', 'uuid', 'bio', 'cart',
             'cmocka', 'ddb']
     # spdk libraries
-    libs += ['spdk_event', 'spdk_log']
-    libs += ['spdk_bdev', 'spdk_blob', 'spdk_blob_bdev', 'spdk_json']
-    libs += ['spdk_nvme', 'spdk_init', 'spdk_thread', 'spdk_log']
-    libs += ['spdk_env_dpdk', 'spdk_thread', 'spdk_bdev', 'rte_mempool']
-    libs += ['rte_mempool_ring', 'rte_bus_pci', 'rte_pci', 'rte_ring']
-    libs += ['rte_mbuf', 'rte_eal', 'rte_kvargs', 'spdk_bdev_aio']
-    libs += ['spdk_bdev_nvme', 'spdk_blob', 'spdk_nvme', 'spdk_util']
-    libs += ['spdk_json', 'spdk_jsonrpc', 'spdk_rpc', 'spdk_trace']
-    libs += ['spdk_sock', 'spdk_log', 'spdk_notify', 'spdk_blob_bdev']
-    libs += ['spdk_vmd', 'spdk_event_bdev', 'spdk_init', 'rte_power']
-    src = ['ddb_cmd_options_tests.c',
-           'ddb_commands_tests.c',
-           'ddb_main_tests.c',
-           'ddb_parse_tests.c',
-           'ddb_path_tests.c',
-           'ddb_test_driver.c',
-           'ddb_vos_tests.c',
-           'ddb_commands_print_tests.c']
-    ddb_tests = denv.d_program('ddb_tests', [src], LIBS=libs)
+    spdk_libs = ['rte_bus_pci', 'rte_eal', 'rte_kvargs', 'rte_mbuf', 'rte_mempool_ring',
+                 'rte_mempool', 'rte_pci', 'rte_power', 'rte_ring', 'spdk_bdev_aio',
+                 'spdk_bdev_nvme', 'spdk_bdev', 'spdk_bdev', 'spdk_blob_bdev', 'spdk_blob_bdev',
+                 'spdk_blob', 'spdk_blob', 'spdk_env_dpdk', 'spdk_event_bdev', 'spdk_event',
+                 'spdk_init', 'spdk_init', 'spdk_json', 'spdk_json', 'spdk_jsonrpc', 'spdk_log',
+                 'spdk_log', 'spdk_log', 'spdk_notify', 'spdk_nvme', 'spdk_nvme', 'spdk_rpc',
+                 'spdk_sock', 'spdk_thread', 'spdk_thread', 'spdk_trace', 'spdk_util', 'spdk_vmd']
+    src = ['ddb_cmd_options_tests.c', 'ddb_commands_print_tests.c', 'ddb_commands_tests.c',
+           'ddb_main_tests.c', 'ddb_parse_tests.c', 'ddb_path_tests.c', 'ddb_test_driver.c',
+           'ddb_vos_tests.c']
+    ddb_tests = denv.d_program('ddb_tests', [src], LIBS=libs + spdk_libs)
 
     denv.Install('$PREFIX/bin/', ddb_tests)
+
+    # Build unit tests
+    denv = env.Clone()
+    prereqs.require(denv, 'argobots', 'spdk')
+    libs = ['uuid', 'daos_common_pmem', 'gurt', 'vea', 'abt', 'bio', 'cmocka', 'pthread']
+    denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
+    denv.AppendUnique(CPPPATH=[Dir('../').srcnode()])
+    denv.AppendUnique(CPPPATH=[Dir('../../../vos/').srcnode()])
+    denv.AppendUnique(CPPPATH=[Dir('../../../bio/').srcnode()])
+    # Required for dtx_act_discard_invalid tests.
+    # This function is validated by its respective unit tests.
+    denv.AppendUnique(LINKFLAGS=['-Wl,--wrap=vos_dtx_discard_invalid'])
+
+    denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
+    vos_src = Glob('../../../vos/*.c')
+
+    mock_src = Glob('../../../dtx/tests/*_mock.c')
+    # Pylint does not like the exclude keyword below, but it works.
+    # pylint: disable=unexpected-keyword-arg
+    ddb_src = Glob('../*.c', exclude=['../ddb_entry.c'])
+    src = ['ddb_ut.c', 'ddb_vos_ut.c']
+    ddb_ut = denv.d_program('ddb_ut', src + vos_src + mock_src + ddb_src, LIBS=libs + spdk_libs)
+
+    denv.Install('$PREFIX/bin/', ddb_ut)
 
 
 if __name__ == "SCons.Script":
