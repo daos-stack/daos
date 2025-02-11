@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -45,6 +46,8 @@ enum {
 			    (DAE_LID(dae) & DTX_LID_SOLO_MASK) - DTX_LID_RESERVED,	\
 			    DAE_EPOCH(dae));						\
 	} while (0)
+
+bool vos_skip_old_partial_dtx;
 
 static inline void
 dtx_type2umoff_flag(umem_off_t *rec, uint32_t type)
@@ -208,6 +211,7 @@ dtx_act_ent_cleanup(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 		dae->dae_oid_cnt = 0;
 	}
 
+	DAE_REC_OFF(dae) = UMOFF_NULL;
 	D_FREE(dae->dae_records);
 	dae->dae_rec_cap = 0;
 	DAE_REC_CNT(dae) = 0;
@@ -683,50 +687,61 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae, bool ab
 
 	if (dae->dae_records != NULL) {
 		D_ASSERT(DAE_REC_CNT(dae) > DTX_INLINE_REC_CNT);
+		D_ASSERT(!UMOFF_IS_NULL(dae_df->dae_rec_off));
 
-		for (i = DAE_REC_CNT(dae) - DTX_INLINE_REC_CNT - 1;
-		     i >= 0; i--) {
-			rc = do_dtx_rec_release(umm, cont, dae,
-						dae->dae_records[i], abort);
+		for (i = DAE_REC_CNT(dae) - DTX_INLINE_REC_CNT - 1; i >= 0; i--) {
+			rc = do_dtx_rec_release(umm, cont, dae, dae->dae_records[i], abort);
 			if (rc != 0)
 				return rc;
 		}
 
+		rc = umem_free(umm, dae_df->dae_rec_off);
+		if (rc != 0)
+			return rc;
+
+		if (keep_act) {
+			rc = umem_tx_add_ptr(umm, &dae_df->dae_rec_off, sizeof(dae_df->dae_rec_off));
+			if (rc != 0)
+				return rc;
+
+			dae_df->dae_rec_off = UMOFF_NULL;
+		}
+
 		count = DTX_INLINE_REC_CNT;
 	} else {
+		D_ASSERT(DAE_REC_CNT(dae) <= DTX_INLINE_REC_CNT);
+
 		count = DAE_REC_CNT(dae);
 	}
 
 	for (i = count - 1; i >= 0; i--) {
-		rc = do_dtx_rec_release(umm, cont, dae, DAE_REC_INLINE(dae)[i],
-					abort);
-		if (rc != 0)
-			return rc;
-	}
-
-	if (!UMOFF_IS_NULL(dae_df->dae_rec_off)) {
-		rc = umem_free(umm, dae_df->dae_rec_off);
+		rc = do_dtx_rec_release(umm, cont, dae, DAE_REC_INLINE(dae)[i], abort);
 		if (rc != 0)
 			return rc;
 	}
 
 	if (keep_act) {
+		/* When re-commit partial committed DTX, the count can be zero. */
+		if (dae_df->dae_rec_cnt > 0) {
+			rc = umem_tx_add_ptr(umm, &dae_df->dae_rec_cnt,
+					     sizeof(dae_df->dae_rec_cnt));
+			if (rc != 0)
+				return rc;
+
+			dae_df->dae_rec_cnt = 0;
+		}
+
 		/*
 		 * If it is required to keep the active DTX entry, then it must be for partial
 		 * commit. Let's mark it as DTE_PARTIAL_COMMITTED.
 		 */
-		if ((DAE_FLAGS(dae) & DTE_PARTIAL_COMMITTED))
+		if (DAE_FLAGS(dae) & DTE_PARTIAL_COMMITTED)
 			return 0;
-
-		rc = umem_tx_add_ptr(umm, &dae_df->dae_rec_off, sizeof(dae_df->dae_rec_off));
-		if (rc != 0)
-			return rc;
 
 		rc = umem_tx_add_ptr(umm, &dae_df->dae_flags, sizeof(dae_df->dae_flags));
 		if (rc != 0)
 			return rc;
 
-		dae_df->dae_rec_off = UMOFF_NULL;
 		dae_df->dae_flags |= DTE_PARTIAL_COMMITTED;
 
 		return 0;
@@ -929,7 +944,7 @@ out:
 		D_FREE(dce);
 
 	if (rm_cos != NULL &&
-	    (rc == 0 || rc == -DER_NONEXIST || (rc == -DER_ALREADY && dae == NULL)))
+	    ((rc == 0 && !keep_act) || rc == -DER_NONEXIST || (rc == -DER_ALREADY && dae == NULL)))
 		*rm_cos = true;
 
 	return rc;
@@ -2852,6 +2867,9 @@ vos_dtx_act_reindex(struct vos_container *cont)
 			dae->dae_prepared = 1;
 			dae->dae_need_release = 1;
 			D_INIT_LIST_HEAD(&dae->dae_link);
+
+			if (vos_skip_old_partial_dtx && DAE_FLAGS(dae) & DTE_PARTIAL_COMMITTED)
+				DAE_REC_CNT(dae) = 0;
 
 			if (DAE_REC_CNT(dae) > DTX_INLINE_REC_CNT) {
 				size_t	size;
