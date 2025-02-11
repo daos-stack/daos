@@ -1863,9 +1863,9 @@ ds_cont_tgt_refresh_track_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 		arg.tgt_status[i] = tgts[i].ta_comp.co_status;
 	ds_pool_put(pool);
 
-	rc = ds_pool_thread_collective(pool_uuid,
-				       PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
-				       cont_refresh_track_eph_one, &arg, DSS_ULT_DEEP_STACK | DSS_ULT_FL_PERIODIC);
+	rc = ds_pool_thread_collective(
+	    pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+	    cont_refresh_track_eph_one, &arg, DSS_ULT_DEEP_STACK | DSS_ULT_FL_PERIODIC);
 
 out:
 	if (arg.tgt_status != NULL && arg.tgt_status != arg.tgt_status_inline)
