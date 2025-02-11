@@ -930,11 +930,11 @@ crt_hg_ctx_init_tm(struct crt_hg_context *hg_ctx, int idx)
 	if (rc)
 		DL_WARN(rc, "Failed to create hg multi recv copy counter");
 
-	rc = d_tm_add_metric(&metrics->chm_active_rpcs, D_TM_COUNTER,
+	rc = d_tm_add_metric(&metrics->chm_active_rpcs, D_TM_GAUGE,
 			     "Mercury-layer count of active RPCs", "rpcs",
 			     "net/%s/hg/active_rpcs/ctx_%u", prov, idx);
 	if (rc)
-		DL_WARN(rc, "Failed to create hg active RPC counter");
+		DL_WARN(rc, "Failed to create hg active RPC gauge");
 
 	rc = d_tm_add_metric(&metrics->chm_extra_bulk_req, D_TM_COUNTER,
 			     "Mercury-layer count of RPCs with extra bulk request", "rpcs",
@@ -1115,7 +1115,7 @@ crt_hg_republish_diags(struct crt_hg_context *hg_ctx)
 	metrics = &hg_ctx->chc_metrics;
 	d_tm_set_counter(metrics->chm_bulks, diags.bulk_count);
 	d_tm_set_counter(metrics->chm_mr_copies, diags.rpc_multi_recv_copy_count);
-	d_tm_set_counter(metrics->chm_active_rpcs, diags.rpc_req_recv_active_count);
+	d_tm_set_gauge(metrics->chm_active_rpcs, diags.rpc_req_recv_active_count);
 	d_tm_set_counter(metrics->chm_extra_bulk_resp, diags.rpc_resp_extra_count);
 	d_tm_set_counter(metrics->chm_extra_bulk_req, diags.rpc_req_extra_count);
 	d_tm_set_counter(metrics->chm_resp_recv, diags.rpc_resp_recv_count);
