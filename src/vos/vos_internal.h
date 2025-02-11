@@ -149,6 +149,7 @@ extern uint32_t vos_agg_gap;
 
 extern unsigned int vos_agg_nvme_thresh;
 extern bool vos_dkey_punch_propagate;
+extern bool vos_skip_old_partial_dtx;
 
 static inline uint32_t vos_byte2blkcnt(uint64_t bytes)
 {

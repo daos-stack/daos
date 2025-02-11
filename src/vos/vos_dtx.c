@@ -41,6 +41,8 @@
 			    DAE_EPOCH(dae));						\
 	} while (0)
 
+bool vos_skip_old_partial_dtx;
+
 static inline uint32_t
 dtx_umoff_flag2type(umem_off_t umoff)
 {
@@ -706,7 +708,7 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae, bool ab
 		 * If it is required to keep the active DTX entry, then it must be for partial
 		 * commit. Let's mark it as DTE_PARTIAL_COMMITTED.
 		 */
-		if ((DAE_FLAGS(dae) & DTE_PARTIAL_COMMITTED))
+		if (DAE_FLAGS(dae) & DTE_PARTIAL_COMMITTED)
 			return 0;
 
 		rc = umem_tx_add_ptr(umm, &dae_df->dae_flags, sizeof(dae_df->dae_flags));
@@ -3234,6 +3236,9 @@ vos_dtx_act_reindex(struct vos_container *cont)
 			dae->dae_prepared = 1;
 			dae->dae_need_release = 1;
 			D_INIT_LIST_HEAD(&dae->dae_link);
+
+			if (vos_skip_old_partial_dtx && DAE_FLAGS(dae) & DTE_PARTIAL_COMMITTED)
+				DAE_REC_CNT(dae) = 0;
 
 			if (DAE_REC_CNT(dae) > DTX_INLINE_REC_CNT) {
 				size_t	size;
