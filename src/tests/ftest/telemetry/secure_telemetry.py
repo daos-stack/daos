@@ -1,0 +1,68 @@
+"""
+  (C) Copyright 2024 Intel Corporation.
+
+  SPDX-License-Identifier: BSD-2-Clause-Patent
+"""
+from ior_utils import read_data, write_data
+from telemetry_test_base import TestWithClientTelemetry
+
+
+class SecureClientTelemetry(TestWithClientTelemetry):
+    """Tests to verify basic client telemetry.
+
+    :avocado: recursive
+    """
+
+    def test_client_metrics_exist(self):
+        """JIRA ID: DAOS-8331.
+
+        Verify that the client-side telemetry captures some throughput metrics.
+        After performing some I/O, there should be some client telemetry data.
+
+        Test steps:
+        1) Create a pool and container
+        2) Perform some I/O with IOR
+        3) Verify that there is some client telemetry data
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=telemetry
+        :avocado: tags=SecureClientTelemetry,test_secure_client_metrics
+        """
+        print("---SAMIR--------")
+        print(self.server_managers[0].manager.job.yaml.get_yaml_data()["telemetry_config"])
+
+        print(self.server_managers[0].get_config_value("scm_mount"))
+        
+        self.server_managers[0].set_config_value("https_cert", "telemetry.cert")
+        self.server_managers[0].set_config_value("https_key", "telemetry.key")
+
+        print(self.server_managers[0].get_config_value("https_cert"))
+        print(self.server_managers[0].get_config_value("https_key"))
+        print(self.server_managers[0])
+        print("---SAMIR--------")
+        self.server_managers[0].manager.stop()
+        self.log.info("Start daos_server and detect the DAOS I/O engine message")
+        self.server_managers[0].restart(hosts=self.hostlist_servers)
+
+        # create pool and container
+        pool = self.get_pool(connect=True)
+        container = self.get_container(pool=pool)
+
+        self.log_step('Writing data to the pool (ior)')
+        ior = write_data(self, container)
+        self.log_step('Reading data from the pool (ior)')
+        read_data(self, ior, container)
+
+        metric_names = [
+            "client_pool_xferred_fetch",
+            "client_pool_xferred_update",
+        ]
+
+        self.log_step('Reading client telemetry (reads & writes should be > 0)')
+        after_metrics = self.telemetry.collect_client_data(metric_names)
+        for metric in metric_names:
+            msum = sum(after_metrics[metric].values())
+            self.assertGreater(msum, 0, f'{metric} value not greater than zero after I/O')
+
+        self.log_step('Test passed')

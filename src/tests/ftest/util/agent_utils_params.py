@@ -44,8 +44,10 @@ class DaosAgentTelemetryConfig(TelemetryConfig):
         self.telemetry_port = BasicParameter(None, 9192)
         self.telemetry_enabled = BasicParameter(None)
         self.telemetry_retain = BasicParameter(None)
-        self.https_cert = LogParameter(self._log_dir, None, "telemetry.crt")
-        self.https_key = LogParameter(self._log_dir, None, "telemetry.key")
+        self.https_cert = BasicParameter(None)
+        self.https_key = BasicParameter(None)
+        # self.https_cert = LogParameter(self._log_dir, None, "telemetry.crt")
+        # self.https_key = LogParameter(self._log_dir, None, "telemetry.key")
 
     def _get_new(self):
         """Get a new object based upon this one.

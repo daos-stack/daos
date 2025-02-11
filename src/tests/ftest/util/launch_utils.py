@@ -426,11 +426,13 @@ class TestRunner():
 
         # Generate certificate files for the test
         status = self._generate_certs(logger)
+        # SAMIR
         if status:
             return status
 
         # Generate certificate files for the test
         return self._generate_telemetry_certs(logger)
+
 
     def execute(self, logger, test, repeat, number, sparse, fail_fast):
         """Run the specified test.

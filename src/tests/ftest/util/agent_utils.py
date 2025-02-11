@@ -287,9 +287,12 @@ class DaosAgentManager(SubprocessManager):
         # Copy certificates
         self.manager.job.copy_certificates(
             get_log_file("daosCA/certs"), self._hosts)
+        # SAMIR
+        """
         self.manager.job.copy_telemetry_root_certificates(
             get_log_file("daosTelemetryCA"), self._hosts)
         self.manager.job.generate_telemetry_server_certificates(self._hosts, "daos_agent")
+        """
 
         # Verify the socket directory exists when using a non-systemctl manager
         if self.verify_socket_dir:
