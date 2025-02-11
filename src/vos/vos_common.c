@@ -716,6 +716,14 @@ vos_mod_init(void)
 	d_getenv_bool("DAOS_DKEY_PUNCH_PROPAGATE", &vos_dkey_punch_propagate);
 	D_INFO("DKEY punch propagation is %s\n", vos_dkey_punch_propagate ? "enabled" : "disabled");
 
+	/*
+	 * NOTE: It is used to skip old partial committed DTX records that were generated when
+	 *	 ran as DAOS-2.6.3-rc{1,2}. If the user has never used such version, please do
+	 *	 NOT set this environment variable.
+	 */
+	d_getenv_bool("DAOS_SKIP_OLD_PARTIAL_DTX", &vos_skip_old_partial_dtx);
+	D_INFO("%s old partial committed DTX record\n", vos_skip_old_partial_dtx ? "Skip" : "Keep");
+
 	vos_agg_gap = VOS_AGG_GAP_DEF;
 	d_getenv_uint("DAOS_VOS_AGG_GAP", &vos_agg_gap);
 	if (vos_agg_gap < VOS_AGG_GAP_MIN || vos_agg_gap > VOS_AGG_GAP_MAX) {
