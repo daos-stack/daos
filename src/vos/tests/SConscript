@@ -30,7 +30,7 @@ def scons():
     vos_test_src = ['vos_tests.c', vts_objs, 'vts_pool.c', 'vts_container.c',
                     'vts_aggregate.c', 'vts_gc.c', 'vts_checksum.c', 'vts_ilog.c',
                     'vts_array.c', 'vts_pm.c', 'vts_ts.c', 'vts_mvcc.c',
-                    'vos_cmd.c', 'vts_wal.c']
+                    'vos_cmd.c', 'vts_wal.c', 'vts_evtree.c', 'vts_tree.c']
     vos_tests = tenv.d_program('vos_tests', vos_test_src, LIBS=libraries)
     tenv.AppendUnique(CPPPATH=[Dir('../../common/tests').srcnode()])
     evt_ctl = tenv.d_program('evt_ctl', ['evt_ctl.c', utest_utils, cmd_parser], LIBS=libraries)
