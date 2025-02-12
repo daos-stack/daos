@@ -634,9 +634,10 @@ do_dtx_rec_release(struct umem_instance *umm, struct vos_container *cont,
 	}
 
 	if (rc == -DER_NONEXIST) {
-		D_ASSERTF(0, "DTX record no longer exists, may indicate some corruption: " DF_DTI
-		       " type %u\n",
-		       DP_DTI(&DAE_XID(dae)), dtx_umoff_flag2type(rec));
+		D_ASSERTF(0,
+			  "DTX record no longer exists, may indicate some corruption: " DF_DTI
+			  " type %u\n",
+			  DP_DTI(&DAE_XID(dae)), dtx_umoff_flag2type(rec));
 		rc = 0;
 	}
 
