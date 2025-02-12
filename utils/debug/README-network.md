@@ -45,7 +45,7 @@ To test RDMA communications with ib network:
 
 To test IB Verbs with `ibv_rc_pingpong`:
 - client: `ibv_rc_pingpong -d <ib device> -i <ib index> -g <server gid> -p <server port> <server ip>`
-- server: `ibv_rc_pingpong -d <ib device> -i <ib index> -g <server gid> -p <server port>
+- server: `ibv_rc_pingpong -d <ib device> -i <ib index> -g <server gid> -p <server port>`
 
 To test RDAM CM connection:
 - client: `ucmatose -s <server ip>`
@@ -65,3 +65,6 @@ On the server a file `port.cfg` is generated which should be copied on the clien
 
 To test CART:
 - `self-test -u --no-sync --group-name daos_server --message-size '(0 0)' --repetitions 1 --endpoint "0:0-7" `
+- To run without the agent, a configuration file of the CART configuration needs to be provided to
+  `self_test`.   More info on the format of this configuration file and how it could be generated
+  could be find in the material of the ticket DAOS-17109.
