@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1090,6 +1091,8 @@ crt_grp_priv_create(struct crt_grp_priv **grp_priv_created,
 
 	grp_priv->gp_size = 0;
 	grp_priv->gp_refcount = 1;
+	grp_priv->gp_psr_rank = CRT_NO_RANK;
+
 	rc = D_RWLOCK_INIT(&grp_priv->gp_rwlock, NULL);
 	if (rc)
 		D_GOTO(out_swim_lock, rc);
