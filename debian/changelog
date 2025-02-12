@@ -1,8 +1,14 @@
-daos (2.7.101-4) unstable; urgency=medium
+daos (2.7.101-6) unstable; urgency=medium
   [ Cedric Koch-Hofer]
   * Add support of the libasan
 
- -- Cedric Koch-Hofer <cedric.koch-hofer@intel.com>  Mon, 20 Jan 2025 14:12:00 -0700
+ -- Cedric Koch-Hofer <cedric.koch-hofer@intel.com>  Wed, 12 Feb 2025 14:12:00 -0700
+
+daos (2.7.101-5) unstable; urgency=medium
+  [ Jan Michalski ]
+  * Add ddb_ut and dtx_ut to the server-tests package
+
+ -- Jan Michalski <jan-marian.michalski@hpe.com>  Wed, 22 Jan 2025 14:31:00 +0000
 
 daos (2.7.101-3) unstable; urgency=medium
   [ Jeff Olivier ]

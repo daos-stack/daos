@@ -132,13 +132,14 @@ class MissingSystemLibs(Exception):
         component    -- component that has missing targets
     """
 
-    def __init__(self, component):
+    def __init__(self, component, prog):
         super().__init__()
         self.component = component
+        self.prog = prog
 
     def __str__(self):
         """Exception string"""
-        return f'{self.component} has unmet dependencies required for build'
+        return f"{self.component} requires {self.prog} for build"
 
 
 class DownloadRequired(Exception):
@@ -654,7 +655,7 @@ class PreReqComponent():
                 if self.__check_only:
                     continue
                 config.Finish()
-                raise MissingSystemLibs(prog)
+                raise MissingSystemLibs(compiler, prog)
             args = {name: prog}
             self.__env.Replace(**args)
 
@@ -1480,7 +1481,7 @@ class _Component():
         if build_dep:
 
             if self._has_missing_system_deps(self.prereqs.system_env):
-                raise MissingSystemLibs(self.name)
+                raise MissingSystemLibs(self.name, self.required_progs)
 
             self.get()
 
