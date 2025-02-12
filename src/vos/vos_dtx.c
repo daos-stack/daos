@@ -573,7 +573,7 @@ do_dtx_rec_release(struct umem_instance *umm, struct vos_container *cont,
 
 		svt = umem_off2ptr(umm, umem_off2offset(rec));
 
-		if (svt->ir_dtx != DAE_LID(dae)) {
+		if (!vos_irec_is_valid(svt, DAE_LID(dae))) {
 			rc = -DER_NONEXIST;
 			break;
 		}
@@ -601,7 +601,7 @@ do_dtx_rec_release(struct umem_instance *umm, struct vos_container *cont,
 
 		evt = umem_off2ptr(umm, umem_off2offset(rec));
 
-		if (evt->dc_magic != EVT_DESC_MAGIC || evt->dc_dtx != DAE_LID(dae)) {
+		if (!evt_desc_is_valid(evt, DAE_LID(dae))) {
 			rc = -DER_NONEXIST;
 			break;
 		}
