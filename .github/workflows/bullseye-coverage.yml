@@ -201,7 +201,7 @@ jobs:
     env:
       CONFIG_POWER_ONLY: false
       PRAGMA_SUFFIX: -vm
-      OPERATIONS_EMAIL: brian.murrell@intel.com
+      OPERATIONS_EMAIL: core-daos-devops@groups.int.hpe.com
       TEST_RPMS: true
       COMMIT_MESSAGE: ${{ needs.Call-RPM-Build.outputs.commit-message }}
       JENKINS_URL: https://build.hpdd.intel.com/
@@ -491,7 +491,7 @@ jobs:
     env:
       CONFIG_POWER_ONLY: false
       PRAGMA_SUFFIX: -vm
-      OPERATIONS_EMAIL: brian.murrell@intel.com
+      OPERATIONS_EMAIL: core-daos-devops@groups.int.hpe.com
       TEST_RPMS: true
       COMMIT_MESSAGE: ${{ needs.Call-RPM-Build.outputs.commit-message }}
       JENKINS_URL: https://build.hpdd.intel.com/
