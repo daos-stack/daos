@@ -596,8 +596,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Mon Feb 10 2025 Jan Michalski <jan-marian.michalski@hpe.com> 2.6.3-3
+* Thu Feb 13 2025 Jan Michalski <jan-marian.michalski@hpe.com> 2.6.3-4
 - Add ddb_ut and dtx_ut to the server-tests package 
+
+* Tue Feb 11 2025 Phillip Henderson <phillip.henderson@intel.com> 2.6.3-3
+- Third release candidate for 2.6.3
 
 * Tue Feb 04 2025 Phillip Henderson <phillip.henderson@intel.com> 2.6.3-2
 - Second release candidate for 2.6.3
