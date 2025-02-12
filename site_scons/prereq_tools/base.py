@@ -1,4 +1,5 @@
 # Copyright 2016-2024 Intel Corporation
+# Copyright 2025 Google LLC
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -131,13 +132,14 @@ class MissingSystemLibs(Exception):
         component    -- component that has missing targets
     """
 
-    def __init__(self, component):
+    def __init__(self, component, prog):
         super().__init__()
         self.component = component
+        self.prog = prog
 
     def __str__(self):
         """Exception string"""
-        return f'{self.component} has unmet dependencies required for build'
+        return f"{self.component} requires {self.prog} for build"
 
 
 class DownloadRequired(Exception):
@@ -652,7 +654,7 @@ class PreReqComponent():
                 if self.__check_only:
                     continue
                 config.Finish()
-                raise MissingSystemLibs(prog)
+                raise MissingSystemLibs(compiler, prog)
             args = {name: prog}
             self.__env.Replace(**args)
 
@@ -902,7 +904,7 @@ class PreReqComponent():
             if not os.path.exists(ipath):
                 ipath = None
             lpath = None
-            for lib in ['lib64', 'lib']:
+            for lib in comp.lib_path:
                 lpath = os.path.join(path, lib)
                 if os.path.exists(lpath):
                     break
@@ -1156,7 +1158,7 @@ class _Component():
         if (not self.use_installed and real_comp_path is not None
            and not real_comp_path == "/usr"):
             path_found = False
-            for path in ["lib", "lib64"]:
+            for path in self.lib_path:
                 config = os.path.join(real_comp_path, path, "pkgconfig")
                 if not os.path.exists(config):
                     continue
@@ -1393,7 +1395,7 @@ class _Component():
         if not os.path.exists(comp_path):
             return
 
-        for libdir in ['lib64', 'lib']:
+        for libdir in self.lib_path:
             path = os.path.join(comp_path, libdir)
             if os.path.exists(path):
                 norigin.append(os.path.normpath(path))
@@ -1405,14 +1407,14 @@ class _Component():
                 comp = self.prereqs.get_component(prereq)
                 subpath = comp.component_prefix
                 if subpath and not subpath.startswith("/usr"):
-                    for libdir in ['lib64', 'lib']:
+                    for libdir in self.lib_path:
                         lpath = os.path.join(subpath, libdir)
                         if not os.path.exists(lpath):
                             continue
                         rpath.append(lpath)
                 continue
 
-            for libdir in ['lib64', 'lib']:
+            for libdir in self.lib_path:
                 path = os.path.join(rootpath, libdir)
                 if not os.path.exists(path):
                     continue
@@ -1478,7 +1480,7 @@ class _Component():
         if build_dep:
 
             if self._has_missing_system_deps(self.prereqs.system_env):
-                raise MissingSystemLibs(self.name)
+                raise MissingSystemLibs(self.name, self.required_progs)
 
             self.get()
 
