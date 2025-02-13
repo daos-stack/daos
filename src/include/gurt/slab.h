@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2025 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -72,6 +72,8 @@ struct d_slab_type {
 	/* Number of sequental calls to acquire() without a call to restock() */
 	int               st_no_restock;     /* Current count */
 	int               st_no_restock_hwm; /* High water mark */
+	/* continous low traffic times to free slab entry if possible */
+	int               st_conts_idle_count;
 };
 
 struct d_slab {
@@ -118,5 +120,9 @@ d_slab_restock(struct d_slab_type *type);
  */
 bool
 d_slab_reclaim(struct d_slab *slab) __attribute((warn_unused_result, nonnull));
+
+/* Reclaim slab entry if possible to reduce memory taken by dfuse.*/
+void
+d_slab_reclaim_if_possible(struct d_slab *slab);
 
 #endif /*  __SLAB_H__ */

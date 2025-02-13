@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2025 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -268,6 +268,7 @@ d_slab_register(struct d_slab *slab, struct d_slab_reg *reg, void *arg, struct d
 	type->st_slab = slab;
 
 	type->st_count = 0;
+	type->st_conts_idle_count = 0;
 	type->st_reg   = *reg;
 	type->st_arg   = arg;
 
@@ -395,4 +396,68 @@ d_slab_restock(struct d_slab_type *type)
 		create_many(type);
 
 	D_MUTEX_UNLOCK(&type->st_lock);
+}
+
+#define MAX_SLAB_NUM_TO_KEEP  32
+#define FREE_SLAB_NUM_FOR_IDLE 5
+#define CONTS_IDLE_COUNT_MIN   3
+#define RECLAIM_NUM_PER_ROUND  5
+
+/* Reclaim slab entry if possible to reduce memory taken by dfuse.
+*
+* This function will be called periodically in background and try to
+* release some slab entry not used now, to reduce the memory taken by
+* dfuse process when traffic is not heavy.
+*/
+void
+d_slab_reclaim_if_possible(struct d_slab *slab)
+{
+	struct d_slab_type *type;
+	int to_free_count;
+
+	D_MUTEX_LOCK(&slab->slab_lock);
+	d_list_for_each_entry(type, &slab->slab_list, st_type_list) {
+		d_list_t *entry, *enext;
+
+		/* check whether the slab entry is large and the traffic not heavy */
+		if (type->st_count < MAX_SLAB_NUM_TO_KEEP ||
+			type->st_free_count < FREE_SLAB_NUM_FOR_IDLE) {
+			type->st_conts_idle_count = 0;
+			continue;
+		}
+
+		type->st_conts_idle_count ++;
+		if (type->st_conts_idle_count < CONTS_IDLE_COUNT_MIN) {
+			continue;
+		}
+
+		to_free_count = (type->st_count - MAX_SLAB_NUM_TO_KEEP) > \
+						RECLAIM_NUM_PER_ROUND ? RECLAIM_NUM_PER_ROUND :\
+						(type->st_count - MAX_SLAB_NUM_TO_KEEP);
+		D_MUTEX_LOCK(&type->st_lock);
+		D_TRACE_DEBUG(DB_ANY, type, "Recaliming type");
+		restock(type, type->st_free_count + to_free_count);
+
+		d_list_for_each_safe(entry, enext, &type->st_free_list) {
+			void *ptr = (void *)entry - type->st_reg.sr_offset;
+
+			if (type->st_reg.sr_release) {
+				type->st_reg.sr_release(ptr);
+				type->st_release_count++;
+			}
+
+			d_list_del(entry);
+			D_FREE(ptr);
+			type->st_free_count--;
+			type->st_count--;
+			to_free_count--;
+
+			if (to_free_count == 0) {
+				break;
+			}
+		}
+		D_MUTEX_UNLOCK(&type->st_lock);
+		type->st_conts_idle_count = 0;
+	}
+	D_MUTEX_UNLOCK(&slab->slab_lock);
 }
