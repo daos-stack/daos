@@ -1,8 +1,8 @@
 diff --git a/prov/tcp/src/xnet.h b/prov/tcp/src/xnet.h
-index ee16d7e3a..1ee7d77a6 100644
+index ee16d7e3a..8470902c2 100644
 --- a/prov/tcp/src/xnet.h
 +++ b/prov/tcp/src/xnet.h
-@@ -754,4 +754,26 @@ int xnet_rdm_ops_open(struct fid *fid, const char *name,
+@@ -754,4 +754,29 @@ int xnet_rdm_ops_open(struct fid *fid, const char *name,
  	FI_WARN(&xnet_prov, subsystem, log_str "%s (%d)\n", \
  		fi_strerror((int) -(err)), (int) err)
  
@@ -23,14 +23,17 @@ index ee16d7e3a..1ee7d77a6 100644
 +	ofi_straddr(_buf, &_len, ofi_translate_addr_format(ofi_sa_family(_addr)), _addr);	\
 +	ofi_straddr(_src_buf, &_src_len, ofi_translate_addr_format(ofi_sa_family(_src_addr)),	\
 +		    _src_addr);									\
-+												\
-+	FI_WARN(&xnet_prov, FI_LOG_EP_CTRL, "error on %s From %s : %s\n", _buf, _src_buf,	\
-+		fi_strerror(err));								\
++	if (err != 0)										\
++		FI_WARN(&xnet_prov, FI_LOG_EP_CTRL, "error on %s From %s : %s\n",		\
++			_buf, _src_buf,	fi_strerror(err));					\
++	else											\
++		FI_INFO(&xnet_prov, FI_LOG_EP_CTRL, "error on %s From %s : %s\n",		\
++			_buf, _src_buf,	fi_strerror(err));					\
 +} while(0)
 +
  #endif //_XNET_H_
 diff --git a/prov/tcp/src/xnet_ep.c b/prov/tcp/src/xnet_ep.c
-index 64772fef0..4c0166ae8 100644
+index 64772fef0..2cc31136e 100644
 --- a/prov/tcp/src/xnet_ep.c
 +++ b/prov/tcp/src/xnet_ep.c
 @@ -326,7 +326,7 @@ xnet_ep_accept(struct fid_ep *ep_fid, const void *param, size_t paramlen)
@@ -86,7 +89,15 @@ index 64772fef0..4c0166ae8 100644
  	ep->rx_avail = 0;
  	ofi_bsock_discard(&ep->bsock);
  }
-@@ -561,6 +564,7 @@ static void xnet_ep_cancel_rx(struct xnet_ep *ep, void *context)
+@@ -444,6 +447,7 @@ void xnet_ep_disable(struct xnet_ep *ep, int cm_err, void* err_data,
+ 	if (!xnet_io_uring)
+ 		xnet_halt_sock(xnet_ep2_progress(ep), ep->bsock.sock);
+ 
++	XNET_OUTPUT_ERR_WARN(ep, cm_err);
+ 	ret = ofi_shutdown(ep->bsock.sock, SHUT_RDWR);
+ 	if (ret && ofi_sockerr() != ENOTCONN)
+ 		FI_WARN(&xnet_prov, FI_LOG_EP_DATA, "shutdown failed\n");
+@@ -561,6 +565,7 @@ static void xnet_ep_cancel_rx(struct xnet_ep *ep, void *context)
  found:
  	slist_remove(&ep->rx_queue, cur, prev);
  	ep->rx_avail++;
