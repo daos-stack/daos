@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -115,7 +116,6 @@ struct rpc_test_cli {
 	/*server group to attach to*/
 	crt_group_t		*target_group[2];
 	crt_context_t		crt_ctx;
-	d_rank_list_t		*psr_cand_list;
 	pthread_t		progress_thid;
 	sem_t			cli_sem;
 	uint32_t		timeout;
