@@ -1569,6 +1569,7 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	if (rc != 0)
 		goto out_prop;
 
+	cont->c_svc->cs_destroying = true;
 	rc = cont_destroy_bcast(rpc->cr_ctx, cont->c_svc, cont->c_uuid);
 	if (rc != 0)
 		goto out_prop;
@@ -1646,6 +1647,7 @@ out_prop:
 out:
 	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p " DF_RC "\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid), rpc, DP_RC(rc));
+	cont->c_svc->cs_destroying = false;
 	return rc;
 }
 
@@ -4144,6 +4146,7 @@ ds_cont_close_by_pool_hdls(uuid_t pool_uuid, uuid_t *pool_hdls, int n_pool_hdls,
 	if (rc != 0)
 		D_GOTO(out_svc, rc);
 
+	D_ASSERT(svc->cs_destroying == false);
 	ABT_rwlock_wrlock(svc->cs_lock);
 
 	arg.cia_tx = &tx;
@@ -5304,6 +5307,7 @@ ds_cont_prop_iv_update(struct cont_svc *svc, uuid_t cont_uuid)
 		return;
 	}
 
+	D_ASSERT(svc->cs_destroying == false);
 	ABT_rwlock_rdlock(svc->cs_lock);
 	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
 	if (rc != 0) {
@@ -5726,6 +5730,7 @@ ds_cont_oid_fetch_add(uuid_t po_uuid, uuid_t co_uuid, uint64_t num_oids, uint64_
 	if (rc != 0)
 		D_GOTO(out_svc, rc);
 
+	D_ASSERT(svc->cs_destroying == false);
 	ABT_rwlock_wrlock(svc->cs_lock);
 
 	rc = cont_lookup(&tx, svc, co_uuid, &cont);
@@ -5937,6 +5942,7 @@ ds_cont_get_prop(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t **prop_out)
 	if (rc != 0)
 		return rc;
 
+	D_ASSERT(svc->cs_destroying == false);
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
 	if (rc != 0)
 		D_GOTO(out_put, rc);
@@ -5989,6 +5995,7 @@ ds_cont_hdl_rdb_lookup(uuid_t pool_uuid, uuid_t cont_hdl_uuid, struct container_
 	if (rc != 0)
 		D_GOTO(put, rc);
 
+	D_ASSERT(svc->cs_destroying == false);
 	ABT_rwlock_rdlock(svc->cs_lock);
 	/* See if this container handle already exists. */
 	d_iov_set(&key, cont_hdl_uuid, sizeof(uuid_t));
