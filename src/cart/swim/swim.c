@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2016 UChicago Argonne, LLC
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1080,6 +1081,7 @@ swim_updates_parse(struct swim_context *ctx, swim_id_t from_id, swim_id_t id,
 {
 	enum swim_context_state ctx_state;
 	struct swim_member_state self_state;
+	struct swim_member_state id_state;
 	swim_id_t self_id = swim_self_get(ctx);
 	swim_id_t upd_id;
 	size_t i;
@@ -1092,6 +1094,17 @@ swim_updates_parse(struct swim_context *ctx, swim_id_t from_id, swim_id_t id,
 
 	swim_ctx_lock(ctx);
 	ctx_state = swim_state_get(ctx);
+
+	rc = ctx->sc_ops->get_member_state(ctx, id, &id_state);
+	if (rc == -DER_NONEXIST || id_state.sms_status == SWIM_MEMBER_DEAD) {
+		swim_ctx_unlock(ctx);
+		SWIM_INFO("%lu: skip untrustable update from %lu, rc = %d\n", self_id, id, rc);
+		D_GOTO(out, rc = -DER_NONEXIST);
+	} else if (rc != 0) {
+		swim_ctx_unlock(ctx);
+		SWIM_ERROR("get_member_state(%lu): " DF_RC "\n", id, DP_RC(rc));
+		D_GOTO(out, rc);
+	}
 
 	if ((from_id == ctx->sc_target || id == ctx->sc_target) &&
 	    (ctx_state == SCS_BEGIN || ctx_state == SCS_PINGED || ctx_state == SCS_IPINGED)) {
