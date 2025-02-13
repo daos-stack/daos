@@ -751,90 +751,18 @@ pool_change_target_state(char *id, d_rank_list_t *svc_ranks, size_t n_target_idx
 	return rc;
 }
 
-static int
-pool_ranks_fill_resp(Mgmt__PoolRanksResp *resp, char *id, uint32_t *ranks, size_t n_ranks,
-		     uint32_t *svc_ranks, size_t n_svc_ranks, uint32_t *target_idx,
-		     size_t n_target_idx, pool_comp_state_t state, size_t scm_size,
-		     size_t nvme_size, size_t meta_size, bool skip_rf_check)
-{
-	d_rank_list_t *tgt_rl     = NULL;
-	d_rank_list_t *svc_rl     = NULL;
-	d_rank_list_t *success_rl = NULL;
-	d_rank_list_t *failed_rl  = NULL;
-	int            rc;
-	int            i;
-	int            j = 0;
-
-	D_ASSERT(ranks != NULL);
-	D_ASSERT(n_ranks > 0);
-	D_ASSERT(svc_ranks != NULL);
-	D_ASSERT(n_svc_ranks > 0);
-
-	tgt_rl = uint32_array_to_rank_list(ranks, n_ranks);
-	if (tgt_rl == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	svc_rl = uint32_array_to_rank_list(svc_ranks, n_svc_ranks);
-	if (svc_rl == NULL)
-		D_GOTO(out_tgt, rc = -DER_NOMEM);
-
-	success_rl = d_rank_list_alloc(n_ranks);
-	if (success_rl == NULL)
-		D_GOTO(out_svc, rc = -DER_NOMEM);
-
-	failed_rl = d_rank_list_alloc(n_ranks);
-	if (failed_rl == NULL)
-		D_GOTO(out_success, rc = -DER_NOMEM);
-
-	for (i = 0; i < n_ranks; i++) {
-		D_INFO("change_target_state: %d\n", ranks[i]);
-		rc = pool_change_target_state(id, svc_rl, n_target_idx, target_idx, ranks[i], state,
-					      scm_size, nvme_size, meta_size, skip_rf_check);
-		if (rc != 0) {
-			D_ASSERT(j < failed_rl->rl_nr);
-			failed_rl->rl_ranks[j++] = ranks[i];
-			D_INFO("nr failures: %d (%d)\n", j, ranks[i]);
-			continue;
-		}
-
-		D_ASSERT(j < success_rl->rl_nr);
-		success_rl->rl_ranks[j++] = ranks[i];
-		D_INFO("nr successe: %d (%d)\n", j, ranks[i]);
-	}
-
-	rc = rank_list_to_uint32_array(failed_rl, &resp->failed_ranks, &resp->n_failed_ranks);
-	if (rc != 0) {
-		D_ERROR("Failed to convert failed rank list: rc=%d\n", rc);
-		D_GOTO(out_failed_resp, rc = -DER_INVAL);
-	}
-
-	rc = rank_list_to_uint32_array(success_rl, &resp->success_ranks, &resp->n_success_ranks);
-	if (rc != 0) {
-		D_ERROR("Failed to convert success rank list: rc=%d\n", rc);
-	}
-
-out_failed_resp:
-	d_rank_list_free(failed_rl);
-out_success:
-	d_rank_list_free(success_rl);
-out_svc:
-	d_rank_list_free(svc_rl);
-out_tgt:
-	d_rank_list_free(tgt_rl);
-out:
-	return rc;
-}
-
 void
 ds_mgmt_drpc_pool_exclude(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	struct drpc_alloc        alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Mgmt__PoolExcludeReq	*req = NULL;
-	Mgmt__PoolRanksResp      resp;
+	Mgmt__PoolExcludeResp    resp;
+	d_rank_list_t           *svc_ranks = NULL;
 	uint8_t			*body;
 	size_t                   len;
+	int                      rc;
 
-	mgmt__pool_ranks_resp__init(&resp);
+	mgmt__pool_exclude_resp__init(&resp);
 
 	/* Unpack the inner request from the drpc call body */
 	req = mgmt__pool_exclude_req__unpack(&alloc.alloc,
@@ -847,17 +775,24 @@ ds_mgmt_drpc_pool_exclude(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	resp.status = pool_ranks_fill_resp(&resp, req->id, req->ranks, req->n_ranks, req->svc_ranks,
-					   req->n_svc_ranks, req->target_idx, req->n_target_idx,
-					   PO_COMP_ST_DOWN, 0 /* scm_size */, 0 /* nvme_size */,
-					   0 /* meta_size */, req->force);
+	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
+	if (svc_ranks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
-	len         = mgmt__pool_ranks_resp__get_packed_size(&resp);
+	rc = pool_change_target_state(req->id, svc_ranks, req->n_target_idx, req->target_idx,
+				      req->rank, PO_COMP_ST_DOWN, 0 /* scm_size */,
+				      0 /* nvme_size */, 0 /* meta_size */, req->force);
+
+	d_rank_list_free(svc_ranks);
+
+out:
+	resp.status = rc;
+	len         = mgmt__pool_exclude_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 	} else {
-		mgmt__pool_ranks_resp__pack(&resp, body);
+		mgmt__pool_exclude_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
 		drpc_resp->body.data = body;
 	}
@@ -870,11 +805,13 @@ ds_mgmt_drpc_pool_drain(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	struct drpc_alloc        alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Mgmt__PoolDrainReq	*req = NULL;
-	Mgmt__PoolRanksResp      resp;
+	Mgmt__PoolDrainResp      resp;
+	d_rank_list_t           *svc_ranks = NULL;
 	uint8_t			*body;
 	size_t                   len;
+	int                      rc;
 
-	mgmt__pool_ranks_resp__init(&resp);
+	mgmt__pool_drain_resp__init(&resp);
 
 	/* Unpack the inner request from the drpc call body */
 	req = mgmt__pool_drain_req__unpack(&alloc.alloc,
@@ -887,17 +824,24 @@ ds_mgmt_drpc_pool_drain(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	resp.status = pool_ranks_fill_resp(&resp, req->id, req->ranks, req->n_ranks, req->svc_ranks,
-					   req->n_svc_ranks, req->target_idx, req->n_target_idx,
-					   PO_COMP_ST_DRAIN, 0 /* scm_size */, 0 /* nvme_size */,
-					   0 /* meta_size */, false);
+	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
+	if (svc_ranks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
-	len         = mgmt__pool_ranks_resp__get_packed_size(&resp);
+	rc = pool_change_target_state(req->id, svc_ranks, req->n_target_idx, req->target_idx,
+				      req->rank, PO_COMP_ST_DRAIN, 0 /* scm_size */,
+				      0 /* nvme_size */, 0 /* meta_size */, false);
+
+	d_rank_list_free(svc_ranks);
+
+out:
+	resp.status = rc;
+	len         = mgmt__pool_drain_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 	} else {
-		mgmt__pool_ranks_resp__pack(&resp, body);
+		mgmt__pool_drain_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
 		drpc_resp->body.data = body;
 	}
@@ -996,14 +940,15 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	struct drpc_alloc                alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Mgmt__PoolReintReq              *req   = NULL;
-	Mgmt__PoolRanksResp              resp;
+	Mgmt__PoolReintResp              resp;
+	d_rank_list_t                   *svc_ranks = NULL;
 	uint8_t				*body;
 	size_t                           len;
 	uint64_t                         scm_bytes;
 	uint64_t                         nvme_bytes = 0;
 	int                              rc;
 
-	mgmt__pool_ranks_resp__init(&resp);
+	mgmt__pool_reint_resp__init(&resp);
 
 	/* Unpack the inner request from the drpc call body */
 	req = mgmt__pool_reint_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
@@ -1026,19 +971,24 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (req->n_tier_bytes > DAOS_MEDIA_NVME)
 		nvme_bytes = req->tier_bytes[DAOS_MEDIA_NVME];
 
-	rc = pool_ranks_fill_resp(&resp, req->id, req->ranks, req->n_ranks, req->svc_ranks,
-				  req->n_svc_ranks, req->target_idx, req->n_target_idx,
-				  PO_COMP_ST_UP, scm_bytes, nvme_bytes,
-				  req->tier_bytes[DAOS_MEDIA_SCM] /* meta_size */, false);
+	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
+	if (svc_ranks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = pool_change_target_state(req->id, svc_ranks, req->n_target_idx, req->target_idx,
+				      req->rank, PO_COMP_ST_UP, scm_bytes, nvme_bytes,
+				      req->tier_bytes[DAOS_MEDIA_SCM] /* meta_size */, false);
+
+	d_rank_list_free(svc_ranks);
 
 out:
 	resp.status = rc;
-	len         = mgmt__pool_ranks_resp__get_packed_size(&resp);
+	len         = mgmt__pool_reint_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 	} else {
-		mgmt__pool_ranks_resp__pack(&resp, body);
+		mgmt__pool_reint_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
 		drpc_resp->body.data = body;
 	}

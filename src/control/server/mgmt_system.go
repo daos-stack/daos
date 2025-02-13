@@ -1099,7 +1099,6 @@ func (svc *mgmtSvc) refuseMissingRanks(hosts, ranks string) (*ranklist.RankSet, 
 
 // Build mappings of pools to any ranks that match the input filter by iterating through the pool
 // service list. Identify pools by label if possible.
-// TODO: on reintegrate dont allow selection of AdminExcluded ranks?
 func (svc *mgmtSvc) getPoolsRanks(ranks *ranklist.RankSet) ([]string, poolRanksMap, error) {
 	poolRanks := make(poolRanksMap)
 	poolIDs := []string{} // Label or UUID.
@@ -1145,11 +1144,11 @@ func (svc *mgmtSvc) getPoolsRanks(ranks *ranklist.RankSet) ([]string, poolRanksM
 
 type poolRanksMap map[string]*ranklist.RankSet
 
-type poolRankOpSig func(*mgmtSvc, context.Context, *control.PoolRanksReq) (*control.PoolRanksResp, error)
+type poolRanksOpSig func(context.Context, control.UnaryInvoker, *control.PoolRanksReq) (*control.PoolRanksResp, error)
 
 // Generate operation results by iterating through pool's ranks and calling supplied fn on each.
-func (svc *mgmtSvc) getPoolRankResults(ctx context.Context, sys string, poolIDs []string, poolRanks poolRanksMap, drpcCall poolRankOpSig) ([]*mgmtpb.PoolRanksResult, error) {
-	results := []*mgmtpb.PoolRanksResult{}
+func (svc *mgmtSvc) getPoolRanksResps(ctx context.Context, sys string, poolIDs []string, poolRanks poolRanksMap, ctlApiCall poolRanksOpSig) ([]*control.PoolRanksResp, error) {
+	resps := []*control.PoolRanksResp{}
 
 	for _, id := range poolIDs {
 		rs := poolRanks[id]
@@ -1158,101 +1157,36 @@ func (svc *mgmtSvc) getPoolRankResults(ctx context.Context, sys string, poolIDs 
 		}
 
 		req := &control.PoolRanksReq{
-			ID:    id,
-			Ranks: rs.Ranks(),
+			PoolID: id,
+			Ranks:  rs.Ranks(),
 		}
 		req.Sys = sys
 
-		resp, err := drpcCall(svc, ctx, req)
-
-		svc.log.Tracef("%T: %+v, %T: %+v", req, req, resp, resp)
-
-		newResults, err := resp.GetResults(id, rs.Ranks(), err)
+		resp, err := ctlApiCall(ctx, svc.rpcClient, req)
 		if err != nil {
 			return nil, err
 		}
 
-		svc.log.Tracef("%T: %+v", newResults, newResults)
+		svc.log.Tracef("%T: %+v, %T: %+v", req, req, resp, resp)
 
-		pbResults := []*mgmtpb.PoolRanksResult{}
-		if err := convert.Types(newResults, &pbResults); err != nil {
-			return nil, errors.Wrapf(err, "convert %T->%T", newResults, pbResults)
-		}
-
-		svc.log.Tracef("%T: %+v", pbResults, pbResults)
-
-		results = append(results, pbResults...)
+		resps = append(resps, resp)
 	}
 
-	return results, nil
-}
-
-// Drain rank on a pool by calling over dRPC. Function signature satisfies poolRankOpSig type.
-func drainPoolRanks(svc *mgmtSvc, ctx context.Context, req *control.PoolRanksReq) (*control.PoolRanksResp, error) {
-	pbReq := &mgmtpb.PoolDrainReq{}
-	if err := convert.Types(req, pbReq); err != nil {
-		return nil, errors.Wrapf(err, "convert %T->%T", req, pbReq)
-	}
-
-	resp := &control.PoolRanksResp{
-		ID:           req.ID,
-		InitialRanks: req.Ranks,
-	}
-
-	pbResp, err := svc.PoolDrain(ctx, pbReq)
-	if err != nil {
-		return resp, err
-	}
-
-	svc.log.Tracef("pool-drain triggered from system-drain: (%T: %+v) (%T: %+v)", pbReq,
-		pbReq, pbResp, pbResp)
-
-	if err := convert.Types(pbResp, resp); err != nil {
-		return nil, errors.Wrapf(err, "convert %T->%T", pbResp, resp)
-	}
-
-	return resp, nil
-}
-
-// Reint rank on a pool by calling over dRPC. Function signature satisfies poolRankOpSig type.
-func reintPoolRanks(svc *mgmtSvc, ctx context.Context, req *control.PoolRanksReq) (*control.PoolRanksResp, error) {
-	pbReq := &mgmtpb.PoolReintReq{}
-	if err := convert.Types(req, pbReq); err != nil {
-		return nil, errors.Wrapf(err, "convert %T->%T", req, pbReq)
-	}
-
-	resp := &control.PoolRanksResp{
-		ID:           req.ID,
-		InitialRanks: req.Ranks,
-	}
-
-	pbResp, err := svc.PoolReintegrate(ctx, pbReq)
-	if err != nil {
-		return resp, err
-	}
-
-	svc.log.Tracef("pool-reint triggered from system-reint: (%T: %+v) (%T: %+v)", pbReq,
-		pbReq, pbResp, pbResp)
-
-	if err := convert.Types(pbResp, resp); err != nil {
-		return nil, errors.Wrapf(err, "convert %T->%T", pbResp, resp)
-	}
-
-	return resp, nil
+	return resps, nil
 }
 
 // SystemDrain marks specified ranks on all pools as being in a drain state.
-func (svc *mgmtSvc) SystemDrain(ctx context.Context, req *mgmtpb.SystemDrainReq) (*mgmtpb.SystemDrainResp, error) {
-	if req == nil {
-		return nil, errors.Errorf("nil %T", req)
+func (svc *mgmtSvc) SystemDrain(ctx context.Context, pbReq *mgmtpb.SystemDrainReq) (*mgmtpb.SystemDrainResp, error) {
+	if pbReq == nil {
+		return nil, errors.Errorf("nil %T", pbReq)
 	}
 
-	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
+	if err := svc.checkLeaderRequest(wrapCheckerReq(pbReq)); err != nil {
 		return nil, err
 	}
 
 	// Validate requested hosts or ranks exist and fail if any are missing.
-	hitRanks, err := svc.refuseMissingRanks(req.Hosts, req.Ranks)
+	hitRanks, err := svc.refuseMissingRanks(pbReq.Hosts, pbReq.Ranks)
 	if err != nil {
 		svc.log.Errorf("refuse missing ranks: %s", err)
 		return nil, err
@@ -1265,19 +1199,22 @@ func (svc *mgmtSvc) SystemDrain(ctx context.Context, req *mgmtpb.SystemDrainReq)
 	}
 
 	// Generate results from dRPC calls.
-	var opCall poolRankOpSig = drainPoolRanks
-	if req.Reint {
-		opCall = reintPoolRanks
+	var apiCall poolRanksOpSig = control.PoolDrain
+	if pbReq.Reint {
+		apiCall = control.PoolReintegrate
 	}
-	results, err := svc.getPoolRankResults(ctx, req.Sys, poolIDs, poolRanks, opCall)
+	resps, err := svc.getPoolRanksResps(ctx, pbReq.Sys, poolIDs, poolRanks, apiCall)
 	if err != nil {
 		return nil, err
 	}
 
-	return &mgmtpb.SystemDrainResp{
-		Reint:   req.Reint,
-		Results: results,
-	}, nil
+	pbResp := &mgmtpb.SystemDrainResp{}
+	if err := convert.Types(resps, pbResp.Responses); err != nil {
+		return nil, errors.Wrapf(err, "convert %T->%T", resps, pbReq.Responses)
+	}
+	pbResp.Reint = pbReq.Reint
+
+	return pbResp, nil
 }
 
 // ClusterEvent management service gRPC handler receives ClusterEvent requests

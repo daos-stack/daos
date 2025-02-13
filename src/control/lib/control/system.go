@@ -604,21 +604,20 @@ type SystemDrainReq struct {
 // in the response so decoding is not required.
 type SystemDrainResp struct {
 	sysResponse `json:"-"`
-	Results     []*PoolRanksResult `json:"results"`
+	Responses   []*PoolRanksResp `json:"responses"`
 }
 
 // Errors returns a single error combining all error messages associated with pool-rank results.
 // Doesn't retrieve errors from sysResponse because missing ranks or hosts will not be returned.
 func (resp *SystemDrainResp) Errors() (err error) {
-	if resp == nil || resp.Results == nil {
+	if resp == nil || len(resp.Responses) == 0 {
 		return
 	}
-	for _, r := range resp.Results {
-		if r.Status != int32(daos.Success) {
-			err = concatErrs(err,
-				errors.Errorf("pool %s ranks %s: %s", r.ID, r.Ranks, r.Msg))
-		}
+
+	for _, resp := range resp.Responses {
+		err = concatErrs(err, resp.Errors())
 	}
+
 	return
 }
 

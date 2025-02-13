@@ -1932,14 +1932,10 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 			},
 			drpcResps: []*mockDrpcResponse{
 				&mockDrpcResponse{
-					Message: &mgmtpb.PoolRanksResp{
-						FailedRank: uint32(ranklist.NilRank),
-					},
+					Message: &mgmtpb.PoolRanksResp{},
 				},
 				&mockDrpcResponse{
-					Message: &mgmtpb.PoolRanksResp{
-						FailedRank: uint32(ranklist.NilRank),
-					},
+					Message: &mgmtpb.PoolRanksResp{},
 				},
 			},
 			expDrainReqs: []*mgmtpb.PoolDrainReq{

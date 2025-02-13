@@ -92,14 +92,14 @@ type MgmtSvcClient interface {
 	PoolDestroy(ctx context.Context, in *PoolDestroyReq, opts ...grpc.CallOption) (*PoolDestroyResp, error)
 	// Evict a DAOS pool's connections.
 	PoolEvict(ctx context.Context, in *PoolEvictReq, opts ...grpc.CallOption) (*PoolEvictResp, error)
-	// Exclude a pool target on multiple ranks.
-	PoolExclude(ctx context.Context, in *PoolExcludeReq, opts ...grpc.CallOption) (*PoolRanksResp, error)
-	// Drain a pool target on multiple ranks.
-	PoolDrain(ctx context.Context, in *PoolDrainReq, opts ...grpc.CallOption) (*PoolRanksResp, error)
+	// Exclude a pool target.
+	PoolExclude(ctx context.Context, in *PoolExcludeReq, opts ...grpc.CallOption) (*PoolExcludeResp, error)
+	// Drain a pool target.
+	PoolDrain(ctx context.Context, in *PoolDrainReq, opts ...grpc.CallOption) (*PoolDrainResp, error)
 	// Extend a pool.
 	PoolExtend(ctx context.Context, in *PoolExtendReq, opts ...grpc.CallOption) (*PoolExtendResp, error)
-	// Reintegrate a pool target on multiple ranks.
-	PoolReintegrate(ctx context.Context, in *PoolReintReq, opts ...grpc.CallOption) (*PoolRanksResp, error)
+	// Reintegrate a pool target.
+	PoolReintegrate(ctx context.Context, in *PoolReintReq, opts ...grpc.CallOption) (*PoolReintResp, error)
 	// PoolQuery queries a DAOS pool.
 	PoolQuery(ctx context.Context, in *PoolQueryReq, opts ...grpc.CallOption) (*PoolQueryResp, error)
 	// PoolQueryTarget queries a DAOS storage target.
@@ -234,8 +234,8 @@ func (c *mgmtSvcClient) PoolEvict(ctx context.Context, in *PoolEvictReq, opts ..
 	return out, nil
 }
 
-func (c *mgmtSvcClient) PoolExclude(ctx context.Context, in *PoolExcludeReq, opts ...grpc.CallOption) (*PoolRanksResp, error) {
-	out := new(PoolRanksResp)
+func (c *mgmtSvcClient) PoolExclude(ctx context.Context, in *PoolExcludeReq, opts ...grpc.CallOption) (*PoolExcludeResp, error) {
+	out := new(PoolExcludeResp)
 	err := c.cc.Invoke(ctx, MgmtSvc_PoolExclude_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -243,8 +243,8 @@ func (c *mgmtSvcClient) PoolExclude(ctx context.Context, in *PoolExcludeReq, opt
 	return out, nil
 }
 
-func (c *mgmtSvcClient) PoolDrain(ctx context.Context, in *PoolDrainReq, opts ...grpc.CallOption) (*PoolRanksResp, error) {
-	out := new(PoolRanksResp)
+func (c *mgmtSvcClient) PoolDrain(ctx context.Context, in *PoolDrainReq, opts ...grpc.CallOption) (*PoolDrainResp, error) {
+	out := new(PoolDrainResp)
 	err := c.cc.Invoke(ctx, MgmtSvc_PoolDrain_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -261,8 +261,8 @@ func (c *mgmtSvcClient) PoolExtend(ctx context.Context, in *PoolExtendReq, opts 
 	return out, nil
 }
 
-func (c *mgmtSvcClient) PoolReintegrate(ctx context.Context, in *PoolReintReq, opts ...grpc.CallOption) (*PoolRanksResp, error) {
-	out := new(PoolRanksResp)
+func (c *mgmtSvcClient) PoolReintegrate(ctx context.Context, in *PoolReintReq, opts ...grpc.CallOption) (*PoolReintResp, error) {
+	out := new(PoolReintResp)
 	err := c.cc.Invoke(ctx, MgmtSvc_PoolReintegrate_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -602,14 +602,14 @@ type MgmtSvcServer interface {
 	PoolDestroy(context.Context, *PoolDestroyReq) (*PoolDestroyResp, error)
 	// Evict a DAOS pool's connections.
 	PoolEvict(context.Context, *PoolEvictReq) (*PoolEvictResp, error)
-	// Exclude a pool target on multiple ranks.
-	PoolExclude(context.Context, *PoolExcludeReq) (*PoolRanksResp, error)
-	// Drain a pool target on multiple ranks.
-	PoolDrain(context.Context, *PoolDrainReq) (*PoolRanksResp, error)
+	// Exclude a pool target.
+	PoolExclude(context.Context, *PoolExcludeReq) (*PoolExcludeResp, error)
+	// Drain a pool target.
+	PoolDrain(context.Context, *PoolDrainReq) (*PoolDrainResp, error)
 	// Extend a pool.
 	PoolExtend(context.Context, *PoolExtendReq) (*PoolExtendResp, error)
-	// Reintegrate a pool target on multiple ranks.
-	PoolReintegrate(context.Context, *PoolReintReq) (*PoolRanksResp, error)
+	// Reintegrate a pool target.
+	PoolReintegrate(context.Context, *PoolReintReq) (*PoolReintResp, error)
 	// PoolQuery queries a DAOS pool.
 	PoolQuery(context.Context, *PoolQueryReq) (*PoolQueryResp, error)
 	// PoolQueryTarget queries a DAOS storage target.
@@ -705,16 +705,16 @@ func (UnimplementedMgmtSvcServer) PoolDestroy(context.Context, *PoolDestroyReq) 
 func (UnimplementedMgmtSvcServer) PoolEvict(context.Context, *PoolEvictReq) (*PoolEvictResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PoolEvict not implemented")
 }
-func (UnimplementedMgmtSvcServer) PoolExclude(context.Context, *PoolExcludeReq) (*PoolRanksResp, error) {
+func (UnimplementedMgmtSvcServer) PoolExclude(context.Context, *PoolExcludeReq) (*PoolExcludeResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PoolExclude not implemented")
 }
-func (UnimplementedMgmtSvcServer) PoolDrain(context.Context, *PoolDrainReq) (*PoolRanksResp, error) {
+func (UnimplementedMgmtSvcServer) PoolDrain(context.Context, *PoolDrainReq) (*PoolDrainResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PoolDrain not implemented")
 }
 func (UnimplementedMgmtSvcServer) PoolExtend(context.Context, *PoolExtendReq) (*PoolExtendResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PoolExtend not implemented")
 }
-func (UnimplementedMgmtSvcServer) PoolReintegrate(context.Context, *PoolReintReq) (*PoolRanksResp, error) {
+func (UnimplementedMgmtSvcServer) PoolReintegrate(context.Context, *PoolReintReq) (*PoolReintResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PoolReintegrate not implemented")
 }
 func (UnimplementedMgmtSvcServer) PoolQuery(context.Context, *PoolQueryReq) (*PoolQueryResp, error) {
