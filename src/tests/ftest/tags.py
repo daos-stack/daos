@@ -13,6 +13,7 @@ from argparse import ArgumentParser, ArgumentTypeError, RawDescriptionHelpFormat
 from collections import defaultdict
 from copy import deepcopy
 from pathlib import Path
+import subprocess
 
 import yaml
 
@@ -38,6 +39,21 @@ class TagSet(set):
 
     def issuperset(self, other):
         return TagSet(other).issubset(self)
+
+
+class AvocadoYamlLoader(yaml.SafeLoader):
+    """Helper class for parsing avocado yaml files."""
+
+    def forward_mux(self, node):
+        """Pass on mux tags unedited."""
+        return self.construct_mapping(node)
+
+    def ignore_unknown(self, node):  # pylint: disable=no-self-use,unused-argument
+        """Drop any other tag."""
+        return None
+
+AvocadoYamlLoader.add_constructor('!mux', AvocadoYamlLoader.forward_mux)
+AvocadoYamlLoader.add_constructor(None, AvocadoYamlLoader.ignore_unknown)
 
 
 class LintFailure(Exception):
@@ -266,6 +282,29 @@ class FtestTagMap():
             return set()
         return set(','.join(tag_strings).split(','))
 
+    @staticmethod
+    def timeout(path, test_name):
+        """Get the test timeout for a given test.
+
+        Args:
+            path (str): test file path or config path
+            test_name (str): test method name to get timeout for
+
+        Returns:
+            int: timeout. None if unable to determine
+        """
+        with open(path.replace('.py', '.yaml'), 'r') as f:
+            config_data = yaml.load(f.read(), Loader=AvocadoYamlLoader)
+        try:
+            return int(config_data['timeouts'][test_name])
+        except:
+            pass
+        try:
+            return int(config_data['timeout'])
+        except:
+            pass
+        return None
+
 
 def sorted_tags(tags):
     """Get a sorted list of tags.
@@ -307,6 +346,7 @@ def run_linter(paths=None, verbose=False):
     tests_wo_hw_vm_manual = []
     tests_w_empty_tag = []
     tests_wo_a_feature_tag = []
+    pr_tests_w_timeout_over_1200 = []
     non_feature_tags = set(STAGE_TYPE_TAGS + STAGE_SIZE_TAGS + STAGE_FREQUENCY_TAGS)
     ftest_tag_map = FtestTagMap(paths)
     for file_path, classes in iter(ftest_tag_map):
@@ -331,6 +371,9 @@ def run_linter(paths=None, verbose=False):
                     tests_w_empty_tag.append(method_name)
                 if not set(tags).difference(non_feature_tags | set([class_name, method_name])):
                     tests_wo_a_feature_tag.append(method_name)
+                method_timeout = ftest_tag_map.timeout(file_path, method_name)
+                if 'pr' in tags and method_timeout and method_timeout > 1200:
+                    pr_tests_w_timeout_over_1200.append(f'{method_name} ({method_timeout})')
 
     non_unique_classes = list(name for name, num in all_classes.items() if num > 1)
     non_unique_methods = list(name for name, num in all_methods.items() if num > 1)
@@ -369,7 +412,8 @@ def run_linter(paths=None, verbose=False):
         _error_handler(test_w_invalid_test_tag, 'tests with invalid test_ tag'),
         _error_handler(tests_wo_hw_vm_manual, 'tests without HW, VM, or manual tag'),
         _error_handler(tests_w_empty_tag, 'tests with an empty tag'),
-        _error_handler(tests_wo_a_feature_tag, 'tests without a feature tag')]))
+        _error_handler(tests_wo_a_feature_tag, 'tests without a feature tag'),
+        _error_handler(pr_tests_w_timeout_over_1200, 'pr tests with timeout over 1200')]))
     if errors:
         raise errors[0]
 
@@ -403,7 +447,8 @@ def run_dump(paths=None, tags=None):
             for method_name, method_tags in functions.items():
                 if tags and not tag_map.is_test_subset([method_tags], tags):
                     continue
-                output[short_file_path][class_name][method_name] = method_tags
+                method_timeout = tag_map.timeout(file_path, method_name)
+                output[short_file_path][class_name][method_name] = (method_tags, method_timeout)
 
     # Format and print output for matching tests
     for short_file_path, classes in output.items():
@@ -411,10 +456,55 @@ def run_dump(paths=None, tags=None):
         for class_name, methods in classes.items():
             print(f'  {class_name}:')
             longest_method_name = max(map(len, methods.keys()))
-            for method_name, method_tags in methods.items():
+            for method_name, method_tags_timeout in methods.items():
+                method_tags, method_timeout = method_tags_timeout
                 method_name_fm = method_name.ljust(longest_method_name, " ")
                 tags_fm = ",".join(sorted_tags(method_tags))
-                print(f'    {method_name_fm} - {tags_fm}')
+                print(f'    {method_name_fm} - {tags_fm} - {method_timeout}')
+
+    return 0 if output else 1
+
+def run_timeouts(paths=None, tags=None):
+    """Dump the tags per test.
+
+    Formatted as
+        <file path>:
+          <class name>:
+            <method name> - <tags>
+
+    Args:
+        paths (list, optional): path(s) to get tags for. Defaults to all ftest python files
+        tags2 (list, optional): list of sets of tags to filter.
+            Default is None, which does not filter
+
+    Returns:
+        int: 0 on success; 1 if no matches found
+    """
+    if not paths:
+        paths = all_python_files(FTEST_DIR)
+
+    # Store output as {path: {class: {test: tags}}}
+    output = defaultdict(lambda: defaultdict(dict))
+
+    tag_map = FtestTagMap(paths)
+    for file_path, classes in iter(tag_map):
+        short_file_path = re.findall(r'ftest/(.*$)', file_path)[0]
+        for class_name, functions in classes.items():
+            for method_name, method_tags in functions.items():
+                if tags and not tag_map.is_test_subset([method_tags], tags):
+                    continue
+                method_timeout = tag_map.timeout(file_path, method_name)
+                output[short_file_path][class_name][method_name] = method_timeout
+
+    # Format and print output for matching tests
+    for short_file_path, classes in output.items():
+        print(f'{short_file_path}:')
+        for class_name, methods in classes.items():
+            print(f'  {class_name}:')
+            longest_method_name = max(map(len, methods.keys()))
+            for method_name, method_timeout in methods.items():
+                method_name_fm = method_name.ljust(longest_method_name, " ")
+                print(f'    {method_name_fm} - {method_timeout}')
 
     return 0 if output else 1
 
@@ -683,7 +773,7 @@ def main():
     parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter, description=description)
     parser.add_argument(
         "command",
-        choices=("lint", "list", "dump", "unit"),
+        choices=("lint", "list", "dump", "timeouts", "unit"),
         help="command to run")
     parser.add_argument(
         "-v", "--verbose",
@@ -715,6 +805,9 @@ def main():
 
     if args.command == "dump":
         return run_dump(args.paths, args.tags)
+
+    if args.command == "timeouts":
+        return run_timeouts(args.paths, args.tags)
 
     if args.command == "list":
         return run_list(args.paths)
