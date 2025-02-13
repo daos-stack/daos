@@ -49,11 +49,22 @@ ior:
     # [ChunkSize, BlocksSize, TransferSize]
     - [47008, 47008, 47008]
   objectclass:
-    dfs_oclass_list:
+    oclass_list_variants: !mux
       # - [EC_Object_Class, Exact number of servers]
-      - ["EC_2P2GX", 6]
-      - ["EC_4P2GX", 8]
-      - ["EC_4P3GX", 12]
-      - ["EC_8P2GX", 12]
+      6_server:
+        !filter-only : "/run/hosts/servers/6_server"  # yamllint disable-line rule:colons
+        dfs_oclass_list:
+          - ["EC_2P2GX", 6]
+      8_server:
+        !filter-only : "/run/hosts/servers/8_server"  # yamllint disable-line rule:colons
+        dfs_oclass_list:
+          - ["EC_4P2GX", 8]
+      12_server:
+        !filter-only : "/run/hosts/servers/12_server"  # yamllint disable-line rule:colons
+        dfs_oclass_list:
+          - ["EC_4P3GX", 12]
+          - ["EC_8P2GX", 12]
+
+
   sw_wearout: 1
   sw_status_file: stoneWallingStatusFile
