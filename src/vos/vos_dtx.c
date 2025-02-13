@@ -633,10 +633,14 @@ do_dtx_rec_release(struct umem_instance *umm, struct vos_container *cont,
 		break;
 	}
 
-	if (rc == -DER_NONEXIST)
+	if (rc == -DER_NONEXIST) {
+		struct vos_tls	*tls = vos_tls_get(false);
+
 		D_WARN("DTX record no longer exists, may indicate some corruption: "
 		       DF_DTI " type %u, discard\n",
 		       DP_DTI(&DAE_XID(dae)), dtx_umoff_flag2type(rec));
+		d_tm_inc_gauge(tls->vtl_invalid_dtx, 1);
+	}
 
 	return rc;
 }
@@ -647,7 +651,6 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae, bool ab
 	struct umem_instance		*umm = vos_cont2umm(cont);
 	struct vos_dtx_act_ent_df	*dae_df;
 	struct vos_dtx_blob_df		*dbd;
-	struct vos_tls			*tls = vos_tls_get(false);
 	bool				 invalid = false;
 	int				 count;
 	int				 i;
@@ -687,7 +690,6 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae, bool ab
 	for (i = 0; i < count; i++) {
 		rc = do_dtx_rec_release(umm, cont, dae, DAE_REC_INLINE(dae)[i], abort);
 		if (unlikely(rc == -DER_NONEXIST)) {
-			d_tm_inc_gauge(tls->vtl_invalid_dtx, 1);
 			invalid = true;
 			break;
 		}
@@ -702,7 +704,6 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae, bool ab
 		for (i = 0; i < DAE_REC_CNT(dae) - DTX_INLINE_REC_CNT; i++) {
 			rc = do_dtx_rec_release(umm, cont, dae, dae->dae_records[i], abort);
 			if (unlikely(rc == -DER_NONEXIST)) {
-				d_tm_inc_gauge(tls->vtl_invalid_dtx, 1);
 				invalid = true;
 				break;
 			}
@@ -722,7 +723,6 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae, bool ab
 				return rc;
 			dae_df->dae_rec_off = UMOFF_NULL;
 		}
-
 	}
 
 	if (!invalid && keep_act) {
@@ -751,6 +751,9 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae, bool ab
 
 		return 0;
 	}
+
+	if (invalid)
+		rc = 0;
 
 	if (!UMOFF_IS_NULL(dae_df->dae_mbs_off)) {
 		/* dae_mbs_off will be invalid via flag DTE_INVALID. */
