@@ -633,13 +633,10 @@ do_dtx_rec_release(struct umem_instance *umm, struct vos_container *cont,
 		break;
 	}
 
-	if (rc == -DER_NONEXIST) {
-		D_ASSERTF(0,
-			  "DTX record no longer exists, may indicate some corruption: " DF_DTI
-			  " type %u\n",
-			  DP_DTI(&DAE_XID(dae)), dtx_umoff_flag2type(rec));
-		rc = 0;
-	}
+	if (rc == -DER_NONEXIST)
+		D_WARN("DTX record no longer exists, may indicate some corruption: "
+		       DF_DTI " type %u, discard\n",
+		       DP_DTI(&DAE_XID(dae)), dtx_umoff_flag2type(rec));
 
 	return rc;
 }
@@ -650,6 +647,8 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae, bool ab
 	struct umem_instance		*umm = vos_cont2umm(cont);
 	struct vos_dtx_act_ent_df	*dae_df;
 	struct vos_dtx_blob_df		*dbd;
+	struct vos_tls			*tls = vos_tls_get(false);
+	bool				 invalid = false;
 	int				 count;
 	int				 i;
 	int				 rc = 0;
@@ -678,42 +677,55 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae, bool ab
 		   abort ? "abort" : "commit", DP_DTI(&DAE_XID(dae)), dbd,
 		   DP_UUID(cont->vc_pool->vp_id), DP_UUID(cont->vc_id));
 
-	if (dae->dae_records != NULL) {
+	/* Handle DTX records as FIFO order to find out potential invalid DTX earlier. */
+
+	if (DAE_REC_CNT(dae) > DTX_INLINE_REC_CNT)
+		count = DTX_INLINE_REC_CNT;
+	else
+		count = DAE_REC_CNT(dae);
+
+	for (i = 0; i < count; i++) {
+		rc = do_dtx_rec_release(umm, cont, dae, DAE_REC_INLINE(dae)[i], abort);
+		if (unlikely(rc == -DER_NONEXIST)) {
+			d_tm_inc_gauge(tls->vtl_invalid_dtx, 1);
+			invalid = true;
+			break;
+		}
+		if (rc != 0)
+			return rc;
+	}
+
+	if (!invalid && dae->dae_records != NULL) {
 		D_ASSERT(DAE_REC_CNT(dae) > DTX_INLINE_REC_CNT);
 		D_ASSERT(!UMOFF_IS_NULL(dae_df->dae_rec_off));
 
-		for (i = DAE_REC_CNT(dae) - DTX_INLINE_REC_CNT - 1; i >= 0; i--) {
+		for (i = 0; i < DAE_REC_CNT(dae) - DTX_INLINE_REC_CNT; i++) {
 			rc = do_dtx_rec_release(umm, cont, dae, dae->dae_records[i], abort);
+			if (unlikely(rc == -DER_NONEXIST)) {
+				d_tm_inc_gauge(tls->vtl_invalid_dtx, 1);
+				invalid = true;
+				break;
+			}
 			if (rc != 0)
 				return rc;
 		}
+	}
 
+	if (!UMOFF_IS_NULL(dae_df->dae_rec_off)) {
 		rc = umem_free(umm, dae_df->dae_rec_off);
 		if (rc != 0)
 			return rc;
 
-		if (keep_act) {
+		if (!invalid && keep_act) {
 			rc = umem_tx_add_ptr(umm, &dae_df->dae_rec_off, sizeof(dae_df->dae_rec_off));
 			if (rc != 0)
 				return rc;
-
 			dae_df->dae_rec_off = UMOFF_NULL;
 		}
 
-		count = DTX_INLINE_REC_CNT;
-	} else {
-		D_ASSERT(DAE_REC_CNT(dae) <= DTX_INLINE_REC_CNT);
-
-		count = DAE_REC_CNT(dae);
 	}
 
-	for (i = count - 1; i >= 0; i--) {
-		rc = do_dtx_rec_release(umm, cont, dae, DAE_REC_INLINE(dae)[i], abort);
-		if (rc != 0)
-			return rc;
-	}
-
-	if (keep_act) {
+	if (!invalid && keep_act) {
 		/* When re-commit partial committed DTX, the count can be zero. */
 		if (dae_df->dae_rec_cnt > 0) {
 			rc = umem_tx_add_ptr(umm, &dae_df->dae_rec_cnt,
