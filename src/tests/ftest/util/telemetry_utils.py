@@ -1083,6 +1083,7 @@ class ClientTelemetryUtils(TelemetryUtils):
 
         """
         all_metrics_names = list(self.CLIENT_EVENT_METRICS)
+        all_metrics_names.extend(self.CLIENT_NET_METRICS)
         all_metrics_names.extend(self.CLIENT_IO_METRICS)
         if with_pools:
             all_metrics_names.extend(self.CLIENT_POOL_METRICS)
