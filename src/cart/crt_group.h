@@ -89,7 +89,7 @@ struct crt_grp_priv {
 	 * If gp_self is CRT_NO_RANK, it usually means the group version is not
 	 * up to date.
 	 */
-	d_rank_t		 gp_self;
+	d_rank_t                  gp_self;
 	/* address lookup cache, only valid for primary group */
 	struct d_hash_table	 *gp_lookup_cache;
 

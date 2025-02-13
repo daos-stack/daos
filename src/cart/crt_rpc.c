@@ -834,7 +834,7 @@ crt_issue_uri_lookup_retry(crt_context_t ctx,
 	 * being either repeated or skipped
 	 */
 	rpc_priv->crp_ul_idx = (rpc_priv->crp_ul_idx + 1) % membs->rl_nr;
-	contact_rank = membs->rl_ranks[rpc_priv->crp_ul_idx];
+	contact_rank         = membs->rl_ranks[rpc_priv->crp_ul_idx];
 
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
@@ -1020,7 +1020,7 @@ crt_client_get_contact_rank(crt_context_t crt_ctx, crt_group_t *grp,
 	membs = grp_priv_get_membs(grp_priv);
 
 	/* Pick random rank from the list */
-	*ret_idx = d_rand() % membs->rl_nr;
+	*ret_idx     = d_rand() % membs->rl_nr;
 	contact_rank = membs->rl_ranks[*ret_idx];
 
 	D_DEBUG(DB_ALL, "URI lookup rank chosen: %d\n", contact_rank);

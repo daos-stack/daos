@@ -115,7 +115,7 @@ struct rpc_test_cli {
 	crt_group_t		*local_group;
 	/*server group to attach to*/
 	crt_group_t		*target_group[2];
-	crt_context_t		crt_ctx;
+	crt_context_t            crt_ctx;
 	pthread_t		progress_thid;
 	sem_t			cli_sem;
 	uint32_t		timeout;

@@ -2179,7 +2179,6 @@ crt_grp_config_load(struct crt_grp_priv *grp_priv)
 				rank, addr_str, rc);
 			break;
 		}
-
 	}
 
 out:
@@ -2191,7 +2190,6 @@ out:
 
 	return rc;
 }
-
 
 int
 crt_register_event_cb(crt_event_cb func, void *args)
@@ -2293,7 +2291,6 @@ crt_trigger_event_cbs(d_rank_t rank, uint64_t incarnation, enum crt_event_source
 			cb_func(rank, incarnation, src, type, cb_args);
 	}
 }
-
 
 /* Free index list is used for tracking which indexes in the rank list
  * are unused. When rank list gets filled, we reallocate bigger size
@@ -2836,7 +2833,6 @@ crt_group_view_destroy(crt_group_t *grp)
 out:
 	return rc;
 }
-
 
 int
 crt_group_secondary_create(crt_group_id_t grp_name, crt_group_t *primary_grp,
