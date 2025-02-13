@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Copyright 2022-2024 Intel Corporation.
 # Copyright 2025 Hewlett Packard Enterprise Development LP
@@ -19,10 +19,10 @@ if ! command -v git-clang-format > /dev/null 2>&1; then
     exit 1
 fi
 
-echo "Formatting C files"
-
 # Check version of clang-format, and print a helpful message if it's too old.  If the right version
 # is not found then exit.
-./site_scons/site_tools/extra/extra.py || exit 0
+./site_scons/site_tools/extra/extra.py > /dev/null || exit 0
+
+echo "Formatting C files"
 
 git-clang-format --staged src
