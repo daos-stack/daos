@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -406,6 +407,7 @@ type SystemStopReq struct {
 	msRequest
 	sysRequest
 	Force bool
+	Full  bool
 }
 
 // SystemStopResp contains the request response.
@@ -451,11 +453,20 @@ func SystemStop(ctx context.Context, rpcClient UnaryInvoker, req *SystemStopReq)
 	if req == nil {
 		return nil, errors.Errorf("nil %T request", req)
 	}
+	if req.Force && req.Full {
+		return nil, errors.New("force and full options may not be mixed")
+	}
+	if req.Full && req.Hosts.String() != "" {
+		return nil, errors.New("full and hosts options may not be mixed")
+	}
+	if req.Full && req.Ranks.String() != "" {
+		return nil, errors.New("full and ranks options may not be mixed")
+	}
 
 	pbReq := new(mgmtpb.SystemStopReq)
 	pbReq.Hosts = req.Hosts.String()
 	pbReq.Ranks = req.Ranks.String()
-	pbReq.Force = req.Force
+	pbReq.Force = !req.Full // Force used unless full graceful shutdown requested.
 	pbReq.Sys = req.getSystem(rpcClient)
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {

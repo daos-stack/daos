@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -605,6 +606,8 @@ daos_errno2der(int err)
 	case EINVAL:		return -DER_INVAL;
 	case ENOTDIR:		return -DER_NOTDIR;
 	case EIO:		return -DER_IO;
+	case ENOTSUP:
+		return -DER_NOTSUPPORTED;
 	case EFAULT:
 	case ENXIO:
 	case ENODEV:
@@ -661,6 +664,8 @@ daos_der2errno(int err)
 	case -DER_NOTDIR:	return ENOTDIR;
 	case -DER_STALE:	return ESTALE;
 	case -DER_TX_RESTART:	return ERESTART;
+	case -DER_NOTSUPPORTED:
+		return ENOTSUP;
 	default:		return EIO;
 	}
 };
