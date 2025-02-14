@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -282,8 +283,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 				      "reqs", "net/%s/req_timeout/ctx_%u",
 				      prov, ctx->cc_idx);
 		if (ret)
-			D_WARN("Failed to create timed out req counter: "DF_RC
-			       "\n", DP_RC(ret));
+			DL_WARN(ret, "Failed to create timed out req counter");
 
 		ret = d_tm_add_metric(&ctx->cc_timedout_uri, D_TM_COUNTER,
 				      "Total number of timed out URI lookup "
@@ -291,8 +291,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 				      "net/%s/uri_lookup_timeout/ctx_%u",
 				      prov, ctx->cc_idx);
 		if (ret)
-			D_WARN("Failed to create timed out uri req counter: "
-			       DF_RC"\n", DP_RC(ret));
+			DL_WARN(ret, "Failed to create timed out uri req counter:");
 
 		ret = d_tm_add_metric(&ctx->cc_failed_addr, D_TM_COUNTER,
 				      "Total number of failed address "
@@ -300,33 +299,32 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 				      "net/%s/failed_addr/ctx_%u",
 				      prov, ctx->cc_idx);
 		if (ret)
-			D_WARN("Failed to create failed addr counter: "DF_RC
-			       "\n", DP_RC(ret));
+			DL_WARN(ret, "Failed to create failed addr counter");
 
 		ret = d_tm_add_metric(&ctx->cc_net_glitches, D_TM_COUNTER,
 				      "Total number of network glitch errors", "errors",
 				      "net/%s/glitch/ctx_%u", prov, ctx->cc_idx);
 		if (ret)
-			DL_WARN(rc, "Failed to create network glitch counter");
+			DL_WARN(ret, "Failed to create network glitch counter");
 
 		ret = d_tm_add_metric(&ctx->cc_swim_delay, D_TM_STATS_GAUGE,
 				      "SWIM delay measurements", "delay",
 				      "net/%s/swim_delay/ctx_%u", prov, ctx->cc_idx);
 		if (ret)
-			DL_WARN(rc, "Failed to create SWIM delay gauge");
+			DL_WARN(ret, "Failed to create SWIM delay gauge");
 
 		ret = d_tm_add_metric(&ctx->cc_quotas.rpc_waitq_depth, D_TM_GAUGE,
 				      "Current count of enqueued RPCs", "rpcs",
 				      "net/%s/waitq_depth/ctx_%u", prov, ctx->cc_idx);
 		if (ret)
-			DL_WARN(rc, "Failed to create rpc waitq gauge");
+			DL_WARN(ret, "Failed to create rpc waitq gauge");
 
 		ret = d_tm_add_metric(&ctx->cc_quotas.rpc_quota_exceeded, D_TM_COUNTER,
 				      "Total number of exceeded RPC quota errors",
 				      "errors", "net/%s/quota_exceeded/ctx_%u",
 				      prov, ctx->cc_idx);
 		if (ret)
-			DL_WARN(rc, "Failed to create quota exceeded counter");
+			DL_WARN(ret, "Failed to create quota exceeded counter");
 	}
 
 	if (crt_is_service() &&
@@ -1207,6 +1205,7 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 	struct d_binheap_node		*bh_node;
 	d_list_t			 timeout_list;
 	uint64_t			 ts_now;
+	bool                             should_republish = false;
 	int                              err_to_print  = 0;
 	int                              left_to_print = 0;
 
@@ -1234,6 +1233,12 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 			  "already on timeout list\n");
 		d_list_add_tail(&rpc_priv->crp_tmp_link_timeout, &timeout_list);
 	};
+
+	/* piggy-back on the timeout processing so that we don't need to do another gettime() */
+	if (ts_now - crt_ctx->cc_hg_ctx.chc_diag_pub_ts > CRT_HG_TM_PUB_INTERVAL_US) {
+		should_republish                   = true;
+		crt_ctx->cc_hg_ctx.chc_diag_pub_ts = ts_now;
+	}
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
 	/* Limit logging when many rpcs time-out at the same time */
@@ -1282,6 +1287,10 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 		crt_req_timeout_hdlr(rpc_priv);
 		RPC_DECREF(rpc_priv);
 	}
+
+	/* periodically republish Mercury-level counters as DAOS metrics */
+	if (should_republish)
+		crt_hg_republish_diags(&crt_ctx->cc_hg_ctx);
 }
 
 /*
