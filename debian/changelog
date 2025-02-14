@@ -1,3 +1,9 @@
+daos (2.6.3-4) unstable; urgency=medium
+  [ Jan Michalski ]
+  * Add ddb_ut and dtx_ut to the server-tests package
+
+ -- Jan Michalski <jan-marian.michalski@hpe.com>  Thu, 13 Feb 2025 11:39:00 +0000
+
 daos (2.6.3-3) unstable; urgency=medium
   [ Phillip Henderson ]
   * Third release candidate for 2.6.3
