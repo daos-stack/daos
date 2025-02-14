@@ -1095,14 +1095,14 @@ swim_updates_parse(struct swim_context *ctx, swim_id_t from_id, swim_id_t id,
 	swim_ctx_lock(ctx);
 	ctx_state = swim_state_get(ctx);
 
-	rc = ctx->sc_ops->get_member_state(ctx, id, &id_state);
+	rc = ctx->sc_ops->get_member_state(ctx, from_id, &id_state);
 	if (rc == -DER_NONEXIST || id_state.sms_status == SWIM_MEMBER_DEAD) {
 		swim_ctx_unlock(ctx);
-		SWIM_INFO("%lu: skip untrustable update from %lu, rc = %d\n", self_id, id, rc);
+		SWIM_INFO("%lu: skip untrustable update from %lu, rc = %d\n", self_id, from_id, rc);
 		D_GOTO(out, rc = -DER_NONEXIST);
 	} else if (rc != 0) {
 		swim_ctx_unlock(ctx);
-		SWIM_ERROR("get_member_state(%lu): " DF_RC "\n", id, DP_RC(rc));
+		SWIM_ERROR("get_member_state(%lu): " DF_RC "\n", from_id, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
