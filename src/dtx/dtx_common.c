@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1438,7 +1439,9 @@ sync:
 			D_WARN(DF_UUID": Fail to sync %s commit DTX "DF_DTI": "DF_RC"\n",
 			       DP_UUID(cont->sc_uuid), dlh->dlh_coll ? "collective" : "regular",
 			       DP_DTI(&dth->dth_xid), DP_RC(rc));
-			if (likely(dtx_batched_ult_max != 0)) {
+			if (likely(dtx_batched_ult_max != 0 &&
+				   !DAOS_FAIL_CHECK(DAOS_DTX_PARTIAL_COMMIT_P1) &&
+				   !DAOS_FAIL_CHECK(DAOS_DTX_PARTIAL_COMMIT_P2))) {
 				dth->dth_sync = 0;
 				goto cache;
 			}
