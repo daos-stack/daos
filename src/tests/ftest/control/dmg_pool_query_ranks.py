@@ -53,6 +53,7 @@ class DmgPoolQueryRanks(ControlTestBase):
         self.log_step("Checking pool query with dead ranks state information")
         data = self.dmg.pool_query(self.pool.identifier, health_only=True)
         self._verify_ranks([], data, "dead_ranks")
+        self._verify_ranks([], data, "disabled_ranks")
 
     def test_pool_query_ranks_mgmt(self):
         """Test the state of ranks after excluding and reintegrate them.
