@@ -1,12 +1,12 @@
 diff --git a/prov/tcp/src/xnet.h b/prov/tcp/src/xnet.h
-index ee16d7e3a..8470902c2 100644
+index ee16d7e3a..49c42bcda 100644
 --- a/prov/tcp/src/xnet.h
 +++ b/prov/tcp/src/xnet.h
-@@ -754,4 +754,29 @@ int xnet_rdm_ops_open(struct fid *fid, const char *name,
+@@ -754,4 +754,25 @@ int xnet_rdm_ops_open(struct fid *fid, const char *name,
  	FI_WARN(&xnet_prov, subsystem, log_str "%s (%d)\n", \
  		fi_strerror((int) -(err)), (int) err)
  
-+#define XNET_OUTPUT_ERR_WARN(ep, err)		\
++#define XNET_EP_MSG(ep, err)			\
 +do {						\
 +	struct sockaddr *_addr;			\
 +	struct sockaddr *_src_addr;		\
@@ -23,17 +23,13 @@ index ee16d7e3a..8470902c2 100644
 +	ofi_straddr(_buf, &_len, ofi_translate_addr_format(ofi_sa_family(_addr)), _addr);	\
 +	ofi_straddr(_src_buf, &_src_len, ofi_translate_addr_format(ofi_sa_family(_src_addr)),	\
 +		    _src_addr);									\
-+	if (err != 0)										\
-+		FI_WARN(&xnet_prov, FI_LOG_EP_CTRL, "error on %s From %s : %s\n",		\
-+			_buf, _src_buf,	fi_strerror(err));					\
-+	else											\
-+		FI_INFO(&xnet_prov, FI_LOG_EP_CTRL, "error on %s From %s : %s\n",		\
-+			_buf, _src_buf,	fi_strerror(err));					\
++	FI_WARN(&xnet_prov, FI_LOG_EP_CTRL, "ep %s:%s %s",					\
++		_buf, _src_buf,	fi_strerror(err));						\
 +} while(0)
 +
  #endif //_XNET_H_
 diff --git a/prov/tcp/src/xnet_ep.c b/prov/tcp/src/xnet_ep.c
-index 64772fef0..2cc31136e 100644
+index 64772fef0..a44187114 100644
 --- a/prov/tcp/src/xnet_ep.c
 +++ b/prov/tcp/src/xnet_ep.c
 @@ -326,7 +326,7 @@ xnet_ep_accept(struct fid_ep *ep_fid, const void *param, size_t paramlen)
@@ -49,7 +45,7 @@ index 64772fef0..2cc31136e 100644
  			ofi_byte_idx_remove(idx, xfer_entry->hdr.base_hdr.op_data);
  		}
  		slist_remove_head(queue);
-+		XNET_OUTPUT_ERR_WARN(ep, FI_ECANCELED);
++		XNET_EP_MSG(ep, FI_ECANCELED);
  		xnet_report_error(xfer_entry, FI_ECANCELED);
  		xnet_free_xfer(progress, xfer_entry);
  	}
@@ -57,7 +53,7 @@ index 64772fef0..2cc31136e 100644
  			ofi_byte_idx_remove(&ep->rts_queue,
  					    ep->cur_tx.entry->hdr.base_hdr.op_data);
  		}
-+		XNET_OUTPUT_ERR_WARN(ep, FI_ECANCELED);
++		XNET_EP_MSG(ep, FI_ECANCELED);
  		xnet_report_error(ep->cur_tx.entry, FI_ECANCELED);
  		xnet_free_xfer(xnet_ep2_progress(ep), ep->cur_tx.entry);
  		ep->cur_tx.entry = NULL;
@@ -79,7 +75,7 @@ index 64772fef0..2cc31136e 100644
  	/* Saved messages are on the saved_msg queue and flushed by the srx */
  	if (ep->cur_rx.entry &&
  	    !(ep->cur_rx.entry->ctrl_flags & XNET_SAVED_XFER)) {
-+		XNET_OUTPUT_ERR_WARN(ep, FI_ECANCELED);
++		XNET_EP_MSG(ep, FI_ECANCELED);
  		xnet_report_error(ep->cur_rx.entry, FI_ECANCELED);
  		xnet_free_xfer(xnet_ep2_progress(ep), ep->cur_rx.entry);
  	}
@@ -93,7 +89,7 @@ index 64772fef0..2cc31136e 100644
  	if (!xnet_io_uring)
  		xnet_halt_sock(xnet_ep2_progress(ep), ep->bsock.sock);
  
-+	XNET_OUTPUT_ERR_WARN(ep, cm_err);
++	XNET_EP_MSG(ep, cm_err);
  	ret = ofi_shutdown(ep->bsock.sock, SHUT_RDWR);
  	if (ret && ofi_sockerr() != ENOTCONN)
  		FI_WARN(&xnet_prov, FI_LOG_EP_DATA, "shutdown failed\n");
@@ -101,19 +97,19 @@ index 64772fef0..2cc31136e 100644
  found:
  	slist_remove(&ep->rx_queue, cur, prev);
  	ep->rx_avail++;
-+	XNET_OUTPUT_ERR_WARN(ep, FI_ECANCELED);
++	XNET_EP_MSG(ep, FI_ECANCELED);
  	xnet_report_error(xfer_entry, FI_ECANCELED);
  	xnet_free_xfer(xnet_ep2_progress(ep), xfer_entry);
  }
 diff --git a/prov/tcp/src/xnet_progress.c b/prov/tcp/src/xnet_progress.c
-index aa76968e1..be76c245f 100644
+index aa76968e1..a638cdf07 100644
 --- a/prov/tcp/src/xnet_progress.c
 +++ b/prov/tcp/src/xnet_progress.c
 @@ -165,6 +165,7 @@ static int xnet_handle_truncate(struct xnet_ep *ep)
  	/* TODO: need to report received message size =
  	 * base_hdr.size - base_hdr.hdr_size - data_left
  	 */
-+	XNET_OUTPUT_ERR_WARN(ep, FI_ETRUNC);
++	XNET_EP_MSG(ep, FI_ETRUNC);
  	xnet_report_error(rx_entry, FI_ETRUNC);
  
  	/* Prepare to remove excess msg data from stream to continue */
@@ -121,7 +117,7 @@ index aa76968e1..be76c245f 100644
  
  err_comp:
  	xnet_cntr_incerr(rx_entry);
-+	XNET_OUTPUT_ERR_WARN(ep, -ret);
++	XNET_EP_MSG(ep, -ret);
  	xnet_report_error(rx_entry, -ret);
  	xnet_free_xfer(xnet_rdm2_progress(rdm), rx_entry);
  	return ret;
@@ -129,7 +125,7 @@ index aa76968e1..be76c245f 100644
  	if (ret) {
  		FI_WARN(&xnet_prov, FI_LOG_DOMAIN, "msg send failed\n");
  		xnet_cntr_incerr(tx_entry);
-+		XNET_OUTPUT_ERR_WARN(ep, -ret);
++		XNET_EP_MSG(ep, -ret);
  		xnet_report_error(tx_entry, -ret);
  		xnet_free_xfer(xnet_ep2_progress(ep), tx_entry);
  	} else if (tx_entry->ctrl_flags & XNET_NEED_CTS) {
@@ -137,7 +133,7 @@ index aa76968e1..be76c245f 100644
  
   poll_err:
  	xnet_cntr_incerr(rx_entry);
-+	XNET_OUTPUT_ERR_WARN(ep, -ret);
++	XNET_EP_MSG(ep, -ret);
  	xnet_report_error(rx_entry, -ret);
  	xnet_free_xfer(xnet_ep2_progress(ep), rx_entry);
  	return ret;
@@ -145,7 +141,7 @@ index aa76968e1..be76c245f 100644
  	FI_WARN(&xnet_prov, FI_LOG_EP_DATA,
  		"msg recv failed ret = %zd (%s)\n", ret, fi_strerror((int)-ret));
  	xnet_cntr_incerr(rx_entry);
-+	XNET_OUTPUT_ERR_WARN(ep, -ret);
++	XNET_EP_MSG(ep, -ret);
  	xnet_report_error(rx_entry, (int) -ret);
  	xnet_free_xfer(xnet_ep2_progress(ep), rx_entry);
  	xnet_reset_rx(ep);
