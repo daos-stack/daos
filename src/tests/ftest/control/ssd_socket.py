@@ -1,13 +1,15 @@
 """
   (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 from textwrap import wrap
 
+from ClusterShell.NodeSet import NodeSet
 from control_test_base import ControlTestBase
-from general_utils import pcmd, run_pcmd
+from run_utils import run_remote
 
 
 class SSDSocketTest(ControlTestBase):
@@ -36,10 +38,10 @@ class SSDSocketTest(ControlTestBase):
         for pci_addr_head in pci_addr_heads:
             self.log.debug(
                 "----- Search PCI Addr Head %s in /sys -----", pci_addr_head)
-            run_pcmd(
-                hosts=self.hostlist_servers,
-                command="find /sys -name \"{}\"".format(pci_addr_head),
-                verbose=True)
+            run_remote(
+                self.log,
+                self.hostlist_servers,
+                f'find /sys -name "{pci_addr_head}"')
 
         # Another way to obtain the Socket ID is to use hwloc-ls --whole-io
         # --verbose. It contains something like:
@@ -55,9 +57,10 @@ class SSDSocketTest(ControlTestBase):
         # much more cumbersome than reading the numa_node, so it's called here
         # for mainly debugging purpose.
         self.log.debug("----- Show PCI Address in hwloc-ls -----")
-        pcmd(
-            hosts=self.hostlist_servers,
-            command="hwloc-ls --whole-io --verbose")
+        run_remote(
+            self.log,
+            self.hostlist_servers,
+            "hwloc-ls --whole-io --verbose")
 
     def verify_ssd_sockets(self, storage_dict):
         """Verify SSD sockets.
@@ -98,17 +101,14 @@ class SSDSocketTest(ControlTestBase):
             pci_addr_heads.append(pci_addr_head)
 
             # Call cat on the server host, not necessarily the local test host.
-            results = run_pcmd(
-                hosts=self.hostlist_servers[0:1], command="cat {}".format(numa_node_path))
-
-            # Obtain the numa_node content.
-            fs_socket_id = ""
-            for result in results:
-                # Test that the content is expected.
-                fs_socket_id = result["stdout"][-1]
-                if fs_socket_id != str(cmd_socket_id):
-                    errors.append(
-                        "Unexpected socket ID! Cmd: {}; FS: {}".format(cmd_socket_id, fs_socket_id))
+            command = f"cat {numa_node_path}"
+            result = run_remote(
+                self.log, NodeSet(self.hostlist_servers[0]), command)
+            if not result.passed:
+                errors.append(f"{command} failed on {result.failed_hosts}")
+            fs_socket_id = result.joined_stdout
+            if fs_socket_id != str(cmd_socket_id):
+                errors.append(f"Unexpected socket ID! Cmd: {cmd_socket_id}; FS: {fs_socket_id}")
 
         if errors:
             # Since we're dealing with system files and we don't have access to
