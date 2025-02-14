@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -189,7 +190,7 @@ dtx_handler(crt_rpc_t *rpc)
 			break;
 
 		if (unlikely(din->di_epoch == 1))
-			D_GOTO(out, rc = -DER_IO);
+			daos_fail_loc_set(DAOS_DTX_PARTIAL_COMMIT_P2);
 
 		while (i < din->di_dtx_array.ca_count) {
 			if (i + count > din->di_dtx_array.ca_count)
@@ -204,6 +205,9 @@ dtx_handler(crt_rpc_t *rpc)
 
 			i += count;
 		}
+
+		if (unlikely(din->di_epoch == 1))
+			D_GOTO(out, rc = -DER_IO);
 
 		if (din->di_flags.ca_count > 0)
 			flags = din->di_flags.ca_arrays;
