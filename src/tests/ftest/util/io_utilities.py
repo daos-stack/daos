@@ -10,35 +10,7 @@ import os
 
 from command_utils import ExecutableCommand
 from command_utils_base import FormattedParameter
-from general_utils import DaosTestError
-from pydaos.raw import DaosApiError
 from run_utils import run_remote
-
-
-def get_target_rank_list(daos_object):
-    """Get a list of target ranks from a DAOS object.
-
-    Note:
-        The DaosObj function called is not part of the public API
-
-    Args:
-        daos_object (DaosObj): the object from which to get the list of targets
-
-    Raises:
-        DaosTestError: if there is an error obtaining the target list from the
-            object
-
-    Returns:
-        list: list of targets for the specified object
-
-    """
-    try:
-        daos_object.get_layout()
-        return daos_object.tgt_rank_list
-    except DaosApiError as error:
-        raise DaosTestError(
-            "Error obtaining target list for the object: {}".format(
-                error)) from error
 
 
 class DirectoryTreeCommand(ExecutableCommand):
