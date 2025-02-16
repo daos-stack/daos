@@ -10,6 +10,8 @@
 #ifndef __DAOS_ERRNO_H__
 #define __DAOS_ERRNO_H__
 
+#include <stdint.h> /* just to trigger testing */
+
 #if defined(__cplusplus)
 extern "C" {
 #endif
