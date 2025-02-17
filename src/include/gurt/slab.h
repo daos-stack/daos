@@ -72,7 +72,7 @@ struct d_slab_type {
 	/* Number of sequental calls to acquire() without a call to restock() */
 	int               st_no_restock;     /* Current count */
 	int               st_no_restock_hwm; /* High water mark */
-	/* continous low traffic times to free slab entry if possible */
+	/* continuous low traffic times to free slab entry if possible */
 	int               st_conts_idle_count;
 };
 

@@ -431,9 +431,8 @@ d_slab_reclaim_if_possible(struct d_slab *slab)
 			continue;
 		}
 
-		to_free_count = (type->st_count - MAX_SLAB_NUM_TO_KEEP) > \
-						RECLAIM_NUM_PER_ROUND ? RECLAIM_NUM_PER_ROUND :\
-						(type->st_count - MAX_SLAB_NUM_TO_KEEP);
+		to_free_count = min(type->st_count - MAX_SLAB_NUM_TO_KEEP,\
+						RECLAIM_NUM_PER_ROUND);
 		D_MUTEX_LOCK(&type->st_lock);
 		D_TRACE_DEBUG(DB_ANY, type, "Recaliming type");
 		restock(type, type->st_free_count + to_free_count);
