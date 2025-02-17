@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -450,8 +451,7 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 
 	/* Sync the HLC. Clients never decode requests. */
 	D_ASSERT(crt_is_service());
-	rc = d_hlc_get_msg(rpc_priv->crp_req_hdr.cch_hlc,
-			     &ctx->cc_last_unpack_hlc, &clock_offset);
+	rc = d_hlc_get_msg(rpc_priv->crp_req_hdr.cch_hlc, NULL /* hlc_out */, &clock_offset);
 	if (rc != 0) {
 		REPORT_HLC_SYNC_ERR("failed to sync HLC for request: opc=%x ts="
 				    DF_U64" offset="DF_U64" from=%u\n",
