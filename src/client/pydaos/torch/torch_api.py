@@ -7,6 +7,8 @@
 """
 torch module provides implementation for PyTorch Map-Style and Iterable Style Datasets
 to access training data on DAOS DFS via POSIX container.
+
+In addition, it provides Checkpoint class to save and load PyTorch model checkpoints.
 """
 
 import io
@@ -25,6 +27,8 @@ ITER_BATCH_SIZE = 32
 READDIR_BATCH_SIZE = 128
 PARALLEL_SCAN_WORKERS = 16
 DIR_CACHE_SIZE = 64 * 1024
+DEFAULT_CHUNK_SIZE = 64 * 1024 * 1024
+DEFAULT_CHUNKS_LIMIT = 1024 // DEFAULT_CHUNK_SIZE
 
 
 def transform_fn_default(data):
@@ -434,10 +438,12 @@ class Checkpoint():
     file_chunk_size : int (optional)
         Chunk size to be used for checkpoint files, default is 0.
     transfer_chunk_size : int (optional)
-        Chunk size for data buffering/transfer, default is 0, which means no chunking:
-        All writes go to in memory buffer and actual flush to storage will happen on close() call.
+        Chunk size for data buffering/transfer, default is DEFAULT_CHUNK_SIZE = 64MB.
+        To disable chunking set it to 0, then all writes go to in memory buffer
+        and actual flush to storage will happen on close() call.
     chunks_limits: int (optional)
-        Number of chunks to be used for buffering and transfer, default is 0, which means no limit.
+        Number of chunks to be used for buffering and transfer.
+        Setting it to 0 means no limit.
         It's used only when transfer_chunk_size is set to non-zero value and provides the mechanism
         to limit memory usage.
     workers: int (optional)
@@ -446,10 +452,11 @@ class Checkpoint():
 
     Methods
     -------
-    reader(fname):
+    reader(file, stream=None):
         Reads the checkpoint file and returns its content as BytesIO object.
+        Optionally, the stream can be provided to read the data into it.
 
-    writer(fname):
+    writer(file):
         Returns write buffer to save the checkpoint file.
     """
 
@@ -459,8 +466,8 @@ class Checkpoint():
                  open_flags=os.O_CREAT | os.O_RDWR,
                  class_name="OC_UNKNOWN",
                  file_chunk_size=0,
-                 transfer_chunk_size=0,
-                 chunks_limit=0,
+                 transfer_chunk_size=DEFAULT_CHUNK_SIZE,
+                 chunks_limit=DEFAULT_CHUNKS_LIMIT,
                  workers=4,
                  ):
         self._pool = pool
@@ -483,26 +490,51 @@ class Checkpoint():
         self._dfs.disconnect()
         self._dfs = None
 
-    def reader(self, fname):
-        """ Reads the checkpoint file and returns its content as BytesIO object """
+    def reader(self, file, stream=None):
+        """
+        Reads the checkpoint file and returns its content as BytesIO object.
+        Alternatively, the stream can be provided to read the data into it, this might
+        be useful for large checkpoints that can't fit into memory.
+        """
 
-        if fname is None:
-            raise ValueError("fname is required")
+        if file is None:
+            raise ValueError("file is required")
 
-        fpath = os.path.join(self._prefix, fname)
+        if stream is None:
+            stream = io.BytesIO()
 
-        size = self._dfs.get_file_size(fpath)
-        buf = self._dfs.read(fpath, size)
-        return io.BytesIO(buf)
+        path = os.path.join(self._prefix, file)
+        size = self._dfs.get_file_size(path)
 
-    def writer(self, fname):
+        chunks_limit = self._chunks_limit
+        if chunks_limit == 0:
+            chunks_limit = size // DEFAULT_CHUNK_SIZE
+
+        chunk_size = self._transfer_chunk_size
+        if chunk_size == 0:
+            # In case we don't have chunking, we read the file in one go
+            chunk_size = size
+            chunks_limit = 1
+
+        chunks = [(path, min(chunk_size, size - offset), offset)
+                  for offset in range(0, size, chunk_size)]
+
+        for i in range(0, len(chunks), chunks_limit):
+            batch = chunks[i:i + chunks_limit]
+            for data in self._dfs.batch_read(batch):
+                stream.write(data)
+
+        stream.seek(0)
+        return stream
+
+    def writer(self, file):
         """ Returns write buffer to save the checkpoint file """
 
-        if fname is None:
-            raise ValueError("fname is required")
+        if file is None:
+            raise ValueError("file is required")
 
-        fpath = os.path.join(self._prefix, fname)
-        return WriteBuffer(self._dfs, fpath, self._mode, self._oflags,
+        path = os.path.join(self._prefix, file)
+        return WriteBuffer(self._dfs, path, self._mode, self._oflags,
                            self._class_name, self._file_chunk_size, self._transfer_chunk_size,
                            self._chunks_limit, self._workers)
 
@@ -571,7 +603,7 @@ class _Dfs():
             # Even if there are no dirs, we should emit the tuple to notify the main process
             out_dirs.put((1, dirs))
 
-            files = [(os.path.join(path, fname), size) for (fname, size) in files]
+            files = [(os.path.join(path, file), size) for (file, size) in files]
             result.extend(files)
 
         out_files.put(result)
@@ -657,9 +689,14 @@ class _Dfs():
             raise OSError(ret, os.strerror(ret), path)
 
     def batch_read(self, items):
-        """ parallel read of multiple files """
+        """
+        Parallel read of multiple files with their sizes and optional offsets.
+        It expects list of tuples (path, size, [offset]) and returns list of buffers
+        with data read from the storage.
+        The result list is in the same order as the input list.
+        """
 
-        to_read = [(item[0], bytearray(item[1])) for item in items]
+        to_read = [(item[0], bytearray(item[1]), item[2] if len(item) > 2 else 0) for item in items]
         ret = torch_shim.torch_batch_read(DAOS_MAGIC, self._dfs, to_read)
 
         if ret != 0:
