@@ -6186,11 +6186,20 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 		switch (upgrade_status) {
 		case DAOS_UPGRADE_STATUS_NOT_STARTED:
 		case DAOS_UPGRADE_STATUS_COMPLETED:
-			if ((upgrade_global_ver < DAOS_POOL_GLOBAL_VERSION &&
-			     dmg_upgrade_cmd) || DAOS_FAIL_CHECK(DAOS_FORCE_OBJ_UPGRADE))
+			if (DAOS_FAIL_CHECK(DAOS_FORCE_OBJ_UPGRADE)) {
 				D_GOTO(out_upgrade, rc = 0);
-			else
+			} else if (upgrade_global_ver < DAOS_POOL_GLOBAL_VERSION &&
+				   dmg_upgrade_cmd) {
+				if (DAOS_POOL_GLOBAL_VERSION - upgrade_global_ver == 1)
+					D_GOTO(out_upgrade, rc = 0);
+				D_ERROR(DF_UUID ": upgrading pool %u -> %u\n is unsupported"
+						" please upgrade pool to %u firstly\n",
+					DP_UUID(svc->ps_uuid), upgrade_global_ver,
+					DAOS_POOL_GLOBAL_VERSION, upgrade_global_ver + 1);
+				D_GOTO(out_tx, rc = -DER_NOTSUPPORTED);
+			} else {
 				D_GOTO(out_tx, rc = 0);
+			}
 			break;
 		case DAOS_UPGRADE_STATUS_FAILED:
 			if (upgrade_global_ver < DAOS_POOL_GLOBAL_VERSION) {
