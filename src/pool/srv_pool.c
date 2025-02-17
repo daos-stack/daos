@@ -1,6 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7353,7 +7354,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 
 	if (svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_NO_DATA_SYNC) {
 		D_DEBUG(DB_MD, "self healing is disabled for no_data_sync reintegration mode.\n");
-		if (opc == POOL_EXCLUDE || opc == POOL_DRAIN) {
+		if (opc == MAP_EXCLUDE || opc == MAP_DRAIN) {
 			rc = ds_pool_tgt_exclude_out(svc->ps_pool->sp_uuid, &target_list);
 			if (rc)
 				D_INFO("mark failed target %d of "DF_UUID " as DOWNOUT: "DF_RC"\n",
@@ -7363,7 +7364,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		D_GOTO(out, rc);
 	}
 
-	if ((entry->dpe_val & DAOS_SELF_HEAL_DELAY_REBUILD) && exclude_rank)
+	if ((entry->dpe_val & DAOS_SELF_HEAL_DELAY_REBUILD) && (opc == MAP_EXCLUDE))
 		delay = -1;
 	else if (daos_fail_check(DAOS_REBUILD_DELAY))
 		delay = 5;
