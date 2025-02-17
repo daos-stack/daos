@@ -10,17 +10,11 @@ daos (2.7.101-5) unstable; urgency=medium
 
  -- Jan Michalski <jan-marian.michalski@hpe.com>  Wed, 22 Jan 2025 14:31:00 +0000
 
-daos (2.7.101-4) unstable; urgency=medium
+daos (2.7.101-3) unstable; urgency=medium
   [ Jeff Olivier ]
   * Switch from libfuse3 to libfused
 
- -- Jeff Olivier <jeffolivier@google.com>  Fri, 20 Dec 2024 20:15:00 +0000
-
-daos (2.7.101-3) unstable; urgency=medium
-  [ Phillip Henderson ]
-  * Fix protobuf-c requiremnent for daos-client-tests on Leap.
-
- -- Phillip Henderson <phillip.henderson@intel.com>  Thu, 19 Dec 2024 13:05:00 -0500
+ -- Jeff Olivier <jeffolivier@google.com>  Thu, 19 Dec 2024 20:15:00 +0000
 
 daos (2.7.101-2) unstable; urgency=medium
   [ Denis Barakhtanov ]
