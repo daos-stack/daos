@@ -703,38 +703,39 @@ def main():
     args.paths = list(map(os.path.realpath, args.paths))
 
     # Check for incompatible arguments
+    rc = 0
     if args.command == "lint" and args.tags:
         print("--tags not supported with lint")
-        return 1
+        rc = 1
     if args.command == "list" and args.tags:
         print("--tags not supported with list")
-        return 1
+        rc = 1
     if args.command == "unit" and args.tags:
         print("--tags not supported with unit")
-        return 1
+        rc = 1
     if args.command == "unit" and args.paths:
         print("--paths not supported with unit")
-        return 1
+        rc = 1
+    if rc != 0:
+        return rc
 
     if args.command == "lint":
         try:
             run_linter(args.paths, args.verbose)
+            rc = 0
         except LintFailure as err:
             print(err)
-            return 1
-        return 0
-
-    if args.command == "dump":
-        return run_dump(args.paths, args.tags)
-
-    if args.command == "list":
-        return run_list(args.paths)
-
-    if args.command == "unit":
+            rc = 1
+    elif args.command == "dump":
+        rc = run_dump(args.paths, args.tags)
+    elif args.command == "list":
+        rc = run_list(args.paths)
+    elif args.command == "unit":
         test_tag_set()
         test_tags_util(args.verbose)
+        rc = 0
 
-    return 0
+    return rc
 
 
 if __name__ == '__main__':
