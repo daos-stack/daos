@@ -199,7 +199,6 @@ ctl_cmd_run(char opc, char *args)
 	int			 rc;
 
 	if (args) {
-		/* DAOS-17042 Replace strncpy with strncat or strlcpy */
 		strncpy(buf, args, CTL_BUF_LEN - 1);
 		buf[CTL_BUF_LEN - 1] = '\0';
 		str = daos_str_trimwhite(buf);
