@@ -1,6 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -38,13 +39,15 @@
                                                                                                    \
 		crt_opc_decode((rpc)->crp_pub.cr_opc, &_module, &_opc);                            \
 		if ((rpc)->crp_coll) {                                                             \
-			D_TRACE_DEBUG(mask, (rpc), "[opc=%#x (%s:%s) rpcid=%#lx CORPC] " fmt,      \
+			D_TRACE_DEBUG(mask, (rpc), "[opc=%#x (%s:%s:%s) rpcid=%#lx CORPC] " fmt,   \
 				      (rpc)->crp_pub.cr_opc, _module, _opc,                        \
+				      crt_rpc_priv_get_origin_addr((rpc)),                         \
 				      (rpc)->crp_req_hdr.cch_rpcid, ##__VA_ARGS__);                \
 		} else {                                                                           \
 			D_TRACE_DEBUG(mask, (rpc),                                                 \
-				      "[opc=%#x (%s:%s) rpcid=%#lx rank:tag=%d:%d] " fmt,          \
+				      "[opc=%#x (%s:%s:%s) rpcid=%#lx rank:tag=%d:%d] " fmt,       \
 				      (rpc)->crp_pub.cr_opc, _module, _opc,                        \
+				      crt_rpc_priv_get_origin_addr((rpc)),                         \
 				      (rpc)->crp_req_hdr.cch_rpcid, (rpc)->crp_pub.cr_ep.ep_rank,  \
 				      (rpc)->crp_pub.cr_ep.ep_tag, ##__VA_ARGS__);                 \
 		}                                                                                  \
@@ -58,12 +61,15 @@
                                                                                                    \
 		crt_opc_decode((rpc)->crp_pub.cr_opc, &_module, &_opc);                            \
 		if ((rpc)->crp_coll) {                                                             \
-			D_TRACE_ERROR((rpc), "[opc=%#x (%s:%s) rpcid=%#lx CORPC] " fmt,            \
+			D_TRACE_ERROR((rpc), "[opc=%#x (%s:%s:%s) rpcid=%#lx CORPC] " fmt,         \
 				      (rpc)->crp_pub.cr_opc, _module, _opc,                        \
+				      crt_rpc_priv_get_origin_addr((rpc)),                         \
 				      (rpc)->crp_req_hdr.cch_rpcid, ##__VA_ARGS__);                \
 		} else {                                                                           \
-			D_TRACE_ERROR((rpc), "[opc=%#x (%s:%s) rpcid=%#lx rank:tag=%d:%d] " fmt,   \
+			D_TRACE_ERROR((rpc),                                                       \
+				      "[opc=%#x (%s:%s:%s) rpcid=%#lx rank:tag=%d:%d] " fmt,       \
 				      (rpc)->crp_pub.cr_opc, _module, _opc,                        \
+				      crt_rpc_priv_get_origin_addr((rpc)),                         \
 				      (rpc)->crp_req_hdr.cch_rpcid, (rpc)->crp_pub.cr_ep.ep_rank,  \
 				      (rpc)->crp_pub.cr_ep.ep_tag, ##__VA_ARGS__);                 \
 		}                                                                                  \
@@ -77,12 +83,14 @@
                                                                                                    \
 		crt_opc_decode((rpc)->crp_pub.cr_opc, &_module, &_opc);                            \
 		if ((rpc)->crp_coll) {                                                             \
-			D_TRACE_WARN((rpc), "[opc=%#x (%s:%s) rpcid=%#lx CORPC] " fmt,             \
+			D_TRACE_WARN((rpc), "[opc=%#x (%s:%s:%s) rpcid=%#lx CORPC] " fmt,          \
 				     (rpc)->crp_pub.cr_opc, _module, _opc,                         \
+				     crt_rpc_priv_get_origin_addr((rpc)),                          \
 				     (rpc)->crp_req_hdr.cch_rpcid, ##__VA_ARGS__);                 \
 		} else {                                                                           \
-			D_TRACE_WARN((rpc), "[opc=%#x (%s:%s) rpcid=%#lx rank:tag=%d:%d] " fmt,    \
+			D_TRACE_WARN((rpc), "[opc=%#x (%s:%s:%s) rpcid=%#lx rank:tag=%d:%d] " fmt, \
 				     (rpc)->crp_pub.cr_opc, _module, _opc,                         \
+				     crt_rpc_priv_get_origin_addr((rpc)),                          \
 				     (rpc)->crp_req_hdr.cch_rpcid, (rpc)->crp_pub.cr_ep.ep_rank,   \
 				     (rpc)->crp_pub.cr_ep.ep_tag, ##__VA_ARGS__);                  \
 		}                                                                                  \
@@ -96,12 +104,14 @@
                                                                                                    \
 		crt_opc_decode((rpc)->crp_pub.cr_opc, &_module, &_opc);                            \
 		if ((rpc)->crp_coll) {                                                             \
-			D_TRACE_INFO((rpc), "[opc=%#x (%s:%s) rpcid=%#lx CORPC] " fmt,             \
+			D_TRACE_INFO((rpc), "[opc=%#x (%s:%s:%s) rpcid=%#lx CORPC] " fmt,          \
 				     (rpc)->crp_pub.cr_opc, _module, _opc,                         \
+				     crt_rpc_priv_get_origin_addr((rpc)),                          \
 				     (rpc)->crp_req_hdr.cch_rpcid, ##__VA_ARGS__);                 \
 		} else {                                                                           \
-			D_TRACE_INFO((rpc), "[opc=%#x (%s:%s) rpcid=%#lx rank:tag=%d:%d] " fmt,    \
+			D_TRACE_INFO((rpc), "[opc=%#x (%s:%s:%s) rpcid=%#lx rank:tag=%d:%d] " fmt, \
 				     (rpc)->crp_pub.cr_opc, _module, _opc,                         \
+				     crt_rpc_priv_get_origin_addr((rpc)),                          \
 				     (rpc)->crp_req_hdr.cch_rpcid, (rpc)->crp_pub.cr_ep.ep_rank,   \
 				     (rpc)->crp_pub.cr_ep.ep_tag, ##__VA_ARGS__);                  \
 		}                                                                                  \
