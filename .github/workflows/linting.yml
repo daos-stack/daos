@@ -228,7 +228,7 @@ jobs:
       - doxygen
       - pylint
       - codespell
-      # - clang-format  # not required
+      - clang-format
       - yaml-lint
       - copyright
     if: (!cancelled())
