@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -322,7 +323,7 @@ class ServerFillUp(IorTestBase):
         Args:
             rank: Rank number to kill the daos server
         """
-        self.server_managers[0].stop_ranks([rank], self.d_log, force=True, copy=True)
+        self.server_managers[0].stop_ranks([rank], force=True, copy=True)
 
     def exclude_target_thread(self, rank, target):
         """Target kill thread function.

@@ -1,5 +1,6 @@
 """
   (C) Copyright 2019-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -50,14 +51,14 @@ class RbldCascadingFailures(RebuildTestBase):
         """Start the rebuild process."""
         if self.mode == "simultaneous":
             # Exclude both ranks from the pool to initiate rebuild
-            self.server_managers[0].stop_ranks(self.inputs.rank.value, self.d_log, force=True)
+            self.server_managers[0].stop_ranks(self.inputs.rank.value, force=True)
         else:
             # Exclude the first rank from the pool to initiate rebuild
-            self.server_managers[0].stop_ranks([self.inputs.rank.value[0]], self.d_log, force=True)
+            self.server_managers[0].stop_ranks([self.inputs.rank.value[0]], force=True)
 
         if self.mode == "sequential":
             # Exclude the second rank from the pool
-            self.server_managers[0].stop_ranks([self.inputs.rank.value[1]], self.d_log, force=True)
+            self.server_managers[0].stop_ranks([self.inputs.rank.value[1]], force=True)
 
         # Wait for rebuild to start
         self.pool.wait_for_rebuild_to_start(1)
@@ -66,7 +67,7 @@ class RbldCascadingFailures(RebuildTestBase):
         """Execute test steps during rebuild."""
         if self.mode == "cascading":
             # Exclude the second rank from the pool during rebuild
-            self.server_managers[0].stop_ranks([self.inputs.rank.value[1]], self.d_log, force=True)
+            self.server_managers[0].stop_ranks([self.inputs.rank.value[1]], force=True)
 
         self.container.set_prop(prop="status", value="healthy")
         # Populate the container with additional data during rebuild

@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -9,9 +10,7 @@
 
 import ctypes
 import enum
-import inspect
 import os
-import sys
 import threading
 import time
 
@@ -2316,7 +2315,6 @@ class DaosContext():
             'create-cont':     self.libdaos.daos_cont_create,
             'create-eq':       self.libdaos.daos_eq_create,
             'create-snap':     self.libdaos.daos_cont_create_snap,
-            'd_log':           self.libtest.dts_log,
             'destroy-cont':    self.libdaos.daos_cont_destroy,
             'destroy-eq':      self.libdaos.daos_eq_destroy,
             'destroy-snap':    self.libdaos.daos_cont_destroy_snap,
@@ -2357,54 +2355,11 @@ class DaosContext():
 
     def get_function(self, function):
         """Call a function through the API."""
-        init_not_required = ['d_log']
-        if function not in init_not_required:
-            # For most functions, we need to ensure
-            # that daos_init() has been called before
-            # invoking anything.
-            self._dc = DaosClient()
+        # For most functions, we need to ensure
+        # that daos_init() has been called before
+        # invoking anything.
+        self._dc = DaosClient()
         return self.ftable[function]
-
-
-class DaosLog:
-    """Expose functionality to write to the DAOS client log."""
-
-    def __init__(self, context):
-        """Set up the log object."""
-        self.context = context
-
-    def debug(self, msg):
-        """Entry point for debug msgs."""
-        self.daos_log(msg, daos_cref.Logfac.DEBUG)
-
-    def info(self, msg):
-        """Entry point for info msgs."""
-        self.daos_log(msg, daos_cref.Logfac.INFO)
-
-    def warning(self, msg):
-        """Entry point for warning msgs."""
-        self.daos_log(msg, daos_cref.Logfac.WARNING)
-
-    def error(self, msg):
-        """Entry point for error msgs."""
-        self.daos_log(msg, daos_cref.Logfac.ERROR)
-
-    def daos_log(self, msg, level):
-        """Write specified message to client daos.log."""
-        func = self.context.get_function("d_log")
-
-        caller = inspect.getframeinfo(inspect.stack()[2][0])
-        # pylint: disable=protected-access
-        caller_func = sys._getframe(1).f_back.f_code.co_name
-        filename = os.path.basename(caller.filename)
-
-        c_filename = ctypes.create_string_buffer(filename.encode('utf-8'))
-        c_line = ctypes.c_int(caller.lineno)
-        c_msg = ctypes.create_string_buffer(msg.encode('utf-8'))
-        c_caller_func = ctypes.create_string_buffer(caller_func.encode('utf-8'))
-        c_level = ctypes.c_uint64(level)
-
-        func(c_msg, c_filename, c_caller_func, c_line, c_level)
 
 
 class DaosApiError(Exception):

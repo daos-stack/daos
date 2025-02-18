@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -39,8 +40,7 @@ class EcodDisabledRebuildSingle(ErasureCodeSingle):
 
         # Kill the last server rank and wait for 20 seconds,
         # Rebuild is disabled so data will not be rebuild.
-        self.server_managers[0].stop_ranks(
-            [self.server_count - 1], self.d_log, force=True)
+        self.server_managers[0].stop_ranks([self.server_count - 1], force=True)
         time.sleep(20)
 
         # Read data set and verify for different EC object for parity 1 and 2.
@@ -50,8 +50,7 @@ class EcodDisabledRebuildSingle(ErasureCodeSingle):
         if self.server_count >= 5:
             # Kill another server rank and wait for 20 seconds,
             # Rebuild is disabled so data will not be rebuild.
-            self.server_managers[0].stop_ranks(
-                [self.server_count - 2], self.d_log, force=True)
+            self.server_managers[0].stop_ranks([self.server_count - 2], force=True)
             time.sleep(20)
 
             # Read data set and verify for different EC object for 2 only.
