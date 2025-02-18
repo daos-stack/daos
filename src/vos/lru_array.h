@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -46,8 +47,8 @@ struct lru_sub {
 	uint32_t		 ls_free;
 	/** Index of this entry in the array */
 	uint32_t		 ls_array_idx;
-	/** Padding */
-	uint32_t		 ls_pad;
+	/** The entries in-using */
+	uint32_t		 ls_used;
 	/** Link in the array free/unused list.  If the subarray has no free
 	 *  entries, it is removed from either list so this field is unused.
 	 */
@@ -432,6 +433,7 @@ lrua_allocx_inplace_(struct lru_array *array, uint32_t idx, uint64_t key,
 		return -DER_NO_PERM;
 	}
 
+	sub->ls_used++;
 	entry->le_key = key;
 
 	/** First remove */
