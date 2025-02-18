@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -441,6 +442,8 @@ kv_put(daos_handle_t oh, daos_size_t size)
 	daos_event_t	*evp;
 	int		rc, usage_ratio1, usage_ratio2;
 	int		eq_rc;
+	int              i;
+	int              num_events;
 	clock_t		last_query = start, current;
 
 	deadline_count = 1;
@@ -485,7 +488,9 @@ kv_put(daos_handle_t oh, daos_size_t size)
 			 * Max request in flight reached, wait for one i/o to
 			 * complete to reuse the slot
 			 */
-			rc = daos_eq_poll(eq, 1, DAOS_EQ_WAIT, 1, &evp);
+			do {
+				rc = daos_eq_poll(eq, 1, DAOS_EQ_NOWAIT, 1, &evp);
+			} while (rc == 0);
 			if (rc < 0)
 				break;
 			if (rc == 0) {
@@ -544,12 +549,15 @@ kv_put(daos_handle_t oh, daos_size_t size)
 	}
 
 	/** Wait for completion of all in-flight requests */
-	do {
-		eq_rc = daos_eq_poll(eq, 1, DAOS_EQ_WAIT, 1, &evp);
+	num_events = daos_eq_query(eq, DAOS_EQR_ALL, 0, NULL);
+	for (eq_rc = 0, i = 0; i < num_events; i++) {
+		do {
+			eq_rc = daos_eq_poll(eq, 1, DAOS_EQ_NOWAIT, 1, &evp);
+		} while (eq_rc == 0);
 		if (rc == 0 && eq_rc == 1) {
 			rc = evp->ev_error;
 		}
-	} while (eq_rc == 1);
+	};
 
 	if (rc == 0 && eq_rc < 0) {
 		rc = eq_rc;
@@ -581,6 +589,7 @@ kv_get(daos_handle_t oh, daos_size_t size)
 	uint64_t	res = 0;
 	int		rc;
 	int		eq_rc;
+	int              num_events;
 
 	total_nr = deadline_count;
 	setup_progress();
@@ -620,7 +629,9 @@ kv_get(daos_handle_t oh, daos_size_t size)
 			 * Max request in flight reached, wait for one i/o to
 			 * complete to reuse the slot
 			 */
-			rc = daos_eq_poll(eq, 1, DAOS_EQ_WAIT, 1, &evp);
+			do {
+				rc = daos_eq_poll(eq, 1, DAOS_EQ_NOWAIT, 1, &evp);
+			} while (rc == 0);
 			if (rc < 0)
 				break;
 			if (rc == 0) {
@@ -665,8 +676,11 @@ kv_get(daos_handle_t oh, daos_size_t size)
 	}
 
 	/** Wait for completion of all in-flight requests */
-	do {
-		eq_rc = daos_eq_poll(eq, 1, DAOS_EQ_WAIT, 1, &evp);
+	num_events = daos_eq_query(eq, DAOS_EQR_ALL, 0, NULL);
+	for (eq_rc = 0, i = 0; i < num_events; i++) {
+		do {
+			eq_rc = daos_eq_poll(eq, 1, DAOS_EQ_NOWAIT, 1, &evp);
+		} while (eq_rc == 0);
 		if (rc == 0 && eq_rc == 1) {
 			rc = evp->ev_error;
 			if (rc == 0) {
@@ -679,7 +693,7 @@ kv_get(daos_handle_t oh, daos_size_t size)
 				}
 			}
 		}
-	} while (eq_rc == 1);
+	};
 
 	if (rc == 0 && eq_rc < 0) {
 		rc = eq_rc;
@@ -699,7 +713,6 @@ kv_get(daos_handle_t oh, daos_size_t size)
 	/** verify that we got the sum of all integers from 1 to deadline_count */
 	if (res != deadline_count * (deadline_count + 1) / 2)
 		rc = -DER_MISMATCH;
-
 	finish_progress();
 	return rc;
 }
