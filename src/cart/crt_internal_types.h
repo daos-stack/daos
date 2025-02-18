@@ -172,6 +172,7 @@ struct crt_gdata {
 	long			 cg_num_cores;
 	/** Inflight rpc quota limit */
 	uint32_t		cg_rpc_quota;
+
 	/** Retry count of HG_Init_opt2() on failure when using CXI provider */
 	uint32_t                 cg_hg_init_retry_cnt;
 };
