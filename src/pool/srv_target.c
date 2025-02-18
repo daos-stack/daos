@@ -460,7 +460,7 @@ pool_child_recreate(struct ds_pool_child *child)
 	rc = vos_pool_create(path, child->spc_uuid, 0 /* scm_sz */,
 			     pool_info->spi_blob_sz[SMD_DEV_TYPE_DATA],
 			     pool_info->spi_blob_sz[SMD_DEV_TYPE_META],
-			     VOS_POF_FOR_RECREATE/* flags */, vos_df_version, NULL);
+			     VOS_POF_FOR_RECREATE /* flags */, vos_df_version, NULL);
 	if (rc)
 		DL_ERROR(rc, DF_UUID": Create VOS pool failed.", DP_UUID(child->spc_uuid));
 

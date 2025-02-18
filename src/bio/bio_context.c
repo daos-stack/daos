@@ -544,8 +544,8 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz,
 				rc = smd_pool_add_tgt(uuid, xs_ctxt->bxc_tgt_id, ba->bca_id, st,
 						      blob_sz, scm_sz, flags & BIO_MC_FL_RECREATE);
 		} else {
-			rc = smd_pool_add_tgt(uuid, xs_ctxt->bxc_tgt_id, ba->bca_id, st, blob_sz,
-					      0, flags & BIO_MC_FL_RECREATE);
+			rc = smd_pool_add_tgt(uuid, xs_ctxt->bxc_tgt_id, ba->bca_id, st, blob_sz, 0,
+					      flags & BIO_MC_FL_RECREATE);
 		}
 
 		if (rc != 0) {
