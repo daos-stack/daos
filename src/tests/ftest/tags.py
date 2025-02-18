@@ -37,7 +37,7 @@ class TagSet(set):
         return True
 
     def issuperset(self, other):
-        return TagSet(other).issubset(self)
+        return TagSet.issubset(other, self)
 
 
 class LintFailure(Exception):
