@@ -398,22 +398,22 @@ d_slab_restock(struct d_slab_type *type)
 	D_MUTEX_UNLOCK(&type->st_lock);
 }
 
-#define MAX_SLAB_NUM_TO_KEEP  32
+#define MAX_SLAB_NUM_TO_KEEP   32
 #define FREE_SLAB_NUM_FOR_IDLE 5
 #define CONTS_IDLE_COUNT_MIN   3
 #define RECLAIM_NUM_PER_ROUND  5
 
 /* Reclaim slab entry if possible to reduce memory taken by dfuse.
-*
-* This function will be called periodically in background and try to
-* release some slab entry not used now, to reduce the memory taken by
-* dfuse process when traffic is not heavy.
-*/
+ *
+ * This function will be called periodically in background and try to
+ * release some slab entry not used now, to reduce the memory taken by
+ * dfuse process when traffic is not heavy.
+ */
 void
 d_slab_reclaim_if_possible(struct d_slab *slab)
 {
 	struct d_slab_type *type;
-	int to_free_count;
+	int                 to_free_count;
 
 	D_MUTEX_LOCK(&slab->slab_lock);
 	d_list_for_each_entry(type, &slab->slab_list, st_type_list) {
@@ -421,18 +421,17 @@ d_slab_reclaim_if_possible(struct d_slab *slab)
 
 		/* check whether the slab entry is large and the traffic not heavy */
 		if (type->st_count < MAX_SLAB_NUM_TO_KEEP ||
-			type->st_free_count < FREE_SLAB_NUM_FOR_IDLE) {
+		    type->st_free_count < FREE_SLAB_NUM_FOR_IDLE) {
 			type->st_conts_idle_count = 0;
 			continue;
 		}
 
-		type->st_conts_idle_count ++;
+		type->st_conts_idle_count++;
 		if (type->st_conts_idle_count < CONTS_IDLE_COUNT_MIN) {
 			continue;
 		}
 
-		to_free_count = min(type->st_count - MAX_SLAB_NUM_TO_KEEP,\
-						RECLAIM_NUM_PER_ROUND);
+		to_free_count = min(type->st_count - MAX_SLAB_NUM_TO_KEEP, RECLAIM_NUM_PER_ROUND);
 		D_MUTEX_LOCK(&type->st_lock);
 		D_TRACE_DEBUG(DB_ANY, type, "Recaliming type");
 		restock(type, type->st_free_count + to_free_count);
