@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,7 +12,7 @@
 #include <gurt/telemetry_producer.h>
 
 /**
- * A sample function that creates and incremements a metric for a loop counter
+ * A sample function that creates and increments a metric for a loop counter
  *
  * \param[in]	count	Number of loop iterations
  */
