@@ -29,12 +29,7 @@ class SecureClientTelemetry(TestWithClientTelemetry):
         :avocado: tags=telemetry
         :avocado: tags=SecureClientTelemetry,test_secure_client_metrics
         """
-        print("---SAMIR--------")
-        self.server_managers[0].manager.stop()
-        self.server_managers[0].generate_telemetry_cert()
-        self.log.info("Start daos_server and detect the DAOS I/O engine message")
-        self.server_managers[0].restart(hosts=self.hostlist_servers)
-
+        self.secure_telemetry_setup()
         # create pool and container
         pool = self.get_pool(connect=True)
         container = self.get_container(pool=pool)

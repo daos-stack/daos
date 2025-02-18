@@ -3,9 +3,12 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import os
+import yaml
 from apricot import TestWithServers
 from telemetry_utils import ClientTelemetryUtils, TelemetryUtils
-
+from general_utils import get_default_config_file
+from server_utils import ServerFailed
 
 class TestWithTelemetry(TestWithServers):
     """Test container telemetry metrics.
@@ -263,6 +266,57 @@ class TestWithTelemetry(TestWithServers):
                     total += value
 
         return total
+
+    def secure_telemetry_setup(self):
+        """ SAMIR
+
+        Args:
+
+        Returns:
+        """
+        self.server_managers[0].prepare_telemetry_certificate()
+        # SAMIR self.server_managers[0].manager.stop()
+        # self.stop_servers()
+        print("---SAMIR--------")
+        yaml_data = self.server_managers[0].manager.job.yaml.get_yaml_data()
+        https_cert = os.path.join(self.server_managers[0].telemetry_certificate_dir,
+                                  "telemetry.crt")
+        https_key = os.path.join(self.server_managers[0].telemetry_certificate_dir,
+                                 "telemetry.key")
+
+        yaml_data["telemetry_config"].update({"https_cert": https_cert})
+        yaml_data["telemetry_config"].update({"https_key": https_key})
+        print(yaml_data)
+        print(get_default_config_file("server", os.path.dirname(
+            self.server_managers[0].manager.job.yaml.filename)))
+        self.server_managers[0].manager.job.create_yaml_file(yaml_data)
+
+        self.log.info("Stop DAOS servers")
+        self.server_managers[0].manager.stop()
+        self.log.info("Start daos_server and detect the DAOS I/O engine message")
+        self.server_managers[0].restart(hosts=self.hostlist_servers)
+
+        """
+        # Start server.
+        try:
+            self.start_server_managers(force=True)
+        except ServerFailed as error:
+            self.fail(f"Restarting server failed! {error}")
+        
+        print(self.server_managers[0].manager.job.yaml.get_yaml_data()["telemetry_config"])
+
+        print(self.server_managers[0].get_config_value("scm_mount"))
+
+        self.server_managers[0].set_config_value("https_cert", "telemetry.crt")
+        self.server_managers[0].set_config_value("https_key", "telemetry.key")
+
+        print(self.server_managers[0].get_config_value("https_cert"))
+        print(self.server_managers[0].get_config_value("https_key"))
+        print(self.server_managers[0])
+        """
+        print("---SAMIR--------")
+        self.log.info("Start daos_server and detect the DAOS I/O engine message")
+        # self.server_managers[0].restart(hosts=self.hostlist_servers)
 
 
 class TestWithClientTelemetry(TestWithTelemetry):

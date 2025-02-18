@@ -1045,16 +1045,13 @@ class YamlCommand(SubProcessCommand):
                 self._command, ", ".join(names))
             get_file_listing(hosts, names, self.run_user).log_output(self.log)
 
-    def copy_telemetry_root_certificates(self, source, hosts):
+    def copy_telemetry_root_certificates(self, source, destination, hosts):
         """Copy telemetry certificates files from the source to the destination hosts.
         Args:
             source (str): source of the certificate files.
             hosts (NodeSet): list of the destination hosts.
         """
         certfiles = ["daosTelemetryCA.crt", "daosTelemetryCA.key"]
-        data = self.yaml.telemetry_config.get_certificate_data(
-            self.yaml.telemetry_config.get_attribute_names(LogParameter))
-        destination = list(data.keys())[0]
 
         for file_name in certfiles:
             src_file = os.path.join(source, file_name)
@@ -1067,7 +1064,7 @@ class YamlCommand(SubProcessCommand):
                 self.log.info("    WARNING: %s copy telemetry cert failed on %s",
                               dst_file, result.failed_hosts)
 
-    def generate_telemetry_server_certificates(self, hosts, user):
+    def generate_telemetry_server_certificates(self, hosts, user, destination):
         """Generate the telemetry certificates for the test on server/client.
 
         Args:
@@ -1075,10 +1072,6 @@ class YamlCommand(SubProcessCommand):
             user (User): User permission set on telemetry certificate file.
                          For server, it's daos_server and for client it's daos_agent.
         """
-        data = self.yaml.telemetry_config.get_certificate_data(
-            self.yaml.telemetry_config.get_attribute_names(LogParameter))
-        destination = list(data.keys())[0]
-
         certgen_dir = os.path.abspath(
             os.path.join(os.getcwd(), "scripts"))
         command = os.path.join(certgen_dir, "gen_telemetry_server_certificate.sh ")
