@@ -24,6 +24,7 @@ from . import DAOS_MAGIC, DaosClient, torch_shim
 ITER_BATCH_SIZE = 32
 READDIR_BATCH_SIZE = 128
 PARALLEL_SCAN_WORKERS = 16
+DIR_CACHE_SIZE = 256
 
 
 def transform_fn_default(data):
@@ -56,6 +57,8 @@ class Dataset(TorchDataset):
         Function to transform samples from storage to in-memory representation
     readdir_batch_size: int (optional)
         Number of directory entries to read for each readdir call.
+    dir_cache_size: int (optional)
+        Number of directory object entries to cache in memory.
 
 
     Methods
@@ -78,12 +81,13 @@ class Dataset(TorchDataset):
     # pylint: disable=too-many-arguments
     def __init__(self, pool=None, cont=None, path=None,
                  transform_fn=transform_fn_default,
-                 readdir_batch_size=READDIR_BATCH_SIZE):
+                 readdir_batch_size=READDIR_BATCH_SIZE,
+                 dir_cache_size=DIR_CACHE_SIZE):
         super().__init__()
 
         self._pool = pool
         self._cont = cont
-        self._dfs = _Dfs(pool=pool, cont=cont)
+        self._dfs = _Dfs(pool=pool, cont=cont, dir_cache_size=dir_cache_size)
         self._transform_fn = transform_fn
         self._readdir_batch_size = readdir_batch_size
 
@@ -171,6 +175,8 @@ class IterableDataset(TorchIterableDataset):
         Number of directory entries to read for each readdir call.
     batch_size: int (optional)
         Number of samples to fetch per iteration.
+    dir_cache_size: int (optional)
+        Number of directory object entries to cache in memory.
 
 
     Methods
@@ -187,12 +193,13 @@ class IterableDataset(TorchIterableDataset):
     def __init__(self, pool=None, cont=None, path=None,
                  transform_fn=transform_fn_default,
                  readdir_batch_size=READDIR_BATCH_SIZE,
-                 batch_size=ITER_BATCH_SIZE):
+                 batch_size=ITER_BATCH_SIZE,
+                 dir_cache_size=DIR_CACHE_SIZE):
         super().__init__()
 
         self._pool = pool
         self._cont = cont
-        self._dfs = _Dfs(pool=pool, cont=cont)
+        self._dfs = _Dfs(pool=pool, cont=cont, dir_cache_size=dir_cache_size)
         self._transform_fn = transform_fn
         self._readdir_batch_size = readdir_batch_size
         self._batch_size = batch_size
@@ -506,14 +513,14 @@ class _Dfs():
     Should not be used directly.
     """
 
-    def __init__(self, pool=None, cont=None, rd_only=True):
+    def __init__(self, pool=None, cont=None, rd_only=True, dir_cache_size=DIR_CACHE_SIZE):
         if pool is None:
             raise ValueError("pool label or UUID is required")
         if cont is None:
             raise ValueError("container label or UUID is required")
 
         self._dc = DaosClient()
-        (ret, dfs) = torch_shim.torch_connect(DAOS_MAGIC, pool, cont, rd_only)
+        (ret, dfs) = torch_shim.torch_connect(DAOS_MAGIC, pool, cont, rd_only, dir_cache_size)
         if ret != 0:
             raise OSError(ret, os.strerror(ret), f"could not connect to {pool}:{cont}")
 

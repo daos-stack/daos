@@ -33,6 +33,8 @@ struct dfs_handle {
 
 	daos_handle_t        eq;
 	pid_t                eq_owner_pid;
+
+	uint32_t             dir_cache_size;
 	struct d_hash_table *dir_cache;
 };
 
@@ -158,7 +160,9 @@ and will have their own handlers, including the cache.
 static int
 __dir_cache_create(struct dfs_handle *hdl)
 {
-	int rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_NOLOCK | D_HASH_FT_LRU, 4,
+	uint32_t bits = ceil(log2(hdl->dir_cache_size));
+
+	int rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_NOLOCK | D_HASH_FT_LRU, bits,
 				     NULL, &dir_cache_hash_ops, &hdl->dir_cache);
 	if (rc) {
 		D_ERROR("Could not create directory cache's hash table: %s (rc=%d)", d_errstr(rc),
@@ -199,19 +203,24 @@ __dir_cache_destroy(struct dfs_handle *hdl)
 static PyObject *
 __shim_handle__torch_connect(PyObject *self, PyObject *args)
 {
-	int                rc      = 0;
-	int                rc2     = 0;
-	char              *pool    = NULL;
-	char              *cont    = NULL;
-	int                rd_only = 1;
-	struct dfs_handle *hdl     = NULL;
+	int                rc             = 0;
+	int                rc2            = 0;
+	char              *pool           = NULL;
+	char              *cont           = NULL;
+	int                rd_only        = 1;
+	uint32_t           dir_cache_size = 0;
+	struct dfs_handle *hdl            = NULL;
 
 	PyObject          *result = PyList_New(2);
 	if (result == NULL) {
 		return PyErr_NoMemory();
 	}
 
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "ssp", &pool, &cont, &rd_only);
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "sspI", &pool, &cont, &rd_only, &dir_cache_size);
+
+	if (dir_cache_size == 0) {
+		return PyLong_FromLong(EINVAL);
+	}
 
 	rc = dfs_init();
 	if (rc) {
@@ -224,7 +233,8 @@ __shim_handle__torch_connect(PyObject *self, PyObject *args)
 		rc = ENOMEM;
 		goto out;
 	}
-	hdl->flags = rd_only ? O_RDONLY : O_RDWR;
+	hdl->flags          = rd_only ? O_RDONLY : O_RDWR;
+	hdl->dir_cache_size = dir_cache_size;
 
 	rc = dfs_connect(pool, NULL, cont, hdl->flags, NULL, &hdl->dfs);
 	if (rc) {
