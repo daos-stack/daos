@@ -17,6 +17,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
+//@Library(value='pipeline-lib@malmberg/sre-2832') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -69,11 +70,15 @@ Map nlt_test() {
 }
 
 // For master, this is just some wildly high number
-String next_version = '1000'
+String next_version() {
+    return '1000'
+}
 
 // Don't define this as a type or it loses it's global scope
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
-String sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
+String sanitized_JOB_NAME() {
+    return JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
+}
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
@@ -602,7 +607,7 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: true,
                                                                 parallel_build: true) +
-                                                " -t ${sanitized_JOB_NAME}-el8 " +
+                                                " -t ${sanitized_JOB_NAME()}-el8 " +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
@@ -640,7 +645,7 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: true,
                                                                 parallel_build: true) +
-                                                " -t ${sanitized_JOB_NAME}-el8 " +
+                                                " -t ${sanitized_JOB_NAME()}-el8 " +
                                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
                         }
@@ -680,7 +685,7 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
                                                                 deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME}-leap15" +
+                                                " -t ${sanitized_JOB_NAME()}-leap15" +
                                                 ' --build-arg COMPILER=icc'
                         }
                     }
@@ -893,7 +898,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
+                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -915,7 +920,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                    inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
+                                    inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
                                     test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -937,7 +942,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                    inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
+                                    inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
                                     test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -959,7 +964,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
+                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
                                 test_function: 'runTestFunctionalV2',
                                 image_version: 'leap15.6'))
                     }
@@ -982,7 +987,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
+                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -1056,7 +1061,7 @@ pipeline {
                     steps {
                         job_step_update(
                             testRpm(inst_repos: daosRepos(),
-                                    daos_pkg_version: daosPackagesVersion(next_version))
+                                    daos_pkg_version: daosPackagesVersion(next_version()))
                         )
                     }
                     post {
@@ -1083,7 +1088,7 @@ pipeline {
                                 name: 'Test RPMs on Leap 15.5',
                                 pragma_suffix: '',
                                 label: params.CI_UNIT_VM1_LABEL,
-                                next_version: next_version,
+                                next_version: next_version(),
                                 stage_tags: '',
                                 default_tags: 'test_daos_management',
                                 nvme: 'auto',
@@ -1097,7 +1102,7 @@ pipeline {
                                 test_tag: 'test_daos_management',
                                 ftest_arg: '--yaml_extension single_host',
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
+                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -1108,7 +1113,7 @@ pipeline {
                     } */
                         job_step_update(
                             testRpm(inst_repos: daosRepos(),
-                                    daos_pkg_version: daosPackagesVersion(next_version))
+                                    daos_pkg_version: daosPackagesVersion(next_version()))
                         )
                     }
                     post {
@@ -1131,7 +1136,7 @@ pipeline {
                 job_step_update(
                     storagePrepTest(
                         inst_repos: daosRepos(),
-                        inst_rpms: functionalPackages(1, next_version, 'tests-internal')))
+                        inst_rpms: functionalPackages(1, next_version(), 'tests-internal')))
             }
             post {
                 cleanup {
@@ -1152,7 +1157,7 @@ pipeline {
                             pragma_suffix: '-hw-medium',
                             base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
-                            next_version: next_version,
+                            next_version: next_versio(),
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
@@ -1165,7 +1170,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-md-on-ssd',
                             base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
-                            next_version: next_version,
+                            next_version: next_version(),
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ?
                                 'pr,md_on_ssd daily_regression,md_on_ssd' : 'pr,md_on_ssd',
@@ -1179,7 +1184,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-vmd',
                             base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
-                            next_version: next_version,
+                            next_version: next_version(),
                             stage_tags: 'hw_vmd,medium',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
@@ -1193,7 +1198,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-verbs-provider',
                             base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
-                            next_version: next_version,
+                            next_version: next_version(),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
@@ -1207,7 +1212,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
                             base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
-                            next_version: next_version,
+                            next_version: next_version(),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ?
                                 'pr,md_on_ssd daily_regression,md_on_ssd' : 'pr,md_on_ssd',
@@ -1222,7 +1227,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-ucx-provider',
                             base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
-                            next_version: next_version,
+                            next_version: next_version(),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
@@ -1236,7 +1241,7 @@ pipeline {
                             pragma_suffix: '-hw-large',
                             base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
-                            next_version: next_version,
+                            next_version: next_version(),
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
@@ -1249,7 +1254,7 @@ pipeline {
                             pragma_suffix: '-hw-large-md-on-ssd',
                             base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
-                            next_version: next_version,
+                            next_version: next_version(),
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
@@ -1273,7 +1278,7 @@ pipeline {
                             filename 'utils/docker/Dockerfile.el.8'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable') +
-                                " -t ${sanitized_JOB_NAME}-el8 " +
+                                " -t ${sanitized_JOB_NAME()}-el8 " +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg REPOS="' + prRepos() + '"'
                         }
