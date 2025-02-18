@@ -1,6 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2136,11 +2137,11 @@ pool_svc_check_node_status(struct pool_svc *svc)
 }
 
 /*
- * Log a NOTE of as well as print a message. Arguments may be evaluated more
+ * Log as well as print a message. Arguments may be evaluated more
  * than once.
  */
-#define DS_POOL_NOTE_PRINT(fmt, ...) do {							\
-	D_NOTE(fmt, ## __VA_ARGS__);								\
+#define DS_POOL_LOG_PRINT(log, fmt, ...) do {							\
+	D_##log(fmt, ## __VA_ARGS__);								\
 	D_PRINT(fmt, ## __VA_ARGS__);								\
 } while (0)
 
@@ -2393,9 +2394,10 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 		D_GOTO(out, rc);
 	}
 
-	DS_POOL_NOTE_PRINT(DF_UUID": rank %u became pool service leader "DF_U64": srv_pool_hdl="
-			   DF_UUID" srv_cont_hdl="DF_UUID"\n", DP_UUID(svc->ps_uuid), rank,
-			   svc->ps_rsvc.s_term, DP_UUID(pool_hdl_uuid), DP_UUID(cont_hdl_uuid));
+	DS_POOL_LOG_PRINT(NOTE, DF_UUID": rank %u became pool service leader "DF_U64
+			  ": srv_pool_hdl="DF_UUID" srv_cont_hdl="DF_UUID"\n",
+			  DP_UUID(svc->ps_uuid), rank, svc->ps_rsvc.s_term, DP_UUID(pool_hdl_uuid),
+			  DP_UUID(cont_hdl_uuid));
 out:
 	if (rc != 0) {
 		if (events_initialized)
@@ -2414,9 +2416,9 @@ out:
 		 * Step up with the error anyway, so that RPCs to the PS
 		 * receive an error instead of timeouts.
 		 */
-		DS_POOL_NOTE_PRINT(DF_UUID": rank %u became pool service leader "DF_U64
-				   " with error: "DF_RC"\n", DP_UUID(svc->ps_uuid), rank,
-				   svc->ps_rsvc.s_term, DP_RC(svc->ps_error));
+		DS_POOL_LOG_PRINT(NOTE, DF_UUID": rank %u became pool service leader "DF_U64
+				  " with error: "DF_RC"\n", DP_UUID(svc->ps_uuid), rank,
+				  svc->ps_rsvc.s_term, DP_RC(svc->ps_error));
 		rc = 0;
 	}
 	return rc;
@@ -2434,12 +2436,12 @@ pool_svc_step_down_cb(struct ds_rsvc *rsvc)
 		sched_cancel_and_wait(&svc->ps_reconf_sched);
 		sched_cancel_and_wait(&svc->ps_rfcheck_sched);
 		ds_cont_svc_step_down(svc->ps_cont_svc);
-		DS_POOL_NOTE_PRINT(DF_UUID": rank %u no longer pool service leader "DF_U64"\n",
-				   DP_UUID(svc->ps_uuid), rank, svc->ps_rsvc.s_term);
+		DS_POOL_LOG_PRINT(NOTE, DF_UUID": rank %u no longer pool service leader "DF_U64"\n",
+				  DP_UUID(svc->ps_uuid), rank, svc->ps_rsvc.s_term);
 	} else {
-		DS_POOL_NOTE_PRINT(DF_UUID": rank %u no longer pool service leader "DF_U64
-				   " with error: "DF_RC"\n", DP_UUID(svc->ps_uuid), rank,
-				   svc->ps_rsvc.s_term, DP_RC(svc->ps_error));
+		DS_POOL_LOG_PRINT(NOTE, DF_UUID": rank %u no longer pool service leader "DF_U64
+				  " with error: "DF_RC"\n", DP_UUID(svc->ps_uuid), rank,
+				  svc->ps_rsvc.s_term, DP_RC(svc->ps_error));
 		svc->ps_error = 0;
 	}
 }
@@ -7029,7 +7031,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclud
 	 * before and after. If the version hasn't changed, we are done.
 	 */
 	map_version_before = pool_map_get_version(map);
-	rc = ds_pool_map_tgts_update(map, tgts, opc, exclude_rank, tgt_map_ver, true);
+	rc = ds_pool_map_tgts_update(svc->ps_uuid, map, tgts, opc, exclude_rank, tgt_map_ver, true);
 	if (rc != 0)
 		D_GOTO(out_map, rc);
 	map_version = pool_map_get_version(map);
@@ -7129,6 +7131,8 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclud
 		goto out_map_buf;
 	}
 
+	DS_POOL_LOG_PRINT(INFO, DF_UUID ": committed pool map: version=%u->%u map=%p\n",
+			  DP_UUID(svc->ps_uuid), map_version_before, map_version, map);
 	updated = true;
 
 	/* Update svc->ps_pool to match the new pool map. */
@@ -7350,7 +7354,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 
 	if (svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_NO_DATA_SYNC) {
 		D_DEBUG(DB_MD, "self healing is disabled for no_data_sync reintegration mode.\n");
-		if (opc == POOL_EXCLUDE || opc == POOL_DRAIN) {
+		if (opc == MAP_EXCLUDE || opc == MAP_DRAIN) {
 			rc = ds_pool_tgt_exclude_out(svc->ps_pool->sp_uuid, &target_list);
 			if (rc)
 				D_INFO("mark failed target %d of "DF_UUID " as DOWNOUT: "DF_RC"\n",
@@ -7360,7 +7364,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		D_GOTO(out, rc);
 	}
 
-	if ((entry->dpe_val & DAOS_SELF_HEAL_DELAY_REBUILD) && exclude_rank)
+	if ((entry->dpe_val & DAOS_SELF_HEAL_DELAY_REBUILD) && (opc == MAP_EXCLUDE))
 		delay = -1;
 	else if (daos_fail_check(DAOS_REBUILD_DELAY))
 		delay = 5;
