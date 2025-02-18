@@ -924,8 +924,7 @@ swim_progress(struct swim_context *ctx, int64_t timeout_us)
 					ctx->sc_next_event = ctx->sc_deadline;
 				ctx_state = SCS_PINGED;
 			} else {
-				if (ctx->sc_next_tick_time < ctx->sc_next_event)
-					ctx->sc_next_event = ctx->sc_next_tick_time;
+				ctx->sc_next_event = MIN(ctx->sc_next_event, ctx->sc_next_tick_time);
 			}
 			break;
 		case SCS_PINGED:
@@ -1036,20 +1035,17 @@ done_item:
 				ctx->sc_next_event = now;
 				ctx_state = SCS_SELECT;
 			} else {
-				if (ctx->sc_next_tick_time < ctx->sc_next_event)
-					ctx->sc_next_event = ctx->sc_next_tick_time;
+				ctx->sc_next_event = MIN(ctx->sc_next_event, ctx->sc_next_tick_time);
 			}
 			break;
 		case SCS_SELECT:
 			ctx->sc_target = ctx->sc_ops->get_dping_target(ctx);
 			if (ctx->sc_target == SWIM_ID_INVALID) {
-				swim_ctx_unlock(ctx);
-				D_GOTO(out, rc = -DER_SHUTDOWN);
+				ctx->sc_next_event = now + swim_period_get();
+			} else {
+				ctx->sc_next_event = MIN(ctx->sc_next_event, ctx->sc_next_tick_time);
+				ctx_state = SCS_BEGIN;
 			}
-
-			if (ctx->sc_next_tick_time < ctx->sc_next_event)
-				ctx->sc_next_event = ctx->sc_next_tick_time;
-			ctx_state = SCS_BEGIN;
 			break;
 		}
 
