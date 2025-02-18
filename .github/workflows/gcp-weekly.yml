@@ -343,6 +343,7 @@ jobs:
       - name: Publish test results
         if: (!cancelled()) && (success() || failure()) &&
             steps.run-test.outcome != 'skipped'
+        # yamllint disable-line rule:line-length
         uses: EnricoMi/publish-unit-test-result-action@170bf24d20d201b842d7a52403b73ed297e6645b  # v2.18.0
         with:
           check_name: ${{ env.STAGE_NAME }} Test Results (old)
@@ -501,6 +502,7 @@ jobs:
       - name: Publish test results
         if: (!cancelled()) && (success() || failure()) &&
             steps.run-test.outcome != 'skipped'
+        # yamllint disable-line rule:line-length
         uses: EnricoMi/publish-unit-test-result-action@170bf24d20d201b842d7a52403b73ed297e6645b  # v2.18.0
         with:
           check_name: ${{ env.STAGE_NAME }} Test Results (old)
