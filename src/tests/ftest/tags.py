@@ -702,10 +702,21 @@ def main():
     args = parser.parse_args()
     args.paths = list(map(os.path.realpath, args.paths))
 
+    # Check for incompatible arguments
+    if args.command == "lint" and args.tags:
+        print("--tags not supported with lint")
+        return 1
+    if args.command == "list" and args.tags:
+        print("--tags not supported with list")
+        return 1
+    if args.command == "unit" and args.tags:
+        print("--tags not supported with unit")
+        return 1
+    if args.command == "unit" and args.paths:
+        print("--paths not supported with unit")
+        return 1
+
     if args.command == "lint":
-        if args.tags:
-            print("--tags not supported with lint")
-            return 1
         try:
             run_linter(args.paths, args.verbose)
         except LintFailure as err:
