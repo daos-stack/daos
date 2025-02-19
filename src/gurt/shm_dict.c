@@ -290,9 +290,11 @@ get_shm_ht_with_name(const char *name, struct d_shm_ht_head **ht_head)
 		return EINVAL;
 
 	*ht_head = NULL;
+	shm_mutex_lock(&(d_shm_head->ht_lock), NULL);
+
 	/* no hash table in shared memory region at all */
 	if (d_shm_head->off_ht_head == INVALID_OFFSET)
-		return ENOENT;
+		goto err;
 
 	offset = d_shm_head->off_ht_head;
 	while (offset != INVALID_OFFSET) {
@@ -305,10 +307,12 @@ get_shm_ht_with_name(const char *name, struct d_shm_ht_head **ht_head)
 		if (head->next == INVALID_OFFSET)
 			/* reaching the end of link list and hash table with target name not found
 			 */
-			return ENOENT;
+			goto err;
 		offset = head->next;
 	}
 
+err:
+	shm_mutex_unlock(&(d_shm_head->ht_lock));
 	return ENOENT;
 }
 
