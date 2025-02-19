@@ -11,12 +11,17 @@
 
 #include "crt_internal.h"
 
-static void crt_epi_destroy(struct crt_ep_inflight *epi);
-static int context_quotas_init(crt_context_t crt_ctx);
-static int context_quotas_finalize(crt_context_t crt_ctx);
+static void
+crt_epi_destroy(struct crt_ep_inflight *epi);
+static void
+context_quotas_init(struct crt_context *ctx);
+static void
+context_quotas_finalize(struct crt_context *ctx);
 
-static inline int get_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota);
-static inline void put_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota);
+static inline int
+get_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota);
+static inline void
+put_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota);
 
 static struct crt_ep_inflight *
 epi_link2ptr(d_list_t *rlink)
@@ -134,14 +139,12 @@ crt_context_ep_empty(crt_context_t crt_ctx)
 }
 
 static int
-crt_context_init(crt_context_t crt_ctx)
+crt_context_init(struct crt_context *ctx)
 {
-	struct crt_context	*ctx;
-	uint32_t		 bh_node_cnt;
-	int			 rc;
+	uint32_t bh_node_cnt;
+	int      rc;
 
-	D_ASSERT(crt_ctx != NULL);
-	ctx = crt_ctx;
+	D_ASSERT(ctx != NULL);
 
 	rc = D_MUTEX_INIT(&ctx->cc_mutex, NULL);
 	if (rc != 0)
@@ -158,30 +161,29 @@ crt_context_init(crt_context_t crt_ctx)
 
 	/* create timeout binheap */
 	bh_node_cnt = CRT_DEFAULT_CREDITS_PER_EP_CTX * 64;
-	rc = d_binheap_create_inplace(DBH_FT_NOLOCK, bh_node_cnt,
-				      NULL /* priv */, &crt_timeout_bh_ops,
-				      &ctx->cc_bh_timeout);
+	rc          = d_binheap_create_inplace(DBH_FT_NOLOCK, bh_node_cnt, NULL /* priv */,
+					       &crt_timeout_bh_ops, &ctx->cc_bh_timeout);
 	if (rc != 0) {
 		D_ERROR("d_binheap_create() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out_mutex_destroy, rc);
 	}
 
 	/* create epi table, use external lock */
-	rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK, CRT_EPI_TABLE_BITS,
-					 NULL, &epi_table_ops,
+	rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK, CRT_EPI_TABLE_BITS, NULL, &epi_table_ops,
 					 &ctx->cc_epi_table);
 	if (rc != 0) {
 		D_ERROR("d_hash_table_create() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out_binheap_destroy, rc);
 	}
 
-	rc = context_quotas_init(crt_ctx);
+	context_quotas_init(ctx);
 
-	D_GOTO(out, rc);
+	return 0;
 
 out_binheap_destroy:
 	d_binheap_destroy_inplace(&ctx->cc_bh_timeout);
 out_mutex_destroy:
+	D_MUTEX_DESTROY(&ctx->cc_quotas.mutex);
 	D_MUTEX_DESTROY(&ctx->cc_mutex);
 out:
 	return rc;
@@ -758,7 +760,7 @@ out:
 int
 crt_context_destroy(crt_context_t crt_ctx, int force)
 {
-	struct crt_context	*ctx;
+	struct crt_context      *ctx = crt_ctx;
 	uint32_t                 timeout_sec;
 	int                      ctx_idx;
 	int                      provider;
@@ -777,14 +779,7 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 		D_GOTO(out, rc = -DER_UNINIT);
 	}
 
-	rc = context_quotas_finalize(crt_ctx);
-	if (rc) {
-		DL_ERROR(rc, "context_quotas_finalize() failed");
-		if (!force)
-			D_GOTO(out, rc);
-	}
-
-	ctx = crt_ctx;
+	context_quotas_finalize(ctx);
 
 	rc = crt_context_idx(crt_ctx, &ctx_idx);
 	if (rc != 0) {
@@ -2028,41 +2023,23 @@ crt_req_force_completion(struct crt_rpc_priv *rpc_priv)
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 }
 
-static int
-context_quotas_init(crt_context_t crt_ctx)
+static void
+context_quotas_init(struct crt_context *ctx)
 {
-	struct crt_context	*ctx = crt_ctx;
-	struct crt_quotas	*quotas;
-	int			rc = 0;
-
-	if (ctx == NULL) {
-		D_ERROR("NULL context\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
+	struct crt_quotas *quotas;
 
 	quotas = &ctx->cc_quotas;
 
 	quotas->limit[CRT_QUOTA_RPCS]   = crt_gdata.cg_rpc_quota;
 	quotas->current[CRT_QUOTA_RPCS] = 0;
 	quotas->enabled[CRT_QUOTA_RPCS] = crt_gdata.cg_rpc_quota > 0 ? true : false;
-out:
-	return rc;
 }
 
-static int
-context_quotas_finalize(crt_context_t crt_ctx)
+static void
+context_quotas_finalize(struct crt_context *ctx)
 {
-	struct crt_context	*ctx = crt_ctx;
-
-	if (ctx == NULL) {
-		D_ERROR("NULL context\n");
-		return -DER_INVAL;
-	}
-
 	for (int i = 0; i < CRT_QUOTA_COUNT; i++)
 		ctx->cc_quotas.enabled[i] = false;
-
-	return DER_SUCCESS;
 }
 
 int
