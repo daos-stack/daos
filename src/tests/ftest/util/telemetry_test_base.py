@@ -268,56 +268,32 @@ class TestWithTelemetry(TestWithServers):
         return total
 
     def secure_telemetry_setup(self):
-        """ SAMIR
-
-        Args:
-
-        Returns:
+        """ Setup the secure certificate for telemetry. 
         """
+        self.log.info("Secure Telemetry Setup start")
+
+        # Create the Certificate
         self.server_managers[0].prepare_telemetry_certificate()
-        # SAMIR self.server_managers[0].manager.stop()
-        # self.stop_servers()
-        print("---SAMIR--------")
         yaml_data = self.server_managers[0].manager.job.yaml.get_yaml_data()
+        
+        # Update the certificate in yaml dictionary.
         https_cert = os.path.join(self.server_managers[0].telemetry_certificate_dir,
                                   "telemetry.crt")
         https_key = os.path.join(self.server_managers[0].telemetry_certificate_dir,
                                  "telemetry.key")
-
         yaml_data["telemetry_config"].update({"https_cert": https_cert})
         yaml_data["telemetry_config"].update({"https_key": https_key})
-        print(yaml_data)
-        print(get_default_config_file("server", os.path.dirname(
-            self.server_managers[0].manager.job.yaml.filename)))
+        
+        # Update the current yaml file.
         self.server_managers[0].manager.job.create_yaml_file(yaml_data)
 
+        # Restart the DAOS servers
         self.log.info("Stop DAOS servers")
         self.server_managers[0].manager.stop()
         self.log.info("Start daos_server and detect the DAOS I/O engine message")
         self.server_managers[0].restart(hosts=self.hostlist_servers)
 
-        """
-        # Start server.
-        try:
-            self.start_server_managers(force=True)
-        except ServerFailed as error:
-            self.fail(f"Restarting server failed! {error}")
-        
-        print(self.server_managers[0].manager.job.yaml.get_yaml_data()["telemetry_config"])
-
-        print(self.server_managers[0].get_config_value("scm_mount"))
-
-        self.server_managers[0].set_config_value("https_cert", "telemetry.crt")
-        self.server_managers[0].set_config_value("https_key", "telemetry.key")
-
-        print(self.server_managers[0].get_config_value("https_cert"))
-        print(self.server_managers[0].get_config_value("https_key"))
-        print(self.server_managers[0])
-        """
-        print("---SAMIR--------")
-        self.log.info("Start daos_server and detect the DAOS I/O engine message")
-        # self.server_managers[0].restart(hosts=self.hostlist_servers)
-
+        self.log.info("Secure Telemetry Setup End")
 
 class TestWithClientTelemetry(TestWithTelemetry):
     """Test client telemetry metrics.
