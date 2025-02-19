@@ -268,6 +268,15 @@ class CommandResult():
         return NodeSet.fromlist(data.hosts for data in self.output if data.returncode != 0)
 
     @property
+    def timeout_hosts(self):
+        """Get all timeout hosts.
+
+        Returns:
+            NodeSet: all nodes where the command timed out
+        """
+        return NodeSet.fromlist(data.hosts for data in self.output if data.timeout)
+
+    @property
     def all_stdout(self):
         """Get all of the stdout from the issued command from each host.
 

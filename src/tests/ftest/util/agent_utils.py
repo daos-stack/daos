@@ -1,10 +1,10 @@
 """
   (C) Copyright 2019-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
-import re
 import socket
 
 from agent_utils_params import DaosAgentTransportCredentials, DaosAgentYamlParameters
@@ -13,7 +13,7 @@ from command_utils import CommandWithSubCommand, SubprocessManager, YamlCommand
 from command_utils_base import (CommandWithParameters, CommonConfig, EnvironmentVariables,
                                 FormattedParameter)
 from exception_utils import CommandFailure
-from general_utils import get_default_config_file, get_log_file, run_pcmd
+from general_utils import get_default_config_file, get_log_file
 from run_utils import run_remote
 
 
@@ -293,12 +293,17 @@ class DaosAgentManager(SubprocessManager):
         super().start()
 
     def dump_attachinfo(self):
-        """Run dump-attachinfo on the daos_agent."""
+        """Run dump-attachinfo on the daos_agent.
+
+        Raises:
+            CommandFailure: if the daos_agent command fails.
+
+        Returns:
+            CommandResult: groups of command results from the same hosts with the same return status
+        """
         cmd = self.manager.job.copy()
         cmd.set_sub_command("dump-attachinfo")
-        self.attachinfo = run_pcmd(self.hosts,
-                                   str(self.manager.job))[0]["stdout"]
-        self.log.info("Agent attachinfo: %s", self.attachinfo)
+        return run_remote(self.log, self.hosts, cmd.with_exports)
 
     def support_collect_log(self, **kwargs):
         """Collect logs for debug purpose.
@@ -309,6 +314,7 @@ class DaosAgentManager(SubprocessManager):
             archive (bool, optional): Archive the log/config files
             extra_logs_dir (str, optional): Collect the Logs from given custom directory
             target-host (str, optional): R sync all the logs to target system
+
         Raises:
             CommandFailure: if the daos_agent command fails.
 
@@ -323,36 +329,6 @@ class DaosAgentManager(SubprocessManager):
         cmd.set_command(("support", "collect-log"), **kwargs)
         self.log.info("Support collect-log on clients: %s", str(cmd))
         return run_remote(self.log, self.hosts, cmd.with_exports)
-
-    def get_attachinfo_file(self):
-        """Run dump-attachinfo on the daos_agent.
-
-        Returns:
-            str: the attach info file path
-
-        """
-        server_name = self.get_config_value("name")
-
-        self.dump_attachinfo()
-
-        attach_info = self.attachinfo
-
-        # Filter log messages from attachinfo content
-        messages = [x for x in attach_info if re.match(r"^(name\s|size\s|all|\d+\s)", x)]
-        attach_info_contents = "\n".join(messages)
-        attach_info_filename = f"{server_name}.attach_info_tmp"
-
-        if len(messages) < 4:
-            self.log.info("Malformed attachinfo file: %s", attach_info_contents)
-            return None
-
-        # Write an attach_info_tmp file in this directory for cart_ctl to use
-        attachinfo_file_path = os.path.join(self.outputdir, attach_info_filename)
-
-        with open(attachinfo_file_path, 'w', encoding='utf-8') as file_handle:
-            file_handle.write(attach_info_contents)
-
-        return attachinfo_file_path
 
     def stop(self):
         """Stop the agent through the job manager.
