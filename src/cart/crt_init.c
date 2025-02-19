@@ -24,6 +24,19 @@ static bool             g_prov_settings_applied[CRT_PROV_COUNT];
 static const char *const crt_tc_name[] = {CRT_TRAFFIC_CLASSES};
 #undef X
 
+#define CRT_ENV_OPT_GET(opt, x, env)                                                               \
+	do {                                                                                       \
+		if (opt != NULL && opt->cio_##x)                                                   \
+			x = opt->cio_##x;                                                          \
+		else                                                                               \
+			crt_env_get(env, &x);                                                      \
+	} while (0)
+
+static int
+crt_init_prov(crt_provider_t provider, bool primary, struct crt_prov_gdata *prov_gdata,
+	      const char *interface, const char *domain, const char *port, const char *auth_key,
+	      bool port_auto_adjust, crt_init_options_t *opt);
+
 static void
 crt_lib_init(void) __attribute__((__constructor__));
 
@@ -77,31 +90,27 @@ dump_opt(crt_init_options_t *opt)
 	D_INFO("options:\n");
 	D_INFO("crt_timeout = %d\n", opt->cio_crt_timeout);
 	D_INFO("max_ctx_num = %d\n", opt->cio_ctx_max_num);
-	D_INFO("swim_idx = %d\n", opt->cio_swim_crt_idx);
-	D_INFO("provider = %s\n", opt->cio_provider);
-	D_INFO("interface = %s\n", opt->cio_interface);
-	D_INFO("domain = %s\n", opt->cio_domain);
-	D_INFO("port = %s\n", opt->cio_port);
-	D_INFO("Flags: fi: %d, use_credits: %d, use_sensors: %d\n", opt->cio_fault_inject,
-	       opt->cio_use_credits, opt->cio_use_sensors);
+	D_INFO("swim_idx    = %d\n", opt->cio_swim_crt_idx);
+	D_INFO("provider    = %s\n", opt->cio_provider);
+	D_INFO("interface   = %s\n", opt->cio_interface);
+	D_INFO("domain      = %s\n", opt->cio_domain);
+	D_INFO("port        = %s\n", opt->cio_port);
+	if (opt->cio_auth_key)
+		D_INFO("auth_key    = %s\n", opt->cio_auth_key);
+	D_INFO("Flags: fault_inject = %d, use_credits = %d, use_sensors = %d, "
+	       "thread_mode_single = %d, progress_busy = %d, mem_device = %d\n",
+	       opt->cio_fault_inject, opt->cio_use_credits, opt->cio_use_sensors,
+	       opt->cio_thread_mode_single, opt->cio_progress_busy, opt->cio_mem_device);
 
 	if (opt->cio_use_expected_size)
 		D_INFO("max_expected_size = %d\n", opt->cio_max_expected_size);
 	if (opt->cio_use_unexpected_size)
 		D_INFO("max_unexpect_size = %d\n", opt->cio_max_unexpected_size);
-
-	/* Handle similar to D_PROVIDER_AUTH_KEY */
-	if (opt->cio_auth_key)
-		D_INFO("auth_key is set\n");
-	if (opt->cio_thread_mode_single)
-		D_INFO("thread mode single is set\n");
-	if (opt->cio_progress_busy)
-		D_INFO("progress busy mode is set\n");
 }
 
 static int
-crt_na_config_init(bool primary, crt_provider_t provider, char *interface, char *domain, char *port,
-		   char *auth_key, bool port_auto_adjust);
+crt_na_config_init(bool primary, crt_provider_t provider, const char *interface, const char *domain,
+		   const char *port, const char *auth_key, bool port_auto_adjust);
 
 /* Workaround for CART-890 */
 static void
@@ -201,14 +210,6 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider, bool p
 	prov_data->cpg_max_exp_size   = max_expect_size;
 	prov_data->cpg_max_unexp_size = max_unexpect_size;
 	prov_data->cpg_primary        = primary;
-
-	if (opt && opt->cio_progress_busy) {
-		prov_data->cpg_progress_busy = opt->cio_progress_busy;
-	} else {
-		bool progress_busy = false;
-		crt_env_get(D_PROGRESS_BUSY, &progress_busy);
-		prov_data->cpg_progress_busy = progress_busy;
-	}
 
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
 		prov_data->cpg_used_idx[i] = false;
@@ -427,38 +428,6 @@ crt_plugin_fini(void)
 	D_MUTEX_DESTROY(&crt_plugin_gdata.cpg_mutex);
 }
 
-static int
-__split_arg(char *s_arg_to_split, const char *delim, char **first_arg, char **second_arg)
-{
-	char *save_ptr = NULL;
-	char *arg_to_split;
-
-	D_ASSERT(first_arg != NULL);
-	D_ASSERT(second_arg != NULL);
-
-	/* no-op, not an error case */
-	if (s_arg_to_split == NULL) {
-		*first_arg  = NULL;
-		*second_arg = NULL;
-		return DER_SUCCESS;
-	}
-
-	D_STRNDUP(arg_to_split, s_arg_to_split, CRT_ENV_STR_MAX_SIZE);
-	if (!arg_to_split) {
-		*first_arg  = NULL;
-		*second_arg = NULL;
-		return -DER_NOMEM;
-	}
-
-	*first_arg  = 0;
-	*second_arg = 0;
-
-	*first_arg  = strtok_r(arg_to_split, delim, &save_ptr);
-	*second_arg = save_ptr;
-
-	return DER_SUCCESS;
-}
-
 crt_provider_t
 crt_str_to_provider(const char *str_provider)
 {
@@ -630,33 +599,16 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 {
 	bool           server = flags & CRT_FLAG_BIT_SERVER;
 	int            rc     = 0;
-	crt_provider_t primary_provider;
-	crt_provider_t secondary_provider;
-	crt_provider_t tmp_prov;
-	char          *provider         = NULL;
-	char          *provider_env     = NULL;
-	char          *interface        = NULL;
-	char          *interface_env    = NULL;
-	char          *domain           = NULL;
-	char          *domain_env       = NULL;
-	char          *auth_key         = NULL;
-	char          *auth_key_env     = NULL;
-	char          *path             = NULL;
-	char          *provider_str0    = NULL;
-	char          *provider_str1    = NULL;
-	char          *port             = NULL;
-	char          *port_env         = NULL;
-	char          *port0            = NULL;
-	char          *port1            = NULL;
-	char          *iface0           = NULL;
-	char          *iface1           = NULL;
-	char          *domain0          = NULL;
-	char          *domain1          = NULL;
-	char          *auth_key0        = NULL;
-	char          *auth_key1        = NULL;
-	int            num_secondaries  = 0;
-	bool           port_auto_adjust = false;
-	int            i;
+	crt_provider_t prov;
+	char *provider = NULL, *interface = NULL, *domain = NULL, *port = NULL, *auth_key = NULL;
+	char *path         = NULL;
+	char *provider_str = NULL, *interface_str = NULL, *domain_str = NULL, *port_str = NULL,
+	     *auth_key_str      = NULL;
+	char *save_provider_str = NULL, *save_interface_str = NULL, *save_domain_str = NULL,
+	     *save_port_str = NULL, *save_auth_key_str = NULL;
+	bool port_auto_adjust = false, thread_mode_single = false, progress_busy = false,
+	     mem_device = false;
+	int i;
 
 	d_signal_register();
 
@@ -672,7 +624,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	D_INFO("libcart (%s) v%s initializing\n", server ? "server" : "client", CART_VERSION);
 	crt_env_init();
 
-	if (opt)
+	if (opt != NULL)
 		dump_opt(opt);
 
 	/* d_fault_inject_init() is reference counted */
@@ -697,246 +649,222 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	D_ASSERT(gdata_init_flag == 1);
 
 	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
-	if (crt_gdata.cg_inited == 0) {
-		crt_gdata.cg_server            = server;
-		crt_gdata.cg_auto_swim_disable = (flags & CRT_FLAG_BIT_AUTO_SWIM_DISABLE) ? 1 : 0;
-
-		crt_env_get(CRT_ATTACH_INFO_PATH, &path);
-		if (path != NULL && strlen(path) > 0) {
-			rc = crt_group_config_path_set(path);
-			if (rc != 0)
-				D_ERROR("Got %s from ENV CRT_ATTACH_INFO_PATH, "
-					"but crt_group_config_path_set failed "
-					"rc: %d, ignore the ENV.\n",
-					path, rc);
-			else
-				D_DEBUG(DB_ALL, "set group_config_path as %s.\n", path);
+	if (crt_gdata.cg_inited) {
+		if (!crt_gdata.cg_server && server) {
+			D_ERROR("CRT initialized as client, cannot set as server again.\n");
+			D_GOTO(unlock, rc = -DER_INVAL);
 		}
+		crt_gdata.cg_refcount++;
+		D_GOTO(unlock, rc);
+	}
 
-		if (opt && opt->cio_thread_mode_single) {
-			crt_gdata.cg_thread_mode_single = opt->cio_thread_mode_single;
-		} else {
-			bool thread_mode_single = false;
-			crt_env_get(D_THREAD_MODE_SINGLE, &thread_mode_single);
-			crt_gdata.cg_thread_mode_single = thread_mode_single;
-		}
+	crt_gdata.cg_server            = server;
+	crt_gdata.cg_auto_swim_disable = (flags & CRT_FLAG_BIT_AUTO_SWIM_DISABLE) ? 1 : 0;
 
-		if (opt && opt->cio_auth_key)
-			auth_key = opt->cio_auth_key;
-		else {
-			crt_env_get(D_PROVIDER_AUTH_KEY, &auth_key_env);
-			auth_key = auth_key_env;
-		}
-
-		if (opt && opt->cio_provider)
-			provider = opt->cio_provider;
-		else {
-			crt_env_get(D_PROVIDER, &provider_env);
-			provider = provider_env;
-		}
-
-		if (opt && opt->cio_interface)
-			interface = opt->cio_interface;
-		else {
-			crt_env_get(D_INTERFACE, &interface_env);
-			interface = interface_env;
-		}
-
-		if (opt && opt->cio_domain)
-			domain = opt->cio_domain;
-		else {
-			crt_env_get(D_DOMAIN, &domain_env);
-			domain = domain_env;
-		}
-
-		if (opt && opt->cio_port)
-			port = opt->cio_port;
-		else {
-			crt_env_get(D_PORT, &port_env);
-			port = port_env;
-		}
-
-		crt_env_get(D_PORT_AUTO_ADJUST, &port_auto_adjust);
-		rc = __split_arg(provider, ",", &provider_str0, &provider_str1);
+	crt_env_get(CRT_ATTACH_INFO_PATH, &path);
+	if (path != NULL && strlen(path) > 0) {
+		rc = crt_group_config_path_set(path);
 		if (rc != 0)
-			D_GOTO(unlock, rc);
+			D_ERROR("Got %s from ENV CRT_ATTACH_INFO_PATH, "
+				"but crt_group_config_path_set failed "
+				"rc: %d, ignore the ENV.\n",
+				path, rc);
+		else
+			D_DEBUG(DB_ALL, "set group_config_path as %s.\n", path);
+	}
 
-		primary_provider   = crt_str_to_provider(provider_str0);
-		secondary_provider = crt_str_to_provider(provider_str1);
+	CRT_ENV_OPT_GET(opt, provider, D_PROVIDER);
+	CRT_ENV_OPT_GET(opt, interface, D_INTERFACE);
+	CRT_ENV_OPT_GET(opt, domain, D_DOMAIN);
+	CRT_ENV_OPT_GET(opt, port, D_PORT);
+	CRT_ENV_OPT_GET(opt, auth_key, D_PROVIDER_AUTH_KEY);
 
-		if (primary_provider == CRT_PROV_UNKNOWN) {
-			D_ERROR("Requested provider %s not found\n", provider);
-			D_GOTO(unlock, rc = -DER_NONEXIST);
+	crt_env_get(D_PORT_AUTO_ADJUST, &port_auto_adjust);
+
+	/* TODO kept as unique globals but may want to distinguish for multi-provider case */
+	CRT_ENV_OPT_GET(opt, thread_mode_single, D_THREAD_MODE_SINGLE);
+	crt_gdata.cg_thread_mode_single = thread_mode_single;
+
+	CRT_ENV_OPT_GET(opt, progress_busy, D_PROGRESS_BUSY);
+	crt_gdata.cg_progress_busy = progress_busy;
+
+	CRT_ENV_OPT_GET(opt, mem_device, D_MEM_DEVICE);
+	crt_gdata.cg_mem_device = mem_device;
+
+	if (provider == NULL) {
+		D_ERROR("No provider specified\n");
+		D_GOTO(unlock, rc = -DER_INVAL);
+	}
+	/*
+	 * A coma-separated list of arguments for interfaces, domains, ports, keys is
+	 * interpreted differently, depending whether it is on a client or on a server side.
+	 *
+	 * On a client, a coma-separated list means multi-interface selection, while on a
+	 * server it means a multi-provider selection.
+	 */
+	if (!crt_is_service()) {
+		if (strchr(provider, ',') != NULL) {
+			D_ERROR("Multiple providers specified in provider string, but secondary "
+				"provider only supported on server side\n");
+			D_GOTO(unlock, rc = -DER_INVAL);
+		}
+	} else if (strchr(provider, ',') != NULL) {
+		D_STRNDUP(provider_str, provider, CRT_ENV_STR_MAX_SIZE);
+		if (provider_str == NULL)
+			D_GOTO(unlock, rc = -DER_NOMEM);
+		provider = strtok_r(provider_str, ",", &save_provider_str);
+
+		if (interface != NULL) {
+			D_STRNDUP(interface_str, interface, CRT_ENV_STR_MAX_SIZE);
+			if (interface_str == NULL)
+				D_GOTO(unlock, rc = -DER_NOMEM);
+			interface = strtok_r(interface_str, ",", &save_interface_str);
 		}
 
-		/*
-		 * A coma-separated list of arguments for interfaces, domains, ports, keys is
-		 * interpreted differently, depending whether it is on a client or on a server side.
-		 *
-		 * On a client, a coma-separated list means multi-interface selection, while on a
-		 * server it means a multi-provider selection.
-		 */
-		if (crt_is_service()) {
-			rc = __split_arg(interface, ",", &iface0, &iface1);
-			if (rc != 0)
-				D_GOTO(unlock, rc);
-			rc = __split_arg(domain, ",", &domain0, &domain1);
-			if (rc != 0)
-				D_GOTO(unlock, rc);
-			rc = __split_arg(port, ",", &port0, &port1);
-			if (rc != 0)
-				D_GOTO(unlock, rc);
-			rc = __split_arg(auth_key, ",", &auth_key0, &auth_key1);
-			if (rc != 0)
-				D_GOTO(unlock, rc);
-		} else {
-			/*
-			 * Note: If on the client the 'interface' contains a
-			 * coma-separated list then it will be later parsed out
-			 * and processed in crt_na_config_init().
-			 */
-			if (interface) {
-				D_STRNDUP(iface0, interface, CRT_ENV_STR_MAX_SIZE);
-				if (!iface0)
-					D_GOTO(unlock, rc = -DER_NOMEM);
-			}
-
-			if (domain) {
-				D_STRNDUP(domain0, domain, CRT_ENV_STR_MAX_SIZE);
-				if (!domain0)
-					D_GOTO(unlock, rc = -DER_NOMEM);
-			}
-
-			if (port) {
-				D_STRNDUP(port0, port, CRT_ENV_STR_MAX_SIZE);
-				if (!port0)
-					D_GOTO(unlock, rc = -DER_NOMEM);
-			}
-
-			if (auth_key) {
-				D_STRNDUP(auth_key0, auth_key, CRT_ENV_STR_MAX_SIZE);
-				if (!auth_key0)
-					D_GOTO(unlock, rc = -DER_NOMEM);
-			}
+		if (domain != NULL) {
+			D_STRNDUP(domain_str, domain, CRT_ENV_STR_MAX_SIZE);
+			if (domain_str == NULL)
+				D_GOTO(unlock, rc = -DER_NOMEM);
+			domain = strtok_r(domain_str, ",", &save_domain_str);
 		}
 
-		/* Secondary provider is specified */
-		if (secondary_provider != CRT_PROV_UNKNOWN) {
-			/* Multi provider mode only supported on the server side */
-			if (!crt_is_service()) {
-				D_ERROR("Secondary provider only supported on the server side\n");
-				D_GOTO(unlock, rc = -DER_INVAL);
+		if (port != NULL) {
+			D_STRNDUP(port_str, port, CRT_ENV_STR_MAX_SIZE);
+			if (port_str == NULL)
+				D_GOTO(unlock, rc = -DER_NOMEM);
+			port = strtok_r(port_str, ",", &save_port_str);
+		}
+
+		if (auth_key != NULL) {
+			D_STRNDUP(auth_key_str, auth_key, CRT_ENV_STR_MAX_SIZE);
+			if (auth_key_str == NULL)
+				D_GOTO(unlock, rc = -DER_NOMEM);
+			auth_key = strtok_r(auth_key_str, ",", &save_auth_key_str);
+		}
+	}
+
+	prov = crt_str_to_provider(provider);
+	if (prov == CRT_PROV_UNKNOWN) {
+		D_ERROR("Requested provider %s not found\n", provider);
+		D_GOTO(unlock, rc = -DER_NONEXIST);
+	}
+
+	/* CXI doesn't use interface value, instead uses domain */
+	if (interface == NULL && prov != CRT_PROV_OFI_CXI)
+		D_WARN("No interface specified\n");
+
+	crt_gdata.cg_primary_prov = prov;
+	/*
+	 * Note: If on the client the 'interface' contains a
+	 * coma-separated list then it will be later parsed out
+	 * and processed in crt_na_config_init().
+	 */
+	rc = crt_init_prov(prov, true, &crt_gdata.cg_prov_gdata_primary, interface, domain, port,
+			   auth_key, port_auto_adjust, opt);
+	if (rc != 0)
+		D_GOTO(unlock, rc);
+
+	if (provider_str != NULL) { /* multi-provider case */
+		int         num_secondaries = 1;
+		const char *provider_ptr    = save_provider_str;
+
+		while (provider_ptr = strchr(provider_ptr, ','), provider_ptr != NULL) {
+			num_secondaries++;
+			provider_ptr++;
+		}
+		crt_gdata.cg_num_secondary_provs = num_secondaries;
+
+		D_ALLOC_ARRAY(crt_gdata.cg_secondary_provs, num_secondaries);
+		if (crt_gdata.cg_secondary_provs == NULL)
+			D_GOTO(cleanup, rc = -DER_NOMEM);
+
+		D_ALLOC_ARRAY(crt_gdata.cg_prov_gdata_secondary, num_secondaries);
+		if (crt_gdata.cg_prov_gdata_secondary == NULL)
+			D_GOTO(cleanup, rc = -DER_NOMEM);
+
+		for (i = 0; i < num_secondaries; i++) {
+			provider = strtok_r(NULL, ",", &save_provider_str);
+			if (provider == NULL) {
+				D_ERROR("Failed to parse secondary provider\n");
+				D_GOTO(cleanup, rc = -DER_INVAL);
 			}
+
+			prov = crt_str_to_provider(provider);
+			if (prov == CRT_PROV_UNKNOWN) {
+				D_ERROR("Requested secondary provider %s not found\n", provider);
+				D_GOTO(cleanup, rc = -DER_NONEXIST);
+			}
+			crt_gdata.cg_secondary_provs[i] = prov;
+
+			if (interface != NULL)
+				interface = strtok_r(NULL, ",", &save_interface_str);
+			if (domain != NULL)
+				domain = strtok_r(NULL, ",", &save_domain_str);
+			if (port != NULL)
+				port = strtok_r(NULL, ",", &save_port_str);
+			if (auth_key != NULL)
+				auth_key = strtok_r(NULL, ",", &save_auth_key_str);
 
 			/* Secondary provider needs its own interface or domain */
-			if (iface1 == NULL && domain1 == NULL) {
+			if (interface == NULL && domain == NULL) {
 				D_ERROR(
 				    "Either a secondary domain or interface must be specified\n");
 				D_GOTO(unlock, rc = -DER_INVAL);
 			}
-
 			/* Note: secondary ports and auth keys are optional */
-		}
+			if (port == NULL || port[0] == '\0')
+				D_WARN("No port specified for secondary provider\n");
 
-		/* CXI doesn't use interface value, instead uses domain */
-		if (iface0 == NULL && primary_provider != CRT_PROV_OFI_CXI)
-			D_WARN("No interface specified\n");
-
-		rc = prov_data_init(&crt_gdata.cg_prov_gdata_primary, primary_provider, true, opt);
-		if (rc != 0)
-			D_GOTO(unlock, rc);
-
-		prov_settings_apply(true, primary_provider, opt);
-		crt_gdata.cg_primary_prov = primary_provider;
-
-		rc = crt_na_config_init(true, primary_provider, iface0, domain0, port0, auth_key0,
-					port_auto_adjust);
-		if (rc != 0) {
-			D_ERROR("crt_na_config_init() failed, " DF_RC "\n", DP_RC(rc));
-			D_GOTO(unlock, rc);
-		}
-
-		if (secondary_provider != CRT_PROV_UNKNOWN) {
-			num_secondaries                  = 1;
-			crt_gdata.cg_num_secondary_provs = num_secondaries;
-
-			if (port1 == NULL || port1[0] == '\0') {
-				port1 = port0;
-			}
-
-			D_ALLOC_ARRAY(crt_gdata.cg_secondary_provs, num_secondaries);
-			if (crt_gdata.cg_secondary_provs == NULL)
-				D_GOTO(cleanup, rc = -DER_NOMEM);
-
-			D_ALLOC_ARRAY(crt_gdata.cg_prov_gdata_secondary, num_secondaries);
-			if (crt_gdata.cg_prov_gdata_secondary == NULL)
-				D_GOTO(cleanup, rc = -DER_NOMEM);
-
-			crt_gdata.cg_secondary_provs[0] = secondary_provider;
-		}
-
-		for (i = 0; i < num_secondaries; i++) {
-			tmp_prov = crt_gdata.cg_secondary_provs[i];
-
-			rc = prov_data_init(&crt_gdata.cg_prov_gdata_secondary[i], tmp_prov, false,
-					    opt);
-			if (rc != 0)
-				D_GOTO(cleanup, rc);
-
-			prov_settings_apply(false, tmp_prov, opt);
-
-			rc = crt_na_config_init(false, tmp_prov, iface1, domain1, port1, auth_key1,
-						port_auto_adjust);
+			rc = crt_init_prov(crt_gdata.cg_secondary_provs[i], false,
+					   &crt_gdata.cg_prov_gdata_secondary[i], interface, domain,
+					   port, auth_key, port_auto_adjust, opt);
 			if (rc != 0) {
-				D_ERROR("crt_na_config_init() failed, " DF_RC "\n", DP_RC(rc));
+				D_ERROR("crt_init_prov() failed for secondary provider, " DF_RC
+					"\n",
+					DP_RC(rc));
 				D_GOTO(cleanup, rc);
 			}
-		}
-
-		rc = crt_hg_init();
-		if (rc != 0) {
-			D_ERROR("crt_hg_init() failed, " DF_RC "\n", DP_RC(rc));
-			D_GOTO(cleanup, rc);
-		}
-
-		rc = crt_grp_init(grpid);
-		if (rc != 0) {
-			D_ERROR("crt_grp_init() failed, " DF_RC "\n", DP_RC(rc));
-			D_GOTO(cleanup, rc);
-		}
-
-		if (crt_plugin_gdata.cpg_inited == 0) {
-			rc = crt_plugin_init();
-			if (rc != 0) {
-				D_ERROR("crt_plugin_init() failed, " DF_RC "\n", DP_RC(rc));
-				D_GOTO(cleanup, rc);
-			}
-		}
-
-		crt_self_test_init();
-
-		crt_iv_init(opt);
-		rc = crt_opc_map_create();
-		if (rc != 0) {
-			D_ERROR("crt_opc_map_create() failed, " DF_RC "\n", DP_RC(rc));
-			D_GOTO(self_test, rc);
-		}
-
-		rc = crt_internal_rpc_register(server);
-		if (rc != 0) {
-			D_ERROR("crt_internal_rpc_register() failed, " DF_RC "\n", DP_RC(rc));
-			D_GOTO(self_test, rc);
-		}
-
-		D_ASSERT(crt_gdata.cg_opc_map != NULL);
-
-		crt_gdata.cg_inited = 1;
-	} else {
-		if (crt_gdata.cg_server == false && server == true) {
-			D_ERROR("CRT initialized as client, cannot set as server again.\n");
-			D_GOTO(unlock, rc = -DER_INVAL);
 		}
 	}
+
+	rc = crt_hg_init();
+	if (rc != 0) {
+		D_ERROR("crt_hg_init() failed, " DF_RC "\n", DP_RC(rc));
+		D_GOTO(cleanup, rc);
+	}
+
+	rc = crt_grp_init(grpid);
+	if (rc != 0) {
+		D_ERROR("crt_grp_init() failed, " DF_RC "\n", DP_RC(rc));
+		D_GOTO(cleanup, rc);
+	}
+
+	if (crt_plugin_gdata.cpg_inited == 0) {
+		rc = crt_plugin_init();
+		if (rc != 0) {
+			D_ERROR("crt_plugin_init() failed, " DF_RC "\n", DP_RC(rc));
+			D_GOTO(cleanup, rc);
+		}
+	}
+
+	crt_self_test_init();
+
+	crt_iv_init(opt);
+	rc = crt_opc_map_create();
+	if (rc != 0) {
+		D_ERROR("crt_opc_map_create() failed, " DF_RC "\n", DP_RC(rc));
+		D_GOTO(self_test, rc);
+	}
+
+	rc = crt_internal_rpc_register(server);
+	if (rc != 0) {
+		D_ERROR("crt_internal_rpc_register() failed, " DF_RC "\n", DP_RC(rc));
+		D_GOTO(self_test, rc);
+	}
+
+	D_ASSERT(crt_gdata.cg_opc_map != NULL);
+
+	crt_gdata.cg_inited = 1;
 
 	crt_gdata.cg_refcount++;
 
@@ -963,15 +891,11 @@ unlock:
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
 out:
-	/*
-	 * We don't need to free port1, iface1 and domain1 as
-	 * they occupy the same original string as port0, iface0 and domain0
-	 */
-	D_FREE(port0);
-	D_FREE(iface0);
-	D_FREE(domain0);
-	D_FREE(provider_str0);
-	D_FREE(auth_key0);
+	D_FREE(provider_str);
+	D_FREE(interface_str);
+	D_FREE(domain_str);
+	D_FREE(port_str);
+	D_FREE(auth_key_str);
 
 	if (rc != 0) {
 		D_ERROR("failed, " DF_RC "\n", DP_RC(rc));
@@ -979,6 +903,29 @@ out:
 		d_log_fini();
 	}
 	return rc;
+}
+
+static int
+crt_init_prov(crt_provider_t provider, bool primary, struct crt_prov_gdata *prov_gdata,
+	      const char *interface, const char *domain, const char *port, const char *auth_key,
+	      bool port_auto_adjust, crt_init_options_t *opt)
+{
+	int rc;
+
+	rc = prov_data_init(prov_gdata, provider, primary, opt);
+	if (rc != 0)
+		return rc;
+
+	prov_settings_apply(primary, provider, opt);
+
+	rc = crt_na_config_init(primary, provider, interface, domain, port, auth_key,
+				port_auto_adjust);
+	if (rc != 0) {
+		D_ERROR("crt_na_config_init() failed, " DF_RC "\n", DP_RC(rc));
+		return rc;
+	}
+
+	return 0;
 }
 
 bool
@@ -1079,7 +1026,7 @@ direct_out:
 }
 
 static inline bool
-is_integer_str(char *str)
+is_integer_str(const char *str)
 {
 	const char *p;
 
@@ -1173,8 +1120,8 @@ crt_port_range_verify(int port)
 }
 
 static int
-crt_na_config_init(bool primary, crt_provider_t provider, char *interface, char *domain,
-		   char *port_str, char *auth_key, bool port_auto_adjust)
+crt_na_config_init(bool primary, crt_provider_t provider, const char *interface, const char *domain,
+		   const char *port_str, const char *auth_key, bool port_auto_adjust)
 {
 	struct crt_na_config *na_cfg;
 	int                   rc       = 0;
