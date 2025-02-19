@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -179,7 +180,7 @@ dtx_free_dbca(struct dtx_batched_cont_args *dbca)
 static inline uint64_t
 dtx_sec2age(uint64_t sec)
 {
-	uint64_t	cur = daos_gettime_coarse();
+	uint64_t	cur = daos_wallclock_secs();
 
 	if (unlikely(cur <= sec))
 		return 0;
