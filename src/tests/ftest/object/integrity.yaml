@@ -46,6 +46,3 @@ record: !mux
       - 32
       - 512
       - 1024
-
-container:
-  control_method: APi
