@@ -441,9 +441,9 @@ kv_put(daos_handle_t oh, daos_size_t size)
 	char		*val;
 	daos_event_t	*evp;
 	int		rc, usage_ratio1, usage_ratio2;
-	int		eq_rc;
-	int              i;
+	int              eq_rc;
 	int              num_events;
+	int              completions = 0;
 	clock_t		last_query = start, current;
 
 	deadline_count = 1;
@@ -488,14 +488,14 @@ kv_put(daos_handle_t oh, daos_size_t size)
 			 * Max request in flight reached, wait for one i/o to
 			 * complete to reuse the slot
 			 */
-			do {
+			while (1) {
 				rc = daos_eq_poll(eq, 1, DAOS_EQ_NOWAIT, 1, &evp);
-			} while (rc == 0);
-			if (rc < 0)
-				break;
-			if (rc == 0) {
-				rc = -DER_IO;
-				break;
+				if (rc > 0)
+					break;
+				if (rc < 0) {
+					rc = -DER_IO;
+					break;
+				}
 			}
 
 			/** Check if completed operation failed */
@@ -545,22 +545,18 @@ kv_put(daos_handle_t oh, daos_size_t size)
 			break;
 
 		deadline_count++;
-
 	}
 
 	/** Wait for completion of all in-flight requests */
 	num_events = daos_eq_query(eq, DAOS_EQR_ALL, 0, NULL);
-	for (eq_rc = 0, i = 0; i < num_events; i++) {
-		do {
-			eq_rc = daos_eq_poll(eq, 1, DAOS_EQ_NOWAIT, 1, &evp);
-		} while (eq_rc == 0);
-		if (rc == 0 && eq_rc == 1) {
-			rc = evp->ev_error;
-		}
-	};
-
-	if (rc == 0 && eq_rc < 0) {
-		rc = eq_rc;
+	while (1) {
+		eq_rc = daos_eq_poll(eq, 1, DAOS_EQ_NOWAIT, 1, &evp);
+		if (eq_rc > 0)
+			completions += eq_rc;
+		if (eq_rc < 0)
+			rc = eq_rc;
+		if (completions >= num_events)
+			break;
 	}
 
 	D_FREE(val);
@@ -589,6 +585,7 @@ kv_get(daos_handle_t oh, daos_size_t size)
 	uint64_t	res = 0;
 	int		rc;
 	int		eq_rc;
+	int              completions = 0;
 	int              num_events;
 
 	total_nr = deadline_count;
@@ -629,14 +626,14 @@ kv_get(daos_handle_t oh, daos_size_t size)
 			 * Max request in flight reached, wait for one i/o to
 			 * complete to reuse the slot
 			 */
-			do {
+			while (1) {
 				rc = daos_eq_poll(eq, 1, DAOS_EQ_NOWAIT, 1, &evp);
-			} while (rc == 0);
-			if (rc < 0)
-				break;
-			if (rc == 0) {
-				rc = -DER_IO;
-				break;
+				if (rc > 0)
+					break;
+				if (rc < 0) {
+					rc = -DER_IO;
+					break;
+				}
 			}
 
 			/** Check if completed operation failed */
@@ -677,13 +674,11 @@ kv_get(daos_handle_t oh, daos_size_t size)
 
 	/** Wait for completion of all in-flight requests */
 	num_events = daos_eq_query(eq, DAOS_EQR_ALL, 0, NULL);
-	for (eq_rc = 0, i = 0; i < num_events; i++) {
-		do {
-			eq_rc = daos_eq_poll(eq, 1, DAOS_EQ_NOWAIT, 1, &evp);
-		} while (eq_rc == 0);
-		if (rc == 0 && eq_rc == 1) {
-			rc = evp->ev_error;
-			if (rc == 0) {
+	while (1) {
+		eq_rc = daos_eq_poll(eq, 1, DAOS_EQ_NOWAIT, 1, &evp);
+		if (eq_rc > 0) {
+			completions += eq_rc;
+			if (!evp->ev_error) {
 				int slot = evp - ev_array;
 
 				if (val_sz[slot] != size) {
@@ -693,10 +688,10 @@ kv_get(daos_handle_t oh, daos_size_t size)
 				}
 			}
 		}
-	};
-
-	if (rc == 0 && eq_rc < 0) {
-		rc = eq_rc;
+		if (eq_rc < 0)
+			rc = eq_rc;
+		if (completions >= num_events)
+			break;
 	}
 
 	D_FREE(val);
