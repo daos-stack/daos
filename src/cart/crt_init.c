@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -97,6 +98,8 @@ dump_opt(crt_init_options_t *opt)
 		D_INFO("auth_key is set\n");
 	if (opt->cio_thread_mode_single)
 		D_INFO("thread mode single is set\n");
+	if (opt->cio_progress_busy)
+		D_INFO("progress busy mode is set\n");
 }
 
 static int
@@ -202,6 +205,14 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider, bool p
 	prov_data->cpg_max_unexp_size = max_unexpect_size;
 	prov_data->cpg_primary        = primary;
 
+	if (opt && opt->cio_progress_busy) {
+		prov_data->cpg_progress_busy = opt->cio_progress_busy;
+	} else {
+		bool progress_busy = false;
+		crt_env_get(D_PROGRESS_BUSY, &progress_busy);
+		prov_data->cpg_progress_busy = progress_busy;
+	}
+
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
 		prov_data->cpg_used_idx[i] = false;
 
@@ -285,11 +296,17 @@ data_init(int server, crt_init_options_t *opt)
 		if (mem_pin_enable == 1)
 			mem_pin_workaround();
 	} else {
+		int retry_count = 3;
+
 		/*
 		 * Client-side envariable to indicate that the cluster
 		 * is running using a secondary provider
 		 */
 		crt_env_get(CRT_SECONDARY_PROVIDER, &is_secondary);
+
+		/** Client side env for hg_init() retries */
+		crt_env_get(CRT_CXI_INIT_RETRY, &retry_count);
+		crt_gdata.cg_hg_init_retry_cnt = retry_count;
 	}
 	crt_gdata.cg_provider_is_primary = (is_secondary) ? 0 : 1;
 
@@ -361,29 +378,16 @@ data_init(int server, crt_init_options_t *opt)
 static int
 crt_plugin_init(void)
 {
-	struct crt_prog_cb_priv  *cbs_prog;
 	struct crt_event_cb_priv *cbs_event;
 	size_t                    cbs_size = CRT_CALLBACKS_NUM;
-	int                       i, rc;
+	int                       rc;
 
 	D_ASSERT(crt_plugin_gdata.cpg_inited == 0);
-
-	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		crt_plugin_gdata.cpg_prog_cbs_old[i] = NULL;
-		D_ALLOC_ARRAY(cbs_prog, cbs_size);
-		if (cbs_prog == NULL) {
-			for (i--; i >= 0; i--)
-				D_FREE(crt_plugin_gdata.cpg_prog_cbs[i]);
-			D_GOTO(out, rc = -DER_NOMEM);
-		}
-		crt_plugin_gdata.cpg_prog_size[i] = cbs_size;
-		crt_plugin_gdata.cpg_prog_cbs[i]  = cbs_prog;
-	}
 
 	crt_plugin_gdata.cpg_event_cbs_old = NULL;
 	D_ALLOC_ARRAY(cbs_event, cbs_size);
 	if (cbs_event == NULL) {
-		D_GOTO(out_destroy_prog, rc = -DER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 	}
 	crt_plugin_gdata.cpg_event_size = cbs_size;
 	crt_plugin_gdata.cpg_event_cbs  = cbs_event;
@@ -397,9 +401,6 @@ crt_plugin_init(void)
 
 out_destroy_event:
 	D_FREE(crt_plugin_gdata.cpg_event_cbs);
-out_destroy_prog:
-	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
-		D_FREE(crt_plugin_gdata.cpg_prog_cbs[i]);
 out:
 	return rc;
 }
@@ -407,16 +408,9 @@ out:
 static void
 crt_plugin_fini(void)
 {
-	int i;
-
 	D_ASSERT(crt_plugin_gdata.cpg_inited == 1);
 
 	crt_plugin_gdata.cpg_inited = 0;
-
-	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		D_FREE(crt_plugin_gdata.cpg_prog_cbs[i]);
-		D_FREE(crt_plugin_gdata.cpg_prog_cbs_old[i]);
-	}
 
 	D_FREE(crt_plugin_gdata.cpg_event_cbs);
 	D_FREE(crt_plugin_gdata.cpg_event_cbs_old);

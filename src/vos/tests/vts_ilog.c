@@ -1,5 +1,7 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,6 +17,7 @@
 #include <stdarg.h>
 #include "vts_io.h"
 #include <vos_internal.h>
+#include "ilog_internal.h"
 
 #define LOG_FAIL(rc, expected_value, format, ...)			\
 	do {								\
@@ -530,6 +533,12 @@ ilog_test_update(void **state)
 	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
 	assert_rc_equal(rc, 0);
 
+	/* Test non-existent tx */
+	id.id_epoch = epoch;
+	id.id_tx_id = current_tx_id.id_tx_id + 4000;
+	rc          = ilog_persist(loh, &id);
+	assert_rc_equal(rc, -DER_NONEXIST);
+
 	/* Commit the punch ilog. */
 	id.id_epoch = epoch;
 	id.id_tx_id = current_tx_id.id_tx_id;
@@ -668,6 +677,12 @@ ilog_test_abort(void **state)
 	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
 	assert_rc_equal(rc, 0);
 
+	/* Test non-existent tx */
+	id = current_tx_id;
+	id.id_tx_id += 400;
+	rc = ilog_abort(loh, &id);
+	assert_rc_equal(rc, -DER_NONEXIST);
+
 	id = current_tx_id;
 	rc = ilog_abort(loh, &id);
 	LOG_FAIL(rc, 0, "Failed to abort log entry\n");
@@ -734,6 +749,11 @@ ilog_test_abort(void **state)
 	ilog_close(loh);
 	rc = ilog_destroy(umm, &ilog_callbacks, ilog);
 	assert_rc_equal(rc, 0);
+
+	/** Test open of "reallocated" ilog */
+	memset(ilog, 0xa1, sizeof(*ilog));
+	rc = ilog_open(umm, ilog, &ilog_callbacks, false, &loh);
+	assert_rc_equal(rc, -DER_NONEXIST);
 
 	assert_true(d_list_empty(&fake_tx_list));
 	ilog_free_root(umm, ilog);
@@ -1055,17 +1075,142 @@ ilog_test_discard(void **state)
 	ilog_fetch_finish(&ilents);
 }
 
+/* values picked arbitrarily where invalid means not as expected by the caller */
+#define DTX_LID_VALID   ((uint32_t)123)
+#define DTX_LID_INVALID (DTX_LID_VALID + 1)
+#define EPOCH_VALID     ((daos_epoch_t)225)
+#define EPOCH_INVALID   (EPOCH_VALID + 1)
+
+static uint32_t dtx_lid_all[] = {DTX_LID_VALID, DTX_LID_INVALID};
+static uint32_t epoch_all[]   = {EPOCH_VALID, EPOCH_INVALID};
+
+#define BOOL2STR(x)     ((x) ? "true" : "false")
+
+#define ILOG_ARRAY_MAX  3
+#define ILOG_ARRAY_SIZE (sizeof(struct ilog_id) * ILOG_ARRAY_MAX)
+
+/* all cases of 3-item arrays containing and not containing the valid epoch */
+static struct ilog_id no_valid_epoch1[] = {
+    {.id_epoch = EPOCH_VALID - 3}, {.id_epoch = EPOCH_VALID - 2}, {.id_epoch = EPOCH_VALID - 1}};
+static struct ilog_id valid_epoch1[] = {
+    {.id_epoch = EPOCH_VALID - 2}, {.id_epoch = EPOCH_VALID - 1}, {.id_epoch = EPOCH_VALID}};
+static struct ilog_id valid_epoch2[] = {
+    {.id_epoch = EPOCH_VALID - 1}, {.id_epoch = EPOCH_VALID}, {.id_epoch = EPOCH_VALID + 1}};
+static struct ilog_id valid_epoch3[] = {
+    {.id_epoch = EPOCH_VALID}, {.id_epoch = EPOCH_VALID + 1}, {.id_epoch = EPOCH_VALID + 2}};
+static struct ilog_id no_valid_epoch2[] = {
+    {.id_epoch = EPOCH_VALID + 1}, {.id_epoch = EPOCH_VALID + 2}, {.id_epoch = EPOCH_VALID + 3}};
+
+static struct ilog_id *no_valid_epoch_all[] = {no_valid_epoch1, no_valid_epoch2};
+static struct ilog_id *valid_epoch_all[]    = {valid_epoch1, valid_epoch2, valid_epoch3};
+
+static void
+ilog_is_valid_test(void **state)
+{
+	struct umem_instance umm;
+	umem_off_t           rec;
+	struct ilog_root    *root;
+	struct ilog_array   *array;
+
+	struct umem_attr     uma = {.uma_id = UMEM_CLASS_VMEM, .uma_pool = NULL};
+
+	umem_class_init(&uma, &umm);
+
+	/* 1. ILOG rec is a NULL pointer. */
+	rec = UMOFF_NULL;
+	assert_false(ilog_is_valid(&umm, rec, DTX_LID_VALID, EPOCH_VALID));
+
+	/* 2. Invalid magic. */
+	rec            = umem_zalloc(&umm, sizeof(struct ilog_root));
+	root           = umem_off2ptr(&umm, rec);
+	root->lr_magic = ILOG_MAGIC + 1;
+	assert_false(ILOG_MAGIC_VALID(root->lr_magic));
+	assert_false(ilog_is_valid(&umm, rec, DTX_LID_VALID, EPOCH_VALID));
+
+	/* Set valid magic for all cases down below. */
+	root->lr_magic = ILOG_MAGIC;
+	assert_true(ILOG_MAGIC_VALID(root->lr_magic));
+
+	/* 3. Empty ILOG can't reference dtx_lid nor epoch. */
+	root->lr_tree.it_embedded = 0;
+	root->lr_tree.it_root     = UMOFF_NULL;
+	assert_true(ilog_empty(root));
+	assert_false(ilog_is_valid(&umm, rec, DTX_LID_VALID, EPOCH_VALID));
+
+	/* 4. Embedded - all cases */
+	root->lr_tree.it_embedded = 1;
+	for (int i = 0; i < ARRAY_SIZE(dtx_lid_all); ++i) {
+		root->lr_id.id_tx_id = dtx_lid_all[i];
+		for (int j = 0; j < ARRAY_SIZE(epoch_all); ++j) {
+			root->lr_id.id_epoch = epoch_all[j];
+			bool exp = (dtx_lid_all[i] == DTX_LID_VALID && epoch_all[j] == EPOCH_VALID);
+			bool result = ilog_is_valid(&umm, rec, DTX_LID_VALID, EPOCH_VALID);
+			if (result != exp) {
+				fail_msg("ilog_is_valid() result is not as expected %s != %s for "
+					 "{dtx_lid=%u, epoch=%u}",
+					 BOOL2STR(result), BOOL2STR(exp), dtx_lid_all[i],
+					 epoch_all[j]);
+			}
+		}
+	}
+
+	/* Prepare ILOG array for all cases below. */
+	root->lr_tree.it_embedded = 0;
+	root->lr_tree.it_root     = umem_zalloc(&umm, sizeof(struct ilog_array) + ILOG_ARRAY_SIZE);
+	array                     = umem_off2ptr(&umm, root->lr_tree.it_root);
+	array->ia_len             = ILOG_ARRAY_MAX;
+	array->ia_max_len         = ILOG_ARRAY_MAX;
+
+	/* 5. Array - no valid epoch */
+	for (int i = 0; i < ARRAY_SIZE(dtx_lid_all); ++i) {
+		uint32_t dtx_lid = dtx_lid_all[i];
+		for (int j = 0; j < ARRAY_SIZE(no_valid_epoch_all); ++j) {
+			/* prepare an array of ILOG id's with epochs from the template */
+			memcpy(array->ia_id, no_valid_epoch_all[j], ILOG_ARRAY_SIZE);
+			/* fill-in dtx_lid for all of the array's entries */
+			for (int k = 0; k < ILOG_ARRAY_MAX; ++k) {
+				array->ia_id[k].id_tx_id = dtx_lid;
+			}
+			if (ilog_is_valid(&umm, rec, DTX_LID_VALID, EPOCH_VALID)) {
+				fail_msg("ilog_is_valid() result is not as expected true != false "
+					 "using no_valid_epoch_all[%d] and dtx_lid=%u",
+					 j, dtx_lid);
+			}
+		}
+	}
+
+	/* 6. Array - with valid epoch */
+	for (int i = 0; i < ARRAY_SIZE(dtx_lid_all); ++i) {
+		uint32_t dtx_lid = dtx_lid_all[i];
+		for (int j = 0; j < ARRAY_SIZE(valid_epoch_all); ++j) {
+			/* prepare an array of ILOG id's with epochs from the template */
+			memcpy(array->ia_id, valid_epoch_all[j], ILOG_ARRAY_SIZE);
+			/* fill-in dtx_lid for all of the array's entries */
+			for (int k = 0; k < ILOG_ARRAY_MAX; ++k) {
+				array->ia_id[k].id_tx_id = dtx_lid;
+			}
+			/* the valid epoch is there so dtx_lid's validity is decisive */
+			bool exp    = (dtx_lid == DTX_LID_VALID);
+			bool result = ilog_is_valid(&umm, rec, DTX_LID_VALID, EPOCH_VALID);
+			if (exp != result) {
+				fail_msg("ilog_is_valid() result is not as expected %s != %s using "
+					 "valid_epoch_all[%d] and dtx_lid=%u",
+					 BOOL2STR(result), BOOL2STR(exp), j, dtx_lid);
+			}
+		}
+	}
+
+	umem_free(&umm, root->lr_tree.it_root);
+	umem_free(&umm, rec);
+}
+
 static const struct CMUnitTest inc_tests[] = {
-	{ "VOS500.1: VOS incarnation log UPDATE", ilog_test_update, NULL,
-		NULL},
-	{ "VOS500.2: VOS incarnation log ABORT test", ilog_test_abort, NULL,
-		NULL},
-	{ "VOS500.3: VOS incarnation log PERSIST test", ilog_test_persist, NULL,
-		NULL},
-	{ "VOS500.4: VOS incarnation log AGGREGATE test", ilog_test_aggregate,
-		NULL, NULL},
-	{ "VOS500.5: VOS incarnation log DISCARD test", ilog_test_discard,
-		NULL, NULL},
+    {"VOS500.1: VOS incarnation log UPDATE", ilog_test_update, NULL, NULL},
+    {"VOS500.2: VOS incarnation log ABORT test", ilog_test_abort, NULL, NULL},
+    {"VOS500.3: VOS incarnation log PERSIST test", ilog_test_persist, NULL, NULL},
+    {"VOS500.4: VOS incarnation log AGGREGATE test", ilog_test_aggregate, NULL, NULL},
+    {"VOS500.5: VOS incarnation log DISCARD test", ilog_test_discard, NULL, NULL},
+    {"VOS501: ilog_is_valid", ilog_is_valid_test, NULL, NULL},
 };
 
 int

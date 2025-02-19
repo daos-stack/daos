@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -244,12 +245,11 @@ func PrintSystemCleanupResponse(out io.Writer, resp *control.SystemCleanupResp, 
 	fmt.Fprintln(out, "System Cleanup Success")
 }
 
-// PrintSystemDrainResponse generates a human-readable representation of the supplied
-// SystemDrainResp struct and writes it to the supplied io.Writer. Result related errors written to
-// error io.Writer.
-func PrintSystemDrainResponse(out io.Writer, resp *control.SystemDrainResp) {
-	if len(resp.Results) == 0 {
-		fmt.Fprintln(out, "No pool ranks drained")
+// PrintPoolRankResults generates a table showing results of operations on pool ranks. Each row will
+// indicate a result for a group of ranks on a pool.
+func PrintPoolRankResults(out io.Writer, results []*control.PoolRankResult) {
+	if len(results) == 0 {
+		fmt.Fprintln(out, "No pool ranks processed")
 		return
 	}
 
@@ -257,11 +257,11 @@ func PrintSystemDrainResponse(out io.Writer, resp *control.SystemDrainResp) {
 	formatter := txtfmt.NewTableFormatter(titles...)
 
 	var table []txtfmt.TableRow
-	for _, r := range resp.Results {
+	for _, r := range results {
 		result := "OK"
-		reason := "N/A"
+		reason := "-"
 		if r.Status != 0 {
-			result = "Failed"
+			result = "FAIL"
 			reason = r.Msg
 		}
 		row := txtfmt.TableRow{

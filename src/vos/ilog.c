@@ -1,5 +1,7 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,35 +19,13 @@
 #include "vos_layout.h"
 #include "vos_ts.h"
 #include "ilog.h"
-
-#define ILOG_TREE_ORDER 11
+#include "ilog_internal.h"
 
 enum {
 	ILOG_ITER_NONE,
 	ILOG_ITER_INIT,
 	ILOG_ITER_READY,
 	ILOG_ITER_FINI,
-};
-
-/** The ilog is split into two parts.   If there is one entry, the ilog
- *  is embedded into the root df struct.   If not, a b+tree is used.
- *  The tree is used more like a set where only the key is used.
- */
-
-struct ilog_tree {
-	umem_off_t	it_root;
-	uint64_t	it_embedded;
-};
-
-struct ilog_array {
-	/** Current length of array */
-	uint32_t	ia_len;
-	/** Allocated length of array */
-	uint32_t	ia_max_len;
-	/** Pad to 16 bytes */
-	uint64_t	ia_pad;
-	/** Entries in array */
-	struct ilog_id	ia_id[0];
 };
 
 struct ilog_array_cache {
@@ -55,15 +35,6 @@ struct ilog_array_cache {
 	struct ilog_array	*ac_array;
 	/** Number of entries */
 	uint32_t		 ac_nr;
-};
-
-struct ilog_root {
-	union {
-		struct ilog_id		lr_id;
-		struct ilog_tree	lr_tree;
-	};
-	uint32_t			lr_ts_idx;
-	uint32_t			lr_magic;
 };
 
 struct ilog_context {
@@ -193,14 +164,6 @@ ilog_init(void)
 	return 0;
 }
 
-/* 4 bit magic number + version */
-#define ILOG_MAGIC		0x00000006
-#define ILOG_MAGIC_BITS		4
-#define ILOG_MAGIC_MASK		((1 << ILOG_MAGIC_BITS) - 1)
-#define ILOG_VERSION_INC	(1 << ILOG_MAGIC_BITS)
-#define ILOG_VERSION_MASK	~(ILOG_VERSION_INC - 1)
-#define ILOG_MAGIC_VALID(magic)	(((magic) & ILOG_MAGIC_MASK) == ILOG_MAGIC)
-
 static inline uint32_t
 ilog_mag2ver(uint32_t magic) {
 	if (!ILOG_MAGIC_VALID(magic))
@@ -276,13 +239,6 @@ ilog_tx_end(struct ilog_context *lctx, int rc)
 done:
 	lctx->ic_in_txn = false;
 	return umem_tx_end(lctx->ic_umm, rc);
-}
-
-static inline bool
-ilog_empty(struct ilog_root *root)
-{
-	return !root->lr_tree.it_embedded &&
-		root->lr_tree.it_root == UMOFF_NULL;
 }
 
 static void
@@ -390,16 +346,18 @@ ilog_create(struct umem_instance *umm, struct ilog_df *root)
 	return rc;
 }
 
-#define ILOG_ASSERT_VALID(root_df)					\
-	do {								\
-		struct ilog_root	*_root;				\
-									\
-		_root = (struct ilog_root *)(root_df);			\
-		D_ASSERTF((_root != NULL) &&				\
-			  ILOG_MAGIC_VALID(_root->lr_magic),		\
-			  "Invalid ilog root detected %p magic=%#x\n",	\
-			  _root, _root == NULL ? 0 : _root->lr_magic);	\
-	} while (0)
+#define ILOG_CHECK_VALID(root_df)                                                                  \
+	({                                                                                         \
+		struct ilog_root *_root = NULL;                                                    \
+		D_ASSERT((root_df) != NULL);                                                       \
+		_root = (struct ilog_root *)(root_df);                                             \
+		if (!ILOG_MAGIC_VALID(_root->lr_magic)) {                                          \
+			D_WARN("Invalid ilog root detected %p magic=%#x\n", _root,                 \
+			       _root == NULL ? 0 : _root->lr_magic);                               \
+			_root = NULL;                                                              \
+		}                                                                                  \
+		_root != NULL;                                                                     \
+	})
 
 int
 ilog_open(struct umem_instance *umm, struct ilog_df *root,
@@ -408,7 +366,8 @@ ilog_open(struct umem_instance *umm, struct ilog_df *root,
 	struct ilog_context	*lctx;
 	int			 rc;
 
-	ILOG_ASSERT_VALID(root);
+	if (!ILOG_CHECK_VALID(root))
+		return -DER_NONEXIST;
 
 	rc = ilog_ctx_create(umm, (struct ilog_root *)root, cbs, &lctx);
 	if (rc != 0)
@@ -474,7 +433,7 @@ ilog_destroy(struct umem_instance *umm,
 	int			 rc = 0;
 	struct ilog_array_cache	 cache = {0};
 
-	ILOG_ASSERT_VALID(root);
+	D_ASSERT(ILOG_CHECK_VALID(root));
 
 	rc = ilog_tx_begin(&lctx);
 	if (rc != 0) {
@@ -984,8 +943,12 @@ done:
 		"%s in incarnation log " DF_X64 " status: rc=" DF_RC " tree_version: %d\n",
 		opc_str[opc], id_in->id_epoch, DP_RC(rc), ilog_mag2ver(lctx->ic_root->lr_magic));
 
-	if (rc == 0 && version != ilog_mag2ver(lctx->ic_root->lr_magic) &&
-	    (opc == ILOG_OP_PERSIST || opc == ILOG_OP_ABORT)) {
+	if (rc == 0 && opc != ILOG_OP_UPDATE) {
+		if (version == ilog_mag2ver(lctx->ic_root->lr_magic)) {
+			D_WARN("ilog entry on %s doesn't exist\n", opc_str[opc]);
+			return -DER_NONEXIST;
+		}
+
 		/** If we persisted or aborted an entry successfully,
 		 *  invoke the callback, if applicable but without
 		 *  deregistration
@@ -1213,7 +1176,7 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 	int			 rc = 0;
 	bool			 retry;
 
-	ILOG_ASSERT_VALID(root_df);
+	D_ASSERT(ILOG_CHECK_VALID(root_df));
 
 	root = (struct ilog_root *)root_df;
 
@@ -1539,7 +1502,7 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 
 	root = lctx->ic_root;
 
-	ILOG_ASSERT_VALID(root);
+	D_ASSERT(ILOG_CHECK_VALID(root));
 
 	D_ASSERT(!ilog_empty(root)); /* ilog_fetch should have failed */
 
@@ -1620,4 +1583,36 @@ ilog_version_get(daos_handle_t loh)
 	}
 
 	return ilog_mag2ver(lctx->ic_root->lr_magic);
+}
+
+bool
+ilog_is_valid(struct umem_instance *umm, umem_off_t rec, uint32_t dtx_lid, daos_epoch_t epoch)
+{
+	struct ilog_root  *root = umem_off2ptr(umm, umem_off2offset(rec));
+	struct ilog_array *array;
+	struct ilog_id    *id;
+
+	// !ILOG_ASSERT_VALID(ilog)
+	if (root == NULL || !ILOG_MAGIC_VALID(root->lr_magic)) {
+		return false;
+	}
+
+	if (ilog_empty(root)) {
+		return false;
+	}
+
+	if (root->lr_tree.it_embedded) {
+		id = &root->lr_id;
+		return (id->id_tx_id == dtx_lid && id->id_epoch == epoch);
+	}
+
+	array = umem_off2ptr(umm, root->lr_tree.it_root);
+	for (int i = 0; i < array->ia_len; ++i) {
+		id = &array->ia_id[i];
+		if (id->id_tx_id == dtx_lid && id->id_epoch == epoch) {
+			return true;
+		}
+	}
+
+	return false;
 }

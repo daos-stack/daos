@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -74,6 +75,9 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_PING_RANK:
 		ds_mgmt_drpc_ping_rank(drpc_req, drpc_resp);
 		break;
+	case DRPC_METHOD_MGMT_SET_UP:
+		ds_mgmt_drpc_set_up(drpc_req, drpc_resp);
+		break;
 	case DRPC_METHOD_MGMT_SET_LOG_MASKS:
 		ds_mgmt_drpc_set_log_masks(drpc_req, drpc_resp);
 		break;
@@ -92,19 +96,16 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_POOL_EVICT:
 		ds_mgmt_drpc_pool_evict(drpc_req, drpc_resp);
 		break;
-	case DRPC_METHOD_MGMT_SET_UP:
-		ds_mgmt_drpc_set_up(drpc_req, drpc_resp);
-		break;
-	case DRPC_METHOD_MGMT_EXCLUDE:
+	case DRPC_METHOD_MGMT_POOL_EXCLUDE:
 		ds_mgmt_drpc_pool_exclude(drpc_req, drpc_resp);
 		break;
-	case DRPC_METHOD_MGMT_DRAIN:
+	case DRPC_METHOD_MGMT_POOL_DRAIN:
 		ds_mgmt_drpc_pool_drain(drpc_req, drpc_resp);
 		break;
-	case DRPC_METHOD_MGMT_REINTEGRATE:
+	case DRPC_METHOD_MGMT_POOL_REINT:
 		ds_mgmt_drpc_pool_reintegrate(drpc_req, drpc_resp);
 		break;
-	case DRPC_METHOD_MGMT_EXTEND:
+	case DRPC_METHOD_MGMT_POOL_EXTEND:
 		ds_mgmt_drpc_pool_extend(drpc_req, drpc_resp);
 		break;
 	case DRPC_METHOD_MGMT_BIO_HEALTH_QUERY:

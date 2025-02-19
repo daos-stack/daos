@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -697,9 +698,9 @@ unsigned int dss_ctx_nr_get(void);
 
 /* Cache for container root */
 struct tree_cache_root {
-	struct btr_root	btr_root;
-	daos_handle_t	root_hdl;
-	unsigned int	count;
+	struct btr_root	tcr_btr_root;
+	daos_handle_t	tcr_root_hdl;
+	unsigned int	tcr_count;
 };
 
 int
