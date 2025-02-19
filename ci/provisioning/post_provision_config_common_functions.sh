@@ -374,7 +374,7 @@ post_provision_config_nodes() {
         if ! $COVFN_DISABLED; then
             subdir="bullseye/"
         fi
-        local repo_url="${ARTIFACTS_URL:-${JENKINS_URL}job/}"daos-stack/job/"$repo"/job/"${branch//\//%252F}"/"$build_number"/artifact/artifacts/"${subdir:-}"$DISTRO_NAME/
+        local repo_url="${REPO_PATH:-${ARTIFACTS_URL:-${JENKINS_URL}job/}daos-stack/job/$repo/job/${branch//\//%252F}/$build_number/artifact/artifacts/$DISTRO_NAME/}"
         dnf -y config-manager --add-repo="$repo_url"
         repo="$(url_to_repo "$repo_url")"
         # PR-repos: should always be able to upgrade modular packages

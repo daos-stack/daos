@@ -1,0 +1,529 @@
+name: GCP Weekly Tests
+
+env:
+  # TODO: we really need to define a list of supported versions (ideally it's no more than 2)
+  #       build is done on the lowest version and test on the highest with a "sanity test"
+  #       stage done on all versions in the list except the highest
+  EL8_BUILD_VERSION: 8.6
+  EL8_VERSION: 8.8
+  EL9_BUILD_VERSION: 9
+  EL9_VERSION: 9
+  LEAP15_VERSION: 15.5
+  GCP_BRANCH: google/2.6
+
+on:
+  schedule:
+    - cron: "0 12 * * 6"  # runs every Saturday at 12pm (UTC)
+
+# shouldn't need this, should only ever have one running at a time. But just in case
+concurrency:
+  group: gcp-weekly-${{ github.run_id }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -ueo pipefail {0}
+
+permissions: {}
+
+jobs:
+  Create-symlinks:
+    # you might think this is an odd place to do this and it should be done as a result of the
+    # build and/or testing stages and ideally you'd be right.
+    # the problem with that is that there is no way to get the success/fail result of individual
+    # axes of matrix jobs so there is no way to query them at the end and see their composite
+    # results.
+    # instead, the final result of the Build-RPM job, for example is a last-one-complete wins.
+    # so for example, if the el9 axis fails quickly and then the el8 axis succeeds afterward the
+    # resulting job state is success.
+    # instead we assume success at the beginning and then let any axis that fails remove the
+    # lastSuccessfulBuild link if it fails
+    name: Create lastBuild and lastSuccessfulBuild symlinks
+    runs-on: [self-hosted, light]
+    env:
+      # TODO -- this should be on stable, backedup storage, not /scratch
+      # yamllint disable-line rule:line-length
+      REPO_PATH: /scratch/job_repos/daos-stack/job/daos/job/gcp-weekly-${{ github.run_id }}/
+    steps:
+      - name: Create lastBuild and lastSuccessfulBuild symlinks
+        run: . ci/gha_functions.sh;
+               mkdir -p ${REPO_PATH};
+               rm -f ${REPO_PATH}last{,Successful}Build;
+               ln -s ${{ github.run_number }} ${REPO_PATH}lastBuild;
+               ln -s ${{ github.run_number }} ${REPO_PATH}lastSuccessfulBuild
+
+  Build-RPM:
+    name: Build RPM
+    permissions:
+      statuses: write
+    runs-on: [self-hosted, docker]
+    needs: [Create-symlinks]
+    if: needs.Create-symlinks.result == 'success' &&
+        ((!cancelled()) || success() || failure())
+    strategy:
+      matrix:
+        distro: ['el8', 'el9']
+      fail-fast: false
+    env:
+      ARTIFACTORY_URL: https://artifactory.dc.hpdd.intel.com/
+      DAOS_EMAIL: brian.murrell@intel.com
+      DAOS_FULLNAME: daos-stack
+      DISTRO: ${{ matrix.distro }}
+      DISTRO_REPOS: disabled
+      DOCKER_BUILDKIT: 0
+      JENKINS_URL: https://build.hpdd.intel.com/
+      ARTIFACTS_URL: file:///scratch/job_repos/
+      MOCK_OPTIONS: --uniqueext=${{ github.run_id }}
+      # TODO -- this should be on stable, backedup storage, not /scratch
+      # yamllint disable-line rule:line-length
+      REPO_PATH: /scratch/job_repos/daos-stack/job/daos/job/gcp-weekly-${{ github.run_id }}/
+      REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
+      RUN_ID: ${{ github.run_id }}
+      TARGET: ${{ matrix.distro }}
+      # keep VS Code's GHA linting happy
+      STAGE_NAME:
+      DISTRO_NAME:
+      DISTRO_VERSION:
+      CP_LEAP15_VERSION:
+      COMMIT_STATUS_DISTRO_VERSION:
+      FVERSION:
+    steps:
+      - name: Set variables
+        run: |
+            FVERSION="38"
+            case ${{ matrix.distro }} in
+                'el8')
+                    CHROOT_NAME="rocky+epel-8-x86_64"
+                    DISTRO_NAME="EL"
+                    DISTRO_VERSION="${{ env.EL8_BUILD_VERSION }}"
+                    COMMIT_STATUS_DISTRO_VERSION="8"
+                    ;;
+                'el9')
+                    CHROOT_NAME="rocky+epel-9-x86_64"
+                    DISTRO_NAME="EL"
+                    DISTRO_VERSION="${{ env.EL9_BUILD_VERSION }}"
+                    ;;
+            esac
+            echo "CHROOT_NAME=$CHROOT_NAME" >> $GITHUB_ENV
+            echo "DISTRO_NAME=$DISTRO_NAME" >> $GITHUB_ENV
+            echo "DISTRO_VERSION=$DISTRO_VERSION" >> $GITHUB_ENV
+            echo "BUILD_CHROOT=/var/lib/mock/$CHROOT_NAME-${{ github.run_id }}/" >> $GITHUB_ENV
+            echo "STAGE_NAME=Build RPM on $DISTRO_NAME $DISTRO_VERSION" >> $GITHUB_ENV
+            echo "FVERSION=$FVERSION" >> $GITHUB_ENV
+            echo "COMMIT_STATUS_DISTRO_VERSION=$COMMIT_STATUS_DISTRO_VERSION" >> $GITHUB_ENV
+      - name: Checkout code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+        with:
+          ref: ${{ env.GCP_BRANCH }}
+      - name: Build RPM Docker image
+        id: build-rpm-docker-image
+        continue-on-error: true
+        run: docker build --file utils/rpms/packaging/Dockerfile.mockbuild
+                          --build-arg CACHEBUST=$(date +%s%3N)
+                          --build-arg CB0=$(date +%V)
+                          --build-arg REPO_FILE_URL=$REPO_FILE_URL
+                          --build-arg UID=$(id -u)
+                          --build-arg FVERSION=${{ env.FVERSION }}
+                          --tag mock-build
+                          utils/rpms
+      - name: Build RPM
+        id: build-rpm
+        continue-on-error: true
+        # yamllint disable rule:line-length
+        run: rm -rf mock_result;
+             mkdir -p mock_result;
+             docker run --name mock-build-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.distro }}
+                        --user build
+                        -v "$PWD":"$PWD" -w "$PWD"
+                        -v "$PWD"/mock_result:/var/lib/mock/$CHROOT_NAME/result
+                        --privileged=true
+                        -e DAOS_FULLNAME="$DAOS_FULLNAME"
+                        -e DAOS_EMAIL="$DAOS_EMAIL"
+                        -e DISTRO_VERSION="$DISTRO_VERSION"
+                        -e STAGE_NAME="$STAGE_NAME"
+                        -e CHROOT_NAME="$CHROOT_NAME"
+                        -e ARTIFACTORY_URL="$ARTIFACTORY_URL"
+                        -e REPO_FILE_URL="$REPO_FILE_URL"
+                        -e JENKINS_URL="$JENKINS_URL"
+                        -e TARGET="$TARGET"
+                        mock-build ci/rpm/build.sh
+        # yamllint enable rule:line-length
+      - name: Build RPM failure log
+        id: build-rpm-fail-log
+        continue-on-error: true
+        if: steps.build-rpm.outcome != 'success'
+        run: cat mock_result/root.log;
+             cat mock_result/build.log
+      - name: Save RPM build logs
+        continue-on-error: true
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808  # v4.3.3
+        with:
+          name: ${{ env.STAGE_NAME }} logs
+          path: |
+            mock_result/root.log
+            mock_result/build.log
+      - name: Create repo
+        id: create-repo
+        if: steps.build-rpm.outcome == 'success'
+        continue-on-error: true
+        run: |
+             set -eux
+             repo_path="$REPO_PATH$GITHUB_RUN_NUMBER/artifact/artifacts/"
+             mkdir -p "$repo_path$TARGET"
+             cp -a mock_result/*.rpm "$repo_path$TARGET"
+             cd "$repo_path$TARGET"
+             createrepo .
+      - name: Test repo
+        id: test-repo
+        if: steps.create-repo.outcome == 'success'
+        continue-on-error: true
+        run: . ci/gha_functions.sh;
+             dnf --disablerepo=\* --repofrompath
+                 testrepo,file://${REPO_PATH}${{ github.run_number }}/artifact/artifacts/$TARGET
+                 repoquery -a
+      - name: Remove lastSuccessfulBuild link and exit failure
+        if: steps.test-repo.outcome != 'success'
+        run: rm -f ${REPO_PATH}lastSuccessfulBuild;
+             exit 1
+      - name: Publish RPMs
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808  # v4.3.3
+        with:
+          name: ${{ env.DISTRO_NAME }} ${{ env.DISTRO_VERSION }} RPM repository
+          path: ${{ env.REPO_PATH}}${{ github.run_number }}/artifact/artifacts/${{ env.TARGET }}
+      - name: Update commit status
+        uses: ouzi-dev/commit-status-updater@26588d166ff273fc4c0664517359948f7cdc9bf1  # v2.0.2
+        with:
+          # yamllint disable-line rule:line-length
+          name: 'build/Build RPM on ${{ env.DISTRO_NAME }} ${{ env.COMMIT_STATUS_DISTRO_VERSION && env.COMMIT_STATUS_DISTRO_VERSION || env.DISTRO_VERSION }}'
+          status: "${{ job.status }}"
+
+  Functional:
+    name: Functional Testing
+    runs-on: [self-hosted, wolf]
+    permissions:
+      statuses: write
+      # https://github.com/EnricoMi/publish-unit-test-result-action#permissions
+      checks: write
+      pull-requests: write
+    timeout-minutes: 7200
+    needs: [Build-RPM]
+    strategy:
+      matrix:
+        distro: ['el8', 'el9']
+      fail-fast: false
+    # https://github.com/actions/runner/issues/491#issuecomment-926924523
+    if: |
+      (!cancelled()) &&
+      (needs.Build-RPM.result == 'success' ||
+       needs.Build-RPM.result == 'skipped')
+    env:
+      CONFIG_POWER_ONLY: false
+      PRAGMA_SUFFIX: -vm
+      OPERATIONS_EMAIL: brian.murrell@intel.com
+      TEST_RPMS: true
+      COMMIT_MESSAGE:
+      JENKINS_URL: https://build.hpdd.intel.com/
+      REPOSITORY_URL: https://repo.dc.hpdd.intel.com/
+      REMOVE_EXISTING_RPMS: false
+      TARGET: ${{ matrix.distro }}
+      REPO_PATH: /scratch/job_repos/daos-stack/job/daos/job/gcp-weekly-${{ github.run_id }}/
+      # TODO -- this should be on stable, backedup storage
+      ARTIFACTS_URL: file:///scratch/job_repos/
+      REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
+      # keep VS Code's GHA linting happy
+      NODESTRING:
+      CP_PR_REPOS:
+      CP_FEATURES:
+      CP_TEST_TAG:
+      CP_EL8_VM9_LABEL:
+      CP_EL9_VM9_LABEL:
+      CP_LEAP15_VM9_LABEL:
+      CP_PRIORITY:
+      CP_EL8_VERSION:
+      CP_EL9_VERSION:
+      CP_LEAP15_VERSION:
+      DISTRO:
+      CLUSTER_REQUEST_reqid:
+      STAGE_NAME:
+      QUEUE_URL:
+      LABEL:
+      DISTRO_NAME:
+      DISTRO_VERSION:
+      COMMIT_STATUS_DISTRO_VERSION:
+    steps:
+      - name: Set variables
+        run: |
+            set -eux
+            env
+            STAGE_TAGS="vm,dfuse"
+            FTEST_ARG=""
+            INST_RPMS="daos-client daos-tests daos-server daos-serialize daos-tests-internal"
+            case "${{ matrix.distro }}" in
+                'el8')
+                    CHROOT_NAME="rocky+epel-8-x86_64"
+                    DISTRO_NAME="EL"
+                    DISTRO_NAME_UPPER="EL"
+                    DISTRO_NAME_LOWER="el"
+                    DISTRO_VERSION="${{ env.CP_EL8_VERSION &&
+                                        env.CP_EL8_VERSION || env.EL8_VERSION }}"
+                    DISTRO_VERSION_MAJOR="8"
+                    OPENMPI="openmpi"
+                    LABEL="${{ env.CP_EL8_VM9_LABEL &&
+                               env.CP_EL8_VM9_LABEL || 'ci_vm9' }}"
+                    ;;
+                'el9')
+                    CHROOT_NAME="rocky+epel-9-x86_64"
+                    DISTRO_NAME="EL"
+                    DISTRO_NAME_UPPER="EL"
+                    DISTRO_NAME_LOWER="el"
+                    DISTRO_VERSION="${{ env.CP_EL9_VERSION &&
+                                        env.CP_EL9_VERSION || env.EL9_VERSION }}"
+                    DISTRO_VERSION_MAJOR="9"
+                    PROV_DISTRO_VERSION_MAJOR="8"
+                    OPENMPI="openmpi"
+                    LABEL="${{ env.CP_EL9_VM9_LABEL &&
+                               env.CP_EL9_VM9_LABEL || 'ci_vm9' }}"
+                    ;;
+            esac
+            echo "CHROOT_NAME=$CHROOT_NAME" >> $GITHUB_ENV
+            echo "DISTRO_NAME=$DISTRO_NAME" >> $GITHUB_ENV
+            echo "DISTRO_VERSION=$DISTRO_VERSION" >> $GITHUB_ENV
+            echo "DISTRO_WITH_VERSION=$DISTRO_NAME_LOWER$DISTRO_VERSION" >> $GITHUB_ENV
+            echo "BUILD_CHROOT=/var/lib/mock/$CHROOT_NAME-${{ github.run_id }}/" >> $GITHUB_ENV
+            echo "STAGE_NAME=Functional on $DISTRO_NAME $DISTRO_VERSION" >> $GITHUB_ENV
+            echo "STAGE_TAGS=$STAGE_TAGS" >> $GITHUB_ENV
+            echo "FTEST_ARG=$FTEST_ARG" >> $GITHUB_ENV
+            echo "DISTRO=${DISTRO_NAME_UPPER}_$DISTRO_VERSION_MAJOR" >> $GITHUB_ENV
+            echo -n "PROVISION_DISTRO=${DISTRO_NAME_UPPER}_" >> $GITHUB_ENV
+            echo "${PROV_DISTRO_VERSION_MAJOR:-$DISTRO_VERSION_MAJOR}" >> $GITHUB_ENV
+            echo -n "DAOS_STACK_${DISTRO_NAME_UPPER}_" >> $GITHUB_ENV
+            echo "${PROV_DISTRO_VERSION_MAJOR:-$DISTRO_VERSION_MAJOR}_LOCAL_REPO=not_used" >> \
+                 $GITHUB_ENV
+            echo "LABEL=$LABEL" >> $GITHUB_ENV
+            echo "INST_RPMS=$INST_RPMS" >> $GITHUB_ENV
+      - name: Checkout code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+        with:
+          submodules: true
+          fetch-depth: 500
+          ref: ${{ env.GCP_BRANCH }}
+      - name: Request and Provision a Cluster
+        timeout-minutes: 7200
+        uses: ./.github/actions/provision-cluster
+        with:
+          condition: true
+          ref: ${{ env.GCP_BRANCH }}
+      - name: Run Test
+        timeout-minutes: 7200
+        id: run-test
+        run: |
+          . ci/gha_functions.sh
+          NODE_COUNT="$NODE_COUNT"                                   \
+          TEST_TAG="$(get_test_tags ${{ env.STAGE_TAGS}})"           \
+          FTEST_ARG="${{ env.FTEST_ARG }}" ci/functional/test_main.sh
+      - name: Cancel cluster request (if cancelled after requesting)
+        if: cancelled()
+        run: |
+          set -eux
+          . ci/gha_functions.sh
+          if ! JENKINS_URL="${{ env.JENKINS_URL }}" QUEUE_URL="${{ env.QUEUE_URL }}" \
+               cancel_provision; then
+              # probably already provisioned and needs unprovisioning
+              if ! cleanup_provision_request "${{ env.CLUSTER_REQUEST_reqid }}"; then
+                  exit 1
+              fi
+          fi
+      - name: Job cleanup
+        if: (!cancelled() && (success() || failure()))
+        run: |
+          set -eux
+          . ci/gha_functions.sh
+          NODELIST=${{ env.NODESTRING }} ci/functional/job_cleanup.sh || true
+          cleanup_provision_request "${{ env.CLUSTER_REQUEST_reqid }}"
+      - name: Publish test results
+        if: (!cancelled()) && (success() || failure()) &&
+            steps.run-test.outcome != 'skipped'
+        # yamllint disable-line rule:line-length
+        uses: EnricoMi/publish-unit-test-result-action@170bf24d20d201b842d7a52403b73ed297e6645b  # v2.18.0
+        with:
+          check_name: ${{ env.STAGE_NAME }} Test Results (old)
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          junit_files: ${{ env.STAGE_NAME }}/**/results.xml
+      - name: Publish artifacts
+        if: (!cancelled()) && (success() || failure()) &&
+            steps.run-test.outcome != 'skipped'
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808  # v4.3.3
+        with:
+          name: ${{ env.STAGE_NAME }} artifacts
+          path: ${{ env.STAGE_NAME }}/**
+      - name: Upload test results
+        if: (success() || failure()) &&
+            steps.run-test.outcome != 'skipped'
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808  # v4.3.3
+        with:
+          name: ${{ env.STAGE_NAME }} test-results
+          path: ${{ env.STAGE_NAME }}/**/results.xml
+      - name: Update commit status
+        uses: ouzi-dev/commit-status-updater@26588d166ff273fc4c0664517359948f7cdc9bf1  # v2.0.2
+        with:
+          # yamllint disable-line rule:line-length
+          name: 'test/Functional on ${{ env.DISTRO_NAME }} ${{ env.COMMIT_STATUS_DISTRO_VERSION && env.COMMIT_STATUS_DISTRO_VERSION || env.DISTRO_VERSION }}'
+          status: "${{ job.status }}"
+
+  Functional_Hardware:
+    name: Functional Testing on Hardware
+    runs-on: [self-hosted, wolf]
+    permissions:
+      statuses: write
+      # https://github.com/EnricoMi/publish-unit-test-result-action#permissions
+      checks: write
+      pull-requests: write
+    timeout-minutes: 7200
+    needs: [Build-RPM, Functional]
+    strategy:
+      matrix:
+        stage: ['Medium', 'Large']
+      fail-fast: false
+    # https://github.com/actions/runner/issues/491#issuecomment-926924523
+    if: |
+      (!cancelled()) &&
+      (needs.Build-RPM.result == 'success' ||
+       needs.Build-RPM.result == 'skipped') &&
+      (needs.Functional.result == 'success' ||
+       needs.Functional.result == 'skipped')
+    env:
+      TARGET: el8
+      REPO_PATH: /scratch/job_repos/daos-stack/job/daos/job/gcp-weekly-${{ github.run_id }}/
+      CONFIG_POWER_ONLY: false
+      PRAGMA_SUFFIX: -vm
+      OPERATIONS_EMAIL: brian.murrell@intel.com
+      TEST_RPMS: true
+      COMMIT_MESSAGE:
+      JENKINS_URL: https://build.hpdd.intel.com/
+      REPOSITORY_URL: https://repo.dc.hpdd.intel.com/
+      REMOVE_EXISTING_RPMS: false
+      # TODO -- this should be on stable, backedup storage
+      ARTIFACTS_URL: file:///scratch/job_repos/
+      REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
+      # keep VS Code's GHA linting happy
+      NODESTRING:
+      CP_PR_REPOS:
+      CP_TEST_TAG:
+      CP_HW_MEDIUM_LABEL:
+      CP_HW_LARGE_LABEL:
+      CP_PRIORITY:
+      CP_EL8_VERSION:
+      CP_EL8_TARGET:
+      CLUSTER_REQUEST_reqid:
+      STAGE_NAME:
+      QUEUE_URL:
+      LABEL:
+      COMMIT_STATUS_DISTRO_VERSION:
+    steps:
+      - name: Set variables
+        run: |
+            STAGE_TAGS=""
+            FTEST_ARG="--nvme=auto_md_on_ssd"
+            INST_RPMS="daos-client daos-tests daos-server daos-serialize daos-tests-internal"
+            CHROOT_NAME="rocky+epel-8-x86_64"
+            DISTRO_NAME="EL"
+            DISTRO_NAME_UPPER="EL"
+            DISTRO_NAME_LOWER="el"
+            DISTRO_VERSION="${{ env.CP_EL8_TARGET &&
+                                env.CP_EL8_TARGET ||
+                                env.CP_EL8_VERSION &&
+                                env.CP_EL8_VERSION || env.EL8_VERSION }}"
+            DISTRO_VERSION_MAJOR="8"
+            if [[ "${{ matrix.stage }}" = Medium* ]]; then
+                LABEL=${{ env.CP_HW_MEDIUM_LABEL &&
+                          env.CP_HW_MEDIUM_LABEL || 'ci_nvme5' }}
+                STAGE_TAGS="hw,medium,dfuse,-provider hw,medium,daily_regression,-provider"
+                SIZE="MEDIUM"
+            elif [[ "${{ matrix.stage }}" = Large* ]]; then
+                LABEL=${{ env.CP_HW_LARGE_LABEL &&
+                          env.CP_HW_LARGE_LABEL || 'ci_nvme9' }}
+                STAGE_TAGS="hw,large,daily_regression hw,large,dfuse"
+                SIZE="LARGE"
+            fi
+            echo "DISTRO_NAME=$DISTRO_NAME" >> $GITHUB_ENV
+            echo "DISTRO_VERSION=$DISTRO_VERSION" >> $GITHUB_ENV
+            echo "DISTRO_WITH_VERSION=$DISTRO_NAME_LOWER$DISTRO_VERSION" >> $GITHUB_ENV
+            echo "STAGE_NAME=Functional Hardware ${{ matrix.stage }}" >> $GITHUB_ENV
+            echo "STAGE_TAGS=$STAGE_TAGS" >> $GITHUB_ENV
+            echo "FTEST_ARG=$FTEST_ARG" >> $GITHUB_ENV
+            echo "DISTRO=${DISTRO_NAME_UPPER}_$DISTRO_VERSION_MAJOR" >> $GITHUB_ENV
+            echo -n "PROVISION_DISTRO=${DISTRO_NAME_UPPER}_" >> $GITHUB_ENV
+            echo "${PROV_DISTRO_VERSION_MAJOR:-$DISTRO_VERSION_MAJOR}" >> $GITHUB_ENV
+            echo -n "DAOS_STACK_${DISTRO_NAME_UPPER}_" >> $GITHUB_ENV
+            echo "${PROV_DISTRO_VERSION_MAJOR:-$DISTRO_VERSION_MAJOR}_LOCAL_REPO=not_used" >> \
+                 $GITHUB_ENV
+            echo "LABEL=$LABEL" >> $GITHUB_ENV
+            echo "INST_RPMS=$INST_RPMS" >> $GITHUB_ENV
+            echo "SIZE=$SIZE" >> $GITHUB_ENV
+      - name: Checkout code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+        with:
+          submodules: true
+          fetch-depth: 500
+          ref: ${{ env.GCP_BRANCH }}
+      - name: Request and Provision a Cluster
+        timeout-minutes: 7200
+        uses: ./.github/actions/provision-cluster
+        with:
+          condition: true
+          ref: ${{ env.GCP_BRANCH }}
+      - name: Run Test
+        timeout-minutes: 7200
+        id: run-test
+        run: |
+          . ci/gha_functions.sh
+          NODE_COUNT="$NODE_COUNT"                                   \
+          TEST_TAG="$(get_test_tags ${{ env.STAGE_TAGS}})"           \
+          FTEST_ARG="${{ env.FTEST_ARG }}" ci/functional/test_main.sh
+      - name: Cancel cluster request (if cancelled after requesting)
+        if: cancelled()
+        run: |
+          set -eux
+          . ci/gha_functions.sh
+          if ! JENKINS_URL="${{ env.JENKINS_URL }}" QUEUE_URL="${{ env.QUEUE_URL }}" \
+               cancel_provision; then
+              # probably already provisioned and needs unprovisioning
+              if ! cleanup_provision_request "${{ env.CLUSTER_REQUEST_reqid }}"; then
+                  exit 1
+              fi
+          fi
+      - name: Job cleanup
+        if: (!cancelled() && (success() || failure()))
+        run: |
+          set -eux
+          . ci/gha_functions.sh
+          cleanup_provision_request "${{ env.CLUSTER_REQUEST_reqid }}"
+          NODELIST=${{ env.NODESTRING }} ci/functional/job_cleanup.sh
+      - name: Publish test results
+        if: (!cancelled()) && (success() || failure()) &&
+            steps.run-test.outcome != 'skipped'
+        # yamllint disable-line rule:line-length
+        uses: EnricoMi/publish-unit-test-result-action@170bf24d20d201b842d7a52403b73ed297e6645b  # v2.18.0
+        with:
+          check_name: ${{ env.STAGE_NAME }} Test Results (old)
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          junit_files: ${{ env.STAGE_NAME }}/**/results.xml
+      - name: Publish artifacts
+        if: (!cancelled()) && (success() || failure()) &&
+            steps.run-test.outcome != 'skipped'
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808  # v4.3.3
+        with:
+          name: ${{ env.STAGE_NAME }} artifacts
+          path: ${{ env.STAGE_NAME }}/**
+      - name: Upload test results
+        if: (success() || failure()) &&
+            steps.run-test.outcome != 'skipped'
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808  # v4.3.3
+        with:
+          name: ${{ env.STAGE_NAME }} test-results
+          path: ${{ env.STAGE_NAME }}/**/results.xml
+      - name: Update commit status
+        uses: ouzi-dev/commit-status-updater@26588d166ff273fc4c0664517359948f7cdc9bf1  # v2.0.2
+        with:
+          name: 'test/Functional Hardware ${{ matrix.stage }}'
+          status: "${{ job.status }}"
