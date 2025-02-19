@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2022-2025 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1774,8 +1774,8 @@ sync_cb(struct ddbs_sync_info *info, void *cb_args)
 		/* Ignore error for now ... might not exist*/
 		D_WARN("delete target failed: " DF_RC "\n", DP_RC(rc));
 
-	rc = smd_pool_add_tgt(pool_id, info->dsi_hdr->bbh_vos_id,
-			      info->dsi_hdr->bbh_blob_id, st, blob_size);
+	rc = smd_pool_add_tgt(pool_id, info->dsi_hdr->bbh_vos_id, info->dsi_hdr->bbh_blob_id, st,
+			      blob_size, false);
 	if (!SUCCESS(rc)) {
 		D_ERROR("add target failed: "DF_RC"\n", DP_RC(rc));
 		args->sync_rc = rc;
