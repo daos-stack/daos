@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2024 Intel Corporation.
+ * (C) Copyright 2024-2025 Intel Corporation.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -27,6 +27,7 @@ shm_ht_create(const char name[], int bits, int n_lock, struct d_shm_ht_head **ht
 	d_shm_mutex_t        *p_locks;
 	int                   len_name;
 	int                   n_bucket;
+	int                   rc;
 
 	*ht_head = NULL;
 	len_name = strnlen(name, MAX_HT_NAME_LEN);
@@ -35,8 +36,17 @@ shm_ht_create(const char name[], int bits, int n_lock, struct d_shm_ht_head **ht
 		return EINVAL;
 	}
 
-	/* force bucket size be power of 2 */
+	/* force the number of buckets be power of 2 */
 	n_bucket = 1 << bits;
+	if (n_bucket < n_lock) {
+		DS_ERROR(EINVAL, "number of buckets is smaller than number of locks");
+		return EINVAL;
+	}
+	if (n_bucket % n_lock) {
+		DS_ERROR(EINVAL, "number of buckets is not a multiplier of number of locks");
+		return EINVAL;
+	}
+
 	shm_mutex_lock(&(d_shm_head->ht_lock), NULL);
 
 	/* loop over existing hash tables to check whether it exists or not */
@@ -44,13 +54,21 @@ shm_ht_create(const char name[], int bits, int n_lock, struct d_shm_ht_head **ht
 		offset = d_shm_head->off_ht_head;
 		while (offset != INVALID_OFFSET) {
 			ht_head_loc = (struct d_shm_ht_head *)((char *)d_shm_head + offset);
-			if ((strncmp(name, ht_head_loc->ht_name, MAX_HT_NAME_LEN) == 0) &&
-			    (ht_head_loc->n_bucket == n_bucket) &&
-			    (ht_head_loc->n_lock == n_lock)) {
-				/* found existing hash table */
-				*ht_head = ht_head_loc;
-				break;
+			if ((strncmp(name, ht_head_loc->ht_name, MAX_HT_NAME_LEN) == 0)) {
+				/* found existing hash table with given name */
+				if ((ht_head_loc->n_bucket == n_bucket) &&
+				    (ht_head_loc->n_lock == n_lock)) {
+					*ht_head = ht_head_loc;
+					shm_mutex_unlock(&(d_shm_head->ht_lock));
+					return 0;
+				} else {
+					DS_ERROR(EINVAL,
+						 "hash table with different parameters exists");
+					rc = EINVAL;
+					goto err;
+				}
 			}
+
 			if (ht_head_loc->next == INVALID_OFFSET) {
 				/* reaching the end of the link list of existing hash tables */
 				*ht_head = NULL;
@@ -60,17 +78,13 @@ shm_ht_create(const char name[], int bits, int n_lock, struct d_shm_ht_head **ht
 		}
 	}
 
-	if (*ht_head) {
-		/* found existing hash table */
-		shm_mutex_unlock(&(d_shm_head->ht_lock));
-		return 0;
-	}
-
 	/* This hash table does not exist, then create it. */
 	*ht_head = shm_alloc(sizeof(struct d_shm_ht_head) + (sizeof(d_shm_mutex_t) * n_lock) +
 			     (sizeof(long int) * n_bucket));
-	if (*ht_head == NULL)
-		return ENOMEM;
+	if (*ht_head == NULL) {
+		rc = ENOMEM;
+		goto err;
+	}
 	ht_head_loc = *ht_head;
 
 	memcpy(ht_head_loc->ht_name, name, len_name + 1);
@@ -81,7 +95,8 @@ shm_ht_create(const char name[], int bits, int n_lock, struct d_shm_ht_head **ht
 	for (i = 0; i < n_lock; i++) {
 		if (shm_mutex_init(&(p_locks[i])) != 0) {
 			DS_ERROR(errno, "shm_mutex_init() failed");
-			return errno;
+			rc = errno;
+			goto err;
 		}
 	}
 	off_next = (long int *)((char *)ht_head_loc + sizeof(struct d_shm_ht_head) +
@@ -95,6 +110,10 @@ shm_ht_create(const char name[], int bits, int n_lock, struct d_shm_ht_head **ht
 
 	shm_mutex_unlock(&(d_shm_head->ht_lock));
 	return 0;
+
+err:
+	shm_mutex_unlock(&(d_shm_head->ht_lock));
+	return rc;
 }
 
 bool
@@ -112,7 +131,7 @@ shm_ht_rec_delete(struct d_shm_ht_head *ht_head, const char *key, const int ksiz
 
 	hash       = d_hash_string_u32(key, ksize);
 	idx        = hash & (ht_head->n_bucket - 1);
-	idx_lock   = (unsigned int)(idx * ht_head->n_lock * 1.0f / ht_head->n_bucket);
+	idx_lock   = idx % ht_head->n_lock;
 	p_ht_lock  = (d_shm_mutex_t *)((char *)ht_head + sizeof(struct d_shm_ht_head));
 	p_off_list = (long int *)((char *)p_ht_lock + sizeof(d_shm_mutex_t) * ht_head->n_lock);
 	shm_mutex_lock(&(p_ht_lock[idx_lock]), NULL);
@@ -124,6 +143,7 @@ shm_ht_rec_delete(struct d_shm_ht_head *ht_head, const char *key, const int ksiz
 
 	/* loop over all records in this bucket to find the key */
 	off_next = p_off_list[idx];
+	/* record is not empty */
 	while (off_next != INVALID_OFFSET) {
 		rec = (struct shm_ht_rec *)((char *)d_shm_head + off_next);
 		if (ksize == rec->len_key) {
@@ -137,9 +157,10 @@ shm_ht_rec_delete(struct d_shm_ht_head *ht_head, const char *key, const int ksiz
 					rec_prev->next = rec->next;
 				} else {
 					/* This is the first record in this bucket */
-					p_off_list[idx] = INVALID_OFFSET;
+					p_off_list[idx] = rec->next;
 				}
 
+				/* next record in this bucket exists */
 				if (rec->next != INVALID_OFFSET) {
 					rec_next =
 					    (struct shm_ht_rec *)((char *)d_shm_head + rec->next);
@@ -170,7 +191,7 @@ shm_ht_rec_delete_at(struct d_shm_ht_head *ht_head, struct shm_ht_rec *link)
 	if (link == NULL)
 		return false;
 
-	idx_lock  = (unsigned int)(link->idx * ht_head->n_lock * 1.0f / ht_head->n_bucket);
+	idx_lock  = link->idx % ht_head->n_lock;
 	p_ht_lock = (d_shm_mutex_t *)((char *)ht_head + sizeof(struct d_shm_ht_head));
 
 	shm_mutex_lock(&(p_ht_lock[idx_lock]), NULL);
@@ -225,7 +246,7 @@ shm_ht_destroy(struct d_shm_ht_head *ht_head)
 	for (i = 0; i < n_bucket; i++) {
 		p_ht_lock  = (d_shm_mutex_t *)((char *)ht_head + sizeof(struct d_shm_ht_head));
 		p_off_list = (long int *)((char *)p_ht_lock + sizeof(d_shm_mutex_t) * n_lock);
-		idx_lock   = (unsigned int)(i * ht_head->n_lock * 1.0f / ht_head->n_bucket);
+		idx_lock   = i % n_lock;
 		shm_mutex_lock(&(p_ht_lock[idx_lock]), NULL);
 
 		/* free records in one bucket */
@@ -308,7 +329,7 @@ shm_ht_rec_find(struct d_shm_ht_head *ht_head, const char *key, const int len_ke
 		*link = NULL;
 	hash       = d_hash_string_u32(key, len_key);
 	idx        = hash & (ht_head->n_bucket - 1);
-	idx_lock   = (unsigned int)(idx * ht_head->n_lock * 1.0f / ht_head->n_bucket);
+	idx_lock   = idx % ht_head->n_lock;
 	p_ht_lock  = (d_shm_mutex_t *)((char *)ht_head + sizeof(struct d_shm_ht_head));
 	p_off_list = (long int *)((char *)p_ht_lock + sizeof(d_shm_mutex_t) * ht_head->n_lock);
 	shm_mutex_lock(&(p_ht_lock[idx_lock]), NULL);
@@ -348,8 +369,9 @@ shm_ht_rec_find_insert(struct d_shm_ht_head *ht_head, const char *key, const int
 	d_shm_mutex_t     *p_ht_lock;
 	long int           off_next;
 	long int          *p_off_list;
-	struct shm_ht_rec *rec   = NULL;
-	char              *value = NULL;
+	struct shm_ht_rec *rec      = NULL;
+	struct shm_ht_rec *rec_next = NULL;
+	char              *value    = NULL;
 	int                err_save;
 	int                rc;
 
@@ -357,7 +379,7 @@ shm_ht_rec_find_insert(struct d_shm_ht_head *ht_head, const char *key, const int
 		*link = NULL;
 	hash       = d_hash_string_u32(key, len_key);
 	idx        = hash & (ht_head->n_bucket - 1);
-	idx_lock   = (unsigned int)(idx * ht_head->n_lock * 1.0f / ht_head->n_bucket);
+	idx_lock   = idx % ht_head->n_lock;
 	p_ht_lock  = (d_shm_mutex_t *)((char *)ht_head + sizeof(struct d_shm_ht_head));
 	p_off_list = (long int *)((char *)p_ht_lock + sizeof(d_shm_mutex_t) * ht_head->n_lock);
 	shm_mutex_lock(&(p_ht_lock[idx_lock]), NULL);
@@ -416,6 +438,11 @@ shm_ht_rec_find_insert(struct d_shm_ht_head *ht_head, const char *key, const int
 	rec->prev       = INVALID_OFFSET;
 	rec->next       = p_off_list[idx];
 	p_off_list[idx] = (long int)((char *)rec - (char *)d_shm_head);
+	if (rec->next != INVALID_OFFSET) {
+		/* the next record exist */
+		rec_next       = (struct shm_ht_rec *)((char *)d_shm_head + rec->next);
+		rec_next->prev = p_off_list[idx];
+	}
 	atomic_store_relaxed(&(rec->ref_count), 1);
 
 	shm_mutex_unlock(&(p_ht_lock[idx_lock]));

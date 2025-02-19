@@ -137,11 +137,16 @@ verify_hash_by_child(void)
 	shm_fini();
 }
 
+#define NUM_KV (2560)
+#define MAX_KEY_LEN (12)
+
 void
 test_hash(void **state)
 {
+	int                   i;
 	int                   rc;
 	int                   status;
+	int                   len;
 	/* the hash table in shared memory */
 	struct d_shm_ht_head *ht_head;
 	struct shm_ht_rec    *link;
@@ -149,6 +154,10 @@ test_hash(void **state)
 	char                 *argv[3] = {"test_shm", "--verifykv", NULL};
 	char                 *exe_path;
 	pid_t                 pid;
+	char                 *key_set = NULL;
+	struct shm_ht_rec   **link_set;
+	char                 *key_name;
+	bool                  deleted;
 
 	/* create shared memory, create a hash table, insert three keys */
 	rc = shm_init();
@@ -185,22 +194,57 @@ test_hash(void **state)
 	free(exe_path);
 
 	/* remove key_1 from ht */
-	rc = shm_ht_rec_delete(ht_head, KEY_1, strlen(KEY_1));
-	assert_true(rc);
+	deleted = shm_ht_rec_delete(ht_head, KEY_1, strlen(KEY_1));
+	assert_true(deleted);
 	value = shm_ht_rec_find(ht_head, KEY_1, strlen(KEY_1), NULL);
 	assert_true(value == NULL);
 
 	/* remove key_2 from ht */
-	rc = shm_ht_rec_delete(ht_head, KEY_2, strlen(KEY_2));
-	assert_true(rc);
+	deleted = shm_ht_rec_delete(ht_head, KEY_2, strlen(KEY_2));
+	assert_true(deleted);
 	value = shm_ht_rec_find(ht_head, KEY_2, strlen(KEY_2), NULL);
 	assert_true(value == NULL);
 
 	/* remove key_3 from ht */
-	rc = shm_ht_rec_delete_at(ht_head, link);
-	assert_true(rc);
+	deleted = shm_ht_rec_delete_at(ht_head, link);
+	assert_true(deleted);
 	value = shm_ht_rec_find(ht_head, KEY_3, strlen(KEY_3), &link);
 	assert_true(value == NULL);
+
+	key_set = malloc(MAX_KEY_LEN * NUM_KV);
+	assert_non_null(key_set);
+	link_set = malloc(sizeof(struct shm_ht_rec *) * NUM_KV);
+	assert_non_null(link_set);
+
+	for (i = 0; i < NUM_KV; i++) {
+		key_name = key_set + i * MAX_KEY_LEN;
+		len = snprintf(key_name, MAX_KEY_LEN, "key_%d", i);
+		assert_true(len < (MAX_KEY_LEN - 1));
+		value = shm_ht_rec_find_insert(ht_head, key_name, len, VAL_1, sizeof(VAL_1), &link_set[i]);
+		assert_non_null(value);
+	}
+
+	/* make sure all inserted records exist */
+	for (i = 0; i < NUM_KV; i++) {
+		key_name = key_set + i * MAX_KEY_LEN;
+		value = shm_ht_rec_find(ht_head, key_name, strlen(key_name), &link);
+		assert_non_null(value);
+		assert_non_null(link);
+	}
+
+	/* delete ht records with shm_ht_rec_delete() */
+	for (i = 0; i < NUM_KV; i += 2) {
+		key_name = key_set + i * MAX_KEY_LEN;
+		deleted = shm_ht_rec_delete(ht_head, key_name, strlen(key_name));
+		assert_true(deleted);
+	}
+
+	/* delete ht records with shm_ht_rec_delete_at() */
+	for (i = 1; i < NUM_KV; i += 2) {
+		key_name = key_set + i * MAX_KEY_LEN;
+		deleted = shm_ht_rec_delete_at(ht_head, link_set[i]);
+		assert_true(deleted);
+	}
 
 	shm_fini();
 }

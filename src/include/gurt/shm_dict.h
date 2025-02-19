@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2024 Intel Corporation.
+ * (C) Copyright 2024-2025 Intel Corporation.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -61,7 +61,8 @@ struct d_shm_ht_head {
 extern struct d_shm_hdr *d_shm_head;
 
 /**
- * create a hash table with given name, size (2^bits), number of locks if it does not exist
+ * create a hash table with given name, size (2^bits), number of locks if it does not exist.
+ * number of buckets, 2^bits, needs to be a multiplier of number of locks.
  *
  * \param[in] name		name string
  * \param[in] bits		used to set the number of buckets, 2^bits 

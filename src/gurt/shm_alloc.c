@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2024 Intel Corporation.
+ * (C) Copyright 2024-2025 Intel Corporation.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -33,8 +33,8 @@ struct d_shm_hdr   *d_shm_head;
 /* the attribute set for mutex located inside shared memory */
 pthread_mutexattr_t d_shm_mutex_attr;
 
-/* the number of times to try calling shm_open() */
-#define RETRY (5)
+/* this will be resived later to support add/remove pool dynamically */
+struct shm_pool_local shm_pool_list[N_SHM_FIXED_POOL];
 
 /**
  * pid of the process who creates shared memory region. shared memory is NOT unmapped when this
@@ -77,29 +77,27 @@ create_shm_region(uint64_t shm_size, uint64_t shm_pool_size)
 	 * implement a memory allocator supporting shared memory natively and remove this limit
 	 * later.
 	 */
-	shm_addr = mmap(FIXED_SHM_ADDR, shm_size, PROT_READ | PROT_WRITE,
-			MAP_SHARED | MAP_FIXED, shm_ht_fd, 0);
-	if (shm_addr != FIXED_SHM_ADDR) {
-		DS_ERROR(errno, "mmap() failed to map at desired address");
+	shm_addr = mmap(NULL, shm_size, PROT_READ | PROT_WRITE, MAP_SHARED, shm_ht_fd, 0);
+	if (shm_addr == MAP_FAILED) {
+		DS_ERROR(errno, "mmap() failed");
 		goto err;
 	}
 	d_shm_head        = (struct d_shm_hdr *)shm_addr;
 	d_shm_head->magic = 0;
 	/* initialize memory allocators */
-	for (i = 0; i < N_SHM_POOL; i++) {
-		d_shm_head->tlsf[i] = tlsf_create_with_pool(
+	for (i = 0; i < N_SHM_FIXED_POOL; i++) {
+		shm_pool_list[i].addr_s         = tlsf_create_with_pool(
 		    shm_addr + sizeof(struct d_shm_hdr) + (i * shm_pool_size), shm_pool_size);
+		shm_pool_list[i].addr_e         = shm_pool_list[i].addr_s + shm_pool_size;
+		shm_pool_list[i].freeable       = false;
+		d_shm_head->off_fixed_pool[i]   = (off_t)shm_pool_list[i].addr_s -
+		    (off_t)d_shm_head;
 	}
+	d_shm_head->num_pool = N_SHM_FIXED_POOL;
 
 	if (shm_mutex_init(&(d_shm_head->g_lock)) != 0) {
 		DS_ERROR(errno, "shm_mutex_init() failed");
 		goto err_unmap;
-	}
-	for (i = 0; i < N_SHM_POOL; i++) {
-		if (shm_mutex_init(&(d_shm_head->mem_lock[i])) != 0) {
-			DS_ERROR(errno, "shm_mutex_init() failed");
-			goto err_unmap;
-		}
 	}
 	if (shm_mutex_init(&(d_shm_head->ht_lock)) != 0) {
 		DS_ERROR(errno, "shm_mutex_init() failed");
@@ -113,8 +111,11 @@ create_shm_region(uint64_t shm_size, uint64_t shm_pool_size)
 	atomic_store_relaxed(&(d_shm_head->large_mem_count), 0);
 	d_shm_head->size          = shm_size;
 	d_shm_head->shm_pool_size = shm_pool_size;
+	d_shm_head->version       = 1;
+	__sync_synchronize();
 	d_shm_head->magic         = DSM_MAGIC;
 	/* initialization is finished now. */
+	close(shm_ht_fd);
 	return 0;
 
 err_unmap:
@@ -129,6 +130,7 @@ err:
 int
 shm_init(void)
 {
+	int      i;
 	int      shm_ht_fd;
 	int      shmopen_perm = 0600;
 	void    *shm_addr;
@@ -151,11 +153,11 @@ shm_init(void)
 	rc = d_getenv_uint64_t("DAOS_SHM_SIZE", &shm_size);
 	if (rc != -DER_NONEXIST) {
 		/* set parameter from env */
-		shm_pool_size = shm_size / N_SHM_POOL;
+		shm_pool_size = shm_size / N_SHM_FIXED_POOL;
 		if (shm_pool_size % page_size)
 			/* make shm_pool_size 4K aligned */
 			shm_pool_size += (page_size - (shm_pool_size % page_size));
-		shm_size = shm_pool_size * N_SHM_POOL + sizeof(struct d_shm_hdr);
+		shm_size = shm_pool_size * N_SHM_FIXED_POOL + sizeof(struct d_shm_hdr);
 	} else {
 		shm_pool_size = SHM_POOL_SIZE;
 		shm_size      = SHM_SIZE_REQ;
@@ -189,10 +191,9 @@ open_rw:
 	}
 
 	/* map existing shared memory */
-	shm_addr = mmap(FIXED_SHM_ADDR, shm_size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED,
-			shm_ht_fd, 0);
-	if (shm_addr != FIXED_SHM_ADDR) {
-		DS_ERROR(errno, "mmap failed to map at desired address");
+	shm_addr = mmap(NULL, shm_size, PROT_READ | PROT_WRITE, MAP_SHARED, shm_ht_fd, 0);
+	if (shm_addr == MAP_FAILED) {
+		DS_ERROR(errno, "mmap() failed");
 		goto err;
 	}
 	/* wait until the shared memory initialization finished */
@@ -207,6 +208,13 @@ open_rw:
 	atomic_fetch_add_relaxed(&(((struct d_shm_hdr *)shm_addr)->ref_count), 1);
 	d_shm_head = (struct d_shm_hdr *)shm_addr;
 	close(shm_ht_fd);
+
+	for (i = 0; i < N_SHM_FIXED_POOL; i++) {
+		shm_pool_list[i].addr_s = (char *)d_shm_head + d_shm_head->off_fixed_pool[i];
+		shm_pool_list[i].addr_e = shm_pool_list[i].addr_s + d_shm_head->shm_pool_size;
+		shm_pool_list[i].freeable = false;
+	}
+
 	return 0;
 
 err_unmap:
@@ -231,20 +239,18 @@ shm_alloc_comm(size_t align, size_t size)
 		tid  = syscall(SYS_gettid);
 		hash = d_hash_string_u32((const char *)&tid, sizeof(int));
 		/* choose a memory allocator based on tid */
-		idx_small = hash % N_SHM_POOL;
+		idx_small = hash % N_SHM_FIXED_POOL;
 	}
 	idx_allocator = idx_small;
 	if (size >= LARGE_MEM) {
 		oldref = atomic_fetch_add_relaxed(&(d_shm_head->large_mem_count), 1);
 		/* pick the allocator for large memory request with round-robin */
-		idx_allocator = oldref % N_SHM_POOL;
+		idx_allocator = oldref % N_SHM_FIXED_POOL;
 	}
-	shm_mutex_lock(&(d_shm_head->mem_lock[idx_allocator]), NULL);
 	if (align == 0)
-		buf = tlsf_malloc(d_shm_head->tlsf[idx_allocator], size);
+		buf = tlsf_malloc((tlsf_t)(shm_pool_list[idx_allocator].addr_s), size);
 	else
-		buf = tlsf_memalign(d_shm_head->tlsf[idx_allocator], align, size);
-	shm_mutex_unlock(&(d_shm_head->mem_lock[idx_allocator]));
+		buf = tlsf_memalign((tlsf_t)(shm_pool_list[idx_allocator].addr_s), align, size);
 
 	return buf;
 }
@@ -264,24 +270,17 @@ shm_memalign(size_t align, size_t size)
 void
 shm_free(void *ptr)
 {
-	uint32_t idx_allocator;
+	int i;
 
-	/* compare with the lower bound address of shared memory pool */
-	if (ptr < d_shm_head->tlsf[0]) {
-		DS_ERROR(EINVAL, "Out of range memory pointer for shm_free()\n");
-		return;
+	for (i = 0; i < N_SHM_FIXED_POOL; i++) {
+		if ( ((char *)ptr >= shm_pool_list[i].addr_s) && ((char *)ptr < shm_pool_list[i].addr_e) ) {
+			tlsf_free((tlsf_t)shm_pool_list[i].addr_s, ptr);
+			return;
+		}
 	}
 
-	idx_allocator = ((uint64_t)ptr - (uint64_t)d_shm_head->tlsf[0]) / d_shm_head->shm_pool_size;
-	/* compare with the upper bound address of shared memory pool */
-	if (idx_allocator >= N_SHM_POOL) {
-		DS_ERROR(EINVAL, "Out of range memory pointer for shm_free()\n");
-		return;
-	}
-
-	shm_mutex_lock(&(d_shm_head->mem_lock[idx_allocator]), NULL);
-	tlsf_free(d_shm_head->tlsf[idx_allocator], ptr);
-	shm_mutex_unlock(&(d_shm_head->mem_lock[idx_allocator]));
+	DS_ERROR(EINVAL, "Out of range memory pointer for shm_free()\n");
+	return;
 }
 
 void
