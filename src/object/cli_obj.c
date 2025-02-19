@@ -4762,35 +4762,34 @@ obj_comp_cb(tse_task_t *task, void *data)
 			if (!obj_auxi->spec_shard && !obj_auxi->spec_group &&
 			    !obj_auxi->no_retry && !obj_auxi->ec_wait_recov) {
 				/* Retry fetch on alternative shard */
-				if (obj_auxi->opc == DAOS_OBJ_RPC_FETCH) {
-					if (task->dt_result == -DER_CSUM)
+				if ((obj_auxi->opc == DAOS_OBJ_RPC_FETCH ||
+				     obj_auxi->opc == DAOS_OBJ_RPC_UPDATE) &&
+				    task->dt_result == -DER_CSUM) {
+					struct shard_rw_args *rw_arg = &obj_auxi->rw_args;
+
+					/* Retry a few times on checksum error; something must
+					 * go terribly wrong if checksum happened for 10 times in a
+					 * row therefore we stop trying anyways even though there
+					 * may exist more replicas. */
+					if (rw_arg->csum_retry_cnt < MAX_CSUM_RETRY) {
 						obj_auxi->csum_retry = 1;
-					else if (task->dt_result == -DER_TX_UNCERTAIN)
+						rw_arg->csum_retry_cnt++;
+						D_DEBUG(DB_IO, DF_OID " checksum error, retrying\n",
+							DP_OID(obj->cob_md.omd_id));
+					} else {
+						D_ERROR(DF_OID
+							" too many retries on checksum error. "
+							"Failing I/O\n",
+							DP_OID(obj->cob_md.omd_id));
+						obj_auxi->io_retry = 0;
+					}
+				}
+
+				if (obj_auxi->opc == DAOS_OBJ_RPC_FETCH) {
+					if (task->dt_result == -DER_TX_UNCERTAIN)
 						obj_auxi->tx_uncertain = 1;
 					else
 						obj_auxi->nvme_io_err = 1;
-				} else {
-					if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE &&
-					    task->dt_result == -DER_CSUM) {
-						struct shard_rw_args *rw_arg = &obj_auxi->rw_args;
-
-						/** Retry a few times on checksum error on update */
-						if (rw_arg->csum_retry_cnt < MAX_CSUM_RETRY) {
-							obj_auxi->csum_retry = 1;
-							rw_arg->csum_retry_cnt++;
-							D_DEBUG(DB_IO, DF_OID" checksum error on "
-								"update, retrying\n",
-								DP_OID(obj->cob_md.omd_id));
-						} else {
-							D_ERROR(DF_OID" checksum error on update, "
-								"too many retries. Failing I/O\n",
-								DP_OID(obj->cob_md.omd_id));
-							obj_auxi->io_retry = 0;
-						}
-					} else if (task->dt_result != -DER_NVME_IO) {
-						/* Don't retry update for UNCERTAIN errors */
-						obj_auxi->io_retry = 0;
-					}
 				}
 			} else {
 				obj_auxi->io_retry = 0;
@@ -5141,6 +5140,12 @@ obj_csum_update(struct dc_object *obj, daos_obj_update_t *args, struct obj_auxi_
 	if (!obj_csum_dedup_candidate(&obj->cob_co->dc_props, args->iods, args->nr))
 		return 0;
 
+	if (obj_auxi->csum_retry) {
+		/* Release old checksum result and prepare for new calculation */
+		daos_csummer_free_ci(obj->cob_co->dc_csummer, &obj_auxi->rw_args.dkey_csum);
+		daos_csummer_free_ic(obj->cob_co->dc_csummer, &obj_auxi->rw_args.iod_csums);
+	}
+
 	return dc_obj_csum_update(obj->cob_co->dc_csummer, obj->cob_co->dc_props,
 				  obj->cob_md.omd_id, args->dkey, args->iods, args->sgls, args->nr,
 				  obj_auxi->reasb_req.orr_singv_los, &obj_auxi->rw_args.dkey_csum,
@@ -5151,6 +5156,12 @@ static int
 obj_csum_fetch(const struct dc_object *obj, daos_obj_fetch_t *args,
 	       struct obj_auxi_args *obj_auxi)
 {
+	if (obj_auxi->csum_retry) {
+		/* Release old checksum result and prepare for new calculation */
+		daos_csummer_free_ci(obj->cob_co->dc_csummer, &obj_auxi->rw_args.dkey_csum);
+		daos_csummer_free_ic(obj->cob_co->dc_csummer, &obj_auxi->rw_args.iod_csums);
+	}
+
 	return dc_obj_csum_fetch(obj->cob_co->dc_csummer, args->dkey, args->iods, args->sgls,
 				 args->nr, obj_auxi->reasb_req.orr_singv_los,
 				 &obj_auxi->rw_args.dkey_csum, &obj_auxi->rw_args.iod_csums);
