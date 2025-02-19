@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -139,6 +140,7 @@ sub_find_free(struct lru_array *array, struct lru_sub *sub,
 	/** Insert at tail (mru) */
 	lrua_insert(sub, &sub->ls_lru, entry, tree_idx, true);
 
+	sub->ls_used++;
 	entry->le_key = key;
 
 	*entryp = entry;
@@ -201,6 +203,7 @@ lrua_find_free(struct lru_array *array, struct lru_entry **entryp,
 	evict_cb(array, sub, entry, sub->ls_lru);
 
 	*idx = ent2idx(array, sub, sub->ls_lru);
+	sub->ls_used++;
 	entry->le_key = key;
 	sub->ls_lru = entry->le_next_idx;
 
@@ -234,6 +237,7 @@ lrua_evictx(struct lru_array *array, uint32_t idx, uint64_t key)
 
 	evict_cb(array, sub, entry, ent_idx);
 
+	sub->ls_used--;
 	entry->le_key = 0;
 
 	/** Remove from active list */
@@ -245,6 +249,9 @@ lrua_evictx(struct lru_array *array, uint32_t idx, uint64_t key)
 		/** Add the entry back to the free list */
 		d_list_add_tail(&sub->ls_link, &array->la_free_sub);
 	}
+
+	if (array->la_flags & LRU_FLAG_EVICT_MANUAL && sub->ls_lru == LRU_NO_IDX)
+		D_ASSERTF(sub->ls_used == 0, "Unexpected in-using entries %u\n", sub->ls_used);
 
 	/** Insert in free list */
 	lrua_insert(sub, &sub->ls_free, entry, ent_idx,
@@ -310,6 +317,7 @@ lrua_array_alloc(struct lru_array **arrayp, uint32_t nr_ent, uint32_t nr_arrays,
 	D_INIT_LIST_HEAD(&array->la_unused_sub);
 	for (idx = 0; idx < nr_arrays; idx++) {
 		array->la_sub[idx].ls_array_idx = idx;
+		array->la_sub[idx].ls_used = 0;
 		d_list_add_tail(&array->la_sub[idx].ls_link,
 				&array->la_unused_sub);
 	}

@@ -39,8 +39,8 @@ enum {
 			D_ASSERT(dae->dae_dth->dth_ent == dae);				\
 			dae->dae_dth->dth_ent = NULL;					\
 		}									\
-		D_DEBUG(DB_TRACE, "Evicting lid "DF_DTI": lid=%lx\n",			\
-			DP_DTI(&DAE_XID(dae)), DAE_LID(dae) & DTX_LID_SOLO_MASK);	\
+		D_DEBUG(DB_IO, "Evicting lid "DF_DTI": lid=%x\n",			\
+			DP_DTI(&DAE_XID(dae)), DAE_LID(dae));				\
 		d_list_del_init(&dae->dae_link);					\
 		lrua_evictx(cont->vc_dtx_array,						\
 			    (DAE_LID(dae) & DTX_LID_SOLO_MASK) - DTX_LID_RESERVED,	\
@@ -1077,8 +1077,8 @@ vos_dtx_alloc(struct umem_instance *umm, struct dtx_handle *dth)
 	DAE_INDEX(dae) = DTX_INDEX_INVAL;
 	dae->dae_dth = dth;
 
-	D_DEBUG(DB_IO, "Allocated new lid DTX: "DF_DTI" lid=%lx, dae=%p\n",
-		DP_DTI(&dth->dth_xid), DAE_LID(dae) & DTX_LID_SOLO_MASK, dae);
+	D_DEBUG(DB_IO, "Allocated new DTX " DF_DTI ", lid=%x, epoch " DF_U64 ", dae=%p\n",
+		DP_DTI(&dth->dth_xid), DAE_LID(dae), DAE_EPOCH(dae), dae);
 
 	d_iov_set(&kiov, &DAE_XID(dae), sizeof(DAE_XID(dae)));
 	d_iov_set(&riov, dae, sizeof(*dae));
@@ -1224,17 +1224,8 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 
 	found = lrua_lookupx(cont->vc_dtx_array, (entry & DTX_LID_SOLO_MASK) - DTX_LID_RESERVED,
 			     epoch, &dae);
-	if (!found) {
-		D_ASSERTF(!(entry & DTX_LID_SOLO_FLAG),
-			  "non-committed solo entry %lu must be there, epoch "DF_X64", boundary "
-			  DF_X64"\n", entry & DTX_LID_SOLO_MASK, epoch, cont->vc_solo_dtx_epoch);
-
-		D_DEBUG(DB_TRACE,
-			"Entry %d "DF_U64" not in lru array, it must be committed\n",
-			entry, epoch);
-
-		return ALB_AVAILABLE_CLEAN;
-	}
+	D_ASSERTF(found, "Non-committed DTX must be in active table: lid=%x, epoch="
+		  DF_U64 ", boundary " DF_U64 "\n", entry, epoch, cont->vc_solo_dtx_epoch);
 
 	if (intent == DAOS_INTENT_PURGE) {
 		uint64_t	now = daos_gettime_coarse();
@@ -1618,15 +1609,10 @@ vos_dtx_deregister_record(struct umem_instance *umm, daos_handle_t coh,
 	if (!vos_dtx_is_normal_entry(entry))
 		return 0;
 
-	D_ASSERT(entry >= DTX_LID_RESERVED);
-
-	found = lrua_lookupx(vos_hdl2cont(coh)->vc_dtx_array, entry - DTX_LID_RESERVED,
-			     epoch, &dae);
-	if (!found) {
-		D_WARN("Could not find active DTX record for lid=%d, epoch="
-		       DF_U64"\n", entry, epoch);
-		return 0;
-	}
+	found = lrua_lookupx(vos_hdl2cont(coh)->vc_dtx_array,
+			     (entry & DTX_LID_SOLO_FLAG) - DTX_LID_RESERVED, epoch, &dae);
+	D_ASSERTF(found, "Could not find active DTX record for lid=%x, epoch=" DF_U64 "\n",
+		  entry, epoch);
 
 	/*
 	 * NOTE: If the record to be deregistered (for free or overwrite, and so on) is referenced
