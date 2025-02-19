@@ -1,5 +1,6 @@
 /**
- * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -33,6 +34,9 @@
 #define DAOS_PROP_ENTRY_GLOBAL_VERSION	"global_version"
 #define DAOS_PROP_ENTRY_OBJ_VERSION	"obj_version"
 #define DAOS_PROP_ENTRY_PERF_DOMAIN	"perf_domain"
+#define DAOS_PROP_ENTRY_ACL             "acl"
+#define DAOS_PROP_ENTRY_SCRUB_DISABLED  "scrub_disabled"
+#define DAOS_PROP_ENTRY_ROOT_OIDS       "root_oids"
 
 /** DAOS deprecated property entry names keeped for backward compatibility */
 #define DAOS_PROP_ENTRY_REDUN_FAC_OLD	"rf"
