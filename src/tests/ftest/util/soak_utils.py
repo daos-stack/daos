@@ -1,5 +1,6 @@
 """
 (C) Copyright 2019-2024 Intel Corporation.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -28,8 +29,8 @@ from duns_utils import format_path
 from exception_utils import CommandFailure
 from fio_utils import FioCommand
 from general_utils import (DaosTestError, check_ping, check_ssh, get_journalctl, get_log_file,
-                           get_random_bytes, get_random_string, list_to_str, pcmd, run_command,
-                           run_pcmd, wait_for_result)
+                           get_random_bytes, get_random_string, list_to_str, run_command,
+                           wait_for_result)
 from ior_utils import IorCommand
 from job_manager_utils import Mpirun
 from macsio_util import MacsioCommand
@@ -301,11 +302,9 @@ def run_monitor_check(self):
         self (obj): soak obj
 
     """
-    monitor_cmds = self.params.get("monitor", "/run/*")
-    hosts = self.hostlist_servers
-    if monitor_cmds:
-        for cmd in monitor_cmds:
-            pcmd(hosts, cmd, timeout=30)
+    monitor_cmds = self.params.get("monitor", "/run/*") or []
+    for cmd in monitor_cmds:
+        run_remote(self.log, self.hostlist_servers, cmd, timeout=30)
 
 
 def run_metrics_check(self, logging=True, prefix=None):
@@ -326,17 +325,13 @@ def run_metrics_check(self, logging=True, prefix=None):
                 name = prefix + f"_metrics_{engine}.csv"
             destination = self.outputsoak_dir
             daos_metrics = f"{self.sudo_cmd} daos_metrics -S {engine} --csv"
-            self.log.info("Running %s", daos_metrics)
-            results = run_pcmd(hosts=self.hostlist_servers,
-                               command=daos_metrics,
-                               verbose=(not logging),
-                               timeout=60)
+            result = run_remote(
+                self.log, self.hostlist_servers, daos_metrics, verbose=(not logging), timeout=60)
             if logging:
-                for result in results:
-                    hosts = result["hosts"]
-                    log_name = name + "-" + str(hosts)
+                for data in result.output:
+                    log_name = name + "-" + str(data.hosts)
                     self.log.info("Logging %s output to %s", daos_metrics, log_name)
-                    write_logfile(result["stdout"], log_name, destination)
+                    write_logfile(data.stdout, log_name, destination)
 
 
 def get_harassers(harasser):

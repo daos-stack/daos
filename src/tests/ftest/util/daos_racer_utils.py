@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -10,7 +11,8 @@ from command_utils import ExecutableCommand
 from command_utils_base import BasicParameter, FormattedParameter
 from env_modules import load_mpi
 from exception_utils import CommandFailure, MPILoadError
-from general_utils import get_log_file, pcmd
+from general_utils import get_log_file
+from run_utils import run_remote
 
 
 class DaosRacerCommand(ExecutableCommand):
@@ -109,15 +111,14 @@ class DaosRacerCommand(ExecutableCommand):
             str(self), self.host,
             "no" if self.clush_timeout.value is None else
             "a {}s".format(self.clush_timeout.value))
-        return_codes = pcmd(self.host, self.with_exports, True, self.clush_timeout.value)
-        if 0 not in return_codes or len(return_codes) > 1:
-            # Kill the daos_racer process if the remote command timed out
-            if 255 in return_codes:
-                self.log.info(
-                    "Stopping timed out daos_racer process on %s", self.host)
-                pcmd(self.host, "pkill daos_racer", True)
+        result = run_remote(
+            self.log, self.host, self.with_exports, timeout=self.clush_timeout.value)
+        if not result.passed:
+            if result.timeout:
+                self.log.info("Stopping timed out daos_racer process on %s", result.timeout_hosts)
+                run_remote(self.log, result.timeout_hosts, "pkill daos_racer", True)
 
             if raise_exception:
-                raise CommandFailure("Error running '{}'".format(self._command))
+                raise CommandFailure(f"Error running '{self._command}'")
 
         self.log.info("Test passed!")
