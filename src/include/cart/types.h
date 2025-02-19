@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -60,6 +61,7 @@ typedef struct crt_init_options {
 			/** whether or not to use expected sizes */
 			cio_use_expected_size:1,
 			cio_use_unexpected_size:1;
+
 	/** overrides the value of the environment variable CRT_CTX_NUM */
 	int		cio_ctx_max_num;
 
@@ -94,6 +96,9 @@ typedef struct crt_init_options {
 
 	/** use single thread to access context */
 	bool             cio_thread_mode_single;
+
+	/** force busy wait (testing only, not in production) */
+	bool             cio_progress_busy;
 } crt_init_options_t;
 
 typedef int		crt_status_t;
