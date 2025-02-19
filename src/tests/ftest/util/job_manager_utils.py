@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -276,14 +277,9 @@ class JobManager(ExecutableCommand):
         self.log.debug(
             "%s processes still running remotely%s:", self.command,
             " {}".format(message) if message else "")
-        self.log.debug("Running (on %s): %s", self._hosts, command)
-        results = pcmd(self._hosts, command, True, 10, None)
-
-        # The pcmd method will return a dictionary with a single key, e.g.
-        # {1: <NodeSet>}, if there are no remote processes running on any of the
-        # hosts.  If this value is not returned, indicate there are remote
-        # processes running by returning a "R" state.
-        return "R" if 1 not in results or len(results) > 1 else None
+        result = run_remote(self.log, self._hosts, command, timeout=10)
+        # Return "R" if processes were found running on any hosts
+        return "R" if result.passed_hosts else None
 
     def run(self, raise_exception=None):
         """Run the command.
