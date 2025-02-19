@@ -24,7 +24,7 @@ from . import DAOS_MAGIC, DaosClient, torch_shim
 ITER_BATCH_SIZE = 32
 READDIR_BATCH_SIZE = 128
 PARALLEL_SCAN_WORKERS = 16
-DIR_CACHE_SIZE = 256
+DIR_CACHE_SIZE = 64 * 1024
 
 
 def transform_fn_default(data):
