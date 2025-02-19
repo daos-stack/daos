@@ -708,6 +708,7 @@ kv_get(daos_handle_t oh, daos_size_t size)
 	/** verify that we got the sum of all integers from 1 to deadline_count */
 	if (res != deadline_count * (deadline_count + 1) / 2)
 		rc = -DER_MISMATCH;
+
 	finish_progress();
 	return rc;
 }
