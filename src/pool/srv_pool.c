@@ -5968,7 +5968,7 @@ __ds_pool_mark_upgrade_completed(uuid_t pool_uuid, struct pool_svc *svc, int rc)
 	struct rdb_tx			tx;
 	d_iov_t				value;
 	uint32_t			upgrade_status;
-	uint32_t			global_version;
+	uint32_t			global_version = DAOS_POOL_GLOBAL_VERSION;
 	uint32_t			obj_version;
 	int				rc1;
 	daos_prop_t			*prop = NULL;
@@ -5989,12 +5989,25 @@ __ds_pool_mark_upgrade_completed(uuid_t pool_uuid, struct pool_svc *svc, int rc)
 	if (rc1)
 		D_GOTO(out_tx, rc1);
 
+	if (rc != 0) {
+		/*
+		 * Currently, the upgrade global version may have not been updated yet, if
+		 * pool_upgrade_props has encountered an error.
+		 */
+		d_iov_set(&value, &global_version, sizeof(global_version));
+		rc1 = rdb_tx_update(&tx, &svc->ps_root, &ds_pool_prop_upgrade_global_version,
+				    &value);
+		if (rc1) {
+			DL_ERROR(rc1, "failed to write upgrade global version prop");
+			D_GOTO(out_tx, rc1);
+		}
+	}
+
 	/*
 	 * only bump global version and connectable properties
 	 * if upgrade succeed.
 	 */
 	if (rc == 0) {
-		global_version = DAOS_POOL_GLOBAL_VERSION;
 		d_iov_set(&value, &global_version, sizeof(global_version));
 		rc1 = rdb_tx_update(&tx, &svc->ps_root,
 				    &ds_pool_prop_global_version, &value);
