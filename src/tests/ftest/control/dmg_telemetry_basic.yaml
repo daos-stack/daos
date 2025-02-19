@@ -16,6 +16,12 @@ server_config:
           class: ram
           scm_mount: /mnt/daos
   system_ram_reserved: 1
+  telemetry_config:
+    secure_mode: !mux
+      case1:
+        telemetry_mode: true
+      case2:
+        telemetry_mode: false
 pool:
   scm_size: 2G
 container:

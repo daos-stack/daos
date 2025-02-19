@@ -1048,7 +1048,8 @@ class YamlCommand(SubProcessCommand):
     def copy_telemetry_root_certificates(self, source, destination, hosts):
         """Copy telemetry certificates files from the source to the destination hosts.
         Args:
-            source (str): source of the certificate files.
+            source (str) : source of the certificate files.
+            destination (str): copy file destination dir.
             hosts (NodeSet): list of the destination hosts.
         """
         certfiles = ["daosTelemetryCA.crt", "daosTelemetryCA.key"]
@@ -1071,6 +1072,10 @@ class YamlCommand(SubProcessCommand):
             hosts (NodeSet): list of the destination hosts.
             user (User): User permission set on telemetry certificate file.
                          For server, it's daos_server and for client it's daos_agent.
+            destination (str): Generate telemetry certificates in to directory.
+
+        Raises:
+            CommandFailure: if there is an error running script on remote machine.
         """
         certgen_dir = os.path.abspath(
             os.path.join(os.getcwd(), "scripts"))
@@ -1079,7 +1084,8 @@ class YamlCommand(SubProcessCommand):
         self.log.debug("Generating the telemetry certificate command %s:", command)
         result = run_remote(self.log, hosts, command, 30)
         if not result.passed:
-            self.log.info("    WARNING: command %s failed", command)
+            raise CommandFailure(
+                f"ERROR: Failed to generate the secure certificate {result.failed_hosts}")
 
     def copy_configuration(self, hosts):
         """Copy the yaml configuration file to the hosts.

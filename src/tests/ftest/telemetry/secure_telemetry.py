@@ -29,7 +29,6 @@ class SecureClientTelemetry(TestWithClientTelemetry):
         :avocado: tags=telemetry
         :avocado: tags=SecureClientTelemetry,test_secure_client_metrics
         """
-        self.secure_telemetry_setup()
         # create pool and container
         pool = self.get_pool(connect=True)
         container = self.get_container(pool=pool)

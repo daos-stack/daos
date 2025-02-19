@@ -230,12 +230,13 @@ class DaosServerManager(SubprocessManager):
         self.dmg.hostlist = hosts
 
     def prepare_telemetry_certificate(self):
-        # SAMIR
+        """Prepare Telemetry certificate"""
         self.manager.job.copy_telemetry_root_certificates(get_log_file("daosTelemetryCA"),
                                                           self.telemetry_certificate_dir,
                                                           self._hosts)
-        self.manager.job.generate_telemetry_server_certificates(
-            self._hosts, "daos_server", self.telemetry_certificate_dir)
+        self.manager.job.generate_telemetry_server_certificates(self._hosts,
+                                                                "daos_server",
+                                                                self.telemetry_certificate_dir)
 
     def prepare(self, storage=True):
         """Prepare to start daos_server.
