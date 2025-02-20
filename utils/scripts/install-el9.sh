@@ -36,6 +36,7 @@ dnf --nodocs install \
     java-1.8.0-openjdk \
     json-c-devel \
     libaio-devel \
+    libasan \
     libcmocka-devel \
     libevent-devel \
     libipmctl-devel \
