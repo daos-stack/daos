@@ -39,7 +39,6 @@ type httpGetter interface {
 	retryer
 	getURL() *url.URL
 	getBody(context.Context) ([]byte, error)
-	getAllowInsecure() bool
 }
 
 type httpReq struct {

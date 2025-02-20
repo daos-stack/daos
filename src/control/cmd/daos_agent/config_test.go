@@ -134,8 +134,8 @@ control_log_mask: debug
 transport_config:
   allow_insecure: true
 telemetry_config:
-  allow_insecure: false
   https_cert: ""
+  https_key: "valid_key"
 `)
 
 	telemetryWithoutHttpsKey := test.CreateTestFile(t, dir, `
@@ -148,7 +148,7 @@ control_log_mask: debug
 transport_config:
   allow_insecure: true
 telemetry_config:
-  allow_insecure: false
+  https_cert: "valid_crt"
   https_key: ""
 `)
 
@@ -182,11 +182,11 @@ telemetry_config:
 		},
 		"telemetry with secure mode with no server certificate": {
 			path:   telemetryWithoutHttpsCert,
-			expErr: errors.New("For secure mode, https_cert and https_key required under telemetry_config"),
+			expErr: errors.New("For secure mode, https_cert and https_key both required"),
 		},
 		"telemetry with secure mode with no server key": {
 			path:   telemetryWithoutHttpsKey,
-			expErr: errors.New("For secure mode, https_cert and https_key required under telemetry_config"),
+			expErr: errors.New("For secure mode, https_cert and https_key both required"),
 		},
 		"without optional items": {
 			path: withoutOptCfg,

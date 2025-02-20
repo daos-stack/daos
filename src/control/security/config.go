@@ -121,6 +121,7 @@ type TelemetryConfig struct {
 // certificate usage and specifying certificates located under /etc/daos/certs.
 func DefaultClientTelemetryConfig() *TelemetryConfig {
 	return &TelemetryConfig{
+		Port:      9191,
 		Enabled:   false,
 		HttpsCert: "",
 		HttpsKey:  "",

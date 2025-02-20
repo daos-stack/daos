@@ -107,6 +107,14 @@ func (c *Config) Validate() error {
 		return errors.New("cannot specify both exclude_fabric_ifaces and include_fabric_ifaces")
 	}
 
+	if len(c.TelemetryConfig.HttpsCert) == 0 && len(c.TelemetryConfig.HttpsKey) > 0 {
+		return errors.New("For secure mode, https_cert and https_key both required")
+	}
+
+	if len(c.TelemetryConfig.HttpsCert) > 0 && len(c.TelemetryConfig.HttpsKey) == 0 {
+		return errors.New("For secure mode, https_cert and https_key both required")
+	}
+
 	return nil
 }
 
