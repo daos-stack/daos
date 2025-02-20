@@ -96,6 +96,8 @@ dump_opt(crt_init_options_t *opt)
 		D_INFO("thread mode single is set\n");
 	if (opt->cio_progress_busy)
 		D_INFO("progress busy mode is set\n");
+	if (opt->cio_mem_device)
+		D_INFO("memory device mode is set\n");
 }
 
 static int
@@ -207,6 +209,14 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider, bool p
 		bool progress_busy = false;
 		crt_env_get(D_PROGRESS_BUSY, &progress_busy);
 		prov_data->cpg_progress_busy = progress_busy;
+	}
+
+	if (opt && opt->cio_mem_device) {
+		prov_data->cpg_mem_device = opt->cio_mem_device;
+	} else {
+		bool mem_device = false;
+		crt_env_get(D_MEM_DEVICE, &mem_device);
+		prov_data->cpg_mem_device = mem_device;
 	}
 
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
