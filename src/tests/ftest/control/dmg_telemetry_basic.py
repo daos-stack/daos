@@ -91,12 +91,9 @@ class TestWithTelemetryBasic(TestWithTelemetry):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
-        :avocado: tags=control,telemetry,container
+        :avocado: tags=control,telemetry,container,secure_telemetry
         :avocado: tags=TestWithTelemetryBasic,test_container_telemetry
         """
-        if self.params.get("telemetry_mode", '/run/server_config/*'):
-            self.secure_server_telemetry_setup()
-
         container_qty = self.params.get("container_qty", "/run/test/*", 1)
         open_close_qty = self.params.get("open_close_qty", "/run/test/*", 2)
         self.add_pool(connect=False)

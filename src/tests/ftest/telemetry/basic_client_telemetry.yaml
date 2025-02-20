@@ -27,9 +27,9 @@ agent_config:
     telemetry_enabled: true
     secure_mode: !mux
       case1:
-        telemetry_mode: true
+        telemetry_secure_mode: true
       case2:
-        telemetry_mode: false
+        telemetry_secure_mode: false
 
 pool:
   scm_size: 2G

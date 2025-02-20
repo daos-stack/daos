@@ -27,6 +27,10 @@ class TestWithTelemetry(TestWithServers):
         self.telemetry = TelemetryUtils(
             self.get_dmg_command(), self.server_managers[0].hosts)
 
+        # Setup Secure Server mode
+        if self.params.get("telemetry_secure_mode", '/run/server_config/*'):
+            self.secure_server_telemetry_setup()
+
     def compare_lists(self, expected, actual, indent, prefix, description):
         """Compare two lists.
 
@@ -268,7 +272,7 @@ class TestWithTelemetry(TestWithServers):
         return total
 
     def secure_server_telemetry_setup(self):
-        """ Setup the secure server certificate for telemetry."""
+        """ Setup secure server certificate for telemetry."""
         self.log.info("Secure Server Telemetry Setup start")
 
         # Create the Certificate
@@ -307,7 +311,7 @@ class TestWithClientTelemetry(TestWithTelemetry):
             self.get_dmg_command(), self.server_managers[0].hosts, self.hostlist_clients)
 
         # Setup Secure Agent mode
-        if self.params.get("telemetry_mode", '/run/agent_config/*'):
+        if self.params.get("telemetry_secure_mode", '/run/agent_config/*'):
             self.secure_client_telemetry_setup()
 
     def verify_client_telemetry_list(self, with_pools=False):
@@ -332,7 +336,7 @@ class TestWithClientTelemetry(TestWithTelemetry):
         self.log.info("Test PASSED")
 
     def secure_client_telemetry_setup(self):
-        """ Setup the secure client certificate for telemetry."""
+        """ Setup secure client certificate for telemetry."""
         self.log.info("Secure Client Telemetry Setup start")
 
         # Create the Certificate

@@ -4,6 +4,8 @@ hosts:
 timeouts:
   test_telemetry_list: 60
   test_container_telemetry: 230
+setup:
+  start_servers_once: False  
 server_config:
   name: daos_server
   engines_per_host: 1
@@ -19,9 +21,9 @@ server_config:
   telemetry_config:
     secure_mode: !mux
       case1:
-        telemetry_mode: true
+        telemetry_secure_mode: true
       case2:
-        telemetry_mode: false
+        telemetry_secure_mode: false
 pool:
   scm_size: 2G
 container:
