@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -43,13 +44,6 @@ class EcodIorHardRebuild(ErasureCodeIor):
         # Kill last server rank
         self.rank_to_kill = [self.server_count - 1]
 
-        # Run only object type which matches the server count and remove other objects
-        tmp_obj_class = []
-        for oclass in self.obj_class:
-            if oclass[1] == self.server_count:
-                tmp_obj_class = oclass
-        self.obj_class = [tmp_obj_class]
-
         # Write IOR data set with different EC object. kill single server while IOR Write phase
         # is in progress.
         self.ior_write_dataset()
@@ -71,4 +65,6 @@ class EcodIorHardRebuild(ErasureCodeIor):
         self.rank_to_kill = [self.server_count - 2]
         # Read IOR data and verify for EC object again EC data was written with +2 parity so after
         # killing Two servers data should be intact and no data corruption observed.
-        self.ior_read_dataset(parity=2)
+        self.ior_read_dataset()
+
+        # TODO kill a third rank?? But write or read??

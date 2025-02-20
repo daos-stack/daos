@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -31,8 +32,11 @@ class EcodOfflineRebuild(ErasureCodeIor):
         # Write IOR data set with different EC object and different sizes
         self.ior_write_dataset()
 
-        # Kill the last server rank
-        self.server_managers[0].stop_ranks([self.server_count - 1], self.d_log, force=True)
+        # TODO the description of the test does not match what it is doing.
+        # Need to figure out the expectation here
+
+        # Stop a random rank
+        self.server_managers[0].stop_random_rank(self.d_log, force=True)
 
         # Wait for rebuild to complete
         self.pool.wait_for_rebuild_to_start()
@@ -42,8 +46,8 @@ class EcodOfflineRebuild(ErasureCodeIor):
         # written before killing the single server
         self.ior_read_dataset()
 
-        # Kill the another server rank
-        self.server_managers[0].stop_ranks([self.server_count - 2], self.d_log, force=True)
+        # Stop another random rank
+        self.server_managers[0].stop_random_rank(self.d_log, force=True)
 
         # Wait for rebuild to complete
         self.pool.wait_for_rebuild_to_start()

@@ -1,9 +1,11 @@
 '''
   (C) Copyright 2021-2022 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from ec_utils import ErasureCodeIor
+from oclass_utils import extract_redundancy_factor
 
 
 class EcodOnlineMultiTargetFail(ErasureCodeIor):
@@ -66,9 +68,11 @@ class EcodOnlineMultiTargetFail(ErasureCodeIor):
         :avocado: tags=ec,ec_array,ec_online_rebuild,rebuild,ec_fault,ec_multiple_failure
         :avocado: tags=EcodOnlineMultiTargetFail,test_ec_multiple_targets_on_diff_ranks
         """
-        # Kill Two targets from different ranks
-        self.pool_exclude[2] = "2"
-        self.pool_exclude[3] = "3"
+        # Exclude a number of targets equal to the object RF, each from a different rank
+        num_ranks_to_kill = extract_redundancy_factor(self.obj_class[0][0])
+        num_targets = self.server_managers[-1].get_config_value("targets")
+        for rank in self.random.sample(list(self.server_managers[0].ranks), k=num_ranks_to_kill):
+            self.pool_exclude[rank] = str(self.random.choice(range(num_targets)))
         self.run_ior_cascade_failure()
 
     def test_ec_single_target_rank_failure(self):
@@ -85,7 +89,7 @@ class EcodOnlineMultiTargetFail(ErasureCodeIor):
         :avocado: tags=EcodOnlineMultiTargetFail,test_ec_single_target_rank_failure
         """
         # Kill One server rank
-        self.rank_to_kill = [self.server_count - 1]
+        self.rank_to_kill = self.random.sample(list(self.server_managers[0].ranks), k=1)
         # Kill single target from single rank
         self.pool_exclude[3] = "3"
         self.run_ior_cascade_failure()

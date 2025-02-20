@@ -1,9 +1,11 @@
 '''
   (C) Copyright 2021-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from ec_utils import ErasureCodeIor
+from oclass_utils import extract_redundancy_factor
 
 
 class EcodOnlineMultiRankFail(ErasureCodeIor):
@@ -32,8 +34,10 @@ class EcodOnlineMultiRankFail(ErasureCodeIor):
         :avocado: tags=ec,ec_online_rebuild,rebuild,ec_fault,ec_multiple_failure
         :avocado: tags=EcodOnlineMultiRankFail,test_ec_multiple_rank_failure
         """
-        # Kill Two server ranks
-        self.rank_to_kill = [self.server_count - 1, self.server_count - 3]
+        # Kill a number of ranks equal to the object RF
+        num_ranks_to_kill = extract_redundancy_factor(self.obj_class[0][0])
+        self.rank_to_kill = self.random.sample(
+            list(self.server_managers[0].ranks), k=num_ranks_to_kill)
 
         # Write IOR data set with different EC object. kill rank, targets or mix of both while IOR
         # Write phase is in progress.
@@ -45,7 +49,6 @@ class EcodOnlineMultiRankFail(ErasureCodeIor):
         self.set_online_rebuild = False
 
         # Read IOR data and verify for EC object again
-        # EC data was written with +2 parity so after killing ranks of targets data should be
-        # intact and no data corruption observed.
+        # After killing ranks of targets data should be intact and no data corruption observed.
         self.log_step(f"Read datasets using IOR after killing rank {self.rank_to_kill}")
-        self.ior_read_dataset(parity=2)
+        self.ior_read_dataset(parity=num_ranks_to_kill)
