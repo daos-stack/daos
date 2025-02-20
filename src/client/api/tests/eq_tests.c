@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1257,7 +1258,7 @@ eq_ut_setup(void **state)
 		return rc;
 	}
 
-	rc = daos_eq_lib_init(daos_crt_init_opt_get(false, 1));
+	rc = daos_eq_lib_init(daos_crt_init_opt_get(false, 1, false));
 	if (rc != 0) {
 		print_error("Failed daos_eq_lib_init: %d\n", rc);
 		return rc;

@@ -925,7 +925,7 @@ crt_hg_ctx_init_tm(struct crt_hg_context *hg_ctx, int idx)
 		return;
 	}
 
-	if (!crt_hgdata.cg_use_sensors)
+	if (!crt_gdata.cg_use_sensors)
 		return;
 
 	prov    = crt_provider_name_get(hg_ctx->chc_provider);

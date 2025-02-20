@@ -647,12 +647,12 @@ daos_hhash_traverse(int type, daos_hhash_traverse_cb_t cb, void *arg)
  */
 static crt_init_options_t daos_crt_init_opt;
 crt_init_options_t *
-daos_crt_init_opt_get(bool server, int ctx_nr)
+daos_crt_init_opt_get(bool server, int ctx_nr, bool client_metrics)
 {
 	uint32_t	limit = 0;
 
 	/** enable statistics on the server side */
-	daos_crt_init_opt.cio_use_sensors = server || daos_client_metric;
+	daos_crt_init_opt.cio_use_sensors = server || client_metrics;
 
 	/** configure cart for maximum bulk threshold */
 	d_getenv_uint32_t("DAOS_RPC_SIZE_LIMIT", &limit);
