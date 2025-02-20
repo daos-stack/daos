@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2025 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -363,32 +363,32 @@ ut_pool(void **state)
 
 	for (i = 0; i < 6; i++) {
 		st = (i < 4) ? SMD_DEV_TYPE_DATA : SMD_DEV_TYPE_DATA + i - 3;
-		rc = smd_pool_add_tgt(id1, i, i << 10, st, 100, 0);
+		rc = smd_pool_add_tgt(id1, i, i << 10, st, 100, 0, false);
 		assert_rc_equal(rc, 0);
 
 		if (st == SMD_DEV_TYPE_META)
-			rc = smd_pool_add_tgt(id2, i, i << 20, st, 200, 50);
+			rc = smd_pool_add_tgt(id2, i, i << 20, st, 200, 50, false);
 		else
-			rc = smd_pool_add_tgt(id2, i, i << 20, st, 200, 0);
+			rc = smd_pool_add_tgt(id2, i, i << 20, st, 200, 0, false);
 		assert_rc_equal(rc, 0);
 	}
 
-	rc = smd_pool_add_tgt(id1, 0, 5000, SMD_DEV_TYPE_DATA, 100, 0);
+	rc = smd_pool_add_tgt(id1, 0, 5000, SMD_DEV_TYPE_DATA, 100, 0, false);
 	assert_rc_equal(rc, -DER_EXIST);
 
-	rc = smd_pool_add_tgt(id1, 4, 4 << 10, SMD_DEV_TYPE_DATA, 200, 0);
+	rc = smd_pool_add_tgt(id1, 4, 4 << 10, SMD_DEV_TYPE_DATA, 200, 0, false);
 	assert_rc_equal(rc, -DER_INVAL);
 
-	rc = smd_pool_add_tgt(id1, 4, 5000, SMD_DEV_TYPE_META, 100, 0);
+	rc = smd_pool_add_tgt(id1, 4, 5000, SMD_DEV_TYPE_META, 100, 0, false);
 	assert_rc_equal(rc, -DER_EXIST);
 
-	rc = smd_pool_add_tgt(id1, 0, 4 << 10, SMD_DEV_TYPE_META, 200, 0);
+	rc = smd_pool_add_tgt(id1, 0, 4 << 10, SMD_DEV_TYPE_META, 200, 0, false);
 	assert_rc_equal(rc, -DER_INVAL);
 
-	rc = smd_pool_add_tgt(id1, 5, 5000, SMD_DEV_TYPE_WAL, 100, 0);
+	rc = smd_pool_add_tgt(id1, 5, 5000, SMD_DEV_TYPE_WAL, 100, 0, false);
 	assert_rc_equal(rc, -DER_EXIST);
 
-	rc = smd_pool_add_tgt(id1, 0, 4 << 10, SMD_DEV_TYPE_WAL, 200, 0);
+	rc = smd_pool_add_tgt(id1, 0, 4 << 10, SMD_DEV_TYPE_WAL, 200, 0, false);
 	assert_rc_equal(rc, -DER_INVAL);
 
 	rc = smd_pool_get_info(id1, &pool_info);
