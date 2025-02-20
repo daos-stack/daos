@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -651,7 +652,7 @@ daos_crt_init_opt_get(bool server, int ctx_nr)
 	uint32_t	limit = 0;
 
 	/** enable statistics on the server side */
-	daos_crt_init_opt.cio_use_sensors = server;
+	daos_crt_init_opt.cio_use_sensors = server || daos_client_metric;
 
 	/** configure cart for maximum bulk threshold */
 	d_getenv_uint32_t("DAOS_RPC_SIZE_LIMIT", &limit);
