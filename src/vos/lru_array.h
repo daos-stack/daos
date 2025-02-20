@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -216,7 +217,8 @@ lrua_lookup_idx(struct lru_array *array, uint32_t idx, uint64_t key,
 
 	entry = &sub->ls_table[ent_idx];
 	if (entry->le_key == key) {
-		if (touch_mru && !array->la_evicting) {
+		if (touch_mru && !array->la_evicting &&
+		    !(array->la_flags & LRU_FLAG_EVICT_MANUAL)) {
 			/** Only make mru if we are not evicting it */
 			lrua_move_to_mru(array, sub, entry, ent_idx);
 		}
