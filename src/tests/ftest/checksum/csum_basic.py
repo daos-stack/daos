@@ -49,7 +49,7 @@ class CsumContainerValidation(TestWithServers):
         obj.open()
         ioreq = IORequest(self.context, container.container, obj, objtype=4)
 
-        self.log_step("Writing the Single Dataset")
+        self.log_step("Write single dataset")
         record_index = 0
         for dkey in range(no_of_dkeys):
             for akey in range(no_of_akeys):
@@ -64,7 +64,7 @@ class CsumContainerValidation(TestWithServers):
                 if record_index == len(record_length):
                     record_index = 0
 
-        self.log_step("Single Dataset Verification -- Started")
+        self.log_step("Verify single dataset")
         record_index = 0
         for dkey in range(no_of_dkeys):
             for akey in range(no_of_akeys):
