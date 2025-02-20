@@ -15,7 +15,6 @@ engines:
       - DAOS_STRICT_SHUTDOWN=1
       - DAOS_TARGET_OVERSUBSCRIBE=1
       - ABT_STACK_OVERFLOW_CHECK=mprotect
-      - PMEMOBJ_CONF='sds.at_create=0'
     storage:
       -
         class: ram
