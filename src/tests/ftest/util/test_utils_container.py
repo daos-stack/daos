@@ -457,11 +457,10 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
 
     @fail_on(DaosApiError)
     @fail_on(CommandFailure)
-    def create(self, con_in=None, query_id=None):
+    def create(self, query_id=None):
         """Create a container.
 
         Args:
-            con_in (optional): to be defined. Defaults to None.
             query_id (str, optional): container uuid or label which if specified will be used to
                 find an existing container through a daos query. Defaults to None which will use a
                 create command to populate this object.
@@ -497,16 +496,8 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
 
             # Refer daos_api for setting input params for DaosContainer.
             cop = self.input_params.get_con_create_params()
-            if con_in is not None:
-                cop.type = con_in[0]
-                cop.enable_chksum = con_in[1]
-                cop.srv_verify = con_in[2]
-                cop.chksum_type = con_in[3]
-                cop.chunk_size = con_in[4]
-                cop.rd_lvl = con_in[5]
-            else:
-                # Default to RANK fault domain (rd_lvl:1) when not specified
-                cop.rd_lvl = ctypes.c_uint64(1)
+            # Default to RANK fault domain (rd_lvl:1)
+            cop.rd_lvl = ctypes.c_uint64(1)
 
             kwargs["con_prop"] = cop
 

@@ -34,17 +34,14 @@ class CsumContainerValidation(TestWithServers):
         :avocado: tags=checksum
         :avocado: tags=CsumContainerValidation,test_single_object_with_checksum
         """
-        no_of_dkeys = self.params.get("no_of_dkeys", '/run/dkeys/*')[0]
-        no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')[0]
+        no_of_dkeys = self.params.get("no_of_dkeys", '/run/dkeys/*')
+        no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')
         record_length = self.params.get("length", '/run/record/*')
 
         pool = add_pool(self, connect=False)
         pool.connect(2)
 
-        enable_checksum = self.params.get("enable_checksum", '/run/container/*')
-        container = add_container(self, pool, create=False)
-        container.input_params.enable_chksum = enable_checksum
-        container.create()
+        container = add_container(self, pool)
         container.open()
 
         obj = DaosObj(self.context, container.container)

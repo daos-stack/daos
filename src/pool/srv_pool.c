@@ -5968,7 +5968,7 @@ __ds_pool_mark_upgrade_completed(uuid_t pool_uuid, struct pool_svc *svc, int rc)
 	struct rdb_tx			tx;
 	d_iov_t				value;
 	uint32_t			upgrade_status;
-	uint32_t			global_version;
+	uint32_t			global_version = DAOS_POOL_GLOBAL_VERSION;
 	uint32_t			obj_version;
 	int				rc1;
 	daos_prop_t			*prop = NULL;
@@ -5989,12 +5989,25 @@ __ds_pool_mark_upgrade_completed(uuid_t pool_uuid, struct pool_svc *svc, int rc)
 	if (rc1)
 		D_GOTO(out_tx, rc1);
 
+	if (rc != 0) {
+		/*
+		 * Currently, the upgrade global version may have not been updated yet, if
+		 * pool_upgrade_props has encountered an error.
+		 */
+		d_iov_set(&value, &global_version, sizeof(global_version));
+		rc1 = rdb_tx_update(&tx, &svc->ps_root, &ds_pool_prop_upgrade_global_version,
+				    &value);
+		if (rc1) {
+			DL_ERROR(rc1, "failed to write upgrade global version prop");
+			D_GOTO(out_tx, rc1);
+		}
+	}
+
 	/*
 	 * only bump global version and connectable properties
 	 * if upgrade succeed.
 	 */
 	if (rc == 0) {
-		global_version = DAOS_POOL_GLOBAL_VERSION;
 		d_iov_set(&value, &global_version, sizeof(global_version));
 		rc1 = rdb_tx_update(&tx, &svc->ps_root,
 				    &ds_pool_prop_global_version, &value);
@@ -6187,11 +6200,20 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 		switch (upgrade_status) {
 		case DAOS_UPGRADE_STATUS_NOT_STARTED:
 		case DAOS_UPGRADE_STATUS_COMPLETED:
-			if ((upgrade_global_ver < DAOS_POOL_GLOBAL_VERSION &&
-			     dmg_upgrade_cmd) || DAOS_FAIL_CHECK(DAOS_FORCE_OBJ_UPGRADE))
+			if (DAOS_FAIL_CHECK(DAOS_FORCE_OBJ_UPGRADE)) {
 				D_GOTO(out_upgrade, rc = 0);
-			else
+			} else if (upgrade_global_ver < DAOS_POOL_GLOBAL_VERSION &&
+				   dmg_upgrade_cmd) {
+				if (DAOS_POOL_GLOBAL_VERSION - upgrade_global_ver == 1)
+					D_GOTO(out_upgrade, rc = 0);
+				D_ERROR(DF_UUID ": upgrading pool %u -> %u\n is unsupported"
+						" please upgrade pool to %u firstly\n",
+					DP_UUID(svc->ps_uuid), upgrade_global_ver,
+					DAOS_POOL_GLOBAL_VERSION, upgrade_global_ver + 1);
+				D_GOTO(out_tx, rc = -DER_NOTSUPPORTED);
+			} else {
 				D_GOTO(out_tx, rc = 0);
+			}
 			break;
 		case DAOS_UPGRADE_STATUS_FAILED:
 			if (upgrade_global_ver < DAOS_POOL_GLOBAL_VERSION) {

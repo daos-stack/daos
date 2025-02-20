@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2119,28 +2120,6 @@ int crt_group_view_create(crt_group_id_t grpid, crt_group_t **ret_grp);
  *                              on failure.
  */
 int crt_group_view_destroy(crt_group_t *grp);
-
-/**
- * Specify rank to be a PSR for the provided group
- *
- * \param[in] grp               Group handle
- * \param[in] rank              Rank to set as PSR
- *
- * \return                      DER_SUCCESS on success, negative value
- *                              on failure.
- */
-int crt_group_psr_set(crt_group_t *grp, d_rank_t rank);
-
-/**
- * Specify list of ranks to be a PSRs for the provided group
- *
- * \param[in] grp               Group handle
- * \param[in] rank_list         Ranks to set as PSRs
- *
- * \return                      DER_SUCCESS on success, negative value
- *                              on failure.
- */
-int crt_group_psrs_set(crt_group_t *grp, d_rank_list_t *rank_list);
 
 /**
  * Add rank to the specified primary group.
