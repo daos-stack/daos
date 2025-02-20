@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -411,7 +412,7 @@ dtx_req_list_send(struct dtx_common_args *dca, bool is_reentrance)
 		dca->dca_drr->drr_result = 0;
 
 		if (unlikely(dra->dra_opc == DTX_COMMIT && dca->dca_i == 0 &&
-			     DAOS_FAIL_CHECK(DAOS_DTX_FAIL_COMMIT)))
+			     DAOS_FAIL_CHECK(DAOS_DTX_PARTIAL_COMMIT_P1)))
 			dtx_req_send(dca->dca_drr, 1);
 		else
 			dtx_req_send(dca->dca_drr, dca->dca_epoch);
