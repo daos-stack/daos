@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -81,7 +82,7 @@ dump_opt(crt_init_options_t *opt)
 	D_INFO("interface = %s\n", opt->cio_interface);
 	D_INFO("domain = %s\n", opt->cio_domain);
 	D_INFO("port = %s\n", opt->cio_port);
-	D_INFO("Flags: fi: %d, use_credits: %d, use_esnsors: %d\n", opt->cio_fault_inject,
+	D_INFO("Flags: fi: %d, use_credits: %d, use_sensors: %d\n", opt->cio_fault_inject,
 	       opt->cio_use_credits, opt->cio_use_sensors);
 
 	if (opt->cio_use_expected_size)
@@ -340,12 +341,12 @@ static int data_init(int server, crt_init_options_t *opt)
 		credits = CRT_MAX_CREDITS_PER_EP_CTX;
 	crt_gdata.cg_credit_ep_ctx = credits;
 
-	/** Enable statistics only for the server side and if requested */
-	if (opt && opt->cio_use_sensors && server) {
-		int	ret;
+	/** enable sensors if requested */
+	crt_gdata.cg_use_sensors = (opt && opt->cio_use_sensors);
 
-		/** enable sensors */
-		crt_gdata.cg_use_sensors = true;
+	/** Enable statistics only for the server side and if requested */
+	if (crt_gdata.cg_use_sensors && server) {
+		int	ret;
 
 		/** set up the global sensors */
 		ret = d_tm_add_metric(&crt_gdata.cg_uri_self, D_TM_COUNTER,
