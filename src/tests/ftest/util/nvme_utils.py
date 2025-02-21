@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -334,7 +335,7 @@ class ServerFillUp(IorTestBase):
         self.pool.exclude(rank, str(target))
 
     def start_ior_load(self, storage='NVMe', operation="WriteRead", percent=1, create_cont=True,
-                       log_file=None):
+                       log_file=None, rank_target_exclusion=None):
         """Fill up the server either SCM or NVMe.
 
         Fill up based on percent amount given using IOR.
@@ -345,6 +346,7 @@ class ServerFillUp(IorTestBase):
             percent (int): % of storage capacity to fil
             create_cont (bool): To create the new container for IOR
             log_file (str, optional): log file. Defaults to None.
+            rank_target_exclusion (dict, optional): mapping of rank to targets for target exclusion
         """
         self.result.clear()
 
