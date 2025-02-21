@@ -355,11 +355,10 @@ df_ll_readdirplus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 static void
 df_ll_getlock(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi, struct flock *lock)
 {
-        struct dfuse_info *dfuse_info = fuse_req_userdata(req);
+	struct dfuse_info *dfuse_info = fuse_req_userdata(req);
 
-        DFUSE_REPLY_ERR_RAW(dfuse_info, req, ENOTSUP);
+	DFUSE_REPLY_ERR_RAW(dfuse_info, req, ENOTSUP);
 }
-
 
 static void
 df_ll_setlock(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi, struct flock *lock,

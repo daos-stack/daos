@@ -779,10 +779,10 @@ do_lowfd(void **state)
 void
 do_flock(void **state)
 {
-	int  len;
-	int  fd;
-	int  rc;
-	char path[512];
+	int          len;
+	int          fd;
+	int          rc;
+	char         path[512];
 	struct flock fl;
 
 	len = snprintf(path, sizeof(path) - 1, "%s/flock_file", test_dir);
@@ -800,7 +800,7 @@ do_flock(void **state)
 	fl.l_start  = 0;
 	fl.l_len    = 0;
 	fl.l_pid    = getpid();
-	rc = fcntl(fd, F_SETLKW, &fl);
+	rc          = fcntl(fd, F_SETLKW, &fl);
 	assert_true(rc == -1);
 	assert_true(errno == ENOTSUP);
 
