@@ -1,6 +1,5 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -797,8 +796,9 @@ server_init(int argc, char *argv[])
 
 	/* initialize the network layer */
 	ctx_nr = dss_ctx_nr_get();
-	rc     = crt_init_opt(daos_sysname, CRT_FLAG_BIT_SERVER,
-			      daos_crt_init_opt_get(true, ctx_nr, false));
+	rc = crt_init_opt(daos_sysname,
+			  CRT_FLAG_BIT_SERVER,
+			  daos_crt_init_opt_get(true, ctx_nr));
 	if (rc)
 		D_GOTO(exit_mod_init, rc);
 	D_INFO("Network successfully initialized\n");

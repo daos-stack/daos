@@ -272,8 +272,8 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
-	/** initialize sensors */
-	if (crt_gdata.cg_use_sensors) {
+	/** initialize sensors for servers */
+	if (crt_gdata.cg_use_sensors && crt_is_service()) {
 		int	ret;
 		char	*prov;
 
