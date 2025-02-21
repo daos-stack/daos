@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -3152,12 +3153,13 @@ btr_node_del_rec(struct btr_context *tcx, struct btr_trace *par_tr,
 		D_DEBUG(DB_TRACE, "Parent trace at=%d, key_nr=%d\n",
 			par_tr->tr_at, par_nd->tn_keyn);
 
+		D_ASSERT(par_tr->tr_at < par_nd->tn_keyn);
+
 		if (par_tr->tr_at == 0) {
 			/* only has sibling on the right side */
 			sib_off = btr_node_child_at(tcx, par_tr->tr_node, 1);
 			sib_on_right = true;
-
-		} else if (par_tr->tr_at == par_nd->tn_keyn) {
+		} else if (par_tr->tr_at == par_nd->tn_keyn - 1) {
 			/* only has sibling on the left side */
 			sib_off = btr_node_child_at(tcx, par_tr->tr_node,
 						     par_tr->tr_at - 1);
