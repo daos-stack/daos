@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2025 Intel Corporation.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -35,6 +35,7 @@ struct dfuse_info {
 	bool                 di_multi_user;
 	bool                 di_wb_cache;
 	bool                 di_read_only;
+	bool                 di_local_flock;
 
 	/* Per process spinlock
 	 * This is used to lock readdir against closedir where they share a readdir handle,
