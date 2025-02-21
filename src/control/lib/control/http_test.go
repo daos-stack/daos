@@ -125,13 +125,12 @@ func TestControl_httpGetBody(t *testing.T) {
 	defaultURL := &url.URL{Host: "testhost"}
 
 	for name, tc := range map[string]struct {
-		url           *url.URL
-		timeout       time.Duration
-		cancelCtx     bool
-		getFn         httpGetFn
-		allowInsecure bool
-		expResult     []byte
-		expErr        error
+		url       *url.URL
+		timeout   time.Duration
+		cancelCtx bool
+		getFn     httpGetFn
+		expResult []byte
+		expErr    error
 	}{
 		"nil url": {
 			expErr: errors.New("nil URL"),
@@ -272,10 +271,6 @@ func (r *mockHTTPGetter) getURL() *url.URL {
 		Scheme: "http",
 		Host:   "testhost",
 	}
-}
-
-func (r *mockHTTPGetter) getAllowInsecure() bool {
-	return true
 }
 
 func (r *mockHTTPGetter) getBody(ctx context.Context) ([]byte, error) {

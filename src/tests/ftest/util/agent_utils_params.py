@@ -104,6 +104,9 @@ class DaosAgentYamlParameters(YamlParameters):
         self.exclude_fabric_ifaces = BasicParameter(None)
         self.cache_expiration = BasicParameter(None)
         self.disable_caching = BasicParameter(None)
+        self.telemetry_port = BasicParameter(None)
+        self.telemetry_enabled = BasicParameter(None)
+        self.telemetry_retain = BasicParameter(None)
         self.access_points = BasicParameter(None, ["localhost"])
 
     def update_log_file(self, name):
