@@ -44,10 +44,6 @@
 #  # default 0 (do not retain telemetry after client exit)
 #  telemetry_retain: 1m
 #
-#  # In order to disable transport security, uncomment and set allow_insecure
-#  # to true. Not recommended for production configurations.
-#  allow_insecure: false
-#
 #  # Server certificate for use in TLS handshakes
 #  # DAOS client is the HTTPS server to open secure telemetry endpoint.
 #  https_cert: /etc/daos/certs/telemetry.crt

@@ -8,7 +8,6 @@ transport_config:
   allow_insecure: true
 
 telemetry_config:
-  allow_insecure: true
   telemetry_port: 9191
 
 engines:

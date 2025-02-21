@@ -424,9 +424,7 @@ func TestServerConfig_MDonSSD_Constructed(t *testing.T) {
 		}).
 		WithControlLogFile("/tmp/daos_server.log").
 		WithTelemetryConfig(&security.TelemetryConfig{
-			Port:      9191,
-			HttpsCert: "/etc/daos/certs/telemetry.crt",
-			HttpsKey:  "/etc/daos/certs/telemetry.key"}).
+			Port: 9191}).
 		WithFabricProvider("ofi+tcp").
 		WithMgmtSvcReplicas("example1", "example2", "example3")
 

@@ -38,10 +38,3 @@
 #  cert: /etc/daos/certs/admin.crt
 #  # Key portion of Admin Certificate
 #  key: /etc/daos/certs/admin.key
-
-## Configuration for telemetry collection commands.
-#
-#telemetry_config:
-#  # In order to enabled transport security, uncomment and set allow_insecure
-#  # to false.
-#  allow_insecure: true
