@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -240,8 +241,7 @@ obj_coll_oper_args_fini(struct coll_oper_args *coa)
 }
 
 static void
-obj_coll_collapse_one(struct coll_oper_args *coa, struct daos_coll_target *dct,
-		      uint32_t *size, bool copy)
+obj_coll_collapse_one(struct coll_oper_args *coa, struct daos_coll_target *dct, bool copy)
 {
 	struct daos_coll_shard	*dcs;
 	uint32_t		 dct_size;
@@ -267,12 +267,10 @@ obj_coll_collapse_one(struct coll_oper_args *coa, struct daos_coll_target *dct,
 		memcpy(&coa->coa_dcts[coa->coa_dct_nr], dct, sizeof(*dct));
 
 	coa->coa_dct_nr++;
-	*size += dct_size;
 }
 
 struct obj_coll_tree_args {
 	struct coll_oper_args	*coa;
-	uint32_t		*size;
 };
 
 static int
@@ -287,7 +285,7 @@ obj_coll_tree_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg)
 		  coa->coa_dct_nr, coa->coa_dct_cap);
 	D_ASSERT(dct->dct_bitmap != NULL);
 
-	obj_coll_collapse_one(coa, dct, octa->size, true);
+	obj_coll_collapse_one(coa, dct, true);
 
 	/* The following members have been migrated into coa->coa_dcts. */
 	dct->dct_bitmap = NULL;
@@ -298,7 +296,7 @@ obj_coll_tree_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg)
 }
 
 static int
-obj_coll_collapse_tree(struct coll_oper_args *coa, uint32_t *size)
+obj_coll_collapse_tree(struct coll_oper_args *coa)
 {
 	struct obj_coll_tree_args	 octa;
 	struct coll_sparse_targets	*tree = coa->coa_tree;
@@ -317,7 +315,6 @@ obj_coll_collapse_tree(struct coll_oper_args *coa, uint32_t *size)
 	coa->coa_max_dct_sz = 0;
 
 	octa.coa = coa;
-	octa.size = size;
 	rc = dbtree_iterate(tree->cst_tree_hdl, DAOS_INTENT_DEFAULT, false,
 			    obj_coll_tree_cb, &octa);
 	if (rc == 0)
@@ -333,16 +330,15 @@ out:
 }
 
 static int
-obj_coll_collapse_array(struct coll_oper_args *coa, uint32_t *size)
+obj_coll_collapse_array(struct coll_oper_args *coa)
 {
 	struct daos_coll_target	*dct;
 	int			 i;
 
-	for (i = 0, *size = 0, coa->coa_dct_nr = 0, coa->coa_max_dct_sz = 0;
-	     i < coa->coa_dct_cap; i++) {
+	for (i = 0, coa->coa_dct_nr = 0, coa->coa_max_dct_sz = 0; i < coa->coa_dct_cap; i++) {
 		dct = &coa->coa_dcts[i];
 		if (dct->dct_bitmap != NULL)
-			obj_coll_collapse_one(coa, dct, size, coa->coa_dct_nr < i);
+			obj_coll_collapse_one(coa, dct, coa->coa_dct_nr < i);
 	}
 
 	/* Reset the other dct slots to avoid double free during cleanup. */
@@ -354,14 +350,14 @@ obj_coll_collapse_array(struct coll_oper_args *coa, uint32_t *size)
 }
 
 static int
-obj_coll_oper_args_collapse(struct coll_oper_args *coa, struct dc_object *obj, uint32_t *size)
+obj_coll_oper_args_collapse(struct coll_oper_args *coa, struct dc_object *obj)
 {
 	int	rc;
 
 	if (coa->coa_sparse)
-		rc = obj_coll_collapse_tree(coa, size);
+		rc = obj_coll_collapse_tree(coa);
 	else
-		rc = obj_coll_collapse_array(coa, size);
+		rc = obj_coll_collapse_array(coa);
 
 	if (rc >= 0) {
 		obj->cob_rank_nr = coa->coa_dct_nr;
@@ -529,13 +525,8 @@ out:
 }
 
 struct obj_coll_punch_cb_args {
-	unsigned char		*cpca_buf;
 	struct dtx_memberships	*cpca_mbs;
 	struct dc_obj_shard	*cpca_shard;
-	crt_bulk_t		*cpca_bulks;
-	crt_proc_t		 cpca_proc;
-	d_sg_list_t		 cpca_sgl;
-	d_iov_t			 cpca_iov;
 };
 
 static int
@@ -543,17 +534,7 @@ dc_obj_coll_punch_cb(tse_task_t *task, void *data)
 {
 	struct obj_coll_punch_cb_args	*cpca = data;
 
-	if (cpca->cpca_bulks != NULL) {
-		if (cpca->cpca_bulks[0] != CRT_BULK_NULL)
-			crt_bulk_free(cpca->cpca_bulks[0]);
-		D_FREE(cpca->cpca_bulks);
-	}
-
-	if (cpca->cpca_proc != NULL)
-		crt_proc_destroy(cpca->cpca_proc);
-
 	D_FREE(cpca->cpca_mbs);
-	D_FREE(cpca->cpca_buf);
 	obj_shard_close(cpca->cpca_shard);
 
 	return 0;
@@ -608,66 +589,6 @@ out:
 }
 
 static int
-dc_obj_coll_punch_bulk(tse_task_t *task, struct coll_oper_args *coa,
-		       struct obj_coll_punch_cb_args *cpca, uint32_t *p_size)
-{
-	/* The proc function may pack more information inside the buffer, enlarge the size a bit. */
-	uint32_t	size = (*p_size * 9) >> 3;
-	uint32_t	used = 0;
-	int		rc = 0;
-	int		i;
-
-again:
-	D_ALLOC(cpca->cpca_buf, size);
-	if (cpca->cpca_buf == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	rc = crt_proc_create(daos_task2ctx(task), cpca->cpca_buf, size, CRT_PROC_ENCODE,
-			     &cpca->cpca_proc);
-	if (rc != 0)
-		goto out;
-
-	for (i = 0; i < coa->coa_dct_nr; i++) {
-		rc = crt_proc_struct_daos_coll_target(cpca->cpca_proc, CRT_PROC_ENCODE,
-						      &coa->coa_dcts[i]);
-		if (rc != 0)
-			goto out;
-	}
-
-	used = crp_proc_get_size_used(cpca->cpca_proc);
-	if (unlikely(used > size)) {
-		crt_proc_destroy(cpca->cpca_proc);
-		cpca->cpca_proc = NULL;
-		D_FREE(cpca->cpca_buf);
-		size = used;
-		goto again;
-	}
-
-	cpca->cpca_iov.iov_buf = cpca->cpca_buf;
-	cpca->cpca_iov.iov_buf_len = used;
-	cpca->cpca_iov.iov_len = used;
-
-	cpca->cpca_sgl.sg_nr = 1;
-	cpca->cpca_sgl.sg_nr_out = 1;
-	cpca->cpca_sgl.sg_iovs = &cpca->cpca_iov;
-
-	rc = obj_bulk_prep(&cpca->cpca_sgl, 1, false, CRT_BULK_RO, task, &cpca->cpca_bulks);
-
-out:
-	if (rc != 0) {
-		if (cpca->cpca_proc != NULL) {
-			crt_proc_destroy(cpca->cpca_proc);
-			cpca->cpca_proc = NULL;
-		}
-		D_FREE(cpca->cpca_buf);
-	} else {
-		*p_size = used;
-	}
-
-	return rc;
-}
-
-static int
 dc_coll_sort_cmp(const void *m1, const void *m2)
 {
 	const struct daos_coll_target	*dct1 = m1;
@@ -693,9 +614,7 @@ dc_obj_coll_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epo
 	struct daos_coll_target		*dct;
 	struct daos_coll_target		 tmp_tgt;
 	struct obj_coll_punch_cb_args	 cpca = { 0 };
-	uint32_t			 tgt_size = 0;
 	uint32_t			 mbs_max_size;
-	uint32_t			 inline_size;
 	uint32_t			 leader = -1;
 	uint32_t			 len;
 	int				 rc;
@@ -711,7 +630,7 @@ dc_obj_coll_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epo
 			goto out;
 	}
 
-	rc = obj_coll_oper_args_collapse(coa, obj, &tgt_size);
+	rc = obj_coll_oper_args_collapse(coa, obj);
 	if (rc != 0)
 		goto out;
 
@@ -782,17 +701,6 @@ gen_mbs:
 	if (rc < 0)
 		goto out;
 
-	inline_size = sizeof(*mbs) + mbs->dm_data_size + sizeof(struct obj_coll_punch_in);
-	D_ASSERTF(inline_size < DAOS_BULK_LIMIT,
-		  "Too much data to be held inside coll punch RPC body: %u vs %u\n",
-		  inline_size, DAOS_BULK_LIMIT);
-
-	if (inline_size + tgt_size >= DAOS_BULK_LIMIT) {
-		rc = dc_obj_coll_punch_bulk(task, coa, &cpca, &tgt_size);
-		if (rc != 0)
-			goto out;
-	}
-
 	cpca.cpca_shard = shard;
 	cpca.cpca_mbs = mbs;
 	rc = tse_task_register_comp_cb(task, dc_obj_coll_punch_cb, &cpca, sizeof(cpca));
@@ -820,7 +728,7 @@ gen_mbs:
 	mbs_max_size = sizeof(*mbs) + mbs->dm_data_size +
 		       sizeof(coa->coa_targets[0]) * coa->coa_max_shard_nr + coa->coa_max_bitmap_sz;
 
-	return dc_obj_shard_coll_punch(shard, spa, mbs, mbs_max_size, cpca.cpca_bulks, tgt_size,
+	return dc_obj_shard_coll_punch(shard, spa, mbs, mbs_max_size,
 				       coa->coa_dcts, coa->coa_dct_nr, coa->coa_max_dct_sz, epoch,
 				       args->flags, auxi->flags, map_ver,
 				       &auxi->map_ver_reply, task);
@@ -832,16 +740,6 @@ out:
 	DL_CDEBUG(rc == 0, DB_IO, DLOG_ERR, rc,
 		  "DAOS_OBJ_RPC_COLL_PUNCH for "DF_OID" map_ver %u, task %p",
 		  DP_OID(obj->cob_md.omd_id), map_ver, task);
-
-	if (cpca.cpca_bulks != NULL) {
-		if (cpca.cpca_bulks[0] != CRT_BULK_NULL)
-			crt_bulk_free(cpca.cpca_bulks[0]);
-		D_FREE(cpca.cpca_bulks);
-	}
-
-	if (cpca.cpca_proc != NULL)
-		crt_proc_destroy(cpca.cpca_proc);
-	D_FREE(cpca.cpca_buf);
 
 	if (shard != NULL)
 		obj_shard_close(shard);
@@ -865,7 +763,7 @@ queue_coll_query_task(tse_task_t *api_task, struct obj_auxi_args *obj_auxi, stru
 	int				 rc = 0;
 	int				 i;
 
-	rc = obj_coll_oper_args_collapse(coa, obj, &tmp);
+	rc = obj_coll_oper_args_collapse(coa, obj);
 	if (rc != 0)
 		goto out;
 
