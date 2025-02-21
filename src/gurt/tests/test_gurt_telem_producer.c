@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -212,7 +213,7 @@ test_timer_snapshot(void **state)
 				     srv_to_cli_node(snapshot2));
 	assert_rc_equal(rc, 0);
 
-	tms3 = d_timediff(tms1, tms2);
+	tms3 = d_timediff(&tms1, &tms2);
 
 	/**
 	 * Just verifies that some amount of time elapsed because it is hard
