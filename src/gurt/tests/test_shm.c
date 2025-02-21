@@ -84,24 +84,24 @@ test_mem(void **state)
 void
 verify_hash(void)
 {
-	int                   rc;
-	char                 *value;
-	struct shm_ht_rec    *link;
-	struct d_shm_ht_head *ht_head_lock;
+	int                  rc;
+	char                *value;
+	struct shm_ht_rec   *link;
+	struct d_shm_ht_loc  ht_lock;
 
 	/* look up hash key in current process */
-	rc = get_shm_ht_with_name(HT_NAME, &ht_head_lock);
+	rc = get_shm_ht_with_name(HT_NAME, &ht_lock);
 	assert_true(rc == 0);
 
-	value = (char *)shm_ht_rec_find(ht_head_lock, KEY_1, strlen(KEY_1), &link);
+	value = (char *)shm_ht_rec_find(&ht_lock, KEY_1, strlen(KEY_1), &link);
 	assert_non_null(value);
 	assert_true(strcmp(value, VAL_1) == 0);
 
-	value = (char *)shm_ht_rec_find(ht_head_lock, KEY_2, strlen(KEY_2), &link);
+	value = (char *)shm_ht_rec_find(&ht_lock, KEY_2, strlen(KEY_2), &link);
 	assert_non_null(value);
 	assert_true(strcmp(value, VAL_2) == 0);
 
-	value = (char *)shm_ht_rec_find(ht_head_lock, KEY_3, strlen(KEY_3), &link);
+	value = (char *)shm_ht_rec_find(&ht_lock, KEY_3, strlen(KEY_3), &link);
 	assert_non_null(value);
 	assert_true(strcmp(value, VAL_3) == 0);
 }
@@ -109,28 +109,28 @@ verify_hash(void)
 void
 verify_hash_by_child(void)
 {
-	int                   rc;
-	char                 *value;
-	struct shm_ht_rec    *link;
-	struct d_shm_ht_head *ht_head_lock;
+	int                 rc;
+	char               *value;
+	struct shm_ht_rec  *link;
+	struct d_shm_ht_loc ht_lock;
 
 	/* look up hash key in child process */
 	rc = shm_init();
 	assert_true(rc == 0);
 	assert_true(shm_inited() == true);
 
-	rc = get_shm_ht_with_name(HT_NAME, &ht_head_lock);
+	rc = get_shm_ht_with_name(HT_NAME, &ht_lock);
 	assert_true(rc == 0);
 
-	value = (char *)shm_ht_rec_find(ht_head_lock, KEY_1, strlen(KEY_1), &link);
+	value = (char *)shm_ht_rec_find(&ht_lock, KEY_1, strlen(KEY_1), &link);
 	assert_non_null(value);
 	assert_true(strcmp(value, VAL_1) == 0);
 
-	value = (char *)shm_ht_rec_find(ht_head_lock, KEY_2, strlen(KEY_2), &link);
+	value = (char *)shm_ht_rec_find(&ht_lock, KEY_2, strlen(KEY_2), &link);
 	assert_non_null(value);
 	assert_true(strcmp(value, VAL_2) == 0);
 
-	value = (char *)shm_ht_rec_find(ht_head_lock, KEY_3, strlen(KEY_3), &link);
+	value = (char *)shm_ht_rec_find(&ht_lock, KEY_3, strlen(KEY_3), &link);
 	assert_non_null(value);
 	assert_true(strcmp(value, VAL_3) == 0);
 
@@ -143,37 +143,37 @@ verify_hash_by_child(void)
 void
 test_hash(void **state)
 {
-	int                   i;
-	int                   rc;
-	int                   status;
-	int                   len;
+	int                 i;
+	int                 rc;
+	int                 status;
+	int                 len;
 	/* the hash table in shared memory */
-	struct d_shm_ht_head *ht_head;
-	struct shm_ht_rec    *link;
-	char                 *value;
-	char                 *argv[3] = {"test_shm", "--verifykv", NULL};
-	char                 *exe_path;
-	pid_t                 pid;
-	char                 *key_set = NULL;
-	struct shm_ht_rec   **link_set;
-	char                 *key_name;
-	bool                  deleted;
+	struct d_shm_ht_loc ht_loc;
+	struct shm_ht_rec  *link;
+	char               *value;
+	char               *argv[3] = {"test_shm", "--verifykv", NULL};
+	char               *exe_path;
+	pid_t               pid;
+	char               *key_set = NULL;
+	struct shm_ht_rec **link_set;
+	char               *key_name;
+	bool                deleted;
 
 	/* create shared memory, create a hash table, insert three keys */
 	rc = shm_init();
 	assert_true(rc == 0);
 	assert_true(shm_inited() == true);
 
-	rc = shm_ht_create(HT_NAME, 8, 16, &ht_head);
+	rc = shm_ht_create(HT_NAME, 8, 16, &ht_loc);
 	assert_true(rc == 0);
 
-	value = shm_ht_rec_find_insert(ht_head, KEY_1, strlen(KEY_1), VAL_1, sizeof(VAL_1), &link);
+	value = shm_ht_rec_find_insert(&ht_loc, KEY_1, strlen(KEY_1), VAL_1, sizeof(VAL_1), &link);
 	assert_non_null(value);
 
-	value = shm_ht_rec_find_insert(ht_head, KEY_2, strlen(KEY_2), VAL_2, sizeof(VAL_2), &link);
+	value = shm_ht_rec_find_insert(&ht_loc, KEY_2, strlen(KEY_2), VAL_2, sizeof(VAL_2), &link);
 	assert_non_null(value);
 
-	value = shm_ht_rec_find_insert(ht_head, KEY_3, strlen(KEY_3), VAL_3, sizeof(VAL_3), &link);
+	value = shm_ht_rec_find_insert(&ht_loc, KEY_3, strlen(KEY_3), VAL_3, sizeof(VAL_3), &link);
 	assert_non_null(value);
 
 	verify_hash();
@@ -194,21 +194,21 @@ test_hash(void **state)
 	free(exe_path);
 
 	/* remove key_1 from ht */
-	deleted = shm_ht_rec_delete(ht_head, KEY_1, strlen(KEY_1));
+	deleted = shm_ht_rec_delete(&ht_loc, KEY_1, strlen(KEY_1));
 	assert_true(deleted);
-	value = shm_ht_rec_find(ht_head, KEY_1, strlen(KEY_1), NULL);
+	value = shm_ht_rec_find(&ht_loc, KEY_1, strlen(KEY_1), NULL);
 	assert_true(value == NULL);
 
 	/* remove key_2 from ht */
-	deleted = shm_ht_rec_delete(ht_head, KEY_2, strlen(KEY_2));
+	deleted = shm_ht_rec_delete(&ht_loc, KEY_2, strlen(KEY_2));
 	assert_true(deleted);
-	value = shm_ht_rec_find(ht_head, KEY_2, strlen(KEY_2), NULL);
+	value = shm_ht_rec_find(&ht_loc, KEY_2, strlen(KEY_2), NULL);
 	assert_true(value == NULL);
 
 	/* remove key_3 from ht */
-	deleted = shm_ht_rec_delete_at(ht_head, link);
+	deleted = shm_ht_rec_delete_at(&ht_loc, link);
 	assert_true(deleted);
-	value = shm_ht_rec_find(ht_head, KEY_3, strlen(KEY_3), &link);
+	value = shm_ht_rec_find(&ht_loc, KEY_3, strlen(KEY_3), &link);
 	assert_true(value == NULL);
 
 	key_set = malloc(MAX_KEY_LEN * NUM_KV);
@@ -220,14 +220,14 @@ test_hash(void **state)
 		key_name = key_set + i * MAX_KEY_LEN;
 		len = snprintf(key_name, MAX_KEY_LEN, "key_%d", i);
 		assert_true(len < (MAX_KEY_LEN - 1));
-		value = shm_ht_rec_find_insert(ht_head, key_name, len, VAL_1, sizeof(VAL_1), &link_set[i]);
+		value = shm_ht_rec_find_insert(&ht_loc, key_name, len, VAL_1, sizeof(VAL_1), &link_set[i]);
 		assert_non_null(value);
 	}
 
 	/* make sure all inserted records exist */
 	for (i = 0; i < NUM_KV; i++) {
 		key_name = key_set + i * MAX_KEY_LEN;
-		value = shm_ht_rec_find(ht_head, key_name, strlen(key_name), &link);
+		value = shm_ht_rec_find(&ht_loc, key_name, strlen(key_name), &link);
 		assert_non_null(value);
 		assert_non_null(link);
 	}
@@ -235,14 +235,14 @@ test_hash(void **state)
 	/* delete ht records with shm_ht_rec_delete() */
 	for (i = 0; i < NUM_KV; i += 2) {
 		key_name = key_set + i * MAX_KEY_LEN;
-		deleted = shm_ht_rec_delete(ht_head, key_name, strlen(key_name));
+		deleted = shm_ht_rec_delete(&ht_loc, key_name, strlen(key_name));
 		assert_true(deleted);
 	}
 
 	/* delete ht records with shm_ht_rec_delete_at() */
 	for (i = 1; i < NUM_KV; i += 2) {
 		key_name = key_set + i * MAX_KEY_LEN;
-		deleted = shm_ht_rec_delete_at(ht_head, link_set[i]);
+		deleted = shm_ht_rec_delete_at(&ht_loc, link_set[i]);
 		assert_true(deleted);
 	}
 
@@ -254,22 +254,22 @@ test_hash(void **state)
 void
 do_lock_mutex_child(bool lock_only)
 {
-	int                   rc;
-	struct shm_ht_rec    *link;
-	struct d_shm_ht_head *ht_head;
-	const char            ht_name[] = "shm_lock_test";
-	const char            key[]     = "mutex";
-	d_shm_mutex_t        *mutex;
+	int                 rc;
+	struct shm_ht_rec  *link;
+	struct d_shm_ht_loc ht_loc;
+	const char          ht_name[] = "shm_lock_test";
+	const char          key[]     = "mutex";
+	d_shm_mutex_t      *mutex;
 
 	/* test lock a mutex in shared memory in a child process */
 	rc = shm_init();
 	assert_true(rc == 0);
 	assert_true(shm_inited() == true);
 
-	rc = get_shm_ht_with_name(ht_name, &ht_head);
+	rc = get_shm_ht_with_name(ht_name, &ht_loc);
 	assert_true(rc == 0);
 
-	mutex = (d_shm_mutex_t *)shm_ht_rec_find(ht_head, key, strlen(key), &link);
+	mutex = (d_shm_mutex_t *)shm_ht_rec_find(&ht_loc, key, strlen(key), &link);
 	assert_true(mutex != NULL);
 
 	shm_mutex_lock(mutex, NULL);
@@ -288,21 +288,21 @@ do_lock_mutex_child(bool lock_only)
 void
 test_lock(void **state)
 {
-	int                   rc;
-	int                   status;
-	d_shm_mutex_t        *mutex;
+	int                 rc;
+	int                 status;
+	d_shm_mutex_t      *mutex;
 	/* the hash table in shared memory */
-	struct d_shm_ht_head *ht_head;
-	const char            ht_name[] = "shm_lock_test";
-	const char            key[]     = "mutex";
-	struct timeval        tm1, tm2;
-	double                dt;
-	struct shm_ht_rec    *link;
-	char                 *argv[3]  = {"test_shm", "--lockmutex", NULL};
-	char                 *argv2[3] = {"test_shm", "--lockonly", NULL};
-	char                 *exe_path;
-	pid_t                 pid;
-	bool                  owner_dead;
+	struct d_shm_ht_loc ht_loc;
+	const char          ht_name[] = "shm_lock_test";
+	const char          key[]     = "mutex";
+	struct timeval      tm1, tm2;
+	double              dt;
+	struct shm_ht_rec  *link;
+	char               *argv[3]  = {"test_shm", "--lockmutex", NULL};
+	char               *argv2[3] = {"test_shm", "--lockonly", NULL};
+	char               *exe_path;
+	pid_t               pid;
+	bool                owner_dead;
 
 	/**
 	 * create shared memory, create a hash table, insert a key whose value is a struct of
@@ -312,11 +312,11 @@ test_lock(void **state)
 	assert_true(rc == 0);
 	assert_true(shm_inited() == true);
 
-	rc = shm_ht_create(ht_name, 8, 16, &ht_head);
+	rc = shm_ht_create(ht_name, 8, 16, &ht_loc);
 	assert_true(rc == 0);
 
 	mutex = (d_shm_mutex_t *)shm_ht_rec_find_insert(
-	    ht_head, key, strlen(key), INIT_KEY_VALUE_MUTEX, sizeof(d_shm_mutex_t), &link);
+	    &ht_loc, key, strlen(key), INIT_KEY_VALUE_MUTEX, sizeof(d_shm_mutex_t), &link);
 	assert_true(mutex != NULL);
 
 	/* start a child process to lock this mutex */
