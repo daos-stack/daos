@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -62,9 +63,10 @@ struct ik_rec {
 	umem_off_t	ir_val_off;
 };
 
-static char	**test_group_args;
-static int	test_group_start;
-static int	test_group_stop;
+struct btr_test_state {
+	int    argc;
+	char **argv;
+};
 
 #define IK_TREE_CLASS	100
 #define POOL_NAME "/mnt/daos/btree-test"
@@ -834,7 +836,6 @@ ik_btr_perf(void **state)
 	D_FREE(arr);
 }
 
-
 static void
 ik_btr_drain(void **state)
 {
@@ -884,52 +885,98 @@ ik_btr_drain(void **state)
 	D_FREE(arr);
 }
 
-static struct option btr_ops[] = {
-	{ "create",	required_argument,	NULL,	'C'	},
-	{ "destroy",	no_argument,		NULL,	'D'	},
-	{ "drain",	no_argument,		NULL,	'e'	},
-	{ "open",	no_argument,		NULL,	'o'	},
-	{ "close",	no_argument,		NULL,	'c'	},
-	{ "update",	required_argument,	NULL,	'u'	},
-	{ "find",	required_argument,	NULL,	'f'	},
-	{ "dyn_tree",	no_argument,		NULL,	't'	},
-	{ "delete",	required_argument,	NULL,	'd'	},
-	{ "del_retain", required_argument,	NULL,	'r'	},
-	{ "query",	no_argument,		NULL,	'q'	},
-	{ "iterate",	required_argument,	NULL,	'i'	},
-	{ "batch",	required_argument,	NULL,	'b'	},
-	{ "perf",	required_argument,	NULL,	'p'	},
-	{ NULL,		0,			NULL,	0	},
-};
+static void
+ik_btr_memory_register(char *pmem_flag)
+{
+	int rc = 0;
+	if (pmem_flag && *pmem_flag != 'p') {
+		fail_msg("Invalid value of -M parameter: %c\n", *pmem_flag);
+	}
+	if (pmem_flag) {
+		D_PRINT("Using pmem\n");
+		rc = utest_pmem_create(POOL_NAME, POOL_SIZE, sizeof(*ik_root), NULL, &ik_utx);
+		if (rc) {
+			fail_msg("Cannot setup pmem: %d\n", rc);
+		}
+	} else {
+		D_PRINT("Using vmem\n");
+		rc = utest_vmem_create(sizeof(*ik_root), &ik_utx);
+		if (rc) {
+			fail_msg("Cannot setup vmem: %d\n", rc);
+		}
+	}
 
-static int
-use_pmem() {
-
-	int rc;
-
-	D_PRINT("Using pmem\n");
-	rc = utest_pmem_create(POOL_NAME, POOL_SIZE,
-			       sizeof(*ik_root), NULL,
-			       &ik_utx);
-	D_ASSERT(rc == 0);
-	return rc;
+	ik_root = utest_utx2root(ik_utx);
+	ik_uma  = utest_utx2uma(ik_utx);
 }
 
 static void
+ik_btr_class_register(char *dynamic_flag)
+{
+	if (dynamic_flag && *dynamic_flag != 'd') {
+		fail_msg("Invalid value of -R parameter: %c\n", *dynamic_flag);
+	}
+	if (dynamic_flag) {
+		D_PRINT("Using dynamic tree order\n");
+	}
+	int rc = dbtree_class_register(IK_TREE_CLASS,
+				       (dynamic_flag ? BTR_FEAT_DYNAMIC_ROOT : 0) |
+					   BTR_FEAT_EMBED_FIRST | BTR_FEAT_UINT_KEY,
+				       &ik_ops);
+	if (rc) {
+		fail_msg("Cannot register memory class: %d\n", rc);
+	}
+}
+
+static struct option btr_ops[] = {
+    {"start-test", required_argument, NULL, 'S'},
+    {"reg-class", optional_argument, NULL, 'R'},
+    {"reg-memory", optional_argument, NULL, 'M'},
+    {"create", required_argument, NULL, 'C'},
+    {"destroy", no_argument, NULL, 'D'},
+    {"drain", no_argument, NULL, 'e'},
+    {"open", no_argument, NULL, 'o'},
+    {"close", no_argument, NULL, 'c'},
+    {"update", required_argument, NULL, 'u'},
+    {"find", required_argument, NULL, 'f'},
+    {"delete", required_argument, NULL, 'd'},
+    {"del_retain", required_argument, NULL, 'r'},
+    {"query", no_argument, NULL, 'q'},
+    {"iterate", required_argument, NULL, 'i'},
+    {"batch", required_argument, NULL, 'b'},
+    {"perf", required_argument, NULL, 'p'},
+    {NULL, 0, NULL, 0},
+};
+
+#define BTR_SHORTOPTS "+S:R::M::C:Deocqu:f:d:r:qi:b:p:"
+
+/**
+ * Execute test based on the given sequence of steps.
+ * -S/--start-test option is ignored
+ * -R and -M options must be provided before -C option.
+ * Each argument of the -R and -M options must be specified without a space between them (e.g. -Rd).
+ */
+static void
 ts_group(void **state) {
+	struct btr_test_state *test_state = (struct btr_test_state *)*state;
+	int                    opt        = 0;
+	void                 **st         = NULL;
 
-	int	opt = 0;
-	void	**st = NULL;
-
-	while ((opt = getopt_long(test_group_stop-test_group_start+1,
-				  test_group_args+test_group_start,
-				  "tmC:Deocqu:d:r:f:i:b:p:",
-				  btr_ops,
+	while ((opt = getopt_long(test_state->argc, test_state->argv, BTR_SHORTOPTS, btr_ops,
 				  NULL)) != -1) {
 		tst_fn_val.optval = optarg;
 		tst_fn_val.input = true;
 
 		switch (opt) {
+		case 'S':
+			/* not part of the test sequence */
+			break;
+		case 'R':
+			ik_btr_class_register(tst_fn_val.optval);
+			break;
+		case 'M':
+			ik_btr_memory_register(tst_fn_val.optval);
+			break;
 		case 'C':
 			ik_btr_open_create(st);
 			break;
@@ -978,26 +1025,17 @@ ts_group(void **state) {
 			ik_btr_perf(st);
 			break;
 		default:
-			D_PRINT("Unsupported command %c\n", opt);
-		case 'm':
-		case 't':
-			/* handled previously */
-			break;
+			fail_msg("Unsupported command %c\n", opt);
 		}
 	}
 }
 
 static int
-run_cmd_line_test(char *test_name, char **args, int start_idx, int stop_idx)
+run_cmd_line_test(char *test_name, struct btr_test_state *initial_state)
 {
-
 	const struct CMUnitTest btree_test[] = {
-		{test_name, ts_group, NULL, NULL},
+	    {test_name, ts_group, NULL, NULL, initial_state},
 	};
-
-	test_group_args = args;
-	test_group_start = start_idx;
-	test_group_stop = stop_idx;
 
 	return cmocka_run_group_tests_name(test_name,
 					   btree_test,
@@ -1011,82 +1049,57 @@ main(int argc, char **argv)
 	struct timeval	tv;
 	int		rc = 0;
 	int		opt;
-	int		dynamic_flag = 0;
-	int		start_idx;
-	char		*test_name;
-	int		stop_idx;
+	char                 *test_name     = NULL;
+	struct btr_test_state initial_state = {.argc = argc, .argv = argv};
 
 	d_register_alt_assert(mock_assert);
+
+	if (argc == 1) {
+		print_message("No parameters provided.\n");
+		return -1;
+	}
+
+	/* Check for --start-test parameter and verify that all parameters are in place */
+	while ((opt = getopt_long(argc, argv, BTR_SHORTOPTS, btr_ops, NULL)) != -1) {
+		if (opt == 'S') {
+			test_name = optarg;
+		} else if (opt == '?') {
+			break;
+		}
+	}
+	if (opt == '?') {
+		/* invalid option - error message printed on stderr already */
+		return -1;
+	} else if (argc != optind) {
+		fail_msg("Cannot interpret parameter: \"%s\" at optind: %d.\n", argv[optind],
+			 optind);
+	}
+
+	/* getopt_long start over */
+	optind = 1;
+
+	if (test_name == NULL) {
+		test_name = "Btree testing tool";
+	}
 
 	gettimeofday(&tv, NULL);
 	srand(tv.tv_usec);
 
-	ik_toh = DAOS_HDL_INVAL;
+	ik_toh      = DAOS_HDL_INVAL;
 	ik_root_off = UMOFF_NULL;
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
-	if (rc != 0)
-		return rc;
-
-	if (argc == 1) {
-		print_message("Invalid format.\n");
-		return -1;
+	if (rc != 0) {
+		fail_msg("daos_debug_init() failed: %d\n", rc);
 	}
-
-	stop_idx = argc-1;
-	if (strcmp(argv[1], "--start-test") == 0) {
-		start_idx = 2;
-		test_name = argv[2];
-		if (strcmp(argv[3], "-t") == 0) {
-			D_PRINT("Using dynamic tree order\n");
-			dynamic_flag = BTR_FEAT_DYNAMIC_ROOT;
-			if (strcmp(argv[4], "-m") == 0)
-				rc = use_pmem();
-		} else if (strcmp(argv[3], "-m") == 0) {
-			rc = use_pmem();
-			if (strcmp(argv[4], "-t") == 0) {
-				D_PRINT("Using dynamic tree order\n");
-				dynamic_flag = BTR_FEAT_DYNAMIC_ROOT;
-			}
-		}
-	} else {
-		start_idx = 0;
-		test_name = "Btree testing tool";
-		optind = 0;
-		/* Check for -m option first */
-		while ((opt = getopt_long(argc, argv, "tmC:Deocqu:d:r:f:i:b:p:",
-					  btr_ops, NULL)) != -1) {
-			if (opt == 'm') {
-				rc = use_pmem();
-				break;
-			}
-			if (opt == 't') {
-				D_PRINT("Using dynamic tree order\n");
-				dynamic_flag = BTR_FEAT_DYNAMIC_ROOT;
-			}
-		}
-	}
-
-	rc = dbtree_class_register(
-	    IK_TREE_CLASS, dynamic_flag | BTR_FEAT_EMBED_FIRST | BTR_FEAT_UINT_KEY, &ik_ops);
-	D_ASSERT(rc == 0);
-
-	if (ik_utx == NULL) {
-		D_PRINT("Using vmem\n");
-		rc = utest_vmem_create(sizeof(*ik_root), &ik_utx);
-		D_ASSERT(rc == 0);
-	}
-
-	ik_root = utest_utx2root(ik_utx);
-	ik_uma = utest_utx2uma(ik_utx);
-
-	/* start over */
-	optind = 0;
-	rc = run_cmd_line_test(test_name, argv, start_idx, stop_idx);
+	rc = run_cmd_line_test(test_name, &initial_state);
 	daos_debug_fini();
-	rc += utest_utx_destroy(ik_utx);
-	if (rc != 0)
-		printf("Error: %d\n", rc);
+	if (ik_utx) {
+		rc += utest_utx_destroy(ik_utx);
+	}
+	if (rc != 0) {
+		fail_msg("Error: %d\n", rc);
+	}
 
-	return rc;
+	return 0;
 }
