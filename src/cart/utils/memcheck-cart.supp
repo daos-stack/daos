@@ -434,12 +434,6 @@
 }
 {
    <insert_a_suppression_name_here>
-   Memcheck:Addr16
-   ...
-   fun:indexbytebody
-}
-{
-   <insert_a_suppression_name_here>
    Memcheck:Addr32
    ...
    fun:indexbytebody

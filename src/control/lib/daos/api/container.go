@@ -75,7 +75,7 @@ func (ch *ContainerHandle) toCtx(ctx context.Context) context.Context {
 		if stashed.UUID() == ch.UUID() {
 			return ctx
 		}
-		panic("attempt to stash different ContinerHandle in context")
+		panic("attempt to stash different ContainerHandle in context")
 	}
 
 	return context.WithValue(ctx, contHandleKey, ch)
@@ -188,9 +188,6 @@ func ContainerDestroy(ctx context.Context, sysName, poolID, contID string, force
 		if errors.Is(err, daos.NoPermission) {
 			// Even if we don't have pool-level write permissions, we may
 			// have delete permissions at the container level.
-			// TODO: Is this still correct? Came from the tool code, but quick testing with
-			// 2.8-ish code seemed to show that trying to a destroy a container without pool
-			// write permissions would result in a permission denied error.
 			poolConn, cleanup, err = getPoolConn(ctx, sysName, poolID, daos.PoolConnectFlagReadOnly)
 		}
 		if err != nil {
