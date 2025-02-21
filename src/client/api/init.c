@@ -1,6 +1,5 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -203,19 +202,12 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_agent, rc);
 
-	/** set up client telemetry */
-	rc = dc_tm_init();
-	if (rc != 0) {
-		/* should not be fatal */
-		DL_WARN(rc, "failed to initialize client telemetry");
-	}
-
 	/** get and cache attach info of default system */
 	rc = dc_mgmt_cache_attach_info(NULL);
 	if (rc != 0)
 		D_GOTO(out_job, rc);
 
-	crt_info = daos_crt_init_opt_get(false, 1, daos_client_metric);
+	crt_info = daos_crt_init_opt_get(false, 1);
 	/**
 	 * get CaRT configuration (see mgmtModule.handleGetAttachInfo for the
 	 * handling of NULL system names)
@@ -251,6 +243,13 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_pl, rc);
 
+	/** set up client telemetry */
+	rc = dc_tm_init();
+	if (rc != 0) {
+		/* should not be fatal */
+		DL_WARN(rc, "failed to initialize client telemetry");
+	}
+
 	/** set up pool */
 	rc = dc_pool_init();
 	if (rc != 0)
@@ -285,6 +284,7 @@ out_co:
 out_pool:
 	dc_pool_fini();
 out_mgmt:
+	dc_tm_fini();
 	dc_mgmt_fini();
 out_pl:
 	pl_fini();
@@ -292,7 +292,6 @@ out_eq:
 	daos_eq_lib_fini();
 out_attach:
 	dc_mgmt_drop_attach_info();
-	dc_tm_fini();
 out_job:
 	dc_job_fini();
 out_agent:
@@ -351,9 +350,9 @@ daos_fini(void)
 	if (rc != 0)
 		D_ERROR("failed to disconnect some resources may leak, " DF_RC "\n", DP_RC(rc));
 
+	dc_tm_fini();
 	dc_mgmt_drop_attach_info();
 	dc_agent_fini();
-	dc_tm_fini();
 	dc_job_fini();
 
 	pl_fini();
