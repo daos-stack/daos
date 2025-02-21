@@ -30,6 +30,7 @@
 #include <sys/ucontext.h>
 #include <sys/user.h>
 #include <linux/binfmts.h>
+#include <linux/magic.h>
 
 #ifdef __aarch64__
 #ifndef PAGE_SIZE
@@ -54,6 +55,11 @@
 
 #include "hook.h"
 #include "pil4dfs_int.h"
+
+#ifndef FUSE_SUPER_MAGIC
+/* Correct value from Linux headers */
+#define FUSE_SUPER_MAGIC 0x65735546
+#endif
 
 /* useful in strncmp() and strndup() */
 #define STR_AND_SIZE(s)    s, sizeof(s)
@@ -3583,6 +3589,7 @@ statfs(const char *pathname, struct statfs *sfs)
 	sfs->f_files  = -1;
 	sfs->f_ffree  = -1;
 	sfs->f_bavail = sfs->f_bfree;
+	sfs->f_type   = FUSE_SUPER_MAGIC;
 
 	drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
@@ -3640,6 +3647,7 @@ fstatfs(int fd, struct statfs *sfs)
 	sfs->f_files  = -1;
 	sfs->f_ffree  = -1;
 	sfs->f_bavail = sfs->f_bfree;
+	sfs->f_type   = FUSE_SUPER_MAGIC;
 
 	return 0;
 }
@@ -3691,6 +3699,7 @@ statvfs(const char *pathname, struct statvfs *svfs)
 	svfs->f_files  = -1;
 	svfs->f_ffree  = -1;
 	svfs->f_bavail = svfs->f_bfree;
+	svfs->f_fsid   = FUSE_SUPER_MAGIC;
 
 	drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
