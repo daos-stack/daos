@@ -29,7 +29,7 @@ class TagSet(set):
 
     def issubset(self, other):
         for tag in self:
-            if tag.startswith('-'):
+            if tag[0] == '-':
                 if tag[1:] in other:
                     return False
             elif tag not in other:
