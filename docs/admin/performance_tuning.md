@@ -117,9 +117,9 @@ self_test --use-daos-agent-env --group-name daos_server --endpoint 0-<MAX_RANK>:
 
 !!! note
     By default, `self_test` will use the network interface selected by the agent.
-    This can be forced by setting the `OFI_INTERFACE` and `OFI_DOMAIN` environment
-    variables manually. e.g. export `OFI_INTERFACE=eth0; export OFI_DOMAIN=eth0`
-    or `export OFI_INTERFACE=ib0; export OFI_DOMAIN=mlx5_0`
+    This can be forced by setting the `D_INTERFACE` and `D_DOMAIN` environment
+    variables manually. e.g. export `D_INTERFACE=eth0; export D_DOMAIN=eth0`
+    or `export D_INTERFACE=ib0; export D_DOMAIN=mlx5_0`
 
 !!! note
     Depending on the HW configuration, the agent might assign a different
@@ -134,7 +134,7 @@ To run `self_test` in cross-servers mode:
 ```bash
 
 $ self_test --use-daos-agent-env --group-name daos_server \
-  --endpoint 0-<MAX_SERVER-1>:0 --master-endpoint 0-<MAX_RANK>:0-<MAX_TAG> \
+  --endpoint 0-<MAX_RANK>:0 --master-endpoint 0-<MAX_RANK>:0-<MAX_TAG> \
   --message-sizes "b1048576,b1048576 0,0 b1048576,i2048,i2048 0,0 i2048" \
   --max-inflight-rpcs 16 --repetitions 100
 ```
@@ -160,7 +160,6 @@ defined:
 
 - `D_PROVIDER` defines mercury NA plugin and transport to be used (e.g.`ofi+verbs;ofi_rxm`)
 - `D_INTERFACE` defines network device name to be used (e.g. `ib0`)
-- `D_DOMAIN` defines the network name to be used (e.g. `mlx5_0:1`)
 
 The value of these environment variables could be found in the following log line of a DAOS agent
 daemon:
@@ -175,10 +174,10 @@ format:
 
 - line 1: the DAOS System Name
 - line 2: The number of ranks
-- line 3: "all" or "self"
+- line 3 (optional): "all" or "self"
   - "all" means dump all ranks' CaRT uri
   - "self" means only dump this rank's CaRT uri
-- line 4 to #ranks: the list of ranks id and their CaRT uri (e.g. `ucx+dc_mlx5://10.6.4.104:32416`)
+- lines [4, #ranks - 3]: the list of ranks id and their CaRT uri (e.g. `ucx+dc_mlx5://10.6.4.104:32416`)
 
 An example of a file named `daos_server.attach_info_tmp` of a DAOS system named `daos_server` (i.e.
 default name of a DAOS system):
@@ -193,7 +192,7 @@ all
 3 ucx+dc_mlx5://10.6.4.5:32416
 ```
 
-This configuration file can be generated thanks to the `daos_agent` sub-command `dum-attachinfo`
+This configuration file can be generated thanks to the `daos_agent` sub-command `dump-attachinfo`
 such as:
 
 ```bash
@@ -212,10 +211,11 @@ transport_config:
 log_file: /root/ckochhof/daos_agent-self_test.log
 ```
 
-Pinging the SWIM service of the rank 0 without a DAOS agent could be done in the following way:
+Pinging the SWIM service (i.e. tag=1) of the engine of rank 0 without a DAOS agent could be done in
+the following way:
 
 ```
-env D_PROVIDER='ofi+verbs;ofi_rxm' D_DOMAIN='mlx5_0:1' D_INTERFACE=ib0  self_test --group-name daos_server --endpoint '0:1' --message-sizes '(0 0)' --repetitions-per-size 1 --no-sync --path '/CaRT/configuration/directory'
+env D_PROVIDER='ofi+verbs;ofi_rxm' D_INTERFACE=ib0  self_test --group-name daos_server --endpoint '0:1' --message-sizes '(0 0)' --repetitions-per-size 1 --no-sync --path '/CaRT/configuration/directory'
 ```
 
 The `--path` option defines the path of the directory containing the CaRT configuration file
@@ -561,7 +561,7 @@ automatically assign a network interface with a matching NUMA node.  The network
 interface provided in the GetAttachInfo response is used to initialize CaRT.
 
 To override the automatically assigned interface, the client should set the
-environment variable `OFI_INTERFACE` to match the desired network
+environment variable `D_INTERFACE` to match the desired network
 interface.
 
 The DAOS Agent scans the client machine on the first GetAttachInfo request to
