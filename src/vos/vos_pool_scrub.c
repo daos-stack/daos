@@ -272,6 +272,9 @@ sc_get_rec_in_chunk_at_idx(const struct scrub_ctx *ctx, uint32_t i)
 static void
 sc_wait_until_should_continue(struct scrub_ctx *ctx)
 {
+	if (sc_cont_is_stopping(ctx))
+		return;
+
 	if (sc_mode(ctx) == DAOS_SCRUB_MODE_TIMED) {
 		struct timespec	now;
 		uint64_t	msec_between;
@@ -279,6 +282,8 @@ sc_wait_until_should_continue(struct scrub_ctx *ctx)
 		d_gettime(&now);
 		while ((msec_between = sc_get_ms_between_scrubs(ctx)) > 0) {
 			d_tm_set_gauge(ctx->sc_metrics.scm_next_csum_scrub, msec_between);
+			if (sc_cont_is_stopping(ctx))
+				break;
 			/* don't wait longer than 1 sec each loop */
 			sc_sleep(ctx, min(1000, msec_between));
 		}
@@ -286,6 +291,8 @@ sc_wait_until_should_continue(struct scrub_ctx *ctx)
 		sc_sleep(ctx, 0);
 		while (!sc_is_idle(ctx) && sc_mode(ctx) == DAOS_SCRUB_MODE_LAZY) {
 			sc_m_track_busy(ctx);
+			if (sc_cont_is_stopping(ctx))
+				break;
 			/* Don't actually know how long it will be but wait for 1 second before
 			 * trying again
 			 */
@@ -293,10 +300,17 @@ sc_wait_until_should_continue(struct scrub_ctx *ctx)
 		}
 		sc_m_track_idle(ctx);
 	} else {
+		uint64_t sleep_seconds = 300;
+
 		D_ERROR("Unknown Scrub Mode: %d, Pool: " DF_UUID "\n", sc_mode(ctx),
 			DP_UUID(ctx->sc_pool->sp_uuid));
 		/* sleep for 5 minutes to give pool property chance to resolve */
-		sc_sleep(ctx, 1000 * 60 * 5);
+		while (sleep_seconds > 0) {
+			if (sc_cont_is_stopping(ctx))
+				break;
+			sc_sleep(ctx, 1000);
+			sleep_seconds--;
+		}
 	}
 }
 

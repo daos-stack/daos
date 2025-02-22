@@ -1262,6 +1262,8 @@ cont_child_destroy_one(void *vin)
 	}
 
 	if (cont->sc_destroying) {
+		D_ERROR(DF_CONT ": Container is already being destroyed\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
 		cont_child_put(tls->dt_cont_cache, cont);
 		D_GOTO(out_pool, rc = -DER_BUSY);
 	}
