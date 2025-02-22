@@ -1,14 +1,14 @@
 #!/bin/bash
 # /*
 #  * (C) Copyright 2024 Intel Corporation.
+#  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 # */
 
 __usage="
 
-This is just an example script for testing purpose. 
-Please modify to use in Production environment.
+This script generates a simple self-signed DAOS telemetry HTTPS certificate for use by the DAOS ftest framework.
 
 Usage: gen_telemetry_server_certificate.sh [USER] [DIR]
     USER: DAOS has server and client and the certificate need the specific file permission

@@ -1070,7 +1070,7 @@ class YamlCommand(SubProcessCommand):
 
         Args:
             hosts (NodeSet): list of the destination hosts.
-            user (User): User permission set on telemetry certificate file.
+            user (str): User permission set on telemetry certificate file.
                          For server, it's daos_server and for client it's daos_agent.
             destination (str): Generate telemetry certificates in to directory.
 
