@@ -479,7 +479,7 @@ class ExecutableCommand(CommandWithParameters):
         super().get_params(test)
         for namespace in ['/run/client/*', self.namespace]:
             if namespace is not None:
-                self.env.update_from_list(test.params.get("env_vars", namespace, []))
+                self.env.update_from_list(test.params.get("env_vars", namespace, None) or [])
 
     def _get_new(self):
         """Get a new object based upon this one.

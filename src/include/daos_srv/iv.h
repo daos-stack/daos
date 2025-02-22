@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -287,14 +288,14 @@ enum iv_key {
 	/* Container properties */
 	IV_CONT_PROP,
 	IV_POOL_HDL,
-	/* Each server report its own EC aggregation epoch to the container
+	/* Each server report its own EC aggregation epoch and stable epoch to the container
 	 * service leader
 	 */
-	IV_CONT_AGG_EPOCH_REPORT,
-	/* leader sync the minimum epoch(VOS aggregate epoch boundary) to all
+	IV_CONT_TRACK_EPOCH_REPORT,
+	/* leader sync the minimum epoch(VOS aggregate epoch boundary and stable epoch) to all
 	 * other servers
 	 */
-	IV_CONT_AGG_EPOCH_BOUNDRY,
+	IV_CONT_TRACK_EPOCH,
 	IV_CHK,
 };
 

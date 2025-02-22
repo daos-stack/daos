@@ -607,7 +607,7 @@ class DmgCommand(DmgCommandBase):
         #     256000000,
         #     0
         #   ],
-        #   "mem_file_bytes": 0
+        #   "mem_file_bytes": 256000000
         # },
         # "error": null,
         # "status": 0
@@ -890,13 +890,14 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_json_result(("pool", "get-prop"), pool=pool, name=name)
 
-    def pool_exclude(self, pool, rank, tgt_idx=None):
+    def pool_exclude(self, pool, rank, tgt_idx=None, force=False):
         """Exclude a daos_server from the pool.
 
         Args:
             pool (str): Pool uuid.
             rank (int): Rank of the daos_server to exclude
             tgt_idx (int): target to be excluded from the pool
+            force (bool, optional): force exclusion regardless of data loss. Defaults to False
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -907,7 +908,7 @@ class DmgCommand(DmgCommandBase):
 
         """
         return self._get_result(
-            ("pool", "exclude"), pool=pool, rank=rank, tgt_idx=tgt_idx)
+            ("pool", "exclude"), pool=pool, rank=rank, tgt_idx=tgt_idx, force=force)
 
     def pool_extend(self, pool, ranks):
         """Extend the daos_server pool.

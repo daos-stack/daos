@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -270,6 +271,7 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_obj, rc);
 #endif
+	daos_array_env_init();
 	module_initialized++;
 	D_GOTO(unlock, rc = 0);
 

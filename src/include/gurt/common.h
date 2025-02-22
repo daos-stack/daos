@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -69,12 +70,6 @@ extern "C" {
 
 /* Check if bit is set in passed val */
 #define D_BIT_IS_SET(val, bit) (((val) & bit) ? 1 : 0)
-
-/**
- * Get the current time using a monotonic timer
- * param[out] ts A timespec structure for the result
- */
-#define _gurt_gettime(ts) clock_gettime(CLOCK_MONOTONIC, ts)
 
 /* rand and srand macros */
 
@@ -389,18 +384,20 @@ d_realpath(const char *path, char *resolved_path) _dalloc_;
 		d_errno2der(_rc);					\
 	})
 
-#define D_SPIN_LOCK(x)		__D_PTHREAD(pthread_spin_lock, x)
-#define D_MUTEX_TRYLOCK(x)	__D_PTHREAD_TRYLOCK(pthread_mutex_trylock, x)
-#define D_SPIN_UNLOCK(x)        __D_PTHREAD(pthread_spin_unlock, x)
-#define D_MUTEX_UNLOCK(x)       __D_PTHREAD(pthread_mutex_unlock, x)
-#define D_RWLOCK_TRYWRLOCK(x)	__D_PTHREAD_TRYLOCK(pthread_rwlock_trywrlock, x)
-#define D_RWLOCK_UNLOCK(x)	__D_PTHREAD(pthread_rwlock_unlock, x)
-#define D_MUTEX_DESTROY(x)	__D_PTHREAD(pthread_mutex_destroy, x)
-#define D_SPIN_DESTROY(x)	__D_PTHREAD(pthread_spin_destroy, x)
-#define D_RWLOCK_DESTROY(x)	__D_PTHREAD(pthread_rwlock_destroy, x)
-#define D_MUTEX_INIT(x, y)	__D_PTHREAD_INIT(pthread_mutex_init, x, y)
-#define D_SPIN_INIT(x, y)	__D_PTHREAD_INIT(pthread_spin_init, x, y)
-#define D_RWLOCK_INIT(x, y)	__D_PTHREAD_INIT(pthread_rwlock_init, x, y)
+#define D_SPIN_LOCK(x)        __D_PTHREAD(pthread_spin_lock, x)
+#define D_SPIN_UNLOCK(x)      __D_PTHREAD(pthread_spin_unlock, x)
+#define D_MUTEX_TRYLOCK(x)    __D_PTHREAD_TRYLOCK(pthread_mutex_trylock, x)
+#define D_MUTEX_UNLOCK(x)     __D_PTHREAD(pthread_mutex_unlock, x)
+#define D_RWLOCK_TRYWRLOCK(x) __D_PTHREAD_TRYLOCK(pthread_rwlock_trywrlock, x)
+#define D_RWLOCK_UNLOCK(x)    __D_PTHREAD(pthread_rwlock_unlock, x)
+#define D_MUTEX_DESTROY(x)    __D_PTHREAD(pthread_mutex_destroy, x)
+#define D_SPIN_DESTROY(x)     __D_PTHREAD(pthread_spin_destroy, x)
+#define D_RWLOCK_DESTROY(x)   __D_PTHREAD(pthread_rwlock_destroy, x)
+#define D_COND_DESTROY(x)     __D_PTHREAD(pthread_cond_destroy, x)
+#define D_MUTEX_INIT(x, y)    __D_PTHREAD_INIT(pthread_mutex_init, x, y)
+#define D_SPIN_INIT(x, y)     __D_PTHREAD_INIT(pthread_spin_init, x, y)
+#define D_RWLOCK_INIT(x, y)   __D_PTHREAD_INIT(pthread_rwlock_init, x, y)
+#define D_COND_INIT(x, y)     __D_PTHREAD_INIT(pthread_cond_init, x, y)
 
 #if defined(DAOS_BUILD_RELEASE) || defined(__COVERITY__)
 
@@ -715,12 +712,34 @@ d_errno2der(int err)
 static inline int
 d_gettime(struct timespec *t)
 {
-	int	rc;
+	int rc;
 
-	rc = _gurt_gettime(t);
+	rc = clock_gettime(CLOCK_MONOTONIC, t);
 	if (rc != 0) {
-		D_ERROR("clock_gettime failed, rc: %d, errno %d(%s).\n",
-			rc, errno, strerror(errno));
+		D_ERROR("clock_gettime failed, rc: %d, errno %d(%s).\n", rc, errno,
+			strerror(errno));
+		rc = d_errno2der(errno);
+	}
+
+	return rc;
+}
+
+/**
+ * Return current time using coarse timer in timespec form
+ *
+ * \param[out] t	timespec returned
+ *
+ * \return		0 on success, negative value on error
+ */
+static inline int
+d_gettime_coarse(struct timespec *t)
+{
+	int rc;
+
+	rc = clock_gettime(CLOCK_MONOTONIC_COARSE, t);
+	if (rc != 0) {
+		D_ERROR("clock_gettime failed, rc: %d, errno %d(%s).\n", rc, errno,
+			strerror(errno));
 		rc = d_errno2der(errno);
 	}
 
@@ -744,19 +763,33 @@ d_timediff_ns(const struct timespec *t1, const struct timespec *t2)
 
 /* Calculate end - start as timespec. */
 static inline struct timespec
-d_timediff(struct timespec start, struct timespec end)
+d_timediff(const struct timespec *t1, const struct timespec *t2)
 {
-	struct timespec		temp;
+	struct timespec temp;
 
-	if ((end.tv_nsec - start.tv_nsec) < 0) {
-		temp.tv_sec = end.tv_sec - start.tv_sec - 1;
-		temp.tv_nsec = NSEC_PER_SEC + end.tv_nsec - start.tv_nsec;
-	} else {
-		temp.tv_sec = end.tv_sec - start.tv_sec;
-		temp.tv_nsec = end.tv_nsec - start.tv_nsec;
+	temp.tv_sec  = t2->tv_sec - t1->tv_sec;
+	temp.tv_nsec = t2->tv_nsec - t1->tv_nsec;
+	if (temp.tv_nsec < 0) {
+		temp.tv_sec -= 1;
+		temp.tv_nsec += NSEC_PER_SEC;
 	}
 
 	return temp;
+}
+
+/* Return true if time is null */
+static inline bool
+d_timenull(const struct timespec *t)
+{
+	return (t->tv_sec == 0) && (t->tv_nsec == 0);
+}
+
+/* Return true if t1 < t2, false otherwise */
+static inline bool
+d_timeless(const struct timespec *t1, const struct timespec *t2)
+{
+	return ((t1->tv_sec < t2->tv_sec) ||
+		((t1->tv_sec == t2->tv_sec) && (t1->tv_nsec < t2->tv_nsec)));
 }
 
 /* Calculate remaining time in ns */
@@ -783,7 +816,7 @@ d_time_elapsed(const struct timespec start)
 
 	d_gettime(&now);
 
-	return d_timediff(start, now);
+	return d_timediff(&start, &now);
 }
 
 /* calculate the number in us after \param sec_diff second */
@@ -806,6 +839,13 @@ d_timeinc(struct timespec *now, uint64_t ns)
 	now->tv_nsec += ns;
 	now->tv_sec += now->tv_nsec / NSEC_PER_SEC;
 	now->tv_nsec = now->tv_nsec % NSEC_PER_SEC;
+}
+
+static inline struct timespec
+d_time_ms(unsigned int ms)
+{
+	return (struct timespec){.tv_sec  = ms / 1000,
+				 .tv_nsec = (ms - (ms / 1000) * 1000) * 1000000};
 }
 
 static inline double
