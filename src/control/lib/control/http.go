@@ -39,16 +39,13 @@ type httpGetter interface {
 	retryer
 	getURL() *url.URL
 	getBody(context.Context) ([]byte, error)
-	getAllowInsecure() bool
-	getHttpsException() bool
 }
 
 type httpReq struct {
-	url            *url.URL
-	getFn          httpGetFn
-	allowInsecure  bool
-	httpsException bool
-	getBodyFn      func(context.Context, *url.URL, httpGetFn, time.Duration, bool, bool) ([]byte, error)
+	url           *url.URL
+	getFn         httpGetFn
+	allowInsecure bool
+	getBodyFn     func(context.Context, *url.URL, httpGetFn, time.Duration) ([]byte, error)
 }
 
 func (r *httpReq) canRetry(err error, cur uint) bool {
@@ -87,14 +84,15 @@ func (r *httpReq) getAllowInsecure() bool {
 	return r.allowInsecure
 }
 
-func (r *httpReq) getHttpsException() bool {
-	return r.httpsException
-}
-
 func (r *httpReq) httpGetFunc() httpGetFn {
 	if r.getFn == nil {
 		r.getFn = http.Get
 	}
+
+	if r.allowInsecure == false {
+		r.getFn = httpsSecureGetFunc()
+	}
+
 	return r.getFn
 }
 
@@ -103,7 +101,7 @@ func (r *httpReq) getBody(ctx context.Context) ([]byte, error) {
 		r.getBodyFn = httpGetBody
 	}
 
-	return r.getBodyFn(ctx, r.getURL(), r.httpGetFunc(), r.getRetryTimeout(), r.getAllowInsecure(), r.getHttpsException())
+	return r.getBodyFn(ctx, r.getURL(), r.httpGetFunc(), r.getRetryTimeout())
 }
 
 func httpGetBodyRetry(ctx context.Context, req httpGetter) ([]byte, error) {
@@ -130,18 +128,11 @@ func httpGetBodyRetry(ctx context.Context, req httpGetter) ([]byte, error) {
 
 // httpsSecureGetFunc will prepare the GET requested using the certificate for secure mode
 // and return the http.Get
-func httpsSecureGetFunc(httpsException bool) (httpGetFn, error) {
+func httpsSecureGetFunc() httpGetFn {
 	rootCAs, _ := x509.SystemCertPool()
-	if rootCAs == nil {
-		return nil, errors.New("Failed to load system root certificates")
-	}
 
 	tlsConfig := &tls.Config{
 		RootCAs: rootCAs,
-	}
-
-	if httpsException {
-		tlsConfig.InsecureSkipVerify = true
 	}
 
 	tr := &http.Transport{
@@ -150,12 +141,12 @@ func httpsSecureGetFunc(httpsException bool) (httpGetFn, error) {
 
 	client := &http.Client{Transport: tr}
 
-	return client.Get, nil
+	return client.Get
 }
 
 // httpGetBody executes a simple HTTP GET request to a given URL and returns the
 // content of the response body.
-func httpGetBody(ctx context.Context, url *url.URL, get httpGetFn, timeout time.Duration, allowInsecure bool, httpsException bool) ([]byte, error) {
+func httpGetBody(ctx context.Context, url *url.URL, get httpGetFn, timeout time.Duration) ([]byte, error) {
 	if url == nil {
 		return nil, errors.New("nil URL")
 	}
@@ -166,14 +157,6 @@ func httpGetBody(ctx context.Context, url *url.URL, get httpGetFn, timeout time.
 
 	if get == nil {
 		return nil, errors.New("nil get function")
-	}
-
-	if allowInsecure == false {
-		var err error
-		get, err = httpsSecureGetFunc(httpsException)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	httpCtx, cancel := context.WithTimeout(ctx, timeout)

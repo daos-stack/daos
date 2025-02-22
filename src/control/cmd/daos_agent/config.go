@@ -40,6 +40,13 @@ func (rm refreshMinutes) Duration() time.Duration {
 	return time.Duration(rm)
 }
 
+// Support Old config options.
+type LegacyConfig struct {
+	TelemetryPort    int           `yaml:"telemetry_port,omitempty"`
+	TelemetryEnabled bool          `yaml:"telemetry_enabled,omitempty"`
+	TelemetryRetain  time.Duration `yaml:"telemetry_retain,omitempty"`
+}
+
 // Config defines the agent configuration.
 type Config struct {
 	SystemName          string                     `yaml:"name"`
@@ -59,10 +66,7 @@ type Config struct {
 	FabricInterfaces    []*NUMAFabricConfig        `yaml:"fabric_ifaces,omitempty"`
 	ProviderIdx         uint                       // TODO SRS-31: Enable with multiprovider functionality
 	TelemetryConfig     *security.TelemetryConfig  `yaml:"telemetry_config"`
-	// Support Old config options.
-	TelemetryPort    int           `yaml:"telemetry_port,omitempty"`
-	TelemetryEnabled bool          `yaml:"telemetry_enabled,omitempty"`
-	TelemetryRetain  time.Duration `yaml:"telemetry_retain,omitempty"`
+	Legacy              LegacyConfig               `yaml:",inline"`
 }
 
 // Validate performs basic validation of the configuration.
@@ -76,16 +80,19 @@ func (c *Config) Validate() error {
 	}
 
 	// Support Old config options and copy it to the underline new structure value.
-	if c.TelemetryRetain > 0 {
-		c.TelemetryConfig.Retain = c.TelemetryRetain
+	if c.Legacy.TelemetryRetain > 0 {
+		c.TelemetryConfig.Retain = c.Legacy.TelemetryRetain
+		fmt.Println(" WARNING - Deprecated:telemetry_retain options can be move under telemetry_config")
 	}
 
-	if c.TelemetryPort != 0 {
-		c.TelemetryConfig.Port = c.TelemetryPort
+	if c.Legacy.TelemetryPort != 0 {
+		c.TelemetryConfig.Port = c.Legacy.TelemetryPort
+		fmt.Println(" WARNING - Deprecated:telemetry_port options can be move under telemetry_config")
 	}
 
-	if c.TelemetryEnabled {
-		c.TelemetryConfig.Enabled = c.TelemetryEnabled
+	if c.Legacy.TelemetryEnabled {
+		c.TelemetryConfig.Enabled = c.Legacy.TelemetryEnabled
+		fmt.Println(" WARNING - Deprecated:telemetry_enabled options can be move under telemetry_config")
 	}
 
 	if c.TelemetryConfig.Retain > 0 && c.TelemetryConfig.Port == 0 {
@@ -98,6 +105,14 @@ func (c *Config) Validate() error {
 
 	if len(c.ExcludeFabricIfaces) > 0 && len(c.IncludeFabricIfaces) > 0 {
 		return errors.New("cannot specify both exclude_fabric_ifaces and include_fabric_ifaces")
+	}
+
+	if len(c.TelemetryConfig.HttpsCert) == 0 && len(c.TelemetryConfig.HttpsKey) > 0 {
+		return errors.New("For secure mode, https_cert and https_key both required")
+	}
+
+	if len(c.TelemetryConfig.HttpsCert) > 0 && len(c.TelemetryConfig.HttpsKey) == 0 {
+		return errors.New("For secure mode, https_cert and https_key both required")
 	}
 
 	return nil
@@ -138,12 +153,6 @@ func LoadConfig(cfgPath string) (*Config, error) {
 
 	if err := cfg.Validate(); err != nil {
 		return nil, errors.Wrap(err, "agent config validation failed")
-	}
-
-	if !cfg.TelemetryConfig.AllowInsecure {
-		if cfg.TelemetryConfig.HttpsCert == "" || cfg.TelemetryConfig.HttpsKey == "" {
-			return nil, errors.New("For secure mode, https_cert and https_key required under telemetry_config")
-		}
 	}
 
 	return cfg, nil

@@ -71,8 +71,6 @@ class DaosServerTelemetryConfig(TelemetryConfig):
         #   - https_key: <str>: Server Key portion
         #
         self.telemetry_port = BasicParameter(None, 9191)
-        self.https_cert = LogParameter(self._log_dir, None, "telemetry.crt")
-        self.https_key = LogParameter(self._log_dir, None, "telemetry.key")
 
     def _get_new(self):
         """Get a new object based upon this one.

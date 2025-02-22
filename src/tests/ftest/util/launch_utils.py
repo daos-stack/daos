@@ -1,5 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -425,7 +426,12 @@ class TestRunner():
             return status
 
         # Generate certificate files for the test
-        return self._generate_certs(logger)
+        status = self._generate_certs(logger)
+        if status:
+            return status
+
+        # Generate telemetry certificate files for the test
+        return self._generate_telemetry_certs(logger)
 
     def execute(self, logger, test, repeat, number, sparse, fail_fast):
         """Run the specified test.
@@ -865,6 +871,42 @@ class TestRunner():
             return 128
         if not run_local(logger, f"{command} {test_env.log_dir}").passed:
             message = "Error generating certificates"
+            self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
+            return 128
+
+        return 0
+
+    def _generate_telemetry_certs(self, logger):
+        """Generate the telemetry certificates for the test and
+           copy to system default certificate location
+        Returns:
+            logger (Logger): logger for the messages produced by this method
+            int: status code: 0 = success, 128 = failure
+        """
+        logger.debug("-" * 80)
+        logger.debug("Generating telemetry certificate")
+        test_env = TestEnvironment()
+        certs_dir = os.path.join(test_env.log_dir, "daosTelemetryCA")
+        certgen_dir = os.path.abspath(os.path.join(os.getcwd(), "scripts"))
+        command = os.path.join(certgen_dir, "gen_telemetry_admin_certificate.sh")
+        if not run_local(logger, f"/usr/bin/rm -rf {certs_dir}").passed:
+            message = "Error removing old telemetry certificates"
+            self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
+            return 128
+        if not run_local(logger, f"{command} {test_env.log_dir}").passed:
+            message = "Error generating telemetry certificates"
+            self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
+            return 128
+
+        from_dir = os.path.join(certs_dir, "daosTelemetryCA.crt")
+        to_dir = "/etc/pki/ca-trust/source/anchors/"
+        if not run_local(logger, f"sudo cp -rf {from_dir} {to_dir}").passed:
+            message = "Copy telemetry certificate failed"
+            self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
+            return 128
+
+        if not run_local(logger, "sudo update-ca-trust").passed:
+            message = "Error running update-ca-trust command"
             self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
             return 128
 

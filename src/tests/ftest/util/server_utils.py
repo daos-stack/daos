@@ -143,6 +143,8 @@ class DaosServerManager(SubprocessManager):
         # defined in the self.manager.job.yaml object.
         self._external_yaml_data = None
 
+        self.telemetry_certificate_dir = svr_cert_dir
+
     @property
     def engines(self):
         """Get the total number of engines.
@@ -227,6 +229,15 @@ class DaosServerManager(SubprocessManager):
             hosts = self._hosts
         self.dmg.hostlist = hosts
 
+    def prepare_telemetry_certificate(self):
+        """Prepare Telemetry certificate"""
+        self.manager.job.copy_telemetry_root_certificates(get_log_file("daosTelemetryCA"),
+                                                          self.telemetry_certificate_dir,
+                                                          self._hosts)
+        self.manager.job.generate_telemetry_server_certificates(self._hosts,
+                                                                "daos_server",
+                                                                self.telemetry_certificate_dir)
+
     def prepare(self, storage=True):
         """Prepare to start daos_server.
 
@@ -245,7 +256,6 @@ class DaosServerManager(SubprocessManager):
 
         # Copy certificates
         self.manager.job.copy_certificates(get_log_file("daosCA/certs"), self._hosts)
-        self.manager.job.generate_telemetry_server_certificates(self._hosts, "daos_server")
         self._prepare_dmg_certificates()
 
         # Prepare dmg for running storage format on all server hosts

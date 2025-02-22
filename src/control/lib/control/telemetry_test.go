@@ -118,10 +118,10 @@ func newTestPBHistogram(numBuckets int) *pclient.Metric {
 	return metric
 }
 
-func mockScrapeFnSuccess(t *testing.T, metricFam ...*pclient.MetricFamily) func(context.Context, *url.URL, httpGetFn, time.Duration, bool, bool) ([]byte, error) {
+func mockScrapeFnSuccess(t *testing.T, metricFam ...*pclient.MetricFamily) func(context.Context, *url.URL, httpGetFn, time.Duration) ([]byte, error) {
 	t.Helper()
 
-	return func(_ context.Context, _ *url.URL, _ httpGetFn, _ time.Duration, _ bool, _ bool) ([]byte, error) {
+	return func(_ context.Context, _ *url.URL, _ httpGetFn, _ time.Duration) ([]byte, error) {
 		var b strings.Builder
 		for _, mf := range metricFam {
 			_, err := expfmt.MetricFamilyToText(&b, mf)
@@ -147,12 +147,12 @@ func TestControl_scrapeMetrics(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		req       httpGetter
-		scrapeFn  func(context.Context, *url.URL, httpGetFn, time.Duration, bool, bool) ([]byte, error)
+		scrapeFn  func(context.Context, *url.URL, httpGetFn, time.Duration) ([]byte, error)
 		expResult pbMetricMap
 		expErr    error
 	}{
 		"check scrape params": {
-			scrapeFn: func(_ context.Context, url *url.URL, getter httpGetFn, timeout time.Duration, allowInsecure bool, httpsException bool) ([]byte, error) {
+			scrapeFn: func(_ context.Context, url *url.URL, getter httpGetFn, timeout time.Duration) ([]byte, error) {
 				test.AssertEqual(t, testURL.Scheme, url.Scheme, "")
 				test.AssertEqual(t, testURL.Host, url.Host, "")
 				test.AssertEqual(t, testURL.Path, url.Path, "")
@@ -166,19 +166,19 @@ func TestControl_scrapeMetrics(t *testing.T) {
 			expResult: pbMetricMap{},
 		},
 		"HTTP scrape error": {
-			scrapeFn: func(context.Context, *url.URL, httpGetFn, time.Duration, bool, bool) ([]byte, error) {
+			scrapeFn: func(context.Context, *url.URL, httpGetFn, time.Duration) ([]byte, error) {
 				return nil, errors.New("mock scrape")
 			},
 			expErr: errors.New("mock scrape"),
 		},
 		"scrape returns no content": {
-			scrapeFn: func(context.Context, *url.URL, httpGetFn, time.Duration, bool, bool) ([]byte, error) {
+			scrapeFn: func(context.Context, *url.URL, httpGetFn, time.Duration) ([]byte, error) {
 				return []byte{}, nil
 			},
 			expResult: pbMetricMap{},
 		},
 		"scrape returns bad content": {
-			scrapeFn: func(context.Context, *url.URL, httpGetFn, time.Duration, bool, bool) ([]byte, error) {
+			scrapeFn: func(context.Context, *url.URL, httpGetFn, time.Duration) ([]byte, error) {
 				return []byte("<h1>Hello world</h1>"), nil
 			},
 			expErr: errors.New("parsing error"),
@@ -217,7 +217,7 @@ func TestControl_MetricsList(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		scrapeFn func(context.Context, *url.URL, httpGetFn, time.Duration, bool, bool) ([]byte, error)
+		scrapeFn func(context.Context, *url.URL, httpGetFn, time.Duration) ([]byte, error)
 		req      *MetricsListReq
 		expResp  *MetricsListResp
 		expErr   error
@@ -241,7 +241,7 @@ func TestControl_MetricsList(t *testing.T) {
 				Port:          1066,
 				AllowInsecure: true,
 			},
-			scrapeFn: func(context.Context, *url.URL, httpGetFn, time.Duration, bool, bool) ([]byte, error) {
+			scrapeFn: func(context.Context, *url.URL, httpGetFn, time.Duration) ([]byte, error) {
 				return nil, errors.New("mock scrape")
 			},
 			expErr: errors.New("mock scrape"),
@@ -252,7 +252,7 @@ func TestControl_MetricsList(t *testing.T) {
 				Port:          8888,
 				AllowInsecure: true,
 			},
-			scrapeFn: func(context.Context, *url.URL, httpGetFn, time.Duration, bool, bool) ([]byte, error) {
+			scrapeFn: func(context.Context, *url.URL, httpGetFn, time.Duration) ([]byte, error) {
 				return []byte{}, nil
 			},
 			expResp: &MetricsListResp{
@@ -284,7 +284,7 @@ func TestControl_MetricsList(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			if tc.scrapeFn == nil {
-				tc.scrapeFn = func(context.Context, *url.URL, httpGetFn, time.Duration, bool, bool) ([]byte, error) {
+				tc.scrapeFn = func(context.Context, *url.URL, httpGetFn, time.Duration) ([]byte, error) {
 					return nil, nil
 				}
 			}
@@ -432,7 +432,7 @@ func TestControl_MetricsQuery(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		scrapeFn func(context.Context, *url.URL, httpGetFn, time.Duration, bool, bool) ([]byte, error)
+		scrapeFn func(context.Context, *url.URL, httpGetFn, time.Duration) ([]byte, error)
 		req      *MetricsQueryReq
 		expResp  *MetricsQueryResp
 		expErr   error
@@ -456,7 +456,7 @@ func TestControl_MetricsQuery(t *testing.T) {
 				Port:          1066,
 				AllowInsecure: true,
 			},
-			scrapeFn: func(context.Context, *url.URL, httpGetFn, time.Duration, bool, bool) ([]byte, error) {
+			scrapeFn: func(context.Context, *url.URL, httpGetFn, time.Duration) ([]byte, error) {
 				return nil, errors.New("mock scrape")
 			},
 			expErr: errors.New("mock scrape"),
@@ -467,7 +467,7 @@ func TestControl_MetricsQuery(t *testing.T) {
 				Port:          8888,
 				AllowInsecure: true,
 			},
-			scrapeFn: func(context.Context, *url.URL, httpGetFn, time.Duration, bool, bool) ([]byte, error) {
+			scrapeFn: func(context.Context, *url.URL, httpGetFn, time.Duration) ([]byte, error) {
 				return []byte{}, nil
 			},
 			expResp: &MetricsQueryResp{

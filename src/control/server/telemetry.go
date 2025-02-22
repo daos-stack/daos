@@ -70,11 +70,10 @@ func regPromEngineSources(ctx context.Context, log logging.Logger, engines []Eng
 
 func startPrometheusExporter(ctx context.Context, srv *server) (func(), error) {
 	expCfg := &promexp.ExporterConfig{
-		Port:          srv.cfg.TelemetryConfig.Port,
-		Title:         "DAOS Engine Telemetry",
-		AllowInsecure: srv.cfg.TelemetryConfig.AllowInsecure,
-		HttpsCert:     srv.cfg.TelemetryConfig.HttpsCert,
-		HttpsKey:      srv.cfg.TelemetryConfig.HttpsKey,
+		Port:      srv.cfg.TelemetryConfig.Port,
+		Title:     "DAOS Engine Telemetry",
+		HttpsCert: srv.cfg.TelemetryConfig.HttpsCert,
+		HttpsKey:  srv.cfg.TelemetryConfig.HttpsKey,
 		Register: func(ctx context.Context, log logging.Logger) error {
 			return regPromEngineSources(ctx, srv.log, srv.harness.Instances())
 		},

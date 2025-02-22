@@ -250,10 +250,9 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithHelperLogFile("/tmp/daos_server_helper.log").
 		WithFirmwareHelperLogFile("/tmp/daos_firmware_helper.log").
 		WithTelemetryConfig(&security.TelemetryConfig{
-			AllowInsecure: true,
-			Port:          9191,
-			HttpsCert:     "/etc/daos/certs/telemetry.crt",
-			HttpsKey:      "/etc/daos/certs/telemetry.key"}).
+			Port:      9191,
+			HttpsCert: "/etc/daos/certs/telemetry.crt",
+			HttpsKey:  "/etc/daos/certs/telemetry.key"}).
 		WithSystemName("daos_server").
 		WithSocketDir("./.daos/daos_server").
 		WithFabricProvider("ofi+verbs;ofi_rxm").
@@ -425,10 +424,7 @@ func TestServerConfig_MDonSSD_Constructed(t *testing.T) {
 		}).
 		WithControlLogFile("/tmp/daos_server.log").
 		WithTelemetryConfig(&security.TelemetryConfig{
-			AllowInsecure: true,
-			Port:          9191,
-			HttpsCert:     "/etc/daos/certs/telemetry.crt",
-			HttpsKey:      "/etc/daos/certs/telemetry.key"}).
+			Port: 9191}).
 		WithFabricProvider("ofi+tcp").
 		WithMgmtSvcReplicas("example1", "example2", "example3")
 

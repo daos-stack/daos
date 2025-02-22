@@ -596,9 +596,7 @@ disable_hugepages: false
 control_log_mask: INFO
 control_log_file: /tmp/daos_server.log
 telemetry_config:
-  allow_insecure: true
-  https_cert: /etc/daos/certs/telemetry.crt
-  https_key: /etc/daos/certs/telemetry.key
+  telemetry_port: 9191
 core_dump_filter: 19
 name: daos_server
 socket_dir: /var/run/daos_server

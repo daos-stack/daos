@@ -262,6 +262,9 @@ class DaosAgentManager(SubprocessManager):
         # Support disabling verifying the socket directory (runtime_dir) for tests
         self.verify_socket_dir = True
 
+        # Set the certificate dir
+        self.telemetry_certificate_dir = cert_dir
+
     def _set_hosts(self, hosts, path, slots):
         """Set the hosts used to execute the daos command.
 
@@ -287,8 +290,6 @@ class DaosAgentManager(SubprocessManager):
         # Copy certificates
         self.manager.job.copy_certificates(
             get_log_file("daosCA/certs"), self._hosts)
-        self.manager.job.generate_telemetry_server_certificates(self._hosts, "daos_agent")
-
         # Verify the socket directory exists when using a non-systemctl manager
         if self.verify_socket_dir:
             self.verify_socket_directory(self.manager.job.certificate_owner)
@@ -392,3 +393,12 @@ class DaosAgentManager(SubprocessManager):
             str: the socket directory
         """
         return self.get_config_value("runtime_dir")
+
+    def prepare_telemetry_certificate(self):
+        """Prepare Telemetry certificate"""
+        self.manager.job.copy_telemetry_root_certificates(get_log_file("daosTelemetryCA"),
+                                                          self.telemetry_certificate_dir,
+                                                          self._hosts)
+        self.manager.job.generate_telemetry_server_certificates(self._hosts,
+                                                                "daos_agent",
+                                                                self.telemetry_certificate_dir)

@@ -84,11 +84,10 @@ type (
 	// MetricsListReq is used to request the list of metrics.
 	MetricsListReq struct {
 		httpReq
-		Host           string         // Host to query for telemetry data
-		Port           uint32         // Port to use for collecting telemetry data
-		AllowInsecure  bool           // Set the https end point secure
-		HttpsException bool           // Use the Https with Exception (Insecure)
-		Log            logging.Logger // Logging the info
+		Host          string         // Host to query for telemetry data
+		Port          uint32         // Port to use for collecting telemetry data
+		AllowInsecure bool           // Set the https end point secure
+		Log           logging.Logger // Logging the info
 	}
 
 	// MetricsListResp contains the list of available metrics.
@@ -112,7 +111,6 @@ func MetricsList(ctx context.Context, req *MetricsListReq) (*MetricsListResp, er
 	}
 
 	req.allowInsecure = req.AllowInsecure
-	req.httpsException = req.HttpsException
 	req.url = getMetricsURL(req.Host, req.Port, req.allowInsecure)
 	scraped, err := scrapeMetrics(ctx, req)
 	if err != nil {
@@ -140,11 +138,10 @@ type (
 	// MetricsQueryReq is used to query telemetry values.
 	MetricsQueryReq struct {
 		httpReq
-		Host           string   // host to query for telemetry data
-		Port           uint32   // port to use for collecting telemetry data
-		AllowInsecure  bool     // Set the https end point secure
-		HttpsException bool     // Use the Https with Exception (Insecure)
-		MetricNames    []string // if empty, collects all metrics
+		Host          string   // host to query for telemetry data
+		Port          uint32   // port to use for collecting telemetry data
+		AllowInsecure bool     // Set the https end point secure
+		MetricNames   []string // if empty, collects all metrics
 	}
 
 	// MetricsQueryResp contains the list of telemetry values per host.
@@ -168,7 +165,6 @@ func MetricsQuery(ctx context.Context, req *MetricsQueryReq) (*MetricsQueryResp,
 	}
 
 	req.allowInsecure = req.AllowInsecure
-	req.httpsException = req.HttpsException
 	req.url = getMetricsURL(req.Host, req.Port, req.allowInsecure)
 	scraped, err := scrapeMetrics(ctx, req)
 	if err != nil {
