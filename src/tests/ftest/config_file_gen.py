@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-  (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2020-2025 Intel Corporation.
   (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -16,7 +16,7 @@ from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from util.agent_utils_params import (DaosAgentTelemetryConfig, DaosAgentTransportCredentials,
                                      DaosAgentYamlParameters)
 from util.command_utils_base import CommonConfig
-from util.dmg_utils_params import DmgTelemetryConfig, DmgTransportCredentials, DmgYamlParameters
+from util.dmg_utils_params import DmgTransportCredentials, DmgYamlParameters
 from util.exception_utils import CommandFailure
 from util.server_utils_params import (DaosServerTelemetryConfig, DaosServerTransportCredentials,
                                       DaosServerYamlParameters)
@@ -73,7 +73,6 @@ def generate_dmg_config(args):
     """
     config = DmgYamlParameters(
         args.dmg_file, args.group_name, DmgTransportCredentials())
-    config.telemetry_config = DmgTelemetryConfig()
     # Update the configuration file hostlist
     config.hostlist.value = args.node_list.split(",")
     return create_config(args, config)

@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2020-2025 Intel Corporation.
   (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -815,8 +815,6 @@ class TelemetryConfig(YamlParameters):
         super().__init__(namespace, None, title)
         self._log_dir = log_dir
         self.telemetry_port = BasicParameter(None, 9191)
-        self.telemetry_retain = None
-        self.telemetry_enabled = None
 
     def get_yaml_data(self):
         """Convert the parameters into a dictionary to use to write a yaml file.

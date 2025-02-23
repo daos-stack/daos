@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2019-2025 Intel Corporation.
 // (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -260,20 +260,13 @@ func (cmd *telemConfigCmd) configurePrometheus() (*installInfo, error) {
 		return nil, err
 	}
 
-	scheme := ""
-	if cmd.cfgCmd.config.TelemetryConfig.HttpsCert != "" && cmd.cfgCmd.config.TelemetryConfig.HttpsKey != "" {
-		cmd.Infof("Prometheus configuration is setup as Secure (https) mode")
-		scheme = "https"
-	} else {
-		cmd.Infof("Prometheus configuration is setup as insecure (http) mode")
-	}
-
+	cmd.Infof("WARNING: By default, Prometheus configuration will be created for insecure (http) mode")
+	cmd.Infof("Configures the protocol scheme for secure mode in config file. [scheme: = https]")
 	cfg.ScrapeConfigs = []*scrapeConfig{
 		{
 			JobName:        "daos",
 			ScrapeInterval: 5 * time.Second,
 			StaticConfigs:  []*staticConfig{sc},
-			Scheme:         scheme,
 		},
 	}
 

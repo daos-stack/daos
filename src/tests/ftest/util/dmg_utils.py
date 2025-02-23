@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2018-2025 Intel Corporation.
   (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -11,7 +11,7 @@ from logging import getLogger
 from pwd import getpwuid
 
 from dmg_utils_base import DmgCommandBase
-from dmg_utils_params import DmgTelemetryConfig, DmgTransportCredentials, DmgYamlParameters
+from dmg_utils_params import DmgTransportCredentials, DmgYamlParameters
 from exception_utils import CommandFailure
 from general_utils import dict_to_str, get_numeric_list
 
@@ -40,8 +40,7 @@ def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None, hos
 
     """
     transport_config = DmgTransportCredentials(cert_dir)
-    telemetry_config = DmgTelemetryConfig(cert_dir)
-    config = DmgYamlParameters(config_file, group, transport_config, telemetry_config)
+    config = DmgYamlParameters(config_file, group, transport_config)
     command = DmgCommand(bin_dir, config, hostlist_suffix)
     if config_temp:
         # Setup the DaosServerCommand to write the config file data to the

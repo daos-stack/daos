@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2020-2025 Intel Corporation.
   (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -105,9 +105,6 @@ class DaosAgentYamlParameters(YamlParameters):
         self.exclude_fabric_ifaces = BasicParameter(None)
         self.cache_expiration = BasicParameter(None)
         self.disable_caching = BasicParameter(None)
-        self.telemetry_port = BasicParameter(None)
-        self.telemetry_enabled = BasicParameter(None)
-        self.telemetry_retain = BasicParameter(None)
         self.access_points = BasicParameter(None, ["localhost"])
 
     def update_log_file(self, name):
