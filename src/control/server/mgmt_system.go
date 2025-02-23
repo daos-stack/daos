@@ -1157,17 +1157,27 @@ func (svc *mgmtSvc) getPoolRanksResps(ctx context.Context, sys string, poolIDs [
 		}
 
 		req := &control.PoolRanksReq{
-			PoolID: id,
-			Ranks:  rs.Ranks(),
+			ID:    id,
+			Ranks: rs.Ranks(),
 		}
 		req.Sys = sys
 
+		svc.log.Tracef("%T: %+v", req, req)
+
 		resp, err := ctlApiCall(ctx, svc.rpcClient, req)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "%T", ctlApiCall)
 		}
 
-		svc.log.Tracef("%T: %+v, %T: %+v", req, req, resp, resp)
+		svc.log.Tracef("%T: %+v", resp, resp)
+
+		if resp == nil {
+			return nil, errors.Errorf("nil %T", resp)
+		}
+
+		for _, res := range resp.Results {
+			svc.log.Tracef("%T: %+v", res, res)
+		}
 
 		resps = append(resps, resp)
 	}
@@ -1198,6 +1208,13 @@ func (svc *mgmtSvc) SystemDrain(ctx context.Context, pbReq *mgmtpb.SystemDrainRe
 		return nil, err
 	}
 
+	if len(poolIDs) != len(poolRanks) {
+		return nil, errors.New("nr poolIDs should be equal to poolRanks keys")
+	}
+	if len(poolIDs) == 0 {
+		return nil, errors.New("no pool-ranks found to operate on with request params")
+	}
+
 	// Generate results from dRPC calls.
 	var apiCall poolRanksOpSig = control.PoolDrain
 	if pbReq.Reint {
@@ -1208,9 +1225,17 @@ func (svc *mgmtSvc) SystemDrain(ctx context.Context, pbReq *mgmtpb.SystemDrainRe
 		return nil, err
 	}
 
+	if len(resps) == 0 {
+		return nil, errors.New("no pool-ranks responses received")
+	}
+	if len(resps) != len(poolIDs) {
+		return nil, errors.Errorf("unexpected number of pool-ranks responses received, "+
+			"want %d got %d", len(poolIDs), len(resps))
+	}
+
 	pbResp := &mgmtpb.SystemDrainResp{}
-	if err := convert.Types(resps, pbResp.Responses); err != nil {
-		return nil, errors.Wrapf(err, "convert %T->%T", resps, pbReq.Responses)
+	if err := convert.Types(resps, &pbResp.Responses); err != nil {
+		return nil, errors.Wrapf(err, "convert %T->%T", resps, pbResp.Responses)
 	}
 	pbResp.Reint = pbReq.Reint
 

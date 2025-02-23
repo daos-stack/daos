@@ -341,10 +341,10 @@ func (cmd *systemDrainCmd) execute(reint bool) (errOut error) {
 		return cmd.OutputJSON(resp, resp.Errors())
 	}
 
-	cmd.Debugf("%T: %+v, %T: %+v", req, req, resp.Results, resp.Results)
+	cmd.Debugf("%T: %+v, %T: %+v", req, req, resp.Responses, resp.Responses)
 
 	var out strings.Builder
-	pretty.PrintPoolRankResults(&out, resp.Results)
+	pretty.PrintPoolRanksResps(&out, resp.Responses...)
 	cmd.Info(out.String())
 
 	return resp.Errors()

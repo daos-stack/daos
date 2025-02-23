@@ -91,8 +91,8 @@ message SystemDrainReq
 // Response from pool-ranks operation.
 message PoolRanksResp
 {
-	string   pool_id                   = 1;
-	repeated shared.RankResult results = 2;
+	string   id                        = 1; // Pool ID
+	repeated shared.RankResult results = 2; // Pool-rank operation results.
 }
 
 // SystemDrainResp returns status of system-drain request.

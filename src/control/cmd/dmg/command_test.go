@@ -22,7 +22,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
-	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -162,10 +161,7 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 		*control.PoolUpdateACLReq, *control.PoolDeleteACLReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.ACLResp{})
 	case *control.PoolRanksReq:
-		// To meet PoolRanksResp.GetResults() validation requirements.
-		resp = control.MockMSResponse("", nil, &mgmtpb.PoolRanksResp{
-			SuccessRanks: []uint32{0}, FailedRank: uint32(ranklist.NilRank),
-		})
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolRanksResp{})
 	case *control.PoolExtendReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolExtendResp{})
 	case *control.SystemCheckEnableReq:

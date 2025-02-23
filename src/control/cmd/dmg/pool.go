@@ -553,34 +553,26 @@ func (cmd *poolExcludeCmd) Execute(args []string) error {
 		return errors.WithMessage(err, "parsing target list")
 	}
 
-	poolID := cmd.PoolID().String()
-	ranks := cmd.RankList.Ranks()
 	req := &control.PoolRanksReq{
-		ID:        poolID,
-		Ranks:     ranks,
+		ID:        cmd.PoolID().String(),
+		Ranks:     cmd.RankList.Ranks(),
 		TargetIdx: idxList,
 		Force:     cmd.Force,
 	}
 
 	resp, err := control.PoolExclude(cmd.MustLogCtx(), cmd.ctlInvoker, req)
-
-	if cmd.JSONOutputEnabled() {
-		return cmd.OutputJSON(resp, err)
-	}
-
-	cmd.Debugf("%T: %+v, %T: %+v", req, req, resp, resp)
-
-	// Retrieve PoolRanksResults so we can pretty print output.
-	results, err := resp.GetResults(poolID, ranks, err)
 	if err != nil {
-		cmd.Errorf(errors.WithMessage(err, "Pool exclude failed").Error())
 		return err
 	}
 
-	cmd.Debugf("%T: %+v", results, results)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
+	}
+
+	cmd.Debugf("%T: %+v, %T: %+v", req, req, resp.Results, resp.Results)
 
 	var out strings.Builder
-	pretty.PrintPoolRankResults(&out, results)
+	pretty.PrintPoolRanksResps(&out, resp)
 	cmd.Info(out.String())
 
 	return resp.Errors()
@@ -599,33 +591,25 @@ func (cmd *poolDrainCmd) Execute(args []string) error {
 		return errors.WithMessage(err, "parsing target list")
 	}
 
-	poolID := cmd.PoolID().String()
-	ranks := cmd.RankList.Ranks()
 	req := &control.PoolRanksReq{
-		ID:        poolID,
-		Ranks:     ranks,
+		ID:        cmd.PoolID().String(),
+		Ranks:     cmd.RankList.Ranks(),
 		TargetIdx: idxList,
 	}
 
 	resp, err := control.PoolDrain(cmd.MustLogCtx(), cmd.ctlInvoker, req)
-
-	if cmd.JSONOutputEnabled() {
-		return cmd.OutputJSON(resp, err)
-	}
-
-	cmd.Debugf("%T: %+v, %T: %+v", req, req, resp, resp)
-
-	// Retrieve PoolRanksResults so we can pretty print output.
-	results, err := resp.GetResults(poolID, ranklist.RankSetFromRanks(ranks), err)
 	if err != nil {
-		cmd.Errorf(errors.WithMessage(err, "Pool drain failed").Error())
 		return err
 	}
 
-	cmd.Debugf("%T: %+v", results, results)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
+	}
+
+	cmd.Debugf("%T: %+v, %T: %+v", req, req, resp.Results, resp.Results)
 
 	var out strings.Builder
-	pretty.PrintPoolRankResults(&out, results)
+	pretty.PrintPoolRanksResps(&out, resp)
 	cmd.Info(out.String())
 
 	return resp.Errors()
@@ -668,34 +652,25 @@ func (cmd *poolReintegrateCmd) Execute(args []string) error {
 		return errors.WithMessage(err, "parsing target list")
 	}
 
-	poolID := cmd.PoolID().String()
-	ranks := cmd.RankList.Ranks()
 	req := &control.PoolRanksReq{
-		ID:        poolID,
-		Ranks:     ranks,
+		ID:        cmd.PoolID().String(),
+		Ranks:     cmd.RankList.Ranks(),
 		TargetIdx: idxList,
-		Force:     cmd.Force,
 	}
 
 	resp, err := control.PoolReintegrate(cmd.MustLogCtx(), cmd.ctlInvoker, req)
-
-	if cmd.JSONOutputEnabled() {
-		return cmd.OutputJSON(resp, err)
-	}
-
-	cmd.Debugf("%T: %+v, %T: %+v", req, req, resp, resp)
-
-	// Retrieve PoolRanksResults so we can pretty print output.
-	results, err := resp.GetResults(poolID, ranklist.RankSetFromRanks(ranks), err)
 	if err != nil {
-		cmd.Errorf(errors.WithMessage(err, "Pool reintegrate failed").Error())
 		return err
 	}
 
-	cmd.Debugf("%T: %+v", results, results)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
+	}
+
+	cmd.Debugf("%T: %+v, %T: %+v", req, req, resp.Results, resp.Results)
 
 	var out strings.Builder
-	pretty.PrintPoolRankResults(&out, results)
+	pretty.PrintPoolRanksResps(&out, resp)
 	cmd.Info(out.String())
 
 	return resp.Errors()

@@ -745,12 +745,15 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 	return resp, nil
 }
 
-// PoolRanksReq struct contains request for operation on multiple pool-ranks.
+// PoolRanksReq struct contains request for operation on multiple pool-ranks. Control API receives
+// generic PoolRanksReq with multiple ranks from API consumer (e.g. dmg admin tool) and issues
+// specific e.g. pb.PoolDrain gRPC requests to server for each rank in serial using the management
+// service client API. Per-rank results are returned in control API generic PoolRanksResp.
 type PoolRanksReq struct {
 	poolRequest
-	PoolID    string          `json:"pool_id"`
+	ID        string          `json:"id"`
 	Ranks     []ranklist.Rank `json:"ranks"`
-	TargetIDs []uint32        `json:"target_ids"`
+	TargetIdx []uint32        `json:"target_idx"`
 	Force     bool            `json:"force"`
 }
 
@@ -764,7 +767,7 @@ type PoolRankResult struct {
 
 // PoolRanksResp struct contains response from operation on multiple pool-ranks.
 type PoolRanksResp struct {
-	PoolID  string            `json:"pool_id"`
+	ID      string            `json:"id"`
 	Results []*PoolRankResult `json:"results"`
 }
 
@@ -773,6 +776,9 @@ type PoolRanksResp struct {
 func (resp *PoolRanksResp) Errors() error {
 	if resp == nil {
 		return errors.Errorf("nil %T", resp)
+	}
+	if resp.ID == "" {
+		return errors.New("empty id in response")
 	}
 
 	rs := ranklist.MustCreateRankSet("")
@@ -784,7 +790,7 @@ func (resp *PoolRanksResp) Errors() error {
 
 	if rs.Count() > 0 {
 		return errors.Errorf("%s %s failed on pool %s",
-			english.Plural(rs.Count(), "rank", "ranks"), rs.String(), resp.PoolID)
+			english.Plural(rs.Count(), "rank", "ranks"), rs.String(), resp.ID)
 	}
 
 	return nil
@@ -798,7 +804,7 @@ func getPoolRanksResp(ctx context.Context, rpcClient UnaryInvoker, req *PoolRank
 	if req == nil {
 		return nil, errors.Errorf("nil %T", req)
 	}
-	if req.PoolID == "" {
+	if req.ID == "" {
 		return nil, errors.New("empty pool id")
 	}
 	if len(req.Ranks) == 0 {
@@ -809,15 +815,25 @@ func getPoolRanksResp(ctx context.Context, rpcClient UnaryInvoker, req *PoolRank
 	for _, rank := range req.Ranks {
 		result, err := poolRankOp(ctx, rpcClient, req, rank)
 		if err != nil {
-			return nil, errors.Wrapf(err, "pool %s rank %d", req.PoolID, rank)
+			return nil, errors.Wrapf(err, "pool %s rank %d", req.ID, rank)
 		}
 		results = append(results, result)
 	}
 
 	return &PoolRanksResp{
-		PoolID:  req.PoolID,
+		ID:      req.ID,
 		Results: results,
 	}, nil
+}
+
+func getPoolRankResult(status int32, rank ranklist.Rank) *PoolRankResult {
+	var msg string
+	errored := daos.Status(status) != daos.Success
+	if errored {
+		msg = daos.Status(status).Error()
+	}
+
+	return &PoolRankResult{Rank: rank, Errored: errored, Msg: msg}
 }
 
 // Implements poolRankOpSig.
@@ -846,13 +862,9 @@ func poolExcludeRank(ctx context.Context, rpcClient UnaryInvoker, req *PoolRanks
 	if err := convertMSResponse(ur, resp); err != nil {
 		return nil, err
 	}
-	rpcClient.Debugf("Exclude DAOS pool-rank targets response: %+v\n", resp)
+	rpcClient.Debugf("Exclude DAOS pool-rank targets response: %+v\n", *resp)
 
-	return &PoolRankResult{
-		Rank:    rank,
-		Errored: daos.Status(resp.Status) != daos.Success,
-		Msg:     daos.Status(resp.Status).Error(),
-	}, nil
+	return getPoolRankResult(resp.Status, rank), nil
 }
 
 // PoolExclude will set pool targets on specified ranks to down state which should automatically
@@ -887,13 +899,9 @@ func poolDrainRank(ctx context.Context, rpcClient UnaryInvoker, req *PoolRanksRe
 	if err := convertMSResponse(ur, resp); err != nil {
 		return nil, err
 	}
-	rpcClient.Debugf("Drain DAOS pool-rank targets response: %+v\n", resp)
+	rpcClient.Debugf("Drain DAOS pool-rank targets response: %+v\n", *resp)
 
-	return &PoolRankResult{
-		Rank:    rank,
-		Errored: daos.Status(resp.Status) != daos.Success,
-		Msg:     daos.Status(resp.Status).Error(),
-	}, nil
+	return getPoolRankResult(resp.Status, rank), nil
 }
 
 // PoolDrain will set pool targets on specified ranks in to the drain state which should
@@ -959,13 +967,9 @@ func poolReintegrateRank(ctx context.Context, rpcClient UnaryInvoker, req *PoolR
 	if err := convertMSResponse(ur, resp); err != nil {
 		return nil, err
 	}
-	rpcClient.Debugf("Reintegrate DAOS pool-rank targets response: %+v\n", resp)
+	rpcClient.Debugf("Reintegrate DAOS pool-rank targets response: %+v\n", *resp)
 
-	return &PoolRankResult{
-		Rank:    rank,
-		Errored: daos.Status(resp.Status) != daos.Success,
-		Msg:     daos.Status(resp.Status).Error(),
-	}, nil
+	return getPoolRankResult(resp.Status, rank), nil
 }
 
 // PoolReintegrate will set pool targets on specified ranks back to up state which should

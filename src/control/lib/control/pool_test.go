@@ -243,32 +243,35 @@ func TestControl_PoolRanksResp_Errors(t *testing.T) {
 		"nil resp": {
 			expErr: errors.New("nil"),
 		},
-		"no failure": {
+		"empty id": {
+			resp:   &PoolRanksResp{},
+			expErr: errors.New("empty id"),
+		},
+		"no results": {
 			resp: &PoolRanksResp{
-				ID:           test.MockUUID(),
-				SuccessRanks: []ranklist.Rank{0},
-				FailedRank:   ranklist.NilRank,
+				ID: test.MockUUID(),
 			},
 		},
-		"failure; nil rank": {
+		"success": {
 			resp: &PoolRanksResp{
-				ID:             test.MockUUID(),
-				Status:         int32(daos.MiscError),
-				FailedRank:     ranklist.NilRank,
-				InitialRankset: "0-3",
+				ID: test.MockUUID(),
+				Results: []*PoolRankResult{
+					{Rank: 1}, {Rank: 2},
+				},
 			},
-			expErr: errors.Errorf("pool %s ranks 0-3: %s", test.MockUUID(),
-				daos.MiscError),
 		},
-		"failure; failed rank": {
+		"failure": {
 			resp: &PoolRanksResp{
-				ID:             test.MockUUID(),
-				Status:         int32(daos.MiscError),
-				FailedRank:     1,
-				InitialRankset: "0-3",
+				ID: test.MockUUID(),
+				Results: []*PoolRankResult{
+					{Rank: 1},
+					{Rank: 2, Errored: true, Msg: "bad"},
+					{Rank: 3, Errored: true, Msg: "bad"},
+					{Rank: 4},
+					{Rank: 5, Errored: true, Msg: "bad"},
+				},
 			},
-			expErr: errors.Errorf("pool %s rank 1: %s", test.MockUUID(),
-				daos.MiscError),
+			expErr: errors.Errorf("3 ranks 2-3,5 failed on pool %s", test.MockUUID()),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -277,80 +280,112 @@ func TestControl_PoolRanksResp_Errors(t *testing.T) {
 	}
 }
 
-func TestControl_PoolRanksResp_GetResults(t *testing.T) {
+func TestControl_PoolExclude(t *testing.T) {
 	for name, tc := range map[string]struct {
-		resp   *PoolRanksResp
-		errIn  error
-		expErr error
-		expRes []*PoolRanksResult
+		mic     *MockInvokerConfig
+		req     *PoolRanksReq
+		expErr  error
+		expResp *PoolRanksResp
 	}{
-		"nil resp": {
-			expErr: errors.New("nil"),
-		},
-		"empty id": {
-			resp:   &PoolRanksResp{},
-			expErr: errors.New("empty"),
-		},
-		"no failure; failed rank": {
-			resp: &PoolRanksResp{
-				ID:         test.MockUUID(),
-				FailedRank: 1,
+		"local failure": {
+			req: &PoolRanksReq{
+				ID:        test.MockUUID(),
+				Ranks:     []ranklist.Rank{2},
+				TargetIdx: []uint32{1, 2, 3},
 			},
-			expErr: errors.New("failed rank"),
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("local failed"),
+			},
+			expErr: errors.New("local failed"),
 		},
-		"no failure; no successes": {
-			resp: &PoolRanksResp{
-				ID:         test.MockUUID(),
-				FailedRank: ranklist.NilRank,
+		"remote failure": {
+			req: &PoolRanksReq{
+				ID:        test.MockUUID(),
+				Ranks:     []ranklist.Rank{2},
+				TargetIdx: []uint32{1, 2, 3},
 			},
-			expErr: errors.New("no ranks"),
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
+			},
+			expErr: errors.New("remote failed"),
 		},
-		"no failure; with successes": {
-			resp: &PoolRanksResp{
-				ID:           test.MockUUID(),
-				SuccessRanks: []ranklist.Rank{0},
-				FailedRank:   ranklist.NilRank,
+		"success": {
+			req: &PoolRanksReq{
+				ID:        test.MockUUID(),
+				Ranks:     []ranklist.Rank{1, 2, 3},
+				TargetIdx: []uint32{1, 2, 3},
 			},
-			expRes: []*PoolRanksResult{
-				{ID: test.MockUUID(), Ranks: "0"},
+			mic: &MockInvokerConfig{
+				// PoolExclude server mgmtSvc gRPC handler to return success for
+				// each rank call.
+				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.PoolExcludeResp{}),
+			},
+			expResp: &PoolRanksResp{
+				ID: test.MockUUID(),
+				Results: []*PoolRankResult{
+					{Rank: 1}, {Rank: 2}, {Rank: 3},
+				},
 			},
 		},
-		"failure; nil rank": {
-			resp: &PoolRanksResp{
-				ID:             test.MockUUID(),
-				Status:         int32(daos.MiscError),
-				FailedRank:     ranklist.NilRank,
-				InitialRankset: "0-3",
+		"mixed results; all targets": {
+			req: &PoolRanksReq{
+				ID:    test.MockUUID(),
+				Ranks: []ranklist.Rank{0, 1, 2, 3},
 			},
-			expErr: errors.New("no failed rank"),
-		},
-		"failure; failed rank": {
-			resp: &PoolRanksResp{
-				ID:             test.MockUUID(),
-				Status:         int32(daos.MiscError),
-				FailedRank:     1,
-				InitialRankset: "0-3",
+			mic: &MockInvokerConfig{
+				// PoolExclude server mgmtSvc gRPC handler to return different resp
+				// for each rank call.
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, &mgmtpb.PoolExcludeResp{}),
+					MockMSResponse("host1", nil, &mgmtpb.PoolExcludeResp{
+						Status: int32(daos.MiscError),
+					}),
+					MockMSResponse("host1", nil, &mgmtpb.PoolExcludeResp{}),
+					MockMSResponse("host1", nil, &mgmtpb.PoolExcludeResp{
+						Status: int32(daos.IOError),
+					}),
+				},
 			},
-			expRes: []*PoolRanksResult{
-				{
-					ID:     test.MockUUID(),
-					Ranks:  "1",
-					Status: int32(daos.MiscError),
-					Msg:    daos.MiscError.Error(),
+			expResp: &PoolRanksResp{
+				ID: test.MockUUID(),
+				Results: []*PoolRankResult{
+					{Rank: 0},
+					{
+						Rank:    1,
+						Errored: true,
+						Msg:     "DER_MISC(-1025): Miscellaneous error",
+					},
+					{Rank: 2},
+					{
+						Rank:    3,
+						Errored: true,
+						Msg:     "DER_IO(-2001): I / O error",
+					},
 				},
 			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			gotRes, gotErr := tc.resp.GetResults(tc.errIn)
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
 
+			mic := tc.mic
+			if mic == nil {
+				mic = DefaultMockInvokerConfig()
+			}
+
+			ctx := test.Context(t)
+			mi := NewMockInvoker(log, mic)
+
+			resp, gotErr := PoolExclude(ctx, mi, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expRes, gotRes); diff != "" {
-				t.Fatalf("Unexpected results (-want, +got):\n%s\n", diff)
+			cmpOpt := cmpopts.IgnoreUnexported(mgmtpb.PoolRanksResp{})
+			if diff := cmp.Diff(tc.expResp, resp, cmpOpt); diff != "" {
+				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
@@ -392,37 +427,52 @@ func TestControl_PoolDrain(t *testing.T) {
 				TargetIdx: []uint32{1, 2, 3},
 			},
 			mic: &MockInvokerConfig{
-				UnaryResponse: MockMSResponse("host1", nil,
-					&mgmtpb.PoolRanksResp{
-						SuccessRanks: []uint32{1, 2, 3},
-					},
-				),
+				// PoolDrain server mgmtSvc gRPC handler to return success for
+				// each rank call.
+				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.PoolDrainResp{}),
 			},
 			expResp: &PoolRanksResp{
-				ID:           test.MockUUID(),
-				SuccessRanks: []ranklist.Rank{1, 2, 3},
+				ID: test.MockUUID(),
+				Results: []*PoolRankResult{
+					{Rank: 1}, {Rank: 2}, {Rank: 3},
+				},
 			},
 		},
-		"partial failure": {
+		"mixed results; all targets": {
 			req: &PoolRanksReq{
-				ID:        test.MockUUID(),
-				Ranks:     []ranklist.Rank{1, 2, 3},
-				TargetIdx: []uint32{1, 2, 3},
+				ID:    test.MockUUID(),
+				Ranks: []ranklist.Rank{0, 1, 2, 3},
 			},
 			mic: &MockInvokerConfig{
-				UnaryResponse: MockMSResponse("host1", nil,
-					&mgmtpb.PoolRanksResp{
-						SuccessRanks: []uint32{1},
-						FailedRank:   2,
-						Status:       -1,
-					},
-				),
+				// PoolDrain server mgmtSvc gRPC handler to return different resp
+				// for each rank call.
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, &mgmtpb.PoolDrainResp{}),
+					MockMSResponse("host1", nil, &mgmtpb.PoolDrainResp{
+						Status: int32(daos.MiscError),
+					}),
+					MockMSResponse("host1", nil, &mgmtpb.PoolDrainResp{}),
+					MockMSResponse("host1", nil, &mgmtpb.PoolDrainResp{
+						Status: int32(daos.IOError),
+					}),
+				},
 			},
 			expResp: &PoolRanksResp{
-				ID:           test.MockUUID(),
-				SuccessRanks: []ranklist.Rank{1},
-				FailedRank:   ranklist.Rank(2),
-				Status:       -1,
+				ID: test.MockUUID(),
+				Results: []*PoolRankResult{
+					{Rank: 0},
+					{
+						Rank:    1,
+						Errored: true,
+						Msg:     "DER_MISC(-1025): Miscellaneous error",
+					},
+					{Rank: 2},
+					{
+						Rank:    3,
+						Errored: true,
+						Msg:     "DER_IO(-2001): I / O error",
+					},
+				},
 			},
 		},
 	} {
@@ -488,37 +538,52 @@ func TestControl_PoolReintegrate(t *testing.T) {
 				TargetIdx: []uint32{1, 2, 3},
 			},
 			mic: &MockInvokerConfig{
-				UnaryResponse: MockMSResponse("host1", nil,
-					&mgmtpb.PoolRanksResp{
-						SuccessRanks: []uint32{1, 2, 3},
-					},
-				),
+				// PoolReintegrate server mgmtSvc gRPC handler to return success for
+				// each rank call.
+				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.PoolReintResp{}),
 			},
 			expResp: &PoolRanksResp{
-				ID:           test.MockUUID(),
-				SuccessRanks: []ranklist.Rank{1, 2, 3},
+				ID: test.MockUUID(),
+				Results: []*PoolRankResult{
+					{Rank: 1}, {Rank: 2}, {Rank: 3},
+				},
 			},
 		},
-		"partial failure": {
+		"mixed results; all targets": {
 			req: &PoolRanksReq{
-				ID:        test.MockUUID(),
-				Ranks:     []ranklist.Rank{1, 2, 3},
-				TargetIdx: []uint32{1, 2, 3},
+				ID:    test.MockUUID(),
+				Ranks: []ranklist.Rank{0, 1, 2, 3},
 			},
 			mic: &MockInvokerConfig{
-				UnaryResponse: MockMSResponse("host1", nil,
-					&mgmtpb.PoolRanksResp{
-						SuccessRanks: []uint32{1},
-						FailedRank:   2,
-						Status:       -1,
-					},
-				),
+				// PoolReintegrate server mgmtSvc gRPC handler to return different resp
+				// for each rank call.
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, &mgmtpb.PoolReintResp{}),
+					MockMSResponse("host1", nil, &mgmtpb.PoolReintResp{
+						Status: int32(daos.MiscError),
+					}),
+					MockMSResponse("host1", nil, &mgmtpb.PoolReintResp{}),
+					MockMSResponse("host1", nil, &mgmtpb.PoolReintResp{
+						Status: int32(daos.IOError),
+					}),
+				},
 			},
 			expResp: &PoolRanksResp{
-				ID:           test.MockUUID(),
-				SuccessRanks: []ranklist.Rank{1},
-				FailedRank:   ranklist.Rank(2),
-				Status:       -1,
+				ID: test.MockUUID(),
+				Results: []*PoolRankResult{
+					{Rank: 0},
+					{
+						Rank:    1,
+						Errored: true,
+						Msg:     "DER_MISC(-1025): Miscellaneous error",
+					},
+					{Rank: 2},
+					{
+						Rank:    3,
+						Errored: true,
+						Msg:     "DER_IO(-2001): I / O error",
+					},
+				},
 			},
 		},
 	} {
@@ -535,103 +600,6 @@ func TestControl_PoolReintegrate(t *testing.T) {
 			mi := NewMockInvoker(log, mic)
 
 			resp, gotErr := PoolReintegrate(ctx, mi, tc.req)
-			test.CmpErr(t, tc.expErr, gotErr)
-			if tc.expErr != nil {
-				return
-			}
-
-			cmpOpt := cmpopts.IgnoreUnexported(mgmtpb.PoolRanksResp{})
-			if diff := cmp.Diff(tc.expResp, resp, cmpOpt); diff != "" {
-				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
-			}
-		})
-	}
-}
-
-func TestControl_PoolExclude(t *testing.T) {
-	for name, tc := range map[string]struct {
-		mic     *MockInvokerConfig
-		req     *PoolRanksReq
-		expErr  error
-		expResp *PoolRanksResp
-	}{
-		"local failure": {
-			req: &PoolRanksReq{
-				ID:        test.MockUUID(),
-				Ranks:     []ranklist.Rank{2},
-				TargetIdx: []uint32{1, 2, 3},
-			},
-			mic: &MockInvokerConfig{
-				UnaryError: errors.New("local failed"),
-			},
-			expErr: errors.New("local failed"),
-		},
-		"remote failure": {
-			req: &PoolRanksReq{
-				ID:        test.MockUUID(),
-				Ranks:     []ranklist.Rank{2},
-				TargetIdx: []uint32{1, 2, 3},
-			},
-			mic: &MockInvokerConfig{
-				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
-			},
-			expErr: errors.New("remote failed"),
-		},
-		"success; with force": {
-			req: &PoolRanksReq{
-				ID:        test.MockUUID(),
-				Ranks:     []ranklist.Rank{1, 2, 3},
-				TargetIdx: []uint32{1, 2, 3},
-				Force:     true,
-			},
-			mic: &MockInvokerConfig{
-				UnaryResponse: MockMSResponse("host1", nil,
-					&mgmtpb.PoolRanksResp{
-						SuccessRanks: []uint32{1, 2, 3},
-					},
-				),
-			},
-			expResp: &PoolRanksResp{
-				ID:           test.MockUUID(),
-				SuccessRanks: []ranklist.Rank{1, 2, 3},
-			},
-		},
-		"partial failure": {
-			req: &PoolRanksReq{
-				ID:        test.MockUUID(),
-				Ranks:     []ranklist.Rank{1, 2, 3},
-				TargetIdx: []uint32{1, 2, 3},
-			},
-			mic: &MockInvokerConfig{
-				UnaryResponse: MockMSResponse("host1", nil,
-					&mgmtpb.PoolRanksResp{
-						SuccessRanks: []uint32{1},
-						FailedRank:   2,
-						Status:       -1,
-					},
-				),
-			},
-			expResp: &PoolRanksResp{
-				ID:           test.MockUUID(),
-				SuccessRanks: []ranklist.Rank{1},
-				FailedRank:   ranklist.Rank(2),
-				Status:       -1,
-			},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer test.ShowBufferOnFailure(t, buf)
-
-			mic := tc.mic
-			if mic == nil {
-				mic = DefaultMockInvokerConfig()
-			}
-
-			ctx := test.Context(t)
-			mi := NewMockInvoker(log, mic)
-
-			resp, gotErr := PoolExclude(ctx, mi, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

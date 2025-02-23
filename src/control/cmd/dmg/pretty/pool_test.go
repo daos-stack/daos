@@ -634,3 +634,87 @@ Label UUID                                 State SvcReps SCM Size SCM Used SCM I
 		})
 	}
 }
+
+func TestPretty_PrintPoolRanksResps(t *testing.T) {
+	for name, tc := range map[string]struct {
+		resps  []*control.PoolRanksResp
+		expOut string
+	}{
+		"normal pool drain response": {
+			resps: []*control.PoolRanksResp{
+				{
+					ID: test.MockUUID(1),
+					Results: []*control.PoolRankResult{
+						{Rank: 0}, {Rank: 1}, {Rank: 2},
+					},
+				},
+			},
+			expOut: `
+Pool                                 Ranks Result Reason 
+----                                 ----- ------ ------ 
+00000001-0001-0001-0001-000000000001 0-2   OK     -      
+
+`,
+		},
+		"normal response; use labels": {
+			resps: []*control.PoolRanksResp{
+				{
+					ID: "label1",
+					Results: []*control.PoolRankResult{
+						{Rank: 0}, {Rank: 1}, {Rank: 2}, {Rank: 3},
+					},
+				},
+				{
+					ID: "label2",
+					Results: []*control.PoolRankResult{
+						{Rank: 1}, {Rank: 2}, {Rank: 3}, {Rank: 4},
+					},
+				},
+			},
+			expOut: `
+Pool   Ranks Result Reason 
+----   ----- ------ ------ 
+label1 0-3   OK     -      
+label2 1-4   OK     -      
+
+`,
+		},
+		"multiple response with failures": {
+			resps: []*control.PoolRanksResp{
+				{
+					ID: test.MockUUID(1),
+					Results: []*control.PoolRankResult{
+						{Rank: 1}, {Rank: 2},
+					},
+				},
+				{
+					ID: test.MockUUID(2),
+					Results: []*control.PoolRankResult{
+						{Rank: 0},
+						{Rank: 1, Errored: true, Msg: "fail1"},
+						{Rank: 2, Errored: true, Msg: "fail2"},
+						{Rank: 3, Errored: true, Msg: "fail1"},
+					},
+				},
+			},
+			expOut: `
+Pool                                 Ranks Result Reason 
+----                                 ----- ------ ------ 
+00000001-0001-0001-0001-000000000001 1-2   OK     -      
+00000002-0002-0002-0002-000000000002 0     OK     -      
+00000002-0002-0002-0002-000000000002 1,3   FAIL   fail1  
+00000002-0002-0002-0002-000000000002 2     FAIL   fail2  
+
+`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var out strings.Builder
+			PrintPoolRanksResps(&out, tc.resps...)
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expOut, "\n"), out.String()); diff != "" {
+				t.Fatalf("unexpected stdout (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}

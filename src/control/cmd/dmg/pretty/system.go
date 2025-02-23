@@ -222,34 +222,3 @@ func PrintSystemCleanupResponse(out io.Writer, resp *control.SystemCleanupResp, 
 
 	fmt.Fprintln(out, "System Cleanup Success")
 }
-
-// PrintPoolRankResults generates a table showing results of operations on pool ranks. Each row will
-// indicate a result for a group of ranks on a pool.
-func PrintPoolRankResults(out io.Writer, results []*control.PoolRanksResult) {
-	if len(results) == 0 {
-		fmt.Fprintln(out, "No pool ranks processed")
-		return
-	}
-
-	titles := []string{"Pool", "Ranks", "Result", "Reason"}
-	formatter := txtfmt.NewTableFormatter(titles...)
-
-	var table []txtfmt.TableRow
-	for _, r := range results {
-		result := "OK"
-		reason := "-"
-		if r.Status != 0 {
-			result = "FAIL"
-			reason = r.Msg
-		}
-		row := txtfmt.TableRow{
-			"Pool":   r.ID,
-			"Ranks":  ranklist.RankSetFromRanks(r.Ranks).String(),
-			"Result": result,
-			"Reason": reason,
-		}
-		table = append(table, row)
-	}
-
-	fmt.Fprintln(out, formatter.Format(table))
-}
