@@ -190,8 +190,8 @@ daos_svc_rf_is_valid(uint64_t svc_rf)
  * Level of perf_domain, should be same value as PO_COMP_TP_xxx (enum pool_comp_type).
  */
 enum {
-	DAOS_PROP_PERF_DOMAIN_ROOT = 255,
-	DAOS_PROP_PERF_DOMAIN_GROUP = 3,
+	DAOS_PROP_PERF_DOMAIN_ROOT  = 255,
+	DAOS_PROP_PERF_DOMAIN_GROUP = 200,
 };
 
 /**
@@ -479,16 +479,16 @@ enum {
  * rank is hardcoded to 1, [2-254] are defined by the admin
  */
 enum {
-	DAOS_PROP_CO_REDUN_MIN	= 1,
+	DAOS_PROP_CO_REDUN_MIN = 1,
 	/* server rank (engine) level */
-	DAOS_PROP_CO_REDUN_RANK	= 1,
-	/* server node level */
-	DAOS_PROP_CO_REDUN_NODE	= 2,
-	DAOS_PROP_CO_REDUN_MAX	= 254,
+	DAOS_PROP_CO_REDUN_RANK = 1,
+	/* fault domain level */
+	DAOS_PROP_CO_REDUN_FAULT = 2,
+	DAOS_PROP_CO_REDUN_MAX   = 254,
 };
 
 /** default fault domain level */
-#define DAOS_PROP_CO_REDUN_DEFAULT	DAOS_PROP_CO_REDUN_NODE
+#define DAOS_PROP_CO_REDUN_DEFAULT DAOS_PROP_CO_REDUN_FAULT
 
 /** container status flag */
 enum {

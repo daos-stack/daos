@@ -279,7 +279,7 @@ init_reconf_map(struct pool_map *map, d_rank_list_t *replicas, d_rank_t self,
 	int                 i;
 	int                 rc;
 
-	domains_len = pool_map_find_domain(map, PO_COMP_TP_NODE, PO_COMP_ID_ALL, &domains);
+	domains_len = pool_map_find_domain(map, PO_COMP_TP_FAULT, PO_COMP_ID_ALL, &domains);
 	D_ASSERTF(domains_len > 0, "pool_map_find_domain: %d\n", domains_len);
 
 	D_ALLOC_ARRAY(rmap.rcm_domains, domains_len);
@@ -305,7 +305,7 @@ init_reconf_map(struct pool_map *map, d_rank_list_t *replicas, d_rank_t self,
 		goto out;
 
 	/*
-	 * Go through all PO_COMP_TP_NODE domains and their engines in the pool
+	 * Go through all PO_COMP_TP_FAULT domains and their engines in the pool
 	 * map, in order to populate rmap and to_remove.
 	 */
 	for (i = 0; i < domains_len; i++) {

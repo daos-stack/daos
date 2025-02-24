@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -297,7 +298,7 @@ static struct d_hash_table	pl_htable;
  * will based on container's DAOS_PROP_CO_REDUN_LVL property to set the fault domain level for
  * that object's layout calculating.
  */
-#define PL_DEFAULT_DOMAIN	PO_COMP_TP_NODE
+#define PL_DEFAULT_DOMAIN PO_COMP_TP_FAULT
 
 static void
 pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,

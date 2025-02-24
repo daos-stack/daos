@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2954,7 +2955,7 @@ nrank_per_node_get(struct pool_map *poolmap)
 	struct pool_domain	*dom;
 	int			 rc;
 
-	rc = pool_map_find_domain(poolmap, PO_COMP_TP_NODE, PO_COMP_ID_ALL, &dom);
+	rc = pool_map_find_domain(poolmap, PO_COMP_TP_FAULT, PO_COMP_ID_ALL, &dom);
 	print_message("system with %d domains of PO_COMP_TP_NODE, %d RANKs per NODE\n",
 		      rc, dom->do_comp.co_nr);
 
@@ -2971,7 +2972,7 @@ ranks_on_same_node(struct pool_map *poolmap, int src_rank, d_rank_t *ranks)
 	int			 i, j, k;
 	int			 rc;
 
-	rc = pool_map_find_domain(poolmap, PO_COMP_TP_NODE, PO_COMP_ID_ALL, &node_doms);
+	rc     = pool_map_find_domain(poolmap, PO_COMP_TP_FAULT, PO_COMP_ID_ALL, &node_doms);
 	nnodes = rc;
 	nrank_per_node = node_doms->do_comp.co_nr;
 
@@ -3036,7 +3037,7 @@ co_redun_lvl(void **state)
 	prop = daos_prop_alloc(2);
 	assert_non_null(prop);
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_LVL;
-	prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_NODE;
+	prop->dpp_entries[0].dpe_val  = DAOS_PROP_CO_REDUN_FAULT;
 	prop->dpp_entries[1].dpe_type = DAOS_PROP_CO_REDUN_FAC;
 	prop->dpp_entries[1].dpe_val = DAOS_PROP_CO_REDUN_RF1;
 
@@ -3055,7 +3056,7 @@ co_redun_lvl(void **state)
 		rc = daos_cont_query(arg->coh, &info, prop_out, NULL);
 		assert_rc_equal(rc, 0);
 		/* Verify DAOS_PROP_CO_REDUN_LVL and DAOS_PROP_CO_REDUN_FAC values */
-		assert_int_equal(prop_out->dpp_entries[0].dpe_val, DAOS_PROP_CO_REDUN_NODE);
+		assert_int_equal(prop_out->dpp_entries[0].dpe_val, DAOS_PROP_CO_REDUN_FAULT);
 		assert_int_equal(prop_out->dpp_entries[1].dpe_val, DAOS_PROP_CO_REDUN_RF1);
 	}
 	par_barrier(PAR_COMM_WORLD);
@@ -3064,7 +3065,7 @@ co_redun_lvl(void **state)
 	plmap = pl_map_find(arg->pool.pool_uuid, oid);
 	poolmap = plmap->pl_poolmap;
 
-	ndom = pool_map_find_domain(poolmap, PO_COMP_TP_NODE, PO_COMP_ID_ALL, NULL);
+	ndom           = pool_map_find_domain(poolmap, PO_COMP_TP_FAULT, PO_COMP_ID_ALL, NULL);
 	nrank_per_node = nrank_per_node_get(poolmap);
 	print_message("system with ndom %d, nrank_per_node %d\n", ndom, nrank_per_node);
 
@@ -3104,7 +3105,7 @@ co_redun_lvl(void **state)
 	daos_prop_val_2_co_status(entry->dpe_val, &stat);
 	assert_int_equal(stat.dcs_status, DAOS_PROP_CO_HEALTHY);
 
-	/* exclude two engined on same node, as redun_lvl set as DAOS_PROP_CO_REDUN_NODE,
+	/* exclude two engined on same node, as redun_lvl set as DAOS_PROP_CO_REDUN_FAULT,
 	 * should not cause RF broken.
 	 */
 	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_REBUILD_DELAY | DAOS_FAIL_ALWAYS);
@@ -3230,7 +3231,7 @@ out:
 		rc = daos_cont_query(coh_g2l, &info, prop_out, NULL);
 		assert_rc_equal(rc, 0);
 		/* Verify DAOS_PROP_CO_REDUN_LVL and DAOS_PROP_CO_REDUN_FAC values */
-		assert_int_equal(prop_out->dpp_entries[0].dpe_val, DAOS_PROP_CO_REDUN_NODE);
+		assert_int_equal(prop_out->dpp_entries[0].dpe_val, DAOS_PROP_CO_REDUN_FAULT);
 		assert_int_equal(prop_out->dpp_entries[1].dpe_val, DAOS_PROP_CO_REDUN_RF1);
 	}
 

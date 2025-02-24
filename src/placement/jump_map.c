@@ -1,6 +1,7 @@
 /**
  *
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -68,7 +69,7 @@ jm_obj_pd_init(struct pl_jump_map *jmap, struct daos_obj_md *md, struct pool_dom
 	 * 2) daos_obj_md::omd_pda is non-zero, and
 	 * 3) with PO_COMP_TP_GRP layer in pool map.
 	 */
-	if (md->omd_pda == 0 || md->omd_pdom_lvl != PO_COMP_TP_GRP)
+	if (md->omd_pda == 0 || md->omd_pdom_lvl != PO_COMP_TP_PERF)
 		pd_nr = 0;
 	jmop->jmop_pd_nr = pd_nr;
 	if (jmop->jmop_pd_nr == 0) {
@@ -77,7 +78,7 @@ jm_obj_pd_init(struct pl_jump_map *jmap, struct daos_obj_md *md, struct pool_dom
 	}
 
 	D_ASSERT(pd_nr >= 1);
-	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_GRP, PO_COMP_ID_ALL, &pds);
+	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_PERF, PO_COMP_ID_ALL, &pds);
 	D_ASSERT(rc == pd_nr);
 	rc = 0;
 
@@ -272,7 +273,7 @@ jm_obj_placement_init(struct pl_jump_map *jmap, struct daos_obj_md *md,
 		jmop->jmop_fdom_lvl = jmap->jmp_redundant_dom;
 	} else {
 		D_ASSERT(md->omd_fdom_lvl == PO_COMP_TP_RANK ||
-			 md->omd_fdom_lvl == PO_COMP_TP_NODE);
+			 md->omd_fdom_lvl == PO_COMP_TP_FAULT);
 		rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, md->omd_fdom_lvl,
 					  PO_COMP_ID_ALL, NULL);
 		D_ASSERT(rc > 0);
@@ -875,7 +876,7 @@ jump_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 
 	jmap->jmp_redundant_dom = mia->ia_jump_map.domain;
 
-	rc = pool_map_find_domain(poolmap, PO_COMP_TP_GRP, PO_COMP_ID_ALL, &doms);
+	rc = pool_map_find_domain(poolmap, PO_COMP_TP_PERF, PO_COMP_ID_ALL, &doms);
 	if (rc < 0)
 		goto ERR;
 	jmap->jmp_pd_nr = rc;

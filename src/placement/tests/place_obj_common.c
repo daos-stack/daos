@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -351,8 +352,8 @@ plt_next_level(pool_comp_type_t current)
 {
 	switch (current) {
 	case PO_COMP_TP_ROOT:
-		return PO_COMP_TP_NODE;
-	case PO_COMP_TP_NODE:
+		return PO_COMP_TP_FAULT;
+	case PO_COMP_TP_FAULT:
 		return PO_COMP_TP_RANK;
 	case PO_COMP_TP_RANK:
 	default:
@@ -567,7 +568,7 @@ gen_pool_and_placement_map(int num_pds, int fdoms_per_pd, int nodes_per_domain,
 	comp = &comps[0];
 	/* fake the pool map */
 	for (i = 0; i < num_pds && num_pds >= 2; i++, comp++) {
-		comp->co_type   = PO_COMP_TP_GRP;
+		comp->co_type   = PO_COMP_TP_PERF;
 		comp->co_status = PO_COMP_ST_UPIN;
 		comp->co_id     = i;
 		comp->co_rank   = i;
@@ -576,7 +577,7 @@ gen_pool_and_placement_map(int num_pds, int fdoms_per_pd, int nodes_per_domain,
 	}
 
 	for (i = 0; i < num_domains; i++, comp++) {
-		comp->co_type   = PO_COMP_TP_NODE;
+		comp->co_type   = PO_COMP_TP_FAULT;
 		comp->co_status = PO_COMP_ST_UPIN;
 		comp->co_id     = i;
 		comp->co_rank   = i;
@@ -619,11 +620,11 @@ gen_pool_and_placement_map(int num_pds, int fdoms_per_pd, int nodes_per_domain,
 	/* No longer needed, copied into pool map */
 	D_FREE(buf);
 
-	D_ASSERTF(fdom_lvl == PO_COMP_TP_RANK || fdom_lvl == PO_COMP_TP_NODE,
-		  "bad fdom_lvl %d\n", fdom_lvl);
+	D_ASSERTF(fdom_lvl == PO_COMP_TP_RANK || fdom_lvl == PO_COMP_TP_FAULT, "bad fdom_lvl %d\n",
+		  fdom_lvl);
 	mia.ia_type = pl_type;
-	if (fail_domain_node || fdom_lvl == PO_COMP_TP_NODE)
-		mia.ia_ring.domain  = PO_COMP_TP_NODE;
+	if (fail_domain_node || fdom_lvl == PO_COMP_TP_FAULT)
+		mia.ia_ring.domain = PO_COMP_TP_FAULT;
 	else
 		mia.ia_ring.domain = PO_COMP_TP_RANK;
 	rc = pl_map_create(*po_map_out, &mia, pl_map_out);
@@ -657,7 +658,7 @@ gen_pool_and_placement_map_non_standard(int num_domains,
 	comp = &comps[0];
 	/* fake the pool map */
 	for (i = 0; i < num_domains; i++, comp++) {
-		comp->co_type   = PO_COMP_TP_NODE;
+		comp->co_type   = PO_COMP_TP_FAULT;
 		comp->co_status = PO_COMP_ST_UPIN;
 		comp->co_id     = i;
 		comp->co_rank   = i;
