@@ -723,9 +723,10 @@ start_read_op(struct dfs_handle *hdl, PyObject *item, struct io_op *op)
 {
 	assert(op != NULL);
 
-	int           rc  = 0;
-	int           rc2 = 0;
-	daos_event_t *evp = &op->ev;
+	int           rc     = 0;
+	int           rc2    = 0;
+	daos_event_t *evp    = &op->ev;
+	daos_size_t   offset = 0;
 
 	char         *dir_name  = NULL;
 	char         *file_name = NULL;
@@ -734,6 +735,10 @@ start_read_op(struct dfs_handle *hdl, PyObject *item, struct io_op *op)
 
 	PyObject     *py_path = PyTuple_GetItem(item, 0);
 	PyObject     *py_buff = PyTuple_GetItem(item, 1);
+
+	if (PyTuple_Size(item) > 2) {
+		offset = PyLong_AsLong(PyTuple_GetItem(item, 2));
+	}
 
 	if (py_path == NULL || py_buff == NULL) {
 		D_ERROR("Each tuple must contain exactly two elements: path and bytearray");
@@ -789,7 +794,7 @@ start_read_op(struct dfs_handle *hdl, PyObject *item, struct io_op *op)
 	op->sgl.sg_nr_out = 0;
 	op->sgl.sg_iovs   = &op->iov;
 
-	rc = dfs_read(hdl->dfs, op->obj, &op->sgl, 0 /* offset */, &op->size, &op->ev);
+	rc = dfs_read(hdl->dfs, op->obj, &op->sgl, offset, &op->size, &op->ev);
 	if (rc) {
 		D_ERROR("Could not start async read on '%s': %s (rc=%d)", op->path, strerror(rc),
 			rc);
