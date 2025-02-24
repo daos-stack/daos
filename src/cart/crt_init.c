@@ -374,29 +374,16 @@ data_init(int server, crt_init_options_t *opt)
 static int
 crt_plugin_init(void)
 {
-	struct crt_prog_cb_priv  *cbs_prog;
 	struct crt_event_cb_priv *cbs_event;
 	size_t                    cbs_size = CRT_CALLBACKS_NUM;
-	int                       i, rc;
+	int                       rc;
 
 	D_ASSERT(crt_plugin_gdata.cpg_inited == 0);
-
-	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		crt_plugin_gdata.cpg_prog_cbs_old[i] = NULL;
-		D_ALLOC_ARRAY(cbs_prog, cbs_size);
-		if (cbs_prog == NULL) {
-			for (i--; i >= 0; i--)
-				D_FREE(crt_plugin_gdata.cpg_prog_cbs[i]);
-			D_GOTO(out, rc = -DER_NOMEM);
-		}
-		crt_plugin_gdata.cpg_prog_size[i] = cbs_size;
-		crt_plugin_gdata.cpg_prog_cbs[i]  = cbs_prog;
-	}
 
 	crt_plugin_gdata.cpg_event_cbs_old = NULL;
 	D_ALLOC_ARRAY(cbs_event, cbs_size);
 	if (cbs_event == NULL) {
-		D_GOTO(out_destroy_prog, rc = -DER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 	}
 	crt_plugin_gdata.cpg_event_size = cbs_size;
 	crt_plugin_gdata.cpg_event_cbs  = cbs_event;
@@ -410,9 +397,6 @@ crt_plugin_init(void)
 
 out_destroy_event:
 	D_FREE(crt_plugin_gdata.cpg_event_cbs);
-out_destroy_prog:
-	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
-		D_FREE(crt_plugin_gdata.cpg_prog_cbs[i]);
 out:
 	return rc;
 }
@@ -420,16 +404,9 @@ out:
 static void
 crt_plugin_fini(void)
 {
-	int i;
-
 	D_ASSERT(crt_plugin_gdata.cpg_inited == 1);
 
 	crt_plugin_gdata.cpg_inited = 0;
-
-	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		D_FREE(crt_plugin_gdata.cpg_prog_cbs[i]);
-		D_FREE(crt_plugin_gdata.cpg_prog_cbs_old[i]);
-	}
 
 	D_FREE(crt_plugin_gdata.cpg_event_cbs);
 	D_FREE(crt_plugin_gdata.cpg_event_cbs_old);
