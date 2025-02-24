@@ -731,3 +731,9 @@
    Memcheck:Addr16
    fun:countbody
 }
+{
+   __tsan_go_atomic32_fetch_add
+   Memcheck:Addr4
+   fun:__tsan_go_atomic32_fetch_add
+   fun:racecall
+}
