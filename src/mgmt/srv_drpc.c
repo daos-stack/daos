@@ -754,13 +754,13 @@ pool_change_target_state(char *id, d_rank_list_t *svc_ranks, size_t n_target_idx
 void
 ds_mgmt_drpc_pool_exclude(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	struct drpc_alloc        alloc = PROTO_ALLOCATOR_INIT(alloc);
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Mgmt__PoolExcludeReq	*req = NULL;
-	Mgmt__PoolExcludeResp    resp;
-	d_rank_list_t           *svc_ranks = NULL;
+	Mgmt__PoolExcludeResp	resp;
+	d_rank_list_t		*svc_ranks = NULL;
 	uint8_t			*body;
-	size_t                   len;
-	int                      rc;
+	size_t			len;
+	int			rc;
 
 	mgmt__pool_exclude_resp__init(&resp);
 
@@ -787,7 +787,7 @@ ds_mgmt_drpc_pool_exclude(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 out:
 	resp.status = rc;
-	len         = mgmt__pool_exclude_resp__get_packed_size(&resp);
+	len = mgmt__pool_exclude_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
@@ -803,13 +803,13 @@ out:
 void
 ds_mgmt_drpc_pool_drain(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	struct drpc_alloc        alloc = PROTO_ALLOCATOR_INIT(alloc);
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Mgmt__PoolDrainReq	*req = NULL;
-	Mgmt__PoolDrainResp      resp;
-	d_rank_list_t           *svc_ranks = NULL;
+	Mgmt__PoolDrainResp	resp;
+	d_rank_list_t		*svc_ranks = NULL;
 	uint8_t			*body;
-	size_t                   len;
-	int                      rc;
+	size_t			len;
+	int			rc;
 
 	mgmt__pool_drain_resp__init(&resp);
 
@@ -836,7 +836,7 @@ ds_mgmt_drpc_pool_drain(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 out:
 	resp.status = rc;
-	len         = mgmt__pool_drain_resp__get_packed_size(&resp);
+	len = mgmt__pool_drain_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
@@ -938,15 +938,15 @@ out:
 void
 ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	struct drpc_alloc                alloc = PROTO_ALLOCATOR_INIT(alloc);
+	struct drpc_alloc		alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Mgmt__PoolReintReq              *req   = NULL;
 	Mgmt__PoolReintResp              resp;
-	d_rank_list_t                   *svc_ranks = NULL;
+	d_rank_list_t			*svc_ranks = NULL;
 	uint8_t				*body;
-	size_t                           len;
-	uint64_t                         scm_bytes;
-	uint64_t                         nvme_bytes = 0;
-	int                              rc;
+	size_t				len;
+	uint64_t			scm_bytes;
+	uint64_t			nvme_bytes = 0;
+	int				rc;
 
 	mgmt__pool_reint_resp__init(&resp);
 

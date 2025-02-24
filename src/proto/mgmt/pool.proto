@@ -79,34 +79,31 @@ message PoolEvictResp {
 }
 
 // PoolExcludeReq supplies pool identifier, rank, and target_idxs.
-message PoolExcludeReq
-{
-	string          sys        = 1; // DAOS system identifier
-	string          id         = 2; // uuid or label of pool to exclude some targets
-	uint32          rank       = 3; // target to move to the down state
+message PoolExcludeReq {
+	string sys = 1; // DAOS system identifier
+	string id = 2; // uuid or label of pool to exclude some targets
+	uint32 rank = 3; // target to move to the down state
 	repeated uint32 target_idx = 4; // target ranks
-	repeated uint32 svc_ranks  = 5; // List of pool service ranks
+	repeated uint32 svc_ranks = 5; // List of pool service ranks
 	bool            force      = 6; // force to exclude potentially leading to data loss
 }
 
 // PoolExcludeResp returns resultant state of Exclude operation.
-message PoolExcludeResp
-{
+message PoolExcludeResp {
 	int32 status = 1; // DAOS error code
 }
 
 // PoolDrainReq supplies pool identifier, rank, and target_idxs.
 message PoolDrainReq {
 	string sys = 1; // DAOS system identifier
-	string          id         = 2; // uuid or label of pool to drain some targets
-	uint32          rank       = 3; // rank to move to the down state
+	string id = 2; // uuid or label of pool to drain some targets
+	uint32 rank = 3; // rank to move to the down state
 	repeated uint32 target_idx = 4; // rank targets
-	repeated uint32 svc_ranks  = 5; // List of pool service ranks
+	repeated uint32 svc_ranks = 5; // List of pool service ranks
 }
 
 // PoolDrainResp returns resultant state of Drain operation.
-message PoolDrainResp
-{
+message PoolDrainResp {
 	int32 status = 1; // DAOS error code
 }
 
@@ -114,8 +111,8 @@ message PoolDrainResp
 message PoolExtendReq {
 	string sys = 1; // DAOS system identifier
 	string id = 2; // uuid or label of pool to add target up to
-	repeated uint32 ranks         = 3; // ranks
-	repeated uint32 svc_ranks     = 4; // List of pool service ranks
+	repeated uint32 ranks = 3; // ranks
+	repeated uint32 svc_ranks = 4; // List of pool service ranks
 	repeated uint64 tier_bytes    = 5; // Size in bytes of storage tiers
 	repeated uint32 fault_domains = 6; // fault domain tree, minimal format
 	float           mem_ratio     = 7; // Fraction of meta-blob-sz to use as mem-file-sz
@@ -128,11 +125,10 @@ message PoolExtendResp {
 }
 
 // PoolReintReq supplies pool identifier, rank, and target_idxs.
-message PoolReintReq
-{
+message PoolReintReq {
 	string sys = 1; // DAOS system identifier
-	string          id         = 2; // uuid or label of pool to add target up to
-	uint32          rank       = 3; // target to move to the up state
+	string id = 2; // uuid or label of pool to add target up to
+	uint32 rank = 3; // target to move to the up state
 	repeated uint32 target_idx = 4; // target ranks
 	repeated uint32 svc_ranks = 5; // List of pool service ranks
 	repeated uint64 tier_bytes = 6; // Size in bytes of storage tiers
@@ -140,8 +136,7 @@ message PoolReintReq
 }
 
 // PoolReintResp returns resultant state of reintegrate operation.
-message PoolReintResp
-{
+message PoolReintResp {
 	int32 status = 1; // DAOS error code
 }
 

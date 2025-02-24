@@ -1789,7 +1789,7 @@ setup_exclude_drpc_call(Drpc__Call *call, char *uuid, uint32_t rank)
 
 	req.id = uuid;
 	req.n_target_idx = 3;
-	req.rank         = rank;
+	req.rank = rank;
 	req.target_idx   = TEST_IDXS;
 	pack_pool_exclude_req(call, &req);
 }
@@ -1797,12 +1797,13 @@ setup_exclude_drpc_call(Drpc__Call *call, char *uuid, uint32_t rank)
 static void
 expect_drpc_exclude_resp_with_error(Drpc__Response *resp, int exp_error)
 {
-	Mgmt__PoolExcludeResp *pc_resp = NULL;
+	Mgmt__PoolExcludeResp	*pc_resp = NULL;
 
 	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
 	assert_non_null(resp->body.data);
 
-	pc_resp = mgmt__pool_exclude_resp__unpack(NULL, resp->body.len, resp->body.data);
+	pc_resp = mgmt__pool_exclude_resp__unpack(NULL, resp->body.len,
+						  resp->body.data);
 	assert_non_null(pc_resp);
 	assert_int_equal(pc_resp->status, exp_error);
 
@@ -1835,7 +1836,8 @@ test_drpc_exclude_mgmt_svc_fails(void **state)
 	ds_mgmt_target_update_return = -DER_MISC;
 
 	ds_mgmt_drpc_pool_exclude(&call, &resp);
-	expect_drpc_exclude_resp_with_error(&resp, ds_mgmt_target_update_return);
+	expect_drpc_exclude_resp_with_error(&resp,
+					       ds_mgmt_target_update_return);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
@@ -1892,7 +1894,7 @@ setup_drain_drpc_call(Drpc__Call *call, char *uuid, uint32_t rank)
 
 	req.id = uuid;
 	req.n_target_idx = 3;
-	req.rank         = rank;
+	req.rank = rank;
 	req.target_idx   = TEST_IDXS;
 	pack_pool_drain_req(call, &req);
 }
@@ -1900,12 +1902,13 @@ setup_drain_drpc_call(Drpc__Call *call, char *uuid, uint32_t rank)
 static void
 expect_drpc_drain_resp_with_error(Drpc__Response *resp, int exp_error)
 {
-	Mgmt__PoolDrainResp *pc_resp = NULL;
+	Mgmt__PoolDrainResp	*pc_resp = NULL;
 
 	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
 	assert_non_null(resp->body.data);
 
-	pc_resp = mgmt__pool_drain_resp__unpack(NULL, resp->body.len, resp->body.data);
+	pc_resp = mgmt__pool_drain_resp__unpack(NULL, resp->body.len,
+						  resp->body.data);
 	assert_non_null(pc_resp);
 	assert_int_equal(pc_resp->status, exp_error);
 
@@ -1938,7 +1941,8 @@ test_drpc_drain_mgmt_svc_fails(void **state)
 	ds_mgmt_target_update_return = -DER_MISC;
 
 	ds_mgmt_drpc_pool_drain(&call, &resp);
-	expect_drpc_drain_resp_with_error(&resp, ds_mgmt_target_update_return);
+	expect_drpc_drain_resp_with_error(&resp,
+					       ds_mgmt_target_update_return);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
