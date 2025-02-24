@@ -5746,7 +5746,7 @@ class AllocFailTestRun():
         if self._aft.check_stderr:
             stderr = self._stderr.decode('utf-8').rstrip()
             if stderr != '' and not stderr.endswith('(-1009): Out of memory') and \
-                not stderr.endswith(': DFS error 12: Cannot allocate memory') and \
+                not stderr.endswith(': errno 12 (Cannot allocate memory)') and \
                'error parsing command line arguments' not in stderr and \
                self.stdout != self._aft.expected_stdout:
                 if self.stdout != b'':

@@ -38,7 +38,7 @@ func dfsError(rc C.int) error {
 	}
 
 	strErr := C.strerror(rc)
-	return errors.Errorf("DFS error %d: %s", rc, C.GoString(strErr))
+	return errors.Errorf("errno %d (%s)", rc, C.GoString(strErr))
 }
 
 // daosError converts a return code from a DAOS API

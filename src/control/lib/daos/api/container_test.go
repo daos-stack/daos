@@ -431,21 +431,21 @@ func TestAPI_containerQueryDFSAttrs(t *testing.T) {
 				dfs_mount_RC = 22
 			},
 			hdl:    defaultContainerHandle(),
-			expErr: errors.New("DFS error"),
+			expErr: errors.New("failed to mount container"),
 		},
 		"dfs_query fails": {
 			setup: func(t *testing.T) {
 				dfs_query_RC = 22
 			},
 			hdl:    defaultContainerHandle(),
-			expErr: errors.New("DFS error"),
+			expErr: errors.New("failed to query container"),
 		},
 		"dfs_umount fails": {
 			setup: func(t *testing.T) {
 				dfs_umount_RC = 22
 			},
 			hdl:    defaultContainerHandle(),
-			expErr: errors.New("DFS error"),
+			expErr: errors.New("failed to unmount container"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -492,7 +492,7 @@ func TestAPI_ContainerQuery(t *testing.T) {
 				dfs_query_RC = 22
 			},
 			ctx:    defaultContainerHandle().toCtx(test.Context(t)),
-			expErr: errors.New("DFS error"),
+			expErr: errors.New("failed to query container"),
 		},
 		"success": {
 			ctx:     defaultContainerHandle().toCtx(test.Context(t)),
