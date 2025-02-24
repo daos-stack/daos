@@ -2613,8 +2613,11 @@ ds_pool_cont_svc_lookup_leader(uuid_t pool_uuid, struct cont_svc **svcp,
 	int			rc;
 
 	rc = pool_svc_lookup_leader(pool_uuid, &pool_svc, hint);
-	if (rc != 0)
+	if (rc != 0) {
+		DL_ERROR(rc, "pool " DF_UUID " pool_svc_lookup_leader failed\n",
+			 DP_UUID(pool_uuid));
 		return rc;
+	}
 	*svcp = pool_svc->ps_cont_svc;
 	return 0;
 }
