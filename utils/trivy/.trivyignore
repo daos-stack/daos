@@ -25,3 +25,10 @@ CVE-2024-29857
 CVE-2024-30171
 ## CVE-2024-30172,MEDIUM,,"org.bouncycastle:bcprov-jdk18on: Infinite loop in ED25519 verification in the ScalarUtil class","org.bouncycastle:bcprov-jdk15on","1.70","1.78",https://avd.aquasec.com/nvd/cve-2024-30172
 CVE-2024-30172
+
+## Ignored io.netty:netty-buffer:4.1.115.Final and hadoop-common:3.4.0 CVE
+## CVE-2025-25193,MEDIUM,,"Netty, an asynchronous, event-driven network application framework, ha ...","io.netty:netty-common","4.1.115.Final","",https://avd.aquasec.com/nvd/cve-2025-25193
+CVE-2025-25193
+## Ignored hadoop 3.4.0 related CVE
+## CVE-2025-24970,HIGH,,"io.netty:netty-handler: SslHandler doesn't correctly validate packets which can lead to native crash when using native SSLEngine","io.netty:netty-handler","4.1.100.Final","4.1.118.Final",https://avd.aquasec.com/nvd/cve-2025-24970
+CVE-2025-24970
