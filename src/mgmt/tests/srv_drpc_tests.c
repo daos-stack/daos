@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2072,57 +2073,56 @@ test_drpc_extend_success(void **state)
  * dRPC pool reintegrate tests
  */
 static void
-pack_pool_reintegrate_req(Drpc__Call *call, Mgmt__PoolReintegrateReq *req)
+pack_pool_reint_req(Drpc__Call *call, Mgmt__PoolReintReq *req)
 {
 	size_t	len;
 	uint8_t	*body;
 
-	len = mgmt__pool_reintegrate_req__get_packed_size(req);
+	len = mgmt__pool_reint_req__get_packed_size(req);
 	D_ALLOC(body, len);
 	assert_non_null(body);
 
-	mgmt__pool_reintegrate_req__pack(req, body);
+	mgmt__pool_reint_req__pack(req, body);
 
 	call->body.data = body;
 	call->body.len = len;
 }
 
 static void
-setup_reintegrate_drpc_call(Drpc__Call *call, char *uuid)
+setup_reint_drpc_call(Drpc__Call *call, char *uuid)
 {
-	Mgmt__PoolReintegrateReq req = MGMT__POOL_REINTEGRATE_REQ__INIT;
+	Mgmt__PoolReintReq req = MGMT__POOL_REINT_REQ__INIT;
 
 	req.id = uuid;
-	pack_pool_reintegrate_req(call, &req);
+	pack_pool_reint_req(call, &req);
 }
 
 static void
-expect_drpc_reintegrate_resp_with_error(Drpc__Response *resp, int exp_error)
+expect_drpc_reint_resp_with_error(Drpc__Response *resp, int exp_error)
 {
-	Mgmt__PoolReintegrateResp	*pc_resp = NULL;
+	Mgmt__PoolReintResp *pc_resp = NULL;
 
 	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
 	assert_non_null(resp->body.data);
 
-	pc_resp = mgmt__pool_reintegrate_resp__unpack(NULL, resp->body.len,
-						 resp->body.data);
+	pc_resp = mgmt__pool_reint_resp__unpack(NULL, resp->body.len, resp->body.data);
 	assert_non_null(pc_resp);
 	assert_int_equal(pc_resp->status, exp_error);
 
-	mgmt__pool_reintegrate_resp__free_unpacked(pc_resp, NULL);
+	mgmt__pool_reint_resp__free_unpacked(pc_resp, NULL);
 }
 
 static void
-test_drpc_reintegrate_bad_uuid(void **state)
+test_drpc_reint_bad_uuid(void **state)
 {
 	Drpc__Call	call = DRPC__CALL__INIT;
 	Drpc__Response	resp = DRPC__RESPONSE__INIT;
 
-	setup_reintegrate_drpc_call(&call, "BAD");
+	setup_reint_drpc_call(&call, "BAD");
 
 	ds_mgmt_drpc_pool_reintegrate(&call, &resp);
 
-	expect_drpc_reintegrate_resp_with_error(&resp, -DER_INVAL);
+	expect_drpc_reint_resp_with_error(&resp, -DER_INVAL);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
@@ -3031,7 +3031,7 @@ test_drpc_check_act_success(void **state)
 #define POOL_EXTEND_TEST(x)	cmocka_unit_test_setup(x, \
 						drpc_pool_extend_setup)
 
-#define REINTEGRATE_TEST(x)	cmocka_unit_test(x)
+#define REINT_TEST(x)           cmocka_unit_test(x)
 
 #define POOL_CREATE_TEST(x)	cmocka_unit_test(x)
 
@@ -3109,7 +3109,7 @@ main(void)
 	    POOL_EXTEND_TEST(test_drpc_extend_bad_uuid),
 	    POOL_EXTEND_TEST(test_drpc_extend_mgmt_svc_fails),
 	    POOL_EXTEND_TEST(test_drpc_extend_success),
-	    REINTEGRATE_TEST(test_drpc_reintegrate_bad_uuid),
+	    REINT_TEST(test_drpc_reint_bad_uuid),
 	    QUERY_TEST(test_drpc_pool_query_bad_uuid),
 	    QUERY_TEST(test_drpc_pool_query_mgmt_svc_fails),
 	    QUERY_TEST(test_drpc_pool_query_success),

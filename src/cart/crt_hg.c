@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -834,6 +835,7 @@ crt_hg_class_init(crt_provider_t provider, int ctx_idx, bool primary, int iface_
 	char			addr_str[CRT_ADDR_STR_MAX_LEN] = {'\0'};
 	size_t			str_size = CRT_ADDR_STR_MAX_LEN;
 	struct crt_prov_gdata	*prov_data;
+	uint32_t                 retry_count = 0;
 	int			rc = DER_SUCCESS;
 
 	prov_data = crt_get_prov_gdata(primary, provider);
@@ -843,7 +845,7 @@ crt_hg_class_init(crt_provider_t provider, int ctx_idx, bool primary, int iface_
 
 	init_info.na_init_info.auth_key = prov_data->cpg_na_config.noc_auth_key;
 
-	if (crt_provider_is_block_mode(provider))
+	if (crt_provider_is_block_mode(provider) && !prov_data->cpg_progress_busy)
 		init_info.na_init_info.progress_mode = 0;
 	else
 		init_info.na_init_info.progress_mode = NA_NO_BLOCK;
@@ -869,9 +871,17 @@ crt_hg_class_init(crt_provider_t provider, int ctx_idx, bool primary, int iface_
 		init_info.traffic_class = (enum na_traffic_class)crt_gdata.cg_swim_tc;
 	if (thread_mode_single)
 		init_info.na_init_info.thread_mode = NA_THREAD_MODE_SINGLE;
-
+retry:
 	hg_class = HG_Init_opt2(info_string, crt_is_service(), HG_VERSION(2, 4), &init_info);
 	if (hg_class == NULL) {
+		/** workaround for DAOS-16990, DAOS-17011 - retry a few times on init */
+		if (provider == CRT_PROV_OFI_CXI && !crt_is_service() &&
+		    retry_count < crt_gdata.cg_hg_init_retry_cnt) {
+			retry_count++;
+			D_WARN("Could not initialize HG class; retrying (%d)\n", retry_count);
+			sleep(retry_count * 5);
+			goto retry;
+		}
 		D_ERROR("Could not initialize HG class.\n");
 		D_GOTO(out, rc = -DER_HG);
 	}
@@ -1600,9 +1610,24 @@ crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
 
 	D_ASSERT(hg_ctx != NULL && hg_ctx->chc_bulkcla != NULL);
 	D_ASSERT(sgl != NULL && bulk_hdl != NULL);
-	D_ASSERT(bulk_perm == CRT_BULK_RW || bulk_perm == CRT_BULK_RO);
 
-	flags = (bulk_perm == CRT_BULK_RW) ? HG_BULK_READWRITE : HG_BULK_READ_ONLY;
+	switch (bulk_perm) {
+	case CRT_BULK_RW:
+		flags = HG_BULK_READWRITE;
+		break;
+	case CRT_BULK_WO:
+		flags = HG_BULK_WRITE_ONLY;
+		break;
+	case CRT_BULK_RO:
+		flags = HG_BULK_READ_ONLY;
+		break;
+	default:
+		D_ASSERT(bulk_perm == CRT_BULK_RW || bulk_perm == CRT_BULK_RO ||
+			 bulk_perm == CRT_BULK_WO);
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Invalid permissions");
+		return rc;
+	}
 
 	if (sgl->sg_nr <= CRT_HG_IOVN_STACK) {
 		buf_sizes = buf_sizes_stack;

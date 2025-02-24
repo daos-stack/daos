@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -34,6 +35,7 @@ type SystemCmd struct {
 	Exclude      systemExcludeCmd      `command:"exclude" description:"Exclude ranks from DAOS system"`
 	ClearExclude systemClearExcludeCmd `command:"clear-exclude" description:"Clear excluded state for ranks"`
 	Drain        systemDrainCmd        `command:"drain" description:"Drain ranks or hosts from all relevant pools in DAOS system"`
+	Reintegrate  systemReintegrateCmd  `command:"reintegrate" alias:"reint" description:"Reintegrate ranks or hosts into all relevant pools in DAOS system"`
 	Erase        systemEraseCmd        `command:"erase" description:"Erase system metadata prior to reformat"`
 	ListPools    poolListCmd           `command:"list-pools" description:"List all pools in the DAOS system"`
 	Cleanup      systemCleanupCmd      `command:"cleanup" description:"Clean up all resources associated with the specified machine"`
@@ -308,9 +310,13 @@ type systemDrainCmd struct {
 	baseRankListCmd
 }
 
-func (cmd *systemDrainCmd) Execute(_ []string) (errOut error) {
+func (cmd *systemDrainCmd) execute(reint bool) (errOut error) {
 	defer func() {
-		errOut = errors.Wrap(errOut, "system drain failed")
+		op := "drain"
+		if reint {
+			op = "reintegrate"
+		}
+		errOut = errors.Wrapf(errOut, "system %s failed", op)
 	}()
 
 	if err := cmd.validateHostsRanks(); err != nil {
@@ -324,6 +330,7 @@ func (cmd *systemDrainCmd) Execute(_ []string) (errOut error) {
 	req.SetSystem(cmd.config.SystemName)
 	req.Hosts.Replace(&cmd.Hosts.HostSet)
 	req.Ranks.Replace(&cmd.Ranks.RankSet)
+	req.Reint = reint
 
 	resp, err := control.SystemDrain(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -335,10 +342,22 @@ func (cmd *systemDrainCmd) Execute(_ []string) (errOut error) {
 	}
 
 	var out strings.Builder
-	pretty.PrintSystemDrainResponse(&out, resp)
+	pretty.PrintPoolRankResults(&out, resp.Results)
 	cmd.Info(out.String())
 
 	return resp.Errors()
+}
+
+func (cmd *systemDrainCmd) Execute(_ []string) error {
+	return cmd.execute(false)
+}
+
+type systemReintegrateCmd struct {
+	systemDrainCmd
+}
+
+func (cmd *systemReintegrateCmd) Execute(_ []string) error {
+	return cmd.execute(true)
 }
 
 type systemCleanupCmd struct {

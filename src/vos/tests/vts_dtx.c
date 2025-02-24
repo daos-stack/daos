@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -43,6 +44,7 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	      uint64_t dkey_hash, struct dtx_handle **dthp)
 {
 	struct dtx_handle	*dth;
+	int			 rc;
 
 	D_ALLOC_PTR(dth);
 	assert_non_null(dth);
@@ -66,6 +68,7 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	dth->dth_for_migration = 0;
 	dth->dth_ignore_uncommitted = 0;
 	dth->dth_prepared = 0;
+	dth->dth_epoch_owner = 0;
 	dth->dth_aborted = 0;
 	dth->dth_already = 0;
 	dth->dth_need_validation = 0;
@@ -91,7 +94,8 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	dth->dth_shares_inited = 1;
 
 	vos_dtx_rsrvd_init(dth);
-	vos_dtx_attach(dth, false, false);
+	rc = vos_dtx_attach(dth, false, false);
+	assert_rc_equal(rc, 0);
 
 	*dthp = dth;
 }

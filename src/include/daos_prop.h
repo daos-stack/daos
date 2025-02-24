@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -216,6 +217,7 @@ enum {
 enum {
 	DAOS_REINT_MODE_DATA_SYNC = 0,
 	DAOS_REINT_MODE_NO_DATA_SYNC = 1,
+	DAOS_REINT_MODE_INCREMENTAL = 2,
 };
 
 /**

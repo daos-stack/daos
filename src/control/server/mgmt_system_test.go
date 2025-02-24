@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -1839,21 +1840,30 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 			SvcRanks: []uint32{0},
 		}
 	}
+	rReq := func(id, rank int) *mgmtpb.PoolReintReq {
+		return &mgmtpb.PoolReintReq{
+			Sys:      "daos_server",
+			Id:       test.MockUUID(int32(id)),
+			Rank:     uint32(rank),
+			SvcRanks: []uint32{0},
+		}
+	}
 
 	for name, tc := range map[string]struct {
-		members     system.Members
-		req         *mgmtpb.SystemDrainReq
-		expDrpcReqs []*mgmt.PoolDrainReq
-		drpcResp    *mgmtpb.PoolDrainResp
-		drpcErr     error
-		poolRanks   map[string]string
-		useLabels   bool
-		expResp     *mgmtpb.SystemDrainResp
-		expErr      error
+		members      system.Members
+		req          *mgmtpb.SystemDrainReq
+		expDrainReqs []*mgmt.PoolDrainReq
+		expReintReqs []*mgmt.PoolReintReq
+		drpcResp     proto.Message
+		drpcErr      error
+		poolRanks    map[string]string
+		useLabels    bool
+		expResp      *mgmtpb.SystemDrainResp
+		expErr       error
 	}{
 		"nil req": {
 			req:    (*mgmtpb.SystemDrainReq)(nil),
-			expErr: errors.New("nil request"),
+			expErr: errors.New("nil *mgmt.SystemDrainReq"),
 		},
 		"not system leader": {
 			req: &mgmtpb.SystemDrainReq{
@@ -1885,7 +1895,9 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 			poolRanks: map[string]string{
 				test.MockUUID(1): "2-5",
 			},
-			expResp: &mgmtpb.SystemDrainResp{},
+			expResp: &mgmtpb.SystemDrainResp{
+				Results: []*mgmtpb.PoolRankResult{},
+			},
 		},
 		"matching ranks; multiple pools; no drpc response": {
 			req: &mgmtpb.SystemDrainReq{Ranks: "0,1"},
@@ -1893,7 +1905,22 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				test.MockUUID(1): "0-4",
 				test.MockUUID(2): "1-7",
 			},
-			expErr: errors.New("not responding on dRPC"),
+			expResp: &mgmtpb.SystemDrainResp{
+				Results: []*mgmtpb.PoolRankResult{
+					{
+						PoolId: test.MockUUID(1),
+						Ranks:  "0-1",
+						Status: -1025,
+						Msg:    FaultDataPlaneNotStarted.Error(),
+					},
+					{
+						PoolId: test.MockUUID(2),
+						Ranks:  "1",
+						Status: -1025,
+						Msg:    FaultDataPlaneNotStarted.Error(),
+					},
+				},
+			},
 		},
 		"matching ranks; multiple pools": {
 			req: &mgmtpb.SystemDrainReq{Ranks: "0,1"},
@@ -1902,11 +1929,11 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				test.MockUUID(2): "1-7",
 			},
 			drpcResp: &mgmtpb.PoolDrainResp{},
-			expDrpcReqs: []*mgmtpb.PoolDrainReq{
+			expDrainReqs: []*mgmtpb.PoolDrainReq{
 				dReq(1, 0), dReq(1, 1), dReq(2, 1),
 			},
 			expResp: &mgmtpb.SystemDrainResp{
-				Results: []*mgmtpb.SystemDrainResp_DrainResult{
+				Results: []*mgmtpb.PoolRankResult{
 					{PoolId: test.MockUUID(1), Ranks: "0-1"},
 					{PoolId: test.MockUUID(2), Ranks: "1"},
 				},
@@ -1923,12 +1950,12 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				test.MockUUID(2): "1-7",
 			},
 			drpcResp: &mgmtpb.PoolDrainResp{},
-			expDrpcReqs: []*mgmtpb.PoolDrainReq{
+			expDrainReqs: []*mgmtpb.PoolDrainReq{
 				dReq(1, 0), dReq(1, 1), dReq(1, 2), dReq(1, 3),
 				dReq(2, 1), dReq(2, 2), dReq(2, 3),
 			},
 			expResp: &mgmtpb.SystemDrainResp{
-				Results: []*mgmtpb.SystemDrainResp_DrainResult{
+				Results: []*mgmtpb.PoolRankResult{
 					{PoolId: test.MockUUID(1), Ranks: "0-3"},
 					{PoolId: test.MockUUID(2), Ranks: "1-3"},
 				},
@@ -1946,12 +1973,12 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 			},
 			useLabels: true,
 			drpcResp:  &mgmtpb.PoolDrainResp{},
-			expDrpcReqs: []*mgmtpb.PoolDrainReq{
+			expDrainReqs: []*mgmtpb.PoolDrainReq{
 				dReq(1, 0), dReq(1, 1), dReq(1, 2), dReq(1, 3),
 				dReq(2, 1), dReq(2, 2), dReq(2, 3),
 			},
 			expResp: &mgmtpb.SystemDrainResp{
-				Results: []*mgmtpb.SystemDrainResp_DrainResult{
+				Results: []*mgmtpb.PoolRankResult{
 					{PoolId: "00000001", Ranks: "0-3"},
 					{PoolId: "00000002", Ranks: "1-3"},
 				},
@@ -1968,22 +1995,119 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				test.MockUUID(2): "1-7",
 			},
 			drpcResp: &mgmtpb.PoolDrainResp{Status: -1},
-			expDrpcReqs: []*mgmtpb.PoolDrainReq{
+			expDrainReqs: []*mgmtpb.PoolDrainReq{
 				dReq(1, 1), dReq(1, 2), dReq(2, 1), dReq(2, 2),
 			},
 			expResp: &mgmtpb.SystemDrainResp{
-				Results: []*mgmtpb.SystemDrainResp_DrainResult{
+				Results: []*mgmtpb.PoolRankResult{
 					{
 						PoolId: test.MockUUID(1),
 						Ranks:  "1-2",
-						Status: -1,
+						Status: -1025,
 						Msg:    "DER_UNKNOWN(-1): Unknown error code -1",
 					},
 					{
 						PoolId: test.MockUUID(2),
 						Ranks:  "1-2",
-						Status: -1,
+						Status: -1025,
 						Msg:    "DER_UNKNOWN(-1): Unknown error code -1",
+					},
+				},
+			},
+		},
+		"reintegrate; matching ranks; multiple pools": {
+			req: &mgmtpb.SystemDrainReq{
+				Ranks: "0,1",
+				Reint: true,
+			},
+			poolRanks: map[string]string{
+				test.MockUUID(1): "0-4",
+				test.MockUUID(2): "1-7",
+			},
+			drpcResp: &mgmtpb.PoolReintResp{},
+			expReintReqs: []*mgmtpb.PoolReintReq{
+				rReq(1, 0), rReq(1, 1), rReq(2, 1),
+			},
+			expResp: &mgmtpb.SystemDrainResp{
+				Reint: true,
+				Results: []*mgmtpb.PoolRankResult{
+					{PoolId: test.MockUUID(1), Ranks: "0-1"},
+					{PoolId: test.MockUUID(2), Ranks: "1"},
+				},
+			},
+		},
+		"reintegrate; matching hosts; multiple pools; pool labels": {
+			req: &mgmtpb.SystemDrainReq{
+				// Resolves to ranks 0-3.
+				Hosts: fmt.Sprintf("%s,%s", test.MockHostAddr(1),
+					test.MockHostAddr(2)),
+				Reint: true,
+			},
+			poolRanks: map[string]string{
+				test.MockUUID(1): "0-4",
+				test.MockUUID(2): "1-7",
+			},
+			useLabels: true,
+			drpcResp:  &mgmtpb.PoolReintResp{},
+			expReintReqs: []*mgmtpb.PoolReintReq{
+				rReq(1, 0), rReq(1, 1), rReq(1, 2), rReq(1, 3),
+				rReq(2, 1), rReq(2, 2), rReq(2, 3),
+			},
+			expResp: &mgmtpb.SystemDrainResp{
+				Reint: true,
+				Results: []*mgmtpb.PoolRankResult{
+					{PoolId: "00000001", Ranks: "0-3"},
+					{PoolId: "00000002", Ranks: "1-3"},
+				},
+			},
+		},
+		"reintegrate; matching ranks; variable states; drpc failed": {
+			members: system.Members{
+				// Only ranks in joined states can be reintegrated.
+				mockMember(t, 4, 0, "adminexcluded"),
+				mockMember(t, 3, 0, "joined"),
+				mockMember(t, 2, 0, "errored"),
+				mockMember(t, 1, 0, "excluded"),
+			},
+			req: &mgmtpb.SystemDrainReq{
+				Reint: true,
+				Ranks: "1-4",
+			},
+			poolRanks: map[string]string{
+				test.MockUUID(1): "0-4",
+				test.MockUUID(2): "1-7",
+			},
+			drpcResp: &mgmtpb.PoolReintResp{Status: -1},
+			expReintReqs: []*mgmtpb.PoolReintReq{
+				// dRPC only called for joined rank
+				rReq(1, 3), rReq(2, 3),
+			},
+			expResp: &mgmtpb.SystemDrainResp{
+				Reint: true,
+				Results: []*mgmtpb.PoolRankResult{
+					{
+						PoolId: test.MockUUID(1),
+						Ranks:  "3",
+						Status: -1025,
+						Msg:    "DER_UNKNOWN(-1): Unknown error code -1",
+					},
+					{
+						PoolId: test.MockUUID(1),
+						Ranks:  "1-2,4",
+						Status: -1025,
+						Msg:    msgInvalidRank,
+					},
+					{
+						PoolId: test.MockUUID(2),
+						Ranks:  "3",
+						Status: -1025,
+						Msg:    "DER_UNKNOWN(-1): Unknown error code -1",
+					},
+					{
+						PoolId: test.MockUUID(2),
+						Ranks:  "1-2,4",
+						Status: -1025,
+						Msg:    msgInvalidRank,
 					},
 				},
 			},
@@ -2041,7 +2165,7 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 
 			cmpOpts := []cmp.Option{
 				cmpopts.IgnoreUnexported(mgmtpb.SystemDrainResp{},
-					mgmtpb.SystemDrainResp_DrainResult{}),
+					mgmtpb.PoolRankResult{}),
 			}
 			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
@@ -2052,19 +2176,49 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 			}
 
 			gotDrpcCalls := mockDrpc.calls.get()
-			test.AssertEqual(t, len(tc.expDrpcReqs), len(gotDrpcCalls),
-				"unexpected number of drpc calls")
 
-			for i := range gotDrpcCalls {
-				gotReq := new(mgmtpb.PoolDrainReq)
-				err := proto.Unmarshal(gotDrpcCalls[i].Body, gotReq)
-				if err != nil {
-					t.Fatal(err)
+			nrDrpcCalls := len(gotDrpcCalls)
+			nrDrainReqs := len(tc.expDrainReqs)
+			nrReintReqs := len(tc.expReintReqs)
+
+			if nrDrainReqs > 0 && nrReintReqs > 0 {
+				t.Fatal("bad test params, both drain and reint params supplied")
+			}
+			if (nrDrainReqs == 0 && nrReintReqs == 0) && nrDrpcCalls != 0 {
+				t.Fatal("unexpected drpc calls")
+			}
+
+			if nrDrainReqs > 0 {
+				test.AssertEqual(t, nrDrainReqs, nrDrpcCalls,
+					"unexpected number of drpc drain calls")
+
+				for i := range gotDrpcCalls {
+					gotReq := new(mgmtpb.PoolDrainReq)
+					err := proto.Unmarshal(gotDrpcCalls[i].Body, gotReq)
+					if err != nil {
+						t.Fatal(err)
+					}
+					opt := cmpopts.IgnoreUnexported(mgmtpb.PoolDrainReq{})
+					diff := cmp.Diff(tc.expDrainReqs[i], gotReq, opt)
+					if diff != "" {
+						t.Fatalf("want-, got+:\n%s", diff)
+					}
 				}
-				opt := cmpopts.IgnoreUnexported(mgmtpb.PoolDrainReq{})
-				diff := cmp.Diff(tc.expDrpcReqs[i], gotReq, opt)
-				if diff != "" {
-					t.Fatalf("want-, got+:\n%s", diff)
+			} else if nrReintReqs > 0 {
+				test.AssertEqual(t, nrReintReqs, nrDrpcCalls,
+					"unexpected number of drpc reint calls")
+
+				for i := range gotDrpcCalls {
+					gotReq := new(mgmtpb.PoolReintReq)
+					err := proto.Unmarshal(gotDrpcCalls[i].Body, gotReq)
+					if err != nil {
+						t.Fatal(err)
+					}
+					opt := cmpopts.IgnoreUnexported(mgmtpb.PoolReintReq{})
+					diff := cmp.Diff(tc.expReintReqs[i], gotReq, opt)
+					if diff != "" {
+						t.Fatalf("want-, got+:\n%s", diff)
+					}
 				}
 			}
 		})

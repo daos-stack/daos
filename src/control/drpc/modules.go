@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -191,16 +192,16 @@ const (
 	MethodPoolCreate MgmtMethod = C.DRPC_METHOD_MGMT_POOL_CREATE
 	// MethodPoolDestroy is a ModuleMgmt method
 	MethodPoolDestroy MgmtMethod = C.DRPC_METHOD_MGMT_POOL_DESTROY
-	// MethodPoolEvict is a ModuleMgmt method
+	// MethodPoolEvict is a ModuleMgmt method to evict pool connections
 	MethodPoolEvict MgmtMethod = C.DRPC_METHOD_MGMT_POOL_EVICT
-	// MethodPoolExclude is a ModuleMgmt method
-	MethodPoolExclude MgmtMethod = C.DRPC_METHOD_MGMT_EXCLUDE
-	// MethodPoolDrain is a ModuleMgmt method
-	MethodPoolDrain MgmtMethod = C.DRPC_METHOD_MGMT_DRAIN
-	// MethodPoolExtend is a ModuleMgmt method
-	MethodPoolExtend MgmtMethod = C.DRPC_METHOD_MGMT_EXTEND
-	// MethodPoolReintegrate is a ModuleMgmt method
-	MethodPoolReintegrate MgmtMethod = C.DRPC_METHOD_MGMT_REINTEGRATE
+	// MethodPoolExclude is a ModuleMgmt method for excluding pool ranks
+	MethodPoolExclude MgmtMethod = C.DRPC_METHOD_MGMT_POOL_EXCLUDE
+	// MethodPoolDrain is a ModuleMgmt method for draining pool ranks
+	MethodPoolDrain MgmtMethod = C.DRPC_METHOD_MGMT_POOL_DRAIN
+	// MethodPoolReintegrate is a ModuleMgmt method for reintegrating pool ranks
+	MethodPoolReintegrate MgmtMethod = C.DRPC_METHOD_MGMT_POOL_REINT
+	// MethodPoolExtend is a ModuleMgmt method for extending pool
+	MethodPoolExtend MgmtMethod = C.DRPC_METHOD_MGMT_POOL_EXTEND
 	// MethodBioHealth is a ModuleMgmt method
 	MethodBioHealth MgmtMethod = C.DRPC_METHOD_MGMT_BIO_HEALTH_QUERY
 	// MethodSetUp is a ModuleMgmt method

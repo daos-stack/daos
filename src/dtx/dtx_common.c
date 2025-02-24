@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -179,7 +180,7 @@ dtx_free_dbca(struct dtx_batched_cont_args *dbca)
 static inline uint64_t
 dtx_sec2age(uint64_t sec)
 {
-	uint64_t	cur = daos_gettime_coarse();
+	uint64_t	cur = daos_wallclock_secs();
 
 	if (unlikely(cur <= sec))
 		return 0;
@@ -922,6 +923,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t xoh, struct dtx_epoch *epoch, 
 	dth->dth_for_migration = (flags & DTX_FOR_MIGRATION) ? 1 : 0;
 	dth->dth_ignore_uncommitted = (flags & DTX_IGNORE_UNCOMMITTED) ? 1 : 0;
 	dth->dth_prepared = (flags & DTX_PREPARED) ? 1 : 0;
+	dth->dth_epoch_owner = (flags & DTX_EPOCH_OWNER) ? 1 : 0;
 	dth->dth_aborted = 0;
 	dth->dth_already = 0;
 	dth->dth_need_validation = 0;

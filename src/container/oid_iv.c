@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -31,7 +32,8 @@ struct oid_iv_entry {
 	struct oid_iv_range	rg;
 	/** protect the entry */
 	ABT_mutex		lock;
-	void                   *current_req;
+	d_rank_t                current_req_rank;
+	void                   *current_req_ptr;
 };
 
 /** Priv data in the iv layer */
@@ -85,12 +87,14 @@ oid_iv_ent_refresh(struct ds_iv_entry *iv_entry, struct ds_iv_key *key,
 
 	D_ASSERT(priv);
 	num_oids = priv->num_oids;
-	D_DEBUG(DB_MD, "%u: ON REFRESH: num_oids = %zu, REF_RC = " DF_RC "\n", dss_self_rank(),
-		num_oids, DP_RC(ref_rc));
 	D_ASSERT(num_oids != 0);
-
 	entry = iv_entry->iv_value.sg_iovs[0].iov_buf;
 	D_ASSERT(entry != NULL);
+
+	D_DEBUG(DB_MD,
+		"%u: ON REFRESH: num_oids = %zu, REF_RC = " DF_RC " ENTRY rank %u Ptr = %p\n",
+		dss_self_rank(), num_oids, DP_RC(ref_rc), entry->current_req_rank,
+		entry->current_req_ptr);
 
 	/** if iv op failed, just release the entry lock acquired in update */
 	if (ref_rc != 0)
@@ -129,17 +133,28 @@ oid_iv_ent_update(struct ds_iv_entry *ns_entry, struct ds_iv_key *iv_key,
 	d_rank_t		myrank = dss_self_rank();
 	int			rc;
 
+	if (src == NULL) {
+		D_DEBUG(DB_MD, "%u: ON UPDATE delete entry iv_entry %p\n", myrank, ns_entry);
+		ns_entry->iv_to_delete = 1;
+		return 0;
+	}
+
 	D_ASSERT(priv != NULL);
 	entry = ns_entry->iv_value.sg_iovs[0].iov_buf;
+	oids  = src->sg_iovs[0].iov_buf;
+
 	rc = ABT_mutex_trylock(entry->lock);
-	/** For retry requests, from _iv_op(), the lock may not be released in some cases. */
-	if (rc == ABT_ERR_MUTEX_LOCKED && entry->current_req != src)
-		return -DER_BUSY;
+	if (rc == ABT_ERR_MUTEX_LOCKED) {
+		if (entry->current_req_rank == oids->req_rank &&
+		    entry->current_req_ptr == oids->req_ptr)
+			D_DEBUG(DB_MD, "%u: ON UPDATE - SAME REQ %p \n", myrank, src);
+		else
+			return -DER_BUSY;
+	}
 
-	entry->current_req = src;
-	avail = &entry->rg;
-
-	oids = src->sg_iovs[0].iov_buf;
+	entry->current_req_rank = oids->req_rank;
+	entry->current_req_ptr  = oids->req_ptr;
+	avail                   = &entry->rg;
 
 	if (myrank == oids->req_rank)
 		num_oids = oids->req_num_oids;
@@ -208,8 +223,6 @@ oid_iv_ent_get(struct ds_iv_entry *entry, void **_priv)
 {
 	struct oid_iv_priv	*priv;
 
-	D_DEBUG(DB_MD, "%u: OID GET\n", dss_self_rank());
-
 	D_ALLOC_PTR(priv);
 	if (priv == NULL)
 		return -DER_NOMEM;
@@ -221,7 +234,6 @@ static void
 oid_iv_ent_put(struct ds_iv_entry *entry, void *priv)
 {
 	D_ASSERT(priv != NULL);
-	D_DEBUG(DB_MD, "%u: ON PUT\n", dss_self_rank());
 	D_FREE(priv);
 }
 
@@ -330,6 +342,7 @@ oid_iv_reserve(void *ns, uuid_t po_uuid, uuid_t co_uuid, uint64_t num_oids, d_sg
 	oids->num_oids = num_oids;
 	oids->req_rank     = dss_self_rank();
 	oids->req_num_oids = num_oids;
+	oids->req_ptr      = value;
 
 	rc = ds_iv_update(ns, &key, value, 0, CRT_IV_SYNC_NONE,
 			  CRT_IV_SYNC_BIDIRECTIONAL, true /* retry */);

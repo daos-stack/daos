@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -265,6 +266,7 @@ const (
 )
 
 const (
-	PoolReintModeDataSync   = C.DAOS_REINT_MODE_DATA_SYNC
-	PoolReintModeNoDataSync = C.DAOS_REINT_MODE_NO_DATA_SYNC
+	PoolReintModeDataSync    = C.DAOS_REINT_MODE_DATA_SYNC
+	PoolReintModeNoDataSync  = C.DAOS_REINT_MODE_NO_DATA_SYNC
+	PoolReintModeIncremental = C.DAOS_REINT_MODE_INCREMENTAL
 )

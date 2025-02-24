@@ -1,13 +1,12 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 import os
 import random
-
-from general_utils import pcmd
 
 
 class DaosTestError(Exception):
@@ -69,24 +68,6 @@ def get_user_type(test_user):
     if "group" in test_user.lower():
         user_type = "group"
     return user_type
-
-
-def add_del_user(hosts, bash_cmd, user):
-    """Add or delete the daos user and group on host by sudo command.
-
-    Args:
-        hosts (NodeSet): hosts on which to add/delete the user.
-        bash_cmd (str): Linux bash command to create user or group.
-        user (str): user or group name to be created or cleaned.
-
-    """
-    bash_cmd = os.path.join("/usr/sbin", bash_cmd)
-    homedir = ""
-    if "usermod" not in bash_cmd and "user" in bash_cmd:
-        homedir = "-r"
-    cmd = " ".join(("sudo", bash_cmd, homedir, user))
-    print("     =Clients/hosts {0}, exec cmd: {1}".format(hosts, cmd))
-    pcmd(hosts, cmd, False)
 
 
 def create_acl_file(file_name, permissions):

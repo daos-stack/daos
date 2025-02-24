@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -281,6 +282,32 @@ func TestDmg_SystemCommands(t *testing.T) {
 		{
 			"system drain without ranks",
 			"system drain",
+			"",
+			errNoRanks,
+		},
+		{
+			"system reintegrate with multiple hosts",
+			"system reintegrate --rank-hosts foo-[0,1,4]",
+			strings.Join([]string{
+				printRequest(t, withSystem(
+					withHosts(&control.SystemDrainReq{Reint: true}, "foo-[0-1,4]"),
+					"daos_server")),
+			}, " "),
+			nil,
+		},
+		{
+			"system reintegrate with multiple ranks",
+			"system reintegrate --ranks 0,1,4",
+			strings.Join([]string{
+				printRequest(t, withSystem(
+					withRanks(&control.SystemDrainReq{Reint: true}, 0, 1, 4),
+					"daos_server")),
+			}, " "),
+			nil,
+		},
+		{
+			"system reintegrate without ranks",
+			"system reint", // Verify alias is accepted.
 			"",
 			errNoRanks,
 		},

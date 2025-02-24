@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2025 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -172,15 +172,18 @@ int smd_dev_replace(uuid_t old_id, uuid_t new_id, unsigned int old_roles);
  * \param [IN]	smd_type	SMD type
  * \param [IN]	blob_sz		Blob size in bytes
  * \param [IN]	scm_sz		VOS file size in bytes
+ * \param [IN]  recreate    is recreate (in replace) or not
  *
  * \return			Zero on success, negative value on error
  */
-int smd_pool_add_tgt(uuid_t pool_id, uint32_t tgt_id, uint64_t blob_id,
-		     enum smd_dev_type smd_type, uint64_t blob_sz, uint64_t scm_sz);
+int
+smd_pool_add_tgt(uuid_t pool_id, uint32_t tgt_id, uint64_t blob_id, enum smd_dev_type smd_type,
+		 uint64_t blob_sz, uint64_t scm_sz, bool recreate);
 
 /* Assign a blob to a RDB pool target */
-int smd_rdb_add_tgt(uuid_t pool_id, uint32_t tgt_id, uint64_t blob_id,
-		    enum smd_dev_type smd_type, uint64_t blob_sz);
+int
+      smd_rdb_add_tgt(uuid_t pool_id, uint32_t tgt_id, uint64_t blob_id, enum smd_dev_type smd_type,
+		      uint64_t blob_sz, bool recreate);
 
 /**
  * Unassign a VOS pool target

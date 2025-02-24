@@ -32,7 +32,7 @@ def scons():
     libs += ['spdk_vmd', 'spdk_event_bdev', 'spdk_init']
 
     # Other libs
-    libs += ['numa', 'dl', 'smd']
+    libs += ['numa', 'dl', 'smd', 'abt']
 
     tgts = FILES + control_tgts
     bio = denv.d_library("bio", tgts, install_off="../..", LIBS=libs)

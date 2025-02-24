@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -532,23 +533,6 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				TierBytes:    []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
 				MemFileBytes: 50 * humanize.GiByte,
 				TgtRanks:     []uint32{0, 1},
-			},
-		},
-		"successful creation with memory file bytes in resp; mdonssd not enabled": {
-			targetCount: 8,
-			req: &mgmtpb.PoolCreateReq{
-				Uuid:       test.MockUUID(1),
-				TierBytes:  []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
-				Properties: testPoolLabelProp(),
-			},
-			drpcRet: &mgmtpb.PoolCreateResp{
-				TierBytes:    []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
-				MemFileBytes: 100 * humanize.GiByte,
-				TgtRanks:     []uint32{0, 1},
-			},
-			expResp: &mgmtpb.PoolCreateResp{
-				TierBytes: []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
-				TgtRanks:  []uint32{0, 1},
 			},
 		},
 		"successful creation minimum size": {
@@ -1494,9 +1478,9 @@ func TestServer_MgmtSvc_PoolReintegrate(t *testing.T) {
 		nilReq      bool
 		getMockDrpc func(error) *mockDrpcClient
 		mgmtSvc     *mgmtSvc
-		reqIn       *mgmtpb.PoolReintegrateReq
-		drpcResp    *mgmtpb.PoolReintegrateResp
-		expDrpcReq  *mgmtpb.PoolReintegrateReq
+		reqIn       *mgmtpb.PoolReintReq
+		drpcResp    *mgmtpb.PoolReintResp
+		expDrpcReq  *mgmtpb.PoolReintReq
 		expErr      error
 	}{
 		"nil request": {
@@ -1504,7 +1488,7 @@ func TestServer_MgmtSvc_PoolReintegrate(t *testing.T) {
 			expErr: errors.New("nil request"),
 		},
 		"wrong system": {
-			reqIn:  &mgmtpb.PoolReintegrateReq{Id: mockUUID, Sys: "bad"},
+			reqIn:  &mgmtpb.PoolReintReq{Id: mockUUID, Sys: "bad"},
 			expErr: FaultWrongSystem("bad", build.DefaultSystemName),
 		},
 		"missing superblock": {
@@ -1528,13 +1512,13 @@ func TestServer_MgmtSvc_PoolReintegrate(t *testing.T) {
 			expErr: errors.New("unmarshal"),
 		},
 		"missing uuid": {
-			reqIn:  &mgmtpb.PoolReintegrateReq{Rank: 1},
+			reqIn:  &mgmtpb.PoolReintReq{Rank: 1},
 			expErr: errors.New("empty pool id"),
 		},
 		"successfully extended": {
-			drpcResp: &mgmtpb.PoolReintegrateResp{},
+			drpcResp: &mgmtpb.PoolReintResp{},
 			// Expect that the last request contains updated params from ps entry.
-			expDrpcReq: &mgmtpb.PoolReintegrateReq{
+			expDrpcReq: &mgmtpb.PoolReintReq{
 				Sys:       build.DefaultSystemName,
 				SvcRanks:  mockSvcRanks,
 				Id:        mockUUID,
@@ -1549,7 +1533,7 @@ func TestServer_MgmtSvc_PoolReintegrate(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.reqIn == nil && !tc.nilReq {
-				tc.reqIn = &mgmtpb.PoolReintegrateReq{Id: mockUUID, Rank: 1}
+				tc.reqIn = &mgmtpb.PoolReintReq{Id: mockUUID, Rank: 1}
 			}
 			if tc.mgmtSvc == nil {
 				tc.mgmtSvc = newTestMgmtSvc(t, log)
@@ -1586,7 +1570,7 @@ func TestServer_MgmtSvc_PoolReintegrate(t *testing.T) {
 			}
 
 			// Check extend gets called with correct params from PS entry.
-			lastReq := new(mgmtpb.PoolReintegrateReq)
+			lastReq := new(mgmtpb.PoolReintReq)
 			if err := proto.Unmarshal(getLastMockCall(mdc).Body, lastReq); err != nil {
 				t.Fatal(err)
 			}
@@ -2321,12 +2305,11 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		mdonssdEnabled bool
-		mgmtSvc        *mgmtSvc
-		setupMockDrpc  func(_ *mgmtSvc, _ error)
-		req            *mgmtpb.PoolQueryReq
-		expResp        *mgmtpb.PoolQueryResp
-		expErr         error
+		mgmtSvc       *mgmtSvc
+		setupMockDrpc func(_ *mgmtSvc, _ error)
+		req           *mgmtpb.PoolQueryReq
+		expResp       *mgmtpb.PoolQueryResp
+		expErr        error
 	}{
 		"nil request": {
 			expErr: errors.New("nil request"),
@@ -2376,16 +2359,15 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 				Uuid:  mockUUID,
 			},
 		},
-		"successful query (includes pre-2.6 Leader field); mdonssd not enabled": {
+		"successful query (includes pre-2.6 Leader field)": {
 			req: &mgmtpb.PoolQueryReq{
 				Id: mockUUID,
 			},
 			setupMockDrpc: func(svc *mgmtSvc, err error) {
 				resp := &mgmtpb.PoolQueryResp{
-					State:        mgmtpb.PoolServiceState_Ready,
-					Uuid:         mockUUID,
-					SvcLdr:       42,
-					MemFileBytes: humanize.GiByte,
+					State:  mgmtpb.PoolServiceState_Ready,
+					Uuid:   mockUUID,
+					SvcLdr: 42,
 				}
 				setupMockDrpcClient(svc, resp, nil)
 			},
@@ -2397,7 +2379,6 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 			},
 		},
 		"successful query; mdonssd enabled": {
-			mdonssdEnabled: true,
 			req: &mgmtpb.PoolQueryReq{
 				Id: mockUUID,
 			},
@@ -2424,9 +2405,6 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 				tier := storage.NewTierConfig().
 					WithStorageClass("nvme").
 					WithBdevDeviceList("foo", "bar")
-				if tc.mdonssdEnabled {
-					tier.WithBdevDeviceRoles(7)
-				}
 				engineCfg := engine.MockConfig().
 					WithTargetCount(16).
 					WithStorage(tier)

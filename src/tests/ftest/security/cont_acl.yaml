@@ -24,8 +24,8 @@ container:
   control_method: daos
 container_acl:
   acl_file_name: cont_test_acl1.txt
-  new_user: daos_ci_tester_1
-  new_group: daos_ci_test_grp_1
+  new_user: root
+  new_group: root
   attribute:
     - container_name
     - Container1

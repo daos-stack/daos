@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -334,7 +335,8 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_PO_REINT_MODE:
 			val = prop->dpp_entries[i].dpe_val;
 			if (val != DAOS_REINT_MODE_DATA_SYNC &&
-			    val != DAOS_REINT_MODE_NO_DATA_SYNC) {
+			    val != DAOS_REINT_MODE_NO_DATA_SYNC &&
+			    val != DAOS_REINT_MODE_INCREMENTAL) {
 				D_ERROR("invalid reintegration mode "DF_U64".\n", val);
 				return false;
 			}

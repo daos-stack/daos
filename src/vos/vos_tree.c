@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1353,4 +1354,14 @@ obj_tree_find_attr(unsigned tree_class, int flags)
 		if (ta->ta_class == VOS_BTR_END)
 			return NULL;
 	}
+}
+
+bool
+vos_irec_is_valid(const struct vos_irec_df *svt, uint32_t dtx_lid)
+{
+	if (svt == NULL) {
+		return false;
+	}
+
+	return svt->ir_dtx == dtx_lid;
 }

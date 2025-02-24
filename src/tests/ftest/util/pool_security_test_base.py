@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -11,6 +12,7 @@ import re
 import agent_utils as agu
 import security_test_base as secTestBase
 from apricot import TestWithServers
+from user_utils import groupadd, groupdel, useradd, userdel, usermod
 
 PERMISSIONS = ["", "r", "w", "rw"]
 DENY_ACCESS = "-1001"
@@ -362,13 +364,14 @@ class PoolSecurityTestBase(TestWithServers):
         for uid in range(num_user):
             username = user_prefix + "_tester_" + str(uid + 1)
             new_user = "A::" + username + "@:" + PERMISSIONS[uid % 4]
-            secTestBase.add_del_user(self.hostlist_clients, "useradd", username)
+            if not useradd(self.log, self.hostlist_clients, username).passed:
+                self.fail(f"Failed to useradd {username}")
             user_list.append(new_user)
         for gid in range(num_group):
             groupname = user_prefix + "_testGrp_" + str(gid + 1)
             new_group = "A:G:" + groupname + "@:" + PERMISSIONS[(gid + 2) % 4]
-            secTestBase.add_del_user(self.hostlist_clients, "groupadd",
-                                     groupname)
+            if not groupadd(self.log, self.hostlist_clients, groupname).passed:
+                self.fail(f"Failed to groupadd {groupname}")
             group_list.append(new_group)
         permission_list = group_list + user_list + current_user_acl
         random.shuffle(permission_list)
@@ -386,11 +389,12 @@ class PoolSecurityTestBase(TestWithServers):
         user_prefix = self.params.get("user_prefix", "/run/pool_acl/*")
         for uid in range(num_user):
             username = user_prefix + "_tester_" + str(uid + 1)
-            secTestBase.add_del_user(self.hostlist_clients, "userdel", username)
+            if not userdel(self.log, self.hostlist_clients, username).passed:
+                self.log.error("Failed to userdel %s", username)
         for gid in range(num_group):
             groupname = user_prefix + "_testGrp_" + str(gid + 1)
-            secTestBase.add_del_user(self.hostlist_clients, "groupdel",
-                                     groupname)
+            if not groupdel(self.log, self.hostlist_clients, groupname).passed:
+                self.log.error("Failed to groupdel %s", groupname)
 
     def verify_pool_acl_prim_sec_groups(self, pool_acl_list, acl_file):
         """Verify daos pool acl access.
@@ -417,10 +421,11 @@ class PoolSecurityTestBase(TestWithServers):
             "sg_read_write", "/run/pool_acl/primary_secondary_group_test/*")
         l_group = grp.getgrgid(os.getegid())[0]
         for group in sec_group:
-            secTestBase.add_del_user(self.hostlist_clients, "groupadd", group)
-        cmd = "usermod -G " + ",".join(sec_group)
-        self.log.info("  (8-1)verify_pool_acl_prim_sec_groups, cmd= %s", cmd)
-        secTestBase.add_del_user(self.hostlist_clients, cmd, l_group)
+            if not groupadd(self.log, self.hostlist_clients, group).passed:
+                self.fail(f"Failed to groupadd {group}")
+        self.log.info("  (8-1)verify_pool_acl_prim_sec_groups, cmd=usermod")
+        if not usermod(self.log, self.hostlist_clients, l_group, sec_group).passed:
+            self.fail(f"Failed to usermod {l_group}")
 
         self.log.info(
             "  (8-2)Before update sec_group permission, pool_acl_list= %s",
@@ -465,7 +470,8 @@ class PoolSecurityTestBase(TestWithServers):
         self.verify_pool_readwrite(self.pool, "write", expect=exp_write)
 
         for group in sec_group:
-            secTestBase.add_del_user(self.hostlist_clients, "groupdel", group)
+            if not groupdel(self.log, self.hostlist_clients, group).passed:
+                self.log.error("Failed to groupdel %s", group)
 
     def pool_acl_verification(self, current_user_acl, read, write,
                               secondary_grp_test=False):

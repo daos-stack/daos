@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -1089,13 +1090,13 @@ func TestControl_SystemDrain(t *testing.T) {
 		"dual pools; single rank": {
 			req: new(SystemDrainReq),
 			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemDrainResp{
-				Results: []*mgmtpb.SystemDrainResp_DrainResult{
+				Results: []*mgmtpb.PoolRankResult{
 					{PoolId: test.MockUUID(1), Ranks: "1"},
 					{PoolId: test.MockUUID(2), Ranks: "1"},
 				},
 			}),
 			expResp: &SystemDrainResp{
-				Results: []*DrainResult{
+				Results: []*PoolRankResult{
 					{PoolID: test.MockUUID(1), Ranks: "1"},
 					{PoolID: test.MockUUID(2), Ranks: "1"},
 				},
@@ -1104,7 +1105,7 @@ func TestControl_SystemDrain(t *testing.T) {
 		"dual pools; single rank; with errors": {
 			req: new(SystemDrainReq),
 			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemDrainResp{
-				Results: []*mgmtpb.SystemDrainResp_DrainResult{
+				Results: []*mgmtpb.PoolRankResult{
 					{
 						PoolId: test.MockUUID(1), Ranks: "1",
 						Status: -1, Msg: "fail1",
@@ -1116,7 +1117,7 @@ func TestControl_SystemDrain(t *testing.T) {
 				},
 			}),
 			expResp: &SystemDrainResp{
-				Results: []*DrainResult{
+				Results: []*PoolRankResult{
 					{
 						PoolID: test.MockUUID(1), Ranks: "1",
 						Status: -1, Msg: "fail1",

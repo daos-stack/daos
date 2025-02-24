@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -785,6 +786,10 @@ vos_iter_cb(vos_iter_cb_t iter_cb, daos_handle_t ih, vos_iter_entry_t *iter_ent,
 	return rc;
 }
 
+/*
+ * ITER_EXIT indicates that the iteration is interrupted (for instance, the iterating ULT is
+ * terminated by shed_req_wait()), we'd return non-zero value to inform caller in such case.
+ */
 #define JUMP_TO_STAGE(rc, next_label, probe_label, abort_label)				\
 	do {										\
 		switch (rc) {								\
@@ -1089,8 +1094,8 @@ vos_iterate_obj(vos_iter_param_t *param, bool recursive, struct vos_iter_anchors
 
 	cont = vos_hdl2cont(param->ip_hdl);
 	if (!vos_pool_is_evictable(cont->vc_pool))
-		return vos_iterate_internal(param, VOS_ITER_OBJ, recursive, false, anchors,
-					    pre_cb, post_cb, arg, dth);
+		return vos_iterate_internal(param, VOS_ITER_OBJ, recursive, false, anchors, pre_cb,
+					    post_cb, arg, dth);
 
 	/* The caller must provide a filter callback and call the oi_bkt_iter_skip() properly */
 	D_ASSERT(param->ip_filter_cb != NULL && param->ip_bkt_iter == NULL);
@@ -1112,7 +1117,8 @@ vos_iterate_obj(vos_iter_param_t *param, bool recursive, struct vos_iter_anchors
 		rc = vos_iterate_internal(param, VOS_ITER_OBJ, recursive, false, anchors,
 					  pre_cb, post_cb, arg, dth);
 		if (rc) {
-			DL_ERROR(rc, "Iterate bucket:%u failed.", i);
+			DL_CDEBUG(rc == ITER_EXIT, DB_TRACE, DLOG_ERR, rc,
+				  "Iterate bucket:%u failed.", i);
 			break;
 		}
 		reset_anchors(VOS_ITER_OBJ, anchors);
@@ -1136,6 +1142,6 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 {
 	D_ASSERT((param->ip_flags & VOS_IT_KEY_TREE) == 0);
 
-	return vos_iterate_internal(param, type, recursive, false, anchors,
-				    pre_cb, post_cb, arg, dth);
+	return vos_iterate_internal(param, type, recursive, false, anchors, pre_cb, post_cb, arg,
+				    dth);
 }

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -113,8 +114,10 @@ struct dtx_handle {
 	    dth_ignore_uncommitted                : 1,
 	    /* Local transaction */
 	    dth_local                             : 1,
+	    /* Locally generate the epoch. */
+	    dth_epoch_owner			  : 1,
 	    /* Flag to commit the local transaction */
-	    dth_local_complete : 1, padding1 : 13;
+	    dth_local_complete : 1, padding1 : 12;
 
 	/* The count the DTXs in the dth_dti_cos array. */
 	uint32_t			 dth_dti_cos_count;
@@ -287,6 +290,8 @@ enum dtx_flags {
 	DTX_RELAY = (1 << 10),
 	/** Local transaction */
 	DTX_LOCAL = (1 << 11),
+	/** Locally generate the epoch. */
+	DTX_EPOCH_OWNER = (1 << 12),
 };
 
 void

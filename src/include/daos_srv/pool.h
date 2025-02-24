@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -38,6 +39,13 @@ struct ds_pool_svc;
 /* age of an entry in svc_ops KVS before it may be evicted */
 #define DEFAULT_SVC_OPS_ENTRY_AGE_SEC_MAX 300ULL
 
+/* Pool map buffer cache */
+struct ds_pool_map_bc {
+	struct pool_buf *pmc_buf;
+	crt_bulk_t       pmc_bulk;
+	uint32_t         pmc_ref;
+};
+
 /*
  * Pool object
  *
@@ -48,7 +56,8 @@ struct ds_pool {
 	uuid_t			sp_uuid;	/* pool UUID */
 	d_list_t		sp_hdls;
 	ABT_rwlock		sp_lock;
-	struct pool_map		*sp_map;
+	struct pool_map         *sp_map;
+	struct ds_pool_map_bc   *sp_map_bc;
 	uint32_t		sp_map_version;	/* temporary */
 	uint32_t		sp_ec_cell_sz;
 	uint64_t		sp_reclaim;
@@ -88,7 +97,8 @@ struct ds_pool {
 				sp_fetch_hdls:1,
 				sp_need_discard:1,
 				sp_disable_rebuild:1,
-				sp_disable_dtx_resync:1;
+				sp_disable_dtx_resync:1,
+				sp_incr_reint:1;
 	/* pool_uuid + map version + leader term + rebuild generation define a
 	 * rebuild job.
 	 */
@@ -270,8 +280,8 @@ int ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 
 int ds_pool_map_buf_get(uuid_t uuid, d_iov_t *iov, uint32_t *map_ver);
 
-int ds_pool_tgt_exclude_out(uuid_t pool_uuid, struct pool_target_id_list *list);
-int ds_pool_tgt_exclude(uuid_t pool_uuid, struct pool_target_id_list *list);
+int
+     ds_pool_tgt_exclude_out(uuid_t pool_uuid, struct pool_target_id_list *list);
 int ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list);
 
 int ds_pool_tgt_revert_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list);
@@ -285,9 +295,10 @@ int ds_pool_start(uuid_t uuid, bool aft_chk, bool immutable);
 int ds_pool_stop(uuid_t uuid);
 int dsc_pool_svc_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uint64_t deadline, int ntargets,
 			const d_rank_list_t *rank_list, int ndomains, const uint32_t *domains);
-int dsc_pool_svc_update_target_state(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline,
-				     struct pool_target_addr_list *target_list,
-				     pool_comp_state_t state);
+int
+	 dsc_pool_svc_update_target_state(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline,
+					  struct pool_target_addr_list *target_list, pool_comp_state_t state,
+					  bool skip_rf_check);
 
 uint32_t ds_pool_get_vos_df_version_default(void);
 int ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
@@ -380,6 +391,7 @@ int dsc_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t de
 			     uuid_t *handles, size_t n_handles, uint32_t destroy, uint32_t force,
 			     char *machine, uint32_t *count);
 
+int ds_pool_target_status(struct ds_pool *pool, uint32_t id);
 int ds_pool_target_status_check(struct ds_pool *pool, uint32_t id,
 				uint8_t matched_status, struct pool_target **p_tgt);
 int ds_pool_mark_connectable(struct ds_pool_svc *ds_svc);

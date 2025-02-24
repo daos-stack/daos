@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -57,19 +58,21 @@ dsm_tls_get()
 
 extern bool ec_agg_disabled;
 
-struct ec_eph {
-	d_rank_t	rank;
-	daos_epoch_t	eph;
+struct rank_eph {
+	d_rank_t	re_rank;
+	daos_epoch_t	re_ec_agg_eph;
+	daos_epoch_t	re_stable_eph;
 };
 
-/* container EC aggregation epoch control descriptor, which is only on leader */
-struct cont_ec_agg {
-	uuid_t			ea_cont_uuid;
-	daos_epoch_t		ea_current_eph;
-	struct ec_eph		*ea_server_ephs;
-	d_list_t		ea_list;
-	int			ea_servers_num;
-	uint32_t		ea_deleted:1;
+/* container EC aggregation epoch and stable epoch control descriptor, which is only on leader */
+struct cont_track_eph_leader {
+	uuid_t			cte_cont_uuid;
+	daos_epoch_t		cte_current_ec_agg_eph;
+	daos_epoch_t		cte_current_stable_eph;
+	struct rank_eph		*cte_server_ephs;
+	d_list_t		cte_list;
+	int			cte_servers_num;
+	uint32_t		cte_deleted:1;
 };
 
 /*
@@ -88,9 +91,9 @@ struct cont_svc {
 	rdb_path_t              cs_hdls;        /* container handle KVS */
 	struct ds_pool	       *cs_pool;
 
-	/* Manage the EC aggregation epoch */
-	struct sched_request   *cs_ec_leader_ephs_req;
-	d_list_t		cs_ec_agg_list; /* link cont_ec_agg */
+	/* Manage the EC aggregation epoch and stable epoch */
+	struct sched_request   *cs_cont_ephs_leader_req;
+	d_list_t		cs_cont_ephs_leader_list; /* link cont_track_eph_leader */
 };
 
 /* Container descriptor */
@@ -110,6 +113,7 @@ struct oid_iv_range {
 	daos_size_t	num_oids;
 	daos_size_t     req_num_oids;
 	d_rank_t        req_rank;
+	void           *req_ptr;
 };
 
 /* Container IV structure */
@@ -157,18 +161,19 @@ struct cont_iv_prop {
 	struct daos_acl			cip_acl;
 };
 
-struct cont_iv_agg_eph {
-	daos_epoch_t	eph;
-	d_rank_t	rank;
+struct cont_iv_track_eph {
+	daos_epoch_t	ite_ec_agg_eph;
+	daos_epoch_t	ite_stable_eph;
+	d_rank_t	ite_rank;
 };
 
 struct cont_iv_entry {
 	uuid_t	cont_uuid;
 	union {
-		struct cont_iv_snapshot iv_snap;
-		struct cont_iv_capa	iv_capa;
-		struct cont_iv_prop	iv_prop;
-		struct cont_iv_agg_eph	iv_agg_eph;
+		struct cont_iv_snapshot		iv_snap;
+		struct cont_iv_capa		iv_capa;
+		struct cont_iv_prop		iv_prop;
+		struct cont_iv_track_eph	iv_track_eph;
 	};
 };
 
@@ -209,8 +214,8 @@ int
 		       struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver);
 int ds_cont_get_prop(uuid_t pool_uuid, uuid_t cont_uuid,
 		     daos_prop_t **prop_out);
-int ds_cont_leader_update_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
-				  d_rank_t rank, daos_epoch_t eph);
+int ds_cont_leader_update_track_eph(uuid_t pool_uuid, uuid_t cont_uuid,
+				    d_rank_t rank, daos_epoch_t agg_eph, daos_epoch_t stable_eph);
 
 /* srv_epoch.c */
 int
@@ -269,8 +274,8 @@ int ds_cont_tgt_snapshots_update(uuid_t pool_uuid, uuid_t cont_uuid,
 				 uint64_t *snapshots, int snap_count);
 int ds_cont_tgt_snapshots_refresh(uuid_t pool_uuid, uuid_t cont_uuid);
 int ds_cont_tgt_close(uuid_t pool_uuid, uuid_t cont_hdl_uuid);
-int ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
-				daos_epoch_t eph);
+int ds_cont_tgt_refresh_track_eph(uuid_t pool_uuid, uuid_t cont_uuid,
+				  daos_epoch_t ec_agg_eph, daos_epoch_t stable_eph);
 int ds_cont_tgt_prop_update(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t *prop);
 
 /* oid_iv.c */
@@ -294,8 +299,10 @@ int cont_iv_prop_update(void *ns, uuid_t cont_uuid, daos_prop_t *prop, bool sync
 int cont_iv_snapshots_refresh(void *ns, uuid_t cont_uuid);
 int cont_iv_snapshots_update(void *ns, uuid_t cont_uuid,
 			     uint64_t *snapshots, int snap_count);
-int cont_iv_ec_agg_eph_update(void *ns, uuid_t cont_uuid, daos_epoch_t eph);
-int cont_iv_ec_agg_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t eph);
+int cont_iv_track_eph_update(void *ns, uuid_t cont_uuid, daos_epoch_t ec_agg_eph,
+			     daos_epoch_t stable_eph);
+int cont_iv_track_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t ec_agg_eph,
+			      daos_epoch_t stable_eph);
 int cont_iv_entry_delete(void *ns, uuid_t pool_uuid, uuid_t cont_uuid);
 
 /* srv_metrics.c*/

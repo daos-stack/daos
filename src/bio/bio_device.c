@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -794,11 +795,7 @@ set_timer_and_check_faulty(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr 
 		if (dev_info->bdi_traddr == NULL) {
 			D_ERROR("No transport address for dev:"DF_UUID", unable to verify state\n",
 				DP_UUID(dev_info->bdi_dev_id));
-			rc = -DER_INVAL;
-			goto out;
-		}
-
-		if (strcmp(dev_info->bdi_traddr, tr_addr) == 0) {
+		} else if (strcmp(dev_info->bdi_traddr, tr_addr) == 0) {
 			if ((is_faulty != NULL) && (dev_info->bdi_flags & NVME_DEV_FL_FAULTY) != 0)
 				*is_faulty = true;
 

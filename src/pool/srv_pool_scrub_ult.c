@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2021-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -246,7 +247,7 @@ drain_pool_target(uuid_t pool_uuid, d_rank_t rank, uint32_t target)
 
 	rc = dsc_pool_svc_update_target_state(pool_uuid, &out_ranks,
 					      daos_getmtime_coarse() + 5 * 60 * 1000, &target_list,
-					      PO_COMP_ST_DRAIN);
+					      PO_COMP_ST_DRAIN, false);
 	if (rc != DER_SUCCESS)
 		D_ERROR("pool target update status failed: "DF_RC"\n", DP_RC(rc));
 	map_ranks_fini(&out_ranks);

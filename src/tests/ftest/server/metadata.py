@@ -10,16 +10,17 @@ from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
 from exception_utils import CommandFailure
 from ior_utils import IorCommand
-from job_manager_utils import get_job_manager
+from job_manager_utils import get_job_manager, stop_job_manager
 from thread_manager import ThreadManager
 
 
-def run_ior_loop(manager, cont_labels):
+def run_ior_loop(test, manager, loops):
     """Run IOR multiple times.
 
     Args:
+        test (Test): the test object
         manager (str): mpi job manager command
-        cont_labels (list): container labels to run iteratively with
+        loops (int): number of times to run IOR
 
     Returns:
         list: a list of CmdResults from each ior command run
@@ -27,8 +28,10 @@ def run_ior_loop(manager, cont_labels):
     """
     results = []
     errors = []
-    for index, cont_label in enumerate(cont_labels):
-        manager.job.dfs_cont.update(cont_label, "ior.dfs_cont")
+    for index in range(loops):
+        cont = test.label_generator.get_label('cont')
+        manager.job.dfs_cont.update(cont, "ior.dfs_cont")
+
         t_start = time.time()
 
         try:
@@ -37,7 +40,7 @@ def run_ior_loop(manager, cont_labels):
             ior_mode = "read" if "-r" in manager.job.flags.value else "write"
             errors.append(
                 "IOR {} Loop {}/{} failed for container {}: {}".format(
-                    ior_mode, index, len(cont_labels), manager.job.dfs_cont.value, error))
+                    ior_mode, index, loops, cont, error))
         finally:
             t_end = time.time()
             ior_cmd_time = t_end - t_start
@@ -45,8 +48,7 @@ def run_ior_loop(manager, cont_labels):
 
     if errors:
         raise CommandFailure(
-            "IOR failed in {}/{} loops: {}".format(
-                len(errors), len(cont_labels), "\n".join(errors)))
+            "IOR failed in {}/{} loops: {}".format(len(errors), loops, "\n".join(errors)))
     return results
 
 
@@ -267,28 +269,25 @@ class ObjectMetadata(TestWithServers):
                 # Keep track of the number of sequential no space container
                 # create errors.  Once the max has been reached stop the loop.
                 if status:
+                    if in_failure:
+                        self.log.info(
+                            "Container: %d - [no space -> available] creation successful after %d"
+                            " sequential 'no space' error(s) ", loop + 1, sequential_fail_counter)
+                        in_failure = False
                     sequential_fail_counter = 0
                 else:
                     sequential_fail_counter += 1
+                    if not in_failure:
+                        self.log.info(
+                            "Container: %d - [available -> no space] detected new sequential "
+                            "'no space' error", loop + 1)
+                    in_failure = True
+
                 if sequential_fail_counter >= sequential_fail_max:
                     self.log.info(
-                        "Container %d - %d/%d sequential no space "
-                        "container create errors", sequential_fail_counter,
-                        sequential_fail_max, loop)
+                        "Container %d - [no space limit] reached %d/%d sequential 'no space' "
+                        "errors", loop + 1, sequential_fail_counter, sequential_fail_max)
                     break
-
-                if status and in_failure:
-                    self.log.info(
-                        "Container: %d - no space -> available "
-                        "transition, sequential no space failures: %d",
-                        loop, sequential_fail_counter)
-                    in_failure = False
-                elif not status and not in_failure:
-                    self.log.info(
-                        "Container: %d - available -> no space "
-                        "transition, sequential no space failures: %d",
-                        loop, sequential_fail_counter)
-                    in_failure = True
 
             except TestFail as error:
                 self.log.error(str(error))
@@ -303,17 +302,17 @@ class ObjectMetadata(TestWithServers):
                           self.created_containers_min)
             self.fail("Created too few containers")
         self.log.info(
-            "Successfully created %d / %d containers)", len(self.container), loop)
+            "Successfully created %d containers in %d loops)", len(self.container), loop + 1)
 
         # Phase 2 clean up some containers (expected to succeed)
-        msg = "Cleaning up {} containers after pool is full.".format(num_cont_to_destroy)
+        msg = (f"Cleaning up {num_cont_to_destroy}/{len(self.container)} containers after pool "
+               "is full.")
         self.log_step(msg)
         if not self.destroy_num_containers(num_cont_to_destroy):
             self.fail("Fail (unexpected container destroy error)")
 
-        # Do not destroy containers in teardown (destroy pool while metadata rdb is full)
-        for container in self.container:
-            container.skip_cleanup()
+        # The remaining containers are not directly destroyed in teardown due to
+        # 'register_cleanup: False' test yaml entry.  They are handled by the pool destroy.
         self.log.info("Leaving pool metadata rdb full (containers will not be destroyed)")
         self.log.info("Test passed")
 
@@ -450,17 +449,11 @@ class ObjectMetadata(TestWithServers):
         :avocado: tags=ObjectMetadata,test_metadata_server_restart
         """
         self.create_pool()
-        files_per_thread = 50  # 400  # DEBUGGING
-        total_ior_threads = 10
+        files_per_thread = 400
+        total_ior_threads = 5
+        ior_managers = []
 
-        processes = self.params.get("np", "/run/ior/*")
-
-        # Generate all labels to be shared between write and read operation
-        all_cont_labels = []
-        for thread_index in range(total_ior_threads):
-            all_cont_labels.append([])
-            for file_index in range(files_per_thread):
-                all_cont_labels[-1].append(f'cont_{thread_index}_{file_index}')
+        processes = self.params.get("slots", "/run/ior/clientslots/*")
 
         # Launch threads to run IOR to write data, restart the agents and
         # servers, and then run IOR to read the data
@@ -473,20 +466,29 @@ class ObjectMetadata(TestWithServers):
                 # Define the arguments for the run_ior_loop method
                 ior_cmd = IorCommand(self.test_env.log_dir)
                 ior_cmd.get_params(self)
-                ior_cmd.dfs_pool.update(self.pool.identifier)
-                ior_cmd.flags.update(self.params.get("ior{}flags".format(operation), "/run/ior/*"))
+                ior_cmd.set_daos_params(self.pool, None)
+                ior_cmd.flags.value = self.params.get("ior{}flags".format(operation), "/run/ior/*")
 
                 # Define the job manager for the IOR command
-                ior_manager = get_job_manager(self, job=ior_cmd)
-                env = ior_cmd.get_default_env(str(ior_manager))
-                ior_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
-                ior_manager.assign_processes(processes)
-                ior_manager.assign_environment(env)
-                ior_manager.verbose = False
+                ior_managers.append(
+                    get_job_manager(self, "Clush", ior_cmd))
+                env = ior_cmd.get_default_env(str(ior_managers[-1]))
+                ior_managers[-1].assign_hosts(self.hostlist_clients, self.workdir, None)
+                ior_managers[-1].assign_processes(processes)
+                ior_managers[-1].assign_environment(env)
+                ior_managers[-1].verbose = False
+
+                # Disable cleanup methods for all ior commands.
+                ior_managers[-1].register_cleanup_method = None
 
                 # Add a thread for these IOR arguments
-                thread_manager.add(manager=ior_manager, cont_labels=all_cont_labels[index])
+                thread_manager.add(
+                    test=self, manager=ior_managers[-1], loops=files_per_thread)
                 self.log.info("Created %s thread %s", operation, index)
+
+            # Manually add one cleanup method for all ior threads
+            if operation == "write":
+                self.register_cleanup(stop_job_manager, job_manager=ior_managers[0])
 
             # Launch the IOR threads
             self.log.info("Launching %d IOR %s threads", thread_manager.qty, operation)

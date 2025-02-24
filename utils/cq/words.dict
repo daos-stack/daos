@@ -27,6 +27,7 @@ IOR
 ISA
 KVM
 Launchable
+LLC
 Lustre
 MPI
 Makefile
@@ -204,6 +205,7 @@ getfattr
 getxattr
 gid
 groupadd
+groupdel
 groupname
 grp
 hackery
@@ -281,6 +283,7 @@ mca
 mdtest
 mem
 memcheck
+memoryview
 metadata
 mgmt
 middleware
@@ -409,6 +412,7 @@ scancel
 scm
 scons
 scontrol
+seekable
 sharedctypes
 shlex
 simul
@@ -498,6 +502,7 @@ uri
 url
 useradd
 userdel
+usermod
 username
 ushort
 usr
