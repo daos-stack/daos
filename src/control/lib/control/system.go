@@ -632,7 +632,7 @@ func SystemDrain(ctx context.Context, rpcClient UnaryInvoker, req *SystemDrainRe
 	pbReq := &mgmtpb.SystemDrainReq{
 		Hosts: req.Hosts.String(),
 		Ranks: req.Ranks.String(),
-		Sys:   req.getSystem(rpcClient),
+		Sys:   req.Sys, // getSystem() used in control API drain/reint later in call-stack.
 		Reint: req.Reint,
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
