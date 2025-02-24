@@ -470,8 +470,7 @@ class ObjectMetadata(TestWithServers):
                 ior_cmd.flags.value = self.params.get("ior{}flags".format(operation), "/run/ior/*")
 
                 # Define the job manager for the IOR command
-                ior_managers.append(
-                    get_job_manager(self, "Clush", ior_cmd))
+                ior_managers.append(get_job_manager(self, job=ior_cmd))
                 env = ior_cmd.get_default_env(str(ior_managers[-1]))
                 ior_managers[-1].assign_hosts(self.hostlist_clients, self.workdir, None)
                 ior_managers[-1].assign_processes(processes)
