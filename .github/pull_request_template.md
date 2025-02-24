@@ -5,5 +5,5 @@
 * [ ] At least two code positive reviews including at least one code owner from each category referenced in the PR.
 * [ ] If necessary, forced-landing label added and a reason added in a comment.
 
-#### If all prior steps are complete:
+#### After all prior steps are complete:
 * [ ] Gatekeeper requested (daos-gatekeeper added as a reviewer).
