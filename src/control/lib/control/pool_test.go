@@ -271,7 +271,7 @@ func TestControl_PoolRanksResp_Errors(t *testing.T) {
 					{Rank: 5, Errored: true, Msg: "bad"},
 				},
 			},
-			expErr: errors.Errorf("3 ranks 2-3,5 failed on pool %s", test.MockUUID()),
+			expErr: errors.Errorf("ranks [2-3,5] failed on pool %s", test.MockUUID()),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

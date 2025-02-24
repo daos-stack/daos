@@ -790,7 +790,7 @@ func (resp *PoolRanksResp) Errors() error {
 
 	if rs.Count() > 0 {
 		return errors.Errorf("%s %s failed on pool %s",
-			english.Plural(rs.Count(), "rank", "ranks"), rs.String(), resp.ID)
+			english.PluralWord(rs.Count(), "rank", "ranks"), rs.RangedString(), resp.ID)
 	}
 
 	return nil

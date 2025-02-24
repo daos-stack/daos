@@ -223,7 +223,6 @@ func PrintPoolRanksResps(out io.Writer, resps ...*control.PoolRanksResp) error {
 
 		poolErrRanks[id] = make(map[string][]ranklist.Rank)
 		for _, res := range resp.Results {
-			fmt.Printf("%s %+v rs\n", id, res)
 			msg := "" // Key used for successful ranks,
 			if res.Errored {
 				msg = res.Msg
@@ -231,7 +230,6 @@ func PrintPoolRanksResps(out io.Writer, resps ...*control.PoolRanksResp) error {
 			poolErrRanks[id][msg] = append(poolErrRanks[id][msg], res.Rank)
 			errMsgs.Add(msg)
 		}
-		fmt.Printf("%+v %+v rs\n", poolErrRanks, errMsgs)
 	}
 
 	titles := []string{"Pool", "Ranks", "Result", "Reason"}

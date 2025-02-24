@@ -1114,38 +1114,46 @@ func TestControl_SystemDrain(t *testing.T) {
 				},
 			},
 		},
-		//		"dual pools; multiple ranks; with errors": {
-		//			req: new(SystemDrainReq),
-		//			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemDrainResp{
-		//				Results: []*mgmtpb.PoolRanksResult{
-		//					{Id: test.MockUUID(1), Ranks: "0"},
-		//					{
-		//						Id: test.MockUUID(1), Ranks: "1",
-		//						Status: -1, Msg: "fail1",
-		//					},
-		//					{Id: test.MockUUID(2), Ranks: "0"},
-		//					{
-		//						Id: test.MockUUID(2), Ranks: "1",
-		//						Status: -1, Msg: "fail2",
-		//					},
-		//				},
-		//			}),
-		//			expResp: &SystemDrainResp{
-		//				Results: []*PoolRanksResult{
-		//					{ID: test.MockUUID(1), Ranks: "0"},
-		//					{
-		//						ID: test.MockUUID(1), Ranks: "1",
-		//						Status: -1, Msg: "fail1",
-		//					},
-		//					{ID: test.MockUUID(2), Ranks: "0"},
-		//					{
-		//						ID: test.MockUUID(2), Ranks: "1",
-		//						Status: -1, Msg: "fail2",
-		//					},
-		//				},
-		//			},
-		//			expRespErr: errors.New("pool 00000001-0001-0001-0001-000000000001 ranks 1: fail1, pool 00000002-0002-0002-0002-000000000002 ranks 1: fail2"),
-		//		},
+		"dual pools; multiple ranks; with errors": {
+			req: new(SystemDrainReq),
+			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemDrainResp{
+				Responses: []*mgmtpb.PoolRanksResp{
+					{
+						Id: test.MockUUID(1),
+						Results: []*sharedpb.RankResult{
+							{Rank: 0},
+							{Rank: 1, Errored: true, Msg: "fail1"},
+						},
+					},
+					{
+						Id: test.MockUUID(2),
+						Results: []*sharedpb.RankResult{
+							{Rank: 0},
+							{Rank: 1, Errored: true, Msg: "fail2"},
+						},
+					},
+				},
+			}),
+			expResp: &SystemDrainResp{
+				Responses: []*PoolRanksResp{
+					{
+						ID: test.MockUUID(1),
+						Results: []*PoolRankResult{
+							{Rank: 0},
+							{Rank: 1, Errored: true, Msg: "fail1"},
+						},
+					},
+					{
+						ID: test.MockUUID(2),
+						Results: []*PoolRankResult{
+							{Rank: 0},
+							{Rank: 1, Errored: true, Msg: "fail2"},
+						},
+					},
+				},
+			},
+			expRespErr: errors.New("rank 1 failed on pool 00000001-0001-0001-0001-000000000001, rank 1 failed on pool 00000002-0002-0002-0002-000000000002"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
