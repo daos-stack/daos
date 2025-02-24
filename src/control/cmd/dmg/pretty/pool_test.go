@@ -638,6 +638,7 @@ Label UUID                                 State SvcReps SCM Size SCM Used SCM I
 func TestPretty_PrintPoolRanksResps(t *testing.T) {
 	for name, tc := range map[string]struct {
 		resps  []*control.PoolRanksResp
+		expErr error
 		expOut string
 	}{
 		"normal pool drain response": {
@@ -707,10 +708,43 @@ Pool                                 Ranks Result Reason
 
 `,
 		},
+		"multiple responses for the same pool": {
+			resps: []*control.PoolRanksResp{
+				{
+					ID: test.MockUUID(1),
+					Results: []*control.PoolRankResult{
+						{Rank: 1}, {Rank: 2},
+					},
+				},
+				{
+					ID: test.MockUUID(1),
+					Results: []*control.PoolRankResult{
+						{Rank: 0},
+						{Rank: 1, Errored: true, Msg: "fail1"},
+					},
+				},
+			},
+			expErr: errors.New("multiple PoolRanksResps for the same pool"),
+		},
+		"multiple results for the same rank": {
+			resps: []*control.PoolRanksResp{
+				{
+					ID: test.MockUUID(1),
+					Results: []*control.PoolRankResult{
+						{Rank: 1}, {Rank: 1},
+					},
+				},
+			},
+			expErr: errors.New("multiple PoolRankResults for rank 1"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var out strings.Builder
-			PrintPoolRanksResps(&out, tc.resps...)
+			gotErr := PrintPoolRanksResps(&out, tc.resps...)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
 
 			if diff := cmp.Diff(strings.TrimLeft(tc.expOut, "\n"), out.String()); diff != "" {
 				t.Fatalf("unexpected stdout (-want, +got):\n%s\n", diff)

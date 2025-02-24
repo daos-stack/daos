@@ -210,6 +210,7 @@ func PrintPoolRanksResps(out io.Writer, resps ...*control.PoolRanksResp) error {
 	poolErrRanks := make(map[string]map[string][]ranklist.Rank)
 	poolIDs := make(common.StringSet)
 	errMsgs := make(common.StringSet)
+
 	for _, resp := range resps {
 		if len(resp.Results) == 0 {
 			continue
@@ -218,15 +219,23 @@ func PrintPoolRanksResps(out io.Writer, resps ...*control.PoolRanksResp) error {
 		id := resp.ID
 		poolIDs.Add(id)
 		if _, exists := poolErrRanks[id]; exists {
-			return errors.Errorf("multiple PoolRankResps for the same pool %q", id)
+			return errors.Errorf("multiple PoolRanksResps for the same pool %q", id)
 		}
 
+		seenRanks := make(map[ranklist.Rank]struct{})
 		poolErrRanks[id] = make(map[string][]ranklist.Rank)
+
 		for _, res := range resp.Results {
 			msg := "" // Key used for successful ranks,
 			if res.Errored {
 				msg = res.Msg
 			}
+
+			if _, exists := seenRanks[res.Rank]; exists {
+				return errors.Errorf("multiple PoolRankResults for rank %d", res.Rank)
+			}
+			seenRanks[res.Rank] = struct{}{}
+
 			poolErrRanks[id][msg] = append(poolErrRanks[id][msg], res.Rank)
 			errMsgs.Add(msg)
 		}
@@ -234,8 +243,8 @@ func PrintPoolRanksResps(out io.Writer, resps ...*control.PoolRanksResp) error {
 
 	titles := []string{"Pool", "Ranks", "Result", "Reason"}
 	formatter := txtfmt.NewTableFormatter(titles...)
-
 	var table []txtfmt.TableRow
+
 	for _, id := range poolIDs.ToSlice() {
 		errRanks := poolErrRanks[id]
 		for _, msg := range errMsgs.ToSlice() {

@@ -572,7 +572,9 @@ func (cmd *poolExcludeCmd) Execute(args []string) error {
 	cmd.Debugf("%T: %+v, %T: %+v", req, req, resp.Results, resp.Results)
 
 	var out strings.Builder
-	pretty.PrintPoolRanksResps(&out, resp)
+	if err := pretty.PrintPoolRanksResps(&out, resp); err != nil {
+		return err
+	}
 	cmd.Info(out.String())
 
 	return resp.Errors()
@@ -609,7 +611,9 @@ func (cmd *poolDrainCmd) Execute(args []string) error {
 	cmd.Debugf("%T: %+v, %T: %+v", req, req, resp.Results, resp.Results)
 
 	var out strings.Builder
-	pretty.PrintPoolRanksResps(&out, resp)
+	if err := pretty.PrintPoolRanksResps(&out, resp); err != nil {
+		return err
+	}
 	cmd.Info(out.String())
 
 	return resp.Errors()
@@ -670,7 +674,9 @@ func (cmd *poolReintegrateCmd) Execute(args []string) error {
 	cmd.Debugf("%T: %+v, %T: %+v", req, req, resp.Results, resp.Results)
 
 	var out strings.Builder
-	pretty.PrintPoolRanksResps(&out, resp)
+	if err := pretty.PrintPoolRanksResps(&out, resp); err != nil {
+		return err
+	}
 	cmd.Info(out.String())
 
 	return resp.Errors()
