@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -847,41 +848,85 @@ dtx_20(void **state)
 static void
 dtx_21(void **state)
 {
-	test_arg_t	*arg = *state;
-	char		*update_buf;
-	const char	*dkey = dts_dtx_dkey;
-	const char	*akey = dts_dtx_akey;
-	daos_obj_id_t	 oid;
-	struct ioreq	 req;
+	test_arg_t		*arg = *state;
+	char			*update_buf;
+	const char		*dkey = dts_dtx_dkey;
+	const char		*akey = dts_dtx_akey;
+	daos_obj_id_t		 oid;
+	struct ioreq		 req;
+	daos_pool_info_t	 info_prep = { 0 };
+	daos_pool_info_t	 info_post = { 0 };
+	int			 rc;
 
 	FAULT_INJECTION_REQUIRED();
 
-	print_message("do not abort partially committed DTX\n");
+	print_message("handle partially committed DTX\n");
 
 	if (!test_runable(arg, dts_dtx_replica_cnt))
 		return;
 
-	D_ALLOC(update_buf, dts_dtx_iosize);
-	assert_non_null(update_buf);
-	dts_buf_render(update_buf, dts_dtx_iosize);
-
-	oid = daos_test_oid_gen(arg->coh, dts_dtx_class, 0, 0, arg->myrank);
-	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-
-	dtx_set_fail_loc(arg, DAOS_DTX_FAIL_COMMIT);
 	/*
-	 * The DTX that create the object will trigger synchronous commit. One of
-	 * the replicas will fail commit locally because of DAOS_DTX_FAIL_COMMIT.
-	 * But the other replicas will commit successfully, then related data can
-	 * be accessed.
+	 * The DTX that create the object will trigger synchronous commit. One non-leader
+	 * replica will commit locally but left the active DTX entry on disk, then report
+	 * IO failure, that will cause the DTX on leader to be marked as partially commit.
+	 *
+	 * Then restart the system, such DTX will be re-loaded from disk. The subsequent
+	 * DTX resync will re-commit such partial committed DTX. The logic on non-leader
+	 * should be able to detect and handle such re-committed DTX; otherwise, it will
+	 * trigger assertion.
+	 *
+	 * To simplify the test logic, only perform the test on rank_0.
 	 */
-	insert_single(dkey, akey, 0, update_buf, dts_dtx_iosize, DAOS_TX_NONE, &req);
-	dtx_set_fail_loc(arg, 0);
 
-	dtx_check_replicas(dkey, akey, "update_succ", update_buf, dts_dtx_iosize, &req);
+	par_barrier(PAR_COMM_WORLD);
+	if (arg->myrank == 0) {
+		rc = daos_pool_query(arg->pool.poh, NULL, &info_prep, NULL, NULL);
+		assert_true(rc == 0);
 
-	D_FREE(update_buf);
-	ioreq_fini(&req);
+		D_ALLOC(update_buf, dts_dtx_iosize);
+		assert_non_null(update_buf);
+		dts_buf_render(update_buf, dts_dtx_iosize);
+
+		oid = daos_test_oid_gen(arg->coh, OC_RP_3GX, 0, 0, arg->myrank);
+		ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_DTX_PARTIAL_COMMIT_P1, 0, NULL);
+
+		print_message("Generating partially committed DTX ...\n");
+		insert_single(dkey, akey, 0, update_buf, dts_dtx_iosize, DAOS_TX_NONE, &req);
+
+		D_FREE(update_buf);
+		ioreq_fini(&req);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+	}
+	par_barrier(PAR_COMM_WORLD);
+
+	test_teardown_cont_hdl(arg);
+	daos_pool_disconnect(arg->pool.poh, NULL);
+	arg->pool.poh = DAOS_HDL_INVAL;
+
+	par_barrier(PAR_COMM_WORLD);
+	if (arg->myrank == 0) {
+		print_message("Stopping system ...\n");
+		dmg_system_stop_rank(dmg_config_file, CRT_NO_RANK, false);
+
+		print_message("Starting system ...\n");
+		dmg_system_start_rank(dmg_config_file, CRT_NO_RANK);
+
+		/* Sleep a while for DTX resync. */
+		sleep(30);
+
+		rc = daos_pool_connect(arg->pool.pool_str, arg->group, DAOS_PC_RW,
+				       &arg->pool.poh, NULL, NULL);
+		assert_true(rc == 0);
+
+		rc = daos_pool_query(arg->pool.poh, NULL, &info_post, NULL, NULL);
+		assert_true(rc == 0);
+
+		assert_int_equal(info_prep.pi_ndisabled, info_post.pi_ndisabled);
+	}
+	par_barrier(PAR_COMM_WORLD);
 }
 
 static void
@@ -1047,7 +1092,7 @@ static const struct CMUnitTest dtx_tests[] = {
 	 dtx_19, NULL, test_case_teardown},
 	{"DTX20: race between DTX refresh and DTX resync",
 	 dtx_20, dtx_base_rf1_setup, rebuild_sub_teardown},
-	{"DTX21: do not abort partially committed DTX",
+	{"DTX21: handle partially committed DTX",
 	 dtx_21, dtx_base_rf0_setup, rebuild_sub_teardown},
 	{"DTX22: iteration does not return aborted DTX",
 	 dtx_22, NULL, test_case_teardown},

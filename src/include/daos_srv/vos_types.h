@@ -61,6 +61,8 @@ enum dtx_entry_flags {
 	DTE_PARTIAL_COMMITTED	= (1 << 5),
 	/* The DTX epoch is sorted locally. */
 	DTE_EPOCH_SORTED	= (1 << 6),
+	/* The active DTX entry is redundant, should be discarded. */
+	DTE_REDUN		= (1 << 7),
 };
 
 struct dtx_entry {
