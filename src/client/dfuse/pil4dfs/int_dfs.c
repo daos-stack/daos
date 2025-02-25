@@ -3571,6 +3571,8 @@ statfs(const char *pathname, struct statfs *sfs)
 	if (!is_target_path)
 		goto out_org;
 
+	atomic_fetch_add_relaxed(&num_stat, 1);
+
 	rc = daos_pool_query(dfs_mt->poh, NULL, &info, NULL, NULL);
 	if (rc != 0)
 		D_GOTO(out_err, rc = daos_der2errno(rc));
@@ -3622,6 +3624,8 @@ fstatfs(int fd, struct statfs *sfs)
 	fd_directed = d_get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
 		return next_fstatfs(fd, sfs);
+
+	atomic_fetch_add_relaxed(&num_stat, 1);
 
 	if (fd_directed < FD_DIR_BASE)
 		dfs_mt = d_file_list[fd_directed - FD_FILE_BASE]->dfs_mt;
@@ -3678,6 +3682,8 @@ statvfs(const char *pathname, struct statvfs *svfs)
 		D_GOTO(out_err, rc);
 	if (!is_target_path)
 		goto out_org;
+
+	atomic_fetch_add_relaxed(&num_stat, 1);
 
 	rc = daos_pool_query(dfs_mt->poh, NULL, &info, NULL, NULL);
 	if (rc) {
