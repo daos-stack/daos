@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -71,6 +72,7 @@ struct mem_stats {
 /* See dss_chore. */
 struct dss_chore_queue {
 	d_list_t   chq_list;
+	int32_t    chq_credits;
 	bool       chq_stop;
 	ABT_mutex  chq_mutex;
 	ABT_cond   chq_cond;
@@ -161,6 +163,11 @@ extern unsigned int          dss_tgt_offload_xs_nr;
 extern unsigned int          dss_offload_per_numa_nr;
 /** Number of target per socket */
 extern unsigned int          dss_tgt_per_numa_nr;
+/** The maximum number of credits for each IO chore queue. That is per helper XS. */
+extern uint32_t		     dss_chore_credits;
+
+#define DSS_CHORE_CREDITS_MIN	1024
+#define DSS_CHORE_CREDITS_DEF	4096
 
 /** Shadow dss_get_module_info */
 struct dss_module_info *get_module_info(void);

@@ -1179,7 +1179,7 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti, struct dtx_epoch *epoch,
 
 	D_ALLOC(dlh, sizeof(*dlh) + sizeof(struct dtx_sub_status) * tgt_cnt);
 	if (dlh == NULL)
-		return -DER_NOMEM;
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	dlh->dlh_future = ABT_FUTURE_NULL;
 	dlh->dlh_coll_entry = dce;
@@ -1217,11 +1217,12 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti, struct dtx_epoch *epoch,
 	if (rc == 0 && sub_modification_cnt > 0)
 		rc = vos_dtx_attach(dth, false, (flags & DTX_PREPARED) ? true : false);
 
-	D_DEBUG(DB_IO, "Start (%s) DTX "DF_DTI" sub modification %d, ver %u, epoch "
-		DF_X64", leader "DF_UOID", dti_cos_cnt %d, tgt_cnt %d, flags %x: "DF_RC"\n",
-		dlh->dlh_coll ? (dlh->dlh_relay ? "relay" : "collective") : "regular",
-		DP_DTI(dti), sub_modification_cnt, dth->dth_ver, epoch->oe_value,
-		DP_UOID(*leader_oid), dti_cos_cnt, tgt_cnt, flags, DP_RC(rc));
+out:
+	DL_CDEBUG(rc != 0, DLOG_ERR, DB_IO, rc, "Start (%s) DTX " DF_DTI " sub modification %d, "
+		  "ver %u, eph " DF_X64 ", leader " DF_UOID ", cos_cnt %d, tgt_cnt %d, flags %x: ",
+		  flags & DTX_TGT_COLL ? (flags & DTX_RELAY ? "relay" : "collective") : "regular",
+		  DP_DTI(dti), sub_modification_cnt, pm_ver, epoch->oe_value,
+		  DP_UOID(*leader_oid), dti_cos_cnt, tgt_cnt, flags);
 
 	if (rc != 0) {
 		D_FREE(dlh);
@@ -2084,8 +2085,9 @@ dtx_sub_comp_cb(struct dtx_leader_handle *dlh, int idx, int rc)
 		sub->dss_comp = 1;
 		sub->dss_result = rc;
 
-		D_DEBUG(DB_TRACE, "execute from idx %d (%d:%d), flags %x: rc %d\n",
-			idx, tgt->st_rank, tgt->st_tgt_idx, tgt->st_flags, rc);
+		DL_CDEBUG(rc == -DER_NOMEM, DLOG_ERR, DB_TRACE, rc,
+			  "execute from idx %d (%d:%d), flags %x",
+			  idx, tgt->st_rank, tgt->st_tgt_idx, tgt->st_flags);
 	}
 
 	rc = ABT_future_set(dlh->dlh_future, dlh);
@@ -2200,6 +2202,9 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 	dtx_chore.func_arg = func_arg;
 	dtx_chore.dlh = dlh;
 
+	dtx_chore.chore.cho_func = dtx_leader_exec_ops_chore;
+	dtx_chore.chore.cho_priority = 0;
+
 	dlh->dlh_result = 0;
 	dlh->dlh_allow_failure = allow_failure;
 	dlh->dlh_normal_sub_done = 0;
@@ -2208,8 +2213,8 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 	dlh->dlh_need_agg = 0;
 	dlh->dlh_agg_done = 0;
 
-	if (sub_cnt > DTX_RPC_STEP_LENGTH) {
-		dlh->dlh_forward_cnt = DTX_RPC_STEP_LENGTH;
+	if (sub_cnt > DTX_REG_RPC_STEP_LENGTH) {
+		dlh->dlh_forward_cnt = DTX_REG_RPC_STEP_LENGTH;
 	} else {
 		dlh->dlh_forward_cnt = sub_cnt;
 		if (likely(dlh->dlh_delay_sub_cnt == 0) && agg_cb != NULL)
@@ -2219,7 +2224,7 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 	if (dlh->dlh_normal_sub_cnt == 0)
 		goto exec;
 
-again:
+again1:
 	D_ASSERT(dlh->dlh_future == ABT_FUTURE_NULL);
 
 	/*
@@ -2233,12 +2238,57 @@ again:
 		D_GOTO(out, rc = dss_abterr2der(rc));
 	}
 
-	rc = dss_chore_delegate(&dtx_chore.chore, dtx_leader_exec_ops_chore);
+again2:
+	dtx_chore.chore.cho_credits = dlh->dlh_forward_cnt;
+	dtx_chore.chore.cho_hint = NULL;
+	rc = dss_chore_register(&dtx_chore.chore);
 	if (rc != 0) {
-		DL_ERROR(rc, "chore create failed [%u, %u] (2)", dlh->dlh_forward_idx,
-			 dlh->dlh_forward_cnt);
-		ABT_future_free(&dlh->dlh_future);
-		goto out;
+		if (rc != -DER_AGAIN) {
+			DL_ERROR(rc, "chore create failed [%u, %u] (2)",
+				 dlh->dlh_forward_idx, dlh->dlh_forward_cnt);
+			ABT_future_free(&dlh->dlh_future);
+			goto out;
+		}
+
+		d_tm_inc_counter(dtx_tls_get()->dt_chore_retry, 1);
+
+		/*
+		 * To avoid the whole task is split too many pieces. If there are very few
+		 * credits, we may prefer to wait instead of shrink the credits quirement.
+		 */
+		if (dtx_chore.chore.cho_credits > dlh->dlh_normal_sub_cnt / 8) {
+			D_DEBUG(DB_TRACE, "Retry IO forward with credits from %d to %d\n",
+				dlh->dlh_forward_cnt, dtx_chore.chore.cho_credits);
+			ABT_future_free(&dlh->dlh_future);
+			dlh->dlh_forward_cnt = dtx_chore.chore.cho_credits;
+			goto again1;
+		}
+
+		/*
+		 * If more than half sub-requests have been processed, let's handle the left
+		 * part ASAP to avoid the whole task timeout. Otherwise once timeout, it may
+		 * cause more overhead for rollback.
+		 */
+		if (dlh->dlh_forward_idx > sub_cnt / 2) {
+			dtx_chore.chore.cho_priority = 1;
+
+			if (dlh->dlh_forward_cnt > DTX_PRI_RPC_STEP_LENGTH) {
+				D_DEBUG(DB_TRACE, "Retry (prio) IO forward with credits %d => %d\n",
+					dlh->dlh_forward_cnt, DTX_PRI_RPC_STEP_LENGTH);
+				ABT_future_free(&dlh->dlh_future);
+				dlh->dlh_forward_cnt = DTX_PRI_RPC_STEP_LENGTH;
+				goto again1;
+			}
+
+			D_DEBUG(DB_TRACE, "Retry (prio) IO forward with credits %d\n",
+				dlh->dlh_forward_cnt);
+			goto again2;
+		}
+
+		D_DEBUG(DB_TRACE, "Not enough credits (%d vs %d) for IO forward, wait and retry\n",
+			dlh->dlh_forward_cnt, dtx_chore.chore.cho_credits);
+		ABT_thread_yield();
+		goto again2;
 	}
 
 exec:
@@ -2247,8 +2297,10 @@ exec:
 		local_rc = func(dlh, func_arg, -1, NULL);
 
 	/* Even the local request failure, we still need to wait for remote sub request. */
-	if (dlh->dlh_normal_sub_cnt > 0)
+	if (dlh->dlh_normal_sub_cnt > 0) {
 		remote_rc = dtx_leader_wait(dlh);
+		dss_chore_deregister(&dtx_chore.chore);
+	}
 
 	if (local_rc != 0 && local_rc != allow_failure)
 		D_GOTO(out, rc = local_rc);
@@ -2259,7 +2311,7 @@ exec:
 	sub_cnt -= dlh->dlh_forward_cnt;
 	if (sub_cnt > 0) {
 		dlh->dlh_forward_idx += dlh->dlh_forward_cnt;
-		if (sub_cnt <= DTX_RPC_STEP_LENGTH) {
+		if (sub_cnt <= DTX_REG_RPC_STEP_LENGTH) {
 			dlh->dlh_forward_cnt = sub_cnt;
 			if (likely(dlh->dlh_delay_sub_cnt == 0) && agg_cb != NULL)
 				dlh->dlh_need_agg = 1;
@@ -2271,7 +2323,8 @@ exec:
 			dlh->dlh_delay_sub_cnt, dlh->dlh_forward_idx,
 			dlh->dlh_forward_cnt, allow_failure);
 
-		goto again;
+		dtx_chore.chore.cho_priority = 0;
+		goto again1;
 	}
 
 	dlh->dlh_normal_sub_done = 1;
@@ -2312,7 +2365,18 @@ exec:
 	/* The ones without DELAY flag will be skipped when scan the targets array. */
 	dlh->dlh_forward_cnt = dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt;
 
-	rc = dss_chore_delegate(&dtx_chore.chore, dtx_leader_exec_ops_chore);
+	/*
+	 * Since non-delay sub-requests have already been processed, let's use high priority
+	 * to apply chore credits, then the left delayed sub-requests can be handled quickly
+	 * to reduce the possibility of the whole IO timeout.
+	 */
+	if (unlikely(dlh->dlh_delay_sub_cnt > DTX_PRI_RPC_STEP_LENGTH))
+		  D_WARN("Too many delayed sub-requests %u\n", dlh->dlh_delay_sub_cnt);
+
+	dtx_chore.chore.cho_priority = 1;
+	dtx_chore.chore.cho_credits = dlh->dlh_delay_sub_cnt;
+	dtx_chore.chore.cho_hint = NULL;
+	rc = dss_chore_register(&dtx_chore.chore);
 	if (rc != 0) {
 		DL_ERROR(rc, "chore create failed (4)");
 		ABT_future_free(&dlh->dlh_future);
@@ -2320,6 +2384,7 @@ exec:
 	}
 
 	remote_rc = dtx_leader_wait(dlh);
+	dss_chore_deregister(&dtx_chore.chore);
 	if (remote_rc != 0 && remote_rc != allow_failure)
 		rc = remote_rc;
 
