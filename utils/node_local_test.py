@@ -2,7 +2,6 @@
 """Node local test (NLT).
 
 (C) Copyright 2020-2024 Intel Corporation.
-(C) Copyright 2025 Hewlett Packard Enterprise Development LP
 (C) Copyright 2025 Google LLC
 (C) Copyright 2025 Enakta Labs Ltd
 
@@ -434,7 +433,7 @@ def get_base_env(clean=False):
         env = os.environ.copy()
     env['DD_MASK'] = 'all'
     env['DD_SUBSYS'] = 'all'
-    env['D_LOG_MASK'] = 'DEBUG,PMDK=ERR'
+    env['D_LOG_MASK'] = 'DEBUG'
     env['D_LOG_SIZE'] = '5g'
     env['FI_UNIVERSE_SIZE'] = '128'
 
@@ -1633,7 +1632,7 @@ def import_daos(server):
 
     os.environ['DD_MASK'] = 'all'
     os.environ['DD_SUBSYS'] = 'all'
-    os.environ['D_LOG_MASK'] = 'DEBUG,PMDK=ERR'
+    os.environ['D_LOG_MASK'] = 'DEBUG'
     os.environ['FI_UNIVERSE_SIZE'] = '128'
     os.environ['DAOS_AGENT_DRPC_DIR'] = server.agent_dir
 
