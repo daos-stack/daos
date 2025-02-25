@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -189,6 +190,8 @@ enum obj_rpc_flags {
 	ORF_EMPTY_SGL		= (1 << 24),
 	/* The CPD RPC only contains read-only transaction. */
 	ORF_CPD_RDONLY		= (1 << 25),
+	/* The elements in collective targets array are sorted. */
+	ORF_COLL_SORTED_TGT	= (1 << 26),
 };
 
 /* common for update/fetch */

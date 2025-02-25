@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -81,6 +82,8 @@ CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
 	((uuid_t)		(dci_co_uuid)		CRT_VAR)	\
 	((struct dtx_id)	(dci_xid)		CRT_VAR)	\
 	((uint32_t)		(dci_version)		CRT_VAR)	\
+	((uint32_t)		(dci_min_rank)		CRT_VAR)	\
+	((uint32_t)		(dci_max_rank)		CRT_VAR)	\
 	((uint32_t)		(dci_padding)		CRT_VAR)	\
 	((uint64_t)		(dci_epoch)		CRT_VAR)	\
 	((uint8_t)		(dci_hints)		CRT_ARRAY)
