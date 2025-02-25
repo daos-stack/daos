@@ -759,6 +759,48 @@ transport_config:
   key: /etc/daos/certs/admin.key
 ```
 
+#### Telemetry Endpoint Configuration
+
+DAOS telemetry is accessed via an HTTP endpoint. This endpoint may be secured with over-the-wire transport security by configuring an HTTPS certificate and key. This must be a standard HTTPS certificate. DAOS server/agent/admin authentication certificates *cannot* be reused for this purpose.
+If the server has an existing HTTPS certificate for its domain, it may be reused for the telemetry endpoint. Otherwise the administrator must acquire a certificate from an accepted Certificate Authority (CA).
+
+#### Telemetry Yaml Example
+
+Information on telelmetry config parameters in respective yaml file.
+
+```yaml
+# /etc/daos/daos_server.yml (servers)
+telemetry_config:
+  # Set the server telemetry endpoint port number
+  port: 9191
+  # Server certificate for use in TLS handshakes
+  https_cert: /etc/daos/certs/telemetry.crt
+  # Key portion of Server Certificate
+  https_key: /etc/daos/certs/telemetry.key
+```
+
+```yaml
+# /etc/daos/daos_agent.yml (clients)
+telemetry_config:
+  # Enable client telemetry for all DAOS clients.
+  enabled: true
+  # Set the client telemetry endpoint port number
+  port: 9192
+  # Retain client telemetry for a period of time after the client process exits.
+  retain: 30s
+  # Server certificate for use in TLS handshakes
+  https_cert: /etc/daos/certs/telemetry.crt
+  # Key portion of Server Certificate
+  https_key: /etc/daos/certs/telemetry.key
+```
+
+```yaml
+# /etc/daos/daos_control.yml (dmg/admin)
+telemetry_config:
+  # To use telemetry in secure mode
+  allow_insecure: false
+```
+
 ### Server Startup
 
 The DAOS Server is started as a systemd service. The DAOS Server

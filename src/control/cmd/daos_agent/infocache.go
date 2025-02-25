@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -49,8 +50,8 @@ func NewInfoCache(ctx context.Context, log logging.Logger, client control.UnaryI
 		devStateGetter:  network.DefaultNetDevStateProvider(log),
 	}
 
-	ic.clientTelemetryEnabled.Store(cfg.TelemetryEnabled)
-	ic.clientTelemetryRetain.Store(cfg.TelemetryRetain > 0)
+	ic.clientTelemetryEnabled.Store(cfg.TelemetryConfig.Enabled)
+	ic.clientTelemetryRetain.Store(cfg.TelemetryConfig.Retain > 0)
 
 	if cfg.DisableCache {
 		ic.DisableAttachInfoCache()

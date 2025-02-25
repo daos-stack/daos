@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -655,14 +656,15 @@ func configureFirstEngine(ctx context.Context, engine *EngineInstance, sysdb *ra
 // registerTelemetryCallbacks sets telemetry related callbacks to
 // be triggered when all engines have been started.
 func registerTelemetryCallbacks(ctx context.Context, srv *server) {
-	telemPort := srv.cfg.TelemetryPort
+	telemPort := srv.cfg.TelemetryConfig.Port
+
 	if telemPort == 0 {
 		return
 	}
 
 	srv.OnEnginesStarted(func(ctxIn context.Context) error {
 		srv.log.Debug("starting Prometheus exporter")
-		cleanup, err := startPrometheusExporter(ctxIn, srv.log, telemPort, srv.harness.Instances())
+		cleanup, err := startPrometheusExporter(ctxIn, srv)
 		if err != nil {
 			return err
 		}

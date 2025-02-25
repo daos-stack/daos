@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -40,6 +41,13 @@ func (rm refreshMinutes) Duration() time.Duration {
 	return time.Duration(rm)
 }
 
+// Support Old config options.
+type LegacyConfig struct {
+	TelemetryPort    int           `yaml:"telemetry_port,omitempty"`
+	TelemetryEnabled bool          `yaml:"telemetry_enabled,omitempty"`
+	TelemetryRetain  time.Duration `yaml:"telemetry_retain,omitempty"`
+}
+
 // Config defines the agent configuration.
 type Config struct {
 	SystemName          string                     `yaml:"name"`
@@ -58,9 +66,8 @@ type Config struct {
 	IncludeFabricIfaces common.StringSet           `yaml:"include_fabric_ifaces,omitempty"`
 	FabricInterfaces    []*NUMAFabricConfig        `yaml:"fabric_ifaces,omitempty"`
 	ProviderIdx         uint                       // TODO SRS-31: Enable with multiprovider functionality
-	TelemetryPort       int                        `yaml:"telemetry_port,omitempty"`
-	TelemetryEnabled    bool                       `yaml:"telemetry_enabled,omitempty"`
-	TelemetryRetain     time.Duration              `yaml:"telemetry_retain,omitempty"`
+	TelemetryConfig     *security.TelemetryConfig  `yaml:"telemetry_config"`
+	Legacy              LegacyConfig               `yaml:",inline"`
 }
 
 // Validate performs basic validation of the configuration.
@@ -73,11 +80,27 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("invalid system name: %s", c.SystemName)
 	}
 
-	if c.TelemetryRetain > 0 && c.TelemetryPort == 0 {
+	// Support Old config options and copy it to the underline new structure value.
+	if c.Legacy.TelemetryRetain > 0 {
+		c.TelemetryConfig.Retain = c.Legacy.TelemetryRetain
+		fmt.Println(" WARNING - Deprecated:telemetry_retain options can be move under telemetry_config")
+	}
+
+	if c.Legacy.TelemetryPort != 0 {
+		c.TelemetryConfig.Port = c.Legacy.TelemetryPort
+		fmt.Println(" WARNING - Deprecated:telemetry_port options can be move under telemetry_config")
+	}
+
+	if c.Legacy.TelemetryEnabled {
+		c.TelemetryConfig.Enabled = c.Legacy.TelemetryEnabled
+		fmt.Println(" WARNING - Deprecated:telemetry_enabled options can be move under telemetry_config")
+	}
+
+	if c.TelemetryConfig.Retain > 0 && c.TelemetryConfig.Port == 0 {
 		return errors.New("telemetry_retain requires telemetry_port")
 	}
 
-	if c.TelemetryEnabled && c.TelemetryPort == 0 {
+	if c.TelemetryConfig.Enabled && c.TelemetryConfig.Port == 0 {
 		return errors.New("telemetry_enabled requires telemetry_port")
 	}
 
@@ -85,12 +108,20 @@ func (c *Config) Validate() error {
 		return errors.New("cannot specify both exclude_fabric_ifaces and include_fabric_ifaces")
 	}
 
+	if len(c.TelemetryConfig.HttpsCert) == 0 && len(c.TelemetryConfig.HttpsKey) > 0 {
+		return errors.New("For secure mode, https_cert and https_key both required")
+	}
+
+	if len(c.TelemetryConfig.HttpsCert) > 0 && len(c.TelemetryConfig.HttpsKey) == 0 {
+		return errors.New("For secure mode, https_cert and https_key both required")
+	}
+
 	return nil
 }
 
 // TelemetryExportEnabled returns true if client telemetry export is enabled.
 func (c *Config) TelemetryExportEnabled() bool {
-	return c.TelemetryPort > 0
+	return c.TelemetryConfig.Port > 0
 }
 
 // NUMAFabricConfig defines a list of fabric interfaces that belong to a NUMA
@@ -139,5 +170,6 @@ func DefaultConfig() *Config {
 		LogLevel:         common.DefaultControlLogLevel,
 		TransportConfig:  security.DefaultAgentTransportConfig(),
 		CredentialConfig: &security.CredentialConfig{},
+		TelemetryConfig:  security.DefaultClientTelemetryConfig(),
 	}
 }

@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -237,8 +238,9 @@ func TestControl_MetricsList(t *testing.T) {
 		},
 		"scrape failed": {
 			req: &MetricsListReq{
-				Host: "host1",
-				Port: 1066,
+				Host:          "host1",
+				Port:          1066,
+				AllowInsecure: true,
 			},
 			scrapeFn: func(context.Context, *url.URL, httpGetFn, time.Duration) ([]byte, error) {
 				return nil, errors.New("mock scrape")
@@ -247,8 +249,9 @@ func TestControl_MetricsList(t *testing.T) {
 		},
 		"no metrics": {
 			req: &MetricsListReq{
-				Host: "host1",
-				Port: 8888,
+				Host:          "host1",
+				Port:          8888,
+				AllowInsecure: true,
 			},
 			scrapeFn: func(context.Context, *url.URL, httpGetFn, time.Duration) ([]byte, error) {
 				return []byte{}, nil
@@ -259,8 +262,9 @@ func TestControl_MetricsList(t *testing.T) {
 		},
 		"success": {
 			req: &MetricsListReq{
-				Host: "host1",
-				Port: 7777,
+				Host:          "host1",
+				Port:          7777,
+				AllowInsecure: true,
 			},
 			scrapeFn: mockScrapeFnSuccess(t, testMetricFam...),
 			expResp: &MetricsListResp{
@@ -449,8 +453,9 @@ func TestControl_MetricsQuery(t *testing.T) {
 		},
 		"scrape failed": {
 			req: &MetricsQueryReq{
-				Host: "host1",
-				Port: 1066,
+				Host:          "host1",
+				Port:          1066,
+				AllowInsecure: true,
 			},
 			scrapeFn: func(context.Context, *url.URL, httpGetFn, time.Duration) ([]byte, error) {
 				return nil, errors.New("mock scrape")
@@ -459,8 +464,9 @@ func TestControl_MetricsQuery(t *testing.T) {
 		},
 		"no metrics": {
 			req: &MetricsQueryReq{
-				Host: "host1",
-				Port: 8888,
+				Host:          "host1",
+				Port:          8888,
+				AllowInsecure: true,
 			},
 			scrapeFn: func(context.Context, *url.URL, httpGetFn, time.Duration) ([]byte, error) {
 				return []byte{}, nil
@@ -471,8 +477,9 @@ func TestControl_MetricsQuery(t *testing.T) {
 		},
 		"all metrics": {
 			req: &MetricsQueryReq{
-				Host: "host1",
-				Port: 7777,
+				Host:          "host1",
+				Port:          7777,
+				AllowInsecure: true,
 			},
 			scrapeFn: mockScrapeFnSuccess(t, testMetricFam...),
 			expResp: &MetricsQueryResp{
@@ -532,9 +539,10 @@ func TestControl_MetricsQuery(t *testing.T) {
 		},
 		"selected metrics": {
 			req: &MetricsQueryReq{
-				Host:        "host1",
-				Port:        7777,
-				MetricNames: []string{"my_generic", "my_counter"},
+				Host:          "host1",
+				Port:          7777,
+				AllowInsecure: true,
+				MetricNames:   []string{"my_generic", "my_counter"},
 			},
 			scrapeFn: mockScrapeFnSuccess(t, testMetricFam...),
 			expResp: &MetricsQueryResp{
@@ -560,9 +568,10 @@ func TestControl_MetricsQuery(t *testing.T) {
 		},
 		"invalid metric name": {
 			req: &MetricsQueryReq{
-				Host:        "host1",
-				Port:        7777,
-				MetricNames: []string{"my_generic", "fake"},
+				Host:          "host1",
+				Port:          7777,
+				AllowInsecure: true,
+				MetricNames:   []string{"my_generic", "fake"},
 			},
 			scrapeFn: mockScrapeFnSuccess(t, testMetricFam...),
 			expErr:   errors.New("metric \"fake\" not found"),

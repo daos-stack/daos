@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -70,7 +71,9 @@ func TestPromExp_StartExporter(t *testing.T) {
 
 			if tc.cfg != nil {
 				tc.cfg.Title = t.Name()
+				tc.cfg.AllowInsecure = true
 			}
+
 			cleanup, err := promexp.StartExporter(test.Context(t), log, tc.cfg)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {

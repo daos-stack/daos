@@ -1,8 +1,11 @@
 """
 (C) Copyright 2021-2024 Intel Corporation.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import os
+
 from apricot import TestWithServers
 from telemetry_utils import ClientTelemetryUtils, TelemetryUtils
 
@@ -23,6 +26,10 @@ class TestWithTelemetry(TestWithServers):
         super().setUp()
         self.telemetry = TelemetryUtils(
             self.get_dmg_command(), self.server_managers[0].hosts)
+
+        # Setup Secure Server mode
+        if self.params.get("telemetry_secure_mode", '/run/server_config/*'):
+            self.secure_server_telemetry_setup()
 
     def compare_lists(self, expected, actual, indent, prefix, description):
         """Compare two lists.
@@ -264,6 +271,33 @@ class TestWithTelemetry(TestWithServers):
 
         return total
 
+    def secure_server_telemetry_setup(self):
+        """ Setup secure server certificate for telemetry."""
+        self.log.info("Secure Server Telemetry Setup start")
+
+        # Create the Certificate
+        self.server_managers[0].prepare_telemetry_certificate()
+        yaml_data = self.server_managers[0].manager.job.yaml.get_yaml_data()
+
+        # Update the certificate in yaml dictionary.
+        https_cert = os.path.join(self.server_managers[0].telemetry_certificate_dir,
+                                  "telemetry.crt")
+        https_key = os.path.join(self.server_managers[0].telemetry_certificate_dir,
+                                 "telemetry.key")
+        yaml_data["telemetry_config"].update({"https_cert": https_cert})
+        yaml_data["telemetry_config"].update({"https_key": https_key})
+
+        # Update the current yaml file.
+        self.server_managers[0].manager.job.create_yaml_file(yaml_data)
+
+        # Restart the DAOS servers
+        self.log.info("Stop DAOS servers")
+        self.server_managers[0].manager.stop()
+        self.log.info("Start daos_server and detect the DAOS I/O engine message")
+        self.server_managers[0].restart(hosts=self.hostlist_servers)
+
+        self.log.info("Secure Server Telemetry Setup End")
+
 
 class TestWithClientTelemetry(TestWithTelemetry):
     """Test client telemetry metrics.
@@ -275,6 +309,10 @@ class TestWithClientTelemetry(TestWithTelemetry):
         super().setUp()
         self.telemetry = ClientTelemetryUtils(
             self.get_dmg_command(), self.server_managers[0].hosts, self.hostlist_clients)
+
+        # Setup Secure Agent mode
+        if self.params.get("telemetry_secure_mode", '/run/agent_config/*'):
+            self.secure_client_telemetry_setup()
 
     def verify_client_telemetry_list(self, with_pools=False):
         """Verify the  dmg telemetry metrics list command output."""
@@ -296,3 +334,30 @@ class TestWithClientTelemetry(TestWithTelemetry):
             self.fail("\n".join(errors))
 
         self.log.info("Test PASSED")
+
+    def secure_client_telemetry_setup(self):
+        """ Setup secure client certificate for telemetry."""
+        self.log.info("Secure Client Telemetry Setup start")
+
+        # Create the Certificate
+        self.agent_managers[0].prepare_telemetry_certificate()
+        yaml_data = self.agent_managers[0].manager.job.yaml.get_yaml_data()
+
+        # Update the certificate in yaml dictionary.
+        https_cert = os.path.join(self.agent_managers[0].telemetry_certificate_dir,
+                                  "telemetry.crt")
+        https_key = os.path.join(self.agent_managers[0].telemetry_certificate_dir,
+                                 "telemetry.key")
+        yaml_data["telemetry_config"].update({"https_cert": https_cert})
+        yaml_data["telemetry_config"].update({"https_key": https_key})
+
+        # Update the current yaml file.
+        self.agent_managers[0].manager.job.create_yaml_file(yaml_data)
+
+        # Restart the DAOS Agent
+        self.log.info("Stop DAOS agents")
+        self.agent_managers[0].stop()
+        self.log.info("Start DAOS agents")
+        self.agent_managers[0].start()
+
+        self.log.info("Secure Client Telemetry Setup End")

@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +9,8 @@ package control
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"io"
 	"net/http"
@@ -40,9 +43,10 @@ type httpGetter interface {
 }
 
 type httpReq struct {
-	url       *url.URL
-	getFn     httpGetFn
-	getBodyFn func(context.Context, *url.URL, httpGetFn, time.Duration) ([]byte, error)
+	url           *url.URL
+	getFn         httpGetFn
+	allowInsecure bool
+	getBodyFn     func(context.Context, *url.URL, httpGetFn, time.Duration) ([]byte, error)
 }
 
 func (r *httpReq) canRetry(err error, cur uint) bool {
@@ -77,10 +81,19 @@ func (r *httpReq) getURL() *url.URL {
 	return r.url
 }
 
+func (r *httpReq) getAllowInsecure() bool {
+	return r.allowInsecure
+}
+
 func (r *httpReq) httpGetFunc() httpGetFn {
 	if r.getFn == nil {
 		r.getFn = http.Get
 	}
+
+	if r.allowInsecure == false {
+		r.getFn = httpsSecureGetFunc()
+	}
+
 	return r.getFn
 }
 
@@ -88,6 +101,7 @@ func (r *httpReq) getBody(ctx context.Context) ([]byte, error) {
 	if r.getBodyFn == nil {
 		r.getBodyFn = httpGetBody
 	}
+
 	return r.getBodyFn(ctx, r.getURL(), r.httpGetFunc(), r.getRetryTimeout())
 }
 
@@ -113,6 +127,24 @@ func httpGetBodyRetry(ctx context.Context, req httpGetter) ([]byte, error) {
 	return result, err
 }
 
+// httpsSecureGetFunc will prepare the GET requested using the certificate for secure mode
+// and return the http.Get
+func httpsSecureGetFunc() httpGetFn {
+	rootCAs, _ := x509.SystemCertPool()
+
+	tlsConfig := &tls.Config{
+		RootCAs: rootCAs,
+	}
+
+	tr := &http.Transport{
+		TLSClientConfig: tlsConfig,
+	}
+
+	client := &http.Client{Transport: tr}
+
+	return client.Get
+}
+
 // httpGetBody executes a simple HTTP GET request to a given URL and returns the
 // content of the response body.
 func httpGetBody(ctx context.Context, url *url.URL, get httpGetFn, timeout time.Duration) ([]byte, error) {
@@ -133,14 +165,12 @@ func httpGetBody(ctx context.Context, url *url.URL, get httpGetFn, timeout time.
 
 	respChan := make(chan *http.Response)
 	errChan := make(chan error)
-
 	go func() {
 		httpResp, err := get(url.String())
 		if err != nil {
 			errChan <- err
 			return
 		}
-
 		respChan <- httpResp
 	}()
 

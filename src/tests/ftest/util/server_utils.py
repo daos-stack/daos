@@ -22,7 +22,8 @@ from general_utils import (get_default_config_file, get_display_size, get_log_fi
 from host_utils import get_local_host
 from run_utils import run_remote, stop_processes
 from server_utils_base import DaosServerCommand, DaosServerInformation, ServerFailed
-from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
+from server_utils_params import (DaosServerTelemetryConfig, DaosServerTransportCredentials,
+                                 DaosServerYamlParameters)
 from user_utils import get_chown_command
 
 
@@ -46,7 +47,10 @@ def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):
     transport_config = DaosServerTransportCredentials(cert_dir)
     common_config = CommonConfig(group, transport_config)
     config = DaosServerYamlParameters(config_file, common_config)
+    config.telemetry_config = DaosServerTelemetryConfig(cert_dir)
+
     command = DaosServerCommand(bin_dir, config, None)
+
     if config_temp:
         # Setup the DaosServerCommand to write the config file data to the
         # temporary file and then copy the file to all the hosts using the
@@ -140,6 +144,8 @@ class DaosServerManager(SubprocessManager):
         # defined in the self.manager.job.yaml object.
         self._external_yaml_data = None
 
+        self.telemetry_certificate_dir = svr_cert_dir
+
     @property
     def engines(self):
         """Get the total number of engines.
@@ -223,6 +229,15 @@ class DaosServerManager(SubprocessManager):
         if hosts is None:
             hosts = self._hosts
         self.dmg.hostlist = hosts
+
+    def prepare_telemetry_certificate(self):
+        """Prepare Telemetry certificate"""
+        self.manager.job.copy_telemetry_root_certificates(get_log_file("daosTelemetryCA"),
+                                                          self.telemetry_certificate_dir,
+                                                          self._hosts)
+        self.manager.job.generate_telemetry_server_certificates(self._hosts,
+                                                                "daos_server",
+                                                                self.telemetry_certificate_dir)
 
     def prepare(self, storage=True):
         """Prepare to start daos_server.

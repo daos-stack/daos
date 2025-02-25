@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -28,6 +29,8 @@ const (
 	defaultAdminKey      = certDir + "admin.key"
 	defaultAgentCert     = certDir + "agent.crt"
 	defaultAgentKey      = certDir + "agent.key"
+	defaultTelemetryCert = certDir + "telemetry.crt"
+	defaultTelemetryKey  = certDir + "telemetry.key"
 	defaultClientCertDir = certDir + "clients"
 	defaultServer        = "server"
 	defaultInsecure      = false
@@ -103,6 +106,27 @@ type CredentialConfig struct {
 type TransportConfig struct {
 	AllowInsecure     bool `yaml:"allow_insecure"`
 	CertificateConfig `yaml:",inline"`
+}
+
+// TelemetryConfig contains all the information on whether or not to use
+// secure endpoint for telemetry and their location if their use is specified.
+type TelemetryConfig struct {
+	Port      int           `yaml:"telemetry_port,omitempty"`
+	Enabled   bool          `yaml:"telemetry_enabled,omitempty"`
+	Retain    time.Duration `yaml:"telemetry_retain,omitempty"`
+	HttpsCert string        `yaml:"https_cert,omitempty"`
+	HttpsKey  string        `yaml:"https_key,omitempty"`
+}
+
+// DefaultClientTelemetryConfig provides a default telemetry config disabling
+// certificate usage and specifying certificates located under /etc/daos/certs.
+func DefaultClientTelemetryConfig() *TelemetryConfig {
+	return &TelemetryConfig{
+		Port:      9191,
+		Enabled:   false,
+		HttpsCert: "",
+		HttpsKey:  "",
+	}
 }
 
 func (tc *TransportConfig) String() string {

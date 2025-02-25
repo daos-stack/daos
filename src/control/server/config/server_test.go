@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -104,11 +105,11 @@ func uncommentServerConfig(t *testing.T, outFile string) {
 		}
 		key := fields[0]
 
-		// If we're in a server or a storage tier config, reset the
+		// If we're in a server, a storage tier config, or telemetry config reset the
 		// seen map to allow the same params in different
 		// server configs.
 		lineTmp := strings.TrimLeft(line, " ")
-		if lineTmp == "-" {
+		if lineTmp == "-" || lineTmp == "telemetry_config:" {
 			seenKeys = make(map[string]struct{})
 		}
 		if _, seen := seenKeys[key]; seen && strings.HasSuffix(key, ":") {
@@ -249,7 +250,10 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithControlLogFile("/tmp/daos_server.log").
 		WithHelperLogFile("/tmp/daos_server_helper.log").
 		WithFirmwareHelperLogFile("/tmp/daos_firmware_helper.log").
-		WithTelemetryPort(9191).
+		WithTelemetryConfig(&security.TelemetryConfig{
+			Port:      9191,
+			HttpsCert: "/etc/daos/certs/telemetry.crt",
+			HttpsKey:  "/etc/daos/certs/telemetry.key"}).
 		WithSystemName("daos_server").
 		WithSocketDir("./.daos/daos_server").
 		WithFabricProvider("ofi+verbs;ofi_rxm").
@@ -420,7 +424,8 @@ func TestServerConfig_MDonSSD_Constructed(t *testing.T) {
 			Path: "/var/daos/config",
 		}).
 		WithControlLogFile("/tmp/daos_server.log").
-		WithTelemetryPort(9191).
+		WithTelemetryConfig(&security.TelemetryConfig{
+			Port: 9191}).
 		WithFabricProvider("ofi+tcp").
 		WithMgmtSvcReplicas("example1", "example2", "example3")
 
