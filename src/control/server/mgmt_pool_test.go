@@ -1356,7 +1356,7 @@ func TestServer_MgmtSvc_PoolExtend(t *testing.T) {
 	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil
 	notAP := newTestMgmtSvc(t, log)
 	mockRanks := []uint32{1}
-	mockFaultDomains := []uint32{1, 1, 1, 1}
+	mockFaultDomains := []uint32{0, 1, 1, 1, 1}
 
 	for name, tc := range map[string]struct {
 		nilReq      bool
