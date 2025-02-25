@@ -1,0 +1,39 @@
+From a9b9ce490ebd17fb31374529b44bc42222d4db3a Mon Sep 17 00:00:00 2001
+From: Jinshan Xiong <jinshanx@google.com>
+Date: Thu, 13 Feb 2025 13:46:25 -0800
+Subject: [PATCH] NA tcp: Add FI_TAG_RPC support
+
+This flag allows the libfabric to drop messages with unmatched tags.
+It fixes an issue that the endpoint would be choked if it receives a
+stale reply and libfabric doesn't know how to handle it.
+
+mercury PR: https://github.com/mercury-hpc/mercury/pull/784
+
+Signed-off-by: Jinshan Xiong <jinshanx@google.com>
+---
+ src/na/na_ofi.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/src/na/na_ofi.c b/src/na/na_ofi.c
+index 8e323b7..7a28ecb 100644
+--- a/src/na/na_ofi.c
++++ b/src/na/na_ofi.c
+@@ -3504,6 +3504,15 @@ na_ofi_getinfo(enum na_ofi_prov_type prov_type, const struct na_ofi_info *info,
+             hints->ep_attr->protocol =
+                 (uint32_t) na_ofi_prov_ep_proto[prov_type];
+ 
++#if FI_VERSION_GE(FI_COMPILE_VERSION, FI_VERSION(2, 0))
++        if (FI_VERSION_GE(fi_version(), FI_VERSION(2, 0)) &&
++            (prov_type == NA_OFI_PROV_TCP)) {
++            char *env = getenv("NA_OFI_TCP_TAG_RPC");
++            if (env == NULL || atoi(env) != 0) /* Enabled by default */
++                hints->ep_attr->mem_tag_format = FI_TAG_RPC;
++        }
++#endif
++
+         /* add any additional caps that are particular to this provider */
+         hints->caps |= na_ofi_prov_extra_caps[prov_type];
+ #if FI_VERSION_GE(FI_COMPILE_VERSION, FI_VERSION(1, 20))
+-- 
+2.48.1.658.g4767266eb4-goog
+
