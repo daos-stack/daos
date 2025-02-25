@@ -2058,8 +2058,10 @@ cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid, st
 	d_iov_set(&tmp, NULL, 0);
 	/* check if the container exists or not */
 	rc = rdb_tx_lookup(tx, &svc->cs_conts, &key, &tmp);
-	if (rc != 0)
+	if (rc != 0) {
+		DL_ERROR(rc, "cont " DF_UUID ", rdb_tx_lookup failed.\n", DP_UUID(uuid));
 		D_GOTO(err, rc);
+	}
 
 	D_ALLOC_PTR(p);
 	if (p == NULL) {
@@ -2126,6 +2128,7 @@ err_attrs:
 err_p:
 	D_FREE(p);
 err:
+	DL_ERROR(rc, "cont " DF_UUID ", lookup failed.\n", DP_UUID(uuid));
 	return rc;
 }
 
@@ -5934,8 +5937,11 @@ ds_cont_get_prop(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t **prop_out)
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	rc = cont_svc_lookup_leader(pool_uuid, 0, &svc, NULL);
-	if (rc != 0)
+	if (rc != 0) {
+		DL_ERROR(rc, "pool " DF_UUID " cont_svc_lookup_leader failed\n",
+			 DP_UUID(pool_uuid));
 		return rc;
+	}
 
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
 	if (rc != 0)
@@ -5943,8 +5949,10 @@ ds_cont_get_prop(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t **prop_out)
 
 	ABT_rwlock_rdlock(svc->cs_lock);
 	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
-	if (rc != 0)
+	if (rc != 0) {
+		DL_ERROR(rc, DF_CONT " cont_lookup failed\n", DP_CONT(pool_uuid, cont_uuid));
 		D_GOTO(out_lock, rc);
+	}
 
 	rc = cont_prop_read(&tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop, true);
 	cont_put(cont);

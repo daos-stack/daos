@@ -479,8 +479,9 @@ again:
 				rc = cont_iv_prop_ent_create(entry, key);
 				if (rc == 0)
 					goto again;
-				D_ERROR("create cont prop iv entry failed "
-					""DF_RC"\n", DP_RC(rc));
+				D_ERROR("cont " DF_UUID " create IV_CONT_PROP iv entry failed "
+					"" DF_RC "\n",
+					DP_UUID(civ_key->cont_uuid), DP_RC(rc));
 			} else if (class_id == IV_CONT_CAPA) {
 				struct container_hdl	chdl = { 0 };
 				int			rc1;
