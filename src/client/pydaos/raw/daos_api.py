@@ -2299,8 +2299,12 @@ class DaosContext():
         ctypes.CDLL(os.path.join(path, 'libdaos_common.so'),
                     mode=ctypes.RTLD_GLOBAL)
 
-        self.libtest = ctypes.CDLL(os.path.join(path, 'libdaos_tests.so'),
-                                   mode=ctypes.DEFAULT_MODE)
+        try:
+            self.libtest = ctypes.CDLL(
+                os.path.join(path, 'libdaos_tests.so'), mode=ctypes.DEFAULT_MODE)
+        except OSError:
+            self.libtest = None
+
         # Note: action-subject format
         self.ftable = {
             'close-cont':      self.libdaos.daos_cont_close,
@@ -2351,15 +2355,28 @@ class DaosContext():
             'stop-service':    self.libdaos.daos_pool_stop_svc,
             'test-event':      self.libdaos.daos_event_test,
             'update-obj':      self.libdaos.daos_obj_update,
-            'oid_gen':         self.libtest.dts_oid_gen}
+            'oid_gen':         self.libtest.dts_oid_gen if self.libtest else None}
 
     def get_function(self, function):
-        """Call a function through the API."""
+        """Get a function handle by name.
+
+        Args:
+            function (str): function to get the handle for
+
+        Raises:
+            DaosApiError: if function is unknown
+
+        Returns:
+            obj: function handle
+        """
         # For most functions, we need to ensure
         # that daos_init() has been called before
         # invoking anything.
         self._dc = DaosClient()
-        return self.ftable[function]
+        func = self.ftable.get(function)
+        if func is None:
+            raise DaosApiError(f"Function not implemented: {function}")
+        return func
 
 
 class DaosApiError(Exception):
