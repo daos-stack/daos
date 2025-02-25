@@ -496,7 +496,7 @@ class ObjectMetadata(TestWithServers):
             self.log.info("Done %d IOR %s threads", thread_manager.qty, operation)
             if failed_thread_count > 0:
                 msg = "{} FAILED IOR {} Thread(s)".format(failed_thread_count, operation)
-                self.d_log.error(msg)
+                self.log.error(msg)
                 self.fail(msg)
 
             # Restart the agents and servers after the write / before the read

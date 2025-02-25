@@ -71,7 +71,7 @@ def remove_pool(test, pool):
 
     """
     error_list = []
-    test.test_log.info("Destroying pool %s", pool.identifier)
+    test.log.info("Destroying pool %s", pool.identifier)
 
     # Ensure exceptions are raised for any failed command
     exit_status_exception = None
@@ -83,7 +83,7 @@ def remove_pool(test, pool):
     try:
         pool.destroy(force=1, disconnect=1, recursive=1)
     except (DaosApiError, TestFail) as error:
-        test.test_log.info("  {}".format(error))
+        test.log.info("  {}".format(error))
         error_list.append("Error destroying pool {}: {}".format(pool.identifier, error))
 
     # Restore raising exceptions for any failed command
