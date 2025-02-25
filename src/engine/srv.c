@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1117,6 +1118,15 @@ dss_xstreams_init(void)
 
 	d_getenv_uint("DAOS_SCHED_UNIT_RUNTIME_MAX", &sched_unit_runtime_max);
 	d_getenv_bool("DAOS_SCHED_WATCHDOG_ALL", &sched_watchdog_all);
+
+	dss_chore_credits = DSS_CHORE_CREDITS_DEF;
+	d_getenv_uint("DAOS_IO_CHORE_CREDITS", &dss_chore_credits);
+	if (dss_chore_credits < DSS_CHORE_CREDITS_MIN) {
+		D_WARN("Invalid DAOS_IO_CHORE_CREDITS value, minimum is %u, set as default %u\n",
+		       DSS_CHORE_CREDITS_MIN, DSS_CHORE_CREDITS_DEF);
+		dss_chore_credits = DSS_CHORE_CREDITS_DEF;
+	}
+	D_INFO("Set DAOS IO chore credits as %u\n", dss_chore_credits);
 
 	/* start the execution streams */
 	D_DEBUG(DB_TRACE,
