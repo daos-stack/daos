@@ -175,6 +175,14 @@ var (
 		},
 	}
 
+	daos_default_PoolHandle PoolHandle = PoolHandle{
+		connHandle: connHandle{
+			UUID:       daos_default_PoolInfo.UUID,
+			Label:      daos_default_PoolInfo.Label,
+			daosHandle: *defaultPoolHdl(),
+		},
+	}
+
 	daos_default_PoolQueryTargetInfo daos.PoolQueryTargetInfo = daos.PoolQueryTargetInfo{
 		Type:  daos.PoolQueryTargetType(1),
 		State: daos.PoolTargetStateUp,
@@ -192,9 +200,22 @@ var (
 	}
 )
 
+// defaultPoolHdl should be used to get a copy of the daos handle for the default pool.
 func defaultPoolHdl() *C.daos_handle_t {
 	newHdl := C.daos_handle_t{cookie: daos_default_pool_connect_Handle.cookie}
 	return &newHdl
+}
+
+// defaultPoolHandle should be used to get a copy of the default pool handle.
+func defaultPoolHandle() *PoolHandle {
+	newHandle := new(PoolHandle)
+	*newHandle = daos_default_PoolHandle
+	return newHandle
+}
+
+// MockPoolHandle returns a valid PoolHandle suitable for use in tests.
+func MockPoolHandle() *PoolHandle {
+	return defaultPoolHandle()
 }
 
 func reset_daos_pool_stubs() {
@@ -219,6 +240,7 @@ var (
 	daos_pool_connect_Handle    *C.daos_handle_t = defaultPoolHdl()
 	daos_pool_connect_Info      *daos.PoolInfo   = defaultPoolInfo()
 	daos_pool_connect_Count     int              = 0
+	daos_pool_connect_RCList    []C.int          = nil
 	daos_pool_connect_RC        C.int            = 0
 )
 
@@ -230,11 +252,18 @@ func reset_daos_pool_connect() {
 	daos_pool_connect_Handle = defaultPoolHdl()
 	daos_pool_connect_Info = defaultPoolInfo()
 	daos_pool_connect_Count = 0
+	daos_pool_connect_RCList = nil
 	daos_pool_connect_RC = 0
 }
 
 func daos_pool_connect(poolID *C.char, sys *C.char, flags C.uint32_t, poolHdl *C.daos_handle_t, poolInfo *C.daos_pool_info_t, ev *C.struct_daos_event) C.int {
 	daos_pool_connect_Count++
+	if len(daos_pool_connect_RCList) > 0 {
+		rc := daos_pool_connect_RCList[daos_pool_connect_Count-1]
+		if rc != 0 {
+			return rc
+		}
+	}
 	if daos_pool_connect_RC != 0 {
 		return daos_pool_connect_RC
 	}
