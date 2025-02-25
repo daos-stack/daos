@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -71,6 +72,12 @@ enum dtx_mbs_flags {
 	DMF_SORTED_SAD_IDX		= (1 << 3),
 	/* The dtx target information are organized as dtx_coll_target. */
 	DMF_COLL_TARGET			= (1 << 4),
+	/*
+	 * The range for the ranks [min, max] on which some object shards reside.
+	 * It is usually used for collective DTX and appended after the bitmap in
+	 * the MBS data.
+	 */
+	DMF_RANK_RANGE			= (1 << 5),
 };
 
 /**
@@ -263,6 +270,28 @@ static inline bool
 daos_dti_equal(struct dtx_id *dti0, struct dtx_id *dti1)
 {
 	return memcmp(dti0, dti1, sizeof(*dti0)) == 0;
+}
+
+static inline uint32_t *
+dtx_coll_mbs_rankrange(struct dtx_memberships *mbs)
+{
+	struct dtx_daos_target	*ddt;
+	struct dtx_coll_target	*dct;
+	size_t			 size;
+
+	D_ASSERT(mbs->dm_flags & DMF_COLL_TARGET);
+	D_ASSERT(mbs->dm_flags & DMF_RANK_RANGE);
+
+	ddt = &mbs->dm_tgts[0];
+	dct = (struct dtx_coll_target *)(ddt + mbs->dm_tgt_cnt);
+
+	size = sizeof(*mbs) + sizeof(*ddt) * mbs->dm_tgt_cnt + sizeof(*dct) +
+	       sizeof(dct->dct_tgts[0]) * dct->dct_tgt_nr + dct->dct_bitmap_sz;
+	size = (size + 3) & ~3;
+
+	D_ASSERT(mbs->dm_data_size >= size + sizeof(uint32_t) * 2);
+
+	return (uint32_t *)((void *)mbs + size);
 }
 
 #define DF_DTI		DF_UUID"."DF_X64

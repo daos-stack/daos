@@ -1,5 +1,6 @@
 /*
  *  (C) Copyright 2016-2024 Intel Corporation.
+ *  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1504,6 +1505,8 @@ dc_obj_shard_coll_punch(struct dc_obj_shard *shard, struct shard_punch_args *arg
 	ocpi->ocpi_api_flags = api_flags;
 	ocpi->ocpi_map_ver = map_ver;
 	ocpi->ocpi_flags = rpc_flags;
+	if (!args->pa_coa.coa_raw_sparse)
+		ocpi->ocpi_flags |= ORF_COLL_SORTED_TGT;
 
 	if (bulks != NULL) {
 		D_ASSERT(bulk_sz != 0);
