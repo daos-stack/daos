@@ -203,19 +203,12 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_agent, rc);
 
-	/** set up client telemetry */
-	rc = dc_tm_init();
-	if (rc != 0) {
-		/* should not be fatal */
-		DL_WARN(rc, "failed to initialize client telemetry");
-	}
-
 	/** get and cache attach info of default system */
 	rc = dc_mgmt_cache_attach_info(NULL);
 	if (rc != 0)
 		D_GOTO(out_job, rc);
 
-	crt_info = daos_crt_init_opt_get(false, 1, daos_client_metric);
+	crt_info = daos_crt_init_opt_get(false, 1);
 	/**
 	 * get CaRT configuration (see mgmtModule.handleGetAttachInfo for the
 	 * handling of NULL system names)
@@ -223,6 +216,13 @@ daos_init(void)
 	rc = dc_mgmt_net_cfg(NULL, crt_info);
 	if (rc != 0)
 		D_GOTO(out_attach, rc);
+
+	/** set up client telemetry */
+	rc = dc_tm_init(crt_info);
+	if (rc != 0) {
+		/* should not be fatal */
+		DL_WARN(rc, "failed to initialize client telemetry");
+	}
 
 	/** set up event queue */
 	rc = daos_eq_lib_init(crt_info);
@@ -291,8 +291,8 @@ out_pl:
 out_eq:
 	daos_eq_lib_fini();
 out_attach:
-	dc_mgmt_drop_attach_info();
 	dc_tm_fini();
+	dc_mgmt_drop_attach_info();
 out_job:
 	dc_job_fini();
 out_agent:
@@ -351,9 +351,9 @@ daos_fini(void)
 	if (rc != 0)
 		D_ERROR("failed to disconnect some resources may leak, " DF_RC "\n", DP_RC(rc));
 
+	dc_tm_fini();
 	dc_mgmt_drop_attach_info();
 	dc_agent_fini();
-	dc_tm_fini();
 	dc_job_fini();
 
 	pl_fini();

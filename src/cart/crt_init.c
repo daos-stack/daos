@@ -341,12 +341,12 @@ static int data_init(int server, crt_init_options_t *opt)
 		credits = CRT_MAX_CREDITS_PER_EP_CTX;
 	crt_gdata.cg_credit_ep_ctx = credits;
 
-	/** Enable statistics only for the server side and if requested */
-	if (opt && opt->cio_use_sensors && server) {
-		int	ret;
+	/** enable sensors if requested */
+	crt_gdata.cg_use_sensors = (opt && opt->cio_use_sensors);
 
-		/** enable sensors */
-		crt_gdata.cg_use_sensors = true;
+	/** Enable statistics only for the server side and if requested */
+	if (crt_gdata.cg_use_sensors && server) {
+		int	ret;
 
 		/** set up the global sensors */
 		ret = d_tm_add_metric(&crt_gdata.cg_uri_self, D_TM_COUNTER,
