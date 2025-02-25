@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2023 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,7 +12,7 @@
 #include <daos/cont_props.h>
 #include "obj_internal.h"
 
-/** How many times to retry UPDATE RPCs on checksum error */
+/** How many times to retry FETCH and UPDATE RPCs on checksum error */
 #define MAX_CSUM_RETRY 10
 
 int dc_obj_csum_update(struct daos_csummer *csummer, struct cont_props props, daos_obj_id_t param,
