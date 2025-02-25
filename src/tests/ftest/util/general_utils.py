@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -788,10 +789,11 @@ def get_remote_file_size(host, file_name):
     return int(result.stdout_text)
 
 
-def get_errors_count(hostlist, file_glob):
+def get_errors_count(log, hostlist, file_glob):
     """Count the number of errors found in log files.
 
     Args:
+        log (logger): logger for the messages produced by this method
         hostlist (list): System list to looks for an error.
         file_glob (str): Glob pattern of the log file to parse.
 
@@ -803,9 +805,9 @@ def get_errors_count(hostlist, file_glob):
     cmd = "cat {} | sed -n -E -e ".format(get_log_file(file_glob))
     cmd += r"'/^.+[[:space:]]ERR[[:space:]].+[[:space:]]DER_[^(]+\([^)]+\).+$/"
     cmd += r"s/^.+[[:space:]]DER_[^(]+\((-[[:digit:]]+)\).+$/\1/p'"
-    results = run_pcmd(hostlist, cmd, False, None, None)
+    result = run_remote(log, hostlist, cmd, verbose=False)
     errors_count = {}
-    for error_str in sum([result["stdout"] for result in results], []):
+    for error_str in sum([data.stdout for data in result.output], []):
         error = int(error_str)
         if error not in errors_count:
             errors_count[error] = 0
