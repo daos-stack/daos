@@ -37,22 +37,29 @@ disable_repos () {
 install_curl() {
 
     if command -v curl; then
+        echo "found curl!"
         return
     fi
 
-    if command -v dnf; then
-        dnf -y install curl
+    if command -v wget; then
+        echo "found wget!"
         return
     fi
 
-    if command -v zypper; then
-        zypper mr --all --disable
-        zypper addrepo                                                                           \
-            "${REPO_FILE_URL%/*/}/opensuse-proxy/distribution/leap/${BASE_DISTRO##*:}/repo/oss/" \
-              temp_opensuse_oss_proxy
-        zypper --non-interactive install curl
-        zypper removerepo temp_opensuse_oss_proxy
-    fi
+    # If we did not already have curl, we won't be able to easily install it.
+    #if command -v dnf; then
+    #    dnf -y install curl
+    #    return
+    #fi
+
+    #if command -v zypper; then
+    #    zypper mr --all --disable
+    #    zypper addrepo                                                                           \
+    #        "${REPO_FILE_URL%/*/}/opensuse-proxy/distribution/leap/${BASE_DISTRO##*:}/repo/oss/" \
+    #          temp_opensuse_oss_proxy
+    #    zypper --non-interactive install curl
+    #    zypper removerepo temp_opensuse_oss_proxy
+    #fi
 }
 
 install_dnf() {
@@ -73,6 +80,15 @@ install_dnf() {
 }
 
 # Use local repo server if present
+install_optional_ca() {
+    ca_storage="/etc/pki/trust/anchors/"
+    if [ -n "$DAOS_LAB_CA_FILE_URL" ]; then
+        curl -k --noproxy '*' -sSf -o "${ca_storage}lab_ca_file.pem" "$DAOS_LAB_CA_FILE_URL"
+        update-ca-certificates
+    fi
+}
+
+# Use local repo server if present
 # if a local repo server is present and the distro repo server can not
 # be reached, have to bootstrap in an environment to get curl installed
 # to then install the pre-built repo file.
@@ -86,12 +102,17 @@ else
 fi
 if [ -n "$REPO_FILE_URL" ]; then
     install_curl
+    install_optional_ca
     mkdir -p "$repos_dir"
     pushd "$repos_dir"
-    curl -k -f -o daos_ci-leap"$MAJOR_VER"-artifactory.repo        \
+    curl -k --noproxy '*' -sSf -o daos_ci-leap"$MAJOR_VER"-artifactory.repo        \
          "$REPO_FILE_URL"daos_ci-leap"$MAJOR_VER"-artifactory.repo
     disable_repos "$repos_dir"
     popd
+    # These may have been created in the Dockerfile must be removed
+    # when using a local repository.
+    unset HTTPS_PROXY
+    unset https_proxy
     install_dnf
 else
     if ! command -v dnf; then
