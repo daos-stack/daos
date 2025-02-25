@@ -878,9 +878,12 @@ class TestRunner():
 
     def _generate_telemetry_certs(self, logger):
         """Generate the telemetry certificates for the test and
-           copy to system default certificate location
-        Returns:
+        copy to system default certificate location
+
+        Args:
             logger (Logger): logger for the messages produced by this method
+
+        Returns:
             int: status code: 0 = success, 128 = failure
         """
         logger.debug("-" * 80)

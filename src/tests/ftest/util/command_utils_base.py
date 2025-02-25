@@ -816,16 +816,6 @@ class TelemetryConfig(YamlParameters):
         self._log_dir = log_dir
         self.telemetry_port = BasicParameter(None, 9191)
 
-    def get_yaml_data(self):
-        """Convert the parameters into a dictionary to use to write a yaml file.
-
-        Returns:
-            dict: a dictionary of parameter name keys and values
-
-        """
-        yaml_data = super().get_yaml_data()
-        return yaml_data
-
     def get_certificate_data(self, name_list):
         """Get certificate data by name_list.
         Args:

@@ -1051,6 +1051,9 @@ class YamlCommand(SubProcessCommand):
             source (str) : source of the certificate files.
             destination (str): copy file destination dir.
             hosts (NodeSet): list of the destination hosts.
+
+        Raises:
+            CommandFailure: if there is an error copying certificate.
         """
         certfiles = ["daosTelemetryCA.crt", "daosTelemetryCA.key"]
 
@@ -1062,8 +1065,8 @@ class YamlCommand(SubProcessCommand):
                 self.log, hosts, src_file, dst_file, mkdir=False,
                 verbose=False, sudo=True, owner=self.certificate_owner)
             if not result.passed:
-                self.log.info("    WARNING: %s copy telemetry cert failed on %s",
-                              dst_file, result.failed_hosts)
+                raise CommandFailure(
+                    f"Error: copy telemetry cert file {dst_file} failed on {result.failed_hosts}")
 
     def generate_telemetry_server_certificates(self, hosts, user, destination):
         """Generate the telemetry certificates for the test on server/client.
@@ -1080,7 +1083,7 @@ class YamlCommand(SubProcessCommand):
         certgen_dir = os.path.abspath(
             os.path.join(os.getcwd(), "scripts"))
         command = os.path.join(certgen_dir, "gen_telemetry_server_certificate.sh ")
-        command = "sudo " + command + user + " " + destination
+        command = command_as_user(command + user + " " + destination, "root")
         self.log.debug("Generating the telemetry certificate command %s:", command)
         result = run_remote(self.log, hosts, command, 30)
         if not result.passed:
