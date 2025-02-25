@@ -1,5 +1,6 @@
 """
   (C) Copyright 2021-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -116,6 +117,7 @@ class DaosCoreTestDfuse(TestWithServers):
         ]
         if use_dfuse:
             parameters.append('--lowfd')
+            parameters.append('--flock')
         else:
             # make D_IL_MOUNT_POINT different from mount_dir so it tests a non-DAOS filesystem
             dummy_dir = '/tmp/dummy'
