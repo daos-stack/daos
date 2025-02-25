@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -142,6 +143,15 @@ daos_lru_ref_evict(struct daos_lru_cache *lcache, struct daos_llink *llink)
  */
 void
 daos_lru_ref_evict_wait(struct daos_lru_cache *lcache, struct daos_llink *llink);
+
+/**
+ * Wait until the caller is the last one holds refcount.
+ *
+ * \param[in] lcache		DAOS LRU cache
+ * \param[in] llink		DAOS LRU item to be evicted
+ */
+void
+daos_lru_ref_noevict_wait(struct daos_lru_cache *lcache, struct daos_llink *llink);
 
 /**
  * Increase a usage reference to the LRU element
