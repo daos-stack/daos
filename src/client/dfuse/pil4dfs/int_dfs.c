@@ -122,6 +122,7 @@ static _Atomic uint64_t        num_read;
 static _Atomic uint64_t        num_write;
 static _Atomic uint64_t        num_open;
 static _Atomic uint64_t        num_stat;
+static _Atomic uint64_t        num_statfs;
 static _Atomic uint64_t        num_opendir;
 static _Atomic uint64_t        num_readdir;
 static _Atomic uint64_t        num_link;
@@ -3571,6 +3572,8 @@ statfs(const char *pathname, struct statfs *sfs)
 	if (!is_target_path)
 		goto out_org;
 
+	atomic_fetch_add_relaxed(&num_statfs, 1);
+
 	rc = daos_pool_query(dfs_mt->poh, NULL, &info, NULL, NULL);
 	if (rc != 0)
 		D_GOTO(out_err, rc = daos_der2errno(rc));
@@ -3622,6 +3625,8 @@ fstatfs(int fd, struct statfs *sfs)
 	fd_directed = d_get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
 		return next_fstatfs(fd, sfs);
+
+	atomic_fetch_add_relaxed(&num_statfs, 1);
 
 	if (fd_directed < FD_DIR_BASE)
 		dfs_mt = d_file_list[fd_directed - FD_FILE_BASE]->dfs_mt;
@@ -3678,6 +3683,8 @@ statvfs(const char *pathname, struct statvfs *svfs)
 		D_GOTO(out_err, rc);
 	if (!is_target_path)
 		goto out_org;
+
+	atomic_fetch_add_relaxed(&num_statfs, 1);
 
 	rc = daos_pool_query(dfs_mt->poh, NULL, &info, NULL, NULL);
 	if (rc) {
@@ -7311,6 +7318,7 @@ print_summary(void)
 	write_loc   = atomic_load_relaxed(&num_write);
 	open_loc    = atomic_load_relaxed(&num_open);
 	stat_loc    = atomic_load_relaxed(&num_stat);
+	statfs_loc  = atomic_load_relaxed(&num_statfs);
 	opendir_loc = atomic_load_relaxed(&num_opendir);
 	readdir_loc = atomic_load_relaxed(&num_readdir);
 	link_loc    = atomic_load_relaxed(&num_link);
@@ -7327,6 +7335,7 @@ print_summary(void)
 	fprintf(stderr, "\n");
 	fprintf(stderr, "[open   ]  %" PRIu64 "\n", open_loc);
 	fprintf(stderr, "[stat   ]  %" PRIu64 "\n", stat_loc);
+	fprintf(stderr, "[statfs ]  %" PRIu64 "\n", statfs_loc);
 	fprintf(stderr, "[opendir]  %" PRIu64 "\n", opendir_loc);
 	fprintf(stderr, "[readdir]  %" PRIu64 "\n", readdir_loc);
 	fprintf(stderr, "[link   ]  %" PRIu64 "\n", link_loc);
@@ -7338,8 +7347,9 @@ print_summary(void)
 	fprintf(stderr, "[rename ]  %" PRIu64 "\n", rename_loc);
 	fprintf(stderr, "[mmap   ]  %" PRIu64 "\n", mmap_loc);
 
-	op_sum = read_loc + write_loc + open_loc + stat_loc + opendir_loc + readdir_loc + link_loc +
-		 unlink_loc + rdlink_loc + seek_loc + mkdir_loc + rmdir_loc + rename_loc + mmap_loc;
+	op_sum = read_loc + write_loc + open_loc + stat_loc + statfs_loc + opendir_loc +
+		 readdir_loc + link_loc + unlink_loc + rdlink_loc + seek_loc + mkdir_loc +
+		 rmdir_loc + rename_loc + mmap_loc;
 	fprintf(stderr, "\n");
 	fprintf(stderr, "[op_sum ]  %" PRIu64 "\n", op_sum);
 }
