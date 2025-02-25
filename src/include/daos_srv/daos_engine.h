@@ -455,6 +455,9 @@ int dss_ult_periodic(void (*func)(void *), void *arg, int xs_type, int tgt_id,
 
 int dss_sleep(uint64_t ms);
 
+int dss_eventual_timeout_wait(ABT_eventual eventual, void *status, uint32_t timeout,
+			      uint32_t step);
+
 /* Pack return codes with additional argument to reduce */
 struct dss_stream_arg_type {
 	/** return value */
