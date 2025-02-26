@@ -294,7 +294,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 				      "net/%s/uri_lookup_timeout/ctx_%u",
 				      prov, ctx->cc_idx);
 		if (ret)
-			DL_WARN(ret, "Failed to create timed out uri req counter:");
+			DL_WARN(ret, "Failed to create timed out uri req counter");
 
 		ret = d_tm_add_metric(&ctx->cc_failed_addr, D_TM_COUNTER,
 				      "Total number of failed address "
