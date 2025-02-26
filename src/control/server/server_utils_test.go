@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -322,15 +323,15 @@ func TestServer_prepBdevStorage(t *testing.T) {
 					WithEngines(pmemEngine(0))
 			},
 			overrideUser:  "root",
-			hugepagesFree: 8192,
+			hugepagesFree: 16386,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugepageCount: 8194,
+				HugepageCount: 16386,
 				HugeNodes:     "0",
 				TargetUser:    "root",
 				DisableVFIO:   true,
 				PCIAllowList:  test.MockPCIAddr(0),
 			},
-			expMemSize:      16384,
+			expMemSize:      32768,
 			expHugepageSize: 2,
 		},
 		"non-nvme bdevs; vfio disabled": {
@@ -338,14 +339,14 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				return sc.WithDisableVFIO(true).
 					WithEngines(pmemFakeNvmeEngine(0))
 			},
-			hugepagesFree: 8192,
+			hugepagesFree: 16386,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugepageCount: 8194,
+				HugepageCount: 16386,
 				HugeNodes:     "0",
 				TargetUser:    username,
 				DisableVFIO:   true,
 			},
-			expMemSize:      16384,
+			expMemSize:      32768,
 			expHugepageSize: 2,
 		},
 		"iommu disabled": {
@@ -361,14 +362,14 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				return sc.WithEngines(pmemEngine(0))
 			},
 			overrideUser:  "root",
-			hugepagesFree: 8192,
+			hugepagesFree: 16386,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugepageCount: 8194,
+				HugepageCount: 16386,
 				HugeNodes:     "0",
 				TargetUser:    "root",
 				PCIAllowList:  test.MockPCIAddr(0),
 			},
-			expMemSize:      16384,
+			expMemSize:      32768,
 			expHugepageSize: 2,
 		},
 		"non-nvme bdevs; iommu disabled": {
@@ -376,13 +377,13 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithEngines(pmemFakeNvmeEngine(0))
 			},
-			hugepagesFree: 8192,
+			hugepagesFree: 16386,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugepageCount: 8194,
+				HugepageCount: 16386,
 				HugeNodes:     "0",
 				TargetUser:    username,
 			},
-			expMemSize:      16384,
+			expMemSize:      32768,
 			expHugepageSize: 2,
 		},
 		"no bdevs configured; hugepages disabled": {
@@ -397,7 +398,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 					WithEngines(pmemOnlyEngine(0), pmemOnlyEngine(1))
 			},
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugepageCount: scanMinHugepageCount,
+				HugepageCount: 128,
 				TargetUser:    username,
 				EnableVMD:     true,
 			},
