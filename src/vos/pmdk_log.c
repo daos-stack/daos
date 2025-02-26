@@ -41,6 +41,11 @@ static void
 pmdk_log_function(enum pmemobj_log_level level, const char *file_name, unsigned line_no,
 		  const char *function_name, const char *message)
 {
+	/* normalize file name - remove leading "../" */
+	while ((*file_name == '.') && (*(file_name + 1) == '.') && (*(file_name + 2) == '/')) {
+		file_name += 3;
+	}
+
 /*
  * There is a set of handy macros for each of the message priorities
  * that are used normally to report a message. They can't be used here
