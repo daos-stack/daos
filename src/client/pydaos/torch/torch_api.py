@@ -510,6 +510,10 @@ class Checkpoint():
         if chunks_limit == 0:
             chunks_limit = size // DEFAULT_CHUNK_SIZE
 
+        # in case the file is smaller than the default chunk size
+        if chunks_limit == 0:
+            chunks_limit = 1
+
         chunk_size = self._transfer_chunk_size
         if chunk_size == 0:
             # In case we don't have chunking, we read the file in one go
