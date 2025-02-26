@@ -22,7 +22,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/daos/api"
-	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -108,50 +107,8 @@ func copyUUID(dst *C.uuid_t, src uuid.UUID) error {
 	return nil
 }
 
-func uuidToC(in uuid.UUID) (out C.uuid_t) {
-	for i, v := range in {
-		out[i] = C.uchar(v)
-	}
-
-	return
-}
-
 func uuidFromC(cUUID C.uuid_t) (uuid.UUID, error) {
 	return uuid.FromBytes(C.GoBytes(unsafe.Pointer(&cUUID[0]), C.int(len(cUUID))))
-}
-
-func rankSetFromC(cRankList *C.d_rank_list_t) (*ranklist.RankSet, error) {
-	if cRankList == nil {
-		return nil, errors.New("nil ranklist")
-	}
-
-	cRankSlice := unsafe.Slice(cRankList.rl_ranks, cRankList.rl_nr)
-	rs := ranklist.NewRankSet()
-	for _, cRank := range cRankSlice {
-		rs.Add(ranklist.Rank(cRank))
-	}
-
-	return rs, nil
-}
-
-func iterStringsBuf(cBuf unsafe.Pointer, expected C.size_t, cb func(string)) error {
-	var curLen C.size_t
-
-	// Create a Go slice for easy iteration (no pointer arithmetic in Go).
-	bufSlice := (*[1 << 30]C.char)(cBuf)[:expected:expected]
-	for total := C.size_t(0); total < expected; total += curLen + 1 {
-		chunk := bufSlice[total:]
-		curLen = C.strnlen(&chunk[0], expected-total)
-
-		if curLen >= expected-total {
-			return errors.New("corrupt buffer")
-		}
-
-		chunk = bufSlice[total : total+curLen]
-		cb(C.GoString(&chunk[0]))
-	}
-
-	return nil
 }
 
 func fd2FILE(fd uintptr, modeStr string) (out *C.FILE, err error) {
@@ -221,9 +178,6 @@ func freeCmdArgs(ap *C.struct_cmd_args_s) {
 	C.free(unsafe.Pointer(ap.dfs_path))
 	C.free(unsafe.Pointer(ap.dfs_prefix))
 
-	if ap.props != nil {
-		C.daos_prop_free(ap.props)
-	}
 	if ap.dm_args != nil {
 		C.free_daos_alloc(unsafe.Pointer(ap.dm_args))
 	}

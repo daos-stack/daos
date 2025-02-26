@@ -29,7 +29,7 @@ var (
 		return fmt.Sprintf("0x%x", oc)
 	}
 	objClassName2Class objClassNameResolver = func(name string) (ObjectClass, error) {
-		return ObjectClass(0), errors.New("no object class resolver set; can't resolve class name")
+		return ObjectClass(0), errors.Wrap(NotImpl, "no object class resolver set; can't resolve class name")
 	}
 )
 
@@ -49,6 +49,15 @@ type (
 	ObjectClass C.daos_oclass_id_t
 )
 
+// ObjectClassFromString parses a string to an ObjectClass.
+func ObjectClassFromString(s string) (ObjectClass, error) {
+	var oc ObjectClass
+	if err := oc.FromString(s); err != nil {
+		return oc, err
+	}
+	return oc, nil
+}
+
 // FromString resolves a string to an ObjectClass.
 func (oc *ObjectClass) FromString(name string) error {
 	class, err := objClassName2Class(name)
@@ -65,4 +74,45 @@ func (oc ObjectClass) String() string {
 
 func (oc ObjectClass) MarshalJSON() ([]byte, error) {
 	return []byte(`"` + oc.String() + `"`), nil
+}
+
+type (
+	// ObjectID represents a DAOS object ID.
+	ObjectID C.daos_obj_id_t
+)
+
+// Class returns the derived object class.
+func (oid ObjectID) Class() ObjectClass {
+	return ObjectClass(C.daos_obj_id2class(C.daos_obj_id_t(oid)))
+}
+
+// IsZero returns true if the ObjectID is the zero value.
+func (oid ObjectID) IsZero() bool {
+	return oid.hi == 0 && oid.lo == 0
+}
+
+// FromString parses a string to an ObjectID.
+func (oid *ObjectID) FromString(s string) error {
+	var hi, lo uint64
+
+	if _, err := fmt.Sscanf(s, "%d.%d", &hi, &lo); err != nil {
+		return errors.Wrapf(InvalidInput, "invalid object ID %q: %v", s, err)
+	}
+
+	oid.hi = C.uint64_t(hi)
+	oid.lo = C.uint64_t(lo)
+	return nil
+}
+
+func (oid ObjectID) String() string {
+	return fmt.Sprintf("%d.%d", oid.hi, oid.lo)
+}
+
+// ObjectIDFromString parses a string to an ObjectID.
+func ObjectIDFromString(s string) (ObjectID, error) {
+	var oid ObjectID
+	if err := oid.FromString(s); err != nil {
+		return ObjectID{}, err
+	}
+	return oid, nil
 }

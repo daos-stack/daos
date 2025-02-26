@@ -136,6 +136,10 @@ func daos_cont_del_attr(contHdl C.daos_handle_t, n C.int, name **C.char, ev *C.s
 	return C.daos_cont_del_attr(contHdl, n, name, ev)
 }
 
+func daos_cont_set_prop(contHdl C.daos_handle_t, prop *C.daos_prop_t, ev *C.struct_daos_event) C.int {
+	return C.daos_cont_set_prop(contHdl, prop, ev)
+}
+
 func daos_oclass_name2id(name *C.char) C.daos_oclass_id_t {
 	return C.daos_oclass_id_t(C.daos_oclass_name2id(name))
 }

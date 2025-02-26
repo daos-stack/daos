@@ -140,6 +140,21 @@ const (
 	PoolConnectFlagExclusive PoolConnectFlag = C.DAOS_PC_EX
 )
 
+func (pcf PoolConnectFlag) String() string {
+	flagStrs := []string{}
+	if pcf&PoolConnectFlagReadOnly != 0 {
+		flagStrs = append(flagStrs, "read-only")
+	}
+	if pcf&PoolConnectFlagReadWrite != 0 {
+		flagStrs = append(flagStrs, "read-write")
+	}
+	if pcf&PoolConnectFlagExclusive != 0 {
+		flagStrs = append(flagStrs, "exclusive")
+	}
+	sort.Strings(flagStrs)
+	return strings.Join(flagStrs, ",")
+}
+
 func (pqo PoolQueryOption) String() string {
 	return string(pqo)
 }
