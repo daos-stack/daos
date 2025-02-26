@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -100,6 +101,58 @@ include_fabric_ifaces: ["ib0"]
 exclude_fabric_ifaces: ["ib3"]
 `)
 
+	telemetryRetainWithBadPort := test.CreateTestFile(t, dir, `
+
+control_log_mask: debug
+transport_config:
+  allow_insecure: true
+telemetry_config:
+  telemetry_retain: 1m
+  telemetry_port: 0
+`)
+
+	telemetryEnabledWithBadPort := test.CreateTestFile(t, dir, `
+name: shire
+access_points: ["one:10001", "two:10001"]
+port: 4242
+runtime_dir: /tmp/runtime
+log_file: /home/frodo/logfile
+control_log_mask: debug
+transport_config:
+  allow_insecure: true
+telemetry_config:
+  telemetry_enabled: true
+  telemetry_port: 0
+`)
+
+	telemetryWithoutHttpsCert := test.CreateTestFile(t, dir, `
+name: shire
+access_points: ["one:10001", "two:10001"]
+port: 4242
+runtime_dir: /tmp/runtime
+log_file: /home/frodo/logfile
+control_log_mask: debug
+transport_config:
+  allow_insecure: true
+telemetry_config:
+  https_cert: ""
+  https_key: "valid_key"
+`)
+
+	telemetryWithoutHttpsKey := test.CreateTestFile(t, dir, `
+name: shire
+access_points: ["one:10001", "two:10001"]
+port: 4242
+runtime_dir: /tmp/runtime
+log_file: /home/frodo/logfile
+control_log_mask: debug
+transport_config:
+  allow_insecure: true
+telemetry_config:
+  https_cert: "valid_crt"
+  https_key: ""
+`)
+
 	for name, tc := range map[string]struct {
 		path      string
 		expResult *Config
@@ -120,6 +173,22 @@ exclude_fabric_ifaces: ["ib3"]
 			path:      emptyFile,
 			expResult: DefaultConfig(),
 		},
+		"telemetry retain with no port": {
+			path:   telemetryRetainWithBadPort,
+			expErr: errors.New("telemetry_retain requires telemetry_port"),
+		},
+		"telemetry enabled with no port": {
+			path:   telemetryEnabledWithBadPort,
+			expErr: errors.New("telemetry_enabled requires telemetry_port"),
+		},
+		"telemetry with secure mode with no server certificate": {
+			path:   telemetryWithoutHttpsCert,
+			expErr: errors.New("For secure mode, https_cert and https_key both required"),
+		},
+		"telemetry with secure mode with no server key": {
+			path:   telemetryWithoutHttpsKey,
+			expErr: errors.New("For secure mode, https_cert and https_key both required"),
+		},
 		"without optional items": {
 			path: withoutOptCfg,
 			expResult: &Config{
@@ -134,6 +203,7 @@ exclude_fabric_ifaces: ["ib3"]
 					AllowInsecure:     true,
 					CertificateConfig: DefaultConfig().TransportConfig.CertificateConfig,
 				},
+				TelemetryConfig: security.DefaultClientTelemetryConfig(),
 			},
 		},
 		"bad log mask": {
@@ -170,6 +240,7 @@ exclude_fabric_ifaces: ["ib3"]
 					AllowInsecure:     true,
 					CertificateConfig: DefaultConfig().TransportConfig.CertificateConfig,
 				},
+				TelemetryConfig:     security.DefaultClientTelemetryConfig(),
 				ExcludeFabricIfaces: common.NewStringSet("ib3"),
 				FabricInterfaces: []*NUMAFabricConfig{
 					{

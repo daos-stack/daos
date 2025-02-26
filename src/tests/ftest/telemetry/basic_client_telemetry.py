@@ -1,5 +1,6 @@
 """
   (C) Copyright 2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -26,7 +27,7 @@ class BasicClientTelemetry(TestWithClientTelemetry):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=telemetry
+        :avocado: tags=telemetry,secure_telemetry
         :avocado: tags=BasicClientTelemetry,test_client_metrics_exist
         """
         # create pool and container

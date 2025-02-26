@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -595,6 +596,8 @@ system_ram_reserved: 26
 disable_hugepages: false
 control_log_mask: INFO
 control_log_file: /tmp/daos_server.log
+telemetry_config:
+  telemetry_port: 9191
 core_dump_filter: 19
 name: daos_server
 socket_dir: /var/run/daos_server

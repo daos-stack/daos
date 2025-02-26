@@ -1,5 +1,6 @@
 """
   (C) Copyright 2019-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -7,7 +8,8 @@ import os
 import re
 import socket
 
-from agent_utils_params import DaosAgentTransportCredentials, DaosAgentYamlParameters
+from agent_utils_params import (DaosAgentTelemetryConfig, DaosAgentTransportCredentials,
+                                DaosAgentYamlParameters)
 from ClusterShell.NodeSet import NodeSet
 from command_utils import CommandWithSubCommand, SubprocessManager, YamlCommand
 from command_utils_base import (CommandWithParameters, CommonConfig, EnvironmentVariables,
@@ -53,6 +55,7 @@ def get_agent_command(group, cert_dir, bin_dir, config_file, run_user, config_te
     transport_config = DaosAgentTransportCredentials(cert_dir)
     common_config = CommonConfig(group, transport_config)
     config = DaosAgentYamlParameters(config_file, common_config)
+    config.telemetry_config = DaosAgentTelemetryConfig(cert_dir)
     command = DaosAgentCommand(bin_dir, config, run_user=run_user)
     if config_temp:
         # Setup the DaosAgentCommand to write the config file data to the
@@ -260,6 +263,9 @@ class DaosAgentManager(SubprocessManager):
         # Support disabling verifying the socket directory (runtime_dir) for tests
         self.verify_socket_dir = True
 
+        # Set the certificate dir
+        self.telemetry_certificate_dir = cert_dir
+
     def _set_hosts(self, hosts, path, slots):
         """Set the hosts used to execute the daos command.
 
@@ -285,7 +291,6 @@ class DaosAgentManager(SubprocessManager):
         # Copy certificates
         self.manager.job.copy_certificates(
             get_log_file("daosCA/certs"), self._hosts)
-
         # Verify the socket directory exists when using a non-systemctl manager
         if self.verify_socket_dir:
             self.verify_socket_directory(self.manager.job.certificate_owner)
@@ -389,3 +394,10 @@ class DaosAgentManager(SubprocessManager):
             str: the socket directory
         """
         return self.get_config_value("runtime_dir")
+
+    def prepare_telemetry_certificate(self):
+        """Prepare Telemetry certificate"""
+        self.manager.job.copy_telemetry_root_certificates(
+            get_log_file("daosTelemetryCA"), self.telemetry_certificate_dir, self._hosts)
+        self.manager.job.generate_telemetry_server_certificates(
+            self._hosts, "daos_agent", self.telemetry_certificate_dir)

@@ -1,5 +1,6 @@
 //
-// (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2019-2025 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -201,6 +202,7 @@ type (
 		ScrapeInterval time.Duration   `yaml:"scrape_interval,omitempty"`
 		ScrapeTimeout  time.Duration   `yaml:"scrape_timeout,omitempty"`
 		StaticConfigs  []*staticConfig `yaml:"static_configs,omitempty"`
+		Scheme         string          `yaml:"scheme,omitempty"`
 	}
 
 	promCfg struct {
@@ -258,6 +260,8 @@ func (cmd *telemConfigCmd) configurePrometheus() (*installInfo, error) {
 		return nil, err
 	}
 
+	cmd.Infof("WARNING: By default, Prometheus configuration will be created for insecure (http) mode")
+	cmd.Infof("Configures the protocol scheme for secure mode in config file. [scheme: = https]")
 	cfg.ScrapeConfigs = []*scrapeConfig{
 		{
 			JobName:        "daos",
@@ -300,6 +304,7 @@ type metricsCmd struct {
 // metricsListCmd provides a list of metrics available from the requested DAOS servers.
 type metricsListCmd struct {
 	baseCmd
+	cfgCmd
 	cmdutil.JSONOutputCmd
 	singleHostCmd
 	Port uint32 `short:"p" long:"port" default:"9191" description:"Telemetry port on the host"`
@@ -320,9 +325,17 @@ func (cmd *metricsListCmd) Execute(args []string) error {
 		cmd.Info(getConnectingMsg(req.Host, req.Port))
 	}
 
+	// Try Secure Mode
 	resp, err := control.MetricsList(cmd.MustLogCtx(), req)
 	if err != nil {
-		return err
+		cmd.Debugf("Secure Mode (HTTPS) failed: %s", err.Error())
+		// Trying Insecure Mode
+		req.AllowInsecure = true
+		cmd.Debug("Trying Insecure Mode (HTTP)")
+		resp, err = control.MetricsList(cmd.MustLogCtx(), req)
+		if err != nil {
+			return err
+		}
 	}
 
 	if cmd.JSONOutputEnabled() {
@@ -354,6 +367,7 @@ func getConnectingMsg(host string, port uint32) string {
 // metricsQueryCmd collects the requested metrics from the requested DAOS servers.
 type metricsQueryCmd struct {
 	baseCmd
+	cfgCmd
 	cmdutil.JSONOutputCmd
 	singleHostCmd
 	Port    uint32 `short:"p" long:"port" default:"9191" description:"Telemetry port on the host"`
@@ -378,7 +392,14 @@ func (cmd *metricsQueryCmd) Execute(args []string) error {
 
 	resp, err := control.MetricsQuery(cmd.MustLogCtx(), req)
 	if err != nil {
-		return err
+		cmd.Debugf("Secure Mode (HTTPS) failed: %s", err.Error())
+		//Trying Insecure Mode
+		req.AllowInsecure = true
+		cmd.Debug("Trying Insecure Mode (HTTP)")
+		resp, err = control.MetricsQuery(cmd.MustLogCtx(), req)
+		if err != nil {
+			return err
+		}
 	}
 
 	if cmd.JSONOutputEnabled() {
