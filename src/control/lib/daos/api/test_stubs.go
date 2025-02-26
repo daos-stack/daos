@@ -31,4 +31,6 @@ func UnlockTestStubs() {
 // to reset state between tests.
 func ResetTestStubs() {
 	reset_daos_pool_stubs()
+	reset_daos_cont_stubs()
+	reset_dfs_stubs()
 }

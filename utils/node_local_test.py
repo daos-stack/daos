@@ -4417,7 +4417,7 @@ class PosixTests():
         assert rc.returncode != 0
         output = rc.stderr.decode('utf-8')
         line = output.splitlines()
-        if line[-1] != 'ERROR: daos: failed fs fix-entry: DER_BUSY(-1012): Device or resource busy':
+        if 'DER_BUSY(-1012): Device or resource busy' not in line[-1]:
             raise NLTestFail('daos fs fix-entry /test_dir/f1')
 
         # stop dfuse
