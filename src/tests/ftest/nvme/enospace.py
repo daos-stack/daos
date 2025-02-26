@@ -571,18 +571,28 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         :avocado: tags=nvme,der_enospace,enospc_lazy,enospc_lazy_fg
         :avocado: tags=NvmeEnospace,test_enospace_lazy_with_fg
         """
-        self.log.info(self.pool.pool_percentage_used())
+        scm_threshold_percent = self.params.get("scm_threshold_percent", "/run/aggregation/*")
+
+        self.log_step("Get initial pool free space")
+        pool_space = self.pool.get_tier_stats(True)
+        initial_free_scm = pool_space["scm"]["free"]
+        initial_free_nvme = pool_space["nvme"]["free"]
+        self.log.info("initial_free_scm  = %s", initial_free_scm)
+        self.log.info("initial_free_nvme = %s", initial_free_nvme)
 
         # Repeat the test in loop.
         for _loop in range(10):
-            self.log.info("-------enospc_lazy_fg Loop--------- %d", _loop)
-            # Run IOR to fill the pool.
+            self.log_step(f"Run IOR to fill the pool - enospc_lazy_fg loop {_loop}")
             log_file = f"-loop_{_loop}".join(os.path.splitext(self.client_log))
             self.run_enospace_foreground(log_file)
-            # Delete all the containers
+            self.log_step(f"Delete all containers - enospc_lazy_fg loop {_loop}")
             self.delete_all_containers(self.pool)
-            # Delete container will take some time to release the space
-            time.sleep(60)
+            self.log_step(f"Wait for aggregation to complete - enospc_lazy_fg loop {_loop}")
+            if not self.pool.check_free_space(
+                    expected_scm=f">={int(initial_free_scm * scm_threshold_percent / 100)}",
+                    expected_nvme=initial_free_nvme,
+                    timeout=240, interval=15):
+                self.fail("Pool space not reclaimed after deleting all containers")
 
         # Run last IO
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
