@@ -891,8 +891,8 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 	ul_out = crt_reply_get(lookup_rpc);
 
 	if (ul_out->ul_rc != 0) {
-		RPC_ERROR(chained_rpc_priv, "URI_LOOKUP returned rc="DF_RC"\n",
-			  DP_RC(ul_out->ul_rc));
+		RPC_WARN(chained_rpc_priv, "URI_LOOKUP returned rc=" DF_RC "\n",
+			 DP_RC(ul_out->ul_rc));
 		D_GOTO(retry, rc = ul_out->ul_rc);
 	}
 
@@ -977,8 +977,8 @@ retry:
 								chained_rpc_priv);
 				D_GOTO(out, rc);
 			} else {
-				D_ERROR("URI lookups exceeded %d retries\n",
-					chained_rpc_priv->crp_ul_retry);
+				D_WARN("URI lookups exceeded %d retries\n",
+				       chained_rpc_priv->crp_ul_retry);
 			}
 		} else {
 			DL_INFO(rc, "URI_LOOKUP for (%d:%d) failed during PROTO_QUERY",
