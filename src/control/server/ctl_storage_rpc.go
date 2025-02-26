@@ -255,7 +255,7 @@ func bdevScan(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvmeReq, n
 		}
 	}()
 
-	bdevCfgs := getBdevCfgsFromSrvCfg(cs.srvCfg)
+	bdevCfgs := cs.srvCfg.GetBdevConfigs()
 	nrCfgBdevs := bdevCfgs.Bdevs().Len()
 
 	if nrCfgBdevs == 0 {
