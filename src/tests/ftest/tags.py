@@ -18,8 +18,6 @@ from pathlib import Path
 
 import yaml
 
-from util.data_utils import dict_extract_values
-
 THIS_FILE = os.path.realpath(__file__)
 FTEST_DIR = os.path.dirname(THIS_FILE)
 MANUAL_TAG = ('manual',)
@@ -302,6 +300,30 @@ class TestYamlData():
             self.__data = yaml.load(f.read(), Loader=AvocadoYamlLoader)
         self.__test_name = test_name
 
+    def __extract_key(self, key, filter=None, key_types=None):
+        """_summary_
+
+        Args:
+            key (str): _description_
+            filter (list, optional): _description_. Defaults to None.
+            key_types (_type_, optional): _description_. Defaults to None.
+
+        Returns:
+            list: _description_
+        """
+        search = [[self.__data, ["root"]]]
+        matches = []
+        while search:
+            data = search.pop()
+            if key in data[0]:
+                if not filter or set(filter) - set(data[1]) == set():
+                    if not key_types or type(data[0][key]) in key_types:
+                        matches.append(data[0][key])
+            for _key, _value in data[0].items():
+                if isinstance(_value, dict):
+                    search.append([_value, data[1] + [_key]])
+        return matches
+
     def __get_test_method_value(self, key, val_type=None):
         """Get the test yaml value for a given key and optional type.
 
@@ -312,7 +334,7 @@ class TestYamlData():
         Returns:
             list: _description_
         """
-        return dict_extract_values(self.__data, [key, self.__test_name], val_type)
+        return self.__extract_key(self.__test_name, [key], val_type)
 
     def value(self, key):
         """Get the test yaml data value for a given key.
@@ -326,16 +348,15 @@ class TestYamlData():
         if not self.__data:
             # Handle empty test yaml files
             return None
+        key_types = None
         if key == "timeout":
+            key_types = [int, str]
             # Handle special case for test-specific numeric timeout values
-            value = self.__get_test_method_value("timeouts", int)
-            if value == []:
-                # Handle special case for test-specific string timeout values
-                value = self.__get_test_method_value("timeouts", str)
+            value = self.__get_test_method_value("timeouts", key_types)
         else:
             value = self.__get_test_method_value(key)
         if not value:
-            value = dict_extract_values(self.__data, [key])
+            value = self.__extract_key(key, key_types=key_types)
 
         if value and len(value) == 1:
             # Reduce list for single matches
