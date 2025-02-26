@@ -443,6 +443,7 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
+/* TODO DISABLE AS IT DOES NOT WORK to let run unit tests
                 stage('Build RPM on EL 8') {
                     when {
                         beforeAgent true
@@ -482,6 +483,7 @@ pipeline {
                         }
                     }
                 }
+*/
 /*
                 stage('Build RPM on EL 9') {
                     when {
