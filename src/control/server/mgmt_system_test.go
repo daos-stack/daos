@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 // (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -2114,8 +2115,8 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer test.ShowBufferOnFailure(t, buf)
+			ctx := test.MustLogContext(t)
+			log := logging.FromContext(ctx)
 
 			if tc.members == nil {
 				tc.members = system.Members{
@@ -2157,7 +2158,7 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				tc.req.Sys = build.DefaultSystemName
 			}
 
-			gotResp, gotErr := svc.SystemDrain(test.MustLogContext(t, log), tc.req)
+			gotResp, gotErr := svc.SystemDrain(ctx, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
