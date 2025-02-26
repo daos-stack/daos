@@ -480,6 +480,7 @@ pipeline {
                         }
                     }
                 }
+/*
                 stage('Build RPM on EL 9') {
                     when {
                         beforeAgent true
@@ -558,6 +559,8 @@ pipeline {
                         }
                     }
                 }
+*/
+/*
                 stage('Build DEB on Ubuntu 20.04') {
                     when {
                         beforeAgent true
@@ -594,6 +597,7 @@ pipeline {
                         }
                     }
                 }
+*/
                 stage('Build on EL 8') {
                     when {
                         beforeAgent true
@@ -633,6 +637,7 @@ pipeline {
                         }
                     }
                 }
+/*
                 stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
@@ -670,6 +675,7 @@ pipeline {
                         }
                     }
                 }
+*/
             }
         }
         stage('Unit Tests') {
