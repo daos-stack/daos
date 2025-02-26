@@ -244,8 +244,7 @@ func TestControl_PoolRanksResp_Errors(t *testing.T) {
 			expErr: errors.New("nil"),
 		},
 		"empty id": {
-			resp:   &PoolRanksResp{},
-			expErr: errors.New("empty id"),
+			resp: &PoolRanksResp{},
 		},
 		"no results": {
 			resp: &PoolRanksResp{
@@ -273,6 +272,15 @@ func TestControl_PoolRanksResp_Errors(t *testing.T) {
 			},
 			expErr: errors.Errorf("ranks [2-3,5] failed on pool %s", test.MockUUID()),
 		},
+		"failure; empty id": {
+			resp: &PoolRanksResp{
+				Results: []*PoolRankResult{
+					{Rank: 2, Errored: true, Msg: "bad"},
+					{Rank: 3, Errored: true, Msg: "bad"},
+				},
+			},
+			expErr: errors.New("ranks [2-3] failed on pool <unknown>"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			test.CmpErr(t, tc.expErr, tc.resp.Errors())
@@ -296,7 +304,16 @@ func TestControl_PoolExclude(t *testing.T) {
 			mic: &MockInvokerConfig{
 				UnaryError: errors.New("local failed"),
 			},
-			expErr: errors.New("local failed"),
+			expResp: &PoolRanksResp{
+				ID: test.MockUUID(),
+				Results: []*PoolRankResult{
+					{
+						Rank:    2,
+						Errored: true,
+						Msg:     "local failed",
+					},
+				},
+			},
 		},
 		"remote failure": {
 			req: &PoolRanksReq{
@@ -307,7 +324,34 @@ func TestControl_PoolExclude(t *testing.T) {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
 			},
-			expErr: errors.New("remote failed"),
+			expResp: &PoolRanksResp{
+				ID: test.MockUUID(),
+				Results: []*PoolRankResult{
+					{
+						Rank:    2,
+						Errored: true,
+						Msg:     "remote failed",
+					},
+				},
+			},
+		},
+		"DataPlaneNotStarted error is retried": {
+			req: &PoolRanksReq{
+				ID:        test.MockUUID(),
+				Ranks:     []ranklist.Rank{2},
+				TargetIdx: []uint32{1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", &fault.Fault{Code: code.ServerDataPlaneNotStarted},
+						nil),
+					MockMSResponse("host1", nil, &mgmtpb.PoolExcludeResp{}),
+				},
+			},
+			expResp: &PoolRanksResp{
+				ID:      test.MockUUID(),
+				Results: []*PoolRankResult{{Rank: 2}},
+			},
 		},
 		"success": {
 			req: &PoolRanksReq{
@@ -407,7 +451,16 @@ func TestControl_PoolDrain(t *testing.T) {
 			mic: &MockInvokerConfig{
 				UnaryError: errors.New("local failed"),
 			},
-			expErr: errors.New("local failed"),
+			expResp: &PoolRanksResp{
+				ID: test.MockUUID(),
+				Results: []*PoolRankResult{
+					{
+						Rank:    2,
+						Errored: true,
+						Msg:     "local failed",
+					},
+				},
+			},
 		},
 		"remote failure": {
 			req: &PoolRanksReq{
@@ -418,7 +471,34 @@ func TestControl_PoolDrain(t *testing.T) {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
 			},
-			expErr: errors.New("remote failed"),
+			expResp: &PoolRanksResp{
+				ID: test.MockUUID(),
+				Results: []*PoolRankResult{
+					{
+						Rank:    2,
+						Errored: true,
+						Msg:     "remote failed",
+					},
+				},
+			},
+		},
+		"DataPlaneNotStarted error is retried": {
+			req: &PoolRanksReq{
+				ID:        test.MockUUID(),
+				Ranks:     []ranklist.Rank{2},
+				TargetIdx: []uint32{1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", &fault.Fault{Code: code.ServerDataPlaneNotStarted},
+						nil),
+					MockMSResponse("host1", nil, &mgmtpb.PoolDrainResp{}),
+				},
+			},
+			expResp: &PoolRanksResp{
+				ID:      test.MockUUID(),
+				Results: []*PoolRankResult{{Rank: 2}},
+			},
 		},
 		"success": {
 			req: &PoolRanksReq{
@@ -518,7 +598,16 @@ func TestControl_PoolReintegrate(t *testing.T) {
 			mic: &MockInvokerConfig{
 				UnaryError: errors.New("local failed"),
 			},
-			expErr: errors.New("local failed"),
+			expResp: &PoolRanksResp{
+				ID: test.MockUUID(),
+				Results: []*PoolRankResult{
+					{
+						Rank:    2,
+						Errored: true,
+						Msg:     "local failed",
+					},
+				},
+			},
 		},
 		"remote failure": {
 			req: &PoolRanksReq{
@@ -529,7 +618,34 @@ func TestControl_PoolReintegrate(t *testing.T) {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
 			},
-			expErr: errors.New("remote failed"),
+			expResp: &PoolRanksResp{
+				ID: test.MockUUID(),
+				Results: []*PoolRankResult{
+					{
+						Rank:    2,
+						Errored: true,
+						Msg:     "remote failed",
+					},
+				},
+			},
+		},
+		"DataPlaneNotStarted error is retried": {
+			req: &PoolRanksReq{
+				ID:        test.MockUUID(),
+				Ranks:     []ranklist.Rank{2},
+				TargetIdx: []uint32{1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", &fault.Fault{Code: code.ServerDataPlaneNotStarted},
+						nil),
+					MockMSResponse("host1", nil, &mgmtpb.PoolReintResp{}),
+				},
+			},
+			expResp: &PoolRanksResp{
+				ID:      test.MockUUID(),
+				Results: []*PoolRankResult{{Rank: 2}},
+			},
 		},
 		"success": {
 			req: &PoolRanksReq{

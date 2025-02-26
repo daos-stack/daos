@@ -1887,7 +1887,25 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 			mic: &control.MockInvokerConfig{
 				UnaryError: errors.New("local failed"),
 			},
-			expErr: errors.New("local failed"),
+			expResp: &mgmtpb.SystemDrainResp{
+				Responses: []*mgmtpb.PoolRanksResp{
+					{
+						Id: test.MockUUID(1),
+						Results: []*sharedpb.RankResult{
+							{
+								Rank:    0,
+								Errored: true,
+								Msg:     "local failed",
+							},
+							{
+								Rank:    1,
+								Errored: true,
+								Msg:     "local failed",
+							},
+						},
+					},
+				},
+			},
 		},
 		"remote failure": {
 			req: &mgmtpb.SystemDrainReq{Ranks: "0,1"},
@@ -1895,11 +1913,27 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				test.MockUUID(1): "0-5",
 			},
 			mic: &control.MockInvokerConfig{
-				UnaryResponse: control.MockMSResponse("host1",
-					errors.New("remote failed"), nil),
+				UnaryResponseSet: []*control.UnaryResponse{
+					control.MockMSResponse("host1", nil, &mgmtpb.PoolDrainResp{}),
+					control.MockMSResponse("host1", errors.New("remote failed"), nil),
+				},
 			},
-			expErr:         errors.New("remote failed"),
-			expInvokeCount: 1,
+			expResp: &mgmtpb.SystemDrainResp{
+				Responses: []*mgmtpb.PoolRanksResp{
+					{
+						Id: test.MockUUID(1),
+						Results: []*sharedpb.RankResult{
+							{Rank: 0},
+							{
+								Rank:    1,
+								Errored: true,
+								Msg:     "remote failed",
+							},
+						},
+					},
+				},
+			},
+			expInvokeCount: 2,
 		},
 		"matching ranks; multiple pools; successful drpc responses": {
 			req: &mgmtpb.SystemDrainReq{Ranks: "0,1"},

@@ -777,8 +777,9 @@ func (resp *PoolRanksResp) Errors() error {
 	if resp == nil {
 		return errors.Errorf("nil %T", resp)
 	}
-	if resp.ID == "" {
-		return errors.New("empty id in response")
+	id := resp.ID
+	if id == "" {
+		id = "<unknown>"
 	}
 
 	rs := ranklist.MustCreateRankSet("")
@@ -790,7 +791,7 @@ func (resp *PoolRanksResp) Errors() error {
 
 	if rs.Count() > 0 {
 		return errors.Errorf("%s %s failed on pool %s",
-			english.PluralWord(rs.Count(), "rank", "ranks"), rs.RangedString(), resp.ID)
+			english.PluralWord(rs.Count(), "rank", "ranks"), rs.RangedString(), id)
 	}
 
 	return nil
@@ -815,7 +816,12 @@ func getPoolRanksResp(ctx context.Context, rpcClient UnaryInvoker, req *PoolRank
 	for _, rank := range req.Ranks {
 		result, err := poolRankOp(ctx, rpcClient, req, rank)
 		if err != nil {
-			return nil, errors.Wrapf(err, "pool %s rank %d", req.ID, rank)
+			rpcClient.Debugf("pool %s rank %d failed: %s", req.ID, rank, err.Error())
+			result = &PoolRankResult{
+				Rank:    rank,
+				Errored: true,
+				Msg:     err.Error(),
+			}
 		}
 		results = append(results, result)
 	}
@@ -854,9 +860,6 @@ func poolExcludeRank(ctx context.Context, rpcClient UnaryInvoker, req *PoolRanks
 	if err != nil {
 		return nil, err
 	}
-	if msErr := ur.getMSError(); err != nil {
-		return nil, msErr
-	}
 
 	resp := new(mgmtpb.PoolExcludeResp)
 	if err := convertMSResponse(ur, resp); err != nil {
@@ -890,9 +893,6 @@ func poolDrainRank(ctx context.Context, rpcClient UnaryInvoker, req *PoolRanksRe
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
-	}
-	if msErr := ur.getMSError(); err != nil {
-		return nil, msErr
 	}
 
 	resp := new(mgmtpb.PoolDrainResp)
@@ -958,9 +958,6 @@ func poolReintegrateRank(ctx context.Context, rpcClient UnaryInvoker, req *PoolR
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
-	}
-	if msErr := ur.getMSError(); err != nil {
-		return nil, msErr
 	}
 
 	resp := new(mgmtpb.PoolReintResp)
