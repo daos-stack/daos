@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1469,10 +1470,9 @@ ds_pool_iv_srv_hdl_update(struct ds_pool *pool, uuid_t pool_hdl_uuid,
 	uuid_copy(iv_entry.piv_hdl.pih_pool_hdl, pool_hdl_uuid);
 	uuid_copy(iv_entry.piv_hdl.pih_cont_hdl, cont_hdl_uuid);
 
-	rc = pool_iv_update(pool->sp_iv_ns, IV_POOL_HDL, pool_hdl_uuid,
-			    &iv_entry, sizeof(struct pool_iv_entry),
-			    CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_LAZY, true);
-
+	rc = pool_iv_update(pool->sp_iv_ns, IV_POOL_HDL, pool_hdl_uuid, &iv_entry,
+			    sizeof(struct pool_iv_entry), CRT_IV_SHORTCUT_TO_ROOT, CRT_IV_SYNC_LAZY,
+			    true);
 	if (rc != 0)
 		D_ERROR("pool_iv_update failed "DF_RC"\n", DP_RC(rc));
 
