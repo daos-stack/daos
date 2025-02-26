@@ -324,8 +324,8 @@ class TestConfig():
                     search.append([_value, data[1] + [_key]])
         return matches
 
-    def test_method_value(self, key, val_type=None):
-        """Get the test yaml value for a given key and optional type.
+    def unique_value(self, key, val_type=None):
+        """Get the unique test yaml value for a given key and optional type.
 
         Args:
             key (str): _description_
@@ -352,9 +352,9 @@ class TestConfig():
         if key == "timeout":
             key_types = [int, str]
             # Handle special case for test-specific numeric timeout values
-            value = self.test_method_value("timeouts", key_types)
+            value = self.unique_value("timeouts", key_types)
         else:
-            value = self.test_method_value(key)
+            value = self.unique_value(key)
         if not value:
             value = self.__filter_value(key, key_types=key_types)
 
@@ -925,7 +925,7 @@ def main():
     unit_parser.add_argument(
         "-v", "--verbose",
         action='store_true',
-        help="print verbose output for some commands")
+        help="print verbose output")
 
     args = parser.parse_args()
     args.paths = list(map(os.path.realpath, args.paths))
