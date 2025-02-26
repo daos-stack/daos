@@ -92,6 +92,11 @@ var (
 		"hugepages cannot be disabled if bdevs have been specified in config",
 		"either set false (or remove) disable_hugepages parameter or remove nvme storage assignment in config and restart the control server",
 	)
+	FaultConfigHugepagesDisabledWithNrSet = serverConfigFault(
+		code.ServerConfigHugepagesDisabledWithNrSet,
+		"hugepages cannot be disabled if non-zero number has been specified in config",
+		"either set false (or remove) disable_hugepages parameter or remove nr_hugepages assignment in config and restart the control server",
+	)
 	FaultConfigControlMetadataNoPath = serverConfigFault(
 		code.ServerConfigControlMetadataNoPath,
 		"using a control_metadata device requires a path to use as the mount point",

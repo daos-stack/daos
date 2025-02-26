@@ -201,6 +201,7 @@ const (
 	ServerConfigEngineBdevRolesMismatch
 	ServerConfigSysRsvdZero
 	ServerConfigBdevExcludeClash
+	ServerConfigHugepagesDisabledWithNrSet
 )
 
 // SPDK library bindings codes
