@@ -32,7 +32,7 @@ class DmgNetworkScanTest(TestWithServers):
         server_provider = self.server_managers[0].get_config_value("provider")
         sys_info = []
         for entry in get_network_information(self.log, self.hostlist_servers, SUPPORTED_PROVIDERS):
-            if server_provider in entry.provider:
+            if server_provider == entry.provider:
                 entry.device = None
                 sys_info.append(entry)
         return sys_info

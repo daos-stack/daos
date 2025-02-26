@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -171,17 +171,31 @@ func newMockDrpcClient(cfg *mockDrpcClientConfig) *mockDrpcClient {
 // setupMockDrpcClientBytes sets up the dRPC client for the mgmtSvc to return
 // a set of bytes as a response.
 func setupMockDrpcClientBytes(svc *mgmtSvc, respBytes []byte, err error) {
-	mi := svc.harness.instances[0]
+	setupSvcDrpcClient(svc, 0, getMockDrpcClientBytes(respBytes, err))
+}
+
+func getMockDrpcClientBytes(respBytes []byte, err error) *mockDrpcClient {
 	cfg := &mockDrpcClientConfig{}
 	cfg.setSendMsgResponse(drpc.Status_SUCCESS, respBytes, err)
-	mi.(*EngineInstance).setDrpcClient(newMockDrpcClient(cfg))
+	return newMockDrpcClient(cfg)
 }
 
 // setupMockDrpcClient sets up the dRPC client for the mgmtSvc to return
 // a valid protobuf message as a response.
 func setupMockDrpcClient(svc *mgmtSvc, resp proto.Message, err error) {
+	setupSvcDrpcClient(svc, 0, getMockDrpcClient(resp, err))
+}
+
+// getMockDrpcClient sets up the dRPC client to return a valid protobuf message as a response.
+func getMockDrpcClient(resp proto.Message, err error) *mockDrpcClient {
 	respBytes, _ := proto.Marshal(resp)
-	setupMockDrpcClientBytes(svc, respBytes, err)
+	return getMockDrpcClientBytes(respBytes, err)
+}
+
+func setupSvcDrpcClient(svc *mgmtSvc, engineIdx int, mdc *mockDrpcClient) {
+	svc.harness.instances[engineIdx].(*EngineInstance).getDrpcClientFn = func(_ string) drpc.DomainSocketClient {
+		return mdc
+	}
 }
 
 // newTestEngine returns an EngineInstance configured for testing.
@@ -200,7 +214,8 @@ func newTestEngine(log logging.Logger, isAP bool, provider *storage.Provider, en
 	rCfg.Running.SetTrue()
 	r := engine.NewTestRunner(rCfg, engineCfg[0])
 
-	e := NewEngineInstance(log, provider, nil, r)
+	e := NewEngineInstance(log, provider, nil, r, nil)
+	e.setDrpcSocket("/dontcare")
 	e.setSuperblock(&Superblock{
 		Rank: ranklist.NewRankPtr(0),
 	})
@@ -219,15 +234,13 @@ func mockTCPResolver(netString string, address string) (*net.TCPAddr, error) {
 	return &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 10001}, nil
 }
 
-// newTestMgmtSvc creates a mgmtSvc that contains an EngineInstance
-// properly set up as an MS.
-func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
+// newTestMgmtSvcWithProvider creates a mgmtSvc that contains an EngineInstance
+// properly set up as an MS using an input storage provider.
+func newTestMgmtSvcWithProvider(t *testing.T, log logging.Logger, provider *storage.Provider) *mgmtSvc {
 	harness := NewEngineHarness(log)
-	provider := storage.MockProvider(log, 0, nil, nil, nil, nil, nil)
 
-	srv := newTestEngine(log, true, provider)
-
-	if err := harness.AddInstance(srv); err != nil {
+	e := newTestEngine(log, true, provider)
+	if err := harness.AddInstance(e); err != nil {
 		t.Fatal(err)
 	}
 	harness.started.SetTrue()
@@ -239,12 +252,20 @@ func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
 	svc.batchInterval = 100 * time.Microsecond // Speed up tests
 	svc.startAsyncLoops(ctx)
 	svc.startLeaderLoops(ctx)
+
 	return svc
+}
+
+// newTestMgmtSvc creates a mgmtSvc that contains an EngineInstance
+// properly set up as an MS.
+func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
+	return newTestMgmtSvcWithProvider(t, log,
+		storage.MockProvider(log, 0, nil, nil, nil, nil, nil))
 }
 
 // newTestMgmtSvcMulti creates a mgmtSvc that contains the requested
 // number of EngineInstances. If requested, the first instance is
-// configured as an access point.
+// configured as a MS replica.
 func newTestMgmtSvcMulti(t *testing.T, log logging.Logger, count int, isAP bool) *mgmtSvc {
 	harness := NewEngineHarness(log)
 	provider := storage.MockProvider(log, 0, nil, nil, nil, nil, nil)

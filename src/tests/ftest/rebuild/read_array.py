@@ -1,9 +1,9 @@
 """
   (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from daos_utils import DaosCommand
 from general_utils import DaosTestError
 from rebuild_test_base import RebuildTestBase
 
@@ -14,20 +14,12 @@ class RbldReadArrayTest(RebuildTestBase):
     :avocado: recursive
     """
 
-    def __init__(self, *args, **kwargs):
-        """Initialize a RbldReadArrayTest object."""
-        super().__init__(*args, **kwargs)
-        self.daos_cmd = None
-
     def execute_during_rebuild(self):
         """Read the objects during rebuild."""
-        self.daos_cmd = DaosCommand(self.bin)
-        self.daos_cmd.container_set_prop(
-            pool=self.pool.uuid, cont=self.container.uuid, prop="status", value="healthy")
+        self.container.set_prop(prop="status", value="healthy")
 
         message = "Reading the array objects during rebuild"
         self.log.info(message)
-        self.d_log.info(message)
         self.assertTrue(self.read_data_during_rebuild(), "Error reading data during rebuild")
 
     def read_data_during_rebuild(self):

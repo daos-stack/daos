@@ -50,7 +50,7 @@ A recommended workflow to get up and running is as follows:
   server config file (default location at `/etc/daos/daos_server.yml`) has not
   yet been populated.
 
-* Run `dmg config generate -l <hostset> -a <access_points>` across the entire
+* Run `dmg config generate -l <hostset> -r <ms_replicas>` across the entire
   hostset (all the storage servers that are now running the `daos_server` service
   after RPM install).
   The command will only generate a config if hardware setups on all the hosts are
@@ -100,10 +100,163 @@ Refer to the example configuration file
 [`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
 for latest information and examples.
 
+#### MD-on-SSD Configuration
+
+To enable MD-on-SSD, the Control-Plane-Metadata ('control_metadata') global section of the
+configuration file
+[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+needs to specify a persistent location to store control-plane specific metadata (which would be
+stored on PMem in non MD-on-SSD mode). Either set 'control_metadata:path' to an existing (mounted)
+local filesystem path or set 'control_metadata:device' to a storage partition which can be mounted
+and formatted by the control-plane during storage format. In the latter case when specifying a
+device the path parameter value will be used as the mountpoint path.
+
+The MD-on-SSD code path will only be used if it is explicitly enabled by specifying the new
+'bdev_role' property for the NVMe storage tier(s) in the 'daos_server.yml' file. There are three
+types of 'bdev_role': wal, meta, and data. Each role must be assigned to exactly one NVMe tier.
+Depending on the number of NVMe SSDs per DAOS engine there may be one, two or three NVMe tiers with
+different 'bdev_role' assignments.
+
+For a complete server configuration file example enabling MD-on-SSD, see
+[`daos_server_mdonssd.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml).
+
+Below are four different 'daos_server.yml' storage configuration snippets that represent scenarios
+for a DAOS engine with four NVMe SSDs and MD-on-SSD enabled.
+
+
+1. One NVMe tier where four SSDs are each assigned wal, meta and data roles:
+
+```bash
+storage:
+-
+  class: ram
+  scm_mount: /mnt/dram1
+-
+  class: nvme
+  bdev_roles:
+  - wal
+  - meta
+  - data
+  bdev_list:
+  - "0000:e3:00.0"
+  - "0000:e4:00.0"
+  - "0000:e5:00.0"
+  - "0000:e6:00.0"
+```
+
+This example shows the typical use case for a DAOS server with a small number of NVMe SSDs. With
+only four or five NVMe SSDs per engine, it is natural to assign all three roles to all NVMe SSDs
+configured as a single NVMe tier.
+
+
+2. Two NVMe tiers, one SSD assigned wal role (tier-1) and three SSDs assigned both meta and data
+   roles (tier-2):
+
+```bash
+storage:
+-
+  class: ram
+  scm_mount: /mnt/dram1
+-
+  class: nvme
+  bdev_roles:
+  - wal
+  bdev_list:
+  - "0000:e3:00.0"
+-
+  class: nvme
+  bdev_roles:
+  - meta
+  - data
+  bdev_list:
+  - "0000:e4:00.0"
+  - "0000:e5:00.0"
+  - "0000:e6:00.0"
+```
+
+This example shows where one NVMe SSD is dedicated for the wal, while the remaining three NVMe SSDs
+are assigned to hold the VOS checkpoints (meta) and the user data. Using two NVMe tiers makes it
+possible to use a higher endurance and higher performance SSD for the wal tier. It should be noted
+that the performance of a single high-performance SSD may still be lower than the aggregate
+performance of multiple lower-performance SSDs in the previous scenario.
+
+
+3. Two NVMe tiers, one SSD assigned both wal and meta roles (tier-1) and three SSDs assigned both
+   meta and data roles (tier-2):
+
+```bash
+storage:
+-
+  class: ram
+  scm_mount: /mnt/dram1
+-
+  class: nvme
+  bdev_roles:
+  - wal
+  - meta
+  bdev_list:
+  - "0000:e3:00.0"
+-
+  class: nvme
+  bdev_roles:
+  - data
+  bdev_list:
+  - "0000:e4:00.0"
+  - "0000:e5:00.0"
+  - "0000:e6:00.0"
+```
+
+This example uses two NVMe tiers but co-locates the wal and meta blobs on the same tier. This may be
+a better choice than co-locating meta and data if the endurance of the data NVMe SSDs is too low for
+the relatively frequent VOS checkpointing. It should be noted that performance may be impacted by
+reducing the number of NVMe SSDs available for VOS checkpointing from three to one.
+
+The other option to use two NVMe tiers would be to co-locate wal and data and dedicate the other
+tier for meta but this configuration is invalid. Sharing wal and data roles on the same tier is not
+allowed.
+
+
+4. Three NVMe tiers, one for each role (each device will have a single distinct role), one SSD
+   assigned wal role (tier-1), one SSD assigned meta role (tier-2) and two SSDs assigned data role
+   (tier-3):
+
+```bash
+storage:
+-
+  class: ram
+  scm_mount: /mnt/dram1
+-
+  class: nvme
+  bdev_roles:
+  - wal
+  bdev_list:
+  - "0000:e3:00.0"
+-
+  class: nvme
+  bdev_roles:
+  - meta
+  bdev_list:
+  - "0000:e4:00.0"
+-
+  class: nvme
+  bdev_roles:
+  - data
+  bdev_list:
+  - "0000:e5:00.0"
+  - "0000:e6:00.0"
+```
+
+Using three NVMe tiers (one per role) is not reasonable when there are only four NVMe SSDs per
+engine but maybe practical with a larger number of SSDs and so illustrated here for completeness.
+
 #### Auto Generate Configuration File
 
 DAOS can attempt to produce a server configuration file that makes optimal use of hardware on a
 given set of hosts either through the `dmg` or `daos_server` tools.
+
+To generate an MD-on-SSD configurations set both '--control-metadata-path' and '--use-tmpfs-scm'
+options as detailed below. Note that due to the number of variables considered when generating a
+configuration automatically the result may not be the most optimal in all situations.
 
 ##### Generating Configuration File Using daos_server Tool
 
@@ -132,7 +285,7 @@ Help Options:
 
 [generate command options]
       -l, --helper-log-file=                Log file location for debug from daos_server_helper binary
-      -a, --access-points=                  Comma separated list of access point addresses
+      -r, --ms-replicas=                    Comma separated list of MS replica addresses
                                             <ipv4addr/hostname> (default: localhost)
       -e, --num-engines=                    Set the number of DAOS Engine sections to be populated in the
                                             config file output. If unset then the value will be set to the
@@ -178,7 +331,7 @@ Help Options:
 
 [generate command options]
       -l, --host-list=                      A comma separated list of addresses <ipv4addr/hostname> to connect to
-      -a, --access-points=                  Comma separated list of access point addresses <ipv4addr/hostname>
+      -r, --ms-replicas=                    Comma separated list of MS replica addresses <ipv4addr/hostname>
                                             to host management service (default: localhost)
       -e, --num-engines=                    Set the number of DAOS Engine sections to be populated in the
                                             config file output. If unset then the value will be set to the
@@ -218,8 +371,8 @@ engines:
 
 The options that can be supplied to the config generate command are as follows:
 
-- `--access-points` specifies the access points (identified storage servers that will host the
-management service for the DAOS system across the cluster).
+- `--ms-replicas` specifies the MS replicas (identified storage servers that will host the
+Management Service for the DAOS system across the cluster).
 
 - `--num-engines` specifies the number of engine sections to populate in the config file output.
 If not set explicitly on the commandline, default is the number of NUMA nodes detected on the host.
@@ -349,7 +502,7 @@ core_dump_filter: 19
 name: daos_server
 socket_dir: /var/run/daos_server
 provider: ofi+tcp
-access_points:
+mgmt_svc_replicas:
 - localhost:10001
 fault_cb: ""
 hyperthreads: false
@@ -362,7 +515,7 @@ and runs until the point where a storage format is required, as expected.
 [user@wolf-226 daos]$ install/bin/daos_server start -i -o ~/configs/tmp.yml
 DAOS Server config loaded from /home/user/configs/tmp.yml
 install/bin/daos_server logging to file /tmp/daos_server.log
-NOTICE: Configuration includes only one access point. This provides no redundancy in the event of an access point failure.
+NOTICE: Configuration includes only one MS replica. This provides no redundancy in the event of a MS replica failure.
 DAOS Control Server v2.3.101 (pid 1211553) listening on 127.0.0.1:10001
 Checking DAOS I/O Engine instance 0 storage ...
 Checking DAOS I/O Engine instance 1 storage ...
@@ -668,8 +821,6 @@ To set the addresses of which DAOS Servers to task, provide either:
 
 Where `<hostlist>` represents a slurm-style hostlist string e.g.
 `foo-1[28-63],bar[256-511]`.
-The first entry in the hostlist (after alphabetic then numeric sorting) will be
-assumed to be the access point as set in the server configuration file.
 
 Local configuration files stored in the user directory will be used in
 preference to the default location e.g. `~/.daos_control.yml`.
@@ -1169,7 +1320,7 @@ as follows to establish 2-tier storage:
 ```yaml
 <snip>
 port: 10001
-access_points: ["wolf-71"] # <----- updated
+mgmt_svc_replicas: ["wolf-71"] # <----- updated
 <snip>
 engines:
 -
@@ -1214,10 +1365,10 @@ information, please refer to the [DAOS build documentation][6].
     DAOS Control Servers will need to be restarted on all hosts after updates to the server
     configuration file.
 
-    Pick an odd number of hosts in the system and set `access_points` to list of that host's
-    hostname or IP address (don't need to specify port).
+    Pick an odd number (3-7) of hosts in the system and set the `mgmt_svc_replicas` list to
+    include the hostnames or IP addresses (don't need to specify port) of those hosts.
 
-    This will be the host which bootstraps the DAOS management service (MS).
+    This will be the set of servers which host the replicated DAOS management service (MS).
 
 >The support of the optional providers is not guarantee and can be removed
 >without further notification.
@@ -1409,18 +1560,18 @@ When the command is run, the pmem kernel devices created on SCM/PMem regions are
 formatted and mounted based on the parameters provided in the server config file.
 
 - `scm_mount` specifies the location of the mountpoint to create.
-- `scm_class` can be set to `ram` to use a tmpfs in the situation that no SCM/PMem
+- `class` can be set to `ram` to use a tmpfs in the situation that no SCM/PMem
   is available (`scm_size` dictates the size of tmpfs in GB), when set to `dcpm` the device
   specified under `scm_list` will be mounted at `scm_mount` path.
 
 ### NVMe Format
 
 When the command is run, NVMe SSDs are formatted and set up to be used by DAOS
-based on the parameters provided in the server config file.
+based on the parameters provided in the server config file engine storage sections.
 
-`bdev_class` can be set to `nvme` to use actual NVMe devices with SPDK for DAOS
+`class` can be set to `nvme` to use actual NVMe devices with SPDK for DAOS
 storage.
-Other `bdev_class` values can be used for emulation of NVMe storage as specified
+Other `class` values can be used for emulation of NVMe storage as specified
 in the server config file.
 `bdev_list` identifies devices to use with a list of PCI addresses (this can be
 populated after viewing results from `storage scan` command).

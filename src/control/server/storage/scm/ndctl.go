@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -78,8 +78,6 @@ func (cr *cmdRunner) createNamespaces(regionPerSocket socketRegionMap, nrNsPerSo
 	if len(sockIDs) == 0 {
 		return nil, errors.New("expected non-zero number of pmem regions in input map")
 	}
-	cr.log.Debugf("creating %d namespaces on each of the following socket(s): %v", nrNsPerSock,
-		sockIDs)
 
 	// As the selector is socket, look up the ndctl region with the same ISetID as the ipmctl
 	// region with specified socket ID. This may not work when the ISetID overflows in ndctl
@@ -134,21 +132,28 @@ func (cr *cmdRunner) createNamespaces(regionPerSocket socketRegionMap, nrNsPerSo
 			regionsToPrep = append(regionsToPrep, &NdctlRegion{
 				Dev:           fmt.Sprintf("region%d", sid),
 				AvailableSize: uint64(regionPerSocket[sid].FreeCapacity),
+				NumaNode:      uint32(sid),
 			})
 		}
 	}
 
+	cr.log.Debugf("attempting to create %d namespaces on each of the following socket(s): %v",
+		nrNsPerSock, sockIDs)
+
 	var numaNodesPrepped []int
 	for _, region := range regionsToPrep {
-		cr.log.Debugf("creating namespaces on %q", region.Dev)
+		if region.AvailableSize == 0 {
+			cr.log.Tracef("skipping namespace creation on full region %q", region.Dev)
+			continue
+		}
 
 		// Check value is 2MiB aligned and (TODO) multiples of interleave width.
 		pmemBytes := uint64(region.AvailableSize) / uint64(nrNsPerSock)
 
 		if pmemBytes%alignmentBoundaryBytes != 0 {
 			return nil, errors.Errorf("%s: available size (%s) is not %s aligned",
-				region.Dev, humanize.Bytes(pmemBytes),
-				humanize.Bytes(alignmentBoundaryBytes))
+				region.Dev, humanize.IBytes(pmemBytes),
+				humanize.IBytes(alignmentBoundaryBytes))
 		}
 
 		// Create specified number of namespaces on a single region (NUMA node).
@@ -156,11 +161,11 @@ func (cr *cmdRunner) createNamespaces(regionPerSocket socketRegionMap, nrNsPerSo
 			cmd := cmdCreateNamespace
 			cmd.Args = append(cmd.Args, "--region", region.Dev, "--size",
 				fmt.Sprintf("%d", pmemBytes))
-			if _, err := cr.runCmd(cr.log, cmd); err != nil {
+			if _, err := cr.runCmd(cmd); err != nil {
 				return nil, errors.WithMessagef(err, "%s", region.Dev)
 			}
-			cr.log.Debugf("created namespace on %s size %s", region.Dev,
-				humanize.Bytes(pmemBytes))
+			cr.log.Debugf("created namespace on %s size %s (numa %d)", region.Dev,
+				humanize.IBytes(pmemBytes), region.NumaNode)
 		}
 
 		numaNodesPrepped = append(numaNodesPrepped, int(region.NumaNode))
@@ -178,13 +183,13 @@ func (cr *cmdRunner) removeNamespace(devName string) error {
 
 	cmd := cmdDisableNamespace
 	cmd.Args = append(cmd.Args, devName)
-	if _, err := cr.runCmd(cr.log, cmd); err != nil {
+	if _, err := cr.runCmd(cmd); err != nil {
 		return err
 	}
 
 	cmd = cmdDestroyNamespace
 	cmd.Args = append(cmd.Args, devName)
-	_, err := cr.runCmd(cr.log, cmd)
+	_, err := cr.runCmd(cmd)
 	return err
 }
 
@@ -214,7 +219,7 @@ func (cr *cmdRunner) getNamespaces(numaID int) (storage.ScmNamespaces, error) {
 	if numaID != sockAny {
 		cmd.Args = append(cmd.Args, "--numa-node", fmt.Sprintf("%d", numaID))
 	}
-	out, err := cr.runCmd(cr.log, cmd)
+	out, err := cr.runCmd(cmd)
 	if err != nil {
 		return nil, err
 	}
@@ -268,7 +273,7 @@ func (cr *cmdRunner) getNdctlRegions(sockID int) (NdctlRegions, error) {
 	if sockID != sockAny {
 		cmd.Args = append(cmd.Args, "--numa-node", fmt.Sprintf("%d", sockID))
 	}
-	out, err := cr.runCmd(cr.log, cmd)
+	out, err := cr.runCmd(cmd)
 	if err != nil {
 		return nil, err
 	}

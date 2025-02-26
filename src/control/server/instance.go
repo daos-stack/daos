@@ -15,9 +15,11 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
@@ -42,6 +44,8 @@ type (
 // be used with EngineHarness to manage and monitor multiple instances
 // per node.
 type EngineInstance struct {
+	events.Publisher
+
 	log             logging.Logger
 	runner          EngineRunner
 	storage         *storage.Provider
@@ -58,27 +62,30 @@ type EngineInstance struct {
 	onStorageReady  []onStorageReadyFn
 	onReady         []onReadyFn
 	onInstanceExit  []onInstanceExitFn
+	getDrpcClientFn func(string) drpc.DomainSocketClient
 
 	sync.RWMutex
 	// these must be protected by a mutex in order to
 	// avoid racy access.
-	_cancelCtx  context.CancelFunc
-	_drpcClient drpc.DomainSocketClient
-	_superblock *Superblock
-	_lastErr    error // populated when harness receives signal
+	_drpcSocket      string
+	_cancelCtx       context.CancelFunc
+	_superblock      *Superblock
+	_lastErr         error // populated when harness receives signal
+	_lastHealthStats map[string]*ctlpb.BioHealthResp
 }
 
-// NewEngineInstance returns an *EngineInstance initialized with
-// its dependencies.
-func NewEngineInstance(l logging.Logger, p *storage.Provider, jf systemJoinFn, r EngineRunner) *EngineInstance {
+// NewEngineInstance returns an *EngineInstance initialized with its dependencies.
+func NewEngineInstance(l logging.Logger, p *storage.Provider, jf systemJoinFn, r EngineRunner, ps *events.PubSub) *EngineInstance {
 	return &EngineInstance{
-		log:            l,
-		runner:         r,
-		storage:        p,
-		joinSystem:     jf,
-		drpcReady:      make(chan *srvpb.NotifyReadyReq),
-		storageReady:   make(chan bool),
-		startRequested: make(chan bool),
+		log:              l,
+		runner:           r,
+		storage:          p,
+		joinSystem:       jf,
+		drpcReady:        make(chan *srvpb.NotifyReadyReq),
+		storageReady:     make(chan bool),
+		startRequested:   make(chan bool),
+		Publisher:        ps,
+		_lastHealthStats: make(map[string]*ctlpb.BioHealthResp),
 	}
 }
 
@@ -157,16 +164,18 @@ func (ei *EngineInstance) Index() uint32 {
 	return ei.runner.GetConfig().Index
 }
 
+// SetCheckerMode adjusts the engine configuration to enable or disable
+// starting the engine in checker mode.
+func (ei *EngineInstance) SetCheckerMode(enabled bool) {
+	ei.runner.GetConfig().CheckerEnabled = enabled
+}
+
 // removeSocket removes the socket file used for dRPC communication with
 // harness and updates relevant ready states.
 func (ei *EngineInstance) removeSocket() error {
 	fMsg := fmt.Sprintf("removing instance %d socket file", ei.Index())
 
-	dc, err := ei.getDrpcClient()
-	if err != nil {
-		return errors.Wrap(err, fMsg)
-	}
-	engineSock := dc.GetSocketPath()
+	engineSock := ei.getDrpcSocket()
 
 	if err := checkDrpcClientSocketPath(engineSock); err != nil {
 		return errors.Wrap(err, fMsg)
@@ -189,15 +198,20 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 		r = *superblock.Rank
 	}
 
-	resp, err := ei.joinSystem(ctx, &control.SystemJoinReq{
-		UUID:        superblock.UUID,
-		Rank:        r,
-		URI:         ready.GetUri(),
-		NumContexts: ready.GetNctxs(),
-		FaultDomain: ei.hostFaultDomain,
-		InstanceIdx: ei.Index(),
-		Incarnation: ready.GetIncarnation(),
-	})
+	joinReq := &control.SystemJoinReq{
+		UUID:                 superblock.UUID,
+		Rank:                 r,
+		URI:                  ready.GetUri(),
+		SecondaryURIs:        ready.GetSecondaryUris(),
+		NumContexts:          ready.GetNctxs(),
+		NumSecondaryContexts: ready.GetSecondaryNctxs(),
+		FaultDomain:          ei.hostFaultDomain,
+		InstanceIdx:          ei.Index(),
+		Incarnation:          ready.GetIncarnation(),
+		CheckMode:            ready.GetCheckMode(),
+	}
+
+	resp, err := ei.joinSystem(ctx, joinReq)
 	if err != nil {
 		ei.log.Errorf("join failed: %s", err)
 		return ranklist.NilRank, false, 0, err
@@ -205,17 +219,25 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 	switch resp.State {
 	case system.MemberStateAdminExcluded, system.MemberStateExcluded:
 		return ranklist.NilRank, resp.LocalJoin, 0, errors.Errorf("rank %d excluded", resp.Rank)
+	case system.MemberStateCheckerStarted:
+		// If the system is in checker mode but the rank was not started in
+		// checker mode, we need to restart it in order to get the correct
+		// modules loaded.
+		if !ready.GetCheckMode() {
+			ei.log.Noticef("restarting rank %d in checker mode", resp.Rank)
+			go ei.requestStart(context.Background())
+			ei.SetCheckerMode(true)
+			return ranklist.NilRank, resp.LocalJoin, 0, errors.Errorf("rank %d restarting to enable checker", resp.Rank)
+		}
 	}
 	r = ranklist.Rank(resp.Rank)
 
-	// TODO: Check to see if ready.Uri != superblock.URI, which might
-	// need to trigger some kind of update?
-
-	if !superblock.ValidRank {
+	if !superblock.ValidRank || ready.Uri != superblock.URI {
+		ei.log.Noticef("updating rank %d URI to %s", resp.Rank, ready.Uri)
 		superblock.Rank = new(ranklist.Rank)
 		*superblock.Rank = r
 		superblock.ValidRank = true
-		superblock.URI = ready.GetUri()
+		superblock.URI = ready.Uri
 		ei.setSuperblock(superblock)
 		if err := ei.WriteSuperblock(); err != nil {
 			return ranklist.NilRank, resp.LocalJoin, 0, err
@@ -374,4 +396,24 @@ func (ei *EngineInstance) Debugf(format string, args ...interface{}) {
 
 func (ei *EngineInstance) Tracef(format string, args ...interface{}) {
 	ei.log.Tracef(format, args...)
+}
+
+func (ei *EngineInstance) GetLastHealthStats(pciAddr string) *ctlpb.BioHealthResp {
+	ei.RLock()
+	defer ei.RUnlock()
+
+	if ei._lastHealthStats == nil {
+		ei._lastHealthStats = make(map[string]*ctlpb.BioHealthResp)
+	}
+	return ei._lastHealthStats[pciAddr]
+}
+
+func (ei *EngineInstance) SetLastHealthStats(pciAddr string, bhr *ctlpb.BioHealthResp) {
+	ei.Lock()
+	defer ei.Unlock()
+
+	if ei._lastHealthStats == nil {
+		ei._lastHealthStats = make(map[string]*ctlpb.BioHealthResp)
+	}
+	ei._lastHealthStats[pciAddr] = bhr
 }

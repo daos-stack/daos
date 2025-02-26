@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -27,23 +28,30 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
-func TestIOEngineInstance_MountControlMetadata(t *testing.T) {
-	cfg := &storage.Config{
-		ControlMetadata: storage.ControlMetadata{
-			Path:       "/dontcare",
-			DevicePath: "/dev/dontcare",
-		},
-		Tiers: storage.TierConfigs{
-			{
-				Class: storage.ClassRam,
-				Scm: storage.ScmConfig{
-					MountPoint:  defaultStoragePath,
-					RamdiskSize: 1,
-				},
+var mockRamCfg = storage.Config{
+	ControlMetadata: storage.ControlMetadata{
+		Path:       "/dontcare",
+		DevicePath: "/dev/dontcare",
+	},
+	Tiers: storage.TierConfigs{
+		{
+			Class: storage.ClassRam,
+			Scm: storage.ScmConfig{
+				MountPoint:  defaultStoragePath,
+				RamdiskSize: 1,
 			},
 		},
-	}
+		{
+			Class: storage.ClassNvme,
+			Bdev: storage.BdevConfig{
+				DeviceList:  new(storage.BdevDeviceList),
+				DeviceRoles: storage.BdevRoles{storage.BdevRoleAll},
+			},
+		},
+	},
+}
 
+func TestIOEngineInstance_MountControlMetadata(t *testing.T) {
 	for name, tc := range map[string]struct {
 		meta   *storage.MockMetadataProvider
 		sysCfg *system.MockSysConfig
@@ -84,12 +92,13 @@ func TestIOEngineInstance_MountControlMetadata(t *testing.T) {
 			}
 
 			ec := engine.MockConfig().
-				WithStorageControlMetadataPath(cfg.ControlMetadata.Path).
-				WithStorageControlMetadataDevice(cfg.ControlMetadata.DevicePath)
+				WithStorageControlMetadataPath(mockRamCfg.ControlMetadata.Path).
+				WithStorageControlMetadataDevice(mockRamCfg.ControlMetadata.DevicePath)
 			runner := engine.NewRunner(log, ec)
 			sysProv := system.NewMockSysProvider(log, tc.sysCfg)
-			provider := storage.MockProvider(log, 0, cfg, sysProv, nil, nil, tc.meta)
-			instance := NewEngineInstance(log, provider, nil, runner)
+			provider := storage.MockProvider(log, 0, &mockRamCfg, sysProv, nil, nil,
+				tc.meta)
+			instance := NewEngineInstance(log, provider, nil, runner, nil)
 
 			gotErr := instance.MountMetadata()
 			test.CmpErr(t, tc.expErr, gotErr)
@@ -195,7 +204,7 @@ func TestIOEngineInstance_MountScmDevice(t *testing.T) {
 			sys := system.NewMockSysProvider(log, tc.msCfg)
 			scm := scm.NewMockProvider(log, nil, tc.msCfg)
 			provider := storage.MockProvider(log, 0, tc.cfg, sys, scm, nil, nil)
-			instance := NewEngineInstance(log, provider, nil, runner)
+			instance := NewEngineInstance(log, provider, nil, runner, nil)
 
 			gotErr := instance.MountScm()
 			test.CmpErr(t, tc.expErr, gotErr)
@@ -205,6 +214,7 @@ func TestIOEngineInstance_MountScmDevice(t *testing.T) {
 
 func TestEngineInstance_NeedsScmFormat(t *testing.T) {
 	const (
+		dev            = "/dev/foo"
 		goodMountPoint = "/mnt/daos"
 	)
 	var (
@@ -218,7 +228,7 @@ func TestEngineInstance_NeedsScmFormat(t *testing.T) {
 			storage.NewTierConfig().
 				WithStorageClass(storage.ClassDcpm.String()).
 				WithScmMountPoint(goodMountPoint).
-				WithScmDeviceList("/dev/foo"),
+				WithScmDeviceList(dev),
 		)
 	)
 
@@ -284,6 +294,7 @@ func TestEngineInstance_NeedsScmFormat(t *testing.T) {
 				IsMountedErr: os.ErrNotExist,
 				GetfsStr:     "ext4",
 			},
+			expErr:         storage.FaultDeviceWithFsNoMountpoint(dev, goodMountPoint),
 			expNeedsFormat: false,
 		},
 		"check dcpm fails (IsMounted fails)": {
@@ -314,7 +325,7 @@ func TestEngineInstance_NeedsScmFormat(t *testing.T) {
 				system.NewMockSysProvider(log, tc.msCfg),
 				scm.NewMockProvider(log, tc.mbCfg, tc.msCfg),
 				nil, nil)
-			instance := NewEngineInstance(log, mp, nil, runner)
+			instance := NewEngineInstance(log, mp, nil, runner, nil)
 
 			gotNeedsFormat, gotErr := instance.GetStorage().ScmNeedsFormat()
 			test.CmpErr(t, tc.expErr, gotErr)
@@ -350,38 +361,121 @@ func (tly *tally) fakePublish(evt *events.RASEvent) {
 
 func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 	errStarted := errors.New("already started")
+	dev := "/dev/foo"
+	mnt := "/mnt/test"
 	dcpmCfg := engine.MockConfig().WithStorage(
 		storage.NewTierConfig().
 			WithStorageClass(storage.ClassDcpm.String()).
-			WithScmMountPoint("/mnt/test").
-			WithScmDeviceList("/dev/foo"),
+			WithScmMountPoint(mnt).
+			WithScmDeviceList(dev),
 	)
 
 	for name, tc := range map[string]struct {
-		engineStarted  bool
-		needsScmFormat bool
-		hasSB          bool
-		engineIndex    uint32
-		expFmtType     string
-		expErr         error
+		engineStarted   bool
+		storageCfg      *storage.Config
+		fsStr           string
+		fsErr           error
+		sbSet           bool
+		engineIndex     uint32
+		isMounted       bool
+		isMountedErr    error
+		mountErr        error
+		unmountErr      error
+		readErr         error
+		metaNeedsFmt    bool
+		metaNeedsFmtErr error
+		expNoWait       bool
+		expFmtType      string
+		expErr          error
 	}{
 		"already started": {
 			engineStarted: true,
+			fsStr:         "ext4",
 			expErr:        errStarted,
 		},
-		"no need to format and existing superblock": {
-			hasSB: true,
+		"no need to format and superblock set": {
+			sbSet:     true,
+			fsStr:     "ext4",
+			isMounted: true,
+			expNoWait: true,
 		},
-		"needs scm format": {
-			needsScmFormat: true,
-			expFmtType:     "SCM",
-		},
-		"needs metadata format": {
+		"no need to format and superblock set; mount fails": {
+			fsStr:      "ext4",
+			mountErr:   errors.New("bad mount"),
 			expFmtType: "Metadata",
 		},
-		"engine index 1": {
+		"filesystem exists and superblock set; mountpoint missing": {
+			sbSet:        true,
+			fsStr:        "ext4",
+			isMountedErr: os.ErrNotExist,
+			expErr:       storage.FaultDeviceWithFsNoMountpoint(dev, mnt),
+		},
+		"mount check fails": {
+			sbSet:        true,
+			fsStr:        "ext4",
+			isMountedErr: errors.New("fail"),
+			expFmtType:   "SCM",
+		},
+		"no need to format: superblock exists but not yet set": {
+			fsStr:     "ext4",
+			isMounted: true,
+			expNoWait: true,
+		},
+		"superblock not found; needs metadata format": {
+			fsStr:      "ext4",
+			readErr:    os.ErrNotExist,
+			expFmtType: "Metadata",
+		},
+		"needs scm format": {
+			fsStr:      "none",
+			expFmtType: "SCM",
+		},
+		"engine index 1; needs metadata format": {
 			engineIndex: 1,
+			fsStr:       "ext4",
+			readErr:     os.ErrNotExist,
 			expFmtType:  "Metadata",
+		},
+		"metadata path with dcpm": {
+			storageCfg: &storage.Config{
+				ControlMetadata: storage.ControlMetadata{
+					Path:       "/dontcare",
+					DevicePath: "/dev/dontcare",
+				},
+				Tiers: storage.TierConfigs{
+					{Class: storage.ClassDcpm},
+				},
+			},
+			expErr: storage.FaultBdevConfigRolesWithDCPM,
+		},
+		"no device roles with metadata path configured": {
+			storageCfg: &storage.Config{
+				ControlMetadata: storage.ControlMetadata{
+					Path:       "/dontcare",
+					DevicePath: "/dev/dontcare",
+				},
+				Tiers: storage.TierConfigs{
+					{Class: storage.ClassRam},
+				},
+			},
+			expErr: storage.FaultBdevConfigControlMetadataNoRoles,
+		},
+		"metadata path; no metadata format needed; scm format fails": {
+			storageCfg: &mockRamCfg,
+			isMounted:  true,
+			unmountErr: errors.New("ramdisk busy"),
+			expErr:     errors.New("format ramdisk: failed to clear existing mount: failed to unmount"),
+		},
+		"metadata path; no metadata format needed; scm format succeeds; superblock intact": {
+			storageCfg: &mockRamCfg,
+			isMounted:  true,
+			expNoWait:  true,
+		},
+		"metadata path; no metadata format needed; scm format succeeds; no superblock": {
+			storageCfg: &mockRamCfg,
+			isMounted:  true,
+			readErr:    os.ErrNotExist,
+			expFmtType: "Metadata",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -394,22 +488,43 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 			}
 			runner := engine.NewTestRunner(trc, dcpmCfg)
 
-			fs := "none"
-			if !tc.needsScmFormat {
-				fs = "ext4"
+			if tc.storageCfg == nil {
+				tc.storageCfg = &dcpmCfg.Storage
 			}
 
-			msc := system.MockSysConfig{GetfsStr: fs}
-			mbc := scm.MockBackendConfig{}
-			mp := storage.NewProvider(log, 0, &dcpmCfg.Storage,
+			msc := system.MockSysConfig{
+				IsMountedBool: tc.isMounted,
+				IsMountedErr:  tc.isMountedErr,
+				MountErr:      tc.mountErr,
+				UnmountErr:    tc.unmountErr,
+				GetfsStr:      tc.fsStr,
+				GetfsErr:      tc.fsErr,
+			}
+			if tc.readErr != nil {
+				storagePath := mnt
+				ctlMD := tc.storageCfg.ControlMetadata
+				if ctlMD.HasPath() {
+					storagePath = ctlMD.EngineDirectory(uint(tc.engineIndex))
+				}
+				sbPath := filepath.Join(storagePath, "superblock")
+				t.Logf("setting readfile err %s for path %s", tc.readErr.Error(), sbPath)
+				msc.ReadFileErrors = map[string]error{sbPath: tc.readErr}
+			}
+			smbc := scm.MockBackendConfig{}
+			mmp := &storage.MockMetadataProvider{
+				NeedsFormatRes: tc.metaNeedsFmt,
+				NeedsFormatErr: tc.metaNeedsFmtErr,
+			}
+
+			mp := storage.NewProvider(log, 0, tc.storageCfg,
 				system.NewMockSysProvider(log, &msc),
-				scm.NewMockProvider(log, &mbc, &msc),
-				nil, nil)
-			engine := NewEngineInstance(log, mp, nil, runner)
+				scm.NewMockProvider(log, &smbc, &msc),
+				nil, mmp)
+			engine := NewEngineInstance(log, mp, nil, runner, nil)
 
 			engine.setIndex(tc.engineIndex)
 
-			if tc.hasSB {
+			if tc.sbSet {
 				engine.setSuperblock(&Superblock{
 					Rank: ranklist.NewRankPtr(0), ValidRank: true,
 				})
@@ -425,7 +540,7 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 
 			gotErr := engine.awaitStorageReady(ctx)
 			test.CmpErr(t, tc.expErr, gotErr)
-			if tc.expErr == errStarted || tc.hasSB == true {
+			if tc.expErr != nil || tc.expNoWait == true {
 				return
 			}
 

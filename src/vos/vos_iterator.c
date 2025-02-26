@@ -1,5 +1,6 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -148,6 +149,11 @@ is_sysdb_pool(vos_iter_type_t type, vos_iter_param_t *param)
 	struct vos_pool		*vos_pool;
 	struct vos_container	*vos_cont;
 
+	/* vos_iterate_key() will never be called upon sysdb */
+	if (param->ip_flags == VOS_IT_KEY_TREE)
+		return false;
+
+	D_ASSERT(!(param->ip_flags & VOS_IT_KEY_TREE));
 	if (type == VOS_ITER_COUUID) {
 		vos_pool = vos_hdl2pool(param->ip_hdl);
 		D_ASSERT(vos_pool != NULL);
@@ -326,6 +332,82 @@ vos_iter_finish(daos_handle_t ih)
 		prc = iter_decref(parent);
 
 	return rc || prc;
+}
+
+static inline void
+vos_iter_sched_sync(struct vos_iterator *iter)
+{
+	iter->it_seq = vos_sched_seq(!!iter->it_for_sysdb);
+}
+
+static inline bool
+vos_iter_sched_check(struct vos_iterator *iter)
+{
+	uint64_t seq = vos_sched_seq(!!iter->it_for_sysdb);
+	bool     ret = iter->it_seq != seq;
+
+	iter->it_seq = seq;
+	return ret;
+}
+
+static int
+vos_iter_validate_internal(struct vos_iterator *iter)
+{
+	daos_anchor_t     *anchor;
+	int                rc;
+	struct dtx_handle *old;
+	bool               is_sysdb = !!iter->it_for_sysdb;
+
+	D_ASSERT(iter->it_anchors != NULL);
+
+	if (!vos_iter_sched_check(iter))
+		return 0; /* No interleaving operations so no need to revalidate */
+
+	if (iter->it_parent) {
+		rc = vos_iter_validate_internal(iter->it_parent);
+		if (rc != 0)
+			return rc;
+	} else {
+		D_ASSERT(iter->it_type == VOS_ITER_OBJ);
+	}
+
+	switch (iter->it_type) {
+	case VOS_ITER_OBJ:
+		anchor = &iter->it_anchors->ia_obj;
+		break;
+	case VOS_ITER_DKEY:
+		anchor = &iter->it_anchors->ia_dkey;
+		break;
+	case VOS_ITER_AKEY:
+		anchor = &iter->it_anchors->ia_akey;
+		break;
+	case VOS_ITER_SINGLE:
+		anchor = &iter->it_anchors->ia_sv;
+		break;
+	case VOS_ITER_RECX:
+		anchor = &iter->it_anchors->ia_sv;
+		break;
+	default:
+		D_ASSERTF(0, "Unexpected iterator type %d\n", iter->it_type);
+	}
+
+	old = vos_dth_get(is_sysdb);
+	vos_dth_set(iter->it_dth, is_sysdb);
+	rc = iter->it_ops->iop_probe(iter, anchor, VOS_ITER_PROBE_AGAIN);
+	vos_dth_set(old, is_sysdb);
+
+	if (rc == 0)
+		return 0;
+
+	iter->it_anchors->ia_probe_level = iter->it_type;
+
+	return iter->it_type;
+}
+
+int
+vos_iter_validate(daos_handle_t ih)
+{
+	return vos_iter_validate_internal(vos_hdl2iter(ih));
 }
 
 int
@@ -508,6 +590,10 @@ static inline void
 reset_anchors(vos_iter_type_t type, struct vos_iter_anchors *anchors)
 {
 	switch (type) {
+	case VOS_ITER_OBJ:
+		daos_anchor_set_zero(&anchors->ia_obj);
+		anchors->ia_reprobe_obj = 0;
+		/* fall through */
 	case VOS_ITER_DKEY:
 		daos_anchor_set_zero(&anchors->ia_dkey);
 		anchors->ia_reprobe_dkey = 0;
@@ -674,22 +760,6 @@ out:
 	return rc;
 }
 
-static inline void
-vos_iter_sched_sync(struct vos_iterator *iter)
-{
-	iter->it_seq = vos_sched_seq(!!iter->it_for_sysdb);
-}
-
-static inline bool
-vos_iter_sched_check(struct vos_iterator *iter)
-{
-	uint64_t seq = vos_sched_seq(!!iter->it_for_sysdb);
-	bool     ret = iter->it_seq != seq;
-
-	iter->it_seq = seq;
-	return ret;
-}
-
 static inline int
 vos_iter_cb(vos_iter_cb_t iter_cb, daos_handle_t ih, vos_iter_entry_t *iter_ent,
 	    vos_iter_type_t type, vos_iter_param_t *param, void *arg, unsigned int *acts)
@@ -700,12 +770,26 @@ vos_iter_cb(vos_iter_cb_t iter_cb, daos_handle_t ih, vos_iter_entry_t *iter_ent,
 	vos_iter_sched_sync(iter);
 	D_ASSERT(iter_cb != NULL);
 	rc = iter_cb(ih, iter_ent, type, param, arg, acts);
-	if (vos_iter_sched_check(iter))
+	if (vos_iter_sched_check(iter)) {
 		*acts |= VOS_ITER_CB_YIELD;
+		if (rc == 0 && iter->it_parent != NULL &&
+		    (param->ip_flags &
+		     (VOS_IT_RECX_VISIBLE | VOS_IT_FOR_AGG | VOS_IT_FOR_DISCARD)) == 0) {
+			/** If scanning the whole tree, we need to revalidate the parent
+			 * chain and possibly jump back to another level to continue */
+			rc = vos_iter_validate_internal(iter->it_parent);
+			if (rc > 0)
+				rc = 0;
+		}
+	}
 
 	return rc;
 }
 
+/*
+ * ITER_EXIT indicates that the iteration is interrupted (for instance, the iterating ULT is
+ * terminated by shed_req_wait()), we'd return non-zero value to inform caller in such case.
+ */
 #define JUMP_TO_STAGE(rc, next_label, probe_label, abort_label)				\
 	do {										\
 		switch (rc) {								\
@@ -970,6 +1054,83 @@ vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
 	return rc;
 }
 
+static inline void
+bkt_iter_free(struct vos_bkt_iter *bkt_iter)
+{
+	D_FREE(bkt_iter);
+}
+
+static struct vos_bkt_iter *
+bkt_iter_alloc(struct vos_pool *pool)
+{
+	struct umem_store	*store = vos_pool2store(pool);
+	struct umem_cache	*cache = store->cache;
+	struct vos_bkt_iter	*bkt_iter;
+	unsigned int		 bitmap_sz;
+
+	D_ASSERT(cache != NULL && cache->ca_md_pages > 0);
+	bitmap_sz = (cache->ca_md_pages + NBBY - 1) / NBBY;
+	D_ALLOC(bkt_iter, sizeof(*bkt_iter) + bitmap_sz);
+	if (bkt_iter == NULL)
+		return NULL;
+
+	bkt_iter->bi_bkt_tot = cache->ca_md_pages;
+	bkt_iter->bi_bkt_cur = UMEM_DEFAULT_MBKT_ID;
+
+	return bkt_iter;
+}
+
+int
+vos_iterate_obj(vos_iter_param_t *param, bool recursive, struct vos_iter_anchors *anchors,
+		vos_iter_cb_t pre_cb, vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth)
+{
+	struct vos_container	*cont;
+	struct vos_bkt_iter	*bkt_iter;
+	uint32_t		 i, iter_cnt = 0;
+	int			 rc = 0;
+
+	/* Not supposed being called by external enumeration which updating read timestamp */
+	D_ASSERT(!dtx_is_valid_handle(dth));
+
+	cont = vos_hdl2cont(param->ip_hdl);
+	if (!vos_pool_is_evictable(cont->vc_pool))
+		return vos_iterate_internal(param, VOS_ITER_OBJ, recursive, false, anchors, pre_cb,
+					    post_cb, arg, dth);
+
+	/* The caller must provide a filter callback and call the oi_bkt_iter_skip() properly */
+	D_ASSERT(param->ip_filter_cb != NULL && param->ip_bkt_iter == NULL);
+
+	bkt_iter = bkt_iter_alloc(cont->vc_pool);
+	if (bkt_iter == NULL)
+		return -DER_NOMEM;
+
+	param->ip_bkt_iter = bkt_iter;
+	for (i = UMEM_DEFAULT_MBKT_ID; i < bkt_iter->bi_bkt_tot; i++) {
+		if (i > UMEM_DEFAULT_MBKT_ID) {
+			/* The bucket wasn't skipped in prior rounds of iterating */
+			if (!isset(&bkt_iter->bi_skipped[0], i))
+				continue;
+			bkt_iter->bi_bkt_cur = i;
+		}
+
+		iter_cnt++;
+		rc = vos_iterate_internal(param, VOS_ITER_OBJ, recursive, false, anchors,
+					  pre_cb, post_cb, arg, dth);
+		if (rc) {
+			DL_CDEBUG(rc == ITER_EXIT, DB_TRACE, DLOG_ERR, rc,
+				  "Iterate bucket:%u failed.", i);
+			break;
+		}
+		reset_anchors(VOS_ITER_OBJ, anchors);
+	}
+	D_DEBUG(DB_TRACE, "Iterate %u/%u buckets.\n", iter_cnt, bkt_iter->bi_bkt_tot);
+
+	bkt_iter_free(bkt_iter);
+	param->ip_bkt_iter = NULL;
+
+	return rc;
+}
+
 /**
  * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a
  * cb(\a arg) for each entry.
@@ -981,66 +1142,6 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 {
 	D_ASSERT((param->ip_flags & VOS_IT_KEY_TREE) == 0);
 
-	return vos_iterate_internal(param, type, recursive, false, anchors,
-				    pre_cb, post_cb, arg, dth);
-}
-
-static int
-vos_iter_validate_internal(struct vos_iterator *iter)
-{
-	daos_anchor_t     *anchor;
-	int                rc;
-	struct dtx_handle *old;
-	bool		   is_sysdb = !!iter->it_for_sysdb;
-
-	D_ASSERT(iter->it_anchors != NULL);
-
-	if (!vos_iter_sched_check(iter))
-		return 0; /* No interleaving operations so no need to revalidate */
-
-	if (iter->it_parent) {
-		rc = vos_iter_validate_internal(iter->it_parent);
-		if (rc != 0)
-			return rc;
-	} else {
-		D_ASSERT(iter->it_type == VOS_ITER_OBJ);
-	}
-
-	switch (iter->it_type) {
-	case VOS_ITER_OBJ:
-		anchor = &iter->it_anchors->ia_obj;
-		break;
-	case VOS_ITER_DKEY:
-		anchor = &iter->it_anchors->ia_dkey;
-		break;
-	case VOS_ITER_AKEY:
-		anchor = &iter->it_anchors->ia_akey;
-		break;
-	case VOS_ITER_SINGLE:
-		anchor = &iter->it_anchors->ia_sv;
-		break;
-	case VOS_ITER_RECX:
-		anchor = &iter->it_anchors->ia_sv;
-		break;
-	default:
-		D_ASSERTF(0, "Unexpected iterator type %d\n", iter->it_type);
-	}
-
-	old = vos_dth_get(is_sysdb);
-	vos_dth_set(iter->it_dth, is_sysdb);
-	rc = iter->it_ops->iop_probe(iter, anchor, VOS_ITER_PROBE_AGAIN);
-	vos_dth_set(old, is_sysdb);
-
-	if (rc == 0)
-		return 0;
-
-	iter->it_anchors->ia_probe_level = iter->it_type;
-
-	return iter->it_type;
-}
-
-int
-vos_iter_validate(daos_handle_t ih)
-{
-	return vos_iter_validate_internal(vos_hdl2iter(ih));
+	return vos_iterate_internal(param, type, recursive, false, anchors, pre_cb, post_cb, arg,
+				    dth);
 }

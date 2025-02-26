@@ -91,8 +91,7 @@ class PoolManagementRace(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=pool,boundary_test
-        :avocado: tags=pool_mgmt_race,test_pool_management_race
-        Args:
+        :avocado: tags=PoolManagementRace,test_pool_management_race
         """
 
         num_pools = self.params.get("num_pools", '/run/boundary_test/*')

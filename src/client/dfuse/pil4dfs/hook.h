@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2018-2021 Lei Huang.
- * (C) Copyright 2023 Intel Corporation.
+ * (C) Copyright 2023-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -53,5 +53,17 @@ uninstall_hook(void);
  */
 void
 free_memory_in_hook(void);
+
+/**
+ * return the full path of libpil4dfs.so.
+ */
+char *
+query_pil4dfs_path(void);
+
+/**
+ * return glibc version in current process
+ */
+float
+query_libc_version(void);
 
 #endif

@@ -1,5 +1,6 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,7 +13,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -26,6 +26,8 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/testing/protocmp"
+
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 // AssertTrue asserts b is true
@@ -138,6 +140,15 @@ func CmpErr(t *testing.T, want, got error) {
 	}
 }
 
+// CmpAny compares two values and fails the test if they are not equal.
+func CmpAny(t *testing.T, desc string, want, got any, cmpOpts ...cmp.Option) {
+	t.Helper()
+
+	if diff := cmp.Diff(want, got, cmpOpts...); diff != "" {
+		t.Fatalf("unexpected %s (-want, +got):\n%s\n", desc, diff)
+	}
+}
+
 // SplitFile separates file content into contiguous sections separated by
 // a blank line.
 func SplitFile(path string) (sections [][]string, err error) {
@@ -239,7 +250,7 @@ func CreateTestDir(t *testing.T) (string, func()) {
 	t.Helper()
 
 	name := strings.Replace(t.Name(), "/", "-", -1)
-	tmpDir, err := ioutil.TempDir("", name)
+	tmpDir, err := os.MkdirTemp("", name)
 	if err != nil {
 		t.Fatalf("Couldn't create temporary directory: %v", err)
 	}
@@ -257,7 +268,7 @@ func CreateTestDir(t *testing.T) (string, func()) {
 func CreateTestFile(t *testing.T, dir, content string) string {
 	t.Helper()
 
-	file, err := ioutil.TempFile(dir, "")
+	file, err := os.CreateTemp(dir, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -411,4 +422,23 @@ func Context(t *testing.T) context.Context {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	return ctx
+}
+
+// MustLogContext returns a context containing the supplied logger.
+// Canceled when the test is done.
+func MustLogContext(t *testing.T, log logging.Logger) context.Context {
+	t.Helper()
+	ctx, err := logging.ToContext(Context(t), log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ctx
+}
+
+// JoinArgs creates a new string slice from a base string and optional
+// additional string arguments. Does not modify the base string.
+func JoinArgs(base []string, args ...string) []string {
+	joined := make([]string, len(base))
+	copy(joined, base)
+	return append(joined, args...)
 }

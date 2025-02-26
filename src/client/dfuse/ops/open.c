@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -66,12 +66,22 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		 * This should mean that pre-read is only used on the first read, and on files
 		 * which pre-existed in the container.
 		 */
+
+		/* TODO: This probably wants reflowing to not reference ie_open_count */
 		if (atomic_load_relaxed(&ie->ie_open_count) > 0 ||
-		    dfuse_dcache_get_valid(ie, ie->ie_dfs->dfc_data_timeout)) {
+		    ((ie->ie_dcache_last_update.tv_sec != 0) &&
+		     dfuse_dcache_get_valid(ie, ie->ie_dfs->dfc_data_timeout))) {
 			fi_out.keep_cache = 1;
 		} else {
 			prefetch = true;
 		}
+	} else if (ie->ie_dfs->dfc_data_otoc) {
+		/* Open to close caching, this allows the use of shared mmap */
+		fi_out.direct_io  = 0;
+		fi_out.keep_cache = 0;
+
+		if (fi->flags & O_DIRECT)
+			fi_out.direct_io = 1;
 	} else {
 		fi_out.direct_io = 1;
 	}
@@ -84,6 +94,17 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	fi_out.fh = (uint64_t)oh;
 
+	/* Pre-read this for files up to the max read size. */
+	if (prefetch && oh->doh_parent_dir &&
+	    atomic_load_relaxed(&oh->doh_parent_dir->ie_linear_read) && ie->ie_stat.st_size > 0 &&
+	    ie->ie_stat.st_size <= DFUSE_MAX_PRE_READ) {
+		preread = true;
+	}
+
+	rc = active_ie_init(ie, &preread);
+	if (rc)
+		goto err;
+
 	/*
 	 * dfs_dup() just locally duplicates the file handle. If we have
 	 * O_TRUNC flag, we need to truncate the file manually.
@@ -91,22 +112,8 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	if (fi->flags & O_TRUNC) {
 		rc = dfs_punch(ie->ie_dfs->dfs_ns, ie->ie_obj, 0, DFS_MAX_FSIZE);
 		if (rc)
-			D_GOTO(err, rc);
+			D_GOTO(decref, rc);
 		dfuse_dcache_evict(oh->doh_ie);
-	}
-
-	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
-
-	/* Enable this for files up to the max read size. */
-	if (prefetch && oh->doh_parent_dir &&
-	    atomic_load_relaxed(&oh->doh_parent_dir->ie_linear_read) && ie->ie_stat.st_size > 0 &&
-	    ie->ie_stat.st_size <= DFUSE_MAX_READ) {
-		D_ALLOC_PTR(oh->doh_readahead);
-		if (oh->doh_readahead) {
-			D_MUTEX_INIT(&oh->doh_readahead->dra_lock, 0);
-			D_MUTEX_LOCK(&oh->doh_readahead->dra_lock);
-			preread = true;
-		}
 	}
 
 	DFUSE_REPLY_OPEN(oh, req, &fi_out);
@@ -115,14 +122,20 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	 * release from completing which also holds open the inode.
 	 */
 	if (preread)
-		dfuse_pre_read(dfuse_info, oh);
+		dfuse_pre_read(dfuse_info, ie);
 
 	return;
+decref:
+	active_ie_decref(dfuse_info, ie);
 err:
 	dfuse_oh_free(dfuse_info, oh);
 	DFUSE_REPLY_ERR_RAW(ie, req, rc);
 }
 
+/* Release a file handle, called after close() by an application.
+ *
+ * Can be invoked concurrently on the same inode.
+ */
 void
 dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
@@ -136,27 +149,11 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	 * but the inode only tracks number of open handles with non-zero ioctl counts
 	 */
 
+	D_ASSERT(oh->doh_ie->ie_active);
+
 	DFUSE_TRA_DEBUG(oh, "Closing %d", oh->doh_caching);
 
-	if (oh->doh_readahead) {
-		struct dfuse_event *ev;
-
-		/* Grab this lock first to ensure that the read cb has been completed.  The
-		 * callback might register an error and release ev so do not read it's value
-		 * until after this has completed.
-		 */
-		D_MUTEX_LOCK(&oh->doh_readahead->dra_lock);
-		D_MUTEX_UNLOCK(&oh->doh_readahead->dra_lock);
-
-		ev = oh->doh_readahead->dra_ev;
-
-		D_MUTEX_DESTROY(&oh->doh_readahead->dra_lock);
-		if (ev) {
-			daos_event_fini(&ev->de_ev);
-			d_slab_release(ev->de_eqt->de_read_slab, ev);
-		}
-		D_FREE(oh->doh_readahead);
-	}
+	DFUSE_IE_WFLUSH(oh->doh_ie);
 
 	/* If the file was read from then set the data cache time for future use, however if the
 	 * file was written to then evict the metadata cache.
@@ -195,12 +192,14 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	if (il_calls != 0) {
 		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_il_count, 1);
 	}
-	atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_count, 1);
 
 	if (oh->doh_evict_on_close) {
 		ie = oh->doh_ie;
 		atomic_fetch_add_relaxed(&ie->ie_ref, 1);
 	}
+
+	if (active_oh_decref(dfuse_info, oh))
+		oh->doh_linear_read = true;
 
 	rc = dfs_release(oh->doh_obj);
 	if (rc == 0) {
@@ -211,13 +210,23 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	}
 	if (oh->doh_parent_dir) {
 		bool use_linear_read = false;
+		bool set_linear_read = true;
 
-		if (oh->doh_linear_read && oh->doh_linear_read_eof)
+		if (oh->doh_linear_read) {
+			/* If the file was not read from then this could indicate a cached read
+			 * so do not disable pre-read for the directory.
+			 */
+			if (!oh->doh_linear_read_eof)
+				set_linear_read = false;
 			use_linear_read = true;
+		}
 
-		DFUSE_TRA_DEBUG(oh->doh_parent_dir, "Setting linear_read to %d", use_linear_read);
+		if (set_linear_read) {
+			DFUSE_TRA_DEBUG(oh->doh_parent_dir, "Setting linear_read to %d",
+					use_linear_read);
 
-		atomic_store_relaxed(&oh->doh_parent_dir->ie_linear_read, use_linear_read);
+			atomic_store_relaxed(&oh->doh_parent_dir->ie_linear_read, use_linear_read);
+		}
 
 		dfuse_inode_decref(dfuse_info, oh->doh_parent_dir);
 	}

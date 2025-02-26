@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2021-2023 Intel Corporation.
+  (C) Copyright 2021-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -9,7 +9,7 @@ from re import findall
 
 from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
-from run_utils import RunException, run_local, run_remote
+from run_utils import run_local, run_remote
 
 
 class HarnessCoreFilesTest(TestWithServers):
@@ -40,11 +40,10 @@ class HarnessCoreFilesTest(TestWithServers):
         """
         # create a core.gdb file
         self.log.debug("Create a core.gdb.harness.advanced file in core_pattern dir.")
-        try:
-            results = run_local(self.log, "cat /proc/sys/kernel/core_pattern", check=True)
-        except RunException:
+        result = run_local(self.log, "cat /proc/sys/kernel/core_pattern")
+        if not result.passed:
             self.fail("Unable to find local core file pattern")
-        core_path = os.path.split(results.stdout.splitlines()[-1])[0]
+        core_path = os.path.split(result.joined_stdout.splitlines()[-1])[0]
         core_file = "{}/core.gdb.harness.advanced".format(core_path)
 
         self.log.debug("Creating %s", core_file)

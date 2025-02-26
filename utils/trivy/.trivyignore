@@ -1,0 +1,34 @@
+## Ignored hadoop 3.3.6 related CVE
+## CVE-2023-52428,MEDIUM,,"Denial of Service in Connect2id Nimbus JOSE+JWT","com.nimbusds:nimbus-jose-jwt","9.8.1","9.37.2",https://avd.aquasec.com/nvd/cve-2023-52428
+CVE-2023-52428
+## CVE-2023-39410,HIGH,7.5,"apache-avro: Apache Avro Java SDK: Memory when deserializing untrusted data in Avro Java SDK","org.apache.avro:avro","1.7.7","1.11.3",https://avd.aquasec.com/nvd/cve-2023-39410
+CVE-2023-39410
+## CVE-2024-25710,HIGH,5.5,"commons-compress: Denial of service caused by an infinite loop for a corrupted DUMP file","org.apache.commons:commons-compress","1.21","1.26.0",https://avd.aquasec.com/nvd/cve-2024-25710
+CVE-2024-25710
+## CVE-2024-26308,HIGH,5.5,"commons-compress: OutOfMemoryError unpacking broken Pack200 file","org.apache.commons:commons-compress","1.21","1.26.0",https://avd.aquasec.com/nvd/cve-2024-26308
+CVE-2024-26308
+## CVE-2024-29131,MEDIUM,,"commons-configuration: StackOverflowError adding property in AbstractListDelimiterHandler.flattenIterator()","org.apache.commons:commons-configuration2","2.8.0","2.10.1",https://avd.aquasec.com/nvd/cve-2024-29131
+CVE-2024-29131
+## CVE-2024-29133,MEDIUM,,"commons-configuration: StackOverflowError calling ListDelimiterHandler.flatten(Object, int) with a cyclical object tree","org.apache.commons:commons-configuration2","2.8.0","2.10.1",https://avd.aquasec.com/nvd/cve-2024-29133
+CVE-2024-29133
+## CVE-2024-25638,HIGH,,"dnsjava: Improper response validation allowing DNSSEC bypass","dnsjava:dnsjava","2.1.7","3.6.0",https://avd.aquasec.com/nvd/cve-2024-25638
+CVE-2024-25638
+
+## Ignored hadoop 3.4.0 related CVE
+## CVE-2024-47561,CRITICAL,,"apache-avro: Schema parsing may trigger Remote Code Execution (RCE)","org.apache.avro:avro","1.9.2","1.11.4",https://avd.aquasec.com/nvd/cve-2024-47561
+CVE-2024-47561
+## CVE-2023-33201,MEDIUM,5.3,"bouncycastle: potential  blind LDAP injection attack using a self-signed certificate","org.bouncycastle:bcprov-jdk15on","1.70","",https://avd.aquasec.com/nvd/cve-2023-33201
+CVE-2023-33201
+## CVE-2024-29857,MEDIUM,,"org.bouncycastle: Importing an EC certificate with crafted F2m parameters may lead to Denial of Service","org.bouncycastle:bcprov-jdk15on","1.70","1.78",https://avd.aquasec.com/nvd/cve-2024-29857
+CVE-2024-29857
+## CVE-2024-30171,MEDIUM,,"bc-java: BouncyCastle vulnerable to a timing variant of Bleichenbacher (Marvin Attack)","org.bouncycastle:bcprov-jdk15on","1.70","1.78",https://avd.aquasec.com/nvd/cve-2024-30171
+CVE-2024-30171
+## CVE-2024-30172,MEDIUM,,"org.bouncycastle:bcprov-jdk18on: Infinite loop in ED25519 verification in the ScalarUtil class","org.bouncycastle:bcprov-jdk15on","1.70","1.78",https://avd.aquasec.com/nvd/cve-2024-30172
+CVE-2024-30172
+
+## Ignored io.netty:netty-buffer:4.1.115.Final and hadoop-common:3.4.0 CVE
+## CVE-2025-25193,MEDIUM,,"Netty, an asynchronous, event-driven network application framework, ha ...","io.netty:netty-common","4.1.115.Final","",https://avd.aquasec.com/nvd/cve-2025-25193
+CVE-2025-25193
+## Ignored hadoop 3.4.0 related CVE
+## CVE-2025-24970,HIGH,,"io.netty:netty-handler: SslHandler doesn't correctly validate packets which can lead to native crash when using native SSLEngine","io.netty:netty-handler","4.1.100.Final","4.1.118.Final",https://avd.aquasec.com/nvd/cve-2025-24970
+CVE-2025-24970

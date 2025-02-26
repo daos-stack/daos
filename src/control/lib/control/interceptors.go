@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,7 +12,6 @@ import (
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"github.com/daos-stack/daos/src/control/build"
@@ -88,10 +87,15 @@ func unaryVersionedComponentInterceptor(comp build.Component) grpc.UnaryClientIn
 				return errors.Wrap(err, "unable to determine component from method")
 			}
 		}
-		ctx := metadata.AppendToOutgoingContext(parent,
-			proto.DaosComponentHeader, comp.String(),
-			proto.DaosVersionHeader, build.DaosVersion,
-		)
+		ctx, err := build.ToContext(parent, comp, build.DaosVersion)
+		if err != nil {
+			// Don't fail if a component version was already set somewhere else.
+			// Any other error is fatal.
+			if err != build.ErrCtxMetadataExists {
+				return err
+			}
+			ctx = parent
+		}
 		return invoker(ctx, method, req, reply, cc, opts...)
 	}
 }

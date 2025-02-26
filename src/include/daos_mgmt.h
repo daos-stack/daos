@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,9 +16,7 @@ extern "C" {
 
 #include <uuid/uuid.h>
 
-#include <daos_event.h>
-#include <daos_types.h>
-#include <daos_pool.h>
+#include <daos_cont.h>
 
 /**
  * Get the DAOS system information in a newly allocated structure.
@@ -53,6 +51,8 @@ typedef struct {
 	 * daos_pool_info_t		 mgpi_info;
 	 */
 	uuid_t				 mgpi_uuid;
+	/** Pool label */
+	d_string_t                       mgpi_label;
 	/** List of current pool service replica ranks */
 	d_rank_list_t			*mgpi_svc;
 	/** Current pool service leader */
@@ -76,6 +76,22 @@ typedef struct {
  */
 int
 daos_pool_stop_svc(daos_handle_t poh, daos_event_t *ev);
+
+/**
+ * List the pools to which the requesting user has access.
+ *
+ * \param[in] 	  group		Name of DAOS system managing the pool.
+ * \param[in,out] npools	[in] Pool array size. [out] If pools is NULL,
+ * 				only the number of pools is retrieved.
+ * \param[out]    pools		Array of \a n pool info structs. If NULL,
+ * 				only the number of pools is retrieved.
+ * \param[in] 	  ev		Completion event, it is optional and can be
+ * 				NULL. The function will run in blocking mode if
+ * 				\a ev is NULL.
+ */
+int
+daos_mgmt_list_pools(const char *group, daos_size_t *npools, daos_mgmt_pool_info_t *pools,
+		     daos_event_t *ev);
 
 /**
  * The operation code for DAOS client to set different parameters globally
@@ -133,6 +149,20 @@ daos_debug_add_mark(const char *mark);
 int
 daos_mgmt_get_bs_state(const char *group, uuid_t blobstore_uuid,
 		       int *blobstore_state, daos_event_t *ev);
+
+/**
+ * Query DAOS server version.
+ *
+ * \param[out] major	Major version number.
+ * \param[out] minor	Minor version number.
+ * \param[out] patch	Patch version number.
+ * \param[out] tag	Version tag.
+ *
+ * \return		0			Success
+ *
+ */
+int
+dc_mgmt_srv_version(uint32_t *major, uint32_t *minor, uint32_t *patch, char **tag);
 
 #if defined(__cplusplus)
 }

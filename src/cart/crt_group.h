@@ -1,5 +1,6 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -88,13 +89,7 @@ struct crt_grp_priv {
 	 * If gp_self is CRT_NO_RANK, it usually means the group version is not
 	 * up to date.
 	 */
-	d_rank_t		 gp_self;
-	/* List of PSR ranks */
-	d_rank_list_t		 *gp_psr_ranks;
-	/* PSR rank in attached group */
-	d_rank_t		 gp_psr_rank;
-	/* PSR phy addr address in attached group */
-	crt_phy_addr_t		 gp_psr_phy_addr;
+	d_rank_t                  gp_self;
 	/* address lookup cache, only valid for primary group */
 	struct d_hash_table	 *gp_lookup_cache;
 
@@ -196,8 +191,7 @@ struct crt_uri_item {
 	d_list_t	ui_link;
 
 	/* URI string for each remote tag */
-	/* TODO: in phase2 change this to hash table */
-	ATOMIC crt_phy_addr_t ui_uri[CRT_SRV_CONTEXT_NUM];
+	ATOMIC d_string_t ui_uri[CRT_SRV_CONTEXT_NUM];
 
 	/* Primary rank; for secondary groups only  */
 	d_rank_t	ui_pri_rank;
@@ -239,9 +233,9 @@ struct crt_grp_gdata {
 
 void crt_hdlr_uri_lookup(crt_rpc_t *rpc_req);
 int crt_grp_detach(crt_group_t *attached_grp);
-void crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
-		      d_rank_t rank, uint32_t tag, crt_phy_addr_t *base_addr,
-		      hg_addr_t *hg_addr);
+void
+    crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx, d_rank_t rank, uint32_t tag,
+		      char **base_addr, hg_addr_t *hg_addr);
 int crt_grp_lc_uri_insert(struct crt_grp_priv *grp_priv,
 			  d_rank_t rank, uint32_t tag, const char *uri);
 int crt_grp_lc_addr_insert(struct crt_grp_priv *grp_priv,
@@ -324,29 +318,6 @@ crt_grp_priv_decref(struct crt_grp_priv *grp_priv)
 		crt_grp_priv_destroy(grp_priv);
 }
 
-static inline int
-crt_grp_psr_set(struct crt_grp_priv *grp_priv, d_rank_t psr_rank,
-		crt_phy_addr_t psr_addr, bool steal)
-{
-	int rc = 0;
-
-	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
-	D_FREE(grp_priv->gp_psr_phy_addr);
-	grp_priv->gp_psr_rank = psr_rank;
-	if (steal) {
-		grp_priv->gp_psr_phy_addr = psr_addr;
-	} else {
-		D_STRNDUP(grp_priv->gp_psr_phy_addr, psr_addr,
-			CRT_ADDR_STR_MAX_LEN);
-		if (grp_priv->gp_psr_phy_addr == NULL)
-			rc = -DER_NOMEM;
-	}
-	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
-	D_DEBUG(DB_TRACE, "group %s, set psr rank %d, uri %s.\n",
-		grp_priv->gp_pub.cg_grpid, psr_rank, psr_addr);
-	return rc;
-}
-
 struct crt_grp_priv *crt_grp_pub2priv(crt_group_t *grp);
 
 static inline bool
@@ -374,8 +345,6 @@ crt_rank_present(crt_group_t *grp, d_rank_t rank)
 
 bool
 crt_grp_id_identical(crt_group_id_t grp_id_1, crt_group_id_t grp_id_2);
-int crt_grp_config_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank);
-int crt_grp_psr_reload(struct crt_grp_priv *grp_priv);
 
 int
 grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank, uint64_t incarnation);

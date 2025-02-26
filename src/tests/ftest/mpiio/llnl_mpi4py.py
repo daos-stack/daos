@@ -1,11 +1,8 @@
 """
-  (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2019-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
-import os
-import site
 
 from mpiio_test_base import MpiioTests
 
@@ -15,25 +12,6 @@ class LlnlMpi4py(MpiioTests):
 
     :avocado: recursive
     """
-
-    def get_test_repo(self, name):
-        """Get the python site-packages path to the test repository.
-
-        Args:
-            name (str): name of the test repository
-
-        Returns:
-            str: python site-packages path to the test repository
-        """
-        test_repo = self.params.get(name, '/run/test_repo/')
-        for packages in site.getsitepackages():
-            test_path = os.path.join(packages, test_repo)
-            if os.path.exists(test_path):
-                return test_path
-
-        self.fail('No test repo found in python site-packages')
-
-        return None
 
     def test_llnl(self):
         """Jira ID: DAOS-2231
@@ -71,4 +49,4 @@ class LlnlMpi4py(MpiioTests):
         :avocado: tags=mpiio,mpich,mpi4py
         :avocado: tags=LlnlMpi4py,test_mpi4py
         """
-        self.run_test(self.get_test_repo('mpi4py'), "mpi4py")
+        self.run_test(self.params.get('mpi4py', '/run/test_repo/'), "mpi4py")

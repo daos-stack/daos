@@ -3,8 +3,9 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.3.1-1%{?dist}
+%global mercury_version   2.4
 %global libfabric_version 1.15.1-1
+%global argobots_version 1.2
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -14,8 +15,8 @@
 %endif
 
 Name:          daos
-Version:       2.5.100
-Release:       15%{?relval}%{?dist}
+Version:       2.7.101
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -41,20 +42,16 @@ BuildRequires: hwloc-devel
 BuildRequires: bullseye
 %endif
 %if (0%{?rhel} >= 8)
-BuildRequires: argobots-devel >= 1.1
+BuildRequires: argobots-devel >= %{argobots_version}
 BuildRequires: json-c-devel
 BuildRequires: boost-python3-devel
 %else
-BuildRequires: libabt-devel >= 1.0rc1
+BuildRequires: libabt-devel >= %{argobots_version}
 BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
-BuildRequires: libpmemobj-devel >= 2.0.0
-%if (0%{?rhel} >= 8)
-BuildRequires: fuse3-devel >= 3
-%else
-BuildRequires: fuse3-devel >= 3.4.2
-%endif
+BuildRequires: libpmemobj-devel >= 2.1.0
+BuildRequires: fused-devel
 %if (0%{?suse_version} >= 1500)
 BuildRequires: go-race
 BuildRequires: libprotobuf-c-devel
@@ -65,6 +62,7 @@ BuildRequires: protobuf-c-devel
 BuildRequires: lz4-devel
 BuildRequires: capstone-devel
 %endif
+BuildRequires: libaio-devel
 BuildRequires: spdk-devel >= 22.01.2
 %if (0%{?rhel} >= 8)
 BuildRequires: isa-l-devel
@@ -73,14 +71,15 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.10.1-2.411.gefa15f4%{?dist}
+BuildRequires: daos-raft-devel = 0.11.0-1.416.g12dbc15%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
 BuildRequires: libcmocka-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
-BuildRequires: go >= 1.17
+BuildRequires: go >= 1.21
+BuildRequires: pciutils-devel
 %if (0%{?rhel} >= 8)
 BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
@@ -111,14 +110,6 @@ BuildRequires: systemd-rpm-macros
 %endif
 BuildRequires: libuuid-devel
 
-%if (0%{?suse_version} > 0)
-BuildRequires: libucp-devel
-BuildRequires: libucs-devel
-BuildRequires: libuct-devel
-%else
-BuildRequires: ucx-devel
-%endif
-
 Requires: openssl
 # This should only be temporary until we can get a stable upstream release
 # of mercury, at which time the autoprov shared library version should
@@ -145,17 +136,18 @@ Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 03.00.00.0423
-Requires: libpmemobj1 >= 2.0.0-1.suse1500
+Requires: libpmemobj1 >= 2.1.0-1.suse1500
 Requires: libfabric1 >= %{libfabric_version}
 %else
 Requires: ipmctl >= 03.00.00.0468
-Requires: libpmemobj >= 2.0.0-1%{?dist}
+Requires: libpmemobj >= 2.1.0-1%{?dist}
 %endif
 Requires: libfabric >= %{libfabric_version}
 Requires: mercury >= %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 Requires: numactl
+Requires: pciutils
 %{?systemd_requires}
 
 %description server
@@ -175,7 +167,6 @@ Requires: mercury >= %{mercury_version}
 Requires: libfabric >= %{libfabric_version}
 %if (0%{?suse_version} >= 1500)
 Requires: libfabric1 >= %{libfabric_version}
-Requires: libfuse3-3 >= 3.4.2
 %endif
 Requires: /usr/bin/fusermount3
 %{?systemd_requires}
@@ -207,17 +198,19 @@ packages
 Summary: The DAOS test suite
 Requires: %{name}-client%{?_isa} = %{version}-%{release}
 Requires: %{name}-admin%{?_isa} = %{version}-%{release}
-Requires: python3-distro
-Requires: python3-tabulate
-Requires: python3-defusedxml
+Requires: %{name}-devel%{?_isa} = %{version}-%{release}
+%if (0%{?suse_version} >= 1500)
+Requires: libprotobuf-c-devel
+%else
 Requires: protobuf-c-devel
+%endif
 Requires: fio
 Requires: git
 Requires: dbench
 Requires: lbzip2
 Requires: attr
 Requires: ior
-Requires: go >= 1.18
+Requires: go >= 1.21
 %if (0%{?suse_version} >= 1315)
 Requires: lua-lmod
 Requires: libcapstone-devel
@@ -225,10 +218,13 @@ Requires: libcapstone-devel
 Requires: Lmod
 Requires: capstone-devel
 %endif
+Requires: pciutils-devel
+%if (0%{?suse_version} > 0)
+Requires: libndctl-devel
+%endif
 %if (0%{?rhel} >= 8)
-Requires: fuse3-devel >= 3
-%else
-Requires: fuse3-devel >= 3.4.2
+Requires: ndctl-devel
+Requires: daxctl-devel
 %endif
 
 %description client-tests
@@ -314,7 +310,7 @@ This is the package that bridges the difference between the MOFED openmpi
 %endif
 
 %prep
-%autosetup
+%autosetup -p1
 
 %build
 
@@ -364,7 +360,7 @@ install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
 mkdir -p %{buildroot}/%{conf_dir}/certs/clients
 mv %{buildroot}/%{conf_dir}/bash_completion.d %{buildroot}/%{_sysconfdir}
 # fixup env-script-interpreters
-sed -i -e '1s/env //' %{buildroot}{%{daoshome}/TESTING/ftest/{cart/cart_logtest,config_file_gen,launch,slurm_setup,verify_perms}.py,%{_bindir}/daos_storage_estimator.py,%{_datarootdir}/daos/control/setup_spdk.sh}
+sed -i -e '1s/env //' %{buildroot}{%{daoshome}/TESTING/ftest/{cart/cart_logtest,cart/daos_sys_logscan,config_file_gen,launch,slurm_setup,tags,verify_perms}.py,%{_bindir}/daos_storage_estimator.py}
 
 # shouldn't have source files in a non-devel RPM
 rm -f %{buildroot}%{daoshome}/TESTING/ftest/cart/{test_linkage.cpp,utest_{hlc,portnumber,protocol,swim}.c,wrap_cmocka.h}
@@ -416,6 +412,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_sysconfdir}/bash_completion.d/daos.bash
 # Certificate generation files
 %dir %{_libdir}/%{name}
+%{_bindir}/daos_metrics
 %{_libdir}/%{name}/certgen/
 %{_libdir}/%{name}/VERSION
 %{_libdir}/libcart.so.*
@@ -432,10 +429,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # and/or daos_firmware_helper
 %attr(2755,root,daos_server) %{_bindir}/daos_server
 %{_bindir}/daos_engine
-%{_bindir}/daos_metrics
+%{_bindir}/ddb
 %{_sysconfdir}/ld.so.conf.d/daos.conf
 %dir %{_libdir}/daos_srv
+%{_libdir}/daos_srv/libchk.so
 %{_libdir}/daos_srv/libcont.so
+%{_libdir}/daos_srv/libddb.so
 %{_libdir}/daos_srv/libdtx.so
 %{_libdir}/daos_srv/libmgmt.so
 %{_libdir}/daos_srv/libobj.so
@@ -452,6 +451,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/daos_srv/libplacement.so
 %{_libdir}/daos_srv/libpipeline.so
 %{_libdir}/libdaos_common_pmem.so
+%{_libdir}/libdav_v2.so
 %config(noreplace) %{conf_dir}/vos_size_input.yaml
 %{_bindir}/daos_storage_estimator.py
 %{python3_sitearch}/storage_estimator/*.py
@@ -480,6 +480,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/dfuse
 %{_bindir}/daos
 %{_libdir}/libdaos_cmd_hdlrs.so
+%{_libdir}/libdaos_self_test.so
 %{_libdir}/libdfs.so
 %{_libdir}/libds3.so
 %{_libdir}/%{name}/API_VERSION
@@ -491,13 +492,18 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{python3_sitearch}/pydaos/*.py
 %dir %{python3_sitearch}/pydaos/raw
 %{python3_sitearch}/pydaos/raw/*.py
+%dir %{python3_sitearch}/pydaos/torch
+%{python3_sitearch}/pydaos/torch/*.py
 %if (0%{?rhel} >= 8)
 %dir %{python3_sitearch}/pydaos/__pycache__
 %{python3_sitearch}/pydaos/__pycache__/*.pyc
 %dir %{python3_sitearch}/pydaos/raw/__pycache__
 %{python3_sitearch}/pydaos/raw/__pycache__/*.pyc
+%dir %{python3_sitearch}/pydaos/torch/__pycache__
+%{python3_sitearch}/pydaos/torch/__pycache__/*.pyc
 %endif
 %{python3_sitearch}/pydaos/pydaos_shim.so
+%{python3_sitearch}/pydaos/torch/torch_shim.so
 %{_datarootdir}/%{name}/ioil-ld-opts
 %config(noreplace) %{conf_dir}/daos_agent.yml
 %{_unitdir}/%{agent_svc_name}
@@ -521,9 +527,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %config(noreplace) %{conf_dir}/fault-inject-cart.yaml
 %{_bindir}/fault_status
 %{_bindir}/crt_launch
-# For avocado tests
-%{daoshome}/.build_vars.json
-%{daoshome}/.build_vars.sh
 %{_bindir}/daos_perf
 %{_bindir}/daos_racer
 %{_bindir}/daos_test
@@ -543,6 +546,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 %files server-tests
 %doc README.md
+%{_bindir}/dtx_tests
+%{_bindir}/dtx_ut
 %{_bindir}/evt_ctl
 %{_bindir}/jump_pl_map
 %{_bindir}/pl_bench
@@ -553,6 +558,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/vea_ut
 %{_bindir}/vos_tests
 %{_bindir}/vea_stress
+%{_bindir}/ddb_tests
+%{_bindir}/ddb_ut
 %{_bindir}/obj_ctl
 %{_bindir}/vos_perf
 
@@ -563,6 +570,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libgurt.so
 %{_libdir}/libcart.so
 %{_libdir}/*.a
+%{daoshome}/python
 
 %files firmware
 %doc README.md
@@ -586,6 +594,86 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Wed Jan 22 2025 Jan Michalski <jan-marian.michalski@hpe.com> 2.7.101-5
+- Add ddb_ut and dtx_ut to the server-tests package
+
+* Fri Dec 20 2024 Jeff Olivier <jeffolivier@google.com> 2.7.101-4
+- Switch libfuse3 to libfused
+
+* Thu Dec 19 2024 Phillip Henderson <phillip.henderson@intel.com> 2.7.101-3
+- Fix protobuf-c requiremnent for daos-client-tests on Leap.
+
+* Tue Nov 13 2024 Denis Barakhtanov <dbarahtanov@enakta.com> 2.7.101-2
+- Add pydaos.torch module to daos-client rpm.
+
+* Fri Nov 08 2024 Phillip Henderson <phillip.henderson@intel.com> 2.7.101-1
+- Bump version to 2.7.100
+
+* Tue Nov 5 2024 Michael MacDonald <mjmac@google.com> 2.7.100-11
+- Move daos_metrics tool to daos package for use on both clients
+  and servers.
+
+* Fri Nov 1 2024 Sherin T George <sherin-t.george@hpe.com> 2.7.100-10
+- The modified DAV allocator with memory bucket support for md_on_ssd
+  phase-2 is delivered as dav_v2.so.
+
+* Tue Oct 15 2024 Brian J. Murrell <brian.murrell@intel.com> - 2.7.100-9
+- Drop BRs for UCX as they were obsoleted as of e01970d
+
+* Mon Oct 07 2024 Cedric Koch-Hofer <cedric.koch-hofer@intel.com> 2.7.100-8
+- Update BR: argobots to 1.2
+
+* Tue Oct 01 2024 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.7.100-7
+- Add support of the PMDK package 2.1.0 with NDCTL enabled.
+  * Increase the default ULT stack size to 20KiB if the engine uses
+    the DCPM storage class.
+  * Prevent using the RAM storage class (simulated PMem) when
+    the shutdown state (SDS) is active.
+    * Automatically disable SDS for the RAM storage class on engine startup.
+    * Force explicitly setting the PMEMOBJ_CONF='sds.at_create=0'
+      environment variable to deactivate SDS for the DAOS tools
+      (ddb, daos_perf, vos_perf, etc.) when used WITHOUT DCPM.
+      Otherwise, a user is supposed to be stopped by an error
+      like: "Unsafe shutdown count is not supported for this source".
+
+* Mon Sep 23 2024 Kris Jacque <kris.jacque@intel.com> 2.7.100-6
+- Bump min supported go version to 1.21
+
+* Thu Aug 15 2024 Michael MacDonald <mjmac@google.com> 2.7.100-5
+- Add libdaos_self_test.so to client RPM
+
+* Mon Aug 05 2024 Jerome Soumagne <jerome.soumagne@intel.com> 2.7.100-4
+- Bump mercury version to 2.4.0rc4
+
+* Thu Jul 11 2024 Dalton Bohning <dalton.bohning@intel.com> 2.7.100-3
+- Add pciutils-devel build dep for client-tests package
+
+* Mon Jun 24 2024 Tom Nabarro <tom.nabarro@intel.com> 2.7.100-2
+- Add pciutils runtime dep for daos_server lspci call
+- Add pciutils-devel build dep for pciutils CGO bindings
+
+* Mon May 20 2024 Phillip Henderson <phillip.henderson@intel.com> 2.7.100-1
+- Bump version to 2.7.100
+
+* Fri May 03 2024 Lei Huang <lei.huang@intel.com> 2.5.101-5
+- Add libaio as a dependent package
+
+* Fri Apr 05 2024 Fan Yong <fan.yong@intel.com> 2.5.101-4
+- Catastrophic Recovery
+
+* Thu Apr 04 2024 Ashley M. Pittman <ashley.m.pittman@intel.com> 2.5.101-3
+- Update pydaos install process
+- Add a dependency from daos-client-tests to daos-devel
+
+* Mon Mar 18 2024 Jan Michalski <jan.michalski@intel.com> 2.5.101-2
+- Add dtx_tests to the server-tests package
+
+* Fri Mar 15 2024 Phillip Henderson <phillip.henderson@intel.com> 2.5.101-1
+- Bump version to 2.5.101
+
+* Tue Feb 27 2024 Li Wei <wei.g.li@intel.com> 2.5.100-16
+- Update raft to 0.11.0-1.416.g12dbc15
+
 * Mon Feb 12 2024 Ryon Jensen <ryon.jensen@intel.com> 2.5.100-15
 - Updated isa-l package name to match EPEL
 

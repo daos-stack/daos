@@ -112,6 +112,8 @@ rebuild_mixed_stripes(void **state)
 	d_rank_t	rank = 0;
 	int		size = 8 * CELL_SIZE + 10000;
 
+	print_message("BEGIN %s\n", __FUNCTION__);
+
 	if (!test_runable(arg, 7))
 		return;
 
@@ -172,6 +174,8 @@ rebuild_ec_multi_stripes(void **state)
 	uint64_t	start;
 	uint16_t	fail_shards[2];
 	int		i, size = 8 * CELL_SIZE;
+
+	print_message("BEGIN %s\n", __FUNCTION__);
 
 	if (!test_runable(arg, 7))
 		return;
@@ -261,13 +265,10 @@ rebuild_ec_setup(void  **state, int number, uint32_t rf)
 	rc = test_setup(state, SETUP_POOL_CONNECT, true,
 			REBUILD_POOL_SIZE, number, NULL);
 	if (rc) {
-		/* Let's skip for this case, since it is possible there
-		 * is not enough ranks here.
-		 */
 		print_message("It can not create the pool with %d ranks"
 			      " probably due to not enough ranks %d\n",
 			      number, rc);
-		return 0;
+		return rc;
 	}
 
 	arg = *state;
@@ -314,78 +315,92 @@ rebuild_ec_6nodes_setup(void **state)
 static void
 rebuild_partial_fail_data(void **state)
 {
+	print_message("BEGIN %s\n", __FUNCTION__);
 	rebuild_ec_internal(state, OC_EC_2P1G1, 1, 0, PARTIAL_UPDATE);
+	print_message("END %s\n", __FUNCTION__);
 }
 
 static void
 rebuild_partial_fail_parity(void **state)
 {
+	print_message("BEGIN %s\n", __FUNCTION__);
 	rebuild_ec_internal(state, OC_EC_2P1G1, 0, 1, PARTIAL_UPDATE);
 }
 
 static void
 rebuild_full_fail_data(void **state)
 {
+	print_message("BEGIN %s\n", __FUNCTION__);
 	rebuild_ec_internal(state, OC_EC_2P1G1, 1, 0, FULL_UPDATE);
 }
 
 static void
 rebuild_full_fail_parity(void **state)
 {
+	print_message("BEGIN %s\n", __FUNCTION__);
 	rebuild_ec_internal(state, OC_EC_2P1G1, 0, 1, FULL_UPDATE);
 }
 
 static void
 rebuild_full_partial_fail_data(void **state)
 {
+	print_message("BEGIN %s\n", __FUNCTION__);
 	rebuild_ec_internal(state, OC_EC_2P1G1, 1, 0, FULL_PARTIAL_UPDATE);
 }
 
 static void
 rebuild_full_partial_fail_parity(void **state)
 {
+	print_message("BEGIN %s\n", __FUNCTION__);
 	rebuild_ec_internal(state, OC_EC_2P1G1, 0, 1, FULL_PARTIAL_UPDATE);
 }
 
 static void
 rebuild_partial_full_fail_data(void **state)
 {
+	print_message("BEGIN %s\n", __FUNCTION__);
 	rebuild_ec_internal(state, OC_EC_2P1G1, 1, 0, PARTIAL_FULL_UPDATE);
 }
 
 static void
 rebuild_partial_full_fail_parity(void **state)
 {
+	print_message("BEGIN %s\n", __FUNCTION__);
 	rebuild_ec_internal(state, OC_EC_2P1G1, 0, 1, PARTIAL_FULL_UPDATE);
 }
 
 static void
 rebuild2p_partial_fail_data(void **state)
 {
+	print_message("BEGIN %s\n", __FUNCTION__);
 	rebuild_ec_internal(state, OC_EC_4P2G1, 1, 0, FULL_UPDATE);
 }
 
 static void
 rebuild2p_partial_fail_2data(void **state)
 {
+	print_message("BEGIN %s\n", __FUNCTION__);
 	rebuild_ec_internal(state, OC_EC_4P2G1, 2, 0, FULL_UPDATE);
 }
 
 static void
 rebuild2p_partial_fail_data_parity(void **state)
 {
+	print_message("BEGIN %s\n", __FUNCTION__);
 	rebuild_ec_internal(state, OC_EC_4P2G1, 1, 1, FULL_UPDATE);
 }
 
 static void
 rebuild2p_partial_fail_parity(void **state)
 {
+	print_message("BEGIN %s\n", __FUNCTION__);
 	rebuild_ec_internal(state, OC_EC_4P2G1, 0, 1, FULL_UPDATE);
 }
 
 static void
 rebuild2p_partial_fail_2parity(void **state)
 {
+	print_message("BEGIN %s\n", __FUNCTION__);
 	rebuild_ec_internal(state, OC_EC_4P2G1, 0, 2, FULL_UPDATE);
 }
 
@@ -394,6 +409,7 @@ rebuild_dfs_fail_data_s0(void **state)
 {
 	int shard = 0;
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	dfs_ec_rebuild_io(state, &shard, 1);
 }
 
@@ -402,6 +418,7 @@ rebuild_dfs_fail_data_s1(void **state)
 {
 	int shard = 1;
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	dfs_ec_rebuild_io(state, &shard, 1);
 }
 
@@ -410,6 +427,7 @@ rebuild_dfs_fail_data_s3(void **state)
 {
 	int shard = 3;
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	dfs_ec_rebuild_io(state, &shard, 1);
 }
 
@@ -418,6 +436,7 @@ rebuild_dfs_fail_2data_s0s1(void **state)
 {
 	int shards[2];
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	shards[0] = 0;
 	shards[1] = 1;
 	dfs_ec_rebuild_io(state, shards, 2);
@@ -428,6 +447,7 @@ rebuild_dfs_fail_2data_s0s2(void **state)
 {
 	int shards[2];
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	shards[0] = 0;
 	shards[1] = 2;
 	dfs_ec_rebuild_io(state, shards, 2);
@@ -438,6 +458,7 @@ rebuild_dfs_fail_2data_s0s3(void **state)
 {
 	int shards[2];
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	shards[0] = 0;
 	shards[1] = 3;
 	dfs_ec_rebuild_io(state, shards, 2);
@@ -448,6 +469,7 @@ rebuild_dfs_fail_2data_s1s2(void **state)
 {
 	int shards[2];
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	shards[0] = 1;
 	shards[1] = 2;
 	dfs_ec_rebuild_io(state, shards, 2);
@@ -458,6 +480,7 @@ rebuild_dfs_fail_2data_s1s3(void **state)
 {
 	int shards[2];
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	shards[0] = 1;
 	shards[1] = 3;
 	dfs_ec_rebuild_io(state, shards, 2);
@@ -468,6 +491,7 @@ rebuild_dfs_fail_2data_s2s3(void **state)
 {
 	int shards[2];
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	shards[0] = 2;
 	shards[1] = 3;
 	dfs_ec_rebuild_io(state, shards, 2);
@@ -478,6 +502,7 @@ rebuild_dfs_fail_data_parity_s0p1(void **state)
 {
 	int shards[2];
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	shards[0] = 0;
 	shards[1] = 5;
 	dfs_ec_rebuild_io(state, shards, 2);
@@ -488,6 +513,7 @@ rebuild_dfs_fail_data_parity_s3p1(void **state)
 {
 	int shards[2];
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	shards[0] = 3;
 	shards[1] = 5;
 	dfs_ec_rebuild_io(state, shards, 2);
@@ -498,6 +524,7 @@ rebuild_dfs_fail_data_parity_s2p1(void **state)
 {
 	int shards[2];
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	shards[0] = 2;
 	shards[1] = 5;
 	dfs_ec_rebuild_io(state, shards, 2);
@@ -508,6 +535,7 @@ rebuild_dfs_fail_data_parity_s0p0(void **state)
 {
 	int shards[2];
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	shards[0] = 0;
 	shards[1] = 4;
 	dfs_ec_rebuild_io(state, shards, 2);
@@ -518,6 +546,7 @@ rebuild_dfs_fail_data_parity_s2p0(void **state)
 {
 	int shards[2];
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	shards[0] = 2;
 	shards[1] = 4;
 	dfs_ec_rebuild_io(state, shards, 2);
@@ -528,6 +557,7 @@ rebuild_dfs_fail_data_parity_s3p0(void **state)
 {
 	int shards[2];
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	shards[0] = 3;
 	shards[1] = 4;
 	dfs_ec_rebuild_io(state, shards, 2);
@@ -681,6 +711,7 @@ rebuild_dfs_fail_seq_s0s1(void **state)
 {
 	int shards[2];
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	shards[0] = 0;
 	shards[1] = 1;
 	dfs_ec_seq_fail(state, shards, 2);
@@ -691,6 +722,7 @@ rebuild_dfs_fail_seq_s1s2(void **state)
 {
 	int shards[2];
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	shards[0] = 1;
 	shards[1] = 2;
 	dfs_ec_seq_fail(state, shards, 2);
@@ -701,6 +733,7 @@ rebuild_dfs_fail_seq_s2s3(void **state)
 {
 	int shards[2];
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	shards[0] = 2;
 	shards[1] = 3;
 	dfs_ec_seq_fail(state, shards, 2);
@@ -711,6 +744,7 @@ rebuild_dfs_fail_seq_s0s3(void **state)
 {
 	int shards[2];
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	shards[0] = 0;
 	shards[1] = 3;
 	dfs_ec_seq_fail(state, shards, 2);
@@ -721,6 +755,7 @@ rebuild_dfs_fail_seq_s0p0(void **state)
 {
 	int shards[2];
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	shards[0] = 0;
 	shards[1] = 4;
 	dfs_ec_seq_fail(state, shards, 2);
@@ -731,6 +766,7 @@ rebuild_dfs_fail_seq_s3p1(void **state)
 {
 	int shards[2];
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	shards[0] = 3;
 	shards[1] = 5;
 	dfs_ec_seq_fail(state, shards, 2);
@@ -741,6 +777,7 @@ rebuild_dfs_fail_seq_p0p1(void **state)
 {
 	int shards[2];
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	shards[0] = 4;
 	shards[1] = 5;
 	dfs_ec_seq_fail(state, shards, 2);
@@ -764,6 +801,8 @@ rebuild_multiple_group_ec_object(void **state)
 	d_sg_list_t	sgl;
 	int		size = 4 * CELL_SIZE;
 	int		rc;
+
+	print_message("BEGIN %s\n", __FUNCTION__);
 
 	if (!test_runable(arg, 8))
 		return;
@@ -874,6 +913,8 @@ rebuild_ec_dkey_enumeration(void **state)
 	d_rank_t	rank;
 	int		i;
 
+	print_message("BEGIN %s\n", __FUNCTION__);
+
 	if (!test_runable(arg, 8))
 		return;
 
@@ -904,6 +945,8 @@ rebuild_ec_parity_multi_group(void **state)
 	daos_obj_id_t	oid;
 	d_rank_t	rank;
 	int		i;
+
+	print_message("BEGIN %s\n", __FUNCTION__);
 
 	if (!test_runable(arg, 8))
 		return;
@@ -993,12 +1036,14 @@ rebuild_ec_snapshot(void **state, daos_oclass_id_t oclass, int shard)
 static void
 rebuild_ec_snapshot_data_shard(void **state)
 {
+	print_message("BEGIN %s\n", __FUNCTION__);
 	rebuild_ec_snapshot(state, OC_EC_4P2G1, 0);
 }
 
 static void
 rebuild_ec_snapshot_parity_shard(void **state)
 {
+	print_message("BEGIN %s\n", __FUNCTION__);
 	rebuild_ec_snapshot(state, OC_EC_4P2G1, 5);
 }
 
@@ -1013,6 +1058,8 @@ rebuild_ec_parity_overwrite(void **state)
 	d_rank_t	rank = 0;
 	int		i;
 	int		stripe_size = 2 * CELL_SIZE;
+
+	print_message("BEGIN %s\n", __FUNCTION__);
 
 	if (!test_runable(arg, 8))
 		return;
@@ -1057,6 +1104,8 @@ rebuild_ec_then_aggregation(void **state)
 	int		i;
 	char		*data;
 	char		*verify_data;
+
+	print_message("BEGIN %s\n", __FUNCTION__);
 
 	if (!test_runable(arg, 8))
 		return;
@@ -1114,6 +1163,8 @@ rebuild_ec_multiple_shards(void **state)
 	char		*verify_data;
 	uint64_t	stripe_size = 4 * CELL_SIZE;
 	daos_recx_t	recx;
+
+	print_message("BEGIN %s\n", __FUNCTION__);
 
 	if (!test_runable(arg, 6))
 		return;
@@ -1197,6 +1248,8 @@ rebuild_ec_multiple_failure_tgts(void **state)
 	char		dkey[32];
 	char		data[20];
 	char		v_data[20];
+
+	print_message("BEGIN %s\n", __FUNCTION__);
 
 	if (!test_runable(arg, 6))
 		return;
@@ -1340,6 +1393,7 @@ rebuild_ec_overwrite_fail_parity_data(void **state)
 {
 	int kill_shards[2];
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	kill_shards[0] = 0;
 	kill_shards[1] = 1;
 	rebuild_ec_parity_overwrite_fail_parity_internal(state, kill_shards, 2, false);
@@ -1350,9 +1404,53 @@ rebuild_ec_overwrite_fail_parity_data_with_parity(void **state)
 {
 	int kill_shards[2];
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	kill_shards[0] = 1;
 	kill_shards[1] = 2;
 	rebuild_ec_parity_overwrite_fail_parity_internal(state, kill_shards, 2, true);
+}
+
+static void
+rebuild_ec_combined_ops(void **state)
+{
+	test_arg_t	*arg = *state;
+	struct ioreq	req;
+	daos_obj_id_t	oid;
+	int		rc;
+
+	print_message("BEGIN %s\n", __FUNCTION__);
+	if (!test_runable(arg, 6))
+		return;
+
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal", "delay_rebuild");
+	assert_int_equal(rc, 0);
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2GX, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	write_ec_full(&req, arg->index, 0);
+	ioreq_fini(&req);
+
+	arg->no_rebuild = 1;
+	rebuild_single_pool_rank(arg, 5, true);
+	print_message("sleep 30 seconds for rebuild to be scheduled/delay \n");
+	sleep(30);
+	extend_single_pool_rank(arg, 6);
+	print_message("sleep 5 seconds for extend be scheduled/combined \n");
+	sleep(5);
+
+	arg->no_rebuild = 0;
+	if (arg->myrank == 0)
+		test_rebuild_wait(&arg, 1);
+
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	verify_ec_full(&req, arg->index, 0);
+	ioreq_fini(&req);
+
+	reintegrate_single_pool_rank(arg, 5, true);
+
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	verify_ec_full(&req, arg->index, 0);
+	ioreq_fini(&req);
+	print_message("END %s\n", __FUNCTION__);
 }
 
 /** create a new pool/container for each test */
@@ -1492,6 +1590,9 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 test_teardown},
 	{"REBUILD47: fail parity shard and data shards after overwrite with aggregation",
 	 rebuild_ec_overwrite_fail_parity_data_with_parity, rebuild_ec_8nodes_setup,
+	 test_teardown},
+	{"REBUILD48: combine multiple rebuild operation for EC",
+	 rebuild_ec_combined_ops, rebuild_ec_6nodes_setup,
 	 test_teardown},
 };
 

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -99,8 +99,11 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 		"request timeout": {
 			timeout: 1 * time.Nanosecond,
 			req: &testRequest{
-				rpcFn: func(_ context.Context, _ *grpc.ClientConn) (proto.Message, error) {
+				rpcFn: func(ctx context.Context, _ *grpc.ClientConn) (proto.Message, error) {
 					time.Sleep(1 * time.Microsecond)
+					if ctx.Err() != nil {
+						return nil, ctx.Err()
+					}
 					return defaultMessage, nil
 				},
 			},
@@ -120,9 +123,13 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 				}
 			}(),
 			req: &testRequest{
-				rpcFn: func(_ context.Context, _ *grpc.ClientConn) (proto.Message, error) {
-					time.Sleep(10 * time.Second) // shouldn't be allowed to run this long
-					return defaultMessage, nil
+				rpcFn: func(ctx context.Context, _ *grpc.ClientConn) (proto.Message, error) {
+					select {
+					case <-ctx.Done():
+						return nil, ctx.Err()
+					case <-time.After(10 * time.Second): // shouldn't be allowed to run this long
+						return defaultMessage, nil
+					}
 				},
 			},
 			expResp: []*HostResponse{{}},

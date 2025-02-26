@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,7 +8,6 @@ package config
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math"
 	"net"
 	"os"
@@ -36,6 +35,15 @@ const (
 	relConfExamplesPath = "../utils/config/examples/"
 )
 
+// SupportConfig is defined here to avoid a import cycle
+type SupportConfig struct {
+	FileTransferExec string `yaml:"file_transfer_exec,omitempty"`
+}
+
+type deprecatedParams struct {
+	AccessPoints []string `yaml:"access_points,omitempty"` // deprecated in 2.8
+}
+
 // Server describes configuration options for DAOS control plane.
 // See utils/config/daos_server.yml for parameter descriptions.
 type Server struct {
@@ -59,6 +67,7 @@ type Server struct {
 	TelemetryPort     int                       `yaml:"telemetry_port,omitempty"`
 	CoreDumpFilter    uint8                     `yaml:"core_dump_filter,omitempty"`
 	ClientEnvVars     []string                  `yaml:"client_env_vars,omitempty"`
+	SupportConfig     SupportConfig             `yaml:"support_config,omitempty"`
 
 	// duplicated in engine.Config
 	SystemName string              `yaml:"name"`
@@ -66,7 +75,7 @@ type Server struct {
 	Fabric     engine.FabricConfig `yaml:",inline"`
 	Modules    string              `yaml:"-"`
 
-	AccessPoints []string `yaml:"access_points"`
+	MgmtSvcReplicas []string `yaml:"mgmt_svc_replicas"`
 
 	Metadata storage.ControlMetadata `yaml:"control_metadata,omitempty"`
 
@@ -76,11 +85,10 @@ type Server struct {
 
 	Path string `yaml:"-"` // path to config file
 
-	// Legacy config file parameters stored in a separate struct.
-	Legacy ServerLegacy `yaml:",inline"`
-
 	// Behavior flags
 	AutoFormat bool `yaml:"-"`
+
+	deprecatedParams `yaml:",inline"`
 }
 
 // WithCoreDumpFilter sets the core dump filter written to /proc/self/coredump_filter.
@@ -141,18 +149,19 @@ func (cfg *Server) WithClientEnvVars(envVars []string) *Server {
 	return cfg
 }
 
-// WithCrtCtxShareAddr sets the top-level CrtCtxShareAddr.
-func (cfg *Server) WithCrtCtxShareAddr(addr uint32) *Server {
-	cfg.Fabric.CrtCtxShareAddr = addr
+// WithCrtTimeout sets the top-level CrtTimeout.
+func (cfg *Server) WithCrtTimeout(timeout uint32) *Server {
+	cfg.Fabric.CrtTimeout = timeout
 	for _, engine := range cfg.Engines {
 		engine.Fabric.Update(cfg.Fabric)
 	}
 	return cfg
 }
 
-// WithCrtTimeout sets the top-level CrtTimeout.
-func (cfg *Server) WithCrtTimeout(timeout uint32) *Server {
-	cfg.Fabric.CrtTimeout = timeout
+// WithNumSecondaryEndpoints sets the number of network endpoints for each engine's secondary
+// provider.
+func (cfg *Server) WithNumSecondaryEndpoints(nr []int) *Server {
+	cfg.Fabric.NumSecondaryEndpoints = nr
 	for _, engine := range cfg.Engines {
 		engine.Fabric.Update(cfg.Fabric)
 	}
@@ -196,9 +205,9 @@ func (cfg *Server) WithEngines(engineList ...*engine.Config) *Server {
 	return cfg
 }
 
-// WithAccessPoints sets the access point list.
-func (cfg *Server) WithAccessPoints(aps ...string) *Server {
-	cfg.AccessPoints = aps
+// WithMgmtSvcReplicas sets the MS replicas list.
+func (cfg *Server) WithMgmtSvcReplicas(reps ...string) *Server {
+	cfg.MgmtSvcReplicas = reps
 	return cfg
 }
 
@@ -320,7 +329,7 @@ func DefaultServer() *Server {
 	return &Server{
 		SystemName:        build.DefaultSystemName,
 		SocketDir:         defaultRuntimeDir,
-		AccessPoints:      []string{fmt.Sprintf("localhost:%d", build.DefaultControlPort)},
+		MgmtSvcReplicas:   []string{fmt.Sprintf("localhost:%d", build.DefaultControlPort)},
 		ControlPort:       build.DefaultControlPort,
 		TransportConfig:   security.DefaultServerTransportConfig(),
 		Hyperthreads:      false,
@@ -334,12 +343,12 @@ func DefaultServer() *Server {
 }
 
 // Load reads the serialized configuration from disk and validates file syntax.
-func (cfg *Server) Load() error {
+func (cfg *Server) Load(log logging.Logger) error {
 	if cfg.Path == "" {
 		return FaultConfigNoPath
 	}
 
-	bytes, err := ioutil.ReadFile(cfg.Path)
+	bytes, err := os.ReadFile(cfg.Path)
 	if err != nil {
 		return errors.WithMessage(err, "reading file")
 	}
@@ -354,9 +363,9 @@ func (cfg *Server) Load() error {
 		return errors.Errorf("invalid system name: %q", cfg.SystemName)
 	}
 
-	// Update server config based on legacy parameters.
-	if err := updateFromLegacyParams(cfg); err != nil {
-		return errors.Wrap(err, "updating config from legacy parameters")
+	// TODO multiprovider: Remove when multiprovider is enabled
+	if cfg.Fabric.GetNumProviders() > 1 {
+		return errors.Errorf("fabric provider string %q includes more than one provider", cfg.Fabric.Provider)
 	}
 
 	// propagate top-level settings to engine configs
@@ -366,6 +375,12 @@ func (cfg *Server) Load() error {
 
 	if cfg.Fabric.AuthKey != "" {
 		cfg.ClientEnvVars = common.MergeKeyValues(cfg.ClientEnvVars, []string{cfg.Fabric.GetAuthKeyEnv()})
+	}
+
+	if len(cfg.deprecatedParams.AccessPoints) > 0 {
+		log.Notice("access_points is deprecated; please use mgmt_svc_replicas instead")
+		cfg.MgmtSvcReplicas = cfg.deprecatedParams.AccessPoints
+		cfg.deprecatedParams.AccessPoints = nil
 	}
 
 	return nil
@@ -379,7 +394,7 @@ func (cfg *Server) SaveToFile(filename string) error {
 		return err
 	}
 
-	return ioutil.WriteFile(filename, bytes, 0644)
+	return os.WriteFile(filename, bytes, 0644)
 }
 
 // SetPath sets the default path to the configuration file.
@@ -409,22 +424,22 @@ func (cfg *Server) SaveActiveConfig(log logging.Logger) {
 	log.Debugf("active config saved to %s (read-only)", activeConfig)
 }
 
-// GetAccessPointPort returns port number suffixed to AP address after its validation or 0 if no
+// GetMSReplicaPort returns port number suffixed to replicas address after its validation or 0 if no
 // port number specified. Error returned if validation fails.
-func GetAccessPointPort(log logging.Logger, addr string) (int, error) {
+func GetMSReplicaPort(log logging.Logger, addr string) (int, error) {
 	if !common.HasPort(addr) {
 		return 0, nil
 	}
 
 	_, port, err := net.SplitHostPort(addr)
 	if err != nil {
-		log.Errorf("invalid access point %q: %s", addr, err)
-		return 0, FaultConfigBadAccessPoints
+		log.Errorf("invalid MS replica %q: %s", addr, err)
+		return 0, FaultConfigBadMgmtSvcReplicas
 	}
 
 	portNum, err := strconv.Atoi(port)
 	if err != nil {
-		log.Errorf("invalid access point port: %s", err)
+		log.Errorf("invalid MS replica port: %s", err)
 		return 0, FaultConfigBadControlPort
 	}
 	if portNum <= 0 {
@@ -432,17 +447,17 @@ func GetAccessPointPort(log logging.Logger, addr string) (int, error) {
 		if portNum < 0 {
 			m = "negative"
 		}
-		log.Errorf("access point port cannot be %s", m)
+		log.Errorf("MS replica port cannot be %s", m)
 		return 0, FaultConfigBadControlPort
 	}
 
 	return portNum, nil
 }
 
-// getAccessPointAddrWithPort appends default port number to address if custom port is not
+// getReplicaAddrWithPort appends default port number to address if custom port is not
 // specified, otherwise custom specified port is validated.
-func getAccessPointAddrWithPort(log logging.Logger, addr string, portDefault int) (string, error) {
-	portNum, err := GetAccessPointPort(log, addr)
+func getReplicaAddrWithPort(log logging.Logger, addr string, portDefault int) (string, error) {
+	portNum, err := GetMSReplicaPort(log, addr)
 	if err != nil {
 		return "", err
 	}
@@ -450,9 +465,9 @@ func getAccessPointAddrWithPort(log logging.Logger, addr string, portDefault int
 		return fmt.Sprintf("%s:%d", addr, portDefault), nil
 	}
 
-	// Warn if access point port differs from config control port.
+	// Warn if MS replica port differs from config control port.
 	if portDefault != portNum {
-		log.Debugf("access point %q port differs from default port %q",
+		log.Debugf("ms replica %q port differs from default port %q",
 			addr, portDefault)
 	}
 
@@ -478,6 +493,10 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 				msg = fmt.Sprintf("%s (MD-on-SSD)", msg)
 				// MD-on-SSD has extra sys-xstream for rdb.
 				sysXSCount++
+			} else if ec.TargetCount == 1 {
+				// Avoid DMA buffer allocation failure with single target count by
+				// increasing the minimum target count used to calculate hugepages.
+				cfgTargetCount++
 			}
 		}
 		log.Debug(msg)
@@ -509,9 +528,7 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 		cfg.NrHugepages = minHugepages
 		log.Infof("hugepage count automatically set to %d (%s)", minHugepages,
 			humanize.IBytes(hugePageBytes(minHugepages, mi.HugepageSizeKiB)))
-	}
-
-	if cfg.NrHugepages < minHugepages {
+	} else if cfg.NrHugepages < minHugepages {
 		log.Noticef("configured nr_hugepages %d is less than recommended %d, "+
 			"if this is not intentional update the 'nr_hugepages' config "+
 			"parameter or remove and it will be automatically calculated",
@@ -639,12 +656,6 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 		}
 	}()
 
-	// The config file format no longer supports "servers"
-	if len(cfg.Legacy.Servers) > 0 {
-		return errors.New("\"servers\" server config file parameter is deprecated, use " +
-			"\"engines\" instead")
-	}
-
 	// Set DisableVMD reference if unset in config file.
 	if cfg.DisableVMD == nil {
 		cfg.WithDisableVMD(false)
@@ -653,20 +664,20 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 	log.Debugf("vfio=%v hotplug=%v vmd=%v requested in config", !cfg.DisableVFIO,
 		cfg.EnableHotplug, !(*cfg.DisableVMD))
 
-	// Update access point addresses with control port if port is not supplied.
-	newAPs := make([]string, 0, len(cfg.AccessPoints))
-	for _, ap := range cfg.AccessPoints {
-		newAP, err := getAccessPointAddrWithPort(log, ap, cfg.ControlPort)
+	// Update MS replica addresses with control port if port is not supplied.
+	newReps := make([]string, 0, len(cfg.MgmtSvcReplicas))
+	for _, rep := range cfg.MgmtSvcReplicas {
+		newAP, err := getReplicaAddrWithPort(log, rep, cfg.ControlPort)
 		if err != nil {
 			return err
 		}
-		newAPs = append(newAPs, newAP)
+		newReps = append(newReps, newAP)
 	}
-	if common.StringSliceHasDuplicates(newAPs) {
-		log.Error("duplicate access points addresses")
-		return FaultConfigBadAccessPoints
+	if common.StringSliceHasDuplicates(newReps) {
+		log.Error("duplicate MS replica addresses")
+		return FaultConfigBadMgmtSvcReplicas
 	}
-	cfg.AccessPoints = newAPs
+	cfg.MgmtSvcReplicas = newReps
 
 	if cfg.Metadata.DevicePath != "" && cfg.Metadata.Path == "" {
 		return FaultConfigControlMetadataNoPath
@@ -686,13 +697,13 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 	}
 
 	switch {
-	case len(cfg.AccessPoints) < 1:
-		return FaultConfigBadAccessPoints
-	case len(cfg.AccessPoints)%2 == 0:
-		return FaultConfigEvenAccessPoints
-	case len(cfg.AccessPoints) == 1:
-		log.Noticef("Configuration includes only one access point. This provides no redundancy " +
-			"in the event of an access point failure.")
+	case len(cfg.MgmtSvcReplicas) < 1:
+		return FaultConfigBadMgmtSvcReplicas
+	case len(cfg.MgmtSvcReplicas)%2 == 0:
+		return FaultConfigEvenMgmtSvcReplicas
+	case len(cfg.MgmtSvcReplicas) == 1:
+		log.Noticef("Configuration includes only one MS replica. This provides no redundancy " +
+			"in the event of a MS replica failure.")
 	}
 
 	switch {
@@ -707,7 +718,6 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 	for idx, ec := range cfg.Engines {
 		ec.Storage.ControlMetadata = cfg.Metadata
 		ec.Storage.EngineIdx = uint(idx)
-		ec.ConvertLegacyStorage(log, idx)
 		ec.Fabric.Update(cfg.Fabric)
 
 		if err := ec.Validate(); err != nil {
@@ -747,7 +757,7 @@ func (cfg *Server) validateMultiEngineConfig(log logging.Logger) error {
 	seenScmClsIdx := -1
 
 	for idx, engine := range cfg.Engines {
-		fabricConfig := fmt.Sprintf("fabric:%s-%s-%d",
+		fabricConfig := fmt.Sprintf("fabric:%q-%q-%q",
 			engine.Fabric.Provider,
 			engine.Fabric.Interface,
 			engine.Fabric.InterfacePort)
@@ -863,7 +873,11 @@ func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineA
 	// Detect legacy mode by checking if first_core is being used.
 	legacyMode := false
 	for _, engineCfg := range cfg.Engines {
-		if engineCfg.ServiceThreadCore != 0 {
+		if engineCfg.ServiceThreadCore != nil {
+			if *engineCfg.ServiceThreadCore == 0 && engineCfg.PinnedNumaNode != nil {
+				// Both are set but we don't know yet which to use
+				continue
+			}
 			legacyMode = true
 			break
 		}
@@ -872,9 +886,15 @@ func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineA
 	// Fail if any engine has an explicit pin and non-zero first_core.
 	for idx, engineCfg := range cfg.Engines {
 		if legacyMode {
+			if engineCfg.PinnedNumaNode != nil {
+				log.Infof("pinned_numa_node setting ignored on engine %d", idx)
+				engineCfg.PinnedNumaNode = nil
+			}
 			log.Debugf("setting legacy core allocation algorithm on engine %d", idx)
-			engineCfg.PinnedNumaNode = nil
 			continue
+		} else if engineCfg.ServiceThreadCore != nil {
+			log.Infof("first_core setting ignored on engine %d", idx)
+			engineCfg.ServiceThreadCore = nil
 		}
 
 		numaAffinity, err := detectEngineAffinity(log, engineCfg, affSources...)

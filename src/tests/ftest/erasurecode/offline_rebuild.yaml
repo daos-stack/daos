@@ -15,6 +15,7 @@ setup:
 server_config:
   name: daos_server
   engines_per_host: 2
+  crt_timeout: 10
   engines:
     0:
       pinned_numa_node: 0
@@ -55,4 +56,5 @@ ior:
       - ["EC_2P1G1", 6]
       - ["EC_4P1G1", 8]
       - ["EC_4P2G1", 8]
+      - ["EC_4P3G1", 10]
       - ["EC_8P2G1", 12]

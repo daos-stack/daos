@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,9 +20,10 @@ import (
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/atm"
+	"github.com/daos-stack/daos/src/control/lib/hardware/defaults/topology"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwloc"
-	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/lib/systemd"
+	"github.com/daos-stack/daos/src/control/lib/telemetry/promexp"
 )
 
 type ctxKey string
@@ -72,14 +73,6 @@ func (cmd *startCmd) Execute(_ []string) error {
 	}
 	cmd.Debugf("created dRPC server: %s", time.Since(createDrpcStart))
 
-	hwprovInitStart := time.Now()
-	hwprovFini, err := hwprov.Init(cmd.Logger)
-	if err != nil {
-		return err
-	}
-	defer hwprovFini()
-	cmd.Debugf("initialized hardware providers: %s", time.Since(hwprovInitStart))
-
 	cacheStart := time.Now()
 	cache := NewInfoCache(ctx, cmd.Logger, cmd.ctlInvoker, cmd.cfg)
 	if cmd.attachInfoCacheDisabled() {
@@ -95,18 +88,38 @@ func (cmd *startCmd) Execute(_ []string) error {
 
 	procmonStart := time.Now()
 	procmon := NewProcMon(cmd.Logger, cmd.ctlInvoker, cmd.cfg.SystemName)
-	procmon.startMonitoring(ctx)
+	procmon.startMonitoring(ctx, cmd.cfg.EvictOnStart)
 	cmd.Debugf("started process monitor: %s", time.Since(procmonStart))
 
+	var clientMetricSource *promexp.ClientSource
+	if cmd.cfg.TelemetryExportEnabled() {
+		if ctx, clientMetricSource, err = promexp.NewClientSource(ctx); err != nil {
+			return errors.Wrap(err, "unable to create client metrics source")
+		}
+		telemetryStart := time.Now()
+		shutdown, err := startPrometheusExporter(ctx, cmd, clientMetricSource, cmd.cfg)
+		if err != nil {
+			return errors.Wrap(err, "unable to start prometheus exporter")
+		}
+		defer shutdown()
+		cmd.Debugf("telemetry exporter started: %s", time.Since(telemetryStart))
+	}
+
 	drpcRegStart := time.Now()
-	drpcServer.RegisterRPCModule(NewSecurityModule(cmd.Logger, cmd.cfg.TransportConfig))
+	secCfg := &securityConfig{
+		transport:   cmd.cfg.TransportConfig,
+		credentials: cmd.cfg.CredentialConfig,
+	}
+	drpcServer.RegisterRPCModule(NewSecurityModule(cmd.Logger, secCfg))
 	mgmtMod := &mgmtModule{
-		log:        cmd.Logger,
-		sys:        cmd.cfg.SystemName,
-		ctlInvoker: cmd.ctlInvoker,
-		cache:      cache,
-		numaGetter: hwprov.DefaultProcessNUMAProvider(cmd.Logger),
-		monitor:    procmon,
+		log:           cmd.Logger,
+		sys:           cmd.cfg.SystemName,
+		ctlInvoker:    cmd.ctlInvoker,
+		cache:         cache,
+		numaGetter:    topology.DefaultProcessNUMAProvider(cmd.Logger),
+		monitor:       procmon,
+		providerIdx:   cmd.cfg.ProviderIdx,
+		cliMetricsSrc: clientMetricSource,
 	}
 	drpcServer.RegisterRPCModule(mgmtMod)
 	cmd.Debugf("registered dRPC modules: %s", time.Since(drpcRegStart))

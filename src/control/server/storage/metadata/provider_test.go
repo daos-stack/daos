@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -69,17 +69,17 @@ func TestMetadata_Provider_Format(t *testing.T) {
 			},
 			expErr: errors.New("not a subdirectory"),
 		},
-		"GetFsType fails": {
+		"GetfsType fails": {
 			req: pathReq,
 			sysCfg: &system.MockSysConfig{
-				GetFsTypeErr: []error{errors.New("mock GetFsType")},
+				GetfsTypeErr: []error{errors.New("mock GetfsType")},
 			},
-			expErr: errors.New("mock GetFsType"),
+			expErr: errors.New("mock GetfsType"),
 		},
-		"GetFsType returns nosuid flag": {
+		"GetfsType returns nosuid flag": {
 			req: pathReq,
 			sysCfg: &system.MockSysConfig{
-				GetFsTypeRes: &system.FsType{
+				GetfsTypeRes: &system.FsType{
 					Name:   system.FsTypeExt4,
 					NoSUID: true,
 				},
@@ -89,30 +89,30 @@ func TestMetadata_Provider_Format(t *testing.T) {
 				NoSUID: true,
 			}),
 		},
-		"GetFsType returns nfs": {
+		"GetfsType returns nfs": {
 			req: pathReq,
 			sysCfg: &system.MockSysConfig{
-				GetFsTypeRes: &system.FsType{Name: system.FsTypeNfs},
+				GetfsTypeRes: &system.FsType{Name: system.FsTypeNfs},
 			},
 			expErr: FaultBadFilesystem(&system.FsType{Name: system.FsTypeNfs}),
 		},
-		"GetFsType returns unknown": {
+		"GetfsType returns unknown": {
 			req: pathReq,
 			sysCfg: &system.MockSysConfig{
-				GetFsTypeRes: &system.FsType{Name: system.FsTypeUnknown},
+				GetfsTypeRes: &system.FsType{Name: system.FsTypeUnknown},
 			},
 		},
-		"GetFsType skipped with device": {
+		"GetfsType skipped with device": {
 			req: deviceReq,
 			sysCfg: &system.MockSysConfig{
-				GetFsTypeErr: []error{errors.New("mock GetFsType")},
+				GetfsTypeErr: []error{errors.New("mock GetfsType")},
 			},
 		},
-		"GetFsType retries with parent if dir doesn't exist": {
+		"GetfsType retries with parent if dir doesn't exist": {
 			req: pathReq,
 			sysCfg: &system.MockSysConfig{
-				GetFsTypeRes: &system.FsType{Name: system.FsTypeExt4},
-				GetFsTypeErr: []error{os.ErrNotExist, os.ErrNotExist, nil},
+				GetfsTypeRes: &system.FsType{Name: system.FsTypeExt4},
+				GetfsTypeErr: []error{os.ErrNotExist, os.ErrNotExist, nil},
 			},
 		},
 		"ClearMountpoint fails": {
@@ -201,7 +201,7 @@ func TestMetadata_Provider_Format(t *testing.T) {
 			req: pathReq,
 			sysCfg: &system.MockSysConfig{
 				MkfsErr:      errors.New("mkfs was called!"),
-				GetFsTypeRes: &system.FsType{Name: system.FsTypeExt4},
+				GetfsTypeRes: &system.FsType{Name: system.FsTypeExt4},
 			},
 			mountCfg: &storage.MockMountProviderConfig{
 				MountErr: errors.New("mount was called!"),
@@ -214,6 +214,12 @@ func TestMetadata_Provider_Format(t *testing.T) {
 
 			testDir, cleanupTestDir := test.CreateTestDir(t)
 			defer cleanupTestDir()
+
+			if tc.sysCfg == nil {
+				tc.sysCfg = new(system.MockSysConfig)
+			}
+			tc.sysCfg.RealMkdir = true
+			tc.sysCfg.RealRemoveAll = true
 
 			// Point the paths at the testdir
 			if tc.req.RootPath != "" {
@@ -239,7 +245,8 @@ func TestMetadata_Provider_Format(t *testing.T) {
 
 			var p *Provider
 			if !tc.nilProv {
-				p = NewProvider(log, system.NewMockSysProvider(log, tc.sysCfg), storage.NewMockMountProvider(tc.mountCfg))
+				p = NewProvider(log, system.NewMockSysProvider(log, tc.sysCfg),
+					storage.NewMockMountProvider(tc.mountCfg))
 			}
 
 			err := p.Format(tc.req)

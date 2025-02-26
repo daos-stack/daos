@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -191,12 +192,13 @@ cont_iv_ent_copy(struct ds_iv_entry *entry, struct cont_iv_key *key,
 				cip_acl.dal_ace[src->iv_prop.cip_acl.dal_len]);
 		memcpy(&dst->iv_prop, &src->iv_prop, size);
 		break;
-	case IV_CONT_AGG_EPOCH_BOUNDRY:
-		dst->iv_agg_eph.eph = src->iv_agg_eph.eph;
+	case IV_CONT_TRACK_EPOCH:
+		dst->iv_track_eph.ite_ec_agg_eph = src->iv_track_eph.ite_ec_agg_eph;
+		dst->iv_track_eph.ite_stable_eph = src->iv_track_eph.ite_stable_eph;
 		break;
 	default:
-		D_ERROR("bad iv_class_id %d: "DF_RC"\n", entry->iv_class->iv_class_id,
-			DP_RC(-DER_INVAL));
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "bad iv_class_id %d: ", entry->iv_class->iv_class_id);
 		return -DER_INVAL;
 	};
 
@@ -511,8 +513,15 @@ again:
 					}
 					prop_entry = daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS);
 					D_ASSERT(prop_entry != NULL);
-
 					daos_prop_val_2_co_status(prop_entry->dpe_val, &stat);
+
+					rc = ds_cont_tgt_open(entry->ns->iv_pool_uuid,
+							      civ_key->cont_uuid, chdl.ch_cont,
+							      chdl.ch_flags, chdl.ch_sec_capas,
+							      stat.dcs_pm_ver);
+					if (rc != 0)
+						D_GOTO(out, rc);
+
 					iv_entry.iv_capa.status_pm_ver = stat.dcs_pm_ver;
 					daos_prop_free(prop);
 					/* Only happens on xstream 0 */
@@ -524,6 +533,11 @@ again:
 					rc = dbtree_update(root_hdl, &key_iov, &val_iov);
 					if (rc == 0)
 						goto again;
+					/*
+					 * It seems that not rolling back the ds_cont_tgt_open call
+					 * above is harmless. Also, an error from the dbtree_update
+					 * call should be rare.
+					 */
 				} else {
 					rc = -DER_NONEXIST;
 				}
@@ -539,9 +553,9 @@ out:
 	return rc;
 }
 
-/* Update the EC agg epoch all servers to the leader */
+/* Update the track epoch all servers to the leader */
 static int
-cont_iv_ent_agg_eph_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
+cont_iv_ent_track_eph_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			   d_sg_list_t *src)
 {
 	struct cont_iv_key	*civ_key = key2priv(key);
@@ -556,25 +570,25 @@ cont_iv_ent_agg_eph_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	if (rank != entry->ns->iv_master_rank)
 		return -DER_IVCB_FORWARD;
 
-	rc = ds_cont_leader_update_agg_eph(entry->ns->iv_pool_uuid,
-					   civ_key->cont_uuid,
-					   civ_ent->iv_agg_eph.rank,
-					   civ_ent->iv_agg_eph.eph);
+	rc = ds_cont_leader_update_track_eph(entry->ns->iv_pool_uuid, civ_key->cont_uuid,
+					     civ_ent->iv_track_eph.ite_rank,
+					     civ_ent->iv_track_eph.ite_ec_agg_eph,
+					     civ_ent->iv_track_eph.ite_stable_eph);
 	return rc;
 }
 
-/* Each server refresh the VOS aggregation epoch gotten from the leader */
+/* Each server refresh the track epoch gotten from the leader */
 static int
-cont_iv_ent_agg_eph_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
+cont_iv_ent_track_eph_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			    d_sg_list_t *src)
 {
 	struct cont_iv_entry	*civ_ent = src->sg_iovs[0].iov_buf;
 	struct cont_iv_key	*civ_key = key2priv(key);
 	int			rc;
 
-	rc = ds_cont_tgt_refresh_agg_eph(entry->ns->iv_pool_uuid,
-					 civ_key->cont_uuid,
-					 civ_ent->iv_agg_eph.eph);
+	rc = ds_cont_tgt_refresh_track_eph(entry->ns->iv_pool_uuid, civ_key->cont_uuid,
+					   civ_ent->iv_track_eph.ite_ec_agg_eph,
+					   civ_ent->iv_track_eph.ite_stable_eph);
 	return rc;
 }
 
@@ -626,13 +640,12 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			if (rc)
 				D_GOTO(out, rc);
 		} else if (entry->iv_class->iv_class_id ==
-						IV_CONT_AGG_EPOCH_REPORT) {
-			rc = cont_iv_ent_agg_eph_update(entry, key, src);
+						IV_CONT_TRACK_EPOCH_REPORT) {
+			rc = cont_iv_ent_track_eph_update(entry, key, src);
 			if (rc)
 				D_GOTO(out, rc);
-		} else if (entry->iv_class->iv_class_id ==
-						IV_CONT_AGG_EPOCH_BOUNDRY) {
-			rc = cont_iv_ent_agg_eph_refresh(entry, key, src);
+		} else if (entry->iv_class->iv_class_id == IV_CONT_TRACK_EPOCH) {
+			rc = cont_iv_ent_track_eph_refresh(entry, key, src);
 			if (rc)
 				D_GOTO(out, rc);
 		}
@@ -654,7 +667,8 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		}
 		if (entry->iv_class->iv_class_id == IV_CONT_CAPA &&
 		    !uuid_is_null(civ_key->cont_uuid)) {
-			rc = ds_cont_tgt_close(civ_key->cont_uuid);
+			rc = ds_cont_tgt_close(entry->ns->iv_pool_uuid,
+					       civ_key->cont_uuid);
 			if (rc)
 				D_GOTO(out, rc);
 		}
@@ -1005,6 +1019,7 @@ cont_iv_hdl_fetch(uuid_t cont_hdl_uuid, uuid_t pool_uuid,
 	D_DEBUG(DB_TRACE, "Can not find "DF_UUID" hdl\n",
 		DP_UUID(cont_hdl_uuid));
 
+invalidate_retry:
 	/* Fetch the capability from the leader. To avoid extra locks,
 	 * all metadatas are maintained by xstream 0, so let's create
 	 * an ULT on xstream 0 to let xstream 0 to handle capa fetch
@@ -1019,7 +1034,7 @@ cont_iv_hdl_fetch(uuid_t cont_hdl_uuid, uuid_t pool_uuid,
 	arg.eventual = eventual;
 	arg.invalidate_current = invalidate_current;
 	rc = dss_ult_create(cont_iv_capa_refresh_ult, &arg, DSS_XS_SYS,
-			    0, 0, NULL);
+			    0, DSS_DEEP_STACK_SZ, NULL);
 	if (rc)
 		D_GOTO(out_eventual, rc);
 
@@ -1033,6 +1048,19 @@ cont_iv_hdl_fetch(uuid_t cont_hdl_uuid, uuid_t pool_uuid,
 	if (*cont_hdl == NULL) {
 		D_DEBUG(DB_TRACE, "Can not find "DF_UUID" hdl\n",
 			DP_UUID(cont_hdl_uuid));
+		/* In reintegrate with case that the IC_CONT_CAPA cache is valid locally
+		 * but cont open handle invalid (not in dt_cont_hdl_hash). For this case
+		 * invalidate local IV cache first and retry again, to avoid in-flight
+		 * UPDATE's failure. (IV locally valid then the IV fetch will not trigger
+		 * cont_iv_ent_update() callback).
+		 */
+		if (!invalidate_current) {
+			invalidate_current = true;
+			ABT_eventual_free(&eventual);
+			D_DEBUG(DB_TRACE, DF_UUID" invalidate_current and retry\n",
+				DP_UUID(cont_hdl_uuid));
+			goto invalidate_retry;
+		}
 		D_GOTO(out_eventual, rc = -DER_NONEXIST);
 	}
 
@@ -1041,20 +1069,20 @@ out_eventual:
 	return rc;
 }
 
-int
-cont_iv_ec_agg_eph_update_internal(void *ns, uuid_t cont_uuid,
-				   daos_epoch_t eph, unsigned int shortcut,
-				   unsigned int sync_mode,
-				   uint32_t op)
+static int
+cont_iv_track_eph_update_internal(void *ns, uuid_t cont_uuid, daos_epoch_t ec_agg_eph,
+				  daos_epoch_t stable_eph, unsigned int shortcut,
+				  unsigned int sync_mode,  uint32_t op)
 {
 	struct cont_iv_entry	iv_entry = { 0 };
 	int			rc;
 
 	/* Only happens on xstream 0 */
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
-	iv_entry.iv_agg_eph.eph = eph;
+	iv_entry.iv_track_eph.ite_ec_agg_eph = ec_agg_eph;
+	iv_entry.iv_track_eph.ite_stable_eph = stable_eph;
 	uuid_copy(iv_entry.cont_uuid, cont_uuid);
-	rc = crt_group_rank(NULL, &iv_entry.iv_agg_eph.rank);
+	rc = crt_group_rank(NULL, &iv_entry.iv_track_eph.ite_rank);
 	if (rc) {
 		D_ERROR(DF_UUID" op %d, crt_group_rank failed "DF_RC"\n",
 			DP_UUID(cont_uuid), op, DP_RC(rc));
@@ -1070,20 +1098,22 @@ cont_iv_ec_agg_eph_update_internal(void *ns, uuid_t cont_uuid,
 }
 
 int
-cont_iv_ec_agg_eph_update(void *ns, uuid_t cont_uuid, daos_epoch_t eph)
+cont_iv_track_eph_update(void *ns, uuid_t cont_uuid, daos_epoch_t ec_agg_eph,
+			 daos_epoch_t stable_eph)
 {
-	return cont_iv_ec_agg_eph_update_internal(ns, cont_uuid, eph,
-						  CRT_IV_SHORTCUT_TO_ROOT,
-						  CRT_IV_SYNC_NONE,
-						  IV_CONT_AGG_EPOCH_REPORT);
+	return cont_iv_track_eph_update_internal(ns, cont_uuid, ec_agg_eph, stable_eph,
+						 CRT_IV_SHORTCUT_TO_ROOT,
+						 CRT_IV_SYNC_NONE,
+						 IV_CONT_TRACK_EPOCH_REPORT);
 }
 
 int
-cont_iv_ec_agg_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t eph)
+cont_iv_track_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t ec_agg_eph,
+			  daos_epoch_t stable_eph)
 {
-	return cont_iv_ec_agg_eph_update_internal(ns, cont_uuid, eph,
-						  0, CRT_IV_SYNC_LAZY,
-						  IV_CONT_AGG_EPOCH_BOUNDRY);
+	return cont_iv_track_eph_update_internal(ns, cont_uuid, ec_agg_eph, stable_eph,
+						 0, CRT_IV_SYNC_LAZY,
+						 IV_CONT_TRACK_EPOCH);
 }
 
 int
@@ -1096,14 +1126,14 @@ ds_cont_fetch_ec_agg_boundary(void *ns, uuid_t cont_uuid)
 	/* Only happens on xstream 0 */
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	uuid_copy(iv_entry.cont_uuid, cont_uuid);
-	rc = crt_group_rank(NULL, &iv_entry.iv_agg_eph.rank);
+	rc = crt_group_rank(NULL, &iv_entry.iv_track_eph.ite_rank);
 	if (rc) {
 		D_ERROR(DF_UUID" crt_group_rank failed "DF_RC"\n",
 			DP_UUID(cont_uuid), DP_RC(rc));
 		return rc;
 	}
 
-	rc = cont_iv_fetch(ns, IV_CONT_AGG_EPOCH_BOUNDRY, cont_uuid, &iv_entry,
+	rc = cont_iv_fetch(ns, IV_CONT_TRACK_EPOCH, cont_uuid, &iv_entry,
 			   sizeof(struct cont_iv_entry), sizeof(struct cont_iv_entry),
 			   true);
 	if (rc)
@@ -1173,11 +1203,11 @@ cont_iv_entry_delete(void *ns, uuid_t pool_uuid, uuid_t cont_uuid)
 	if (rc != 0)
 		D_DEBUG(DB_MD, "delete prop "DF_UUID"\n", DP_UUID(cont_uuid));
 
-	rc = cont_iv_invalidate(ns, IV_CONT_AGG_EPOCH_REPORT, cont_uuid, CRT_IV_SYNC_NONE);
+	rc = cont_iv_invalidate(ns, IV_CONT_TRACK_EPOCH_REPORT, cont_uuid, CRT_IV_SYNC_NONE);
 	if (rc != 0)
 		D_DEBUG(DB_MD, "delete agg epoch report "DF_UUID"\n", DP_UUID(cont_uuid));
 
-	rc = cont_iv_invalidate(ns, IV_CONT_AGG_EPOCH_BOUNDRY, cont_uuid, CRT_IV_SYNC_NONE);
+	rc = cont_iv_invalidate(ns, IV_CONT_TRACK_EPOCH, cont_uuid, CRT_IV_SYNC_NONE);
 	if (rc != 0)
 		D_DEBUG(DB_MD, "delete agg epoch boundary "DF_UUID"\n", DP_UUID(cont_uuid));
 
@@ -1638,8 +1668,8 @@ ds_cont_iv_fini(void)
 	ds_iv_class_unregister(IV_CONT_SNAP);
 	ds_iv_class_unregister(IV_CONT_CAPA);
 	ds_iv_class_unregister(IV_CONT_PROP);
-	ds_iv_class_unregister(IV_CONT_AGG_EPOCH_REPORT);
-	ds_iv_class_unregister(IV_CONT_AGG_EPOCH_BOUNDRY);
+	ds_iv_class_unregister(IV_CONT_TRACK_EPOCH_REPORT);
+	ds_iv_class_unregister(IV_CONT_TRACK_EPOCH);
 	return 0;
 }
 
@@ -1660,13 +1690,12 @@ ds_cont_iv_init(void)
 	if (rc)
 		D_GOTO(out, rc);
 
-	rc = ds_iv_class_register(IV_CONT_AGG_EPOCH_REPORT, &iv_cache_ops,
+	rc = ds_iv_class_register(IV_CONT_TRACK_EPOCH_REPORT, &iv_cache_ops,
 				  &cont_iv_ops);
 	if (rc)
 		D_GOTO(out, rc);
 
-	rc = ds_iv_class_register(IV_CONT_AGG_EPOCH_BOUNDRY, &iv_cache_ops,
-				  &cont_iv_ops);
+	rc = ds_iv_class_register(IV_CONT_TRACK_EPOCH, &iv_cache_ops, &cont_iv_ops);
 	if (rc)
 		D_GOTO(out, rc);
 out:

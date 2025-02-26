@@ -602,7 +602,11 @@ drain_fail_and_retry_objects(void **state)
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 			      DAOS_REBUILD_OBJ_FAIL | DAOS_FAIL_ALWAYS, 0, NULL);
 
+	arg->no_rebuild = 1;
 	drain_single_pool_rank(arg, ranks_to_kill[0], false);
+	print_message("sleep 30 seconds for drain to fail and exit\n");
+	sleep(30);
+	arg->no_rebuild = 0;
 
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
 	rebuild_io_validate(arg, oids, OBJ_NR);
@@ -980,6 +984,73 @@ dfs_drain_writeloop(void **state)
 	dfs_extend_drain_common(state, EXTEND_DRAIN_WRITELOOP, OC_EC_4P2GX);
 }
 
+void
+dfs_drain_extend(void **state)
+{
+	test_arg_t	*arg = *state;
+	dfs_t		*dfs_mt;
+	daos_handle_t	co_hdl;
+	dfs_obj_t	*dir;
+	uuid_t		co_uuid;
+	char		str[37];
+	daos_obj_id_t	oids[EXTEND_DRAIN_OBJ_NR];
+	dfs_attr_t attr = {};
+	int		rc;
+
+	FAULT_INJECTION_REQUIRED();
+
+	if (!test_runable(arg, 3))
+		return;
+
+	attr.da_props = daos_prop_alloc(2);
+	assert_non_null(attr.da_props);
+	attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+	attr.da_props->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RANK;
+	attr.da_props->dpp_entries[1].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	attr.da_props->dpp_entries[1].dpe_val = DAOS_PROP_CO_REDUN_RF0;
+	rc = dfs_cont_create(arg->pool.poh, &co_uuid, &attr, &co_hdl, &dfs_mt);
+	daos_prop_free(attr.da_props);
+	assert_int_equal(rc, 0);
+	print_message("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
+
+	rc = dfs_open(dfs_mt, NULL, "dir", S_IFDIR | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT, OC_SX, 0, NULL, &dir);
+	assert_int_equal(rc, 0);
+
+	/* Create 10 files */
+	extend_drain_write(dfs_mt, dir, OC_SX, EXTEND_DRAIN_OBJ_NR, WRITE_SIZE,
+			   'a', oids);
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_REBUILD_HANG | DAOS_FAIL_ALWAYS);
+	arg->no_rebuild = 1;
+	drain_single_pool_rank(arg, ranks_to_kill[0], false);
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 0, 0, NULL);
+	extend_single_pool_rank(arg, 3);
+	arg->no_rebuild = 0;
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
+
+	if (arg->myrank == 0)
+		test_rebuild_wait(&arg, 1);
+
+	extend_drain_check(dfs_mt, dir, OC_SX, EXTEND_DRAIN_UPDATE);
+
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0], false);
+
+	extend_drain_check(dfs_mt, dir, OC_SX, EXTEND_DRAIN_UPDATE);
+
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+	rc = dfs_umount(dfs_mt);
+	assert_int_equal(rc, 0);
+
+	rc = daos_cont_close(co_hdl, NULL);
+	assert_rc_equal(rc, 0);
+
+	uuid_unparse(co_uuid, str);
+	rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
+	assert_rc_equal(rc, 0);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest drain_tests[] = {
 	{"DRAIN0: drain small rec multiple dkeys",
@@ -1018,6 +1089,8 @@ static const struct CMUnitTest drain_tests[] = {
 	 dfs_drain_overwrite, rebuild_sub_rf0_setup, test_teardown},
 	{"DRAIN17: keep write during drain",
 	 dfs_drain_writeloop, rebuild_sub_rf0_setup, test_teardown},
+	{"DRAIN18: drain and extend at the same time",
+	 dfs_drain_extend, rebuild_sub_3nodes_rf0_setup, test_teardown},
 };
 
 int

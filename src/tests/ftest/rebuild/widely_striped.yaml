@@ -2,6 +2,9 @@ hosts:
   test_servers: 7
   test_clients: 1
 timeout: 1200
+agent_config:
+  cache_expiration: 1
+  #disable_caching: true
 server_config:
   name: daos_server
   crt_timeout: 60

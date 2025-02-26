@@ -1,5 +1,6 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -24,6 +25,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/engine"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -160,9 +162,8 @@ func minPoolNvme(tgtCount, rankCount uint64) uint64 {
 	return minRankNvme(tgtCount) * rankCount
 }
 
-// calculateCreateStorage determines the amount of SCM/NVMe storage to
-// allocate per engine in order to fulfill the create request, if those
-// values are not already supplied as part of the request.
+// calculateCreateStorage determines the amount of SCM/NVMe storage to allocate per engine in order
+// to fulfill the create request, if those values are not already supplied as part of the request.
 func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 	instances := svc.harness.Instances()
 	if len(instances) < 1 {
@@ -171,15 +172,22 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 	if len(req.GetRanks()) == 0 {
 		return errors.New("zero ranks in calculateCreateStorage()")
 	}
-	if req.MetaBlobSize > 0 && !instances[0].GetStorage().BdevRoleMetaConfigured() {
-		return errors.New("meta size set in request but md-on-ssd is not enabled in config")
+
+	mdOnSSD := instances[0].GetStorage().BdevRoleMetaConfigured()
+	switch {
+	case !mdOnSSD && req.MemRatio > 0:
+		// Prevent MD-on-SSD parameters being used in incompatible mode.
+		return FaultPoolMemRatioNoRoles
+	case mdOnSSD && req.MemRatio == 0:
+		// Set reasonable default if not set in MD-on-SSD mode.
+		req.MemRatio = storage.DefaultMemoryFileRatio
+		svc.log.Infof("Default memory-file:md-on-ssd ratio of %d%% applied",
+			int(storage.DefaultMemoryFileRatio)*100)
 	}
 
-	// NB: The following logic is based on the assumption that
-	// a request will always include SCM as tier 0. Currently,
-	// we only support one additional tier, NVMe, which is
-	// optional. As we add support for other tiers, this logic
-	// will need to be updated.
+	// NB: The following logic is based on the assumption that a request will always include SCM
+	// as tier 0. Currently, we only support one additional tier, NVMe, which is optional. As we
+	// add support for other tiers, this logic will need to be updated.
 
 	nvmeMissing := !instances[0].GetStorage().HasBlockDevices()
 
@@ -188,29 +196,29 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 
 	switch {
 	// Pool tier sizes already specified in request.
-	case len(req.Tierbytes) == 2 && len(req.Tierratio) == 0 && req.Totalbytes == 0:
+	case len(req.TierBytes) == 2 && len(req.TierRatio) == 0 && req.TotalBytes == 0:
 		// If no NVMe, refuse request as NVMe has been incorrectly requested.
-		nvmeBytes := req.Tierbytes[1]
+		nvmeBytes := req.TierBytes[1]
 		if nvmeMissing && nvmeBytes > 0 {
 			return errors.Errorf("%s NVMe requested for pool but config has zero bdevs",
-				humanize.Bytes(nvmeBytes))
+				humanize.IBytes(nvmeBytes))
 		}
 
 	// Pool tier sizes to be populated based on total-size and ratio.
-	case len(req.Tierbytes) == 0 && len(req.Tierratio) == 2 && req.Totalbytes > 0:
+	case len(req.TierBytes) == 0 && len(req.TierRatio) == 2 && req.TotalBytes > 0:
 		// If no NVMe, adjust ratio as NVMe hasn't been specifically requested.
 		if nvmeMissing {
 			svc.log.Noticef("config has zero bdevs; excluding NVMe from pool create " +
 				"request")
-			req.Tierratio = []float64{1.00, 0.00}
+			req.TierRatio = []float64{1.00, 0.00}
 		}
-		req.Tierbytes = make([]uint64, len(req.Tierratio))
-		for tierIdx := range req.Tierbytes {
-			req.Tierbytes[tierIdx] =
-				uint64(float64(req.Totalbytes)*req.Tierratio[tierIdx]) /
+		req.TierBytes = make([]uint64, len(req.TierRatio))
+		for tierIdx := range req.TierBytes {
+			req.TierBytes[tierIdx] =
+				uint64(float64(req.TotalBytes)*req.TierRatio[tierIdx]) /
 					uint64(len(req.GetRanks()))
-			svc.log.Infof("%s = (%s*%f) / %d", humanize.Bytes(req.Tierbytes[tierIdx]),
-				humanize.Bytes(req.Totalbytes), req.Tierratio[tierIdx],
+			svc.log.Infof("%s = (%s*%f) / %d", humanize.IBytes(req.TierBytes[tierIdx]),
+				humanize.IBytes(req.TotalBytes), req.TierRatio[tierIdx],
 				len(req.GetRanks()))
 		}
 
@@ -224,20 +232,20 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 		return errors.New("zero target count")
 	}
 	minPoolTotal := minPoolScm(tgts, ranks)
-	if req.Tierbytes[1] > 0 {
+	if req.TierBytes[1] > 0 {
 		minPoolTotal += minPoolNvme(tgts, ranks)
 	}
-	if req.Tierbytes[0] < minRankScm(tgts) {
+	if req.TierBytes[0] < minRankScm(tgts) {
 		return FaultPoolScmTooSmall(minPoolTotal, minPoolScm(tgts, ranks))
 	}
-	if req.Tierbytes[1] != 0 && req.Tierbytes[1] < minRankNvme(tgts) {
+	if req.TierBytes[1] != 0 && req.TierBytes[1] < minRankNvme(tgts) {
 		return FaultPoolNvmeTooSmall(minPoolTotal, minPoolNvme(tgts, ranks))
 	}
 
 	// Zero no longer required request fields.
-	req.Totalbytes = 0
-	req.Tierratio = nil
-	req.Numranks = 0
+	req.TotalBytes = 0
+	req.TierRatio = nil
+	req.NumRanks = 0
 
 	return nil
 }
@@ -254,6 +262,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 	if err != nil {
 		return nil, err
 	}
+
 	return msg.(*mgmtpb.PoolCreateResp), nil
 }
 
@@ -299,11 +308,10 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 			return nil, errors.Wrap(err, "query on already-created pool failed")
 		}
 
-		resp.Leader = qr.Leader
+		resp.SvcLdr = qr.SvcLdr
 		resp.SvcReps = ranklist.RanksToUint32(ps.Replicas)
 		resp.TgtRanks = ranklist.RanksToUint32(ps.Storage.CreationRanks())
 		resp.TierBytes = ps.Storage.PerRankTierStorage
-		// TODO DAOS-14223: Store Meta-Blob-Size in sysdb.
 
 		return resp, nil
 	}
@@ -357,8 +365,8 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		// specify a number of ranks, all are used).
 		nAllRanks := len(allRanks)
 		nRanks := nAllRanks
-		if req.GetNumranks() > 0 {
-			nRanks = int(req.GetNumranks())
+		if req.GetNumRanks() > 0 {
+			nRanks = int(req.GetNumRanks())
 
 			if nRanks > nAllRanks {
 				return nil, FaultPoolInvalidNumRanks(nRanks, nAllRanks)
@@ -394,8 +402,8 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		return uint32(allRanks)
 	}(len(req.GetRanks()))
 
-	// If Numsvcreps is not specified, daos_engine will choose a value.
-	if req.GetNumsvcreps() > maxSvcReps {
+	// If NumSvcReps is not specified, daos_engine will choose a value.
+	if req.GetNumSvcReps() > maxSvcReps {
 		return nil, FaultPoolInvalidServiceReps(maxSvcReps)
 	}
 
@@ -409,7 +417,8 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		return nil, err
 	}
 
-	ps = system.NewPoolService(poolUUID, req.Tierbytes, ranklist.RanksFromUint32(req.GetRanks()))
+	ps = system.NewPoolService(poolUUID, req.TierBytes, req.MemRatio,
+		ranklist.RanksFromUint32(req.GetRanks()))
 	ps.PoolLabel = poolLabel
 	if err := svc.sysdb.AddPoolService(ctx, ps); err != nil {
 		return nil, err
@@ -452,7 +461,7 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		}
 	}()
 
-	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolCreate, req)
+	dResp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolCreate, req)
 	if err != nil {
 		svc.log.Errorf("pool create dRPC call failed: %s", err)
 		if err := svc.sysdb.RemovePoolService(ctx, ps.PoolUUID); err != nil {
@@ -470,8 +479,8 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		}
 	}
 
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolCreate response")
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, err
 	}
 
 	if resp.GetStatus() != 0 {
@@ -598,7 +607,7 @@ func (svc *mgmtSvc) checkPools(parent context.Context, ignCreating bool, psList 
 			Id:        ps.PoolUUID.String(),
 		}
 
-		if _, err := svc.PoolDestroy(ctx, dr); err != nil {
+		if _, err := svc.poolDestroyNoLeaderCheck(ctx, dr); err != nil {
 			// Best effort cleanup. If the pool destroy fails here,
 			// another leadership step-up should get it eventually.
 			svc.log.Errorf("pool %s not destroyed: %s", ps.PoolUUID, err)
@@ -657,6 +666,10 @@ func (svc *mgmtSvc) PoolDestroy(parent context.Context, req *mgmtpb.PoolDestroyR
 		return nil, err
 	}
 
+	return svc.poolDestroyNoLeaderCheck(parent, req)
+}
+
+func (svc *mgmtSvc) poolDestroyNoLeaderCheck(parent context.Context, req *mgmtpb.PoolDestroyReq) (*mgmtpb.PoolDestroyResp, error) {
 	poolUUID, err := svc.resolvePoolID(req.Id)
 	if err != nil {
 		return nil, err
@@ -739,14 +752,15 @@ func (svc *mgmtSvc) PoolDestroy(parent context.Context, req *mgmtpb.PoolDestroyR
 	}
 	sort.Slice(allRanks, func(i, j int) bool { return allRanks[i] < allRanks[j] })
 	req.SvcRanks = allRanks
-	svc.log.Debugf("MgmtSvc.PoolDestroy issuing drpc.MethodPoolDestroy: id=%s nSvcRanks=%d\n", req.Id, len(req.SvcRanks))
-	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolDestroy, req)
+	svc.log.Debugf("MgmtSvc.PoolDestroy issuing drpc.MethodPoolDestroy: id=%s nSvcRanks=%d\n",
+		req.Id, len(req.SvcRanks))
+	dResp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolDestroy, req)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolDestroy response")
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, err
 	}
 
 	ds := daos.Status(resp.Status)
@@ -772,14 +786,14 @@ func (svc *mgmtSvc) evictPoolConnections(ctx context.Context, req *mgmtpb.PoolEv
 		return nil, err
 	}
 
-	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolEvict, req)
+	dResp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolEvict, req)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := &mgmtpb.PoolEvictResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolEvict response")
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, err
 	}
 
 	if resp.Count > 0 {
@@ -815,14 +829,14 @@ func (svc *mgmtSvc) PoolExclude(ctx context.Context, req *mgmtpb.PoolExcludeReq)
 		return nil, err
 	}
 
-	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolExclude, req)
+	dResp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolExclude, req)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := &mgmtpb.PoolExcludeResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolExclude response")
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, err
 	}
 
 	return resp, nil
@@ -834,14 +848,14 @@ func (svc *mgmtSvc) PoolDrain(ctx context.Context, req *mgmtpb.PoolDrainReq) (*m
 		return nil, err
 	}
 
-	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolDrain, req)
+	dResp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolDrain, req)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := &mgmtpb.PoolDrainResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolDrain response")
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, err
 	}
 
 	return resp, nil
@@ -866,25 +880,26 @@ func (svc *mgmtSvc) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq) (
 	if err != nil {
 		return nil, err
 	}
-	req.Tierbytes = ps.Storage.PerRankTierStorage
+	req.TierBytes = ps.Storage.PerRankTierStorage
+	req.MemRatio = ps.Storage.MemRatio
 
 	svc.log.Debugf("MgmtSvc.PoolExtend forwarding modified req:%+v\n", req)
 
-	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolExtend, req)
+	dResp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolExtend, req)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := &mgmtpb.PoolExtendResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolExtend response")
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, err
 	}
 
 	return resp, nil
 }
 
 // PoolReintegrate implements the method defined for the Management Service.
-func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReintegrateReq) (*mgmtpb.PoolReintegrateResp, error) {
+func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReintReq) (*mgmtpb.PoolReintResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
@@ -895,16 +910,30 @@ func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReinteg
 	if err != nil {
 		return nil, err
 	}
-	req.Tierbytes = ps.Storage.PerRankTierStorage
 
-	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolReintegrate, req)
+	r := ranklist.Rank(req.Rank)
+
+	m, err := svc.membership.Get(r)
 	if err != nil {
 		return nil, err
 	}
 
-	resp := &mgmtpb.PoolReintegrateResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolReintegrate response")
+	if m.State&system.AvailableMemberFilter == 0 {
+		invalid := []ranklist.Rank{r}
+		return nil, FaultPoolInvalidRanks(invalid)
+	}
+
+	req.TierBytes = ps.Storage.PerRankTierStorage
+	req.MemRatio = ps.Storage.MemRatio
+
+	dResp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolReintegrate, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.PoolReintResp{}
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, err
 	}
 
 	return resp, nil
@@ -916,15 +945,22 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 		return nil, err
 	}
 
-	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolQuery, req)
+	if req.QueryMask == 0 {
+		req.QueryMask = uint64(daos.DefaultPoolQueryMask)
+	}
+
+	dResp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolQuery, req)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := &mgmtpb.PoolQueryResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolQuery response")
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, err
 	}
+
+	// Preserve compatibility with pre-2.6 callers.
+	resp.Leader = resp.SvcLdr
 
 	return resp, nil
 }
@@ -935,14 +971,14 @@ func (svc *mgmtSvc) PoolQueryTarget(ctx context.Context, req *mgmtpb.PoolQueryTa
 		return nil, err
 	}
 
-	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolQueryTarget, req)
+	dResp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolQueryTarget, req)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := &mgmtpb.PoolQueryTargetResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolQueryTarget response")
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, err
 	}
 
 	return resp, nil
@@ -954,14 +990,14 @@ func (svc *mgmtSvc) PoolUpgrade(ctx context.Context, req *mgmtpb.PoolUpgradeReq)
 		return nil, err
 	}
 
-	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolUpgrade, req)
+	dResp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolUpgrade, req)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := &mgmtpb.PoolUpgradeResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolUpgrade response")
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, err
 	}
 
 	return resp, nil
@@ -1002,15 +1038,15 @@ func (svc *mgmtSvc) updatePoolLabel(ctx context.Context, sys string, uuid uuid.U
 		Properties: []*mgmtpb.PoolProperty{prop},
 	}
 
-	var dresp *drpc.Response
-	dresp, err = svc.makePoolServiceCall(ctx, drpc.MethodPoolSetProp, req)
+	var dResp *drpc.Response
+	dResp, err = svc.makePoolServiceCall(ctx, drpc.MethodPoolSetProp, req)
 	if err != nil {
 		return err
 	}
 
 	resp := new(mgmtpb.PoolSetPropResp)
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return errors.Wrap(err, "unmarshal PoolSetProp response")
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return err
 	}
 
 	if resp.GetStatus() != 0 {
@@ -1067,14 +1103,14 @@ func (svc *mgmtSvc) PoolSetProp(parent context.Context, req *mgmtpb.PoolSetPropR
 
 	req.Properties = miscProps
 
-	var dresp *drpc.Response
-	dresp, err = svc.makePoolServiceCall(ctx, drpc.MethodPoolSetProp, req)
+	var dResp *drpc.Response
+	dResp, err = svc.makePoolServiceCall(ctx, drpc.MethodPoolSetProp, req)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolSetProp response")
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, err
 	}
 
 	return resp, nil
@@ -1093,14 +1129,14 @@ func (svc *mgmtSvc) PoolGetProp(ctx context.Context, req *mgmtpb.PoolGetPropReq)
 		return nil, errors.Errorf("PoolGetProp() request with 0 properties")
 	}
 
-	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolGetProp, req)
+	dResp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolGetProp, req)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := new(mgmtpb.PoolGetPropResp)
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolGetProp response")
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, err
 	}
 
 	if resp.GetStatus() != 0 {
@@ -1116,14 +1152,14 @@ func (svc *mgmtSvc) PoolGetACL(ctx context.Context, req *mgmtpb.GetACLReq) (*mgm
 		return nil, err
 	}
 
-	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolGetACL, req)
+	dResp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolGetACL, req)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := &mgmtpb.ACLResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolGetACL response")
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "PoolGetACL")
 	}
 
 	return resp, nil
@@ -1135,14 +1171,14 @@ func (svc *mgmtSvc) PoolOverwriteACL(ctx context.Context, req *mgmtpb.ModifyACLR
 		return nil, err
 	}
 
-	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolOverwriteACL, req)
+	dResp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolOverwriteACL, req)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := &mgmtpb.ACLResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolOverwriteACL response")
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "PoolOverwriteACL")
 	}
 
 	return resp, nil
@@ -1155,14 +1191,14 @@ func (svc *mgmtSvc) PoolUpdateACL(ctx context.Context, req *mgmtpb.ModifyACLReq)
 		return nil, err
 	}
 
-	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolUpdateACL, req)
+	dResp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolUpdateACL, req)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := &mgmtpb.ACLResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolUpdateACL response")
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "PoolUpdateACL")
 	}
 
 	return resp, nil
@@ -1175,14 +1211,14 @@ func (svc *mgmtSvc) PoolDeleteACL(ctx context.Context, req *mgmtpb.DeleteACLReq)
 		return nil, err
 	}
 
-	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolDeleteACL, req)
+	dResp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolDeleteACL, req)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := &mgmtpb.ACLResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolDeleteACL response")
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "PoolDeleteACL")
 	}
 
 	return resp, nil
@@ -1190,7 +1226,7 @@ func (svc *mgmtSvc) PoolDeleteACL(ctx context.Context, req *mgmtpb.DeleteACLReq)
 
 // ListPools returns a set of all pools in the system.
 func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*mgmtpb.ListPoolsResp, error) {
-	if err := svc.checkReplicaRequest(req); err != nil {
+	if err := svc.checkReplicaRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
 

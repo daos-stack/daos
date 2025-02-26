@@ -91,14 +91,17 @@ func TestSystem_RankGroupsFromMembers(t *testing.T) {
 
 func TestSystem_RankGroupsFromMemberResults(t *testing.T) {
 	for name, tc := range map[string]struct {
-		rankGroups RankGroups
-		results    MemberResults
-		expGroups  []string
-		expOut     string
-		expErr     error
+		nilRankGroups    bool
+		rankGroups       RankGroups
+		results          MemberResults
+		matchingFieldSep bool
+		expGroups        []string
+		expOut           string
+		expErr           error
 	}{
 		"nil groups": {
-			expErr: errors.New("expecting non-nil"),
+			nilRankGroups: true,
+			expErr:        errors.New("expecting non-nil"),
 		},
 		"existing groups": {
 			rankGroups: RankGroups{
@@ -107,16 +110,13 @@ func TestSystem_RankGroupsFromMemberResults(t *testing.T) {
 			expErr: errors.New("expecting non-nil empty"),
 		},
 		"nil results": {
-			rankGroups: make(RankGroups),
-			expGroups:  []string{},
+			expGroups: []string{},
 		},
 		"no results": {
-			rankGroups: make(RankGroups),
-			expGroups:  []string{},
-			results:    MemberResults{},
+			expGroups: []string{},
+			results:   MemberResults{},
 		},
 		"results with no action": {
-			rankGroups: make(RankGroups),
 			results: MemberResults{
 				MockMemberResult(4, "ping", nil, MemberStateExcluded),
 				MockMemberResult(5, "", nil, MemberStateExcluded),
@@ -124,7 +124,6 @@ func TestSystem_RankGroupsFromMemberResults(t *testing.T) {
 			expErr: errors.New("action field empty for rank 5 result"),
 		},
 		"results with duplicate ranks": {
-			rankGroups: make(RankGroups),
 			results: MemberResults{
 				MockMemberResult(4, "ping", nil, MemberStateExcluded),
 				MockMemberResult(4, "ping", nil, MemberStateExcluded),
@@ -132,40 +131,58 @@ func TestSystem_RankGroupsFromMemberResults(t *testing.T) {
 			expErr: &ErrMemberExists{Rank: ranklist.NewRankPtr(4)},
 		},
 		"successful results": {
-			rankGroups: make(RankGroups),
 			results: MemberResults{
 				MockMemberResult(2, "ping", nil, MemberStateStopped),
 				MockMemberResult(3, "ping", nil, MemberStateExcluded),
 				MockMemberResult(4, "ping", nil, MemberStateExcluded),
 				MockMemberResult(1, "ping", nil, MemberStateJoined),
 			},
-			expGroups: []string{"ping/OK"},
-			expOut:    "1-4: ping/OK\n",
+			expGroups: []string{"ping\tOK"},
+			expOut:    "1-4: ping\tOK\n",
 		},
 		"mixed results": {
-			rankGroups: make(RankGroups),
 			results: MemberResults{
 				MockMemberResult(2, "ping", nil, MemberStateStopped),
 				MockMemberResult(3, "ping", nil, MemberStateExcluded),
-				MockMemberResult(4, "ping", errors.New("failure 2"), MemberStateExcluded),
+				MockMemberResult(4, "ping", errors.New("failure\t2"), MemberStateExcluded),
 				MockMemberResult(5, "ping", errors.New("failure 2"), MemberStateExcluded),
 				MockMemberResult(7, "ping", errors.New("failure 1"), MemberStateExcluded),
 				MockMemberResult(6, "ping", errors.New("failure 1"), MemberStateExcluded),
 				MockMemberResult(1, "ping", nil, MemberStateJoined),
 			},
-			expGroups: []string{"ping/OK", "ping/failure 1", "ping/failure 2"},
-			expOut:    "1-3: ping/OK\n6-7: ping/failure 1\n4-5: ping/failure 2\n",
+			expGroups: []string{"ping\tOK", "ping\tfailure 1", "ping\tfailure 2"},
+			expOut:    "1-3: ping\tOK\n6-7: ping\tfailure 1\n4-5: ping\tfailure 2\n",
+		},
+		"separator in error message": {
+			results: MemberResults{
+				MockMemberResult(2, "ping", nil, MemberStateStopped),
+				MockMemberResult(3, "ping", nil, MemberStateExcluded),
+				MockMemberResult(4, "ping", errors.New("failure 2"),
+					MemberStateExcluded),
+				MockMemberResult(5, "ping", errors.New("failure 2"),
+					MemberStateExcluded),
+			},
+			matchingFieldSep: true,
+			expErr:           errors.New("illegal field separator"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			gotErr := tc.rankGroups.FromMemberResults(tc.results, "/")
+			if tc.rankGroups == nil && !tc.nilRankGroups {
+				tc.rankGroups = make(RankGroups)
+			}
+			sep := "\t"
+			if tc.matchingFieldSep {
+				sep = " "
+			}
+
+			gotErr := tc.rankGroups.FromMemberResults(tc.results, sep)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
 
 			if diff := cmp.Diff(tc.expGroups, tc.rankGroups.Keys()); diff != "" {
-				t.Fatalf("unexpected states (-want, +got):\n%s\n", diff)
+				t.Fatalf("unexpected group states (-want, +got):\n%s\n", diff)
 			}
 
 			if diff := cmp.Diff(tc.expOut, tc.rankGroups.String()); diff != "" {

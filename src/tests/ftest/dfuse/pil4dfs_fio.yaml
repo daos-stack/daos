@@ -1,0 +1,93 @@
+hosts:
+  test_servers: 2
+  test_clients: 1
+
+timeout: 600
+
+server_config:
+  name: daos_server
+  engines_per_host: 2
+  engines:
+    0:
+      pinned_numa_node: 0
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      log_mask: INFO
+      storage: auto
+    1:
+      pinned_numa_node: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      log_mask: INFO
+      storage: auto
+
+pool:
+  size: 90%
+
+container:
+  type: POSIX
+  control_method: daos
+
+test_pil4dfs_vs_dfs:
+  bw_deltas:
+    read: 10
+    write: 10
+
+fio:
+  names:
+    - global
+    - job
+  output_format: 'json'
+  global:
+    direct: 1
+    time_based: 1
+    runtime: '60s'
+    ramp_time: '5s'
+    group_reporting: 1
+    cpus_allowed_policy: split
+    numa_mem_policy: bind:all
+    percentile_list: '99.0:99.9:99.99:99.999:99.9999:100'
+    disable_slat: 1
+    disable_clat: 1
+  job:
+    params: !mux
+      256B_fork:
+        pil4dfs_ioengines: ['psync']
+        thread: 0
+        blocksize: '256B'
+        size: '32K'
+        iodepth: 1
+      256B_pthread:
+        pil4dfs_ioengines: ['psync']
+        thread: 1
+        blocksize: '256B'
+        size: '32K'
+        iodepth: 1
+      1M_fork:
+        pil4dfs_ioengines: ['psync']
+        thread: 0
+        blocksize: '1M'
+        size: '64M'
+        iodepth: 1
+      1M_pthread:
+        pil4dfs_ioengines: ['psync']
+        thread: 1
+        blocksize: '1M'
+        size: '64M'
+        iodepth: 1
+      iodepth_fork:
+        pil4dfs_ioengines: ['libaio']
+        thread: 0
+        numjobs: 8
+        blocksize: '4K'
+        size: '512K'
+        iodepth: 16
+      iodepth_thread:
+        pil4dfs_ioengines: ['libaio']
+        thread: 1
+        numjobs: 8
+        blocksize: '4K'
+        size: '512K'
+        iodepth: 16

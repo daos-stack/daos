@@ -1,5 +1,6 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -13,12 +14,38 @@
 
 #include <daos_srv/pool.h>
 #include <daos/rpc.h>
+#include <daos/metrics.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/bio.h>
 #include "rpc.h"
 #include "srv_internal.h"
 #include "srv_layout.h"
-bool ec_agg_disabled;
+
+bool		ec_agg_disabled;
+uint32_t        pw_rf = -1; /* pool wise redundancy factor */
+uint32_t        ps_cache_intvl = 2;  /* pool space cache expiration time, in seconds */
+#define PW_RF_DEFAULT (2)
+#define PW_RF_MIN     (0)
+#define PW_RF_MAX     (4)
+
+static inline bool
+check_pool_redundancy_factor(const char *variable)
+{
+	d_getenv_uint32_t(variable, &pw_rf);
+	if (pw_rf == -1)
+		return false;
+
+	D_INFO("Checked threshold %s=%d\n", variable, pw_rf);
+
+	if (pw_rf <= PW_RF_MAX)
+		return true;
+
+	D_INFO("pw_rf %d is out of range [%d, %d], take default %d\n", pw_rf, PW_RF_MIN, PW_RF_MAX,
+	       PW_RF_DEFAULT);
+	pw_rf = PW_RF_DEFAULT;
+
+	return true;
+}
 
 static int
 init(void)
@@ -45,6 +72,19 @@ init(void)
 	d_getenv_bool("DAOS_EC_AGG_DISABLE", &ec_agg_disabled);
 	if (unlikely(ec_agg_disabled))
 		D_WARN("EC aggregation is disabled.\n");
+
+	pw_rf = -1;
+	if (!check_pool_redundancy_factor("DAOS_POOL_RF"))
+		pw_rf = PW_RF_DEFAULT;
+	D_INFO("pool redundancy factor %d\n", pw_rf);
+
+	d_getenv_uint32_t("DAOS_POOL_SPACE_CACHE_INTVL", &ps_cache_intvl);
+	if (ps_cache_intvl > 20) {
+		D_WARN("pool space cache expiration time %u is too large, use default value\n",
+		       ps_cache_intvl);
+		ps_cache_intvl = 2;
+	}
+	D_INFO("pool space cache expiration time set to %u seconds\n", ps_cache_intvl);
 
 	ds_pool_rsvc_class_register();
 
@@ -77,9 +117,12 @@ setup(void)
 {
 	bool start = true;
 
-	d_getenv_bool("DAOS_START_POOL_SVC", &start);
-	if (start)
-		return ds_pool_start_all();
+	if (!engine_in_check()) {
+		d_getenv_bool("DAOS_START_POOL_SVC", &start);
+		if (start)
+			return ds_pool_start_all();
+	}
+
 	return 0;
 }
 
@@ -100,6 +143,11 @@ static struct crt_corpc_ops ds_pool_tgt_disconnect_co_ops = {
 	.co_pre_forward	= NULL,
 };
 
+static struct crt_corpc_ops ds_pool_tgt_query_co_ops_v6 = {
+    .co_aggregate   = ds_pool_tgt_query_aggregator_v6,
+    .co_pre_forward = NULL,
+};
+
 static struct crt_corpc_ops ds_pool_tgt_query_co_ops = {
 	.co_aggregate	= ds_pool_tgt_query_aggregator,
 	.co_pre_forward	= NULL,
@@ -115,11 +163,11 @@ static struct crt_corpc_ops ds_pool_tgt_query_co_ops = {
 	.dr_corpc_ops = e,	\
 },
 
-static struct daos_rpc_handler pool_handlers_v5[] = {POOL_PROTO_CLI_RPC_LIST(5)
-							 POOL_PROTO_SRV_RPC_LIST};
-
 static struct daos_rpc_handler pool_handlers_v6[] = {POOL_PROTO_CLI_RPC_LIST(6)
-							 POOL_PROTO_SRV_RPC_LIST};
+							 POOL_PROTO_SRV_RPC_LIST(6)};
+
+static struct daos_rpc_handler pool_handlers_v7[] = {POOL_PROTO_CLI_RPC_LIST(7)
+							 POOL_PROTO_SRV_RPC_LIST(7)};
 
 #undef X
 
@@ -170,11 +218,11 @@ struct dss_module_key pool_module_key = {
 	.dmk_fini = pool_tls_fini,
 };
 
-struct dss_module_metrics pool_metrics = {
-	.dmm_tags = DAOS_SYS_TAG,
-	.dmm_init = ds_pool_metrics_alloc,
-	.dmm_fini = ds_pool_metrics_free,
-	.dmm_nr_metrics = ds_pool_metrics_count,
+struct daos_module_metrics pool_metrics = {
+    .dmm_tags       = DAOS_SYS_TAG,
+    .dmm_init       = ds_pool_metrics_alloc,
+    .dmm_fini       = ds_pool_metrics_free,
+    .dmm_nr_metrics = ds_pool_metrics_count,
 };
 
 struct dss_module pool_module = {
@@ -186,9 +234,9 @@ struct dss_module pool_module = {
     .sm_fini        = fini,
     .sm_setup       = setup,
     .sm_cleanup     = cleanup,
-    .sm_proto_fmt   = {&pool_proto_fmt_v5, &pool_proto_fmt_v6},
+    .sm_proto_fmt   = {&pool_proto_fmt_v6, &pool_proto_fmt_v7},
     .sm_cli_count   = {POOL_PROTO_CLI_COUNT, POOL_PROTO_CLI_COUNT},
-    .sm_handlers    = {pool_handlers_v5, pool_handlers_v6},
+    .sm_handlers    = {pool_handlers_v6, pool_handlers_v7},
     .sm_key         = &pool_module_key,
     .sm_metrics     = &pool_metrics,
 };

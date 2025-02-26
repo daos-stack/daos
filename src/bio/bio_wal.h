@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,6 +11,7 @@
 
 enum meta_hdr_flags {
 	META_HDR_FL_EMPTY	= (1UL << 0),
+	META_HDR_FL_EVICTABLE	= (1UL << 1),
 };
 
 /* Meta blob header */
@@ -28,7 +29,10 @@ struct meta_header {
 	uint64_t	mh_tot_blks;		/* Meta blob capacity, in blocks */
 	uint32_t	mh_vos_id;		/* Associated per-engine target ID */
 	uint32_t	mh_flags;		/* Meta header flags */
-	uint32_t	mh_padding[5];		/* Reserved */
+	uint8_t		mh_backend_type;	/* Backend allocator type */
+	uint8_t		mh_padding1;		/* Reserved */
+	uint16_t	mh_padding2;		/* Reserved */
+	uint32_t	mh_padding[4];		/* Reserved */
 	uint32_t	mh_csum;		/* Checksum of this header */
 };
 
@@ -97,6 +101,7 @@ struct wal_super_info {
 	ABT_cond		si_rsrv_wq;	/* FIFO waitqueue for WAL ID reserving */
 	ABT_mutex		si_mutex;	/* For si_rsrv_wq */
 	unsigned int		si_rsrv_waiters;/* Number of waiters in reserve waitqueue */
+	unsigned int		si_pending_tx;	/* Number of pending transactions */
 	unsigned int		si_tx_failed:1;	/* Indicating some transaction failed */
 };
 
@@ -123,9 +128,10 @@ struct meta_fmt_info {
 	uint64_t	fi_wal_size;		/* WAL blob size in bytes */
 	uint64_t	fi_data_size;		/* Data blob size in bytes */
 	uint32_t	fi_vos_id;		/* Associated per-engine target ID */
+	uint8_t		fi_backend_type;	/* Backend allocator type */
 };
 
-int meta_format(struct bio_meta_context *mc, struct meta_fmt_info *fi, bool force);
+int meta_format(struct bio_meta_context *mc, struct meta_fmt_info *fi, uint32_t flags, bool force);
 int meta_open(struct bio_meta_context *mc);
 void meta_close(struct bio_meta_context *mc);
 int wal_open(struct bio_meta_context *mc);

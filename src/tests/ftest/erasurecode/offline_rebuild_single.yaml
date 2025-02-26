@@ -10,6 +10,9 @@ hosts:
 setup:
   start_servers_once: False
 timeout: 900
+agent_config:
+  #cache_expiration: 1
+  disable_caching: true
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -33,7 +36,6 @@ pool:
   pool_query_timeout: 30
 container:
   type: POSIX
-  control_method: API
   single_data_set:
     # [object_qty, record_qty, dkey, akey, data_size]
     - [1, 1, 1, 1, 4194304]

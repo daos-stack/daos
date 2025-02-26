@@ -1,5 +1,5 @@
 """
-(C) Copyright 2021-2023 Intel Corporation.
+(C) Copyright 2021-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -73,13 +73,13 @@ class ManagementServiceResilience(TestWithServers):
         self.log.info("*** creating pool")
         self.pool.create()
 
-        self.log.info("Pool UUID %s on server group: %s", self.pool.uuid, self.server_group)
+        self.log.info("%s on server group: %s", str(self.pool), self.server_group)
         # Verify that the pool persisted.
         while not self.find_pool(self.pool.uuid):
             # Occasionally the pool may not be found
             # immediately after creation if the read
             # is serviced by a non-leader replica.
-            self.log.info("Pool %s not found yet.", self.pool.uuid)
+            self.log.info("%s not found yet.", str(self.pool))
             time.sleep(1)
         self.log.info("Found pool in system.")
 
@@ -99,7 +99,7 @@ class ManagementServiceResilience(TestWithServers):
         """Verify the leader of the MS is in the replicas.
 
         Args:
-            replicas (NodeSet): host names representing the access points for the MS.
+            replicas (NodeSet): host names representing the replicas for the MS.
 
         Returns:
             NodeSet: hostname of the MS leader.
@@ -165,7 +165,7 @@ class ManagementServiceResilience(TestWithServers):
                 resiliency.
 
         Returns:
-            NodeSet: access point hosts where MS has been started.
+            NodeSet: replica hosts where MS has been started.
 
         """
         self.log.info("*** launching %d servers", resilience_num)
@@ -175,7 +175,7 @@ class ManagementServiceResilience(TestWithServers):
             self.server_group:
                 {
                     "hosts": self.hostlist_servers,
-                    "access_points": replicas,
+                    "mgmt_svc_replicas": replicas,
                     "svr_config_file": None,
                     "dmg_config_file": None,
                     "svr_config_temp": None,

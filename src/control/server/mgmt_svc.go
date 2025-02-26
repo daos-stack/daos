@@ -1,5 +1,6 @@
 //
-// (C) Copyright 2018-2023 Intel Corporation.
+// (C) Copyright 2018-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,6 +19,7 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
@@ -75,7 +77,7 @@ type mgmtSvc struct {
 	rpcClient         control.UnaryInvoker
 	events            *events.PubSub
 	systemProps       daos.SystemPropertyMap
-	clientNetworkHint *mgmtpb.ClientNetHint
+	clientNetworkHint []*mgmtpb.ClientNetHint
 	batchInterval     time.Duration
 	batchReqs         batchReqChan
 	serialReqs        batchReqChan
@@ -92,7 +94,7 @@ func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c cont
 		rpcClient:         c,
 		events:            p,
 		systemProps:       daos.SystemProperties(),
-		clientNetworkHint: new(mgmtpb.ClientNetHint),
+		clientNetworkHint: []*mgmtpb.ClientNetHint{new(mgmtpb.ClientNetHint)},
 		batchInterval:     batchLoopInterval,
 		batchReqs:         make(batchReqChan),
 		serialReqs:        make(batchReqChan),
@@ -127,16 +129,32 @@ func (svc *mgmtSvc) checkSystemRequest(req proto.Message) error {
 // checkLeaderRequest performs sanity-checking on a request that must
 // be run on the current MS leader.
 func (svc *mgmtSvc) checkLeaderRequest(req proto.Message) error {
-	if err := svc.checkSystemRequest(req); err != nil {
+	unwrapped, err := svc.unwrapCheckerReq(req)
+	if err != nil {
 		return err
 	}
-	return svc.sysdb.CheckLeader()
+
+	if err := svc.checkSystemRequest(unwrapped); err != nil {
+		return err
+	}
+
+	if err := svc.sysdb.CheckLeader(); err != nil {
+		return err
+	}
+
+	svc.sysdb.WaitForLeaderStepUp()
+	return nil
 }
 
 // checkReplicaRequest performs sanity-checking on a request that must
 // be run on a MS replica.
 func (svc *mgmtSvc) checkReplicaRequest(req proto.Message) error {
-	if err := svc.checkSystemRequest(req); err != nil {
+	unwrapped, err := svc.unwrapCheckerReq(req)
+	if err != nil {
+		return err
+	}
+
+	if err := svc.checkSystemRequest(unwrapped); err != nil {
 		return err
 	}
 	return svc.sysdb.CheckReplica()
@@ -392,4 +410,13 @@ func (svc *mgmtSvc) leaderTaskLoop(parent context.Context) {
 			groupUpdateNeeded = false
 		}
 	}
+}
+
+func (svc *mgmtSvc) unmarshalPB(body []byte, resp proto.Message) error {
+	if err := proto.Unmarshal(body, resp); err != nil {
+		svc.log.Errorf("%T Unmarshal: %s", resp, err)
+		return errors.Wrapf(drpc.UnmarshalingPayloadFailure(), "%T", resp)
+	}
+
+	return nil
 }

@@ -1,5 +1,6 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -435,6 +436,11 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, int index)
 	int	j;
 	int	k;
 	int	l;
+
+	if (dt_no_punch) {
+		akey_punch_idx = -1;
+		dkey_punch_idx = -1;
+	}
 
 	D_ALLOC(large_key, LARGE_KEY_SIZE);
 	if (large_key == NULL)
@@ -964,6 +970,8 @@ reintegrate_inflight_io(void *data)
 
 	}
 	ioreq_fini(&req);
+	sleep(12);
+	print_message("sleep 12 seconds to wait for the stable epoch update.\n");
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0,
 				      NULL);
@@ -1203,12 +1211,9 @@ rebuild_sub_setup_common(void **state, daos_size_t pool_size, int node_nr, uint3
 	rc = test_setup(state, SETUP_POOL_CONNECT, true,
 			pool_size, node_nr, NULL);
 	if (rc) {
-		/* Let's skip for this case, since it is possible there
-		 * is not enough ranks here.
-		 */
 		print_message("It can not create the pool, probably due"
 			      " to not enough ranks %d\n", rc);
-		return 0;
+		return rc;
 	}
 
 	arg = *state;
@@ -1267,6 +1272,20 @@ rebuild_sub_rf0_setup(void **state)
 {
 	return rebuild_sub_setup_common(state, REBUILD_SUBTEST_POOL_SIZE, 0,
 					DAOS_PROP_CO_REDUN_RF0);
+}
+
+int
+rebuild_sub_3nodes_rf0_setup(void **state)
+{
+	return rebuild_sub_setup_common(state, REBUILD_SUBTEST_POOL_SIZE, 3,
+					DAOS_PROP_CO_REDUN_RF0);
+}
+
+int
+rebuild_sub_6nodes_rf1_setup(void **state)
+{
+	return rebuild_sub_setup_common(state, REBUILD_SUBTEST_POOL_SIZE, 6,
+					DAOS_PROP_CO_REDUN_RF1);
 }
 
 int

@@ -36,7 +36,7 @@ class TestWithScrubberFreq(TestWithScrubber):
         cont_prop = self.params.get("properties", '/run/container/*')
         self.create_pool_cont_with_scrubber(pool_prop=pool_prop, cont_prop=cont_prop)
         # Run IOR and gather the total scrubbed metrics information.
-        self.run_ior_and_check_scruber_status(pool=self.pool, cont=self.container)
+        self.run_ior_and_check_scrubber_status(pool=self.pool, cont=self.container)
         # Wait for 5 minutes to get first scrubber bytes scrubbed metrics.
         # NOTE: This value could change depending on the IOR data (objects created)
         self.log.info("Sleeping for 5 minutes pool property set to scrub:timed")
@@ -51,16 +51,16 @@ class TestWithScrubberFreq(TestWithScrubber):
                                                     final_scrubbed_metrics)
         if status is True:
             self.fail("--Test Failed: Metrics Value is Changing--")
-        # Now set the scrub-freq to 5 seconds.
-        self.pool.set_property("scrub-freq", "5")
-        self.log.info("Sleeping for 5 secs pool property scrub:timed,scrub-freq:5")
+        # Now set the scrub_freq to 5 seconds.
+        self.pool.set_property("scrub_freq", "5")
+        self.log.info("Sleeping for 5 secs pool property scrub:timed,scrub_freq:5")
         sleep(5)
-        self.log.info("Initial scrubber metrics with scrub:timed,scrub-freq:5")
+        self.log.info("Initial scrubber metrics with scrub:timed,scrub_freq:5")
         initial_scrubbed_metrics = self.scrubber.get_scrubber_bytes_scrubbed_total()
         # Now wait for 60 seconds
-        self.log.info("Sleeping for 60 secs pool property scrub:timed,scrub-freq:5")
+        self.log.info("Sleeping for 60 secs pool property scrub:timed,scrub_freq:5")
         sleep(60)
-        self.log.info("Final scrubber metrics with scrub:timed,scrub-freq:5")
+        self.log.info("Final scrubber metrics with scrub:timed,scrub_freq:5")
         final_scrubbed_metrics = self.scrubber.get_scrubber_bytes_scrubbed_total()
         status = self.verify_scrubber_metrics_value(initial_scrubbed_metrics,
                                                     final_scrubbed_metrics)

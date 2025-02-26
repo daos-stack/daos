@@ -49,7 +49,7 @@ running DAOS servers in the [server config file](/utils/config/daos_server.yml).
 NOTES:
 * some environment variables can only be supplied to `daos_engine` instances
 through the server config file:
-	* `CRT_PHY_ADDR_STR`, `OFI_INTERFACE`, `OFI_PORT`, `D_LOG_MASK`,
+	* `D_PROVIDER`, `D_INTERFACE`, `D_PORT`, `D_LOG_MASK`,
 `D_LOG_FILE`
 * while it is very highly recommended to use the server config file as a means
 to supply parameters, environment variables not applied through the config file
@@ -120,7 +120,7 @@ The control API is responsible for working out which `daos_server` instance
 is the MS leader and issuing the request, `dmg` uses the control API.
 The `dmg` tool requires the hostlist of all hosts in the DAOS system to be
 specified either on the command line or in the `daos_control.yml` config file.
-A list of access point servers is defined in the server's config file.
+A list of MS replica servers is defined in the server's config file.
 
 ## Functionality
 

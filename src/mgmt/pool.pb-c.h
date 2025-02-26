@@ -27,8 +27,8 @@ typedef struct _Mgmt__PoolDrainReq Mgmt__PoolDrainReq;
 typedef struct _Mgmt__PoolDrainResp Mgmt__PoolDrainResp;
 typedef struct _Mgmt__PoolExtendReq Mgmt__PoolExtendReq;
 typedef struct _Mgmt__PoolExtendResp Mgmt__PoolExtendResp;
-typedef struct _Mgmt__PoolReintegrateReq Mgmt__PoolReintegrateReq;
-typedef struct _Mgmt__PoolReintegrateResp Mgmt__PoolReintegrateResp;
+typedef struct _Mgmt__PoolReintReq Mgmt__PoolReintReq;
+typedef struct _Mgmt__PoolReintResp Mgmt__PoolReintResp;
 typedef struct _Mgmt__ListPoolsReq Mgmt__ListPoolsReq;
 typedef struct _Mgmt__ListPoolsResp Mgmt__ListPoolsResp;
 typedef struct _Mgmt__ListPoolsResp__Pool Mgmt__ListPoolsResp__Pool;
@@ -160,7 +160,7 @@ struct  _Mgmt__PoolCreateReq
   /*
    * formatted group e.g. "builders@"
    */
-  char *usergroup;
+  char *user_group;
   /*
    * Access Control Entries in short string format
    */
@@ -180,39 +180,39 @@ struct  _Mgmt__PoolCreateReq
   /*
    * Fault domain tree, minimal format
    */
-  size_t n_faultdomains;
-  uint32_t *faultdomains;
+  size_t n_fault_domains;
+  uint32_t *fault_domains;
   /*
    * desired number of pool service replicas
    */
-  uint32_t numsvcreps;
+  uint32_t num_svc_reps;
   /*
-   * Total pool size in bytes (auto config)
+   * Total pool size in bytes
    */
-  uint64_t totalbytes;
+  uint64_t total_bytes;
   /*
-   * Ratio of storage tiers expressed as % of totalbytes (auto config)
+   * Ratio of storage tiers expressed as % of totalbytes
    */
-  size_t n_tierratio;
-  double *tierratio;
+  size_t n_tier_ratio;
+  double *tier_ratio;
   /*
-   * Number of target ranks to use (auto config)
+   * Number of target ranks to use
    */
-  uint32_t numranks;
+  uint32_t num_ranks;
   /*
-   * target ranks (manual config)
+   * target ranks
    */
   size_t n_ranks;
   uint32_t *ranks;
   /*
-   * Size in bytes of storage tiers (manual config)
+   * Size in bytes of storage tier
    */
-  size_t n_tierbytes;
-  uint64_t *tierbytes;
+  size_t n_tier_bytes;
+  uint64_t *tier_bytes;
   /*
-   * Size in bytes of metadata blob on SSD (manual config)
+   * Fraction of meta-blob-sz to use as mem-file-sz
    */
-  uint64_t meta_blob_size;
+  float mem_ratio;
 };
 #define MGMT__POOL_CREATE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_req__descriptor) \
@@ -230,9 +230,9 @@ struct  _Mgmt__PoolCreateResp
    */
   int32_t status;
   /*
-   * Current service leader
+   * Current service leader rank
    */
-  uint32_t leader;
+  uint32_t svc_ldr;
   /*
    * pool service replica ranks
    */
@@ -244,18 +244,22 @@ struct  _Mgmt__PoolCreateResp
   size_t n_tgt_ranks;
   uint32_t *tgt_ranks;
   /*
-   * storage tiers allocated to pool
+   * per-rank storage tier sizes allocated in pool
    */
   size_t n_tier_bytes;
   uint64_t *tier_bytes;
   /*
-   * Size in bytes of metadata blob on SSD (manual config)
+   * per-rank accumulated value of memory file sizes
    */
-  uint64_t meta_blob_size;
+  uint64_t mem_file_bytes;
+  /*
+   * MD-on-SSD mode flag
+   */
+  protobuf_c_boolean md_on_ssd_active;
 };
 #define MGMT__POOL_CREATE_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_resp__descriptor) \
-    , 0, 0, 0,NULL, 0,NULL, 0,NULL, 0 }
+    , 0, 0, 0,NULL, 0,NULL, 0,NULL, 0, 0 }
 
 
 /*
@@ -390,17 +394,21 @@ struct  _Mgmt__PoolExcludeReq
   /*
    * target ranks
    */
-  size_t n_targetidx;
-  uint32_t *targetidx;
+  size_t n_target_idx;
+  uint32_t *target_idx;
   /*
    * List of pool service ranks
    */
   size_t n_svc_ranks;
   uint32_t *svc_ranks;
+  /*
+   * force to exclude potentially leading to data loss
+   */
+  protobuf_c_boolean force;
 };
 #define MGMT__POOL_EXCLUDE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_exclude_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0,NULL, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0,NULL, 0,NULL, 0 }
 
 
 /*
@@ -440,8 +448,8 @@ struct  _Mgmt__PoolDrainReq
   /*
    * rank targets
    */
-  size_t n_targetidx;
-  uint32_t *targetidx;
+  size_t n_target_idx;
+  uint32_t *target_idx;
   /*
    * List of pool service ranks
    */
@@ -496,17 +504,21 @@ struct  _Mgmt__PoolExtendReq
   /*
    * Size in bytes of storage tiers
    */
-  size_t n_tierbytes;
-  uint64_t *tierbytes;
+  size_t n_tier_bytes;
+  uint64_t *tier_bytes;
   /*
    * fault domain tree, minimal format
    */
-  size_t n_faultdomains;
-  uint32_t *faultdomains;
+  size_t n_fault_domains;
+  uint32_t *fault_domains;
+  /*
+   * Fraction of meta-blob-sz to use as mem-file-sz
+   */
+  float mem_ratio;
 };
 #define MGMT__POOL_EXTEND_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_extend_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0,NULL, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0,NULL, 0,NULL, 0 }
 
 
 /*
@@ -531,9 +543,9 @@ struct  _Mgmt__PoolExtendResp
 
 
 /*
- * PoolReintegrateReq supplies pool identifier, rank, and target_idxs.
+ * PoolReintReq supplies pool identifier, rank, and target_idxs.
  */
-struct  _Mgmt__PoolReintegrateReq
+struct  _Mgmt__PoolReintReq
 {
   ProtobufCMessage base;
   /*
@@ -551,8 +563,8 @@ struct  _Mgmt__PoolReintegrateReq
   /*
    * target ranks
    */
-  size_t n_targetidx;
-  uint32_t *targetidx;
+  size_t n_target_idx;
+  uint32_t *target_idx;
   /*
    * List of pool service ranks
    */
@@ -561,18 +573,22 @@ struct  _Mgmt__PoolReintegrateReq
   /*
    * Size in bytes of storage tiers
    */
-  size_t n_tierbytes;
-  uint64_t *tierbytes;
+  size_t n_tier_bytes;
+  uint64_t *tier_bytes;
+  /*
+   * Fraction of meta-blob-sz to use as mem-file-sz
+   */
+  float mem_ratio;
 };
-#define MGMT__POOL_REINTEGRATE_REQ__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_reintegrate_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0,NULL, 0,NULL, 0,NULL }
+#define MGMT__POOL_REINT_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_reint_req__descriptor) \
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0,NULL, 0,NULL, 0,NULL, 0 }
 
 
 /*
- * PoolReintegrateResp returns resultant state of Reintegrate operation.
+ * PoolReintResp returns resultant state of reintegrate operation.
  */
-struct  _Mgmt__PoolReintegrateResp
+struct  _Mgmt__PoolReintResp
 {
   ProtobufCMessage base;
   /*
@@ -580,8 +596,8 @@ struct  _Mgmt__PoolReintegrateResp
    */
   int32_t status;
 };
-#define MGMT__POOL_REINTEGRATE_RESP__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_reintegrate_resp__descriptor) \
+#define MGMT__POOL_REINT_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_reint_resp__descriptor) \
     , 0 }
 
 
@@ -731,17 +747,13 @@ struct  _Mgmt__PoolQueryReq
   size_t n_svc_ranks;
   uint32_t *svc_ranks;
   /*
-   * True if the list of enabled ranks shall be returned
+   * Bitmask of pool query options
    */
-  protobuf_c_boolean include_enabled_ranks;
-  /*
-   * True if the list of disabled ranks shall be returned
-   */
-  protobuf_c_boolean include_disabled_ranks;
+  uint64_t query_mask;
 };
 #define MGMT__POOL_QUERY_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0, 0 }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0 }
 
 
 /*
@@ -825,7 +837,7 @@ struct  _Mgmt__PoolQueryResp
    */
   uint32_t version;
   /*
-   * current raft leader
+   * current raft leader (2.4)
    */
   uint32_t leader;
   /*
@@ -852,10 +864,35 @@ struct  _Mgmt__PoolQueryResp
    * pool state
    */
   Mgmt__PoolServiceState state;
+  /*
+   * current raft leader (2.6+)
+   */
+  uint32_t svc_ldr;
+  /*
+   * service replica ranks
+   */
+  size_t n_svc_reps;
+  uint32_t *svc_reps;
+  /*
+   * Bitmask of pool query options used
+   */
+  uint64_t query_mask;
+  /*
+   * per-pool accumulated value of memory file sizes
+   */
+  uint64_t mem_file_bytes;
+  /*
+   * optional set of dead ranks
+   */
+  char *dead_ranks;
+  /*
+   * MD-on-SSD mode flag
+   */
+  protobuf_c_boolean md_on_ssd_active;
 };
 #define MGMT__POOL_QUERY_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_resp__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, 0,NULL, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, MGMT__POOL_SERVICE_STATE__Creating }
+    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, 0,NULL, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, MGMT__POOL_SERVICE_STATE__Creating, 0, 0,NULL, 0, 0, (char *)protobuf_c_empty_string, 0 }
 
 
 typedef enum {
@@ -1097,10 +1134,18 @@ struct  _Mgmt__PoolQueryTargetInfo
    */
   size_t n_space;
   Mgmt__StorageTargetUsage **space;
+  /*
+   * per-target value of memory file size
+   */
+  uint64_t mem_file_bytes;
+  /*
+   * MD-on-SSD mode flag
+   */
+  protobuf_c_boolean md_on_ssd_active;
 };
 #define MGMT__POOL_QUERY_TARGET_INFO__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_target_info__descriptor) \
-    , MGMT__POOL_QUERY_TARGET_INFO__TARGET_TYPE__UNKNOWN, MGMT__POOL_QUERY_TARGET_INFO__TARGET_STATE__STATE_UNKNOWN, 0,NULL }
+    , MGMT__POOL_QUERY_TARGET_INFO__TARGET_TYPE__UNKNOWN, MGMT__POOL_QUERY_TARGET_INFO__TARGET_STATE__STATE_UNKNOWN, 0,NULL, 0, 0 }
 
 
 /*
@@ -1352,43 +1397,43 @@ Mgmt__PoolExtendResp *
 void   mgmt__pool_extend_resp__free_unpacked
                      (Mgmt__PoolExtendResp *message,
                       ProtobufCAllocator *allocator);
-/* Mgmt__PoolReintegrateReq methods */
-void   mgmt__pool_reintegrate_req__init
-                     (Mgmt__PoolReintegrateReq         *message);
-size_t mgmt__pool_reintegrate_req__get_packed_size
-                     (const Mgmt__PoolReintegrateReq   *message);
-size_t mgmt__pool_reintegrate_req__pack
-                     (const Mgmt__PoolReintegrateReq   *message,
+/* Mgmt__PoolReintReq methods */
+void   mgmt__pool_reint_req__init
+                     (Mgmt__PoolReintReq         *message);
+size_t mgmt__pool_reint_req__get_packed_size
+                     (const Mgmt__PoolReintReq   *message);
+size_t mgmt__pool_reint_req__pack
+                     (const Mgmt__PoolReintReq   *message,
                       uint8_t             *out);
-size_t mgmt__pool_reintegrate_req__pack_to_buffer
-                     (const Mgmt__PoolReintegrateReq   *message,
+size_t mgmt__pool_reint_req__pack_to_buffer
+                     (const Mgmt__PoolReintReq   *message,
                       ProtobufCBuffer     *buffer);
-Mgmt__PoolReintegrateReq *
-       mgmt__pool_reintegrate_req__unpack
+Mgmt__PoolReintReq *
+       mgmt__pool_reint_req__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data);
-void   mgmt__pool_reintegrate_req__free_unpacked
-                     (Mgmt__PoolReintegrateReq *message,
+void   mgmt__pool_reint_req__free_unpacked
+                     (Mgmt__PoolReintReq *message,
                       ProtobufCAllocator *allocator);
-/* Mgmt__PoolReintegrateResp methods */
-void   mgmt__pool_reintegrate_resp__init
-                     (Mgmt__PoolReintegrateResp         *message);
-size_t mgmt__pool_reintegrate_resp__get_packed_size
-                     (const Mgmt__PoolReintegrateResp   *message);
-size_t mgmt__pool_reintegrate_resp__pack
-                     (const Mgmt__PoolReintegrateResp   *message,
+/* Mgmt__PoolReintResp methods */
+void   mgmt__pool_reint_resp__init
+                     (Mgmt__PoolReintResp         *message);
+size_t mgmt__pool_reint_resp__get_packed_size
+                     (const Mgmt__PoolReintResp   *message);
+size_t mgmt__pool_reint_resp__pack
+                     (const Mgmt__PoolReintResp   *message,
                       uint8_t             *out);
-size_t mgmt__pool_reintegrate_resp__pack_to_buffer
-                     (const Mgmt__PoolReintegrateResp   *message,
+size_t mgmt__pool_reint_resp__pack_to_buffer
+                     (const Mgmt__PoolReintResp   *message,
                       ProtobufCBuffer     *buffer);
-Mgmt__PoolReintegrateResp *
-       mgmt__pool_reintegrate_resp__unpack
+Mgmt__PoolReintResp *
+       mgmt__pool_reint_resp__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data);
-void   mgmt__pool_reintegrate_resp__free_unpacked
-                     (Mgmt__PoolReintegrateResp *message,
+void   mgmt__pool_reint_resp__free_unpacked
+                     (Mgmt__PoolReintResp *message,
                       ProtobufCAllocator *allocator);
 /* Mgmt__ListPoolsReq methods */
 void   mgmt__list_pools_req__init
@@ -1795,11 +1840,11 @@ typedef void (*Mgmt__PoolExtendReq_Closure)
 typedef void (*Mgmt__PoolExtendResp_Closure)
                  (const Mgmt__PoolExtendResp *message,
                   void *closure_data);
-typedef void (*Mgmt__PoolReintegrateReq_Closure)
-                 (const Mgmt__PoolReintegrateReq *message,
+typedef void (*Mgmt__PoolReintReq_Closure)
+                 (const Mgmt__PoolReintReq *message,
                   void *closure_data);
-typedef void (*Mgmt__PoolReintegrateResp_Closure)
-                 (const Mgmt__PoolReintegrateResp *message,
+typedef void (*Mgmt__PoolReintResp_Closure)
+                 (const Mgmt__PoolReintResp *message,
                   void *closure_data);
 typedef void (*Mgmt__ListPoolsReq_Closure)
                  (const Mgmt__ListPoolsReq *message,
@@ -1884,8 +1929,8 @@ extern const ProtobufCMessageDescriptor mgmt__pool_drain_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_drain_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_extend_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_extend_resp__descriptor;
-extern const ProtobufCMessageDescriptor mgmt__pool_reintegrate_req__descriptor;
-extern const ProtobufCMessageDescriptor mgmt__pool_reintegrate_resp__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__pool_reint_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__pool_reint_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__list_pools_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__list_pools_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__list_pools_resp__pool__descriptor;

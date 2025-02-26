@@ -15,13 +15,18 @@
 !utils/setup_daos_server_helper.sh
 !utils/sl/setup_local.sh
 !utils/scripts
+!utils/run_utest.py
+!utils/utest.yaml
+!utils/unit
 !SConstruct
 !VERSION
 !LICENSE
 !ftest.sh
 !site_scons
 !.clang-format
-!requirements.txt
+!requirements-build.txt
+!requirements-utest.txt
+!requirements-ftest.txt
 
 # Now disallow extra files which may be present but are not required.
 # Include the rdb repo as well.

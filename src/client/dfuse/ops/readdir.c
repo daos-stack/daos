@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -133,7 +133,7 @@ dfuse_dre_drop(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh)
 	struct dfuse_readdir_hdl *hdl;
 	struct dfuse_readdir_c   *drc, *next;
 	uint32_t                  oldref;
-	off_t                     expected_offset = 2;
+	off_t                     next_offset = 0;
 
 	DFUSE_TRA_DEBUG(oh, "Dropping ref on %p", oh->doh_rd);
 
@@ -161,10 +161,11 @@ dfuse_dre_drop(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh)
 		oh->doh_ie->ie_rd_hdl = NULL;
 
 	d_list_for_each_entry_safe(drc, next, &hdl->drh_cache_list, drc_list) {
-		D_ASSERT(drc->drc_offset == expected_offset);
-		D_ASSERT(drc->drc_next_offset == expected_offset + 1 ||
-			 drc->drc_next_offset == READDIR_EOD);
-		expected_offset = drc->drc_next_offset;
+		/** Verify offset/next_offset are consistent in the entry cache list */
+		D_ASSERTF(next_offset == 0 || next_offset == drc->drc_offset,
+			  "Inconsistent offset list %#lx prev next %#lx " DF_DE,
+			  drc->drc_offset, next_offset, DP_DE(drc->drc_name));
+		next_offset = drc->drc_next_offset;
 		if (drc->drc_rlink)
 			d_hash_rec_decref(&dfuse_info->dpi_iet, drc->drc_rlink);
 		D_FREE(drc);
@@ -202,11 +203,15 @@ create_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *parent, st
 	if (S_ISDIR(ie->ie_stat.st_mode) && attr_len) {
 		/* Check for UNS entry point, this will allocate a new inode number if successful */
 		rc = check_for_uns_ep(dfuse_info, ie, attr, attr_len);
-		if (rc != 0) {
-			DFUSE_TRA_WARNING(ie, "check_for_uns_ep() returned %d, ignoring", rc);
+		if (rc == 0) {
+			ie->ie_root = true;
+		} else {
+			if (rc == ENOLINK)
+				DHS_INFO(ie, rc, "check_for_uns_ep() failed, ignoring");
+			else
+				DHS_WARN(ie, rc, "check_for_uns_ep() failed, ignoring");
 			rc = 0;
 		}
-		ie->ie_root = true;
 	}
 
 	strncpy(ie->ie_name, name, NAME_MAX);
@@ -384,7 +389,7 @@ restart:
 		/* If there is no seekdir but there is valid cache data then use the cache.
 		 *
 		 * Directory handles may not have up-to-date values for doh_rd_nextc in some cases
-		 * so perform a seek here if necessairy.
+		 * so perform a seek here if necessary.
 		 */
 		struct dfuse_readdir_c *drc;
 		size_t                  written     = 0;
@@ -468,7 +473,7 @@ restart:
 
 					if (rc != 0) {
 						DFUSE_TRA_DEBUG(oh, "Problem finding file %d", rc);
-						D_GOTO(reply, 0);
+						D_GOTO(reply, rc);
 					}
 					/* Check oid is the same! */
 
@@ -685,7 +690,8 @@ restart:
 			if (rc == ENOENT) {
 				DFUSE_TRA_DEBUG(oh, "File does not exist");
 				D_FREE(drc);
-				continue;
+				/** legitimate race */
+				D_GOTO(next, rc = 0);
 			} else if (rc != 0) {
 				DFUSE_TRA_DEBUG(oh, "Problem finding file %d", rc);
 				D_FREE(drc);
@@ -755,6 +761,12 @@ restart:
 			}
 
 			if (drc) {
+				if (oh->doh_rd_nextc != NULL)
+					/**
+					 * Fix next offset of previous cache entry in case some
+					 * dre entries were skipped (e.g. failed stat call).
+					 */
+					oh->doh_rd_nextc->drc_next_offset = drc->drc_offset;
 				oh->doh_rd_nextc = drc;
 				DFUSE_TRA_DEBUG(hdl, "Appending offset %#lx to list, next %#lx",
 						drc->drc_offset, drc->drc_next_offset);
@@ -765,12 +777,15 @@ restart:
 			dre->dre_offset = 0;
 			buff_offset += written;
 			added++;
+next:
 			offset++;
 			oh->doh_rd_offset = dre->dre_next_offset;
 
 			if (dre->dre_next_offset == READDIR_EOD) {
 				DFUSE_TRA_DEBUG(oh, "Reached end of directory");
 				oh->doh_rd_offset = READDIR_EOD;
+				if (hdl->drh_caching && oh->doh_rd_nextc != NULL)
+					oh->doh_rd_nextc->drc_next_offset = READDIR_EOD;
 				D_GOTO(reply, rc = 0);
 			}
 		}

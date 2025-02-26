@@ -2,6 +2,9 @@ hosts:
   test_servers: 6
   test_clients: 1
 timeout: 420
+agent_config:
+  #cache_expiration: 1
+  disable_caching: true
 server_config:
   name: daos_server
   engines_per_host: 1

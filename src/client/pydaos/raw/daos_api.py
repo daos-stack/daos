@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -9,9 +10,7 @@
 
 import ctypes
 import enum
-import inspect
 import os
-import sys
 import threading
 import time
 
@@ -49,7 +48,6 @@ class DaosPool():
         self.glob = None
         self.svc = None
         self.pool_info = None
-        self.target_info = None
 
     def get_uuid_str(self):
         """Retrieve pool's UUID as Python string."""
@@ -196,29 +194,6 @@ class DaosPool():
         event = daos_cref.DaosEvent()
         params = [self.handle, None, ctypes.byref(self.pool_info), None,
                   event]
-        thread = threading.Thread(target=daos_cref.async_worker,
-                                  args=(func,
-                                        params,
-                                        self.context,
-                                        cb_func,
-                                        self))
-        thread.start()
-        return None
-
-    def target_query(self, tgt, rank, cb_func=None):
-        """Query information of storage targets within a DAOS pool."""
-        self.target_info = daos_cref.TargetInfo()
-        func = self.context.get_function('query-target')
-
-        if cb_func is None:
-            ret = func(self.handle, tgt, rank, ctypes.byref(self.target_info),
-                       None)
-            if ret != 0:
-                raise DaosApiError("Pool query returned non-zero. RC: {0}".format(ret))
-            return self.target_info
-
-        event = daos_cref.DaosEvent()
-        params = [self.handle, tgt, rank, ctypes.byref(self.target_info), event]
         thread = threading.Thread(target=daos_cref.async_worker,
                                   args=(func,
                                         params,
@@ -2324,8 +2299,12 @@ class DaosContext():
         ctypes.CDLL(os.path.join(path, 'libdaos_common.so'),
                     mode=ctypes.RTLD_GLOBAL)
 
-        self.libtest = ctypes.CDLL(os.path.join(path, 'libdaos_tests.so'),
-                                   mode=ctypes.DEFAULT_MODE)
+        try:
+            self.libtest = ctypes.CDLL(
+                os.path.join(path, 'libdaos_tests.so'), mode=ctypes.DEFAULT_MODE)
+        except OSError:
+            self.libtest = None
+
         # Note: action-subject format
         self.ftable = {
             'close-cont':      self.libdaos.daos_cont_close,
@@ -2340,7 +2319,6 @@ class DaosContext():
             'create-cont':     self.libdaos.daos_cont_create,
             'create-eq':       self.libdaos.daos_eq_create,
             'create-snap':     self.libdaos.daos_cont_create_snap,
-            'd_log':           self.libtest.dts_log,
             'destroy-cont':    self.libdaos.daos_cont_destroy,
             'destroy-eq':      self.libdaos.daos_eq_destroy,
             'destroy-snap':    self.libdaos.daos_cont_destroy_snap,
@@ -2377,58 +2355,28 @@ class DaosContext():
             'stop-service':    self.libdaos.daos_pool_stop_svc,
             'test-event':      self.libdaos.daos_event_test,
             'update-obj':      self.libdaos.daos_obj_update,
-            'oid_gen':         self.libtest.dts_oid_gen}
+            'oid_gen':         self.libtest.dts_oid_gen if self.libtest else None}
 
     def get_function(self, function):
-        """Call a function through the API."""
-        init_not_required = ['d_log']
-        if function not in init_not_required:
-            # For most functions, we need to ensure
-            # that daos_init() has been called before
-            # invoking anything.
-            self._dc = DaosClient()
-        return self.ftable[function]
+        """Get a function handle by name.
 
+        Args:
+            function (str): function to get the handle for
 
-class DaosLog:
-    """Expose functionality to write to the DAOS client log."""
+        Raises:
+            DaosApiError: if function is unknown
 
-    def __init__(self, context):
-        """Set up the log object."""
-        self.context = context
-
-    def debug(self, msg):
-        """Entry point for debug msgs."""
-        self.daos_log(msg, daos_cref.Logfac.DEBUG)
-
-    def info(self, msg):
-        """Entry point for info msgs."""
-        self.daos_log(msg, daos_cref.Logfac.INFO)
-
-    def warning(self, msg):
-        """Entry point for warning msgs."""
-        self.daos_log(msg, daos_cref.Logfac.WARNING)
-
-    def error(self, msg):
-        """Entry point for error msgs."""
-        self.daos_log(msg, daos_cref.Logfac.ERROR)
-
-    def daos_log(self, msg, level):
-        """Write specified message to client daos.log."""
-        func = self.context.get_function("d_log")
-
-        caller = inspect.getframeinfo(inspect.stack()[2][0])
-        # pylint: disable=protected-access
-        caller_func = sys._getframe(1).f_back.f_code.co_name
-        filename = os.path.basename(caller.filename)
-
-        c_filename = ctypes.create_string_buffer(filename.encode('utf-8'))
-        c_line = ctypes.c_int(caller.lineno)
-        c_msg = ctypes.create_string_buffer(msg.encode('utf-8'))
-        c_caller_func = ctypes.create_string_buffer(caller_func.encode('utf-8'))
-        c_level = ctypes.c_uint64(level)
-
-        func(c_msg, c_filename, c_caller_func, c_line, c_level)
+        Returns:
+            obj: function handle
+        """
+        # For most functions, we need to ensure
+        # that daos_init() has been called before
+        # invoking anything.
+        self._dc = DaosClient()
+        func = self.ftable.get(function)
+        if func is None:
+            raise DaosApiError(f"Function not implemented: {function}")
+        return func
 
 
 class DaosApiError(Exception):

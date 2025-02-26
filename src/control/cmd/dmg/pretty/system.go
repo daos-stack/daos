@@ -1,5 +1,6 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -21,6 +22,8 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+const rowFieldSep = "\t"
+
 // tabulateRankGroups produces a representation of rank groupings in a tabular form.
 func tabulateRankGroups(out io.Writer, groups system.RankGroups, titles ...string) error {
 	if len(titles) < 2 {
@@ -37,7 +40,8 @@ func tabulateRankGroups(out io.Writer, groups system.RankGroups, titles ...strin
 
 		summary := strings.Split(result, rowFieldSep)
 		if len(summary) != len(columnTitles) {
-			return errors.New("unexpected summary format")
+			return errors.Errorf("unexpected summary format, fields %v values %v",
+				columnTitles, summary)
 		}
 		for i, title := range columnTitles {
 			row[title] = summary[i]
@@ -182,10 +186,10 @@ func PrintSystemStopResponse(out, outErr io.Writer, resp *control.SystemStopResp
 	return printSystemResults(out, outErr, resp.Results, &resp.AbsentHosts, &resp.AbsentRanks)
 }
 
-func printSystemCleanupRespVerbose(out io.Writer, resp *control.SystemCleanupResp) error {
+func printSystemCleanupRespVerbose(out io.Writer, resp *control.SystemCleanupResp) {
 	if len(resp.Results) == 0 {
 		fmt.Fprintln(out, "no handles cleaned up")
-		return nil
+		return
 	}
 
 	titles := []string{"Pool", "Handles Revoked"}
@@ -201,28 +205,51 @@ func printSystemCleanupRespVerbose(out io.Writer, resp *control.SystemCleanupRes
 	}
 
 	fmt.Fprintln(out, formatter.Format(table))
-
-	return nil
 }
 
 // PrintSystemCleanupResponse generates a human-readable representation of the
 // supplied SystemCleanupResp struct and writes it to the supplied io.Writer.
-func PrintSystemCleanupResponse(out, outErr io.Writer, resp *control.SystemCleanupResp, verbose bool) error {
-	err := resp.Errors()
-
-	if err != nil {
-		fmt.Fprintln(outErr, err.Error())
-	}
-
+func PrintSystemCleanupResponse(out io.Writer, resp *control.SystemCleanupResp, verbose bool) {
 	if len(resp.Results) == 0 {
 		fmt.Fprintln(out, "No handles cleaned up")
-		return nil
+		return
 	}
 
 	if verbose {
-		return printSystemCleanupRespVerbose(out, resp)
+		printSystemCleanupRespVerbose(out, resp)
+		return
 	}
 
 	fmt.Fprintln(out, "System Cleanup Success")
-	return nil
+}
+
+// PrintPoolRankResults generates a table showing results of operations on pool ranks. Each row will
+// indicate a result for a group of ranks on a pool.
+func PrintPoolRankResults(out io.Writer, results []*control.PoolRankResult) {
+	if len(results) == 0 {
+		fmt.Fprintln(out, "No pool ranks processed")
+		return
+	}
+
+	titles := []string{"Pool", "Ranks", "Result", "Reason"}
+	formatter := txtfmt.NewTableFormatter(titles...)
+
+	var table []txtfmt.TableRow
+	for _, r := range results {
+		result := "OK"
+		reason := "-"
+		if r.Status != 0 {
+			result = "FAIL"
+			reason = r.Msg
+		}
+		row := txtfmt.TableRow{
+			"Pool":   r.PoolID,
+			"Ranks":  r.Ranks,
+			"Result": result,
+			"Reason": reason,
+		}
+		table = append(table, row)
+	}
+
+	fmt.Fprintln(out, formatter.Format(table))
 }

@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,7 +15,7 @@
 #define CRT_CONTEXT_NULL         (NULL)
 
 #ifndef CRT_SRV_CONTEXT_NUM
-#define CRT_SRV_CONTEXT_NUM (64)	/* Maximum number of contexts */
+#define CRT_SRV_CONTEXT_NUM (128) /* Maximum number of contexts */
 #endif
 
 
@@ -33,47 +34,61 @@ struct crt_grp_gdata;
 
 struct crt_na_config {
 	int32_t		 noc_port;
+	int		 noc_iface_total;
+	int               noc_domain_total;
 	char		*noc_interface;
 	char		*noc_domain;
 	char		*noc_auth_key;
-	/* IP addr str for the noc_interface */
-	char		 noc_ip_str[INET_ADDRSTRLEN];
+	char		**noc_iface_str; /* Array of interfaces */
+	char            **noc_domain_str; /* Array of domains */
 };
+
+#define CRT_TRAFFIC_CLASSES                                                                        \
+	X(CRT_TC_UNSPEC, "unspec")           /* Leave it upon plugin to choose */                  \
+	X(CRT_TC_BEST_EFFORT, "best_effort") /* Best effort */                                     \
+	X(CRT_TC_LOW_LATENCY, "low_latency") /* Low latency */                                     \
+	X(CRT_TC_BULK_DATA, "bulk_data")     /* Bulk data */                                       \
+	X(CRT_TC_UNKNOWN, "unknown")         /* Unknown */
+
+#define X(a, b) a,
+enum crt_traffic_class { CRT_TRAFFIC_CLASSES };
+#undef X
 
 struct crt_prov_gdata {
 	/** NA plugin type */
-	int			cpg_provider;
+	int                  cpg_provider;
 
-	struct crt_na_config	cpg_na_config;
+	struct crt_na_config cpg_na_config;
 	/** Context0 URI */
-	char			cpg_addr[CRT_ADDR_STR_MAX_LEN];
+	char                 cpg_addr[CRT_ADDR_STR_MAX_LEN];
 
 	/** CaRT contexts list */
-	d_list_t		cpg_ctx_list;
+	d_list_t             cpg_ctx_list;
 	/** actual number of items in CaRT contexts list */
-	int			cpg_ctx_num;
+	int                  cpg_ctx_num;
 	/** maximum number of contexts user wants to create */
-	uint32_t		cpg_ctx_max_num;
+	uint32_t             cpg_ctx_max_num;
 
 	/** free-list of indices */
-	bool			cpg_used_idx[CRT_SRV_CONTEXT_NUM];
+	bool                 cpg_used_idx[CRT_SRV_CONTEXT_NUM];
 
 	/** Hints to mercury/ofi for max expected/unexp sizes */
-	uint32_t		cpg_max_exp_size;
-	uint32_t		cpg_max_unexp_size;
+	uint32_t             cpg_max_exp_size;
+	uint32_t             cpg_max_unexp_size;
 
 	/** Number of remote tags */
-	uint32_t		cpg_num_remote_tags;
-	uint32_t		cpg_last_remote_tag;
+	uint32_t             cpg_num_remote_tags;
+	uint32_t             cpg_last_remote_tag;
 
 	/** Set of flags */
-	unsigned int		cpg_sep_mode		: 1,
-				cpg_primary		: 1,
-				cpg_contig_ports	: 1,
-				cpg_inited		: 1;
+	bool                 cpg_sep_mode;
+	bool                 cpg_primary;
+	bool                 cpg_contig_ports;
+	bool                 cpg_inited;
+	bool                 cpg_progress_busy;
 
 	/** Mutext to protect fields above */
-	pthread_mutex_t		cpg_mutex;
+	pthread_mutex_t      cpg_mutex;
 };
 
 #define MAX_NUM_SECONDARY_PROVS 2
@@ -94,12 +109,17 @@ struct crt_gdata {
 	/** Hints to mercury for request post init (ignored for clients) */
 	uint32_t                 cg_post_init;
 	uint32_t                 cg_post_incr;
+	unsigned int             cg_mrecv_buf;
+	unsigned int             cg_mrecv_buf_copy;
 
 	/** global timeout value (second) for all RPCs */
 	uint32_t		cg_timeout;
 
-	/** global swim index for all servers */
-	int32_t			cg_swim_crt_idx;
+	/** cart context index used by SWIM */
+	int32_t                  cg_swim_ctx_idx;
+
+	/** traffic class used by SWIM */
+	enum crt_traffic_class   cg_swim_tc;
 
 	/** credits limitation for #in-flight RPCs per target EP CTX */
 	uint32_t		cg_credit_ep_ctx;
@@ -117,16 +137,20 @@ struct crt_gdata {
 	volatile unsigned int	cg_refcount;
 
 	/** flags to keep track of states */
-	unsigned int		cg_inited		: 1,
-				cg_grp_inited		: 1,
-				cg_swim_inited		: 1,
-				cg_auto_swim_disable	: 1,
-				/** whether it is a client or server */
-				cg_server		: 1,
-				/** whether scalable endpoint is enabled */
-				cg_use_sensors		: 1,
-				/** whether we are on a primary provider */
-				cg_provider_is_primary	: 1;
+	unsigned int             cg_inited              : 1;
+	unsigned int             cg_grp_inited          : 1;
+	unsigned int             cg_swim_inited         : 1;
+	unsigned int             cg_auto_swim_disable   : 1;
+
+	/** whether it is a client or server */
+	unsigned int             cg_server              : 1;
+	/** whether metrics are used */
+	unsigned int             cg_use_sensors         : 1;
+	/** whether we are on a primary provider */
+	unsigned int             cg_provider_is_primary : 1;
+
+	/** use single thread to access context */
+	bool                     cg_thread_mode_single;
 
 	ATOMIC uint64_t		cg_rpcid; /* rpc id */
 
@@ -148,14 +172,11 @@ struct crt_gdata {
 	long			 cg_num_cores;
 	/** Inflight rpc quota limit */
 	uint32_t		cg_rpc_quota;
+	/** Retry count of HG_Init_opt2() on failure when using CXI provider */
+	uint32_t                 cg_hg_init_retry_cnt;
 };
 
 extern struct crt_gdata		crt_gdata;
-
-struct crt_prog_cb_priv {
-	crt_progress_cb		 cpcp_func;
-	void			*cpcp_args;
-};
 
 struct crt_event_cb_priv {
 	crt_event_cb		 cecp_func;
@@ -166,12 +187,171 @@ struct crt_event_cb_priv {
 #define CRT_CALLBACKS_NUM		(4)	/* start number of CBs */
 #endif
 
+/*
+ * List of environment variables to read at CaRT library load time.
+ * for integer envs use ENV()
+ * for string ones ENV_STR() or ENV_STR_NO_PRINT()
+ **/
+#define CRT_ENV_LIST                                                                               \
+	ENV_STR(CRT_ATTACH_INFO_PATH)                                                              \
+	ENV(CRT_CREDIT_EP_CTX)                                                                     \
+	ENV(CRT_CTX_NUM)                                                                           \
+	ENV(CRT_CXI_INIT_RETRY)                                                                    \
+	ENV(CRT_ENABLE_MEM_PIN)                                                                    \
+	ENV_STR(CRT_L_GRP_CFG)                                                                     \
+	ENV(CRT_L_RANK)                                                                            \
+	ENV(CRT_MRC_ENABLE)                                                                        \
+	ENV(CRT_SECONDARY_PROVIDER)                                                                \
+	ENV(CRT_TIMEOUT)                                                                           \
+	ENV(DAOS_RPC_SIZE_LIMIT)                                                                   \
+	ENV(DAOS_SIGNAL_REGISTER)                                                                  \
+	ENV_STR(DAOS_TEST_SHARED_DIR)                                                              \
+	ENV_STR(DD_MASK)                                                                           \
+	ENV_STR(DD_STDERR)                                                                         \
+	ENV_STR(DD_SUBSYS)                                                                         \
+	ENV_STR(D_CLIENT_METRICS_DUMP_DIR)                                                         \
+	ENV(D_CLIENT_METRICS_ENABLE)                                                               \
+	ENV(D_CLIENT_METRICS_RETAIN)                                                               \
+	ENV_STR(D_DOMAIN)                                                                          \
+	ENV_STR(D_FI_CONFIG)                                                                       \
+	ENV_STR(D_INTERFACE)                                                                       \
+	ENV_STR(D_LOG_FILE)                                                                        \
+	ENV_STR(D_LOG_FILE_APPEND_PID)                                                             \
+	ENV_STR(D_LOG_FILE_APPEND_RANK)                                                            \
+	ENV_STR(D_LOG_FLUSH)                                                                       \
+	ENV_STR(D_LOG_MASK)                                                                        \
+	ENV_STR(D_LOG_SIZE)                                                                        \
+	ENV(D_LOG_STDERR_IN_LOG)                                                                   \
+	ENV(D_POLL_TIMEOUT)                                                                        \
+	ENV_STR(D_PORT)                                                                            \
+	ENV(D_PORT_AUTO_ADJUST)                                                                    \
+	ENV(D_THREAD_MODE_SINGLE)                                                                  \
+	ENV(D_PROGRESS_BUSY)                                                                       \
+	ENV(D_POST_INCR)                                                                           \
+	ENV(D_POST_INIT)                                                                           \
+	ENV(D_MRECV_BUF)                                                                           \
+	ENV(D_MRECV_BUF_COPY)                                                                      \
+	ENV_STR(D_PROVIDER)                                                                        \
+	ENV_STR_NO_PRINT(D_PROVIDER_AUTH_KEY)                                                      \
+	ENV(D_QUOTA_RPCS)                                                                          \
+	ENV(FI_OFI_RXM_USE_SRX)                                                                    \
+	ENV(FI_UNIVERSE_SIZE)                                                                      \
+	ENV(SWIM_PING_TIMEOUT)                                                                     \
+	ENV(SWIM_PROTOCOL_PERIOD_LEN)                                                              \
+	ENV(SWIM_SUSPECT_TIMEOUT)                                                                  \
+	ENV_STR(SWIM_TRAFFIC_CLASS)                                                                \
+	ENV_STR(UCX_IB_FORK_INIT)
+
+/* uint env */
+#define ENV(x)                                                                                     \
+	unsigned int _##x;                                                                         \
+	int          _rc_##x;                                                                      \
+	int          _no_print_##x;
+
+/* char* env */
+#define ENV_STR(x)                                                                                 \
+	char *_##x;                                                                                \
+	int   _rc_##x;                                                                             \
+	int   _no_print_##x;
+
+#define ENV_STR_NO_PRINT(x) ENV_STR(x)
+
+struct crt_envs {
+	CRT_ENV_LIST;
+	bool inited;
+};
+
+#undef ENV
+#undef ENV_STR
+#undef ENV_STR_NO_PRINT
+
+extern struct crt_envs crt_genvs;
+
+static inline void
+crt_env_fini(void);
+
+static inline void
+crt_env_init(void)
+{
+	/* release strings if already inited previously */
+	if (crt_genvs.inited)
+		crt_env_fini();
+
+#define ENV(x)                                                                                     \
+	do {                                                                                       \
+		crt_genvs._rc_##x       = d_getenv_uint(#x, &crt_genvs._##x);                      \
+		crt_genvs._no_print_##x = 0;                                                       \
+	} while (0);
+
+#define ENV_STR(x)                                                                                 \
+	do {                                                                                       \
+		crt_genvs._rc_##x       = d_agetenv_str(&crt_genvs._##x, #x);                      \
+		crt_genvs._no_print_##x = 0;                                                       \
+	} while (0);
+
+#define ENV_STR_NO_PRINT(x)                                                                        \
+	do {                                                                                       \
+		crt_genvs._rc_##x       = d_agetenv_str(&crt_genvs._##x, #x);                      \
+		crt_genvs._no_print_##x = 1;                                                       \
+	} while (0);
+
+	CRT_ENV_LIST;
+#undef ENV
+#undef ENV_STR
+#undef ENV_STR_NO_PRINT
+
+	crt_genvs.inited = true;
+}
+
+static inline void
+crt_env_fini(void)
+{
+#define ENV(x)           (void)
+#define ENV_STR(x)       d_freeenv_str(&crt_genvs._##x);
+#define ENV_STR_NO_PRINT ENV_STR
+
+	CRT_ENV_LIST
+
+#undef ENV
+#undef ENV_STR
+#undef ENV_STR_NO_PRINT
+
+	crt_genvs.inited = false;
+}
+
+/* Returns value if env was present at load time */
+#define crt_env_get(name, val)                                                                     \
+	do {                                                                                       \
+		D_ASSERT(crt_genvs.inited);                                                        \
+		if (crt_genvs._rc_##name == 0)                                                     \
+			*val = crt_genvs._##name;                                                  \
+	} while (0)
+
+static inline void
+crt_env_dump(void)
+{
+	D_INFO("--- ENV ---\n");
+
+	/* Only dump envariables that were set */
+#define ENV(x)                                                                                     \
+	if (!crt_genvs._rc_##x && crt_genvs._no_print_##x == 0)                                    \
+		D_INFO("%s = %d\n", #x, crt_genvs._##x);
+
+#define ENV_STR(x)                                                                                 \
+	if (!crt_genvs._rc_##x)                                                                    \
+		D_INFO("%s = %s\n", #x, crt_genvs._no_print_##x ? "****" : crt_genvs._##x);
+
+#define ENV_STR_NO_PRINT ENV_STR
+
+	CRT_ENV_LIST;
+
+#undef ENV
+#undef ENV_STR
+#undef ENV_STR_NO_PRINT
+}
+
 /* structure of global fault tolerance data */
 struct crt_plugin_gdata {
-	/* list of progress callbacks */
-	size_t				 cpg_prog_size[CRT_SRV_CONTEXT_NUM];
-	struct crt_prog_cb_priv		*cpg_prog_cbs[CRT_SRV_CONTEXT_NUM];
-	struct crt_prog_cb_priv		*cpg_prog_cbs_old[CRT_SRV_CONTEXT_NUM];
 	/* list of event notification callbacks */
 	size_t				 cpg_event_size;
 	struct crt_event_cb_priv	*cpg_event_cbs;
@@ -198,6 +378,10 @@ struct crt_quotas {
 	bool			enabled[CRT_QUOTA_COUNT];
 	pthread_mutex_t		mutex;
 	d_list_t		rpc_waitq;
+	/** Stats gauge of wait queue depth */
+	struct d_tm_node_t     *rpc_waitq_depth;
+	/** Counter for exceeded quota */
+	struct d_tm_node_t     *rpc_quota_exceeded;
 };
 
 /* crt_context */
@@ -211,6 +395,10 @@ struct crt_context {
 	void			*cc_rpc_cb_arg;
 	crt_rpc_task_t		 cc_rpc_cb;	/** rpc callback */
 	crt_rpc_task_t		 cc_iv_resp_cb;
+
+	/* progress callback */
+	void                    *cc_prog_cb_arg;
+	crt_progress_cb          cc_prog_cb;
 
 	/** RPC tracking */
 	/** in-flight endpoint tracking hash table */

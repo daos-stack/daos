@@ -1,5 +1,6 @@
 /*
- * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -372,12 +373,13 @@ sc_handle_corruption(struct scrub_ctx *ctx)
 		rc = 0;
 	}
 	ctx->sc_pool_tgt_corrupted_detected++;
-	D_ERROR("[tgt_id: %d]Checksum scrubber found corruption. %d so far.\n",
+	D_ERROR("[tgt_id: %d] Checksum scrubber found corruption. %d so far.\n",
 		ctx->sc_dmi->dmi_tgt_id,
 		ctx->sc_pool_tgt_corrupted_detected);
 	if (sc_should_evict(ctx)) {
-		D_ERROR("Corruption threshold reached. %d >= %d\n",
-			ctx->sc_pool_tgt_corrupted_detected, sc_thresh(ctx));
+		D_ERROR("[tgt_id: %d] Corruption threshold reached. %d >= %d\n",
+			ctx->sc_dmi->dmi_tgt_id, ctx->sc_pool_tgt_corrupted_detected,
+			sc_thresh(ctx));
 		d_tm_set_counter(ctx->sc_metrics.scm_csum_calcs, 0);
 		d_tm_set_counter(ctx->sc_metrics.scm_csum_calcs_last, 0);
 		rc = sc_pool_drain(ctx);
@@ -967,5 +969,5 @@ get_ms_between_periods(struct timespec start_time, struct timespec cur_time,
 	if (d_time2us(exp_curr_end) <= d_time2us(cur_time))
 		return 0;
 
-	return d_time2ms(d_timediff(cur_time, exp_curr_end));
+	return d_time2ms(d_timediff(&cur_time, &exp_curr_end));
 }

@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2018-2021 Lei Huang.
- * (C) Copyright 2023 Intel Corporation.
+ * (C) Copyright 2023-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -42,6 +42,7 @@
 #include <linux/limits.h>
 #include <capstone/capstone.h>
 #include <gurt/common.h>
+#include <gnu/libc-version.h>
 
 #include "hook.h"
 #include "hook_int.h"
@@ -87,13 +88,21 @@ static uint64_t addr_min[MAX_NUM_SEG], addr_max[MAX_NUM_SEG];
 static uint64_t lib_base_addr[MAX_NUM_LIB];
 
 /* List of names of loaded libraries */
-static char     **lib_name_list;
+static char   **lib_name_list;
+
+/* libc version number in current process. e.g., 2.28 */
+static float    libc_version;
+static char    *libc_version_str;
 
 /* end   to compile list of memory blocks in /proc/pid/maps */
 
-static char     *path_ld;
-static char     *path_libc;
-static char     *path_libpthread;
+static char    *path_ld;
+static char    *path_libc;
+static char    *path_libdl;
+static char    *path_libpthread;
+/* This holds the path of libpil4dfs.so. It is needed when we want to
+ * force child processes append libpil4dfs.so to env LD_PRELOAD. */
+static char     path_libpil4dfs[PATH_MAX];
 
 #define MAX_MAP_SIZE	(512*1024)
 #define MAP_SIZE_LIMIT	(16*1024*1024)
@@ -101,7 +110,8 @@ static char     *path_libpthread;
 static void
 quit_hook_init(void)
 {
-	D_FATAL("pil4dfs failed to initialize, aborting.");
+	/* print to stdout instead of stderr to avoid fault injection errors */
+	printf("pil4dfs failed to initialize, aborting.\n");
 	exit(1);
 }
 
@@ -207,14 +217,19 @@ read_map_file(char **buf)
 static void
 determine_lib_path(void)
 {
-	int   path_offset   = 0, read_size, i, rc;
+	int   path_offset   = 0, read_size, i;
 	char *read_buff_map = NULL;
-	char *pos, *start, *end, lib_ver_str[32] = "", *lib_dir_str = NULL;
+	char *pos, *start, *end, *lib_dir_str = NULL;
+	bool  ver_in_lib_name = false;
 
 	read_size = read_map_file(&read_buff_map);
 
 	/* need to find the offset of lib path in the line */
-	pos = strstr(read_buff_map, "[heap]");
+	pos = strstr(read_buff_map, "[stack]");
+	if (pos == NULL) {
+		D_ERROR("Failed to find section stack.\n");
+		goto err;
+	}
 	/* look back for the first '\n', the end of last line */
 	for(i = 0; i < 128; i++) {
 		if (*(pos - i) == '\n') {
@@ -229,7 +244,7 @@ determine_lib_path(void)
 		}
 	}
 	if (path_offset == 0) {
-		D_ERROR("Fail to determine path_offset in /proc/self/maps!\n");
+		D_ERROR("Fail to determine path_offset in /proc/self/maps.\n");
 		quit_hook_init();
 	}
 
@@ -238,12 +253,12 @@ determine_lib_path(void)
 		/* try a different format */
 		pos = strstr(read_buff_map, "ld-2.");
 	if (pos == NULL) {
-		D_ERROR("Failed to find ld.so!\n");
+		D_ERROR("Failed to find ld.so.\n");
 		goto err;
 	}
 	get_path_pos(pos, &start, &end, path_offset, read_buff_map, read_buff_map + read_size);
 	if (start == NULL || end == NULL) {
-		D_ERROR("get_path_pos() failed to determine the path for ld.so!\n");
+		D_ERROR("get_path_pos() failed to determine the path for ld.so.\n");
 		goto err;
 	}
 	if ((end - start + 1) >= PATH_MAX) {
@@ -260,12 +275,12 @@ determine_lib_path(void)
 		/* try a different format */
 		pos = strstr(read_buff_map, "libc-2.");
 	if (pos == NULL) {
-		D_ERROR("Failed to find the path of libc.so!\n");
+		D_ERROR("Failed to find the path of libc.so.\n");
 		goto err;
 	}
 	get_path_pos(pos, &start, &end, path_offset, read_buff_map, read_buff_map + read_size);
 	if (start == NULL || end == NULL) {
-		D_ERROR("get_path_pos() failed to determine the path for libc.so.!\n");
+		D_ERROR("get_path_pos() failed to determine the path for libc.so.\n");
 		goto err;
 	}
 	if ((end - start + 1) >= PATH_MAX) {
@@ -281,41 +296,83 @@ determine_lib_path(void)
 	if (path_libc == NULL)
 		goto err;
 	path_libc[end - start] = 0;
-	D_FREE(read_buff_map);
 
+	if (libc_version_str == NULL) {
+		libc_version_str = (char *)gnu_get_libc_version();
+		if (libc_version_str == NULL) {
+			DS_ERROR(errno, "Failed to determine libc version");
+			goto err;
+		}
+		libc_version = atof(libc_version_str);
+	}
+
+	/* check whether libc name contains version. EL9 libs do not have version info! */
 	pos = strstr(path_libc, "libc-2.");
-	if (pos) {
-		/* containing version in name. example, 2.17 */
-		memcpy(lib_ver_str, pos + 5, 4);
-		lib_ver_str[4] = 0;
+	if (pos)
+		ver_in_lib_name = true;
+
+	/* with version in name */
+	if (ver_in_lib_name)
+		D_ASPRINTF(path_libpthread, "%s/libpthread-%s.so", lib_dir_str, libc_version_str);
+	else
+		D_ASPRINTF(path_libpthread, "%s/libpthread.so.0", lib_dir_str);
+	if (path_libpthread == NULL)
+		goto err;
+	if (strnlen(path_libpthread, PATH_MAX) >= PATH_MAX) {
+		D_FREE(path_libpthread);
+		DS_ERROR(ENAMETOOLONG, "path_libpthread is too long");
+		goto err;
+	}
+	if (ver_in_lib_name)
+		D_ASPRINTF(path_libdl, "%s/libdl-%s.so", lib_dir_str, libc_version_str);
+	else
+		D_ASPRINTF(path_libdl, "%s/libdl.so.2", lib_dir_str);
+	if (path_libdl == NULL)
+		goto err;
+	D_FREE(lib_dir_str);
+
+	if (strstr(read_buff_map, "libioil.so")) {
+		D_FREE(read_buff_map);
+		return;
 	}
 
-	if (lib_ver_str[0]) {
-		/* with version in name */
-		rc = asprintf(&path_libpthread, "%s/libpthread-%s.so", lib_dir_str, lib_ver_str);
-	} else {
-		rc = asprintf(&path_libpthread, "%s/libpthread.so.0", lib_dir_str);
+	pos = strstr(read_buff_map, "libpil4dfs.so");
+	if (pos == NULL) {
+		D_ERROR("Failed to find the path of libpil4dfs.so.\n");
+		goto err;
 	}
-	if (rc < 0) {
-		DS_ERROR(ENOMEM, "Failed to allocate memory for path_libpthread");
-		goto err_1;
+	get_path_pos(pos, &start, &end, path_offset, read_buff_map, read_buff_map + read_size);
+	if (start == NULL || end == NULL) {
+		D_ERROR("get_path_pos() failed to determine the path for libpil4dfs.so.\n");
+		goto err;
 	}
-	if (rc >= PATH_MAX) {
-		free(path_libpthread);
-		path_libpthread = NULL;
-		DS_ERROR(ENAMETOOLONG, "path_libpthread is too long");
-		goto err_1;
-	}	
-	D_FREE(lib_dir_str);
+	if ((end - start + 1) >= PATH_MAX) {
+		DS_ERROR(ENAMETOOLONG, "path_libpil4dfs is too long");
+		goto err;
+	}
+	memcpy(path_libpil4dfs, start, pos - start + sizeof("libpil4dfs.so"));
+	path_libpil4dfs[pos - start - 1 + sizeof("libpil4dfs.so")] = 0;
+	D_FREE(read_buff_map);
 
 	return;
 
 err:
 	D_FREE(read_buff_map);
-err_1:
 	D_FREE(lib_dir_str);
 	found_libc = 0;
 	quit_hook_init();
+}
+
+char *
+query_pil4dfs_path(void)
+{
+	return path_libpil4dfs;
+}
+
+float
+query_libc_version(void)
+{
+	return libc_version;
 }
 
 /*
@@ -717,10 +774,14 @@ free_memory_in_hook(void)
 {
 	int i;
 
+	for (i = 0; i < num_module; i++)
+		D_FREE(module_list[i].module_name);
+
 	D_FREE(path_ld);
 	D_FREE(path_libc);
 	D_FREE(module_list);
-	free(path_libpthread);
+	D_FREE(path_libdl);
+	D_FREE(path_libpthread);
 
 	if (lib_name_list) {
 		for (i = 0; i < num_lib_in_map; i++) {
@@ -769,7 +830,7 @@ install_hook(void)
 	allocate_memory_block_for_patches();
 
 	if (cs_open(CS_ARCH_X86, CS_MODE_64, &handle)) {
-		D_ERROR("cs_open() failed to initialize capstone engine!\n");
+		D_ERROR("cs_open() failed to initialize capstone engine.\n");
 		quit_hook_init();
 	}
 	cs_opt_skipdata skipdata = {
@@ -964,7 +1025,7 @@ register_a_hook(const char *module_name, const char *func_name, const void *new_
 {
 	void *module;
 	int   idx, idx_mod;
-	char  module_name_local[MAX_LEN_PATH_NAME + 4];
+	char *module_name_local;
 
 	/* make sure module_name[] and func_name[] are not too long. */
 	if (strnlen(module_name, MAX_LEN_PATH_NAME + 1) >= MAX_LEN_PATH_NAME)
@@ -997,13 +1058,15 @@ register_a_hook(const char *module_name, const char *func_name, const void *new_
 	}
 
 	if (strncmp(module_name, "ld", 3) == 0)
-		strncpy(module_name_local, path_ld, MAX_LEN_PATH_NAME);
+		module_name_local = path_ld;
 	else if (strncmp(module_name, "libc", 5) == 0)
-		strncpy(module_name_local, path_libc, MAX_LEN_PATH_NAME);
+		module_name_local = path_libc;
+	else if (strncmp(module_name, "libdl", 6) == 0)
+		module_name_local = path_libdl;
 	else if (strncmp(module_name, "libpthread", 11) == 0)
-		strncpy(module_name_local, path_libpthread, MAX_LEN_PATH_NAME);
+		module_name_local = path_libpthread;
 	else
-		strncpy(module_name_local, module_name, MAX_LEN_PATH_NAME);
+		module_name_local = (char *)module_name;
 
 	if (module_name_local[0] == '/') {
 		/* absolute path */
@@ -1027,7 +1090,9 @@ register_a_hook(const char *module_name, const char *func_name, const void *new_
 	idx_mod = query_registered_module(module_name_local);
 	if (idx_mod == -1) {
 		/* not registered module name. Register it. */
-		strcpy(module_list[num_module].module_name, module_name_local);
+		D_STRNDUP(module_list[num_module].module_name, module_name_local, PATH_MAX);
+		if (module_list[num_module].module_name == NULL)
+			quit_hook_init();
 		module_list[num_module].module_base_addr = lib_base_addr[idx];
 		strcpy(module_list[num_module].func_name_list[module_list[num_module].num_hook],
 		       func_name);
@@ -1082,7 +1147,6 @@ query_all_org_func_addr(void)
 			       module_list[idx_mod].module_name);
 			quit_hook_init();
 		} else {
-			strcpy(module_list[idx_mod].module_name, lib_name_list[idx]);
 			module_list[idx_mod].module_base_addr = lib_base_addr[idx];
 		}
 	}

@@ -1,5 +1,6 @@
 """
   (C) Copyright 2019-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -72,7 +73,7 @@ class ContRedundancyFactor(RebuildTestBase):
 
         # Exclude the ranks from the pool to initiate rebuild simultaneously
         self.log.info("==>(3)Start rebuild for all specified ranks simultaneously")
-        self.server_managers[0].stop_ranks(self.inputs.rank.value, self.d_log)
+        self.server_managers[0].stop_ranks(self.inputs.rank.value, force=True)
 
     def execute_during_rebuild_cont_rf(self, rd_fac, expect_cont_status="HEALTHY"):
         """Execute test steps during rebuild.
@@ -180,6 +181,9 @@ class ContRedundancyFactor(RebuildTestBase):
                 self.execute_pool_verify(" after rebuild")
                 self.log.info("==>(7)Check for container data if the container is healthy.")
                 self.verify_container_data()
+            else:
+                self.container.close()
+                self.container.skip_cleanup()
             self.log.info("Test passed")
         elif mode == "cont_rf_enforcement":
             self.log.info("Container rd_fac test passed")

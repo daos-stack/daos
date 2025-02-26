@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,13 +9,25 @@ package main
 
 /*
 #include "util.h"
+
+static void
+free_daos_alloc(void *ptr)
+{
+        // Use the macro to free memory allocated
+        // by DAOS macros in order to keep NLT happy.
+        D_FREE(ptr);
+}
 */
 import "C"
 
 import (
 	"fmt"
+	"strings"
+	"unsafe"
 
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/lib/daos"
 )
 
 func dfsError(rc C.int) error {
@@ -39,6 +52,8 @@ type fsCmd struct {
 	ResetObjClass  fsResetOclassCmd    `command:"reset-oclass" description:"reset default creation object class on a directory"`
 	DfuseQuery     fsDfuseQueryCmd     `command:"query" description:"Query dfuse for memory usage"`
 	DfuseEvict     fsDfuseEvictCmd     `command:"evict" description:"Evict object from dfuse"`
+	Scan           fsScanCmd           `command:"scan" description:"Scan POSIX container and report statistics"`
+	Chmod          fsChmodCmd          `command:"chmod" description:"Change file mode bits"`
 }
 
 type fsCopyCmd struct {
@@ -179,14 +194,12 @@ func fsModifyAttr(cmd *fsAttrCmd, op uint32, updateAP func(*C.struct_cmd_args_s)
 	}
 	defer deallocCmdArgs()
 
-	flags := C.uint(C.DAOS_COO_RW)
-
 	ap.fs_op = op
 	if updateAP != nil {
 		updateAP(ap)
 	}
 
-	cleanup, err := cmd.resolveAndConnect(flags, ap)
+	cleanup, err := cmd.resolveAndOpen(daos.ContainerOpenFlagReadWrite, ap)
 	if err != nil {
 		return err
 	}
@@ -253,9 +266,8 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 	defer deallocCmdArgs()
 
 	ap.fs_op = C.FS_GET_ATTR
-	flags := C.uint(C.DAOS_COO_RO)
 
-	cleanup, err := cmd.resolveAndConnect(flags, ap)
+	cleanup, err := cmd.resolveAndOpen(daos.ContainerOpenFlagReadOnly, ap)
 	if err != nil {
 		return err
 	}
@@ -272,6 +284,8 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 
 	var diroclassName [16]C.char
 	var fileoclassName [16]C.char
+	var oid C.daos_obj_id_t = attrs.doi_oid
+	var oidStr string = fmt.Sprintf("%d.%d", oid.hi, oid.lo)
 	if C.mode_is_dir(cmode) {
 		C.daos_oclass_id2name(attrs.doi_dir_oclass_id, &diroclassName[0])
 		C.daos_oclass_id2name(attrs.doi_file_oclass_id, &fileoclassName[0])
@@ -281,6 +295,7 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 		if C.mode_is_dir(cmode) {
 			jsonAttrs := struct {
 				ObjAttr struct {
+					OID      string `json:"oid"`
 					ObjClass string `json:"oclass"`
 				} `json:"object"`
 				DirAttr struct {
@@ -290,8 +305,10 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 				} `json:"directory"`
 			}{
 				ObjAttr: struct {
+					OID      string `json:"oid"`
 					ObjClass string `json:"oclass"`
 				}{
+					OID:      oidStr,
 					ObjClass: C.GoString(&oclassName[0]),
 				},
 				DirAttr: struct {
@@ -307,9 +324,11 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 			return cmd.OutputJSON(jsonAttrs, nil)
 		} else {
 			jsonAttrs := &struct {
+				OID       string `json:"oid"`
 				ObjClass  string `json:"oclass"`
 				ChunkSize uint64 `json:"chunk_size"`
 			}{
+				OID:       oidStr,
 				ObjClass:  C.GoString(&oclassName[0]),
 				ChunkSize: uint64(attrs.doi_chunk_size),
 			}
@@ -317,6 +336,7 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 		}
 	}
 
+	cmd.Infof("OID = %s", oidStr)
 	cmd.Infof("Object Class = %s", C.GoString(&oclassName[0]))
 	if C.mode_is_dir(cmode) {
 		cmd.Infof("Directory Creation Object Class = %s", C.GoString(&diroclassName[0]))
@@ -379,10 +399,8 @@ func (cmd *fsFixEntryCmd) Execute(_ []string) error {
 	}
 	defer deallocCmdArgs()
 
-	flags := C.uint(C.DAOS_COO_EX)
-
 	ap.fs_op = C.FS_CHECK
-	cleanup, err := cmd.resolveAndConnect(flags, ap)
+	cleanup, err := cmd.resolveAndOpen(daos.ContainerOpenFlagExclusive, ap)
 	if err != nil {
 		return errors.Wrapf(err, "failed fs fix-entry")
 	}
@@ -419,7 +437,7 @@ func (cmd *fsFixSBCmd) Execute(_ []string) error {
 	defer deallocCmdArgs()
 
 	ap.fs_op = C.FS_CHECK
-	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_EX, ap)
+	cleanup, err := cmd.resolveAndOpen(daos.ContainerOpenFlagExclusive, ap)
 	if err != nil {
 		return err
 	}
@@ -464,7 +482,7 @@ func (cmd *fsFixRootCmd) Execute(_ []string) error {
 	defer deallocCmdArgs()
 
 	ap.fs_op = C.FS_CHECK
-	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_EX, ap)
+	cleanup, err := cmd.resolveAndOpen(daos.ContainerOpenFlagExclusive, ap)
 	if err != nil {
 		return err
 	}
@@ -501,23 +519,38 @@ func (cmd *fsDfuseQueryCmd) Execute(_ []string) error {
 		ap.dfuse_mem.ino = C.ulong(cmd.Ino)
 	}
 
-	rc := C.dfuse_count_query(ap)
+	rc := C.dfuse_cont_query(ap)
 	if err := daosError(rc); err != nil {
 		return errors.Wrapf(err, "failed to query %s", cmd.Args.Path)
 	}
 
+	defer C.free_daos_alloc(unsafe.Pointer(ap.dfuse_stat))
+
 	if cmd.JSONOutputEnabled() {
+
+		ds_map := make(map[string]uint64)
+
+		ds_slice := unsafe.Slice(ap.dfuse_stat, ap.dfuse_mem.stat_count)
+
+		for _, v := range ds_slice {
+			if v.value != 0 {
+				ds_map[strings.ToLower(C.GoString(&v.name[0]))] = uint64(v.value)
+			}
+		}
+
 		if cmd.Ino == 0 {
 			jsonAttrs := &struct {
-				NumInodes      uint64 `json:"inodes"`
-				NumFileHandles uint64 `json:"open_files"`
-				NumPools       uint64 `json:"pools"`
-				NumContainers  uint64 `json:"containers"`
+				NumInodes      uint64            `json:"inodes"`
+				NumFileHandles uint64            `json:"open_files"`
+				NumPools       uint64            `json:"pools"`
+				NumContainers  uint64            `json:"containers"`
+				Data           map[string]uint64 `json:"statistics"`
 			}{
 				NumInodes:      uint64(ap.dfuse_mem.inode_count),
 				NumFileHandles: uint64(ap.dfuse_mem.fh_count),
 				NumPools:       uint64(ap.dfuse_mem.pool_count),
 				NumContainers:  uint64(ap.dfuse_mem.container_count),
+				Data:           ds_map,
 			}
 			return cmd.OutputJSON(jsonAttrs, nil)
 		} else {
@@ -600,6 +633,70 @@ func (cmd *fsDfuseEvictCmd) Execute(_ []string) error {
 	cmd.Infof("    Containers: %d", ap.dfuse_mem.container_count)
 	cmd.Infof("        Inodes: %d", ap.dfuse_mem.inode_count)
 	cmd.Infof("    Open files: %d", ap.dfuse_mem.fh_count)
+
+	return nil
+}
+
+type fsScanCmd struct {
+	existingContainerCmd
+
+	DirName string `long:"dir-name" short:"n" description:"subdirectory path to scan. Start from container root if not specified."`
+}
+
+func (cmd *fsScanCmd) Execute(_ []string) error {
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
+	if err != nil {
+		return err
+	}
+	defer deallocCmdArgs()
+
+	if err := cmd.resolveContainer(ap); err != nil {
+		return err
+	}
+
+	cleanupPool, err := cmd.connectPool(C.DAOS_PC_RW, ap)
+	if err != nil {
+		return err
+	}
+	defer cleanupPool()
+
+	var dirName *C.char
+	if cmd.DirName != "" {
+		dirName = C.CString(cmd.DirName)
+		defer freeString(dirName)
+	}
+
+	rc := C.dfs_cont_scan(cmd.cPoolHandle, &ap.cont_str[0], 0, dirName)
+	if err := dfsError(rc); err != nil {
+		return errors.Wrapf(err, "failed to scan")
+	}
+	return nil
+}
+
+type fsChmodCmd struct {
+	fsAttrCmd
+
+	ModeBits ModeBitsFlag `long:"mode" short:"m" description:"file mode in octal, e.g. 0755" required:"1"`
+}
+
+func (cmd *fsChmodCmd) Execute(_ []string) error {
+	ap, deallocCmdArgs, err := setupFSAttrCmd(&cmd.fsAttrCmd)
+	if err != nil {
+		return err
+	}
+	defer deallocCmdArgs()
+
+	ap.object_mode = cmd.ModeBits.Mode
+
+	cleanup, err := cmd.resolveAndOpen(daos.ContainerOpenFlagReadWrite, ap)
+	if err != nil {
+		return errors.Wrapf(err, "failed to connect")
+	}
+	defer cleanup()
+
+	if err := dfsError(C.fs_chmod_hdlr(ap)); err != nil {
+		return errors.Wrapf(err, "chmod failed")
+	}
 
 	return nil
 }

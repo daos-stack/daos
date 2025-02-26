@@ -1,5 +1,6 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,12 +16,17 @@
 #define D_LOGFAC	DD_FAC(pool)
 
 #include <daos/common.h>
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 #include <daos/event.h>
 #include <daos/mgmt.h>
 #include <daos/placement.h>
+#include <daos/metrics.h>
+#include <daos/job.h>
 #include <daos/pool.h>
 #include <daos/security.h>
 #include <daos_types.h>
+#include <semaphore.h>
 #include "cli_internal.h"
 #include "rpc.h"
 
@@ -31,12 +37,160 @@ struct rsvc_client_state {
 };
 
 int	dc_pool_proto_version;
+static pthread_mutex_t warmup_lock = PTHREAD_MUTEX_INITIALIZER;
 
 /* task private context for pool API implementation */
 struct pool_task_priv {
 	uint64_t                  rq_time; /* request time (hybrid logical clock) */
 	struct dc_pool           *pool;    /* client pool handle (pool_connect) */
 	struct pool_update_state *state;   /* (pool_update_internal) */
+};
+
+struct dc_pool_metrics {
+	d_list_t dp_pool_list; /* pool metrics list on this thread */
+	uuid_t   dp_uuid;
+	char     dp_path[D_TM_MAX_NAME_LEN];
+	void    *dp_metrics[DAOS_NR_MODULE];
+	int      dp_ref;
+};
+
+/**
+ * Destroy metrics for a specific pool.
+ *
+ * \param[in]	pool	pointer to ds_pool structure
+ */
+static void
+dc_pool_metrics_free(struct dc_pool_metrics *metrics)
+{
+	int rc;
+
+	if (!daos_client_metric)
+		return;
+
+	daos_module_fini_metrics(DAOS_CLI_TAG, metrics->dp_metrics);
+	if (!daos_client_metric_retain) {
+		rc = d_tm_del_ephemeral_dir(metrics->dp_path);
+		if (rc != 0) {
+			D_WARN(DF_UUID ": failed to remove pool metrics dir for pool: " DF_RC "\n",
+			       DP_UUID(metrics->dp_uuid), DP_RC(rc));
+			return;
+		}
+	}
+
+	D_INFO(DF_UUID ": destroyed ds_pool metrics: %s\n", DP_UUID(metrics->dp_uuid),
+	       metrics->dp_path);
+}
+
+static int
+dc_pool_metrics_alloc(uuid_t pool_uuid, struct dc_pool_metrics **metrics_p)
+{
+	struct dc_pool_metrics *metrics = NULL;
+	int                     pid;
+	size_t                  size;
+	int                     rc;
+
+	if (!daos_client_metric)
+		return 0;
+
+	D_ALLOC_PTR(metrics);
+	if (metrics == NULL)
+		return -DER_NOMEM;
+
+	uuid_copy(metrics->dp_uuid, pool_uuid);
+	pid = getpid();
+	snprintf(metrics->dp_path, sizeof(metrics->dp_path), "pool/" DF_UUIDF,
+		 DP_UUID(metrics->dp_uuid));
+
+	/** create new shmem space for per-pool metrics */
+	size = daos_module_nr_pool_metrics() * PER_METRIC_BYTES;
+	rc   = d_tm_add_ephemeral_dir(NULL, size, metrics->dp_path);
+	if (rc != 0) {
+		D_WARN(DF_UUID ": failed to create metrics dir for pool: " DF_RC "\n",
+		       DP_UUID(metrics->dp_uuid), DP_RC(rc));
+		D_FREE(metrics);
+		return rc;
+	}
+
+	/* initialize metrics on the system xstream for each module */
+	rc = daos_module_init_metrics(DAOS_CLI_TAG, metrics->dp_metrics, metrics->dp_path, pid);
+	if (rc != 0) {
+		D_WARN(DF_UUID ": failed to initialize module metrics: " DF_RC "\n",
+		       DP_UUID(metrics->dp_uuid), DP_RC(rc));
+		dc_pool_metrics_free(metrics);
+		return rc;
+	}
+
+	D_INFO(DF_UUID ": created metrics for pool %s\n", DP_UUID(metrics->dp_uuid),
+	       metrics->dp_path);
+	*metrics_p = metrics;
+
+	return 0;
+}
+
+struct dc_pool_metrics *
+dc_pool_metrics_lookup(struct dc_pool_tls *tls, uuid_t pool_uuid)
+{
+	struct dc_pool_metrics *metrics;
+
+	D_MUTEX_LOCK(&tls->dpc_metrics_list_lock);
+	d_list_for_each_entry(metrics, &tls->dpc_metrics_list, dp_pool_list) {
+		if (uuid_compare(pool_uuid, metrics->dp_uuid) == 0) {
+			D_MUTEX_UNLOCK(&tls->dpc_metrics_list_lock);
+			return metrics;
+		}
+	}
+	D_MUTEX_UNLOCK(&tls->dpc_metrics_list_lock);
+
+	return NULL;
+}
+
+static void *
+dc_pool_tls_init(int tags, int xs_id, int pid)
+{
+	struct dc_pool_tls *tls;
+	int                 rc;
+
+	D_ALLOC_PTR(tls);
+	if (tls == NULL)
+		return NULL;
+
+	rc = D_MUTEX_INIT(&tls->dpc_metrics_list_lock, NULL);
+	if (rc != 0) {
+		D_FREE(tls);
+		return NULL;
+	}
+
+	D_INIT_LIST_HEAD(&tls->dpc_metrics_list);
+	return tls;
+}
+
+static void
+dc_pool_tls_fini(int tags, void *data)
+{
+	struct dc_pool_tls     *tls = data;
+	struct dc_pool_metrics *dpm;
+	struct dc_pool_metrics *tmp;
+
+	D_MUTEX_LOCK(&tls->dpc_metrics_list_lock);
+	d_list_for_each_entry_safe(dpm, tmp, &tls->dpc_metrics_list, dp_pool_list) {
+		if (dpm->dp_ref != 0)
+			D_WARN("still reference for pool " DF_UUID " metrics\n",
+			       DP_UUID(dpm->dp_uuid));
+		d_list_del_init(&dpm->dp_pool_list);
+		dc_pool_metrics_free(dpm);
+		D_FREE(dpm);
+	}
+	D_MUTEX_UNLOCK(&tls->dpc_metrics_list_lock);
+
+	D_MUTEX_DESTROY(&tls->dpc_metrics_list_lock);
+	D_FREE(tls);
+}
+
+struct daos_module_key dc_pool_module_key = {
+    .dmk_tags  = DAOS_CLI_TAG,
+    .dmk_index = -1,
+    .dmk_init  = dc_pool_tls_init,
+    .dmk_fini  = dc_pool_tls_fini,
 };
 
 /**
@@ -48,16 +202,19 @@ dc_pool_init(void)
 	uint32_t		ver_array[2] = {DAOS_POOL_VERSION - 1, DAOS_POOL_VERSION};
 	int			rc;
 
+	if (daos_client_metric)
+		daos_register_key(&dc_pool_module_key);
+
 	dc_pool_proto_version = 0;
-	rc = daos_rpc_proto_query(pool_proto_fmt_v5.cpf_base, ver_array, 2, &dc_pool_proto_version);
+	rc = daos_rpc_proto_query(pool_proto_fmt_v6.cpf_base, ver_array, 2, &dc_pool_proto_version);
 	if (rc)
 		return rc;
 
 	if (dc_pool_proto_version == DAOS_POOL_VERSION - 1) {
-		rc = daos_rpc_register(&pool_proto_fmt_v5, POOL_PROTO_CLI_COUNT, NULL,
+		rc = daos_rpc_register(&pool_proto_fmt_v6, POOL_PROTO_CLI_COUNT, NULL,
 				       DAOS_POOL_MODULE);
 	} else if (dc_pool_proto_version == DAOS_POOL_VERSION) {
-		rc = daos_rpc_register(&pool_proto_fmt_v6, POOL_PROTO_CLI_COUNT, NULL,
+		rc = daos_rpc_register(&pool_proto_fmt_v7, POOL_PROTO_CLI_COUNT, NULL,
 				       DAOS_POOL_MODULE);
 	} else {
 		D_ERROR("%d version pool RPC not supported.\n", dc_pool_proto_version);
@@ -80,15 +237,76 @@ dc_pool_fini(void)
 	int rc;
 
 	if (dc_pool_proto_version == DAOS_POOL_VERSION - 1) {
-		rc = daos_rpc_unregister(&pool_proto_fmt_v5);
-	} else if (dc_pool_proto_version == DAOS_POOL_VERSION) {
 		rc = daos_rpc_unregister(&pool_proto_fmt_v6);
+	} else if (dc_pool_proto_version == DAOS_POOL_VERSION) {
+		rc = daos_rpc_unregister(&pool_proto_fmt_v7);
 	} else {
 		rc = -DER_PROTO;
 		DL_ERROR(rc, "%d version pool RPC not supported", dc_pool_proto_version);
 	}
 	if (rc != 0)
 		DL_ERROR(rc, "failed to unregister pool RPCs");
+
+	if (daos_client_metric)
+		daos_unregister_key(&dc_pool_module_key);
+}
+
+static int
+dc_pool_metrics_start(struct dc_pool *pool)
+{
+	struct dc_pool_tls     *tls;
+	struct dc_pool_metrics *metrics;
+	int                     rc;
+
+	if (!daos_client_metric)
+		return 0;
+
+	if (pool->dp_metrics != NULL)
+		return 0;
+
+	tls = dc_pool_tls_get();
+	D_ASSERT(tls != NULL);
+
+	metrics = dc_pool_metrics_lookup(tls, pool->dp_pool);
+	if (metrics != NULL) {
+		metrics->dp_ref++;
+		pool->dp_metrics = metrics->dp_metrics;
+		return 0;
+	}
+
+	rc = dc_pool_metrics_alloc(pool->dp_pool, &metrics);
+	if (rc != 0)
+		return rc;
+
+	D_MUTEX_LOCK(&tls->dpc_metrics_list_lock);
+	d_list_add(&metrics->dp_pool_list, &tls->dpc_metrics_list);
+	D_MUTEX_UNLOCK(&tls->dpc_metrics_list_lock);
+	metrics->dp_ref++;
+	pool->dp_metrics = metrics->dp_metrics;
+
+	return 0;
+}
+
+static void
+dc_pool_metrics_stop(struct dc_pool *pool)
+{
+	struct dc_pool_metrics *metrics;
+	struct dc_pool_tls     *tls;
+
+	if (!daos_client_metric)
+		return;
+
+	if (pool->dp_metrics == NULL)
+		return;
+
+	tls = dc_pool_tls_get();
+	D_ASSERT(tls != NULL);
+
+	metrics = dc_pool_metrics_lookup(tls, pool->dp_pool);
+	if (metrics != NULL)
+		metrics->dp_ref--;
+
+	pool->dp_metrics = NULL;
 }
 
 static void
@@ -109,6 +327,8 @@ pool_free(struct d_hlink *hlink)
 
 	if (pool->dp_map != NULL)
 		pool_map_decref(pool->dp_map);
+
+	dc_pool_metrics_stop(pool);
 
 	rsvc_client_fini(&pool->dp_client);
 	if (pool->dp_sys != NULL)
@@ -261,6 +481,38 @@ choose:
 	return rc;
 }
 
+struct subtract_rsvc_rank_arg {
+	struct pool_domain *srra_nodes;
+	int                 srra_nodes_len;
+};
+
+static bool
+subtract_rsvc_rank(d_rank_t rank, void *varg)
+{
+	struct subtract_rsvc_rank_arg *arg = varg;
+	int                            i;
+
+	for (i = 0; i < arg->srra_nodes_len; i++)
+		if (arg->srra_nodes[i].do_comp.co_rank == rank)
+			return !(arg->srra_nodes[i].do_comp.co_status & DC_POOL_SVC_MAP_STATES);
+	return true;
+}
+
+/* The pool->dp_map_lock must have been held for write. */
+static void
+update_rsvc_client(struct dc_pool *pool)
+{
+	struct subtract_rsvc_rank_arg arg;
+
+	arg.srra_nodes_len = pool_map_find_ranks(pool->dp_map, PO_COMP_ID_ALL, &arg.srra_nodes);
+	/* There must be at least one rank. */
+	D_ASSERTF(arg.srra_nodes_len > 0, "%d > 0\n", arg.srra_nodes_len);
+
+	D_MUTEX_LOCK(&pool->dp_client_lock);
+	rsvc_client_subtract(&pool->dp_client, subtract_rsvc_rank, &arg);
+	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+}
+
 /* Assume dp_map_lock is locked before calling this function */
 int
 dc_pool_map_update(struct dc_pool *pool, struct pool_map *map, bool connect)
@@ -297,6 +549,7 @@ dc_pool_map_update(struct dc_pool *pool, struct pool_map *map, bool connect)
 	pool->dp_map = map;
 	if (pool->dp_map_version_known < map_version)
 		pool->dp_map_version_known = map_version;
+	update_rsvc_client(pool);
 	D_INFO(DF_UUID ": updated pool map: version=%u->%u\n", DP_UUID(pool->dp_pool),
 	       map_version_before, map_version);
 out:
@@ -459,6 +712,143 @@ struct pool_connect_arg {
 	daos_handle_t		*hdlp;
 };
 
+static void
+warmup_cb(const struct crt_cb_info *info)
+{
+	sem_t *sem;
+
+	if (info->cci_rc != 0)
+		D_ERROR("Ping failed with rc = %d\n", info->cci_rc);
+
+	sem = (sem_t *)info->cci_arg;
+
+	sem_post(sem);
+}
+
+/*
+ * Pro-actively ping each target in the pool map.
+ * This forces underlying connection to be set up.
+ */
+static void
+warmup(struct dc_pool *pool)
+{
+	static bool         parsed;
+	static bool         enabled = false;
+	crt_context_t       ctx;
+	int                 i;
+	int                 shift;
+	struct pool_target *tgts;
+	sem_t               sem;
+	crt_bulk_t          bulk_hdl;
+	void               *bulk_buf;
+	int                 bulk_len = 4096;
+	d_sg_list_t         sgl;
+	d_iov_t             iov;
+	int                 nr;
+	int                 rc = 0;
+
+	if (parsed && !enabled)
+		/** fast path when disabled */
+		return;
+
+	D_MUTEX_LOCK(&warmup_lock);
+	if (!parsed) {
+		d_getenv_bool("D_POOL_WARMUP", &enabled);
+		parsed = true;
+	}
+	if (!enabled) {
+		D_MUTEX_UNLOCK(&warmup_lock);
+		return;
+	}
+
+	D_ALLOC(bulk_buf, bulk_len);
+	if (bulk_buf == NULL) {
+		D_ERROR("Failed to alloc mem\n");
+		goto out_unlock;
+	}
+
+	ctx = daos_get_crt_ctx();
+
+	d_iov_set(&iov, bulk_buf, bulk_len);
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs   = &iov;
+	rc            = crt_bulk_create(ctx, &sgl, CRT_BULK_RW, &bulk_hdl);
+	if (rc < 0) {
+		D_ERROR("Failed to create bulk handle\n");
+		goto out_bulk;
+	}
+
+	rc = sem_init(&sem, 0, 0);
+	if (rc < 0) {
+		D_ERROR("Failed to initialize semaphore\n");
+		goto out_hdl;
+	}
+
+	/** retrieve all targets from the pool map */
+	nr = pool_map_find_target(pool->dp_map, PO_COMP_ID_ALL, &tgts);
+
+	/** Randomize start order to minimize load for large-scale job */
+	shift = rand() + (int)getpid();
+	if (shift < 0)
+		shift = rand();
+
+	D_DEBUG(DB_TRACE, "Pinging %d targets, shifting at %d\n", nr, shift);
+
+	for (i = 0; i < nr; i++) {
+		crt_endpoint_t             ep;
+		crt_rpc_t                 *rpc = NULL;
+		struct pool_tgt_warmup_in *rpc_in;
+		int                        idx;
+		crt_opcode_t               opcode;
+
+		idx        = (i + shift) % nr;
+		if (tgts[idx].ta_comp.co_status == PO_COMP_ST_DOWN ||
+		    tgts[idx].ta_comp.co_status == PO_COMP_ST_DOWNOUT)
+			continue;
+		ep.ep_grp  = pool->dp_sys->sy_group;
+		ep.ep_rank = tgts[idx].ta_comp.co_rank;
+		ep.ep_tag  = daos_rpc_tag(DAOS_REQ_TGT, tgts[idx].ta_comp.co_index);
+		opcode     = DAOS_RPC_OPCODE(POOL_TGT_WARMUP, DAOS_POOL_MODULE,
+                                         dc_pool_proto_version ? dc_pool_proto_version
+								   : DAOS_POOL_VERSION);
+		rc         = crt_req_create(ctx, &ep, opcode, &rpc);
+		if (rc != 0) {
+			D_ERROR("Failed to allocate req " DF_RC "\n", DP_RC(rc));
+			goto out_sem;
+		}
+		D_ASSERTF(rc == 0, "crt_req_create failed; rc=%d\n", rc);
+		rpc_in          = crt_req_get(rpc);
+		rpc_in->tw_bulk = bulk_hdl;
+
+		rc = crt_req_send(rpc, warmup_cb, &sem);
+		if (rc != 0) {
+			D_ERROR("Failed to ping rank=%d:%d, " DF_RC "\n", ep.ep_rank, ep.ep_tag,
+				DP_RC(rc));
+			goto out_sem;
+		}
+
+		while (sem_trywait(&sem) == -1) {
+			rc = crt_progress(ctx, 0);
+			if (rc && rc != -DER_TIMEDOUT) {
+				D_ERROR("failed to progress context, " DF_RC "\n", DP_RC(rc));
+				break;
+			}
+		}
+		rc = 0;
+	}
+	D_DEBUG(DB_TRACE, "Pinging done\n");
+
+out_sem:
+	(void)sem_destroy(&sem);
+out_hdl:
+	crt_bulk_free(bulk_hdl);
+out_bulk:
+	D_FREE(bulk_buf);
+out_unlock:
+	D_MUTEX_UNLOCK(&warmup_lock);
+}
+
 static int
 pool_connect_cp(tse_task_t *task, void *data)
 {
@@ -534,6 +924,7 @@ pool_connect_cp(tse_task_t *task, void *data)
 		DP_UUID(tpriv->pool->dp_pool), arg->hdlp->cookie,
 		DP_UUID(tpriv->pool->dp_pool_hdl));
 
+	warmup(tpriv->pool);
 out:
 	pool_connect_in_get_cred(arg->rpc, &credp);
 	pool_connect_in_get_data(arg->rpc, NULL /* flags */, NULL /* bits */, &bulk,
@@ -579,7 +970,6 @@ init_pool(const char *label, uuid_t uuid, uint64_t capas, const char *grp,
 	/** sy_info.provider */
 	/** sy_info.interface */
 	/** sy_info.domain */
-	/** sy_info.crt_ctx_share_addr */
 	/** sy_info.crt_timeout */
 
 	rc = rsvc_client_init(&pool->dp_client, NULL);
@@ -618,6 +1008,10 @@ dc_pool_connect_internal(tse_task_t *task, daos_pool_info_t *info, const char *l
 			  label ? label : "");
 		goto out;
 	}
+
+	rc = dc_pool_metrics_start(pool);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	/** Pool connect RPC by UUID (provided, or looked up by label above) */
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_CONNECT, pool->dp_pool,
@@ -1112,6 +1506,10 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 	if (rc < 0)
 		goto out;
 
+	rc = dc_pool_metrics_start(pool);
+	if (rc != 0)
+		goto out;
+
 	rc = pool_map_create(map_buf, pool_glob->dpg_map_version, &map);
 	if (rc != 0) {
 		D_ERROR("failed to create local pool map: "DF_RC"\n",
@@ -1131,6 +1529,7 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 		" slave\n", DP_UUID(pool->dp_pool), poh->cookie,
 		DP_UUID(pool->dp_pool_hdl));
 
+	warmup(pool);
 out:
 	if (rc != 0)
 		D_ERROR("failed, rc: "DF_RC"\n", DP_RC(rc));
@@ -1176,6 +1575,23 @@ out:
 	return rc;
 }
 
+int
+dc_pool_hdl2uuid(daos_handle_t poh, uuid_t *hdl_uuid, uuid_t *uuid)
+{
+	struct dc_pool *dp;
+
+	dp = dc_hdl2pool(poh);
+	if (dp == NULL)
+		return -DER_NO_HDL;
+
+	if (hdl_uuid != NULL)
+		uuid_copy(*hdl_uuid, dp->dp_pool_hdl);
+	if (uuid != NULL)
+		uuid_copy(*uuid, dp->dp_pool);
+	dc_pool_put(dp);
+	return 0;
+}
+
 struct pool_update_state {
 	struct rsvc_client	client;
 	struct dc_mgmt_sys     *sys;
@@ -1192,6 +1608,7 @@ pool_tgt_update_cp(tse_task_t *task, void *data)
 	int                              n_addrs;
 	bool                             free_tpriv = true;
 	int				 rc = task->dt_result;
+	uint32_t                         flags;
 
 	rc = rsvc_client_complete_rpc(&tpriv->state->client, &rpc->cr_ep, rc, out->pto_op.po_rc,
 				      &out->pto_op.po_hint);
@@ -1221,7 +1638,7 @@ pool_tgt_update_cp(tse_task_t *task, void *data)
 		DP_UUID(in->pti_op.pi_uuid), DP_UUID(in->pti_op.pi_hdl),
 		(int)out->pto_addr_list.ca_count);
 
-	pool_tgt_update_in_get_data(rpc, &addrs, &n_addrs);
+	pool_tgt_update_in_get_data(rpc, &addrs, &n_addrs, &flags);
 	D_FREE(addrs);
 
 	if (out->pto_addr_list.ca_arrays != NULL &&
@@ -1317,7 +1734,8 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args, int opc)
 		list.pta_addrs[i].pta_target = args->tgts->tl_tgts[i];
 	}
 
-	pool_tgt_update_in_set_data(rpc, list.pta_addrs, (size_t)list.pta_number);
+	pool_tgt_update_in_set_data(rpc, list.pta_addrs, (size_t)list.pta_number,
+				    POOL_TGT_UPDATE_SKIP_RF_CHECK);
 
 	crt_req_addref(rpc);
 
@@ -1618,7 +2036,7 @@ choose_map_refresh_rank(struct map_refresh_arg *arg)
 	if (arg->mra_n <= 0)
 		return CRT_NO_RANK;
 
-	n = pool_map_find_nodes(arg->mra_pool->dp_map, PO_COMP_ID_ALL, &nodes);
+	n = pool_map_find_ranks(arg->mra_pool->dp_map, PO_COMP_ID_ALL, &nodes);
 	/* There must be at least one rank. */
 	D_ASSERTF(n > 0, "%d\n", n);
 
@@ -3263,4 +3681,21 @@ dc_pool_tgt_idx2ptr(struct dc_pool *pool, uint32_t tgt_idx,
 		return -DER_INVAL;
 	}
 	return 0;
+}
+
+static int
+pool_mark_slave(struct d_hlink *link, void *arg)
+{
+	struct dc_pool *pool;
+
+	pool           = container_of(link, struct dc_pool, dp_hlink);
+	pool->dp_slave = 1;
+
+	return 0;
+}
+
+int
+dc_pool_mark_all_slave(void)
+{
+	return daos_hhash_traverse(DAOS_HTYPE_POOL, pool_mark_slave, NULL);
 }

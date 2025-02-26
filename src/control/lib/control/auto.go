@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -37,13 +37,14 @@ const (
 	minNrSSDs             = 1
 	minDMABuffer          = 1024
 	numaCoreUsage         = 0.8 // fraction of numa cores to use for targets
+	coresRsvdPerEngine    = 2   // number of cores to reserve for system usage per engine
 
 	errUnsupNetDevClass  = "unsupported net dev class in request: %s"
 	errInsufNrIfaces     = "insufficient matching fabric interfaces, want %d got %d %v"
 	errInsufNrPMemGroups = "insufficient number of pmem device numa groups %v, want %d got %d"
 	errInsufNrSSDGroups  = "insufficient number of ssd device numa groups %v, want %d got %d"
 	errInsufNrSSDs       = "insufficient number of ssds for numa %d, want %d got %d"
-	errInvalNrCores      = "invalid number of cores for numa %d, want at least 2"
+	errInvalNrCores      = "invalid number of cores-per-numa, want at least 2 got %d"
 	errInsufNrProvGroups = "none of the provider-ifaces sets match the numa node sets " +
 		"that meet storage requirements"
 )
@@ -62,7 +63,7 @@ type (
 		// Generate a config without NVMe.
 		SCMOnly bool `json:"SCMOnly"`
 		// Hosts to run the management service.
-		AccessPoints []string `json:"-"`
+		MgmtSvcReplicas []string `json:"-"`
 		// Ports to use for fabric comms (one needed per engine).
 		FabricPorts []int `json:"-"`
 		// Generate config with a tmpfs RAM-disk SCM.
@@ -100,9 +101,9 @@ type (
 func (cgr *ConfGenerateReq) UnmarshalJSON(data []byte) error {
 	type Alias ConfGenerateReq
 	aux := &struct {
-		AccessPoints string
-		FabricPorts  string
-		NetClass     string
+		MgmtSvcReplicas string
+		FabricPorts     string
+		NetClass        string
 		*Alias
 	}{
 		Alias: (*Alias)(cgr),
@@ -112,7 +113,7 @@ func (cgr *ConfGenerateReq) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	cgr.AccessPoints = strings.Split(aux.AccessPoints, ",")
+	cgr.MgmtSvcReplicas = strings.Split(aux.MgmtSvcReplicas, ",")
 	fabricPorts := strings.Split(aux.FabricPorts, ",")
 	for _, s := range fabricPorts {
 		if s == "" {
@@ -187,13 +188,13 @@ func ConfGenerate(req ConfGenerateReq, newEngineCfg newEngineCfgFn, hf *HostFabr
 	}
 
 	// calculate service and helper thread counts
-	tc, err := getThreadCounts(req.Log, ecs[0], nd.NumaCoreCount)
+	tc, err := getThreadCounts(req.Log, nodeSet, nd.NumaCoreCount, sd.NumaSSDs)
 	if err != nil {
 		return nil, err
 	}
 
 	// populate server config using engine configs
-	sc, err := genServerConfig(req, ecs, sd.MemInfo, tc)
+	sc, err := genServerConfig(req, ecs, tc)
 	if err != nil {
 		return nil, err
 	}
@@ -211,8 +212,8 @@ func ConfGenerateRemote(ctx context.Context, req ConfGenerateRemoteReq) (*ConfGe
 		return nil, errors.New("no hosts specified")
 	}
 
-	if len(req.AccessPoints) == 0 {
-		return nil, errors.New("no access points specified")
+	if len(req.MgmtSvcReplicas) == 0 {
+		return nil, errors.New("no MS replicas specified")
 	}
 
 	ns, err := getNetworkSet(ctx, req)
@@ -944,16 +945,6 @@ func correctSSDCounts(log logging.Logger, sd *storageDetails) error {
 			ssdAddrs := ssds.Strings()[:minSSDsInCfg]
 			sd.NumaSSDs[numaID] = hardware.MustNewPCIAddressSet(ssdAddrs...)
 		}
-
-		if ssds.HasVMD() {
-			// If addresses are for VMD backing devices, convert to the logical VMD
-			// endpoint address as this is what is expected in the server config.
-			newAddrSet, err := ssds.BackingToVMDAddresses()
-			if err != nil {
-				return errors.Wrap(err, "converting backing addresses to vmd")
-			}
-			sd.NumaSSDs[numaID] = newAddrSet
-		}
 	}
 
 	return nil
@@ -977,6 +968,19 @@ func getSCMTier(log logging.Logger, numaID, nrNumaNodes int, sd *storageDetails)
 
 func getBdevTiers(log logging.Logger, mdOnSSD bool, ssds *hardware.PCIAddressSet) (storage.TierConfigs, error) {
 	nrSSDs := ssds.Len()
+	addrs := ssds.Strings()
+
+	if ssds.HasVMD() {
+		// If addresses are for VMD backing devices, convert to the logical VMD
+		// domain address as this is what is expected in the server config.
+		newAddrSet, err := ssds.BackingToVMDAddresses()
+		if err != nil {
+			return nil, errors.Wrap(err, "converting backing addresses to vmd")
+		}
+		nrSSDs = newAddrSet.Len()
+		addrs = newAddrSet.Strings()
+	}
+
 	if nrSSDs == 0 {
 		log.Debugf("skip assigning ssd tiers as no ssds are available")
 		return nil, nil
@@ -986,7 +990,7 @@ func getBdevTiers(log logging.Logger, mdOnSSD bool, ssds *hardware.PCIAddressSet
 		return storage.TierConfigs{
 			storage.NewTierConfig().
 				WithStorageClass(storage.ClassNvme.String()).
-				WithBdevDeviceList(ssds.Strings()...),
+				WithBdevDeviceList(addrs...),
 		}, nil
 	}
 
@@ -997,6 +1001,9 @@ func getBdevTiers(log logging.Logger, mdOnSSD bool, ssds *hardware.PCIAddressSet
 	// 6+ SSDs: tiers 2:N-2
 	//
 	// Bdev tier device roles are assigned later based on tier structure applied here.
+	//
+	// Note: Currently VMD backing devices cannot be split across tiers so only one
+	//       VMD domain per bdev tier.
 	//
 	// TODO: Decide whether engine config target count should be calculated based on
 	//       the number of cores and number of SSDs in the second (meta+data) tier.
@@ -1018,7 +1025,7 @@ func getBdevTiers(log logging.Logger, mdOnSSD bool, ssds *hardware.PCIAddressSet
 	for _, count := range ts {
 		tiers = append(tiers, storage.NewTierConfig().
 			WithStorageClass(storage.ClassNvme.String()).
-			WithBdevDeviceList(ssds.Strings()[last:last+count]...))
+			WithBdevDeviceList(addrs[last:last+count]...))
 		last += count
 	}
 
@@ -1110,28 +1117,36 @@ type threadCounts struct {
 }
 
 // getThreadCounts validates and returns recommended values for I/O service and offload thread
-// counts. The following algorithm is implemented after validating against edge cases:
+// counts. The following algorithm is implemented after validating against edge cases and reserving
+// 2 cores for system usage:
 //
 // targets_per_ssd = ROUNDDOWN(#cores_per_engine * 0.8 / #ssds_per_engine; 0)
 // targets_per_engine = #ssds_per_engine * #targets_per_ssd
 // xs_streams_per_engine = ROUNDDOWN(#targets_per_engine / 4; 0)
 //
 // Here, 0.8 = 4/5 = #targets / (#targets + #xs_streams).
-func getThreadCounts(log logging.Logger, ec *engine.Config, coresPerEngine int) (*threadCounts, error) {
-	if ec == nil {
-		return nil, errors.Errorf("nil %T parameter", ec)
+func getThreadCounts(log logging.Logger, nodeSet []int, coresPerEngine int, numaSSDs numaSSDsMap) (*threadCounts, error) {
+	if len(nodeSet) == 0 {
+		return nil, errors.New("empty nodeSet")
 	}
 	if coresPerEngine < 2 {
 		return nil, errors.Errorf(errInvalNrCores, coresPerEngine)
 	}
+	// reserve cores for system usage
+	coresPerEngine -= coresRsvdPerEngine
 
-	ssdsPerEngine := ec.Storage.Tiers.NVMeBdevs().Len()
+	// number of ssds will be the same for each engine
+	ssds, exists := numaSSDs[nodeSet[0]]
+	if !exists {
+		return nil, errors.Errorf("numa %d not in numa-ssds map (%v)", nodeSet[0], numaSSDs)
+	}
+	ssdsPerEngine := ssds.Len()
 
-	// first handle atypical edge cases
+	// handle case without ssds
 	if ssdsPerEngine == 0 {
 		tgtsPerEngine := defaultTargetCount
 		if tgtsPerEngine >= coresPerEngine {
-			tgtsPerEngine = coresPerEngine - 1
+			tgtsPerEngine = coresPerEngine
 		}
 		log.Debugf("nvme disabled, %d targets assigned and 0 helper threads", tgtsPerEngine)
 
@@ -1145,14 +1160,15 @@ func getThreadCounts(log logging.Logger, ec *engine.Config, coresPerEngine int) 
 	tgtsPerSSD := int((float64(coresPerEngine) * numaCoreUsage) / float64(ssdsPerEngine))
 	tgtsPerEngine := ssdsPerEngine * tgtsPerSSD
 
+	// not enough spare cores to allocate one-per-ssd
 	if tgtsPerSSD == 0 {
-		if ssdsPerEngine > (coresPerEngine - 1) {
-			tgtsPerEngine = coresPerEngine - 1
+		if ssdsPerEngine > coresPerEngine {
+			tgtsPerEngine = coresPerEngine
 		} else {
 			tgtsPerEngine = ssdsPerEngine
 		}
 
-		log.Debugf("80-percent-of-cores:ssd ratio is less than 1 (%.2f:%.2f), use %d tgts",
+		log.Debugf("80-percent-of-spare-cores:ssd ratio is less than 1 (%.2f:%.2f), use %d tgts",
 			float64(coresPerEngine)*numaCoreUsage, float64(ssdsPerEngine),
 			tgtsPerEngine)
 
@@ -1167,30 +1183,31 @@ func getThreadCounts(log logging.Logger, ec *engine.Config, coresPerEngine int) 
 		nrHlprs: tgtsPerEngine / 4,
 	}
 
-	log.Debugf("per-engine %d targets assigned with %d ssds (based on %d cores available), "+
-		"%d helper xstreams", tc.nrTgts, ssdsPerEngine, coresPerEngine, tc.nrHlprs)
+	log.Debugf("per-engine %d targets assigned with %d ssds (based on %d cores of which 2 are "+
+		"reserved for system usage) and %d helper xstreams", tc.nrTgts, ssdsPerEngine,
+		coresPerEngine+coresRsvdPerEngine, tc.nrHlprs)
 
 	return &tc, nil
 }
 
-// check that all access points either have no port specified or have the same port number.
-func checkAccessPointPorts(log logging.Logger, aps []string) (int, error) {
-	if len(aps) == 0 {
-		return 0, errors.New("no access points")
+// check that all MS replicas either have no port specified or have the same port number.
+func checkReplicaPorts(log logging.Logger, replicas []string) (int, error) {
+	if len(replicas) == 0 {
+		return 0, errors.New("no MS replicas")
 	}
 
 	port := -1
-	for _, ap := range aps {
-		apPort, err := config.GetAccessPointPort(log, ap)
+	for _, ap := range replicas {
+		apPort, err := config.GetMSReplicaPort(log, ap)
 		if err != nil {
-			return 0, errors.Wrapf(err, "access point %q", ap)
+			return 0, errors.Wrapf(err, "MS replica %q", ap)
 		}
 		if port == -1 {
 			port = apPort
 			continue
 		}
 		if apPort != port {
-			return 0, errors.New("access point port numbers do not match")
+			return 0, errors.New("MS replica port numbers do not match")
 		}
 	}
 
@@ -1200,7 +1217,7 @@ func checkAccessPointPorts(log logging.Logger, aps []string) (int, error) {
 // Generate a server config file from the constituent hardware components. Enforce consistent
 // target and helper count across engine configs necessary for optimum performance and populate
 // config parameters. Set NUMA affinity on the generated config and then run through validation.
-func genServerConfig(req ConfGenerateReq, ecs []*engine.Config, mi *common.MemInfo, tc *threadCounts) (*config.Server, error) {
+func genServerConfig(req ConfGenerateReq, ecs []*engine.Config, tc *threadCounts) (*config.Server, error) {
 	if len(ecs) == 0 {
 		return nil, errors.New("expected non-zero number of engine configs")
 	}
@@ -1211,7 +1228,7 @@ func genServerConfig(req ConfGenerateReq, ecs []*engine.Config, mi *common.MemIn
 	}
 
 	cfg := config.DefaultServer().
-		WithAccessPoints(req.AccessPoints...).
+		WithMgmtSvcReplicas(req.MgmtSvcReplicas...).
 		WithFabricProvider(ecs[0].Fabric.Provider).
 		WithEngines(ecs...).
 		WithControlLogFile(defaultControlLogFile)
@@ -1230,25 +1247,17 @@ func genServerConfig(req ConfGenerateReq, ecs []*engine.Config, mi *common.MemIn
 		}
 	}
 
-	portNum, err := checkAccessPointPorts(req.Log, cfg.AccessPoints)
+	portNum, err := checkReplicaPorts(req.Log, cfg.MgmtSvcReplicas)
 	if err != nil {
 		return nil, err
 	}
 	if portNum != 0 {
-		// Custom access point port number specified so set server port to the same.
+		// Custom MS replica port number specified so set server port to the same.
 		cfg.WithControlPort(portNum)
 	}
 
 	if err := cfg.Validate(req.Log); err != nil {
 		return nil, errors.Wrap(err, "validating engine config")
-	}
-
-	if err := cfg.SetNrHugepages(req.Log, mi); err != nil {
-		return nil, err
-	}
-
-	if err := cfg.SetRamdiskSize(req.Log, mi); err != nil {
-		return nil, err
 	}
 
 	return cfg, nil

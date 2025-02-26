@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,6 +10,13 @@
 
 #include <time.h>
 #include <uuid/uuid.h>
+#include <inttypes.h>
+#include <string.h>
+#include <stdbool.h>
+
+#include <daos_types.h>
+#include <gurt/debug.h>
+#include <gurt/common.h>
 
 /* If the count of committable DTXs on leader exceeds this threshold,
  * it will trigger batched DTX commit globally. We will optimize the
@@ -19,17 +27,6 @@
 
 /* The time (in second) threshold for batched DTX commit. */
 #define DTX_COMMIT_THRESHOLD_AGE	10
-
-/*
- * VOS aggregation should try to avoid aggregating in the epoch range where
- * lots of data records are pending to commit, so the aggregation epoch upper
- * bound is: current HLC - (DTX batched commit threshold + buffer period)
- *
- * To avoid conflicting of aggregation vs. transactions, any transactional
- * update/fetch with epoch lower than the aggregation upper bound should be
- * rejected and restarted.
- */
-#define DAOS_AGG_THRESHOLD	(DTX_COMMIT_THRESHOLD_AGE + 10) /* seconds */
 
 enum dtx_target_flags {
 	/* The target only contains read-only operations for the DTX. */
@@ -259,6 +256,7 @@ daos_dti_equal(struct dtx_id *dti0, struct dtx_id *dti1)
 }
 
 #define DF_DTI		DF_UUID"."DF_X64
+#define DF_DTIF		DF_UUIDF"."DF_X64
 #define DP_DTI(dti)	DP_UUID((dti)->dti_uuid), (dti)->dti_hlc
 
 enum daos_ops_intent {

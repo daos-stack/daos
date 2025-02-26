@@ -49,6 +49,9 @@ const (
 	// scanMinHugepageCount is the minimum number of hugepages to allocate in order to satisfy
 	// SPDK memory requirements when performing a NVMe device scan.
 	scanMinHugepageCount = 128
+
+	// maxLineChars is the maximum number of chars per line in a formatted byte string.
+	maxLineChars = 32
 )
 
 // netListenerFn is a type alias for the net.Listener function signature.
@@ -109,12 +112,12 @@ func getBdevCfgsFromSrvCfg(cfg *config.Server) storage.TierConfigs {
 
 func cfgGetReplicas(cfg *config.Server, lookup ipLookupFn) ([]*net.TCPAddr, error) {
 	var dbReplicas []*net.TCPAddr
-	for _, ap := range cfg.AccessPoints {
-		apAddr, err := resolveFirstAddr(ap, lookup)
+	for _, rep := range cfg.MgmtSvcReplicas {
+		repAddr, err := resolveFirstAddr(rep, lookup)
 		if err != nil {
-			return nil, config.FaultConfigBadAccessPoints
+			return nil, config.FaultConfigBadMgmtSvcReplicas
 		}
-		dbReplicas = append(dbReplicas, apAddr)
+		dbReplicas = append(dbReplicas, repAddr)
 	}
 
 	return dbReplicas, nil
@@ -193,37 +196,84 @@ func createListener(ctlAddr *net.TCPAddr, listen netListenFn) (net.Listener, err
 func updateFabricEnvars(log logging.Logger, cfg *engine.Config, fis *hardware.FabricInterfaceSet) error {
 	// In the case of some providers, mercury uses the interface name
 	// such as ib0, while OFI uses the device name such as hfi1_0 CaRT and
-	// Mercury will now support the new OFI_DOMAIN environment variable so
+	// Mercury will now support the new D_DOMAIN environment variable so
 	// that we can specify the correct device for each.
-	if !cfg.HasEnvVar("OFI_DOMAIN") {
-		fi, err := fis.GetInterfaceOnNetDevice(cfg.Fabric.Interface, cfg.Fabric.Provider)
+	if !cfg.HasEnvVar("D_DOMAIN") {
+		interfaces, err := cfg.Fabric.GetInterfaces()
 		if err != nil {
-			return errors.Wrapf(err, "unable to determine device domain for %s", cfg.Fabric.Interface)
+			return err
 		}
-		log.Debugf("setting OFI_DOMAIN=%s for %s", fi.Name, cfg.Fabric.Interface)
-		envVar := "OFI_DOMAIN=" + fi.Name
+
+		providers, err := cfg.Fabric.GetProviders()
+		if err != nil {
+			return err
+		}
+
+		if len(providers) != len(interfaces) {
+			return errors.New("number of providers not equal to number of interfaces")
+		}
+
+		domains := []string{}
+
+		for i, p := range providers {
+			fi, err := fis.GetInterfaceOnNetDevice(interfaces[i], p)
+			if err != nil {
+				return errors.Wrapf(err, "unable to determine device domain for %s", interfaces[i])
+			}
+			domains = append(domains, fi.Name)
+		}
+
+		domain := strings.Join(domains, engine.MultiProviderSeparator)
+		log.Debugf("setting D_DOMAIN=%s for %s", domain, cfg.Fabric.Interface)
+		envVar := "D_DOMAIN=" + domain
 		cfg.WithEnvVars(envVar)
 	}
 
 	return nil
 }
 
-func getFabricNetDevClass(cfg *config.Server, fis *hardware.FabricInterfaceSet) (hardware.NetDevClass, error) {
-	var netDevClass hardware.NetDevClass
+func getFabricNetDevClass(cfg *config.Server, fis *hardware.FabricInterfaceSet) ([]hardware.NetDevClass, error) {
+	netDevClass := []hardware.NetDevClass{}
 	for index, engine := range cfg.Engines {
-		fi, err := fis.GetInterfaceOnNetDevice(engine.Fabric.Interface, engine.Fabric.Provider)
+		cfgIfaces, err := engine.Fabric.GetInterfaces()
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
 
-		ndc := fi.DeviceClass
-		if index == 0 {
-			netDevClass = ndc
-			continue
+		provs, err := engine.Fabric.GetProviders()
+		if err != nil {
+			return nil, err
 		}
-		if ndc != netDevClass {
-			return 0, config.FaultConfigInvalidNetDevClass(index, netDevClass,
-				ndc, engine.Fabric.Interface)
+
+		if len(provs) == 1 {
+			for i := range cfgIfaces {
+				if i == 0 {
+					continue
+				}
+				provs = append(provs, provs[0])
+			}
+		}
+
+		if len(cfgIfaces) != len(provs) {
+			return nil, fmt.Errorf("number of ifaces (%d) and providers (%d) not equal",
+				len(cfgIfaces), len(provs))
+		}
+
+		for i, cfgIface := range cfgIfaces {
+			fi, err := fis.GetInterfaceOnNetDevice(cfgIface, provs[i])
+			if err != nil {
+				return nil, err
+			}
+
+			ndc := fi.DeviceClass
+			if index == 0 {
+				netDevClass = append(netDevClass, ndc)
+				continue
+			}
+			if ndc != netDevClass[i] {
+				return nil, config.FaultConfigInvalidNetDevClass(index, netDevClass[i],
+					ndc, engine.Fabric.Interface)
+			}
 		}
 	}
 	return netDevClass, nil
@@ -493,6 +543,19 @@ func checkEngineTmpfsMem(srv *server, ei *EngineInstance, mi *common.MemInfo) er
 	}
 
 	return nil
+}
+
+// createPublishFormatRequiredFunc returns onAwaitFormatFn which will publish an
+// event using the provided publish function to indicate that host is awaiting
+// storage format.
+func createPublishFormatRequiredFunc(publish func(*events.RASEvent), hostname string) onAwaitFormatFn {
+	return func(_ context.Context, engineIdx uint32, formatType string) error {
+		evt := events.NewEngineFormatRequiredEvent(hostname, engineIdx, formatType).
+			WithRank(uint32(ranklist.NilRank))
+		publish(evt)
+
+		return nil
+	}
 }
 
 func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarted *sync.WaitGroup) {
@@ -780,4 +843,25 @@ func checkFabricInterface(name string, lookup ifLookupFn) error {
 	}
 
 	return nil
+}
+
+// Convert bytestring to format accepted by lspci, 16 bytes per line.
+func formatBytestring(in string, sb *strings.Builder) {
+	if sb == nil {
+		return
+	}
+	for i, s := range in {
+		remainder := i % maxLineChars
+		if remainder == 0 {
+			sb.WriteString(fmt.Sprintf("%02x: ", i/2))
+		}
+		sb.WriteString(string(s))
+		if i == (len(in)-1) || remainder == maxLineChars-1 {
+			// Print newline after last char on line.
+			sb.WriteString("\n")
+		} else if (i % 2) != 0 {
+			// Print space after each double char group.
+			sb.WriteString(" ")
+		}
+	}
 }

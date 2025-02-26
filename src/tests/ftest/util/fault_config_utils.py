@@ -1,14 +1,15 @@
 """
-  (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2019-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+import logging
 import os
 
 import yaml
-from general_utils import DaosTestError, distribute_files, run_command
-from run_utils import get_clush_command
+from file_utils import distribute_files
+from run_utils import run_local, run_remote
 
 # a lookup table of predefined faults
 #
@@ -18,6 +19,12 @@ from run_utils import get_clush_command
 # 100: Used in dfuse to trigger an exit after initialization is complete
 # 101: Used by daos_init() to disable fault id 0 for duration of daos_init
 FAULTS = {
+    'DAOS_DELAYED_CSUM_CORRUPT_DISK': {
+        'id': '65574',
+        'probability_x': '100',
+        'probability_y': '100',
+        'interval': '50',
+        'max_faults': '100'},
     'DAOS_CSUM_CORRUPT_DISK': {
         'id': '65574',
         'probability_x': '100',
@@ -259,7 +266,7 @@ class FaultInjection():
 
         fi_config = os.path.join(self._test_dir, "fi.yaml")
 
-        with open(fi_config, 'w', encoding='utf8') as outfile:
+        with open(fi_config, 'w', encoding='utf-8') as outfile:
             yaml.dump({'seed': '123'}, outfile, default_flow_style=False, allow_unicode=True)
             fault_config = []
             if self._fault_list is not None:
@@ -288,15 +295,22 @@ class FaultInjection():
             # orterun or something, could re-evaluate this later
             self.write_fault_file(None)
 
-    def copy_fault_files(self, hosts):
+    def copy_fault_files(self, logger, hosts):
         """Copy the fault injection file to all test hosts.
 
         Args:
+            logger (Logger): logger for the messages produced by this method
             hosts (list): list of hosts to copy the fault injection file
+
+        Raises:
+            FaultInjectionFailed: if there is an error copying the fault injection files
         """
         if self._fault_list:
             self._hosts = hosts
-            distribute_files(self._hosts, self.fault_file, self.fault_file)
+            result = distribute_files(logger, self._hosts, self.fault_file, self.fault_file)
+            if not result.passed:
+                raise FaultInjectionFailed(
+                    f"Error copying fault injection files to {result.failed_hosts}")
 
     def stop(self):
         """Remove the fault injection file created during testing.
@@ -308,13 +322,13 @@ class FaultInjection():
             return []
 
         # Remove the fault injection files on the hosts.
+        log = logging.getLogger()
         error_list = []
-        command = "rm -f {}".format(self.fault_file)
+        command = f"rm -f {self.fault_file}"
         if self._hosts:
-            command = get_clush_command(
-                self._hosts, args="-S -v", command=command, command_sudo=True)
-        try:
-            run_command(command, verbose=True, raise_exception=False)
-        except DaosTestError as error:
-            error_list.append(error)
+            result = run_remote(log, self._hosts, command)
+        else:
+            result = run_local(log, command)
+        if not result.passed:
+            error_list.append(f"Error removing fault injection file {self.fault_file}")
         return error_list

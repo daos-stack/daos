@@ -1,5 +1,6 @@
 /**
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -53,8 +54,17 @@ on_faulty(struct bio_blobstore *bbs)
 	rc = ract_ops->faulty_reaction(tgt_ids, tgt_cnt);
 	if (rc < 0)
 		D_ERROR("Faulty reaction failed. "DF_RC"\n", DP_RC(rc));
+	else if (rc == 0)
+		bbs->bb_faulty_done = 1;
 
 	return rc;
+}
+
+void
+trigger_faulty_reaction(struct bio_blobstore *bbs)
+{
+	D_ASSERT(!bbs->bb_faulty_done);
+	on_faulty(bbs);
 }
 
 static void
@@ -139,6 +149,57 @@ bs2bxb(struct bio_blobstore *bbs, struct bio_xs_context *xs_ctxt)
 	return NULL;
 }
 
+static inline int
+pause_health_monitor(struct bio_dev_health *bdh)
+{
+	bdh->bdh_stopping = 1;
+	if (bdh->bdh_inflights > 0)
+		return 1;
+
+	/* Put io channel for health monitor */
+	if (bdh->bdh_io_channel != NULL) {
+		spdk_put_io_channel(bdh->bdh_io_channel);
+		bdh->bdh_io_channel = NULL;
+	}
+
+	/* Close open desc for health monitor */
+	if (bdh->bdh_desc != NULL) {
+		spdk_bdev_close(bdh->bdh_desc);
+		bdh->bdh_desc = NULL;
+	}
+
+	return 0;
+}
+
+static inline int
+resume_health_monitor(struct bio_bdev *d_bdev, struct bio_dev_health *bdh)
+{
+	int rc;
+
+	/* Acquire open desc for health monitor */
+	if (bdh->bdh_desc == NULL) {
+		rc = spdk_bdev_open_ext(d_bdev->bb_name, true, bio_bdev_event_cb, NULL,
+					&bdh->bdh_desc);
+		if (rc != 0) {
+			D_ERROR("Failed to open bdev %s, rc:%d\n", d_bdev->bb_name, rc);
+			return 1;
+		}
+		D_ASSERT(bdh->bdh_desc != NULL);
+	}
+
+	/* Get io channel for health monitor */
+	if (bdh->bdh_io_channel == NULL) {
+		bdh->bdh_io_channel = spdk_bdev_get_io_channel(bdh->bdh_desc);
+		if (bdh->bdh_io_channel == NULL) {
+			D_ERROR("Failed to get health channel for bdev %s\n", d_bdev->bb_name);
+			return 1;
+		}
+	}
+
+	bdh->bdh_stopping = 0;
+	return 0;
+}
+
 /*
  * Return value:	0:  Blobstore is torn down;
  *			>0: Blobstore teardown is in progress;
@@ -183,17 +244,9 @@ on_teardown(struct bio_blobstore *bbs)
 	if (rc)
 		return rc;
 
-	/* Put io channel for health monitor */
-	if (bdh->bdh_io_channel != NULL) {
-		spdk_put_io_channel(bdh->bdh_io_channel);
-		bdh->bdh_io_channel = NULL;
-	}
-
-	/* Close open desc for health monitor */
-	if (bdh->bdh_desc != NULL) {
-		spdk_bdev_close(bdh->bdh_desc);
-		bdh->bdh_desc = NULL;
-	}
+	rc = pause_health_monitor(bdh);
+	if (rc)
+		return rc;
 
 	/*
 	 * Unload the blobstore. The blobstore could be still in loading from
@@ -337,27 +390,9 @@ on_setup(struct bio_blobstore *bbs)
 	return 1;
 
 bs_loaded:
-	/* Acquire open desc for health monitor */
-	if (bdh->bdh_desc == NULL) {
-		rc = spdk_bdev_open_ext(d_bdev->bb_name, true,
-					bio_bdev_event_cb, NULL,
-					&bdh->bdh_desc);
-		if (rc != 0) {
-			D_ERROR("Failed to open bdev %s, for %p, %d\n",
-				d_bdev->bb_name, bbs, rc);
-			return 1;
-		}
-		D_ASSERT(bdh->bdh_desc != NULL);
-	}
-
-	/* Get io channel for health monitor */
-	if (bdh->bdh_io_channel == NULL) {
-		bdh->bdh_io_channel = spdk_bdev_get_io_channel(bdh->bdh_desc);
-		if (bdh->bdh_io_channel == NULL) {
-			D_ERROR("Failed to get health channel for %p\n", bbs);
-			return 1;
-		}
-	}
+	rc = resume_health_monitor(d_bdev, bdh);
+	if (rc)
+		return rc;
 
 	/*
 	 * It's safe to access xs context array without locking when the
@@ -460,9 +495,10 @@ bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state)
 }
 
 int
-bio_xsctxt_health_check(struct bio_xs_context *xs_ctxt)
+bio_xsctxt_health_check(struct bio_xs_context *xs_ctxt, bool log_err, bool update)
 {
 	struct bio_xs_blobstore	*bxb;
+	struct media_error_msg	*mem;
 	enum smd_dev_type	 st;
 
 	/* sys xstream in pmem mode doesn't have NVMe context */
@@ -475,8 +511,21 @@ bio_xsctxt_health_check(struct bio_xs_context *xs_ctxt)
 		if (!bxb || !bxb->bxb_blobstore)
 			continue;
 
-		if (bxb->bxb_blobstore->bb_state != BIO_BS_STATE_NORMAL)
+		if (bxb->bxb_blobstore->bb_state != BIO_BS_STATE_NORMAL) {
+			if (log_err && bxb->bxb_blobstore->bb_state != BIO_BS_STATE_SETUP) {
+				D_ALLOC_PTR(mem);
+				if (mem == NULL) {
+					D_ERROR("Failed to allocate media error msg.\n");
+					return -DER_NVME_IO;
+				}
+
+				mem->mem_err_type = update ? MET_WRITE : MET_READ;
+				mem->mem_bs = bxb->bxb_blobstore;
+				mem->mem_tgt_id = xs_ctxt->bxc_tgt_id;
+				spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error, mem);
+			}
 			return -DER_NVME_IO;
+		}
 	}
 
 	return 0;
@@ -492,7 +541,7 @@ is_reint_ready(struct bio_blobstore *bbs)
 		xs_ctxt = bbs->bb_xs_ctxts[i];
 
 		D_ASSERT(xs_ctxt != NULL);
-		if (bio_xsctxt_health_check(xs_ctxt))
+		if (bio_xsctxt_health_check(xs_ctxt, false, false))
 			return false;
 	}
 	return true;

@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#  (C) Copyright 2021-2023 Intel Corporation.
+#  (C) Copyright 2021-2024 Intel Corporation.
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -15,19 +15,12 @@ group_repo_post() {
 }
 
 distro_custom() {
-    # install avocado
-    local avocado_rpms=(python3-avocado{,-plugins-{output-html,varianter-yaml-to-mux}})
-    if [ -z "$(dnf repoquery "${avocado_rpms[@]}")" ]; then
-        avocado_rpms=()
-        pip install "avocado-framework<83.0"
-        pip install "avocado-framework-plugin-result-html<83.0"
-        pip install "avocado-framework-plugin-varianter-yaml-to-mux<83.0"
-    fi
-    dnf -y install "${avocado_rpms[@]}" clustershell
+    # TODO: This code is not exiting on failure.
 
-    # for Launchable's pip install
-    dnf -y install python3-setuptools.noarch
-
+    # Use a more recent python version for unit testing, this allows us to also test installing
+    # pydaos into virtual environments.
+    dnf -y install python39 python39-devel
+    dnf -y install python3.11 python3.11-devel
 }
 
 install_mofed() {

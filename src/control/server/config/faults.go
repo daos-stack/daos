@@ -41,15 +41,15 @@ var (
 		"invalid telemetry port in configuration",
 		"specify a positive non-zero network port in configuration ('telemetry_port' parameter) and restart the control server",
 	)
-	FaultConfigBadAccessPoints = serverConfigFault(
-		code.ServerConfigBadAccessPoints,
-		"invalid list of access points in configuration",
-		"'access_points' must contain resolvable addresses; fix the configuration and restart the control server",
+	FaultConfigBadMgmtSvcReplicas = serverConfigFault(
+		code.ServerConfigBadMgmtSvcReplicas,
+		"invalid list of MS replicas in configuration",
+		"'mgmt_svc_replicas' must contain resolvable addresses; fix the configuration and restart the control server",
 	)
-	FaultConfigEvenAccessPoints = serverConfigFault(
-		code.ServerConfigEvenAccessPoints,
-		"non-odd number of access points in configuration",
-		"'access_points' must contain an odd number (e.g. 1, 3, 5, etc.) of addresses; fix the configuration and restart the control server",
+	FaultConfigEvenMgmtSvcReplicas = serverConfigFault(
+		code.ServerConfigEvenMgmtSvcReplicas,
+		"non-odd number of MS replicas in configuration",
+		"'mgmt_svc_replicas' must contain an odd number (e.g. 1, 3, 5, etc.) of addresses; fix the configuration and restart the control server",
 	)
 	FaultConfigNoProvider = serverConfigFault(
 		code.ServerConfigBadProvider,
@@ -60,11 +60,6 @@ var (
 		code.ServerConfigNoEngines,
 		"no DAOS IO Engines specified in configuration",
 		"specify at least one IO Engine configuration ('engines' list parameter) and restart the control server",
-	)
-	FaultConfigFaultDomainInvalid = serverConfigFault(
-		code.ServerConfigFaultDomainInvalid,
-		"invalid fault domain",
-		"specify a valid fault domain ('fault_path' parameter) or callback script ('fault_cb' parameter) and restart the control server",
 	)
 	FaultConfigFaultCallbackNotFound = serverConfigFault(
 		code.ServerConfigFaultCallbackNotFound,
@@ -96,11 +91,6 @@ var (
 		"hugepages cannot be disabled if bdevs have been specified in config",
 		"either set false (or remove) disable_hugepages parameter or remove nvme storage assignment in config and restart the control server",
 	)
-	FaultConfigVMDSettingDuplicate = serverConfigFault(
-		code.ServerConfigVMDSettingDuplicate,
-		"enable_vmd and disable_vmd parameters both specified in config",
-		"remove legacy enable_vmd parameter from config",
-	)
 	FaultConfigControlMetadataNoPath = serverConfigFault(
 		code.ServerConfigControlMetadataNoPath,
 		"using a control_metadata device requires a path to use as the mount point",
@@ -117,6 +107,14 @@ var (
 		"set `system_ram_reserved` to a positive integer value in config",
 	)
 )
+
+func FaultConfigFaultDomainInvalid(err error) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigFaultDomainInvalid,
+		fmt.Sprintf("invalid fault domain: %s", err.Error()),
+		"specify a valid fault domain ('fault_path' parameter) or callback script ('fault_cb' parameter) and restart the control server",
+	)
+}
 
 func FaultConfigDuplicateFabric(curIdx, seenIdx int) *fault.Fault {
 	return serverConfigFault(

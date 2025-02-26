@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -83,6 +83,11 @@ func MockNvmeHealth(varIdx ...int32) *NvmeHealth {
 		PllLockLossCnt:          uint64(idx),
 		NandBytesWritten:        uint64(idx),
 		HostBytesWritten:        uint64(idx),
+		LinkPortId:              uint32(idx),
+		LinkMaxSpeed:            float32(idx) * 1e+9,
+		LinkMaxWidth:            uint32(idx) * 4,
+		LinkNegSpeed:            float32(idx) * 1e+9,
+		LinkNegWidth:            uint32(idx) * 4,
 	}
 }
 
@@ -102,7 +107,7 @@ func MockSmdDevice(c *NvmeController, varIdx ...int32) *SmdDevice {
 	sd := SmdDevice{
 		UUID:      test.MockUUID(idx),
 		TargetIDs: []int32{startTgt, startTgt + 1, startTgt + 2, startTgt + 3},
-		Roles:     BdevRoles{OptionBits(BdevRoleAll)},
+		Roles:     BdevRolesFromBits(BdevRoleAll),
 	}
 	if c != nil {
 		sd.Ctrlr = *c
@@ -173,6 +178,7 @@ func MockScmModule(varIdx ...int32) *ScmModule {
 		UID:              fmt.Sprintf("Device%d", idx),
 		PartNumber:       fmt.Sprintf("PartNumber%d", idx),
 		FirmwareRevision: fmt.Sprintf("FWRev%d", idx),
+		HealthState:      "Healthy",
 	}
 }
 
@@ -197,7 +203,7 @@ func MockScmMountPoint(varIdx ...int32) *ScmMountPoint {
 		Path:       fmt.Sprintf("/mnt/daos%d", idx),
 		DeviceList: []string{fmt.Sprintf("pmem%d", idx)},
 		TotalBytes: uint64(humanize.TByte) * uint64(idx+1),
-		AvailBytes: uint64(humanize.TByte/4) * uint64(idx+1), // 75% used
+		AvailBytes: uint64(humanize.TByte/4) * uint64(idx+1), // 25% available
 		Rank:       ranklist.Rank(uint32(idx)),
 	}
 }

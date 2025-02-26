@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -23,7 +23,7 @@ class ConfigGenerateOutput(TestWithServers):
         """Initialize a ConfigGenerateOutput object."""
         super().__init__(*args, **kwargs)
 
-        self.def_provider = "ofi+tcp;ofi_rxm"
+        self.def_provider = "ofi+tcp"
 
         # Data structure that store expected values.
         self.numa_node_to_pci_addrs = defaultdict(set)
@@ -119,11 +119,11 @@ class ConfigGenerateOutput(TestWithServers):
         if errors:
             self.fail("\n----- Errors detected! -----\n{}".format("\n".join(errors)))
 
-    def verify_access_point(self, host_port_input, failure_expected=None):
-        """Run with given AP and verify the AP in the output.
+    def verify_ms_replica(self, host_port_input, failure_expected=None):
+        """Run with given MS replica and verify the MS replica in the output.
 
         Args:
-            host_port_input (str): Host:Port or just Host. Supports multiple APs
+            host_port_input (str): Host:Port or just Host. Supports multiple MS replicas
                 that are separated by comma.
             failure_expected (str): Expected error message. Set it to None if
                 not expecting any error. Defaults to None.
@@ -147,17 +147,17 @@ class ConfigGenerateOutput(TestWithServers):
 
         try:
             result = dmg.config_generate(
-                access_points=host_port_input, net_provider=self.def_provider)
+                mgmt_svc_replicas=host_port_input, net_provider=self.def_provider)
         except CommandFailure as err:
             errors.append("Unexpected failure! {}".format(err))
 
         if result.exit_status == 0 and failure_expected is None:
             try:
                 yaml_data = yaml.safe_load(result.stdout)
-                check["actual"] = yaml_data["access_points"]
+                check["actual"] = yaml_data["mgmt_svc_replicas"]
                 if sorted(check["expected"]) != sorted(check["actual"]):
                     errors.append(
-                        "Unexpected access point: {} != {}".format(
+                        "Unexpected MS replica: {} != {}".format(
                             check["expected"], check["actual"]))
             except yaml.YAMLError as error:
                 errors.append("Error loading dmg generated config!: {}".format(error))
@@ -195,7 +195,7 @@ class ConfigGenerateOutput(TestWithServers):
 
         # 1. Call dmg config generate.
         result = self.get_dmg_command().config_generate(
-            access_points="wolf-a", net_provider=self.def_provider)
+            mgmt_svc_replicas="wolf-a", net_provider=self.def_provider)
         generated_yaml = yaml.safe_load(result.stdout)
 
         errors = []
@@ -257,7 +257,7 @@ class ConfigGenerateOutput(TestWithServers):
         1. Call dmg config generate (using --use-tmpfs-scm flag)
         2. Verify class value is set to ram.
         3. Verify the scm_list value is not set.
-        4. Verify the scm_size value is set.
+        4. Verify the scm_size value is not set (as auto calculated on start).
         5. Iterate bdev_list address list and verify that it's in the NVMe PCI address set
         of the correct numa node.
         6. Get fabric_iface and verify that it's in the interface set.
@@ -275,7 +275,7 @@ class ConfigGenerateOutput(TestWithServers):
 
         # Call dmg config generate.
         result = self.get_dmg_command().config_generate(
-            access_points="wolf-a", net_provider=self.def_provider, use_tmpfs_scm=True,
+            mgmt_svc_replicas="wolf-a", net_provider=self.def_provider, use_tmpfs_scm=True,
             control_metadata_path=self.test_dir)
         if result.exit_status != 0:
             errors.append("Config generate failed with use_tmpfs_scm = True!")
@@ -294,9 +294,9 @@ class ConfigGenerateOutput(TestWithServers):
                     # Verify scm_list value is not set:
                     if "scm_list" in storage:
                         errors.append("unexpected scm_list field exists in ram tier")
-                    # Verify scm_size value is set:
-                    if "scm_size" not in storage:
-                        errors.append("Expected scm_size field does not exist in ram tier")
+                    # Verify scm_size value is not set:
+                    if "scm_size" in storage:
+                        errors.append("unexpected scm_size field exists in ram tier")
                 elif storage["class"] == "dcpm":
                     scm_found = True
                     errors.append("Unexpected storage tier class dcpm, want ram")
@@ -328,76 +328,77 @@ class ConfigGenerateOutput(TestWithServers):
 
         self.check_errors(errors)
 
-    def test_access_points_single(self):
-        """Test --access-points with single AP with and without port.
+    def test_mgmt_svc_replicas_single(self):
+        """Test --ms-replica with single MS replica with and without port.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=control,dmg_config_generate,access_points
-        :avocado: tags=ConfigGenerateOutput,test_access_points_single
+        :avocado: tags=control,dmg_config_generate,mgmt_svc_replicas
+        :avocado: tags=ConfigGenerateOutput,test_mgmt_svc_replicas_single
         """
         errors = []
 
         # Single AP.
-        errors.extend(self.verify_access_point("wolf-a"))
+        errors.extend(self.verify_ms_replica("wolf-a"))
 
         # Single AP with a valid port.
-        errors.extend(self.verify_access_point("wolf-a:12345"))
+        errors.extend(self.verify_ms_replica("wolf-a:12345"))
 
         self.check_errors(errors)
 
-    def test_access_points_odd(self):
-        """Test --access-points with odd number of APs.
+    def test_mgmt_svc_replicas_odd(self):
+        """Test --ms-replicas with odd number of MS replicas.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=control,dmg_config_generate,access_points
-        :avocado: tags=ConfigGenerateOutput,test_access_points_odd
+        :avocado: tags=control,dmg_config_generate,mgmt_svc_replicas
+        :avocado: tags=ConfigGenerateOutput,test_mgmt_svc_replicas_odd
         """
         errors = []
 
         # Odd AP.
-        errors.extend(self.verify_access_point("wolf-a,wolf-b,wolf-c"))
+        errors.extend(self.verify_ms_replica("wolf-a,wolf-b,wolf-c"))
 
         # Odd AP with port.
-        errors.extend(self.verify_access_point("wolf-a:12345,wolf-b:12345,wolf-c:12345"))
+        errors.extend(self.verify_ms_replica("wolf-a:12345,wolf-b:12345,wolf-c:12345"))
 
         self.check_errors(errors)
 
-    def test_access_points_invalid(self):
-        """Test --access-points with invalid port.
+    def test_mgmt_svc_replicas_invalid(self):
+        """Test --ms-replicas with invalid port.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=control,dmg_config_generate,access_points
-        :avocado: tags=ConfigGenerateOutput,test_access_points_invalid
+        :avocado: tags=control,dmg_config_generate,mgmt_svc_replicas
+        :avocado: tags=ConfigGenerateOutput,test_mgmt_svc_replicas_invalid
         """
         errors = []
 
         # Even AP.
-        errors.extend(self.verify_access_point("wolf-a,wolf-b", "non-odd"))
+        errors.extend(self.verify_ms_replica("wolf-a,wolf-b", "non-odd"))
 
         # Single AP with an invalid port.
-        errors.extend(self.verify_access_point("wolf-a:abcd", "invalid access point port"))
+        errors.extend(self.verify_ms_replica("wolf-a:abcd", "invalid MS replica port"))
 
         # Odd AP with both valid and invalid port.
         errors.extend(
-            self.verify_access_point(
-                "wolf-a:12345,wolf-b:12345,wolf-c:abcd", "invalid access point port"))
+            self.verify_ms_replica(
+                "wolf-a:12345,wolf-b:12345,wolf-c:abcd", "invalid MS replica port"))
 
         self.check_errors(errors)
 
-    def test_access_points_same_ap_repeated(self):
-        """Test --access-points with the same APs repeated.
+    def test_mgmt_svc_replicas_same_ap_repeated(self):
+        """Test --ms-replicas with the same MS replicas repeated.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=control,dmg_config_generate,access_points
-        :avocado: tags=ConfigGenerateOutput,test_access_points_same_ap_repeated
+        :avocado: tags=control,dmg_config_generate,mgmt_svc_replicas
+        :avocado: tags=ConfigGenerateOutput,test_mgmt_svc_replicas_same_ap_repeated
         """
         errors = []
 
-        errors.extend(self.verify_access_point("wolf-a,wolf-a,wolf-a", "duplicate access points"))
+        errors.extend(self.verify_ms_replica("wolf-a,wolf-a,wolf-a",
+                                             "duplicate MS replica addresses"))
 
         self.check_errors(errors)
 
@@ -432,7 +433,7 @@ class ConfigGenerateOutput(TestWithServers):
         # Call dmg config generate --num-engines=<1 to max_engine>
         for num_engines in range(1, max_engine + 1):
             result = dmg.config_generate(
-                access_points="wolf-a", num_engines=num_engines, net_provider=self.def_provider)
+                mgmt_svc_replicas="wolf-a", num_engines=num_engines, net_provider=self.def_provider)
             generated_yaml = yaml.safe_load(result.stdout)
             actual_num_engines = len(generated_yaml["engines"])
 
@@ -444,7 +445,7 @@ class ConfigGenerateOutput(TestWithServers):
 
         # Verify that max_engine + 1 fails.
         result = dmg.config_generate(
-            access_points="wolf-a", num_engines=max_engine + 1, net_provider=self.def_provider)
+            mgmt_svc_replicas="wolf-a", num_engines=max_engine + 1, net_provider=self.def_provider)
         if result.exit_status == 0:
             errors.append("Host + invalid num engines succeeded with {}!".format(max_engine + 1))
 
@@ -473,7 +474,7 @@ class ConfigGenerateOutput(TestWithServers):
 
         # Call dmg config generate with --scm-only=False
         result = dmg.config_generate(
-            access_points="wolf-a", scm_only=False, net_provider=self.def_provider)
+            mgmt_svc_replicas="wolf-a", scm_only=False, net_provider=self.def_provider)
         if result.exit_status != 0:
             errors.append("config generate failed with scm_only = False!")
         generated_yaml = yaml.safe_load(result.stdout)
@@ -492,7 +493,7 @@ class ConfigGenerateOutput(TestWithServers):
 
         # Call dmg config generate with --scm-only=True
         result = dmg.config_generate(
-            access_points="wolf-a", scm_only=True, net_provider=self.def_provider)
+            mgmt_svc_replicas="wolf-a", scm_only=True, net_provider=self.def_provider)
         if result.exit_status != 0:
             errors.append("config generate failed with scm_only = True!")
         generated_yaml = yaml.safe_load(result.stdout)
@@ -548,7 +549,7 @@ class ConfigGenerateOutput(TestWithServers):
         for num_engines in range(1, ib_count + 1):
             # dmg config generate should pass.
             result = dmg.config_generate(
-                access_points="wolf-a", num_engines=num_engines, net_class="infiniband",
+                mgmt_svc_replicas="wolf-a", num_engines=num_engines, net_class="infiniband",
                 net_provider=self.def_provider)
 
             if result.exit_status != 0:
@@ -574,7 +575,7 @@ class ConfigGenerateOutput(TestWithServers):
         # Call dmg config generate --num-engines=<ib_count + 1>
         # --net-class=infiniband. Too many engines. Should fail.
         result = dmg.config_generate(
-            access_points="wolf-a", num_engines=ib_count + 1, net_class="infiniband",
+            mgmt_svc_replicas="wolf-a", num_engines=ib_count + 1, net_class="infiniband",
             net_provider=self.def_provider)
         if result.exit_status == 0:
             msg = "config generate succeeded with --net-class=infiniband num_engines = {}!".format(
@@ -593,7 +594,7 @@ class ConfigGenerateOutput(TestWithServers):
         for num_engines in range(1, eth_count + 1):
             # dmg config generate should pass.
             result = dmg.config_generate(
-                access_points="wolf-a", num_engines=num_engines, net_class="ethernet",
+                mgmt_svc_replicas="wolf-a", num_engines=num_engines, net_class="ethernet",
                 net_provider=self.def_provider)
 
             if result.exit_status != 0:
@@ -619,7 +620,7 @@ class ConfigGenerateOutput(TestWithServers):
         # Call dmg config generate --num-engines=<eth_count + 1>
         # --net-class=ethernet. Too many engines. Should fail.
         result = dmg.config_generate(
-            access_points="wolf-a", num_engines=eth_count + 1, net_class="ethernet",
+            mgmt_svc_replicas="wolf-a", num_engines=eth_count + 1, net_class="ethernet",
             net_provider=self.def_provider)
         if result.exit_status == 0:
             msg = "config generate succeeded with --net-class=ethernet, num_engines = {}!".format(

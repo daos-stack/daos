@@ -27,9 +27,13 @@ func TestSyslogOutput(t *testing.T) {
 		t.Log("unable to locate journalctl -- not running this test")
 		return
 	}
-	cmd := exec.Command(journalctl, "--system")
+	cmd := exec.Command(journalctl, "--system", "--since", "1 minute ago")
 	if err := cmd.Run(); err != nil {
 		t.Log("current user does not have permissions to view system log")
+		return
+	}
+	if _, err := syslog.New(syslog.LOG_ALERT, "test"); err != nil {
+		t.Logf("unable to connect to syslog: %s -- not running this test", err)
 		return
 	}
 

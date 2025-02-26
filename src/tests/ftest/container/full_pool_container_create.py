@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -46,7 +47,7 @@ class FullPoolContainerCreate(TestWithServers):
         threshold_percent = self.params.get("threshold_percent", "/run/pool/*")
 
         # create pool and connect
-        self.prepare_pool()
+        self.add_pool()
 
         # query the pool
         self.log.info("Pool Query before write")
@@ -66,7 +67,7 @@ class FullPoolContainerCreate(TestWithServers):
         for obj_sz in [1048576, 10240, 10, 1]:
             write_count = 0
             while True:
-                self.d_log.debug("writing obj {0} sz {1} to container".format(write_count, obj_sz))
+                self.log.debug("writing obj %s sz %s to container", write_count, obj_sz)
                 my_str = b"a" * obj_sz
                 dkey = get_random_bytes(5)
                 akey = get_random_bytes(5)
@@ -74,7 +75,7 @@ class FullPoolContainerCreate(TestWithServers):
                     self.container.written_data.append(TestContainerData(False))
                     self.container.written_data[-1].write_record(
                         self.container, akey, dkey, my_str, obj_class='OC_SX')
-                    self.d_log.debug("wrote obj {0}, sz {1}".format(write_count, obj_sz))
+                    self.log.debug("wrote obj %s, sz %s", write_count, obj_sz)
                     write_count += 1
                 except DaosTestError as excep:
                     if err not in repr(excep):

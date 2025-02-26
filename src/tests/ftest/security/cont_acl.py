@@ -1,5 +1,6 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -10,12 +11,16 @@ from cont_security_test_base import ContSecurityTestBase
 from pool_security_test_base import PoolSecurityTestBase
 
 
-class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
+class DaosContainerSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
     # pylint: disable=too-few-public-methods,too-many-ancestors
     """Test daos_container user acls.
 
     :avocado: recursive
     """
+
+    def _get_acl_file_name(self):
+        return os.path.join(self.tmp, self.params.get("acl_file_name", "/run/container_acl/*",
+                                                      "cont_test_acl.txt"))
 
     def test_container_user_acl(self):
         """
@@ -56,7 +61,7 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=security,container,container_acl,cont_user_sec,cont_group_sec,cont_sec
-        :avocado: tags=DaosContainterSecurityTest,test_container_user_acl
+        :avocado: tags=DaosContainerSecurityTest,test_container_user_acl
         """
 
         # (1)Setup
@@ -69,13 +74,7 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
             "attribute", "/run/container_acl/*")
         property_name, property_value = self.params.get(
             "property", "/run/container_acl/*")
-        secTestBase.add_del_user(
-            self.hostlist_clients, "useradd", new_test_user)
-        secTestBase.add_del_user(
-            self.hostlist_clients, "groupadd", new_test_group)
-        acl_file_name = os.path.join(
-            self.tmp, self.params.get(
-                "acl_file_name", "/run/container_acl/*", "cont_test_acl.txt"))
+        acl_file_name = self._get_acl_file_name()
         test_user = self.params.get(
             "testuser", "/run/container_acl/daos_user/*")
         test_user_type = secTestBase.get_user_type(test_user)
@@ -195,13 +194,9 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
             "update", secTestBase.acl_entry("user", "OWNER", p_permission))
         self.verify_cont_delete(self.container, expect)
         if expect == "pass":  # Container deleted
-            self.container = None
+            self.container.skip_cleanup()
 
         # (8)Cleanup
         # Restore pool permissions in case they were altered
         self.update_pool_acl_entry(
             "update", secTestBase.acl_entry("user", "OWNER", "rctd"))
-        secTestBase.add_del_user(
-            self.hostlist_clients, "userdel", new_test_user)
-        secTestBase.add_del_user(
-            self.hostlist_clients, "groupdel", new_test_group)

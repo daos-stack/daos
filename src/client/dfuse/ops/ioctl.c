@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -37,8 +37,8 @@ handle_il_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 
 	il_reply.fir_version = DFUSE_IOCTL_VERSION;
 
-	uuid_copy(il_reply.fir_pool, oh->doh_ie->ie_dfs->dfs_dfp->dfp_pool);
-	uuid_copy(il_reply.fir_cont, oh->doh_ie->ie_dfs->dfs_cont);
+	uuid_copy(il_reply.fir_pool, oh->doh_ie->ie_dfs->dfs_dfp->dfp_uuid);
+	uuid_copy(il_reply.fir_cont, oh->doh_ie->ie_dfs->dfc_uuid);
 
 	if (oh->doh_ie->ie_dfs->dfc_attr_timeout > 0)
 		il_reply.fir_flags |= DFUSE_IOCTL_FLAGS_MCACHE;
@@ -227,7 +227,10 @@ handle_dsize_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 	/* Handle directory */
 	hsd_reply.fsr_version = DFUSE_IOCTL_VERSION;
 
-	rc = dfs_obj_local2global(oh->doh_ie->ie_dfs->dfs_ns, oh->doh_obj, &iov);
+	if (S_ISDIR(oh->doh_ie->ie_stat.st_mode))
+		rc = dfs_obj_local2global(oh->doh_ie->ie_dfs->dfs_ns, oh->doh_ie->ie_obj, &iov);
+	else
+		rc = dfs_obj_local2global(oh->doh_ie->ie_dfs->dfs_ns, oh->doh_obj, &iov);
 	if (rc)
 		D_GOTO(err, rc);
 
@@ -281,7 +284,10 @@ handle_dooh_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 	if (iov.iov_buf == NULL)
 		D_GOTO(err, rc = ENOMEM);
 
-	rc = dfs_obj_local2global(oh->doh_ie->ie_dfs->dfs_ns, oh->doh_obj, &iov);
+	if (S_ISDIR(oh->doh_ie->ie_stat.st_mode))
+		rc = dfs_obj_local2global(oh->doh_ie->ie_dfs->dfs_ns, oh->doh_ie->ie_obj, &iov);
+	else
+		rc = dfs_obj_local2global(oh->doh_ie->ie_dfs->dfs_ns, oh->doh_obj, &iov);
 	if (rc)
 		D_GOTO(err, rc);
 
@@ -438,9 +444,6 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 	 * need the correct container handle to be able to use them.
 	 */
 	if (cmd == DFUSE_IOCTL_IL_DSIZE) {
-		if (S_ISDIR(oh->doh_ie->ie_stat.st_mode))
-			D_GOTO(out_err, rc = EISDIR);
-
 		if (out_bufsz < sizeof(struct dfuse_hsd_reply))
 			D_GOTO(out_err, rc = EIO);
 		handle_dsize_ioctl(oh, req);

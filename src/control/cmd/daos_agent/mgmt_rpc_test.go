@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,22 +13,36 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
+	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
+	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/telemetry"
 	"github.com/daos-stack/daos/src/control/logging"
 )
+
+func hostResps(resps ...*mgmtpb.GetAttachInfoResp) []*control.HostResponse {
+	result := []*control.HostResponse{}
+	for _, r := range resps {
+		result = append(result, &control.HostResponse{
+			Message: r,
+		})
+	}
+	return result
+}
 
 func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 	testSys := "test_sys"
@@ -48,13 +62,21 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 			NetInterfaces: common.NewStringSet("test0"),
 			DeviceClass:   hardware.Ether,
 			Providers:     hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "ofi+tcp"}),
+			NUMANode:      0,
 		},
 		&hardware.FabricInterface{
 			Name:          "dev1",
 			NetInterfaces: common.NewStringSet("test1"),
 			DeviceClass:   hardware.Ether,
-			NUMANode:      1,
-			Providers:     hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "ofi+tcp"}),
+			NUMANode:      2,
+			Providers:     hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "ofi+tcp"}, &hardware.FabricProvider{Name: "ucx+tcp"}),
+		},
+		&hardware.FabricInterface{
+			Name:          "dev2",
+			NetInterfaces: common.NewStringSet("test2"),
+			DeviceClass:   hardware.Infiniband,
+			NUMANode:      2,
+			Providers:     hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "ofi+verbs"}),
 		})
 
 	testFabric := NUMAFabricFromScan(test.Context(t), logging.NewCommandLineLogger(), testFIS)
@@ -69,7 +91,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		return bytes
 	}
 
-	respWith := func(in *control.GetAttachInfoResp, iface, domain string) *mgmtpb.GetAttachInfoResp {
+	respWith := func(in *control.GetAttachInfoResp, iface, domain string, numaMap []*mgmtpb.FabricInterfaces) *mgmtpb.GetAttachInfoResp {
 		t.Helper()
 		out := new(mgmtpb.GetAttachInfoResp)
 		if err := convert.Types(in, out); err != nil {
@@ -77,6 +99,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		}
 		out.ClientNetHint.Interface = iface
 		out.ClientNetHint.Domain = domain
+		out.NumaFabricInterfaces = numaMap
 		return out
 	}
 
@@ -86,6 +109,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		mockFabricScan    fabricScanFn
 		mockGetNetIfaces  func() ([]net.Interface, error)
 		numaGetter        *mockNUMAProvider
+		fabricCfg         []*NUMAFabricConfig
 		reqBytes          []byte
 		expResp           *mgmtpb.GetAttachInfoResp
 		expErr            error
@@ -126,11 +150,150 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		},
 		"success": {
 			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{Sys: testSys}),
-			expResp:  respWith(testResp, "test1", "dev1"),
+			expResp: respWith(testResp, "test1", "dev1", []*mgmtpb.FabricInterfaces{
+				{
+					Ifaces: []*mgmtpb.FabricInterface{
+						{
+							Interface: "test0",
+							Domain:    "test0",
+							Provider:  "ofi+tcp",
+						},
+					},
+				},
+				{
+					NumaNode: 1,
+				},
+				{
+					NumaNode: 2,
+					Ifaces: []*mgmtpb.FabricInterface{
+						{
+							NumaNode:  2,
+							Interface: "test1",
+							Domain:    "dev1",
+							Provider:  "ofi+tcp",
+						},
+					},
+				},
+			}),
 		},
 		"no sys succeeds": {
 			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{}),
-			expResp:  respWith(testResp, "test1", "dev1"),
+			expResp: respWith(testResp, "test1", "dev1", []*mgmtpb.FabricInterfaces{
+				{
+					Ifaces: []*mgmtpb.FabricInterface{
+						{
+							Interface: "test0",
+							Domain:    "test0",
+							Provider:  "ofi+tcp",
+						},
+					},
+				},
+				{
+					NumaNode: 1,
+				},
+				{
+					NumaNode: 2,
+					Ifaces: []*mgmtpb.FabricInterface{
+						{
+							NumaNode:  2,
+							Interface: "test1",
+							Domain:    "dev1",
+							Provider:  "ofi+tcp",
+						},
+					},
+				},
+			}),
+		},
+		"req interface/domain": {
+			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{
+				Sys:       testSys,
+				Interface: "test1",
+				Domain:    "dev1",
+			}),
+			expResp: respWith(testResp, "test1", "dev1", []*mgmtpb.FabricInterfaces{
+				{
+					Ifaces: []*mgmtpb.FabricInterface{
+						{
+							Interface: "test0",
+							Domain:    "test0",
+							Provider:  "ofi+tcp",
+						},
+					},
+				},
+				{
+					NumaNode: 1,
+				},
+				{
+					NumaNode: 2,
+					Ifaces: []*mgmtpb.FabricInterface{
+						{
+							NumaNode:  2,
+							Interface: "test1",
+							Domain:    "dev1",
+							Provider:  "ofi+tcp",
+						},
+					},
+				},
+			}),
+		},
+		"req interface only": {
+			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{
+				Sys:       testSys,
+				Interface: "test0",
+			}),
+			expResp: respWith(testResp, "test0", "test0", []*mgmtpb.FabricInterfaces{
+				{
+					Ifaces: []*mgmtpb.FabricInterface{
+						{
+							Interface: "test0",
+							Domain:    "test0",
+							Provider:  "ofi+tcp",
+						},
+					},
+				},
+				{
+					NumaNode: 1,
+				},
+				{
+					NumaNode: 2,
+					Ifaces: []*mgmtpb.FabricInterface{
+						{
+							NumaNode:  2,
+							Interface: "test1",
+							Domain:    "dev1",
+							Provider:  "ofi+tcp",
+						},
+					},
+				},
+			}),
+		},
+		"req interface with cfg ifaces": {
+			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{
+				Sys:       testSys,
+				Interface: "test0",
+			}),
+			fabricCfg: []*NUMAFabricConfig{
+				{
+					NUMANode: 0,
+					Interfaces: []*FabricInterfaceConfig{
+						{
+							Interface: "test0",
+							Domain:    "test0",
+						},
+					},
+				},
+			},
+			expResp: respWith(testResp, "test0", "test0", []*mgmtpb.FabricInterfaces{
+				{
+					Ifaces: []*mgmtpb.FabricInterface{
+						{
+							Interface: "test0",
+							Domain:    "test0",
+							Provider:  "ofi+tcp", // automatically set to the same as server requested
+						},
+					},
+				},
+			}),
 		},
 		"incompatible error": {
 			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{}),
@@ -160,7 +323,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 
 			if tc.numaGetter == nil {
 				tc.numaGetter = &mockNUMAProvider{
-					GetNUMANodeIDForPIDResult: 1,
+					GetNUMANodeIDForPIDResult: 2,
 				}
 			}
 
@@ -186,14 +349,26 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 				}
 			}
 
+			ic := newTestInfoCache(t, log, testInfoCacheParams{
+				mockGetAttachInfo: tc.mockGetAttachInfo,
+				mockScanFabric:    tc.mockFabricScan,
+				mockNetIfaces:     tc.mockGetNetIfaces,
+				mockNetDevClassGetter: &hardware.MockNetDevClassProvider{
+					GetNetDevClassReturn: []hardware.MockGetNetDevClassResult{
+						{
+							NDC: hardware.Ether,
+						},
+					},
+				},
+			})
+			if tc.fabricCfg != nil {
+				nf := NUMAFabricFromConfig(log, tc.fabricCfg)
+				ic.EnableStaticFabricCache(test.Context(t), nf)
+			}
 			mod := &mgmtModule{
-				log: log,
-				sys: testSys,
-				cache: newTestInfoCache(t, log, testInfoCacheParams{
-					mockGetAttachInfo: tc.mockGetAttachInfo,
-					mockScanFabric:    tc.mockFabricScan,
-					mockNetIfaces:     tc.mockGetNetIfaces,
-				}),
+				log:        log,
+				sys:        testSys,
+				cache:      ic,
 				numaGetter: tc.numaGetter,
 			}
 
@@ -213,11 +388,10 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if diff := cmp.Diff(tc.expResp, resp, cmpopts.IgnoreUnexported(
-				mgmtpb.GetAttachInfoResp{},
-				mgmtpb.GetAttachInfoResp_RankUri{},
-				mgmtpb.ClientNetHint{},
-			)); diff != "" {
+			cmpOpts := cmp.Options{
+				protocmp.Transform(),
+			}
+			if diff := cmp.Diff(tc.expResp, resp, cmpOpts...); diff != "" {
 				t.Fatalf("want-, got+:\n%s", diff)
 			}
 		})
@@ -276,7 +450,10 @@ func TestAgent_mgmtModule_getAttachInfo_Parallel(t *testing.T) {
 		go func(n int) {
 			defer wg.Done()
 
-			_, err := mod.getAttachInfo(test.Context(t), 0, sysName)
+			_, err := mod.getAttachInfo(test.Context(t), 0,
+				&mgmtpb.GetAttachInfoReq{
+					Sys: sysName,
+				})
 			if err != nil {
 				panic(errors.Wrapf(err, "thread %d", n))
 			}
@@ -330,7 +507,7 @@ func TestAgent_mgmtModule_getNUMANode(t *testing.T) {
 
 			mod := &mgmtModule{
 				log:            log,
-				useDefaultNUMA: tc.useDefaultNUMA,
+				useDefaultNUMA: atm.NewBool(tc.useDefaultNUMA),
 				numaGetter:     tc.numaGetter,
 			}
 
@@ -385,6 +562,119 @@ func TestAgent_mgmtModule_RefreshCache(t *testing.T) {
 			err := mod.RefreshCache(test.Context(t))
 
 			test.CmpErr(t, tc.expErr, err)
+		})
+	}
+}
+
+func TestAgent_handleSetupClientTelemetry(t *testing.T) {
+	testCreds := &unix.Ucred{
+		Uid: 123,
+		Gid: 456,
+	}
+	testSysName := "test-sys"
+	testJobID := "test-job"
+	testShmKey := int32(42)
+
+	for name, tc := range map[string]struct {
+		clientBytes []byte
+		clientReq   *mgmtpb.ClientTelemetryReq
+		clientCred  *unix.Ucred
+		expResp     *mgmtpb.ClientTelemetryResp
+		expErr      error
+	}{
+		"nil client request": {
+			clientReq:  nil,
+			clientCred: testCreds,
+			expErr:     errors.New("empty request"),
+		},
+		"garbage client request": {
+			clientBytes: []byte("invalid"),
+			clientCred:  testCreds,
+			expErr:      drpc.UnmarshalingPayloadFailure(),
+		},
+		"unset jobid": {
+			clientReq: &mgmtpb.ClientTelemetryReq{
+				Sys:    testSysName,
+				Jobid:  "",
+				ShmKey: testShmKey,
+			},
+			clientCred: testCreds,
+			expErr:     errors.New("empty jobid"),
+		},
+		"unset shm key": {
+			clientReq: &mgmtpb.ClientTelemetryReq{
+				Sys:    testSysName,
+				Jobid:  testJobID,
+				ShmKey: 0,
+			},
+			clientCred: testCreds,
+			expErr:     errors.New("unset shm key"),
+		},
+		"nil user creds": {
+			clientReq: &mgmtpb.ClientTelemetryReq{
+				Sys:    testSysName,
+				Jobid:  testJobID,
+				ShmKey: testShmKey,
+			},
+			clientCred: nil,
+			expErr:     errors.New("nil user credentials"),
+		},
+		"success": {
+			clientReq: &mgmtpb.ClientTelemetryReq{
+				Sys:    testSysName,
+				Jobid:  testJobID,
+				ShmKey: testShmKey,
+			},
+			clientCred: testCreds,
+			expResp: &mgmtpb.ClientTelemetryResp{
+				AgentUid: int32(unix.Getuid()),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mod := &mgmtModule{
+				log: log,
+			}
+
+			var reqBytes []byte
+			if len(tc.clientBytes) > 0 {
+				reqBytes = tc.clientBytes
+			} else {
+				var err error
+				reqBytes, err = proto.Marshal(tc.clientReq)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			testID := uint32(telemetry.NextTestID(telemetry.AgentIDBase))
+			telemetry.InitTestMetricsProducer(t, int(testID), 2048)
+			defer telemetry.CleanupTestMetricsProducer(t)
+
+			parent := test.MustLogContext(t, log)
+			ctx, err := telemetry.Init(parent, testID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer telemetry.Fini()
+
+			gotResp, gotErr := mod.handleSetupClientTelemetry(ctx, reqBytes, tc.clientCred)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			expRespBytes, err := proto.Marshal(tc.expResp)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(expRespBytes, gotResp, protocmp.Transform()); diff != "" {
+				t.Fatalf("-want, +got:\n%s", diff)
+			}
 		})
 	}
 }

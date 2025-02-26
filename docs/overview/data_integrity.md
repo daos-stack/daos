@@ -199,10 +199,10 @@ taken:
   - **Lazy** - Trigger the scrubber only when there is no IO activity. Trigger
     aggregation regularly despite of IO activities.
   - **Timed** - Trigger the scrubber regularly despite IO activities.
-- **Pool Scrubber Frequency** (scrub-freq) - How frequently the scrubber should
+- **Pool Scrubber Frequency** (scrub\_freq) - How frequently the scrubber should
   scrub a pool. This value indicates the regularity of scrubbing activity when
   the Scrubber Mode is set to Timed.
-- **Threshold** (scrub-thresh) - Number of checksum errors when the pool target
+- **Threshold** (scrub\_thresh) - Number of checksum errors when the pool target
   is evicted. A value of 0 disables auto eviction
 
 The command to create a pool with scrubbing enabled might look like this:

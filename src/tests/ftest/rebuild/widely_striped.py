@@ -1,5 +1,6 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
     SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -73,11 +74,12 @@ class RbldWidelyStriped(MdtestBase):
 
         # start 1st mdtest run and let it complete
         self.log.info(">> Running mdtest to completion")
-        self.execute_mdtest()
+        job_manager = self.get_mdtest_job_manager_command(self.manager)
+        self.execute_mdtest(job_manager=job_manager)
 
         # Kill rank[6] and wait for rebuild to complete
         self.log.info(">> Killing rank %s", ranks_to_kill[0])
-        self.server_managers[0].stop_ranks(ranks_to_kill[0], self.d_log, force=True)
+        self.server_managers[0].stop_ranks(ranks_to_kill[0], force=True)
         self.log.info(">> Waiting for rebuild to complete after killing rank %s", ranks_to_kill[0])
         self.pool.wait_for_rebuild_to_start()
         self.pool.wait_for_rebuild_to_end(interval=1)
@@ -89,19 +91,20 @@ class RbldWidelyStriped(MdtestBase):
         # start 2nd mdtest job in the background
         self.log.info(">> Running the first mdtest job in the background")
         self.subprocess = True
-        self.execute_mdtest()
+        job_manager = self.get_mdtest_job_manager_command(self.manager)
+        self.execute_mdtest(job_manager=job_manager)
 
         # Kill rank[5] in the middle of mdtest run and wait for rebuild to complete
         time.sleep(3)
         self.log.info(">> Killing rank %s", ranks_to_kill[1])
-        self.server_managers[0].stop_ranks(ranks_to_kill[1], self.d_log, force=True)
+        self.server_managers[0].stop_ranks(ranks_to_kill[1], force=True)
         self.log.info(">> Waiting for rebuild to complete after killing rank %s", ranks_to_kill[1])
         self.pool.wait_for_rebuild_to_start()
         self.pool.wait_for_rebuild_to_end(interval=1)
 
         # wait for mdtest to complete successfully
         self.log.info(">> Waiting for the first background mdtest job to complete")
-        mdtest_returncode = self.job_manager.process.wait()
+        mdtest_returncode = job_manager.process.wait()
         if mdtest_returncode != 0:
             self.fail("mdtest failed")
 
@@ -111,19 +114,19 @@ class RbldWidelyStriped(MdtestBase):
 
         # start 3rd mdtest job in the background
         self.log.info(">> Running a second mdtest job in the background")
-        self.execute_mdtest()
+        self.execute_mdtest(job_manager=job_manager)
 
         # Kill 2 server ranks [3,4] during mdtest and wait for rebuild to complete
         time.sleep(3)
         self.log.info(">> Killing rank %s", ranks_to_kill[2])
-        self.server_managers[0].stop_ranks(ranks_to_kill[2], self.d_log, force=True)
+        self.server_managers[0].stop_ranks(ranks_to_kill[2], force=True)
         self.log.info(">> Waiting for rebuild to complete after killing rank %s", ranks_to_kill[2])
         self.pool.wait_for_rebuild_to_start()
         self.pool.wait_for_rebuild_to_end(interval=1)
 
         # wait for mdtest to complete successfully
         self.log.info(">> Waiting for the second background mdtest job to complete")
-        mdtest_returncode = self.job_manager.process.wait()
+        mdtest_returncode = job_manager.process.wait()
         if mdtest_returncode != 0:
             self.fail("mdtest failed")
 

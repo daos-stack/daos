@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -72,9 +73,9 @@ enum daos_pool_props {
 	 */
 	DAOS_PROP_PO_EC_CELL_SZ,
 	/**
-	 * Media selection policy
+	 * Bdev threshold size
 	 */
-	DAOS_PROP_PO_POLICY,
+	DAOS_PROP_PO_DATA_THRESH,
 	/**
 	 * Pool redundancy factor.
 	 */
@@ -216,6 +217,7 @@ enum {
 enum {
 	DAOS_REINT_MODE_DATA_SYNC = 0,
 	DAOS_REINT_MODE_NO_DATA_SYNC = 1,
+	DAOS_REINT_MODE_INCREMENTAL = 2,
 };
 
 /**
@@ -256,12 +258,13 @@ enum {
 #define DAOS_PROP_PO_CHECKPOINT_THRESH_MIN     10        /* 10 % WAL capacity */
 #define DAOS_PROP_PO_SVC_OPS_ENABLED_DEFAULT   1         /* true: enabled by default */
 #define DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_DEFAULT 300       /* 300 seconds */
-#define DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_MIN     150       /* 150 seconds */
+#define DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_MIN     60        /* 60 seconds */
 #define DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_MAX     600       /* 600 seconds */
 
 /** self healing strategy bits */
 #define DAOS_SELF_HEAL_AUTO_EXCLUDE	(1U << 0)
 #define DAOS_SELF_HEAL_AUTO_REBUILD	(1U << 1)
+#define DAOS_SELF_HEAL_DELAY_REBUILD	(1U << 2)
 
 /**
  * DAOS container property types
@@ -463,11 +466,12 @@ enum {
 
 /** container redundancy factor */
 enum {
-	DAOS_PROP_CO_REDUN_RF0,
-	DAOS_PROP_CO_REDUN_RF1,
-	DAOS_PROP_CO_REDUN_RF2,
-	DAOS_PROP_CO_REDUN_RF3,
-	DAOS_PROP_CO_REDUN_RF4,
+	DAOS_PROP_CO_REDUN_RF0	= 0,
+	DAOS_PROP_CO_REDUN_RF1	= 1,
+	DAOS_PROP_CO_REDUN_RF2	= 2,
+	DAOS_PROP_CO_REDUN_RF3	= 3,
+	DAOS_PROP_CO_REDUN_RF4	= 4,
+	DAOS_RF_MAX		= 4,
 };
 
 /**
@@ -609,37 +613,23 @@ daos_label_is_valid(const char *label)
 	}
 
 	/** Check to see if it could be a valid UUID */
-	if (maybe_uuid && strnlen(label, 36) == 36) {
-		bool		is_uuid = true;
-		const char	*p;
-
-		/** Implement the check directly to avoid uuid_parse() overhead */
-		for (i = 0, p = label; i < 36; i++, p++) {
-			if (i == 8 || i == 13 || i == 18 || i == 23) {
-				if (*p != '-') {
-					is_uuid = false;
-					break;
-				}
-				continue;
-			}
-			if (!isxdigit(*p)) {
-				is_uuid = false;
-				break;
-			}
-		}
-
-		if (is_uuid)
-			return false;
-	}
+	if (maybe_uuid && daos_is_valid_uuid_string(label))
+		return false;
 
 	return true;
 }
 
-/** max length of the policy string */
-#define DAOS_PROP_POLICYSTR_MAX_LEN	(127)
+/* default data threshold size of 4KiB */
+#define DAOS_PROP_PO_DATA_THRESH_DEFAULT (1UL << 12)
 
-/* default policy string */
-#define DAOS_PROP_POLICYSTR_DEFAULT	"type=io_size"
+/* For the case of no label is set for the pool. */
+#define DAOS_PROP_NO_PO_LABEL		"pool_label_not_set"
+
+/* Default container label */
+#define DEFAULT_CONT_LABEL		"container_label_not_set"
+
+/* For the case of no label is set for the container. */
+#define DAOS_PROP_NO_CO_LABEL		DEFAULT_CONT_LABEL
 
 /**
  * Check if DAOS pool performance domain string is valid, string

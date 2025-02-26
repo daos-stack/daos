@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,6 +12,13 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/ipmctl"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
+
+// Function pointer to enable mocking during unit tests.
+var getLibipmctl = libipmctlGet
+
+func libipmctlGet() ipmctl.IpmCtl {
+	return &ipmctl.NvmMgmt{}
+}
 
 func scmFirmwareUpdateStatusFromIpmctl(ipmctlStatus uint32) storage.ScmFirmwareUpdateStatus {
 	switch ipmctlStatus {
@@ -43,7 +50,13 @@ func (cr *cmdRunner) GetFirmwareStatus(deviceUID string) (*storage.ScmFirmwareIn
 	if err != nil {
 		return nil, errors.New("invalid SCM module UID")
 	}
-	info, err := cr.binding.GetFirmwareInfo(uid)
+
+	lib := getLibipmctl()
+	if err := lib.Init(cr.log); err != nil {
+		return nil, err
+	}
+
+	info, err := lib.GetFirmwareInfo(uid)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to get firmware info for device %q", deviceUID)
 	}
@@ -69,10 +82,17 @@ func (cr *cmdRunner) UpdateFirmware(deviceUID string, firmwarePath string) error
 	if err != nil {
 		return errors.New("invalid SCM module UID")
 	}
+
+	lib := getLibipmctl()
+	if err := lib.Init(cr.log); err != nil {
+		return err
+	}
+
 	// Force option permits minor version downgrade.
-	err = cr.binding.UpdateFirmware(uid, firmwarePath, true)
+	err = lib.UpdateFirmware(uid, firmwarePath, true)
 	if err != nil {
 		return errors.Wrapf(err, "failed to update firmware for device %q", deviceUID)
 	}
+
 	return nil
 }

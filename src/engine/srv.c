@@ -75,6 +75,10 @@
 #define DRPC_XS_NR	(1)
 /** Number of offload XS */
 unsigned int	dss_tgt_offload_xs_nr;
+/** Number of offload per socket */
+unsigned int            dss_offload_per_numa_nr;
+/** Number of target per socket */
+unsigned int            dss_tgt_per_numa_nr;
 /** Number of target (XS set) per engine */
 unsigned int	dss_tgt_nr;
 /** Number of system XS */
@@ -382,12 +386,13 @@ wait_all_exited(struct dss_xstream *dx, struct dss_module_info *dmi)
 static void
 dss_srv_handler(void *arg)
 {
-	struct dss_xstream		*dx = (struct dss_xstream *)arg;
-	struct dss_thread_local_storage	*dtc;
-	struct dss_module_info		*dmi;
+	struct dss_xstream               *dx = (struct dss_xstream *)arg;
+	struct daos_thread_local_storage *dtc;
+	struct dss_module_info           *dmi;
 	int				 rc;
 	bool				 track_mem = false;
 	bool				 signal_caller = true;
+	bool				 with_chore_queue = dx->dx_iofw && !dx->dx_main_xs;
 
 	rc = dss_xstream_set_affinity(dx);
 	if (rc)
@@ -507,14 +512,24 @@ dss_srv_handler(void *arg)
 			D_GOTO(nvme_fini, rc = dss_abterr2der(rc));
 		}
 
-		rc = daos_abt_thread_create(dx->dx_sp, dss_free_stack_cb, dx->dx_pools[DSS_POOL_NVME_POLL],
-					    dss_nvme_poll_ult, NULL, attr, NULL);
+		rc = ABT_thread_create(dx->dx_pools[DSS_POOL_NVME_POLL], dss_nvme_poll_ult, NULL,
+				       attr, NULL);
 		ABT_thread_attr_free(&attr);
 		if (rc != ABT_SUCCESS) {
 			D_ERROR("create NVMe poll ULT failed: %d\n", rc);
 			ABT_future_set(dx->dx_shutdown, dx);
 			wait_all_exited(dx, dmi);
 			D_GOTO(nvme_fini, rc = dss_abterr2der(rc));
+		}
+	}
+
+	if (with_chore_queue) {
+		rc = dss_chore_queue_start(dx);
+		if (rc != 0) {
+			DL_ERROR(rc, "failed to start chore queue");
+			ABT_future_set(dx->dx_shutdown, dx);
+			wait_all_exited(dx, dmi);
+			goto nvme_fini;
 		}
 	}
 
@@ -564,6 +579,9 @@ dss_srv_handler(void *arg)
 	if (dx->dx_comm)
 		dx->dx_progress_started = false;
 
+	if (with_chore_queue)
+		dss_chore_queue_stop(dx);
+
 	wait_all_exited(dx, dmi);
 	if (dmi->dmi_dp) {
 		daos_profile_destroy(dmi->dmi_dp);
@@ -603,16 +621,6 @@ dss_xstream_alloc(hwloc_cpuset_t cpus)
 	if (dx == NULL) {
 		return NULL;
 	}
-
-#ifdef ULT_MMAP_STACK
-	if (daos_ult_mmap_stack == true) {
-		rc = stack_pool_create(&dx->dx_sp);
-		if (rc != 0) {
-			D_ERROR("failed to create stack pool\n");
-			D_GOTO(err_free, rc);
-		}
-	}
-#endif
 
 	dx->dx_stopping = ABT_FUTURE_NULL;
 	dx->dx_shutdown = ABT_FUTURE_NULL;
@@ -657,14 +665,6 @@ err_free:
 static inline void
 dss_xstream_free(struct dss_xstream *dx)
 {
-#ifdef ULT_MMAP_STACK
-	struct stack_pool *sp = dx->dx_sp;
-
-	if (daos_ult_mmap_stack == true) {
-		stack_pool_destroy(sp);
-		dx->dx_sp = NULL;
-	}
-#endif
 	hwloc_bitmap_free(dx->dx_cpuset);
 	D_FREE(dx);
 }
@@ -773,6 +773,8 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int tag, int xs_id)
 	} else {
 		dx->dx_main_xs	= (xs_id >= dss_sys_xs_nr) && (xs_offset == 0);
 	}
+	/* See the DSS_XS_IOFW case in sched_ult2xs. */
+	dx->dx_iofw = xs_id >= dss_sys_xs_nr && (!dx->dx_main_xs || dss_tgt_offload_xs_nr == 0);
 	dx->dx_dsc_started = false;
 
 	/**
@@ -801,6 +803,12 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int tag, int xs_id)
 		D_GOTO(out_dx, rc);
 	}
 
+	rc = dss_chore_queue_init(dx);
+	if (rc != 0) {
+		DL_ERROR(rc, "initialize chore queue fails");
+		goto out_sched;
+	}
+
 	dss_mem_stats_init(&dx->dx_mem_stats, xs_id);
 
 	/** start XS, ABT rank 0 is reserved for the primary xstream */
@@ -808,7 +816,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int tag, int xs_id)
 					  &dx->dx_xstream);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("create xstream fails %d\n", rc);
-		D_GOTO(out_sched, rc = dss_abterr2der(rc));
+		D_GOTO(out_chore_queue, rc = dss_abterr2der(rc));
 	}
 
 	rc = ABT_thread_attr_create(&attr);
@@ -824,9 +832,8 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int tag, int xs_id)
 	}
 
 	/** start progress ULT */
-	rc = daos_abt_thread_create(dx->dx_sp, dss_free_stack_cb, dx->dx_pools[DSS_POOL_NET_POLL],
-				    dss_srv_handler, dx, attr,
-				    &dx->dx_progress);
+	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_NET_POLL], dss_srv_handler, dx, attr,
+			       &dx->dx_progress);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("create progress ULT failed: %d\n", rc);
 		D_GOTO(out_xstream, rc = dss_abterr2der(rc));
@@ -857,6 +864,8 @@ out_xstream:
 		ABT_thread_attr_free(&attr);
 	ABT_xstream_join(dx->dx_xstream);
 	ABT_xstream_free(&dx->dx_xstream);
+out_chore_queue:
+	dss_chore_queue_fini(dx);
 out_sched:
 	dss_sched_fini(dx);
 out_dx:
@@ -916,6 +925,7 @@ dss_xstreams_fini(bool force)
 		dx = xstream_data.xd_xs_ptrs[i];
 		if (dx == NULL)
 			continue;
+		dss_chore_queue_fini(dx);
 		dss_sched_fini(dx);
 		dss_xstream_free(dx);
 		xstream_data.xd_xs_ptrs[i] = NULL;
@@ -957,37 +967,58 @@ static int
 dss_start_xs_id(int tag, int xs_id)
 {
 	hwloc_obj_t	obj;
+	int                   tgt;
 	int		rc;
 	int		xs_core_offset;
-	unsigned	idx;
+	unsigned int          idx;
 	char		*cpuset;
+	struct dss_numa_info *ninfo;
+	bool                  clear = false;
 
-	D_DEBUG(DB_TRACE, "start xs_id called for %d.  ", xs_id);
+	D_DEBUG(DB_TRACE, "start xs_id called for %d.\n", xs_id);
 	/* if we are NUMA aware, use the NUMA information */
-	if (numa_obj) {
-		idx = hwloc_bitmap_first(core_allocation_bitmap);
+	if (dss_numa) {
+		if (dss_numa_node == -1) {
+			tgt = dss_xs2tgt(xs_id);
+			if (xs_id == 1) {
+				/** Put swim on first core of numa 1, core 0 */
+				ninfo = &dss_numa[1];
+			} else if (tgt != -1) {
+				/** Split I/O targets evenly among numa nodes */
+				ninfo = &dss_numa[tgt / dss_tgt_per_numa_nr];
+			} else if (xs_id > 2) {
+				/** Split helper xstreams evenly among numa nodes */
+				tgt   = xs_id - dss_sys_xs_nr - dss_tgt_nr;
+				ninfo = &dss_numa[tgt / dss_offload_per_numa_nr];
+			} else {
+				/** Put the system and DRPC on numa 0, core 0 */
+				ninfo = &dss_numa[0];
+			}
+
+			D_DEBUG(DB_TRACE, "Using numa node %d for XS %d\n", ninfo->ni_idx, xs_id);
+
+			if (xs_id != 0)
+				clear = true;
+		} else {
+			ninfo = &dss_numa[dss_numa_node];
+			if (xs_id > 1 || (xs_id == 0 && dss_core_nr > dss_tgt_nr))
+				clear = true;
+		}
+
+		idx = hwloc_bitmap_first(ninfo->ni_coremap);
 		if (idx == -1) {
 			D_ERROR("No core available for XS: %d\n", xs_id);
 			return -DER_INVAL;
 		}
-		D_DEBUG(DB_TRACE,
-			"Choosing next available core index %d.", idx);
+		D_DEBUG(DB_TRACE, "Choosing next available core index %d on numa %d.\n", idx,
+			ninfo->ni_idx);
 		/*
 		 * All system XS will reuse the first XS' core, but
 		 * the SWIM and DRPC XS will use separate core if enough cores
 		 */
-		if (xs_id > 1 || (xs_id == 0 && dss_core_nr > dss_tgt_nr))
-			hwloc_bitmap_clr(core_allocation_bitmap, idx);
+		if (clear)
+			hwloc_bitmap_clr(ninfo->ni_coremap, idx);
 
-		obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, idx);
-		if (obj == NULL) {
-			D_PRINT("Null core returned by hwloc\n");
-			return -DER_INVAL;
-		}
-
-		hwloc_bitmap_asprintf(&cpuset, obj->cpuset);
-		D_DEBUG(DB_TRACE, "Using CPU set %s\n", cpuset);
-		free(cpuset);
 	} else {
 		D_DEBUG(DB_TRACE, "Using non-NUMA aware core allocation\n");
 		/*
@@ -1000,14 +1031,19 @@ dss_start_xs_id(int tag, int xs_id)
 			xs_core_offset = (dss_core_nr > dss_tgt_nr) ? 1 : 0;
 		else
 			xs_core_offset = 0;
-		obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth,
-					     (xs_core_offset + dss_core_offset)
-					     % dss_core_nr);
-		if (obj == NULL) {
-			D_ERROR("Null core returned by hwloc for XS %d\n",
-				xs_id);
-			return -DER_INVAL;
-		}
+		idx = (xs_core_offset + dss_core_offset) % dss_core_nr;
+	}
+
+	obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, idx);
+	if (obj == NULL) {
+		D_PRINT("Null core returned by hwloc\n");
+		return -DER_INVAL;
+	}
+
+	if (D_LOG_ENABLED(DB_TRACE)) {
+		hwloc_bitmap_asprintf(&cpuset, obj->cpuset);
+		D_DEBUG(DB_TRACE, "Using CPU set %s for XS %d\n", cpuset, xs_id);
+		free(cpuset);
 	}
 
 	rc = dss_start_one_xstream(obj->cpuset, tag, xs_id);
@@ -1030,12 +1066,6 @@ dss_xstreams_init(void)
 	d_getenv_bool("DAOS_SCHED_PRIO_DISABLED", &sched_prio_disabled);
 	if (sched_prio_disabled)
 		D_INFO("ULT prioritizing is disabled.\n");
-
-#ifdef ULT_MMAP_STACK
-	d_getenv_bool("DAOS_ULT_MMAP_STACK", &daos_ult_mmap_stack);
-	if (daos_ult_mmap_stack == false)
-		D_INFO("ULT mmap()'ed stack allocation is disabled.\n");
-#endif
 
 	d_getenv_uint("DAOS_SCHED_RELAX_INTVL", &sched_relax_intvl);
 	if (sched_relax_intvl == 0 ||
@@ -1069,9 +1099,8 @@ dss_xstreams_init(void)
 		dss_core_nr, dss_tgt_nr);
 
 	if (dss_numa_node != -1) {
-		D_DEBUG(DB_TRACE,
-			"Detected %d cores on NUMA node %d\n",
-			dss_num_cores_numa_node, dss_numa_node);
+		D_DEBUG(DB_TRACE, "Detected %d cores on NUMA node %d\n",
+			dss_numa[dss_numa_node].ni_core_nr, dss_numa_node);
 	}
 
 	xstream_data.xd_xs_nr = DSS_XS_NR_TOTAL;
@@ -1293,7 +1322,7 @@ dss_srv_fini(bool force)
 		vos_standalone_tls_fini();
 		/* fall through */
 	case XD_INIT_TLS_REG:
-		pthread_key_delete(dss_tls_key);
+		ds_tls_key_delete();
 		/* fall through */
 	case XD_INIT_ULT_BARRIER:
 		ABT_cond_free(&xstream_data.xd_ult_barrier);
@@ -1390,7 +1419,7 @@ dss_srv_init(void)
 	xstream_data.xd_init_step = XD_INIT_ULT_BARRIER;
 
 	/* register xstream-local storage key */
-	rc = pthread_key_create(&dss_tls_key, NULL);
+	rc = ds_tls_key_create();
 	if (rc) {
 		rc = dss_abterr2der(rc);
 		D_ERROR("Failed to register storage key: "DF_RC"\n", DP_RC(rc));

@@ -10,23 +10,32 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/hardware/pciutils"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 var (
-	scanSmd                       = listSmdDevices
-	getCtrlrHealth                = getBioHealth
+	// Function pointers to enable mocking.
+	scanSmd       = listSmdDevices
+	scanHealth    = getBioHealth
+	linkStatsProv = pciutils.NewPCIeLinkStatsProvider()
+
+	// Sentinel errors to enable comparison.
 	errEngineBdevScanEmptyDevList = errors.New("empty device list for engine instance")
+	errCtrlrHealthSkipped         = errors.New("controller health update was skipped")
 )
 
 // newMntRet creates and populates SCM mount result.
@@ -163,21 +172,154 @@ func (ei *EngineInstance) StorageFormatSCM(ctx context.Context, force bool) (mRe
 	return
 }
 
-func populateCtrlrHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealthReq, ctrlr *ctlpb.NvmeController) (bool, error) {
-	stateName := ctlpb.NvmeDevState_name[int32(ctrlr.DevState)]
-	if !ctrlr.CanSupplyHealthStats() {
-		engine.Debugf("skip fetching health stats on device %q in %q state",
-			ctrlr.PciAddr, stateName)
-		return false, nil
+func addLinkInfoToHealthStats(prov hardware.PCIeLinkStatsProvider, pciCfg string, health *ctlpb.BioHealthResp) error {
+	if health == nil {
+		return errors.New("nil BioHealthResp")
 	}
 
-	health, err := getCtrlrHealth(ctx, engine, req)
+	// Convert byte-string to lspci-format.
+	sb := new(strings.Builder)
+	formatBytestring(pciCfg, sb)
+
+	pciDev := &hardware.PCIDevice{}
+	if err := prov.PCIeCapsFromConfig([]byte(sb.String()), pciDev); err != nil {
+		return errors.Wrap(err, "pciutils lib")
+	}
+
+	// Copy link details from PCIDevice to health stats.
+	health.LinkPortId = uint32(pciDev.LinkPortID)
+	health.LinkMaxSpeed = pciDev.LinkMaxSpeed
+	health.LinkMaxWidth = uint32(pciDev.LinkMaxWidth)
+	health.LinkNegSpeed = pciDev.LinkNegSpeed
+	health.LinkNegWidth = uint32(pciDev.LinkNegWidth)
+
+	return nil
+}
+
+// Only raise events if speed or width state is:
+// - Currently at maximum but was previously downgraded
+// - Currently downgraded but is now at maximum
+// - Currently downgraded and was previously at a different downgraded speed
+func checkPublishEvent(engine Engine, id events.RASID, typ, pciAddr, maximum, negotiated, lastMax, lastNeg string, port uint32) {
+
+	// Return early if previous and current stats are both in the expected state.
+	if lastNeg == lastMax && negotiated == maximum {
+		return
+	}
+
+	// Return if stats have not changed since when last seen.
+	if negotiated == lastNeg && maximum == lastMax {
+		return
+	}
+
+	// Otherwise publish event indicating link state change.
+
+	engine.Debugf("link %s changed on %s, was %s (max %s) now %s (max %s)",
+		typ, pciAddr, lastNeg, lastMax, negotiated, maximum)
+	msg := fmt.Sprintf("NVMe PCIe device at %q port-%d: link %s changed to %s "+
+		"(max %s)", pciAddr, port, typ, negotiated, maximum)
+
+	sev := events.RASSeverityWarning
+	if negotiated == maximum {
+		sev = events.RASSeverityNotice
+	}
+
+	engine.Publish(events.NewGenericEvent(id, sev, msg, ""))
+}
+
+// Evaluate PCIe link state on NVMe SSD and raise events when negotiated speed or width changes in
+// relation to last recorded stats for the given PCI address.
+func publishLinkStatEvents(engine Engine, pciAddr string, stats *ctlpb.BioHealthResp) {
+	lastStats := engine.GetLastHealthStats(pciAddr)
+	engine.SetLastHealthStats(pciAddr, stats)
+
+	lastMaxSpeedStr, lastSpeedStr, lastMaxWidthStr, lastWidthStr := "-", "-", "-", "-"
+	if lastStats != nil {
+		lastMaxSpeedStr = humanize.SI(float64(lastStats.LinkMaxSpeed), "T/s")
+		lastSpeedStr = humanize.SI(float64(lastStats.LinkNegSpeed), "T/s")
+		lastMaxWidthStr = fmt.Sprintf("x%d", lastStats.LinkMaxWidth)
+		lastWidthStr = fmt.Sprintf("x%d", lastStats.LinkNegWidth)
+	}
+
+	checkPublishEvent(engine, events.RASNVMeLinkSpeedChanged, "speed", pciAddr,
+		humanize.SI(float64(stats.LinkMaxSpeed), "T/s"),
+		humanize.SI(float64(stats.LinkNegSpeed), "T/s"),
+		lastMaxSpeedStr, lastSpeedStr, stats.LinkPortId)
+
+	checkPublishEvent(engine, events.RASNVMeLinkWidthChanged, "width", pciAddr,
+		fmt.Sprintf("x%d", stats.LinkMaxWidth),
+		fmt.Sprintf("x%d", stats.LinkNegWidth),
+		lastMaxWidthStr, lastWidthStr, stats.LinkPortId)
+}
+
+type ctrlrHealthReq struct {
+	meta          bool
+	engine        Engine
+	bhReq         *ctlpb.BioHealthReq
+	ctrlr         *ctlpb.NvmeController
+	linkStatsProv hardware.PCIeLinkStatsProvider
+}
+
+// Retrieve NVMe controller health statistics for those in an acceptable state. Return nil health
+// resp if in a bad state.
+func getCtrlrHealth(ctx context.Context, req ctrlrHealthReq) (*ctlpb.BioHealthResp, error) {
+	stateName := ctlpb.NvmeDevState_name[int32(req.ctrlr.DevState)]
+	if !req.ctrlr.CanSupplyHealthStats() {
+		req.engine.Debugf("skip fetching health stats on device %q in %q state",
+			req.ctrlr.PciAddr, stateName)
+		return nil, errCtrlrHealthSkipped
+	}
+
+	health, err := scanHealth(ctx, req.engine, req.bhReq)
 	if err != nil {
-		return false, errors.Wrapf(err, "retrieve health stats for %q (state %q)", ctrlr,
+		return nil, errors.Wrapf(err, "retrieve health stats for %q (state %q)", req.ctrlr,
 			stateName)
 	}
-	ctrlr.HealthStats = health
 
+	return health, nil
+}
+
+// Add link state and capability information to input health statistics for the given controller
+// then if successful publish events based on link statistic changes. Link updated health stats to
+// controller.
+func setCtrlrHealthWithLinkInfo(req ctrlrHealthReq, health *ctlpb.BioHealthResp) error {
+	err := addLinkInfoToHealthStats(req.linkStatsProv, req.ctrlr.PciCfg, health)
+	if err == nil {
+		publishLinkStatEvents(req.engine, req.ctrlr.PciAddr, health)
+	} else {
+		if errors.Cause(err) != pciutils.ErrNoPCIeCaps {
+			return errors.Wrapf(err, "add link stats for %q", req.ctrlr)
+		}
+		req.engine.Debugf("device %q not reporting PCIe capabilities", req.ctrlr.PciAddr)
+	}
+
+	return nil
+}
+
+// Update controller health statistics and include link info if required and available.
+func populateCtrlrHealth(ctx context.Context, req ctrlrHealthReq) (bool, error) {
+	health, err := getCtrlrHealth(ctx, req)
+	if err != nil {
+		if err == errCtrlrHealthSkipped {
+			// Nothing to do.
+			return false, nil
+		}
+		return false, errors.Wrap(err, "get ctrlr health")
+	}
+
+	if req.linkStatsProv == nil {
+		req.engine.Debugf("device %q skip adding link stats; nil provider",
+			req.ctrlr.PciAddr)
+	} else if req.ctrlr.PciCfg == "" {
+		req.engine.Debugf("device %q skip adding link stats; empty pci cfg",
+			req.ctrlr.PciAddr)
+	} else {
+		if err = setCtrlrHealthWithLinkInfo(req, health); err != nil {
+			return false, errors.Wrap(err, "set ctrlr health")
+		}
+	}
+
+	req.ctrlr.HealthStats = health
 	return true, nil
 }
 
@@ -190,6 +332,7 @@ func scanEngineBdevsOverDrpc(ctx context.Context, engine Engine, pbReq *ctlpb.Sc
 	if scanSmdResp == nil {
 		return nil, errors.New("nil smd scan resp")
 	}
+	engine.Tracef("smd scan devices: %+v", scanSmdResp.Devices)
 
 	// Re-link SMD devices inside NVMe controller structures and populate scan response.
 
@@ -198,12 +341,20 @@ func scanEngineBdevsOverDrpc(ctx context.Context, engine Engine, pbReq *ctlpb.Sc
 	}
 	seenCtrlrs := make(map[string]*ctlpb.NvmeController)
 
-	for _, sd := range scanSmdResp.Devices {
+	for i, sd := range scanSmdResp.Devices {
 		if sd.Ctrlr == nil {
 			return nil, errors.Errorf("smd %q has no ctrlr ref", sd.Uuid)
 		}
 
 		addr := sd.Ctrlr.PciAddr
+		if addr == "" {
+			// Mock identifier for emulated NVMe mode where devices have no PCI-address.
+			// Allows for 256 unique identifiers per-host and formatted string template
+			// ensures no collisions with real device addresses. Note that this mock
+			// identifier address is not used outside of this loop and is only used for
+			// the purpose of mapping SMD records to NVMe (emulated) device details.
+			addr = fmt.Sprintf("FFFF:00:%X.F", i)
+		}
 
 		if _, exists := seenCtrlrs[addr]; !exists {
 			c := new(ctlpb.NvmeController)
@@ -215,12 +366,13 @@ func scanEngineBdevsOverDrpc(ctx context.Context, engine Engine, pbReq *ctlpb.Sc
 
 		c := seenCtrlrs[addr]
 
-		// Only minimal info provided in standard scan to enable result aggregation across
-		// homogeneous hosts.
 		engineRank, err := engine.GetRank()
 		if err != nil {
 			return nil, errors.Wrapf(err, "instance %d GetRank", engine.Index())
 		}
+
+		// Only provide minimal info in standard scan to enable result aggregation across
+		// homogeneous hosts.
 		nsd := &ctlpb.SmdDevice{
 			RoleBits:         sd.RoleBits,
 			CtrlrNamespaceId: sd.CtrlrNamespaceId,
@@ -236,17 +388,29 @@ func scanEngineBdevsOverDrpc(ctx context.Context, engine Engine, pbReq *ctlpb.Sc
 		// Populate health if requested.
 		healthUpdated := false
 		if pbReq.Health && c.HealthStats == nil {
-			bhReq := &ctlpb.BioHealthReq{
-				DevUuid:  sd.Uuid,
-				MetaSize: pbReq.MetaSize,
-				RdbSize:  pbReq.RdbSize,
+			bhReq := &ctlpb.BioHealthReq{DevUuid: sd.Uuid}
+			if pbReq.Meta {
+				bhReq.MetaSize = pbReq.MetaSize
+				bhReq.RdbSize = pbReq.RdbSize
 			}
-			upd, err := populateCtrlrHealth(ctx, engine, bhReq, c)
+
+			chReq := ctrlrHealthReq{
+				engine: engine,
+				bhReq:  bhReq,
+				ctrlr:  c,
+			}
+			if pbReq.LinkStats {
+				// Add link stats to health if flag set.
+				chReq.linkStatsProv = linkStatsProv
+			}
+
+			healthUpdated, err = populateCtrlrHealth(ctx, chReq)
 			if err != nil {
 				return nil, err
 			}
-			healthUpdated = upd
 		}
+		// Used to update health with link stats, now redundant.
+		c.PciCfg = ""
 
 		// Populate usage data if requested.
 		if pbReq.Meta {
@@ -305,6 +469,7 @@ func bdevScanEngineAssigned(ctx context.Context, engine Engine, req *ctlpb.ScanN
 	return scanEngineBdevsOverDrpc(ctx, engine, req)
 }
 
+// Accommodate for VMD backing devices and emulated NVMe (AIO).
 func getEffCtrlrCount(ctrlrs []*ctlpb.NvmeController) (int, error) {
 	pas := hardware.MustNewPCIAddressSet()
 	for _, c := range ctrlrs {
@@ -316,11 +481,13 @@ func getEffCtrlrCount(ctrlrs []*ctlpb.NvmeController) (int, error) {
 		if npas, err := pas.BackingToVMDAddresses(); err != nil {
 			return 0, err
 		} else {
-			pas = npas
+			return npas.Len(), nil
 		}
 	}
 
-	return pas.Len(), nil
+	// Return inputted number of controllers rather than number of parsed addresses to cater for
+	// the case of emulated NVMe where there will be no valid PCI address.
+	return len(ctrlrs), nil
 }
 
 // bdevScanEngine calls either in to the private engine storage provider to scan bdevs if engine process
@@ -392,20 +559,22 @@ func smdQueryEngine(ctx context.Context, engine Engine, pbReq *ctlpb.SmdQueryReq
 		return nil, errors.Wrapf(err, "instance %d GetRank", engine.Index())
 	}
 
-	rResp := new(ctlpb.SmdQueryResp_RankResp)
-	rResp.Rank = engineRank.Uint32()
-
-	listDevsResp, err := listSmdDevices(ctx, engine, new(ctlpb.SmdDevReq))
+	scanSmdResp, err := scanSmd(ctx, engine, &ctlpb.SmdDevReq{})
 	if err != nil {
-		return nil, errors.Wrapf(err, "rank %d", engineRank)
+		return nil, errors.Wrapf(err, "rank %d: scan smd", engineRank)
+	}
+	if scanSmdResp == nil {
+		return nil, errors.Errorf("rank %d: nil scan smd response", engineRank)
 	}
 
-	if len(listDevsResp.Devices) == 0 {
+	rResp := new(ctlpb.SmdQueryResp_RankResp)
+	rResp.Rank = engineRank.Uint32()
+	if len(scanSmdResp.Devices) == 0 {
 		rResp.Devices = nil
 		return rResp, nil
 	}
 
-	for _, sd := range listDevsResp.Devices {
+	for _, sd := range scanSmdResp.Devices {
 		if sd != nil {
 			rResp.Devices = append(rResp.Devices, sd)
 		}
@@ -417,11 +586,20 @@ func smdQueryEngine(ctx context.Context, engine Engine, pbReq *ctlpb.SmdQueryReq
 			continue // Skip health query if UUID doesn't match requested.
 		}
 		if pbReq.IncludeBioHealth {
-			bhReq := &ctlpb.BioHealthReq{DevUuid: dev.Uuid}
-			if _, err := populateCtrlrHealth(ctx, engine, bhReq, dev.Ctrlr); err != nil {
+			chReq := ctrlrHealthReq{
+				engine:        engine,
+				bhReq:         &ctlpb.BioHealthReq{DevUuid: dev.Uuid},
+				ctrlr:         dev.Ctrlr,
+				linkStatsProv: linkStatsProv,
+			}
+
+			if _, err = populateCtrlrHealth(ctx, chReq); err != nil {
 				return nil, err
 			}
 		}
+		// Used to update health with link stats, now redundant.
+		dev.Ctrlr.PciCfg = ""
+
 		if pbReq.Uuid != "" && dev.Uuid == pbReq.Uuid {
 			rResp.Devices = []*ctlpb.SmdDevice{dev}
 			found = true

@@ -32,7 +32,6 @@ server_config:
           scm_mount: /mnt/daos1
 pool:
   scm_size: 500G
-  control_method: dmg
 container:
   type: POSIX
   control_method: daos
@@ -56,7 +55,9 @@ ior:
       dfs_oclass: "EC_2P1GX"
     EC_4P2GX:
       dfs_oclass: "EC_4P2GX"
+    EC_4P3GX:
+      dfs_oclass: "EC_4P3GX"
     EC_8P2GX:
       dfs_oclass: "EC_8P2GX"
   sw_wearout: 1
-  sw_status_file: "/var/tmp/daos_testing/stoneWallingStatusFile"
+  sw_status_file: stoneWallingStatusFile

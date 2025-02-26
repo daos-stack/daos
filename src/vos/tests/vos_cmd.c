@@ -2,7 +2,7 @@
 
 #include <fcntl.h>
 #include "vts_io.h"
-#include <daos/stack_mmap.h>
+#include <abt.h>
 #include <gurt/atomic.h>
 
 static pthread_once_t     once_control = PTHREAD_ONCE_INIT;
@@ -198,6 +198,7 @@ free_pool(struct known_pool *pool)
 	ACTION(AGGREGATE, aggregate, true, 1)                                                      \
 	ACTION(DISCARD, discard, true, 0)                                                          \
 	ACTION(ITERATE, iterate, true, 0)                                                          \
+	ACTION(VISIBLE_ITERATE, visible_iterate, true, 0)                                          \
 	ACTION(SIZE_QUERY, print_size, true, 0)                                                    \
 	ACTION(RANDOMIZE, run_many_tests, true, 0)
 
@@ -272,7 +273,9 @@ create_pool(struct cmd_info *cinfo)
 
 	close(fd);
 
-	rc = vos_pool_create(known_pool->kp_path, known_pool->kp_uuid, 0, 0, 0, NULL);
+	rc = vos_pool_create(known_pool->kp_path, known_pool->kp_uuid, 0 /* scm_sz */,
+			     0 /* data_sz */, 0 /* meta_sz */, 0 /* flags */, 0 /* version */,
+			     NULL);
 	if (rc != 0) {
 		D_ERROR("Could not create vos pool at %s, rc=" DF_RC "\n", known_pool->kp_path,
 			DP_RC(rc));
@@ -477,7 +480,7 @@ iter_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type, vos_ite
 }
 
 static int
-iterate(struct cmd_info *cinfo)
+iterate_common(struct cmd_info *cinfo, bool visible)
 {
 	struct vos_iter_anchors anchors = {0};
 	vos_iter_param_t        param   = {0};
@@ -488,7 +491,9 @@ iterate(struct cmd_info *cinfo)
 	set_oid(&param.ip_oid);
 	param.ip_epr.epr_lo = 0;
 	param.ip_epr.epr_hi = d_hlc_get();
-	param.ip_flags      = VOS_IT_RECX_VISIBLE | VOS_IT_RECX_COVERED;
+	param.ip_flags      = VOS_IT_RECX_VISIBLE;
+	if (!visible)
+		param.ip_flags |= VOS_IT_RECX_COVERED;
 
 	rc = vos_iterate(&param, VOS_ITER_DKEY, true, &anchors, iter_cb, NULL, &count, NULL);
 	if (rc != 0) {
@@ -498,6 +503,18 @@ iterate(struct cmd_info *cinfo)
 	printf("Total recx count is %d\n", count);
 out:
 	return rc;
+}
+
+static int
+iterate(struct cmd_info *cinfo)
+{
+	return iterate_common(cinfo, false);
+}
+
+static int
+visible_iterate(struct cmd_info *cinfo)
+{
+	return iterate_common(cinfo, true);
 }
 
 int
@@ -641,8 +658,8 @@ handle_op(struct cmd_info *cinfo, bool async)
 	if (async)
 		d_list_add(&ult_info->link, &active_list);
 
-	rc = daos_abt_thread_create_on_xstream(NULL, NULL, abt_xstream, ult_func, ult_info,
-					       ABT_THREAD_ATTR_NULL, &ult_info->thread);
+	rc = ABT_thread_create_on_xstream(abt_xstream, ult_func, ult_info, ABT_THREAD_ATTR_NULL,
+					  &ult_info->thread);
 	assert_int_equal(rc, ABT_SUCCESS);
 
 	if (!async) {
@@ -766,14 +783,14 @@ abit_start(void)
 
 	rc = ABT_init(0, NULL);
 	if (rc != ABT_SUCCESS) {
-		fprintf(stderr, "ABT init failed: %d\n", rc);
+		fprintf(stderr, "Failed to init ABT: " AF_RC "\n", AP_RC(rc));
 		return -1;
 	}
 
 	rc = ABT_xstream_self(&abt_xstream);
 	if (rc != ABT_SUCCESS) {
 		ABT_finalize();
-		printf("ABT get self xstream failed: %d\n", rc);
+		printf("ABT get self xstream failed: " AF_RC "\n", AP_RC(rc));
 		return -1;
 	}
 
@@ -944,6 +961,7 @@ run_vos_command(const char *arg0, const char *cmd)
 	    {"write", required_argument, 0, 'w'},
 	    {"punch_range", required_argument, 0, 'P'},
 	    {"iterate", required_argument, 0, 'i'},
+	    {"visible_iterate", required_argument, 0, 'I'},
 	    {"remove", required_argument, 0, 'R'},
 	    {"punch", required_argument, 0, 'p'},
 	    {"aggregate", no_argument, 0, 'a'},
@@ -976,7 +994,7 @@ run_vos_command(const char *arg0, const char *cmd)
 
 	optind = 1;
 
-	while ((c = getopt_long(args.a_nr, args.a_argv, "c:o:dw:p:ahrsP:R:ix:A:D", long_options,
+	while ((c = getopt_long(args.a_nr, args.a_argv, "c:o:dw:p:ahrsP:R:iIx:A:D", long_options,
 				&option_index)) != -1) {
 		cinfo = &args.a_cmds[args.a_cmd_nr];
 		switch (c) {
@@ -988,6 +1006,10 @@ run_vos_command(const char *arg0, const char *cmd)
 			break;
 		case 'i':
 			cinfo->type = ITERATE;
+			args.a_cmd_nr++;
+			break;
+		case 'I':
+			cinfo->type = VISIBLE_ITERATE;
 			args.a_cmd_nr++;
 			break;
 		case 'c':

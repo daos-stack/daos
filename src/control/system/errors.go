@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,9 +20,10 @@ import (
 )
 
 var (
-	ErrEmptyGroupMap = errors.New("empty group map (all ranks excluded?)")
-	ErrRaftUnavail   = errors.New("raft service unavailable (not started yet?)")
-	ErrUninitialized = errors.New("system is uninitialized (storage format required?)")
+	ErrEmptyGroupMap          = errors.New("empty group map (all ranks excluded?)")
+	ErrRaftUnavail            = errors.New("raft service unavailable (not started yet?)")
+	ErrUninitialized          = errors.New("system is uninitialized (storage format required?)")
+	ErrLeaderStepUpInProgress = errors.New("leader step-up in progress (try again)")
 )
 
 // IsNotReady is a convenience function for checking if an error
@@ -37,7 +38,8 @@ func IsUnavailable(err error) bool {
 	if err == nil {
 		return false
 	}
-	return strings.Contains(errors.Cause(err).Error(), ErrRaftUnavail.Error())
+	cause := errors.Cause(err).Error()
+	return strings.Contains(cause, ErrRaftUnavail.Error()) || strings.Contains(cause, ErrLeaderStepUpInProgress.Error())
 }
 
 // IsEmptyGroupMap returns a boolean indicating whether or not the
@@ -134,10 +136,13 @@ type ErrJoinFailure struct {
 	rankChanged bool
 	uuidChanged bool
 	isExcluded  bool
+	addrChanged bool
 	newUUID     *uuid.UUID
 	curUUID     *uuid.UUID
 	newRank     *ranklist.Rank
 	curRank     *ranklist.Rank
+	newAddr     *net.TCPAddr
+	curAddr     *net.TCPAddr
 }
 
 func (err *ErrJoinFailure) Error() string {
@@ -148,6 +153,8 @@ func (err *ErrJoinFailure) Error() string {
 		return fmt.Sprintf("can't rejoin member with rank %d: uuid changed from %s -> %s", *err.curRank, *err.curUUID, *err.newUUID)
 	case err.isExcluded:
 		return fmt.Sprintf("member %s (rank %d) has been administratively excluded", err.curUUID, *err.curRank)
+	case err.addrChanged:
+		return fmt.Sprintf("can't rejoin member %s (rank %d): control address changed from %s -> %s", *err.curUUID, *err.curRank, err.curAddr, err.newAddr)
 	default:
 		return "unknown join failure"
 	}
@@ -168,6 +175,16 @@ func ErrUuidChanged(new, cur uuid.UUID, rank ranklist.Rank) *ErrJoinFailure {
 		newUUID:     &new,
 		curUUID:     &cur,
 		curRank:     &rank,
+	}
+}
+
+func ErrControlAddrChanged(new, cur *net.TCPAddr, uuid uuid.UUID, rank ranklist.Rank) *ErrJoinFailure {
+	return &ErrJoinFailure{
+		addrChanged: true,
+		curUUID:     &uuid,
+		curRank:     &rank,
+		newAddr:     new,
+		curAddr:     cur,
 	}
 }
 

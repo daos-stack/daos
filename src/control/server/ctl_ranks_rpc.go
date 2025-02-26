@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -140,7 +140,7 @@ func (svc *ControlService) memberStateResults(instances []Engine, tgtState syste
 
 		state := ei.LocalState()
 		if state != tgtState {
-			results = append(results, system.NewMemberResult(rank, errors.Errorf(failMsg),
+			results = append(results, system.NewMemberResult(rank, errors.New(failMsg),
 				system.MemberStateErrored))
 			continue
 		}
@@ -293,6 +293,8 @@ func (svc *ControlService) StartRanks(ctx context.Context, req *ctlpb.RanksReq) 
 		return nil, err
 	}
 	for _, ei := range instances {
+		ei.SetCheckerMode(req.CheckMode)
+
 		if ei.IsStarted() {
 			continue
 		}

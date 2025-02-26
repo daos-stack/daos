@@ -1,5 +1,6 @@
 /**
- * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -158,7 +159,7 @@ evt_mbr_same(const struct evt_node *node, const struct evt_rect *rect)
 }
 
 static bool
-time_cmp(uint64_t t1, uint64_t t2, int *out)
+time_cmp(uint64_t t1, uint64_t t2, int *out, bool rebuild_overlap)
 {
 	if (t1 == t2) {
 		*out = RT_OVERLAP_SAME;
@@ -170,7 +171,7 @@ time_cmp(uint64_t t1, uint64_t t2, int *out)
 		*out = RT_OVERLAP_OVER;
 	} else {
 		*out = RT_OVERLAP_UNDER;
-		if (t2 == EVT_REBUILD_MINOR_MIN) {
+		if (rebuild_overlap && t2 == EVT_REBUILD_MINOR_MIN) {
 			/** If t1 is also a rebuild, we should return
 			 * RT_OVERLAP_SAME to force adjustment of new rebuild
 			 * minor epoch.
@@ -191,8 +192,8 @@ time_cmp(uint64_t t1, uint64_t t2, int *out)
  * second rectangle \a rt2 should be the one being searched/inserted.
  */
 static void
-evt_rect_overlap(const struct evt_rect *rt1, const struct evt_rect *rt2,
-		 int *range, int *time)
+evt_rect_overlap(const struct evt_rect *rt1, const struct evt_rect *rt2, int *range, int *time,
+		 bool overlap)
 {
 	*time = *range = RT_OVERLAP_NO;
 
@@ -204,8 +205,8 @@ evt_rect_overlap(const struct evt_rect *rt1, const struct evt_rect *rt2,
 	 * updates are from epc to INF.  Determine here what kind
 	 * of overlap exists.
 	 */
-	if (time_cmp(rt1->rc_epc, rt2->rc_epc, time))
-		time_cmp(rt1->rc_minor_epc, rt2->rc_minor_epc, time);
+	if (time_cmp(rt1->rc_epc, rt2->rc_epc, time, false))
+		time_cmp(rt1->rc_minor_epc, rt2->rc_minor_epc, time, overlap);
 
 	if (evt_same_extent(&rt1->rc_ex, &rt2->rc_ex))
 		*range = RT_OVERLAP_SAME;
@@ -1443,8 +1444,9 @@ evt_node_alloc(struct evt_context *tcx, unsigned int flags,
 	struct evt_node         *nd;
 	umem_off_t		 nd_off;
 	bool                     leaf = (flags & EVT_NODE_LEAF);
+	struct vos_object	*obj = tcx->tc_desc_cbs.dc_alloc_arg;
 
-	nd_off = umem_zalloc(evt_umm(tcx), evt_node_size(tcx, leaf));
+	nd_off = vos_obj_alloc(evt_umm(tcx), obj, evt_node_size(tcx, leaf), true);
 	if (UMOFF_IS_NULL(nd_off))
 		return -DER_NOSPACE;
 
@@ -2639,8 +2641,8 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 			if (find_opc == EVT_FIND_OVERWRITE)
 				has_agg = true;
 
-			evt_rect_overlap(&rtmp, rect, &range_overlap,
-					 &time_overlap);
+			evt_rect_overlap(&rtmp, rect, &range_overlap, &time_overlap,
+					 find_opc == EVT_FIND_OVERWRITE);
 			switch (range_overlap) {
 			default:
 				D_ASSERT(0);
@@ -3249,8 +3251,9 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 	}
 
 	if (leaf) {
-		umem_off_t desc_off;
-		uint32_t   csum_buf_size = 0;
+		umem_off_t		 desc_off;
+		uint32_t		 csum_buf_size = 0;
+		struct vos_object	*obj = tcx->tc_desc_cbs.dc_alloc_arg;
 
 		if (ci_is_valid(&ent->ei_csum))
 			csum_buf_size = ci_csums_len(ent->ei_csum);
@@ -3263,7 +3266,7 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 			D_DEBUG(DB_TRACE, "Allocating an extra %d bytes "
 						"for checksum", csum_buf_size);
 		}
-		desc_off = umem_zalloc(evt_umm(tcx), desc_size);
+		desc_off = vos_obj_alloc(evt_umm(tcx), obj, desc_size, true);
 		if (UMOFF_IS_NULL(desc_off))
 			return -DER_NOSPACE;
 
@@ -4086,3 +4089,12 @@ evt_feats_set(struct evt_root *root, struct umem_instance *umm, uint64_t feats)
 	return rc;
 }
 
+bool
+evt_desc_is_valid(const struct evt_desc *evt, uint32_t dtx_lid)
+{
+	if (evt == NULL || evt->dc_magic != EVT_DESC_MAGIC) {
+		return false;
+	}
+
+	return (evt->dc_dtx == dtx_lid);
+}

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -86,6 +86,18 @@ dfuse_reply_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 		    ie->ie_oid.hi != inode->ie_oid.hi) {
 			DFUSE_TRA_ERROR(inode, "Duplicate inode found (oid)");
 			D_GOTO(out_err, rc = EIO);
+		}
+
+		/* Make the inode active for the create case */
+		if (ie->ie_active) {
+			D_ASSERT(atomic_load_relaxed(&ie->ie_open_count) == 1);
+			active_ie_decref(dfuse_info, ie);
+			rc = active_ie_init(inode, NULL);
+			if (rc != -DER_SUCCESS) {
+				atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
+				dfuse_ie_close(dfuse_info, ie);
+				D_GOTO(out_err, rc);
+			}
 		}
 
 		DFUSE_TRA_DEBUG(inode,
@@ -191,27 +203,39 @@ check_for_uns_ep(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, ch
 	 */
 
 	rc = dfuse_pool_get_handle(dfuse_info, dattr.da_puuid, &dfp);
-	if (rc != 0)
-		D_GOTO(out_err, rc);
+	if (rc != 0) {
+		if (rc == ENOENT)
+			rc = ENOLINK;
+		goto out_err;
+	}
 
-	rc = dfuse_cont_open(dfuse_info, dfp, &dattr.da_cuuid, &dfs);
-	if (rc != 0)
-		D_GOTO(out_dfp, rc);
-
-	/* The inode has a reference to the dfs, so keep that. */
-	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfp->dfp_entry);
+	rc = dfuse_cont_get_handle(dfuse_info, dfp, dattr.da_cuuid, &dfs);
+	if (rc != 0) {
+		if (rc == ENOENT)
+			rc = ENOLINK;
+		goto out_dfp;
+	}
 
 	rc = dfs_release(ie->ie_obj);
 	if (rc) {
 		DFUSE_TRA_ERROR(dfs, "dfs_release() failed: %d (%s)", rc, strerror(rc));
 		D_GOTO(out_dfs, rc);
 	}
+	ie->ie_obj = NULL;
 
 	rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, &ie->ie_stat);
 	if (rc) {
-		DFUSE_TRA_ERROR(dfs, "dfs_lookup() returned: %d (%s)", rc, strerror(rc));
-		D_GOTO(out_dfs, rc);
+		if (rc == EINVAL) {
+			rc = ENOLINK;
+			DHS_INFO(dfs, rc, "dfs_lookup() failed");
+		} else {
+			DHS_WARN(dfs, rc, "dfs_lookup() failed");
+		}
+		goto out_dfs;
 	}
+
+	/* The inode has a reference to the dfs, so keep that. */
+	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfp->dfp_entry);
 
 	ie->ie_stat.st_ino = dfs->dfs_ino;
 
@@ -219,13 +243,13 @@ check_for_uns_ep(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, ch
 
 	ie->ie_dfs = dfs;
 
-	DFUSE_TRA_INFO(dfs, "UNS entry point activated, root %#lx", dfs->dfs_ino);
+	DFUSE_TRA_DEBUG(dfs, "UNS entry point activated, root %#lx", dfs->dfs_ino);
 
 	duns_destroy_attr(&dattr);
 
 	return rc;
 out_dfs:
-	d_hash_rec_decref(&dfp->dfp_cont_table, &dfs->dfs_entry);
+	d_hash_rec_decref(dfp->dfp_cont_table, &dfs->dfs_entry);
 out_dfp:
 	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfp->dfp_entry);
 out_err:

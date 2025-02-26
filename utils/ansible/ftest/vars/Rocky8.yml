@@ -6,39 +6,43 @@ daos_openmpi_module_path: /usr/share/modulefiles/mpi/openmpi-x86_64
 daos_base_deps:
   rpms:
     - bash
+    - bzip2-devel
+    - capstone
+    - createrepo
+    - dnf-plugins-core
     - gdb
     - glibc
+    - iproute
     - jq
     - lbzip2
-    - mercury
+    - numactl
+    - numactl-libs
+    - numatop
     - platform-python
+    - psmisc
     - python36
+    - python3.11-devel
+    - python3-pexpect
+    - python3-wheel
     - systemd
     - tree
+    - valgrind-devel
+    - wget
 
 daos_dev_deps:
   rpms:
-    - cmake
-    - createrepo
-    - dnf-plugins-core
+    - daos-raft-devel
+    - gcc-gfortran
     - libaec-devel
-    - meson
+    - libattr-devel
+    - python3.11
+    - python3.11-devel
     - python3-clustershell
+    - python3-pip
+    - python3-wheel
     - rpmdevtools
     - rpm-build
-    - wget
-    - libattr-devel
-    - bzip2-devel
-  pips:
-    - "avocado=={{ daos_avocado_version | default(daos_avocado_version_default) }}"
-    - "avocado-framework=={{ daos_avocado_framework_version | default(daos_avocado_framework_version_default) }}"
-    - "avocado-framework-plugin-glib=={{ daos_avocado_framework_version | default(daos_avocado_framework_version_default) }}"
-    - "avocado-framework-plugin-golang=={{ daos_avocado_framework_version | default(daos_avocado_framework_version_default) }}"
-    - "avocado-framework-plugin-loader-yaml=={{ daos_avocado_framework_version | default(daos_avocado_framework_version_default) }}"
-    - "avocado-framework-plugin-result-html=={{ daos_avocado_framework_version | default(daos_avocado_framework_version_default) }}"
-    - "avocado-framework-plugin-result-upload=={{ daos_avocado_framework_version | default(daos_avocado_framework_version_default) }}"
-    - "avocado-framework-plugin-varianter-yaml-to-mux=={{ daos_avocado_framework_version | default(daos_avocado_framework_version_default) }}"
-    - pyelftools
+    - spdk-devel
 
 daos_client_deps:
   rpms:
@@ -48,6 +52,7 @@ daos_client_deps:
     - libaec
     - libuuid
     - lz4-libs
+    - numactl-devel
     - systemd
     - util-linux
 
@@ -56,11 +61,14 @@ daos_server_deps:
     - compat-hwloc1
     - dpdk
     - ipmctl
-    - libfabric
     - libipmctl
     - libpmemobj
     - libuuid
     - lz4-libs
     - ndctl
-    - numactl-libs
+    - pciutils
     - spdk-tools
+
+mlnx_deps:
+  rpms:
+    - mlnx-ofed-all

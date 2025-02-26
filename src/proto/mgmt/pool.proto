@@ -1,5 +1,6 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,7 +18,7 @@ message PoolCreateReq {
 	string uuid = 1; // UUID for new pool, generated on the client
 	string sys = 2; // DAOS system identifier
 	string user = 3; // formatted user e.g. "bob@"
-	string usergroup = 4; // formatted group e.g. "builders@"
+	string                user_group = 4; // formatted group e.g. "builders@"
 	repeated string acl = 5; // Access Control Entries in short string format
 	repeated PoolProperty properties = 6; // Pool properties to be set
 
@@ -25,24 +26,25 @@ message PoolCreateReq {
 	// representing members of the tree in a breadth-first traversal order.
 	// Each domain above rank consists of: (level, id, num children)
 	// Each rank consists of: (rank number)
-	repeated uint32 faultDomains = 7; // Fault domain tree, minimal format
-	uint32 numsvcreps = 8; // desired number of pool service replicas
-	uint64 totalbytes = 9; // Total pool size in bytes (auto config)
-	repeated double tierratio = 10; // Ratio of storage tiers expressed as % of totalbytes (auto config)
-	uint32 numranks = 11; // Number of target ranks to use (auto config)
-	repeated uint32 ranks = 12; // target ranks (manual config)
-	repeated uint64 tierbytes = 13; // Size in bytes of storage tiers (manual config)
-	uint64 meta_blob_size     = 14; // Size in bytes of metadata blob on SSD (manual config)
+	repeated uint32       fault_domains = 7; // Fault domain tree, minimal format
+	uint32                num_svc_reps  = 8; // desired number of pool service replicas
+	uint64                total_bytes   = 9; // Total pool size in bytes
+	repeated double tier_ratio = 10; // Ratio of storage tiers expressed as % of totalbytes
+	uint32          num_ranks  = 11; // Number of target ranks to use
+	repeated uint32 ranks      = 12; // target ranks
+	repeated uint64 tier_bytes = 13; // Size in bytes of storage tier
+	float           mem_ratio = 14; // Fraction of meta-blob-sz to use as mem-file-sz
 }
 
 // PoolCreateResp returns created pool uuid and ranks.
 message PoolCreateResp {
 	int32 status = 1; // DAOS error code
-	uint32 leader = 2; // Current service leader
+	uint32 svc_ldr = 2; // Current service leader rank
 	repeated uint32 svc_reps = 3; // pool service replica ranks
 	repeated uint32 tgt_ranks = 4; // pool target ranks
-	repeated uint64 tier_bytes = 5; // storage tiers allocated to pool
-	uint64 meta_blob_size     = 6; // Size in bytes of metadata blob on SSD (manual config)
+	repeated uint64 tier_bytes     = 5; // per-rank storage tier sizes allocated in pool
+	uint64          mem_file_bytes = 6; // per-rank accumulated value of memory file sizes
+	bool            md_on_ssd_active = 7; // MD-on-SSD mode flag
 }
 
 // PoolDestroyReq supplies pool identifier and force flag.
@@ -81,8 +83,9 @@ message PoolExcludeReq {
 	string sys = 1; // DAOS system identifier
 	string id = 2; // uuid or label of pool to exclude some targets
 	uint32 rank = 3; // target to move to the down state
-	repeated uint32 targetidx = 4; // target ranks
+	repeated uint32 target_idx = 4; // target ranks
 	repeated uint32 svc_ranks = 5; // List of pool service ranks
+	bool            force      = 6; // force to exclude potentially leading to data loss
 }
 
 // PoolExcludeResp returns resultant state of Exclude operation.
@@ -95,7 +98,7 @@ message PoolDrainReq {
 	string sys = 1; // DAOS system identifier
 	string id = 2; // uuid or label of pool to drain some targets
 	uint32 rank = 3; // rank to move to the down state
-	repeated uint32 targetidx = 4; // rank targets
+	repeated uint32 target_idx = 4; // rank targets
 	repeated uint32 svc_ranks = 5; // List of pool service ranks
 }
 
@@ -110,8 +113,9 @@ message PoolExtendReq {
 	string id = 2; // uuid or label of pool to add target up to
 	repeated uint32 ranks = 3; // ranks
 	repeated uint32 svc_ranks = 4; // List of pool service ranks
-	repeated uint64 tierbytes = 5; // Size in bytes of storage tiers
-	repeated uint32 faultDomains = 6; // fault domain tree, minimal format
+	repeated uint64 tier_bytes    = 5; // Size in bytes of storage tiers
+	repeated uint32 fault_domains = 6; // fault domain tree, minimal format
+	float           mem_ratio     = 7; // Fraction of meta-blob-sz to use as mem-file-sz
 }
 
 // PoolExtendResp returns resultant state of Extend operation.
@@ -120,18 +124,19 @@ message PoolExtendResp {
 	repeated uint64 tier_bytes = 2; // storage tiers allocated to pool
 }
 
-// PoolReintegrateReq supplies pool identifier, rank, and target_idxs.
-message PoolReintegrateReq {
+// PoolReintReq supplies pool identifier, rank, and target_idxs.
+message PoolReintReq {
 	string sys = 1; // DAOS system identifier
 	string id = 2; // uuid or label of pool to add target up to
 	uint32 rank = 3; // target to move to the up state
-	repeated uint32 targetidx = 4; // target ranks
+	repeated uint32 target_idx = 4; // target ranks
 	repeated uint32 svc_ranks = 5; // List of pool service ranks
-	repeated uint64 tierbytes = 6; // Size in bytes of storage tiers
+	repeated uint64 tier_bytes = 6; // Size in bytes of storage tiers
+	float           mem_ratio  = 7; // Fraction of meta-blob-sz to use as mem-file-sz
 }
 
-// PoolReintegrateResp returns resultant state of Reintegrate operation.
-message PoolReintegrateResp {
+// PoolReintResp returns resultant state of reintegrate operation.
+message PoolReintResp {
 	int32 status = 1; // DAOS error code
 }
 
@@ -176,8 +181,7 @@ message PoolQueryReq {
 	string sys = 1; // DAOS system identifier
 	string id = 2;
 	repeated uint32 svc_ranks = 3; // List of pool service ranks
-	bool include_enabled_ranks = 4; // True if the list of enabled ranks shall be returned
-	bool include_disabled_ranks = 5; // True if the list of disabled ranks shall be returned
+	uint64          query_mask = 4; // Bitmask of pool query options
 }
 
 enum StorageMediaType {
@@ -229,13 +233,19 @@ message PoolQueryResp {
 	PoolRebuildStatus rebuild = 7; // pool rebuild status
 	repeated StorageUsageStats tier_stats = 8; // storage tiers usage stats
 	uint32 version = 10; // latest pool map version
-	uint32 leader = 11; // current raft leader
+	uint32 leader = 11; // current raft leader (2.4)
 	string enabled_ranks = 12; // optional set of ranks enabled
 	string disabled_ranks = 13; // optional set of ranks disabled
 	uint32 total_engines = 14; // total engines in pool
 	uint32 pool_layout_ver = 15; // current pool global version
 	uint32 upgrade_layout_ver = 16; // latest pool global version to upgrade
 	PoolServiceState state = 17; // pool state
+	uint32 svc_ldr = 18; // current raft leader (2.6+)
+	repeated uint32 svc_reps = 19; // service replica ranks
+	uint64                     query_mask         = 20; // Bitmask of pool query options used
+	uint64 mem_file_bytes = 21; // per-pool accumulated value of memory file sizes
+	string dead_ranks     = 22; // optional set of dead ranks
+	bool   md_on_ssd_active = 23; // MD-on-SSD mode flag
 }
 
 message PoolProperty {
@@ -326,6 +336,8 @@ message PoolQueryTargetInfo {
 	TargetState state = 2; // target state see enum daos_target_state_t
 	// TODO: target performance data
 	repeated StorageTargetUsage space = 3; // this target's usage per storage tier
+	uint64                      mem_file_bytes = 4; // per-target value of memory file size
+	bool                        md_on_ssd_active = 5; // MD-on-SSD mode flag
 }
 
 // PoolQueryTargetResp represents a pool target query response

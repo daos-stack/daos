@@ -1,4 +1,6 @@
-# Copyright 2016-2023 Intel Corporation
+# Copyright 2016-2024 Intel Corporation
+# Copyright 2025 Google LLC
+# Copyright 2025 Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -127,7 +129,7 @@ def define_mercury(reqs):
         ofi_build.append('--disable-debug')
 
     reqs.define('ofi',
-                retriever=GitRepoRetriever('https://github.com/ofiwg/libfabric'),
+                retriever=GitRepoRetriever(),
                 commands=[['./autogen.sh'],
                           ofi_build,
                           ['make'],
@@ -152,7 +154,7 @@ def define_mercury(reqs):
         ucx_configure.extend(['--disable-debug', '--disable-logging'])
 
     reqs.define('ucx',
-                retriever=GitRepoRetriever('https://github.com/openucx/ucx.git'),
+                retriever=GitRepoRetriever(),
                 libs=['ucs', 'ucp', 'uct'],
                 functions={'ucs': ['ucs_debug_disable_signal']},
                 headers=['uct/api/uct.h'],
@@ -189,7 +191,7 @@ def define_mercury(reqs):
         mercury_build.append('-DMERCURY_ENABLE_DEBUG:BOOL=OFF')
 
     reqs.define('mercury',
-                retriever=GitRepoRetriever('https://github.com/mercury-hpc/mercury.git', True),
+                retriever=GitRepoRetriever(True),
                 commands=[mercury_build,
                           ['make'],
                           ['make', 'install']],
@@ -246,14 +248,14 @@ def define_components(reqs):
     define_ompi(reqs)
 
     reqs.define('isal',
-                retriever=GitRepoRetriever('https://github.com/intel/isa-l.git'),
+                retriever=GitRepoRetriever(),
                 commands=[['./autogen.sh'],
                           ['./configure', '--prefix=$ISAL_PREFIX', '--libdir=$ISAL_PREFIX/lib'],
                           ['make'],
                           ['make', 'install']],
                 libs=['isal'])
     reqs.define('isal_crypto',
-                retriever=GitRepoRetriever('https://github.com/intel/isa-l_crypto'),
+                retriever=GitRepoRetriever(),
                 commands=[['./autogen.sh'],
                           ['./configure',
                            '--prefix=$ISAL_CRYPTO_PREFIX',
@@ -263,10 +265,9 @@ def define_components(reqs):
                 libs=['isal_crypto'])
 
     reqs.define('pmdk',
-                retriever=GitRepoRetriever('https://github.com/pmem/pmdk.git'),
+                retriever=GitRepoRetriever(),
                 commands=[['make',
                            'all',
-                           'NDCTL_ENABLE=n',
                            'BUILD_EXAMPLES=n',
                            'BUILD_BENCHMARKS=n',
                            'DOC=n',
@@ -288,7 +289,7 @@ def define_components(reqs):
         abt_build.append('--enable-valgrind')
 
     reqs.define('argobots',
-                retriever=GitRepoRetriever('https://github.com/pmodels/argobots.git', True),
+                retriever=GitRepoRetriever(True),
                 commands=[['git', 'clean', '-dxf'],
                           ['./autogen.sh'],
                           abt_build,
@@ -299,15 +300,25 @@ def define_components(reqs):
                 headers=['abt.h'])
 
     reqs.define('fuse', libs=['fuse3'], defines=['FUSE_USE_VERSION=35'],
-                retriever=GitRepoRetriever('https://github.com/libfuse/libfuse.git'),
-                commands=[['meson', 'setup', '../fuse'],
-                          ['meson', 'configure', '--prefix=$FUSE_PREFIX', '-Ddisable-mtab=True',
+                retriever=GitRepoRetriever(),
+                commands=[['meson', 'setup', '--prefix=$FUSE_PREFIX', '-Ddisable-mtab=True',
                            '-Dudevrulesdir=$FUSE_PREFIX/udev', '-Dutils=False',
-                           '--default-library', 'both'],
-                          ['ninja', '-v'],
+                           '--default-library', 'both', '../fuse'],
                           ['ninja', 'install']],
                 headers=['fuse3/fuse.h'],
-                required_progs=['libtoolize', 'ninja'],
+                required_progs=['libtoolize', 'ninja', 'meson'],
+                out_of_src_build=True)
+
+    reqs.define('fused', libs=['fused'], defines=['FUSE_USE_VERSION=35'],
+                retriever=GitRepoRetriever(),
+                commands=[['meson', 'setup', '--prefix=$FUSED_PREFIX', '-Ddisable-mtab=True',
+                           '-Dudevrulesdir=$FUSED_PREFIX/udev', '-Dutils=False',
+                           '--default-library', 'static', '../fused'],
+                          ['meson', 'setup', '--reconfigure', '../fused'],
+                          ['ninja', 'install']],
+                pkgconfig='fused',
+                headers=['fused/fuse.h'],
+                required_progs=['libtoolize', 'ninja', 'meson'],
                 out_of_src_build=True)
 
     # Tell SPDK which CPU to optimize for, by default this is native which works well unless you
@@ -330,7 +341,7 @@ def define_components(reqs):
         spdk_arch = 'haswell'
 
     reqs.define('spdk',
-                retriever=GitRepoRetriever('https://github.com/spdk/spdk.git', True),
+                retriever=GitRepoRetriever(True),
                 commands=[['./configure',
                            '--prefix=$SPDK_PREFIX',
                            '--disable-tests',
@@ -359,7 +370,7 @@ def define_components(reqs):
                 patch_rpath=['lib', 'bin'])
 
     reqs.define('protobufc',
-                retriever=GitRepoRetriever('https://github.com/protobuf-c/protobuf-c.git'),
+                retriever=GitRepoRetriever(),
                 commands=[['./autogen.sh'],
                           ['./configure', '--prefix=$PROTOBUFC_PREFIX', '--disable-protoc'],
                           ['make'],
@@ -371,12 +382,16 @@ def define_components(reqs):
     os_name = dist[0].split()[0]
     if os_name == 'Ubuntu':
         capstone_pkg = 'libcapstone-dev'
+        libaio_pkg = 'libaio-dev'
     elif os_name == 'openSUSE':
         capstone_pkg = 'libcapstone-devel'
+        libaio_pkg = 'libaio-devel'
     else:
         capstone_pkg = 'capstone-devel'
+        libaio_pkg = 'libaio-devel'
     reqs.define('capstone', libs=['capstone'], headers=['capstone/capstone.h'],
                 package=capstone_pkg)
+    reqs.define('aio', libs=['aio'], headers=['libaio.h'], package=libaio_pkg)
 
 
 __all__ = ['define_components']

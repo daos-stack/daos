@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021-2022 Intel Corporation.
+ * (C) Copyright 2021-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -8,23 +8,8 @@
 
 #include "srv_internal.h"
 #include <abt.h>
+#include <daos/metrics.h>
 #include <gurt/telemetry_producer.h>
-
-
-/* Estimate of bytes per typical metric node */
-#define NODE_BYTES		(sizeof(struct d_tm_node_t) + \
-				 sizeof(struct d_tm_metric_t) + \
-				 64 /* buffer for metadata */)
-/* Estimate of bytes per histogram bucket */
-#define BUCKET_BYTES		(sizeof(struct d_tm_bucket_t) + NODE_BYTES)
-/*
-   Estimate of bytes per metric.
-   This is a generous high-water mark assuming most metrics are not using
-   histograms. May need adjustment if the balance of metrics changes.
-*/
-#define PER_METRIC_BYTES	(NODE_BYTES + sizeof(struct d_tm_stats_t) + \
-				 sizeof(struct d_tm_histogram_t) + \
-				 BUCKET_BYTES)
 
 /**
  * Initializes the pool metrics
@@ -79,6 +64,48 @@ ds_pool_metrics_alloc(const char *path, int tgt_id)
 			     "%s/ops/pool_query_space", path);
 	if (rc != 0)
 		D_WARN("Failed to create pool query space counter: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&metrics->service_leader, D_TM_GAUGE, "Pool service leader rank", NULL,
+			     "%s/svc/leader", path);
+	if (rc != 0)
+		DL_WARN(rc, "Failed to create pool service leader metric");
+
+	rc = d_tm_add_metric(&metrics->map_version, D_TM_COUNTER, "Pool map version", NULL,
+			     "%s/svc/map_version", path);
+	if (rc != 0)
+		DL_WARN(rc, "Failed to create pool map version metric");
+
+	rc = d_tm_add_metric(&metrics->open_handles, D_TM_GAUGE, "Pool handles held by clients",
+			     NULL, "%s/svc/open_pool_handles", path);
+	if (rc != 0)
+		DL_WARN(rc, "Failed to create pool handle metric");
+
+	rc = d_tm_add_metric(&metrics->total_ranks, D_TM_GAUGE, "Pool storage ranks (total)", NULL,
+			     "%s/svc/total_ranks", path);
+	if (rc != 0)
+		DL_WARN(rc, "Failed to create pool total_ranks metric");
+
+	rc = d_tm_add_metric(&metrics->degraded_ranks, D_TM_GAUGE, "Pool storage ranks (degraded)",
+			     NULL, "%s/svc/degraded_ranks", path);
+	if (rc != 0)
+		DL_WARN(rc, "Failed to create pool degraded_ranks metric");
+
+	rc = d_tm_add_metric(&metrics->total_targets, D_TM_GAUGE, "Pool storage targets (total)",
+			     NULL, "%s/svc/total_targets", path);
+	if (rc != 0)
+		DL_WARN(rc, "Failed to create pool total_targets metric");
+
+	rc = d_tm_add_metric(&metrics->draining_targets, D_TM_GAUGE,
+			     "Pool storage targets (draining)", NULL, "%s/svc/draining_targets",
+			     path);
+	if (rc != 0)
+		DL_WARN(rc, "Failed to create pool draining_targets metric");
+
+	rc = d_tm_add_metric(&metrics->disabled_targets, D_TM_GAUGE,
+			     "Pool storage targets (disabled)", NULL, "%s/svc/disabled_targets",
+			     path);
+	if (rc != 0)
+		DL_WARN(rc, "Failed to create pool disabled_targets metric");
 
 	return metrics;
 }

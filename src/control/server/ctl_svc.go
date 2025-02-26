@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -29,6 +29,10 @@ type ControlService struct {
 // datastore. Initialized with sensible defaults and provided components.
 func NewControlService(log logging.Logger, h *EngineHarness,
 	cfg *config.Server, e *events.PubSub, f *hardware.FabricScanner) *ControlService {
+
+	if cfg == nil {
+		cfg = &config.Server{}
+	}
 
 	scs := NewStorageControlService(log, cfg.Engines)
 

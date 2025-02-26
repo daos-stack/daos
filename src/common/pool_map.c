@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -421,6 +421,7 @@ pool_buf_attach(struct pool_buf *buf, struct pool_component *comps,
 			buf->pb_domain_nr++;
 
 		buf->pb_comps[nr] = comps[0];
+		buf->pb_comps[nr].co_flags &= ~PO_COMPF_CHK_DONE;
 
 		D_DEBUG(DB_TRACE, "nr %d %s\n", nr,
 			pool_comp_type2str(comps[0].co_type));
@@ -1160,24 +1161,21 @@ pool_map_compat(struct pool_map *map, uint32_t version,
 					return -DER_NO_PERM;
 				}
 
-			} else if (dc->co_status == PO_COMP_ST_UPIN) {
+			} else if (dc->co_status & (PO_COMP_ST_UPIN | PO_COMP_ST_UP |
+						    PO_COMP_ST_DOWN)) {
 				if (!existed) {
-					D_ERROR("status [UPIN] not valid for "
-						"new comp\n");
+					D_ERROR("status [%u] not valid for new comp\n",
+						dc->co_status);
 					return -DER_INVAL;
 				}
 
-				D_ASSERT(parent != NULL);
-				if (parent->do_comp.co_status ==
-				    PO_COMP_ST_NEW) {
+				if (parent != NULL && parent->do_comp.co_status == PO_COMP_ST_NEW) {
 					D_ERROR("invalid parent status [NEW] "
-						"when component status "
-						"[UPIN]\n");
+						"when component status %u\n", dc->co_status);
 					return -DER_INVAL;
 				}
 			} else {
-				D_ERROR("bad comp status=0x%x\n",
-					dc->co_status);
+				D_ERROR("bad comp status=0x%x\n", dc->co_status);
 				return -DER_INVAL;
 			}
 
@@ -1321,8 +1319,8 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 				ddom->do_targets   = NULL;
 				ddom->do_child_nr  = 0;
 				ddom->do_target_nr = 0;
-				D_DEBUG(DB_TRACE, "Add new domain %s %d\n",
-					pool_domain_name(cdom), dom_nr);
+				D_DEBUG(DB_TRACE, "Add new domain %s[%d] idx/nr %d/%u\n",
+					pool_domain_name(ddom), ddom->do_comp.co_id, i, dom_nr);
 			} else {
 				/* Domain existed, copy its children/targets
 				 * from current pool map.
@@ -1382,9 +1380,9 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 					if (dc->co_status != PO_COMP_ST_NEW)
 						continue;
 
-					D_DEBUG(DB_TRACE, "New %s[%d]\n",
+					D_DEBUG(DB_TRACE, "New %s[%d] to %u\n",
 						pool_comp_type2str(dc->co_type),
-						dc->co_id);
+						dc->co_id, (uint32_t)(child - dst_doms));
 
 					*child = sdom->do_children[j];
 					child++;
@@ -1575,7 +1573,7 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 			if (map) {
 				struct pool_domain *found_dom;
 
-				found_dom = pool_map_find_node_by_rank(map, rank);
+				found_dom = pool_map_find_dom_by_rank(map, rank);
 				if (found_dom) {
 					if (found_dom->do_comp.co_status == PO_COMP_ST_NEW)
 						found_new_dom = true;
@@ -1694,11 +1692,12 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 			map_comp.co_flags = PO_COMPF_NONE;
 			map_comp.co_nr = 1;
 
-			D_DEBUG(DB_TRACE, "adding target: type=0x%hhx, status=%hhu, idx=%d, "
+			D_DEBUG(DB_TRACE, "adding target: type=0x%hhx, status=%hhu, idx=%d, id=%d, "
 				"rank=%d, ver=%d, in_ver=%d, fseq=%u, flags=0x%x, nr=%u\n",
 				map_comp.co_type, map_comp.co_status, map_comp.co_index,
-				map_comp.co_rank, map_comp.co_ver, map_comp.co_in_ver,
-				map_comp.co_fseq, map_comp.co_flags, map_comp.co_nr);
+				map_comp.co_id, map_comp.co_rank, map_comp.co_ver,
+				map_comp.co_in_ver, map_comp.co_fseq, map_comp.co_flags,
+				map_comp.co_nr);
 
 			rc = pool_buf_attach(map_buf, &map_comp, 1);
 			if (rc != 0)
@@ -1808,6 +1807,144 @@ out:
 	return rc;
 }
 
+static bool
+child_status_check(struct pool_domain *domain, uint32_t status)
+{
+	int i;
+
+	if (domain->do_children == NULL) {
+		for (i = 0; i < domain->do_target_nr; i++) {
+			struct pool_component *comp = &domain->do_targets[i].ta_comp;
+
+			if (!(comp->co_status & status))
+				return false;
+		}
+
+		return true;
+	}
+
+	for (i = 0; i < domain->do_child_nr; i++) {
+		struct pool_component *comp = &domain->do_children[i].do_comp;
+
+		if (!(comp->co_status & status))
+			return false;
+	}
+
+	return true;
+}
+
+/* Domain status update state machine */
+static int
+update_dom_status(struct pool_domain *domain, uint32_t id, uint32_t status, uint32_t version,
+		  bool *updated)
+{
+	int i;
+
+	D_ASSERT(domain->do_targets != NULL);
+
+	/*
+	 * If this component has children, recurse over them.
+	 *
+	 * If the target ID is found in any of the children, activate
+	 * this component and abort the search
+	 */
+	for (i = 0; domain->do_children != NULL && i < domain->do_child_nr; i++) {
+		struct pool_domain *child = &domain->do_children[i];
+		int found;
+
+		found = update_dom_status(child, id, status, version, updated);
+		if (!found)
+			continue;
+
+		switch(status) {
+		case PO_COMP_ST_NEW:
+			/* Dom should only be changed to NEW if its original
+			 * status is UP during revert rebuild.
+			 */
+			if (child->do_comp.co_status == PO_COMP_ST_UP) {
+				D_DEBUG(DB_MD, "rank %u id %u status %u --> %u\n",
+					child->do_comp.co_rank, child->do_comp.co_id,
+					child->do_comp.co_status, status);
+				child->do_comp.co_status = status;
+				child->do_comp.co_in_ver = 0;
+				*updated = true;
+			}
+			break;
+		case PO_COMP_ST_UP:
+			/* Dom should only be changed to UP if its original
+			 * status is NEW|DOWN|DOWNOUT.
+			 */
+			if (child->do_comp.co_status &
+			    (PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT)) {
+				if (child->do_comp.co_status == PO_COMP_ST_DOWN)
+					child->do_comp.co_flags = PO_COMPF_DOWN2UP;
+				D_DEBUG(DB_MD, "rank %u id %u status %u --> %u\n",
+					child->do_comp.co_rank, child->do_comp.co_id,
+					child->do_comp.co_status, status);
+				child->do_comp.co_status = status;
+				child->do_comp.co_in_ver = version;
+				*updated = true;
+			}
+			break;
+		case PO_COMP_ST_UPIN:
+			/* Dom should only be changed to UPIN if its original
+			 * status is UP, otherwise if parts of targets under
+			 * the domain are turns to UP, the domain status might
+			 * be UPIN, then it can not be turned to UP.
+			 */
+			if (child->do_comp.co_status == PO_COMP_ST_UP) {
+				D_DEBUG(DB_MD, "rank %u id %u status %u --> %u\n",
+					child->do_comp.co_rank, child->do_comp.co_id,
+					child->do_comp.co_status, status);
+				child->do_comp.co_status = status;
+				child->do_comp.co_in_ver = version;
+				*updated = true;
+			}
+			break;
+		case PO_COMP_ST_DOWNOUT:
+		case PO_COMP_ST_DOWN:
+			/* Only change to DOWNOUT/DOWN if all of children are DOWNOUT/DOWN */
+			if (child_status_check(child, PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT) &&
+			    (child->do_comp.co_status != status)) {
+				D_DEBUG(DB_MD, "rank %u id %u status %u --> %u\n",
+					child->do_comp.co_rank, child->do_comp.co_id,
+					child->do_comp.co_status, status);
+				if (child->do_comp.co_status == PO_COMP_ST_DOWN)
+					child->do_comp.co_flags = PO_COMPF_DOWN2OUT;
+
+				child->do_comp.co_status = status;
+				if (status == PO_COMP_ST_DOWN)
+					child->do_comp.co_fseq = version;
+				*updated = true;
+			}
+		}
+
+		return found;
+	}
+
+	for (i = 0; i < domain->do_target_nr; i++) {
+		struct pool_component *comp = &domain->do_targets[i].ta_comp;
+
+		if (comp->co_id == id)
+			return 1;
+	}
+
+	return 0;
+}
+
+int
+update_dom_status_by_tgt_id(struct pool_map *map, uint32_t tgt_id, uint32_t status,
+			    uint32_t version, bool *updated)
+{
+	int rc;
+
+	D_ASSERT(map->po_tree != NULL);
+	rc = update_dom_status(map->po_tree, tgt_id, status, version, updated);
+	if (rc < 0)
+		return rc;
+	return 0;
+}
+
 /**
  * Destroy a pool map.
  */
@@ -1901,7 +2038,7 @@ pool_map_find_domain(struct pool_map *map, pool_comp_type_t type, uint32_t id,
 }
 
 /**
- * Find all nodes in the pool map.
+ * Find all ranks in the pool map.
  *
  * \param map	[IN]	pool map to search.
  * \param id	[IN]	id to search.
@@ -1911,7 +2048,7 @@ pool_map_find_domain(struct pool_map *map, pool_comp_type_t type, uint32_t id,
  *                      0 if none.
  */
 int
-pool_map_find_nodes(struct pool_map *map, uint32_t id,
+pool_map_find_ranks(struct pool_map *map, uint32_t id,
 		    struct pool_domain **domain_pp)
 {
 	return pool_map_find_domain(map, PO_COMP_TP_RANK, id,
@@ -1965,14 +2102,14 @@ pool_map_find_target(struct pool_map *map, uint32_t id,
  * \return              domain found by rank.
  */
 struct pool_domain *
-pool_map_find_node_by_rank(struct pool_map *map, uint32_t rank)
+pool_map_find_dom_by_rank(struct pool_map *map, uint32_t rank)
 {
 	struct pool_domain	*doms;
 	struct pool_domain	*found = NULL;
 	int			doms_cnt;
 	int			i;
 
-	doms_cnt = pool_map_find_nodes(map, PO_COMP_ID_ALL, &doms);
+	doms_cnt = pool_map_find_ranks(map, PO_COMP_ID_ALL, &doms);
 	if (doms_cnt <= 0)
 		return NULL;
 
@@ -2013,7 +2150,7 @@ pool_map_find_targets_on_ranks(struct pool_map *map, d_rank_list_t *rank_list,
 	for (i = 0; i < rank_list->rl_nr; i++) {
 		struct pool_domain *dom;
 
-		dom = pool_map_find_node_by_rank(map, rank_list->rl_ranks[i]);
+		dom = pool_map_find_dom_by_rank(map, rank_list->rl_ranks[i]);
 		if (dom == NULL) {
 			pool_target_id_list_free(tgts);
 			return 0;
@@ -2054,7 +2191,7 @@ pool_map_find_target_by_rank_idx(struct pool_map *map, uint32_t rank,
 {
 	struct pool_domain	*dom;
 
-	dom = pool_map_find_node_by_rank(map, rank);
+	dom = pool_map_find_dom_by_rank(map, rank);
 	if (dom == NULL)
 		return 0;
 
@@ -2070,68 +2207,6 @@ pool_map_find_target_by_rank_idx(struct pool_map *map, uint32_t rank,
 
 	return 1;
 }
-
-static int
-activate_new_target(struct pool_domain *domain, uint32_t id)
-{
-	int i;
-
-	D_ASSERT(domain->do_targets != NULL);
-
-	/*
-	 * If this component has children, recurse over them.
-	 *
-	 * If the target ID is found in any of the children, activate
-	 * this component and abort the search
-	 */
-	if (domain->do_children != NULL) {
-		for (i = 0; i < domain->do_child_nr; i++) {
-			int found = activate_new_target(&domain->do_children[i],
-							id);
-			if (found) {
-				domain->do_comp.co_status = PO_COMP_ST_UPIN;
-				return found;
-			}
-		}
-	}
-
-	/*
-	 * Check the targets in this domain to see if they match
-	 *
-	 * If they do, activate them and activate the current domain
-	 */
-	for (i = 0; i < domain->do_target_nr; i++) {
-		struct pool_component *comp = &domain->do_targets[i].ta_comp;
-
-		if (comp->co_id == id && (comp->co_status == PO_COMP_ST_NEW ||
-					  comp->co_status == PO_COMP_ST_UP ||
-					  comp->co_status == PO_COMP_ST_DRAIN)) {
-			comp->co_status = PO_COMP_ST_UPIN;
-			domain->do_comp.co_status = PO_COMP_ST_UPIN;
-			return 1;
-		}
-	}
-
-	return 0;
-}
-
-/**
- * Activate (move to UPIN) a NEW or UP target and all of its parent domains
- *
- * \param map	[IN]		The pool map to search
- * \param id	[IN]		Target ID to search
- *
- * \return		0 if target was not found or not in NEW state
- *                      1 if target was found and activated
- */
-int
-pool_map_activate_new_target(struct pool_map *map, uint32_t id)
-{
-	if (map->po_tree != NULL)
-		return activate_new_target(map->po_tree, id);
-	return 0;
-}
-
 
 /**
  * Check if all targets under one node matching the status.
@@ -2476,7 +2551,7 @@ pmap_comp_failed(struct pool_component *comp)
 {
 	return (comp->co_status == PO_COMP_ST_DOWN) ||
 	       (comp->co_status == PO_COMP_ST_DOWNOUT &&
-		comp->co_flags == PO_COMPF_DOWN2OUT);
+		comp->co_flags & PO_COMPF_DOWN2OUT);
 }
 
 static bool
@@ -2792,7 +2867,7 @@ pool_map_find_by_rank_status(struct pool_map *map,
 
 	*tgt_ppp = NULL;
 	*tgt_cnt = 0;
-	dom = pool_map_find_node_by_rank(map, rank);
+	dom = pool_map_find_dom_by_rank(map, rank);
 	if (dom == NULL)
 		return 0;
 
@@ -2827,7 +2902,7 @@ pool_map_get_ranks(uuid_t pool_uuid, struct pool_map *map, bool get_enabled, d_r
 	struct pool_domain	*domains = NULL;
 	d_rank_list_t		*ranklist = NULL;
 
-	nnodes_tot = pool_map_find_nodes(map, PO_COMP_ID_ALL, &domains);
+	nnodes_tot = pool_map_find_ranks(map, PO_COMP_ID_ALL, &domains);
 	for (i = 0; i < nnodes_tot; i++) {
 		if (pool_map_node_status_match(&domains[i], ENABLED))
 			nnodes_enabled++;
@@ -3017,6 +3092,18 @@ pool_map_set_version(struct pool_map *map, uint32_t version)
 
 	map->po_version = version;
 	return 0;
+}
+
+/**
+ * Bump the pool map version.
+ */
+uint32_t
+pool_map_bump_version(struct pool_map *map)
+{
+	map->po_version++;
+	D_DEBUG(DB_TRACE, "Bump pool map to version %u\n", map->po_version);
+
+	return map->po_version;
 }
 
 int

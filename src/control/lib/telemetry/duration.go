@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -25,8 +25,11 @@ import (
 	"time"
 )
 
+var _ StatsMetric = (*Duration)(nil)
+
 type Duration struct {
 	statsMetric
+	hist *Histogram // optional histogram data
 }
 
 func (d *Duration) Type() MetricType {
@@ -34,18 +37,22 @@ func (d *Duration) Type() MetricType {
 }
 
 func (d *Duration) Value() time.Duration {
+	durValue := BadDuration
 	if d.handle == nil || d.node == nil {
-		return BadDuration
+		return durValue
 	}
 
-	var tms C.struct_timespec
-
-	res := C.d_tm_get_duration(d.handle.ctx, &tms, &d.stats, d.node)
-	if res == C.DER_SUCCESS {
-		return time.Duration(tms.tv_sec)*time.Second + time.Duration(tms.tv_nsec)*time.Nanosecond
+	fetch := func() C.int {
+		var tms C.struct_timespec
+		res := C.d_tm_get_duration(d.handle.ctx, &tms, &d.stats, d.node)
+		if res == C.DER_SUCCESS {
+			durValue = time.Duration(tms.tv_sec)*time.Second + time.Duration(tms.tv_nsec)*time.Nanosecond
+		}
+		return res
 	}
+	d.fetchValWithRetry(fetch)
 
-	return BadDuration
+	return durValue
 }
 
 func (d *Duration) FloatValue() float64 {
@@ -63,6 +70,7 @@ func newDuration(hdl *handle, path string, name *string, node *C.struct_d_tm_nod
 			},
 		},
 	}
+	d.hist = newHistogram(&d.statsMetric)
 
 	// Load up statistics
 	_ = d.Value()

@@ -24,17 +24,21 @@
 #include <unistd.h>
 #include <errno.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <sys/stat.h>
 #include <sys/statfs.h>
 #include <sys/ioctl.h>
+#include <sys/mman.h>
 #include <dirent.h>
+#include <sys/wait.h>
+#include <sys/uio.h>
 
 #include <dfuse_ioctl.h>
 
 /* Tests can be run by specifying the appropriate argument for a test or all will be run if no test
  * is specified.
  */
-static const char *all_tests = "ismdl";
+static const char *all_tests = "ismdlfec";
 
 static void
 print_usage()
@@ -48,31 +52,57 @@ print_usage()
 	print_message("dfuse_test -m|--metadata\n");
 	print_message("dfuse_test -d|--directory\n");
 	print_message("dfuse_test -l|--lowfd\n");
+	print_message("dfuse_test -f|--mmap\n");
+	print_message("dfuse_test -e|--exec\n");
+	/* verifyenv is only run by exec test. Should not be executed directly */
+	/* print_message("dfuse_test    --verifyenv\n");                       */
+	print_message("dfuse_test -c|--cache\n");
 	print_message("Default <dfuse_test> runs all tests\n=============\n");
 	print_message("\n=============================\n");
 }
 
 char *test_dir;
-
 void
 do_openat(void **state)
 {
-	struct stat stbuf0;
-	struct stat stbuf;
-	int         fd;
-	int         rc;
-	char        output_buf[10];
-	char        input_buf[] = "hello";
-	off_t       offset;
-	int         root = open(test_dir, O_PATH | O_DIRECTORY);
+	struct stat  stbuf0;
+	struct stat  stbuf;
+	struct statx stxbuf;
+	int          fd;
+	int          rc;
+	char         output_buf[10];
+	char         input_buf[] = "hello";
+	off_t        offset;
+	int          root = open(test_dir, O_PATH | O_DIRECTORY);
 
 	assert_return_code(root, errno);
+
+	/* Test corner case: empty path in stat() and its variants. */
+	rc = stat("", &stbuf);
+	assert_int_equal(rc, -1);
+	assert_int_equal(errno, ENOENT);
+
+	rc = lstat("", &stbuf);
+	assert_int_equal(rc, -1);
+	assert_int_equal(errno, ENOENT);
+
+	rc = fstatat(root, "", &stbuf, 0);
+	assert_int_equal(rc, -1);
+	assert_int_equal(errno, ENOENT);
+
+	rc = statx(root, "", 0, 0, &stxbuf);
+	assert_int_equal(rc, -1);
+	assert_int_equal(errno, ENOENT);
 
 	fd = openat(root, "openat_file", O_RDWR | O_CREAT | O_EXCL, S_IWUSR | S_IRUSR);
 	assert_return_code(fd, errno);
 
 	/* This will write six bytes, including a \0 terminator */
 	rc = write(fd, input_buf, sizeof(input_buf));
+	assert_return_code(rc, errno);
+
+	/* test fdatasync() */
+	rc = fdatasync(fd);
 	assert_return_code(rc, errno);
 
 	/* First fstat.  IL will forward this to the kernel so it can save ino for future calls */
@@ -172,6 +202,32 @@ do_openat(void **state)
 	assert_return_code(rc, errno);
 }
 
+extern int __open(const char *pathname, int flags, ...);
+void
+do_open(void **state)
+{
+	int  fd;
+	int  rc;
+	int  len;
+	char path[512];
+
+	len = snprintf(path, sizeof(path) - 1, "%s/open_file", test_dir);
+	assert_true(len < (sizeof(path) - 1));
+
+	/* Test O_CREAT with open but without mode. __open() is called to workaround
+	 * "-D_FORTIFY_SOURCE=3". Normally mode is required when O_CREAT is in flag.
+	 * libc seems supporting it although the permission could be undefined.
+	 */
+	fd = __open(path, O_RDWR | O_CREAT | O_EXCL);
+	assert_return_code(fd, errno);
+
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlink(path);
+	assert_return_code(rc, errno);
+}
+
 void
 do_stream(void **state)
 {
@@ -268,9 +324,17 @@ do_stream(void **state)
 	rc = fclose(stream);
 	assert_int_equal(rc, 0);
 
+	fd = openat(root, "stream_file", O_RDWR | O_EXCL, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
+	stream = fdopen(fd, "w+");
+	assert_non_null(stream);
+
+	rc = fputs("Hello World!\n", stream);
+	assert_return_code(rc, errno);
+	fclose(stream);
+
 	rc = unlinkat(root, "stream_file", 0);
 	assert_return_code(rc, errno);
-
 	rc = close(root);
 	assert_return_code(rc, errno);
 }
@@ -311,6 +375,53 @@ out:
 	assert_return_code(rc, errno);
 
 	rc = unlinkat(root, "ioctl_file", 0);
+	assert_return_code(rc, errno);
+
+	rc = close(root);
+	assert_return_code(rc, errno);
+}
+
+void
+do_readv_writev(void **state)
+{
+	int          fd;
+	int          rc;
+	int          root = open(test_dir, O_DIRECTORY);
+	char        *str0 = "hello ";
+	char        *str1 = "world\n";
+	struct iovec iov[2];
+	ssize_t      bytes_written;
+	ssize_t      bytes_read;
+	char         buf_read[16];
+	off_t        off;
+
+	assert_return_code(root, errno);
+
+	/* readv/writev testing */
+	fd = openat(root, "readv_writev_file", O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
+
+	iov[0].iov_base = str0;
+	iov[0].iov_len  = strlen(str0);
+	iov[1].iov_base = str1;
+	iov[1].iov_len  = strlen(str1);
+
+	bytes_written = writev(fd, iov, 2);
+	assert_int_equal(bytes_written, 12);
+
+	off = lseek(fd, 0, SEEK_SET);
+	assert_true(off == 0);
+
+	iov[0].iov_base = buf_read;
+	iov[1].iov_base = buf_read + strlen(str0);
+	bytes_read      = readv(fd, iov, 2);
+	assert_int_equal(bytes_read, 12);
+	assert_true(strncmp(buf_read, "hello world\n", 12) == 0);
+
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlinkat(root, "readv_writev_file", 0);
 	assert_return_code(rc, errno);
 
 	rc = close(root);
@@ -425,14 +536,28 @@ do_mtime(void **state)
 	assert_return_code(rc, errno);
 }
 
+static int
+get_dir_num_entry(DIR *dirp)
+{
+	int            num_entry = 0;
+	struct dirent *ent;
+
+	while ((ent = readdir(dirp)) != NULL) {
+		num_entry++;
+	}
+	return num_entry;
+}
+
 /*
  * Check readdir for issues.
  *
  * Create a directory
  * Populate it
+ * Test scandirat
  * Check the file count
  * Rewind the directory handle
  * Re-check the file count.
+ * seekdir, then verify the number of entries left
  *
  * In order for this test to be idempotent and because it takes time to create the files then
  * ignore errors about file exists when creating.
@@ -440,13 +565,14 @@ do_mtime(void **state)
 void
 do_directory(void **state)
 {
-	int            root;
-	int            dfd;
-	int            rc;
-	int            i;
-	DIR           *dirp;
-	struct dirent *ent;
-	long           pos;
+	int             root;
+	int             dfd;
+	int             rc;
+	int             i;
+	DIR            *dirp;
+	struct dirent **namelist;
+	long            pos;
+	int             entry_count = 100;
 
 	printf("Creating dir and files\n");
 	root = open(test_dir, O_PATH | O_DIRECTORY);
@@ -459,11 +585,11 @@ do_directory(void **state)
 	dfd = openat(root, "wide_dir", O_RDONLY | O_DIRECTORY);
 	assert_return_code(dfd, errno);
 
-	for (i = 0; i < 100; i++) {
+	for (i = 0; i < entry_count; i++) {
 		char fname[17];
 		int  fd;
 
-		rc = snprintf(fname, 17, "file %d", i);
+		rc = snprintf(fname, 17, "file_%02d", i);
 		assert_in_range(rc, 0, 16);
 
 		fd = openat(dfd, fname, O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
@@ -472,6 +598,21 @@ do_directory(void **state)
 		assert_return_code(rc, errno);
 	}
 
+	rc = scandirat(dfd, ".", &namelist, NULL, alphasort);
+	if (strcmp(namelist[0]->d_name, ".") == 0) {
+		entry_count += 2;
+	} else {
+		assert_true(strcmp(namelist[0]->d_name, "file_00") == 0);
+	}
+	assert_int_equal(rc, entry_count);
+	assert_true(strcmp(namelist[rc - 1]->d_name, "file_99") == 0);
+
+	/* free namelist */
+	while (rc--) {
+		free(namelist[rc]);
+	}
+	free(namelist);
+
 	printf("Checking file count\n");
 	dirp = fdopendir(dfd);
 	if (dirp == NULL)
@@ -479,30 +620,99 @@ do_directory(void **state)
 
 	pos = telldir(dirp);
 
-	i     = 0;
 	errno = 0;
-	while ((ent = readdir(dirp)) != NULL) {
-		i++;
-	}
+	rc    = get_dir_num_entry(dirp);
 	if (errno != 0)
 		assert_return_code(-1, errno);
-	printf("File count is %d\n", i);
-	assert_int_equal(i, 100);
+	printf("File count is %d\n", rc);
+	assert_int_equal(rc, entry_count);
 
 	printf("Rewinding and rechecking file count\n");
 	seekdir(dirp, pos);
 
-	i     = 0;
 	errno = 0;
-	while ((ent = readdir(dirp)) != NULL) {
-		i++;
-	}
+	rc    = get_dir_num_entry(dirp);
 	if (errno != 0)
 		assert_return_code(-1, errno);
-	printf("File count is %d\n", i);
-	assert_int_equal(i, 100);
+	printf("File count is %d\n", rc);
+	assert_int_equal(rc, entry_count);
+
+	long           positions[entry_count];
+	struct dirent *ent;
+	i = 0;
+	rewinddir(dirp);
+	positions[i] = telldir(dirp);
+	i++;
+
+	while ((ent = readdir(dirp)) != NULL) {
+		positions[i] = telldir(dirp);
+		assert_true(i <= entry_count);
+		i++;
+	}
+
+	for (i = 0; i < entry_count; i++) {
+		rewinddir(dirp);
+		seekdir(dirp, positions[i]);
+		assert_int_equal(get_dir_num_entry(dirp), entry_count - i);
+	}
+	for (i = 0; i < entry_count; i++) {
+		rewinddir(dirp);
+		readdir(dirp);
+		seekdir(dirp, positions[i]);
+		assert_int_equal(get_dir_num_entry(dirp), entry_count - i);
+	}
 
 	rc = close(dfd);
+	assert_return_code(rc, errno);
+
+	rc = close(root);
+	assert_return_code(rc, errno);
+}
+
+void
+do_mmap(void **state)
+{
+	int   root;
+	int   fd;
+	int   rc;
+	void *addr;
+
+	root = open(test_dir, O_PATH | O_DIRECTORY);
+	assert_return_code(root, errno);
+
+	/* Always unlink the file but do not check for errors.  If running the test manually the
+	 * file might pre-exist and affect the behavior.
+	 */
+	unlinkat(root, "file", 0);
+
+	fd = openat(root, "file", O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+	assert_return_code(root, errno);
+
+	rc = ftruncate(fd, 1024 * 1024);
+	assert_return_code(rc, errno);
+
+	addr = mmap(NULL, 1024 * 1024, PROT_WRITE, MAP_PRIVATE, fd, 0);
+	assert_ptr_not_equal(addr, MAP_FAILED);
+
+	printf("Mapped private to %p\n", addr);
+
+	memset(addr, 0, 1024 * 1024);
+
+	rc = munmap(addr, 1024 * 1024);
+	assert_return_code(rc, errno);
+
+	addr = mmap(NULL, 1024 * 1024, PROT_READ, MAP_SHARED, fd, 0);
+	assert_ptr_not_equal(addr, MAP_FAILED);
+
+	printf("Mapped shared to %p\n", addr);
+
+	rc = munmap(addr, 1024 * 1024);
+	assert_return_code(rc, errno);
+
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlinkat(root, "file", 0);
 	assert_return_code(rc, errno);
 
 	rc = close(root);
@@ -519,7 +729,6 @@ do_lowfd(void **state)
 	int   fd;
 	int   rc;
 	int   i;
-	bool  pil4dfs_loaded = false;
 	char *env_ldpreload;
 	char  fd_path[64];
 	char *path;
@@ -528,9 +737,7 @@ do_lowfd(void **state)
 	if (env_ldpreload == NULL)
 		return;
 
-	if (strstr(env_ldpreload, "libpil4dfs.so"))
-		pil4dfs_loaded = true;
-	else
+	if (strstr(env_ldpreload, "libpil4dfs.so") == NULL)
 		/* libioil cannot pass this test since low fds are only temporarily blocked */
 		return;
 
@@ -547,8 +754,7 @@ do_lowfd(void **state)
 	printf("fd = %d\n", fd);
 	rc = close(fd);
 	assert_return_code(rc, errno);
-	if (pil4dfs_loaded)
-		assert_true(fd >= MIN_DAOS_FD);
+	assert_true(fd >= MIN_DAOS_FD);
 
 	/* now check whether daos uses low fds */
 	path = malloc(PATH_MAX);
@@ -556,18 +762,190 @@ do_lowfd(void **state)
 	for (i = 0; i < MIN_DAOS_FD; i++) {
 		snprintf(fd_path, sizeof(fd_path) - 1, "/proc/self/fd/%d", i);
 		rc = readlink(fd_path, path, PATH_MAX - 1);
-		/* libioil only temporarily block low fds during daos_init().
-		 * libpil4dfs blocks low fds before daos_init() and does not free
-		 * them until applications end.
-		 */
-		if (!pil4dfs_loaded && rc == -1 && errno == ENOENT)
-			continue;
 		assert_true(rc > 0);
 		path[rc] = 0;
 		assert_true(strstr(path, "socket:") == NULL);
 		assert_true(strstr(path, "anon_inode:") == NULL);
 	}
 	free(path);
+}
+
+#define ERR_ENV_UNSET (2)
+
+void
+verify_pil4dfs_env()
+{
+	char *p;
+
+	p = getenv("LD_PRELOAD");
+	if (!p) {
+		printf("Error: LD_PRELOAD is unset.\n");
+		goto err;
+	}
+
+	p = getenv("D_IL_REPORT");
+	if (!p) {
+		printf("Error: D_IL_REPORT is unset.\n");
+		goto err;
+	}
+
+	p = getenv("D_IL_MOUNT_POINT");
+	if (!p) {
+		printf("Error: D_IL_MOUNT_POINT is unset.\n");
+		goto err;
+	}
+
+	p = getenv("D_IL_POOL");
+	if (!p) {
+		printf("Error: D_IL_POOL is unset.\n");
+		goto err;
+	}
+
+	p = getenv("D_IL_CONTAINER");
+	if (!p) {
+		printf("Error: D_IL_CONTAINER is unset.\n");
+		goto err;
+	}
+
+	p = getenv("D_IL_MAX_EQ");
+	if (!p) {
+		printf("Error: D_IL_MAX_EQ is unset.\n");
+		goto err;
+	}
+
+	exit(0);
+
+err:
+	exit(ERR_ENV_UNSET);
+}
+
+/*
+ * fork() to create a child process and call exec() to run this test itself.
+ * This test is only used for libpil4dfs.so.
+ */
+void
+do_exec(void **state)
+{
+	pid_t pid;
+	int   status, rc;
+	char *envp[1] = {NULL};
+	char *argv[3] = {"dfuse_test", "--verifyenv", NULL};
+	char *exe_path;
+	char *env_ldpreload;
+
+	env_ldpreload = getenv("LD_PRELOAD");
+	if (env_ldpreload == NULL)
+		return;
+	if (strstr(env_ldpreload, "libpil4dfs.so") == NULL)
+		return;
+
+	printf("Found libpil4dfs.so.\n");
+	exe_path = malloc(PATH_MAX);
+	assert_non_null(exe_path);
+	rc = readlink("/proc/self/exe", exe_path, PATH_MAX - 1);
+	assert_true(rc > 0);
+	exe_path[rc] = 0;
+
+	/* fork and call execve() */
+	printf("Testing execve().\n");
+	pid = fork();
+	if (pid == 0)
+		execve(exe_path, argv, envp);
+	waitpid(pid, &status, 0);
+	if (WIFEXITED(status))
+		assert_int_equal(WEXITSTATUS(status), 0);
+
+	/* fork and call execv() */
+	printf("Testing execv().\n");
+	pid = fork();
+	if (pid == 0)
+		execv(exe_path, argv);
+	waitpid(pid, &status, 0);
+	if (WIFEXITED(status))
+		assert_int_equal(WEXITSTATUS(status), 0);
+
+	/* fork and call execvp() */
+	printf("Testing execvp().\n");
+	pid = fork();
+	if (pid == 0)
+		execvp(exe_path, argv);
+	waitpid(pid, &status, 0);
+	if (WIFEXITED(status))
+		assert_int_equal(WEXITSTATUS(status), 0);
+
+	/* fork and call execvpe() */
+	printf("Testing execvpe().\n");
+	pid = fork();
+	if (pid == 0)
+		execvpe(exe_path, argv, envp);
+	waitpid(pid, &status, 0);
+	if (WIFEXITED(status))
+		assert_int_equal(WEXITSTATUS(status), 0);
+}
+
+/*
+ * Check the consistency of dir caching in interception library.
+ *
+ * Create a directory
+ * Create a file under this directory
+ * Remove the file
+ * Remove the directory
+ * Create this directory again
+ * Create the same file again
+ * Create a child process with fork and executable cat to show the content of the file
+ *
+ * Failure to pass means dir caching has inconsistency
+ */
+void
+do_cachingcheck(void **state)
+{
+	int   fd;
+	int   rc;
+	int   pid;
+	char  dir_name[256];
+	char  file_name[256];
+	char  exe_name[] = "/usr/bin/cat";
+	char *argv[3];
+
+	snprintf(dir_name, 256, "%s/%s", test_dir, "test_dir");
+	snprintf(file_name, 256, "%s/%s/%s", test_dir, "test_dir", "test_file");
+
+	rc = mkdir(dir_name, 0740);
+	assert_return_code(rc, errno);
+
+	fd = open(file_name, O_WRONLY | O_TRUNC | O_CREAT, 0640);
+	assert_return_code(fd, errno);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlink(file_name);
+	assert_return_code(rc, errno);
+
+	rc = rmdir(dir_name);
+	assert_return_code(rc, errno);
+
+	rc = mkdir(dir_name, 0740);
+	assert_return_code(rc, errno);
+
+	fd = open(file_name, O_WRONLY | O_TRUNC | O_CREAT, 0640);
+	assert_return_code(fd, errno);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	/* fork() to create a child process and exec() to run "cat test_file" */
+	pid = fork();
+	if (pid == 0) {
+		argv[0] = exe_name;
+		argv[1] = file_name;
+		argv[2] = NULL;
+		/* Run command "cat test_file" in a new process */
+		execv(exe_name, argv);
+	}
+	rc = unlink(file_name);
+	assert_return_code(rc, errno);
+
+	rc = rmdir(dir_name);
+	assert_return_code(rc, errno);
 }
 
 static int
@@ -586,10 +964,13 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			printf("=====================\n");
 			const struct CMUnitTest io_tests[] = {
 			    cmocka_unit_test(do_openat),
+			    cmocka_unit_test(do_open),
 			    cmocka_unit_test(do_ioctl),
+			    cmocka_unit_test(do_readv_writev),
 			};
 			nr_failed += cmocka_run_group_tests(io_tests, NULL, NULL);
 			break;
+
 		case 's':
 			printf("\n\n=================");
 			printf("dfuse streaming tests");
@@ -619,6 +1000,7 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			};
 			nr_failed += cmocka_run_group_tests(readdir_tests, NULL, NULL);
 			break;
+
 		case 'l':
 			printf("\n\n=================");
 			printf("dfuse low fd tests");
@@ -627,6 +1009,37 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			    cmocka_unit_test(do_lowfd),
 			};
 			nr_failed += cmocka_run_group_tests(lowfd_tests, NULL, NULL);
+			break;
+
+		case 'f': {
+			const struct CMUnitTest mmap_tests[] = {
+			    cmocka_unit_test(do_mmap),
+			};
+			printf("\n\n=================");
+			printf("dfuse mmap tests");
+			printf("=====================\n");
+			nr_failed += cmocka_run_group_tests(mmap_tests, NULL, NULL);
+			break;
+		}
+
+		case 'e':
+			printf("\n\n=================");
+			printf("dfuse exec tests");
+			printf("=====================\n");
+			const struct CMUnitTest exec_tests[] = {
+			    cmocka_unit_test(do_exec),
+			};
+			nr_failed += cmocka_run_group_tests(exec_tests, NULL, NULL);
+			break;
+
+		case 'c':
+			printf("\n\n=================");
+			printf("dfuse dir cache consistency check");
+			printf("=====================\n");
+			const struct CMUnitTest cache_tests[] = {
+			    cmocka_unit_test(do_cachingcheck),
+			};
+			nr_failed += cmocka_run_group_tests(cache_tests, NULL, NULL);
 			break;
 
 		default:
@@ -653,10 +1066,14 @@ main(int argc, char **argv)
 					       {"stream", no_argument, NULL, 's'},
 					       {"metadata", no_argument, NULL, 'm'},
 					       {"directory", no_argument, NULL, 'd'},
+					       {"mmap", no_argument, NULL, 'f'},
 					       {"lowfd", no_argument, NULL, 'l'},
+					       {"exec", no_argument, NULL, 'e'},
+					       {"verifyenv", no_argument, NULL, 't'},
+					       {"cache", no_argument, NULL, 'c'},
 					       {NULL, 0, NULL, 0}};
 
-	while ((opt = getopt_long(argc, argv, "aM:imsdl", long_options, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "aM:imsdlfetc", long_options, &index)) != -1) {
 		if (strchr(all_tests, opt) != NULL) {
 			tests[ntests] = opt;
 			ntests++;
@@ -667,6 +1084,10 @@ main(int argc, char **argv)
 			break;
 		case 'M':
 			test_dir = optarg;
+			break;
+		case 't':
+			/* only run by child process */
+			verify_pil4dfs_env();
 			break;
 		default:
 			printf("Unknown Option\n");

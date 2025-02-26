@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -74,7 +74,9 @@ test_set_tgt(struct pool_map *po_map, uint32_t id, uint32_t status)
 
 	tgt->ta_comp.co_status = status;
 	tgt->ta_comp.co_fseq = fseq++;
-	pool_map_set_version(po_map, fseq);
+	rc = pool_map_set_version(po_map, fseq);
+	assert_rc_equal(rc, 0);
+
 	print_message("set target id %d status as %d\n", id, status);
 }
 

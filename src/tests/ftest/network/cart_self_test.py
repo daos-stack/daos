@@ -1,5 +1,6 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -54,7 +55,6 @@ class CartSelfTest(TestWithServers):
     def setUp(self):
         """Set up each test case."""
         super().setUp()
-        share_addr = self.params.get("share_addr", "/run/test_params/*")
 
         # Configure the daos server
         self.add_server_manager()
@@ -63,18 +63,13 @@ class CartSelfTest(TestWithServers):
             self.server_managers[-1],
             self.hostlist_servers,
             self.hostfile_servers_slots,
-            self.access_points)
-        self.assertTrue(
-            self.server_managers[-1].set_config_value(
-                "crt_ctx_share_addr", share_addr),
-            "Error updating daos_server 'crt_ctx_share_addr' config setting")
+            self.mgmt_svc_replicas)
 
         # Setup additional environment variables for the server orterun command
-        self.cart_env["CRT_CTX_SHARE_ADDR"] = str(share_addr)
         self.cart_env["CRT_CTX_NUM"] = "8"
-        self.cart_env["CRT_PHY_ADDR_STR"] = \
+        self.cart_env["D_PROVIDER"] = \
             self.server_managers[0].get_config_value("provider")
-        self.cart_env["OFI_INTERFACE"] = \
+        self.cart_env["D_INTERFACE"] = \
             self.server_managers[0].get_config_value("fabric_iface")
         self.cart_env["DAOS_AGENT_DRPC_DIR"] = "/var/run/daos_agent/"
 
@@ -83,14 +78,15 @@ class CartSelfTest(TestWithServers):
 
         # Start the daos server
         self.start_server_managers()
+        self.register_cleanup(self.stop_servers)
 
     def test_self_test(self):
         """Run a few CaRT self-test scenarios.
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
-        :avocado: tags=network,smoke
-        :avocado: tags=unittest,cartselftest,test_self_test
+        :avocado: tags=network,smoke,cart
+        :avocado: tags=CartSelfTest,unittest,test_self_test
         """
         # Setup the orterun command
         orterun = get_job_manager(self, "Orterun", self.SelfTest(self.bin), mpi_type="openmpi")
@@ -109,6 +105,6 @@ class CartSelfTest(TestWithServers):
         try:
             orterun.run()
         except CommandFailure as error:
-            self.test_log.info(
+            self.log.info(
                 "CaRT self_test returned non-zero: %s", str(error))
             self.fail("CaRT self_test returned non-zero")
