@@ -285,8 +285,8 @@ class FtestTagMap():
         return set(','.join(tag_strings).split(','))
 
 
-class TestYamlData():
-    """Represent the data from the test yaml file."""
+class TestConfig():
+    """Represent the test configuration defined in the test yaml file."""
 
     def __init__(self, path, test_name):
         """Initialize the tag mapping.
@@ -300,23 +300,23 @@ class TestYamlData():
             self.__data = yaml.load(f.read(), Loader=AvocadoYamlLoader)
         self.__test_name = test_name
 
-    def __extract_key(self, key, filter=None, key_types=None):
-        """_summary_
+    def __filter_value(self, key, key_filter=None, key_types=None):
+        """Get the test yaml data value for a given key.
 
         Args:
-            key (str): _description_
-            filter (list, optional): _description_. Defaults to None.
-            key_types (_type_, optional): _description_. Defaults to None.
+            key (str): key to lookup in the test yaml data
+            key_filter (list, optional): path names from which to match the key. Defaults to None.
+            key_types (list, optional): key object types to match. Defaults to None.
 
         Returns:
-            list: _description_
+            list: values found for the key
         """
         search = [[self.__data, ["root"]]]
         matches = []
         while search:
             data = search.pop()
             if key in data[0]:
-                if not filter or set(filter) - set(data[1]) == set():
+                if not key_filter or set(key_filter) - set(data[1]) == set():
                     if not key_types or type(data[0][key]) in key_types:
                         matches.append(data[0][key])
             for _key, _value in data[0].items():
@@ -324,7 +324,7 @@ class TestYamlData():
                     search.append([_value, data[1] + [_key]])
         return matches
 
-    def __get_test_method_value(self, key, val_type=None):
+    def test_method_value(self, key, val_type=None):
         """Get the test yaml value for a given key and optional type.
 
         Args:
@@ -334,7 +334,7 @@ class TestYamlData():
         Returns:
             list: _description_
         """
-        return self.__extract_key(self.__test_name, [key], val_type)
+        return self.__filter_value(self.__test_name, [key], val_type)
 
     def value(self, key):
         """Get the test yaml data value for a given key.
@@ -343,7 +343,7 @@ class TestYamlData():
             key (str): key to lookup in the test yaml data
 
         Returns:
-            object: value associated with the test ymal key or None if non existant
+            object: value associated with the test ymal key or None if non existent
         """
         if not self.__data:
             # Handle empty test yaml files
@@ -352,11 +352,11 @@ class TestYamlData():
         if key == "timeout":
             key_types = [int, str]
             # Handle special case for test-specific numeric timeout values
-            value = self.__get_test_method_value("timeouts", key_types)
+            value = self.test_method_value("timeouts", key_types)
         else:
-            value = self.__get_test_method_value(key)
+            value = self.test_method_value(key)
         if not value:
-            value = self.__extract_key(key, key_types=key_types)
+            value = self.__filter_value(key, key_types=key_types)
 
         if value and len(value) == 1:
             # Reduce list for single matches
@@ -748,7 +748,7 @@ def test_tags_util(verbose=False):
 
 
 def test_frequency(tags):
-    """Get the test frequeny from its tags.
+    """Get the test frequency from its tags.
 
     Args:
         tags (dict): test tags
@@ -758,15 +758,15 @@ def test_frequency(tags):
     """
     if "pr" in tags:
         return "pr"
-    elif "daily_regression" in tags:
+    if "daily_regression" in tags:
         return "daily"
-    elif "weekly_regression" in tags:
+    if "weekly_regression" in tags:
         return "weekly"
     return "manual"
 
 
-def run_data(paths=None, tags=None, keys=None, csv_file=None):
-    """Display the tests matching the tags and their requested test yaml data keys.
+def run_config(paths=None, tags=None, keys=None, csv_file=None):
+    """Display the tests matching the tags and their requested test yaml configuration.
 
     Args:
         paths (list, optional): paths to files from which to list via their tags. Defaults to all
@@ -796,7 +796,7 @@ def run_data(paths=None, tags=None, keys=None, csv_file=None):
                 try:
                     output.append(
                         [test_frequency(method_tags), short_file_path, class_name, method_name])
-                    yaml_data = TestYamlData(file_path, method_name)
+                    yaml_data = TestConfig(file_path, method_name)
                     for key in key_list:
                         output[-1].append(yaml_data.value(key))
                 except Exception as error:      # pylint: disable=broad-except
@@ -811,17 +811,13 @@ def run_data(paths=None, tags=None, keys=None, csv_file=None):
         print(f"Generated {csv_file} with {len(output)} records")
 
     else:
-        width = []
+        widths = [0] * len(output[0])
         for line in output:
             for index, column in enumerate(line):
-                size = len(str(column))
-                if index == len(width):
-                    width.append(size)
-                elif size > width[index]:
-                    width[index] = size
-        format_line = "  ".join(list(map(lambda x: f"{{:{x}}}", width)))
+                widths[index] = max(widths[index], len(str(column)))
+        format_line = "  ".join(list(map(lambda x: f"{{:{x}}}", widths)))
         for line in output:
-            print(format_line.format(*list(map(lambda x: str(x), line))))
+            print(format_line.format(*list(map(str, line))))
 
     return 0 if output else 1
 
@@ -852,33 +848,32 @@ def main():
     Returns:
         int: 0 = success
              1 = error
-             2 = code problem
     """
     parser = ArgumentParser(prog='tags')
     subparsers = parser.add_subparsers(
         title='options for the tags command',
         dest='command')
 
-    # Parser for the "data" command and its optional arguments
-    data_parser = subparsers.add_parser(
-        'data',
-        help='list test files and their requested test yaml key data')
-    data_parser.add_argument(
+    # Parser for the "config" command and its optional arguments
+    config_parser = subparsers.add_parser(
+        'config',
+        help='list test files and their requested test configuration values')
+    config_parser.add_argument(
         "--paths",
         nargs="+",
         default=[],
         help="file paths")
-    data_parser.add_argument(
+    config_parser.add_argument(
         "--tags",
         nargs="+",
         type=__comma_separated_arg,
         help="tags used to filter which files to display")
-    data_parser.add_argument(
+    config_parser.add_argument(
         "--keys",
         nargs="+",
         type=__comma_separated_arg,
         help="keys to display from the test yaml")
-    data_parser.add_argument(
+    config_parser.add_argument(
         "--csv",
         type=str,
         default=None,
@@ -935,9 +930,8 @@ def main():
     args = parser.parse_args()
     args.paths = list(map(os.path.realpath, args.paths))
 
-    rc = 2
-    if args.command == "data":
-        rc = run_data(args.paths, args.tags, args.keys, args.csv)
+    if args.command == "config":
+        rc = run_config(args.paths, args.tags, args.keys, args.csv)
     elif args.command == "dump":
         rc = run_dump(args.paths, args.tags)
     elif args.command == "lint":
@@ -953,6 +947,8 @@ def main():
         test_tag_set()
         test_tags_util(args.verbose)
         rc = 0
+    else:
+        raise ValueError(f"Unhandled command option: {args.command}")
 
     return rc
 
