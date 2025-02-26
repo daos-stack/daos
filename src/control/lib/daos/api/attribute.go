@@ -48,8 +48,8 @@ func listDaosAttributes(hdl C.daos_handle_t, at attrType) ([]string, error) {
 	switch at {
 	case poolAttr:
 		rc = daos_pool_list_attr(hdl, nil, &totalSize, nil)
-	/*case contAttr:
-	rc = daos_cont_list_attr(hdl, nil, &totalSize, nil)*/
+	case contAttr:
+		rc = daos_cont_list_attr(hdl, nil, &totalSize, nil)
 	default:
 		return nil, errors.Wrapf(daos.InvalidInput, "unknown attr type %d", at)
 	}
@@ -69,8 +69,8 @@ func listDaosAttributes(hdl C.daos_handle_t, at attrType) ([]string, error) {
 	switch at {
 	case poolAttr:
 		rc = daos_pool_list_attr(hdl, (*C.char)(cNamesBuf), &totalSize, nil)
-	/*case contAttr:
-	rc = daos_cont_list_attr(hdl, (*C.char)(buf), &totalSize, nil)*/
+	case contAttr:
+		rc = daos_cont_list_attr(hdl, (*C.char)(cNamesBuf), &totalSize, nil)
 	default:
 		return nil, errors.Wrapf(daos.InvalidInput, "unknown attr type %d", at)
 	}
@@ -125,8 +125,8 @@ func getDaosAttributes(hdl C.daos_handle_t, at attrType, reqAttrNames []string) 
 	switch at {
 	case poolAttr:
 		rc = daos_pool_get_attr(hdl, C.int(numAttr), &cAttrNames[0], nil, &cAttrSizes[0], nil)
-	/*case contAttr:
-	rc = daos_cont_get_attr(hdl, C.int(numAttr), &attrNames[0], nil, &attrSizes[0], nil)*/
+	case contAttr:
+		rc = daos_cont_get_attr(hdl, C.int(numAttr), &cAttrNames[0], nil, &cAttrSizes[0], nil)
 	default:
 		return nil, errors.Wrapf(daos.InvalidInput, "unknown attr type %d", at)
 	}
@@ -153,8 +153,8 @@ func getDaosAttributes(hdl C.daos_handle_t, at attrType, reqAttrNames []string) 
 	switch at {
 	case poolAttr:
 		rc = daos_pool_get_attr(hdl, C.int(numAttr), &cAttrNames[0], &cAttrValues[0], &cAttrSizes[0], nil)
-	/*case contAttr:
-	rc = daos_cont_get_attr(hdl, C.int(numAttr), &attrNames[0], &attrValues[0], &attrSizes[0], nil)*/
+	case contAttr:
+		rc = daos_cont_get_attr(hdl, C.int(numAttr), &cAttrNames[0], &cAttrValues[0], &cAttrSizes[0], nil)
 	default:
 		return nil, errors.Wrapf(daos.InvalidInput, "unknown attr type %d", at)
 	}
@@ -226,8 +226,8 @@ func setDaosAttributes(hdl C.daos_handle_t, at attrType, attrs daos.AttributeLis
 	switch at {
 	case poolAttr:
 		rc = daos_pool_set_attr(hdl, attrCount, &attrNames[0], &attrValues[0], &attrSizes[0], nil)
-	/*case contAttr:
-	rc = daos_cont_set_attr(hdl, attrCount, &attrNames[0], &valBufs[0], &valSizes[0], nil)*/
+	case contAttr:
+		rc = daos_cont_set_attr(hdl, attrCount, &attrNames[0], &attrValues[0], &attrSizes[0], nil)
 	default:
 		return errors.Wrapf(daos.InvalidInput, "unknown attr type %d", at)
 	}
@@ -258,8 +258,8 @@ func delDaosAttributes(hdl C.daos_handle_t, at attrType, names []string) error {
 	switch at {
 	case poolAttr:
 		rc = daos_pool_del_attr(hdl, C.int(len(attrNames)), &attrNames[0], nil)
-	/*case contAttr:
-	rc = daos_cont_del_attr(hdl, 1, &attrName, nil)*/
+	case contAttr:
+		rc = daos_cont_del_attr(hdl, C.int(len(attrNames)), &attrNames[0], nil)
 	default:
 		return errors.Wrapf(daos.InvalidInput, "unknown attr type %d", at)
 	}
