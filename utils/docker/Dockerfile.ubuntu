@@ -22,11 +22,11 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Install basic tools
 ARG DAOS_LAB_CA_FILE_URL
 # script to setup local repo if available
-COPY ./utils/scripts/helpers/repo-helper-ubuntu.sh /tmp/repo-helper.sh
+COPY ./utils/scripts/helpers/repo-helper-ubuntu.sh /tmp/repo-helper-ubuntu.sh
 
-RUN chmod +x /tmp/repo-helper.sh &&                 \
-    /tmp/repo-helper.sh &&                          \
-    rm -f /tmp/repo-helper.sh
+RUN chmod +x /tmp/repo-helper-ubuntu.sh &&                 \
+    /tmp/repo-helper-ubuntu.sh &&                          \
+    rm -f /tmp/repo-helper-ubuntu.sh
 
 RUN locale-gen en_US.UTF-8
 

@@ -24,10 +24,10 @@ COPY ./utils/scripts/helpers/distro_info.sh /tmp/distro_info.sh
 # script to install OS updates basic tools and maldet
 COPY ./utils/scripts/helpers/install_maldet.sh /tmp/install.sh
 # script to setup local repo if available
-COPY ./utils/scripts/helpers/repo-helper-el8.sh /tmp/repo-helper.sh
+COPY ./utils/scripts/helpers/repo-helper-el8.sh /tmp/repo-helper-el8.sh
 RUN set -e;                                         \
-    chmod +x /tmp/repo-helper.sh /tmp/install.sh && \
-    /tmp/repo-helper.sh
+    chmod +x /tmp/repo-helper-el8.sh /tmp/install.sh && \
+    /tmp/repo-helper-el8.sh
 
 # Add DAOS users
 ARG UID=1000

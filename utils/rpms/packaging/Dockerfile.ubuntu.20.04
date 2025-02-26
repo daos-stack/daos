@@ -13,11 +13,11 @@ ARG BASE_DISTRO
 ARG REPO_FILE_URL
 ARG DAOS_LAB_CA_FILE_URL
 # script to setup local repo if available
-COPY ./utils/scripts/helpers/repo-helper-ubuntu.sh /tmp/repo-helper.sh
+COPY ./utils/scripts/helpers/repo-helper-ubuntu.sh /tmp/repo-helper-ubuntu.sh
 
-RUN chmod +x /tmp/repo-helper.sh &&                 \
-    /tmp/repo-helper.sh                             \
-    rm -f /tmp/repo-helper.sh
+RUN chmod +x /tmp/repo-helper-ubuntu.sh &&                 \
+    /tmp/repo-helper-ubuntu.sh                             \
+    rm -f /tmp/repo-helper-ubuntu.sh
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
     curl gpg
