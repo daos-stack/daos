@@ -395,6 +395,7 @@ pipeline {
                 cancelPreviousBuilds()
             }
         }
+/* stage works, let disable it to save 48s
         stage('Pre-build') {
             when {
                 beforeAgent true
@@ -430,6 +431,7 @@ pipeline {
                 } // stage('Python Bandit check')
             }
         }
+*/
         stage('Build') {
             /* Don't use failFast here as whilst it avoids using extra resources
              * and gives faster results for PRs it's also on for master where we
