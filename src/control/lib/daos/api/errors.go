@@ -21,13 +21,13 @@ import (
 import "C"
 
 var (
-	ErrNoSystemRanks         = errors.New("no ranks in system")
-	ErrContextHandleConflict = errors.New("context already contains a handle for a different pool or container")
-	ErrInvalidPoolHandle     = errors.New("pool handle is nil or invalid")
+	ErrNoSystemRanks          = errors.New("no ranks in system")
+	ErrContextHandleConflict  = errors.New("context already contains a handle for a different pool or container")
+	ErrInvalidPoolHandle      = errors.New("pool handle is nil or invalid")
+	ErrInvalidContainerHandle = errors.New("container handle is nil or invalid")
 
-	errInvalidContainerHandle = errors.New("container handle is nil or invalid")
-	errNilCtx                 = errors.New("nil context")
-	errNoCtxHdl               = errors.New("no handle in context")
+	errNilCtx   = errors.New("nil context")
+	errNoCtxHdl = errors.New("no handle in context")
 )
 
 // dfsError converts a return code from a DFS API
@@ -38,7 +38,7 @@ func dfsError(rc C.int) error {
 	}
 
 	strErr := C.strerror(rc)
-	return errors.Errorf("DFS error %d: %s", rc, C.GoString(strErr))
+	return errors.Errorf("errno %d (%s)", rc, C.GoString(strErr))
 }
 
 // daosError converts a return code from a DAOS API
