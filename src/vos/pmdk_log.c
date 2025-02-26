@@ -37,26 +37,10 @@ static struct {
 
 #undef PMDK_LOG_2_DAOS_LOG_INIT
 
-#define PMDK_LOG_FUNCTION_MAX_FILE_NAME 255
-
 static void
 pmdk_log_function(enum pmemobj_log_level level, const char *file_name, unsigned line_no,
 		  const char *function_name, const char *message)
 {
-	/* normalize file name - remove leading "../" */
-	while ((*file_name == '.') && (*(file_name + 1) == '.') && (*(file_name + 2) == '/')) {
-		file_name += 3;
-	}
-
-	/* add "pmdk/" prefix to file name to be able to detect and filter PMDK messages in NLT */
-	char  file_name_buff[PMDK_LOG_FUNCTION_MAX_FILE_NAME] = "pmdk/";
-	char *local_file_name                                 = file_name_buff + 5;
-	while ((local_file_name < file_name_buff + PMDK_LOG_FUNCTION_MAX_FILE_NAME - 1) &&
-	       (*file_name != '\0')) {
-		*(local_file_name++) = *(file_name++);
-	}
-	*local_file_name = '\0';
-
 /*
  * There is a set of handy macros for each of the message priorities
  * that are used normally to report a message. They can't be used here
@@ -77,7 +61,7 @@ pmdk_log_function(enum pmemobj_log_level level, const char *file_name, unsigned 
  * line number and the function name from the local variables.
  */
 #define PMDK_LOG_NOCHECK(mask, fmt, ...)                                                           \
-	d_log(mask, "%s:%d %s() " fmt, local_file_name, line_no, function_name, ##__VA_ARGS__)
+	d_log(mask, "%s:%d %s() " fmt, file_name, line_no, function_name, ##__VA_ARGS__)
 
 	int *saved_mask = pmemobj_log_level_2_daos_log[level].saved_mask;
 	_D_DEBUG_W_SAVED_MASK(PMDK_LOG_NOCHECK, *saved_mask,
