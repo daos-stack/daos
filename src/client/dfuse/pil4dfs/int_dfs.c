@@ -1063,8 +1063,8 @@ PMPI_Init(int *argc, char ***argv)
 	return rc;
 }
 
-int
-zeInit(int flags)
+static int
+new_zeInit(int flags)
 {
 	int rc;
 
@@ -1127,7 +1127,7 @@ my_strcmp(const char *s1, const char *s2)
 static void *
 get_zeinit_addr(void)
 {
-	return (void *)zeInit;
+	return (void *)new_zeInit;
 }
 
 __attribute__((aligned(16))) static void
@@ -1190,7 +1190,7 @@ new_dlsym_c(void *handle, const char *symbol)
 	next_ze_init = next_dlsym(handle, symbol);
 	if (next_ze_init)
 		/* dlsym() finished successfully, then intercept zeInit() */
-		return zeInit;
+		return new_zeInit;
 	else
 		return next_ze_init;
 
