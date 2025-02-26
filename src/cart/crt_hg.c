@@ -845,7 +845,7 @@ crt_hg_class_init(crt_provider_t provider, int ctx_idx, bool primary, int iface_
 
 	init_info.na_init_info.auth_key = prov_data->cpg_na_config.noc_auth_key;
 
-	if (crt_provider_is_block_mode(provider))
+	if (crt_provider_is_block_mode(provider) && !prov_data->cpg_progress_busy)
 		init_info.na_init_info.progress_mode = 0;
 	else
 		init_info.na_init_info.progress_mode = NA_NO_BLOCK;
@@ -1610,9 +1610,24 @@ crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
 
 	D_ASSERT(hg_ctx != NULL && hg_ctx->chc_bulkcla != NULL);
 	D_ASSERT(sgl != NULL && bulk_hdl != NULL);
-	D_ASSERT(bulk_perm == CRT_BULK_RW || bulk_perm == CRT_BULK_RO);
 
-	flags = (bulk_perm == CRT_BULK_RW) ? HG_BULK_READWRITE : HG_BULK_READ_ONLY;
+	switch (bulk_perm) {
+	case CRT_BULK_RW:
+		flags = HG_BULK_READWRITE;
+		break;
+	case CRT_BULK_WO:
+		flags = HG_BULK_WRITE_ONLY;
+		break;
+	case CRT_BULK_RO:
+		flags = HG_BULK_READ_ONLY;
+		break;
+	default:
+		D_ASSERT(bulk_perm == CRT_BULK_RW || bulk_perm == CRT_BULK_RO ||
+			 bulk_perm == CRT_BULK_WO);
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Invalid permissions");
+		return rc;
+	}
 
 	if (sgl->sg_nr <= CRT_HG_IOVN_STACK) {
 		buf_sizes = buf_sizes_stack;

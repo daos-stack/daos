@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -42,25 +43,25 @@ class Permission(TestWithServers):
         # initialize a python pool object then create the underlying
         # daos storage
         pool = add_pool(self, create=False)
-        self.test_log.debug("Pool initialization successful")
+        self.log.debug("Pool initialization successful")
         pool.create()
-        self.test_log.debug("Pool Creation successful")
+        self.log.debug("Pool Creation successful")
         try:
             pool.connect(1 << permissions)
-            self.test_log.debug("Pool Connect successful")
+            self.log.debug("Pool Connect successful")
         except TestFail as excep:
             self.log.error(str(excep))
             if expected_result == RESULT_PASS:
                 self.fail("Test was expected to pass but it failed at pool.connect.")
 
         container = add_container(self, pool, create=False)
-        self.test_log.debug("Container initialization successful")
+        self.log.debug("Container initialization successful")
         try:
             container.create()
-            self.test_log.debug("Container create successful")
+            self.log.debug("Container create successful")
             # now open it
             container.open()
-            self.test_log.debug("Container open successful")
+            self.log.debug("Container open successful")
         except TestFail as error:
             self.log.error(str(error))
             if expected_result == RESULT_PASS:
@@ -72,7 +73,7 @@ class Permission(TestWithServers):
         akey = b"this is the akey"
         try:
             container.container.write_an_obj(thedata, size, dkey, akey)
-            self.test_log.debug("Container write successful")
+            self.log.debug("Container write successful")
             if expected_result == RESULT_FAIL:
                 self.fail("Test was expected to fail at container operations but it passed.")
         except DaosApiError as error:
@@ -80,5 +81,5 @@ class Permission(TestWithServers):
             if expected_result == RESULT_PASS:
                 self.fail("Test was expected to pass but it failed at container operations.")
             else:
-                self.test_log.debug("Test expected failed in container create, r/w.")
-        self.test_log.debug("Test Passed.")
+                self.log.debug("Test expected failed in container create, r/w.")
+        self.log.debug("Test Passed.")

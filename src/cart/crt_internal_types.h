@@ -56,38 +56,39 @@ enum crt_traffic_class { CRT_TRAFFIC_CLASSES };
 
 struct crt_prov_gdata {
 	/** NA plugin type */
-	int			cpg_provider;
+	int                  cpg_provider;
 
-	struct crt_na_config	cpg_na_config;
+	struct crt_na_config cpg_na_config;
 	/** Context0 URI */
-	char			cpg_addr[CRT_ADDR_STR_MAX_LEN];
+	char                 cpg_addr[CRT_ADDR_STR_MAX_LEN];
 
 	/** CaRT contexts list */
-	d_list_t		cpg_ctx_list;
+	d_list_t             cpg_ctx_list;
 	/** actual number of items in CaRT contexts list */
-	int			cpg_ctx_num;
+	int                  cpg_ctx_num;
 	/** maximum number of contexts user wants to create */
-	uint32_t		cpg_ctx_max_num;
+	uint32_t             cpg_ctx_max_num;
 
 	/** free-list of indices */
-	bool			cpg_used_idx[CRT_SRV_CONTEXT_NUM];
+	bool                 cpg_used_idx[CRT_SRV_CONTEXT_NUM];
 
 	/** Hints to mercury/ofi for max expected/unexp sizes */
-	uint32_t		cpg_max_exp_size;
-	uint32_t		cpg_max_unexp_size;
+	uint32_t             cpg_max_exp_size;
+	uint32_t             cpg_max_unexp_size;
 
 	/** Number of remote tags */
-	uint32_t		cpg_num_remote_tags;
-	uint32_t		cpg_last_remote_tag;
+	uint32_t             cpg_num_remote_tags;
+	uint32_t             cpg_last_remote_tag;
 
 	/** Set of flags */
-	unsigned int		cpg_sep_mode		: 1,
-				cpg_primary		: 1,
-				cpg_contig_ports	: 1,
-				cpg_inited		: 1;
+	bool                 cpg_sep_mode;
+	bool                 cpg_primary;
+	bool                 cpg_contig_ports;
+	bool                 cpg_inited;
+	bool                 cpg_progress_busy;
 
 	/** Mutext to protect fields above */
-	pthread_mutex_t		cpg_mutex;
+	pthread_mutex_t      cpg_mutex;
 };
 
 #define MAX_NUM_SECONDARY_PROVS 2
@@ -177,11 +178,6 @@ struct crt_gdata {
 
 extern struct crt_gdata		crt_gdata;
 
-struct crt_prog_cb_priv {
-	crt_progress_cb		 cpcp_func;
-	void			*cpcp_args;
-};
-
 struct crt_event_cb_priv {
 	crt_event_cb		 cecp_func;
 	void			*cecp_args;
@@ -230,6 +226,7 @@ struct crt_event_cb_priv {
 	ENV_STR(D_PORT)                                                                            \
 	ENV(D_PORT_AUTO_ADJUST)                                                                    \
 	ENV(D_THREAD_MODE_SINGLE)                                                                  \
+	ENV(D_PROGRESS_BUSY)                                                                       \
 	ENV(D_POST_INCR)                                                                           \
 	ENV(D_POST_INIT)                                                                           \
 	ENV(D_MRECV_BUF)                                                                           \
@@ -355,10 +352,6 @@ crt_env_dump(void)
 
 /* structure of global fault tolerance data */
 struct crt_plugin_gdata {
-	/* list of progress callbacks */
-	size_t				 cpg_prog_size[CRT_SRV_CONTEXT_NUM];
-	struct crt_prog_cb_priv		*cpg_prog_cbs[CRT_SRV_CONTEXT_NUM];
-	struct crt_prog_cb_priv		*cpg_prog_cbs_old[CRT_SRV_CONTEXT_NUM];
 	/* list of event notification callbacks */
 	size_t				 cpg_event_size;
 	struct crt_event_cb_priv	*cpg_event_cbs;
@@ -402,6 +395,10 @@ struct crt_context {
 	void			*cc_rpc_cb_arg;
 	crt_rpc_task_t		 cc_rpc_cb;	/** rpc callback */
 	crt_rpc_task_t		 cc_iv_resp_cb;
+
+	/* progress callback */
+	void                    *cc_prog_cb_arg;
+	crt_progress_cb          cc_prog_cb;
 
 	/** RPC tracking */
 	/** in-flight endpoint tracking hash table */

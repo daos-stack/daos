@@ -1,6 +1,7 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -149,6 +150,7 @@ extern uint32_t vos_agg_gap;
 
 extern unsigned int vos_agg_nvme_thresh;
 extern bool vos_dkey_punch_propagate;
+extern bool vos_skip_old_partial_dtx;
 
 static inline uint32_t vos_byte2blkcnt(uint64_t bytes)
 {
@@ -512,6 +514,8 @@ struct vos_dtx_cmt_ent {
 #define DCE_XID(dce)		((dce)->dce_base.dce_xid)
 #define DCE_EPOCH(dce)		((dce)->dce_base.dce_epoch)
 #define DCE_CMT_TIME(dce)	((dce)->dce_base.dce_cmt_time)
+
+#define EVT_DESC_MAGIC          0xbeefdead
 
 extern uint64_t vos_evt_feats;
 
@@ -2066,5 +2070,45 @@ bool vos_bkt_array_subset(struct vos_bkt_array *super, struct vos_bkt_array *sub
 int vos_bkt_array_add(struct vos_bkt_array *bkts, uint32_t bkt_id);
 int vos_bkt_array_pin(struct vos_pool *pool, struct vos_bkt_array *bkts,
 		      struct umem_pin_handle **pin_hdl);
+
+/** Validate the provided svt.
+ *
+ * Note: It is designed for catastrophic recovery. Not to perform at run-time.
+ *
+ * \param svt[in]
+ * \param dtx_lid[in]	local id of the DTX entry the evt is supposed to belong to
+ *
+ * \return true if svt is valid.
+ **/
+bool
+vos_irec_is_valid(const struct vos_irec_df *svt, uint32_t dtx_lid);
+
+enum {
+	DTX_UMOFF_ILOG = (1 << 0),
+	DTX_UMOFF_SVT  = (1 << 1),
+	DTX_UMOFF_EVT  = (1 << 2),
+};
+
+static inline void
+dtx_type2umoff_flag(umem_off_t *rec, uint32_t type)
+{
+	uint8_t flag = 0;
+
+	switch (type) {
+	case DTX_RT_ILOG:
+		flag = DTX_UMOFF_ILOG;
+		break;
+	case DTX_RT_SVT:
+		flag = DTX_UMOFF_SVT;
+		break;
+	case DTX_RT_EVT:
+		flag = DTX_UMOFF_EVT;
+		break;
+	default:
+		D_ASSERT(0);
+	}
+
+	umem_off_set_flags(rec, flag);
+}
 
 #endif /* __VOS_INTERNAL_H__ */

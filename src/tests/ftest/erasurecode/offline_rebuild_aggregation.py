@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -41,7 +42,7 @@ class EcodAggregationOffRebuild(ErasureCodeIor):
         self.ior_read_dataset()
 
         # Kill the last server rank
-        self.server_managers[0].stop_ranks([self.server_count - 1], self.d_log, force=True)
+        self.server_managers[0].stop_ranks([self.server_count - 1], force=True)
 
         # Wait for rebuild to complete
         self.pool.wait_for_rebuild_to_start()
@@ -52,7 +53,7 @@ class EcodAggregationOffRebuild(ErasureCodeIor):
         self.ior_read_dataset()
 
         # Kill the another server rank
-        self.server_managers[0].stop_ranks([self.server_count - 2], self.d_log, force=True)
+        self.server_managers[0].stop_ranks([self.server_count - 2], force=True)
 
         # Wait for rebuild to complete
         self.pool.wait_for_rebuild_to_start()
@@ -121,7 +122,7 @@ class EcodAggregationOffRebuild(ErasureCodeIor):
         # Aggregation will start in 20 seconds after it sets to time mode.
         # So wait for 20 seconds and kill the last server rank
         time.sleep(20)
-        self.server_managers[0].stop_ranks([self.server_count - 1], self.d_log, force=True)
+        self.server_managers[0].stop_ranks([self.server_count - 1], force=True)
 
         # Verify if Aggregation is getting started
         if not any(self.check_aggregation_status().values()):
@@ -136,7 +137,7 @@ class EcodAggregationOffRebuild(ErasureCodeIor):
         self.ior_read_dataset()
 
         # Kill the another server rank
-        self.server_managers[0].stop_ranks([self.server_count - 2], self.d_log, force=True)
+        self.server_managers[0].stop_ranks([self.server_count - 2], force=True)
 
         # Wait for rebuild to complete
         self.pool.wait_for_rebuild_to_start()

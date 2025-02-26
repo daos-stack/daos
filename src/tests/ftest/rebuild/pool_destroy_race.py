@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -72,7 +73,7 @@ class RbldPoolDestroyWithIO(TestWithServers):
 
         # Kill the server and trigger rebuild
         self.log_step(f'Starting rebuild by killing rank {rank}')
-        self.server_managers[0].stop_ranks([rank], self.d_log, force=True)
+        self.server_managers[0].stop_ranks([rank], force=True)
 
         # Wait for rebuild to start.
         self.log_step('Wait for rebuild to start')
@@ -95,4 +96,4 @@ class RbldPoolDestroyWithIO(TestWithServers):
         self.log_step('Verify the space was reclaimed')
         pool.query()
 
-        self.test_log.debug("Test Passed.")
+        self.log.debug("Test Passed.")

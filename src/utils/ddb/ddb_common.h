@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -35,11 +36,13 @@
 	else \
 		printf(str); } while (0)
 
-#define ddb_errorf(ctx, fmt, ...) \
-	do { if ((ctx)->dc_io_ft.ddb_print_error) \
-		(ctx)->dc_io_ft.ddb_print_error(fmt, __VA_ARGS__); \
-	else                            \
-		printf(fmt, __VA_ARGS__); \
+#define ddb_errorf(ctx, fmt, ...)                                                                  \
+	do {                                                                                       \
+		if ((ctx)->dc_io_ft.ddb_print_error)                                               \
+			(ctx)->dc_io_ft.ddb_print_error("At %s:%d: " fmt, __FILE__, __LINE__,      \
+							__VA_ARGS__);                              \
+		else                                                                               \
+			printf("At %s:%d: " fmt, __FILE__, __LINE__, __VA_ARGS__);                 \
 	} while (0)
 
 struct argv_parsed {

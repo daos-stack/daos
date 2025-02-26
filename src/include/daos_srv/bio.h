@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2018-2025 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1009,7 +1009,8 @@ int bio_copy(struct bio_io_context *ioctxt, struct umem_instance *umem,
 	     struct bio_csum_desc *csum_desc);
 
 enum bio_mc_flags {
-	BIO_MC_FL_RDB		= (1UL << 0),	/* for RDB */
+	BIO_MC_FL_RDB      = (1UL << 0), /* for RDB */
+	BIO_MC_FL_RECREATE = (1UL << 1), /* to identify recreate (e.g., in replace op) */
 };
 
 /*

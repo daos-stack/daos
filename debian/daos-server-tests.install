@@ -1,4 +1,5 @@
 usr/bin/dtx_tests
+usr/bin/dtx_ut
 usr/bin/jump_pl_map
 usr/bin/ring_pl_map
 usr/bin/evt_ctl
@@ -9,6 +10,7 @@ usr/bin/bio_ut
 usr/bin/vea_ut
 usr/bin/vos_tests
 usr/bin/ddb_tests
+usr/bin/ddb_ut
 usr/bin/vea_stress
 usr/bin/vos_perf
 usr/bin/obj_ctl
