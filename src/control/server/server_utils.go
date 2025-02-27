@@ -425,8 +425,20 @@ func updateHugeMemValues(srv *server, ei *EngineInstance, mi *common.MemInfo) er
 	}
 	ei.RUnlock()
 
+	cfgNrTgts, nrSysXS := srv.cfg.GetTgtCounts(srv.log)
+
+	minHugepages := 0
+	if cfgNrTgts != 0 {
+		// Calculate minimum number of hugepages for all configured engines.
+		mhps, err := storage.CalcMinHugepages(mi.HugepageSizeKiB, cfgNrTgts+nrSysXS)
+		if err != nil {
+			return err
+		}
+		minHugepages = mhps
+	}
+
 	// Calculate mem_size per I/O engine (in MB) from number of hugepages required per engine.
-	nrPagesRequired := srv.cfg.NrHugepages / len(srv.cfg.Engines)
+	nrPagesRequired := minHugepages / len(srv.cfg.Engines)
 	pageSizeMiB := mi.HugepageSizeKiB / humanize.KiByte // kib to mib
 	memSizeReqMiB := nrPagesRequired * pageSizeMiB
 	memSizeFreeMiB := mi.HugepagesFree * pageSizeMiB
@@ -554,6 +566,12 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 	engine.OnInstanceExit(func(_ context.Context, _ uint32, _ ranklist.Rank, _ error, _ int) error {
 		if engine.storage.BdevRoleMetaConfigured() {
 			return engine.storage.UnmountTmpfs()
+		}
+		if !srv.cfg.DisableHugepages {
+			// Attempt to remove unused hugepages, log error only.
+			if err := cleanEngineHugepages(srv); err != nil {
+				srv.log.Errorf(err.Error())
+			}
 		}
 		return nil
 	})
