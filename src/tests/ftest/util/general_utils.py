@@ -451,7 +451,7 @@ def get_host_data(hosts, command, text, error, timeout=None):
         return [{"hosts": result.failed_hosts, "data": data_error}]
 
     return [
-        {"hosts": _hosts, "data": stdout}
+        {"hosts": NodeSet(_hosts), "data": stdout}
         for _hosts, stdout in result.all_stdout.items()]
 
 
