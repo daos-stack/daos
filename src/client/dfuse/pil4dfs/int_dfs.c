@@ -3583,6 +3583,7 @@ statfs(const char *pathname, struct statfs *sfs)
 	sfs->f_files  = -1;
 	sfs->f_ffree  = -1;
 	sfs->f_bavail = sfs->f_bfree;
+	sfs->f_type   = DAOS_SUPER_MAGIC;
 
 	drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
@@ -3640,6 +3641,7 @@ fstatfs(int fd, struct statfs *sfs)
 	sfs->f_files  = -1;
 	sfs->f_ffree  = -1;
 	sfs->f_bavail = sfs->f_bfree;
+	sfs->f_type   = DAOS_SUPER_MAGIC;
 
 	return 0;
 }
@@ -3691,6 +3693,7 @@ statvfs(const char *pathname, struct statvfs *svfs)
 	svfs->f_files  = -1;
 	svfs->f_ffree  = -1;
 	svfs->f_bavail = svfs->f_bfree;
+	svfs->f_fsid   = DAOS_SUPER_MAGIC;
 
 	drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
