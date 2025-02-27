@@ -45,9 +45,9 @@ def run_ior_loop(manager, cont_labels):
             results.append("ior_cmd_time = {}".format(ior_cmd_time))
 
     if errors:
+        err_str = "\n".join(errors)
         raise CommandFailure(
-            "IOR failed in {}/{} loops: {}".format(
-                len(errors), len(cont_labels), "\n".join(errors)))
+            f"IOR failed in {len(errors)}/{len(cont_labels)} loops: {err_str}")
     return results
 
 
@@ -454,6 +454,11 @@ class ObjectMetadata(TestWithServers):
 
         processes = self.params.get("slots", "/run/ior/clientslots/*")
 
+        # Generate all container labels upfront such that write and read use the same container
+        cont_labels = [
+            [f'cont_{index}_{loop}' for loop in range(files_per_thread)]
+            for index in range(total_ior_threads)]
+
         # Launch threads to run IOR to write data, restart the agents and
         # servers, and then run IOR to read the data
         for operation in ("write", "read"):
@@ -479,11 +484,8 @@ class ObjectMetadata(TestWithServers):
                 # Disable cleanup methods for all ior commands.
                 ior_managers[-1].register_cleanup_method = None
 
-                # Generate labels such that write and read use the same container
-                cont_labels = [f'cont_{index}_{loop}' for loop in range(files_per_thread)]
-
                 # Add a thread for these IOR arguments
-                thread_manager.add(manager=ior_managers[-1], cont_labels=cont_labels)
+                thread_manager.add(manager=ior_managers[-1], cont_labels=cont_labels[index])
                 self.log.info("Created %s thread %s", operation, index)
 
             # Manually add one cleanup method for all ior threads
