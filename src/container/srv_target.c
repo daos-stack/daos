@@ -1792,9 +1792,8 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 		DP_UUID(pool_uuid), DP_UUID(cont_uuid), DP_UUID(cont_hdl_uuid));
 
 retry:
-	rc = ds_pool_thread_collective(pool_uuid,
-				       PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
-				       cont_open_one, &arg, DSS_ULT_DEEP_STACK);
+	rc = ds_pool_thread_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
+				       PO_COMP_ST_DOWNOUT, cont_open_one, &arg, 0);
 	if (rc != 0) {
 		if (rc == -DER_AGAIN) {
 			dss_sleep(50);
@@ -2106,9 +2105,9 @@ ds_cont_tgt_snapshots_update(uuid_t pool_uuid, uuid_t cont_uuid,
 	 * the up targets in this scenario. The target property will be updated
 	 * upon initiating container aggregation.
 	 */
-	return ds_pool_thread_collective(
-	    pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT | PO_COMP_ST_UP,
-	    cont_snap_update_one, &args, DSS_ULT_DEEP_STACK);
+	return ds_pool_thread_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
+					 PO_COMP_ST_DOWNOUT | PO_COMP_ST_UP,
+					 cont_snap_update_one, &args, 0);
 }
 
 void
