@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -51,15 +52,19 @@ class DaosServerDumpTest(TestWithServers):
         :avocado: tags=server
         :avocado: tags=DaosServerDumpTest,test_daos_server_dump_basic
         """
-
-        ret_codes = dump_engines_stacks(self.hostlist_servers,
-                                        added_filter=r"'\<(grep|defunct)\>'")
+        result = dump_engines_stacks(
+            self.hostlist_servers, added_filter=r"'\<(grep|defunct)\>'")
         # at this time there is no way to know when Argobots ULTs stacks
         # has completed, see DAOS-1452/DAOS-9942.
-        if 1 in ret_codes:
-            self.log.info("Dumped daos_engine stacks on %s", str(ret_codes[1]))
-        if 0 in ret_codes:
-            self.fail("No daos_engine processes found on {}".format(str(ret_codes[0])))
+        if result.timeout_hosts:
+            # This is fatal
+            self.fail(f"Timeout dumping daos_engine stacks on {result.timeout_hosts}")
+        if result.failed_hosts:
+            # This is actually what we want
+            self.log.info("Dumped daos_engine stacks on %s", str(result.failed_hosts))
+        if result.passed_hosts:
+            # This is actually a failure
+            self.fail(f"No daos_engine processes found on {result.passed_hosts}")
 
         self.log.info("Test passed!")
 

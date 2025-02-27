@@ -48,7 +48,8 @@ class DmgStorageScanSCMTest(ControlTestBase):
                 errors.append(f"{pmem_name} didn't exist under /dev!")
 
             # Verify the Socket ID.
-            numa_node_path = f"/sys/class/block/{pmem_name}/device/numa_node"
+            numa_node_path = os.path.join(
+                os.sep, "sys", "class", "block", pmem_name, "device", "numa_node")
             command = f"cat {numa_node_path}"
             result = run_remote(self.log, self.hostlist_servers, command)
             if not result.passed:

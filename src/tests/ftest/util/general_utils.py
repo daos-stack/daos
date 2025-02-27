@@ -441,32 +441,17 @@ def get_host_data(hosts, command, text, error, timeout=None):
 
     """
     log = getLogger()
-    host_data = []
     data_error = "[ERROR]"
 
     # Find the data for each specified servers
     log.info("  Obtaining %s data on %s", text, hosts)
-    results = run_pcmd(hosts, command, False, timeout, None)
-    errors = [
-        item["exit_status"]
-        for item in results if item["exit_status"] != 0]
-    if errors:
-        log.info("    %s on the following hosts:", error)
-        for result in results:
-            if result["exit_status"] in errors:
-                log.info(
-                    "      %s: rc=%s, interrupted=%s, command=\"%s\":",
-                    result["hosts"], result["exit_status"],
-                    result["interrupted"], result["command"])
-                for line in result["stdout"]:
-                    log.info("        %s", line)
-        host_data.append({"hosts": hosts, "data": data_error})
-    else:
-        for result in results:
-            host_data.append(
-                {"hosts": result["hosts"], "data": "\n".join(result["stdout"])})
+    result = run_remote(log, hosts, command, verbose=False, timeout=timeout)
+    if result.failed_hosts:
+        return [{"hosts": result.failed_hosts, "data": data_error}]
 
-    return host_data
+    return [
+        {"hosts": _hosts, "data": stdout}
+        for _hosts, stdout in result.all_stdout.items()]
 
 
 def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
@@ -687,15 +672,17 @@ def dump_engines_stacks(hosts, verbose=True, timeout=60, added_filter=None):
             engines.
 
     Returns:
-        dict: a dictionary of return codes keys and accompanying NodeSet
-            values indicating which hosts yielded the return code.
+        CommandResult: groups of command results from the same hosts with the same return status
             Return code keys:
                 0   No engine matched the criteria / No engine signaled.
                 1   One or more engine matched the criteria and a signal was
                     sent.
+        None: if hosts is None
 
     """
-    result = {}
+    if hosts is None:
+        return None
+
     log = getLogger()
     log.info("Dumping ULT stacks of engines on %s", hosts)
 
@@ -705,22 +692,19 @@ def dump_engines_stacks(hosts, verbose=True, timeout=60, added_filter=None):
     else:
         ps_cmd = "/usr/bin/pgrep --list-full daos_engine"
 
-    if hosts is not None:
-        commands = [
-            "rc=0",
-            "if " + ps_cmd,
-            "then rc=1",
-            "sudo pkill --signal USR2 daos_engine",
-            # leave some time for ABT info/stacks dump to complete.
-            # at this time there is no way to know when Argobots ULTs stacks
-            # has completed, see DAOS-1452/DAOS-9942.
-            "sleep 30",
-            "fi",
-            "exit $rc",
-        ]
-        result = pcmd(hosts, "; ".join(commands), verbose, timeout, None)
-
-    return result
+    command = ":" .join([
+        "rc=0",
+        "if " + ps_cmd,
+        "then rc=1",
+        "sudo pkill --signal USR2 daos_engine",
+        # leave some time for ABT info/stacks dump to complete.
+        # at this time there is no way to know when Argobots ULTs stacks
+        # has completed, see DAOS-1452/DAOS-9942.
+        "sleep 30",
+        "fi",
+        "exit $rc",
+    ])
+    return run_remote(log, hosts, command, verbose=verbose, timeout=timeout)
 
 
 def get_log_file(name):

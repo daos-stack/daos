@@ -123,8 +123,7 @@ class DdbCommand(DdbCommandBase):
                 called.
 
         Returns:
-            dict: A list of dictionaries with each entry containing output, exit
-                status, and interrupted status common to each group of hosts.
+            CommandResult: groups of command results from the same hosts with the same return status
 
         """
         cmd = ["ls"]
@@ -149,8 +148,7 @@ class DdbCommand(DdbCommandBase):
                 /var/tmp/daos_testing/<test_name>/my_out.txt
 
         Returns:
-            dict: A list of dictionaries with each entry containing output, exit
-                status, and interrupted status common to each group of hosts.
+            CommandResult: groups of command results from the same hosts with the same return status
 
         """
         self.write_mode.value = False
@@ -172,8 +170,7 @@ class DdbCommand(DdbCommandBase):
             load_file_path (str): Path of the file that contains the data to load.
 
         Returns:
-            dict: A list of dictionaries with each entry containing output, exit
-                status, and interrupted status common to each group of hosts.
+            CommandResult: groups of command results from the same hosts with the same return status
 
         """
         self.write_mode.value = True
@@ -190,8 +187,7 @@ class DdbCommand(DdbCommandBase):
                 container, second object.
 
         Returns:
-            dict: A list of dictionaries with each entry containing output, exit
-                status, and interrupted status common to each group of hosts.
+            CommandResult: groups of command results from the same hosts with the same return status
 
         """
         self.write_mode.value = True
@@ -207,8 +203,7 @@ class DdbCommand(DdbCommandBase):
                 first container, second object, second dkey. Needs to be object or after.
 
         Returns:
-            dict: A list of dictionaries with each entry containing output, exit
-                status, and interrupted status common to each group of hosts.
+            CommandResult: groups of command results from the same hosts with the same return status
 
         """
         self.write_mode.value = False
@@ -224,8 +219,7 @@ class DdbCommand(DdbCommandBase):
                 first container, second object, second dkey. Needs to be object or after.
 
         Returns:
-            dict: A list of dictionaries with each entry containing output, exit
-                status, and interrupted status common to each group of hosts.
+            CommandResult: groups of command results from the same hosts with the same return status
 
         """
         self.write_mode.value = False
@@ -241,8 +235,7 @@ class DdbCommand(DdbCommandBase):
                 first container, second object, second dkey. Needs to be object or after.
 
         Returns:
-            dict: A list of dictionaries with each entry containing output, exit
-                status, and interrupted status common to each group of hosts.
+            CommandResult: groups of command results from the same hosts with the same return status
 
         """
         self.write_mode.value = False
@@ -258,8 +251,7 @@ class DdbCommand(DdbCommandBase):
                 e.g., [0]/[1]/[1] for first container, second object, second dkey.
 
         Returns:
-            dict: A list of dictionaries with each entry containing output, exit
-                status, and interrupted status common to each group of hosts.
+            CommandResult: groups of command results from the same hosts with the same return status
 
         """
         self.write_mode.value = False
@@ -279,8 +271,7 @@ class DdbCommand(DdbCommandBase):
             active (str): -a flag. Defaults to False.
 
         Returns:
-            dict: A list of dictionaries with each entry containing output, exit
-                status, and interrupted status common to each group of hosts.
+            CommandResult: groups of command results from the same hosts with the same return status
 
         """
         self.write_mode.value = False
@@ -304,8 +295,7 @@ class DdbCommand(DdbCommandBase):
                 matter as long as it's valid. Defaults to [0].
 
         Returns:
-            dict: A list of dictionaries with each entry containing output, exit
-                status, and interrupted status common to each group of hosts.
+            CommandResult: groups of command results from the same hosts with the same return status
 
         """
         self.write_mode.value = True
