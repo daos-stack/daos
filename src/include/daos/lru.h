@@ -130,6 +130,9 @@ daos_lru_ref_release(struct daos_lru_cache *lcache, struct daos_llink *llink);
 static inline void
 daos_lru_ref_evict(struct daos_lru_cache *lcache, struct daos_llink *llink)
 {
+	if (llink->ll_evicted)
+		return;
+
 	llink->ll_evicted = 1;
 	d_hash_rec_evict_at(&lcache->dlc_htable, &llink->ll_link);
 }
