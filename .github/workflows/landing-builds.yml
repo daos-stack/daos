@@ -35,7 +35,7 @@ jobs:
   # for distros where we only want to build on master and not PRs see the Build-branch job below.
   Prepare:
     name: Create Docker images
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       max-parallel: 1
@@ -44,7 +44,7 @@ jobs:
         include:
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:mantic
+            with: ubuntu:oracular
           - distro: rocky
             base: el.9
             with: rockylinux/rockylinux:9
@@ -88,7 +88,7 @@ jobs:
   Build-and-test:
     name: Run DAOS/NLT tests
     needs: Prepare
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     permissions:
       # https://github.com/EnricoMi/publish-unit-test-result-action#permissions
       checks: write
@@ -99,7 +99,7 @@ jobs:
         include:
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:mantic
+            with: ubuntu:oracular
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
@@ -138,7 +138,8 @@ jobs:
         run: docker cp build-post:/home/daos/daos/nlt-junit.xml ./
       - name: Publish NLT test results
         if: always()
-        uses: EnricoMi/publish-unit-test-result-action@v1.17
+        # yamllint disable-line rule:line-length
+        uses: EnricoMi/publish-unit-test-result-action@170bf24d20d201b842d7a52403b73ed297e6645b  # v2.18.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           files: nlt-junit.xml
@@ -148,7 +149,7 @@ jobs:
   Build:
     name: Build DAOS in image
     needs: Prepare
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       max-parallel: 2
@@ -158,7 +159,7 @@ jobs:
         include:
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:mantic
+            with: ubuntu:oracular
           - distro: rocky
             base: el.9
             with: rockylinux/rockylinux:9
@@ -226,7 +227,7 @@ jobs:
 
   Build-branch:
     name: Build DAOS
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -322,7 +323,7 @@ jobs:
         include:
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:mantic
+            with: ubuntu:oracular
           - distro: alma.8
             base: el.8
             with: almalinux:8

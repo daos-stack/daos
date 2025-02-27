@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -177,10 +178,24 @@ struct vos_agg_param {
 };
 
 static inline void
-credits_set(struct vos_agg_credits *vac, bool tight)
+credits_set(struct vos_pool *pool, struct vos_agg_credits *vac, bool tight)
 {
-	vac->vac_creds_scan = tight ? AGG_CREDS_SCAN_TIGHT : AGG_CREDS_SCAN_SLACK;
-	vac->vac_creds_del = tight ? AGG_CREDS_DEL_TIGHT : AGG_CREDS_DEL_SLACK;
+	unsigned int multiplier = 1;
+
+	/*
+	 * When md-on-ssd phase2 pool runs into space pressure, larger SCAN credits will
+	 * be used to reduce yield & reprobe on iterating, larger DEL credits will be used
+	 * to drop more punched objects to GC in one batch, so that GC will likely reclaim
+	 * more objects when reclaiming a bucket.
+	 *
+	 * Though larger aggregation credits will lower front end I/O performance, it can
+	 * greatly reduce page misses for GC when free space/page is tight.
+	 */
+	if (tight && vos_pool_is_evictable(pool))
+		multiplier = 100;
+
+	vac->vac_creds_scan  = (tight ? AGG_CREDS_SCAN_TIGHT : AGG_CREDS_SCAN_SLACK) * multiplier;
+	vac->vac_creds_del   = (tight ? AGG_CREDS_DEL_TIGHT : AGG_CREDS_DEL_SLACK) * multiplier;
 	vac->vac_creds_merge = tight ? AGG_CREDS_MERGE_TIGHT : AGG_CREDS_MERGE_SLACK;
 }
 
@@ -323,7 +338,7 @@ vos_aggregate_yield(struct vos_agg_param *agg_param)
 
 	if (agg_param->ap_yield_func == NULL) {
 		bio_yield(agg_param->ap_umm);
-		credits_set(&agg_param->ap_credits, true);
+		credits_set(cont->vc_pool, &agg_param->ap_credits, true);
 		return false;
 	}
 
@@ -333,7 +348,7 @@ vos_aggregate_yield(struct vos_agg_param *agg_param)
 		return true;
 
 	/* rc == 0: tight mode; rc == 1: slack mode */
-	credits_set(&agg_param->ap_credits, rc == 0);
+	credits_set(cont->vc_pool, &agg_param->ap_credits, rc == 0);
 
 	return false;
 }
@@ -2702,7 +2717,7 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	/* Set aggregation parameters */
 	ad->ad_agg_param.ap_umm = &cont->vc_pool->vp_umm;
 	ad->ad_agg_param.ap_coh = coh;
-	credits_set(&ad->ad_agg_param.ap_credits, true);
+	credits_set(cont->vc_pool, &ad->ad_agg_param.ap_credits, true);
 	ad->ad_agg_param.ap_discard = 0;
 	ad->ad_agg_param.ap_yield_func = yield_func;
 	ad->ad_agg_param.ap_yield_arg = yield_arg;
@@ -2765,6 +2780,7 @@ free_agg_data:
 		if (vam && vam->vam_fail_count)
 			d_tm_inc_counter(vam->vam_fail_count, 1);
 	}
+	umem_heap_gc(&cont->vc_pool->vp_umm);
 
 	return rc;
 }
@@ -2821,7 +2837,7 @@ vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
 	/* Set aggregation parameters */
 	ad->ad_agg_param.ap_umm = &cont->vc_pool->vp_umm;
 	ad->ad_agg_param.ap_coh = coh;
-	credits_set(&ad->ad_agg_param.ap_credits, true);
+	credits_set(cont->vc_pool, &ad->ad_agg_param.ap_credits, true);
 	ad->ad_agg_param.ap_discard = 1;
 	ad->ad_agg_param.ap_yield_func = yield_func;
 	ad->ad_agg_param.ap_yield_arg = yield_arg;

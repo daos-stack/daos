@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -99,7 +100,7 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 
 	/* re-init the send argument to fill the object buffer */
 	arg->count = 0;
-	rc = dbtree_iterate(root->root_hdl, DAOS_INTENT_MIGRATION, false,
+	rc = dbtree_iterate(root->tcr_root_hdl, DAOS_INTENT_MIGRATION, false,
 			    rebuild_obj_fill_buf, arg);
 	if (rc < 0 || arg->count == 0) {
 		D_DEBUG(DB_REBUILD, DF_RB " cannot get objects: " DF_RC "\n", DP_RB_RPT(rpt),
@@ -178,7 +179,7 @@ tgt_tree_destory_cb(daos_handle_t ih, d_iov_t *key_iov,
 {
 	struct tree_cache_root *root = val_iov->iov_buf;
 
-	return obj_tree_destroy(root->root_hdl);
+	return obj_tree_destroy(root->tcr_root_hdl);
 }
 
 int
@@ -211,7 +212,7 @@ rebuild_tgt_iter_cb(daos_handle_t ih, d_iov_t *key_iov, d_iov_t *val_iov, void *
 	tgt_id = *(uint64_t *)key_iov->iov_buf;
 	arg->tgt_id = (unsigned int)tgt_id;
 	root = val_iov->iov_buf;
-	while (!dbtree_is_empty(root->root_hdl)) {
+	while (!dbtree_is_empty(root->tcr_root_hdl)) {
 		rc = rebuild_obj_send_cb(root, arg);
 		if (rc < 0) {
 			DL_ERROR(rc, DF_RB " rebuild_obj_send_cb failed", DP_RB_RPT(arg->rpt));
@@ -220,7 +221,7 @@ rebuild_tgt_iter_cb(daos_handle_t ih, d_iov_t *key_iov, d_iov_t *val_iov, void *
 	}
 
 	d_iov_set(&save_key_iov, &tgt_id, sizeof(tgt_id));
-	ret = obj_tree_destroy_current_probe(ih, root->root_hdl, &save_key_iov);
+	ret = obj_tree_destroy_current_probe(ih, root->tcr_root_hdl, &save_key_iov);
 	if (rc == 0)
 		rc = ret;
 	return rc;
@@ -238,8 +239,8 @@ rebuild_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 
 	uuid_copy(arg->cont_uuid, *(uuid_t *)key_iov->iov_buf);
 	root = val_iov->iov_buf;
-	while (!dbtree_is_empty(root->root_hdl)) {
-		rc = dbtree_iterate(root->root_hdl, DAOS_INTENT_MIGRATION, false,
+	while (!dbtree_is_empty(root->tcr_root_hdl)) {
+		rc = dbtree_iterate(root->tcr_root_hdl, DAOS_INTENT_MIGRATION, false,
 				    rebuild_tgt_iter_cb, arg);
 		if (rc < 0) {
 			DL_ERROR(rc, DF_RB " rebuild_tgt_send_cb failed", DP_RB_RPT(arg->rpt));
@@ -248,7 +249,7 @@ rebuild_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 	}
 
 	d_iov_set(&save_key_iov, arg->cont_uuid, sizeof(uuid_t));
-	ret = obj_tree_destroy_current_probe(ih, root->root_hdl, &save_key_iov);
+	ret = obj_tree_destroy_current_probe(ih, root->tcr_root_hdl, &save_key_iov);
 	if (rc == 0)
 		rc = ret;
 	return rc;
@@ -633,8 +634,8 @@ rebuild_object(struct rebuild_tgt_pool_tracker *rpt, uuid_t co_uuid, daos_unit_o
 
 	if (myrank == target->ta_comp.co_rank && mytarget == target->ta_comp.co_index &&
 	    (shard == oid.id_shard) && rpt->rt_rebuild_op != RB_OP_UPGRADE) {
-		D_DEBUG(DB_REBUILD, DF_UOID" %u/%u already on the target shard\n",
-			DP_UOID(oid), myrank, mytarget);
+		D_DEBUG(DB_REBUILD, DF_RB ": " DF_UOID " %u/%u already on the target shard\n",
+			DP_RB_RPT(rpt), DP_UOID(oid), myrank, mytarget);
 		return 0;
 	}
 
@@ -876,9 +877,9 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	       rpt->rt_rebuild_op != RB_OP_FAIL_RECLAIM) {
 		D_ASSERTF(rpt->rt_pool->sp_rebuilding >= 0, DF_UUID" rebuilding %d\n",
 			  DP_UUID(rpt->rt_pool_uuid), rpt->rt_pool->sp_rebuilding);
-			/* Wait for EC aggregation to abort before discard the object */
-		D_INFO(DF_RB " " DF_UUID " wait for ec agg abort.\n", DP_RB_RPT(rpt),
-		       DP_UUID(entry->ie_couuid));
+		/* Wait for EC aggregation to abort before discard the object */
+		D_INFO(DF_RB " " DF_UUID " wait for ec agg abort, rebuilding %d.\n", DP_RB_RPT(rpt),
+		       DP_UUID(entry->ie_couuid), rpt->rt_pool->sp_rebuilding);
 		dss_sleep(1000);
 		if (rpt->rt_abort || rpt->rt_finishing) {
 			D_DEBUG(DB_REBUILD, DF_RB " " DF_UUID " rebuild abort %u/%u.\n",
@@ -1051,6 +1052,7 @@ rebuild_scan_leader(void *data)
 	struct rebuild_tgt_pool_tracker *rpt = data;
 	struct rebuild_pool_tls	  *tls;
 	int			   rc;
+	bool			   wait = false;
 
 	D_DEBUG(DB_REBUILD, DF_RB " check resync %u/%u < %u\n", DP_RB_RPT(rpt),
 		rpt->rt_pool->sp_dtx_resync_version, rpt->rt_global_dtx_resync_version,
@@ -1063,6 +1065,7 @@ rebuild_scan_leader(void *data)
 			if (rpt->rt_global_dtx_resync_version < rpt->rt_rebuild_ver) {
 				D_INFO(DF_RB " wait for global dtx %u\n", DP_RB_RPT(rpt),
 				       rpt->rt_global_dtx_resync_version);
+				       wait = true;
 				ABT_cond_wait(rpt->rt_global_dtx_wait_cond, rpt->rt_lock);
 			}
 			ABT_mutex_unlock(rpt->rt_lock);
@@ -1073,7 +1076,10 @@ rebuild_scan_leader(void *data)
 		}
 	}
 
-	D_DEBUG(DB_REBUILD, DF_RB " scan collective begin\n", DP_RB_RPT(rpt));
+	if (wait)
+		D_INFO(DF_RB " scan collective begin\n", DP_RB_RPT(rpt));
+	else
+		D_DEBUG(DB_REBUILD, DF_RB " scan collective begin\n", DP_RB_RPT(rpt));
 
 	rc = ds_pool_thread_collective(rpt->rt_pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
 				       PO_COMP_ST_DOWNOUT, rebuild_scanner, rpt,
@@ -1081,7 +1087,10 @@ rebuild_scan_leader(void *data)
 	if (rc)
 		D_GOTO(out, rc);
 
-	D_DEBUG(DB_REBUILD, DF_RB "rebuild scan collective done\n", DP_RB_RPT(rpt));
+	if (wait)
+		D_INFO(DF_RB "rebuild scan collective done\n", DP_RB_RPT(rpt));
+	else
+		D_DEBUG(DB_REBUILD, DF_RB "rebuild scan collective done\n", DP_RB_RPT(rpt));
 
 	ABT_mutex_lock(rpt->rt_lock);
 	rc = ds_pool_task_collective(rpt->rt_pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
@@ -1109,7 +1118,7 @@ void
 rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 {
 	struct rebuild_scan_in		*rsi;
-	struct rebuild_scan_out		*ro;
+	struct rebuild_scan_out		*rout;
 	struct rebuild_pool_tls		*tls = NULL;
 	struct rebuild_tgt_pool_tracker	*rpt = NULL;
 	int				 rc;
@@ -1246,9 +1255,9 @@ out:
 			rpt_delete(rpt);
 		rpt_put(rpt);
 	}
-	ro = crt_reply_get(rpc);
-	ro->rso_status = rc;
-	ro->rso_stable_epoch = d_hlc_get();
+	rout = crt_reply_get(rpc);
+	rout->rso_status = rc;
+	rout->rso_stable_epoch = d_hlc_get();
 	dss_rpc_reply(rpc, DAOS_REBUILD_DROP_SCAN);
 }
 

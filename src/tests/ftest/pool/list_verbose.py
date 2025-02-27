@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -110,10 +111,8 @@ class ListVerboseTest(IorTestBase):
                     "imbalance": nvme_imbalance
                 },
             ],
-            "mem_file_bytes": (
-                scm_size if
-                self.server_managers[0].manager.job.using_control_metadata else
-                0)
+            "md_on_ssd_active": self.server_managers[0].manager.job.using_control_metadata,
+            "mem_file_bytes": scm_size,
         }
 
     @staticmethod

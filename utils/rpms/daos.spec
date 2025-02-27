@@ -16,7 +16,7 @@
 
 Name:          daos
 Version:       2.7.101
-Release:       1%{?relval}%{?dist}
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -51,11 +51,7 @@ BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
 BuildRequires: libpmemobj-devel >= 2.1.0
-%if (0%{?rhel} >= 8)
-BuildRequires: fuse3-devel >= 3
-%else
-BuildRequires: fuse3-devel >= 3.4.2
-%endif
+BuildRequires: fused-devel
 %if (0%{?suse_version} >= 1500)
 BuildRequires: go-race
 BuildRequires: libprotobuf-c-devel
@@ -171,7 +167,6 @@ Requires: mercury >= %{mercury_version}
 Requires: libfabric >= %{libfabric_version}
 %if (0%{?suse_version} >= 1500)
 Requires: libfabric1 >= %{libfabric_version}
-Requires: libfuse3-3 >= 3.4.2
 %endif
 Requires: /usr/bin/fusermount3
 %{?systemd_requires}
@@ -204,7 +199,11 @@ Summary: The DAOS test suite
 Requires: %{name}-client%{?_isa} = %{version}-%{release}
 Requires: %{name}-admin%{?_isa} = %{version}-%{release}
 Requires: %{name}-devel%{?_isa} = %{version}-%{release}
+%if (0%{?suse_version} >= 1500)
+Requires: libprotobuf-c-devel
+%else
 Requires: protobuf-c-devel
+%endif
 Requires: fio
 Requires: git
 Requires: dbench
@@ -218,11 +217,6 @@ Requires: libcapstone-devel
 %else
 Requires: Lmod
 Requires: capstone-devel
-%endif
-%if (0%{?rhel} >= 8)
-Requires: fuse3-devel >= 3
-%else
-Requires: fuse3-devel >= 3.4.2
 %endif
 Requires: pciutils-devel
 %if (0%{?suse_version} > 0)
@@ -366,7 +360,7 @@ install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
 mkdir -p %{buildroot}/%{conf_dir}/certs/clients
 mv %{buildroot}/%{conf_dir}/bash_completion.d %{buildroot}/%{_sysconfdir}
 # fixup env-script-interpreters
-sed -i -e '1s/env //' %{buildroot}{%{daoshome}/TESTING/ftest/{cart/cart_logtest,config_file_gen,launch,slurm_setup,tags,verify_perms}.py,%{_bindir}/daos_storage_estimator.py}
+sed -i -e '1s/env //' %{buildroot}{%{daoshome}/TESTING/ftest/{cart/cart_logtest,cart/daos_sys_logscan,config_file_gen,launch,slurm_setup,tags,verify_perms}.py,%{_bindir}/daos_storage_estimator.py}
 
 # shouldn't have source files in a non-devel RPM
 rm -f %{buildroot}%{daoshome}/TESTING/ftest/cart/{test_linkage.cpp,utest_{hlc,portnumber,protocol,swim}.c,wrap_cmocka.h}
@@ -498,13 +492,18 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{python3_sitearch}/pydaos/*.py
 %dir %{python3_sitearch}/pydaos/raw
 %{python3_sitearch}/pydaos/raw/*.py
+%dir %{python3_sitearch}/pydaos/torch
+%{python3_sitearch}/pydaos/torch/*.py
 %if (0%{?rhel} >= 8)
 %dir %{python3_sitearch}/pydaos/__pycache__
 %{python3_sitearch}/pydaos/__pycache__/*.pyc
 %dir %{python3_sitearch}/pydaos/raw/__pycache__
 %{python3_sitearch}/pydaos/raw/__pycache__/*.pyc
+%dir %{python3_sitearch}/pydaos/torch/__pycache__
+%{python3_sitearch}/pydaos/torch/__pycache__/*.pyc
 %endif
 %{python3_sitearch}/pydaos/pydaos_shim.so
+%{python3_sitearch}/pydaos/torch/torch_shim.so
 %{_datarootdir}/%{name}/ioil-ld-opts
 %config(noreplace) %{conf_dir}/daos_agent.yml
 %{_unitdir}/%{agent_svc_name}
@@ -548,6 +547,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files server-tests
 %doc README.md
 %{_bindir}/dtx_tests
+%{_bindir}/dtx_ut
 %{_bindir}/evt_ctl
 %{_bindir}/jump_pl_map
 %{_bindir}/pl_bench
@@ -559,6 +559,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/vos_tests
 %{_bindir}/vea_stress
 %{_bindir}/ddb_tests
+%{_bindir}/ddb_ut
 %{_bindir}/obj_ctl
 %{_bindir}/vos_perf
 
@@ -593,6 +594,18 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Wed Jan 22 2025 Jan Michalski <jan-marian.michalski@hpe.com> 2.7.101-5
+- Add ddb_ut and dtx_ut to the server-tests package
+
+* Fri Dec 20 2024 Jeff Olivier <jeffolivier@google.com> 2.7.101-4
+- Switch libfuse3 to libfused
+
+* Thu Dec 19 2024 Phillip Henderson <phillip.henderson@intel.com> 2.7.101-3
+- Fix protobuf-c requiremnent for daos-client-tests on Leap.
+
+* Tue Nov 13 2024 Denis Barakhtanov <dbarahtanov@enakta.com> 2.7.101-2
+- Add pydaos.torch module to daos-client rpm.
+
 * Fri Nov 08 2024 Phillip Henderson <phillip.henderson@intel.com> 2.7.101-1
 - Bump version to 2.7.100
 

@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -353,6 +354,7 @@ func TestPretty_PrintPoolCreateResp(t *testing.T) {
 					600 * humanize.MByte,
 					10 * humanize.GByte,
 				},
+				MemFileBytes: 300 * humanize.MByte,
 			},
 			expPrintStr: fmt.Sprintf(`
 Pool created with 5.66%%,94.34%% storage tier ratio
@@ -367,7 +369,7 @@ Pool created with 5.66%%,94.34%% storage tier ratio
 
 `, test.MockPoolUUID()),
 		},
-		"basic; md-on-ssd": {
+		"basic; MD-on-SSD": {
 			pcr: &control.PoolCreateResp{
 				UUID:     test.MockUUID(),
 				SvcReps:  mockRanks(0, 1, 2),
@@ -376,7 +378,8 @@ Pool created with 5.66%%,94.34%% storage tier ratio
 					600 * humanize.MByte,
 					10 * humanize.GByte,
 				},
-				MemFileBytes: 300 * humanize.MByte, // Non-zero indicates MD-on-SSD.
+				MemFileBytes:  300 * humanize.MByte,
+				MdOnSsdActive: true,
 			},
 			expPrintStr: fmt.Sprintf(`
 Pool created with 5.66%%,94.34%% storage tier ratio
@@ -481,6 +484,7 @@ func TestPretty_PrintListPoolsResponse(t *testing.T) {
 						DisabledTargets:  0,
 						PoolLayoutVer:    1,
 						UpgradeLayoutVer: 2,
+						QueryMask:        daos.DefaultPoolQueryMask,
 					},
 					{
 						UUID:             test.MockPoolUUID(2),
@@ -492,6 +496,7 @@ func TestPretty_PrintListPoolsResponse(t *testing.T) {
 						DisabledTargets:  8,
 						PoolLayoutVer:    2,
 						UpgradeLayoutVer: 2,
+						QueryMask:        daos.DefaultPoolQueryMask,
 					},
 				},
 			},
@@ -511,6 +516,7 @@ func TestPretty_PrintListPoolsResponse(t *testing.T) {
 						State:            daos.PoolServiceStateReady,
 						PoolLayoutVer:    1,
 						UpgradeLayoutVer: 2,
+						QueryMask:        daos.DefaultPoolQueryMask,
 					},
 					{
 						Label:           "two",
@@ -529,7 +535,7 @@ Query on pool "two" unsuccessful, error: "stats unavailable"
 
 Pool Size   State Used Imbalance Disabled UpgradeNeeded? 
 ---- ----   ----- ---- --------- -------- -------------- 
-one  6.0 TB Ready 83%  16%       0/16     1->2           
+one  6.0 TB Ready 83%  8%        0/16     1->2           
 
 `,
 		},
@@ -547,6 +553,7 @@ one  6.0 TB Ready 83%  16%       0/16     1->2
 						State:            daos.PoolServiceStateReady,
 						PoolLayoutVer:    1,
 						UpgradeLayoutVer: 1,
+						QueryMask:        daos.DefaultPoolQueryMask,
 					},
 					{
 						UUID:            test.MockPoolUUID(2),
@@ -573,7 +580,7 @@ Query on pool "three" unsuccessful, status: %q
 
 Pool Size   State Used Imbalance Disabled 
 ---- ----   ----- ---- --------- -------- 
-one  6.0 TB Ready 83%%  16%%       0/16     
+one  6.0 TB Ready 83%%  8%%        0/16     
 
 `, daos.NotInit),
 		},

@@ -1,5 +1,7 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1370,11 +1372,8 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 			      orw->orw_dkey_csum, &orw->orw_iod_array,
 			      &orw->orw_oid);
 	if (rc != 0) {
-		D_ERROR(DF_C_UOID_DKEY"verify_keys error: "DF_RC"\n",
-			DP_C_UOID_DKEY(orw->orw_oid, &orw->orw_dkey),
-			DP_RC(rc));
-		if (rc == -DER_CSUM)
-			obj_log_csum_err();
+		D_ERROR(DF_C_UOID_DKEY "verify_keys error: " DF_RC "\n",
+			DP_C_UOID_DKEY(orw->orw_oid, &orw->orw_dkey), DP_RC(rc));
 		return rc;
 	}
 
@@ -2019,17 +2018,19 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc, struct dtx_handle *dth)
 again:
 	rc = obj_local_rw_internal_wrap(rpc, ioc, dth);
 	if (dth != NULL && obj_dtx_need_refresh(dth, rc)) {
-		if (unlikely(++retry % 10 == 3)) {
+		if (unlikely(++retry % 10 == 9)) {
 			dsp = d_list_entry(dth->dth_share_tbd_list.next, struct dtx_share_peer,
 					   dsp_link);
 			D_WARN("DTX refresh for "DF_DTI" because of "DF_DTI" (%d) for %d times, "
-			       "maybe dead loop\n", DP_DTI(&dth->dth_xid), DP_DTI(&dsp->dsp_xid),
+			       "maybe starve\n", DP_DTI(&dth->dth_xid), DP_DTI(&dsp->dsp_xid),
 			       dth->dth_share_tbd_count, retry);
 		}
 
-		rc = dtx_refresh(dth, ioc->ioc_coc);
-		if (rc == -DER_AGAIN)
-			goto again;
+		if (!obj_rpc_is_fetch(rpc) || retry < 30) {
+			rc = dtx_refresh(dth, ioc->ioc_coc);
+			if (rc == -DER_AGAIN)
+				goto again;
+		}
 	}
 
 	return rc;
@@ -2362,8 +2363,9 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc,
 {
 	if (opc == DAOS_OBJ_RPC_ENUMERATE && flags & ORF_FOR_MIGRATION) {
 		if (child->sc_ec_agg_active) {
-			D_ERROR(DF_UUID" ec aggregate still active\n",
-				DP_UUID(child->sc_pool->spc_uuid));
+			D_ERROR(DF_CONT" ec aggregate still active, rebuilding %d\n",
+				DP_CONT(child->sc_pool->spc_uuid, child->sc_uuid),
+				child->sc_pool->spc_pool->sp_rebuilding);
 			return -DER_UPDATE_AGAIN;
 		}
 	}
@@ -2687,7 +2689,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 		if (orw->orw_dti_cos.ca_count > 0) {
 			rc = vos_dtx_commit(ioc.ioc_vos_coh,
 					    orw->orw_dti_cos.ca_arrays,
-					    orw->orw_dti_cos.ca_count, NULL);
+					    orw->orw_dti_cos.ca_count, false, NULL);
 			if (rc < 0) {
 				D_WARN(DF_UOID ": Failed to DTX CoS commit " DF_RC "\n",
 				       DP_UOID(orw->orw_oid), DP_RC(rc));
@@ -2895,8 +2897,10 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 	rc = process_epoch(&orw->orw_epoch, &orw->orw_epoch_first,
 			   &orw->orw_flags);
-	if (rc == PE_OK_LOCAL)
+	if (rc == PE_OK_LOCAL) {
 		orw->orw_flags &= ~ORF_EPOCH_UNCERTAIN;
+		dtx_flags |= DTX_EPOCH_OWNER;
+	}
 
 	if (obj_rpc_is_fetch(rpc)) {
 		struct dtx_handle	*dth;
@@ -3541,11 +3545,11 @@ again:
 	}
 
 	if (obj_dtx_need_refresh(dth, rc)) {
-		if (unlikely(++retry % 10 == 3)) {
+		if (unlikely(++retry % 10 == 9)) {
 			dsp = d_list_entry(dth->dth_share_tbd_list.next,
 					   struct dtx_share_peer, dsp_link);
 			D_WARN("DTX refresh for "DF_DTI" because of "DF_DTI" (%d) for %d "
-			       "times, maybe dead loop\n", DP_DTI(&dth->dth_xid),
+			       "times, maybe starve\n", DP_DTI(&dth->dth_xid),
 			       DP_DTI(&dsp->dsp_xid), dth->dth_share_tbd_count, retry);
 		}
 
@@ -3855,8 +3859,10 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 
 	rc = process_epoch(&opi->opi_epoch, NULL /* epoch_first */,
 			   &opi->opi_flags);
-	if (rc == PE_OK_LOCAL)
+	if (rc == PE_OK_LOCAL) {
 		opi->opi_flags &= ~ORF_EPOCH_UNCERTAIN;
+		dtx_flags |= DTX_EPOCH_OWNER;
+	}
 
 	version = opi->opi_map_ver;
 	max_ver = opi->opi_map_ver;
@@ -4590,12 +4596,8 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 		rc = csum_verify_keys(ioc->ioc_coc->sc_csummer,
 				      &dcsr->dcsr_dkey, dcu->dcu_dkey_csum,
 				      &dcu->dcu_iod_array, &dcsr->dcsr_oid);
-		if (rc != 0) {
-			if (rc == -DER_CSUM)
-				obj_log_csum_err();
-
+		if (rc != 0)
 			goto out;
-		}
 
 		if (iohs == NULL) {
 			D_ALLOC_ARRAY(iohs, dcde->dcde_write_cnt);
@@ -4843,14 +4845,14 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 out:
 	if (rc != 0) {
 		if (bulks != NULL) {
-			for (i = 0;
-			     i < dcde->dcde_write_cnt && rma_idx < rma; i++) {
+			for (i = 0; i < dcde->dcde_write_cnt; i++) {
 				if (!bulks[i].inited)
 					continue;
 
-				ABT_eventual_wait(bulks[i].eventual, NULL);
-				ABT_eventual_free(&bulks[i].eventual);
-				rma_idx++;
+				if (bulks[i].eventual != ABT_EVENTUAL_NULL) {
+					ABT_eventual_wait(bulks[i].eventual, NULL);
+					ABT_eventual_free(&bulks[i].eventual);
+				}
 			}
 		}
 
@@ -4940,11 +4942,11 @@ ds_cpd_handle_one_wrap(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 again:
 	rc = ds_cpd_handle_one(rpc, dcsh, dcde, dcsrs, ioc, dth);
 	if (obj_dtx_need_refresh(dth, rc)) {
-		if (unlikely(++retry % 10 == 3)) {
+		if (unlikely(++retry % 10 == 9)) {
 			dsp = d_list_entry(dth->dth_share_tbd_list.next,
 					   struct dtx_share_peer, dsp_link);
 			D_WARN("DTX refresh for "DF_DTI" because of "DF_DTI" (%d) for %d "
-			       "times, maybe dead loop\n", DP_DTI(&dth->dth_xid),
+			       "times, maybe starve\n", DP_DTI(&dth->dth_xid),
 			       DP_DTI(&dsp->dsp_xid), dth->dth_share_tbd_count, retry);
 		}
 
@@ -5109,6 +5111,7 @@ ds_obj_dtx_leader(struct daos_cpd_args *dca)
 			   &dcsh->dcsh_epoch.oe_first,
 			   &dcsh->dcsh_epoch.oe_rpc_flags);
 	if (rc == PE_OK_LOCAL) {
+		dtx_flags |= DTX_EPOCH_OWNER;
 		/*
 		 * In this case, writes to local RDGs can use the chosen epoch
 		 * without any uncertainty. This optimization is left to future
@@ -5700,8 +5703,10 @@ ds_obj_coll_punch_handler(crt_rpc_t *rpc)
 
 	if (ocpi->ocpi_flags & ORF_LEADER) {
 		rc = process_epoch(&ocpi->ocpi_epoch, NULL /* epoch_first */, &ocpi->ocpi_flags);
-		if (rc == PE_OK_LOCAL)
+		if (rc == PE_OK_LOCAL) {
 			ocpi->ocpi_flags &= ~ORF_EPOCH_UNCERTAIN;
+			dtx_flags |= DTX_EPOCH_OWNER;
+		}
 	} else if (dct_nr == 1) {
 		rc = obj_coll_local(rpc, dcts[0].dct_shards, dce, &version, &ioc, NULL,
 				    odm->odm_mbs, obj_coll_tgt_punch);

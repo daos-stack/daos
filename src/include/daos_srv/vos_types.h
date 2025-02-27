@@ -1,5 +1,6 @@
 /**
- * (C) Copyright 2015-2024 Intel Corporation.
+ * (C) Copyright 2015-2025 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -58,6 +59,8 @@ enum dtx_entry_flags {
 	 * on all yet, need to be re-committed.
 	 */
 	DTE_PARTIAL_COMMITTED	= (1 << 5),
+	/* The DTX epoch is sorted locally. */
+	DTE_EPOCH_SORTED	= (1 << 6),
 };
 
 struct dtx_entry {
@@ -94,6 +97,8 @@ enum vos_pool_open_flags {
 	VOS_POF_FOR_CHECK_QUERY = (1 << 6),
 	/** Open the pool for feature fetch/update, that will skip VEA load */
 	VOS_POF_FOR_FEATURE_FLAG = (1 << 7),
+	/** To identify this is a recreate operation. */
+	VOS_POF_FOR_RECREATE = (1 << 8),
 };
 
 enum vos_oi_attr {
@@ -130,6 +135,8 @@ struct vos_pool_space {
 	/** Total & free non-evictable space for md-on-ssd phase2 pool */
 	uint64_t		vps_ne_total;
 	uint64_t		vps_ne_free;
+	/* Memory file size for md-on-ssd pool */
+	uint64_t		vps_mem_bytes;
 };
 
 #define SCM_TOTAL(vps)	((vps)->vps_space.s_total[DAOS_MEDIA_SCM])

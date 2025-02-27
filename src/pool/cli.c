@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -205,15 +206,15 @@ dc_pool_init(void)
 		daos_register_key(&dc_pool_module_key);
 
 	dc_pool_proto_version = 0;
-	rc = daos_rpc_proto_query(pool_proto_fmt_v5.cpf_base, ver_array, 2, &dc_pool_proto_version);
+	rc = daos_rpc_proto_query(pool_proto_fmt_v6.cpf_base, ver_array, 2, &dc_pool_proto_version);
 	if (rc)
 		return rc;
 
 	if (dc_pool_proto_version == DAOS_POOL_VERSION - 1) {
-		rc = daos_rpc_register(&pool_proto_fmt_v5, POOL_PROTO_CLI_COUNT, NULL,
+		rc = daos_rpc_register(&pool_proto_fmt_v6, POOL_PROTO_CLI_COUNT, NULL,
 				       DAOS_POOL_MODULE);
 	} else if (dc_pool_proto_version == DAOS_POOL_VERSION) {
-		rc = daos_rpc_register(&pool_proto_fmt_v6, POOL_PROTO_CLI_COUNT, NULL,
+		rc = daos_rpc_register(&pool_proto_fmt_v7, POOL_PROTO_CLI_COUNT, NULL,
 				       DAOS_POOL_MODULE);
 	} else {
 		D_ERROR("%d version pool RPC not supported.\n", dc_pool_proto_version);
@@ -236,9 +237,9 @@ dc_pool_fini(void)
 	int rc;
 
 	if (dc_pool_proto_version == DAOS_POOL_VERSION - 1) {
-		rc = daos_rpc_unregister(&pool_proto_fmt_v5);
-	} else if (dc_pool_proto_version == DAOS_POOL_VERSION) {
 		rc = daos_rpc_unregister(&pool_proto_fmt_v6);
+	} else if (dc_pool_proto_version == DAOS_POOL_VERSION) {
+		rc = daos_rpc_unregister(&pool_proto_fmt_v7);
 	} else {
 		rc = -DER_PROTO;
 		DL_ERROR(rc, "%d version pool RPC not supported", dc_pool_proto_version);
@@ -1574,6 +1575,23 @@ out:
 	return rc;
 }
 
+int
+dc_pool_hdl2uuid(daos_handle_t poh, uuid_t *hdl_uuid, uuid_t *uuid)
+{
+	struct dc_pool *dp;
+
+	dp = dc_hdl2pool(poh);
+	if (dp == NULL)
+		return -DER_NO_HDL;
+
+	if (hdl_uuid != NULL)
+		uuid_copy(*hdl_uuid, dp->dp_pool_hdl);
+	if (uuid != NULL)
+		uuid_copy(*uuid, dp->dp_pool);
+	dc_pool_put(dp);
+	return 0;
+}
+
 struct pool_update_state {
 	struct rsvc_client	client;
 	struct dc_mgmt_sys     *sys;
@@ -1590,6 +1608,7 @@ pool_tgt_update_cp(tse_task_t *task, void *data)
 	int                              n_addrs;
 	bool                             free_tpriv = true;
 	int				 rc = task->dt_result;
+	uint32_t                         flags;
 
 	rc = rsvc_client_complete_rpc(&tpriv->state->client, &rpc->cr_ep, rc, out->pto_op.po_rc,
 				      &out->pto_op.po_hint);
@@ -1619,7 +1638,7 @@ pool_tgt_update_cp(tse_task_t *task, void *data)
 		DP_UUID(in->pti_op.pi_uuid), DP_UUID(in->pti_op.pi_hdl),
 		(int)out->pto_addr_list.ca_count);
 
-	pool_tgt_update_in_get_data(rpc, &addrs, &n_addrs);
+	pool_tgt_update_in_get_data(rpc, &addrs, &n_addrs, &flags);
 	D_FREE(addrs);
 
 	if (out->pto_addr_list.ca_arrays != NULL &&
@@ -1715,7 +1734,8 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args, int opc)
 		list.pta_addrs[i].pta_target = args->tgts->tl_tgts[i];
 	}
 
-	pool_tgt_update_in_set_data(rpc, list.pta_addrs, (size_t)list.pta_number);
+	pool_tgt_update_in_set_data(rpc, list.pta_addrs, (size_t)list.pta_number,
+				    POOL_TGT_UPDATE_SKIP_RF_CHECK);
 
 	crt_req_addref(rpc);
 

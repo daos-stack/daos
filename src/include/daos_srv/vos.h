@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -168,13 +169,14 @@ vos_dtx_load_mbs(daos_handle_t coh, struct dtx_id *dti, daos_unit_oid_t *oid,
  * \param coh	[IN]	Container open handle.
  * \param dtis	[IN]	The array for DTX identifiers to be committed.
  * \param count [IN]	The count of DTXs to be committed.
+ * \param keep_act [IN]	Keep DTX entry or not.
  * \param rm_cos [OUT]	The array for whether remove entry from CoS cache.
  *
  * \return		Negative value if error.
  * \return		Others are for the count of committed DTXs.
  */
 int
-vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool rm_cos[]);
+vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool keep_act, bool rm_cos[]);
 
 /**
  * Abort the specified DTXs.
@@ -187,6 +189,18 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool rm_cos[]
  */
 int
 vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch);
+
+/**
+ * Discard the active DTX entry's records if invalid.
+ *
+ * \param coh		[IN]	Container open handle.
+ * \param dti		[IN]	The DTX identifier to be validated.
+ * \param discarded	[OUT]	The number of discarded records.
+ *
+ * \return		Zero on success, negative value if error.
+ */
+int
+vos_dtx_discard_invalid(daos_handle_t coh, struct dtx_id *dti, int *discarded);
 
 /**
  * Set flags on the active DTXs.
@@ -939,6 +953,56 @@ void
 vos_dtx_renew_epoch(struct dtx_handle *dth);
 
 /**
+ * Calculate current locally known stable epoch for the given container.
+ *
+ * \param coh	[IN]	Container open handle
+ *
+ * \return		The epoch on success, negative value if error.
+ */
+daos_epoch_t
+vos_cont_get_local_stable_epoch(daos_handle_t coh);
+
+/**
+ * Get global stable epoch for the given container.
+ *
+ * \param coh	[IN]	Container open handle
+ *
+ * \return		The epoch on success, negative value if error.
+ */
+daos_epoch_t
+vos_cont_get_global_stable_epoch(daos_handle_t coh);
+
+/**
+ * Set global stable epoch for the given container.
+ *
+ * \param coh	[IN]	Container open handle
+ * \param epoch	[IN]	The epoch to be used as the new global stable epoch.
+ *
+ * \return		Zero on success, negative value if error.
+ */
+int
+vos_cont_set_global_stable_epoch(daos_handle_t coh, daos_epoch_t epoch);
+
+/**
+ * Set the lowest allowed modification epoch for the given container.
+ *
+ * \param coh	[IN]	Container open handle
+ * \param epoch	[IN]	The lowest allowed epoch for modification.
+ *
+ * \return		Zero on success, negative value if error.
+ */
+int
+vos_cont_set_mod_bound(daos_handle_t coh, uint64_t epoch);
+
+/**
+ * Query the gap between the max allowed aggregation epoch and current HLC.
+ *
+ * \return		The gap value in seconds.
+ */
+uint32_t
+vos_get_agg_gap(void);
+
+/**
  * Get the recx/epoch list.
  *
  * \param ioh	[IN]	The I/O handle.
@@ -1660,5 +1724,17 @@ vos_unpin_objects(daos_handle_t coh, struct vos_pin_handle *hdl);
  */
 int
 vos_pin_objects(daos_handle_t coh, daos_unit_oid_t oids[], int count, struct vos_pin_handle **hdl);
+
+/**
+ * Check if the oid exist in current vos.
+ *
+ * \param[in]	coh	container open handle.
+ * \param[in]	oid	oid to be checked.
+ *
+ * \return	true	exist.
+ *		false	does not exist.
+ */
+bool
+vos_oi_exist(daos_handle_t coh, daos_unit_oid_t oid);
 
 #endif /* __VOS_API_H */

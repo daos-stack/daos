@@ -459,12 +459,12 @@ lw_tx_begin(dav_obj_t *pop)
 	rc = umem_cache_reserve(pop->do_store);
 	if (rc) {
 		D_ERROR("umem_cache_reserve failed, " DF_RC "\n", DP_RC(rc));
-		return rc;
+		return daos_der2errno(rc);
 	}
 	rc = dav_wal_tx_reserve(pop, &wal_id);
 	if (rc) {
 		D_ERROR("so_wal_reserv failed, "DF_RC"\n", DP_RC(rc));
-		return rc;
+		return daos_der2errno(rc);
 	}
 	if (pop->do_utx == NULL) {
 		utx = dav_umem_wtx_new(pop);
@@ -559,6 +559,7 @@ dav_tx_begin_v2(dav_obj_t *pop, jmp_buf env, ...)
 			sizeof(struct tx_range_def));
 		tx->first_snapshot = 1;
 		tx->pop = pop;
+		heap_soemb_reserve(pop->do_heap);
 	} else {
 		FATAL("Invalid stage %d to begin new transaction", tx->stage);
 	}
@@ -1891,5 +1892,31 @@ obj_realloc(dav_obj_t *pop, uint64_t *offp, size_t *sizep, size_t size)
 	ret = palloc_operation(pop->do_heap, *offp, offp, size, constructor_zrealloc_root, &carg, 0,
 			       0, 0, 0, ctx);
 
+	return ret;
+}
+
+DAV_FUNC_EXPORT int
+dav_force_gc_v2(dav_obj_t *pop)
+{
+	int tx_inprogress = 0;
+	int rc, ret;
+
+	if (get_tx()->stage != DAV_TX_STAGE_NONE)
+		tx_inprogress = 1;
+
+	if (!tx_inprogress) {
+		rc = lw_tx_begin(pop);
+		if (rc) {
+			errno = rc;
+			return -1;
+		}
+	}
+
+	ret = heap_force_recycle(pop->do_heap);
+
+	if (!tx_inprogress) {
+		rc = lw_tx_end(pop, NULL);
+		D_ASSERT(rc == 0);
+	}
 	return ret;
 }

@@ -1,4 +1,5 @@
 #  (C) Copyright 2023-2024 Intel Corporation.
+#  (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 - name: common
@@ -56,6 +57,7 @@
   base: "PREFIX"
   tests:
     - cmd: ["bin/dtx_tests"]
+    - cmd: ["bin/dtx_ut"]
 - name: placement
   base: "PREFIX"
   tests:
@@ -184,9 +186,29 @@
   base: "PREFIX"
   tests:
     - cmd: ["bin/ddb_tests"]
+    - cmd: ["bin/ddb_ut"]
 - name: Source metadata testing
   gha: True
   memcheck: False
   tests:
     - cmd: ["src/tests/ftest/tags.py", "unit"]
     - cmd: ["utils/unit/include_test.py"]
+- name: Argobot performance testing
+  base: "BUILD_DIR"
+  tests:
+    - cmd: ["src/engine/tests/abt_perf", "--test=c", "--sec=10", "--num=100", "--stack=16"]
+    - cmd: ["src/engine/tests/abt_perf", "--test=s", "--sec=10", "--num=100"]
+    - cmd: ["src/engine/tests/abt_perf", "--test=m", "--sec=10"]
+    - cmd: ["src/engine/tests/abt_perf", "--test=w", "--sec=10"]
+    - cmd: ["src/engine/tests/abt_perf", "--test=e", "--sec=10"]
+    - cmd: ["src/engine/tests/abt_perf", "--test=d", "--sec=10"]
+- name: Argobot stack overflow testing
+  base: "BUILD_DIR"
+  memcheck: False
+  tests:
+    - cmd: ["src/engine/tests/abt_stack", "--check-overflow"]
+      env_vars:
+        ABT_STACK_OVERFLOW_CHECK: "mprotect_strict"
+    - cmd: ["src/engine/tests/abt_stack", "--check-overflow", "--on-pool"]
+      env_vars:
+        ABT_STACK_OVERFLOW_CHECK: "mprotect_strict"

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -196,17 +197,6 @@ enum {
 };
 
 static int	sched_policy;
-
-/*
- * Time threshold for giving IO up throttling. If space pressure stays in the
- * highest level for enough long time, we assume that no more space can be
- * reclaimed and choose to give up IO throttling, so that ENOSPACE error could
- * be returned to client earlier.
- *
- * To make time for aggregation reclaiming overwriteen space, this threshold
- * should be longer than the DAOS_AGG_THRESHOLD.
- */
-#define SCHED_DELAY_THRESH	40000	/* msecs */
 
 struct pressure_ratio {
 	unsigned int	pr_free;	/* free space ratio */
@@ -781,7 +771,7 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
 	struct vos_pool_space	 vps = { 0 };
-	uint64_t		 scm_left, nvme_left, ne_left, ne_sys;
+	uint64_t                 scm_left, nvme_left, ne_left;
 	struct pressure_ratio	*pr;
 	int			 orig_pressure, rc;
 
@@ -817,12 +807,8 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 	if (vps.vps_ne_total == 0) {
 		ne_left = UINT64_MAX;
 	} else {
-		D_ASSERT(vps.vps_ne_total < SCM_TOTAL(&vps));
-		ne_sys = SCM_SYS(&vps) * vps.vps_ne_total / SCM_TOTAL(&vps);
-		if (vps.vps_ne_free > ne_sys)
-			ne_left = vps.vps_ne_free - ne_sys;
-		else
-			ne_left = 0;
+		ne_left = vps.vps_ne_free;
+		D_ASSERT(ne_left <= vps.vps_ne_total);
 	}
 
 	if (NVME_TOTAL(&vps) == 0)      /* NVMe not enabled */
@@ -943,12 +929,22 @@ is_gc_pending(struct sched_pool_info *spi)
 	return spi->spi_gc_ults && (spi->spi_gc_ults > spi->spi_gc_sleeping);
 }
 
-/* Just run into this space pressure situation recently? */
+/*
+ * Just run into this space pressure situation recently?
+ *
+ * If space pressure stays in the highest level for enough long time, we assume
+ * that no more space can be reclaimed and choose to give up IO throttling, so
+ * that ENOSPACE error could be returned to client earlier.
+ *
+ * To make time for aggregation reclaiming overwriteen space, this threshold
+ * should be longer than VOS aggregation epoch gap against current HLC.
+ */
 static inline bool
 is_pressure_recent(struct sched_info *info, struct sched_pool_info *spi)
 {
 	D_ASSERT(info->si_cur_ts >= spi->spi_pressure_ts);
-	return (info->si_cur_ts - spi->spi_pressure_ts) < SCHED_DELAY_THRESH;
+	return (info->si_cur_ts - spi->spi_pressure_ts) <
+	       (vos_get_agg_gap() + 10) * 1000; /* msecs */
 }
 
 static inline uint64_t
@@ -2161,10 +2157,7 @@ sched_watchdog_prep(struct dss_xstream *dx, ABT_unit unit)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
 	ABT_thread		 thread;
-	void			 (*thread_func)(void *);
-#ifdef ULT_MMAP_STACK
-	mmap_stack_desc_t		*desc;
-#endif
+	void (*thread_func)(void *);
 	int			 rc;
 
 	if (!watchdog_enabled(dx))
@@ -2175,18 +2168,6 @@ sched_watchdog_prep(struct dss_xstream *dx, ABT_unit unit)
 	D_ASSERT(rc == ABT_SUCCESS);
 	rc = ABT_thread_get_thread_func(thread, &thread_func);
 	D_ASSERT(rc == ABT_SUCCESS);
-#ifdef ULT_MMAP_STACK
-	/* has ULT stack been allocated using mmap() or using
-	 * Argobots standard way ? With the later case the ULT
-	 * argument could not be used to address the mmap()'ed
-	 * stack descriptor !
-	 */
-	if (likely(thread_func == mmap_stack_wrapper)) {
-		rc = ABT_thread_get_arg(thread, (void **)&desc);
-		D_ASSERT(rc == ABT_SUCCESS);
-		thread_func = desc->thread_func;
-	}
-#endif
 	info->si_ult_func = thread_func;
 }
 

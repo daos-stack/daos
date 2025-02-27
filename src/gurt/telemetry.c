@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -804,6 +805,12 @@ destroy_shmem_with_key(key_t key)
 	return 0;
 }
 
+static bool
+is_initialized(void)
+{
+	return tm_shmem.ctx != NULL && tm_shmem.ctx->shmem_root != NULL;
+}
+
 /**
  * Initialize an instance of the telemetry and metrics API for the producer
  * process with the root set to the provided name.
@@ -830,8 +837,11 @@ d_tm_init_with_name(int id, uint64_t mem_size, int flags, const char *root_name)
 {
 	struct d_tm_shmem_hdr   *new_shmem = NULL;
 	key_t			 key;
-	int                      shmid;
+	int                      shmid = 0;
 	int			 rc = DER_SUCCESS;
+
+	if (is_initialized())
+		return -DER_ALREADY;
 
 	if (root_name == NULL || strnlen(root_name, D_TM_MAX_NAME_LEN) == 0) {
 		D_ERROR("root name cannot be empty\n");
@@ -2048,7 +2058,7 @@ d_tm_mark_duration_end(struct d_tm_node_t *metric)
 	d_tm_node_lock(metric);
 	clock_gettime(d_tm_clock_id(metric->dtn_type & ~D_TM_DURATION), &end);
 	metric->dtn_metric->dtm_data.tms[0] =
-		d_timediff(metric->dtn_metric->dtm_data.tms[1], end);
+	    d_timediff(&metric->dtn_metric->dtm_data.tms[1], &end);
 	tms = metric->dtn_metric->dtm_data.tms;
 	us = (tms->tv_sec * 1000000) + (tms->tv_nsec / 1000);
 	d_tm_compute_stats(metric, us);
@@ -2251,13 +2261,6 @@ d_tm_find_metric(struct d_tm_context *ctx, char *path)
 		node = d_tm_follow_link(ctx, node);
 
 	return node;
-}
-
-static bool
-is_initialized(void)
-{
-	return tm_shmem.ctx != NULL &&
-	       tm_shmem.ctx->shmem_root != NULL;
 }
 
 /*

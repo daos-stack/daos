@@ -220,6 +220,7 @@ determine_lib_path(void)
 	int   path_offset   = 0, read_size, i;
 	char *read_buff_map = NULL;
 	char *pos, *start, *end, *lib_dir_str = NULL;
+	bool  ver_in_lib_name = false;
 
 	read_size = read_map_file(&read_buff_map);
 
@@ -305,8 +306,16 @@ determine_lib_path(void)
 		libc_version = atof(libc_version_str);
 	}
 
+	/* check whether libc name contains version. EL9 libs do not have version info! */
+	pos = strstr(path_libc, "libc-2.");
+	if (pos)
+		ver_in_lib_name = true;
+
 	/* with version in name */
-	D_ASPRINTF(path_libpthread, "%s/libpthread-%s.so", lib_dir_str, libc_version_str);
+	if (ver_in_lib_name)
+		D_ASPRINTF(path_libpthread, "%s/libpthread-%s.so", lib_dir_str, libc_version_str);
+	else
+		D_ASPRINTF(path_libpthread, "%s/libpthread.so.0", lib_dir_str);
 	if (path_libpthread == NULL)
 		goto err;
 	if (strnlen(path_libpthread, PATH_MAX) >= PATH_MAX) {
@@ -314,7 +323,10 @@ determine_lib_path(void)
 		DS_ERROR(ENAMETOOLONG, "path_libpthread is too long");
 		goto err;
 	}
-	D_ASPRINTF(path_libdl, "%s/libdl-%s.so", lib_dir_str, libc_version_str);
+	if (ver_in_lib_name)
+		D_ASPRINTF(path_libdl, "%s/libdl-%s.so", lib_dir_str, libc_version_str);
+	else
+		D_ASPRINTF(path_libdl, "%s/libdl.so.2", lib_dir_str);
 	if (path_libdl == NULL)
 		goto err;
 	D_FREE(lib_dir_str);

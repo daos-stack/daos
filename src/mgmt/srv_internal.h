@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -92,7 +93,7 @@ int
 ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 				 struct pool_target_addr_list *target_addrs,
 				 pool_comp_state_t state, size_t scm_size, size_t nvme_size,
-				 size_t meta_size);
+				 size_t meta_size, bool skip_rf_check);
 int
 ds_mgmt_pool_reintegrate(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uint32_t reint_rank,
 			 struct pool_target_id_list *reint_list);
@@ -120,11 +121,14 @@ int ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
 			   struct daos_pool_cont_info **containers,
 			   uint64_t *ncontainers);
 int
-     ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **enabled_ranks,
-			d_rank_list_t **disabled_ranks, daos_pool_info_t *pool_info,
-			uint32_t *pool_layout_ver, uint32_t *upgrade_layout_ver);
-int ds_mgmt_pool_query_targets(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_t rank,
-			       d_rank_list_t *tgts, daos_target_info_t **infos);
+    ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **enabled_ranks,
+		       d_rank_list_t **disabled_ranks, d_rank_list_t **dead_ranks,
+		       daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
+		       uint32_t *upgrade_layout_ver, uint64_t *mem_file_bytes);
+int
+    ds_mgmt_pool_query_targets(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_t rank,
+			       d_rank_list_t *tgts, daos_target_info_t **infos,
+			       uint64_t *mem_file_bytes);
 
 int
      ds_mgmt_cont_set_owner(uuid_t pool_uuid, d_rank_list_t *svc_ranks, const char *cont_id,

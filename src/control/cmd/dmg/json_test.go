@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -113,9 +114,8 @@ func TestDmg_JsonOutput(t *testing.T) {
 				testArgs = append(testArgs, "foo:bar")
 			case "system del-attr":
 				testArgs = append(testArgs, "foo")
-			case "system exclude":
-				testArgs = append(testArgs, "--ranks", "0")
-			case "system clear-exclude":
+			case "system exclude", "system clear-exclude", "system drain",
+				"system reintegrate":
 				testArgs = append(testArgs, "--ranks", "0")
 			}
 

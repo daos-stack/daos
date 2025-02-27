@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -460,7 +461,7 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		}
 	}()
 
-	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolCreate, req)
+	dResp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolCreate, req)
 	if err != nil {
 		svc.log.Errorf("pool create dRPC call failed: %s", err)
 		if err := svc.sysdb.RemovePoolService(ctx, ps.PoolUUID); err != nil {
@@ -478,8 +479,8 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		}
 	}
 
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolCreate response")
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, err
 	}
 
 	if resp.GetStatus() != 0 {
@@ -751,14 +752,15 @@ func (svc *mgmtSvc) poolDestroyNoLeaderCheck(parent context.Context, req *mgmtpb
 	}
 	sort.Slice(allRanks, func(i, j int) bool { return allRanks[i] < allRanks[j] })
 	req.SvcRanks = allRanks
-	svc.log.Debugf("MgmtSvc.PoolDestroy issuing drpc.MethodPoolDestroy: id=%s nSvcRanks=%d\n", req.Id, len(req.SvcRanks))
-	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolDestroy, req)
+	svc.log.Debugf("MgmtSvc.PoolDestroy issuing drpc.MethodPoolDestroy: id=%s nSvcRanks=%d\n",
+		req.Id, len(req.SvcRanks))
+	dResp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolDestroy, req)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolDestroy response")
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, err
 	}
 
 	ds := daos.Status(resp.Status)
@@ -784,14 +786,14 @@ func (svc *mgmtSvc) evictPoolConnections(ctx context.Context, req *mgmtpb.PoolEv
 		return nil, err
 	}
 
-	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolEvict, req)
+	dResp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolEvict, req)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := &mgmtpb.PoolEvictResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolEvict response")
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, err
 	}
 
 	if resp.Count > 0 {
@@ -827,14 +829,14 @@ func (svc *mgmtSvc) PoolExclude(ctx context.Context, req *mgmtpb.PoolExcludeReq)
 		return nil, err
 	}
 
-	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolExclude, req)
+	dResp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolExclude, req)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := &mgmtpb.PoolExcludeResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolExclude response")
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, err
 	}
 
 	return resp, nil
@@ -846,14 +848,14 @@ func (svc *mgmtSvc) PoolDrain(ctx context.Context, req *mgmtpb.PoolDrainReq) (*m
 		return nil, err
 	}
 
-	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolDrain, req)
+	dResp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolDrain, req)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := &mgmtpb.PoolDrainResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolDrain response")
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, err
 	}
 
 	return resp, nil
@@ -883,21 +885,21 @@ func (svc *mgmtSvc) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq) (
 
 	svc.log.Debugf("MgmtSvc.PoolExtend forwarding modified req:%+v\n", req)
 
-	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolExtend, req)
+	dResp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolExtend, req)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := &mgmtpb.PoolExtendResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolExtend response")
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, err
 	}
 
 	return resp, nil
 }
 
 // PoolReintegrate implements the method defined for the Management Service.
-func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReintegrateReq) (*mgmtpb.PoolReintegrateResp, error) {
+func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReintReq) (*mgmtpb.PoolReintResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
@@ -924,14 +926,14 @@ func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReinteg
 	req.TierBytes = ps.Storage.PerRankTierStorage
 	req.MemRatio = ps.Storage.MemRatio
 
-	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolReintegrate, req)
+	dResp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolReintegrate, req)
 	if err != nil {
 		return nil, err
 	}
 
-	resp := &mgmtpb.PoolReintegrateResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolReintegrate response")
+	resp := &mgmtpb.PoolReintResp{}
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, err
 	}
 
 	return resp, nil
@@ -947,25 +949,18 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 		req.QueryMask = uint64(daos.DefaultPoolQueryMask)
 	}
 
-	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolQuery, req)
+	dResp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolQuery, req)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := &mgmtpb.PoolQueryResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolQuery response")
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, err
 	}
 
 	// Preserve compatibility with pre-2.6 callers.
 	resp.Leader = resp.SvcLdr
-
-	// TODO DAOS-16209: After VOS query API is updated, zero-value mem_file_bytes will be
-	//                  returned in non-MD-on-SSD mode and this hack can be removed.
-	storage := svc.harness.Instances()[0].GetStorage()
-	if !storage.ControlMetadataPathConfigured() {
-		resp.MemFileBytes = 0
-	}
 
 	return resp, nil
 }
@@ -976,23 +971,14 @@ func (svc *mgmtSvc) PoolQueryTarget(ctx context.Context, req *mgmtpb.PoolQueryTa
 		return nil, err
 	}
 
-	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolQueryTarget, req)
+	dResp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolQueryTarget, req)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := &mgmtpb.PoolQueryTargetResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolQueryTarget response")
-	}
-
-	// TODO DAOS-16209: After VOS query API is updated, zero-value mem_file_bytes will be
-	//                  returned in non-MD-on-SSD mode and this hack can be removed.
-	storage := svc.harness.Instances()[0].GetStorage()
-	if !storage.ControlMetadataPathConfigured() {
-		for _, tgtInfo := range resp.Infos {
-			tgtInfo.MemFileBytes = 0
-		}
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, err
 	}
 
 	return resp, nil
@@ -1004,14 +990,14 @@ func (svc *mgmtSvc) PoolUpgrade(ctx context.Context, req *mgmtpb.PoolUpgradeReq)
 		return nil, err
 	}
 
-	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolUpgrade, req)
+	dResp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolUpgrade, req)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := &mgmtpb.PoolUpgradeResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolUpgrade response")
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, err
 	}
 
 	return resp, nil
@@ -1052,15 +1038,15 @@ func (svc *mgmtSvc) updatePoolLabel(ctx context.Context, sys string, uuid uuid.U
 		Properties: []*mgmtpb.PoolProperty{prop},
 	}
 
-	var dresp *drpc.Response
-	dresp, err = svc.makePoolServiceCall(ctx, drpc.MethodPoolSetProp, req)
+	var dResp *drpc.Response
+	dResp, err = svc.makePoolServiceCall(ctx, drpc.MethodPoolSetProp, req)
 	if err != nil {
 		return err
 	}
 
 	resp := new(mgmtpb.PoolSetPropResp)
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return errors.Wrap(err, "unmarshal PoolSetProp response")
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return err
 	}
 
 	if resp.GetStatus() != 0 {
@@ -1117,14 +1103,14 @@ func (svc *mgmtSvc) PoolSetProp(parent context.Context, req *mgmtpb.PoolSetPropR
 
 	req.Properties = miscProps
 
-	var dresp *drpc.Response
-	dresp, err = svc.makePoolServiceCall(ctx, drpc.MethodPoolSetProp, req)
+	var dResp *drpc.Response
+	dResp, err = svc.makePoolServiceCall(ctx, drpc.MethodPoolSetProp, req)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolSetProp response")
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, err
 	}
 
 	return resp, nil
@@ -1143,14 +1129,14 @@ func (svc *mgmtSvc) PoolGetProp(ctx context.Context, req *mgmtpb.PoolGetPropReq)
 		return nil, errors.Errorf("PoolGetProp() request with 0 properties")
 	}
 
-	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolGetProp, req)
+	dResp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolGetProp, req)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := new(mgmtpb.PoolGetPropResp)
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolGetProp response")
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, err
 	}
 
 	if resp.GetStatus() != 0 {
@@ -1166,14 +1152,14 @@ func (svc *mgmtSvc) PoolGetACL(ctx context.Context, req *mgmtpb.GetACLReq) (*mgm
 		return nil, err
 	}
 
-	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolGetACL, req)
+	dResp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolGetACL, req)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := &mgmtpb.ACLResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolGetACL response")
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "PoolGetACL")
 	}
 
 	return resp, nil
@@ -1185,14 +1171,14 @@ func (svc *mgmtSvc) PoolOverwriteACL(ctx context.Context, req *mgmtpb.ModifyACLR
 		return nil, err
 	}
 
-	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolOverwriteACL, req)
+	dResp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolOverwriteACL, req)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := &mgmtpb.ACLResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolOverwriteACL response")
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "PoolOverwriteACL")
 	}
 
 	return resp, nil
@@ -1205,14 +1191,14 @@ func (svc *mgmtSvc) PoolUpdateACL(ctx context.Context, req *mgmtpb.ModifyACLReq)
 		return nil, err
 	}
 
-	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolUpdateACL, req)
+	dResp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolUpdateACL, req)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := &mgmtpb.ACLResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolUpdateACL response")
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "PoolUpdateACL")
 	}
 
 	return resp, nil
@@ -1225,14 +1211,14 @@ func (svc *mgmtSvc) PoolDeleteACL(ctx context.Context, req *mgmtpb.DeleteACLReq)
 		return nil, err
 	}
 
-	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolDeleteACL, req)
+	dResp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolDeleteACL, req)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := &mgmtpb.ACLResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolDeleteACL response")
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "PoolDeleteACL")
 	}
 
 	return resp, nil

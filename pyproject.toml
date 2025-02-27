@@ -5,7 +5,7 @@ line_length = 99
 skip_gitignore = true
 
 [tool.codespell]
-skip = './src/control/vendor,./src/control/go.sum,./.git,./src/rdb/raft,./build,./install,./venv,./src/control/vendor/,./src/control/security/testdata/certs/source.txt'
+skip = './src/control/vendor/*,./src/control/go.sum,./.git/*,./src/rdb/raft/*,./build/*,./install/*,./venv/*,./src/control/security/testdata/certs/source.txt,./utils/*.patch'
 quiet-level = 3
 ignore-words = 'ci/codespell.ignores'
 builtin = 'clear,rare,informal,names,en-GB_to_en-US'

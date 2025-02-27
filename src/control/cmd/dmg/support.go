@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -202,7 +202,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 				}
 			}
 		}
-		fmt.Printf(progress.Display())
+		fmt.Print(progress.Display())
 	}
 
 	// Run dmg command info collection set
@@ -224,13 +224,13 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 				}
 			}
 		}
-		fmt.Printf(progress.Display())
+		fmt.Print(progress.Display())
 	}
 
 	params.FileTransferExecArgs = cmd.FileTransferExecArgs
 	// R sync the logs from servers
 	rsyncerr := cmd.rsyncLog()
-	fmt.Printf(progress.Display())
+	fmt.Print(progress.Display())
 	if rsyncerr != nil && cmd.StopOnError {
 		return rsyncerr
 	}
@@ -252,10 +252,10 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 				return err
 			}
 		}
-		fmt.Printf(progress.Display())
+		fmt.Print(progress.Display())
 	}
 
-	fmt.Printf(progress.Display())
+	fmt.Print(progress.Display())
 
 	if cmd.JSONOutputEnabled() {
 		return cmd.OutputJSON(nil, err)

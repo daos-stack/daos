@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -71,6 +72,9 @@ class ExecutableCommand(CommandWithParameters):
         # list is used to generate the 'command_regex' property, which can be
         # used to check on the progress or terminate the command.
         self._exe_names = [self.command]
+
+        # If set use the full command string when returning the 'command_regex' property
+        self.full_command_regex = False
 
         # Define an attribute to store the CmdResult from the last run() call.
         # A CmdResult object has the following properties:
@@ -475,7 +479,7 @@ class ExecutableCommand(CommandWithParameters):
         super().get_params(test)
         for namespace in ['/run/client/*', self.namespace]:
             if namespace is not None:
-                self.env.update_from_list(test.params.get("env_vars", namespace, []))
+                self.env.update_from_list(test.params.get("env_vars", namespace, None) or [])
 
     def _get_new(self):
         """Get a new object based upon this one.

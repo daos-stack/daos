@@ -212,6 +212,8 @@ palloc_reservation_create(struct palloc_heap *heap, size_t size, palloc_constr c
 		return -1;
 	}
 
+	heap_soemb_active_iter_init(heap);
+
 retry:
 	mb = heap_mbrt_get_mb(heap, mb_id);
 	if (mb == NULL) {
@@ -288,7 +290,7 @@ out:
 	 */
 	if ((mb_id != 0) && (err == ENOMEM)) {
 		heap_mbrt_log_alloc_failure(heap, mb_id);
-		mb_id = 0;
+		mb_id = heap_soemb_active_get(heap);
 		goto retry;
 	}
 
@@ -305,6 +307,7 @@ palloc_heap_action_exec(struct palloc_heap *heap,
 	struct operation_context *ctx)
 {
 	struct zone *zone;
+	bool         is_evictable = false;
 #ifdef DAV_EXTRA_DEBUG
 	if (act->m.m_ops->get_state(&act->m) == act->new_state) {
 		D_CRIT("invalid operation or heap corruption\n");
@@ -324,14 +327,19 @@ palloc_heap_action_exec(struct palloc_heap *heap,
 	 * Update the memory bucket utilization info.
 	 */
 	if (heap_mbrt_ismb_evictable(heap, act->m.zone_id))
-		zone = ZID_TO_ZONE(&heap->layout_info, act->m.zone_id);
-	else
-		zone = heap->layout_info.zone0;
+		is_evictable = true;
 
-	if (act->new_state == MEMBLOCK_FREE)
+	zone = ZID_TO_ZONE(&heap->layout_info, act->m.zone_id);
+
+	if (act->new_state == MEMBLOCK_FREE) {
 		zone->header.sp_usage -= act->m.m_ops->get_real_size(&act->m);
-	else
+		if (!is_evictable && !zone->header.sp_usage)
+			heap_incr_empty_nemb_cnt(heap);
+	} else {
+		if (!is_evictable && !zone->header.sp_usage)
+			heap_decr_empty_nemb_cnt(heap);
 		zone->header.sp_usage += act->m.m_ops->get_real_size(&act->m);
+	}
 	operation_add_entry(ctx, &zone->header.sp_usage, zone->header.sp_usage, ULOG_OPERATION_SET);
 }
 

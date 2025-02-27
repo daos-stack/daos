@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -25,11 +26,11 @@ from dmg_utils import get_dmg_command
 from environment_utils import TestEnvironment
 from exception_utils import CommandFailure
 from fault_config_utils import FaultInjection
-from general_utils import (dict_to_str, dump_engines_stacks, get_avocado_config_value,
-                           nodeset_append_suffix, set_avocado_config_value)
+from general_utils import (DaosTestError, dict_to_str, dump_engines_stacks,
+                           get_avocado_config_value, nodeset_append_suffix,
+                           set_avocado_config_value)
 from host_utils import HostException, HostInfo, HostRole, get_host_parameters, get_local_host
-from logger_utils import TestLogger
-from pydaos.raw import DaosApiError, DaosContext, DaosLog
+from pydaos.raw import DaosApiError, DaosContext
 from run_utils import run_local, run_remote, stop_processes
 from server_utils import DaosServerManager
 from slurm_utils import SlurmFailed, get_partition_hosts, get_reservation_hosts
@@ -476,6 +477,9 @@ class Test(avocadoTest):
         self.report_timeout()
         super().tearDown()
 
+        # Execute any tear down steps in the reverse order of which they were registered.
+        self._teardown_errors.extend(self._cleanup())
+
         # Clean up any temporary files
         self._teardown_errors.extend(self.remove_temp_test_dir())
 
@@ -501,25 +505,17 @@ class TestWithoutServers(Test):
 
         self.client_mca = None
         self.bin = None
-        self.daos_test = None
         self.cart_prefix = None
         self.cart_bin = None
         self.tmp = None
         self.context = None
-        self.d_log = None
         self.fault_injection = None
         self.label_generator = LabelGenerator()
-
-        # Create a default TestLogger w/o a DaosLog object to prevent errors in
-        # tearDown() if setUp() is not completed.  The DaosLog is added upon the
-        # completion of setUp().
-        self.test_log = TestLogger(self.log, None)
 
     def setUp(self):
         """Set up run before each test."""
         super().setUp()
         self.bin = os.path.join(self.prefix, 'bin')
-        self.daos_test = os.path.join(self.prefix, 'bin', 'daos_test')
 
         # set the shared directory for daos tests
         self.tmp = self.test_env.shared_dir
@@ -532,8 +528,6 @@ class TestWithoutServers(Test):
         self.fault_injection.start(self.params.get("fault_list", '/run/faults/*'), self.test_dir)
 
         self.context = DaosContext(self.prefix + '/lib64/')
-        self.d_log = DaosLog(self.context)
-        self.test_log.daos_log = self.d_log
 
     def tearDown(self):
         """Tear down after each test case."""
@@ -664,8 +658,8 @@ class TestWithServers(TestWithoutServers):
         self.__dump_engine_ult_on_failure = True
         # Whether engines ULT stacks have been already dumped
         self.__have_dumped_ult_stacks = False
-        # Suffix to append to each access point name
-        self.access_points_suffix = None
+        # Suffix to append to each MS replica name
+        self.mgmt_svc_replicas_suffix = None
 
     def setUp(self):
         """Set up each test case."""
@@ -722,23 +716,23 @@ class TestWithServers(TestWithoutServers):
         self.hostlist_servers = NodeSet(self.host_info.servers.hosts)
         self.hostlist_clients = NodeSet(self.host_info.clients.hosts)
 
-        # Access points to use by default when starting servers and agents
-        #  - for 1 or 2 servers use 1 access point
-        #  - for 3 or more servers use 3 access points
-        default_access_points_qty = 1 if len(self.hostlist_servers) < 3 else 3
-        access_points_qty = self.params.get(
-            "access_points_qty", "/run/setup/*", default_access_points_qty)
-        if access_points_qty < 1 or access_points_qty > len(self.hostlist_servers):
-            self.fail("Invalid access points node quantity")
-        default_access_points = self.hostlist_servers[:access_points_qty]
-        self.access_points = NodeSet(
-            self.params.get("access_points", "/run/setup/*", default_access_points))
-        self.access_points_suffix = self.params.get(
-            "access_points_suffix", "/run/setup/*", self.access_points_suffix)
-        if self.access_points_suffix:
-            self.access_points = nodeset_append_suffix(
-                self.access_points, self.access_points_suffix)
-        self.host_info.access_points = self.access_points
+        # MS replicas to use by default when starting servers and agents
+        #  - for 1 or 2 servers use 1 replica
+        #  - for 3 or more servers use 3 replicas
+        default_mgmt_svc_replicas_qty = 1 if len(self.hostlist_servers) < 3 else 3
+        mgmt_svc_replicas_qty = self.params.get(
+            "mgmt_svc_replicas_qty", "/run/setup/*", default_mgmt_svc_replicas_qty)
+        if mgmt_svc_replicas_qty < 1 or mgmt_svc_replicas_qty > len(self.hostlist_servers):
+            self.fail("Invalid MS replica node quantity")
+        default_mgmt_svc_replicas = self.hostlist_servers[:mgmt_svc_replicas_qty]
+        self.mgmt_svc_replicas = NodeSet(
+            self.params.get("mgmt_svc_replicas", "/run/setup/*", default_mgmt_svc_replicas))
+        self.mgmt_svc_replicas_suffix = self.params.get(
+            "mgmt_svc_replicas_suffix", "/run/setup/*", self.mgmt_svc_replicas_suffix)
+        if self.mgmt_svc_replicas_suffix:
+            self.mgmt_svc_replicas = nodeset_append_suffix(
+                self.mgmt_svc_replicas, self.mgmt_svc_replicas_suffix)
+        self.host_info.mgmt_svc_replicas = self.mgmt_svc_replicas
 
         # Toggle whether to dump server ULT stacks on failure
         self.__dump_engine_ult_on_failure = self.params.get(
@@ -879,9 +873,9 @@ class TestWithServers(TestWithoutServers):
         Args:
             agent_groups (dict, optional): dictionary of dictionaries,
                 containing the list of hosts on which to start the daos agent
-                and the list of server access points, using a unique server
+                and the list of MS replicas, using a unique server
                 group name key. Defaults to None which will use the server group
-                name, all of the client hosts, and the access points from the
+                name, all of the client hosts, and the MS replicas from the
                 test's yaml file to define a single server group entry.
             force (bool, optional): whether or not to force starting the agents.
                 Defaults to False.
@@ -894,6 +888,7 @@ class TestWithServers(TestWithoutServers):
         self.setup_agents(agent_groups)
         if self.agent_managers:
             self.start_agent_managers(force)
+            self.register_cleanup(self.stop_agents)
 
     def start_servers(self, server_groups=None, force=False):
         """Start the daos_server processes.
@@ -901,9 +896,9 @@ class TestWithServers(TestWithoutServers):
         Args:
             server_groups (dict, optional): dictionary of dictionaries,
                 containing the list of hosts on which to start the daos server
-                and the list of access points, using a unique server group name
+                and the list of MS replicas, using a unique server group name
                 key. Defaults to None which will use the server group name, all
-                of the server hosts, and the access points from the test's yaml
+                of the server hosts, and the MS replicas from the test's yaml
                 file to define a single server group entry.
             force (bool, optional): whether or not to force starting the
                 servers. Defaults to False.
@@ -917,6 +912,7 @@ class TestWithServers(TestWithoutServers):
         self.setup_servers(server_groups)
         if self.server_managers:
             force_agent_start = self.start_server_managers(force)
+            self.register_cleanup(self.stop_servers)
         return force_agent_start
 
     def restart_servers(self):
@@ -934,7 +930,7 @@ class TestWithServers(TestWithoutServers):
             errors.append(
                 "ERROR: At least one multi-variant server was not found in its expected state "
                 "prior to stopping all servers")
-        self.test_log.info("Stopping %s group(s) of servers", len(self.server_managers))
+        self.log.info("Stopping %s group(s) of servers", len(self.server_managers))
         errors.extend(self._stop_managers(self.server_managers, "servers"))
 
         self.log.info("-" * 100)
@@ -967,9 +963,9 @@ class TestWithServers(TestWithoutServers):
         Args:
             agent_groups (dict, optional): dictionary of dictionaries,
                 containing the list of hosts on which to start the daos agent
-                and the list of server access points, using a unique server
+                and the list of server MS replicas, using a unique server
                 group name key. Defaults to None which will use the server group
-                name, all of the client hosts, and the access points from the
+                name, all of the client hosts, and the MS replicas from the
                 test's yaml file to define a single server group entry.
 
         Raises:
@@ -983,7 +979,7 @@ class TestWithServers(TestWithoutServers):
             agent_groups = {
                 self.server_group: {
                     "hosts": include_local_host(self.hostlist_clients),
-                    "access_points": self.access_points
+                    "mgmt_svc_replicas": self.mgmt_svc_replicas
                 }
             }
 
@@ -998,7 +994,7 @@ class TestWithServers(TestWithoutServers):
                     self.agent_managers[-1],
                     info["hosts"],
                     self.hostfile_clients_slots,
-                    info["access_points"])
+                    info["mgmt_svc_replicas"])
 
     def setup_servers(self, server_groups=None):
         """Start the daos_server processes.
@@ -1006,9 +1002,9 @@ class TestWithServers(TestWithoutServers):
         Args:
             server_groups (dict, optional): dictionary of dictionaries,
                 containing the list of hosts on which to start the daos server
-                and the list of access points, using a unique server group name
+                and the list of MS replicas, using a unique server group name
                 key. Defaults to None which will use the server group name, all
-                of the server hosts, and the access points from the test's yaml
+                of the server hosts, and the MS replicas from the test's yaml
                 file to define a single server group entry.
 
         Raises:
@@ -1020,7 +1016,7 @@ class TestWithServers(TestWithoutServers):
             server_groups = {
                 self.server_group: {
                     "hosts": self.hostlist_servers,
-                    "access_points": self.access_points,
+                    "mgmt_svc_replicas": self.mgmt_svc_replicas,
                     "svr_config_file": None,
                     "dmg_config_file": None,
                     "svr_config_temp": None,
@@ -1041,7 +1037,7 @@ class TestWithServers(TestWithoutServers):
                     self.server_managers[-1],
                     info["hosts"],
                     self.hostfile_servers_slots,
-                    info["access_points"])
+                    info["mgmt_svc_replicas"])
 
     def get_config_file(self, name, command, path=None):
         """Get the yaml configuration file.
@@ -1161,7 +1157,7 @@ class TestWithServers(TestWithoutServers):
             DaosServerManager(
                 group, self.bin, svr_cert_dir, svr_config_file, dmg_cert_dir,
                 dmg_config_file, svr_config_temp, dmg_config_temp,
-                self.server_manager_class, access_points_suffix=self.access_points_suffix)
+                self.server_manager_class, mgmt_svc_replicas_suffix=self.mgmt_svc_replicas_suffix)
         )
         if self.server_config_namespace is not None:
             self.log.debug(
@@ -1169,7 +1165,7 @@ class TestWithServers(TestWithoutServers):
                 len(self.server_managers) - 1, self.server_config_namespace)
             self.server_managers[-1].manager.job.yaml.namespace = self.server_config_namespace
 
-    def configure_manager(self, name, manager, hosts, slots, access_points=None):
+    def configure_manager(self, name, manager, hosts, slots, mgmt_svc_replicas=None):
         """Configure the agent/server manager object.
 
         Defines the environment variables, host list, and hostfile settings used
@@ -1180,17 +1176,22 @@ class TestWithServers(TestWithoutServers):
             manager (SubprocessManager): the daos agent/server process manager
             hosts (NodeSet): hosts on which to start the daos agent/server
             slots (int): number of slots per engine to define in the hostfile
-            access_points (NodeSet): access point hosts. Defaults to None which
-                uses self.access_points.
+            mgmt_svc_replicas (NodeSet): MS replica hosts. Defaults to None which
+                uses self.mgmt_svc_replicas.
 
         """
         self.log.info("-" * 100)
         self.log.info("--- CONFIGURING %s MANAGER ---", name.upper())
-        if access_points is None:
-            access_points = NodeSet(self.access_points)
+        if mgmt_svc_replicas is None:
+            mgmt_svc_replicas = NodeSet(self.mgmt_svc_replicas)
         # Calling get_params() will set the test-specific log names
         manager.get_params(self)
-        manager.set_config_value("access_points", list(access_points))
+        if name == "server":
+            manager.set_config_value("mgmt_svc_replicas", list(mgmt_svc_replicas))
+        elif name == "agent":
+            manager.set_config_value("access_points", list(mgmt_svc_replicas))
+        else:
+            raise DaosTestError("invalid manager name: {}".format(name))
         manager.manager.assign_environment(
             EnvironmentVariables({"PATH": None}), True)
         manager.hosts = (hosts, self.workdir, slots)
@@ -1211,7 +1212,7 @@ class TestWithServers(TestWithoutServers):
             # Stop any running agents
             self.log.info("-" * 100)
             self.log.info("--- STOPPING AGENTS ---")
-            self.test_log.info(
+            self.log.info(
                 "Stopping %s group(s) of agents", len(self.agent_managers))
             self._stop_managers(self.agent_managers, "agents")
 
@@ -1248,7 +1249,7 @@ class TestWithServers(TestWithoutServers):
             # Stop any running servers
             self.log.info("-" * 100)
             self.log.info("--- STOPPING SERVERS ---")
-            self.test_log.info(
+            self.log.info(
                 "Stopping %s group(s) of servers", len(self.server_managers))
             self._stop_managers(self.server_managers, "servers")
 
@@ -1396,23 +1397,13 @@ class TestWithServers(TestWithoutServers):
         # class (see DAOS-1452/DAOS-9941 and Avocado issue #5217 with
         # associated PR-5224)
         if self.status is not None and self.status != 'PASS' and self.status != 'SKIP':
-            self.__dump_engines_stacks("Test status is {}".format(self.status))
+            self.__dump_engines_stacks(f"Test status is {self.status}")
 
         # Report whether or not the timeout has expired
         self.report_timeout()
 
         # Tear down any test-specific items
         self._teardown_errors = self.pre_tear_down()
-
-        # Destroy any job managers, containers, pools, and dfuse instances next
-        # Eventually this call will encompass all teardown steps
-        self._teardown_errors.extend(self._cleanup())
-
-        # Stop the agents
-        self._teardown_errors.extend(self.stop_agents())
-
-        # Stop the servers
-        self._teardown_errors.extend(self.stop_servers())
 
         super().tearDown()
 
@@ -1441,7 +1432,7 @@ class TestWithServers(TestWithoutServers):
         if containers:
             if not isinstance(containers, (list, tuple)):
                 containers = [containers]
-            self.test_log.info("Destroying containers")
+            self.log.info("Destroying containers")
             for container in containers:
                 # Ensure exceptions are raised for any failed command
                 if hasattr(container, "daos") and container.daos is not None:
@@ -1452,7 +1443,7 @@ class TestWithServers(TestWithoutServers):
                     try:
                         container.close()
                     except (DaosApiError, TestFail) as error:
-                        self.test_log.info("  {}".format(error))
+                        self.log.info(error)
                         error_list.append(
                             "Error closing the container: {}".format(error))
 
@@ -1461,7 +1452,7 @@ class TestWithServers(TestWithoutServers):
                     try:
                         container.destroy()
                     except (DaosApiError, TestFail) as error:
-                        self.test_log.info("  {}".format(error))
+                        self.log.info(error)
                         error_list.append(
                             "Error destroying container: {}".format(error))
         return error_list
@@ -1481,7 +1472,7 @@ class TestWithServers(TestWithoutServers):
         if pools:
             if not isinstance(pools, (list, tuple)):
                 pools = [pools]
-            self.test_log.info("Destroying pools")
+            self.log.info("Destroying pools")
             for pool in pools:
                 # Ensure exceptions are raised for any failed command
                 if pool.dmg is not None:
@@ -1492,7 +1483,7 @@ class TestWithServers(TestWithoutServers):
                     try:
                         pool.disconnect()
                     except (DaosApiError, TestFail) as error:
-                        self.test_log.info("  {}".format(error))
+                        self.log.info(error)
                         error_list.append(
                             "Error disconnecting pool: {}".format(error))
 
@@ -1501,7 +1492,7 @@ class TestWithServers(TestWithoutServers):
                     try:
                         pool.destroy(1)
                     except (DaosApiError, TestFail) as error:
-                        self.test_log.info("  {}".format(error))
+                        self.log.info(error)
                         error_list.append(
                             "Error destroying pool: {}".format(error))
         return error_list
@@ -1515,7 +1506,7 @@ class TestWithServers(TestWithoutServers):
 
         """
         error_list = []
-        self.test_log.info("Searching for any existing pools")
+        self.log.info("Searching for any existing pools")
         for manager in self.server_managers:
             # Ensure exceptions are raised for any failed command
             manager.dmg.exit_status_exception = True
@@ -1565,7 +1556,7 @@ class TestWithServers(TestWithoutServers):
                 errors.append(
                     "ERROR: At least one multi-variant agent was not found in "
                     "its expected state; stopping all agents")
-            self.test_log.info(
+            self.log.info(
                 "Stopping %s group(s) of agents", len(self.agent_managers))
             errors.extend(self._stop_managers(self.agent_managers, "agents"))
         return errors
@@ -1609,15 +1600,10 @@ class TestWithServers(TestWithoutServers):
                     "its expected state; stopping all servers")
                 # dump engines stacks if not already done
                 self.__dump_engines_stacks("Some engine not in expected state")
-            self.test_log.info(
+            self.log.info(
                 "Stopping %s group(s) of servers", len(self.server_managers))
             errors.extend(self._stop_managers(self.server_managers, "servers"))
 
-            # Stopping agents whenever servers are stopped for DAOS-6873
-            self.log.info(
-                "Workaround for DAOS-6873: Stopping %s group(s) of agents",
-                len(self.agent_managers))
-            errors.extend(self._stop_managers(self.agent_managers, "agents"))
         return errors
 
     def _stop_managers(self, managers, name):
@@ -1637,7 +1623,7 @@ class TestWithServers(TestWithoutServers):
                 try:
                     manager.stop()
                 except CommandFailure as error:
-                    self.test_log.info("  {}".format(error))
+                    self.log.info(error)
                     error_list.append(
                         "Error stopping {}: {}".format(name, error))
         return error_list
@@ -1665,13 +1651,13 @@ class TestWithServers(TestWithoutServers):
         """Get a DmgCommand setup to interact with server manager index.
 
         Return a DmgCommand object configured with:
-            - the "-l" parameter assigned to the server's access point list
+            - the "-l" parameter assigned to the server's MS replica list
             - the "-i" parameter assigned to the server's interactive mode
 
         This method is intended to be used by tests that wants to use dmg to
         create and destroy pool. Pass in the object to TestPool constructor.
 
-        Access point should be passed in to -l regardless of the number of
+        MS replica should be passed in to -l regardless of the number of
         servers.
 
         Args:
@@ -1695,8 +1681,8 @@ class TestWithServers(TestWithoutServers):
 
         dmg_cmd = get_dmg_command(
             self.server_group, dmg_cert_dir, self.bin, dmg_config_file,
-            dmg_config_temp, self.access_points_suffix)
-        dmg_cmd.hostlist = self.access_points
+            dmg_config_temp, self.mgmt_svc_replicas_suffix)
+        dmg_cmd.hostlist = self.mgmt_svc_replicas
         return dmg_cmd
 
     def get_daos_command(self):
@@ -1841,7 +1827,7 @@ class TestWithServers(TestWithoutServers):
             self.container.append(
                 self.get_container(pool=pool, namespace=namespace, create=create))
 
-    def start_additional_servers(self, additional_servers, index=0, access_points=None):
+    def start_additional_servers(self, additional_servers, index=0, mgmt_svc_replicas=None):
         """Start additional servers.
 
         This method can be used to start a new daos_server during a test.
@@ -1850,8 +1836,8 @@ class TestWithServers(TestWithoutServers):
             additional_servers (NodeSet): hosts on which to start daos_server.
             index (int): Determines which server_managers to use when creating
                 the new server.
-            access_points (NodeSet): access point hosts. Defaults to None which
-                uses self.access_points.
+            mgmt_svc_replicas (NodeSet): MS replica hosts. Defaults to None which
+                uses self.mgmt_svc_replicas.
         """
         self.add_server_manager(
             self.server_managers[index].manager.job.get_config_value("name"),
@@ -1865,6 +1851,6 @@ class TestWithServers(TestWithoutServers):
             self.server_managers[-1],
             additional_servers,
             self.hostfile_servers_slots,
-            access_points
+            mgmt_svc_replicas
         )
         self._start_manager_list("server", [self.server_managers[-1]])

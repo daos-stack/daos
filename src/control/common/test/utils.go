@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,7 +13,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -250,7 +250,7 @@ func CreateTestDir(t *testing.T) (string, func()) {
 	t.Helper()
 
 	name := strings.Replace(t.Name(), "/", "-", -1)
-	tmpDir, err := ioutil.TempDir("", name)
+	tmpDir, err := os.MkdirTemp("", name)
 	if err != nil {
 		t.Fatalf("Couldn't create temporary directory: %v", err)
 	}
@@ -268,7 +268,7 @@ func CreateTestDir(t *testing.T) (string, func()) {
 func CreateTestFile(t *testing.T, dir, content string) string {
 	t.Helper()
 
-	file, err := ioutil.TempFile(dir, "")
+	file, err := os.CreateTemp(dir, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -433,4 +433,12 @@ func MustLogContext(t *testing.T, log logging.Logger) context.Context {
 		t.Fatal(err)
 	}
 	return ctx
+}
+
+// JoinArgs creates a new string slice from a base string and optional
+// additional string arguments. Does not modify the base string.
+func JoinArgs(base []string, args ...string) []string {
+	joined := make([]string, len(base))
+	copy(joined, base)
+	return append(joined, args...)
 }

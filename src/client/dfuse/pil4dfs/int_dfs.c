@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -3582,6 +3583,7 @@ statfs(const char *pathname, struct statfs *sfs)
 	sfs->f_files  = -1;
 	sfs->f_ffree  = -1;
 	sfs->f_bavail = sfs->f_bfree;
+	sfs->f_type   = DAOS_SUPER_MAGIC;
 
 	drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
@@ -3639,6 +3641,7 @@ fstatfs(int fd, struct statfs *sfs)
 	sfs->f_files  = -1;
 	sfs->f_ffree  = -1;
 	sfs->f_bavail = sfs->f_bfree;
+	sfs->f_type   = DAOS_SUPER_MAGIC;
 
 	return 0;
 }
@@ -3690,6 +3693,7 @@ statvfs(const char *pathname, struct statvfs *svfs)
 	svfs->f_files  = -1;
 	svfs->f_ffree  = -1;
 	svfs->f_bavail = svfs->f_bfree;
+	svfs->f_fsid   = DAOS_SUPER_MAGIC;
 
 	drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
@@ -4616,13 +4620,7 @@ execve(const char *filename, char *const argv[], char *const envp[])
 	if (rc)
 		goto err;
 
-	rc = next_execve(filename, argv, new_envp);
-	if (rc == -1)
-		/* d_hook_enabled could be set false in reset_daos_env_before_exec(). Need to be
-		 * restored if exec() failed for some reason.
-		 */
-		d_hook_enabled = true;
-	return rc;
+	return next_execve(filename, argv, new_envp);
 
 err:
 	errno = rc;
@@ -4650,10 +4648,7 @@ execvpe(const char *filename, char *const argv[], char *const envp[])
 	if (rc)
 		goto err;
 
-	rc = next_execvpe(filename, argv, new_envp);
-	if (rc == -1)
-		d_hook_enabled = true;
-	return rc;
+	return next_execvpe(filename, argv, new_envp);
 
 err:
 	errno = rc;
@@ -4678,10 +4673,7 @@ execv(const char *filename, char *const argv[])
 		return (-1);
 	}
 
-	rc = next_execv(filename, argv);
-	if (rc == -1)
-		d_hook_enabled = true;
-	return rc;
+	return next_execv(filename, argv);
 }
 
 int
@@ -4702,10 +4694,7 @@ execvp(const char *filename, char *const argv[])
 		return (-1);
 	}
 
-	rc = next_execvp(filename, argv);
-	if (rc == -1)
-		d_hook_enabled = true;
-	return rc;
+	return next_execvp(filename, argv);
 }
 
 int
@@ -4729,10 +4718,7 @@ fexecve(int fd, char *const argv[], char *const envp[])
 	if (rc)
 		goto err;
 
-	rc = next_fexecve(fd, argv, new_envp);
-	if (rc == -1)
-		d_hook_enabled = true;
-	return rc;
+	return next_fexecve(fd, argv, new_envp);
 
 err:
 	errno = rc;
@@ -6147,13 +6133,17 @@ futimens(int fd, const struct timespec times[2])
 static int
 new_fcntl(int fd, int cmd, ...)
 {
-	int     fd_directed, param, OrgFunc = 1;
+	int     fd_directed, OrgFunc = 1;
 	int     next_dirfd, next_fd, rc;
+	void   *param;
 	va_list arg;
 
 	va_start(arg, cmd);
-	param = va_arg(arg, int);
+	param = va_arg(arg, void *);
 	va_end(arg);
+
+	if (!d_hook_enabled)
+		return libc_fcntl(fd, cmd, param);
 
 	if (fd < FD_FILE_BASE && d_compatible_mode)
 		return libc_fcntl(fd, cmd, param);
@@ -6172,9 +6162,6 @@ new_fcntl(int fd, int cmd, ...)
 	case F_SETPIPE_SZ:
 	case F_ADD_SEALS:
 		fd_directed = d_get_fd_redirected(fd);
-
-		if (!d_hook_enabled)
-			return libc_fcntl(fd, cmd, param);
 
 		if (cmd == F_GETFL) {
 			if (fd_directed >= FD_DIR_BASE)
@@ -6224,12 +6211,15 @@ new_fcntl(int fd, int cmd, ...)
 	case F_OFD_GETLK:
 	case F_GETOWN_EX:
 	case F_SETOWN_EX:
-		if (!d_hook_enabled)
+		fd_directed = d_get_fd_redirected(fd);
+		if (fd_directed >= FD_FILE_BASE) {
+			errno = ENOTSUP;
+			return (-1);
+		} else {
 			return libc_fcntl(fd, cmd, param);
-
-		return libc_fcntl(fd, cmd, param);
+		}
 	default:
-		return libc_fcntl(fd, cmd);
+		return libc_fcntl(fd, cmd, param);
 	}
 }
 

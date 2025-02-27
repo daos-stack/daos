@@ -1,5 +1,7 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -227,6 +229,22 @@ static btr_ops_t oi_btr_ops = {
 	.to_node_alloc		= oi_node_alloc,
 };
 
+bool
+vos_oi_exist(daos_handle_t coh, daos_unit_oid_t oid)
+{
+	struct vos_container	*cont = vos_hdl2cont(coh);
+	d_iov_t			 key_iov;
+	d_iov_t			 val_iov;
+	int			 rc;
+
+	d_iov_set(&key_iov, &oid, sizeof(oid));
+	d_iov_set(&val_iov, NULL, 0);
+
+	rc = dbtree_fetch(cont->vc_btr_hdl, BTR_PROBE_EQ,
+			  DAOS_INTENT_DEFAULT, &key_iov, NULL, &val_iov);
+	return rc == 0;
+}
+
 /**
  * Locate a durable object in OI table.
  */
@@ -321,6 +339,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 	if (log) {
 		vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
 		rc = ilog_open(vos_cont2umm(cont), &obj->vo_ilog, &cbs, dth == NULL, &loh);
+		D_ASSERTF(rc != -DER_NONEXIST, "Uncorrectable incarnation log corruption detected");
 		if (rc != 0)
 			return rc;
 
@@ -895,6 +914,7 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
 	struct vos_container    *cont  = oiter->oit_cont;
 	struct vos_obj_df	*obj;
+	struct oi_delete_arg	 del_arg;
 	daos_unit_oid_t		 oid;
 	d_iov_t			 rec_iov;
 	bool			 delete = false, invisible = false;
@@ -945,7 +965,9 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 		if (rc != 0)
 			D_ERROR("Could not evict object "DF_UOID" "DF_RC"\n",
 				DP_UOID(oid), DP_RC(rc));
-		rc = dbtree_iter_delete(oiter->oit_hdl, NULL);
+		del_arg.cont = oiter->oit_cont;
+		del_arg.only_delete_entry = 0;
+		rc = dbtree_iter_delete(oiter->oit_hdl, &del_arg);
 		D_ASSERT(rc != -DER_NONEXIST);
 	} else if (rc == -DER_NONEXIST) {
 		/** ilog isn't visible in range but still has some entries */
