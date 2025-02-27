@@ -115,13 +115,82 @@ CRT_PROC_TYPE_FUNC(bool)
 
 int
 crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op,
-		    crt_bulk_t *bulk_hdl)
+		    crt_bulk_t *crt_bulk)
 {
+	struct crt_bulk	*bulk = *crt_bulk;
 	hg_return_t	hg_ret;
+	hg_bulk_t 	tmp_hg_bulk;
 
-	hg_ret = hg_proc_hg_bulk_t(proc, (hg_bulk_t *)bulk_hdl);
 
-	return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
+	/*
+	 * We only send 'hg_bulk_t' over the wire. During encoding stage we
+	 * extract mercury bulk handle from crt_bulk_t, while during decode
+	 * we wrap mercury bulk in crt_bulk_t struct
+	 */
+	switch (proc_op) {
+	case CRT_PROC_ENCODE:
+		if (!bulk) {
+			hg_ret = hg_proc_hg_bulk_t(proc, (hg_bulk_t *)crt_bulk);
+			return 0;
+		}
+
+		/* Deferred allocation as a result of D_QUOTA_BULKS limit */
+		if (bulk->hg_bulk_hdl == HG_BULK_NULL) {
+			struct crt_context	*ctx;
+			int			rc;
+
+			/* Create actual mercury handle based on remembered params */
+			ctx = bulk->crt_ctx;
+			rc  = crt_hg_bulk_create(&ctx->cc_hg_ctx,
+						 bulk->sgl, bulk->bulk_perm,
+						 &bulk->hg_bulk_hdl);
+			if (rc != DER_SUCCESS)
+				return -DER_HG;
+
+			record_quota_resource(ctx, CRT_QUOTA_BULKS);
+
+			if (bulk->bound) {
+				rc = crt_hg_bulk_bind(bulk->hg_bulk_hdl, &ctx->cc_hg_ctx);
+				if (rc != 0) {
+					D_ERROR("Failed to bind bulk druing proc\n");
+					/* free will return quota resource */
+					crt_bulk_free(bulk->hg_bulk_hdl);
+					return -DER_HG;
+				}
+			}
+		}
+
+		/* Send mercury bulk handle over the wire */
+		hg_ret = hg_proc_hg_bulk_t(proc, (hg_bulk_t *)&bulk->hg_bulk_hdl);
+		return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
+		break;
+
+	case CRT_PROC_DECODE:
+		/* unpack mercury handle and wrap it around crt_bulk_t struct */
+		hg_ret = hg_proc_hg_bulk_t(proc, &tmp_hg_bulk);
+		if (hg_ret != HG_SUCCESS)
+			return -DER_HG;
+
+		/* TODO: need to see if avoiding this alloc is possible */
+		D_ALLOC_PTR(bulk);
+		if (!bulk)
+			return -DER_NOMEM;
+
+		bulk->hg_bulk_hdl = tmp_hg_bulk;
+		*crt_bulk = bulk;
+		return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
+		break;
+
+	case CRT_PROC_FREE:
+		hg_ret = hg_proc_hg_bulk_t(proc, &bulk->hg_bulk_hdl);
+
+		D_FREE(bulk);
+		return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
+		break;
+	}
+
+	/* Should not get here */
+	return -DER_INVAL;
 }
 
 int
