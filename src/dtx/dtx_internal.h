@@ -188,14 +188,14 @@ extern uint32_t dtx_batched_ult_max;
  * dispatch process may trigger too many in-flight or in-queued RPCs that will hold
  * too much resource as to server maybe out of memory.
  */
-#define DTX_REG_RPC_STEP_LENGTH		512
+#define DTX_REG_RPC_STEP_LENGTH         512
 
 /*
  * High priority (DTX) RPC may break through IO chore credit restriction temporarily.
  * To reduce the side-affect on the other IO forward RPCs, use smaller step for high
  * priority RPC.
  */
-#define DTX_PRI_RPC_STEP_LENGTH		64
+#define DTX_PRI_RPC_STEP_LENGTH         64
 
 extern struct crt_corpc_ops	dtx_coll_commit_co_ops;
 extern struct crt_corpc_ops	dtx_coll_abort_co_ops;
