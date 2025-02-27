@@ -487,7 +487,8 @@ func hugePageBytes(hpNr, hpSz int) uint64 {
 	return uint64(hpNr*hpSz) * humanize.KiByte
 }
 
-func (cfg *Server) getTgtCounts(log logging.Logger) (cfgTargetCount, sysXSCount int) {
+// GetTgtCounts returns target count totals for a server config file.
+func (cfg *Server) GetTgtCounts(log logging.Logger) (cfgTargetCount, sysXSCount int) {
 	for idx, ec := range cfg.Engines {
 		msg := fmt.Sprintf("engine %d fabric numa %d, storage numa %d", idx,
 			ec.Fabric.NumaNodeIndex, ec.Storage.NumaNodeIndex)
@@ -512,7 +513,7 @@ func (cfg *Server) getTgtCounts(log logging.Logger) (cfgTargetCount, sysXSCount 
 }
 
 func (cfg *Server) getMinMaxNrHugepages(log logging.Logger, hpSizeKiB int) (int, int, error) {
-	cfgTargetCount, sysXSCount := cfg.getTgtCounts(log)
+	cfgTargetCount, sysXSCount := cfg.GetTgtCounts(log)
 
 	if cfgTargetCount == 0 {
 		return 0, 0, nil
