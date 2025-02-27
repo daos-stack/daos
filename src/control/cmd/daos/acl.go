@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -42,6 +43,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 )
 
 func getAclStrings(e *C.struct_daos_prop_entry) (out []string) {
@@ -154,7 +156,7 @@ func (cmd *containerOverwriteACLCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
+	cleanup, err := cmd.resolveAndOpen(daos.ContainerOpenFlagReadWrite, ap)
 	if err != nil {
 		return err
 	}
@@ -244,7 +246,7 @@ func (cmd *containerUpdateACLCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
+	cleanup, err := cmd.resolveAndOpen(daos.ContainerOpenFlagReadWrite, ap)
 	if err != nil {
 		return err
 	}
@@ -278,7 +280,7 @@ func (cmd *containerDeleteACLCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
+	cleanup, err := cmd.resolveAndOpen(daos.ContainerOpenFlagReadWrite, ap)
 	if err != nil {
 		return err
 	}
@@ -340,7 +342,7 @@ func (cmd *containerGetACLCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RO, ap)
+	cleanup, err := cmd.resolveAndOpen(daos.ContainerOpenFlagReadOnly, ap)
 	if err != nil {
 		return err
 	}
@@ -348,7 +350,7 @@ func (cmd *containerGetACLCmd) Execute(args []string) error {
 
 	acl, err := cmd.getACL(ap)
 	if err != nil {
-		return errors.Wrapf(err, "failed to query ACL for container %s", cmd.contUUID)
+		return errors.Wrapf(err, "failed to query ACL for container %s", cmd.ContainerID())
 	}
 
 	if cmd.File != "" {
@@ -398,7 +400,7 @@ func (cmd *containerSetOwnerCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
+	cleanup, err := cmd.resolveAndOpen(daos.ContainerOpenFlagReadWrite, ap)
 	if err != nil {
 		return err
 	}
