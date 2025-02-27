@@ -760,9 +760,11 @@ def test_frequency(tags):
         return "pr"
     if "daily_regression" in tags:
         return "daily"
-    if "weekly_regression" in tags:
+    if "full_regression" in tags:
         return "weekly"
-    return "manual"
+    if "manual" in tags:
+        return "manual"
+    return ""
 
 
 def run_config(paths=None, tags=None, keys=None, csv_file=None):
