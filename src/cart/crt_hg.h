@@ -18,6 +18,8 @@
 #include <mercury_proc_string.h>
 #include <mercury_log.h>
 
+#include <stdatomic.h>
+
 /** the shared HG RPC ID used for all CRT opc */
 #define CRT_HG_RPCID		(0xDA036868)
 #define CRT_HG_ONEWAY_RPCID	(0xDA036869)
@@ -111,20 +113,30 @@ struct crt_hg_pool {
 	bool			chp_enabled;
 };
 
+/* For multi progress on single context */
+struct crt_hg_progress_multi {
+	pthread_cond_t  cond;  /* Cond */
+	pthread_mutex_t mutex; /* Mutex */
+	atomic_uint     count; /* Count */
+};
+
 /** HG context */
 struct crt_hg_context {
 	/* Flag indicating whether hg class is shared; true for SEP mode */
-	bool               chc_shared_hg_class;
-	hg_class_t        *chc_hgcla;              /* HG class */
-	hg_context_t      *chc_hgctx;              /* HG context */
-	hg_class_t        *chc_bulkcla;            /* bulk class */
-	hg_context_t      *chc_bulkctx;            /* bulk context */
-	struct crt_hg_pool chc_hg_pool;            /* HG handle pool */
-	int                chc_provider;           /* provider */
-	bool               chc_thread_mode_single; /* thread safety */
+	bool                         chc_shared_hg_class;
+	hg_class_t                  *chc_hgcla;              /* HG class */
+	hg_context_t                *chc_hgctx;              /* HG context */
+	hg_class_t                  *chc_bulkcla;            /* bulk class */
+	hg_context_t                *chc_bulkctx;            /* bulk context */
+	struct crt_hg_pool           chc_hg_pool;            /* HG handle pool */
+	int                          chc_provider;           /* provider */
+	bool                         chc_thread_mode_single; /* thread safety */
+	int                          chc_epfd;               /* epoll fd */
+	struct crt_hg_progress_multi chc_progress_multi;     /* multi progress */
 };
 
 /* crt_hg.c */
+/* clang-format off */
 int crt_hg_get_protocol_info(const char *info_string, struct na_protocol_info **na_protocol_info_p);
 void crt_hg_free_protocol_info(struct na_protocol_info *na_protocol_info);
 int crt_hg_init(void);
@@ -139,8 +151,10 @@ int crt_hg_reply_send(struct crt_rpc_priv *rpc_priv);
 void crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code);
 int crt_hg_req_cancel(struct crt_rpc_priv *rpc_priv);
 int crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout);
+int crt_hg_event_progress(struct crt_hg_context *hg_ctx, const struct timespec *deadline);
 int crt_hg_addr_free(struct crt_hg_context *hg_ctx, hg_addr_t addr);
 int crt_hg_get_addr(hg_class_t *hg_class, char *addr_str, size_t *str_size);
+/* clang-format on */
 
 int crt_rpc_handler_common(hg_handle_t hg_hdl);
 
