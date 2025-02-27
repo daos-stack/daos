@@ -425,8 +425,20 @@ func updateHugeMemValues(srv *server, ei *EngineInstance, mi *common.MemInfo) er
 	}
 	ei.RUnlock()
 
+	cfgNrTgts, nrSysXS := srv.cfg.GetTgtCounts(srv.log)
+
+	minHugepages := 0
+	if cfgNrTgts != 0 {
+		// Calculate minimum number of hugepages for all configured engines.
+		mhps, err := storage.CalcMinHugepages(mi.HugepageSizeKiB, cfgNrTgts+nrSysXS)
+		if err != nil {
+			return err
+		}
+		minHugepages = mhps
+	}
+
 	// Calculate mem_size per I/O engine (in MB) from number of hugepages required per engine.
-	nrPagesRequired := srv.cfg.NrHugepages / len(srv.cfg.Engines)
+	nrPagesRequired := minHugepages / len(srv.cfg.Engines)
 	pageSizeMiB := mi.HugepageSizeKiB / humanize.KiByte // kib to mib
 	memSizeReqMiB := nrPagesRequired * pageSizeMiB
 	memSizeFreeMiB := mi.HugepagesFree * pageSizeMiB
