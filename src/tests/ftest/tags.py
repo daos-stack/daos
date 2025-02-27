@@ -747,14 +747,14 @@ def test_tags_util(verbose=False):
     print('PASS  Ftest Tags Utility Unit Tests')
 
 
-def test_frequency(tags):
-    """Get the test frequency from its tags.
+def frequency_id(tags):
+    """Get the test frequency ID from its tags.
 
     Args:
         tags (dict): test tags
 
     Returns:
-        str: test frequency
+        str: test frequency or empty string if not a known test frequency
     """
     if "pr" in tags:
         return "pr"
@@ -797,7 +797,7 @@ def run_config(paths=None, tags=None, keys=None, csv_file=None):
                 # Add a new row of output
                 try:
                     output.append(
-                        [test_frequency(method_tags), short_file_path, class_name, method_name])
+                        [frequency_id(method_tags), short_file_path, class_name, method_name])
                     yaml_data = TestConfig(file_path, method_name)
                     for key in key_list:
                         output[-1].append(yaml_data.value(key))
@@ -930,7 +930,8 @@ def main():
         help="print verbose output")
 
     args = parser.parse_args()
-    args.paths = list(map(os.path.realpath, args.paths))
+    if hasattr(args, "paths"):
+        args.paths = list(map(os.path.realpath, args.paths))
 
     if args.command == "config":
         rc = run_config(args.paths, args.tags, args.keys, args.csv)
