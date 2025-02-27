@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -51,6 +52,22 @@ daos_oclass_attr_find(daos_obj_id_t oid, uint32_t *nr_grps)
 	D_DEBUG(DB_PL, "Find class %s for oid "DF_OID"\n",
 		oc->oc_name, DP_OID(oid));
 
+	return &oc->oc_attr;
+}
+
+/**
+ * Find the object class attributes for the provided oclass.
+ */
+struct daos_oclass_attr *
+daos_oclass_id2attr(daos_oclass_id_t oclass_id, uint32_t *nr_grps)
+{
+	struct daos_obj_class *oc;
+
+	oc = oclass_ident2cl(oclass_id, nr_grps);
+	if (!oc) {
+		D_WARN("Unknown object class %u\n", oclass_id);
+		return NULL;
+	}
 	return &oc->oc_attr;
 }
 
