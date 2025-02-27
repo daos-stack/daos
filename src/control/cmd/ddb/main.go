@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -225,7 +226,7 @@ Example Paths:
 	// Print the version upon entry
 	log.Infof("ddb version %s", build.DaosVersion)
 	// app.Run() uses the os.Args so need to clear them before running
-	os.Args = args
+	os.Args = []string{}
 	result := app.Run()
 	// make sure pool is closed
 	if ddbPoolIsOpen(ctx) {

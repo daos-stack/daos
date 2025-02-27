@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -76,7 +77,7 @@ struct ds_migrate_status {
 
 int
 ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver, unsigned int generation, int op,
-			struct ds_migrate_status *dms);
+			bool gl_scan_done, struct ds_migrate_status *dms);
 
 int
 ds_object_migrate_send(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_uuid,

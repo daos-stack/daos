@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
   (C) Copyright 2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,7 +9,7 @@ import ast
 import os
 import re
 import sys
-from argparse import ArgumentParser, RawDescriptionHelpFormatter
+from argparse import ArgumentParser, ArgumentTypeError, RawDescriptionHelpFormatter
 from collections import defaultdict
 from copy import deepcopy
 from pathlib import Path
@@ -21,6 +22,22 @@ MANUAL_TAG = ('manual',)
 STAGE_TYPE_TAGS = ('vm', 'hw', 'hw_vmd')
 STAGE_SIZE_TAGS = ('medium', 'large')
 STAGE_FREQUENCY_TAGS = ('all', 'pr', 'daily_regression', 'full_regression')
+
+
+class TagSet(set):
+    """Set with handling for negative entries."""
+
+    def issubset(self, other):
+        for tag in self:
+            if tag[0] == '-':
+                if tag[1:] in other:
+                    return False
+            elif tag not in other:
+                return False
+        return True
+
+    def issuperset(self, other):
+        return TagSet.issubset(other, self)
 
 
 class LintFailure(Exception):
@@ -144,7 +161,7 @@ class FtestTagMap():
         """
         tests1 = set(self.__tags_to_tests(tags1))
         tests2 = set(self.__tags_to_tests(tags2))
-        return tests1 and tests2 and tests1.issubset(tests2)
+        return bool(tests1) and bool(tests2) and tests1.issubset(tests2)
 
     def __tags_to_tests(self, tags):
         """Convert a list of tags to the tests they would run.
@@ -152,6 +169,9 @@ class FtestTagMap():
         Args:
             tags (list): list of sets of tags
         """
+        # Convert to TagSet to handle negative matching
+        for idx, _tags in enumerate(tags):
+            tags[idx] = TagSet(_tags)
         tests = []
         for method_name, test_tags in self.__methods():
             for tag_set in tags:
@@ -354,7 +374,7 @@ def run_linter(paths=None, verbose=False):
         raise errors[0]
 
 
-def run_dump(paths=None):
+def run_dump(paths=None, tags=None):
     """Dump the tags per test.
 
     Formatted as
@@ -364,23 +384,39 @@ def run_dump(paths=None):
 
     Args:
         paths (list, optional): path(s) to get tags for. Defaults to all ftest python files
+        tags2 (list, optional): list of sets of tags to filter.
+            Default is None, which does not filter
+
+    Returns:
+        int: 0 on success; 1 if no matches found
     """
     if not paths:
         paths = all_python_files(FTEST_DIR)
-    for file_path, classes in iter(FtestTagMap(paths)):
+
+    # Store output as {path: {class: {test: tags}}}
+    output = defaultdict(lambda: defaultdict(dict))
+
+    tag_map = FtestTagMap(paths)
+    for file_path, classes in iter(tag_map):
         short_file_path = re.findall(r'ftest/(.*$)', file_path)[0]
-        print(f'{short_file_path}:')
         for class_name, functions in classes.items():
+            for method_name, method_tags in functions.items():
+                if tags and not tag_map.is_test_subset([method_tags], tags):
+                    continue
+                output[short_file_path][class_name][method_name] = method_tags
+
+    # Format and print output for matching tests
+    for short_file_path, classes in output.items():
+        print(f'{short_file_path}:')
+        for class_name, methods in classes.items():
             print(f'  {class_name}:')
-            all_methods = []
-            longest_method_name = 0
-            for method_name, tags in functions.items():
-                longest_method_name = max(longest_method_name, len(method_name))
-                all_methods.append((method_name, tags))
-            for method_name, tags in all_methods:
+            longest_method_name = max(map(len, methods.keys()))
+            for method_name, method_tags in methods.items():
                 method_name_fm = method_name.ljust(longest_method_name, " ")
-                tags_fm = ",".join(sorted_tags(tags))
+                tags_fm = ",".join(sorted_tags(method_tags))
                 print(f'    {method_name_fm} - {tags_fm}')
+
+    return 0 if output else 1
 
 
 def files_to_tags(paths):
@@ -470,14 +506,56 @@ def read_tag_config():
     return config
 
 
-def run_list(paths):
+def run_list(paths=None):
     """List unique tags for paths.
 
     Args:
-        paths (list): paths to list tags of
+        paths (list, optional): paths to list tags of. Defaults to all ftest python files
+
+    Returns:
+        int: 0 on success; 1 if no matches found
+
+    Raises:
+        ValueError: if neither paths nor tags is given
     """
+    if not paths:
+        paths = all_python_files(FTEST_DIR)
     tags = files_to_tags(paths)
-    print(' '.join(sorted(tags)))
+    if tags:
+        print(' '.join(sorted(tags)))
+        return 0
+    return 1
+
+
+def test_tag_set():
+    """Run unit tests for TagSet.
+
+    Can be ran directly as:
+        tags.py unit
+    Or with pytest as:
+        python3 -m pytest tags.py
+
+    """
+    print('START Ftest TagSet Unit Tests')
+
+    def print_step(*args):
+        """Print a step."""
+        print('  ', *args)
+
+    l_hw_medium = ['hw', 'medium']
+    l_hw_medium_provider = l_hw_medium = ['provider']
+    l_hw_medium_minus_provider = l_hw_medium + ['-provider']
+    print_step('issubset')
+    assert TagSet(l_hw_medium).issubset(l_hw_medium_provider)
+    assert not TagSet(l_hw_medium_minus_provider).issubset(l_hw_medium_provider)
+    print_step('issuperset')
+    assert TagSet(l_hw_medium_provider).issuperset(l_hw_medium)
+    assert TagSet(l_hw_medium_provider).issuperset(set(l_hw_medium))
+    assert TagSet(l_hw_medium_provider).issuperset(TagSet(l_hw_medium))
+    assert not TagSet(l_hw_medium_provider).issuperset(l_hw_medium_minus_provider)
+    assert not TagSet(l_hw_medium_provider).issuperset(set(l_hw_medium_minus_provider))
+    assert not TagSet(l_hw_medium_provider).issuperset(TagSet(l_hw_medium_minus_provider))
+    print('PASS  Ftest TagSet Unit Tests')
 
 
 def test_tags_util(verbose=False):
@@ -492,7 +570,7 @@ def test_tags_util(verbose=False):
         verbose (bool): whether to print verbose output for debugging
     """
     # pylint: disable=protected-access
-    print('Ftest Tags Utility Unit Tests')
+    print('START Ftest Tags Utility Unit Tests')
     tag_map = FtestTagMap([])
     os.chdir('/')
 
@@ -569,7 +647,27 @@ def test_tags_util(verbose=False):
     expected_tags = set(['test_harness_config', 'test_ior_small', 'test_dfuse_mu_perms'])
     assert len(tag_map.unique_tags().intersection(expected_tags)) == len(expected_tags)
 
-    print('Ftest Tags Utility Unit Tests PASSED')
+    print('PASS  Ftest Tags Utility Unit Tests')
+
+
+def __arg_type_tags(val):
+    """Parse a tags argument.
+
+    Args:
+        val (str): string to parse comma-separated tags from
+
+    Returns:
+        set: tags converted to a set
+
+    Raises:
+        ArgumentTypeError: if val is invalid
+    """
+    if not val:
+        raise ArgumentTypeError("tags cannot be empty")
+    try:
+        return set(map(str.strip, val.split(",")))
+    except Exception as err:  # pylint: disable=broad-except
+        raise ArgumentTypeError(f"Invalid tags: {val}") from err
 
 
 def main():
@@ -592,32 +690,53 @@ def main():
         action='store_true',
         help="print verbose output for some commands")
     parser.add_argument(
-        "paths",
-        nargs="*",
+        "--paths",
+        nargs="+",
+        default=[],
         help="file paths")
+    parser.add_argument(
+        "--tags",
+        nargs="+",
+        type=__arg_type_tags,
+        help="tags")
     args = parser.parse_args()
     args.paths = list(map(os.path.realpath, args.paths))
+
+    # Check for incompatible arguments
+    rc = 0
+    if args.command == "lint" and args.tags:
+        print("--tags not supported with lint")
+        rc = 1
+    if args.command == "list" and args.tags:
+        print("--tags not supported with list")
+        rc = 1
+    if args.command == "unit" and args.tags:
+        print("--tags not supported with unit")
+        rc = 1
+    if args.command == "unit" and args.paths:
+        print("--paths not supported with unit")
+        rc = 1
+    if rc != 0:
+        return rc
 
     if args.command == "lint":
         try:
             run_linter(args.paths, args.verbose)
+            rc = 0
         except LintFailure as err:
             print(err)
-            sys.exit(1)
-        sys.exit(0)
-
-    if args.command == "dump":
-        run_dump(args.paths)
-        sys.exit(0)
-
-    if args.command == "list":
-        run_list(args.paths)
-        sys.exit(0)
-
-    if args.command == "unit":
+            rc = 1
+    elif args.command == "dump":
+        rc = run_dump(args.paths, args.tags)
+    elif args.command == "list":
+        rc = run_list(args.paths)
+    elif args.command == "unit":
+        test_tag_set()
         test_tags_util(args.verbose)
-        sys.exit(0)
+        rc = 0
+
+    return rc
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

@@ -610,7 +610,7 @@ class DmgCommand(DmgCommandBase):
         #     256000000,
         #     0
         #   ],
-        #   "mem_file_bytes": 0
+        #   "mem_file_bytes": 256000000
         # },
         # "error": null,
         # "status": 0

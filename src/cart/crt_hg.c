@@ -1,5 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -834,6 +836,7 @@ crt_hg_class_init(crt_provider_t provider, int ctx_idx, bool primary, int iface_
 	char			addr_str[CRT_ADDR_STR_MAX_LEN] = {'\0'};
 	size_t			str_size = CRT_ADDR_STR_MAX_LEN;
 	struct crt_prov_gdata	*prov_data;
+	uint32_t                 retry_count = 0;
 	int			rc = DER_SUCCESS;
 
 	prov_data = crt_get_prov_gdata(primary, provider);
@@ -843,7 +846,7 @@ crt_hg_class_init(crt_provider_t provider, int ctx_idx, bool primary, int iface_
 
 	init_info.na_init_info.auth_key = prov_data->cpg_na_config.noc_auth_key;
 
-	if (crt_provider_is_block_mode(provider))
+	if (crt_provider_is_block_mode(provider) && !prov_data->cpg_progress_busy)
 		init_info.na_init_info.progress_mode = 0;
 	else
 		init_info.na_init_info.progress_mode = NA_NO_BLOCK;
@@ -869,9 +872,17 @@ crt_hg_class_init(crt_provider_t provider, int ctx_idx, bool primary, int iface_
 		init_info.traffic_class = (enum na_traffic_class)crt_gdata.cg_swim_tc;
 	if (thread_mode_single)
 		init_info.na_init_info.thread_mode = NA_THREAD_MODE_SINGLE;
-
+retry:
 	hg_class = HG_Init_opt2(info_string, crt_is_service(), HG_VERSION(2, 4), &init_info);
 	if (hg_class == NULL) {
+		/** workaround for DAOS-16990, DAOS-17011 - retry a few times on init */
+		if (provider == CRT_PROV_OFI_CXI && !crt_is_service() &&
+		    retry_count < crt_gdata.cg_hg_init_retry_cnt) {
+			retry_count++;
+			D_WARN("Could not initialize HG class; retrying (%d)\n", retry_count);
+			sleep(retry_count * 5);
+			goto retry;
+		}
 		D_ERROR("Could not initialize HG class.\n");
 		D_GOTO(out, rc = -DER_HG);
 	}
@@ -903,6 +914,79 @@ out:
 
 	D_FREE(info_string);
 	return rc;
+}
+
+static void
+crt_hg_ctx_init_tm(struct crt_hg_context *hg_ctx, int idx)
+{
+	struct crt_hg_metrics *metrics;
+	char                  *prov;
+	int                    rc = 0;
+
+	if (hg_ctx == NULL) {
+		D_ERROR("hg_ctx is NULL.\n");
+		return;
+	}
+
+	if (!crt_gdata.cg_use_sensors)
+		return;
+
+	prov    = crt_provider_name_get(hg_ctx->chc_provider);
+	metrics = &hg_ctx->chc_metrics;
+
+	rc = d_tm_add_metric(&metrics->chm_bulks, D_TM_COUNTER,
+			     "Mercury-layer count of bulk transfers", "bulks",
+			     "net/%s/hg/bulks/ctx_%u", prov, idx);
+	if (rc)
+		DL_WARN(rc, "Failed to create hg bulk counter");
+
+	rc = d_tm_add_metric(&metrics->chm_mr_copies, D_TM_COUNTER,
+			     "Mercury-layer count of multi-recv RPC requests requiring a copy",
+			     "rpc", "net/%s/hg/mr_copies/ctx_%u", prov, idx);
+	if (rc)
+		DL_WARN(rc, "Failed to create hg multi recv copy counter");
+
+	rc = d_tm_add_metric(&metrics->chm_active_rpcs, D_TM_GAUGE,
+			     "Mercury-layer count of active RPCs", "rpcs",
+			     "net/%s/hg/active_rpcs/ctx_%u", prov, idx);
+	if (rc)
+		DL_WARN(rc, "Failed to create hg active RPC gauge");
+
+	rc = d_tm_add_metric(&metrics->chm_extra_bulk_req, D_TM_COUNTER,
+			     "Mercury-layer count of RPCs with extra bulk request", "rpcs",
+			     "net/%s/hg/extra_bulk_req/ctx_%u", prov, idx);
+	if (rc)
+		DL_WARN(rc, "Failed to create hg extra bulk req counter");
+
+	rc = d_tm_add_metric(&metrics->chm_extra_bulk_resp, D_TM_COUNTER,
+			     "Mercury-layer count of RPCs with extra bulk response", "rpcs",
+			     "net/%s/hg/extra_bulk_resp/ctx_%u", prov, idx);
+	if (rc)
+		DL_WARN(rc, "Failed to create hg extra bulk resp counter");
+
+	rc = d_tm_add_metric(&metrics->chm_req_sent, D_TM_COUNTER,
+			     "Mercury-layer count of RPC requests sent", "requests",
+			     "net/%s/hg/req_sent/ctx_%u", prov, idx);
+	if (rc)
+		DL_WARN(rc, "Failed to create hg req sent counter");
+
+	rc = d_tm_add_metric(&metrics->chm_resp_recv, D_TM_COUNTER,
+			     "Mercury-layer count of RPC responses received", "responses",
+			     "net/%s/hg/resp_recv/ctx_%u", prov, idx);
+	if (rc)
+		DL_WARN(rc, "Failed to create hg resp recv counter");
+
+	rc = d_tm_add_metric(&metrics->chm_req_recv, D_TM_COUNTER,
+			     "Mercury-layer count of RPC requests received", "requests",
+			     "net/%s/hg/req_recv/ctx_%u", prov, idx);
+	if (rc)
+		DL_WARN(rc, "Failed to create hg req recv counter");
+
+	rc = d_tm_add_metric(&metrics->chm_resp_sent, D_TM_COUNTER,
+			     "Mercury-layer count of RPC responses sent", "responses",
+			     "net/%s/hg/resp_sent/ctx_%u", prov, idx);
+	if (rc)
+		DL_WARN(rc, "Failed to create hg resp sent counter");
 }
 
 int
@@ -950,6 +1034,7 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, crt_provider_t provider, int idx,
 		D_GOTO(out, rc = -DER_HG);
 	}
 
+	hg_ctx->chc_diag_pub_ts     = 0;
 	hg_ctx->chc_hgcla = hg_class;
 	hg_ctx->chc_shared_hg_class = sep_mode;
 
@@ -981,6 +1066,8 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, crt_provider_t provider, int idx,
 	if (rc != 0)
 		D_ERROR("crt_hg_pool_init() failed, context idx %d hg_ctx %p, "
 			"rc: " DF_RC "\n", idx, hg_ctx, DP_RC(rc));
+
+	crt_hg_ctx_init_tm(hg_ctx, idx);
 out:
 	return rc;
 }
@@ -1021,6 +1108,40 @@ crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 	}
 out:
 	return rc;
+}
+
+void
+crt_hg_republish_diags(struct crt_hg_context *hg_ctx)
+{
+	struct hg_diag_counters diags = {0};
+	struct crt_hg_metrics  *metrics;
+	int                     rc = 0;
+
+#ifndef HG_HAS_DIAG
+	return;
+#endif
+
+	if (hg_ctx == NULL) {
+		D_ERROR("hg_ctx is NULL.\n");
+		return;
+	}
+
+	rc = HG_Class_get_counters(hg_ctx->chc_hgcla, &diags);
+	if (rc != HG_SUCCESS) {
+		D_ERROR("HG_Class_get_counters failed, rc: %d.\n", rc);
+		return;
+	}
+
+	metrics = &hg_ctx->chc_metrics;
+	d_tm_set_counter(metrics->chm_bulks, diags.bulk_count);
+	d_tm_set_counter(metrics->chm_mr_copies, diags.rpc_multi_recv_copy_count);
+	d_tm_set_gauge(metrics->chm_active_rpcs, diags.rpc_req_recv_active_count);
+	d_tm_set_counter(metrics->chm_extra_bulk_resp, diags.rpc_resp_extra_count);
+	d_tm_set_counter(metrics->chm_extra_bulk_req, diags.rpc_req_extra_count);
+	d_tm_set_counter(metrics->chm_resp_recv, diags.rpc_resp_recv_count);
+	d_tm_set_counter(metrics->chm_resp_sent, diags.rpc_resp_sent_count);
+	d_tm_set_counter(metrics->chm_req_recv, diags.rpc_req_recv_count);
+	d_tm_set_counter(metrics->chm_req_sent, diags.rpc_req_sent_count);
 }
 
 int
@@ -1600,9 +1721,24 @@ crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
 
 	D_ASSERT(hg_ctx != NULL && hg_ctx->chc_bulkcla != NULL);
 	D_ASSERT(sgl != NULL && bulk_hdl != NULL);
-	D_ASSERT(bulk_perm == CRT_BULK_RW || bulk_perm == CRT_BULK_RO);
 
-	flags = (bulk_perm == CRT_BULK_RW) ? HG_BULK_READWRITE : HG_BULK_READ_ONLY;
+	switch (bulk_perm) {
+	case CRT_BULK_RW:
+		flags = HG_BULK_READWRITE;
+		break;
+	case CRT_BULK_WO:
+		flags = HG_BULK_WRITE_ONLY;
+		break;
+	case CRT_BULK_RO:
+		flags = HG_BULK_READ_ONLY;
+		break;
+	default:
+		D_ASSERT(bulk_perm == CRT_BULK_RW || bulk_perm == CRT_BULK_RO ||
+			 bulk_perm == CRT_BULK_WO);
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Invalid permissions");
+		return rc;
+	}
 
 	if (sgl->sg_nr <= CRT_HG_IOVN_STACK) {
 		buf_sizes = buf_sizes_stack;
