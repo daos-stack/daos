@@ -222,7 +222,7 @@ struct dtx_tls {
 	struct d_tm_node_t	*dt_committable;
 	struct d_tm_node_t	*dt_dtx_leader_total;
 	struct d_tm_node_t	*dt_async_cmt_lat;
-	struct d_tm_node_t	*dt_chore_retry;
+	struct d_tm_node_t      *dt_chore_retry;
 	uint64_t		 dt_agg_gen;
 	uint32_t		 dt_batched_ult_cnt;
 };

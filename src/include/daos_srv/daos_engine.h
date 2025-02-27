@@ -778,15 +778,18 @@ struct dss_chore {
 	d_list_t              cho_link;
 	enum dss_chore_status cho_status;
 	dss_chore_func_t      cho_func;
-	uint32_t	      cho_priority:1;
-	int32_t		      cho_credits;
-	void		     *cho_hint;
+	uint32_t              cho_priority : 1;
+	int32_t               cho_credits;
+	void                 *cho_hint;
 };
 
-int dss_chore_register(struct dss_chore *chore);
-void dss_chore_deregister(struct dss_chore *chore);
-void dss_chore_diy(struct dss_chore *chore);
-
-bool engine_in_check(void);
+int
+dss_chore_register(struct dss_chore *chore);
+void
+dss_chore_deregister(struct dss_chore *chore);
+void
+dss_chore_diy(struct dss_chore *chore);
+bool
+engine_in_check(void);
 
 #endif /* __DSS_API_H__ */

@@ -721,8 +721,7 @@ dtx_rpc(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **dtes,
 		length = dca->dca_count;
 	}
 
-
-	dca->dca_chore.cho_func = dtx_rpc_helper;
+	dca->dca_chore.cho_func     = dtx_rpc_helper;
 	dca->dca_chore.cho_priority = 1;
 	dca->dca_drr = d_list_entry(dca->dca_head.next, struct dtx_req_rec, drr_link);
 
@@ -747,8 +746,8 @@ dtx_rpc(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **dtes,
 			}
 
 			dca->dca_chore.cho_credits = dca->dca_steps;
-			dca->dca_chore.cho_hint = NULL;
-			rc = dss_chore_register(&dca->dca_chore);
+			dca->dca_chore.cho_hint    = NULL;
+			rc                         = dss_chore_register(&dca->dca_chore);
 			if (rc != 0) {
 				ABT_eventual_free(&dca->dca_chore_eventual);
 				goto out;
@@ -789,8 +788,8 @@ dtx_rpc(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **dtes,
 			break;
 		case DTX_REFRESH:
 			D_ASSERTF(length < DTX_PRI_RPC_STEP_LENGTH,
-				  "Too long list for DTX refresh: %u vs %u\n",
-				  length, DTX_PRI_RPC_STEP_LENGTH);
+				  "Too long list for DTX refresh: %u vs %u\n", length,
+				  DTX_PRI_RPC_STEP_LENGTH);
 			break;
 		default:
 			D_ASSERTF(0, "Invalid DTX opc %u\n", opc);
@@ -1587,7 +1586,7 @@ dtx_coll_rpc_prep(struct ds_cont_child *cont, struct dtx_coll_entry *dce, uint32
 	dcra->dcra_hints = dce->dce_hints;
 	dcra->dcra_hint_sz = dce->dce_hint_sz;
 
-	dcra->dcra_chore.cho_func = dtx_coll_rpc_helper;
+	dcra->dcra_chore.cho_func     = dtx_coll_rpc_helper;
 	dcra->dcra_chore.cho_priority = 1;
 
 	rc = ABT_future_create(1, NULL, &dcra->dcra_future);
@@ -1599,10 +1598,11 @@ dtx_coll_rpc_prep(struct ds_cont_child *cont, struct dtx_coll_entry *dce, uint32
 
 	if (dss_has_enough_helper()) {
 		/* The cho_credits maybe over-estimated, no matter. */
-		dcra->dcra_chore.cho_credits = dcra->dcra_ranks->rl_nr < DTX_COLL_TREE_WIDTH ?
-					       dcra->dcra_ranks->rl_nr : DTX_COLL_TREE_WIDTH;
-		dcra->dcra_chore.cho_hint = NULL;
-		rc = dss_chore_register(&dcra->dcra_chore);
+		dcra->dcra_chore.cho_credits = dcra->dcra_ranks->rl_nr < DTX_COLL_TREE_WIDTH
+						   ? dcra->dcra_ranks->rl_nr
+						   : DTX_COLL_TREE_WIDTH;
+		dcra->dcra_chore.cho_hint    = NULL;
+		rc                           = dss_chore_register(&dcra->dcra_chore);
 		if (rc != 0)
 			ABT_future_free(&dcra->dcra_future);
 	} else {

@@ -1218,11 +1218,12 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti, struct dtx_epoch *epoch,
 		rc = vos_dtx_attach(dth, false, (flags & DTX_PREPARED) ? true : false);
 
 out:
-	DL_CDEBUG(rc != 0, DLOG_ERR, DB_IO, rc, "Start (%s) DTX " DF_DTI " sub modification %d, "
+	DL_CDEBUG(rc != 0, DLOG_ERR, DB_IO, rc,
+		  "Start (%s) DTX " DF_DTI " sub modification %d, "
 		  "ver %u, eph " DF_X64 ", leader " DF_UOID ", cos_cnt %d, tgt_cnt %d, flags %x: ",
 		  flags & DTX_TGT_COLL ? (flags & DTX_RELAY ? "relay" : "collective") : "regular",
-		  DP_DTI(dti), sub_modification_cnt, pm_ver, epoch->oe_value,
-		  DP_UOID(*leader_oid), dti_cos_cnt, tgt_cnt, flags);
+		  DP_DTI(dti), sub_modification_cnt, pm_ver, epoch->oe_value, DP_UOID(*leader_oid),
+		  dti_cos_cnt, tgt_cnt, flags);
 
 	if (rc != 0) {
 		D_FREE(dlh);
@@ -2086,8 +2087,8 @@ dtx_sub_comp_cb(struct dtx_leader_handle *dlh, int idx, int rc)
 		sub->dss_result = rc;
 
 		DL_CDEBUG(rc == -DER_NOMEM, DLOG_ERR, DB_TRACE, rc,
-			  "execute from idx %d (%d:%d), flags %x",
-			  idx, tgt->st_rank, tgt->st_tgt_idx, tgt->st_flags);
+			  "execute from idx %d (%d:%d), flags %x", idx, tgt->st_rank,
+			  tgt->st_tgt_idx, tgt->st_flags);
 	}
 
 	rc = ABT_future_set(dlh->dlh_future, dlh);
@@ -2202,7 +2203,7 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 	dtx_chore.func_arg = func_arg;
 	dtx_chore.dlh = dlh;
 
-	dtx_chore.chore.cho_func = dtx_leader_exec_ops_chore;
+	dtx_chore.chore.cho_func     = dtx_leader_exec_ops_chore;
 	dtx_chore.chore.cho_priority = 0;
 
 	dlh->dlh_result = 0;
@@ -2240,12 +2241,12 @@ again1:
 
 again2:
 	dtx_chore.chore.cho_credits = dlh->dlh_forward_cnt;
-	dtx_chore.chore.cho_hint = NULL;
-	rc = dss_chore_register(&dtx_chore.chore);
+	dtx_chore.chore.cho_hint    = NULL;
+	rc                          = dss_chore_register(&dtx_chore.chore);
 	if (rc != 0) {
 		if (rc != -DER_AGAIN) {
-			DL_ERROR(rc, "chore create failed [%u, %u] (2)",
-				 dlh->dlh_forward_idx, dlh->dlh_forward_cnt);
+			DL_ERROR(rc, "chore create failed [%u, %u] (2)", dlh->dlh_forward_idx,
+				 dlh->dlh_forward_cnt);
 			ABT_future_free(&dlh->dlh_future);
 			goto out;
 		}
@@ -2371,12 +2372,12 @@ exec:
 	 * to reduce the possibility of the whole IO timeout.
 	 */
 	if (unlikely(dlh->dlh_delay_sub_cnt > DTX_PRI_RPC_STEP_LENGTH))
-		  D_WARN("Too many delayed sub-requests %u\n", dlh->dlh_delay_sub_cnt);
+		D_WARN("Too many delayed sub-requests %u\n", dlh->dlh_delay_sub_cnt);
 
 	dtx_chore.chore.cho_priority = 1;
-	dtx_chore.chore.cho_credits = dlh->dlh_delay_sub_cnt;
-	dtx_chore.chore.cho_hint = NULL;
-	rc = dss_chore_register(&dtx_chore.chore);
+	dtx_chore.chore.cho_credits  = dlh->dlh_delay_sub_cnt;
+	dtx_chore.chore.cho_hint     = NULL;
+	rc                           = dss_chore_register(&dtx_chore.chore);
 	if (rc != 0) {
 		DL_ERROR(rc, "chore create failed (4)");
 		ABT_future_free(&dlh->dlh_future);

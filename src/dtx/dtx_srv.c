@@ -56,12 +56,10 @@ dtx_tls_init(int tags, int xs_id, int tgt_id)
 		D_WARN("Failed to create DTX async commit latency metric: " DF_RC"\n",
 		       DP_RC(rc));
 
-	rc = d_tm_add_metric(&tls->dt_chore_retry, D_TM_COUNTER,
-			     "DTX chore retry", NULL,
+	rc = d_tm_add_metric(&tls->dt_chore_retry, D_TM_COUNTER, "DTX chore retry", NULL,
 			     "io/dtx/chore_retry/tgt_%u", tgt_id);
 	if (rc != DER_SUCCESS)
-		D_WARN("Failed to create DTX chore retry metric: " DF_RC"\n",
-		       DP_RC(rc));
+		D_WARN("Failed to create DTX chore retry metric: " DF_RC"\n", DP_RC(rc));
 
 	return tls;
 }

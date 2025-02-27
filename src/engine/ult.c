@@ -15,7 +15,7 @@
 /* ============== Thread collective functions ============================ */
 
 /** The maximum number of credits for each IO chore queue. That is per helper XS. */
-uint32_t	dss_chore_credits;
+uint32_t dss_chore_credits;
 
 struct aggregator_arg_type {
 	struct dss_stream_arg_type	at_args;
@@ -785,7 +785,7 @@ dss_chore_register(struct dss_chore *chore)
 void
 dss_chore_deregister(struct dss_chore *chore)
 {
-	struct dss_chore_queue	*queue = chore->cho_hint;
+	struct dss_chore_queue *queue = chore->cho_hint;
 
 	if (queue != NULL) {
 		D_ASSERT(chore->cho_credits > 0);
@@ -794,8 +794,8 @@ dss_chore_deregister(struct dss_chore *chore)
 		queue->chq_credits += chore->cho_credits;
 		ABT_mutex_unlock(queue->chq_mutex);
 
-		D_DEBUG(DB_TRACE, "deregister chore %p from queue %p: credits %u\n",
-			chore, queue, chore->cho_credits);
+		D_DEBUG(DB_TRACE, "deregister chore %p from queue %p: credits %u\n", chore, queue,
+			chore->cho_credits);
 	}
 }
 

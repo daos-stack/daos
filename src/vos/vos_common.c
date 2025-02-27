@@ -582,8 +582,8 @@ vos_tls_init(int tags, int xs_id, int tgt_id)
 			       DP_RC(rc));
 
 		rc = d_tm_add_metric(&tls->vtl_invalid_dtx, D_TM_COUNTER,
-				     "Number of invalid active DTX", NULL,
-				     "io/dtx/invalid/tgt_%u", tgt_id);
+				     "Number of invalid active DTX", NULL, "io/dtx/invalid/tgt_%u",
+				     tgt_id);
 		if (rc)
 			D_WARN("Failed to create invalid DTX cnt sensor: " DF_RC "\n", DP_RC(rc));
 

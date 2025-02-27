@@ -164,10 +164,10 @@ extern unsigned int          dss_offload_per_numa_nr;
 /** Number of target per socket */
 extern unsigned int          dss_tgt_per_numa_nr;
 /** The maximum number of credits for each IO chore queue. That is per helper XS. */
-extern uint32_t		     dss_chore_credits;
+extern uint32_t              dss_chore_credits;
 
-#define DSS_CHORE_CREDITS_MIN	1024
-#define DSS_CHORE_CREDITS_DEF	4096
+#define DSS_CHORE_CREDITS_MIN 1024
+#define DSS_CHORE_CREDITS_DEF 4096
 
 /** Shadow dss_get_module_info */
 struct dss_module_info *get_module_info(void);
