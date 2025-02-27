@@ -447,6 +447,7 @@ def get_host_data(hosts, command, text, error, timeout=None):
     log.info("  Obtaining %s data on %s", text, hosts)
     result = run_remote(log, hosts, command, verbose=False, timeout=timeout)
     if result.failed_hosts:
+        log.info(" %s on hosts: %s", error, str(result.failed_hosts))
         return [{"hosts": result.failed_hosts, "data": data_error}]
 
     return [
