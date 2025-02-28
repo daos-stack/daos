@@ -47,11 +47,14 @@ on:
         required: false
         type: boolean
         default: false
-  pull_request:
-  push:
-    branches:
-      - master
-      - 'release/*'
+  # Disable the workflow until the infrastructure is in place and
+  # the test procedure is fully implemented.
+  # This will also disable the constantly failing 'RPM Build and Test Report' workflow
+  # pull_request:
+  # push:
+  #   branches:
+  #     - master
+  #     - 'release/*'
 
 concurrency:
   group: rpm-build-and-test-${{ github.head_ref  || github.run_id }}
