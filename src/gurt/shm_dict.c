@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2024-2025 Intel Corporation.
+ * (C) Copyright 2024 Intel Corporation.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -48,7 +48,8 @@ shm_ht_update_nref(d_shm_ht_loc_t ht_loc, int64_t change)
 
 	saved_ht_id        = ht_loc->ht_id;
 	addr_old_nref_htid = (int64_t *)&(ht_loc->ht_head->nref_htid);
-	old_nref_htid      = atomic_load_explicit(addr_old_nref_htid, memory_order_relaxed);
+	old_nref_htid      = atomic_load_explicit((_Atomic int64_t *)addr_old_nref_htid,
+						  memory_order_relaxed);
 	ht_id              = GET_HTID(old_nref_htid);
 	if (saved_ht_id != ht_id)
 		/* hash table is not valid any more */
@@ -63,8 +64,8 @@ shm_ht_update_nref(d_shm_ht_loc_t ht_loc, int64_t change)
 
 	new_nref_htid = old_nref_htid + change;
 	while (1) {
-		if (atomic_compare_exchange_weak(addr_old_nref_htid, &old_nref_htid,
-						 new_nref_htid)) {
+		if (atomic_compare_exchange_weak((_Atomic int64_t *)addr_old_nref_htid,
+						 &old_nref_htid, new_nref_htid)) {
 			return SHM_HT_SUCCESS;
 		} else {
 			/* failed to exchange */
@@ -287,8 +288,8 @@ shm_ht_invalidate_htid(d_shm_ht_loc_t ht_loc, bool force, int *num_ref)
 		/* invalidate htid only if reference count is 0 */
 		old_nref_htid = saved_ht_id;
 		new_nref_htid = 0;
-		if (atomic_compare_exchange_weak(addr_old_nref_htid, &old_nref_htid,
-						 new_nref_htid)) {
+		if (atomic_compare_exchange_weak((_Atomic int64_t *)addr_old_nref_htid,
+						 &old_nref_htid, new_nref_htid)) {
 			*num_ref = GET_NREF(old_nref_htid);
 			return SHM_HT_SUCCESS;
 		} else {
@@ -302,7 +303,8 @@ shm_ht_invalidate_htid(d_shm_ht_loc_t ht_loc, bool force, int *num_ref)
 		}
 	}
 
-	old_nref_htid = atomic_load_explicit(addr_old_nref_htid, memory_order_relaxed);
+	old_nref_htid = atomic_load_explicit((_Atomic int64_t *)addr_old_nref_htid,
+					     memory_order_relaxed);
 	ht_id         = GET_HTID(old_nref_htid);
 	if (saved_ht_id == INVALID_HT_ID) {
 		/* hash table was invalidated already */
@@ -322,8 +324,8 @@ shm_ht_invalidate_htid(d_shm_ht_loc_t ht_loc, bool force, int *num_ref)
 
 	new_nref_htid = (old_nref_htid & NREF_MASK) + INVALID_HT_ID;
 	while (1) {
-		if (atomic_compare_exchange_weak(addr_old_nref_htid, &old_nref_htid,
-						 new_nref_htid)) {
+		if (atomic_compare_exchange_weak((_Atomic int64_t *)addr_old_nref_htid,
+						 &old_nref_htid, new_nref_htid)) {
 			*num_ref = GET_NREF(old_nref_htid);
 			return SHM_HT_SUCCESS;
 		} else {
