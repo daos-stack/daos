@@ -35,6 +35,7 @@ dfuse: !mux
     name: "otoc"
   native:
     name: "native"
+  local_flock: true
 intercept: !mux
   off:
     use_intercept: false
