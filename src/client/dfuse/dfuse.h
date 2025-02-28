@@ -35,6 +35,7 @@ struct dfuse_info {
 	bool                 di_multi_user;
 	bool                 di_wb_cache;
 	bool                 di_read_only;
+	bool                 di_local_flock;
 
 	/* Per process spinlock
 	 * This is used to lock readdir against closedir where they share a readdir handle,
