@@ -41,6 +41,7 @@ test_two_pools_hw:
 server_config:
   name: daos_server
   engines_per_host: 2
+  control_log_mask: TRACE  # For debugging
   # Mux the number of targets per engine (1-4) with both engines using the same number of targets
   engines:
     0:
