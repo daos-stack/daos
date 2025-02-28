@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -96,9 +97,6 @@ static bool dss_abt_init;
 
 /** Start daos_engine under check mode. */
 static bool dss_check_mode;
-
-/* stream used to dump ABT infos and ULTs stacks */
-static FILE *abt_infos;
 
 bool
 engine_in_check(void)
@@ -1173,10 +1171,24 @@ parse(int argc, char **argv)
 	return 0;
 }
 
+static void
+abt_dump_done_cb(ABT_bool success, void *arg)
+{
+	FILE *fp = arg;
+
+	if (fp == NULL)
+		return;
+
+	fprintf(fp, "Callstack dump result: %d\n", success);
+	fclose(fp);
+}
+
 int
 main(int argc, char **argv)
 {
+	char            name[64] = {0};
 	sigset_t	set;
+	FILE           *fp = NULL;
 	int		sig;
 	int		rc;
 
@@ -1234,53 +1246,48 @@ main(int argc, char **argv)
 				D_ERROR("failure to gettimeofday(): %s (%d)\n",
 					strerror(errno), errno);
 
-			 if (abt_infos == NULL) {
-				/* filename format is
-				 * "/tmp/daos_dump_<PID>_YYYYMMDD_hh_mm.txt"
-				 */
-				char name[50];
+			/* filename format is
+			 * "/tmp/daos_dump_<PID>_YYYYMMDD_hh_mm_ss.txt"
+			 */
 
-				if (rc != -1 && tm != NULL)
-					snprintf(name, 50,
-						 "/tmp/daos_dump_%d_%04d%02d%02d_%02d_%02d.txt",
-						 getpid(), tm->tm_year + 1900,
-						 tm->tm_mon + 1, tm->tm_mday,
-						 tm->tm_hour, tm->tm_min);
-				else
-					snprintf(name, 50,
-						 "/tmp/daos_dump_%d.txt",
-						 getpid());
+			if (rc != -1 && tm != NULL)
+				snprintf(name, 50,
+					 "/tmp/daos_dump_%d_%04d%02d%02d_%02d_%02d_%02d.txt",
+					 getpid(), tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
+					 tm->tm_hour, tm->tm_min, tm->tm_sec);
+			else
+				snprintf(name, 50, "/tmp/daos_dump_%d.txt", getpid());
 
-				abt_infos = fopen(name, "a");
-				if (abt_infos == NULL) {
-					D_ERROR("failed to open file to dump ABT infos and ULTs stacks: %s (%d)\n",
-						strerror(errno), errno);
-					abt_infos = stderr;
-				}
+			fp = fopen(name, "a");
+			if (fp == NULL) {
+				D_ERROR("failed to open file to dump ABT infos and ULTs stacks: %s "
+					"(%d)\n",
+					strerror(errno), errno);
+				fp = stderr;
 			}
 
 			/* print header msg with date */
-			fprintf(abt_infos,
-				"=== Dump of ABT infos and ULTs stacks in %s mode (",
+			fprintf(fp, "=== Dump of ABT infos and ULTs stacks in %s mode (",
 				sig == SIGUSR1 ? "unattended" : "attended");
 			if (rc == -1 || tm == NULL)
-				fprintf(abt_infos, "time unavailable");
+				fprintf(fp, "time unavailable");
 			else
-				fprintf(abt_infos,
-					"%04d/%02d/%02d-%02d:%02d:%02d.%02ld",
-					tm->tm_year + 1900, tm->tm_mon + 1,
-					tm->tm_mday, tm->tm_hour, tm->tm_min,
-					tm->tm_sec,
+				fprintf(fp, "%04d/%02d/%02d-%02d:%02d:%02d.%02ld",
+					tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
+					tm->tm_hour, tm->tm_min, tm->tm_sec,
 					(long int)tv.tv_usec / 10000);
-			fprintf(abt_infos, ")\n");
+			fprintf(fp, ")\n");
 		}
 
 		/* use this engine main thread's context to dump Argobots
 		 * internal infos and ULTs stacks without internal synchro
 		 */
 		if (sig == SIGUSR1) {
-			D_INFO("got SIGUSR1, dumping Argobots infos and ULTs stacks\n");
-			dss_dump_ABT_state(abt_infos);
+			D_INFO("got SIGUSR1, dumping Argobots infos and ULTs stacks to %s\n", name);
+			dss_dump_ABT_state(fp);
+			/* re-add SIGUSR1 to set */
+			sigaddset(&set, SIGUSR1);
+			fclose(fp);
 			continue;
 		}
 
@@ -1288,10 +1295,12 @@ main(int argc, char **argv)
 		 * synchro (timeout of 10s)
 		 */
 		if (sig == SIGUSR2) {
-			D_INFO("got SIGUSR2, attempting to trigger dump of all Argobots ULTs stacks\n");
-			ABT_info_trigger_print_all_thread_stacks(abt_infos,
-								 10.0, NULL,
-								 NULL);
+			D_INFO("got SIGUSR2, attempting to trigger dump of all Argobots ULTs stacks"
+			       " to %s\n",
+			       name);
+			ABT_info_trigger_print_all_thread_stacks(fp, 10.0, abt_dump_done_cb, fp);
+			/* re-add SIGUSR2 to set */
+			sigaddset(&set, SIGUSR2);
 			continue;
 		}
 
