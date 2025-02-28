@@ -1,7 +1,6 @@
 #!/bin/bash
 #
 #  (C) Copyright 2021-2024 Intel Corporation.
-#  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -57,7 +56,7 @@ install_mofed() {
     fi
 
     # Add a repo to install MOFED RPMS
-    artifactory_base_url="https://artifactory/artifactory/"
+    artifactory_base_url="https://artifactory.dc.hpdd.intel.com/artifactory/"
     mellanox_proxy="${artifactory_base_url}mellanox-proxy/mlnx_ofed/"
     mellanox_key_url="${artifactory_base_url}mlnx_ofed/RPM-GPG-KEY-Mellanox"
     rpm --import "$mellanox_key_url"
