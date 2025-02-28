@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -89,8 +90,7 @@ class RbldNoCapacity(TestWithServers):
         for payload_size in test_data_list:
             write_count = 0
             while True:
-                self.d_log.debug(
-                    "writing obj {0} sz {1} to container".format(write_count, payload_size))
+                self.log.debug("writing obj %s sz %s to container", write_count, payload_size)
                 my_str = b"A" * payload_size
                 dkey = get_random_bytes(5)
                 akey = get_random_bytes(5)
@@ -99,7 +99,7 @@ class RbldNoCapacity(TestWithServers):
                     self.container.written_data.append(TestContainerData(False))
                     self.container.written_data[-1].write_record(
                         self.container, akey, dkey, my_str, obj_class=oclass)
-                    self.d_log.debug("wrote obj {0}, sz {1}".format(write_count, payload_size))
+                    self.log.debug("wrote obj %s, sz %s", write_count, payload_size)
                     write_count += 1
                 except DaosTestError as excep:
                     if not str(err_pool_full) in repr(excep):
@@ -122,7 +122,7 @@ class RbldNoCapacity(TestWithServers):
         # Start rebuild
         rank = 1
         self.log.info("..(5)Stop rank for rebuild")
-        self.server_managers[0].stop_ranks([rank], self.d_log, force=True)
+        self.server_managers[0].stop_ranks([rank], force=True)
 
         # Wait for rebuild started
         self.log.info("..(6)Wait for rebuild started")
