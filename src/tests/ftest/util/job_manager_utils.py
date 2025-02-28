@@ -180,7 +180,7 @@ class JobManager(ExecutableCommand):
                 parameters to keep them in sync with the hosts. Defaults to True.
         """
         # pylint: disable=unused-argument
-        self._hosts = NodeSet(hosts).copy()
+        self._hosts = hosts.copy()
 
     def _setup_hostfile(self, path=None, slots=None, hostfile=True):
         """Setup the hostfile to use with the command.
