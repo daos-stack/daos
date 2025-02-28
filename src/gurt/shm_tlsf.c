@@ -584,7 +584,7 @@ block_merge_prev(control_t *control, block_header_t *block)
 }
 
 /* Merge a just-freed block with an adjacent free block. */
-inline block_header_t *
+__inline__ block_header_t *
 block_merge_next(control_t *control, block_header_t *block)
 {
 	block_header_t *next = block_next(block);
@@ -601,7 +601,7 @@ block_merge_next(control_t *control, block_header_t *block)
 }
 
 /* Trim any trailing block space off the end of a block, return to pool. */
-inline void
+__inline__ void
 block_trim_free(control_t *control, block_header_t *block, size_t size)
 {
 	tlsf_assert(block_is_free(block) && "block must be free");
@@ -615,7 +615,7 @@ block_trim_free(control_t *control, block_header_t *block, size_t size)
 }
 
 /* Trim any trailing block space off the end of a used block, return to pool. */
-inline void
+__inline__ void
 block_trim_used(control_t *control, block_header_t *block, size_t size)
 {
 	tlsf_assert(!block_is_free(block) && "block must be used");
@@ -630,7 +630,7 @@ block_trim_used(control_t *control, block_header_t *block, size_t size)
 	}
 }
 
-inline block_header_t *
+__inline__ block_header_t *
 block_trim_free_leading(control_t *control, block_header_t *block, size_t size)
 {
 	block_header_t *remaining_block = block;
@@ -646,7 +646,7 @@ block_trim_free_leading(control_t *control, block_header_t *block, size_t size)
 	return remaining_block;
 }
 
-inline block_header_t *
+__inline__ block_header_t *
 block_locate_free(control_t *control, size_t size)
 {
 	int             fl    = 0;
@@ -920,7 +920,7 @@ tlsf_memalign(tlsf_t tlsf, size_t align, size_t size)
 	return buf;
 }
 
-inline void
+__inline__ void
 tlsf_free_nolock(tlsf_t tlsf, void *ptr)
 {
 	control_t      *control = tlsf_cast(control_t *, tlsf);
