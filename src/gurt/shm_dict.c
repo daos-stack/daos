@@ -26,7 +26,7 @@ extern struct d_shm_hdr *d_shm_head;
 
 #if defined(__x86_64__)
 /* efficient way to generate random number with time stamp counter on x86_64 */
-static __inline__ unsigned long long
+static inline unsigned long long
 rdtsc(void)
 {
 	unsigned hi, lo;
@@ -441,7 +441,7 @@ shm_ht_destroy(d_shm_ht_loc_t shm_ht_loc, bool force)
 	return SHM_HT_SUCCESS;
 }
 
-inline int
+static inline int
 shm_ht_rec_incref(d_shm_ht_rec_t link)
 {
 	atomic_fetch_add_relaxed(&(link->ref_count), 1);
