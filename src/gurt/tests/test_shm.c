@@ -229,12 +229,14 @@ thread_ht_op(void *arg)
 
 	/* delete ht records with shm_ht_rec_delete_at() */
 	for (i = 1; i < NUM_KV; i += 2) {
-		key_name = key_set + i * MAX_KEY_LEN;
 		rc = shm_ht_rec_delete_at(&(rec_loc_set[i]));
 		assert_true(rc == 0);
 	}
 
 	shm_ht_decref(&ht_loc);
+
+	free(key_set);
+	free(rec_loc_set);
 
 	pthread_exit(NULL);
 }
@@ -542,14 +544,17 @@ main(int argc, char **argv)
 			break;
 		case 'v':
 			/* only run by child process */
+			init_tests(NULL);
 			verify_hash_by_child();
 			goto exit_child;
 		case 'k':
 			/* only run by child process */
+			init_tests(NULL);
 			do_lock_mutex_child(false);
 			goto exit_child;
 		case 'o':
 			/* only run by child process */
+			init_tests(NULL);
 			do_lock_mutex_child(true);
 			goto exit_child;
 		default:
@@ -567,5 +572,6 @@ main(int argc, char **argv)
 	return rc;
 
 exit_child:
+	fini_tests(NULL);
 	return 0;
 }

@@ -542,7 +542,7 @@ shm_ht_rec_delete_at(d_shm_ht_rec_loc_t link_loc)
 {
 	unsigned int    idx_lock;
 	long int       *p_off_list;
-	d_shm_ht_rec_t  link     = link_loc->ht_rec;
+	d_shm_ht_rec_t  link;
 	d_shm_ht_rec_t  rec_prev = NULL;
 	d_shm_ht_rec_t  rec_next = NULL;
 	d_shm_mutex_t  *p_ht_lock;
@@ -550,6 +550,9 @@ shm_ht_rec_delete_at(d_shm_ht_rec_loc_t link_loc)
 	d_shm_ht_loc_t  shm_ht_loc;
 	int             ref_count;
 
+	if (link_loc == NULL)
+		return SHM_HT_REC_INVALID;
+	link = link_loc->ht_rec;
 	if (link == NULL)
 		return SHM_HT_REC_INVALID;
 	shm_ht_loc = &(link_loc->ht_head_loc);
@@ -575,7 +578,7 @@ shm_ht_rec_delete_at(d_shm_ht_rec_loc_t link_loc)
 		/* This is the first record in this bucket */
 		p_off_list = (long int *)((char *)ht_head + sizeof(struct d_shm_ht_head) +
 					  sizeof(d_shm_mutex_t) * ht_head->n_lock);
-		p_off_list[link->idx] = INVALID_OFFSET;
+		p_off_list[link->idx] = link->next;
 	}
 	if (link->next != INVALID_OFFSET) {
 		rec_next       = (d_shm_ht_rec_t)((char *)d_shm_head + link->next);
