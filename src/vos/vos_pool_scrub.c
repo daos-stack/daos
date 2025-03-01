@@ -272,12 +272,17 @@ sc_get_rec_in_chunk_at_idx(const struct scrub_ctx *ctx, uint32_t i)
 static void
 sc_wait_until_should_continue(struct scrub_ctx *ctx)
 {
+	if (sc_cont_is_stopping(ctx))
+		return;
+
 	if (sc_mode(ctx) == DAOS_SCRUB_MODE_TIMED) {
 		struct timespec	now;
 		uint64_t	msec_between;
 
 		d_gettime(&now);
 		while ((msec_between = sc_get_ms_between_scrubs(ctx)) > 0) {
+			if (sc_cont_is_stopping(ctx))
+				break;
 			d_tm_set_gauge(ctx->sc_metrics.scm_next_csum_scrub, msec_between);
 			/* don't wait longer than 1 sec each loop */
 			sc_sleep(ctx, min(1000, msec_between));
@@ -290,13 +295,22 @@ sc_wait_until_should_continue(struct scrub_ctx *ctx)
 			 * trying again
 			 */
 			sc_sleep(ctx, 1000);
+			if (sc_cont_is_stopping(ctx))
+				break;
 		}
 		sc_m_track_idle(ctx);
 	} else {
+		uint64_t sleep_seconds = 300;
+
 		D_ERROR("Unknown Scrub Mode: %d, Pool: " DF_UUID "\n", sc_mode(ctx),
 			DP_UUID(ctx->sc_pool->sp_uuid));
 		/* sleep for 5 minutes to give pool property chance to resolve */
-		sc_sleep(ctx, 1000 * 60 * 5);
+		while (sleep_seconds > 0) {
+			if (sc_cont_is_stopping(ctx))
+				break;
+			sc_sleep(ctx, 1000);
+			sleep_seconds--;
+		}
 	}
 }
 
@@ -795,6 +809,7 @@ cont_iter_scrub_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		*acts = VOS_ITER_CB_SKIP;
 		uuid_clear(ctx->sc_cont_uuid);
 	} else {
+		D_ERROR(DF_UUID ": scrubbing container begin\n", entry->ie_couuid);
 		rc = sc_cont_setup(ctx, entry);
 		if (rc != 0) {
 			/* log error for container, but then keep going */
@@ -803,6 +818,7 @@ cont_iter_scrub_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		}
 
 		rc = sc_scrub_cont(ctx);
+		D_ERROR(DF_UUID ": scrubbing container finished\n", entry->ie_couuid);
 
 		sc_cont_teardown(ctx);
 		*acts = VOS_ITER_CB_YIELD;
@@ -864,6 +880,7 @@ cont_iter_is_loaded_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	rc = sc_cont_setup(ctx, entry);
 	if (rc != 0)
 		return rc;
+	D_ASSERT(sc_cont_is_stopping(ctx) == false);
 	if (sc_cont_is_stopping(ctx))
 		return 0;
 
@@ -903,6 +920,7 @@ sc_ensure_containers_are_loaded(struct scrub_ctx *ctx)
 		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchors, NULL,
 				 cont_iter_is_loaded_cb, &args, NULL);
 		sc_sleep(ctx, 500);
+		D_ERROR("loading xxxxxxx: %d\n", rc);
 	} while (args.args_found_unloaded_container || rc != 0);
 	ctx->sc_cont_loaded = true;
 
