@@ -288,7 +288,7 @@ class FtestTagMap():
 class TestConfig():
     """Represent the test configuration defined in the test yaml file."""
 
-    def __init__(self, path, test_name):
+    def __init__(self, path, test_name, verbose=False):
         """Initialize the tag mapping.
 
         Args:
@@ -299,42 +299,58 @@ class TestConfig():
         with open(path.replace('.py', '.yaml'), 'r') as f:
             self.__data = yaml.load(f.read(), Loader=AvocadoYamlLoader)
         self.__test_name = test_name
+        self.__verbose = verbose
 
-    def __filter_value(self, key, key_filter=None, key_types=None):
+    def __display(self, message):
+        """Display the message if verbose is turned on.
+
+        Args:
+            message (str): message to display
+        """
+        if self.__verbose:
+            print(message)
+
+    def __filter_value(self, key_path, key_types=None):
         """Get the test yaml data value for a given key.
 
         Args:
-            key (str): key to lookup in the test yaml data
-            key_filter (list, optional): path names from which to match the key. Defaults to None.
+            key_path (list): path names from which to match the key where the last entry is the
+                key to lookup in the test yaml data.
             key_types (list, optional): key object types to match. Defaults to None.
 
         Returns:
             list: values found for the key
         """
-        search = [[self.__data, ["root"]]]
+        self.__display(f"__filter_value: key_path={key_path}, key_types={key_types}")
+        key = key_path.pop()
+        search = [[self.__data, []]]
         matches = []
+        self.__display(f"  - searching for '{key}' in '{key_path}' with type '{key_types}'")
         while search:
             data = search.pop()
             if key in data[0]:
-                if not key_filter or set(key_filter) - set(data[1]) == set():
+                self.__display(f"    (1/3) key match '{key}' in path '{data[1]}'")
+                if not key_path or set(key_path) - set(data[1]) == set():
+                    self.__display(f"    (2/3) path match '{key_path}' to '{data[1]}'")
                     if not key_types or type(data[0][key]) in key_types:
+                        self.__display(f"    (3/3) type match '{key_types}': value={data[0][key]}")
                         matches.append(data[0][key])
             for _key, _value in data[0].items():
                 if isinstance(_value, dict):
                     search.append([_value, data[1] + [_key]])
         return matches
 
-    def unique_value(self, key, val_type=None):
+    def unique_value(self, keys, val_type=None):
         """Get the unique test yaml value for a given key and optional type.
 
         Args:
-            key (str): _description_
+            keys (list): _description_
             val_type (object, optional): type of value
 
         Returns:
             list: _description_
         """
-        return self.__filter_value(self.__test_name, [key], val_type)
+        return self.__filter_value(keys + [self.__test_name], val_type)
 
     def value(self, key):
         """Get the test yaml data value for a given key.
@@ -349,14 +365,15 @@ class TestConfig():
             # Handle empty test yaml files
             return None
         key_types = None
-        if key == "timeout":
+        keys = key.split("/")
+        if keys[-1] == "timeout":
             key_types = [int, str]
             # Handle special case for test-specific numeric timeout values
-            value = self.unique_value("timeouts", key_types)
+            value = self.unique_value(["timeouts"], key_types)
         else:
-            value = self.unique_value(key)
+            value = self.unique_value(keys)
         if not value:
-            value = self.__filter_value(key, key_types=key_types)
+            value = self.__filter_value(keys, key_types)
 
         if value and len(value) == 1:
             # Reduce list for single matches
@@ -767,18 +784,19 @@ def frequency_id(tags):
     return ""
 
 
-def run_config(paths=None, tags=None, keys=None, csv_file=None):
+def run_config(paths=None, tags=None, keys=None, csv_file=None, verbose=False):
     """Display the tests matching the tags and their requested test yaml configuration.
 
     Args:
         paths (list, optional): paths to files from which to list via their tags. Defaults to all
             ftest python files.
-        list (set, optional): list of sets of tags used to filter displayed tests. Defaults to no
+        tags (set, optional): list of sets of tags used to filter displayed tests. Defaults to no
             filtering.
-        list (set, optional): list of sets of test yaml data keys to display. Defaults to None,
+        keys (set, optional): list of sets of test yaml data keys to display. Defaults to None,
             only displaying the tests.
         csv_file (str, optional): output file which if specified is generated in a CSV format
             instead of displaying the test files an their data.
+        verbose (bool, optional): display key match debug. Defaults to False.
     """
     if not paths:
         paths = all_python_files(FTEST_DIR)
@@ -798,7 +816,7 @@ def run_config(paths=None, tags=None, keys=None, csv_file=None):
                 try:
                     output.append(
                         [frequency_id(method_tags), short_file_path, class_name, method_name])
-                    yaml_data = TestConfig(file_path, method_name)
+                    yaml_data = TestConfig(file_path, method_name, verbose)
                     for key in key_list:
                         output[-1].append(yaml_data.value(key))
                 except Exception as error:      # pylint: disable=broad-except
@@ -854,7 +872,8 @@ def main():
     parser = ArgumentParser(prog='tags')
     subparsers = parser.add_subparsers(
         title='options for the tags command',
-        dest='command')
+        dest='command',
+        required=True)
 
     # Parser for the "config" command and its optional arguments
     config_parser = subparsers.add_parser(
@@ -880,6 +899,10 @@ def main():
         type=str,
         default=None,
         help="csv output file")
+    config_parser.add_argument(
+        "-v", "--verbose",
+        action='store_true',
+        help="print verbose output")
 
     # Parser for the "dump" command and its optional arguments
     dump_parser = subparsers.add_parser(
@@ -934,7 +957,7 @@ def main():
         args.paths = list(map(os.path.realpath, args.paths))
 
     if args.command == "config":
-        rc = run_config(args.paths, args.tags, args.keys, args.csv)
+        rc = run_config(args.paths, args.tags, args.keys, args.csv, args.verbose)
     elif args.command == "dump":
         rc = run_dump(args.paths, args.tags)
     elif args.command == "lint":
