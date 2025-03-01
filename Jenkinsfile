@@ -1024,7 +1024,7 @@ pipeline {
                                                       scm: 'daos-stack/daos',
                                                       requiredResult: hudson.model.Result.UNSTABLE
                             recordIssues enabledForFailure: true,
-                                         /* ignore warnign/errors from PMDK logging system */
+                                         /* ignore warning/errors from PMDK logging system */
                                          filters: [excludeFile('pmdk/.+')],
                                          failOnError: false,
                                          ignoreQualityGate: true,

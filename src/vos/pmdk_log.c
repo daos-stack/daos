@@ -52,7 +52,7 @@ pmdk_log_function(enum pmemobj_log_level level, const char *file_name, unsigned 
 	}
 
 	/** Add "pmdk/" prefix to file name
-	* Prefix is needed to filtered out PMDK messages in NLT resultst analysis
+	* Prefix is needed to filter out PMDK messages in NLT results analysis
 	* as it is implemented in https://github.com/daos-stack/pipeline-lib/pull/457
 	*/
 #define PMDK_LOG_FUNCTION_MAX_FILENAME 255
