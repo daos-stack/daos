@@ -487,8 +487,8 @@ func hugePageBytes(hpNr, hpSz int) uint64 {
 	return uint64(hpNr*hpSz) * humanize.KiByte
 }
 
-// GetTgtCounts returns target count totals for a server config file.
-func (cfg *Server) GetTgtCounts(log logging.Logger) (cfgTargetCount, sysXSCount int) {
+// getTgtCounts returns target count totals for a server config file.
+func (cfg *Server) getTgtCounts(log logging.Logger) (cfgTargetCount, sysXSCount int) {
 	for idx, ec := range cfg.Engines {
 		msg := fmt.Sprintf("engine %d fabric numa %d, storage numa %d", idx,
 			ec.Fabric.NumaNodeIndex, ec.Storage.NumaNodeIndex)
@@ -513,7 +513,7 @@ func (cfg *Server) GetTgtCounts(log logging.Logger) (cfgTargetCount, sysXSCount 
 }
 
 func (cfg *Server) getMinMaxNrHugepages(log logging.Logger, hpSizeKiB int) (int, int, error) {
-	cfgTargetCount, sysXSCount := cfg.GetTgtCounts(log)
+	cfgTargetCount, sysXSCount := cfg.getTgtCounts(log)
 
 	if cfgTargetCount == 0 {
 		return 0, 0, nil
@@ -565,7 +565,7 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 			return FaultConfigHugepagesDisabledWithNrSet
 		}
 		if cfg.GetBdevConfigs().HaveRealNVMe() {
-			return FaultConfigHugepagesDisabledWithBdevs
+			return FaultConfigHugepagesDisabledWithNvmeBdevs
 		}
 		if minHugepages != 0 {
 			log.Noticef("hugepages disabled but targets will be assigned to bdevs, " +

@@ -187,7 +187,7 @@ const (
 	ServerConfigFaultCallbackEmpty
 	ServerConfigFaultDomainTooManyLayers
 	ServerConfigNrHugepagesOutOfRange
-	ServerConfigHugepagesDisabledWithBdevs
+	ServerConfigHugepagesDisabledWithNvmeBdevs
 	ServerConfigVMDSettingDuplicate
 	ServerConfigEngineNUMAImbalance
 	ServerConfigControlMetadataNoPath
