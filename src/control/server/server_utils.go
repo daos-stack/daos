@@ -369,7 +369,7 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 			prepReq.HugepageCount += extraPages
 			prepReq.HugeNodes = strings.Join(numaNodes, ",")
 
-			srv.log.Debugf("allocating %d hugepages on each of these numa nodes: %v",
+			srv.log.Infof("allocating %d hugepages on each of these numa nodes: %v",
 				prepReq.HugepageCount, numaNodes)
 		} else {
 			srv.log.Debugf("skip allocating hugepages, no change is required")
@@ -410,9 +410,9 @@ func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error
 	return nil
 }
 
-// Minimum recommended number of hugepages has already been calculated and set in config so verify
-// we have enough free hugepage memory to satisfy this requirement before setting mem_size and
-// hugepage_size parameters for engine.
+// Hugepage allocations have been calculated and requested from kernel in prepBdevStorage so
+// allocate total hugemem across engines and verify there are enough free hugepages to satisfy
+// requirements before setting mem_size and hugepage_size parameters for engine.
 func updateHugeMemValues(srv *server, ei *EngineInstance, mi *common.MemInfo) error {
 	ei.RLock()
 	ec := ei.runner.GetConfig()
@@ -425,20 +425,8 @@ func updateHugeMemValues(srv *server, ei *EngineInstance, mi *common.MemInfo) er
 	}
 	ei.RUnlock()
 
-	cfgNrTgts, nrSysXS := srv.cfg.GetTgtCounts(srv.log)
-
-	minHugepages := 0
-	if cfgNrTgts != 0 {
-		// Calculate minimum number of hugepages for all configured engines.
-		mhps, err := storage.CalcMinHugepages(mi.HugepageSizeKiB, cfgNrTgts+nrSysXS)
-		if err != nil {
-			return err
-		}
-		minHugepages = mhps
-	}
-
-	// Calculate mem_size per I/O engine (in MB) from number of hugepages required per engine.
-	nrPagesRequired := minHugepages / len(srv.cfg.Engines)
+	// Calculate mem_size per I/O engine (in MB) from total number of hugepages.
+	nrPagesRequired := mi.HugepagesTotal / len(srv.cfg.Engines)
 	pageSizeMiB := mi.HugepageSizeKiB / humanize.KiByte // kib to mib
 	memSizeReqMiB := nrPagesRequired * pageSizeMiB
 	memSizeFreeMiB := mi.HugepagesFree * pageSizeMiB
