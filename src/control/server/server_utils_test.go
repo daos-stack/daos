@@ -345,7 +345,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				DisableVFIO:   true,
 				PCIAllowList:  test.MockPCIAddr(0),
 			},
-			expMemSize:      16384,
+			expMemSize:      32768,
 			expHugepageSize: 2,
 		},
 		"non-nvme bdevs; vfio disabled": {
@@ -360,7 +360,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				TargetUser:    username,
 				DisableVFIO:   true,
 			},
-			expMemSize:      16384,
+			expMemSize:      32768,
 			expHugepageSize: 2,
 		},
 		"iommu disabled": {
@@ -384,7 +384,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				TargetUser:    "root",
 				PCIAllowList:  test.MockPCIAddr(0),
 			},
-			expMemSize:      16384,
+			expMemSize:      32768,
 			expHugepageSize: 2,
 		},
 		"non-nvme bdevs; iommu disabled": {
@@ -398,7 +398,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				HugeNodes:     "0",
 				TargetUser:    username,
 			},
-			expMemSize:      16384,
+			expMemSize:      32768,
 			expHugepageSize: 2,
 		},
 		"no bdevs configured; hugepages disabled": {
