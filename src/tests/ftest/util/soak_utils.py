@@ -1,5 +1,6 @@
 """
 (C) Copyright 2019-2024 Intel Corporation.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -7,7 +8,6 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 
 import getpass
 import os
-import random
 import re
 import stat
 import threading
@@ -582,7 +582,7 @@ def launch_vmd_identify_check(self, name, results, args):
     uuid_list = [device['uuid'] for device in device_info]
     # limit the number of leds to blink to 1024
     if len(uuid_list) > 1024:
-        uuids = random.sample(uuid_list, 1024)
+        uuids = self.random.sample(uuid_list, 1024)
     else:
         uuids = uuid_list
     self.log.info("VMD device UUIDs: %s", uuids)
@@ -832,12 +832,12 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
         engine_count = self.params.get("engines_per_host", "/run/server_config/*", default=1)
         exclude_servers = (len(self.hostlist_servers) * int(engine_count)) - 1
         # Exclude one rank.
-        rank = random.randint(0, exclude_servers)  # nosec
+        rank = self.random.randint(0, exclude_servers)
 
         if targets >= 8:
             tgt_idx = None
         else:
-            target_list = random.sample(range(0, 8), targets)
+            target_list = self.random.sample(range(0, 8), targets)
             tgt_idx = ','.join(str(tgt) for tgt in target_list)
 
         # init the status dictionary
@@ -905,7 +905,7 @@ def launch_server_stop_start(self, pools, name, results, args):
         exclude_servers = (
             len(self.hostlist_servers) * int(engine_count)) - 1
         # Exclude one rank.
-        rank = random.randint(0, exclude_servers)  # nosec
+        rank = self.random.randint(0, exclude_servers)
         # init the status dictionary
         params = {"name": name,
                   "status": status,

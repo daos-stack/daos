@@ -1,10 +1,10 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
-import random
 
 from apricot import TestWithServers
 from command_utils import ExecutableCommand
@@ -94,14 +94,15 @@ class IoConfGen(ExecutableCommand):
         return True
 
 
-def gen_unaligned_io_conf(record_size, filename="testfile"):
+def gen_unaligned_io_conf(test, record_size, filename="testfile"):
     """Generate the data-set file based on record size.
 
     Args:
-        record_size(Number): Record Size to fill the data.
+        test (Test): test object
+        record_size (Number): Record Size to fill the data.
         filename (string): Filename (with/without path) for creating the data set.
     """
-    rand_ofs_end = random.randint(1, record_size - 1)  # nosec
+    rand_ofs_end = test.random.randint(1, record_size - 1)
     rand_ofs_start = rand_ofs_end - 1
     file_data = (
         "test_lvl daos",
@@ -172,7 +173,7 @@ class IoConfTestBase(TestWithServers):
         for record_size in total_sizes:
             print("Start test for record size = {}".format(record_size))
             # Create unaligned test data set
-            gen_unaligned_io_conf(record_size, self.testfile)
+            gen_unaligned_io_conf(self, record_size, self.testfile)
             # Run test file using daos_run_io_conf
             if not io_conf.run_conf(self.dmg_config_file):
                 self.fail("daos_run_io_conf failed")
