@@ -1044,7 +1044,7 @@ def get_journalctl(hosts, since, until, journalctl_type):
     """Run the journalctl on the hosts.
 
     Args:
-        hosts (list): List of hosts to run journalctl.
+        hosts (NodeSet): hosts to run journalctl.
         since (str): Start time to search the log.
         until (str): End time to search the log.
         journalctl_type (str): String to search in the log. -t param for journalctl.

@@ -205,10 +205,9 @@ def run_event_check(self, since, until):
     detected = 0
     events = self.params.get("events", "/run/*")
     # check events on all server nodes
-    hosts = list(set(self.hostlist_servers))
     if events:
         for journalctl_type in ["kernel", "daos_server"]:
-            for output in get_journalctl(hosts, since, until, journalctl_type):
+            for output in get_journalctl(self.hostlist_servers, since, until, journalctl_type):
                 for event in events:
                     lines = output["data"].splitlines()
                     for line in lines:
@@ -220,33 +219,6 @@ def run_event_check(self, since, until):
                         "Found %s instances of %s in system log from %s through %s",
                         detected, event, since, until)
     return events_found
-
-
-def get_journalctl_logs(self, hosts, since, until, journalctl_type):
-    """Run the journalctl on daos servers.
-
-    Args:
-        self (obj): soak obj
-        since (str): start time
-        until (str): end time
-        journalctl_type (str): the -t param for journalctl
-        log (bool):  If true; write the events to a logfile
-
-    Returns:
-        list: a list of dictionaries containing the following key/value pairs:
-            "hosts": NodeSet containing the hosts with this data
-            "data":  data requested for the group of hosts
-
-    """
-    results = get_journalctl(hosts, since, until, journalctl_type)
-    name = f"journalctl_{journalctl_type}.log"
-    destination = self.outputsoak_dir
-    for result in results:
-        for host in result["hosts"]:
-            log_name = name + "-" + str(host)
-            self.log.info("Logging output to %s", log_name)
-            write_logfile(result["data"], log_name, destination)
-    return results
 
 
 def get_daos_server_logs(self):
