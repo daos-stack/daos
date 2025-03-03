@@ -169,7 +169,7 @@ func TestAPI_PoolConnect(t *testing.T) {
 				defer tc.checkParams(t)
 			}
 
-			gotResp, gotErr := PoolConnect(mustLogCtx(tc.ctx, t), tc.connReq)
+			gotResp, gotErr := PoolConnect(test.MustLogContext(t, tc.ctx), tc.connReq)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -247,7 +247,7 @@ func TestAPI_getPoolConn(t *testing.T) {
 				defer tc.checkParams(t)
 			}
 
-			ph, cleanup, gotErr := getPoolConn(mustLogCtx(ctx, t), "", tc.poolID, tc.flags)
+			ph, cleanup, gotErr := getPoolConn(test.MustLogContext(t, ctx), "", tc.poolID, tc.flags)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -367,7 +367,7 @@ func TestAPI_PoolQuery(t *testing.T) {
 				defer tc.checkParams(t)
 			}
 
-			gotResp, err := PoolQuery(mustLogCtx(tc.ctx, t), "", tc.poolID, tc.queryMask)
+			gotResp, err := PoolQuery(test.MustLogContext(t, tc.ctx), "", tc.poolID, tc.queryMask)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
@@ -498,7 +498,7 @@ func TestAPI_PoolQueryTargets(t *testing.T) {
 				defer tc.checkParams(t)
 			}
 
-			gotResp, err := PoolQueryTargets(mustLogCtx(tc.ctx, t), "", tc.poolID, tc.rank, tc.targets)
+			gotResp, err := PoolQueryTargets(test.MustLogContext(t, tc.ctx), "", tc.poolID, tc.rank, tc.targets)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
@@ -563,7 +563,7 @@ func TestAPI_PoolListAttributes(t *testing.T) {
 				tc.setup(t)
 			}
 
-			gotNames, err := PoolListAttributes(mustLogCtx(tc.ctx, t), "", tc.poolID)
+			gotNames, err := PoolListAttributes(test.MustLogContext(t, tc.ctx), "", tc.poolID)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
@@ -671,7 +671,7 @@ func TestAPI_PoolGetAttributes(t *testing.T) {
 				defer tc.checkParams(t)
 			}
 
-			gotAttrs, err := PoolGetAttributes(mustLogCtx(tc.ctx, t), "", tc.poolID, tc.attrNames...)
+			gotAttrs, err := PoolGetAttributes(test.MustLogContext(t, tc.ctx), "", tc.poolID, tc.attrNames...)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
@@ -731,7 +731,7 @@ func TestAPI_PoolSetAttributes(t *testing.T) {
 				tc.setup(t)
 			}
 
-			err := PoolSetAttributes(mustLogCtx(tc.ctx, t), "", tc.poolID, tc.toSet...)
+			err := PoolSetAttributes(test.MustLogContext(t, tc.ctx), "", tc.poolID, tc.toSet...)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
@@ -781,7 +781,7 @@ func TestAPI_PoolDeleteAttributes(t *testing.T) {
 				tc.setup(t)
 			}
 
-			err := PoolDeleteAttributes(mustLogCtx(tc.ctx, t), "", tc.poolID, tc.toDelete...)
+			err := PoolDeleteAttributes(test.MustLogContext(t, tc.ctx), "", tc.poolID, tc.toDelete...)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
@@ -992,7 +992,7 @@ func TestAPI_GetPoolList(t *testing.T) {
 				defer tc.checkParams(t)
 			}
 
-			gotPools, err := GetPoolList(mustLogCtx(tc.ctx, t), tc.req)
+			gotPools, err := GetPoolList(test.MustLogContext(t, tc.ctx), tc.req)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
