@@ -339,9 +339,8 @@ func TestStorage_ProviderValidateBdevConfig(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(name)
-			defer test.ShowBufferOnFailure(t, buf)
-			ctx := test.MustLogContext(t, log)
+			ctx := test.MustLogContext(t)
+			log := logging.FromContext(ctx)
 
 			p := NewProvider(log, 0, tc.cfg, nil, nil, tc.bdevProv, nil)
 			gotErr := p.ValidateBdevConfig(ctx, tc.ctrlrs)
