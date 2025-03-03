@@ -21,7 +21,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
-	"github.com/daos-stack/daos/src/control/logging"
 )
 
 var (
@@ -95,7 +94,7 @@ func TestAPI_PoolConnect(t *testing.T) {
 					connHandle: connHandle{
 						Label:      daos_default_PoolInfo.Label,
 						UUID:       daos_default_PoolInfo.UUID,
-						daosHandle: daos_default_pool_connect_Handle,
+						daosHandle: *defaultPoolHdl(),
 					},
 				},
 				Info: defaultPoolInfo(),
@@ -114,7 +113,7 @@ func TestAPI_PoolConnect(t *testing.T) {
 					connHandle: connHandle{
 						Label:      daos_default_PoolInfo.Label,
 						UUID:       daos_default_PoolInfo.UUID,
-						daosHandle: daos_default_pool_connect_Handle,
+						daosHandle: *defaultPoolHdl(),
 					},
 				},
 				Info: defaultPoolInfo(),
@@ -149,7 +148,7 @@ func TestAPI_PoolConnect(t *testing.T) {
 					connHandle: connHandle{
 						Label:      MissingPoolLabel,
 						UUID:       daos_default_PoolInfo.UUID,
-						daosHandle: daos_default_pool_connect_Handle,
+						daosHandle: *defaultPoolHdl(),
 					},
 				},
 				Info: func() *daos.PoolInfo {
@@ -165,14 +164,12 @@ func TestAPI_PoolConnect(t *testing.T) {
 			if tc.setup != nil {
 				tc.setup(t)
 			}
-			log, buf := logging.NewTestLogger(name)
-			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.checkParams != nil {
 				defer tc.checkParams(t)
 			}
 
-			gotResp, gotErr := PoolConnect(mustLogCtx(tc.ctx, log), tc.connReq)
+			gotResp, gotErr := PoolConnect(mustLogCtx(tc.ctx, t), tc.connReq)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -192,23 +189,6 @@ func TestAPI_PoolConnect(t *testing.T) {
 	}
 }
 
-var (
-	testCtxPoolHandle = &PoolHandle{
-		connHandle: connHandle{
-			UUID:  test.MockPoolUUID(43),
-			Label: "test-ctx-pool",
-		},
-	}
-
-	testConnPoolHandle = &PoolHandle{
-		connHandle: connHandle{
-			daosHandle: daos_default_pool_connect_Handle,
-			UUID:       daos_default_PoolInfo.UUID,
-			Label:      daos_default_PoolInfo.Label,
-		},
-	}
-)
-
 func TestAPI_getPoolConn(t *testing.T) {
 	for name, tc := range map[string]struct {
 		setup       func(t *testing.T)
@@ -220,17 +200,25 @@ func TestAPI_getPoolConn(t *testing.T) {
 		expErr      error
 	}{
 		"pool handle in context with non-empty ID": {
-			ctx:    testCtxPoolHandle.toCtx(test.Context(t)),
+			ctx:    defaultPoolHandle().toCtx(test.Context(t)),
 			poolID: testPoolName,
 			expErr: errors.New("PoolHandle found in context with non-empty poolID"),
 		},
 		"pool handle in context": {
-			ctx:    testCtxPoolHandle.toCtx(test.Context(t)),
-			expHdl: testCtxPoolHandle,
+			ctx:    defaultPoolHandle().toCtx(test.Context(t)),
+			expHdl: defaultPoolHandle(),
 		},
 		"pool handle not in context, no poolID": {
 			ctx:    test.Context(t),
 			expErr: errors.Wrap(daos.InvalidInput, "no pool ID provided"),
+		},
+		"pool not in context; pool connect fails": {
+			ctx: test.Context(t),
+			setup: func(t *testing.T) {
+				daos_pool_connect_RC = -_Ctype_int(daos.IOError)
+			},
+			poolID: testPoolName,
+			expErr: errors.Wrap(daos.IOError, "failed to connect to pool"),
 		},
 		"pool handle from Connect()": {
 			ctx:    test.Context(t),
@@ -241,7 +229,7 @@ func TestAPI_getPoolConn(t *testing.T) {
 				test.CmpAny(t, "flags", daos.PoolConnectFlagReadOnly, daos_pool_connect_SetFlags)
 				test.CmpAny(t, "query", daos.PoolQueryMask(0), daos_pool_connect_QueryMask)
 			},
-			expHdl: testConnPoolHandle,
+			expHdl: defaultPoolHandle(),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -249,8 +237,6 @@ func TestAPI_getPoolConn(t *testing.T) {
 			if tc.setup != nil {
 				tc.setup(t)
 			}
-			log, buf := logging.NewTestLogger(name)
-			defer test.ShowBufferOnFailure(t, buf)
 
 			ctx := tc.ctx
 			if ctx == nil {
@@ -261,7 +247,7 @@ func TestAPI_getPoolConn(t *testing.T) {
 				defer tc.checkParams(t)
 			}
 
-			ph, cleanup, gotErr := getPoolConn(mustLogCtx(ctx, log), "", tc.poolID, tc.flags)
+			ph, cleanup, gotErr := getPoolConn(mustLogCtx(ctx, t), "", tc.poolID, tc.flags)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -291,15 +277,6 @@ func TestAPI_PoolQuery(t *testing.T) {
 		"nil context": {
 			expErr: errNilCtx,
 		},
-		"pool handle in context with non-empty ID": {
-			ctx:    testCtxPoolHandle.toCtx(test.Context(t)),
-			poolID: testPoolName,
-			expErr: errors.New("PoolHandle found in context with non-empty poolID"),
-		},
-		"pool handle not in context, no poolID": {
-			ctx:    test.Context(t),
-			expErr: errors.Wrap(daos.InvalidInput, "no pool ID provided"),
-		},
 		"daos_pool_query() fails": {
 			setup: func(t *testing.T) {
 				daos_pool_query_RC = -_Ctype_int(daos.IOError)
@@ -318,7 +295,7 @@ func TestAPI_PoolQuery(t *testing.T) {
 			expErr:    errors.Wrap(daos.IOError, "failed to query pool"),
 		},
 		"unspecified query mask": {
-			ctx: testCtxPoolHandle.toCtx(test.Context(t)),
+			ctx: defaultPoolHandle().toCtx(test.Context(t)),
 			expResp: func() *daos.PoolInfo {
 				out := defaultPoolInfo()
 				out.QueryMask = daos.DefaultPoolQueryMask
@@ -327,7 +304,7 @@ func TestAPI_PoolQuery(t *testing.T) {
 			}(),
 		},
 		"default query mask": {
-			ctx:       testCtxPoolHandle.toCtx(test.Context(t)),
+			ctx:       defaultPoolHandle().toCtx(test.Context(t)),
 			queryMask: daos.DefaultPoolQueryMask,
 			expResp: func() *daos.PoolInfo {
 				out := defaultPoolInfo()
@@ -337,7 +314,7 @@ func TestAPI_PoolQuery(t *testing.T) {
 			}(),
 		},
 		"health-only query mask": {
-			ctx:       testCtxPoolHandle.toCtx(test.Context(t)),
+			ctx:       defaultPoolHandle().toCtx(test.Context(t)),
 			queryMask: daos.HealthOnlyPoolQueryMask,
 			expResp: func() *daos.PoolInfo {
 				out := defaultPoolInfo()
@@ -348,7 +325,7 @@ func TestAPI_PoolQuery(t *testing.T) {
 			}(),
 		},
 		"enabled ranks": {
-			ctx:       testCtxPoolHandle.toCtx(test.Context(t)),
+			ctx:       defaultPoolHandle().toCtx(test.Context(t)),
 			queryMask: daos.MustNewPoolQueryMask(daos.PoolQueryOptionEnabledEngines),
 			expResp: func() *daos.PoolInfo {
 				out := defaultPoolInfo()
@@ -359,7 +336,7 @@ func TestAPI_PoolQuery(t *testing.T) {
 			}(),
 		},
 		"enabled & disabled ranks": {
-			ctx:       testCtxPoolHandle.toCtx(test.Context(t)),
+			ctx:       defaultPoolHandle().toCtx(test.Context(t)),
 			queryMask: daos.MustNewPoolQueryMask(daos.PoolQueryOptionEnabledEngines, daos.PoolQueryOptionDisabledEngines),
 			expResp: func() *daos.PoolInfo {
 				out := defaultPoolInfo()
@@ -369,7 +346,7 @@ func TestAPI_PoolQuery(t *testing.T) {
 			}(),
 		},
 		"space-only": {
-			ctx:       testCtxPoolHandle.toCtx(test.Context(t)),
+			ctx:       defaultPoolHandle().toCtx(test.Context(t)),
 			queryMask: daos.MustNewPoolQueryMask(daos.PoolQueryOptionSpace),
 			expResp: func() *daos.PoolInfo {
 				out := defaultPoolInfo()
@@ -385,14 +362,12 @@ func TestAPI_PoolQuery(t *testing.T) {
 			if tc.setup != nil {
 				tc.setup(t)
 			}
-			log, buf := logging.NewTestLogger(name)
-			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.checkParams != nil {
 				defer tc.checkParams(t)
 			}
 
-			gotResp, err := PoolQuery(mustLogCtx(tc.ctx, log), "", tc.poolID, tc.queryMask)
+			gotResp, err := PoolQuery(mustLogCtx(tc.ctx, t), "", tc.poolID, tc.queryMask)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
@@ -423,15 +398,6 @@ func TestAPI_PoolQueryTargets(t *testing.T) {
 	}{
 		"nil context": {
 			expErr: errNilCtx,
-		},
-		"pool handle in context with non-empty ID": {
-			ctx:    testCtxPoolHandle.toCtx(test.Context(t)),
-			poolID: testPoolName,
-			expErr: errors.New("PoolHandle found in context with non-empty poolID"),
-		},
-		"pool handle not in context, no poolID": {
-			ctx:    test.Context(t),
-			expErr: errors.Wrap(daos.InvalidInput, "no pool ID provided"),
 		},
 		"daos_pool_query() fails": {
 			setup: func(t *testing.T) {
@@ -527,14 +493,12 @@ func TestAPI_PoolQueryTargets(t *testing.T) {
 			if tc.setup != nil {
 				tc.setup(t)
 			}
-			log, buf := logging.NewTestLogger(name)
-			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.checkParams != nil {
 				defer tc.checkParams(t)
 			}
 
-			gotResp, err := PoolQueryTargets(mustLogCtx(tc.ctx, log), "", tc.poolID, tc.rank, tc.targets)
+			gotResp, err := PoolQueryTargets(mustLogCtx(tc.ctx, t), "", tc.poolID, tc.rank, tc.targets)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
@@ -561,20 +525,11 @@ func TestAPI_PoolListAttributes(t *testing.T) {
 		"nil context": {
 			expErr: errNilCtx,
 		},
-		"pool handle in context with non-empty ID": {
-			ctx:    testCtxPoolHandle.toCtx(test.Context(t)),
-			poolID: testPoolName,
-			expErr: errors.New("PoolHandle found in context with non-empty poolID"),
-		},
-		"pool handle not in context, no poolID": {
-			ctx:    test.Context(t),
-			expErr: errors.Wrap(daos.InvalidInput, "no pool ID provided"),
-		},
 		"daos_pool_list_attr() fails (get buf size)": {
 			setup: func(t *testing.T) {
 				daos_pool_list_attr_RC = -_Ctype_int(daos.IOError)
 			},
-			ctx:    testCtxPoolHandle.toCtx(test.Context(t)),
+			ctx:    defaultPoolHandle().toCtx(test.Context(t)),
 			expErr: errors.Wrap(daos.IOError, "failed to list pool attributes"),
 		},
 		"daos_pool_list_attr() fails (fetch names)": {
@@ -584,17 +539,17 @@ func TestAPI_PoolListAttributes(t *testing.T) {
 					-_Ctype_int(daos.IOError),
 				}
 			},
-			ctx:    testCtxPoolHandle.toCtx(test.Context(t)),
+			ctx:    defaultPoolHandle().toCtx(test.Context(t)),
 			expErr: errors.Wrap(daos.IOError, "failed to list pool attributes"),
 		},
 		"no attributes set": {
 			setup: func(t *testing.T) {
 				daos_pool_list_attr_AttrList = nil
 			},
-			ctx: testCtxPoolHandle.toCtx(test.Context(t)),
+			ctx: defaultPoolHandle().toCtx(test.Context(t)),
 		},
 		"success": {
-			ctx: testCtxPoolHandle.toCtx(test.Context(t)),
+			ctx: defaultPoolHandle().toCtx(test.Context(t)),
 			expNames: []string{
 				daos_default_AttrList[0].Name,
 				daos_default_AttrList[1].Name,
@@ -607,10 +562,8 @@ func TestAPI_PoolListAttributes(t *testing.T) {
 			if tc.setup != nil {
 				tc.setup(t)
 			}
-			log, buf := logging.NewTestLogger(name)
-			defer test.ShowBufferOnFailure(t, buf)
 
-			gotNames, err := PoolListAttributes(mustLogCtx(tc.ctx, log), "", tc.poolID)
+			gotNames, err := PoolListAttributes(mustLogCtx(tc.ctx, t), "", tc.poolID)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
@@ -634,27 +587,18 @@ func TestAPI_PoolGetAttributes(t *testing.T) {
 		"nil context": {
 			expErr: errNilCtx,
 		},
-		"pool handle in context with non-empty ID": {
-			ctx:    testCtxPoolHandle.toCtx(test.Context(t)),
-			poolID: testPoolName,
-			expErr: errors.New("PoolHandle found in context with non-empty poolID"),
-		},
-		"pool handle not in context, no poolID": {
-			ctx:    test.Context(t),
-			expErr: errors.Wrap(daos.InvalidInput, "no pool ID provided"),
-		},
 		"daos_pool_list_attr() fails": {
 			setup: func(t *testing.T) {
 				daos_pool_list_attr_RC = -_Ctype_int(daos.IOError)
 			},
-			ctx:    testCtxPoolHandle.toCtx(test.Context(t)),
+			ctx:    defaultPoolHandle().toCtx(test.Context(t)),
 			expErr: errors.Wrap(daos.IOError, "failed to list pool attributes"),
 		},
 		"daos_pool_get_attr() fails (sizes)": {
 			setup: func(t *testing.T) {
 				daos_pool_get_attr_RC = -_Ctype_int(daos.IOError)
 			},
-			ctx:    testCtxPoolHandle.toCtx(test.Context(t)),
+			ctx:    defaultPoolHandle().toCtx(test.Context(t)),
 			expErr: errors.Wrap(daos.IOError, "failed to get pool attribute sizes"),
 		},
 		"daos_pool_get_attr() fails (values)": {
@@ -664,11 +608,11 @@ func TestAPI_PoolGetAttributes(t *testing.T) {
 					-_Ctype_int(daos.IOError),
 				}
 			},
-			ctx:    testCtxPoolHandle.toCtx(test.Context(t)),
+			ctx:    defaultPoolHandle().toCtx(test.Context(t)),
 			expErr: errors.Wrap(daos.IOError, "failed to get pool attribute values"),
 		},
 		"empty requested attribute name": {
-			ctx:       testCtxPoolHandle.toCtx(test.Context(t)),
+			ctx:       defaultPoolHandle().toCtx(test.Context(t)),
 			attrNames: test.JoinArgs(nil, "a", ""),
 			expErr:    errors.Errorf("empty pool attribute name at index 1"),
 		},
@@ -676,7 +620,7 @@ func TestAPI_PoolGetAttributes(t *testing.T) {
 			setup: func(t *testing.T) {
 				daos_pool_get_attr_AttrList = nil
 			},
-			ctx:       testCtxPoolHandle.toCtx(test.Context(t)),
+			ctx:       defaultPoolHandle().toCtx(test.Context(t)),
 			attrNames: test.JoinArgs(nil, "foo"),
 			checkParams: func(t *testing.T) {
 				test.CmpAny(t, "req attr names", map[string]struct{}{"foo": {}}, daos_pool_get_attr_ReqNames)
@@ -684,7 +628,7 @@ func TestAPI_PoolGetAttributes(t *testing.T) {
 			expErr: errors.Wrap(daos.Nonexistent, "failed to get pool attribute sizes"),
 		},
 		"unknown attribute requested": {
-			ctx:       testCtxPoolHandle.toCtx(test.Context(t)),
+			ctx:       defaultPoolHandle().toCtx(test.Context(t)),
 			attrNames: test.JoinArgs(nil, "foo"),
 			checkParams: func(t *testing.T) {
 				test.CmpAny(t, "req attr names", map[string]struct{}{"foo": {}}, daos_pool_get_attr_ReqNames)
@@ -695,14 +639,14 @@ func TestAPI_PoolGetAttributes(t *testing.T) {
 			setup: func(t *testing.T) {
 				daos_pool_list_attr_AttrList = nil
 			},
-			ctx: testCtxPoolHandle.toCtx(test.Context(t)),
+			ctx: defaultPoolHandle().toCtx(test.Context(t)),
 		},
 		"success; all attributes": {
-			ctx:      testCtxPoolHandle.toCtx(test.Context(t)),
+			ctx:      defaultPoolHandle().toCtx(test.Context(t)),
 			expAttrs: daos_default_AttrList,
 		},
 		"success; requested attributes": {
-			ctx:       testCtxPoolHandle.toCtx(test.Context(t)),
+			ctx:       defaultPoolHandle().toCtx(test.Context(t)),
 			attrNames: test.JoinArgs(nil, daos_default_AttrList[0].Name, daos_default_AttrList[2].Name),
 			checkParams: func(t *testing.T) {
 				reqNames := test.JoinArgs(nil, daos_default_AttrList[0].Name, daos_default_AttrList[2].Name)
@@ -722,14 +666,12 @@ func TestAPI_PoolGetAttributes(t *testing.T) {
 			if tc.setup != nil {
 				tc.setup(t)
 			}
-			log, buf := logging.NewTestLogger(name)
-			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.checkParams != nil {
 				defer tc.checkParams(t)
 			}
 
-			gotAttrs, err := PoolGetAttributes(mustLogCtx(tc.ctx, log), "", tc.poolID, tc.attrNames...)
+			gotAttrs, err := PoolGetAttributes(mustLogCtx(tc.ctx, t), "", tc.poolID, tc.attrNames...)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
@@ -751,31 +693,22 @@ func TestAPI_PoolSetAttributes(t *testing.T) {
 		"nil context": {
 			expErr: errNilCtx,
 		},
-		"pool handle in context with non-empty ID": {
-			ctx:    testCtxPoolHandle.toCtx(test.Context(t)),
-			poolID: testPoolName,
-			expErr: errors.New("PoolHandle found in context with non-empty poolID"),
-		},
-		"pool handle not in context, no poolID": {
-			ctx:    test.Context(t),
-			expErr: errors.Wrap(daos.InvalidInput, "no pool ID provided"),
-		},
 		"no attributes to set": {
-			ctx:    testCtxPoolHandle.toCtx(test.Context(t)),
+			ctx:    defaultPoolHandle().toCtx(test.Context(t)),
 			expErr: errors.Wrap(daos.InvalidInput, "no pool attributes provided"),
 		},
 		"nil toSet attribute": {
-			ctx:    testCtxPoolHandle.toCtx(test.Context(t)),
+			ctx:    defaultPoolHandle().toCtx(test.Context(t)),
 			toSet:  append(daos_default_AttrList, nil),
 			expErr: errors.Wrap(daos.InvalidInput, "nil pool attribute at index 3"),
 		},
 		"toSet attribute with empty name": {
-			ctx:    testCtxPoolHandle.toCtx(test.Context(t)),
+			ctx:    defaultPoolHandle().toCtx(test.Context(t)),
 			toSet:  append(daos_default_AttrList, &daos.Attribute{Name: ""}),
 			expErr: errors.Wrap(daos.InvalidInput, "empty pool attribute name at index 3"),
 		},
 		"toSet attribute with empty value": {
-			ctx:    testCtxPoolHandle.toCtx(test.Context(t)),
+			ctx:    defaultPoolHandle().toCtx(test.Context(t)),
 			toSet:  append(daos_default_AttrList, &daos.Attribute{Name: "empty"}),
 			expErr: errors.Wrap(daos.InvalidInput, "empty pool attribute value at index 3"),
 		},
@@ -783,12 +716,12 @@ func TestAPI_PoolSetAttributes(t *testing.T) {
 			setup: func(t *testing.T) {
 				daos_pool_set_attr_RC = -_Ctype_int(daos.IOError)
 			},
-			ctx:    testCtxPoolHandle.toCtx(test.Context(t)),
+			ctx:    defaultPoolHandle().toCtx(test.Context(t)),
 			toSet:  daos_default_AttrList,
 			expErr: errors.Wrap(daos.IOError, "failed to set pool attributes"),
 		},
 		"success": {
-			ctx:   testCtxPoolHandle.toCtx(test.Context(t)),
+			ctx:   defaultPoolHandle().toCtx(test.Context(t)),
 			toSet: daos_default_AttrList,
 		},
 	} {
@@ -797,10 +730,8 @@ func TestAPI_PoolSetAttributes(t *testing.T) {
 			if tc.setup != nil {
 				tc.setup(t)
 			}
-			log, buf := logging.NewTestLogger(name)
-			defer test.ShowBufferOnFailure(t, buf)
 
-			err := PoolSetAttributes(mustLogCtx(tc.ctx, log), "", tc.poolID, tc.toSet...)
+			err := PoolSetAttributes(mustLogCtx(tc.ctx, t), "", tc.poolID, tc.toSet...)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
@@ -822,21 +753,12 @@ func TestAPI_PoolDeleteAttributes(t *testing.T) {
 		"nil context": {
 			expErr: errNilCtx,
 		},
-		"pool handle in context with non-empty ID": {
-			ctx:    testCtxPoolHandle.toCtx(test.Context(t)),
-			poolID: testPoolName,
-			expErr: errors.New("PoolHandle found in context with non-empty poolID"),
-		},
-		"pool handle not in context, no poolID": {
-			ctx:    test.Context(t),
-			expErr: errors.Wrap(daos.InvalidInput, "no pool ID provided"),
-		},
 		"no attributes to delete": {
-			ctx:    testCtxPoolHandle.toCtx(test.Context(t)),
+			ctx:    defaultPoolHandle().toCtx(test.Context(t)),
 			expErr: errors.Wrap(daos.InvalidInput, "no pool attribute names provided"),
 		},
 		"empty name in toDelete list": {
-			ctx:      testCtxPoolHandle.toCtx(test.Context(t)),
+			ctx:      defaultPoolHandle().toCtx(test.Context(t)),
 			toDelete: test.JoinArgs(nil, "foo", "", "bar"),
 			expErr:   errors.Wrap(daos.InvalidInput, "empty pool attribute name at index 1"),
 		},
@@ -844,12 +766,12 @@ func TestAPI_PoolDeleteAttributes(t *testing.T) {
 			setup: func(t *testing.T) {
 				daos_pool_del_attr_RC = -_Ctype_int(daos.IOError)
 			},
-			ctx:      testCtxPoolHandle.toCtx(test.Context(t)),
+			ctx:      defaultPoolHandle().toCtx(test.Context(t)),
 			toDelete: test.JoinArgs(nil, daos_default_AttrList[0].Name),
 			expErr:   errors.Wrap(daos.IOError, "failed to delete pool attributes"),
 		},
 		"success": {
-			ctx:      testCtxPoolHandle.toCtx(test.Context(t)),
+			ctx:      defaultPoolHandle().toCtx(test.Context(t)),
 			toDelete: test.JoinArgs(nil, daos_default_AttrList[0].Name),
 		},
 	} {
@@ -858,10 +780,8 @@ func TestAPI_PoolDeleteAttributes(t *testing.T) {
 			if tc.setup != nil {
 				tc.setup(t)
 			}
-			log, buf := logging.NewTestLogger(name)
-			defer test.ShowBufferOnFailure(t, buf)
 
-			err := PoolDeleteAttributes(mustLogCtx(tc.ctx, log), "", tc.poolID, tc.toDelete...)
+			err := PoolDeleteAttributes(mustLogCtx(tc.ctx, t), "", tc.poolID, tc.toDelete...)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
@@ -873,9 +793,7 @@ func TestAPI_PoolDeleteAttributes(t *testing.T) {
 }
 
 func TestAPI_PoolHandleMethods(t *testing.T) {
-	testHandle := &PoolHandle{}
-
-	thType := reflect.TypeOf(testHandle)
+	thType := reflect.TypeOf(defaultPoolHandle())
 	for i := 0; i < thType.NumMethod(); i++ {
 		method := thType.Method(i)
 		methArgs := make([]reflect.Value, 0)
@@ -901,6 +819,18 @@ func TestAPI_PoolHandleMethods(t *testing.T) {
 		case "DeleteAttributes":
 			methArgs = append(methArgs, reflect.ValueOf(daos_default_AttrList[0].Name))
 			expResults = 1
+		case "ListContainers":
+			methArgs = append(methArgs, reflect.ValueOf(true))
+			expResults = 2
+		case "DestroyContainer":
+			methArgs = append(methArgs, reflect.ValueOf("foo"), reflect.ValueOf(true))
+			expResults = 1
+		case "QueryContainer":
+			methArgs = append(methArgs, reflect.ValueOf("foo"))
+			expResults = 2
+		case "OpenContainer":
+			methArgs = append(methArgs, reflect.ValueOf(ContainerOpenReq{ID: "foo"}))
+			expResults = 2
 		case "FillHandle", "IsValid", "String", "UUID", "ID":
 			// No tests for these. The main point of this suite is to ensure that the
 			// convenience wrappers handle inputs as expected.
@@ -922,7 +852,7 @@ func TestAPI_PoolHandleMethods(t *testing.T) {
 				expErr: ErrInvalidPoolHandle,
 			},
 			fmt.Sprintf("%s: success", method.Name): {
-				th: testHandle,
+				th: defaultPoolHandle(),
 			},
 		} {
 			t.Run(name, func(t *testing.T) {
@@ -1057,14 +987,12 @@ func TestAPI_GetPoolList(t *testing.T) {
 			if tc.setup != nil {
 				tc.setup(t)
 			}
-			log, buf := logging.NewTestLogger(name)
-			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.checkParams != nil {
 				defer tc.checkParams(t)
 			}
 
-			gotPools, err := GetPoolList(mustLogCtx(tc.ctx, log), tc.req)
+			gotPools, err := GetPoolList(mustLogCtx(tc.ctx, t), tc.req)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return

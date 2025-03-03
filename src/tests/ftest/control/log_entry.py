@@ -101,7 +101,7 @@ class ControlLogEntry(TestWithServers):
         expected = [fr'rank {rank}.*is down' for rank in stop_ranks] \
             + [r'Rebuild \[queued\]', r'Rebuild \[completed\]']
         with self.verify_journalctl(expected):
-            self.server_managers[0].stop_ranks(stop_ranks, self.d_log, force=True)
+            self.server_managers[0].stop_ranks(stop_ranks, force=True)
             dmg.system_query()
             pool.wait_for_rebuild_to_start()
             pool.wait_for_rebuild_to_end()
@@ -109,7 +109,7 @@ class ControlLogEntry(TestWithServers):
         self.log_step('Restart rank after rebuild')
         expected = [r'Starting I/O Engine instance']
         with self.verify_journalctl(expected):
-            self.server_managers[0].start_ranks(stop_ranks, self.d_log)
+            self.server_managers[0].start_ranks(stop_ranks)
 
         self.log_step('Reintegrate rank and wait for rebuild')
         expected = [fr'rank {rank}.*start reintegration' for rank in stop_ranks] \
@@ -175,7 +175,7 @@ class ControlLogEntry(TestWithServers):
         expected = [fr'rank {rank}.*exited with 0' for rank in stop_ranks] \
             + [fr'process.*started on rank {rank}' for rank in stop_ranks]
         with self.verify_journalctl(expected):
-            self.server_managers[0].stop_ranks(stop_ranks, self.d_log)
-            self.server_managers[0].start_ranks(stop_ranks, self.d_log)
+            self.server_managers[0].stop_ranks(stop_ranks)
+            self.server_managers[0].start_ranks(stop_ranks)
 
         self.log_step('Test passed')
