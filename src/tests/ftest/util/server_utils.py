@@ -7,7 +7,6 @@
 # pylint: disable=too-many-lines
 
 import os
-import random
 import time
 from getpass import getuser
 
@@ -919,10 +918,11 @@ class DaosServerManager(SubprocessManager):
         # Update the expected status of the stopped/excluded ranks
         self.update_expected_states(ranks, ["stopped", "excluded"])
 
-    def stop_random_rank(self, force=False, exclude_ranks=None):
+    def stop_random_rank(self, random, force=False, exclude_ranks=None):
         """Kill/Stop a random server rank that is expected to be running.
 
         Args:
+            random (obj): random object
             force (bool, optional): whether to use --force option to dmg system
                 stop. Defaults to False.
             exclude_ranks (list, optional): ranks to exclude from the random selection.
