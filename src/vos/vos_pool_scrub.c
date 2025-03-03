@@ -271,6 +271,9 @@ sc_get_rec_in_chunk_at_idx(const struct scrub_ctx *ctx, uint32_t i)
 static void
 sc_wait_until_should_continue(struct scrub_ctx *ctx)
 {
+	if (sc_cont_is_stopping(ctx))
+		return;
+
 	if (sc_mode(ctx) == DAOS_SCRUB_MODE_TIMED) {
 		struct timespec	now;
 		uint64_t	msec_between;
@@ -280,6 +283,8 @@ sc_wait_until_should_continue(struct scrub_ctx *ctx)
 			d_tm_set_gauge(ctx->sc_metrics.scm_next_csum_scrub, msec_between);
 			/* don't wait longer than 1 sec each loop */
 			sc_sleep(ctx, min(1000, msec_between));
+			if (sc_cont_is_stopping(ctx))
+				break;
 		}
 	} else if (sc_mode(ctx) == DAOS_SCRUB_MODE_LAZY) {
 		sc_sleep(ctx, 0);
@@ -289,6 +294,8 @@ sc_wait_until_should_continue(struct scrub_ctx *ctx)
 			 * trying again
 			 */
 			sc_sleep(ctx, 1000);
+			if (sc_cont_is_stopping(ctx))
+				break;
 		}
 		sc_m_track_idle(ctx);
 	} else {
