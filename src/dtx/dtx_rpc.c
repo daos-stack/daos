@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1474,6 +1475,8 @@ struct dtx_coll_rpc_args {
 	struct dtx_id		 dcra_xid;
 	uint32_t		 dcra_opc;
 	uint32_t		 dcra_ver;
+	uint32_t                 dcra_min_rank;
+	uint32_t                 dcra_max_rank;
 	daos_epoch_t		 dcra_epoch;
 	d_rank_list_t		*dcra_ranks;
 	uint8_t			*dcra_hints;
@@ -1530,6 +1533,8 @@ dtx_coll_rpc(struct dtx_coll_rpc_args *dcra)
 	uuid_copy(dci->dci_co_uuid, dcra->dcra_cont->sc_uuid);
 	dci->dci_xid = dcra->dcra_xid;
 	dci->dci_version = dcra->dcra_ver;
+	dci->dci_min_rank        = dcra->dcra_min_rank;
+	dci->dci_max_rank        = dcra->dcra_max_rank;
 	dci->dci_epoch = dcra->dcra_epoch;
 	dci->dci_hints.ca_count = dcra->dcra_hint_sz;
 	dci->dci_hints.ca_arrays = dcra->dcra_hints;
@@ -1575,6 +1580,8 @@ dtx_coll_rpc_prep(struct ds_cont_child *cont, struct dtx_coll_entry *dce, uint32
 	dcra->dcra_xid = dce->dce_xid;
 	dcra->dcra_opc = opc;
 	dcra->dcra_ver = dce->dce_ver;
+	dcra->dcra_min_rank = dce->dce_min_rank;
+	dcra->dcra_max_rank = dce->dce_max_rank;
 	dcra->dcra_epoch = epoch;
 	dcra->dcra_ranks = dce->dce_ranks;
 	dcra->dcra_hints = dce->dce_hints;

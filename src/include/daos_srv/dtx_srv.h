@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -189,6 +190,8 @@ struct dtx_sub_status {
 struct dtx_coll_entry {
 	struct dtx_id			 dce_xid;
 	uint32_t			 dce_ver;
+	uint32_t                         dce_min_rank;
+	uint32_t                         dce_max_rank;
 	uint32_t			 dce_refs;
 	d_rank_list_t			*dce_ranks;
 	uint8_t				*dce_hints;
