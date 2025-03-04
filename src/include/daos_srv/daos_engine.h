@@ -772,23 +772,27 @@ struct dss_chore;
 typedef enum dss_chore_status (*dss_chore_func_t)(struct dss_chore *chore, bool is_reentrance);
 
 /**
- * Chore (opaque)
- *
  * A simple task (e.g., an I/O forwarding task) that yields by returning
  * DSS_CHORE_YIELD instead of calling ABT_thread_yield. This data structure
  * shall be embedded in the user's own task data structure, which typically
- * also includes arguments and internal state variables for \a cho_func. All
- * fields are private. See dtx_chore for an example.
+ * also includes arguments and internal state variables for \a cho_func.
  */
 struct dss_chore {
 	d_list_t              cho_link;
 	enum dss_chore_status cho_status;
 	dss_chore_func_t      cho_func;
+	uint32_t              cho_priority : 1;
+	int32_t               cho_credits;
+	void                 *cho_hint;
 };
 
-int dss_chore_delegate(struct dss_chore *chore, dss_chore_func_t func);
-void dss_chore_diy(struct dss_chore *chore, dss_chore_func_t func);
-
-bool engine_in_check(void);
+int
+dss_chore_register(struct dss_chore *chore);
+void
+dss_chore_deregister(struct dss_chore *chore);
+void
+dss_chore_diy(struct dss_chore *chore);
+bool
+engine_in_check(void);
 
 #endif /* __DSS_API_H__ */

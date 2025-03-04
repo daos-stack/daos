@@ -1,6 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,12 +12,17 @@
 
 #include "crt_internal.h"
 
-static void crt_epi_destroy(struct crt_ep_inflight *epi);
-static int context_quotas_init(crt_context_t crt_ctx);
-static int context_quotas_finalize(crt_context_t crt_ctx);
+static void
+crt_epi_destroy(struct crt_ep_inflight *epi);
+static void
+context_quotas_init(struct crt_context *ctx);
+static void
+context_quotas_finalize(struct crt_context *ctx);
 
-static inline int get_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota);
-static inline void put_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota);
+static inline int
+get_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota);
+static inline void
+put_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota);
 
 static struct crt_ep_inflight *
 epi_link2ptr(d_list_t *rlink)
@@ -134,14 +140,12 @@ crt_context_ep_empty(crt_context_t crt_ctx)
 }
 
 static int
-crt_context_init(crt_context_t crt_ctx)
+crt_context_init(struct crt_context *ctx)
 {
-	struct crt_context	*ctx;
-	uint32_t		 bh_node_cnt;
-	int			 rc;
+	uint32_t bh_node_cnt;
+	int      rc;
 
-	D_ASSERT(crt_ctx != NULL);
-	ctx = crt_ctx;
+	D_ASSERT(ctx != NULL);
 
 	rc = D_MUTEX_INIT(&ctx->cc_mutex, NULL);
 	if (rc != 0)
@@ -158,30 +162,29 @@ crt_context_init(crt_context_t crt_ctx)
 
 	/* create timeout binheap */
 	bh_node_cnt = CRT_DEFAULT_CREDITS_PER_EP_CTX * 64;
-	rc = d_binheap_create_inplace(DBH_FT_NOLOCK, bh_node_cnt,
-				      NULL /* priv */, &crt_timeout_bh_ops,
-				      &ctx->cc_bh_timeout);
+	rc          = d_binheap_create_inplace(DBH_FT_NOLOCK, bh_node_cnt, NULL /* priv */,
+					       &crt_timeout_bh_ops, &ctx->cc_bh_timeout);
 	if (rc != 0) {
 		D_ERROR("d_binheap_create() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out_mutex_destroy, rc);
 	}
 
 	/* create epi table, use external lock */
-	rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK, CRT_EPI_TABLE_BITS,
-					 NULL, &epi_table_ops,
+	rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK, CRT_EPI_TABLE_BITS, NULL, &epi_table_ops,
 					 &ctx->cc_epi_table);
 	if (rc != 0) {
 		D_ERROR("d_hash_table_create() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out_binheap_destroy, rc);
 	}
 
-	rc = context_quotas_init(crt_ctx);
+	context_quotas_init(ctx);
 
-	D_GOTO(out, rc);
+	return 0;
 
 out_binheap_destroy:
 	d_binheap_destroy_inplace(&ctx->cc_bh_timeout);
 out_mutex_destroy:
+	D_MUTEX_DESTROY(&ctx->cc_quotas.mutex);
 	D_MUTEX_DESTROY(&ctx->cc_mutex);
 out:
 	return rc;
@@ -272,8 +275,8 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
-	/** initialize sensors */
-	if (crt_gdata.cg_use_sensors) {
+	/** initialize sensors for servers */
+	if (crt_gdata.cg_use_sensors && crt_is_service()) {
 		int	ret;
 		char	*prov;
 
@@ -283,8 +286,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 				      "reqs", "net/%s/req_timeout/ctx_%u",
 				      prov, ctx->cc_idx);
 		if (ret)
-			D_WARN("Failed to create timed out req counter: "DF_RC
-			       "\n", DP_RC(ret));
+			DL_WARN(ret, "Failed to create timed out req counter");
 
 		ret = d_tm_add_metric(&ctx->cc_timedout_uri, D_TM_COUNTER,
 				      "Total number of timed out URI lookup "
@@ -292,8 +294,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 				      "net/%s/uri_lookup_timeout/ctx_%u",
 				      prov, ctx->cc_idx);
 		if (ret)
-			D_WARN("Failed to create timed out uri req counter: "
-			       DF_RC"\n", DP_RC(ret));
+			DL_WARN(ret, "Failed to create timed out uri req counter");
 
 		ret = d_tm_add_metric(&ctx->cc_failed_addr, D_TM_COUNTER,
 				      "Total number of failed address "
@@ -301,32 +302,31 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 				      "net/%s/failed_addr/ctx_%u",
 				      prov, ctx->cc_idx);
 		if (ret)
-			D_WARN("Failed to create failed addr counter: "DF_RC
-			       "\n", DP_RC(ret));
+			DL_WARN(ret, "Failed to create failed addr counter");
 
 		ret = d_tm_add_metric(&ctx->cc_net_glitches, D_TM_COUNTER,
 				      "Total number of network glitch errors", "errors",
 				      "net/%s/glitch/ctx_%u", prov, ctx->cc_idx);
 		if (ret)
-			DL_WARN(rc, "Failed to create network glitch counter");
+			DL_WARN(ret, "Failed to create network glitch counter");
 
 		ret = d_tm_add_metric(&ctx->cc_swim_delay, D_TM_STATS_GAUGE,
 				      "SWIM delay measurements", "delay",
 				      "net/%s/swim_delay/ctx_%u", prov, ctx->cc_idx);
 		if (ret)
-			DL_WARN(rc, "Failed to create SWIM delay gauge");
+			DL_WARN(ret, "Failed to create SWIM delay gauge");
 
 		ret = d_tm_add_metric(&ctx->cc_quotas.rpc_waitq_depth, D_TM_GAUGE,
 				      "Current count of enqueued RPCs", "rpcs",
 				      "net/%s/waitq_depth/ctx_%u", prov, ctx->cc_idx);
 		if (ret)
-			DL_WARN(rc, "Failed to create rpc waitq gauge");
+			DL_WARN(ret, "Failed to create rpc waitq gauge");
 
 		ret = d_tm_add_metric(&ctx->cc_quotas.rpc_quota_exceeded, D_TM_COUNTER,
 				      "Total number of exceeded RPC quota errors", "errors",
 				      "net/%s/quota_exceeded/ctx_%u", prov, ctx->cc_idx);
 		if (ret)
-			DL_WARN(rc, "Failed to create quota exceeded counter");
+			DL_WARN(ret, "Failed to create quota exceeded counter");
 	}
 
 	if (crt_is_service() && crt_gdata.cg_auto_swim_disable == 0 &&
@@ -758,7 +758,7 @@ out:
 int
 crt_context_destroy(crt_context_t crt_ctx, int force)
 {
-	struct crt_context	*ctx;
+	struct crt_context      *ctx = crt_ctx;
 	uint32_t                 timeout_sec;
 	int                      ctx_idx;
 	int                      provider;
@@ -777,14 +777,7 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 		D_GOTO(out, rc = -DER_UNINIT);
 	}
 
-	rc = context_quotas_finalize(crt_ctx);
-	if (rc) {
-		DL_ERROR(rc, "context_quotas_finalize() failed");
-		if (!force)
-			D_GOTO(out, rc);
-	}
-
-	ctx = crt_ctx;
+	context_quotas_finalize(ctx);
 
 	rc = crt_context_idx(crt_ctx, &ctx_idx);
 	if (rc != 0) {
@@ -1229,6 +1222,9 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 	d_list_t			 timeout_list;
 	uint64_t			 ts_now;
 	bool                             print_once = false;
+#ifdef HG_HAS_DIAG
+	bool should_republish = false;
+#endif
 
 	D_ASSERT(crt_ctx != NULL);
 
@@ -1254,6 +1250,14 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 			  "already on timeout list\n");
 		d_list_add_tail(&rpc_priv->crp_tmp_link_timeout, &timeout_list);
 	}
+
+#ifdef HG_HAS_DIAG
+	/* piggy-back on the timeout processing so that we don't need to do another gettime() */
+	if (ts_now - crt_ctx->cc_hg_ctx.chc_diag_pub_ts > CRT_HG_TM_PUB_INTERVAL_US) {
+		should_republish                   = true;
+		crt_ctx->cc_hg_ctx.chc_diag_pub_ts = ts_now;
+	}
+#endif
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
 	/* handle the timeout RPCs */
@@ -1281,6 +1285,12 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 		crt_req_timeout_hdlr(rpc_priv);
 		RPC_DECREF(rpc_priv);
 	}
+
+#ifdef HG_HAS_DIAG
+	/* periodically republish Mercury-level counters as DAOS metrics */
+	if (should_republish)
+		crt_hg_republish_diags(&crt_ctx->cc_hg_ctx);
+#endif
 }
 
 /*
@@ -2028,41 +2038,23 @@ crt_req_force_completion(struct crt_rpc_priv *rpc_priv)
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 }
 
-static int
-context_quotas_init(crt_context_t crt_ctx)
+static void
+context_quotas_init(struct crt_context *ctx)
 {
-	struct crt_context	*ctx = crt_ctx;
-	struct crt_quotas	*quotas;
-	int			rc = 0;
-
-	if (ctx == NULL) {
-		D_ERROR("NULL context\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
+	struct crt_quotas *quotas;
 
 	quotas = &ctx->cc_quotas;
 
 	quotas->limit[CRT_QUOTA_RPCS]   = crt_gdata.cg_rpc_quota;
 	quotas->current[CRT_QUOTA_RPCS] = 0;
 	quotas->enabled[CRT_QUOTA_RPCS] = crt_gdata.cg_rpc_quota > 0 ? true : false;
-out:
-	return rc;
 }
 
-static int
-context_quotas_finalize(crt_context_t crt_ctx)
+static void
+context_quotas_finalize(struct crt_context *ctx)
 {
-	struct crt_context	*ctx = crt_ctx;
-
-	if (ctx == NULL) {
-		D_ERROR("NULL context\n");
-		return -DER_INVAL;
-	}
-
 	for (int i = 0; i < CRT_QUOTA_COUNT; i++)
 		ctx->cc_quotas.enabled[i] = false;
-
-	return DER_SUCCESS;
 }
 
 int

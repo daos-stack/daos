@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -410,7 +411,7 @@ func TestFlags_ContTypeFlag(t *testing.T) {
 		},
 		"invalid": {
 			arg:    "snausages",
-			expErr: errors.New("unknown container type"),
+			expErr: errors.New("unknown container layout"),
 		},
 		"valid": {
 			arg: "pOsIx",
