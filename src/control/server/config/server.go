@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -48,26 +49,27 @@ type deprecatedParams struct {
 // See utils/config/daos_server.yml for parameter descriptions.
 type Server struct {
 	// control-specific
-	ControlPort       int                       `yaml:"port"`
-	TransportConfig   *security.TransportConfig `yaml:"transport_config"`
-	Engines           []*engine.Config          `yaml:"engines"`
-	BdevExclude       []string                  `yaml:"bdev_exclude,omitempty"`
-	DisableVFIO       bool                      `yaml:"disable_vfio"`
-	DisableVMD        *bool                     `yaml:"disable_vmd"`
-	EnableHotplug     bool                      `yaml:"enable_hotplug"`
-	NrHugepages       int                       `yaml:"nr_hugepages"`        // total for all engines
-	SystemRamReserved int                       `yaml:"system_ram_reserved"` // total for all engines
-	DisableHugepages  bool                      `yaml:"disable_hugepages"`
-	ControlLogMask    common.ControlLogLevel    `yaml:"control_log_mask"`
-	ControlLogFile    string                    `yaml:"control_log_file,omitempty"`
-	ControlLogJSON    bool                      `yaml:"control_log_json,omitempty"`
-	HelperLogFile     string                    `yaml:"helper_log_file,omitempty"`
-	FWHelperLogFile   string                    `yaml:"firmware_helper_log_file,omitempty"`
-	FaultPath         string                    `yaml:"fault_path,omitempty"`
-	TelemetryPort     int                       `yaml:"telemetry_port,omitempty"`
-	CoreDumpFilter    uint8                     `yaml:"core_dump_filter,omitempty"`
-	ClientEnvVars     []string                  `yaml:"client_env_vars,omitempty"`
-	SupportConfig     SupportConfig             `yaml:"support_config,omitempty"`
+	ControlPort            int                       `yaml:"port"`
+	TransportConfig        *security.TransportConfig `yaml:"transport_config"`
+	Engines                []*engine.Config          `yaml:"engines"`
+	BdevExclude            []string                  `yaml:"bdev_exclude,omitempty"`
+	DisableVFIO            bool                      `yaml:"disable_vfio"`
+	DisableVMD             *bool                     `yaml:"disable_vmd"`
+	EnableHotplug          bool                      `yaml:"enable_hotplug"`
+	NrHugepages            int                       `yaml:"nr_hugepages"` // total for all engines
+	NrHugepagesNeedsUpdate bool                      `yaml:"-"`
+	SystemRamReserved      int                       `yaml:"system_ram_reserved"` // total for all engines
+	DisableHugepages       bool                      `yaml:"disable_hugepages"`
+	ControlLogMask         common.ControlLogLevel    `yaml:"control_log_mask"`
+	ControlLogFile         string                    `yaml:"control_log_file,omitempty"`
+	ControlLogJSON         bool                      `yaml:"control_log_json,omitempty"`
+	HelperLogFile          string                    `yaml:"helper_log_file,omitempty"`
+	FWHelperLogFile        string                    `yaml:"firmware_helper_log_file,omitempty"`
+	FaultPath              string                    `yaml:"fault_path,omitempty"`
+	TelemetryPort          int                       `yaml:"telemetry_port,omitempty"`
+	CoreDumpFilter         uint8                     `yaml:"core_dump_filter,omitempty"`
+	ClientEnvVars          []string                  `yaml:"client_env_vars,omitempty"`
+	SupportConfig          SupportConfig             `yaml:"support_config,omitempty"`
 
 	// duplicated in engine.Config
 	SystemName string              `yaml:"name"`
@@ -533,6 +535,10 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 			"if this is not intentional update the 'nr_hugepages' config "+
 			"parameter or remove and it will be automatically calculated",
 			cfg.NrHugepages, minHugepages)
+	}
+
+	if mi.HugepagesTotal < cfg.NrHugepages {
+		cfg.NrHugepagesNeedsUpdate = true
 	}
 
 	return nil
