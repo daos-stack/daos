@@ -111,7 +111,7 @@ struct rpc_proto {
 static d_rank_t
 get_rand_rank(void)
 {
-	int           idx;
+	int idx;
 
 	idx = d_rand() % dc_mgmt_net_get_num_srv_ranks();
 	return dc_mgmt_net_get_srv_rank(idx);
