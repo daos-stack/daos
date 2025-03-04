@@ -43,6 +43,8 @@ extern "C" {
 #define DFS_MAX_XATTR_NAME	255
 /** Maximum xattr value */
 #define DFS_MAX_XATTR_LEN	65536
+/** Magic number identifier for statfs and related routines */
+#define DAOS_SUPER_MAGIC        0xDA05AD10
 
 /** File/Directory/Symlink object handle struct */
 typedef struct dfs_obj dfs_obj_t;
