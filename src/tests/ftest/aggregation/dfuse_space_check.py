@@ -4,7 +4,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
 import os
 
 from dfuse_utils import get_dfuse, start_dfuse
@@ -68,13 +67,12 @@ class DfuseSpaceCheck(IorTestBase):
 
         return file_count
 
-    def test_dfusespacecheck(self):
+    def test_dfuse_space_check(self):
         """Jira ID: DAOS-3777.
 
         Test Description:
-            Purpose of this test is to mount dfuse and verify aggregation
-            to return space when pool is filled with once large file and
-            once with small files.
+            Purpose of this test is to mount dfuse and verify aggregation to return space when pool
+            is filled with once large file and once with small files.
 
         Use cases:
             Create a pool.
@@ -93,10 +91,10 @@ class DfuseSpaceCheck(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=aggregation,daosio,dfuse
-        :avocado: tags=DfuseSpaceCheck,test_dfusespacecheck
+        :avocado: tags=DfuseSpaceCheck,test_dfuse_space_check
         """
-        # get test params for cont and pool count
-        self.__block_size = self.params.get('block_size', '/run/dfusespacecheck/*')
+        # Get test params for cont and pool count
+        self.__block_size = self.params.get('block_size', '/run/dfuse_space_check/*')
 
         # Create a pool, container, and start dfuse
         self.create_pool()
@@ -104,7 +102,7 @@ class DfuseSpaceCheck(IorTestBase):
         dfuse = get_dfuse(self, self.hostlist_clients)
         start_dfuse(self, dfuse, self.pool, self.container)
 
-        # get nvme space before write
+        # Get nvme space before write
         self.__initial_space = self.get_nvme_free_space()
 
         # Create a file as large as we can

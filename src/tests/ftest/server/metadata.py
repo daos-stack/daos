@@ -14,13 +14,12 @@ from job_manager_utils import get_job_manager, stop_job_manager
 from thread_manager import ThreadManager
 
 
-def run_ior_loop(test, manager, loops):
+def run_ior_loop(manager, cont_labels):
     """Run IOR multiple times.
 
     Args:
-        test (Test): the test object
         manager (str): mpi job manager command
-        loops (int): number of times to run IOR
+        cont_labels (list): container labels to loop over and run ior with
 
     Returns:
         list: a list of CmdResults from each ior command run
@@ -28,8 +27,7 @@ def run_ior_loop(test, manager, loops):
     """
     results = []
     errors = []
-    for index in range(loops):
-        cont = test.label_generator.get_label('cont')
+    for index, cont in enumerate(cont_labels):
         manager.job.dfs_cont.update(cont, "ior.dfs_cont")
 
         t_start = time.time()
@@ -40,15 +38,16 @@ def run_ior_loop(test, manager, loops):
             ior_mode = "read" if "-r" in manager.job.flags.value else "write"
             errors.append(
                 "IOR {} Loop {}/{} failed for container {}: {}".format(
-                    ior_mode, index, loops, cont, error))
+                    ior_mode, index, len(cont_labels), cont, error))
         finally:
             t_end = time.time()
             ior_cmd_time = t_end - t_start
             results.append("ior_cmd_time = {}".format(ior_cmd_time))
 
     if errors:
+        err_str = "\n".join(errors)
         raise CommandFailure(
-            "IOR failed in {}/{} loops: {}".format(len(errors), loops, "\n".join(errors)))
+            f"IOR failed in {len(errors)}/{len(cont_labels)} loops: {err_str}")
     return results
 
 
@@ -455,6 +454,11 @@ class ObjectMetadata(TestWithServers):
 
         processes = self.params.get("slots", "/run/ior/clientslots/*")
 
+        # Generate all container labels upfront such that write and read use the same container
+        cont_labels = [
+            [f'cont_{index}_{loop}' for loop in range(files_per_thread)]
+            for index in range(total_ior_threads)]
+
         # Launch threads to run IOR to write data, restart the agents and
         # servers, and then run IOR to read the data
         for operation in ("write", "read"):
@@ -470,8 +474,7 @@ class ObjectMetadata(TestWithServers):
                 ior_cmd.flags.value = self.params.get("ior{}flags".format(operation), "/run/ior/*")
 
                 # Define the job manager for the IOR command
-                ior_managers.append(
-                    get_job_manager(self, "Clush", ior_cmd))
+                ior_managers.append(get_job_manager(self, job=ior_cmd))
                 env = ior_cmd.get_default_env(str(ior_managers[-1]))
                 ior_managers[-1].assign_hosts(self.hostlist_clients, self.workdir, None)
                 ior_managers[-1].assign_processes(processes)
@@ -482,8 +485,7 @@ class ObjectMetadata(TestWithServers):
                 ior_managers[-1].register_cleanup_method = None
 
                 # Add a thread for these IOR arguments
-                thread_manager.add(
-                    test=self, manager=ior_managers[-1], loops=files_per_thread)
+                thread_manager.add(manager=ior_managers[-1], cont_labels=cont_labels[index])
                 self.log.info("Created %s thread %s", operation, index)
 
             # Manually add one cleanup method for all ior threads
@@ -496,7 +498,7 @@ class ObjectMetadata(TestWithServers):
             self.log.info("Done %d IOR %s threads", thread_manager.qty, operation)
             if failed_thread_count > 0:
                 msg = "{} FAILED IOR {} Thread(s)".format(failed_thread_count, operation)
-                self.d_log.error(msg)
+                self.log.error(msg)
                 self.fail(msg)
 
             # Restart the agents and servers after the write / before the read

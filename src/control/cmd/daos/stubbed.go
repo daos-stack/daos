@@ -12,7 +12,8 @@ package main
 import "github.com/daos-stack/daos/src/control/lib/daos/api"
 
 var (
-	RunSelfTest = api.RunSelfTest
-	GetPoolList = api.GetPoolList
-	PoolConnect = api.PoolConnect
+	RunSelfTest   = api.RunSelfTest
+	GetPoolList   = api.GetPoolList
+	PoolConnect   = api.PoolConnect
+	ContainerOpen = api.ContainerOpen
 )
