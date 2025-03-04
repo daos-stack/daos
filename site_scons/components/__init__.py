@@ -363,7 +363,8 @@ def define_components(reqs):
                           ['mkdir', '-p', '$SPDK_PREFIX/share/spdk'],
                           ['cp', '-r', 'include', 'scripts', '$SPDK_PREFIX/share/spdk'],
                           ['cp', 'build/examples/lsvmd', '$SPDK_PREFIX/bin/spdk_nvme_lsvmd'],
-                          ['cp', 'build/examples/nvme_manage', '$SPDK_PREFIX/bin/spdk_nvme_manage']],
+                          ['cp', 'build/examples/nvme_manage', '$SPDK_PREFIX/bin/spdk_nvme_manage']
+                          ],
                 headers=['spdk/nvme.h'],
                 patch_rpath=['lib', 'bin'])
 
