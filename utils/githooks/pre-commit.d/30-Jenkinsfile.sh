@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2317
 #
 #  Copyright 2023-2024 Intel Corporation.
 #  Copyright 2025 Hewlett Packard Enterprise Development LP
@@ -18,6 +19,10 @@ if [ -z "$(_git_diff_cached_files "Jenkinsfile")" ] ; then
     echo "No Jenkinsfile changes. Skipping"
     exit 0
 fi
+
+echo "Temporary skipping as the old Jenkins instance is not accessible"
+echo "Pre-hook will be restored after new instance of Jenkins will be fully operational"
+exit 0
 
 echo "Checking syntax"
 
