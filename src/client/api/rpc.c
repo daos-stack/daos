@@ -115,14 +115,16 @@ query_cb(struct crt_proto_query_cb_info *cb_info)
 	int			 rc;
 
 	if (daos_rpc_retryable_rc(cb_info->pq_rc)) {
-		int nr_ranks;
+		int      nr_ranks;
+		d_rank_t rank;
 
 		/** select next rank to issue the retry proto query rpc to */
 		nr_ranks = dc_mgmt_net_get_num_srv_ranks();
 		D_ASSERT(nr_ranks > 0);
 		rproto->rank_idx = (rproto->rank_idx + 1) % nr_ranks;
-		rc = dc_mgmt_net_get_srv_rank(rproto->rank_idx, &rproto->ep.ep_rank);
-		D_ASSERT(rc == 0);
+		rank = dc_mgmt_net_get_srv_rank(rproto->rank_idx);
+		D_ASSERT(rank != CRT_NO_RANK);
+		rproto->ep.ep_rank = rank;
 
 		rproto->timeout += 3;
 		rc = crt_proto_query_with_ctx(&rproto->ep, rproto->base_opc, rproto->ver_array,
@@ -149,6 +151,7 @@ daos_rpc_proto_query(crt_opcode_t base_opc, uint32_t *ver_array, int count, int 
 	int                      rc;
 	int			 i;
 	int                      nr_ranks;
+	d_rank_t                 rank;
 
 	rc = dc_mgmt_sys_attach(NULL, &sys);
 	if (rc != 0) {
@@ -167,8 +170,9 @@ daos_rpc_proto_query(crt_opcode_t base_opc, uint32_t *ver_array, int count, int 
 		D_GOTO(out_free, -DER_NONEXIST);
 	}
 	rproto->rank_idx = d_rand() % nr_ranks;
-	rc = dc_mgmt_net_get_srv_rank(rproto->rank_idx, &rproto->ep.ep_rank);
-	D_ASSERT(rc == 0);
+	rank = dc_mgmt_net_get_srv_rank(rproto->rank_idx);
+	D_ASSERT(rank != CRT_NO_RANK);
+	rproto->ep.ep_rank = rank;
 
 	rproto->ep.ep_tag  = 0;
 	rproto->ver_array = ver_array;
