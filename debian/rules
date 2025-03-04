@@ -59,6 +59,7 @@ override_dh_auto_install:
 	install -m 644 utils/systemd/daos_server.service ${buildroot}$(prefix)/lib/systemd/system
 	install -m 644 utils/systemd/daos_agent.service ${buildroot}$(prefix)/lib/systemd/system
 	mkdir -p ${buildroot}$(sysconfdir)/daos/certs/clients
+	mkdir -p ${buildroot}$(sysconfdir)/daos/certs/clients1
 	mv ${buildroot}$(sysconfdir)/daos/bash_completion.d ${buildroot}$(sysconfdir)/
 
 override_dh_missing:
@@ -67,7 +68,7 @@ override_dh_missing:
 
 override_dh_fixperms:
 	dh_fixperms
-	chmod 0700 debian/tmp$(sysconfdir)/daos/certs debian/tmp$(sysconfdir)/daos/certs/clients
+	chmod 0700 debian/tmp$(sysconfdir)/daos/certs debian/tmp$(sysconfdir)/daos/certs/clients debian/tmp$(sysconfdir)/daos/certs/clients1
 	chmod 0664 debian/tmp$(sysconfdir)/daos/daos_server.yml
 	# set daos_server_helper to be setuid root and group daos_server in order to perform privileged tasks
 	chmod 4750 debian/tmp$(prefix)/bin/daos_server_helper
