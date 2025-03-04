@@ -16,6 +16,67 @@
 
 #include "dfs_internal.h"
 
+static int
+suggest_dfs_cs(daos_handle_t poh, daos_prop_t *prop, uint64_t rf, daos_oclass_id_t oc_id,
+	       daos_size_t *cs)
+{
+	struct daos_oclass_attr *oc_attr;
+	struct daos_prop_entry  *dpe;
+	uint64_t                 ec_cell_size;
+	uint64_t                 val;
+	uint32_t                 nr_grps;
+	int                      rc;
+
+	/** No EC above RF 2, use default CS */
+	if (rf > 2) {
+		*cs = DFS_DEFAULT_CHUNK_SIZE;
+		return 0;
+	}
+
+	if (oc_id == 0) {
+		daos_obj_id_t oid       = {.hi = 0, .lo = 0};
+		uint32_t      pa_domain = daos_cont_prop2redunlvl(prop);
+
+		/** generate the oclass that would be used for file  */
+		rc = daos_obj_generate_oid_by_rf(poh, rf, &oid, DAOS_OT_ARRAY_BYTE, OC_UNKNOWN, 0,
+						 0, pa_domain);
+		if (rc) {
+			D_ERROR("daos_obj_generate_oid_by_rf() Failed: " DF_RC "\n", DP_RC(rc));
+			return daos_der2errno(rc);
+		}
+
+		oc_attr = daos_oclass_attr_find(oid, &nr_grps);
+		if (oc_attr == NULL)
+			return EINVAL;
+	} else {
+		oc_attr = daos_oclass_id2attr(oc_id, &nr_grps);
+		if (oc_attr == NULL)
+			return EINVAL;
+	}
+
+	/** for Replication (including non-redundant), return the default chunk size - 1 MiB */
+	if (oc_attr->ca_resil == DAOS_RES_REPL) {
+		*cs = DFS_DEFAULT_CHUNK_SIZE;
+		return 0;
+	}
+
+	/** query the EC cell size */
+	dpe = daos_prop_entry_get(prop, DAOS_PROP_CO_EC_CELL_SZ);
+	if (dpe)
+		ec_cell_size = dpe->dpe_val;
+	else
+		ec_cell_size = DAOS_EC_CELL_DEF;
+
+	/** set the DFS chunk size to the 2 x the EC cell size x the number of data cells */
+	val = oc_attr->u.ec.e_k * ec_cell_size * 2;
+	if (val <= DFS_DEFAULT_CHUNK_SIZE)
+		*cs = DFS_DEFAULT_CHUNK_SIZE;
+	else
+		*cs = val;
+
+	return 0;
+}
+
 int
 dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_t *_coh,
 		dfs_t **_dfs)
@@ -59,6 +120,17 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 		}
 	}
 
+	/** check if RF factor is set on property */
+	dpe = daos_prop_entry_get(prop, DAOS_PROP_CO_REDUN_FAC);
+	if (!dpe) {
+		rc = dc_pool_get_redunc(poh);
+		if (rc < 0)
+			D_GOTO(err_prop, rc = daos_der2errno(rc));
+		rf = rc;
+	} else {
+		rf = dpe->dpe_val;
+	}
+
 	if (attr) {
 		if (attr->da_oclass_id) {
 			dattr.da_dir_oclass_id  = attr->da_oclass_id;
@@ -80,8 +152,12 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 		/** check non default chunk size */
 		if (attr->da_chunk_size != 0)
 			dattr.da_chunk_size = attr->da_chunk_size;
-		else
-			dattr.da_chunk_size = DFS_DEFAULT_CHUNK_SIZE;
+		else {
+			rc = suggest_dfs_cs(poh, prop, rf, dattr.da_file_oclass_id,
+					    &dattr.da_chunk_size);
+			if (rc)
+				D_GOTO(err_prop, rc);
+		}
 
 		if (attr->da_hints[0] != 0) {
 			strncpy(dattr.da_hints, attr->da_hints, DAOS_CONT_HINT_MAX_LEN - 1);
@@ -92,18 +168,9 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 		dattr.da_dir_oclass_id  = 0;
 		dattr.da_file_oclass_id = 0;
 		dattr.da_mode           = DFS_RELAXED;
-		dattr.da_chunk_size     = DFS_DEFAULT_CHUNK_SIZE;
-	}
-
-	/** check if RF factor is set on property */
-	dpe = daos_prop_entry_get(prop, DAOS_PROP_CO_REDUN_FAC);
-	if (!dpe) {
-		rc = dc_pool_get_redunc(poh);
-		if (rc < 0)
-			D_GOTO(err_prop, rc = daos_der2errno(rc));
-		rf = rc;
-	} else {
-		rf = dpe->dpe_val;
+		rc                      = suggest_dfs_cs(poh, prop, rf, 0, &dattr.da_chunk_size);
+		if (rc)
+			D_GOTO(err_prop, rc);
 	}
 
 	/** verify object class redundancy */
