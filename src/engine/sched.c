@@ -2237,6 +2237,7 @@ sched_run(ABT_sched sched)
 		return;
 	}
 
+	D_ASSERTF((ABT_UNIT_NULL == NULL), "ABT_UNIT_NULL=%p (expected NULL)\n", ABT_UNIT_NULL);
 	while (1) {
 		/* Try to pick network poll ULT */
 		pool = pools[DSS_POOL_NET_POLL];

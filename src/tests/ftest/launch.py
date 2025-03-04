@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -32,7 +33,7 @@ from util.storage_utils import StorageException
 from util.yaml_utils import YamlException
 
 DEFAULT_LOGS_THRESHOLD = "2150M"    # 2.1G
-MAX_CI_REPETITIONS = 10
+MAX_CI_REPETITIONS = 30
 
 
 class LaunchError(Exception):
