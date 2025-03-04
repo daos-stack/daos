@@ -41,14 +41,18 @@ class PytorchDatasetsTest(TestWithServers):
         subdirs = self.params.get("subdirs", "/run/map_style_dataset/*")
         files_per_node = self.params.get("files_per_node", "/run/map_style_dataset/*")
         file_min_size = self.params.get("file_min_size", "/run/map_style_dataset/*", 4096)
-        file_max_size = self.params.get("file_max_size", "/run/map_style_dataset/*", 128 * 1024)
+        file_max_size = self.params.get("file_max_size", "/run/map_style_dataset/*", 4096)
+        readdir_batch_size = self.params.get("readdir_batch_size", "/run/map_style_dataset/*", 5)
 
         self._create_test_files(root_dir, height, subdirs, files_per_node,
                                 file_min_size, file_max_size)
 
         expected = self._get_test_files_hashmap(root_dir, self.hostlist_clients)
 
-        dataset = Dataset(pool.identifier, container.identifier)
+        dataset = Dataset(pool=pool.identifier,
+                          cont=container.identifier,
+                          readdir_batch_size=readdir_batch_size,
+                          )
 
         actual = {}
         for _, content in enumerate(dataset):
