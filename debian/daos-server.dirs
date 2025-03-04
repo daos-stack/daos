@@ -1,5 +1,4 @@
 etc/daos/certs/clients
-etc/daos/certs/clients1
 usr/bin
 usr/lib64/daos_srv
 usr/share/daos/control
