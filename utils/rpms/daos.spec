@@ -16,7 +16,7 @@
 
 Name:          daos
 Version:       2.7.101
-Release:       5%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -358,6 +358,7 @@ mkdir -p %{buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{server_svc_name} %{buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
 mkdir -p %{buildroot}/%{conf_dir}/certs/clients
+mkdir -p %{buildroot}/%{conf_dir}/certs/sam-client
 mv %{buildroot}/%{conf_dir}/bash_completion.d %{buildroot}/%{_sysconfdir}
 # fixup env-script-interpreters
 sed -i -e '1s/env //' %{buildroot}{%{daoshome}/TESTING/ftest/{cart/cart_logtest,cart/daos_sys_logscan,config_file_gen,launch,slurm_setup,tags,verify_perms}.py,%{_bindir}/daos_storage_estimator.py}
@@ -423,6 +424,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %doc README.md
 %config(noreplace) %attr(0644,root,root) %{conf_dir}/daos_server.yml
 %dir %attr(0700,daos_server,daos_server) %{conf_dir}/certs/clients
+%dir %attr(0700,daos_server,daos_server) %{conf_dir}/var-samir
 # set daos_server_helper to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_server) %{_bindir}/daos_server_helper
 # set daos_server to be setgid daos_server in order to invoke daos_server_helper
@@ -594,6 +596,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Mon Mar 03 2025 Samirkumar Raval <samirkumar.raval@hpe.com> 2.7.101-6
+- Changing the default log location to /var/log/daos from /tmp
+
 * Wed Jan 22 2025 Jan Michalski <jan-marian.michalski@hpe.com> 2.7.101-5
 - Add ddb_ut and dtx_ut to the server-tests package
 
