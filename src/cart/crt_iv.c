@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2025 Intel Corporation.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -2271,7 +2271,11 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 			D_ERROR("ctt_bulk_create(): "DF_RC"\n", DP_RC(rc));
 			D_GOTO(exit, rc);
 		}
+		D_INFO("Using bulk for sync. size=%ld:\n", d_sgl_buf_size(iv_value));
+	} else {
+		D_INFO("Using no value or inline for sync\n");
 	}
+
 
 	rc = crt_corpc_req_create(ivns_internal->cii_ctx,
 				  &ivns_internal->cii_grp_priv->gp_pub,
@@ -2525,8 +2529,13 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 
 	/* For bi-directional updates, transfer data back to child */
 	if (iv_info->uci_sync_type.ivs_flags & CRT_IV_SYNC_BIDIRECTIONAL) {
-		if (iv_info->uci_bulk_hdl == CRT_BULK_NULL)
+		if (iv_info->uci_bulk_hdl == CRT_BULK_NULL) {
+			D_INFO("Using inline iv value\n");
 			d_sgl_buf_copy(&iv_info->uci_iv_value, &output->ivo_iv_sgl);
+		} else {
+			D_INFO("Using bulks\n");
+		}
+
 		iv_ops->ivo_on_refresh(iv_info->uci_ivns_internal, &input->ivu_key, 0,
 				       &iv_info->uci_iv_value, false, cb_info->cci_rc ?: output->rc,
 				       iv_info->uci_user_priv);
