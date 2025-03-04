@@ -1,3 +1,6 @@
-#!/bin/bash
+#!/usr/bin/env bash
+#
+# Copyright 2025 Hewlett Packard Enterprise Development LP
+#
 
 . utils/githooks/hook_base.sh
