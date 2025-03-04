@@ -19,6 +19,9 @@ if [ -z "$(_git_diff_cached_files "Jenkinsfile")" ] ; then
     exit 0
 fi
 
+echo "Temporary disable githook as no access to build.hpdd.intel.com"
+exit 0
+
 echo "Checking syntax"
 
 HOST="${HOST:-build.hpdd.intel.com}"
