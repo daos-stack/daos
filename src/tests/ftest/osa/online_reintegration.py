@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -43,7 +44,8 @@ class OSAOnlineReintegration(OSAUtils):
         self.daos_racer.get_params(self)
         self.daos_racer.run()
 
-    def run_online_reintegration_test(self, num_pool, racer=False, server_boot=False, oclass=None):
+    def run_online_reintegration_test(self, num_pool, racer=False, server_boot=False, oclass=None,
+                                      multiple_ranks=False):
         """Run the Online reintegration without data.
 
         Args:
@@ -52,6 +54,7 @@ class OSAOnlineReintegration(OSAUtils):
                 Defaults to False.
             server_boot (bool) : Perform system stop/start on a rank. Defaults to False.
             oclass (str) : daos object class string (eg: "RP_2G8"). Defaults to None.
+            multiple_ranks (bool) : Perform multiple ranks testing (Default: False)
         """
         if oclass is None:
             oclass = self.ior_cmd.dfs_oclass.value
@@ -60,8 +63,11 @@ class OSAOnlineReintegration(OSAUtils):
         pool = {}
         exclude_servers = (len(self.hostlist_servers) * 2) - 1
 
-        # Exclude one rank : other than rank 0.
-        rank = random.randint(1, exclude_servers)  # nosec
+        if multiple_ranks is True:
+            rank = random.sample(range(1, exclude_servers), 2)
+        else:
+            # Exclude one rank : other than rank 0.
+            rank = random.randint(1, exclude_servers)  # nosec
 
         # Start the daos_racer thread
         if racer is True:
@@ -220,3 +226,16 @@ class OSAOnlineReintegration(OSAUtils):
         self.log.info("Online Reintegration : Object Class")
         for oclass in self.test_oclass:
             self.run_online_reintegration_test(1, oclass=oclass)
+
+    def test_osa_online_reintegration_with_multiple_ranks(self):
+        """Test ID: DAOS-4753.
+
+        Test Description: Validate online reintegration with multiple ranks.
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=osa,checksum,online_reintegration
+        :avocado: tags=OSAOnlineReintegration,test_osa_online_reintegration_with_multiple_ranks
+        """
+        self.log.info("Online Reintegration : Multiple ranks")
+        self.run_online_reintegration_test(1, multiple_ranks=True)

@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -30,14 +31,16 @@ class OSAOnlineDrain(OSAUtils):
         self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir)
         self.dmg_command.exit_status_exception = True
         self.pool = None
+        self.multiple_ranks = self.params.get("rank_list", '/run/multiple_ranks/*')
 
-    def run_online_drain_test(self, num_pool, oclass=None, app_name="ior"):
+    def run_online_drain_test(self, num_pool, oclass=None, app_name="ior", multiple_ranks=False):
         """Run the Online drain without data.
 
         Args:
              num_pool (int) : total pools to create for testing purposes.
              oclass (str) : Object class type (RP_2G1, etc)
              app_name (str) : application to run on parallel (ior or mdtest). Defaults to ior.
+             multiple_ranks (bool): Perform multiple ranks testing (Default: False)
         """
         # Create a pool
         pool = {}
@@ -51,6 +54,9 @@ class OSAOnlineDrain(OSAUtils):
 
         # Drain one of the ranks (or server)
         rank = self.random.choice(list(self.server_managers[0].ranks.keys()))
+        # For testing with multiple ranks as dmg parameters, use a list of ranks.
+        if multiple_ranks is True:
+            rank = self.multiple_ranks
 
         for val in range(0, num_pool):
             pool[val] = add_pool(self, connect=False)
@@ -186,3 +192,16 @@ class OSAOnlineDrain(OSAUtils):
         """
         self.log.info("Online Drain : With Mdtest")
         self.run_online_drain_test(1, app_name="mdtest")
+
+    def test_osa_online_drain_with_multiple_ranks(self):
+        """Test ID: DAOS-4753.
+
+        Test Description: Drain multiple ranks at the same time.
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=osa,osa_drain,online_drain
+        :avocado: tags=OSAOnlineDrain,test_osa_online_drain_with_multiple_ranks
+        """
+        self.log.info("Online Drain : Test with multiple ranks")
+        self.run_online_drain_test(1, data=True, multiple_ranks=True)
