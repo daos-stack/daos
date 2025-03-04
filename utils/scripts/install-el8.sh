@@ -66,6 +66,7 @@ dnf --nodocs install \
     systemd \
     valgrind-devel \
     which \
+    ncurses-devel \
     yasm
 
 # ipmctl is only available on x86_64
