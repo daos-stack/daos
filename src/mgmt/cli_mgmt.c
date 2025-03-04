@@ -537,7 +537,7 @@ dc_mgmt_put_sys_info(struct daos_sys_info *info)
 
 #define SYS_INFO_BUF_SIZE 16
 
-static int g_num_serv_ranks = -1;
+static int       g_num_serv_ranks = -1;
 static d_rank_t *g_serv_ranks;
 
 /* Return the number of attached ranks.  */
