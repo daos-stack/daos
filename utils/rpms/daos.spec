@@ -16,7 +16,7 @@
 
 Name:          daos
 Version:       2.7.101
-Release:       5%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -109,6 +109,14 @@ BuildRequires: systemd-rpm-macros
 %endif
 %endif
 BuildRequires: libuuid-devel
+
+# Needed for debugging tasks
+%if (0%{?rhel} >= 8)
+BuildRequires: libasan
+%endif
+%if (0%{?suse_version} > 0)
+BuildRequires: libasan8
+%endif
 
 Requires: openssl
 # This should only be temporary until we can get a stable upstream release
@@ -594,6 +602,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Wed Feb 12 2025  Cedric Koch-Hofer <cedric.koch-hofer@intel.com> 2.7.101-6
+- Add support of the libasan
+
 * Wed Jan 22 2025 Jan Michalski <jan-marian.michalski@hpe.com> 2.7.101-5
 - Add ddb_ut and dtx_ut to the server-tests package
 
