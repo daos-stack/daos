@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.6.3
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -66,7 +66,7 @@ BuildRequires: lz4-devel
 BuildRequires: capstone-devel
 %endif
 BuildRequires: libaio-devel
-BuildRequires: spdk-devel >= 22.01.2
+BuildRequires: spdk-devel = 22.01.2
 %if (0%{?rhel} >= 8)
 BuildRequires: isa-l-devel
 BuildRequires: libisa-l_crypto-devel
@@ -134,7 +134,7 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: spdk-tools >= 22.01.2
+Requires: spdk-tools = 22.01.2
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
@@ -594,6 +594,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Mar 04 2025 Jeff Olivier <jeffolivier@google.com> 2.6.3-4
+- Pin spdk version
+
 * Tue Feb 11 2025 Phillip Henderson <phillip.henderson@intel.com> 2.6.3-3
 - Third release candidate for 2.6.3
 
