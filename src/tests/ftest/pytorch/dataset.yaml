@@ -1,5 +1,5 @@
 hosts:
-  test_servers: 4
+  test_servers: 2
   test_clients: 1
 server_config:
   name: daos_server
@@ -23,9 +23,9 @@ container:
 timeout: 270
 
 map_style_dataset:
-  tree_height: 4
-  subdirs: 5
-  files_per_node: 6
+  tree_height: 2
+  subdirs: 2
+  files_per_node: 64
 
 iterable_dataset:
   tree_height: 4
