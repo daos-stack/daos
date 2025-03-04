@@ -1,12 +1,12 @@
 """
 (C) Copyright 2019-2024 Intel Corporation.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 import multiprocessing
 import os
-import random
 import socket
 import threading
 import time
@@ -468,8 +468,7 @@ class SoakTestBase(TestWithServers):
                                               "joblog": jobscript[1],
                                               "joberrlog": jobscript[2]}])
         # randomize job list
-        random.seed(4)
-        random.shuffle(self.joblist)
+        self.random.shuffle(self.joblist)
 
     def job_startup(self):
         """Launch the job script.
