@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -107,6 +108,15 @@ struct rpc_proto {
 	uint32_t       timeout;
 };
 
+static d_rank_t
+get_rand_rank(void)
+{
+	int           idx;
+
+	idx = d_rand() % dc_mgmt_net_get_num_srv_ranks();
+	return dc_mgmt_net_get_srv_rank(idx);
+}
+
 static void
 query_cb(struct crt_proto_query_cb_info *cb_info)
 {
@@ -114,7 +124,7 @@ query_cb(struct crt_proto_query_cb_info *cb_info)
 	int			 rc;
 
 	if (daos_rpc_retryable_rc(cb_info->pq_rc)) {
-		rproto->ep.ep_rank = (rproto->ep.ep_rank + 1) % rproto->nr_ranks;
+		rproto->ep.ep_rank = get_rand_rank();
 		rproto->timeout += 3;
 		rc = crt_proto_query_with_ctx(&rproto->ep, rproto->base_opc, rproto->ver_array,
 					      rproto->array_size, rproto->timeout, query_cb, rproto,
@@ -152,7 +162,7 @@ daos_rpc_proto_query(crt_opcode_t base_opc, uint32_t *ver_array, int count, int 
 
 	/** select a random rank to issue the proto query rpc to */
 	rproto->nr_ranks   = dc_mgmt_net_get_num_srv_ranks();
-	rproto->ep.ep_rank = d_rand() % rproto->nr_ranks;
+	rproto->ep.ep_rank = get_rand_rank();
 	rproto->ep.ep_tag  = 0;
 	rproto->ver_array = ver_array;
 	rproto->array_size = count;
