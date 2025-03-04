@@ -173,11 +173,21 @@ dump_ilog_cmd_tests(void **state)
 	assert_success(ddb_run_ilog_dump(&ctx, &opt));
 	assert_true(dvt_fake_print_called);
 
+	/* Dump dkey ilog - invalid */
+	dvt_fake_print_called = 0;
+	opt.path              = "[0]/[0]//";
+	assert_rc_equal(ddb_run_ilog_dump(&ctx, &opt), -DER_INVAL);
+	assert_true(dvt_fake_print_called);
+
 	/* Dump dkey ilog */
 	dvt_fake_print_called = 0;
 	opt.path = "[0]/[0]/[0]";
 	assert_success(ddb_run_ilog_dump(&ctx, &opt));
 	assert_true(dvt_fake_print_called);
+
+	/* Dump akey ilog - invalid */
+	opt.path = "[0]/[0]/[0]//";
+	assert_rc_equal(ddb_run_ilog_dump(&ctx, &opt), -DER_INVAL);
 
 	/* Dump akey ilog */
 	opt.path = "[0]/[0]/[0]/[0]";
