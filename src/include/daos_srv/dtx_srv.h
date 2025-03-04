@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -231,13 +232,13 @@ struct dtx_leader_handle {
 	/* Elements for collective DTX. */
 	struct dtx_coll_entry		*dlh_coll_entry;
 	/* How many normal sub request. */
-	uint32_t			dlh_normal_sub_cnt;
+	int32_t                          dlh_normal_sub_cnt;
 	/* How many delay forward sub request. */
-	uint32_t			dlh_delay_sub_cnt;
+	int32_t                          dlh_delay_sub_cnt;
 	/* The index of the first target that forward sub-request to. */
-	uint32_t			dlh_forward_idx;
+	int32_t                          dlh_forward_idx;
 	/* The count of the targets that forward sub-request to. */
-	uint32_t			dlh_forward_cnt;
+	int32_t                          dlh_forward_cnt;
 	/* Sub transaction handle to manage the dtx leader */
 	struct dtx_sub_status		*dlh_subs;
 };
