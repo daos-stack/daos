@@ -24,7 +24,7 @@
 #define N_SHM_FIXED_POOL     (8)
 
 /* the size of each shm pool */
-#define SHM_POOL_SIZE  (512 * 1024 * 1024L)
+#define SHM_POOL_SIZE  (128 * 1024 * 1024L)
 
 /* the total size of shared memory that will be allocated */
 #define SHM_SIZE_TOTAL (SHM_POOL_SIZE * N_SHM_FIXED_POOL)
