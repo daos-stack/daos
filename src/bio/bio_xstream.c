@@ -1576,7 +1576,6 @@ subsystem_init_arg_fini(void *arg, int rc)
 	if (rc)
 		D_ERROR("subsystem init failed: %d\n", rc);
 
-	D_DEBUG(DB_TRACE, "subsystem init: %d\n", rc);
 	subsys_init_cb(rc, init_arg->cp_arg);
 	init_arg->cp_arg->cca_rc = rc;
 
@@ -1601,7 +1600,6 @@ subsystem_init_cb(int rc, void *arg)
 
 	init_arg = arg;
 
-	D_DEBUG(DB_TRACE, "subsystem init done.\n");
 	/* Set RUNTIME state and load config again for RUNTIME methods */
 	spdk_rpc_set_state(SPDK_RPC_RUNTIME);
 	spdk_subsystem_load_config(init_arg->json_data, (ssize_t)init_arg->json_data_size,
@@ -1616,7 +1614,6 @@ load_config_cb(int rc, void *arg)
 		return;
 	}
 
-	D_DEBUG(DB_TRACE, "load config succeeds\n");
 	/* init subsystem */
 	spdk_subsystem_init(subsystem_init_cb, arg);
 }

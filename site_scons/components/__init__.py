@@ -347,7 +347,6 @@ def define_components(reqs):
                            '--prefix=$SPDK_PREFIX',
                            '--disable-tests',
                            '--disable-unit-tests',
-                           '--disable-apps',
                            '--without-vhost',
                            '--without-crypto',
                            '--without-rbd',
