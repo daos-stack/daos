@@ -727,7 +727,7 @@ dc_mgmt_net_cfg(const char *name, crt_init_options_t *crt_info)
 	g_serv_ranks = serv_ranks_tmp;
 
 	D_INFO("Network interface: %s, Domain: %s, Provider: %s, Ranks count: %d\n",
-	       crt_info->cio_interface, crt_info->cio_domain, crt_info->cio_providerm,
+	       crt_info->cio_interface, crt_info->cio_domain, crt_info->cio_provider,
 	       g_num_serv_ranks);
 
 cleanup:
