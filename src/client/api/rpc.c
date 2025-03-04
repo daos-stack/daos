@@ -97,7 +97,7 @@ daos_rpc_send_wait(crt_rpc_t *rpc)
 }
 
 struct rpc_proto {
-	int            nr_ranks;
+	int            rank_idx;
 	crt_endpoint_t ep;
 	int            version;
 	int            rc;
@@ -108,15 +108,6 @@ struct rpc_proto {
 	uint32_t       timeout;
 };
 
-static d_rank_t
-get_rand_rank(void)
-{
-	int idx;
-
-	idx = d_rand() % dc_mgmt_net_get_num_srv_ranks();
-	return dc_mgmt_net_get_srv_rank(idx);
-}
-
 static void
 query_cb(struct crt_proto_query_cb_info *cb_info)
 {
@@ -124,7 +115,15 @@ query_cb(struct crt_proto_query_cb_info *cb_info)
 	int			 rc;
 
 	if (daos_rpc_retryable_rc(cb_info->pq_rc)) {
-		rproto->ep.ep_rank = get_rand_rank();
+		int nr_ranks;
+
+		/** select next rank to issue the retry proto query rpc to */
+		nr_ranks = dc_mgmt_net_get_num_srv_ranks();
+		D_ASSERT(nr_ranks > 0);
+		rproto->rank_idx = (rproto->rank_idx + 1) % nr_ranks;
+		rc = dc_mgmt_net_get_srv_rank(rproto->rank_idx, &rproto->ep.ep_rank);
+		D_ASSERT(rc == 0);
+
 		rproto->timeout += 3;
 		rc = crt_proto_query_with_ctx(&rproto->ep, rproto->base_opc, rproto->ver_array,
 					      rproto->array_size, rproto->timeout, query_cb, rproto,
@@ -149,6 +148,7 @@ daos_rpc_proto_query(crt_opcode_t base_opc, uint32_t *ver_array, int count, int 
 	crt_context_t		 ctx = daos_get_crt_ctx();
 	int                      rc;
 	int			 i;
+	int                      nr_ranks;
 
 	rc = dc_mgmt_sys_attach(NULL, &sys);
 	if (rc != 0) {
@@ -161,8 +161,15 @@ daos_rpc_proto_query(crt_opcode_t base_opc, uint32_t *ver_array, int count, int 
 		D_GOTO(out_detach, rc = -DER_NOMEM);
 
 	/** select a random rank to issue the proto query rpc to */
-	rproto->nr_ranks   = dc_mgmt_net_get_num_srv_ranks();
-	rproto->ep.ep_rank = get_rand_rank();
+	nr_ranks = dc_mgmt_net_get_num_srv_ranks();
+	if (nr_ranks == 0) {
+		D_ERROR("failed to select an attached ranks: no attached ranks");
+		D_GOTO(out_free, -DER_NONEXIST);
+	}
+	rproto->rank_idx = d_rand() % nr_ranks;
+	rc = dc_mgmt_net_get_srv_rank(rproto->rank_idx, &rproto->ep.ep_rank);
+	D_ASSERT(rc == 0);
+
 	rproto->ep.ep_tag  = 0;
 	rproto->ver_array = ver_array;
 	rproto->array_size = count;
