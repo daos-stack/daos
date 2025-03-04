@@ -124,7 +124,6 @@ dfuse_reply_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 			wipe_name[NAME_MAX] = '\0';
 
 			inode->ie_parent = ie->ie_parent;
-			/* DAOS-17042 Replace strncpy with strncat or strlcpy */
 			strncpy(inode->ie_name, ie->ie_name, NAME_MAX);
 			inode->ie_name[NAME_MAX] = '\0';
 		}
@@ -298,7 +297,6 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (attr_len)
 		DFUSE_TRA_DEBUG(ie, "Attr len is %zi", attr_len);
 
-	/* DAOS-17042 Replace strncpy with strncat or strlcpy */
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
 

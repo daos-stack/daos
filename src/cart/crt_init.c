@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -81,7 +82,7 @@ dump_opt(crt_init_options_t *opt)
 	D_INFO("interface = %s\n", opt->cio_interface);
 	D_INFO("domain = %s\n", opt->cio_domain);
 	D_INFO("port = %s\n", opt->cio_port);
-	D_INFO("Flags: fi: %d, use_credits: %d, use_esnsors: %d\n", opt->cio_fault_inject,
+	D_INFO("Flags: fi: %d, use_credits: %d, use_sensors: %d\n", opt->cio_fault_inject,
 	       opt->cio_use_credits, opt->cio_use_sensors);
 
 	if (opt->cio_use_expected_size)
@@ -343,12 +344,12 @@ data_init(int server, crt_init_options_t *opt)
 		credits = CRT_MAX_CREDITS_PER_EP_CTX;
 	crt_gdata.cg_credit_ep_ctx = credits;
 
-	/** Enable statistics only for the server side and if requested */
-	if (opt && opt->cio_use_sensors && server) {
-		int ret;
+	/** enable sensors if requested */
+	crt_gdata.cg_use_sensors = (opt && opt->cio_use_sensors);
 
-		/** enable sensors */
-		crt_gdata.cg_use_sensors = true;
+	/** Enable statistics only for the server side and if requested */
+	if (crt_gdata.cg_use_sensors && server) {
+		int ret;
 
 		/** set up the global sensors */
 		ret = d_tm_add_metric(&crt_gdata.cg_uri_self, D_TM_COUNTER,
@@ -374,29 +375,16 @@ data_init(int server, crt_init_options_t *opt)
 static int
 crt_plugin_init(void)
 {
-	struct crt_prog_cb_priv  *cbs_prog;
 	struct crt_event_cb_priv *cbs_event;
 	size_t                    cbs_size = CRT_CALLBACKS_NUM;
-	int                       i, rc;
+	int                       rc;
 
 	D_ASSERT(crt_plugin_gdata.cpg_inited == 0);
-
-	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		crt_plugin_gdata.cpg_prog_cbs_old[i] = NULL;
-		D_ALLOC_ARRAY(cbs_prog, cbs_size);
-		if (cbs_prog == NULL) {
-			for (i--; i >= 0; i--)
-				D_FREE(crt_plugin_gdata.cpg_prog_cbs[i]);
-			D_GOTO(out, rc = -DER_NOMEM);
-		}
-		crt_plugin_gdata.cpg_prog_size[i] = cbs_size;
-		crt_plugin_gdata.cpg_prog_cbs[i]  = cbs_prog;
-	}
 
 	crt_plugin_gdata.cpg_event_cbs_old = NULL;
 	D_ALLOC_ARRAY(cbs_event, cbs_size);
 	if (cbs_event == NULL) {
-		D_GOTO(out_destroy_prog, rc = -DER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 	}
 	crt_plugin_gdata.cpg_event_size = cbs_size;
 	crt_plugin_gdata.cpg_event_cbs  = cbs_event;
@@ -410,9 +398,6 @@ crt_plugin_init(void)
 
 out_destroy_event:
 	D_FREE(crt_plugin_gdata.cpg_event_cbs);
-out_destroy_prog:
-	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
-		D_FREE(crt_plugin_gdata.cpg_prog_cbs[i]);
 out:
 	return rc;
 }
@@ -420,16 +405,9 @@ out:
 static void
 crt_plugin_fini(void)
 {
-	int i;
-
 	D_ASSERT(crt_plugin_gdata.cpg_inited == 1);
 
 	crt_plugin_gdata.cpg_inited = 0;
-
-	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		D_FREE(crt_plugin_gdata.cpg_prog_cbs[i]);
-		D_FREE(crt_plugin_gdata.cpg_prog_cbs_old[i]);
-	}
 
 	D_FREE(crt_plugin_gdata.cpg_event_cbs);
 	D_FREE(crt_plugin_gdata.cpg_event_cbs_old);

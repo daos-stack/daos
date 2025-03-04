@@ -88,6 +88,58 @@ func daos_pool_del_attr(poolHdl C.daos_handle_t, n C.int, name **C.char, ev *C.s
 	return C.daos_pool_del_attr(poolHdl, n, name, ev)
 }
 
+func daos_pool_list_cont(poolHdl C.daos_handle_t, nCont *C.daos_size_t, conts *C.struct_daos_pool_cont_info, ev *C.struct_daos_event) C.int {
+	return C.daos_pool_list_cont(poolHdl, nCont, conts, ev)
+}
+
 func daos_mgmt_list_pools(sysName *C.char, poolCount *C.daos_size_t, pools *C.daos_mgmt_pool_info_t, ev *C.struct_daos_event) C.int {
 	return C.daos_mgmt_list_pools(sysName, poolCount, pools, ev)
+}
+
+func daos_cont_open(poolHdl C.daos_handle_t, contID *C.char, flags C.uint, contHdl *C.daos_handle_t, contInfo *C.daos_cont_info_t, ev *C.struct_daos_event) C.int {
+	return C.daos_cont_open(poolHdl, contID, flags, contHdl, contInfo, ev)
+}
+
+func daos_cont_destroy(poolHdl C.daos_handle_t, contID *C.char, force C.int, ev *C.struct_daos_event) C.int {
+	return C.daos_cont_destroy(poolHdl, contID, force, ev)
+}
+
+func daos_cont_close(contHdl C.daos_handle_t) C.int {
+	// Hack for NLT fault injection testing: If the rc
+	// is -DER_NOMEM, retry once in order to actually
+	// shut down and release resources.
+	rc := C.daos_cont_close(contHdl, nil)
+	if rc == -C.DER_NOMEM {
+		rc = C.daos_cont_close(contHdl, nil)
+	}
+
+	return rc
+}
+
+func daos_cont_query(contHdl C.daos_handle_t, contInfo *C.daos_cont_info_t, props *C.daos_prop_t, ev *C.struct_daos_event) C.int {
+	return C.daos_cont_query(contHdl, contInfo, props, ev)
+}
+
+func daos_cont_list_attr(contHdl C.daos_handle_t, buf *C.char, size *C.size_t, ev *C.struct_daos_event) C.int {
+	return C.daos_cont_list_attr(contHdl, buf, size, ev)
+}
+
+func daos_cont_get_attr(contHdl C.daos_handle_t, n C.int, names **C.char, values *unsafe.Pointer, sizes *C.size_t, ev *C.struct_daos_event) C.int {
+	return C.daos_cont_get_attr(contHdl, n, names, values, sizes, ev)
+}
+
+func daos_cont_set_attr(contHdl C.daos_handle_t, n C.int, names **C.char, values *unsafe.Pointer, sizes *C.size_t, ev *C.struct_daos_event) C.int {
+	return C.daos_cont_set_attr(contHdl, n, names, values, sizes, ev)
+}
+
+func daos_cont_del_attr(contHdl C.daos_handle_t, n C.int, name **C.char, ev *C.struct_daos_event) C.int {
+	return C.daos_cont_del_attr(contHdl, n, name, ev)
+}
+
+func daos_oclass_name2id(name *C.char) C.daos_oclass_id_t {
+	return C.daos_oclass_id_t(C.daos_oclass_name2id(name))
+}
+
+func daos_oclass_id2name(id C.daos_oclass_id_t, name *C.char) C.int {
+	return C.daos_oclass_id2name(id, name)
 }

@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -88,13 +89,7 @@ struct crt_grp_priv {
 	 * If gp_self is CRT_NO_RANK, it usually means the group version is not
 	 * up to date.
 	 */
-	d_rank_t		 gp_self;
-	/* List of PSR ranks */
-	d_rank_list_t		 *gp_psr_ranks;
-	/* PSR rank in attached group */
-	d_rank_t		 gp_psr_rank;
-	/* PSR URI address in attached group */
-	char                     *gp_psr_uri;
+	d_rank_t                  gp_self;
 	/* address lookup cache, only valid for primary group */
 	struct d_hash_table	 *gp_lookup_cache;
 
@@ -323,31 +318,6 @@ crt_grp_priv_decref(struct crt_grp_priv *grp_priv)
 		crt_grp_priv_destroy(grp_priv);
 }
 
-static inline int
-crt_grp_psr_set(struct crt_grp_priv *grp_priv, d_rank_t psr_rank, char *psr_uri, bool steal)
-{
-	int rc = 0;
-
-	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
-
-	D_FREE(grp_priv->gp_psr_uri);
-	grp_priv->gp_psr_rank = psr_rank;
-
-	if (steal) {
-		grp_priv->gp_psr_uri = psr_uri;
-	} else {
-		D_STRNDUP(grp_priv->gp_psr_uri, psr_uri, CRT_ADDR_STR_MAX_LEN);
-		if (grp_priv->gp_psr_uri == NULL)
-			rc = -DER_NOMEM;
-	}
-
-	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
-
-	D_DEBUG(DB_TRACE, "group %s, set psr rank %d, uri %s.\n", grp_priv->gp_pub.cg_grpid,
-		psr_rank, psr_uri);
-	return rc;
-}
-
 struct crt_grp_priv *crt_grp_pub2priv(crt_group_t *grp);
 
 static inline bool
@@ -375,8 +345,6 @@ crt_rank_present(crt_group_t *grp, d_rank_t rank)
 
 bool
 crt_grp_id_identical(crt_group_id_t grp_id_1, crt_group_id_t grp_id_2);
-int crt_grp_config_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank);
-int crt_grp_psr_reload(struct crt_grp_priv *grp_priv);
 
 int
 grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank, uint64_t incarnation);
