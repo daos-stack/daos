@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -159,7 +160,7 @@ obj_coll_punch_disp(struct dtx_leader_handle *dlh, void *arg, int idx, dtx_sub_c
 }
 
 int
-obj_coll_punch_bulk(crt_rpc_t *rpc, d_iov_t *iov, crt_proc_t *p_proc,
+obj_coll_punch_bulk(struct obj_io_context *ioc, crt_rpc_t *rpc, d_iov_t *iov, crt_proc_t *p_proc,
 		    struct daos_coll_target **p_dcts, uint32_t *dct_nr)
 {
 	struct obj_coll_punch_in	*ocpi = crt_req_get(rpc);
@@ -167,6 +168,7 @@ obj_coll_punch_bulk(crt_rpc_t *rpc, d_iov_t *iov, crt_proc_t *p_proc,
 	crt_proc_t			 proc = NULL;
 	d_sg_list_t			 sgl;
 	d_sg_list_t			*sgls = &sgl;
+	uint32_t			 used;
 	int				 rc = 0;
 	int				 i;
 	int				 j;
@@ -183,7 +185,7 @@ obj_coll_punch_bulk(crt_rpc_t *rpc, d_iov_t *iov, crt_proc_t *p_proc,
 	sgl.sg_iovs = iov;
 
 	rc = obj_bulk_transfer(rpc, CRT_BULK_GET, false, &ocpi->ocpi_tgt_bulk, NULL, NULL,
-			       DAOS_HDL_INVAL, &sgls, 1, 1, NULL, NULL);
+			       DAOS_HDL_INVAL, &sgls, 1, 1, NULL, ioc->ioc_coh);
 	if (rc != 0) {
 		D_ERROR("Failed to prepare bulk transfer for coll_punch, size %u: "DF_RC"\n",
 			ocpi->ocpi_bulk_tgt_sz, DP_RC(rc));
@@ -208,6 +210,10 @@ obj_coll_punch_bulk(crt_rpc_t *rpc, d_iov_t *iov, crt_proc_t *p_proc,
 			goto out;
 		}
 	}
+
+	used = crp_proc_get_size_used(proc);
+	D_ASSERTF(used == ocpi->ocpi_bulk_tgt_sz, "Decode corruption %u vs %u, rank %u\n",
+		  used, ocpi->ocpi_bulk_tgt_sz, ocpi->ocpi_bulk_tgt_nr);
 
 out:
 	if (rc != 0) {
