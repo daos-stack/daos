@@ -1,5 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -28,7 +29,7 @@ def get_cmocka_command(command, parameters=None):
     """
     keywords = ["Process received signal", "stack smashing detected", "End of error message",
                 "buffer overflow detected"]
-    path, executable = os.path.split(command)
+    path, executable = os.path.split(command.strip())
     command = CmockaCommand(path, executable, keywords)
     command.parameters.value = parameters
     return command
