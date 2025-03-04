@@ -1196,7 +1196,6 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 	char                    *uri       = NULL;
 	int			 rc = 0;
 	char                    *base_addr = NULL;
-	struct crt_prov_gdata	*prov_data;
 	int			 dst_tag;
 
 	req = &rpc_priv->crp_pub;
@@ -1211,13 +1210,12 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 	/* For a secondary provider round-robin between all available remote contexts */
 	if (!crt_gdata.cg_provider_is_primary) {
 
-		prov_data = &crt_gdata.cg_prov_gdata_secondary[0];
+		D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
+		crt_gdata.cg_last_remote_tag++;
+		crt_gdata.cg_last_remote_tag %= crt_gdata.cg_num_remote_tags;
 
-		D_MUTEX_LOCK(&prov_data->cpg_mutex);
-		prov_data->cpg_last_remote_tag++;
-		prov_data->cpg_last_remote_tag %= prov_data->cpg_num_remote_tags;
-		dst_tag = prov_data->cpg_last_remote_tag;
-		D_MUTEX_UNLOCK(&prov_data->cpg_mutex);
+		dst_tag = crt_gdata.cg_last_remote_tag;
+		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 	}
 
 	crt_grp_lc_lookup(grp_priv, ctx->cc_idx,
@@ -1780,6 +1778,10 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 			goto skip_check;
 	}
 
+	/* Skip check for secondary provider clients */
+	if (!rpc_priv->crp_req_hdr.cch_src_is_primary)
+		goto skip_check;
+
 	if ((self_rank != CRT_NO_RANK && self_rank != rpc_priv->crp_req_hdr.cch_dst_rank) ||
 	    crt_ctx->cc_idx != rpc_priv->crp_req_hdr.cch_dst_tag) {
 		D_ERROR("Mismatch rpc: %p opc: %x rank:%d tag:%d "
@@ -1891,6 +1893,28 @@ crt_req_src_rank_get(crt_rpc_t *rpc, d_rank_t *rank)
 
 	*rank = rpc_priv->crp_req_hdr.cch_src_rank;
 
+out:
+	return rc;
+}
+
+int
+crt_req_src_provider_is_primary(crt_rpc_t *req, bool *result)
+{
+	struct crt_rpc_priv	*rpc_priv = NULL;
+	int			rc = 0;
+
+	if (req == NULL) {
+		D_ERROR("req is NULL\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (result == NULL) {
+		D_ERROR("result is NULL\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
+	*result = rpc_priv->crp_req_hdr.cch_src_is_primary;
 out:
 	return rc;
 }
