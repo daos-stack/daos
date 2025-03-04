@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -187,7 +188,14 @@ extern uint32_t dtx_batched_ult_max;
  * dispatch process may trigger too many in-flight or in-queued RPCs that will hold
  * too much resource as to server maybe out of memory.
  */
-#define DTX_RPC_STEP_LENGTH	DTX_THRESHOLD_COUNT
+#define DTX_REG_RPC_STEP_LENGTH         512
+
+/*
+ * High priority (DTX) RPC may break through IO chore credit restriction temporarily.
+ * To reduce the side-affect on the other IO forward RPCs, use smaller step for high
+ * priority RPC.
+ */
+#define DTX_PRI_RPC_STEP_LENGTH         64
 
 extern struct crt_corpc_ops	dtx_coll_commit_co_ops;
 extern struct crt_corpc_ops	dtx_coll_abort_co_ops;
@@ -214,6 +222,7 @@ struct dtx_tls {
 	struct d_tm_node_t	*dt_committable;
 	struct d_tm_node_t	*dt_dtx_leader_total;
 	struct d_tm_node_t	*dt_async_cmt_lat;
+	struct d_tm_node_t      *dt_chore_retry;
 	uint64_t		 dt_agg_gen;
 	uint32_t		 dt_batched_ult_cnt;
 };
