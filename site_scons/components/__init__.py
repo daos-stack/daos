@@ -367,7 +367,8 @@ def define_components(reqs):
                           ['cp', 'build/examples/lsvmd', '$SPDK_PREFIX/bin/spdk_nvme_lsvmd'],
                           ['cp', 'build/examples/nvme_manage', '$SPDK_PREFIX/bin/spdk_nvme_manage'],
                           ['cp', 'build/examples/identify', '$SPDK_PREFIX/bin/spdk_nvme_identify'],
-                          ['cp', 'build/examples/perf', '$SPDK_PREFIX/bin/spdk_nvme_perf']],
+                          ['cp', 'build/examples/perf', '$SPDK_PREFIX/bin/spdk_nvme_perf'],
+                          ['cp', 'build/examples/blobcli', '$SPDK_PREFIX/bin/spdk_blobcli']],
                 headers=['spdk/nvme.h'],
                 patch_rpath=['lib', 'bin'])
 
