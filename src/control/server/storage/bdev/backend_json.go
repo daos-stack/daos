@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -45,7 +46,7 @@ func (_ SetOptionsParams) isSpdkSubsystemConfigParams() {}
 
 // NvmeSetOptionsParams specifies details for a storage.ConfBdevNvmeSetOptions method.
 type NvmeSetOptionsParams struct {
-	RetryCount               uint32 `json:"retry_count"`
+	RetryCount               uint32 `json:"bdev_retry_count"`
 	TimeoutUsec              uint64 `json:"timeout_us"`
 	NvmeAdminqPollPeriodUsec uint32 `json:"nvme_adminq_poll_period_us"`
 	ActionOnTimeout          string `json:"action_on_timeout"`
