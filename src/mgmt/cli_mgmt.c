@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -520,10 +521,20 @@ dc_mgmt_put_sys_info(struct daos_sys_info *info)
 #define SYS_INFO_BUF_SIZE 16
 
 static int g_num_serv_ranks = 1;
+static d_rank_t *g_serv_ranks;
 
 int dc_mgmt_net_get_num_srv_ranks(void)
 {
 	return g_num_serv_ranks;
+}
+
+d_rank_t
+dc_mgmt_net_get_srv_rank(int idx)
+{
+	D_ASSERT(g_serv_ranks != NULL);
+	D_ASSERT(idx >= 0 && idx < g_num_serv_ranks);
+
+	return g_serv_ranks[idx];
 }
 
 static int
@@ -558,6 +569,7 @@ dc_mgmt_net_cfg(const char *name, crt_init_options_t *crt_info)
 	char                     buf[SYS_INFO_BUF_SIZE];
 	struct dc_mgmt_sys_info *info = &info_g;
 	Mgmt__GetAttachInfoResp *resp = resp_g;
+	int                      idx;
 
 	if (resp->client_net_hint != NULL && resp->client_net_hint->n_env_vars > 0) {
 		int i;
@@ -586,6 +598,13 @@ dc_mgmt_net_cfg(const char *name, crt_init_options_t *crt_info)
 	/* Save number of server ranks */
 	g_num_serv_ranks = resp->n_rank_uris;
 	D_INFO("Setting number of server ranks to %d\n", g_num_serv_ranks);
+
+	/* Save ranks id */
+	D_ALLOC_ARRAY(g_serv_ranks, g_num_serv_ranks);
+	if (g_serv_ranks == NULL)
+		D_GOTO(cleanup, rc = -DER_NOMEM);
+	for (idx = 0; idx < g_num_serv_ranks; idx++)
+		g_serv_ranks[idx] = resp->rank_uris[idx]->rank;
 
 	/* If the server has set this, the client must use the same value. */
 	if (info->srv_srx_set != -1) {
@@ -640,6 +659,7 @@ dc_mgmt_net_cfg(const char *name, crt_init_options_t *crt_info)
 
 cleanup:
 	if (rc) {
+		D_FREE(g_serv_ranks);
 		D_FREE(crt_info->cio_provider);
 		D_FREE(crt_info->cio_interface);
 		D_FREE(crt_info->cio_domain);
