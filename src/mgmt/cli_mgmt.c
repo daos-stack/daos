@@ -550,20 +550,17 @@ dc_mgmt_net_get_num_srv_ranks(void)
 }
 
 /* Return the rank id of an attached rank.  */
-int
-dc_mgmt_net_get_srv_rank(int idx, d_rank_t *rank)
+d_rank_t
+dc_mgmt_net_get_srv_rank(int idx)
 {
-	D_ASSERT(rank != NULL);
 	D_ASSERT(g_num_serv_ranks >= 0);
 
 	if (idx >= g_num_serv_ranks) {
 		D_ERROR("Invalid rank index: index=%d, ranks_num=%d\n", idx, g_num_serv_ranks);
-		return -DER_NONEXIST;
+		return CRT_NO_RANK;
 	}
 
-	*rank =  g_serv_ranks[idx];
-
-	return -DER_SUCCESS;
+	return g_serv_ranks[idx];
 }
 
 static int
@@ -711,8 +708,6 @@ dc_mgmt_net_cfg(const char *name, crt_init_options_t *crt_info)
 		if (NULL == crt_info->cio_domain)
 			D_GOTO(cleanup, rc = -DER_NOMEM);
 	}
-	D_INFO("Network interface: %s, Domain: %s, Provider: %s\n", crt_info->cio_interface,
-	       crt_info->cio_domain, crt_info->cio_provider);
 	D_DEBUG(DB_MGMT,
 		"CaRT initialization with:\n"
 		"\tD_PROVIDER: %s, CRT_TIMEOUT: %d, CRT_SECONDARY_PROVIDER: %s\n",
@@ -730,7 +725,10 @@ dc_mgmt_net_cfg(const char *name, crt_init_options_t *crt_info)
 	}
 	D_FREE(g_serv_ranks);
 	g_serv_ranks = serv_ranks_tmp;
-	D_INFO("Setting number of attached server ranks to %d\n", g_num_serv_ranks);
+
+	D_INFO("Network interface: %s, Domain: %s, Provider: %s, Ranks count: %d\n",
+	       crt_info->cio_interface, crt_info->cio_domain, crt_info->cio_providerm,
+ 	       g_num_serv_ranks);
 
 cleanup:
 	if (rc) {
