@@ -635,12 +635,10 @@ do_dtx_rec_release(struct umem_instance *umm, struct vos_container *cont,
 	}
 
 	if (rc == -DER_NONEXIST) {
-		struct vos_tls	*tls = vos_tls_get(false);
-
 		D_WARN("DTX record no longer exists, may indicate some corruption: "
 		       DF_DTI " type %u, discard\n",
 		       DP_DTI(&DAE_XID(dae)), dtx_umoff_flag2type(rec));
-		d_tm_inc_gauge(tls->vtl_invalid_dtx, 1);
+		d_tm_inc_gauge(vos_tls_get(cont->vc_pool->vp_sysdb)->vtl_invalid_dtx, 1);
 	}
 
 	return rc;
@@ -712,6 +710,24 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae, bool ab
 				return rc;
 		}
 	}
+
+	/*
+	 * Inject fault to simulate the case of DTX records are left on disk after commit.
+	 * Then when container re-open (such as for engine restart), it will be re-loaded
+	 * from disk and then trigger DTX re-commit via DTX resync.
+	 */
+	if (unlikely(DAOS_FAIL_CHECK(DAOS_DTX_PARTIAL_COMMIT_P2))) {
+		rc = umem_tx_add_ptr(umm, &dae_df->dae_flags, sizeof(dae_df->dae_flags));
+		if (rc != 0)
+			return rc;
+
+		dae_df->dae_flags |= DTE_REDUN;
+		return 0;
+	}
+
+	/* It is expected to detect some invalid DTX records. Otherwise assert for test. */
+	if (DAE_REC_CNT(dae) != 0 && unlikely(DAE_FLAGS(dae) & DTE_REDUN))
+		D_ASSERT(invalid);
 
 	if (!UMOFF_IS_NULL(dae_df->dae_rec_off)) {
 		rc = umem_free(umm, dae_df->dae_rec_off);
@@ -2291,8 +2307,7 @@ vos_dtx_post_handle(struct vos_container *cont,
 	}
 
 	if (!abort && dces != NULL) {
-		struct vos_tls		*tls = vos_tls_get(false);
-		int			 j = 0;
+		int	j = 0;
 
 		D_ASSERT(cont->vc_pool->vp_sysdb == false);
 		for (i = 0; i < count; i++) {
@@ -2303,7 +2318,7 @@ vos_dtx_post_handle(struct vos_container *cont,
 		if (j > 0) {
 			cont->vc_dtx_committed_count += j;
 			cont->vc_pool->vp_dtx_committed_count += j;
-			d_tm_inc_gauge(tls->vtl_committed, j);
+			d_tm_inc_gauge(vos_tls_get(cont->vc_pool->vp_sysdb)->vtl_committed, j);
 		}
 	}
 
@@ -2929,7 +2944,6 @@ out:
 int
 vos_dtx_aggregate(daos_handle_t coh)
 {
-	struct vos_tls			*tls = vos_tls_get(false);
 	struct vos_container		*cont;
 	struct vos_cont_df		*cont_df;
 	struct umem_instance		*umm;
@@ -3048,7 +3062,7 @@ out:
 
 		cont->vc_dtx_committed_count -= count;
 		cont->vc_pool->vp_dtx_committed_count -= count;
-		d_tm_dec_gauge(tls->vtl_committed, count);
+		d_tm_dec_gauge(vos_tls_get(cont->vc_pool->vp_sysdb)->vtl_committed, count);
 	}
 
 	DL_CDEBUG(rc != 0, DLOG_ERR, DB_IO, rc,
