@@ -520,21 +520,33 @@ dc_mgmt_put_sys_info(struct daos_sys_info *info)
 
 #define SYS_INFO_BUF_SIZE 16
 
-static int g_num_serv_ranks = 1;
+static int g_num_serv_ranks = -1;
 static d_rank_t *g_serv_ranks;
 
-int dc_mgmt_net_get_num_srv_ranks(void)
+/* Return the number of attached ranks.  */
+int
+dc_mgmt_net_get_num_srv_ranks(void)
 {
+	D_ASSERT(g_num_serv_ranks >= 0);
+
 	return g_num_serv_ranks;
 }
 
-d_rank_t
-dc_mgmt_net_get_srv_rank(int idx)
+/* Return the rank id of an attached rank.  */
+int
+dc_mgmt_net_get_srv_rank(int idx, d_rank_t *rank)
 {
-	D_ASSERT(g_serv_ranks != NULL);
-	D_ASSERT(idx >= 0 && idx < g_num_serv_ranks);
+	D_ASSERT(rank != NULL);
+	D_ASSERT(g_num_serv_ranks >= 0);
 
-	return g_serv_ranks[idx];
+	if (idx >= g_num_serv_ranks) {
+		D_ERROR("Invalid rank index: index=%d, ranks_num=%d\n", idx, g_num_serv_ranks);
+		return -DER_NONEXIST;
+	}
+
+	*rank =  g_serv_ranks[idx];
+
+	return -DER_SUCCESS;
 }
 
 static int
@@ -570,6 +582,7 @@ dc_mgmt_net_cfg(const char *name, crt_init_options_t *crt_info)
 	struct dc_mgmt_sys_info *info = &info_g;
 	Mgmt__GetAttachInfoResp *resp = resp_g;
 	int                      idx;
+	d_rank_t                *serv_ranks_tmp;
 
 	if (resp->client_net_hint != NULL && resp->client_net_hint->n_env_vars > 0) {
 		int i;
@@ -594,17 +607,6 @@ dc_mgmt_net_cfg(const char *name, crt_init_options_t *crt_info)
 			D_DEBUG(DB_MGMT, "set server-supplied client env: %s", env);
 		}
 	}
-
-	/* Save number of server ranks */
-	g_num_serv_ranks = resp->n_rank_uris;
-	D_INFO("Setting number of server ranks to %d\n", g_num_serv_ranks);
-
-	/* Save ranks id */
-	D_ALLOC_ARRAY(g_serv_ranks, g_num_serv_ranks);
-	if (g_serv_ranks == NULL)
-		D_GOTO(cleanup, rc = -DER_NOMEM);
-	for (idx = 0; idx < g_num_serv_ranks; idx++)
-		g_serv_ranks[idx] = resp->rank_uris[idx]->rank;
 
 	/* If the server has set this, the client must use the same value. */
 	if (info->srv_srx_set != -1) {
@@ -657,9 +659,23 @@ dc_mgmt_net_cfg(const char *name, crt_init_options_t *crt_info)
 		"\tD_PROVIDER: %s, CRT_TIMEOUT: %d, CRT_SECONDARY_PROVIDER: %s\n",
 		crt_info->cio_provider, crt_info->cio_crt_timeout, buf);
 
+	/* Save attached ranks id info */
+	g_num_serv_ranks = resp->n_rank_uris;
+	serv_ranks_tmp   = NULL;
+	if (g_num_serv_ranks > 0) {
+		D_ALLOC_ARRAY(serv_ranks_tmp, g_num_serv_ranks);
+		if (serv_ranks_tmp == NULL)
+			D_GOTO(cleanup, rc = -DER_NOMEM);
+		for (idx = 0; idx < g_num_serv_ranks; idx++)
+			serv_ranks_tmp[idx] = resp->rank_uris[idx]->rank;
+	}
+	D_FREE(g_serv_ranks);
+	g_serv_ranks = serv_ranks_tmp;
+	D_INFO("Setting number of attached server ranks to %d\n", g_num_serv_ranks);
+
+
 cleanup:
 	if (rc) {
-		D_FREE(g_serv_ranks);
 		D_FREE(crt_info->cio_provider);
 		D_FREE(crt_info->cio_interface);
 		D_FREE(crt_info->cio_domain);
@@ -1505,6 +1521,8 @@ dc_mgmt_fini()
 
 	if (rc != 0)
 		D_ERROR("failed to unregister mgmt RPCs: "DF_RC"\n", DP_RC(rc));
+
+	D_FREE(g_serv_ranks);
 }
 
 int dc2_mgmt_svc_rip(tse_task_t *task)

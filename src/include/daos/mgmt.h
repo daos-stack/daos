@@ -72,7 +72,7 @@ int dc_mgmt_notify_pool_connect(struct dc_pool *pool);
 int dc_mgmt_notify_pool_disconnect(struct dc_pool *pool);
 int dc_mgmt_notify_exit(void);
 int dc_mgmt_net_get_num_srv_ranks(void);
-d_rank_t dc_mgmt_net_get_srv_rank(int idx);
+int dc_mgmt_net_get_srv_rank(int idx, d_rank_t *rank);
 int dc_mgmt_get_sys_info(const char *sys, struct daos_sys_info **info);
 void dc_mgmt_put_sys_info(struct daos_sys_info *info);
 int dc_get_attach_info(const char *name, bool all_ranks, struct dc_mgmt_sys_info *info,
