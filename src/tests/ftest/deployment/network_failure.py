@@ -235,7 +235,7 @@ class NetworkFailureTest(IorTestBase):
         # 7. Call dmg pool reintegrate one rank at a time to enable all ranks.
         self.log_step("Reintegrate one rank at a time to enable all ranks.")
         for disabled_rank in disabled_ranks:
-            self.pool.reintegrate(rank=disabled_rank)
+            self.pool.reintegrate(ranks=disabled_rank)
             self.pool.wait_for_rebuild_to_start(interval=5)
             self.pool.wait_for_rebuild_to_end(interval=10)
 

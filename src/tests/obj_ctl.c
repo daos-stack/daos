@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -198,7 +199,7 @@ ctl_cmd_run(char opc, char *args)
 	int			 rc;
 
 	if (args) {
-		strncpy(buf, args, CTL_BUF_LEN);
+		strncpy(buf, args, CTL_BUF_LEN - 1);
 		buf[CTL_BUF_LEN - 1] = '\0';
 		str = daos_str_trimwhite(buf);
 	} else {
