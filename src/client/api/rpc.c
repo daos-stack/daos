@@ -122,7 +122,7 @@ query_cb(struct crt_proto_query_cb_info *cb_info)
 		nr_ranks = dc_mgmt_net_get_num_srv_ranks();
 		D_ASSERT(nr_ranks > 0);
 		rproto->rank_idx = (rproto->rank_idx + 1) % nr_ranks;
-		rank = dc_mgmt_net_get_srv_rank(rproto->rank_idx);
+		rank             = dc_mgmt_net_get_srv_rank(rproto->rank_idx);
 		D_ASSERT(rank != CRT_NO_RANK);
 		rproto->ep.ep_rank = rank;
 
@@ -170,7 +170,7 @@ daos_rpc_proto_query(crt_opcode_t base_opc, uint32_t *ver_array, int count, int 
 		D_GOTO(out_free, -DER_NONEXIST);
 	}
 	rproto->rank_idx = d_rand() % nr_ranks;
-	rank = dc_mgmt_net_get_srv_rank(rproto->rank_idx);
+	rank             = dc_mgmt_net_get_srv_rank(rproto->rank_idx);
 	D_ASSERT(rank != CRT_NO_RANK);
 	rproto->ep.ep_rank = rank;
 
