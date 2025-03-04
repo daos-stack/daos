@@ -516,7 +516,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build RPM on Leap 15.5') {
+                stage('Build RPM on Leap 15.6') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -669,7 +669,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
+                stage('Build on Leap 15.6 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
