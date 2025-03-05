@@ -1,7 +1,7 @@
 name: Check variable value
 
 on:
-  workflow_dispatch
+  pull_request
 
 env:
   LEAP15_VERSION: ${{ vars.LEAP15_VERSION_MASTER }}
