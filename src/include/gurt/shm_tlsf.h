@@ -42,20 +42,20 @@
 
 /* tlsf_t: a TLSF structure. */
 /* pool_t: a block of memory that TLSF can manage. */
-typedef void* tlsf_t;
+typedef void *tlsf_t;
 
 /* Create/destroy a memory pool. */
 tlsf_t
-tlsf_create_with_pool(void* mem, size_t bytes);
+tlsf_create_with_pool(void *mem, size_t bytes);
 
 /* malloc/memalign/realloc/free replacements. */
-void*
+void *
 tlsf_malloc(tlsf_t tlsf, size_t bytes);
-void*
+void *
 tlsf_memalign(tlsf_t tlsf, size_t align, size_t bytes);
-void*
-tlsf_realloc(tlsf_t tlsf, void* ptr, size_t size);
+void *
+tlsf_realloc(tlsf_t tlsf, void *ptr, size_t size);
 void
-tlsf_free(tlsf_t tlsf, void* ptr);
+tlsf_free(tlsf_t tlsf, void *ptr);
 
 #endif

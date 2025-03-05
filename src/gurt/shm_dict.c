@@ -18,11 +18,11 @@
 extern struct d_shm_hdr *d_shm_head;
 
 #define INVALID_HT_ID (0)
-#define NREF_MASK (0xFFFF000000000000L)
-#define HT_ID_MASK (0xFFFFFFFFFFFFL)
-#define NREF_INC  (0x1000000000000L)
-#define GET_NREF(x) (((x) & 0xFFFF000000000000L) >> 48)
-#define GET_HTID(x) ((x) & HT_ID_MASK)
+#define NREF_MASK     (0xFFFF000000000000L)
+#define HT_ID_MASK    (0xFFFFFFFFFFFFL)
+#define NREF_INC      (0x1000000000000L)
+#define GET_NREF(x)   (((x) & 0xFFFF000000000000L) >> 48)
+#define GET_HTID(x)   ((x) & HT_ID_MASK)
 
 #if defined(__x86_64__)
 /* efficient way to generate random number with time stamp counter on x86_64 */
@@ -31,7 +31,7 @@ rdtsc(void)
 {
 	unsigned hi, lo;
 
-	__asm__ __volatile__ ("rdtsc" : "=a"(lo), "=d"(hi));
+	__asm__ __volatile__("rdtsc" : "=a"(lo), "=d"(hi));
 	return ((unsigned long long)lo) | (((unsigned long long)hi) << 32);
 }
 #endif
@@ -48,9 +48,9 @@ shm_ht_update_nref(d_shm_ht_loc_t ht_loc, int64_t change)
 
 	saved_ht_id        = ht_loc->ht_id;
 	addr_old_nref_htid = (int64_t *)&(ht_loc->ht_head->nref_htid);
-	old_nref_htid      = atomic_load_explicit((_Atomic int64_t *)addr_old_nref_htid,
-						  memory_order_relaxed);
-	ht_id              = GET_HTID(old_nref_htid);
+	old_nref_htid =
+	    atomic_load_explicit((_Atomic int64_t *)addr_old_nref_htid, memory_order_relaxed);
+	ht_id = GET_HTID(old_nref_htid);
 	if (saved_ht_id != ht_id)
 		/* hash table is not valid any more */
 		return SHM_HT_INVALID_HT;
@@ -114,18 +114,18 @@ shm_ht_decref(d_shm_ht_loc_t ht_loc)
 int
 shm_ht_create(const char name[], int bits, int n_lock, d_shm_ht_loc_t shm_ht_loc)
 {
-	int              i;
-	d_shm_ht_head_t  ht_head_tmp;
-	long int        *off_next;
-	long int         offset;
-	d_shm_mutex_t   *p_locks;
-	int              len_name;
-	int              n_bucket;
-	int              rc;
-	uint64_t         ht_id;
+	int             i;
+	d_shm_ht_head_t ht_head_tmp;
+	long int       *off_next;
+	long int        offset;
+	d_shm_mutex_t  *p_locks;
+	int             len_name;
+	int             n_bucket;
+	int             rc;
+	uint64_t        ht_id;
 
 	shm_ht_loc->ht_head = NULL;
-	len_name = strnlen(name, MAX_HT_NAME_LEN);
+	len_name            = strnlen(name, MAX_HT_NAME_LEN);
 	if (len_name >= MAX_HT_NAME_LEN) {
 		DS_ERROR(EINVAL, "hash table name is longer than %d bytes", MAX_HT_NAME_LEN - 1);
 		return EINVAL;
@@ -154,7 +154,7 @@ shm_ht_create(const char name[], int bits, int n_lock, d_shm_ht_loc_t shm_ht_loc
 				if ((ht_head_tmp->n_bucket == n_bucket) &&
 				    (ht_head_tmp->n_lock == n_lock)) {
 					shm_ht_loc->ht_head = ht_head_tmp;
-					shm_ht_loc->ht_id = GET_HTID(ht_head_tmp->nref_htid);
+					shm_ht_loc->ht_id   = GET_HTID(ht_head_tmp->nref_htid);
 					shm_mutex_unlock(&(d_shm_head->ht_lock));
 					/* increase ht reference count */
 					return shm_ht_incref(shm_ht_loc);
@@ -176,9 +176,9 @@ shm_ht_create(const char name[], int bits, int n_lock, d_shm_ht_loc_t shm_ht_loc
 	}
 
 	/* This hash table does not exist, then create it. */
-	shm_ht_loc->ht_head = shm_alloc(sizeof(struct d_shm_ht_head) +
-					(sizeof(d_shm_mutex_t) * n_lock) +
-					(sizeof(long int) * n_bucket));
+	shm_ht_loc->ht_head =
+	    shm_alloc(sizeof(struct d_shm_ht_head) + (sizeof(d_shm_mutex_t) * n_lock) +
+		      (sizeof(long int) * n_bucket));
 	if (shm_ht_loc->ht_head == NULL) {
 		rc = ENOMEM;
 		goto err;
@@ -221,7 +221,7 @@ shm_ht_create(const char name[], int bits, int n_lock, d_shm_ht_loc_t shm_ht_loc
 	}
 	/* set ht reference count 1 for this new ht */
 	atomic_store_relaxed(&(ht_head_tmp->nref_htid), ht_id + NREF_INC);
-	shm_ht_loc->ht_id  = ht_id;
+	shm_ht_loc->ht_id = ht_id;
 
 	shm_mutex_unlock(&(d_shm_head->ht_lock));
 	return SHM_HT_SUCCESS;
@@ -303,9 +303,9 @@ shm_ht_invalidate_htid(d_shm_ht_loc_t ht_loc, bool force, int *num_ref)
 		}
 	}
 
-	old_nref_htid = atomic_load_explicit((_Atomic int64_t *)addr_old_nref_htid,
-					     memory_order_relaxed);
-	ht_id         = GET_HTID(old_nref_htid);
+	old_nref_htid =
+	    atomic_load_explicit((_Atomic int64_t *)addr_old_nref_htid, memory_order_relaxed);
+	ht_id = GET_HTID(old_nref_htid);
 	if (saved_ht_id == INVALID_HT_ID) {
 		/* hash table was invalidated already */
 		DS_ERROR(EINVAL, "hash table has been invalidated already");
@@ -376,7 +376,7 @@ shm_ht_destroy(d_shm_ht_loc_t shm_ht_loc, bool force)
 		return SHM_HT_INVALID_HT;
 
 	/* invalid ht id to alert other processes do not use this ht any more */
-	rc = shm_ht_invalidate_htid(shm_ht_loc, force,  &num_ref);
+	rc = shm_ht_invalidate_htid(shm_ht_loc, force, &num_ref);
 	if (rc)
 		return rc;
 
@@ -503,8 +503,7 @@ shm_ht_rec_delete(d_shm_ht_loc_t shm_ht_loc, const char *key, const int ksize)
 				 * list.
 				 */
 				if (rec->prev != INVALID_OFFSET) {
-					rec_prev =
-					    (d_shm_ht_rec_t)((char *)d_shm_head + rec->prev);
+					rec_prev = (d_shm_ht_rec_t)((char *)d_shm_head + rec->prev);
 					rec_prev->next = rec->next;
 				} else {
 					/* This is the first record in this bucket */
@@ -513,12 +512,11 @@ shm_ht_rec_delete(d_shm_ht_loc_t shm_ht_loc, const char *key, const int ksize)
 
 				/* next record in this bucket exists */
 				if (rec->next != INVALID_OFFSET) {
-					rec_next =
-					    (d_shm_ht_rec_t)((char *)d_shm_head + rec->next);
+					rec_next = (d_shm_ht_rec_t)((char *)d_shm_head + rec->next);
 					rec_next->prev = rec->prev;
 				}
-				rec_ref_count = atomic_load_explicit(&(rec->ref_count),
-								     memory_order_relaxed);
+				rec_ref_count =
+				    atomic_load_explicit(&(rec->ref_count), memory_order_relaxed);
 				if (rec_ref_count == 0) {
 					/* free record memory only if reference count is zero */
 					shm_free(rec);
@@ -559,6 +557,10 @@ shm_ht_rec_delete_at(d_shm_ht_rec_loc_t link_loc)
 	if (!shm_ht_is_usable(shm_ht_loc))
 		/* immediately return error if ht is not usable */
 		return SHM_HT_INVALID_HT;
+
+	/* currently the memory for ht record is leaked in destroying ht by force if the reference
+	 * count of record is not zero. This can be improved later. To do.
+	 */
 
 	ht_head   = shm_ht_loc->ht_head;
 	idx_lock  = link->idx % ht_head->n_lock;
@@ -614,10 +616,10 @@ shm_ht_rec_find(d_shm_ht_loc_t shm_ht_loc, const char *key, const int len_key,
 	if (link_loc) {
 		link_loc->ht_head_loc.ht_head = shm_ht_loc->ht_head;
 		link_loc->ht_head_loc.ht_id   = shm_ht_loc->ht_id;
-		link_loc->ht_rec = NULL;
+		link_loc->ht_rec              = NULL;
 	}
 
-	ht_head = shm_ht_loc->ht_head;
+	ht_head    = shm_ht_loc->ht_head;
 	hash       = d_hash_string_u32(key, len_key);
 	idx        = hash & (ht_head->n_bucket - 1);
 	idx_lock   = idx % ht_head->n_lock;
@@ -656,8 +658,7 @@ shm_ht_rec_find(d_shm_ht_loc_t shm_ht_loc, const char *key, const int len_key,
 
 void *
 shm_ht_rec_find_insert(d_shm_ht_loc_t shm_ht_loc, const char *key, const int len_key,
-		       const char *val, const int len_value, d_shm_ht_rec_loc_t link_loc,
-		       int *err)
+		       const char *val, const int len_value, d_shm_ht_rec_loc_t link_loc, int *err)
 {
 	unsigned int    hash;
 	unsigned int    idx;
@@ -681,7 +682,7 @@ shm_ht_rec_find_insert(d_shm_ht_loc_t shm_ht_loc, const char *key, const int len
 	if (link_loc) {
 		link_loc->ht_head_loc.ht_head = shm_ht_loc->ht_head;
 		link_loc->ht_head_loc.ht_id   = shm_ht_loc->ht_id;
-		link_loc->ht_rec = NULL;
+		link_loc->ht_rec              = NULL;
 	}
 
 	ht_head    = shm_ht_loc->ht_head;
@@ -699,11 +700,11 @@ shm_ht_rec_find_insert(d_shm_ht_loc_t shm_ht_loc, const char *key, const int len
 		while (off_next != INVALID_OFFSET) {
 			rec = (d_shm_ht_rec_t)((char *)d_shm_head + off_next);
 			if (len_key == rec->len_key) {
-				if (memcmp(key, (char *)rec + sizeof(struct d_shm_ht_rec), len_key) ==
-				    0) {
+				if (memcmp(key, (char *)rec + sizeof(struct d_shm_ht_rec),
+					   len_key) == 0) {
 					/* found the key, then return value */
-					value = (char *)rec + sizeof(struct d_shm_ht_rec) + len_key +
-						rec->len_padding;
+					value = (char *)rec + sizeof(struct d_shm_ht_rec) +
+						len_key + rec->len_padding;
 					if (link_loc) {
 						link_loc->ht_rec = rec;
 						shm_ht_rec_incref(rec);
@@ -717,17 +718,17 @@ shm_ht_rec_find_insert(d_shm_ht_loc_t shm_ht_loc, const char *key, const int len
 	}
 	/* record is not found. Insert it at the very beginning of the link list. */
 	rec = (d_shm_ht_rec_t)shm_memalign(SHM_MEM_ALIGN,
-						sizeof(struct d_shm_ht_rec) + len_key + len_value);
+					   sizeof(struct d_shm_ht_rec) + len_key + len_value);
 	if (rec == NULL) {
 		*err = ENOMEM;
 		goto err;
 	}
-	rec->len_key     = len_key;
+	rec->len_key = len_key;
 	/* add padding space to make sure value is aligned by SHM_MEM_ALIGN */
 	rec->len_padding =
 	    (len_key & (SHM_MEM_ALIGN - 1)) ? (SHM_MEM_ALIGN - (len_key & (SHM_MEM_ALIGN - 1))) : 0;
-	rec->len_value   = len_value;
-	rec->next        = INVALID_OFFSET;
+	rec->len_value = len_value;
+	rec->next      = INVALID_OFFSET;
 	memcpy((char *)rec + sizeof(struct d_shm_ht_rec), key, len_key);
 	value = (char *)rec + sizeof(struct d_shm_ht_rec) + len_key + rec->len_padding;
 
@@ -744,7 +745,7 @@ shm_ht_rec_find_insert(d_shm_ht_loc_t shm_ht_loc, const char *key, const int len
 		memcpy(value, val, len_value);
 	}
 
-	rec->idx        = idx;
+	rec->idx = idx;
 	/* only non-null link_loc increase ref_count */
 	atomic_store_relaxed(&(rec->ref_count), link_loc ? 1 : 0);
 	/* put the new record at the head of the link list */
@@ -769,14 +770,24 @@ err:
 }
 
 void *
-shm_ht_rec_data(d_shm_ht_rec_loc_t rec_loc)
+shm_ht_rec_data(d_shm_ht_rec_loc_t rec_loc, int *err)
 {
-	void *data;
+	void          *data;
 	d_shm_ht_rec_t rec;
 
-	rec = rec_loc->ht_rec;
-	if (rec == NULL)
+	*err = SHM_HT_SUCCESS;
+	rec  = rec_loc->ht_rec;
+	if (rec == NULL) {
+		*err = SHM_HT_INVALID_ARG;
 		return NULL;
+	}
+
+	if (!shm_ht_is_usable(&rec_loc->ht_head_loc)) {
+		/* immediately return error if ht is not usable */
+		*err = SHM_HT_INVALID_HT;
+		return NULL;
+	}
+
 	data = (char *)rec + sizeof(struct d_shm_ht_rec) + rec->len_key + rec->len_padding;
 	return data;
 }

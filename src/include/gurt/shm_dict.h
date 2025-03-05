@@ -14,8 +14,7 @@
 #define INIT_KEY_VALUE_MUTEX "INIT_MUTEX"
 
 /* error code for hash table related functions */
-enum SHM_HT_ERROR
-{
+enum SHM_HT_ERROR {
 	SHM_HT_SUCCESS     = 0,
 	SHM_HT_INVALID_ARG = EINVAL,
 	SHM_HT_NOT_EXIST   = ENOENT,
@@ -80,7 +79,7 @@ struct d_shm_ht_head {
 	 */
 };
 
-typedef struct d_shm_ht_head * d_shm_ht_head_t;
+typedef struct d_shm_ht_head *d_shm_ht_head_t;
 
 /* local struct for accessing a hash table stored in shared memory */
 struct d_shm_ht_loc {
@@ -91,10 +90,10 @@ struct d_shm_ht_loc {
 };
 
 /* the address of shared memory region */
-extern struct d_shm_hdr *d_shm_head;
+extern struct d_shm_hdr     *d_shm_head;
 
-typedef struct d_shm_ht_loc * d_shm_ht_loc_t;
-typedef struct d_shm_ht_rec * d_shm_ht_rec_t;
+typedef struct d_shm_ht_loc *d_shm_ht_loc_t;
+typedef struct d_shm_ht_rec *d_shm_ht_rec_t;
 
 /* local struct for accessing a hash table record stored in shared memory */
 struct d_shm_ht_rec_loc {
@@ -104,7 +103,7 @@ struct d_shm_ht_rec_loc {
 	d_shm_ht_rec_t      ht_rec;
 };
 
-typedef struct d_shm_ht_rec_loc * d_shm_ht_rec_loc_t;
+typedef struct d_shm_ht_rec_loc *d_shm_ht_rec_loc_t;
 
 /**
  * create a hash table with given name, size (2^bits), number of locks if it does not exist.
@@ -112,7 +111,7 @@ typedef struct d_shm_ht_rec_loc * d_shm_ht_rec_loc_t;
  * is increased by 1.
  *
  * \param[in] name		name string
- * \param[in] bits		used to set the number of buckets, 2^bits 
+ * \param[in] bits		used to set the number of buckets, 2^bits
  * \param[in] n_lock		the number of locks shared by buckets
 
  * \param[out] shm_ht_loc	local struct contains ht_head in shm and ht_id local copy
@@ -209,9 +208,8 @@ shm_ht_rec_find(d_shm_ht_loc_t shm_ht_loc, const char *key, const int ksize,
  * \return			value
  */
 void *
-shm_ht_rec_find_insert(d_shm_ht_loc_t shm_ht_loc, const char *key, const int ksize,
-		       const char *val, const int len_value, d_shm_ht_rec_loc_t rec_loc,
-		       int *err);
+shm_ht_rec_find_insert(d_shm_ht_loc_t shm_ht_loc, const char *key, const int ksize, const char *val,
+		       const int len_value, d_shm_ht_rec_loc_t rec_loc, int *err);
 
 /**
  * decrease the refcount of the record by 1.
@@ -248,10 +246,12 @@ shm_ht_rec_delete_at(d_shm_ht_rec_loc_t rec_loc);
  *
  * \param[in] rec_loc		pointer to local struct for accessing a hash table record
  *
+ * \param[out] err		error code
+ *
  * \return			address of the data
  */
 void *
-shm_ht_rec_data(d_shm_ht_rec_loc_t rec_loc);
+shm_ht_rec_data(d_shm_ht_rec_loc_t rec_loc, int *err);
 
 /**
  * return the reference count of a ht record. Mainly used for debugging.

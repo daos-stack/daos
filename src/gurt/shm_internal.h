@@ -15,25 +15,25 @@
 #include <gurt/shm_tlsf.h>
 
 /* the magic value stored at the header of share memory region */
-#define DSM_MAGIC      (0x13577531)
+#define DSM_MAGIC        (0x13577531)
 
 /**
  * the number of shared memory allocators. Use multiple allocators to alleviate lock contentions
  * since the allocator currently used is not thread safe.
  */
-#define N_SHM_FIXED_POOL     (8)
+#define N_SHM_FIXED_POOL (8)
 
 /* the size of each shm pool */
-#define SHM_POOL_SIZE  (128 * 1024 * 1024L)
+#define SHM_POOL_SIZE    (256 * 1024 * 1024L)
 
 /* the total size of shared memory that will be allocated */
-#define SHM_SIZE_TOTAL (SHM_POOL_SIZE * N_SHM_FIXED_POOL)
+#define SHM_SIZE_TOTAL   (SHM_POOL_SIZE * N_SHM_FIXED_POOL)
 
 /**
  * the threshold value to determine whether requesting large memory. The ways to pick memory
  * allocator are different for large and small memory blocks.
  */
-#define LARGE_MEM      (64 * 1024)
+#define LARGE_MEM        (64 * 1024)
 
 /* Head of shared memory region */
 struct d_shm_hdr {

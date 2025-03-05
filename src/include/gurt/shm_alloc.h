@@ -38,9 +38,11 @@ shm_alloc(size_t size);
 
 /**
  * Remove shared memory file under /dev/shm/ when tests finish
+ *
+ * \param[in] force		remove shared memory file immediately
  */
 void
-shm_destroy(void);
+shm_destroy(bool force);
 
 /**
  * Allocate memory from shared memory region with alignment

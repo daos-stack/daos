@@ -22,16 +22,16 @@
 #define daos_shm_name "daos_shm_cache"
 
 /* pid of current process */
-static int          pid;
+static int            pid;
 
 /* the memory allocator that will be used to handle small memory allocation */
-static __thread int idx_small = -1;
+static __thread int   idx_small = -1;
 
 /* the address of shared memory region */
-struct d_shm_hdr   *d_shm_head;
+struct d_shm_hdr     *d_shm_head;
 
 /* the attribute set for mutex located inside shared memory */
-pthread_mutexattr_t d_shm_mutex_attr;
+pthread_mutexattr_t   d_shm_mutex_attr;
 
 /* this will be resived later to support add/remove pool dynamically */
 struct shm_pool_local shm_pool_list[N_SHM_FIXED_POOL];
@@ -41,9 +41,9 @@ struct shm_pool_local shm_pool_list[N_SHM_FIXED_POOL];
  * process exits to keep shm always available. shared memory is unmapped when other processes
  * exit.
  */
-static int      pid_shm_creator;
+static int            pid_shm_creator;
 
-static uint64_t page_size;
+static uint64_t       page_size;
 
 static int
 create_shm_region(uint64_t shm_size, uint64_t shm_pool_size)
@@ -86,12 +86,11 @@ create_shm_region(uint64_t shm_size, uint64_t shm_pool_size)
 	d_shm_head->magic = 0;
 	/* initialize memory allocators */
 	for (i = 0; i < N_SHM_FIXED_POOL; i++) {
-		shm_pool_list[i].addr_s         = tlsf_create_with_pool(
+		shm_pool_list[i].addr_s = tlsf_create_with_pool(
 		    shm_addr + sizeof(struct d_shm_hdr) + (i * shm_pool_size), shm_pool_size);
-		shm_pool_list[i].addr_e         = shm_pool_list[i].addr_s + shm_pool_size;
-		shm_pool_list[i].freeable       = false;
-		d_shm_head->off_fixed_pool[i]   = (off_t)shm_pool_list[i].addr_s -
-		    (off_t)d_shm_head;
+		shm_pool_list[i].addr_e       = shm_pool_list[i].addr_s + shm_pool_size;
+		shm_pool_list[i].freeable     = false;
+		d_shm_head->off_fixed_pool[i] = (off_t)shm_pool_list[i].addr_s - (off_t)d_shm_head;
 	}
 	d_shm_head->num_pool = N_SHM_FIXED_POOL;
 
@@ -113,7 +112,7 @@ create_shm_region(uint64_t shm_size, uint64_t shm_pool_size)
 	d_shm_head->shm_pool_size = shm_pool_size;
 	d_shm_head->version       = 1;
 	__sync_synchronize();
-	d_shm_head->magic         = DSM_MAGIC;
+	d_shm_head->magic = DSM_MAGIC;
 	/* initialization is finished now. */
 	close(shm_ht_fd);
 	return 0;
@@ -210,8 +209,8 @@ open_rw:
 	close(shm_ht_fd);
 
 	for (i = 0; i < N_SHM_FIXED_POOL; i++) {
-		shm_pool_list[i].addr_s = (char *)d_shm_head + d_shm_head->off_fixed_pool[i];
-		shm_pool_list[i].addr_e = shm_pool_list[i].addr_s + d_shm_head->shm_pool_size;
+		shm_pool_list[i].addr_s   = (char *)d_shm_head + d_shm_head->off_fixed_pool[i];
+		shm_pool_list[i].addr_e   = shm_pool_list[i].addr_s + d_shm_head->shm_pool_size;
 		shm_pool_list[i].freeable = false;
 	}
 
@@ -273,7 +272,8 @@ shm_free(void *ptr)
 	int i;
 
 	for (i = 0; i < N_SHM_FIXED_POOL; i++) {
-		if ( ((char *)ptr >= shm_pool_list[i].addr_s) && ((char *)ptr < shm_pool_list[i].addr_e) ) {
+		if (((char *)ptr >= shm_pool_list[i].addr_s) &&
+		    ((char *)ptr < shm_pool_list[i].addr_e)) {
 			tlsf_free((tlsf_t)shm_pool_list[i].addr_s, ptr);
 			return;
 		}
@@ -284,12 +284,17 @@ shm_free(void *ptr)
 }
 
 void
-shm_destroy(void)
+shm_destroy(bool force)
 {
 	char daos_shm_file_name[128];
 
 	sprintf(daos_shm_file_name, "/dev/shm/%s_%d", daos_shm_name, getuid());
-	shm_unlink(daos_shm_file_name);
+	if (!force)
+		/* the file will be removed after all processes call shm_unlink() */
+		shm_unlink(daos_shm_file_name);
+	else
+		/* unlink the shared memory file immediately */
+		unlink(daos_shm_file_name);
 }
 
 bool

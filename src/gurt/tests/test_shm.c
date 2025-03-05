@@ -39,14 +39,9 @@ void
 test_mem(void **state)
 {
 	int    i;
-	int    rc;
 	size_t align = 4;
 	size_t size;
 	char  *buf_list[N_LOOP_MEM];
-
-	rc = shm_init();
-	assert_true(rc == 0);
-	assert_true(shm_inited() == true);
 
 	srandom(1);
 	/* testing allocation with alignment and deallocation */
@@ -70,7 +65,6 @@ test_mem(void **state)
 	for (i = 0; i < N_LOOP_MEM; i++) {
 		shm_free(buf_list[i]);
 	}
-	shm_fini();
 }
 
 #define HT_NAME "shm_ht_test"
@@ -97,7 +91,7 @@ verify_hash(void)
 	value = (char *)shm_ht_rec_find(&ht_lock, KEY_1, strlen(KEY_1), &rec_loc, &err);
 	assert_non_null(value);
 	assert_true(strcmp(value, VAL_1) == 0);
-	assert_true(value == shm_ht_rec_data(&rec_loc));
+	assert_true(value == shm_ht_rec_data(&rec_loc, &err));
 
 	rc = shm_ht_rec_decref(&rec_loc);
 	assert_true(rc == 0);
@@ -105,7 +99,7 @@ verify_hash(void)
 	value = (char *)shm_ht_rec_find(&ht_lock, KEY_2, strlen(KEY_2), &rec_loc, &err);
 	assert_non_null(value);
 	assert_true(strcmp(value, VAL_2) == 0);
-	assert_true(value == shm_ht_rec_data(&rec_loc));
+	assert_true(value == shm_ht_rec_data(&rec_loc, &err));
 
 	rc = shm_ht_rec_decref(&rec_loc);
 	assert_true(rc == 0);
@@ -113,7 +107,7 @@ verify_hash(void)
 	value = (char *)shm_ht_rec_find(&ht_lock, KEY_3, strlen(KEY_3), &rec_loc, &err);
 	assert_non_null(value);
 	assert_true(strcmp(value, VAL_3) == 0);
-	assert_true(value == shm_ht_rec_data(&rec_loc));
+	assert_true(value == shm_ht_rec_data(&rec_loc, &err));
 
 	rc = shm_ht_rec_decref(&rec_loc);
 	assert_true(rc == 0);
@@ -131,17 +125,13 @@ verify_hash_by_child(void)
 	struct d_shm_ht_loc     ht_lock;
 
 	/* look up hash key in child process */
-	rc = shm_init();
-	assert_true(rc == 0);
-	assert_true(shm_inited() == true);
-
 	rc = shm_ht_open_with_name(HT_NAME, &ht_lock);
 	assert_true(rc == 0);
 
 	value = (char *)shm_ht_rec_find(&ht_lock, KEY_1, strlen(KEY_1), &rec_loc, &err);
 	assert_non_null(value);
 	assert_true(strcmp(value, VAL_1) == 0);
-	assert_true(value == shm_ht_rec_data(&rec_loc));
+	assert_true(value == shm_ht_rec_data(&rec_loc, &err));
 
 	rc = shm_ht_rec_decref(&rec_loc);
 	assert_true(rc == 0);
@@ -149,7 +139,7 @@ verify_hash_by_child(void)
 	value = (char *)shm_ht_rec_find(&ht_lock, KEY_2, strlen(KEY_2), &rec_loc, &err);
 	assert_non_null(value);
 	assert_true(strcmp(value, VAL_2) == 0);
-	assert_true(value == shm_ht_rec_data(&rec_loc));
+	assert_true(value == shm_ht_rec_data(&rec_loc, &err));
 
 	rc = shm_ht_rec_decref(&rec_loc);
 	assert_true(rc == 0);
@@ -157,18 +147,17 @@ verify_hash_by_child(void)
 	value = (char *)shm_ht_rec_find(&ht_lock, KEY_3, strlen(KEY_3), &rec_loc, &err);
 	assert_non_null(value);
 	assert_true(strcmp(value, VAL_3) == 0);
-	assert_true(value == shm_ht_rec_data(&rec_loc));
+	assert_true(value == shm_ht_rec_data(&rec_loc, &err));
 
 	rc = shm_ht_rec_decref(&rec_loc);
 	assert_true(rc == 0);
 
 	shm_ht_decref(&ht_lock);
-	shm_fini();
 }
 
-#define NUM_KV (2560)
+#define NUM_KV      (2560)
 #define MAX_KEY_LEN (12)
-#define N_THREAD (8)
+#define N_THREAD    (8)
 
 static void *
 thread_ht_op(void *arg)
@@ -185,7 +174,7 @@ thread_ht_op(void *arg)
 	char                    *key_set = NULL;
 	struct d_shm_ht_rec_loc *rec_loc_set;
 
-	thread_id = *(int*)arg;
+	thread_id = *(int *)arg;
 
 	rc = shm_ht_open_with_name(HT_NAME, &ht_loc);
 	assert_true(rc == 0);
@@ -197,12 +186,12 @@ thread_ht_op(void *arg)
 
 	for (i = 0; i < NUM_KV; i++) {
 		key_name = key_set + i * MAX_KEY_LEN;
-		len = snprintf(key_name, MAX_KEY_LEN, "key_%d_%d", thread_id, i);
+		len      = snprintf(key_name, MAX_KEY_LEN, "key_%d_%d", thread_id, i);
 		assert_true(len < (MAX_KEY_LEN - 1));
 		value = shm_ht_rec_find_insert(&ht_loc, key_name, len, VAL_1, sizeof(VAL_1),
 					       &rec_loc_set[i], &err);
 		assert_non_null(value);
-		assert_true(value == shm_ht_rec_data(&rec_loc_set[i]));
+		assert_true(value == shm_ht_rec_data(&rec_loc_set[i], &err));
 
 		rc = shm_ht_rec_decref(&rec_loc_set[i]);
 		assert_true(rc == 0);
@@ -211,10 +200,10 @@ thread_ht_op(void *arg)
 	/* make sure all inserted records exist */
 	for (i = 0; i < NUM_KV; i++) {
 		key_name = key_set + i * MAX_KEY_LEN;
-		value = shm_ht_rec_find(&ht_loc, key_name, strlen(key_name), &rec_loc, &err);
+		value    = shm_ht_rec_find(&ht_loc, key_name, strlen(key_name), &rec_loc, &err);
 		assert_non_null(value);
 		assert_non_null(rec_loc.ht_rec);
-		assert_true(value == shm_ht_rec_data(&rec_loc));
+		assert_true(value == shm_ht_rec_data(&rec_loc, &err));
 
 		rc = shm_ht_rec_decref(&rec_loc);
 		assert_true(rc == 0);
@@ -223,7 +212,7 @@ thread_ht_op(void *arg)
 	/* delete ht records with shm_ht_rec_delete() */
 	for (i = 0; i < NUM_KV; i += 2) {
 		key_name = key_set + i * MAX_KEY_LEN;
-		rc = shm_ht_rec_delete(&ht_loc, key_name, strlen(key_name));
+		rc       = shm_ht_rec_delete(&ht_loc, key_name, strlen(key_name));
 		assert_true(rc == 0);
 	}
 
@@ -259,10 +248,6 @@ test_hash(void **state)
 	pthread_t               thread_list[N_THREAD];
 
 	/* create shared memory, create a hash table, insert three keys */
-	rc = shm_init();
-	assert_true(rc == 0);
-	assert_true(shm_inited() == true);
-
 	rc = shm_ht_create(HT_NAME, 8, 16, &ht_loc);
 	assert_true(rc == 0);
 	/* shm_ht_create() increases reference count */
@@ -279,7 +264,7 @@ test_hash(void **state)
 	value = shm_ht_rec_find_insert(&ht_loc, KEY_1, strlen(KEY_1), VAL_1, sizeof(VAL_1),
 				       &rec_loc, &err);
 	assert_non_null(value);
-	assert_true(value == shm_ht_rec_data(&rec_loc));
+	assert_true(value == shm_ht_rec_data(&rec_loc, &err));
 
 	/* verify ht record reference count */
 	assert_true(shm_ht_rec_num_ref(&rec_loc) == 1);
@@ -302,7 +287,7 @@ test_hash(void **state)
 	value = shm_ht_rec_find_insert(&ht_loc, KEY_2, strlen(KEY_2), VAL_2, sizeof(VAL_2),
 				       &rec_loc, &err);
 	assert_non_null(value);
-	assert_true(value == shm_ht_rec_data(&rec_loc));
+	assert_true(value == shm_ht_rec_data(&rec_loc, &err));
 
 	rc = shm_ht_rec_decref(&rec_loc);
 	assert_true(rc == 0);
@@ -310,7 +295,7 @@ test_hash(void **state)
 	value = shm_ht_rec_find_insert(&ht_loc, KEY_3, strlen(KEY_3), VAL_3, sizeof(VAL_3),
 				       &rec_loc, &err);
 	assert_non_null(value);
-	assert_true(value == shm_ht_rec_data(&rec_loc));
+	assert_true(value == shm_ht_rec_data(&rec_loc, &err));
 
 	rc = shm_ht_rec_decref(&rec_loc);
 	assert_true(rc == 0);
@@ -349,13 +334,12 @@ test_hash(void **state)
 	assert_true(rc == 0);
 	value = shm_ht_rec_find(&ht_loc, KEY_3, strlen(KEY_3), &rec_loc, &err);
 	assert_true(value == NULL);
-	assert_true(value == shm_ht_rec_data(&rec_loc));
+	assert_true(value == shm_ht_rec_data(&rec_loc, &err));
 
 	/* start multiple threads to operate ht currently */
 	for (i = 0; i < N_THREAD; i++) {
 		id_list[i] = i;
-		rc         = pthread_create(&thread_list[i], NULL, thread_ht_op,
-					    (void*)&id_list[i]);
+		rc = pthread_create(&thread_list[i], NULL, thread_ht_op, (void *)&id_list[i]);
 		assert_true(rc == 0);
 	}
 	for (i = 0; i < N_THREAD; i++) {
@@ -370,8 +354,6 @@ test_hash(void **state)
 
 	rc = shm_ht_destroy(&ht_loc, false);
 	assert_true(rc == SHM_HT_SUCCESS);
-
-	shm_fini();
 }
 
 #define TIME_SLEEP (1)
@@ -379,25 +361,21 @@ test_hash(void **state)
 void
 do_lock_mutex_child(bool lock_only)
 {
-	int                 rc;
-	int                 err;
+	int                     rc;
+	int                     err;
 	struct d_shm_ht_rec_loc rec_loc;
-	struct d_shm_ht_loc ht_loc;
-	const char          ht_name[] = "shm_lock_test";
-	const char          key[]     = "mutex";
-	d_shm_mutex_t      *mutex;
+	struct d_shm_ht_loc     ht_loc;
+	const char              ht_name[] = "shm_lock_test";
+	const char              key[]     = "mutex";
+	d_shm_mutex_t          *mutex;
 
 	/* test lock a mutex in shared memory in a child process */
-	rc = shm_init();
-	assert_true(rc == 0);
-	assert_true(shm_inited() == true);
-
 	rc = shm_ht_open_with_name(ht_name, &ht_loc);
 	assert_true(rc == 0);
 
 	mutex = (d_shm_mutex_t *)shm_ht_rec_find(&ht_loc, key, strlen(key), &rec_loc, &err);
 	assert_true(mutex != NULL);
-	assert_true(mutex == shm_ht_rec_data(&rec_loc));
+	assert_true(mutex == shm_ht_rec_data(&rec_loc, &err));
 
 	rc = shm_ht_rec_decref(&rec_loc);
 	assert_true(rc == 0);
@@ -407,8 +385,11 @@ do_lock_mutex_child(bool lock_only)
 	if (!lock_only) {
 		shm_mutex_unlock(mutex);
 		shm_ht_decref(&ht_loc);
-		shm_fini();
+	} else {
+		/* Do not unmap shared memory to simulate a process crashing */
+		_exit(0);
 	}
+
 
 	/**
 	 * shm_fini() is NOT called to unmap shm. Otherwise EOWNERDEAD will not be triggered. This
@@ -419,38 +400,34 @@ do_lock_mutex_child(bool lock_only)
 void
 test_lock(void **state)
 {
-	int                 rc;
-	int                 err;
-	int                 status;
-	d_shm_mutex_t      *mutex;
+	int                     rc;
+	int                     err;
+	int                     status;
+	d_shm_mutex_t          *mutex;
 	/* the hash table in shared memory */
-	struct d_shm_ht_loc ht_loc;
-	const char          ht_name[] = "shm_lock_test";
-	const char          key[]     = "mutex";
-	struct timeval      tm1, tm2;
-	double              dt;
+	struct d_shm_ht_loc     ht_loc;
+	const char              ht_name[] = "shm_lock_test";
+	const char              key[]     = "mutex";
+	struct timeval          tm1, tm2;
+	double                  dt;
 	struct d_shm_ht_rec_loc rec_loc;
-	char               *argv[3]  = {"test_shm", "--lockmutex", NULL};
-	char               *argv2[3] = {"test_shm", "--lockonly", NULL};
-	char               *exe_path;
-	pid_t               pid;
-	bool                owner_dead;
+	char                   *argv[3]  = {"test_shm", "--lockmutex", NULL};
+	char                   *argv2[3] = {"test_shm", "--lockonly", NULL};
+	char                   *exe_path;
+	pid_t                   pid;
+	bool                    owner_dead;
 
 	/**
 	 * create shared memory, create a hash table, insert a key whose value is a struct of
 	 * d_shm_mutex_t
 	 */
-	rc = shm_init();
-	assert_true(rc == 0);
-	assert_true(shm_inited() == true);
-
 	rc = shm_ht_create(ht_name, 8, 16, &ht_loc);
 	assert_true(rc == 0);
 
 	mutex = (d_shm_mutex_t *)shm_ht_rec_find_insert(
 	    &ht_loc, key, strlen(key), INIT_KEY_VALUE_MUTEX, sizeof(d_shm_mutex_t), &rec_loc, &err);
 	assert_true(mutex != NULL);
-	assert_true(mutex == shm_ht_rec_data(&rec_loc));
+	assert_true(mutex == shm_ht_rec_data(&rec_loc, &err));
 
 	rc = shm_ht_rec_decref(&rec_loc);
 	assert_true(rc == 0);
@@ -499,20 +476,23 @@ test_lock(void **state)
 	assert_true(owner_dead);
 	free(exe_path);
 	shm_ht_decref(&ht_loc);
-	shm_fini();
 }
 
 static int
 init_tests(void **state)
 {
+	int rc;
+
+	rc = shm_init();
+	assert_true(rc == 0);
+	assert_true(shm_inited() == true);
 	return d_log_init();
 }
 
 static int
 fini_tests(void **state)
 {
-	/* unlink shared memory file under /dev/shm/ */
-	shm_destroy();
+	shm_fini();
 	d_log_fini();
 
 	return 0;
@@ -522,10 +502,8 @@ int
 main(int argc, char **argv)
 {
 	int                     opt = 0, index = 0, rc;
-	const struct CMUnitTest tests[] = {
-		cmocka_unit_test(test_hash),
-		cmocka_unit_test(test_lock),
-		cmocka_unit_test(test_mem)};
+	const struct CMUnitTest tests[] = {cmocka_unit_test(test_hash), cmocka_unit_test(test_lock),
+					   cmocka_unit_test(test_mem)};
 
 	static struct option    long_options[] = {
 		{"all", no_argument, NULL, 'a'},
@@ -567,7 +545,7 @@ main(int argc, char **argv)
 	rc = cmocka_run_group_tests_name("test_shm", tests, init_tests, fini_tests);
 
 	/* unlink shared memory file under /dev/shm/ */
-	shm_destroy();
+	shm_destroy(true);
 
 	return rc;
 
