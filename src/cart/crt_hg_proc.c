@@ -186,6 +186,7 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op,
 		hg_ret = hg_proc_hg_bulk_t(proc, &bulk->hg_bulk_hdl);
 
 		D_FREE(bulk);
+		*crt_bulk = NULL;
 		return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
 		break;
 	}
