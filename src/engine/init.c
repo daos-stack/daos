@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -555,6 +556,26 @@ set_abt_max_num_xstreams(int n)
 }
 
 static int
+set_abt_max_num_stacks(void)
+{
+	char *name = "ABT_MEM_MAX_NUM_STACKS";
+	char *value;
+	int   rc;
+
+	D_ASPRINTF(value, "%d", 4096);
+	if (value == NULL)
+		return -DER_NOMEM;
+
+	D_INFO("Setting %s to %s\n", name, value);
+	rc = d_setenv(name, value, 1 /* overwrite */);
+	D_FREE(value);
+	if (rc != 0)
+		rc = daos_errno2der(errno);
+
+	return rc;
+}
+
+static int
 abt_init(int argc, char *argv[])
 {
 	int	nrequested = abt_max_num_xstreams();
@@ -570,7 +591,11 @@ abt_init(int argc, char *argv[])
 	 */
 	rc = set_abt_max_num_xstreams(max(nrequested, nrequired));
 	if (rc != 0)
-		return daos_errno2der(errno);
+		return rc;
+
+	rc = set_abt_max_num_stacks();
+	if (rc != 0)
+		return rc;
 
 	/* Now, initialize Argobots. */
 	rc = ABT_init(argc, argv);
