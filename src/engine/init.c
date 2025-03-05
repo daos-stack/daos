@@ -1132,15 +1132,14 @@ abt_dump_done_cb(ABT_bool success, void *arg)
 		return;
 
 	fprintf(fp, "Callstack dump result: %d\n", success);
-	fclose(fp);
+	if (fp != stderr)
+		fclose(fp);
 }
 
 int
 main(int argc, char **argv)
 {
-	char            name[64] = {0};
-	sigset_t	set;
-	FILE           *fp = NULL;
+	sigset_t        set;
 	int		sig;
 	int		rc;
 
@@ -1181,6 +1180,8 @@ main(int argc, char **argv)
 	sigaddset(&set, SIGUSR1);
 	sigaddset(&set, SIGUSR2);
 	while (1) {
+		FILE *fp           = NULL;
+		char  filename[64] = {0};
 		rc = sigwait(&set, &sig);
 		if (rc) {
 			D_ERROR("failed to wait for signals: %d\n", rc);
@@ -1204,14 +1205,15 @@ main(int argc, char **argv)
 			 */
 
 			if (rc != -1 && tm != NULL)
-				snprintf(name, 50,
+				snprintf(filename, sizeof(filename),
 					 "/tmp/daos_dump_%d_%04d%02d%02d_%02d_%02d_%02d.txt",
 					 getpid(), tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
 					 tm->tm_hour, tm->tm_min, tm->tm_sec);
 			else
-				snprintf(name, 50, "/tmp/daos_dump_%d.txt", getpid());
+				snprintf(filename, sizeof(filename), "/tmp/daos_dump_%d.txt",
+					 getpid());
 
-			fp = fopen(name, "a");
+			fp = fopen(filename, "a");
 			if (fp == NULL) {
 				D_ERROR("failed to open file to dump ABT infos and ULTs stacks: %s "
 					"(%d)\n",
@@ -1236,7 +1238,8 @@ main(int argc, char **argv)
 		 * internal infos and ULTs stacks without internal synchro
 		 */
 		if (sig == SIGUSR1) {
-			D_INFO("got SIGUSR1, dumping Argobots infos and ULTs stacks to %s\n", name);
+			D_INFO("got SIGUSR1, dumping Argobots infos and ULTs stacks to %s\n",
+			       filename);
 			dss_dump_ABT_state(fp);
 			/* re-add SIGUSR1 to set */
 			sigaddset(&set, SIGUSR1);
@@ -1250,7 +1253,7 @@ main(int argc, char **argv)
 		if (sig == SIGUSR2) {
 			D_INFO("got SIGUSR2, attempting to trigger dump of all Argobots ULTs stacks"
 			       " to %s\n",
-			       name);
+			       filename);
 			ABT_info_trigger_print_all_thread_stacks(fp, 10.0, abt_dump_done_cb, fp);
 			/* re-add SIGUSR2 to set */
 			sigaddset(&set, SIGUSR2);
