@@ -1,5 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -134,10 +135,10 @@ class TargetFailure(IorTestBase):
         self.log.info("Reintegrate rank 1 target 1")
         # Reintegrate one target and wait for rebuild to finish before reintegrating the
         # next one.
-        self.pool.reintegrate(rank="1", tgt_idx="1")
+        self.pool.reintegrate(ranks="1", tgt_idx="1")
         self.pool.measure_rebuild_time(operation="Reintegrate rank 1 -> target 1", interval=5)
         self.log.info("Reintegrate rank 0 target 1")
-        self.pool.reintegrate(rank="0", tgt_idx="1")
+        self.pool.reintegrate(ranks="0", tgt_idx="1")
         self.pool.measure_rebuild_time(operation="Reintegrate rank 0 -> target 1", interval=5)
 
         self.container.set_prop(prop='status', value="healthy")
@@ -242,7 +243,7 @@ class TargetFailure(IorTestBase):
             errors.append("Container health isn't UNCLEAN after first IOR!")
 
         # 6. Reintegrate the excluded target.
-        self.pool.reintegrate(rank="1", tgt_idx="0")
+        self.pool.reintegrate(ranks="1", tgt_idx="0")
         self.pool.measure_rebuild_time(operation="Reintegrate 1 target", interval=5)
 
         self.container.set_prop(prop='status', value="healthy")
@@ -385,7 +386,7 @@ class TargetFailure(IorTestBase):
 
         # 7. Reintegrate the excluded target.
         self.log.info("Reintegrate target")
-        self.pool[excluded_pool_num].reintegrate(rank="1", tgt_idx="0")
+        self.pool[excluded_pool_num].reintegrate(ranks="1", tgt_idx="0")
         self.pool[excluded_pool_num].measure_rebuild_time(
             operation="Reintegrate 1 target", interval=5)
 

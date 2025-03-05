@@ -1,7 +1,13 @@
+//
+// (C) Copyright 2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
+//
+// SPDX-License-Identifier: BSD-2-Clause-Patent
+//
+
 package api
 
 import (
-	"context"
 	"unsafe"
 
 	"github.com/google/uuid"
@@ -9,7 +15,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
-	"github.com/daos-stack/daos/src/control/logging"
 )
 
 /*
@@ -103,15 +108,4 @@ func ranklistFromGo(rs *ranklist.RankSet) *C.d_rank_list_t {
 	}
 
 	return rl
-}
-
-func mustLogCtx(parent context.Context, log logging.Logger) context.Context {
-	if parent == nil {
-		return nil
-	}
-	ctx, err := logging.ToContext(parent, log)
-	if err != nil {
-		panic(err)
-	}
-	return ctx
 }
