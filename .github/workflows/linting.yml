@@ -216,6 +216,19 @@ jobs:
           \[ ! -x ./utils/cq/check_update_copyright.sh \] || ./utils/cq/check_update_copyright.sh \
             $(git merge-base HEAD ${{ github.event.pull_request.base.sha || github.ref }}) gha
 
+  rpmlint:
+    runs-on: ubuntu-24.04
+    name: RPM lint check
+    steps:
+      - name: Check out source repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Install rpmlint
+        run: sudo apt-get install rpmlint
+      - name: Run check
+        run: rpmlint -f ./utils/rpms/daos.rpmlintrc ./utils/rpms/daos.spec
+
   linting-summary:
     name: Linting Summary
     runs-on: ubuntu-24.04
@@ -231,6 +244,7 @@ jobs:
       - clang-format
       - yaml-lint
       - copyright
+      - rpmlint
     if: (!cancelled())
     steps:
       - name: Check if any job failed
