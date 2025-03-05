@@ -227,7 +227,7 @@ jobs:
       - name: Install rpmlint
         run: sudo apt-get install rpmlint
       - name: Run check
-        run: rpmlint -r ./utils/rpms/daos.rpmlintrc ./utils/rpms/daos.spec
+        run: rpmlint --ignore-unused-rpmlintrc -r ./utils/rpms/daos.rpmlintrc ./utils/rpms/daos.spec
 
   linting-summary:
     name: Linting Summary
