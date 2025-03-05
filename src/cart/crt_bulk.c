@@ -310,7 +310,7 @@ crt_bulk_access(crt_bulk_t crt_bulk, d_sg_list_t *sgl)
 	if (bulk->hg_bulk_hdl == HG_BULK_NULL) {
 		*sgl = *bulk->sgl;
 	} else {
-		rc = crt_hg_bulk_access(bulk->hg_bulk_hdl, sgl);
+		rc = crt_hg_bulk_access(crt_bulk, sgl);
 	}
 
 out:
