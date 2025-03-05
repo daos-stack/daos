@@ -120,8 +120,6 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op,
 {
 	struct crt_bulk	*bulk = *crt_bulk;
 	hg_return_t	hg_ret;
-	hg_bulk_t 	tmp_hg_bulk;
-
 
 	/*
 	 * We only send 'hg_bulk_t' over the wire. During encoding stage we
@@ -167,19 +165,21 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op,
 		break;
 
 	case CRT_PROC_DECODE:
-		/* unpack mercury handle and wrap it around crt_bulk_t struct */
-		hg_ret = hg_proc_hg_bulk_t(proc, &tmp_hg_bulk);
-		if (hg_ret != HG_SUCCESS)
-			return -DER_HG;
 
 		/* TODO: need to see if avoiding this alloc is possible */
 		D_ALLOC_PTR(bulk);
 		if (!bulk)
 			return -DER_NOMEM;
 
-		bulk->hg_bulk_hdl = tmp_hg_bulk;
+		/* unpack mercury bulk handle */
+		hg_ret = hg_proc_hg_bulk_t(proc, &bulk->hg_bulk_hdl);
+		if (hg_ret != HG_SUCCESS) {
+			D_FREE(bulk);
+			return -DER_HG;
+		}
+
 		*crt_bulk = bulk;
-		return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
+		return 0;
 		break;
 
 	case CRT_PROC_FREE:
