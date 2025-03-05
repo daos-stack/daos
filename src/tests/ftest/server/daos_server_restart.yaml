@@ -13,6 +13,8 @@ server_config:
   engines_per_host: 2
   engines:
     0:
+      env_vars:
+        - ABT_THREAD_STACKSIZE=20480
       pinned_numa_node: 0
       nr_xs_helpers: 1
       fabric_iface: ib0
@@ -23,6 +25,8 @@ server_config:
           class: ram
           scm_mount: /mnt/daos0
     1:
+      env_vars:
+        - ABT_THREAD_STACKSIZE=20480
       pinned_numa_node: 1
       nr_xs_helpers: 1
       fabric_iface: ib1

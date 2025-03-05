@@ -1,8 +1,11 @@
 """
   (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import time
+
 from apricot import TestWithServers
 from avocado import fail_on
 from exception_utils import CommandFailure
@@ -148,7 +151,9 @@ class DaosServerTest(TestWithServers):
         self.restart_engine()
         self.log.info("(3) Force shutdown and restart the daos engine.")
         self.restart_engine()
-        self.log.info("(4) Verify pool list after forced shutdown and restart the daos engine.")
+        self.log.info("(4) Verify pool list after forced shutdown and restart the daos engine, and "
+                      "a small delay.")
+        time.sleep(10)
         self.verify_pool_list(pool_list)
         hosts = self.hostlist_servers
         self.hostlist_servers = hosts[-1]
