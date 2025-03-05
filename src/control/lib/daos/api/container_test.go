@@ -197,7 +197,7 @@ func TestAPI_ContainerOpen(t *testing.T) {
 				defer tc.checkParams(t)
 			}
 
-			gotResp, gotErr := ContainerOpen(mustLogCtx(tc.ctx, t), tc.openReq)
+			gotResp, gotErr := ContainerOpen(test.MustLogContext(t, tc.ctx), tc.openReq)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -267,7 +267,7 @@ func TestAPI_ContainerDestroy(t *testing.T) {
 				defer tc.checkParams(t)
 			}
 
-			gotErr := ContainerDestroy(mustLogCtx(tc.ctx, t), "", tc.poolID, tc.contID, false)
+			gotErr := ContainerDestroy(test.MustLogContext(t, tc.ctx), "", tc.poolID, tc.contID, false)
 			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
@@ -399,7 +399,7 @@ func TestAPI_getContConn(t *testing.T) {
 				defer tc.checkParams(t)
 			}
 
-			ph, cleanup, gotErr := getContConn(mustLogCtx(tc.ctx, t), "", tc.poolID, tc.contID, tc.flags)
+			ph, cleanup, gotErr := getContConn(test.MustLogContext(t, tc.ctx), "", tc.poolID, tc.contID, tc.flags)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -509,7 +509,7 @@ func TestAPI_ContainerQuery(t *testing.T) {
 				defer tc.checkParams(t)
 			}
 
-			gotResp, err := ContainerQuery(mustLogCtx(tc.ctx, t), "", tc.poolID, tc.contID)
+			gotResp, err := ContainerQuery(test.MustLogContext(t, tc.ctx), "", tc.poolID, tc.contID)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
@@ -575,7 +575,7 @@ func TestAPI_ContainerListAttributes(t *testing.T) {
 				tc.setup(t)
 			}
 
-			gotNames, err := ContainerListAttributes(mustLogCtx(tc.ctx, t), "", tc.poolID, tc.contID)
+			gotNames, err := ContainerListAttributes(test.MustLogContext(t, tc.ctx), "", tc.poolID, tc.contID)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
@@ -684,7 +684,7 @@ func TestAPI_ContainerGetAttributes(t *testing.T) {
 				defer tc.checkParams(t)
 			}
 
-			gotAttrs, err := ContainerGetAttributes(mustLogCtx(tc.ctx, t), "", tc.poolID, tc.contID, tc.attrNames...)
+			gotAttrs, err := ContainerGetAttributes(test.MustLogContext(t, tc.ctx), "", tc.poolID, tc.contID, tc.attrNames...)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
@@ -745,7 +745,7 @@ func TestAPI_ContainerSetAttributes(t *testing.T) {
 				tc.setup(t)
 			}
 
-			err := ContainerSetAttributes(mustLogCtx(tc.ctx, t), "", tc.poolID, tc.contID, tc.toSet...)
+			err := ContainerSetAttributes(test.MustLogContext(t, tc.ctx), "", tc.poolID, tc.contID, tc.toSet...)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
@@ -796,7 +796,7 @@ func TestAPI_ContainerDeleteAttributes(t *testing.T) {
 				tc.setup(t)
 			}
 
-			err := ContainerDeleteAttributes(mustLogCtx(tc.ctx, t), "", tc.poolID, tc.contID, tc.toDelete...)
+			err := ContainerDeleteAttributes(test.MustLogContext(t, tc.ctx), "", tc.poolID, tc.contID, tc.toDelete...)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
