@@ -1290,7 +1290,8 @@ main(int argc, char **argv)
 			dss_dump_ABT_state(fp);
 			/* re-add SIGUSR1 to set */
 			sigaddset(&set, SIGUSR1);
-			fclose(fp);
+			if (pr != stderr)
+				fclose(fp);
 			continue;
 		}
 
