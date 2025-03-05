@@ -1,0 +1,14 @@
+name: Check variable value
+
+on:
+  workflow_dispatch
+
+env:
+  LEAP15_VERSION: ${{ vars.LEAP15_VERSION_MASTER }}
+
+jobs:
+  print_job:
+    runs-on: [self-hosted, light]
+    steps:
+      - name: "Print variable value"
+        run: echo "LEAP15_VERSION is $LEAP15_VERSION"
