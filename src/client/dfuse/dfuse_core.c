@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1269,12 +1270,15 @@ dfuse_ie_close(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 	DFUSE_TRA_DEBUG(ie, "closing, inode %#lx ref %u, name " DF_DE ", parent %#lx",
 			ie->ie_stat.st_ino, ref, DP_DE(ie->ie_name), ie->ie_parent);
 
-	D_ASSERTF(ref == 0, "Reference is %d", ref);
-	D_ASSERTF(atomic_load_relaxed(&ie->ie_il_count) == 0, "il_count is %d",
-		  atomic_load_relaxed(&ie->ie_il_count));
-	D_ASSERTF(atomic_load_relaxed(&ie->ie_open_count) == 0, "open_count is %d",
-		  atomic_load_relaxed(&ie->ie_open_count));
-	D_ASSERT(!ie->ie_active);
+	if (ref != 0 || atomic_load_relaxed(&ie->ie_il_count) != 0 ||
+	    atomic_load_relaxed(&ie->ie_open_count) != 0 || ie->ie_active) {
+		DFUSE_TRA_WARNING(ie,
+				  "Unclean shutdown of dfuse, probably due to forced umount: "
+				  "ref=%d il_count=%d open_count=%d active=%p",
+				  ref, atomic_load_relaxed(&ie->ie_il_count),
+				  atomic_load_relaxed(&ie->ie_open_count), ie->ie_active);
+		return;
+	}
 
 	if (ie->ie_obj) {
 		rc = dfs_release(ie->ie_obj);

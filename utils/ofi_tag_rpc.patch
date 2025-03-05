@@ -1,4 +1,4 @@
-From c8cfb3e23062a30066d0aa9862d4f6c4f261ebda Mon Sep 17 00:00:00 2001
+From 00545da67770fa9d97e8f46ae69eaac265934dff Mon Sep 17 00:00:00 2001
 From: Jinshan Xiong <jinshanx@google.com>
 Date: Fri, 14 Feb 2025 17:38:37 -0800
 Subject: [PATCH] prov/tcp: drop stale messages for new endpoint
@@ -21,10 +21,10 @@ Signed-off-by: Jinshan Xiong <jinshanx@google.com>
  prov/tcp/src/xnet.h          |  2 ++
  prov/tcp/src/xnet_cq.c       |  2 +-
  prov/tcp/src/xnet_ep.c       |  1 +
- prov/tcp/src/xnet_init.c     | 12 +++++++--
+ prov/tcp/src/xnet_init.c     | 13 ++++++++--
  prov/tcp/src/xnet_progress.c | 48 +++++++++++++++++++++++++++++++++++-
  prov/tcp/src/xnet_rdm.c      |  2 ++
- 8 files changed, 75 insertions(+), 4 deletions(-)
+ 8 files changed, 76 insertions(+), 4 deletions(-)
 
 diff --git a/include/rdma/fabric.h b/include/rdma/fabric.h
 index 42c505327..2059fcbbd 100644
@@ -106,10 +106,10 @@ index 0ff5723d9..b6a7a60fd 100644
  
  	assert(ep->cm_msg);
 diff --git a/prov/tcp/src/xnet_init.c b/prov/tcp/src/xnet_init.c
-index 0805ad940..fd1f09622 100644
+index 0805ad940..ccd4b5d88 100644
 --- a/prov/tcp/src/xnet_init.c
 +++ b/prov/tcp/src/xnet_init.c
-@@ -48,8 +48,16 @@ static int xnet_getinfo(uint32_t version, const char *node, const char *service,
+@@ -48,8 +48,17 @@ static int xnet_getinfo(uint32_t version, const char *node, const char *service,
  			uint64_t flags, const struct fi_info *hints,
  			struct fi_info **info)
  {
@@ -121,7 +121,8 @@ index 0805ad940..fd1f09622 100644
 +	if (ret)
 +		return ret;
 +
-+	if (hints->ep_attr && hints->ep_attr->mem_tag_format && (*info)->ep_attr)
++	if (hints && hints->ep_attr && hints->ep_attr->mem_tag_format &&
++	    (*info) && (*info)->ep_attr)
 +		(*info)->ep_attr->mem_tag_format = hints->ep_attr->mem_tag_format;
 +
 +	return 0;
@@ -215,5 +216,5 @@ index 774568605..a18426dc0 100644
  	ret = fi_srx_context(&rdm->util_ep.domain->domain_fid, info->rx_attr,
  			     &srx, rdm);
 -- 
-2.48.1.658.g4767266eb4-goog
+2.48.1.711.g2feabab25a-goog
 

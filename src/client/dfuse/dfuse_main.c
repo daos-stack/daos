@@ -741,10 +741,19 @@ out_daos:
 		rc = rc2;
 out_fini:
 	if (dfuse_info && rc == -DER_SUCCESS) {
-		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_inode_count) == 0);
-		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_fh_count) == 0);
-		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_pool_count) == 0);
-		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_container_count) == 0);
+		if (atomic_load_relaxed(&dfuse_info->di_inode_count) != 0 ||
+		    atomic_load_relaxed(&dfuse_info->di_fh_count) != 0 ||
+		    atomic_load_relaxed(&dfuse_info->di_pool_count) != 0 ||
+		    atomic_load_relaxed(&dfuse_info->di_container_count) != 0) {
+			DFUSE_TRA_WARNING(dfuse_info,
+					  "Not all resources were cleaned up, probably"
+					  " due to forced umount: inodes=" DF_U64 " handles=" DF_U64
+					  " pools= " DF_U64 " containers=" DF_U64,
+					  atomic_load_relaxed(&dfuse_info->di_inode_count),
+					  atomic_load_relaxed(&dfuse_info->di_fh_count),
+					  atomic_load_relaxed(&dfuse_info->di_pool_count),
+					  atomic_load_relaxed(&dfuse_info->di_container_count));
+		}
 	}
 
 	DFUSE_TRA_DOWN(dfuse_info);
