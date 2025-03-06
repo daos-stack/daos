@@ -143,7 +143,7 @@ crt_bulk_bind(crt_bulk_t crt_bulk, crt_context_t crt_ctx)
 	struct crt_bulk		*bulk = crt_bulk;
 	int			rc = 0;
 
-	if (ctx == CRT_CONTEXT_NULL || bulk == NULL) {
+	if (ctx == CRT_CONTEXT_NULL || crt_bulk_is_null(crt_bulk)) {
 		D_ERROR("invalid parameter, NULL crt_ctx or crt_bulk.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
@@ -170,7 +170,7 @@ crt_bulk_addref(crt_bulk_t crt_bulk)
 	int         		rc = -DER_SUCCESS;
 	hg_return_t		hg_ret;
 
-	if (bulk == NULL) {
+	if (crt_bulk_is_null(bulk)) {
 		D_ERROR("invalid parameter, NULL bulk\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
@@ -197,9 +197,13 @@ crt_bulk_free(crt_bulk_t crt_bulk)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	/* This can happen if D_QUOTA_BULKS is enabled */
-	if (bulk->hg_bulk_hdl == HG_BULK_NULL)
-		D_GOTO(out, rc = DER_SUCCESS);
+	/* Handle deferred bulks, see D_QUOTA_BULKS */
+	if (bulk->hg_bulk_hdl == HG_BULK_NULL) {
+		if (bulk->deferred)
+			D_GOTO(out, rc = DER_SUCCESS);
+		else
+			D_GOTO(out, rc = -DER_INVAL);
+	}
 
 	hg_ret = HG_Bulk_free(bulk->hg_bulk_hdl);
 	if (hg_ret != HG_SUCCESS) {
@@ -263,7 +267,7 @@ crt_bulk_get_len(crt_bulk_t crt_bulk, size_t *bulk_len)
 		return -DER_INVAL;
 	}
 
-	if (bulk == NULL || bulk->hg_bulk_hdl == HG_BULK_NULL) {
+	if (crt_bulk_is_null(crt_bulk)) {
 		D_ERROR("bulk is NULL\n");
 		return -DER_INVAL;
 	}
@@ -278,7 +282,13 @@ bool
 crt_bulk_is_null(crt_bulk_t crt_bulk) {
 	struct crt_bulk *bulk = crt_bulk;
 
-	return (bulk == NULL || bulk->hg_bulk_hdl == HG_BULK_NULL);
+	if (bulk == NULL)
+		return true;
+
+	if (bulk->deferred)
+		return false;
+
+	return (bulk->hg_bulk_hdl == HG_BULK_NULL);
 }
 
 int
@@ -305,9 +315,8 @@ int
 crt_bulk_access(crt_bulk_t crt_bulk, d_sg_list_t *sgl)
 {
 	int		rc = 0;
-	struct crt_bulk	*bulk = crt_bulk;
 
-	if (bulk == NULL || bulk->hg_bulk_hdl == HG_BULK_NULL) {
+	if (crt_bulk_is_null(crt_bulk)) {
 		D_ERROR("invalid parameter, NULL bulk.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}

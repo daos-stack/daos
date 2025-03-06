@@ -578,7 +578,7 @@ do_bulk_transfer_sgl(crt_rpc_t *rpc, crt_bulk_t bulk, d_sg_list_t *sgl, int sgl_
 	crt_bulk_opid_t       bulk_opid;
 	int                   rc;
 
-	if (bulk == NULL) {
+	if (crt_bulk_is_null(bulk)) {
 		D_ERROR("Remote bulk is NULL\n");
 		return -DER_INVAL;
 	}

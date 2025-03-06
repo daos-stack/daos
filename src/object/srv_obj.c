@@ -340,7 +340,7 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 	size_t			remote_size;
 	int			rc, bulk_iovs = 0;
 
-	if (remote_bulk == NULL) {
+	if (crt_bulk_is_null(remote_bulk)) {
 		D_ERROR("Remote bulk is NULL\n");
 		return -DER_INVAL;
 	}

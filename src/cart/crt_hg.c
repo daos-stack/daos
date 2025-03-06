@@ -1815,7 +1815,7 @@ crt_hg_bulk_access(crt_bulk_t crt_bulk, d_sg_list_t *sgl)
 	bool		  allocate = false;
 	struct crt_bulk	 *bulk = crt_bulk;
 
-	D_ASSERT(crt_bulk != NULL && sgl != NULL);
+	D_ASSERT(!crt_bulk_is_null(crt_bulk) && sgl != NULL);
 
 	rc = crt_bulk_get_sgnum(crt_bulk, &bulk_sgnum);
 	if (rc != 0) {
