@@ -311,12 +311,7 @@ crt_bulk_access(crt_bulk_t crt_bulk, d_sg_list_t *sgl)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	if (bulk->hg_bulk_hdl == HG_BULK_NULL) {
-		*sgl = *bulk->sgl;
-	} else {
-		rc = crt_hg_bulk_access(crt_bulk, sgl);
-	}
-
+	rc = crt_hg_bulk_access(crt_bulk, sgl);
 out:
 	return rc;
 }
