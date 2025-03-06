@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1344,7 +1345,7 @@ d_hhash_key_type(uint64_t key)
 	return d_hhash_key_isptr(key) ? D_HTYPE_PTR : key & D_HTYPE_MASK;
 }
 
-struct traverse_args {
+struct hhash_traverse_args {
 	int                   type;
 	d_hhash_traverse_cb_t cb;
 	void                 *arg;
@@ -1353,7 +1354,7 @@ struct traverse_args {
 static int
 d_hhash_cb(d_list_t *link, void *args)
 {
-	struct traverse_args *targs = args;
+	struct hhash_traverse_args *targs = args;
 	struct d_hlink       *hlink = link2hlink(link);
 	uint64_t              key;
 
@@ -1371,7 +1372,7 @@ d_hhash_cb(d_list_t *link, void *args)
 int
 d_hhash_traverse(struct d_hhash *hhash, int type, d_hhash_traverse_cb_t cb, void *arg)
 {
-	struct traverse_args args;
+	struct hhash_traverse_args args;
 
 	args.type = type;
 	args.cb   = cb;
@@ -1564,4 +1565,29 @@ void
 d_uhash_link_delete(struct d_hash_table *htable, struct d_ulink *ulink)
 {
 	d_hash_rec_delete_at(htable, &ulink->ul_link.rl_link);
+}
+
+struct uhash_traverse_args {
+	d_uhash_traverse_cb_t cb;
+	void                 *arg;
+};
+
+static int
+d_uhash_cb(d_list_t *link, void *args)
+{
+	struct uhash_traverse_args *targs = args;
+
+	if (link == NULL) {
+		return 0;
+	}
+
+	return targs->cb(link2ulink(link), targs->arg);
+}
+
+int
+d_uhash_traverse(struct d_hash_table *htable, d_uhash_traverse_cb_t cb, void *arg)
+{
+	struct uhash_traverse_args args = {.cb = cb, .arg = arg};
+
+	return d_hash_table_traverse(htable, d_uhash_cb, &args);
 }

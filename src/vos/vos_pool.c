@@ -2116,3 +2116,53 @@ vos_pool_feature_skip_dtx_resync(daos_handle_t poh)
 
 	return vos_pool->vp_pool_df->pd_compat_flags & VOS_POOL_COMPAT_FLAG_SKIP_DTX_RESYNC;
 }
+
+/**
+ * Just close the pool if is a PMEM pool.
+ *
+ * Note: This procedure leaves the volatile bookkeeping in an inconsistent state. It is designed as
+ * the last step before terminating the process.
+ */
+static int
+force_close_pmem_cb(struct d_ulink *ulink, void *arg)
+{
+	struct vos_pool  *pool = pool_hlink2ptr(ulink);
+	struct umem_pool *ph_p = pool->vp_umm.umm_pool;
+	if (ph_p == NULL) {
+		return 0;
+	}
+
+	/** Close only PMEM pools. */
+	if (ph_p->up_store.store_type == DAOS_MD_PMEM) {
+		umempobj_close(pool->vp_umm.umm_pool);
+	}
+
+	return 0;
+}
+
+void
+vos_pool_force_close_all_pmem(bool is_sysdb)
+{
+	struct vos_tls      *tls;
+	struct d_hash_table *htable;
+	int                  rc;
+
+	/** sysdb is not stored in the VOS' TLS so no need to check whether it is present. */
+	if (!is_sysdb) {
+		/** VOS' TLS may be not present for the given thread/execution stream. */
+		tls = vos_tls_get(is_sysdb);
+		if (tls == NULL) {
+			return;
+		}
+	}
+
+	/** The getter below conducts no checks so the check above is necessary. */
+	htable = vos_pool_hhash_get(is_sysdb);
+	if (htable != NULL) {
+		rc = d_uhash_traverse(htable, force_close_pmem_cb, NULL);
+		if (rc != 0) {
+			D_ERROR("d_uhash_traverse failed: %d\n", rc);
+			/** Nothing more can be done. Continue. */
+		}
+	}
+}
