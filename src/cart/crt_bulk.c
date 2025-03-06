@@ -296,7 +296,7 @@ crt_bulk_access(crt_bulk_t crt_bulk, d_sg_list_t *sgl)
 	int		rc = 0;
 	struct crt_bulk	*bulk = crt_bulk;
 
-	if (bulk == NULL) {
+	if (bulk == NULL || bulk->hg_bulk_hdl == HG_BULK_NULL) {
 		D_ERROR("invalid parameter, NULL bulk.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
