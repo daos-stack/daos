@@ -120,6 +120,7 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op,
 {
 	struct crt_bulk *bulk = *crt_bulk;
 	hg_return_t	hg_ret;
+	hg_bulk_t 	hg_empty_bulk = HG_BULK_NULL;
 
 	/*
 	 * We only send 'hg_bulk_t' over the wire. During encoding stage we
@@ -130,15 +131,16 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op,
 	case CRT_PROC_ENCODE:
 		/* bulk can be an optional in rpc args */
 		if (!bulk) {
-			hg_bulk_t tmp_bulk = HG_BULK_NULL;
-			hg_ret = hg_proc_hg_bulk_t(proc, (hg_bulk_t *)&tmp_bulk);
+			hg_ret = hg_proc_hg_bulk_t(proc, (hg_bulk_t *)&hg_empty_bulk);
 			return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
 		}
 
 		/* Deferred allocation as a result of D_QUOTA_BULKS limit */
-		if (bulk->hg_bulk_hdl == HG_BULK_NULL) {
+		if (bulk->deferred) {
 			struct crt_context	*ctx;
 			int			rc;
+
+			D_ASSERT(bulk->hg_bulk_hdl == HG_BULK_NULL);
 
 			/* Create actual mercury handle based on remembered params */
 			ctx = bulk->crt_ctx;
@@ -149,13 +151,14 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op,
 				return -DER_HG;
 
 			record_quota_resource(ctx, CRT_QUOTA_BULKS);
+			bulk->deferred = false;
 
 			if (bulk->bound) {
 				rc = crt_hg_bulk_bind(bulk->hg_bulk_hdl, &ctx->cc_hg_ctx);
 				if (rc != 0) {
 					D_ERROR("Failed to bind bulk during proc\n");
 					/* free will return quota resource */
-					crt_bulk_free(bulk->hg_bulk_hdl);
+					crt_bulk_free(bulk);
 					return -DER_HG;
 				}
 			}
@@ -173,6 +176,8 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op,
 		if (!bulk)
 			return -DER_NOMEM;
 
+		bulk->deferred = false;
+
 		/* unpack mercury bulk handle */
 		hg_ret = hg_proc_hg_bulk_t(proc, &bulk->hg_bulk_hdl);
 		if (hg_ret != HG_SUCCESS) {
@@ -185,7 +190,11 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op,
 		break;
 
 	case CRT_PROC_FREE:
-		hg_ret = hg_proc_hg_bulk_t(proc, &bulk->hg_bulk_hdl);
+		if (!bulk) {
+			hg_ret = hg_proc_hg_bulk_t(proc, &hg_empty_bulk);
+		} else {
+			hg_ret = hg_proc_hg_bulk_t(proc, &bulk->hg_bulk_hdl);
+		}
 
 		D_FREE(bulk);
 		*crt_bulk = NULL;

@@ -1065,6 +1065,17 @@ crt_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl);
 int
 crt_bulk_free(crt_bulk_t bulk_hdl);
 
+
+/**
+ * Checks if bulk is empty
+ *
+ * \param[in] bulk_hdl         bulk handle to check
+ *
+ * \return                     true if bulk is empty, false otherwise
+ */
+bool
+crt_bulk_is_null(crt_bulk_t crt_bulk);
+
 /**
  * Start a bulk transferring (inside an RPC handler).
  *

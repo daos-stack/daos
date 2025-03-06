@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -2078,7 +2079,7 @@ obj_bulk_fini(struct obj_auxi_args *obj_auxi)
 		return;
 
 	for (i = 0; i < nr; i++)
-		if (bulks[i] != CRT_BULK_NULL)
+		if (!crt_bulk_is_null(bulks[i]))
 			crt_bulk_free(bulks[i]);
 
 	D_FREE(bulks);

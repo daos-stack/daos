@@ -54,8 +54,8 @@ crt_bulk_desc_valid(struct crt_bulk_desc *bulk_desc)
 {
 	if (bulk_desc == NULL || bulk_desc->bd_rpc == NULL ||
 	    bulk_desc->bd_rpc->cr_ctx == CRT_CONTEXT_NULL ||
-	    bulk_desc->bd_remote_hdl == CRT_BULK_NULL ||
-	    bulk_desc->bd_local_hdl == CRT_BULK_NULL ||
+		crt_bulk_is_null(bulk_desc->bd_remote_hdl) ||
+		crt_bulk_is_null(bulk_desc->bd_local_hdl) ||
 	    (bulk_desc->bd_bulk_op != CRT_BULK_PUT &&
 	     bulk_desc->bd_bulk_op != CRT_BULK_GET) ||
 	    bulk_desc->bd_len == 0) {
@@ -110,24 +110,28 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 
 	quota_rc = get_quota_resource(crt_ctx, CRT_QUOTA_BULKS);
 	if (quota_rc ==  -DER_QUOTA_LIMIT) {
-		D_INFO("Exceeded bulk limit\n");
+		D_DEBUG(DB_ALL, "Exceeded bulk limit\n");
 		ret_hdl->bound = false;
 		ret_hdl->sgl = sgl;
 		ret_hdl->bulk_perm = bulk_perm;
 		ret_hdl->hg_bulk_hdl = HG_BULK_NULL;
 		ret_hdl->crt_ctx = crt_ctx;
+		ret_hdl->deferred = true;
 		D_GOTO(out, rc = DER_SUCCESS);
 	}
 
-	ret_hdl->crt_ctx = crt_ctx;
-
 	rc = crt_hg_bulk_create(&ctx->cc_hg_ctx, sgl, bulk_perm, &ret_hdl->hg_bulk_hdl);
-	if (rc != 0)
-		D_ERROR("crt_hg_bulk_create() failed, rc: "DF_RC"\n",
-			DP_RC(rc));
+	if (rc != 0) {
+		D_ERROR("crt_hg_bulk_create() failed, rc: "DF_RC"\n", DP_RC(rc));
+		put_quota_resource(crt_ctx, CRT_QUOTA_BULKS);
+		D_FREE(ret_hdl);
+		D_GOTO(out, rc);
+	}
 
+	ret_hdl->deferred = false;
+	ret_hdl->crt_ctx = crt_ctx;
 out:
-	if (bulk_hdl)
+	if (rc == 0 && bulk_hdl)
 		*bulk_hdl = ret_hdl;
 	return rc;
 }
@@ -268,6 +272,13 @@ crt_bulk_get_len(crt_bulk_t crt_bulk, size_t *bulk_len)
 	*bulk_len = hg_size;
 
 	return 0;
+}
+
+bool
+crt_bulk_is_null(crt_bulk_t crt_bulk) {
+	struct crt_bulk *bulk = crt_bulk;
+
+	return (bulk == NULL || bulk->hg_bulk_hdl == HG_BULK_NULL);
 }
 
 int

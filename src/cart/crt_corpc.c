@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -68,7 +69,7 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 		co_hdr->coh_root = grp_root;
 	}
 
-	D_ASSERT(co_hdr->coh_bulk_hdl == CRT_BULK_NULL);
+	D_ASSERT(crt_bulk_is_null(co_hdr->coh_bulk_hdl));
 	co_hdr->coh_bulk_hdl = co_bulk_hdl;
 
 	rpc_priv->crp_corpc_info = co_info;
@@ -214,7 +215,7 @@ crt_corpc_free_chained_bulk(crt_bulk_t bulk_hdl)
 	uint32_t	 seg_num;
 	int		 i, rc = 0;
 
-	if (bulk_hdl == CRT_BULK_NULL)
+	if (crt_bulk_is_null(bulk_hdl))
 		return 0;
 
 	sgl.sg_nr = 0;
@@ -281,7 +282,8 @@ crt_corpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 	/* handle possible chained bulk first and then initiate the corpc */
 	co_hdr = &rpc_priv->crp_coreq_hdr;
 	parent_bulk_hdl = co_hdr->coh_bulk_hdl;
-	if (parent_bulk_hdl != CRT_BULK_NULL) {
+
+	if (!crt_bulk_is_null(parent_bulk_hdl)) {
 		rc = crt_bulk_get_len(parent_bulk_hdl, &bulk_len);
 		if (rc != 0 || bulk_len == 0) {
 			RPC_ERROR(rpc_priv, "crt_bulk_get_len failed: "

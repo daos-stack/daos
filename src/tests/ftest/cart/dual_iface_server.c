@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -431,7 +432,7 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 		if (addr != NULL && size != 0)
 			munmap(addr, size);
 
-		if (bulk_hdl != CRT_BULK_NULL)
+		if (!crt_bulk_is_null(bulk_hdl))
 			crt_bulk_free(bulk_hdl);
 	}
 

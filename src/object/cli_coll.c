@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -544,7 +545,7 @@ dc_obj_coll_punch_cb(tse_task_t *task, void *data)
 	struct obj_coll_punch_cb_args	*cpca = data;
 
 	if (cpca->cpca_bulks != NULL) {
-		if (cpca->cpca_bulks[0] != CRT_BULK_NULL)
+		if (!crt_bulk_is_null(cpca->cpca_bulks[0]))
 			crt_bulk_free(cpca->cpca_bulks[0]);
 		D_FREE(cpca->cpca_bulks);
 	}
@@ -834,7 +835,7 @@ out:
 		  DP_OID(obj->cob_md.omd_id), map_ver, task);
 
 	if (cpca.cpca_bulks != NULL) {
-		if (cpca.cpca_bulks[0] != CRT_BULK_NULL)
+		if (!crt_bulk_is_null(cpca.cpca_bulks[0]))
 			crt_bulk_free(cpca.cpca_bulks[0]);
 		D_FREE(cpca.cpca_bulks);
 	}

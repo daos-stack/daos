@@ -272,7 +272,7 @@ bulk_cp(const struct crt_bulk_cb_info *cb_info)
 	struct crt_bulk_desc	*bulk_desc;
 
 	bulk_desc = cb_info->bci_bulk_desc;
-	D_ASSERT(bulk_desc->bd_local_hdl != CRT_BULK_NULL);
+	D_ASSERT(!crt_bulk_is_null(bulk_desc->bd_local_hdl));
 	crt_bulk_free(bulk_desc->bd_local_hdl);
 	bulk_desc->bd_local_hdl = CRT_BULK_NULL;
 
@@ -2559,7 +2559,7 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 
 	D_ASSERT(ioc.ioc_coc != NULL);
 	dkey = (daos_key_t *)&oea->ea_dkey;
-	if (parity_bulk != CRT_BULK_NULL) {
+	if (!crt_bulk_is_null(parity_bulk)) {
 		rc = vos_update_begin(ioc.ioc_coc->sc_hdl, oea->ea_oid, oea->ea_epoch_range.epr_hi,
 				      VOS_OF_REBUILD, dkey, 1, iod, iod_csums, 0, &ioh, NULL);
 		if (rc) {

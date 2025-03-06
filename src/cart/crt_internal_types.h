@@ -402,6 +402,7 @@ struct crt_quotas {
  */
 struct crt_bulk {
 	hg_bulk_t	hg_bulk_hdl;	/** mercury bulk handle */
+	bool		deferred;	/** whether allocation is deferred */
 	crt_context_t	crt_ctx;	/** context on which bulk is to be created  */
 	bool		bound;		/** whether crt_bulk_bind() was used on it */
 	d_sg_list_t	*sgl;		/** original sgl */

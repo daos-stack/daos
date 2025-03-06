@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -408,7 +409,7 @@ dc_tx_cleanup_one(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr)
 		csummer = tx->tx_co->dc_csummer;
 		if (dcu->dcu_flags & ORF_CPD_BULK) {
 			for (i = 0; i < dcsr->dcsr_nr; i++) {
-				if (dcu->dcu_bulks[i] != CRT_BULK_NULL)
+				if (!crt_bulk_is_null(dcu->dcu_bulks[i]))
 					crt_bulk_free(dcu->dcu_bulks[i]);
 			}
 
@@ -523,7 +524,7 @@ dc_tx_cleanup(struct dc_tx *tx)
 
 	if (tx->tx_reqs.dcs_type == DCST_BULK_REQ) {
 		if (tx->tx_reqs_bulk.dcb_bulk != NULL) {
-			if (tx->tx_reqs_bulk.dcb_bulk[0] != CRT_BULK_NULL)
+			if (!crt_bulk_is_null(tx->tx_reqs_bulk.dcb_bulk[0]))
 				crt_bulk_free(tx->tx_reqs_bulk.dcb_bulk[0]);
 			D_FREE(tx->tx_reqs_bulk.dcb_bulk);
 		}
@@ -540,7 +541,7 @@ dc_tx_cleanup(struct dc_tx *tx)
 
 	if (tx->tx_head.dcs_type == DCST_BULK_HEAD) {
 		if (tx->tx_head_bulk.dcb_bulk != NULL) {
-			if (tx->tx_head_bulk.dcb_bulk[0] != CRT_BULK_NULL)
+			if (!crt_bulk_is_null(tx->tx_head_bulk.dcb_bulk[0]))
 				crt_bulk_free(tx->tx_head_bulk.dcb_bulk[0]);
 			D_FREE(tx->tx_head_bulk.dcb_bulk);
 		}
@@ -557,7 +558,7 @@ dc_tx_cleanup(struct dc_tx *tx)
 
 	if (tx->tx_disp.dcs_type == DCST_BULK_ENT) {
 		if (tx->tx_disp_bulk.dcb_bulk != NULL) {
-			if (tx->tx_disp_bulk.dcb_bulk[0] != CRT_BULK_NULL)
+			if (!crt_bulk_is_null(tx->tx_disp_bulk.dcb_bulk[0]))
 				crt_bulk_free(tx->tx_disp_bulk.dcb_bulk[0]);
 			D_FREE(tx->tx_disp_bulk.dcb_bulk);
 		}
@@ -577,7 +578,7 @@ dc_tx_cleanup(struct dc_tx *tx)
 
 	if (tx->tx_tgts.dcs_type == DCST_BULK_TGT) {
 		if (tx->tx_tgts_bulk.dcb_bulk != NULL) {
-			if (tx->tx_tgts_bulk.dcb_bulk[0] != CRT_BULK_NULL)
+			if (!crt_bulk_is_null(tx->tx_tgts_bulk.dcb_bulk[0]))
 				crt_bulk_free(tx->tx_tgts_bulk.dcb_bulk[0]);
 			D_FREE(tx->tx_tgts_bulk.dcb_bulk);
 		}

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -541,7 +542,7 @@ pipeline_bulk_comp_cb(const struct crt_bulk_cb_info *cb_info)
 	crt_rpc_t                  *rpc;
 
 	bulk_desc               = cb_info->bci_bulk_desc;
-	D_ASSERT(bulk_desc->bd_local_hdl != CRT_BULK_NULL);
+	D_ASSERT(!crt_bulk_is_null(bulk_desc->bd_local_hdl));
 	crt_bulk_free(bulk_desc->bd_local_hdl);
 	bulk_desc->bd_local_hdl = CRT_BULK_NULL;
 
