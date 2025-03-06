@@ -286,6 +286,7 @@ func TestAPI_getContConn(t *testing.T) {
 	for name, tc := range map[string]struct {
 		setup       func(t *testing.T)
 		ctx         context.Context
+		sysName     string
 		poolID      string
 		contID      string
 		flags       daos.ContainerOpenFlag
@@ -371,6 +372,24 @@ func TestAPI_getContConn(t *testing.T) {
 			},
 			expHdl: defaultContainerHandle(),
 		},
+		"pool handle from Connect() with non-default sys name; container handle from Open()": {
+			ctx:     test.Context(t),
+			sysName: "non-default",
+			poolID:  testPoolName,
+			contID:  testContName,
+			checkParams: func(t *testing.T) {
+				test.CmpAny(t, "pool connect count", 1, daos_pool_connect_Count)
+				test.CmpAny(t, "poolID", testPoolName, daos_pool_connect_SetPoolID)
+				test.CmpAny(t, "sysName", "non-default", daos_pool_connect_SetSys)
+				test.CmpAny(t, "connect flags", daos.PoolConnectFlagReadOnly, daos_pool_connect_SetFlags)
+				test.CmpAny(t, "pool query", daos.PoolQueryMask(0), daos_pool_connect_QueryMask)
+
+				test.CmpAny(t, "cont open count", 1, daos_cont_open_Count)
+				test.CmpAny(t, "contID", testContName, daos_cont_open_SetContainerID)
+				test.CmpAny(t, "open flags", daos.ContainerOpenFlagReadOnly, daos_cont_open_SetFlags)
+			},
+			expHdl: defaultContainerHandle(),
+		},
 		"pool handle from Connect(); container handle from Open()": {
 			ctx:    test.Context(t),
 			poolID: testPoolName,
@@ -378,7 +397,7 @@ func TestAPI_getContConn(t *testing.T) {
 			checkParams: func(t *testing.T) {
 				test.CmpAny(t, "pool connect count", 1, daos_pool_connect_Count)
 				test.CmpAny(t, "poolID", testPoolName, daos_pool_connect_SetPoolID)
-				test.CmpAny(t, "sysName", build.DefaultSystemName, daos_pool_connect_SetSys)
+				test.CmpAny(t, "sysName", "", daos_pool_connect_SetSys)
 				test.CmpAny(t, "connect flags", daos.PoolConnectFlagReadOnly, daos_pool_connect_SetFlags)
 				test.CmpAny(t, "pool query", daos.PoolQueryMask(0), daos_pool_connect_QueryMask)
 
@@ -399,7 +418,7 @@ func TestAPI_getContConn(t *testing.T) {
 				defer tc.checkParams(t)
 			}
 
-			ph, cleanup, gotErr := getContConn(test.MustLogContext(t, tc.ctx), "", tc.poolID, tc.contID, tc.flags)
+			ph, cleanup, gotErr := getContConn(test.MustLogContext(t, tc.ctx), tc.sysName, tc.poolID, tc.contID, tc.flags)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
