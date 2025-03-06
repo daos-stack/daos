@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,6 +11,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -105,6 +107,7 @@ type JoinRequest struct {
 	FaultDomain             *FaultDomain
 	Incarnation             uint64
 	CheckMode               bool
+	ReplaceMode             bool
 }
 
 // JoinResponse contains information returned from join membership update.
@@ -130,12 +133,19 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 	if !req.Rank.Equals(NilRank) {
 		curMember, err = m.db.FindMemberByRank(req.Rank)
 	} else {
+		// This should fail for req.ReplaceMode case as UUID is new.
 		curMember, err = m.db.FindMemberByUUID(req.UUID)
 	}
+
+	// Request for an existing MS-db member.
 	if err == nil {
+		if req.ReplaceMode {
+			return nil, errors.New("rejoin request unexpectedly matches db entry")
+		}
+
 		// Fault domain check only matters if there are other members
 		// besides the one being updated.
-		if count, err := m.db.MemberCount(); err != nil {
+		if count, err := m.Count(); err != nil {
 			return nil, err
 		} else if count != 1 {
 			if err := m.checkReqFaultDomain(req); err != nil {
@@ -198,11 +208,93 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 	if !IsMemberNotFound(err) {
 		return nil, err
 	}
+	err = nil
+
+	// If in replace mode, attempt to update UUID of existing member if identical control
+	// address and fabric URIs. Neither UUID or rank in request will match MS-db member.
+	if req.ReplaceMode {
+		if !req.Rank.Equals(NilRank) {
+			return nil, errors.New("unexpected rank in rejoin request")
+		}
+
+		oldCount, err := m.Count()
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to get member count")
+		}
+		currentMembers, err := m.db.AllMembers()
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to get all members")
+		}
+
+		var memberToReplace *Member
+		for _, cm := range currentMembers {
+			// Only match identical member with different UUID.
+			switch {
+			case cm.Addr.String() != req.ControlAddr.String(),
+				cm.PrimaryFabricURI != req.PrimaryFabricURI,
+				!slices.Equal(cm.SecondaryFabricURIs,
+					req.SecondaryFabricURIs),
+				cm.PrimaryFabricContexts != req.FabricContexts,
+				!slices.Equal(cm.SecondaryFabricContexts,
+					req.SecondaryFabricContexts),
+				!cm.FaultDomain.Equals(req.FaultDomain):
+				continue
+			}
+
+			if cm.UUID == req.UUID {
+				return nil, errors.New("unexpected matching uuid in rejoin request")
+			}
+
+			memberToReplace = new(Member)
+			*memberToReplace = *cm
+			if err := m.db.RemoveMember(cm); err != nil {
+				return nil, err
+			}
+			break
+		}
+		if memberToReplace == nil {
+			return nil, errors.Errorf("rejoin failed for request %+v, no such member "+
+				"exists", req)
+		}
+
+		// Update (remove then add) member with new UUID and set state to joined (regardless
+		// of previous state). Retain existing member record incarnation value.
+
+		m.log.Debugf("rejoin: updating member with UUID %s->%s", memberToReplace.UUID,
+			req.UUID)
+
+		resp.PrevState = memberToReplace.State
+		memberToReplace.State = MemberStateJoined
+		memberToReplace.Info = ""
+		memberToReplace.UUID = req.UUID
+
+		if err := m.db.AddMember(memberToReplace); err != nil {
+			return nil, errors.Wrap(err, "adding new uuid member in rejoin")
+		}
+
+		newCount, err := m.Count()
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to get member count")
+		}
+		if newCount != oldCount {
+			return nil, errors.Errorf("expect the same number of members before and "+
+				"after rejoin, want %d got %d", oldCount, newCount)
+		}
+
+		resp.Member = memberToReplace
+		resp.MapVersion, err = m.db.CurMapVersion()
+		if err != nil {
+			return nil, err
+		}
+
+		return resp, err
+	}
 
 	if err := m.checkReqFaultDomain(req); err != nil {
 		return nil, err
 	}
 
+	// Process join request for a new rank.
 	newMember := &Member{
 		Rank:                    req.Rank,
 		Incarnation:             req.Incarnation,

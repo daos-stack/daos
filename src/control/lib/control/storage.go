@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -310,6 +311,7 @@ type (
 	StorageFormatReq struct {
 		unaryRequest
 		Reformat bool `json:"reformat"`
+		Rejoin   bool `json:"rejoin"`
 	}
 
 	// StorageFormatResp contains the response from a storage format request.
