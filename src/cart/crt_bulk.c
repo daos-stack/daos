@@ -264,8 +264,10 @@ crt_bulk_get_len(crt_bulk_t crt_bulk, size_t *bulk_len)
 		return -DER_INVAL;
 	}
 
-	if (bulk->hg_bulk_hdl == HG_BULK_NULL)
-		return -DER_NOTSUPPORTED;
+	if (bulk->hg_bulk_hdl == HG_BULK_NULL) {
+		*bulk_len = 0;
+		return 0;
+	}
 
 	hg_size   = HG_Bulk_get_size(bulk->hg_bulk_hdl);
 	*bulk_len = hg_size;
@@ -282,8 +284,10 @@ crt_bulk_get_sgnum(crt_bulk_t crt_bulk, unsigned int *bulk_sgnum)
 	D_ASSERT(bulk_sgnum != NULL);
 	D_ASSERT(bulk != NULL);
 
-	if (bulk->hg_bulk_hdl == HG_BULK_NULL)
-		return -DER_NOTSUPPORTED;
+	if (bulk->hg_bulk_hdl == HG_BULK_NULL) {
+		*bulk_sgnum = 0;
+		return 0;
+	}
 
 	hg_sgnum    = HG_Bulk_get_segment_count(bulk->hg_bulk_hdl);
 	*bulk_sgnum = hg_sgnum;
