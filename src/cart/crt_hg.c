@@ -1787,11 +1787,12 @@ out:
 }
 
 int
-crt_hg_bulk_bind(crt_bulk_t bulk_hdl, struct crt_hg_context *hg_ctx)
+crt_hg_bulk_bind(crt_bulk_t crt_bulk, struct crt_hg_context *hg_ctx)
 {
-	hg_return_t	  hg_ret = HG_SUCCESS;
+	struct crt_bulk	*bulk = crt_bulk;
+	hg_return_t	hg_ret = HG_SUCCESS;
 
-	hg_ret = HG_Bulk_bind(bulk_hdl, hg_ctx->chc_hgctx);
+	hg_ret = HG_Bulk_bind(bulk->hg_bulk_hdl, hg_ctx->chc_hgctx);
 	if (hg_ret != HG_SUCCESS)
 		D_ERROR("HG_Bulk_bind failed, hg_ret " DF_HG_RC "\n",
 			DP_HG_RC(hg_ret));
@@ -1800,7 +1801,7 @@ crt_hg_bulk_bind(crt_bulk_t bulk_hdl, struct crt_hg_context *hg_ctx)
 }
 
 int
-crt_hg_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl)
+crt_hg_bulk_access(crt_bulk_t crt_bulk, d_sg_list_t *sgl)
 {
 	unsigned int	  bulk_sgnum;
 	unsigned int	  actual_sgnum;
@@ -1809,19 +1810,19 @@ crt_hg_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl)
 	void		 *buf_ptrs_stack[CRT_HG_IOVN_STACK];
 	hg_size_t	 *buf_sizes = NULL;
 	hg_size_t	  buf_sizes_stack[CRT_HG_IOVN_STACK];
-	hg_bulk_t	  hg_bulk_hdl;
 	hg_return_t	  hg_ret = HG_SUCCESS;
 	int		  rc = 0, i;
 	bool		  allocate = false;
+	struct crt_bulk	 *bulk = crt_bulk;
 
-	D_ASSERT(bulk_hdl != CRT_BULK_NULL && sgl != NULL);
+	D_ASSERT(crt_bulk != NULL && sgl != NULL);
 
-	rc = crt_bulk_get_sgnum(bulk_hdl, &bulk_sgnum);
+	rc = crt_bulk_get_sgnum(crt_bulk, &bulk_sgnum);
 	if (rc != 0) {
 		D_ERROR("crt_bulk_get_sgnum failed, rc: %d.\n", rc);
 		D_GOTO(out, rc);
 	}
-	rc = crt_bulk_get_len(bulk_hdl, &bulk_len);
+	rc = crt_bulk_get_len(crt_bulk, &bulk_len);
 	if (rc != 0) {
 		D_ERROR("crt_bulk_get_len failed, rc: %d.\n", rc);
 		D_GOTO(out, rc);
@@ -1850,8 +1851,7 @@ crt_hg_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl)
 		allocate = true;
 	}
 
-	hg_bulk_hdl = bulk_hdl;
-	hg_ret = HG_Bulk_access(hg_bulk_hdl, 0, bulk_len, HG_BULK_READWRITE,
+	hg_ret = HG_Bulk_access(bulk->hg_bulk_hdl, 0, bulk_len, HG_BULK_READWRITE,
 				bulk_sgnum, buf_ptrs, buf_sizes, &actual_sgnum);
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Bulk_access failed, hg_ret: " DF_HG_RC "\n",
