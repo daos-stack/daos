@@ -663,12 +663,10 @@ do_dtx_rec_release(struct umem_instance *umm, struct vos_container *cont,
 	}
 
 	if (unlikely(rc == -DER_NONEXIST)) {
-		struct vos_tls	*tls = vos_tls_get(false);
-
 		D_WARN("DTX record no longer exists, may indicate some corruption: "
 		       DF_DTI " type %u, discard\n",
 		       DP_DTI(&DAE_XID(dae)), dtx_umoff_flag2type(rec));
-		d_tm_inc_gauge(tls->vtl_invalid_dtx, 1);
+		d_tm_inc_counter(vos_tls_get(false)->vtl_invalid_dtx, 1);
 	}
 
 	return rc;
