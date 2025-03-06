@@ -487,10 +487,29 @@ common_init_cb(void *arg, int rc)
 	cp_arg->cca_rc = daos_errno2der(-rc);
 }
 
+struct subsystem_init_arg {
+	struct common_cp_arg *cp_arg;
+	void                 *json_data;
+	size_t                json_data_size;
+};
+
 static void
 subsys_init_cb(int rc, void *arg)
 {
+	struct subsystem_init_arg *init_arg = arg;
+
+	if (init_arg->json_data != NULL) {
+		free(init_arg->json_data);
+		init_arg->json_data = NULL;
+	}
+
+	if (rc)
+		D_ERROR("subsystem init failed: %d\n", rc);
+
+	init_arg->cp_arg->cca_rc = rc;
 	common_init_cb(arg, rc);
+
+	return;
 }
 
 static void
@@ -1557,35 +1576,10 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 	D_FREE(ctxt);
 }
 
-struct subsystem_init_arg {
-	struct common_cp_arg *cp_arg;
-	void                 *json_data;
-	size_t                json_data_size;
-};
-
-static void
-subsystem_init_arg_fini(void *arg, int rc)
-{
-	struct subsystem_init_arg *init_arg = arg;
-
-	if (init_arg->json_data != NULL) {
-		free(init_arg->json_data);
-		init_arg->json_data = NULL;
-	}
-
-	if (rc)
-		D_ERROR("subsystem init failed: %d\n", rc);
-
-	subsys_init_cb(rc, init_arg->cp_arg);
-	init_arg->cp_arg->cca_rc = rc;
-
-	return;
-}
-
 static void
 subsystem_init_done(int rc, void *arg)
 {
-	subsystem_init_arg_fini(arg, rc);
+	subsys_init_cb(rc, arg);
 }
 
 static void
@@ -1594,7 +1588,7 @@ subsystem_init_cb(int rc, void *arg)
 	struct subsystem_init_arg *init_arg;
 
 	if (rc) {
-		subsystem_init_arg_fini(arg, rc);
+		subsys_init_cb(rc, arg);
 		return;
 	}
 
@@ -1610,7 +1604,7 @@ static void
 load_config_cb(int rc, void *arg)
 {
 	if (rc) {
-		subsystem_init_arg_fini(arg, rc);
+		subsys_init_cb(rc, arg);
 		return;
 	}
 
