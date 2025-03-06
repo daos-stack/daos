@@ -1591,6 +1591,14 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 
 	if (orw->orw_flags & ORF_CHECK_EXISTENCE)
 		goto out;
+		
+
+	if (DAOS_FAIL_CHECK(DAOS_CLIENT_UNREACHABLE) && obj_rpc_is_update(rpc)) {
+		/** Fault injection - client unreachable */
+		D_INFO("enabled fault injection client unreachable");
+		rc = -DER_CLIENT_UNREACH;
+		goto out;
+	}
 
 	time = daos_get_ntime();
 	biod = vos_ioh2desc(ioh);

@@ -927,6 +927,9 @@ enum {
 #define DAOS_WAL_FAIL_REPLAY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x101)
 #define DAOS_MEM_FAIL_CHECKPOINT	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x102)
 
+/* Fault for when the server cannot reach the client */
+#define DAOS_CLIENT_UNREACHABLE (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x103)
+
 #define DAOS_DTX_SKIP_PREPARE		DAOS_DTX_SPEC_LEADER
 
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
