@@ -1171,17 +1171,27 @@ parse(int argc, char **argv)
 	return 0;
 }
 
+struct abt_dump_arg {
+	FILE     *ad_fp;
+	sigset_t *ad_set;
+};
+
 static void
 abt_dump_done_cb(ABT_bool success, void *arg)
 {
-	FILE *fp = arg;
+	struct abt_dump_arg *da = arg;
 
-	if (fp == NULL)
+	if (da == NULL)
 		return;
 
-	fprintf(fp, "Callstack dump result: %d\n", success);
-	if (fp != stderr)
-		fclose(fp);
+	fprintf(da->ad_fp, "Callstack dump result: %d\n", success);
+	if (da->ad_fp != stderr)
+		fclose(da->ad_fp);
+
+	/* re-add SIGUSR2 to set */
+	sigaddset(da->ad_set, SIGUSR2);
+
+	D_FREE(da);
 }
 
 int
@@ -1299,12 +1309,20 @@ main(int argc, char **argv)
 		 * synchro (timeout of 10s)
 		 */
 		if (sig == SIGUSR2) {
+			struct abt_dump_arg *da;
+
+			D_ALLOC_PTR(da);
+			if (da == NULL) {
+				sigaddset(&set, SIGUSR2);
+				continue;
+			}
+
+			da->ad_fp  = fp;
+			da->ad_set = &set;
 			D_INFO("got SIGUSR2, attempting to trigger dump of all Argobots ULTs stacks"
 			       " to %s\n",
 			       filename);
-			ABT_info_trigger_print_all_thread_stacks(fp, 10.0, abt_dump_done_cb, fp);
-			/* re-add SIGUSR2 to set */
-			sigaddset(&set, SIGUSR2);
+			ABT_info_trigger_print_all_thread_stacks(fp, 10.0, abt_dump_done_cb, da);
 			continue;
 		}
 
