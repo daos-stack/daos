@@ -32,7 +32,7 @@ install_curl() {
         apt-get install curl
     fi
     apt-get update
-    apt-get install ca-certificates gpg gpg-agent
+    apt-get install ca-certificates gpg gpg-agent locales
     if [[ "$DISTRO_VERSION" == "20."* ]]; then
         apt-get install software-properties-common
     fi
