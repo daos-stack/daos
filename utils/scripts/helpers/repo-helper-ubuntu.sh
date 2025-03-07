@@ -95,6 +95,8 @@ if [ -n "$REPO_FILE_URL" ]; then
         --output /usr/local/share/keyrings/daos-stack-public.gpg
 fi
 
+apt-get update
+apt-get install python3
 if [[ "$BASE_DISTRO" == "20."* ]]; then
     apt-get update
     apt-get upgrade
