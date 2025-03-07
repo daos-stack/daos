@@ -392,7 +392,7 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 		}
 
 		local_bulk = vos_iod_bulk_at(ioh, sgl_idx, iov_idx, &local_off);
-		if (local_bulk != NULL) {
+		if (!crt_bulk_is_null(local_bulk)) {
 			unsigned int tmp_off;
 
 			length = sgl->sg_iovs[iov_idx].iov_len;
@@ -439,7 +439,7 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 				D_ERROR("crt_bulk_create %d error " DF_RC "\n", sgl_idx, DP_RC(rc));
 				break;
 			}
-			D_ASSERT(local_bulk != NULL);
+			D_ASSERT(!crt_bulk_is_null(local_bulk));
 		}
 
 		D_ASSERT(remote_size > remote_off);
