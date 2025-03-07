@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
-package main
+package daos
 
 import (
 	"strconv"
@@ -14,67 +14,68 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common/test"
-	"github.com/daos-stack/daos/src/control/lib/daos"
 )
 
-func TestProperty_EcCellSize(t *testing.T) {
+func newTestContainerProperty(hdlr *propHdlr) *ContainerProperty {
+	return &ContainerProperty{
+		property: property{
+			entry: &_Ctype_struct_daos_prop_entry{}, // managed by Go; no need to free()
+		},
+		hdlr: hdlr,
+	}
+}
+
+func TestDaos_ContainerProperty_EcCellSize(t *testing.T) {
 	for name, tc := range map[string]struct {
 		SizeStr    string
 		EntryBytes uint64
 	}{
 		"Human Minimal Entry": {
-			SizeStr:    humanize.IBytes(daos.ECCellMin),
-			EntryBytes: daos.ECCellMin,
+			SizeStr:    humanize.IBytes(ECCellMin),
+			EntryBytes: ECCellMin,
 		},
 		"Human Default Entry": {
-			SizeStr:    humanize.IBytes(daos.ECCellDefault),
-			EntryBytes: daos.ECCellDefault,
+			SizeStr:    humanize.IBytes(ECCellDefault),
+			EntryBytes: ECCellDefault,
 		},
 		"Human Maximal Entry": {
-			SizeStr:    humanize.IBytes(daos.ECCellMax),
-			EntryBytes: daos.ECCellMax,
+			SizeStr:    humanize.IBytes(ECCellMax),
+			EntryBytes: ECCellMax,
 		},
 		"Bytes Minimal Entry": {
-			SizeStr:    strconv.FormatUint(daos.ECCellMin, 10),
-			EntryBytes: daos.ECCellMin,
+			SizeStr:    strconv.FormatUint(ECCellMin, 10),
+			EntryBytes: ECCellMin,
 		},
 		"Bytes Default Entry": {
-			SizeStr:    strconv.FormatUint(daos.ECCellDefault, 10),
-			EntryBytes: daos.ECCellDefault,
+			SizeStr:    strconv.FormatUint(ECCellDefault, 10),
+			EntryBytes: ECCellDefault,
 		},
 		"Bytes Maximal Entry": {
-			SizeStr:    strconv.FormatUint(daos.ECCellMax, 10),
-			EntryBytes: daos.ECCellMax,
+			SizeStr:    strconv.FormatUint(ECCellMax, 10),
+			EntryBytes: ECCellMax,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			propEntry := newTestPropEntry()
-			err := propHdlrs[daos.PropEntryECCellSize].nameHdlr(nil,
-				propEntry,
-				tc.SizeStr)
+			testProp := newTestContainerProperty(propHdlrs[ContainerPropEcCellSize.String()])
+			err := testProp.Set(tc.SizeStr)
 			if err != nil {
 				t.Fatalf("Expected no error: %s", err.Error())
 			}
-			val, err := getDpeVal(propEntry)
-			if err != nil {
-				t.Fatal(err)
-			}
 			test.AssertEqual(t,
-				val,
+				testProp.GetValue(),
 				tc.EntryBytes,
 				"Invalid EC Cell size")
 
-			sizeStr := propHdlrs[daos.PropEntryECCellSize].toString(propEntry,
-				daos.PropEntryECCellSize)
 			test.AssertEqual(t,
 				humanize.IBytes(tc.EntryBytes),
-				sizeStr,
+				testProp.StringValue(),
 				"Invalid EC Cell size representation")
 		})
 	}
 }
 
-func TestProperty_EcCellSize_Errors(t *testing.T) {
+func TestDaos_ContainerProperty_EcCellSize_Errors(t *testing.T) {
+	propName := ContainerPropEcCellSize.String()
 	for name, tc := range map[string]struct {
 		SizeStr     string
 		ExpectError error
@@ -89,31 +90,25 @@ func TestProperty_EcCellSize_Errors(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			propEntry := newTestPropEntry()
-			err := propHdlrs[daos.PropEntryECCellSize].nameHdlr(nil,
-				propEntry,
-				tc.SizeStr)
+			testProp := newTestContainerProperty(propHdlrs[ContainerPropEcCellSize.String()])
+			err := testProp.Set(tc.SizeStr)
 			test.CmpErr(t, tc.ExpectError, err)
 		})
 	}
 
 	t.Run("Invalid Entry error message: nil entry", func(t *testing.T) {
-		sizeStr := propHdlrs[daos.PropEntryECCellSize].toString(nil,
-			daos.PropEntryECCellSize)
+		sizeStr := propHdlrs[propName].toString(nil, propName)
 		test.AssertEqual(t,
-			"property \""+daos.PropEntryECCellSize+"\" not found",
+			"property \""+propName+"\" not found",
 			sizeStr,
 			"Invalid error message")
 	})
 
 	t.Run("Invalid Entry error message: invalid size", func(t *testing.T) {
-		propEntry := newTestPropEntry()
-		sizeStr := propHdlrs[daos.PropEntryECCellSize].toString(propEntry,
-			daos.PropEntryECCellSize)
+		testProp := newTestContainerProperty(propHdlrs[ContainerPropEcCellSize.String()])
 		test.AssertEqual(t,
 			"invalid size 0",
-			sizeStr,
+			testProp.StringValue(),
 			"Invalid error message")
 	})
-
 }

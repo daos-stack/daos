@@ -9,6 +9,8 @@ package daos
 
 import (
 	"encoding/json"
+	"sort"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -66,6 +68,33 @@ const (
 	// ContainerLayoutMeteo represents a meteo container layout.
 	ContainerLayoutMeteo ContainerLayout = C.DAOS_PROP_CO_LAYOUT_METEO
 )
+
+func (cof ContainerOpenFlag) String() string {
+	flagStrs := []string{}
+	if cof&ContainerOpenFlagReadOnly != 0 {
+		flagStrs = append(flagStrs, "read-only")
+	}
+	if cof&ContainerOpenFlagReadWrite != 0 {
+		flagStrs = append(flagStrs, "read-write")
+	}
+	if cof&ContainerOpenFlagExclusive != 0 {
+		flagStrs = append(flagStrs, "exclusive")
+	}
+	if cof&ContainerOpenFlagForce != 0 {
+		flagStrs = append(flagStrs, "force")
+	}
+	if cof&ContainerOpenFlagReadOnlyMetadata != 0 {
+		flagStrs = append(flagStrs, "read-only-metadata")
+	}
+	if cof&ContainerOpenFlagEvict != 0 {
+		flagStrs = append(flagStrs, "evict")
+	}
+	if cof&ContainerOpenFlagEvictAll != 0 {
+		flagStrs = append(flagStrs, "evict-all")
+	}
+	sort.Strings(flagStrs)
+	return strings.Join(flagStrs, ",")
+}
 
 // FromString converts a string to a ContainerLayout.
 func (l *ContainerLayout) FromString(in string) error {

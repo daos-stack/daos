@@ -850,6 +850,17 @@ func TestAPI_ContainerHandleMethods(t *testing.T) {
 		case "DeleteAttributes":
 			methArgs = append(methArgs, reflect.ValueOf(daos_default_AttrList[0].Name))
 			expResults = 1
+		case "GetProperties":
+			methArgs = append(methArgs, reflect.ValueOf(daos.ContainerPropLabel.String()))
+			expResults = 2
+		case "SetProperties":
+			propList, err := daos.AllocateContainerPropertyList(1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer propList.Free()
+			methArgs = append(methArgs, reflect.ValueOf(propList))
+			expResults = 1
 		case "FillHandle", "IsValid", "String", "UUID", "ID":
 			// No tests for these. The main point of this suite is to ensure that the
 			// convenience wrappers handle inputs as expected.
