@@ -71,9 +71,9 @@ fi
 # get them installed from a local repository.
 apt-get update
 apt-get install ca-certificates gpg gpg-agent locales
-if [[ "$BASE_DISTRO" == "20."* ]]; then
+# if [[ "$BASE_DISTRO" == "20."* ]]; then
     apt-get install software-properties-common
-fi
+# fi
 
 # Use local repo server if present
 # if a local repo server is present and the distro repo server can not
@@ -95,11 +95,11 @@ if [ -n "$REPO_FILE_URL" ]; then
         --output /usr/local/share/keyrings/daos-stack-public.gpg
 fi
 
-if [[ "$BASE_DISTRO" == "20."* ]]; then
+# if [[ "$BASE_DISTRO" == "20."* ]]; then
     apt-get update
     apt-get upgrade
     add-apt-repository ppa:longsleep/golang-backports
-fi
+# fi
 apt-get update
 if [ -e /tmp/install.sh ]; then
     chmod +x /tmp/install.sh

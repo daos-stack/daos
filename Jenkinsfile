@@ -1197,10 +1197,6 @@ pipeline {
                 }
             }
         } // stage('Test Hardware')
-        // stage('Test Report') {
-        //    parallel {
-        //    } // parallel
-        //} // stage ('Test Report')
     } // stages
     post {
         always {
