@@ -1205,6 +1205,7 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 	struct d_binheap_node		*bh_node;
 	d_list_t			 timeout_list;
 	uint64_t			 ts_now;
+	bool                             should_republish = false;
 	bool                             print_once = false;
 
 	D_ASSERT(crt_ctx != NULL);
@@ -1230,6 +1231,12 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 		D_ASSERTF(d_list_empty(&rpc_priv->crp_tmp_link_timeout),
 			  "already on timeout list\n");
 		d_list_add_tail(&rpc_priv->crp_tmp_link_timeout, &timeout_list);
+	}
+
+	/* piggy-back on the timeout processing so that we don't need to do another gettime() */
+	if (ts_now - crt_ctx->cc_hg_ctx.chc_diag_pub_ts > CRT_HG_TM_PUB_INTERVAL_US) {
+		should_republish                   = true;
+		crt_ctx->cc_hg_ctx.chc_diag_pub_ts = ts_now;
 	}
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
@@ -1258,6 +1265,10 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 		crt_req_timeout_hdlr(rpc_priv);
 		RPC_DECREF(rpc_priv);
 	}
+
+	/* periodically republish Mercury-level counters as DAOS metrics */
+	if (should_republish)
+		crt_hg_republish_diags(&crt_ctx->cc_hg_ctx);
 }
 
 /*
