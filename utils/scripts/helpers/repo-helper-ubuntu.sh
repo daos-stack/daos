@@ -66,6 +66,14 @@ if [ -n "$HTTPS_PROXY" ];then
     fi
 fi
 
+# These need to be installed here until we can figure out how to
+# get them installed from a local repository.
+apt-get update
+apt-get install ca-certificates gpg gpg-agent locales
+if [[ "$DISTRO_VERSION" == "20."* ]]; then
+    apt-get install software-properties-common
+fi
+
 # Use local repo server if present
 # if a local repo server is present and the distro repo server can not
 # be reached, have to bootstrap in an environment to get curl installed
