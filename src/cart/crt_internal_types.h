@@ -387,18 +387,32 @@ struct crt_quotas {
 };
 
 /*
- * crt_bulk
+ * crt_bulk - wrapper struct for crt_bulk_t type
  *
- * Local structure wrapping mercury bulk handle.
+ * Local structure for representing mercury bulk handle.
  * Allows deferred allocations of mercury bulk handles by postponing
- * them until RPC encode time, right before sending onto wire (HG_Forward())
+ * them until RPC encode time, right before sending onto the wire (HG_Forward())
  * See crt_proc_crt_bulk_t() for more details
  *
- * During deferred allocations hg_bulk_hdl will be set to HG_BULK_NULL
- * and other fields populated.
+ * During deferred allocations hg_bulk_hdl will be set to HG_BULK_NULL (null),
+ * deferred flag set to true and other fields populated based on the original
+ * bulk info provided.
  *
- * Note: deferred allocation is only supported on clients through D_QUOTA_BULKS
- * env. hg_bulk_hdl should not be NULL on servers.
+ * Deferred allocation is only supported on clients through D_QUOTA_BULKS
+ * env.
+ *
+ * Note:
+ * In order to check for a handle being NULL, crt_bulk_is_null() helper function
+ * should be used since a check for hg_bulk_hdl being NULL is not sufficient.
+ *
+ * hg_bulk_hdl can be a valid HG_BULK_NULL in following cases:
+ *
+ * - If provided as a NULL to one of CaRT APIs such as crt_corpc_req_create()
+ * - If sent as a NULL over a wire and decoded as part of RPC
+ * - If crt_bulk_create() call resulted in D_QUOTA_BULK limit being exceeded
+ *
+ * First 2 cases will result in crt_bulk_is_null() returning true while
+ * third will return false.
  */
 struct crt_bulk {
 	hg_bulk_t	hg_bulk_hdl;	/** mercury bulk handle */

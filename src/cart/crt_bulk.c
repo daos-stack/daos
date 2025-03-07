@@ -212,7 +212,9 @@ crt_bulk_free(crt_bulk_t crt_bulk)
 		rc = crt_hgret_2_der(hg_ret);
 	}
 
-	put_quota_resource(bulk->crt_ctx, CRT_QUOTA_BULKS);
+	/* Decoded bulks are not counted towards the quota and dont have crt_ctx set */
+	if (bulk->crt_ctx)
+		put_quota_resource(bulk->crt_ctx, CRT_QUOTA_BULKS);
 out:
 	return rc;
 }
@@ -285,6 +287,7 @@ crt_bulk_is_null(crt_bulk_t crt_bulk) {
 	if (bulk == NULL)
 		return true;
 
+	/* Deferred bulks (due to quota) are considered non-null */
 	if (bulk->deferred)
 		return false;
 
