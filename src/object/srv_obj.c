@@ -553,7 +553,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bul
 		D_ASSERTF(i + skip_nr < bulk_nr, "i %d, skip_nr %d, sgl_nr %d, bulk_nr %d\n",
 			  i, skip_nr, sgl_nr, bulk_nr);
 
-		if (remote_bulks[i + skip_nr] == NULL)
+		if (crt_bulk_is_null(remote_bulks[i + skip_nr]))
 			continue;
 
 		if (sgls != NULL) {
