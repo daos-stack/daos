@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -541,11 +542,12 @@ var propHdlrs = propHdlrMap{
 
 			return vh(e, v)
 		},
+		// TODO DAOS-16942: Update displayed name once labels are in place.
 		valHdlrMap{
 			"1":    setDpeVal(C.DAOS_PROP_CO_REDUN_RANK),
-			"2":    setDpeVal(C.DAOS_PROP_CO_REDUN_NODE),
+			"2":    setDpeVal(C.DAOS_PROP_CO_REDUN_FAULT),
 			"rank": setDpeVal(C.DAOS_PROP_CO_REDUN_RANK),
-			"node": setDpeVal(C.DAOS_PROP_CO_REDUN_NODE),
+			"node": setDpeVal(C.DAOS_PROP_CO_REDUN_FAULT),
 		},
 		func(e *C.struct_daos_prop_entry, name string) string {
 			if e == nil {
@@ -556,7 +558,7 @@ var propHdlrs = propHdlrMap{
 			switch lvl {
 			case C.DAOS_PROP_CO_REDUN_RANK:
 				return fmt.Sprintf("rank (%d)", lvl)
-			case C.DAOS_PROP_CO_REDUN_NODE:
+			case C.DAOS_PROP_CO_REDUN_FAULT:
 				return fmt.Sprintf("node (%d)", lvl)
 			default:
 				return fmt.Sprintf("(%d)", lvl)

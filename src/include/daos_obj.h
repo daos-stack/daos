@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -122,7 +123,7 @@ daos_otype_t_is_valid(enum daos_otype_t type)
 static inline bool
 daos_pa_domain_is_valid(uint32_t pa_domain)
 {
-	return pa_domain == DAOS_PROP_CO_REDUN_NODE || pa_domain == DAOS_PROP_CO_REDUN_RANK;
+	return pa_domain == DAOS_PROP_CO_REDUN_FAULT || pa_domain == DAOS_PROP_CO_REDUN_RANK;
 }
 
 static inline enum daos_otype_t
