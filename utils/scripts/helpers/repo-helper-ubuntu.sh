@@ -96,7 +96,7 @@ if [ -n "$REPO_FILE_URL" ]; then
 fi
 
 apt-get update
-apt-get install python3
+apt-get install python3 python3-venv
 if [[ "$BASE_DISTRO" == "20."* ]]; then
     apt-get update
     apt-get upgrade
