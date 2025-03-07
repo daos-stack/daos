@@ -1560,12 +1560,6 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 }
 
 static void
-subsystem_init_done(int rc, void *arg)
-{
-	subsys_init_cb(rc, arg);
-}
-
-static void
 subsystem_init_cb(int rc, void *arg)
 {
 	struct subsystem_init_arg *init_arg;
@@ -1580,7 +1574,7 @@ subsystem_init_cb(int rc, void *arg)
 	/* Set RUNTIME state and load config again for RUNTIME methods */
 	spdk_rpc_set_state(SPDK_RPC_RUNTIME);
 	spdk_subsystem_load_config(init_arg->json_data, (ssize_t)init_arg->json_data_size,
-				   subsystem_init_done, init_arg, true);
+				   subsys_init_cb, init_arg, true);
 }
 
 static void
