@@ -2,6 +2,7 @@
 
 set -uex
 
+echo "ls /etc/mock/: $(ls /etc/mock/)"
 cp /etc/mock/"$CHROOT_NAME".cfg mock.cfg
 
 # Enable mock ccache plugin

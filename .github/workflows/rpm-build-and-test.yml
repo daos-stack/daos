@@ -85,7 +85,7 @@ jobs:
       TEST_TAG: ${{ env.TEST_TAG }}
     steps:
       - name: Make outputs from env variables
-        run: echo "Make outputs from env variables"
+        run: echo "Make outputs from env variables" && echo "LEAP15_VERSION is $LEAP15_VERSION and vars.LEAP15_VERSION_MASTER is ${{ vars.LEAP15_VERSION_MASTER }}"
 
   Call-RPM-Build:
     name: Build RPM
@@ -314,6 +314,7 @@ jobs:
                                env.CP_LEAP15_VM9_LABEL || 'all_vm9' }}'
                     ;;
             esac
+            echo "env.CP_LEAP15_VERSION: $env.CP_LEAP15_VERSION, env.LEAP15_VERSION: $env.LEAP15_VERSION"
             echo "CHROOT_NAME=$CHROOT_NAME" >> $GITHUB_ENV
             echo "DISTRO_NAME=$DISTRO_NAME" >> $GITHUB_ENV
             echo "DISTRO_VERSION=$DISTRO_VERSION" >> $GITHUB_ENV
