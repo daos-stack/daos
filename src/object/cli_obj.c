@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -2078,7 +2079,7 @@ obj_bulk_fini(struct obj_auxi_args *obj_auxi)
 		return;
 
 	for (i = 0; i < nr; i++)
-		if (bulks[i] != CRT_BULK_NULL)
+		if (!crt_bulk_is_null(bulks[i]))
 			crt_bulk_free(bulks[i]);
 
 	D_FREE(bulks);
@@ -2484,7 +2485,8 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 			if (!obj_key_valid(obj->cob_md.omd_id, f_args->dkey,
 					   true) ||
 			    (f_args->nr == 0 && !check_exist)) {
-				D_ERROR("Invalid fetch parameter.\n");
+				D_ERROR("Invalid fetch parameter; size_fetch=%d f_args->nr=%d\n", size_fetch,
+						f_args->nr);
 				D_GOTO(out, rc = -DER_INVAL);
 			}
 

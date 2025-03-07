@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -119,7 +120,7 @@ static void free_session(struct st_session **session)
 		(*session)->buf_list = free_entry->next;
 
 		D_FREE(free_entry->buf);
-		if (free_entry->bulk_hdl != CRT_BULK_NULL)
+		if (!crt_bulk_is_null(free_entry->bulk_hdl))
 			crt_bulk_free(free_entry->bulk_hdl);
 		D_FREE(free_entry);
 
@@ -241,7 +242,7 @@ static int alloc_buf_entry(struct st_buf_entry **const return_entry,
 			D_FREE(new_entry);
 			return ret;
 		}
-		D_ASSERT(new_entry->bulk_hdl != CRT_BULK_NULL);
+		D_ASSERT(!crt_bulk_is_null(new_entry->bulk_hdl));
 	}
 
 	/* Buffer entry contains a pointer to its session */
@@ -689,8 +690,8 @@ crt_self_test_msg_handler(crt_rpc_t *rpc_req)
 		crt_bulk_t bulk_remote_hdl =
 			((struct crt_st_send_id_bulk *)args)->bulk_hdl;
 
-		D_ASSERT(bulk_remote_hdl != CRT_BULK_NULL);
-		D_ASSERT(buf_entry->bulk_hdl != CRT_BULK_NULL);
+		D_ASSERT(!crt_bulk_is_null(bulk_remote_hdl));
+		D_ASSERT(!crt_bulk_is_null(buf_entry->bulk_hdl));
 		D_ASSERT(rpc_req != NULL);
 
 		bulk_desc.bd_rpc = rpc_req;

@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -429,7 +430,7 @@ static void send_next_rpc(struct st_cb_args *cb_args, int skip_inc_complete)
 						g_data->buf_alignment),
 					 g_data->send_size);
 				typed_args->bulk_hdl = cb_args->bulk_hdl;
-				D_ASSERT(typed_args->bulk_hdl != CRT_BULK_NULL);
+				D_ASSERT(!crt_bulk_is_null(typed_args->bulk_hdl));
 			}
 			break;
 		case CRT_OPC_SELF_TEST_SEND_BULK_REPLY_IOV:
@@ -439,7 +440,7 @@ static void send_next_rpc(struct st_cb_args *cb_args, int skip_inc_complete)
 					(struct crt_st_send_id_bulk *)args;
 
 				typed_args->bulk_hdl = cb_args->bulk_hdl;
-				D_ASSERT(typed_args->bulk_hdl != CRT_BULK_NULL);
+				D_ASSERT(!crt_bulk_is_null(typed_args->bulk_hdl));
 			}
 			break;
 		}
@@ -749,7 +750,7 @@ static void free_g_data(void)
 				g_data->cb_args_ptrs[alloc_idx];
 
 			if (cb_args != NULL) {
-				if (cb_args->bulk_hdl != CRT_BULK_NULL) {
+				if (!crt_bulk_is_null(cb_args->bulk_hdl)) {
 					crt_bulk_free(cb_args->bulk_hdl);
 					cb_args->bulk_hdl = NULL;
 				}
@@ -765,10 +766,12 @@ static void free_g_data(void)
 
 		D_FREE(g_data->cb_args_ptrs);
 	}
-	if (g_data->rep_latencies_bulk_hdl != CRT_BULK_NULL) {
+
+	if (!crt_bulk_is_null(g_data->rep_latencies_bulk_hdl)) {
 		crt_bulk_free(g_data->rep_latencies_bulk_hdl);
 		g_data->rep_latencies_bulk_hdl = CRT_BULK_NULL;
 	}
+
 	D_FREE(g_data->rep_latencies);
 	D_FREE(g_data->endpts);
 	D_FREE(g_data);
@@ -890,7 +893,7 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 			ret);
 		D_GOTO(fail_cleanup, ret);
 	}
-	D_ASSERT(g_data->rep_latencies_bulk_hdl != CRT_BULK_NULL);
+	D_ASSERT(!crt_bulk_is_null(g_data->rep_latencies_bulk_hdl));
 
 	/*
 	 * Allocate an array of pointers to keep track of private
@@ -985,7 +988,7 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 					ret);
 				D_GOTO(fail_cleanup, ret);
 			}
-			D_ASSERT(cb_args->bulk_hdl != CRT_BULK_NULL);
+			D_ASSERT(!crt_bulk_is_null(cb_args->bulk_hdl));
 		}
 	}
 
@@ -1064,7 +1067,7 @@ crt_self_test_status_req_handler(crt_rpc_t *rpc_req)
 
 	bulk_hdl_in = crt_req_get(rpc_req);
 	D_ASSERT(bulk_hdl_in != NULL);
-	D_ASSERT(*bulk_hdl_in != CRT_BULK_NULL);
+	D_ASSERT(!crt_bulk_is_null(*bulk_hdl_in));
 
 	res = crt_reply_get(rpc_req);
 	D_ASSERT(res != NULL);

@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -243,7 +244,7 @@ crt_der_2_hgret(int der)
 }
 
 int crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
-		       crt_bulk_perm_t bulk_perm, crt_bulk_t *bulk_hdl);
+		       crt_bulk_perm_t bulk_perm, hg_bulk_t *bulk_hdl);
 int crt_hg_bulk_bind(crt_bulk_t bulk_hdl, struct crt_hg_context *hg_ctx);
 int crt_hg_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl);
 int

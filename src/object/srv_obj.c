@@ -272,7 +272,7 @@ bulk_cp(const struct crt_bulk_cb_info *cb_info)
 	struct crt_bulk_desc	*bulk_desc;
 
 	bulk_desc = cb_info->bci_bulk_desc;
-	D_ASSERT(bulk_desc->bd_local_hdl != CRT_BULK_NULL);
+	D_ASSERT(!crt_bulk_is_null(bulk_desc->bd_local_hdl));
 	crt_bulk_free(bulk_desc->bd_local_hdl);
 	bulk_desc->bd_local_hdl = CRT_BULK_NULL;
 
@@ -340,7 +340,7 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 	size_t			remote_size;
 	int			rc, bulk_iovs = 0;
 
-	if (remote_bulk == NULL) {
+	if (crt_bulk_is_null(remote_bulk)) {
 		D_ERROR("Remote bulk is NULL\n");
 		return -DER_INVAL;
 	}
@@ -392,7 +392,7 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 		}
 
 		local_bulk = vos_iod_bulk_at(ioh, sgl_idx, iov_idx, &local_off);
-		if (local_bulk != NULL) {
+		if (!crt_bulk_is_null(local_bulk)) {
 			unsigned int tmp_off;
 
 			length = sgl->sg_iovs[iov_idx].iov_len;
@@ -439,7 +439,7 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 				D_ERROR("crt_bulk_create %d error " DF_RC "\n", sgl_idx, DP_RC(rc));
 				break;
 			}
-			D_ASSERT(local_bulk != NULL);
+			D_ASSERT(!crt_bulk_is_null(local_bulk));
 		}
 
 		D_ASSERT(remote_size > remote_off);
@@ -553,7 +553,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bul
 		D_ASSERTF(i + skip_nr < bulk_nr, "i %d, skip_nr %d, sgl_nr %d, bulk_nr %d\n",
 			  i, skip_nr, sgl_nr, bulk_nr);
 
-		if (remote_bulks[i + skip_nr] == NULL)
+		if (crt_bulk_is_null(remote_bulks[i + skip_nr]))
 			continue;
 
 		if (sgls != NULL) {
@@ -2559,7 +2559,7 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 
 	D_ASSERT(ioc.ioc_coc != NULL);
 	dkey = (daos_key_t *)&oea->ea_dkey;
-	if (parity_bulk != CRT_BULK_NULL) {
+	if (!crt_bulk_is_null(parity_bulk)) {
 		rc = vos_update_begin(ioc.ioc_coc->sc_hdl, oea->ea_oid, oea->ea_epoch_range.epr_hi,
 				      VOS_OF_REBUILD, dkey, 1, iod, iod_csums, 0, &ioh, NULL);
 		if (rc) {

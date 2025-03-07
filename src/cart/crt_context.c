@@ -19,11 +19,6 @@ context_quotas_init(struct crt_context *ctx);
 static void
 context_quotas_finalize(struct crt_context *ctx);
 
-static inline int
-get_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota);
-static inline void
-put_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota);
-
 static struct crt_ep_inflight *
 epi_link2ptr(d_list_t *rlink)
 {
@@ -2048,6 +2043,10 @@ context_quotas_init(struct crt_context *ctx)
 	quotas->limit[CRT_QUOTA_RPCS]   = crt_gdata.cg_rpc_quota;
 	quotas->current[CRT_QUOTA_RPCS] = 0;
 	quotas->enabled[CRT_QUOTA_RPCS] = crt_gdata.cg_rpc_quota > 0 ? true : false;
+
+	quotas->limit[CRT_QUOTA_BULKS] = crt_gdata.cg_bulk_quota;
+	quotas->current[CRT_QUOTA_BULKS] = 0;
+	quotas->enabled[CRT_QUOTA_BULKS] = crt_gdata.cg_bulk_quota > 0 ? true: false;
 }
 
 static void
@@ -2108,7 +2107,24 @@ out:
 	return rc;
 }
 
-static inline int
+/* unlike get variant only bumps quota usage unlike get variant only bumps quota usage  */
+void
+record_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota)
+{
+	struct crt_context	*ctx = crt_ctx;
+
+	D_ASSERTF(ctx != NULL, "NULL context\n");
+	D_ASSERTF(quota >= 0 && quota < CRT_QUOTA_COUNT, "Invalid quota\n");
+
+	/* If quotas not enabled or unlimited quota */
+	if (!ctx->cc_quotas.enabled[quota] || ctx->cc_quotas.limit[quota] == 0)
+		return;
+
+	atomic_fetch_add(&ctx->cc_quotas.current[quota], 1);
+}
+
+
+int
 get_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota)
 {
 	struct crt_context	*ctx = crt_ctx;
@@ -2134,7 +2150,7 @@ get_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota)
 	return rc;
 }
 
-static inline void
+void
 put_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota)
 {
 	struct crt_context	*ctx = crt_ctx;

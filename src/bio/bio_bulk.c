@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2021-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -65,7 +66,7 @@ static inline bool
 bulk_hdl_is_inuse(struct bio_bulk_hdl *hdl)
 {
 	D_ASSERT(hdl->bbh_chunk != NULL);
-	D_ASSERT(hdl->bbh_chunk->bdc_bulk_hdl != NULL);
+	D_ASSERT(!crt_bulk_is_null(hdl->bbh_chunk->bdc_bulk_hdl));
 
 	if (hdl->bbh_inuse) {
 		D_ASSERT(d_list_empty(&hdl->bbh_link));
@@ -118,7 +119,7 @@ bulk_chunk_depopulate(struct bio_dma_chunk *chk, bool fini)
 	if (fini) {
 		D_FREE(chk->bdc_bulks);
 
-		if (chk->bdc_bulk_hdl != NULL) {
+		if (crt_bulk_is_null(chk->bdc_bulk_hdl)) {
 			rc = bulk_free_fn(chk->bdc_bulk_hdl);
 			if (rc)
 				D_ERROR("Failed to free bulk hdl %p "DF_RC"\n",
@@ -293,7 +294,7 @@ bulk_create_hdl(struct bio_dma_chunk *chk, struct bio_bulk_args *arg)
 	if (rc) {
 		D_ERROR("Create bulk handle failed. "DF_RC"\n", DP_RC(rc));
 	} else {
-		D_ASSERT(chk->bdc_bulk_hdl != NULL);
+		D_ASSERT(!crt_bulk_is_null(chk->bdc_bulk_hdl));
 	}
 
 	d_sgl_fini(&sgl, false);
@@ -319,7 +320,7 @@ bulk_chunk_populate(struct bio_dma_chunk *chk, struct bio_bulk_group *bbg,
 			hdl->bbh_chunk = chk;
 		}
 
-		D_ASSERT(chk->bdc_bulk_hdl == NULL);
+		D_ASSERT(crt_bulk_is_null(chk->bdc_bulk_hdl));
 		rc = bulk_create_hdl(chk, arg);
 		if (rc)
 			goto error;

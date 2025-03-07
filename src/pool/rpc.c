@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -395,7 +396,7 @@ list_cont_bulk_create(crt_context_t ctx, crt_bulk_t *bulk,
 void
 list_cont_bulk_destroy(crt_bulk_t bulk)
 {
-	if (bulk != CRT_BULK_NULL)
+	if (!crt_bulk_is_null(bulk))
 		crt_bulk_free(bulk);
 }
 

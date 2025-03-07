@@ -720,7 +720,7 @@ run_self_test(struct st_size_params all_params[], int num_msg_sizes, int rep_cou
 					ret);
 				D_GOTO(cleanup, ret);
 			}
-			D_ASSERT(latencies_bulk_hdl != CRT_BULK_NULL);
+			D_ASSERT(!crt_bulk_is_null(latencies_bulk_hdl));
 		}
 
 		/* Set test parameters to send to the test node */
@@ -747,7 +747,7 @@ run_self_test(struct st_size_params all_params[], int num_msg_sizes, int rep_cou
 
 		/* Clean up this size iteration's handles */
 		for (m_idx = 0; m_idx < num_ms_endpts; m_idx++)
-			if (latencies_bulk_hdl[m_idx] != CRT_BULK_NULL)
+			if (!crt_bulk_is_null(latencies_bulk_hdl[m_idx]))
 				crt_bulk_free(latencies_bulk_hdl[m_idx]);
 	}
 
@@ -763,7 +763,7 @@ cleanup:
 cleanup_nothread:
 	if (latencies_bulk_hdl != NULL) {
 		for (m_idx = 0; m_idx < num_ms_endpts; m_idx++)
-			if (latencies_bulk_hdl[m_idx] != CRT_BULK_NULL)
+			if (!crt_bulk_is_null(latencies_bulk_hdl[m_idx]))
 				crt_bulk_free(latencies_bulk_hdl[m_idx]);
 		D_FREE(latencies_bulk_hdl);
 	}

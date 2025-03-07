@@ -4633,7 +4633,7 @@ transfer_cont_buf(void *cont_buf, size_t cont_buf_size, struct pool_svc *svc,
 out_eventual:
 	ABT_eventual_free(&eventual);
 out_bulk:
-	if (bulk != CRT_BULK_NULL)
+	if (!crt_bulk_is_null(bulk))
 		crt_bulk_free(bulk);
 out:
 	return rc;
@@ -4829,7 +4829,7 @@ pool_list_cont_handler(crt_rpc_t *rpc, int handler_version)
 			DP_UUID(in->plci_op.pi_uuid), DP_UUID(in->plci_op.pi_hdl), ncont);
 
 		/* Send any results only if client provided a handle */
-		if (cont_buf && (ncont_in > 0) && (bulk != CRT_BULK_NULL))
+		if (cont_buf && (ncont_in > 0) && (!crt_bulk_is_null(bulk)))
 			rc = transfer_cont_buf(cont_buf, nbytes, svc, rpc, bulk);
 	}
 
@@ -4976,7 +4976,7 @@ pool_filter_cont_handler(crt_rpc_t *rpc, int handler_version)
 			DP_UUID(in->pfci_op.pi_uuid), DP_UUID(in->pfci_op.pi_hdl), ncont);
 
 		/* Send any results only if client provided a handle */
-		if (cont_buf && (ncont_in > 0) && (bulk != CRT_BULK_NULL))
+		if (cont_buf && (ncont_in > 0) && (!crt_bulk_is_null(bulk)))
 			rc = transfer_cont_buf(cont_buf, nbytes, svc, rpc, bulk);
 	}
 out_free_cont_buf:
@@ -7991,7 +7991,7 @@ transfer_ranks_buf(d_rank_t *ranks_buf, size_t nranks,
 out_eventual:
 	ABT_eventual_free(&eventual);
 out_bulk:
-	if (bulk != CRT_BULK_NULL)
+	if (!crt_bulk_is_null(bulk))
 		crt_bulk_free(bulk);
 out:
 	return rc;
@@ -8036,7 +8036,7 @@ ds_pool_ranks_get_handler(crt_rpc_t *rpc)
 		D_DEBUG(DB_MD, DF_UUID ": %u ranks\n",
 			DP_UUID(in->prgi_op.pi_uuid), out_ranks.rl_nr);
 		if ((out_ranks.rl_nr > 0) && (in->prgi_nranks > 0) &&
-		    (in->prgi_ranks_bulk != CRT_BULK_NULL))
+		    (!crt_bulk_is_null(in->prgi_ranks_bulk)))
 			rc = transfer_ranks_buf(out_ranks.rl_ranks,
 						out_ranks.rl_nr, svc, rpc,
 						in->prgi_ranks_bulk);
