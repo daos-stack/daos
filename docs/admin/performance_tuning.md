@@ -12,7 +12,7 @@ as regular DAOS.
 
 The CaRT `self_test` can run against the DAOS servers in a production environment
 in a non-destructive manner. The only requirement is to have a formatted DAOS
-system and the DAOS agent running on the client node where self\_test is run.
+system and the `self_test` command.
 
 ### Parameters
 
@@ -27,7 +27,7 @@ and the following test scenarios:
     many to many communication model.
 
 The mode is selected via the `--master-endpoint` option. If this option is
-notified on the command line, then we are in the first mode and the self_test
+not set on the command line, then we are in the first mode and the `self_test`
 binary itself issues the RPCs. If one or several master endpoint are specified,
 then we are in the cross-server mode.
 
@@ -79,18 +79,18 @@ $ self_test --help
 To run self\_test in client-to-servers mode:
 
 ```bash
-self_test -u --group-name daos_server --endpoint 0:2 --message-size '(0 b1048578)' --max-inflight-rpcs 16 --repetitions 100000
+self_test --use-daos-agent-env --group-name daos_server --endpoint 0:2 --message-size '(0 b1048578)' --max-inflight-rpcs 16 --repetitions 100000
 ```
 
 This will send 100k RPCs with a empty request, a bulk put of 1MB followed by an
-empty reply from the node where the self_test application is running to the
+empty reply from the node where the `self_test` application is running to the
 first target of engine rank 0. This workload effectively simulate a 1MB
 fetch/read RPC over DAOS.
 
 A 1MB update/write RPC would be simulated with the following command:
 
 ```bash
-self_test -u --group-name daos_server --endpoint 0:2 --message-size "(b1048578 0)" --max-inflight-rpcs 16 --repetitions 100000
+self_test --use-daos-agent-env --group-name daos_server --endpoint 0:2 --message-size "(b1048578 0)" --max-inflight-rpcs 16 --repetitions 100000
 ```
 
 The RPC rate with empty request and reply is also often useful to evaluate what
@@ -98,7 +98,7 @@ is the maximum capabilities of the network. This can be achieved as with the
 following command line:
 
 ```bash
-self_test -u --group-name daos_server --endpoint 0:2 --message-size "(0 0)" --max-inflight-rpcs 16 --repetitions 100000
+self_test --use-daos-agent-env --group-name daos_server --endpoint 0:2 --message-size "(0 0)" --max-inflight-rpcs 16 --repetitions 100000
 ```
 
 0 could be replaced with i2048 for instance to send a payload of 2Kb.
@@ -106,35 +106,35 @@ self_test -u --group-name daos_server --endpoint 0:2 --message-size "(0 0)" --ma
 All those 3 tests could be combined in a single and unique run:
 
 ```bash
-self_test -u --group-name daos_server --endpoint 0:2 --message-size "(0 0) (b1048578 0) (0 b1048578)" --max-inflight-rpcs 16 --repetitions 100000
+self_test --use-daos-agent-env --group-name daos_server --endpoint 0:2 --message-size "(0 0) (b1048578 0) (0 b1048578)" --max-inflight-rpcs 16 --repetitions 100000
 ```
 
 RPCs could also be send to a range of engine ranks and tags as follows:
 
 ```bash
-self_test -u --group-name daos_server --endpoint 0-<MAX_RANK>:0-<MAX_TAG> --message-size "(0 0) (b1048578 0) (0 b1048578)" --max-inflight-rpcs 16 --repetitions 100000
+self_test --use-daos-agent-env --group-name daos_server --endpoint 0-<MAX_RANK>:0-<MAX_TAG> --message-size "(0 0) (b1048578 0) (0 b1048578)" --max-inflight-rpcs 16 --repetitions 100000
 ```
 
 !!! note
-    By default, self\_test will use the network interface selected by the agent.
-    This can be forced by setting the OFI\_INTERFACE and OFI\_DOMAIN environment
-    variables manually. e.g. export OFI\_INTERFACE=eth0; export OFI\_DOMAIN=eth0
-    or export OFI\_INTERFACE=ib0; export OFI\_DOMAIN=mlx5_0
+    By default, `self_test` will use the network interface selected by the agent.
+    This can be forced by setting the `D_INTERFACE` and `D_DOMAIN` environment
+    variables manually. e.g. export `D_INTERFACE=eth0; export D_DOMAIN=eth0`
+    or `export D_INTERFACE=ib0; export D_DOMAIN=mlx5_0`
 
 !!! note
     Depending on the HW configuration, the agent might assign a different
-    network interface to the self_test application depending on the NUMA node
+    network interface to the `self_test` application depending on the NUMA node
     where the process is scheduled. It is thus recommended to use taskset to bind
-    the self_test process to a specific core. e.g. taskset -c 1 self_test ...
+    the `self_test` process to a specific core. e.g. taskset -c 1 `self_test` ...
 
 ### Example: Cross-Servers
 
-To run self\_test in cross-servers mode:
+To run `self_test` in cross-servers mode:
 
 ```bash
 
-$ self_test -u --group-name daos_server --endpoint 0-<MAX_SERVER-1>:0 \
-  --master-endpoint 0-<MAX_RANK>:0-<MAX_TAG> \
+$ self_test --use-daos-agent-env --group-name daos_server \
+  --endpoint 0-<MAX_RANK>:0 --master-endpoint 0-<MAX_RANK>:0-<MAX_TAG> \
   --message-sizes "b1048576,b1048576 0,0 b1048576,i2048,i2048 0,0 i2048" \
   --max-inflight-rpcs 16 --repetitions 100
 ```
@@ -152,6 +152,74 @@ i2048 0      2Kb iovec Input only
 !!! note
     Number of repetitions, max inflight rpcs, message sizes can be adjusted based
     on the particular test/experiment.
+
+### Example: Without DAOS Agent
+
+For running `self_test` without a DAOS agent, the following environment variables needs to be
+defined:
+
+- `D_PROVIDER` defines mercury NA plugin and transport to be used (e.g.`ofi+verbs;ofi_rxm`)
+- `D_INTERFACE` defines network device name to be used (e.g. `ib0`)
+
+The value of these environment variables could be found in the following log line of a DAOS agent
+daemon:
+
+```
+m02r01s01dao INFO 2025/02/17 17:17:27 pid:122802 (daos): numa:0 iface:ib0 dom:mlx5_0:1 prov:ucx+dc_mlx5 srx:1
+```
+
+A CaRT configuration file needs also to be provided to the `self_test` command.  This file should
+respect the following name pattern `<DAOS System Name>.attach_info_tmp` and respect the following
+format:
+
+- line 1: the DAOS System Name
+- line 2: The number of ranks
+- line 3 (optional): "all" or "self"
+  - "all" means dump all ranks' CaRT uri
+  - "self" means only dump this rank's CaRT uri
+- lines [4, #ranks - 3]: the list of ranks id and their CaRT uri (e.g. `ucx+dc_mlx5://10.6.4.104:32416`)
+
+An example of a file named `daos_server.attach_info_tmp` of a DAOS system named `daos_server` (i.e.
+default name of a DAOS system):
+
+```text
+name daos_server
+size 4
+all
+0 ucx+dc_mlx5://10.6.4.104:32416
+1 ucx+dc_mlx5://10.6.4.8:32416
+2 ucx+dc_mlx5://10.6.3.102:31416
+3 ucx+dc_mlx5://10.6.4.5:32416
+```
+
+This configuration file can be generated thanks to the `daos_agent` sub-command `dump-attachinfo`
+such as:
+
+```bash
+daos_agent -o daos_agent-self_test.yml dump-attachinfo -o daos_server.attach_info_tmp
+```
+
+This usage of the `daos_agent` command needs a minimal DAOS agent configuration file such as:
+
+```yaml
+name: daos_server
+access_points:
+- m02r01s01dao
+port: 10001
+transport_config:
+  allow_insecure: true
+log_file: /root/ckochhof/daos_agent-self_test.log
+```
+
+Pinging the SWIM service (i.e. tag=1) of the engine of rank 0 without a DAOS agent could be done in
+the following way:
+
+```
+env D_PROVIDER='ofi+verbs;ofi_rxm' D_INTERFACE=ib0  self_test --group-name daos_server --endpoint '0:1' --message-sizes '(0 0)' --repetitions-per-size 1 --no-sync --path '/CaRT/configuration/directory'
+```
+
+The `--path` option defines the path of the directory containing the CaRT configuration file
+`daos_server.attach_info_tmp`.
 
 ## Storage Performance
 
@@ -493,7 +561,7 @@ automatically assign a network interface with a matching NUMA node.  The network
 interface provided in the GetAttachInfo response is used to initialize CaRT.
 
 To override the automatically assigned interface, the client should set the
-environment variable `OFI_INTERFACE` to match the desired network
+environment variable `D_INTERFACE` to match the desired network
 interface.
 
 The DAOS Agent scans the client machine on the first GetAttachInfo request to
