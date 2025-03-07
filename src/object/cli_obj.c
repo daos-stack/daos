@@ -2485,7 +2485,8 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 			if (!obj_key_valid(obj->cob_md.omd_id, f_args->dkey,
 					   true) ||
 			    (f_args->nr == 0 && !check_exist)) {
-				D_ERROR("Invalid fetch parameter.\n");
+				D_ERROR("Invalid fetch parameter; size_fetch=%d f_args->nr=%d\n", size_fetch,
+						f_args->nr);
 				D_GOTO(out, rc = -DER_INVAL);
 			}
 

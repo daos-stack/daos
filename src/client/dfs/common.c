@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -216,7 +217,7 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 		*exists = false;
 		D_GOTO(out, rc = 0);
 	} else if (rc) {
-		D_ERROR("Failed to fetch entry %s " DF_RC "\n", name, DP_RC(rc));
+		D_ERROR("Failed to fetch entry '%s' " DF_RC "\n", name, DP_RC(rc));
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
