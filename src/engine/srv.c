@@ -874,6 +874,138 @@ out_dx:
 	return rc;
 }
 
+/**
+ * It is not a full-fledged scheduler. It is dedicated to make a clean-up and quickly terminate the
+ * execution stream. Hence it is rather a dummy.
+ */
+static void
+server_force_stop_dummy_sched(ABT_sched sched)
+{
+	/**
+	 * Close all PMEM pools opened by the given execution stream. The list of pools is stored in
+	 * TLS, hence it cannot be done from other thread/execution stream.
+	 */
+	vos_pool_force_close_all_pmem(false /** is_sysdb */);
+
+	/** Send a cancellation request to the execution stream and return. */
+	ABT_xstream xstream;
+	ABT_xstream_self(&xstream);
+	ABT_xstream_cancel(xstream);
+}
+
+/**
+ * Close all the PMEM pools and return as quickly as possible.
+ *
+ * Note: All the volatile book-keeping is disregarded hence the engine after
+ * this procedure has to be terminated immediately.
+ *
+ * Note: If you need a complete clean-up process please use other procedures
+ * instead of extending this one. This one aimed to be as close to SIGKILL as possible.
+ */
+void
+server_force_stop()
+{
+	ABT_pool            pool;
+	ABT_sched           sched;
+	struct dss_xstream *dx;
+	int                 rc;
+	int                 i;
+	ABT_sched_def       sched_def = {.type          = ABT_SCHED_TYPE_ULT,
+					 .init          = NULL,
+					 .run           = server_force_stop_dummy_sched,
+					 .free          = NULL,
+					 .get_migr_pool = NULL};
+
+	/** For all execution streams... */
+	for (i = 0; i < xstream_data.xd_xs_nr; i++) {
+		dx = xstream_data.xd_xs_ptrs[i];
+		if (dx == NULL) {
+			continue;
+		}
+		/** ... send a cancellation request and... */
+		rc = ABT_xstream_cancel(dx->dx_xstream);
+		if (rc != ABT_SUCCESS) {
+			D_ERROR("ABT_xstream_cancel failed: %d\n", rc);
+			return;
+		}
+		/** ... request the scheduler to finish even if its pools are not empty. */
+		rc = ABT_sched_exit(dx->dx_sched);
+		if (rc != ABT_SUCCESS) {
+			D_ERROR("ABT_sched_exit failed: %d\n", rc);
+			return;
+		}
+	}
+
+	/** Wait for all the execution streams to terminate. */
+	for (i = 0; i < xstream_data.xd_xs_nr; i++) {
+		dx = xstream_data.xd_xs_ptrs[i];
+		if (dx == NULL) {
+			continue;
+		}
+		rc = ABT_xstream_join(dx->dx_xstream);
+		if (rc != ABT_SUCCESS) {
+			D_ERROR("ABT_xstream_join failed: %d\n", rc);
+			return;
+		}
+	}
+
+	/** Now we can safely close sysdb. */
+	vos_pool_force_close_all_pmem(true /** is_sysdb */);
+
+	/**
+	 * Since the opened pools are store in TLS on each of the execution streams,
+	 * all the code below is a labourous way of executing the cleanup function
+	 * on each of the execution streams.
+	 *
+	 * Note: The clean-up function is called directly from the scheduler's run
+	 * function to limit the number of created objects to a bare minimum.
+	 */
+
+	/**
+	 * Scheduler needs at least a single pool no matter it is used or not.
+	 * Since the provided scheduler does not use this pool at all it won't be
+	 * pushed nor popped in the lifetime of the pool. Hence ABT_POOL_ACCESS_PRIV
+	 * should be sufficient.
+	 */
+	rc = ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_PRIV, ABT_TRUE, &pool);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("ABT_pool_create_basic failed: %d\n", rc);
+		return;
+	}
+
+	/** For all execution streams... */
+	for (i = 0; i < xstream_data.xd_xs_nr; i++) {
+		dx = xstream_data.xd_xs_ptrs[i];
+		if (dx == NULL) {
+			continue;
+		}
+		/** ... create a new scheduler and... */
+		rc = ABT_sched_create(&sched_def, 1, &pool, ABT_SCHED_CONFIG_NULL, &sched);
+		if (rc != ABT_SUCCESS) {
+			D_ERROR("ABT_sched_create failed: %d\n", rc);
+			return;
+		}
+		/** ... replace the main scheduler with the created one. */
+		rc = ABT_xstream_set_main_sched(dx->dx_xstream, sched);
+		if (rc != ABT_SUCCESS) {
+			D_ERROR("ABT_xstream_set_main_sched failed: %d\n", rc);
+			return;
+		}
+		/** Revive the execution stream and... */
+		rc = ABT_xstream_revive(dx->dx_xstream);
+		if (rc != ABT_SUCCESS) {
+			D_ERROR("ABT_xstream_revive failed: %d\n", rc);
+			return;
+		}
+		/** ... wait for it to terminate. */
+		rc = ABT_xstream_join(dx->dx_xstream);
+		if (rc != ABT_SUCCESS) {
+			D_ERROR("ABT_xstream_join failed: %d\n", rc);
+			return;
+		}
+	}
+}
+
 static void
 dss_xstreams_fini(bool force)
 {

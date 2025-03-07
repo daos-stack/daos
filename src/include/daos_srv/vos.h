@@ -1737,4 +1737,15 @@ vos_pin_objects(daos_handle_t coh, daos_unit_oid_t oids[], int count, struct vos
 bool
 vos_oi_exist(daos_handle_t coh, daos_unit_oid_t oid);
 
+/**
+ * Force close all PMEM pools kept on the current thread/execution stream or sysdb.
+ * Please cease all other operations before calling this procedure.
+ * It leaves the volatile bookkeeping in an inconsistent state. Please terminate the current process
+ * immediately afterwards.
+ *
+ * \param[in]	is_sysdb	close sysdb.
+ */
+void
+vos_pool_force_close_all_pmem(bool is_sysdb);
+
 #endif /* __VOS_API_H */

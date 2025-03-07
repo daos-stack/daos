@@ -195,6 +195,8 @@ struct dss_xstream *dss_get_xstream(int stream_id);
 int dss_xstream_cnt(void);
 void dss_mem_total_alloc_track(void *arg, daos_size_t bytes);
 void dss_mem_total_free_track(void *arg, daos_size_t bytes);
+void
+    server_force_stop(void);
 
 /* srv_metrics.c */
 int dss_engine_metrics_init(void);

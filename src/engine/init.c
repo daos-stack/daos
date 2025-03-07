@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1252,7 +1253,13 @@ main(int argc, char **argv)
 			continue;
 		}
 
-		/* SIGINT/SIGTERM cause server shutdown */
+		/** SIGINT causes a forced server shutdown */
+		if (sig == SIGINT) {
+			server_force_stop();
+			exit(EXIT_SUCCESS);
+		}
+
+		/* SIGTERM causes a normal server shutdown */
 		break;
 	}
 

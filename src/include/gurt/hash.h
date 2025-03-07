@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -622,6 +623,9 @@ int  d_uhash_link_insert(struct d_hash_table *htable, struct d_uuid *key,
 			 void *cmp_args, struct d_ulink *ulink);
 struct d_ulink *d_uhash_link_lookup(struct d_hash_table *htable,
 				    struct d_uuid *key, void *cmp_args);
+typedef int (*d_uhash_traverse_cb_t)(struct d_ulink *link, void *arg);
+int
+d_uhash_traverse(struct d_hash_table *htable, d_uhash_traverse_cb_t cb, void *arg);
 
 #if defined(__cplusplus)
 }
