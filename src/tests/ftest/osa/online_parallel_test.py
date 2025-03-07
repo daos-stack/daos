@@ -1,11 +1,11 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import copy
 import queue
-import random
 import threading
 import time
 from itertools import product
@@ -93,7 +93,7 @@ class OSAOnlineParallelTest(OSAUtils):
         target_list = []
 
         # Exclude target : random two targets  (target idx : 0-7)
-        exc = random.randint(0, 6)  # nosec
+        exc = self.random.randint(0, 6)
         target_list.append(exc)
         target_list.append(exc + 1)
         t_string = "{},{}".format(target_list[0], target_list[1])

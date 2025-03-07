@@ -157,16 +157,16 @@ class Test(avocadoTest):
         super().setUp()
 
         # Random generator that could be seeded for reproducibility
-        env_seed = os.environ.get("DAOS_TEST_RANDOM_SEED", None)
-        if env_seed is None:
+        self.rand_seed = os.environ.get("DAOS_TEST_RANDOM_SEED", None)
+        if self.rand_seed is None:
+            self.rand_seed = self.params.get("rand_seed", "/run/setup/*", None)
+        if self.rand_seed is None:
             self.rand_seed = int.from_bytes(os.urandom(8), byteorder='little')
         else:
             try:
-                self.rand_seed = int(env_seed)
+                self.rand_seed = int(self.rand_seed)
             except ValueError:
-                self.fail(
-                    "ERROR: The env variable DAOS_TEST_RANDOM_SEED "
-                    "does not define a valid integer: got='{}'".format(env_seed))
+                self.fail(f"rand_seed is not an integer: {self.rand_seed}")
         self.log.info("Test.random seed = %d", self.rand_seed)
         self.random = random.Random(self.rand_seed)     # nosec
 
