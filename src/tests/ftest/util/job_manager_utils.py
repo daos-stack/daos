@@ -323,6 +323,11 @@ class JobManager(ExecutableCommand):
         regex = self.job.command_regex
         if self.job.full_command_regex:
             regex = f"'{str(self.job)}'"
+
+        self.log.debug(
+            "DBG: Stopping job: job.command=%s, job.command_regex=%s, job.full_command_regex=%s",
+            self.job.command, self.job.command_regex, self.job.full_command_regex)
+
         detected, running = stop_processes(
             self.log, self._hosts, regex, full_command=self.job.full_command_regex)
         if not detected:

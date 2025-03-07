@@ -31,6 +31,9 @@ def get_cmocka_command(command, parameters=None):
                 "buffer overflow detected"]
     path, executable = os.path.split(command.strip())
     command = CmockaCommand(path, executable, keywords)
+    command.log.debug(
+        "DBG: Added CmockaCommand(): command=%s, command_path=%s",
+        command.command, command.command_path)
     command.parameters.value = parameters
     return command
 
