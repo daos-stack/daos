@@ -10,6 +10,7 @@ set -uex
 : "${HTTPS_PROXY:=}"
 : "${DAOS_LAB_CA_FILE_UR:=}"
 : "${REPOSITORY_NAME:=artifactory}"
+: "${BASE_DISTRO:=24.04}"
 
 disable_repos () {
     if [ -e /etc/apt/sources.list.d/ubuntu.sources ];then
@@ -33,7 +34,7 @@ install_curl() {
     fi
     apt-get update
     apt-get install ca-certificates gpg gpg-agent locales
-    if [[ "$DISTRO_VERSION" == "20."* ]]; then
+    if [[ "$BASE_DISTRO" == "20."* ]]; then
         apt-get install software-properties-common
     fi
     if command -v wget; then
@@ -70,7 +71,7 @@ fi
 # get them installed from a local repository.
 apt-get update
 apt-get install ca-certificates gpg gpg-agent locales
-if [[ "$DISTRO_VERSION" == "20."* ]]; then
+if [[ "$BASE_DISTRO" == "20."* ]]; then
     apt-get install software-properties-common
 fi
 
@@ -94,7 +95,7 @@ if [ -n "$REPO_FILE_URL" ]; then
         --output /usr/local/share/keyrings/daos-stack-public.gpg
 fi
 
-if [[ "$DISTRO_VERSION" == "20."* ]]; then
+if [[ "$BASE_DISTRO" == "20."* ]]; then
     apt-get update
     apt-get upgrade
     add-apt-repository ppa:longsleep/golang-backports
