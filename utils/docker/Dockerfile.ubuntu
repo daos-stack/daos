@@ -31,8 +31,9 @@ RUN chmod +x /tmp/repo-helper.sh &&                 \
 RUN locale-gen en_US.UTF-8
 
 # use Java 8 instead of default Java 11
-RUN update-alternatives --set \
-    java /usr/lib/jvm/java-8-openjdk-*/jre/bin/java
+# Java 8 is no longer available for Ubuntu
+# RUN update-alternatives --set \
+#    java /usr/lib/jvm/java-8-openjdk-*/jre/bin/java
 
 ARG UID=5000
 
