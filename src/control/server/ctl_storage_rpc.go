@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -250,7 +251,7 @@ func bdevScan(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvmeReq, n
 		}
 	}()
 
-	bdevCfgs := getBdevCfgsFromSrvCfg(cs.srvCfg)
+	bdevCfgs := cs.srvCfg.GetBdevConfigs()
 	nrCfgBdevs := bdevCfgs.Bdevs().Len()
 
 	if nrCfgBdevs == 0 {
