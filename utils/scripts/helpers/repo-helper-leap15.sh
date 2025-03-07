@@ -47,21 +47,6 @@ install_curl() {
         echo "found wget!"
         return
     fi
-
-    # If we did not already have curl, we won't be able to easily install it.
-    #if command -v dnf; then
-    #    dnf -y install curl
-    #    return
-    #fi
-
-    #if command -v zypper; then
-    #    zypper mr --all --disable
-    #    zypper addrepo                                                                           \
-    #        "${REPO_FILE_URL%/*/}/opensuse-proxy/distribution/leap/${BASE_DISTRO##*:}/repo/oss/" \
-    #          temp_opensuse_oss_proxy
-    #    zypper --non-interactive install curl
-    #    zypper removerepo temp_opensuse_oss_proxy
-    #fi
 }
 
 install_dnf() {

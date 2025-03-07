@@ -29,10 +29,13 @@ install_curl() {
         return
     else
         apt-get update
-        apt-get install curl ca-certificates gpg gpg-agent \
-                software-properties-common
+        apt-get install curl
     fi
-
+    apt-get update
+    apt-get install ca-certificates gpg gpg-agent
+    if [[ "$DISTRO_VERSION" == "20."* ]]; then
+        apt-get install software-properties-common
+    fi
     if command -v wget; then
         echo "found wget!"
         return
@@ -83,9 +86,11 @@ if [ -n "$REPO_FILE_URL" ]; then
         --output /usr/local/share/keyrings/daos-stack-public.gpg
 fi
 
-apt-get update
-apt-get upgrade
-add-apt-repository ppa:longsleep/golang-backports
+if [[ "$DISTRO_VERSION" == "20."* ]]; then
+    apt-get update
+    apt-get upgrade
+    add-apt-repository ppa:longsleep/golang-backports
+fi
 apt-get update
 if [ -e /tmp/install.sh ]; then
     chmod +x /tmp/install.sh
