@@ -86,6 +86,7 @@ struct crt_prov_gdata {
 	bool                 cpg_contig_ports;
 	bool                 cpg_inited;
 	bool                 cpg_progress_busy;
+	bool                 cpg_mem_device;
 
 	/** Mutext to protect fields above */
 	pthread_mutex_t      cpg_mutex;
@@ -227,6 +228,7 @@ struct crt_event_cb_priv {
 	ENV(D_PORT_AUTO_ADJUST)                                                                    \
 	ENV(D_THREAD_MODE_SINGLE)                                                                  \
 	ENV(D_PROGRESS_BUSY)                                                                       \
+	ENV(D_MEM_DEVICE)                                                                          \
 	ENV(D_POST_INCR)                                                                           \
 	ENV(D_POST_INIT)                                                                           \
 	ENV(D_MRECV_BUF)                                                                           \
