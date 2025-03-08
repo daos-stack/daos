@@ -1,7 +1,6 @@
 setup:
   start_agents_once: False
   start_servers_once: False
-  server_config_namespace: /run/server_configurations/*/server_config/*
 
 hosts:
   test_servers: 3
@@ -39,145 +38,45 @@ test_two_pools_hw:
       scm: 2147483648   # 2GiB
       nvme: 0
 
-# Mux the number of targets per engine (1-4) with both engines using the same number of targets
-server_configurations: !mux
-  server_config_1_target:
-    server_config:
-      name: daos_server
-      engines_per_host: 2
-      engines:
-        0:
+server_config:
+  name: daos_server
+  engines_per_host: 2
+  control_log_mask: TRACE  # For debugging
+  # Mux the number of targets per engine (1-4) with both engines using the same number of targets
+  engines:
+    0:
+      target_mux: !mux
+        1_target:
           targets: 1
-          pinned_numa_node: 0
-          nr_xs_helpers: 1
-          fabric_iface: ib0
-          fabric_iface_port: 31317
-          log_file: daos_server0.log
-          storage:
-            0:
-              class: dcpm
-              scm_list: ["/dev/pmem0"]
-              scm_mount: /mnt/daos0
-            1:
-              class: nvme
-              bdev_list: ["aaaa:aa:aa.a"]
-        1:
+        2_targets:
+          targets: 2
+        3_target:
+          targets: 3
+        5_targets:
+          targets: 5
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      storage: auto
+    1:
+      target_mux: !mux
+        1_target:
           targets: 1
-          pinned_numa_node: 1
-          nr_xs_helpers: 1
-          fabric_iface: ib1
-          fabric_iface_port: 31417
-          log_file: daos_server1.log
-          storage:
-            0:
-              class: dcpm
-              scm_list: ["/dev/pmem1"]
-              scm_mount: /mnt/daos1
-            1:
-              class: nvme
-              bdev_list: ["bbbb:bb:bb.b"]
-  server_config_2_target:
-    server_config:
-      name: daos_server
-      engines_per_host: 2
-      engines:
-        0:
+          !filter-only : /run/server_config/engines/0/target_mux/1_target # yamllint disable-line rule:colons
+        2_targets:
           targets: 2
-          pinned_numa_node: 0
-          nr_xs_helpers: 1
-          fabric_iface: ib0
-          fabric_iface_port: 31317
-          log_file: daos_server0.log
-          storage:
-            0:
-              class: dcpm
-              scm_list: ["/dev/pmem0"]
-              scm_mount: /mnt/daos0
-            1:
-              class: nvme
-              bdev_list: ["aaaa:aa:aa.a"]
-        1:
-          targets: 2
-          pinned_numa_node: 1
-          nr_xs_helpers: 1
-          fabric_iface: ib1
-          fabric_iface_port: 31417
-          log_file: daos_server1.log
-          storage:
-            0:
-              class: dcpm
-              scm_list: ["/dev/pmem1"]
-              scm_mount: /mnt/daos1
-            1:
-              class: nvme
-              bdev_list: ["bbbb:bb:bb.b"]
-  server_config_3_target:
-    server_config:
-      name: daos_server
-      engines_per_host: 2
-      engines:
-        0:
+          !filter-only : /run/server_config/engines/0/target_mux/2_targets # yamllint disable-line rule:colons
+        3_target:
           targets: 3
-          pinned_numa_node: 0
-          nr_xs_helpers: 1
-          fabric_iface: ib0
-          fabric_iface_port: 31317
-          log_file: daos_server0.log
-          storage:
-            0:
-              class: dcpm
-              scm_list: ["/dev/pmem0"]
-              scm_mount: /mnt/daos0
-            1:
-              class: nvme
-              bdev_list: ["aaaa:aa:aa.a"]
-        1:
-          targets: 3
-          pinned_numa_node: 1
-          nr_xs_helpers: 1
-          fabric_iface: ib1
-          fabric_iface_port: 31417
-          log_file: daos_server1.log
-          storage:
-            0:
-              class: dcpm
-              scm_list: ["/dev/pmem1"]
-              scm_mount: /mnt/daos1
-            1:
-              class: nvme
-              bdev_list: ["bbbb:bb:bb.b"]
-  server_config_5_target:
-    server_config:
-      name: daos_server
-      engines_per_host: 2
-      engines:
-        0:
+          !filter-only : /run/server_config/engines/0/target_mux/3_target # yamllint disable-line rule:colons
+        5_targets:
           targets: 5
-          pinned_numa_node: 0
-          nr_xs_helpers: 1
-          fabric_iface: ib0
-          fabric_iface_port: 31317
-          log_file: daos_server0.log
-          storage:
-            0:
-              class: dcpm
-              scm_list: ["/dev/pmem0"]
-              scm_mount: /mnt/daos0
-            1:
-              class: nvme
-              bdev_list: ["aaaa:aa:aa.a"]
-        1:
-          targets: 5
-          pinned_numa_node: 1
-          nr_xs_helpers: 1
-          fabric_iface: ib1
-          fabric_iface_port: 31417
-          log_file: daos_server1.log
-          storage:
-            0:
-              class: dcpm
-              scm_list: ["/dev/pmem1"]
-              scm_mount: /mnt/daos1
-            1:
-              class: nvme
-              bdev_list: ["bbbb:bb:bb.b"]
+          !filter-only : /run/server_config/engines/0/target_mux/5_targets # yamllint disable-line rule:colons
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      storage: auto
