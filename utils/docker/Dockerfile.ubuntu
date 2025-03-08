@@ -23,7 +23,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 ARG DAOS_LAB_CA_FILE_URL
 # script to setup local repo if available and install packages
 COPY ./utils/scripts/helpers/repo-helper-ubuntu.sh /tmp/repo-helper.sh
-COPY ./utils/scripts/helpers/install-ubuntu.sh /tmp/install.sh
+COPY ./utils/scripts/install-ubuntu.sh /tmp/install.sh
 
 RUN chmod +x /tmp/repo-helper.sh /tmp/install.sh && \
     /tmp/repo-helper.sh &&                          \
