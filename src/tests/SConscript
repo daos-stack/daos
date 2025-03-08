@@ -24,8 +24,7 @@ def build_tests(env):
 
     denv.AppendUnique(CPPPATH=[Dir('suite').srcnode()])
     denv.AppendUnique(LIBPATH=[Dir('.')])
-
-    denv.require('argobots', 'protobufc', 'pmdk', 'isal')
+    denv.require('isal', 'protobufc')
 
     daos_racer = denv.d_program('daos_racer', ['daos_racer.c'], LIBS=libs_client)
     denv.Install('$PREFIX/bin/', daos_racer)
@@ -35,25 +34,29 @@ def build_tests(env):
     daos_perf = denv.d_program('daos_perf', ['daos_perf.c', perf_common], LIBS=libs_client)
     denv.Install('$PREFIX/bin/', daos_perf)
 
-    libs_server += ['vos', 'bio', 'abt']
-    vos_engine = denv.StaticObject(['vos_engine.c'])
+    if prereqs.server_requested():
+        tenv = denv.Clone()
+        tenv.require('argobots', 'pmdk')
 
-    if denv["STACK_MMAP"] == 1:
-        new_env = denv.Clone()
-        new_env.Append(CCFLAGS=['-DULT_MMAP_STACK'])
-        vos_perf = new_env.d_program('vos_perf',
-                                     ['vos_perf.c', perf_common, vos_engine] + libdaos_tgts,
-                                     LIBS=libs_server)
-    else:
-        vos_perf = denv.d_program('vos_perf',
-                                  ['vos_perf.c', perf_common, vos_engine] + libdaos_tgts,
-                                  LIBS=libs_server)
-    denv.Install('$PREFIX/bin/', vos_perf)
+        libs_server += ['vos', 'bio', 'abt', 'numa']
+        vos_engine = tenv.StaticObject(['vos_engine.c'])
+        if denv["STACK_MMAP"] == 1:
+            new_env = denv.Clone()
+            new_env.Append(CCFLAGS=['-DULT_MMAP_STACK'])
+            vos_perf = new_env.d_program('vos_perf',
+                                         ['vos_perf.c', perf_common, vos_engine] + libdaos_tgts,
+                                         LIBS=libs_server)
+        else:
+            vos_perf = denv.d_program('vos_perf',
+                                      ['vos_perf.c', perf_common, vos_engine] + libdaos_tgts,
+                                      LIBS=libs_server)
 
-    obj_ctl = denv.d_program('obj_ctl',
+        tenv.Install('$PREFIX/bin/', vos_perf)
+
+        obj_ctl = tenv.d_program('obj_ctl',
                              ['obj_ctl.c', cmd_parser, vos_engine] + libdaos_tgts,
                              LIBS=libs_server)
-    denv.Install('$PREFIX/bin/', obj_ctl)
+        tenv.Install('$PREFIX/bin/', obj_ctl)
 
     jobtest = denv.d_program('jobtest', ['jobtest.c'], LIBS=libs_client)
     denv.Install('$PREFIX/bin/', jobtest)

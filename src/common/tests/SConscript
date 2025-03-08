@@ -3,26 +3,30 @@
 
 def scons():
     """Execute build"""
-    Import('tenv', 'utest_utils')
+    Import('tenv', 'prereqs')
 
-    tenv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     tenv.require('argobots')
+    if prereqs.server_requested():
+        Import('utest_utils')
+        tenv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
 
-    tenv.d_test_program('btree', ['btree.c', utest_utils],
-                        LIBS=['daos_common_pmem', 'gurt', 'pmemobj', 'cmocka'])
-    tenv.d_test_program('umem_test_bmem', ['umem_test_bmem.c', utest_utils],
-                        LIBS=['daos_common_pmem', 'gurt', 'cmocka'])
-    tenv.d_test_program('umem_test', ['umem_test.c', utest_utils],
-                        LIBS=['daos_common_pmem', 'gurt', 'pmemobj', 'cmocka'])
-    tenv.d_test_program('btree_direct', ['btree_direct.c', utest_utils],
-                        LIBS=['daos_common_pmem', 'gurt', 'pmemobj', 'cmocka'])
-    tenv.d_test_program('other', 'other.c',
-                        LIBS=['daos_common_pmem', 'gurt', 'cart'])
+        tenv.d_test_program('btree', ['btree.c', utest_utils],
+			    LIBS=['daos_common_pmem', 'gurt', 'pmemobj', 'cmocka'])
+        tenv.d_test_program('umem_test_bmem', ['umem_test_bmem.c', utest_utils],
+			    LIBS=['daos_common_pmem', 'gurt', 'cmocka'])
+        tenv.d_test_program('umem_test', ['umem_test.c', utest_utils],
+			    LIBS=['daos_common_pmem', 'gurt', 'pmemobj', 'cmocka'])
+        tenv.d_test_program('btree_direct', ['btree_direct.c', utest_utils],
+			    LIBS=['daos_common_pmem', 'gurt', 'pmemobj', 'cmocka'])
+        tenv.d_test_program('other', 'other.c',
+			    LIBS=['daos_common_pmem', 'gurt', 'cart'])
+        tenv.d_test_program('ad_mem_tests', 'ad_mem_tests.c',
+                            LIBS=['daos_common_pmem', 'gurt', 'cmocka'])
+        tenv.d_test_program('lru', 'lru.c', LIBS=['daos_common_pmem', 'gurt', 'cart'])
     tenv.d_test_program('common_test', ['common_test.c', 'checksum_tests.c',
                                         'compress_tests.c', 'misc_tests.c'],
                         LIBS=['daos_common', 'daos_tests', 'gurt',
                               'cart', 'cmocka'])
-    tenv.d_test_program('lru', 'lru.c', LIBS=['daos_common_pmem', 'gurt', 'cart'])
     tenv.d_test_program('sched', 'sched.c',
                         LIBS=['daos_common', 'gurt', 'cart', 'cmocka', 'pthread'])
     new_env = tenv.Clone()
@@ -36,8 +40,6 @@ def scons():
                         LIBS=['daos_common', 'gurt', 'cmocka'])
     tenv.d_test_program('fault_domain_tests', 'fault_domain_tests.c',
                         LIBS=['daos_common', 'gurt', 'cmocka'])
-    tenv.d_test_program('ad_mem_tests', 'ad_mem_tests.c',
-                        LIBS=['daos_common_pmem', 'gurt', 'cmocka'])
     tenv.d_test_program('checksum_timing', 'checksum_timing.c', LIBS=['daos_common', 'gurt'])
     tenv.d_test_program('compress_timing', 'compress_timing.c', LIBS=['daos_common', 'gurt'])
     tenv.d_test_program('rsvc_tests', ['rsvc_tests.c', '../rsvc.c'],
