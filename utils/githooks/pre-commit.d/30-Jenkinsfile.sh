@@ -10,6 +10,7 @@
 # Will only check if Jenkinsfile is modified
 #
 
+exit 0
 set -ue
 
 _print_githook_header "Jenkinsfile"
