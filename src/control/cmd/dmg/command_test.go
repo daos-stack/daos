@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 // (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -11,11 +12,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path"
 	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"gopkg.in/yaml.v2"
 
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -70,8 +74,20 @@ func testExpectedError(t *testing.T, expected, actual error) {
 func runCmd(t *testing.T, cmd string, log *logging.LeveledLogger, ctlClient control.Invoker) error {
 	t.Helper()
 
+	tmpCfg := control.DefaultConfig()
+	tmpCfg.TransportConfig.AllowInsecure = true
+	tmpCfgDir := t.TempDir()
+	tmpCfgFile := path.Join(tmpCfgDir, "control_config.yaml")
+	tmpCfgYaml, err := yaml.Marshal(tmpCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(tmpCfgFile, tmpCfgYaml, 0600); err != nil {
+		t.Fatal(err)
+	}
+
 	var opts cliOptions
-	args := append([]string{"--insecure"}, strings.Split(cmd, " ")...)
+	args := append([]string{"--config-path", tmpCfgFile}, strings.Split(cmd, " ")...)
 	return parseOpts(args, &opts, ctlClient, log)
 }
 
