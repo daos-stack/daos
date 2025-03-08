@@ -1,14 +1,16 @@
 #
 # Copyright 2018-2024 Intel Corporation
+# Copyright 2025 Hewlett Packard Enterprise Development LP
 #
 # 'recipe' for Docker to build an RPM
 #
 
 # Pull base image
-ARG FVERSION=latest
-FROM fedora:$FVERSION
-# Needed for later use of FVERSION
-ARG FVERSION
+# ARG FVERSION=latest
+# FROM fedora:$FVERSION
+# # Needed for later use of FVERSION
+# ARG FVERSION
+FROM fedora:41
 LABEL maintainer="daos@daos.groups.io"
 
 # Use local repo server if present
