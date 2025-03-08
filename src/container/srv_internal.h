@@ -91,6 +91,7 @@ struct cont_svc {
 	rdb_path_t              cs_hdls;        /* container handle KVS */
 	struct ds_pool	       *cs_pool;
 
+	bool                    cs_destroying; /* container is in destroying */
 	/* Manage the EC aggregation epoch and stable epoch */
 	struct sched_request   *cs_cont_ephs_leader_req;
 	d_list_t		cs_cont_ephs_leader_list; /* link cont_track_eph_leader */
