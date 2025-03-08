@@ -95,8 +95,11 @@ if [ -n "$REPO_FILE_URL" ]; then
         --output /usr/local/share/keyrings/daos-stack-public.gpg
 fi
 
+# Now these packages are needed for the python3 venv that the
+# dockerfile is trying to create.
 apt-get update
-apt-get install python3 python3-venv
+apt-get install python3 python3-venv python3-pip gcc
+
 if [[ "$BASE_DISTRO" == "20."* ]]; then
     apt-get update
     apt-get upgrade
