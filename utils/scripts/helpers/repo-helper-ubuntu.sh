@@ -70,7 +70,7 @@ fi
 # These need to be installed here until we can figure out how to
 # get them installed from a local repository.
 apt-get update
-apt-get install ca-certificates gpg gpg-agent locales
+apt-get install ca-certificates gpg gpg-agent
 if [[ "$BASE_DISTRO" == "20."* ]]; then
     apt-get install software-properties-common
 fi
@@ -94,12 +94,6 @@ if [ -n "$REPO_FILE_URL" ]; then
     gpg --no-default-keyring --keyring ./temp-keyring.gpg --export   \
         --output /usr/local/share/keyrings/daos-stack-public.gpg
 fi
-
-# Now these packages are needed for the python3 venv that the
-# dockerfile is trying to create.
-apt-get update
-apt-get install python3 python3-venv python3-pip gcc python3-dev \
-                build-essential
 
 if [[ "$BASE_DISTRO" == "20."* ]]; then
     apt-get update

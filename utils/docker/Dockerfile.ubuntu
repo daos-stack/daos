@@ -21,19 +21,19 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Install basic tools
 ARG DAOS_LAB_CA_FILE_URL
-# script to setup local repo if available
+# script to setup local repo if available and install packages
 COPY ./utils/scripts/helpers/repo-helper-ubuntu.sh /tmp/repo-helper.sh
+COPY ./utils/scripts/helpers/install-ubuntu.sh /tmp/install.sh
 
-RUN chmod +x /tmp/repo-helper.sh &&                 \
+RUN chmod +x /tmp/repo-helper.sh /tmp/install.sh && \
     /tmp/repo-helper.sh &&                          \
-    rm -f /tmp/repo-helper.sh
+    rm -f /tmp/repo-helper.sh /tmp/install.sh
 
 RUN locale-gen en_US.UTF-8
 
 # use Java 8 instead of default Java 11
-# Java 8 is no longer available for Ubuntu
-# RUN update-alternatives --set \
-#    java /usr/lib/jvm/java-8-openjdk-*/jre/bin/java
+RUN update-alternatives --set \
+    java /usr/lib/jvm/java-8-openjdk-*/jre/bin/java
 
 ARG UID=5000
 
