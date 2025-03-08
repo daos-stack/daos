@@ -1753,7 +1753,7 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 
 	rc = ds_pool_thread_collective(pool_uuid,
 				       PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
-				       cont_open_one, &arg, DSS_ULT_DEEP_STACK);
+				       cont_open_one, &arg, 0);
 	if (rc != 0)
 		/* Once it exclude the target from the pool, since the target
 		 * might still in the cart group, so IV cont open might still
@@ -2061,7 +2061,7 @@ ds_cont_tgt_snapshots_update(uuid_t pool_uuid, uuid_t cont_uuid,
 	 */
 	return ds_pool_thread_collective(
 	    pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT | PO_COMP_ST_UP,
-	    cont_snap_update_one, &args, DSS_ULT_DEEP_STACK);
+	    cont_snap_update_one, &args, 0);
 }
 
 void
