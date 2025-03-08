@@ -98,7 +98,8 @@ fi
 # Now these packages are needed for the python3 venv that the
 # dockerfile is trying to create.
 apt-get update
-apt-get install python3 python3-venv python3-pip gcc python3-dev
+apt-get install python3 python3-venv python3-pip gcc python3-dev \
+                build-essential
 
 if [[ "$BASE_DISTRO" == "20."* ]]; then
     apt-get update
