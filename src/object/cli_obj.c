@@ -5140,7 +5140,7 @@ obj_csum_update(struct dc_object *obj, daos_obj_update_t *args, struct obj_auxi_
 	if (!obj_csum_dedup_candidate(&obj->cob_co->dc_props, args->iods, args->nr))
 		return 0;
 
-	if (obj_auxi->csum_retry) {
+	if (obj_auxi->csum_retry && obj_auxi->rw_args.csum_retry_cnt > 2) {
 		/* Release old checksum result and prepare for new calculation */
 		daos_csummer_free_ci(obj->cob_co->dc_csummer, &obj_auxi->rw_args.dkey_csum);
 		daos_csummer_free_ic(obj->cob_co->dc_csummer, &obj_auxi->rw_args.iod_csums);
