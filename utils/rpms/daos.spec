@@ -6,9 +6,7 @@
 %bcond_without server
 
 %if %{without server}
-%global server_build_args
-%else
-%global server_build_args client test
+%global client_build_args client test
 %endif
 %global mercury_version   2.4
 %global libfabric_version 1.15.1-1
@@ -82,7 +80,9 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
+%if %{with server}
 BuildRequires: daos-raft-devel = 0.11.0-1.416.g12dbc15%{?dist}
+%endif
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -347,7 +347,7 @@ This is the package that bridges the difference between the MOFED openmpi
       USE_INSTALLED=all      \
       FIRMWARE_MGMT=yes      \
       CONF_DIR=%{conf_dir}   \
-     %{?server_build_args}   \
+     %{?client_build_args}   \
      %{?scons_args}          \
      %{?compiler_args}
 
@@ -366,7 +366,7 @@ mv test.cov{,-build}
       FIRMWARE_MGMT=yes               \
       CONF_DIR=%{conf_dir}            \
       PREFIX=%{_prefix}               \
-     %{?server_build_args}            \
+     %{?client_build_args}            \
       %{?scons_args}                  \
       %{?compiler_args}
 
