@@ -1358,9 +1358,6 @@ engines:
 <end>
 ```
 
-There are a few optional providers that are not built by default. For detailed
-information, please refer to the [DAOS build documentation][6].
-
 !!! note
     DAOS Control Servers will need to be restarted on all hosts after updates to the server
     configuration file.
@@ -1369,9 +1366,6 @@ information, please refer to the [DAOS build documentation][6].
     include the hostnames or IP addresses (don't need to specify port) of those hosts.
 
     This will be the set of servers which host the replicated DAOS management service (MS).
-
->The support of the optional providers is not guarantee and can be removed
->without further notification.
 
 ### Network Configuration
 
@@ -1763,8 +1757,6 @@ the `[Service]` section before reloading systemd and restarting the
 [^4]: https://github.com/daos-stack/daos/tree/master/src/control/README.md
 
 [^5]: https://github.com/pmem/ndctl/issues/130
-
-[6]: <../dev/development.md#building-optional-components> (Building DAOS for Development)
 
 ## Multi-user DFuse setup
 
