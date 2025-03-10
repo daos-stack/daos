@@ -254,9 +254,9 @@ static int pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc,
 static int
 	   pool_space_query_bcast(crt_context_t ctx, struct pool_svc *svc, uuid_t pool_hdl,
 				  struct daos_pool_space *ps, uint64_t *mem_file_bytes);
-static int ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
-				     struct pool_svc *svc, crt_rpc_t *rpc, uuid_t srv_pool_hdl,
-				     uuid_t srv_cont_hdl);
+static int
+ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint, struct pool_svc *svc,
+			  crt_rpc_t *rpc, uuid_t srv_pool_hdl, uuid_t srv_cont_hdl);
 static int
 find_hdls_to_evict(struct rdb_tx *tx, struct pool_svc *svc, uuid_t **hdl_uuids,
 		   size_t *hdl_uuids_size, int *n_hdl_uuids, char *machine);
@@ -2327,8 +2327,8 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	struct pool_svc	       *svc = pool_svc_obj(rsvc);
 	struct pool_buf	       *map_buf = NULL;
 	uint32_t		map_version = 0;
-	uuid_t			srv_pool_hdl;
-	uuid_t			srv_cont_hdl;
+	uuid_t                  srv_pool_hdl;
+	uuid_t                  srv_cont_hdl;
 	daos_prop_t	       *prop = NULL;
 	bool			cont_svc_up = false;
 	bool			events_initialized = false;
@@ -2351,8 +2351,8 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	if (!primary_group_initialized())
 		return -DER_GRPVER;
 
-	rc = read_db_for_stepping_up(svc, &map_buf, &map_version, &prop, srv_pool_hdl,
-				     srv_cont_hdl);
+	rc =
+	    read_db_for_stepping_up(svc, &map_buf, &map_version, &prop, srv_pool_hdl, srv_cont_hdl);
 	if (rc != 0)
 		goto out;
 
@@ -2449,8 +2449,9 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 		D_GOTO(out, rc);
 	}
 
-	DS_POOL_LOG_PRINT(NOTE, DF_UUID": rank %u became pool service leader "DF_U64
-			  ": srv_pool_hdl="DF_UUID" srv_cont_hdl="DF_UUID"\n",
+	DS_POOL_LOG_PRINT(NOTE,
+			  DF_UUID ": rank %u became pool service leader " DF_U64
+				  ": srv_pool_hdl=" DF_UUID " srv_cont_hdl=" DF_UUID "\n",
 			  DP_UUID(svc->ps_uuid), rank, svc->ps_rsvc.s_term, DP_UUID(srv_pool_hdl),
 			  DP_UUID(srv_cont_hdl));
 out:
@@ -5646,7 +5647,7 @@ pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc, uuid_t pool_uuid, cr
 	d_iov_t			value;
 	uint64_t		val;
 	uint32_t		val32;
-	uuid_t			valuuid;
+	uuid_t                  valuuid;
 	int			rc;
 	bool			need_commit = false;
 	uuid_t		       *hdl_uuids = NULL;
