@@ -313,9 +313,9 @@ jobs:
 
   Build-branch-ARM:
     name: Build DAOS (ARM64)
-    if: github.repository == 'daos-stack/daos'
-    runs-on: ubuntu-24.04
-    # runs-on: [self-hosted, ARM64]
+    if: false  # Disable until we have ARM64 runners
+    # if: github.repository == 'daos-stack/daos'
+    runs-on: [self-hosted, ARM64]
     strategy:
       fail-fast: false
       matrix:
@@ -337,10 +337,6 @@ jobs:
       DOCKER_BASE: ${{ matrix.base }}
       COMPILER: ${{ matrix.compiler }}
     steps:
-      - name: Dummy ARM build
-        run: |
-          echo "No self-hosted ARM runners available"
-          exit 1
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -399,6 +395,6 @@ jobs:
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER=gcc
       - name: Run NLT
-        run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
-                 --user root:root build-image ./daos/utils/node_local_test.py --no-root
+        run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
+                 build-image ./daos/utils/node_local_test.py --no-root
                  --memcheck no --test cont_copy --system-ram-reserved 6
