@@ -47,14 +47,11 @@ on:
         required: false
         type: boolean
         default: false
-# Disable the workflow until the infrastructure is in place and
-# the test procedure is fully implemented.
-# This will also disable the constantly failing 'RPM Build and Test Report' workflow
-#   pull_request:
-#   push:
-#     branches:
-#       - master
-#       - 'release/*'
+  pull_request:
+  push:
+    branches:
+      - master
+      - 'release/*'
 
 concurrency:
   group: rpm-build-and-test-${{ github.head_ref  || github.run_id }}
@@ -74,6 +71,7 @@ jobs:
     # with:
     #    NAME: ${{ env.NAME }}
     # in the Call-RPM-Build job but the above issue prevents it
+    if: false  # Disable this job until it will be fully implemented
     name: Compute outputs
     runs-on: [self-hosted, light]
     outputs:
