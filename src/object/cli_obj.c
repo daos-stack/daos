@@ -20,8 +20,19 @@
 #include <daos_types.h>
 #include <daos_obj.h>
 #include "obj_rpc.h"
+#include <daos/rpc.h>
 #include "obj_internal.h"
 #include "cli_csum.h"
+#include <semaphore.h>
+
+/*
+ * Arg of ping_task
+ */
+struct ping_task_arg {
+	daos_handle_t         pool_hdl;
+	struct dc_object     *obj;
+	struct obj_auxi_args *obj_auxi;
+};
 
 /**
  * Open an object shard (shard object), cache the open handle.
@@ -844,6 +855,7 @@ obj_dkey2grpidx(struct dc_object *obj, uint64_t hash, unsigned int map_ver)
 	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 
 	grp_size = obj_get_grp_size(obj);
+
 	D_ASSERT(grp_size > 0);
 
 	D_RWLOCK_RDLOCK(&obj->cob_lock);
@@ -1403,6 +1415,96 @@ obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
 	return 0;
 }
 
+static int
+ping_task(tse_task_t *task)
+{
+	daos_handle_t         pool_hdl;
+	struct dc_object     *obj;
+	struct obj_auxi_args *obj_auxi;
+	int                   first_target;
+	int                   grp_idx;
+	int                   i;
+	int                   target;
+	int                   tgt_id;
+	int                   rc = 0;
+
+	struct ping_task_arg *arg = tse_task_buf_embedded(task, sizeof(*arg));
+	pool_hdl                  = arg->pool_hdl;
+	obj                       = arg->obj;
+	obj_auxi                  = arg->obj_auxi;
+
+	grp_idx      = obj_dkey2grpidx(obj, obj_auxi->dkey_hash, obj->cob_version);
+	first_target = grp_idx * obj->cob_grp_size;
+
+	for (i = 0, target = first_target; i < obj->cob_grp_size; i++, target++) {
+		tgt_id = obj->cob_shards->do_shards[target].do_pl_shard.po_target;
+
+		rc = ping_target(tgt_id, pool_hdl);
+		if (rc != 0) {
+			D_ERROR("failed to ping target " DF_RC "\n", DP_RC(rc));
+			return rc;
+		}
+	}
+
+	tse_task_complete(task, 0);
+	return 0;
+}
+
+int
+create_ping_task(tse_sched_t *sched, daos_handle_t pool_hdl, struct dc_object *obj,
+		 struct obj_auxi_args *obj_auxi, tse_task_t **task)
+{
+	struct dc_pool       *pool;
+	tse_task_t           *t;
+	int                   rc;
+	struct ping_task_arg *a;
+
+	pool = dc_hdl2pool(pool_hdl);
+	if (pool == NULL) {
+		D_ERROR("failed to find pool handle " DF_X64 "\n", pool_hdl.cookie);
+		return -DER_NO_HDL;
+	}
+
+	rc = tse_task_create(ping_task, sched, NULL, &t);
+	if (rc != 0) {
+		D_ERROR("%s", "failed to create task");
+		return rc;
+	}
+
+	a = tse_task_buf_embedded(t, sizeof(*a));
+	dc_pool_get(pool);
+	a->pool_hdl = pool_hdl;
+	a->obj      = obj;
+	a->obj_auxi = obj_auxi;
+
+	*task = t;
+	dc_pool_put(pool);
+	return 0;
+}
+
+int
+obj_tgt_ping_task(tse_sched_t *sched, struct dc_object *obj, struct obj_auxi_args *obj_auxi,
+		  tse_task_t **taskp)
+{
+	tse_task_t     *task;
+	struct dc_pool *pool;
+	daos_handle_t   ph;
+	int             rc = 0;
+
+	pool = obj->cob_pool;
+	D_ASSERT(pool != NULL);
+
+	dc_pool2hdl_noref(pool, &ph);
+
+	rc = create_ping_task(sched, ph, obj, obj_auxi, &task);
+	if (rc != 0) {
+		return rc;
+	}
+
+	*taskp = task;
+	return 0;
+}
+
 int
 dc_obj_register_class(tse_task_t *task)
 {
@@ -1756,23 +1858,28 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	     bool *io_task_reinited)
 {
 	tse_sched_t	 *sched = tse_task2sched(task);
-	tse_task_t	 *pool_task = NULL;
+	tse_task_t       *required_task = NULL;
 	uint32_t	  delay;
+	bool              is_pool_task = false;
 	int		  result = task->dt_result;
 	int		  rc;
 
 	if (pmap_stale) {
-		rc = obj_pool_query_task(sched, obj, 0, &pool_task);
+		is_pool_task = true;
+		rc           = obj_pool_query_task(sched, obj, 0, &required_task);
 		if (rc != 0)
 			D_GOTO(err, rc);
+	} else if (result == -DER_CLIENT_UNREACH) {
+		rc = obj_tgt_ping_task(sched, obj, obj_auxi, &required_task);
 	}
 
 	if (obj_auxi->io_retry) {
-		if (pool_task != NULL) {
-			rc = dc_task_depend(task, 1, &pool_task);
+		if (required_task != NULL) {
+			rc = dc_task_depend(task, 1, &required_task);
 			if (rc != 0) {
 				D_ERROR("Failed to add dependency on pool "
-					 "query task (%p)\n", pool_task);
+					"query task (%p)\n",
+					required_task);
 				D_GOTO(err, rc);
 			}
 		}
@@ -1786,17 +1893,17 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 		*io_task_reinited = true;
 	}
 
-	if (pool_task != NULL)
+	if (required_task != NULL)
 		/* ignore returned value, error is reported by comp_cb */
-		tse_task_schedule(pool_task, obj_auxi->io_retry);
+		tse_task_schedule(required_task, obj_auxi->io_retry);
 
 	D_DEBUG(DB_IO, "Retrying task=%p/%d for err=%d, io_retry=%d\n",
 		task, task->dt_result, result, obj_auxi->io_retry);
 
 	return 0;
 err:
-	if (pool_task)
-		dc_pool_abandon_map_refresh_task(pool_task);
+	if (is_pool_task && required_task)
+		dc_pool_abandon_map_refresh_task(required_task);
 
 	task->dt_result = result; /* restore the original error */
 	obj_auxi->io_retry = 0;
