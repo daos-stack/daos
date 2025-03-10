@@ -69,7 +69,7 @@ def scons():
     Export('dc_credit')
 
     if prereqs.server_requested():
-        SConscript('dav_v2/SConscript')
+        SConscript('dav_v2/SConscript', exports=['denv'])
         build_daos_common(denv, False)
 
     if not prereqs.test_requested():
