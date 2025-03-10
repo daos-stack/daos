@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -126,7 +127,9 @@ test_d_errstr(void **state)
 	assert_string_equal(value, "DER_QUOTA_LIMIT");
 	value = d_errstr(-1046);
 	assert_string_equal(value, "DER_QUOTA_LIMIT");
-	value = d_errstr(-(DER_QUOTA_LIMIT + 1));
+	value = d_errstr(-DER_CLIENT_UNREACH);
+	assert_string_equal(value, "DER_CLIENT_UNREACH");
+	value = d_errstr(-(DER_CLIENT_UNREACH + 1));
 	assert_string_equal(value, "DER_UNKNOWN");
 
 	/* Check the end of the DAOS error numbers. */
