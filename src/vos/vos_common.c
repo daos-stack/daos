@@ -1,6 +1,7 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -581,6 +582,12 @@ vos_tls_init(int tags, int xs_id, int tgt_id)
 			D_WARN("Failed to create committed cnt sensor: "DF_RC"\n",
 			       DP_RC(rc));
 
+		rc = d_tm_add_metric(&tls->vtl_invalid_dtx, D_TM_COUNTER,
+				     "Number of invalid active DTX", NULL, "io/dtx/invalid/tgt_%u",
+				     tgt_id);
+		if (rc)
+			D_WARN("Failed to create invalid DTX cnt sensor: " DF_RC "\n", DP_RC(rc));
+
 		rc = d_tm_add_metric(&tls->vtl_obj_cnt, D_TM_GAUGE,
 				     "Number of cached vos object", "entry",
 				     "mem/vos/vos_obj_%u/tgt_%u",
@@ -722,6 +729,14 @@ vos_mod_init(void)
 
 	d_getenv_bool("DAOS_DKEY_PUNCH_PROPAGATE", &vos_dkey_punch_propagate);
 	D_INFO("DKEY punch propagation is %s\n", vos_dkey_punch_propagate ? "enabled" : "disabled");
+
+	/*
+	 * NOTE: It is used to skip old partial committed DTX records that were generated when
+	 *	 ran as DAOS-2.6.3-rc{1,2}. If the user has never used such version, please do
+	 *	 NOT set this environment variable.
+	 */
+	d_getenv_bool("DAOS_SKIP_OLD_PARTIAL_DTX", &vos_skip_old_partial_dtx);
+	D_INFO("%s old partial committed DTX record\n", vos_skip_old_partial_dtx ? "Skip" : "Keep");
 
 	vos_agg_gap = VOS_AGG_GAP_DEF;
 	d_getenv_uint("DAOS_VOS_AGG_GAP", &vos_agg_gap);

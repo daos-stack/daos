@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -101,7 +102,7 @@ skip_agent:
 }
 
 int
-dc_tm_init(void)
+dc_tm_init(crt_init_options_t *crt_info)
 {
 	struct d_tm_node_t *started_at;
 	pid_t               pid = getpid();
@@ -117,6 +118,9 @@ dc_tm_init(void)
 		return 0;
 
 	D_INFO("Setting up client telemetry for %s/%d\n", dc_jobid, pid);
+
+	/* Enable client-appropriate CaRT telemetry. */
+	crt_info->cio_use_sensors = 1;
 
 	rc = dc_tls_key_create();
 	if (rc)

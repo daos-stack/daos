@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -71,7 +72,7 @@ daos_module_nr_pool_metrics(void);
  *  Called during library initialization to init metrics.
  */
 int
-dc_tm_init(void);
+dc_tm_init(crt_init_options_t *crt_info);
 
 /**
  *  Called during library finalization to free metrics resources

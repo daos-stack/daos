@@ -1,5 +1,7 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -215,6 +217,13 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_attach, rc);
 
+	/** set up client telemetry */
+	rc = dc_tm_init(crt_info);
+	if (rc != 0) {
+		/* should not be fatal */
+		DL_WARN(rc, "failed to initialize client telemetry");
+	}
+
 	/** set up event queue */
 	rc = daos_eq_lib_init(crt_info);
 	D_FREE(crt_info->cio_provider);
@@ -242,13 +251,6 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_pl, rc);
 
-	/** set up client telemetry */
-	rc = dc_tm_init();
-	if (rc != 0) {
-		/* should not be fatal */
-		DL_WARN(rc, "failed to initialize client telemetry");
-	}
-
 	/** set up pool */
 	rc = dc_pool_init();
 	if (rc != 0)
@@ -270,6 +272,7 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_obj, rc);
 #endif
+	daos_array_env_init();
 	module_initialized++;
 	D_GOTO(unlock, rc = 0);
 
@@ -282,13 +285,13 @@ out_co:
 out_pool:
 	dc_pool_fini();
 out_mgmt:
-	dc_tm_fini();
 	dc_mgmt_fini();
 out_pl:
 	pl_fini();
 out_eq:
 	daos_eq_lib_fini();
 out_attach:
+	dc_tm_fini();
 	dc_mgmt_drop_attach_info();
 out_job:
 	dc_job_fini();
