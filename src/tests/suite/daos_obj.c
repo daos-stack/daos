@@ -2533,6 +2533,21 @@ io_simple_update_timeout(void **state)
 }
 
 static void
+io_simple_update_client_unreachable(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+
+	FAULT_INJECTION_REQUIRED();
+	
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_CLIENT_UNREACHABLE | DAOS_FAIL_ONCE);
+
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
+	io_simple_internal(state, oid, 64, DAOS_IOD_ARRAY, "test_update dkey client unreachable",
+			   "test_update akey client unreachable");
+}
+
+static void
 io_simple_fetch_timeout(void **state)
 {
 	test_arg_t	*arg = *state;
@@ -5481,6 +5496,8 @@ static const struct CMUnitTest io_tests[] = {
 	  io_56, async_disable, test_case_teardown},
 	{ "IO57: collective object query with rank_0 excluded",
 	  io_57, rebuild_sub_rf1_setup, test_teardown},
+	{ "IO58: update with client unreachable",
+	  io_simple_update_client_unreachable, async_disable, test_case_teardown},
 };
 
 int

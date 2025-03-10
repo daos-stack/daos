@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2025 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -200,6 +200,7 @@ int dc_pool_choose_svc_rank(const char *label, uuid_t puuid,
 int dc_pool_create_map_refresh_task(daos_handle_t pool_hdl, uint32_t map_version,
 				    tse_sched_t *sched, tse_task_t **task);
 void dc_pool_abandon_map_refresh_task(tse_task_t *task);
+int ping_target(int tgt_id, daos_handle_t pool_hdl);
 
 int
 dc_pool_mark_all_slave(void);
