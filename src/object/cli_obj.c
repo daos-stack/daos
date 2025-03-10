@@ -1439,7 +1439,7 @@ ping_task(tse_task_t *task)
 	for (i = 0, target = first_target; i < obj->cob_grp_size; i++, target++) {
 		tgt_id = obj->cob_shards->do_shards[target].do_pl_shard.po_target;
 
-		rc = ping_target(tgt_id, pool_hdl);
+		rc = dc_pool_ping_target(tgt_id, pool_hdl);
 		if (rc != 0) {
 			D_ERROR("failed to ping target " DF_RC "\n", DP_RC(rc));
 			return rc;
