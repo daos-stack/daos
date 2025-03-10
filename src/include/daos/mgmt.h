@@ -66,7 +66,7 @@ ssize_t dc_mgmt_sys_decode(void *buf, size_t len, struct dc_mgmt_sys **sysp);
 int
 dc_mgmt_net_cfg_init(const char *name, crt_init_options_t *crt_info);
 void
-dc_mgmt_net_cfg_fini(void);
+    dc_mgmt_net_cfg_fini(void);
 
 int dc_mgmt_net_cfg_check(const char *name);
 int dc_mgmt_get_pool_svc_ranks(struct dc_mgmt_sys *sys, const uuid_t puuid,
