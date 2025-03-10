@@ -29,12 +29,10 @@ def get_cmocka_command(command, parameters=None):
     """
     keywords = ["Process received signal", "stack smashing detected", "End of error message",
                 "buffer overflow detected"]
-    path, executable = os.path.split(command.strip())
+    path, executable = os.path.split(command)
     command = CmockaCommand(path, executable, keywords)
-    command.log.debug(
-        "DBG: Added CmockaCommand(): command=%s, command_path=%s",
-        command.command, command.command_path)
-    command.parameters.value = parameters
+    if parameters:
+        command.parameters.value = parameters.strip()
     return command
 
 
