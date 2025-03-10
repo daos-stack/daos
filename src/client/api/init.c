@@ -291,7 +291,7 @@ out_pl:
 out_eq:
 	daos_eq_lib_fini();
 out_net_cfg:
-	dc_mgmt_net_cfg_fini()
+	dc_mgmt_net_cfg_fini();
 out_attach:
 	dc_tm_fini();
 	dc_mgmt_drop_attach_info();
