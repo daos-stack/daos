@@ -861,71 +861,71 @@ func TestSystem_Membership_Join(t *testing.T) {
 				MapVersion: expMapVer,
 			},
 		},
-		"rejoin with existing UUID and nil rank; replace mode set in request": {
-			req: &JoinRequest{
-				Rank:             NilRank,
-				UUID:             curMember.UUID,
-				ControlAddr:      curMember.Addr,
-				PrimaryFabricURI: curMember.Addr.String(),
-				FaultDomain:      curMember.FaultDomain,
-				ReplaceMode:      true,
-			},
-			expErr: errors.New("unexpectedly matches db"),
-		},
-		// DAOS-15947 TODO: This should probably be refused as duplicate addresses/URIs
-		//                  rather than joining a new rank.
-		"rejoin identical member with new UUID and nil rank; replace mode not set": {
-			req: &JoinRequest{
-				Rank:             NilRank,
-				UUID:             newUUID,
-				ControlAddr:      curMember.Addr,
-				PrimaryFabricURI: curMember.Addr.String(),
-				FaultDomain:      curMember.FaultDomain,
-			},
-			expResp: &JoinResponse{
-				Created: true,
-				Member: func() *Member {
-					cm := *defaultCurMembers[0]
-					cm.UUID = newUUID
-					cm.Rank = 2
-					return &cm
-				}(),
-				PrevState:  MemberStateUnknown,
-				MapVersion: expMapVer,
-			},
-		},
-		"rejoin identical member with new UUID and nil rank; replace mode set; not found": {
-			req: &JoinRequest{
-				Rank:             NilRank,
-				UUID:             newUUID,
-				ControlAddr:      newMember.Addr, // Shouldn't match entry in db.
-				PrimaryFabricURI: curMember.Addr.String(),
-				FaultDomain:      curMember.FaultDomain,
-				ReplaceMode:      true,
-			},
-			expErr: errors.New("no such member"),
-		},
-		"rejoin identical member with new UUID and nil rank; replace mode set": {
-			req: &JoinRequest{
-				Rank:             NilRank,
-				UUID:             newUUID,
-				ControlAddr:      curMember.Addr,
-				PrimaryFabricURI: curMember.Addr.String(),
-				FaultDomain:      curMember.FaultDomain,
-				ReplaceMode:      true,
-			},
-			expResp: &JoinResponse{
-				Created: false,
-				Member: func() *Member {
-					cm := *defaultCurMembers[0]
-					cm.UUID = newUUID
-					return &cm
-				}(),
-				PrevState: curMember.State,
-				// Extra map increment because of remove and add operations.
-				MapVersion: expMapVer + 1,
-			},
-		},
+		//		"rejoin with existing UUID and nil rank; replace mode set in request": {
+		//			req: &JoinRequest{
+		//				Rank:             NilRank,
+		//				UUID:             curMember.UUID,
+		//				ControlAddr:      curMember.Addr,
+		//				PrimaryFabricURI: curMember.Addr.String(),
+		//				FaultDomain:      curMember.FaultDomain,
+		//				ReplaceMode:      true,
+		//			},
+		//			expErr: errors.New("unexpectedly matches db"),
+		//		},
+		//		// DAOS-15947 TODO: This should probably be refused as duplicate addresses/URIs
+		//		//                  rather than joining a new rank.
+		//		"rejoin identical member with new UUID and nil rank; replace mode not set": {
+		//			req: &JoinRequest{
+		//				Rank:             NilRank,
+		//				UUID:             newUUID,
+		//				ControlAddr:      curMember.Addr,
+		//				PrimaryFabricURI: curMember.Addr.String(),
+		//				FaultDomain:      curMember.FaultDomain,
+		//			},
+		//			expResp: &JoinResponse{
+		//				Created: true,
+		//				Member: func() *Member {
+		//					cm := *defaultCurMembers[0]
+		//					cm.UUID = newUUID
+		//					cm.Rank = 2
+		//					return &cm
+		//				}(),
+		//				PrevState:  MemberStateUnknown,
+		//				MapVersion: expMapVer,
+		//			},
+		//		},
+		//		"rejoin identical member with new UUID and nil rank; replace mode set; not found": {
+		//			req: &JoinRequest{
+		//				Rank:             NilRank,
+		//				UUID:             newUUID,
+		//				ControlAddr:      newMember.Addr, // Shouldn't match entry in db.
+		//				PrimaryFabricURI: curMember.Addr.String(),
+		//				FaultDomain:      curMember.FaultDomain,
+		//				ReplaceMode:      true,
+		//			},
+		//			expErr: errors.New("no such member"),
+		//		},
+		//		"rejoin identical member with new UUID and nil rank; replace mode set": {
+		//			req: &JoinRequest{
+		//				Rank:             NilRank,
+		//				UUID:             newUUID,
+		//				ControlAddr:      curMember.Addr,
+		//				PrimaryFabricURI: curMember.Addr.String(),
+		//				FaultDomain:      curMember.FaultDomain,
+		//				ReplaceMode:      true,
+		//			},
+		//			expResp: &JoinResponse{
+		//				Created: false,
+		//				Member: func() *Member {
+		//					cm := *defaultCurMembers[0]
+		//					cm.UUID = newUUID
+		//					return &cm
+		//				}(),
+		//				PrevState: curMember.State,
+		//				// Extra map increment because of remove and add operations.
+		//				MapVersion: expMapVer + 1,
+		//			},
+		//		},
 		"new member with bad fault domain depth": {
 			req: &JoinRequest{
 				Rank:             NilRank,

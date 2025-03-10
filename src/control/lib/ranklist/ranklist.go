@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -140,6 +141,15 @@ func (rs *RankSet) Ranks() (out []Rank) {
 	}
 
 	return
+}
+
+// Ranks returns true if Rank found in RankSet.
+func (rs *RankSet) Contains(r Rank) bool {
+	if rs == nil {
+		return false
+	}
+
+	return rs.ns.Contains(uint(r))
 }
 
 func (rs *RankSet) MarshalJSON() ([]byte, error) {

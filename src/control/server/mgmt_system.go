@@ -180,6 +180,53 @@ func getPeerListenAddr(ctx context.Context, listenAddrStr string) (*net.TCPAddr,
 		net.JoinHostPort(tcpAddr.IP.String(), portStr))
 }
 
+// Check rank to be replaced is excluded from all it's pools.
+// 1. Get potential replacement rank from membership
+// 2. Retrieve pool-rank map for pools to query
+// 3. Query each pool that rank belongs to
+// 4. Check rank is not in response list of enabled ranks
+func (svc *mgmtSvc) checkReplaceModeRank(ctx context.Context, rankToReplace ranklist.Rank) error {
+	if rankToReplace == ranklist.NilRank {
+		return errors.New("checking replace mode rank, nil rank supplied")
+	}
+
+	// Retrieve rank-to-pool mappings.
+	rl := ranklist.RankList{rankToReplace}
+	poolIDs, poolRanks, err := svc.getPoolsRanks(ranklist.RankSetFromRanks(rl))
+	if err != nil {
+		return err
+	}
+
+	if len(poolIDs) != len(poolRanks) {
+		return errors.New("nr poolIDs should be equal to poolRanks keys")
+	}
+	if len(poolIDs) == 0 {
+		return errors.New("no pool-ranks found to operate on with request params")
+	}
+
+	// Verify rank to replace is excluded in all pools.
+	for _, id := range poolIDs {
+		rs := poolRanks[id]
+		if rs.Count() == 0 {
+			return errors.Errorf("no ranks in map for pool %s", id)
+		}
+
+		req := &mgmtpb.PoolQueryReq{Id: id, Sys: svc.sysdb.SystemName()}
+
+		resp, err := svc.PoolQuery(ctx, req)
+		if err != nil {
+			return errors.Wrap(err, "query on pool failed")
+		}
+		enabledRanks := ranklist.MustCreateRankSet(resp.EnabledRanks)
+
+		if enabledRanks.Contains(rankToReplace) {
+			return FaultJoinReplaceEnabledPoolRank(rankToReplace, id)
+		}
+	}
+
+	return nil
+}
+
 // join handles a request to join the system and is called from
 // the batch processing goroutine.
 func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net.TCPAddr) (*mgmtpb.JoinResp, error) {
@@ -197,7 +244,7 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 		return nil, err
 	}
 
-	joinResponse, err := svc.membership.Join(&system.JoinRequest{
+	joinReq := &system.JoinRequest{
 		Rank:                    ranklist.Rank(req.Rank),
 		UUID:                    uuid,
 		ControlAddr:             peerAddr,
@@ -209,7 +256,23 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 		Incarnation:             req.Incarnation,
 		CheckMode:               req.CheckMode,
 		ReplaceMode:             req.ReplaceMode,
-	})
+	}
+
+	if req.ReplaceMode {
+		rankToReplace, err := svc.membership.FindRankFromJoinRequest(joinReq)
+		if err != nil {
+			return nil, err
+		}
+		if rankToReplace == ranklist.NilRank {
+			return nil, FaultJoinReplaceRankNotFound(joinReq)
+		}
+		if err := svc.checkReplaceModeRank(ctx, rankToReplace); err != nil {
+			return nil, err
+		}
+		req.Rank = rankToReplace.Uint32()
+	}
+
+	joinResponse, err := svc.membership.Join(joinReq)
 	if err != nil {
 		if system.IsJoinFailure(err) {
 			publishJoinFailedEvent(req, peerAddr, svc.events, err.Error())
@@ -1092,7 +1155,7 @@ func (svc *mgmtSvc) refuseMissingRanks(hosts, ranks string) (*ranklist.RankSet, 
 		return nil, errors.Errorf("invalid rank(s): %s", missRanks.String())
 	}
 	if hitRanks.Count() == 0 {
-		return nil, errors.New("no ranks to drain")
+		return nil, errors.New("no ranks to operate on")
 	}
 
 	return hitRanks, nil

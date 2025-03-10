@@ -95,6 +95,44 @@ func (m *Membership) Count() (int, error) {
 	return m.db.MemberCount()
 }
 
+// FindRankFromJoinRequest finds the first rank that matches join request parameters. UUID shouldn't
+// match.
+func (m *Membership) FindRankFromJoinRequest(req *JoinRequest) (Rank, error) {
+	if !req.Rank.Equals(NilRank) {
+		return NilRank, errors.New("unexpected rank in rejoin request")
+	}
+
+	currentMembers, err := m.Members(nil)
+	if err != nil {
+		return NilRank, errors.Wrap(err, "failed to get all system members")
+	}
+
+	rank := NilRank
+	for _, cm := range currentMembers {
+		// Only match identical member with different UUID.
+		switch {
+		case cm.Addr.String() != req.ControlAddr.String(),
+			cm.PrimaryFabricURI != req.PrimaryFabricURI,
+			!slices.Equal(cm.SecondaryFabricURIs,
+				req.SecondaryFabricURIs),
+			cm.PrimaryFabricContexts != req.FabricContexts,
+			!slices.Equal(cm.SecondaryFabricContexts,
+				req.SecondaryFabricContexts),
+			!cm.FaultDomain.Equals(req.FaultDomain):
+			continue
+		}
+
+		if cm.UUID == req.UUID {
+			return NilRank, errors.New("unexpected matching uuid in rejoin request")
+		}
+
+		rank = cm.Rank
+		break
+	}
+
+	return rank, nil
+}
+
 // JoinRequest contains information needed for join membership update.
 type JoinRequest struct {
 	Rank                    Rank
@@ -129,20 +167,72 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 	}
 
 	resp = new(JoinResponse)
+
+	// If in replace mode, attempt to update UUID of existing member if identical control
+	// address and fabric URIs. Neither UUID or rank in request will match MS-db member.
+	if req.ReplaceMode {
+		if req.Rank == NilRank {
+			return nil, errors.New("unexpected nil rank in replace mode join request")
+		}
+
+		oldCount, err := m.db.MemberCount()
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to get member count")
+		}
+
+		// Update (remove then add) member with new UUID and set state to joined (regardless
+		// of previous state). Retain existing member record incarnation value.
+
+		cm, err := m.db.FindMemberByRank(req.Rank)
+		if err != nil {
+			return nil, err
+		}
+		memberToReplace := &Member{}
+		*memberToReplace = *cm
+
+		m.log.Debugf("rejoin: updating member with UUID %s->%s", memberToReplace.UUID,
+			req.UUID)
+
+		if err := m.db.RemoveMember(cm); err != nil {
+			return nil, errors.Wrap(err, "adding new uuid member in rejoin")
+		}
+
+		resp.PrevState = memberToReplace.State
+		memberToReplace.State = MemberStateJoined
+		memberToReplace.Info = ""
+		memberToReplace.UUID = req.UUID
+
+		if err := m.db.AddMember(memberToReplace); err != nil {
+			return nil, errors.Wrap(err, "adding new uuid member in rejoin")
+		}
+
+		newCount, err := m.db.MemberCount()
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to get member count")
+		}
+		if newCount != oldCount {
+			return nil, errors.Errorf("expect the same number of members before and "+
+				"after rejoin, want %d got %d", oldCount, newCount)
+		}
+
+		resp.Member = memberToReplace
+		resp.MapVersion, err = m.db.CurMapVersion()
+		if err != nil {
+			return nil, err
+		}
+
+		return resp, err
+	}
+
 	var curMember *Member
 	if !req.Rank.Equals(NilRank) {
 		curMember, err = m.db.FindMemberByRank(req.Rank)
 	} else {
-		// This should fail for req.ReplaceMode case as UUID is new.
 		curMember, err = m.db.FindMemberByUUID(req.UUID)
 	}
 
 	// Request for an existing MS-db member.
 	if err == nil {
-		if req.ReplaceMode {
-			return nil, errors.New("rejoin request unexpectedly matches db entry")
-		}
-
 		// Fault domain check only matters if there are other members
 		// besides the one being updated.
 		if count, err := m.Count(); err != nil {
@@ -207,87 +297,6 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 
 	if !IsMemberNotFound(err) {
 		return nil, err
-	}
-	err = nil
-
-	// If in replace mode, attempt to update UUID of existing member if identical control
-	// address and fabric URIs. Neither UUID or rank in request will match MS-db member.
-	if req.ReplaceMode {
-		if !req.Rank.Equals(NilRank) {
-			return nil, errors.New("unexpected rank in rejoin request")
-		}
-
-		oldCount, err := m.Count()
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to get member count")
-		}
-		currentMembers, err := m.db.AllMembers()
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to get all members")
-		}
-
-		var memberToReplace *Member
-		for _, cm := range currentMembers {
-			// Only match identical member with different UUID.
-			switch {
-			case cm.Addr.String() != req.ControlAddr.String(),
-				cm.PrimaryFabricURI != req.PrimaryFabricURI,
-				!slices.Equal(cm.SecondaryFabricURIs,
-					req.SecondaryFabricURIs),
-				cm.PrimaryFabricContexts != req.FabricContexts,
-				!slices.Equal(cm.SecondaryFabricContexts,
-					req.SecondaryFabricContexts),
-				!cm.FaultDomain.Equals(req.FaultDomain):
-				continue
-			}
-
-			if cm.UUID == req.UUID {
-				return nil, errors.New("unexpected matching uuid in rejoin request")
-			}
-
-			memberToReplace = new(Member)
-			*memberToReplace = *cm
-			if err := m.db.RemoveMember(cm); err != nil {
-				return nil, err
-			}
-			break
-		}
-		if memberToReplace == nil {
-			return nil, errors.Errorf("rejoin failed for request %+v, no such member "+
-				"exists", req)
-		}
-
-		// Update (remove then add) member with new UUID and set state to joined (regardless
-		// of previous state). Retain existing member record incarnation value.
-
-		m.log.Debugf("rejoin: updating member with UUID %s->%s", memberToReplace.UUID,
-			req.UUID)
-
-		resp.PrevState = memberToReplace.State
-		memberToReplace.State = MemberStateJoined
-		memberToReplace.Info = ""
-		memberToReplace.UUID = req.UUID
-
-		if err := m.db.AddMember(memberToReplace); err != nil {
-			return nil, errors.Wrap(err, "adding new uuid member in rejoin")
-		}
-
-		newCount, err := m.Count()
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to get member count")
-		}
-		if newCount != oldCount {
-			return nil, errors.Errorf("expect the same number of members before and "+
-				"after rejoin, want %d got %d", oldCount, newCount)
-		}
-
-		resp.Member = memberToReplace
-		resp.MapVersion, err = m.db.CurMapVersion()
-		if err != nil {
-			return nil, err
-		}
-
-		return resp, err
 	}
 
 	if err := m.checkReqFaultDomain(req); err != nil {
