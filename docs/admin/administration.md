@@ -900,10 +900,10 @@ from the pools it hosted, please check the pool operation section on how to
 reintegrate an excluded engine.
 
 After one or more DAOS engines being excluded, the DAOS agent cache needs to be
-refresh.  For detailed information, please refer to the [1][System Deployment
+refreshed.  For detailed information, please refer to the [1][System Deployment
 documentation].  Before refreshing the DAOS Agent cache, it should be checked
 that the exclusion information has been spread to the Management Service leader.
-This could be done thanks to the `dump-attachinfo` sub-command of the `daos_agent`
+This could be done using the `dump-attachinfo` sub-command of the `daos_agent`
 executable:
 
 ```bash
@@ -1082,7 +1082,7 @@ the system (this can be checked with `dmg system query -v`).
     Please see the pool operation section for how to extend the pool membership.
 
 After extending the system, the cache of the `daos_agent` service of the client
-nodes needs to be refresh.  For detailed information, please refer to the
+nodes needs to be refreshed.  For detailed information, please refer to the
 [1][System Deployment documentation].
 
 
