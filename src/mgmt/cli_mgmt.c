@@ -587,7 +587,7 @@ _split_env(char *env, char **name, char **value)
  * Configure the client's local environment with these parameters
  */
 int
-dc_mgmt_net_cfg(const char *name, crt_init_options_t *crt_info)
+dc_mgmt_net_cfg_init(const char *name, crt_init_options_t *crt_info)
 {
 	int                      rc;
 	char                    *cli_srx_set        = NULL;
@@ -740,6 +740,12 @@ cleanup:
 	d_freeenv_str(&cli_srx_set);
 
 	return rc;
+}
+
+void
+dc_mgmt_net_cfg_fini()
+{
+	D_FREE(g_serv_ranks);
 }
 
 int dc_mgmt_net_cfg_check(const char *name)
@@ -1635,8 +1641,6 @@ dc_mgmt_fini()
 
 	if (rc != 0)
 		D_ERROR("failed to unregister mgmt RPCs: "DF_RC"\n", DP_RC(rc));
-
-	D_FREE(g_serv_ranks);
 }
 
 int dc2_mgmt_svc_rip(tse_task_t *task)
