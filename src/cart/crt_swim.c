@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -505,12 +506,7 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc)
 	} else {
 		rc = swim_updates_parse(ctx, from_id, from_id, rpc_in->upds.ca_arrays,
 					rpc_in->upds.ca_count);
-		if (rc == -DER_SHUTDOWN) {
-			if (grp_priv->gp_size > 1)
-				D_ERROR("SWIM shutdown\n");
-			swim_self_set(ctx, SWIM_ID_INVALID);
-			D_GOTO(out_reply, rc);
-		} else if (rc) {
+		if (rc) {
 			RPC_ERROR(rpc_priv,
 				  "updates parse. %lu: %lu <= %lu failed: "DF_RC"\n",
 				  self_id, to_id, from_id, DP_RC(rc));
@@ -652,12 +648,7 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 	rc = swim_updates_parse(ctx, to_id,
 				rpc_type == SWIM_RPC_IREQ && !reply_rc ? from_id : to_id,
 				rpc_out->upds.ca_arrays, rpc_out->upds.ca_count);
-	if (rc == -DER_SHUTDOWN) {
-		if (grp_priv->gp_size > 1)
-			D_ERROR("SWIM shutdown\n");
-		swim_self_set(ctx, SWIM_ID_INVALID);
-		D_GOTO(out, rc);
-	} else if (rc) {
+	if (rc) {
 		RPC_ERROR(rpc_priv,
 			  "updates parse. %lu: %lu <= %lu failed: "DF_RC"\n",
 			  self_id, from_id, to_id, DP_RC(rc));
@@ -1054,11 +1045,7 @@ static int64_t crt_swim_progress_cb(crt_context_t crt_ctx, int64_t timeout_us, v
 	}
 
 	rc = swim_progress(ctx, timeout_us);
-	if (rc == -DER_SHUTDOWN) {
-		if (grp_priv->gp_size > 1)
-			D_ERROR("SWIM shutdown\n");
-		swim_self_set(ctx, SWIM_ID_INVALID);
-	} else if (rc == -DER_TIMEDOUT || rc == -DER_CANCELED) {
+	if (rc == -DER_TIMEDOUT || rc == -DER_CANCELED) {
 		uint64_t now = swim_now_ms();
 
 		crt_swim_update_last_unpack_hlc(csm);
