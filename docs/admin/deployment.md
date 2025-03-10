@@ -1729,26 +1729,46 @@ In certain circumstances (e.g. [system extension][6] with new servers), it may
 be needed to refresh the DAOS Agent cache.  The DAOS Agent normally caches a map
 of rank-to-fabric URI lookups as well as client network configuration data in
 order to reduce the number of management RPCs required to start an application.
-When this information becomes stale, the cache could be refresh with sending the
-`SIGUSR2` to the `daos_agent` process.  Alternatively, the Agent could be
-restarted in order to repopulate the cache with new information.  Finally, the
-caching mechanism may be disabled, with the tradeoff that each application
-launch will invoke management RPCs in order to obtain system connection
-information.
 
-To disable the DAOS Agent caching mechanism, set the following environment
-variable before starting the `daos_agent` process:
+After a new server has been added to the system, or an existing server has been
+permanently removed from the system, the administrator should ensure that the
+Agent is not serving stale system information to new clients. There are three
+options to achieve this goal:
 
-`DAOS_AGENT_DISABLE_CACHE=true`
+1. Send the `SIGUSR2` signal to the `daos_agent` process to force a refresh on
+   demand. This could be done with running the following command
 
-If running from systemd, add the following to the `daos_agent` service file in
-the `[Service]` section before reloading systemd and restarting the
-`daos_agent` service:
+```bash
+pkill -x -SIGUSR2 daos_agent
+```
 
-`Environment=DAOS_AGENT_DISABLE_CACHE=true`
+2. Add a cache expiration value, defined in minutes, to the Agent configuration
+   file `daos_agent.yml` in order to cause a cache refresh when the data is
+   older than the defined value.
 
-It is also possible to disable the `daos_agent` cache with adding the following
-entry into the `daos_agent.yml` configuration file:
+```yaml
+cache_expiration: 30
+```
+
+3. Disable the caching mechanism completely, with the tradeoff that each
+   application launch will invoke management RPCs in order to obtain system
+   connection information.  To disable the DAOS Agent caching mechanism, set the
+   following environment variable before starting the `daos_agent` process:
+
+```bash
+DAOS_AGENT_DISABLE_CACHE=true
+```
+
+   If running from systemd, add the following line to the `daos_agent` service
+   file in the `[Service]` section before reloading systemd and restarting the
+   `daos_agent` service:
+
+```ini
+Environment=DAOS_AGENT_DISABLE_CACHE=true
+```
+
+   It is also possible to disable the `daos_agent` cache with adding the
+   following entry into the `daos_agent.yml` configuration file:
 
 ```yaml
 disable_caching: true
