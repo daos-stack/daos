@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -723,6 +724,100 @@ warmup_cb(const struct crt_cb_info *info)
 	sem = (sem_t *)info->cci_arg;
 
 	sem_post(sem);
+}
+
+int
+ping_target(int tgt_id, daos_handle_t pool_hdl)
+{
+	struct pool_target        *tgts;
+	crt_endpoint_t             ep;
+	crt_rpc_t                 *rpc = NULL;
+	struct pool_tgt_warmup_in *rpc_in;
+	int                        idx;
+	crt_opcode_t               opcode;
+	struct dc_pool            *pool;
+	sem_t                      sem;
+	crt_bulk_t                 bulk_hdl;
+	void                      *bulk_buf;
+	int                        bulk_len = 4096;
+	crt_context_t              ctx;
+	int                        rc = 0;
+	d_sg_list_t                sgl;
+	d_iov_t                    iov;
+
+	pool = dc_hdl2pool(pool_hdl);
+
+	pool_map_find_target(pool->dp_map, tgt_id, &tgts);
+
+	D_ALLOC(bulk_buf, bulk_len);
+	if (bulk_buf == NULL) {
+		D_ERROR("Failed to alloc mem\n");
+		goto out_unlock;
+	}
+
+	ctx = daos_get_crt_ctx();
+
+	d_iov_set(&iov, bulk_buf, bulk_len);
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs   = &iov;
+	rc            = crt_bulk_create(ctx, &sgl, CRT_BULK_RW, &bulk_hdl);
+	if (rc < 0) {
+		D_ERROR("Failed to create bulk handle\n");
+		goto out_bulk;
+	}
+
+	rc = sem_init(&sem, 0, 0);
+	if (rc < 0) {
+		D_ERROR("Failed to initialize semaphore\n");
+		goto out_hdl;
+	}
+
+	idx = 0;
+	if (tgts[idx].ta_comp.co_status == PO_COMP_ST_DOWN ||
+	    tgts[idx].ta_comp.co_status == PO_COMP_ST_DOWNOUT)
+		return 0;
+
+	ep.ep_grp  = pool->dp_sys->sy_group;
+	ep.ep_rank = tgts[idx].ta_comp.co_rank;
+	ep.ep_tag  = daos_rpc_tag(DAOS_REQ_TGT, tgts[idx].ta_comp.co_index);
+	opcode     = DAOS_RPC_OPCODE(POOL_TGT_WARMUP, DAOS_POOL_MODULE,
+                                 dc_pool_proto_version ? dc_pool_proto_version : DAOS_POOL_VERSION);
+	rc         = crt_req_create(ctx, &ep, opcode, &rpc);
+	if (rc != 0) {
+		D_ERROR("Failed to allocate req " DF_RC "\n", DP_RC(rc));
+		goto out_sem;
+	}
+	D_ASSERTF(rc == 0, "crt_req_create failed; rc=%d\n", rc);
+	rpc_in          = crt_req_get(rpc);
+	rpc_in->tw_bulk = bulk_hdl;
+
+	rc = crt_req_send(rpc, warmup_cb, &sem);
+	if (rc != 0) {
+		D_ERROR("Failed to ping rank=%d:%d, " DF_RC "\n", ep.ep_rank, ep.ep_tag, DP_RC(rc));
+		goto out_sem;
+	}
+
+	while (sem_trywait(&sem) == -1) {
+		rc = crt_progress(ctx, 0);
+		if (rc && rc != -DER_TIMEDOUT) {
+			D_ERROR("failed to progress context, " DF_RC "\n", DP_RC(rc));
+			break;
+		}
+	}
+	rc = 0;
+out_sem:
+	(void)sem_destroy(&sem);
+	return rc;
+out_hdl:
+	crt_bulk_free(bulk_hdl);
+	return rc;
+out_bulk:
+	D_FREE(bulk_buf);
+	return rc;
+out_unlock:
+	D_MUTEX_UNLOCK(&warmup_lock);
+	return rc;
 }
 
 /*
