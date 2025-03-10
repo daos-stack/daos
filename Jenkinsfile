@@ -529,7 +529,7 @@ pipeline {
                             args '--group-add mock'     +
                                  ' --cap-add=SYS_ADMIN' +
                                  ' -v /scratch:/scratch'
-                            additionalBuildArgs dockerBuildArgs()
+                            additionalBuildArgs dockerBuildArgs() + '--build-arg FVERSION=41'
                         }
                     }
                     steps {
