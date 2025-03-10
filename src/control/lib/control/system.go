@@ -134,6 +134,7 @@ type SystemJoinReq struct {
 	InstanceIdx          uint32              `json:"idx"`
 	Incarnation          uint64              `json:"incarnation"`
 	CheckMode            bool                `json:"check_mode"`
+	ReplaceMode          bool                `json:"replace_mode"`
 }
 
 // MarshalJSON packs SystemJoinResp struct into a JSON message.

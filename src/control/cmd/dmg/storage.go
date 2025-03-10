@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -98,6 +99,7 @@ type storageFormatCmd struct {
 	cmdutil.JSONOutputCmd
 	Verbose bool `short:"v" long:"verbose" description:"Show results of each SCM & NVMe device format operation"`
 	Force   bool `long:"force" description:"Force storage format on a host, stopping any running engines (CAUTION: destructive operation)"`
+	Rejoin  bool `long:"rejoin" description:"Rejoin a previously joined but then excluded rank. Handles scenario where rank metadata is lost due to PMem or other storage media failure (CAUTION: experimental operation)"`
 }
 
 // Execute is run when storageFormatCmd activates.
@@ -106,7 +108,15 @@ type storageFormatCmd struct {
 func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 	ctx := cmd.MustLogCtx()
 
-	req := &control.StorageFormatReq{Reformat: cmd.Force}
+	if cmd.Rejoin && cmd.Force {
+		return errIncompatFlags("rejoin", "force")
+	}
+
+	if cmd.Rejoin && len(cmd.getHostList()) != 1 {
+		return errors.New("command expects a single host in hostlist if rejoin option used")
+	}
+
+	req := &control.StorageFormatReq{Reformat: cmd.Force, Rejoin: cmd.Rejoin}
 	req.SetHostList(cmd.getHostList())
 
 	resp, err := control.StorageFormat(ctx, cmd.ctlInvoker, req)

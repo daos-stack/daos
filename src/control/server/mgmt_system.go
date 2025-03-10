@@ -208,6 +208,7 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 		FaultDomain:             fd,
 		Incarnation:             req.Incarnation,
 		CheckMode:               req.CheckMode,
+		ReplaceMode:             req.ReplaceMode,
 	})
 	if err != nil {
 		if system.IsJoinFailure(err) {
