@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -632,8 +633,8 @@ func TestAgent_handleSetupClientTelemetry(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer test.ShowBufferOnFailure(t, buf)
+			parent := test.MustLogContext(t)
+			log := logging.FromContext(parent)
 
 			mod := &mgmtModule{
 				log: log,
@@ -654,7 +655,6 @@ func TestAgent_handleSetupClientTelemetry(t *testing.T) {
 			telemetry.InitTestMetricsProducer(t, int(testID), 2048)
 			defer telemetry.CleanupTestMetricsProducer(t)
 
-			parent := test.MustLogContext(t, log)
 			ctx, err := telemetry.Init(parent, testID)
 			if err != nil {
 				t.Fatal(err)

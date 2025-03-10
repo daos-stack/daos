@@ -1,3 +1,9 @@
+/*
+ * (C) Copyright 2021-2022 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
+ *
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
+ */
 #ifndef __DAOS_API_UTIL_H__
 #define __DAOS_API_UTIL_H__
 
@@ -88,14 +94,5 @@ set_dpe_val_ptr(struct daos_prop_entry *dpe, void *val_ptr)
 
 	dpe->dpe_val_ptr = val_ptr;
 }
-
-/*static inline uint32_t
-get_rebuild_state(struct daos_rebuild_status *drs)
-{
-	if (drs == NULL)
-		return 0;
-
-	return drs->rs_state;
-}*/
 
 #endif /* __DAOS_API_UTIL_H__ */
