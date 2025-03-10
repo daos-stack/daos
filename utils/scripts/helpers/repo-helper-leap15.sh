@@ -97,10 +97,10 @@ if [ -n "$REPO_FILE_URL" ]; then
          "${REPO_FILE_URL}daos_ci-leap${MAJOR_VER}-${REPOSITORY_NAME}.repo"
     disable_repos "$repos_dir"
     popd
-    # These may have been created in the Dockerfile must be removed
-    # when using a local repository.
-    unset HTTPS_PROXY
-    unset https_proxy
+    # # These may have been created in the Dockerfile must be removed
+    # # when using a local repository.
+    # unset HTTPS_PROXY
+    # unset https_proxy
     install_dnf
 else
     if ! command -v dnf; then
