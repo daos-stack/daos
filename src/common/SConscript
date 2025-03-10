@@ -48,7 +48,6 @@ def scons():
     """Execute build"""
     Import('env', 'base_env', 'prereqs')
 
-    SConscript('dav_v2/SConscript')
     env.AppendUnique(LIBPATH=[Dir('.')])
     base_env.AppendUnique(LIBPATH=[Dir('.')])
     base_env.d_add_build_rpath()
@@ -70,6 +69,7 @@ def scons():
     Export('dc_credit')
 
     if prereqs.server_requested():
+        SConscript('dav_v2/SConscript')
         build_daos_common(denv, False)
 
     if not prereqs.test_requested():
