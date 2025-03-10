@@ -727,7 +727,7 @@ warmup_cb(const struct crt_cb_info *info)
 }
 
 int
-ping_target(int tgt_id, daos_handle_t pool_hdl)
+dc_pool_ping_target(int tgt_id, daos_handle_t pool_hdl)
 {
 	struct pool_target        *tgts;
 	crt_endpoint_t             ep;
