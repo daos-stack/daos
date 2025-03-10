@@ -154,7 +154,7 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op,
 			if (bulk->bound) {
 				rc = crt_hg_bulk_bind(bulk->hg_bulk_hdl, &ctx->cc_hg_ctx);
 				if (rc != 0) {
-					D_ERROR("Failed to bind bulk druing proc\n");
+					D_ERROR("Failed to bind bulk during proc\n");
 					/* free will return quota resource */
 					crt_bulk_free(bulk->hg_bulk_hdl);
 					return -DER_HG;

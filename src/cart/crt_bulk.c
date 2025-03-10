@@ -261,7 +261,6 @@ out:
 int
 crt_bulk_get_len(crt_bulk_t crt_bulk, size_t *bulk_len)
 {
-	hg_size_t	hg_size;
 	struct crt_bulk *bulk = crt_bulk;
 
 	if (bulk_len == NULL) {
@@ -277,16 +276,14 @@ crt_bulk_get_len(crt_bulk_t crt_bulk, size_t *bulk_len)
 	if (bulk->hg_bulk_hdl == HG_BULK_NULL)
 		return -DER_NOTSUPPORTED;
 
-	hg_size   = HG_Bulk_get_size(bulk->hg_bulk_hdl);
-	*bulk_len = hg_size;
-
+	*bulk_len = crt_hg_bulk_get_len(bulk->hg_bulk_hdl);
 	return 0;
 }
+
 
 int
 crt_bulk_get_sgnum(crt_bulk_t crt_bulk, unsigned int *bulk_sgnum)
 {
-	hg_uint32_t	hg_sgnum;
 	struct crt_bulk *bulk = crt_bulk;
 
 	D_ASSERT(bulk_sgnum != NULL);
@@ -295,9 +292,7 @@ crt_bulk_get_sgnum(crt_bulk_t crt_bulk, unsigned int *bulk_sgnum)
 	if (bulk->deferred)
 		return -DER_NOTSUPPORTED;
 
-	hg_sgnum    = HG_Bulk_get_segment_count(bulk->hg_bulk_hdl);
-	*bulk_sgnum = hg_sgnum;
-
+	*bulk_sgnum = crt_hg_bulk_get_sgnum(bulk->hg_bulk_hdl);
 	return 0;
 }
 
