@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1340,6 +1341,13 @@ int d_log_setmasks(const char *mstr, int mlen0)
 		else {
 			/* apply to all facilities */
 			for (facno = 0; facno < d_log_xst.fac_cnt; facno++) {
+				/* don't include external when setting blanket DEBUG -- must be
+				 * enabled explicitly */
+				if (prino == DLOG_DBG &&
+				    strncasecmp(d_log_xst.dlog_facs[facno].fac_aname, "external",
+						8) == 0)
+					continue;
+
 				tmp = d_log_setlogmask(facno, prino);
 				if (rv != -1)
 					rv = tmp;
