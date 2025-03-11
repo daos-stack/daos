@@ -1595,7 +1595,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 	if (DAOS_FAIL_CHECK(DAOS_CLIENT_UNREACHABLE) && obj_rpc_is_update(rpc)) {
 		/** Fault injection - client unreachable. */
 		D_INFO("enabled fault injection client unreachable");
-		rc = -DER_NO_CONNECTION;
+		rc = -DER_RECONNECT;
 		goto out;
 	}
 

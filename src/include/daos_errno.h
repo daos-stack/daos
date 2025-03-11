@@ -122,7 +122,7 @@ extern "C" {
 	/** Quota limit reached on the requested resource */                                       \
 	ACTION(DER_QUOTA_LIMIT, Quota limit reached)											   \
 	/** Client has indicated it's behind a firewall. Client must establish a connection. */     \
-	ACTION(DER_NO_CONNECTION, Client was unreachable on bulk transfer)
+	ACTION(DER_RECONNECT, Client was unreachable on bulk transfer)
 	/** TODO: add more error numbers */
 
 /** Preprocessor macro defining DAOS errno values and internal definition of d_errstr */
