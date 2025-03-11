@@ -839,7 +839,7 @@ obj_retry_error(int err)
 	       err == -DER_GRPVER || err == -DER_EXCLUDED || err == -DER_CSUM ||
 	       err == -DER_TX_BUSY || err == -DER_TX_UNCERTAIN || err == -DER_NEED_TX ||
 	       err == -DER_NOTLEADER || err == -DER_UPDATE_AGAIN || err == -DER_NVME_IO ||
-	       err == -DER_CHKPT_BUSY || err == -DER_OVERLOAD_RETRY || err == -DER_CLIENT_UNREACH ||
+	       err == -DER_CHKPT_BUSY || err == -DER_OVERLOAD_RETRY || err == -DER_NO_CONNECTION ||
 	       daos_crt_network_error(err);
 }
 

@@ -127,9 +127,9 @@ test_d_errstr(void **state)
 	assert_string_equal(value, "DER_QUOTA_LIMIT");
 	value = d_errstr(-1046);
 	assert_string_equal(value, "DER_QUOTA_LIMIT");
-	value = d_errstr(-DER_CLIENT_UNREACH);
-	assert_string_equal(value, "DER_CLIENT_UNREACH");
-	value = d_errstr(-(DER_CLIENT_UNREACH + 1));
+	value = d_errstr(-DER_NO_CONNECTION);
+	assert_string_equal(value, "DER_NO_CONNECTION");
+	value = d_errstr(-(DER_NO_CONNECTION + 1));
 	assert_string_equal(value, "DER_UNKNOWN");
 
 	/* Check the end of the DAOS error numbers. */
