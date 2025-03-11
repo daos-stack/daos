@@ -49,3 +49,4 @@ ddeserialize:
     np: 16
 dfuse:
   disable_caching: true
+  local_flock: true
