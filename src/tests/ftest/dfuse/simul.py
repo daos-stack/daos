@@ -11,6 +11,7 @@ from dfuse_utils import get_dfuse, start_dfuse
 from host_utils import get_local_host
 from job_manager_utils import Mpirun
 
+
 class PosixSimul(TestWithServers):
     """Tests a posix container with simul.
 
@@ -146,7 +147,8 @@ class PosixSimul(TestWithServers):
         :avocado: tags=posix,simul,dfuse
         :avocado: tags=PosixSimul,test_posix_expected_failures
         """
-        expected_failures = {"9": None, "18": None, "20": None, "30": None, "39": None, "40": None, "41": None}
+        expected_failures = {"9": None, "18": None, "20": None, "30": None, "39": None, "40": None,
+            "41": None}
         for test in sorted(expected_failures):
             expected_failures[test] = self.run_simul(include=test, raise_exception=False)
         failed = []
