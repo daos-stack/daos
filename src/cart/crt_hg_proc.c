@@ -184,9 +184,14 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op,
 			return 0;
 		}
 
-		D_ALLOC_PTR(bulk);
-		if (!bulk)
-			return -DER_NOMEM;
+		/* If there is a space to decode a wrapper into - use it */
+		if (*pcrt_bulk == NULL) {
+			D_ALLOC_PTR(bulk);
+			if (!bulk)
+				return -DER_NOMEM;
+		} else {
+			bulk = *pcrt_bulk;
+		}
 
 		bulk->hg_bulk_hdl = tmp_hg_bulk;
 		bulk->deferred = false;
