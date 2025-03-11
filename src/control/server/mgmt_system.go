@@ -284,7 +284,7 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 		if err := svc.checkReplaceModeRank(ctx, rankToReplace); err != nil {
 			return nil, errors.Wrapf(err, "join: replace rank %d", rankToReplace)
 		}
-		req.Rank = rankToReplace.Uint32()
+		joinReq.Rank = rankToReplace
 	}
 
 	joinResponse, err := svc.membership.Join(joinReq)

@@ -817,7 +817,7 @@ func checkTmpfsMem(log logging.Logger, scmCfgs map[int]*storage.TierConfig, getM
 type formatScmReq struct {
 	log        logging.Logger
 	reformat   bool
-	rejoin     bool
+	replace    bool
 	instances  []Engine
 	getMemInfo func() (*common.MemInfo, error)
 }
@@ -855,10 +855,10 @@ func formatScm(ctx context.Context, req formatScmReq, resp *ctlpb.StorageFormatR
 		}
 	}
 
-	if req.rejoin {
+	if req.replace {
 		// Only valid if single engine requires format.
 		if len(needFormat) != 1 {
-			return nil, nil, errors.Errorf("format rejoin option only valid if a "+
+			return nil, nil, errors.Errorf("format replace option only valid if a "+
 				"single engine requires format but %d engines need format",
 				len(needFormat))
 		}
@@ -1019,7 +1019,7 @@ func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageF
 		return resp, nil
 	}
 
-	// DAOS-15947: Do we need to pass in the rejoin flag here?
+	// DAOS-15947: Do we need to pass in the replace flag here?
 	mdFormatted, err := cs.formatMetadata(instances, req.Reformat)
 	if err != nil {
 		return nil, err
@@ -1028,7 +1028,7 @@ func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageF
 	fsr := formatScmReq{
 		log:        cs.log,
 		reformat:   req.Reformat,
-		rejoin:     req.Rejoin,
+		replace:    req.Replace,
 		instances:  instances,
 		getMemInfo: cs.getMemInfo,
 	}
@@ -1071,7 +1071,7 @@ func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageF
 			cs.log.Errorf("instance %d: %s", idx, msg)
 			continue
 		}
-		engine.NotifyStorageReady(req.Rejoin)
+		engine.NotifyStorageReady(req.Replace)
 	}
 
 	return resp, nil

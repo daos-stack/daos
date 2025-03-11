@@ -1677,7 +1677,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 		expResp          *ctlpb.StorageFormatResp
 		expErr           error
 		reformat         bool // indicates setting of reformat parameter
-		rejoin           bool // indicates setting of rejoin parameter
+		replace          bool // indicates setting of replace parameter
 	}{
 		"nil request": {
 			nilReq: true,
@@ -1838,13 +1838,13 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				},
 			},
 		},
-		"nvme and dcpm; rejoin set": {
+		"nvme and dcpm; replace set": {
 			sMounts: []string{"/mnt/daos"},
 			sClass:  storage.ClassDcpm,
 			sDevs:   []string{"dev/pmem0"},
 			bClass:  storage.ClassNvme,
 			bDevs:   [][]string{{mockNvmeController0.PciAddr}},
-			rejoin:  true,
+			replace: true,
 			bmbcs: []*bdev.MockBackendConfig{
 				{
 					ScanRes: &storage.BdevScanResponse{
@@ -2066,14 +2066,14 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				},
 			},
 		},
-		"dcpm already mounted no reformat; rejoin fails": {
+		"dcpm already mounted no reformat; replace fails": {
 			scmMounted: true,
 			sMounts:    []string{"/mnt/daos"},
 			sClass:     storage.ClassDcpm,
 			sDevs:      []string{"/dev/pmem1"},
 			bClass:     storage.ClassNvme,
 			bDevs:      [][]string{{mockNvmeController0.PciAddr}},
-			rejoin:     true,
+			replace:    true,
 			bmbcs: []*bdev.MockBackendConfig{
 				{
 					ScanRes: &storage.BdevScanResponse{
@@ -2233,7 +2233,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				},
 			},
 		},
-		"nvme and dcpm multi-io; rejoin fails": {
+		"nvme and dcpm multi-io; replace fails": {
 			sMounts: []string{"/mnt/daos0", "/mnt/daos1"},
 			sClass:  storage.ClassDcpm,
 			sDevs:   []string{"/dev/pmem0", "/dev/pmem1"},
@@ -2242,7 +2242,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				{mockNvmeController0.PciAddr},
 				{mockNvmeController1.PciAddr},
 			},
-			rejoin: true,
+			replace: true,
 			// One for each engine.
 			bmbcs: []*bdev.MockBackendConfig{
 				{
@@ -2520,7 +2520,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			if !tc.nilReq {
 				req = &ctlpb.StorageFormatReq{
 					Reformat: tc.reformat,
-					Rejoin:   tc.rejoin,
+					Replace:  tc.replace,
 				}
 			}
 			if tc.noSrvCfg {

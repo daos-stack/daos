@@ -311,7 +311,7 @@ type (
 	StorageFormatReq struct {
 		unaryRequest
 		Reformat bool `json:"reformat"`
-		Rejoin   bool `json:"rejoin"`
+		Replace  bool `json:"replace"`
 	}
 
 	// StorageFormatResp contains the response from a storage format request.
