@@ -737,14 +737,12 @@ out:
 	return rc;
 }
 
-static FILE    *hg_dbg_log        = NULL;
-static uint64_t last_hg_dbg_flush = 0;
+static FILE *hg_dbg_log = NULL;
 
 static int
 crt_hg_log(FILE *stream, const char *fmt, ...)
 {
-	va_list		ap;
-	struct timeval  tv;
+	va_list         ap;
 	int		flags;
 
 	flags = d_log_check((intptr_t)stream);
@@ -756,14 +754,30 @@ crt_hg_log(FILE *stream, const char *fmt, ...)
 	 * Mercury debug logging, send DEBUG-level messages to it.
 	 */
 	if (hg_dbg_log != NULL && (flags & DLOG_PRIMASK) == DLOG_DBG) {
-		va_start(ap, fmt);
-		vfprintf(hg_dbg_log, fmt, ap);
-		va_end(ap);
+		unsigned int         mlen, hlen;
+		static uint64_t      last_flush;
+		static __thread char b[1024];
+		struct timeval       tv;
+		struct tm           *tm;
 
 		(void)gettimeofday(&tv, 0);
-		if (tv.tv_sec - last_hg_dbg_flush > 1) {
+		tm = localtime(&tv.tv_sec);
+
+		/*
+		 * The mercury/libfabric logs don't include a useful timestamp, so
+		 * we need to prepend one. Sigh.
+		 */
+		hlen = snprintf(b, sizeof(b), "%02d:%02d:%02d.%02ld ", tm->tm_hour, tm->tm_min,
+				tm->tm_sec, (long int)tv.tv_usec / 10000);
+
+		va_start(ap, fmt);
+		mlen = vsnprintf(b + hlen, sizeof(b) - hlen, fmt, ap);
+		va_end(ap);
+
+		fwrite(b, hlen + mlen, 1, hg_dbg_log);
+		if (tv.tv_sec - last_flush > 1) {
 			fflush(hg_dbg_log);
-			last_hg_dbg_flush = tv.tv_sec;
+			last_flush = tv.tv_sec;
 		}
 		return 0;
 	}
