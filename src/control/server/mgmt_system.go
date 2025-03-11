@@ -201,6 +201,7 @@ func (svc *mgmtSvc) checkReplaceModeRank(ctx context.Context, rankToReplace rank
 		return errors.New("nr poolIDs should be equal to poolRanks keys")
 	}
 	if len(poolIDs) == 0 {
+		svc.log.Debug("checking replace mode rank: zero pools to verify")
 		return nil // No pools to query.
 	}
 
@@ -230,6 +231,8 @@ func (svc *mgmtSvc) checkReplaceModeRank(ctx context.Context, rankToReplace rank
 				id)
 		}
 		enabledRanks := ranklist.MustCreateRankSet(resp.EnabledRanks)
+		svc.log.Tracef("checking replace mode rank: pool %s enabled ranks %+v", id,
+			enabledRanks)
 
 		if enabledRanks.Contains(rankToReplace) {
 			return FaultJoinReplaceEnabledPoolRank(rankToReplace, id)
