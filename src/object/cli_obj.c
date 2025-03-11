@@ -1869,7 +1869,7 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 		rc           = obj_pool_query_task(sched, obj, 0, &required_task);
 		if (rc != 0)
 			D_GOTO(err, rc);
-	} else if (result == -DER_NO_CONNECTION) {
+	} else if (result == -DER_RECONNECT) {
 		rc = obj_tgt_ping_task(sched, obj, obj_auxi, &required_task);
 	}
 
