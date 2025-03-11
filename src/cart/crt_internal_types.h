@@ -171,9 +171,9 @@ struct crt_gdata {
 	/** Number of cores on a system */
 	long			 cg_num_cores;
 	/** Inflight rpc quota limit */
-	uint32_t		cg_rpc_quota;
+	uint32_t                 cg_rpc_quota;
 	/** bulk quota limit */
-	uint32_t		cg_bulk_quota;
+	uint32_t                 cg_bulk_quota;
 	/** Retry count of HG_Init_opt2() on failure when using CXI provider */
 	uint32_t                 cg_hg_init_retry_cnt;
 };
@@ -386,7 +386,6 @@ struct crt_quotas {
 	struct d_tm_node_t     *rpc_quota_exceeded;
 };
 
-
 /*
  * crt_bulk - wrapper struct for crt_bulk_t type
  *
@@ -399,16 +398,15 @@ struct crt_quotas {
  * deferred flag set to true and other fields populated based on the original
  * bulk info provided.
  *
- * Deferred allocation is only supported on clients through D_QUOTA_BULKS
- * env.
+ * Deferred allocation is only supported on clients through D_QUOTA_BULKS env
  */
 struct crt_bulk {
-	hg_bulk_t		hg_bulk_hdl;	/** mercury bulk handle */
-	bool			deferred;	/** whether handle allocation was deferred */
-	crt_context_t		crt_ctx;	/** context on which bulk is to be created  */
-	bool			bound;		/** whether crt_bulk_bind() was used on it */
-	d_sg_list_t		*sgl;		/** original sgl */
-	crt_bulk_perm_t		bulk_perm;	/** bulk permissions */
+	hg_bulk_t	hg_bulk_hdl;	/** mercury bulk handle */
+	bool		deferred;	/** whether handle allocation was deferred */
+	crt_context_t	crt_ctx;	/** context on which bulk is to be created  */
+	bool		bound;		/** whether crt_bulk_bind() was used on it */
+	d_sg_list_t	*sgl;		/** original sgl */
+	crt_bulk_perm_t	bulk_perm;	/** bulk permissions */
 };
 
 /* crt_context */

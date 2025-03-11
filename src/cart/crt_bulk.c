@@ -87,9 +87,9 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 		crt_bulk_perm_t bulk_perm, crt_bulk_t *bulk_hdl)
 {
 	struct crt_context	*ctx;
-	int			rc = 0;
-	int			quota_rc = 0;
 	struct crt_bulk		*ret_hdl = NULL;
+	int			quota_rc = 0;
+	int			rc = 0;
 
 	if (crt_ctx == CRT_CONTEXT_NULL || !crt_sgl_valid(sgl) ||
 	    (bulk_perm != CRT_BULK_RW && bulk_perm != CRT_BULK_RO && bulk_perm != CRT_BULK_WO) ||
@@ -103,14 +103,12 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 	ctx = crt_ctx;
 
 	D_ALLOC_PTR(ret_hdl);
-	if (ret_hdl == NULL) {
-		D_ERROR("Failed to allocate handle\n");
+	if (ret_hdl == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	}
 
 	quota_rc = get_quota_resource(crt_ctx, CRT_QUOTA_BULKS);
 	if (quota_rc ==  -DER_QUOTA_LIMIT) {
-		D_INFO("Exceeded bulk limit\n");
+		D_DEBUG(DB_ALL, "Exceeded bulk limit, deferring bulk handle allocation\n");
 		ret_hdl->bound = false;
 		ret_hdl->sgl = sgl;
 		ret_hdl->bulk_perm = bulk_perm;
@@ -195,7 +193,7 @@ crt_bulk_free(crt_bulk_t crt_bulk)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	/* This can happen if D_QUOTA_BULKS is enabled */
+	/* This can happen if D_QUOTA_BULKS is enabled on a client */
 	if (bulk->hg_bulk_hdl == HG_BULK_NULL) {
 		if (bulk->deferred) {
 			/* Treat as success */
@@ -273,7 +271,7 @@ crt_bulk_get_len(crt_bulk_t crt_bulk, size_t *bulk_len)
 		return -DER_INVAL;
 	}
 
-	if (bulk->hg_bulk_hdl == HG_BULK_NULL)
+	if (bulk->deferred)
 		return -DER_NOTSUPPORTED;
 
 	*bulk_len = crt_hg_bulk_get_len(bulk->hg_bulk_hdl);

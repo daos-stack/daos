@@ -116,9 +116,9 @@ CRT_PROC_TYPE_FUNC(bool)
 
 int
 crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op,
-		    crt_bulk_t *crt_bulk)
+		    crt_bulk_t *pcrt_bulk)
 {
-	struct crt_bulk	*bulk = *crt_bulk;
+	struct crt_bulk	*bulk = NULL;
 	hg_return_t	hg_ret;
 	hg_bulk_t 	tmp_hg_bulk;
 
@@ -126,14 +126,17 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op,
 	/*
 	 * We only send 'hg_bulk_t' over the wire. During encoding stage we
 	 * extract mercury bulk handle from crt_bulk_t, while during decode
-	 * we wrap mercury bulk in crt_bulk_t struct
+	 * we wrap mercury bulk in a newly allocated crt_bulk_t struct
 	 */
 	switch (proc_op) {
 	case CRT_PROC_ENCODE:
+		bulk = *pcrt_bulk;
+
+		/* RPC can have an optional bulk; if such, encode a NULL value */
 		if (!bulk) {
 			tmp_hg_bulk = HG_BULK_NULL;
 			hg_ret = hg_proc_hg_bulk_t(proc, (hg_bulk_t *)&tmp_hg_bulk);
-			return 0;
+			return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
 		}
 
 		/* Deferred allocation as a result of D_QUOTA_BULKS limit */
@@ -141,13 +144,14 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op,
 			struct crt_context	*ctx;
 			int			rc;
 
-			/* Create actual mercury handle based on remembered params */
+			/* Create mercury handle based on saved params */
 			ctx = bulk->crt_ctx;
-			rc  = crt_hg_bulk_create(&ctx->cc_hg_ctx,
-						 bulk->sgl, bulk->bulk_perm,
-						 &bulk->hg_bulk_hdl);
+			D_ASSERT(ctx != NULL);
+
+			rc  = crt_hg_bulk_create(&ctx->cc_hg_ctx, bulk->sgl,
+						 bulk->bulk_perm, &bulk->hg_bulk_hdl);
 			if (rc != DER_SUCCESS)
-				return -DER_HG;
+				return rc;
 
 			record_quota_resource(ctx, CRT_QUOTA_BULKS);
 
@@ -157,7 +161,7 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op,
 					D_ERROR("Failed to bind bulk during proc\n");
 					/* free will return quota resource */
 					crt_bulk_free(bulk->hg_bulk_hdl);
-					return -DER_HG;
+					return rc;
 				}
 			}
 			bulk->deferred = false;
@@ -176,7 +180,7 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op,
 
 		/* don't create a bulk wrapper if null bulk was transmitted */
 		if (tmp_hg_bulk == HG_BULK_NULL) {
-			*crt_bulk = NULL;
+			*pcrt_bulk = NULL;
 			return 0;
 		}
 
@@ -186,12 +190,14 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op,
 
 		bulk->hg_bulk_hdl = tmp_hg_bulk;
 		bulk->deferred = false;
+		bulk->crt_ctx = NULL;
 
-		*crt_bulk = bulk;
+		*pcrt_bulk = bulk;
 		return 0;
 		break;
 
 	case CRT_PROC_FREE:
+		bulk = *pcrt_bulk;
 
 		if (bulk == NULL)
 			return 0;
