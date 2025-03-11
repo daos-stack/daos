@@ -473,15 +473,13 @@ again:
 				rc = cont_iv_snap_ent_create(entry, key);
 				if (rc == 0)
 					goto again;
-				D_DEBUG(DB_MD,
-					"cont " DF_UUID " create IV_CONT_SNAP iv entry failed\n",
-					DP_UUID(civ_key->cont_uuid));
+				DL_ERROR(rc, "cont " DF_UUID " create IV_CONT_SNAP iv entry failed",
+					 DP_UUID(civ_key->cont_uuid));
 			} else if (class_id == IV_CONT_PROP) {
 				rc = cont_iv_prop_ent_create(entry, key);
 				if (rc == 0)
 					goto again;
-				DL_ERROR(rc,
-					 "cont " DF_UUID " create IV_CONT_PROP iv entry failed\n",
+				DL_ERROR(rc, "cont " DF_UUID " create IV_CONT_PROP iv entry failed",
 					 DP_UUID(civ_key->cont_uuid));
 			} else if (class_id == IV_CONT_CAPA) {
 				struct container_hdl	chdl = { 0 };

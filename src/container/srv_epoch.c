@@ -684,8 +684,7 @@ ds_cont_get_snapshots(uuid_t pool_uuid, uuid_t cont_uuid,
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	rc = cont_svc_lookup_leader(pool_uuid, 0, &svc, NULL);
 	if (rc != 0) {
-		DL_ERROR(rc, "pool " DF_UUID " cont_svc_lookup_leader failed\n",
-			 DP_UUID(pool_uuid));
+		DL_ERROR(rc, "pool " DF_UUID " cont_svc_lookup_leader failed", DP_UUID(pool_uuid));
 		return rc;
 	}
 
@@ -696,7 +695,7 @@ ds_cont_get_snapshots(uuid_t pool_uuid, uuid_t cont_uuid,
 	ABT_rwlock_rdlock(svc->cs_lock);
 	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
 	if (rc != 0) {
-		DL_ERROR(rc, DF_CONT " cont_lookup failed\n", DP_CONT(pool_uuid, cont_uuid));
+		DL_ERROR(rc, DF_CONT " cont_lookup failed", DP_CONT(pool_uuid, cont_uuid));
 		D_GOTO(out_lock, rc);
 	}
 
