@@ -489,8 +489,7 @@ subsys_init_cb(int rc, void *arg)
 	if (rc)
 		D_ERROR("subsystem init failed: %d\n", rc);
 
-	init_arg->cp_arg->cca_rc = rc;
-	common_init_cb(arg, rc);
+	common_init_cb(init_arg->cp_arg, rc);
 
 	return;
 }
