@@ -216,6 +216,7 @@ crt_bulk_free(crt_bulk_t crt_bulk)
 	if (bulk->crt_ctx)
 		put_quota_resource(bulk->crt_ctx, CRT_QUOTA_BULKS);
 out:
+	D_FREE(bulk);
 	return rc;
 }
 
