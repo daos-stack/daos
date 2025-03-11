@@ -201,21 +201,33 @@ func (svc *mgmtSvc) checkReplaceModeRank(ctx context.Context, rankToReplace rank
 		return errors.New("nr poolIDs should be equal to poolRanks keys")
 	}
 	if len(poolIDs) == 0 {
-		return errors.New("no pool-ranks found to operate on with request params")
+		return nil // No pools to query.
 	}
 
-	// Verify rank to replace is excluded in all pools.
+	// Verify rank to replace is not enabled on any pool.
 	for _, id := range poolIDs {
 		rs := poolRanks[id]
 		if rs.Count() == 0 {
 			return errors.Errorf("no ranks in map for pool %s", id)
 		}
 
-		req := &mgmtpb.PoolQueryReq{Id: id, Sys: svc.sysdb.SystemName()}
+		req := &mgmtpb.PoolQueryReq{
+			Id:  id,
+			Sys: svc.sysdb.SystemName(),
+			QueryMask: uint64(daos.MustNewPoolQueryMask(
+				daos.PoolQueryOptionEnabledEngines,
+				daos.PoolQueryOptionDisabledEngines)),
+		}
 
 		resp, err := svc.PoolQuery(ctx, req)
 		if err != nil {
 			return errors.Wrap(err, "query on pool failed")
+		}
+
+		// Sanity check pool has at least one rank enabled or disabled.
+		if resp.EnabledRanks == "" && resp.DisabledRanks == "" {
+			return errors.Errorf("query on pool %s returned no enabled/disabled ranks",
+				id)
 		}
 		enabledRanks := ranklist.MustCreateRankSet(resp.EnabledRanks)
 
@@ -261,13 +273,13 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 	if req.ReplaceMode {
 		rankToReplace, err := svc.membership.FindRankFromJoinRequest(joinReq)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "join: replace existing rank")
 		}
 		if rankToReplace == ranklist.NilRank {
 			return nil, FaultJoinReplaceRankNotFound(joinReq)
 		}
 		if err := svc.checkReplaceModeRank(ctx, rankToReplace); err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "join: replace rank %d", rankToReplace)
 		}
 		req.Rank = rankToReplace.Uint32()
 	}
