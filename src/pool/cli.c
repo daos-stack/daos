@@ -808,13 +808,10 @@ dc_pool_ping_target(int tgt_id, daos_handle_t pool_hdl)
 	rc = 0;
 out_sem:
 	(void)sem_destroy(&sem);
-	return rc;
 out_hdl:
 	crt_bulk_free(bulk_hdl);
-	return rc;
 out_bulk:
 	D_FREE(bulk_buf);
-	return rc;
 out_unlock:
 	D_MUTEX_UNLOCK(&warmup_lock);
 	return rc;
