@@ -120,8 +120,7 @@ class PosixSimul(TestWithServers):
         if include:
             # testing cases that are expected to fail
             return out
-        else:
-            return None
+        return None
 
     def test_posix_simul(self):
         """Test simul.
