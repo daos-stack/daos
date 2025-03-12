@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -495,6 +496,26 @@ int
 crt_rank_self_set(d_rank_t rank, uint32_t group_version_min)
 {
 	return 0;
+}
+
+void
+crt_hg_reset_log_level()
+{
+}
+
+void
+crt_hg_set_log_level(const char *level)
+{
+}
+
+void
+crt_hg_reset_log_subsys()
+{
+}
+
+void
+crt_hg_set_log_subsys(const char *subsys)
+{
 }
 
 void
