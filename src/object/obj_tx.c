@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -393,6 +394,15 @@ out:
 	return rc;
 }
 
+static inline void
+dc_tx_bulk_free(crt_bulk_t *hdl)
+{
+	if (hdl != NULL && *hdl != CRT_BULK_NULL) {
+		crt_bulk_free(*hdl);
+		*hdl = CRT_BULK_NULL;
+	}
+}
+
 static void
 dc_tx_cleanup_one(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr)
 {
@@ -407,11 +417,8 @@ dc_tx_cleanup_one(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr)
 
 		csummer = tx->tx_co->dc_csummer;
 		if (dcu->dcu_flags & ORF_CPD_BULK) {
-			for (i = 0; i < dcsr->dcsr_nr; i++) {
-				if (dcu->dcu_bulks[i] != CRT_BULK_NULL)
-					crt_bulk_free(dcu->dcu_bulks[i]);
-			}
-
+			for (i = 0; i < dcsr->dcsr_nr; i++)
+				dc_tx_bulk_free(&dcu->dcu_bulks[i]);
 			D_FREE(dcu->dcu_bulks);
 		}
 
@@ -522,12 +529,7 @@ dc_tx_cleanup(struct dc_tx *tx)
 	/* Keep 'tx_set_resend'. */
 
 	if (tx->tx_reqs.dcs_type == DCST_BULK_REQ) {
-		if (tx->tx_reqs_bulk.dcb_bulk != NULL) {
-			if (tx->tx_reqs_bulk.dcb_bulk[0] != CRT_BULK_NULL)
-				crt_bulk_free(tx->tx_reqs_bulk.dcb_bulk[0]);
-			D_FREE(tx->tx_reqs_bulk.dcb_bulk);
-		}
-
+		dc_tx_bulk_free(&tx->tx_reqs_bulk.dcb_bulk);
 		D_FREE(tx->tx_reqs_bulk.dcb_iov.iov_buf);
 	}
 
@@ -539,11 +541,7 @@ dc_tx_cleanup(struct dc_tx *tx)
 	}
 
 	if (tx->tx_head.dcs_type == DCST_BULK_HEAD) {
-		if (tx->tx_head_bulk.dcb_bulk != NULL) {
-			if (tx->tx_head_bulk.dcb_bulk[0] != CRT_BULK_NULL)
-				crt_bulk_free(tx->tx_head_bulk.dcb_bulk[0]);
-			D_FREE(tx->tx_head_bulk.dcb_bulk);
-		}
+		dc_tx_bulk_free(&tx->tx_head_bulk.dcb_bulk);
 		/* Free MBS buffer. */
 		D_FREE(tx->tx_head_bulk.dcb_iov.iov_buf);
 	} else {
@@ -556,12 +554,12 @@ dc_tx_cleanup(struct dc_tx *tx)
 	tx->tx_head.dcs_buf = NULL;
 
 	if (tx->tx_disp.dcs_type == DCST_BULK_ENT) {
-		if (tx->tx_disp_bulk.dcb_bulk != NULL) {
-			if (tx->tx_disp_bulk.dcb_bulk[0] != CRT_BULK_NULL)
-				crt_bulk_free(tx->tx_disp_bulk.dcb_bulk[0]);
-			D_FREE(tx->tx_disp_bulk.dcb_bulk);
-		}
+		dc_tx_bulk_free(&tx->tx_disp_bulk.dcb_bulk);
 		dcde = tx->tx_disp_bulk.dcb_iov.iov_buf;
+		if (dcde != NULL)
+			D_INFO("Post bulk transfer CPD RPC: size %u, rd0 %u, wr0 %u\n",
+			       (uint32_t)tx->tx_disp_bulk.dcb_iov.iov_len, dcde[0].dcde_read_cnt,
+			       dcde[0].dcde_write_cnt);
 	} else {
 		dcde = tx->tx_disp.dcs_buf;
 	}
@@ -576,11 +574,7 @@ dc_tx_cleanup(struct dc_tx *tx)
 	}
 
 	if (tx->tx_tgts.dcs_type == DCST_BULK_TGT) {
-		if (tx->tx_tgts_bulk.dcb_bulk != NULL) {
-			if (tx->tx_tgts_bulk.dcb_bulk[0] != CRT_BULK_NULL)
-				crt_bulk_free(tx->tx_tgts_bulk.dcb_bulk[0]);
-			D_FREE(tx->tx_tgts_bulk.dcb_bulk);
-		}
+		dc_tx_bulk_free(&tx->tx_tgts_bulk.dcb_bulk);
 		D_FREE(tx->tx_tgts_bulk.dcb_iov.iov_buf);
 		tx->tx_tgts.dcs_buf = NULL;
 	} else {
@@ -1609,7 +1603,7 @@ out:
 static void
 dc_tx_dump(struct dc_tx *tx)
 {
-	D_DEBUG(DB_IO,
+	D_INFO(
 		"Dump TX %p:\n"
 		"ID: "DF_DTI"\n"
 		"epoch: "DF_U64"\n"
@@ -1767,15 +1761,23 @@ dc_tx_cpd_body_bulk(struct daos_cpd_sg *dcs, struct daos_cpd_bulk *dcb,
 	dcb->dcb_sgl.sg_nr_out = 1;
 	dcb->dcb_sgl.sg_iovs = &dcb->dcb_iov;
 
-	rc = obj_bulk_prep(&dcb->dcb_sgl, 1, true, CRT_BULK_RO, task, &dcb->dcb_bulk);
-	if (rc == 0) {
-		dcs->dcs_type = type;
-		dcs->dcs_nr = nr;
-		dcs->dcs_buf = dcb;
-	} else {
+	rc = crt_bulk_create(daos_task2ctx(task), &dcb->dcb_sgl, CRT_BULK_RO, &dcb->dcb_bulk);
+	if (rc != 0)
+		goto out;
+
+	rc = crt_bulk_bind(dcb->dcb_bulk, daos_task2ctx(task));
+	if (rc != 0)
+		goto out;
+
+	dcs->dcs_type = type;
+	dcs->dcs_nr   = nr;
+	dcs->dcs_buf  = dcb;
+
+out:
+	if (rc != 0) {
+		dc_tx_bulk_free(&dcb->dcb_bulk);
 		dcb->dcb_iov.iov_buf = NULL;
 	}
-
 	return rc;
 }
 
@@ -2154,9 +2156,13 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		size += sizeof(*dcri) * (dcdes[i].dcde_read_cnt + dcdes[i].dcde_write_cnt);
 
 	if (dc_tx_cpd_body_need_bulk(body_size + size)) {
-		D_REALLOC(ptr, dcdes, sizeof(*dcdes) * act_tgt_cnt, size);
+		struct daos_cpd_disp_ent *saved = dcdes;
+
+		D_ALLOC(ptr, size);
 		if (ptr == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
+
+		memcpy(ptr, dcdes, sizeof(*dcdes) * act_tgt_cnt);
 
 		dcdes = ptr;
 		dcri = ptr + sizeof(*dcdes) * act_tgt_cnt;
@@ -2176,6 +2182,11 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 					 size, act_tgt_cnt, DCST_BULK_ENT);
 		if (rc != 0)
 			goto out;
+
+		D_INFO("New buf for bulk transfer CPD RPC: %u => %u, %p => %p, rd0 %u, wr0 %u\n",
+		       (uint32_t)(sizeof(*saved) * act_tgt_cnt), (uint32_t)size, saved, dcdes,
+		       dcdes[0].dcde_read_cnt, dcdes[0].dcde_write_cnt);
+		D_FREE(saved);
 	} else {
 		tx->tx_disp.dcs_type = DCST_ENT;
 		tx->tx_disp.dcs_nr = act_tgt_cnt;
