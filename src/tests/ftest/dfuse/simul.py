@@ -120,6 +120,8 @@ class PosixSimul(TestWithServers):
         if include:
             # testing cases that are expected to fail
             return out
+        else:
+            return None
 
     def test_posix_simul(self):
         """Test simul.
@@ -148,7 +150,7 @@ class PosixSimul(TestWithServers):
         :avocado: tags=PosixSimul,test_posix_expected_failures
         """
         expected_failures = {"9": None, "18": None, "20": None, "30": None, "39": None, "40": None,
-            "41": None}
+                             "41": None}
         for test in sorted(expected_failures):
             expected_failures[test] = self.run_simul(include=test, raise_exception=False)
         failed = []
