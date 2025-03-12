@@ -111,7 +111,7 @@ enum tlsf_private {
 ** Cast and min/max macros.
 */
 
-#define tlsf_cast(t, exp) ((t) (exp))
+#define tlsf_cast(t, exp) ((t)(exp))
 #define tlsf_min(a, b)    ((a) < (b) ? (a) : (b))
 #define tlsf_max(a, b)    ((a) > (b) ? (a) : (b))
 
@@ -128,7 +128,7 @@ enum tlsf_private {
 
 #define _tlsf_glue2(x, y)       x ## y
 #define _tlsf_glue(x, y)        _tlsf_glue2(x, y)
-#define tlsf_static_assert(exp) typedef char _tlsf_glue(static_assert, __LINE__) [(exp) ? 1 : -1]
+#define tlsf_static_assert(exp) typedef char _tlsf_glue(static_assert, __LINE__)[(exp) ? 1 : -1]
 
 /* This code has been tested on 32- and 64-bit (LP/LLP) architectures. */
 tlsf_static_assert(sizeof(int) * CHAR_BIT == 32);
@@ -199,7 +199,7 @@ typedef struct block_header_t {
 ** bits for FL_INDEX.
 */
 
-#define block_size_min             (sizeof(block_header_t) - sizeof(block_header_t*))
+#define block_size_min             (sizeof(block_header_t) - sizeof(block_header_t *))
 #define block_size_max             (tlsf_cast(size_t, 1) << FL_INDEX_MAX)
 
 /* The TLSF control structure. */
@@ -452,9 +452,9 @@ remove_free_block(control_t *control, block_header_t *block, int fl, int sl)
 	tlsf_assert(block->off_prev_free && "prev_free field can not be null");
 	tlsf_assert(block->off_next_free && "next_free field can not be null");
 	prev =
-	    tlsf_cast(block_header_t*, tlsf_cast(unsigned char *, control) + block->off_prev_free);
+	    tlsf_cast(block_header_t *, tlsf_cast(unsigned char *, control) + block->off_prev_free);
 	next =
-	    tlsf_cast(block_header_t*, tlsf_cast(unsigned char *, control) + block->off_next_free);
+	    tlsf_cast(block_header_t *, tlsf_cast(unsigned char *, control) + block->off_next_free);
 	next->off_prev_free = tlsf_cast(off_t, prev) - tlsf_cast(off_t, control);
 	prev->off_next_free = tlsf_cast(off_t, next) - tlsf_cast(off_t, control);
 
@@ -893,7 +893,7 @@ tlsf_memalign(tlsf_t tlsf, size_t align, size_t size)
 		const size_t gap_remain = gap_minimum - gap;
 		const size_t offset     = tlsf_max(gap_remain, align);
 		const void  *next_aligned =
-		    tlsf_cast(void*, tlsf_cast(tlsfptr_t, aligned) + offset);
+		    tlsf_cast(void *, tlsf_cast(tlsfptr_t, aligned) + offset);
 
 		aligned = align_ptr(next_aligned, align);
 		gap = tlsf_cast(size_t, tlsf_cast(tlsfptr_t, aligned) - tlsf_cast(tlsfptr_t, ptr));

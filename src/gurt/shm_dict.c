@@ -57,7 +57,7 @@ shm_ht_update_nref(d_shm_ht_loc_t ht_loc, int64_t change)
 
 	old_nref = GET_NREF(old_nref_htid);
 	/* sanity check */
-	if (old_nref <= 0 && change < 0) {
+	if (old_nref + change < 0) {
 		DS_ERROR(EINVAL, "negative number of hash table reference");
 		return SHM_HT_NEGATIVE_REF;
 	}
@@ -76,7 +76,7 @@ shm_ht_update_nref(d_shm_ht_loc_t ht_loc, int64_t change)
 			} else {
 				/* hash table is still valid, but nref was updated by other user */
 				old_nref = GET_NREF(old_nref_htid);
-				if (old_nref <= 0 && change < 0) {
+				if (old_nref + change < 0) {
 					DS_WARN(EINVAL, "negative number of hash table reference");
 					return SHM_HT_NEGATIVE_REF;
 				}
@@ -287,7 +287,7 @@ shm_ht_invalidate_htid(d_shm_ht_loc_t ht_loc, bool force, int *num_ref)
 	if (!force) {
 		/* invalidate htid only if reference count is 0 */
 		old_nref_htid = saved_ht_id;
-		new_nref_htid = 0;
+		new_nref_htid = INVALID_HT_ID;
 		if (atomic_compare_exchange_weak((_Atomic int64_t *)addr_old_nref_htid,
 						 &old_nref_htid, new_nref_htid)) {
 			*num_ref = GET_NREF(old_nref_htid);

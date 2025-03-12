@@ -83,7 +83,7 @@ create_shm_region(uint64_t shm_size, uint64_t shm_pool_size)
 		goto err;
 	}
 	d_shm_head        = (struct d_shm_hdr *)shm_addr;
-	d_shm_head->magic = 0;
+	memset(shm_addr, 0, shm_size);
 	/* initialize memory allocators */
 	for (i = 0; i < N_SHM_FIXED_POOL; i++) {
 		shm_pool_list[i].addr_s = tlsf_create_with_pool(
