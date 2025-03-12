@@ -477,16 +477,16 @@ d_log_write(char *msg, int len, struct d_log_state *dls, bool flush)
 	}
 	D_ASSERT(!msg || len);
  again:
-	 if (msg && (len <= LOG_BUF_SIZE - dls->log_buf_nob)) {
-		 /* the current buffer is not full */
-		 strncpy(&dls->log_buf[dls->log_buf_nob], msg, len);
-		 dls->log_buf_nob += len;
-		 if (!flush)
-			 return 0; /* short path done */
+	if (msg && (len <= LOG_BUF_SIZE - dls->log_buf_nob)) {
+		/* the current buffer is not full */
+		strncpy(&dls->log_buf[dls->log_buf_nob], msg, len);
+		dls->log_buf_nob += len;
+		if (!flush)
+			return 0; /* short path done */
 
-		 msg = NULL; /* already copied into log buffer */
-		 len = 0;
-	 }
+		msg = NULL; /* already copied into log buffer */
+		len = 0;
+	}
 	/* write log buffer to log file */
 
 	if (dls->log_buf_nob == 0)
@@ -952,7 +952,7 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 		}
 
 		dbg_mst->log_size_max = log_size;
-		dbg_mst->log_file = strdup(env);
+		dbg_mst->log_file     = strdup(env);
 		if (!dbg_mst->log_file) {
 			fprintf(stderr, "strdup failed for debug logger.\n");
 			d_freeenv_str(&env);
@@ -961,7 +961,7 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 		d_freeenv_str(&env);
 
 		dbg_mst->log_old_fd = -1;
-		dbg_mst->log_fd = open(dbg_mst->log_file, log_flags, 0644);
+		dbg_mst->log_fd     = open(dbg_mst->log_file, log_flags, 0644);
 		if (dbg_mst->log_fd < 0) {
 			fprintf(stderr, "d_log_open: cannot open %s: %s\n", dbg_mst->log_file,
 				strerror(errno));
