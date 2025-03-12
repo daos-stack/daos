@@ -279,7 +279,7 @@ shm_free(void *ptr)
 		}
 	}
 
-	DS_ERROR(EINVAL, "Out of range memory pointer for shm_free()\n");
+	DS_ERROR(EINVAL, "Out of range memory pointer for shm_free()");
 	return;
 }
 
