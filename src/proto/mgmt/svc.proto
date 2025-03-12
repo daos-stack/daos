@@ -45,7 +45,7 @@ message JoinReq {
 	repeated string secondary_uris = 10; // URIs for any secondary providers
 	repeated uint32 secondary_nctxs = 11; // CaRT context count for each secondary provider
 	bool check_mode = 12; 		// rank started in check mode
-	bool            replace_mode    = 13; // Rank's engine instance metadata to be replaced
+	bool            replace         = 13; // Rank's engine instance metadata to be replaced
 }
 
 message JoinResp {

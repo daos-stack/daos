@@ -167,7 +167,7 @@ struct  _Mgmt__JoinReq
   /*
    * Rank's engine instance metadata to be replaced
    */
-  protobuf_c_boolean replace_mode;
+  protobuf_c_boolean replace;
 };
 #define MGMT__JOIN_REQ__INIT                                                                       \
 	{PROTOBUF_C_MESSAGE_INIT(&mgmt__join_req__descriptor),                                     \

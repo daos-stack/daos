@@ -185,7 +185,7 @@ func getPeerListenAddr(ctx context.Context, listenAddrStr string) (*net.TCPAddr,
 // 2. Retrieve pool-rank map for pools to query
 // 3. Query each pool that rank belongs to
 // 4. Check rank is not in response list of enabled ranks
-func (svc *mgmtSvc) checkReplaceModeRank(ctx context.Context, rankToReplace ranklist.Rank) error {
+func (svc *mgmtSvc) checkReplaceRank(ctx context.Context, rankToReplace ranklist.Rank) error {
 	if rankToReplace == ranklist.NilRank {
 		return errors.New("checking replace mode rank, nil rank supplied")
 	}
@@ -197,9 +197,6 @@ func (svc *mgmtSvc) checkReplaceModeRank(ctx context.Context, rankToReplace rank
 		return err
 	}
 
-	if len(poolIDs) != len(poolRanks) {
-		return errors.New("nr poolIDs should be equal to poolRanks keys")
-	}
 	if len(poolIDs) == 0 {
 		svc.log.Debug("checking replace mode rank: zero pools to verify")
 		return nil // No pools to query.
@@ -209,6 +206,7 @@ func (svc *mgmtSvc) checkReplaceModeRank(ctx context.Context, rankToReplace rank
 	for _, id := range poolIDs {
 		rs := poolRanks[id]
 		if rs.Count() == 0 {
+			// Sanity check.
 			return errors.Errorf("no ranks in map for pool %s", id)
 		}
 
@@ -270,18 +268,15 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 		FaultDomain:             fd,
 		Incarnation:             req.Incarnation,
 		CheckMode:               req.CheckMode,
-		ReplaceMode:             req.ReplaceMode,
+		Replace:                 req.Replace,
 	}
 
-	if req.ReplaceMode {
+	if req.Replace {
 		rankToReplace, err := svc.membership.FindRankFromJoinRequest(joinReq)
 		if err != nil {
-			return nil, errors.Wrap(err, "join: replace existing rank")
+			return nil, err
 		}
-		if rankToReplace == ranklist.NilRank {
-			return nil, FaultJoinReplaceRankNotFound(joinReq)
-		}
-		if err := svc.checkReplaceModeRank(ctx, rankToReplace); err != nil {
+		if err := svc.checkReplaceRank(ctx, rankToReplace); err != nil {
 			return nil, errors.Wrapf(err, "join: replace rank %d", rankToReplace)
 		}
 		joinReq.Rank = rankToReplace
@@ -1215,6 +1210,12 @@ func (svc *mgmtSvc) getPoolsRanks(ranks *ranklist.RankSet) ([]string, poolRanksM
 		}
 	}
 	svc.log.Debugf("pool-ranks to operate on: %v", poolRanks)
+
+	// Sanity check.
+	if len(poolIDs) != len(poolRanks) {
+		return nil, nil, errors.Errorf("nr poolIDs (%d) should be equal to nr poolRanks "+
+			"keys (%d)", len(poolIDs), len(poolRanks))
+	}
 
 	sort.Strings(poolIDs)
 

@@ -20,7 +20,6 @@ import (
 	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/engine"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 var (
@@ -189,14 +188,6 @@ func FaultBadFaultDomainLabels(faultPath, addr string, reqLabels, systemLabels [
 		fmt.Sprintf("labels in join request [%s] don't match system labels [%s] for server %s (fault path: %s)",
 			strings.Join(reqLabels, ", "), strings.Join(systemLabels, ", "), addr, faultPath),
 		"update the 'fault_path' or executable specified in 'fault_cb' in the affected server's configuration file to match the system labels",
-	)
-}
-
-func FaultJoinReplaceRankNotFound(joinReq *system.JoinRequest) *fault.Fault {
-	return serverFault(
-		code.ServerJoinReplaceRankNotFound,
-		fmt.Sprintf("system member could not be found from request info %+v", joinReq),
-		"check that dmg format --replace is being run on a host that has previously had a rank excluded from the system",
 	)
 }
 

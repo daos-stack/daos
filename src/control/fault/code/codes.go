@@ -115,6 +115,7 @@ const (
 	SystemUnknown Code = iota + 400
 	SystemBadFaultDomainDepth
 	SystemPoolLocked
+	SystemJoinReplaceRankNotFound
 )
 
 // client fault codes
@@ -157,7 +158,6 @@ const (
 	ServerHugepagesDisabled
 	ServerPoolMemRatioNoRoles
 	ServerBadFaultDomainLabels
-	ServerJoinReplaceRankNotFound
 	ServerJoinReplaceEnabledPoolRank
 )
 

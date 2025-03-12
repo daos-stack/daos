@@ -1130,8 +1130,8 @@ static const ProtobufCFieldDescriptor mgmt__join_req__field_descriptors[13] = {
 	0, NULL, NULL /* reserved1,reserved2, etc */
     },
     {
-	"replace_mode", 13, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_BOOL, 0, /* quantifier_offset */
-	offsetof(Mgmt__JoinReq, replace_mode), NULL, NULL, 0,               /* flags */
+	"replace", 13, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_BOOL, 0, /* quantifier_offset */
+	offsetof(Mgmt__JoinReq, replace), NULL, NULL, 0,               /* flags */
 	0, NULL, NULL /* reserved1,reserved2, etc */
     },
 };
@@ -1142,7 +1142,7 @@ static const unsigned mgmt__join_req__field_indices_by_name[] = {
     8,  /* field[8] = incarnation */
     4,  /* field[4] = nctxs */
     2,  /* field[2] = rank */
-    12, /* field[12] = replace_mode */
+    12, /* field[12] = replace */
     10, /* field[10] = secondary_nctxs */
     9,  /* field[9] = secondary_uris */
     6,  /* field[6] = srvFaultDomain */

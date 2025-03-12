@@ -101,6 +101,11 @@ func TestHostList_NumericList_Contains(t *testing.T) {
 			searchNum:   126,
 			expContains: true,
 		},
+		"gaps in range": {
+			startList:   "[1-125,127,128]",
+			searchNum:   126,
+			expContains: false,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			nl, err := hostlist.CreateNumericList(tc.startList)

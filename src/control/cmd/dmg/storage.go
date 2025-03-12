@@ -99,7 +99,7 @@ type storageFormatCmd struct {
 	cmdutil.JSONOutputCmd
 	Verbose bool `short:"v" long:"verbose" description:"Show results of each SCM & NVMe device format operation"`
 	Force   bool `long:"force" description:"Force storage format on a host, stopping any running engines (CAUTION: destructive operation)"`
-	Replace bool `long:"replace" description:"Replace a previously joined but then excluded rank. Handles scenario where rank metadata is lost due to PMem or other storage media failure (CAUTION: experimental operation)"`
+	Replace bool `long:"replace" description:"Replace an excluded rank. Allows a DAOS engine instance to reclaim its old rank number after metadata is lost due to PMem or other storage media failure (CAUTION: experimental operation)"`
 }
 
 // Execute is run when storageFormatCmd activates.

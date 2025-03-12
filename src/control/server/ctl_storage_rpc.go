@@ -769,11 +769,16 @@ func (cs *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageSca
 	return resp, nil
 }
 
-func (cs *ControlService) formatMetadata(instances []Engine, reformat bool) (bool, error) {
+func (cs *ControlService) formatMetadata(instances []Engine, reformat, replace bool) (bool, error) {
 	// Format control metadata first, if needed
 	if needs, err := cs.storage.ControlMetadataNeedsFormat(); err != nil {
 		return false, errors.Wrap(err, "detecting if metadata format is needed")
 	} else if needs || reformat {
+		if replace == true {
+			return false, errors.New("control metadata formatting is not possible " +
+				"when rank replace is requested")
+		}
+
 		engineIdxs := make([]uint, len(instances))
 		for i, eng := range instances {
 			engineIdxs[i] = uint(eng.Index())
@@ -1020,7 +1025,7 @@ func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageF
 	}
 
 	// DAOS-15947: Do we need to pass in the replace flag here?
-	mdFormatted, err := cs.formatMetadata(instances, req.Reformat)
+	mdFormatted, err := cs.formatMetadata(instances, req.Reformat, req.Replace)
 	if err != nil {
 		return nil, err
 	}
