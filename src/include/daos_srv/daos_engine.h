@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -406,6 +407,7 @@ struct dss_module {
  * Stack size used for ULTs with deep stack
  */
 #define DSS_DEEP_STACK_SZ	65536
+#define DSS_XTRA_DEEP_STACK_SZ  (DSS_DEEP_STACK_SZ * 2)
 
 enum dss_xs_type {
 	/** current xstream */

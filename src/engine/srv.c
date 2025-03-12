@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -506,7 +507,7 @@ dss_srv_handler(void *arg)
 			D_GOTO(nvme_fini, rc = dss_abterr2der(rc));
 		}
 
-		rc = ABT_thread_attr_set_stacksize(attr, DSS_DEEP_STACK_SZ);
+		rc = ABT_thread_attr_set_stacksize(attr, DSS_XTRA_DEEP_STACK_SZ);
 		if (rc != ABT_SUCCESS) {
 			ABT_thread_attr_free(&attr);
 			D_ERROR("Set ABT stack size failed. %d\n", rc);
@@ -844,7 +845,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int tag, int xs_id)
 		D_GOTO(out_xstream, rc = dss_abterr2der(rc));
 	}
 
-	rc = ABT_thread_attr_set_stacksize(attr, DSS_DEEP_STACK_SZ);
+	rc = ABT_thread_attr_set_stacksize(attr, DSS_XTRA_DEEP_STACK_SZ);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("ABT_thread_attr_set_stacksize fails %d\n", rc);
 		D_GOTO(out_xstream, rc = dss_abterr2der(rc));
