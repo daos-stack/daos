@@ -63,6 +63,9 @@ pmdk_log_function(enum pmemobj_log_level level, const char *file_name, unsigned 
 #define PMDK_LOG_FUNCTION_MAX_FILENAME 255
 #define PMDK_LOG_NOCHECK(mask, fmt, ...)                                                           \
 	do {                                                                                       \
+		char  file_name_buff[PMDK_LOG_FUNCTION_MAX_FILENAME] = "pmdk/";                    \
+		char *local_file_name = file_name_buff + sizeof("pmdk/") - 1;                      \
+                                                                                                   \
 		/* normalize file path - remove leading "../" */                                   \
 		while ((*file_name == '.') && (*(file_name + 1) == '.') &&                         \
 		       (*(file_name + 2) == '/')) {                                                \
@@ -77,8 +80,6 @@ pmdk_log_function(enum pmemobj_log_level level, const char *file_name, unsigned 
 		/* Prefix is needed to filter out PMDK messages in NLT results analysis */         \
 		/* as it is implemented in https://github.com/daos-stack/pipeline-lib/pull/457 */  \
                                                                                                    \
-		char  file_name_buff[PMDK_LOG_FUNCTION_MAX_FILENAME] = "pmdk/";                    \
-		char *local_file_name = file_name_buff + sizeof("pmdk/") - 1;                      \
 		while ((local_file_name < file_name_buff + PMDK_LOG_FUNCTION_MAX_FILENAME - 1) &&  \
 		       (*file_name != '\0')) {                                                     \
 			*(local_file_name++) = *(file_name++);                                     \
