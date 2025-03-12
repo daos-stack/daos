@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -753,6 +754,11 @@ retry:
 			   NULL, flags, NULL, csum_iov_fetch);
 	if (rc == -DER_TIMEDOUT &&
 	    tls->mpt_version + 1 >= tls->mpt_pool->spc_map_version) {
+		if (tls->mpt_fini) {
+			DL_ERROR(rc, DF_RB ": dsc_obj_fetch " DF_UOID "failed when mpt_fini",
+				 DP_RB_MPT(tls), DP_UOID(mrone->mo_oid));
+			return rc;
+		}
 		/* If pool map does not change, then let's retry for timeout, instead of
 		 * fail out.
 		 */
@@ -1405,6 +1411,7 @@ __migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 	struct daos_csummer	*csummer = NULL;
 	struct dcs_iod_csums	*iod_csums = NULL;
 	d_iov_t			*p_csum_iov = NULL;
+	bool                     stale      = false;
 
 	if (daos_oclass_is_ec(&mrone->mo_oca))
 		mrone_recx_daos2_vos(mrone, iods, iod_num);
@@ -1493,7 +1500,8 @@ post:
 			 * failure for this rebuild, then reschedule
 			 * the rebuild and retry.
 			 */
-			rc = -DER_DATA_LOSS;
+			rc    = -DER_STALE;
+			stale = true;
 			D_DEBUG(DB_REBUILD,
 				DF_UOID" %p dkey "DF_KEY" "DF_KEY" nr %d/%d"
 				" eph "DF_U64" "DF_RC"\n",
@@ -1513,7 +1521,8 @@ end:
 		rc = rc1;
 
 	if (rc)
-		D_ERROR(DF_UOID " migrate error: "DF_RC"\n", DP_UOID(mrone->mo_oid), DP_RC(rc));
+		DL_CDEBUG(stale, DB_REBUILD, DLOG_ERR, rc, DF_UOID " migrate error",
+			  DP_UOID(mrone->mo_oid));
 
 	return rc;
 }
