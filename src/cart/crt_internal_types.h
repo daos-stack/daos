@@ -405,7 +405,7 @@ struct crt_bulk {
 	bool		deferred;	/** whether handle allocation was deferred */
 	crt_context_t	crt_ctx;	/** context on which bulk is to be created  */
 	bool		bound;		/** whether crt_bulk_bind() was used on it */
-	d_sg_list_t	*sgl;		/** original sgl */
+	d_sg_list_t	sgl;		/** original sgl */
 	crt_bulk_perm_t	bulk_perm;	/** bulk permissions */
 };
 

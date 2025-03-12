@@ -110,7 +110,7 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 	if (quota_rc ==  -DER_QUOTA_LIMIT) {
 		D_DEBUG(DB_ALL, "Exceeded bulk limit, deferring bulk handle allocation\n");
 		ret_hdl->bound = false;
-		ret_hdl->sgl = sgl;
+		ret_hdl->sgl = *sgl;
 		ret_hdl->bulk_perm = bulk_perm;
 		ret_hdl->hg_bulk_hdl = HG_BULK_NULL;
 		ret_hdl->crt_ctx = crt_ctx;
@@ -314,7 +314,7 @@ crt_bulk_access(crt_bulk_t crt_bulk, d_sg_list_t *sgl)
 	}
 
 	if (bulk->deferred) {
-		*sgl = *bulk->sgl;
+		*sgl = bulk->sgl;
 	} else {
 		rc = crt_hg_bulk_access(bulk->hg_bulk_hdl, sgl);
 	}

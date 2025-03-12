@@ -148,7 +148,7 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op,
 			ctx = bulk->crt_ctx;
 			D_ASSERT(ctx != NULL);
 
-			rc  = crt_hg_bulk_create(&ctx->cc_hg_ctx, bulk->sgl,
+			rc  = crt_hg_bulk_create(&ctx->cc_hg_ctx, &bulk->sgl,
 						 bulk->bulk_perm, &bulk->hg_bulk_hdl);
 			if (rc != DER_SUCCESS)
 				return rc;
