@@ -18,10 +18,11 @@
 extern struct d_shm_hdr *d_shm_head;
 
 #define INVALID_HT_ID (0)
-#define NREF_MASK     (0xFFFF000000000000L)
-#define HT_ID_MASK    (0xFFFFFFFFFFFFL)
-#define NREF_INC      (0x1000000000000L)
-#define GET_NREF(x)   (((x) & 0xFFFF000000000000L) >> 48)
+#define N_BITS_HT_ID  (40)
+#define NREF_MASK     (0xFFFFFF0000000000L)
+#define HT_ID_MASK    (0xFFFFFFFFFFL)
+#define NREF_INC      (0x1L << N_BITS_HT_ID)
+#define GET_NREF(x)   (((x) & NREF_MASK) >> N_BITS_HT_ID)
 #define GET_HTID(x)   ((x) & HT_ID_MASK)
 
 #if defined(__x86_64__)
@@ -57,7 +58,7 @@ shm_ht_update_nref(d_shm_ht_loc_t ht_loc, int64_t change)
 
 	old_nref = GET_NREF(old_nref_htid);
 	/* sanity check */
-	if (old_nref + change < 0) {
+	if (old_nref + (change >> N_BITS_HT_ID) < 0) {
 		DS_ERROR(EINVAL, "negative number of hash table reference");
 		return SHM_HT_NEGATIVE_REF;
 	}
@@ -76,7 +77,7 @@ shm_ht_update_nref(d_shm_ht_loc_t ht_loc, int64_t change)
 			} else {
 				/* hash table is still valid, but nref was updated by other user */
 				old_nref = GET_NREF(old_nref_htid);
-				if (old_nref + change < 0) {
+				if (old_nref + (change >> N_BITS_HT_ID) < 0) {
 					DS_WARN(EINVAL, "negative number of hash table reference");
 					return SHM_HT_NEGATIVE_REF;
 				}
@@ -216,7 +217,7 @@ shm_ht_create(const char name[], int bits, int n_lock, d_shm_ht_loc_t shm_ht_loc
 		ht_id = ((long int)rand()) << 32;
 		ht_id |= rand();
 #endif
-		/* ht id only takes lower 48 bits */
+		/* ht id only takes lower 40 bits */
 		ht_id &= HT_ID_MASK;
 	}
 	/* set ht reference count 1 for this new ht */

@@ -53,8 +53,8 @@ struct d_shm_ht_rec {
 
 /* struct of the head of the hash table stored in shared memory */
 struct d_shm_ht_head {
-	/* This 64 bits contains two parts, a randomly generated ht id (lower 48 bits) and the
-	 * number of reference accessing current hash table (upper 16 bits). ht id needs a local
+	/* This 64 bits contains two parts, a randomly generated ht id (lower 40 bits) and the
+	 * number of reference accessing current hash table (upper 24 bits). ht id needs a local
 	 * copy which is required in ht record search, insert, and remove.
 	 */
 	_Atomic int64_t nref_htid;
