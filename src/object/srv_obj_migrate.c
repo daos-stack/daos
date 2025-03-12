@@ -792,6 +792,11 @@ retry:
 			   NULL, flags, NULL, csum_iov_fetch);
 	if (rc == -DER_TIMEDOUT &&
 	    tls->mpt_version + 1 >= tls->mpt_pool->spc_map_version) {
+		if (tls->mpt_fini) {
+			DL_ERROR(rc, DF_RB ": dsc_obj_fetch " DF_UOID "failed when mpt_fini",
+				 DP_RB_MPT(tls), DP_UOID(mrone->mo_oid));
+			return rc;
+		}
 		/* If pool map does not change, then let's retry for timeout, instead of
 		 * fail out.
 		 */
