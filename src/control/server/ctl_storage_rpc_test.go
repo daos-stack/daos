@@ -2081,7 +2081,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 					},
 				},
 			},
-			expErr: errors.New("only valid if a single engine requires format"),
+			expErr: errors.New("only valid if at least one engine requires format"),
 			expResp: &ctlpb.StorageFormatResp{
 				Crets: []*ctlpb.NvmeControllerResult{
 					{
@@ -2169,71 +2169,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				},
 			},
 		},
-		"nvme and dcpm success multi-io": {
-			sMounts: []string{"/mnt/daos0", "/mnt/daos1"},
-			sClass:  storage.ClassDcpm,
-			sDevs:   []string{"/dev/pmem0", "/dev/pmem1"},
-			bClass:  storage.ClassNvme,
-			bDevs: [][]string{
-				{mockNvmeController0.PciAddr},
-				{mockNvmeController1.PciAddr},
-			},
-			// One for each engine.
-			bmbcs: []*bdev.MockBackendConfig{
-				{
-					ScanRes: &storage.BdevScanResponse{
-						Controllers: storage.NvmeControllers{mockNvmeController0},
-					},
-					FormatRes: &storage.BdevFormatResponse{
-						DeviceResponses: storage.BdevDeviceFormatResponses{
-							mockNvmeController0.PciAddr: &storage.BdevDeviceFormatResponse{
-								Formatted: true,
-							},
-						},
-					},
-				},
-				{
-					ScanRes: &storage.BdevScanResponse{
-						Controllers: storage.NvmeControllers{mockNvmeController1},
-					},
-					FormatRes: &storage.BdevFormatResponse{
-						DeviceResponses: storage.BdevDeviceFormatResponses{
-							mockNvmeController1.PciAddr: &storage.BdevDeviceFormatResponse{
-								Formatted: true,
-							},
-						},
-					},
-				},
-			},
-			expResp: &ctlpb.StorageFormatResp{
-				Crets: []*ctlpb.NvmeControllerResult{
-					{
-						PciAddr: mockNvmeController0.PciAddr,
-						State:   new(ctlpb.ResponseState),
-					},
-					{
-						// this should be id 1 but mock
-						// backend spits same output for
-						// both I/O Engine instances
-						PciAddr: mockNvmeController0.PciAddr,
-						State:   new(ctlpb.ResponseState),
-					},
-				},
-				Mrets: []*ctlpb.ScmMountResult{
-					{
-						Mntpoint:    "/mnt/daos0",
-						State:       new(ctlpb.ResponseState),
-						Instanceidx: 0,
-					},
-					{
-						Mntpoint:    "/mnt/daos1",
-						State:       new(ctlpb.ResponseState),
-						Instanceidx: 1,
-					},
-				},
-			},
-		},
-		"nvme and dcpm multi-io; replace fails": {
+		"nvme and dcpm multi-io; replace succeeds": {
 			sMounts: []string{"/mnt/daos0", "/mnt/daos1"},
 			sClass:  storage.ClassDcpm,
 			sDevs:   []string{"/dev/pmem0", "/dev/pmem1"},
@@ -2270,7 +2206,6 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 					},
 				},
 			},
-			expErr: errors.New("only valid if a single engine requires format"),
 			expResp: &ctlpb.StorageFormatResp{
 				Crets: []*ctlpb.NvmeControllerResult{
 					{
