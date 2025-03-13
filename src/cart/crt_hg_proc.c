@@ -117,7 +117,7 @@ CRT_PROC_TYPE_FUNC(bool)
 int
 crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_bulk)
 {
-	struct crt_bulk	*bulk = NULL;
+	struct crt_bulk *bulk = NULL;
 	hg_return_t      hg_ret;
 	hg_bulk_t        tmp_hg_bulk;
 
