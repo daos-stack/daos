@@ -401,12 +401,12 @@ struct crt_quotas {
  * Deferred allocation is only supported on clients through D_QUOTA_BULKS env
  */
 struct crt_bulk {
-	hg_bulk_t	hg_bulk_hdl;	/** mercury bulk handle */
-	bool		deferred;	/** whether handle allocation was deferred */
-	crt_context_t	crt_ctx;	/** context on which bulk is to be created  */
-	bool		bound;		/** whether crt_bulk_bind() was used on it */
-	d_sg_list_t	sgl;		/** original sgl */
-	crt_bulk_perm_t	bulk_perm;	/** bulk permissions */
+	hg_bulk_t       hg_bulk_hdl; /** mercury bulk handle */
+	bool            deferred;    /** whether handle allocation was deferred */
+	crt_context_t   crt_ctx;     /** context on which bulk is to be created  */
+	bool            bound;       /** whether crt_bulk_bind() was used on it */
+	d_sg_list_t     sgl;         /** original sgl */
+	crt_bulk_perm_t bulk_perm;   /** bulk permissions */
 };
 
 /* crt_context */

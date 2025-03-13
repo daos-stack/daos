@@ -86,10 +86,10 @@ int
 crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 		crt_bulk_perm_t bulk_perm, crt_bulk_t *bulk_hdl)
 {
-	struct crt_context	*ctx;
-	struct crt_bulk		*ret_hdl = NULL;
-	int			quota_rc = 0;
-	int			rc = 0;
+	struct crt_context *ctx;
+	struct crt_bulk    *ret_hdl  = NULL;
+	int                 quota_rc = 0;
+	int                 rc       = 0;
 
 	if (crt_ctx == CRT_CONTEXT_NULL || !crt_sgl_valid(sgl) ||
 	    (bulk_perm != CRT_BULK_RW && bulk_perm != CRT_BULK_RO && bulk_perm != CRT_BULK_WO) ||
@@ -107,19 +107,19 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	quota_rc = get_quota_resource(crt_ctx, CRT_QUOTA_BULKS);
-	if (quota_rc ==  -DER_QUOTA_LIMIT) {
+	if (quota_rc == -DER_QUOTA_LIMIT) {
 		D_DEBUG(DB_ALL, "Exceeded bulk limit, deferring bulk handle allocation\n");
-		ret_hdl->bound = false;
-		ret_hdl->sgl = *sgl;
-		ret_hdl->bulk_perm = bulk_perm;
+		ret_hdl->bound       = false;
+		ret_hdl->sgl         = *sgl;
+		ret_hdl->bulk_perm   = bulk_perm;
 		ret_hdl->hg_bulk_hdl = HG_BULK_NULL;
-		ret_hdl->crt_ctx = crt_ctx;
-		ret_hdl->deferred = true;
+		ret_hdl->crt_ctx     = crt_ctx;
+		ret_hdl->deferred    = true;
 		D_GOTO(out, rc = DER_SUCCESS);
 	}
 
 	ret_hdl->deferred = false;
-	ret_hdl->crt_ctx = crt_ctx;
+	ret_hdl->crt_ctx  = crt_ctx;
 
 	rc = crt_hg_bulk_create(&ctx->cc_hg_ctx, sgl, bulk_perm, &ret_hdl->hg_bulk_hdl);
 	if (rc != 0) {
@@ -137,9 +137,9 @@ out:
 int
 crt_bulk_bind(crt_bulk_t crt_bulk, crt_context_t crt_ctx)
 {
-	struct crt_context	*ctx = crt_ctx;
-	struct crt_bulk		*bulk = crt_bulk;
-	int			rc = 0;
+	struct crt_context *ctx  = crt_ctx;
+	struct crt_bulk    *bulk = crt_bulk;
+	int                 rc   = 0;
 
 	if (ctx == CRT_CONTEXT_NULL || bulk == NULL) {
 		D_ERROR("invalid parameter, NULL crt_ctx or crt_bulk.\n");
@@ -164,9 +164,9 @@ out:
 int
 crt_bulk_addref(crt_bulk_t crt_bulk)
 {
-	struct crt_bulk		*bulk = crt_bulk;
-	int         		rc = -DER_SUCCESS;
-	hg_return_t		hg_ret;
+	struct crt_bulk *bulk = crt_bulk;
+	int              rc   = -DER_SUCCESS;
+	hg_return_t      hg_ret;
 
 	if (bulk == NULL) {
 		D_ERROR("invalid parameter, NULL bulk\n");
@@ -186,9 +186,9 @@ out:
 int
 crt_bulk_free(crt_bulk_t crt_bulk)
 {
-	struct crt_bulk		*bulk = crt_bulk;
-	int			rc = -DER_SUCCESS;
-	hg_return_t		hg_ret;
+	struct crt_bulk *bulk = crt_bulk;
+	int              rc   = -DER_SUCCESS;
+	hg_return_t      hg_ret;
 
 	if (bulk == NULL) {
 		D_ERROR("invalid parameter, NULL bulk\n");
@@ -300,8 +300,8 @@ crt_bulk_get_sgnum(crt_bulk_t crt_bulk, unsigned int *bulk_sgnum)
 int
 crt_bulk_access(crt_bulk_t crt_bulk, d_sg_list_t *sgl)
 {
-	int		rc = 0;
-	struct crt_bulk	*bulk = crt_bulk;
+	struct crt_bulk *bulk = crt_bulk;
+	int              rc   = 0;
 
 	if (bulk == NULL) {
 		D_ERROR("invalid parameter, NULL bulk.\n");

@@ -243,12 +243,17 @@ crt_der_2_hgret(int der)
 	};
 }
 
-int crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
-		       crt_bulk_perm_t bulk_perm, hg_bulk_t *bulk_hdl);
-int crt_hg_bulk_bind(hg_bulk_t bulk_hdl, struct crt_hg_context *hg_ctx);
-int crt_hg_bulk_access(hg_bulk_t bulk_hdl, d_sg_list_t *sgl);
-int crt_hg_bulk_get_sgnum(hg_bulk_t hg_bulk_hdl);
-int crt_hg_bulk_get_len(hg_bulk_t hg_bulk_hdl);
+int
+crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl, crt_bulk_perm_t bulk_perm,
+		   hg_bulk_t *bulk_hdl);
+int
+crt_hg_bulk_bind(hg_bulk_t bulk_hdl, struct crt_hg_context *hg_ctx);
+int
+crt_hg_bulk_access(hg_bulk_t bulk_hdl, d_sg_list_t *sgl);
+int
+crt_hg_bulk_get_sgnum(hg_bulk_t hg_bulk_hdl);
+int
+crt_hg_bulk_get_len(hg_bulk_t hg_bulk_hdl);
 int
 crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb, void *arg,
 		     crt_bulk_opid_t *opid, bool bind);

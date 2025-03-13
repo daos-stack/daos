@@ -87,7 +87,7 @@ struct bio_dma_chunk {
 	/* == Bulk handle caching related fields == */
 	struct bio_bulk_group	*bdc_bulk_grp;
 	struct bio_bulk_hdl	*bdc_bulks;
-	crt_bulk_t		 bdc_bulk_hdl;	/* Bulk handle used by upper layer caller */
+	crt_bulk_t               bdc_bulk_hdl; /* Bulk handle used by upper layer caller */
 	unsigned int		 bdc_bulk_cnt;
 	unsigned int		 bdc_bulk_idle;
 };

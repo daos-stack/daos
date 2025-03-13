@@ -134,21 +134,21 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op,
 		/* RPC can have a NULL bulk. if so, encode a NULL value */
 		if (!bulk) {
 			tmp_hg_bulk = HG_BULK_NULL;
-			hg_ret = hg_proc_hg_bulk_t(proc, (hg_bulk_t *)&tmp_hg_bulk);
+			hg_ret      = hg_proc_hg_bulk_t(proc, (hg_bulk_t *)&tmp_hg_bulk);
 			return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
 		}
 
 		/* Deferred allocation as a result of D_QUOTA_BULKS limit */
 		if (bulk->deferred) {
-			struct crt_context	*ctx;
-			int			rc;
+			struct crt_context *ctx;
+			int                 rc;
 
 			/* Create mercury handle based on saved params */
 			ctx = bulk->crt_ctx;
 			D_ASSERT(ctx != NULL);
 
-			rc  = crt_hg_bulk_create(&ctx->cc_hg_ctx, &bulk->sgl,
-						 bulk->bulk_perm, &bulk->hg_bulk_hdl);
+			rc = crt_hg_bulk_create(&ctx->cc_hg_ctx, &bulk->sgl, bulk->bulk_perm,
+						&bulk->hg_bulk_hdl);
 			if (rc != DER_SUCCESS)
 				return rc;
 

@@ -2044,9 +2044,9 @@ context_quotas_init(struct crt_context *ctx)
 	quotas->current[CRT_QUOTA_RPCS] = 0;
 	quotas->enabled[CRT_QUOTA_RPCS] = crt_gdata.cg_rpc_quota > 0 ? true : false;
 
-	quotas->limit[CRT_QUOTA_BULKS] = crt_gdata.cg_bulk_quota;
+	quotas->limit[CRT_QUOTA_BULKS]   = crt_gdata.cg_bulk_quota;
 	quotas->current[CRT_QUOTA_BULKS] = 0;
-	quotas->enabled[CRT_QUOTA_BULKS] = crt_gdata.cg_bulk_quota > 0 ? true: false;
+	quotas->enabled[CRT_QUOTA_BULKS] = crt_gdata.cg_bulk_quota > 0 ? true : false;
 }
 
 static void
@@ -2111,7 +2111,7 @@ out:
 void
 record_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota)
 {
-	struct crt_context	*ctx = crt_ctx;
+	struct crt_context *ctx = crt_ctx;
 
 	D_ASSERTF(ctx != NULL, "NULL context\n");
 	D_ASSERTF(quota >= 0 && quota < CRT_QUOTA_COUNT, "Invalid quota\n");
@@ -2122,7 +2122,6 @@ record_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota)
 
 	atomic_fetch_add(&ctx->cc_quotas.current[quota], 1);
 }
-
 
 /* returns 0 if resource is available or -DER_QUOTA_LIMIT otherwise */
 int
