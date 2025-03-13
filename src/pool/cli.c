@@ -752,7 +752,7 @@ dc_pool_ping_target(int tgt_id, daos_handle_t pool_hdl)
 	D_ALLOC(bulk_buf, bulk_len);
 	if (bulk_buf == NULL) {
 		D_ERROR("Failed to alloc mem\n");
-		goto out_unlock;
+		goto out;
 	}
 
 	ctx = daos_get_crt_ctx();
@@ -812,8 +812,7 @@ out_hdl:
 	crt_bulk_free(bulk_hdl);
 out_bulk:
 	D_FREE(bulk_buf);
-out_unlock:
-	D_MUTEX_UNLOCK(&warmup_lock);
+out:
 	return rc;
 }
 
