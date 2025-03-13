@@ -23,7 +23,6 @@ suggest_dfs_cs(daos_handle_t poh, daos_prop_t *prop, uint64_t rf, daos_oclass_id
 	struct daos_oclass_attr *oc_attr;
 	struct daos_prop_entry  *dpe;
 	uint64_t                 ec_cell_size;
-	uint64_t                 val;
 	uint32_t                 nr_grps;
 	int                      rc;
 
@@ -60,20 +59,34 @@ suggest_dfs_cs(daos_handle_t poh, daos_prop_t *prop, uint64_t rf, daos_oclass_id
 		return 0;
 	}
 
-	/** query the EC cell size */
+	/** query the EC cell size from container first */
 	dpe = daos_prop_entry_get(prop, DAOS_PROP_CO_EC_CELL_SZ);
-	if (dpe)
+	if (dpe) {
 		ec_cell_size = dpe->dpe_val;
-	else
-		ec_cell_size = DAOS_EC_CELL_DEF;
+	} else {
+		daos_prop_t             pool_prop;
+		struct daos_prop_entry *entry;
+
+		/** Check the EC Cell size property on pool */
+		pool_prop                          = daos_prop_alloc(1);
+		pool_prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_EC_CELL_SZ;
+
+		rc = daos_pool_query(arg->pool.poh, NULL, NULL, prop_query, NULL);
+		if (rc) {
+			daos_prop_free(pool_prop);
+			return daos_der2errno(rc);
+		}
+		entry = daos_prop_entry_get(pool_prop, DAOS_PROP_PO_EC_CELL_SZ);
+		if (entry != NULL)
+			ec_cell_size = entry->dpe_val;
+		else
+			ec_cell_size = DAOS_EC_CELL_DEF;
+	}
 
 	/** set the DFS chunk size to the 2 x the EC cell size x the number of data cells */
-	val = oc_attr->u.ec.e_k * ec_cell_size * 2;
-	if (val <= DFS_DEFAULT_CHUNK_SIZE)
-		*cs = DFS_DEFAULT_CHUNK_SIZE;
-	else
-		*cs = val;
-
+	*cs = oc_attr->u.ec.e_k * ec_cell_size * 2;
+	D_DEBUG(DB_TRACE, "Setting the DFS chunk size of the container to %zu (%zu x %d x 2)\n",
+		*cs, ec_cell_size, oc_attr->u.ec.e_k);
 	return 0;
 }
 
