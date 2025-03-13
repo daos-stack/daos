@@ -165,7 +165,7 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_bul
 			bulk->deferred = false;
 		}
 
-		/* Send mercury bulk handle over the wire */
+		/* Pack mercury bulk handle to send over the wire */
 		hg_ret = hg_proc_hg_bulk_t(proc, (hg_bulk_t *)&bulk->hg_bulk_hdl);
 		return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
 		break;

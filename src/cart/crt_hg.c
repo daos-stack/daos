@@ -1801,22 +1801,6 @@ crt_hg_bulk_bind(hg_bulk_t hg_bulk_hdl, struct crt_hg_context *hg_ctx)
 }
 
 int
-crt_hg_bulk_get_sgnum(hg_bulk_t hg_bulk_hdl)
-{
-	D_ASSERT(hg_bulk_hdl != HG_BULK_NULL);
-
-	return HG_Bulk_get_segment_count(hg_bulk_hdl);
-}
-
-int
-crt_hg_bulk_get_len(hg_bulk_t hg_bulk_hdl)
-{
-	D_ASSERT(hg_bulk_hdl != HG_BULK_NULL);
-
-	return HG_Bulk_get_size(hg_bulk_hdl);
-}
-
-int
 crt_hg_bulk_access(hg_bulk_t hg_bulk_hdl, d_sg_list_t *sgl)
 {
 	unsigned int	  bulk_sgnum;

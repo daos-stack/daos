@@ -141,7 +141,7 @@ crt_bulk_bind(crt_bulk_t crt_bulk, crt_context_t crt_ctx)
 	struct crt_bulk    *bulk = crt_bulk;
 	int                 rc   = 0;
 
-	if (ctx == CRT_CONTEXT_NULL || bulk == NULL) {
+	if (ctx == NULL || bulk == NULL) {
 		D_ERROR("invalid parameter, NULL crt_ctx or crt_bulk.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
@@ -201,8 +201,7 @@ crt_bulk_free(crt_bulk_t crt_bulk)
 			/* Treat as success */
 			D_GOTO(out, rc = DER_SUCCESS);
 		} else {
-			D_ERROR("hg_bulk_hdl was null\n");
-			D_GOTO(out, rc = -DER_INVAL);
+			D_ASSERTF(0, "Bulk handle should not be NULL\n");
 		}
 	}
 
@@ -212,7 +211,7 @@ crt_bulk_free(crt_bulk_t crt_bulk)
 		rc = crt_hgret_2_der(hg_ret);
 	}
 
-	/* decoded bulks dont have a context and not counted towards quota */
+	/* decoded bulks are not counted towards quota; such bulks have crt_ctx set to NULL */
 	if (bulk->crt_ctx)
 		put_quota_resource(bulk->crt_ctx, CRT_QUOTA_BULKS);
 out:
@@ -312,11 +311,10 @@ crt_bulk_access(crt_bulk_t crt_bulk, d_sg_list_t *sgl)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	if (bulk->deferred) {
+	if (bulk->deferred)
 		*sgl = bulk->sgl;
-	} else {
+	else
 		rc = crt_hg_bulk_access(bulk->hg_bulk_hdl, sgl);
-	}
 
 out:
 	return rc;
