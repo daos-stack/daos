@@ -806,6 +806,7 @@ dc_pool_ping_target(int tgt_id, daos_handle_t pool_hdl)
 			break;
 		}
 	}
+
 	rc = 0;
 out_sem:
 	(void)sem_destroy(&sem);

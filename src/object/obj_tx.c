@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -978,6 +979,11 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 	int			  rc = task->dt_result;
 	int			  rc1;
 	bool			  locked = true;
+	uint32_t                  start;
+	uint32_t                  req_cnt;
+	int                       i;
+	tse_task_t               *required_task = NULL;
+	tse_sched_t              *sched         = tse_task2sched(task);
 
 	if (rc == 0) {
 		rc = oco->oco_ret;
@@ -989,8 +995,8 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 		}
 	}
 
-	D_DEBUG(DB_IO, "TX " DF_DTI " commit (%p) with version %u get result: %d, %d\n",
-		DP_DTI(&tx->tx_id), task, tx->tx_pm_ver, task->dt_result, rc);
+	D_DEBUG(DB_IO, "TX " DF_DTI " commit (%p) with version %u get result: %d, " DF_RC "\n",
+		DP_DTI(&tx->tx_id), task, tx->tx_pm_ver, task->dt_result, DP_RC(rc));
 
 	D_MUTEX_LOCK(&tx->tx_lock);
 
@@ -1074,6 +1080,50 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 			 */
 			tx->tx_status = TX_FAILED;
 			rc = -DER_TX_RESTART;
+		}
+	}
+
+	// If the task's return code is DER_RECONNECT, then ping every update RPC's
+	// targets to establish connection between the client and server. We do not know
+	// which sub request resulted in this error.
+	if (rc == -DER_RECONNECT) {
+		struct daos_cpd_sub_req *dcsr;
+		struct dc_object        *obj;
+		int                      ping_task_rc;
+		start   = dc_tx_leftmost_req(tx, false);
+		req_cnt = tx->tx_read_cnt + tx->tx_write_cnt;
+		for (i = 0; i < req_cnt; i++) {
+			dcsr = &tx->tx_req_cache[i + start];
+			obj  = dcsr->dcsr_obj;
+
+			if (dcsr->dcsr_opc == DCSO_UPDATE) {
+				ping_task_rc = obj_tgt_ping_task(sched, obj, dcsr->dcsr_dkey_hash,
+								 &required_task);
+				if (ping_task_rc != 0) {
+					D_ERROR("Failed to create ping task %p: %d, %d\n",
+						required_task, ping_task_rc, rc);
+					tx->tx_status = TX_ABORTED;
+				}
+
+				if (required_task != NULL) {
+					D_INFO("Adding %p as dependency on %p", required_task,
+					       task);
+					ping_task_rc = dc_task_depend(task, 1, &required_task);
+					if (ping_task_rc != 0) {
+						D_ERROR("Failed to add dependency on ping task "
+							"(%p)\n",
+							required_task);
+						tx->tx_status = TX_ABORTED;
+					}
+
+					ping_task_rc = tse_task_schedule(required_task, false);
+					if (ping_task_rc != 0) {
+						D_ERROR("Failed to schedule ping task %p: %d, %d\n",
+							required_task, ping_task_rc, rc);
+						tx->tx_status = TX_ABORTED;
+					}
+				}
+			}
 		}
 	}
 

@@ -822,6 +822,10 @@ obj_ec_encode_buf(daos_obj_id_t oid, struct daos_oclass_attr *oca,
 		  unsigned char *p_bufs[]);
 
 int
+obj_tgt_ping_task(tse_sched_t *sched, struct dc_object *obj, uint64_t dkey_hash,
+		  tse_task_t **taskp);
+
+int
 obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash, uint32_t *shard);
 
 static inline struct pl_obj_shard*

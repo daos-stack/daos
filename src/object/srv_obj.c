@@ -5486,6 +5486,13 @@ ds_obj_cpd_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		goto reply;
 
+	if (DAOS_FAIL_CHECK(DAOS_CLIENT_UNREACHABLE)) {
+		/** Fault injection - client unreachable. */
+		D_INFO("enabled fault injection client unreachable");
+		rc = -DER_RECONNECT;
+		goto reply;
+	}
+
 	if (!leader) {
 		if (tx_count != 1 || oci->oci_sub_reqs.ca_count != 1 ||
 		    oci->oci_disp_ents.ca_count != 1 || oci->oci_disp_tgts.ca_count != 0) {
