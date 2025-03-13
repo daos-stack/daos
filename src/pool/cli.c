@@ -751,6 +751,7 @@ dc_pool_ping_target(int tgt_id, daos_handle_t pool_hdl)
 
 	D_ALLOC(bulk_buf, bulk_len);
 	if (bulk_buf == NULL) {
+		rc = -DER_NOMEM;
 		D_ERROR("Failed to alloc mem\n");
 		goto out;
 	}
@@ -763,20 +764,20 @@ dc_pool_ping_target(int tgt_id, daos_handle_t pool_hdl)
 	sgl.sg_iovs   = &iov;
 	rc            = crt_bulk_create(ctx, &sgl, CRT_BULK_RW, &bulk_hdl);
 	if (rc < 0) {
-		D_ERROR("Failed to create bulk handle\n");
+		DL_ERROR(rc, "Failed to create bulk handle");
 		goto out_bulk;
 	}
 
 	rc = sem_init(&sem, 0, 0);
 	if (rc < 0) {
-		D_ERROR("Failed to initialize semaphore\n");
+		DL_ERROR(rc, "Failed to initialize semaphore");
 		goto out_hdl;
 	}
 
 	idx = 0;
 	if (tgts[idx].ta_comp.co_status == PO_COMP_ST_DOWN ||
 	    tgts[idx].ta_comp.co_status == PO_COMP_ST_DOWNOUT)
-		return 0;
+		goto out_sem;
 
 	ep.ep_grp  = pool->dp_sys->sy_group;
 	ep.ep_rank = tgts[idx].ta_comp.co_rank;

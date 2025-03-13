@@ -25,15 +25,6 @@
 #include "cli_csum.h"
 #include <semaphore.h>
 
-/*
- * Arg of ping_task
- */
-struct ping_task_arg {
-	daos_handle_t         pool_hdl;
-	struct dc_object     *obj;
-	struct obj_auxi_args *obj_auxi;
-};
-
 /**
  * Open an object shard (shard object), cache the open handle.
  */
@@ -865,7 +856,6 @@ obj_dkey2grpidx(struct dc_object *obj, uint64_t hash, unsigned int map_ver)
 			obj->cob_version, map_ver, pool_map_ver);
 		return -DER_STALE;
 	}
-
 	D_ASSERT(obj->cob_shards_nr >= grp_size);
 
 	grp_idx = obj_pl_grp_idx(obj->cob_layout_version, hash,
@@ -1415,6 +1405,15 @@ obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
 	return 0;
 }
 
+/*
+ * Arg of ping_task
+ */
+struct ping_task_arg {
+	daos_handle_t         pool_hdl;
+	struct dc_object     *obj;
+	struct obj_auxi_args *obj_auxi;
+};
+
 static int
 ping_task(tse_task_t *task)
 {
@@ -1442,6 +1441,7 @@ ping_task(tse_task_t *task)
 		rc = dc_pool_ping_target(tgt_id, pool_hdl);
 		if (rc != 0) {
 			D_ERROR("failed to ping target " DF_RC "\n", DP_RC(rc));
+			tse_task_complete(task, 0);
 			return rc;
 		}
 	}
@@ -1468,11 +1468,11 @@ create_ping_task(tse_sched_t *sched, daos_handle_t pool_hdl, struct dc_object *o
 	rc = tse_task_create(ping_task, sched, NULL, &t);
 	if (rc != 0) {
 		D_ERROR("%s", "failed to create task");
+		dc_pool_put(pool);
 		return rc;
 	}
 
-	a = tse_task_buf_embedded(t, sizeof(*a));
-	dc_pool_get(pool);
+	a           = tse_task_buf_embedded(t, sizeof(*a));
 	a->pool_hdl = pool_hdl;
 	a->obj      = obj;
 	a->obj_auxi = obj_auxi;
@@ -1871,6 +1871,8 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 			D_GOTO(err, rc);
 	} else if (result == -DER_RECONNECT) {
 		rc = obj_tgt_ping_task(sched, obj, obj_auxi, &required_task);
+		if (rc != 0)
+			D_GOTO(err, rc);
 	}
 
 	if (obj_auxi->io_retry) {
