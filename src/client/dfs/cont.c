@@ -64,14 +64,14 @@ suggest_dfs_cs(daos_handle_t poh, daos_prop_t *prop, uint64_t rf, daos_oclass_id
 	if (dpe) {
 		ec_cell_size = dpe->dpe_val;
 	} else {
-		daos_prop_t             pool_prop;
+		daos_prop_t            *pool_prop;
 		struct daos_prop_entry *entry;
 
 		/** Check the EC Cell size property on pool */
 		pool_prop                          = daos_prop_alloc(1);
 		pool_prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_EC_CELL_SZ;
 
-		rc = daos_pool_query(arg->pool.poh, NULL, NULL, prop_query, NULL);
+		rc = daos_pool_query(poh, NULL, NULL, pool_prop, NULL);
 		if (rc) {
 			daos_prop_free(pool_prop);
 			return daos_der2errno(rc);
@@ -81,6 +81,7 @@ suggest_dfs_cs(daos_handle_t poh, daos_prop_t *prop, uint64_t rf, daos_oclass_id
 			ec_cell_size = entry->dpe_val;
 		else
 			ec_cell_size = DAOS_EC_CELL_DEF;
+		daos_prop_free(pool_prop);
 	}
 
 	/** set the DFS chunk size to the 2 x the EC cell size x the number of data cells */
