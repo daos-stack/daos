@@ -1,5 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -90,14 +91,14 @@ class DmgPoolQueryRanks(ControlTestBase):
 
         # kill second rank.
         self.log_step(f"Stopping rank:{dead_rank} all_ranks={all_ranks}")
-        self.server_managers[0].stop_ranks([dead_rank], self.d_log)
+        self.server_managers[0].stop_ranks([dead_rank])
 
         self.log_step(f"Waiting for pool rank {dead_rank} to be dead")
         self.pool.wait_pool_dead_ranks([dead_rank], timeout=30)
         self._verify_ranks(disabled_ranks, data, "disabled_ranks")
 
         self.log_step(f"Starting rank {dead_rank}")
-        self.server_managers[0].start_ranks([dead_rank], self.d_log)
+        self.server_managers[0].start_ranks([dead_rank])
 
         self.log_step("Waiting for pool ranks to no longer be dead")
         self.pool.wait_pool_dead_ranks([], timeout=30)
