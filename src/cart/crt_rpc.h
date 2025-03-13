@@ -19,7 +19,7 @@
 #define CRT_DEFAULT_TIMEOUT_S	(60) /* second */
 #define CRT_DEFAULT_TIMEOUT_US	(CRT_DEFAULT_TIMEOUT_S * 1e6) /* micro-second */
 
-#define CRT_QUOTA_RPCS_DEFAULT		64
+#define CRT_QUOTA_RPCS_DEFAULT          64
 #define CRT_QUOTA_BULKS_DEFAULT         64
 
 /* uri lookup max retry times */

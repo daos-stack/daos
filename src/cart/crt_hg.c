@@ -1951,8 +1951,8 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 	struct crt_rpc_priv		*rpc_priv;
 	hg_bulk_t                        local_bulk;
 	hg_bulk_t                        remote_bulk;
-	struct crt_bulk			*crt_local_bulk;
-	struct crt_bulk			*crt_remote_bulk;
+	struct crt_bulk                 *crt_local_bulk;
+	struct crt_bulk                 *crt_remote_bulk;
 	hg_return_t                      hg_ret = HG_SUCCESS;
 	int                              rc     = 0;
 
@@ -1992,7 +1992,7 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 
 	hg_bulk_op = (bulk_desc->bd_bulk_op == CRT_BULK_PUT) ?
 		     HG_BULK_PUSH : HG_BULK_PULL;
-	rpc_priv = container_of(bulk_desc->bd_rpc, struct crt_rpc_priv, crp_pub);
+	rpc_priv   = container_of(bulk_desc->bd_rpc, struct crt_rpc_priv, crp_pub);
 
 	if (bind)
 		hg_ret = HG_Bulk_bind_transfer(

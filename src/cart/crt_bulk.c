@@ -123,7 +123,7 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 
 	rc = crt_hg_bulk_create(&ctx->cc_hg_ctx, sgl, bulk_perm, &ret_hdl->hg_bulk_hdl);
 	if (rc != 0) {
-		D_ERROR("crt_hg_bulk_create() failed, rc: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("crt_hg_bulk_create() failed, rc: " DF_RC "\n", DP_RC(rc));
 		D_FREE(ret_hdl);
 		D_GOTO(out, rc);
 	}
@@ -280,7 +280,6 @@ crt_bulk_get_len(crt_bulk_t crt_bulk, size_t *bulk_len)
 	*bulk_len = crt_hg_bulk_get_len(bulk->hg_bulk_hdl);
 	return 0;
 }
-
 
 int
 crt_bulk_get_sgnum(crt_bulk_t crt_bulk, unsigned int *bulk_sgnum)

@@ -115,12 +115,11 @@ CRT_PROC_TYPE_FUNC(uint64_t)
 CRT_PROC_TYPE_FUNC(bool)
 
 int
-crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op,
-		    crt_bulk_t *pcrt_bulk)
+crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_bulk)
 {
 	struct crt_bulk	*bulk = NULL;
-	hg_return_t	hg_ret;
-	hg_bulk_t 	tmp_hg_bulk;
+	hg_return_t      hg_ret;
+	hg_bulk_t        tmp_hg_bulk;
 
 	/*
 	 * We only send 'hg_bulk_t' over the wire. During encoding stage we
@@ -189,8 +188,8 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op,
 			return -DER_NOMEM;
 
 		bulk->hg_bulk_hdl = tmp_hg_bulk;
-		bulk->deferred = false;
-		bulk->crt_ctx = NULL;
+		bulk->deferred    = false;
+		bulk->crt_ctx     = NULL;
 
 		*pcrt_bulk = bulk;
 		return 0;

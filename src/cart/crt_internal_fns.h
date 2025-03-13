@@ -40,7 +40,7 @@ record_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota);
 int
 get_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota);
 void
-put_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota);
+     put_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota);
 void crt_rpc_complete_and_unlock(struct crt_rpc_priv *rpc_priv, int rc);
 int crt_req_timeout_track(struct crt_rpc_priv *rpc_priv);
 void crt_req_timeout_untrack(struct crt_rpc_priv *rpc_priv);
