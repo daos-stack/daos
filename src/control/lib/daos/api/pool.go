@@ -242,9 +242,6 @@ func PoolConnect(ctx context.Context, req PoolConnectReq) (*PoolConnectResp, err
 	if req.ID == "" {
 		return nil, errors.Wrap(daos.InvalidInput, "no pool ID provided")
 	}
-	if req.SysName == "" {
-		req.SysName = build.DefaultSystemName
-	}
 	if req.Flags == 0 {
 		req.Flags = daos.PoolConnectFlagReadOnly
 	}
@@ -257,8 +254,11 @@ func PoolConnect(ctx context.Context, req PoolConnectReq) (*PoolConnectResp, err
 
 	cPoolID := C.CString(req.ID)
 	defer freeString(cPoolID)
-	cSys := C.CString(req.SysName)
-	defer freeString(cSys)
+	var cSys *C.char
+	if req.SysName != "" {
+		cSys = C.CString(req.SysName)
+		defer freeString(cSys)
+	}
 
 	if err := daosError(daos_pool_connect(cPoolID, cSys, C.uint(req.Flags), &poolConn.daosHandle, &dpi, nil)); err != nil {
 		return nil, errors.Wrap(err, "failed to connect to pool")

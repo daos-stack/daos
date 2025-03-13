@@ -7033,7 +7033,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclud
 							   inval_tgt_addrs);
 			if (rc != 0)
 				goto out_map;
-			if (inval_tgt_addrs->pta_number > 0) {
+			if (src == MUS_DMG && inval_tgt_addrs->pta_number > 0) {
 				/*
 				 * If any invalid ranks/targets were specified here,
 				 * abort the entire request. This will mean the
@@ -7604,8 +7604,8 @@ pool_svc_exclude_ranks(struct pool_svc *svc, struct pool_svc_event_set *event_se
 				 NULL, NULL, 0, &list, &inval_list_out, &map_version,
 				 NULL /* hint */, MUS_SWIM, false);
 
-	D_DEBUG(DB_MD, "Exclude pool "DF_UUID"/%u ranks %u: rc %d\n",
-		DP_UUID(svc->ps_uuid), map_version, n, rc);
+	D_DEBUG(DB_MD, DF_UUID ": exclude %u ranks: map_version=%u: " DF_RC "\n",
+		DP_UUID(svc->ps_uuid), n, rc == 0 ? map_version : 0, DP_RC(rc));
 
 	pool_target_addr_list_free(&inval_list_out);
 out:

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,6 +13,9 @@
 #include "srv_internal.h"
 
 /* ============== Thread collective functions ============================ */
+
+/** The maximum number of credits for each IO chore queue. That is per helper XS. */
+uint32_t dss_chore_credits;
 
 struct aggregator_arg_type {
 	struct dss_stream_arg_type	at_args;
@@ -716,20 +720,20 @@ dss_chore_ult(void *arg)
  * Add \a chore for \a func to the chore queue of some other xstream.
  *
  * \param[in]	chore	address of the embedded chore object
- * \param[in]	func	function to be executed via \a chore
  *
  * \retval	-DER_CANCEL	chore queue stopping
  */
 int
-dss_chore_delegate(struct dss_chore *chore, dss_chore_func_t func)
+dss_chore_register(struct dss_chore *chore)
 {
 	struct dss_module_info *info = dss_get_module_info();
 	int                     xs_id;
 	struct dss_xstream     *dx;
 	struct dss_chore_queue *queue;
 
+	D_ASSERT(chore->cho_credits > 0);
+
 	chore->cho_status = DSS_CHORE_NEW;
-	chore->cho_func   = func;
 
 	/*
 	 * The dss_chore_queue_ult approach may get insufficient scheduling on
@@ -755,13 +759,44 @@ dss_chore_delegate(struct dss_chore *chore, dss_chore_func_t func)
 		ABT_mutex_unlock(queue->chq_mutex);
 		return -DER_CANCELED;
 	}
+
+	if (!chore->cho_priority && queue->chq_credits < chore->cho_credits) {
+		/*
+		 * Piggyback current available credits, then the caller can decide
+		 * whether can shrink credit requirement and retry with more steps.
+		 */
+		chore->cho_credits = queue->chq_credits;
+		ABT_mutex_unlock(queue->chq_mutex);
+		return -DER_AGAIN;
+	}
+
+	/* queue->chq_credits can be negative temporarily because of high priority requests. */
+	queue->chq_credits -= chore->cho_credits;
+	chore->cho_hint = queue;
 	d_list_add_tail(&chore->cho_link, &queue->chq_list);
 	ABT_cond_broadcast(queue->chq_cond);
 	ABT_mutex_unlock(queue->chq_mutex);
 
-	D_DEBUG(DB_TRACE, "%p: tgt_id=%d -> xs_id=%d dx.tgt_id=%d\n", chore, info->dmi_tgt_id,
-		xs_id, dx->dx_tgt_id);
+	D_DEBUG(DB_TRACE, "register chore %p on queue %p: tgt=%d -> xs=%d dx.tgt=%d, credits %u\n",
+		chore, queue, info->dmi_tgt_id, xs_id, dx->dx_tgt_id, chore->cho_credits);
 	return 0;
+}
+
+void
+dss_chore_deregister(struct dss_chore *chore)
+{
+	struct dss_chore_queue *queue = chore->cho_hint;
+
+	if (queue != NULL) {
+		D_ASSERT(chore->cho_credits > 0);
+
+		ABT_mutex_lock(queue->chq_mutex);
+		queue->chq_credits += chore->cho_credits;
+		ABT_mutex_unlock(queue->chq_mutex);
+
+		D_DEBUG(DB_TRACE, "deregister chore %p from queue %p: credits %u\n", chore, queue,
+			chore->cho_credits);
+	}
 }
 
 /**
@@ -771,11 +806,10 @@ dss_chore_delegate(struct dss_chore *chore, dss_chore_func_t func)
  * \param[in]	func	function to be executed via \a chore
  */
 void
-dss_chore_diy(struct dss_chore *chore, dss_chore_func_t func)
+dss_chore_diy(struct dss_chore *chore)
 {
 	D_INIT_LIST_HEAD(&chore->cho_link);
 	chore->cho_status = DSS_CHORE_NEW;
-	chore->cho_func   = func;
 
 	dss_chore_diy_internal(chore);
 }
@@ -856,6 +890,7 @@ dss_chore_queue_init(struct dss_xstream *dx)
 
 	D_INIT_LIST_HEAD(&queue->chq_list);
 	queue->chq_stop = false;
+	queue->chq_credits = dss_chore_credits;
 
 	rc = ABT_mutex_create(&queue->chq_mutex);
 	if (rc != ABT_SUCCESS) {

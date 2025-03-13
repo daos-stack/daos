@@ -1,5 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -191,7 +192,7 @@ class ServerRankFailure(IorTestBase):
         for disabled_rank in disabled_ranks:
             while True:
                 try:
-                    self.pool.reintegrate(rank=disabled_rank)
+                    self.pool.reintegrate(ranks=disabled_rank)
                     break
                 except CommandFailure as error:
                     self.log.debug("## pool reintegrate error: %s", error)

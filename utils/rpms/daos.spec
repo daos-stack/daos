@@ -603,7 +603,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 * Thu Dec 19 2024 Phillip Henderson <phillip.henderson@intel.com> 2.7.101-3
 - Fix protobuf-c requiremnent for daos-client-tests on Leap.
 
-* Tue Nov 13 2024 Denis Barakhtanov <dbarahtanov@enakta.com> 2.7.101-2
+* Thu Nov 14 2024 Denis Barakhtanov <dbarahtanov@enakta.com> 2.7.101-2
 - Add pydaos.torch module to daos-client rpm.
 
 * Fri Nov 08 2024 Phillip Henderson <phillip.henderson@intel.com> 2.7.101-1
