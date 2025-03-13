@@ -1,3 +1,9 @@
+daos (2.7.101-6) unstable; urgency=medium
+  [ Kris Jacque ]
+  * Bump minimum golang-go version to 1.23
+
+  -- Kris Jacque <kris.jacque@hpe.com> Thu, 13 Mar 2024 09:17:00 -0600
+
 daos (2.7.101-5) unstable; urgency=medium
   [ Jan Michalski ]
   * Add ddb_ut and dtx_ut to the server-tests package

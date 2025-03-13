@@ -78,7 +78,7 @@ BuildRequires: libyaml-devel
 BuildRequires: libcmocka-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
-BuildRequires: go >= 1.21
+BuildRequires: go >= 1.23
 BuildRequires: pciutils-devel
 %if (0%{?rhel} >= 8)
 BuildRequires: numactl-devel
@@ -210,7 +210,7 @@ Requires: dbench
 Requires: lbzip2
 Requires: attr
 Requires: ior
-Requires: go >= 1.21
+Requires: go >= 1.23
 %if (0%{?suse_version} >= 1315)
 Requires: lua-lmod
 Requires: libcapstone-devel
@@ -594,6 +594,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Mar 13 2025 Kris Jacque <kris.jacque@hpe.com> 2.7.101-6
+- Bump minimum Go version to 1.23
+
 * Wed Jan 22 2025 Jan Michalski <jan-marian.michalski@hpe.com> 2.7.101-5
 - Add ddb_ut and dtx_ut to the server-tests package
 
