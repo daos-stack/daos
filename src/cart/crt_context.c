@@ -2107,7 +2107,7 @@ out:
 	return rc;
 }
 
-/* unlike get variant only bumps quota usage unlike get variant only bumps quota usage  */
+/* bump tracked usage of the resource by 1 without checking for limits  */
 void
 record_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota)
 {
@@ -2124,6 +2124,7 @@ record_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota)
 }
 
 
+/* returns 0 if resource is available or -DER_QUOTA_LIMIT otherwise */
 int
 get_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota)
 {
@@ -2150,6 +2151,7 @@ get_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota)
 	return rc;
 }
 
+/* return resource back */
 void
 put_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota)
 {

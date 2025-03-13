@@ -122,7 +122,6 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op,
 	hg_return_t	hg_ret;
 	hg_bulk_t 	tmp_hg_bulk;
 
-
 	/*
 	 * We only send 'hg_bulk_t' over the wire. During encoding stage we
 	 * extract mercury bulk handle from crt_bulk_t, while during decode
@@ -132,7 +131,7 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op,
 	case CRT_PROC_ENCODE:
 		bulk = *pcrt_bulk;
 
-		/* RPC can have an optional bulk; if such, encode a NULL value */
+		/* RPC can have a NULL bulk. if so, encode a NULL value */
 		if (!bulk) {
 			tmp_hg_bulk = HG_BULK_NULL;
 			hg_ret = hg_proc_hg_bulk_t(proc, (hg_bulk_t *)&tmp_hg_bulk);
@@ -184,7 +183,7 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op,
 			return 0;
 		}
 
-		/* If there is a space to decode a wrapper into - use it */
+		/* Allocate space for a wrapper struct */
 		D_ALLOC_PTR(bulk);
 		if (!bulk)
 			return -DER_NOMEM;
@@ -205,7 +204,9 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op,
 
 		hg_ret = hg_proc_hg_bulk_t(proc, &bulk->hg_bulk_hdl);
 
+		/* Free the wrapper struct */
 		D_FREE(bulk);
+		*pcrt_bulk = NULL;
 		return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
 		break;
 	}
