@@ -59,7 +59,7 @@ type EngineInstance struct {
 	fsRoot          string
 	hostFaultDomain *system.FaultDomain
 	joinSystem      systemJoinFn
-	rejoin          atm.Bool
+	replaceRank     atm.Bool
 	onAwaitFormat   []onAwaitFormatFn
 	onStorageReady  []onStorageReadyFn
 	onReady         []onReadyFn
@@ -211,7 +211,7 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 		InstanceIdx:          ei.Index(),
 		Incarnation:          ready.GetIncarnation(),
 		CheckMode:            ready.GetCheckMode(),
-		ReplaceMode:          ei.rejoin.Load(),
+		Replace:              ei.replaceRank.Load(),
 	}
 
 	resp, err := ei.joinSystem(ctx, joinReq)
@@ -235,8 +235,8 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 	}
 	r = ranklist.Rank(resp.Rank)
 
-	// Reset rejoin state for instance after joinSystem() has returned.
-	ei.rejoin.SetFalse()
+	// Reset replaceRank state for instance after joinSystem() has returned.
+	ei.replaceRank.SetFalse()
 
 	if !superblock.ValidRank || ready.Uri != superblock.URI {
 		ei.log.Noticef("updating rank %d URI to %s", resp.Rank, ready.Uri)

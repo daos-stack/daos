@@ -69,9 +69,9 @@ func (ei *EngineInstance) MountScm() error {
 }
 
 // NotifyStorageReady releases any blocks on awaitStorageReady().
-func (ei *EngineInstance) NotifyStorageReady(rejoin bool) {
+func (ei *EngineInstance) NotifyStorageReady(replaceRank bool) {
 	go func() {
-		ei.storageReady <- rejoin
+		ei.storageReady <- replaceRank
 	}()
 }
 
@@ -172,12 +172,12 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		ei.log.Infof("%s %s storage not ready: %s", build.DataPlaneName, msgIdx, ctx.Err())
-	case rejoin := <-ei.storageReady:
-		// Set rejoin instance state to be used later in join request.
-		ei.rejoin.Store(rejoin)
+	case replaceRank := <-ei.storageReady:
+		// Set replaceRank instance state to be used later in join request.
+		ei.replaceRank.Store(replaceRank)
 		msg := fmt.Sprintf("%s %s storage ready", build.DataPlaneName, msgIdx)
-		if rejoin {
-			msg += ", attempting to rejoin rank..."
+		if replaceRank {
+			msg += ", attempting to replace rank..."
 		}
 		ei.log.Info(msg)
 	}

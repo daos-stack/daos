@@ -2241,6 +2241,264 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 	}
 }
 
+func TestServer_MgmtSvc_checkReplaceRank(t *testing.T) {
+	for name, tc := range map[string]struct {
+		members        system.Members
+		rank           ranklist.Rank
+		poolRanks      map[string]string
+		mic            *control.MockInvokerConfig
+		expErr         error
+		expInvokeCount int
+	}{
+		"nil rank": {
+			rank:   ranklist.NilRank,
+			expErr: errors.New("nil rank supplied"),
+		},
+		"no matching ranks": {
+			rank: ranklist.Rank(1),
+			poolRanks: map[string]string{
+				test.MockUUID(1): "2-5",
+			},
+			mic: &control.MockInvokerConfig{
+				UnaryError: errors.New("local failed"),
+			},
+			expErr: errors.New("no pool-ranks found to operate on"),
+		},
+		//		"local failure": {
+		//			req: &mgmtpb.SystemDrainReq{Ranks: "0,1"},
+		//			poolRanks: map[string]string{
+		//				test.MockUUID(1): "0-5",
+		//			},
+		//			mic: &control.MockInvokerConfig{
+		//				UnaryError: errors.New("local failed"),
+		//			},
+		//			expResp: &mgmtpb.SystemDrainResp{
+		//				Responses: []*mgmtpb.PoolRanksResp{
+		//					{
+		//						Id: test.MockUUID(1),
+		//						Results: []*sharedpb.RankResult{
+		//							{
+		//								Rank:    0,
+		//								Errored: true,
+		//								Msg:     "local failed",
+		//							},
+		//							{
+		//								Rank:    1,
+		//								Errored: true,
+		//								Msg:     "local failed",
+		//							},
+		//						},
+		//					},
+		//				},
+		//			},
+		//		},
+		//		"remote failure": {
+		//			req: &mgmtpb.SystemDrainReq{Ranks: "0,1"},
+		//			poolRanks: map[string]string{
+		//				test.MockUUID(1): "0-5",
+		//			},
+		//			mic: &control.MockInvokerConfig{
+		//				UnaryResponseSet: []*control.UnaryResponse{
+		//					control.MockMSResponse("host1", nil, &mgmtpb.PoolDrainResp{}),
+		//					control.MockMSResponse("host1", errors.New("remote failed"), nil),
+		//				},
+		//			},
+		//			expResp: &mgmtpb.SystemDrainResp{
+		//				Responses: []*mgmtpb.PoolRanksResp{
+		//					{
+		//						Id: test.MockUUID(1),
+		//						Results: []*sharedpb.RankResult{
+		//							{Rank: 0},
+		//							{
+		//								Rank:    1,
+		//								Errored: true,
+		//								Msg:     "remote failed",
+		//							},
+		//						},
+		//					},
+		//				},
+		//			},
+		//			expInvokeCount: 2,
+		//		},
+		//		"matching ranks; multiple pools; successful drpc responses": {
+		//			req: &mgmtpb.SystemDrainReq{Ranks: "0,1"},
+		//			poolRanks: map[string]string{
+		//				test.MockUUID(1): "0-4",
+		//				test.MockUUID(2): "1-7",
+		//			},
+		//			// Mock invoker will return empty drpc drain resp (with zero value status
+		//			// field indicating a success) by default.
+		//			expResp: &mgmtpb.SystemDrainResp{
+		//				Responses: []*mgmtpb.PoolRanksResp{
+		//					{
+		//						Id: test.MockUUID(1),
+		//						Results: []*sharedpb.RankResult{
+		//							{Rank: 0}, {Rank: 1},
+		//						},
+		//					},
+		//					{
+		//						Id: test.MockUUID(2),
+		//						Results: []*sharedpb.RankResult{
+		//							{Rank: 1},
+		//						},
+		//					},
+		//				},
+		//			},
+		//			expInvokeCount: 3,
+		//		},
+		//		"matching ranks; multiple pools; errored drpc response": {
+		//			req: &mgmtpb.SystemDrainReq{Ranks: "0,1"},
+		//			poolRanks: map[string]string{
+		//				test.MockUUID(1): "0-4",
+		//				test.MockUUID(2): "1-7",
+		//			},
+		//			mic: &control.MockInvokerConfig{
+		//				UnaryResponse: control.MockMSResponse("host1", nil,
+		//					&mgmtpb.PoolDrainResp{Status: -1}),
+		//			},
+		//			expResp: &mgmtpb.SystemDrainResp{
+		//				Responses: []*mgmtpb.PoolRanksResp{
+		//					{
+		//						Id: test.MockUUID(1),
+		//						Results: []*sharedpb.RankResult{
+		//							{
+		//								Rank:    0,
+		//								Errored: true,
+		//								Msg:     "DER_UNKNOWN(-1): Unknown error code -1",
+		//							},
+		//							{
+		//								Rank:    1,
+		//								Errored: true,
+		//								Msg:     "DER_UNKNOWN(-1): Unknown error code -1",
+		//							},
+		//						},
+		//					},
+		//					{
+		//						Id: test.MockUUID(2),
+		//						Results: []*sharedpb.RankResult{
+		//							{
+		//								Rank:    1,
+		//								Errored: true,
+		//								Msg:     "DER_UNKNOWN(-1): Unknown error code -1",
+		//							},
+		//						},
+		//					},
+		//				},
+		//			},
+		//			expInvokeCount: 3,
+		//		},
+		//		"matching hosts; multiple pools; pool labels": {
+		//			useLabels: true,
+		//			req: &mgmtpb.SystemDrainReq{
+		//				// Resolves to ranks 0-3.
+		//				Hosts: fmt.Sprintf("%s,%s", test.MockHostAddr(1),
+		//					test.MockHostAddr(2)),
+		//			},
+		//			poolRanks: map[string]string{
+		//				test.MockUUID(1): "0-1",
+		//				test.MockUUID(2): "1-3",
+		//			},
+		//			// Mock invoker will return empty drpc drain resp (with zero value status
+		//			// field indicating a success) by default.
+		//			expResp: &mgmtpb.SystemDrainResp{
+		//				Responses: []*mgmtpb.PoolRanksResp{
+		//					{
+		//						Id: "00000001",
+		//						Results: []*sharedpb.RankResult{
+		//							{Rank: 0}, {Rank: 1},
+		//						},
+		//					},
+		//					{
+		//						Id: "00000002",
+		//						Results: []*sharedpb.RankResult{
+		//							{Rank: 1}, {Rank: 2}, {Rank: 3},
+		//						},
+		//					},
+		//				},
+		//			},
+		//			expInvokeCount: 5,
+		//		},
+		//		"reintegrate; matching ranks; multiple pools; successful drpc responses": {
+		//			req: &mgmtpb.SystemDrainReq{Ranks: "0,1", Reint: true},
+		//			poolRanks: map[string]string{
+		//				test.MockUUID(1): "0-4",
+		//				test.MockUUID(2): "1-7",
+		//			},
+		//			// Mock invoker will return empty drpc drain resp (with zero value status
+		//			// field indicating a success) by default.
+		//			expResp: &mgmtpb.SystemDrainResp{
+		//				Reint: true,
+		//				Responses: []*mgmtpb.PoolRanksResp{
+		//					{
+		//						Id: test.MockUUID(1),
+		//						Results: []*sharedpb.RankResult{
+		//							{Rank: 0},
+		//							{Rank: 1},
+		//						},
+		//					},
+		//					{
+		//						Id: test.MockUUID(2),
+		//						Results: []*sharedpb.RankResult{
+		//							{Rank: 1},
+		//						},
+		//					},
+		//				},
+		//			},
+		//			expInvokeCount: 3,
+		//		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.MustLogContext(t)
+			log := logging.FromContext(ctx)
+
+			members := system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 2, "joined"),
+				mockMember(t, 2, 2, "joined"),
+				mockMember(t, 3, 1, "joined"),
+				mockMember(t, 4, 3, "joined"),
+				mockMember(t, 5, 3, "joined"),
+				mockMember(t, 6, 4, "joined"),
+				mockMember(t, 7, 4, "joined"),
+			}
+			svc := mgmtSystemTestSetup(t, log, members, nil)
+
+			for uuidStr, ranksStr := range tc.poolRanks {
+				var label string
+				if tc.useLabels {
+					label = uuidStr[:8]
+				}
+				addTestPoolService(t, svc.sysdb, &system.PoolService{
+					PoolUUID:  uuid.MustParse(uuidStr),
+					PoolLabel: label,
+					State:     system.PoolServiceStateReady,
+					Storage: &system.PoolServiceStorage{
+						CurrentRankStr: ranksStr,
+					},
+					Replicas: []ranklist.Rank{0},
+				})
+			}
+
+			mic := tc.mic
+			if mic == nil {
+				mic = control.DefaultMockInvokerConfig()
+			}
+
+			mi := control.NewMockInvoker(log, mic)
+			svc.rpcClient = mi
+
+			if tc.req != nil && tc.req.Sys == "" {
+				tc.req.Sys = build.DefaultSystemName
+			}
+
+			gotErr := svc.checkReplaceRank(ctx, tc.rank)
+			test.CmpErr(t, tc.expErr, gotErr)
+
+			test.AssertEqual(t, tc.expInvokeCount, mi.GetInvokeCount(), "rpc client invoke count")
+		})
+	}
+}
+
 func TestServer_MgmtSvc_Join(t *testing.T) {
 	curMember := mockMember(t, 0, 0, "excluded")
 	newMember := mockMember(t, 1, 1, "joined")

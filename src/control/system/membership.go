@@ -99,7 +99,7 @@ func (m *Membership) Count() (int, error) {
 // match.
 func (m *Membership) FindRankFromJoinRequest(req *JoinRequest) (Rank, error) {
 	if !req.Rank.Equals(NilRank) {
-		return NilRank, errors.New("unexpected rank in rejoin request")
+		return NilRank, errors.New("unexpected rank in replace-rank request")
 	}
 
 	currentMembers, err := m.Members(nil)
@@ -139,7 +139,7 @@ func (m *Membership) FindRankFromJoinRequest(req *JoinRequest) (Rank, error) {
 		}
 
 		if cm.UUID == req.UUID {
-			return NilRank, errors.New("unexpected matching uuid in rejoin request")
+			return NilRank, errors.New("matching uuid in replace-rank join request")
 		}
 
 		rank = cm.Rank
@@ -180,7 +180,7 @@ type JoinResponse struct {
 // fabric URIs. Neither UUID or rank in request will match MS-db member.
 func (m *Membership) joinReplace(req *JoinRequest) (*JoinResponse, error) {
 	if req.Rank == NilRank {
-		return nil, errors.New("unexpected nil rank in replace mode join request")
+		return nil, errors.New("unexpected nil rank in replace-rank join request")
 	}
 
 	// Update (remove then add) member with new UUID and set state to joined (regardless
@@ -190,14 +190,18 @@ func (m *Membership) joinReplace(req *JoinRequest) (*JoinResponse, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if cm.State == MemberStateAdminExcluded {
+		return nil, ErrAdminExcluded(cm.UUID, cm.Rank)
+	}
 	memberToReplace := &Member{}
 	*memberToReplace = *cm
 
-	m.log.Debugf("rejoin: updating member with UUID %s->%s", memberToReplace.UUID,
+	m.log.Debugf("replace-rank: updating member with UUID %s->%s", memberToReplace.UUID,
 		req.UUID)
 
 	if err := m.db.RemoveMember(cm); err != nil {
-		return nil, errors.Wrap(err, "adding new uuid member in rejoin")
+		return nil, errors.Wrap(err, "adding new uuid member in replace-rank join request")
 	}
 
 	resp := JoinResponse{
@@ -208,7 +212,7 @@ func (m *Membership) joinReplace(req *JoinRequest) (*JoinResponse, error) {
 	memberToReplace.UUID = req.UUID
 
 	if err := m.db.AddMember(memberToReplace); err != nil {
-		return nil, errors.Wrap(err, "adding new uuid member in rejoin")
+		return nil, errors.Wrap(err, "adding new uuid member in replace-rank join request")
 	}
 
 	resp.Member = memberToReplace
