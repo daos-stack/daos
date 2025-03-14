@@ -10,21 +10,22 @@ SRC = ['alloc_class.c', 'bucket.c', 'container_ravl.c', 'container_seglists.c', 
 def scons():
     """Scons function"""
 
-    Import('env', 'base_env')
+    Import('denv', 'env', 'base_env')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
+    env.d_add_build_rpath()
     base_env.AppendUnique(LIBPATH=[Dir('.')])
     base_env.d_add_build_rpath()
-    env.d_add_build_rpath()
+    denv.AppendUnique(LIBPATH=[Dir('.')])
+    denv.d_add_build_rpath()
 
-    denv = env.Clone()
+    lenv = denv.Clone()
+    lenv.AppendUnique(LIBS=['pthread', 'gurt'])
+    lenv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD', '-DDAV_V2_BUILD'])
+    lenv.AppendUnique(CFLAGS=['-fvisibility=hidden'])
 
-    denv.AppendUnique(LIBS=['pthread', 'gurt'])
-    denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD', '-DDAV_V2_BUILD'])
-    denv.AppendUnique(CFLAGS=['-fvisibility=hidden'])
-
-    dav_v2 = denv.d_library('dav_v2', SRC)
-    denv.Install('$PREFIX/lib64/', dav_v2)
+    dav_v2 = lenv.d_library('dav_v2', SRC)
+    lenv.Install('$PREFIX/lib64/', dav_v2)
 
 
 if __name__ == "SCons.Script":

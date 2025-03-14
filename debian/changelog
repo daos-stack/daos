@@ -1,3 +1,10 @@
+daos (2.7.101-6) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Remove server build from Ubuntu packaging
+  * Fix client only build
+
+ -- Jeff Olivier <jeffolivier@google.com>  Mon, 10 Mar 2025 13:31:00 +0000
+
 daos (2.7.101-5) unstable; urgency=medium
   [ Jan Michalski ]
   * Add ddb_ut and dtx_ut to the server-tests package
