@@ -171,7 +171,9 @@ struct crt_gdata {
 	/** Number of cores on a system */
 	long			 cg_num_cores;
 	/** Inflight rpc quota limit */
-	uint32_t		cg_rpc_quota;
+	uint32_t                 cg_rpc_quota;
+	/** bulk quota limit */
+	uint32_t                 cg_bulk_quota;
 	/** Retry count of HG_Init_opt2() on failure when using CXI provider */
 	uint32_t                 cg_hg_init_retry_cnt;
 };
@@ -234,6 +236,7 @@ struct crt_event_cb_priv {
 	ENV_STR(D_PROVIDER)                                                                        \
 	ENV_STR_NO_PRINT(D_PROVIDER_AUTH_KEY)                                                      \
 	ENV(D_QUOTA_RPCS)                                                                          \
+	ENV(D_QUOTA_BULKS)                                                                         \
 	ENV(FI_OFI_RXM_USE_SRX)                                                                    \
 	ENV(FI_UNIVERSE_SIZE)                                                                      \
 	ENV(SWIM_PING_TIMEOUT)                                                                     \
@@ -358,9 +361,8 @@ struct crt_plugin_gdata {
 	struct crt_event_cb_priv	*cpg_event_cbs_old;
 	uint32_t			 cpg_inited:1;
 	/* hlc error event callback */
-	crt_hlc_error_cb		 hlc_error_cb;
-	void				*hlc_error_cb_arg;
-
+	crt_hlc_error_cb                 hlc_error_cb;
+	void                            *hlc_error_cb_arg;
 	/* mutex to protect all callbacks change only */
 	pthread_mutex_t			 cpg_mutex;
 };
@@ -382,6 +384,29 @@ struct crt_quotas {
 	struct d_tm_node_t     *rpc_waitq_depth;
 	/** Counter for exceeded quota */
 	struct d_tm_node_t     *rpc_quota_exceeded;
+};
+
+/*
+ * crt_bulk - wrapper struct for crt_bulk_t type
+ *
+ * Local structure for representing mercury bulk handle.
+ * Allows deferred allocations of mercury bulk handles by postponing
+ * them until RPC encode time, right before sending onto the wire (HG_Forward())
+ * See crt_proc_crt_bulk_t() for more details
+ *
+ * During deferred allocations hg_bulk_hdl will be set to HG_BULK_NULL (null),
+ * deferred flag set to true and other fields populated based on the original
+ * bulk info provided.
+ *
+ * Deferred allocation is only supported on clients through D_QUOTA_BULKS env
+ */
+struct crt_bulk {
+	hg_bulk_t       hg_bulk_hdl; /** mercury bulk handle */
+	bool            deferred;    /** whether handle allocation was deferred */
+	crt_context_t   crt_ctx;     /** context on which bulk is to be created  */
+	bool            bound;       /** whether crt_bulk_bind() was used on it */
+	d_sg_list_t     sgl;         /** original sgl */
+	crt_bulk_perm_t bulk_perm;   /** bulk permissions */
 };
 
 /* crt_context */

@@ -444,6 +444,9 @@ typedef enum {
 	/** Limit of number of inflight rpcs */
 	CRT_QUOTA_RPCS,
 
+	/** Limit of number of registered bulk handles */
+	CRT_QUOTA_BULKS,
+
 	/** Total count of supported quotas */
 	CRT_QUOTA_COUNT,
 } crt_quota_type_t;
