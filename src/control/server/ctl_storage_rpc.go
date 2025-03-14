@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -816,6 +817,7 @@ func checkTmpfsMem(log logging.Logger, scmCfgs map[int]*storage.TierConfig, getM
 type formatScmReq struct {
 	log        logging.Logger
 	reformat   bool
+	replace    bool
 	instances  []Engine
 	getMemInfo func() (*common.MemInfo, error)
 }
@@ -831,10 +833,11 @@ func formatScm(ctx context.Context, req formatScmReq, resp *ctlpb.StorageFormatR
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "detecting if SCM format is needed")
 		}
-		if !needs {
+		if needs {
+			needFormat[idx] = true
+		} else {
 			allNeedFormat = false
 		}
-		needFormat[idx] = needs
 
 		scmCfg, err := ei.GetStorage().GetScmConfig()
 		if err != nil || scmCfg == nil {
@@ -850,6 +853,12 @@ func formatScm(ctx context.Context, req formatScmReq, resp *ctlpb.StorageFormatR
 			}
 			emptyTmpfs[idx] = info.TotalBytes-info.AvailBytes == 0
 		}
+	}
+
+	if req.replace && len(needFormat) == 0 {
+		// Only valid if at least one engine requires format.
+		return nil, nil, errors.New("format replace option only valid if at " +
+			"least one engine requires format but no engines need format")
 	}
 
 	if allNeedFormat {
@@ -1007,6 +1016,9 @@ func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageF
 		return resp, nil
 	}
 
+	// DAOS-15947: control_metadata format is valid in --replace case where multiple engines
+	// require replacement or format on the same host. No need to handle independently for
+	// individual engine as if control_metadata is missing then it needs to be created.
 	mdFormatted, err := cs.formatMetadata(instances, req.Reformat)
 	if err != nil {
 		return nil, err
@@ -1015,6 +1027,7 @@ func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageF
 	fsr := formatScmReq{
 		log:        cs.log,
 		reformat:   req.Reformat,
+		replace:    req.Replace,
 		instances:  instances,
 		getMemInfo: cs.getMemInfo,
 	}
@@ -1057,7 +1070,7 @@ func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageF
 			cs.log.Errorf("instance %d: %s", idx, msg)
 			continue
 		}
-		engine.NotifyStorageReady()
+		engine.NotifyStorageReady(req.Replace)
 	}
 
 	return resp, nil

@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -31,6 +32,23 @@ func FaultPoolLocked(poolUUID, lockID uuid.UUID, lockTime time.Time) *fault.Faul
 	return systemFault(code.SystemPoolLocked,
 		fmt.Sprintf("pool %s is locked (id: %s, time: %s)", poolUUID, lockID, common.FormatTime(lockTime)),
 		"retry the pool operation")
+}
+
+func FaultJoinReplaceRankNotFound(notMatched []string) *fault.Fault {
+	suggestionMsg := "check that dmg format --replace is being run on a host with an engine " +
+		"that has previously had a rank excluded from the system"
+	if len(notMatched) > 1 {
+		suggestionMsg = "engines on selected storage server don't seem to match any " +
+			"existing records in the management service, run dmg storage format " +
+			"without the --replace option"
+	}
+
+	return systemFault(
+		code.SystemJoinReplaceRankNotFound,
+		fmt.Sprintf("system member could not be found from join request info (no match: %v)",
+			notMatched),
+		suggestionMsg,
+	)
 }
 
 func systemFault(code code.Code, desc, res string) *fault.Fault {

@@ -180,6 +180,66 @@ func getPeerListenAddr(ctx context.Context, listenAddrStr string) (*net.TCPAddr,
 		net.JoinHostPort(tcpAddr.IP.String(), portStr))
 }
 
+// Check rank to be replaced is excluded from all it's pools.
+// 1. Get potential replacement rank from membership
+// 2. Retrieve pool-rank map for pools to query
+// 3. Query each pool that rank belongs to
+// 4. Check rank is not in response list of enabled ranks
+func (svc *mgmtSvc) checkReplaceRank(ctx context.Context, rankToReplace ranklist.Rank) error {
+	if rankToReplace == ranklist.NilRank {
+		return errors.New("checking replace mode rank, nil rank supplied")
+	}
+
+	// Retrieve rank-to-pool mappings.
+	rl := ranklist.RankList{rankToReplace}
+	poolIDs, poolRanks, err := svc.getPoolsRanks(ranklist.RankSetFromRanks(rl))
+	if err != nil {
+		return err
+	}
+
+	if len(poolIDs) == 0 {
+		svc.log.Debug("checking replace mode rank: zero pools to verify")
+		return nil // No pools to query.
+	}
+
+	// Verify rank to replace is not enabled on any pool.
+	for _, id := range poolIDs {
+		rs := poolRanks[id]
+		if rs.Count() == 0 {
+			// Sanity check.
+			return errors.Errorf("no ranks in map for pool %s", id)
+		}
+
+		req := &mgmtpb.PoolQueryReq{
+			Id:  id,
+			Sys: svc.sysdb.SystemName(),
+			QueryMask: uint64(daos.MustNewPoolQueryMask(
+				daos.PoolQueryOptionEnabledEngines,
+				daos.PoolQueryOptionDisabledEngines)),
+		}
+
+		resp, err := svc.PoolQuery(ctx, req)
+		if err != nil {
+			return errors.Wrap(err, "query on pool failed")
+		}
+
+		// Sanity check pool has at least one rank enabled or disabled.
+		if resp.EnabledRanks == "" && resp.DisabledRanks == "" {
+			return errors.Errorf("query on pool %s returned no enabled/disabled ranks",
+				id)
+		}
+		enabledRanks := ranklist.MustCreateRankSet(resp.EnabledRanks)
+		svc.log.Tracef("checking replace mode rank: pool %s enabled ranks %+v", id,
+			enabledRanks)
+
+		if enabledRanks.Contains(rankToReplace) {
+			return FaultJoinReplaceEnabledPoolRank(rankToReplace, id)
+		}
+	}
+
+	return nil
+}
+
 // join handles a request to join the system and is called from
 // the batch processing goroutine.
 func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net.TCPAddr) (*mgmtpb.JoinResp, error) {
@@ -197,7 +257,7 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 		return nil, err
 	}
 
-	joinResponse, err := svc.membership.Join(&system.JoinRequest{
+	joinReq := &system.JoinRequest{
 		Rank:                    ranklist.Rank(req.Rank),
 		UUID:                    uuid,
 		ControlAddr:             peerAddr,
@@ -208,7 +268,21 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 		FaultDomain:             fd,
 		Incarnation:             req.Incarnation,
 		CheckMode:               req.CheckMode,
-	})
+		Replace:                 req.Replace,
+	}
+
+	if req.Replace {
+		rankToReplace, err := svc.membership.FindRankFromJoinRequest(joinReq)
+		if err != nil {
+			return nil, err
+		}
+		if err := svc.checkReplaceRank(ctx, rankToReplace); err != nil {
+			return nil, errors.Wrapf(err, "join: replace rank %d", rankToReplace)
+		}
+		joinReq.Rank = rankToReplace
+	}
+
+	joinResponse, err := svc.membership.Join(joinReq)
 	if err != nil {
 		if system.IsJoinFailure(err) {
 			publishJoinFailedEvent(req, peerAddr, svc.events, err.Error())
@@ -1091,7 +1165,7 @@ func (svc *mgmtSvc) refuseMissingRanks(hosts, ranks string) (*ranklist.RankSet, 
 		return nil, errors.Errorf("invalid rank(s): %s", missRanks.String())
 	}
 	if hitRanks.Count() == 0 {
-		return nil, errors.New("no ranks to drain")
+		return nil, errors.New("no ranks to operate on")
 	}
 
 	return hitRanks, nil
@@ -1136,6 +1210,12 @@ func (svc *mgmtSvc) getPoolsRanks(ranks *ranklist.RankSet) ([]string, poolRanksM
 		}
 	}
 	svc.log.Debugf("pool-ranks to operate on: %v", poolRanks)
+
+	// Sanity check.
+	if len(poolIDs) != len(poolRanks) {
+		return nil, nil, errors.Errorf("nr poolIDs (%d) should be equal to nr poolRanks "+
+			"keys (%d)", len(poolIDs), len(poolRanks))
+	}
 
 	sort.Strings(poolIDs)
 
