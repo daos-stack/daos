@@ -132,13 +132,14 @@ class MissingSystemLibs(Exception):
         component    -- component that has missing targets
     """
 
-    def __init__(self, component):
+    def __init__(self, component, prog):
         super().__init__()
         self.component = component
+        self.prog = prog
 
     def __str__(self):
         """Exception string"""
-        return f'{self.component} has unmet dependencies required for build'
+        return f"{self.component} requires {self.prog} for build"
 
 
 class DownloadRequired(Exception):
@@ -451,6 +452,8 @@ class PreReqComponent():
         self.__top_dir = Dir('#').abspath
         install_dir = os.path.join(self.__top_dir, 'install')
 
+        self.deps_as_gitmodules_subdir = GetOption("deps_as_gitmodules_subdir")
+
         RUNNER.initialize(self.__env)
 
         opts.Add(PathVariable('PREFIX', 'Installation path', install_dir,
@@ -488,7 +491,7 @@ class PreReqComponent():
 
         self.system_env = env.Clone()
 
-        self.__build_dir = self._sub_path(build_dir_name)
+        self.__build_dir = self.sub_path(build_dir_name)
 
         opts.Add(PathVariable('GOPATH', 'Location of your GOPATH for the build',
                               f'{self.__build_dir}/go', PathVariable.PathIsDirCreate))
@@ -653,7 +656,7 @@ class PreReqComponent():
                 if self.__check_only:
                     continue
                 config.Finish()
-                raise MissingSystemLibs(prog)
+                raise MissingSystemLibs(compiler, prog)
             args = {name: prog}
             self.__env.Replace(**args)
 
@@ -714,7 +717,7 @@ class PreReqComponent():
             if not skip_download:
                 self.download_deps = True
 
-    def _sub_path(self, path):
+    def sub_path(self, path):
         """Resolve the real path"""
         return os.path.realpath(os.path.join(self.__top_dir, path))
 
@@ -722,7 +725,7 @@ class PreReqComponent():
         """Create a command line variable for a path"""
         tmp = self.__env.get(var)
         if tmp:
-            value = self._sub_path(tmp)
+            value = self.sub_path(tmp)
             self.__env[var] = value
 
     def define(self, name, **kw):
@@ -1092,8 +1095,33 @@ class _Component():
         commit_sha = self.prereqs.get_config("commit_versions", self.name)
         repo = self.prereqs.get_config("repos", self.name)
 
-        if not self.retriever:
-            print(f'Using installed version of {self.name}')
+        if self.prereqs.deps_as_gitmodules_subdir is None and \
+                not self.retriever:
+            print(f"Using installed version of {self.name}")
+            return
+
+        if self.prereqs.deps_as_gitmodules_subdir:
+            builddir, _ = os.path.split(self.src_path)
+            target = os.path.join(
+                self.prereqs.sub_path(self.prereqs.deps_as_gitmodules_subdir),
+                self.name)
+
+            if not os.path.isdir(target):
+                print(f"Symlink target {target} is not a valid directory")
+                raise BuildFailure(self.name)
+
+            relpath = os.path.relpath(target, builddir)
+            if os.path.exists(self.src_path):
+                if not os.path.islink(self.src_path) or \
+                        os.readlink(self.src_path) != relpath:
+
+                    print(f"{self.src_path} already exists in build directory.")
+                    raise BuildFailure(self.name)
+            else:
+                print(f"Creating symlink {self.src_path} to {relpath}")
+                if not RUNNER.run_commands([['ln', '-s', relpath, self.src_path]]):
+                    print("Error creating symlink")
+                    raise BuildFailure(self.name)
             return
 
         # Source code is retrieved using retriever
@@ -1479,7 +1507,7 @@ class _Component():
         if build_dep:
 
             if self._has_missing_system_deps(self.prereqs.system_env):
-                raise MissingSystemLibs(self.name)
+                raise MissingSystemLibs(self.name, self.required_progs)
 
             self.get()
 

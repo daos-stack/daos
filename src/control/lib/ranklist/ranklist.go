@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -98,7 +99,7 @@ func (rs *RankSet) Merge(other *RankSet) {
 
 // Replace replaces the contents of the receiver with the supplied RankSet.
 func (rs *RankSet) Replace(other *RankSet) {
-	if rs == nil || other == nil {
+	if rs == nil || other == nil || other.ns == nil {
 		return
 	}
 

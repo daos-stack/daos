@@ -1,6 +1,7 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
 // (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -35,10 +36,10 @@ type PoolCmd struct {
 	Destroy      poolDestroyCmd      `command:"destroy" description:"Destroy a DAOS pool"`
 	Evict        poolEvictCmd        `command:"evict" description:"Evict all pool connections to a DAOS pool"`
 	List         poolListCmd         `command:"list" alias:"ls" description:"List DAOS pools"`
-	Extend       poolExtendCmd       `command:"extend" description:"Extend a DAOS pool to include new ranks."`
-	Exclude      poolExcludeCmd      `command:"exclude" description:"Exclude targets from a rank"`
-	Drain        poolDrainCmd        `command:"drain" description:"Drain targets from a rank"`
-	Reintegrate  poolReintegrateCmd  `command:"reintegrate" alias:"reint" description:"Reintegrate targets for a rank"`
+	Extend       poolExtendCmd       `command:"extend" description:"Extend a DAOS pool to include new ranks"`
+	Exclude      poolExcludeCmd      `command:"exclude" description:"Exclude targets from a set of ranks"`
+	Drain        poolDrainCmd        `command:"drain" description:"Drain targets from a set of ranks"`
+	Reintegrate  poolReintegrateCmd  `command:"reintegrate" alias:"reint" description:"Reintegrate targets for a set of rank"`
 	Query        poolQueryCmd        `command:"query" description:"Query a DAOS pool"`
 	QueryTargets poolQueryTargetsCmd `command:"query-targets" description:"Query pool target info"`
 	GetACL       poolGetACLCmd       `command:"get-acl" description:"Get a DAOS pool's Access Control List"`
@@ -531,72 +532,96 @@ func (cmd *poolEvictCmd) Execute(args []string) error {
 	return err
 }
 
+// poolRanksCmd is used as an embedded command type that enables multiple ranks on a pool to be
+// processed.
+type poolRanksCmd struct {
+	poolCmd
+	RankList ui.RankSetFlag `long:"ranks" required:"1" description:"Comma-separated list of rank-range strings to operate on for a single pool"`
+}
+
 // poolExcludeCmd is the struct representing the command to exclude a DAOS target.
 type poolExcludeCmd struct {
-	poolCmd
+	poolRanksCmd
 	Force     bool   `short:"f" long:"force" description:"Force the operation to continue, potentially leading to data loss"`
-	Rank      uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be excluded"`
-	TargetIdx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be excluded from the rank"`
+	TargetIdx string `long:"target-idx" description:"Comma-separated list of target index(es) to be excluded from each rank"`
 }
 
 // Execute is run when PoolExcludeCmd subcommand is activated
 func (cmd *poolExcludeCmd) Execute(args []string) error {
-	msg := "succeeded"
-
 	var idxList []uint32
 	if err := common.ParseNumberList(cmd.TargetIdx, &idxList); err != nil {
 		return errors.WithMessage(err, "parsing target list")
 	}
 
-	req := &control.PoolExcludeReq{ID: cmd.PoolID().String(), Rank: ranklist.Rank(cmd.Rank), TargetIdx: idxList, Force: cmd.Force}
-
-	err := control.PoolExclude(cmd.MustLogCtx(), cmd.ctlInvoker, req)
-	if err != nil {
-		msg = errors.WithMessage(err, "failed").Error()
+	req := &control.PoolRanksReq{
+		ID:        cmd.PoolID().String(),
+		Ranks:     cmd.RankList.Ranks(),
+		TargetIdx: idxList,
+		Force:     cmd.Force,
 	}
 
-	cmd.Infof("Exclude command %s\n", msg)
+	resp, err := control.PoolExclude(cmd.MustLogCtx(), cmd.ctlInvoker, req)
+	if err != nil {
+		return err
+	}
 
-	return err
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
+	}
+
+	cmd.Debugf("%T: %+v, %T: %+v", req, req, resp.Results, resp.Results)
+
+	var out strings.Builder
+	if err := pretty.PrintPoolRanksResps(&out, resp); err != nil {
+		return err
+	}
+	cmd.Info(out.String())
+
+	return resp.Errors()
 }
 
 // poolDrainCmd is the struct representing the command to Drain a DAOS target.
 type poolDrainCmd struct {
-	poolCmd
-	Rank      uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be drained"`
-	TargetIdx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be drained on the rank"`
+	poolRanksCmd
+	TargetIdx string `long:"target-idx" description:"Comma-separated list of target index(es) to be drained on each rank"`
 }
 
 // Execute is run when PoolDrainCmd subcommand is activated
 func (cmd *poolDrainCmd) Execute(args []string) error {
-	msg := "succeeded"
-
 	var idxList []uint32
 	if err := common.ParseNumberList(cmd.TargetIdx, &idxList); err != nil {
-		err = errors.WithMessage(err, "parsing target list")
-		return err
+		return errors.WithMessage(err, "parsing target list")
 	}
 
-	req := &control.PoolDrainReq{
+	req := &control.PoolRanksReq{
 		ID:        cmd.PoolID().String(),
-		Rank:      ranklist.Rank(cmd.Rank),
+		Ranks:     cmd.RankList.Ranks(),
 		TargetIdx: idxList,
 	}
 
-	err := control.PoolDrain(cmd.MustLogCtx(), cmd.ctlInvoker, req)
+	resp, err := control.PoolDrain(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
-		msg = errors.WithMessage(err, "failed").Error()
+		return err
 	}
 
-	cmd.Infof("Drain command %s\n", msg)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
+	}
 
-	return err
+	cmd.Debugf("%T: %+v, %T: %+v", req, req, resp.Results, resp.Results)
+
+	var out strings.Builder
+	if err := pretty.PrintPoolRanksResps(&out, resp); err != nil {
+		return err
+	}
+	cmd.Info(out.String())
+
+	return resp.Errors()
 }
 
 // poolExtendCmd is the struct representing the command to Extend a DAOS pool.
 type poolExtendCmd struct {
-	poolCmd
-	RankList ui.RankSetFlag `long:"ranks" required:"1" description:"Comma-separated list of ranks to add to the pool"`
+	poolRanksCmd
 }
 
 // Execute is run when PoolExtendCmd subcommand is activated
@@ -620,35 +645,41 @@ func (cmd *poolExtendCmd) Execute(args []string) error {
 
 // poolReintegrateCmd is the struct representing the command to Add a DAOS target.
 type poolReintegrateCmd struct {
-	poolCmd
-	Rank      uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be reintegrated"`
-	TargetIdx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be reintegrated into the rank"`
+	poolRanksCmd
+	TargetIdx string `long:"target-idx" description:"Comma-separated list of target index(es) to be reintegrated into each rank"`
 }
 
 // Execute is run when poolReintegrateCmd subcommand is activated
 func (cmd *poolReintegrateCmd) Execute(args []string) error {
-	msg := "succeeded"
-
 	var idxList []uint32
 	if err := common.ParseNumberList(cmd.TargetIdx, &idxList); err != nil {
-		err = errors.WithMessage(err, "parsing target list")
-		return err
+		return errors.WithMessage(err, "parsing target list")
 	}
 
-	req := &control.PoolReintegrateReq{
+	req := &control.PoolRanksReq{
 		ID:        cmd.PoolID().String(),
-		Rank:      ranklist.Rank(cmd.Rank),
+		Ranks:     cmd.RankList.Ranks(),
 		TargetIdx: idxList,
 	}
 
-	err := control.PoolReintegrate(cmd.MustLogCtx(), cmd.ctlInvoker, req)
+	resp, err := control.PoolReintegrate(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
-		msg = errors.WithMessage(err, "failed").Error()
+		return err
 	}
 
-	cmd.Infof("Reintegration command %s\n", msg)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
+	}
 
-	return err
+	cmd.Debugf("%T: %+v, %T: %+v", req, req, resp.Results, resp.Results)
+
+	var out strings.Builder
+	if err := pretty.PrintPoolRanksResps(&out, resp); err != nil {
+		return err
+	}
+	cmd.Info(out.String())
+
+	return resp.Errors()
 }
 
 // poolQueryCmd is the struct representing the command to query a DAOS pool.
@@ -700,8 +731,8 @@ func (cmd *poolQueryCmd) Execute(args []string) error {
 type poolQueryTargetsCmd struct {
 	poolCmd
 
-	Rank    uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be queried"`
-	Targets string `long:"target-idx" description:"Comma-separated list of target idx(s) to be queried"`
+	Rank    uint32         `long:"rank" required:"1" description:"Engine rank of the target(s) to be queried"`
+	Targets ui.RankSetFlag `long:"target-idx" description:"Comma-separated list of target index(es) to be queried (default: all)"`
 }
 
 // Execute is run when PoolQueryTargetsCmd subcommand is activated
@@ -709,11 +740,7 @@ func (cmd *poolQueryTargetsCmd) Execute(args []string) error {
 	ctx := cmd.MustLogCtx()
 
 	var tgtsList []uint32
-	if len(cmd.Targets) > 0 {
-		if err := common.ParseNumberList(cmd.Targets, &tgtsList); err != nil {
-			return errors.WithMessage(err, "parsing target list")
-		}
-	} else {
+	if cmd.Targets.RankSet.Count() == 0 {
 		pi, err := control.PoolQuery(ctx, cmd.ctlInvoker, &control.PoolQueryReq{
 			ID:        cmd.PoolID().String(),
 			QueryMask: daos.DefaultPoolQueryMask,
@@ -727,6 +754,11 @@ func (cmd *poolQueryTargetsCmd) Execute(args []string) error {
 		tgtCount := pi.TotalTargets / pi.TotalEngines
 		for i := uint32(0); i < tgtCount; i++ {
 			tgtsList = append(tgtsList, i)
+		}
+	} else {
+		tgtsList = make([]uint32, cmd.Targets.RankSet.Count())
+		for i, rank := range cmd.Targets.RankSet.Ranks() {
+			tgtsList[i] = uint32(rank)
 		}
 	}
 
