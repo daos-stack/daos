@@ -178,7 +178,7 @@ func (cmd *systemEraseCmd) Execute(_ []string) error {
 type systemStopCmd struct {
 	baseRankListCmd
 	Force bool `long:"force" description:"Force stop DAOS system members"`
-	Full  bool `long:"full" description:"Attempt a graceful shutdown of DAOS system. Experimental and not for use in production environments"`
+	Full  bool `long:"full" hidden:"true" description:"Attempt a graceful shutdown of DAOS system. Experimental and not for use in production environments"`
 }
 
 // Execute is run when systemStopCmd activates.
