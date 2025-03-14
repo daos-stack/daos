@@ -39,7 +39,7 @@ if [ -z "$TARGET" ]; then
     # behind.
     # check master, then current release branches, then current feature branches.
     export ORIGIN
-    TARGET="$ORIGIN/$(utils/rpms/packaging/get_release_branch "feature/cat_recovery feature/multiprovider")"
+    TARGET="$ORIGIN/$(utils/rpms/packaging/get_release_branch "feature/multiprovider feature/firewall feature/dfs_dcache")"
     echo "  Install gh command to auto-detect target branch, assuming $TARGET."
 fi
 
