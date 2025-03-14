@@ -126,7 +126,7 @@ enum tlsf_private {
 ** Static assertion mechanism.
 */
 
-#define _tlsf_glue2(x, y)       x ## y
+#define _tlsf_glue2(x, y)       x##y
 #define _tlsf_glue(x, y)        _tlsf_glue2(x, y)
 #define tlsf_static_assert(exp) typedef char _tlsf_glue(static_assert, __LINE__)[(exp) ? 1 : -1]
 
@@ -477,9 +477,10 @@ remove_free_block(control_t *control, block_header_t *block, int fl, int sl)
 static inline void
 insert_free_block(control_t *control, block_header_t *block, int fl, int sl)
 {
+// clang-format off
 	block_header_t *current = tlsf_cast(block_header_t *, tlsf_cast(unsigned char *, control) +
-								control->off_blocks[fl][sl]);
-
+							      control->off_blocks[fl][sl]);
+// clang-format on
 	tlsf_assert(current && "free list cannot have a null entry");
 	tlsf_assert(block && "cannot insert a null entry into the free list");
 	block->off_next_free   = control->off_blocks[fl][sl];

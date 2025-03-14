@@ -22,8 +22,8 @@ extern struct d_shm_hdr *d_shm_head;
 #define NREF_MASK     (0xFFFFFF0000000000L)
 #define HT_ID_MASK    (0xFFFFFFFFFFL)
 #define NREF_INC      (0x1L << N_BITS_HT_ID)
-#define GET_NREF(x)   (((x) & NREF_MASK) >> N_BITS_HT_ID)
-#define GET_HTID(x)   ((x) & HT_ID_MASK)
+#define GET_NREF(x)   (((x)&NREF_MASK) >> N_BITS_HT_ID)
+#define GET_HTID(x)   ((x)&HT_ID_MASK)
 
 #if defined(__x86_64__)
 /* efficient way to generate random number with time stamp counter on x86_64 */

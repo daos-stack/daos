@@ -503,13 +503,13 @@ main(int argc, char **argv)
 	int                     opt = 0, index = 0, rc;
 	const struct CMUnitTest tests[] = {cmocka_unit_test(test_hash), cmocka_unit_test(test_lock),
 					   cmocka_unit_test(test_mem)};
-
+// clang-format off
 	static struct option    long_options[] = {
-		{"all", no_argument, NULL, 'a'},      {"hash", no_argument, NULL, 'h'},
-		{"lock", no_argument, NULL, 'l'},     {"lockmutex", no_argument, NULL, 'k'},
-		{"memory", no_argument, NULL, 'm'},   {"lockonly", no_argument, NULL, 'o'},
-		{"verifykv", no_argument, NULL, 'v'}, {NULL, 0, NULL, 0}};
-
+	    {"all", no_argument, NULL, 'a'},      {"hash", no_argument, NULL, 'h'},
+	    {"lock", no_argument, NULL, 'l'},     {"lockmutex", no_argument, NULL, 'k'},
+	    {"memory", no_argument, NULL, 'm'},   {"lockonly", no_argument, NULL, 'o'},
+	    {"verifykv", no_argument, NULL, 'v'}, {NULL, 0, NULL, 0}};
+// clang-format on
 	while ((opt = getopt_long(argc, argv, ":ahlkmov", long_options, &index)) != -1) {
 		switch (opt) {
 		case 'a':
