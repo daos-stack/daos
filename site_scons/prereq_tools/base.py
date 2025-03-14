@@ -752,10 +752,12 @@ class PreReqComponent():
             out_of_src_build -- Build from a different directory if set to True
             build_env -- Environment variables to set for build
             skip_arch -- not required on this architecture
+            static_libs -- Static libraries only, no published install
         """
         use_installed = False
-        if 'all' in self.installed or name in self.installed:
-            use_installed = True
+        if not kw.get('static_libs', False):
+            if 'all' in self.installed or name in self.installed:
+                use_installed = True
         comp = _Component(self, name, use_installed, **kw)
         self.__defined[name] = comp
 
@@ -936,10 +938,15 @@ class PreReqComponent():
         self._replace_env(**{var: value})
         self.__build_info.update(var, value)
 
-    def get_prefixes(self, name, prebuilt_path):
+    def get_prefixes(self, name, prebuilt_path, static_libs):
         """Get the location of the scons prefix as well as the external component prefix."""
         prefix = self.__env.get('PREFIX')
         comp_prefix = f'{name.upper()}_PREFIX'
+        if static_libs:
+            target_prefix = os.path.join(self.__build_dir, "install", name)
+            print(f"\n\n\n{name} is at {target_prefix}\n\n\n")
+            self._save_component_prefix(comp_prefix, target_prefix)
+            return (target_prefix, prefix)
         if prebuilt_path:
             self._save_component_prefix(comp_prefix, prebuilt_path)
             return (prebuilt_path, prefix)
@@ -997,6 +1004,7 @@ class _Component():
         patch_rpath -- Add appropriate relative rpaths to binaries
         build_env -- Environment variable(s) to add to build environment
         skip_arch -- not required on this platform
+        static_libs -- Static libraries only, no public install
     """
 
     def __init__(self,
@@ -1039,6 +1047,7 @@ class _Component():
         self.out_of_src_build = kw.get("out_of_src_build", False)
         self.patch_path = self.prereqs.get_build_dir()
         self.skip_arch = kw.get("skip_arch", False)
+        self.static_libs = kw.get("static_libs", False)
 
     @staticmethod
     def _sanitize_patch_path(path):
@@ -1316,7 +1325,8 @@ class _Component():
             self.prebuilt_path = self.prereqs.get_prebuilt_path(self, self.name)
 
         (self.component_prefix, self.prefix) = self.prereqs.get_prefixes(self.name,
-                                                                         self.prebuilt_path)
+                                                                         self.prebuilt_path,
+                                                                         self.static_libs)
         self.src_path = None
         if self.retriever:
             self.src_path = self.prereqs.get_src_path(self.name)

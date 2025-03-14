@@ -352,20 +352,20 @@ def define_components(reqs):
                            '--without-rbd',
                            '--without-iscsi-initiator',
                            '--without-vtune',
-                           '--with-shared',
                            '--without-nvme-cuse',
                            f'--target-arch={spdk_arch}'],
                           ['make', f'CONFIG_ARCH={spdk_arch}'],
                           ['make', 'install'],
-                          ['cp', '-r', '-P', 'dpdk/build/lib/', '$SPDK_PREFIX'],
+                          ['rm', '-rf', '$SPDK_PREFIX/lib/dpdk'],
+                          ['find', '$SPDK_PREFIX/lib', '-name', 'lib*.so*', '-delete'],
                           ['cp', '-r', '-P', 'dpdk/build/include/', '$SPDK_PREFIX/include/dpdk'],
                           ['mkdir', '-p', '$SPDK_PREFIX/share/spdk'],
                           ['cp', '-r', 'include', 'scripts', '$SPDK_PREFIX/share/spdk'],
                           ['cp', 'build/examples/lsvmd', '$SPDK_PREFIX/bin/spdk_nvme_lsvmd'],
                           ['cp', 'build/examples/nvme_manage', '$SPDK_PREFIX/bin/spdk_nvme_manage']
                           ],
-                headers=['spdk/nvme.h'],
-                patch_rpath=['lib', 'bin'])
+                static_libs=True,
+                headers=['spdk/nvme.h'])
 
     reqs.define('protobufc',
                 retriever=GitRepoRetriever(),

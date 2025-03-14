@@ -23,16 +23,13 @@ def scons():
     denv.AppendUnique(OBJPREFIX='b_')
 
     # SPDK related libs
-    libs = ['spdk_log', 'spdk_env_dpdk', 'spdk_thread', 'spdk_bdev', 'rte_mempool']
-    libs += ['rte_mempool_ring', 'rte_bus_pci', 'rte_pci', 'rte_ring']
-    libs += ['rte_mbuf', 'rte_eal', 'rte_kvargs', 'spdk_bdev_aio']
-    libs += ['spdk_bdev_nvme', 'spdk_blob', 'spdk_nvme', 'spdk_util']
-    libs += ['spdk_json', 'spdk_jsonrpc', 'spdk_rpc', 'spdk_trace']
-    libs += ['spdk_sock', 'spdk_log', 'spdk_notify', 'spdk_blob_bdev']
-    libs += ['spdk_vmd', 'spdk_event_bdev', 'spdk_init']
-
-    # Other libs
-    libs += ['numa', 'dl', 'smd', 'abt']
+    libs = ['daos_common_pmem', 'gurt', 'spdk_bdev', 'spdk_bdev_aio', 'spdk_bdev_nvme', 'spdk_blob',
+            'spdk_nvme', 'spdk_sock', 'spdk_log', 'spdk_notify', 'spdk_blob_bdev', 'spdk_vmd',
+            'spdk_event_bdev', 'spdk_init', 'numa', 'dl', 'smd', 'abt', 'spdk_accel', 'spdk_thread',
+            'spdk_util', 'spdk_json', 'spdk_jsonrpc', 'spdk_rpc', 'spdk_dma', 'spdk_keyring',
+            'spdk_trace', 'spdk_env_dpdk', 'rte_mempool', 'rte_mempool_ring', 'rte_bus_pci',
+            'rte_pci', 'rte_ring', 'rte_mbuf', 'rte_eal', 'rte_kvargs', 'rte_log', 'rte_telemetry',
+            'ssl']
 
     tgts = FILES + control_tgts
     bio = denv.d_library("bio", tgts, install_off="../..", LIBS=libs)
