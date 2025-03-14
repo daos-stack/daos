@@ -23,5 +23,6 @@ mpi: !mux
   # no need to run both openmpi and mpich
 client_processes:
   np: 24
+  ppn: 12
 dfuse:
   disable_caching: true

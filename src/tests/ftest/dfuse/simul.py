@@ -89,6 +89,7 @@ class PosixSimul(TestWithServers):
         mpi_type = self.params.get("mpi_type", "/run/*", "")
         simul_path = self.params.get("simul_path", "/run/*", "")
         num_proc = self.params.get("np", "/run/client_processes/*", "")
+        ppn = self.params.get("ppn", "/run/client_processes/*", "")
 
         # Create a pool
         self.log_step("Create a pool")
@@ -115,8 +116,8 @@ class PosixSimul(TestWithServers):
 
         self.log_step(f"Running simul on {mpi_type}")
         mpirun = Mpirun(cmd, mpi_type=mpi_type)
-        mpirun.assign_hosts(get_local_host(), dfuse.mount_dir.value, slots=12)
-        mpirun.assign_processes(num_proc)
+        mpirun.assign_hosts(get_local_host(), dfuse.mount_dir.value)
+        mpirun.assign_processes(processes=num_proc, ppn=ppn)
         out = mpirun.run(raise_exception=raise_exception)
         if include:
             # testing cases that are expected to fail
