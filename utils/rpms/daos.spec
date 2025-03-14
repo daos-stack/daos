@@ -16,7 +16,7 @@
 
 Name:          daos
 Version:       2.7.101
-Release:       5%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -575,7 +575,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %doc README.md
 # set daos_firmware_helper to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware_helper
-
 %files serialize
 %doc README.md
 %{_libdir}/libdaos_serialize.so
@@ -593,6 +592,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Mar 13 2025 Jeff Olivier  <jeffolivier@google.com> 2.7.101-6
+- Remove raft as external dependency
+
 * Wed Jan 22 2025 Jan Michalski <jan-marian.michalski@hpe.com> 2.7.101-5
 - Add ddb_ut and dtx_ut to the server-tests package
 
