@@ -1,6 +1,7 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -106,7 +107,7 @@ ds_mgmt_drpc_set_log_masks(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Ctl__SetLogMasksResp	 resp;
 	uint8_t			*body;
 	size_t			 len;
-	char			 retbuf[1024];
+	char                     retbuf[1024] = {'\0'};
 
 	/* Unpack the inner request from the drpc call body */
 	req = ctl__set_log_masks_req__unpack(&alloc.alloc,
@@ -131,6 +132,18 @@ ds_mgmt_drpc_set_log_masks(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	d_log_getmasks(retbuf, 0, sizeof(retbuf), 0);
 	D_INFO("Received request to set log masks '%s' masks are now %s, debug streams (DD_MASK) "
 	       "set to '%s'\n", req->masks, retbuf, req->streams);
+
+	/* b/390177544: Adjust mercury/libfabric logging at runtime */
+	if (strstr(retbuf, "external=DBUG") != NULL) {
+		crt_hg_set_log_level("debug");
+		crt_hg_set_log_subsys("hg,na,libfabric");
+		D_INFO("enabled DEBUG logging for external facility\n");
+	} else {
+		/* if it's not DEBUG, reset it to defaults */
+		crt_hg_reset_log_level();
+		crt_hg_reset_log_subsys();
+		D_INFO("reset logging to defaults for external facility\n");
+	}
 
 	len = ctl__set_log_masks_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);

@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -62,6 +63,9 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 
 /**< Env to specify stderr merge with logfile*/
 #define D_LOG_STDERR_IN_LOG_ENV	"D_LOG_STDERR_IN_LOG"
+
+/**< Env to specify separate log file for debug messages */
+#define D_LOG_DEBUG_FILE_ENV            "D_LOG_DEBUG_FILE"
 
 /* Enable shadow warning where users use same variable name in nested scope.  This enables use of a
  * variable in the macro below and is just good coding practice.
