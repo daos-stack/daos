@@ -35,6 +35,18 @@ def scons():
     bio = denv.d_library("bio", tgts, install_off="../..", LIBS=libs)
     denv.Install('$PREFIX/lib64/daos_srv', bio)
 
+    # Install spdk binaries
+    spdk_bins = ['dpdk-cmdline-gen.py', 'dpdk-hugepages.py', 'dpdk-rss-flows.py', 'iscsi_tgt',
+                 'spdk_cli', 'spdk_lspci', 'spdk_nvme_identify', 'spdk_nvme_manage', 'spdk_rpc',
+                 'spdk_top', 'spdk_trace_record', 'dpdk-devbind.py', 'dpdk-pmdinfo.py',
+                 'dpdk-telemetry.py', 'nvmf_tgt', 'spdk_dd', 'spdk_nvme_discover',
+                 'spdk_nvme_lsvmd', 'spdk_nvme_perf', 'spdk_tgt', 'spdk_trace']
+    for spdk_bin in spdk_bins:
+        denv.Install('$PREFIX/bin', [f'$SPDK_PREFIX/bin/{spdk_bin}'])
+    denv.Install('$PREFIX/share/', '$SPDK_PREFIX/share/spdk')
+    denv.Install('$PREFIX/share/', '$SPDK_PREFIX/share/dpdk')
+    denv.Install('$PREFIX/share/spdk', '$SPDK_PREFIX/include')
+
 
 if __name__ == "SCons.Script":
     scons()
