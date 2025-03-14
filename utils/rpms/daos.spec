@@ -16,7 +16,7 @@
 
 Name:          daos
 Version:       2.7.101
-Release:       5%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -71,7 +71,6 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.11.0-1.416.g12dbc15%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -594,6 +593,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Mar 13 2025 Jeff Olivier  <jeffolivier@google.com> 2.7.101-6
+- Remove raft as external dependency
+
 * Wed Jan 22 2025 Jan Michalski <jan-marian.michalski@hpe.com> 2.7.101-5
 - Add ddb_ut and dtx_ut to the server-tests package
 
