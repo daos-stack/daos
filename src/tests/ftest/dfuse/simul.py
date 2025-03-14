@@ -115,7 +115,7 @@ class PosixSimul(TestWithServers):
 
         self.log_step(f"Running simul on {mpi_type}")
         mpirun = Mpirun(cmd, mpi_type=mpi_type)
-        mpirun.assign_hosts(get_local_host(), dfuse.mount_dir.value)
+        mpirun.assign_hosts(get_local_host(), dfuse.mount_dir.value, slots=12)
         mpirun.assign_processes(num_proc)
         out = mpirun.run(raise_exception=raise_exception)
         if include:

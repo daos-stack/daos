@@ -22,6 +22,6 @@ mpi: !mux
     simul_path: /usr/lib64/openmpi/bin
   # no need to run both openmpi and mpich
 client_processes:
-  np: 48
+  np: 24
 dfuse:
   disable_caching: true
