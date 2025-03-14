@@ -93,9 +93,8 @@ class OSAOnlineParallelTest(OSAUtils):
         target_list = []
 
         # Exclude target : random two targets  (target idx : 0-7)
-        exc = random.randint(0, 6)  # nosec
-        target_list.append(exc)
-        target_list.append(exc + 1)
+        targets = self.server_managers[0].get_config_value("targets")
+        target_list = random.sample(list(range(0, targets)), 2)  # nosec
         t_string = "{},{}".format(target_list[0], target_list[1])
 
         # Exclude rank 2.
