@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -640,7 +641,7 @@ struct daos_cpd_bulk {
 	struct daos_cpd_sub_head	 dcb_head;
 	uint32_t			 dcb_size;
 	uint32_t			 dcb_padding;
-	crt_bulk_t			*dcb_bulk;
+	crt_bulk_t			 dcb_bulk;
 	/*
 	 * The following are only used to handle the bulk for CPD RPC body temporarily,
 	 * do not pack on-wire.
