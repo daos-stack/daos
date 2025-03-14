@@ -212,11 +212,8 @@ const (
 )
 
 const (
-	PoolPerfDomainRoot   = C.PO_COMP_TP_ROOT
-	PoolPerfDomainGrp    = C.PO_COMP_TP_GRP
-	PoolPerfDomainNode   = C.PO_COMP_TP_NODE
-	PoolPerfDomainRank   = C.PO_COMP_TP_RANK
-	PoolPerfDomainTarget = C.PO_COMP_TP_TARGET
+	PoolPerfDomainRoot        = C.PO_COMP_TP_ROOT
+	PoolPerfDomainUserDefined = C.PO_COMP_TP_PERF
 )
 
 const (

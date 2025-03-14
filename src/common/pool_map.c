@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -86,6 +87,7 @@ struct pool_map {
 	uint32_t		po_fseq;
 };
 
+/* clang-format off */
 static struct pool_comp_state_dict comp_state_dict[] = {
 	{
 		.sd_state	= PO_COMP_ST_UP,
@@ -116,10 +118,12 @@ static struct pool_comp_state_dict comp_state_dict[] = {
 		.sd_name	= "UNKNOWN",
 	},
 };
+/* clang-format on */
 
 #define comp_state_for_each(d)		\
 	for (d = &comp_state_dict[0]; d->sd_state != PO_COMP_ST_UNKNOWN; d++)
 
+/* clang-format off */
 static struct pool_comp_type_dict comp_type_dict[] = {
 	{
 		.td_type	= PO_COMP_TP_TARGET,
@@ -137,9 +141,14 @@ static struct pool_comp_type_dict comp_type_dict[] = {
 		.td_name	= "node",
 	},
 	{
-		.td_type	= PO_COMP_TP_GRP,
-		.td_abbr	= 'g',
-		.td_name	= "group",
+		.td_type	= PO_COMP_TP_FAULT,
+		.td_abbr	= 'f',
+		.td_name	= "fault",
+	},
+	{
+		.td_type	= PO_COMP_TP_PERF,
+		.td_abbr	= 'p',
+		.td_name	= "perf",
 	},
 	{
 		.td_type	= PO_COMP_TP_ROOT,
@@ -152,6 +161,7 @@ static struct pool_comp_type_dict comp_type_dict[] = {
 		.td_name	= "",
 	}
 };
+/* clang-format on */
 
 #define comp_type_for_each(d)		\
 	for (d = &comp_type_dict[0]; d->td_type != PO_COMP_TP_END; d++)
@@ -474,7 +484,8 @@ pool_buf_parse(struct pool_buf *buf, struct pool_domain **tree_pp)
 			buf->pb_target_nr);
 		return -DER_INVAL;
 	}
-	if (buf->pb_domain_nr != 0 && buf->pb_comps[0].co_type != PO_COMP_TP_GRP &&
+	if (buf->pb_domain_nr != 0 && buf->pb_comps[0].co_type != PO_COMP_TP_PERF &&
+	    buf->pb_comps[0].co_type != PO_COMP_TP_FAULT &&
 	    buf->pb_comps[0].co_type != PO_COMP_TP_NODE) {
 		D_DEBUG(DB_MGMT, "Invalid co_type %s[%d] for first domain.\n",
 			pool_comp_type2str(buf->pb_comps[0].co_type), buf->pb_comps[0].co_type);
@@ -508,16 +519,16 @@ pool_buf_parse(struct pool_buf *buf, struct pool_domain **tree_pp)
 		parent->do_child_nr = buf->pb_node_nr;
 	} else {
 		comp = &buf->pb_comps[0];
-		if (comp->co_type == PO_COMP_TP_GRP) {
+		if (comp->co_type == PO_COMP_TP_PERF) {
 			nr = 0;
 			do {
 				nr++;
 				comp++;
-			} while (comp->co_type == PO_COMP_TP_GRP);
+			} while (comp->co_type == PO_COMP_TP_PERF);
 			parent->do_child_nr = nr;
 			D_DEBUG(DB_TRACE, "root do_child_nr %d, with performance domain\n",
 				parent->do_child_nr);
-		} else if (comp->co_type == PO_COMP_TP_NODE) {
+		} else if (comp->co_type == PO_COMP_TP_FAULT || comp->co_type == PO_COMP_TP_NODE) {
 			parent->do_child_nr = buf->pb_domain_nr;
 			D_DEBUG(DB_TRACE, "root do_child_nr %d, without performance domain\n",
 				parent->do_child_nr);
@@ -1483,13 +1494,14 @@ fill_rank_comp(uint32_t rank, int idx, int map_version, uint8_t new_status, uint
 }
 
 static int
-add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
-			    int map_version, uint32_t nr_tgts,
-			    int ndomains, const uint32_t *domains, d_rank_list_t *ordered_ranks)
+add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf, int map_version,
+			    uint32_t nr_tgts, int ndomains, const uint32_t *domains,
+			    d_rank_list_t *ordered_ranks)
 {
 	int			rc;
-	uint32_t		num_dom_comps;
-	uint32_t		num_grp_comps;
+	uint32_t                num_node_comps;
+	uint32_t                num_fault_comps;
+	uint32_t                num_perf_comps;
 	uint32_t		num_rank_comps;
 	uint32_t		num_comps;
 	uint8_t			new_status;
@@ -1502,16 +1514,15 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 
 	if (map != NULL) {
 		new_status = PO_COMP_ST_NEW;
-		num_dom_comps = pool_map_find_domain(map, PO_COMP_TP_NODE,
-						     PO_COMP_ID_ALL, NULL);
-		num_grp_comps = pool_map_find_domain(map, PO_COMP_TP_GRP,
-						     PO_COMP_ID_ALL, NULL);
-		num_rank_comps = pool_map_find_domain(map, PO_COMP_TP_RANK,
-						      PO_COMP_ID_ALL, NULL);
+		num_node_comps  = pool_map_find_domain(map, PO_COMP_TP_NODE, PO_COMP_ID_ALL, NULL);
+		num_fault_comps = pool_map_find_domain(map, PO_COMP_TP_FAULT, PO_COMP_ID_ALL, NULL);
+		num_perf_comps  = pool_map_find_domain(map, PO_COMP_TP_PERF, PO_COMP_ID_ALL, NULL);
+		num_rank_comps  = pool_map_find_domain(map, PO_COMP_TP_RANK, PO_COMP_ID_ALL, NULL);
 	} else {
 		new_status = PO_COMP_ST_UPIN;
-		num_dom_comps = 0;
-		num_grp_comps = 0;
+		num_node_comps  = 0;
+		num_fault_comps = 0;
+		num_perf_comps  = 0;
 		num_rank_comps = 0;
 	}
 
@@ -1533,14 +1544,24 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 		}
 
 		switch (node.fdn_type) {
-		case D_FD_NODE_TYPE_DOMAIN:
-			/* TODO DAOS-6353: Use the layer number as type */
-			if (d_fd_node_is_group(&node)) {
-				dom_type = PO_COMP_TP_GRP;
-				num_comps = num_grp_comps;
-			} else {
+		case D_FD_NODE_TYPE_PERF_DOM:
+		case D_FD_NODE_TYPE_FAULT_DOM:
+		case D_FD_NODE_TYPE_NODE:
+			switch (node.fdn_type) {
+			case D_FD_NODE_TYPE_PERF_DOM:
+				dom_type  = PO_COMP_TP_PERF;
+				num_comps = num_perf_comps;
+				break;
+			case D_FD_NODE_TYPE_FAULT_DOM:
+				dom_type  = PO_COMP_TP_FAULT;
+				num_comps = num_fault_comps;
+				break;
+			case D_FD_NODE_TYPE_NODE:
 				dom_type = PO_COMP_TP_NODE;
-				num_comps = num_dom_comps;
+				num_comps = num_node_comps;
+				break;
+			default:
+				D_ASSERT(false); /* cannot happen */
 			}
 			fill_domain_comp(map, dom_type, &node, num_comps, map_version,
 					 new_status, &map_comp);
@@ -1555,15 +1576,19 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 						map_comp.co_id, current->do_comp.co_status);
 					map_comp.co_status = current->do_comp.co_status;
 					map_comp.co_index = current->do_comp.co_index;
-				} else if (dom_type == PO_COMP_TP_GRP) {
-					num_grp_comps++;
+				} else if (dom_type == PO_COMP_TP_PERF) {
+					num_perf_comps++;
+				} else if (dom_type == PO_COMP_TP_FAULT) {
+					num_fault_comps++;
 				} else {
-					num_dom_comps++;
+					num_node_comps++;
 				}
-			} else if (dom_type == PO_COMP_TP_GRP) {
-				num_grp_comps++;
+			} else if (dom_type == PO_COMP_TP_PERF) {
+				num_perf_comps++;
+			} else if (dom_type == PO_COMP_TP_FAULT) {
+				num_fault_comps++;
 			} else {
-				num_dom_comps++;
+				num_node_comps++;
 			}
 			break;
 		case D_FD_NODE_TYPE_RANK:
@@ -1627,6 +1652,22 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 	return rc;
 }
 
+/**
+ * Generate the pool map buffer.
+ *
+ * @param[in] map Existing pool map, or NULL
+ * @param[out] map_buf_out Pool map buffer
+ * @param[in] map_version Version number
+ * @param[in] ndomains Number of domains in the domains array
+ * @param[in] nnodes Number of ranks
+ * @param[in] ntargets Number of targets
+ * @param[in] domains Compressed domain tree
+ * @param[in] dss_tgt_nr
+ *
+ * @return	0		Success
+ *		-DER_NOMEM	Not enough memory
+ *		-DER_INVAL	Invalid domain tree
+ */
 int
 gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_version, int ndomains,
 	     int nnodes, int ntargets, const uint32_t *domains, uint32_t dss_tgt_nr)
@@ -1658,8 +1699,8 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 	if (map_buf == NULL)
 		D_GOTO(out_ranks, rc = -DER_NOMEM);
 
-	rc = add_domain_tree_to_pool_buf(map, map_buf, map_version, dss_tgt_nr, ndomains,
-					 domains, ordered_ranks);
+	rc = add_domain_tree_to_pool_buf(map, map_buf, map_version, dss_tgt_nr, ndomains, domains,
+					 ordered_ranks);
 	if (rc != 0) {
 		/* Do not need update the pool map anymore */
 		if (rc == -DER_EXIST)
@@ -2832,7 +2873,19 @@ pool_map_rf_verify(struct pool_map *map, uint32_t last_ver, uint32_t rlvl, uint3
 	int			 rc = 0;
 
 	pmap_fail_stat_init(&fstat, last_ver, rf);
-	com_type = rlvl == DAOS_PROP_CO_REDUN_NODE ? PO_COMP_TP_NODE : PO_COMP_TP_RANK;
+	switch (rlvl) {
+	case DAOS_PROP_CO_REDUN_FAULT:
+		com_type = PO_COMP_TP_FAULT;
+		break;
+	case DAOS_PROP_CO_REDUN_NODE:
+		com_type = PO_COMP_TP_NODE;
+		break;
+	case DAOS_PROP_CO_REDUN_RANK:
+		com_type = PO_COMP_TP_RANK;
+		break;
+	default:
+		D_ASSERTF(false, "invalid redundancy level %u", rlvl);
+	};
 	node_nr = pool_map_find_domain(map, com_type, PO_COMP_ID_ALL, &node_doms);
 	D_ASSERT(node_nr >= 0);
 	if (node_nr == 0)
