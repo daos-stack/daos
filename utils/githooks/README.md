@@ -1,7 +1,7 @@
 # About DAOS Git hooks
 
 Githooks are a [well documented](https://git-scm.com/docs/githooks) feature
-of git that enable various local exectubles to be run during various stages of
+of git that enable various local executables to be run during various stages of
 the git workflow.
 
 The DAOS repo contains several built-in githooks that are intended
@@ -18,6 +18,7 @@ Recommended: Configure your `core.hookspath`.
 Any new githooks added to the repository will automatically run,
 but possibly require additional software to produce the desired effect.
 Additionally, as the branch changes, the githooks change with it.
+
 ```sh
 git config core.hookspath utils/githooks
 ```
@@ -33,10 +34,13 @@ effectively a noop if such is not installed.
 Requirements come from a combination of `pip` and system packages and can usually be installed through standard means.  
 To install `pip` packages specified in [utils/cq/requirements.txt](../../utils/cq/requirements.txt) it is recommended to setup a virtual environment and install with pip.  
 If you already have a [virtual environment for building](../../docs/QSG/build_from_scratch.md#python-packages) you can simply install the requirements:
+
 ```sh
 python3 -m pip install -r utils/cq/requirements.txt
 ```
+
 Install system packages with your package manager - for example:
+
 ```sh
 sudo dnf install git-clang-format -y
 ```
@@ -52,8 +56,10 @@ If the check is unable to parse the version output, it will fail. Try running
 3. `flake8`
 4. `isort`
 5. `yamllint`
-6. `gofmt`
+6. `gofmt` or `golang-go`
 7. `codespell`
+8. `scons`
+9. `gh`
 
 #### Optional tools
 
@@ -79,11 +85,13 @@ any one of the required tools is missing.
 allowing the user to inspect the changes and retry the commit.
    - See [.clang-format](../../.clang-format) for configuration
    - In some cases unwanted formatting changes are made. To disable formatting, for example:
-     ```
+
+     ```c
      /* clang-format off */
      ...
      /* clang-format on */
      ```
+
 6. gofmt - Automatically formats for modified GO files
 7. isort - Linter for python imports on modified python files
 8. flake - Linter for python files

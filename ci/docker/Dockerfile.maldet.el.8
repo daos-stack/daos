@@ -1,4 +1,5 @@
 # Copyright 2018-2022 Intel Corporation
+# Copyright 2025 Hewlett Packard Enterprise Development LP
 # All rights reserved.
 #
 # 'recipe' for Docker to build an environment scan DAOS for malware.
@@ -17,6 +18,7 @@ ARG CB0
 ARG REPO_FILE_URL
 ARG JENKINS_URL
 ARG REPOS
+ARG DAOS_LAB_CA_FILE_URL
 # script to translate lookup distro names to commonly used names
 COPY ./utils/scripts/helpers/distro_info.sh /tmp/distro_info.sh
 # script to install OS updates basic tools and maldet
