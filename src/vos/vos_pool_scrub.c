@@ -802,6 +802,7 @@ cont_iter_scrub_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		*acts = VOS_ITER_CB_SKIP;
 		uuid_clear(ctx->sc_cont_uuid);
 	} else {
+		D_ERROR(DF_UUID ": scrubbing container begin\n", entry->ie_couuid);
 		rc = sc_cont_setup(ctx, entry);
 		if (rc != 0) {
 			/* log error for container, but then keep going */
@@ -810,6 +811,7 @@ cont_iter_scrub_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		}
 
 		rc = sc_scrub_cont(ctx);
+		D_ERROR(DF_UUID ": scrubbing container finished\n", entry->ie_couuid);
 
 		sc_cont_teardown(ctx);
 		*acts = VOS_ITER_CB_YIELD;
@@ -871,6 +873,7 @@ cont_iter_is_loaded_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	rc = sc_cont_setup(ctx, entry);
 	if (rc != 0)
 		return rc;
+	D_ASSERT(sc_cont_is_stopping(ctx) == false);
 	if (sc_cont_is_stopping(ctx))
 		return 0;
 
@@ -910,6 +913,7 @@ sc_ensure_containers_are_loaded(struct scrub_ctx *ctx)
 		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchors, NULL,
 				 cont_iter_is_loaded_cb, &args, NULL);
 		sc_sleep(ctx, 500);
+		D_ERROR("loading xxxxxxx: %d\n", rc);
 	} while (args.args_found_unloaded_container || rc != 0);
 	ctx->sc_cont_loaded = true;
 
