@@ -1,4 +1,5 @@
 # Copyright 2018-2024 Intel Corporation
+# Copyright 2025 Google LLC
 # All rights reserved.
 #
 # 'recipe' for Docker to build an image of EL 8 based
@@ -126,6 +127,7 @@ COPY --chown=daos_server:daos_server VERSION LICENSE ftest.sh SConstruct require
 COPY --chown=daos_server:daos_server site_scons site_scons
 COPY --chown=daos_server:daos_server utils utils
 COPY --chown=daos_server:daos_server src src
+COPY --chown=daos_server:daos_server external external
 
 # select compiler to use
 ARG COMPILER=gcc
