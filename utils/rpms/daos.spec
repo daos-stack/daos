@@ -340,7 +340,6 @@ This is the package that bridges the difference between the MOFED openmpi
 %endif
 %{scons_exe} %{?_smp_mflags} \
       --config=force         \
-      --no-rpath             \
       USE_INSTALLED=all      \
       --build-deps=yes       \
       CONF_DIR=%{conf_dir}   \
@@ -355,7 +354,6 @@ mv test.cov{,-build}
 %install
 %{scons_exe} %{?_smp_mflags}          \
       --config=force                  \
-      --no-rpath                      \
       --install-sandbox=%{buildroot}  \
       %{buildroot}%{_prefix}          \
       %{buildroot}%{conf_dir}         \
@@ -365,6 +363,15 @@ mv test.cov{,-build}
      %{?daos_build_args}            \
       %{?scons_args}                  \
       %{?compiler_args}
+for f in `ls -1 {%buildroot}%{_bindir}`; do
+  patchelf --remove-rpath "${f}" || true
+done
+for f in `ls -1 {%buildroot}%{_libdir}`; do
+  patchelf --remove-rpath "${f}" || true
+done
+for f in `ls -1 {%buildroot}%{_libdir}/daos_srv`; do
+  patchelf --remove-rpath "${f}" || true
+done
 
 %if ("%{?compiler_args}" == "COMPILER=covc")
 mv test.cov-build %{buildroot}/%{daoshome}/TESTING/ftest/test.cov

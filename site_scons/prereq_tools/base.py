@@ -966,8 +966,7 @@ class PreReqComponent():
         prefix = self.__env.get('PREFIX')
         comp_prefix = f'{name.upper()}_PREFIX'
         if static_libs:
-            target_prefix = os.path.join(self.__build_dir, "install", name)
-            print(f"\n\n\n{name} is at {target_prefix}\n\n\n")
+            target_prefix = os.path.join(self.__top_dir, "external", name)
             self._save_component_prefix(comp_prefix, target_prefix)
             return (target_prefix, prefix)
         if prebuilt_path:
