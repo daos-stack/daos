@@ -73,6 +73,8 @@ BuildRequires: capstone-devel
 %endif
 %if %{with server}
 BuildRequires: libaio-devel
+BuildRequires: meson
+BuildRequires: Python3-pyelftools
 %endif
 %if (0%{?rhel} >= 8)
 BuildRequires: isa-l-devel
