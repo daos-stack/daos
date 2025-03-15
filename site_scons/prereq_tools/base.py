@@ -254,12 +254,13 @@ def default_libpath():
 
 
 class CopyRetriever():
-    """Identify a source submodule to copy"""
+    """Copy from git modules area or specified directory"""
 
-    def __init__(self, source=None, **kw):
+    # pylint: disable=too-few-public-methods
+    def __init__(self, source=None):
         self.source = source
 
-    def get(self, name, subdir, source, **kw):
+    def get(self, name, subdir, **kw):
         """Downloads sources from a git repository into subdir"""
         if self.source is None:
             self.source = os.path.join(Dir('#').srcnode().abspath, "src", "external", name)
@@ -315,7 +316,7 @@ class GitRepoRetriever():
         """Downloads sources from a git repository into subdir"""
         # Now checkout the commit_sha if specified
         print(f'Downloading source for {name}')
-        self.url = repo
+        self.url = kw.get("repo")
         passed_commit_sha = kw.get("commit_sha", None)
         if passed_commit_sha is None:
             comp = os.path.basename(subdir)
@@ -1162,7 +1163,7 @@ class _Component():
                 return
 
         patches = self._resolve_patches()
-        self.retriever.get(self.name, self.src_path, repo, commit_sha=commit_sha,
+        self.retriever.get(self.name, self.src_path, repo=repo, commit_sha=commit_sha,
                            patches=patches, branch=branch)
 
     def _has_missing_system_deps(self, env):
