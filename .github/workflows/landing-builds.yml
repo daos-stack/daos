@@ -109,7 +109,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          submodules: true
+          submodules: 'recursive'
           fetch-depth: 500
       - name: Setup git hash
         run: ./ci/gha_helper.py --single
@@ -178,7 +178,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          submodules: true
+          submodules: 'recursive'
           fetch-depth: 500
       - name: Setup git hash
         run: ./ci/gha_helper.py --single
@@ -252,7 +252,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          submodules: true
+          submodules: 'recursive'
       - name: Build dependencies in image.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
@@ -339,7 +339,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          submodules: true
+          submodules: 'recursive'
       - name: Build dependencies in image.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
