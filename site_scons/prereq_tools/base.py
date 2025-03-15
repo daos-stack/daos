@@ -1332,7 +1332,6 @@ class _Component():
         new_env = self.prereqs.system_env.Clone()
         self.set_environment(new_env, needed_libs)
         if self.has_missing_targets(new_env):
-            self.use_installed = False
             return False
         return True
 
@@ -1520,9 +1519,7 @@ class _Component():
             return False
 
         build_dep = self.prereqs.build_deps
-        if "all" in self.prereqs.installed:
-            build_dep = False
-        if self.name in self.prereqs.installed:
+        if self.use_installed:
             build_dep = False
         if self.component_prefix and os.path.exists(self.component_prefix):
             build_dep = False
