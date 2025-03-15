@@ -86,8 +86,8 @@ class PosixSimul(TestWithServers):
             CmdResult: result from the simul command
 
         """
-        mpi_type = self.params.get("mpi_type", "/run/*", "")
-        simul_path = self.params.get("simul_path", "/run/*", "")
+        mpi_type = self.params.get("mpi_type", "/run/mpi/*", "")
+        simul_path = self.params.get("simul_path", "/run/mpi/*", "")
         num_proc = self.params.get("np", "/run/client_processes/*", "")
         ppn = self.params.get("ppn", "/run/client_processes/*", "")
 
