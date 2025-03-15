@@ -528,7 +528,7 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 							DP_RC(rc));
 				}
 			} else {
-				D_ERROR("Failed to process pending request\n");
+				D_ERROR("Failed to process pending request: %d\n", rc);
 
 				output = crt_reply_get(iv_info->ifc_child_rpc);
 
