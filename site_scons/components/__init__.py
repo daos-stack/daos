@@ -25,8 +25,7 @@
 import platform
 
 import distro
-from prereq_tools import GitRepoRetriever
-from prereq_tools import CopyRetriever
+from prereq_tools import CopyRetriever, GitRepoRetriever
 from SCons.Script import GetOption
 
 # Check if this is an ARM platform
