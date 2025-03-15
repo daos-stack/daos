@@ -1,3 +1,9 @@
+daos (2.7.101-6) unstable; urgency=medium
+  [ Tomasz Gromadzki ]
+  * pmemobj errors and warnings reported via DAOS logging system
+
+ -- Tomasz Gromadzki <tomasz.gromadzki@hpe.com>  Mon, 10 Feb 2025 12:00:00 +0200
+
 daos (2.7.101-5) unstable; urgency=medium
   [ Jan Michalski ]
   * Add ddb_ut and dtx_ut to the server-tests package
@@ -30,7 +36,6 @@ daos (2.7.100-11) unstable; urgency=medium
  -- Michael MacDonald <mjmac@google.com>  Tue, 5 Nov 2024 12:00:00 -0500
 
 daos (2.7.100-10) unstable; urgency=medium
-
   [ Sherin T George ]
   * Add DAV v2 lib
 
