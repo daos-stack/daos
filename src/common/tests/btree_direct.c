@@ -1,12 +1,12 @@
 /**
  * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(tests)
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <fcntl.h>
 #include <string.h>
 #include <errno.h>
@@ -24,10 +24,6 @@
 #include <daos/dtx.h>
 #include <daos/tests_lib.h>
 #include "utest_common.h"
-
-static char	**test_group_args;
-static int	test_group_start;
-static int	test_group_stop;
 
 enum sk_btr_opc {
 	BTR_OPC_UPDATE,
@@ -51,6 +47,11 @@ struct sk_rec {
 	uint32_t	sr_val_msize;
 	umem_off_t	sr_val_off;
 	char		sr_key[0];
+};
+
+struct btr_test_state {
+	int    argc;
+	char **argv;
 };
 
 #define SK_TREE_CLASS	100
@@ -285,15 +286,15 @@ sk_rec_stat(struct btr_instance *tins, struct btr_record *rec,
 }
 
 static btr_ops_t sk_ops = {
-	.to_key_cmp	= sk_key_cmp,
-	.to_key_encode	= sk_key_encode,
-	.to_key_decode	= sk_key_decode,
-	.to_rec_alloc	= sk_rec_alloc,
-	.to_rec_free	= sk_rec_free,
-	.to_rec_fetch	= sk_rec_fetch,
-	.to_rec_update	= sk_rec_update,
-	.to_rec_string	= sk_rec_string,
-	.to_rec_stat	= sk_rec_stat,
+    .to_key_encode = sk_key_encode,
+    .to_key_decode = sk_key_decode,
+    .to_key_cmp    = sk_key_cmp,
+    .to_rec_alloc  = sk_rec_alloc,
+    .to_rec_free   = sk_rec_free,
+    .to_rec_fetch  = sk_rec_fetch,
+    .to_rec_update = sk_rec_update,
+    .to_rec_string = sk_rec_string,
+    .to_rec_stat   = sk_rec_stat,
 };
 
 #define SK_SEP		','
@@ -1026,37 +1027,87 @@ sk_btr_perf(void **state)
 	D_FREE(kv);
 }
 
+static void
+sk_btr_memory_register(char *pmem_flag)
+{
+	int rc = 0;
+	if (pmem_flag && *pmem_flag != 'p') {
+		fail_msg("Invalid value of -M parameter: %c\n", *pmem_flag);
+	}
+	if (pmem_flag) {
+		D_PRINT("Using pmem\n");
+		rc = utest_pmem_create(POOL_NAME, POOL_SIZE, sizeof(*sk_root), NULL, &sk_utx);
+		if (rc) {
+			fail_msg("Cannot setup pmem: %d\n", rc);
+		}
+	} else {
+		D_PRINT("Using vmem\n");
+		rc = utest_vmem_create(sizeof(*sk_root), &sk_utx);
+		if (rc) {
+			fail_msg("Cannot setup vmem: %d\n", rc);
+		}
+	}
+
+	sk_root = utest_utx2root(sk_utx);
+	sk_uma  = utest_utx2uma(sk_utx);
+}
+static void
+sk_btr_class_register()
+{
+	D_PRINT("Using dynamic tree order\n");
+	int rc = dbtree_class_register(SK_TREE_CLASS, BTR_FEAT_EMBED_FIRST | BTR_FEAT_DIRECT_KEY,
+				       &sk_ops);
+	if (rc) {
+		fail_msg("Cannot register memory class: %d\n", rc);
+	}
+}
+
 static struct option btr_ops[] = {
-	{ "create",	required_argument,	NULL,	'C'	},
-	{ "destroy",	no_argument,		NULL,	'D'	},
-	{ "open",	no_argument,		NULL,	'o'	},
-	{ "close",	no_argument,		NULL,	'c'	},
-	{ "update",	required_argument,	NULL,	'u'	},
-	{ "find",	required_argument,	NULL,	'f'	},
-	{ "delete",	required_argument,	NULL,	'd'	},
-	{ "del_retain", required_argument,	NULL,	'r'	},
-	{ "query",	no_argument,		NULL,	'q'	},
-	{ "iterate",	required_argument,	NULL,	'i'	},
-	{ "batch",	required_argument,	NULL,	'b'	},
-	{ "perf",	required_argument,	NULL,	'p'	},
-	{ NULL,		0,			NULL,	0	},
+    {"start-test", required_argument, NULL, 'S'},
+    {"reg-class", no_argument, NULL, 'R'},
+    {"reg-memory", optional_argument, NULL, 'M'},
+    {"create", required_argument, NULL, 'C'},
+    {"destroy", no_argument, NULL, 'D'},
+    {"drain", no_argument, NULL, 'e'},
+    {"open", no_argument, NULL, 'o'},
+    {"close", no_argument, NULL, 'c'},
+    {"update", required_argument, NULL, 'u'},
+    {"find", required_argument, NULL, 'f'},
+    {"delete", required_argument, NULL, 'd'},
+    {"del_retain", required_argument, NULL, 'r'},
+    {"query", no_argument, NULL, 'q'},
+    {"iterate", required_argument, NULL, 'i'},
+    {"batch", required_argument, NULL, 'b'},
+    {"perf", required_argument, NULL, 'p'},
+    {NULL, 0, NULL, 0},
 };
+
+#define BTR_SHORTOPTS "+S:RM::C:Deocqu:f:d:r:qi:b:p:"
 
 static void
 ts_group(void **state) {
-
+	struct btr_test_state *test_state = (struct btr_test_state *)*state;
 	int	opt = 0;
 	void	**st = NULL;
 
 	D_PRINT("--------------------------------------\n");
-	while ((opt = getopt_long(test_group_stop-test_group_start+1,
-				  test_group_args+test_group_start,
-				  "mC:Docqu:d:r:f:i:b:p:",
-				  btr_ops,
+	while ((opt = getopt_long(test_state->argc, test_state->argv, BTR_SHORTOPTS, btr_ops,
 				  NULL)) != -1) {
 		tst_fn_val.optval = optarg;
 		tst_fn_val.input = true;
+
 		switch (opt) {
+		case 'S':
+			/* not part of the test sequence */
+			break;
+		case 'R':
+			sk_btr_class_register();
+			break;
+
+		case 'M':
+			sk_btr_memory_register(tst_fn_val.optval);
+			break;
+
 		case 'C':
 			sk_btr_open_create(st);
 			break;
@@ -1071,6 +1122,10 @@ ts_group(void **state) {
 		case 'c':
 			tst_fn_val.input = false;
 			sk_btr_close_destroy(st);
+			break;
+		case 'e':
+			/* not supported by btree_direct,
+			   but keep here for compatibility with btree.c */
 			break;
 		case 'q':
 			sk_btr_query(st);
@@ -1101,104 +1156,79 @@ ts_group(void **state) {
 			sk_btr_perf(st);
 			break;
 		default:
-			D_PRINT("Unsupported command %c\n", opt);
-		case 'm':
-			/* already handled */
-			break;
+			fail_msg("Unsupported command %c\n", opt);
 		}
 		D_PRINT("--------------------------------------\n");
 	}
 }
 
 static int
-run_cmd_line_test(char *test_name, char **args, int start_idx, int stop_idx)
+run_cmd_line_test(char *test_name, struct btr_test_state *initial_state)
 {
 	const struct CMUnitTest btree_test[] = {
-		{test_name, ts_group, NULL, NULL},
+	    {test_name, ts_group, NULL, NULL, initial_state},
 	};
 
-	test_group_args = args;
-	test_group_start = start_idx;
-	test_group_stop = stop_idx;
-
-	return cmocka_run_group_tests_name(test_name,
-					   btree_test,
-					   NULL,
-					   NULL);
-
+	return cmocka_run_group_tests_name(test_name, btree_test, NULL, NULL);
 }
 
 int
 main(int argc, char **argv)
 {
 	struct timeval	tv;
+	int                   rc = 0;
 	int		opt;
-	int		rc;
-	int		start_idx;
-	char		*test_name;
-	int		stop_idx;
+	char                 *test_name     = NULL;
+	struct btr_test_state initial_state = {.argc = argc, .argv = argv};
 
 	d_register_alt_assert(mock_assert);
+
+	if (argc == 1) {
+		print_message("No parameters provided.\n");
+		return -1;
+	}
+
+	/* Check for --start-test parameter and verify that all parameters are in place */
+	while ((opt = getopt_long(argc, argv, BTR_SHORTOPTS, btr_ops, NULL)) != -1) {
+		if (opt == 'S') {
+			test_name = optarg;
+		} else if (opt == '?') {
+			break;
+		}
+	}
+	if (opt == '?') {
+		/* invalid option - error message printed on stderr already */
+		return -1;
+	} else if (argc != optind) {
+		fail_msg("Cannot interpret parameter: \"%s\" at optind: %d.\n", argv[optind],
+			 optind);
+	}
+
+	/* getopt_long start over */
+	optind = 1;
+
+	if (test_name == NULL) {
+		test_name = "Btree testing tool";
+	}
 
 	gettimeofday(&tv, NULL);
 	srand(tv.tv_usec);
 
-	sk_toh = DAOS_HDL_INVAL;
+	sk_toh      = DAOS_HDL_INVAL;
 	sk_root_off = UMOFF_NULL;
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
-	if (rc != 0)
-		return rc;
-
-	rc = dbtree_class_register(SK_TREE_CLASS, BTR_FEAT_EMBED_FIRST | BTR_FEAT_DIRECT_KEY,
-				   &sk_ops);
-	D_ASSERT(rc == 0);
-
-	stop_idx = argc-1;
-	if (strcmp(argv[1], "--start-test") == 0) {
-		start_idx = 2;
-		test_name = argv[2];
-		if (strcmp(argv[3], "-m") == 0) {
-			D_PRINT("Using pmem\n");
-			rc = utest_pmem_create(POOL_NAME, POOL_SIZE,
-					       sizeof(*sk_root), NULL, &sk_utx);
-			D_ASSERT(rc == 0);
-		}
-	} else {
-		start_idx = 0;
-		test_name = "Btree testing tool";
-		optind = 0;
-		/* Check for -m option first */
-		while ((opt = getopt_long(argc, argv, "mC:Docqu:d:r:f:i:b:p:",
-					  btr_ops, NULL)) != -1) {
-			if (opt == 'm') {
-				D_PRINT("Using pmem\n");
-				rc = utest_pmem_create(POOL_NAME, POOL_SIZE,
-						       sizeof(*sk_root), NULL,
-						       &sk_utx);
-				D_ASSERT(rc == 0);
-				break;
-			}
-		}
+	if (rc != 0) {
+		fail_msg("daos_debug_init() failed: %d\n", rc);
 	}
-
-	if (sk_utx == NULL) {
-		D_PRINT("Using vmem\n");
-		rc = utest_vmem_create(sizeof(*sk_root), &sk_utx);
-		D_ASSERT(rc == 0);
-	}
-
-	sk_root = utest_utx2root(sk_utx);
-	sk_uma = utest_utx2uma(sk_utx);
-
-	/* start over */
-	optind = 0;
-	rc = run_cmd_line_test(test_name, argv, start_idx, stop_idx);
-
+	rc = run_cmd_line_test(test_name, &initial_state);
 	daos_debug_fini();
-	rc += utest_utx_destroy(sk_utx);
-	if (rc != 0)
-		printf("Error: %d\n", rc);
+	if (sk_utx) {
+		rc += utest_utx_destroy(sk_utx);
+	}
+	if (rc != 0) {
+		fail_msg("Error: %d\n", rc);
+	}
 
-	return rc;
+	return 0;
 }
