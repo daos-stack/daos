@@ -134,7 +134,7 @@ COPY --chown=daos_server:daos_server VERSION LICENSE ftest.sh SConstruct require
 COPY --chown=daos_server:daos_server site_scons site_scons
 COPY --chown=daos_server:daos_server utils utils
 COPY --chown=daos_server:daos_server src src
-COPY --chown=daos_server:daos_server external external
+COPY --chown=daos_server:daos_server externa[l]/* external
 
 ARG JOBS=$DEPS_JOBS
 ARG DAOS_BUILD_TYPE=$DAOS_TARGET_TYPE
