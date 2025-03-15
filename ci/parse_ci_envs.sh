@@ -23,7 +23,7 @@ if [ -n "${STAGE_NAME:?}" ]; then
       : "${REPO_SPEC:=el-9}"
       ;;
     *Leap\ 15.6*|*leap15.6*|*opensuse15.6*|*sles15.6*)
-      : "${CHROOT_NAME:=opensuse-leap-15.5-x86_64}"
+      : "${CHROOT_NAME:=opensuse-leap-15.6-x86_64}"
       : "${TARGET:=leap15.6}"
       ;;
     *Leap\ 15.5*|*leap15.5*|*opensuse15.5*|*sles15.5*)
@@ -39,7 +39,7 @@ if [ -n "${STAGE_NAME:?}" ]; then
       : "${TARGET:=leap15.3}"
       ;;
     *Leap\ 15*|*leap15*|*opensuse15*|*sles15*)
-      : "${CHROOT_NAME:=opensuse-leap-15.5-x86_64}"
+      : "${CHROOT_NAME:=opensuse-leap-15.6-x86_64}"
       : "${TARGET:=leap15}"
       : "${REPO_SPEC:=sl-15}"
       ;;
