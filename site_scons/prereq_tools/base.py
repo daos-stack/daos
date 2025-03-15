@@ -264,7 +264,7 @@ class CopyRetriever():
         """Downloads sources from a git repository into subdir"""
         if self.source is None:
             self.source = os.path.join(Dir('#').srcnode().abspath, "src", "external", name)
-        print(f'Copying source for {name}')
+        print(f'Copying source for {name} from {self.source} to {subdir}')
         exclude = set([".git", ".github"])
         for root, dirs, files in os.walk(self.source, topdown=True):
             dirs[:] = [d for d in dirs if d not in exclude]
