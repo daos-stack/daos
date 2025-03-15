@@ -7110,7 +7110,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclud
 			goto out_map;
 		}
 
-		failed_cnt = pool_map_get_failed_cnt(map, PO_COMP_TP_NODE);
+		failed_cnt = pool_map_get_failed_cnt(map, PO_COMP_TP_FAULT);
 		D_INFO(DF_UUID ": Exclude %d ranks, failed NODE %d\n", DP_UUID(svc->ps_uuid),
 		       tgt_addrs->pta_number, failed_cnt);
 		if (failed_cnt > pw_rf) {
