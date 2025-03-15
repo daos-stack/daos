@@ -6,12 +6,14 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import ast
+import csv
 import os
 import re
 import sys
-from argparse import ArgumentParser, ArgumentTypeError, RawDescriptionHelpFormatter
+from argparse import ArgumentParser, ArgumentTypeError
 from collections import defaultdict
 from copy import deepcopy
+from itertools import chain
 from pathlib import Path
 
 import yaml
@@ -22,6 +24,22 @@ MANUAL_TAG = ('manual',)
 STAGE_TYPE_TAGS = ('vm', 'hw', 'hw_vmd')
 STAGE_SIZE_TAGS = ('medium', 'large')
 STAGE_FREQUENCY_TAGS = ('all', 'pr', 'daily_regression', 'full_regression')
+
+
+class AvocadoYamlLoader(yaml.SafeLoader):
+    """Helper class for parsing avocado yaml files."""
+
+    def forward_mux(self, node):
+        """Pass on mux tags unedited."""
+        return self.construct_mapping(node)
+
+    def ignore_unknown(self, node):  # pylint: disable=no-self-use,unused-argument
+        """Drop any other tag."""
+        return None
+
+
+AvocadoYamlLoader.add_constructor('!mux', AvocadoYamlLoader.forward_mux)
+AvocadoYamlLoader.add_constructor(None, AvocadoYamlLoader.ignore_unknown)
 
 
 class TagSet(set):
@@ -265,6 +283,102 @@ class FtestTagMap():
         if not tag_strings:
             return set()
         return set(','.join(tag_strings).split(','))
+
+
+class TestConfig():
+    """Represent the test configuration defined in the test yaml file."""
+
+    def __init__(self, path, test_name, verbose=False):
+        """Initialize the tag mapping.
+
+        Args:
+            path (str): test file path or config path
+            test_name (str): test method name to get timeout for
+        """
+        self.__data = {}
+        with open(path.replace('.py', '.yaml'), 'r') as f:
+            self.__data = yaml.load(f.read(), Loader=AvocadoYamlLoader)
+        self.__test_name = test_name
+        self.__verbose = verbose
+
+    def __display(self, message):
+        """Display the message if verbose is turned on.
+
+        Args:
+            message (str): message to display
+        """
+        if self.__verbose:
+            print(message)
+
+    def __filter_value(self, key_path, key_types=None):
+        """Get the test yaml data value for a given key.
+
+        Args:
+            key_path (list): path names from which to match the key where the last entry is the
+                key to lookup in the test yaml data.
+            key_types (list, optional): key object types to match. Defaults to None.
+
+        Returns:
+            list: values found for the key
+        """
+        self.__display(f"__filter_value: key_path={key_path}, key_types={key_types}")
+        key = key_path.pop()
+        search = [[self.__data, []]]
+        matches = []
+        self.__display(f"  - searching for '{key}' in '{key_path}' with type '{key_types}'")
+        while search:
+            data = search.pop()
+            if key in data[0]:
+                self.__display(f"    (1/3) key match '{key}' in path '{data[1]}'")
+                if not key_path or set(key_path) - set(data[1]) == set():
+                    self.__display(f"    (2/3) path match '{key_path}' to '{data[1]}'")
+                    if not key_types or type(data[0][key]) in key_types:
+                        self.__display(f"    (3/3) type match '{key_types}': value={data[0][key]}")
+                        matches.append(data[0][key])
+            for _key, _value in data[0].items():
+                if isinstance(_value, dict):
+                    search.append([_value, data[1] + [_key]])
+        return matches
+
+    def unique_value(self, keys, val_type=None):
+        """Get the unique test yaml value for a given key and optional type.
+
+        Args:
+            keys (list): _description_
+            val_type (object, optional): type of value
+
+        Returns:
+            list: _description_
+        """
+        return self.__filter_value(keys + [self.__test_name], val_type)
+
+    def value(self, key):
+        """Get the test yaml data value for a given key.
+
+        Args:
+            key (str): key to lookup in the test yaml data
+
+        Returns:
+            object: value associated with the test ymal key or None if non existent
+        """
+        if not self.__data:
+            # Handle empty test yaml files
+            return None
+        key_types = None
+        keys = key.split("/")
+        if keys[-1] == "timeout":
+            key_types = [int, str]
+            # Handle special case for test-specific numeric timeout values
+            value = self.unique_value(["timeouts"], key_types)
+        else:
+            value = self.unique_value(keys)
+        if not value:
+            value = self.__filter_value(keys, key_types)
+
+        if value and len(value) == 1:
+            # Reduce list for single matches
+            return value[0]
+        return value
 
 
 def sorted_tags(tags):
@@ -650,90 +764,217 @@ def test_tags_util(verbose=False):
     print('PASS  Ftest Tags Utility Unit Tests')
 
 
-def __arg_type_tags(val):
-    """Parse a tags argument.
+def frequency_id(tags):
+    """Get the test frequency ID from its tags.
 
     Args:
-        val (str): string to parse comma-separated tags from
+        tags (dict): test tags
 
     Returns:
-        set: tags converted to a set
+        str: test frequency or empty string if not a known test frequency
+    """
+    if "pr" in tags:
+        return "pr"
+    if "daily_regression" in tags:
+        return "daily"
+    if "full_regression" in tags:
+        return "weekly"
+    if "manual" in tags:
+        return "manual"
+    return ""
+
+
+def run_config(paths=None, tags=None, keys=None, csv_file=None, verbose=False):
+    """Display the tests matching the tags and their requested test yaml configuration.
+
+    Args:
+        paths (list, optional): paths to files from which to list via their tags. Defaults to all
+            ftest python files.
+        tags (set, optional): list of sets of tags used to filter displayed tests. Defaults to no
+            filtering.
+        keys (set, optional): list of sets of test yaml data keys to display. Defaults to None,
+            only displaying the tests.
+        csv_file (str, optional): output file which if specified is generated in a CSV format
+            instead of displaying the test files an their data.
+        verbose (bool, optional): display key match debug. Defaults to False.
+    """
+    if not paths:
+        paths = all_python_files(FTEST_DIR)
+
+    key_list = sorted(set(chain(*(keys or []))))
+    output = [["Frequency", "File", "Class", "Method"] + key_list]
+
+    tag_map = FtestTagMap(paths)
+    for file_path, classes in iter(tag_map):
+        short_file_path = re.findall(r'ftest/(.*$)', file_path)[0]
+        for class_name, functions in classes.items():
+            for method_name, method_tags in functions.items():
+                if tags and not tag_map.is_test_subset([method_tags], tags):
+                    continue
+
+                # Add a new row of output
+                try:
+                    output.append(
+                        [frequency_id(method_tags), short_file_path, class_name, method_name])
+                    yaml_data = TestConfig(file_path, method_name, verbose)
+                    for key in key_list:
+                        output[-1].append(yaml_data.value(key))
+                except Exception as error:      # pylint: disable=broad-except
+                    print(f"<< Error processing yaml keys {key_list} for {short_file_path} >>")
+                    raise error
+
+    if csv_file:
+        with open(csv_file, 'w', newline='\n') as csvfile:
+            csv_writer = csv.writer(csvfile)
+            for line in output:
+                csv_writer.writerow(line)
+        print(f"Generated {csv_file} with {len(output)} records")
+
+    else:
+        widths = [0] * len(output[0])
+        for line in output:
+            for index, column in enumerate(line):
+                widths[index] = max(widths[index], len(str(column)))
+        format_line = "  ".join(list(map(lambda x: f"{{:{x}}}", widths)))
+        for line in output:
+            print(format_line.format(*list(map(str, line))))
+
+    return 0 if output else 1
+
+
+def __comma_separated_arg(val):
+    """Parse a comma-separated argument.
+
+    Args:
+        val (str): string to parse comma-separated values from
+
+    Returns:
+        set: comma-separated strings converted to a set
 
     Raises:
         ArgumentTypeError: if val is invalid
     """
     if not val:
-        raise ArgumentTypeError("tags cannot be empty")
+        raise ArgumentTypeError("comma-separated argument cannot be empty")
     try:
         return set(map(str.strip, val.split(",")))
     except Exception as err:  # pylint: disable=broad-except
-        raise ArgumentTypeError(f"Invalid tags: {val}") from err
+        raise ArgumentTypeError(f"Invalid comma-separated argument: {val}") from err
 
 
 def main():
-    """main function execution"""
-    description = '\n'.join([
-        'Commands',
-        '  lint - lint ftest avocado tags',
-        '  list - list ftest avocado tags associated with test files',
-        '  dump - dump the file/class/method/tag structure for test files',
-        '  unit - run self unit tests'
-    ])
+    """Main function execution.
 
-    parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter, description=description)
-    parser.add_argument(
-        "command",
-        choices=("lint", "list", "dump", "unit"),
-        help="command to run")
-    parser.add_argument(
-        "-v", "--verbose",
-        action='store_true',
-        help="print verbose output for some commands")
-    parser.add_argument(
+    Returns:
+        int: 0 = success
+             1 = error
+    """
+    parser = ArgumentParser(prog='tags')
+    subparsers = parser.add_subparsers(
+        title='options for the tags command',
+        dest='command',
+        required=True)
+
+    # Parser for the "config" command and its optional arguments
+    config_parser = subparsers.add_parser(
+        'config',
+        help='list test files and their requested test configuration values')
+    config_parser.add_argument(
         "--paths",
         nargs="+",
         default=[],
         help="file paths")
-    parser.add_argument(
+    config_parser.add_argument(
         "--tags",
         nargs="+",
-        type=__arg_type_tags,
-        help="tags")
+        type=__comma_separated_arg,
+        help="tags used to filter which files to display")
+    config_parser.add_argument(
+        "--keys",
+        nargs="+",
+        type=__comma_separated_arg,
+        help="keys to display from the test yaml")
+    config_parser.add_argument(
+        "--csv",
+        type=str,
+        default=None,
+        help="csv output file")
+    config_parser.add_argument(
+        "-v", "--verbose",
+        action='store_true',
+        help="print verbose output")
+
+    # Parser for the "dump" command and its optional arguments
+    dump_parser = subparsers.add_parser(
+        'dump',
+        help='dump the file/class/method/tag structure for test files')
+    dump_parser.add_argument(
+        "--paths",
+        nargs="+",
+        default=[],
+        help="file paths")
+    dump_parser.add_argument(
+        "--tags",
+        nargs="+",
+        type=__comma_separated_arg,
+        help="tags used to filter which files to display")
+
+    # Parser for the "lint" command and its optional arguments
+    lint_parser = subparsers.add_parser(
+        'lint',
+        help='lint ftest avocado tags')
+    lint_parser.add_argument(
+        "--paths",
+        nargs="+",
+        default=[],
+        help="file paths")
+    lint_parser.add_argument(
+        "-v", "--verbose",
+        action='store_true',
+        help="print verbose output for some commands")
+
+    # Parser for the "list" command and its optional arguments
+    list_parser = subparsers.add_parser(
+        'list',
+        help='list ftest avocado tags associated with test files')
+    list_parser.add_argument(
+        "--paths",
+        nargs="+",
+        default=[],
+        help="file paths")
+
+    # Parser for the "unit" command and its optional arguments
+    unit_parser = subparsers.add_parser(
+        'unit',
+        help='run self unit tests')
+    unit_parser.add_argument(
+        "-v", "--verbose",
+        action='store_true',
+        help="print verbose output")
+
     args = parser.parse_args()
-    args.paths = list(map(os.path.realpath, args.paths))
+    if hasattr(args, "paths"):
+        args.paths = list(map(os.path.realpath, args.paths))
 
-    # Check for incompatible arguments
-    rc = 0
-    if args.command == "lint" and args.tags:
-        print("--tags not supported with lint")
-        rc = 1
-    if args.command == "list" and args.tags:
-        print("--tags not supported with list")
-        rc = 1
-    if args.command == "unit" and args.tags:
-        print("--tags not supported with unit")
-        rc = 1
-    if args.command == "unit" and args.paths:
-        print("--paths not supported with unit")
-        rc = 1
-    if rc != 0:
-        return rc
-
-    if args.command == "lint":
+    if args.command == "config":
+        rc = run_config(args.paths, args.tags, args.keys, args.csv, args.verbose)
+    elif args.command == "dump":
+        rc = run_dump(args.paths, args.tags)
+    elif args.command == "lint":
         try:
             run_linter(args.paths, args.verbose)
             rc = 0
         except LintFailure as err:
             print(err)
             rc = 1
-    elif args.command == "dump":
-        rc = run_dump(args.paths, args.tags)
     elif args.command == "list":
         rc = run_list(args.paths)
     elif args.command == "unit":
         test_tag_set()
         test_tags_util(args.verbose)
         rc = 0
+    else:
+        raise ValueError(f"Unhandled command option: {args.command}")
 
     return rc
 
