@@ -1,3 +1,15 @@
+daos (2.7.101-8) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Use submodule and static spdk
+
+ -- Jeff Olivier <jeffolivier@google.com>  Sat, 15 Mar 2025 13:05:00 +0000
+
+daos (2.7.101-7) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Remove raft as an external dependence
+
+ -- Jeff Olivier <jeffolivier@google.com>  Thu, 13 Mar 2025 19:31:00 +0000
+
 daos (2.7.101-6) unstable; urgency=medium
   [ Jeff Olivier ]
   * Remove server build from Ubuntu packaging

@@ -23,7 +23,7 @@
 
 Name:          daos
 Version:       2.7.101
-Release:       6%{?relval}%{?dist}
+Release:       8%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -73,7 +73,6 @@ BuildRequires: capstone-devel
 %endif
 %if %{with server}
 BuildRequires: libaio-devel
-BuildRequires: spdk-devel >= 22.01.2
 %endif
 %if (0%{?rhel} >= 8)
 BuildRequires: isa-l-devel
@@ -81,9 +80,6 @@ BuildRequires: libisa-l_crypto-devel
 %else
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
-%endif
-%if %{with server}
-BuildRequires: daos-raft-devel = 0.11.0-1.416.g12dbc15%{?dist}
 %endif
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
@@ -149,7 +145,6 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: spdk-tools >= 22.01.2
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
@@ -347,8 +342,9 @@ This is the package that bridges the difference between the MOFED openmpi
       --config=force         \
       --no-rpath             \
       USE_INSTALLED=all      \
+      --build-deps=yes       \
       CONF_DIR=%{conf_dir}   \
-     %{?daos_build_args}   \
+     %{?daos_build_args}     \
      %{?scons_args}          \
      %{?compiler_args}
 
@@ -487,6 +483,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdav_v2.so
 %config(noreplace) %{conf_dir}/vos_size_input.yaml
 %{_bindir}/daos_storage_estimator.py
+%{_bindir}/spdk*
+%{_bindir}/spdk*
+%{_bindir}/nvmf_tgt
 %{python3_sitearch}/storage_estimator/*.py
 %dir %{python3_sitearch}/storage_estimator
 %if (0%{?rhel} >= 8)
@@ -494,6 +493,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{python3_sitearch}/storage_estimator/__pycache__/*.pyc
 %endif
 %{_datarootdir}/%{name}
+%{_datarootdir}/dpdk
+%{_datarootdir}/spdk
 %exclude %{_datarootdir}/%{name}/ioil-ld-opts
 %{_unitdir}/%{server_svc_name}
 %{_sysctldir}/%{sysctl_script_name}
@@ -632,6 +633,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Sat Mar 15 2025 Jeff Olivier  <jeffolivier@google.com> 2.7.101-8
+- Make spdk static and add as a submodule
+
+* Thu Mar 13 2025 Jeff Olivier  <jeffolivier@google.com> 2.7.101-7
+- Remove raft as external dependency
+
 * Mon Mar 10 2025 Jeff Olivier <jeffolivie@google.com> 2.7.101-6
 - Remove server from Ubuntu packaging and fix client only build
 
