@@ -90,6 +90,8 @@ struct dfs_mt {
 	_Atomic uint32_t inited;
 	char            *pool, *cont;
 	char            *fs_root;
+	char		*snap_name;
+	daos_epoch_t	 snap_epoch;
 };
 
 #endif
