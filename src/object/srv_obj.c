@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -5331,20 +5332,27 @@ ds_obj_cpd_body_bulk(crt_rpc_t *rpc, struct obj_io_context *ioc, bool leader,
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	for (i = 0; i < count; i++) {
-		bulks[i] = *dcbs[i]->dcb_bulk;
+		bulks[i] = dcbs[i]->dcb_bulk;
 		sgls[i] = &dcbs[i]->dcb_sgl;
 	}
 
-	rc = obj_bulk_transfer(rpc, CRT_BULK_GET, ORF_BULK_BIND, bulks, NULL, NULL,
-			       DAOS_HDL_INVAL, sgls, count, count, NULL, ioc->ioc_coh);
+	rc = obj_bulk_transfer(rpc, CRT_BULK_GET, true, bulks, NULL, NULL, DAOS_HDL_INVAL, sgls,
+			       count, count, NULL, ioc->ioc_coh);
 	if (rc != 0)
 		goto out;
 
 	for (i = 0; i < count; i++) {
+		D_ASSERTF(dcbs[i]->dcb_size == dcbs[i]->dcb_iov.iov_len, "Bad bulk: %u vs %u\n",
+			  dcbs[i]->dcb_size, (uint32_t)dcbs[i]->dcb_iov.iov_len);
+
 		switch (dcbs[i]->dcb_type) {
 		case DCST_BULK_HEAD:
 			dcsh = &dcbs[i]->dcb_head;
 			dcsh->dcsh_mbs = dcbs[i]->dcb_iov.iov_buf;
+			D_ASSERTF(dcsh->dcsh_mbs->dm_data_size ==
+				      dcbs[i]->dcb_iov.iov_len - sizeof(*dcsh->dcsh_mbs),
+				  "Invalid MBS data: %u vs %u\n", dcsh->dcsh_mbs->dm_data_size,
+				  (uint32_t)(dcbs[i]->dcb_iov.iov_len - sizeof(*dcsh->dcsh_mbs)));
 			break;
 		case DCST_BULK_REQ:
 			rc = crt_proc_create(dss_get_module_info()->dmi_ctx,
@@ -5373,7 +5381,11 @@ ds_obj_cpd_body_bulk(crt_rpc_t *rpc, struct obj_io_context *ioc, bool leader,
 			for (j = 0; j < dcbs[i]->dcb_item_nr; j++) {
 				dcde[j].dcde_reqs = dcri;
 				dcri += dcde[j].dcde_read_cnt + dcde[j].dcde_write_cnt;
-				D_ASSERT((void *)dcri <= end);
+				D_ASSERTF((void *)dcri <= end,
+					  "Hit invalid CPD bulk data: pos %u, "
+					  "rd %u, wr %u, nr %u, size %u, base %p, cur %p, end %p\n",
+					  j, dcde[j].dcde_read_cnt, dcde[j].dcde_write_cnt,
+					  dcbs[i]->dcb_item_nr, dcbs[i]->dcb_size, dcde, dcri, end);
 			}
 			break;
 		default:
