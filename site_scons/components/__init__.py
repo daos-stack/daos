@@ -26,6 +26,7 @@ import platform
 
 import distro
 from prereq_tools import GitRepoRetriever
+from prereq_tools import CopyRetriever
 from SCons.Script import GetOption
 
 # Check if this is an ARM platform
@@ -342,7 +343,7 @@ def define_components(reqs):
         spdk_arch = 'haswell'
 
     reqs.define('spdk',
-                retriever=GitRepoRetriever(True),
+                retriever=CopyRetriever(),
                 commands=[['./configure',
                            '--prefix=$SPDK_PREFIX',
                            '--disable-tests',

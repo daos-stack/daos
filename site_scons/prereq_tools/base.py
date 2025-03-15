@@ -253,6 +253,28 @@ def default_libpath():
     return []
 
 
+class CopyRetriever():
+    """Identify a source submodule to copy"""
+
+    def __init__(self, source=None, **kw):
+        self.source = source
+
+    def get(self, name, subdir, source, **kw):
+        """Downloads sources from a git repository into subdir"""
+        if self.source is None:
+            self.source = os.path.join(Dir('#').srcnode().abspath, "src", "external", name)
+        print(f'Copying source for {name}')
+        exclude = set([".git", ".github"])
+        for root, dirs, files in os.walk(self.source, topdown=True):
+            [dirs.remove(d) for d in list(dirs) if d in exclude]
+            for filename in files:
+                dest_root = root.replace(self.source, subdir)
+                os.makedirs(dest_root, exist_ok=True)
+                shutil.copy(os.path.join(root, filename), os.path.join(dest_root, filename))
+        if kw.get('patches', {}):
+            print("Patches are not yet supported for CopyRetriever")
+
+
 class GitRepoRetriever():
     """Identify a git repository from which to download sources"""
 
@@ -289,9 +311,10 @@ class GitRepoRetriever():
             if not RUNNER.run_commands(commands, subdir=subdir):
                 raise DownloadFailure(self.url, subdir)
 
-    def get(self, subdir, repo, **kw):
+    def get(self, name, subdir, repo, **kw):
         """Downloads sources from a git repository into subdir"""
         # Now checkout the commit_sha if specified
+        print(f'Downloading source for {name}')
         self.url = repo
         passed_commit_sha = kw.get("commit_sha", None)
         if passed_commit_sha is None:
@@ -1139,9 +1162,8 @@ class _Component():
                 print("Assuming sources have been downloaded already")
                 return
 
-        print(f'Downloading source for {self.name}')
         patches = self._resolve_patches()
-        self.retriever.get(self.src_path, repo, commit_sha=commit_sha,
+        self.retriever.get(self.name, self.src_path, repo, commit_sha=commit_sha,
                            patches=patches, branch=branch)
 
     def _has_missing_system_deps(self, env):
@@ -1552,6 +1574,6 @@ class _Component():
         return changes
 
 
-__all__ = ["GitRepoRetriever", "DownloadFailure", "BadScript", "BuildFailure", "MissingDefinition",
-           "MissingTargets", "MissingSystemLibs", "DownloadRequired", "PreReqComponent",
-           "BuildRequired"]
+__all__ = ["GitRepoRetriever", "CopyRetriever", "DownloadFailure", "BadScript", "BuildFailure",
+           "MissingDefinition", "MissingTargets", "MissingSystemLibs", "DownloadRequired",
+           "PreReqComponent", "BuildRequired"]
