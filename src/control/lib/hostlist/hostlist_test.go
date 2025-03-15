@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -108,6 +109,12 @@ func TestHostList_Create(t *testing.T) {
 			expRawOut:    "node[1-4]",
 			expUniqOut:   "node[1-4]",
 			expUniqCount: 4,
+		},
+		"trailing range delimiter": {
+			startList:    "node[366,369-370,374,377-378,382-383,385-386,]",
+			expRawOut:    "node[366,369-370,374,377-378,382-383,385-386]",
+			expUniqOut:   "node[366,369-370,374,377-378,382-383,385-386]",
+			expUniqCount: 10,
 		},
 		"lo > hi": {
 			startList: "node[5-4]",

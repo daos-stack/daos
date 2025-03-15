@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -101,6 +102,12 @@ func TestHostList_CreateNumericList(t *testing.T) {
 			expRawOut:    "[0-1,3-5,3]",
 			expUniqOut:   "[0-1,3-5]",
 			expUniqCount: 5,
+		},
+		"trailing range delimiter": {
+			startList:    "[366,369-370,374,377-378,382-383,385-386,]",
+			expRawOut:    "[366,369-370,374,377-378,382-383,385-386]",
+			expUniqOut:   "[366,369-370,374,377-378,382-383,385-386]",
+			expUniqCount: 10,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

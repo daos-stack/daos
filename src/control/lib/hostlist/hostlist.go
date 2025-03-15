@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -173,6 +174,9 @@ func parseRange(input, rangeOp string) (*hostRange, error) {
 
 func parseRanges(input, rangeOp string) (ranges []*hostRange, err error) {
 	for _, shr := range strings.Split(input, innerRangeSeparator) {
+		if shr == "" {
+			continue
+		}
 		r, err := parseRange(shr, rangeOp)
 		if err != nil {
 			return nil, err
