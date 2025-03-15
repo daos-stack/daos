@@ -1,5 +1,6 @@
 /*
- *  (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -105,6 +106,7 @@ struct rw_cb_args {
 	crt_endpoint_t		tgt_ep;
 	struct shard_rw_args	*shard_args;
 	uint64_t                 send_time;
+	uint32_t                 extra_flags;
 };
 
 static d_iov_t *
@@ -148,6 +150,10 @@ rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	    .iov_csum   = rw_args2csum_iov(rw_args->shard_args),
 	    .shard      = rw_args->shard_args->auxi.shard,
 	};
+
+	/* Bypass CSUM since data verification logic will check whether the data is valid or not. */
+	if (rw_args->extra_flags & DIOF_FOR_DATA_VERIFICATION)
+		return 0;
 
 	if (obj_is_ec(obj))
 		csum_verify_args.shard_idx =
@@ -1233,6 +1239,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	/* remember the sgl to copyout the data inline for fetch */
 	rw_args.rwaa_sgls = sgls;
 	rw_args.send_time = daos_client_metric ? daos_get_ntime() : 0;
+	rw_args.extra_flags = api_args->extra_flags;
 	obj_shard_update_metrics_begin(req);
 	if (args->reasb_req && args->reasb_req->orr_recov) {
 		rw_args.maps = NULL;
