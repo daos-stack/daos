@@ -570,9 +570,9 @@ class PreReqComponent():
     def run_build(self, opts):
         """Build and dependencies"""
         common_reqs = ['ofi', 'hwloc', 'mercury', 'boost', 'uuid', 'crypto', 'protobufc',
-                       'lz4', 'isal', 'isal_crypto']
+                       'lz4', 'isal', 'isal_crypto', 'argobots']
         client_reqs = ['fused', 'json-c', 'capstone', 'aio']
-        server_reqs = ['argobots', 'pmdk', 'spdk', 'ipmctl']
+        server_reqs = ['pmdk', 'spdk', 'ipmctl']
         test_reqs = ['cmocka']
 
         reqs = []
