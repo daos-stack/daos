@@ -267,7 +267,7 @@ class CopyRetriever():
         print(f'Copying source for {name}')
         exclude = set([".git", ".github"])
         for root, dirs, files in os.walk(self.source, topdown=True):
-            [dirs.remove(d) for d in list(dirs) if d in exclude]
+            dirs[:] = [d for d in dirs if d not in exclude]
             for filename in files:
                 dest_root = root.replace(self.source, subdir)
                 os.makedirs(dest_root, exist_ok=True)
