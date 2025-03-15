@@ -878,22 +878,11 @@ crt_proc_struct_daos_cpd_bulk(crt_proc_t proc, crt_proc_op_t proc_op,
 	if (unlikely(rc))
 		return rc;
 
-	if (DECODING(proc_op)) {
-		D_ALLOC_PTR(dcb->dcb_bulk);
-		if (dcb->dcb_bulk == NULL)
-			return -DER_NOMEM;
-	}
-
-	rc = crt_proc_crt_bulk_t(proc, proc_op, dcb->dcb_bulk);
-	if (unlikely(rc))
-		return rc;
-
-	if (FREEING(proc_op))
-		D_FREE(dcb->dcb_bulk);
+	rc = crt_proc_crt_bulk_t(proc, proc_op, &dcb->dcb_bulk);
 
 	/* The other fields will not be packed on-wire. */
 
-	return 0;
+	return rc;
 }
 
 static int
