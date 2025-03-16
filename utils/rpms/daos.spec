@@ -75,6 +75,7 @@ BuildRequires: capstone-devel
 BuildRequires: libaio-devel
 BuildRequires: meson
 BuildRequires: python3-pyelftools
+BuildRequires: ncurses-devel
 %endif
 %if (0%{?rhel} >= 8)
 BuildRequires: isa-l-devel
