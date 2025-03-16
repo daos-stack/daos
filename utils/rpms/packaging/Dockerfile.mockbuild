@@ -1,5 +1,6 @@
 #
 # Copyright 2018-2024 Intel Corporation
+# Copyright 2025 Google LLC
 #
 # 'recipe' for Docker to build an RPM
 #
@@ -24,9 +25,9 @@ RUN if [ -n "$REPO_FILE_URL" ]; then                            \
     fi
 
 # Install basic tools
-RUN dnf -y install mock make                                        \
-                   rpm-build createrepo rpmlint redhat-lsb-core git \
-                   python-srpm-macros rpmdevtools &&                \
+RUN dnf -y install mock                             \
+                   rpm-build createrepo rpmlint git \
+                   python-srpm-macros &&            \
     dnf -y clean all
 
 # use same UID as host and default value of 1000 if not specified

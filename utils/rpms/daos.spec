@@ -497,7 +497,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %config(noreplace) %{conf_dir}/vos_size_input.yaml
 %{_bindir}/daos_storage_estimator.py
 %{_bindir}/spdk*
-%{_bindir}/spdk*
+%{_bindir}/dpdk*.py
 %{_bindir}/nvmf_tgt
 %{python3_sitearch}/storage_estimator/*.py
 %dir %{python3_sitearch}/storage_estimator
