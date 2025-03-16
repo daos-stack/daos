@@ -78,6 +78,7 @@ BuildRequires: python3-pyelftools
 BuildRequires: python3-pip
 BuildRequires: ncurses-devel
 BuildRequires: patchelf
+BuildRequires: libarchive-devel
 %endif
 %if (0%{?rhel} >= 8)
 BuildRequires: isa-l-devel

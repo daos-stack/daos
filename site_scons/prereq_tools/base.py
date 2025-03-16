@@ -256,9 +256,21 @@ def default_libpath():
 class CopyRetriever():
     """Copy from git modules area or specified directory"""
 
-    # pylint: disable=too-few-public-methods
     def __init__(self, source=None):
         self.source = source
+
+    def _apply_patches(self, subdir, patches):
+        """apply a patch"""
+        if patches is not None:
+            for patch in patches.keys():
+                print(f'Applying patch {patch}')
+                command = ['patch', '-ruN', '-p1']
+                if patches[patch] is not None:
+                    command.extend(['--directory', patches[patch]])
+                command.append('-i')
+                command.append(patch)
+                if not RUNNER.run_commands([command], subdir=subdir):
+                    raise DownloadFailure(self.patch, subdir)
 
     def get(self, name, subdir, *_args, **kw):
         """Downloads sources from a git repository into subdir"""
@@ -270,11 +282,9 @@ class CopyRetriever():
             dirs[:] = [d for d in dirs if d not in exclude]
             for filename in files:
                 dest_root = root.replace(self.source, subdir)
-                print(f'Copying {filename} to {dest_root}')
                 os.makedirs(dest_root, exist_ok=True)
                 shutil.copy(os.path.join(root, filename), os.path.join(dest_root, filename))
-        if kw.get('patches', {}):
-            print("Patches are not yet supported for CopyRetriever")
+        self._apply_patches(subdir, kw.get("patches", {}))
 
 
 class GitRepoRetriever():
@@ -1091,6 +1101,7 @@ class _Component():
             if "^" in raw:
                 (patch_subdir, raw) = raw.split('^')
             if "https://" not in raw:
+                raw = os.path.join(Dir('#').abspath, raw)
                 patches[raw] = patch_subdir
                 continue
             patch_name = f'{self.name}_{self._sanitize_patch_path(raw)}_{patchnum:d}'
