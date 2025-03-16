@@ -270,6 +270,7 @@ class CopyRetriever():
             dirs[:] = [d for d in dirs if d not in exclude]
             for filename in files:
                 dest_root = root.replace(self.source, subdir)
+                print(f'Copying {filename} to {dest_root}')
                 os.makedirs(dest_root, exist_ok=True)
                 shutil.copy(os.path.join(root, filename), os.path.join(dest_root, filename))
         if kw.get('patches', {}):
