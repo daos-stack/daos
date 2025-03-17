@@ -123,7 +123,7 @@ class PosixSimul(TestWithServers):
                 out = mpirun.run(raise_exception=raise_exception)
                 # testing cases that are expected to fail
                 if "FAILED in simul" in out.stdout_text:
-                    self.log.info(f"Test {test_to_fail} failed as expected")
+                    self.log.info("Test %s failed as expected", test_to_fail)
                 else:
                     self.fail(f"Test {test_to_fail} was expected to fail, but passed")
 
