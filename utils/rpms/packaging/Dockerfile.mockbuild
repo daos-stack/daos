@@ -44,8 +44,7 @@ RUN useradd -u $UID -ms /bin/bash $USER
 RUN echo "$USER:$PASSWD" | chpasswd
 # add the user to the mock group so it can run mock
 RUN usermod -a -G mock $USER
-RUN ls -ld /var/cache/mock || true
-RUN mkdir -p /var/cache/mock && chown mock:mock /var/cache/mock
+RUN mkdir -p /var/cache/mock && chown $USER:root /var/cache/mock
 
 ARG CB0
 RUN dnf -y upgrade && \
