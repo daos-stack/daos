@@ -914,14 +914,15 @@ class TestPool(TestDaosApiBase):
             for index, item in enumerate(val)]
         return self._check_info(checks)
 
-    def check_free_space(self, expected_scm=None, expected_nvme=None, timeout=30):
+    def check_free_space(self, expected_scm=None, expected_nvme=None, timeout=30, interval=1):
         """Check pool free space with expected value.
 
         Args:
             expected_scm (int, optional): pool expected SCM free space.
             expected_nvme (int, optional): pool expected NVME free space.
-            timeout(int, optional): time to fail test if it could not match
+            timeout (int, optional): time to fail test if it could not match
                 expected values.
+            interval (int, optional): time to sleep between retries
 
         Note:
             Arguments may also be provided as a string with a number preceded
@@ -929,25 +930,21 @@ class TestPool(TestDaosApiBase):
             default '=='.
 
         Raises:
-            DaosTestError: if scm or nvme free space doesn't match expected
-            values within timeout.
+            ValueError: if no space arguments are given
 
         Returns:
-            bool: True if expected value is specified and all the
-                specified values match; False if no space parameters specified.
+            bool: whether the space matched expected values
 
         """
         if not expected_scm and not expected_nvme:
-            self.log.error("at least one space parameter must be specified")
-            return False
+            raise ValueError("at least one space parameter must be specified")
 
-        done = False
         scm_fs = 0
         nvme_fs = 0
         start = time()
         scm_index, nvme_index = 0, 1
-        while time() - start < timeout and not done:
-            sleep(1)
+        while time() - start < timeout:
+            sleep(interval)
             checks = []
             self.get_info()
             scm_fs = self.info.pi_space.ps_space.s_free[scm_index]
@@ -956,14 +953,10 @@ class TestPool(TestDaosApiBase):
                 checks.append(("scm", scm_fs, expected_scm))
             if expected_nvme is not None:
                 checks.append(("nvme", nvme_fs, expected_nvme))
-            done = self._check_info(checks)
+            if self._check_info(checks):
+                return True
 
-        if not done:
-            raise DaosTestError(
-                "Pool Free space did not match: actual={},{} expected={},{}".format(
-                    scm_fs, nvme_fs, expected_scm, expected_nvme))
-
-        return done
+        return False
 
     def check_rebuild_status(self, rs_version=None, rs_seconds=None,
                              rs_errno=None, rs_state=None, rs_padding32=None,
