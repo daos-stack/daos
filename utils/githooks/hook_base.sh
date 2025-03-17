@@ -1,6 +1,7 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 #  Copyright 2024 Intel Corporation.
+#  Copyright 2025 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -43,8 +44,8 @@ run-parts() {
         # for new repo, skip old changeId script
         [ "$(basename "${i}")" == "20-user-changeId" ] && continue
         skip_item=false
-        for skip in "${skip_list[@]}"; do
-            if [[ "${i}" =~ ${skip} ]]; then
+        for skip in "${skip_list[@]:-}"; do
+            if [[ -n "${skip}" ]] && [[ "${i}" =~ ${skip} ]]; then
                 skip_item=true
                 echo "Skipping ${i}"
                 break
