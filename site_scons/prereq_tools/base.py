@@ -256,6 +256,7 @@ def default_libpath():
 class CopyRetriever():
     """Copy from git modules area or specified directory"""
 
+    # pylint: disable=too-few-public-methods
     def __init__(self, source=None):
         self.source = source
 
@@ -270,7 +271,7 @@ class CopyRetriever():
                 command.append('-i')
                 command.append(patch)
                 if not RUNNER.run_commands([command], subdir=subdir):
-                    raise DownloadFailure(self.patch, subdir)
+                    raise DownloadFailure(patch, subdir)
 
     def get(self, name, subdir, *_args, **kw):
         """Downloads sources from a git repository into subdir"""
