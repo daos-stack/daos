@@ -127,6 +127,10 @@ fi
 
 bs_dir=/scratch/mock/cache/"${CHROOT_NAME}"-bootstrap-$(id -u)
 if ls -l "$bs_dir"/root_cache/cache.tar.gz; then
+    ls -ld /var || true
+    ls -ld /var/cache || true
+    ls -ld /var/cache/mock || true
+    ls -l /var/cache/mock || true
     mkdir -p "/var/cache/mock/${CHROOT_NAME}-bootstrap/"
     flock "$bs_dir" -c "cp -a $bs_dir/root_cache /var/cache/mock/${CHROOT_NAME}-bootstrap"
 fi
