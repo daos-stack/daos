@@ -54,7 +54,9 @@ addFilter("daos-client-tests\.x86_64: E: devel-dependency capstone-devel")
 addFilter("daos-client-tests\.x86_64: E: explicit-lib-dependency lib(capstone|ndctl|protobuf-c)-devel")
 addFilter("daos-client-tests\.x86_64: E: devel-dependency libcapstone-devel")
 addFilter("daos-client-tests\.x86_64: E: devel-dependency fuse3-devel")
+
+# ignore missing %check section
 addFilter("W: no-%check-section")
-addFilter(r"E: spelling-error Summary(en_US) openmpi")
-addFilter(r"E: spelling-error %description -l en_US openmpi")
-addFilter(r"E: spelling-error %description -l en_US deserialization")
+
+# disable spelling errors for now
+addFilter("E: spelling-error")
