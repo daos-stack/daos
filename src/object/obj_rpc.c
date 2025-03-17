@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1090,7 +1091,8 @@ static int
 crt_proc_struct_obj_dtx_mbs(crt_proc_t proc, crt_proc_op_t proc_op,
 			    struct obj_dtx_mbs *odm)
 {
-	int	rc;
+	uint32_t size;
+	int      rc;
 
 	rc = crt_proc_struct_dtx_id(proc, proc_op, &odm->odm_xid);
 	if (unlikely(rc))
@@ -1104,7 +1106,9 @@ crt_proc_struct_obj_dtx_mbs(crt_proc_t proc, crt_proc_op_t proc_op,
 	if (unlikely(rc))
 		return rc;
 
-	return crt_proc_struct_dtx_mbs(proc, proc_op, odm->odm_mbs_max_sz, &odm->odm_mbs);
+	/* For collective DTX, rank range will be appended after the bitmap in MBS data. */
+	size = ((odm->odm_mbs_max_sz + 3) & ~3) + sizeof(uint32_t) * 2;
+	return crt_proc_struct_dtx_mbs(proc, proc_op, size, &odm->odm_mbs);
 }
 
 static int
