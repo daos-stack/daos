@@ -106,7 +106,7 @@ COPY --chown=daos_server:daos_server VERSION LICENSE ftest.sh SConstruct require
 COPY --chown=daos_server:daos_server site_scons site_scons
 COPY --chown=daos_server:daos_server utils utils
 COPY --chown=daos_server:daos_server src src
-COPY --chown=daos_server:daos_server externa[l] external
+COPY --chown=daos_server:daos_server /home/daos/pre/externa[l] external
 
 # select compiler to use
 ARG COMPILER=gcc

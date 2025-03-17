@@ -497,6 +497,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %config(noreplace) %{conf_dir}/vos_size_input.yaml
 %{_bindir}/daos_storage_estimator.py
 %{_bindir}/spdk*
+%{_bindir}/iscsi*
+%{_bindir}/nvme*
 %{_bindir}/dpdk*.py
 %{_bindir}/nvmf_tgt
 %{python3_sitearch}/storage_estimator/*.py
@@ -508,6 +510,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_datarootdir}/%{name}
 %{_datarootdir}/dpdk
 %{_datarootdir}/spdk
+%exclude %{}/%{name}/ioil-ld-opts
 %exclude %{_datarootdir}/%{name}/ioil-ld-opts
 %{_unitdir}/%{server_svc_name}
 %{_sysctldir}/%{sysctl_script_name}
