@@ -55,3 +55,5 @@ addFilter("daos-client-tests\.x86_64: E: explicit-lib-dependency lib(capstone|nd
 addFilter("daos-client-tests\.x86_64: E: devel-dependency libcapstone-devel")
 addFilter("daos-client-tests\.x86_64: E: devel-dependency fuse3-devel")
 addFilter("W: no-%check-section")
+addFilter("E: spelling-error .* 'openmpi' .*")
+addFilter("E: spelling-error .* 'deserialization' .*")
