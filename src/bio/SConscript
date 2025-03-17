@@ -29,7 +29,7 @@ def scons():
             'spdk_util', 'spdk_json', 'spdk_jsonrpc', 'spdk_rpc', 'spdk_dma', 'spdk_keyring',
             'spdk_trace', 'spdk_env_dpdk', 'rte_mempool', 'rte_mempool_ring', 'rte_bus_pci',
             'rte_pci', 'rte_ring', 'rte_mbuf', 'rte_eal', 'rte_kvargs', 'rte_log', 'rte_telemetry',
-            'ssl']
+            'ssl', 'isal']
 
     tgts = FILES + control_tgts
     bio = denv.d_library("bio", tgts, install_off="../..", LIBS=libs)
