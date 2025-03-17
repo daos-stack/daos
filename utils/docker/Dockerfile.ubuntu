@@ -69,6 +69,7 @@ COPY --chown=daos_server:daos_server src/external src/external
 COPY --chown=daos_server:daos_server site_scons/prereq_tools site_scons/prereq_tools
 COPY --chown=daos_server:daos_server site_scons/components site_scons/components
 COPY --chown=daos_server:daos_server utils/build.config utils/
+COPY --chown=daos_server:daos_server utils/*.patch utils/
 
 # Control what to build.  By default Dockerfiles build everything to allow for
 # ease-of-use for users, however in CI everything is turned off and then
@@ -89,7 +90,8 @@ ARG DEPS_JOBS=1
 
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] ||                           \
     { scons --build-deps=only --jobs $DEPS_JOBS PREFIX=/opt/daos \
-      TARGET_TYPE=$DAOS_TARGET_TYPE &&                           \
+      TARGET_TYPE=$DAOS_TARGET_TYPE                              \
+      INTERNAL_PREFIX=/opt/daos/external &&                      \
     ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); }
 
 USER root:root
@@ -106,7 +108,6 @@ COPY --chown=daos_server:daos_server VERSION LICENSE ftest.sh SConstruct require
 COPY --chown=daos_server:daos_server site_scons site_scons
 COPY --chown=daos_server:daos_server utils utils
 COPY --chown=daos_server:daos_server src src
-COPY --chown=daos_server:daos_server /home/daos/pre/externa[l] external
 
 # select compiler to use
 ARG COMPILER=gcc
@@ -117,7 +118,8 @@ ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
     { scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER \
-      BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
+      BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE      \
+      INTERNAL_PREFIX=/opt/daos/external &&                          \
     ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build) && \
     go clean -cache && cp -r utils/config/examples /opt/daos; }
 

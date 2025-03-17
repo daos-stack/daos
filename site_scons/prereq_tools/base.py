@@ -486,6 +486,7 @@ class PreReqComponent():
 
         self.__top_dir = Dir('#').abspath
         install_dir = os.path.join(self.__top_dir, 'install')
+        internal_prefix = os.path.join(self.__top_dir, 'external')
 
         self.deps_as_gitmodules_subdir = GetOption("deps_as_gitmodules_subdir")
 
@@ -493,6 +494,8 @@ class PreReqComponent():
 
         opts.Add(PathVariable('PREFIX', 'Installation path', install_dir,
                               PathVariable.PathAccept))
+        opts.Add(PathVariable('INTERNAL_PREFIX', 'Prefix for internal dependencies to be installed',
+                              internal_prefix, PathVariable.PathAccept))
         opts.Add('ALT_PREFIX', f'Specifies {os.pathsep} separated list of alternative paths to add',
                  None)
         opts.Add(PathVariable('BUILD_ROOT', 'Alternative build root directory', "build",
@@ -978,7 +981,7 @@ class PreReqComponent():
         prefix = self.__env.get('PREFIX')
         comp_prefix = f'{name.upper()}_PREFIX'
         if static_libs:
-            target_prefix = os.path.join(self.__top_dir, "external", name)
+            target_prefix = os.path.join(self.__env.get('INTERNAL_PREFIX'), name)
             self._save_component_prefix(comp_prefix, target_prefix)
             return (target_prefix, prefix)
         if prebuilt_path:
