@@ -727,57 +727,28 @@ warmup_cb(const struct crt_cb_info *info)
 }
 
 int
-dc_pool_ping_target(int tgt_id, daos_handle_t pool_hdl)
+dc_pool_ping_target(int tgt_id, daos_handle_t pool_hdl, tse_task_t *task)
 {
-	struct pool_target        *tgts;
-	crt_endpoint_t             ep;
-	crt_rpc_t                 *rpc = NULL;
-	struct pool_tgt_warmup_in *rpc_in;
-	int                        idx;
-	crt_opcode_t               opcode;
-	struct dc_pool            *pool;
-	sem_t                      sem;
-	crt_bulk_t                 bulk_hdl;
-	void                      *bulk_buf;
-	int                        bulk_len = 4096;
-	crt_context_t              ctx;
-	int                        rc = 0;
-	d_sg_list_t                sgl;
-	d_iov_t                    iov;
+	struct pool_target *tgts;
+	crt_endpoint_t      ep;
+	crt_rpc_t          *rpc = NULL;
+	int                 idx;
+	crt_opcode_t        opcode;
+	struct dc_pool     *pool;
+	crt_context_t       ctx;
+	int                 rc = 0;
 
 	pool = dc_hdl2pool(pool_hdl);
-
 	pool_map_find_target(pool->dp_map, tgt_id, &tgts);
-
-	D_ALLOC(bulk_buf, bulk_len);
-	if (bulk_buf == NULL) {
-		rc = -DER_NOMEM;
-		D_ERROR("Failed to alloc mem\n");
-		goto out;
-	}
 
 	ctx = daos_get_crt_ctx();
 
-	d_iov_set(&iov, bulk_buf, bulk_len);
-	sgl.sg_nr     = 1;
-	sgl.sg_nr_out = 0;
-	sgl.sg_iovs   = &iov;
-	rc            = crt_bulk_create(ctx, &sgl, CRT_BULK_RW, &bulk_hdl);
-	if (rc < 0) {
-		DL_ERROR(rc, "Failed to create bulk handle");
-		goto out_bulk;
-	}
-
-	rc = sem_init(&sem, 0, 0);
-	if (rc < 0) {
-		DL_ERROR(rc, "Failed to initialize semaphore");
-		goto out_hdl;
-	}
-
 	idx = 0;
 	if (tgts[idx].ta_comp.co_status == PO_COMP_ST_DOWN ||
-	    tgts[idx].ta_comp.co_status == PO_COMP_ST_DOWNOUT)
-		goto out_sem;
+	    tgts[idx].ta_comp.co_status == PO_COMP_ST_DOWNOUT) {
+		tse_task_complete(task, rc);
+		goto out;
+	}
 
 	ep.ep_grp  = pool->dp_sys->sy_group;
 	ep.ep_rank = tgts[idx].ta_comp.co_rank;
@@ -786,33 +757,18 @@ dc_pool_ping_target(int tgt_id, daos_handle_t pool_hdl)
                                  dc_pool_proto_version ? dc_pool_proto_version : DAOS_POOL_VERSION);
 	rc         = crt_req_create(ctx, &ep, opcode, &rpc);
 	if (rc != 0) {
+		tse_task_complete(task, rc);
 		D_ERROR("Failed to allocate req " DF_RC "\n", DP_RC(rc));
-		goto out_sem;
+		goto out;
 	}
-	D_ASSERTF(rc == 0, "crt_req_create failed; rc=%d\n", rc);
-	rpc_in          = crt_req_get(rpc);
-	rpc_in->tw_bulk = bulk_hdl;
 
-	rc = crt_req_send(rpc, warmup_cb, &sem);
+	rc = daos_rpc_send(rpc, task);
 	if (rc != 0) {
+		tse_task_complete(task, rc);
 		D_ERROR("Failed to ping rank=%d:%d, " DF_RC "\n", ep.ep_rank, ep.ep_tag, DP_RC(rc));
-		goto out_sem;
-	}
-
-	while (sem_trywait(&sem) == -1) {
-		rc = crt_progress(ctx, 0);
-		if (rc && rc != -DER_TIMEDOUT) {
-			D_ERROR("failed to progress context, " DF_RC "\n", DP_RC(rc));
-			break;
-		}
+		goto out;
 	}
 	rc = 0;
-out_sem:
-	(void)sem_destroy(&sem);
-out_hdl:
-	crt_bulk_free(bulk_hdl);
-out_bulk:
-	D_FREE(bulk_buf);
 out:
 	return rc;
 }
