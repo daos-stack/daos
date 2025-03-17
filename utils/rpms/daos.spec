@@ -510,7 +510,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_datarootdir}/%{name}
 %{_datarootdir}/dpdk
 %{_datarootdir}/spdk
-%exclude %{}/%{name}/ioil-ld-opts
 %exclude %{_datarootdir}/%{name}/ioil-ld-opts
 %{_unitdir}/%{server_svc_name}
 %{_sysctldir}/%{sysctl_script_name}
