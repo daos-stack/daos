@@ -369,16 +369,6 @@ mv test.cov{,-build}
      %{?daos_build_args}            \
       %{?scons_args}                  \
       %{?compiler_args}
-for f in `ls -1 {%buildroot}%{_bindir}`; do
-  patchelf --remove-rpath "${f}" || true
-done
-for f in `ls -1 {%buildroot}%{_libdir}`; do
-  patchelf --remove-rpath "${f}" || true
-done
-for f in `ls -1 {%buildroot}%{_libdir}/daos_srv`; do
-  patchelf --remove-rpath "${f}" || true
-done
-
 %if ("%{?compiler_args}" == "COMPILER=covc")
 mv test.cov-build %{buildroot}/%{daoshome}/TESTING/ftest/test.cov
 %endif
@@ -403,6 +393,16 @@ sed -i -e '1s/env //' %{buildroot}%{_bindir}/daos_storage_estimator.py
 
 # shouldn't have source files in a non-devel RPM
 rm -f %{buildroot}%{daoshome}/TESTING/ftest/cart/{test_linkage.cpp,utest_{hlc,portnumber,protocol,swim}.c,wrap_cmocka.h}
+for f in `ls -1 {%buildroot}%{_bindir}`; do
+  patchelf --remove-rpath "${f}" || true
+done
+for f in `ls -1 {%buildroot}%{_libdir}`; do
+  patchelf --remove-rpath "${f}" || true
+done
+for f in `ls -1 {%buildroot}%{_libdir}/daos_srv`; do
+  patchelf --remove-rpath "${f}" || true
+done
+
 
 %if %{with server}
 %pre server
@@ -508,7 +508,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{python3_sitearch}/storage_estimator/__pycache__/*.pyc
 %endif
 %{_datarootdir}/%{name}
-%{_datarootdir}/dpdk
 %{_datarootdir}/spdk
 %exclude %{_datarootdir}/%{name}/ioil-ld-opts
 %{_unitdir}/%{server_svc_name}

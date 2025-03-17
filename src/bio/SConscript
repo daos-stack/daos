@@ -44,8 +44,6 @@ def scons():
     for spdk_bin in spdk_bins:
         denv.Install('$PREFIX/bin', [f'$SPDK_PREFIX/bin/{spdk_bin}'])
     denv.Install('$PREFIX/share/', '$SPDK_PREFIX/share/spdk')
-    denv.Install('$PREFIX/share/', '$SPDK_PREFIX/share/dpdk')
-    denv.Install('$PREFIX/share/spdk', '$SPDK_PREFIX/include')
 
 
 if __name__ == "SCons.Script":
