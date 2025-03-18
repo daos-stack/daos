@@ -95,7 +95,8 @@ def install_go_bin(env, name, libs=None, install_man=False):
     libs.extend(['daos_common', 'cart', 'gurt'])
 
     target = env.d_run_command(name, sources, libs,
-                               f'cd {gosrc}; {env.d_go_bin} build -mod vendor '
+                               f'cd {gosrc}; '
+                               + f'GOTOOLCHAIN=auto {env.d_go_bin} build -mod vendor '
                                + f'-ldflags "{go_ldflags(env)}" '
                                + f'{get_build_flags(env)} '
                                + f'{get_build_tags(env)} '
