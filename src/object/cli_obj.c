@@ -23,7 +23,6 @@
 #include <daos/rpc.h>
 #include "obj_internal.h"
 #include "cli_csum.h"
-#include <semaphore.h>
 
 /**
  * Open an object shard (shard object), cache the open handle.
