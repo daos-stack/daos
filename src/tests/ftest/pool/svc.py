@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -123,7 +124,7 @@ class PoolSvc(TestWithServers):
                 # Stop the pool leader
                 self.log.info("Stopping the pool leader: %s", pool_leader)
                 try:
-                    self.server_managers[-1].stop_ranks([pool_leader], self.test_log)
+                    self.server_managers[-1].stop_ranks([pool_leader])
                 except TestFail as error:
                     self.log.info(error)
                     self.fail(
@@ -159,7 +160,7 @@ class PoolSvc(TestWithServers):
                             "Pool non_leader_ranks is empty, Stopping the new pool leader: %s",
                             rank_to_kill)
                     try:
-                        self.server_managers[-1].stop_ranks([rank_to_kill], self.test_log)
+                        self.server_managers[-1].stop_ranks([rank_to_kill])
                     except TestFail as error:
                         self.log.info(error)
                         self.fail(

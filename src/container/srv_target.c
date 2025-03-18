@@ -1262,6 +1262,8 @@ cont_child_destroy_one(void *vin)
 	}
 
 	if (cont->sc_destroying) {
+		D_ERROR(DF_CONT ": Container is already being destroyed\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
 		cont_child_put(tls->dt_cont_cache, cont);
 		D_GOTO(out_pool, rc = -DER_BUSY);
 	}
@@ -1289,7 +1291,22 @@ cont_child_destroy_one(void *vin)
 	ABT_mutex_unlock(cont->sc_mutex);
 
 	/* nobody should see it again after eviction */
-	daos_lru_ref_evict_wait(tls->dt_cont_cache, &cont->sc_list);
+	/**
+	 * This function may yield, potentially creating a race condition with
+	 * rebuild operations. During rebuild migration, the container could be
+	 * reopened and restarted, which could result in EBUSY errors from
+	 * subsequent vos_cont_destroy() calls.
+	 *
+	 * To resolve this issue:
+	 * 1. We avoid container eviction during waiting periods
+	 * 2. Container lookup failures are guaranteed by checking the
+	 *    @sc_destroying flag before proceeding
+	 *
+	 * This design ensures consistency by preventing concurrent access
+	 * to containers marked for destruction.
+	 */
+	daos_lru_ref_noevict_wait(tls->dt_cont_cache, &cont->sc_list);
+	daos_lru_ref_evict(tls->dt_cont_cache, &cont->sc_list);
 	cont_child_put(tls->dt_cont_cache, cont);
 
 	D_DEBUG(DB_MD, DF_CONT": destroying vos container\n",
@@ -1792,8 +1809,9 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 		DP_UUID(pool_uuid), DP_UUID(cont_uuid), DP_UUID(cont_hdl_uuid));
 
 retry:
-	rc = ds_pool_thread_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
-				       PO_COMP_ST_DOWNOUT, cont_open_one, &arg, 0);
+	rc = ds_pool_thread_collective(pool_uuid,
+				       PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+				       cont_open_one, &arg, DSS_ULT_DEEP_STACK);
 	if (rc != 0) {
 		if (rc == -DER_AGAIN) {
 			dss_sleep(50);
@@ -2105,9 +2123,9 @@ ds_cont_tgt_snapshots_update(uuid_t pool_uuid, uuid_t cont_uuid,
 	 * the up targets in this scenario. The target property will be updated
 	 * upon initiating container aggregation.
 	 */
-	return ds_pool_thread_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
-					 PO_COMP_ST_DOWNOUT | PO_COMP_ST_UP,
-					 cont_snap_update_one, &args, 0);
+	return ds_pool_thread_collective(
+	    pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT | PO_COMP_ST_UP,
+	    cont_snap_update_one, &args, DSS_ULT_DEEP_STACK);
 }
 
 void

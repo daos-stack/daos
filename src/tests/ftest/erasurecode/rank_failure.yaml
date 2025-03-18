@@ -35,6 +35,3 @@ gen_io_conf:
   record_size: "1000"
   obj_num: "3"
   obj_class: "EC_8P2GX"
-
-container:
-  control_method: API
