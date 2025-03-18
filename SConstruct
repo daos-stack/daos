@@ -97,7 +97,7 @@ def add_command_line_options():
               action='store_true',
               dest='test_coverage',
               default=True,
-              help='enable test coverage analyze (with gcov)')
+              help='Enable test coverage analyze (with gcov)')
 
 
 def parse_and_save_conf(env, opts_file):
