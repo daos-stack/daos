@@ -1568,7 +1568,6 @@ create_ping_task(tse_sched_t *sched, daos_handle_t pool_hdl, struct dc_object *o
 int
 obj_tgt_ping_task(tse_sched_t *sched, struct dc_object *obj, uint64_t dkey_hash, tse_task_t **taskp)
 {
-	tse_task_t     *task;
 	struct dc_pool *pool;
 	daos_handle_t   ph;
 	int             rc = 0;
@@ -1578,11 +1577,10 @@ obj_tgt_ping_task(tse_sched_t *sched, struct dc_object *obj, uint64_t dkey_hash,
 
 	dc_pool2hdl_noref(pool, &ph);
 
-	rc = create_ping_task(sched, ph, obj, dkey_hash, &task);
+	rc = create_ping_task(sched, ph, obj, dkey_hash, taskp);
 	if (rc != 0)
 		return rc;
 
-	*taskp = task;
 	return 0;
 }
 
