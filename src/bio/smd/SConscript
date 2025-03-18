@@ -10,8 +10,11 @@ def scons():
     denv = env.Clone()
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     denv.require('pmdk', 'argobots', 'protobufc')
+    libs = []
+    if GetOption("test_coverage"):
+        libs += ['gcov']
 
-    denv.d_static_library('smd', FILES, LIBS=[])
+    denv.d_static_library('smd', FILES, LIBS=libs)
 
     if prereqs.test_requested():
         SConscript('tests/SConscript', exports='denv')
