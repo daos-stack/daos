@@ -741,7 +741,7 @@ dc_pool_ping_target(int tgt_id, daos_handle_t pool_hdl, tse_task_t *task)
 	pool = dc_hdl2pool(pool_hdl);
 	pool_map_find_target(pool->dp_map, tgt_id, &tgts);
 
-	ctx = daos_get_crt_ctx();
+	ctx = daos_task2ctx(task);
 
 	idx = 0;
 	if (tgts[idx].ta_comp.co_status == PO_COMP_ST_DOWN ||
@@ -758,18 +758,19 @@ dc_pool_ping_target(int tgt_id, daos_handle_t pool_hdl, tse_task_t *task)
 	rc         = crt_req_create(ctx, &ep, opcode, &rpc);
 	if (rc != 0) {
 		tse_task_complete(task, rc);
-		D_ERROR("Failed to allocate req " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to allocate req");
 		goto out;
 	}
 
 	rc = daos_rpc_send(rpc, task);
 	if (rc != 0) {
 		tse_task_complete(task, rc);
-		D_ERROR("Failed to ping rank=%d:%d, " DF_RC "\n", ep.ep_rank, ep.ep_tag, DP_RC(rc));
+		DL_ERROR(rc, "Failed to ping rank=%d:%d", ep.ep_rank, ep.ep_tag);
 		goto out;
 	}
 	rc = 0;
 out:
+	dc_pool_put(pool);
 	return rc;
 }
 
