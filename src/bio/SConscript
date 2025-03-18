@@ -17,7 +17,7 @@ def scons():
     denv = env.Clone()
     denv.AppendUnique(LINKFLAGS=["-Wl,--no-as-needed"])
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
-    denv.require('pmdk', 'spdk', 'argobots', 'protobufc')
+    denv.require('pmdk', 'spdk', 'argobots', 'protobufc', 'isal')
 
     SConscript('smd/SConscript')
     denv.AppendUnique(OBJPREFIX='b_')
