@@ -1467,16 +1467,16 @@ struct ping_task_arg {
 static int
 ping_task(tse_task_t *task)
 {
-	daos_handle_t     pool_hdl;
-	struct dc_object *obj;
-	int               first_target;
-	int               grp_idx;
-	int               i;
-	int               target;
-	int               tgt_id;
-	int               rc = 0;
+	daos_handle_t         pool_hdl;
+	struct dc_object     *obj;
+	int                   first_target;
+	int                   grp_idx;
+	int                   i;
+	int                   target;
+	int                   tgt_id;
+	int                   rc = 0;
 	d_list_t              ping_task_list;
-	tse_sched_t      *sched = tse_task2sched(task);
+	tse_sched_t          *sched = tse_task2sched(task);
 
 	struct ping_task_arg *arg = tse_task_buf_embedded(task, sizeof(*arg));
 	pool_hdl                  = arg->pool_hdl;
