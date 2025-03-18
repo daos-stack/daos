@@ -9,9 +9,11 @@ def scons():
     """Execute build"""
     Import('env')
 
-    env.d_test_program('telemetry_producer_example', 'telem_producer_example.c', LIBS=['gurt'])
-
-    env.d_test_program('telemetry_consumer_example', 'telem_consumer_example.c', LIBS=['gurt'])
+    libs = ['gurt']
+    if GetOption("test_coverage"):
+        libs += ['gcov']
+    env.d_test_program('telemetry_producer_example', 'telem_producer_example.c', LIBS=libs)
+    env.d_test_program('telemetry_consumer_example', 'telem_consumer_example.c', LIBS=libs)
 
 
 if __name__ == "SCons.Script":

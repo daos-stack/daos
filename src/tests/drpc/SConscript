@@ -7,6 +7,8 @@ def scons():
 
     libs = ['daos_common', 'gurt', 'protobuf-c']
     sources = ['drpc_test.c', 'drpc_test.pb-c.c']
+    if GetOption("test_coverage"):
+        libs += ['gcov']
 
     denv = env.Clone()
     denv.AppendUnique(CFLAGS=['-std=gnu99'])

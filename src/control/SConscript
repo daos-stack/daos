@@ -158,9 +158,10 @@ def scons():
                              "-L$BUILD_DIR/src/utils/self_test "
                              "$_RPATH")
         dbenv.AppendENVPath("CGO_LDFLAGS", dblibs, sep=" ")
-        install_go_bin(dbenv, 'daos', libs=['daos_cmd_hdlrs', 'dfs', 'duns', 'daos',
-                                            'daos_self_test'],
-                       install_man=True)
+        libs = ['daos_cmd_hdlrs', 'dfs', 'duns', 'daos', 'daos_self_test']
+        if GetOption('test_coverage'):
+            libs += ['gcov']
+        install_go_bin(dbenv, 'daos', libs=libs, install_man=True)
 
     if not prereqs.server_requested():
         return
@@ -194,28 +195,41 @@ def scons():
     # Explicitly link RTE & SPDK libs for CGO access
     ldopts = cgolibdirs + " -lspdk_env_dpdk -lspdk_nvme -lspdk_vmd -lrte_mempool" + \
         " -lrte_mempool_ring -lrte_bus_pci -lnvme_control -lnuma -ldl"
+    if GetOption("test_coverage"):
+        ldopts += " -lgcov"
+
     aenv.AppendENVPath("CGO_LDFLAGS", ldopts, sep=" ")
 
     aenv.AppendENVPath("CGO_CFLAGS",
                        senv.subst("-I$SPDK_PREFIX/include -I$OFI_PREFIX/include"),
                        sep=" ")
 
+    libs = ['nvme_control']
+    if GetOption("test_coverage"):
+        libs += ['gcov']
+
     # Sets CGO_LDFLAGS for rpath
     aenv.d_add_rpaths(None, True, True)
-    install_go_bin(aenv, 'daos_server_helper', libs=['nvme_control'])
+    install_go_bin(aenv, 'daos_server_helper', libs)
 
     if is_firmware_mgmt_build(aenv):
         print("(EXPERIMENTAL) Building DAOS firmware tools")
-        install_go_bin(aenv, "daos_firmware_helper", libs=['nvme_control'])
+        install_go_bin(aenv, "daos_firmware_helper", libs)
 
     ddb_env = aenv.Clone()
     ddb_env.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     ddb_env.d_add_rpaths(None, True, True)
 
     # Add vos and dependent libs for ddb
-    ddb_env.AppendENVPath("CGO_LDFLAGS", " -lvos -ldav_v2 -ldaos_common_pmem -lpmem "
-                                         "-labt -lgurt -luuid -lbio -lcart", sep=" ")
-    install_go_bin(ddb_env, "ddb", ['ddb'])
+    ldopts = " -lvos -ldav_v2 -ldaos_common_pmem -lpmem -labt -lgurt -luuid -lbio -lcart"
+    if GetOption("test_coverage"):
+        ldopts += " -lgcov"
+    ddb_env.AppendENVPath("CGO_LDFLAGS", ldopts, sep=" ")
+
+    libs = ['ddb']
+    if GetOption("test_coverage"):
+        libs += ['gcov']
+    install_go_bin(ddb_env, "ddb", libs)
 
 
 if __name__ == "SCons.Script":

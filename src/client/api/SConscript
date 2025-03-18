@@ -16,8 +16,11 @@ def scons():
     libdaos_tgts[:0] = denv.SharedObject(LIBDAOS_SRC)
 
     if prereqs.client_requested():
+        libs = ['daos_common', 'numa']
+        if GetOption("test_coverage"):
+            libs += ['gcov']
         libdaos = env.d_library('daos', libdaos_tgts, SHLIBVERSION=API_VERSION,
-                                LIBS=['daos_common', 'numa'])
+                                LIBS=libs)
         if hasattr(env, 'InstallVersionedLib'):
             env.InstallVersionedLib('$PREFIX/lib64/', libdaos, SHLIBVERSION=API_VERSION)
         else:

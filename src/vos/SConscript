@@ -27,7 +27,10 @@ def build_vos(env, standalone):
         # profiling tools will point at preprocessed file lines.
         files = denv.Preprocess(FILES)
 
-    vos = denv.d_library(libname, files, install_off='../..', LIBS=['vea'])
+    libs = ['vea']
+    if GetOption("test_coverage"):
+        libs += ['gcov']
+    vos = denv.d_library(libname, files, install_off='../..', LIBS=libs)
     denv.Install('$PREFIX/lib64/daos_srv', vos)
 
 
@@ -36,6 +39,8 @@ def build_vos_internal(env):
     denv = env.Clone()
 
     libraries = ['vos', 'bio', 'abt', 'daos_common_pmem', 'gurt']
+    if GetOption("test_coverage"):
+        libraries += ['gcov']
 
     # Add runtime paths for daos libraries
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])

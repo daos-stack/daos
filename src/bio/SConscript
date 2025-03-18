@@ -33,7 +33,8 @@ def scons():
 
     # Other libs
     libs += ['numa', 'dl', 'smd', 'abt']
-
+    if GetOption("test_coverage"):
+        libs += ['gcov']
     tgts = FILES + control_tgts
     bio = denv.d_library("bio", tgts, install_off="../..", LIBS=libs)
     denv.Install('$PREFIX/lib64/daos_srv', bio)

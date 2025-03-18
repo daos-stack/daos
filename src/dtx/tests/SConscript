@@ -9,6 +9,8 @@ def scons():
 
     libraries = ['abt', 'bio', 'dtx', 'vos', 'gurt', 'daos_common_pmem', 'cmocka', 'pthread',
                  'uuid', 'cart', 'daos_tests']
+    if GetOption("test_coverage"):
+        libraries += ['gcov']
 
     tenv = denv.Clone()
     tenv.Append(CPPPATH=[Dir('..').srcnode()])
@@ -27,6 +29,8 @@ def scons():
     # build dtx_ut
 
     libraries = ['abt', 'bio', 'cmocka', 'daos_common_pmem', 'gurt', 'uuid', 'vea', 'pthread']
+    if GetOption("test_coverage"):
+        libraries += ['gcov']
 
     tenv = denv.Clone()
     tenv.Append(CPPPATH=[Dir('../../vos').srcnode()])

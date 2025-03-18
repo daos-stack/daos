@@ -67,6 +67,8 @@ def build_client_libs_shared(env, prereqs):
     ilenv.AppendUnique(LIBPATH=[Dir('../dfs')])
     ilenv.AppendUnique(LIBPATH=[Dir('../api')])
     ilenv.AppendUnique(LIBS=['dfs'])
+    if GetOption("test_coverage"):
+        ilenv.AppendUnique(LIBS=['gcov'])
     ilenv.require('capstone')
     penv = ilenv.Clone()
     penv.AppendUnique(CPPDEFINES=['_FILE_OFFSET_BITS=64'])
@@ -85,6 +87,8 @@ def build_client_libs_shared(env, prereqs):
     pil4dfsenv.AppendUnique(CPPPATH=[Dir('../../gurt').srcnode()])
     pil4dfsenv.AppendUnique(LIBPATH=[Dir('../api')])
     pil4dfsenv.AppendUnique(LIBS=['pthread', 'daos', 'dfs', 'duns', 'gurt', 'dl'])
+    if GetOption("test_coverage"):
+        pil4dfsenv.AppendUnique(LIBS=['gcov'])
     pil4dfsenv.require('capstone')
     pil4dfs_obj = []
     for src in PIL4DFS_SRC:
@@ -101,7 +105,10 @@ def build_client_libs_shared(env, prereqs):
     pil4dfs_lib = pil4dfsenv.d_library('pil4dfs/libpil4dfs', pil4dfs_obj)
     env.InstallVersionedLib(os.path.join("$PREFIX", 'lib64'), pil4dfs_lib)
 
-    gen_script = ilenv.d_program('il/gen_script', ['il/gen_script.c'], LIBS=[])
+    libs = []
+    if GetOption("test_coverage"):
+        libs += ['gcov']
+    gen_script = ilenv.d_program('il/gen_script', ['il/gen_script.c'], LIBS=libs)
     if prereqs.test_requested():
         script = ilenv.Command('il/check_ioil_syms', gen_script,
                                "$SOURCE -s $TARGET")
@@ -204,12 +211,14 @@ def scons():
     dfuse_env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
     dfuse_env.AppendUnique(CFLAGS=['-pthread'])
     dfuse_env.AppendUnique(LIBS=['pthread', 'daos', 'daos_common', 'uuid', 'm'])
-
+    if GetOption("test_coverage"):
+        dfuse_env.AppendUnique(LIBS=['gcov'])
     gcc_env = il_env.Clone(LIBS=[])
     gcc_env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
     gcc_env.AppendUnique(CFLAGS=['-pthread', '-fvisibility=hidden'])
     gcc_env.AppendUnique(LIBS=['pthread', 'daos', 'daos_common'])
-
+    if GetOption("test_coverage"):
+        gcc_env.AppendUnique(LIBS=['gcov'])
     build_client_libs_shared(gcc_env, prereqs)
 
     static_env = gcc_env.Clone()
@@ -221,7 +230,8 @@ def scons():
     cenv = dfuse_env.Clone()
     cenv.AppendUnique(LIBPATH=[Dir('../dfs')])
     cenv.AppendUnique(LIBS=['dfs', 'duns'])
-
+    if GetOption("test_coverage"):
+        gcc_env.AppendUnique(LIBS=['gcov'])
     cenv.require('hwloc')
     cenv.require('fused')
     extra_libs = ['dl']

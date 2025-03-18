@@ -8,6 +8,8 @@ def scons():
     denv = env.Clone()
 
     libraries = ['daos', 'dfs']
+    if GetOption("test_coverage"):
+        libraries += ['gcov']
     denv.AppendUnique(LIBPATH=["../dfs"])
 
     ds3_src = ['pool.c', 'user.c', 'bucket.c', 'object.c', 'multipart.c']

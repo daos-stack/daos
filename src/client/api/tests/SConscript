@@ -5,15 +5,13 @@ def scons():
     """Execute build"""
     Import('denv')
 
-    eq_tests = denv.d_test_program('eq_tests', 'eq_tests.c',
-                                   LIBS=['daos', 'daos_common', 'gurt', 'cart',
-                                         'pthread', 'cmocka'])
-    agent_tests = denv.d_test_program('agent_tests', 'agent_tests.c',
-                                      LIBS=['daos', 'daos_common', 'gurt', 'cart',
-                                            'pthread', 'cmocka'])
-    job_tests = denv.d_test_program('job_tests', 'job_tests.c',
-                                    LIBS=['daos', 'daos_common', 'gurt', 'cart',
-                                          'pthread', 'cmocka'])
+    libs = ['daos', 'daos_common', 'gurt', 'cart', 'pthread', 'cmocka']
+    if GetOption("test_coverage"):
+        libs += ['gcov']
+
+    eq_tests = denv.d_test_program('eq_tests', 'eq_tests.c', LIBS=libs)
+    agent_tests = denv.d_test_program('agent_tests', 'agent_tests.c', LIBS=libs)
+    job_tests = denv.d_test_program('job_tests', 'job_tests.c', LIBS=libs)
 
     denv.Install('$PREFIX/bin/', [eq_tests, agent_tests, job_tests])
 
