@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,7 +8,6 @@
 package main
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/google/uuid"
@@ -16,10 +16,16 @@ import (
 	"github.com/daos-stack/daos/src/control/cmd/daos/pretty"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/daos/api"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/ui"
 	"github.com/daos-stack/daos/src/control/logging"
 )
+
+/*
+#include "util.h"
+*/
+import "C"
 
 type healthCmds struct {
 	Check   healthCheckCmd `command:"check" description:"Perform DAOS system health checks"`
@@ -62,6 +68,8 @@ func collectBuildInfo(log logging.Logger, shi *daos.SystemHealthInfo) error {
 }
 
 func (cmd *healthCheckCmd) Execute([]string) error {
+	ctx := cmd.MustLogCtx()
+
 	// TODO (DAOS-10028): Move this logic into the daos package once the API is available.
 	systemHealth := &daos.SystemHealthInfo{
 		ComponentBuildInfo: make(map[string]daos.ComponentBuild),
@@ -72,7 +80,7 @@ func (cmd *healthCheckCmd) Execute([]string) error {
 		return err
 	}
 
-	sysInfo, err := cmd.apiProvider.GetSystemInfo(cmd.MustLogCtx())
+	sysInfo, err := cmd.apiProvider.GetSystemInfo(ctx)
 	if err != nil {
 		cmd.Errorf("failed to query system information: %v", err)
 	}
@@ -80,7 +88,10 @@ func (cmd *healthCheckCmd) Execute([]string) error {
 
 	cmd.Infof("Checking DAOS system: %s", systemHealth.SystemInfo.Name)
 
-	pools, err := getPoolList(cmd.Logger, cmd.SysName, true)
+	pools, err := api.GetPoolList(ctx, api.GetPoolListReq{
+		SysName: cmd.SysName,
+		Query:   false,
+	})
 	if err != nil {
 		cmd.Errorf("failed to get pool list: %v", err)
 	}
@@ -88,13 +99,18 @@ func (cmd *healthCheckCmd) Execute([]string) error {
 	for _, pool := range pools {
 		systemHealth.Pools[pool.UUID] = pool
 
-		poolHdl, _, err := poolConnect(pool.UUID.String(), cmd.SysName, daos.PoolConnectFlagReadOnly, false)
+		pcResp, err := api.PoolConnect(ctx, api.PoolConnectReq{
+			SysName: cmd.SysName,
+			ID:      pool.UUID.String(),
+			Flags:   daos.PoolConnectFlagReadOnly,
+			Query:   false,
+		})
 		if err != nil {
 			cmd.Errorf("failed to connect to pool %s: %v", pool.Label, err)
 			continue
 		}
 		defer func() {
-			if err := poolDisconnectAPI(poolHdl); err != nil {
+			if err := pcResp.Connection.Disconnect(ctx); err != nil {
 				cmd.Errorf("failed to disconnect from pool %s: %v", pool.Label, err)
 			}
 		}()
@@ -104,7 +120,7 @@ func (cmd *healthCheckCmd) Execute([]string) error {
 		if pool.DisabledTargets > 0 {
 			queryMask.SetOptions(daos.PoolQueryOptionDisabledEngines)
 		}
-		tpi, err := queryPool(poolHdl, queryMask)
+		tpi, err := pcResp.Connection.Query(ctx, queryMask)
 		if err != nil {
 			cmd.Errorf("failed to query pool %s: %v", pool.Label, err)
 			continue
@@ -113,43 +129,14 @@ func (cmd *healthCheckCmd) Execute([]string) error {
 		pool.DisabledRanks = tpi.DisabledRanks
 		pool.DeadRanks = tpi.DeadRanks
 
-		poolConts, err := listContainers(poolHdl)
+		poolConts, err := pcResp.Connection.ListContainers(ctx, true)
 		if err != nil {
 			cmd.Errorf("failed to list containers on pool %s: %v", pool.Label, err)
 			continue
 		}
 
-		for _, cont := range poolConts {
-			openFlags := uint(daos.ContainerOpenFlagReadOnly | daos.ContainerOpenFlagForce | daos.ContainerOpenFlagReadOnlyMetadata)
-			contHdl, contInfo, err := containerOpen(poolHdl, cont.UUID.String(), openFlags, true)
-			if err != nil {
-				cmd.Errorf("failed to connect to container %s: %v", cont.Label, err)
-				ci := &daos.ContainerInfo{
-					PoolUUID:       pool.UUID,
-					ContainerUUID:  cont.UUID,
-					ContainerLabel: cont.Label,
-					Health:         fmt.Sprintf("Unknown (%s)", err),
-				}
-				systemHealth.Containers[pool.UUID] = append(systemHealth.Containers[pool.UUID], ci)
-				continue
-			}
-			ci := convertContainerInfo(pool.UUID, cont.UUID, contInfo)
-			ci.ContainerLabel = cont.Label
-
-			props, freeProps, err := getContainerProperties(contHdl, "status")
-			if err != nil || len(props) == 0 {
-				cmd.Errorf("failed to get container properties for %s: %v", cont.Label, err)
-				ci.Health = fmt.Sprintf("Unknown (%s)", err)
-			} else {
-				ci.Health = props[0].String()
-			}
-			freeProps()
-
-			if err := containerCloseAPI(contHdl); err != nil {
-				cmd.Errorf("failed to close container %s: %v", cont.Label, err)
-			}
-
-			systemHealth.Containers[pool.UUID] = append(systemHealth.Containers[pool.UUID], ci)
+		for _, contInfo := range poolConts {
+			systemHealth.Containers[pool.UUID] = append(systemHealth.Containers[pool.UUID], contInfo)
 		}
 	}
 

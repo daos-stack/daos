@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -148,6 +149,57 @@ bs2bxb(struct bio_blobstore *bbs, struct bio_xs_context *xs_ctxt)
 	return NULL;
 }
 
+static inline int
+pause_health_monitor(struct bio_dev_health *bdh)
+{
+	bdh->bdh_stopping = 1;
+	if (bdh->bdh_inflights > 0)
+		return 1;
+
+	/* Put io channel for health monitor */
+	if (bdh->bdh_io_channel != NULL) {
+		spdk_put_io_channel(bdh->bdh_io_channel);
+		bdh->bdh_io_channel = NULL;
+	}
+
+	/* Close open desc for health monitor */
+	if (bdh->bdh_desc != NULL) {
+		spdk_bdev_close(bdh->bdh_desc);
+		bdh->bdh_desc = NULL;
+	}
+
+	return 0;
+}
+
+static inline int
+resume_health_monitor(struct bio_bdev *d_bdev, struct bio_dev_health *bdh)
+{
+	int rc;
+
+	/* Acquire open desc for health monitor */
+	if (bdh->bdh_desc == NULL) {
+		rc = spdk_bdev_open_ext(d_bdev->bb_name, true, bio_bdev_event_cb, NULL,
+					&bdh->bdh_desc);
+		if (rc != 0) {
+			D_ERROR("Failed to open bdev %s, rc:%d\n", d_bdev->bb_name, rc);
+			return 1;
+		}
+		D_ASSERT(bdh->bdh_desc != NULL);
+	}
+
+	/* Get io channel for health monitor */
+	if (bdh->bdh_io_channel == NULL) {
+		bdh->bdh_io_channel = spdk_bdev_get_io_channel(bdh->bdh_desc);
+		if (bdh->bdh_io_channel == NULL) {
+			D_ERROR("Failed to get health channel for bdev %s\n", d_bdev->bb_name);
+			return 1;
+		}
+	}
+
+	bdh->bdh_stopping = 0;
+	return 0;
+}
+
 /*
  * Return value:	0:  Blobstore is torn down;
  *			>0: Blobstore teardown is in progress;
@@ -192,17 +244,9 @@ on_teardown(struct bio_blobstore *bbs)
 	if (rc)
 		return rc;
 
-	/* Put io channel for health monitor */
-	if (bdh->bdh_io_channel != NULL) {
-		spdk_put_io_channel(bdh->bdh_io_channel);
-		bdh->bdh_io_channel = NULL;
-	}
-
-	/* Close open desc for health monitor */
-	if (bdh->bdh_desc != NULL) {
-		spdk_bdev_close(bdh->bdh_desc);
-		bdh->bdh_desc = NULL;
-	}
+	rc = pause_health_monitor(bdh);
+	if (rc)
+		return rc;
 
 	/*
 	 * Unload the blobstore. The blobstore could be still in loading from
@@ -226,7 +270,7 @@ on_teardown(struct bio_blobstore *bbs)
 static void
 setup_xs_bs(void *arg)
 {
-	struct bio_io_context	*ioc;
+	struct bio_io_context   *ioc, *tmp;
 	struct bio_xs_blobstore	*bxb = arg;
 	struct bio_blobstore	*bbs;
 	int			 closed_blobs = 0;
@@ -256,7 +300,16 @@ setup_xs_bs(void *arg)
 
 	/* If reint will be tirggered later, blobs will be opened in reint reaction */
 	if (bbs->bb_dev->bb_trigger_reint) {
-		D_ASSERT(d_list_empty(&bxb->bxb_io_ctxts));
+		/*
+		 * There could be leftover io contexts if TEARDOWN is performed on an
+		 * unplugged device before it's marked as FAULTY.
+		 */
+		d_list_for_each_entry_safe(ioc, tmp, &bxb->bxb_io_ctxts, bic_link) {
+			/* The blob must have been closed on teardown */
+			D_ASSERT(ioc->bic_blob == NULL);
+			d_list_del_init(&ioc->bic_link);
+			D_FREE(ioc);
+		}
 		goto done;
 	}
 
@@ -346,27 +399,9 @@ on_setup(struct bio_blobstore *bbs)
 	return 1;
 
 bs_loaded:
-	/* Acquire open desc for health monitor */
-	if (bdh->bdh_desc == NULL) {
-		rc = spdk_bdev_open_ext(d_bdev->bb_name, true,
-					bio_bdev_event_cb, NULL,
-					&bdh->bdh_desc);
-		if (rc != 0) {
-			D_ERROR("Failed to open bdev %s, for %p, %d\n",
-				d_bdev->bb_name, bbs, rc);
-			return 1;
-		}
-		D_ASSERT(bdh->bdh_desc != NULL);
-	}
-
-	/* Get io channel for health monitor */
-	if (bdh->bdh_io_channel == NULL) {
-		bdh->bdh_io_channel = spdk_bdev_get_io_channel(bdh->bdh_desc);
-		if (bdh->bdh_io_channel == NULL) {
-			D_ERROR("Failed to get health channel for %p\n", bbs);
-			return 1;
-		}
-	}
+	rc = resume_health_monitor(d_bdev, bdh);
+	if (rc)
+		return rc;
 
 	/*
 	 * It's safe to access xs context array without locking when the

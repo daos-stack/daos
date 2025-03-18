@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -113,8 +114,10 @@ struct dtx_handle {
 	    dth_ignore_uncommitted                : 1,
 	    /* Local transaction */
 	    dth_local                             : 1,
+	    /* Locally generate the epoch. */
+	    dth_epoch_owner			  : 1,
 	    /* Flag to commit the local transaction */
-	    dth_local_complete : 1, padding1 : 13;
+	    dth_local_complete : 1, padding1 : 12;
 
 	/* The count the DTXs in the dth_dti_cos array. */
 	uint32_t			 dth_dti_cos_count;
@@ -189,6 +192,8 @@ struct dtx_sub_status {
 struct dtx_coll_entry {
 	struct dtx_id			 dce_xid;
 	uint32_t			 dce_ver;
+	uint32_t                         dce_min_rank;
+	uint32_t                         dce_max_rank;
 	uint32_t			 dce_refs;
 	d_rank_list_t			*dce_ranks;
 	uint8_t				*dce_hints;
@@ -231,13 +236,13 @@ struct dtx_leader_handle {
 	/* Elements for collective DTX. */
 	struct dtx_coll_entry		*dlh_coll_entry;
 	/* How many normal sub request. */
-	uint32_t			dlh_normal_sub_cnt;
+	int32_t                          dlh_normal_sub_cnt;
 	/* How many delay forward sub request. */
-	uint32_t			dlh_delay_sub_cnt;
+	int32_t                          dlh_delay_sub_cnt;
 	/* The index of the first target that forward sub-request to. */
-	uint32_t			dlh_forward_idx;
+	int32_t                          dlh_forward_idx;
 	/* The count of the targets that forward sub-request to. */
-	uint32_t			dlh_forward_cnt;
+	int32_t                          dlh_forward_cnt;
 	/* Sub transaction handle to manage the dtx leader */
 	struct dtx_sub_status		*dlh_subs;
 };
@@ -287,6 +292,8 @@ enum dtx_flags {
 	DTX_RELAY = (1 << 10),
 	/** Local transaction */
 	DTX_LOCAL = (1 << 11),
+	/** Locally generate the epoch. */
+	DTX_EPOCH_OWNER = (1 << 12),
 };
 
 void

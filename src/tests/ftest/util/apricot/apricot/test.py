@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -29,8 +30,7 @@ from general_utils import (DaosTestError, dict_to_str, dump_engines_stacks,
                            get_avocado_config_value, nodeset_append_suffix,
                            set_avocado_config_value)
 from host_utils import HostException, HostInfo, HostRole, get_host_parameters, get_local_host
-from logger_utils import TestLogger
-from pydaos.raw import DaosApiError, DaosContext, DaosLog
+from pydaos.raw import DaosApiError, DaosContext
 from run_utils import run_local, run_remote, stop_processes
 from server_utils import DaosServerManager
 from slurm_utils import SlurmFailed, get_partition_hosts, get_reservation_hosts
@@ -168,7 +168,7 @@ class Test(avocadoTest):
                     "ERROR: The env variable DAOS_TEST_RANDOM_SEED "
                     "does not define a valid integer: got='{}'".format(env_seed))
         self.log.info("Test.random seed = %d", self.rand_seed)
-        self.random = random.Random(self.rand_seed)
+        self.random = random.Random(self.rand_seed)     # nosec
 
     def add_test_data(self, filename, data):
         """Add a file to the test variant specific data directory.
@@ -509,14 +509,8 @@ class TestWithoutServers(Test):
         self.cart_bin = None
         self.tmp = None
         self.context = None
-        self.d_log = None
         self.fault_injection = None
         self.label_generator = LabelGenerator()
-
-        # Create a default TestLogger w/o a DaosLog object to prevent errors in
-        # tearDown() if setUp() is not completed.  The DaosLog is added upon the
-        # completion of setUp().
-        self.test_log = TestLogger(self.log, None)
 
     def setUp(self):
         """Set up run before each test."""
@@ -534,8 +528,6 @@ class TestWithoutServers(Test):
         self.fault_injection.start(self.params.get("fault_list", '/run/faults/*'), self.test_dir)
 
         self.context = DaosContext(self.prefix + '/lib64/')
-        self.d_log = DaosLog(self.context)
-        self.test_log.daos_log = self.d_log
 
     def tearDown(self):
         """Tear down after each test case."""
@@ -938,7 +930,7 @@ class TestWithServers(TestWithoutServers):
             errors.append(
                 "ERROR: At least one multi-variant server was not found in its expected state "
                 "prior to stopping all servers")
-        self.test_log.info("Stopping %s group(s) of servers", len(self.server_managers))
+        self.log.info("Stopping %s group(s) of servers", len(self.server_managers))
         errors.extend(self._stop_managers(self.server_managers, "servers"))
 
         self.log.info("-" * 100)
@@ -1220,7 +1212,7 @@ class TestWithServers(TestWithoutServers):
             # Stop any running agents
             self.log.info("-" * 100)
             self.log.info("--- STOPPING AGENTS ---")
-            self.test_log.info(
+            self.log.info(
                 "Stopping %s group(s) of agents", len(self.agent_managers))
             self._stop_managers(self.agent_managers, "agents")
 
@@ -1257,7 +1249,7 @@ class TestWithServers(TestWithoutServers):
             # Stop any running servers
             self.log.info("-" * 100)
             self.log.info("--- STOPPING SERVERS ---")
-            self.test_log.info(
+            self.log.info(
                 "Stopping %s group(s) of servers", len(self.server_managers))
             self._stop_managers(self.server_managers, "servers")
 
@@ -1440,7 +1432,7 @@ class TestWithServers(TestWithoutServers):
         if containers:
             if not isinstance(containers, (list, tuple)):
                 containers = [containers]
-            self.test_log.info("Destroying containers")
+            self.log.info("Destroying containers")
             for container in containers:
                 # Ensure exceptions are raised for any failed command
                 if hasattr(container, "daos") and container.daos is not None:
@@ -1451,7 +1443,7 @@ class TestWithServers(TestWithoutServers):
                     try:
                         container.close()
                     except (DaosApiError, TestFail) as error:
-                        self.test_log.info("  {}".format(error))
+                        self.log.info(error)
                         error_list.append(
                             "Error closing the container: {}".format(error))
 
@@ -1460,7 +1452,7 @@ class TestWithServers(TestWithoutServers):
                     try:
                         container.destroy()
                     except (DaosApiError, TestFail) as error:
-                        self.test_log.info("  {}".format(error))
+                        self.log.info(error)
                         error_list.append(
                             "Error destroying container: {}".format(error))
         return error_list
@@ -1480,7 +1472,7 @@ class TestWithServers(TestWithoutServers):
         if pools:
             if not isinstance(pools, (list, tuple)):
                 pools = [pools]
-            self.test_log.info("Destroying pools")
+            self.log.info("Destroying pools")
             for pool in pools:
                 # Ensure exceptions are raised for any failed command
                 if pool.dmg is not None:
@@ -1491,7 +1483,7 @@ class TestWithServers(TestWithoutServers):
                     try:
                         pool.disconnect()
                     except (DaosApiError, TestFail) as error:
-                        self.test_log.info("  {}".format(error))
+                        self.log.info(error)
                         error_list.append(
                             "Error disconnecting pool: {}".format(error))
 
@@ -1500,7 +1492,7 @@ class TestWithServers(TestWithoutServers):
                     try:
                         pool.destroy(1)
                     except (DaosApiError, TestFail) as error:
-                        self.test_log.info("  {}".format(error))
+                        self.log.info(error)
                         error_list.append(
                             "Error destroying pool: {}".format(error))
         return error_list
@@ -1514,7 +1506,7 @@ class TestWithServers(TestWithoutServers):
 
         """
         error_list = []
-        self.test_log.info("Searching for any existing pools")
+        self.log.info("Searching for any existing pools")
         for manager in self.server_managers:
             # Ensure exceptions are raised for any failed command
             manager.dmg.exit_status_exception = True
@@ -1564,7 +1556,7 @@ class TestWithServers(TestWithoutServers):
                 errors.append(
                     "ERROR: At least one multi-variant agent was not found in "
                     "its expected state; stopping all agents")
-            self.test_log.info(
+            self.log.info(
                 "Stopping %s group(s) of agents", len(self.agent_managers))
             errors.extend(self._stop_managers(self.agent_managers, "agents"))
         return errors
@@ -1608,7 +1600,7 @@ class TestWithServers(TestWithoutServers):
                     "its expected state; stopping all servers")
                 # dump engines stacks if not already done
                 self.__dump_engines_stacks("Some engine not in expected state")
-            self.test_log.info(
+            self.log.info(
                 "Stopping %s group(s) of servers", len(self.server_managers))
             errors.extend(self._stop_managers(self.server_managers, "servers"))
 
@@ -1631,7 +1623,7 @@ class TestWithServers(TestWithoutServers):
                 try:
                     manager.stop()
                 except CommandFailure as error:
-                    self.test_log.info("  {}".format(error))
+                    self.log.info(error)
                     error_list.append(
                         "Error stopping {}: {}".format(name, error))
         return error_list
