@@ -20,7 +20,6 @@ mpi:
   mpi_type: mpich
   simul_path: /usr/lib64/mpich/bin
 client_processes:
-  np: 24
   ppn: 12
 dfuse:
   disable_caching: true
