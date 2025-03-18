@@ -28,6 +28,9 @@ def scons():
 
     libraries = ['daos', 'daos_common', 'gurt', 'uuid', 'cmocka', 'isal', 'm']
 
+    if GetOption("test_coverage"):
+        libraries += ['gcov']
+
     ring_pl_test = denv.d_program('ring_pl_map', ring_test_tgt, LIBS=libraries)
 
     jump_pl_test = denv.d_program('jump_pl_map',

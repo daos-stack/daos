@@ -25,6 +25,9 @@ def scons():
     # Other libs
     libs += ['numa', 'dl', 'isal', 'cmocka', 'pthread']
 
+    if GetOption("test_coverage"):
+        libs += ['gcov']
+
     if GetOption('help'):
         return
 

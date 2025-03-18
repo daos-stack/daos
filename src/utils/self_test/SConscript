@@ -14,6 +14,8 @@ def scons():
     tenv.AppendUnique(FLAGS='-pthread')
     tenv.require('mercury', 'protobufc')
     libs = ['cart', 'gurt', 'pthread', 'm', 'daos', 'daos_common']
+    if GetOption("test_coverage"):
+        libs += ['gcov']
 
     self_test_lib_src = ['self_test_lib.c', cart_utils_objs]
     self_test_lib = tenv.d_library('daos_self_test', self_test_lib_src, LIBS=libs)

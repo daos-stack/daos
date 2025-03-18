@@ -6,6 +6,8 @@ def scons():
     Import('env')
 
     libs = ['daos', 'daos_common', 'cmocka', 'gurt']
+    if GetOption("test_coverage"):
+        libs += ['gcov']
     sources = ['rpc_tests.c']
 
     denv = env.Clone()

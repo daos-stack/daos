@@ -9,6 +9,9 @@ def scons():
     libraries = ['smd', 'pmemobj', 'cmocka', 'daos_common_pmem', 'uuid', 'abt', 'gurt']
     tenv = denv.Clone()
 
+    if GetOption("test_coverage"):
+        libraries += ['gcov']
+
     tenv.require('argobots')
 
     tenv.AppendUnique(LIBPATH=[Dir('..')])

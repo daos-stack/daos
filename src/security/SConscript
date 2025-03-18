@@ -24,6 +24,8 @@ def scons():
     senv = denv.Clone()
     senv.require("argobots")
     senv.AppendUnique(LIBS=['gurt'])
+    if GetOption("test_coverage"):
+        senv.AppendUnique(LIBS=['gcov'])
     srv_acl_obj = senv.SharedObject('srv_acl.c')
     ds_sec = senv.d_library('security', ['srv.c', srv_acl_obj, acl_obj], install_off="../..")
     senv.Install('$PREFIX/lib64/daos_srv', ds_sec)

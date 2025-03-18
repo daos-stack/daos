@@ -11,7 +11,10 @@ def scons():
 
     denv = env.Clone()
 
-    daos_metrics = denv.d_program('daos_metrics', ['daos_metrics.c'], LIBS=['gurt'])
+    libs = ['gurt']
+    if GetOption("test_coverage"):
+        libs += ['gcov']
+    daos_metrics = denv.d_program('daos_metrics', ['daos_metrics.c'], LIBS=libs)
 
     denv.Install('$PREFIX/bin', daos_metrics)
 

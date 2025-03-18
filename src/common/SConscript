@@ -20,6 +20,9 @@ def build_daos_common(denv, client):
     ult_files = []
 
     common_libs = ['isal', 'isal_crypto', 'cart', 'gurt', 'lz4', 'protobuf-c', 'uuid', 'pthread']
+    if GetOption("test_coverage"):
+        common_libs += ['gcov']
+
     if client:
         libname = 'daos_common'
     else:
@@ -59,6 +62,8 @@ def scons():
     denv.AppendUnique(CPPPATH=[Dir("../include/daos").srcnode()])
     denv.require('isal', 'isal_crypto', 'protobufc')
     denv.AppendUnique(LIBS=['cart', 'gurt', 'lz4'])
+    if GetOption("test_coverage"):
+        denv.AppendUnique(LIBS=['gcov'])
     build_daos_common(denv, True)
 
     control_tgts = [File('control.c')]
@@ -78,6 +83,8 @@ def scons():
     tlibenv = env.Clone(LIBS=[])
     tlibenv.require('argobots', 'isal', 'isal_crypto', 'protobufc')
     tlibenv.AppendUnique(LIBS=['cart', 'gurt', 'lz4', 'json-c'])
+    if GetOption("test_coverage"):
+        tlibenv.AppendUnique(LIBS=['gcov'])
 
     tests_lib = tlibenv.d_library('daos_tests', ['tests_lib.c', 'tests_dmg_helpers.c'])
 
