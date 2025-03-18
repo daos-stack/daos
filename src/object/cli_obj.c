@@ -1548,9 +1548,10 @@ create_ping_task(tse_sched_t *sched, daos_handle_t pool_hdl, struct dc_object *o
 
 	rc = tse_task_create(ping_task, sched, NULL, &t);
 	if (rc != 0) {
-		D_ERROR("failed to create ping_task for pool handle " DF_X64
-			"\n and object ID " DF_OID "\n",
-			pool_hdl.cookie, DP_OID(obj->cob_md.omd_id));
+		DL_ERROR(rc,
+			 "failed to create ping_task for pool handle " DF_X64
+			 "and object ID " DF_OID "",
+			 pool_hdl.cookie, DP_OID(obj->cob_md.omd_id));
 		dc_pool_put(pool);
 		return rc;
 	}
