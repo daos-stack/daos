@@ -313,7 +313,8 @@ jobs:
 
   Build-branch-ARM:
     name: Build DAOS (ARM64)
-    if: github.repository == 'daos-stack/daos'
+    if: false  # Disable until we have ARM64 runners
+    # if: github.repository == 'daos-stack/daos'
     runs-on: [self-hosted, ARM64]
     strategy:
       fail-fast: false
