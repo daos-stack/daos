@@ -20,6 +20,8 @@ def scons():
     denv = env.Clone()
 
     denv.AppendUnique(LIBS=['pthread', 'gurt'])
+    if GetOption("test_coverage"):
+        denv.AppendUnique(['gcov'])
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD', '-DDAV_V2_BUILD'])
     denv.AppendUnique(CFLAGS=['-fvisibility=hidden'])
 
