@@ -330,6 +330,15 @@ data_init(int server, crt_init_options_t *opt)
 	crt_gdata.cg_rpc_quota = server ? 0 : CRT_QUOTA_RPCS_DEFAULT;
 	crt_env_get(D_QUOTA_RPCS, &crt_gdata.cg_rpc_quota);
 
+	crt_gdata.cg_bulk_quota = server ? 0 : CRT_QUOTA_BULKS_DEFAULT;
+	crt_env_get(D_QUOTA_BULKS, &crt_gdata.cg_bulk_quota);
+
+	/* servers need to have real bulks at all times to receive data */
+	if (server && crt_gdata.cg_bulk_quota) {
+		D_WARN("BULK quotas not supported on the server. auto-disabling them\n");
+		crt_gdata.cg_bulk_quota = 0;
+	}
+
 	/* Must be set on the server when using UCX, will not affect OFI */
 	if (server)
 		d_setenv("UCX_IB_FORK_INIT", "n", 1);

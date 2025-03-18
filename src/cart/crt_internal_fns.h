@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -34,6 +35,12 @@ bool crt_context_empty(crt_provider_t provider, int locked);
 void crt_context_req_untrack(struct crt_rpc_priv *rpc_priv);
 crt_context_t crt_context_lookup(int ctx_idx);
 crt_context_t crt_context_lookup_locked(int ctx_idx);
+void
+record_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota);
+int
+get_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota);
+void
+     put_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota);
 void crt_rpc_complete_and_unlock(struct crt_rpc_priv *rpc_priv, int rc);
 int crt_req_timeout_track(struct crt_rpc_priv *rpc_priv);
 void crt_req_timeout_untrack(struct crt_rpc_priv *rpc_priv);

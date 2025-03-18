@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -389,6 +390,15 @@ crt_swim_lookup_id(swim_id_t id)
 	return grp_ver;
 }
 
+static void
+crt_swim_update_last_unpack_hlc(struct crt_swim_membs *csm, uint64_t hlc)
+{
+	crt_swim_csm_lock(csm);
+	if (csm->csm_last_unpack_hlc < hlc)
+		csm->csm_last_unpack_hlc = hlc;
+	crt_swim_csm_unlock(csm);
+}
+
 static void crt_swim_srv_cb(crt_rpc_t *rpc)
 {
 	struct crt_rpc_priv	*rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
@@ -408,6 +418,8 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc)
 	int			 rc;
 
 	D_ASSERT(crt_is_service());
+
+	crt_swim_update_last_unpack_hlc(csm, hlc);
 
 	from_id = rpc_priv->crp_req_hdr.cch_src_rank;
 
@@ -505,12 +517,7 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc)
 	} else {
 		rc = swim_updates_parse(ctx, from_id, from_id, rpc_in->upds.ca_arrays,
 					rpc_in->upds.ca_count);
-		if (rc == -DER_SHUTDOWN) {
-			if (grp_priv->gp_size > 1)
-				D_ERROR("SWIM shutdown\n");
-			swim_self_set(ctx, SWIM_ID_INVALID);
-			D_GOTO(out_reply, rc);
-		} else if (rc) {
+		if (rc) {
 			RPC_ERROR(rpc_priv,
 				  "updates parse. %lu: %lu <= %lu failed: "DF_RC"\n",
 				  self_id, to_id, from_id, DP_RC(rc));
@@ -618,6 +625,14 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 		if (to_id == ctx->sc_target)
 			ctx->sc_deadline = 0;
 		swim_ctx_unlock(ctx);
+	} else {
+		struct crt_swim_membs *csm = &grp_priv->gp_membs_swim;
+
+		/*
+		 * Although some errors also suggest incoming messages, we keep
+		 * it simple for now.
+		 */
+		crt_swim_update_last_unpack_hlc(csm, hlc);
 	}
 
 	reply_rc = cb_info->cci_rc ? cb_info->cci_rc : rpc_out->rc;
@@ -652,12 +667,7 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 	rc = swim_updates_parse(ctx, to_id,
 				rpc_type == SWIM_RPC_IREQ && !reply_rc ? from_id : to_id,
 				rpc_out->upds.ca_arrays, rpc_out->upds.ca_count);
-	if (rc == -DER_SHUTDOWN) {
-		if (grp_priv->gp_size > 1)
-			D_ERROR("SWIM shutdown\n");
-		swim_self_set(ctx, SWIM_ID_INVALID);
-		D_GOTO(out, rc);
-	} else if (rc) {
+	if (rc) {
 		RPC_ERROR(rpc_priv,
 			  "updates parse. %lu: %lu <= %lu failed: "DF_RC"\n",
 			  self_id, from_id, to_id, DP_RC(rc));
@@ -1000,24 +1010,6 @@ static void crt_swim_new_incarnation(struct swim_context *ctx,
 	state->sms_incarnation = incarnation;
 }
 
-static void crt_swim_update_last_unpack_hlc(struct crt_swim_membs *csm)
-{
-	struct crt_context	*ctx = NULL;
-	d_list_t		*ctx_list;
-
-	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
-
-	ctx_list = crt_provider_get_ctx_list(true, crt_gdata.cg_primary_prov);
-	d_list_for_each_entry(ctx, ctx_list, cc_link) {
-		uint64_t hlc = ctx->cc_last_unpack_hlc;
-
-		if (csm->csm_last_unpack_hlc < hlc)
-			csm->csm_last_unpack_hlc = hlc;
-	}
-
-	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
-}
-
 static void
 crt_metrics_sample_delay(crt_context_t crt_ctx, uint64_t delay, bool glitch)
 {
@@ -1054,17 +1046,11 @@ static int64_t crt_swim_progress_cb(crt_context_t crt_ctx, int64_t timeout_us, v
 	}
 
 	rc = swim_progress(ctx, timeout_us);
-	if (rc == -DER_SHUTDOWN) {
-		if (grp_priv->gp_size > 1)
-			D_ERROR("SWIM shutdown\n");
-		swim_self_set(ctx, SWIM_ID_INVALID);
-	} else if (rc == -DER_TIMEDOUT || rc == -DER_CANCELED) {
+	if (rc == -DER_TIMEDOUT || rc == -DER_CANCELED) {
 		uint64_t now = swim_now_ms();
 
-		crt_swim_update_last_unpack_hlc(csm);
-
 		/*
-		 * Check for network idle in all contexts.
+		 * Check for network idle in swim context.
 		 * If the time passed from last received RPC till now is more
 		 * than 2/3 of suspicion timeout suspends eviction.
 		 * The max_delay should be less suspicion timeout to guarantee
@@ -1077,10 +1063,10 @@ static int64_t crt_swim_progress_cb(crt_context_t crt_ctx, int64_t timeout_us, v
 			uint64_t max_delay = swim_suspect_timeout_get() * 2 / 3;
 
 			if (delay > max_delay) {
-				D_ERROR("Network outage detected (idle during "
+				D_ERROR("SWIM network outage detected (idle during "
 					"%lu.%lu sec > expected %lu.%lu sec).\n",
-					delay / 1000, delay % 1000,
-					max_delay / 1000, max_delay % 1000);
+					delay / 1000, delay % 1000, max_delay / 1000,
+					max_delay % 1000);
 				swim_net_glitch_update(csm->csm_ctx, self_id, delay);
 				csm->csm_last_unpack_hlc = hlc2;
 			}
