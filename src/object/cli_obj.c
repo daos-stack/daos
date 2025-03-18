@@ -1433,7 +1433,6 @@ ping_tgt_task(tse_task_t *task)
 	daos_handle_t             pool_hdl;
 	int                       tgt_id;
 	int                       rc;
-
 	struct ping_tgt_task_arg *arg = tse_task_buf_embedded(task, sizeof(*arg));
 	pool_hdl                      = arg->pool_hdl;
 	tgt_id                        = arg->tgt_id;
@@ -1441,7 +1440,6 @@ ping_tgt_task(tse_task_t *task)
 	rc = dc_pool_ping_target(tgt_id, pool_hdl, task);
 	if (rc != 0) {
 		D_ERROR("failed to ping target " DF_RC "\n", DP_RC(rc));
-		tse_task_complete(task, rc);
 		return rc;
 	}
 
@@ -1496,7 +1494,10 @@ ping_task(tse_task_t *task)
 
 		rc = tse_task_create(ping_tgt_task, sched, NULL, &ping_task);
 		if (rc != 0) {
-			D_ERROR("failed to create task");
+			tse_task_list_traverse(&ping_task_list, ping_task_abort, &rc);
+
+			DL_ERROR(rc, "failed to create task");
+			tse_task_complete(ping_task, rc);
 			return rc;
 		}
 		a           = tse_task_buf_embedded(ping_task, sizeof(*a));
@@ -1507,7 +1508,7 @@ ping_task(tse_task_t *task)
 		if (rc != 0) {
 			tse_task_list_traverse(&ping_task_list, ping_task_abort, &rc);
 
-			D_ERROR("failed to depend ping_task on task");
+			DL_ERROR(rc, "failed to depend ping_task on task");
 			tse_task_complete(ping_task, rc);
 			return rc;
 		}
@@ -1541,7 +1542,7 @@ create_ping_task(tse_sched_t *sched, daos_handle_t pool_hdl, struct dc_object *o
 
 	pool = dc_hdl2pool(pool_hdl);
 	if (pool == NULL) {
-		D_ERROR("failed to find pool handle " DF_X64 "\n", pool_hdl.cookie);
+		DL_ERROR(-DER_NO_HDL, "failed to find pool handle " DF_X64 "", pool_hdl.cookie);
 		return -DER_NO_HDL;
 	}
 
