@@ -114,7 +114,7 @@ func (rs *RankSet) Replace(other *RankSet) {
 
 // Add adds rank to an existing RankSet.
 func (rs *RankSet) Add(rank Rank) {
-	if rs.ns == nil {
+	if rs == nil || rs.ns == nil {
 		rs.ns = hostlist.NewNumericSet()
 	}
 	rs.ns.Add(uint(rank))
@@ -122,7 +122,7 @@ func (rs *RankSet) Add(rank Rank) {
 
 // Delete removes the specified rank from the RankSet.
 func (rs *RankSet) Delete(rank Rank) {
-	if rs.ns == nil {
+	if rs == nil || rs.ns == nil {
 		return
 	}
 	rs.ns.Delete(uint(rank))
@@ -132,7 +132,7 @@ func (rs *RankSet) Delete(rank Rank) {
 func (rs *RankSet) Ranks() (out []Rank) {
 	out = make([]Rank, 0, rs.Count())
 
-	if rs.ns == nil {
+	if rs == nil || rs.ns == nil {
 		return
 	}
 
@@ -145,7 +145,7 @@ func (rs *RankSet) Ranks() (out []Rank) {
 
 // Ranks returns true if Rank found in RankSet.
 func (rs *RankSet) Contains(r Rank) bool {
-	if rs == nil {
+	if rs == nil || rs.ns == nil {
 		return false
 	}
 

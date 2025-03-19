@@ -606,6 +606,8 @@ func (m *Membership) CheckHosts(hosts string, ctlPort int) (*RankSet, *hostlist.
 	if err != nil {
 		return nil, nil, err
 	}
+	m.log.Debugf("hostset to check for ranks: %s (host-ranks: %v)", hs.String(), hostRanks)
+
 	missHS, err := hostlist.CreateSet("")
 	if err != nil {
 		return nil, nil, err
