@@ -1935,7 +1935,7 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 {
 	tse_sched_t	 *sched = tse_task2sched(task);
 	tse_task_t       *required_task = NULL;
-	bool              is_pool_task = false;
+	bool              is_pool_task  = false;
 	int		  result = task->dt_result;
 	int		  rc;
 
