@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2021-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -57,7 +58,7 @@ plt_obj_place_with_pd(daos_obj_id_t oid, uint32_t pda, struct pl_obj_layout **la
 	memset(&md, 0, sizeof(md));
 	md.omd_id  = oid;
 	md.omd_pda = pda;
-	md.omd_pdom_lvl = PO_COMP_TP_GRP;
+	md.omd_pdom_lvl = PO_COMP_TP_PERF;
 	md.omd_fdom_lvl = PO_COMP_TP_RANK;
 	D_ASSERT(pl_map != NULL);
 	md.omd_ver = pool_map_get_version(pl_map->pl_poolmap);
