@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -323,8 +324,10 @@ dfs_readdir_with_filter(dfs_t *dfs, dfs_obj_t *obj, dfs_pipeline_t *dpipe, daos_
 		rc = daos_pipeline_run(dfs->coh, obj->oh, &dpipe->pipeline, dfs->th, 0, NULL,
 				       &nr_iods, &iod, anchor, &nr_kds, kds, &sgl_keys, &sgl_recs,
 				       NULL, NULL, &stats, NULL);
-		if (rc)
+		if (rc) {
+			D_ERROR("daos_pipeline_run failed: " DF_RC "\n", DP_RC(rc));
 			D_GOTO(out, rc = daos_der2errno(rc));
+		}
 
 		D_ASSERT(nr_iods == 1);
 		ptr1 = buf_keys;
