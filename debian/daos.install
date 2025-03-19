@@ -1,4 +1,3 @@
-usr/bin/daos_metrics
 etc/daos/memcheck-cart.supp
 # Certificate generation files
 usr/lib64/daos/certgen/*
