@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2023-2024 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2023-2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -213,6 +213,7 @@ setup_pmem_internal(void **state, struct umem_store *store)
 	struct test_arg		*arg = *state;
 	static int		 tnum;
 	int			 rc = 0;
+	uint64_t                 pool_sz = POOL_SIZE;
 
 	D_ASPRINTF(arg->ta_pool_name, "/mnt/daos/umem-test-%d", tnum++);
 	if (arg->ta_pool_name == NULL) {
@@ -220,7 +221,9 @@ setup_pmem_internal(void **state, struct umem_store *store)
 		return 1;
 	}
 
-	rc = utest_pmem_create(arg->ta_pool_name, POOL_SIZE * 2, sizeof(*arg->ta_root), store,
+	if (store->store_type == DAOS_MD_BMEM_V2)
+		pool_sz = POOL_SIZE * 2;
+	rc = utest_pmem_create(arg->ta_pool_name, pool_sz, sizeof(*arg->ta_root), store,
 			       &arg->ta_utx);
 	if (rc != 0) {
 		perror("Could not create pmem context");
@@ -269,12 +272,6 @@ static int
 global_setup(void **state)
 {
 	struct test_arg	*arg;
-
-	if (umempobj_settings_init(true) != 0) {
-		print_message("Failed to set the md_on_ssd tunable\n");
-		return 1;
-	}
-	ustore.store_type = umempobj_get_backend_type();
 
 	D_ALLOC_PTR(arg);
 	if (arg == NULL) {

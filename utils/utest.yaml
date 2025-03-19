@@ -138,6 +138,8 @@
       aio: "AIO_7"
       size: 13
     - cmd: ["bin/vos_tests", "-A", "50"]
+      env_vars:
+        DAOS_MD_ON_SSD_MODE: "1"
       aio: "AIO_7"
       size: 13
     - cmd: ["bin/bio_ut"]

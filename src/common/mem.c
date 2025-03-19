@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -51,7 +52,7 @@ umempobj_settings_init(bool md_on_ssd)
 {
 	int					rc;
 	enum pobj_arenas_assignment_type	atype;
-	unsigned int				md_mode = DAOS_MD_BMEM;
+	unsigned int                            md_mode            = DAOS_MD_BMEM_V2;
 	unsigned int                            md_disable_bmem_v2 = 0;
 
 	if (!md_on_ssd) {
@@ -84,10 +85,10 @@ umempobj_settings_init(bool md_on_ssd)
 	};
 
 	d_getenv_uint("DAOS_MD_DISABLE_BMEM_V2", &md_disable_bmem_v2);
-	if (md_disable_bmem_v2 && (md_mode != DAOS_MD_BMEM))
-		D_INFO("Ignoring DAOS_MD_DISABLE_BMEM_V2 tunable");
+	if (md_disable_bmem_v2 && (md_mode == DAOS_MD_BMEM_V2))
+		md_mode = DAOS_MD_BMEM;
 	else
-		daos_disable_bmem_v2 = md_disable_bmem_v2;
+		D_INFO("Ignoring DAOS_MD_DISABLE_BMEM_V2 tunable");
 
 	daos_md_backend = md_mode;
 	return 0;
