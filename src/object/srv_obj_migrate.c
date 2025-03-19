@@ -1476,10 +1476,19 @@ __migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 		sgl_cnt++;
 	}
 
-	D_DEBUG(DB_REBUILD,
-		DF_RB ": " DF_UOID " mrone %p dkey " DF_KEY " nr %d eph " DF_X64 "/" DF_X64 "\n",
+	// D_DEBUG(DB_REBUILD,
+	D_ERROR("lxzlxz" DF_RB ": " DF_UOID " mrone %p dkey " DF_KEY " nr %d eph " DF_X64 "/" DF_X64
+		"\n",
 		DP_RB_MRO(mrone), DP_UOID(mrone->mo_oid), mrone, DP_KEY(&mrone->mo_dkey), iod_num,
 		mrone->mo_epoch, update_eph);
+
+	for (i = 0; i < iod_num; i++) {
+		if (iods[i].iod_type == DAOS_IOD_ARRAY)
+			D_ERROR("lxzlxz i %d dkey " DF_KEY ", akey " DF_KEY ", recx " DF_RECX
+				", iod_nr %d\n",
+				i, DP_KEY(&mrone->mo_dkey), DP_KEY(&iods[i].iod_name),
+				DP_RECX(iods[i].iod_recxs[0]), iods[i].iod_nr);
+	}
 
 	if (daos_oclass_is_ec(&mrone->mo_oca))
 		mrone_recx_vos2_daos(mrone, mrone->mo_oid.id_shard, iods, iod_num);
@@ -1531,9 +1540,9 @@ post:
 			 * the rebuild and retry.
 			 */
 			rc = -DER_STALE;
-			D_DEBUG(DB_REBUILD,
-				DF_RB ": " DF_UOID " %p dkey " DF_KEY " " DF_KEY
-				      " nr %d/%d eph " DF_U64 " " DF_RC "\n",
+			// D_DEBUG(DB_REBUILD,
+			D_ERROR("lxzlxz" DF_RB ": " DF_UOID " %p dkey " DF_KEY " " DF_KEY
+				" nr %d/%d eph " DF_U64 " " DF_RC "\n",
 				DP_RB_MRO(mrone), DP_UOID(mrone->mo_oid), mrone,
 				DP_KEY(&mrone->mo_dkey), DP_KEY(&iods[i].iod_name), iod_num, i,
 				mrone->mo_epoch, DP_RC(rc));
@@ -1662,9 +1671,12 @@ migrate_punch(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 	int	rc = 0;
 	int	i;
 
+	D_ERROR("lxzlxz\n");
+
 	/* Punch dkey */
 	if (mrone->mo_dkey_punch_eph != 0 && mrone->mo_dkey_punch_eph <= tls->mpt_max_eph) {
-		D_DEBUG(DB_REBUILD, DF_RB ": " DF_UOID " punch dkey " DF_KEY "/" DF_U64 "\n",
+		// D_DEBUG(DB_REBUILD,
+		D_ERROR("lxzlxz" DF_RB ": " DF_UOID " punch dkey " DF_KEY "/" DF_U64 "\n",
 			DP_RB_MPT(tls), DP_UOID(mrone->mo_oid), DP_KEY(&mrone->mo_dkey),
 			mrone->mo_dkey_punch_eph);
 		rc = vos_obj_punch(cont->sc_hdl, mrone->mo_oid,
@@ -1683,19 +1695,24 @@ migrate_punch(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 
 		eph = mrone->mo_akey_punch_ephs[i];
 		D_ASSERT(eph != DAOS_EPOCH_MAX);
+		D_ERROR("lxzlxz" DF_RB ": " DF_UOID " skip mrone %p punch dkey " DF_KEY
+			" akey " DF_KEY " eph " DF_X64 " current " DF_X64 "i %d, mo_iod_num %d\n",
+			DP_RB_MPT(tls), DP_UOID(mrone->mo_oid), mrone, DP_KEY(&mrone->mo_dkey),
+			DP_KEY(&mrone->mo_iods[i].iod_name), eph, mrone->mo_epoch, i,
+			mrone->mo_iod_num);
 		if (eph == 0 || eph > tls->mpt_max_eph) {
-			D_DEBUG(DB_REBUILD,
-				DF_RB ": " DF_UOID " skip mrone %p punch dkey " DF_KEY
-				      " akey " DF_KEY " eph " DF_X64 " current " DF_X64 "\n",
+			// D_DEBUG(DB_REBUILD,
+			D_ERROR("lxzlxz" DF_RB ": " DF_UOID " skip mrone %p punch dkey " DF_KEY
+				" akey " DF_KEY " eph " DF_X64 " current " DF_X64 "\n",
 				DP_RB_MPT(tls), DP_UOID(mrone->mo_oid), mrone,
 				DP_KEY(&mrone->mo_dkey), DP_KEY(&mrone->mo_iods[i].iod_name), eph,
 				mrone->mo_epoch);
 			continue;
 		}
 
-		D_DEBUG(DB_REBUILD,
-			DF_RB ": " DF_UOID " mrone %p punch dkey " DF_KEY "akey " DF_KEY
-			      " eph " DF_U64 "\n",
+		// D_DEBUG(DB_REBUILD,
+		D_ERROR("lxzlxz" DF_RB ": " DF_UOID " mrone %p punch dkey " DF_KEY "akey " DF_KEY
+			" eph " DF_U64 "\n",
 			DP_RB_MPT(tls), DP_UOID(mrone->mo_oid), mrone, DP_KEY(&mrone->mo_dkey),
 			DP_KEY(&mrone->mo_iods[i].iod_name), eph);
 
@@ -1724,8 +1741,9 @@ migrate_punch(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 				    mrone->mo_version, 0, &mrone->mo_dkey,
 				    mrone->mo_punch_iod_num,
 				    mrone->mo_punch_iods, NULL, NULL);
-		D_DEBUG(DB_REBUILD,
-			DF_RB ": " DF_UOID " mrone %p punch %d eph " DF_U64 "records: " DF_RC "\n",
+		// D_DEBUG(DB_REBUILD,
+		D_ERROR("lxzlxz" DF_RB ": " DF_UOID " mrone %p punch %d eph " DF_U64
+			"records: " DF_RC "\n",
 			DP_RB_MPT(tls), DP_UOID(mrone->mo_oid), mrone, mrone->mo_punch_iod_num,
 			mrone->mo_rec_punch_eph, DP_RC(rc));
 	}
