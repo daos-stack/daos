@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -735,8 +736,8 @@ auto_faulty_detect(struct bio_blobstore *bbs)
 	if (bbs->bb_state == BIO_BS_STATE_FAULTY)
 		return;
 
-	/* To make things simpler, don't detect faulty in SETUP phase */
-	if (bbs->bb_state == BIO_BS_STATE_SETUP)
+	/* To make things simpler, we only detect faulty when BS is in NORMAL or OUT state */
+	if (bbs->bb_state != BIO_BS_STATE_NORMAL && bbs->bb_state != BIO_BS_STATE_OUT)
 		return;
 
 	if (!is_bbs_faulty(bbs))
@@ -744,7 +745,7 @@ auto_faulty_detect(struct bio_blobstore *bbs)
 
 	/*
 	 * The device might have been unplugged before marked as FAULTY, and the bbs is
-	 * already in teardown.
+	 * already in OUT state.
 	 */
 	if (bbs->bb_state != BIO_BS_STATE_NORMAL) {
 		/* Faulty reaction is already successfully performed */

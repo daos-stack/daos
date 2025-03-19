@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -605,7 +606,7 @@ class DmgCommand(DmgCommandBase):
         #     256000000,
         #     0
         #   ],
-        #   "mem_file_bytes": 0
+        #   "mem_file_bytes": 256000000
         # },
         # "error": null,
         # "status": 0
@@ -888,13 +889,16 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_json_result(("pool", "get-prop"), pool=pool, name=name)
 
-    def pool_exclude(self, pool, rank, tgt_idx=None):
+    def pool_exclude(self, pool, ranks, tgt_idx=None, force=False):
         """Exclude a daos_server from the pool.
 
         Args:
             pool (str): Pool uuid.
-            rank (int): Rank of the daos_server to exclude
-            tgt_idx (int): target to be excluded from the pool
+            ranks (str): Comma separated daos_server-rank ranges to exclude e.g.
+                "0,2-5".
+            tgt_idx (list, optional): targets to exclude on ranks e.g. "1,2".
+                Defaults to None.
+            force (bool, optional): force exclusion regardless of data loss. Defaults to False
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -905,14 +909,15 @@ class DmgCommand(DmgCommandBase):
 
         """
         return self._get_result(
-            ("pool", "exclude"), pool=pool, rank=rank, tgt_idx=tgt_idx)
+            ("pool", "exclude"), pool=pool, ranks=ranks, tgt_idx=tgt_idx, force=force)
 
     def pool_extend(self, pool, ranks):
         """Extend the daos_server pool.
 
         Args:
             pool (str): Pool uuid.
-            ranks (int): Ranks of the daos_server to extend
+            ranks (str): Comma separated daos_server-rank ranges to extend e.g.
+                "0,2-5".
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -925,13 +930,15 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("pool", "extend"), pool=pool, ranks=ranks)
 
-    def pool_drain(self, pool, rank, tgt_idx=None):
+    def pool_drain(self, pool, ranks, tgt_idx=None):
         """Drain a daos_server from the pool.
 
         Args:
             pool (str): Pool uuid.
-            rank (int): Rank of the daos_server to drain
-            tgt_idx (int): target to be excluded from the pool
+            ranks (str): Comma separated daos_server-rank ranges to drain e.g.
+                "0,2-5".
+            tgt_idx (list, optional): targets to drain on ranks e.g. "1,2".
+                Defaults to None.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -942,15 +949,17 @@ class DmgCommand(DmgCommandBase):
 
         """
         return self._get_result(
-            ("pool", "drain"), pool=pool, rank=rank, tgt_idx=tgt_idx)
+            ("pool", "drain"), pool=pool, ranks=ranks, tgt_idx=tgt_idx)
 
-    def pool_reintegrate(self, pool, rank, tgt_idx=None):
+    def pool_reintegrate(self, pool, ranks, tgt_idx=None):
         """Reintegrate a daos_server to the pool.
 
         Args:
             pool (str): Pool uuid.
-            rank (int): Rank of the daos_server to reintegrate
-            tgt_idx (int): target to be reintegrated to the pool
+            ranks (str): Comma separated daos_server-rank ranges to reintegrate
+                e.g. "0,2-5".
+            tgt_idx (list, optional): targets to reintegrate on ranks e.g. "1,2".
+                Defaults to None.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -961,7 +970,7 @@ class DmgCommand(DmgCommandBase):
 
         """
         return self._get_result(
-            ("pool", "reintegrate"), pool=pool, rank=rank, tgt_idx=tgt_idx)
+            ("pool", "reintegrate"), pool=pool, ranks=ranks, tgt_idx=tgt_idx)
 
     def cont_set_owner(self, pool, cont, user=None, group=None):
         """Dmg container set-owner to the specified new user/group.
@@ -1026,7 +1035,7 @@ class DmgCommand(DmgCommandBase):
         Either ranks or rank_hosts is necessary. Pass in None to one of them.
 
         Args:
-            ranks (str): comma separated ranks to exclude.
+            ranks (str): Comma separated rank-ranges to exclude e.g. "0,2-5".
             rank_hosts (str): hostlist representing hosts whose managed ranks are to be
                 operated on.
 
@@ -1045,7 +1054,7 @@ class DmgCommand(DmgCommandBase):
 
         Args:
             ranks (str): Specify specific ranks to obtain it's status. Use
-                comma separated list for multiple ranks. e.g., 0,1.
+                comma separated rank-ranges for multiple ranks e.g. "0,2-5".
                 Defaults to None, which means report all available ranks.
             verbose (bool): To obtain detailed query report
 
@@ -1129,7 +1138,7 @@ class DmgCommand(DmgCommandBase):
         Either ranks or rank_hosts is necessary. Pass in None to one of them.
 
         Args:
-            ranks (str): comma separated ranks to exclude.
+            ranks (str): Comma separated rank-ranges to exclude e.g. "0,2-5".
             rank_hosts (str): hostlist representing hosts whose managed ranks are to be
                 operated on.
 
@@ -1147,8 +1156,8 @@ class DmgCommand(DmgCommandBase):
         """Start the system.
 
         Args:
-            ranks (str, optional): comma separated ranks to stop. Defaults to
-                None.
+            ranks (str, optional): Comma separated rank-ranges to start e.g.
+                "0,2-5". Defaults to None.
 
         Raises:
             CommandFailure: if the dmg system start command fails.
@@ -1175,8 +1184,8 @@ class DmgCommand(DmgCommandBase):
         Args:
             force (bool, optional): whether to force the stop. Defaults to
                 False.
-            ranks (str, optional): comma separated ranks to stop. Defaults to
-                None.
+            ranks (str, optional): Comma separated rank-ranges to stop e.g.
+                "0,2-5". Defaults to None.
 
         Raises:
             CommandFailure: if the dmg system stop command fails.

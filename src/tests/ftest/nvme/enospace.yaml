@@ -36,7 +36,7 @@ pool:
   usage_min:
     # SCM usage will not be 100% because some space (<1%) is used for the system and data
     # distribution is not fully uniform.
-    scm: 94
+    scm: 92
     # NVMe will not be 100% because data distribution is not fully uniform.
     nvme: 96
 
@@ -58,3 +58,6 @@ ior:
       transfer_size: 2048  # 2K
     16M:
       nvme_transfer_size: 16777216  # 16M
+
+aggregation:
+  scm_threshold_percent: 99  # percent of scm expected to be reclaimed after aggregation

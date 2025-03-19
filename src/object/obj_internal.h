@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -574,7 +575,7 @@ is_ec_parity_shard(struct dc_object *obj, uint64_t dkey_hash, uint32_t shard)
 static inline bool
 daos_obj_id_is_ec(daos_obj_id_t oid)
 {
-	return daos_obj_id2ord(oid) >= OR_RS_2P1 && daos_obj_id2ord(oid) <= OR_RS_16P2;
+	return daos_obj_id2ord(oid) >= OR_RS_2P1 && daos_obj_id2ord(oid) <= OR_RS_16P3;
 }
 
 #define obj_ec_parity_rotate_enabled(obj)	(obj->cob_layout_version > 0)

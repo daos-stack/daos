@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,6 +13,7 @@
 #include <signal.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/pool.h>
+#include <daos_srv/bio.h>
 #include <daos_api.h>
 #include <daos_security.h>
 
@@ -426,6 +428,7 @@ static int pool_create_fill_resp(Mgmt__PoolCreateResp *resp, uuid_t uuid, d_rank
 			pool_info.pi_space.ps_space.s_total[index] / resp->n_tgt_ranks;
 	}
 	resp->mem_file_bytes = mem_file_bytes / resp->n_tgt_ranks;
+	resp->md_on_ssd_active = bio_nvme_configured(SMD_DEV_TYPE_META);
 
 out:
 	d_rank_list_free(enabled_ranks);
@@ -709,7 +712,7 @@ out:
 static int
 pool_change_target_state(char *id, d_rank_list_t *svc_ranks, size_t n_target_idx,
 			 uint32_t *target_idx, uint32_t rank, pool_comp_state_t state,
-			 size_t scm_size, size_t nvme_size, size_t meta_size)
+			 size_t scm_size, size_t nvme_size, size_t meta_size, bool skip_rf_check)
 {
 	uuid_t				uuid;
 	struct pool_target_addr_list	target_addr_list;
@@ -738,7 +741,7 @@ pool_change_target_state(char *id, d_rank_list_t *svc_ranks, size_t n_target_idx
 	}
 
 	rc = ds_mgmt_pool_target_update_state(uuid, svc_ranks, &target_addr_list, state, scm_size,
-					      nvme_size, meta_size);
+					      nvme_size, meta_size, skip_rf_check);
 	if (rc != 0) {
 		D_ERROR("Failed to set pool target up "DF_UUID": "DF_RC"\n",
 			DP_UUID(uuid), DP_RC(rc));
@@ -778,7 +781,7 @@ ds_mgmt_drpc_pool_exclude(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	rc = pool_change_target_state(req->id, svc_ranks, req->n_target_idx, req->target_idx,
 				      req->rank, PO_COMP_ST_DOWN, 0 /* scm_size */,
-				      0 /* nvme_size */, 0 /* meta_size */);
+				      0 /* nvme_size */, 0 /* meta_size */, req->force);
 
 	d_rank_list_free(svc_ranks);
 
@@ -827,7 +830,7 @@ ds_mgmt_drpc_pool_drain(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	rc = pool_change_target_state(req->id, svc_ranks, req->n_target_idx, req->target_idx,
 				      req->rank, PO_COMP_ST_DRAIN, 0 /* scm_size */,
-				      0 /* nvme_size */, 0 /* meta_size */);
+				      0 /* nvme_size */, 0 /* meta_size */, false);
 
 	d_rank_list_free(svc_ranks);
 
@@ -936,8 +939,8 @@ void
 ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	struct drpc_alloc		alloc = PROTO_ALLOCATOR_INIT(alloc);
-	Mgmt__PoolReintegrateReq	*req = NULL;
-	Mgmt__PoolReintegrateResp	resp;
+	Mgmt__PoolReintReq              *req   = NULL;
+	Mgmt__PoolReintResp              resp;
 	d_rank_list_t			*svc_ranks = NULL;
 	uint8_t				*body;
 	size_t				len;
@@ -945,12 +948,10 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	uint64_t			nvme_bytes = 0;
 	int				rc;
 
-	mgmt__pool_reintegrate_resp__init(&resp);
+	mgmt__pool_reint_resp__init(&resp);
 
 	/* Unpack the inner request from the drpc call body */
-	req = mgmt__pool_reintegrate_req__unpack(&alloc.alloc,
-						 drpc_req->body.len,
-						 drpc_req->body.data);
+	req = mgmt__pool_reint_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
 
 	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
@@ -976,23 +977,23 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	rc = pool_change_target_state(req->id, svc_ranks, req->n_target_idx, req->target_idx,
 				      req->rank, PO_COMP_ST_UP, scm_bytes, nvme_bytes,
-				      req->tier_bytes[DAOS_MEDIA_SCM] /* meta_size */);
+				      req->tier_bytes[DAOS_MEDIA_SCM] /* meta_size */, false);
 
 	d_rank_list_free(svc_ranks);
 
 out:
 	resp.status = rc;
-	len = mgmt__pool_reintegrate_resp__get_packed_size(&resp);
+	len         = mgmt__pool_reint_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 	} else {
-		mgmt__pool_reintegrate_resp__pack(&resp, body);
+		mgmt__pool_reint_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
 		drpc_resp->body.data = body;
 	}
 
-	mgmt__pool_reintegrate_req__free_unpacked(req, &alloc.alloc);
+	mgmt__pool_reint_req__free_unpacked(req, &alloc.alloc);
 }
 
 void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
@@ -1845,6 +1846,7 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		resp.disabled_ranks = disabled_ranks_str;
 	if (dead_ranks_str != NULL)
 		resp.dead_ranks = dead_ranks_str;
+	resp.md_on_ssd_active = bio_nvme_configured(SMD_DEV_TYPE_META);
 
 	D_ALLOC_ARRAY(resp.tier_stats, DAOS_MEDIA_MAX);
 	if (resp.tier_stats == NULL)
@@ -1904,6 +1906,7 @@ ds_mgmt_drpc_pool_query_targets(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	daos_target_info_t		*infos = NULL;
 	Mgmt__PoolQueryTargetInfo	*resp_infos = NULL;
 	uint64_t			 mem_file_bytes = 0;
+	bool                             md_on_ssd_active;
 
 	req = mgmt__pool_query_target_req__unpack(&alloc.alloc, drpc_req->body.len,
 						  drpc_req->body.data);
@@ -1935,6 +1938,7 @@ ds_mgmt_drpc_pool_query_targets(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			req->id, req->rank, DP_RC(rc));
 		goto out_tgts;
 	}
+	md_on_ssd_active = bio_nvme_configured(SMD_DEV_TYPE_META);
 
 	/* Populate the response */
 	/* array of pointers to Mgmt__PoolQueryTargetInfo */
@@ -1975,6 +1979,7 @@ ds_mgmt_drpc_pool_query_targets(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			resp.infos[i]->space[j]->media_type = j;
 		}
 		resp.infos[i]->mem_file_bytes = mem_file_bytes;
+		resp.infos[i]->md_on_ssd_active = md_on_ssd_active;
 	}
 
 out_infos:

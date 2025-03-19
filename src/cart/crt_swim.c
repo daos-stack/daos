@@ -1,5 +1,7 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -179,6 +181,12 @@ crt_swim_membs_iterate(struct crt_swim_membs *csm, d_hash_traverse_cb_t cb, void
 	return d_hash_table_traverse(csm->csm_table, cb, arg);
 }
 
+static inline bool
+crt_swim_status_alive_or_suspect(enum swim_member_status status)
+{
+	return status == SWIM_MEMBER_ALIVE || status == SWIM_MEMBER_SUSPECT;
+}
+
 /* Move cst into the csm. */
 static int
 crt_swim_membs_add(struct crt_swim_membs *csm, struct crt_swim_target *cst)
@@ -213,6 +221,9 @@ crt_swim_membs_add(struct crt_swim_membs *csm, struct crt_swim_target *cst)
 
 	if (csm->csm_target == CRT_SWIM_TARGET_INVALID)
 		csm->csm_target = 0;
+
+	if (crt_swim_status_alive_or_suspect(cst->cst_state.sms_status))
+		csm->csm_alive_or_suspect_count++;
 
 	return 0;
 }
@@ -255,6 +266,9 @@ crt_swim_membs_del(struct crt_swim_membs *csm, d_rank_t rank)
 
 	deleted = d_hash_rec_delete_at(csm->csm_table, &cst->cst_link);
 	D_ASSERT(deleted);
+
+	if (crt_swim_status_alive_or_suspect(cst->cst_state.sms_status))
+		csm->csm_alive_or_suspect_count--;
 
 	return cst;
 }
@@ -376,6 +390,15 @@ crt_swim_lookup_id(swim_id_t id)
 	return grp_ver;
 }
 
+static void
+crt_swim_update_last_unpack_hlc(struct crt_swim_membs *csm, uint64_t hlc)
+{
+	crt_swim_csm_lock(csm);
+	if (csm->csm_last_unpack_hlc < hlc)
+		csm->csm_last_unpack_hlc = hlc;
+	crt_swim_csm_unlock(csm);
+}
+
 static void crt_swim_srv_cb(crt_rpc_t *rpc)
 {
 	struct crt_rpc_priv	*rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
@@ -395,6 +418,8 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc)
 	int			 rc;
 
 	D_ASSERT(crt_is_service());
+
+	crt_swim_update_last_unpack_hlc(csm, hlc);
 
 	from_id = rpc_priv->crp_req_hdr.cch_src_rank;
 
@@ -492,12 +517,7 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc)
 	} else {
 		rc = swim_updates_parse(ctx, from_id, from_id, rpc_in->upds.ca_arrays,
 					rpc_in->upds.ca_count);
-		if (rc == -DER_SHUTDOWN) {
-			if (grp_priv->gp_size > 1)
-				D_ERROR("SWIM shutdown\n");
-			swim_self_set(ctx, SWIM_ID_INVALID);
-			D_GOTO(out_reply, rc);
-		} else if (rc) {
+		if (rc) {
 			RPC_ERROR(rpc_priv,
 				  "updates parse. %lu: %lu <= %lu failed: "DF_RC"\n",
 				  self_id, to_id, from_id, DP_RC(rc));
@@ -605,6 +625,14 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 		if (to_id == ctx->sc_target)
 			ctx->sc_deadline = 0;
 		swim_ctx_unlock(ctx);
+	} else {
+		struct crt_swim_membs *csm = &grp_priv->gp_membs_swim;
+
+		/*
+		 * Although some errors also suggest incoming messages, we keep
+		 * it simple for now.
+		 */
+		crt_swim_update_last_unpack_hlc(csm, hlc);
 	}
 
 	reply_rc = cb_info->cci_rc ? cb_info->cci_rc : rpc_out->rc;
@@ -639,12 +667,7 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 	rc = swim_updates_parse(ctx, to_id,
 				rpc_type == SWIM_RPC_IREQ && !reply_rc ? from_id : to_id,
 				rpc_out->upds.ca_arrays, rpc_out->upds.ca_count);
-	if (rc == -DER_SHUTDOWN) {
-		if (grp_priv->gp_size > 1)
-			D_ERROR("SWIM shutdown\n");
-		swim_self_set(ctx, SWIM_ID_INVALID);
-		D_GOTO(out, rc);
-	} else if (rc) {
+	if (rc) {
 		RPC_ERROR(rpc_priv,
 			  "updates parse. %lu: %lu <= %lu failed: "DF_RC"\n",
 			  self_id, from_id, to_id, DP_RC(rc));
@@ -952,12 +975,12 @@ static int crt_swim_set_member_state(struct swim_context *ctx,
 	crt_swim_csm_lock(csm);
 	cst = crt_swim_membs_find(csm, id);
 	if (cst != NULL && state->sms_incarnation >= cst->cst_state.sms_incarnation) {
-		if (cst->cst_state.sms_status != SWIM_MEMBER_ALIVE &&
-		    state->sms_status == SWIM_MEMBER_ALIVE)
-			csm->csm_alive_count++;
-		else if (cst->cst_state.sms_status == SWIM_MEMBER_ALIVE &&
-			 state->sms_status != SWIM_MEMBER_ALIVE)
-			csm->csm_alive_count--;
+		if (!crt_swim_status_alive_or_suspect(cst->cst_state.sms_status) &&
+		    crt_swim_status_alive_or_suspect(state->sms_status))
+			csm->csm_alive_or_suspect_count++;
+		else if (crt_swim_status_alive_or_suspect(cst->cst_state.sms_status) &&
+			 !crt_swim_status_alive_or_suspect(state->sms_status))
+			csm->csm_alive_or_suspect_count--;
 		state_prev = cst->cst_state;
 		cst->cst_state = *state;
 		rc = 0;
@@ -985,24 +1008,6 @@ static void crt_swim_new_incarnation(struct swim_context *ctx,
 	csm->csm_incarnation = incarnation;
 	crt_swim_csm_unlock(csm);
 	state->sms_incarnation = incarnation;
-}
-
-static void crt_swim_update_last_unpack_hlc(struct crt_swim_membs *csm)
-{
-	struct crt_context	*ctx = NULL;
-	d_list_t		*ctx_list;
-
-	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
-
-	ctx_list = crt_provider_get_ctx_list(true, crt_gdata.cg_primary_prov);
-	d_list_for_each_entry(ctx, ctx_list, cc_link) {
-		uint64_t hlc = ctx->cc_last_unpack_hlc;
-
-		if (csm->csm_last_unpack_hlc < hlc)
-			csm->csm_last_unpack_hlc = hlc;
-	}
-
-	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 }
 
 static void
@@ -1041,33 +1046,27 @@ static int64_t crt_swim_progress_cb(crt_context_t crt_ctx, int64_t timeout_us, v
 	}
 
 	rc = swim_progress(ctx, timeout_us);
-	if (rc == -DER_SHUTDOWN) {
-		if (grp_priv->gp_size > 1)
-			D_ERROR("SWIM shutdown\n");
-		swim_self_set(ctx, SWIM_ID_INVALID);
-	} else if (rc == -DER_TIMEDOUT || rc == -DER_CANCELED) {
+	if (rc == -DER_TIMEDOUT || rc == -DER_CANCELED) {
 		uint64_t now = swim_now_ms();
 
-		crt_swim_update_last_unpack_hlc(csm);
-
 		/*
-		 * Check for network idle in all contexts.
+		 * Check for network idle in swim context.
 		 * If the time passed from last received RPC till now is more
 		 * than 2/3 of suspicion timeout suspends eviction.
 		 * The max_delay should be less suspicion timeout to guarantee
 		 * the already suspected members will not be expired.
 		 */
-		if (csm->csm_alive_count > 2) {
+		if (csm->csm_alive_or_suspect_count > 2) {
 			uint64_t hlc1 = csm->csm_last_unpack_hlc;
 			uint64_t hlc2 = d_hlc_get();
 			uint64_t delay = d_hlc2msec(hlc2 - hlc1);
 			uint64_t max_delay = swim_suspect_timeout_get() * 2 / 3;
 
 			if (delay > max_delay) {
-				D_ERROR("Network outage detected (idle during "
+				D_ERROR("SWIM network outage detected (idle during "
 					"%lu.%lu sec > expected %lu.%lu sec).\n",
-					delay / 1000, delay % 1000,
-					max_delay / 1000, max_delay % 1000);
+					delay / 1000, delay % 1000, max_delay / 1000,
+					max_delay % 1000);
 				swim_net_glitch_update(csm->csm_ctx, self_id, delay);
 				csm->csm_last_unpack_hlc = hlc2;
 			}
@@ -1150,7 +1149,7 @@ int crt_swim_init(int crt_ctx_idx)
 
 	csm->csm_crt_ctx_idx = crt_ctx_idx;
 	csm->csm_last_unpack_hlc = hlc;
-	csm->csm_alive_count = 0;
+	csm->csm_alive_or_suspect_count = 0;
 	csm->csm_nglitches = 0;
 	csm->csm_nmessages = 0;
 	/*
@@ -1350,31 +1349,42 @@ void crt_swim_disable_all(void)
 					   old_ctx_idx, NULL);
 }
 
-static int
-crt_swim_suspend_cb(d_list_t *link, void *arg)
-{
-	struct crt_swim_target	*cst = crt_swim_target_obj(link);
-	swim_id_t		*self_id = arg;
+struct crt_swim_suspend_arg {
+	struct crt_swim_membs *csm;
+	swim_id_t              self_id;
+};
 
-	if (cst->cst_id != *self_id)
+static int
+crt_swim_suspend_cb(d_list_t *link, void *varg)
+{
+	struct crt_swim_target      *cst = crt_swim_target_obj(link);
+	struct crt_swim_suspend_arg *arg = varg;
+
+	if (cst->cst_id != arg->self_id) {
+		if (crt_swim_status_alive_or_suspect(cst->cst_state.sms_status))
+			arg->csm->csm_alive_or_suspect_count--;
 		cst->cst_state.sms_status = SWIM_MEMBER_INACTIVE;
+	}
 	return 0;
 }
 
 void crt_swim_suspend_all(void)
 {
-	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
-	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
-	swim_id_t		 self_id;
-	int			 rc;
+	struct crt_grp_priv        *grp_priv = crt_gdata.cg_grp->gg_primary_grp;
+	struct crt_swim_membs      *csm      = &grp_priv->gp_membs_swim;
+	struct crt_swim_suspend_arg arg;
+	int                         rc;
 
 	if (!crt_gdata.cg_swim_inited)
 		return;
 
 	csm->csm_ctx->sc_glitch = 1;
-	self_id = swim_self_get(csm->csm_ctx);
+
+	arg.csm     = csm;
+	arg.self_id = swim_self_get(csm->csm_ctx);
+
 	crt_swim_csm_lock(csm);
-	rc = crt_swim_membs_iterate(csm, crt_swim_suspend_cb, &self_id);
+	rc = crt_swim_membs_iterate(csm, crt_swim_suspend_cb, &arg);
 	D_ASSERTF(rc == 0, "suspend SWIM members: "DF_RC"\n", DP_RC(rc));
 	crt_swim_csm_unlock(csm);
 }
@@ -1625,6 +1635,8 @@ crt_swim_rank_check(struct crt_grp_priv *grp_priv, d_rank_t rank, uint64_t incar
 		if (cst->cst_state.sms_incarnation < incarnation) {
 			state_prev = cst->cst_state;
 			cst->cst_state.sms_incarnation = incarnation;
+			if (!crt_swim_status_alive_or_suspect(cst->cst_state.sms_status))
+				csm->csm_alive_or_suspect_count++;
 			cst->cst_state.sms_status = SWIM_MEMBER_ALIVE;
 			state = cst->cst_state;
 			updated = true;

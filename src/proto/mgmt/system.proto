@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -84,19 +85,21 @@ message SystemDrainReq
 	string sys   = 1; // DAOS system name
 	string ranks = 2; // rankset to drain on all pools
 	string hosts = 3; // hostset to drain on all pools
+	bool   reint = 4; // Flag to indicate if request is for drain or reint.
+}
+
+// Response from pool-ranks operation.
+message PoolRanksResp
+{
+	string   id                        = 1; // Pool ID
+	repeated shared.RankResult results = 2; // Pool-rank operation results.
 }
 
 // SystemDrainResp returns status of system-drain request.
 message SystemDrainResp
 {
-	message DrainResult
-	{
-		int32  status  = 1; // Status of the evict on the specific pool
-		string msg     = 2; // Error message if status indicates an error
-		string pool_id = 3; // Label or uuid of pool
-		string ranks   = 4; // Rank-set that has encountered this result
-	}
-	repeated DrainResult results = 1; // Results for pool-ranks drain calls.
+	bool                    reint   = 1; // Flag to indicate if results are for drain or reint.
+	repeated PoolRanksResp  responses = 2; // Response from drain or reint calls on pool-ranks.
 }
 
 // SystemQueryReq supplies system query parameters.

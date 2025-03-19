@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -159,7 +160,7 @@ static long int         page_size;
 #define DAOS_INIT_RUNNING     1
 
 static _Atomic uint64_t mpi_init_count;
-static _Atomic int64_t  zeInit_count;
+static _Atomic int64_t  dlopen_count;
 
 static long int         daos_initing;
 _Atomic bool            d_daos_inited;
@@ -489,9 +490,7 @@ static int (*next_tcgetattr)(int fd, void *termios_p);
 
 static int (*next_mpi_init)(int *argc, char ***argv);
 static int (*next_pmpi_init)(int *argc, char ***argv);
-static int (*next_ze_init)(int flags);
-static void *(*next_dlsym)(void *handle, const char *symbol);
-static void *(*new_dlsym)(void *handle, const char *symbol);
+static void *(*next_dlopen)(const char *filename, int flags);
 
 /* to do!! */
 /**
@@ -1078,140 +1077,19 @@ PMPI_Init(int *argc, char ***argv)
 	return rc;
 }
 
-int
-zeInit(int flags)
+void *
+new_dlopen(const char *filename, int flags)
 {
-	int rc;
+	void *rc;
 
-	if (next_ze_init == NULL) {
-		if (d_hook_enabled)
-			next_ze_init = next_dlsym(RTLD_NEXT, "zeInit");
-		else
-			next_ze_init = dlsym(RTLD_NEXT, "zeInit");
-	}
-	D_ASSERT(next_ze_init != NULL);
-	atomic_fetch_add_relaxed(&zeInit_count, 1);
-	rc = next_ze_init(flags);
-	atomic_fetch_add_relaxed(&zeInit_count, -1);
+	if (!d_hook_enabled)
+		return next_dlopen(filename, flags);
+
+	atomic_fetch_add_relaxed(&dlopen_count, 1);
+	rc = next_dlopen(filename, flags);
+	atomic_fetch_add_relaxed(&dlopen_count, -1);
 	return rc;
 }
-
-#if defined(__x86_64__)
-/* This is used to work around compiling warning and limitations of using asm function. */
-static void *
-query_new_dlsym_addr(void *addr)
-{
-	int i;
-
-	/* assume little endian */
-	for (i = 0; i < 64; i++) {
-		/* 0x56579090 is corresponding to the first four instructions at new_dlsym_asm.
-		 * 0x90 - nop, 0x90 - nop, 0x57 - push %rdi, 0x56 - push %rsi
-		 */
-		if (*((int *)(addr + i)) == 0x56579090) {
-			/* two nop are added for easier positioning. offset +2 here to skip two
-			 * nop and start from the real entry.
-			 */
-			return ((void *)(addr + i + 2));
-		}
-	}
-	return NULL;
-}
-
-_Pragma("GCC diagnostic push")
-_Pragma("GCC diagnostic ignored \"-Wunused-function\"")
-_Pragma("GCC diagnostic ignored \"-Wunused-variable\"")
-_Pragma("GCC push_options")
-_Pragma("GCC optimize(\"-O0\")")
-static char str_zeinit[] = "zeInit";
-
-static int
-is_hook_enabled(void)
-{
-	return (d_hook_enabled ? 1 : 0);
-}
-
-/* This wrapper function is introduced to avoid compiling issue with Intel-C on Leap 15.5 */
-static int
-my_strcmp(const char *s1, const char *s2)
-{
-	return strcmp(s1, s2);
-}
-
-static void *
-get_zeinit_addr(void)
-{
-	return (void *)zeInit;
-}
-
-__attribute__((aligned(16))) static void
-new_dlsym_marker(void)
-{
-}
-
-__asm__(
-	"new_dlsym_asm:\n"
-	"nop\n"
-	"nop\n"
-	"push %rdi\n"
-	"push %rsi\n"
-
-	"call is_hook_enabled\n"
-	"test %eax,%eax\n"
-	"je org_dlsym\n"
-
-	"mov %rsi, %rdi\n"
-	"lea str_zeinit(%rip), %rsi\n"
-	"call my_strcmp\n"
-	"test %eax,%eax\n"
-	"jne org_dlsym\n"
-
-	"pop %rsi\n"
-	"pop %rdi\n"
-	"call *next_dlsym(%rip)\n"
-	"mov %rax, next_ze_init(%rip)\n"
-
-	"test %eax,%eax\n"
-	"jne found\n"
-	"ret\n"
-
-	"found:\n"
-	"call get_zeinit_addr\n"
-	"ret\n"
-
-	"org_dlsym:\n"
-	"pop %rsi\n"
-	"pop %rdi\n"
-	"jmp *next_dlsym(%rip)\n"
-);
-_Pragma("GCC pop_options")
-_Pragma("GCC diagnostic pop")
-
-#else
-/* c code for other architecture. caller info could be wrong inside libc dlsym() when handle is set
- * RTLD_NEXT. Assembly version implementation similar to above is needed to fix the issue by using
- * jump instead of call instruction. 
- */
-static void *
-new_dlsym_c(void *handle, const char *symbol)
-{
-	if (!d_hook_enabled)
-		goto org_dlsym;
-	if (strcmp(symbol, "zeInit") != 0)
-		goto org_dlsym;
-
-	next_ze_init = next_dlsym(handle, symbol);
-	if (next_ze_init)
-		/* dlsym() finished successfully, then intercept zeInit() */
-		return zeInit;
-	else
-		return next_ze_init;
-
-org_dlsym:
-	/* Ideally we need to adjust stack and jump to next_dlsym(). */
-	return next_dlsym(handle, symbol);
-}
-#endif
 
 /** determine whether a path (both relative and absolute) is on DAOS or not. If yes,
  *  returns parent object, item name, full path of parent dir, full absolute path, and
@@ -1319,11 +1197,11 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 				goto out_normal;
 			}
 
-			/* Check whether zeInit() is running. If yes, pass to the original
+			/* Check whether dlopen() is running. If yes, pass to the original
 			 * libc functions. Avoid possible zeInit reentrancy/nested call.
 			 */
 
-			if (atomic_load_relaxed(&zeInit_count) > 0) {
+			if (atomic_load_relaxed(&dlopen_count) > 0) {
 				*is_target_path = 0;
 				goto out_normal;
 			}
@@ -3582,6 +3460,7 @@ statfs(const char *pathname, struct statfs *sfs)
 	sfs->f_files  = -1;
 	sfs->f_ffree  = -1;
 	sfs->f_bavail = sfs->f_bfree;
+	sfs->f_type   = DAOS_SUPER_MAGIC;
 
 	drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
@@ -3639,6 +3518,7 @@ fstatfs(int fd, struct statfs *sfs)
 	sfs->f_files  = -1;
 	sfs->f_ffree  = -1;
 	sfs->f_bavail = sfs->f_bfree;
+	sfs->f_type   = DAOS_SUPER_MAGIC;
 
 	return 0;
 }
@@ -3690,6 +3570,7 @@ statvfs(const char *pathname, struct statvfs *svfs)
 	svfs->f_files  = -1;
 	svfs->f_ffree  = -1;
 	svfs->f_bavail = svfs->f_bfree;
+	svfs->f_fsid   = DAOS_SUPER_MAGIC;
 
 	drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
@@ -6129,13 +6010,17 @@ futimens(int fd, const struct timespec times[2])
 static int
 new_fcntl(int fd, int cmd, ...)
 {
-	int     fd_directed, param, OrgFunc = 1;
+	int     fd_directed, OrgFunc = 1;
 	int     next_dirfd, next_fd, rc;
+	void   *param;
 	va_list arg;
 
 	va_start(arg, cmd);
-	param = va_arg(arg, int);
+	param = va_arg(arg, void *);
 	va_end(arg);
+
+	if (!d_hook_enabled)
+		return libc_fcntl(fd, cmd, param);
 
 	if (fd < FD_FILE_BASE && d_compatible_mode)
 		return libc_fcntl(fd, cmd, param);
@@ -6154,9 +6039,6 @@ new_fcntl(int fd, int cmd, ...)
 	case F_SETPIPE_SZ:
 	case F_ADD_SEALS:
 		fd_directed = d_get_fd_redirected(fd);
-
-		if (!d_hook_enabled)
-			return libc_fcntl(fd, cmd, param);
 
 		if (cmd == F_GETFL) {
 			if (fd_directed >= FD_DIR_BASE)
@@ -6206,12 +6088,15 @@ new_fcntl(int fd, int cmd, ...)
 	case F_OFD_GETLK:
 	case F_GETOWN_EX:
 	case F_SETOWN_EX:
-		if (!d_hook_enabled)
+		fd_directed = d_get_fd_redirected(fd);
+		if (fd_directed >= FD_FILE_BASE) {
+			errno = ENOTSUP;
+			return (-1);
+		} else {
 			return libc_fcntl(fd, cmd, param);
-
-		return libc_fcntl(fd, cmd, param);
+		}
 	default:
-		return libc_fcntl(fd, cmd);
+		return libc_fcntl(fd, cmd, param);
 	}
 }
 
@@ -7259,17 +7144,11 @@ init_myhook(void)
 	register_a_hook("libc", "dup3", (void *)new_dup3, (long int *)(&libc_dup3));
 	register_a_hook("libc", "readlink", (void *)new_readlink, (long int *)(&libc_readlink));
 
-#if defined(__x86_64__)
-	new_dlsym = query_new_dlsym_addr(new_dlsym_marker);
-#else
-	new_dlsym = new_dlsym_c;
-#endif
-	D_ASSERT(new_dlsym != NULL);
 	libc_version = query_libc_version();
 	if (libc_ver_cmp(libc_version, 2.34) < 0)
-		register_a_hook("libdl", "dlsym", (void *)new_dlsym, (long int *)(&next_dlsym));
+		register_a_hook("libdl", "dlopen", (void *)new_dlopen, (long int *)(&next_dlopen));
 	else
-		register_a_hook("libc", "dlsym", (void *)new_dlsym, (long int *)(&next_dlsym));
+		register_a_hook("libc", "dlopen", (void *)new_dlopen, (long int *)(&next_dlopen));
 
 	init_fd_dup2_list();
 
@@ -7280,9 +7159,6 @@ init_myhook(void)
 		dcache_rec_timeout = 0;
 
 	install_hook();
-
-	/* Check it here to minimize the work in function new_dlsym() written in assembly */
-	D_ASSERT(next_dlsym != NULL);
 
 	d_hook_enabled   = 1;
 	hook_enabled_bak = d_hook_enabled;

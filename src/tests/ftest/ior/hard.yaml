@@ -55,6 +55,8 @@ ior:
       dfs_oclass: "EC_2P1GX"
     EC_4P2GX:
       dfs_oclass: "EC_4P2GX"
+    EC_4P3GX:
+      dfs_oclass: "EC_4P3GX"
     EC_8P2GX:
       dfs_oclass: "EC_8P2GX"
   sw_wearout: 1

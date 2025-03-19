@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -20,7 +21,7 @@
 #include <daos/pool_map.h>
 
 D_CASSERT((int)DAOS_PROP_PERF_DOMAIN_ROOT == (int)PO_COMP_TP_ROOT);
-D_CASSERT((int)DAOS_PROP_PERF_DOMAIN_GROUP == (int)PO_COMP_TP_GRP);
+D_CASSERT((int)DAOS_PROP_PERF_DOMAIN_GROUP == (int)PO_COMP_TP_PERF);
 
 daos_prop_t *
 daos_prop_alloc(uint32_t entries_nr)
@@ -325,8 +326,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_PO_PERF_DOMAIN:
 		case DAOS_PROP_CO_PERF_DOMAIN:
 			val = prop->dpp_entries[i].dpe_val;
-			if (val != PO_COMP_TP_ROOT &&
-			    val != PO_COMP_TP_GRP) {
+			if (val != PO_COMP_TP_ROOT && val != PO_COMP_TP_PERF) {
 				D_ERROR("invalid perf domain "DF_U64".\n", val);
 				return false;
 			}
@@ -334,7 +334,8 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_PO_REINT_MODE:
 			val = prop->dpp_entries[i].dpe_val;
 			if (val != DAOS_REINT_MODE_DATA_SYNC &&
-			    val != DAOS_REINT_MODE_NO_DATA_SYNC) {
+			    val != DAOS_REINT_MODE_NO_DATA_SYNC &&
+			    val != DAOS_REINT_MODE_INCREMENTAL) {
 				D_ERROR("invalid reintegration mode "DF_U64".\n", val);
 				return false;
 			}

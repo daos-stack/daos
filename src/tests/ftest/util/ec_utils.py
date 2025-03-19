@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -399,7 +400,7 @@ class ErasureCodeSingle(TestWithServers):
             time.sleep(10)
             # Kill the server rank
             if self.rank_to_kill is not None:
-                self.server_managers[0].stop_ranks([self.rank_to_kill], self.d_log, force=True)
+                self.server_managers[0].stop_ranks([self.rank_to_kill], force=True)
 
         # Wait to finish the thread
         job.join()
@@ -413,56 +414,53 @@ class ErasureCodeSingle(TestWithServers):
 class ErasureCodeMdtest(MdtestBase):
     """Class to used for EC testing for MDtest Benchmark."""
 
-    def __init__(self, *args, **kwargs):
-        """Initialize a MdtestBase object."""
-        super().__init__(*args, **kwargs)
-        self.server_count = None
-        self.set_online_rebuild = False
-        self.rank_to_kill = None
-        self.obj_class = None
-
     def setUp(self):
         """Set up each test case."""
         super().setUp()
-        engine_count = self.server_managers[0].get_config_value("engines_per_host")
-        self.server_count = len(self.hostlist_servers) * engine_count
-        self.obj_class = self.params.get("dfs_oclass_list", '/run/mdtest/objectclass/*')
         # Create Pool
         self.add_pool()
+        self.container = None
         self.out_queue = queue.Queue()
 
-    def write_single_mdtest_dataset(self):
-        """Run MDtest with EC object type."""
-        # Update the MDtest obj class
-        self.mdtest_cmd.dfs_oclass.update(self.obj_class)
+    def _start_execute_mdtest(self, mdtest_result_queue):
+        """Run the execute_mdtest method
 
-        # Write the MDtest data
-        self.execute_mdtest(self.out_queue)
-
-    def start_online_mdtest(self):
-        """Run MDtest operation with thread in background.
-
-        Trigger the server failure while MDtest is running
+        Args:
+            mdtest_result_queue(Queue) : Queue for passing errors.
+        Returns:
+            result(object) : mdtest run result
         """
+        try:
+            result = self.execute_mdtest(mdtest_result_queue)
+        except Exception:  # pylint: disable=broad-except
+            mdtest_result_queue.put('Mdtest Failed')
+        return result
+
+    def start_online_mdtest(self, ranks_to_stop):
+        """Run mdtest and stop ranks while mdtest is running.
+
+        Args:
+            ranks_to_stop (list): ranks to stop while mdtest is running
+        """
+        # Create the container and check the status
+        self.container = self.get_mdtest_container(self.pool)
         # Create the MDtest run thread
-        job = threading.Thread(target=self.write_single_mdtest_dataset)
+        job = threading.Thread(
+            target=self._start_execute_mdtest,
+            kwargs={"mdtest_result_queue": self.out_queue})
 
         # Launch the MDtest thread
         job.start()
 
-        # Kill the server rank while IO operation in progress
-        if self.set_online_rebuild:
-            time.sleep(30)
-            # Kill the server rank
-            if self.rank_to_kill is not None:
-                self.server_managers[0].stop_ranks([self.rank_to_kill],
-                                                   self.d_log,
-                                                   force=True)
+        # Stop the server ranks while IO operation in progress
+        time.sleep(self.mdtest_cmd.stonewall_timer.value / 2)
+        self.server_managers[0].stop_ranks(ranks_to_stop, force=True)
 
         # Wait to finish the thread
         job.join()
 
         # Verify the queue result and make sure test has no failure
         while not self.out_queue.empty():
-            if self.out_queue.get() == "Mdtest Failed":
-                self.fail("FAIL")
+            result = self.out_queue.get()
+            if result == "Mdtest Failed":
+                self.fail(result)

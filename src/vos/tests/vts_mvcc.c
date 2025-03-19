@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1720,7 +1721,7 @@ setup_mvcc(void **state)
 	D_ASSERT(arg->custom == NULL);
 	D_ALLOC_PTR(mvcc_arg);
 	D_ASSERT(mvcc_arg != NULL);
-	mvcc_arg->epoch = 500;
+	mvcc_arg->epoch = d_hlc_get() + 500;
 	d_getenv_bool("CMOCKA_TEST_ABORT", &mvcc_arg->fail_fast);
 	arg->custom = mvcc_arg;
 	return 0;

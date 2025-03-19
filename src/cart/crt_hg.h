@@ -1,5 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,6 +19,7 @@
 #include <mercury_proc.h>
 #include <mercury_proc_string.h>
 #include <mercury_log.h>
+#include <mercury_config.h>
 
 /** the shared HG RPC ID used for all CRT opc */
 #define CRT_HG_RPCID		(0xDA036868)
@@ -26,6 +29,9 @@
 #define CRT_HG_POOL_MAX_NUM	(512)
 /** number of prepost HG handles when enable pool */
 #define CRT_HG_POOL_PREPOST_NUM	(16)
+
+/** interval at which to republish HG diagnostics as metrics */
+#define CRT_HG_TM_PUB_INTERVAL_US 1 * (1000 * 1000)
 
 /** default values for init / incr to prepost handles */
 #define CRT_HG_POST_INIT        (512)
@@ -111,6 +117,19 @@ struct crt_hg_pool {
 	bool			chp_enabled;
 };
 
+/** HG metrics (republished from class diagnostics counters) */
+struct crt_hg_metrics {
+	struct d_tm_node_t *chm_bulks;
+	struct d_tm_node_t *chm_mr_copies;
+	struct d_tm_node_t *chm_active_rpcs;
+	struct d_tm_node_t *chm_extra_bulk_resp;
+	struct d_tm_node_t *chm_extra_bulk_req;
+	struct d_tm_node_t *chm_resp_recv;
+	struct d_tm_node_t *chm_resp_sent;
+	struct d_tm_node_t *chm_req_recv;
+	struct d_tm_node_t *chm_req_sent;
+};
+
 /** HG context */
 struct crt_hg_context {
 	/* Flag indicating whether hg class is shared; true for SEP mode */
@@ -122,6 +141,8 @@ struct crt_hg_context {
 	struct crt_hg_pool chc_hg_pool;            /* HG handle pool */
 	int                chc_provider;           /* provider */
 	bool               chc_thread_mode_single; /* thread safety */
+	uint64_t              chc_diag_pub_ts;        /* time of last diagnostics pub */
+	struct crt_hg_metrics chc_metrics;            /* HG metrics */
 };
 
 /* crt_hg.c */
@@ -168,7 +189,6 @@ void crt_provider_get_ctx_list_and_num(bool primary, crt_provider_t provider, d_
 char* crt_provider_iface_str_get(bool primary, crt_provider_t provider, int iface_idx);
 struct crt_na_config*
 crt_provider_get_na_config(bool primary, crt_provider_t provider);
-
 
 static inline int
 crt_hgret_2_der(int hg_ret)
@@ -223,12 +243,33 @@ crt_der_2_hgret(int der)
 	};
 }
 
-int crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
-		       crt_bulk_perm_t bulk_perm, crt_bulk_t *bulk_hdl);
-int crt_hg_bulk_bind(crt_bulk_t bulk_hdl, struct crt_hg_context *hg_ctx);
-int crt_hg_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl);
+static inline int
+crt_hg_bulk_get_sgnum(hg_bulk_t hg_bulk_hdl)
+{
+	D_ASSERT(hg_bulk_hdl != HG_BULK_NULL);
+
+	return HG_Bulk_get_segment_count(hg_bulk_hdl);
+}
+
+static inline int
+crt_hg_bulk_get_len(hg_bulk_t hg_bulk_hdl)
+{
+	D_ASSERT(hg_bulk_hdl != HG_BULK_NULL);
+
+	return HG_Bulk_get_size(hg_bulk_hdl);
+}
+
+int
+crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl, crt_bulk_perm_t bulk_perm,
+		   hg_bulk_t *bulk_hdl);
+int
+crt_hg_bulk_bind(hg_bulk_t bulk_hdl, struct crt_hg_context *hg_ctx);
+int
+crt_hg_bulk_access(hg_bulk_t bulk_hdl, d_sg_list_t *sgl);
 int
 crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb, void *arg,
 		     crt_bulk_opid_t *opid, bool bind);
+void
+crt_hg_republish_diags(struct crt_hg_context *hg_ctx);
 
 #endif /* __CRT_MERCURY_H__ */

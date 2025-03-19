@@ -1,13 +1,14 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2024 Google LLC
- * (C) Copyright 2024 Enakta Labs Ltd
+ * (C) Copyright 2024-2025 Google LLC
+ * (C) Copyright 2024-2025 Enakta Labs Ltd
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include <Python.h>
 
+#include <assert.h>
 #include <fcntl.h>  /* S_ISDIR */
 #include <libgen.h> /* dirname() */
 
@@ -20,17 +21,76 @@
 #include <daos/common.h>
 #include <gurt/debug.h>
 #include <gurt/common.h>
+#include <gurt/hash.h>
 
 #define PY_SHIM_MAGIC_NUMBER (0x7A8B)
 #define EQ_POLL_BATCH_SIZE   (64)
 
 struct dfs_handle {
-	int           flags;
-	dfs_t        *dfs;
-	d_iov_t       global;
+	int                  flags;
+	dfs_t               *dfs;
+	d_iov_t              global;
 
-	daos_handle_t eq;
-	pid_t         eq_owner_pid;
+	daos_handle_t        eq;
+	pid_t                eq_owner_pid;
+
+	uint32_t             dir_cache_size;
+	struct d_hash_table *dir_cache;
+};
+
+/* Cached directory object entry */
+struct dir_obj_cache_entry {
+	d_list_t   entry;
+	dfs_obj_t *obj;
+	char       name[PATH_MAX];
+};
+
+static inline struct dir_obj_cache_entry *
+dir_obj_cache_entry_from_link(d_list_t *rlink)
+{
+	return container_of(rlink, struct dir_obj_cache_entry, entry);
+}
+
+static bool
+dir_cache_key_cmp(struct d_hash_table *htable, d_list_t *rlink, const void *key, unsigned int ksize)
+{
+	struct dir_obj_cache_entry *h = dir_obj_cache_entry_from_link(rlink);
+
+	return (strcmp(h->name, (const char *)key) == 0);
+}
+
+static void
+dir_cache_rec_free(struct d_hash_table *htable, d_list_t *rlink)
+{
+	struct dir_obj_cache_entry *h = dir_obj_cache_entry_from_link(rlink);
+
+	int                         rc = dfs_release(h->obj);
+	if (rc) {
+		D_ERROR("Could not release object '%s': %s (rc=%d)", h->name, strerror(rc), rc);
+	}
+	free(h);
+}
+
+static bool
+dir_cache_rec_decref(struct d_hash_table *htable, d_list_t *rlink)
+{
+	return true;
+}
+
+static uint32_t
+dir_cache_rec_hash(struct d_hash_table *htable, d_list_t *rlink)
+{
+	struct dir_obj_cache_entry *h = dir_obj_cache_entry_from_link(rlink);
+
+	return d_hash_string_u32(h->name, strnlen(h->name, PATH_MAX));
+}
+
+/* Directory object hash table operations */
+static d_hash_table_ops_t dir_cache_hash_ops = {
+    .hop_key_cmp    = dir_cache_key_cmp,
+    .hop_rec_decref = dir_cache_rec_decref,
+    .hop_rec_free   = dir_cache_rec_free,
+    .hop_rec_hash   = dir_cache_rec_hash,
 };
 
 /* Parse arguments and magic number.
@@ -67,8 +127,8 @@ __shim_handle__module_init(PyObject *self, PyObject *args)
 {
 	int rc = daos_init();
 	if (rc) {
-		PyErr_Format(PyExc_TypeError, "Could not initialize DAOS module %s (rc=%d)",
-			     d_errstr(rc), rc);
+		PyErr_Format(PyExc_TypeError, "Could not initialize DAOS: %s (rc=%d)", d_errstr(rc),
+			     rc);
 		return NULL;
 	}
 
@@ -87,40 +147,94 @@ __shim_handle__module_fini(PyObject *self, PyObject *args)
 {
 	int rc = daos_fini();
 	if (rc) {
+		PyErr_Format(PyExc_TypeError, "Could not finalize DAOS: %s (rc=%d)", d_errstr(rc),
+			     rc);
+		return NULL;
+	}
+	return PyLong_FromLong(rc);
+}
+
+/* Hash table does not require lock: workers will be working on their own subsets of data
+and will have their own handlers, including the cache.
+*/
+static int
+__dir_cache_create(struct dfs_handle *hdl)
+{
+	uint32_t bits = ceil(log2(hdl->dir_cache_size));
+
+	int rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_NOLOCK | D_HASH_FT_LRU, bits,
+				     NULL, &dir_cache_hash_ops, &hdl->dir_cache);
+	if (rc) {
+		D_ERROR("Could not create directory cache's hash table: %s (rc=%d)", d_errstr(rc),
+			rc);
 		rc = daos_der2errno(rc);
 	}
 
-	return PyLong_FromLong(rc);
+	return rc;
+}
+
+static int
+__dir_cache_destroy(struct dfs_handle *hdl)
+{
+	int rc = 0;
+
+	/* Before finalizing the handle, we need to release all cached directory objects,
+	by dropping the reference count we allow the hash table to free the memory via rec_free
+	callback
+	*/
+	while (true) {
+		d_list_t *rlink = d_hash_rec_first(hdl->dir_cache);
+		if (rlink == NULL)
+			break;
+
+		d_hash_rec_decref(hdl->dir_cache, rlink);
+	}
+
+	rc = d_hash_table_destroy(hdl->dir_cache, false);
+	if (rc) {
+		D_ERROR("Could not destroy directory objects cache hash table: %s (rc=%d)",
+			d_errstr(rc), rc);
+		rc = daos_der2errno(rc);
+	}
+
+	return rc;
 }
 
 static PyObject *
 __shim_handle__torch_connect(PyObject *self, PyObject *args)
 {
-	int                rc      = 0;
-	char              *pool    = NULL;
-	char              *cont    = NULL;
-	int                rd_only = 1;
-	struct dfs_handle *hdl     = NULL;
+	int                rc             = 0;
+	int                rc2            = 0;
+	char              *pool           = NULL;
+	char              *cont           = NULL;
+	int                rd_only        = 1;
+	uint32_t           dir_cache_size = 0;
+	struct dfs_handle *hdl            = NULL;
 
 	PyObject          *result = PyList_New(2);
 	if (result == NULL) {
 		return PyErr_NoMemory();
 	}
 
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "ssp", &pool, &cont, &rd_only);
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "sspI", &pool, &cont, &rd_only, &dir_cache_size);
+
+	if (dir_cache_size == 0) {
+		return PyLong_FromLong(EINVAL);
+	}
+
+	rc = dfs_init();
+	if (rc) {
+		D_ERROR("Could not initialize DFS: %s (rc=%d)", strerror(rc), rc);
+		return PyLong_FromLong(rc);
+	}
 
 	D_ALLOC_PTR(hdl);
 	if (hdl == NULL) {
 		rc = ENOMEM;
 		goto out;
 	}
-	hdl->flags = rd_only ? O_RDONLY : O_RDWR;
-
-	rc = dfs_init();
-	if (rc) {
-		D_ERROR("Could not initialize DFS: %s (rc=%d)", strerror(rc), rc);
-		goto out;
-	}
+	hdl->flags          = rd_only ? O_RDONLY : O_RDWR;
+	hdl->dir_cache_size = dir_cache_size;
 
 	rc = dfs_connect(pool, NULL, cont, hdl->flags, NULL, &hdl->dfs);
 	if (rc) {
@@ -157,17 +271,32 @@ __shim_handle__torch_connect(PyObject *self, PyObject *args)
 	}
 	hdl->eq_owner_pid = getpid();
 
-out:
+	rc = __dir_cache_create(hdl);
 	if (rc) {
-		dfs_disconnect(hdl->dfs);
-
-		D_FREE(hdl->global.iov_buf);
-		D_FREE(hdl);
-		hdl = NULL;
+		goto out;
 	}
 
 	PyList_SetItem(result, 0, PyLong_FromLong(rc));
 	PyList_SetItem(result, 1, PyLong_FromVoidPtr(hdl));
+
+	return result;
+
+out:
+	rc2 = dfs_disconnect(hdl->dfs);
+	if (rc2) {
+		D_ERROR("Could not disconnect DFS: %s (rc=%d)", strerror(rc2), rc2);
+	}
+
+	D_FREE(hdl->global.iov_buf);
+	D_FREE(hdl);
+
+	rc2 = dfs_fini();
+	if (rc2) {
+		D_ERROR("Could not finalize DFS: %s (rc=%d)", strerror(rc2), rc2);
+	}
+
+	PyList_SetItem(result, 0, PyLong_FromLong(rc));
+	PyList_SetItem(result, 1, PyLong_FromVoidPtr(NULL));
 
 	return result;
 }
@@ -195,6 +324,11 @@ __shim_handle__torch_disconnect(PyObject *self, PyObject *args)
 	if (rc) {
 		D_ERROR("Could not destroy event queue: %s (rc=%d)", d_errstr(rc), rc);
 		rc = daos_der2errno(rc);
+		goto out;
+	}
+
+	rc = __dir_cache_destroy(hdl);
+	if (rc) {
 		goto out;
 	}
 
@@ -249,7 +383,57 @@ __shim_handle__torch_worker_init(PyObject *self, PyObject *args)
 		rc = daos_der2errno(rc);
 	}
 
+	rc = __dir_cache_create(hdl);
+
 	return PyLong_FromLong(rc);
+}
+
+static int
+lookup_or_insert_dir_obj(struct dfs_handle *hdl, const char *name, dfs_obj_t **obj)
+{
+	int                         rc    = 0;
+	d_list_t                   *rlink = NULL;
+	size_t                      len   = strnlen(name, PATH_MAX);
+	struct dir_obj_cache_entry *rec   = NULL;
+
+	assert(obj != NULL);
+	assert(hdl->dir_cache != NULL);
+
+	rlink = d_hash_rec_find(hdl->dir_cache, name, len);
+	if (rlink != NULL) {
+		rec  = dir_obj_cache_entry_from_link(rlink);
+		*obj = rec->obj;
+		return 0;
+	}
+
+	rc = dfs_lookup(hdl->dfs, name, hdl->flags, obj, NULL, NULL);
+	if (rc) {
+		return rc;
+	}
+
+	rec = calloc(1, sizeof(struct dir_obj_cache_entry));
+	if (rec == NULL) {
+		return ENOMEM;
+	}
+
+	rec->obj = *obj;
+	strncpy(rec->name, name, len);
+
+	rc = d_hash_rec_insert(hdl->dir_cache, rec->name, len, &rec->entry, false);
+	if (rc) {
+		D_ERROR("Failed to insert dir handle in hashtable: '%s': %s (rc=%d)", name,
+			d_errstr(rc), rc);
+		rc = daos_der2errno(rc);
+
+		int rc2 = dfs_release(rec->obj);
+		if (rc2) {
+			D_ERROR("Could not release object '%s': %s (rc=%d)", name, strerror(rc2),
+				rc2);
+		}
+		free(rec);
+	}
+
+	return rc;
 }
 
 static PyObject *
@@ -259,27 +443,19 @@ __shim_handle__torch_recommended_dir_split(PyObject *self, PyObject *args)
 	char              *path = NULL;
 	dfs_obj_t         *obj  = NULL;
 	uint32_t           nr   = 0;
+	int                rc   = 0;
 
 	RETURN_NULL_IF_FAILED_TO_PARSE(args, "Ls", &hdl, &path);
 
 	assert(hdl->dfs != NULL);
 
-	int rc = dfs_lookup(hdl->dfs, path, O_RDONLY, &obj, NULL, NULL);
+	rc = lookup_or_insert_dir_obj(hdl, path, &obj);
 	if (rc) {
-		return PyLong_FromLong(-rc);
+		return Py_BuildValue("iI", rc, nr);
 	}
 
 	rc = dfs_obj_anchor_split(obj, &nr, NULL);
-	if (rc) {
-		return PyLong_FromLong(-rc);
-	}
-
-	rc = dfs_release(obj);
-	if (rc) {
-		return PyLong_FromLong(-rc);
-	}
-
-	return PyLong_FromLong(nr);
+	return Py_BuildValue("iI", rc, nr);
 }
 
 static PyObject *
@@ -319,7 +495,7 @@ __shim_handle__torch_list_with_anchor(PyObject *self, PyObject *args)
 		goto out;
 	}
 
-	rc = dfs_lookup(hdl->dfs, path, O_RDONLY, &obj, NULL, NULL);
+	rc = lookup_or_insert_dir_obj(hdl, path, &obj);
 	if (rc) {
 		D_ERROR("Could not lookup object at '%s': %s (rc=%d)", path, strerror(rc), rc);
 		goto out;
@@ -380,24 +556,68 @@ out:
 	D_FREE(dentries);
 	D_FREE(stats);
 
-	if (obj) {
-		rc = dfs_release(obj);
+	return PyLong_FromLong(rc);
+}
+
+static int
+split_path(const char *path, char **dir, char **name)
+{
+	assert(dir != NULL);
+	assert(name != NULL);
+
+	int   rc        = 0;
+	char *cp1       = NULL;
+	char *cp2       = NULL;
+	char *dir_name  = NULL;
+	char *file_name = NULL;
+
+	D_STRNDUP(cp1, path, PATH_MAX);
+	if (cp1 == NULL) {
+		return ENOMEM;
+	}
+	D_STRNDUP(cp2, path, PATH_MAX);
+	if (cp2 == NULL) {
+		rc = ENOMEM;
+		goto out;
 	}
 
-	return PyLong_FromLong(rc);
+	dir_name  = dirname(cp1);
+	file_name = basename(cp2);
+
+	D_STRNDUP(*dir, dir_name, PATH_MAX);
+	if (*dir == NULL) {
+		rc = ENOMEM;
+		goto out;
+	}
+	D_STRNDUP(*name, file_name, PATH_MAX);
+	if (*name == NULL) {
+		D_FREE(*dir);
+		rc = ENOMEM;
+		goto out;
+	}
+
+out:
+	D_FREE(cp1);
+	D_FREE(cp2);
+
+	return rc;
 }
 
 static PyObject *
 __shim_handle__torch_read(PyObject *self, PyObject *args)
 {
-	ssize_t            rc     = 0;
-	struct dfs_handle *hdl    = NULL;
-	char              *path   = NULL;
-	dfs_obj_t         *obj    = NULL;
-	PyObject          *buffer = NULL;
+	ssize_t            rc        = 0;
+	struct dfs_handle *hdl       = NULL;
+	char              *path      = NULL;
+	char              *dir_name  = NULL;
+	char              *file_name = NULL;
+	dfs_obj_t         *obj       = NULL;
+	dfs_obj_t         *parent    = NULL;
+	PyObject          *buffer    = NULL;
 	Py_buffer          bview;
 	d_iov_t            iov;
 	daos_size_t        read = 0;
+	mode_t             mode = S_IFREG;
 
 	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LsO", &hdl, &path, &buffer);
 	assert(hdl->dfs != NULL);
@@ -423,6 +643,23 @@ __shim_handle__torch_read(PyObject *self, PyObject *args)
 		return NULL;
 	}
 
+	rc = split_path(path, &dir_name, &file_name);
+	if (rc) {
+		goto out;
+	}
+
+	rc = lookup_or_insert_dir_obj(hdl, dir_name, &parent);
+	if (rc) {
+		D_ERROR("Could not lookup '%s': %s (rc=%ld)", path, strerror(rc), rc);
+		goto out;
+	}
+
+	rc = dfs_open(hdl->dfs, parent, file_name, mode, O_RDONLY, 0, 0, NULL, &obj);
+	if (rc) {
+		D_ERROR("Could not open '%s': %s (rc=%ld)", path, strerror(rc), rc);
+		goto out;
+	}
+
 	read = bview.len;
 	d_iov_set(&iov, bview.buf, read);
 
@@ -431,12 +668,6 @@ __shim_handle__torch_read(PyObject *self, PyObject *args)
 	    .sg_nr_out = 0,
 	    .sg_iovs   = &iov,
 	};
-
-	rc = dfs_lookup(hdl->dfs, path, O_RDONLY, &obj, NULL, NULL);
-	if (rc) {
-		D_ERROR("Could not lookup '%s': %s (rc=%ld)", path, strerror(rc), rc);
-		goto out;
-	}
 
 	rc = dfs_read(hdl->dfs, obj, &sgl, 0 /* offset */, &read, NULL);
 	if (rc) {
@@ -447,6 +678,8 @@ __shim_handle__torch_read(PyObject *self, PyObject *args)
 	}
 
 out:
+	D_FREE(dir_name);
+	D_FREE(file_name);
 	PyBuffer_Release(&bview);
 
 	if (obj) {
@@ -486,12 +719,22 @@ start_read_op(struct dfs_handle *hdl, PyObject *item, struct io_op *op)
 {
 	assert(op != NULL);
 
-	int           rc  = 0;
-	int           rc2 = 0;
-	daos_event_t *evp = &op->ev;
+	int           rc     = 0;
+	int           rc2    = 0;
+	daos_event_t *evp    = &op->ev;
+	daos_size_t   offset = 0;
+
+	char         *dir_name  = NULL;
+	char         *file_name = NULL;
+	dfs_obj_t    *parent    = NULL;
+	mode_t        mode      = S_IFREG;
 
 	PyObject     *py_path = PyTuple_GetItem(item, 0);
 	PyObject     *py_buff = PyTuple_GetItem(item, 1);
+
+	if (PyTuple_Size(item) > 2) {
+		offset = PyLong_AsLong(PyTuple_GetItem(item, 2));
+	}
 
 	if (py_path == NULL || py_buff == NULL) {
 		D_ERROR("Each tuple must contain exactly two elements: path and bytearray");
@@ -512,20 +755,31 @@ start_read_op(struct dfs_handle *hdl, PyObject *item, struct io_op *op)
 	if (!PyBuffer_IsContiguous(&op->buf_view, 'C')) {
 		D_ERROR("Buffer for '%s' is not contiguous", path);
 		rc = EINVAL;
-		goto out;
+		goto err;
 	}
 
 	rc = daos_event_init(evp, hdl->eq, NULL);
 	if (rc) {
 		D_ERROR("Could not init event: %s (rc=%d)", d_errstr(rc), rc);
 		rc = daos_der2errno(rc);
-		goto out;
+		goto err;
 	}
 
-	rc = dfs_lookup(hdl->dfs, path, O_RDONLY, &op->obj, NULL, NULL);
+	rc = split_path(path, &dir_name, &file_name);
 	if (rc) {
-		D_ERROR("Could not lookup path '%s': %s (rc=%d)", op->path, strerror(rc), rc);
-		goto out;
+		goto err;
+	}
+
+	rc = lookup_or_insert_dir_obj(hdl, dir_name, &parent);
+	if (rc) {
+		D_ERROR("Could not lookup '%s': %s (rc=%d)", dir_name, strerror(rc), rc);
+		goto err;
+	}
+
+	rc = dfs_open(hdl->dfs, parent, file_name, mode, O_RDONLY, 0, 0, NULL, &op->obj);
+	if (rc) {
+		D_ERROR("Could not open '%s': %s (rc=%d)", op->path, strerror(rc), rc);
+		goto err;
 	}
 
 	op->path = path;
@@ -536,16 +790,21 @@ start_read_op(struct dfs_handle *hdl, PyObject *item, struct io_op *op)
 	op->sgl.sg_nr_out = 0;
 	op->sgl.sg_iovs   = &op->iov;
 
-	rc = dfs_read(hdl->dfs, op->obj, &op->sgl, 0 /* offset */, &op->size, &op->ev);
+	rc = dfs_read(hdl->dfs, op->obj, &op->sgl, offset, &op->size, &op->ev);
 	if (rc) {
 		D_ERROR("Could not start async read on '%s': %s (rc=%d)", op->path, strerror(rc),
 			rc);
-		goto out;
+		goto err;
 	}
+
+	D_FREE(dir_name);
+	D_FREE(file_name);
 
 	return 0;
 
-out:
+err:
+	D_FREE(dir_name);
+	D_FREE(file_name);
 	PyBuffer_Release(&op->buf_view);
 
 	rc2 = daos_event_fini(&op->ev);
@@ -602,9 +861,6 @@ complete_read_op(struct dfs_handle *hdl, struct io_op *op)
 	return rc;
 }
 
-/*
-
- */
 static PyObject *
 __shim_handle__torch_batch_read(PyObject *self, PyObject *args)
 {
@@ -680,6 +936,131 @@ __shim_handle__torch_batch_read(PyObject *self, PyObject *args)
 	return PyLong_FromLong(rc);
 }
 
+static PyObject *
+__shim_handle__torch_write(PyObject *self, PyObject *args)
+{
+	int                rc         = 0;
+	int                rc2        = 0;
+	struct dfs_handle *hdl        = NULL;
+	char              *path       = NULL;
+	char              *dir_name   = NULL;
+	char              *file_name  = NULL;
+	dfs_obj_t         *parent     = NULL;
+	dfs_obj_t         *obj        = NULL;
+	PyObject          *buffer     = NULL;
+	int                oflags     = 0;
+	mode_t             mode       = 0;
+	int                chunk_size = 0;
+	char              *class_name = NULL;
+	daos_size_t        offset     = 0;
+	daos_oclass_id_t   cid        = OC_UNKNOWN;
+
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LsIisiKO", &hdl, &path, &mode, &oflags, &class_name,
+				       &chunk_size, &offset, &buffer);
+	assert(hdl->dfs != NULL);
+
+	mode |= S_IFREG; /* In case when only acl bits were set */
+	cid = daos_oclass_name2id(class_name);
+
+	if (!PyObject_CheckBuffer(buffer)) {
+		PyErr_SetString(PyExc_TypeError,
+				"Expected an object that supports the buffer protocol");
+		return NULL;
+	}
+
+	Py_buffer bview;
+	if (PyObject_GetBuffer(buffer, &bview, PyBUF_READ) == -1) {
+		return NULL;
+	}
+
+	if (!PyBuffer_IsContiguous(&bview, 'C')) {
+		PyErr_SetString(PyExc_BufferError, "Buffer is not contiguous");
+		PyBuffer_Release(&bview);
+		return NULL;
+	}
+
+	rc = split_path(path, &dir_name, &file_name);
+	if (rc) {
+		goto out;
+	}
+
+	rc = lookup_or_insert_dir_obj(hdl, dir_name, &parent);
+	if (rc) {
+		D_ERROR("Could not lookup '%s': %s (rc=%d)", dir_name, strerror(rc), rc);
+		goto out;
+	}
+
+	rc = dfs_open(hdl->dfs, parent, file_name, mode, oflags, cid, chunk_size, NULL, &obj);
+	if (rc) {
+		D_ERROR("Could not open '%s': %s (rc=%d)", path, strerror(rc), rc);
+		goto out;
+	}
+
+	d_iov_t iov;
+	d_iov_set(&iov, bview.buf, bview.len);
+
+	d_sg_list_t sgl = {
+	    .sg_nr     = 1,
+	    .sg_nr_out = 0,
+	    .sg_iovs   = &iov,
+	};
+
+	rc = dfs_write(hdl->dfs, obj, &sgl, offset, NULL);
+	if (rc) {
+		D_ERROR("Could not write to '%s': %s (rc=%d)", path, strerror(rc), rc);
+		goto out;
+	}
+
+out:
+	PyBuffer_Release(&bview);
+
+	if (obj) {
+		rc2 = dfs_release(obj);
+		if (rc2) {
+			D_ERROR("Could not release object '%s': %s (rc=%d)", path, strerror(rc2),
+				rc2);
+		}
+	}
+
+	D_FREE(dir_name);
+	D_FREE(file_name);
+
+	return PyLong_FromLong(rc);
+}
+
+static PyObject *
+__shim_handle__torch_get_fsize(PyObject *self, PyObject *args)
+{
+	struct dfs_handle *hdl       = NULL;
+	char              *path      = NULL;
+	char              *dir_name  = NULL;
+	char              *file_name = NULL;
+	dfs_obj_t         *parent    = NULL;
+	struct stat        st        = {0};
+
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "Ls", &hdl, &path);
+
+	assert(hdl->dfs != NULL);
+
+	int rc = split_path(path, &dir_name, &file_name);
+	if (rc) {
+		return Py_BuildValue("iK", rc, 0);
+	}
+
+	rc = lookup_or_insert_dir_obj(hdl, dir_name, &parent);
+	if (rc) {
+		D_ERROR("Could not lookup '%s': %s (rc=%d)", dir_name, strerror(rc), rc);
+		goto out;
+	}
+
+	rc = dfs_stat(hdl->dfs, parent, file_name, &st);
+
+out:
+	D_FREE(dir_name);
+	D_FREE(file_name);
+	return Py_BuildValue("iK", rc, st.st_size);
+}
+
 /**
  * Python shim module
  */
@@ -694,9 +1075,11 @@ static PyMethodDef torchMethods[] = {
     EXPORT_PYTHON_METHOD(torch_disconnect),
     EXPORT_PYTHON_METHOD(torch_worker_init),
     EXPORT_PYTHON_METHOD(torch_read),
+    EXPORT_PYTHON_METHOD(torch_write),
     EXPORT_PYTHON_METHOD(torch_batch_read),
     EXPORT_PYTHON_METHOD(torch_recommended_dir_split),
     EXPORT_PYTHON_METHOD(torch_list_with_anchor),
+    EXPORT_PYTHON_METHOD(torch_get_fsize),
 
     EXPORT_PYTHON_METHOD(module_init),
     EXPORT_PYTHON_METHOD(module_fini),

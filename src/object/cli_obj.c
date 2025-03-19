@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1717,27 +1718,23 @@ uint32_t
 dc_obj_retry_delay(tse_task_t *task, int err, uint16_t *retry_cnt, uint16_t *inprogress_cnt,
 		   uint32_t timeout_sec)
 {
-	uint32_t	delay = 0;
-	uint32_t	limit = 4;
+	uint32_t delay = 0;
+
+	if (err == -DER_INPROGRESS || err == -DER_UPDATE_AGAIN)
+		++(*inprogress_cnt);
 
 	/*
-	 * Randomly delay 5 ~ 1028 us if it is not the first retry for
-	 * -DER_INPROGRESS || -DER_UPDATE_AGAIN cases.
+	 * Randomly delay 5 ~ 1028 us if it is not the first retry.
 	 */
-	++(*retry_cnt);
-	if (err == -DER_INPROGRESS || err == -DER_UPDATE_AGAIN) {
-		if (++(*inprogress_cnt) > 1) {
-			limit += *inprogress_cnt;
-			if (limit > 10)
-				limit = 10;
+	if (++(*retry_cnt) > 1) {
+		uint32_t limit = MIN(6, *retry_cnt) + 4;
 
-			delay = (d_rand() & ((1 << limit) - 1)) + 5;
-			/* Rebuild is being established on the server side, wait a bit longer */
-			if (err == -DER_UPDATE_AGAIN)
-				delay <<= 10;
-			D_DEBUG(DB_IO, "Try to re-sched task %p for %d/%d times with %u us delay\n",
-				task, (int)*inprogress_cnt, (int)*retry_cnt, delay);
-		}
+		delay = (d_rand() & ((1 << limit) - 1)) + 5;
+		/* Rebuild is being established on the server side, wait a bit longer */
+		if (err == -DER_UPDATE_AGAIN)
+			delay <<= 10;
+		D_DEBUG(DB_IO, "Try to re-sched task %p for %u/%u times with %u us delay\n", task,
+			*inprogress_cnt, *retry_cnt, delay);
 	}
 
 	/*
@@ -1755,8 +1752,7 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	     bool *io_task_reinited)
 {
 	tse_sched_t	 *sched = tse_task2sched(task);
-	tse_task_t	 *pool_task = NULL;
-	uint32_t	  delay;
+	tse_task_t       *pool_task = NULL;
 	int		  result = task->dt_result;
 	int		  rc;
 
@@ -1767,6 +1763,8 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	}
 
 	if (obj_auxi->io_retry) {
+		uint32_t delay = 0;
+
 		if (pool_task != NULL) {
 			rc = dc_task_depend(task, 1, &pool_task);
 			if (rc != 0) {
@@ -1776,8 +1774,11 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 			}
 		}
 
-		delay = dc_obj_retry_delay(task, result, &obj_auxi->retry_cnt,
-					   &obj_auxi->inprogress_cnt, obj_auxi->max_delay);
+		if (!pmap_stale) {
+			delay = dc_obj_retry_delay(task, result, &obj_auxi->retry_cnt,
+						   &obj_auxi->inprogress_cnt, obj_auxi->max_delay);
+		}
+
 		rc = tse_task_reinit_with_delay(task, delay);
 		if (rc != 0)
 			D_GOTO(err, rc);
@@ -5816,7 +5817,8 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 
 	rc = obj_update_shards_get(obj, args, map_ver, obj_auxi, &shard, &shard_cnt);
 	if (rc != 0) {
-		D_ERROR(DF_OID" get update shards failure %d\n", DP_OID(obj->cob_md.omd_id), rc);
+		D_CDEBUG(rc == -DER_STALE, DLOG_DBG, DLOG_ERR,
+			 DF_OID " get update shards failure %d\n", DP_OID(obj->cob_md.omd_id), rc);
 		D_GOTO(out_task, rc);
 	}
 

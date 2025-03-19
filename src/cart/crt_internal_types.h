@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -55,38 +56,39 @@ enum crt_traffic_class { CRT_TRAFFIC_CLASSES };
 
 struct crt_prov_gdata {
 	/** NA plugin type */
-	int			cpg_provider;
+	int                  cpg_provider;
 
-	struct crt_na_config	cpg_na_config;
+	struct crt_na_config cpg_na_config;
 	/** Context0 URI */
-	char			cpg_addr[CRT_ADDR_STR_MAX_LEN];
+	char                 cpg_addr[CRT_ADDR_STR_MAX_LEN];
 
 	/** CaRT contexts list */
-	d_list_t		cpg_ctx_list;
+	d_list_t             cpg_ctx_list;
 	/** actual number of items in CaRT contexts list */
-	int			cpg_ctx_num;
+	int                  cpg_ctx_num;
 	/** maximum number of contexts user wants to create */
-	uint32_t		cpg_ctx_max_num;
+	uint32_t             cpg_ctx_max_num;
 
 	/** free-list of indices */
-	bool			cpg_used_idx[CRT_SRV_CONTEXT_NUM];
+	bool                 cpg_used_idx[CRT_SRV_CONTEXT_NUM];
 
 	/** Hints to mercury/ofi for max expected/unexp sizes */
-	uint32_t		cpg_max_exp_size;
-	uint32_t		cpg_max_unexp_size;
+	uint32_t             cpg_max_exp_size;
+	uint32_t             cpg_max_unexp_size;
 
 	/** Number of remote tags */
-	uint32_t		cpg_num_remote_tags;
-	uint32_t		cpg_last_remote_tag;
+	uint32_t             cpg_num_remote_tags;
+	uint32_t             cpg_last_remote_tag;
 
 	/** Set of flags */
-	unsigned int		cpg_sep_mode		: 1,
-				cpg_primary		: 1,
-				cpg_contig_ports	: 1,
-				cpg_inited		: 1;
+	bool                 cpg_sep_mode;
+	bool                 cpg_primary;
+	bool                 cpg_contig_ports;
+	bool                 cpg_inited;
+	bool                 cpg_progress_busy;
 
 	/** Mutext to protect fields above */
-	pthread_mutex_t		cpg_mutex;
+	pthread_mutex_t      cpg_mutex;
 };
 
 #define MAX_NUM_SECONDARY_PROVS 2
@@ -169,15 +171,14 @@ struct crt_gdata {
 	/** Number of cores on a system */
 	long			 cg_num_cores;
 	/** Inflight rpc quota limit */
-	uint32_t		cg_rpc_quota;
+	uint32_t                 cg_rpc_quota;
+	/** bulk quota limit */
+	uint32_t                 cg_bulk_quota;
+	/** Retry count of HG_Init_opt2() on failure when using CXI provider */
+	uint32_t                 cg_hg_init_retry_cnt;
 };
 
 extern struct crt_gdata		crt_gdata;
-
-struct crt_prog_cb_priv {
-	crt_progress_cb		 cpcp_func;
-	void			*cpcp_args;
-};
 
 struct crt_event_cb_priv {
 	crt_event_cb		 cecp_func;
@@ -197,6 +198,7 @@ struct crt_event_cb_priv {
 	ENV_STR(CRT_ATTACH_INFO_PATH)                                                              \
 	ENV(CRT_CREDIT_EP_CTX)                                                                     \
 	ENV(CRT_CTX_NUM)                                                                           \
+	ENV(CRT_CXI_INIT_RETRY)                                                                    \
 	ENV(CRT_ENABLE_MEM_PIN)                                                                    \
 	ENV_STR(CRT_L_GRP_CFG)                                                                     \
 	ENV(CRT_L_RANK)                                                                            \
@@ -226,6 +228,7 @@ struct crt_event_cb_priv {
 	ENV_STR(D_PORT)                                                                            \
 	ENV(D_PORT_AUTO_ADJUST)                                                                    \
 	ENV(D_THREAD_MODE_SINGLE)                                                                  \
+	ENV(D_PROGRESS_BUSY)                                                                       \
 	ENV(D_POST_INCR)                                                                           \
 	ENV(D_POST_INIT)                                                                           \
 	ENV(D_MRECV_BUF)                                                                           \
@@ -233,6 +236,7 @@ struct crt_event_cb_priv {
 	ENV_STR(D_PROVIDER)                                                                        \
 	ENV_STR_NO_PRINT(D_PROVIDER_AUTH_KEY)                                                      \
 	ENV(D_QUOTA_RPCS)                                                                          \
+	ENV(D_QUOTA_BULKS)                                                                         \
 	ENV(FI_OFI_RXM_USE_SRX)                                                                    \
 	ENV(FI_UNIVERSE_SIZE)                                                                      \
 	ENV(SWIM_PING_TIMEOUT)                                                                     \
@@ -351,19 +355,14 @@ crt_env_dump(void)
 
 /* structure of global fault tolerance data */
 struct crt_plugin_gdata {
-	/* list of progress callbacks */
-	size_t				 cpg_prog_size[CRT_SRV_CONTEXT_NUM];
-	struct crt_prog_cb_priv		*cpg_prog_cbs[CRT_SRV_CONTEXT_NUM];
-	struct crt_prog_cb_priv		*cpg_prog_cbs_old[CRT_SRV_CONTEXT_NUM];
 	/* list of event notification callbacks */
 	size_t				 cpg_event_size;
 	struct crt_event_cb_priv	*cpg_event_cbs;
 	struct crt_event_cb_priv	*cpg_event_cbs_old;
 	uint32_t			 cpg_inited:1;
 	/* hlc error event callback */
-	crt_hlc_error_cb		 hlc_error_cb;
-	void				*hlc_error_cb_arg;
-
+	crt_hlc_error_cb                 hlc_error_cb;
+	void                            *hlc_error_cb_arg;
 	/* mutex to protect all callbacks change only */
 	pthread_mutex_t			 cpg_mutex;
 };
@@ -387,6 +386,29 @@ struct crt_quotas {
 	struct d_tm_node_t     *rpc_quota_exceeded;
 };
 
+/*
+ * crt_bulk - wrapper struct for crt_bulk_t type
+ *
+ * Local structure for representing mercury bulk handle.
+ * Allows deferred allocations of mercury bulk handles by postponing
+ * them until RPC encode time, right before sending onto the wire (HG_Forward())
+ * See crt_proc_crt_bulk_t() for more details
+ *
+ * During deferred allocations hg_bulk_hdl will be set to HG_BULK_NULL (null),
+ * deferred flag set to true and other fields populated based on the original
+ * bulk info provided.
+ *
+ * Deferred allocation is only supported on clients through D_QUOTA_BULKS env
+ */
+struct crt_bulk {
+	hg_bulk_t       hg_bulk_hdl; /** mercury bulk handle */
+	bool            deferred;    /** whether handle allocation was deferred */
+	crt_context_t   crt_ctx;     /** context on which bulk is to be created  */
+	bool            bound;       /** whether crt_bulk_bind() was used on it */
+	d_sg_list_t     sgl;         /** original sgl */
+	crt_bulk_perm_t bulk_perm;   /** bulk permissions */
+};
+
 /* crt_context */
 struct crt_context {
 	d_list_t		 cc_link;	/** link to gdata.cg_ctx_list */
@@ -398,6 +420,10 @@ struct crt_context {
 	void			*cc_rpc_cb_arg;
 	crt_rpc_task_t		 cc_rpc_cb;	/** rpc callback */
 	crt_rpc_task_t		 cc_iv_resp_cb;
+
+	/* progress callback */
+	void                    *cc_prog_cb_arg;
+	crt_progress_cb          cc_prog_cb;
 
 	/** RPC tracking */
 	/** in-flight endpoint tracking hash table */
@@ -411,9 +437,7 @@ struct crt_context {
 	pthread_mutex_t		 cc_mutex;
 
 	/** timeout per-context */
-	uint32_t		 cc_timeout_sec;
-	/** HLC time of last received RPC */
-	uint64_t		 cc_last_unpack_hlc;
+	uint32_t                 cc_timeout_sec;
 
 	/** Per-context statistics (server-side only) */
 	/** Total number of timed out requests, of type counter */

@@ -1,6 +1,0 @@
-etc/daos/certs/clients
-usr/bin
-usr/lib64/daos_srv
-usr/share/daos/control
-usr/lib/systemd/system
-usr/lib64/python3.8/site-packages/storage_estimator

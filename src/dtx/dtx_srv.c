@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -54,6 +55,11 @@ dtx_tls_init(int tags, int xs_id, int tgt_id)
 	if (rc != DER_SUCCESS)
 		D_WARN("Failed to create DTX async commit latency metric: " DF_RC"\n",
 		       DP_RC(rc));
+
+	rc = d_tm_add_metric(&tls->dt_chore_retry, D_TM_COUNTER, "DTX chore retry", NULL,
+			     "io/dtx/chore_retry/tgt_%u", tgt_id);
+	if (rc != DER_SUCCESS)
+		D_WARN("Failed to create DTX chore retry metric: " DF_RC "\n", DP_RC(rc));
 
 	return tls;
 }
@@ -370,10 +376,21 @@ dtx_coll_handler(crt_rpc_t *rpc)
 	int				 i;
 
 	D_ASSERT(hints != NULL);
-	D_ASSERT(dci->dci_hints.ca_count > myrank);
 
-	D_DEBUG(DB_TRACE, "Handling collective DTX PRC %u on rank %d for "DF_DTI" with hint %d\n",
-		opc, myrank, DP_DTI(&dci->dci_xid), (int)hints[myrank]);
+	if (unlikely(dci->dci_hints.ca_count != dci->dci_max_rank - dci->dci_min_rank + 1)) {
+		D_ERROR("On-wire data corruption: hints_cnt %u, max_rank %u, min_rank %u\n",
+			(uint32_t)dci->dci_hints.ca_count, dci->dci_max_rank, dci->dci_min_rank);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (unlikely(myrank < dci->dci_min_rank || myrank > dci->dci_max_rank)) {
+		D_ERROR("On-wire data corruption: myrank %u, max_rank %u, min_rank %u\n", myrank,
+			dci->dci_max_rank, dci->dci_min_rank);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	D_DEBUG(DB_TRACE, "Handling collective DTX PRC %u on rank %d for " DF_DTI " with hint %d\n",
+		opc, myrank, DP_DTI(&dci->dci_xid), (int)hints[myrank - dci->dci_min_rank]);
 
 	dcpa.dcpa_rpc = rpc;
 	rc = ABT_future_create(1, NULL, &dcpa.dcpa_future);
@@ -382,10 +399,12 @@ dtx_coll_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = dss_abterr2der(rc));
 	}
 
-	rc = dss_ult_create(dtx_coll_prep_ult, &dcpa, DSS_XS_VOS, hints[myrank], 0, NULL);
+	rc = dss_ult_create(dtx_coll_prep_ult, &dcpa, DSS_XS_VOS, hints[myrank - dci->dci_min_rank],
+			    0, NULL);
 	if (rc != 0) {
 		ABT_future_free(&dcpa.dcpa_future);
-		D_ERROR("Failed to create ult on XS %u: "DF_RC"\n", hints[myrank], DP_RC(rc));
+		D_ERROR("Failed to create ult on XS %u: " DF_RC "\n",
+			hints[myrank - dci->dci_min_rank], DP_RC(rc));
 		goto out;
 	}
 

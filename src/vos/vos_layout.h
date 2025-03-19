@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -273,8 +274,13 @@ enum vos_io_stream {
 struct vos_cont_ext_df {
 	/* GC bucket extension */
 	struct vos_gc_bkt_df		ced_gc_bkt;
+	/*
+	 * Any modification involved in current target (container shard) under the global
+	 * stable epoch have already been persistently stored globally.
+	 */
+	uint64_t			ced_global_stable_epoch;
 	/* Reserved for potential new features */
-	uint64_t			ced_paddings[38];
+	uint64_t			ced_paddings[37];
 	/* Reserved for future extension */
 	uint64_t			ced_reserve;
 };

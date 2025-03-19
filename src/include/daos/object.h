@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -149,9 +150,9 @@ struct daos_obj_md {
 	uint32_t		omd_fdom_lvl;
 	/* Performance domain affinity */
 	uint32_t		omd_pda;
-	/* Performance domain level - PO_COMP_TP_ROOT or PO_COMP_TP_GRP.
+	/* Performance domain level - PO_COMP_TP_ROOT or PO_COMP_TP_PERF.
 	 * Now will enable the performance domain feature only when omd_pdom_lvl set as
-	 * PO_COMP_TP_GRP and with PO_COMP_TP_GRP layer in pool map.
+	 * PO_COMP_TP_PERF and with PO_COMP_TP_PERF layer in pool map.
 	 */
 	uint32_t		omd_pdom_lvl;
 };

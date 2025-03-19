@@ -1,5 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -834,6 +836,7 @@ crt_hg_class_init(crt_provider_t provider, int ctx_idx, bool primary, int iface_
 	char			addr_str[CRT_ADDR_STR_MAX_LEN] = {'\0'};
 	size_t			str_size = CRT_ADDR_STR_MAX_LEN;
 	struct crt_prov_gdata	*prov_data;
+	uint32_t                 retry_count = 0;
 	int			rc = DER_SUCCESS;
 
 	prov_data = crt_get_prov_gdata(primary, provider);
@@ -843,7 +846,7 @@ crt_hg_class_init(crt_provider_t provider, int ctx_idx, bool primary, int iface_
 
 	init_info.na_init_info.auth_key = prov_data->cpg_na_config.noc_auth_key;
 
-	if (crt_provider_is_block_mode(provider))
+	if (crt_provider_is_block_mode(provider) && !prov_data->cpg_progress_busy)
 		init_info.na_init_info.progress_mode = 0;
 	else
 		init_info.na_init_info.progress_mode = NA_NO_BLOCK;
@@ -869,9 +872,17 @@ crt_hg_class_init(crt_provider_t provider, int ctx_idx, bool primary, int iface_
 		init_info.traffic_class = (enum na_traffic_class)crt_gdata.cg_swim_tc;
 	if (thread_mode_single)
 		init_info.na_init_info.thread_mode = NA_THREAD_MODE_SINGLE;
-
+retry:
 	hg_class = HG_Init_opt2(info_string, crt_is_service(), HG_VERSION(2, 4), &init_info);
 	if (hg_class == NULL) {
+		/** workaround for DAOS-16990, DAOS-17011 - retry a few times on init */
+		if (provider == CRT_PROV_OFI_CXI && !crt_is_service() &&
+		    retry_count < crt_gdata.cg_hg_init_retry_cnt) {
+			retry_count++;
+			D_WARN("Could not initialize HG class; retrying (%d)\n", retry_count);
+			sleep(retry_count * 5);
+			goto retry;
+		}
 		D_ERROR("Could not initialize HG class.\n");
 		D_GOTO(out, rc = -DER_HG);
 	}
@@ -903,6 +914,79 @@ out:
 
 	D_FREE(info_string);
 	return rc;
+}
+
+static void
+crt_hg_ctx_init_tm(struct crt_hg_context *hg_ctx, int idx)
+{
+	struct crt_hg_metrics *metrics;
+	char                  *prov;
+	int                    rc = 0;
+
+	if (hg_ctx == NULL) {
+		D_ERROR("hg_ctx is NULL.\n");
+		return;
+	}
+
+	if (!crt_gdata.cg_use_sensors)
+		return;
+
+	prov    = crt_provider_name_get(hg_ctx->chc_provider);
+	metrics = &hg_ctx->chc_metrics;
+
+	rc = d_tm_add_metric(&metrics->chm_bulks, D_TM_COUNTER,
+			     "Mercury-layer count of bulk transfers", "bulks",
+			     "net/%s/hg/bulks/ctx_%u", prov, idx);
+	if (rc)
+		DL_WARN(rc, "Failed to create hg bulk counter");
+
+	rc = d_tm_add_metric(&metrics->chm_mr_copies, D_TM_COUNTER,
+			     "Mercury-layer count of multi-recv RPC requests requiring a copy",
+			     "rpc", "net/%s/hg/mr_copies/ctx_%u", prov, idx);
+	if (rc)
+		DL_WARN(rc, "Failed to create hg multi recv copy counter");
+
+	rc = d_tm_add_metric(&metrics->chm_active_rpcs, D_TM_GAUGE,
+			     "Mercury-layer count of active RPCs", "rpcs",
+			     "net/%s/hg/active_rpcs/ctx_%u", prov, idx);
+	if (rc)
+		DL_WARN(rc, "Failed to create hg active RPC gauge");
+
+	rc = d_tm_add_metric(&metrics->chm_extra_bulk_req, D_TM_COUNTER,
+			     "Mercury-layer count of RPCs with extra bulk request", "rpcs",
+			     "net/%s/hg/extra_bulk_req/ctx_%u", prov, idx);
+	if (rc)
+		DL_WARN(rc, "Failed to create hg extra bulk req counter");
+
+	rc = d_tm_add_metric(&metrics->chm_extra_bulk_resp, D_TM_COUNTER,
+			     "Mercury-layer count of RPCs with extra bulk response", "rpcs",
+			     "net/%s/hg/extra_bulk_resp/ctx_%u", prov, idx);
+	if (rc)
+		DL_WARN(rc, "Failed to create hg extra bulk resp counter");
+
+	rc = d_tm_add_metric(&metrics->chm_req_sent, D_TM_COUNTER,
+			     "Mercury-layer count of RPC requests sent", "requests",
+			     "net/%s/hg/req_sent/ctx_%u", prov, idx);
+	if (rc)
+		DL_WARN(rc, "Failed to create hg req sent counter");
+
+	rc = d_tm_add_metric(&metrics->chm_resp_recv, D_TM_COUNTER,
+			     "Mercury-layer count of RPC responses received", "responses",
+			     "net/%s/hg/resp_recv/ctx_%u", prov, idx);
+	if (rc)
+		DL_WARN(rc, "Failed to create hg resp recv counter");
+
+	rc = d_tm_add_metric(&metrics->chm_req_recv, D_TM_COUNTER,
+			     "Mercury-layer count of RPC requests received", "requests",
+			     "net/%s/hg/req_recv/ctx_%u", prov, idx);
+	if (rc)
+		DL_WARN(rc, "Failed to create hg req recv counter");
+
+	rc = d_tm_add_metric(&metrics->chm_resp_sent, D_TM_COUNTER,
+			     "Mercury-layer count of RPC responses sent", "responses",
+			     "net/%s/hg/resp_sent/ctx_%u", prov, idx);
+	if (rc)
+		DL_WARN(rc, "Failed to create hg resp sent counter");
 }
 
 int
@@ -950,6 +1034,7 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, crt_provider_t provider, int idx,
 		D_GOTO(out, rc = -DER_HG);
 	}
 
+	hg_ctx->chc_diag_pub_ts     = 0;
 	hg_ctx->chc_hgcla = hg_class;
 	hg_ctx->chc_shared_hg_class = sep_mode;
 
@@ -981,6 +1066,8 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, crt_provider_t provider, int idx,
 	if (rc != 0)
 		D_ERROR("crt_hg_pool_init() failed, context idx %d hg_ctx %p, "
 			"rc: " DF_RC "\n", idx, hg_ctx, DP_RC(rc));
+
+	crt_hg_ctx_init_tm(hg_ctx, idx);
 out:
 	return rc;
 }
@@ -1021,6 +1108,40 @@ crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 	}
 out:
 	return rc;
+}
+
+void
+crt_hg_republish_diags(struct crt_hg_context *hg_ctx)
+{
+	struct hg_diag_counters diags = {0};
+	struct crt_hg_metrics  *metrics;
+	int                     rc = 0;
+
+#ifndef HG_HAS_DIAG
+	return;
+#endif
+
+	if (hg_ctx == NULL) {
+		D_ERROR("hg_ctx is NULL.\n");
+		return;
+	}
+
+	rc = HG_Class_get_counters(hg_ctx->chc_hgcla, &diags);
+	if (rc != HG_SUCCESS) {
+		D_ERROR("HG_Class_get_counters failed, rc: %d.\n", rc);
+		return;
+	}
+
+	metrics = &hg_ctx->chc_metrics;
+	d_tm_set_counter(metrics->chm_bulks, diags.bulk_count);
+	d_tm_set_counter(metrics->chm_mr_copies, diags.rpc_multi_recv_copy_count);
+	d_tm_set_gauge(metrics->chm_active_rpcs, diags.rpc_req_recv_active_count);
+	d_tm_set_counter(metrics->chm_extra_bulk_resp, diags.rpc_resp_extra_count);
+	d_tm_set_counter(metrics->chm_extra_bulk_req, diags.rpc_req_extra_count);
+	d_tm_set_counter(metrics->chm_resp_recv, diags.rpc_resp_recv_count);
+	d_tm_set_counter(metrics->chm_resp_sent, diags.rpc_resp_sent_count);
+	d_tm_set_counter(metrics->chm_req_recv, diags.rpc_req_recv_count);
+	d_tm_set_counter(metrics->chm_req_sent, diags.rpc_req_sent_count);
 }
 
 int
@@ -1585,8 +1706,8 @@ crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout)
 
 #define CRT_HG_IOVN_STACK	(8)
 int
-crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
-		   crt_bulk_perm_t bulk_perm, crt_bulk_t *bulk_hdl)
+crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl, crt_bulk_perm_t bulk_perm,
+		   hg_bulk_t *bulk_hdl)
 {
 	void      **buf_ptrs                           = NULL;
 	void       *buf_ptrs_stack[CRT_HG_IOVN_STACK]  = {0};
@@ -1595,14 +1716,30 @@ crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
 	hg_uint8_t  flags;
 	hg_bulk_t   hg_bulk_hdl;
 	hg_return_t hg_ret;
-	int         rc       = 0, i;
+	int         rc = 0;
+	int         i;
 	bool        allocate = false;
 
 	D_ASSERT(hg_ctx != NULL && hg_ctx->chc_bulkcla != NULL);
 	D_ASSERT(sgl != NULL && bulk_hdl != NULL);
-	D_ASSERT(bulk_perm == CRT_BULK_RW || bulk_perm == CRT_BULK_RO);
 
-	flags = (bulk_perm == CRT_BULK_RW) ? HG_BULK_READWRITE : HG_BULK_READ_ONLY;
+	switch (bulk_perm) {
+	case CRT_BULK_RW:
+		flags = HG_BULK_READWRITE;
+		break;
+	case CRT_BULK_WO:
+		flags = HG_BULK_WRITE_ONLY;
+		break;
+	case CRT_BULK_RO:
+		flags = HG_BULK_READ_ONLY;
+		break;
+	default:
+		D_ASSERT(bulk_perm == CRT_BULK_RW || bulk_perm == CRT_BULK_RO ||
+			 bulk_perm == CRT_BULK_WO);
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Invalid permissions");
+		return rc;
+	}
 
 	if (sgl->sg_nr <= CRT_HG_IOVN_STACK) {
 		buf_sizes = buf_sizes_stack;
@@ -1651,11 +1788,11 @@ out:
 }
 
 int
-crt_hg_bulk_bind(crt_bulk_t bulk_hdl, struct crt_hg_context *hg_ctx)
+crt_hg_bulk_bind(hg_bulk_t hg_bulk_hdl, struct crt_hg_context *hg_ctx)
 {
 	hg_return_t	  hg_ret = HG_SUCCESS;
 
-	hg_ret = HG_Bulk_bind(bulk_hdl, hg_ctx->chc_hgctx);
+	hg_ret = HG_Bulk_bind(hg_bulk_hdl, hg_ctx->chc_hgctx);
 	if (hg_ret != HG_SUCCESS)
 		D_ERROR("HG_Bulk_bind failed, hg_ret " DF_HG_RC "\n",
 			DP_HG_RC(hg_ret));
@@ -1664,7 +1801,7 @@ crt_hg_bulk_bind(crt_bulk_t bulk_hdl, struct crt_hg_context *hg_ctx)
 }
 
 int
-crt_hg_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl)
+crt_hg_bulk_access(hg_bulk_t hg_bulk_hdl, d_sg_list_t *sgl)
 {
 	unsigned int	  bulk_sgnum;
 	unsigned int	  actual_sgnum;
@@ -1672,24 +1809,15 @@ crt_hg_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl)
 	void		**buf_ptrs = NULL;
 	void		 *buf_ptrs_stack[CRT_HG_IOVN_STACK];
 	hg_size_t	 *buf_sizes = NULL;
-	hg_size_t	  buf_sizes_stack[CRT_HG_IOVN_STACK];
-	hg_bulk_t	  hg_bulk_hdl;
+	hg_size_t         buf_sizes_stack[CRT_HG_IOVN_STACK];
 	hg_return_t	  hg_ret = HG_SUCCESS;
 	int		  rc = 0, i;
 	bool		  allocate = false;
 
-	D_ASSERT(bulk_hdl != CRT_BULK_NULL && sgl != NULL);
+	D_ASSERT(hg_bulk_hdl != HG_BULK_NULL && sgl != NULL);
 
-	rc = crt_bulk_get_sgnum(bulk_hdl, &bulk_sgnum);
-	if (rc != 0) {
-		D_ERROR("crt_bulk_get_sgnum failed, rc: %d.\n", rc);
-		D_GOTO(out, rc);
-	}
-	rc = crt_bulk_get_len(bulk_hdl, &bulk_len);
-	if (rc != 0) {
-		D_ERROR("crt_bulk_get_len failed, rc: %d.\n", rc);
-		D_GOTO(out, rc);
-	}
+	bulk_sgnum = crt_hg_bulk_get_sgnum(hg_bulk_hdl);
+	bulk_len   = crt_hg_bulk_get_len(hg_bulk_hdl);
 
 	if (sgl->sg_nr < bulk_sgnum) {
 		D_DEBUG(DB_NET, "sgl->sg_nr (%d) too small, %d required.\n",
@@ -1714,7 +1842,6 @@ crt_hg_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl)
 		allocate = true;
 	}
 
-	hg_bulk_hdl = bulk_hdl;
 	hg_ret = HG_Bulk_access(hg_bulk_hdl, 0, bulk_len, HG_BULK_READWRITE,
 				bulk_sgnum, buf_ptrs, buf_sizes, &actual_sgnum);
 	if (hg_ret != HG_SUCCESS) {
@@ -1765,10 +1892,6 @@ crt_hg_bulk_transfer_cb(const struct hg_cb_info *hg_cbinfo)
 	hg_ctx = &ctx->cc_hg_ctx;
 	D_ASSERT(hg_ctx != NULL);
 	D_ASSERT(hg_cbinfo->type == HG_CB_BULK);
-	D_ASSERT(hg_cbinfo->info.bulk.origin_handle ==
-		 bulk_desc->bd_remote_hdl);
-	D_ASSERT(hg_cbinfo->info.bulk.local_handle ==
-		 bulk_desc->bd_local_hdl);
 
 	if (hg_cbinfo->ret != HG_SUCCESS) {
 		if (hg_cbinfo->ret == HG_CANCELED) {
@@ -1807,23 +1930,39 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 	struct crt_context		*ctx;
 	struct crt_hg_context		*hg_ctx;
 	struct crt_hg_bulk_cbinfo	*bulk_cbinfo;
-	hg_bulk_op_t			hg_bulk_op;
+	hg_bulk_op_t                     hg_bulk_op;
 	struct crt_bulk_desc		*bulk_desc_dup;
 	struct crt_rpc_priv		*rpc_priv;
-	hg_return_t			hg_ret = HG_SUCCESS;
-	int				rc = 0;
+	hg_bulk_t                        local_bulk;
+	hg_bulk_t                        remote_bulk;
+	struct crt_bulk                 *crt_local_bulk;
+	struct crt_bulk                 *crt_remote_bulk;
+	hg_return_t                      hg_ret = HG_SUCCESS;
+	int                              rc     = 0;
 
 	D_ASSERT(bulk_desc != NULL);
 	D_ASSERT(bulk_desc->bd_bulk_op == CRT_BULK_PUT ||
 		 bulk_desc->bd_bulk_op == CRT_BULK_GET);
 	D_ASSERT(bulk_desc->bd_rpc != NULL);
+
 	ctx = bulk_desc->bd_rpc->cr_ctx;
 	hg_ctx = &ctx->cc_hg_ctx;
+
+	crt_local_bulk  = ((struct crt_bulk *)(bulk_desc->bd_local_hdl));
+	crt_remote_bulk = ((struct crt_bulk *)(bulk_desc->bd_remote_hdl));
+
+	D_ASSERT(crt_local_bulk != NULL);
+	D_ASSERT(crt_remote_bulk != NULL);
+
+	local_bulk  = crt_local_bulk->hg_bulk_hdl;
+	remote_bulk = crt_remote_bulk->hg_bulk_hdl;
+
 	D_ASSERT(hg_ctx != NULL && hg_ctx->chc_bulkctx != NULL);
 
 	D_ALLOC_PTR(bulk_cbinfo);
 	if (bulk_cbinfo == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
+
 	D_ALLOC_PTR(bulk_desc_dup);
 	if (bulk_desc_dup == NULL) {
 		D_FREE(bulk_cbinfo);
@@ -1837,30 +1976,19 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 
 	hg_bulk_op = (bulk_desc->bd_bulk_op == CRT_BULK_PUT) ?
 		     HG_BULK_PUSH : HG_BULK_PULL;
-	rpc_priv = container_of(bulk_desc->bd_rpc, struct crt_rpc_priv,
-				crp_pub);
+	rpc_priv   = container_of(bulk_desc->bd_rpc, struct crt_rpc_priv, crp_pub);
+
 	if (bind)
-		hg_ret = HG_Bulk_bind_transfer(hg_ctx->chc_bulkctx,
-				crt_hg_bulk_transfer_cb, bulk_cbinfo,
-				hg_bulk_op, bulk_desc->bd_remote_hdl,
-				bulk_desc->bd_remote_off,
-				bulk_desc->bd_local_hdl,
-				bulk_desc->bd_local_off,
-				bulk_desc->bd_len,
-				opid != NULL ? (hg_op_id_t *)opid :
-				HG_OP_ID_IGNORE);
+		hg_ret = HG_Bulk_bind_transfer(
+		    hg_ctx->chc_bulkctx, crt_hg_bulk_transfer_cb, bulk_cbinfo, hg_bulk_op,
+		    remote_bulk, bulk_desc->bd_remote_off, local_bulk, bulk_desc->bd_local_off,
+		    bulk_desc->bd_len, opid != NULL ? (hg_op_id_t *)opid : HG_OP_ID_IGNORE);
 	else
-		hg_ret = HG_Bulk_transfer_id(hg_ctx->chc_bulkctx,
-				crt_hg_bulk_transfer_cb, bulk_cbinfo,
-				hg_bulk_op, rpc_priv->crp_hg_addr,
-				HG_Get_info(rpc_priv->crp_hg_hdl)->context_id,
-				bulk_desc->bd_remote_hdl,
-				bulk_desc->bd_remote_off,
-				bulk_desc->bd_local_hdl,
-				bulk_desc->bd_local_off,
-				bulk_desc->bd_len,
-				opid != NULL ? (hg_op_id_t *)opid :
-				HG_OP_ID_IGNORE);
+		hg_ret = HG_Bulk_transfer_id(
+		    hg_ctx->chc_bulkctx, crt_hg_bulk_transfer_cb, bulk_cbinfo, hg_bulk_op,
+		    rpc_priv->crp_hg_addr, HG_Get_info(rpc_priv->crp_hg_hdl)->context_id,
+		    remote_bulk, bulk_desc->bd_remote_off, local_bulk, bulk_desc->bd_local_off,
+		    bulk_desc->bd_len, opid != NULL ? (hg_op_id_t *)opid : HG_OP_ID_IGNORE);
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Bulk_(bind)transfer failed, hg_ret: " DF_HG_RC "\n",
 			DP_HG_RC(hg_ret));

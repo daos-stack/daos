@@ -2,6 +2,10 @@
 
 set -uex
 
+: "${HTTPS_PROXY:=}"
+: "${REPO_FILE_URL:=}"
+: "${REPOSITORY_NAME:=artifactory}"
+
 cp /etc/mock/"$CHROOT_NAME".cfg mock.cfg
 
 # Enable mock ccache plugin
@@ -10,6 +14,18 @@ config_opts['plugin_conf']['ccache_enable'] = True
 config_opts['plugin_conf']['ccache_opts']['dir'] = "%(cache_topdir)s/%(root)s/ccache/"
 EOF
 
+# Optionally add a proxy to mock
+if [ -n "$HTTPS_PROXY" ];then
+    yum_proxy="http://${HTTPS_PROXY##*//}"
+    echo "config_opts['https_proxy'] = '$yum_proxy'" >> mock.cfg
+fi
+
+# No proxy for local mirrors
+if [ -n "$REPO_FILE_URL" ]; then
+    direct="${REPO_FILE_URL##*//}"
+    direct="${direct%%/*}"
+    echo "config_opts['no_proxy'] = '${direct}'" >> mock.cfg
+fi
 
 if [[ $CHROOT_NAME == *epel-8-x86_64 ]]; then
     cat <<EOF >> mock.cfg
@@ -60,8 +76,8 @@ if [ -n "${ARTIFACTORY_URL:-}" ] && "$LOCAL_REPOS"; then
                 REPO_FILE_URL="file://$(readlink -e "$REPO_FILES_PR")/"
             fi
         fi
-        curl -sSf "$REPO_FILE_URL"daos_ci-"${CHROOT_NAME%-*}".repo >> mock.cfg
-        repo_adds+=("--enablerepo *-artifactory")
+        curl --noproxy '*' -sSf "$REPO_FILE_URL"daos_ci-"${CHROOT_NAME%-*}".repo >> mock.cfg
+        repo_adds+=("--enablerepo *-${REPOSITORY_NAME}")
     fi
 fi
 
@@ -111,6 +127,10 @@ fi
 
 bs_dir=/scratch/mock/cache/"${CHROOT_NAME}"-bootstrap-$(id -u)
 if ls -l "$bs_dir"/root_cache/cache.tar.gz; then
+    ls -ld /var || true
+    ls -ld /var/cache || true
+    ls -ld /var/cache/mock || true
+    ls -l /var/cache/mock || true
     mkdir -p "/var/cache/mock/${CHROOT_NAME}-bootstrap/"
     flock "$bs_dir" -c "cp -a $bs_dir/root_cache /var/cache/mock/${CHROOT_NAME}-bootstrap"
 fi
@@ -127,7 +147,7 @@ if ! eval time mock -r mock.cfg ${repo_dels[*]} ${repo_adds[*]} --no-clean \
 fi
 
 # Save the ccache
-if [ -d /scratch/ ]; then
+if [ -d /scratch/mock/ ]; then
     mkdir -p "$bs_dir"/
     if ! flock "$bs_dir" -c "tar -czf $bs_dir/ccache-$CHROOT_NAME-$PACKAGE.tar.gz /var/cache/mock/${CHROOT_NAME}/ccache"; then
         echo "Failed to save ccache.  Plowing onward."

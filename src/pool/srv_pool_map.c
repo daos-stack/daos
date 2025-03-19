@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2021-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  *
@@ -7,36 +8,41 @@
 #include <daos/pool_map.h>
 #include "rpc.h"
 
+#define DF_MAP                 DF_UUID ": map=%p"
+#define DP_MAP(pool_uuid, map) DP_UUID(pool_uuid), map
+
 static void
-update_tgt_up_to_upin(struct pool_map *map, struct pool_target *target, bool print_changes,
-		      uint32_t *version)
+update_tgt_up_to_upin(uuid_t pool_uuid, struct pool_map *map, struct pool_target *target,
+		      bool print_changes, uint32_t *version)
 {
-	D_DEBUG(DB_MD, "change "DF_TARGET" to UPIN %p\n", DP_TARGET(target), map);
+	D_DEBUG(DB_MD, DF_MAP ": change " DF_TARGET " to UPIN\n", DP_MAP(pool_uuid, map),
+		DP_TARGET(target));
 	target->ta_comp.co_flags = 0;
 	target->ta_comp.co_in_ver = ++(*version);
 	target->ta_comp.co_status = PO_COMP_ST_UPIN;
 	if (print_changes)
-		D_PRINT(DF_TARGET " is reintegrated.\n", DP_TARGET(target));
-	else
-		D_INFO(DF_TARGET " is reintegrated.\n", DP_TARGET(target));
+		D_PRINT(DF_MAP ": " DF_TARGET " is reintegrated.\n", DP_MAP(pool_uuid, map),
+			DP_TARGET(target));
+	D_INFO(DF_MAP ": " DF_TARGET " is reintegrated.\n", DP_MAP(pool_uuid, map),
+	       DP_TARGET(target));
 }
 
 static void
-update_tgt_down_drain_to_downout(struct pool_map *map, struct pool_target *target,
+update_tgt_down_drain_to_downout(uuid_t pool_uuid, struct pool_map *map, struct pool_target *target,
 				 bool print_changes, uint32_t *version)
 {
 	if (target->ta_comp.co_status == PO_COMP_ST_DOWN)
 		target->ta_comp.co_flags = PO_COMPF_DOWN2OUT;
 
-	D_DEBUG(DB_MD, "change "DF_TARGET" to DOWNOUT %p fseq %u\n",
-		DP_TARGET(target), map, target->ta_comp.co_fseq);
+	D_DEBUG(DB_MD, DF_MAP ": change " DF_TARGET " to DOWNOUT %p fseq %u\n",
+		DP_MAP(pool_uuid, map), DP_TARGET(target), map, target->ta_comp.co_fseq);
 	target->ta_comp.co_status = PO_COMP_ST_DOWNOUT;
 	target->ta_comp.co_out_ver = ++(*version);
 
 	if (print_changes)
-		D_PRINT(DF_TARGET" is excluded\n", DP_TARGET(target));
-	else
-		D_INFO(DF_TARGET" is excluded\n", DP_TARGET(target));
+		D_PRINT(DF_MAP ": " DF_TARGET " is excluded\n", DP_MAP(pool_uuid, map),
+			DP_TARGET(target));
+	D_INFO(DF_MAP ": " DF_TARGET " is excluded\n", DP_MAP(pool_uuid, map), DP_TARGET(target));
 }
 
 /*
@@ -48,8 +54,8 @@ update_tgt_down_drain_to_downout(struct pool_map *map, struct pool_target *targe
  * < 0: failure happened.
  */
 static int
-update_one_tgt(struct pool_map *map, struct pool_target *target,
-	       int opc, uint32_t *version, bool print_changes)
+update_one_tgt(uuid_t pool_uuid, struct pool_map *map, struct pool_target *target, int opc,
+	       uint32_t *version, bool print_changes)
 {
 	int rc = 0;
 
@@ -67,22 +73,21 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 		case PO_COMP_ST_DOWN:
 		case PO_COMP_ST_DOWNOUT:
 			/* Nothing to do, already excluded */
-			D_INFO("Skip exclude down "DF_TARGET"\n",
+			D_INFO(DF_MAP ": Skip exclude down " DF_TARGET "\n", DP_MAP(pool_uuid, map),
 			       DP_TARGET(target));
 			break;
 		case PO_COMP_ST_UP:
 		case PO_COMP_ST_UPIN:
 		case PO_COMP_ST_DRAIN:
-			D_DEBUG(DB_MD, "change "DF_TARGET" to DOWN %p\n",
-				DP_TARGET(target), map);
+			D_DEBUG(DB_MD, DF_MAP ": change " DF_TARGET " to DOWN\n",
+				DP_MAP(pool_uuid, map), DP_TARGET(target));
 			target->ta_comp.co_status = PO_COMP_ST_DOWN;
 			target->ta_comp.co_fseq = ++(*version);
 			if (print_changes)
-				D_PRINT(DF_TARGET " is down.\n",
+				D_PRINT(DF_MAP ": " DF_TARGET " is down.\n", DP_MAP(pool_uuid, map),
 					DP_TARGET(target));
-			else
-				D_INFO(DF_TARGET " is down.\n",
-				       DP_TARGET(target));
+			D_INFO(DF_MAP ": " DF_TARGET " is down.\n", DP_MAP(pool_uuid, map),
+			       DP_TARGET(target));
 			rc = 1;
 			break;
 		case PO_COMP_ST_NEW:
@@ -101,29 +106,27 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 		case PO_COMP_ST_DRAIN:
 		case PO_COMP_ST_DOWNOUT:
 			/* Nothing to do, already excluded / draining */
-			D_INFO("Skip drain down target (rank %u idx %u)\n",
-			       target->ta_comp.co_rank,
-			       target->ta_comp.co_index);
+			D_INFO(DF_MAP ": Skip drain down " DF_TARGET "\n", DP_MAP(pool_uuid, map),
+			       DP_TARGET(target));
 			break;
 		case PO_COMP_ST_NEW:
-			D_ERROR("Can't drain new "DF_TARGET"\n",
+			D_ERROR(DF_MAP ": Can't drain new " DF_TARGET "\n", DP_MAP(pool_uuid, map),
 				DP_TARGET(target));
 			return -DER_BUSY;
 		case PO_COMP_ST_UP:
-			D_ERROR("Can't drain reint "DF_TARGET"\n",
-				DP_TARGET(target));
+			D_ERROR(DF_MAP ": Can't drain reint " DF_TARGET "\n",
+				DP_MAP(pool_uuid, map), DP_TARGET(target));
 			return -DER_BUSY;
 		case PO_COMP_ST_UPIN:
-			D_DEBUG(DB_MD, "change "DF_TARGET" to DRAIN %p\n",
-				DP_TARGET(target), map);
+			D_DEBUG(DB_MD, DF_MAP ": change " DF_TARGET " to DRAIN\n",
+				DP_MAP(pool_uuid, map), DP_TARGET(target));
 			target->ta_comp.co_status = PO_COMP_ST_DRAIN;
 			target->ta_comp.co_fseq = ++(*version);
 			if (print_changes)
-				D_PRINT(DF_TARGET " is draining.\n",
-					DP_TARGET(target));
-			else
-				D_INFO(DF_TARGET " is draining.\n",
-				       DP_TARGET(target));
+				D_PRINT(DF_MAP ": " DF_TARGET " is draining.\n",
+					DP_MAP(pool_uuid, map), DP_TARGET(target));
+			D_INFO(DF_MAP ": " DF_TARGET " is draining.\n", DP_MAP(pool_uuid, map),
+			       DP_TARGET(target));
 			rc = 1;
 			break;
 		}
@@ -132,32 +135,31 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 		switch (target->ta_comp.co_status) {
 		case PO_COMP_ST_NEW:
 			/* Nothing to do, already added */
-			D_INFO("Can't reint new "DF_TARGET"\n",
+			D_INFO(DF_MAP ": Can't reint new " DF_TARGET "\n", DP_MAP(pool_uuid, map),
 			       DP_TARGET(target));
 			return -DER_BUSY;
 		case PO_COMP_ST_UP:
 		case PO_COMP_ST_UPIN:
 			/* Nothing to do, already added */
-			D_INFO("Skip reint up "DF_TARGET"\n",
+			D_INFO(DF_MAP ": Skip reint up " DF_TARGET "\n", DP_MAP(pool_uuid, map),
 			       DP_TARGET(target));
 			break;
 		case PO_COMP_ST_DRAIN:
-			D_ERROR("Can't reint rebuilding "DF_TARGET"\n",
-				DP_TARGET(target));
+			D_ERROR(DF_MAP ": Can't reint rebuilding " DF_TARGET "\n",
+				DP_MAP(pool_uuid, map), DP_TARGET(target));
 			return -DER_BUSY;
 		case PO_COMP_ST_DOWN:
 			target->ta_comp.co_flags |= PO_COMPF_DOWN2UP;
 		case PO_COMP_ST_DOWNOUT:
-			D_DEBUG(DB_MD, "change "DF_TARGET" to UP %p\n",
-				DP_TARGET(target), map);
+			D_DEBUG(DB_MD, DF_MAP ": change " DF_TARGET " to UP\n",
+				DP_MAP(pool_uuid, map), DP_TARGET(target));
 			target->ta_comp.co_status = PO_COMP_ST_UP;
 			target->ta_comp.co_in_ver = ++(*version);
 			if (print_changes)
-				D_PRINT(DF_TARGET " start reintegration.\n",
-					DP_TARGET(target));
-			else
-				D_INFO(DF_TARGET " start reintegration.\n",
-				       DP_TARGET(target));
+				D_PRINT(DF_MAP ": " DF_TARGET " start reintegration.\n",
+					DP_MAP(pool_uuid, map), DP_TARGET(target));
+			D_INFO(DF_MAP ": " DF_TARGET " start reintegration.\n",
+			       DP_MAP(pool_uuid, map), DP_TARGET(target));
 			rc = 1;
 			break;
 		}
@@ -167,25 +169,26 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 		case PO_COMP_ST_NEW:
 			target->ta_comp.co_status = PO_COMP_ST_UP;
 			target->ta_comp.co_in_ver = ++(*version);
-			D_DEBUG(DB_MD, "change "DF_TARGET" to UP %p\n",
-				DP_TARGET(target), map);
+			D_DEBUG(DB_MD, DF_MAP ": change " DF_TARGET " to UP\n",
+				DP_MAP(pool_uuid, map), DP_TARGET(target));
 			if (print_changes)
-				D_PRINT(DF_TARGET " is being extended.\n",
-					DP_TARGET(target));
-			else
-				D_INFO(DF_TARGET " is being extended.\n",
-				       DP_TARGET(target));
+				D_PRINT(DF_MAP ": " DF_TARGET " is being extended.\n",
+					DP_MAP(pool_uuid, map), DP_TARGET(target));
+			D_INFO(DF_MAP ": " DF_TARGET " is being extended.\n",
+			       DP_MAP(pool_uuid, map), DP_TARGET(target));
 			rc = 1;
 			break;
 		case PO_COMP_ST_UP:
 		case PO_COMP_ST_UPIN:
 			/* Nothing to do, already added */
-			D_INFO("Skip extend "DF_TARGET"\n", DP_TARGET(target));
+			D_INFO(DF_MAP ": Skip extend " DF_TARGET "\n", DP_MAP(pool_uuid, map),
+			       DP_TARGET(target));
 			break;
 		case PO_COMP_ST_DOWN:
 		case PO_COMP_ST_DRAIN:
 		case PO_COMP_ST_DOWNOUT:
-			D_ERROR("Can't extend "DF_TARGET"\n", DP_TARGET(target));
+			D_ERROR(DF_MAP ": Can't extend " DF_TARGET "\n", DP_MAP(pool_uuid, map),
+				DP_TARGET(target));
 			return -DER_BUSY;
 		}
 		break;
@@ -196,12 +199,12 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 		case PO_COMP_ST_DOWN:
 		case PO_COMP_ST_DRAIN:
 		case PO_COMP_ST_NEW:
-			/* Nothing to do, already UPIN */
-			D_INFO("Skip ADD_IN UPIN "DF_TARGET"\n",
+			/* Nothing to do */
+			D_INFO(DF_MAP ": Skip ADD_IN " DF_TARGET "\n", DP_MAP(pool_uuid, map),
 			       DP_TARGET(target));
 			break;
 		case PO_COMP_ST_UP:
-			update_tgt_up_to_upin(map, target, print_changes, version);
+			update_tgt_up_to_upin(pool_uuid, map, target, print_changes, version);
 			rc = 1;
 			break;
 		}
@@ -212,13 +215,14 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 		case PO_COMP_ST_DOWNOUT:
 		case PO_COMP_ST_NEW:
 		case PO_COMP_ST_UP:
-			/* Nothing to do, already UPIN */
-			D_INFO("Skip ADD_IN UPIN "DF_TARGET"\n",
+			/* Nothing to do */
+			D_INFO(DF_MAP ": Skip EXCLUDE_OUT " DF_TARGET "\n", DP_MAP(pool_uuid, map),
 			       DP_TARGET(target));
 			break;
 		case PO_COMP_ST_DOWN:
 		case PO_COMP_ST_DRAIN:
-			update_tgt_down_drain_to_downout(map, target, print_changes, version);
+			update_tgt_down_drain_to_downout(pool_uuid, map, target, print_changes,
+							 version);
 			rc = 1;
 			break;
 		}
@@ -228,17 +232,18 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 		case PO_COMP_ST_UPIN:
 		case PO_COMP_ST_DOWNOUT:
 		case PO_COMP_ST_NEW:
-			/* Nothing to do, already UPIN */
-			D_INFO("Skip ADD_IN UPIN "DF_TARGET"\n",
-			       DP_TARGET(target));
+			/* Nothing to do */
+			D_INFO(DF_MAP ": Skip FINISH_REBUILD " DF_TARGET "\n",
+			       DP_MAP(pool_uuid, map), DP_TARGET(target));
 			break;
 		case PO_COMP_ST_DOWN:
 		case PO_COMP_ST_DRAIN:
-			update_tgt_down_drain_to_downout(map, target, print_changes, version);
+			update_tgt_down_drain_to_downout(pool_uuid, map, target, print_changes,
+							 version);
 			rc = 1;
 			break;
 		case PO_COMP_ST_UP:
-			update_tgt_up_to_upin(map, target, print_changes, version);
+			update_tgt_up_to_upin(pool_uuid, map, target, print_changes, version);
 			rc = 1;
 			break;
 		}
@@ -249,9 +254,9 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 		case PO_COMP_ST_DOWNOUT:
 		case PO_COMP_ST_DOWN:
 		case PO_COMP_ST_NEW:
-			/* Nothing to do, already UPIN and DOWNOUT. DOWN can not be revert. */
-			D_INFO("Skip ADD_IN UPIN DOWN "DF_TARGET"\n",
-			       DP_TARGET(target));
+			/* Nothing to do. DOWN can not be revert. */
+			D_INFO(DF_MAP ": Skip REVERT_REBUILD " DF_TARGET "\n",
+			       DP_MAP(pool_uuid, map), DP_TARGET(target));
 			break;
 		case PO_COMP_ST_DRAIN: /* revert DRAIN to UPIN */
 			target->ta_comp.co_status = PO_COMP_ST_UPIN;
@@ -261,30 +266,40 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 			break;
 		case PO_COMP_ST_UP:
 			if (target->ta_comp.co_fseq == 1) {
-				D_DEBUG(DB_MD, "change "DF_TARGET" to NEW %p\n",
-					DP_TARGET(target), map);
+				D_DEBUG(DB_MD, DF_MAP ": change " DF_TARGET " to NEW\n",
+					DP_MAP(pool_uuid, map), DP_TARGET(target));
 				target->ta_comp.co_status = PO_COMP_ST_NEW;
 				target->ta_comp.co_in_ver = 0;
 				++(*version);
 			} else {
-				D_DEBUG(DB_MD, "change "DF_TARGET" to DOWNOUT %p fseq %u\n",
-					DP_TARGET(target), map, target->ta_comp.co_fseq);
-				if (target->ta_comp.co_flags & PO_COMPF_DOWN2UP)
+				if (target->ta_comp.co_flags & PO_COMPF_DOWN2UP) {
+					D_DEBUG(DB_MD,
+						DF_MAP ": change " DF_TARGET " to DOWN fseq %u\n",
+						DP_MAP(pool_uuid, map), DP_TARGET(target),
+						target->ta_comp.co_fseq);
 					target->ta_comp.co_status = PO_COMP_ST_DOWN;
-				else
+				} else {
+					D_DEBUG(DB_MD,
+						DF_MAP ": change " DF_TARGET
+						" to DOWNOUT fseq %u\n",
+						DP_MAP(pool_uuid, map), DP_TARGET(target),
+						target->ta_comp.co_fseq);
 					target->ta_comp.co_status = PO_COMP_ST_DOWNOUT;
+				}
 				target->ta_comp.co_out_ver = ++(*version);
 			}
 			if (print_changes)
-				D_PRINT(DF_TARGET" is excluded.\n", DP_TARGET(target));
-			else
-				D_INFO(DF_TARGET" is excluded.\n", DP_TARGET(target));
+				D_PRINT(DF_MAP ": " DF_TARGET " is reverted.\n",
+					DP_MAP(pool_uuid, map), DP_TARGET(target));
+			D_INFO(DF_MAP ": " DF_TARGET " is reverted.\n", DP_MAP(pool_uuid, map),
+			       DP_TARGET(target));
 			rc = 1;
 			break;
 		}
 		break;
 	default:
-		D_ERROR("Invalid pool target operation: %d\n", opc);
+		D_ERROR(DF_MAP ": Invalid pool target operation: %d\n", DP_MAP(pool_uuid, map),
+			opc);
 		D_ASSERT(0);
 	}
 
@@ -348,12 +363,11 @@ update_one_dom(struct pool_map *map, struct pool_domain *dom, struct pool_target
 
 /*
  * Update "tgts" in "map". A new map version is generated only if actual
- * changes have been made.
+ * changes have been made. The pool_uuid parameter may be NULL.
  */
 int
-ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
-			int opc, bool exclude_rank, uint32_t *tgt_map_ver,
-			bool print_changes)
+ds_pool_map_tgts_update(uuid_t pool_uuid, struct pool_map *map, struct pool_target_id_list *tgts,
+			int opc, bool exclude_rank, uint32_t *tgt_map_ver, bool print_changes)
 {
 	uint32_t	version;
 	int		i;
@@ -372,27 +386,26 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 		rc = pool_map_find_target(map, tgts->pti_ids[i].pti_id,
 					  &target);
 		if (rc <= 0) {
-			D_ERROR("Got request to change nonexistent target %u"
-				" in map %p\n",
-				tgts->pti_ids[i].pti_id, map);
+			D_ERROR(DF_MAP ": Got request to change nonexistent target %u\n",
+				DP_MAP(pool_uuid, map), tgts->pti_ids[i].pti_id);
 			return -DER_NONEXIST;
 		}
 
 		dom = pool_map_find_dom_by_rank(map, target->ta_comp.co_rank);
 		if (dom == NULL) {
-			D_ERROR("Got request to change nonexistent rank %u"
-				" in map %p\n",
-				target->ta_comp.co_rank, map);
+			D_ERROR(DF_MAP ": Got request to change nonexistent rank %u\n",
+				DP_MAP(pool_uuid, map), target->ta_comp.co_rank);
 			return -DER_NONEXIST;
 		}
 
-		rc = update_one_tgt(map, target, opc, &version, print_changes);
+		rc = update_one_tgt(pool_uuid, map, target, opc, &version, print_changes);
 		if (rc < 0)
 			return rc;
 
-		/* if the target status does not need to change */
+		/* if the rank status does not need to change */
 		if (rc == 0 && !exclude_rank) {
-			D_DEBUG(DB_MD, "skip target "DF_TARGET"\n", DP_TARGET(target));
+			D_DEBUG(DB_MD, DF_MAP ": skip target " DF_TARGET "\n",
+				DP_MAP(pool_uuid, map), DP_TARGET(target));
 			continue;
 		}
 
@@ -409,8 +422,8 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 
 	/* Set the version only if actual changes have been made. */
 	if (version > pool_map_get_version(map)) {
-		D_DEBUG(DB_MD, "generating map %p version %u:\n",
-			map, version);
+		D_DEBUG(DB_MD, DF_MAP ": generating version %u:\n", DP_MAP(pool_uuid, map),
+			version);
 		rc = pool_map_set_version(map, version);
 		D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	}

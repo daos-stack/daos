@@ -1,4 +1,6 @@
 # Copyright 2016-2024 Intel Corporation
+# Copyright 2025 Google LLC
+# Copyright 2025 Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -178,6 +180,7 @@ def define_mercury(reqs):
                      '-DBUILD_TESTING_UNIT:BOOL=OFF',
                      '-DMERCURY_USE_BOOST_PP:BOOL=ON',
                      '-DMERCURY_USE_CHECKSUMS:BOOL=OFF',
+                     '-DMERCURY_ENABLE_COUNTERS:BOOL=ON',
                      '-DNA_USE_SM:BOOL=ON',
                      '-DNA_USE_OFI:BOOL=ON',
                      '-DNA_USE_UCX:BOOL=ON',
@@ -304,6 +307,18 @@ def define_components(reqs):
                            '--default-library', 'both', '../fuse'],
                           ['ninja', 'install']],
                 headers=['fuse3/fuse.h'],
+                required_progs=['libtoolize', 'ninja', 'meson'],
+                out_of_src_build=True)
+
+    reqs.define('fused', libs=['fused'], defines=['FUSE_USE_VERSION=35'],
+                retriever=GitRepoRetriever(),
+                commands=[['meson', 'setup', '--prefix=$FUSED_PREFIX', '-Ddisable-mtab=True',
+                           '-Dudevrulesdir=$FUSED_PREFIX/udev', '-Dutils=False',
+                           '--default-library', 'static', '../fused'],
+                          ['meson', 'setup', '--reconfigure', '../fused'],
+                          ['ninja', 'install']],
+                pkgconfig='fused',
+                headers=['fused/fuse.h'],
                 required_progs=['libtoolize', 'ninja', 'meson'],
                 out_of_src_build=True)
 

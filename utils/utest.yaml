@@ -58,6 +58,7 @@
   base: "PREFIX"
   tests:
     - cmd: ["bin/dtx_tests"]
+    - cmd: ["bin/dtx_ut"]
 - name: placement
   base: "PREFIX"
   tests:
@@ -186,6 +187,7 @@
   base: "PREFIX"
   tests:
     - cmd: ["bin/ddb_tests"]
+    - cmd: ["bin/ddb_ut"]
 - name: Source metadata testing
   gha: True
   memcheck: False

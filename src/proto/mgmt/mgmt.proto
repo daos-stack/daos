@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -46,7 +47,7 @@ service MgmtSvc {
 	// Extend a pool.
 	rpc PoolExtend(PoolExtendReq) returns (PoolExtendResp) {}
 	// Reintegrate a pool target.
-	rpc PoolReintegrate(PoolReintegrateReq) returns (PoolReintegrateResp) {}
+	rpc PoolReintegrate(PoolReintReq) returns (PoolReintResp) {}
 	// PoolQuery queries a DAOS pool.
 	rpc PoolQuery(PoolQueryReq) returns (PoolQueryResp) {}
 	// PoolQueryTarget queries a DAOS storage target.
@@ -79,7 +80,7 @@ service MgmtSvc {
 	rpc SystemStart(SystemStartReq) returns(SystemStartResp) {}
 	// Exclude DAOS ranks
 	rpc SystemExclude(SystemExcludeReq) returns(SystemExcludeResp) {}
-	// Drain DAOS ranks from all pools
+	// Drain or reintegrate DAOS ranks from all pools
 	rpc SystemDrain(SystemDrainReq) returns (SystemDrainResp) {}
 	// Erase DAOS system database prior to reformat
 	rpc SystemErase(SystemEraseReq) returns(SystemEraseResp) {}

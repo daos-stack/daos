@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -441,6 +442,11 @@ class EngineYamlParameters(YamlParameters):
             "D_LOG_FILE_APPEND_PID=1",
             "DAOS_POOL_RF=4",
             "CRT_EVENT_DELAY=1",
+            "DAOS_VOS_AGG_GAP=25",
+            # pylint: disable-next=fixme
+            # FIXME disable space cache since some tests need to verify instant pool space
+            # changing, this global setting to individual test setting once in follow-on PR.
+            "DAOS_POOL_SPACE_CACHE_INTVL=0",
             "COVFILE=/tmp/test.cov"],
         "ofi+tcp": [],
         "ofi+tcp;ofi_rxm": [],

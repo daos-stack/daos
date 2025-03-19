@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -87,30 +88,18 @@ dtx_resync_commit(struct ds_cont_child *cont,
 		 */
 		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid, NULL, NULL, NULL, false);
 
-		/* Skip this DTX since it has been committed or aggregated. */
-		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE || rc == -DER_NONEXIST)
-			goto next;
-
-		/* Remote ones are all ready, but local is not, then abort such DTX.
-		 * If related RPC sponsor is still alive, related RPC will be resent.
-		 */
-		if (unlikely(rc == DTX_ST_INITED)) {
-			rc = dtx_abort(cont, &dre->dre_dte, dre->dre_epoch);
-			D_DEBUG(DB_TRACE, "As new leader for DTX "DF_DTI", abort it (1): "DF_RC"\n",
-				DP_DTI(&dre->dre_dte.dte_xid), DP_RC(rc));
-			goto next;
-		}
-
-		/* If we failed to check the status, then assume that it is
+		/*
+		 * Skip this DTX since it has been committed or aggregated.
+		 * If we failed to check the status, then assume that it is
 		 * not committed, then commit it (again), that is harmless.
 		 */
+		if (rc != DTX_ST_COMMITTED && rc != -DER_NONEXIST) {
+			dtes[j] = dtx_entry_get(&dre->dre_dte);
+			dcks[j].oid = dre->dre_oid;
+			dcks[j].dkey_hash = dre->dre_dkey_hash;
+			j++;
+		}
 
-		dtes[j] = dtx_entry_get(&dre->dre_dte);
-		dcks[j].oid = dre->dre_oid;
-		dcks[j].dkey_hash = dre->dre_dkey_hash;
-		j++;
-
-next:
 		dtx_dre_release(drh, dre);
 	}
 

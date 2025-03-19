@@ -1,5 +1,7 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -227,6 +229,22 @@ static btr_ops_t oi_btr_ops = {
 	.to_node_alloc		= oi_node_alloc,
 };
 
+bool
+vos_oi_exist(daos_handle_t coh, daos_unit_oid_t oid)
+{
+	struct vos_container	*cont = vos_hdl2cont(coh);
+	d_iov_t			 key_iov;
+	d_iov_t			 val_iov;
+	int			 rc;
+
+	d_iov_set(&key_iov, &oid, sizeof(oid));
+	d_iov_set(&val_iov, NULL, 0);
+
+	rc = dbtree_fetch(cont->vc_btr_hdl, BTR_PROBE_EQ,
+			  DAOS_INTENT_DEFAULT, &key_iov, NULL, &val_iov);
+	return rc == 0;
+}
+
 /**
  * Locate a durable object in OI table.
  */
@@ -321,6 +339,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 	if (log) {
 		vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
 		rc = ilog_open(vos_cont2umm(cont), &obj->vo_ilog, &cbs, dth == NULL, &loh);
+		D_ASSERTF(rc != -DER_NONEXIST, "Uncorrectable incarnation log corruption detected");
 		if (rc != 0)
 			return rc;
 
