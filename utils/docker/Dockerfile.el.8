@@ -43,6 +43,10 @@ RUN if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "\
     dnf clean all &&      \
     rm -f /tmp/install.sh
 
+# Manually install the latest version of go as it is not available in the default repos
+# Install bison as it is required for installing go
+RUN yum install bison -y
+
 # Add DAOS users
 ARG UID=1000
 COPY ./utils/scripts/helpers/daos-server-user-setup.sh \
@@ -71,6 +75,12 @@ ENV VIRTUAL_ENV=/home/daos/venv/
 COPY requirements-build.txt requirements-utest.txt ./
 RUN python3 -m pip --no-cache-dir install --upgrade pip && \
     python3 -m pip --no-cache-dir install -r requirements-build.txt -r requirements-utest.txt
+
+# Manually install the latest version of go as it is not available in the default repos
+RUN curl -sSL https://raw.githubusercontent.com/moovweb/gvm/master/binscripts/gvm-installer | bash && \
+    source ~/.gvm/scripts/gvm && \
+    gvm install go1.23 && \
+    gvm use go1.23
 
 WORKDIR /home/daos/pre
 RUN mkdir -p /home/daos/pre/site_scons/prereq_tools /home/daos/pre/site_scons/components
