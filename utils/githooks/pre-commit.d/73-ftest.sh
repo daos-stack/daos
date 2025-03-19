@@ -1,6 +1,7 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Copyright 2024 Intel Corporation.
+# Copyright 2025 Hewlett Packard Enterprise Development LP
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -19,4 +20,4 @@ fi
 
 echo "Linting modified files"
 
-_git_diff_cached_files '*/ftest/*.py' | xargs -r python3 src/tests/ftest/tags.py lint
+_git_diff_cached_files '*/ftest/*.py' | xargs -r python3 src/tests/ftest/tags.py lint --paths

@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -607,79 +608,6 @@ Unknown 3 hosts: foo[7-9]
 
 			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
 				t.Fatalf("unexpected string output (-want, +got):\n%s\n", diff)
-			}
-		})
-	}
-}
-
-func TestPretty_PrintSystemDrainResp(t *testing.T) {
-	for name, tc := range map[string]struct {
-		resp   *control.SystemDrainResp
-		expOut string
-	}{
-		"empty response": {
-			resp: &control.SystemDrainResp{},
-			expOut: `
-No pool ranks drained
-`,
-		},
-		"normal response": {
-			resp: &control.SystemDrainResp{
-				Results: []*control.DrainResult{
-					{PoolID: test.MockUUID(1), Ranks: "0-3"},
-					{PoolID: test.MockUUID(2), Ranks: "1-4"},
-				},
-			},
-			expOut: `
-Pool                                 Ranks Result Reason 
-----                                 ----- ------ ------ 
-00000001-0001-0001-0001-000000000001 0-3   OK     N/A    
-00000002-0002-0002-0002-000000000002 1-4   OK     N/A    
-
-`,
-		},
-		"normal response; use labels": {
-			resp: &control.SystemDrainResp{
-				Results: []*control.DrainResult{
-					{PoolID: "label1", Ranks: "0-3"},
-					{PoolID: "label2", Ranks: "1-4"},
-				},
-			},
-			expOut: `
-Pool   Ranks Result Reason 
-----   ----- ------ ------ 
-label1 0-3   OK     N/A    
-label2 1-4   OK     N/A    
-
-`,
-		},
-		"response with failures": {
-			resp: &control.SystemDrainResp{
-				Results: []*control.DrainResult{
-					{PoolID: test.MockUUID(1), Ranks: "1-2"},
-					{PoolID: test.MockUUID(2), Ranks: "0"},
-					{
-						PoolID: test.MockUUID(2), Ranks: "1-2",
-						Status: -1, Msg: "fail1",
-					},
-				},
-			},
-			expOut: `
-Pool                                 Ranks Result Reason 
-----                                 ----- ------ ------ 
-00000001-0001-0001-0001-000000000001 1-2   OK     N/A    
-00000002-0002-0002-0002-000000000002 0     OK     N/A    
-00000002-0002-0002-0002-000000000002 1-2   Failed fail1  
-
-`,
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			var out strings.Builder
-			PrintSystemDrainResponse(&out, tc.resp)
-
-			if diff := cmp.Diff(strings.TrimLeft(tc.expOut, "\n"), out.String()); diff != "" {
-				t.Fatalf("unexpected stdout (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

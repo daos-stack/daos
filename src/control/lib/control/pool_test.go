@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -234,44 +235,177 @@ func TestControl_PoolUpgrade(t *testing.T) {
 	}
 }
 
-func TestControl_PoolDrain(t *testing.T) {
+func TestControl_PoolRanksResp_Errors(t *testing.T) {
 	for name, tc := range map[string]struct {
-		mic    *MockInvokerConfig
-		req    *PoolDrainReq
+		resp   *PoolRanksResp
 		expErr error
 	}{
+		"nil resp": {
+			expErr: errors.New("nil"),
+		},
+		"empty id": {
+			resp: &PoolRanksResp{},
+		},
+		"no results": {
+			resp: &PoolRanksResp{
+				ID: test.MockUUID(),
+			},
+		},
+		"success": {
+			resp: &PoolRanksResp{
+				ID: test.MockUUID(),
+				Results: []*PoolRankResult{
+					{Rank: 1}, {Rank: 2},
+				},
+			},
+		},
+		"failure": {
+			resp: &PoolRanksResp{
+				ID: test.MockUUID(),
+				Results: []*PoolRankResult{
+					{Rank: 1},
+					{Rank: 2, Errored: true, Msg: "bad"},
+					{Rank: 3, Errored: true, Msg: "bad"},
+					{Rank: 4},
+					{Rank: 5, Errored: true, Msg: "bad"},
+				},
+			},
+			expErr: errors.Errorf("ranks [2-3,5] failed on pool %s", test.MockUUID()),
+		},
+		"failure; empty id": {
+			resp: &PoolRanksResp{
+				Results: []*PoolRankResult{
+					{Rank: 2, Errored: true, Msg: "bad"},
+					{Rank: 3, Errored: true, Msg: "bad"},
+				},
+			},
+			expErr: errors.New("ranks [2-3] failed on pool <unknown>"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.CmpErr(t, tc.expErr, tc.resp.Errors())
+		})
+	}
+}
+
+func TestControl_PoolExclude(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mic     *MockInvokerConfig
+		req     *PoolRanksReq
+		expErr  error
+		expResp *PoolRanksResp
+	}{
 		"local failure": {
-			req: &PoolDrainReq{
+			req: &PoolRanksReq{
 				ID:        test.MockUUID(),
-				Rank:      2,
+				Ranks:     []ranklist.Rank{2},
 				TargetIdx: []uint32{1, 2, 3},
 			},
 			mic: &MockInvokerConfig{
 				UnaryError: errors.New("local failed"),
 			},
-			expErr: errors.New("local failed"),
+			expResp: &PoolRanksResp{
+				ID: test.MockUUID(),
+				Results: []*PoolRankResult{
+					{
+						Rank:    2,
+						Errored: true,
+						Msg:     "local failed",
+					},
+				},
+			},
 		},
 		"remote failure": {
-			req: &PoolDrainReq{
+			req: &PoolRanksReq{
 				ID:        test.MockUUID(),
-				Rank:      2,
+				Ranks:     []ranklist.Rank{2},
 				TargetIdx: []uint32{1, 2, 3},
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
 			},
-			expErr: errors.New("remote failed"),
+			expResp: &PoolRanksResp{
+				ID: test.MockUUID(),
+				Results: []*PoolRankResult{
+					{
+						Rank:    2,
+						Errored: true,
+						Msg:     "remote failed",
+					},
+				},
+			},
 		},
-		"success": {
-			req: &PoolDrainReq{
+		"DataPlaneNotStarted error is retried": {
+			req: &PoolRanksReq{
 				ID:        test.MockUUID(),
-				Rank:      2,
+				Ranks:     []ranklist.Rank{2},
 				TargetIdx: []uint32{1, 2, 3},
 			},
 			mic: &MockInvokerConfig{
-				UnaryResponse: MockMSResponse("host1", nil,
-					&mgmtpb.PoolDrainResp{},
-				),
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", &fault.Fault{Code: code.ServerDataPlaneNotStarted},
+						nil),
+					MockMSResponse("host1", nil, &mgmtpb.PoolExcludeResp{}),
+				},
+			},
+			expResp: &PoolRanksResp{
+				ID:      test.MockUUID(),
+				Results: []*PoolRankResult{{Rank: 2}},
+			},
+		},
+		"success": {
+			req: &PoolRanksReq{
+				ID:        test.MockUUID(),
+				Ranks:     []ranklist.Rank{1, 2, 3},
+				TargetIdx: []uint32{1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				// PoolExclude server mgmtSvc gRPC handler to return success for
+				// each rank call.
+				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.PoolExcludeResp{}),
+			},
+			expResp: &PoolRanksResp{
+				ID: test.MockUUID(),
+				Results: []*PoolRankResult{
+					{Rank: 1}, {Rank: 2}, {Rank: 3},
+				},
+			},
+		},
+		"mixed results; all targets": {
+			req: &PoolRanksReq{
+				ID:    test.MockUUID(),
+				Ranks: []ranklist.Rank{0, 1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				// PoolExclude server mgmtSvc gRPC handler to return different resp
+				// for each rank call.
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, &mgmtpb.PoolExcludeResp{}),
+					MockMSResponse("host1", nil, &mgmtpb.PoolExcludeResp{
+						Status: int32(daos.MiscError),
+					}),
+					MockMSResponse("host1", nil, &mgmtpb.PoolExcludeResp{}),
+					MockMSResponse("host1", nil, &mgmtpb.PoolExcludeResp{
+						Status: int32(daos.IOError),
+					}),
+				},
+			},
+			expResp: &PoolRanksResp{
+				ID: test.MockUUID(),
+				Results: []*PoolRankResult{
+					{Rank: 0},
+					{
+						Rank:    1,
+						Errored: true,
+						Msg:     "DER_MISC(-1025): Miscellaneous error",
+					},
+					{Rank: 2},
+					{
+						Rank:    3,
+						Errored: true,
+						Msg:     "DER_IO(-2001): I / O error",
+					},
+				},
 			},
 		},
 	} {
@@ -287,10 +421,309 @@ func TestControl_PoolDrain(t *testing.T) {
 			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
-			gotErr := PoolDrain(ctx, mi, tc.req)
+			resp, gotErr := PoolExclude(ctx, mi, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
+			}
+
+			cmpOpt := cmpopts.IgnoreUnexported(mgmtpb.PoolRanksResp{})
+			if diff := cmp.Diff(tc.expResp, resp, cmpOpt); diff != "" {
+				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestControl_PoolDrain(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mic     *MockInvokerConfig
+		req     *PoolRanksReq
+		expErr  error
+		expResp *PoolRanksResp
+	}{
+		"local failure": {
+			req: &PoolRanksReq{
+				ID:        test.MockUUID(),
+				Ranks:     []ranklist.Rank{2},
+				TargetIdx: []uint32{1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("local failed"),
+			},
+			expResp: &PoolRanksResp{
+				ID: test.MockUUID(),
+				Results: []*PoolRankResult{
+					{
+						Rank:    2,
+						Errored: true,
+						Msg:     "local failed",
+					},
+				},
+			},
+		},
+		"remote failure": {
+			req: &PoolRanksReq{
+				ID:        test.MockUUID(),
+				Ranks:     []ranklist.Rank{2},
+				TargetIdx: []uint32{1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
+			},
+			expResp: &PoolRanksResp{
+				ID: test.MockUUID(),
+				Results: []*PoolRankResult{
+					{
+						Rank:    2,
+						Errored: true,
+						Msg:     "remote failed",
+					},
+				},
+			},
+		},
+		"DataPlaneNotStarted error is retried": {
+			req: &PoolRanksReq{
+				ID:        test.MockUUID(),
+				Ranks:     []ranklist.Rank{2},
+				TargetIdx: []uint32{1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", &fault.Fault{Code: code.ServerDataPlaneNotStarted},
+						nil),
+					MockMSResponse("host1", nil, &mgmtpb.PoolDrainResp{}),
+				},
+			},
+			expResp: &PoolRanksResp{
+				ID:      test.MockUUID(),
+				Results: []*PoolRankResult{{Rank: 2}},
+			},
+		},
+		"success": {
+			req: &PoolRanksReq{
+				ID:        test.MockUUID(),
+				Ranks:     []ranklist.Rank{1, 2, 3},
+				TargetIdx: []uint32{1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				// PoolDrain server mgmtSvc gRPC handler to return success for
+				// each rank call.
+				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.PoolDrainResp{}),
+			},
+			expResp: &PoolRanksResp{
+				ID: test.MockUUID(),
+				Results: []*PoolRankResult{
+					{Rank: 1}, {Rank: 2}, {Rank: 3},
+				},
+			},
+		},
+		"mixed results; all targets": {
+			req: &PoolRanksReq{
+				ID:    test.MockUUID(),
+				Ranks: []ranklist.Rank{0, 1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				// PoolDrain server mgmtSvc gRPC handler to return different resp
+				// for each rank call.
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, &mgmtpb.PoolDrainResp{}),
+					MockMSResponse("host1", nil, &mgmtpb.PoolDrainResp{
+						Status: int32(daos.MiscError),
+					}),
+					MockMSResponse("host1", nil, &mgmtpb.PoolDrainResp{}),
+					MockMSResponse("host1", nil, &mgmtpb.PoolDrainResp{
+						Status: int32(daos.IOError),
+					}),
+				},
+			},
+			expResp: &PoolRanksResp{
+				ID: test.MockUUID(),
+				Results: []*PoolRankResult{
+					{Rank: 0},
+					{
+						Rank:    1,
+						Errored: true,
+						Msg:     "DER_MISC(-1025): Miscellaneous error",
+					},
+					{Rank: 2},
+					{
+						Rank:    3,
+						Errored: true,
+						Msg:     "DER_IO(-2001): I / O error",
+					},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mic := tc.mic
+			if mic == nil {
+				mic = DefaultMockInvokerConfig()
+			}
+
+			ctx := test.Context(t)
+			mi := NewMockInvoker(log, mic)
+
+			resp, gotErr := PoolDrain(ctx, mi, tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			cmpOpt := cmpopts.IgnoreUnexported(mgmtpb.PoolRanksResp{})
+			if diff := cmp.Diff(tc.expResp, resp, cmpOpt); diff != "" {
+				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestControl_PoolReintegrate(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mic     *MockInvokerConfig
+		req     *PoolRanksReq
+		expErr  error
+		expResp *PoolRanksResp
+	}{
+		"local failure": {
+			req: &PoolRanksReq{
+				ID:        test.MockUUID(),
+				Ranks:     []ranklist.Rank{2},
+				TargetIdx: []uint32{1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("local failed"),
+			},
+			expResp: &PoolRanksResp{
+				ID: test.MockUUID(),
+				Results: []*PoolRankResult{
+					{
+						Rank:    2,
+						Errored: true,
+						Msg:     "local failed",
+					},
+				},
+			},
+		},
+		"remote failure": {
+			req: &PoolRanksReq{
+				ID:        test.MockUUID(),
+				Ranks:     []ranklist.Rank{2},
+				TargetIdx: []uint32{1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
+			},
+			expResp: &PoolRanksResp{
+				ID: test.MockUUID(),
+				Results: []*PoolRankResult{
+					{
+						Rank:    2,
+						Errored: true,
+						Msg:     "remote failed",
+					},
+				},
+			},
+		},
+		"DataPlaneNotStarted error is retried": {
+			req: &PoolRanksReq{
+				ID:        test.MockUUID(),
+				Ranks:     []ranklist.Rank{2},
+				TargetIdx: []uint32{1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", &fault.Fault{Code: code.ServerDataPlaneNotStarted},
+						nil),
+					MockMSResponse("host1", nil, &mgmtpb.PoolReintResp{}),
+				},
+			},
+			expResp: &PoolRanksResp{
+				ID:      test.MockUUID(),
+				Results: []*PoolRankResult{{Rank: 2}},
+			},
+		},
+		"success": {
+			req: &PoolRanksReq{
+				ID:        test.MockUUID(),
+				Ranks:     []ranklist.Rank{1, 2, 3},
+				TargetIdx: []uint32{1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				// PoolReintegrate server mgmtSvc gRPC handler to return success for
+				// each rank call.
+				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.PoolReintResp{}),
+			},
+			expResp: &PoolRanksResp{
+				ID: test.MockUUID(),
+				Results: []*PoolRankResult{
+					{Rank: 1}, {Rank: 2}, {Rank: 3},
+				},
+			},
+		},
+		"mixed results; all targets": {
+			req: &PoolRanksReq{
+				ID:    test.MockUUID(),
+				Ranks: []ranklist.Rank{0, 1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				// PoolReintegrate server mgmtSvc gRPC handler to return different resp
+				// for each rank call.
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, &mgmtpb.PoolReintResp{}),
+					MockMSResponse("host1", nil, &mgmtpb.PoolReintResp{
+						Status: int32(daos.MiscError),
+					}),
+					MockMSResponse("host1", nil, &mgmtpb.PoolReintResp{}),
+					MockMSResponse("host1", nil, &mgmtpb.PoolReintResp{
+						Status: int32(daos.IOError),
+					}),
+				},
+			},
+			expResp: &PoolRanksResp{
+				ID: test.MockUUID(),
+				Results: []*PoolRankResult{
+					{Rank: 0},
+					{
+						Rank:    1,
+						Errored: true,
+						Msg:     "DER_MISC(-1025): Miscellaneous error",
+					},
+					{Rank: 2},
+					{
+						Rank:    3,
+						Errored: true,
+						Msg:     "DER_IO(-2001): I / O error",
+					},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mic := tc.mic
+			if mic == nil {
+				mic = DefaultMockInvokerConfig()
+			}
+
+			ctx := test.Context(t)
+			mi := NewMockInvoker(log, mic)
+
+			resp, gotErr := PoolReintegrate(ctx, mi, tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			cmpOpt := cmpopts.IgnoreUnexported(mgmtpb.PoolRanksResp{})
+			if diff := cmp.Diff(tc.expResp, resp, cmpOpt); diff != "" {
+				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
@@ -842,7 +1275,7 @@ func TestControl_PoolQueryResp_MarshalJSON(t *testing.T) {
 					UpgradeLayoutVer: 8,
 				},
 			},
-			exp: `{"query_mask":"disabled_engines,rebuild,space","state":"Ready","uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":[0,1,2],"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8,"mem_file_bytes":0,"status":42}`,
+			exp: `{"query_mask":"disabled_engines,rebuild,space","state":"Ready","uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":[0,1,2],"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8,"mem_file_bytes":0,"md_on_ssd_active":false,"status":42}`,
 		},
 		"valid rankset default query": {
 			pqr: &PoolQueryResp{
@@ -863,9 +1296,10 @@ func TestControl_PoolQueryResp_MarshalJSON(t *testing.T) {
 					PoolLayoutVer:    7,
 					UpgradeLayoutVer: 8,
 					MemFileBytes:     1000,
+					MdOnSsdActive:    true,
 				},
 			},
-			exp: `{"query_mask":"disabled_engines,rebuild,space","state":"Ready","uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":[0,1,2],"rebuild":null,"tier_stats":null,"enabled_ranks":[0,1,2,3,5],"disabled_ranks":[],"pool_layout_ver":7,"upgrade_layout_ver":8,"mem_file_bytes":1000,"status":42}`,
+			exp: `{"query_mask":"disabled_engines,rebuild,space","state":"Ready","uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":[0,1,2],"rebuild":null,"tier_stats":null,"enabled_ranks":[0,1,2,3,5],"disabled_ranks":[],"pool_layout_ver":7,"upgrade_layout_ver":8,"mem_file_bytes":1000,"md_on_ssd_active":true,"status":42}`,
 		},
 		"valid rankset health query": {
 			pqr: &PoolQueryResp{
@@ -887,7 +1321,7 @@ func TestControl_PoolQueryResp_MarshalJSON(t *testing.T) {
 					UpgradeLayoutVer: 8,
 				},
 			},
-			exp: `{"query_mask":"dead_engines,disabled_engines,rebuild","state":"Ready","uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":[0,1,2],"rebuild":null,"tier_stats":null,"disabled_ranks":[],"dead_ranks":[7,8,9],"pool_layout_ver":7,"upgrade_layout_ver":8,"mem_file_bytes":0,"status":42}`,
+			exp: `{"query_mask":"dead_engines,disabled_engines,rebuild","state":"Ready","uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":[0,1,2],"rebuild":null,"tier_stats":null,"disabled_ranks":[],"dead_ranks":[7,8,9],"pool_layout_ver":7,"upgrade_layout_ver":8,"mem_file_bytes":0,"md_on_ssd_active":false,"status":42}`,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

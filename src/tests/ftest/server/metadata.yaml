@@ -1,11 +1,13 @@
 hosts:
   test_servers: 4
   test_clients: 1
+
 timeouts:
   test_metadata_fillup_svc_ops_disabled: 400
   test_metadata_fillup_svc_ops_enabled: 400
   test_metadata_addremove: 1300
-  test_metadata_server_restart: 500
+  test_metadata_server_restart: 1500
+
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -52,16 +54,23 @@ pool:
 #  properties: svc_ops_entry_age:150
 #  properties: svc_ops_entry_age:300
 #  properties: svc_ops_entry_age:600
+
 container:
   control_method: API
   silent: true
+  register_cleanup: False
+
 ior:
-  clientslots:
-    slots: 1
+  np: 1
   dfs_destroy: false
   iorwriteflags: "-w -W -k -G 1"
   iorreadflags: "-r -R -G 1"
-  dfs_oclass: "SX"
+  test_file: /testFile
+  transfer_size: 8B
+  block_size: 8B
+  api: DFS
+  dfs_oclass: SX
+
 metadata:
   mean_percent: 1
   num_addremove_loops: 4

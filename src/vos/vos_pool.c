@@ -1,5 +1,6 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2025 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -794,6 +795,9 @@ vos2mc_flags(unsigned int vos_flags)
 	if (vos_flags & VOS_POF_RDB)
 		mc_flags |= BIO_MC_FL_RDB;
 
+	if (vos_flags & VOS_POF_FOR_RECREATE)
+		mc_flags |= BIO_MC_FL_RECREATE;
+
 	return mc_flags;
 }
 
@@ -1064,6 +1068,18 @@ vos_delete_blob(uuid_t pool_uuid, unsigned int flags)
 	return;
 }
 
+static inline void
+pool_free(struct vos_pool *pool)
+{
+	if (pool->vp_cond != ABT_COND_NULL)
+		ABT_cond_free(&pool->vp_cond);
+
+	if (pool->vp_mutex != ABT_MUTEX_NULL)
+		ABT_mutex_free(&pool->vp_mutex);
+
+	D_FREE(pool);
+}
+
 static void
 pool_hop_free(struct d_ulink *hlink)
 {
@@ -1103,11 +1119,27 @@ pool_hop_free(struct d_ulink *hlink)
 	if (pool->vp_dying)
 		vos_delete_blob(pool->vp_id, pool->vp_rdb ? VOS_POF_RDB : 0);
 
-	D_FREE(pool);
+	pool_free(pool);
+}
+
+static bool
+pool_hop_cmp(struct d_ulink *ulink, void *cmp_args)
+{
+	struct vos_pool	*pool;
+	bool		 show_all;
+
+	D_ASSERT(cmp_args != NULL);
+	show_all = *(bool *)cmp_args;
+	pool = container_of(ulink, struct vos_pool, vp_hlink);
+	if (!pool->vp_opening || show_all)
+		return true;
+
+	return false;
 }
 
 static struct d_ulink_ops   pool_uuid_hops = {
 	.uop_free       = pool_hop_free,
+	.uop_cmp	= pool_hop_cmp,
 };
 
 /** allocate DRAM instance of vos pool */
@@ -1115,10 +1147,24 @@ static int
 pool_alloc(uuid_t uuid, struct vos_pool **pool_p)
 {
 	struct vos_pool		*pool;
+	int			 rc;
 
 	D_ALLOC_PTR(pool);
 	if (pool == NULL)
 		return -DER_NOMEM;
+
+	rc = ABT_mutex_create(&pool->vp_mutex);
+	if (rc != ABT_SUCCESS) {
+		D_FREE(pool);
+		return dss_abterr2der(rc);
+	}
+
+	rc = ABT_cond_create(&pool->vp_cond);
+	if (rc != ABT_SUCCESS) {
+		ABT_mutex_free(&pool->vp_mutex);
+		D_FREE(pool);
+		return dss_abterr2der(rc);
+	}
 
 	d_uhash_ulink_init(&pool->vp_hlink, &pool_uuid_hops);
 	D_INIT_LIST_HEAD(&pool->vp_gc_link);
@@ -1130,36 +1176,34 @@ pool_alloc(uuid_t uuid, struct vos_pool **pool_p)
 }
 
 static int
-pool_link(struct vos_pool *pool, struct d_uuid *ukey, daos_handle_t *poh)
+pool_lookup(struct d_uuid *ukey, struct vos_pool **pool_p, bool show_all)
 {
-	int	rc;
+	struct vos_pool		*pool;
+	struct d_ulink		*hlink;
+	struct d_hash_table	*htable;
 
-	rc = d_uhash_link_insert(vos_pool_hhash_get(pool->vp_sysdb), ukey, NULL,
-				 &pool->vp_hlink);
-	if (rc) {
-		D_ERROR("uuid hash table insert failed: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(failed, rc);
-	}
-	*poh = vos_pool2hdl(pool);
-	return 0;
-failed:
-	return rc;
-}
+	htable = vos_pool_hhash_get(uuid_compare(ukey->uuid, *vos_db_pool_uuid()) == 0);
 
-static int
-pool_lookup(struct d_uuid *ukey, struct vos_pool **pool)
-{
-	struct d_ulink *hlink;
-	bool		is_sysdb = uuid_compare(ukey->uuid, *vos_db_pool_uuid()) == 0 ?
-					true : false;
-
-	hlink = d_uhash_link_lookup(vos_pool_hhash_get(is_sysdb), ukey, NULL);
+again:
+	hlink = d_uhash_link_lookup(htable, ukey, &show_all);
 	if (hlink == NULL) {
 		D_DEBUG(DB_MGMT, "can't find "DF_UUID"\n", DP_UUID(ukey->uuid));
 		return -DER_NONEXIST;
 	}
 
-	*pool = pool_hlink2ptr(hlink);
+	pool = pool_hlink2ptr(hlink);
+	if (unlikely(pool->vp_opening)) {
+		D_ASSERT(show_all);
+
+		ABT_mutex_lock(pool->vp_mutex);
+		if (likely(pool->vp_opening))
+			ABT_cond_wait(pool->vp_cond, pool->vp_mutex);
+		ABT_mutex_unlock(pool->vp_mutex);
+		vos_pool_decref(pool);
+		goto again;
+	}
+
+	*pool_p = pool;
 	return 0;
 }
 
@@ -1209,8 +1253,12 @@ vos_blob_unmap_cb(d_sg_list_t *unmap_sgl, uint32_t blk_sz, void *data)
 	return rc;
 }
 
-static int pool_open(void *ph, struct vos_pool_df *pool_df,
-		     unsigned int flags, void *metrics, daos_handle_t *poh);
+static int
+pool_open_prep(uuid_t uuid, unsigned int flags, struct vos_pool **p_pool);
+
+static int
+pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned int flags,
+	       void *metrics, struct vos_pool *pool, int ret);
 
 int
 vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t nvme_sz,
@@ -1220,7 +1268,7 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_
 	struct umem_pool	*ph;
 	struct umem_attr	 uma = {0};
 	struct umem_instance	 umem = {0};
-	struct vos_pool_df	*pool_df;
+	struct vos_pool_df	*pool_df = NULL;
 	struct bio_blob_hdr	 blob_hdr;
 	uint32_t		 vea_compat = 0;
 	daos_handle_t		 hdl;
@@ -1246,7 +1294,7 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_
 		flags |= VOS_POF_EXCL;
 
 	uuid_copy(ukey.uuid, uuid);
-	rc = pool_lookup(&ukey, &pool);
+	rc = pool_lookup(&ukey, &pool, true);
 	if (rc == 0) {
 		D_ASSERT(pool != NULL);
 		D_ERROR("Found already opened(%d) pool:%p dying(%d)\n",
@@ -1261,12 +1309,20 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_
 		return daos_errno2der(errno);
 	}
 
+	/*
+	 * The caller may not want to open the pool, but we still need to insert the pool
+	 * handle into the hash table to handle concurrent pool_create or pool_open.
+	 */
+	rc = pool_open_prep(uuid, flags, &pool);
+	if (rc != 0)
+		return rc;
+
 	rc = vos_pmemobj_create(path, uuid, VOS_POOL_LAYOUT, scm_sz, nvme_sz, wal_sz, meta_sz,
 				flags, &ph);
 	if (rc) {
 		D_ERROR("Failed to create pool %s, scm_sz="DF_U64", nvme_sz="DF_U64", meta_sz="
 			DF_U64". "DF_RC"\n", path, scm_sz, nvme_sz, meta_sz, DP_RC(rc));
-		return rc;
+		goto post;
 	}
 
 	pool_df = vos_pool_pop2df(ph);
@@ -1279,7 +1335,7 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_
 
 		rc = stat(path, &lstat);
 		if (rc != 0)
-			D_GOTO(close, rc = daos_errno2der(errno));
+			D_GOTO(post, rc = daos_errno2der(errno));
 		scm_sz = lstat.st_size;
 	}
 
@@ -1288,11 +1344,11 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_
 
 	rc = umem_class_init(&uma, &umem);
 	if (rc != 0)
-		goto close;
+		goto post;
 
 	rc = umem_tx_begin(&umem, NULL);
 	if (rc != 0)
-		goto close;
+		goto post;
 
 	rc = umem_tx_add_ptr(&umem, pool_df, sizeof(*pool_df));
 	if (rc != 0)
@@ -1344,12 +1400,12 @@ end:
 
 	if (rc != 0) {
 		D_ERROR("Initialize pool root error: "DF_RC"\n", DP_RC(rc));
-		goto close;
+		goto post;
 	}
 
 	/* SCM only pool or data blob isn't configured */
 	if (nvme_sz == 0 || !bio_nvme_configured(SMD_DEV_TYPE_DATA))
-		goto open;
+		goto post;
 
 	/* Format SPDK blob header */
 	blob_hdr.bbh_blk_sz = VOS_BLK_SZ;
@@ -1368,19 +1424,21 @@ end:
 	if (rc) {
 		D_ERROR("Format blob error for pool:"DF_UUID". "DF_RC"\n",
 			DP_UUID(uuid), DP_RC(rc));
-		goto close;
+		goto post;
 	}
 
-open:
-	/* If the caller does not want a VOS pool handle, we're done. */
-	if (poh == NULL)
-		goto close;
+post:
+	if (rc == 0 && poh != NULL) {
+		rc = pool_open_post(&ph, pool_df, flags, NULL, pool, rc);
+		if (rc == 0)
+			*poh = vos_pool2hdl(pool);
+	} else {
+		pool->vp_opening = 0;
+		ABT_cond_broadcast(pool->vp_cond);
+		vos_pool_hash_del(pool);
+		vos_pool_decref(pool);
+	}
 
-	/* Create a VOS pool handle using ph. */
-	rc = pool_open(ph, pool_df, flags, NULL, poh);
-	ph = NULL;
-
-close:
 	/* Close this local handle, if it hasn't been consumed nor already
 	 * been closed by pool_open upon error.
 	 */
@@ -1411,7 +1469,7 @@ vos_pool_kill(uuid_t uuid, unsigned int flags)
 	while (1) {
 		struct vos_pool	*pool = NULL;
 
-		rc = pool_lookup(&ukey, &pool);
+		rc = pool_lookup(&ukey, &pool, true);
 		if (rc) {
 			D_ASSERT(rc == -DER_NONEXIST);
 			rc = 0;
@@ -1542,43 +1600,84 @@ lock_pool_memory(struct vos_pool *pool)
 		pool->vp_umm.umm_base);
 }
 
-/*
- * If successful, this function consumes ph, and closes it upon any error.
- * So the caller shall not close ph in any case.
- */
 static int
-pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metrics,
-	  daos_handle_t *poh)
+pool_open_prep(uuid_t uuid, unsigned int flags, struct vos_pool **p_pool)
 {
 	struct vos_pool		*pool = NULL;
-	struct umem_attr	*uma;
 	struct d_uuid		 ukey;
 	int			 rc;
+	bool			 show_all = true;
 
 	/* Create a new handle during open */
-	rc = pool_alloc(pool_df->pd_id, &pool); /* returned with refcount=1 */
+	rc = pool_alloc(uuid, &pool); /* returned with refcount=1 */
 	if (rc != 0) {
 		D_ERROR("Error allocating pool handle\n");
-		vos_pmemobj_close(ph);
 		return rc;
 	}
 
+	pool->vp_opening = 1;
+	pool->vp_sysdb = !!(flags & VOS_POF_SYSDB);
+	pool->vp_excl = !!(flags & VOS_POF_EXCL);
+	pool->vp_small = !!(flags & VOS_POF_SMALL);
+	pool->vp_rdb = !!(flags & VOS_POF_RDB);
+
+	/*
+	 * Insert the pool into the uuid hash table before full opened, because subsequent
+	 * pool_open process maybe yield and other pool_lookup for the same UUID will find
+	 * the in-processing pool_open, then wait there and avoid concurrent pool_open.
+	 */
+	uuid_copy(ukey.uuid, uuid);
+	rc = d_uhash_link_insert(vos_pool_hhash_get(pool->vp_sysdb), &ukey, &show_all,
+				 &pool->vp_hlink);
+	if (rc != 0) {
+		D_ERROR("uuid hash table insert for pool " DF_UUID " failed: " DF_RC "\n",
+			DP_UUID(uuid), DP_RC(rc));
+		pool_free(pool);
+	} else {
+		/* Here, two references on the pool: one is for myself, the other for the hash. */
+		*p_pool = pool;
+	}
+
+	return rc;
+}
+
+static int
+pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned int flags,
+	       void *metrics, struct vos_pool *pool, int ret)
+{
+	struct umem_attr	*uma;
+	int			 rc;
+
+	if (ret != 0)
+		D_GOTO(out, rc = ret);
+
+	D_ASSERT(pool_df != NULL);
+
 	uma = &pool->vp_uma;
-	uma->uma_pool = ph;
+	uma->uma_pool = *p_ph;
 	uma->uma_id = umempobj_backend_type2class_id(uma->uma_pool->up_store.store_type);
+
+	/* initialize a umem instance for later btree operations */
+	rc = umem_class_init(uma, &pool->vp_umm);
+	if (rc != 0)
+		goto out;
+
+	/* It has been taken by uma->uma_pool and will be closed when pool_hop_free(). */
+	*p_ph = NULL;
+
+	if (pool_df->pd_version >= VOS_POOL_DF_2_4)
+		pool->vp_feats |= VOS_POOL_FEAT_2_4;
+	if (pool_df->pd_version >= VOS_POOL_DF_2_6)
+		pool->vp_feats |= VOS_POOL_FEAT_2_6;
+	if (pool_df->pd_version >= VOS_POOL_DF_2_8)
+		pool->vp_feats |= VOS_POOL_FEAT_2_8;
+	pool->vp_pool_df = pool_df;
 
 	/* Initialize dummy data I/O context */
 	rc = bio_ioctxt_open(&pool->vp_dummy_ioctxt, vos_xsctxt_get(), pool->vp_id, true);
 	if (rc) {
 		D_ERROR("Failed to open dummy I/O context. "DF_RC"\n", DP_RC(rc));
-		D_GOTO(failed, rc);
-	}
-
-	/* initialize a umem instance for later btree operations */
-	rc = umem_class_init(uma, &pool->vp_umm);
-	if (rc != 0) {
-		D_ERROR("Failed to instantiate umem: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(failed, rc);
+		goto out;
 	}
 
 	/* Cache container table btree hdl */
@@ -1586,7 +1685,7 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 				    DAOS_HDL_INVAL, pool, &pool->vp_cont_th);
 	if (rc) {
 		D_ERROR("Container Tree open failed\n");
-		D_GOTO(failed, rc);
+		goto out;
 	}
 
 	pool->vp_metrics = metrics;
@@ -1607,54 +1706,40 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 		if (rc) {
 			D_ERROR("Failed to load block space info: "DF_RC"\n",
 				DP_RC(rc));
-			goto failed;
+			goto out;
 		}
+
+		if (pool->vp_vea_info == NULL)
+			/** always store on SCM if no bdev */
+			pool->vp_data_thresh = 0;
+		else
+			pool->vp_data_thresh = DAOS_PROP_PO_DATA_THRESH_DEFAULT;
 	}
 
 	rc = vos_dedup_init(pool);
 	if (rc)
-		goto failed;
-
-	/* Insert the opened pool to the uuid hash table */
-	uuid_copy(ukey.uuid, pool_df->pd_id);
-	pool->vp_sysdb = !!(flags & VOS_POF_SYSDB);
-	pool->vp_dtx_committed_count = 0;
-	pool->vp_pool_df             = pool_df;
-	pool->vp_opened = 1;
-	pool->vp_excl = !!(flags & VOS_POF_EXCL);
-	pool->vp_small = !!(flags & VOS_POF_SMALL);
-	pool->vp_rdb    = !!(flags & VOS_POF_RDB);
-	if (pool_df->pd_version >= VOS_POOL_DF_2_4)
-		pool->vp_feats |= VOS_POOL_FEAT_2_4;
-	if (pool_df->pd_version >= VOS_POOL_DF_2_6)
-		pool->vp_feats |= VOS_POOL_FEAT_2_6;
-	if (pool_df->pd_version >= VOS_POOL_DF_2_8)
-		pool->vp_feats |= VOS_POOL_FEAT_2_8;
-
-	if (pool->vp_vea_info == NULL)
-		/** always store on SCM if no bdev */
-		pool->vp_data_thresh = 0;
-	else
-		pool->vp_data_thresh = DAOS_PROP_PO_DATA_THRESH_DEFAULT;
+		goto out;
 
 	rc = gc_open_pool(pool);
 	if (rc)
-		goto failed;
+		goto out;
 
-	rc = pool_link(pool, &ukey, poh);
-	if (rc) {
-		D_ERROR("Error inserting into vos DRAM hash\n");
-		D_GOTO(failed, rc);
-	}
-
+	pool->vp_opened = 1;
 	vos_space_sys_init(pool);
 	/* Ensure GC is triggered after server restart */
 	gc_add_pool(pool);
 	lock_pool_memory(pool);
-	D_DEBUG(DB_MGMT, "Opened pool %p df version %d\n", pool, pool_df->pd_version);
-	return 0;
-failed:
-	vos_pool_decref(pool); /* -1 for myself */
+
+out:
+	DL_CDEBUG(rc != 0, DLOG_ERR, DB_MGMT, rc,
+		  "Open pool " DF_UUID "(%p) with df version %d",
+		  DP_UUID(pool->vp_id), pool, pool_df != NULL ? pool_df->pd_version : -1);
+	pool->vp_opening = 0;
+	ABT_cond_broadcast(pool->vp_cond);
+	if (rc != 0) {
+		vos_pool_hash_del(pool);
+		vos_pool_decref(pool);
+	}
 	return rc;
 }
 
@@ -1662,16 +1747,21 @@ int
 vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *metrics,
 		      daos_handle_t *poh)
 {
-	struct vos_pool_df	*pool_df;
+	struct vos_pool_df	*pool_df = NULL;
 	struct vos_pool		*pool = NULL;
+	struct umem_pool	*ph = NULL;
 	struct d_uuid		 ukey;
-	struct umem_pool	*ph;
 	int			 rc;
-	bool			 skip_uuid_check = flags & VOS_POF_SKIP_UUID_CHECK;
 
 	if (path == NULL || poh == NULL) {
 		D_ERROR("Invalid parameters.\n");
 		return -DER_INVAL;
+	}
+
+	if (unlikely(flags & VOS_POF_SKIP_UUID_CHECK)) {
+		D_ERROR("Do not support SKIP_UUID_CHECK flags (%x) via regular pool open API\n",
+			VOS_POF_SKIP_UUID_CHECK);
+		return -DER_NOTSUPPORTED;
 	}
 
 	D_DEBUG(DB_MGMT, "Pool Path: %s, UUID: "DF_UUID"\n", path,
@@ -1680,40 +1770,43 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 	if (flags & VOS_POF_SMALL)
 		flags |= VOS_POF_EXCL;
 
-	if (!skip_uuid_check) {
-		uuid_copy(ukey.uuid, uuid);
-		rc = pool_lookup(&ukey, &pool);
-		if (rc == 0) {
-			D_ASSERT(pool != NULL);
-			D_DEBUG(DB_MGMT, "Found already opened(%d) pool : %p\n",
-				pool->vp_opened, pool);
-			if (pool->vp_dying) {
-				D_ERROR("Found dying pool : %p\n", pool);
-				vos_pool_decref(pool);
-				return -DER_BUSY;
-			}
-			if (!(flags & VOS_POF_FOR_CHECK_QUERY) &&
-			    ((flags & VOS_POF_EXCL) || pool->vp_excl)) {
-				vos_pool_decref(pool);
-				return -DER_BUSY;
-			}
-			pool->vp_opened++;
-			*poh = vos_pool2hdl(pool);
-			return 0;
+	uuid_copy(ukey.uuid, uuid);
+
+	rc = pool_lookup(&ukey, &pool, true);
+	if (rc == 0) {
+		D_ASSERT(pool != NULL);
+		D_DEBUG(DB_MGMT, "Found already opened(%d) pool : %p\n",
+			pool->vp_opened, pool);
+		if (pool->vp_dying) {
+			D_ERROR("Found dying pool : %p\n", pool);
+			vos_pool_decref(pool);
+			return -DER_BUSY;
 		}
+		if (!(flags & VOS_POF_FOR_CHECK_QUERY) &&
+		    ((flags & VOS_POF_EXCL) || pool->vp_excl)) {
+			vos_pool_decref(pool);
+			return -DER_BUSY;
+		}
+		pool->vp_opened++;
+		*poh = vos_pool2hdl(pool);
+		return 0;
 	}
+
+	rc = pool_open_prep(uuid, flags, &pool);
+	if (rc != 0)
+		return rc;
 
 	rc = bio_xsctxt_health_check(vos_xsctxt_get(), false, false);
 	if (rc) {
 		DL_WARN(rc, DF_UUID": Skip pool open due to faulty NVMe.", DP_UUID(uuid));
-		return rc;
+		goto out;
 	}
 
 	rc = vos_pmemobj_open(path, uuid, VOS_POOL_LAYOUT, flags, metrics, &ph);
 	if (rc) {
 		D_ERROR("Error in opening the pool "DF_UUID". "DF_RC"\n",
 			DP_UUID(uuid), DP_RC(rc));
-		return rc;
+		goto out;
 	}
 
 	pool_df = vos_pool_pop2df(ph);
@@ -1734,17 +1827,18 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 		goto out;
 	}
 
-	if (!skip_uuid_check && uuid_compare(uuid, pool_df->pd_id)) {
+	if (uuid_compare(uuid, pool_df->pd_id)) {
 		D_ERROR("Mismatch uuid, user="DF_UUIDF", pool="DF_UUIDF"\n",
 			DP_UUID(uuid), DP_UUID(pool_df->pd_id));
 		rc = -DER_ID_MISMATCH;
 		goto out;
 	}
 
-	rc = pool_open(ph, pool_df, flags, metrics, poh);
-	ph = NULL;
-
 out:
+	rc = pool_open_post(&ph, pool_df, flags, metrics, pool, rc);
+	if (rc == 0)
+		*poh = vos_pool2hdl(pool);
+
 	/* Close this local handle, if it hasn't been consumed nor already
 	 * been closed by pool_open upon error.
 	 */
@@ -1891,7 +1985,7 @@ vos_pool_query_space(uuid_t pool_id, struct vos_pool_space *vps)
 	int		 rc;
 
 	uuid_copy(ukey.uuid, pool_id);
-	rc = pool_lookup(&ukey, &pool);
+	rc = pool_lookup(&ukey, &pool, false);
 	if (rc) {
 		D_ASSERT(rc == -DER_NONEXIST);
 		return rc;

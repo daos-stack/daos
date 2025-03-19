@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,8 +15,10 @@ import (
 	"github.com/pkg/errors"
 
 	pretty "github.com/daos-stack/daos/src/control/cmd/daos/pretty"
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
 
@@ -76,7 +79,7 @@ func getPoolCreateRespRows(tierBytes []uint64, tierRatios []float64, numRanks in
 	return
 }
 
-func getPoolCreateRespRowsMDOnSSD(tierBytes []uint64, tierRatios []float64, numRanks int, memFileBytes uint64) (title string, rows []txtfmt.TableRow) {
+func getPoolCreateRespRowsMdOnSsd(tierBytes []uint64, tierRatios []float64, numRanks int, memFileBytes uint64) (title string, rows []txtfmt.TableRow) {
 	title = "Pool created with "
 	tierName := "Metadata"
 
@@ -137,8 +140,8 @@ func PrintPoolCreateResponse(pcr *control.PoolCreateResp, out io.Writer, opts ..
 
 	var title string
 	var tierRows []txtfmt.TableRow
-	if pcr.MemFileBytes > 0 {
-		title, tierRows = getPoolCreateRespRowsMDOnSSD(pcr.TierBytes, tierRatios, numRanks,
+	if pcr.MdOnSsdActive {
+		title, tierRows = getPoolCreateRespRowsMdOnSsd(pcr.TierBytes, tierRatios, numRanks,
 			pcr.MemFileBytes)
 	} else {
 		title, tierRows = getPoolCreateRespRows(pcr.TierBytes, tierRatios, numRanks)
@@ -193,4 +196,80 @@ func PrintPoolProperties(poolID string, out io.Writer, properties ...*daos.PoolP
 	tf := txtfmt.NewTableFormatter(nameTitle, valueTitle)
 	tf.InitWriter(out)
 	tf.Format(table)
+}
+
+// PrintPoolRanksResps generates a table showing results of operations on pool ranks. Each row will
+// indicate a common result for a group of ranks on a pool.
+func PrintPoolRanksResps(out io.Writer, resps ...*control.PoolRanksResp) error {
+	if len(resps) == 0 {
+		fmt.Fprintln(out, "No pool ranks processed")
+		return nil
+	}
+
+	// Results are aggregated based on error messages for a given pool ID.
+	poolErrRanks := make(map[string]map[string][]ranklist.Rank)
+	poolIDs := make(common.StringSet)
+	errMsgs := make(common.StringSet)
+
+	for _, resp := range resps {
+		if len(resp.Results) == 0 {
+			continue
+		}
+
+		id := resp.ID
+		poolIDs.Add(id)
+		if _, exists := poolErrRanks[id]; exists {
+			return errors.Errorf("multiple PoolRanksResps for the same pool %q", id)
+		}
+
+		seenRanks := make(map[ranklist.Rank]struct{})
+		poolErrRanks[id] = make(map[string][]ranklist.Rank)
+
+		for _, res := range resp.Results {
+			msg := "" // Key used for successful ranks,
+			if res.Errored {
+				msg = res.Msg
+			}
+
+			if _, exists := seenRanks[res.Rank]; exists {
+				return errors.Errorf("multiple PoolRankResults for rank %d", res.Rank)
+			}
+			seenRanks[res.Rank] = struct{}{}
+
+			poolErrRanks[id][msg] = append(poolErrRanks[id][msg], res.Rank)
+			errMsgs.Add(msg)
+		}
+	}
+
+	titles := []string{"Pool", "Ranks", "Result", "Reason"}
+	formatter := txtfmt.NewTableFormatter(titles...)
+	var table []txtfmt.TableRow
+
+	for _, id := range poolIDs.ToSlice() {
+		errRanks := poolErrRanks[id]
+		for _, msg := range errMsgs.ToSlice() {
+			ranks, exists := errRanks[msg]
+			if !exists || len(ranks) == 0 {
+				continue
+			}
+			rs := ranklist.RankSetFromRanks(ranks)
+
+			result := "OK"
+			reason := "-"
+			if msg != "" {
+				result = "FAIL"
+				reason = msg
+			}
+			row := txtfmt.TableRow{
+				"Pool":   id,
+				"Ranks":  rs.String(),
+				"Result": result,
+				"Reason": reason,
+			}
+			table = append(table, row)
+		}
+	}
+
+	fmt.Fprintln(out, formatter.Format(table))
+	return nil
 }

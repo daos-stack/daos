@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -220,36 +221,4 @@ func PrintSystemCleanupResponse(out io.Writer, resp *control.SystemCleanupResp, 
 	}
 
 	fmt.Fprintln(out, "System Cleanup Success")
-}
-
-// PrintSystemDrainResponse generates a human-readable representation of the supplied
-// SystemDrainResp struct and writes it to the supplied io.Writer. Result related errors written to
-// error io.Writer.
-func PrintSystemDrainResponse(out io.Writer, resp *control.SystemDrainResp) {
-	if len(resp.Results) == 0 {
-		fmt.Fprintln(out, "No pool ranks drained")
-		return
-	}
-
-	titles := []string{"Pool", "Ranks", "Result", "Reason"}
-	formatter := txtfmt.NewTableFormatter(titles...)
-
-	var table []txtfmt.TableRow
-	for _, r := range resp.Results {
-		result := "OK"
-		reason := "N/A"
-		if r.Status != 0 {
-			result = "Failed"
-			reason = r.Msg
-		}
-		row := txtfmt.TableRow{
-			"Pool":   r.PoolID,
-			"Ranks":  r.Ranks,
-			"Result": result,
-			"Reason": reason,
-		}
-		table = append(table, row)
-	}
-
-	fmt.Fprintln(out, formatter.Format(table))
 }
