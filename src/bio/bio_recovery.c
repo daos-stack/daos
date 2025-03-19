@@ -270,7 +270,7 @@ on_teardown(struct bio_blobstore *bbs)
 static void
 setup_xs_bs(void *arg)
 {
-	struct bio_io_context	*ioc;
+	struct bio_io_context   *ioc, *tmp;
 	struct bio_xs_blobstore	*bxb = arg;
 	struct bio_blobstore	*bbs;
 	int			 closed_blobs = 0;
@@ -300,7 +300,16 @@ setup_xs_bs(void *arg)
 
 	/* If reint will be tirggered later, blobs will be opened in reint reaction */
 	if (bbs->bb_dev->bb_trigger_reint) {
-		D_ASSERT(d_list_empty(&bxb->bxb_io_ctxts));
+		/*
+		 * There could be leftover io contexts if TEARDOWN is performed on an
+		 * unplugged device before it's marked as FAULTY.
+		 */
+		d_list_for_each_entry_safe(ioc, tmp, &bxb->bxb_io_ctxts, bic_link) {
+			/* The blob must have been closed on teardown */
+			D_ASSERT(ioc->bic_blob == NULL);
+			d_list_del_init(&ioc->bic_link);
+			D_FREE(ioc);
+		}
 		goto done;
 	}
 
