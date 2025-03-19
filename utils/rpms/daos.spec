@@ -3,6 +3,13 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
+%bcond_without server
+
+%if %{with server}
+%global daos_build_args FIRMWARE_MGMT=yes
+%else
+%global daos_build_args client test
+%endif
 %global mercury_version   2.4
 %global libfabric_version 1.15.1-1
 %global argobots_version 1.2
@@ -16,7 +23,7 @@
 
 Name:          daos
 Version:       2.7.101
-Release:       6%{?relval}%{?dist}
+Release:       7%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -50,7 +57,9 @@ BuildRequires: libabt-devel >= %{argobots_version}
 BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
+%if %{with server}
 BuildRequires: libpmemobj-devel >= 2.1.0
+%endif
 BuildRequires: fused-devel
 %if (0%{?suse_version} >= 1500)
 BuildRequires: go-race
@@ -62,8 +71,10 @@ BuildRequires: protobuf-c-devel
 BuildRequires: lz4-devel
 BuildRequires: capstone-devel
 %endif
+%if %{with server}
 BuildRequires: libaio-devel
 BuildRequires: spdk-devel >= 22.01.2
+%endif
 %if (0%{?rhel} >= 8)
 BuildRequires: isa-l-devel
 BuildRequires: libisa-l_crypto-devel
@@ -71,7 +82,9 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
+%if %{with server}
 BuildRequires: daos-raft-devel = 0.11.0-1.416.g12dbc15%{?dist}
+%endif
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -84,7 +97,9 @@ BuildRequires: pciutils-devel
 BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
 # needed to retrieve PMM region info through control-plane
+%if %{with server}
 BuildRequires: libipmctl-devel
+%endif
 %if (0%{?rhel} >= 9)
 BuildRequires: python-devel
 %else
@@ -100,7 +115,9 @@ BuildRequires: Lmod
 BuildRequires: distribution-release
 BuildRequires: libnuma-devel
 BuildRequires: cunit-devel
+%if %{with server}
 BuildRequires: ipmctl-devel
+%endif
 BuildRequires: python3-devel
 BuildRequires: python3-distro
 BuildRequires: python-rpm-macros
@@ -128,6 +145,7 @@ data protection with self healing on top of commodity hardware, end-
 to-end data integrity, fine grained data control and elastic storage
 to optimize performance and cost.
 
+%if %{with server}
 %package server
 Summary: The DAOS server
 Requires: %{name}%{?_isa} = %{version}-%{release}
@@ -152,6 +170,7 @@ Requires: pciutils
 
 %description server
 This is the package needed to run a DAOS server
+%endif
 
 %package admin
 Summary: DAOS admin tools
@@ -259,6 +278,7 @@ Requires: python3-mpi4py-tests
 %description client-tests-mpich
 This is the package needed to run the DAOS client test suite mpich tools
 
+%if %{with server}
 %package server-tests
 Summary: The DAOS server test suite (server tests)
 Requires: %{name}-server%{?_isa} = %{version}-%{release}
@@ -266,6 +286,7 @@ Requires: %{name}-admin%{?_isa} = %{version}-%{release}
 
 %description server-tests
 This is the package needed to run the DAOS server test suite (server tests)
+%endif
 
 %package devel
 Summary: The DAOS development libraries and headers
@@ -275,12 +296,14 @@ Requires: libuuid-devel
 %description devel
 This is the package needed to build software with the DAOS library.
 
+%if %{with server}
 %package firmware
 Summary: The DAOS firmware management helper
 Requires: %{name}-server%{?_isa} = %{version}-%{release}
 
 %description firmware
 This is the package needed to manage server storage firmware on DAOS servers.
+%endif
 
 %package serialize
 Summary: DAOS serialization library that uses HDF5
@@ -324,8 +347,8 @@ This is the package that bridges the difference between the MOFED openmpi
       --config=force         \
       --no-rpath             \
       USE_INSTALLED=all      \
-      FIRMWARE_MGMT=yes      \
       CONF_DIR=%{conf_dir}   \
+     %{?daos_build_args}   \
      %{?scons_args}          \
      %{?compiler_args}
 
@@ -341,31 +364,39 @@ mv test.cov{,-build}
       %{buildroot}%{_prefix}          \
       %{buildroot}%{conf_dir}         \
       USE_INSTALLED=all               \
-      FIRMWARE_MGMT=yes               \
       CONF_DIR=%{conf_dir}            \
       PREFIX=%{_prefix}               \
+     %{?daos_build_args}            \
       %{?scons_args}                  \
       %{?compiler_args}
 
 %if ("%{?compiler_args}" == "COMPILER=covc")
 mv test.cov-build %{buildroot}/%{daoshome}/TESTING/ftest/test.cov
 %endif
+%if %{with server}
 mkdir -p %{buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{buildroot}/%{_sysctldir}
 install -m 644 utils/rpms/%{sysctl_script_name} %{buildroot}/%{_sysctldir}
+%endif
 mkdir -p %{buildroot}/%{_unitdir}
+%if %{with server}
 install -m 644 utils/systemd/%{server_svc_name} %{buildroot}/%{_unitdir}
+%endif
 install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
 mkdir -p %{buildroot}/%{conf_dir}/certs/clients
 mkdir -p %{buildroot}/%{_var}/log/daos
 mv %{buildroot}/%{conf_dir}/bash_completion.d %{buildroot}/%{_sysconfdir}
 # fixup env-script-interpreters
-sed -i -e '1s/env //' %{buildroot}{%{daoshome}/TESTING/ftest/{cart/cart_logtest,cart/daos_sys_logscan,config_file_gen,launch,slurm_setup,tags,verify_perms}.py,%{_bindir}/daos_storage_estimator.py}
+sed -i -e '1s/env //' %{buildroot}%{daoshome}/TESTING/ftest/{cart/cart_logtest,cart/daos_sys_logscan,config_file_gen,launch,slurm_setup,tags,verify_perms}.py
+%if %{with server}
+sed -i -e '1s/env //' %{buildroot}%{_bindir}/daos_storage_estimator.py
+%endif
 
 # shouldn't have source files in a non-devel RPM
 rm -f %{buildroot}%{daoshome}/TESTING/ftest/cart/{test_linkage.cpp,utest_{hlc,portnumber,protocol,swim}.c,wrap_cmocka.h}
 
+%if %{with server}
 %pre server
 getent group daos_metrics >/dev/null || groupadd -r daos_metrics
 getent group daos_server >/dev/null || groupadd -r daos_server
@@ -385,6 +416,7 @@ getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_serv
 %postun server
 %{?run_ldconfig}
 %systemd_postun %{server_svc_name}
+%endif
 %endif
 
 %pre client
@@ -413,13 +445,13 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_sysconfdir}/bash_completion.d/daos.bash
 # Certificate generation files
 %dir %{_libdir}/%{name}
-%{_bindir}/daos_metrics
 %{_libdir}/%{name}/certgen/
 %{_libdir}/%{name}/VERSION
 %{_libdir}/libcart.so.*
 %{_libdir}/libgurt.so.*
 %{_libdir}/libdaos_common.so
 
+%if %{with server}
 %files server
 %doc README.md
 %config(noreplace) %attr(0644,root,root) %{conf_dir}/daos_server.yml
@@ -431,6 +463,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # and/or daos_firmware_helper
 %attr(2755,root,daos_server) %{_bindir}/daos_server
 %{_bindir}/daos_engine
+%{_bindir}/daos_metrics
 %{_bindir}/ddb
 %{_sysconfdir}/ld.so.conf.d/daos.conf
 %dir %{_libdir}/daos_srv
@@ -466,6 +499,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %exclude %{_datarootdir}/%{name}/ioil-ld-opts
 %{_unitdir}/%{server_svc_name}
 %{_sysctldir}/%{sysctl_script_name}
+%endif
 
 %files admin
 %doc README.md
@@ -525,6 +559,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/dfuse_test
 %{_bindir}/eq_tests
 %{_bindir}/job_tests
+%{_bindir}/jump_pl_map
+%{_bindir}/pl_bench
+%{_bindir}/ring_pl_map
 %{_bindir}/security_test
 %config(noreplace) %{conf_dir}/fault-inject-cart.yaml
 %{_bindir}/fault_status
@@ -546,15 +583,13 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files client-tests-mpich
 %doc README.md
 
+%if %{with server}
 %files server-tests
 %doc README.md
 %{_bindir}/dtx_tests
 %{_bindir}/dtx_ut
 %{_bindir}/evt_ctl
-%{_bindir}/jump_pl_map
-%{_bindir}/pl_bench
 %{_bindir}/rdbt
-%{_bindir}/ring_pl_map
 %{_bindir}/smd_ut
 %{_bindir}/bio_ut
 %{_bindir}/vea_ut
@@ -564,6 +599,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/ddb_ut
 %{_bindir}/obj_ctl
 %{_bindir}/vos_perf
+%endif
 
 %files devel
 %doc README.md
@@ -574,10 +610,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 %{daoshome}/python
 
+%if %{with server}
 %files firmware
 %doc README.md
 # set daos_firmware_helper to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware_helper
+%endif
 
 %files serialize
 %doc README.md
@@ -596,8 +634,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Mon Mar 04 2025 Samirkumar Raval <samirkumar.raval@hpe.com> 2.7.101-6
+* Wed Mar 19 2025 Samirkumar Raval <samirkumar.raval@hpe.com> 2.7.101-7
 - Changing the default log location to /var/log/daos from /tmp
+
+* Mon Mar 10 2025 Jeff Olivier <jeffolivie@google.com> 2.7.101-6
+- Remove server from Ubuntu packaging and fix client only build
 
 * Wed Jan 22 2025 Jan Michalski <jan-marian.michalski@hpe.com> 2.7.101-5
 - Add ddb_ut and dtx_ut to the server-tests package
@@ -608,7 +649,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 * Thu Dec 19 2024 Phillip Henderson <phillip.henderson@intel.com> 2.7.101-3
 - Fix protobuf-c requiremnent for daos-client-tests on Leap.
 
-* Tue Nov 13 2024 Denis Barakhtanov <dbarahtanov@enakta.com> 2.7.101-2
+* Thu Nov 14 2024 Denis Barakhtanov <dbarahtanov@enakta.com> 2.7.101-2
 - Add pydaos.torch module to daos-client rpm.
 
 * Fri Nov 08 2024 Phillip Henderson <phillip.henderson@intel.com> 2.7.101-1
