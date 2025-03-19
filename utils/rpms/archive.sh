@@ -6,9 +6,8 @@
 # submodules.
 #
 #   - Must run at the root of the Git repository.
-#   - Must have all submodules initialized and updated.
+#   - Must have all submodules recursively initialized and updated.
 #   - Whitespaces are prohibited in any of the parameters.
-#   - Submodules within submodules are not supported.
 #
 # For example,
 #
