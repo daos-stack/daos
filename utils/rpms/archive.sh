@@ -42,4 +42,4 @@ git submodule --quiet foreach \
 tar -Af "${tmp}/${file}" "${tmp}/${sm_file_prefix}-"*."${ext}"
 
 # Publish the archive.
-mv ${tmp}/${file} ${dir}/${file}
+mv "${tmp}/${file}" "${dir}/${file}"
