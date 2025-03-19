@@ -403,7 +403,6 @@ for f in `ls -1 {%buildroot}%{_libdir}/daos_srv`; do
   patchelf --remove-rpath "${f}" || true
 done
 
-
 %if %{with server}
 %pre server
 getent group daos_metrics >/dev/null || groupadd -r daos_metrics
@@ -647,10 +646,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Sat Mar 15 2025 Jeff Olivier  <jeffolivier@google.com> 2.7.101-8
+* Sat Mar 18 2025 Jeff Olivier  <jeffolivier@google.com> 2.7.101-8
 - Make spdk static and add as a submodule
 
-* Thu Mar 13 2025 Jeff Olivier  <jeffolivier@google.com> 2.7.101-7
+* Tue Mar 18 2025 Jeff Olivier  <jeffolivier@google.com> 2.7.101-7
 - Remove raft as external dependency
 
 * Mon Mar 10 2025 Jeff Olivier <jeffolivie@google.com> 2.7.101-6
