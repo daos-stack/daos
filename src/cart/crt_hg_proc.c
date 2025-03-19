@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -114,14 +115,103 @@ CRT_PROC_TYPE_FUNC(uint64_t)
 CRT_PROC_TYPE_FUNC(bool)
 
 int
-crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op,
-		    crt_bulk_t *bulk_hdl)
+crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_bulk)
 {
-	hg_return_t	hg_ret;
+	struct crt_bulk *bulk = NULL;
+	hg_return_t      hg_ret;
+	hg_bulk_t        tmp_hg_bulk;
 
-	hg_ret = hg_proc_hg_bulk_t(proc, (hg_bulk_t *)bulk_hdl);
+	/*
+	 * We only send 'hg_bulk_t' over the wire. During encoding stage we
+	 * extract mercury bulk handle from crt_bulk_t, while during decode
+	 * we wrap mercury bulk in a newly allocated crt_bulk_t struct
+	 */
+	switch (proc_op) {
+	case CRT_PROC_ENCODE:
+		bulk = *pcrt_bulk;
 
-	return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
+		/* RPC can have a NULL bulk. if so, encode a NULL value */
+		if (!bulk) {
+			tmp_hg_bulk = HG_BULK_NULL;
+			hg_ret      = hg_proc_hg_bulk_t(proc, (hg_bulk_t *)&tmp_hg_bulk);
+			return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
+		}
+
+		/* Deferred allocation as a result of D_QUOTA_BULKS limit */
+		if (bulk->deferred) {
+			struct crt_context *ctx;
+			int                 rc;
+
+			/* Create mercury handle based on saved params */
+			ctx = bulk->crt_ctx;
+			D_ASSERT(ctx != NULL);
+
+			rc = crt_hg_bulk_create(&ctx->cc_hg_ctx, &bulk->sgl, bulk->bulk_perm,
+						&bulk->hg_bulk_hdl);
+			if (rc != DER_SUCCESS)
+				return rc;
+
+			record_quota_resource(ctx, CRT_QUOTA_BULKS);
+
+			if (bulk->bound) {
+				rc = crt_hg_bulk_bind(bulk->hg_bulk_hdl, &ctx->cc_hg_ctx);
+				if (rc != 0) {
+					D_ERROR("Failed to bind bulk during proc\n");
+					/* free will return quota resource */
+					crt_bulk_free(bulk->hg_bulk_hdl);
+					return rc;
+				}
+			}
+			bulk->deferred = false;
+		}
+
+		/* Pack mercury bulk handle to send over the wire */
+		hg_ret = hg_proc_hg_bulk_t(proc, (hg_bulk_t *)&bulk->hg_bulk_hdl);
+		return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
+		break;
+
+	case CRT_PROC_DECODE:
+		/* unpack mercury handle and wrap it around crt_bulk_t struct */
+		hg_ret = hg_proc_hg_bulk_t(proc, &tmp_hg_bulk);
+		if (hg_ret != HG_SUCCESS)
+			return -DER_HG;
+
+		/* don't create a bulk wrapper if null bulk was transmitted */
+		if (tmp_hg_bulk == HG_BULK_NULL) {
+			*pcrt_bulk = NULL;
+			return 0;
+		}
+
+		/* Allocate space for a wrapper struct */
+		D_ALLOC_PTR(bulk);
+		if (!bulk)
+			return -DER_NOMEM;
+
+		bulk->hg_bulk_hdl = tmp_hg_bulk;
+		bulk->deferred    = false;
+		bulk->crt_ctx     = NULL;
+
+		*pcrt_bulk = bulk;
+		return 0;
+		break;
+
+	case CRT_PROC_FREE:
+		bulk = *pcrt_bulk;
+
+		if (bulk == NULL)
+			return 0;
+
+		hg_ret = hg_proc_hg_bulk_t(proc, &bulk->hg_bulk_hdl);
+
+		/* Free the wrapper struct */
+		D_FREE(bulk);
+		*pcrt_bulk = NULL;
+		return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
+		break;
+	}
+
+	/* Should not get here */
+	return -DER_INVAL;
 }
 
 int
@@ -450,8 +540,7 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 
 	/* Sync the HLC. Clients never decode requests. */
 	D_ASSERT(crt_is_service());
-	rc = d_hlc_get_msg(rpc_priv->crp_req_hdr.cch_hlc,
-			     &ctx->cc_last_unpack_hlc, &clock_offset);
+	rc = d_hlc_get_msg(rpc_priv->crp_req_hdr.cch_hlc, NULL /* hlc_out */, &clock_offset);
 	if (rc != 0) {
 		REPORT_HLC_SYNC_ERR("failed to sync HLC for request: opc=%x ts="
 				    DF_U64" offset="DF_U64" from=%u\n",
