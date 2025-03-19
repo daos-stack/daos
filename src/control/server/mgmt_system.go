@@ -50,6 +50,8 @@ const (
 	domainLabelsSep      = "=" // invalid in a label name
 )
 
+var errSysForceNotFull = errors.New("force must be used if not full system stop")
+
 // GetAttachInfo handles a request to retrieve a map of ranks to fabric URIs, in addition
 // to client network autoconfiguration hints.
 //
@@ -898,9 +900,13 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (
 		return nil, err
 	}
 
-	// First phase: Prepare the ranks for shutdown, but only if the request
-	// is for an unforced full system stop.
-	if fReq.FullSystem && !fReq.Force {
+	// First phase: Prepare the ranks for shutdown, but only if the request is for an unforced
+	// full system stop.
+	if !fReq.Force {
+		if !fReq.FullSystem {
+			return nil, errSysForceNotFull
+		}
+
 		fReq.Method = control.PrepShutdownRanks
 		fResp, _, err = svc.rpcFanout(ctx, fReq, fResp, true)
 		if err != nil {
