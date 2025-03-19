@@ -37,9 +37,11 @@ sm_file_prefix="${file_extless}-submodule"
 git archive --prefix "${name}-${version}/" -o "${tmp}/${file}" HEAD
 
 # Add all submodules to the archive.
-git submodule --quiet foreach \
-    "git archive --prefix ${name}-${version}/\$sm_path/ -o ${tmp}/${sm_file_prefix}-\$name.${ext} \$sha1"
-tar -Af "${tmp}/${file}" "${tmp}/${sm_file_prefix}-"*."${ext}"
+# shellcheck disable=SC2086,SC2016
+git submodule --quiet foreach --recursive \
+    'tarfile='${tmp}/${sm_file_prefix}'-$name.'${ext}' && \
+     git archive --prefix '${name}-${version}'/$displaypath/ -o ${tarfile} $sha1 && \
+     tar -Af '"${tmp}/${file}"' ${tarfile}'
 
 # Publish the archive.
 mv "${tmp}/${file}" "${dir}/${file}"
