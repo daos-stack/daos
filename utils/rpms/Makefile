@@ -31,8 +31,7 @@ $(NAME)-$(VERSION).tar.gz: $(shell git ls-files --recurse-submodules :/:)
 	echo Creating $@
 	echo $(basename $@)
 	rm -f $@
-	./archive.sh ../../ $(NAME) $(VERSION) tar
-	mv ../../$(NAME)-$(VERSION).tar .
+	cd ../../ && utils/rpms/archive.sh utils/rpms $(NAME) $(VERSION) tar
 	gzip $(NAME)-$(VERSION).tar
 
 tarball: $(NAME)-$(VERSION).tar.gz
