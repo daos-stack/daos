@@ -35,7 +35,6 @@ sm_file_prefix="${file_extless}-submodule"
 
 # Create an archive, which doesn't include any submodule.
 git archive --prefix "${name}-${version}/" -o "${tmp}/${file}" HEAD
-tar -tvf "${tmp}/${file}"
 
 # Add all submodules to the archive.
 git submodule --quiet foreach \
