@@ -20,7 +20,9 @@
 
 // The trusted-pipeline-lib daosLatestVersion() method will convert this into a number
 /* groovylint-disable-next-line CompileStatic, VariableName */
-String next_version = 'release/2.6'
+String next_version() {
+    return 'release/2.6'
+}
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
