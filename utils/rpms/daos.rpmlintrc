@@ -63,3 +63,6 @@ addFilter("E: spelling-error")
 
 # Set warnings as errors to work with updated rpmlintMockResults.groovy
 setBadness('warning', 1000)
+
+# Ignore log rotate warning
+addFilter("W: log-files-without-logrotate")
