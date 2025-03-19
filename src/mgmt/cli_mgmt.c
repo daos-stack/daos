@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -536,11 +537,30 @@ dc_mgmt_put_sys_info(struct daos_sys_info *info)
 
 #define SYS_INFO_BUF_SIZE 16
 
-static int g_num_serv_ranks = 1;
+static int       g_num_serv_ranks = -1;
+static d_rank_t *g_serv_ranks;
 
-int dc_mgmt_net_get_num_srv_ranks(void)
+/* Return the number of attached ranks.  */
+int
+dc_mgmt_net_get_num_srv_ranks(void)
 {
+	D_ASSERT(g_num_serv_ranks >= 0);
+
 	return g_num_serv_ranks;
+}
+
+/* Return the rank id of an attached rank.  */
+d_rank_t
+dc_mgmt_net_get_srv_rank(int idx)
+{
+	D_ASSERT(g_num_serv_ranks >= 0);
+
+	if (idx >= g_num_serv_ranks) {
+		D_ERROR("Invalid rank index: index=%d, ranks_num=%d\n", idx, g_num_serv_ranks);
+		return CRT_NO_RANK;
+	}
+
+	return g_serv_ranks[idx];
 }
 
 static int
@@ -567,7 +587,7 @@ _split_env(char *env, char **name, char **value)
  * Configure the client's local environment with these parameters
  */
 int
-dc_mgmt_net_cfg(const char *name, crt_init_options_t *crt_info)
+dc_mgmt_net_cfg_init(const char *name, crt_init_options_t *crt_info)
 {
 	int                      rc;
 	char                    *cli_srx_set        = NULL;
@@ -575,6 +595,8 @@ dc_mgmt_net_cfg(const char *name, crt_init_options_t *crt_info)
 	char                     buf[SYS_INFO_BUF_SIZE];
 	struct dc_mgmt_sys_info *info = &info_g;
 	Mgmt__GetAttachInfoResp *resp = resp_g;
+	int                      idx;
+	d_rank_t                *serv_ranks_tmp;
 
 	if (resp->client_net_hint != NULL && resp->client_net_hint->n_env_vars > 0) {
 		int i;
@@ -599,10 +621,6 @@ dc_mgmt_net_cfg(const char *name, crt_init_options_t *crt_info)
 			D_DEBUG(DB_MGMT, "set server-supplied client env: %s", env);
 		}
 	}
-
-	/* Save number of server ranks */
-	g_num_serv_ranks = resp->n_rank_uris;
-	D_INFO("Setting number of server ranks to %d\n", g_num_serv_ranks);
 
 	/* If the server has set this, the client must use the same value. */
 	if (info->srv_srx_set != -1) {
@@ -690,12 +708,27 @@ dc_mgmt_net_cfg(const char *name, crt_init_options_t *crt_info)
 		if (NULL == crt_info->cio_domain)
 			D_GOTO(cleanup, rc = -DER_NOMEM);
 	}
-	D_INFO("Network interface: %s, Domain: %s, Provider: %s\n", crt_info->cio_interface,
-	       crt_info->cio_domain, crt_info->cio_provider);
 	D_DEBUG(DB_MGMT,
 		"CaRT initialization with:\n"
 		"\tD_PROVIDER: %s, CRT_TIMEOUT: %d, CRT_SECONDARY_PROVIDER: %s\n",
 		crt_info->cio_provider, crt_info->cio_crt_timeout, buf);
+
+	/* Save attached ranks id info */
+	g_num_serv_ranks = resp->n_rank_uris;
+	serv_ranks_tmp   = NULL;
+	if (g_num_serv_ranks > 0) {
+		D_ALLOC_ARRAY(serv_ranks_tmp, g_num_serv_ranks);
+		if (serv_ranks_tmp == NULL)
+			D_GOTO(cleanup, rc = -DER_NOMEM);
+		for (idx = 0; idx < g_num_serv_ranks; idx++)
+			serv_ranks_tmp[idx] = resp->rank_uris[idx]->rank;
+	}
+	D_FREE(g_serv_ranks);
+	g_serv_ranks = serv_ranks_tmp;
+
+	D_INFO("Network interface: %s, Domain: %s, Provider: %s, Ranks count: %d\n",
+	       crt_info->cio_interface, crt_info->cio_domain, crt_info->cio_provider,
+	       g_num_serv_ranks);
 
 cleanup:
 	if (rc) {
@@ -707,6 +740,12 @@ cleanup:
 	d_freeenv_str(&cli_srx_set);
 
 	return rc;
+}
+
+void
+dc_mgmt_net_cfg_fini()
+{
+	D_FREE(g_serv_ranks);
 }
 
 int dc_mgmt_net_cfg_check(const char *name)
