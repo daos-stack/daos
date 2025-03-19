@@ -212,7 +212,7 @@ daos_init(void)
 	 * get CaRT configuration (see mgmtModule.handleGetAttachInfo for the
 	 * handling of NULL system names)
 	 */
-	rc = dc_mgmt_net_cfg(NULL, crt_info);
+	rc = dc_mgmt_net_cfg_init(NULL, crt_info);
 	if (rc != 0)
 		D_GOTO(out_attach, rc);
 
@@ -223,7 +223,7 @@ daos_init(void)
 	D_FREE(crt_info->cio_domain);
 	if (rc != 0) {
 		D_ERROR("failed to initialize eq_lib: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_attach, rc);
+		D_GOTO(out_net_cfg, rc);
 	}
 
 	/**
@@ -290,6 +290,8 @@ out_pl:
 	pl_fini();
 out_eq:
 	daos_eq_lib_fini();
+out_net_cfg:
+	dc_mgmt_net_cfg_fini();
 out_attach:
 	dc_mgmt_drop_attach_info();
 out_job:
@@ -350,6 +352,7 @@ daos_fini(void)
 	if (rc != 0)
 		D_ERROR("failed to disconnect some resources may leak, " DF_RC "\n", DP_RC(rc));
 
+	dc_mgmt_net_cfg_fini();
 	dc_tm_fini();
 	dc_mgmt_drop_attach_info();
 	dc_agent_fini();
