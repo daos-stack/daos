@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -567,7 +568,7 @@ gen_pool_and_placement_map(int num_pds, int fdoms_per_pd, int nodes_per_domain,
 	comp = &comps[0];
 	/* fake the pool map */
 	for (i = 0; i < num_pds && num_pds >= 2; i++, comp++) {
-		comp->co_type   = PO_COMP_TP_GRP;
+		comp->co_type   = PO_COMP_TP_PERF;
 		comp->co_status = PO_COMP_ST_UPIN;
 		comp->co_id     = i;
 		comp->co_rank   = i;

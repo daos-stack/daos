@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -611,6 +612,7 @@ func (m *Membership) OnEvent(_ context.Context, evt *events.RASEvent) {
 
 // CompressedFaultDomainTree returns the tree of fault domains of joined
 // members in a compressed format.
+// The first uint32 is a bitmask providing metadata about the tree.
 // Each domain is represented as a tuple: (level, ID, number of children)
 // Except for the rank, which is represented as: (rank)
 // The order of items is a breadth-first traversal of the tree.
@@ -625,7 +627,26 @@ func (m *Membership) CompressedFaultDomainTree(ranks ...uint32) ([]uint32, error
 		return nil, err
 	}
 
-	return compressTree(subtree), nil
+	md := getCompressedTreeMetadata(tree)
+	return append([]uint32{md}, compressTree(subtree)...), nil
+}
+
+const (
+	DomTreeMetadataHasFaultDom uint32 = (1 << iota)
+	DomTreeMetadataHasPerfDom
+)
+
+func getCompressedTreeMetadata(tree *FaultDomainTree) uint32 {
+	var md uint32
+
+	// TODO DAOS-6353: Properly detect when fault and perf domain are requested.
+	// Currently any depth greater than the minimum must indicate a performance domain.
+	minDepth := 2 // domain + rank
+	if tree.Depth() > minDepth {
+		md |= DomTreeMetadataHasPerfDom
+	}
+
+	return md
 }
 
 func getFaultDomainSubtree(tree *FaultDomainTree, ranks ...uint32) (*FaultDomainTree, error) {
