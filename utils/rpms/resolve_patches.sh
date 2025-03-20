@@ -19,14 +19,15 @@ apply_patches()
 
   pushd "${patch_dir}" || exit 1
   for patch in $all_patches; do
-    base="$(basename "${patch}")"
     if [[ ! "${patch}" =~ ^https ]]; then
       continue
     fi
-    wget "${patch}"
-    sed -i "s!${patch}!utils/${base}!" build.config
-    git add "${base}" build.config
-    git commit -s -m "Commit ${patch} to ${base} in build.config"
+    no_slash="${patch//\//_}"
+    resolved="${no_slash/:/}"
+    curl -sSfL --retry 10 --retry-max-time 60  -o "${resolved}" "${patch}"
+    sed -i "s!${patch}!utils/${resolved}!" build.config
+    git add "${resolved}" build.config
+    git commit -s -m "Commit ${patch} to ${resolved} in build.config"
   done
   popd || exit 1
 }

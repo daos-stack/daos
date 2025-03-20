@@ -281,9 +281,10 @@ class CopyRetriever():
         exclude = set([".git", ".github"])
         for root, dirs, files in os.walk(self.source, topdown=True):
             dirs[:] = [d for d in dirs if d not in exclude]
+            dest_root = root.replace(self.source, subdir)
+            print(f"Copying to {dest_root}")
+            os.makedirs(dest_root, exist_ok=True)
             for filename in files:
-                dest_root = root.replace(self.source, subdir)
-                os.makedirs(dest_root, exist_ok=True)
                 shutil.copy(os.path.join(root, filename), os.path.join(dest_root, filename))
         self._apply_patches(subdir, kw.get("patches", {}))
 
