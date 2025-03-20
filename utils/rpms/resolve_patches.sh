@@ -27,6 +27,9 @@ apply_patches()
     curl -sSfL --retry 10 --retry-max-time 60  -o "${resolved}" "${patch}"
     sed -i "s!${patch}!utils/${resolved}!" build.config
     git add "${resolved}" build.config
+    # actual emails don't matter, this is only local commit
+    git config --global user.email "daos@daos.io"
+    git config --global user.email "Automation"
     git commit -s -m "Commit ${patch} to ${resolved} in build.config"
   done
   popd || exit 1
