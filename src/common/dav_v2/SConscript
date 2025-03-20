@@ -20,7 +20,10 @@ def scons():
     denv.d_add_build_rpath()
 
     lenv = denv.Clone()
-    lenv.AppendUnique(LIBS=['pthread', 'gurt'])
+    libs = ['pthread', 'gurt']
+    if GetOption("test_coverage"):
+        libs += ['gcov']
+    lenv.AppendUnique(LIBS=libs)
     lenv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD', '-DDAV_V2_BUILD'])
     lenv.AppendUnique(CFLAGS=['-fvisibility=hidden'])
 
