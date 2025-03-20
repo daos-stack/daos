@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -594,6 +595,7 @@ obj_coll_disp_init(uint32_t tgt_nr, uint32_t max_tgt_size, uint32_t inline_size,
 			max_width = COLL_DISP_WIDTH_DEF;
 	}
 
+#if 0
 	if (tgt_nr - start > max_width) {
 		ocdc->grp_nr = max_width;
 		ocdc->cur_step = (tgt_nr - start) / max_width;
@@ -604,10 +606,13 @@ obj_coll_disp_init(uint32_t tgt_nr, uint32_t max_tgt_size, uint32_t inline_size,
 			ocdc->fixed_step = 1;
 		}
 	} else {
+#endif
 		ocdc->grp_nr = tgt_nr - start;
 		ocdc->cur_step = 1;
 		ocdc->fixed_step = 1;
+#if 0
 	}
+#endif
 
 	ocdc->pending_grps = ocdc->grp_nr;
 	ocdc->tgt_nr = tgt_nr;
