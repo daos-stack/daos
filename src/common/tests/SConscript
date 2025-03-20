@@ -10,21 +10,6 @@ def scons():
     if GetOption("test_coverage"):
         g_libs = ['gcov']
 
-    tenv.d_test_program('btree', ['btree.c', utest_utils],
-                        LIBS=['daos_common_pmem', 'gurt', 'pmemobj', 'cmocka'] + g_libs)
-    tenv.d_test_program('umem_test_bmem', ['umem_test_bmem.c', utest_utils],
-                        LIBS=['daos_common_pmem', 'gurt', 'cmocka'] + g_libs)
-    tenv.d_test_program('umem_test', ['umem_test.c', utest_utils],
-                        LIBS=['daos_common_pmem', 'gurt', 'pmemobj', 'cmocka'] + g_libs)
-    tenv.d_test_program('btree_direct', ['btree_direct.c', utest_utils],
-                        LIBS=['daos_common_pmem', 'gurt', 'pmemobj', 'cmocka'] + g_libs)
-    tenv.d_test_program('other', 'other.c',
-                        LIBS=['daos_common_pmem', 'gurt', 'cart'] + g_libs)
-    tenv.d_test_program('common_test', ['common_test.c', 'checksum_tests.c',
-                                        'compress_tests.c', 'misc_tests.c'],
-                        LIBS=['daos_common', 'daos_tests', 'gurt',
-                              'cart', 'cmocka'] + g_libs)
-    tenv.d_test_program('lru', 'lru.c', LIBS=['daos_common_pmem', 'gurt', 'cart'] + g_libs)
     if prereqs.server_requested():
         Import('utest_utils')
         tenv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
@@ -53,12 +38,6 @@ def scons():
     tenv.d_test_program('prop_tests', 'prop_tests.c',
                         LIBS=['daos_common', 'gurt', 'cmocka'] + g_libs)
     tenv.d_test_program('fault_domain_tests', 'fault_domain_tests.c',
-                        LIBS=['daos_common', 'gurt', 'cmocka'] + g_libs)
-    tenv.d_test_program('ad_mem_tests', 'ad_mem_tests.c',
-                        LIBS=['daos_common_pmem', 'gurt', 'cmocka'] + g_libs)
-    tenv.d_test_program('checksum_timing', 'checksum_timing.c',
-                        LIBS=['daos_common', 'gurt'] + g_libs)
-    tenv.d_test_program(':', 'compress_timing.c',
                         LIBS=['daos_common', 'gurt', 'cmocka'] + g_libs)
     tenv.d_test_program('checksum_timing', 'checksum_timing.c',
                         LIBS=['daos_common', 'gurt'] + g_libs)
