@@ -646,7 +646,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Sat Mar 18 2025 Jeff Olivier  <jeffolivier@google.com> 2.7.101-8
+* Tue Mar 18 2025 Jeff Olivier  <jeffolivier@google.com> 2.7.101-8
 - Make spdk static and add as a submodule
 
 * Tue Mar 18 2025 Jeff Olivier  <jeffolivier@google.com> 2.7.101-7

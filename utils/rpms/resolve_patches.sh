@@ -29,8 +29,8 @@ apply_patches()
     git add "${resolved}" build.config
     # actual emails don't matter, this is only local commit
     git config --global user.email "daos@daos.io"
-    git config --global user.email "Automation"
-    git commit -s -m "Commit ${patch} to ${resolved} in build.config"
+    git config --global user.name "Automation"
+    git commit -m "Commit ${patch} to ${resolved} in build.config"
   done
   popd || exit 1
 }
