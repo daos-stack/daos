@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -47,7 +48,7 @@ struct crt_swim_membs {
 	struct swim_context		*csm_ctx;
 	uint64_t			 csm_incarnation;
 	uint64_t			 csm_last_unpack_hlc;
-	uint64_t			 csm_alive_count;
+	uint64_t                         csm_alive_or_suspect_count;
 	int				 csm_crt_ctx_idx;
 	int				 csm_nglitches;
 	int				 csm_nmessages;
