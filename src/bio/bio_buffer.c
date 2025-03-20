@@ -50,8 +50,11 @@ dma_alloc_chunk(unsigned int cnt)
 		 * This could mitigate the fragmentation issue at the cost of cross
 		 * NUMA memory accessing for certain chunks.
 		 */
-		if (chunk->bdc_ptr == NULL)
+		if (chunk->bdc_ptr == NULL && bio_numa_node != SPDK_ENV_SOCKET_ID_ANY) {
 			chunk->bdc_ptr = spdk_dma_malloc(bytes, BIO_DMA_PAGE_SZ, NULL);
+			if (chunk->bdc_ptr != NULL)
+				D_DEBUG(DB_IO, "Allocate chunk from ANY NUMA node\n");
+		}
 	} else {
 		rc = posix_memalign(&chunk->bdc_ptr, BIO_DMA_PAGE_SZ, bytes);
 		if (rc)
