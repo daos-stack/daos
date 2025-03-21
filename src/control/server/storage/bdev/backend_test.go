@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -981,7 +982,6 @@ func TestBackend_Prepare(t *testing.T) {
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-						fmt.Sprintf("%s=%d", nrHugepagesEnv, defaultNrHugepages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
 					},
 				},
@@ -1083,7 +1083,6 @@ func TestBackend_Prepare(t *testing.T) {
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-						fmt.Sprintf("%s=%d", nrHugepagesEnv, defaultNrHugepages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
 					},
 				},
