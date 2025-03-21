@@ -48,7 +48,6 @@ apt-get install \
     locales \
     maven \
     numactl \
-    openjdk-8-jdk \
     patchelf \
     pciutils \
     pkg-config \
