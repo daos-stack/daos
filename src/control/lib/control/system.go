@@ -590,6 +590,9 @@ func SystemExclude(ctx context.Context, rpcClient UnaryInvoker, req *SystemExclu
 
 	resp := new(SystemExcludeResp)
 	return resp, convertMSResponse(ur, resp)
+
+	// DAOS-17289 TODO: Perform SystemDrain with Exclude flag set in request so that PoolExclude
+	//                  gets called for each of the rank's pools.
 }
 
 // SystemDrainReq contains the inputs for the system drain request.

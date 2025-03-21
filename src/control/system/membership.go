@@ -106,6 +106,9 @@ func (m *Membership) FindRankFromJoinRequest(req *JoinRequest) (Rank, error) {
 	if err != nil {
 		return NilRank, errors.Wrap(err, "failed to get all system members")
 	}
+	if len(currentMembers) == 0 {
+		return NilRank, errors.New("empty system membership")
+	}
 
 	var minMissing []string
 	rank := NilRank
@@ -139,7 +142,9 @@ func (m *Membership) FindRankFromJoinRequest(req *JoinRequest) (Rank, error) {
 		}
 
 		if cm.UUID == req.UUID {
-			return NilRank, errors.New("matching uuid in replace-rank join request")
+			m.log.Errorf("unexpected matching uuid %q in replace-rank join request",
+				req.UUID)
+			return NilRank, ErrUuidExists(req.UUID)
 		}
 
 		rank = cm.Rank
@@ -147,7 +152,9 @@ func (m *Membership) FindRankFromJoinRequest(req *JoinRequest) (Rank, error) {
 	}
 
 	if rank == NilRank {
-		return NilRank, FaultJoinReplaceRankNotFound(minMissing)
+		m.log.Errorf("replace-rank join request failed because fields %v didn't match",
+			minMissing)
+		return NilRank, FaultJoinReplaceRankNotFound(len(minMissing))
 	}
 
 	return rank, nil
@@ -201,7 +208,7 @@ func (m *Membership) joinReplace(req *JoinRequest) (*JoinResponse, error) {
 		req.UUID)
 
 	if err := m.db.RemoveMember(cm); err != nil {
-		return nil, errors.Wrap(err, "adding new uuid member in replace-rank join request")
+		return nil, errors.Wrap(err, "removing old member in replace-rank join request")
 	}
 
 	resp := JoinResponse{
@@ -212,7 +219,7 @@ func (m *Membership) joinReplace(req *JoinRequest) (*JoinResponse, error) {
 	memberToReplace.UUID = req.UUID
 
 	if err := m.db.AddMember(memberToReplace); err != nil {
-		return nil, errors.Wrap(err, "adding new uuid member in replace-rank join request")
+		return nil, errors.Wrap(err, "adding new member in replace-rank join request")
 	}
 
 	resp.Member = memberToReplace
@@ -262,6 +269,7 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		if curMember.State == MemberStateAdminExcluded {
 			return nil, ErrAdminExcluded(curMember.UUID, curMember.Rank)
 		}
+
 		// If the member is already in the membership, don't allow rejoining
 		// with a different rank, as this may indicate something strange
 		// has happened on the node. The only exception is if the rejoin
@@ -641,6 +649,19 @@ func (m *Membership) CheckHosts(hosts string, ctlPort int) (*RankSet, *hostlist.
 	}
 
 	return rs, missHS, nil
+}
+
+func (m *Membership) CheckRankNotAdminExcluded(rank Rank) error {
+	cm, err := m.db.FindMemberByRank(rank)
+	if err != nil {
+		return errors.Wrap(err, "check rank admin excluded")
+	}
+
+	if cm.State == MemberStateAdminExcluded {
+		return ErrAdminExcluded(cm.UUID, cm.Rank)
+	}
+
+	return nil
 }
 
 // MarkRankDead is a helper method to mark a rank as dead in response to a

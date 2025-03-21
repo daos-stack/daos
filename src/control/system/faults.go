@@ -34,10 +34,10 @@ func FaultPoolLocked(poolUUID, lockID uuid.UUID, lockTime time.Time) *fault.Faul
 		"retry the pool operation")
 }
 
-func FaultJoinReplaceRankNotFound(notMatched []string) *fault.Fault {
+func FaultJoinReplaceRankNotFound(nrFieldsNotMatching int) *fault.Fault {
 	suggestionMsg := "check that dmg format --replace is being run on a host with an engine " +
 		"that has previously had a rank excluded from the system"
-	if len(notMatched) > 1 {
+	if nrFieldsNotMatching > 1 {
 		suggestionMsg = "engines on selected storage server don't seem to match any " +
 			"existing records in the management service, run dmg storage format " +
 			"without the --replace option"
@@ -45,8 +45,7 @@ func FaultJoinReplaceRankNotFound(notMatched []string) *fault.Fault {
 
 	return systemFault(
 		code.SystemJoinReplaceRankNotFound,
-		fmt.Sprintf("system member could not be found from join request info (no match: %v)",
-			notMatched),
+		"system member could not be found from join request fields",
 		suggestionMsg,
 	)
 }

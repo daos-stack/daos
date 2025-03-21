@@ -1112,7 +1112,7 @@ func (svc *mgmtSvc) SystemExclude(ctx context.Context, req *mgmtpb.SystemExclude
 	return resp, nil
 }
 
-func (svc *mgmtSvc) refuseMissingRanks(hosts, ranks string) (*ranklist.RankSet, error) {
+func (svc *mgmtSvc) refuseUnavailableRanks(hosts, ranks string) (*ranklist.RankSet, error) {
 	if hosts == "" && ranks == "" {
 		return nil, errors.New("no hosts or ranks specified")
 	}
@@ -1130,6 +1130,13 @@ func (svc *mgmtSvc) refuseMissingRanks(hosts, ranks string) (*ranklist.RankSet, 
 	}
 	if hitRanks.Count() == 0 {
 		return nil, errors.New("no ranks to operate on")
+	}
+
+	// Refuse to operate on AdminExcluded rank.
+	for _, r := range hitRanks.Ranks() {
+		if err := svc.membership.CheckRankNotAdminExcluded(r); err != nil {
+			return nil, err
+		}
 	}
 
 	return hitRanks, nil
@@ -1285,9 +1292,9 @@ func (svc *mgmtSvc) SystemDrain(ctx context.Context, pbReq *mgmtpb.SystemDrainRe
 	}
 
 	// Validate requested hosts or ranks exist and fail if any are missing.
-	hitRanks, err := svc.refuseMissingRanks(pbReq.Hosts, pbReq.Ranks)
+	hitRanks, err := svc.refuseUnavailableRanks(pbReq.Hosts, pbReq.Ranks)
 	if err != nil {
-		svc.log.Errorf("refuse missing ranks: %s", err)
+		svc.log.Errorf("refuse unavailable ranks: %s", err)
 		return nil, err
 	}
 
