@@ -1134,7 +1134,7 @@ dfuse_cache_evict_dir(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *i
  * Returns true if feature was used.
  */
 bool
-read_chunk_close(struct dfuse_inode_entry *ie);
+read_chunk_close(struct active_inode *active);
 
 /* Metadata caching functions. */
 
