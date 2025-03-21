@@ -58,6 +58,8 @@ message JoinResp {
 	string faultDomain = 4; // Fault domain for the instance
 	bool localJoin = 5;	// Join processed locally.
 	uint32 map_version = 6; // Join processed in this version of the system map.
+	repeated string pool_uuids = 7; // UUIDs of pools in the system.
+	uint64 data_version = 8; // Version of the MS DB data.
 }
 
 message LeaderQueryReq {
@@ -147,6 +149,8 @@ message PingRankReq {
 message SetRankReq {
 	uint32 rank = 1;	// DAOS I/O Engine unique identifier.
 	uint32 map_version = 2;	// System map version in which the rank joined the system.
+	repeated string pool_uuids = 3; // UUIDs of pools in the system.
+	uint64 data_version = 4; //Version of the MS DB data.
 }
 
 // SetRankResp is identical to DaosResp.
