@@ -1,10 +1,9 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import random
-
 from nvme_utils import ServerFillUp
 from osa_utils import OSAUtils
 from test_utils_pool import add_pool
@@ -83,7 +82,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
 
         # Exclude ranks 0 and 3 from a random pool
         ranks = [0, 3]
-        self.pool = random.choice(pools)  # nosec
+        self.pool = self.random.choice(pools)
         for loop in range(0, self.loop_test_cnt):
             self.log.info(
                 "==> (Loop %s/%s) Excluding ranks %s from %s",
