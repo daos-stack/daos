@@ -43,7 +43,7 @@ message StorageFormatReq {
 	FormatNvmeReq nvme = 1;
 	FormatScmReq scm = 2;
 	bool reformat = 3;
-	bool          replace   = 4;
+	bool          replace  = 4;
 }
 
 message StorageFormatResp {
