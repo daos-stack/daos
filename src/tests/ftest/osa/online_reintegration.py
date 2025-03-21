@@ -58,10 +58,9 @@ class OSAOnlineReintegration(OSAUtils):
         test_seq = self.ior_test_sequence[0]
         # Create a pool
         pool = {}
-        exclude_servers = (len(self.hostlist_servers) * 2) - 1
 
         # Exclude one rank : other than rank 0.
-        rank = random.randint(1, exclude_servers)  # nosec
+        rank = random.choice(list(self.server_managers[0].ranks.keys())[1:])  # nosec
 
         # Start the daos_racer thread
         if racer is True:
