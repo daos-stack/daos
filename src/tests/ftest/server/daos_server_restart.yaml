@@ -13,6 +13,8 @@ server_config:
   engines_per_host: 2
   engines:
     0:
+      env_vars:
+        - ABT_STACK_OVERFLOW_CHECK=mprotect_strict
       pinned_numa_node: 0
       nr_xs_helpers: 1
       fabric_iface: ib0
@@ -20,6 +22,8 @@ server_config:
       log_file: daos_server0.log
       storage: auto
     1:
+      env_vars:
+        - ABT_STACK_OVERFLOW_CHECK=mprotect_strict
       pinned_numa_node: 1
       nr_xs_helpers: 1
       fabric_iface: ib1
