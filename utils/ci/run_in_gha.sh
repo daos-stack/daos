@@ -80,6 +80,6 @@ echo ::group::Setting up daos_server_helper
 ./utils/setup_daos_server_helper.sh
 echo ::endgroup::
 
-echo ::group::Container copy test
-./utils/node_local_test.py --no-root --memcheck no --system-ram-reserved 1 --test cont_copy
+echo ::group::NLT suite
+./utils/node_local_test.py --no-root --memcheck no --system-ram-reserved 1 all
 echo ::endgroup::
