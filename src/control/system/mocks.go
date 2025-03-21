@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	. "github.com/daos-stack/daos/src/control/lib/ranklist"
@@ -73,15 +75,36 @@ func MockMemberResult(rank Rank, action string, err error, state MemberState) *M
 	return result
 }
 
+func MockResolveFn(netString string, address string) (*net.TCPAddr, error) {
+	if netString != "tcp" {
+		return nil, errors.Errorf("unexpected network type in test: %s, want 'tcp'", netString)
+	}
+
+	return map[string]*net.TCPAddr{
+			"127.0.0.1:10001": {IP: net.ParseIP("127.0.0.1"), Port: 10001},
+			"127.0.0.2:10001": {IP: net.ParseIP("127.0.0.2"), Port: 10001},
+			"127.0.0.3:10001": {IP: net.ParseIP("127.0.0.3"), Port: 10001},
+			"foo-1:10001":     {IP: net.ParseIP("127.0.0.1"), Port: 10001},
+			"foo-2:10001":     {IP: net.ParseIP("127.0.0.2"), Port: 10001},
+			"foo-3:10001":     {IP: net.ParseIP("127.0.0.3"), Port: 10001},
+			"foo-4:10001":     {IP: net.ParseIP("127.0.0.4"), Port: 10001},
+			"foo-5:10001":     {IP: net.ParseIP("127.0.0.5"), Port: 10001},
+		}[address], map[string]error{
+			"127.0.0.4:10001": errors.New("bad lookup"),
+			"127.0.0.5:10001": errors.New("bad lookup"),
+			"foo-6:10001":     errors.New("bad lookup"),
+		}[address]
+}
+
 // MockMembership returns an initialized *Membership using the given MemberStore.
 func MockMembership(t *testing.T, log logging.Logger, mdb MemberStore, resolver TCPResolver) *Membership {
 	t.Helper()
 
 	m := NewMembership(log, mdb)
 
-	if resolver != nil {
-		return m.WithTCPResolver(resolver)
+	if resolver == nil {
+		resolver = MockResolveFn
 	}
 
-	return m
+	return m.WithTCPResolver(resolver)
 }

@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -33,10 +34,10 @@ message GroupUpdateResp {
 
 message JoinReq {
 	string sys = 1;			// DAOS system name.
-	string uuid = 2;		// Server UUID.
-	uint32 rank = 3;		// Server rank desired, if not MAX_UINT32.
-	string uri = 4;			// Server CaRT primary provider URI (i.e., for context 0).
-	uint32 nctxs = 5;		// Server CaRT context count.
+	string          uuid  = 2;                 // Engine UUID.
+	uint32          rank  = 3;                 // Engine rank desired, if not MAX_UINT32.
+	string          uri   = 4; // Engine CaRT primary provider URI (i.e., for context 0).
+	uint32          nctxs = 5; // Engine CaRT context count.
 	string addr = 6;		// Server management address.
 	string srvFaultDomain = 7; 	// Fault domain for this instance's server
 	uint32 idx = 8;			// Instance index on server node.
@@ -44,6 +45,7 @@ message JoinReq {
 	repeated string secondary_uris = 10; // URIs for any secondary providers
 	repeated uint32 secondary_nctxs = 11; // CaRT context count for each secondary provider
 	bool check_mode = 12; 		// rank started in check mode
+	bool            replace         = 13; // Rank's engine instance metadata to be replaced
 }
 
 message JoinResp {
