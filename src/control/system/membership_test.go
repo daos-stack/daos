@@ -1272,6 +1272,7 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 		"root only": {
 			tree: NewFaultDomainTree(),
 			expResult: []uint32{
+				0, // metadata
 				0,
 				ExpFaultDomainID(0),
 				0,
@@ -1282,6 +1283,7 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 				MustCreateFaultDomain("one", "two", "three"),
 			),
 			expResult: []uint32{
+				DomTreeMetadataHasPerfDom, // metadata
 				3,
 				ExpFaultDomainID(0),
 				1,
@@ -1305,6 +1307,7 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 				MustCreateFaultDomainFromString("/rack2/pdu4"),
 			),
 			expResult: []uint32{
+				0, // metadata
 				2, // root
 				ExpFaultDomainID(0),
 				3,
@@ -1339,6 +1342,7 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 				rankDomain("/one/two/three", 5),
 			),
 			expResult: []uint32{
+				DomTreeMetadataHasPerfDom, // metadata
 				4,
 				ExpFaultDomainID(0),
 				1,
@@ -1364,6 +1368,7 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 				rankDomain("/rack2/pdu4", 5),
 			),
 			expResult: []uint32{
+				DomTreeMetadataHasPerfDom, // metadata
 				3,
 				ExpFaultDomainID(0), // root
 				3,
@@ -1405,6 +1410,7 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 				rankDomain(fmt.Sprintf("/top/%s2/bottom", RankFaultDomainPrefix), 1),
 			),
 			expResult: []uint32{
+				DomTreeMetadataHasPerfDom, // metadata
 				4,
 				ExpFaultDomainID(0), // root
 				1,
@@ -1420,6 +1426,28 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 				1, // rank
 			},
 		},
+		"request one rank with node only": {
+			tree: NewFaultDomainTree(
+				rankDomain("/node0", 0),
+				rankDomain("/node1", 1),
+				rankDomain("/node2", 2),
+				rankDomain("/node3", 3),
+				rankDomain("/node3", 4),
+				rankDomain("/node4", 5),
+			),
+			inputRanks: []uint32{4},
+			expResult: []uint32{
+				0, // metadata
+				2,
+				ExpFaultDomainID(0), // root
+				1,
+				1,
+				ExpFaultDomainID(7), // node3
+				1,
+				// ranks
+				4,
+			},
+		},
 		"request one rank": {
 			tree: NewFaultDomainTree(
 				rankDomain("/rack0/pdu0", 0),
@@ -1431,6 +1459,7 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 			),
 			inputRanks: []uint32{4},
 			expResult: []uint32{
+				DomTreeMetadataHasPerfDom, // metadata
 				3,
 				ExpFaultDomainID(0), // root
 				1,
@@ -1455,6 +1484,7 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 			),
 			inputRanks: []uint32{4, 0, 5, 3},
 			expResult: []uint32{
+				DomTreeMetadataHasPerfDom, // metadata
 				3,
 				ExpFaultDomainID(0), // root
 				3,
