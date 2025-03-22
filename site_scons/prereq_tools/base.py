@@ -267,7 +267,7 @@ class CopyRetriever():
                 print(f'Applying patch {patch}')
                 filter_patch = ['sed', '-i', '/^[di].*/d', patch]
                 cat = ['cat', patch]
-                command = ['patch', '-p1']
+                command = ['patch', '-u', '-p1']
                 if patches[patch] is not None:
                     command.extend(['--directory', patches[patch]])
                 command.append('-i')
