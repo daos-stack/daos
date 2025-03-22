@@ -490,7 +490,7 @@ common_init_cb(void *arg, int rc)
 struct subsystem_init_arg {
 	struct common_cp_arg *cp_arg;
 	void                 *json_data;
-	size_t                json_data_size;
+	ssize_t               json_data_size;
 };
 
 static void
@@ -507,6 +507,8 @@ subsys_init_cb(int rc, void *arg)
 		D_ERROR("subsystem init failed: %d\n", rc);
 
 	common_init_cb(init_arg->cp_arg, rc);
+
+	D_FREE(init_arg);
 
 	return;
 }
@@ -1589,8 +1591,8 @@ subsystem_init_cb(int rc, void *arg)
 
 	/* Set RUNTIME state and load config again for RUNTIME methods */
 	spdk_rpc_set_state(SPDK_RPC_RUNTIME);
-	spdk_subsystem_load_config(init_arg->json_data, (ssize_t)init_arg->json_data_size,
-				   subsys_init_cb, init_arg, true);
+	spdk_subsystem_load_config(init_arg->json_data, init_arg->json_data_size, subsys_init_cb,
+				   init_arg, true);
 }
 
 static void
@@ -1608,7 +1610,7 @@ load_config_cb(int rc, void *arg)
 static int
 bio_xsctxt_init_by_config(struct common_cp_arg *cp_arg)
 {
-	struct subsystem_init_arg init_arg;
+	struct subsystem_init_arg *init_arg;
 	void                     *json_data;
 	size_t                    json_data_size;
 
@@ -1618,10 +1620,16 @@ bio_xsctxt_init_by_config(struct common_cp_arg *cp_arg)
 		return -DER_NOMEM;
 	}
 
-	init_arg.cp_arg         = cp_arg;
-	init_arg.json_data      = json_data;
-	init_arg.json_data_size = json_data_size;
-	spdk_subsystem_load_config(json_data, (ssize_t)json_data_size, load_config_cb, &init_arg,
+	D_ALLOC_PTR(init_arg);
+	if (init_arg == NULL) {
+		free(json_data);
+		return -DER_NOMEM;
+	}
+
+	init_arg->cp_arg         = cp_arg;
+	init_arg->json_data      = json_data;
+	init_arg->json_data_size = (ssize_t)json_data_size;
+	spdk_subsystem_load_config(json_data, (ssize_t)json_data_size, load_config_cb, init_arg,
 				   true);
 	return 0;
 }
