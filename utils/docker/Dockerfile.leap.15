@@ -1,5 +1,6 @@
 # Copyright 2018-2024 Intel Corporation
 # Copyright 2025 Hewlett Packard Enterprise Development LP
+# Copyright 2025 Google LLC
 # All rights reserved.
 #
 # 'recipe' for Docker to build an image of Leap based
@@ -74,9 +75,11 @@ RUN python3 -m pip --no-cache-dir install --upgrade pip && \
 WORKDIR /home/daos/pre
 RUN mkdir -p /home/daos/pre/site_scons/prereq_tools /home/daos/pre/site_scons/components
 COPY --chown=daos_server:daos_server SConstruct .
+COPY --chown=daos_server:daos_server src/external/spdk src/external/spdk
 COPY --chown=daos_server:daos_server site_scons/prereq_tools site_scons/prereq_tools
 COPY --chown=daos_server:daos_server site_scons/components site_scons/components
 COPY --chown=daos_server:daos_server utils/build.config utils/
+COPY --chown=daos_server:daos_server utils/*.patch utils/
 
 # Control what to build.  By default Dockerfiles build everything to allow for
 # ease-of-use for users, however in CI everything is turned off and then
@@ -104,7 +107,8 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                            \
         if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "\
             direct="${direct%%/*}"; export no_proxy="${direct}"; fi; \
         scons --build-deps=only --jobs $DEPS_JOBS PREFIX=/opt/daos  \
-              TARGET_TYPE=$DAOS_TARGET_TYPE &&                      \
+              TARGET_TYPE=$DAOS_TARGET_TYPE                         \
+	      INTERNAL_PREFIX=/opt/daos/external &&                 \
         ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); \
     }
 USER root:root
@@ -159,7 +163,8 @@ RUN [ "$DAOS_BUILD" != "yes" ] || {                                        \
         if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "  \
             direct="${direct%%/*}"; export no_proxy="${direct}"; fi;       \
         scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER     \
-              BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
+              BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE    \
+	      INTERNAL_PREFIX=/opt/daos/external &&                        \
         ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build) &&           \
         go clean -cache &&                                                 \
         cp -r utils/config/examples /opt/daos;                             \

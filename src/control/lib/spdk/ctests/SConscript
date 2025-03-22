@@ -19,11 +19,15 @@ def scons():
     unit_env.AppendUnique(CPPPATH=[nvme_lib_src, spdk_incl_src])
 
     # Explicitly link RTE & SPDK libs for CGO access
-    libs = ['spdk_env_dpdk', 'spdk_nvme', 'spdk_vmd', 'rte_mempool']
-    libs += ['rte_mempool_ring', 'rte_bus_pci', 'nvme_control']
+    libs = ['nvme_control', 'spdk_bdev', 'spdk_bdev_aio', 'spdk_bdev_nvme', 'spdk_blob',
+            'spdk_nvme', 'spdk_sock', 'spdk_notify', 'spdk_blob_bdev', 'spdk_vmd',
+            'spdk_event_bdev', 'spdk_init', 'spdk_accel', 'spdk_thread', 'spdk_util', 'spdk_dma',
+            'spdk_keyring', 'spdk_json', 'spdk_jsonrpc', 'spdk_rpc', 'spdk_trace', 'spdk_env_dpdk',
+            'spdk_log', 'rte_mempool', 'rte_mempool_ring', 'rte_bus_pci', 'rte_pci', 'rte_ring',
+            'rte_mbuf', 'rte_eal', 'rte_kvargs', 'rte_log', 'rte_telemetry']
 
     # Other libs
-    libs += ['numa', 'dl', 'isal', 'cmocka', 'pthread']
+    libs += ['uuid', 'numa', 'dl', 'isal', 'cmocka', 'pthread', 'ssl', 'crypto']
 
     if GetOption('help'):
         return

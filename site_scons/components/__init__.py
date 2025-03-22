@@ -25,7 +25,7 @@
 import platform
 
 import distro
-from prereq_tools import GitRepoRetriever
+from prereq_tools import CopyRetriever, GitRepoRetriever
 from SCons.Script import GetOption
 
 # Check if this is an ARM platform
@@ -349,33 +349,30 @@ def define_components(reqs):
         spdk_arch = 'haswell'
 
     reqs.define('spdk',
-                retriever=GitRepoRetriever(True),
+                retriever=CopyRetriever(),
                 commands=[['./configure',
                            '--prefix=$SPDK_PREFIX',
                            '--disable-tests',
                            '--disable-unit-tests',
-                           '--disable-apps',
                            '--without-vhost',
                            '--without-crypto',
-                           '--without-pmdk',
                            '--without-rbd',
                            '--without-iscsi-initiator',
-                           '--without-isal',
                            '--without-vtune',
-                           '--with-shared',
+                           '--without-nvme-cuse',
                            f'--target-arch={spdk_arch}'],
                           ['make', f'CONFIG_ARCH={spdk_arch}'],
                           ['make', 'install'],
-                          ['cp', '-r', '-P', 'dpdk/build/lib/', '$SPDK_PREFIX'],
+                          ['rm', '-rf', '$SPDK_PREFIX/lib/dpdk'],
+                          ['find', '$SPDK_PREFIX/lib', '-name', 'lib*.so*', '-delete'],
                           ['cp', '-r', '-P', 'dpdk/build/include/', '$SPDK_PREFIX/include/dpdk'],
                           ['mkdir', '-p', '$SPDK_PREFIX/share/spdk'],
                           ['cp', '-r', 'include', 'scripts', '$SPDK_PREFIX/share/spdk'],
                           ['cp', 'build/examples/lsvmd', '$SPDK_PREFIX/bin/spdk_nvme_lsvmd'],
-                          ['cp', 'build/examples/nvme_manage', '$SPDK_PREFIX/bin/spdk_nvme_manage'],
-                          ['cp', 'build/examples/identify', '$SPDK_PREFIX/bin/spdk_nvme_identify'],
-                          ['cp', 'build/examples/perf', '$SPDK_PREFIX/bin/spdk_nvme_perf']],
-                headers=['spdk/nvme.h'],
-                patch_rpath=['lib', 'bin'])
+                          ['cp', 'build/examples/nvme_manage', '$SPDK_PREFIX/bin/spdk_nvme_manage']
+                          ],
+                static_libs=True,
+                headers=['spdk/nvme.h'])
 
     reqs.define('protobufc',
                 retriever=GitRepoRetriever(),
