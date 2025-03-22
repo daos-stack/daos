@@ -361,8 +361,6 @@ def define_components(reqs):
                           ['cp', '-r', '-P', 'dpdk/build/include/', '$SPDK_PREFIX/include/dpdk'],
                           ['mkdir', '-p', '$SPDK_PREFIX/share/spdk'],
                           ['cp', '-r', 'include', 'scripts', '$SPDK_PREFIX/share/spdk'],
-                          ['cp', '-r', '-P', '$SPDK_PREFIX/include/',
-                           '$SPDK_PREFIX/share/spdk/include'],
                           ['cp', 'build/examples/lsvmd', '$SPDK_PREFIX/bin/spdk_nvme_lsvmd'],
                           ['cp', 'build/examples/nvme_manage', '$SPDK_PREFIX/bin/spdk_nvme_manage']
                           ],
