@@ -9,13 +9,14 @@ apply_patches()
   echo "Applying patches to ${COMP}"
 
   patch_dir="${DAOS_ROOT}/utils"
+  # shellcheck disable=SC2283,SC1090
   source <(grep = <(grep -A10 '\[patch_versions\]' "${patch_dir}"/build.config))
   if [ -z "${!COMP}" ]; then
     echo "No patches for ${COMP}"
     return
   fi
   all_patches=${!COMP//,/ }
-  echo ${all_patches}
+  echo "${all_patches}"
 
   pushd "${patch_dir}" || exit 1
   for patch in $all_patches; do
