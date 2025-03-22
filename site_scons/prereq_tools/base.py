@@ -265,12 +265,14 @@ class CopyRetriever():
         if patches is not None:
             for patch in patches.keys():
                 print(f'Applying patch {patch}')
+                filter_patch = ['sed', '-i', '/^[di].*/d', patch]
+                cat = ['cat', patch]
                 command = ['patch', '-p1']
                 if patches[patch] is not None:
                     command.extend(['--directory', patches[patch]])
                 command.append('-i')
                 command.append(patch)
-                if not RUNNER.run_commands([command], subdir=subdir):
+                if not RUNNER.run_commands([filter_patch, cat, command], subdir=subdir):
                     raise DownloadFailure(patch, subdir)
 
     def get(self, name, subdir, *_args, **kw):
@@ -1105,15 +1107,16 @@ class _Component():
             patch_subdir = None
             if "^" in raw:
                 (patch_subdir, raw) = raw.split('^')
-            if "https://" not in raw:
-                raw = os.path.join(Dir('#').abspath, raw)
-                patches[raw] = patch_subdir
-                continue
             patch_name = f'{self.name}_{self._sanitize_patch_path(raw)}_{patchnum:d}'
             patch_path = os.path.join(self.patch_path, patch_name)
             patchnum += 1
             patches[patch_path] = patch_subdir
             if os.path.exists(patch_path):
+                continue
+            if "https://" not in raw:
+                raw = os.path.join(Dir('#').abspath, raw)
+                shutil.copy(raw, patch_path)
+                patches[patch_path] = patch_subdir
                 continue
             command = [['curl', '-sSfL', '--retry', '10', '--retry-max-time', '60',
                         '-o', patch_path, raw]]
