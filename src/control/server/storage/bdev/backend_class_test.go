@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -145,7 +146,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         },
         {
           "params": {
-            "retry_count": 4,
+            "bdev_retry_count": 4,
             "timeout_us": 0,
             "nvme_adminq_poll_period_us": 100000,
             "action_on_timeout": "none",
@@ -203,7 +204,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         },
         {
           "params": {
-            "retry_count": 4,
+            "bdev_retry_count": 4,
             "timeout_us": 0,
             "nvme_adminq_poll_period_us": 100000,
             "action_on_timeout": "none",
@@ -268,7 +269,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         },
         {
           "params": {
-            "retry_count": 4,
+            "bdev_retry_count": 4,
             "timeout_us": 0,
             "nvme_adminq_poll_period_us": 100000,
             "action_on_timeout": "none",
@@ -349,7 +350,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         },
         {
           "params": {
-            "retry_count": 4,
+            "bdev_retry_count": 4,
             "timeout_us": 0,
             "nvme_adminq_poll_period_us": 100000,
             "action_on_timeout": "none",
@@ -421,7 +422,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         },
         {
           "params": {
-            "retry_count": 4,
+            "bdev_retry_count": 4,
             "timeout_us": 0,
             "nvme_adminq_poll_period_us": 100000,
             "action_on_timeout": "none",
@@ -495,7 +496,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         },
         {
           "params": {
-            "retry_count": 4,
+            "bdev_retry_count": 4,
             "timeout_us": 0,
             "nvme_adminq_poll_period_us": 100000,
             "action_on_timeout": "none",
@@ -551,7 +552,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         },
         {
           "params": {
-            "retry_count": 4,
+            "bdev_retry_count": 4,
             "timeout_us": 0,
             "nvme_adminq_poll_period_us": 100000,
             "action_on_timeout": "none",
@@ -607,7 +608,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         },
         {
           "params": {
-            "retry_count": 4,
+            "bdev_retry_count": 4,
             "timeout_us": 0,
             "nvme_adminq_poll_period_us": 100000,
             "action_on_timeout": "none",
@@ -689,7 +690,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         },
         {
           "params": {
-            "retry_count": 4,
+            "bdev_retry_count": 4,
             "timeout_us": 0,
             "nvme_adminq_poll_period_us": 100000,
             "action_on_timeout": "none",

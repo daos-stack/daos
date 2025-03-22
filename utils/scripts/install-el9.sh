@@ -64,4 +64,5 @@ dnf --nodocs install \
     sudo \
     valgrind-devel \
     which \
+    ncurses-devel \
     yasm
