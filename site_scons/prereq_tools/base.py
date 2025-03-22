@@ -265,7 +265,7 @@ class CopyRetriever():
         if patches is not None:
             for patch in patches.keys():
                 print(f'Applying patch {patch}')
-                command = ['patch', '-ruN', '-p1']
+                command = ['patch', '-p1']
                 if patches[patch] is not None:
                     command.extend(['--directory', patches[patch]])
                 command.append('-i')
