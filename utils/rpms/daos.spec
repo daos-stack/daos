@@ -393,13 +393,13 @@ sed -i -e '1s/env //' %{buildroot}%{_bindir}/daos_storage_estimator.py
 
 # shouldn't have source files in a non-devel RPM
 rm -f %{buildroot}%{daoshome}/TESTING/ftest/cart/{test_linkage.cpp,utest_{hlc,portnumber,protocol,swim}.c,wrap_cmocka.h}
-for f in `ls -1 {%buildroot}%{_bindir}`; do
+for f in `ls -1 %{buildroot}%{_bindir}`; do
   patchelf --remove-rpath "${f}" || true
 done
-for f in `ls -1 {%buildroot}%{_libdir}`; do
+for f in `ls -1 %{buildroot}%{_libdir}`; do
   patchelf --remove-rpath "${f}" || true
 done
-for f in `ls -1 {%buildroot}%{_libdir}/daos_srv`; do
+for f in `ls -1 %{buildroot}%{_libdir}/daos_srv`; do
   patchelf --remove-rpath "${f}" || true
 done
 
