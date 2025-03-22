@@ -123,6 +123,7 @@ fi
 if command -v zypper; then
     zypper --non-interactive clean --all
 fi
+dnf install -y 'dnf-command(config-manager)'
 dnf config-manager --save --setopt=assumeyes=True
 dnf config-manager --save --setopt=install_weak_deps=False
 

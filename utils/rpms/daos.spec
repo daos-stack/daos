@@ -23,7 +23,7 @@
 
 Name:          daos
 Version:       2.7.101
-Release:       7%{?relval}%{?dist}
+Release:       8%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -73,7 +73,12 @@ BuildRequires: capstone-devel
 %endif
 %if %{with server}
 BuildRequires: libaio-devel
-BuildRequires: spdk-devel >= 22.01.2
+BuildRequires: meson
+BuildRequires: python3-pyelftools
+BuildRequires: python3-pip
+BuildRequires: ncurses-devel
+BuildRequires: patchelf
+BuildRequires: libarchive-devel
 %endif
 %if (0%{?rhel} >= 8)
 BuildRequires: isa-l-devel
@@ -146,7 +151,6 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: spdk-tools >= 22.01.2
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
@@ -342,10 +346,10 @@ This is the package that bridges the difference between the MOFED openmpi
 %endif
 %{scons_exe} %{?_smp_mflags} \
       --config=force         \
-      --no-rpath             \
       USE_INSTALLED=all      \
+      --build-deps=yes       \
       CONF_DIR=%{conf_dir}   \
-     %{?daos_build_args}   \
+     %{?daos_build_args}     \
      %{?scons_args}          \
      %{?compiler_args}
 
@@ -356,7 +360,6 @@ mv test.cov{,-build}
 %install
 %{scons_exe} %{?_smp_mflags}          \
       --config=force                  \
-      --no-rpath                      \
       --install-sandbox=%{buildroot}  \
       %{buildroot}%{_prefix}          \
       %{buildroot}%{conf_dir}         \
@@ -366,7 +369,6 @@ mv test.cov{,-build}
      %{?daos_build_args}            \
       %{?scons_args}                  \
       %{?compiler_args}
-
 %if ("%{?compiler_args}" == "COMPILER=covc")
 mv test.cov-build %{buildroot}/%{daoshome}/TESTING/ftest/test.cov
 %endif
@@ -391,6 +393,15 @@ sed -i -e '1s/env //' %{buildroot}%{_bindir}/daos_storage_estimator.py
 
 # shouldn't have source files in a non-devel RPM
 rm -f %{buildroot}%{daoshome}/TESTING/ftest/cart/{test_linkage.cpp,utest_{hlc,portnumber,protocol,swim}.c,wrap_cmocka.h}
+for f in `ls -1 {%buildroot}%{_bindir}`; do
+  patchelf --remove-rpath "${f}" || true
+done
+for f in `ls -1 {%buildroot}%{_libdir}`; do
+  patchelf --remove-rpath "${f}" || true
+done
+for f in `ls -1 {%buildroot}%{_libdir}/daos_srv`; do
+  patchelf --remove-rpath "${f}" || true
+done
 
 %if %{with server}
 %pre server
@@ -484,6 +495,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdav_v2.so
 %config(noreplace) %{conf_dir}/vos_size_input.yaml
 %{_bindir}/daos_storage_estimator.py
+%{_bindir}/spdk*
+%{_bindir}/iscsi*
+%{_bindir}/nvme*
+%{_bindir}/dpdk*.py
+%{_bindir}/nvmf_tgt
 %{python3_sitearch}/storage_estimator/*.py
 %dir %{python3_sitearch}/storage_estimator
 %if (0%{?rhel} >= 8)
@@ -491,6 +507,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{python3_sitearch}/storage_estimator/__pycache__/*.pyc
 %endif
 %{_datarootdir}/%{name}
+%{_datarootdir}/spdk
 %exclude %{_datarootdir}/%{name}/ioil-ld-opts
 %{_unitdir}/%{server_svc_name}
 %{_sysctldir}/%{sysctl_script_name}
@@ -629,6 +646,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Mar 20 2025 Jeff Olivier  <jeffolivier@google.com> 2.7.101-8
+- Make spdk static and add as a submodule
+
 * Tue Mar 18 2025 Jeff Olivier  <jeffolivier@google.com> 2.7.101-7
 - Remove raft as external dependency
 

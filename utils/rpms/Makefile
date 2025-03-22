@@ -30,8 +30,8 @@ PACKAGING_CHECK_DIR ?= ../../../rpm/packaging
 $(NAME)-$(VERSION).tar.gz: $(shell git ls-files --recurse-submodules :/:)
 	echo Creating $@
 	echo $(basename $@)
+	./create_tar.sh $(NAME) $(VERSION)
 	rm -f $@
-	cd ../../ && utils/rpms/archive.sh utils/rpms $(NAME) $(VERSION) tar
-	gzip $(NAME)-$(VERSION).tar
+	gzip $(basename $@)
 
 tarball: $(NAME)-$(VERSION).tar.gz

@@ -1,3 +1,9 @@
+daos (2.7.101-8) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Use submodule and static spdk
+
+ -- Jeff Olivier <jeffolivier@google.com>  Thu, 20 Mar 2025 21:05:00 +0000
+
 daos (2.7.101-7) unstable; urgency=medium
   [ Jeff Olivier ]
   * Remove raft as an external dependence

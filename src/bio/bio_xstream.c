@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -21,6 +22,7 @@
 #include <spdk/blob_bdev.h>
 #include <spdk/blob.h>
 #include <spdk/rpc.h>
+#include <spdk/file.h>
 #include <spdk/env_dpdk.h>
 #include "bio_internal.h"
 #include <daos_srv/smd.h>
@@ -154,6 +156,7 @@ bio_spdk_env_init(void)
 	/* Only print error and more severe to stderr. */
 	spdk_log_set_print_level(SPDK_LOG_ERROR);
 
+	opts.opts_size = sizeof(opts);
 	spdk_env_opts_init(&opts);
 	opts.name = "daos_engine";
 	opts.env_context = (char *)dpdk_cli_override_opts;
@@ -484,10 +487,28 @@ common_init_cb(void *arg, int rc)
 	cp_arg->cca_rc = daos_errno2der(-rc);
 }
 
+struct subsystem_init_arg {
+	struct common_cp_arg *cp_arg;
+	void                 *json_data;
+	size_t                json_data_size;
+};
+
 static void
 subsys_init_cb(int rc, void *arg)
 {
-	common_init_cb(arg, rc);
+	struct subsystem_init_arg *init_arg = arg;
+
+	if (init_arg->json_data != NULL) {
+		free(init_arg->json_data);
+		init_arg->json_data = NULL;
+	}
+
+	if (rc)
+		D_ERROR("subsystem init failed: %d\n", rc);
+
+	common_init_cb(init_arg->cp_arg, rc);
+
+	return;
 }
 
 static void
@@ -1554,6 +1575,57 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 	D_FREE(ctxt);
 }
 
+static void
+subsystem_init_cb(int rc, void *arg)
+{
+	struct subsystem_init_arg *init_arg;
+
+	if (rc) {
+		subsys_init_cb(rc, arg);
+		return;
+	}
+
+	init_arg = arg;
+
+	/* Set RUNTIME state and load config again for RUNTIME methods */
+	spdk_rpc_set_state(SPDK_RPC_RUNTIME);
+	spdk_subsystem_load_config(init_arg->json_data, (ssize_t)init_arg->json_data_size,
+				   subsys_init_cb, init_arg, true);
+}
+
+static void
+load_config_cb(int rc, void *arg)
+{
+	if (rc) {
+		subsys_init_cb(rc, arg);
+		return;
+	}
+
+	/* init subsystem */
+	spdk_subsystem_init(subsystem_init_cb, arg);
+}
+
+static int
+bio_xsctxt_init_by_config(struct common_cp_arg *cp_arg)
+{
+	struct subsystem_init_arg init_arg;
+	void                     *json_data;
+	size_t                    json_data_size;
+
+	json_data = spdk_posix_file_load_from_name(nvme_glb.bd_nvme_conf, &json_data_size);
+	if (json_data == NULL) {
+		D_ERROR("failed to load nvme conf %s\n", nvme_glb.bd_nvme_conf);
+		return -DER_NOMEM;
+	}
+
+	init_arg.cp_arg         = cp_arg;
+	init_arg.json_data      = json_data;
+	init_arg.json_data_size = json_data_size;
+	spdk_subsystem_load_config(json_data, (ssize_t)json_data_size, load_config_cb, &init_arg,
+				   true);
+	return 0;
+}
+
 int
 bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 {
@@ -1617,13 +1689,14 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 
 		/* Initialize all registered subsystems: bdev, vmd, copy. */
 		common_prep_arg(&cp_arg);
-		spdk_subsystem_init_from_json_config(nvme_glb.bd_nvme_conf,
-						     SPDK_DEFAULT_RPC_ADDR,
-						     subsys_init_cb, &cp_arg,
-						     true);
+		rc = bio_xsctxt_init_by_config(&cp_arg);
+		if (rc != 0) {
+			D_ERROR("failed to load nvme conf %s\n", nvme_glb.bd_nvme_conf);
+			goto out;
+		}
+
 		rc = xs_poll_completion(ctxt, &cp_arg.cca_inflights, 0);
 		D_ASSERT(rc == 0);
-
 		if (cp_arg.cca_rc != 0) {
 			rc = cp_arg.cca_rc;
 			D_ERROR("failed to init bdevs, rc:%d\n", rc);
@@ -1648,7 +1721,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 			if ((!nvme_glb.bd_rpc_srv_addr) || (strlen(nvme_glb.bd_rpc_srv_addr) == 0))
 				nvme_glb.bd_rpc_srv_addr = SPDK_DEFAULT_RPC_ADDR;
 
-			rc = spdk_rpc_initialize(nvme_glb.bd_rpc_srv_addr);
+			rc = spdk_rpc_initialize(nvme_glb.bd_rpc_srv_addr, NULL);
 			if (rc != 0) {
 				D_ERROR("failed to start SPDK JSON-RPC server at %s, "DF_RC"\n",
 					nvme_glb.bd_rpc_srv_addr, DP_RC(daos_errno2der(-rc)));
