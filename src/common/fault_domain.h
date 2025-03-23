@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2021-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,22 +10,20 @@
 
 #include <daos/common.h>
 
-/**
- * The group domain level indicates which level (if any) represents the "group"
- * domains.
- *
- * TODO DAOS-6353: Remove this when we have an arbitrary number of levels. At that
- * point the concept of "groups" goes away.
- */
-#define D_FD_GROUP_DOMAIN_LEVEL	2
+/** Values for metadata bitmask that makes up the first uint32 in the compressed tree */
+#define D_FD_TREE_HAS_FAULT_DOMAIN (1 << 0)
+#define D_FD_TREE_HAS_PERF_DOMAIN  (1 << 1)
 
 /**
  * Possible types of fault domain tree node.
  */
 enum d_fd_node_type {
 	D_FD_NODE_TYPE_UNKNOWN = 0,
-	D_FD_NODE_TYPE_DOMAIN,
 	D_FD_NODE_TYPE_RANK,
+	D_FD_NODE_TYPE_NODE,
+	D_FD_NODE_TYPE_FAULT_DOM,
+	D_FD_NODE_TYPE_PERF_DOM,
+	D_FD_NODE_TYPE_ROOT,
 };
 
 /**
@@ -59,15 +58,19 @@ struct d_fd_tree {
 	 * contents through the d_fd_tree_* functions.
 	 */
 
-	const uint32_t	*fdt_compressed; /** compressed domain array */
-	int32_t		fdt_len; /** length of compressed array */
+	const uint32_t *fdt_compressed;       /** compressed domain array */
+	int32_t         fdt_len;              /** length of compressed array */
+	bool            fdt_has_fault_domain; /** whether there is a fault domain above node */
+	bool            fdt_has_perf_domain;  /** whether there is a perf domain below root */
 
 	/** Tree traversal state */
-	uint32_t fdt_idx; /** index of the next item in the tree */
-	uint32_t fdt_domains_expected; /** counted up to this point */
-	uint32_t fdt_domains_found; /** actually traversed */
-	uint32_t fdt_ranks_expected; /** counted up to this point */
-	uint32_t fdt_ranks_found; /** actually traversed */
+	uint32_t        fdt_idx;              /** index of the next item in the tree */
+	uint32_t        fdt_domains_expected; /** counted up to this point */
+	uint32_t        fdt_domains_found;    /** actually traversed */
+	uint32_t        fdt_ranks_expected;   /** counted up to this point */
+	uint32_t        fdt_ranks_found;      /** actually traversed */
+	int32_t         fdt_perf_dom_level;   /** perf domain layer if found (otherwise -1) */
+	int32_t         fdt_fault_dom_level;  /** fault domain layer if found (otherwise -1) */
 };
 
 /**
@@ -86,8 +89,7 @@ struct d_fd_tree {
  *		-DER_NOMEM	Out of memory
  */
 int
-d_fd_tree_init(struct d_fd_tree *tree, const uint32_t *compressed,
-	       const uint32_t compressed_len);
+d_fd_tree_init(struct d_fd_tree *tree, const uint32_t *compressed, const uint32_t compressed_len);
 
 /**
  * Get the next domain in the breadth-first traversal of the fault domain tree.
@@ -135,17 +137,13 @@ d_fd_get_exp_num_domains(uint32_t compressed_len, uint32_t exp_num_ranks,
 			 uint32_t *result);
 
 /**
- * Determine whether the domain tree node is a group component.
+ * Translate the node type enum to a string value.
  *
- * TODO DAOS-6353: Remove this when we have an arbitrary number of levels. At that
- * point the concept of "groups" goes away.
+ * @param[in] node_type enum d_fd_node_type
  *
- * @param[in]	node	Node of a fault domain tree
- *
- * @return	true	if the node is at the right level to be a group component
- *		false	otherwise
+ * @return associated string value, or "unknown" if not recognized
  */
-bool
-d_fd_node_is_group(struct d_fd_node *node);
+const char *
+d_fd_get_node_type_str(enum d_fd_node_type node_type);
 
 #endif /* __DAOS_COMMON_FAULT_DOMAIN__ */
