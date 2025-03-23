@@ -82,7 +82,9 @@ struct ds_cont_child {
 	uint32_t                 sc_rw_disabled       : 1;
 	uint32_t                 sc_scrubbing         : 1;
 	uint32_t                 sc_rebuilding        : 1;
+
 	uint32_t		 sc_dtx_batched_gen;
+
 	/* Tracks the schedule request for aggregation ULT */
 	struct sched_request	*sc_agg_req;
 

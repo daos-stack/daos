@@ -32,8 +32,6 @@ import (
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
-	"github.com/daos-stack/daos/src/control/fault"
-	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
@@ -50,9 +48,9 @@ const (
 	groupUpdatePauseProp = "group_update_paused"
 	domainLabelsProp     = "domain_labels"
 	domainLabelsSep      = "=" // invalid in a label name
-
-	msgInvalidRank = "invalid ranks: check rank status"
 )
+
+var errSysForceNotFull = errors.New("force must be used if not full system stop")
 
 // GetAttachInfo handles a request to retrieve a map of ranks to fabric URIs, in addition
 // to client network autoconfiguration hints.
@@ -614,8 +612,8 @@ func (svc *mgmtSvc) resolveRanks(hosts, ranks string) (hitRS, missRS *ranklist.R
 			return
 		}
 	default:
-		// empty rank/host sets implies include all ranks so pass empty
-		// string to CheckRanks()
+		// Empty rank/host sets implies include all ranks so pass empty
+		// string to CheckRanks() to retrieve full rankset.
 		if hitRS, missRS, err = svc.membership.CheckRanks(""); err != nil {
 			return
 		}
@@ -902,9 +900,13 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (
 		return nil, err
 	}
 
-	// First phase: Prepare the ranks for shutdown, but only if the request
-	// is for an unforced full system stop.
-	if fReq.FullSystem && !fReq.Force {
+	// First phase: Prepare the ranks for shutdown, but only if the request is for an unforced
+	// full system stop.
+	if !fReq.Force {
+		if !fReq.FullSystem {
+			return nil, errSysForceNotFull
+		}
+
 		fReq.Method = control.PrepShutdownRanks
 		fResp, _, err = svc.rpcFanout(ctx, fReq, fResp, true)
 		if err != nil {
@@ -1103,7 +1105,6 @@ func (svc *mgmtSvc) refuseMissingRanks(hosts, ranks string) (*ranklist.RankSet, 
 
 // Build mappings of pools to any ranks that match the input filter by iterating through the pool
 // service list. Identify pools by label if possible.
-// TODO: on reintegrate dont allow selection of AdminExcluded ranks?
 func (svc *mgmtSvc) getPoolsRanks(ranks *ranklist.RankSet) ([]string, poolRanksMap, error) {
 	poolRanks := make(poolRanksMap)
 	poolIDs := []string{} // Label or UUID.
@@ -1147,141 +1148,61 @@ func (svc *mgmtSvc) getPoolsRanks(ranks *ranklist.RankSet) ([]string, poolRanksM
 	return poolIDs, poolRanks, nil
 }
 
-func resultsFromPoolRanks(id string, succeeded *ranklist.RankSet, failed poolRanksMap) []*mgmtpb.PoolRankResult {
-	results := []*mgmtpb.PoolRankResult{}
-
-	// Single result generated for all ranks operated on successfully.
-	if succeeded.Count() > 0 {
-		results = append(results, &mgmtpb.PoolRankResult{
-			PoolId: id,
-			Ranks:  succeeded.String(),
-		})
-	}
-
-	var msgs []string
-	for msg := range failed {
-		msgs = append(msgs, msg)
-	}
-	sort.Strings(msgs)
-
-	// Result generated for each failure message rank-group.
-	for _, msg := range msgs {
-		results = append(results, &mgmtpb.PoolRankResult{
-			// Status already included in error message.
-			Status: int32(daos.MiscError),
-			Msg:    msg,
-			PoolId: id,
-			Ranks:  failed[msg].String(),
-		})
-	}
-
-	return results
-}
-
 type poolRanksMap map[string]*ranklist.RankSet
 
-type poolRankOpSig func(*mgmtSvc, context.Context, string, string, ranklist.Rank) (int32, error)
+type poolRanksOpSig func(context.Context, control.UnaryInvoker, *control.PoolRanksReq) (*control.PoolRanksResp, error)
 
 // Generate operation results by iterating through pool's ranks and calling supplied fn on each.
-func (svc *mgmtSvc) getPoolRankResults(ctx context.Context, sys string, poolIDs []string, poolRanks poolRanksMap, drpcCall poolRankOpSig) ([]*mgmtpb.PoolRankResult, error) {
-	results := []*mgmtpb.PoolRankResult{}
+func (svc *mgmtSvc) getPoolRanksResps(ctx context.Context, sys string, poolIDs []string, poolRanks poolRanksMap, ctlApiCall poolRanksOpSig) ([]*control.PoolRanksResp, error) {
+	resps := []*control.PoolRanksResp{}
 
 	for _, id := range poolIDs {
 		rs := poolRanks[id]
 		if rs.Count() == 0 {
 			continue
 		}
-		svc.log.Tracef("operating on ranks %v on pool %s", rs, id)
 
-		succeeded := ranklist.MustCreateRankSet("")
-		failed := make(poolRanksMap)
+		req := &control.PoolRanksReq{
+			ID:    id,
+			Ranks: rs.Ranks(),
+		}
+		req.Sys = sys
 
-		// TODO DAOS-6611: Operate on multiple pool-ranks per call when
-		//                 drpc.MethodPool{Drain|Reint} API supports it.
-		for _, r := range rs.Ranks() {
-			status, err := drpcCall(svc, ctx, sys, id, r)
+		svc.log.Tracef("%T: %+v", req, req)
 
-			if status == int32(daos.Success) {
-				succeeded.Add(r)
-				continue
-			}
-
-			msgErr := err.Error()
-
-			// Check fault code to aggregate invalid rank results.
-			f, ok := errors.Cause(err).(*fault.Fault)
-			if ok && f.Code == code.ServerPoolInvalidRanks {
-				msgErr = msgInvalidRank
-			}
-
-			// Each rank-drain failure message will produce a single result.
-			if _, exists := failed[msgErr]; !exists {
-				failed[msgErr] = ranklist.MustCreateRankSet("")
-			}
-			failed[msgErr].Add(r)
+		resp, err := ctlApiCall(ctx, svc.rpcClient, req)
+		if err != nil {
+			return nil, errors.Wrapf(err, "%T", ctlApiCall)
 		}
 
-		results = append(results, resultsFromPoolRanks(id, succeeded, failed)...)
-		svc.log.Tracef("results %+v", results)
+		svc.log.Tracef("%T: %+v", resp, resp)
+
+		if resp == nil {
+			return nil, errors.Errorf("nil %T", resp)
+		}
+
+		for _, res := range resp.Results {
+			svc.log.Tracef("%T: %+v", res, res)
+		}
+
+		resps = append(resps, resp)
 	}
 
-	return results, nil
-}
-
-// Drain rank on a pool by calling over dRPC. Function signature satisfies poolRankOpSig type.
-func drainPoolRank(svc *mgmtSvc, ctx context.Context, sys, id string, rank ranklist.Rank) (int32, error) {
-	pbReq := &mgmtpb.PoolDrainReq{
-		Sys:  sys,
-		Rank: rank.Uint32(),
-		Id:   id,
-	}
-
-	pbResp, err := svc.PoolDrain(ctx, pbReq)
-	if err != nil {
-		return int32(daos.MiscError), err
-	}
-	if pbResp.Status != int32(daos.Success) {
-		return pbResp.Status, daos.Status(pbResp.Status)
-	}
-
-	svc.log.Tracef("pool-drain triggered from system-drain: %+v (req: %+v)", pbResp, pbReq)
-
-	return int32(daos.Success), nil
-}
-
-// Reint rank on a pool by calling over dRPC. Function signature satisfies poolRankOpSig type.
-func reintPoolRank(svc *mgmtSvc, ctx context.Context, sys, id string, rank ranklist.Rank) (int32, error) {
-	pbReq := &mgmtpb.PoolReintReq{
-		Sys:  sys,
-		Rank: rank.Uint32(),
-		Id:   id,
-	}
-
-	pbResp, err := svc.PoolReintegrate(ctx, pbReq)
-	if err != nil {
-		return int32(daos.MiscError), err
-	}
-	if pbResp.Status != int32(daos.Success) {
-		return pbResp.Status, daos.Status(pbResp.Status)
-	}
-
-	svc.log.Tracef("pool-reint triggered from system-reint: %+v (req: %+v)", pbResp, pbReq)
-
-	return int32(daos.Success), nil
+	return resps, nil
 }
 
 // SystemDrain marks specified ranks on all pools as being in a drain state.
-func (svc *mgmtSvc) SystemDrain(ctx context.Context, req *mgmtpb.SystemDrainReq) (*mgmtpb.SystemDrainResp, error) {
-	if req == nil {
-		return nil, errors.Errorf("nil %T", req)
+func (svc *mgmtSvc) SystemDrain(ctx context.Context, pbReq *mgmtpb.SystemDrainReq) (*mgmtpb.SystemDrainResp, error) {
+	if pbReq == nil {
+		return nil, errors.Errorf("nil %T", pbReq)
 	}
 
-	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
+	if err := svc.checkLeaderRequest(wrapCheckerReq(pbReq)); err != nil {
 		return nil, err
 	}
 
 	// Validate requested hosts or ranks exist and fail if any are missing.
-	hitRanks, err := svc.refuseMissingRanks(req.Hosts, req.Ranks)
+	hitRanks, err := svc.refuseMissingRanks(pbReq.Hosts, pbReq.Ranks)
 	if err != nil {
 		svc.log.Errorf("refuse missing ranks: %s", err)
 		return nil, err
@@ -1293,20 +1214,38 @@ func (svc *mgmtSvc) SystemDrain(ctx context.Context, req *mgmtpb.SystemDrainReq)
 		return nil, err
 	}
 
-	// Generate results from dRPC calls.
-	var opCall poolRankOpSig = drainPoolRank
-	if req.Reint {
-		opCall = reintPoolRank
+	if len(poolIDs) != len(poolRanks) {
+		return nil, errors.New("nr poolIDs should be equal to poolRanks keys")
 	}
-	results, err := svc.getPoolRankResults(ctx, req.Sys, poolIDs, poolRanks, opCall)
+	if len(poolIDs) == 0 {
+		return nil, errors.New("no pool-ranks found to operate on with request params")
+	}
+
+	// Generate results from dRPC calls.
+	var apiCall poolRanksOpSig = control.PoolDrain
+	if pbReq.Reint {
+		apiCall = control.PoolReintegrate
+	}
+	resps, err := svc.getPoolRanksResps(ctx, pbReq.Sys, poolIDs, poolRanks, apiCall)
 	if err != nil {
 		return nil, err
 	}
 
-	return &mgmtpb.SystemDrainResp{
-		Reint:   req.Reint,
-		Results: results,
-	}, nil
+	if len(resps) == 0 {
+		return nil, errors.New("no pool-ranks responses received")
+	}
+	if len(resps) != len(poolIDs) {
+		return nil, errors.Errorf("unexpected number of pool-ranks responses received, "+
+			"want %d got %d", len(poolIDs), len(resps))
+	}
+
+	pbResp := &mgmtpb.SystemDrainResp{}
+	if err := convert.Types(resps, &pbResp.Responses); err != nil {
+		return nil, errors.Wrapf(err, "convert %T->%T", resps, pbResp.Responses)
+	}
+	pbResp.Reint = pbReq.Reint
+
+	return pbResp, nil
 }
 
 // ClusterEvent management service gRPC handler receives ClusterEvent requests

@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2019-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -24,13 +25,11 @@ class EcodFioRebuild(FioBase):
         Args:
             rebuild_mode (str): On-line or off-line rebuild mode
         """
-        aggregation_threshold = self.params.get("threshold", "/run/pool/aggregation/*")
         aggregation_timeout = self.params.get("aggr_timeout", "/run/pool/aggregation/*")
         read_option = self.params.get("rw_read", "/run/fio/test/read_write/*")
 
-        engine_count = self.server_managers[0].get_config_value("engines_per_host")
-        server_count = len(self.hostlist_servers) * engine_count
-        rank_to_kill = server_count - 1
+        num_ranks = len(self.server_managers[0].ranks)
+        rank_to_kill = num_ranks - 1
 
         # 1. Disable aggregation
         self.log_step("Disable aggregation")
@@ -54,38 +53,35 @@ class EcodFioRebuild(FioBase):
 
         # Get initial total free space (scm+nvme)
         self.log_step("Get initial total free space (scm+nvme)")
-        init_free_space = pool.get_total_free_space(refresh=True)
+        initial_free_space = pool.get_total_free_space(refresh=True)
 
         # Enable aggregation
         self.log_step("Enable aggregation")
         pool.enable_aggregation()
 
-        # Get total space consumed (scm+nvme) after aggregation enabled, verify and wait until
-        # aggregation triggered, maximum 3 minutes.
+        # Wait for aggregation to be triggered.
+        # Assume an increase in total free space means aggregation is triggered.
         self.log_step("Verify the Fio write finish without any error")
         start_time = time.time()
-        timed_out = False
-        aggr_triggered = False
         self.log_step("Verify and wait until aggregation triggered")
-        while not aggr_triggered and not timed_out:
-            # Check if current free space exceeds threshold
-            free_space = pool.get_total_free_space(refresh=True)
-            difference = free_space - init_free_space
-            aggr_triggered = difference >= aggregation_threshold
-            self.log.debug("Total Free space: initial=%s, current=%s, difference=%s",
-                           "{:,}".format(init_free_space), "{:,}".format(free_space),
-                           "{:,}".format(difference))
+        while True:
+            # Check if current free space exceeds initial free space
+            current_free_space = pool.get_total_free_space(refresh=True)
+            self.log.debug(
+                "Total Free space: initial=%s, current=%s",
+                "{:,}".format(initial_free_space), "{:,}".format(current_free_space))
+            if current_free_space > initial_free_space:
+                break
             # Check timeout
-            timed_out = (time.time() - start_time) > aggregation_timeout
-            if not aggr_triggered and not timed_out:
-                time.sleep(1)
-        if timed_out:
-            self.fail(f"Aggregation not observed within {aggregation_timeout} seconds")
+            if (time.time() - start_time) > aggregation_timeout:
+                self.fail(f"Aggregation not observed within {aggregation_timeout} seconds")
+            self.log.debug("Rechecking in 5 seconds")
+            time.sleep(5)
 
         # ec off-line rebuild fio
         if 'off-line' in rebuild_mode:
             self.log_step(f"Stop the last server rank ({rank_to_kill}) for ec off-line rebuild fio")
-            self.server_managers[0].stop_ranks([rank_to_kill], self.d_log, force=True)
+            self.server_managers[0].stop_ranks([rank_to_kill], force=True)
 
         # Adding unlink option for final read command
         self.log_step("Adding unlink option for final read command")
@@ -100,10 +96,10 @@ class EcodFioRebuild(FioBase):
         # If RF is 2 kill one more server and validate the data is not corrupted.
         if int(container.properties.value.split(":")[1]) == 2:
             # Kill one more server rank
-            rank_to_kill = server_count - 2
+            rank_to_kill = num_ranks - 2
             self.log_step(f"Kill one more server rank {rank_to_kill} when RF=2")
             self.fio_cmd._jobs['test'].unlink.value = 1         # pylint: disable=protected-access
-            self.server_managers[0].stop_ranks([rank_to_kill], self.d_log, force=True)
+            self.server_managers[0].stop_ranks([rank_to_kill], force=True)
 
             # Read and verify the original data.
             self.log_step(f"Verify the data is not corrupted after stopping rank {rank_to_kill}.")
@@ -137,7 +133,7 @@ class EcodFioRebuild(FioBase):
         # Kill the server rank while IO operation in progress
         if rank_to_kill is not None:
             time.sleep(30)
-            self.server_managers[0].stop_ranks([rank_to_kill], self.d_log, force=True)
+            self.server_managers[0].stop_ranks([rank_to_kill], force=True)
 
         # Wait to finish the thread
         job.join()

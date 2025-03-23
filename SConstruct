@@ -86,6 +86,13 @@ def add_command_line_options():
               default=os.path.join(Dir('#').abspath, 'utils', 'build.config'),
               help='build config file to use. [%default]')
 
+    AddOption('--deps-as-gitmodules-subdir',
+              dest='deps_as_gitmodules_subdir',
+              default=None,
+              help='Ignore the versions/branches/patches specified in build.config and \
+                    use the specified relative sub-directory containing all \
+                    dependencies as git submodules instead')
+
 
 def parse_and_save_conf(env, opts_file):
     """Parse daos.conf
@@ -443,6 +450,18 @@ def scons():
 
     # Define and load the components.  This will add more values to opt.
     prereqs = PreReqComponent(deps_env, opts)
+
+    gitmodules_subdir = GetOption("deps_as_gitmodules_subdir")
+    if gitmodules_subdir:
+        print(f"WARNING: --deps-as-gitmodules-subdir specified; ignoring build.config "
+              f"versions, branches, and patches and using gitmodules installed in "
+              f"{gitmodules_subdir} instead")
+        gitmodules_absdir = os.path.join(Dir('#').abspath, gitmodules_subdir)
+        if not os.path.isdir(gitmodules_absdir):
+            print(f"ERROR: --deps-as-gitmodules-subdir was specified but {gitmodules_absdir} "
+                  f"is not a valid directory.")
+            Exit(-1)
+
     # Now save the daos.conf file before attempting to build anything.  This means that options
     # are sticky even if there's a failed build.
     opts.Save(opts_file, deps_env)

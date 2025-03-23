@@ -1863,9 +1863,9 @@ ds_cont_tgt_refresh_track_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 		arg.tgt_status[i] = tgts[i].ta_comp.co_status;
 	ds_pool_put(pool);
 
-	rc = ds_pool_task_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
-				     PO_COMP_ST_DOWNOUT, cont_refresh_track_eph_one,
-				     &arg, DSS_ULT_FL_PERIODIC);
+	rc = ds_pool_thread_collective(
+	    pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+	    cont_refresh_track_eph_one, &arg, DSS_ULT_DEEP_STACK | DSS_ULT_FL_PERIODIC);
 
 out:
 	if (arg.tgt_status != NULL && arg.tgt_status != arg.tgt_status_inline)
@@ -5934,8 +5934,10 @@ ds_cont_get_prop(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t **prop_out)
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	rc = cont_svc_lookup_leader(pool_uuid, 0, &svc, NULL);
-	if (rc != 0)
+	if (rc != 0) {
+		DL_ERROR(rc, "pool " DF_UUID " cont_svc_lookup_leader failed", DP_UUID(pool_uuid));
 		return rc;
+	}
 
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
 	if (rc != 0)
@@ -5943,8 +5945,10 @@ ds_cont_get_prop(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t **prop_out)
 
 	ABT_rwlock_rdlock(svc->cs_lock);
 	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
-	if (rc != 0)
+	if (rc != 0) {
+		DL_ERROR(rc, DF_CONT " cont_lookup failed", DP_CONT(pool_uuid, cont_uuid));
 		D_GOTO(out_lock, rc);
+	}
 
 	rc = cont_prop_read(&tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop, true);
 	cont_put(cont);
