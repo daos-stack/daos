@@ -1554,6 +1554,17 @@ end:
 	if (rc == 0)
 		rc = rc1;
 
+	if (stale && iod_num == 1 && fetch_eph < mrone->mo_akey_punch_ephs[0]) {
+		/* XXX got record rebuild epoch lower than akey punch epoch, maybe should fix
+		 * pack/unpack part, ignore it now to avoid rebuild stuck.
+		 */
+		D_INFO(DF_RB ": " DF_UOID " %p dkey " DF_KEY " " DF_KEY " fetch_eph " DF_U64
+			     "akey_punch_eph " DF_U64 "\n",
+		       DP_RB_MRO(mrone), DP_UOID(mrone->mo_oid), mrone, DP_KEY(&mrone->mo_dkey),
+		       DP_KEY(&iods[0].iod_name), fetch_eph, mrone->mo_akey_punch_ephs[0]);
+		rc = 0;
+	}
+
 	if (rc)
 		DL_CDEBUG(stale, DB_REBUILD, DLOG_ERR, rc, DF_RB ": " DF_UOID " migrate error",
 			  DP_RB_MRO(mrone), DP_UOID(mrone->mo_oid));
