@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -612,18 +613,10 @@ calc_csum_recx_with_map(struct daos_csummer *obj, size_t *csum_nr,
 		}
 	}
 
-	if (consumed_bytes < recx->rx_nr * rec_len) {
-		/** Nothing mapped for recx or tail unmapped */
-		bytes_to_skip = (recx->rx_nr * rec_len) - consumed_bytes;
-		daos_sgl_processor(sgl, false, idx, bytes_to_skip,
-				   sgl_process_nop_cb, NULL);
-		consumed_bytes += bytes_to_skip;
-	}
-
 	*csum_nr = csums_calculated;
-	D_ASSERTF(consumed_bytes == recx->rx_nr * rec_len,
-		"consumed_bytes(%lu) == recx->rx_nr * rec_len(%lu)",
-		  consumed_bytes, recx->rx_nr * rec_len);
+	D_ASSERTF(consumed_bytes <= recx->rx_nr * rec_len,
+		  "consumed_bytes(%lu) <= recx->rx_nr * rec_len(%lu)", consumed_bytes,
+		  recx->rx_nr * rec_len);
 	return 0;
 }
 
