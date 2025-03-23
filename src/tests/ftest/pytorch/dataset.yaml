@@ -1,0 +1,47 @@
+hosts:
+  test_servers: 2
+  test_clients: 1
+server_config:
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+  system_ram_reserved: 1
+pool:
+  size: 8G
+container:
+  type: POSIX
+  control_method: daos
+  dir_oclass: SX
+
+timeout: 270
+
+map_style_dataset:
+  tree_height: 2
+  subdirs: 2
+  files_per_node: 64
+
+iterable_dataset:
+  tree_height: 4
+  subdirs: 5
+  files_per_node: 6
+
+map_dataset_with_dataloader:
+  tree_height: 3
+  subdirs: 5
+  files_per_node: 7
+  processes: [0, 1, 2, 3, 4, 8]
+  batch_size: [2, 4, 8, 16]
+
+iterable_dataset_with_dataloader:
+  tree_height: 3
+  subdirs: 5
+  files_per_node: 7
+  processes: [0, 1, 2, 3, 4, 8]
+  batch_size: [2, 4, 8, 16]

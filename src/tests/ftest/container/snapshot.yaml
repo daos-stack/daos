@@ -35,6 +35,3 @@ object_class: !mux
     obj_class: OC_SX
   OC_RP_2GX:
     obj_class: OC_RP_2GX
-
-container:
-  control_method: API

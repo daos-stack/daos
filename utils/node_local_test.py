@@ -2,6 +2,9 @@
 """Node local test (NLT).
 
 (C) Copyright 2020-2024 Intel Corporation.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP
+(C) Copyright 2025 Google LLC
+(C) Copyright 2025 Enakta Labs Ltd
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -918,7 +921,7 @@ class DaosServer():
             self.conf.wf.issues.append(entry)
             self._add_test_case('server_stop', failure=message)
         start = time.perf_counter()
-        rc = self.run_dmg(['system', 'stop'])
+        rc = self.run_dmg(['system', 'stop', '--full'])
         if rc.returncode != 0:
             print(rc)
             entry = {}
@@ -926,7 +929,7 @@ class DaosServer():
             # pylint: disable=protected-access
             entry['lineStart'] = sys._getframe().f_lineno
             entry['severity'] = 'ERROR'
-            msg = f'dmg system stop failed with {rc.returncode}'
+            msg = f'dmg system stop --full failed with {rc.returncode}'
             entry['message'] = msg
             self.conf.wf.issues.append(entry)
         if not self.valgrind:
@@ -4383,7 +4386,7 @@ class PosixTests():
         assert rc.returncode != 0
         output = rc.stderr.decode('utf-8')
         line = output.splitlines()
-        if line[-1] != 'ERROR: daos: failed fs fix-entry: DER_BUSY(-1012): Device or resource busy':
+        if 'DER_BUSY(-1012): Device or resource busy' not in line[-1]:
             raise NLTestFail('daos fs fix-entry /test_dir/f1')
 
         # stop dfuse
@@ -4542,66 +4545,6 @@ class PosixTests():
         os.environ['DAOS_AGENT_DRPC_DIR'] = server.agent_dir
 
         return importlib.import_module('pydaos.torch')
-
-    @needs_dfuse_with_opt(caching_variants=[False])
-    def test_torch_map_dataset(self):
-        """Check that all files in container are read regardless of the directory level"""
-        test_files = [
-            {"name": "0.txt", "content": b"0", "seen": 0},
-            {"name": "1/l1.txt", "content": b"1", "seen": 0},
-            {"name": "1/2/l2.txt", "content": b"2", "seen": 0},
-            {"name": "1/2/3/l3.txt", "content": b"3", "seen": 0},
-        ]
-
-        for tf in test_files:
-            file = join(self.dfuse.dir, tf["name"])
-            os.makedirs(os.path.dirname(file), exist_ok=True)
-            with open(file, 'wb') as f:
-                f.write(tf["content"])
-
-        torch = self.import_torch(self.server)
-        dataset = torch.Dataset(pool=self.pool.uuid, cont=self.container.uuid)
-
-        assert len(dataset) == len(test_files)
-
-        for _, content in enumerate(dataset):
-            for f in test_files:
-                if f["content"] == content:
-                    f["seen"] += 1
-
-        for f in test_files:
-            assert f["seen"] == 1
-
-        del dataset
-
-    @needs_dfuse_with_opt(caching_variants=[False])
-    def test_torch_iter_dataset(self):
-        """Check that all files in container are read regardless of the directory level"""
-        test_files = [
-            {"name": "0.txt", "content": b"0", "seen": 0},
-            {"name": "1/l1.txt", "content": b"1", "seen": 0},
-            {"name": "1/2/l2.txt", "content": b"2", "seen": 0},
-            {"name": "1/2/3/l3.txt", "content": b"3", "seen": 0},
-        ]
-
-        for tf in test_files:
-            file = join(self.dfuse.dir, tf["name"])
-            os.makedirs(os.path.dirname(file), exist_ok=True)
-            with open(file, 'wb') as f:
-                f.write(tf["content"])
-
-        torch = self.import_torch(self.server)
-        dataset = torch.IterableDataset(pool=self.pool.uuid, cont=self.container.uuid)
-
-        for content in dataset:
-            for f in test_files:
-                if f["content"] == content:
-                    f["seen"] += 1
-
-        for f in test_files:
-            assert f["seen"] == 1
-
-        del dataset
 
 
 class NltStdoutWrapper():
@@ -5588,6 +5531,8 @@ class AllocFailTestRun():
                                          delete=False) as log_file:
             self.log_file = log_file.name
             self._env['D_LOG_FILE'] = self.log_file
+            with open(log_file.name, 'w', encoding='utf-8') as lf:
+                lf.write(f'cmd: {" ".join(cmd)}\n')
 
     def __str__(self):
         cmd_text = ' '.join(self._cmd)

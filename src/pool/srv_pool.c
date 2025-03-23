@@ -1,6 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2136,11 +2137,11 @@ pool_svc_check_node_status(struct pool_svc *svc)
 }
 
 /*
- * Log a NOTE of as well as print a message. Arguments may be evaluated more
+ * Log as well as print a message. Arguments may be evaluated more
  * than once.
  */
-#define DS_POOL_NOTE_PRINT(fmt, ...) do {							\
-	D_NOTE(fmt, ## __VA_ARGS__);								\
+#define DS_POOL_LOG_PRINT(log, fmt, ...) do {							\
+	D_##log(fmt, ## __VA_ARGS__);								\
 	D_PRINT(fmt, ## __VA_ARGS__);								\
 } while (0)
 
@@ -2393,9 +2394,10 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 		D_GOTO(out, rc);
 	}
 
-	DS_POOL_NOTE_PRINT(DF_UUID": rank %u became pool service leader "DF_U64": srv_pool_hdl="
-			   DF_UUID" srv_cont_hdl="DF_UUID"\n", DP_UUID(svc->ps_uuid), rank,
-			   svc->ps_rsvc.s_term, DP_UUID(pool_hdl_uuid), DP_UUID(cont_hdl_uuid));
+	DS_POOL_LOG_PRINT(NOTE, DF_UUID": rank %u became pool service leader "DF_U64
+			  ": srv_pool_hdl="DF_UUID" srv_cont_hdl="DF_UUID"\n",
+			  DP_UUID(svc->ps_uuid), rank, svc->ps_rsvc.s_term, DP_UUID(pool_hdl_uuid),
+			  DP_UUID(cont_hdl_uuid));
 out:
 	if (rc != 0) {
 		if (events_initialized)
@@ -2414,9 +2416,9 @@ out:
 		 * Step up with the error anyway, so that RPCs to the PS
 		 * receive an error instead of timeouts.
 		 */
-		DS_POOL_NOTE_PRINT(DF_UUID": rank %u became pool service leader "DF_U64
-				   " with error: "DF_RC"\n", DP_UUID(svc->ps_uuid), rank,
-				   svc->ps_rsvc.s_term, DP_RC(svc->ps_error));
+		DS_POOL_LOG_PRINT(NOTE, DF_UUID": rank %u became pool service leader "DF_U64
+				  " with error: "DF_RC"\n", DP_UUID(svc->ps_uuid), rank,
+				  svc->ps_rsvc.s_term, DP_RC(svc->ps_error));
 		rc = 0;
 	}
 	return rc;
@@ -2434,12 +2436,12 @@ pool_svc_step_down_cb(struct ds_rsvc *rsvc)
 		sched_cancel_and_wait(&svc->ps_reconf_sched);
 		sched_cancel_and_wait(&svc->ps_rfcheck_sched);
 		ds_cont_svc_step_down(svc->ps_cont_svc);
-		DS_POOL_NOTE_PRINT(DF_UUID": rank %u no longer pool service leader "DF_U64"\n",
-				   DP_UUID(svc->ps_uuid), rank, svc->ps_rsvc.s_term);
+		DS_POOL_LOG_PRINT(NOTE, DF_UUID": rank %u no longer pool service leader "DF_U64"\n",
+				  DP_UUID(svc->ps_uuid), rank, svc->ps_rsvc.s_term);
 	} else {
-		DS_POOL_NOTE_PRINT(DF_UUID": rank %u no longer pool service leader "DF_U64
-				   " with error: "DF_RC"\n", DP_UUID(svc->ps_uuid), rank,
-				   svc->ps_rsvc.s_term, DP_RC(svc->ps_error));
+		DS_POOL_LOG_PRINT(NOTE, DF_UUID": rank %u no longer pool service leader "DF_U64
+				  " with error: "DF_RC"\n", DP_UUID(svc->ps_uuid), rank,
+				  svc->ps_rsvc.s_term, DP_RC(svc->ps_error));
 		svc->ps_error = 0;
 	}
 }
@@ -5966,7 +5968,7 @@ __ds_pool_mark_upgrade_completed(uuid_t pool_uuid, struct pool_svc *svc, int rc)
 	struct rdb_tx			tx;
 	d_iov_t				value;
 	uint32_t			upgrade_status;
-	uint32_t			global_version;
+	uint32_t			global_version = DAOS_POOL_GLOBAL_VERSION;
 	uint32_t			obj_version;
 	int				rc1;
 	daos_prop_t			*prop = NULL;
@@ -5987,12 +5989,25 @@ __ds_pool_mark_upgrade_completed(uuid_t pool_uuid, struct pool_svc *svc, int rc)
 	if (rc1)
 		D_GOTO(out_tx, rc1);
 
+	if (rc != 0) {
+		/*
+		 * Currently, the upgrade global version may have not been updated yet, if
+		 * pool_upgrade_props has encountered an error.
+		 */
+		d_iov_set(&value, &global_version, sizeof(global_version));
+		rc1 = rdb_tx_update(&tx, &svc->ps_root, &ds_pool_prop_upgrade_global_version,
+				    &value);
+		if (rc1) {
+			DL_ERROR(rc1, "failed to write upgrade global version prop");
+			D_GOTO(out_tx, rc1);
+		}
+	}
+
 	/*
 	 * only bump global version and connectable properties
 	 * if upgrade succeed.
 	 */
 	if (rc == 0) {
-		global_version = DAOS_POOL_GLOBAL_VERSION;
 		d_iov_set(&value, &global_version, sizeof(global_version));
 		rc1 = rdb_tx_update(&tx, &svc->ps_root,
 				    &ds_pool_prop_global_version, &value);
@@ -6185,11 +6200,20 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 		switch (upgrade_status) {
 		case DAOS_UPGRADE_STATUS_NOT_STARTED:
 		case DAOS_UPGRADE_STATUS_COMPLETED:
-			if ((upgrade_global_ver < DAOS_POOL_GLOBAL_VERSION &&
-			     dmg_upgrade_cmd) || DAOS_FAIL_CHECK(DAOS_FORCE_OBJ_UPGRADE))
+			if (DAOS_FAIL_CHECK(DAOS_FORCE_OBJ_UPGRADE)) {
 				D_GOTO(out_upgrade, rc = 0);
-			else
+			} else if (upgrade_global_ver < DAOS_POOL_GLOBAL_VERSION &&
+				   dmg_upgrade_cmd) {
+				if (DAOS_POOL_GLOBAL_VERSION - upgrade_global_ver == 1)
+					D_GOTO(out_upgrade, rc = 0);
+				D_ERROR(DF_UUID ": upgrading pool %u -> %u\n is unsupported"
+						" please upgrade pool to %u firstly\n",
+					DP_UUID(svc->ps_uuid), upgrade_global_ver,
+					DAOS_POOL_GLOBAL_VERSION, upgrade_global_ver + 1);
+				D_GOTO(out_tx, rc = -DER_NOTSUPPORTED);
+			} else {
 				D_GOTO(out_tx, rc = 0);
+			}
 			break;
 		case DAOS_UPGRADE_STATUS_FAILED:
 			if (upgrade_global_ver < DAOS_POOL_GLOBAL_VERSION) {
@@ -6974,9 +6998,9 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclud
 	if (opc == MAP_EXTEND) {
 		D_ASSERT(extend_rank_list != NULL);
 		map_version = pool_map_get_version(map) + 1;
-		rc = gen_pool_buf(map, &map_buf, map_version, extend_domains_nr,
-				  extend_rank_list->rl_nr, extend_rank_list->rl_nr * dss_tgt_nr,
-				  extend_domains, dss_tgt_nr);
+		rc          = gen_pool_buf(map, &map_buf, map_version, extend_domains_nr,
+					   extend_rank_list->rl_nr, extend_rank_list->rl_nr * dss_tgt_nr,
+					   extend_domains, dss_tgt_nr);
 		if (rc != 0)
 			D_GOTO(out_map, rc);
 
@@ -7009,7 +7033,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclud
 							   inval_tgt_addrs);
 			if (rc != 0)
 				goto out_map;
-			if (inval_tgt_addrs->pta_number > 0) {
+			if (src == MUS_DMG && inval_tgt_addrs->pta_number > 0) {
 				/*
 				 * If any invalid ranks/targets were specified here,
 				 * abort the entire request. This will mean the
@@ -7029,7 +7053,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclud
 	 * before and after. If the version hasn't changed, we are done.
 	 */
 	map_version_before = pool_map_get_version(map);
-	rc = ds_pool_map_tgts_update(map, tgts, opc, exclude_rank, tgt_map_ver, true);
+	rc = ds_pool_map_tgts_update(svc->ps_uuid, map, tgts, opc, exclude_rank, tgt_map_ver, true);
 	if (rc != 0)
 		D_GOTO(out_map, rc);
 	map_version = pool_map_get_version(map);
@@ -7086,6 +7110,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclud
 			goto out_map;
 		}
 
+		/* TODO DAOS-6353: Update to FAULT when supported */
 		failed_cnt = pool_map_get_failed_cnt(map, PO_COMP_TP_NODE);
 		D_INFO(DF_UUID ": Exclude %d ranks, failed NODE %d\n", DP_UUID(svc->ps_uuid),
 		       tgt_addrs->pta_number, failed_cnt);
@@ -7129,6 +7154,8 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclud
 		goto out_map_buf;
 	}
 
+	DS_POOL_LOG_PRINT(INFO, DF_UUID ": committed pool map: version=%u->%u map=%p\n",
+			  DP_UUID(svc->ps_uuid), map_version_before, map_version, map);
 	updated = true;
 
 	/* Update svc->ps_pool to match the new pool map. */
@@ -7350,7 +7377,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 
 	if (svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_NO_DATA_SYNC) {
 		D_DEBUG(DB_MD, "self healing is disabled for no_data_sync reintegration mode.\n");
-		if (opc == POOL_EXCLUDE || opc == POOL_DRAIN) {
+		if (opc == MAP_EXCLUDE || opc == MAP_DRAIN) {
 			rc = ds_pool_tgt_exclude_out(svc->ps_pool->sp_uuid, &target_list);
 			if (rc)
 				D_INFO("mark failed target %d of "DF_UUID " as DOWNOUT: "DF_RC"\n",
@@ -7360,7 +7387,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		D_GOTO(out, rc);
 	}
 
-	if ((entry->dpe_val & DAOS_SELF_HEAL_DELAY_REBUILD) && exclude_rank)
+	if ((entry->dpe_val & DAOS_SELF_HEAL_DELAY_REBUILD) && (opc == MAP_EXCLUDE))
 		delay = -1;
 	else if (daos_fail_check(DAOS_REBUILD_DELAY))
 		delay = 5;
@@ -7578,8 +7605,8 @@ pool_svc_exclude_ranks(struct pool_svc *svc, struct pool_svc_event_set *event_se
 				 NULL, NULL, 0, &list, &inval_list_out, &map_version,
 				 NULL /* hint */, MUS_SWIM, false);
 
-	D_DEBUG(DB_MD, "Exclude pool "DF_UUID"/%u ranks %u: rc %d\n",
-		DP_UUID(svc->ps_uuid), map_version, n, rc);
+	D_DEBUG(DB_MD, DF_UUID ": exclude %u ranks: map_version=%u: " DF_RC "\n",
+		DP_UUID(svc->ps_uuid), n, rc == 0 ? map_version : 0, DP_RC(rc));
 
 	pool_target_addr_list_free(&inval_list_out);
 out:

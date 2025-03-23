@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -1371,11 +1372,8 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 			      orw->orw_dkey_csum, &orw->orw_iod_array,
 			      &orw->orw_oid);
 	if (rc != 0) {
-		D_ERROR(DF_C_UOID_DKEY"verify_keys error: "DF_RC"\n",
-			DP_C_UOID_DKEY(orw->orw_oid, &orw->orw_dkey),
-			DP_RC(rc));
-		if (rc == -DER_CSUM)
-			obj_log_csum_err();
+		D_ERROR(DF_C_UOID_DKEY "verify_keys error: " DF_RC "\n",
+			DP_C_UOID_DKEY(orw->orw_oid, &orw->orw_dkey), DP_RC(rc));
 		return rc;
 	}
 
@@ -4598,12 +4596,8 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 		rc = csum_verify_keys(ioc->ioc_coc->sc_csummer,
 				      &dcsr->dcsr_dkey, dcu->dcu_dkey_csum,
 				      &dcu->dcu_iod_array, &dcsr->dcsr_oid);
-		if (rc != 0) {
-			if (rc == -DER_CSUM)
-				obj_log_csum_err();
-
+		if (rc != 0)
 			goto out;
-		}
 
 		if (iohs == NULL) {
 			D_ALLOC_ARRAY(iohs, dcde->dcde_write_cnt);

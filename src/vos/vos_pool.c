@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2025 Intel Corporation.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -794,6 +794,9 @@ vos2mc_flags(unsigned int vos_flags)
 
 	if (vos_flags & VOS_POF_RDB)
 		mc_flags |= BIO_MC_FL_RDB;
+
+	if (vos_flags & VOS_POF_FOR_RECREATE)
+		mc_flags |= BIO_MC_FL_RECREATE;
 
 	return mc_flags;
 }

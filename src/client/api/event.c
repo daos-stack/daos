@@ -1,5 +1,7 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -26,31 +28,6 @@ static __thread bool		ev_thpriv_is_init;
  * busy-polling by default (0), timeout in us otherwise
  */
 static uint32_t ev_prog_timeout;
-
-#define EQ_WITH_CRT
-
-#if !defined(EQ_WITH_CRT)
-
-#define crt_init(a,b,c)			({0;})
-#define crt_finalize()			({0;})
-#define crt_context_create(a, b)	({0;})
-#define crt_context_destroy(a, b)	({0;})
-#define crt_progress_cond(ctx, timeout, cb, args)	\
-({							\
-	int __rc = cb(args);				\
-							\
-	while ((timeout) != 0 && __rc == 0) {		\
-		sleep(1);				\
-		__rc = cb(args);			\
-		if ((timeout) < 0)			\
-			continue;			\
-		if ((timeout) < 1000000)		\
-			break;				\
-		(timeout) -= 1000000;			\
-	}						\
-	0;						\
-})
-#endif
 
 /*
  * For the moment, we use a global crt_context_t to create all the RPC requests
@@ -130,7 +107,7 @@ daos_eq_lib_reset_after_fork(void)
 	eq_ref            = 0;
 	ev_thpriv_is_init = false;
 	crt_info          = daos_crt_init_opt_get(false, 1);
-	rc                = dc_mgmt_net_cfg(NULL, crt_info);
+	rc                = dc_mgmt_net_cfg_init(NULL, crt_info);
 	if (rc == 0)
 		rc = daos_eq_lib_init(crt_info);
 	D_FREE(crt_info->cio_provider);
