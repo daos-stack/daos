@@ -1358,9 +1358,6 @@ engines:
 <end>
 ```
 
-There are a few optional providers that are not built by default. For detailed
-information, please refer to the [DAOS build documentation][6].
-
 !!! note
     DAOS Control Servers will need to be restarted on all hosts after updates to the server
     configuration file.
@@ -1369,9 +1366,6 @@ information, please refer to the [DAOS build documentation][6].
     include the hostnames or IP addresses (don't need to specify port) of those hosts.
 
     This will be the set of servers which host the replicated DAOS management service (MS).
-
->The support of the optional providers is not guarantee and can be removed
->without further notification.
 
 ### Network Configuration
 
@@ -1729,42 +1723,56 @@ Once the service file is installed and `systemctl daemon-reload` has been run to
 reload the configuration, the `daos_agent` can be started through systemd
 as shown above.
 
-#### Disable Agent Cache (Optional)
+#### Refresh Agent Cache
 
-In certain circumstances (e.g. for DAOS development or system evaluation), it
-may be desirable to disable the DAOS Agent's caching mechanism in order to avoid
-stale system information being retained across reformats of a system. The DAOS
-Agent normally caches a map of rank-to-fabric URI lookups as well as client network
-configuration data in order to reduce the number of management RPCs required to
-start an application. When this information becomes stale, the Agent must be
-restarted in order to repopulate the cache with new information.
-Alternatively, the caching mechanism may be disabled, with the tradeoff that
-each application launch will invoke management RPCs in order to obtain system
-connection information.
+In certain circumstances (e.g. [system extension][6] with new servers), it may
+be needed to refresh the DAOS Agent cache.  The DAOS Agent normally caches a map
+of rank-to-fabric URI lookups as well as client network configuration data in
+order to reduce the number of management RPCs required to start an application.
 
-To disable the DAOS Agent caching mechanism, set the following environment
-variable before starting the `daos_agent` process:
+After a new server has been added to the system, or an existing server has been
+permanently removed from the system, the administrator should ensure that the
+Agent is not serving stale system information to new clients. There are three
+options to achieve this goal:
 
-`DAOS_AGENT_DISABLE_CACHE=true`
+1. Send the `SIGUSR2` signal to the `daos_agent` process to force a refresh on
+   demand. This could be done with running the following command
 
-If running from systemd, add the following to the `daos_agent` service file in
-the `[Service]` section before reloading systemd and restarting the
-`daos_agent` service:
+```bash
+pkill -x -SIGUSR2 daos_agent
+```
 
-`Environment=DAOS_AGENT_DISABLE_CACHE=true`
+2. Add a cache expiration value, defined in minutes, to the Agent configuration
+   file `daos_agent.yml` in order to cause a cache refresh when the data is
+   older than the defined value.
 
+```yaml
+cache_expiration: 30
+```
 
-[^1]: https://github.com/intel/ipmctl
+3. Disable the caching mechanism completely, with the tradeoff that each
+   application launch will invoke management RPCs in order to obtain system
+   connection information.  To disable the DAOS Agent caching mechanism, set the
+   following environment variable before starting the `daos_agent` process:
 
-[^2]: https://github.com/daos-stack/daos/tree/master/utils/config
+```bash
+DAOS_AGENT_DISABLE_CACHE=true
+```
 
-[^3]: [https://www.open-mpi.org/faq/?category=running\#mpirun-hostfile](https://www.open-mpi.org/faq/?category=running#mpirun-hostfile)
+   If running from systemd, add the following line to the `daos_agent` service
+   file in the `[Service]` section before reloading systemd and restarting the
+   `daos_agent` service:
 
-[^4]: https://github.com/daos-stack/daos/tree/master/src/control/README.md
+```ini
+Environment=DAOS_AGENT_DISABLE_CACHE=true
+```
 
-[^5]: https://github.com/pmem/ndctl/issues/130
+   It is also possible to disable the `daos_agent` cache with adding the
+   following entry into the `daos_agent.yml` configuration file:
 
-[6]: <../dev/development.md#building-optional-components> (Building DAOS for Development)
+```yaml
+disable_caching: true
+```
 
 ## Multi-user DFuse setup
 
@@ -1779,3 +1787,16 @@ fuse and must be enabled by root before any user can use it.  To allow this then
 uncomment a line in `/etc/fuse.conf` to enable the `user_allow_other` setting.  The daos-client rpm
 does not do this automatically. An administrator must set this option on all nodes on which they
 want to provide a persistent multi-user dfuse service.
+
+
+[^1]: https://github.com/intel/ipmctl
+
+[^2]: https://github.com/daos-stack/daos/tree/master/utils/config
+
+[^3]: [https://www.open-mpi.org/faq/?category=running\#mpirun-hostfile](https://www.open-mpi.org/faq/?category=running#mpirun-hostfile)
+
+[^4]: https://github.com/daos-stack/daos/tree/master/src/control/README.md
+
+[^5]: https://github.com/pmem/ndctl/issues/130
+
+[6]: <administration.md#system-extension>(Extension of the DAOS system)
