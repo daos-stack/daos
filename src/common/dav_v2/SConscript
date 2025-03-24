@@ -28,7 +28,7 @@ def scons():
     lenv.AppendUnique(CFLAGS=['-fvisibility=hidden'])
 
     dav_v2 = lenv.d_library('dav_v2', SRC)
-    lenv.Install('$PREFIX/lib64/', dv_v2)
+    lenv.Install('$PREFIX/lib64/', dav_v2)
 
 
 if __name__ == "SCons.Script":
