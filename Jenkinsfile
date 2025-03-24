@@ -18,7 +18,7 @@
 //@Library(value='pipeline-lib@your_branch') _
 
 // Name of branch to be tested
-test_branch = 'release/2.6'
+test_branch = 'google/2.6'
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -71,7 +71,7 @@ pipeline {
 
     triggers {
         /* groovylint-disable-next-line AddEmptyString */
-        cron(env.BRANCH_NAME == 'weekly-2.6-testing' ? 'TZ=UTC\n0 6 * * 6' : '')
+        cron(env.BRANCH_NAME == 'weekly-google/2.6-testing' ? 'TZ=UTC\n0 6 * * 6' : '')
     }
 
     environment {
