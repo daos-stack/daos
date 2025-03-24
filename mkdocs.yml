@@ -100,6 +100,7 @@ nav:
       - 'MPI-IO Support': 'user/mpi-io.md'
       - 'HDF5 Support': 'user/hdf5.md'
       - 'Python Support': 'user/python.md'
+      - 'Pytorch Support': 'user/pytorch.md'
       - 'Spark and Hadoop': 'user/spark.md'
       - 'Data Mover': 'user/datamover.md'
       - 'Tensorflow-IO Support': 'user/tensorflow.md'

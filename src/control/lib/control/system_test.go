@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -834,6 +835,12 @@ func TestControl_SystemStop(t *testing.T) {
 	testRespRS := new(SystemStopResp)
 	testRespRS.AbsentRanks.Replace(testRS)
 
+	withFull := func(stopReq *SystemStopReq) *SystemStopReq {
+		nr := *stopReq
+		nr.Full = true
+		return &nr
+	}
+
 	for name, tc := range map[string]struct {
 		req        *SystemStopReq
 		uErr       error
@@ -871,6 +878,21 @@ func TestControl_SystemStop(t *testing.T) {
 			}),
 			expResp:    testRespRS,
 			expRespErr: errors.New("non-existent ranks 1-23"),
+		},
+		"request force and full options": {
+			req: &SystemStopReq{
+				Force: true,
+				Full:  true,
+			},
+			expErr: errors.New("may not be mixed"),
+		},
+		"request full and host set options": {
+			req:    withFull(testReqHS),
+			expErr: errors.New("may not be mixed"),
+		},
+		"request full and rank set options": {
+			req:    withFull(testReqRS),
+			expErr: errors.New("may not be mixed"),
 		},
 		"multiple member results": {
 			req: new(SystemStopReq),
@@ -1089,45 +1111,69 @@ func TestControl_SystemDrain(t *testing.T) {
 		"dual pools; single rank": {
 			req: new(SystemDrainReq),
 			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemDrainResp{
-				Results: []*mgmtpb.SystemDrainResp_DrainResult{
-					{PoolId: test.MockUUID(1), Ranks: "1"},
-					{PoolId: test.MockUUID(2), Ranks: "1"},
+				Responses: []*mgmtpb.PoolRanksResp{
+					{
+						Id:      test.MockUUID(1),
+						Results: []*sharedpb.RankResult{{Rank: 1}},
+					},
+					{
+						Id:      test.MockUUID(2),
+						Results: []*sharedpb.RankResult{{Rank: 1}},
+					},
 				},
 			}),
 			expResp: &SystemDrainResp{
-				Results: []*DrainResult{
-					{PoolID: test.MockUUID(1), Ranks: "1"},
-					{PoolID: test.MockUUID(2), Ranks: "1"},
+				Responses: []*PoolRanksResp{
+					{
+						ID:      test.MockUUID(1),
+						Results: []*PoolRankResult{{Rank: 1}},
+					},
+					{
+						ID:      test.MockUUID(2),
+						Results: []*PoolRankResult{{Rank: 1}},
+					},
 				},
 			},
 		},
-		"dual pools; single rank; with errors": {
+		"dual pools; multiple ranks; with errors": {
 			req: new(SystemDrainReq),
 			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemDrainResp{
-				Results: []*mgmtpb.SystemDrainResp_DrainResult{
+				Responses: []*mgmtpb.PoolRanksResp{
 					{
-						PoolId: test.MockUUID(1), Ranks: "1",
-						Status: -1, Msg: "fail1",
+						Id: test.MockUUID(1),
+						Results: []*sharedpb.RankResult{
+							{Rank: 0},
+							{Rank: 1, Errored: true, Msg: "fail1"},
+						},
 					},
 					{
-						PoolId: test.MockUUID(2), Ranks: "1",
-						Status: -1, Msg: "fail2",
+						Id: test.MockUUID(2),
+						Results: []*sharedpb.RankResult{
+							{Rank: 0},
+							{Rank: 1, Errored: true, Msg: "fail2"},
+						},
 					},
 				},
 			}),
 			expResp: &SystemDrainResp{
-				Results: []*DrainResult{
+				Responses: []*PoolRanksResp{
 					{
-						PoolID: test.MockUUID(1), Ranks: "1",
-						Status: -1, Msg: "fail1",
+						ID: test.MockUUID(1),
+						Results: []*PoolRankResult{
+							{Rank: 0},
+							{Rank: 1, Errored: true, Msg: "fail1"},
+						},
 					},
 					{
-						PoolID: test.MockUUID(2), Ranks: "1",
-						Status: -1, Msg: "fail2",
+						ID: test.MockUUID(2),
+						Results: []*PoolRankResult{
+							{Rank: 0},
+							{Rank: 1, Errored: true, Msg: "fail2"},
+						},
 					},
 				},
 			},
-			expRespErr: errors.New("pool 00000001-0001-0001-0001-000000000001 ranks 1: fail1, pool 00000002-0002-0002-0002-000000000002 ranks 1: fail2"),
+			expRespErr: errors.New("rank 1 failed on pool 00000001-0001-0001-0001-000000000001, rank 1 failed on pool 00000002-0002-0002-0002-000000000002"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

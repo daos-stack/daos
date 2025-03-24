@@ -1,5 +1,7 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -25,53 +27,6 @@ import "C"
 const (
 	// MaxLabelLength is the maximum length of a label.
 	MaxLabelLength = C.DAOS_PROP_LABEL_MAX_LEN
-)
-
-const (
-	// PropEntryAllocedOID is the highest allocated OID.
-	PropEntryAllocedOID = C.DAOS_PROP_ENTRY_ALLOCED_OID
-	// PropEntryChecksum is the checksum property.
-	PropEntryChecksum = C.DAOS_PROP_ENTRY_CKSUM
-	// PropEntryChecksumSize is the checksum size property.
-	PropEntryChecksumSize = C.DAOS_PROP_ENTRY_CKSUM_SIZE
-	// PropEntryCompression is the compression property.
-	PropEntryCompression = C.DAOS_PROP_ENTRY_COMPRESS
-	// PropEntryDedupe is the dedupe property.
-	PropEntryDedupe = C.DAOS_PROP_ENTRY_DEDUP
-	// PropEntryDedupThreshold is the dedupe threshold property.
-	PropEntryDedupeThreshold = C.DAOS_PROP_ENTRY_DEDUP_THRESHOLD
-	// PropEntryECCellSize is the EC cell size property.
-	PropEntryECCellSize = C.DAOS_PROP_ENTRY_EC_CELL_SZ
-	// PropEntryECPerfDomainAff is the EC performance domain affinity property.
-	PropEntryECPerfDomainAff = C.DAOS_PROP_ENTRY_EC_PDA
-	// PropEntryEncryption is the encryption property.
-	PropEntryEncryption = C.DAOS_PROP_ENTRY_ENCRYPT
-	// PropEntryGlobalVersion is the global version property.
-	PropEntryGlobalVersion = C.DAOS_PROP_ENTRY_GLOBAL_VERSION
-	// PropEntryObjectVersion is the object layout version property.
-	PropEntryObjectVersion = C.DAOS_PROP_ENTRY_OBJ_VERSION
-	// PropEntryGroup is the group property.
-	PropEntryGroup = C.DAOS_PROP_ENTRY_GROUP
-	// PropEntryLabel is the label property.
-	PropEntryLabel = C.DAOS_PROP_ENTRY_LABEL
-	// PropEntryLayout is the layout property.
-	PropEntryLayoutType = C.DAOS_PROP_ENTRY_LAYOUT_TYPE
-	// PropEntryLayoutVersion is the layout version property.
-	PropEntryLayoutVersion = C.DAOS_PROP_ENTRY_LAYOUT_VER
-	// PropEntryOwner is the owner property.
-	PropEntryOwner = C.DAOS_PROP_ENTRY_OWNER
-	// PropEntryRedunFactor is the redundancy factor property.
-	PropEntryRedunFactor = C.DAOS_PROP_ENTRY_REDUN_FAC
-	// PropEntryRedunLevel is the redundancy level property.
-	PropEntryRedunLevel = C.DAOS_PROP_ENTRY_REDUN_LVL
-	// PropEntryRedunPerfDomainAff is the redundancy performance domain affinity property.
-	PropEntryRedunPerfDomainAff = C.DAOS_PROP_ENTRY_RP_PDA
-	// PropEntrySnapshotMax is the snapshot max property.
-	PropEntrySnapshotMax = C.DAOS_PROP_ENTRY_SNAPSHOT_MAX
-	// PropEntryServerChecksum is the server checksum property.
-	PropEntryServerChecksum = C.DAOS_PROP_ENTRY_SRV_CKSUM
-	// PropEntryStatus is the status property.
-	PropEntryStatus = C.DAOS_PROP_ENTRY_STATUS
 )
 
 const (
@@ -257,14 +212,12 @@ const (
 )
 
 const (
-	PoolPerfDomainRoot   = C.PO_COMP_TP_ROOT
-	PoolPerfDomainGrp    = C.PO_COMP_TP_GRP
-	PoolPerfDomainNode   = C.PO_COMP_TP_NODE
-	PoolPerfDomainRank   = C.PO_COMP_TP_RANK
-	PoolPerfDomainTarget = C.PO_COMP_TP_TARGET
+	PoolPerfDomainRoot        = C.PO_COMP_TP_ROOT
+	PoolPerfDomainUserDefined = C.PO_COMP_TP_PERF
 )
 
 const (
-	PoolReintModeDataSync   = C.DAOS_REINT_MODE_DATA_SYNC
-	PoolReintModeNoDataSync = C.DAOS_REINT_MODE_NO_DATA_SYNC
+	PoolReintModeDataSync    = C.DAOS_REINT_MODE_DATA_SYNC
+	PoolReintModeNoDataSync  = C.DAOS_REINT_MODE_NO_DATA_SYNC
+	PoolReintModeIncremental = C.DAOS_REINT_MODE_INCREMENTAL
 )

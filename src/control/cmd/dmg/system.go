@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -34,6 +35,7 @@ type SystemCmd struct {
 	Exclude      systemExcludeCmd      `command:"exclude" description:"Exclude ranks from DAOS system"`
 	ClearExclude systemClearExcludeCmd `command:"clear-exclude" description:"Clear excluded state for ranks"`
 	Drain        systemDrainCmd        `command:"drain" description:"Drain ranks or hosts from all relevant pools in DAOS system"`
+	Reintegrate  systemReintegrateCmd  `command:"reintegrate" alias:"reint" description:"Reintegrate ranks or hosts into all relevant pools in DAOS system"`
 	Erase        systemEraseCmd        `command:"erase" description:"Erase system metadata prior to reformat"`
 	ListPools    poolListCmd           `command:"list-pools" description:"List all pools in the DAOS system"`
 	Cleanup      systemCleanupCmd      `command:"cleanup" description:"Clean up all resources associated with the specified machine"`
@@ -176,6 +178,7 @@ func (cmd *systemEraseCmd) Execute(_ []string) error {
 type systemStopCmd struct {
 	baseRankListCmd
 	Force bool `long:"force" description:"Force stop DAOS system members"`
+	Full  bool `long:"full" hidden:"true" description:"Attempt a graceful shutdown of DAOS system. Experimental and not for use in production environments"`
 }
 
 // Execute is run when systemStopCmd activates.
@@ -185,11 +188,20 @@ func (cmd *systemStopCmd) Execute(_ []string) (errOut error) {
 	defer func() {
 		errOut = errors.Wrap(errOut, "system stop failed")
 	}()
+	if cmd.Force && cmd.Full {
+		return errIncompatFlags("force", "full")
+	}
+	if cmd.Full && !cmd.Hosts.Empty() {
+		return errIncompatFlags("full", "rank-hosts")
+	}
+	if cmd.Full && !cmd.Ranks.Empty() {
+		return errIncompatFlags("full", "ranks")
+	}
 
 	if err := cmd.validateHostsRanks(); err != nil {
 		return err
 	}
-	req := &control.SystemStopReq{Force: cmd.Force}
+	req := &control.SystemStopReq{Force: cmd.Force, Full: cmd.Full}
 	req.Hosts.Replace(&cmd.Hosts.HostSet)
 	req.Ranks.Replace(&cmd.Ranks.RankSet)
 
@@ -308,9 +320,13 @@ type systemDrainCmd struct {
 	baseRankListCmd
 }
 
-func (cmd *systemDrainCmd) Execute(_ []string) (errOut error) {
+func (cmd *systemDrainCmd) execute(reint bool) (errOut error) {
 	defer func() {
-		errOut = errors.Wrap(errOut, "system drain failed")
+		opStr := "drain"
+		if reint {
+			opStr = "reintegrate"
+		}
+		errOut = errors.Wrapf(errOut, "system %s failed", opStr)
 	}()
 
 	if err := cmd.validateHostsRanks(); err != nil {
@@ -324,6 +340,7 @@ func (cmd *systemDrainCmd) Execute(_ []string) (errOut error) {
 	req.SetSystem(cmd.config.SystemName)
 	req.Hosts.Replace(&cmd.Hosts.HostSet)
 	req.Ranks.Replace(&cmd.Ranks.RankSet)
+	req.Reint = reint
 
 	resp, err := control.SystemDrain(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -334,11 +351,25 @@ func (cmd *systemDrainCmd) Execute(_ []string) (errOut error) {
 		return cmd.OutputJSON(resp, resp.Errors())
 	}
 
+	cmd.Debugf("%T: %+v, %T: %+v", req, req, resp.Responses, resp.Responses)
+
 	var out strings.Builder
-	pretty.PrintSystemDrainResponse(&out, resp)
+	pretty.PrintPoolRanksResps(&out, resp.Responses...)
 	cmd.Info(out.String())
 
 	return resp.Errors()
+}
+
+func (cmd *systemDrainCmd) Execute(_ []string) error {
+	return cmd.execute(false)
+}
+
+type systemReintegrateCmd struct {
+	systemDrainCmd
+}
+
+func (cmd *systemReintegrateCmd) Execute(_ []string) error {
+	return cmd.execute(true)
 }
 
 type systemCleanupCmd struct {

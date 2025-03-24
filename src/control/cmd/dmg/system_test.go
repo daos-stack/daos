@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -201,6 +202,32 @@ func TestDmg_SystemCommands(t *testing.T) {
 			errors.New("--ranks and --rank-hosts options cannot be set together"),
 		},
 		{
+			"system stop with full option",
+			"system stop --full",
+			strings.Join([]string{
+				printRequest(t, &control.SystemStopReq{Full: true}),
+			}, " "),
+			nil,
+		},
+		{
+			"system stop with full and force options",
+			"system stop --full --force",
+			"",
+			errors.New(`may not be mixed`),
+		},
+		{
+			"system stop with full and rank-hosts options",
+			"system stop --full --rank-hosts foo-[0-2]",
+			"",
+			errors.New(`may not be mixed`),
+		},
+		{
+			"system stop with full and ranks options",
+			"system stop --full --ranks 0-2",
+			"",
+			errors.New(`may not be mixed`),
+		},
+		{
 			"system start with no arguments",
 			"system start",
 			strings.Join([]string{
@@ -281,6 +308,32 @@ func TestDmg_SystemCommands(t *testing.T) {
 		{
 			"system drain without ranks",
 			"system drain",
+			"",
+			errNoRanks,
+		},
+		{
+			"system reintegrate with multiple hosts",
+			"system reintegrate --rank-hosts foo-[0,1,4]",
+			strings.Join([]string{
+				printRequest(t, withSystem(
+					withHosts(&control.SystemDrainReq{Reint: true}, "foo-[0-1,4]"),
+					"daos_server")),
+			}, " "),
+			nil,
+		},
+		{
+			"system reintegrate with multiple ranks",
+			"system reintegrate --ranks 0,1,4",
+			strings.Join([]string{
+				printRequest(t, withSystem(
+					withRanks(&control.SystemDrainReq{Reint: true}, 0, 1, 4),
+					"daos_server")),
+			}, " "),
+			nil,
+		},
+		{
+			"system reintegrate without ranks",
+			"system reint", // Verify alias is accepted.
 			"",
 			errNoRanks,
 		},

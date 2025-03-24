@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -36,10 +37,17 @@
 			break;                                                                     \
                                                                                                    \
 		crt_opc_decode((rpc)->crp_pub.cr_opc, &_module, &_opc);                            \
-		D_TRACE_DEBUG(mask, (rpc), "[opc=%#x (%s:%s) rpcid=%#lx rank:tag=%d:%d] " fmt,     \
-			      (rpc)->crp_pub.cr_opc, _module, _opc, (rpc)->crp_req_hdr.cch_rpcid,  \
-			      (rpc)->crp_pub.cr_ep.ep_rank, (rpc)->crp_pub.cr_ep.ep_tag,           \
-			      ##__VA_ARGS__);                                                      \
+		if ((rpc)->crp_coll) {                                                             \
+			D_TRACE_DEBUG(mask, (rpc), "[opc=%#x (%s:%s) rpcid=%#lx CORPC] " fmt,      \
+				      (rpc)->crp_pub.cr_opc, _module, _opc,                        \
+				      (rpc)->crp_req_hdr.cch_rpcid, ##__VA_ARGS__);                \
+		} else {                                                                           \
+			D_TRACE_DEBUG(mask, (rpc),                                                 \
+				      "[opc=%#x (%s:%s) rpcid=%#lx rank:tag=%d:%d] " fmt,          \
+				      (rpc)->crp_pub.cr_opc, _module, _opc,                        \
+				      (rpc)->crp_req_hdr.cch_rpcid, (rpc)->crp_pub.cr_ep.ep_rank,  \
+				      (rpc)->crp_pub.cr_ep.ep_tag, ##__VA_ARGS__);                 \
+		}                                                                                  \
 	} while (0)
 
 /* Log an error with an RPC descriptor */
@@ -49,10 +57,16 @@
 		char *_opc;                                                                        \
                                                                                                    \
 		crt_opc_decode((rpc)->crp_pub.cr_opc, &_module, &_opc);                            \
-		D_TRACE_ERROR((rpc), "[opc=%#x (%s:%s) rpcid=%#lx rank:tag=%d:%d] " fmt,           \
-			      (rpc)->crp_pub.cr_opc, _module, _opc, (rpc)->crp_req_hdr.cch_rpcid,  \
-			      (rpc)->crp_pub.cr_ep.ep_rank, (rpc)->crp_pub.cr_ep.ep_tag,           \
-			      ##__VA_ARGS__);                                                      \
+		if ((rpc)->crp_coll) {                                                             \
+			D_TRACE_ERROR((rpc), "[opc=%#x (%s:%s) rpcid=%#lx CORPC] " fmt,            \
+				      (rpc)->crp_pub.cr_opc, _module, _opc,                        \
+				      (rpc)->crp_req_hdr.cch_rpcid, ##__VA_ARGS__);                \
+		} else {                                                                           \
+			D_TRACE_ERROR((rpc), "[opc=%#x (%s:%s) rpcid=%#lx rank:tag=%d:%d] " fmt,   \
+				      (rpc)->crp_pub.cr_opc, _module, _opc,                        \
+				      (rpc)->crp_req_hdr.cch_rpcid, (rpc)->crp_pub.cr_ep.ep_rank,  \
+				      (rpc)->crp_pub.cr_ep.ep_tag, ##__VA_ARGS__);                 \
+		}                                                                                  \
 	} while (0)
 
 /* Log a warning with an RPC descriptor */
@@ -62,10 +76,16 @@
 		char *_opc;                                                                        \
                                                                                                    \
 		crt_opc_decode((rpc)->crp_pub.cr_opc, &_module, &_opc);                            \
-		D_TRACE_WARN((rpc), "[opc=%#x (%s:%s) rpcid=%#lx rank:tag=%d:%d] " fmt,            \
-			     (rpc)->crp_pub.cr_opc, _module, _opc, (rpc)->crp_req_hdr.cch_rpcid,   \
-			     (rpc)->crp_pub.cr_ep.ep_rank, (rpc)->crp_pub.cr_ep.ep_tag,            \
-			     ##__VA_ARGS__);                                                       \
+		if ((rpc)->crp_coll) {                                                             \
+			D_TRACE_WARN((rpc), "[opc=%#x (%s:%s) rpcid=%#lx CORPC] " fmt,             \
+				     (rpc)->crp_pub.cr_opc, _module, _opc,                         \
+				     (rpc)->crp_req_hdr.cch_rpcid, ##__VA_ARGS__);                 \
+		} else {                                                                           \
+			D_TRACE_WARN((rpc), "[opc=%#x (%s:%s) rpcid=%#lx rank:tag=%d:%d] " fmt,    \
+				     (rpc)->crp_pub.cr_opc, _module, _opc,                         \
+				     (rpc)->crp_req_hdr.cch_rpcid, (rpc)->crp_pub.cr_ep.ep_rank,   \
+				     (rpc)->crp_pub.cr_ep.ep_tag, ##__VA_ARGS__);                  \
+		}                                                                                  \
 	} while (0)
 
 /* Log an info message with an RPC descriptor */
@@ -75,10 +95,16 @@
 		char *_opc;                                                                        \
                                                                                                    \
 		crt_opc_decode((rpc)->crp_pub.cr_opc, &_module, &_opc);                            \
-		D_TRACE_INFO((rpc), "[opc=%#x (%s:%s) rpcid=%#lx rank:tag=%d:%d] " fmt,            \
-			     (rpc)->crp_pub.cr_opc, _module, _opc, (rpc)->crp_req_hdr.cch_rpcid,   \
-			     (rpc)->crp_pub.cr_ep.ep_rank, (rpc)->crp_pub.cr_ep.ep_tag,            \
-			     ##__VA_ARGS__);                                                       \
+		if ((rpc)->crp_coll) {                                                             \
+			D_TRACE_INFO((rpc), "[opc=%#x (%s:%s) rpcid=%#lx CORPC] " fmt,             \
+				     (rpc)->crp_pub.cr_opc, _module, _opc,                         \
+				     (rpc)->crp_req_hdr.cch_rpcid, ##__VA_ARGS__);                 \
+		} else {                                                                           \
+			D_TRACE_INFO((rpc), "[opc=%#x (%s:%s) rpcid=%#lx rank:tag=%d:%d] " fmt,    \
+				     (rpc)->crp_pub.cr_opc, _module, _opc,                         \
+				     (rpc)->crp_req_hdr.cch_rpcid, (rpc)->crp_pub.cr_ep.ep_rank,   \
+				     (rpc)->crp_pub.cr_ep.ep_tag, ##__VA_ARGS__);                  \
+		}                                                                                  \
 	} while (0)
 /**
  * If \a cond is false, this is equivalent to an RPC_ERROR (i.e., \a mask is

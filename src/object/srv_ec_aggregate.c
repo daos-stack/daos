@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2533,30 +2534,17 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	return rc;
 }
 
-struct ec_agg_ult_arg {
-	struct ec_agg_param	*param;
-	daos_epoch_t		*ec_query_p;
-	uint32_t		tgt_idx;
-};
-
 /* Captures the IV values need for pool and container open. Runs in
  * system xstream.
  */
 static	int
 ec_agg_init_ult(void *arg)
 {
-	struct ec_agg_ult_arg	*ult_arg = arg;
-	struct ec_agg_param	*agg_param = ult_arg->param;
+	struct ec_agg_param	*agg_param = arg;
 	struct ds_pool		*pool = agg_param->ap_pool_info.api_pool;
 	struct daos_prop_entry	*entry = NULL;
 	daos_prop_t		*prop = NULL;
 	int			 rc;
-
-	rc = ds_cont_ec_eph_insert(agg_param->ap_pool_info.api_pool,
-				   agg_param->ap_pool_info.api_cont_uuid,
-				   ult_arg->tgt_idx, &ult_arg->ec_query_p);
-	if (rc)
-		D_GOTO(out, rc);
 
 	rc = ds_pool_iv_srv_hdl_fetch(pool, &agg_param->ap_pool_info.api_poh_uuid,
 				      &agg_param->ap_pool_info.api_coh_uuid);
@@ -2590,32 +2578,10 @@ out:
 	return rc;
 }
 
-static	int
-ec_agg_fini_ult(void *arg)
-{
-	struct ec_agg_ult_arg	*ult_arg = arg;
-	struct ec_agg_param	*agg_param = ult_arg->param;
-	int			 rc;
-
-	rc = ds_cont_ec_eph_delete(agg_param->ap_pool_info.api_pool,
-				   agg_param->ap_pool_info.api_cont_uuid,
-				   ult_arg->tgt_idx);
-	D_ASSERT(rc == 0);
-	return 0;
-}
-
 static void
 ec_agg_param_fini(struct ds_cont_child *cont, struct ec_agg_param *agg_param)
 {
 	struct ec_agg_entry	*agg_entry = &agg_param->ap_agg_entry;
-	struct ec_agg_ult_arg	arg;
-
-	arg.param = agg_param;
-	arg.tgt_idx = dss_get_module_info()->dmi_tgt_id;
-	if (cont->sc_ec_query_agg_eph) {
-		dss_ult_execute(ec_agg_fini_ult, &arg, NULL, NULL, DSS_XS_SYS, 0, 0);
-		cont->sc_ec_query_agg_eph = NULL;
-	}
 
 	if (daos_handle_is_valid(agg_param->ap_pool_info.api_cont_hdl))
 		dsc_cont_close(agg_param->ap_pool_info.api_pool_hdl,
@@ -2637,7 +2603,6 @@ ec_agg_param_init(struct ds_cont_child *cont, struct agg_param *param)
 {
 	struct ec_agg_param	*agg_param = param->ap_data;
 	struct ec_agg_pool_info *info = &agg_param->ap_pool_info;
-	struct ec_agg_ult_arg	arg = { 0 };
 	int			rc;
 
 	D_ASSERT(agg_param->ap_initialized == 0);
@@ -2651,11 +2616,7 @@ ec_agg_param_init(struct ds_cont_child *cont, struct agg_param *param)
 	agg_param->ap_credits_max	= EC_AGG_ITERATION_MAX;
 	D_INIT_LIST_HEAD(&agg_param->ap_agg_entry.ae_cur_stripe.as_dextents);
 
-	arg.param = agg_param;
-	arg.tgt_idx = dss_get_module_info()->dmi_tgt_id;
-	rc = dss_ult_execute(ec_agg_init_ult, &arg, NULL, NULL, DSS_XS_SYS, 0, 0);
-	if (arg.ec_query_p != NULL)
-		cont->sc_ec_query_agg_eph = arg.ec_query_p;
+	rc = dss_ult_execute(ec_agg_init_ult, agg_param, NULL, NULL, DSS_XS_SYS, 0, 0);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -2814,10 +2775,10 @@ update_hae:
 
 	if (rc == 0) {
 		cont->sc_ec_agg_eph = max(cont->sc_ec_agg_eph, epr->epr_hi);
-		if (!cont->sc_stopping && cont->sc_ec_query_agg_eph) {
+		if (!cont->sc_stopping && cont->sc_query_ec_agg_eph) {
 			uint64_t orig, cur;
 
-			orig = d_hlc2sec(*cont->sc_ec_query_agg_eph);
+			orig = d_hlc2sec(*cont->sc_query_ec_agg_eph);
 			cur = d_hlc2sec(cont->sc_ec_agg_eph);
 			if (orig && cur > orig && (cur - orig) >= 600)
 				D_WARN(DF_CONT" Sluggish EC boundary bumping: "
@@ -2825,7 +2786,7 @@ update_hae:
 				       DP_CONT(cont->sc_pool_uuid, cont->sc_uuid),
 				       orig, cur, cur - orig);
 
-			*cont->sc_ec_query_agg_eph = min(ec_agg_param->ap_min_unagg_eph,
+			*cont->sc_query_ec_agg_eph = min(ec_agg_param->ap_min_unagg_eph,
 							 cont->sc_ec_agg_eph);
 		}
 	}

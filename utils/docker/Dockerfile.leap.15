@@ -1,4 +1,5 @@
 # Copyright 2018-2024 Intel Corporation
+# Copyright 2025 Hewlett Packard Enterprise Development LP
 # All rights reserved.
 #
 # 'recipe' for Docker to build an image of Leap based
@@ -8,7 +9,7 @@
 # Pull base image
 ARG POINT_RELEASE=
 ARG BASE_DISTRO=registry.opensuse.org/opensuse/leap-dnf:15$POINT_RELEASE
-FROM $BASE_DISTRO as basic
+FROM $BASE_DISTRO AS basic
 LABEL maintainer="daos@daos.groups.io"
 # Needed for later use of BASE_DISTRO
 ARG BASE_DISTRO
@@ -19,6 +20,7 @@ ARG CB0
 ARG REPO_FILE_URL
 ARG JENKINS_URL
 ARG REPOS
+ARG DAOS_LAB_CA_FILE_URL
 # script to install OS updates basic tools and daos dependencies
 COPY ./utils/scripts/install-leap15.sh /tmp/install.sh
 # script to setup local repo if available
@@ -30,7 +32,14 @@ RUN chmod +x /tmp/repo-helper.sh /tmp/install.sh && \
 
 FROM basic
 # Install OS updates and package.  Include basic tools and daos dependencies
-RUN dnf upgrade &&        \
+# Install OS updates and package.  Include basic tools and daos dependencies
+# The unset commands are currently needed for the combination of running
+# with a local repository, yet needing a proxy to reach outside repositories.
+# This needs to be moved to a shell script like above in the future to
+# properly only remove the proxy variables only when they need to be removed
+RUN if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "\
+        direct="${direct%%/*}"; export no_proxy="${direct}"; fi; \
+    dnf upgrade &&        \
     /tmp/install.sh &&    \
     dnf clean all &&      \
     rm -f /tmp/install.sh
@@ -82,6 +91,8 @@ ARG DAOS_TARGET_TYPE=release
 # The dnf upgrade can add or re-enable distro repositories.
 USER root:root
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                                                             \
+        if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "                            \
+            direct="${direct%%/*}"; export no_proxy="${direct}"; fi;                                 \
         dnf upgrade --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel && \
         dnf clean all;                                                                               \
     }
@@ -90,6 +101,8 @@ USER daos_server:daos_server
 ARG DEPS_JOBS=1
 
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                            \
+        if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "\
+            direct="${direct%%/*}"; export no_proxy="${direct}"; fi; \
         scons --build-deps=only --jobs $DEPS_JOBS PREFIX=/opt/daos  \
               TARGET_TYPE=$DAOS_TARGET_TYPE &&                      \
         ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); \
@@ -111,13 +124,17 @@ RUN if [ "$COMPILER" = "icc" ]; then                                            
             rpm --import https://yum.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB && \
             dnf config-manager --add-repo https://yum.repos.intel.com/oneapi oneAPI;                     \
         fi;                                                                                              \
+        if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "\
+            direct="${direct%%/*}"; export no_proxy="${direct}"; fi; \
         dnf install intel-oneapi-compiler-dpcpp-cpp &&                                                   \
         dnf clean all;                                                                                   \
     fi
 
 # force an upgrade to get any newly built RPMs, but only if CB1 is set.
 ARG CB1
-RUN [ -z "$CB1" ] || {                                                                         \
+RUN [ -z "$CB1" ] || {                                                                               \
+        if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "                            \
+            direct="${direct%%/*}"; export no_proxy="${direct}"; fi;                                 \
         dnf upgrade --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel && \
         dnf clean all;                                                                               \
     }
@@ -139,6 +156,8 @@ ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || {                                        \
+        if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "  \
+            direct="${direct%%/*}"; export no_proxy="${direct}"; fi;       \
         scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER     \
               BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
         ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build) &&           \
@@ -156,6 +175,8 @@ WORKDIR /home/daos/daos/src/client/java
 ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 
 RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || {                                                      \
+        if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "                     \
+            direct="${direct%%/*}"; export no_proxy="${direct}"; fi;                          \
         mkdir /home/daos/.m2 &&                                                               \
         cp /home/daos/daos/utils/scripts/helpers/maven-settings.xml.in /home/daos/.m2/settings.xml &&      \
         mvn clean install -ntp -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos;      \
