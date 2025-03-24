@@ -1019,7 +1019,8 @@ libpil4dfs intercepting summary for ops on DFS:
 
 [op_sum ]  5003
 ```
-
+### The reported number of interception
+libioil intercepts streaming IO functions like fread, fwrite, etc. It issues IO request via dfs API immediately for each call. libpil4dfs only intercepts low level API read/write. Streaming APIs like fread, fwrite, fprintf, etc. are not explicitly intercepted. The default streaming IO buffer size is 8KB (may depend on OS and glibc version). The low level API read() is called by streaming IO API in case read buffer is empty/depleted. write() is called when the write buffer is full or fflush()/fclose() is called. Consequently, the amount of IO interception reported by libioil and libpil4dfs could be different.
 ### Bypassing function interception in libpil4dfs
 libpil4dfs enhances I/O performance by bypassing the fuse kernel when going over dfuse for I/O intensive workloads. In some scenarios however, for short-running applications (e.g., simple linux commands like cat, mkdir, chmod, etc.), there is no enough incentive to justify initializing the DAOS environment in user space with libpil4dfs, since this is relatively expensive. Such overhead is particularly noticeable for processes that complete within tens or hundreds of milliseconds and run frequently.
 To address this issue, DAOS can disable function interception by libpil4dfs for specific executables/commands listed below:
