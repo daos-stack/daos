@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"syscall"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -74,6 +76,12 @@ func (r *Runner) run(parent context.Context, args, env []string, exitCh RunnerEx
 			Gid:         uint32(os.Getgid()),
 			NoSetGroups: true,
 		},
+	}
+
+	if r.Config.StartDelay > 0 {
+		delay := time.Duration(r.Config.StartDelay) * time.Second
+		r.log.Noticef("Delaying I/O Engine start for %s", delay)
+		time.Sleep(delay)
 	}
 
 	r.log.Debugf("%s:%d args: %s", engineBin, r.Config.Index, args)

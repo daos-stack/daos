@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -260,6 +261,7 @@ type Config struct {
 	MemSize           int            `yaml:"-" cmdLongFlag:"--mem_size" cmdShortFlag:"-r"`
 	HugepageSz        int            `yaml:"-" cmdLongFlag:"--hugepage_size" cmdShortFlag:"-H"`
 	CheckerEnabled    bool           `yaml:"-" cmdLongFlag:"--checker" cmdShortFlag:"-C"`
+	StartDelay        int            `yaml:"-"`
 }
 
 // NewConfig returns an I/O Engine config.
