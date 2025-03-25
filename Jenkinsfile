@@ -248,6 +248,9 @@ pipeline {
         booleanParam(name: 'CI_UNIT_TEST',
                      defaultValue: true,
                      description: 'Run the Unit Test on EL 8 test stage')
+        booleanParam(name: 'CI_NLT_TEST',
+                     defaultValue: true,
+                     description: 'Run the NLT test stage')
         booleanParam(name: 'CI_UNIT_TEST_MEMCHECK',
                      defaultValue: true,
                      description: 'Run the Unit Test with memcheck on EL 8 test stage')
@@ -723,7 +726,7 @@ pipeline {
                 stage('NLT on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { params.'CI_NLT_TEST' && !skipStage() }
                     }
                     agent {
                         label params.CI_NLT_1_LABEL
