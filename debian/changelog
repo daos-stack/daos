@@ -1,3 +1,9 @@
+daos (2.6.4-2) unstable; urgency=medium
+  [ Cedric Koch-Hofer]
+  * Add support of the libasan
+
+ -- Cedric Koch-Hofer <cedric.koch-hofer@hpe.com>  Thu, 19 Jun 2025 10:30:00 +0100
+
 daos (2.6.4-1) unstable; urgency=medium
   [ Phillip Henderson ]
   * First release candidate for 2.6.4
