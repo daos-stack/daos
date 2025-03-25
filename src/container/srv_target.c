@@ -1448,7 +1448,8 @@ ds_cont_local_close(uuid_t cont_hdl_uuid)
 	if (hdl == NULL)
 		return 0;
 
-	hdl->sch_closed = 1;
+	if (hdl->sch_cont != NULL && hdl->sch_cont->sc_pool->spc_stop_for_maintain == 0)
+		hdl->sch_closed = 1;
 	cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
 
 	ds_cont_hdl_put(hdl);
