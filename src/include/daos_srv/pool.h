@@ -193,8 +193,8 @@ struct ds_pool_child {
 	int		spc_ref;
 	ABT_eventual	spc_ref_eventual;
 
-	uint64_t	spc_discard_done:1,
-			spc_no_storage:1; /* The pool shard has no storage. */
+	uint32_t spc_discard_done : 1, spc_no_storage : 1, /* The pool shard has no storage. */
+	    spc_stop_for_maintain : 1; /* Stop the pool_child for local maintenance. */
 
 	uint32_t	spc_reint_mode;
 	uint32_t	*spc_state;	/* Pointer to ds_pool->sp_states[i] */

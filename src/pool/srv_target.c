@@ -563,6 +563,7 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 		goto out_cont;
 
 done:
+	child->spc_stop_for_maintain = 0;
 	*child->spc_state = POOL_CHILD_STARTED;
 	return 0;
 
@@ -687,6 +688,8 @@ ds_pool_child_stop(uuid_t pool_uuid, bool free)
 		return -DER_NONEXIST;
 	}
 
+	if (!free)
+		child->spc_stop_for_maintain = 1;
 	rc = pool_child_stop(child);
 	if (rc == 0 && free)
 		pool_child_free(child);
@@ -747,6 +750,8 @@ pool_child_delete_one(void *uuid)
 	child = pool_child_lookup_noref(uuid);
 	if (child == NULL)
 		return 0;
+
+	child->spc_stop_for_maintain = 0;
 retry:
 	rc = pool_child_stop(child);
 	if (rc) {
