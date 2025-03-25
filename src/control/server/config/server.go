@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -64,6 +65,7 @@ type Server struct {
 	CoreDumpFilter    uint8                     `yaml:"core_dump_filter,omitempty"`
 	ClientEnvVars     []string                  `yaml:"client_env_vars,omitempty"`
 	SupportConfig     SupportConfig             `yaml:"support_config,omitempty"`
+	EngineStartDelay  int                       `yaml:"engine_start_delay,omitempty"`
 
 	// duplicated in engine.Config
 	SystemName string              `yaml:"name"`
@@ -188,6 +190,7 @@ func (cfg *Server) updateServerConfig(cfgPtr **engine.Config) {
 	engineCfg.SocketDir = cfg.SocketDir
 	engineCfg.Modules = cfg.Modules
 	engineCfg.Storage.EnableHotplug = cfg.EnableHotplug
+	engineCfg.StartDelay = cfg.EngineStartDelay
 }
 
 // WithEngines sets the list of engine configurations.
