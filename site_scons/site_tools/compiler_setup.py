@@ -72,6 +72,7 @@ def _base_setup(env):
             if flag in env["CCFLAGS"]:
                 env["CCFLAGS"].remove(flag)
         cc_flags = [f"-Wframe-larger-than={ASAN_FRAME_SIZE_MAX[cc]}",
+                    '-Wno-stringop-truncation',
                     '-fno-omit-frame-pointer',
                     '-fno-common']
 
