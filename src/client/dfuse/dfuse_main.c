@@ -287,6 +287,7 @@ show_help(char *name)
 	    "	-f --foreground		Run in foreground\n"
 	    "	   --enable-caching	Enable all caching (default)\n"
 	    "	   --enable-wb-cache	Use write-back cache rather than write-through (default)\n"
+	    "	   --enable-local-flock	Enable the support of local flock\n"
 	    "	   --disable-caching	Disable all caching\n"
 	    "	   --disable-wb-cache	Use write-through rather than write-back cache\n"
 	    "	-o options		mount style options string\n"
@@ -440,6 +441,7 @@ main(int argc, char **argv)
 					     {"foreground", no_argument, 0, 'f'},
 					     {"enable-caching", no_argument, 0, 'E'},
 					     {"enable-wb-cache", no_argument, 0, 'F'},
+					     {"enable-local-flock", no_argument, 0, 'L'},
 					     {"disable-caching", no_argument, 0, 'A'},
 					     {"disable-wb-cache", no_argument, 0, 'B'},
 					     {"dump-handles", required_argument, 0, 'D'},
@@ -466,6 +468,7 @@ main(int argc, char **argv)
 	dfuse_info->di_eq_count = 1;
 	dfuse_info->di_dump_handles = false;
 	dfuse_info->di_read_handles = false;
+	dfuse_info->di_local_flock = false;
 
 	while (1) {
 		c = getopt_long(argc, argv, "Mm:St:o:fhe:v", long_options, NULL);
@@ -489,6 +492,9 @@ main(int argc, char **argv)
 			break;
 		case 'F':
 			dfuse_info->di_wb_cache = true;
+			break;
+		case 'L':
+			dfuse_info->di_local_flock = true;
 			break;
 		case 'A':
 			dfuse_info->di_caching  = false;
