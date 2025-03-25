@@ -96,7 +96,7 @@ def add_command_line_options():
     AddOption('--test-coverage',
               action='store_true',
               dest='test_coverage',
-              default=True,
+              default=False,
               help='enable test coverage analyze (with gcov)')
 
 
