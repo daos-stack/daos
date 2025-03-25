@@ -23,7 +23,7 @@
 
 Name:          daos
 Version:       2.6.4
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -127,6 +127,14 @@ BuildRequires: systemd-rpm-macros
 %endif
 %endif
 BuildRequires: libuuid-devel
+
+# Needed for debugging tasks
+%if (0%{?rhel} >= 8)
+BuildRequires: libasan
+%endif
+%if (0%{?suse_version} > 0)
+BuildRequires: libasan8
+%endif
 
 Requires: openssl
 # This should only be temporary until we can get a stable upstream release
@@ -632,6 +640,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Jun 19 2025  Cedric Koch-Hofer <cedric.koch-hofer@hpe.com> 2.6.4-2
+- Add support of the libasan
+
 * Tue Jun 17 2025 Phillip Henderson <phillip.henderson@intel.com> 2.6.4-1
 - First release candidate for 2.6.4
 
