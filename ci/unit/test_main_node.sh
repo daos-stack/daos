@@ -81,10 +81,19 @@ source venv/bin/activate
 # pip config set global.progress_bar off
 # pip config set global.no_color true
 
-pip install --upgrade pip
-pip install --requirement requirements-utest.txt
+if [ -z $HTTPS_PROXY ]; then
+    pip install --upgrade pip
 
-pip install /opt/daos/lib/daos/python/
+    pip install --requirement requirements-utest.txt
+
+    pip install /opt/daos/lib/daos/python/
+else
+    pip install --proxy "$HTTPS_PROXY" --upgrade pip
+
+    pip install --proxy "$HTTPS_PROXY" --requirement requirements-utest.txt
+
+    pip install --proxy "$HTTPS_PROXY" /opt/daos/lib/daos/python/
+fi
 
 utils/run_utest.py $RUN_TEST_VALGRIND --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" \
                    $SUDO_ARG
