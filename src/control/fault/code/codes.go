@@ -189,7 +189,7 @@ const (
 	ServerConfigFaultCallbackEmpty
 	ServerConfigFaultDomainTooManyLayers
 	ServerConfigNrHugepagesOutOfRange
-	ServerConfigHugepagesDisabledWithBdevs
+	ServerConfigHugepagesDisabledWithNvmeBdevs
 	ServerConfigVMDSettingDuplicate
 	ServerConfigEngineNUMAImbalance
 	ServerConfigControlMetadataNoPath
@@ -198,6 +198,7 @@ const (
 	ServerConfigScmDiffClass
 	ServerConfigEngineBdevRolesMismatch
 	ServerConfigSysRsvdZero
+	ServerConfigHugepagesDisabledWithNrSet
 )
 
 // SPDK library bindings codes

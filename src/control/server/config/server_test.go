@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -978,7 +979,7 @@ func TestServerConfig_Validation(t *testing.T) {
 	}
 }
 
-func TestServerConfig_SetNrHugepages(t *testing.T) {
+func TestServerConfig_getMinMaxNrHugepages(t *testing.T) {
 	testDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
@@ -989,59 +990,12 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 	defHpSizeKb := 2048
 
 	for name, tc := range map[string]struct {
-		extraConfig    func(c *Server) *Server
-		zeroHpSize     bool
-		expNrHugepages int
-		expErr         error
+		extraConfig     func(c *Server) *Server
+		zeroHpSize      bool
+		expMinHugepages int
+		expMaxHugepages int
+		expErr          error
 	}{
-		"disabled hugepages; bdevs configured": {
-			extraConfig: func(c *Server) *Server {
-				return c.WithDisableHugepages(true).
-					WithEngines(defaultEngineCfg().
-						WithStorage(
-							storage.NewTierConfig().
-								WithStorageClass("ram").
-								WithScmMountPoint("/foo"),
-							storage.NewTierConfig().
-								WithStorageClass("nvme").
-								WithBdevDeviceList("0000:81:00.0"),
-						),
-					)
-			},
-			expErr: FaultConfigHugepagesDisabledWithBdevs,
-		},
-		"disabled hugepages; emulated bdevs configured": {
-			extraConfig: func(c *Server) *Server {
-				return c.WithDisableHugepages(true).
-					WithEngines(defaultEngineCfg().
-						WithStorage(
-							storage.NewTierConfig().
-								WithStorageClass("ram").
-								// 80gib total - (8gib huge + 6gib sys +
-								// 1gib engine)
-								WithScmRamdiskSize(65).
-								WithScmMountPoint("/foo"),
-							storage.NewTierConfig().
-								WithStorageClass("file").
-								WithBdevDeviceList("/tmp/daos-bdev").
-								WithBdevFileSize(16),
-						),
-					)
-			},
-			expErr: FaultConfigHugepagesDisabledWithBdevs,
-		},
-		"disabled hugepages; no bdevs configured": {
-			extraConfig: func(c *Server) *Server {
-				return c.WithDisableHugepages(true).
-					WithEngines(defaultEngineCfg().
-						WithStorage(
-							storage.NewTierConfig().
-								WithStorageClass("ram").
-								WithScmMountPoint("/foo"),
-						),
-					)
-			},
-		},
 		"zero hugepage size": {
 			extraConfig: func(c *Server) *Server {
 				return c
@@ -1049,7 +1003,7 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 			zeroHpSize: true,
 			expErr:     errors.New("invalid system hugepage size"),
 		},
-		"zero hugepages set in config; bdevs configured; single target count": {
+		"unset in cfg; bdevs configured; single target count": {
 			extraConfig: func(c *Server) *Server {
 				return c.WithEngines(defaultEngineCfg().
 					WithTargetCount(1).
@@ -1073,9 +1027,10 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 						),
 				)
 			},
-			expNrHugepages: 2048,
+			expMinHugepages: 2048,
+			expMaxHugepages: 16384,
 		},
-		"zero hugepages set in config; bdevs configured; single target count; md-on-ssd": {
+		"unset in cfg; bdevs configured; single target count; md-on-ssd": {
 			extraConfig: func(c *Server) *Server {
 				return c.WithEngines(defaultEngineCfg().
 					WithTargetCount(1).
@@ -1101,9 +1056,10 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 						),
 				)
 			},
-			expNrHugepages: 2048,
+			expMinHugepages: 2048,
+			expMaxHugepages: 17408,
 		},
-		"zero hugepages set in config; bdevs configured": {
+		"unset in cfg; bdevs configured": {
 			extraConfig: func(c *Server) *Server {
 				return c.WithEngines(defaultEngineCfg().
 					WithStorage(
@@ -1116,9 +1072,27 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 					),
 				)
 			},
-			expNrHugepages: 4096,
+			expMinHugepages: 4096,
+			expMaxHugepages: 16384,
 		},
-		"zero hugepages set in config; emulated bdevs configured": {
+		"unset in cfg; bdevs configured; target count exceeds max": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithEngines(defaultEngineCfg().
+					WithTargetCount(33).
+					WithStorage(
+						storage.NewTierConfig().
+							WithStorageClass("ram").
+							WithScmMountPoint("/foo"),
+						storage.NewTierConfig().
+							WithStorageClass("nvme").
+							WithBdevDeviceList("0000:81:00.0"),
+					),
+				)
+			},
+			expMinHugepages: 16896,
+			expMaxHugepages: 16896,
+		},
+		"unset in cfg; emulated bdevs configured": {
 			extraConfig: func(c *Server) *Server {
 				return c.WithEngines(defaultEngineCfg().
 					WithStorage(
@@ -1132,9 +1106,10 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 					),
 				)
 			},
-			expNrHugepages: 4096,
+			expMinHugepages: 4096,
+			expMaxHugepages: 16384,
 		},
-		"zero hugepages set in config; no bdevs configured": {
+		"unset in cfg; no bdevs configured": {
 			extraConfig: func(c *Server) *Server {
 				return c.WithEngines(defaultEngineCfg().
 					WithStorage(
@@ -1163,7 +1138,226 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 				)
 			},
 			// 512 pages * (8 targets + 1 sys-xstream for MD-on-SSD)
-			expNrHugepages: 4608,
+			expMinHugepages: 4608,
+			expMaxHugepages: 17408,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			// Apply test case changes to basic config
+			cfg := tc.extraConfig(baseCfg(t, log, testFile))
+
+			hugepageSizeKiB := defHpSizeKb
+			if tc.zeroHpSize {
+				hugepageSizeKiB = 0
+			}
+
+			minHugepages, maxHugepages, err := cfg.getMinMaxNrHugepages(log, hugepageSizeKiB)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			test.AssertEqual(t, tc.expMinHugepages, minHugepages,
+				"unexpected number of minimum hugepages calculated from config")
+			test.AssertEqual(t, tc.expMaxHugepages, maxHugepages,
+				"unexpected number of maximum hugepages calculated from config")
+		})
+	}
+}
+
+func TestServerConfig_SetNrHugepages(t *testing.T) {
+	testDir, cleanup := test.CreateTestDir(t)
+	defer cleanup()
+
+	// First, load a config based on the server config with all options uncommented.
+	testFile := filepath.Join(testDir, sConfigUncomment)
+	uncommentServerConfig(t, testFile)
+
+	for name, tc := range map[string]struct {
+		extraConfig       func(c *Server) *Server
+		hugepagesTotal    int
+		expCfgNrHugepages int
+		expErr            error
+	}{
+		"disabled hugepages; nr_hugepages requested": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithDisableHugepages(true).
+					WithNrHugepages(16896)
+			},
+			expErr: FaultConfigHugepagesDisabledWithNrSet,
+		},
+		"disabled hugepages; bdevs configured": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithDisableHugepages(true).
+					WithEngines(defaultEngineCfg().
+						WithStorage(
+							storage.NewTierConfig().
+								WithStorageClass("ram").
+								WithScmMountPoint("/foo"),
+							storage.NewTierConfig().
+								WithStorageClass("nvme").
+								WithBdevDeviceList("0000:81:00.0"),
+						),
+					)
+			},
+			expErr: FaultConfigHugepagesDisabledWithNvmeBdevs,
+		},
+		"disabled hugepages; emulated bdevs configured": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithDisableHugepages(true).
+					WithEngines(defaultEngineCfg().
+						WithStorage(
+							storage.NewTierConfig().
+								WithStorageClass("ram").
+								// 80gib total - (8gib huge + 6gib sys +
+								// 1gib engine)
+								WithScmRamdiskSize(65).
+								WithScmMountPoint("/foo"),
+							storage.NewTierConfig().
+								WithStorageClass("file").
+								WithBdevDeviceList("/tmp/daos-bdev").
+								WithBdevFileSize(16),
+						),
+					)
+			},
+		},
+		"disabled hugepages; no bdevs configured": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithDisableHugepages(true).
+					WithEngines(defaultEngineCfg().
+						WithStorage(
+							storage.NewTierConfig().
+								WithStorageClass("ram").
+								WithScmMountPoint("/foo"),
+						),
+					)
+			},
+		},
+		"unset in config; no bdevs configured": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithEngines(defaultEngineCfg().
+					WithStorage(
+						storage.NewTierConfig().
+							WithStorageClass("ram").
+							WithScmMountPoint("/foo"),
+					),
+				)
+			},
+			expCfgNrHugepages: scanMinHugepageCount,
+		},
+		"insufficient hugepages set in config; no bdevs configured": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithEngines(defaultEngineCfg().
+					WithStorage(
+						storage.NewTierConfig().
+							WithStorageClass("ram").
+							WithScmMountPoint("/foo"),
+					),
+				).WithNrHugepages(scanMinHugepageCount - 1)
+			},
+			expCfgNrHugepages: scanMinHugepageCount,
+		},
+		"sufficient hugepages set in config; no bdevs configured": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithEngines(defaultEngineCfg().
+					WithStorage(
+						storage.NewTierConfig().
+							WithStorageClass("ram").
+							WithScmMountPoint("/foo"),
+					),
+				).WithNrHugepages(scanMinHugepageCount + 1)
+			},
+			expCfgNrHugepages: scanMinHugepageCount + 1,
+		},
+		"unset in cfg; insufficient total system hugepages; no bdevs configured": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithEngines(defaultEngineCfg().
+					WithStorage(
+						storage.NewTierConfig().
+							WithStorageClass("ram").
+							WithScmMountPoint("/foo"),
+					),
+				)
+			},
+			hugepagesTotal:    scanMinHugepageCount - 1,
+			expCfgNrHugepages: scanMinHugepageCount,
+		},
+		"unset in cfg; sufficient total system hugepages; no bdevs configured": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithEngines(defaultEngineCfg().
+					WithStorage(
+						storage.NewTierConfig().
+							WithStorageClass("ram").
+							WithScmMountPoint("/foo"),
+					),
+				)
+			},
+			hugepagesTotal: scanMinHugepageCount + 1,
+		},
+		"md-on-ssd enabled with explicit role assignment; zero total system hugepages": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithEngines(
+					defaultEngineCfg().
+						WithFabricInterfacePort(1234).
+						WithStorage(
+							storage.NewTierConfig().
+								WithScmMountPoint("/mnt/daos/1").
+								WithStorageClass("ram").
+								WithScmDisableHugepages(),
+							storage.NewTierConfig().
+								WithStorageClass("nvme").
+								WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
+								WithBdevDeviceRoles(storage.BdevRoleAll),
+						),
+				)
+			},
+			// Initial maximum set, disregarding minimum calculated.
+			// Min: 512 pages * (8 targets + 1 sys-xstream for MD-on-SSD). Max: 512
+			// pages * 32 targets + 2 sys-xstream.
+			expCfgNrHugepages: 17408,
+		},
+		"md-on-ssd enabled with explicit role assignment; sufficient total system hugepages": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithEngines(
+					defaultEngineCfg().
+						WithFabricInterfacePort(1234).
+						WithStorage(
+							storage.NewTierConfig().
+								WithScmMountPoint("/mnt/daos/1").
+								WithStorageClass("ram").
+								WithScmDisableHugepages(),
+							storage.NewTierConfig().
+								WithStorageClass("nvme").
+								WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
+								WithBdevDeviceRoles(storage.BdevRoleAll),
+						),
+				)
+			},
+			// Total system hugepages meets minimum requirement, no change required.
+			// Min: 512 pages * (8 targets + 1 sys-xstream for MD-on-SSD).
+			hugepagesTotal: 4608,
+		},
+		"md-on-ssd enabled with explicit role assignment; manual nr_hugepages in cfg": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithNrHugepages(4000).
+					WithEngines(defaultEngineCfg().
+						WithFabricInterfacePort(1234).
+						WithStorage(
+							storage.NewTierConfig().
+								WithScmMountPoint("/mnt/daos/1").
+								WithStorageClass("ram").
+								WithScmDisableHugepages(),
+							storage.NewTierConfig().
+								WithStorageClass("nvme").
+								WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
+								WithBdevDeviceRoles(storage.BdevRoleAll),
+						),
+					)
+			},
+			expCfgNrHugepages: 4000,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1174,10 +1368,8 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 			cfg := tc.extraConfig(baseCfg(t, log, testFile))
 
 			mi := &common.MemInfo{
-				HugepageSizeKiB: defHpSizeKb,
-			}
-			if tc.zeroHpSize {
-				mi.HugepageSizeKiB = 0
+				HugepagesTotal:  tc.hugepagesTotal,
+				HugepageSizeKiB: 2048,
 			}
 
 			test.CmpErr(t, tc.expErr, cfg.SetNrHugepages(log, mi))
@@ -1185,7 +1377,7 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 				return
 			}
 
-			test.AssertEqual(t, tc.expNrHugepages, cfg.NrHugepages,
+			test.AssertEqual(t, tc.expCfgNrHugepages, cfg.NrHugepages,
 				"unexpected number of hugepages set in config")
 		})
 	}
