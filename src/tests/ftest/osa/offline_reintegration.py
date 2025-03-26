@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -34,7 +35,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         self.dmg_command.exit_status_exception = True
 
     def run_offline_reintegration_test(self, num_pool, data=False, server_boot=False, oclass=None,
-                                       pool_fillup=0):
+                                       pool_fillup=0, multiple_ranks=False):
         # pylint: disable=too-many-branches
         """Run the offline reintegration without data.
 
@@ -46,6 +47,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
             oclass (str) : daos object class string (eg: "RP_2G8")
             pool_fillup (int) : Percentage of pool filled up with data before performing OSA
                                 operations.
+            multiple_ranks (bool) : Perform multiple ranks testing (Default: False)
         """
         # Create 'num_pool' number of pools
         pools = []
@@ -82,7 +84,11 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                     self.run_ior_thread("Write", oclass, test_seq)
 
         # Exclude ranks 0 and 3 from a random pool
-        ranks = [0, 3]
+        # Exclude ranks 0 and 3 from a random pool
+        if multiple_ranks is True:
+            ranks = ["0,3"]
+        else:
+            ranks = [0, 3]
         self.pool = random.choice(pools)  # nosec
         for loop in range(0, self.loop_test_cnt):
             self.log.info(
@@ -318,3 +324,16 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         oclass = self.params.get("pool_test_oclass", '/run/pool_capacity/*')
         pool_fillup = self.params.get("pool_fillup", '/run/pool_capacity/*')
         self.run_offline_reintegration_test(1, data=True, oclass=oclass, pool_fillup=pool_fillup)
+
+    def test_osa_offline_reintegrate_with_multiple_ranks(self):
+        """Test ID: DAOS-4753.
+
+        Test Description: Exclude and Reintegrate multiple ranks.
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=osa,offline_reintegration
+        :avocado: tags=OSAOfflineReintegration,test_osa_offline_reintegrate_with_multiple_ranks
+        """
+        self.log.info("Offline Reintegration : Test with multiple ranks")
+        self.run_offline_drain_test(1, data=True, multiple_ranks=True)
