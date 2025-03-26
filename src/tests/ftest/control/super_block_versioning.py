@@ -1,14 +1,15 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
-
 import os
 
 from apricot import TestWithServers
-from general_utils import check_file_exists, pcmd
+from command_utils import command_as_user
+from general_utils import check_file_exists
+from run_utils import run_remote
 
 
 class SuperBlockVersioning(TestWithServers):
@@ -39,9 +40,7 @@ class SuperBlockVersioning(TestWithServers):
             self.fail("{}: {} not found".format(check_result[1], fname))
 
         # Make sure that 'version' is in the file, run task to check
-        cmd = "sudo cat {} | grep -F \"version\"".format(fname)
-        result = pcmd(self.hostlist_servers, cmd, timeout=20)
-
-        # Determine if the command completed successfully across all the hosts
-        if len(result) > 1 or 0 not in result:
-            self.fail("Was not able to find version in {} file".format(fname))
+        cmd = command_as_user(f'cat {fname} | grep -F "version"', "root")
+        result = run_remote(self.log, self.hostlist_servers, cmd, timeout=20)
+        if not result.passed:
+            self.fail(f"Was not able to find version in {fname} file")

@@ -1,11 +1,13 @@
 """
   (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from general_utils import get_remote_file_size, run_pcmd
+from general_utils import get_remote_file_size
 from ior_test_base import IorTestBase
+from run_utils import run_remote
 
 
 class POSIXStatTest(IorTestBase):
@@ -55,31 +57,27 @@ class POSIXStatTest(IorTestBase):
                 create_cont=False, test_file_suffix=test_file_suffix)
 
             # Get current epoch.
-            current_epoch = -1
-            output = run_pcmd(hosts=self.hostlist_clients, command="date +%s")
-            stdout = output[0]["stdout"]
-            self.log.info("date stdout = %s", stdout)
-            current_epoch = stdout[-1]
+            result = run_remote(self.log, self.hostlist_clients, "date +%s")
+            if not result.passed:
+                self.fail("Failed to get date on clients")
+            current_epoch = int(result.output[0].stdout[-1])
 
             # Get epoch of the created file. (technically %Z is for last status
             # change. %W is file birth, but it returns 0.)
-            creation_epoch = -1
             # As in date command, run stat command in the client node.
             stat_command = "stat -c%Z {}".format(self.ior_cmd.test_file.value)
-            output = run_pcmd(hosts=self.hostlist_clients, command=stat_command)
-            stdout = output[0]["stdout"]
-            self.log.info("stat stdout = %s", stdout)
-            creation_epoch = stdout[-1]
+            result = run_remote(self.log, self.hostlist_clients, stat_command)
+            if not result.passed:
+                self.fail(f"{stat_command} failed on clients")
+            creation_epoch = int(result.output[0].stdout[-1])
 
             # Calculate the epoch difference between the creation time and the
             # value in the file metadata. They're usually 2 sec apart.
-            creation_epoch_int = int(creation_epoch)
-            current_epoch_int = int(current_epoch)
-            diff_epoch = creation_epoch_int - current_epoch_int
+            diff_epoch = creation_epoch - current_epoch
             if diff_epoch > 10:
                 msg = "Unexpected creation time! Expected = {}; Actual = {}"
                 error_list.append(
-                    msg.format(current_epoch_int, creation_epoch_int))
+                    msg.format(current_epoch, creation_epoch))
 
             # 2. Verify file size.
             # Get file size.
