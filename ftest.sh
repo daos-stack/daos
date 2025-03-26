@@ -72,13 +72,12 @@ cleanup() {
 ls ~/.ssh
 touch ~/.ssh/known_hosts
 chmod 600 ~/.ssh/known_hosts
-#for host in $(echo $TNODES | tr "," "\n")
-#do
-#    echo "Removing all keys from known_hosts file for $host"
-#    ssh-keygen -R $host
-#    echo "Add new key for $host to known_hosts"
-#    ssh-keyscan $host >> ~/.ssh/known_hosts
-#done
+for host in "$(IFS=','; echo "${nodes[*]}")"; do
+    echo "Removing all keys from known_hosts file for $host"
+    ssh-keygen -R $host
+    echo "Add new key for $host to known_hosts"
+    ssh-keyscan $host >> ~/.ssh/known_hosts
+done
 
 # shellcheck disable=SC1091
 if ${TEST_RPMS:-false}; then
