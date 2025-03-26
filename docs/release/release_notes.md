@@ -6,6 +6,8 @@ We are pleased to announce the release of DAOS version 2.6.
 
 The DAOS 2.6.3-4 release contains the following updates on top of DAOS 2.6.2
 
+* Operating system support: Added SLES/Leap 15 SP6 support
+
 * libfabric has been updated from 1.22.0-1 to 1.22.0-2
 
 * PMDK (libpmem\*) has been updated from 2.1.0-2 to 2.1.0-3
@@ -16,7 +18,27 @@ The DAOS 2.6.3-4 release contains the following updates on top of DAOS 2.6.2
 
 The DAOS 2.6.3-4 release includes fixes for several defects
 
-* tbd
+* Refresh DAOS agent URI cache after DAOS engine(s) have been excluded.
+* Clear io contexts for unplugged faulty device, otherwise it can cause engine coredump.
+* Fix a bug in collective punch for sparse ranks, which may cause illegal memory access and engine coredump.
+* Increase stack size for more IV ULTs and avoid stack overflow.
+* Populate stat::f\_fsid for intercepted statfs().
+* Add credits and flow control for server-side RPC forwarding and avoid RPC congestion.
+* Several fixes for DTX to avoid inconsistency between VOS data structure and persistent DTX status,
+  the inconsistency can cause assertion failure on DTX resync.
+* Fix a bug for tearing down faulty NVMe device, which can cause engine coredump.
+* Limit the number of extents being passed to DAOS to 16k, if the extent sizes are under 16 bytes.
+* Always use SIGKILL to shutdown DAOS engine, instead of running through finalizing processes of modules.
+  The latter may cause false eviction and trigger unnecessary rebuild. This is a temporary solution.
+* Include EP flush patch to Mercury.
+* Cache pool map bulk descriptor on service leader instead of recreating it for each query.
+  Otherwise service leader may run out of low-level network stack resources while handling intensive pool query.
+* Fix a bug in aggregation which may cause integer overflow and assertion failure on the server.
+* Add 3-fault-tolerant EC object classes (like EC\_16P3).
+* Add a few new functionalities to the DDB tool.
+* Several fixes for usability improvements for the control plane.
+* Automatically retrigger rebuild when number of unreachable engines decreased to less than or equal to RF of pool.
+* Fix a double free of collective RPC.
 
 For details, please refer to the Github
 [release/2.6 commit history](https://github.com/daos-stack/daos/commits/release/2.6)
