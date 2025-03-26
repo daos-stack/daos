@@ -25,6 +25,9 @@ def scons():
 
     libs = ['vos', 'daos_common_pmem', 'abt', 'gurt', 'uuid', 'bio', 'cart',
             'cmocka', 'ddb']
+    if GetOption("test_coverage"):
+        libs += ['gcov']
+
     # spdk libraries
     spdk_libs = ['rte_bus_pci', 'rte_eal', 'rte_kvargs', 'rte_mbuf', 'rte_mempool_ring',
                  'rte_mempool', 'rte_pci', 'rte_power', 'rte_ring', 'spdk_bdev_aio',
@@ -44,6 +47,8 @@ def scons():
     denv = env.Clone()
     prereqs.require(denv, 'argobots', 'spdk')
     libs = ['uuid', 'daos_common_pmem', 'gurt', 'vea', 'abt', 'bio', 'cmocka', 'pthread']
+    if GetOption("test_coverage"):
+        libs += ['gcov']
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     denv.AppendUnique(CPPPATH=[Dir('../').srcnode()])
     denv.AppendUnique(CPPPATH=[Dir('../../../vos/').srcnode()])

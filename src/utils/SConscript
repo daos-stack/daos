@@ -35,6 +35,8 @@ def scons():
     denv = env.Clone()
     denv.AppendUnique(LIBPATH=[Dir('../client/dfs')])
     libs = ['daos', 'daos_common', 'uuid', 'dfs', 'duns', 'gurt', 'cart', 'dl']
+    if GetOption("test_coverage"):
+        libs += ['gcov']
 
     daos_hdlrs_src = ['daos_hdlr.c', 'daos_autotest.c', 'daos_dfs_hdlr.c']
     daos_hdlrs_lib = denv.d_library('daos_cmd_hdlrs', daos_hdlrs_src, LIBS=libs)

@@ -17,6 +17,8 @@ def scons():
     libraries = ['vos', 'bio', 'abt', 'pthread', 'daos_common_pmem',
                  'daos_tests', 'gurt', 'uuid', 'pthread',
                  'pmemobj', 'cmocka', 'gomp']
+    if GetOption("test_coverage"):
+        libraries += ['gcov']
 
     tenv = denv.Clone()
     tenv.Append(CPPPATH=[Dir('..').srcnode()])
@@ -43,6 +45,9 @@ def scons():
 
     libraries = ['daos_common_pmem', 'daos_tests', 'gurt', 'cart', 'cmocka',
                  'vos', 'uuid', 'pmem', 'pmemobj', 'bio', 'pthread', 'abt']
+    if GetOption("test_coverage"):
+        libraries += ['gcov']
+
     unit_env.d_test_program('pool_scrubbing_tests', ['pool_scrubbing_tests.c',
                                                      '../vos_pool_scrub.c'],
                             LIBS=libraries)
@@ -52,6 +57,8 @@ def scons():
     tenv.Append(CPPDEFINES={'VOS_STANDALONE': '1'})
 
     libraries = ['uuid', 'bio', 'gurt', 'cmocka', 'daos_common_pmem', 'daos_tests', 'vos', 'abt']
+    if GetOption("test_coverage"):
+        libraries += ['gcov']
 
     tenv.require('spdk')
     bio_ut_src = ['bio_ut.c', 'wal_ut.c']

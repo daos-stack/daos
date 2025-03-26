@@ -7,7 +7,11 @@ def build_dpar(env, mpi_env):
     senv = env.Clone()
     senv.compiler_setup()
 
-    serial_lib = senv.d_library('dpar', ['dpar_stub.c'], LIBS=['pthread', 'dl'])
+    libs = ['pthread', 'dl']
+    if GetOption("test_coverage"):
+        libs += ['gcov']
+    serial_lib = senv.d_library('dpar', ['dpar_stub.c'], LIBS=libs)
+
     senv.Install('$PREFIX/lib64/', serial_lib)
 
     if not mpi_env:
