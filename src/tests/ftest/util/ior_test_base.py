@@ -227,7 +227,6 @@ class IorTestBase(TestWithServers):
         if plugin_path:
             env["HDF5_VOL_CONNECTOR"] = "daos"
             env["HDF5_PLUGIN_PATH"] = str(plugin_path)
-            manager.working_dir.value = self.dfuse.mount_dir.value
         manager.assign_hosts(
             self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
         # Pass only processes or ppn to be compatible with previous behavior
