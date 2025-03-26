@@ -319,7 +319,7 @@ For a complete list of supported hardware and software, refer to the
 
 ### Bug fixes
 
-The DAOS 2.6.0-3 release includes fixes for numerous defects.
+The DAOS 2.6.0 release includes fixes for numerous defects.
 For details, please refer to the Github
 [release/2.6 commit history](https://github.com/daos-stack/daos/commits/release/2.6)
 and the associated
