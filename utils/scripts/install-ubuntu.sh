@@ -56,6 +56,7 @@ apt-get install \
     python3-venv \
     uuid-dev \
     valgrind \
+    libncurses-dev \
     yasm
 
 # ipmctl is only available on x86_64

@@ -1,8 +1,9 @@
 /**
-* (C) Copyright 2018-2022 Intel Corporation.
-*
-* SPDX-License-Identifier: BSD-2-Clause-Patent
-*/
+ * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
+ *
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
+ */
 
 #include <spdk/stdinc.h>
 #include <spdk/nvme.h>
@@ -488,6 +489,7 @@ daos_spdk_init(int mem_sz, char *env_ctx, size_t nr_pcil, char **pcil)
 	struct spdk_env_opts	 opts = {};
 	int			 rc, i;
 
+	opts.opts_size = sizeof(opts);
 	spdk_env_opts_init(&opts);
 
 	if (mem_sz > 0)
