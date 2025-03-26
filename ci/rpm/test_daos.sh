@@ -12,5 +12,4 @@ mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 ssh "$SSH_KEY_ARGS" jenkins@"${nodelist[0]}" \
   "NODE=${nodelist[0]}                       \
    DAOS_PKG_VERSION=$DAOS_PKG_VERSION        \
-   HTTPS_PROXY=$HTTPS_PROXY                  \
    $(cat "$mydir/test_daos_node.sh")"

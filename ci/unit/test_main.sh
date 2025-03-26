@@ -39,12 +39,10 @@ NODE=${NODELIST%%,*}
 # Copy over the install tree and some of the build tree.
 rsync -rlpt -z -e "ssh $SSH_KEY_ARGS" . jenkins@"$NODE":build/
 
-HTTPS_PROXY=${HTTPS_PROXY:-""}
 # shellcheck disable=SC2029
 ssh -tt "$SSH_KEY_ARGS" jenkins@"$NODE" "HOSTNAME=$HOSTNAME        \
                                          HOSTPWD=$PWD              \
                                          WITH_VALGRIND=$WITH_VALGRIND \
                                          BULLSEYE=$BULLSEYE        \
                                          BDEV_TEST=$BDEV_TEST       \
-                                         HTTPS_PROXY=$HTTPS_PROXY   \
                                          ./build/ci/unit/test_main_node.sh"
