@@ -1,7 +1,6 @@
 #!/bin/bash
 # /*
 #  * (C) Copyright 2016-2022 Intel Corporation.
-#  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 #  */
@@ -68,16 +67,6 @@ cleanup() {
     fi
     return 0
 }
-
-ls ~/.ssh
-touch ~/.ssh/known_hosts
-chmod 600 ~/.ssh/known_hosts
-for host in "$(IFS=','; echo "${nodes[*]}")"; do
-    echo "Removing all keys from known_hosts file for $host"
-    ssh-keygen -R $host
-    echo "Add new key for $host to known_hosts"
-    ssh-keyscan $host >> ~/.ssh/known_hosts
-done
 
 # shellcheck disable=SC1091
 if ${TEST_RPMS:-false}; then
