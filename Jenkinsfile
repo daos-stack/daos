@@ -242,6 +242,12 @@ pipeline {
         booleanParam(name: 'CI_DEB_Ubuntu20_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build DEB packages for Ubuntu 20')
+        booleanParam(name: 'CI_el8_BUILD',
+                     defaultValue: true,
+                     description: 'Build on EL 8')
+        booleanParam(name: 'CI_leap15_BUILD',
+                     defaultValue: true,
+                     description: 'Build on Leap 15')
         booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
                      defaultValue: false,
                      description: 'Continue testing if a previous stage is Unstable')
@@ -600,7 +606,7 @@ pipeline {
                 stage('Build on EL 8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { params.'CI_el8_BUILD' && !skipStage() }
                     }
                     agent {
                         dockerfile {
@@ -638,7 +644,7 @@ pipeline {
                 stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { params.'CI_leap15_BUILD' &&  !skipStage() }
                     }
                     agent {
                         dockerfile {
