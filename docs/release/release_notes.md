@@ -4,7 +4,8 @@ We are pleased to announce the release of DAOS version 2.6.
 
 ## DAOS Version 2.6.3 (2025-03-26)
 
-The DAOS 2.6.3-4 release contains the following updates on top of DAOS 2.6.2
+The DAOS 2.6.3 release includes the daos-2.6.3-4 RPM packages and its prerequisites.
+It contains the following updates on top of DAOS 2.6.2:
 
 * Operating system support: Added SLES/Leap 15 SP6 support
 
@@ -16,7 +17,7 @@ The DAOS 2.6.3-4 release contains the following updates on top of DAOS 2.6.2
 
 ### Bug fixes and improvements
 
-The DAOS 2.6.3-4 release includes fixes for several defects
+The DAOS 2.6.3 release includes fixes for several defects:
 
 * Refresh DAOS agent URI cache after DAOS engine(s) have been excluded.
 * Clear io contexts for unplugged faulty device, otherwise it can cause engine coredump.
@@ -46,13 +47,14 @@ and the associated [Jira tickets](https://jira.daos.io/) as stated in the commit
 
 ## DAOS Version 2.6.2 (2024-12-10)
 
-The DAOS 2.6.2-2 release contains the following updates on top of DAOS 2.6.1:
+The DAOS 2.6.2 release includes the daos-2.6.2-2 RPM packages and its prerequisites.
+It contains the following updates on top of DAOS 2.6.1:
 
 * Bump hadoop-common from 3.3.6 to 3.4.0
 
 ### Bug fixes and improvements
 
-The DAOS 2.6.2-2 release includes fixes for several defects
+The DAOS 2.6.2 release includes fixes for several defects:
 
 * Add function to cycle OIDs non-sequentially and gain better object distribution
 
@@ -97,13 +99,14 @@ and the associated [Jira tickets](https://jira.daos.io/) as stated in the commit
 
 ## DAOS Version 2.6.1 (2024-10-05)
 
-The DAOS 2.6.1-3 release contains the following updates on top of DAOS 2.6.0:
+The DAOS 2.6.1 release includes the daos-2.6.1-3 RPM packages and its prerequisites.
+It contains the following updates on top of DAOS 2.6.0:
 
 * Mercury update for slingshot 11.0 host stack and other UCX provider fixes.
 
 ### Bug fixes and improvements
 
-The DAOS 2.6.1-3 release includes fixes for several defects and a few changes
+The DAOS 2.6.1 release includes fixes for several defects and a few changes
 of administrator interface that can improve usability of DAOS system.
 
 * Fix a race between MS replica stepping up as leader and engines joining the
@@ -150,6 +153,7 @@ and the associated [Jira tickets](https://jira.daos.io/) as stated in the commit
 
 ### General Support
 
+The DAOS 2.6.0 release includes the daos-2.6.0-3 RPM packages and its prerequisites.
 DAOS Version 2.6.0 supports the following environments:
 
 Architecture Support:
