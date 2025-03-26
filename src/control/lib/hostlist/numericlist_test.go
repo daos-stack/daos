@@ -140,6 +140,12 @@ func TestHostList_CreateNumericList(t *testing.T) {
 			expUniqOut:   "[0-1,3-5]",
 			expUniqCount: 5,
 		},
+		"trailing range delimiter": {
+			startList:    "[366,369-370,374,377-378,382-383,385-386,]",
+			expRawOut:    "[366,369-370,374,377-378,382-383,385-386]",
+			expUniqOut:   "[366,369-370,374,377-378,382-383,385-386]",
+			expUniqCount: 10,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			hl, gotErr := hostlist.CreateNumericList(tc.startList)
