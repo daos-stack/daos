@@ -394,15 +394,16 @@ pipeline {
                 }
             } // parallel
         } // stage('Check PR')
-        stage('Cancel Previous Builds') {
-            when {
-                beforeAgent true
-                expression { !skipStage() }
-            }
-            steps {
-                cancelPreviousBuilds()
-            }
-        }
+// Lets skip this and cancel previous build manually
+        // stage('Cancel Previous Builds') {
+        //     when {
+        //         beforeAgent true
+        //         expression { !skipStage() }
+        //     }
+        //     steps {
+        //         cancelPreviousBuilds()
+        //     }
+        // }
         stage('Pre-build') {
             when {
                 beforeAgent true
