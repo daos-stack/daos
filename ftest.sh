@@ -1,6 +1,7 @@
 #!/bin/bash
 # /*
 #  * (C) Copyright 2016-2022 Intel Corporation.
+#  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 #  */
@@ -57,6 +58,11 @@ cleanup() {
         ((i-=1)) || true
     done
 }
+
+if [ $i -eq 0 ]; then
+    echo "All cleanup attempts failed." >&2
+    return 1
+fi
 
 # shellcheck disable=SC1091
 if ${TEST_RPMS:-false}; then
