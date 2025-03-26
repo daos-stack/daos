@@ -2,5 +2,5 @@
 	path = src/rdb/raft
 	url = https://github.com/daos-stack/raft.git
 [submodule "spdk_src"]
-	path = src/external/spdk
+	path = deps/spdk
 	url = https://github.com/spdk/spdk.git
