@@ -6,6 +6,7 @@
 *
 !src
 !utils/build.config
+!utils/*.patch
 !utils/certs
 !utils/ci
 !utils/completion
