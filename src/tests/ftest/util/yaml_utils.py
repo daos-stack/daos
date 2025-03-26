@@ -1,5 +1,6 @@
 """
 (C) Copyright 2020-2024 Intel Corporation.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -9,8 +10,12 @@ from collections import OrderedDict
 
 import yaml
 from ClusterShell.NodeSet import NodeSet
+
 # pylint: disable=import-error,no-name-in-module
-from util.data_utils import dict_extract_values, list_flatten, list_unique
+try:
+    from util.data_utils import dict_extract_values, list_flatten, list_unique
+except (ImportError, ModuleNotFoundError):
+    from data_utils import dict_extract_values, list_flatten, list_unique
 
 
 class YamlException(BaseException):
