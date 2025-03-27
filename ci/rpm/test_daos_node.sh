@@ -105,13 +105,8 @@ FTEST=/usr/lib/daos/TESTING/ftest
 python3 -m venv venv
 # shellcheck disable=SC1091
 source venv/bin/activate
-if [ -z $HTTPS_PROXY ]; then
-    pip install --upgrade pip
-    pip install -r $FTEST/requirements-ftest.txt
-else
-    pip install --proxy "$HTTPS_PROXY" --upgrade pip
-    pip install --proxy "$HTTPS_PROXY" -r $FTEST/requirements-ftest.txt
-fi
+pip install --upgrade pip
+pip install -r $FTEST/requirements-ftest.txt
 
 
 sudo PYTHONPATH="$FTEST/util"                        \

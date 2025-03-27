@@ -2,7 +2,6 @@
 # shellcheck disable=SC1113
 # /*
 #  * (C) Copyright 2016-2024 Intel Corporation.
-#  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 # */
@@ -27,14 +26,8 @@ python3 -m venv venv
 # shellcheck disable=SC1091
 source venv/bin/activate
 
-if [ -z $HTTPS_PROXY ]; then
-    pip install --upgrade pip
-    pip install -r "$PREFIX"/lib/daos/TESTING/ftest/requirements-ftest.txt
-else
-    pip install --proxy "$HTTPS_PROXY" --upgrade pip
-    pip install --proxy "$HTTPS_PROXY" -r "$PREFIX"/lib/daos/TESTING/ftest/requirements-ftest.txt
-fi
-
+pip install --upgrade pip
+pip install -r "$PREFIX"/lib/daos/TESTING/ftest/requirements-ftest.txt
 
 if $TEST_RPMS; then
     rm -rf "$PWD"/install/tmp
