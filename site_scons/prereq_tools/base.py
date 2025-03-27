@@ -1156,7 +1156,6 @@ class _Component():
             return
 
         if self.prereqs.deps_as_gitmodules_subdir:
-            builddir, _ = os.path.split(self.src_path)
             target = os.path.join(
                 self.prereqs.sub_path(self.prereqs.deps_as_gitmodules_subdir),
                 self.name)
