@@ -7,9 +7,6 @@
 [submodule "fused"]
 	path = deps/fused
 	url = https://github.com/daos-stack/fused.git
-[submodule "mercury"]
-	path = deps/mercury
-	url = https://github.com/mercury-hpc/mercury.git
 [submodule "ofi"]
 	path = deps/ofi
 	url = https://github.com/ofiwg/libfabric.git
@@ -31,3 +28,6 @@
 [submodule "spdk"]
 	path = deps/spdk
 	url = https://github.com/spdk/spdk.git
+[submodule "mercury"]
+	path = deps/mercury
+	url = https://github.com/mercury-hpc/mercury.git
