@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -166,6 +167,10 @@ enum map_update_opc {
 	MAP_EXCLUDE_OUT,
 	MAP_FINISH_REBUILD,
 	MAP_REVERT_REBUILD,
+};
+
+enum pool_target_update_flags {
+	POOL_TGT_UPDATE_SKIP_RF_CHECK = (1 << 0),
 };
 
 static inline uint32_t
@@ -653,12 +658,13 @@ CRT_RPC_DECLARE(pool_replicas_add, DAOS_ISEQ_POOL_MEMBERSHIP, DAOS_OSEQ_POOL_MEM
 CRT_RPC_DECLARE(pool_replicas_remove, DAOS_ISEQ_POOL_MEMBERSHIP, DAOS_OSEQ_POOL_MEMBERSHIP)
 
 #define DAOS_ISEQ_POOL_TGT_UPDATE	/* input fields */			\
-	((struct pool_op_in)		(pti_op)		CRT_VAR)	\
+	((struct pool_op_v6_in)		(pti_op)		CRT_VAR)	\
 	((struct pool_target_addr)	(pti_addr_list)		CRT_ARRAY)
 
 #define DAOS_ISEQ_POOL_TGT_UPDATE_V6	/* input fields */			\
-	((struct pool_op_v6_in)		(pti_op)		CRT_VAR)	\
-	((struct pool_target_addr)	(pti_addr_list)		CRT_ARRAY)
+	((struct pool_op_in)		(pti_op)		CRT_VAR)	\
+	((struct pool_target_addr)	(pti_addr_list)		CRT_ARRAY)	\
+	((uint32_t)			(pti_flags)		CRT_VAR)
 
 #define DAOS_OSEQ_POOL_TGT_UPDATE	/* output fields */			\
 	((struct pool_op_out)		(pto_op)		CRT_VAR)	\
@@ -692,13 +698,15 @@ CRT_RPC_DECLARE(pool_exclude_out_v6, DAOS_ISEQ_POOL_TGT_UPDATE_V6, DAOS_OSEQ_POO
 /* clang-format on */
 
 static inline void
-pool_tgt_update_in_get_data(crt_rpc_t *rpc, struct pool_target_addr **pti_addr_listp, int *countp)
+pool_tgt_update_in_get_data(crt_rpc_t *rpc, struct pool_target_addr **pti_addr_listp, int *countp,
+			    uint32_t *flags)
 {
 	void *in = crt_req_get(rpc);
 
 	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		*pti_addr_listp = ((struct pool_tgt_update_v6_in *)in)->pti_addr_list.ca_arrays;
 		*countp         = (int)((struct pool_tgt_update_v6_in *)in)->pti_addr_list.ca_count;
+		*flags          = ((struct pool_tgt_update_v6_in *)in)->pti_flags;
 	} else {
 		*pti_addr_listp = ((struct pool_tgt_update_in *)in)->pti_addr_list.ca_arrays;
 		*countp         = (int)((struct pool_tgt_update_in *)in)->pti_addr_list.ca_count;
@@ -706,13 +714,15 @@ pool_tgt_update_in_get_data(crt_rpc_t *rpc, struct pool_target_addr **pti_addr_l
 }
 
 static inline void
-pool_tgt_update_in_set_data(crt_rpc_t *rpc, struct pool_target_addr *pti_addr_list, uint64_t count)
+pool_tgt_update_in_set_data(crt_rpc_t *rpc, struct pool_target_addr *pti_addr_list, uint64_t count,
+			    uint32_t flags)
 {
 	void *in = crt_req_get(rpc);
 
 	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		((struct pool_tgt_update_v6_in *)in)->pti_addr_list.ca_arrays = pti_addr_list;
 		((struct pool_tgt_update_v6_in *)in)->pti_addr_list.ca_count  = count;
+		((struct pool_tgt_update_v6_in *)in)->pti_flags               = flags;
 	} else {
 		((struct pool_tgt_update_in *)in)->pti_addr_list.ca_arrays = pti_addr_list;
 		((struct pool_tgt_update_in *)in)->pti_addr_list.ca_count  = count;

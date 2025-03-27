@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -516,6 +517,7 @@ func (cmd *PoolEvictCmd) Execute(args []string) error {
 // PoolExcludeCmd is the struct representing the command to exclude a DAOS target.
 type PoolExcludeCmd struct {
 	poolCmd
+	Force     bool   `short:"f" long:"force" description:"Force the operation to continue, potentially leading to data loss"`
 	Rank      uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be excluded"`
 	Targetidx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be excluded from the rank"`
 }
@@ -529,7 +531,7 @@ func (cmd *PoolExcludeCmd) Execute(args []string) error {
 		return errors.WithMessage(err, "parsing target list")
 	}
 
-	req := &control.PoolExcludeReq{ID: cmd.PoolID().String(), Rank: ranklist.Rank(cmd.Rank), Targetidx: idxlist}
+	req := &control.PoolExcludeReq{ID: cmd.PoolID().String(), Rank: ranklist.Rank(cmd.Rank), Targetidx: idxlist, Force: cmd.Force}
 
 	err := control.PoolExclude(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {

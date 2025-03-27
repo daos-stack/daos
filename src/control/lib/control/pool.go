@@ -740,6 +740,7 @@ type PoolExcludeReq struct {
 	ID        string
 	Rank      ranklist.Rank
 	Targetidx []uint32
+	Force     bool
 }
 
 // ExcludeResp has no other parameters other than success/failure for now.
@@ -753,6 +754,7 @@ func PoolExclude(ctx context.Context, rpcClient UnaryInvoker, req *PoolExcludeRe
 		Id:        req.ID,
 		Rank:      req.Rank.Uint32(),
 		Targetidx: req.Targetidx,
+		Force:     req.Force,
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolExclude(ctx, pbReq)
