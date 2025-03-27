@@ -1,0 +1,16 @@
+*.d
+*.dll
+*.lib
+*.exp
+*.obj
+*.o
+*.so*
+*.a
+*.d
+*.dep
+*~
+ipsec_MB_testapp*
+ipsec_perf*
+ipsec_xvalid_test*
+job_api_fuzz_test*
+TAGS

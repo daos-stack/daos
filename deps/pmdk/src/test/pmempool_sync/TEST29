@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2018-2024, Intel Corporation
+#
+#
+# pmempool_sync/TEST29 -- test for sync using the 'obj_verify' tool
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+require_fs_type any
+require_build_type debug nondebug
+
+setup
+
+LOG=out${UNITTEST_NUM}.log
+rm -f $LOG && touch $LOG
+
+POOLSET=$DIR/testset1
+create_poolset $POOLSET 8M:$DIR/testfile0:z \
+			8M:$DIR/testfile1:z \
+			8M:$DIR/testfile2:z \
+			R \
+			12M:$DIR/testfile3:z \
+			12M:$DIR/testfile4:z
+
+expect_normal_exit $PMEMPOOL$EXESUFFIX rm $POOLSET
+expect_normal_exit $PMEMPOOL$EXESUFFIX create obj --layout pmempool$SUFFIX $POOLSET
+
+expect_normal_exit "$OBJ_VERIFY$EXESUFFIX $POOLSET pmempool$SUFFIX c v &>> $LOG"
+
+# zero blocks
+zero_blocks $DIR/testfile1 0 100
+
+expect_abnormal_exit "$OBJ_VERIFY$EXESUFFIX $POOLSET pmempool$SUFFIX v" > /dev/null 2>&1
+expect_abnormal_exit "$PMEMPOOL$EXESUFFIX check -v $POOLSET >> $LOG"
+expect_normal_exit "$PMEMPOOL$EXESUFFIX sync -v $POOLSET >> $LOG"
+expect_normal_exit "$PMEMPOOL$EXESUFFIX check -v $POOLSET >> $LOG"
+
+expect_normal_exit "$OBJ_VERIFY$EXESUFFIX $POOLSET pmempool$SUFFIX v &>> $LOG"
+
+check
+
+pass

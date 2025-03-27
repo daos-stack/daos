@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2016-2019, Intel Corporation
+
+#
+# src/test/ex_linkedlist/TEST1 -- unit test for linkedlist example
+#
+# Do not enable "--mult-stores" flag.
+# When this flag is on test reports overwritten store errors
+# due to loop which repeatedly add an element to the list which results
+# in multiply stores to the same field. This is not en error considering
+# the transactional nature of the test.
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_build_type debug nondebug
+configure_valgrind pmemcheck force-enable
+setup
+
+expect_normal_exit ./ex_linkedlist$EXESUFFIX $DIR/testfile
+
+check
+
+pass

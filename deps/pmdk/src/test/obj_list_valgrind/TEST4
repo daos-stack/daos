@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2015-2019, Intel Corporation
+
+#
+# src/test/obj_list_valgrind/TEST4 -- unit test for list module with valgrind
+# pmemcheck tool
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_fs_type pmem non-pmem
+require_build_type debug
+
+configure_valgrind pmemcheck force-enable ../obj_list/obj_list
+export VALGRIND_OPTS="--mult-stores=yes"
+setup
+
+create_holey_file 1M $DIR/testfile
+
+expect_normal_exit ../obj_list/obj_list$EXESUFFIX $DIR/testfile\
+		n:1:0:10\
+		n:0:0:11\
+		n:1:-1:12\
+		n:0:-1:13\
+		n:1:2:14\
+		n:0:1:15\
+		P:2 R:2
+
+pass

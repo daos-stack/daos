@@ -1,0 +1,21 @@
+name: coverity
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  coverity:
+    timeout-minutes: 5
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+      - name: run-scan
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install libjson-c-dev libcmocka-dev clang valgrind \
+                                  python3-pytest debianutils meson ninja-build
+          ./.github/workflows/coverity.sh
+    env:
+      COVERITY_TOKEN: ${{ secrets.COVERITY_TOKEN }}
+      COVERITY_EMAIL: ${{ secrets.COVERITY_EMAIL }}

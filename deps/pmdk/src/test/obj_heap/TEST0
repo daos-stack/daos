@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2015-2019, Intel Corporation
+
+#
+# src/test/obj_heap/TEST0 -- unit test for obj_heap interface
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+setup
+
+expect_normal_exit ./obj_heap$EXESUFFIX t
+
+pass

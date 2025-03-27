@@ -1,0 +1,8 @@
+#!/bin/sh
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2019, Intel Corporation
+
+# git-years -- calculate the range of years for a given file from git
+
+git log --pretty='%aI %aE' "$@"|grep '@intel\.com'|cut -d- -f1|sort|
+	sed '$p;2,$d'|uniq|tr '\n' -|sed 's/-$//'

@@ -1,0 +1,48 @@
+poolset_in
+PMEMPOOLSET
+20M $(nW)testfile00
+20M $(nW)testfile01
+
+poolset_out
+PMEMPOOLSET
+20M $(nW)testfile00
+20M $(nW)testfile01
+REPLICA
+20M $(nW)testfile01
+20M $(nW)testfile21
+
+$(OPT)$(*) *ERROR* transform.c:  $(N): check_if_part_used_once: cannot get absolute path for $(*)/test_pmempool_transform10/testfile00, replica 0, part 0
+$(OPT)$(*) *ERROR* util_posix.c:  $(N): util_compare_file_inodes: stat failed for $(*)/test_pmempool_transform10/testfile21
+$(OPT)$(*) *ERROR* transform.c:  $(N): check_if_part_used_once: some part file's path is used multiple times
+$(OPT)$(*) *ERROR* replica.c: $(N): pmempool_transformU: transformation failed
+error: Invalid argument
+error: failed to transform $(nW)poolset.in -> $(nW)poolset.out: some part file's path is used multiple times
+Poolset structure:
+Number of replicas       : 1
+Replica 0 (master) - local, 2 part(s):
+part 0:
+path                     : $(nW)testfile00
+type                     : regular file
+size                     : $(nW)
+part 1:
+path                     : $(nW)testfile01
+type                     : regular file
+size                     : $(nW)
+
+POOL Header:
+Signature                : PMEMOBJ
+Major                    : $(nW)
+Mandatory features       : $(*)
+Not mandatory features   : $(*)
+Forced RO                : $(*)
+Pool set UUID            : $(nW)
+
+PMEM OBJ Header:
+Layout                   : OBJ_LAYOUT$(nW)
+$(OPT)Lanes offset             : 0x2000
+$(OPX)Lanes offset             : 0x20000
+Number of lanes          : 1024
+Heap offset              : $(nW)
+Heap size                : $(nW)
+Checksum                 : $(nW) [OK]
+Root offset              : 0x0

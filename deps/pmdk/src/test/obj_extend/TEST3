@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2018-2019, Intel Corporation
+
+#
+# src/test/obj_extend/TEST3 -- unit test for extending the pool
+# negative scenario - reservation size smaller than min part/pool size
+# (pmem/issues#819)
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+require_fs_type any
+
+setup
+
+RESVSIZE=20K
+
+# prepare pool sets
+create_poolset $DIR/testset1\
+	$RESVSIZE:$DIR/testdir11:d\
+	O SINGLEHDR
+
+expect_normal_exit ./obj_extend$EXESUFFIX $DIR/testset1
+
+check
+
+pass

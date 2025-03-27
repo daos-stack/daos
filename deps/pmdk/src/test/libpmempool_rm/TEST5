@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2016-2019, Intel Corporation
+#
+#
+# libpmempool_rm/TEST5 -- test for pmempool_rm with limited permissions
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_fs_type any
+
+require_no_superuser
+
+setup
+
+enable_log_append
+
+create_poolset $DIR/pool.set1 32M:$DIR/pool.obj1:x
+expect_normal_exit $PMEMPOOL$EXESUFFIX create obj $DIR/pool.set1
+check_files $DIR/pool.set1 $DIR/pool.obj1
+
+chmod -r $DIR/pool.set1
+
+expect_normal_exit ./libpmempool_rm$EXESUFFIX $DIR/pool.set1
+
+check
+
+pass

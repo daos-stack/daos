@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Make sure file has a trailing newline
+
+f="$1"
+
+if [ -z "$f" ]; then
+	echo "usage: $0 <file>"
+	exit 1
+fi
+
+if [ ! -f "$f" ]; then
+	exit 0
+fi
+
+if [[ $(tail -c1 "$f") ]]; then
+	echo "$f: No newline at end of file"
+	echo '' >> "$f"
+	exit 1
+fi
+
+if [[ ! $(tail -c2 "$f") ]]; then
+	echo "$f: Extra trailing newline"
+	exit 1
+fi
+
+if grep -q $'\r' "$f"; then
+	echo "$f: DOS-style newlines"
+	dos2unix "$f" &> /dev/null
+	exit 1
+fi
+
+if grep -q $'[\t ]$' "$f"; then
+	echo "$f: Trailing whitespace"
+	sed -i $'s/[ \t]*$//' "$f"
+	exit 1
+fi
+
+exit 0

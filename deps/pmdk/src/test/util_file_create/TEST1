@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2014-2019, Intel Corporation
+
+#
+# src/test/util_file_create/TEST1 -- unit test for util_file_create()
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_fs_type any
+require_no_superuser
+
+setup
+
+MIN_POOL=0x4000
+
+mkdir $DIR/testdir1
+chmod -w $DIR/testdir1
+
+expect_normal_exit ./util_file_create$EXESUFFIX $MIN_POOL \
+    $MIN_POOL:$DIR/testdir1/testfile
+
+check
+
+pass

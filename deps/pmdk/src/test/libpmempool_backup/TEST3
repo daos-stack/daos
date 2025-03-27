@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2016-2023, Intel Corporation
+#
+#
+# libpmempool_backup/TEST3 -- test backup poolset with replica (invalid)
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_fs_type pmem non-pmem
+
+setup
+
+. ./common.sh
+
+backup_cleanup
+
+# prepare poolset files
+create_poolset_variation 1
+create_poolset_variation 2 $BACKUP
+
+# create source poolset parts
+expect_normal_exit $PMEMPOOL$EXESUFFIX create obj \
+	"--layout test_layout" $POOLSET
+
+backup_and_compare $POOLSET
+
+mv $OUT_TEMP $OUT
+
+check
+
+pass

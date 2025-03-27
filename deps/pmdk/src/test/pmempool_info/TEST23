@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2017-2018, Intel Corporation
+#
+#
+# pmempool_info/TEST23 -- test for info command with directory poolsets
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+require_fs_type any
+
+setup
+
+LOG=out${UNITTEST_NUM}.log
+RESVSIZE=$((4 * 1024 * 1024 * 1024)) # 4GiB
+
+create_poolset $DIR/testset1\
+	$RESVSIZE:$DIR/testdir11:d $RESVSIZE:$DIR/testdir12:d\
+	R $RESVSIZE:$DIR/testdir13:d $RESVSIZE:$DIR/testdir14:d\
+	O SINGLEHDR
+
+expect_normal_exit $PMEMPOOL$EXESUFFIX create obj --layout pmempool$SUFFIX\
+	$DIR/testset1
+expect_normal_exit $PMEMPOOL$EXESUFFIX info $DIR/testset1 >> $LOG
+
+check
+
+pass

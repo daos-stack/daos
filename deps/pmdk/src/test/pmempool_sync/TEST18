@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2016-2023, Intel Corporation
+#
+#
+# pmempool_sync/TEST18 -- test for pmempool sync with SINGLEHDR option
+#
+# Check syncing data between device-dax-based replicas with various alignment
+# Alignment variant: replica 0: 2MB, 2MB; replica 1: 4KB, 4KB
+#
+
+. ../unittest/unittest.sh
+
+# XXX Disable tests for all configurations until the issue #5708 is fixed.
+DISABLED
+
+require_test_type medium
+require_fs_type any
+
+# the test takes too long under pmemcheck
+configure_valgrind pmemcheck force-disable
+
+require_dax_device_alignments $SIZE_2MB $SIZE_2MB $SIZE_4KB $SIZE_4KB
+require_max_devdax_size 0 $PMEMOBJ_MAX_ALLOC_SIZE
+
+setup
+
+dax_device_zero
+
+LOG=out${UNITTEST_NUM}.log
+LOG_TEMP=out${UNITTEST_NUM}_part.log
+rm -f $LOG && touch $LOG
+rm -f $LOG_TEMP && touch $LOG_TEMP
+
+LAYOUT=OBJ_LAYOUT$SUFFIX
+POOLSET=$DIR/poolset
+
+# Create poolset file
+create_poolset $POOLSET \
+	O SINGLEHDR \
+	AUTO:${DEVICE_DAX_PATH[0]} \
+	AUTO:${DEVICE_DAX_PATH[1]} \
+	R \
+	AUTO:${DEVICE_DAX_PATH[2]} \
+	AUTO:${DEVICE_DAX_PATH[3]}
+
+DAX_SIZE[0]=$(get_devdax_size 0)
+DAX_SIZE[2]=$(get_devdax_size 2)
+
+OFFSET=$(minimum ${DAX_SIZE[0]} ${DAX_SIZE[2]})
+ROOT_SIZE=$[OFFSET + 1024]
+
+# CLI script for writing some data hitting all the parts
+WRITE_SCRIPT=$DIR/write_data
+cat << EOF > $WRITE_SCRIPT
+pr $ROOT_SIZE
+srcp 0 TestOK111
+srcp $OFFSET TestOK222
+EOF
+
+# CLI script for reading 9 characters from all the parts
+READ_SCRIPT=$DIR/read_data
+cat << EOF > $READ_SCRIPT
+srpr 0 9
+srpr $OFFSET 9
+EOF
+
+# Create poolset
+expect_normal_exit $PMEMPOOL$EXESUFFIX create --layout=$LAYOUT\
+	obj $POOLSET
+cat $LOG >> $LOG_TEMP
+
+# Write some data into the pool, hitting three part files
+expect_normal_exit $PMEMOBJCLI$EXESUFFIX -s $WRITE_SCRIPT $POOLSET >> $LOG_TEMP
+
+# Check if correctly written
+expect_normal_exit $PMEMOBJCLI$EXESUFFIX -s $READ_SCRIPT $POOLSET >> $LOG_TEMP
+
+# Destroy the primary replica
+expect_normal_exit $PMEMPOOL$EXESUFFIX rm -f ${DEVICE_DAX_PATH[0]} >> $LOG_TEMP
+expect_normal_exit $PMEMPOOL$EXESUFFIX rm -f ${DEVICE_DAX_PATH[1]} >> $LOG_TEMP
+
+# Synchronize replicas
+expect_normal_exit $PMEMPOOL$EXESUFFIX sync $POOLSET >> $LOG_TEMP
+
+# Check if correctly copied
+expect_normal_exit $PMEMOBJCLI$EXESUFFIX -s $READ_SCRIPT $POOLSET >> $LOG_TEMP
+
+mv $LOG_TEMP $LOG
+check
+
+pass

@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2015-2023, Intel Corporation
+
+#
+# src/test/obj_sync/TEST0 -- unit test for PMEM-resident locks without valgrind
+#
+
+# Test cases "m", "r", "c" fail under valgrind.
+# This test verifies that the tests run normally
+# until these errors are fixed: https://github.com/pmem/pmdk/issues/5646
+# and https://github.com/pmem/pmdk/issues/5727
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_fs_type none
+require_build_type debug nondebug
+
+setup
+
+LOG=out${UNITTEST_NUM}.log
+LOG_TEMP=out${UNITTEST_NUM}_part.log
+ERR=err${UNITTEST_NUM}.log
+ERR_TEMP=err${UNITTEST_NUM}_part.log
+
+rm -f $LOG $LOG_TEMP $ERR $ERR_TEMP
+
+VALGRIND_DISABLED=y expect_normal_exit ./obj_sync$EXESUFFIX m 50 5
+cat $LOG >> $LOG_TEMP
+cat $ERR >> $ERR_TEMP
+VALGRIND_DISABLED=y expect_normal_exit ./obj_sync$EXESUFFIX r 50 5
+cat $LOG >> $LOG_TEMP
+cat $ERR >> $ERR_TEMP
+VALGRIND_DISABLED=y expect_normal_exit ./obj_sync$EXESUFFIX c 50 5
+cat $LOG >> $LOG_TEMP
+cat $ERR >> $ERR_TEMP
+VALGRIND_DISABLED=y expect_normal_exit ./obj_sync$EXESUFFIX t 50 5
+cat $LOG >> $LOG_TEMP
+cat $ERR >> $ERR_TEMP
+
+mv $LOG_TEMP $LOG
+mv $ERR_TEMP $ERR
+check
+
+pass

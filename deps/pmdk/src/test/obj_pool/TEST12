@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2015-2019, Intel Corporation
+
+#
+# src/test/obj_pool/TEST12 -- unit test for pmemobj_create
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+setup
+umask 0
+
+#
+# TEST12 non-existing file, poolsize >= min required size
+#        layout is NULL
+#
+expect_normal_exit ./obj_pool$EXESUFFIX c $DIR/testfile NULL 20 0600
+
+check_files $DIR/testfile
+
+check
+
+pass

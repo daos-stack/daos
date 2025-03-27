@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2015-2022, Intel Corporation
+
+#
+# src/test/pmem_movnt/TEST0 -- unit test for pmem_memcpy, pmem_memmove
+#                              and pmem_memset
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_build_type debug
+
+setup
+
+export PMEM_IS_PMEM_FORCE=1
+export PMEM_LOG_LEVEL=15
+
+function test() {
+	expect_normal_exit ./pmem_movnt$EXESUFFIX
+}
+
+function test_all() {
+	unset PMEM_MOVNT_THRESHOLD
+	test
+
+	export PMEM_MOVNT_THRESHOLD=1024
+	test
+
+	export PMEM_MOVNT_THRESHOLD=5
+	test
+
+	export PMEM_MOVNT_THRESHOLD=-15
+	test
+}
+
+test_all
+
+export PMEM_AVX512F=0
+
+test_all
+
+export PMEM_AVX=0
+
+test_all
+
+export PMEM_NO_MOVNT=1
+export PMEM_NO_GENERIC_MEMCPY=1
+
+test
+
+export PMEM_MOVDIR64B=1
+
+test_all
+
+pass

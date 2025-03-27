@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2015-2023, Intel Corporation
+
+#
+# src/test/obj_debug/TEST2 -- unit test for debug features
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+require_build_type debug static_debug
+require_fs_type any
+
+# test causes 5 pmemcheck errors by design
+configure_valgrind pmemcheck force-disable
+setup
+
+export PMEMOBJ_LOG_LEVEL=4
+expect_normal_exit ./obj_debug$EXESUFFIX $DIR/testfile1 a
+
+$GREP "_pobj_debug_notice" ./pmemobj$UNITTEST_NUM.log > grep$UNITTEST_NUM.log
+
+check
+
+pass

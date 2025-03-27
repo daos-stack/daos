@@ -1,0 +1,96 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2023, Intel Corporation
+
+# This playbook is designed to add a new self-hosted runner to pmem/pmdk.
+# Examples below show how to use this file:
+# 1) remotely
+# export TARGET_IP= # ip of the target
+# export USER_PASSWORD= # a password on the target
+# export GHA_TOKEN= # a GitHub token generated for a new self-hosted runner
+# export HOST_NAME= # host's name that will be visible on GitHub
+# export LABELS= # rhel or opensuse
+# export VARS_GHA=http_proxy=http://proxy-dmz.{XXX}.com:911,https_proxy=http://proxy-dmz.{XXX}.com:912
+# ansible-playbook -i $TARGET_IP, configure-self-hosted-runner.yml --extra-vars \
+#   "host=all ansible_user=pmdkuser ansible_password=$USER_PASSWORD \
+#   runner_name=$HOST_NAME labels=$LABELS token=$GHA_TOKEN vars_gha=$VARS_GHA"
+#
+# 2) locally
+# For a playbook to be used on a local server please log in as pmdkuser:
+# a) comment out the first command: # -hosts: "{{ host }}"
+# b) uncomment the next two lines:
+# - hosts: localhost
+#   connection: local
+#
+# export GHA_TOKEN= # a GitHub token generated for a new self-hosted runner
+# export HOST_NAME= # Host name that will be visible on GitHub (e.g. `hostname`)
+# export LABELS= # rhel or opensuse
+# export VARS_GHA=http_proxy=http://proxy-dmz.{XXX}.com:911,https_proxy=http://proxy-dmz.{XXX}.com:912
+# ansible-playbook configure-self-hosted-runner.yml --extra-vars \
+#   "runner_name=$HOST_NAME labels=$LABELS vars_gha=$VARS_GHA token=$GHA_TOKEN"
+#
+
+#
+# The runner package version may be changed by: --extra-vars package_url=<url_to_package.tar.gz>
+
+- hosts: "{{ host }}"
+#- hosts: localhost
+#  connection: local
+  vars:
+    package_url: https://github.com/actions/runner/releases/download/v2.311.0/actions-runner-linux-x64-2.311.0.tar.gz
+    runner_folder: /home/{{ ansible_user }}/actions-runner
+    repo_url: https://github.com/pmem/pmdk
+    vars_list: "{{ vars_gha.split(',') }}"
+#    token: # a GitHub token generated for a new self-hosted runner
+#    label: # rhel or opensuse
+#    runner_name: # Host name that will be visible on GitHub
+
+  tasks:
+    - name: Create a runner folder
+      file:
+        path: "{{ runner_folder }}"
+        state: directory
+        force: yes
+
+    - name: Download and extract the installer
+      unarchive:
+        src: "{{ package_url }}"
+        dest: "{{ runner_folder }}"
+        remote_src: yes
+
+    # Make sure the following environment variables are present in the env
+    # to ensure propagation to the actions-runner's environment.
+    - name: Add env variables into env.sh checklist
+      lineinfile:
+        path: "{{ runner_folder }}/env.sh"
+        line: "    '{{ item.line }}'"
+        insertafter: "^varCheckList=\\("
+      loop:
+        - line: PKG_CONFIG_PATH
+        - line: HOME
+
+    - name: Add runner to GHA
+      shell: |
+        cd {{ runner_folder }}
+        ./config.sh --url {{ repo_url }} --token {{ token }} --name {{ runner_name }} --labels {{ labels }} --runnergroup Default --work _work
+
+    - name: Install runner service
+      shell: ./svc.sh install {{ ansible_user }}
+      args:
+        chdir: "{{ runner_folder }}"
+      become: true
+
+    - name: Insert variables into runsvc.sh file
+      lineinfile:
+        path: "{{ runner_folder }}/runsvc.sh"
+        line: "export {{ item }}"
+        insertbefore: "insert anything to setup env when running as a service"
+      loop: "{{ vars_list }}"
+
+    - name: Enable and restart runner service
+      # Note: The service name must match the repo_url.
+      # repo_url: https://github.com/{OWNER}/{REPO}
+      # service: actions.runner.{OWNER}-{REPO}.{{ runner_name }}.service
+      shell: |
+        systemctl enable actions.runner.pmem-pmdk.{{ runner_name }}.service
+        systemctl restart actions.runner.pmem-pmdk.{{ runner_name }}.service
+      become: true

@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2015-2019, Intel Corporation
+
+#
+# src/test/set_funcs/TEST0 -- unit test for pmem*_set_funcs
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+require_fs_type any
+
+setup
+
+expect_normal_exit ./set_funcs$EXESUFFIX $DIR/testfile $DIR
+
+pass

@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2018-2019, Intel Corporation
+
+#
+# src/test/obj_memcheck_register/TEST0 -- unit test for obj_memcheck_register
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_fs_type any
+
+require_valgrind 3.12
+configure_valgrind memcheck force-enable
+
+setup
+
+expect_normal_exit ./obj_memcheck_register$EXESUFFIX c $DIR/testfile
+expect_normal_exit ./obj_memcheck_register$EXESUFFIX o $DIR/testfile
+
+check
+
+pass

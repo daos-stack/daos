@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2017-2019, Intel Corporation
+
+. ../unittest/unittest.sh
+
+require_test_type short
+require_fs_type any
+
+setup
+
+RESVSIZE=$((4 * 1024 * 1024 * 1024))
+create_poolset $DIR/testset1 $RESVSIZE:$DIR/testdir11:d\
+	O SINGLEHDR
+
+expect_normal_exit $PMEMPOOL$EXESUFFIX create obj --layout obj_ctl_heap_size\
+	$DIR/testset1
+
+expect_normal_exit ./obj_ctl_heap_size$EXESUFFIX $DIR/testset1 x
+
+pass

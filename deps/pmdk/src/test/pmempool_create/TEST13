@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2018-2023, Intel Corporation
+#
+#
+# pmempool_create/TEST13 -- testing if file allocation fails when
+# file already exists
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_fs_type any
+
+setup
+
+expect_normal_exit $PMEMPOOL$EXESUFFIX create obj $DIR/pool.obj
+
+expect_abnormal_exit $PMEMPOOL$EXESUFFIX create -M obj $DIR/pool.obj 2> err13.log
+
+pass

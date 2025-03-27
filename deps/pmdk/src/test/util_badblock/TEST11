@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2019-2023, Intel Corporation
+
+#
+# src/test/util_badblock/TEST11 -- unit test for inject error malloc
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+set_test_labels fault_injection
+require_fs_type non-pmem
+require_linked_with_ndctl ./util_badblock$EXESUFFIX
+
+setup
+
+expect_normal_exit ./util_badblock$EXESUFFIX $DIR/testfile1 f
+
+check
+
+pass

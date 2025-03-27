@@ -1,0 +1,24 @@
+From 305f8735de2f16cc4d96be5778f90f79c504d18d Mon Sep 17 00:00:00 2001
+From: Marcel Cornu <marcel.d.cornu@intel.com>
+Date: Tue, 8 Sep 2020 12:03:39 +0100
+Subject: [PATCH] Fix for executable stack in v0.54 release
+
+---
+ avx512/ethernet_fcs_avx512.asm | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/avx512/ethernet_fcs_avx512.asm b/avx512/ethernet_fcs_avx512.asm
+index c645975..ac3bf4f 100644
+--- a/avx512/ethernet_fcs_avx512.asm
++++ b/avx512/ethernet_fcs_avx512.asm
+@@ -487,3 +487,7 @@ byte_len_to_mask_table:
+         dw      0x00ff, 0x01ff, 0x03ff, 0x07ff,
+         dw      0x0fff, 0x1fff, 0x3fff, 0x7fff,
+         dw      0xffff
++
++%ifdef LINUX
++section .note.GNU-stack noalloc noexec nowrite progbits
++%endif
+-- 
+2.17.1
+

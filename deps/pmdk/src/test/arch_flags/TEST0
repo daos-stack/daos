@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2015-2019, Intel Corporation
+
+#
+# src/test/arch_flags/TEST0 -- unit test for util_get_arch_flags function
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_fs_type none
+
+setup
+
+export ARCH_FLAGS_LOG_LEVEL=15
+export ARCH_FLAGS_LOG_FILE="log${UNITTEST_NUM}.log"
+
+expect_normal_exit ./arch_flags$EXESUFFIX\
+	0:0:0:0x0:0x0\
+	65535:0:0:0x0:0x0\
+	0:255:0:0x0:0x0\
+	0:0:255:0x0:0x0\
+	0:0:0:0x1:0x0\
+	0:0:0:0x0:0x1
+
+check
+
+pass

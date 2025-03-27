@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2014-2019, Intel Corporation
+
+#
+# src/test/util_map_proc/TEST2 -- unit test for util_map /proc parsing
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_fs_type none
+
+setup
+
+# due to alignment requirements there should be no hint address for
+# the last two range lengths
+mapfile="maps_align_"$(uname -s | tr "[:upper:]" "[:lower:]")
+expect_normal_exit ./util_map_proc$EXESUFFIX $mapfile\
+     0x0001000000\
+     0x0001100000\
+     0x0001110000\
+     0x0001110800\
+     0x0001111000
+
+check
+
+pass

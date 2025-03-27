@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2016-2019, Intel Corporation
+
+#
+# src/test/obj_pool/TEST29 -- unit test for pmemobj_open
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+setup
+umask 0
+
+#
+# TEST29 existing poolset file, file size >= min required size, layout is NULL
+#        bad format of the poolset file
+#
+expect_normal_exit ./obj_pool$EXESUFFIX o ./pool.set NULL
+
+check
+
+pass

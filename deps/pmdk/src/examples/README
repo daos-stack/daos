@@ -1,0 +1,31 @@
+Persistent Memory Development Kit
+
+This is examples/README.
+
+This directory contains brief educational examples illustrating the use
+of the PMDK libraries.  For many of these examples, the Makefile rules
+are here just to check that the example compiles, loads against the
+appropriate library, and passes cstyle.
+
+If you're looking for documentation to get you started using PMDK,
+start here: https://pmem.io/pmdk and follow the links to examples and
+man pages.  Developers new to PMDK are probably looking for libpmemobj.
+
+Many of the examples in this directory are described in more detail
+on the above web site.
+
+libpmem(7) -- low-level persistent memory support
+    Example programs are in the libpmem directory.
+    More documentation: https://pmem.io/pmdk/libpmem
+
+libpmemobj(7) -- transactional object store
+    Example programs are in the libpmemobj directory.
+    More documentation: https://pmem.io/pmdk/libpmemobj
+
+libpmempool(7) -- pool management, diagnostics and repair
+    Example programs are in the libpmempool directory.
+    More documentation: https://pmem.io/pmdk/libpmempool
+
+libpmem2(7) -- low-level persistent memory support
+    Example programs are in the libpmem2 directory.
+    More documentation: https://pmem.io/pmdk/libpmem2

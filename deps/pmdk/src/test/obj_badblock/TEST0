@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2019, Intel Corporation
+#
+#
+# obj_badblock/TEST0 -- test for inserting bad blocks into an obj pool
+#
+. ../unittest/unittest.sh
+require_test_type medium
+require_badblock_tests_enabled block_device
+
+setup
+
+. ../common_badblock.sh
+MOUNT_DIR="$DIR/mnt-pmem"
+badblock_test_init block_device $MOUNT_DIR
+
+POOLSET=$MOUNT_DIR/testset1
+RESVSIZE=$((4 * 1024 * 1024 * 1024)) # 4GiB
+
+create_poolset $POOLSET\
+	$RESVSIZE:$MOUNT_DIR/testdir11:d\
+	O SINGLEHDR
+
+# create pool and allocate some amount of data
+expect_normal_exit ./obj_badblock$EXESUFFIX $POOLSET c
+
+# inject bad block into one of files created in pool directory during
+# allocation
+FIRST_SECTOR=$(expect_normal_exit $EXTENTS $MOUNT_DIR/testdir11/000010.pmem -l 0)
+ndctl_inject_error $NAMESPACE $FIRST_SECTOR 8
+
+expect_bad_blocks $NAMESPACE
+
+expect_abnormal_exit ./obj_badblock$EXESUFFIX $POOLSET o
+
+ndctl_uninject_error $FULLDEV $NAMESPACE $FIRST_SECTOR 8
+badblock_test_fini $MOUNT_DIR
+
+pass

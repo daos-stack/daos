@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2018-2024, Intel Corporation
+#
+#
+# pmempool_feature/TEST15 -- unit test for SHUTDOWN_STATE + ctl
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+require_fs_type any
+require_sds $PMEMPOOL$EXESUFFIX
+
+setup
+. ./common.sh
+
+require_usc_permission $DIR
+
+PMEMOBJ_CONF="${PMEMOBJ_CONF};sds.at_create=1"
+pmempool_feature_create_poolset "no_dax_device"
+pmempool_feature_query SHUTDOWN_STATE normal
+
+check
+
+pass

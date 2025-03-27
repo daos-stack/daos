@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2018-2019, Intel Corporation
+
+#
+# src/test/obj_pool/TEST33 -- unit test for pmemobj_open
+#                             with a poolset and bad block recovery files
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+setup
+
+POOLSET=$DIR/testset1
+create_poolset $POOLSET 10M:$DIR/testfile0:z 10M:$DIR/testfile1:z 10M:$DIR/testfile2:z \
+			R 30M:$DIR/testfile3:z
+
+#
+# TEST33 existing file, file size >= min required size,
+#        layout matches the value from pool header
+#
+expect_normal_exit ./obj_pool$EXESUFFIX c $DIR/testset1 "test" 0 0640
+
+# create recovery files - no bad blocks
+create_recovery_file $DIR/testset1_r0_p0_badblocks.txt
+create_recovery_file $DIR/testset1_r0_p1_badblocks.txt
+create_recovery_file $DIR/testset1_r0_p2_badblocks.txt
+create_recovery_file $DIR/testset1_r1_p0_badblocks.txt
+
+turn_on_checking_bad_blocks $DIR/testset1
+
+# pmemobj_open() should fail, because the bad block recovery files exist
+expect_normal_exit ./obj_pool$EXESUFFIX o $DIR/testset1 "test"
+
+check
+
+pass

@@ -1,0 +1,16 @@
+pre_install() {
+	if [[ $INSTALL_TSOCKS == true ]]; then
+		# tsocks package is not available in latest fedora releases, so don't exit in case
+		# installation failed.
+		install tsocks || echo "Installation of the tsocks package failed, proxy may not be available"
+	fi
+        if [[ $ID == centos ]] && (( VERSION_ID == 8 )); then
+                sudo "$package_manager" update -y --refresh
+        fi
+
+	install nbd || {
+		install wget
+		wget -O nbd.rpm https://download-ib01.fedoraproject.org/pub/epel/7/x86_64/Packages/n/nbd-3.14-2.el7.x86_64.rpm
+		install nbd.rpm
+	}
+}

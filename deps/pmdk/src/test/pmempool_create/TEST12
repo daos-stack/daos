@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2018-2019, Intel Corporation
+#
+#
+# pmempool_create/TEST12 -- test for create command with badblocks
+#                           - clear bad blocks in the dax device
+#                             during creating a pool
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+require_build_type debug nondebug
+
+require_badblock_tests_enabled dax_device
+require_linked_with_ndctl $PMEMPOOL$EXESUFFIX
+
+setup
+
+. ../common_badblock.sh
+
+badblock_test_init dax_device
+
+LOG=out${UNITTEST_NUM}.log
+rm -f $LOG && touch $LOG
+
+POOLSET=$DIR/testset1
+create_poolset $POOLSET AUTO:$FULLDEV:x
+
+expect_normal_exit $PMEMPOOL$EXESUFFIX rm $POOLSET
+
+# inject bad block: OFF=11 LEN=1
+ndctl_inject_error $NAMESPACE 11 1
+
+expect_bad_blocks $NAMESPACE
+
+expect_normal_exit "$PMEMPOOL$EXESUFFIX create obj -b --layout pmempool$SUFFIX $POOLSET >> $LOG"
+
+ndctl_uninject_error $FULLDEV $NAMESPACE 11 1
+badblock_test_fini
+
+check
+
+pass

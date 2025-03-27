@@ -1,0 +1,27 @@
+---
+draft: false
+slider_enable: true
+description: ""
+disclaimer: "The contents of this web site and the associated <a href=\"https://github.com/pmem\">GitHub repositories</a> are BSD-licensed open source."
+aliases: ["pmempool-convert.1.html"]
+title: "pmempool | PMDK"
+header: "pmem Tools version 1.5"
+---
+
+[comment]: <> (SPDX-License-Identifier: BSD-3-Clause)
+[comment]: <> (Copyright 2016-2023, Intel Corporation)
+
+[comment]: <> (pmempool-convert.1 -- man page for pmempool-convert)
+
+[NAME](#name)<br />
+[SEE ALSO](#see-also)<br />
+
+# NAME #
+
+**pmempool-convert** - this is a wrapper around pmdk-convert tool. More information
+can be found in **pmdk-convert**(1) man page.
+
+# SEE ALSO #
+
+**pmdk-convert**(1), **pmempool**(1), **libpmemobj**(7), **libpmempool**(7)
+and **<https://pmem.io>**

@@ -1,0 +1,82 @@
+========================================================================
+README for Intel(R) Multi-Buffer Crypto for IPsec Library API
+performance measurement tool
+
+February 2017
+========================================================================
+
+
+Contents
+========
+
+- Overview
+- Files
+- Compilation
+- Usage
+- Legal Disclaimer
+
+
+Overview
+========
+This test tool performs multiple execution of functions included in
+Intel Multi-Buffer Crypto for IPsec Library.
+
+Files
+=====
+
+ipsec_perf.c -	Tool which produces text formatted output representing
+		average times of ipsec_mb functions execution.
+ipsec_diff_tool.py - Another tool which interprets text data given.
+
+Compilation
+===========
+
+Required tools:
+- GNU make
+- gcc (GCC) 4.8.3 (or newer)
+
+Simply run "make" to compile the tool.
+To clean the build please run "make clean".
+
+You can point to another directory containing IPSec MB library by setting
+LIB_LOC. for ex:
+	LIB_LOC=../ipsec_mb_lib make
+
+In order to perform static code analysis or style check you can do:
+	make cppcheck
+or
+	make style
+
+Be aware that you will have cppcheck tool installed and checkpatch.pl
+script copied into one of the directories listed in $PATH.
+You can also set CPPCHECK and/or CHECKPATCH variables if you want give paths
+to this tools being placed in different directories. for ex:
+	CPPCHECK=~/tools/cppcheck make cppcheck
+	CHECKPATCH=~/scripts/checkpatch.pl make style
+
+Usage
+=====
+
+You can simply check list of arguments by typing:
+	./ipsec_perf -h
+
+Usage example:
+	./ipsec_perf -c --no-avx512 --no-gcm -o 24
+
+Later you can pass output to ipsec_diff_tool.py for data
+analysis:
+	./ipsec_diff_tool.py out1.txt out2.txt 5
+
+Run ipsec_diff_tool.py -h too see help page.
+
+Legal Disclaimer
+================
+
+THIS SOFTWARE IS PROVIDED BY INTEL"AS IS". NO LICENSE, EXPRESS OR
+IMPLIED, BY ESTOPPEL OR OTHERWISE, TO ANY INTELLECTUAL PROPERTY RIGHTS
+ARE GRANTED THROUGH USE. EXCEPT AS PROVIDED IN INTEL'S TERMS AND
+CONDITIONS OF SALE, INTEL ASSUMES NO LIABILITY WHATSOEVER AND INTEL
+DISCLAIMS ANY EXPRESS OR IMPLIED WARRANTY, RELATING TO SALE AND/OR
+USE OF INTEL PRODUCTS INCLUDING LIABILITY OR WARRANTIES RELATING TO
+FITNESS FOR A PARTICULAR PURPOSE, MERCHANTABILITY, OR INFRINGEMENT
+OF ANY PATENT, COPYRIGHT OR OTHER INTELLECTUAL PROPERTY RIGHT.

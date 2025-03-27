@@ -1,0 +1,9 @@
+{
+   libdl-non-leak
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:calloc
+   fun:_dlerror_run
+   fun:dlsym
+   fun:close
+}

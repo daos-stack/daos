@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2017-2023, Intel Corporation
+#
+#
+# pmempool_check/TEST23 -- test for checking pools with device dax under
+#			valgrind
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_dax_devices 1
+require_fs_type any
+
+configure_valgrind memcheck force-enable $PMEMPOOL$EXESUFFIX
+require_valgrind 3.11
+
+setup
+
+LOG=out${UNITTEST_NUM}.log
+rm -f $LOG && touch $LOG
+
+POOLSET=$DIR/testset1
+create_poolset $POOLSET AUTO:$DEVICE_DAX_PATH
+
+expect_normal_exit $PMEMPOOL$EXESUFFIX rm $DEVICE_DAX_PATH
+expect_normal_exit $PMEMPOOL$EXESUFFIX create obj $POOLSET
+expect_normal_exit $PMEMPOOL$EXESUFFIX check -v $POOLSET >> $LOG
+expect_normal_exit $PMEMPOOL$EXESUFFIX info $POOLSET &> /dev/null
+
+# remove the pools in the poolset while preserving the file itself
+expect_normal_exit $PMEMPOOL$EXESUFFIX rm -s $POOLSET
+# verify that the poolset still exists
+check_files $POOLSET
+
+check
+
+pass

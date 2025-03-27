@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2019, Intel Corporation
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+setup
+
+expect_normal_exit ./libpmempool_check_version$EXESUFFIX
+
+check
+
+pass

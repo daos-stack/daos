@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2018-2019, Intel Corporation
+
+#
+# src/test/util_badblock/TEST9 -- unit test for util_badblock
+#                                 - create and open a pool
+#                                   on regular file with bad blocks
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_badblock_tests_enabled block_device
+require_linked_with_ndctl ./util_badblock$EXESUFFIX
+
+setup
+
+. ../common_badblock.sh
+
+MOUNT_DIR="$DIR/mnt-pmem"
+badblock_test_init block_device $MOUNT_DIR
+
+FILE="$MOUNT_DIR/file"
+fallocate -l 10M $FILE
+
+# create a pool
+expect_normal_exit ./util_badblock$EXESUFFIX $FILE r
+
+turn_on_checking_bad_blocks $FILE
+
+# inject bad block:
+FIRST_SECTOR=$(expect_normal_exit $EXTENTS $FILE -l 0)
+ndctl_inject_error $NAMESPACE $FIRST_SECTOR 1
+
+expect_bad_blocks $NAMESPACE
+
+# open a pool with bad blocks
+expect_abnormal_exit ./util_badblock$EXESUFFIX $FILE o
+
+ndctl_uninject_error $FULLDEV $NAMESPACE $FIRST_SECTOR 1
+badblock_test_fini $MOUNT_DIR
+
+check
+
+pass

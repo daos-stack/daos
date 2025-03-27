@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2016-2024, Intel Corporation
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+set_test_labels fault_injection
+
+configure_valgrind memcheck force-enable
+
+setup
+
+expect_normal_exit\
+	./util_ctl$EXESUFFIX $DIR/testconfig 2>/dev/null
+
+pass

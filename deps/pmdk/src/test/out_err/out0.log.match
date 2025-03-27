@@ -1,0 +1,7 @@
+out_err$(nW)TEST0: START: out_err$(nW)
+ $(nW)out_err$(nW)
+ERR #1
+$(OPT)ERR #2: Success
+$(OPX)ERR #2: No error: 0
+ERR #3: Invalid argument
+out_err$(nW)TEST0: DONE

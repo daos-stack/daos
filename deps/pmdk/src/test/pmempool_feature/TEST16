@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2019, Intel Corporation
+#
+#
+# pmempool_feature/TEST16 -- unit test for CHECK_BAD_BLOCKS
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+require_fs_type any
+require_sds $PMEMPOOL$EXESUFFIX
+
+configure_valgrind force-disable
+
+setup
+. ./common.sh
+require_bb_enabled_by_default $PMEMPOOL$EXESUFFIX
+
+pmempool_feature_create_poolset "no_dax_device"
+pmempool_feature_test_CHECK_BAD_BLOCKS
+
+check
+
+pass

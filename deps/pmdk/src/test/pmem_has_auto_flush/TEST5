@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2018-2019, Intel Corporation
+
+#
+# src/test/pmem_has_auto_flush/TEST5 -- unit test for pmem_has_auto_flush
+#
+# tests regions with mixed - empty persistence_domain file
+# and persistence_domain with other type
+#
+. ../unittest/unittest.sh
+
+require_test_type medium
+require_fs_type pmem non-pmem
+
+setup
+
+ROOT=$DIR/pmem_has_auto_flush/root
+export BUS_DEVICE_PATH=$ROOT
+
+mkdir -p $ROOT/regiond000 $ROOT/regiond111
+ln -sf $ROOT/regiond000 $ROOT/region000
+ln -sf $ROOT/regiond111 $ROOT/region111
+
+touch $ROOT/regiond000/persistent $ROOT/regiond111/domain \
+	$ROOT/regiond000/abcd $ROOT/regiond111/abcd \
+	$ROOT/regiond000/persistence_domain $ROOT/regiond111/persistence_domain \
+	$ROOT/regiond000/tempname $ROOT/regiond111/defg
+echo "" > $ROOT/regiond000/persistence_domain
+echo "memory_controller" > $ROOT/regiond111/persistence_domain
+
+expect_normal_exit ./pmem_has_auto_flush$EXESUFFIX
+
+check
+
+pass

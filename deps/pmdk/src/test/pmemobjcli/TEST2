@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2018, Intel Corporation
+#
+#
+# pmemobjcli/TEST2 -- test for pmemobjcli -p option
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+setup
+
+LOG=out${UNITTEST_NUM}.log
+
+expect_normal_exit $PMEMOBJCLI$EXESUFFIX -s ${PMEMOBJCLI}_example.posc -p > $LOG
+echo "---" >> $LOG
+expect_normal_exit $PMEMOBJCLI$EXESUFFIX -s ${PMEMOBJCLI}_example_tx.posc -p >> $LOG
+
+check
+
+pass
