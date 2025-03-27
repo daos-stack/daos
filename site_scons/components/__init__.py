@@ -293,8 +293,7 @@ def define_components(reqs):
 
     reqs.define('argobots',
                 retriever=GitRepoRetriever(True),
-                commands=[['git', 'clean', '-dxf'],
-                          ['./autogen.sh'],
+                commands=[['./autogen.sh'],
                           abt_build,
                           ['make'],
                           ['make', 'install']],
