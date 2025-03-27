@@ -1,0 +1,256 @@
+
+_psm3_cppflags = \
+	-I$(top_srcdir)/src \
+	-I$(top_srcdir)/psm3 \
+	-I$(top_srcdir)/psm3/ptl_ips \
+	-I$(top_srcdir)/psm3/include \
+	-I$(top_srcdir)/psm3/include/linux-i386 \
+	-I$(top_srcdir)/psm3/mpspawn \
+	-I$(top_srcdir)/psm3/utils \
+	-I$(top_builddir)/psm3 \
+	-D_GNU_SOURCE=1
+
+noinst_LTLIBRARIES += \
+	psm3/libutils.la \
+	psm3/libptl_am.la \
+	psm3/libptl_ips.la \
+	psm3/libptl_self.la \
+	psm3/libhal_verbs.la \
+	psm3/libhal_sockets.la \
+	psm3/libpsm3i.la
+
+psm3_libptl_am_la_SOURCES = \
+	psm3/ptl_am/am_config.h \
+	psm3/ptl_am/am_cuda_memhandle_cache.c \
+	psm3/ptl_am/am_cuda_memhandle_cache.h \
+	psm3/ptl_am/am_oneapi_memhandle_cache.c \
+	psm3/ptl_am/am_oneapi_memhandle_cache.h \
+	psm3/ptl_am/am_reqrep.c \
+	psm3/ptl_am/am_reqrep_shmem.c \
+	psm3/ptl_am/cmarw.h \
+	psm3/ptl_am/cmarwu.c \
+	psm3/ptl_am/psm_am_internal.h \
+	psm3/ptl_am/ptl.c \
+	psm3/ptl_am/ptl_fwd.h
+psm3_libptl_am_la_CPPFLAGS = \
+	-I$(top_srcdir)/psm3/ptl_am/ \
+	$(AM_CPPFLAGS) $(psm3_CPPFLAGS) $(_psm3_cppflags)
+psm3_libptl_am_la_CFLAGS = \
+	$(AM_CFLAGS) $(psm3_CFLAGS) $(_psm3_cflags)
+
+psm3_libptl_ips_la_SOURCES = \
+	psm3/ptl_ips/ips_config.h \
+	psm3/ptl_ips/ips_crc32.c \
+	psm3/ptl_ips/ips_epstate.c \
+	psm3/ptl_ips/ips_epstate.h \
+	psm3/ptl_ips/ips_expected_proto.h \
+	psm3/ptl_ips/ips_opp_path_rec.c \
+	psm3/ptl_ips/ips_path_rec.c \
+	psm3/ptl_ips/ips_path_rec.h \
+	psm3/ptl_ips/ips_proto.c \
+	psm3/ptl_ips/ips_proto.h \
+	psm3/ptl_ips/ips_proto_am.c \
+	psm3/ptl_ips/ips_proto_am.h \
+	psm3/ptl_ips/ips_proto_connect.c \
+	psm3/ptl_ips/ips_proto_connect.h \
+	psm3/ptl_ips/ips_proto_dump.c \
+	psm3/ptl_ips/ips_proto_expected.c \
+	psm3/ptl_ips/ips_proto_header.h \
+	psm3/ptl_ips/ips_proto_help.h \
+	psm3/ptl_ips/ips_proto_internal.h \
+	psm3/ptl_ips/ips_proto_mq.c \
+	psm3/ptl_ips/ips_proto_params.h \
+	psm3/ptl_ips/ips_proto_recv.c \
+	psm3/ptl_ips/ips_recvhdrq.h \
+	psm3/ptl_ips/ips_recvq.c \
+	psm3/ptl_ips/ips_recvq.h \
+	psm3/ptl_ips/ips_scb.c \
+	psm3/ptl_ips/ips_scb.h \
+	psm3/ptl_ips/ips_tidflow.c \
+	psm3/ptl_ips/ips_tidflow.h \
+	psm3/ptl_ips/ptl.c \
+	psm3/ptl_ips/ptl_fwd.h \
+	psm3/ptl_ips/ptl_ips.h \
+	psm3/ptl_ips/ptl_rcvthread.c
+psm3_libptl_ips_la_CPPFLAGS = \
+	-I$(top_srcdir)/psm3/ptl_ips/ \
+	$(AM_CPPFLAGS) $(psm3_CPPFLAGS) $(_psm3_cppflags)
+psm3_libptl_ips_la_CFLAGS = \
+	$(AM_CFLAGS) $(psm3_CFLAGS) $(_psm3_cflags)
+psm3_libptl_ips_la_DEPENDENCIES = \
+	psm3/libutils.la
+
+psm3_libptl_self_la_SOURCES = \
+	psm3/ptl_self/ptl.c \
+	psm3/ptl_self/ptl_fwd.h
+psm3_libptl_self_la_CPPFLAGS = \
+	-I$(top_srcdir)/psm3/ptl_self/ \
+	$(AM_CPPFLAGS) $(psm3_CPPFLAGS) $(_psm3_cppflags)
+psm3_libptl_self_la_CFLAGS = \
+	$(AM_CFLAGS) $(psm3_CFLAGS) $(_psm3_cflags)
+
+psm3_libutils_la_SOURCES = \
+	psm3/utils/utils_debug.c \
+	psm3/utils/utils_dsa.c \
+	psm3/utils/utils_dwordcpy-x86_64.c \
+	psm3/utils/utils_env.c \
+	psm3/utils/utils_sysfs.c \
+	psm3/utils/utils_syslog.c \
+	psm3/utils/utils_time.c \
+	psm3/utils/utils_mallopt.c \
+	psm3/include/utils_byteorder.h \
+	psm3/include/utils_debug.h \
+	psm3/include/utils_dsa.h \
+	psm3/include/utils_env.h \
+	psm3/include/utils_macros.h \
+	psm3/include/utils_queue.h \
+	psm3/include/psm_revision.h \
+	psm3/include/utils_sysfs.h \
+	psm3/include/utils_user.h \
+	psm3/include/psm2_mock_testing.h \
+	psm3/include/psm3_rbtree.h \
+	psm3/include/linux-i386/bit_ops.h \
+	psm3/include/linux-i386/sysdep.h \
+	psm3/mpspawn/mpspawn_stats.h
+psm3_libutils_la_CPPFLAGS = \
+	$(AM_CPPFLAGS) $(psm3_CPPFLAGS) $(_psm3_cppflags)
+psm3_libutils_la_CFLAGS = \
+	$(AM_CFLAGS) $(psm3_CFLAGS) $(_psm3_cflags)
+
+psm3_libhal_verbs_la_SOURCES = \
+	psm3/hal_verbs/verbs_ep.c \
+	psm3/hal_verbs/verbs_ep.h \
+	psm3/hal_verbs/verbs_service.c \
+	psm3/hal_verbs/verbs_service.h \
+	psm3/hal_verbs/verbs_user.h \
+	psm3/hal_verbs/verbs_gdrcpy.c \
+	psm3/hal_verbs/verbs_hal.c \
+	psm3/hal_verbs/verbs_hal.h \
+	psm3/hal_verbs/verbs_hal_inline_i.h \
+	psm3/hal_verbs/verbs_ptl_ips.c \
+	psm3/hal_verbs/verbs_rcvthread.c \
+	psm3/hal_verbs/verbs_recvhdrq.c
+psm3_libhal_verbs_la_CPPFLAGS = \
+	-I$(top_srcdir)/psm3/hal_verbs/ \
+	$(AM_CPPFLAGS) $(psm3_CPPFLAGS) $(_psm3_cppflags)
+psm3_libhal_verbs_la_CFLAGS = \
+	$(AM_CFLAGS) $(psm3_CFLAGS) $(_psm3_cflags)
+
+psm3_libhal_sockets_la_SOURCES = \
+	psm3/hal_sockets/sockets_ep.c \
+	psm3/hal_sockets/sockets_ep.h \
+	psm3/hal_sockets/sockets_service.c \
+	psm3/hal_sockets/sockets_service.h \
+	psm3/hal_sockets/sockets_user.h \
+	psm3/hal_sockets/sockets_gdrcpy.c \
+	psm3/hal_sockets/sockets_hal.c \
+	psm3/hal_sockets/sockets_hal.h \
+	psm3/hal_sockets/sockets_hal_inline_i.h \
+	psm3/hal_sockets/sockets_proto.c \
+	psm3/hal_sockets/sockets_ptl_ips.c \
+	psm3/hal_sockets/sockets_rcvthread.c \
+	psm3/hal_sockets/sockets_recvhdrq.c
+psm3_libhal_sockets_la_CPPFLAGS = \
+	-I$(top_srcdir)/psm3/hal_sockets/ \
+	$(AM_CPPFLAGS) $(psm3_CPPFLAGS) $(_psm3_cppflags)
+psm3_libhal_sockets_la_CFLAGS = \
+	$(AM_CFLAGS) $(psm3_CFLAGS) $(_psm3_cflags)
+
+psm3_libpsm3i_la_SOURCES = \
+	psm3/psm.c \
+	psm3/psm_am.c \
+	psm3/psm_am_internal.h \
+	psm3/psm_config.h \
+	psm3/psm_context.c \
+	psm3/psm_context.h \
+	psm3/psm_diags.c \
+	psm3/psm_ep.c \
+	psm3/psm_ep.h \
+	psm3/psm_ep_connect.c \
+	psm3/psm_error.c \
+	psm3/psm_error.h \
+	psm3/psm_help.h \
+	psm3/psm_lock.h \
+	psm3/psm_log.h \
+	psm3/psm_memcpy.c \
+	psm3/psm_mock.c \
+	psm3/psm_mpool.c \
+	psm3/psm_mpool.h \
+	psm3/psm_mq.c \
+	psm3/psm_mq_internal.h \
+	psm3/psm_mq_recv.c \
+	psm3/psm_mq_utils.c \
+	psm3/psm_netutils.h \
+	psm3/psm_nic_select.c \
+	psm3/psm_nic_select.h \
+	psm3/psm_oneapi_ze.c \
+	psm3/psm_perf.c \
+	psm3/psm_perf.h \
+	psm3/psm_rndv_mod.c \
+	psm3/psm_rndv_mod.h \
+	psm3/psm_stats.c \
+	psm3/psm_stats.h \
+	psm3/psm_sysbuf.c \
+	psm3/psm_sysbuf.h \
+	psm3/psm_timer.c \
+	psm3/psm_timer.h \
+	psm3/psm_uffd.c \
+	psm3/psm_uffd.h \
+	psm3/psm_user.h \
+	psm3/psm_utils.c \
+	psm3/psm_utils.h \
+	psm3/psm_verbs_mr.c \
+	psm3/psm_verbs_mr.h \
+	psm3/psmi_wrappers.c \
+	psm3/psmi_wrappers.h \
+	psm3/psm2.h \
+	psm3/psm2_am.h \
+	psm3/psm2_hal.c \
+	psm3/psm2_hal_loopback.c \
+	psm3/psm2_hal.h \
+	psm3/psm2_hal_loopback.h \
+	psm3/psm2_hal_inline_t.h \
+	psm3/psm2_mq.h \
+	psm3/ptl.h
+psm3_libpsm3i_la_CPPFLAGS = \
+	-I$(top_srcdir)/psm3/include/ \
+	$(AM_CPPFLAGS) $(psm3_CPPFLAGS) $(_psm3_cppflags)
+psm3_libpsm3i_la_CFLAGS = \
+	$(AM_CFLAGS) $(psm3_CFLAGS) $(_psm3_cflags)
+
+nodist_psm3_libpsm3i_la_SOURCES = \
+	psm3/psm2_hal_inlines_i.h \
+	psm3/psm2_hal_inlines_d.h
+
+psm3_libpsm3i_la_LIBADD = \
+	psm3/libutils.la \
+	psm3/libptl_am.la \
+	psm3/libptl_ips.la \
+	psm3/libptl_self.la \
+	psm3/libhal_verbs.la \
+	psm3/libhal_sockets.la
+
+psm3_libpsm3i_la_DEPENDENCIES = \
+	psm3/libutils.la \
+	psm3/libptl_am.la \
+	psm3/libptl_ips.la \
+	psm3/libptl_self.la \
+	psm3/libhal_verbs.la \
+	psm3/libhal_sockets.la
+
+_psm3_extra_dist = \
+	psm3/include/psm3_rbtree.c \
+	psm3/hal_verbs/verbs_spio.c \
+	psm3/hal_sockets/sockets_spio.c \
+	psm3/utils/utils_dwordcpy-x86_64-fast.S
+EXTRA_DIST += $(_psm3_extra_dist)
+
+chksum_srcs += \
+	$(psm3_libptl_am_la_SOURCES) \
+	$(psm3_libptl_ips_la_SOURCES) \
+	$(psm3_libptl_self_la_SOURCES) \
+	$(psm3_libutils_la_SOURCES) \
+	$(psm3_libhal_verbs_la_SOURCES) \
+	$(psm3_libhal_sockets_la_SOURCES) \
+	$(psm3_libpsm3i_la_SOURCES) \
+	$(_psm3_extra_dist)

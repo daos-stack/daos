@@ -1,0 +1,115 @@
+# Regex patterns of tests to exclude in runfabtests.sh
+
+# atomic ops not supported
+atomic
+
+# dgram endpoints not supported
+dgram
+
+multi_ep
+
+# tests use counters, but counters not supported
+multi_mr
+rma_event
+
+# scalable endpoints not supported
+scalable_ep
+
+# shared av not supported
+shared_av
+
+# triggered ops not supported
+trigger
+
+# unexpected message test requires FI_TAGGED
+# which FI_EP_MSG does not support
+unexpected_msg -e msg
+
+# prefix mode not supported
+-k
+
+# shared context tests need to be evaluated for support
+# some subset may be supported, but do not currently work
+shared_ctx
+
+# multi_recv not supported by standard msg endpoints
+multi_recv -e msg
+
+# collective offload not supported
+fi_multinode_coll
+
+# IO URING related tests
+
+# fi_eq_test failes fi_eq_read of empty EQ with -4
+fi_eq_test
+
+# fi_cm_data fails with fi_eq_sread(): functional/cm_data.c:134,
+# ret=-4 (Interrupted system call)
+fi_cm_data
+
+# fi_cq_data -e msg -o senddata fails with
+# fi_eq_sread(): common/shared.c:1165, ret=-4 (Interrupted system call)
+fi_cq_data -e msg -o senddata
+
+# fi_cq_data -e msg -o writedata fails with
+# fi_eq_sread(): common/shared.c:1165, ret=-4 (Interrupted system call)
+fi_cq_data -e msg -o writedata
+
+# fi_msg fails with
+# fi_eq_sread(): common/shared.c:1165, ret=-4 (Interrupted system call)
+fi_msg
+
+# fi_msg_epoll fails with
+# fi_eq_sread(): common/shared.c:1165, ret=-4 (Interrupted system call)
+fi_eq_spread
+
+# fi_msg_sockets fails with
+# fi_eq_sread(): functional/msg_sockets.c:183, ret=-4 (Interrupted system call)
+fi_msg_sockets
+
+# fi_unexpected_msg -e rdm fails with no message
+fi_unexpected_msg -e rdm
+
+# fi_bw -e msg fails with
+# fi_eq_sread(): common/shared.c:1165, ret=-4 (Interrupted system call)
+fi_bw -e msg
+
+# fi_bw fails by hanging
+# This is a suspected race condition
+fi_bw
+
+# fi_msg_pingpong fails with
+# fi_eq_sread(): common/shared.c:1127, ret=-4 (Interrupted system call)
+fi_msg_pingpong
+
+# fi_rdm_cntr_pingpong passes but reports errors of
+# fi_cntr_wait(): common/shared.c:2708, ret=-4 (Interrupted system call)
+fi_rdm_cntr_pingpong
+
+# fi_msg_bw fails with
+# fi_eq_sread(): common/shared.c:1127, ret=-4 (Interrupted system call)
+fi_msg_bw
+
+# fi_rma_bw -e msg -o write fails with
+# fi_eq_sread(): common/shared.c:1127, ret=-4 (Interrupted system call)
+fi_rma_bw -e msg -o write
+
+# fi_rma_bw -e msg -o read fails with
+# fi_eq_sread(): common/shared.c:1127, ret=-4 (Interrupted system call)
+fi_rma_bw -e msg -o read
+
+# fi_rma_bw -e msg -o writedata fails with
+# fi_eq_sread(): common/shared.c:1127, ret=-4 (Interrupted system call)
+fi_rma_bw -e msg -o writedata
+
+# fi_ubertest fails many tests with
+# ubertest/test_ctrl.c:602, ret=-125 (Operation canceled)
+# fabtests:common/shared.c:2891: cq_readerr 125 (Operation canceled), provider errno: 107 (Transport endpoint is not connected)
+# ft_sock_recv(): ubertest/uber.c:356, ret=-107 (Transport endpoint is not connected)
+fi_ubertest
+
+# fi_multinode -x msg fails with no output
+fi_multinode -x msg
+
+# fi_multinode -x rma fails with no output
+fi_multinode -x rma

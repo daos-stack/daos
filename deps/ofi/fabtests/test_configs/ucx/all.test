@@ -1,0 +1,41 @@
+#: "Suite of tests for the ucx provider"
+{
+	prov_name: ucx
+	test_type: [
+		FT_TEST_LATENCY,
+		FT_TEST_BANDWIDTH,
+	],
+	class_function: [
+		FT_FUNC_SEND,
+		FT_FUNC_SENDV,
+		FT_FUNC_SENDMSG,
+	],
+	ep_type: [
+		FI_EP_RDM,
+	],
+	test_class: [
+		FT_CAP_MSG,
+		FT_CAP_TAGGED,
+	],
+	mr_mode: [FI_MR_LOCAL, FI_MR_VIRT_ADDR, FI_MR_ALLOCATED, FI_MR_PROV_KEY, FI_MR_RAW],
+},
+{
+	prov_name: ucx
+	test_type: [
+		FT_TEST_LATENCY,
+		FT_TEST_BANDWIDTH,
+	],
+	class_function: [
+		FT_FUNC_WRITE,
+		FT_FUNC_WRITEV,
+		FT_FUNC_READ,
+		FT_FUNC_READV,
+	],
+	ep_type: [
+		FI_EP_RDM,
+	],
+	test_class: [
+		FT_CAP_RMA,
+	],
+	mr_mode: [FI_MR_LOCAL, FI_MR_VIRT_ADDR, FI_MR_ALLOCATED, FI_MR_PROV_KEY, FI_MR_RAW],
+},

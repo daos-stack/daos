@@ -1,0 +1,7 @@
+# Regex patterns of tests to exclude in runfabtests.sh
+
+# Exclude all prefix tests
+-k
+-e dgram
+dgram
+multinode_coll

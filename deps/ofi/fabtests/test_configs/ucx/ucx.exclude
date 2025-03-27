@@ -1,0 +1,48 @@
+# Regex patterns of tests to exclude in runfabtests.sh
+# Exclude all prefix tests
+-k
+# Exclude delivery completion tests
+-U
+# av_test supports only FI_SOCKADDR
+av_test
+
+# Exclude FI_EP_MSG and FI_EP_DGRAM tests
+^fi_msg
+^fi_dgram
+-e msg
+-e dgram
+getinfo
+rdm g00n13s
+cm_data
+cq_data
+shared_ctx
+scalable_ep
+
+# FI_RMA_EVENT not supported
+rdm_rma_event
+multi_mr
+
+# FI_TRIGGER not supported
+rdm_rma_trigger
+
+# shared AV not supported
+shared_av
+
+# FI_DIRECTED_RECV not supported
+unexpected_msg
+
+# failing tests;need to investigate.
+# temporarily disabled.
+multinode
+multi_recv
+cntr_pingpong
+
+# CQ data not supported
+writedata
+# FI_ATOMICS not supported
+rdm_atomic
+# FI_INJECT_COMPLETE not supported
+-A inj_complete
+
+# Fails as a race condition because of segfault
+rdm_tagged_peek

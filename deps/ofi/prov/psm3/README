@@ -1,0 +1,28 @@
+This is derived from libfabric source.  See libfabric for README, AUTHORS, COPYING
+and other notices.
+
+Before building, set CONFIG_OPTS
+   If building for GPU (Intel GPU or NVIDIA):
+      CONFIG_OPTS="--with-oneapi-ze=/usr"
+      -or-
+      CONFIG_OPTS="--with-cuda=/usr/local/cuda"
+   else (CPU only - CONFIG_OPTS should be empty)
+      CONFIG_OPTS=
+
+To Build PSM3 OFI Provider:
+1. ./configure $CONFIG_OPTS
+2. make -j
+
+To Build PSM3 OFI Provider RPM:
+1. ./configure $CONFIG_OPTS
+2. export VER=$(rpmspec --query --srpm --queryformat "%{version}\n" libpsm3-fi.spec)
+3. mkdir -p rpmbuild/{SPECS,SOURCES}
+4. git archive --format=tar --prefix=libpsm3-fi-${VER}/ HEAD | bzip2 > rpmbuild/SOURCES/libpsm3-fi-${VER}.tar.bz2
+5. rpmbuild --define "_topdir $(pwd)/rpmbuild" --define "configopts LDFLAGS=-Wl,--build-id ${CONFIG_OPTS}" -ba libpsm3-fi.spec
+
+To Build PSM3 OFI Provider deb:
+1. ./configure $CONFIG_OPTS
+2. export VER=$(grep Version: libpsm3-fi.spec | cut -d' ' -f2)
+3. git archive --format=tar --prefix=libpsm3-fi-${VER}/ HEAD | tar xf -
+4. cd libpsm3-fi-${VER}
+5. dpkg-buildpackage

@@ -1,0 +1,9 @@
+#
+# Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2021. ALL RIGHTS RESERVED.
+# See file LICENSE for terms.
+#
+
+EXTRA_DIST = ucx-$(PKG_CONFIG_NAME).pc.in
+pkgconfigdir = $(libdir)/pkgconfig
+pkgconfig_DATA = ucx-$(PKG_CONFIG_NAME).pc
+

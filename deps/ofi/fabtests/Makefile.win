@@ -1,0 +1,202 @@
+
+
+!if "$(arch)" == ""
+arch = x64
+!endif
+
+!if "$(config)" == ""
+config = Debug-v140
+!endif
+
+output_root = .\\
+
+!if "$(config)" == "Debug-v140"
+outdir = $(output_root)$(arch)\debug-v140
+CFLAGS = $(CFLAGS) /Zi /Od /MTd
+!endif
+!if "$(config)" == "Debug-v141"
+outdir = $(output_root)$(arch)\debug-v141
+CFLAGS = $(CFLAGS) /Zi /Od /MTd
+!endif
+!if "$(config)" == "Debug-v142"
+outdir = $(output_root)$(arch)\debug-v142
+CFLAGS = $(CFLAGS) /Zi /Od /MTd
+!endif
+!if "$(config)" == "Debug-Efa-v142"
+outdir = $(output_root)$(arch)\debug-efa-v142
+CFLAGS = $(CFLAGS) /Zi /Od /MTd
+!endif
+!if "$(config)" == "Release-v140"
+outdir = $(output_root)$(arch)\release-v140
+CFLAGS = $(CFLAGS) /O2 /MT
+!endif
+!if "$(config)" == "Release-v141"
+outdir = $(output_root)$(arch)\release-v141
+CFLAGS = $(CFLAGS) /O2 /MT
+!endif
+!if "$(config)" == "Release-v142"
+outdir = $(output_root)$(arch)\release-v142
+CFLAGS = $(CFLAGS) /O2 /MT
+!endif
+!if "$(config)" == "Release-Efa-v142"
+outdir = $(output_root)$(arch)\release-efa-v142
+CFLAGS = $(CFLAGS) /O2 /MT
+!endif
+
+basedeps = common\hmem.c common\shared.c \
+	common\windows\getopt.c common\windows\osd.c \
+	common\hmem_cuda.c common\hmem_rocr.c common\hmem_ze.c \
+	common\hmem_neuron.c common\hmem_synapseai.c
+
+includes = /Iinclude /Iinclude\windows /I..\include /FIft_osd.h \
+	/Iinclude\windows\getopt /Imultinode\include
+defines = /DGETOPT_STATIC
+libs = ..\$(arch)\$(config)\libfabric.lib Ws2_32.lib
+
+CFLAGS = $(CFLAGS) $(includes) $(defines)
+
+#all: complex functional
+
+all: benchmarks functional unit multinode
+
+{benchmarks}.c{$(outdir)}.exe:
+	if not exist $(@D) mkdir $(@D)
+	$(CC) /Fe$@ $** $(baseincludes) $(CFLAGS) $(libs)
+
+{functional}.c{$(outdir)}.exe:
+	if not exist $(@D) mkdir $(@D)
+	$(CC) /Fe$@ $** $(baseincludes) $(CFLAGS) $(libs)
+
+{unit}.c{$(outdir)}.exe:
+	if not exist $(@D) mkdir $(@D)
+	$(CC) /Fe$@ $** $(baseincludes) $(CFLAGS) $(libs)
+
+
+benchmarks: $(outdir)\dgram_pingpong.exe $(outdir)\msg_bw.exe \
+	$(outdir)\msg_pingpong.exe $(outdir)\rdm_cntr_pingpong.exe \
+	$(outdir)\rdm_pingpong.exe $(outdir)\rma_pingpong.exe $(outdir)\rdm_tagged_bw.exe \
+	$(outdir)\rdm_bw.exe $(outdir)\rdm_tagged_pingpong.exe $(outdir)\rma_bw.exe
+
+functional: $(outdir)\av_xfer.exe $(outdir)\bw.exe $(outdir)\cm_data.exe $(outdir)\cq_data.exe \
+	$(outdir)\dgram.exe $(outdir)\dgram_waitset.exe $(outdir)\msg.exe $(outdir)\msg_epoll.exe \
+	$(outdir)\inject_test.exe $(outdir)\msg_sockets.exe $(outdir)\multi_mr.exe \
+	$(outdir)\multi_ep.exe $(outdir)\multi_recv.exe $(outdir)\poll.exe $(outdir)\rdm.exe \
+	$(outdir)\rdm_atomic.exe $(outdir)\rdm_multi_client.exe $(outdir)\rdm_rma_event.exe \
+	$(outdir)\rdm_rma_trigger.exe $(outdir)\rdm_shared_av.exe $(outdir)\rdm_tagged_peek.exe \
+	$(outdir)\recv_cancel.exe $(outdir)\scalable_ep.exe $(outdir)\shared_ctx.exe \
+	$(outdir)\unexpected_msg.exe
+
+unit: $(outdir)\av_test.exe $(outdir)\cntr_test.exe $(outdir)\cq_test.exe $(outdir)\dom_test.exe \
+	$(outdir)\eq_test.exe $(outdir)\getinfo_test.exe $(outdir)\mr_test.exe
+
+multinode: $(outdir)\multinode.exe $(outdir)\multinode_coll.exe
+
+complex: $(outdir)\complex.exe
+
+clean:
+	if exist $(outdir) rmdir /s /q $(outdir)
+	del *.obj
+
+$(outdir)\dgram_pingpong.exe: {benchmarks}dgram_pingpong.c $(basedeps) {benchmarks}benchmark_shared.c
+
+$(outdir)\msg_bw.exe: {benchmarks}msg_bw.c $(basedeps) {benchmarks}benchmark_shared.c
+
+$(outdir)\msg_pingpong.exe: {benchmarks}msg_pingpong.c $(basedeps) {benchmarks}benchmark_shared.c
+
+$(outdir)\rdm_cntr_pingpong.exe: {benchmarks}rdm_cntr_pingpong.c $(basedeps) {benchmarks}benchmark_shared.c
+
+$(outdir)\rdm_bw.exe: {benchmarks}rdm_bw.c $(basedeps) {benchmarks}benchmark_shared.c
+
+$(outdir)\rdm_pingpong.exe: {benchmarks}rdm_pingpong.c $(basedeps) {benchmarks}benchmark_shared.c
+
+$(outdir)\rma_pingpong.exe: {benchmarks}rma_pingpong.c $(basedeps) {benchmarks}benchmark_shared.c
+
+$(outdir)\rdm_tagged_bw.exe: {benchmarks}rdm_tagged_bw.c $(basedeps) {benchmarks}benchmark_shared.c
+
+$(outdir)\rdm_tagged_pingpong.exe: {benchmarks}rdm_tagged_pingpong.c $(basedeps) {benchmarks}benchmark_shared.c
+
+$(outdir)\rma_bw.exe: {benchmarks}rma_bw.c $(basedeps) {benchmarks}benchmark_shared.c
+
+
+$(outdir)\av_xfer.exe: {functional}av_xfer.c $(basedeps)
+
+$(outdir)\bw.exe: {functional}bw.c $(basedeps)
+
+$(outdir)\cm_data.exe: {functional}cm_data.c $(basedeps)
+
+$(outdir)\cq_data.exe: {functional}cq_data.c $(basedeps)
+
+$(outdir)\dgram.exe: {functional}dgram.c $(basedeps)
+
+$(outdir)\dgram_waitset.exe: {functional}dgram_waitset.c $(basedeps)
+
+$(outdir)\msg.exe: {functional}msg.c $(basedeps)
+
+$(outdir)\msg_epoll.exe: {functional}msg_epoll.c $(basedeps)
+
+$(outdir)\inject_test.exe: {functional}inject_test.c $(basedeps)
+
+$(outdir)\msg_sockets.exe: {functional}msg_sockets.c $(basedeps)
+
+$(outdir)\multi_mr.exe: {functional}multi_mr.c $(basedeps)
+
+$(outdir)\multi_ep.exe: {functional}multi_ep.c $(basedeps)
+
+$(outdir)\multi_recv.exe: {functional}multi_recv.c $(basedeps)
+
+$(outdir)\poll.exe: {functional}poll.c $(basedeps)
+
+$(outdir)\rdm.exe: {functional}rdm.c $(basedeps)
+
+$(outdir)\rdm_atomic.exe: {functional}rdm_atomic.c $(basedeps)
+
+$(outdir)\rdm_multi_client.exe: {functional}rdm_multi_client.c $(basedeps)
+
+$(outdir)\rdm_rma_event.exe: {functional}rdm_rma_event.c $(basedeps)
+
+$(outdir)\rdm_rma_trigger.exe: {functional}rdm_rma_trigger.c $(basedeps)
+
+$(outdir)\rdm_shared_av.exe: {functional}rdm_shared_av.c $(basedeps)
+
+$(outdir)\rdm_tagged_peek.exe: {functional}rdm_tagged_peek.c $(basedeps)
+
+$(outdir)\recv_cancel.exe: {functional}recv_cancel.c $(basedeps)
+
+$(outdir)\scalable_ep.exe: {functional}scalable_ep.c $(basedeps)
+
+$(outdir)\shared_ctx.exe: {functional}shared_ctx.c $(basedeps)
+
+$(outdir)\unexpected_msg.exe: {functional}unexpected_msg.c $(basedeps)
+
+
+$(outdir)\av_test.exe: {unit}av_test.c $(basedeps) {unit}common.c
+
+$(outdir)\cntr_test.exe: {unit}cntr_test.c $(basedeps) {unit}common.c
+
+$(outdir)\cq_test.exe: {unit}cq_test.c $(basedeps) {unit}common.c
+
+$(outdir)\dom_test.exe: {unit}dom_test.c $(basedeps) {unit}common.c
+
+$(outdir)\eq_test.exe: {unit}eq_test.c $(basedeps) {unit}common.c
+
+$(outdir)\getinfo_test.exe: {unit}getinfo_test.c $(basedeps) {unit}common.c
+
+$(outdir)\mr_test.exe: {unit}mr_test.c $(basedeps) {unit}common.c
+
+
+$(outdir)\multinode.exe: {multinode\src}harness.c $(basedeps) {multinode\src}core.c {multinode\src}pattern.c {multinode\src}timing.c
+	if not exist $(@D) mkdir $(@D)
+	$(CC) /Fe$@ $** $(baseincludes) $(CFLAGS) $(libs)
+
+$(outdir)\multinode_coll.exe: {multinode\src}harness.c $(basedeps) {multinode\src}core_coll.c
+	if not exist $(@D) mkdir $(@D)
+	$(CC) /Fe$@ $** $(baseincludes) $(CFLAGS) $(libs)
+
+
+$(outdir)\complex.exe: {complex}ft_comm.c {complex}ft_comp.c {complex}ft_config.c {complex}ft_domain.c {complex}ft_endpoint.c {complex}ft_main.c {complex}ft_msg.c {complex}ft_test.c $(basedeps)
+	if not exist $(@D) mkdir $(@D)
+	$(CC) /Fe$@ $** $(baseincludes) $(CFLAGS) $(libs)
+
+
+
+

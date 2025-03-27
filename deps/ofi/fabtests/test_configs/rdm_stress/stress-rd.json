@@ -1,0 +1,33 @@
+"
+Do not remove quotes around this comment header.
+
+This is a sample control file for fi_rdm_stress
+
+* op is the command to execute.
+  Valid commands:
+	* noop - do nothing
+	* hello - initiate a conversation
+	* goodbye - hang up nicely
+	* msg_req - send request for a message
+	* msg_resp - receive response to message request
+	* tag_req - send request for a tagged message
+	* tag_resp - receive response to tagged message request
+	* read_req - send request for a RMA read
+	* read_resp - receive response to RMA read request
+	* write_req - send request for a RMA write
+	* write_resp - receive response to RMA write request
+	* sleep - sleep for some ms
+	* exit - exit process
+
+* size specifies amount of data to transfer.
+* offset is the starting location for data.
+* ms is time in milliseconds.
+* count specifies number of times to execute the op.
+
+Valid configuration is in the JSON array definition below.
+"
+[
+	{ "op" : "read_req", "size" : 10000000 },
+	{ "op" : "sleep", "ms" : 1 },
+	{ "op" : "exit" }
+]

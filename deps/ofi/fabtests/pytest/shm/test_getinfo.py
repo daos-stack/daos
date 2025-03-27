@@ -1,0 +1,1 @@
+from default.test_getinfo import test_getinfo

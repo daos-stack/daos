@@ -1,0 +1,31 @@
+Introduction
+============
+Jenkins is a CI/CD (Continuous Integration/Continuous Development) Pipelining
+tool that Intel uses to test code changes to libfabric. It follows the
+Jenkinsfile pipeline stages to build, test, and cleanup resources.
+
+The scripts that this pipeline uses are stored in an internal Intel CI
+repository.
+
+Tests, Middlewares and Libraries supported by Intel CI/CD are:
+	Fabtests
+	Intel MPI
+	MPICH
+	OMPI
+	OneCCL
+	OneCCL-GPU
+	DAOS
+	DSA
+	Open SHMEM
+	OSU
+
+Support
+=======
+Bugs or issues may be submitted directly to the Github issues list:
+
+https://github.com/ofiwg/libfabric/issues
+
+Additionally, users may post questions, comments, bugs, etc. to the Libfabric
+users mailing list.
+
+libfabric-users@lists.openfabrics.org
