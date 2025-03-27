@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -1214,12 +1215,12 @@ func TestDmg_PoolListCmd_Errors(t *testing.T) {
 				UnaryResponseSet: responses,
 			})
 
-			PoolListCmd := new(PoolListCmd)
-			PoolListCmd.setInvoker(mi)
-			PoolListCmd.SetLog(log)
-			PoolListCmd.setConfig(tc.ctlCfg)
+			cmd := new(poolListCmd)
+			cmd.setInvoker(mi)
+			cmd.SetLog(log)
+			cmd.setConfig(tc.ctlCfg)
 
-			gotErr := PoolListCmd.Execute(nil)
+			gotErr := cmd.Execute(nil)
 			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
