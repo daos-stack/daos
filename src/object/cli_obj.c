@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2084,12 +2085,27 @@ obj_bulk_fini(struct obj_auxi_args *obj_auxi)
 	obj_auxi->bulks = NULL;
 }
 
+static inline bool
+obj_sgls_bulk_needed(struct obj_auxi_args *obj_auxi, d_sg_list_t *sgls, unsigned int nr)
+{
+	daos_size_t sgls_size;
+
+	/* inline fetch needs to pack sgls buffer into RPC so uses it to check
+	 * if need bulk transferring.
+	 */
+	sgls_size = daos_sgls_packed_size(sgls, nr, NULL);
+	if (sgls_size >= DAOS_BULK_LIMIT ||
+	    (obj_is_ec(obj_auxi->obj) && !obj_auxi->reasb_req.orr_single_tgt))
+		return true;
+
+	return false;
+}
+
 static int
 obj_rw_bulk_prep(struct dc_object *obj, daos_iod_t *iods, d_sg_list_t *sgls,
 		 unsigned int nr, bool update, bool bulk_bind,
 		 tse_task_t *task, struct obj_auxi_args *obj_auxi)
 {
-	daos_size_t		sgls_size;
 	crt_bulk_perm_t		bulk_perm;
 	int			rc = 0;
 
@@ -2097,12 +2113,7 @@ obj_rw_bulk_prep(struct dc_object *obj, daos_iod_t *iods, d_sg_list_t *sgls,
 	     obj_auxi->bulks != NULL) || obj_auxi->reasb_req.orr_size_fetch || sgls == NULL)
 		return 0;
 
-	/* inline fetch needs to pack sgls buffer into RPC so uses it to check
-	 * if need bulk transferring.
-	 */
-	sgls_size = daos_sgls_packed_size(sgls, nr, NULL);
-	if (sgls_size >= DAOS_BULK_LIMIT ||
-	    (obj_is_ec(obj) && !obj_auxi->reasb_req.orr_single_tgt)) {
+	if (obj_sgls_bulk_needed(obj_auxi, sgls, nr)) {
 		bulk_perm = update ? CRT_BULK_RO : CRT_BULK_RW;
 		rc = obj_bulk_prep(sgls, nr, bulk_bind, bulk_perm, task,
 				   &obj_auxi->bulks);
@@ -4461,38 +4472,237 @@ obj_size_fetch_cb(const struct dc_object *obj, struct obj_auxi_args *obj_auxi)
 	}
 }
 
+#define SMALL_IOV_THRESHOLD 64
+#define FRAGMENT_SIZE       512
+#define FRAGMENT_COUNT      256
+#define MAX_MERGE_SIZE      (16 << 20)
+
+static inline bool
+skip_sgl_iov(bool update, d_iov_t *iov)
+{
+	return ((update && iov->iov_len == 0) || iov->iov_buf_len == 0);
+}
+
+static int
+sgl_alloc_bitmaps_needed(uint64_t ***bitmaps, uint32_t i, uint32_t bitmap_nr, uint32_t bitmap_sz)
+{
+	D_ASSERT(bitmaps != NULL && i < bitmap_nr);
+	if (*bitmaps == NULL) {
+		D_ALLOC_ARRAY(*bitmaps, bitmap_nr);
+		if (!*bitmaps)
+			return -DER_NOMEM;
+	}
+
+	/* Caller will free memory */
+	if ((*bitmaps)[i] == NULL) {
+		D_ALLOC_ARRAY((*bitmaps)[i], bitmap_sz);
+		if (!(*bitmaps)[i])
+			return -DER_NOMEM;
+	}
+
+	return 0;
+}
+
+static int
+merge_tiny_iovs(struct sgl_merge_ctx *ctx, d_sg_list_t *sg, uint32_t i, uint32_t j,
+		uint32_t bitmap_nr, bool update)
+{
+	d_iov_t *iov_left, *iov_right, *iov;
+	bool     merged    = false;
+	uint32_t merge_idx = j;
+	uint32_t bitmap_sz = (sg->sg_nr + 63) / 64;
+	int      rc;
+
+	if (ctx->merged_bitmaps && ctx->merged_bitmaps[i] &&
+	    isset_range((uint8_t *)ctx->merged_bitmaps[i], j, j))
+		return 1;
+
+	iov = &sg->sg_iovs[j];
+	/* try to merge with left iov */
+	while (merge_idx >= 1) {
+		iov_left = &sg->sg_iovs[merge_idx - 1];
+		if (skip_sgl_iov(update, iov_left)) {
+			merge_idx--;
+			continue;
+		}
+
+		if (iov->iov_buf_len + iov_left->iov_buf_len <= MAX_MERGE_SIZE) {
+			rc =
+			    sgl_alloc_bitmaps_needed(&ctx->merged_bitmaps, i, bitmap_nr, bitmap_sz);
+			if (rc)
+				return rc;
+			setbits64(ctx->merged_bitmaps[i], merge_idx - 1, 1);
+			setbits64(ctx->merged_bitmaps[i], j, 1);
+			merged = true;
+		}
+		break;
+	}
+	if (merged)
+		return 1;
+
+	/* try to merge with right iov */
+	merge_idx = j + 1;
+	while (merge_idx < sg->sg_nr) {
+		iov_right = &sg->sg_iovs[merge_idx];
+
+		if (skip_sgl_iov(update, iov_right)) {
+			merge_idx++;
+			continue;
+		}
+		if (iov->iov_buf_len + iov_right->iov_buf_len <= MAX_MERGE_SIZE) {
+			rc =
+			    sgl_alloc_bitmaps_needed(&ctx->merged_bitmaps, i, bitmap_nr, bitmap_sz);
+			if (rc)
+				return rc;
+			setbits64(ctx->merged_bitmaps[i], merge_idx, 1);
+			setbits64(ctx->merged_bitmaps[i], j, 1);
+			merged = true;
+		}
+		break;
+	}
+
+	return merged ? 1 : 0;
+}
+
+static void
+sgls_dup_free(struct sgl_merge_ctx *ctx, uint32_t nr)
+{
+	uint32_t     i, j;
+	d_sg_list_t *sgls_dup = ctx->sgls_dup;
+
+	if (sgls_dup) {
+		for (i = 0; i < nr; i++) {
+			if (sgls_dup[i].sg_iovs) {
+				for (j = 0; j < sgls_dup[i].sg_nr; j++) {
+					if (ctx->alloc_bitmaps && ctx->alloc_bitmaps[i] &&
+					    isset_range((uint8_t *)ctx->alloc_bitmaps[i], j, j))
+						D_FREE(sgls_dup[i].sg_iovs[j].iov_buf);
+				}
+				d_sgl_fini(&sgls_dup[i], false);
+			}
+		}
+		D_FREE(sgls_dup);
+		ctx->sgls_dup = NULL;
+	}
+	if (ctx->merged_bitmaps) {
+		for (i = 0; i < nr; i++)
+			D_FREE(ctx->merged_bitmaps[i]);
+		D_FREE(ctx->merged_bitmaps);
+		ctx->merged_bitmaps = NULL;
+	}
+	if (ctx->alloc_bitmaps) {
+		for (i = 0; i < nr; i++)
+			D_FREE(ctx->alloc_bitmaps[i]);
+		D_FREE(ctx->alloc_bitmaps);
+		ctx->alloc_bitmaps = NULL;
+	}
+}
+
+static int
+sgls_set_merged_bitmap(struct sgl_merge_ctx *ctx, d_sg_list_t *sg, uint32_t frag_start,
+		       uint32_t frag_chain, uint32_t i, uint32_t j, uint32_t bitmap_nr, bool update,
+		       bool *dup)
+{
+	uint32_t k;
+	d_iov_t *iov;
+	uint32_t bitmap_sz = (sg->sg_nr + 63) / 64;
+	int      rc        = 0;
+
+	if (frag_chain >= FRAGMENT_COUNT) {
+		rc = sgl_alloc_bitmaps_needed(&ctx->merged_bitmaps, i, bitmap_nr, bitmap_sz);
+		if (rc)
+			return rc;
+		D_ASSERT(frag_chain <= bitmap_sz * 64);
+		if (frag_start == j - frag_chain) {
+			setbits64(ctx->merged_bitmaps[i], j - frag_chain, frag_chain);
+		} else {
+			for (k = frag_start; k < j; k++) {
+				iov = &sg->sg_iovs[k];
+				if (!skip_sgl_iov(update, iov))
+					setbits64(ctx->merged_bitmaps[i], k, 1);
+			}
+		}
+		*dup = true;
+	}
+
+	return rc;
+}
+
 /**
- * User possibly provides sgl with iov_len < iov_buf_len, this may cause some troubles for internal
- * handling, such as crt_bulk_create/daos_iov_left() always use iov_buf_len.
- * For that case, we duplicate the sgls and make its iov_buf_len = iov_len.
+ * obj_sgls_dup - Normalize and optimize scatter-gather lists (SGLs)
+ * @obj_auxi: Auxiliary object context
+ * @args: DAOS object operation arguments
+ * @update: Flag indicating update operation constraints
+ *
+ * Handles SGL normalization and optimization through:
+ * 1. IOV Buffer Length Normalization:
+ *    - Ensures iov_buf_len == iov_len for update operations
+ *    - Works around lower layer APIs that use iov_buf_len
+ *
+ * 2. IOV Fragmentation Mitigation:
+ *    a. Merges contiguous small IOVs (<= SMALL_IOV_THRESHOLD)
+ *    b. Combines fragment chains (< FRAGMENT_SIZE) into single buffers
+ *    c. Skips zero-length IOV entries (unsupported by transport)
+ *
+ * 3. Memory Safety:
+ *    - Creates duplicate buffers for merged IOVs
+ *    - Maintains original SGL integrity
+ *
+ * Processing Flow:
+ * 1. Analysis Phase:
+ *    - Scans SGLs to identify merge candidates using bitmaps
+ *    - Marks small IOVs and fragment chains for merging
+ *
+ * 2. Construction Phase:
+ *    a. Allocates merged buffers up to MAX_MERGE_SIZE
+ *    b. Copies data from original IOVs to merged buffers
+ *    c. Builds optimized SGL with normalized IOV entries
+ *
+ * Bitmap Usage:
+ * - merged_bitmaps: Tracks IOVs included in merge operations
+ * - alloc_bitmaps: Marks IOVs requiring allocated buffers
+ *
+ * Return: 0 on success, negative error code on failure
  */
 static int
 obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool update)
 {
-	daos_iod_t	*iod;
-	d_sg_list_t	*sgls_dup, *sgls;
-	d_sg_list_t	*sg, *sg_dup;
-	d_iov_t		*iov, *iov_dup;
-	bool		 dup = false;
-	uint32_t	 i, j, count;
-	int		 rc = 0;
+	daos_iod_t          *iod;
+	d_sg_list_t         *sgls_dup = NULL, *sgls;
+	d_sg_list_t         *sg, *sg_dup;
+	d_iov_t             *iov, *iov_dup;
+	bool                 dup = false;
+	uint32_t             i, j, k, sgl_idx, count = 0, bitmap_sz;
+	int                  rc        = 0;
+	struct sgl_merge_ctx ctx       = {0};
+	bool                 merge_iov = obj_sgls_bulk_needed(obj_auxi, args->sgls, args->nr);
 
 	sgls = args->sgls;
-	if (obj_auxi->rw_args.sgls_dup != NULL || sgls == NULL)
+	if ((obj_auxi->rw_args.merge_ctx && obj_auxi->rw_args.merge_ctx->sgls_dup != NULL) ||
+	    sgls == NULL)
 		return 0;
 
+	/* First pass: Analyze SGL structure and mark merge candidates */
 	for (i = 0; i < args->nr; i++) {
-		sg = &sgls[i];
 		iod = &args->iods[i];
-		for (j = 0, count = 0; j < sg->sg_nr; j++) {
+		sg                  = &sgls[i];
+		uint32_t frag_chain = 0;
+		uint32_t frag_start = 0;
+
+		/* Process each IOV in current SGL */
+		for (j = 0; j < sg->sg_nr; j++) {
 			iov = &sg->sg_iovs[j];
+
+			/* Validate IOV buffer dimensions */
 			if (iov->iov_len > iov->iov_buf_len) {
 				DL_ERROR(-DER_INVAL,
 					 "invalid args, iov_len " DF_U64 ", iov_buf_len" DF_U64,
 					 iov->iov_len, iov->iov_buf_len);
-				return -DER_INVAL;
+				rc = -DER_INVAL;
+				goto cleanup;
 			}
-			if ((update && iov->iov_len == 0) || iov->iov_buf_len == 0) {
+
+			if (skip_sgl_iov(update, iov)) {
 				/** POSIX supports passing 0 length entries in
 				 * iov. Since lower layers don't support this,
 				 * let's remove them when we duplicate.
@@ -4500,70 +4710,241 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
 				dup = true;
 				continue;
 			}
+			/* Detect need for iov_buf_len normalization */
 			if (update && iov->iov_len < iov->iov_buf_len)
 				dup = true;
 			count++;
+
+			/* Skip merging logic for single-IOV SGLs */
+			if (sg->sg_nr == 1 || !merge_iov)
+				break;
+			/* Track mergeable IOV chains */
+			if (iov->iov_buf_len <= FRAGMENT_SIZE) {
+				frag_chain++;
+				if (frag_chain == 1)
+					frag_start = j;
+				/* Merge tiny IOVs below threshold */
+				if (iov->iov_buf_len <= SMALL_IOV_THRESHOLD) {
+					rc = merge_tiny_iovs(&ctx, sg, i, j, args->nr, update);
+					if (rc < 0)
+						goto cleanup;
+					if (rc > 0) {
+						rc  = 0;
+						dup = true;
+					}
+				}
+			} else {
+				/* Finalize current fragment chain */
+				rc = sgls_set_merged_bitmap(&ctx, sg, frag_start, frag_chain, i, j,
+							    args->nr, update, &dup);
+				if (rc)
+					goto cleanup;
+				frag_chain = 0;
+			}
 		}
+		/* Validate non-empty SGL for non-ANY size requests */
 		if (count == 0 && iod->iod_size != DAOS_REC_ANY) {
 			DL_ERROR(-DER_INVAL, "invalid args, sgl contained only 0 length entries");
-			return -DER_INVAL;
+			rc = -DER_INVAL;
+			goto cleanup;
 		}
+		/* Finalize last fragment chain in SGL */
+		rc = sgls_set_merged_bitmap(&ctx, sg, frag_start, frag_chain, i, j, args->nr,
+					    update, &dup);
+		if (rc)
+			goto cleanup;
 	}
-	if (dup == false)
-		return 0;
+
+	if (!dup) {
+		D_ASSERT(ctx.merged_bitmaps == NULL);
+		D_ASSERT(ctx.alloc_bitmaps == NULL);
+		rc = 0;
+		goto cleanup;
+	}
 
 	D_ALLOC_ARRAY(sgls_dup, args->nr);
-	if (sgls_dup == NULL)
-		return -DER_NOMEM;
-
-	for (i = 0; i < args->nr; i++) {
-		sg_dup = &sgls_dup[i];
-		sg = &sgls[i];
-		rc = d_sgl_init(sg_dup, sg->sg_nr);
-		if (rc)
-			goto failed;
-
-		for (j = 0, count = 0; j < sg_dup->sg_nr; j++) {
-			iov = &sg->sg_iovs[j];
-			if ((update && iov->iov_len == 0) || iov->iov_buf_len == 0)
-				continue;
-			iov_dup = &sg_dup->sg_iovs[count++];
-			*iov_dup = *iov;
-			if (update)
-				iov_dup->iov_buf_len = iov_dup->iov_len;
-		}
-		sg_dup->sg_nr = count;
+	if (!sgls_dup) {
+		rc = -DER_NOMEM;
+		goto cleanup;
 	}
+
+	/* Second pass: Build modified SGLs */
+	for (i = 0; i < args->nr; i++) {
+		iod       = &args->iods[i];
+		sg        = &sgls[i];
+		bitmap_sz = (sg->sg_nr + 63) / 64;
+
+		rc = d_sgl_init(&sgls_dup[i], sg->sg_nr);
+		if (rc)
+			goto cleanup;
+
+		sg_dup  = &sgls_dup[i];
+		sgl_idx = 0;
+		/* Process each IOV with merge logic */
+		for (j = 0; j < sg->sg_nr;) {
+			uint64_t merged_buf_size = 0;
+			uint64_t merged_size     = 0;
+			uint32_t merge_start;
+			void    *merged_buf = NULL;
+			uint64_t offset     = 0;
+			d_iov_t *merged_iov;
+
+			iov = &sg->sg_iovs[j];
+			if (skip_sgl_iov(update, iov)) {
+				j++;
+				continue;
+			}
+
+			/* Copy unmerged IOV directly */
+			if (!ctx.merged_bitmaps || !ctx.merged_bitmaps[i] ||
+			    !isset_range((uint8_t *)ctx.merged_bitmaps[i], j, j)) {
+				iov_dup  = &sg_dup->sg_iovs[sgl_idx++];
+				iov      = &sg->sg_iovs[j++];
+				*iov_dup = *iov;
+				if (update)
+					iov_dup->iov_buf_len = iov_dup->iov_len;
+				continue;
+			}
+			/* Calculate merge range within size constraints */
+			merge_start = j;
+			while (j < sg->sg_nr &&
+			       (merged_buf_size + sg->sg_iovs[j].iov_buf_len) <= MAX_MERGE_SIZE) {
+				iov = &sg->sg_iovs[j];
+				if (skip_sgl_iov(update, iov)) {
+					j++;
+					continue;
+				}
+				if (!isset_range((uint8_t *)ctx.merged_bitmaps[i], j, j))
+					break;
+				merged_buf_size += sg->sg_iovs[j].iov_buf_len;
+				merged_size += sg->sg_iovs[j].iov_len;
+				j++;
+			}
+
+			rc = sgl_alloc_bitmaps_needed(&ctx.alloc_bitmaps, i, args->nr, bitmap_sz);
+			if (rc) {
+				rc = -DER_NOMEM;
+				goto cleanup;
+			}
+			D_ALLOC(merged_buf, merged_buf_size);
+			if (!merged_buf) {
+				rc = -DER_NOMEM;
+				goto cleanup;
+			}
+			setbits64(ctx.alloc_bitmaps[i], sgl_idx, 1);
+
+			/* Copy data from original IOVs to merged buffer */
+			offset = 0;
+			for (k = merge_start; k < j; k++) {
+				iov = &sg->sg_iovs[k];
+				if (skip_sgl_iov(update, iov))
+					continue;
+				D_ASSERT(offset < merged_buf_size);
+				memcpy(merged_buf + offset, sg->sg_iovs[k].iov_buf,
+				       sg->sg_iovs[k].iov_len);
+				offset += sg->sg_iovs[k].iov_len;
+			}
+
+			/* Create merged IOV entry */
+			merged_iov = &sgls_dup[i].sg_iovs[sgl_idx++];
+			d_iov_set(merged_iov, merged_buf, merged_buf_size);
+			merged_iov->iov_len = merged_size;
+			if (update)
+				merged_iov->iov_buf_len = merged_iov->iov_len;
+		}
+		sg_dup->sg_nr = sgl_idx;
+	}
+
+	D_ALLOC_PTR(obj_auxi->rw_args.merge_ctx);
+	if (obj_auxi->rw_args.merge_ctx == NULL) {
+		rc = -DER_NOMEM;
+		goto cleanup;
+	}
+	ctx.sgls_dup                  = sgls_dup;
+	ctx.sgls_orig                 = sgls;
+	*obj_auxi->rw_args.merge_ctx  = ctx;
 	obj_auxi->reasb_req.orr_usgls = sgls;
-	obj_auxi->rw_args.sgls_dup = sgls_dup;
 	args->sgls = sgls_dup;
 	return 0;
 
-failed:
-	if (sgls_dup != NULL) {
-		for (i = 0; i < args->nr; i++)
-			d_sgl_fini(&sgls_dup[i], false);
-		D_FREE(sgls_dup);
-	}
+cleanup:
+	ctx.sgls_dup = sgls_dup;
+	sgls_dup_free(&ctx, args->nr);
 	return rc;
 }
 
 static void
 obj_dup_sgls_free(struct obj_auxi_args *obj_auxi)
 {
-	int	i;
+	int                   i, j;
+	struct sgl_merge_ctx *ctx = obj_auxi->rw_args.merge_ctx;
+	d_iov_t              *iov, *iov_dup;
+	daos_obj_rw_t        *api_args;
 
-	if ((obj_auxi->opc == DAOS_OBJ_RPC_UPDATE || obj_auxi->opc == DAOS_OBJ_RPC_FETCH) &&
-	    obj_auxi->rw_args.sgls_dup != NULL) {
-		daos_obj_rw_t	*api_args;
+	if (obj_auxi->opc != DAOS_OBJ_RPC_UPDATE && obj_auxi->opc != DAOS_OBJ_RPC_FETCH)
+		return;
 
-		for (i = 0; i < obj_auxi->iod_nr; i++)
-			d_sgl_fini(&obj_auxi->rw_args.sgls_dup[i], false);
-		D_FREE(obj_auxi->rw_args.sgls_dup);
-		obj_auxi->rw_args.sgls_dup = NULL;
-		api_args = dc_task_get_args(obj_auxi->obj_task);
-		api_args->sgls = obj_auxi->reasb_req.orr_usgls;
+	if (ctx == NULL)
+		return;
+
+	/* Handle fetch operation: copy data from duplicate buffer back to original buffer */
+	if (obj_auxi->opc == DAOS_OBJ_RPC_FETCH) {
+		for (i = 0; i < obj_auxi->iod_nr; i++) {
+			d_sg_list_t *sg_dup       = &ctx->sgls_dup[i];
+			d_sg_list_t *sg_orig      = &ctx->sgls_orig[i];
+			uint32_t     dup_sg_idx   = 0;
+			uint32_t     dup_buf_size = 0;
+			uint32_t     sg_nr_out    = 0;
+			char        *dup_buf;
+
+			if (!ctx->alloc_bitmaps || !ctx->alloc_bitmaps[i])
+				continue;
+
+			D_ASSERT(ctx->merged_bitmaps[i] != NULL);
+			for (j = 0; j < sg_orig->sg_nr && dup_sg_idx < sg_dup->sg_nr_out;) {
+				iov     = &sg_orig->sg_iovs[j];
+				iov_dup = &sg_dup->sg_iovs[dup_sg_idx];
+
+				if (skip_sgl_iov(false, iov)) {
+					j++;
+					continue;
+				}
+
+				/* Direct copy if entry wasn't modified */
+				if (!isset_range((uint8_t *)ctx->merged_bitmaps[i], j, j)) {
+					*iov = *iov_dup;
+					j++;
+					sg_nr_out++;
+					dup_sg_idx++;
+					continue;
+				}
+				if (dup_buf_size == 0) {
+					dup_buf_size = iov_dup->iov_buf_len;
+					dup_buf      = (char *)iov_dup->iov_buf;
+				}
+
+				/* Copy data from duplicate buffer to original buffer */
+				D_ASSERT(dup_buf_size >= iov->iov_buf_len);
+				memcpy((char *)iov->iov_buf, dup_buf, iov->iov_buf_len);
+				dup_buf_size -= iov->iov_buf_len;
+				dup_buf += iov->iov_buf_len;
+				sg_nr_out++;
+				j++;
+
+				/* When current duplicate buffer is exhausted, get next entry */
+				if (dup_buf_size == 0)
+					dup_sg_idx++;
+			}
+			sg_orig->sg_nr_out = sg_nr_out;
+		}
 	}
+
+	sgls_dup_free(ctx, obj_auxi->iod_nr);
+	D_FREE(ctx);
+	obj_auxi->rw_args.merge_ctx = NULL;
+	api_args                    = dc_task_get_args(obj_auxi->obj_task);
+	api_args                    = dc_task_get_args(obj_auxi->obj_task);
+	api_args->sgls              = obj_auxi->reasb_req.orr_usgls;
 }
 
 static void
