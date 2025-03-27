@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -5642,7 +5643,7 @@ ds_obj_coll_punch_handler(crt_rpc_t *rpc)
 		goto out;
 
 	if (ocpi->ocpi_flags & ORF_LEADER && ocpi->ocpi_bulk_tgt_sz > 0) {
-		rc = obj_coll_punch_bulk(rpc, &iov, &proc, &dcts, &dct_nr);
+		rc = obj_coll_punch_bulk(&ioc, rpc, &iov, &proc, &dcts, &dct_nr);
 		if (rc != 0)
 			goto out;
 	} else {
