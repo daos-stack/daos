@@ -1159,7 +1159,7 @@ out:
 	return rc;
 }
 
-int
+static int
 crt_proc_struct_daos_coll_target(crt_proc_t proc, crt_proc_op_t proc_op, struct daos_coll_target *dct)
 {
 	int	size;

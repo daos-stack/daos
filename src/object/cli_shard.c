@@ -1,5 +1,6 @@
 /*
  *  (C) Copyright 2016-2024 Intel Corporation.
+ *  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1468,8 +1469,8 @@ obj_shard_coll_punch_cb(tse_task_t *task, void *data)
 
 int
 dc_obj_shard_coll_punch(struct dc_obj_shard *shard, struct shard_punch_args *args,
-			struct dtx_memberships *mbs, uint32_t mbs_max_size, crt_bulk_t *bulks,
-			uint32_t bulk_sz, struct daos_coll_target *tgts, uint32_t tgt_nr,
+			struct dtx_memberships *mbs, uint32_t mbs_max_size,
+			struct daos_coll_target *tgts, uint32_t tgt_nr,
 			uint32_t max_tgt_size, struct dtx_epoch *epoch, uint64_t api_flags,
 			uint32_t rpc_flags, uint32_t map_ver, uint32_t *rep_ver, tse_task_t *task)
 {
@@ -1505,23 +1506,8 @@ dc_obj_shard_coll_punch(struct dc_obj_shard *shard, struct shard_punch_args *arg
 	ocpi->ocpi_map_ver = map_ver;
 	ocpi->ocpi_flags = rpc_flags;
 
-	if (bulks != NULL) {
-		D_ASSERT(bulk_sz != 0);
-
-		ocpi->ocpi_bulk_tgt_sz = bulk_sz;
-		ocpi->ocpi_bulk_tgt_nr = tgt_nr;
-		ocpi->ocpi_tgt_bulk = bulks[0];
-		ocpi->ocpi_tgts.ca_count = 0;
-		ocpi->ocpi_tgts.ca_arrays = NULL;
-	} else {
-		D_ASSERT(tgts != NULL);
-
-		ocpi->ocpi_bulk_tgt_sz = 0;
-		ocpi->ocpi_bulk_tgt_nr = 0;
-		ocpi->ocpi_tgt_bulk = NULL;
-		ocpi->ocpi_tgts.ca_count = tgt_nr;
-		ocpi->ocpi_tgts.ca_arrays = tgts;
-	}
+	ocpi->ocpi_tgts.ca_count = tgt_nr;
+	ocpi->ocpi_tgts.ca_arrays = tgts;
 
 	ocpi->ocpi_max_tgt_sz = max_tgt_size;
 	ocpi->ocpi_disp_width = 0;
@@ -1539,9 +1525,9 @@ dc_obj_shard_coll_punch(struct dc_obj_shard *shard, struct shard_punch_args *arg
 		D_GOTO(out_req, rc);
 
 	D_DEBUG(DB_IO, "Sending DAOS_OBJ_RPC_COLL_PUNCH RPC %p for "DF_UOID" with DTX "
-		DF_DTI" for task %p, map_ver %u, flags %lx/%x, leader %u/%u, bulk_sz %u\n",
+		DF_DTI" for task %p, map_ver %u, flags %lx/%x, leader %u/%u\n",
 		req, DP_UOID(shard->do_id), DP_DTI(&args->pa_dti), task, map_ver,
-		(unsigned long)api_flags, rpc_flags, tgt_ep.ep_rank, tgt_ep.ep_tag, bulk_sz);
+		(unsigned long)api_flags, rpc_flags, tgt_ep.ep_rank, tgt_ep.ep_tag);
 
 	return daos_rpc_send(req, task);
 
