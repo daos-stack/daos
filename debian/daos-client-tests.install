@@ -6,6 +6,9 @@ usr/bin/drpc_engine_test
 usr/bin/drpc_test
 usr/bin/dfuse_test
 usr/bin/job_tests
+usr/bin/jump_pl_map
+usr/bin/ring_pl_map
+usr/bin/pl_bench
 usr/bin/eq_tests
 usr/bin/security_test
 usr/bin/fault_status
