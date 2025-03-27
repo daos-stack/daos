@@ -103,6 +103,8 @@ LABEL DAOS=true
 
 WORKDIR /home/daos/daos/
 COPY --chown=daos_server:daos_server VERSION LICENSE ftest.sh SConstruct requirements-ftest.txt .clang-format ./
+# needed for NLT test
+COPY --chown=daos_server:daos_server deps deps
 COPY --chown=daos_server:daos_server site_scons site_scons
 COPY --chown=daos_server:daos_server utils utils
 COPY --chown=daos_server:daos_server src src
