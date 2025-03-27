@@ -66,14 +66,20 @@ copy_patches()
       wget "${patch}"
       mv "${base}" "${patch_name}"
     else
-      cp "${DAOS_ROOT}/${patch}" "${patch_name}"
+      if [[ ! "${patch}" =~ ^deps/patches ]]; then
+        cp "${DAOS_ROOT}/${patch}" "${patch_name}"
+      else
+        patch_name="${base}"
+      fi
     fi
     if [ -z "${new_patches}" ]; then
       new_patches="deps/patches/${COMP}/${patch_name}"
     else
       new_patches+=",deps/patches/${COMP}/${patch_name}"
     fi
-    count=$(( count + 1 ))
+    if [[ ! "${patch}" =~ ^deps/patches ]]; then
+      count=$(( count + 1 ))
+    fi
   done
   sed "s#${!COMP}#${new_patches}#" -i "${DAOS_ROOT}/utils/build.config"
   popd || exit 1
