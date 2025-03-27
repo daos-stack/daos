@@ -1,0 +1,18 @@
+fused (1.0.0-3) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Removes rpm dependence on fused
+
+ -- Jeff Olivier <jeffolivier@google.com>  Sun, 12 Jan 2025 15:09:00 +0000
+
+fused (1.0.0-2) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Change to static only
+
+ -- Jeff Olivier <jeffolivier@google.com>  Sat, 11 Jan 2025 08:09:00 +0000
+
+
+fused (1.0.0-1) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Initial version
+
+ -- Jeff Olivier <jeffolivier@google.com>  Wed, 13 Mar 2024 08:09:00 +0000

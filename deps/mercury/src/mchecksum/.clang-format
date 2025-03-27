@@ -1,0 +1,18 @@
+---
+BasedOnStyle: LLVM
+UseTab: Never
+IndentWidth: 4
+TabWidth: 4
+BreakBeforeBraces: Linux
+AllowShortIfStatementsOnASingleLine: false
+IndentCaseLabels: true
+IndentGotoLabels: false
+IndentPPDirectives: AfterHash
+ColumnLimit: 80
+AccessModifierOffset: -4
+AlignAfterOpenBracket: DontAlign
+AlignConsecutiveMacros: true
+AlwaysBreakAfterReturnType: All
+SpaceAfterCStyleCast: true
+ForEachMacros: ['HG_QUEUE_FOREACH', 'HG_LIST_FOREACH']
+...

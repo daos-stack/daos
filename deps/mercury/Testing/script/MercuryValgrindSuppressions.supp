@@ -1,0 +1,15 @@
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   obj:/usr/lib64/mpich/bin/mpiexec.hydra
+   fun:HYDT_bscu_stdio_cb
+   fun:HYDT_dmxu_poll_wait_for_event
+   obj:/usr/lib64/mpich/bin/mpiexec.hydra
+   obj:/usr/lib64/mpich/bin/mpiexec.hydra
+   obj:/usr/lib64/mpich/bin/mpiexec.hydra
+   obj:/usr/lib64/mpich/bin/mpiexec.hydra
+   fun:(below main)
+}
+

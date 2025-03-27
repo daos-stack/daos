@@ -1,0 +1,146 @@
+#!/bin/bash
+
+set -uex
+
+cp /etc/mock/"$CHROOT_NAME".cfg mock.cfg
+
+# Enable mock ccache plugin
+cat <<EOF >> mock.cfg
+config_opts['plugin_conf']['ccache_enable'] = True
+config_opts['plugin_conf']['ccache_opts']['dir'] = "%(cache_topdir)s/%(root)s/ccache/"
+EOF
+
+
+if [[ $CHROOT_NAME == *epel-8-x86_64 ]]; then
+    cat <<EOF >> mock.cfg
+config_opts['module_setup_commands'] = [
+  ('enable', 'javapackages-tools:201801'),
+  ('disable',  'go-toolset')
+]
+EOF
+fi
+
+# Use dnf on CentOS 7
+if [[ $CHROOT_NAME == *epel-7-x86_64 ]]; then
+    MOCK_OPTIONS="--dnf --no-bootstrap-chroot${MOCK_OPTIONS:+ }$MOCK_OPTIONS"
+fi
+
+# Allow BR: foo-devel < 1.2 to work when foo-devel-1.3 is actually available
+cat <<EOF >> mock.cfg
+config_opts['dnf.conf'] += """
+[main]
+best=0
+"""
+EOF
+
+# shellcheck disable=SC2153
+repo_adds=()
+repo_dels=()
+
+echo -e "config_opts['yum.conf'] += \"\"\"\n" >> mock.cfg
+
+if [ -n "${ARTIFACTORY_URL:-}" ] && "$LOCAL_REPOS"; then
+    repo_dels+=("--disablerepo=\*")
+
+    if [ -n "${REPO_FILE_URL:-}" ]; then
+        if [ -n "$REPO_FILES_PR" ]; then
+            if [[ $REPO_FILES_PR = PR-* ]]; then
+                build_number="lastSuccessfulBuild"
+                branch="$REPO_FILES_PR"
+                if [[ $branch = *:* ]]; then
+                    build_number="${branch#*:}"
+                    branch="${branch%:*}"
+                fi
+                REPO_FILE_URL="${JENKINS_URL:-https://build.hpdd.intel.com/}job/daos-do/job/repo-files/job/$branch/$build_number/artifact/"
+            else
+                if [ ! -d "$REPO_FILES_PR" ]; then
+                    echo "Could not find your specified directory \"$REPO_FILES_PR\" to read repo-files from"
+                    exit 1
+                fi
+                REPO_FILE_URL="file://$(readlink -e "$REPO_FILES_PR")/"
+            fi
+        fi
+        curl -sSf "$REPO_FILE_URL"daos_ci-"${CHROOT_NAME%-*}".repo >> mock.cfg
+        repo_adds+=("--enablerepo *-artifactory")
+    fi
+fi
+
+repos_added=()
+for repo in $DISTRO_BASE_PR_REPOS $PR_REPOS; do
+    branch="master"
+    build_number="lastSuccessfulBuild"
+    if [[ $repo = *@* ]]; then
+        branch="${repo#*@}"
+        repo="${repo%@*}"
+        if [[ $branch = *:* ]]; then
+            build_number="${branch#*:}"
+            branch="${branch%:*}"
+        fi
+    fi
+    if [[ " ${repos_added[*]} " = *\ ${repo}\ * ]]; then
+        # don't add duplicates, first found wins
+        continue
+    fi
+    repos_added+=("$repo")
+    repo_adds+=("--enablerepo $repo:${branch//[@\/]/_}:$build_number")
+    echo -e "[$repo:${branch//[@\/]/_}:$build_number]\n\
+name=$repo:${branch//[@\/]/_}:$build_number\n\
+baseurl=${ARTIFACTS_URL:-${JENKINS_URL:-https://build.hpdd.intel.com/}job/}daos-stack/job/$repo/job/${branch//\//%2F}/$build_number/artifact/artifacts/$DISTRO/\n\
+enabled=1\n\
+gpgcheck=False\n" >> mock.cfg
+done
+for repo in $JOB_REPOS; do
+    repo_name=${repo##*://}
+    repo_name=${repo_name//\//_}
+    if [[ " ${repos_added[*]} " = *\ ${repo_name}\ * ]]; then
+        # don't add duplicates, first found wins
+        continue
+    fi
+    repos_added+=("$repo_name")
+    repo_adds+=("--enablerepo $repo_name")
+    echo -e "[${repo_name//[@\/]/_}]\n\
+name=${repo_name}\n\
+baseurl=${repo//\//%2F}\n\
+enabled=1\n" >> mock.cfg
+done
+echo "\"\"\"" >> mock.cfg
+
+if [ -n "$DISTRO_VERSION" ]; then
+    releasever_opt=("--config-opts=releasever=$DISTRO_VERSION")
+fi
+
+bs_dir=/scratch/mock/cache/"${CHROOT_NAME}"-bootstrap-$(id -u)
+if ls -l "$bs_dir"/root_cache/cache.tar.gz; then
+    mkdir -p "/var/cache/mock/${CHROOT_NAME}-bootstrap/"
+    flock "$bs_dir" -c "cp -a $bs_dir/root_cache /var/cache/mock/${CHROOT_NAME}-bootstrap"
+fi
+if ls -l "$bs_dir/ccache-$CHROOT_NAME-$PACKAGE".tar.gz; then
+    flock "$bs_dir" -c "tar -C / -xzf $bs_dir/ccache-$CHROOT_NAME-$PACKAGE.tar.gz"
+fi
+
+rc=0
+# shellcheck disable=SC2086,SC2048
+if ! eval time mock -r mock.cfg ${repo_dels[*]} ${repo_adds[*]} --no-clean \
+                    --disablerepo=\*-debug* ${releasever_opt[*]} $MOCK_OPTIONS  \
+                    $RPM_BUILD_OPTIONS "$TARGET"; then
+    rc=${PIPESTATUS[0]}
+fi
+
+# Save the ccache
+if [ -d /scratch/ ]; then
+    mkdir -p "$bs_dir"/
+    if ! flock "$bs_dir" -c "tar -czf $bs_dir/ccache-$CHROOT_NAME-$PACKAGE.tar.gz /var/cache/mock/${CHROOT_NAME}/ccache"; then
+        echo "Failed to save ccache.  Plowing onward."
+        echo "I am $(id)"
+    fi
+    if ls -l /var/cache/mock/"${CHROOT_NAME}"-bootstrap/root_cache/cache.tar.gz; then
+        if ! cmp /var/cache/mock/"${CHROOT_NAME}"-bootstrap/root_cache/cache.tar.gz "$bs_dir"/root_cache/cache.tar.gz; then
+            if ! flock "$bs_dir" -c "cp -a /var/cache/mock/${CHROOT_NAME}-bootstrap/root_cache $bs_dir/"; then
+                echo "Failed to save root_cache.  Plowing onward."
+                echo "I am $(id)"
+            fi
+        fi
+    fi
+fi
+
+exit "$rc"

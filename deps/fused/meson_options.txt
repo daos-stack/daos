@@ -1,0 +1,24 @@
+option('disable-mtab', type : 'boolean', value : false,
+       description: 'Disable and ignore usage of /etc/mtab')
+
+option('udevrulesdir', type : 'string', value : '',
+       description: 'Where to install udev rules (if empty, query pkg-config(1))')
+
+option('initscriptdir', type : 'string', value : '/etc/init.d/',
+       description: 'Init script installation location (if empty, disable init script installation)')
+
+option('utils', type : 'boolean', value : true,
+       description: 'Whether or not to build and install helper programs')
+
+option('examples', type : 'boolean', value : true,
+       description: 'Whether or not to build example programs')
+
+option('useroot', type : 'boolean', value : true,
+       description: 'Set owner and setuid bits on installed files')
+
+option('tests', type : 'boolean', value : true,
+       description: 'Compile the test files')
+
+option('disable-libc-symbol-version', type : 'boolean', value : false,
+       description: 'Disable versioned symbols through libc')
+

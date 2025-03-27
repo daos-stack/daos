@@ -1,0 +1,218 @@
+# -------------------------------------------------------------------------
+# Doxygen documentation batch
+# -------------------------------------------------------------------------
+
+set(DOXYGEN "@DOXYGEN@")
+set(DOXYGEN_DOT_EXECUTABLE "@DOXYGEN_DOT_EXECUTABLE@")
+set(HTML_HELP_COMPILER "@HTML_HELP_COMPILER@")
+set(PERL "@PERL@")
+set(DOXYGEN_KEEP_TEMP "@DOXYGEN_KEEP_TEMP@")
+
+if(NOT DOXYGEN)
+  message(FATAL_ERROR "error: cannot build Mercury documentation without doxygen")
+endif()
+if(NOT DOXYGEN_DOT_EXECUTABLE)
+  message(FATAL_ERROR "error: cannot build Mercury documentation without dot")
+endif()
+if(NOT PERL)
+  message(FATAL_ERROR "error: cannot build Mercury documentation without perl")
+endif()
+
+set(PROJECT_NAME MERCURY)
+
+# Path to dox scripts
+set(PATH_TO_MERCURY_DOX_SCRIPTS "@MERCURY_SOURCE_DIR@/Documentation/Doxygen")
+
+# Directory where the intermediate Doxygen files should be stored.
+set(DOXTEMP "@CMAKE_CURRENT_BINARY_DIR@")
+set(INTERMEDIATE_DOX_DIR "${DOXTEMP}/dox")
+
+# Path to the Doxygen configuration file (i.e. doxyfile)
+set(DOXYFILE "${DOXTEMP}/doxyfile")
+
+# Path to the Doxygen output directory (where the resulting doc is stored).
+set(OUTPUT_DIRECTORY "${DOXTEMP}/doc")
+set(ALLOW_ERASE_OUTPUT_DIRECTORY ON)
+
+# Compile the CHM (Compressed HTML) HTML Help file, name of the resulting
+# file. If set to ON and name is non-empty these options will actually
+# trigger the HTML-Help compiler to create the CHM. The resulting
+# file (usually index.chm) will be renamed to this name.
+# Note: if ON, the whole $OUTPUT_DIRECTORY will be erased at the end of
+#       this script, since this file is considered to be one of the
+#       advanced final output, unless ALLOW_ERASE_OUTPUT_DIRECTORY is OFF
+# Note: your doxyfile should be configured to enable HTML Help creation
+#       (using GENERATE_HTML   YES, GENERATE_HTMLHELP   YES)
+set(COMPILE_HTML_HELP OFF)
+set(RESULTING_HTML_HELP_FILE "${DOXTEMP}/hg@MERCURY_PACKAGE_VERSION_MAJOR@.chm")
+
+# Create a compressed (gzip) tar archive of the html directory (located
+# under the OUTPUT_DIRECTORY), and name of the resulting archive file.
+# Note: your doxyfile should be configured to enable HTML creation
+#       (using GENERATE_HTML   YES)
+set(CREATE_HTML_TARZ_ARCHIVE ON)
+set(RESULTING_HTML_TARZ_ARCHIVE_FILE "${DOXTEMP}/mercury-html.tar.gz")
+
+# ----------------------------------------------------------------------------
+# SOURCE_DIRECTORIES
+#
+# This list is processed by several perl scripts below. Keeping it in one
+# list avoids the possibility that multiple lists might get out of sync with
+# rushed edits...
+#
+set(SOURCE_DIRECTORIES
+  @HG_MODULE_DIRS_DOXYGEN@
+)
+
+# ----------------------------------------------------------------------------
+# Print some progress. Be nice to the build watcher.
+
+macro(step n desc)
+  message(STATUS "")
+  message(STATUS "Building mercury docs: step ${n} of 7, (${desc})")
+  message(STATUS "----------------------------------------------------------------------------")
+endmacro()
+
+macro(echo v)
+  message(STATUS "${v}='${${v}}'")
+endmacro()
+
+# ----------------------------------------------------------------------------
+# Values of this script's variables:
+
+message(STATUS "")
+message(STATUS "Building Mercury Documentation: initial variable values")
+message(STATUS "----------------------------------------------------------------------------")
+
+foreach(var
+  CMAKE_CURRENT_LIST_FILE
+  CMAKE_MAJOR_VERSION
+  CMAKE_MINOR_VERSION
+  CMAKE_PATCH_VERSION
+  DOXYGEN
+  DOXYGEN_DOT_EXECUTABLE
+  HTML_HELP_COMPILER
+  PERL
+  PROJECT_NAME
+  PATH_TO_MERCURY_DOX_SCRIPTS
+  DOXTEMP
+  INTERMEDIATE_DOX_DIR
+  DOXYFILE
+  OUTPUT_DIRECTORY
+  ALLOW_ERASE_OUTPUT_DIRECTORY
+  COMPILE_HTML_HELP
+  RESULTING_HTML_HELP_FILE
+  CREATE_HTML_TARZ_ARCHIVE
+  RESULTING_HTML_TARZ_ARCHIVE_FILE
+  SOURCE_DIRECTORIES
+)
+  echo(${var})
+endforeach()
+
+# ----------------------------------------------------------------------------
+# Extract the Mercury version and create the main page.
+#  -- Here we we simply install the generated
+#  doc_mercury_version.dox file instead.
+step(1 "extract Mercury version")
+file(INSTALL "${DOXTEMP}/doc_mercury_version.dox"
+     DESTINATION "${INTERMEDIATE_DOX_DIR}"
+     USE_SOURCE_PERMISSIONS)
+
+# ----------------------------------------------------------------------------
+# Create the Doxygen doc.
+
+step(2 "run doxygen")
+file(REMOVE_RECURSE "${OUTPUT_DIRECTORY}")
+file(MAKE_DIRECTORY "${OUTPUT_DIRECTORY}")
+execute_process(COMMAND ${DOXYGEN} ${DOXYFILE}
+  RESULT_VARIABLE rv
+)
+
+# ----------------------------------------------------------------------------
+# Clean the HTML pages to remove the path to the intermediate Doxygen dir.
+
+step(3 "remove intermediate path from html")
+execute_process(COMMAND ${PERL}
+  "${PATH_TO_MERCURY_DOX_SCRIPTS}/doc_rmpath.pl"
+  --to "${INTERMEDIATE_DOX_DIR}"
+  --html "${OUTPUT_DIRECTORY}/html"
+  RESULT_VARIABLE rv
+)
+
+# ----------------------------------------------------------------------------
+# clean the HTML pages to remove layout problems
+
+step(4 "clean html to remove layout problems")
+execute_process(COMMAND ${PERL}
+  "${PATH_TO_MERCURY_DOX_SCRIPTS}/doc_cleanhtml.pl"
+  --html "${OUTPUT_DIRECTORY}/html"
+  RESULT_VARIABLE rv
+)
+
+# ----------------------------------------------------------------------------
+# Create the *.chm file
+
+step(5 "build *.chm file")
+if(COMPILE_HTML_HELP AND HTML_HELP_COMPILER)
+  if(NOT "${RESULTING_HTML_HELP_FILE}" STREQUAL "")
+    if(EXISTS "${OUTPUT_DIRECTORY}/html/index.hhp")
+      # hhc creates index.chm next to index.hhp
+      execute_process(COMMAND ${HTML_HELP_COMPILER} index.hhp
+        WORKING_DIRECTORY "${OUTPUT_DIRECTORY}/html"
+        RESULT_VARIABLE rv
+      )
+    else()
+      message(STATUS "warning: no index.hhp file, not running HTML Help Compiler...")
+    endif()
+
+    if(EXISTS "${OUTPUT_DIRECTORY}/html/index.chm")
+      # copy it to where we want it
+      execute_process(COMMAND ${CMAKE_COMMAND} -E copy
+        "${OUTPUT_DIRECTORY}/html/index.chm"
+        "${RESULTING_HTML_HELP_FILE}"
+        RESULT_VARIABLE rv
+      )
+
+      # get rid of the one in the html dir
+      file(REMOVE "${OUTPUT_DIRECTORY}/html/index.chm")
+    else()
+      message(STATUS "warning: no index.chm file, not moving to final location...")
+    endif()
+  endif()
+endif()
+
+# ----------------------------------------------------------------------------
+# Create the *.tar.gz file
+
+step(6 "build *.tar.gz file")
+if(CREATE_HTML_TARZ_ARCHIVE)
+  if(NOT RESULTING_HTML_TARZ_ARCHIVE_FILE STREQUAL "")
+    execute_process(COMMAND ${CMAKE_COMMAND} -E tar cfz ${RESULTING_HTML_TARZ_ARCHIVE_FILE} html
+      WORKING_DIRECTORY ${OUTPUT_DIRECTORY}
+      RESULT_VARIABLE rv
+    )
+  endif()
+endif()
+
+# ----------------------------------------------------------------------------
+# Clean-up.
+
+if(DOXYGEN_KEEP_TEMP)
+  message("Skipping step 7: clean up.")
+else()
+  step(7 "clean up")
+  file(REMOVE_RECURSE "${INTERMEDIATE_DOX_DIR}")
+
+  if(COMPILE_HTML_HELP)
+    if(NOT RESULTING_HTML_HELP_FILE STREQUAL "")
+      if(ALLOW_ERASE_OUTPUT_DIRECTORY)
+        file(REMOVE_RECURSE "${OUTPUT_DIRECTORY}")
+      endif()
+    endif()
+  endif()
+endif()
+
+#
+# If you add more steps, please update the step macro to reflect the total
+# number of steps in the progressive build output... Thanks.
+#

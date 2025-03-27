@@ -26,6 +26,7 @@ import platform
 
 import distro
 from prereq_tools import GitRepoRetriever
+from prereq_tools import CopyRetriever
 from SCons.Script import GetOption
 
 # Check if this is an ARM platform
@@ -192,7 +193,7 @@ def define_mercury(reqs):
         mercury_build.append('-DMERCURY_ENABLE_DEBUG:BOOL=OFF')
 
     reqs.define('mercury',
-                retriever=GitRepoRetriever(True),
+                retriever=CopyRetriever(),
                 commands=[mercury_build,
                           ['make'],
                           ['make', 'install']],
@@ -249,14 +250,14 @@ def define_components(reqs):
     define_ompi(reqs)
 
     reqs.define('isal',
-                retriever=GitRepoRetriever(),
+                retriever=CopyRetriever(),
                 commands=[['./autogen.sh'],
                           ['./configure', '--prefix=$ISAL_PREFIX', '--libdir=$ISAL_PREFIX/lib'],
                           ['make'],
                           ['make', 'install']],
                 libs=['isal'])
     reqs.define('isal_crypto',
-                retriever=GitRepoRetriever(),
+                retriever=CopyRetriever(),
                 commands=[['./autogen.sh'],
                           ['./configure',
                            '--prefix=$ISAL_CRYPTO_PREFIX',
@@ -298,7 +299,7 @@ def define_components(reqs):
         abt_build.append('--enable-valgrind')
 
     reqs.define('argobots',
-                retriever=GitRepoRetriever(True),
+                retriever=CopyRetriever(),
                 commands=[['./autogen.sh'],
                           abt_build,
                           ['make'],
@@ -318,7 +319,7 @@ def define_components(reqs):
                 out_of_src_build=True)
 
     reqs.define('fused', libs=['fused'], defines=['FUSE_USE_VERSION=35'],
-                retriever=GitRepoRetriever(),
+                retriever=CopyRetriever(),
                 commands=[['meson', 'setup', '--prefix=$FUSED_PREFIX', '-Ddisable-mtab=True',
                            '-Dudevrulesdir=$FUSED_PREFIX/udev', '-Dutils=False',
                            '--default-library', 'static', '../fused'],
