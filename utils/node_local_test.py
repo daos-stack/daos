@@ -1419,16 +1419,16 @@ class DFuse():
 
         print(f"Running {' '.join(cmd)}")
         # pylint: disable-next=consider-using-with
-        self._sp = subprocess.Popen(cmd, env=my_env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self._sp = subprocess.Popen(cmd, env=my_env)
         print(f'Started dfuse at {self.dir}')
         print(f'Log file is {self.log_file}')
 
         total_time = 0
         while os.stat(self.dir).st_ino == pre_inode:
-            print('Dfuse not started, waiting...', flush=True)
+            print('Dfuse not started, waiting...')
             try:
                 ret = self._sp.wait(timeout=1)
-                print(f'dfuse command exited with {ret}', flush=True)
+                print(f'dfuse command exited with {ret}')
                 self._sp = None
                 if os.path.exists(self.log_file):
                     log_test(self.conf, self.log_file)
