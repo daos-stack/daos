@@ -32,15 +32,11 @@ touch venv/pip.conf
 pip config set global.progress_bar off
 pip config set global.no_color true
 
-if [ -z $HTTPS_PROXY ]; then
-    pip install --upgrade pip
-    pip install --requirement requirements-utest.txt
-    pip install /opt/daos/lib/daos/python/
-else
-    pip install --proxy "$HTTPS_PROXY" --upgrade pip
-    pip install --proxy "$HTTPS_PROXY" --requirement requirements-utest.txt
-    pip install --proxy "$HTTPS_PROXY" /opt/daos/lib/daos/python/
-fi
+pip install --upgrade pip
+pip install --requirement requirements-utest.txt
+
+pip install /opt/daos/lib/daos/python/
+
 # set high open file limit in the shell to avoid extra warning
 sudo prlimit --nofile=1024:262144 --pid $$
 prlimit -n
