@@ -83,7 +83,9 @@ copy_patches()
   done
   sed "s#${!COMP}#${new_patches}#" -i "${DAOS_ROOT}/utils/build.config"
   popd || exit 1
-  git add "${patch_dir}"/*
+  pushd "${DAOS_ROOT}" || exit 1
+  git add "deps/patches/${COMP}/"*
+  popd || exit 1
 }
 
 get_tag
