@@ -272,9 +272,16 @@ struct shard_auxi_args {
 	uint64_t		 enqueue_id;
 };
 
+struct sgl_merge_ctx {
+	d_sg_list_t *sgls_dup;
+	d_sg_list_t *sgls_orig;
+	uint64_t   **merged_bitmaps;
+	uint64_t   **alloc_bitmaps;
+};
+
 struct shard_rw_args {
 	struct shard_auxi_args	 auxi;
-	d_sg_list_t		*sgls_dup;
+	struct sgl_merge_ctx    *merge_ctx;
 	struct dtx_id		 dti;
 	crt_bulk_t		*bulks;
 	struct obj_io_desc	*oiods;
