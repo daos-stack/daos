@@ -1,0 +1,98 @@
+# a list of command line options that are shared by runfabtests.py and libfabric pytest.
+#
+# Each option has a variable name, long form command line argument name (longform).
+# Some options has a short form command line argument name.
+#
+# Variable name is used to access the value of the option from inside python scripts.
+#
+# Longform is used for user to specify the value of the option from command line.
+# By default, an option's longform is:
+#
+#    double dash ("--") + variable_name.replace("_", "-")
+#
+# (The replacement of underscore to dash is to follow linux command's convention.)
+# The default longform can be overriden by explicitly assign a longform for the option.
+#
+# Shortform is supported by runfabtests.py only. An option's shortform is
+#
+#    single dash ("-") + designated character
+# Note that not very option has a short form.
+#
+# The option exlcusion file's variable name is "exclusion_file", its
+# longform is "--exclusion-file", its shortform is "-f". Therefore, user can
+# specify exclusion file via:
+#
+#       runfabtests.py --exclusion-file <path_to_exclusion_file>
+#       runfabtests.py -f <path_to_exclusion_file
+#       pytest --exclusion-file <path_to_exclusion_file>
+#
+#  Developer can access the value of exclusion file via:
+#
+#       args.exlcusion_file in runfabtests.py
+#       cmdline_args.exclusion_file in pytest
+#
+good_address:
+  type: str
+  help: "good address from host's perspective (default $GOOD_ADDR)"
+  shortform: -g
+exclusion_list:
+  type: str
+  help: "comma delimited list of test names/regex patterns for test to be excluded.\nFor example: \"dgram,rma.*write\""
+  shortform: -e
+environments:
+  type: str
+  help: "export provided variable name and value to ssh client and server processes."
+  shortform: -E
+exclusion_file:
+  type: str
+  help: "exclude tests file: File containing list of test names/regex patterns\nto exclude (one per line)"
+  shortform: -f
+exclude_negative_tests:
+  type: boolean
+  help: "whether to exclusion negative unit tests. Default: no"
+  shortform: -N
+binpath:
+  type: str
+  help: "path to test bins (default PATH)"
+  shortform: -p
+client_interface:
+  type: str
+  help: "client interface"
+  shortform: -c
+server_interface:
+  type: str
+  help: "server interface"
+  shortform: -s
+ubertest_config_file:
+  type: str
+  help: "configure option for uber tests"
+  shortform: -u
+timeout:
+  type: int
+  help: "timeout value in seconds"
+  default: 360
+  shortform: -T
+core_list:
+  type: str
+  help: "Specify cores to pin when running standard tests. Cores can specified via a comma-delimited list, like 0,2-4"
+  longform: --pin-core
+strict_fabtests_mode:
+  type: boolean
+  help: "Strict mode: -FI_ENODATA, -FI_ENOSYS errors would be treated as failures\ninstead of skipped/notrun"
+  shortform: -S
+additional_client_arguments:
+  type: str
+  help: "Additional client test arguments: Parameters to pass to client fabtests"
+  shortform: -C
+additional_server_arguments:
+  type: str
+  help: "Additional server test arguments: Parameters to pass to server fabtests"
+  shortform: -L
+oob_address_exchange:
+  type: boolean
+  help: "out-of-band address exchange over the default port"
+  shortform: -b
+do_dmabuf_reg_for_hmem:
+  type: boolean
+  help: "Register hmem memory via dmabuf"
+  longform: --do-dmabuf-reg-for-hmem

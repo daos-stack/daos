@@ -1,0 +1,39 @@
+# Regex patterns of tests to exclude in runfabtests.sh
+
+# atomic ops not supported
+atomic
+
+# dgram endpoints not supported
+dgram
+
+multi_ep
+
+# tests use counters, but counters not supported
+multi_mr
+rma_event
+
+# scalable endpoints not supported
+scalable_ep
+
+# shared av not supported
+shared_av
+
+# triggered ops not supported
+trigger
+
+# unexpected message test requires FI_TAGGED
+# which FI_EP_MSG does not support
+unexpected_msg -e msg
+
+# prefix mode not supported
+-k
+
+# shared context tests need to be evaluated for support
+# some subset may be supported, but do not currently work
+shared_ctx
+
+# multi_recv not supported by standard msg endpoints
+multi_recv -e msg
+
+# collective offload not supported
+fi_multinode_coll

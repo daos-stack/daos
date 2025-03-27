@@ -1,0 +1,131 @@
+/* SPDX-License-Identifier: BSD-2-Clause OR GPL-2.0-only */
+/* SPDX-FileCopyrightText: Copyright Amazon.com, Inc. or its affiliates. All rights reserved. */
+// Use milestones to abort old builds when the user force pushes
+def buildNumber = env.BUILD_NUMBER as int
+if (buildNumber > 1) milestone(buildNumber - 1)
+milestone(buildNumber)
+
+pipeline {
+    agent {
+        ecs {
+            inheritFrom 'fargate-large'
+        }
+    }
+    options {
+        buildDiscarder(logRotator(daysToKeepStr: "90"))
+        timeout(time: 8, unit: 'HOURS')
+    }
+    environment {
+        // AWS region where the cluster is created
+        REGION="us-west-2"
+    }
+    stages {
+        // Cleanup workspace before job start.
+        stage("Clean up workspace") {
+            steps{
+                deleteDir()
+            }
+        }
+        stage("Checkout SCM repo") {
+            steps {
+                checkout scm
+            }
+        }
+        stage("Download and extract PortaFiducia") {
+            steps {
+                script {
+                    sh 'printenv'
+                    def common = load "contrib/aws/common.groovy"
+                    common.download_and_extract_portafiducia('PortaFiducia')
+                }
+            }
+        }
+        stage("Install PortaFiducia") {
+            steps {
+                script {
+                    def common = load "contrib/aws/common.groovy"
+                    common.install_porta_fiducia()
+                }
+
+            }
+        }
+        stage("Test EFA provider") {
+            steps {
+                script {
+                    def common = load "contrib/aws/common.groovy"
+                    def stages = [:]
+                    // This needs the extra space at the end
+                    def addl_args_pr = "--test-libfabric-pr $env.CHANGE_ID "
+
+                    // Single Node Tests - EFA
+                    stages["1_g4dn_alinux2-efa"] = common.get_test_stage("1_g4dn_alinux2_efa", env.BUILD_TAG, "alinux2", "g4dn.8xlarge", 1, "us-east-1", "libfabric_pr_test.yaml", addl_args_pr)
+                    stages["1_g4dn_ubuntu2004-efa"] = common.get_test_stage("1_g4dn_ubuntu2004_efa", env.BUILD_TAG, "ubuntu2004", "g4dn.8xlarge", 1, "us-east-1", "libfabric_pr_test.yaml", addl_args_pr)
+                    stages["1_g4dn_rhel8-efa"] = common.get_test_stage("1_g4dn_rhel8_efa", env.BUILD_TAG, "rhel8", "g4dn.8xlarge", 1, "us-east-1", "libfabric_pr_test.yaml", addl_args_pr)
+                    stages["1_g4dn_centos7-efa"] = common.get_test_stage("1_g4dn_centos7_efa", env.BUILD_TAG, "centos7", "g4dn.8xlarge", 1, "us-east-1", "libfabric_pr_test.yaml", addl_args_pr)
+
+                    // Single Node Tests - SHM
+                    stages["1_g4dn_alinux2_shm"] = common.get_test_stage("1_g4dn_alinux2_shm", env.BUILD_TAG, "alinux2", "g4dn.8xlarge", 1, "us-east-1", "libfabric_pr_test.yaml", addl_args_pr + "--test-libfabric-provider shm")
+                    stages["1_g4dn_ubuntu2004_shm"] = common.get_test_stage("1_g4dn_ubuntu2004_shm", env.BUILD_TAG, "ubuntu2004", "g4dn.8xlarge", 1, "us-east-1", "libfabric_pr_test.yaml", addl_args_pr + "--test-libfabric-provider shm")
+                    stages["1_g4dn_rhel8_shm"] = common.get_test_stage("1_g4dn_rhel8_shm", env.BUILD_TAG, "rhel8", "g4dn.8xlarge", 1, "us-east-1", "libfabric_pr_test.yaml", addl_args_pr + "--test-libfabric-provider shm")
+                    stages["1_g4dn_centos7_shm"] = common.get_test_stage("1_g4dn_centos7_shm", env.BUILD_TAG, "centos7", "g4dn.8xlarge", 1, "us-east-1", "libfabric_pr_test.yaml", addl_args_pr + "--test-libfabric-provider shm")
+                    stages["1_g4dn_ubuntu2004_shm_disable-cma"] = common.get_test_stage("1_g4dn_ubuntu2004_shm_disable-cma", env.BUILD_TAG, "ubuntu2004", "g4dn.8xlarge", 1, "us-east-1", "libfabric_pr_test.yaml", addl_args_pr + "--test-libfabric-provider shm --enable-cma false")
+
+                    // Single Node Windows Test
+                    stages["EFA_Windows_Test"] = common.get_single_node_windows_test_stage("EFA_Windows_Test")
+
+                    // Multi Node Tests - EFA
+                    stages["2_hpc6a_alinux2_efa"] = common.get_test_stage("2_hpc6a_alinux2_efa", env.BUILD_TAG, "alinux2", "hpc6a.48xlarge", 2, "eu-north-1", "libfabric_pr_test.yaml", addl_args_pr)
+                    stages["2_c6gn_alinux2_efa"] = common.get_test_stage("2_c6gn_alinux2_efa", env.BUILD_TAG, "alinux2", "c6gn.16xlarge", 2, "us-west-2", "libfabric_pr_test.yaml", addl_args_pr)
+                    stages["2_c5n_alinux2_efa"] = common.get_test_stage("2_c5n_alinux2_efa", env.BUILD_TAG, "alinux2", "c5n.18xlarge", 2, "us-east-1", "libfabric_pr_test.yaml", addl_args_pr)
+                    stages["2_hpc6a_ubuntu2004_efa"] = common.get_test_stage("2_hpc6a_ubuntu2004_efa", env.BUILD_TAG, "ubuntu2004", "hpc6a.48xlarge", 2, "eu-north-1", "libfabric_pr_test.yaml", addl_args_pr)
+                    stages["2_hpc6a_rhel8_efa"] = common.get_test_stage("2_hpc6a_rhel8_efa", env.BUILD_TAG, "rhel8", "hpc6a.48xlarge", 2, "eu-north-1", "libfabric_pr_test.yaml", addl_args_pr)
+
+                    // Multi Node Tests - TCP
+                    stages["2_hpc6a_alinux2_tcp"] = common.get_test_stage("2_hpc6a_alinux2_tcp", env.BUILD_TAG, "alinux2", "hpc6a.48xlarge", 2, "eu-north-1", "libfabric_pr_test.yaml", addl_args_pr + "--test-libfabric-provider tcp")
+                    stages["2_hpc6a_ubuntu2004_tcp"] = common.get_test_stage("2_hpc6a_ubuntu2004_tcp", env.BUILD_TAG, "ubuntu2004", "hpc6a.48xlarge", 2, "eu-north-1", "libfabric_pr_test.yaml", addl_args_pr + "--test-libfabric-provider tcp")
+                    stages["2_hpc6a_rhel8_tcp"] = common.get_test_stage("2_hpc6a_rhel8_tcp", env.BUILD_TAG, "rhel8", "hpc6a.48xlarge", 2, "eu-north-1", "libfabric_pr_test.yaml", addl_args_pr + "--test-libfabric-provider tcp")
+
+                    // Multi Node Tests - SOCKETS
+                    stages["2_hpc6a_alinux2_sockets"] = common.get_test_stage("2_hpc6a_alinux2_sockets", env.BUILD_TAG, "alinux2", "hpc6a.48xlarge", 2, "eu-north-1", "libfabric_pr_test.yaml", addl_args_pr + "--test-libfabric-provider sockets")
+                    stages["2_hpc6a_ubuntu2004_sockets"] = common.get_test_stage("2_hpc6a_ubuntu2004_sockets", env.BUILD_TAG, "ubuntu2004", "hpc6a.48xlarge", 2, "eu-north-1", "libfabric_pr_test.yaml", addl_args_pr + "--test-libfabric-provider sockets")
+                    stages["2_hpc6a_rhel8_sockets"] = common.get_test_stage("2_hpc6a_rhel8_sockets", env.BUILD_TAG, "rhel8", "hpc6a.48xlarge", 2, "eu-north-1", "libfabric_pr_test.yaml", addl_args_pr + "--test-libfabric-provider sockets")
+
+                    parallel stages
+                }
+            }
+        }
+        stage('check build_ok') {
+            steps {
+                script {
+                    def common = load "contrib/aws/common.groovy"
+                    if (common.build_ok) {
+                        currentBuild.result = "SUCCESS"
+                    }
+                    else {
+                        currentBuild.result = "FAILURE"
+                    }
+                }
+            }
+        }
+    }
+    post {
+        always {
+            sh 'find PortaFiducia/tests/outputs -name "*.xml" | xargs du -shc'
+            junit testResults: 'PortaFiducia/tests/outputs/**/*.xml', keepLongStdio: false
+            archiveArtifacts artifacts: 'PortaFiducia/tests/outputs/**/*.*'
+        }
+        failure {
+            sh '''
+                . venv/bin/activate
+                ./PortaFiducia/scripts/delete_manual_cluster.py --cluster-name WindowsLibfabricCi_${env.CHANGE_ID}_*
+            '''
+        }
+        aborted {
+            sh '. venv/bin/activate; ./PortaFiducia/scripts/delete_manual_cluster.py --cluster-name "$BUILD_TAG"\'*\' --region $REGION'
+        }
+        // Cleanup workspace after job completes.
+        cleanup {
+            deleteDir()
+        }
+    }
+}

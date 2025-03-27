@@ -1,0 +1,68 @@
+#
+# Copyright (c) 2021 Amazon.com, Inc. or its affiliates. All rights reserved.
+#
+# This software is available to you under a choice of one of two
+# licenses.  You may choose to be licensed under the terms of the GNU
+# General Public License (GPL) Version 2, available from the file
+# COPYING in the main directory of this source tree, or the
+# BSD license below:
+#
+#     Redistribution and use in source and binary forms, with or
+#     without modification, are permitted provided that the following
+#     conditions are met:
+#
+#      - Redistributions of source code must retain the above
+#        copyright notice, this list of conditions and the following
+#        disclaimer.
+#
+#      - Redistributions in binary form must reproduce the above
+#        copyright notice, this list of conditions and the following
+#        disclaimer in the documentation and/or other materials
+#        provided with the distribution.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+# NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+# BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+# ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+# CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+#
+
+bin_PROGRAMS += prov/efa/src/fi_efa_rnr_read_cq_error \
+		prov/efa/src/fi_efa_rnr_queue_resend \
+		prov/efa/src/fi_efa_info_test
+if HAVE_VERBS_DEVEL
+bin_PROGRAMS += prov/efa/src/fi_efa_exhaust_mr_reg_rdm_pingpong
+endif HAVE_VERBS_DEVEL
+
+efa_rnr_srcs = \
+	prov/efa/src/efa_rnr_shared.h \
+	prov/efa/src/efa_rnr_shared.c
+
+prov_efa_src_fi_efa_rnr_read_cq_error_SOURCES = \
+	prov/efa/src/rdm_rnr_read_cq_error.c \
+	$(efa_rnr_srcs)
+prov_efa_src_fi_efa_rnr_read_cq_error_LDADD = libfabtests.la
+
+prov_efa_src_fi_efa_rnr_queue_resend_SOURCES = \
+	prov/efa/src/rdm_rnr_queue_resend.c \
+	$(efa_rnr_srcs)
+prov_efa_src_fi_efa_rnr_queue_resend_LDADD = libfabtests.la
+
+prov_efa_src_fi_efa_info_test_SOURCES = \
+	prov/efa/src/efa_info_test.c
+prov_efa_src_fi_efa_info_test_LDADD = libfabtests.la
+
+if HAVE_VERBS_DEVEL
+efa_exhaust_mr_reg_srcs = \
+	prov/efa/src/efa_exhaust_mr_reg_common.h \
+	prov/efa/src/efa_exhaust_mr_reg_common.c
+
+prov_efa_src_fi_efa_exhaust_mr_reg_rdm_pingpong_SOURCES = \
+	prov/efa/src/efa_exhaust_mr_reg_rdm_pingpong.c \
+	$(efa_exhaust_mr_reg_srcs) \
+	$(benchmarks_srcs)
+prov_efa_src_fi_efa_exhaust_mr_reg_rdm_pingpong_LDADD = libfabtests.la
+endif HAVE_VERBS_DEVEL

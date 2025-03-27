@@ -1,0 +1,100 @@
+# example input file for run_criterion_tests script
+
+# Set paths, prompt, and password for node under test
+env:
+  libfabric_dir_on_node: /path/to/libfabric
+  pycxi_dir_on_node: /path/to/pycxi   # required for cxiutil
+  node_prompt: '#'
+  node_password: <password>
+
+
+# These parameters apply to all tests
+global_runtime_parameters:
+  - {DMA_FAULT_RATE: .1,
+     MALLOC_FAULT_RATE: .1,
+     FI_LOG_LEVEL: warn,
+     FI_CXI_FC_RECOVERY: 1}
+
+
+# Test definitions
+tests:
+  #-------------------------------------------------------------------------------------------------------
+  #  EXAMPLE:
+  #  - {description: "Meaningful description of test(s) to be included in tap report",
+  #     filter: "tagged/*",            # run all tagged tests (null = run all tests)
+  #     runtime_parameters: {          # include these params when running the test (null = no params)
+  #       FI_CXI_PARAM_1: val,
+  #       FI_CXI_PARAM_2: val},
+  #     csrs: [                        # set these CSRs prior to running the test (null = no CSRs)
+  #       [<csr1>, <field>, <value>],
+  #       [<csr2>, <field>, <value>]
+  #     ]}
+  #-------------------------------------------------------------------------------------------------------
+
+  - {description: "Run with default settings",
+     filter: null,
+     runtime_parameters: null,
+     csrs: null}
+
+  - {description: "Disable caching of FI_HMEM_SYSTEM",
+     filter: null,
+     runtime_parameters: {
+       FI_MR_CACHE_MONITOR: disable},
+     csrs: null}
+
+  - {description: "Run with RPut and SW Gets",
+     filter: "(tagged|msg)/*",
+     runtime_parameters: null,
+     csrs: [
+       [get_ctrl, get_en, 0]
+     ]}
+
+  - {description: "Run with constrained LE count",
+     filter: "tagged/fc*",
+     runtime_parameters: null,
+     csrs: [
+       ["le_pools[]", max_alloc, 10]
+     ]}
+
+  - {description: "Verify tag matching with rendezvous",
+     filter: "tagged_directed/*",
+     runtime_parameters: {
+       FI_CXI_DEVICE_NAME: "cxi1,cxi0",
+       FI_CXI_RDZV_GET_MIN: 0,
+       FI_CXI_RDZV_THRESHOLD: 2048},
+     csrs: null}
+
+  - {description: "Run with software RX matching mode",
+     filter: null,
+     runtime_parameters: {
+       FI_CXI_RX_MATCH_MODE: '"software"',
+       FI_CXI_RDZV_GET_MIN: 0,
+       FI_CXI_RDZV_THRESHOLD: 2048},
+     csrs: null}
+
+  - {description: "Run with FI_CXI_MSG_OFFLOAD disabled",
+     filter: null,
+     runtime_parameters: {
+       FI_CXI_MSG_OFFLOAD: 0,
+       FI_CXI_RDZV_GET_MIN: 0,
+       FI_CXI_RDZV_THRESHOLD: 2048},
+     csrs: null}
+
+  - {description: "Verify fc_no_eq_space_expected_multi_recv",
+     filter: "tagged/fc_no_eq_space_expected_multi_recv",
+     runtime_parameters: {
+       FI_CXI_DEFAULT_CQ_SIZE: 64,
+       FI_CXI_DISABLE_CQ_HUGETLB: 1,
+       FI_CXI_RDZV_GET_MIN: 0,
+       FI_CXI_RDZV_THRESHOLD: 2048},
+     csrs: null}
+
+  - {description: "Verify fc_no_eq_space_expected_multi_recv and FI_CXI_CQ_FILL_PERCENT",
+     filter: "tagged/fc_no_eq_space_expected_multi_recv",
+     runtime_parameters: {
+       FI_CXI_CQ_FILL_PERCENT: 20,
+       FI_CXI_DEFAULT_CQ_SIZE: 64,
+       FI_CXI_DISABLE_CQ_HUGETLB: 1,
+       FI_CXI_RDZV_GET_MIN: 0,
+       FI_CXI_RDZV_THRESHOLD: 2048},
+     csrs: null}

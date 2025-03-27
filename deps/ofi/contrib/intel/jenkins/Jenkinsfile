@@ -1,0 +1,943 @@
+import groovy.transform.Field
+
+properties([disableConcurrentBuilds(abortPrevious: true)])
+@Field def DO_RUN=true
+@Field def TARGET="main"
+@Field def RELEASE=false
+@Field def BUILD_MODES=["reg", "dbg", "dl"]
+@Field def PYTHON_VERSION="3.9"
+@Field def TIMEOUT="7200"
+
+def run_python(version, command, output=null) {
+  if (output != null)
+    sh "python$version $command >> $output"
+  else
+    sh "python$version $command"
+}
+
+def slurm_batch(partition, node_num, output, command) {
+  
+  try {
+    sh """sbatch --partition=${partition} -N ${node_num} \
+          --wait -o ${output} --open-mode=append \
+          --wrap=\'env; timeout $TIMEOUT ${command}\'
+       """
+  } catch (Exception e) {
+    sh "scancel \$(cat ${output} | grep SLURM_JOBID | cut -d \"=\" -f 2)"
+    sh "cat ${output}"
+    error("Build failed ${e}")
+  }
+  sh "cat ${output}"
+}
+
+def run_fabtests(stage_name, hw, partition, node_num, prov, util=null,
+                 user_env=null, way=null) {
+  def command = "python3.9 ${RUN_LOCATION}/runtests.py --build_hw=${hw}"
+  def opts = "--prov=${prov} --test=fabtests"
+  def modes = BUILD_MODES
+  if (util)
+    opts = "${opts} --util=${util}"
+
+  if (user_env)
+    opts = "${opts} --user_env ${user_env}"
+
+  if (way) {
+    opts = "${opts} --way ${way}"
+    stage_name = "${stage_name}_${way}"
+    modes = ["reg"]
+  }
+
+  for (mode in modes) {
+    echo "Running $stage_name fabtests $mode"
+    slurm_batch("${partition}", "${node_num}",
+                "${env.LOG_DIR}/${stage_name}_fabtests_${mode}",
+                "${command} ${opts} --ofi_build_mode=${mode}")
+  }
+
+  echo "${stage_name} completed."
+}
+
+def run_middleware(providers, stage_name, test, hw, partition, node_num,
+                   mpi=null, imb_grp=null, user_env=null) {
+  def base_cmd = "python3.9 ${RUN_LOCATION}/runtests.py --test=${test} --build_hw=${hw}"
+  def opts = ""
+  def prefix = "${env.LOG_DIR}/${stage_name}_"
+  def suffix = "_${test}_reg"
+  if (mpi) {
+    base_cmd = "${base_cmd} --mpi=${mpi}"
+    suffix = "_${mpi}${suffix}"
+  }
+
+  if (imb_grp)
+    base_cmd = "${base_cmd} --imb_grp=${imb_grp}"
+
+  if (env.WEEKLY.toBoolean())
+    base_cmd = "${base_cmd} --weekly=${env.WEEKLY}"
+  
+  if (user_env)
+    base_cmd = "${base_cmd} --user_env ${user_env}"
+
+  for (prov in providers) {
+    if (prov[1]) {
+      echo "Running ${prov[0]}-${prov[1]} ${stage_name}"
+      opts = "--prov=${prov[0]} --util=${prov[1]}"
+      output = "${prefix}${prov[0]}-${prov[1]}${suffix}"
+    } else {
+      echo "Running ${prov[0]} ${stage_name}"
+      opts = "--prov=${prov[0]}"
+      output = "${prefix}${prov[0]}${suffix}"
+    }
+
+    slurm_batch("${partition}", "${node_num}", "${output}",
+                "${base_cmd} ${opts}")
+  }
+}
+
+def run_ci(stage_name, config_name) {
+  return sh(returnStatus: true,
+            script: """source ${CI_LOCATION}/${env.CI_MODULE}/venv/bin/activate;\
+                      python run.py \
+                      --output=${env.LOG_DIR}/${stage_name} \
+                      --job=${config_name}
+                    """
+  )
+}
+
+def gather_logs(cluster, key, dest, source) {
+  def address = "${env.USER}@${cluster}"
+
+  try {
+    sh "scp -r -i ${key} ${address}:${source}/* ${dest}/"
+  } catch (Exception e) {
+    echo "Caught exception ${e} when transfering files from ${cluster}"
+  }
+}
+
+def CI_summarize(verbose=false) {
+  if (verbose) {
+    sh """source ${CI_LOCATION}/${env.CI_MODULE}/venv/bin/activate;\
+               python ${CI_LOCATION}/summarize.py \
+               --log_directory=${env.LOG_DIR} \
+               -v
+       """
+  } else {
+    sh """source ${CI_LOCATION}/${env.CI_MODULE}/venv/bin/activate;\
+               python ${CI_LOCATION}/summarize.py \
+               --log_directory=${env.LOG_DIR}
+       """
+  }
+}
+
+def summarize(item, verbose=false, release=false, send_mail=false) {
+  def cmd = "${RUN_LOCATION}/summary.py --summary_item=all"
+  if (verbose) {
+    cmd = "${cmd} -v "
+  }
+  if (release) {
+    cmd = "${cmd} --release "
+  }
+  if (send_mail.toBoolean()) {
+    cmd = "${cmd} --send_mail "
+  }
+
+  run_python(PYTHON_VERSION, cmd)
+}
+
+def save_summary() {
+  sh """
+    mkdir -p ${env.WORKSPACE}/internal
+    rm -rf ${env.WORKSPACE}/internal/*
+    git clone https://${env.PAT}@github.com/${env.INTERNAL} ${env.WORKSPACE}/internal
+    cd ${env.WORKSPACE}/internal
+    mkdir -p ${env.WORKSPACE}/internal/summaries
+    cp ${env.WORKSPACE}/summary_*.log ${env.WORKSPACE}/internal/summaries/
+    git add ${env.WORKSPACE}/internal/summaries/
+    git commit -am \"add ${env.JOB_NAME}'s summary\"
+    git pull -r origin master
+    git push origin master
+  """
+}
+
+def checkout_upstream() {
+  def loc = "${env.WORKSPACE}/upstream/libfabric"
+  sh """
+    if [[ ! -d ${env.WORKSPACE}/upstream ]]; then
+      mkdir -p ${loc}
+    else
+      rm -rf ${env.WORKSPACE}/upstream && mkdir -p ${loc}
+    fi
+
+    git clone --branch ${TARGET} ${env.UPSTREAM} ${loc}
+  """
+}
+
+def checkout_ci_resources() {
+  sh """
+    if [[ ! -d ${env.WORKSPACE}/upstream ]]; then
+      mkdir ${env.WORKSPACE}/ci_resources
+    else
+      rm -rf ${env.WORKSPACE}/ci_resources && mkdir ${env.WORKSPACE}/ci_resources
+    fi
+
+    git clone ${env.CI_RESOURCES} ${env.WORKSPACE}/ci_resources
+
+  """
+}
+
+def checkout_ci() {
+  sh """
+   if [[ ! -d ${env.WORKSPACE}/ci ]]; then
+      mkdir ${env.WORKSPACE}/ci
+    else
+      rm -rf ${env.WORKSPACE}/ci && mkdir ${env.WORKSPACE}/ci
+    fi
+
+    git clone --recurse-submodules ${env.CI} ${env.WORKSPACE}/ci
+  """
+}
+
+def checkout_external_resources() {
+  checkout_ci_resources()
+  checkout_upstream()
+  checkout_ci()
+}
+
+def generate_diff(def branch_name, def output_loc) {
+  sh """
+    git remote add mainRepo ${env.UPSTREAM}
+    git fetch mainRepo
+    git diff --name-only HEAD..mainRepo/${branch_name} > ${output_loc}/commit_id
+    git remote remove mainRepo
+  """
+}
+
+def generate_release_num(def branch_name, def output_loc) {
+  sh """
+    git remote add mainRepo ${env.UPSTREAM}
+    git fetch mainRepo
+    git diff mainRepo/${branch_name}:Makefile.am Makefile.am > \
+        ${output_loc}/Makefile.am.diff
+    git diff mainRepo/${branch_name}:configure.ac configure.ac > \
+        ${output_loc}/configure.ac.diff
+    cat configure.ac | grep AC_INIT | cut -d ' ' -f 2 | \
+        cut -d '[' -f 2 | cut -d ']' -f 1 > ${output_loc}/release_num.txt
+    git remote remove mainRepo
+  """
+}
+
+def slurm_build(modes, partition, location, tag, hw=null, additional_args=null) {
+  def cmd = "pwd; "
+  def prefix = "python${PYTHON_VERSION} ${RUN_LOCATION}/build.py"
+  def libfabric = "--build_item=libfabric --build_loc=${CUSTOM_WORKSPACE}/${location}/libfabric"
+  def fabtests = "--build_item=fabtests --build_loc=${CUSTOM_WORKSPACE}/${location}/libfabric/fabtests"
+  if (RELEASE) {
+    prefix = "${prefix} --release"
+  }
+
+  if (hw) {
+    prefix = "${prefix} --build_hw=${hw}"
+  }
+
+  if (additional_args) {
+    prefix = "${prefix} ${additional_args} "
+  }
+
+  for (mode in modes) {
+    cmd = "${cmd} ${prefix} ${libfabric} --ofi_build_mode=${mode};"
+    cmd = "${cmd} ${prefix} ${fabtests} --ofi_build_mode=${mode};"
+  }
+
+  slurm_batch(partition, "1", "${env.LOG_DIR}/libfabric_${tag}", cmd)
+}
+
+def build(item, mode=null, hw=null, additional_args=null) {
+  def cmd = "${RUN_LOCATION}/build.py --build_item=${item}"
+
+  if (item == "fabtests") {
+    cmd ="${cmd} --build_loc=${CUSTOM_WORKSPACE}/source/libfabric/fabtests"
+  } else {
+    cmd ="${cmd} --build_loc=${CUSTOM_WORKSPACE}/source/libfabric"
+  }
+
+  if (mode) {
+    cmd = "${cmd} --ofi_build_mode=${mode} "
+  }
+
+  if (hw) {
+    cmd = "${cmd} --build_hw=${hw} "
+  }
+
+  if (RELEASE) {
+    cmd = "${cmd} --release "
+  }
+
+  if (additional_args) {
+    cmd = "${cmd} ${additional_args} "
+  }
+
+  run_python(PYTHON_VERSION, cmd)
+}
+
+def build_ci() {
+  sh "${CI_LOCATION}/${env.CI_MODULE}/bootstrap.sh"
+}
+
+def check_target() {
+  echo "CHANGE_TARGET = ${env.CHANGE_TARGET}"
+  if (changeRequest()) {
+    TARGET = env.CHANGE_TARGET
+  }
+
+  if (TARGET) {
+    return TARGET
+  }
+
+  return "main"
+}
+
+def release() {
+  def file = "${env.WORKSPACE}/commit_id"
+  if (!fileExists(file)) {
+    echo "CI Run has not rebased with ofiwg/libfabric. Please Rebase."
+    return 1
+  }
+
+  def changes = readFile file
+  def changeStrings = new ArrayList<String>()
+
+  for (line in changes.readLines()) {
+    changeStrings.add(line)
+  }
+
+  if ((changeStrings.toArray().any { it =~ /(Makefile\.am)\b/ }) ||
+      (changeStrings.toArray().any { it =~ /(configure\.ac)\b/ })) {
+        echo "This is probably a release"
+        return true
+  }
+
+  return false
+}
+
+def skip() {
+  def file = "${env.WORKSPACE}/source/libfabric/commit_id"
+  if (!fileExists(file)) {
+    echo "CI Run has not rebased with ofiwg/libfabric. Please Rebase."
+    return 1
+  }
+
+  def changes = readFile file
+  def changeStrings = new ArrayList<String>()
+
+  for (line in changes.readLines()) {
+    changeStrings.add(line)
+  }
+
+  echo "Changeset is: ${changeStrings.toArray()}"
+  if (changeStrings.toArray().every { it =~ /(?:fabtests\/pytests|man|prov\/efa|prov\/opx|contrib\/aws).*$/ }) {
+    echo "DONT RUN!"
+    return true
+  }
+
+  if (changeStrings.isEmpty()) {
+    echo "DONT RUN!"
+    return true
+  }
+
+  return false
+}
+
+pipeline {
+  agent {
+    node {
+      label 'main'
+      customWorkspace "workspace/${JOB_NAME}/${env.BUILD_NUMBER}"
+    }
+  }
+  options {
+      timestamps()
+      timeout(activity: true, time: 6, unit: 'HOURS')
+      skipDefaultCheckout()
+  }
+  environment {
+      JOB_CADENCE = 'PR'
+      WITH_ENV="'PATH+EXTRA=/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/bin:$PYTHONPATH'"
+      CUSTOM_WORKSPACE="${CB_HOME}/workspace/${JOB_NAME}/${env.BUILD_NUMBER}"
+      DELETE_LOCATION="${env.CUSTOM_WORKSPACE}/middlewares"
+      RUN_LOCATION="${env.CUSTOM_WORKSPACE}/ci_resources/legacy_pipeline_scripts/"
+      CI_LOCATION="${env.CUSTOM_WORKSPACE}/ci"
+      LOG_DIR = "${env.CUSTOM_WORKSPACE}/log_dir"
+  }
+  stages {
+    stage ('checkout') {
+      steps {
+        script {
+          dir ("${CUSTOM_WORKSPACE}/source/libfabric") {
+            checkout scm
+          }
+          dir ("${CUSTOM_WORKSPACE}/grass/libfabric") {
+            checkout scm
+          }
+          dir ("${CUSTOM_WORKSPACE}/water/libfabric") {
+            checkout scm
+          }
+          dir ("${CUSTOM_WORKSPACE}/electric/libfabric") {
+            checkout scm
+          }
+          dir ("${CUSTOM_WORKSPACE}/ucx/libfabric") {
+            checkout scm
+          }
+          dir ("${CUSTOM_WORKSPACE}/cuda/libfabric") {
+            checkout scm
+          }
+          dir ("${CUSTOM_WORKSPACE}/iouring/libfabric") {
+            checkout scm
+          }
+          dir (CUSTOM_WORKSPACE) {
+            checkout_external_resources()
+          }
+        }
+      }
+    }
+    stage ('opt-out') {
+      steps {
+        script {
+          TARGET=check_target()
+          dir ("${CUSTOM_WORKSPACE}/source/libfabric") {
+            generate_diff("${TARGET}", "${env.WORKSPACE}/source/libfabric")
+            generate_release_num("${TARGET}", "${env.WORKSPACE}/source/libfabric")
+          }
+
+          if (env.WEEKLY == null) {
+            weekly = false
+          } else {
+            weekly = env.WEEKLY.toBoolean()
+          }
+          if (weekly) {
+            TIMEOUT="21600" 
+          } 
+          skip = skip()
+          RELEASE = release()
+          if (skip && !weekly) {
+            DO_RUN=false
+          }
+        }
+      }
+    }
+    stage ('prepare build') {
+      when { equals expected: true, actual: DO_RUN }
+      steps {
+        script {  
+          echo "Copying build dirs."
+          build("builddir")
+          echo "Copying log dirs."
+          build("logdir")
+        }
+      }
+    }
+    stage ('parallel-builds') {
+      when { equals expected: true, actual: DO_RUN }
+      parallel {
+        stage ('build-ci') {
+          steps {
+            script {
+              build_ci()
+            }
+          }
+        }
+        stage ('build-water') {
+          steps {
+            script {
+              slurm_build(BUILD_MODES, "totodile", "water", "water", "water")
+              slurm_batch("totodile", "1",
+                            "${env.LOG_DIR}/build_mpich_water_log",
+                            """python$PYTHON_VERSION ${RUN_LOCATION}/build.py \
+                              --build_item=mpich --build_hw=water"""
+                          )
+              slurm_batch("totodile", "1",
+                          "${env.LOG_DIR}/build_shmem_water_log",
+                          """python$PYTHON_VERSION ${RUN_LOCATION}/build.py \
+                              --build_item=shmem --build_hw=water"""
+                         )
+            }
+          }
+        }
+        stage ('build-grass') {
+          steps {
+            script {
+              slurm_build(BUILD_MODES, "grass", "grass", "grass", "grass")
+              slurm_batch("grass", "1",
+                            "${env.LOG_DIR}/build_mpich_grass_log",
+                            """python$PYTHON_VERSION ${RUN_LOCATION}/build.py \
+                              --build_item=mpich --build_hw=grass"""
+                          )
+              slurm_batch("grass", "1",
+                          "${env.LOG_DIR}/build_shmem_grass_log",
+                          """python$PYTHON_VERSION ${RUN_LOCATION}/build.py \
+                              --build_item=shmem --build_hw=grass"""
+                         )
+            }
+          }
+        }
+        stage ('build-electric') {
+          steps {
+            script {
+              slurm_build(BUILD_MODES, "electric", "electric", "electric",
+                          "electric")
+            }
+          }
+        }
+        stage ('build-ucx') {
+          steps {
+            script {
+              slurm_build(BUILD_MODES, "totodile", "ucx", "ucx", "ucx")
+            }
+          }
+        }
+        stage ('build-cuda') {
+          steps {
+            script {
+              slurm_build(["reg"], "cyndaquil", "cuda", "cyndaquil",
+                          "cyndaquil", "--cuda")
+              slurm_build(["reg"], "quilava", "cuda", "quilava",
+                          "quilava", "--cuda")
+            }
+          }
+        }
+        stage ('build-iouring') {
+          steps {
+            script {
+              slurm_build(BUILD_MODES, "ivysaur", "iouring", "ivysaur",
+                          "ivysaur")
+            }
+          }
+        }
+        stage ('build-daos') {
+          agent {
+            node {
+              label 'daos_head'
+              customWorkspace CUSTOM_WORKSPACE
+            }
+          }
+          options { skipDefaultCheckout() }
+          steps {
+            script {
+              dir ("${CUSTOM_WORKSPACE}/source/libfabric") { checkout scm }
+              checkout_external_resources()
+              dir (CUSTOM_WORKSPACE) {
+                build("logdir")
+                build("libfabric", "reg", "daos")
+                build("fabtests", "reg", "daos")
+              }
+            }
+          }
+        }
+        stage ('build-gpu') {
+          agent {
+            node {
+              label 'ze'
+              customWorkspace CUSTOM_WORKSPACE
+            }
+          }
+          options { skipDefaultCheckout() }
+          steps {
+            script {
+              dir ("${CUSTOM_WORKSPACE}/source/libfabric") { checkout scm }
+              checkout_external_resources()
+              dir (CUSTOM_WORKSPACE) {
+                build("logdir")
+                build("builddir")
+                build_ci()
+                slurm_build(BUILD_MODES, "fabrics-ci", "source", "ze", "gpu",
+                            "--gpu")
+              }
+            }
+          }
+        }
+      }
+    }
+    stage('parallel-tests') {
+      when { equals expected: true, actual: DO_RUN }
+      parallel {
+        stage ('CI_mpi_verbs-rxm_imb') {
+          steps {
+            script {
+              dir (CI_LOCATION) {
+                run_ci("CI_mpi_verbs-rxm_imb", "pr_imb_water.json")
+              }
+            }
+          }
+        }
+        stage ('CI_mpi_verbs-rxm_osu') {
+          steps {
+            script {
+              dir (CI_LOCATION) {
+                run_ci("CI_mpi_verbs-rxm_osu", "pr_osu_water.json")
+              }
+            }
+          }
+        }
+        stage ('CI_mpi_tcp_imb') {
+          steps {
+            script {
+              dir (CI_LOCATION) {
+                run_ci("CI_mpi_tcp_imb", "pr_imb_grass.json")
+              }
+            }
+          }
+        }
+        stage ('CI_mpi_tcp_osu') {
+          steps {
+            script {
+              dir (CI_LOCATION) {
+                run_ci("CI_mpi_tcp_osu", "pr_osu_grass.json")
+              }
+            }
+          }
+        }
+        stage('CI_fabtests_tcp') {
+           steps {
+            script {
+              dir (CI_LOCATION) {
+                run_ci("CI_fabtests_tcp_reg", "pr_fabtests_tcp_reg.json")
+                run_ci("CI_fabtests_tcp_dbg", "pr_fabtests_tcp_dbg.json")
+                run_ci("CI_fabtests_tcp_dl", "pr_fabtests_tcp_dl.json")
+              }
+            }
+          }
+        }
+        stage('CI_fabtests_sockets') {
+           steps {
+            script {
+              dir (CI_LOCATION) {
+                run_ci("CI_fabtests_sockets_reg", "pr_fabtests_sockets_reg.json")
+                run_ci("CI_fabtests_sockets_dbg", "pr_fabtests_sockets_dbg.json")
+                run_ci("CI_fabtests_sockets_dl", "pr_fabtests_sockets_dl.json")
+              }
+            }
+          }
+        }
+        stage('CI_fabtests_udp') {
+           steps {
+            script {
+              dir (CI_LOCATION) {
+                run_ci("CI_fabtests_udp_reg", "pr_fabtests_udp_reg.json")
+                run_ci("CI_fabtests_udp_dbg", "pr_fabtests_udp_dbg.json")
+                run_ci("CI_fabtests_udp_dl", "pr_fabtests_udp_dl.json")
+              }
+            }
+          }
+        }
+        stage('CI_fabtests_shm') {
+           steps {
+            script {
+              dir (CI_LOCATION) {
+                run_ci("CI_fabtests_shm_reg", "pr_fabtests_shm_reg.json")
+                run_ci("CI_fabtests_shm_dbg", "pr_fabtests_shm_dbg.json")
+                run_ci("CI_fabtests_shm_dl", "pr_fabtests_shm_dl.json")
+              }
+            }
+          }
+        }
+        stage('CI_fabtests_ivysaur') {
+          steps {
+            script {
+              dir (CI_LOCATION) {
+                run_ci("CI_fabtests_ivysaur_reg", "pr_fabtests_ivysaur_reg.json")
+                run_ci("CI_fabtests_ivysaur_dbg", "pr_fabtests_ivysaur_dbg.json")
+                run_ci("CI_fabtests_ivysaur_dl", "pr_fabtests_ivysaur_dl.json")
+              }
+            }
+          }
+        }
+        stage('CI_fabtests_verbs_rxm') {
+          steps {
+            script {
+              dir (CI_LOCATION) {
+                run_ci("CI_fabtests_verbs_reg", "pr_fabtests_verbs_rxm_reg.json")
+                run_ci("CI_fabtests_verbs_dbg", "pr_fabtests_verbs_rxm_dbg.json")
+                run_ci("CI_fabtests_verbs_dl", "pr_fabtests_verbs_rxm_dl.json")
+              }
+            }
+          }
+        }
+        stage('CI_fabtests_verbs_rxd') {
+          steps {
+            script {
+              dir (CI_LOCATION) {
+                run_ci("CI_fabtests_verbs_reg", "pr_fabtests_verbs_rxd_reg.json")
+                run_ci("CI_fabtests_verbs_dbg", "pr_fabtests_verbs_rxd_dbg.json")
+                run_ci("CI_fabtests_verbs_dl", "pr_fabtests_verbs_rxd_dl.json")
+              }
+            }
+          }
+        }
+        stage('CI_fabtests_psm3') {
+          steps {
+            script {
+              dir (CI_LOCATION) {
+                run_ci("CI_fabtests_psm3_reg", "pr_fabtests_psm3_reg.json")
+                run_ci("CI_fabtests_psm3_dbg", "pr_fabtests_psm3_dbg.json")
+                run_ci("CI_fabtests_psm3_dl", "pr_fabtests_psm3_dl.json")
+              }
+            }
+          }
+        }
+        stage('CI_fabtests_ucx') {
+          steps {
+            script {
+              dir (CI_LOCATION) {
+                run_ci("CI_fabtests_ucx_reg", "pr_fabtests_ucx_reg.json")
+                run_ci("CI_fabtests_ucx_dbg", "pr_fabtests_ucx_dbg.json")
+                run_ci("CI_fabtests_ucx_dl", "pr_fabtests_ucx_dl.json")
+              }
+            }
+          }
+        }
+        stage('mpichtestsuite') {
+          steps {
+            script {
+              dir (RUN_LOCATION) {
+                def providers = [['tcp', null], ["verbs","rxm"]]
+                def MPIS = ["mpich"]
+                if (env.WEEKLY.toBoolean()) {
+                  MPIS = ["impi", "mpich"]
+                }
+                for (def mpi in MPIS) {
+                  run_middleware(providers, "mpichtestsuite", "mpichtestsuite",
+                                 "water", "totodile", "2", "${mpi}")
+                }
+              }
+            }
+          }
+        }
+        stage('SHMEM_grass') {
+          steps {
+            script {
+              dir (RUN_LOCATION) {
+                run_middleware([["tcp", null]], "SHMEM", "shmem",
+                                "grass", "grass", "2")
+              }
+            }
+          }
+        }
+        stage('SHMEM_water') {
+          steps {
+            script {
+              dir (RUN_LOCATION) {
+                run_middleware([["verbs", "rxm"], ["sockets", null]], "SHMEM",
+                                "shmem", "water", "totodile", "2")
+              }
+            }
+          }
+        }
+        stage ('multinode_performance') {
+          steps {
+            script {
+              dir (RUN_LOCATION) {
+                run_middleware([["tcp", null],["sockets", null]],
+			       "multinode_performance", "multinode", "grass", "grass", "2")
+		run_middleware([["verbs", "rxm"]], "multinode_performance",
+			       "multinode", "water", "totodile", "2")
+              }
+            }
+          }
+        }
+	      stage ('oneCCL') {
+          steps {
+            script {
+              dir (RUN_LOCATION) {
+		            run_middleware([["verbs", null]], "oneCCL",
+                               "oneccl", "water", "totodile", "2")
+		            run_middleware([["shm", null]], "oneCCL",
+			                         "oneccl", "grass", "bulbasaur", "1")
+		            run_middleware([["psm3", null]], "oneCCL",
+			                         "oneccl", "water", "totodile", "2")
+		            run_middleware([["tcp", null]], "oneCCL",
+			                         "oneccl", "grass", "bulbasaur", "2")
+                run_middleware([["shm", null]], "oneCCL_DSA",
+                               "oneccl", "electric", "pikachu", "1", null, null,
+                               """CCL_ATL_SHM=1 FI_SHM_DISABLE_CMA=1 \
+                               FI_SHM_USE_DSA_SAR=1 FI_LOG_LEVEL=warn""")
+              }
+            }
+          }
+        }
+        stage ('oneCCL-GPU-v3') {
+          agent { node { label 'ze' } }
+          options { skipDefaultCheckout() }
+          steps {
+            script {
+              dir (RUN_LOCATION) {
+		            run_middleware([["psm3", null]], "oneCCL-GPU-v3", "onecclgpu",
+			       "gpu", "torchic", "1", null, null,
+                               "FI_HMEM_DISABLE_P2P=1")
+		            run_middleware([["verbs", null]], "oneCCL-GPU-v3", "onecclgpu",
+                               "gpu", "torchic", "1", null, null,
+                               "FI_HMEM_DISABLE_P2P=1")
+			    run_middleware([["tcp", null]], "oneCCL-GPU-v3", "onecclgpu",
+			       "gpu", "torchic", "1", null, null,
+			       "FI_HMEM_DISABLE_P2P=1")
+			    run_middleware([["shm", null]], "oneCCL-GPU-v3", "onecclgpu",
+			       "gpu", "torchic", "1", null, null,
+			       "FI_HMEM_DISABLE_P2P=1")
+              }
+            }
+          }
+        }
+        stage('daos_tcp') {
+          agent { node { label 'daos_tcp' } }
+          options { skipDefaultCheckout() }
+          steps {
+            script {
+              dir (RUN_LOCATION) {
+                run_python(PYTHON_VERSION,
+                           """runtests.py --prov='tcp' --util='rxm' \
+                           --test=daos --build_hw=daos \
+                           --log_file=${env.LOG_DIR}/daos_tcp-rxm_reg""")
+              }
+            }
+          }
+        }
+         stage('daos_verbs') {
+          agent { node { label 'daos_verbs' } }
+          options { skipDefaultCheckout() }
+          steps {
+            script {
+              dir (RUN_LOCATION) {
+                run_python(PYTHON_VERSION,
+                           """runtests.py --prov='verbs' --util='rxm' \
+                           --test=daos --build_hw=daos \
+                           --log_file=${env.LOG_DIR}/daos_verbs-rxm_reg""")
+              }
+            }
+          }
+        }
+        stage ('DMABUF-Tests') {
+          agent { node { label 'ze' } }
+          options { skipDefaultCheckout() }
+          steps {
+            script {
+              dir (RUN_LOCATION) {
+                dmabuf_output = "${LOG_DIR}/DMABUF-Tests_verbs-rxm_dmabuf"
+                cmd = """ python3.9 runtests.py --test=dmabuf \
+                           --prov=verbs --util=rxm --build_hw=gpu"""
+                slurm_batch("torchic", "1", "${dmabuf_output}_reg",
+                            "${cmd}")
+              }
+            }
+          }
+        }
+        stage ('CI_fabtests_cyndaquil') {
+          steps {
+            script {
+              dir (CI_LOCATION) {
+                run_ci("CI_fabtests_cyndaquil_h2d_reg",
+                       "pr_fabtests_cyndaquil_h2d_reg.json")
+                run_ci("CI_fabtests_cyndaquil_d2d_reg",
+                       "pr_fabtests_cyndaquil_d2d_reg.json")
+              }
+            }
+          }
+        }
+        stage ('CI_fabtests_quilava') {
+          steps {
+            script {
+              dir (CI_LOCATION) {
+                run_ci("CI_fabtests_quilava_h2d_reg",
+                       "pr_fabtests_quilava_h2d_reg.json")
+                run_ci("CI_fabtests_quilava_d2d_reg",
+                       "pr_fabtests_quilava_d2d_reg.json")
+              }
+            }
+          }
+        }
+        stage ('CI_fabtests_charizard') {
+          agent { node { label 'ze' } }
+          options { skipDefaultCheckout() }
+          steps {
+            script {
+              dir (CI_LOCATION) {
+                run_ci("CI_fabtests_charizard_h2d_reg",
+                       "pr_fabtests_charizard_h2d_reg.json")
+                run_ci("CI_fabtests_charizard_d2d_reg",
+                       "pr_fabtests_charizard_d2d_reg.json")
+                run_ci("CI_fabtests_charizard_xd2d_reg",
+                       "pr_fabtests_charizard_xd2d_reg.json")
+              }
+            }
+          }
+        }
+        stage('CI_fabtests_electric') {
+          steps {
+            script {
+              dir (CI_LOCATION) {
+                run_ci("CI_fabtests_electric_reg", "pr_fabtests_electric_reg.json")
+                run_ci("CI_fabtests_electric_dbg", "pr_fabtests_electric_dbg.json")
+                run_ci("CI_fabtests_electric_dl", "pr_fabtests_electric_dl.json")
+              }
+            }
+          }
+        }
+      }
+    }
+    stage ('Summary') {
+      when { equals expected: true, actual: DO_RUN }
+      steps {
+        script {
+          gather_logs("${env.DAOS_ADDR}", "${env.DAOS_KEY}", "${env.LOG_DIR}",
+                      "${env.LOG_DIR}")
+          gather_logs("${env.ZE_ADDR}", "${env.ZE_KEY}", "${env.LOG_DIR}",
+                      "${env.LOG_DIR}")
+
+          CI_summarize(verbose=false)
+          summarize("all", verbose=false, release=RELEASE,
+                    send_mail=env.WEEKLY.toBoolean())
+          if (RELEASE) {
+            save_summary()
+          }
+        }
+      }
+    }
+  }
+
+  post {
+    always {
+      script {
+        if (DO_RUN) {
+          CI_summarize(verbose=true)
+          CI_summarize()
+          summarize("all", verbose=true)
+          summarize("all")
+        }
+      }
+    }
+    aborted {
+      node ('daos_head') {
+        dir ("${DELETE_LOCATION}/middlewares") { deleteDir() }
+      }
+      node ('ze') {
+        dir ("${DELETE_LOCATION}/middlewares") { deleteDir() }
+      }
+      dir ("${DELETE_LOCATION}/middlewares") { deleteDir() }
+    }
+    success {
+      script {
+        if (DO_RUN) {
+          CI_summarize(verbose=true)
+          summarize("all", verbose=true, release=false,
+          send_mail=env.WEEKLY.toBoolean())
+        }
+      }
+      node ('daos_head') {
+        dir("${env.WORKSPACE}") { deleteDir() }
+        dir("${env.WORKSPACE}@tmp") { deleteDir() }
+      }
+      node ('ze') {
+        dir("${env.WORKSPACE}") { deleteDir() }
+        dir("${env.WORKSPACE}@tmp") { deleteDir() }
+      }
+      dir("${env.WORKSPACE}") { deleteDir() }
+      dir("${env.WORKSPACE}@tmp") { deleteDir() }
+    }
+  }
+}

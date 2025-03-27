@@ -1,0 +1,24 @@
+#!/bin/sh
+#
+# Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2014. ALL RIGHTS RESERVED.
+# Copyright (C) UT-Battelle, LLC. 2014. ALL RIGHTS RESERVED.
+# See file LICENSE for terms.
+#
+
+#
+# UCX build for development.
+# Full logging and an runtime checks.
+#
+
+basedir=$(cd $(dirname $0) && pwd)
+$basedir/../configure \
+	--enable-gtest \
+	--enable-examples \
+	--with-valgrind \
+	--enable-profiling \
+	--enable-frame-pointer \
+	--enable-stats \
+	--enable-fault-injection \
+	--enable-debug-data \
+	--enable-mt \
+	"$@"

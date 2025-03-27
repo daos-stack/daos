@@ -1,0 +1,21 @@
+#: "Suite of tests for the ucx provider"
+{
+	prov_name: ucx,
+	test_type: [
+		FT_TEST_LATENCY,
+		FT_TEST_BANDWIDTH,
+	],
+	class_function: [
+		FT_FUNC_SEND,
+		FT_FUNC_SENDV,
+		FT_FUNC_SENDMSG,
+	],
+	ep_type: [
+		FI_EP_RDM,
+	],
+	mr_mode: [ FI_MR_LOCAL, FI_MR_VIRT_ADDR, FI_MR_ALLOCATED, FI_MR_PROV_KEY, FI_MR_RAW ],
+	test_class: [
+		FT_CAP_MSG,
+	],
+	test_flags: FT_FLAG_QUICKTEST
+},

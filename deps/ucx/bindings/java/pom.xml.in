@@ -1,0 +1,425 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2019. ALL RIGHTS RESERVED.
+  ~ See file LICENSE for terms.
+  -->
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>org.openucx</groupId>
+  <artifactId>jucx</artifactId>
+  <version>@VERSION@</version>
+  <packaging>jar</packaging>
+  <name>jucx</name>
+  <url>https://github.com/openucx/ucx</url>
+  <description>Java binding to ucx high performance communication library</description>
+
+  <mailingLists>
+    <mailingList>
+      <name>UCX group</name>
+      <archive>https://elist.ornl.gov/mailman/listinfo/ucx-group</archive>
+    </mailingList>
+  </mailingLists>
+
+  <licenses>
+    <license>
+      <name>BSD 3 Clause License</name>
+      <url>http://www.openucx.org/license/</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
+  <scm>
+    <connection>scm:git:git://github.com/openucx/ucx.git</connection>
+    <developerConnection>scm:git:ssh://git@github.com/openucx/ucx.git</developerConnection>
+    <tag>HEAD</tag>
+    <url>https://github.com/openucx/ucx.git</url>
+  </scm>
+
+  <properties>
+    <gpg.defaultKeyring>false</gpg.defaultKeyring>
+    <gpg.passphrase>${env.GPG_PASSPHRASE}</gpg.passphrase>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <ucx.src.dir>@abs_top_srcdir@/src</ucx.src.dir>
+    <jucx.src.dir>${ucx.src.dir}/../bindings/java</jucx.src.dir>
+    <ucx.build.dir>@abs_top_builddir@</ucx.build.dir>
+    <native.dir>${ucx.build.dir}/bindings/java/src/main/native</native.dir>
+    <ucm.lib.path>${ucx.build.dir}/src/ucm/.libs</ucm.lib.path>
+    <ucs.lib.path>${ucx.build.dir}/src/ucs/.libs</ucs.lib.path>
+    <uct.lib.path>${ucx.build.dir}/src/uct/.libs</uct.lib.path>
+    <ucp.lib.path>${ucx.build.dir}/src/ucp/.libs</ucp.lib.path>
+    <junit.version>4.12</junit.version>
+    <sources>**/jucx/**</sources>
+    <skipCopy>false</skipCopy>
+  </properties>
+
+  <profiles>
+      <profile>
+        <id>jdk8</id>
+        <activation>
+          <jdk>1.8</jdk>
+        </activation>
+        <properties>
+          <javadocExecutable>${java.home}/../bin/javadoc</javadocExecutable>
+        </properties>
+        <build>
+          <plugins>
+            <plugin>
+              <artifactId>maven-compiler-plugin</artifactId>
+              <configuration>
+                <source>1.8</source>
+                <target>1.8</target>
+              </configuration>
+            </plugin>
+          </plugins>
+        </build>
+      </profile>
+      <profile>
+        <id>jdk9</id>
+        <activation>
+          <jdk>1.9</jdk>
+        </activation>
+        <properties>
+          <javadocExecutable>${java.home}/../bin/javadoc</javadocExecutable>
+        </properties>
+        <build>
+          <plugins>
+            <plugin>
+              <artifactId>maven-compiler-plugin</artifactId>
+              <configuration>
+                <release>8</release>
+              </configuration>
+            </plugin>
+          </plugins>
+        </build>
+      </profile>
+      <profile>
+        <id>jdk10+</id>
+        <activation>
+          <jdk>[1.10,)</jdk>
+        </activation>
+        <properties>
+          <javadocExecutable>${java.home}/bin/javadoc</javadocExecutable>
+        </properties>
+        <build>
+          <plugins>
+            <plugin>
+              <artifactId>maven-compiler-plugin</artifactId>
+              <configuration>
+                <source>1.8</source>
+                <target>1.8</target>
+                <compilerArgs>
+                  <arg>-h</arg>
+                  <arg>${native.dir}</arg>
+                </compilerArgs>
+              </configuration>
+            </plugin>
+          </plugins>
+        </build>
+      </profile>
+
+    </profiles>
+
+  <issueManagement>
+    <system>Github</system>
+    <url>https://github.com/openucx/ucx/issues</url>
+  </issueManagement>
+
+  <developers>
+    <developer>
+      <name>Peter Rudenko</name>
+      <email>peterr@mellanox.com</email>
+      <organization>Mellanox Technologies</organization>
+    </developer>
+    <developer>
+      <name>Yossi Itigin</name>
+      <email>yosefe@mellanox.com</email>
+      <organization>Mellanox Technologies</organization>
+    </developer>
+  </developers>
+
+  <distributionManagement>
+    <snapshotRepository>
+      <id>ossrh</id>
+      <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+    </snapshotRepository>
+    <repository>
+      <id>ossrh</id>
+      <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+    </repository>
+  </distributionManagement>
+
+  <repositories>
+    <repository>
+      <id>gcs-maven-central-mirror</id>
+      <!--
+        Google Mirror of Maven Central, placed first so that it's used instead of flaky Maven Central.
+        See https://storage-download.googleapis.com/maven-central/index.html
+      -->
+      <name>GCS Maven Central mirror</name>
+      <url>https://maven-central.storage-download.googleapis.com/maven2/</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </repository>
+    <repository>
+      <!--
+        This is used as a fallback when the first try fails.
+      -->
+      <id>central</id>
+      <name>Maven Repository</name>
+      <url>https://repo.maven.apache.org/maven2</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </repository>
+  </repositories>
+  <pluginRepositories>
+    <pluginRepository>
+      <id>gcs-maven-central-mirror</id>
+      <!--
+        Google Mirror of Maven Central, placed first so that it's used instead of flaky Maven Central.
+        See https://storage-download.googleapis.com/maven-central/index.html
+      -->
+      <name>GCS Maven Central mirror</name>
+      <url>https://maven-central.storage-download.googleapis.com/maven2/</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </pluginRepository>
+    <pluginRepository>
+      <id>central</id>
+      <url>https://repo.maven.apache.org/maven2</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </pluginRepository>
+  </pluginRepositories>
+
+  <dependencies>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>${junit.version}</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <sourceDirectory>${jucx.src.dir}/src/main/java</sourceDirectory>
+    <testSourceDirectory>${jucx.src.dir}/src/test/java</testSourceDirectory>
+    <directory>${native.dir}/build-java</directory>
+    <testResources>
+      <testResource>
+        <directory>resources</directory>
+        <includes>
+          <include>**/*</include>
+        </includes>
+      </testResource>
+    </testResources>
+    <resources>
+      <resource>
+        <directory>resources</directory>
+        <includes>
+          <include>libjucx.so</include>
+        </includes>
+      </resource>
+    </resources>
+
+    <plugins>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-source-plugin</artifactId>
+        <version>3.1.0</version>
+        <executions>
+            <execution>
+                <id>attach-sources</id>
+                <goals>
+                    <goal>jar-no-fork</goal>
+                </goals>
+            </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-gpg-plugin</artifactId>
+        <version>1.6</version>
+        <executions>
+          <execution>
+            <id>sign-artifacts</id>
+            <phase>deploy</phase>
+            <goals>
+              <goal>sign</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.8.1</version>
+        <configuration>
+          <compilerArgs>
+            <arg>-h</arg>
+            <arg>${native.dir}</arg>
+          </compilerArgs>
+          <includes>
+            <include>${sources}</include>
+          </includes>
+        </configuration>
+        <executions>
+          <execution>
+            <id>default-testCompile</id>
+            <phase>test-compile</phase>
+            <goals>
+              <goal>testCompile</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <artifactId>maven-clean-plugin</artifactId>
+        <version>3.0.0</version>
+        <configuration>
+          <filesets>
+            <fileset>
+              <directory>resources</directory>
+              <includes>
+                <include>**/*.so</include>
+              </includes>
+            </fileset>
+          </filesets>
+        </configuration>
+      </plugin>
+
+      <plugin>
+        <artifactId>maven-resources-plugin</artifactId>
+        <version>2.7</version>
+        <executions>
+          <execution>
+            <id>copy-dynamic-libs</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>copy-resources</goal>
+            </goals>
+            <configuration>
+              <overwrite>true</overwrite>
+              <skip>${skipCopy}</skip>
+              <outputDirectory>${basedir}/resources</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>${native.dir}/.libs</directory>
+                  <includes>
+                    <include>**/*.so</include>
+                  </includes>
+                </resource>
+                <resource>
+                  <directory>${ucm.lib.path}</directory>
+                  <includes>
+                    <include>**/*.so</include>
+                  </includes>
+                </resource>
+                <resource>
+                  <directory>${ucs.lib.path}</directory>
+                  <includes>
+                    <include>**/*.so</include>
+                  </includes>
+                </resource>
+                <resource>
+                  <directory>${uct.lib.path}</directory>
+                  <includes>
+                    <include>**/*.so</include>
+                  </includes>
+                </resource>
+                <resource>
+                  <directory>${ucp.lib.path}</directory>
+                  <includes>
+                    <include>**/*.so</include>
+                  </includes>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-checkstyle-plugin</artifactId>
+        <version>3.1.0</version>
+        <dependencies>
+          <dependency>
+            <groupId>com.puppycrawl.tools</groupId>
+            <artifactId>checkstyle</artifactId>
+            <version>8.29</version>
+          </dependency>
+        </dependencies>
+        <executions>
+          <execution>
+            <id>validate</id>
+            <phase>validate</phase>
+            <configuration>
+              <configLocation>${jucx.src.dir}/checkstyle.xml</configLocation>
+              <encoding>UTF-8</encoding>
+              <consoleOutput>true</consoleOutput>
+              <failsOnError>true</failsOnError>
+              <linkXRef>false</linkXRef>
+              <includeTestSourceDirectory>true</includeTestSourceDirectory>
+              <violationSeverity>warning</violationSeverity>
+            </configuration>
+            <goals>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-javadoc-plugin</artifactId>
+        <version>3.2.0</version>
+        <configuration>
+          <source>8</source>
+          <quiet>true</quiet>
+          <doclint>all,-missing</doclint>
+        </configuration>
+        <executions>
+            <execution>
+              <id>attach-javadocs</id>
+              <goals>
+                <goal>jar</goal>
+              </goals>
+            </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.sonatype.plugins</groupId>
+        <artifactId>nexus-staging-maven-plugin</artifactId>
+        <version>1.6.8</version>
+        <extensions>true</extensions>
+        <configuration>
+          <serverId>ossrh</serverId>
+          <nexusUrl>https://oss.sonatype.org/</nexusUrl>
+          <autoReleaseAfterClose>true</autoReleaseAfterClose>
+        </configuration>
+      </plugin>
+
+    </plugins>
+  </build>
+</project>

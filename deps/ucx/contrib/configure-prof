@@ -1,0 +1,22 @@
+#!/bin/sh
+#
+# Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2014. ALL RIGHTS RESERVED.
+#
+# See file LICENSE for terms.
+#
+
+#
+# UCX build for profiling purposes.
+# Some extra code to ease performance debugging.
+#
+
+basedir=$(cd $(dirname $0) && pwd)
+$basedir/../configure \
+	--disable-logging \
+	--disable-debug \
+	--disable-assertions \
+	--disable-params-check \
+	--enable-profiling \
+	--enable-frame-pointer \
+	--enable-stats \
+	"$@"

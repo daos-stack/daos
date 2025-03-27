@@ -1,0 +1,37 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+# Sample debian/rules that uses debhelper.
+# This file was originally written by Joey Hess and Craig Small.
+# As a special exception, when this file is copied by dh-make into a
+# dh-make output file, you may use that output file without restriction.
+# This special exception was added by Craig Small in version 0.37 of dh-make.
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+CUDA_OPT = $(shell echo ${DEB_BUILD_PROFILES} | grep -qw cuda \
+	&& echo --with-cuda=/usr/local/cuda || echo --without-cuda)
+
+%:
+	dh $@ 
+
+override_dh_auto_configure:
+	./contrib/configure-release-mt --prefix=/usr \
+		--enable-examples --with-java=no \
+		$(CUDA_OPT)
+	chmod +x debian/rules
+
+# We may have a single package or two packages. We can't tell in advance.
+# Therefore set destdir for the default of multiple packages (that also
+# works for a single package):
+override_dh_auto_install:
+	dh_auto_install --destdir=debian/tmp
+
+override_dh_shlibdeps:
+	dh_shlibdeps --dpkg-shlibdeps-params=--ignore-missing-info
+	if [ -e debian/ucx-cuda.substvars ]; then \
+	  sed -i -e 's/libnvidia-compute-\([0-9]\+\)/& | libnvidia-ml1/' \
+	    debian/ucx-cuda.substvars \
+	; fi
+
+override_dh_auto_clean:

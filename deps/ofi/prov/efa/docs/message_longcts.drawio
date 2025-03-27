@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="drawio.corp.amazon.com" modified="2021-07-20T15:06:47.205Z" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15" etag="2F3kZEbBkw2vVyTIGyXy" version="12.4.8" type="browser">
+  <diagram id="OzKOerL5p1M4QQdfBGPd" name="Page-1">
+    <mxGraphModel dx="1418" dy="627" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="hM9hUbB8x_-XiU8bxfhU-2" value="Application call Libfabric&#39;s send API" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="120" y="30" width="120" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="hM9hUbB8x_-XiU8bxfhU-3" value="Receiver&#39;s progress engine" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="320" y="30" width="120" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="hM9hUbB8x_-XiU8bxfhU-6" value="" style="endArrow=classic;html=1;dashed=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" target="hM9hUbB8x_-XiU8bxfhU-9" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="179.5" y="90" as="sourcePoint"/>
+            <mxPoint x="180" y="260" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="hM9hUbB8x_-XiU8bxfhU-7" value="" style="endArrow=classic;html=1;dashed=1;" parent="1" target="hM9hUbB8x_-XiU8bxfhU-10" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="379.5" y="90" as="sourcePoint"/>
+            <mxPoint x="380" y="269" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="hM9hUbB8x_-XiU8bxfhU-8" value="" style="endArrow=classic;html=1;dashed=1;" parent="1" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="180" y="130" as="sourcePoint"/>
+            <mxPoint x="380" y="170" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="hM9hUbB8x_-XiU8bxfhU-9" value="Application got libfaric&#39;s send completion" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="120" y="530" width="120" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="hM9hUbB8x_-XiU8bxfhU-10" value="Application got Libfabric&#39;s receive completion" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="320" y="530" width="120" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="hM9hUbB8x_-XiU8bxfhU-14" value="LONGCTS RTM" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;rotation=11;" parent="1" vertex="1">
+          <mxGeometry x="234.82" y="130" width="100.18" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="nSG-SVCCmyc8D_64ludf-9" value="" style="endArrow=classic;html=1;dashed=1;" parent="1" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="380" y="180" as="sourcePoint"/>
+            <mxPoint x="180" y="220" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="nSG-SVCCmyc8D_64ludf-10" value="CTS" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;rotation=349;" parent="1" vertex="1">
+          <mxGeometry x="258" y="186" width="40" height="10" as="geometry"/>
+        </mxCell>
+        <mxCell id="nSG-SVCCmyc8D_64ludf-11" value="DATA" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;rotation=11;" parent="1" vertex="1">
+          <mxGeometry x="225" y="230" width="110" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="nSG-SVCCmyc8D_64ludf-12" value="" style="endArrow=classic;html=1;dashed=1;" parent="1" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="180" y="230" as="sourcePoint"/>
+            <mxPoint x="380" y="270" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ELLmg3xNlQ1Nrk4ykZ6T-2" value="" style="endArrow=classic;html=1;dashed=1;" parent="1" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="180" y="250" as="sourcePoint"/>
+            <mxPoint x="380" y="290" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ELLmg3xNlQ1Nrk4ykZ6T-3" value="" style="endArrow=classic;html=1;dashed=1;" parent="1" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="180" y="270" as="sourcePoint"/>
+            <mxPoint x="380" y="310" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ELLmg3xNlQ1Nrk4ykZ6T-4" value="" style="endArrow=classic;html=1;dashed=1;" parent="1" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="180" y="290" as="sourcePoint"/>
+            <mxPoint x="380" y="330" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ELLmg3xNlQ1Nrk4ykZ6T-5" value="Application call Libfabric&#39;s receive API" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="380" y="160" width="160" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="ELLmg3xNlQ1Nrk4ykZ6T-6" value="" style="endArrow=classic;html=1;dashed=1;" parent="1" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="380" y="340" as="sourcePoint"/>
+            <mxPoint x="180" y="380" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ELLmg3xNlQ1Nrk4ykZ6T-8" value="CTS" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;rotation=349;" parent="1" vertex="1">
+          <mxGeometry x="260" y="347" width="40" height="10" as="geometry"/>
+        </mxCell>
+        <mxCell id="ELLmg3xNlQ1Nrk4ykZ6T-9" value="DATA" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;rotation=11;" parent="1" vertex="1">
+          <mxGeometry x="225" y="390" width="110" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="ELLmg3xNlQ1Nrk4ykZ6T-10" value="" style="endArrow=classic;html=1;dashed=1;" parent="1" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="180" y="390" as="sourcePoint"/>
+            <mxPoint x="380" y="430" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ELLmg3xNlQ1Nrk4ykZ6T-11" value="" style="endArrow=classic;html=1;dashed=1;" parent="1" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="180" y="410" as="sourcePoint"/>
+            <mxPoint x="380" y="450" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ELLmg3xNlQ1Nrk4ykZ6T-12" value="" style="endArrow=classic;html=1;dashed=1;" parent="1" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="180" y="430" as="sourcePoint"/>
+            <mxPoint x="380" y="470" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ELLmg3xNlQ1Nrk4ykZ6T-13" value="" style="endArrow=classic;html=1;dashed=1;" parent="1" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="180" y="450" as="sourcePoint"/>
+            <mxPoint x="380" y="490" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -130,7 +130,7 @@ def define_mercury(reqs):
         ofi_build.append('--disable-debug')
 
     reqs.define('ofi',
-                retriever=GitRepoRetriever(),
+                retriever=CopyRetriever(),
                 commands=[['./autogen.sh'],
                           ofi_build,
                           ['make'],
@@ -155,7 +155,7 @@ def define_mercury(reqs):
         ucx_configure.extend(['--disable-debug', '--disable-logging'])
 
     reqs.define('ucx',
-                retriever=GitRepoRetriever(),
+                retriever=CopyRetriever(),
                 libs=['ucs', 'ucp', 'uct'],
                 functions={'ucs': ['ucs_debug_disable_signal']},
                 headers=['uct/api/uct.h'],
@@ -379,7 +379,7 @@ def define_components(reqs):
                 patch_rpath=['lib', 'bin'])
 
     reqs.define('protobufc',
-                retriever=GitRepoRetriever(),
+                retriever=CopyRetriever(),
                 commands=[['./autogen.sh'],
                           ['./configure', '--prefix=$PROTOBUFC_PREFIX', '--disable-protoc'],
                           ['make'],

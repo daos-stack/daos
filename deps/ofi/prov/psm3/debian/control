@@ -1,0 +1,12 @@
+Source: libpsm3-fi
+Section: libs
+Priority: optional
+Maintainer: https://www.intel.com/content/www/us/en/support.html
+Build-Depends: debhelper (>= 12~), uuid-dev, libnuma-dev, libibverbs-dev, librdmacm-dev, libhwloc-dev
+Standards-Version: 4.5.1
+Rules-Requires-Root: no
+
+Package: libpsm3-fi
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, libfabric1
+Description: PSM3 provider for libfabric
