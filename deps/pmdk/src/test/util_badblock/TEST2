@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2018-2019, Intel Corporation
+
+#
+# src/test/util_badblock/TEST2 -- unit test for util_badblock
+#                                 - dax device with no bad blocks
+#                                 - only list bad blocks
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_badblock_tests_enabled dax_device
+require_linked_with_ndctl ./util_badblock$EXESUFFIX
+
+setup
+
+. ../common_badblock.sh
+
+badblock_test_init dax_device
+expect_normal_exit ./util_badblock$EXESUFFIX $FULLDEV l
+
+badblock_test_fini
+
+check
+
+pass

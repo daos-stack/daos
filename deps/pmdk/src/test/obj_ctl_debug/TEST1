@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2018-2019, Intel Corporation
+
+#
+# src/test/obj_ctl_debug/TEST1 -- unit test (short) with memcheck
+#       for ctl_debug
+#
+
+. ../unittest/unittest.sh
+
+require_test_type short
+require_fs_type any
+configure_valgrind memcheck force-enable
+
+setup
+
+expect_normal_exit ./obj_ctl_debug$EXESUFFIX $DIR/testfile
+
+pass

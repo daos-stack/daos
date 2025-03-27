@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2015-2019, Intel Corporation
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+setup
+
+create_poolset $DIR/testset1 16M:$DIR/testfile1:x r 16M:$DIR/testfile2:x
+
+expect_normal_exit\
+    ./obj_basic_integration$EXESUFFIX $DIR/testset1
+
+compare_replicas "-soOaAb -l -Z -H -C" \
+	$DIR/testfile1 $DIR/testfile2 > diff$UNITTEST_NUM.log
+
+check
+
+pass

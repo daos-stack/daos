@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2015-2019, Intel Corporation
+
+#
+# src/test/obj_tx_add_range/TEST1 -- unit test for pmemobj_tx_add_range
+# with valgrind pmemcheck tool
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_fs_type pmem non-pmem
+configure_valgrind pmemcheck force-enable
+export VALGRIND_OPTS="--mult-stores=no"
+setup
+
+expect_normal_exit ./obj_tx_add_range$EXESUFFIX $DIR/testfile1 0
+
+check
+
+pass

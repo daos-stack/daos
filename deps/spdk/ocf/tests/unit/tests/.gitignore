@@ -1,0 +1,6 @@
+build/
+ocf_env/
+logs/
+preprocessed_sources_repository/
+sources_to_test_repository/
+*generated_wraps.c

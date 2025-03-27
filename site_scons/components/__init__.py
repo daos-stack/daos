@@ -267,7 +267,7 @@ def define_components(reqs):
                 libs=['isal_crypto'])
 
     reqs.define('pmdk',
-                retriever=GitRepoRetriever(),
+                retriever=CopyRetriever(),
                 commands=[['make',
                            'all',
                            'BUILD_EXAMPLES=n',
@@ -350,7 +350,7 @@ def define_components(reqs):
         spdk_arch = 'haswell'
 
     reqs.define('spdk',
-                retriever=GitRepoRetriever(True),
+                retriever=CopyRetriever(),
                 commands=[['./configure',
                            '--prefix=$SPDK_PREFIX',
                            '--disable-tests',

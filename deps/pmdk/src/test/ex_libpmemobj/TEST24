@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2018-2019, Intel Corporation
+
+#
+# src/test/ex_libpmemobj/TEST24 -- unit test for libpmemobj examples
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_build_type debug nondebug
+
+setup
+
+EX_PATH=../../examples/libpmemobj/map
+
+expect_normal_exit $EX_PATH/mapcli rbtree $DIR/testfile1 444 > out$UNITTEST_NUM.log 2>&1 << EOF
+i 1234
+i 4321
+p
+n 5
+p
+q
+EOF
+
+check
+
+pass

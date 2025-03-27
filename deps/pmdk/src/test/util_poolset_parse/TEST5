@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2019-2023, Intel Corporation
+
+#
+# src/test/util_poolset_parse/TEST5 -- unit test for inject error malloc
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+set_test_labels fault_injection
+require_build_type debug
+require_fs_type any
+
+setup
+
+# prepare pool sets
+create_poolset $DIR/pool.set\
+	32M:$DIR/pool:d R 32M:$DIR/rep:d\
+	O SINGLEHDR
+
+expect_normal_exit $PMEMPOOL$EXESUFFIX create obj $DIR/pool.set
+
+# remove file from replica
+rm $DIR/rep/000000.pmem
+
+expect_normal_exit ./util_poolset_parse$EXESUFFIX f $DIR/pool.set
+
+check
+
+pass

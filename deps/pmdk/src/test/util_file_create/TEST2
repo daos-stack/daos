@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2014-2019, Intel Corporation
+
+#
+# src/test/util_file_create/TEST2 -- unit test for util_file_create()
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+setup
+
+# without fallocate this test takes forever
+require_native_fallocate $DIR/testfile1
+
+MIN_POOL=0x4000
+
+expect_normal_exit ./util_file_create$EXESUFFIX $MIN_POOL \
+    0x7FFFFFFFFFFFFFFF:$DIR/testfile
+
+check
+
+pass

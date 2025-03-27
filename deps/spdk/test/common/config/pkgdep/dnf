@@ -1,0 +1,73 @@
+package_manager=dnf
+
+upgrade() {
+	sudo "$package_manager" upgrade -y
+}
+
+install() {
+	(($#)) || return 0
+
+	sudo "$package_manager" install -y "$@"
+}
+
+packages=(
+	valgrind
+	jq
+	nvme-cli
+	ceph
+	gdb
+	fio
+	libaio-devel
+	librbd-devel
+	kernel-devel
+	gflags-devel
+	libasan
+	libubsan
+	autoconf
+	automake
+	libtool
+	libmount-devel
+	iscsi-initiator-utils
+	isns-utils-devel
+	pmempool
+	perl-open
+	glib2-devel
+	pixman-devel
+	astyle-devel
+	elfutils
+	libabigail
+	elfutils-libelf-devel
+	flex
+	bison
+	targetcli
+	perl-Switch
+	librdmacm-utils
+	libibverbs-utils
+	gdisk
+	socat
+	sshfs
+	sshpass
+	python3-pandas
+	rpm-build
+	iptables
+	clang-analyzer
+	bc
+	kernel-modules-extra
+	systemd-devel
+	smartmontools
+	wget
+	xfsprogs
+	rpmdevtools
+	ruby-devel
+	llvm
+)
+
+if [[ $OSID != centos ]] || ((OSVERSION != 8)); then
+	packages+=(btrfs-progs)
+fi
+
+pre_install() { :; }
+
+if [[ $OSID != fedora ]]; then
+	echo "Located dnf package manager, but it was tested for Fedora only"
+fi

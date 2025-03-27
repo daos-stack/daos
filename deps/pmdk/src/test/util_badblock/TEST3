@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2018-2019, Intel Corporation
+
+#
+# src/test/util_badblock/TEST3 -- unit test for util_badblock
+#                                 - dax device with bad blocks
+#                                 - only list bad blocks
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_badblock_tests_enabled dax_device
+require_linked_with_ndctl ./util_badblock$EXESUFFIX
+
+setup
+
+. ../common_badblock.sh
+
+badblock_test_init dax_device
+
+# inject bad block: OFF=11 LEN=1
+ndctl_inject_error $NAMESPACE 11 1
+
+expect_bad_blocks $NAMESPACE
+
+expect_normal_exit ./util_badblock$EXESUFFIX $FULLDEV l
+
+ndctl_uninject_error $FULLDEV $NAMESPACE 11 1
+
+badblock_test_fini
+
+check
+
+pass

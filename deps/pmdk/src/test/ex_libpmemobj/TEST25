@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2019, Intel Corporation
+
+#
+# src/test/ex_libpmemobj/TEST25 -- unit test for libpmemobj examples
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_build_type debug nondebug
+
+setup
+
+EX_PATH=../../examples/libpmemobj
+
+expect_normal_exit $EX_PATH/buffons_needle_problem $DIR/testfile 100 > out$UNITTEST_NUM.log 2>&1
+
+expect_normal_exit $EX_PATH/buffons_needle_problem $DIR/testfile >> out$UNITTEST_NUM.log 2>&1
+
+check
+
+pass

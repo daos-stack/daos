@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2017-2018, Intel Corporation
+#
+#
+# pmempool_rm/TEST9 -- test for pmempool rm
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+require_fs_type any
+
+setup
+
+RESVSIZE=$((4 * 1024 * 1024 * 1024)) # 4GiB
+
+create_poolset $DIR/testset1\
+	$RESVSIZE:$DIR/testdir11:d\
+	O SINGLEHDR
+
+expect_normal_exit $PMEMPOOL$EXESUFFIX create obj --layout pmempool$SUFFIX\
+	$DIR/testset1
+
+expect_normal_exit $PMEMPOOL$EXESUFFIX rm -af $DIR/testset1
+
+check_no_files $DIR/testset1
+
+pass

@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2014-2019, Intel Corporation
+
+#
+# src/test/traces/TEST0 -- unit test for traces
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_fs_type none
+require_build_type debug
+
+setup
+
+shopt -u failglob
+rm -f ./custom_file.log-*
+shopt -s failglob
+
+export UT_LOG_LEVEL=4
+export UT_LOG_FILE=./custom_file.log-
+expect_normal_exit ./traces$EXESUFFIX
+
+# check results
+[ -s ./custom_file.log-* ] || {
+	fatal "error: ./custom_file.log-PID not found"
+}
+mv ./custom_file.log-* custom_file$UNITTEST_NUM.log
+check
+
+pass

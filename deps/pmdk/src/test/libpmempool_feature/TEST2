@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2018-2019, Intel Corporation
+#
+#
+# libpmempool_feature/TEST2 -- unit test for PMEMPOOL_FEAT_SHUTDOWN_STATE
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_fs_type any
+
+require_sds ./libpmempool_feature$EXESUFFIX
+
+setup
+. ./common.sh
+
+require_usc_permission $DIR
+
+expect_normal_exit $PMEMPOOL$EXESUFFIX create obj $POOL
+
+# SHUTDOWN_STATE is disabled on Linux if PMDK is compiled with old ndctl
+if [ $sds_enabled -eq 1 ]; then
+	libpmempool_feature_query SHUTDOWN_STATE
+else
+	libpmempool_feature_disable SHUTDOWN_STATE
+fi
+
+# PMEMPOOL_FEAT_SHUTDOWN_STATE requires PMEMPOOL_FEAT_CHCKSUM_2K
+libpmempool_feature_disable CKSUM_2K
+exit_func=expect_abnormal_exit
+libpmempool_feature_enable SHUTDOWN_STATE # should fail
+exit_func=expect_normal_exit
+libpmempool_feature_enable CKSUM_2K
+libpmempool_feature_enable SHUTDOWN_STATE # should succeed
+
+check
+
+pass

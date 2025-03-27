@@ -1,0 +1,3 @@
+PMEMPOOLSET
+OPTION	SINGLEHDR	SINGLEHDR  # two options in a single line
+100G /mountpoint1/part0

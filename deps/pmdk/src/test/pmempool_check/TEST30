@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2018, Intel Corporation
+#
+#
+# pmempool_check/TEST30 -- test for checking pools
+#
+. ../unittest/unittest.sh
+
+require_test_type medium
+require_fs_type any
+require_sds $PMEMPOOL$EXESUFFIX
+
+setup
+. ./common.sh
+
+require_usc_permission $DIR
+
+pmempool_check_sds_init enable-sds
+pmempool_check_sds fix_no_replicas
+
+check
+pass

@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2015-2019, Intel Corporation
+
+#
+# src/test/obj_list_recovery/TEST1 -- unit test for list recovery process
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+require_build_type debug
+
+# exits with locked mutexes
+configure_valgrind helgrind force-disable
+configure_valgrind drd force-disable
+
+# the test delibretly fails at various stages of redo logging
+configure_valgrind pmemcheck force-disable ../obj_list/obj_list$EXESUFFIX
+
+setup
+
+create_holey_file 1M $DIR/testfile
+
+rm -f log${UNITTEST_NUM}.log
+
+function concat_log()
+{
+	cat out${UNITTEST_NUM}.log >> log${UNITTEST_NUM}.log
+	rm out${UNITTEST_NUM}.log
+}
+
+# fail after finish flag is set in redo log
+expect_normal_exit\
+	../obj_list/obj_list$EXESUFFIX $DIR/testfile\
+		i:1:0 i:1:0\
+		P:2 R:2\
+		F:after_finish\
+		r:0
+
+concat_log
+
+# check
+expect_normal_exit\
+	../obj_list/obj_list$EXESUFFIX $DIR/testfile\
+		P:2 R:2\
+		V\
+		P:2 R:2
+
+concat_log
+
+# fail before finish flag is set in redo log
+expect_normal_exit\
+	../obj_list/obj_list$EXESUFFIX $DIR/testfile\
+		F:before_finish\
+		r:0
+
+concat_log
+
+# check
+expect_normal_exit\
+	../obj_list/obj_list$EXESUFFIX $DIR/testfile\
+		P:2 R:2\
+		V\
+		P:2 R:2
+
+concat_log
+
+check
+
+pass

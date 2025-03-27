@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2015-2019, Intel Corporation
+
+#
+# src/test/obj_recovery/TEST4 -- unit test for pool recovery
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+require_no_asan
+
+configure_valgrind pmemcheck force-disable
+
+setup
+
+# exits in the middle of transaction, so pool cannot be closed
+export MEMCHECK_DONT_CHECK_LEAKS=1
+
+create_poolset $DIR/testset 16M:$DIR/testfile1 R 16M:$DIR/testfile2
+
+expect_normal_exit ./obj_recovery$EXESUFFIX $DIR/testset n c n
+
+compare_replicas "-soOaAbd -l -Z -H -C" \
+	$DIR/testfile1 $DIR/testfile2 > diff_pre$UNITTEST_NUM.log
+
+expect_normal_exit ./obj_recovery$EXESUFFIX $DIR/testset n o n
+
+compare_replicas "-soOaAbd -l -Z -H -C" \
+	$DIR/testfile1 $DIR/testfile2 > diff_post$UNITTEST_NUM.log
+
+check
+
+pass

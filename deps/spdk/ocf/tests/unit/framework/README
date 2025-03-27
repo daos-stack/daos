@@ -1,0 +1,17 @@
+GENERATING NEW TEST
+	To add new test, run "add_new_test_file.py" with two parameters:
+		- tested file path (path must be relative to your current working dir)
+		- tested function name
+	Generated file name may be changed without any consequences.
+
+	Good practise is to use "add_new_test_file.py" script from test directory (not framework),
+	because it prepend appropriate license header.
+
+RUNNING SINGLE TEST
+	Executable tests files are stored by default in 'UT_dir/build/sources_to_test_repository/'
+
+REQUIREMENTS FOR BUILD:
+- cmocka
+- cmake
+- ctags (Exuberant version)
+- nm, gcc, make

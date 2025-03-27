@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2016-2019, Intel Corporation
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_fs_type pmem
+
+setup
+
+expect_normal_exit ./obj_fragmentation$EXESUFFIX 1024 \
+		$DIR/testfile1
+
+pass

@@ -1,0 +1,20 @@
+# testconfig.sh should not be checked into git.
+# It describes the configuration of the local machine where the local copy
+# of the source tree is being tested.
+testconfig.sh
+testconfig.py
+# ignore files generated during test runs (left around for analysis)
+*.log
+testfile*
+# ignore static binaries generated for testing
+*.static_debug
+*.static_nondebug
+libs.tar
+*.synced
+.sync-dir
+# ignore lock files
+*.lock
+# ignore python modules cache
+__pycache__/
+/envconfig.sh
+/envconfig.py

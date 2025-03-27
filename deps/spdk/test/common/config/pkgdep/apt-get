@@ -1,0 +1,97 @@
+package_manager=apt-get
+
+update() {
+	sudo "$package_manager" update
+}
+
+install() {
+	(( $# )) || return 0
+
+	sudo "$package_manager" install -y "$@"
+}
+
+upgrade() {
+	sudo "$package_manager" update
+	sudo "$package_manager" upgrade -y
+}
+
+
+pre_install() {
+	echo "Package perl-open is not available at Ubuntu repositories" >&2
+
+	update
+
+	if [[ $INSTALL_TSOCKS == true ]]; then
+		install tsocks
+	fi
+
+	# asan an ubsan have to be installed together to not mix up gcc versions
+	if install libasan5; then
+		install libubsan1
+	else
+		echo "Latest libasan5 is not available" >&2
+		echo "  installing libasan2 and corresponding libubsan0" >&2
+		install libasan2
+		install libubsan0
+	fi
+}
+
+packages=(
+	valgrind
+	jq
+	nvme-cli
+	ceph
+	gdb
+	fio
+	libaio-dev
+	librbd-dev
+	linux-headers-generic
+	libgflags-dev
+	autoconf
+	automake
+	libtool
+	libmount-dev
+	open-iscsi
+	libglib2.0-dev
+	libpixman-1-dev
+	astyle
+	elfutils
+	libelf-dev
+	flex
+	bison
+	libswitch-perl
+	gdisk
+	socat
+	sshfs
+	sshpass
+	python3-pandas
+	bc
+	smartmontools
+	wget
+	xfsprogs
+	ibverbs-utils
+	rdmacm-utils
+	ruby-dev
+	llvm
+)
+
+install_vagrant_dependencies() {
+	local vagrant_packages
+	vagrant_packages=(
+		qemu
+		libvirt-bin
+		ebtables
+		dnsmasq-base
+		libxslt-dev
+		libxml2-dev
+		libvirt-dev
+		zlib1g-dev
+		ruby-dev
+	)
+
+	install "${vagrant_packages[@]}"
+}
+
+if [[ $OSID != ubuntu ]]; then
+	echo "Located apt-get package manager, but it was tested for Ubuntu only"
+fi

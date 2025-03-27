@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2018-2019, Intel Corporation
+
+#
+# src/test/pmem_has_auto_flush/TEST1 -- unit test for pmem_has_auto_flush
+#
+# tests case when there is no regions inside
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+require_fs_type pmem non-pmem
+
+setup
+
+ROOT=$DIR/pmem_has_auto_flush/root
+export BUS_DEVICE_PATH=$ROOT
+
+expect_normal_exit ./pmem_has_auto_flush$EXESUFFIX
+
+check
+
+pass

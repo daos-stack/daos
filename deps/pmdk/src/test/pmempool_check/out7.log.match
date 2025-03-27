@@ -1,0 +1,58 @@
+$(nW)file.pool: spoil: pool_hdr.uuid=ERROR
+incorrect pool header
+$(nW)file.pool: not consistent
+checking shutdown state
+shutdown state correct
+checking pool header
+incorrect pool header
+the repair of pmemobj pools is not supported
+$(nW)file.pool: cannot repair
+checking shutdown state
+shutdown state correct
+checking pool header
+incorrect pool header
+$(nW)file.pool: not consistent
+$(nW)file.pool: spoil: pool_hdr.prev_part_uuid=ERROR_PREV
+$(nW)file.pool: spoil: pool_hdr.next_part_uuid=ERROR_NEXT
+incorrect pool header
+$(nW)file.pool: not consistent
+checking shutdown state
+shutdown state correct
+checking pool header
+incorrect pool header
+the repair of pmemobj pools is not supported
+$(nW)file.pool: cannot repair
+checking shutdown state
+shutdown state correct
+checking pool header
+incorrect pool header
+the repair of pmemobj pools is not supported
+$(nW)file.pool: cannot repair
+checking shutdown state
+shutdown state correct
+checking pool header
+incorrect pool header
+$(nW)file.pool: not consistent
+$(nW)file.pool: spoil: pool_hdr.prev_part_uuid=ERROR_PREV
+$(nW)file.pool: spoil: pool_hdr.next_part_uuid=ERROR_NEXT
+$(nW)file.pool: spoil: pool_hdr.prev_repl_uuid=ERROR_RPREV
+$(nW)file.pool: spoil: pool_hdr.next_repl_uuid=ERROR_RNEXT
+incorrect pool header
+$(nW)file.pool: not consistent
+checking shutdown state
+shutdown state correct
+checking pool header
+incorrect pool header
+the repair of pmemobj pools is not supported
+$(nW)file.pool: cannot repair
+checking shutdown state
+shutdown state correct
+checking pool header
+incorrect pool header
+the repair of pmemobj pools is not supported
+$(nW)file.pool: cannot repair
+checking shutdown state
+shutdown state correct
+checking pool header
+incorrect pool header
+$(nW)file.pool: not consistent

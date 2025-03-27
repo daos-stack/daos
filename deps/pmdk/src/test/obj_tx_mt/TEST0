@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2016-2019, Intel Corporation
+
+#
+# src/test/obj_tx_mt/TEST0 -- multi-threaded test for pmemobj_tx*
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_fs_type any
+
+setup
+
+expect_normal_exit ./obj_tx_mt$EXESUFFIX $DIR/testfile1
+
+pass

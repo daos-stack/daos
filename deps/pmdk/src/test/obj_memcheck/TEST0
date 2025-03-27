@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2015-2019, Intel Corporation
+
+#
+# src/test/obj_memcheck/TEST0 -- unit test for obj_memcheck
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_fs_type non-pmem
+
+# Valgrind merges errors which have the same last 4 stack frames. With non-debug
+# builds the depth of the stack trace depends on how much compiler optimized it.
+# So always use debug build to take a compiler out of the picture and get
+# deterministic stack traces.
+require_build_type debug
+
+require_valgrind 3.10
+configure_valgrind memcheck force-enable
+
+setup
+
+export PMEMOBJ_VG_CHECK_UNDEF=1
+export VALIDATE_VALGRIND_LOG=0
+export VALGRIND_OPTS="$VALGRIND_OPTS --show-reachable=yes"
+
+if ! eval $TRACE valgrind ./obj_memcheck$EXESUFFIX m 2>/dev/null; then
+	echo "$UNITTEST_NAME: SKIP valgrind with bug"
+	exit 0
+fi
+
+expect_normal_exit ./obj_memcheck$EXESUFFIX t $DIR/testfile
+
+check
+
+pass

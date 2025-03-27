@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2018-2019, Intel Corporation
+#
+#
+# pmempool_sync/TEST39 -- test for sync command with badblocks
+#                         - bad blocks in the regular file
+#                           blocks: offset: 1000 length: 8
+#                           in the 2nd part
+#                         - run sync and break it after clearing bad blocks
+#                           and before recovering data using gdb
+#                         - run sync again and it should recover data
+#                           using bad block recovery files
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+# must be non-static debug release of the binary because the test relies on the
+# gdb ability to interrupt the program at a static method inside
+# the libpmempool library
+require_build_type debug
+require_command gdb
+
+require_badblock_tests_enabled block_device
+require_linked_with_ndctl $PMEMPOOL$EXESUFFIX
+
+setup
+
+. ../common_badblock.sh
+
+MOUNT_DIR="$DIR/mnt-pmem"
+badblock_test_init block_device $MOUNT_DIR
+
+LOG=out${UNITTEST_NUM}.log
+rm -f $LOG && touch $LOG
+
+POOLSET=$DIR/testset1
+create_poolset $POOLSET \
+	8M:$DIR/testfile0:z \
+	8M:$MOUNT_DIR/testfile1:z \
+	8M:$DIR/testfile2:z \
+	R \
+	24M:$DIR/testfile3:z
+
+expect_normal_exit $PMEMPOOL$EXESUFFIX rm $POOLSET
+expect_normal_exit $PMEMPOOL$EXESUFFIX create obj --layout pmempool$SUFFIX $POOLSET
+
+expect_normal_exit "$OBJ_VERIFY$EXESUFFIX $POOLSET pmempool$SUFFIX c v &>> $LOG"
+
+turn_on_checking_bad_blocks $POOLSET
+
+# inject bad block:
+FIRST_SECTOR=$(expect_normal_exit $EXTENTS $MOUNT_DIR/testfile1 -l 1000)
+ndctl_inject_error $NAMESPACE $FIRST_SECTOR 8
+
+expect_bad_blocks $NAMESPACE
+
+expect_normal_exit "$PMEMPOOL$EXESUFFIX info --bad-blocks=yes $POOLSET >> $LOG"
+
+expect_bad_blocks $NAMESPACE
+
+expect_abnormal_exit "$OBJ_VERIFY$EXESUFFIX $POOLSET pmempool$SUFFIX v" > /dev/null 2>&1
+
+expect_bad_blocks $NAMESPACE
+
+# run sync and break it after clearing bad blocks and before recovering data using gdb
+expect_normal_exit gdb --batch \
+	--command=trip_on_recreate_broken_parts.gdb \
+	--args $PMEMPOOL$EXESUFFIX sync -b -v $POOLSET &> /dev/null
+
+# obj_verify should fail, because the recovery files exist
+expect_abnormal_exit "$OBJ_VERIFY$EXESUFFIX $POOLSET pmempool$SUFFIX v &>> $LOG"
+
+# run sync again and it should recover data using bad block recovery files
+expect_normal_exit "$PMEMPOOL$EXESUFFIX sync -b -v $POOLSET >> $LOG"
+
+expect_normal_exit "$PMEMPOOL$EXESUFFIX check -v $POOLSET >> $LOG"
+expect_normal_exit "$PMEMPOOL$EXESUFFIX info --bad-blocks=yes $POOLSET >> $LOG"
+
+expect_normal_exit "$OBJ_VERIFY$EXESUFFIX $POOLSET pmempool$SUFFIX v &>> $LOG"
+
+ndctl_uninject_error $FULLDEV $NAMESPACE $FIRST_SECTOR 8
+badblock_test_fini $MOUNT_DIR
+
+check
+
+pass

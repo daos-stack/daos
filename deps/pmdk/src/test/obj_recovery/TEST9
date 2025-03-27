@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2019, Intel Corporation
+
+#
+# src/test/obj_recovery/TEST9 -- unit test for pool recovery
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+require_no_asan
+
+setup
+
+# exits in the middle of transaction, so pool cannot be closed
+export MEMCHECK_DONT_CHECK_LEAKS=1
+
+create_holey_file 16M $DIR/testfile
+
+expect_normal_exit ./obj_recovery$EXESUFFIX $DIR/testfile n c l
+expect_normal_exit ./obj_recovery$EXESUFFIX $DIR/testfile n o l
+
+check
+
+pass

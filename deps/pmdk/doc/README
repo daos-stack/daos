@@ -1,0 +1,51 @@
+Persistent Memory Development Kit
+
+This is doc/README.
+
+Subdirectories of this directory contain source for the man pages for the
+Persistent Memory Development Kit in markdown format (.md files).
+If you're looking for documentation to
+get you started using PMDK, start here: https://pmem.io/pmdk and follow the
+links to examples and man pages. Developers new to PMDK are probably looking
+for libpmemobj.
+
+To generate web-based documentation or Linux man pages, you need to
+have groff and pandoc installed. Processing is performed
+by the ../utils/md2man.sh script.
+
+All files in the *generated* directory are automatically generated and updated
+by the pmdk-bot. **DO NOT MODIFY THE FILES IN THAT DIRECTORY**. All changes to
+the documentation must be made by modifying the *.md files in the following
+document subdirectories:
+
+libpmem -- low-level persistent memory support
+libpmem2 -- low-level persistent memory support
+libpmemobj -- transactional object store
+libpmempool -- persistent memory pool management library
+pmempool -- persistent memory pool management tool
+daxio -- perform I/O on Device DAX device
+
+These man pages provide the API specification for the corresponding libraries
+and commands in this source tree, so any updates to one should be tested,
+reviewed, and committed with changes to the other.
+
+To create more readable text files from the source, use:
+	$ [g]make
+
+NOTE: This will write man page output into the *generated* subdirectory. Files
+in this directory MUST NOT be included in any pull requests.
+
+The man(1) command may be used to format generated man pages for viewing
+in a terminal window (includes bold, underline, etc.), for example:
+	$ man generated/libpmem.7
+	$ man generated/pmemobj_create.3
+
+In addition, for testing purposes ../utils/md2man.sh will generate a
+preprocessed markdown file with the headers stripped off if the TESTOPTS
+variable is set. For example:
+
+	$ export TESTOPTS="-DWEB"
+	$ ../utils/md2man.sh libpmemobj/libpmemobj.7.md x libpmemobj.7.web.md
+
+will generate a version of the libpmemobj.7 man page for web in markdown
+format. The resulting file may be viewed with a markdown-enabled browser.

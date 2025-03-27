@@ -1,0 +1,64 @@
+package_manager=yum
+
+upgrade() {
+	sudo "$package_manager" upgrade -y
+}
+
+install() {
+	(($#)) || return 0
+
+	sudo "$package_manager" install -y "$@"
+}
+
+packages=(
+	pciutils
+	valgrind
+	jq
+	nvme-cli
+	gdb
+	fio
+	libaio-devel
+	librbd-devel
+	kernel-devel
+	gflags-devel
+	libasan
+	libubsan
+	autoconf
+	automake
+	libtool
+	libmount-devel
+	iscsi-initiator-utils
+	isns-utils-devel pmempool
+	perl-open
+	glib2-devel
+	pixman-devel
+	astyle-devel
+	elfutils
+	elfutils-libelf-devel
+	flex
+	bison
+	targetcli
+	perl-Switch
+	librdmacm-utils
+	libibverbs-utils
+	gdisk
+	socat
+	sshfs
+	sshpass
+	python3-pandas
+	rpm-build
+	iptables
+	clang-analyzer
+	bc
+	kernel-modules-extra
+	systemd-devel
+	python3
+	wget
+	btrfs-progs
+	xfsprogs
+	rpmdevtools
+	ruby-devel
+	llvm
+)
+
+pre_install() { :; }

@@ -1,0 +1,4 @@
+{$(nW) main} compat_incompat_features/TEST4: Error: $(nW)pool.set: pmemobj_open failed: Invalid argument
+{$(nW) main} compat_incompat_features/TEST4: Error: $(nW)pool.set: pmemobj_open failed: Invalid argument
+{$(nW) main} compat_incompat_features/TEST4: Error: $(nW)pool.set: pmemobj_open failed: Invalid argument
+{$(nW) main} compat_incompat_features/TEST4: Error: $(nW)pool.set: pmemobj_open failed: Invalid argument

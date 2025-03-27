@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2016-2019, Intel Corporation
+
+#
+# src/test/util_is_absolute/TEST0 -- unit test for util_is_absolute_path()
+#
+# NOTE: This is for Linux only!
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_fs_type none
+
+setup
+
+expect_normal_exit ./util_is_absolute$EXESUFFIX \
+	"/foo/bar" \
+	"foo/bar" \
+	"/" \
+	"./foo/bar"
+
+check
+
+pass

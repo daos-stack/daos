@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2018-2019, Intel Corporation
+
+#
+# src/test/obj_pool/TEST17 -- unit test for pmemobj_create
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+require_command bc
+
+setup
+
+# non-existing file, poolsize == RANGE_OF_SIZE_T_AS_MB
+# Use 2^64-1 as an arbitrarily huge number (fixed size for match file)
+RANGE_OF_SIZE_T_AS_MB=$(echo "2^64/1024/1024-1" | bc)
+expect_normal_exit ./obj_pool$EXESUFFIX c $DIR/testfile "test" \
+    $RANGE_OF_SIZE_T_AS_MB 0640
+
+check_no_files $DIR/testfile
+
+check
+
+pass

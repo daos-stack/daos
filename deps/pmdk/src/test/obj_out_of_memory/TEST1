@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2015-2019, Intel Corporation
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+setup
+
+export PMEM_IS_PMEM_FORCE=1
+export PMEMOBJ_LOG_LEVEL=1
+
+create_poolset $DIR/testset1 8M:$DIR/testfile1 R 8M:$DIR/testfile2
+
+expect_normal_exit\
+	./obj_out_of_memory$EXESUFFIX 1024 $DIR/testset1
+
+compare_replicas "-soOaAbd -l -Z -H -C" \
+		$DIR/testfile1 $DIR/testfile2 > diff$UNITTEST_NUM.log
+
+check
+
+pass

@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: BSD-3-Clause
+
+# This file is intended to be sourced into shell
+
+# Load DPDK devel config and allow override
+# from system file
+test ! -r /etc/dpdk/devel.config ||
+        . /etc/dpdk/devel.config
+# from user file
+test ! -r ~/.config/dpdk/devel.config ||
+        . ~/.config/dpdk/devel.config
+# from local file
+test ! -r $(dirname $(readlink -f $0))/../.develconfig ||
+        . $(dirname $(readlink -f $0))/../.develconfig
+
+# The config files must export variables in the shell style

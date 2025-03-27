@@ -1,0 +1,149 @@
+.\"                                      Hey, EMACS: -*- nroff -*-
+.\" Copyright (c) 2018-2021, Intel Corporation, written by Tomasz Kantecki
+.\"     <tomasz.kantecki@intel.com>
+.\"
+.\" %%%LICENSE_START(VERBATIM)
+.\" 
+.\" Redistribution and use in source and binary forms, with or without
+.\" modification, are permitted provided that the following conditions are met:
+.\" 
+.\"     * Redistributions of source code must retain the above copyright notice,
+.\"       this list of conditions and the following disclaimer.
+.\"     * Redistributions in binary form must reproduce the above copyright
+.\"       notice, this list of conditions and the following disclaimer in the
+.\"       documentation and/or other materials provided with the distribution.
+.\"     * Neither the name of Intel Corporation nor the names of its contributors
+.\"       may be used to endorse or promote products derived from this software
+.\"       without specific prior written permission.
+.\" 
+.\" THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+.\" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+.\" IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+.\" DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE
+.\" FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+.\" DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+.\" SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+.\" CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+.\" OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+.\" OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+.\" %%%LICENSE_END
+.\"
+.\" First parameter, NAME, should be all caps
+.\" Second parameter, SECTION, should be 1-8, maybe w/ subsection
+.\" other parameters are allowed: see man(7), man(1)
+.TH libipsec-mb 7 2018-03-01 "Linux" "Linux Programmer's Manual"
+.\" Please adjust this date whenever revising the manpage.
+.\"
+.\" Some roff macros, for reference:
+.\" .nh        disable hyphenation
+.\" .hy        enable hyphenation
+.\" .ad l      left justify
+.\" .ad b      justify to both left and right margins
+.\" .nf        disable filling
+.\" .fi        enable filling
+.\" .br        insert line break
+.\" .sp <n>    insert n+1 empty lines
+.\" for manpage-specific macros, see man(7)
+.SH NAME
+libipsec-mb \- overview of Intel(R) Multi-Buffer Crypto for IPSec library
+.br
+.SH DESCRIPTION
+Intel Multi-Buffer Crypto for IPsec Library is highly-optimized
+software implementations of the core cryptographic processing for IPsec,
+which provides industry-leading performance on a range of Intel(R) Processors.
+.br
+The library offers API crafted for IPsec applications where a network packet
+is subject of encryption and integrity operations.
+.br
+For best processor utilization it uses multi buffer technology for algorithms
+that don't allow multi block processing.
+.br
+See more in the Intel White Paper:
+"Fast Multi-buffer IPsec Implementations on Intel Architecture Processors".
+Jim Guilford, Sean Gulley, et. al.
+.br
+The easiest way to find it is to search the Internet for the title.
+
+
+.br
+More information can be found at
+.UR https://github.com/intel/intel-ipsec-mb
+.I intel-ipsec-mb
+.UE .
+
+.SS ENCRYPTION ALGORITHMS
+AES128-GCM, AES192-GCM, AES256-GCM, AES128-CBC, AES192-CBC, AES256-CBC,
+AES128-CTR, AES192-CTR, AES256-CTR, AES128-CCM, AES256-CCM, AES128-ECB,
+AES192-ECB, AES256-ECB, NULL, AES128-DOCSIS, AES256-DOCSIS, DES-DOCSIS,
+3DES, DES, KASUMI-F8, ZUC-EEA3, SNOW3G-UEA2, AES128-CBCS and Chacha20.
+
+.SS INTEGRITY ALGORITHMS
+AES-XCBC-96, HMAC-MD5-96, HMAC-SHA1-96, HMAC-SHA2-224_112, HMAC-SHA2-256_128,
+HMAC-SHA2-384_192, HMAC-SHA2-512_256, AES128-GMAC, AES192-GMAC, AES256-GMAC,
+NULL, AES128-CCM, AES256-CCM, AES128-CMAC-96, AES256-CMAC-96, KASUMI-F9,
+ZUC-EIA3, SNOW3G-UIA2, DOCSIS-CRC32, HEC and POLY1305.
+
+.SS RECOMMENDATIONS
+DES algorithm should be avoided and AES encryption should be used instead.
+.br
+3DES is a legacy algorithms and AES encryption is recommended to use instead.
+.br
+HMAC-MD5-96 is a legacy algorithm and HMAC-SHA1 is recommended to use instead.
+.br
+DES, 3DES and HMAC-MD5-96 are implemented in the library to support legacy applications.
+.br
+AES-ECB algorithm should be avoided and AES-CBC or AES-CNTR encryption should be used instead.
+
+.SS KEY STORAGE
+The library doesn't offer any solution for secure key storage or storage of sensitive information.
+It is up to application to arrange safe storage of sensitive information.
+
+.SS API
+The library offers four sets of identical API's. Each set corresponds to one architecture: SSE, AVX, AVX2 and AVX512.
+.br
+It comprises of init_mb_mgr, get_next_job, submit_job, get_completed_job and flush_job operations.
+.br
+.nf
+init_mb_mgr()  \- initializes the instance of the multi-buffer manager
+get_next_job() \- obtains pointer to next available job entry
+submit_job()   \- submits job for processing
+get_completed_job() \- returns already completed jobs
+flush_job()    \- flushes multi-buffer manager and completes any outstanding operations.
+.fi
+
+The basic usage of the API is presented by this pseudo code:
+.br
+.nf
+
+        init_mb_mgr(&mb_mgr);
+        ...
+        while (work_to_be_done) {
+                job = get_next_job(&mb_mgr);
+                /* TODO: Fill in job fields */
+                job = submit_job(&mb_mgr);
+                while (job != NULL) {
+                        /* TODO: Complete processing on job */
+    	                job = get_completed_job(&mb_mgr);
+                }
+        }
+
+        job = flush_job(&mb_mgr);
+        while (job != NULL) {
+                /* TODO: Complete processing on job */
+    	        job = flush_job(&mb_mgr);
+        }
+
+.fi
+The library provides more interface functions i.e. single block hash functions for HMAC OPAD and IPAD calculations.
+.SH BUGS
+Report bugs at
+.UR https://github.com/intel/intel-ipsec-mb/issues
+.I intel-ipsec-mb/issues
+.UE .
+
+.SH AUTHORS
+Jim Guilford <james.guilford@intel.com>, Tomasz Kantecki <tomasz.kantecki@intel.com>
+
+.P
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.

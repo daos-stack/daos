@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2015-2023, Intel Corporation
+
+#
+# src/test/pmem_movnt_align/TEST0 -- unit test for pmem_memcpy_persist
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_fs_type pmem non-pmem
+require_build_type debug static_debug
+
+setup
+
+export PMEM_LOG_LEVEL=4
+
+function test() {
+	expect_normal_exit ./pmem_movnt_align$EXESUFFIX C 1
+	expect_normal_exit ./pmem_movnt_align$EXESUFFIX F 1
+	expect_normal_exit ./pmem_movnt_align$EXESUFFIX B 1
+	expect_normal_exit ./pmem_movnt_align$EXESUFFIX S 1
+}
+
+test
+
+export PMEM_NO_MOVNT=1
+export PMEM_NO_GENERIC_MEMCPY=1
+
+test
+
+pass

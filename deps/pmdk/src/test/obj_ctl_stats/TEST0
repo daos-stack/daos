@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2017-2019, Intel Corporation
+
+. ../unittest/unittest.sh
+
+require_test_type short
+require_fs_type any
+
+setup
+
+expect_normal_exit ./obj_ctl_stats$EXESUFFIX $DIR/testfile1
+
+pass

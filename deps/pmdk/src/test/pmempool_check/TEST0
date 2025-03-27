@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2014-2023, Intel Corporation
+#
+#
+# pmempool_check/TEST0 -- test for checking pools
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_fs_type pmem non-pmem
+
+setup
+
+POOL=$DIR/file.pool
+LOG=out${UNITTEST_NUM}.log
+rm -f $LOG && touch $LOG
+
+echo "PMEMOBJ: consistent" >> $LOG
+rm -f $POOL
+expect_normal_exit $PMEMPOOL$EXESUFFIX create obj $POOL
+check_file $POOL
+expect_normal_exit $PMEMWRITE$EXESUFFIX $POOL TEST
+expect_normal_exit $PMEMPOOL$EXESUFFIX check $POOL >> $LOG
+
+echo "PMEMOBJ: consistent" >> $LOG
+rm -f $POOL
+expect_normal_exit $PMEMPOOL$EXESUFFIX create obj $POOL
+check_file $POOL
+expect_normal_exit $PMEMWRITE$EXESUFFIX $POOL 0:w:TEST0
+expect_normal_exit $PMEMWRITE$EXESUFFIX $POOL 1:w:TEST0
+expect_normal_exit $PMEMWRITE$EXESUFFIX $POOL 2:w:TEST0
+expect_normal_exit $PMEMPOOL$EXESUFFIX check $POOL >> $LOG
+
+echo "PMEMOBJ: pool_hdr" >> $LOG
+rm -f $POOL
+expect_normal_exit $PMEMPOOL$EXESUFFIX create obj $POOL
+check_file $POOL
+$PMEMSPOIL -v $POOL pool_hdr.signature=ERROR >> $LOG
+expect_abnormal_exit $PMEMPOOL$EXESUFFIX check $POOL >> $LOG
+
+check
+
+pass

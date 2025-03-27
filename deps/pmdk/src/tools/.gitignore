@@ -1,0 +1,7 @@
+TAGS
+cscope.in.out
+cscope.po.out
+cscope.out
+*.static_debug
+*.static_nondebug
+.synced

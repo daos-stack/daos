@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2015-2019, Intel Corporation
+
+#
+# src/test/obj_check/TEST5 -- unit test for pmemobj_check
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_fs_type any
+
+setup
+
+# existing file, opened pool, valid layout
+LAYOUT="Valid_layout"
+SIZE=$((20*1024*1024))
+
+expect_normal_exit $PMEMPOOL$EXESUFFIX create -l $LAYOUT -s $SIZE -m 0600 obj \
+	$DIR/testfile
+expect_normal_exit ./obj_check$EXESUFFIX $DIR/testfile -l $LAYOUT -o
+
+check
+
+pass

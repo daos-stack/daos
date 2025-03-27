@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2019-2023, Intel Corporation
+
+#
+# src/test/obj_heap/TEST1 -- unit test for inject fault malloc
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+set_test_labels fault_injection
+
+setup
+
+expect_normal_exit ./obj_heap$EXESUFFIX b
+expect_normal_exit ./obj_heap$EXESUFFIX r
+expect_normal_exit ./obj_heap$EXESUFFIX c
+expect_normal_exit ./obj_heap$EXESUFFIX h
+expect_normal_exit ./obj_heap$EXESUFFIX a
+expect_normal_exit ./obj_heap$EXESUFFIX n
+expect_normal_exit ./obj_heap$EXESUFFIX s
+
+pass

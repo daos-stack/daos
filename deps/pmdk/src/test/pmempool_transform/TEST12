@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2016-2024, Intel Corporation
+#
+#
+# pmempool_transform/TEST12 -- test for transform with SINGLEHDR option
+#
+# removing the SINGLEHDR option
+# case: a single replica with two 2MB-aligned device daxes - should fail
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+require_fs_type any
+
+require_dax_device_alignments $SIZE_2MB $SIZE_2MB
+require_max_devdax_size 0 $PMEMOBJ_MAX_ALLOC_SIZE
+
+# the test takes too long under pmemcheck
+configure_valgrind pmemcheck force-disable
+
+setup
+
+DAX_SIZE[0]=$(get_devdax_size 0)
+SIZE_512M=$(convert_to_bytes 512M)
+require_free_space $(( DAX_SIZE[0] + SIZE_512M ))
+
+dax_device_zero
+
+LOG=out${UNITTEST_NUM}.log
+ERR_LOG=err${UNITTEST_NUM}.log
+LOG_TEMP=out${UNITTEST_NUM}_part.log
+ERR_TEMP=err${UNITTEST_NUM}_temp.log
+rm -f $LOG && touch $LOG
+rm -f $LOG_TEMP && touch $LOG_TEMP
+
+LAYOUT=OBJ_LAYOUT$SUFFIX
+POOLSET_1=$DIR/poolset.1
+POOLSET_2=$DIR/poolset.2
+POOLSET_3=$DIR/poolset.3
+
+# Create poolset files
+create_poolset $POOLSET_1 \
+	O SINGLEHDR \
+	AUTO:${DEVICE_DAX_PATH[0]}:x \
+	AUTO:${DEVICE_DAX_PATH[1]}:x \
+	R \
+	${DAX_SIZE[0]}:$DIR/part00:x \
+	512M:$DIR/part01:x
+
+create_poolset $POOLSET_2 \
+	O SINGLEHDR \
+	AUTO:${DEVICE_DAX_PATH[0]}:x \
+	AUTO:${DEVICE_DAX_PATH[1]}:x \
+
+create_poolset $POOLSET_3 \
+	AUTO:${DEVICE_DAX_PATH[0]}:x \
+	AUTO:${DEVICE_DAX_PATH[1]}:x \
+
+OFFSET=${DAX_SIZE[0]}
+ROOT_SIZE=$[OFFSET + 1024]
+
+# CLI script for writing some data hitting all the parts
+WRITE_SCRIPT=$DIR/write_data
+cat << EOF > $WRITE_SCRIPT
+pr $ROOT_SIZE
+srcp 0 TestOK111
+srcp $OFFSET TestOK222
+EOF
+
+# CLI script for reading 9 characters from all the parts
+READ_SCRIPT=$DIR/read_data
+cat << EOF > $READ_SCRIPT
+srpr 0 9
+srpr $OFFSET 9
+EOF
+
+# Create a pool
+expect_normal_exit $PMEMPOOL$EXESUFFIX create --layout=$LAYOUT obj $POOLSET_1 \
+	>> $LOG_TEMP
+
+# Remove the second replica
+expect_normal_exit $PMEMPOOL$EXESUFFIX transform $POOLSET_1 $POOLSET_2 >> \
+	$LOG_TEMP
+
+# Write some data into the pool, hitting all the part files
+expect_normal_exit $PMEMOBJCLI$EXESUFFIX -s $WRITE_SCRIPT $POOLSET_2 >> \
+	$LOG_TEMP
+
+# Check if correctly written
+expect_normal_exit $PMEMOBJCLI$EXESUFFIX -s $READ_SCRIPT $POOLSET_2 >> \
+	$LOG_TEMP
+
+# Make an attempt to transform the poolset
+expect_abnormal_exit $PMEMPOOL$EXESUFFIX transform \
+	$POOLSET_2 $POOLSET_3 2> $ERR_LOG > /dev/null
+
+# Check if data is still correctly written
+expect_normal_exit $PMEMOBJCLI$EXESUFFIX -s $READ_SCRIPT $POOLSET_2 >> \
+	$LOG_TEMP
+
+# Check metadata by pmempool info
+dump_pool_info $POOLSET_2 >> $LOG_TEMP
+dump_pool_info ${DEVICE_DAX_PATH[0]} >> $LOG_TEMP
+
+mv $LOG_TEMP $LOG
+
+check
+
+pass

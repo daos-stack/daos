@@ -1,0 +1,319 @@
+Contributing to intel-ipsec-mb
+==============================
+
+As an open source project, we welcome contributions of any kind.
+These can range from bug reports, code reviews and code development,
+to significant code or documentation features.
+
+Note:
+There is just one branch used in the project. All development is done on the
+master branch. Code taken from the tip of the master branch should not be
+considered fit for production.
+Refer to the releases tab for stable code versions:
+https://github.com/intel/intel-ipsec-mb/releases
+
+
+How can I contribute?
+=====================
+
+This document specifies contributing guidelines to the intel-ipsec-mb source
+tree. It covers some general guidelines, the preferred style and formatting
+for source files, additional requirements like documentation and development
+workflow. The goal of this document is to walk you through the concepts and
+specifics that should be understood while contributing to intel-ipsec-mb.
+
+
+Reporting Bugs
+==============
+
+Bugs should be reported via GitHub issues. The description should include
+a platform name, OS and kernel version, library version and detailed
+information on how to reproduce the bug.
+
+
+Suggesting Enhancements
+=======================
+
+Improvements should be reported via GitHub issues or pull requests.
+
+
+Creating Pull Requests
+======================
+
+Pull requests should be created using standard procedure available on GitHub.
+It is important to fill in all required information into a template. For major
+modifications (e.g. adding a new feature, refactoring), for effective
+development, it is recommended to share high level document with core
+development team via GitHub issue so that one can ask questions if one foresees
+issues that may occur in existing development.
+
+
+Coding Style Guides
+===================
+
+General Guidelines
+==================
+
+The rules and guidelines given in this document cannot cover every situation,
+so the following general guidelines should be used as a fallback:
+
+The code style should be consistent within each individual file.
+In the case of creating new files, the style should be consistent within
+each file in a given directory or module. The primary reason for coding
+standards is to increase code readability and comprehensibility, therefore
+always use whatever option will make the code easier to read. Line length
+is recommended to be not more than 80 characters, including comments.
+
+
+C
+=
+
+Formatting using checkpatch.pl
+==============================
+
+To format your code please use checkpatch.pl script (version 0.32) from
+Linux kernel
+(https://github.com/torvalds/linux/blob/master/scripts/checkpatch.pl).
+
+The top level Makefile contains a target "style" that can be used to check
+formatting. Please ensure the checkpatch.pl script has been added to your PATH.
+
+
+Indentation
+===========
+
+Tabs are 8 characters and thus indentations are also 8 characters.
+It should be consistent within each part of the code. When adding a new file,
+spaces should be used over tabs.
+
+
+C Comment Style
+===============
+
+Usual Comments
+==============
+
+These comments should be used in normal cases. To document a public API,
+a doxygen-like format must be used: refer to Doxygen Guidelines
+(http://www.doxygen.nl/manual/docblocks.html).
+
+/*
+ * VERY important single-line comments look like this.
+ */
+
+/* Most single-line comments look like this. */
+
+/*
+ * Multi-line comments look like this. Make them real sentences. Fill
+ * them so they look like real paragraphs.
+ */
+
+
+License Header
+==============
+
+Each file should begin with a special comment containing the appropriate
+copyright and license for the file. After any copyright header, a blank line
+should be left before any other contents, e.g. include statements in a C file.
+
+
+Preprocessor Directives (Header Includes)
+=========================================
+
+Include files from the local application directory are included using quotes,
+while includes from other paths are included using angle brackets: "<>".
+
+Example:
+
+#include <stdlib.h>
+#include <string.h>
+
+#include "intel-ipsec-mb.h"
+#include "asm.h"
+
+
+Header File Guards
+==================
+
+Headers should be protected against multiple inclusion with the usual:
+
+#ifndef _FILE_H_
+#define _FILE_H_
+
+/* Code */
+
+#endif /* _FILE_H_ */
+
+
+Macros
+======
+
+You can define a macro similar in C using #define preprocessor directive.
+
+For example:
+
+/**
+ * ---------------------------------------
+ * Local macros
+ * ---------------------------------------
+ */
+
+/*
+ * Custom ASSERT and DIM macros
+ */
+#ifdef DEBUG
+#include <assert.h>
+#define IMB_ASSERT(x) assert(x)
+#else
+#define IMB_ASSERT(x)
+#endif
+
+#ifndef IMB_DIM
+#define IMB_DIM(x) (sizeof(x) / sizeof(x[0]))
+#endif
+
+
+ASM
+===
+
+Syntax
+======
+
+Intel syntax should be used always.
+
+
+Register Naming
+===============
+
+Virtual registers with meaningful names should be used over direct register
+names when possible.
+
+
+Indentation
+===========
+
+Tabs are 8 characters and thus indentations are also 8 characters.
+To improve readability, instructions should be preceded by a single indent
+and followed by one or more indents in order to align the first operand.
+Spaces should be used over tabs.
+
+Example:
+        vmovdqu         %%T5, [%%GDATA + HashKey_6]
+        vpshufd         %%T2, %%XMM2, 01001110b
+        vpshufd         %%T3, %%T5, 01001110b
+        vpclmulqdq      %%T4, %%XMM2, %%T5, 0x11
+
+
+Comment Style
+=============
+
+Two semicolons should be used for comment lines and a single semicolon
+for end of line comments.
+
+Example:
+        ;; first phase of the reduction
+        vmovdqu         %%T3, [rel POLY2]
+
+        vpclmulqdq      %%T2, %%T3, %%T7, 0x01
+        vpslldq         %%T2, %%T2, 8     ; shift-L xmm2 2 DWs
+
+
+Macros
+======
+
+Macros should be used where possible to reduce code duplication. All macros
+should be properly documented, specifying input/output parameters and
+their types.
+
+Example:
+%macro AESROUND_1_TO_16_BLOCKS 5
+%define %%L0B0_3   %1      ; [in/out] ZMM; blocks 0 to 3
+%define %%L0B4_7   %2      ; [in/out] ZMM; blocks 4 to 7
+%define %%KEY      %3      ; [in] ZMM containing round key
+%define %%ROUND    %4      ; [in] numerical value containing round number
+%define %%IA0      %5      ; [clobbered] temp GP register
+
+Macros should be located within or before the .text section in the file.
+
+
+License Header
+==============
+
+Each file should begin with a special comment containing the appropriate
+copyright and license for the file. After any copyright header, a blank line
+should be left before any other contents.
+
+
+File and Code Structure
+=======================
+
+New files should be structured in the following layout:
+ 1. License header
+ 2. .data section
+ 3. .text section
+
+Please see avx512/cntr_vaes_avx512.asm for an example.
+All new modules should compile to produce relocatable code.
+
+
+Public APIs in the library
+==========================
+
+All functions that are exposed by the library must have their prototypes
+defined in intel-ipsec-mb.h and symbols added to libIPSec_MB.def.
+
+
+Documentation
+=============
+
+Please make sure to update documentation when necessary. If not possible
+(e.g. not allowed to edit wiki), propose necessary changes.
+
+
+Git Commit Messages
+===================
+
+Git commit messages should start with a short 50 character or less summary
+in a single paragraph. Ideally, it should start with a short prefix
+followed by a colon describing which part of the code it modifies
+e.g. "test: extended AES-CBC tests".
+
+
+Development Workflow
+====================
+
+Clone a repository in the usual way, for example:
+
+git clone https://github.com/intel/intel-ipsec-mb
+
+Once your local repository is set up as above, you must use
+the following workflow.
+
+Make sure you have the latest upstream changes:
+
+git remote update
+git checkout master
+git pull origin master
+
+
+Committing a Change
+===================
+
+Make your changes, commit them, and submit them for review:
+
+git commit -a
+
+To see how to create pull requests on GitHub, please refer to "About pull
+requests" help page (https://help.github.com/articles/about-pull-requests/).
+
+Note: Please ensure that you have your username and email address set correctly
+to let other developers know about your contribution:
+
+git config --global user.name "Firstname Lastname"
+git config --global user.email "your_email@youremail.com"
+
+
+Licenses
+========
+
+The code in this repository is licensed under BSD license (see LICENSE file).

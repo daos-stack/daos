@@ -1,0 +1,26 @@
+PMEMOBJ: pool_hdr
+$(nW): spoil: pool_hdr.major=$(*)
+$(nW): spoil: pool_hdr.features.compat=$(*)
+$(nW): spoil: pool_hdr.features.incompat=$(*)
+$(nW): spoil: pool_hdr.features.ro_compat=$(*)
+$(nW): spoil: pool_hdr.shutdown_state.usc=0
+$(nW): spoil: pool_hdr.shutdown_state.uuid=0
+$(nW): spoil: pool_hdr.shutdown_state.f:checksum_gen
+$(nW): spoil: pool_hdr.unused=$(*)
+checking shutdown state
+shutdown state correct
+checking pool header
+incorrect pool header
+the repair of pmemobj pools is not supported
+$(nW): cannot repair
+PMEMOBJ: pool_hdr
+$(nW): spoil: pool_hdr.signature=$(*)
+$(nW): spoil: pool_hdr.major=$(*)
+$(nW): spoil: pool_hdr.features.compat=$(*)
+$(nW): spoil: pool_hdr.features.incompat=$(*)
+$(nW): spoil: pool_hdr.features.ro_compat=$(*)
+$(nW): spoil: pool_hdr.unused=$(*)
+checking pool header
+incorrect pool header
+cannot determine pool type
+$(nW): cannot repair

@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2015-2023, Intel Corporation
+
+#
+# src/test/obj_lane/TEST0 -- single thread unit test for lanes
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+set_test_labels fault_injection
+
+setup
+
+expect_normal_exit ./obj_lane$EXESUFFIX f
+
+expect_normal_exit ./obj_lane$EXESUFFIX s
+
+check
+
+pass

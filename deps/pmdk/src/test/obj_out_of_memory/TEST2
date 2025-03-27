@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2016-2019, Intel Corporation
+
+. ../unittest/unittest.sh
+
+require_test_type long
+
+setup
+
+export PMEM_IS_PMEM_FORCE=1
+export PMEMOBJ_LOG_LEVEL=1
+
+create_poolset $DIR/testset1 2G:$DIR/testfile1
+
+# allocate 32 kilobyte blocks so that runs are used
+expect_normal_exit\
+	./obj_out_of_memory$EXESUFFIX 32768 $DIR/testset1
+
+pass

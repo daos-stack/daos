@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2015-2018, Intel Corporation
+#
+#
+# pmempool_rm/TEST4 -- test for pmempool rm
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+require_dax_devices 1
+
+setup
+
+create_poolset $DIR/testset1 AUTO:$DEVICE_DAX_PATH
+
+expect_normal_exit $PMEMPOOL$EXESUFFIX rm -af $DIR/testset1
+
+check_no_files $DIR/testset1
+
+pass

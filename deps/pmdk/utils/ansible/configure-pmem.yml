@@ -1,0 +1,177 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2023, Intel Corporation
+
+# This playbook is designed to configure regions and namespaces on DIMMs
+# so users can execute tests later. Playbook usage is described in
+# the README.md file.
+# The steps below are divided into 3 parts: removing previous namespaces
+# (if existed), creating new regions (if requested by the user)
+# and creating namespaces on that regions.
+#
+# Shell script implemented in this playbook for namespace creation
+# will create 9 DAX namespaces with aligned sizes to fit the first region
+# and 1 FSDAX namespace to fit the second region.
+# It is assumed that system contains 2 interleaved regions beforehand.
+# Setting "newRegions" to "true" will do that.
+#
+# Below are examples of how to use this file:
+#
+# 1) remotely
+# export TARGET_IP= # ip of the target
+# export USER_PASSWORD= # a password on the target
+# a) setup PMem for the first time (establish regions):
+# ansible-playbook -i $TARGET_IP, configure-pmem.yml --extra-vars \
+#   "host=all ansible_user=pmdkuser ansible_password=$USER_PASSWORD newRegions=true"
+# b) setup PMem if it already has been initialized before:
+# ansible-playbook -i $TARGET_IP, configure-pmem.yml --extra-vars \
+#   "host=all ansible_user=pmdkuser ansible_password=$USER_PASSWORD"
+#
+# 2) locally
+# For a playbook to be used on a local server please log in as pmdkuser:
+# a) comment out the first command: # -hosts: "{{ host }}"
+# b) uncomment the next two lines:
+# - hosts: localhost
+#   connection: local
+# c) setup PMem for the first time (establish regions):
+# ansible-playbook configure-pmem.yml --extra-vars "newRegions=true"
+# d) setup PMem if it already has been initialized before:
+# ansible-playbook configure-pmem.yml
+#
+
+- hosts: "{{ host }}"
+# - hosts: localhost
+#   connection: local
+  vars:
+    newRegions: false
+    mountPoint: /mnt/pmem0
+
+  tasks:
+    - name: Test if ndctl is installed
+      shell: which ndctl
+
+    - name: Remove fstab entry if it exist
+      ansible.posix.mount:
+        path: "{{ mountPoint }}"
+        state: absent_from_fstab
+        backup: true
+      become: true
+
+    - name: Unmount namespaces if they exist
+      shell: umount /dev/pmem* || true
+      become: true
+
+    - name: Disable current namespaces
+      shell: ndctl disable-namespace all || true
+      register: namespaces
+      become: true
+
+    - name: Destroy current namespaces
+      shell: ndctl destroy-namespace all || true
+      register: namespaces
+      become: true
+
+    - debug: var=namespaces
+
+    - name: Create new regions
+      block:
+      - name: Test if ipmctl is installed
+        shell: which ipmctl
+
+      - name: Create goal in AppDirectInterleaved mode
+        shell: ipmctl create -f -goal
+        become: true
+
+      - name: Reboot machine in order to apply new AppDirectInterleaved goal
+        reboot:
+      when: newRegions == 'true'
+      become: true
+
+    - name: Create new namespace configuration
+      shell: |
+        #!/usr/bin/env bash
+        DEV_DAX_R=0x0000
+        FS_DAX_R=0x0001
+
+        function check_alignment() {
+          local size=$1
+          local interleave_width=$(ipmctl show -dimm -socket 1 | grep "0x1" | wc -l)
+          local size_alignment=$(expr $size % $interleave_width)
+
+          if [ "$size_alignment" -gt "0" ]; then
+            size=$(expr $size - $size_alignment + $interleave_width)
+          fi
+
+          echo "${size}G"
+        }
+
+        function create_devdax() {
+          local align=$1
+          local size=$2
+          local size_option="-s $size"
+
+          if [ -z "$size" ]; then
+            size_option=""
+          fi
+
+          local cmd="ndctl create-namespace --mode devdax -a ${align} ${size_option} -r ${DEV_DAX_R} -f"
+          result=$(${cmd})
+          if [ $? -ne 0 ]; then
+            exit 1;
+          fi
+        }
+
+        function create_fsdax() {
+          local cmd="ndctl create-namespace --mode fsdax -r ${FS_DAX_R} -f"
+          result=$(${cmd})
+          if [ $? -ne 0 ]; then
+            exit 1;
+          fi
+          jq -r '.blockdev' <<< $result
+        }
+
+        BIG_NS_SIZE=$(check_alignment 55)
+        SMALL_NS_SIZE=$(check_alignment 4)
+
+        create_devdax 4k $SMALL_NS_SIZE
+        create_devdax 4k $SMALL_NS_SIZE
+        create_devdax 2m $SMALL_NS_SIZE
+        create_devdax 2m $SMALL_NS_SIZE
+        create_devdax 4k $BIG_NS_SIZE
+        create_devdax 4k $BIG_NS_SIZE
+        create_devdax 2m $BIG_NS_SIZE
+        create_devdax 2m $BIG_NS_SIZE
+        create_devdax 2m $SMALL_NS_SIZE
+
+        pmem_name=$(create_fsdax)
+
+        if [ ! -d "{{ mountPoint }}" ]; then
+          mkdir {{ mountPoint }}
+        fi
+
+        mkfs.ext4 -F /dev/${pmem_name}
+        mount -o dax=always /dev/${pmem_name} {{ mountPoint }}
+        chown -R $(id -u {{ ansible_user }}):$(id -g {{ ansible_user }}) {{ mountPoint }}
+
+        chmod 777 /dev/dax*
+        chmod +rw /sys/bus/nd/devices/region*/deep_flush
+        chmod +r /sys/bus/nd/devices/ndbus*/region*/resource
+        chmod +r /sys/bus/nd/devices/ndbus*/region*/dax*/resource
+      register: script
+      become: true
+
+    - debug: var=script
+
+    - name: Get PMEM device name for {{ mountPoint }} mount point
+      shell: |
+        mount | sed -nr 's/^.*(\/dev\/\S+) on \/mnt\/pmem0.*$/\1/p'
+      register: pmem_name
+
+    - name: Add /etc/fstab entry for PMEM
+      ansible.posix.mount:
+        path: "{{ mountPoint }}"
+        src: "{{ pmem_name.stdout }}"
+        fstype: ext4
+        opts: rw,relatime,dax=always
+        state: present
+        backup: true
+      become: true

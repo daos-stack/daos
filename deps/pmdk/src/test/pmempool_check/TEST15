@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2016-2023, Intel Corporation
+#
+#
+# pmempool_check/TEST15 -- test for checking poolset with valid parts but with
+#	invalid links
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_fs_type pmem non-pmem
+
+setup
+
+POOLSET=$DIR/pool.set
+POOLSET1=$DIR/pool1.set
+POOLSET2=$DIR/pool2.set
+PART1=$DIR/pool.part1
+PART2=$DIR/pool.part2
+PART3=$DIR/pool.part3
+PART4=$DIR/pool.part4
+PARTS="$PART1 $PART2 $PART3 $PART4"
+
+LOG=out${UNITTEST_NUM}.log
+rm -f $LOG && touch $LOG
+
+echo "Arguments: create obj" >> $LOG
+input_types=`seq 2`
+output_types=`seq 3`
+
+for input_type in $input_types; do
+
+	case "$input_type" in
+		1)
+		echo "Input: two parts per poolset" >> $LOG
+		create_poolset $POOLSET1 32M:$PART1 32M:$PART2
+		create_poolset $POOLSET2 32M:$PART3 32M:$PART4
+		;;
+		2)
+		echo "Input: two replicas per poolset" >> $LOG
+		create_poolset $POOLSET1 32M:$PART1 R 32M:$PART2
+		create_poolset $POOLSET2 32M:$PART3 R 32M:$PART4
+		;;
+	esac
+
+	for output_type in $output_types; do
+
+		case "$output_type" in
+			1)
+			echo "Output: four parts in poolset" >> $LOG
+			create_poolset $POOLSET 32M:$PART1 32M:$PART2 \
+				32M:$PART3 32M:$PART4
+			;;
+			2)
+			echo "Output: two replicas with two parts each in poolset" >> $LOG
+			create_poolset $POOLSET 32M:$PART1 32M:$PART2 \
+				R 32M:$PART3 32M:$PART4
+			;;
+			3)
+			echo "Output: four replicas in poolset" >> $LOG
+			create_poolset $POOLSET 32M:$PART1 R 32M:$PART2 \
+				R 32M:$PART3 R 32M:$PART4
+			;;
+		esac
+
+		rm -f $PARTS
+		expect_normal_exit $PMEMPOOL$EXESUFFIX create obj $POOLSET1
+		expect_normal_exit $PMEMPOOL$EXESUFFIX create obj $POOLSET2
+		check_files $PARTS
+
+		expect_abnormal_exit $PMEMPOOL$EXESUFFIX check -v $POOLSET >> $LOG
+		expect_abnormal_exit $PMEMPOOL$EXESUFFIX check -vry $POOLSET >> $LOG
+		expect_abnormal_exit $PMEMPOOL$EXESUFFIX check -vary $POOLSET >> $LOG
+	done
+done
+
+check
+
+pass

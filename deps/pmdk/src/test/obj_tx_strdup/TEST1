@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2015-2020, Intel Corporation
+#
+
+#
+# src/test/obj_tx_strdup/TEST1 -- unit test for pmemobj_tx_strdup
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+require_build_type debug
+require_fs_type pmem
+
+# This test relies on libc debug symbols being installed for reliable
+# error reporting.
+# XXX Figure out how to detect it.
+configure_valgrind pmemcheck force-enable
+setup
+
+expect_normal_exit ./obj_tx_strdup$EXESUFFIX $DIR/testfile1
+
+check
+
+pass

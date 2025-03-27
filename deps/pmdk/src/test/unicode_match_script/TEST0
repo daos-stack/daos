@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2017-2019, Intel Corporation
+
+#
+# src/test/unicode_match_script/TEST0 -- unicode encoding unit test for match
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_fs_type any
+# there's no point in testing different builds
+require_build_type debug
+
+setup
+
+../match -a
+
+pass

@@ -1,0 +1,5 @@
+checking shutdown state
+shutdown state correct
+checking pool header
+pool header correct
+$(nW): consistent

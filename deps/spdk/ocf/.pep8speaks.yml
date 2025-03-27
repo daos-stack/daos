@@ -1,0 +1,13 @@
+# File : .pep8speaks.yml
+
+scanner:
+    diff_only: True
+    linter: pycodestyle
+    
+pycodestyle:
+    max-line-length: 100
+    ignore:
+        - E402  # module level import not at top of file
+        - W503  # line break after binary operator
+
+no_blank_comment: True

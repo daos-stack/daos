@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2015-2018, Intel Corporation
+#
+#
+# pmempool_rm/TEST5 -- test for pmempool rm
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+setup
+
+create_poolset $DIR/pool.set\
+	8M:$DIR/pool1:x\
+	8M:$DIR/pool2:x\
+	8M:$DIR/pool3:x\
+	8M:$DIR/pool4:x
+
+expect_normal_exit $PMEMPOOL$EXESUFFIX create obj $DIR/pool.set
+expect_normal_exit $PMEMPOOL$EXESUFFIX create obj $DIR/pool.1
+expect_normal_exit $PMEMPOOL$EXESUFFIX create obj $DIR/pool.2
+check_files $DIR/pool.set $DIR/pool1 $DIR/pool2 $DIR/pool3 $DIR/pool4\
+	$DIR/pool.1 $DIR/pool.2
+expect_normal_exit $PMEMPOOL$EXESUFFIX rm $DIR/pool2 $DIR/pool3
+check_no_file $DIR/pool2 $DIR/pool3
+
+expect_abnormal_exit $PMEMPOOL$EXESUFFIX rm -a\
+	$DIR/pool.1 $DIR/pool.set $DIR/pool.2 2>log$UNITTEST_NUM.log
+
+check_no_files $DIR/pool1 $DIR/pool2 $DIR/pool3 $DIR/pool4\
+	$DIR/pool.1 $DIR/pool.2
+check_file $DIR/pool.set
+
+check
+
+pass

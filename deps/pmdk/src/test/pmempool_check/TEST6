@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2014-2023, Intel Corporation
+#
+#
+# pmempool_check/TEST6 -- test for checking pools
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_fs_type pmem non-pmem
+
+setup
+
+POOLSET=$DIR/pool.set
+POOL_PART1=$DIR/pool.part1
+POOL_PART2=$DIR/pool.part2
+POOLS="$POOL_PART1 $POOL_PART2"
+
+LOG=out${UNITTEST_NUM}.log
+rm -f $LOG && touch $LOG
+
+create_poolset $POOLSET 32M:$DIR/pool.part1:z 32M:$DIR/pool.part2
+check_file $POOLSET
+
+echo "PMEMOBJ: pool_hdr" >> $LOG
+expect_normal_exit $PMEMPOOL$EXESUFFIX create obj $POOLSET
+check_files $POOLS
+$PMEMSPOIL -v $POOLSET pool_hdr.signature=ERROR >> $LOG
+expect_abnormal_exit $PMEMPOOL$EXESUFFIX check $POOLSET >> $LOG
+expect_abnormal_exit $PMEMPOOL$EXESUFFIX check $POOL_PART1 >> $LOG
+expect_normal_exit $PMEMPOOL$EXESUFFIX check $POOL_PART2 >> $LOG
+
+check
+
+pass

@@ -1,0 +1,20 @@
+$(nW)pool.p1: spoil: pool_hdr.checksum=$(nW)
+checking shutdown state
+shutdown state correct
+replica 0 part 0: checking pool header
+replica 0 part 0: incorrect pool header
+the repair of pmemobj pools is not supported
+$(nW)pool.set: cannot repair
+$(nW)pool.p1: spoil: pool_hdr.uuid=$(nW)
+checking shutdown state
+shutdown state correct
+replica 0 part 0: checking pool header
+replica 0 part 0: incorrect pool header
+the repair of pmemobj pools is not supported
+$(nW)pool.set: cannot repair
+checking shutdown state
+shutdown state correct
+replica 0 part 0: checking pool header
+replica 0 part 0: incorrect pool header
+the repair of pmemobj pools is not supported
+$(nW)pool.set: cannot repair

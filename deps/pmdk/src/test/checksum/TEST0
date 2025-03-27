@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2014-2019, Intel Corporation
+
+#
+# src/test/checksum/TEST0 -- unit test for checksum
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_fs_type none
+
+setup
+
+expect_normal_exit ./checksum$EXESUFFIX ./file?
+
+check
+
+pass

@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2015-2023, Intel Corporation
+
+#
+# src/test/obj_debug/TEST4 -- unit test for debug features
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+require_build_type debug static_debug
+require_fs_type any
+
+setup
+
+expect_abnormal_exit ./obj_debug$EXESUFFIX $DIR/testfile1 n 2> /dev/null
+
+pass

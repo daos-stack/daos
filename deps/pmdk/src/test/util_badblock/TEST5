@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2018-2019, Intel Corporation
+
+#
+# src/test/util_badblock/TEST5 -- unit test for util_badblock
+#                                 - regular file with no bad blocks
+#                                 - only list bad blocks
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_badblock_tests_enabled block_device
+require_linked_with_ndctl ./util_badblock$EXESUFFIX
+
+setup
+
+. ../common_badblock.sh
+
+MOUNT_DIR="$DIR/mnt-pmem"
+badblock_test_init block_device $MOUNT_DIR
+
+FILE="$MOUNT_DIR/file"
+fallocate -l 1M $FILE
+
+expect_normal_exit ./util_badblock$EXESUFFIX $FILE l
+
+badblock_test_fini $MOUNT_DIR
+
+check
+
+pass

@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2018-2019, Intel Corporation
+
+#
+# src/test/obj_direct_volatile/TEST0 -- unit test for direct_volatile
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+require_fs_type any
+
+setup
+
+expect_normal_exit ./obj_direct_volatile$EXESUFFIX $DIR/test0
+
+pass

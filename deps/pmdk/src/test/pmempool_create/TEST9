@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2017-2018, Intel Corporation
+#
+#
+# pmempool_create/TEST9 -- test for pmempool create command with poolset
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+require_fs_type any
+
+setup
+
+RESVSIZE=$((4 * 1024 * 1024 * 1024)) # 4GiB
+
+create_poolset $DIR/testset1\
+	$RESVSIZE:$DIR/testdir11:d\
+	O SINGLEHDR
+
+expect_normal_exit $PMEMPOOL$EXESUFFIX create --layout=LAYOUT_NAME$SUFFIX obj\
+	$DIR/testset1
+
+pass

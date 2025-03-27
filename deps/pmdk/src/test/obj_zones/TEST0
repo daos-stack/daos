@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2017-2023, Intel Corporation
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+# too large
+configure_valgrind force-disable
+
+setup
+
+create_holey_file 64G $DIR/testfile1
+
+expect_normal_exit ./obj_zones$EXESUFFIX $DIR/testfile1 c
+
+check
+
+expect_normal_exit ./obj_zones$EXESUFFIX $DIR/testfile1 o
+
+pass

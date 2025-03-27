@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2018-2020, Intel Corporation
+
+#
+# src/test/util_badblock/TEST7 -- unit test for util_badblock
+#                                 - regular file with bad blocks
+#                                 - list, clear and list again
+#                                   bad blocks in the file
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_badblock_tests_enabled block_device
+require_linked_with_ndctl ./util_badblock$EXESUFFIX
+
+setup
+
+. ../common_badblock.sh
+
+MOUNT_DIR="$DIR/mnt-pmem"
+badblock_test_init block_device $MOUNT_DIR
+
+FILE="$MOUNT_DIR/file"
+fallocate -l 1M $FILE
+
+# inject bad block:
+FIRST_SECTOR=$(expect_normal_exit $EXTENTS $FILE -l 0)
+ndctl_inject_error $NAMESPACE $FIRST_SECTOR 1
+
+expect_bad_blocks $NAMESPACE
+
+enable_log_append
+
+expect_normal_exit ./util_badblock$EXESUFFIX $FILE l c
+
+#
+# This is a workaround for a Linux kernel bug (at least v4.16):
+# fixed blocks have to be written to get bad blocks cleared.
+#
+dd if=/dev/zero of=$FILE count=1 status=none
+
+expect_normal_exit ./util_badblock$EXESUFFIX $FILE l
+
+ndctl_uninject_error $FULLDEV $NAMESPACE $FIRST_SECTOR 1
+
+badblock_test_fini $MOUNT_DIR
+
+check
+
+pass

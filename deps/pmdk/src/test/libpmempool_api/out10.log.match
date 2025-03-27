@@ -1,0 +1,17 @@
+libpmempool_api$(nW)TEST10: START: libpmempool_test$(nW)
+ $(nW)libpmempool_test$(nW) -d 0 -r 0 -y 0 $(nW)
+checking shutdown state
+shutdown state correct
+checking pool header
+incorrect pool header
+status = not consistent
+libpmempool_api$(nW)TEST10: DONE
+libpmempool_api$(nW)TEST10: START: libpmempool_test$(nW)
+ $(nW)libpmempool_test$(nW) -d 0 -r 1 -y 1 $(nW)
+checking shutdown state
+shutdown state correct
+checking pool header
+incorrect pool header
+the repair of pmemobj pools is not supported
+status = cannot repair
+libpmempool_api$(nW)TEST10: DONE

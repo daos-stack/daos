@@ -1,0 +1,150 @@
+#
+# src/test/testconfig.py -- configuration for unit tests
+#
+
+config = {
+    #
+    # 1) *** TEST CONFIGURATION ***
+    #
+    # The first part of the file tells the test framework
+    # which file system locations are to be used for local testing.
+    #
+    #
+    # Set logging level. Possible values:
+    # 0 - silent (only error messages)
+    # 1 - normal (above + SETUP + START + DONE + PASS + SKIP messages)
+    # 2 - verbose (above + stdout from test binaries)
+    #
+
+    'unittest_log_level': 1,
+
+    #
+    # For tests that require filesystem with page granularity, set the
+    # path to a directory on a filesystem with such granularity.
+    # This line may stay commented out if there's no such filesystem
+    # available on your system.
+    #
+
+    # 'page_fs_dir': '/tmp',
+
+    #
+    # Enforce that the library will act in accordance with
+    # page granularity, even if the underlying filesystem is not page
+    # granular.
+    #
+
+    'force_page': False,
+
+    #
+    # For tests that require filesystem with cache line granularity, set
+    # the path to a directory on a filesystem with such granularity.
+    # This line may stay commented out if there's no such filesystem
+    # available on your system.
+    #
+
+    # 'cacheline_fs_dir': '/mnt/pmem',
+
+    #
+    # Enforce that the library will act in accordance with
+    # cache line granularity, even if the underlying filesystem is not
+    # cache line granular.
+    #
+
+    'force_cacheline': False,
+
+    #
+    # For tests that require filesystem with byte granularity, set
+    # the path to a directory on a filesystem with such granularity.
+    # This line may stay commented out if there's no such filesystem
+    # available on your system.
+    #
+
+    # 'byte_fs_dir': '/mnt/pmem',
+
+    #
+    # Enforce that the library will act in accordance with
+    # byte granularity, even if the underlying filesystem is not byte
+    # granular.
+    #
+
+    'force_byte': False,
+
+    #
+    # To display execution time of each test
+    #
+
+    'tm': True,
+
+    #
+    # Overwrite default test type:
+    # check, short, medium, long, all
+    # where: check = short + medium; all = short + medium + long
+    #
+
+    'test_type': 'check',
+
+    #
+    # Set build type to be run:
+    # debug, release, static_debug, static_nondebug, all
+    # Can be a string or a list: ['debug', 'release']
+    #
+
+    'build': 'all',
+
+    #
+    # Set filesystem granularity to be run:
+    # page, cacheline, byte, none, all (default)
+    #
+
+    'granularity': 'all',
+
+    #
+    # If keep_going is set to True, execution continues despite test failures.
+    #
+
+    'keep_going': False,
+
+    #
+    # Skips will be treated as Fails if set to True
+    #
+
+    'fail_on_skip': False,
+
+    #
+    # Set timeout
+    # (floating point number with an optional suffix: 's' for seconds,
+    # 'm' for minutes, 'h' for hours or 'd' for days)
+    #
+
+    'timeout': '3m',
+
+    #
+    # In case of test fail all log files will be written. You can specify how
+    # many lines should be written by setting this variable. If 'dump_lines' is
+    # not set default value is 30.
+    #
+    'dump_lines': 30,
+
+    # Forcibly run tests with selected Valgrind tool, unless the test
+    # explicitly disables it.
+    # Possible values: None (do not force), 'memcheck',
+    # 'pmemcheck', 'drd', 'helgrind'
+    #
+    'force_enable': None,
+
+    # For tests that require raw dax devices without a file system, add paths to
+    # those devices to the list 'device_dax_path'. For most tests one device
+    # is enough, but some might require more.
+    # Eg. ['/dev/dax0.0', '/dev/dax1.0']
+    #
+    'device_dax_path' : [],
+
+    # Enable tests that require administrative privileges.
+    # They can be potentially very harmful,
+    # so they have to be enabled deliberately.
+    #
+    # In case of linux OSes the 'sudo' command needs to be available
+    # in the non-interactive mode (no password required to perform the command).
+    #
+    'enable_admin_tests': False
+}

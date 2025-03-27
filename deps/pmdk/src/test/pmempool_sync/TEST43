@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2018-2024, Intel Corporation
+#
+#
+# pmempool_sync/TEST43 -- test for sync command with badblocks
+#                         - overlapping bad blocks in two replicas
+#                           replica #0: blocks: offset: 125 length: 2
+#                           replica #1: blocks: offset: 126 length: 2
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+require_fs_type non-pmem
+require_build_type debug nondebug
+require_linked_with_ndctl $PMEMPOOL$EXESUFFIX
+
+setup
+
+export PMEMPOOL_LOG_LEVEL=10
+
+LOG=out${UNITTEST_NUM}.log
+rm -rf $LOG && touch $LOG
+
+POOLSET=$DIR/testset1
+create_poolset $POOLSET \
+	8M:$DIR/testfile0:z \
+	8M:$DIR/testfile1:z \
+	8M:$DIR/testfile2:z \
+	R \
+	8M:$DIR/testfile3:z \
+	8M:$DIR/testfile4:z \
+	8M:$DIR/testfile5:z
+
+expect_normal_exit $PMEMPOOL$EXESUFFIX rm $POOLSET
+expect_normal_exit $PMEMPOOL$EXESUFFIX create obj --layout pmempool$SUFFIX $POOLSET
+
+expect_normal_exit "$OBJ_VERIFY$EXESUFFIX $POOLSET pmempool$SUFFIX c v &>> $LOG"
+
+# zero blocks: offset: 125 length: 2 in the replica #0
+zero_blocks $DIR/testfile1 125 2
+
+# zero blocks: offset: 126 length: 2 in the replica #1
+zero_blocks $DIR/testfile4 126 2
+
+# fail because of bad blocks
+expect_abnormal_exit "$OBJ_VERIFY$EXESUFFIX $POOLSET pmempool$SUFFIX v &>> $LOG"
+
+# create recovery files
+create_recovery_file $DIR/testset1_r0_p0_badblocks.txt
+create_recovery_file $DIR/testset1_r0_p1_badblocks.txt 125 2
+create_recovery_file $DIR/testset1_r0_p2_badblocks.txt
+create_recovery_file $DIR/testset1_r1_p0_badblocks.txt
+create_recovery_file $DIR/testset1_r1_p1_badblocks.txt 126 2
+create_recovery_file $DIR/testset1_r1_p2_badblocks.txt
+
+turn_on_checking_bad_blocks $POOLSET
+
+# fixing bad blocks should fail
+expect_abnormal_exit "$PMEMPOOL$EXESUFFIX sync -v -b $POOLSET &>> $LOG"
+
+# pool verification should fail
+expect_abnormal_exit "$OBJ_VERIFY$EXESUFFIX $POOLSET pmempool$SUFFIX v &>> $LOG"
+
+check
+
+pass

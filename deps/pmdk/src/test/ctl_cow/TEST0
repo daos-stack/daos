@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2019-2024, Intel Corporation
+
+#
+# src/test/ctl_cow/TEST0 -- unit test which checks copy on write feature
+# for obj pool
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+require_command md5sum
+
+setup
+
+POOLSET="testset_local"
+POOL="testfile"
+REPLICA="testfile_replica"
+
+create_poolset $DIR/$POOLSET 32M:$DIR/$POOL:z  \
+        R 32M:$DIR/$REPLICA:z
+
+expect_normal_exit $PMEMPOOL$EXESUFFIX create obj $DIR/$POOLSET
+
+POOL_BEFORE=`md5sum -b $DIR/$POOL`
+REPLICA_BEFORE=`md5sum -b $DIR/$REPLICA`
+
+PMEMOBJ_CONF="${PMEMOBJ_CONF};copy_on_write.at_open=1"
+
+expect_normal_exit ./ctl_cow$EXESUFFIX $DIR/$POOLSET obj
+
+POOL_AFTER=`md5sum -b $DIR/$POOL`
+REPLICA_AFTER=`md5sum -b $DIR/$REPLICA`
+
+if [ "$POOL_BEFORE" != "$POOL_AFTER" ] || [ "$REPLICA_BEFORE" != "$REPLICA_AFTER" ]
+then
+	fatal "$POOL_BEFORE != $POOL_AFTER or $REPLICA_BEFORE != $REPLICA_AFTER"
+fi
+
+check
+
+pass

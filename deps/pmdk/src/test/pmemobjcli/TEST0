@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2016-2018, Intel Corporation
+#
+#
+# pmemobjcli/TEST0 -- test for pmemobjcli
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+setup
+
+POOL=$DIR/testfile
+SCRIPT=_example.posc
+LOG=out${UNITTEST_NUM}.log
+
+expect_normal_exit $PMEMPOOL$EXESUFFIX create obj $POOL -s 16M
+expect_normal_exit $PMEMOBJCLI$EXESUFFIX -s $PMEMOBJCLI$SCRIPT $POOL > $LOG
+
+check
+
+pass

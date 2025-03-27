@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2018, Intel Corporation
+#
+#
+# libpmempool_feature/TEST0 -- unit test for PMEMPOOL_FEAT_SINGLEHDR
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_fs_type any
+
+setup
+. ./common.sh
+
+expect_normal_exit $PMEMPOOL$EXESUFFIX create obj $POOL
+
+exit_func=expect_abnormal_exit
+
+libpmempool_feature_enable SINGLEHDR no-query # UNSUPPORTED
+libpmempool_feature_disable SINGLEHDR no-query # UNSUPPORTED
+libpmempool_feature_query SINGLEHDR
+
+check
+pass

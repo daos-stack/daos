@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2015-2019, Intel Corporation
+
+#
+# src/test/util_poolset_parse/TEST0 -- unit test for parsing a pool set file
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_fs_type none
+
+setup
+
+export PARSER_LOG_LEVEL=4
+export PARSER_LOG_FILE=./parser$UNITTEST_NUM.log
+
+POOLSETS=`ls -1 ./pool*[0-9].set | sort -V`
+
+expect_normal_exit ./util_poolset_parse$EXESUFFIX t $POOLSETS
+
+$GREP -e "<[14]>.*\[.*util_poolset_parse\]" ./parser$UNITTEST_NUM.log | \
+	sed -e "s/^.*util_poolset_parse][ ]*//g" > grep$UNITTEST_NUM.log
+
+check
+
+pass

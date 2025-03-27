@@ -1,0 +1,16 @@
+#
+# Various versions of Python in our CI do not behave well under valgrind.
+#
+{
+    python-is-b0rked
+    Memcheck:Cond
+    ...
+    fun:PyUnicode*
+}
+
+{
+    python-is-b0rked
+    Memcheck:Cond
+    ...
+    fun:wcstombs
+}

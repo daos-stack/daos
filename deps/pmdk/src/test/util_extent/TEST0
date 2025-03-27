@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2018-2019, Intel Corporation
+
+#
+# src/test/util_extent/TEST0 -- unit test for util_extent
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+require_fs_type any
+
+setup
+
+require_fs_name ext4
+
+SIZE=$((100 * 1024 * 1024))
+
+fallocate -l $SIZE $DIR/testfile1
+
+expect_normal_exit ./util_extent$EXESUFFIX $DIR/testfile1 $SIZE
+
+pass

@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2014-2023, Intel Corporation
+#
+#
+# pmempool_create/TEST0 -- test for pmempool create command with default pool size
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_fs_type pmem non-pmem
+
+setup
+
+POOL=$DIR/file.pool
+
+# PMEMOBJ
+rm -f $POOL
+expect_normal_exit $PMEMPOOL$EXESUFFIX create --layout=LAYOUT_NAME$SUFFIX obj $POOL
+check_file $POOL
+check_signature PMEMOBJ $POOL
+check_layout LAYOUT_NAME$SUFFIX $POOL
+
+pass

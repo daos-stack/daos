@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2015-2019, Intel Corporation
+
+#
+# src/test/util_cpuid/TEST0 -- unit test for CPU features detection
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_fs_type none
+
+require_x86_64
+
+setup
+
+expect_normal_exit ./util_cpuid$EXESUFFIX
+
+pass

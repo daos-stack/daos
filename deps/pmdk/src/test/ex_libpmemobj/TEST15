@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2015-2023, Intel Corporation
+
+#
+# src/test/ex_libpmemobj/TEST15 -- unit test for libpmemobj examples
+# This test is not run on GH Actions, as it requires
+# connecting a terminal to standard output.
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_build_type debug nondebug
+require_fs_type pmem
+require_pkg ncurses
+require_tty
+
+setup
+
+EX_PATH=../../examples/libpmemobj/pminvaders
+INPUT=$DIR/input.txt
+
+dd if=/dev/zero bs=1k count=2 2>>prep$UNITTEST_NUM.log | tr '\0' ' ' >> $INPUT
+echo -n oooo >> $INPUT
+dd if=/dev/zero bs=1k count=2 2>>prep$UNITTEST_NUM.log | tr '\0' ' ' >> $INPUT
+echo -n ppppppp >> $INPUT
+dd if=/dev/zero bs=1k count=2 2>>prep$UNITTEST_NUM.log | tr '\0' ' ' >> $INPUT
+echo -n ooo >> $INPUT
+dd if=/dev/zero bs=1k count=2 2>>prep$UNITTEST_NUM.log | tr '\0' ' ' >> $INPUT
+echo -n q >> $INPUT
+
+if [ -t 1 -a -z "$NOTTY" ]
+then
+	expect_normal_exit $EX_PATH/pminvaders $DIR/testfile1 < $INPUT
+else
+	expect_normal_exit $EX_PATH/pminvaders $DIR/testfile1 >/dev/null 2>/dev/null < $INPUT
+fi
+
+pass

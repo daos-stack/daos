@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2014-2019, Intel Corporation
+
+#
+# src/test/util_file_open/TEST1 -- unit test for util_file_open()
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+
+require_fs_type any
+require_no_superuser
+
+setup
+
+MIN_POOL=0x4000
+
+truncate -s 32K $DIR/testfile1
+chmod -rw $DIR/testfile1
+truncate -s 32K $DIR/testfile2
+chmod -w $DIR/testfile2
+ln -s testfile1 $DIR/testlink1
+ln -s testfile2 $DIR/testlink2
+
+expect_normal_exit ./util_file_open$EXESUFFIX $MIN_POOL \
+    $DIR/testlink1\
+    $DIR/testlink2\
+    $DIR/testfile1\
+    $DIR/testfile2\
+
+check
+
+pass

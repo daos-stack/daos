@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2018, Intel Corporation
+#
+#
+# pmempool_feature/TEST3 -- unit test for SINGLEHDR + memcheck
+#
+
+. ../unittest/unittest.sh
+
+require_test_type medium
+require_fs_type any
+
+configure_valgrind memcheck force-enable $PMEMPOOL$EXESUFFIX
+
+setup
+. ./common.sh
+
+pmempool_feature_create_poolset "no_dax_device"
+pmempool_feature_test_SINGLEHDR
+
+check
+
+pass
