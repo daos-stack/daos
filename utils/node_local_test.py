@@ -1438,10 +1438,16 @@ class DFuse():
                 pass
             total_time += 1
             if total_time > 60:
+                # Kill the unresponsive dfuse command
+                self._sp.send_signal(signal.SIGTERM)
+                self._sp = None
+
+                # Report any errors for the log
                 print(f'Dfuse not started within 60 seconds; contents of {self.log_file}:')
                 with open(self.log_file, 'r', encoding='utf-8') as lf:
                     for line in lf.readlines():
                         print(f'  {line}')
+
                 raise NLTestFail('Timeout starting dfuse')
 
         self._daos.add_fuse(self)

@@ -263,6 +263,12 @@ pipeline {
         booleanParam(name: 'CI_FI_el8_TEST',
                      defaultValue: true,
                      description: 'Run the Fault injection testing on EL 8 test stage')
+        booleanParam(name: 'CI_TEST_EL8_RPMs',
+                     defaultValue: true,
+                     description: 'Run the Test RPMs on EL 8 test stage')
+        booleanParam(name: 'CI_TEST_LEAP15_RPMs',
+                     defaultValue: false,
+                     description: 'Run the Test RPMs on Leap 15 test stage')
         booleanParam(name: 'CI_MORE_FUNCTIONAL_PR_TESTS',
                      defaultValue: false,
                      description: 'Enable more distros for functional CI tests')
@@ -994,7 +1000,7 @@ pipeline {
                 stage('Test RPMs on EL 8.6') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { params.CI_TEST_EL8_RPMs && !skipStage() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -1014,7 +1020,7 @@ pipeline {
                 stage('Test RPMs on Leap 15.5') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { params.CI_TEST_LEAP15_RPMs && !skipStage() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
