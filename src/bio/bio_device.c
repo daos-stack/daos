@@ -576,10 +576,6 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 
 	/*
 	 * Scan remaining SMD devices not present bio_bdev list.
-	 *
-	 * As for current implementation, there won't be any device
-	 * present in SMD but not in bio_bdev list, here we just do
-	 * it for sanity check.
 	 */
 	d_list_for_each_entry(s_info, &s_dev_list, sdi_link) {
 		D_ERROR("Found unexpected device "DF_UUID" in SMD\n",
