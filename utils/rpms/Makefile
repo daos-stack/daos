@@ -27,10 +27,10 @@ include packaging/Makefile_packaging.mk
 
 PACKAGING_CHECK_DIR ?= ../../../rpm/packaging
 
-$(NAME)-$(VERSION).tar.gz: $(shell git ls-files --recurse-submodules :/:)
+$(NAME)-$(VERSION).tar.gz: $(shell git ls-files :/:)
 	echo Creating $@
 	echo $(basename $@)
-	./create_tar.sh $(NAME) $(VERSION)
+	cd ../../ && utils/rpms/archive.sh utils/rpms "$(NAME)" "$(VERSION)" tar
 	rm -f $@
 	gzip $(basename $@)
 
