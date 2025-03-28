@@ -210,4 +210,9 @@ void dv_oid_to_obj(daos_obj_id_t oid, struct ddb_obj *obj);
 
 int ddb_vtp_verify(daos_handle_t poh, struct dv_tree_path *vtp);
 
+int
+dv_dev_list(const char *db_path, d_list_t *dev_list, int *dev_cnt);
+int
+dv_dev_replace(const char *db_path, uuid_t old_devid, uuid_t new_devid);
+
 #endif /* DAOS_DDB_VOS_H */
