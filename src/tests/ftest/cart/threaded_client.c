@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,6 +19,8 @@ static crt_context_t crt_ctx;
 #define STARTED  1
 #define STOPPING 2
 #define SHUTDOWN 3
+
+char path[1024];
 
 
 static int check_status(void *arg)
@@ -176,6 +179,15 @@ static struct crt_proto_format my_proto_fmt_threaded_client = {
 	.cpf_base = TEST_THREADED_BASE,
 };
 
+static void *respawn(void *arg)
+{
+	char *cmd = arg;
+
+	printf("Executing %s\n", cmd);
+	system(cmd);
+	return NULL;
+}
+
 int main(int argc, char **argv)
 {
 	pthread_t		 thread[NUM_THREADS];
@@ -188,6 +200,9 @@ int main(int argc, char **argv)
 
 	saved_rc = d_log_init();
 	assert(saved_rc == 0);
+
+	sleep(2);
+	int count = atoi(argv[1]);
 
 	saved_rc = crt_init(NULL, 0);
 	if (saved_rc != 0) {
@@ -229,8 +244,19 @@ int main(int argc, char **argv)
 		pthread_create(&thread[i], NULL, send_rpcs, &status);
 
 	/* Run test for 10 seconds */
-	printf("Running test for 10 seconds");
-	for (i = 0; i < 10; i++) {
+	printf("Running test for 5000 seconds");
+	for (i = 0; i < 5000; i++) {
+		if ((rand() % (200 * count)) < 30)
+		{
+			pthread_t quit_thread;
+			char *cmd;
+			readlink("/proc/self/exe", path, 1024);
+			D_ASPRINTF(cmd, "%s %d", path, count + 1);
+			pthread_create(&quit_thread, NULL, respawn, cmd);
+			sleep(1);
+			printf("Exiting\n");
+			exit(0);
+		}
 		printf(".");
 		fflush(stdout);
 		sleep(1);
