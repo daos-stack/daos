@@ -63,7 +63,7 @@ if ! retry_cmd 2400 clush -B -S -l root -w "$NODESTRING" \
            REPO_PATH=\"${REPO_PATH:-}\"
            ARTIFACTS_URL=\"${ARTIFACTS_URL:-}\"
            COVFN_DISABLED=\"${COVFN_DISABLED:-true}\"
-           DAOS_CI_INFO_DIR=\"${DAOS_CI_INFO_DIR:-"wolf-2:/export/scratch"}\"
+           DAOS_CI_INFO_DIR=\"${DAOS_CI_INFO_DIR:-'wolf-2:/export/scratch'}\"
            $(cat ci/stacktrace.sh)
            $(cat ci/junit.sh)
            $(cat ci/provisioning/post_provision_config_common_functions.sh)
