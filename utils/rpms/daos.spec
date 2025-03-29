@@ -402,7 +402,7 @@ utils/rpms/move_files.sh "%{buildroot}/opt/daos/bin" "%{buildroot}%{_bindir}" \
                          "dmg"
 utils/rpms/move_files.sh "%{buildroot}/opt/daos/lib64" "%{buildroot}%{_libdir}" \
                          "%{buildroot}/opt/daos" "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
-                         "%{buildroot}/opt/daos/lib64/daos" \
+                         "daos" \
                          $(basename -a "%{buildroot}/opt/daos/lib64/libgurt"*) \
                          $(basename -a "%{buildroot}/opt/daos/lib64/libcart"*) \
                          $(basename -a "%{buildroot}/opt/daos/lib64/libdfs"*) \
