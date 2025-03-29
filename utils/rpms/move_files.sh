@@ -24,6 +24,14 @@ while [ $# -gt 0 ]; do
   grep -Il '' "$src" | xargs -I % sed -i "s!${oldprefix}/${lib}!${libdir}!" '%'
   grep -Il '' "$src" | xargs -I % sed -i "s!${oldprefix}/!${newprefix}!" '%'
   grep -Il '' "$src" | xargs -I % sed -i "s!-L${oldprefix}\S*!!" '%'
+  dbg_src=$(echo "${src}" | sed "s!${oldprefix}!/usr/lib/debug/${oldprefix}!")
+  dbg_dest=$(echo "${dest_root}" | sed "s!${newprefix}/bin!${newprefix}/lib/debug/${newprefix}/bin!")
+  dbg_dest=$(echo "${dest_root}" | sed "s!${newprefix}/lib!${newprefix}/lib/debug/${newprefix}/lib!")
+  fname=$(grep -IL '' "${dbg_src}-"*".debug")
+  if [ -f "${fname}" ]; then
+    mkdir -p "${dbg_dest}"
+    mv "${fname}" "${dbg_dest}"
+  fi
   mv "${src}" "${dest_root}"
   shift
 done

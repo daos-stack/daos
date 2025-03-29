@@ -405,6 +405,7 @@ utils/rpms/move_files.sh "%{buildroot}/opt/daos/lib64" "%{buildroot}%{_libdir}" 
                          "daos" \
                          $(basename -a "%{buildroot}/opt/daos/lib64/libgurt"*) \
                          $(basename -a "%{buildroot}/opt/daos/lib64/libcart"*) \
+                         $(basename -a "%{buildroot}/opt/daos/lib64/libdaos_serialize"*) \
                          $(basename -a "%{buildroot}/opt/daos/lib64/libdfs"*) \
                          $(basename -a "%{buildroot}/opt/daos/lib64/libdaos."*) \
                          $(basename -a "%{buildroot}/opt/daos/lib64/libdaos_common."*)
@@ -565,37 +566,37 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %config(noreplace) %attr(0644,root,root) %{conf_dir}/daos_server.yml
 %dir %attr(0700,daos_server,daos_server) %{conf_dir}/certs/clients
 # set daos_server_helper to be setuid root in order to perform privileged tasks
-%attr(4750,root,daos_server) %{_bindir}/daos_server_helper
+%attr(4750,root,daos_server) /opt/daos/bin/daos_server_helper
 # set daos_server to be setgid daos_server in order to invoke daos_server_helper
 # and/or daos_firmware_helper
-%attr(2755,root,daos_server) %{_bindir}/daos_server
-%{_bindir}/daos_engine
-%{_bindir}/daos_metrics
-%{_bindir}/ddb
+%attr(2755,root,daos_server) /opt/daos/bin/daos_server
+/opt/daos/bin/daos_engine
+/opt/daos/bin/daos_metrics
+/opt/daos/bin/ddb
 %{_sysconfdir}/ld.so.conf.d/daos.conf
-%dir %{_libdir}/daos_srv
-%{_libdir}/daos_srv/libchk.so
-%{_libdir}/daos_srv/libcont.so
-%{_libdir}/daos_srv/libddb.so
-%{_libdir}/daos_srv/libdtx.so
-%{_libdir}/daos_srv/libmgmt.so
-%{_libdir}/daos_srv/libobj.so
-%{_libdir}/daos_srv/libpool.so
-%{_libdir}/daos_srv/librdb.so
-%{_libdir}/daos_srv/librdbt.so
-%{_libdir}/daos_srv/librebuild.so
-%{_libdir}/daos_srv/librsvc.so
-%{_libdir}/daos_srv/libsecurity.so
-%{_libdir}/daos_srv/libvos_srv.so
-%{_libdir}/daos_srv/libvos_size.so
-%{_libdir}/daos_srv/libvos.so
-%{_libdir}/daos_srv/libbio.so
-%{_libdir}/daos_srv/libplacement.so
-%{_libdir}/daos_srv/libpipeline.so
-%{_libdir}/libdaos_common_pmem.so
-%{_libdir}/libdav_v2.so
+%dir /opt/daos/lib64/daos_srv
+/opt/daos/lib64/daos_srv/libchk.so
+/opt/daos/lib64/daos_srv/libcont.so
+/opt/daos/lib64/daos_srv/libddb.so
+/opt/daos/lib64/daos_srv/libdtx.so
+/opt/daos/lib64/daos_srv/libmgmt.so
+/opt/daos/lib64/daos_srv/libobj.so
+/opt/daos/lib64/daos_srv/libpool.so
+/opt/daos/lib64/daos_srv/librdb.so
+/opt/daos/lib64/daos_srv/librdbt.so
+/opt/daos/lib64/daos_srv/librebuild.so
+/opt/daos/lib64/daos_srv/librsvc.so
+/opt/daos/lib64/daos_srv/libsecurity.so
+/opt/daos/lib64/daos_srv/libvos_srv.so
+/opt/daos/lib64/daos_srv/libvos_size.so
+/opt/daos/lib64/daos_srv/libvos.so
+/opt/daos/lib64/daos_srv/libbio.so
+/opt/daos/lib64/daos_srv/libplacement.so
+/opt/daos/lib64/daos_srv/libpipeline.so
+/opt/daos/lib64/libdaos_common_pmem.so
+/opt/daos/lib64/libdav_v2.so
 %config(noreplace) %{conf_dir}/vos_size_input.yaml
-%{_bindir}/daos_storage_estimator.py
+/opt/daos/bin/daos_storage_estimator.py
 %{python3_sitearch}/storage_estimator/*.py
 %dir %{python3_sitearch}/storage_estimator
 %if (0%{?rhel} >= 8)
@@ -657,35 +658,35 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %dir %{daoshome}
 %{daoshome}/TESTING
 %exclude %{daoshome}/TESTING/ftest/avocado_tests.yaml
-%{_bindir}/hello_drpc
-%{_libdir}/libdaos_tests.so
-%{_bindir}/acl_dump_test
-%{_bindir}/agent_tests
-%{_bindir}/drpc_engine_test
-%{_bindir}/drpc_test
-%{_bindir}/dfuse_test
-%{_bindir}/eq_tests
-%{_bindir}/job_tests
-%{_bindir}/jump_pl_map
-%{_bindir}/pl_bench
-%{_bindir}/ring_pl_map
-%{_bindir}/security_test
+/opt/daos/bin/hello_drpc
+/opt/daos/lib64/libdaos_tests.so
+/opt/daos/bin/acl_dump_test
+/opt/daos/bin/agent_tests
+/opt/daos/bin/drpc_engine_test
+/opt/daos/bin/drpc_test
+/opt/daos/bin/dfuse_test
+/opt/daos/bin/eq_tests
+/opt/daos/bin/job_tests
+/opt/daos/bin/jump_pl_map
+/opt/daos/bin/pl_bench
+/opt/daos/bin/ring_pl_map
+/opt/daos/bin/security_test
 %config(noreplace) %{conf_dir}/fault-inject-cart.yaml
-%{_bindir}/fault_status
-%{_bindir}/crt_launch
-%{_bindir}/daos_perf
-%{_bindir}/daos_racer
-%{_bindir}/daos_test
-%{_bindir}/daos_debug_set_params
-%{_bindir}/dfs_test
-%{_bindir}/jobtest
-%{_bindir}/daos_gen_io_conf
-%{_bindir}/daos_run_io_conf
-%{_libdir}/libdpar.so
+/opt/daos/bin/fault_status
+/opt/daos/bin/crt_launch
+/opt/daos/bin/daos_perf
+/opt/daos/bin/daos_racer
+/opt/daos/bin/daos_test
+/opt/daos/bin/daos_debug_set_params
+/opt/daos/bin/dfs_test
+/opt/daos/bin/jobtest
+/opt/daos/bin/daos_gen_io_conf
+/opt/daos/bin/daos_run_io_conf
+/opt/daos/lib64/libdpar.so
 
 %files client-tests-openmpi
 %doc README.md
-%{_libdir}/libdpar_mpi.so
+/opt/daos/lib64/libdpar_mpi.so
 
 %files client-tests-mpich
 %doc README.md
@@ -693,19 +694,19 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %if %{with server}
 %files server-tests
 %doc README.md
-%{_bindir}/dtx_tests
-%{_bindir}/dtx_ut
-%{_bindir}/evt_ctl
-%{_bindir}/rdbt
-%{_bindir}/smd_ut
-%{_bindir}/bio_ut
-%{_bindir}/vea_ut
-%{_bindir}/vos_tests
-%{_bindir}/vea_stress
-%{_bindir}/ddb_tests
-%{_bindir}/ddb_ut
-%{_bindir}/obj_ctl
-%{_bindir}/vos_perf
+/opt/daos/bin/dtx_tests
+/opt/daos/bin/dtx_ut
+/opt/daos/bin/evt_ctl
+/opt/daos/bin/rdbt
+/opt/daos/bin/smd_ut
+/opt/daos/bin/bio_ut
+/opt/daos/bin/vea_ut
+/opt/daos/bin/vos_tests
+/opt/daos/bin/vea_stress
+/opt/daos/bin/ddb_tests
+/opt/daos/bin/ddb_ut
+/opt/daos/bin/obj_ctl
+/opt/daos/bin/vos_perf
 %endif
 
 %files devel
@@ -721,7 +722,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files firmware
 %doc README.md
 # set daos_firmware_helper to be setuid root in order to perform privileged tasks
-%attr(4750,root,daos_server) %{_bindir}/daos_firmware_helper
+%attr(4750,root,daos_server) /opt/daos/bin/daos_firmware_helper
 %endif
 
 %files serialize
