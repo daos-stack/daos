@@ -144,6 +144,7 @@ os=$(uname -s)
 for file in $files; do
     if [[ "$file" == *vendor* ]] || [[ "$file" == *pb.go ]]    ||
        [[ "$file" == *_string.go ]] || [[ "$file" == *pb-c* ]] ||
+       [[ "$file" == deps* ]] ||
        { [ "$mode" == "githook" ] &&
          [ "$git_vercode" -ge 2030000 ] &&
          [ "$(git diff --cached -I Copyright "$file")" = '' ]; }; then

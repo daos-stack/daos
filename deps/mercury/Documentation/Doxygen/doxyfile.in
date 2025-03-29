@@ -1,0 +1,86 @@
+# -------------------------------------------------------------------------
+# doxyfile for Mercury
+# -------------------------------------------------------------------------
+
+PROJECT_NAME         = Mercury
+
+FULL_PATH_NAMES      = YES
+WARN_IF_UNDOCUMENTED = NO
+
+GENERATE_TREEVIEW    = NO
+GENERATE_TODOLIST    = YES
+GENERATE_BUGLIST     = YES
+GENERATE_HTML        = YES
+GENERATE_HTMLHELP    = YES
+GENERATE_LATEX       = NO
+GENERATE_MAN         = NO
+GENERATE_RTF         = NO
+GENERATE_TAGFILE     = "@CMAKE_CURRENT_BINARY_DIR@/mercury.tag"
+
+PDF_HYPERLINKS       = YES
+
+HAVE_DOT             = @HAVE_DOT_YESNO@
+DOT_PATH             = "@DOT_PATH@"
+CLASS_GRAPH          = YES
+COLLABORATION_GRAPH  = YES
+TEMPLATE_RELATIONS   = YES
+INCLUDE_GRAPH        = YES
+INCLUDED_BY_GRAPH    = YES
+CLASS_DIAGRAMS       = YES
+GENERATE_LEGEND      = YES
+GRAPHICAL_HIERARCHY  = NO # ends up being too large and useless.
+MAX_DOT_GRAPH_DEPTH  = 3
+
+ALLEXTERNALS         = NO
+
+IMAGE_PATH           = "@CMAKE_CURRENT_SOURCE_DIR@"
+
+OUTPUT_DIRECTORY     = "@CMAKE_CURRENT_BINARY_DIR@/doc"
+
+INPUT                = \
+          "@CMAKE_CURRENT_BINARY_DIR@/dox" \
+          "@CMAKE_CURRENT_BINARY_DIR@/dox/doc_mercury_version.dox" \
+          "@CMAKE_CURRENT_BINARY_DIR@/dox/doc_mercury_index.dox" \
+          @HG_MODULE_DIRS_DOXYGEN_ESCAPED@
+
+
+EXCLUDE_PATTERNS     =
+EXCLUDE              =
+
+TAGFILES             = @TAGFILES@
+EXTRACT_ALL          = YES
+EXTRACT_PRIVATE      = NO
+EXTRACT_STATIC       = YES
+EXTRACT_LOCAL_CLASSES = NO
+HIDE_UNDOC_MEMBERS   = NO
+HIDE_UNDOC_CLASSES   = YES
+ALWAYS_DETAILED_SEC  = NO
+SOURCE_BROWSER       = YES
+INLINE_SOURCES       = NO
+CASE_SENSE_NAMES     = YES
+VERBATIM_HEADERS     = NO
+SHOW_INCLUDE_FILES   = YES
+JAVADOC_AUTOBRIEF    = YES
+SORT_MEMBER_DOCS     = NO
+DISTRIBUTE_GROUP_DOC = YES
+TAB_SIZE             = 3
+DETAILS_AT_TOP       = YES
+SHORT_NAMES          = @DOXYGEN_SHORT_NAMES@
+# PAPER_TYPE           = letter
+
+FILE_PATTERNS        = *.h
+RECURSIVE            = YES
+
+HTML_ALIGN_MEMBERS   = YES
+
+ALPHABETICAL_INDEX   = YES
+COLS_IN_ALPHA_INDEX  = 3
+IGNORE_PREFIX        = 
+
+ENABLE_PREPROCESSING = YES
+MACRO_EXPANSION      = YES
+SEARCH_INCLUDES      = YES
+INCLUDE_PATH         =
+EXPAND_ONLY_PREDEF   = YES
+PREDEFINED  =
+STRIP_FROM_PATH      = @HG_MODULE_DIRS_DOXYGEN@

@@ -1,0 +1,17 @@
+Source: fused
+Priority: optional
+Maintainer: daos-stack <daos@daos.groups.io>
+Build-Depends:
+ debhelper (>= 11),
+ pkg-config,
+ meson,
+Standards-Version: 4.3.0
+Homepage: https://daos.io
+Vcs-Browser: https://github.com/daos-stack/fused.git
+Vcs-Git: https://github.com/daos-stack/fused.git
+
+Package: libfused-dev
+Section: libdevel
+Architecture: any
+Multi-Arch: same
+Description: Headers and static library for DAOS FUSE library

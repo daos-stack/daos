@@ -10,6 +10,7 @@ exclude =
     src/control/vendor,
     src/client/pydaos/raw,
     venv,
+    deps,
     build,
     install
 max-line-length: 100

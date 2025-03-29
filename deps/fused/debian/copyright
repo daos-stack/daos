@@ -1,0 +1,89 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: fused
+Upstream-Contact: fuse-devel@lists.sourceforge.net
+Source: https://sourceforge.net/projects/fuse/files/
+
+Files: *
+Copyright: 2016-     Nikolaus Rath <Nikolaus@rath.org>,
+ 2001-2013 Miklos Szeredi <miklos@szeredi.hu>
+License: GPL-2
+
+Files: lib/*
+Copyright: 2001-2013 Miklos Szeredi <miklos@szeredi.hu>
+License: LGPL-2.1
+
+Files: example/passthrough.c example/passthrough_fh.c
+License: GPL-2
+Copyright: Copyright (C) 2001-2007 Miklos Szeredi <miklos@szeredi.hu>,
+ Copyright (C) 2011 Sebastian Pipping <sebastian@pipping.org>
+
+Files: example/cuse.c
+ example/cuse_client.c
+ example/ioctl.c
+ example/ioctl.h
+ example/ioctl_client.c
+ example/poll.c
+ example/poll_client.c
+ include/cuse_lowlevel.h
+ lib/cuse_lowlevel.c
+License: GPL-2
+Copyright: Copyright (C) 2008-2009 SUSE Linux Products GmbH,
+ Copyright (C) 2008-2009 Tejun Heo <tj@kernel.org>
+
+Files: debian/*
+Copyright: 2014- Laszlo Boszormenyi (GCS) <gcs@debian.org>,
+ 2011-2014 Daniel Baumann <mail@daniel-baumann.ch>
+License: GPL-2+
+
+License: GPL-2
+ This package is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 2 of the License.
+ .
+ This package is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ GNU General Public License for more details.
+ .
+ You should have received a copy of the GNU General Public License
+ along with this package; if not, write to the Free Software
+ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
+ .
+ On Debian systems, the complete text of the GNU General
+ Public License can be found in `/usr/share/common-licenses/GPL-2'.
+
+License: GPL-2+
+ This package is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 2 of the License, or
+ (at your option) any later version.
+ .
+ This package is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ GNU General Public License for more details.
+ .
+ You should have received a copy of the GNU General Public License
+ along with this package; if not, write to the Free Software
+ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
+ .
+ On Debian systems, the complete text of the GNU General
+ Public License can be found in `/usr/share/common-licenses/GPL-2'.
+
+License: LGPL-2.1
+ This package is free software; you can redistribute it and/or
+ modify it under the terms of the GNU Lesser General Public
+ License as published by the Free Software Foundation; either
+ version 2.1 of the License, or (at your option) any later version.
+ .
+ This package is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ Lesser General Public License for more details.
+ .
+ You should have received a copy of the GNU Lesser General Public
+ License along with this package; if not, write to the Free Software
+ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
+ .
+ On Debian systems, the complete text of the GNU Lesser General
+ Public License can be found in `/usr/share/common-licenses/LGPL-2.1'.

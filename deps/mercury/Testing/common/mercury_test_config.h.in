@@ -1,0 +1,58 @@
+/**
+ * Copyright (c) 2013-2022 UChicago Argonne, LLC and The HDF Group.
+ * Copyright (c) 2022-2023 Intel Corporation.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/* Generated file. Only edit mercury_test_config.h.in. */
+
+#ifndef MERCURY_TEST_CONFIG_H
+#define MERCURY_TEST_CONFIG_H
+
+/*************************************/
+/* Public Type and Struct Definition */
+/*************************************/
+
+/*****************/
+/* Public Macros */
+/*****************/
+
+/* MPI flags */
+#cmakedefine HG_TEST_HAS_PARALLEL
+#ifdef HG_TEST_HAS_PARALLEL
+#cmakedefine MPIEXEC_MAX_NUMPROCS (@MPIEXEC_MAX_NUMPROCS@)
+#endif /* HG_TEST_HAS_PARALLEL */
+
+/* Start msg */
+#cmakedefine HG_TEST_SERVER_START_MSG "@HG_TEST_SERVER_START_MSG@"
+#ifndef HG_TEST_SERVER_START_MSG
+#    define HG_TEST_SERVER_START_MSG "# Waiting for client"
+#endif
+#include <stdio.h>
+#define HG_TEST_READY_MSG()                                                    \
+    do {                                                                       \
+        /* Used by CTest Test Driver */                                        \
+        printf(HG_TEST_SERVER_START_MSG "\n");                                 \
+        fflush(stdout);                                                        \
+    } while (0)
+
+/* Test options */
+#cmakedefine HG_TEST_TEMP_DIRECTORY "@HG_TEST_TEMP_DIRECTORY@"
+
+/* Timeout (in seconds) */
+#cmakedefine HG_TEST_TIMEOUT (@DART_TESTING_TIMEOUT@ / 2)
+#ifndef HG_TEST_TIMEOUT
+#    define HG_TEST_TIMEOUT 240
+#endif
+
+/* Number of threads */
+#define HG_TEST_NUM_THREADS_DEFAULT (8)
+
+/* Define if has <sys/prctl.h> */
+#cmakedefine HG_TEST_HAS_SYSPRCTL_H
+
+/* Define if has <libcxi/libcxi.h> */
+#cmakedefine HG_TEST_HAS_CXI
+
+#endif /* MERCURY_TEST_CONFIG_H */

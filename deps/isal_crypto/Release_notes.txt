@@ -1,0 +1,207 @@
+================================================================================
+v2.23 Intel Intelligent Storage Acceleration Library Crypto Release Notes
+================================================================================
+
+================================================================================
+RELEASE NOTE CONTENTS
+================================================================================
+1. KNOWN ISSUES
+2. FIXED ISSUES
+3. CHANGE LOG & FEATURES ADDED
+
+================================================================================
+1.  KNOWN ISSUES
+================================================================================
+
+* Perf tests do not run in Windows environment.
+
+* 32-bit lib is not supported in Windows.
+
+================================================================================
+2. FIXED ISSUES
+================================================================================
+v2.21
+
+* Put correct vec instruction versions in aes_cbc_enc_{128,192,256}().  May help
+  performance on some systems.
+
+v2.20
+
+* Fix issue with new aes_gcm API, aes_gcm_pre_256 was incorrect.
+
+* Multi-buffer hash max length extended.  Previous max length for
+  {sha1,sha256,sha512,md5}_mb was 4095MB.  While there is still a 4GB limit for
+  each submit, the total hashed length can now be larger then 4GB.
+
+v2.18
+
+* Fix for multi-buffer hash when total length is above 512MB.
+
+v2.14
+
+* Building in unit directories is no longer supported removing the issue of
+  leftover object files causing the top-level make build to fail.
+
+v2.9
+
+* Multi-buffer MD5 AVX2 tests fixed to work on FreeBSD 9.1 by explicitly aligning
+  structures.
+
+v2.7
+
+* Unit tests and examples are now supported in Windows environment
+
+
+================================================================================
+3. CHANGE LOG & FEATURES ADDED
+================================================================================
+v2.23
+
+* New optimized versions of block ciphers AES-GCM and AES-XTS.
+
+* New optimized versions of multi-buffer SM3 hashing.  Removed experimental
+  status.
+
+v2.22
+
+* New multi-buffer SM3 functions. Experimental base functions only.
+
+* New multi-arch support.
+
+v2.21
+
+* Multi-buffer hash performance improvement for Intel(R) Atom(tm) processors.
+  New by-2 shani versions for multi-buffer sha1 & sha256.
+
+* New base functions for multi-buffer hashes.
+  md5_mb, sha1_mb, sha256_mb, sha512_mb.
+
+v2.20
+
+* New functions
+  - Non-temporal versions of aes_gcm added.
+
+* Multi-buffer hash improvement
+  - Increase max length of hash in {sha1,sha256,sha512,md5}_mb to > 4GB.
+
+v2.19
+
+* Multi-buffer hash (sha1_mb, sha256_mb)
+
+  - Choose fast single buffer routine to do flush operation if lanes aren't full.
+
+  - Add SHA-NI support for Goldmont and Cannonlake.
+
+* AES-GCM interface updates.
+
+  - New interface separates the expanded keys and other context into two
+  structures.  The old interface is maintained for backward compatibility.
+
+  - User no longer has to append the GCM_IV_END_MARK manually to then end of iv
+  as this is now done automatically.  This update should also improve performance
+  of small packets.
+
+* Rolling hash is released.
+
+v2.18
+
+* New multi-hash SHA256-based version.
+
+v2.16
+
+* Split lib from non-crypto functions.
+
+v2.15
+
+* Multi-buffer hash updates.  New AVX512 versions for multi-buffer SHA1, SHA256,
+  SHA512, MD5 and SHA1+murmur3_x64_128 stitched.
+
+* Removes restrictions on AAD length in AES-GCM.  Previously AAD length was
+  limited to a multiple of 4 bytes.  Now any AAD length is allowed.
+
+* Nasm support.  ISA-L ported to build with nasm or yasm assembler.
+
+* Windows DLL support.  Windows builds DLL by default.
+
+* The older, deprecated multi-buffer API has been removed.
+
+v2.14
+
+* New multi-hash sha1 function and multi-hash sha1 + murmur3_x64_128 stitched.
+  Multi-hash is designed to give the performance of multi-buffer cryptographic
+  hashes with a synchronous single buffer interface.
+
+* New AES-GCM and AES-CBC functions added.
+
+* Autoconf and autotools build allows easier porting to additional systems.
+  Previous make system still available to embedded users with Makefile.unx.
+
+* The AES key expand functions that were used for AES-XTS with pre-expanded keys
+  now expand the decrypt keys in a different order. The order that decrypt keys
+  are stored and used by XTS_AES_128_dec_expanded_key() is reversed from
+  previous versions to be compatable with CBC and GCM key expansion. The
+  aes_keyexp_*() and XTS_AES_128_dec_expanded_key() functions should work the
+  same when paired together.
+
+* Includes update for building on Mac OS X/darwin systems. Add --target=darwin
+  to ./configure step.
+
+v2.10
+
+* Added multi-buffer MD5 in the new hash API.  Includes multi-binary capability,
+  no restriction on update length and other benefits of the CTX API.
+
+v2.9
+
+* New multi-buffer hash API.  The new API brings the following new features to
+  multi-buffer hashes.  The older API is still included but may be deprecated in
+  future releases.
+
+  - Multibinary functionality.  Call one function and the appropriate
+    architecture-specific version is fixed up at runtime.
+
+  - No restriction on update length.  Submitting an update block no longer has
+    to have length a multiple of the fundamental block size.
+
+* New expanded key tests added for AES-XTS 128 and 256
+
+v2.7
+
+* New AVX2 versions for mb_md5 and mb_sha512 hashing code have been added.
+
+v2.6
+
+* Update buffer functionality added to mb_md5, mb_sha256 and mb_sha512 hashing
+  code.  Requires API changes to current interface to specify job type and total
+  length of hash.
+
+* New AVX2 versions for mb_sha1 and mb_sha256 hashing code have been added.
+
+v2.5
+
+* New feature for multi-buffer SHA-1, update buffer.  mb_sha1 non-finalize jobs
+  can now be submitted by setting flags in job structure.  Requires API changes
+  to current interface to specify job type and total length of hash.
+
+v2.4
+
+* Added new multi-buffer SHA-512: mb_sha512.  SSE, AVX versions.
+
+v2.3
+
+* Added improved AES XTS versions.
+
+v2.2
+
+* Added new AVX versions of multi-buffer hashes
+* Changed type in the interface struct for multi-buffer hashes
+  the len field in the following structures :JOB_SHA1,JOB_MD5,
+  JOB_SHA256 is now a 32-bit int.
+
+v2.0
+
+* Added AES XTS units aes_xts_128, aes_xts_256
+
+v1.3
+
+* Added new multi-buffer units for SHA-256 and MD5: mb_sha256, mb_md5.

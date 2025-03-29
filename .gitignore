@@ -65,3 +65,4 @@ utils/githooks/*.d/*-user-*
 .vscode
 src/include/daos_version.h
 utils/rpms/mock.cfg
+!deps/**

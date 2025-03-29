@@ -1,0 +1,15 @@
+diff --git a/prov/sockets/src/sock_ep.c b/prov/sockets/src/sock_ep.c
+index 8257fdeb7..047b5a128 100644
+--- a/prov/sockets/src/sock_ep.c
++++ b/prov/sockets/src/sock_ep.c
+@@ -1838,9 +1838,7 @@ struct sock_conn *sock_ep_lookup_conn(struct sock_ep_attr *attr, fi_addr_t index
+ 					"Peer disconnected", &addr->sa);
+ 			return NULL;
+ 		}
+-		if (conn->av_index != FI_ADDR_NOTAVAIL)
+-			assert(conn->av_index == idx);
+-		else
++		if (conn->av_index == FI_ADDR_NOTAVAIL)
+ 			conn->av_index = idx;
+ 	}
+ 	return conn;

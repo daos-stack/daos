@@ -1,0 +1,26 @@
+/**
+ * Copyright (c) 2013-2022 UChicago Argonne, LLC and The HDF Group.
+ * Copyright (c) 2022-2023 Intel Corporation.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/* Generated file. Only edit mercury_test_util_config.h.in. */
+
+#ifndef MERCURY_TEST_UTIL_CONFIG_H
+#define MERCURY_TEST_UTIL_CONFIG_H
+
+#include "mercury_util_config.h"
+
+/*************************************/
+/* Public Type and Struct Definition */
+/*************************************/
+
+/*****************/
+/* Public Macros */
+/*****************/
+
+/* Output directory name */
+#cmakedefine HG_TEST_UTIL_OUTPUT_DIRECTORY "@HG_TEST_UTIL_OUTPUT_DIRECTORY@"
+
+#endif /* MERCURY_TEST_UTIL_CONFIG_H */

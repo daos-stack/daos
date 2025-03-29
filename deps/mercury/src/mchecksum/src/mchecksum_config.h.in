@@ -1,0 +1,75 @@
+/**
+ * Copyright (c) 2013-2021 UChicago Argonne, LLC and The HDF Group.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/* Generated file. Only edit mchecksum_config.h.in. */
+
+#ifndef MCHECKSUM_CONFIG_H
+#define MCHECKSUM_CONFIG_H
+
+/*************************************/
+/* Public Type and Struct Definition */
+/*************************************/
+
+/* Type definitions */
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+/*****************/
+/* Public Macros */
+/*****************/
+
+/* Reflects major releases of MChecksum */
+#define MCHECKSUM_VERSION_MAJOR @MCHECKSUM_VERSION_MAJOR@
+/* Reflects any API changes */
+#define MCHECKSUM_VERSION_MINOR @MCHECKSUM_VERSION_MINOR@
+/* Reflects any library code changes */
+#define MCHECKSUM_VERSION_PATCH @MCHECKSUM_VERSION_PATCH@
+
+/* Visibility of symbols */
+#if defined(_WIN32)
+#    define MCHECKSUM_ABI_IMPORT __declspec(dllimport)
+#    define MCHECKSUM_ABI_EXPORT __declspec(dllexport)
+#    define MCHECKSUM_ABI_HIDDEN
+#elif defined(__GNUC__) && (__GNUC__ >= 4)
+#    define MCHECKSUM_ABI_IMPORT __attribute__((visibility("default")))
+#    define MCHECKSUM_ABI_EXPORT __attribute__((visibility("default")))
+#    define MCHECKSUM_ABI_HIDDEN __attribute__((visibility("hidden")))
+#else
+#    define MCHECKSUM_ABI_IMPORT
+#    define MCHECKSUM_ABI_EXPORT
+#    define MCHECKSUM_ABI_HIDDEN
+#endif
+
+/* Inline macro */
+#ifdef _WIN32
+#    define MCHECKSUM_INLINE __inline
+#else
+#    define MCHECKSUM_INLINE __inline__
+#endif
+
+/* Shared libraries */
+#cmakedefine MCHECKSUM_BUILD_SHARED_LIBS
+#ifdef MCHECKSUM_BUILD_SHARED_LIBS
+#    ifdef mchecksum_EXPORTS
+#        define MCHECKSUM_PUBLIC MCHECKSUM_ABI_EXPORT
+#    else
+#        define MCHECKSUM_PUBLIC MCHECKSUM_ABI_IMPORT
+#    endif
+#    define MCHECKSUM_PRIVATE MCHECKSUM_ABI_HIDDEN
+#else
+#    define MCHECKSUM_PUBLIC
+#    define MCHECKSUM_PRIVATE
+#endif
+
+/* Build Options */
+#cmakedefine MCHECKSUM_HAS_ISAL
+#cmakedefine MCHECKSUM_HAS_SSE4_2
+#cmakedefine MCHECKSUM_HAS_ZLIB
+
+#cmakedefine MCHECKSUM_HAS_DEBUG
+
+#endif /* MCHECKSUM_CONFIG_H */
