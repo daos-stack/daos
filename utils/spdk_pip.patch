@@ -1,0 +1,13 @@
+diff --git a/python/Makefile b/python/Makefile
+index b45c42328..4a5fb474b 100644
+--- a/python/Makefile
++++ b/python/Makefile
+@@ -7,7 +7,7 @@
+ SPDK_ROOT_DIR := $(abspath $(CURDIR)/..)
+ include $(SPDK_ROOT_DIR)/mk/spdk.common.mk
+ 
+-setup_cmd = pip install --prefix=$(CONFIG_PREFIX)
++setup_cmd = python3 -m pip install --prefix=$(CONFIG_PREFIX)
+ ifneq ($(DESTDIR),)
+ setup_cmd += --root $(DESTDIR)
+ endif

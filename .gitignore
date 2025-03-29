@@ -9,6 +9,7 @@ tags
 daos.conf
 config.log
 /install/
+/external/
 *.tar.gz
 *.tgz
 *.pyc
