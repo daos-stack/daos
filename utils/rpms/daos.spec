@@ -391,17 +391,43 @@ This is the package that bridges the difference between the MOFED openmpi
       %{?compiler_args}
 
 # Move mercury build
-utils/rpms/move_prereq.sh mercury "%{buildroot}" "%{_prefix}" "%{_exec_prefix}" "%{_bindir}" \
-                                  "%{_libdir}" "%{_includedir}" "%{_sysconfdir}" %{_datadir} lib
-utils/rpms/move_prereq.sh ofi "%{buildroot}" "%{_prefix}" "%{_exec_prefix}" "%{_bindir}" \
-                              "%{_libdir}" "%{_includedir}" "%{_sysconfdir}" %{_datadir} lib
+utils/rpms/move_prereq.sh mercury "%{buildroot}" "%{_prefix}" "%{_bindir}" "%{_libdir}" \
+                                  "%{_includedir}" "%{_sysconfdir}" %{_datadir} lib
+utils/rpms/move_prereq.sh ofi "%{buildroot}" "%{_prefix}" "%{_bindir}" "%{_libdir}" \
+                              "%{_includedir}" "%{_sysconfdir}" %{_datadir} lib
+utils/rpms/move_files.sh "%{buildroot}/opt/daos/bin" "%{buildroot}%{_bindir}" \
+                         "%{buildroot}/opt/daos" "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
+                         "daos" \
+                         "daos_agent" \
+                         "dmg"
+utils/rpms/move_files.sh "%{buildroot}/opt/daos/lib64" "%{buildroot}%{_libdir}" \
+                         "%{buildroot}/opt/daos" "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
+                         "%{buildroot}/opt/daos/lib64/daos" \
+                         $(basename -a "%{buildroot}/opt/daos/lib64/libgurt"*) \
+                         $(basename -a "%{buildroot}/opt/daos/lib64/libcart"*) \
+                         $(basename -a "%{buildroot}/opt/daos/lib64/libdfs"*) \
+                         $(basename -a "%{buildroot}/opt/daos/lib64/libdaos."*) \
+                         $(basename -a "%{buildroot}/opt/daos/lib64/libdaos_common."*)
+utils/rpms/move_files.sh "%{buildroot}/opt/daos/include" "%{buildroot}%{_includedir}" \
+                         "%{buildroot}/opt/daos" \
+                         "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
+                         $(basename -a "%{buildroot}/opt/daos/include/"*)
+utils/rpms/move_files.sh "%{buildroot}/opt/daos/lib/daos/python" \
+                         "%{buildroot}%{_prefix}/lib/daos/python" \
+                         "%{buildroot}/opt/daos" \
+                         "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
+                         $(basename -a "%{buildroot}/opt/daos/lib/daos/python/"*)
+utils/rpms/move_files.sh "%{buildroot}/opt/daos/share/man" \
+                         "%{buildroot}%{_mandir}" \
+                         "%{buildroot}/opt/daos" \
+                         "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
+                         $(basename -a "%{buildroot}/opt/daos/share/man/"*)
+utils/rpms/fix_files.sh "%{buildroot}" "%{buildroot}/opt/daos"
 
 %if ("%{?compiler_args}" == "COMPILER=covc")
 mv test.cov %{buildroot}/opt/daos/lib/daos/TESTING/ftest/test.cov
 %endif
 %if %{with server}
-mkdir -p %{buildroot}/%{_sysconfdir}/ld.so.conf.d/
-echo "%{_libdir}/daos_srv" > %{buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{buildroot}/%{_sysctldir}
 install -m 644 utils/rpms/%{sysctl_script_name} %{buildroot}/%{_sysctldir}
 %endif
@@ -411,15 +437,16 @@ install -m 644 utils/systemd/%{server_svc_name} %{buildroot}/%{_unitdir}
 %endif
 install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
 mkdir -p %{buildroot}/%{conf_dir}/certs/clients
-mv %{buildroot}/opt/daos/%{conf_dir}/bash_completion.d %{buildroot}/%{_sysconfdir}
+mkdir -p  %{buildroot}%{_sysconfdir}/bash_completion.d
+mv %{buildroot}/opt/daos/etc/bash_completion.d/* %{buildroot}/%{_sysconfdir}/bash_completion.d
 # fixup env-script-interpreters
 sed -i -e '1s/env //' %{buildroot}/opt/daos/lib/daos/TESTING/ftest/{cart/cart_logtest,cart/daos_sys_logscan,config_file_gen,launch,slurm_setup,tags,verify_perms}.py
 %if %{with server}
-sed -i -e '1s/env //' %{buildroot}opt/daos/lib/daos/bin/daos_storage_estimator.py
+sed -i -e '1s/env //' %{buildroot}/opt/daos/bin/daos_storage_estimator.py
 %endif
 
 # shouldn't have source files in a non-devel RPM
-rm -f %{buildroot}opt/daos/lib/daos/TESTING/ftest/cart/{test_linkage.cpp,utest_{hlc,portnumber,protocol,swim}.c,wrap_cmocka.h}
+rm -f %{buildroot}/opt/daos/lib/daos/TESTING/ftest/cart/{test_linkage.cpp,utest_{hlc,portnumber,protocol,swim}.c,wrap_cmocka.h}
 
 %if %{with server}
 %pre server

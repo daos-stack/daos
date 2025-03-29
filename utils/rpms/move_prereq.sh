@@ -3,15 +3,12 @@
 component="$1"
 build_root="$2"
 prefix="$3"
-execprefix="$4"
-bindir="$5"
-libdir="$6"
-includedir="$7"
-configdir="$8"
-datadir="$9"
-buildlib="${10}"
-
-echo "${buildlib} is buildlib"
+bindir="$4"
+libdir="$5"
+includedir="$6"
+configdir="$7"
+datadir="$8"
+buildlib="$9"
 
 prereq_base="${build_root}/opt/daos/prereq"
 if [ -d "${prereq_base}/release" ]; then
@@ -27,34 +24,20 @@ if [ ! -d "${prereq_root}" ]; then
   exit 1
 fi
 
-set -x
-grep -rIl "${prereq_root}" "${prereq_root}" | \
-	xargs -I % sed -i "s!${prereq_root}/${buildlib}!${libdir}!" '%'
-grep -rIl "${prereq_root}" "${prereq_root}" | \
-	xargs -I % sed -i "s!${prereq_root}!${prefix}!" '%'
-grep -rIl "${prereq_root}" "${prereq_root}"| \
-	xargs -I % sed -i "s!-L${prereq_base}\S*!!" '%'
+move_files()
+{
+  if [ -d "${prereq_root}/$1" ]; then
+    mkdir -p "${build_root}/$2"
+    utils/rpms/move_files.sh "${prereq_root}/$1" "${build_root}/$2" "${prereq_root}" \
+                             "${prefix}" "${buildlib}" "${libdir}" \
+                             $(basename -a "${prereq_root}/$1/"*)
+  rmdir "${prereq_root}/$1"
+  fi
+}
 
-if [ -d "${prereq_root}/${buildlib}" ]; then
-  find ${prereq_root}/${buildlib} -name "*.so*" -type f -exec patchelf --remove-rpath {} ';'
-  mkdir -p "${build_root}/${libdir}"
-  cp -r "${prereq_root}/${buildlib}"/* "${build_root}/${libdir}"
-fi
-
-if [ -d "${prereq_root}/bin" ]; then
-  find ${prereq_root}/bin -type f -exec patchelf --remove-rpath {} ';'
-  mkdir -p "${build_root}/${bindir}"
-  cp -r "${prereq_root}/bin/"* "${build_root}/${bindir}"
-fi
-if [ -d "${prereq_root}/include" ]; then
-  mkdir -p "${build_root}/${includedir}"
-  cp -r "${prereq_root}/include/"* "${build_root}/${includedir}"
-fi
-if [ -d "${prereq_root}/etc" ]; then
-  mkdir -p "${build_root}/${configdir}"
-  cp -r "${prereq_root}/etc/"* "${build_root}/${configdir}"
-fi
-if [ -d "${prereq_root}/share" ]; then
-  mkdir -p "${build_root}/${datadir}"
-  cp -r "${prereq_root}/share/"* "${build_root}/${datadir}"
-fi
+move_files "bin" "${bindir}"
+move_files "${buildlib}" "${libdir}"
+move_files "include" "${includedir}"
+move_files "etc" "${configdir}"
+move_files "share" "${datadir}"
+rmdir "${prereq_root}"
