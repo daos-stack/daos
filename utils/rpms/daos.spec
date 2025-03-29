@@ -4,14 +4,15 @@
 %define sysctl_script_name 10-daos_server.conf
 
 %bcond_without server
+%bcond_without ucx
 
 %if %{with server}
 %global daos_build_args FIRMWARE_MGMT=yes
 %else
 %global daos_build_args client test
 %endif
-%global mercury_version   2.4
-%global libfabric_version 1.15.1-1
+%global mercury_version   2.4.0-4
+%global libfabric_version 1.22.0-2
 %global argobots_version 1.2
 %global __python %{__python3}
 
@@ -35,8 +36,6 @@ BuildRequires: python3-scons >= 2.4
 %else
 BuildRequires: scons >= 2.4
 %endif
-BuildRequires: libfabric-devel >= %{libfabric_version}
-BuildRequires: mercury-devel >= %{mercury_version}
 BuildRequires: gcc-c++
 %if (0%{?rhel} >= 8)
 %global openmpi openmpi
@@ -49,18 +48,12 @@ BuildRequires: hwloc-devel
 BuildRequires: bullseye
 %endif
 %if (0%{?rhel} >= 8)
-BuildRequires: argobots-devel >= %{argobots_version}
 BuildRequires: json-c-devel
 BuildRequires: boost-python3-devel
 %else
-BuildRequires: libabt-devel >= %{argobots_version}
 BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
-%if %{with server}
-BuildRequires: libpmemobj-devel >= 2.1.0
-%endif
-BuildRequires: fused-devel
 %if (0%{?suse_version} >= 1500)
 BuildRequires: go-race
 BuildRequires: libprotobuf-c-devel
@@ -73,14 +66,7 @@ BuildRequires: capstone-devel
 %endif
 %if %{with server}
 BuildRequires: libaio-devel
-BuildRequires: spdk-devel >= 22.01.2
-%endif
-%if (0%{?rhel} >= 8)
-BuildRequires: isa-l-devel
-BuildRequires: libisa-l_crypto-devel
-%else
-BuildRequires: libisal-devel
-BuildRequires: libisal_crypto-devel
+#BuildRequires: meson
 %endif
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
@@ -133,10 +119,6 @@ BuildRequires: libasan8
 %endif
 
 Requires: openssl
-# This should only be temporary until we can get a stable upstream release
-# of mercury, at which time the autoprov shared library version should
-# suffice
-Requires: mercury >= %{mercury_version}
 
 
 %description
@@ -154,19 +136,13 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: spdk-tools >= 22.01.2
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 03.00.00.0423
-Requires: libpmemobj1 >= 2.1.0-1.suse1500
-Requires: libfabric1 >= %{libfabric_version}
 %else
 Requires: ipmctl >= 03.00.00.0468
-Requires: libpmemobj >= 2.1.0-1%{?dist}
 %endif
-Requires: libfabric >= %{libfabric_version}
-Requires: mercury >= %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 Requires: numactl
@@ -184,14 +160,68 @@ Requires: %{name}%{?_isa} = %{version}-%{release}
 %description admin
 This package contains DAOS administrative tools (e.g. dmg).
 
+%if (0%{?suse_version} > 0)
+%define libfabric_name libfabric1
+%else
+%define libfabric_name libfabric
+%endif
+
+%package        %{libfabric_name}
+Summary:        Shared library for libfabric
+Group:          System/Libraries
+Provides:       %{libfabric_name}%{?_isa} = %{libfabric_version}
+
+%description %{libfabric_name}
+%{name}-%{libfabric_name} provides a user-space API to access high-performance fabric
+services, such as RDMA. This package contains the runtime library.
+
+%package        %{libfabric_name}-devel
+Summary:        Development files for %{name}
+Group:          Development/Libraries/C and C++
+Provides:       %{libfabric_name}-devel%{?_isa} = %{libfabric_version}
+Requires:       %{name}-%{libfabric_name}%{?_isa} = %{version}-%{release}
+
+%description    %{libfabric_name}-devel
+The %{libfabric_name}-devel package contains libraries and header files for
+developing applications that use %{libfabric_name}.
+
+%package mercury
+Summary:  Mercury package
+Provides: mercury%{?_isa}-%{mercury_version}
+
+%description mercury
+Mercury is a Remote Procedure Call (RPC) framework specifically
+designed for use in High-Performance Computing (HPC) systems with
+high-performance fabrics. Its network implementation is abstracted
+to make efficient use of native transports and allow easy porting
+to a variety of systems. Mercury supports asynchronous transfer of
+parameters and execution requests, and has dedicated support for
+large data arguments that are transferred using Remote Memory
+Access (RMA). Its interface is generic and allows any function
+call to be serialized. Since code generation is done using the C
+preprocessor, no external tool is required.
+
+%package mercury-devel
+Summary:  Mercury devel package
+Provides: mercury-devel%{?_isa}-%{mercury_version}
+Requires: mercury%{?_isa} = %{mercury_version}
+
+%description mercury-devel
+Mercury development headers and libraries.
+
+%if %{with ucx}
+%package mercury-ucx
+Summary:  Mercury with UCX
+Provides: mercury-ucx%{?_isa}-%{mercury_version}
+Requires: mercury%{?_isa} = %{mercury_version}
+
+%description mercury-ucx
+Mercury plugin to support the UCX transport.
+%endif
+
 %package client
 Summary: The DAOS client
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: mercury >= %{mercury_version}
-Requires: libfabric >= %{libfabric_version}
-%if (0%{?suse_version} >= 1500)
-Requires: libfabric1 >= %{libfabric_version}
-%endif
 Requires: /usr/bin/fusermount3
 %{?systemd_requires}
 
@@ -342,41 +372,32 @@ This is the package that bridges the difference between the MOFED openmpi
 
 %build
 
+%install
 %define conf_dir %{_sysconfdir}/daos
 %if (0%{?rhel} == 8)
 %define scons_exe scons-3
 %else
 %define scons_exe scons
 %endif
-%{scons_exe} %{?_smp_mflags} \
-      --config=force         \
-      --no-rpath             \
-      USE_INSTALLED=all      \
-      CONF_DIR=%{conf_dir}   \
-     %{?daos_build_args}   \
-     %{?scons_args}          \
-     %{?compiler_args}
-
-%if ("%{?compiler_args}" == "COMPILER=covc")
-mv test.cov{,-build}
-%endif
-
-%install
 %{scons_exe} %{?_smp_mflags}          \
       --config=force                  \
-      --no-rpath                      \
       --install-sandbox=%{buildroot}  \
-      %{buildroot}%{_prefix}          \
-      %{buildroot}%{conf_dir}         \
-      USE_INSTALLED=all               \
-      CONF_DIR=%{conf_dir}            \
-      PREFIX=%{_prefix}               \
+      %{buildroot}/opt/daos          \
+      USE_INSTALLED=ucx,isal,isal_crypto \
+      --build-deps=yes                \
+      PREFIX=/opt/daos              \
      %{?daos_build_args}            \
       %{?scons_args}                  \
       %{?compiler_args}
 
+# Move mercury build
+utils/rpms/move_prereq.sh mercury "%{buildroot}" "%{_prefix}" "%{_exec_prefix}" "%{_bindir}" \
+                                  "%{_libdir}" "%{_includedir}" "%{_sysconfdir}" %{_datadir} lib
+utils/rpms/move_prereq.sh ofi "%{buildroot}" "%{_prefix}" "%{_exec_prefix}" "%{_bindir}" \
+                              "%{_libdir}" "%{_includedir}" "%{_sysconfdir}" %{_datadir} lib
+
 %if ("%{?compiler_args}" == "COMPILER=covc")
-mv test.cov-build %{buildroot}/%{daoshome}/TESTING/ftest/test.cov
+mv test.cov %{buildroot}/opt/daos/lib/daos/TESTING/ftest/test.cov
 %endif
 %if %{with server}
 mkdir -p %{buildroot}/%{_sysconfdir}/ld.so.conf.d/
@@ -390,15 +411,15 @@ install -m 644 utils/systemd/%{server_svc_name} %{buildroot}/%{_unitdir}
 %endif
 install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
 mkdir -p %{buildroot}/%{conf_dir}/certs/clients
-mv %{buildroot}/%{conf_dir}/bash_completion.d %{buildroot}/%{_sysconfdir}
+mv %{buildroot}/opt/daos/%{conf_dir}/bash_completion.d %{buildroot}/%{_sysconfdir}
 # fixup env-script-interpreters
-sed -i -e '1s/env //' %{buildroot}%{daoshome}/TESTING/ftest/{cart/cart_logtest,cart/daos_sys_logscan,config_file_gen,launch,slurm_setup,tags,verify_perms}.py
+sed -i -e '1s/env //' %{buildroot}/opt/daos/lib/daos/TESTING/ftest/{cart/cart_logtest,cart/daos_sys_logscan,config_file_gen,launch,slurm_setup,tags,verify_perms}.py
 %if %{with server}
-sed -i -e '1s/env //' %{buildroot}%{_bindir}/daos_storage_estimator.py
+sed -i -e '1s/env //' %{buildroot}opt/daos/lib/daos/bin/daos_storage_estimator.py
 %endif
 
 # shouldn't have source files in a non-devel RPM
-rm -f %{buildroot}%{daoshome}/TESTING/ftest/cart/{test_linkage.cpp,utest_{hlc,portnumber,protocol,swim}.c,wrap_cmocka.h}
+rm -f %{buildroot}opt/daos/lib/daos/TESTING/ftest/cart/{test_linkage.cpp,utest_{hlc,portnumber,protocol,swim}.c,wrap_cmocka.h}
 
 %if %{with server}
 %pre server
@@ -454,6 +475,62 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libcart.so.*
 %{_libdir}/libgurt.so.*
 %{_libdir}/libdaos_common.so
+
+%files %{libfabric_name}
+%defattr(-,root,root,-)
+%license deps/ofi/COPYING
+%doc deps/ofi/NEWS.md
+%{_bindir}/fi_info
+%{_bindir}/fi_pingpong
+%{_bindir}/fi_strerror
+%if 0%{?rhel}
+%{_libdir}/libfabric*.so.1*
+%endif
+%{_mandir}/man1/fi_*.1*
+
+%if 0%{?suse_version}
+%files -n %{libfabirc_name}
+%defattr(-,root,root)
+%{_libdir}/libfabric*.so.1*
+%endif
+
+%files %{libfabric_name}-devel
+%defattr(-,root,root)
+%license deps/ofi/COPYING
+%doc deps/ofi/AUTHORS deps/ofi/README
+# We knowingly share this with kernel-headers and librdmacm-devel
+# https://github.com/ofiwg/libfabric/issues/1277
+%{_includedir}/rdma/
+%{_libdir}/libfabric*.so
+%{_libdir}/pkgconfig/%{libfabric_name}.pc
+%{_mandir}/man3/fi_*.3*
+%{_mandir}/man7/fi_*.7*
+
+%files mercury
+%license deps/mercury/LICENSE.txt
+%doc deps/mercury/Documentation/CHANGES.md
+%{_bindir}/hg_*
+%{_bindir}/na_*
+%{_libdir}/libmercury*.so.*
+%{_libdir}/libna*.so.*
+%{_libdir}/mercury/libna_plugin_ofi.so
+
+%if %{with ucx}
+%files mercury-ucx
+%{_libdir}/mercury/libna_plugin_ucx.so
+%endif
+
+%files mercury-devel
+%license deps/mercury/LICENSE.txt
+%doc deps/mercury/README.md
+%{_includedir}/mercury*
+%{_includedir}/na_*
+%{_includedir}/boost
+%{_libdir}/libmercury.so
+%{_libdir}/libmercury_util.so
+%{_libdir}/libna.so
+%{_libdir}/pkgconfig/mercury*.pc
+%{_libdir}/pkgconfig/na*.pc
 
 %if %{with server}
 %files server
