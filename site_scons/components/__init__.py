@@ -173,6 +173,7 @@ def define_mercury(reqs):
                      '-DCMAKE_BUILD_TYPE:STRING=RelWithDebInfo',
                      '-DCMAKE_CXX_FLAGS:STRING="-std=c++11"',
                      '-DCMAKE_INSTALL_PREFIX:PATH=$MERCURY_PREFIX',
+                     '-DMERCURY_INSTALL_DATA_DIR:PATH=$MERCURY_PREFIX/lib',
                      '-DBUILD_DOCUMENTATION:BOOL=OFF',
                      '-DBUILD_EXAMPLES:BOOL=OFF',
                      '-DBUILD_TESTING:BOOL=ON',

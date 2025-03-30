@@ -395,12 +395,12 @@ utils/rpms/move_prereq.sh mercury "%{buildroot}" "%{_prefix}" "%{_bindir}" "%{_l
                                   "%{_includedir}" "%{_sysconfdir}" %{_datadir} lib
 utils/rpms/move_prereq.sh ofi "%{buildroot}" "%{_prefix}" "%{_bindir}" "%{_libdir}" \
                               "%{_includedir}" "%{_sysconfdir}" %{_datadir} lib
-utils/rpms/move_files.sh "%{buildroot}/opt/daos/bin" "%{buildroot}%{_bindir}" \
+utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}/opt/daos/bin" "%{buildroot}%{_bindir}" \
                          "%{buildroot}/opt/daos" "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
                          "daos" \
                          "daos_agent" \
                          "dmg"
-utils/rpms/move_files.sh "%{buildroot}/opt/daos/lib64" "%{buildroot}%{_libdir}" \
+utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}/opt/daos/lib64" "%{buildroot}%{_libdir}" \
                          "%{buildroot}/opt/daos" "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
                          "daos" \
                          $(basename -a "%{buildroot}/opt/daos/lib64/libgurt"*) \
@@ -409,16 +409,17 @@ utils/rpms/move_files.sh "%{buildroot}/opt/daos/lib64" "%{buildroot}%{_libdir}" 
                          $(basename -a "%{buildroot}/opt/daos/lib64/libdfs"*) \
                          $(basename -a "%{buildroot}/opt/daos/lib64/libdaos."*) \
                          $(basename -a "%{buildroot}/opt/daos/lib64/libdaos_common."*)
-utils/rpms/move_files.sh "%{buildroot}/opt/daos/include" "%{buildroot}%{_includedir}" \
+utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}/opt/daos/include" \
+                         "%{buildroot}%{_includedir}" \
                          "%{buildroot}/opt/daos" \
                          "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
                          $(basename -a "%{buildroot}/opt/daos/include/"*)
-utils/rpms/move_files.sh "%{buildroot}/opt/daos/lib/daos/python" \
+utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}/opt/daos/lib/daos/python" \
                          "%{buildroot}%{_prefix}/lib/daos/python" \
                          "%{buildroot}/opt/daos" \
                          "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
                          $(basename -a "%{buildroot}/opt/daos/lib/daos/python/"*)
-utils/rpms/move_files.sh "%{buildroot}/opt/daos/share/man" \
+utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}/opt/daos/share/man" \
                          "%{buildroot}%{_mandir}" \
                          "%{buildroot}/opt/daos" \
                          "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
@@ -559,6 +560,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libna.so
 %{_libdir}/pkgconfig/mercury*.pc
 %{_libdir}/pkgconfig/na*.pc
+%{_libdir}/cmake/*
 
 %if %{with server}
 %files server
