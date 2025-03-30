@@ -28,7 +28,7 @@ move_files()
 {
   if [ -d "${prereq_root}/$1" ]; then
     mkdir -p "${build_root}/$2"
-    utils/rpms/move_files.sh "${buildroot}" "${prereq_root}/$1" "${build_root}/$2" \
+    utils/rpms/move_files.sh "${build_root}" "${prereq_root}/$1" "${build_root}/$2" \
                              "${prereq_root}" "${prefix}" "${buildlib}" "${libdir}" \
                              $(basename -a "${prereq_root}/$1/"*)
   rmdir "${prereq_root}/$1"

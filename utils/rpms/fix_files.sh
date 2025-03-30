@@ -13,6 +13,7 @@ run_patchelf()
     if [ -n "${rpath}" ]; then
       patched_rpath=$(echo "${rpath}" | sed "s!${buildbase}!!g")
       patchelf --set-rpath "${patched_rpath}" "$1"
+      strip "$1"
     fi
   fi
 }

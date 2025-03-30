@@ -28,6 +28,7 @@ while [ $# -gt 0 ]; do
   grep -Il '' "$src" | xargs -I % sed -i "s!${oldprefix}/!${newprefix}!" '%'
   grep -Il '' "$src" | xargs -I % sed -i "s!-L${oldprefix}\S*!!" '%'
   grep -IL '' "${src}" | xargs -I % patchelf --remove-rpath '%'
+  grep -IL '' "${src}" | xargs -I % strip '%'
   dbg_src=$(sed "s!${oldprefix}!/usr/lib/debug/${oldprefix}!" <<< "${src}")
   dbg_dest=$(sed "s!${newprefix}/bin!${newprefix}/lib/debug/${newprefix}/bin!" <<< "${dest_root}")
   dbg_dest=$(sed "s!${newprefix}/lib!${newprefix}/lib/debug/${newprefix}/lib!" <<< "${dest_root}")
