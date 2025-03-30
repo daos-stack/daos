@@ -3,6 +3,8 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
+%define __arch_install_post %{nil}
+
 %bcond_without server
 %bcond_without ucx
 
@@ -424,8 +426,13 @@ utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}/opt/daos/share/man" \
                          "%{buildroot}/opt/daos" \
                          "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
                          $(basename -a "%{buildroot}/opt/daos/share/man/"*)
+utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}/opt/daos/etc" \
+                         "%{buildroot}%{conf_dir}" \
+                         "%{buildroot}/opt/daos" \
+                         "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
+                         $(basename -a "%{buildroot}/opt/daos/etc/"*.yml) \
+                         $(basename -a "%{buildroot}/opt/daos/etc/"*.supp)
 utils/rpms/fix_files.sh "%{buildroot}" "%{buildroot}/opt/daos"
-
 %if ("%{?compiler_args}" == "COMPILER=covc")
 mv test.cov %{buildroot}/opt/daos/lib/daos/TESTING/ftest/test.cov
 %endif
@@ -599,14 +606,14 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 /opt/daos/lib64/libdav_v2.so
 %config(noreplace) %{conf_dir}/vos_size_input.yaml
 /opt/daos/bin/daos_storage_estimator.py
-%{python3_sitearch}/storage_estimator/*.py
-%dir %{python3_sitearch}/storage_estimator
+/opt/daos/lib64/python*/*/storage_estimator/*.py
+%dir /opt/daos/lib64/python*/*/storage_estimator
 %if (0%{?rhel} >= 8)
-%dir %{python3_sitearch}/storage_estimator/__pycache__
-%{python3_sitearch}/storage_estimator/__pycache__/*.pyc
+%dir /opt/daos/lib64/python*/*/storage_estimator/__pycache__
+/opt/daos/lib64/python*/*/storage_estimator/__pycache__/*.pyc
 %endif
 %{_datarootdir}/%{name}
-%exclude %{_datarootdir}/%{name}/ioil-ld-opts
+%exclude /opt/daos/share/%{name}/ioil-ld-opts
 %{_unitdir}/%{server_svc_name}
 %{_sysctldir}/%{sysctl_script_name}
 %endif
