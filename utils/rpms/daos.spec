@@ -566,6 +566,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libfabric*.so.1*
 %endif
 %{_mandir}/man1/fi_*.1*
+%exclude %{_libdir}/*.la
 
 %if 0%{?suse_version}
 %files -n %{libfabirc_name}
@@ -584,6 +585,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/pkgconfig/%{libfabric_name}.pc
 %{_mandir}/man3/fi_*.3*
 %{_mandir}/man7/fi_*.7*
+%{_mandir}/man7/fabric.7*
 
 %files mercury
 %license deps/mercury/LICENSE.txt
@@ -769,6 +771,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{daos_root}/bin/ddb_ut
 %{daos_root}/bin/obj_ctl
 %{daos_root}/bin/vos_perf
+%exclude %{daos_root}/bin/nvme_control_ctests
 %endif
 
 %files devel
