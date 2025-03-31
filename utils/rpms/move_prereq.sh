@@ -11,13 +11,7 @@ datadir="$8"
 buildlib="$9"
 
 prereq_base="${build_root}/opt/daos/prereq"
-if [ -d "${prereq_base}/release" ]; then
-  prereq_root="${prereq_base}/release/${component}"
-elif [ -d "${prereq_base}/debug" ]; then
-  prereq_root="${prereq_base}/debug/${component}"
-elif [ -d "${prereq_base}/dev" ]; then
-  prereq_root="${prereq_base}/dev/${component}"
-fi
+prereq_root="${prereq_base}/release/${component}"
 
 if [ ! -d "${prereq_root}" ]; then
   echo "no build found for ${component} at ${prereq_root}"

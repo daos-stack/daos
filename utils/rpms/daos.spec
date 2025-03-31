@@ -4,6 +4,7 @@
 %define sysctl_script_name 10-daos_server.conf
 
 %define __arch_install_post %{nil}
+%global daos_root /opt/daos
 
 %bcond_without server
 %bcond_without ucx
@@ -135,9 +136,18 @@ to-end data integrity, fine grained data control and elastic storage
 to optimize performance and cost.
 
 %if %{with server}
+%package server-deps-common
+Summary: Prebuilt server dependencies
+
+%description server-deps-common
+Prebuilt server dependencies needed for server components.  Includes
+SPDK and PMDK libraries
+
 %package server
 Summary: The DAOS server
 Requires: %{name}%{?_isa} = %{version}-%{release}
+Requires: %{name}-deps-common%{?_isa} = %{version}-%{release}
+Requires: %{name}-server-deps-common%{?_isa} = %{version}-%{release}
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
@@ -250,11 +260,18 @@ BuildArch: noarch
 This is the package is a metapackage to install all of the internal test
 packages
 
+%package deps-common
+Summary: Common prebuilt dependencies
+
+%description deps-common
+Builds Argobots for tests and server components
+
 %package client-tests
 Summary: The DAOS test suite
 Requires: %{name}-client%{?_isa} = %{version}-%{release}
 Requires: %{name}-admin%{?_isa} = %{version}-%{release}
 Requires: %{name}-devel%{?_isa} = %{version}-%{release}
+Requires: %{name}-deps-common%{?_isa} = %{version}-%{release}
 %if (0%{?suse_version} >= 1500)
 Requires: libprotobuf-c-devel
 %else
@@ -384,10 +401,11 @@ This is the package that bridges the difference between the MOFED openmpi
 %{scons_exe} %{?_smp_mflags}          \
       --config=force                  \
       --install-sandbox=%{buildroot}  \
-      %{buildroot}/opt/daos          \
+      %{buildroot}%{daos_root}          \
+      TARGET_TYPE=release               \
       USE_INSTALLED=ucx,isal,isal_crypto \
       --build-deps=yes                \
-      PREFIX=/opt/daos              \
+      PREFIX=%{daos_root}              \
      %{?daos_build_args}            \
       %{?scons_args}                  \
       %{?compiler_args}
@@ -397,46 +415,53 @@ utils/rpms/move_prereq.sh mercury "%{buildroot}" "%{_prefix}" "%{_bindir}" "%{_l
                                   "%{_includedir}" "%{_sysconfdir}" %{_datadir} lib
 utils/rpms/move_prereq.sh ofi "%{buildroot}" "%{_prefix}" "%{_bindir}" "%{_libdir}" \
                               "%{_includedir}" "%{_sysconfdir}" %{_datadir} lib
-utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}/opt/daos/bin" "%{buildroot}%{_bindir}" \
-                         "%{buildroot}/opt/daos" "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
+utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}%{daos_root}/bin" "%{buildroot}%{_bindir}" \
+                         "%{buildroot}%{daos_root}" "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
                          "daos" \
                          "daos_agent" \
                          "dmg"
-utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}/opt/daos/lib64" "%{buildroot}%{_libdir}" \
-                         "%{buildroot}/opt/daos" "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
+utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}%{daos_root}/lib64" "%{buildroot}%{_libdir}" \
+                         "%{buildroot}%{daos_root}" "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
                          "daos" \
-                         $(basename -a "%{buildroot}/opt/daos/lib64/libgurt"*) \
-                         $(basename -a "%{buildroot}/opt/daos/lib64/libcart"*) \
-                         $(basename -a "%{buildroot}/opt/daos/lib64/libdaos_serialize"*) \
-                         $(basename -a "%{buildroot}/opt/daos/lib64/libdfs"*) \
-                         $(basename -a "%{buildroot}/opt/daos/lib64/libdaos."*) \
-                         $(basename -a "%{buildroot}/opt/daos/lib64/libdaos_common."*)
-utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}/opt/daos/include" \
+                         $(basename -a "%{buildroot}%{daos_root}/lib64/libgurt"*) \
+                         $(basename -a "%{buildroot}%{daos_root}/lib64/libcart"*) \
+                         $(basename -a "%{buildroot}%{daos_root}/lib64/libdaos_serialize"*) \
+                         $(basename -a "%{buildroot}%{daos_root}/lib64/libdfs"*) \
+                         $(basename -a "%{buildroot}%{daos_root}/lib64/libdaos."*) \
+                         $(basename -a "%{buildroot}%{daos_root}/lib64/libdaos_common."*)
+utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}%{daos_root}/include" \
                          "%{buildroot}%{_includedir}" \
-                         "%{buildroot}/opt/daos" \
+                         "%{buildroot}%{daos_root}" \
                          "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
-                         $(basename -a "%{buildroot}/opt/daos/include/"*)
-utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}/opt/daos/lib/daos/python" \
+                         $(basename -a "%{buildroot}%{daos_root}/include/"*)
+utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}%{daos_root}/lib/daos/python" \
                          "%{buildroot}%{_prefix}/lib/daos/python" \
-                         "%{buildroot}/opt/daos" \
+                         "%{buildroot}%{daos_root}" \
                          "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
-                         $(basename -a "%{buildroot}/opt/daos/lib/daos/python/"*)
-utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}/opt/daos/share/man" \
+                         $(basename -a "%{buildroot}%{daos_root}/lib/daos/python/"*)
+utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}%{daos_root}/share/man" \
                          "%{buildroot}%{_mandir}" \
-                         "%{buildroot}/opt/daos" \
+                         "%{buildroot}%{daos_root}" \
                          "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
-                         $(basename -a "%{buildroot}/opt/daos/share/man/"*)
+                         $(basename -a "%{buildroot}%{daos_root}/share/man/"*)
 mkdir -p %{buildroot}/%{conf_dir}
-utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}/opt/daos/etc" \
+utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}%{daos_root}/etc" \
                          "%{buildroot}%{conf_dir}" \
-                         "%{buildroot}/opt/daos" \
+                         "%{buildroot}%{daos_root}" \
                          "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
-                         $(basename -a "%{buildroot}/opt/daos/etc/"*.yml) \
-                         $(basename -a "%{buildroot}/opt/daos/etc/"*.yaml) \
-                         $(basename -a "%{buildroot}/opt/daos/etc/"*.supp)
-utils/rpms/fix_files.sh "%{buildroot}" "%{buildroot}/opt/daos"
+                         $(basename -a "%{buildroot}%{daos_root}/etc/"*.yml) \
+                         $(basename -a "%{buildroot}%{daos_root}/etc/"*.yaml) \
+                         $(basename -a "%{buildroot}%{daos_root}/etc/"*.supp)
+utils/rpms/fix_files.sh "%{buildroot}" "%{buildroot}%{daos_root}"
+ln -s /opt/daos/daos_server %{buildroot}%{_bindir}/daos_server
+ln -s /opt/daos/daos_server_helper %{buildroot}%{_bindir}/daos_server_helper
+ln -s /opt/daos/daos_firmware_helper %{buildroot}%{_bindir}/daos_firmware_helper
+ln -s /opt/daos/daos_engine %{buildroot}%{_bindir}/daos_engine
+ln -s /opt/daos/ddb %{buildroot}%{_bindir}/ddb
+ln -s /opt/daos/daos_metrics %{buildroot}%{_bindir}/daos_metrics
+ln -s %{daos_root}/share/%{name} %{buildroot}%{_datadir}/%{name}
 %if ("%{?compiler_args}" == "COMPILER=covc")
-mv test.cov %{buildroot}/opt/daos/lib/daos/TESTING/ftest/test.cov
+mv test.cov %{buildroot}%{daos_root}/lib/daos/TESTING/ftest/test.cov
 %endif
 %if %{with server}
 mkdir -p %{buildroot}/%{_sysctldir}
@@ -449,15 +474,15 @@ install -m 644 utils/systemd/%{server_svc_name} %{buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
 mkdir -p %{buildroot}/%{conf_dir}/certs/clients
 mkdir -p  %{buildroot}%{_sysconfdir}/bash_completion.d
-mv %{buildroot}/opt/daos/etc/bash_completion.d/* %{buildroot}/%{_sysconfdir}/bash_completion.d
+mv %{buildroot}%{daos_root}/etc/bash_completion.d/* %{buildroot}/%{_sysconfdir}/bash_completion.d
 # fixup env-script-interpreters
-sed -i -e '1s/env //' %{buildroot}/opt/daos/lib/daos/TESTING/ftest/{cart/cart_logtest,cart/daos_sys_logscan,config_file_gen,launch,slurm_setup,tags,verify_perms}.py
+sed -i -e '1s/env //' %{buildroot}%{daos_root}/lib/daos/TESTING/ftest/{cart/cart_logtest,cart/daos_sys_logscan,config_file_gen,launch,slurm_setup,tags,verify_perms}.py
 %if %{with server}
-sed -i -e '1s/env //' %{buildroot}/opt/daos/bin/daos_storage_estimator.py
+sed -i -e '1s/env //' %{buildroot}%{daos_root}/bin/daos_storage_estimator.py
 %endif
 
 # shouldn't have source files in a non-devel RPM
-rm -f %{buildroot}/opt/daos/lib/daos/TESTING/ftest/cart/{test_linkage.cpp,utest_{hlc,portnumber,protocol,swim}.c,wrap_cmocka.h}
+rm -f %{buildroot}%{daos_root}/lib/daos/TESTING/ftest/cart/{test_linkage.cpp,utest_{hlc,portnumber,protocol,swim}.c,wrap_cmocka.h}
 
 %if %{with server}
 %pre server
@@ -577,42 +602,45 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %config(noreplace) %attr(0644,root,root) %{conf_dir}/daos_server.yml
 %dir %attr(0700,daos_server,daos_server) %{conf_dir}/certs/clients
 # set daos_server_helper to be setuid root in order to perform privileged tasks
-%attr(4750,root,daos_server) /opt/daos/bin/daos_server_helper
+%attr(4750,root,daos_server) %{daos_root}/bin/daos_server_helper
+%{_bindir}/daos_server_helper
 # set daos_server to be setgid daos_server in order to invoke daos_server_helper
 # and/or daos_firmware_helper
-%attr(2755,root,daos_server) /opt/daos/bin/daos_server
-/opt/daos/bin/daos_engine
-/opt/daos/bin/daos_metrics
-/opt/daos/bin/ddb
-%dir /opt/daos/lib64/daos_srv
-/opt/daos/lib64/daos_srv/libchk.so
-/opt/daos/lib64/daos_srv/libcont.so
-/opt/daos/lib64/daos_srv/libddb.so
-/opt/daos/lib64/daos_srv/libdtx.so
-/opt/daos/lib64/daos_srv/libmgmt.so
-/opt/daos/lib64/daos_srv/libobj.so
-/opt/daos/lib64/daos_srv/libpool.so
-/opt/daos/lib64/daos_srv/librdb.so
-/opt/daos/lib64/daos_srv/librdbt.so
-/opt/daos/lib64/daos_srv/librebuild.so
-/opt/daos/lib64/daos_srv/librsvc.so
-/opt/daos/lib64/daos_srv/libsecurity.so
-/opt/daos/lib64/daos_srv/libvos_srv.so
-/opt/daos/lib64/daos_srv/libvos_size.so
-/opt/daos/lib64/daos_srv/libvos.so
-/opt/daos/lib64/daos_srv/libbio.so
-/opt/daos/lib64/daos_srv/libplacement.so
-/opt/daos/lib64/daos_srv/libpipeline.so
-/opt/daos/lib64/libdaos_common_pmem.so
-/opt/daos/lib64/libdav_v2.so
+%attr(2755,root,daos_server) %{daos_root}/bin/daos_server
+%{_bindir}/daos_server
+%{daos_root}/bin/daos_engine
+%{_bindir}/daos_engine
+%{daos_root}/bin/daos_metrics
+%{_bindir}/daos_metrics
+%{daos_root}/bin/ddb
+%{_bindir}/ddb
+%dir %{daos_root}/lib64/daos_srv
+%{daos_root}/lib64/daos_srv/libchk.so
+%{daos_root}/lib64/daos_srv/libcont.so
+%{daos_root}/lib64/daos_srv/libddb.so
+%{daos_root}/lib64/daos_srv/libdtx.so
+%{daos_root}/lib64/daos_srv/libmgmt.so
+%{daos_root}/lib64/daos_srv/libobj.so
+%{daos_root}/lib64/daos_srv/libpool.so
+%{daos_root}/lib64/daos_srv/librdb.so
+%{daos_root}/lib64/daos_srv/librdbt.so
+%{daos_root}/lib64/daos_srv/librebuild.so
+%{daos_root}/lib64/daos_srv/librsvc.so
+%{daos_root}/lib64/daos_srv/libsecurity.so
+%{daos_root}/lib64/daos_srv/libvos_srv.so
+%{daos_root}/lib64/daos_srv/libvos_size.so
+%{daos_root}/lib64/daos_srv/libvos.so
+%{daos_root}/lib64/daos_srv/libbio.so
+%{daos_root}/lib64/daos_srv/libplacement.so
+%{daos_root}/lib64/daos_srv/libpipeline.so
+%{daos_root}/lib64/libdaos_common_pmem.so
+%{daos_root}/lib64/libdav_v2.so
 %config(noreplace) %{conf_dir}/vos_size_input.yaml
-/opt/daos/bin/daos_storage_estimator.py
-/opt/daos/lib64/python*/*/storage_estimator/*.py
-%if (0%{?rhel} >= 8)
-/opt/daos/lib64/python*/*/storage_estimator/__pycache__/*.pyc
-%endif
+%{daos_root}/bin/daos_storage_estimator.py
+%{daos_root}/lib64/python*/*/storage_estimator/*.py
+%{daos_root}/share/%{name}
 %{_datarootdir}/%{name}
-%exclude /opt/daos/share/%{name}/ioil-ld-opts
+%exclude %{daos_root}/share/%{name}/ioil-ld-opts
 %{_unitdir}/%{server_svc_name}
 %{_sysctldir}/%{sysctl_script_name}
 %endif
@@ -661,60 +689,71 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_unitdir}/%{agent_svc_name}
 %{_mandir}/man8/daos.8*
 
+%files deps-common
+%dir %{daos_root}/prereq/release/argobots
+%{daos_root}/prereq/release/argobots/*
+%exclude %{daos_root}/prereq/release/fused/*
+
 %files client-tests
 %doc README.md
 %dir %{daoshome}
 %{daoshome}/TESTING
 %exclude %{daoshome}/TESTING/ftest/avocado_tests.yaml
-/opt/daos/bin/hello_drpc
-/opt/daos/lib64/libdaos_tests.so
-/opt/daos/bin/acl_dump_test
-/opt/daos/bin/agent_tests
-/opt/daos/bin/drpc_engine_test
-/opt/daos/bin/drpc_test
-/opt/daos/bin/dfuse_test
-/opt/daos/bin/eq_tests
-/opt/daos/bin/job_tests
-/opt/daos/bin/jump_pl_map
-/opt/daos/bin/pl_bench
-/opt/daos/bin/ring_pl_map
-/opt/daos/bin/security_test
+%{daos_root}/bin/hello_drpc
+%{daos_root}/lib64/libdaos_tests.so
+%{daos_root}/bin/acl_dump_test
+%{daos_root}/bin/agent_tests
+%{daos_root}/bin/drpc_engine_test
+%{daos_root}/bin/drpc_test
+%{daos_root}/bin/dfuse_test
+%{daos_root}/bin/eq_tests
+%{daos_root}/bin/job_tests
+%{daos_root}/bin/jump_pl_map
+%{daos_root}/bin/pl_bench
+%{daos_root}/bin/ring_pl_map
+%{daos_root}/bin/security_test
 %config(noreplace) %{conf_dir}/fault-inject-cart.yaml
-/opt/daos/bin/fault_status
-/opt/daos/bin/crt_launch
-/opt/daos/bin/daos_perf
-/opt/daos/bin/daos_racer
-/opt/daos/bin/daos_test
-/opt/daos/bin/daos_debug_set_params
-/opt/daos/bin/dfs_test
-/opt/daos/bin/jobtest
-/opt/daos/bin/daos_gen_io_conf
-/opt/daos/bin/daos_run_io_conf
-/opt/daos/lib64/libdpar.so
+%{daos_root}/bin/fault_status
+%{daos_root}/bin/crt_launch
+%{daos_root}/bin/daos_perf
+%{daos_root}/bin/daos_racer
+%{daos_root}/bin/daos_test
+%{daos_root}/bin/daos_debug_set_params
+%{daos_root}/bin/dfs_test
+%{daos_root}/bin/jobtest
+%{daos_root}/bin/daos_gen_io_conf
+%{daos_root}/bin/daos_run_io_conf
+%{daos_root}/lib64/libdpar.so
 
 %files client-tests-openmpi
 %doc README.md
-/opt/daos/lib64/libdpar_mpi.so
+%{daos_root}/lib64/libdpar_mpi.so
 
 %files client-tests-mpich
 %doc README.md
 
 %if %{with server}
+%files server-deps-common
+%dir %{daos_root}/prereq/release/spdk
+%{daos_root}/prereq/release/spdk/*
+%dir %{daos_root}/prereq/release/pmdk
+%{daos_root}/prereq/release/pmdk/*
+
 %files server-tests
 %doc README.md
-/opt/daos/bin/dtx_tests
-/opt/daos/bin/dtx_ut
-/opt/daos/bin/evt_ctl
-/opt/daos/bin/rdbt
-/opt/daos/bin/smd_ut
-/opt/daos/bin/bio_ut
-/opt/daos/bin/vea_ut
-/opt/daos/bin/vos_tests
-/opt/daos/bin/vea_stress
-/opt/daos/bin/ddb_tests
-/opt/daos/bin/ddb_ut
-/opt/daos/bin/obj_ctl
-/opt/daos/bin/vos_perf
+%{daos_root}/bin/dtx_tests
+%{daos_root}/bin/dtx_ut
+%{daos_root}/bin/evt_ctl
+%{daos_root}/bin/rdbt
+%{daos_root}/bin/smd_ut
+%{daos_root}/bin/bio_ut
+%{daos_root}/bin/vea_ut
+%{daos_root}/bin/vos_tests
+%{daos_root}/bin/vea_stress
+%{daos_root}/bin/ddb_tests
+%{daos_root}/bin/ddb_ut
+%{daos_root}/bin/obj_ctl
+%{daos_root}/bin/vos_perf
 %endif
 
 %files devel
@@ -730,7 +769,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files firmware
 %doc README.md
 # set daos_firmware_helper to be setuid root in order to perform privileged tasks
-%attr(4750,root,daos_server) /opt/daos/bin/daos_firmware_helper
+%attr(4750,root,daos_server) %{daos_root}/bin/daos_firmware_helper
+%{_bindir}/daos_firmware_helper
 %endif
 
 %files serialize
