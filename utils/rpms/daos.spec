@@ -454,7 +454,7 @@ utils/rpms/move_files.sh "%{buildroot}" \
                 "%{buildroot}"$(sed "s!%{_prefix}!%{daos_root}!" <<< "%{python3_sitearch}/pydaos") \
                 "%{buildroot}%{python3_sitearch}/pydaos" "%{buildroot}%{daos_root}" \
                 "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
-                $(basename -a "%{buildroot}%{daos_root}/lib64/python*/site-packages/pydaos/"*)
+                $(basename -a "%{buildroot}%{daos_root}/lib64/python"*"/site-packages/pydaos/"*)
 utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}%{daos_root}/share/man" \
                          "%{buildroot}%{_mandir}" \
                          "%{buildroot}%{daos_root}" \
@@ -667,7 +667,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %config(noreplace) %{conf_dir}/daos_control.yml
 
 %files client
-%doc RE__ADME.md
+%doc README.md
 %{_libdir}/libdaos.so.*
 %{_bindir}/cart_ctl
 %{_bindir}/self_test
@@ -711,9 +711,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 %files client-tests
 %doc README.md
-%dir %{daoshome}
-%{daoshome}/TESTING
-%exclude %{daoshome}/TESTING/ftest/avocado_tests.yaml
+%dir %{daos_root}/lib/%{name}
+%{daos_root}/lib/%{name}/TESTING
+%exclude %{daos_root}/lib/%{name}/TESTING/ftest/avocado_tests.yaml
 %{daos_root}/bin/hello_drpc
 %{daos_root}/lib64/libdaos_tests.so
 %{daos_root}/bin/acl_dump_test
