@@ -183,7 +183,7 @@ def define_mercury(reqs):
                      '-DMERCURY_USE_CHECKSUMS:BOOL=OFF',
                      '-DMERCURY_ENABLE_COUNTERS:BOOL=ON',
                      '-DNA_USE_DYNAMIC_PLUGINS:BOOL=ON',
-                     '-DNA_INSTALL_PLUGIN_DIR:PATH=$MERCURY_PREFIX/lib/mercury',
+                     '-DNA_INSTALL_PLUGIN_DIR:PATH=mercury',
                      '-DNA_USE_SM:BOOL=ON',
                      '-DNA_USE_OFI:BOOL=ON',
                      '-DNA_USE_UCX:BOOL=ON',
