@@ -419,6 +419,9 @@ utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}%{daos_root}/bin" "%{buildr
                          "%{buildroot}%{daos_root}" "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
                          "daos" \
                          "daos_agent" \
+                         "cart_ctl" \
+                         "self_test" \
+                         "dfuse" \
                          "dmg"
 utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}%{daos_root}/lib64" "%{buildroot}%{_libdir}" \
                          "%{buildroot}%{daos_root}" "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
@@ -428,6 +431,13 @@ utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}%{daos_root}/lib64" "%{buil
                          $(basename -a "%{buildroot}%{daos_root}/lib64/libdaos_serialize"*) \
                          $(basename -a "%{buildroot}%{daos_root}/lib64/libdfs"*) \
                          $(basename -a "%{buildroot}%{daos_root}/lib64/libdaos."*) \
+                         $(basename -a "%{buildroot}%{daos_root}/lib64/libduns"*) \
+                         $(basename -a "%{buildroot}%{daos_root}/lib64/libds3"*) \
+                         $(basename -a "%{buildroot}%{daos_root}/lib64/libdaos_cmd_hdlrs"*) \
+                         $(basename -a "%{buildroot}%{daos_root}/lib64/libdaos_self_test"*) \
+                         $(basename -a "%{buildroot}%{daos_root}/lib64/libdfuse"*) \
+                         $(basename -a "%{buildroot}%{daos_root}/lib64/libioil"*) \
+                         $(basename -a "%{buildroot}%{daos_root}/lib64/libpil4dfs"*) \
                          $(basename -a "%{buildroot}%{daos_root}/lib64/libdaos_common."*)
 utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}%{daos_root}/include" \
                          "%{buildroot}%{_includedir}" \
@@ -439,6 +449,12 @@ utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}%{daos_root}/lib/daos/pytho
                          "%{buildroot}%{daos_root}" \
                          "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
                          $(basename -a "%{buildroot}%{daos_root}/lib/daos/python/"*)
+mkdir -p "%{buildroot}%{python3_sitearch}/pydaos"
+utils/rpms/move_files.sh "%{buildroot}" \
+                "%{buildroot}"$(sed "s!%{_prefix}!%{daos_root}!" <<< "%{python3_sitearch}/pydaos") \
+                "%{buildroot}%{python3_sitearch}/pydaos" "%{buildroot}%{daos_root}" \
+                "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
+                $(basename -a "%{buildroot}%{daos_root}/lib64/python*/site-packages/pydaos/"*)
 utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}%{daos_root}/share/man" \
                          "%{buildroot}%{_mandir}" \
                          "%{buildroot}%{daos_root}" \
@@ -640,7 +656,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{daos_root}/lib64/python*/*/storage_estimator/*.py
 %{daos_root}/share/%{name}
 %{_datarootdir}/%{name}
-%exclude %{daos_root}/share/%{name}/ioil-ld-opts
 %{_unitdir}/%{server_svc_name}
 %{_sysctldir}/%{sysctl_script_name}
 %endif
@@ -652,7 +667,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %config(noreplace) %{conf_dir}/daos_control.yml
 
 %files client
-%doc README.md
+%doc RE__ADME.md
 %{_libdir}/libdaos.so.*
 %{_bindir}/cart_ctl
 %{_bindir}/self_test
@@ -684,7 +699,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %endif
 %{python3_sitearch}/pydaos/pydaos_shim.so
 %{python3_sitearch}/pydaos/torch/torch_shim.so
-%{_datarootdir}/%{name}/ioil-ld-opts
+%exclude %{daos_root}/share/%{name}/ioil-ld-opts
 %config(noreplace) %{conf_dir}/daos_agent.yml
 %{_unitdir}/%{agent_svc_name}
 %{_mandir}/man8/daos.8*
