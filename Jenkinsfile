@@ -395,6 +395,8 @@ pipeline {
                             env.RELEASE_BRANCH = releaseBranch()
                             echo 'Release branch == ' + env.RELEASE_BRANCH
                         }
+                        sh label: 'Environment Dump for debug',
+                           script: export
                     }
                 }
             }
