@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -352,6 +353,31 @@ df_ll_readdirplus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 }
 
 static void
+df_ll_getlock(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi, struct flock *lock)
+{
+	struct dfuse_info *dfuse_info = fuse_req_userdata(req);
+
+	DFUSE_REPLY_ERR_RAW(dfuse_info, req, ENOTSUP);
+}
+
+static void
+df_ll_setlock(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi, struct flock *lock,
+	      int sleep)
+{
+	struct dfuse_info *dfuse_info = fuse_req_userdata(req);
+
+	DFUSE_REPLY_ERR_RAW(dfuse_info, req, ENOTSUP);
+}
+
+static void
+df_ll_flock(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi, int op)
+{
+	struct dfuse_info *dfuse_info = fuse_req_userdata(req);
+
+	DFUSE_REPLY_ERR_RAW(dfuse_info, req, ENOTSUP);
+}
+
+static void
 df_ll_symlink(fuse_req_t req, const char *link, fuse_ino_t parent, const char *name)
 {
 	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
@@ -604,6 +630,9 @@ const struct dfuse_inode_ops dfuse_pool_ops = {
 	ACTION(unlink, df_ll_unlink, true)                                                         \
 	ACTION(rmdir, df_ll_unlink, true)                                                          \
 	ACTION(readdir, df_ll_readdir, false)                                                      \
+	ACTION(flock, df_ll_flock, true)                                                           \
+	ACTION(setlk, df_ll_setlock, true)                                                         \
+	ACTION(getlk, df_ll_getlock, true)                                                         \
 	ACTION(readdirplus, df_ll_readdirplus, false)                                              \
 	ACTION(create, df_ll_create, true)                                                         \
 	ACTION(mknod, df_ll_mknod, true)                                                           \
@@ -645,5 +674,11 @@ dfuse_session_new(struct fuse_args *args, struct dfuse_info *dfuse_info)
 		FOR_CB_FN(SET_MEMBER)
 	}
 
+	if (dfuse_info->di_local_flock) {
+		/* local flock support is implemented by kernel, so dfuse does not handle them */
+		ops.flock = NULL;
+		ops.setlk = NULL;
+		ops.getlk = NULL;
+	}
 	return fuse_session_new(args, &ops, sizeof(ops), dfuse_info);
 }

@@ -116,7 +116,7 @@ function check_cmds
 function usage
 {
 	cat <<- EOF
-		usage: daos-make.sh [OPTIONS]
+		usage: daos-make.sh [OPTIONS] [-- ARGS]
 
 		Build and install DAOS for running avocado functional tests
 
@@ -169,7 +169,7 @@ do
 		-v|--verbose) TRACE_LEVEL=$TRACE_LEVEL_VERBOSE ; shift 1 ;;
 		-D|--debug) TRACE_LEVEL=$TRACE_LEVEL_DEBUG ; set -x ; shift 1 ;;
 		-q|--quiet) TRACE_LEVEL=$TRACE_LEVEL_QUIET ; shift 1 ;;
-		--) shift ; break ;;
+		--) shift 1 ; args=("$@") ; break ;;
 		*) fatal "unrecognized command line option: $1" ;;
 	esac
 done
@@ -212,17 +212,20 @@ run $PIP_EXE install --upgrade pip
 run $PIP_EXE install -r "$DAOS_SOURCE_DIR/requirements.txt"
 
 SCONS_OPTS="--directory="$DAOS_SOURCE_DIR" --jobs=$JOBS_NB"
+if "$FORCE_INSTALL" ; then
+        SCONS_OPTS+=" --config=force"
+fi
 
 if "$DAOS_BUILD_DEPS" ; then
 	info "Building DAOS dependencies from source tree $DAOS_SOURCE_DIR"
-	if ! run "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" BUILD_ROOT="$DAOS_BUILD_DIR" PREFIX="$DAOS_INSTALL_DIR" $SCONS_OPTS --build-deps=only ; then
+	if ! run "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" BUILD_ROOT="$DAOS_BUILD_DIR" PREFIX="$DAOS_INSTALL_DIR" "${args[@]}" $SCONS_OPTS --build-deps=only ; then
 		fatal "DAOS dependencies could not be properly build"
 	fi
 fi
 
 info "Building DAOS from source tree $DAOS_SOURCE_DIR"
 # NOTE Dependencies will not be build as 'no' is default value of the --build-deps option
-if ! run env MPI_PKG=any "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" BUILD_ROOT="$DAOS_BUILD_DIR" PREFIX="$DAOS_INSTALL_DIR" $SCONS_OPTS ; then
+if ! run env MPI_PKG=any "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" BUILD_ROOT="$DAOS_BUILD_DIR" PREFIX="$DAOS_INSTALL_DIR" "${args[@]}" $SCONS_OPTS ; then
 	fatal "DAOS could not be properly build"
 fi
 
@@ -266,10 +269,10 @@ run $CLUSH_EXE $CLUSH_OPTS -w $CLIENTS_LIST sudo chmod 755 /usr/bin/dfuse
 info "Updating dynamic linker configuration"
 {% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
 run $CLUSH_EXE $CLUSH_OPTS -w $SERVERS_LIST -w $CLIENTS_LIST sudo rm -f /etc/ld.so.cache
-run $CLUSH_EXE $CLUSH_OPTS -w $SERVERS_LIST -w $CLIENTS_LIST sudo ldconfig
+run $CLUSH_EXE $CLUSH_OPTS -w $SERVERS_LIST -w $CLIENTS_LIST sudo ldconfig "$DAOS_INSTALL_DIR/lib64" "$DAOS_INSTALL_DIR/lib64/daos_srv"
 {% else %}
 run $CLUSH_EXE $CLUSH_OPTS -w $SERVERS_LIST sudo rm -f /etc/ld.so.cache
-run $CLUSH_EXE $CLUSH_OPTS -w $SERVERS_LIST sudo ldconfig
+run $CLUSH_EXE $CLUSH_OPTS -w $SERVERS_LIST sudo ldconfig "$DAOS_INSTALL_DIR/lib64" "$DAOS_INSTALL_DIR/lib64/daos_srv"
 {% endif %}
 
 if [[ ${MPICH_PATH:+x} ]] ; then
@@ -618,8 +621,8 @@ fi
 info "Updating dynamic linker configuration"
 {% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
 run $CLUSH_EXE $CLUSH_OPTS -w $SERVERS_LIST -w $CLIENTS_LIST sudo rm -f /etc/ld.so.cache
-run $CLUSH_EXE $CLUSH_OPTS -w $SERVERS_LIST -w $CLIENTS_LIST sudo ldconfig
+run $CLUSH_EXE $CLUSH_OPTS -w $SERVERS_LIST -w $CLIENTS_LIST sudo ldconfig "$DAOS_INSTALL_DIR/lib64" "$DAOS_INSTALL_DIR/lib64/daos_srv"
 {% else %}
 run $CLUSH_EXE $CLUSH_OPTS -w $SERVERS_LIST sudo rm -f /etc/ld.so.cache
-run $CLUSH_EXE $CLUSH_OPTS -w $SERVERS_LIST sudo ldconfig
+run $CLUSH_EXE $CLUSH_OPTS -w $SERVERS_LIST sudo ldconfig "$DAOS_INSTALL_DIR/lib64" "$DAOS_INSTALL_DIR/lib64/daos_srv"
 {% endif %}
