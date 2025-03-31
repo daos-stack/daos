@@ -586,6 +586,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	ev->de_oh           = oh;
 	ev->de_req_len      = len;
 	ev->de_req_position = position;
+	D_INIT_LIST_HEAD(&ev->de_read_list);
 
 	if (mock_read) {
 		ev->de_len = len;
