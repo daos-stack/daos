@@ -80,6 +80,9 @@ String sanitized_JOB_NAME() {
 }
 
 String branch_name() {
+    if (!env.CHANGE_ID) {
+        return ''
+    }
     return scm.branches[0].name
 }
 
