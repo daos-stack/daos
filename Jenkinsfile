@@ -80,7 +80,7 @@ String sanitized_JOB_NAME() {
 }
 
 String branch_name() {
-    return env.GIT_LOCAL_BRANCH ? env.GIT_LOCAL_BRANCH : env.BRANCH_NAME
+    return scm.branches[0].name
 }
 
 // bail out of branch builds that are not on a whitelist
