@@ -426,11 +426,13 @@ utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}/opt/daos/share/man" \
                          "%{buildroot}/opt/daos" \
                          "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
                          $(basename -a "%{buildroot}/opt/daos/share/man/"*)
+mkdir -p %{buildroot}/%{conf_dir}
 utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}/opt/daos/etc" \
                          "%{buildroot}%{conf_dir}" \
                          "%{buildroot}/opt/daos" \
                          "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
                          $(basename -a "%{buildroot}/opt/daos/etc/"*.yml) \
+                         $(basename -a "%{buildroot}/opt/daos/etc/"*.yaml) \
                          $(basename -a "%{buildroot}/opt/daos/etc/"*.supp)
 utils/rpms/fix_files.sh "%{buildroot}" "%{buildroot}/opt/daos"
 %if ("%{?compiler_args}" == "COMPILER=covc")
@@ -582,7 +584,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 /opt/daos/bin/daos_engine
 /opt/daos/bin/daos_metrics
 /opt/daos/bin/ddb
-%{_sysconfdir}/ld.so.conf.d/daos.conf
 %dir /opt/daos/lib64/daos_srv
 /opt/daos/lib64/daos_srv/libchk.so
 /opt/daos/lib64/daos_srv/libcont.so
@@ -607,9 +608,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %config(noreplace) %{conf_dir}/vos_size_input.yaml
 /opt/daos/bin/daos_storage_estimator.py
 /opt/daos/lib64/python*/*/storage_estimator/*.py
-%dir /opt/daos/lib64/python*/*/storage_estimator
 %if (0%{?rhel} >= 8)
-%dir /opt/daos/lib64/python*/*/storage_estimator/__pycache__
 /opt/daos/lib64/python*/*/storage_estimator/__pycache__/*.pyc
 %endif
 %{_datarootdir}/%{name}
