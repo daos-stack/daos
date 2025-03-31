@@ -738,6 +738,12 @@
    fun:racecall
 }
 {
+   __tsan_go_atomic64_fetch_add
+   Memcheck:Addr8
+   fun:__tsan_go_atomic64_fetch_add
+   fun:racecall
+}
+{
    DAOS-17006 - mercury leak
    Memcheck:Leak
    match-leak-kinds: reachable

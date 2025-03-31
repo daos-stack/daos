@@ -63,3 +63,13 @@ addFilter("E: spelling-error")
 
 # Set warnings as errors to work with updated rpmlintMockResults.groovy
 setBadness('warning', 1000)
+
+# Golang executable are not position independent executable
+addFilter("daos-admin\.x86_64: W: position-independent-executable-suggested /usr/bin/dmg")
+addFilter("daos-client\.x86_64: W: position-independent-executable-suggested /usr/bin/daos")
+addFilter("daos-client\.x86_64: W: position-independent-executable-suggested /usr/bin/daos_agent")
+addFilter("daos-client-tests\.x86_64: W: position-independent-executable-suggested /usr/bin/hello_drpc")
+addFilter("daos-firmware\.x86_64: W: position-independent-executable-suggested /usr/bin/daos_firmware_helper")
+addFilter("daos-server\.x86_64: W: position-independent-executable-suggested /usr/bin/daos_server")
+addFilter("daos-server\.x86_64: W: position-independent-executable-suggested /usr/bin/daos_server_helper")
+addFilter("daos-server\.x86_64: W: position-independent-executable-suggested /usr/bin/ddb")

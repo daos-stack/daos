@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -79,6 +80,43 @@ func TestHostList_NumericList(t *testing.T) {
 			gotCount := nl.Count()
 			if gotCount != tc.expCount {
 				t.Fatalf("expected count to be %d; got %d", tc.expCount, gotCount)
+			}
+		})
+	}
+}
+
+func TestHostList_NumericList_Contains(t *testing.T) {
+	for name, tc := range map[string]struct {
+		startList   string
+		searchNum   uint
+		expContains bool
+	}{
+		"missing": {
+			startList:   "[1-128]",
+			searchNum:   200,
+			expContains: false,
+		},
+		"found": {
+			startList:   "[1-128]",
+			searchNum:   126,
+			expContains: true,
+		},
+		"gaps in range": {
+			startList:   "[1-125,127,128]",
+			searchNum:   126,
+			expContains: false,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			nl, err := hostlist.CreateNumericList(tc.startList)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			gotContains := nl.Contains(tc.searchNum)
+			if gotContains != tc.expContains {
+				t.Fatalf("expected %d to be found in %s, want %v got %v",
+					tc.searchNum, tc.startList, tc.expContains, gotContains)
 			}
 		})
 	}
@@ -209,6 +247,10 @@ func TestHostSet_CreateNumericSet(t *testing.T) {
 		"whitespace in numeric list": {
 			startList: "[0, 5]",
 			expErr:    errors.New("unexpected whitespace character(s)"),
+		},
+		"no brackets": {
+			startList: "1-128",
+			expErr:    errors.New("missing brackets around numeric ranges"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
