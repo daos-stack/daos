@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -142,6 +143,24 @@ struct pool_iv_entry {
 	};
 };
 
+static inline size_t
+pool_iv_conn_size(size_t cred_size)
+{
+	return sizeof(struct pool_iv_conn) + cred_size;
+}
+
+static inline struct pool_iv_conn *
+pool_iv_conn_next(struct pool_iv_conn *conn)
+{
+	return (struct pool_iv_conn *)((char *)conn + pool_iv_conn_size(conn->pic_cred_size));
+}
+
+static inline size_t
+pool_iv_conn_ent_size(size_t cred_size)
+{
+	return sizeof(struct pool_iv_entry) + pool_iv_conn_size(cred_size);
+}
+
 struct pool_map_refresh_ult_arg {
 	uint32_t	iua_pool_version;
 	uuid_t		iua_pool_uuid;
@@ -255,6 +274,9 @@ void ds_pool_map_refresh_ult(void *arg);
 int ds_pool_iv_conn_hdl_update(struct ds_pool *pool, uuid_t hdl_uuid,
 			       uint64_t flags, uint64_t capas, d_iov_t *cred,
 			       uint32_t global_ver, uint32_t obj_layout_ver);
+
+int
+      ds_pool_iv_conn_hdls_update(struct ds_pool *pool, struct pool_iv_conns *conns);
 
 int ds_pool_iv_srv_hdl_update(struct ds_pool *pool, uuid_t pool_hdl_uuid,
 			      uuid_t cont_hdl_uuid);
