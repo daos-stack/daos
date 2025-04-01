@@ -36,7 +36,7 @@ def build_tests(env, prereqs):
 
     if prereqs.server_requested():
         tenv = denv.Clone()
-        tenv.require('argobots', 'pmdk')
+        tenv.require('argobots', 'pmdk', 'spdk')
 
         libs_server += ['vos', 'bio', 'abt', 'numa']
         vos_engine = tenv.StaticObject(['vos_engine.c'])

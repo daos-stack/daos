@@ -117,6 +117,7 @@ def define_mercury(reqs):
     # TODO: change to --enable-opx once upgraded to libfabric 1.17+
     ofi_build = ['./configure',
                  '--prefix=$OFI_PREFIX',
+                 '--libdir=$OFI_PREFIX/lib64',
                  '--disable-efa',
                  '--disable-psm2',
                  '--disable-psm3',
@@ -139,8 +140,9 @@ def define_mercury(reqs):
                 headers=['rdma/fabric.h'],
                 pkgconfig='libfabric',
                 package='libfabric-devel' if inst(reqs, 'ofi') else None,
-                patch_rpath=['lib'],
-                build_env={'CFLAGS': "-fstack-usage"})
+                patch_rpath=['lib64'],
+                build_env={'CFLAGS': "-fstack-usage",
+                           'DESTDIR': '$SANDBOX_PREFIX'})
 
     ucx_configure = ['./configure', '--disable-assertions', '--disable-params-check', '--enable-mt',
                      '--without-go', '--without-java', '--prefix=$UCX_PREFIX',
@@ -165,7 +167,8 @@ def define_mercury(reqs):
                           ['make', 'install'],
                           ['mkdir', '-p', '$UCX_PREFIX/lib64/pkgconfig'],
                           ['cp', 'ucx.pc', '$UCX_PREFIX/lib64/pkgconfig']],
-                build_env={'CFLAGS': '-Wno-error'},
+                build_env={'CFLAGS': '-Wno-error',
+                           'DESTDIR': '$SANDBOX_PREFIX'},
                 package='ucx-devel' if inst(reqs, 'ucx') else None)
 
     mercury_build = ['cmake',
@@ -173,17 +176,19 @@ def define_mercury(reqs):
                      '-DCMAKE_BUILD_TYPE:STRING=RelWithDebInfo',
                      '-DCMAKE_CXX_FLAGS:STRING="-std=c++11"',
                      '-DCMAKE_INSTALL_PREFIX:PATH=$MERCURY_PREFIX',
-                     '-DMERCURY_INSTALL_DATA_DIR:PATH=$MERCURY_PREFIX/lib',
+                     '-DMERCURY_INSTALL_LIB_DIR:PATH=$MERCURY_PREFIX/lib64',
+                     '-DMERCURY_INSTALL_DATA_DIR:PATH=$MERCURY_PREFIX/lib64',
                      '-DBUILD_DOCUMENTATION:BOOL=OFF',
                      '-DBUILD_EXAMPLES:BOOL=OFF',
                      '-DBUILD_TESTING:BOOL=ON',
                      '-DBUILD_TESTING_PERF:BOOL=ON',
                      '-DBUILD_TESTING_UNIT:BOOL=OFF',
                      '-DMERCURY_USE_BOOST_PP:BOOL=ON',
+                     '-DMERCURY_USE_SYSTEM_BOOST:BOOL=ON',
                      '-DMERCURY_USE_CHECKSUMS:BOOL=OFF',
                      '-DMERCURY_ENABLE_COUNTERS:BOOL=ON',
                      '-DNA_USE_DYNAMIC_PLUGINS:BOOL=ON',
-                     '-DNA_INSTALL_PLUGIN_DIR:PATH=mercury',
+                     '-DNA_INSTALL_PLUGIN_DIR:PATH=$MERCURY_PREFIX/lib64/mercury',
                      '-DNA_USE_SM:BOOL=ON',
                      '-DNA_USE_OFI:BOOL=ON',
                      '-DNA_USE_UCX:BOOL=ON',
@@ -204,7 +209,11 @@ def define_mercury(reqs):
                 requires=['boost', 'ofi', 'ucx'] + libs,
                 out_of_src_build=True,
                 package='mercury-devel' if inst(reqs, 'mercury') else None,
-                build_env={'CFLAGS': '-fstack-usage'})
+                build_env={'CFLAGS': '-fstack-usage -I$SANDBOX_PREFIX$OFI_PREFIX/include '
+                                     '-I$SANDBOX_PREFIX$UCX_PREFIX/include',
+                           'LDFLAGS': '-L$SANDBOX_PREFIX$OFI_PREFIX/lib64 '
+                                      '-L$SANDBOX_PREFIX$UCX_PREFIX/lib64',
+                           'DESTDIR': '$SANDBOX_PREFIX'})
 
 
 def define_common(reqs):
@@ -254,19 +263,23 @@ def define_components(reqs):
     reqs.define('isal',
                 retriever=CopyRetriever(),
                 commands=[['./autogen.sh'],
-                          ['./configure', '--prefix=$ISAL_PREFIX', '--libdir=$ISAL_PREFIX/lib'],
+                          ['./configure', '--prefix=$ISAL_PREFIX', '--libdir=$ISAL_PREFIX/lib64'],
                           ['make'],
                           ['make', 'install']],
-                libs=['isal'])
+                libs=['isal'],
+                pkgconfig='libisal',
+                build_env={'DESTDIR': '$SANDBOX_PREFIX'})
     reqs.define('isal_crypto',
                 retriever=CopyRetriever(),
                 commands=[['./autogen.sh'],
                           ['./configure',
                            '--prefix=$ISAL_CRYPTO_PREFIX',
-                           '--libdir=$ISAL_CRYPTO_PREFIX/lib'],
+                           '--libdir=$ISAL_CRYPTO_PREFIX/lib64'],
                           ['make'],
                           ['make', 'install']],
-                libs=['isal_crypto'])
+                libs=['isal_crypto'],
+                pkgconfig='libisal_crypto',
+                build_env={'DESTDIR': '$SANDBOX_PREFIX'})
 
     reqs.define('pmdk',
                 retriever=CopyRetriever(),
@@ -278,7 +291,9 @@ def define_components(reqs):
                            'EXTRA_CFLAGS="-Wno-error"',
                            'install',
                            'prefix=$PMDK_PREFIX']],
-                libs=['pmemobj'])
+                libs=['pmemobj'],
+                pkgconfig='libpmemobj',
+                build_env={'DESTDIR': '$SANDBOX_PREFIX'})
     abt_build = ['./configure',
                  '--prefix=$ARGOBOTS_PREFIX',
                  'CC=gcc',
@@ -307,8 +322,10 @@ def define_components(reqs):
                           ['make'],
                           ['make', 'install']],
                 requires=['libunwind'],
+                pkgconfig='argobots',
                 libs=['abt'],
-                headers=['abt.h'])
+                headers=['abt.h'],
+                build_env={'DESTDIR': '$SANDBOX_PREFIX'})
 
     reqs.define('fuse', libs=['fuse3'], defines=['FUSE_USE_VERSION=35'],
                 retriever=GitRepoRetriever(),
@@ -316,6 +333,7 @@ def define_components(reqs):
                            '-Dudevrulesdir=$FUSE_PREFIX/udev', '-Dutils=False',
                            '--default-library', 'both', '../fuse'],
                           ['ninja', 'install']],
+                build_env={'DESTDIR': "$SANDBOX_PREFIX"},
                 headers=['fuse3/fuse.h'],
                 required_progs=['libtoolize', 'ninja', 'meson'],
                 out_of_src_build=True)
@@ -324,10 +342,12 @@ def define_components(reqs):
                 retriever=CopyRetriever(),
                 commands=[['meson', 'setup', '--prefix=$FUSED_PREFIX', '-Ddisable-mtab=True',
                            '-Dudevrulesdir=$FUSED_PREFIX/udev', '-Dutils=False',
-                           '--default-library', 'static', '../fused'],
+                           '--default-library', 'static', '-Dlibdir=$FUSED_PREFIX/lib64',
+                           '../fused'],
                           ['meson', 'setup', '--reconfigure', '../fused'],
                           ['ninja', 'install']],
                 pkgconfig='fused',
+                build_env={'DESTDIR': "$SANDBOX_PREFIX"},
                 headers=['fused/fuse.h'],
                 required_progs=['libtoolize', 'ninja', 'meson'],
                 out_of_src_build=True)
@@ -368,15 +388,21 @@ def define_components(reqs):
                            '--with-shared',
                            f'--target-arch={spdk_arch}'],
                           ['make', f'CONFIG_ARCH={spdk_arch}'],
-                          ['make', 'install'],
-                          ['cp', '-r', '-P', 'dpdk/build/lib/', '$SPDK_PREFIX'],
-                          ['cp', '-r', '-P', 'dpdk/build/include/', '$SPDK_PREFIX/include/dpdk'],
-                          ['mkdir', '-p', '$SPDK_PREFIX/share/spdk'],
-                          ['cp', '-r', 'include', 'scripts', '$SPDK_PREFIX/share/spdk'],
-                          ['cp', 'build/examples/lsvmd', '$SPDK_PREFIX/bin/spdk_nvme_lsvmd'],
-                          ['cp', 'build/examples/nvme_manage', '$SPDK_PREFIX/bin/spdk_nvme_manage'],
-                          ['cp', 'build/examples/identify', '$SPDK_PREFIX/bin/spdk_nvme_identify'],
-                          ['cp', 'build/examples/perf', '$SPDK_PREFIX/bin/spdk_nvme_perf']],
+                          ['make', 'DESTDIR=$SANDBOX_PREFIX', 'install'],
+                          ['cp', '-r', '-P', 'dpdk/build/lib/', '$SANDBOX_PREFIX$SPDK_PREFIX'],
+                          ['cp', '-r', '-P', 'dpdk/build/include/',
+                           '$SANDBOX_PREFIX$SPDK_PREFIX/include/dpdk'],
+                          ['mkdir', '-p', '$SANDBOX_PREFIX$SPDK_PREFIX/share/spdk'],
+                          ['cp', '-r', 'include', 'scripts',
+                           '$SANDBOX_PREFIX$SPDK_PREFIX/share/spdk'],
+                          ['cp', 'build/examples/lsvmd',
+                           '$SANDBOX_PREFIX$SPDK_PREFIX/bin/spdk_nvme_lsvmd'],
+                          ['cp', 'build/examples/nvme_manage',
+                           '$SANDBOX_PREFIX$SPDK_PREFIX/bin/spdk_nvme_manage'],
+                          ['cp', 'build/examples/identify',
+                           '$SANDBOX_PREFIX$SPDK_PREFIX/bin/spdk_nvme_identify'],
+                          ['cp', 'build/examples/perf',
+                           '$SANDBOX_PREFIX$SPDK_PREFIX/bin/spdk_nvme_perf']],
                 headers=['spdk/nvme.h'],
                 patch_rpath=['lib', 'bin'])
 
@@ -388,7 +414,8 @@ def define_components(reqs):
                           ['make', 'install']],
                 libs=['protobuf-c'],
                 headers=['protobuf-c/protobuf-c.h'],
-                package='protobuf-c-devel')
+                package='protobuf-c-devel',
+                build_env={'DESTDIR': "$SANDBOX_PREFIX"})
 
     os_name = dist[0].split()[0]
     if os_name == 'Ubuntu':

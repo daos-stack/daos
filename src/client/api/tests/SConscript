@@ -4,6 +4,7 @@
 def scons():
     """Execute build"""
     Import('denv')
+    denv.require('isal_crypto')
 
     eq_tests = denv.d_test_program('eq_tests', 'eq_tests.c',
                                    LIBS=['daos', 'daos_common', 'gurt', 'cart',

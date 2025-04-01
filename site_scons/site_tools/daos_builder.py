@@ -54,6 +54,10 @@ def _add_rpaths(env, install_off, set_cgo_ld, is_bin):
         else:
             # NB: Also use full path so intermediate linking works
             env.AppendUnique(RPATH=[path])
+        with_sandbox = env.subst(f"$SANDBOX_PREFIX{path}")
+        if with_sandbox != path:
+            env.AppendUnique(LINKFLAGS=[f'-Wl,-rpath-link={with_sandbox}'])
+            env.AppendENVPath("CGO_LDFLAGS", f'-Wl,-rpath={with_sandbox}', sep=" ")
 
     if set_cgo_ld:
         env.AppendENVPath("CGO_LDFLAGS", env.subst("$_LIBDIRFLAGS $_RPATH"), sep=" ")
@@ -72,7 +76,7 @@ def _enable_ld_path(env, part_list):
     # man pages.  In such cases, we need LD_LIBRARY_PATH set to pick up
     # the dependencies
     for part in part_list:
-        env.AppendENVPath("LD_LIBRARY_PATH", os.path.join(env["BUILD_DIR"], "src", part))
+        env.AppendENVPath("LD_LIBRARY_PATH", os.path.join(env["BUILD_DIR"], "src", env.subst(part)))
 
 
 def _known_deps(env, **kwargs):

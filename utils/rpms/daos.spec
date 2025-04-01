@@ -410,11 +410,6 @@ This is the package that bridges the difference between the MOFED openmpi
       %{?scons_args}                  \
       %{?compiler_args}
 
-# Move mercury build
-utils/rpms/move_prereq.sh mercury "%{buildroot}" "%{_prefix}" "%{_bindir}" "%{_libdir}" \
-                                  "%{_includedir}" "%{_sysconfdir}" %{_datadir} lib
-utils/rpms/move_prereq.sh ofi "%{buildroot}" "%{_prefix}" "%{_bindir}" "%{_libdir}" \
-                              "%{_includedir}" "%{_sysconfdir}" %{_datadir} lib
 utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}%{daos_root}/bin" "%{buildroot}%{_bindir}" \
                          "%{buildroot}%{daos_root}" "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
                          "daos" \
@@ -606,7 +601,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %doc deps/mercury/README.md
 %{_includedir}/mercury*
 %{_includedir}/na_*
-%{_includedir}/boost
 %{_libdir}/libmercury.so
 %{_libdir}/libmercury_util.so
 %{_libdir}/libna.so
@@ -709,6 +703,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files deps-common
 %dir %{daos_root}/prereq/release/argobots
 %{daos_root}/prereq/release/argobots/*
+%dir %{daos_root}/prereq/release/protobufc
+%{daos_root}/prereq/release/protobufc/*
 %exclude %{daos_root}/prereq/release/fused/*
 
 %files client-tests

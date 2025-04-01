@@ -15,7 +15,7 @@ def scons():
     tenv.Append(CPPPATH=[Dir('../../vos').srcnode()])
     tenv.Append(CPPPATH=[Dir('../../vos/tests').srcnode()])
     tenv.AppendUnique(CPPPATH=[Dir('../../common/tests').srcnode()])
-    tenv.require('argobots')
+    tenv.require('argobots', 'spdk')
     tenv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     tenv.Append(OBJPREFIX="b_")
 
@@ -30,7 +30,7 @@ def scons():
 
     tenv = denv.Clone()
     tenv.Append(CPPPATH=[Dir('../../vos').srcnode()])
-    tenv.require('pmdk')
+    tenv.require('pmdk', 'spdk')
     tenv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     tenv.Append(OBJPREFIX="c_")
 
