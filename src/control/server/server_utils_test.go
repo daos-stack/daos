@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -747,6 +748,122 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				txtMod)
 			test.AssertEqual(t, tc.expNotice, strings.Contains(buf.String(), "NOTICE"),
 				msg)
+		})
+	}
+}
+
+func TestServer_cleanEngineSpdkResources(t *testing.T) {
+	for name, tc := range map[string]struct {
+		srvCfgExtra func(*config.Server) *config.Server
+		bmbc        *bdev.MockBackendConfig
+		expErr      error
+		expPrepCall *storage.BdevPrepareRequest
+	}{
+		"bdevs configured; hugepages disabled": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithDisableHugepages(true).
+					WithEngines(pmemEngine(1))
+			},
+			// Returns early so no prep call.
+		},
+		"no bdevs configured": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithEngines(pmemOnlyEngine(1))
+			},
+			// Returns early so no prep call.
+		},
+		"bdev resources cleaned": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithEngines(pmemEngine(1))
+			},
+			bmbc: &bdev.MockBackendConfig{},
+			expPrepCall: &storage.BdevPrepareRequest{
+				CleanSpdkHugepages: true,
+				CleanSpdkLockfiles: true,
+				PCIAllowList:       test.MockPCIAddr(1),
+			},
+		},
+		"bdev resources cleaned; multiple ssds": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithEngines(
+					basicEngineCfg(1).WithTargetCount(16).
+						WithStorage(pmemTier(1),
+							storage.NewTierConfig().
+								WithStorageClass(storage.ClassNvme.String()).
+								WithBdevDeviceList(
+									test.MockPCIAddr(int32(1)),
+									test.MockPCIAddr(int32(2)))))
+			},
+			bmbc: &bdev.MockBackendConfig{},
+			expPrepCall: &storage.BdevPrepareRequest{
+				CleanSpdkHugepages: true,
+				CleanSpdkLockfiles: true,
+				PCIAllowList: strings.Join([]string{
+					test.MockPCIAddr(1), test.MockPCIAddr(2),
+				}, storage.BdevPciAddrSep),
+			},
+		},
+		"bdev resources clean fails": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithEngines(pmemEngine(1))
+			},
+			bmbc: &bdev.MockBackendConfig{
+				ResetErr: errors.New("backed prep reset failed"),
+			},
+			expPrepCall: &storage.BdevPrepareRequest{
+				CleanSpdkHugepages: true,
+				CleanSpdkLockfiles: true,
+				PCIAllowList:       test.MockPCIAddr(1),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			cfg := config.DefaultServer().
+				WithFabricProvider("ofi+verbs")
+			if tc.srvCfgExtra != nil {
+				cfg = tc.srvCfgExtra(cfg)
+			}
+
+			srv, err := newServer(log, cfg, &system.FaultDomain{})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			mbb := bdev.NewMockBackend(tc.bmbc)
+			mbp := bdev.NewProvider(log, mbb)
+			sp := sysprov.NewMockSysProvider(log, nil)
+
+			srv.ctlSvc = &ControlService{
+				StorageControlService: *NewMockStorageControlService(log, nil, //cfg.Engines,
+					sp, scm.NewProvider(log, scm.NewMockBackend(nil), sp, nil),
+					mbp, nil),
+				srvCfg: cfg,
+			}
+
+			if len(srv.cfg.Engines) == 0 {
+				t.Fatal("zero engines configured")
+			}
+
+			runner := engine.NewRunner(log, srv.cfg.Engines[0])
+			ei := NewEngineInstance(log, srv.ctlSvc.storage, nil, runner, nil)
+
+			test.CmpErr(t, tc.expErr, cleanEngineSpdkResources(srv, ei))
+
+			mbb.RLock()
+			if tc.expPrepCall != nil {
+				if len(mbb.PrepareCalls) != 1 {
+					t.Fatalf("expected prepare to be called once")
+				}
+				if diff := cmp.Diff(*tc.expPrepCall, mbb.PrepareCalls[0]); diff != "" {
+					t.Fatalf("unexpected prepare calls (-want, +got):\n%s\n", diff)
+				}
+			} else if len(mbb.PrepareCalls) != 0 {
+				t.Fatalf("expected prepare not to be called")
+			}
+			mbb.RUnlock()
 		})
 	}
 }

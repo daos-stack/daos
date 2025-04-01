@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -190,29 +191,70 @@ func logNUMAStats(log logging.Logger) {
 	log.Debugf("run cmd numastat -m: %s", toLog)
 }
 
+// Skip addresses in block list if present then expand to include both VMD and VMD backing device
+// addresses in search filter.
+func (sb *spdkBackend) removeSpdkLockfiles(req storage.BdevPrepareRequest, resp *storage.BdevPrepareResponse) (err error) {
+	inAllowList, err := hardware.NewPCIAddressSetFromString(req.PCIAllowList)
+	if err != nil {
+		return
+	}
+	inBlockList, err := hardware.NewPCIAddressSetFromString(req.PCIBlockList)
+	if err != nil {
+		return
+	}
+	// Remove blocked VMD addresses from allow list.
+	addrs := inAllowList.Difference(inBlockList).Strings()
+
+	resp.LockfilesRemoved, err = sb.binding.Clean(addrs...)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Remove hugepages that were created by a no-longer-active SPDK process. Note that when running
+// prepare, it's unlikely that any SPDK processes are active as this is performed prior to starting
+// engines.
+func (sb *spdkBackend) removeSpdkHugepages(req storage.BdevPrepareRequest, hpClean hpCleanFn, resp *storage.BdevPrepareResponse) error {
+	nrRemoved, err := hpClean(sb.log, hugepageDir)
+	if err != nil {
+		return err
+	}
+	resp.NrHugepagesRemoved = nrRemoved
+	logNUMAStats(sb.log)
+
+	return nil
+}
+
 // prepare receives function pointers for external interfaces.
 func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, vmdDetect vmdDetectFn, hpClean hpCleanFn) (*storage.BdevPrepareResponse, error) {
 	resp := &storage.BdevPrepareResponse{}
-
-	if req.CleanHugepagesOnly {
-		// Remove hugepages that were created by a no-longer-active SPDK process. Note that
-		// when running prepare, it's unlikely that any SPDK processes are active as this
-		// is performed prior to starting engines.
-		nrRemoved, err := hpClean(sb.log, hugepageDir)
-		if err != nil {
-			return resp, errors.Wrapf(err, "clean spdk hugepages")
-		}
-		resp.NrHugepagesRemoved = nrRemoved
-
-		logNUMAStats(sb.log)
-
-		return resp, nil
-	}
 
 	// Update request if VMD has been explicitly enabled and there are VMD endpoints configured.
 	if err := updatePrepareRequest(sb.log, &req, vmdDetect); err != nil {
 		return resp, errors.Wrapf(err, "update prepare request")
 	}
+
+	// Process a clean request, treated as exclusive and not compatible with backend prepare or
+	// reset.
+	if req.CleanSpdkHugepages || req.CleanSpdkLockfiles {
+		sb.log.Debugf("spdk backend: received a reset-clean request: %+v", req)
+
+		if req.CleanSpdkHugepages {
+			if err := sb.removeSpdkHugepages(req, hpClean, resp); err != nil {
+				return resp, errors.Wrapf(err, "clean spdk hugepages")
+			}
+		}
+		if req.CleanSpdkLockfiles {
+			if err := sb.removeSpdkLockfiles(req, resp); err != nil {
+				return resp, errors.Wrapf(err, "clean spdk lockfiles")
+			}
+		}
+
+		return resp, nil
+	}
+
 	resp.VMDPrepared = req.EnableVMD
 
 	// Before preparing, reset device bindings.
@@ -250,8 +292,6 @@ func (sb *spdkBackend) reset(req storage.BdevPrepareRequest, vmdDetect vmdDetect
 // Reset will perform a lookup on the requested target user to validate existence
 // then reset non-VMD NVMe devices for use by the OS/kernel.
 // If EnableVmd is true in request then attempt to use VMD NVMe devices.
-// If DisableCleanHugepages is false in request then cleanup any leftover hugepages
-// owned by the target user.
 // Backend call executes the SPDK setup.sh script to rebind PCI devices as selected by
 // devs specified in bdev_list and bdev_exclude provided in the server config file.
 func (sb *spdkBackend) Reset(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
@@ -262,8 +302,6 @@ func (sb *spdkBackend) Reset(req storage.BdevPrepareRequest) (*storage.BdevPrepa
 // Prepare will perform a lookup on the requested target user to validate existence
 // then prepare non-VMD NVMe devices for use with SPDK.
 // If EnableVmd is true in request then attempt to use VMD NVMe devices.
-// If DisableCleanHugepages is false in request then cleanup any leftover hugepages
-// owned by the target user.
 // Backend call executes the SPDK setup.sh script to rebind PCI devices as selected by
 // devs specified in bdev_list and bdev_exclude provided in the server config file.
 func (sb *spdkBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {

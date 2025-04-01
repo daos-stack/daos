@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,7 +15,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common/test"
-	"github.com/daos-stack/daos/src/control/logging"
 )
 
 type ext struct {
@@ -33,7 +33,7 @@ func mockRemove(name string) error {
 	return mockExt.removeErr
 }
 
-func TestSpdk_CleanLockfiles(t *testing.T) {
+func TestSpdk_cleanLockfiles(t *testing.T) {
 	for name, tc := range map[string]struct {
 		pciAddrs  []string
 		removeErr error
@@ -55,9 +55,6 @@ func TestSpdk_CleanLockfiles(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer test.ShowBufferOnFailure(t, buf)
-
 			if tc.expCalls == nil {
 				tc.expCalls = make([]string, 0, len(tc.pciAddrs))
 				for _, p := range tc.pciAddrs {
@@ -69,7 +66,7 @@ func TestSpdk_CleanLockfiles(t *testing.T) {
 			mockExt.removeCalls = make([]string, 0, len(tc.pciAddrs))
 			mockExt.removeErr = tc.removeErr
 
-			gotErr := cleanLockfiles(log, mockRemove, tc.pciAddrs...)
+			removedLocks, gotErr := cleanLockfiles(mockRemove, tc.pciAddrs...)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -79,6 +76,9 @@ func TestSpdk_CleanLockfiles(t *testing.T) {
 			sort.Strings(mockExt.removeCalls)
 
 			if diff := cmp.Diff(tc.expCalls, mockExt.removeCalls); diff != "" {
+				t.Fatalf("(-want, +got): %s", diff)
+			}
+			if diff := cmp.Diff(tc.expCalls, removedLocks); diff != "" {
 				t.Fatalf("(-want, +got): %s", diff)
 			}
 		})

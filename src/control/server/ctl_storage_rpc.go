@@ -241,8 +241,11 @@ func bdevScan(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvmeReq, n
 	if req == nil {
 		return nil, errNilReq
 	}
-	if cs.srvCfg != nil && cs.srvCfg.DisableHugepages {
-		return nil, errors.New("cannot scan bdevs if hugepages have been disabled")
+	if cs.srvCfg == nil {
+		return nil, errNoSrvCfg
+	}
+	if cs.srvCfg.DisableHugepages {
+		return nil, storage.FaultHugepagesDisabled
 	}
 
 	defer func() {
@@ -1085,7 +1088,7 @@ func (cs *ControlService) StorageNvmeRebind(ctx context.Context, req *ctlpb.Nvme
 		return nil, errNoSrvCfg
 	}
 	if cs.srvCfg.DisableHugepages {
-		return nil, FaultHugepagesDisabled
+		return nil, storage.FaultHugepagesDisabled
 	}
 
 	cu, err := user.Current()
@@ -1128,7 +1131,7 @@ func (cs *ControlService) StorageNvmeAddDevice(ctx context.Context, req *ctlpb.N
 		return nil, errNoSrvCfg
 	}
 	if cs.srvCfg.DisableHugepages {
-		return nil, FaultHugepagesDisabled
+		return nil, storage.FaultHugepagesDisabled
 	}
 
 	engines := cs.harness.Instances()
