@@ -1,6 +1,7 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1775,8 +1776,18 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 		}
 
 		if (!pmap_stale) {
+			uint32_t now = daos_gettime_coarse();
+
 			delay = dc_obj_retry_delay(task, result, &obj_auxi->retry_cnt,
 						   &obj_auxi->inprogress_cnt, obj_auxi->max_delay);
+			if (result == -DER_INPROGRESS &&
+			    ((obj_auxi->retry_warn_ts == 0 && obj_auxi->inprogress_cnt >= 10) ||
+			     (obj_auxi->retry_warn_ts > 0 && obj_auxi->retry_warn_ts + 10 < now))) {
+				obj_auxi->retry_warn_ts = now;
+				obj_auxi->flags |= ORF_MAYBE_STARVE;
+				D_WARN("The task %p has been retried for %u times, maybe starve\n",
+				       task, obj_auxi->inprogress_cnt);
+			}
 		}
 
 		rc = tse_task_reinit_with_delay(task, delay);
@@ -4698,6 +4709,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 	obj_auxi->csum_retry	= 0;
 	obj_auxi->tx_uncertain	= 0;
 	obj_auxi->nvme_io_err	= 0;
+	obj_auxi->flags &= ~ORF_MAYBE_STARVE;
 
 	rc = obj_comp_cb_internal(obj_auxi);
 	if (rc != 0 || obj_auxi->result) {
