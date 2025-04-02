@@ -1028,7 +1028,6 @@ func TestServerConfig_getMinMaxNrHugepages(t *testing.T) {
 				)
 			},
 			expMinHugepages: 2048,
-			expMaxHugepages: 16384,
 		},
 		"unset in cfg; bdevs configured; single target count; md-on-ssd": {
 			extraConfig: func(c *Server) *Server {
@@ -1057,7 +1056,6 @@ func TestServerConfig_getMinMaxNrHugepages(t *testing.T) {
 				)
 			},
 			expMinHugepages: 2048,
-			expMaxHugepages: 17408,
 		},
 		"unset in cfg; bdevs configured": {
 			extraConfig: func(c *Server) *Server {
@@ -1073,7 +1071,6 @@ func TestServerConfig_getMinMaxNrHugepages(t *testing.T) {
 				)
 			},
 			expMinHugepages: 4096,
-			expMaxHugepages: 16384,
 		},
 		"unset in cfg; bdevs configured; target count exceeds max": {
 			extraConfig: func(c *Server) *Server {
@@ -1090,7 +1087,6 @@ func TestServerConfig_getMinMaxNrHugepages(t *testing.T) {
 				)
 			},
 			expMinHugepages: 16896,
-			expMaxHugepages: 16896,
 		},
 		"unset in cfg; emulated bdevs configured": {
 			extraConfig: func(c *Server) *Server {
@@ -1107,7 +1103,6 @@ func TestServerConfig_getMinMaxNrHugepages(t *testing.T) {
 				)
 			},
 			expMinHugepages: 4096,
-			expMaxHugepages: 16384,
 		},
 		"unset in cfg; no bdevs configured": {
 			extraConfig: func(c *Server) *Server {
@@ -1139,7 +1134,6 @@ func TestServerConfig_getMinMaxNrHugepages(t *testing.T) {
 			},
 			// 512 pages * (8 targets + 1 sys-xstream for MD-on-SSD)
 			expMinHugepages: 4608,
-			expMaxHugepages: 17408,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1154,7 +1148,7 @@ func TestServerConfig_getMinMaxNrHugepages(t *testing.T) {
 				hugepageSizeKiB = 0
 			}
 
-			minHugepages, maxHugepages, err := cfg.getMinMaxNrHugepages(log, hugepageSizeKiB)
+			minHugepages, err := cfg.getMinNrHugepages(log, hugepageSizeKiB)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
@@ -1162,8 +1156,6 @@ func TestServerConfig_getMinMaxNrHugepages(t *testing.T) {
 
 			test.AssertEqual(t, tc.expMinHugepages, minHugepages,
 				"unexpected number of minimum hugepages calculated from config")
-			test.AssertEqual(t, tc.expMaxHugepages, maxHugepages,
-				"unexpected number of maximum hugepages calculated from config")
 		})
 	}
 }
@@ -1314,10 +1306,8 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 						),
 				)
 			},
-			// Initial maximum set, disregarding minimum calculated.
-			// Min: 512 pages * (8 targets + 1 sys-xstream for MD-on-SSD). Max: 512
-			// pages * 32 targets + 2 sys-xstream.
-			expCfgNrHugepages: 17408,
+			// Min: 512 pages * (8 targets + 1 sys-xstream for MD-on-SSD).
+			expCfgNrHugepages: 4608,
 		},
 		"md-on-ssd enabled with explicit role assignment; sufficient total system hugepages": {
 			extraConfig: func(c *Server) *Server {

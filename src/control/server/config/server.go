@@ -512,48 +512,34 @@ func (cfg *Server) getTgtCounts(log logging.Logger) (cfgTargetCount, sysXSCount 
 	return
 }
 
-func (cfg *Server) getMinMaxNrHugepages(log logging.Logger, hpSizeKiB int) (int, int, error) {
+func (cfg *Server) getMinNrHugepages(log logging.Logger, hpSizeKiB int) (int, error) {
 	cfgTargetCount, sysXSCount := cfg.getTgtCounts(log)
 
 	if cfgTargetCount == 0 {
-		return 0, 0, nil
+		return 0, nil
 	}
 
 	// Calculate minimum number of hugepages for all configured engines.
 	minHugepages, err := storage.CalcMinHugepages(hpSizeKiB, cfgTargetCount+sysXSCount)
 	if err != nil {
-		return 0, 0, err
-	}
-
-	maxTgtCount := largeTargetCount
-	if sysXSCount > 0 {
-		maxTgtCount += largeSysXSCount
-	}
-	maxHugepages, err := storage.CalcMinHugepages(hpSizeKiB, maxTgtCount)
-	if err != nil {
-		return 0, 0, err
+		return 0, err
 	}
 
 	var msgSysXS string
 	if sysXSCount > 0 {
-		msgSysXS = fmt.Sprintf(" and %d/%d sys-xstreams", sysXSCount, largeSysXSCount)
+		msgSysXS = fmt.Sprintf(" and %d sys-xstreams", sysXSCount)
 	}
-	log.Tracef("calculated min/max %d/%d nr_hugepages based on %d/%d targets%s",
-		minHugepages, maxHugepages, cfgTargetCount, largeTargetCount, msgSysXS)
+	log.Tracef("calculated min %d nr_hugepages based on %d targets%s",
+		minHugepages, cfgTargetCount, msgSysXS)
 
-	if minHugepages > maxHugepages {
-		log.Debugf("config hugepage requirements exceed normal maximum")
-		maxHugepages = minHugepages
-	}
-
-	return minHugepages, maxHugepages, nil
+	return minHugepages, nil
 }
 
 // SetNrHugepages calculates minimum based on total target count if using nvme. If cfg.NrHugepages
 // is set to zero, no hugepage allocation requests will be made to the kernel during service
 // start-up in prepBdevStorage(). Only set non-zero here if a change is required.
 func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error {
-	minHugepages, maxHugepages, err := cfg.getMinMaxNrHugepages(log, mi.HugepageSizeKiB)
+	minHugepages, err := cfg.getMinNrHugepages(log, mi.HugepageSizeKiB)
 	if err != nil {
 		return err
 	}
@@ -587,24 +573,26 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 
 	log.Infof("%d total hugepages currently allocated on host", mi.HugepagesTotal)
 
-	// If the config doesn't specify nr_hugepages, allocate a large initial value to reduce the
-	// chance of subsequent allocations on server start causing fragmentation. If the number is
-	// manually set in the config, notify if the configured amount is insufficient for number of
-	// targets. If the number of total hugepages in the system is insufficient for the number of
-	// configured targets then request a larger allocation by increasing cfg.NrHugepages.
+	// If the config doesn't specify nr_hugepages, avoid requesting a new allocation unless the
+	// current system total is insufficient. This will reduce the chance of multiple allocations
+	// on server start causing hugepage memory fragmentation.
+	// - If the number of hugepages is unset in config and the number of total hugepages in the
+	//   system is insufficient to cover the amount required for the number of configured
+	//   targets then request the minimum number by setting cfg.NrHugepages.
+	// - If the number of hugepages is unset in config and the number of total hugepages in the
+	//   system is sufficient to cover the amount required for the number of configured targets
+	//   then leave cfg.NrHugepages equal to zero to indicate no change is required.
+	// - If the number is manually set in the config, notify if the configured amount is
+	//   insufficient for number of targets.
 
 	if cfg.NrHugepages == 0 {
 		if mi.HugepagesTotal < minHugepages {
-			if minHugepages == maxHugepages {
-				log.Debugf("allocating calculated nr_hugepages %d", maxHugepages)
-			} else {
-				log.Debugf("allocating large nr_hugepages %d", maxHugepages)
-			}
-			cfg.NrHugepages = maxHugepages
-		}
-		if cfg.NrHugepages != 0 {
+			cfg.NrHugepages = minHugepages
 			log.Infof("nr_hugepages requested auto-set to %d (%s)", cfg.NrHugepages,
 				humanize.IBytes(hugePageBytes(cfg.NrHugepages, mi.HugepageSizeKiB)))
+		} else {
+			log.Debugf("skipping allocation of hugepages, %d min covered by total sys %d",
+				minHugepages, mi.HugepagesTotal)
 		}
 	} else {
 		log.Infof("nr_hugepages requested manually-set to %d (%s)", cfg.NrHugepages,
