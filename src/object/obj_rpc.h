@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -131,6 +132,7 @@ obj_opc_to_str(crt_opcode_t opc)
 	return "unknown";
 }
 
+/* clang-format off */
 enum obj_rpc_flags {
 	ORF_BULK_BIND		= (1 << 0),
 	/** It is a resent RPC. */
@@ -167,8 +169,8 @@ enum obj_rpc_flags {
 	ORF_CREATE_MAP_DETAIL	= (1 << 13),
 	/* For data migration. */
 	ORF_FOR_MIGRATION	= (1 << 14),
-	/* Force DTX refresh if hit non-committed DTX on non-leader. Out-of-date DAOS-7878. */
-	ORF_DTX_REFRESH		= (1 << 15),
+	/* Retried IO for too many times, maybe starve. */
+	ORF_MAYBE_STARVE	= (1 << 15),
 	/* for EC aggregate (to bypass read perm check related with RF) */
 	ORF_FOR_EC_AGG		= (1 << 16),
 	/* for EC data recovery */
@@ -190,6 +192,7 @@ enum obj_rpc_flags {
 	/* The CPD RPC only contains read-only transaction. */
 	ORF_CPD_RDONLY		= (1 << 25),
 };
+/* clang-format on */
 
 /* common for update/fetch */
 #define DAOS_ISEQ_OBJ_RW	/* input fields */		 \
