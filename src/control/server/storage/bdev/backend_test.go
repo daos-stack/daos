@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,6 +8,7 @@
 package bdev
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -1329,6 +1331,78 @@ func TestBackend_Prepare(t *testing.T) {
 				}
 			}
 			test.AssertEqual(t, tc.expHpCleanCall, hpCleanCall, "unexpected clean hugepages call")
+		})
+	}
+}
+
+func TestBdev_spdkBackend_ReadConfig(t *testing.T) {
+	for name, tc := range map[string]struct {
+		setup   func(t *testing.T, req *storage.BdevReadConfigRequest)
+		req     storage.BdevReadConfigRequest
+		expResp *storage.BdevReadConfigResponse
+		expErr  error
+	}{
+		"empty config path": {
+			req:    storage.BdevReadConfigRequest{},
+			expErr: errors.New("empty SPDK config path"),
+		},
+		"bad config path": {
+			req: storage.BdevReadConfigRequest{
+				ConfigPath: "/bad/path",
+			},
+			expErr: errors.New("open /bad/path: no such file or directory"),
+		},
+		"good config path; bad config": {
+			setup: func(t *testing.T, req *storage.BdevReadConfigRequest) {
+				t.Helper()
+				tmpDir := t.TempDir()
+				testCfg := filepath.Join(tmpDir, "spdk.conf")
+				if err := os.WriteFile(testCfg, []byte("bad config"), 0600); err != nil {
+					t.Fatal(err)
+				}
+				req.ConfigPath = testCfg
+			},
+			req:    storage.BdevReadConfigRequest{},
+			expErr: storage.FaultInvalidSPDKConfig(errors.New("invalid character 'b' looking for beginning of value")),
+		},
+		"good config path; good config": {
+			setup: func(t *testing.T, req *storage.BdevReadConfigRequest) {
+				t.Helper()
+				tmpDir := t.TempDir()
+				testCfg := filepath.Join(tmpDir, "spdk.conf")
+				data, err := json.Marshal(SpdkConfig{})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(testCfg, data, 0600); err != nil {
+					t.Fatal(err)
+				}
+				req.ConfigPath = testCfg
+			},
+			req:     storage.BdevReadConfigRequest{},
+			expResp: &storage.BdevReadConfigResponse{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.MustLogContext(t, test.Context(t))
+
+			if tc.setup != nil {
+				tc.setup(t, &tc.req)
+			}
+
+			b := &spdkBackend{
+				log: logging.FromContext(ctx),
+			}
+
+			gotResp, gotErr := b.ReadConfig(tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+				t.Fatalf("unexpected response (-want,+got):\n%s\n", diff)
+			}
 		})
 	}
 }
