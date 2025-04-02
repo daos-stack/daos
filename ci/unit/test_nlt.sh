@@ -14,6 +14,6 @@ mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 rsync -rlpt -z -e "ssh $SSH_KEY_ARGS" .build_vars* opt-daos.tar utils requirements-utest.txt jenkins@"$NODE":build/
 
 # shellcheck disable=SC2029
-ssh -tt "$SSH_KEY_ARGS" jenkins@"$NODE" "HTTP_PROXY=$HTTP_PROXY \
-                                         HTTPS_PROXY=$HTTPS_PROXY \
+ssh -tt "$SSH_KEY_ARGS" jenkins@"$NODE" "HTTP_PROXY=\"${HTTP_PROXY:-}\" \
+                                         HTTPS_PROXY=\"${HTTPS_PROXY:-}\" \
                                          $(cat "$mydir/test_nlt_node.sh")"
