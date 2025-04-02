@@ -272,6 +272,30 @@ func TestDmg_SystemCommands(t *testing.T) {
 			errors.New("--ranks and --rank-hosts options cannot be set together"),
 		},
 		{
+			"system start with ranks and ignore-admin-excluded",
+			"system start --ranks 0-3 --ignore-admin-excluded",
+			strings.Join([]string{
+				printRequest(t, withRanks(&control.SystemStartReq{IgnoreAdminExcluded: true}, 0, 1, 2, 3)),
+			}, " "),
+			nil,
+		},
+		{
+			"system start with hosts and ignore-admin-excluded",
+			"system start --rank-hosts foo-1 --ignore-admin-excluded",
+			strings.Join([]string{
+				printRequest(t, withHosts(&control.SystemStartReq{IgnoreAdminExcluded: true}, "foo-1")),
+			}, " "),
+			nil,
+		},
+		{
+			"system start all with ignore-admin-excluded",
+			"system start --ignore-admin-excluded",
+			strings.Join([]string{
+				printRequest(t, &control.SystemStartReq{IgnoreAdminExcluded: true}),
+			}, " "),
+			nil,
+		},
+		{
 			"system exclude with multiple ranks",
 			"system exclude --ranks 0,1,4",
 			strings.Join([]string{

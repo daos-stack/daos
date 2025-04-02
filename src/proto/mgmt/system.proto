@@ -56,6 +56,7 @@ message SystemStartReq {
 	string ranks = 2; // rankset to query
 	string hosts = 3; // hostset to query
 	bool check_mode = 4; // start ranks in check mode
+	bool ignore_admin_excluded = 5; // ignore AdminExcluded ranks specified in rank/host lists
 }
 
 // SystemStartResp returns status of restart attempt and results

@@ -229,6 +229,7 @@ func (cmd *systemStopCmd) Execute(_ []string) (errOut error) {
 // systemStartCmd is the struct representing the command to start system.
 type systemStartCmd struct {
 	baseRankListCmd
+	IgnoreAdminExcluded bool `long:"ignore-admin-excluded" description:"Ignore requested ranks in AdminExcluded state instead of returning an error"`
 }
 
 // Execute is run when systemStartCmd activates.
@@ -241,7 +242,9 @@ func (cmd *systemStartCmd) Execute(_ []string) (errOut error) {
 		return err
 	}
 
-	req := new(control.SystemStartReq)
+	req := &control.SystemStartReq{
+		IgnoreAdminExcluded: cmd.IgnoreAdminExcluded,
+	}
 	req.Hosts.Replace(&cmd.Hosts.HostSet)
 	req.Ranks.Replace(&cmd.Ranks.RankSet)
 
