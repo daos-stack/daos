@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -26,7 +27,7 @@ dfuse_oid_unlinked(struct dfuse_info *dfuse_info, fuse_req_t req, daos_obj_id_t 
 
 	ie = dfuse_inode_lookup(dfuse_info, ino);
 	if (!ie) {
-		DFUSE_REPLY_ZERO(parent, req);
+		fuse_reply_err(req, EPERM);
 		return;
 	}
 

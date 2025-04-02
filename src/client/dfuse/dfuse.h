@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -1345,5 +1346,7 @@ dfuse_cont_mknod(fuse_req_t req, struct dfuse_inode_entry *parent,
 void
 dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		  const char *name);
+
+#define DFUSE_LOG_CTRL_MODE (S_IFREG | 0222)
 
 #endif /* __DFUSE_H__ */

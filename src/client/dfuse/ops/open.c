@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,6 +19,14 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	bool                      prefetch = false;
 	bool                      preread  = false;
 	int                       flags;
+
+	if (ino == DFUSE_LOG_CTRL_INO) {
+		fi_out.fh          = ino;
+		fi_out.direct_io   = 1;
+		fi_out.nonseekable = 1;
+		fuse_reply_open(req, &fi_out);
+		return;
+	}
 
 	ie = dfuse_inode_lookup_nf(dfuse_info, ino);
 
@@ -145,6 +154,10 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	int                       rc;
 	uint32_t                  il_calls;
 
+	if (ino == DFUSE_LOG_CTRL_INO) {
+		fuse_reply_err(req, 0);
+		return;
+	}
 	/* Perform the opposite of what the ioctl call does, always change the open handle count
 	 * but the inode only tracks number of open handles with non-zero ioctl counts
 	 */

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -22,6 +23,110 @@ dfuse_cb_write_complete(struct dfuse_event *ev)
 	d_slab_release(ev->de_eqt->de_write_slab, ev);
 }
 
+struct log_variables {
+	char *mask;
+	char *streams;
+};
+
+int
+dfuse_log_var_parse_one(const char *name, char **ptr, const char *log_var, const char *value,
+			int len)
+{
+	if (strncmp(name, log_var, len) == 0) {
+		if (*ptr != NULL) {
+			D_ERROR("Duplication definition not supported in " DFUSE_LOG_CTRL "\n");
+			return -EINVAL;
+		}
+		D_STRNDUP(*ptr, value, len);
+		if (value == NULL)
+			return -ENOMEM;
+
+		return 1;
+	}
+
+	return 0;
+}
+
+int
+dfuse_process_log_var(struct log_variables *lv, char *log_var, char *value, int len)
+{
+	int rc;
+
+	if (log_var == NULL && value == NULL)
+		return 0;
+	if (value == NULL) {
+		D_ERROR("Empty value not supported in " DFUSE_LOG_CTRL "\n");
+		return EINVAL;
+	}
+
+	rc = dfuse_log_var_parse_one("log_mask", &lv->mask, log_var, value, len);
+	if (rc == 1)
+		return 0;
+	if (rc < 0)
+		return -rc;
+	rc = dfuse_log_var_parse_one("streams", &lv->streams, log_var, value, len);
+	if (rc == 1)
+		return 0;
+	if (rc < 0)
+		D_ERROR("Did not recognize variable %s\n", log_var);
+	return -rc;
+}
+
+int
+dfuse_set_log_mask_hdlr(struct fuse_bufvec *bufv, size_t len)
+{
+	struct log_variables lv   = {0};
+	struct fuse_bufvec   ibuf = FUSE_BUFVEC_INIT(len);
+	char                *buf;
+	char                *log_var = NULL;
+	char                *value   = NULL;
+	int                  rc      = 0;
+
+	D_ALLOC_ARRAY(buf, len + 1);
+	if (buf == NULL)
+		return ENOMEM;
+
+	ibuf.buf[0].mem = buf;
+	rc              = fuse_buf_copy(&ibuf, bufv, 0);
+	if (rc != len)
+		D_GOTO(out, rc = EIO);
+
+	buf[len] = '\n';
+	for (int i = 0; i < len; i++) {
+		if (buf[i] == '\n') {
+			buf[i] = '\0';
+			rc     = dfuse_process_log_var(&lv, log_var, value, len);
+			if (rc != 0)
+				goto out;
+			log_var = NULL;
+			value   = NULL;
+			continue;
+		}
+		if (log_var == NULL) {
+			if (!isalpha(buf[i]))
+				continue;
+			log_var = &buf[i];
+			continue;
+		}
+		if (value == NULL) {
+			if (buf[i] == '=') {
+				buf[i] = '\0';
+				value  = &buf[i + 1];
+			}
+		}
+	}
+
+	if (lv.mask)
+		D_INFO("Setting log_mask to %s\n", lv.mask);
+	if (lv.streams)
+		D_INFO("Setting streams to %s\n", lv.streams);
+	d_log_sync_mask_ex(lv.mask, lv.streams);
+out:
+	D_FREE(lv.mask);
+	D_FREE(lv.streams);
+	return rc;
+}
+
 void
 dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t position,
 	       struct fuse_file_info *fi)
@@ -35,6 +140,15 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 	struct dfuse_event   *ev;
 	uint64_t              eqt_idx;
 	bool                  wb_cache = false;
+
+	if (ino == DFUSE_LOG_CTRL_INO) {
+		rc = dfuse_set_log_mask_hdlr(bufv, len);
+		if (rc != 0)
+			fuse_reply_err(req, rc);
+		else
+			fuse_reply_write(req, len);
+		return;
+	}
 
 	DFUSE_IE_STAT_ADD(oh->doh_ie, DS_WRITE);
 
