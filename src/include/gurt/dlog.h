@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -367,6 +368,27 @@ void d_log_rank_setup(int rank);
 void d_log_sync_mask(void);
 
 void d_log_sync_mask_ex(const char *log_mask, const char *dd_mask);
+
+/**
+ * The user of d_log_parse_config has data they pass in but it's not necessarily
+ * in a usable format.  The function d_log_parse_config will allocate an
+ * appropriately sized buffer and pass it to the copy_cb with the config which
+ * the callback must fill up to len bytes
+ */
+typedef int (*d_log_copy_cb)(char *buf, int len, void *config);
+
+/**
+ * Parse a log config
+ *
+ * \param[in] config	Opaque pointer representing the original config
+ * \param[in] len	Length of data in config
+ * \param[in] copy_cb	Function to fill a supplied buffer with the original
+ *                      data
+ *
+ * \return 0 on success or appropriate error code
+ */
+int
+     d_log_parse_config(void *config, int len, d_log_copy_cb copy_cb);
 
 /**
  * open a dlog.

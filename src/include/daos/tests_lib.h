@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -13,22 +14,6 @@
 #include <daos_mgmt.h>
 #include <daos/object.h>
 #include <daos/credit.h>
-
-#define assert_rc_equal(rc, expected_rc)                                                           \
-	do {                                                                                       \
-		int __rc = (rc);                                                                   \
-		if (__rc == (expected_rc))                                                         \
-			break;                                                                     \
-		print_message("Failure assert_rc_equal %s:%d "                                     \
-			      "%s(%d) != %s(%d)\n",                                                \
-			      __FILE__, __LINE__, d_errstr(__rc), __rc, d_errstr(expected_rc),     \
-			      expected_rc);                                                        \
-		assert_string_equal(d_errstr(__rc), d_errstr(expected_rc));                        \
-		assert_int_equal(__rc, expected_rc);                                               \
-	} while (0)
-
-/** Just use assert_rc_equal since it will ensure the problem is reported in the Jenkins output */
-#define assert_success(r) assert_rc_equal(r, 0)
 
 #define DTS_OCLASS_DEF OC_RP_XSF
 

@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,6 +10,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <ctype.h>
 
 #include <gurt/common.h>
 
@@ -620,4 +622,144 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 		return 0;
 	}
 	return -DER_INVAL;
+}
+
+struct log_variables {
+	char *mask;
+	char *streams;
+};
+
+static int
+d_log_var_parse_one(const char *name, char **ptr, const char *log_var, const char *value, int len)
+{
+	if (strncmp(name, log_var, len) == 0) {
+		if (*ptr != NULL) {
+			D_ERROR("Duplication definition not supported in log config\n");
+			return -DER_INVAL;
+		}
+		D_STRNDUP(*ptr, value, len);
+		if (value == NULL)
+			return -DER_NOMEM;
+
+		return 1;
+	}
+
+	return 0;
+}
+
+static void
+trim(char **strp, int *lenp)
+{
+	char *str = *strp;
+	int   len = strnlen(str, *lenp);
+
+	/* left trim */
+	while (len > 0 && isspace(*str)) {
+		len--;
+		str++;
+	}
+
+	while (len > 0 && isspace(str[len - 1])) {
+		str[len - 1] = '\0';
+		len--;
+	}
+
+	*strp = str;
+	*lenp = len;
+}
+
+static int
+d_process_log_var(struct log_variables *lv, char *log_var, char *value, int len)
+{
+	int rc;
+	/** Initial length doesn't matter, just make strnlen happy. The strings
+	 * are null terminated and len will be larger than the length.
+	 */
+	int log_var_len = len;
+	int value_len   = len;
+
+	trim(&log_var, &log_var_len);
+	trim(&value, &value_len);
+
+	if (log_var_len == 0) {
+		if (value_len == 0)
+			return 0;
+		D_ERROR("Value without log_var %s in log config\n", value);
+		return -DER_INVAL;
+	}
+
+	if (value_len == 0) {
+		D_ERROR("Empty value not supported for %s in log config\n", log_var);
+		return -DER_INVAL;
+	}
+
+	rc = d_log_var_parse_one("log_mask", &lv->mask, log_var, value, sizeof("log_mask"));
+	if (rc == 1)
+		return 0;
+	if (rc < 0)
+		return rc;
+	rc = d_log_var_parse_one("streams", &lv->streams, log_var, value, sizeof("streams"));
+	if (rc == 1)
+		return 0;
+	if (rc == 0) {
+		D_ERROR("Unrecognized variable %s in log config\n", log_var);
+		rc = -DER_INVAL;
+	}
+	return rc;
+}
+
+int
+d_log_parse_config(void *config, int len, d_log_copy_cb copy_cb)
+{
+	struct log_variables lv      = {0};
+	char                *buf     = NULL;
+	char                *log_var = NULL;
+	char                *value   = NULL;
+	int                  rc      = 0;
+	char                *saveptr1;
+	char                *loc;
+	char                *str1;
+
+	/** Extra byte allocated for possible NUL character */
+	D_ALLOC_ARRAY(buf, len + 1);
+	if (buf == NULL)
+		return -DER_NOMEM;
+
+	rc = copy_cb(buf, len, config);
+	if (rc != 0)
+		goto free_buf;
+
+	buf[len] = '\0';
+	for (str1 = buf;; str1 = NULL) {
+		log_var = strtok_r(str1, "\n", &saveptr1);
+		if (log_var == NULL)
+			break;
+		loc = strchr(log_var, '=');
+		if (loc == NULL) {
+			D_ERROR("Could not parse value from '%s'\n", log_var);
+		}
+		*loc  = '\0';
+		value = loc + 1;
+
+		rc = d_process_log_var(&lv, log_var, value, len);
+		if (rc != 0)
+			goto out;
+	}
+
+	if (lv.mask)
+		D_INFO("Setting log_mask to %s\n", lv.mask);
+	else
+		D_INFO("No update to log_mask\n");
+	if (lv.streams)
+		D_INFO("Setting streams to %s\n", lv.streams);
+	else
+		D_INFO("No update to streams\n");
+
+	d_log_sync_mask_ex(lv.mask, lv.streams);
+out:
+	D_FREE(lv.mask);
+	D_FREE(lv.streams);
+free_buf:
+	D_FREE(buf);
+	return rc;
 }
