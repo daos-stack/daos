@@ -428,7 +428,6 @@ def load_conf(args):
 
 def get_base_env(clean=False):
     """Return the base set of env vars needed for DAOS"""
-    # If set, retain the HTTPS_PROXY for valgrind
     if clean:
         env = {}
     else:
