@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -328,6 +329,30 @@ func (h *bdevWriteConfigHandler) Handle(log logging.Logger, req *pbin.Request) *
 	h.setupProvider(log)
 
 	fRes, err := h.bdevProvider.WriteConfig(fReq)
+	if err != nil {
+		return pbin.NewResponseWithError(err)
+	}
+
+	return pbin.NewResponseWithPayload(fRes)
+}
+
+type bdevReadConfigHandler struct {
+	bdevHandler
+}
+
+func (h *bdevReadConfigHandler) Handle(log logging.Logger, req *pbin.Request) *pbin.Response {
+	if req == nil {
+		return getNilRequestResp()
+	}
+
+	var fReq storage.BdevReadConfigRequest
+	if err := json.Unmarshal(req.Payload, &fReq); err != nil {
+		return pbin.NewResponseWithError(err)
+	}
+
+	h.setupProvider(log)
+
+	fRes, err := h.bdevProvider.ReadConfig(fReq)
 	if err != nil {
 		return pbin.NewResponseWithError(err)
 	}

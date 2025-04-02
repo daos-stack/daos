@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -126,6 +127,10 @@ func (mb *MockBackend) WriteConfig(req storage.BdevWriteConfigRequest) (*storage
 	default:
 		return mb.cfg.WriteConfRes, nil
 	}
+}
+
+func (mb *MockBackend) ReadConfig(_ storage.BdevReadConfigRequest) (*storage.BdevReadConfigResponse, error) {
+	return &storage.BdevReadConfigResponse{}, nil
 }
 
 func NewMockProvider(log logging.Logger, mbc *MockBackendConfig) *Provider {
