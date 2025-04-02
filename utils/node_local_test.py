@@ -428,10 +428,18 @@ def load_conf(args):
 
 def get_base_env(clean=False):
     """Return the base set of env vars needed for DAOS"""
+    # If set, retain the HTTPS_PROXY for valgrind
+    https_proxy = os.environ.get('HTTPS_PROXY')
+
     if clean:
         env = {}
     else:
         env = os.environ.copy()
+
+    if https_proxy:
+        print(f"Using HTTPS_PROXY={https_proxy}")
+        env['HTTPS_PROXY'] = https_proxy
+
     env['DD_MASK'] = 'all'
     env['DD_SUBSYS'] = 'all'
     env['D_LOG_MASK'] = 'DEBUG'
@@ -444,8 +452,6 @@ def get_base_env(clean=False):
 
     # Otherwise max number of contexts will be limited by number of cores
     env['CRT_CTX_NUM'] = '32'
-
-    print(f"<debug> ENV={env}")
 
     return env
 
