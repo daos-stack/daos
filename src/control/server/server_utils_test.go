@@ -324,16 +324,16 @@ func TestServer_prepBdevStorage(t *testing.T) {
 					WithEngines(pmemEngine(0))
 			},
 			overrideUser:   "root",
-			hugepagesFree:  16386,
-			hugepagesTotal: 16386,
+			hugepagesFree:  8194,
+			hugepagesTotal: 8194,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugepageCount: 16386,
+				HugepageCount: 8194,
 				HugeNodes:     "0",
 				TargetUser:    "root",
 				DisableVFIO:   true,
 				PCIAllowList:  test.MockPCIAddr(0),
 			},
-			expMemSize:      32772,
+			expMemSize:      16388,
 			expHugepageSize: 2,
 		},
 		"non-nvme bdevs; vfio disabled": {
@@ -341,15 +341,15 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				return sc.WithDisableVFIO(true).
 					WithEngines(pmemFakeNvmeEngine(0))
 			},
-			hugepagesFree:  16386,
-			hugepagesTotal: 16386,
+			hugepagesFree:  8194,
+			hugepagesTotal: 8194,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugepageCount: 16386,
+				HugepageCount: 8194,
 				HugeNodes:     "0",
 				TargetUser:    username,
 				DisableVFIO:   true,
 			},
-			expMemSize:      32772,
+			expMemSize:      16388,
 			expHugepageSize: 2,
 		},
 		"iommu disabled": {
@@ -365,15 +365,15 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				return sc.WithEngines(pmemEngine(0))
 			},
 			overrideUser:   "root",
-			hugepagesFree:  16386,
-			hugepagesTotal: 16386,
+			hugepagesFree:  8194,
+			hugepagesTotal: 8194,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugepageCount: 16386,
+				HugepageCount: 8194,
 				HugeNodes:     "0",
 				TargetUser:    "root",
 				PCIAllowList:  test.MockPCIAddr(0),
 			},
-			expMemSize:      32772,
+			expMemSize:      16388,
 			expHugepageSize: 2,
 		},
 		"non-nvme bdevs; iommu disabled": {
@@ -381,14 +381,14 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithEngines(pmemFakeNvmeEngine(0))
 			},
-			hugepagesFree:  16386,
-			hugepagesTotal: 16386,
+			hugepagesFree:  8194,
+			hugepagesTotal: 8194,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugepageCount: 16386,
+				HugepageCount: 8194,
 				HugeNodes:     "0",
 				TargetUser:    username,
 			},
-			expMemSize:      32772,
+			expMemSize:      16388,
 			expHugepageSize: 2,
 		},
 		"no bdevs configured; hugepages disabled": {
