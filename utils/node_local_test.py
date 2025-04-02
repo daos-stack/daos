@@ -445,6 +445,8 @@ def get_base_env(clean=False):
     # Otherwise max number of contexts will be limited by number of cores
     env['CRT_CTX_NUM'] = '32'
 
+    print(f"<debug> ENV={env}")
+
     return env
 
 
