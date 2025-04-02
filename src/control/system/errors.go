@@ -160,7 +160,7 @@ func (err *ErrJoinFailure) Error() string {
 	}
 }
 
-func ErrRankChanged(new, cur ranklist.Rank, uuid uuid.UUID) *ErrJoinFailure {
+func ErrJoinRankChanged(new, cur ranklist.Rank, uuid uuid.UUID) *ErrJoinFailure {
 	return &ErrJoinFailure{
 		rankChanged: true,
 		curUUID:     &uuid,
@@ -169,7 +169,7 @@ func ErrRankChanged(new, cur ranklist.Rank, uuid uuid.UUID) *ErrJoinFailure {
 	}
 }
 
-func ErrUuidChanged(new, cur uuid.UUID, rank ranklist.Rank) *ErrJoinFailure {
+func ErrJoinUuidChanged(new, cur uuid.UUID, rank ranklist.Rank) *ErrJoinFailure {
 	return &ErrJoinFailure{
 		uuidChanged: true,
 		newUUID:     &new,
@@ -178,7 +178,7 @@ func ErrUuidChanged(new, cur uuid.UUID, rank ranklist.Rank) *ErrJoinFailure {
 	}
 }
 
-func ErrControlAddrChanged(new, cur *net.TCPAddr, uuid uuid.UUID, rank ranklist.Rank) *ErrJoinFailure {
+func ErrJoinControlAddrChanged(new, cur *net.TCPAddr, uuid uuid.UUID, rank ranklist.Rank) *ErrJoinFailure {
 	return &ErrJoinFailure{
 		addrChanged: true,
 		curUUID:     &uuid,
@@ -188,7 +188,7 @@ func ErrControlAddrChanged(new, cur *net.TCPAddr, uuid uuid.UUID, rank ranklist.
 	}
 }
 
-func ErrAdminExcluded(uuid uuid.UUID, rank ranklist.Rank) *ErrJoinFailure {
+func ErrJoinAdminExcluded(uuid uuid.UUID, rank ranklist.Rank) *ErrJoinFailure {
 	return &ErrJoinFailure{
 		isExcluded: true,
 		curUUID:    &uuid,

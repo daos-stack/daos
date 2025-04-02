@@ -84,6 +84,18 @@ func mockRankSuccess(a string, r uint32, n ...int32) *sharedpb.RankResult {
 	return rr
 }
 
+func mockRankIgnored(a string, r uint32, n ...int32) *sharedpb.RankResult {
+	rr := &sharedpb.RankResult{
+		Rank: r, Msg: a + " ignored on AdminExcluded rank",
+		State:  stateString(system.MemberStateAdminExcluded),
+		Action: a,
+	}
+	if len(n) > 0 {
+		rr.Addr = test.MockHostAddr(n[0]).String()
+	}
+	return rr
+}
+
 var defEvtCmpOpts = append(test.DefaultCmpOpts(),
 	cmpopts.IgnoreUnexported(events.RASEvent{}),
 	cmpopts.IgnoreFields(events.RASEvent{}, "Timestamp"))
@@ -1553,6 +1565,43 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 				mockMember(t, 2, 2, "ready"),
 				mockMember(t, 3, 2, "joined"),
 			},
+		},
+		"ignore adminexcluded ranks": {
+			req: &mgmtpb.SystemStartReq{},
+			members: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "stopped"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "stopped"),
+			},
+			mResps: []*control.HostResponse{
+				hr(1, mockRankSuccess("start", 0), mockRankSuccess("start", 1)),
+				hr(2, mockRankIgnored("start", 2), mockRankSuccess("start", 3)),
+			},
+			expResults: []*sharedpb.RankResult{
+				mockRankSuccess("start", 0, 1),
+				mockRankSuccess("start", 1, 1),
+				mockRankIgnored("start", 2, 2),
+				mockRankSuccess("start", 3, 2),
+			},
+			expMembers: system.Members{
+				mockMember(t, 0, 1, "ready"),
+				mockMember(t, 1, 1, "ready"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "ready"),
+			},
+		},
+		"specifically requested adminexcluded ranks": {
+			req: &mgmtpb.SystemStartReq{
+				Ranks: "1-3",
+			},
+			members: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "stopped"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "stopped"),
+			},
+			expAPIErr: errors.New("TBD"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
