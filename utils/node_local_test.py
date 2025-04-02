@@ -1265,7 +1265,8 @@ class ValgrindHelper():
                '--xml=yes',
                '--fair-sched=yes',
                '--gen-suppressions=all',
-               '--error-exitcode=42']
+               '--error-exitcode=42',
+               '--verbose']
 
         if self.full_check:
             cmd.extend(['--leak-check=full', '--show-leak-kinds=all'])
@@ -1417,11 +1418,6 @@ class DFuse():
             if self.container:
                 cmd.extend(['--container', self.container])
 
-        # Debug
-        my_env['D_LOG_MASK'] = 'DEBUG'
-        my_env['D_LOG_FLUSH'] = 'DEBUG'
-
-
         print(f"Running {' '.join(cmd)}")
         # pylint: disable-next=consider-using-with
         self._sp = subprocess.Popen(cmd, env=my_env)
@@ -1446,15 +1442,6 @@ class DFuse():
                 # Kill the unresponsive dfuse command
                 self._sp.send_signal(signal.SIGTERM)
                 self._sp = None
-
-                # Report any errors for the log
-                wrapper = NltStdoutWrapper()
-                wrapper.sprint(f'Dfuse not started within 60 seconds; contents of {self.log_file}:')
-                with open(self.log_file, 'r', encoding='utf-8') as lf:
-                    for line in lf.readlines():
-                        wrapper.sprint(f'  {line}')
-                wrapper = None
-
                 raise NLTestFail('Timeout starting dfuse')
 
         self._daos.add_fuse(self)
