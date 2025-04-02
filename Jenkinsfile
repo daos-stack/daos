@@ -625,7 +625,7 @@ pipeline {
                 stage('Build on EL 8') {
                     when {
                         beforeAgent true
-                        expression { params.'CI_el8_BUILD' && !skipStage() }
+                        expression { params.CI_el8_BUILD && !skipStage() }
                     }
                     agent {
                         dockerfile {
@@ -663,7 +663,7 @@ pipeline {
                 stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
-                        expression { params.'CI_leap15_BUILD' &&  !skipStage() }
+                        expression { params.CI_leap15_BUILD &&  !skipStage() }
                     }
                     agent {
                         dockerfile {
@@ -751,7 +751,7 @@ pipeline {
                 stage('NLT on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { params.'CI_NLT_TEST' && !skipStage() }
+                        expression { params.CI_NLT_TEST && !skipStage() }
                     }
                     agent {
                         label params.CI_NLT_1_LABEL

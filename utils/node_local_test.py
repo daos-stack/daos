@@ -429,22 +429,20 @@ def load_conf(args):
 def get_base_env(clean=False):
     """Return the base set of env vars needed for DAOS"""
     # If set, retain the HTTPS_PROXY for valgrind
-    https_proxy = os.environ.get('HTTPS_PROXY')
-
     if clean:
         env = {}
     else:
         env = os.environ.copy()
-
-    if https_proxy:
-        print(f"Using HTTPS_PROXY={https_proxy}")
-        env['HTTPS_PROXY'] = https_proxy
-
     env['DD_MASK'] = 'all'
     env['DD_SUBSYS'] = 'all'
     env['D_LOG_MASK'] = 'DEBUG'
     env['D_LOG_SIZE'] = '5g'
     env['FI_UNIVERSE_SIZE'] = '128'
+
+    # If set, retain the HTTPS_PROXY for valgrind
+    http_proxy = os.environ.get('HTTPS_PROXY')
+    if http_proxy:
+        env['HTTPS_PROXY'] = http_proxy
 
     # Enable this to debug memory errors, it has a performance impact but will scan the heap
     # for corruption.  See DAOS-12735 for why this can cause problems in practice.
@@ -1273,8 +1271,10 @@ class ValgrindHelper():
                '--xml=yes',
                '--fair-sched=yes',
                '--gen-suppressions=all',
-               '--error-exitcode=42',
-               '--verbose']
+               '--error-exitcode=42']
+
+        if self.conf.args.valgrind_verbose:
+            cmd.append('--verbose')
 
         if self.full_check:
             cmd.extend(['--leak-check=full', '--show-leak-kinds=all'])
@@ -6772,6 +6772,7 @@ def main():
     parser.add_argument('--test', action='append', help="Use '--test list' for list")
     parser.add_argument('--exclude-test', action='append',
                         help='space separated list of tests to exclude')
+    parser.add_argument('--valgrind_verbose', action='store_true', help='Use --verbose w/ valgrind')
     parser.add_argument('mode', nargs='*')
     args = parser.parse_args()
 
