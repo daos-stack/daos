@@ -213,6 +213,9 @@ pipeline {
                             'stages.  Specifies the default provider to use the daos_server ' +
                             'config file when running functional tests (the launch.py ' +
                             '--provider argument; i.e. "ucx+dc_x", "ofi+verbs", "ofi+tcp")')
+        booleanParam(name: 'CI_SKIP_CANCEL_PREV_BUILD',
+                     defaultValue: false,
+                     description: 'Do not cancel previous build.')
         booleanParam(name: 'CI_BUILD_PACKAGES_ONLY',
                      defaultValue: false,
                      description: 'Only build RPM and DEB packages, Skip unit tests.')
@@ -412,16 +415,15 @@ pipeline {
                 }
             } // parallel
         } // stage('Check PR')
-// Lets skip this and cancel previous build manually
-        // stage('Cancel Previous Builds') {
-        //     when {
-        //         beforeAgent true
-        //         expression { !skipStage() }
-        //     }
-        //     steps {
-        //         cancelPreviousBuilds()
-        //     }
-        // }
+        stage('Cancel Previous Builds') {
+            when {
+                beforeAgent true
+                expression { !paramsValue('CI_SKIP_CANCEL_PREV_BUILD', false)  && !skipStage() }
+            }
+            steps {
+                cancelPreviousBuilds()
+            }
+        }
         stage('Pre-build') {
             when {
                 beforeAgent true
