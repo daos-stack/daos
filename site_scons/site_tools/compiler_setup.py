@@ -126,7 +126,7 @@ def _base_setup(env):
         env.AppendUnique(CCFLAGS=["-fprofile-arcs", "-ftest-coverage"])
         env.AppendUnique(LDFLAGS=["-lgcov", "--coverage -g -O0"])
         env.AppendUnique(CGO_CFLAGS=["-fprofile-arcs", "-ftest-coverage"])
-        env.AppendUnique(CGO_LDFLAGS=["-lgcov", "--coverage -g -O0"])
+        env.AppendUnique(CGO_LDFLAGS=["-lgcov", "--coverage"])
         env.AppendUnique(LIBS=['gcov'])
 
 
