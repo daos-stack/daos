@@ -18,3 +18,8 @@ if ! sudo umount "$DAOS_BASE"; then
   echo 'Failed to unmount '"$DAOS_BASE"
   ps axf
 fi
+
+# Run code coverage gcovr
+if find build -name *.gcda; then
+  gcovr -r build --html code_coverage_report.html
+fi
