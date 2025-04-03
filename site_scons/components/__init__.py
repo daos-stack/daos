@@ -355,15 +355,13 @@ def define_components(reqs):
                            '--prefix=$SPDK_PREFIX',
                            '--disable-tests',
                            '--disable-unit-tests',
-                           '--disable-apps',
                            '--without-vhost',
                            '--without-crypto',
-                           '--without-pmdk',
                            '--without-rbd',
                            '--without-iscsi-initiator',
-                           '--without-isal',
                            '--without-vtune',
                            '--with-shared',
+                           '--without-nvme-cuse',
                            f'--target-arch={spdk_arch}'],
                           ['make', f'CONFIG_ARCH={spdk_arch}'],
                           ['make', 'install'],
@@ -372,9 +370,8 @@ def define_components(reqs):
                           ['mkdir', '-p', '$SPDK_PREFIX/share/spdk'],
                           ['cp', '-r', 'include', 'scripts', '$SPDK_PREFIX/share/spdk'],
                           ['cp', 'build/examples/lsvmd', '$SPDK_PREFIX/bin/spdk_nvme_lsvmd'],
-                          ['cp', 'build/examples/nvme_manage', '$SPDK_PREFIX/bin/spdk_nvme_manage'],
-                          ['cp', 'build/examples/identify', '$SPDK_PREFIX/bin/spdk_nvme_identify'],
-                          ['cp', 'build/examples/perf', '$SPDK_PREFIX/bin/spdk_nvme_perf']],
+                          ['cp', 'build/examples/nvme_manage', '$SPDK_PREFIX/bin/spdk_nvme_manage']
+                          ],
                 headers=['spdk/nvme.h'],
                 patch_rpath=['lib', 'bin'])
 
