@@ -145,7 +145,7 @@ enum {
 extern uint32_t vos_agg_gap;
 
 #define VOS_AGG_GAP_MIN		20 /* seconds */
-#define VOS_AGG_GAP_DEF		60
+#define VOS_AGG_GAP_DEF         25
 #define VOS_AGG_GAP_MAX		180
 
 extern unsigned int vos_agg_nvme_thresh;
