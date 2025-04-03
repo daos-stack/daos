@@ -1,3 +1,9 @@
+daos (2.7.101-9) unstable; urgency=medium
+  [ Samirkumar Raval ]
+  * Changing the default log location to /var/log/daos from /tmp
+
+ -- Samirkumar Raval <samirkumar.raval@hpe.com>  Thu, 4 Apr 2025 11:55:00 +0000
+
 daos (2.7.101-8) unstable; urgency=medium
   [ Cedric Koch-Hofer]
   * Add support of the libasan
