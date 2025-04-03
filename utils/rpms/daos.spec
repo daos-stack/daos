@@ -25,6 +25,12 @@
 %define __find_requires %{SOURCE1}
 %endif
 
+%if %{with olddaos}
+%define buildspec daos_old.spec
+%else
+%define buildspec daos_new.spec
+%endif
+
 Name:          daos
 Version:       2.7.101
 Release:       8%{?relval}%{?dist}
@@ -34,12 +40,6 @@ License:       BSD-2-Clause-Patent
 URL:           https://github.com/daos-stack/daos
 Source0:       %{name}-%{version}.tar.gz
 Source1:       bz-1955184_find-requires
-
-%if %{with olddaos}
-%define buildspec daos_old.spec
-%else
-%define buildspec daos_new.spec
-%endif
 
 %include %{buildspec}
 
