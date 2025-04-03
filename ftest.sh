@@ -73,9 +73,9 @@ ls ~/.ssh
 touch ~/.ssh/known_hosts
 chmod 600 ~/.ssh/known_hosts
 for host in "$(IFS=','; echo "${nodes[*]}")"; do
-    echo "Removing all keys from known_hosts file for $host"
+    echo "Removing all keys from known_hosts file for $host" # shellcheck disable=SC2086
     ssh-keygen -R $host
-    echo "Add new key for $host to known_hosts"
+    echo "Add new key for $host to known_hosts" # shellcheck disable=SC2086
     ssh-keyscan $host >> ~/.ssh/known_hosts
 done
 
