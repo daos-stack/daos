@@ -293,7 +293,7 @@ def define_components(reqs):
                            'prefix=$PMDK_PREFIX']],
                 libs=['pmemobj'],
                 pkgconfig='libpmemobj',
-                build_env={'DESTDIR': '$SANDBOX_PREFIX'})
+                build_env={'DESTDIR': '$SANDBOX_PREFIX', 'LIBS': "-lpthread"})
     abt_build = ['./configure',
                  '--prefix=$ARGOBOTS_PREFIX',
                  'CC=gcc',
@@ -321,10 +321,10 @@ def define_components(reqs):
                           abt_build,
                           ['make'],
                           ['make', 'install']],
-                requires=['libunwind', 'pthread'],
+                requires=['libunwind'],
                 libs=['abt'],
                 headers=['abt.h'],
-                build_env={'DESTDIR': '$SANDBOX_PREFIX'})
+                build_env={'DESTDIR': '$SANDBOX_PREFIX', 'LIBS': '-lpthread'})
 
     reqs.define('fuse', libs=['fuse3'], defines=['FUSE_USE_VERSION=35'],
                 retriever=GitRepoRetriever(),
