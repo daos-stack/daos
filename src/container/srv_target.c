@@ -967,9 +967,10 @@ cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 	 * 3. Pool service is going to be stopped;
 	 */
 	if (cont_child->sc_stopping || cont_child->sc_destroying) {
-		D_ERROR(DF_CONT"[%d]: Container is being stopped or destroyed (s=%d, d=%d)\n",
-			DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id,
-			cont_child->sc_stopping, cont_child->sc_destroying);
+		D_DEBUG(DB_MD,
+			DF_CONT "[%d]: Container is being stopped or destroyed (s=%d, d=%d)\n",
+			DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id, cont_child->sc_stopping,
+			cont_child->sc_destroying);
 		rc = -DER_SHUTDOWN;
 	} else if (!cont_child_started(cont_child)) {
 		if (!ds_pool_restricted(pool_child->spc_pool, false)) {
@@ -1262,7 +1263,7 @@ cont_child_destroy_one(void *vin)
 	}
 
 	if (cont->sc_destroying) {
-		D_ERROR(DF_CONT ": Container is already being destroyed\n",
+		D_DEBUG(DB_MD, DF_CONT ": Container is already being destroyed\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
 		cont_child_put(tls->dt_cont_cache, cont);
 		D_GOTO(out_pool, rc = -DER_BUSY);
@@ -2775,9 +2776,9 @@ cont_child_prop_update(void *data)
 	}
 	D_ASSERT(child != NULL);
 	if (child->sc_stopping || child->sc_destroying) {
-		D_ERROR(DF_CONT" is being stopping or destroyed (s=%d, d=%d)\n",
-			DP_CONT(arg->cpa_pool_uuid, arg->cpa_cont_uuid),
-			child->sc_stopping, child->sc_destroying);
+		D_DEBUG(DB_MD, DF_CONT " is being stopping or destroyed (s=%d, d=%d)\n",
+			DP_CONT(arg->cpa_pool_uuid, arg->cpa_cont_uuid), child->sc_stopping,
+			child->sc_destroying);
 		rc = -DER_SHUTDOWN;
 		goto out;
 	}
