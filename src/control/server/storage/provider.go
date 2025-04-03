@@ -461,14 +461,12 @@ func BdevFormatRequestFromConfig(log logging.Logger, cfg *TierConfig) (BdevForma
 		OwnerGID:   os.Getegid(),
 	}
 
-	if req.Hostname == "" {
-		hn, err := os.Hostname()
-		if err != nil {
-			log.Errorf("get hostname: %s", err)
-			return req, err
-		}
-		req.Hostname = hn
+	hn, err := os.Hostname()
+	if err != nil {
+		log.Errorf("get hostname: %s", err)
+		return req, err
 	}
+	req.Hostname = hn
 
 	return req, nil
 }
@@ -687,24 +685,24 @@ func (p *Provider) ValidateBdevConfig(ctx context.Context, ctrlrs NvmeController
 	}
 
 	_, err := p.ReadNvmeConfig(ctx)
-	if err == nil {
-		// For now, we'll just assume that if we can read the config file, then
-		// we don't need to do anything else.
-		return nil
+	if err != nil {
+		// Take the conservative approach that if we expect there to have been a config
+		// file and it's not there, then we need the admin to investigate.
+		if !fault.IsFaultCode(err, code.SpdkInvalidConfiguration) {
+			p.log.Errorf("Missing or unreadable bdev config file: %s", p.engineStorage.ConfigOutputPath)
+			return err
+		}
+
+		// Otherwise, if the config file is there but we can't understand it, then
+		// it's probably from a different version of DAOS and we should just regenerate
+		// it based on our version of the configuration.
+		p.log.Notice("The bdev config file was unparsable; regenerating it.")
+		return p.WriteNvmeConfig(ctx, p.log, ctrlrs)
 	}
 
-	// Take the conservative approach that if we expect there to have been a config
-	// file and it's not there, then we need the admin to investigate.
-	if !fault.IsFaultCode(err, code.SpdkInvalidConfiguration) {
-		p.log.Errorf("Missing bdev config file: %s", p.engineStorage.ConfigOutputPath)
-		return err
-	}
-
-	// Otherwise, if the config file is there but we can't understand it, then
-	// it's probably from a different version of DAOS and we should just regenerate
-	// it based on our version of the configuration.
-	p.log.Notice("The bdev config file was unparsable; regenerating it.")
-	return p.WriteNvmeConfig(ctx, p.log, ctrlrs)
+	// For now, we'll just assume that if we can read the config file, then
+	// we don't need to do anything else.
+	return nil
 }
 
 // NewProvider returns an initialized storage provider.
