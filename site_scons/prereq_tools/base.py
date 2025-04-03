@@ -1342,7 +1342,10 @@ class _Component():
         new_env = self.prereqs.system_env.Clone()
         self.set_environment(new_env, needed_libs)
         if self.has_missing_targets(new_env):
+            self.use_installed = False
+            print(f"{self.name} failed install check")
             return False
+        print(f"{self.name} passed install check")
         return True
 
     def configure(self):
@@ -1530,8 +1533,10 @@ class _Component():
 
         build_dep = self.prereqs.build_deps
         if self.use_installed:
+            print(f"{self.name} should be installed")
             build_dep = False
         if self.component_prefix and os.path.exists(self.component_prefix):
+            print(f"{self.name} already has a build directory")
             build_dep = False
 
         # If a component has both a package name and builder then check if the package can be used
@@ -1541,6 +1546,7 @@ class _Component():
             if self.package:
                 missing_targets = self.has_missing_targets(envcopy)
                 if not missing_targets:
+                    print(f"{self.name} is not actually installed, building...")
                     build_dep = False
         else:
             missing_targets = self.has_missing_targets(envcopy)
