@@ -23,7 +23,7 @@
 
 Name:          daos
 Version:       2.7.101
-Release:       7%{?relval}%{?dist}
+Release:       9%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -82,9 +82,6 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-%if %{with server}
-BuildRequires: daos-raft-devel = 0.11.0-1.416.g12dbc15%{?dist}
-%endif
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -126,6 +123,14 @@ BuildRequires: systemd-rpm-macros
 %endif
 %endif
 BuildRequires: libuuid-devel
+
+# Needed for debugging tasks
+%if (0%{?rhel} >= 8)
+BuildRequires: libasan
+%endif
+%if (0%{?suse_version} > 0)
+BuildRequires: libasan8
+%endif
 
 Requires: openssl
 # This should only be temporary until we can get a stable upstream release
@@ -634,8 +639,14 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Wed Mar 19 2025 Samirkumar Raval <samirkumar.raval@hpe.com> 2.7.101-7
+* Thu Apr 3 2025 Samirkumar Raval <samirkumar.raval@hpe.com> 2.7.101-9
 - Changing the default log location to /var/log/daos from /tmp
+
+* Fri Mar 21 2025  Cedric Koch-Hofer <cedric.koch-hofer@intel.com> 2.7.101-8
+- Add support of the libasan
+
+* Tue Mar 18 2025 Jeff Olivier  <jeffolivier@google.com> 2.7.101-7
+- Remove raft as external dependency
 
 * Mon Mar 10 2025 Jeff Olivier <jeffolivie@google.com> 2.7.101-6
 - Remove server from Ubuntu packaging and fix client only build
