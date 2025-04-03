@@ -141,6 +141,15 @@ void rpm_test_post(String stage_name, String node) {
     job_status_update()
 }
 
+String sconsArgs() {
+    if (!params.CI_SCONS_ARGS) {
+        return sconsFaultsArgs()
+    }
+
+    println("Compiling DAOS with custom arguments")
+    return sconsFaultsArgs() + ' ' + params.CI_SCONS_ARGS
+}
+
 /**
  * Update default commit pragmas based on files modified.
  */
@@ -164,7 +173,7 @@ pipeline {
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
         COVFN_DISABLED = cachedCommitPragma(pragma: 'Skip-fnbullseye', def_val: 'true')
         REPO_FILE_URL = repoFileUrl(env.REPO_FILE_URL)
-        SCONS_FAULTS_ARGS = sconsFaultsArgs()
+        SCONS_FAULTS_ARGS = sconsArgs()
     }
 
     options {
@@ -334,6 +343,9 @@ pipeline {
         string(name: 'CI_BUILD_DESCRIPTION',
                defaultValue: '',
                description: 'A description of the build')
+        string(name: 'CI_SCONS_ARGS',
+               defaultValue: '',
+               description: 'Arguments for scons when building DAOS')
     }
 
     stages {
@@ -616,7 +628,7 @@ pipeline {
                                        stash_files: 'ci/test_files_to_stash.txt',
                                        build_deps: 'no',
                                        stash_opt: true,
-                                       scons_args: sconsFaultsArgs() +
+                                       scons_args: sconsArgs() +
                                                   ' PREFIX=/opt/daos TARGET_TYPE=release'))
                     }
                     post {

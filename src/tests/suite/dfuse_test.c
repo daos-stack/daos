@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2021-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -32,13 +33,14 @@
 #include <dirent.h>
 #include <sys/wait.h>
 #include <sys/uio.h>
+#include <sys/file.h>
 
 #include <dfuse_ioctl.h>
 
 /* Tests can be run by specifying the appropriate argument for a test or all will be run if no test
  * is specified.
  */
-static const char *all_tests = "ismdlfec";
+static const char *all_tests = "ismdlkfec";
 
 static void
 print_usage()
@@ -52,6 +54,7 @@ print_usage()
 	print_message("dfuse_test -m|--metadata\n");
 	print_message("dfuse_test -d|--directory\n");
 	print_message("dfuse_test -l|--lowfd\n");
+	print_message("dfuse_test -k|--flock\n");
 	print_message("dfuse_test -f|--mmap\n");
 	print_message("dfuse_test -e|--exec\n");
 	/* verifyenv is only run by exec test. Should not be executed directly */
@@ -770,6 +773,44 @@ do_lowfd(void **state)
 	free(path);
 }
 
+/*
+ * Verify the behavior of flock() and fcntl().
+ */
+void
+do_flock(void **state)
+{
+	int          len;
+	int          fd;
+	int          rc;
+	char         path[512];
+	struct flock fl;
+
+	len = snprintf(path, sizeof(path) - 1, "%s/flock_file", test_dir);
+	assert_true(len < (sizeof(path) - 1));
+
+	fd = open(path, O_RDWR | O_CREAT | O_EXCL, 0640);
+	assert_return_code(fd, errno);
+
+	rc = flock(fd, LOCK_EX);
+	assert_true(rc == -1);
+	assert_true(errno == ENOTSUP);
+
+	fl.l_type   = F_WRLCK;
+	fl.l_whence = SEEK_SET;
+	fl.l_start  = 0;
+	fl.l_len    = 0;
+	fl.l_pid    = getpid();
+	rc          = fcntl(fd, F_SETLKW, &fl);
+	assert_true(rc == -1);
+	assert_true(errno == ENOTSUP);
+
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlink(path);
+	assert_return_code(rc, errno);
+}
+
 #define ERR_ENV_UNSET (2)
 
 void
@@ -1011,6 +1052,16 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			nr_failed += cmocka_run_group_tests(lowfd_tests, NULL, NULL);
 			break;
 
+		case 'k':
+			printf("\n\n=================");
+			printf("dfuse flock tests");
+			printf("=====================\n");
+			const struct CMUnitTest flock_tests[] = {
+			    cmocka_unit_test(do_flock),
+			};
+			nr_failed += cmocka_run_group_tests(flock_tests, NULL, NULL);
+			break;
+
 		case 'f': {
 			const struct CMUnitTest mmap_tests[] = {
 			    cmocka_unit_test(do_mmap),
@@ -1068,12 +1119,13 @@ main(int argc, char **argv)
 					       {"directory", no_argument, NULL, 'd'},
 					       {"mmap", no_argument, NULL, 'f'},
 					       {"lowfd", no_argument, NULL, 'l'},
+					       {"flock", no_argument, NULL, 'k'},
 					       {"exec", no_argument, NULL, 'e'},
 					       {"verifyenv", no_argument, NULL, 't'},
 					       {"cache", no_argument, NULL, 'c'},
 					       {NULL, 0, NULL, 0}};
 
-	while ((opt = getopt_long(argc, argv, "aM:imsdlfetc", long_options, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "aM:imsdlkfetc", long_options, &index)) != -1) {
 		if (strchr(all_tests, opt) != NULL) {
 			tests[ntests] = opt;
 			ntests++;

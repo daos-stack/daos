@@ -1,3 +1,9 @@
+daos (2.7.101-8) unstable; urgency=medium
+  [ Cedric Koch-Hofer]
+  * Add support of the libasan
+
+ -- Cedric Koch-Hofer <cedric.koch-hofer@intel.com>  Fri, 21 Mar 2025 14:12:00 -0700
+
 daos (2.7.101-7) unstable; urgency=medium
   [ Jeff Olivier ]
   * Remove raft as an external dependence
