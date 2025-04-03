@@ -28,6 +28,7 @@ import errno
 import json
 # pylint: disable=too-many-lines
 import os
+import re
 import shutil
 import subprocess  # nosec
 import sys
@@ -557,10 +558,13 @@ class PreReqComponent():
         self.__src_path = {}
 
         if GetOption('install_sandbox'):
-            self.__env['SANDBOX_PREFIX'] = GetOption('install_sandbox') + '/'
+            sandbox = os.path.join(self.__top_dir, GetOption('install_sandbox'))
+            sandbox = os.path.realpath(sandbox)
+            self.__env['SANDBOX_PREFIX'] = sandbox + '/'
             self._setup_path_var('SANDBOX_PREFIX')
             # turn prefix into "absolute path"
             self.__env['PREFIX'] = os.path.join('/', self.__env.subst('$PREFIX'))
+            print(f"Installing to {sandbox}")
         else:
             # prefix needs to be relative to install_sandbox otherwise so don't
             # resolve it.
@@ -625,7 +629,18 @@ class PreReqComponent():
                             if not self.sandbox_prefix:
                                 dest.write(line)
                                 continue
-                            dest.write(line.replace(comp_path, self.sandbox_prefix + comp_path))
+                            line = line.strip()
+                            new_line = line.replace(comp_path, self.sandbox_prefix + comp_path)
+                            reconstructed = ""
+                            while True:
+                                match = re.search(r'^(.*\-L)(\S+)(.*)$', new_line)
+                                if not match:
+                                    reconstructed += new_line
+                                    break
+                                new_line = match.group(3)
+                                reconstructed += ' ' + match.group(1) + match.group(2)
+                                reconstructed += ' -Wl,-rpath-link=' + match.group(2)
+                            dest.write(f"{reconstructed.strip()}\n")
                 self.pkgconfigs[f] = base
 
     def run_build(self, opts):
@@ -1270,8 +1285,10 @@ class _Component():
             self.prereqs.find_pkgconfig(self.pkgconfig, real_comp_path, self.lib_path)
 
         try:
+            print(f"Parsing pkg-config for {self.pkgconfig}")
             env.ParseConfig(f'pkg-config {opts} {self.pkgconfig}')
         except OSError:
+            print(f"Could not find pkg-config for {self.pkgconfig}")
             return
 
         return

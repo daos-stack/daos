@@ -321,8 +321,7 @@ def define_components(reqs):
                           abt_build,
                           ['make'],
                           ['make', 'install']],
-                requires=['libunwind'],
-                pkgconfig='argobots',
+                requires=['libunwind', 'pthread'],
                 libs=['abt'],
                 headers=['abt.h'],
                 build_env={'DESTDIR': '$SANDBOX_PREFIX'})
