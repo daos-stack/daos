@@ -2409,7 +2409,7 @@ test_umempobj_nemb_usage(void **state)
 	size_t               alloc_size = (10 * 1024 * 1024);
 
 	uma.uma_id = umempobj_backend_type2class_id(ustore_tmp.store_type);
-	/* Create a heap and cache of size 256MB and 249MB (16 & 15 zones) respectively */
+	/* Create a heap and cache of size 256MB and 240MB (16 & 15 zones) respectively */
 	D_ASPRINTF(name, "/mnt/daos/umem-test-tmp-%d", 0);
 	assert_true(name != NULL);
 	uma.uma_pool = umempobj_create(name, "valid_pool", UMEMPOBJ_ENABLE_STATS, 240 * 1024 * 1024,
@@ -2424,8 +2424,8 @@ test_umempobj_nemb_usage(void **state)
 		umem_tx_commit(&umm);
 	}
 
-	/* Do allocation and verify that only 10 zones allotted to non evictable MBs
-	 * 3 zones are reserved for soemb
+	/* Do allocation and verify that only 80% of 15 zones - MIN_SOEMB_CNT are allotted
+	 * to non evictable MBs
 	 */
 	for (num = 0;; num++) {
 		/* do an allocation that takes more than half the zone size */
@@ -2437,7 +2437,7 @@ test_umempobj_nemb_usage(void **state)
 		prev_umoff = umoff;
 	}
 	/* 80% nemb when heap size greater than cache size */
-	assert_int_equal(num, 13 - MIN_SOEMB_CNT);
+	assert_int_equal(num, 12 - MIN_SOEMB_CNT);
 	print_message("Number of allocations is %d\n", num);
 
 	for (--num;; num--) {

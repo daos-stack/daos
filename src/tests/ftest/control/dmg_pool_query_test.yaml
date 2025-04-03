@@ -36,6 +36,7 @@ exp_vals:
   query_mask: "disabled_engines,rebuild,space"
   scm:
     total: 16000008192
+    total_mdonssd: 16039018496
   nvme:
     total: 32000000000
   rebuild:
