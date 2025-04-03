@@ -1,4 +1,5 @@
 tabulate
+gcovr
 junit_xml
 pyxattr
 PyYAML
