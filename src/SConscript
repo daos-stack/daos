@@ -83,12 +83,10 @@ def scons():
         base_env_mpi.AppendUnique(CPPPATH=[Dir('include')])
 
     if not env.GetOption('clean') and not env.GetOption('help'):
-        conf = env.Clone().Configure()
         # Detect if we have explicit_bzero
-        if not conf.CheckFunc('explicit_bzero'):
+        if not env.CheckFunc('explicit_bzero'):
             env.Append(CCFLAGS=['-DNEED_EXPLICIT_BZERO'])
             base_env.Append(CCFLAGS=['-DNEED_EXPLICIT_BZERO'])
-        conf.Finish()
 
     for header in HEADERS:
         env.Install(os.path.join('$PREFIX', 'include'), os.path.join('include', header))
