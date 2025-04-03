@@ -569,6 +569,8 @@ def main():
         assert not args.git, 'No longer supported'
         all_files = FileTypeList()
         for line in sys.stdin.readlines():
+            if re.match(r"^deps", line):
+                continue
             if os.path.exists(line):
                 all_files.add(line)
         if all_files.run(args):

@@ -1,0 +1,26 @@
+diff --git a/Makefile.in b/Makefile.in
+index f22ab91..51d00ff 100644
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -488,7 +488,7 @@ endif
+ LIBRARIES_THREADED :=
+ ifeq ($(build_shared),yes)
+ ifdef BUILD_BMI_ONLY
+-BMILIBRARIES := lib/libbmi.so
++BMILIBRARIES := lib/libbmi.dylib
+ endif
+ LIBRARIES_SHARED = lib/libpvfs2.so
+ LIBRARIES += $(LIBRARIES_SHARED)
+@@ -717,10 +717,10 @@ lib/libbmi.a: $(LIBBMIOBJS)
+ 	$(E)ar rcs $@ $(LIBBMIOBJS)
+ 
+ # rule for building the shared bmi library
+-lib/libbmi.so: $(LIBBMIPICOBJS)
++lib/libbmi.dylib: $(LIBBMIPICOBJS)
+ 	$(Q) "  LDSO		$@"
+ 	$(E)$(INSTALL) -d lib
+-	$(E)$(LDSHARED) -Wl,-soname,libbmi.so -o $@ $(LIBBMIPICOBJS) $(DEPLIBS)
++	$(E)$(LDSHARED) -dynamiclib -install_name $(libdir)/libbmi.dylib -o $@ $(LIBBMIPICOBJS) $(DEPLIBS)
+ endif
+ 
+ # rule for building the pvfs2 library

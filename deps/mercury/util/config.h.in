@@ -1,0 +1,16 @@
+/**
+ * Copyright (c) 2013-2022 UChicago Argonne, LLC and The HDF Group.
+ * Copyright (c) 2022-2023 Intel Corporation.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/* Generated file. Only edit config.h.in. */
+
+#ifndef CONFIG_H
+#define CONFIG_H
+
+/* Build Options */
+#cmakedefine HG_INFO_HAS_JSON
+
+#endif /* CONFIG_H */

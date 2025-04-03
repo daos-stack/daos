@@ -1,0 +1,99 @@
+/**
+ * Copyright (c) 2013-2022 UChicago Argonne, LLC and The HDF Group.
+ * Copyright (c) 2022-2023 Intel Corporation.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/* Generated file. Only edit mercury_config.h.in. */
+
+#ifndef MERCURY_CONFIG_H
+#define MERCURY_CONFIG_H
+
+/*************************************/
+/* Public Type and Struct Definition */
+/*************************************/
+
+/* Type definitions */
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+typedef int64_t hg_int64_t;
+typedef int32_t hg_int32_t;
+typedef int16_t hg_int16_t;
+typedef int8_t hg_int8_t;
+typedef uint64_t hg_uint64_t;
+typedef uint32_t hg_uint32_t;
+typedef uint16_t hg_uint16_t;
+typedef uint8_t hg_uint8_t;
+
+typedef hg_uint64_t hg_ptr_t;
+typedef hg_uint8_t hg_bool_t;
+
+/* True / false */
+#define HG_TRUE  1
+#define HG_FALSE 0
+
+/*****************/
+/* Public Macros */
+/*****************/
+
+/* Reflects major releases of Mercury */
+#define HG_VERSION_MAJOR @MERCURY_VERSION_MAJOR@
+/* Reflects any API changes */
+#define HG_VERSION_MINOR @MERCURY_VERSION_MINOR@
+/* Reflects any library code changes */
+#define HG_VERSION_PATCH @MERCURY_VERSION_PATCH@
+
+#include <mercury_compiler_attributes.h>
+
+/* Unused return values */
+#define HG_WARN_UNUSED_RESULT HG_ATTR_WARN_UNUSED_RESULT
+
+/* Unused variables */
+#define HG_UNUSED HG_ATTR_UNUSED
+
+/* Packed */
+#define HG_PACKED(x) HG_ATTR_PACKED(x)
+
+/* Fallthrough */
+#define HG_FALLTHROUGH HG_ATTR_FALLTHROUGH
+
+/* Inline */
+#ifdef _WIN32
+#    define HG_INLINE __inline
+#else
+#    define HG_INLINE __inline__
+#endif
+
+/* Shared libraries */
+#cmakedefine HG_BUILD_SHARED_LIBS
+#ifdef HG_BUILD_SHARED_LIBS
+#    ifdef mercury_EXPORTS
+#        define HG_PUBLIC HG_ATTR_ABI_EXPORT
+#    else
+#        define HG_PUBLIC HG_ATTR_ABI_IMPORT
+#    endif
+#    define HG_PRIVATE HG_ATTR_ABI_HIDDEN
+#else
+#    define HG_PUBLIC
+#    define HG_PRIVATE
+#endif
+
+/* Build Options */
+#cmakedefine HG_HAS_DEBUG
+
+/* Boost */
+#cmakedefine HG_HAS_BOOST
+
+/* Checksums */
+#cmakedefine HG_HAS_CHECKSUMS
+
+/* Multi-progress */
+#cmakedefine HG_HAS_MULTI_PROGRESS
+
+/* XDR */
+#cmakedefine HG_HAS_XDR
+
+#endif /* MERCURY_CONFIG_H */

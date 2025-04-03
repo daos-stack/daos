@@ -1,0 +1,124 @@
+/**
+ * Copyright (c) 2013-2022 UChicago Argonne, LLC and The HDF Group.
+ * Copyright (c) 2022-2023 Intel Corporation.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/* Generated file. Only edit na_config.h.in. */
+
+#ifndef NA_CONFIG_H
+#define NA_CONFIG_H
+
+/*************************************/
+/* Public Type and Struct Definition */
+/*************************************/
+
+/* Type definitions */
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+/*****************/
+/* Public Macros */
+/*****************/
+
+/* Reflects any major or incompatible public API changes */
+#define NA_VERSION_MAJOR @NA_VERSION_MAJOR@
+/* Reflects any minor backwards compatible API or functionality addition */
+#define NA_VERSION_MINOR @NA_VERSION_MINOR@
+/* Reflects any backwards compatible bug fixes */
+#define NA_VERSION_PATCH @NA_VERSION_PATCH@
+
+#include <mercury_compiler_attributes.h>
+
+/* Unused return values */
+#define NA_WARN_UNUSED_RESULT HG_ATTR_WARN_UNUSED_RESULT
+
+/* Remove warnings when plugin does not use callback arguments */
+#define NA_UNUSED HG_ATTR_UNUSED
+
+/* Alignment */
+#define NA_ALIGNED(x, a) HG_ATTR_ALIGNED(x, a)
+
+/* Check format arguments */
+#define NA_PRINTF(_fmt, _firstarg) HG_ATTR_PRINTF(_fmt, _firstarg)
+
+/* Packed */
+#define NA_PACKED(x) HG_ATTR_PACKED(x)
+
+/* Fallthrough */
+#define NA_FALLTHROUGH HG_ATTR_FALLTHROUGH
+
+/* Inline */
+#ifdef _WIN32
+#    define NA_INLINE __inline
+#else
+#    define NA_INLINE __inline__
+#endif
+
+/* Shared libraries */
+#cmakedefine NA_BUILD_SHARED_LIBS
+#ifdef NA_BUILD_SHARED_LIBS
+#    ifdef na_EXPORTS
+#        define NA_PUBLIC HG_ATTR_ABI_EXPORT
+#    else
+#        define NA_PUBLIC HG_ATTR_ABI_IMPORT
+#    endif
+#    define NA_PRIVATE HG_ATTR_ABI_HIDDEN
+#else
+#    define NA_PUBLIC
+#    define NA_PRIVATE
+#endif
+
+/* Dynamically loaded plugins */
+#cmakedefine NA_HAS_DYNAMIC_PLUGINS
+#ifdef NA_HAS_DYNAMIC_PLUGINS
+#    define NA_PLUGIN            HG_ATTR_ABI_EXPORT /* plugins always export */
+#    define NA_PLUGIN_VISIBILITY NA_PUBLIC
+#else
+#    define NA_PLUGIN
+#    define NA_PLUGIN_VISIBILITY NA_PRIVATE
+#endif
+#cmakedefine NA_DEFAULT_PLUGIN_PATH "@NA_DEFAULT_PLUGIN_PATH@"
+
+/* Build Options */
+#cmakedefine NA_HAS_DEBUG
+#cmakedefine NA_HAS_MULTI_PROGRESS
+
+/* HWLOC */
+#cmakedefine NA_HAS_HWLOC
+
+/* BMI */
+#cmakedefine NA_HAS_BMI
+
+/* MPI */
+#cmakedefine NA_HAS_MPI
+#cmakedefine NA_MPI_HAS_GNI_SETUP
+
+/* OFI */
+#cmakedefine NA_HAS_OFI
+#cmakedefine NA_OFI_HAS_EXT_GNI_H
+#cmakedefine NA_OFI_HAS_EXT_CXI_H
+#cmakedefine NA_OFI_GNI_HAS_UDREG
+
+/* NA SM */
+#cmakedefine NA_HAS_SM
+#cmakedefine NA_SM_HAS_UUID
+#cmakedefine NA_SM_HAS_CMA
+#cmakedefine NA_SM_SHM_PREFIX "@NA_SM_SHM_PREFIX@"
+#cmakedefine NA_SM_TMP_DIRECTORY "@NA_SM_TMP_DIRECTORY@"
+
+/* UCX */
+#cmakedefine NA_HAS_UCX
+#cmakedefine NA_UCX_HAS_LIB_QUERY
+#cmakedefine NA_UCX_HAS_THREAD_MODE_NAMES
+#cmakedefine NA_UCX_HAS_FIELD_LOCAL_SOCK_ADDR
+
+/* PSM */
+#cmakedefine NA_HAS_PSM
+
+/* PSM2 */
+#cmakedefine NA_HAS_PSM2
+
+#endif /* NA_CONFIG_H */

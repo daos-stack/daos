@@ -1,0 +1,31 @@
+#-----------------------------------------------------------------------------
+# mchecksum-config.cmake - MChecksum CMake configuration file for external projects.
+#-----------------------------------------------------------------------------
+set(__mchecksum_install_tree @MCHECKSUM_CONFIG_INSTALLED@)
+if(__mchecksum_install_tree)
+  get_filename_component(location "${CMAKE_CURRENT_LIST_FILE}" PATH)
+  set(MCHECKSUM_CONFIG_TARGETS_FILE "${location}/@MCHECKSUM_PACKAGE@-targets.cmake")
+else()
+  # This is the build location.
+  set(MCHECKSUM_CONFIG_TARGETS_FILE "@MCHECKSUM_BINARY_DIR@/src/@MCHECKSUM_PACKAGE@-targets.cmake")
+endif()
+
+#-----------------------------------------------------------------------------
+# Version information for MChecksum
+#-----------------------------------------------------------------------------
+set(MCHECKSUM_VERSION_MAJOR   @MCHECKSUM_VERSION_MAJOR@)
+set(MCHECKSUM_VERSION_MINOR   @MCHECKSUM_VERSION_MINOR@)
+set(MCHECKSUM_VERSION_PATCH   @MCHECKSUM_VERSION_PATCH@)
+set(MCHECKSUM_VERSION_FULL    @MCHECKSUM_VERSION_FULL@)
+set(MCHECKSUM_VERSION         @MCHECKSUM_VERSION@)
+
+#-----------------------------------------------------------------------------
+# Don't include targets if this file is being picked up by another
+# project which has already built MChecksum as a subproject
+#-----------------------------------------------------------------------------
+if(NOT TARGET "mchecksum" AND NOT MCHECKSUM_INSTALL_SKIP_TARGETS)
+  include(${MCHECKSUM_CONFIG_TARGETS_FILE})
+endif()
+
+# cleanup
+unset(__mchecksum_install_tree)

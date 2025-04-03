@@ -10,6 +10,7 @@ exclude =
     src/client/pydaos/raw,
     venv,
     build,
+    deps,
     install
 filename=*/SConscript, SConstruct
 max-line-length: 100
