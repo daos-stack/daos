@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2015-2024, Intel Corporation */
+/* Copyright 2015-2024, Intel Corporation
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ */
 
 /*
  * heap.c -- heap implementation

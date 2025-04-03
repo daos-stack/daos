@@ -172,7 +172,7 @@ class ListVerboseTest(IorTestBase):
         self.log.info("rank_count = %d; targets = %d", rank_count, targets)
 
         total_targets = rank_count * targets
-        if (self.server_managers[0].manager.job.using_control_metadata):
+        if self.server_managers[0].manager.job.using_control_metadata:
             threshold = total_targets * (16 * 1024 * 1024 - 1)
         else:
             threshold = total_targets * 4095
