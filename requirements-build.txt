@@ -3,3 +3,4 @@ ninja
 meson
 distro
 pyelftools
+gcovr
