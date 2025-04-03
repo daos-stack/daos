@@ -1,10 +1,5 @@
 %global daos_root /opt/daos
 
-%if (0%{?rhel} >= 8)
-BuildRequires: python3-scons >= 2.4
-%else
-BuildRequires: scons >= 2.4
-%endif
 BuildRequires: gcc-c++
 %if (0%{?rhel} >= 8)
 %global openmpi openmpi

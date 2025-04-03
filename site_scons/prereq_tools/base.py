@@ -536,6 +536,10 @@ class PreReqComponent():
         self.pkgconfig_tmp = os.path.join(self.__top_dir, build_dir_name, 'pkgconfig')
         os.makedirs(self.pkgconfig_tmp, exist_ok=True)
         self.pkgconfigs = {}
+        path = os.environ.get("PKG_CONFIG_PATH", None)
+        if path and "PKG_CONFIG_PATH" not in env["ENV"]:
+            env["ENV"]["PKG_CONFIG_PATH"] = path
+
         self.__env.PrependENVPath("PKG_CONFIG_PATH", self.pkgconfig_tmp)
 
         self.system_env = env.Clone()
@@ -860,7 +864,8 @@ class PreReqComponent():
 
         if comp_def.src_path and \
            not os.path.exists(comp_def.src_path) and \
-           not os.path.exists(self.prereqs.sandbox_prefix, self.prereq_prefix, comp_def.name) and \
+           not os.path.exists(os.path.join(self.sandbox_prefix, self.prereq_prefix,
+                              comp_def.name)) and \
            not os.path.exists(self.__env.get(f'{comp_def.name.upper()}_PREFIX')):
             self._save_component_prefix(f'{comp_def.name.upper()}_PREFIX', '/usr')
 
@@ -1260,10 +1265,6 @@ class _Component():
             real_comp_path = self.component_prefix
         if comp_path:
             real_comp_path = comp_path
-
-        path = os.environ.get("PKG_CONFIG_PATH", None)
-        if path and "PKG_CONFIG_PATH" not in env["ENV"]:
-            env["ENV"]["PKG_CONFIG_PATH"] = path
 
         if not self.use_installed and real_comp_path is not None:
             self.prereqs.find_pkgconfig(self.pkgconfig, real_comp_path, self.lib_path)

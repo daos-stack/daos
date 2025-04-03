@@ -41,6 +41,23 @@ URL:           https://github.com/daos-stack/daos
 Source0:       %{name}-%{version}.tar.gz
 Source1:       bz-1955184_find-requires
 
+%description
+The Distributed Asynchronous Object Storage (DAOS) is an open-source
+software-defined object store designed from the ground up for
+massively distributed Non Volatile Memory (NVM). DAOS takes advantage
+of next generation NVM technology like Storage Class Memory (SCM) and
+NVM express (NVMe) while presenting a key-value storage interface and
+providing features such as transactional non-blocking I/O, advanced
+data protection with self healing on top of commodity hardware, end-
+to-end data integrity, fine grained data control and elastic storage
+to optimize performance and cost.
+%if (0%{?rhel} >= 8)
+
+BuildRequires: python3-scons >= 2.4
+%else
+BuildRequires: scons >= 2.4
+%endif
+
 %include %{buildspec}
 
 %changelog
