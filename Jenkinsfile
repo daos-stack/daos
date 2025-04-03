@@ -1115,8 +1115,7 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version(),
                             stage_tags: 'hw,medium,-provider',
-                            default_tags: startedByTimer() ?
-                                'pr,md_on_ssd daily_regression,md_on_ssd' : 'pr,md_on_ssd',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
                             run_if_pr: true,
                             run_if_landing: false,
@@ -1157,8 +1156,7 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             next_version: next_version(),
                             stage_tags: 'hw,medium,provider',
-                            default_tags: startedByTimer() ?
-                                'pr,md_on_ssd daily_regression,md_on_ssd' : 'pr,md_on_ssd',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
                             provider: 'ofi+verbs;ofi_rxm',
                             run_if_pr: true,

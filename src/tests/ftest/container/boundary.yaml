@@ -1,6 +1,8 @@
 hosts:
   test_servers: 4
+
 timeout: 1200
+
 server_config:
   name: daos_server
   engines_per_host: 1
@@ -10,14 +12,13 @@ server_config:
       env_vars:
         - DD_MASK=group_metadata_only
         - DAOS_MD_CAP=1024
-      storage:
-        0:
-          class: ram
-          scm_mount: /mnt/daos
+      storage: auto
+
 pool:
   scm_size: 200M
   label: pool
   set_logmasks: False
+
 container:
   control_method: API
   akey_size: 5
@@ -27,6 +28,7 @@ container:
     run_time: 10
     rank: 1
     obj_classs: "OC_RP_3G1"
+
 boundary_test: !mux
   test_1:
     num_pools: 1
