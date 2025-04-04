@@ -1,5 +1,6 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -76,6 +77,7 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		"/mgmt.MgmtSvc/SystemErase":              {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemStart":              {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemExclude":            {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemDrain":              {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolCreate":               {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolDestroy":              {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolQuery":                {ComponentAdmin},
