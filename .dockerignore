@@ -7,7 +7,6 @@
 !src
 !deps
 !utils/build.config
-!utils/*.patch
 !utils/certs
 !utils/ci
 !utils/completion
@@ -26,6 +25,7 @@
 !LICENSE
 !ftest.sh
 !site_scons
+!pyproject.toml
 !.clang-format
 !requirements-build.txt
 !requirements-utest.txt
