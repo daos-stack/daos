@@ -762,8 +762,7 @@ type PoolRanksResp struct {
 	Results []*PoolRankResult `json:"results"`
 }
 
-// Errors returns either a generic failure based on the requested rankset failure or a rank-specific
-// failure depending on whether or not FailedRank has been set in the response.
+// Errors returns a summary of any rank result failures contained within the response.
 func (resp *PoolRanksResp) Errors() error {
 	if resp == nil {
 		return errors.Errorf("nil %T", resp)
