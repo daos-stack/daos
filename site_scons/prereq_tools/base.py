@@ -1285,7 +1285,6 @@ class _Component():
             self.prereqs.find_pkgconfig(self.pkgconfig, real_comp_path, self.lib_path)
 
         try:
-            print(f"Parsing pkg-config for {self.pkgconfig}")
             env.ParseConfig(f'pkg-config {opts} {self.pkgconfig}')
         except OSError:
             print(f"Could not find pkg-config for {self.pkgconfig}")

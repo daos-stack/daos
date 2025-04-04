@@ -362,7 +362,7 @@ This is the package that bridges the difference between the MOFED openmpi
 %{scons_exe} %{?_smp_mflags}          \
       --config=force                  \
       --install-sandbox=%{buildroot}  \
-      %{buildroot}%{daos_root}          \
+      install                         \
       TARGET_TYPE=release               \
       USE_INSTALLED=ucx,isal,isal_crypto \
       --build-deps=yes                \
