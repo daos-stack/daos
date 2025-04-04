@@ -14,6 +14,7 @@ pkgs="argobots                         \
       capstone                         \
       fuse3                            \
       fuse3-libs                       \
+      gcovr                            \
       gotestsum                        \
       hwloc-devel                      \
       libasan                          \
