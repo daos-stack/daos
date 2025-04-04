@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -32,6 +33,21 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 	"github.com/daos-stack/daos/src/control/system/raft"
+)
+
+var (
+	mockSvcRanks    = []uint32{0}
+	mockTierBytes   = []uint64{uint64(1), uint64(2)}
+	mockPoolService = &system.PoolService{
+		PoolUUID: uuid.MustParse(mockUUID),
+		State:    system.PoolServiceStateReady,
+		Replicas: []ranklist.Rank{0},
+		Storage: &system.PoolServiceStorage{
+			CreationRankStr:    "0",
+			PerRankTierStorage: mockTierBytes,
+		},
+	}
+	errNotReplica = errors.New("not a MS replica")
 )
 
 func getPoolLockCtx(t *testing.T, parent context.Context, sysdb poolDatabase, poolUUID uuid.UUID) (*raft.PoolLock, context.Context) {
@@ -1276,6 +1292,118 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 				}
 			} else if gotSvc != nil {
 				t.Fatalf("expected pool to be destroyed, but found %+v", gotSvc)
+			}
+		})
+	}
+}
+
+func TestServer_MgmtSvc_PoolReintegrate(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	missingSB := newTestMgmtSvc(t, log)
+	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil
+	notAP := newTestMgmtSvc(t, log)
+
+	for name, tc := range map[string]struct {
+		nilReq      bool
+		getMockDrpc func(error) *mockDrpcClient
+		mgmtSvc     *mgmtSvc
+		reqIn       *mgmtpb.PoolReintReq
+		drpcResp    *mgmtpb.PoolReintResp
+		expDrpcReq  *mgmtpb.PoolReintReq
+		expErr      error
+	}{
+		"nil request": {
+			nilReq: true,
+			expErr: errors.New("nil request"),
+		},
+		"wrong system": {
+			reqIn:  &mgmtpb.PoolReintReq{Id: mockUUID, Sys: "bad"},
+			expErr: FaultWrongSystem("bad", build.DefaultSystemName),
+		},
+		"missing superblock": {
+			mgmtSvc: missingSB,
+			expErr:  errNotReplica,
+		},
+		"not MS replica": {
+			mgmtSvc: notAP,
+			expErr:  errNotReplica,
+		},
+		"dRPC send fails": {
+			expErr: errors.New("send failure"),
+		},
+		"garbage resp": {
+			getMockDrpc: func(err error) *mockDrpcClient {
+				// dRPC call returns junk in the message body
+				badBytes := makeBadBytes(42)
+
+				return getMockDrpcClientBytes(badBytes, err)
+			},
+			expErr: errors.New("unmarshal"),
+		},
+		"missing uuid": {
+			reqIn:  &mgmtpb.PoolReintReq{Rank: 1},
+			expErr: errors.New("empty pool id"),
+		},
+		"successfully reintegrated": {
+			drpcResp: &mgmtpb.PoolReintResp{},
+			// Expect that the last request contains updated params from ps entry.
+			expDrpcReq: &mgmtpb.PoolReintReq{
+				Sys:       build.DefaultSystemName,
+				SvcRanks:  mockSvcRanks,
+				Id:        mockUUID,
+				Rank:      1,
+				Tierbytes: mockTierBytes,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			buf.Reset()
+			defer test.ShowBufferOnFailure(t, buf)
+
+			if tc.reqIn == nil && !tc.nilReq {
+				tc.reqIn = &mgmtpb.PoolReintReq{Id: mockUUID, Rank: 1}
+			}
+			if tc.mgmtSvc == nil {
+				tc.mgmtSvc = newTestMgmtSvc(t, log)
+			}
+			addTestPoolService(t, tc.mgmtSvc.sysdb, mockPoolService)
+
+			if tc.getMockDrpc == nil {
+				tc.getMockDrpc = func(err error) *mockDrpcClient {
+					return getMockDrpcClient(tc.drpcResp, err)
+				}
+			}
+			mdc := tc.getMockDrpc(tc.expErr)
+			setupSvcDrpcClient(tc.mgmtSvc, 0, mdc)
+
+			if tc.reqIn != nil && tc.reqIn.Sys == "" {
+				tc.reqIn.Sys = build.DefaultSystemName
+			}
+
+			_, err := tc.mgmtSvc.membership.Add(system.MockMember(t, 1,
+				system.MemberStateJoined))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			gotResp, gotErr := tc.mgmtSvc.PoolReintegrate(test.Context(t), tc.reqIn)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			cmpOpts := test.DefaultCmpOpts()
+			if diff := cmp.Diff(tc.drpcResp, gotResp, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+
+			// Check extend gets called with correct params from PS entry.
+			lastReq := new(mgmtpb.PoolReintReq)
+			if err := proto.Unmarshal(getLastMockCall(mdc).Body, lastReq); err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(tc.expDrpcReq, lastReq, test.DefaultCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected final dRPC request (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
