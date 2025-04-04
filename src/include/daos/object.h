@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -648,6 +649,8 @@ enum daos_io_flags {
 	DIOF_FOR_FORCE_DEGRADE = 0x400,
 	/* reverse enumeration for recx */
 	DIOF_RECX_REVERSE = 0x800,
+	/* For data consistency verification. */
+	DIOF_FOR_DATA_VERIFICATION = 0x1000,
 };
 
 /**
