@@ -21,6 +21,8 @@ fi
 
 # Run code coverage gcovr
 if find build -name "./*.gcda"; then
+  # tmp pip3 install
+  sudo pip3 install gcovr
   cd build
-  /usr/bin/gcovr --html code_coverage_report.html
+  gcovr --html code_coverage_report.html
 fi
