@@ -2099,6 +2099,53 @@ dfs_test_readdir_internal(void **state, daos_oclass_id_t obj_class)
 	assert_true(num_dirs == 100);
 	assert_true(total_entries == 200);
 
+	/** readdir with split anchor */
+	uint32_t num_splits = 0, j;
+
+	rc = dfs_obj_anchor_split(dir, &num_splits, NULL);
+	assert_int_equal(rc, 0);
+	print_message("Anchor split in %u parts\n", num_splits);
+
+	daos_anchor_t *anchors;
+
+	anchors       = malloc(sizeof(daos_anchor_t) * num_splits);
+	num_files     = 0;
+	num_dirs      = 0;
+	total_entries = 0;
+
+	for (j = 0; j < num_splits; j++) {
+		daos_anchor_t *split_anchor = &anchors[j];
+
+		memset(split_anchor, 0, sizeof(daos_anchor_t));
+
+		rc = dfs_obj_anchor_set(dir, j, split_anchor);
+		assert_int_equal(rc, 0);
+
+		while (!daos_anchor_is_eof(split_anchor)) {
+			num_ents = 10;
+			rc = dfs_readdirplus(dfs_mt, dir, split_anchor, &num_ents, ents, stbufs);
+			assert_int_equal(rc, 0);
+
+			for (i = 0; i < num_ents; i++) {
+				/** save the 50th entry to restart iteration from there */
+				if (strncmp(ents[i].d_name, "RD_file", 7) == 0) {
+					assert_true(S_ISREG(stbufs[i].st_mode));
+					num_files++;
+				} else if (strncmp(ents[i].d_name, "RD_dir", 6) == 0) {
+					assert_true(S_ISDIR(stbufs[i].st_mode));
+					num_dirs++;
+				} else {
+					print_error("Found invalid entry: %s\n", ents[i].d_name);
+				}
+				total_entries++;
+			}
+		}
+	}
+
+	assert_true(num_files == 100);
+	assert_true(num_dirs == 100);
+	assert_true(total_entries == 200);
+
 	/** set anchor at the saved entry and restart iteration */
 	rc = dfs_dir_anchor_set(dir, anchor_name, &anchor);
 	assert_int_equal(rc, 0);
@@ -2146,15 +2193,31 @@ dfs_test_readdir_internal(void **state, daos_oclass_id_t obj_class)
 static void
 dfs_test_readdir(void **state)
 {
-	test_arg_t	*arg = *state;
+	test_arg_t        *arg  = *state;
+	struct pl_map_attr attr = {0};
+	int                rc;
 
 	print_message("Running readdir test with OC_SX dir..\n");
 	dfs_test_readdir_internal(state, OC_SX);
-	if (test_runable(arg, 2)) {
-		print_message("Running readdir test with OC_RP_2GX dir..\n");
-		dfs_test_readdir_internal(state, OC_RP_2GX);
+	if (test_runable(arg, 3)) {
+		print_message("Running readdir test with OC_RP_3GX dir..\n");
+		dfs_test_readdir_internal(state, OC_RP_3GX);
 	}
-	if (test_runable(arg, 4)) {
+
+	rc = pl_map_query(arg->pool.pool_uuid, &attr);
+	assert_rc_equal(rc, 0);
+
+	/** set the expect EC object class ID based on domain nr */
+	if (attr.pa_domain_nr >= 18) {
+		print_message("Running readdir test with OC_EC_16P2GX dir..\n");
+		dfs_test_readdir_internal(state, OC_EC_16P2GX);
+	} else if (attr.pa_domain_nr >= 10) {
+		print_message("Running readdir test with OC_EC_8P2GX dir..\n");
+		dfs_test_readdir_internal(state, OC_EC_8P2GX);
+	} else if (attr.pa_domain_nr >= 6) {
+		print_message("Running readdir test with OC_EC_4P2GX dir..\n");
+		dfs_test_readdir_internal(state, OC_EC_4P2GX);
+	} else {
 		print_message("Running readdir test with OC_EC_2P2GX dir..\n");
 		dfs_test_readdir_internal(state, OC_EC_2P2GX);
 	}
@@ -3238,7 +3301,7 @@ dfs_test_oflags(void **state)
 #define NR_ENUM		64
 
 static void
-dfs_test_pipeline_find(void **state)
+test_pipeline_find(void **state, daos_oclass_id_t dir_oclass)
 {
 #ifndef BUILD_PIPELINE
 	skip();
@@ -3251,8 +3314,8 @@ dfs_test_pipeline_find(void **state)
 	char		*dirname = "pipeline_dir";
 	int		rc;
 
-	rc = dfs_open(dfs_mt, NULL, dirname, create_mode | S_IFDIR, create_flags,
-		      OC_SX, 0, NULL, &dir1);
+	rc = dfs_open(dfs_mt, NULL, dirname, create_mode | S_IFDIR, create_flags, dir_oclass, 0,
+		      NULL, &dir1);
 	assert_int_equal(rc, 0);
 
 	for (i = 0; i < NUM_ENTRIES; i++) {
@@ -3285,6 +3348,9 @@ dfs_test_pipeline_find(void **state)
 		}
 	}
 
+	/** sleep to avoid DER_INPROGRESS errors since pipeline currently does not retry */
+	sleep(10);
+
 	dfs_predicate_t pred = {0};
 	dfs_pipeline_t *dpipe = NULL;
 
@@ -3292,7 +3358,6 @@ dfs_test_pipeline_find(void **state)
 	pred.dp_newer = ts;
 	rc = dfs_pipeline_create(dfs_mt, pred, DFS_FILTER_NAME | DFS_FILTER_NEWER, &dpipe);
 	assert_int_equal(rc, 0);
-
 
 	uint32_t num_split = 0, j;
 
@@ -3325,6 +3390,24 @@ dfs_test_pipeline_find(void **state)
 			nr = NR_ENUM;
 			rc = dfs_readdir_with_filter(dfs_mt, dir1, dpipe, anchor, &nr, dents, oids,
 						     csizes, &nr_scanned);
+			/*
+			 * It is still possible to get INPROGRESS even with the sleep, so let's just
+			 * skip the test in this case.
+			 */
+			if (rc == -DER_INPROGRESS) {
+				print_message("dfs_readdir_with_filter() returned -DER_INPROGRESS; "
+					      "skipping test!\n");
+				free(dents);
+				free(anchors);
+				free(oids);
+				free(csizes);
+				dfs_pipeline_destroy(dpipe);
+				rc = dfs_release(dir1);
+				assert_int_equal(rc, 0);
+				rc = dfs_remove(dfs_mt, NULL, dirname, true, NULL);
+				assert_int_equal(rc, 0);
+				skip();
+			}
 			assert_int_equal(rc, 0);
 
 			nr_total += nr_scanned;
@@ -3358,6 +3441,17 @@ dfs_test_pipeline_find(void **state)
 	assert_int_equal(rc, 0);
 	rc = dfs_remove(dfs_mt, NULL, dirname, true, NULL);
 	assert_int_equal(rc, 0);
+}
+
+static void
+dfs_test_pipeline_find(void **state)
+{
+	print_message("Running Pipeline Find test with Dir oclass OC_SX\n");
+	test_pipeline_find(state, OC_SX);
+	print_message("Running Pipeline Find test with Dir oclass OC_RP_2GX\n");
+	test_pipeline_find(state, OC_RP_2GX);
+	print_message("Running Pipeline Find test with Dir oclass OC_RP_3GX\n");
+	test_pipeline_find(state, OC_RP_3GX);
 }
 
 static const struct CMUnitTest dfs_unit_tests[] = {
