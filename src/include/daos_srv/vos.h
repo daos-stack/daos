@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -221,6 +222,15 @@ vos_dtx_aggregate(daos_handle_t coh);
  */
 void
 vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat, uint32_t flags);
+
+/**
+ * Notify lower layer that DTX resync has been done.
+ *
+ * \param coh	[IN]	Container open handle.
+ * \param ver	[IN]	The version that DTX resync has been done.
+ */
+void
+vos_set_dtx_resync_version(daos_handle_t coh, uint32_t ver);
 
 /**
  * Set the DTX committable as committable.
