@@ -10,3 +10,6 @@ skip = './src/control/vendor/*,./src/control/go.sum,./.git/*,./src/rdb/raft/*,./
 quiet-level = 3
 ignore-words = 'ci/codespell.ignores'
 builtin = 'clear,rare,informal,names,en-GB_to_en-US'
+
+[tool.bandit]
+exclude_dirs = ["deps"]
