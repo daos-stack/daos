@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize/english"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/fault"
@@ -110,7 +112,8 @@ func FaultPoolInvalidRanks(invalid []ranklist.Rank) *fault.Fault {
 
 	return serverFault(
 		code.ServerPoolInvalidRanks,
-		fmt.Sprintf("pool request contains invalid ranks: %s", strings.Join(rs, ",")),
+		fmt.Sprintf("pool request contains invalid %s: %s",
+			english.PluralWord(len(invalid), "rank", "ranks"), strings.Join(rs, ",")),
 		"retry the request with a valid set of ranks",
 	)
 }

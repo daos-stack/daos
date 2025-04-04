@@ -1111,45 +1111,69 @@ func TestControl_SystemDrain(t *testing.T) {
 		"dual pools; single rank": {
 			req: new(SystemDrainReq),
 			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemDrainResp{
-				Results: []*mgmtpb.PoolRankResult{
-					{PoolId: test.MockUUID(1), Ranks: "1"},
-					{PoolId: test.MockUUID(2), Ranks: "1"},
+				Responses: []*mgmtpb.PoolRanksResp{
+					{
+						Id:      test.MockUUID(1),
+						Results: []*sharedpb.RankResult{{Rank: 1}},
+					},
+					{
+						Id:      test.MockUUID(2),
+						Results: []*sharedpb.RankResult{{Rank: 1}},
+					},
 				},
 			}),
 			expResp: &SystemDrainResp{
-				Results: []*PoolRankResult{
-					{PoolID: test.MockUUID(1), Ranks: "1"},
-					{PoolID: test.MockUUID(2), Ranks: "1"},
+				Responses: []*PoolRanksResp{
+					{
+						ID:      test.MockUUID(1),
+						Results: []*PoolRankResult{{Rank: 1}},
+					},
+					{
+						ID:      test.MockUUID(2),
+						Results: []*PoolRankResult{{Rank: 1}},
+					},
 				},
 			},
 		},
-		"dual pools; single rank; with errors": {
+		"dual pools; multiple ranks; with errors": {
 			req: new(SystemDrainReq),
 			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemDrainResp{
-				Results: []*mgmtpb.PoolRankResult{
+				Responses: []*mgmtpb.PoolRanksResp{
 					{
-						PoolId: test.MockUUID(1), Ranks: "1",
-						Status: -1, Msg: "fail1",
+						Id: test.MockUUID(1),
+						Results: []*sharedpb.RankResult{
+							{Rank: 0},
+							{Rank: 1, Errored: true, Msg: "fail1"},
+						},
 					},
 					{
-						PoolId: test.MockUUID(2), Ranks: "1",
-						Status: -1, Msg: "fail2",
+						Id: test.MockUUID(2),
+						Results: []*sharedpb.RankResult{
+							{Rank: 0},
+							{Rank: 1, Errored: true, Msg: "fail2"},
+						},
 					},
 				},
 			}),
 			expResp: &SystemDrainResp{
-				Results: []*PoolRankResult{
+				Responses: []*PoolRanksResp{
 					{
-						PoolID: test.MockUUID(1), Ranks: "1",
-						Status: -1, Msg: "fail1",
+						ID: test.MockUUID(1),
+						Results: []*PoolRankResult{
+							{Rank: 0},
+							{Rank: 1, Errored: true, Msg: "fail1"},
+						},
 					},
 					{
-						PoolID: test.MockUUID(2), Ranks: "1",
-						Status: -1, Msg: "fail2",
+						ID: test.MockUUID(2),
+						Results: []*PoolRankResult{
+							{Rank: 0},
+							{Rank: 1, Errored: true, Msg: "fail2"},
+						},
 					},
 				},
 			},
-			expRespErr: errors.New("pool 00000001-0001-0001-0001-000000000001 ranks 1: fail1, pool 00000002-0002-0002-0002-000000000002 ranks 1: fail2"),
+			expRespErr: errors.New("rank 1 failed on pool 00000001-0001-0001-0001-000000000001, rank 1 failed on pool 00000002-0002-0002-0002-000000000002"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
