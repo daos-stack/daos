@@ -3,6 +3,7 @@
 /* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral */
 /* groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName */
 /* Copyright 2019-2024 Intel Corporation
+/* Copyright 2025 Google LLC
  * Copyright 2025 Hewlett Packard Enterprise Development LP
  * All rights reserved.
  *
@@ -612,6 +613,7 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
+			checkoutScm(withSubmodules: true)
                         dockerfile {
                             filename 'utils/docker/Dockerfile.el.8'
                             label 'docker_runner'
@@ -650,6 +652,7 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
+			checkoutScm(withSubmodules: true)
                         dockerfile {
                             filename 'utils/docker/Dockerfile.leap.15'
                             label 'docker_runner'
