@@ -1,5 +1,4 @@
 tabulate
-gcovr
 junit_xml
 pyxattr
 PyYAML
@@ -7,3 +6,4 @@ PyYAML
 # pytest
 # for pydaos.torch module
 torch
+gcovr
