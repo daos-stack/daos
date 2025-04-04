@@ -12,7 +12,7 @@ server_config:
       storage: auto
 
 pool:
-  scm_size: 30000000000
+  size: 50G
   pool_count: 5
 
 container:

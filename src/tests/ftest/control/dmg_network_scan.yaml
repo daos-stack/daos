@@ -12,5 +12,4 @@ server_config:
   engines_per_host: 1
   engines:
     0:
-      storage:
-        0: auto
+      storage: auto

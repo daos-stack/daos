@@ -12,7 +12,7 @@ server_config:
       storage: auto
 
 pool:
-  size: 410M
+  size: 5G
   test_loop: 5
   delta: 1MiB
   reclaim_props:
