@@ -828,9 +828,7 @@ vos_pool_store_type(daos_size_t scm_sz, daos_size_t meta_sz)
 	}
 
 	if (scm_sz < meta_sz) {
-		if ((backend == DAOS_MD_BMEM) && umempobj_allow_md_bmem_v2())
-			backend = DAOS_MD_BMEM_V2;
-		else if (backend != DAOS_MD_BMEM_V2) {
+		if (backend != DAOS_MD_BMEM_V2) {
 			D_ERROR("scm_sz %lu is less than meta_sz %lu", scm_sz, meta_sz);
 			return -DER_INVAL;
 		}
