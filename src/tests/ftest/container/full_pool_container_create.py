@@ -64,18 +64,19 @@ class FullPoolContainerCreate(TestWithServers):
 
         # generate random dkey, akey each time
         # write 1M until no space, then 10K, etc. to fill pool quickly
-        for obj_sz in [1048576, 10240, 10, 1]:
+        obj_size = 1048576
+        while obj_size > 0:
             write_count = 0
             while True:
-                self.log.debug("writing obj %s sz %s to container", write_count, obj_sz)
-                my_str = b"a" * obj_sz
+                self.log.debug("writing obj %s sz %s to container", write_count, obj_size)
+                my_str = b"a" * obj_size
                 dkey = get_random_bytes(5)
                 akey = get_random_bytes(5)
                 try:
                     self.container.written_data.append(TestContainerData(False))
                     self.container.written_data[-1].write_record(
                         self.container, akey, dkey, my_str, obj_class='OC_SX')
-                    self.log.debug("wrote obj %s, sz %s", write_count, obj_sz)
+                    self.log.debug("wrote obj %s, sz %s", write_count, obj_size)
                     write_count += 1
                 except DaosTestError as excep:
                     if err not in repr(excep):
@@ -83,8 +84,9 @@ class FullPoolContainerCreate(TestWithServers):
                         self.container.close()
                         self.fail("caught exception while writing object: {}".format(repr(excep)))
                     else:
-                        self.log.info("pool is too full for %s byte objects", obj_sz)
+                        self.log.info("pool is too full for %s byte objects", obj_size)
                         break
+            obj_size /= 2
 
         # query the pool
         self.log.info("Pool Query after filling")

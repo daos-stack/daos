@@ -29,7 +29,7 @@ class RbldWithIOR(IorTestBase):
              sequence while failure/rebuild is triggered in another process
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium,md_on_ssd
+        :avocado: tags=hw,medium
         :avocado: tags=pool,rebuild
         :avocado: tags=RbldWithIOR,test_rebuild_with_ior
         """
