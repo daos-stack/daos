@@ -1566,7 +1566,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 				mockMember(t, 3, 2, "joined"),
 			},
 		},
-		"ignore adminexcluded ranks": {
+		"ignore admin-excluded ranks": {
 			req: &mgmtpb.SystemStartReq{},
 			members: system.Members{
 				mockMember(t, 0, 1, "stopped"),
@@ -1591,7 +1591,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 				mockMember(t, 3, 2, "ready"),
 			},
 		},
-		"specifically requested adminexcluded ranks": {
+		"requested admin-excluded ranks": {
 			req: &mgmtpb.SystemStartReq{
 				Ranks: "1-3",
 			},
@@ -1601,7 +1601,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 				mockMember(t, 2, 2, "adminexcluded"),
 				mockMember(t, 3, 2, "stopped"),
 			},
-			expAPIErr: errors.New("TBD"),
+			expAPIErr: FaultRankAdminExcluded(ranklist.RankList{2}),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -2051,6 +2051,15 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 		"invalid hosts": {
 			req:    &mgmtpb.SystemDrainReq{Hosts: "host-[1-2]"},
 			expErr: errors.New("invalid host(s)"),
+		},
+		"requested admin excluded ranks": {
+			req: &mgmtpb.SystemDrainReq{Ranks: "0-2"},
+			members: system.Members{
+				system.MockMember(t, 0, system.MemberStateAdminExcluded),
+				system.MockMember(t, 1, system.MemberStateJoined),
+				system.MockMember(t, 2, system.MemberStateAdminExcluded),
+			},
+			expErr: FaultRankAdminExcluded(ranklist.RankList{0, 2}),
 		},
 		"local failure on pool query": {
 			req:   &mgmtpb.SystemDrainReq{Ranks: "0"},

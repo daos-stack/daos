@@ -651,17 +651,15 @@ func (m *Membership) CheckHosts(hosts string, ctlPort int) (*RankSet, *hostlist.
 	return rs, missHS, nil
 }
 
-func (m *Membership) CheckRankNotAdminExcluded(rank Rank) error {
+// IsRankAdminExcluded checks whether a given rank is in the AdminExcluded State.
+func (m *Membership) IsRankAdminExcluded(rank Rank) bool {
 	cm, err := m.db.FindMemberByRank(rank)
 	if err != nil {
-		return errors.Wrap(err, "check rank admin excluded")
+		m.log.Errorf("unable to find rank %d: %s", err.Error())
+		return false
 	}
 
-	if cm.State == MemberStateAdminExcluded {
-		return ErrJoinAdminExcluded(cm.UUID, cm.Rank)
-	}
-
-	return nil
+	return cm.State == MemberStateAdminExcluded
 }
 
 // MarkRankDead is a helper method to mark a rank as dead in response to a
