@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -87,20 +88,22 @@ int ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks);
 int ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uuid_t *handles,
 		       size_t n_handles, uint32_t destroy, uint32_t force_destroy,
 		       char *machine, uint32_t *count);
-int ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-				     struct pool_target_addr_list *target_addrs,
-				     pool_comp_state_t state, size_t scm_size, size_t nvme_size);
-int ds_mgmt_pool_reintegrate(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-			     uint32_t reint_rank,
-			     struct pool_target_id_list *reint_list);
-int ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-			d_rank_list_t *rank_list, char *tgt_dev,
-			size_t scm_size, size_t nvme_size,
-			size_t domains_nr, uint32_t *domains);
-int ds_mgmt_pool_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-			  daos_prop_t *prop);
-int ds_mgmt_pool_get_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-			  daos_prop_t *prop);
+int
+ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+				 struct pool_target_addr_list *target_addrs,
+				 pool_comp_state_t state, size_t scm_size, size_t nvme_size,
+				 bool skip_rf_check);
+int
+ds_mgmt_pool_reintegrate(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uint32_t reint_rank,
+			 struct pool_target_id_list *reint_list);
+int
+ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t *rank_list,
+		    char *tgt_dev, size_t scm_size, size_t nvme_size, size_t domains_nr,
+		    uint32_t *domains);
+int
+ds_mgmt_pool_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks, daos_prop_t *prop);
+int
+    ds_mgmt_pool_get_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks, daos_prop_t *prop);
 int ds_mgmt_pool_upgrade(uuid_t pool_uuid, d_rank_list_t *svc_ranks);
 int ds_mgmt_pool_get_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			 daos_prop_t **access_prop);
