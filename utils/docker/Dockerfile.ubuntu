@@ -62,9 +62,6 @@ COPY requirements-build.txt requirements-utest.txt ./
 RUN python3 -m pip --no-cache-dir install --upgrade pip && \
     python3 -m pip --no-cache-dir install -r requirements-build.txt -r requirements-utest.txt
 
-WORKDIR /home/daos
-RUN git submodule update --init --recursive
-
 WORKDIR /home/daos/pre
 RUN mkdir -p /home/daos/pre/site_scons/prereq_tools /home/daos/pre/site_scons/components
 COPY --chown=daos_server:daos_server SConstruct .
