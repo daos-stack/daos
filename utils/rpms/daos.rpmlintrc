@@ -73,3 +73,6 @@ addFilter("daos-firmware\.x86_64: W: position-independent-executable-suggested /
 addFilter("daos-server\.x86_64: W: position-independent-executable-suggested /usr/bin/daos_server")
 addFilter("daos-server\.x86_64: W: position-independent-executable-suggested /usr/bin/daos_server_helper")
 addFilter("daos-server\.x86_64: W: position-independent-executable-suggested /usr/bin/ddb")
+
+# Ignore log rotate warning
+addFilter("W: log-files-without-logrotate")
