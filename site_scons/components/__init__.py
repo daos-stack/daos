@@ -296,6 +296,7 @@ def define_components(reqs):
                 build_env={'DESTDIR': '$SANDBOX_PREFIX', 'LIBS': "-lpthread"})
     abt_build = ['./configure',
                  '--prefix=$ARGOBOTS_PREFIX',
+                 '--libdir=$ARGOBOTS_PREFIX/lib64',
                  'CC=gcc',
                  '--enable-stack-unwind=yes']
     try:
@@ -408,7 +409,8 @@ def define_components(reqs):
     reqs.define('protobufc',
                 retriever=CopyRetriever(),
                 commands=[['./autogen.sh'],
-                          ['./configure', '--prefix=$PROTOBUFC_PREFIX', '--disable-protoc'],
+                          ['./configure', '--prefix=$PROTOBUFC_PREFIX', '--disable-protoc',
+                           '--libdir=$PROTOBUFC_PREFIX/lib64'],
                           ['make'],
                           ['make', 'install']],
                 libs=['protobuf-c'],

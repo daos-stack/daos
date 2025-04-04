@@ -124,11 +124,11 @@ Requires: %{name}%{?_isa} = %{version}-%{release}
 %description admin
 This package contains DAOS administrative tools (e.g. dmg).
 
-
 %include libfabric.spec
 %include mercury.spec
 %include isa-l.spec
 %include isa-l_crypto.spec
+%include argobots.spec
 
 %package client
 Summary: The DAOS client
@@ -302,7 +302,7 @@ This is the package that bridges the difference between the MOFED openmpi
       --install-sandbox=%{buildroot}  \
       install                         \
       TARGET_TYPE=release               \
-      USE_INSTALLED=ucx               \
+      USE_INSTALLED=all               \
       --build-deps=yes                \
       PREFIX=%{daos_root}              \
      %{?daos_build_args}            \
@@ -506,6 +506,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 %files client
 %doc README.md
+%exclude %{daos_root}/prereq/release/fused/*
 %{_libdir}/libdaos.so.*
 %{_bindir}/cart_ctl
 %{_bindir}/self_test
@@ -541,13 +542,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %config(noreplace) %{conf_dir}/daos_agent.yml
 %{_unitdir}/%{agent_svc_name}
 %{_mandir}/man8/daos.8*
-
-%files deps-common
-%dir %{daos_root}/prereq/release/argobots
-%{daos_root}/prereq/release/argobots/*
-%dir %{daos_root}/prereq/release/protobufc
-%{daos_root}/prereq/release/protobufc/*
-%exclude %{daos_root}/prereq/release/fused/*
 
 %files client-tests
 %doc README.md

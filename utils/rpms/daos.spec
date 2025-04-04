@@ -23,6 +23,7 @@
 %global isal_crypto_version 2.24.0
 %global isal_crypto_release 2
 %global argobots_version 1.2
+%global argobots_release 2
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)

@@ -1050,7 +1050,8 @@ class PreReqComponent():
             self._save_component_prefix(comp_prefix, prebuilt_path)
             return (prebuilt_path, prefix)
 
-        if name in ["ofi", "ucx", "mercury", "isal", "isal_crypto"] and self.sandbox_prefix:
+        if name in ["ofi", "ucx", "mercury", "isal", "isal_crypto", "argobots",
+                    "protobufc"] and self.sandbox_prefix:
             target_prefix = '/usr'
         else:
             target_prefix = os.path.join(self.prereq_prefix, name)
