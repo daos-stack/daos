@@ -1394,7 +1394,10 @@ class _Component():
         new_env = self.prereqs.system_env.Clone()
         self.set_environment(new_env, needed_libs)
         if self.has_missing_targets(new_env):
+            self.use_installed = False
+            print(f"{self.name} failed install check")
             return False
+        print(f"{self.name} passed install check")
         return True
 
     def configure(self):
@@ -1608,6 +1611,7 @@ class _Component():
 
         build_dep = self.prereqs.build_deps
         if self.use_installed:
+            print(f"{self.name} should be installed")
             build_dep = False
         if self.component_prefix and \
                 os.path.exists(self.prereqs.sandbox_prefix + self.component_prefix):

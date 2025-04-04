@@ -400,7 +400,7 @@ accessed again.
 
 If the user is willing to access an unhealthy container (e.g., to recover data),
 the force flag can be passed on container open or the container state can be
-forced to healthy via `daos cont set-prop tank mycont1 --properties health:healthy`.
+forced to healthy via `daos cont set-prop tank mycont1 --properties status:healthy`.
 
 The redundancy level (rd\_lvl) is another property that was introduced to
 specify the fault domain level to use for placement.
