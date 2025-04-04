@@ -100,6 +100,7 @@ def scons():
     if not base_env_mpi:
         return
     denv = base_env_mpi.Clone()
+    denv.require('mercury')
 
     denv.AppendUnique(LIBPATH=[Dir('../gurt')])
     denv.AppendUnique(LIBPATH=[Dir('../common')])

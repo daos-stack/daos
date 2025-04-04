@@ -1,5 +1,8 @@
 %global daos_root /opt/daos
 
+# disable check-buildroot (normally /usr/lib/rpm/check-buildroot) with:
+%define __arch_install_post %{nil}
+
 BuildRequires: gcc-c++
 %if (0%{?rhel} >= 8)
 %global openmpi openmpi
@@ -83,18 +86,6 @@ BuildRequires: libasan8
 %endif
 
 Requires: openssl
-
-
-%description
-The Distributed Asynchronous Object Storage (DAOS) is an open-source
-software-defined object store designed from the ground up for
-massively distributed Non Volatile Memory (NVM). DAOS takes advantage
-of next generation NVM technology like Storage Class Memory (SCM) and
-NVM express (NVMe) while presenting a key-value storage interface and
-providing features such as transactional non-blocking I/O, advanced
-data protection with self healing on top of commodity hardware, end-
-to-end data integrity, fine grained data control and elastic storage
-to optimize performance and cost.
 
 %if %{with server}
 %package server-deps-common
@@ -371,6 +362,7 @@ This is the package that bridges the difference between the MOFED openmpi
       %{?scons_args}                  \
       %{?compiler_args}
 
+utils/rpms/fix_files.sh "%{buildroot}" "%{buildroot}%{_prefix}" "remove-rpath"
 utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}%{daos_root}/bin" "%{buildroot}%{_bindir}" \
                          "%{buildroot}%{daos_root}" "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
                          "daos" \
@@ -424,7 +416,7 @@ utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}%{daos_root}/etc" \
                          $(basename -a "%{buildroot}%{daos_root}/etc/"*.yml) \
                          $(basename -a "%{buildroot}%{daos_root}/etc/"*.yaml) \
                          $(basename -a "%{buildroot}%{daos_root}/etc/"*.supp)
-utils/rpms/fix_files.sh "%{buildroot}" "%{buildroot}%{daos_root}"
+utils/rpms/fix_files.sh "%{buildroot}" "%{buildroot}%{daos_root}" "keep-rpath"
 ln -s /opt/daos/daos_server %{buildroot}%{_bindir}/daos_server
 ln -s /opt/daos/daos_server_helper %{buildroot}%{_bindir}/daos_server_helper
 ln -s /opt/daos/daos_firmware_helper %{buildroot}%{_bindir}/daos_firmware_helper
