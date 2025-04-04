@@ -1,4 +1,11 @@
 %global daos_root /opt/daos
+%if 0%{?suse_version} >= 1315
+%define isal_libname libisal2
+%define isal_devname libisal-devel
+%else
+%define isal_libname libisa-l
+%define isal_devname libisa-l-devel
+%endif
 
 # disable check-buildroot (normally /usr/lib/rpm/check-buildroot) with:
 %define __arch_install_post %{nil}
@@ -183,6 +190,49 @@ Requires: mercury%{?_isa} = %{mercury_version}
 Mercury plugin to support the UCX transport.
 %endif
 
+%if 0%{?suse_version} <= 1320
+%define make_build  %{__make} %{?_smp_mflags}
+%endif
+%global _hardened_build 1
+
+%package isa-l
+Summary:	Intelligent Storage Acceleration Library
+Provides: isa-l%{?_isa}-%{isal_version}
+License:	BSD-3-Clause
+
+%description isa-l
+Provides various algorithms for erasure coding, crc, raid, compression and
+ decompression
+
+%package %{isal_libname}
+Summary: Dynamic library for isa-l functions
+License: BSD-3-Clause
+Requires: isa-l%{?_isa} = %{isal_version}
+Provides: %{isal_libname}%{?_isa}-%{isal_version}
+
+%description %{isal_libname}
+This package contains the libisal.so dynamic library which contains
+a collection of optimized low-level functions targeting storage
+applications. ISA-L includes:
+- Erasure codes - Fast block Reed-Solomon type erasure codes for any
+encode/decode matrix in GF(2^8).
+- CRC - Fast implementations of cyclic redundancy check. Six different
+polynomials supported.
+    - iscsi32, ieee32, t10dif, ecma64, iso64, jones64.
+- Raid - calculate and operate on XOR and P+Q parity found in common
+RAID implementations.
+- Compression - Fast deflate-compatible data compression.
+- De-compression - Fast inflate-compatible data compression.
+
+%package %{isal_devname}
+Summary:	ISA-L devel package
+Requires:	%{isal_libname}%{?_isa} = %{version}
+Provides:	%{isal_devname}-%{isal_version}
+Provides:	%{isal_libname}-static%{?_isa} = %{version}
+
+%description %{isal_devname}
+Development files for the %{isal_libname} library.
+
 %package client
 Summary: The DAOS client
 Requires: %{name}%{?_isa} = %{version}-%{release}
@@ -355,7 +405,7 @@ This is the package that bridges the difference between the MOFED openmpi
       --install-sandbox=%{buildroot}  \
       install                         \
       TARGET_TYPE=release               \
-      USE_INSTALLED=ucx,isal,isal_crypto \
+      USE_INSTALLED=ucx,isal_crypto \
       --build-deps=yes                \
       PREFIX=%{daos_root}              \
      %{?daos_build_args}            \
@@ -560,6 +610,22 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/pkgconfig/mercury*.pc
 %{_libdir}/pkgconfig/na*.pc
 %{_libdir}/cmake/*
+
+%files isa-l
+%license LICENSE
+%{_bindir}/igzip
+%{_mandir}/man1/igzip.*
+
+%files %{isal_libname}
+%license deps/isal/LICENSE
+%{_libdir}/libisal.so.*
+
+%files %{isal_devname}
+%license deps/isal/LICENSE
+%dir %{_includedir}/isa-l
+%{_includedir}/isa-l.h
+%{_libdir}/libisal.so
+%{_libdir}/pkgconfig/libisal.pc
 
 %if %{with server}
 %files server
