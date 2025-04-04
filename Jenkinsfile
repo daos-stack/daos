@@ -449,7 +449,7 @@ pipeline {
             //failFast true
             when {
                 beforeAgent true
-                expression { !skipStage() }
+                expression { !skipStage() && checkoutScm(withSubmodules: true) }
             }
             parallel {
                 stage('Build RPM on EL 8') {
@@ -610,7 +610,7 @@ pipeline {
                 stage('Build on EL 8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() && checkoutScm(withSubmodules: true) }
+                        expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
@@ -648,7 +648,7 @@ pipeline {
                 stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() && checkoutScm(withSubmodules: true) }
+                        expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
