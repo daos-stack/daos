@@ -14,10 +14,15 @@
 %else
 %global daos_build_args client test
 %endif
-%global mercury_version   2.4
-%global libfabric_version 1.15.1-1
+%global mercury_version   2.4.0
+%global mercury_release   2
+%global libfabric_version 1.22.0
+%global libfabric_release   3
+%global isal_version 2.30.0
+%global isal_release 3
+%global isal_crypto_version 2.24.0
+%global isal_crypto_release 2
 %global argobots_version 1.2
-%global isal_version 2.30.0-3
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)

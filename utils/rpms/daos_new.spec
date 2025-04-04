@@ -2,9 +2,13 @@
 %if 0%{?suse_version} >= 1315
 %define isal_libname libisal2
 %define isal_devname libisal-devel
+%define isal_crypto_libname libisal_crypto2
+%define isal_crypto_devname libisal_crypto-devel
 %else
 %define isal_libname libisa-l
 %define isal_devname libisa-l-devel
+%define isal_crypto_libname libisa-l_crypto
+%define isal_crypto_devname libisa-l_crypto-devel
 %endif
 
 # disable check-buildroot (normally /usr/lib/rpm/check-buildroot) with:
@@ -137,30 +141,33 @@ This package contains DAOS administrative tools (e.g. dmg).
 %define libfabric_name libfabric
 %endif
 
-%package        %{libfabric_name}
+%package -n     %{libfabric_name}
 Summary:        Shared library for libfabric
+Version:        %{libfabric_version}
+Release:        %{libfabric_release}%{?relval}%{?dist}
 Group:          System/Libraries
-Provides:       %{libfabric_name}%{?_isa} = %{libfabric_version}
 
-%description %{libfabric_name}
+%description -n %{libfabric_name}
 %{name}-%{libfabric_name} provides a user-space API to access high-performance fabric
 services, such as RDMA. This package contains the runtime library.
 
-%package        %{libfabric_name}-devel
+%package  -n    %{libfabric_name}-devel
 Summary:        Development files for %{name}
+Version:        %{libfabric_version}
+Release:        %{libfabric_release}%{?relval}%{?dist}
 Group:          Development/Libraries/C and C++
-Provides:       %{libfabric_name}-devel%{?_isa} = %{libfabric_version}
-Requires:       %{name}-%{libfabric_name}%{?_isa} = %{version}-%{release}
+Requires:       %{libfabric_name}%{?_isa} = %{libfabric_version}
 
-%description    %{libfabric_name}-devel
+%description -n   %{libfabric_name}-devel
 The %{libfabric_name}-devel package contains libraries and header files for
 developing applications that use %{libfabric_name}.
 
-%package mercury
+%package -n mercury
 Summary:  Mercury package
-Provides: mercury%{?_isa}-%{mercury_version}
+Version: %{mercury_version}
+Release:  %{mercury_release}%{?relval}%{?dist}
 
-%description mercury
+%description -n mercury
 Mercury is a Remote Procedure Call (RPC) framework specifically
 designed for use in High-Performance Computing (HPC) systems with
 high-performance fabrics. Its network implementation is abstracted
@@ -172,21 +179,23 @@ Access (RMA). Its interface is generic and allows any function
 call to be serialized. Since code generation is done using the C
 preprocessor, no external tool is required.
 
-%package mercury-devel
+%package -n mercury-devel
 Summary:  Mercury devel package
-Provides: mercury-devel%{?_isa}-%{mercury_version}
+Version: %{mercury_version}
+Release:  %{mercury_release}%{?relval}%{?dist}
 Requires: mercury%{?_isa} = %{mercury_version}
 
-%description mercury-devel
+%description -n mercury-devel
 Mercury development headers and libraries.
 
 %if %{with ucx}
-%package mercury-ucx
+%package -n mercury-ucx
 Summary:  Mercury with UCX
-Provides: mercury-ucx%{?_isa}-%{mercury_version}
+Version: %{mercury_version}
+Release:  %{mercury_release}%{?relval}%{?dist}
 Requires: mercury%{?_isa} = %{mercury_version}
 
-%description mercury-ucx
+%description -n mercury-ucx
 Mercury plugin to support the UCX transport.
 %endif
 
@@ -195,22 +204,24 @@ Mercury plugin to support the UCX transport.
 %endif
 %global _hardened_build 1
 
-%package isa-l
+%package -n isa-l
 Summary:	Intelligent Storage Acceleration Library
-Provides: isa-l%{?_isa}-%{isal_version}
+Version: %{isal_version}
+Release:  %{isal_release}%{?relval}%{?dist}
 License:	BSD-3-Clause
 
-%description isa-l
+%description -n isa-l
 Provides various algorithms for erasure coding, crc, raid, compression and
  decompression
 
-%package %{isal_libname}
+%package -n %{isal_libname}
 Summary: Dynamic library for isa-l functions
+Version: %{isal_version}
+Release:  %{isal_release}%{?relval}%{?dist}
 License: BSD-3-Clause
 Requires: isa-l%{?_isa} = %{isal_version}
-Provides: %{isal_libname}%{?_isa}-%{isal_version}
 
-%description %{isal_libname}
+%description -n %{isal_libname}
 This package contains the libisal.so dynamic library which contains
 a collection of optimized low-level functions targeting storage
 applications. ISA-L includes:
@@ -224,14 +235,45 @@ RAID implementations.
 - Compression - Fast deflate-compatible data compression.
 - De-compression - Fast inflate-compatible data compression.
 
-%package %{isal_devname}
+%package -n %{isal_devname}
 Summary:	ISA-L devel package
-Requires:	%{isal_libname}%{?_isa} = %{version}
-Provides:	%{isal_devname}-%{isal_version}
-Provides:	%{isal_libname}-static%{?_isa} = %{version}
+Version:        %{isal_version}
+Release:        %{isal_release}%{?relval}%{?dist}
+Requires:	%{isal_libname}%{?_isa} = %{isal_version}
+Provides:	%{isal_libname}-static%{?_isa} = %{isal_version}
+Obsoletes:      %{isal_devname} < %{isal_version}
 
-%description %{isal_devname}
+%description -n %{isal_devname}
 Development files for the %{isal_libname} library.
+
+%package -n %{isal_crypto_libname}
+Summary: Dynamic library for isa-l_crypto functions
+Version:        %{isal_crypto_version}
+Release:        %{isal_crypto_release}%{?relval}%{?dist}
+License: BSD-3-Clause
+Obsoletes: %{isal_crypto_libname} < %{isal_crypto_version}
+
+%description -n %{isal_crypto_libname}
+ISA-L_crypto is a collection of optimized low-level functions
+targeting storage applications. ISA-L_crypto includes:
+- Multi-buffer hashes - run multiple hash jobs together on one core
+for much better throughput than single-buffer versions. (
+SHA1, SHA256, SHA512, MD5)
+- Multi-hash - Get the performance of multi-buffer hashing with a
+  single-buffer interface.
+- Multi-hash + murmur - run both together.
+- AES - block ciphers (XTS, GCM, CBC)
+- Rolling hash - Hash input in a window which moves through the input
+
+%package -n %{isal_crypto_devname}
+Summary:	ISA-L_CRYPTO devel package
+Version:        %{isal_crypto_version}
+Release:        %{isal_crypto_release}%{?relval}%{?dist}
+Requires:	%{isal_crypto_libname}%{?_isa} = %{isal_crypto_version}
+Provides:	%{isal_crypto_libname}-static%{?_isa} = %{isal_crypto_version}
+
+%description -n %{isal_crypto_devname}
+Development files for the %{isal_crypto_libname} library.
 
 %package client
 Summary: The DAOS client
@@ -405,7 +447,7 @@ This is the package that bridges the difference between the MOFED openmpi
       --install-sandbox=%{buildroot}  \
       install                         \
       TARGET_TYPE=release               \
-      USE_INSTALLED=ucx,isal_crypto \
+      USE_INSTALLED=ucx               \
       --build-deps=yes                \
       PREFIX=%{daos_root}              \
      %{?daos_build_args}            \
@@ -553,7 +595,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libgurt.so.*
 %{_libdir}/libdaos_common.so
 
-%files %{libfabric_name}
+%files -n %{libfabric_name}
 %defattr(-,root,root,-)
 %license deps/ofi/COPYING
 %doc deps/ofi/NEWS.md
@@ -567,12 +609,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %exclude %{_libdir}/*.la
 
 %if 0%{?suse_version}
-%files -n %{libfabirc_name}
+%files -n %{libfabric_name}
 %defattr(-,root,root)
 %{_libdir}/libfabric*.so.1*
 %endif
 
-%files %{libfabric_name}-devel
+%files -n %{libfabric_name}-devel
 %defattr(-,root,root)
 %license deps/ofi/COPYING
 %doc deps/ofi/AUTHORS deps/ofi/README
@@ -585,7 +627,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_mandir}/man7/fi_*.7*
 %{_mandir}/man7/fabric.7*
 
-%files mercury
+%files -n mercury
 %license deps/mercury/LICENSE.txt
 %doc deps/mercury/Documentation/CHANGES.md
 %{_bindir}/hg_*
@@ -595,11 +637,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/mercury/libna_plugin_ofi.so
 
 %if %{with ucx}
-%files mercury-ucx
+%files -n mercury-ucx
 %{_libdir}/mercury/libna_plugin_ucx.so
 %endif
 
-%files mercury-devel
+%files -n mercury-devel
 %license deps/mercury/LICENSE.txt
 %doc deps/mercury/README.md
 %{_includedir}/mercury*
@@ -611,21 +653,30 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/pkgconfig/na*.pc
 %{_libdir}/cmake/*
 
-%files isa-l
+%files -n isa-l
 %license LICENSE
 %{_bindir}/igzip
 %{_mandir}/man1/igzip.*
 
-%files %{isal_libname}
+%files -n %{isal_libname}
 %license deps/isal/LICENSE
 %{_libdir}/libisal.so.*
 
-%files %{isal_devname}
+%files -n %{isal_devname}
 %license deps/isal/LICENSE
 %dir %{_includedir}/isa-l
 %{_includedir}/isa-l.h
 %{_libdir}/libisal.so
 %{_libdir}/pkgconfig/libisal.pc
+
+%files -n %{isal_crypto_libname}
+%{_libdir}/libisal_crypto.so.*
+
+%files -n %{isal_crypto_devname}
+%dir %{_includedir}/isa-l_crypto
+%{_includedir}/isa-l_crypto.h
+%{_libdir}/libisal_crypto.so
+%{_libdir}/pkgconfig/libisal_crypto.pc
 
 %if %{with server}
 %files server
