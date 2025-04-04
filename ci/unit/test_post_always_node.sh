@@ -22,5 +22,5 @@ fi
 # Run code coverage gcovr
 if find build -name "./*.gcda"; then
   cd build
-  gcovr --html code_coverage_report.html
+  /usr/bin/gcovr --html code_coverage_report.html
 fi
