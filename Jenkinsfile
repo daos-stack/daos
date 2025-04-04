@@ -610,10 +610,9 @@ pipeline {
                 stage('Build on EL 8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && checkoutScm(withSubmodules: true) }
                     }
                     agent {
-			checkoutScm(withSubmodules: true)
                         dockerfile {
                             filename 'utils/docker/Dockerfile.el.8'
                             label 'docker_runner'
@@ -649,10 +648,9 @@ pipeline {
                 stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && checkoutScm(withSubmodules: true) }
                     }
                     agent {
-			checkoutScm(withSubmodules: true)
                         dockerfile {
                             filename 'utils/docker/Dockerfile.leap.15'
                             label 'docker_runner'
