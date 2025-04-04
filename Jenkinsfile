@@ -610,7 +610,7 @@ pipeline {
                 stage('Build on EL 8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+			expression { !skipStage() && checkoutScm(withSubmodules: true) }
                     }
                     agent {
                         dockerfile {
