@@ -94,9 +94,8 @@ pwd
 ls -al
 if [[ -n $(find build -name "*.gcda") ]]; then
   #gcovr build --html "${test_log_dir}/code_coverage_report.html"
-  ls -al "build/dev/gcc"
-  gcovr "build/dev/gcc/src" -o "${test_log_dir}/code_coverage_report.html" --html
+  ls -al "build/dev/gcc/src/cart"
+  gcovr -j -k build -o unit_test_logs/code_coverage_report.html --html --gcov-ignore-parse-errors
   pwd
-  ls -al "build/dev/gcc"
-  ls -al "$test_log_dir"
+  ls -al "unit_test_logs"
 fi
