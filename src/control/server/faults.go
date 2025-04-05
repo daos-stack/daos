@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize/english"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/fault"
@@ -110,7 +112,8 @@ func FaultPoolInvalidRanks(invalid []ranklist.Rank) *fault.Fault {
 
 	return serverFault(
 		code.ServerPoolInvalidRanks,
-		fmt.Sprintf("pool request contains invalid ranks: %s", strings.Join(rs, ",")),
+		fmt.Sprintf("pool request contains invalid %s: %s",
+			english.PluralWord(len(invalid), "rank", "ranks"), strings.Join(rs, ",")),
 		"retry the request with a valid set of ranks",
 	)
 }
@@ -185,6 +188,15 @@ func FaultBadFaultDomainLabels(faultPath, addr string, reqLabels, systemLabels [
 		fmt.Sprintf("labels in join request [%s] don't match system labels [%s] for server %s (fault path: %s)",
 			strings.Join(reqLabels, ", "), strings.Join(systemLabels, ", "), addr, faultPath),
 		"update the 'fault_path' or executable specified in 'fault_cb' in the affected server's configuration file to match the system labels",
+	)
+}
+
+func FaultJoinReplaceEnabledPoolRank(rank ranklist.Rank, poolIDs ...string) *fault.Fault {
+	return serverFault(
+		code.ServerJoinReplaceEnabledPoolRank,
+		fmt.Sprintf("rank %d is enabled on %s %s and cannot be replaced until excluded on all pools",
+			rank, english.PluralWord(len(poolIDs), "pool", "pools"), strings.Join(poolIDs, ",")),
+		"run dmg system exclude --rank=<rank> to manually exclude rank from all system pools then attempt dmg storage format --replace again",
 	)
 }
 

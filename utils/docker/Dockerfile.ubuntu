@@ -1,4 +1,5 @@
 # Copyright 2018-2024 Intel Corporation
+# Copyright 2025 Hewlett Packard Enterprise Development LP
 # All rights reserved.
 #
 # 'recipe' for Docker to build an image of Ubuntu-based environment for building the DAOS project.
@@ -10,6 +11,8 @@
 ARG BASE_DISTRO=ubuntu:22.04
 FROM $BASE_DISTRO
 LABEL maintainer="daos@daos.groups.io"
+# Needed for later use of BASE_DISTRO
+ARG BASE_DISTRO
 
 # Intermittent cache-bust.  Used to reduce load on the actual CB1 later.
 ARG CB0
@@ -17,17 +20,14 @@ ARG CB0
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install basic tools
+ARG DAOS_LAB_CA_FILE_URL
+# script to setup local repo if available and install packages
+COPY ./utils/scripts/helpers/repo-helper-ubuntu.sh /tmp/repo-helper.sh
 COPY ./utils/scripts/install-ubuntu.sh /tmp/install.sh
-RUN echo "APT::Get::Assume-Yes \"true\";" > /etc/apt/apt.conf.d/no-prompt
-RUN echo "APT::Install-Recommends \"false\";" > /etc/apt/apt.conf.d/no-recommends
-RUN apt-get update && \
-    apt-get upgrade && \
-    apt-get install gpg-agent software-properties-common && \
-    add-apt-repository ppa:longsleep/golang-backports && \
-    apt-get update && \
-    chmod +x /tmp/install.sh && \
-    /tmp/install.sh && \
-    apt-get clean all
+
+RUN chmod +x /tmp/repo-helper.sh /tmp/install.sh && \
+    /tmp/repo-helper.sh &&                          \
+    rm -f /tmp/repo-helper.sh /tmp/install.sh
 
 RUN locale-gen en_US.UTF-8
 
@@ -46,8 +46,8 @@ RUN echo "daos_agent:daos_agent" | chpasswd
 
 # Create directory for DAOS backend storage
 RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent /home/daos/pre /home/daos/daos &&   \
-    chown -R daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server /home/daos &&  \
-    chown daos_agent.daos_agent /var/run/daos_agent
+    chown -R daos_server:daos_server /opt/daos /mnt/daos /var/run/daos_server /home/daos &&  \
+    chown daos_agent:daos_agent /var/run/daos_agent
 
 USER daos_server:daos_server
 

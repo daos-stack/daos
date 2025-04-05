@@ -1706,8 +1706,8 @@ crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout)
 
 #define CRT_HG_IOVN_STACK	(8)
 int
-crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
-		   crt_bulk_perm_t bulk_perm, crt_bulk_t *bulk_hdl)
+crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl, crt_bulk_perm_t bulk_perm,
+		   hg_bulk_t *bulk_hdl)
 {
 	void      **buf_ptrs                           = NULL;
 	void       *buf_ptrs_stack[CRT_HG_IOVN_STACK]  = {0};
@@ -1716,7 +1716,8 @@ crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
 	hg_uint8_t  flags;
 	hg_bulk_t   hg_bulk_hdl;
 	hg_return_t hg_ret;
-	int         rc       = 0, i;
+	int         rc = 0;
+	int         i;
 	bool        allocate = false;
 
 	D_ASSERT(hg_ctx != NULL && hg_ctx->chc_bulkcla != NULL);
@@ -1787,11 +1788,11 @@ out:
 }
 
 int
-crt_hg_bulk_bind(crt_bulk_t bulk_hdl, struct crt_hg_context *hg_ctx)
+crt_hg_bulk_bind(hg_bulk_t hg_bulk_hdl, struct crt_hg_context *hg_ctx)
 {
 	hg_return_t	  hg_ret = HG_SUCCESS;
 
-	hg_ret = HG_Bulk_bind(bulk_hdl, hg_ctx->chc_hgctx);
+	hg_ret = HG_Bulk_bind(hg_bulk_hdl, hg_ctx->chc_hgctx);
 	if (hg_ret != HG_SUCCESS)
 		D_ERROR("HG_Bulk_bind failed, hg_ret " DF_HG_RC "\n",
 			DP_HG_RC(hg_ret));
@@ -1800,7 +1801,7 @@ crt_hg_bulk_bind(crt_bulk_t bulk_hdl, struct crt_hg_context *hg_ctx)
 }
 
 int
-crt_hg_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl)
+crt_hg_bulk_access(hg_bulk_t hg_bulk_hdl, d_sg_list_t *sgl)
 {
 	unsigned int	  bulk_sgnum;
 	unsigned int	  actual_sgnum;
@@ -1808,24 +1809,15 @@ crt_hg_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl)
 	void		**buf_ptrs = NULL;
 	void		 *buf_ptrs_stack[CRT_HG_IOVN_STACK];
 	hg_size_t	 *buf_sizes = NULL;
-	hg_size_t	  buf_sizes_stack[CRT_HG_IOVN_STACK];
-	hg_bulk_t	  hg_bulk_hdl;
+	hg_size_t         buf_sizes_stack[CRT_HG_IOVN_STACK];
 	hg_return_t	  hg_ret = HG_SUCCESS;
 	int		  rc = 0, i;
 	bool		  allocate = false;
 
-	D_ASSERT(bulk_hdl != CRT_BULK_NULL && sgl != NULL);
+	D_ASSERT(hg_bulk_hdl != HG_BULK_NULL && sgl != NULL);
 
-	rc = crt_bulk_get_sgnum(bulk_hdl, &bulk_sgnum);
-	if (rc != 0) {
-		D_ERROR("crt_bulk_get_sgnum failed, rc: %d.\n", rc);
-		D_GOTO(out, rc);
-	}
-	rc = crt_bulk_get_len(bulk_hdl, &bulk_len);
-	if (rc != 0) {
-		D_ERROR("crt_bulk_get_len failed, rc: %d.\n", rc);
-		D_GOTO(out, rc);
-	}
+	bulk_sgnum = crt_hg_bulk_get_sgnum(hg_bulk_hdl);
+	bulk_len   = crt_hg_bulk_get_len(hg_bulk_hdl);
 
 	if (sgl->sg_nr < bulk_sgnum) {
 		D_DEBUG(DB_NET, "sgl->sg_nr (%d) too small, %d required.\n",
@@ -1850,7 +1842,6 @@ crt_hg_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl)
 		allocate = true;
 	}
 
-	hg_bulk_hdl = bulk_hdl;
 	hg_ret = HG_Bulk_access(hg_bulk_hdl, 0, bulk_len, HG_BULK_READWRITE,
 				bulk_sgnum, buf_ptrs, buf_sizes, &actual_sgnum);
 	if (hg_ret != HG_SUCCESS) {
@@ -1901,10 +1892,6 @@ crt_hg_bulk_transfer_cb(const struct hg_cb_info *hg_cbinfo)
 	hg_ctx = &ctx->cc_hg_ctx;
 	D_ASSERT(hg_ctx != NULL);
 	D_ASSERT(hg_cbinfo->type == HG_CB_BULK);
-	D_ASSERT(hg_cbinfo->info.bulk.origin_handle ==
-		 bulk_desc->bd_remote_hdl);
-	D_ASSERT(hg_cbinfo->info.bulk.local_handle ==
-		 bulk_desc->bd_local_hdl);
 
 	if (hg_cbinfo->ret != HG_SUCCESS) {
 		if (hg_cbinfo->ret == HG_CANCELED) {
@@ -1943,23 +1930,39 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 	struct crt_context		*ctx;
 	struct crt_hg_context		*hg_ctx;
 	struct crt_hg_bulk_cbinfo	*bulk_cbinfo;
-	hg_bulk_op_t			hg_bulk_op;
+	hg_bulk_op_t                     hg_bulk_op;
 	struct crt_bulk_desc		*bulk_desc_dup;
 	struct crt_rpc_priv		*rpc_priv;
-	hg_return_t			hg_ret = HG_SUCCESS;
-	int				rc = 0;
+	hg_bulk_t                        local_bulk;
+	hg_bulk_t                        remote_bulk;
+	struct crt_bulk                 *crt_local_bulk;
+	struct crt_bulk                 *crt_remote_bulk;
+	hg_return_t                      hg_ret = HG_SUCCESS;
+	int                              rc     = 0;
 
 	D_ASSERT(bulk_desc != NULL);
 	D_ASSERT(bulk_desc->bd_bulk_op == CRT_BULK_PUT ||
 		 bulk_desc->bd_bulk_op == CRT_BULK_GET);
 	D_ASSERT(bulk_desc->bd_rpc != NULL);
+
 	ctx = bulk_desc->bd_rpc->cr_ctx;
 	hg_ctx = &ctx->cc_hg_ctx;
+
+	crt_local_bulk  = ((struct crt_bulk *)(bulk_desc->bd_local_hdl));
+	crt_remote_bulk = ((struct crt_bulk *)(bulk_desc->bd_remote_hdl));
+
+	D_ASSERT(crt_local_bulk != NULL);
+	D_ASSERT(crt_remote_bulk != NULL);
+
+	local_bulk  = crt_local_bulk->hg_bulk_hdl;
+	remote_bulk = crt_remote_bulk->hg_bulk_hdl;
+
 	D_ASSERT(hg_ctx != NULL && hg_ctx->chc_bulkctx != NULL);
 
 	D_ALLOC_PTR(bulk_cbinfo);
 	if (bulk_cbinfo == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
+
 	D_ALLOC_PTR(bulk_desc_dup);
 	if (bulk_desc_dup == NULL) {
 		D_FREE(bulk_cbinfo);
@@ -1973,30 +1976,19 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 
 	hg_bulk_op = (bulk_desc->bd_bulk_op == CRT_BULK_PUT) ?
 		     HG_BULK_PUSH : HG_BULK_PULL;
-	rpc_priv = container_of(bulk_desc->bd_rpc, struct crt_rpc_priv,
-				crp_pub);
+	rpc_priv   = container_of(bulk_desc->bd_rpc, struct crt_rpc_priv, crp_pub);
+
 	if (bind)
-		hg_ret = HG_Bulk_bind_transfer(hg_ctx->chc_bulkctx,
-				crt_hg_bulk_transfer_cb, bulk_cbinfo,
-				hg_bulk_op, bulk_desc->bd_remote_hdl,
-				bulk_desc->bd_remote_off,
-				bulk_desc->bd_local_hdl,
-				bulk_desc->bd_local_off,
-				bulk_desc->bd_len,
-				opid != NULL ? (hg_op_id_t *)opid :
-				HG_OP_ID_IGNORE);
+		hg_ret = HG_Bulk_bind_transfer(
+		    hg_ctx->chc_bulkctx, crt_hg_bulk_transfer_cb, bulk_cbinfo, hg_bulk_op,
+		    remote_bulk, bulk_desc->bd_remote_off, local_bulk, bulk_desc->bd_local_off,
+		    bulk_desc->bd_len, opid != NULL ? (hg_op_id_t *)opid : HG_OP_ID_IGNORE);
 	else
-		hg_ret = HG_Bulk_transfer_id(hg_ctx->chc_bulkctx,
-				crt_hg_bulk_transfer_cb, bulk_cbinfo,
-				hg_bulk_op, rpc_priv->crp_hg_addr,
-				HG_Get_info(rpc_priv->crp_hg_hdl)->context_id,
-				bulk_desc->bd_remote_hdl,
-				bulk_desc->bd_remote_off,
-				bulk_desc->bd_local_hdl,
-				bulk_desc->bd_local_off,
-				bulk_desc->bd_len,
-				opid != NULL ? (hg_op_id_t *)opid :
-				HG_OP_ID_IGNORE);
+		hg_ret = HG_Bulk_transfer_id(
+		    hg_ctx->chc_bulkctx, crt_hg_bulk_transfer_cb, bulk_cbinfo, hg_bulk_op,
+		    rpc_priv->crp_hg_addr, HG_Get_info(rpc_priv->crp_hg_hdl)->context_id,
+		    remote_bulk, bulk_desc->bd_remote_off, local_bulk, bulk_desc->bd_local_off,
+		    bulk_desc->bd_len, opid != NULL ? (hg_op_id_t *)opid : HG_OP_ID_IGNORE);
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Bulk_(bind)transfer failed, hg_ret: " DF_HG_RC "\n",
 			DP_HG_RC(hg_ret));

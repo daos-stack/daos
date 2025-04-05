@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -22,6 +23,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 	. "github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/fault"
 	. "github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	. "github.com/daos-stack/daos/src/control/system"
@@ -44,7 +46,7 @@ func populateMembership(t *testing.T, log logging.Logger, members ...*Member) *M
 	t.Helper()
 
 	db := raft.MockDatabase(t, log)
-	ms := MockMembership(t, log, db, mockResolveFn)
+	ms := MockMembership(t, log, db, MockResolveFn)
 	for _, m := range members {
 		if _, err := ms.Add(m); err != nil {
 			t.Fatal(err)
@@ -160,7 +162,7 @@ func TestSystem_Membership_AddRemove(t *testing.T) {
 			var count int
 			var err error
 			db := raft.MockDatabase(t, log)
-			ms := MockMembership(t, log, db, mockResolveFn)
+			ms := MockMembership(t, log, db, MockResolveFn)
 			for i, m := range tc.membersToAdd {
 				count, err = ms.Add(m)
 				CmpErr(t, tc.expAddErrs[i], err)
@@ -228,7 +230,7 @@ func TestSystem_Membership_Add(t *testing.T) {
 			defer ShowBufferOnFailure(t, buf)
 
 			db := raft.MockDatabase(t, log)
-			ms := MockMembership(t, log, db, mockResolveFn)
+			ms := MockMembership(t, log, db, MockResolveFn)
 			for _, m := range tc.membersToAddOrReplace {
 				if err := ms.AddOrReplace(m); err != nil {
 					t.Fatal(err)
@@ -458,27 +460,6 @@ func TestSystem_Membership_CheckRanklist(t *testing.T) {
 	}
 }
 
-func mockResolveFn(netString string, address string) (*net.TCPAddr, error) {
-	if netString != "tcp" {
-		return nil, errors.Errorf("unexpected network type in test: %s, want 'tcp'", netString)
-	}
-
-	return map[string]*net.TCPAddr{
-			"127.0.0.1:10001": {IP: net.ParseIP("127.0.0.1"), Port: 10001},
-			"127.0.0.2:10001": {IP: net.ParseIP("127.0.0.2"), Port: 10001},
-			"127.0.0.3:10001": {IP: net.ParseIP("127.0.0.3"), Port: 10001},
-			"foo-1:10001":     {IP: net.ParseIP("127.0.0.1"), Port: 10001},
-			"foo-2:10001":     {IP: net.ParseIP("127.0.0.2"), Port: 10001},
-			"foo-3:10001":     {IP: net.ParseIP("127.0.0.3"), Port: 10001},
-			"foo-4:10001":     {IP: net.ParseIP("127.0.0.4"), Port: 10001},
-			"foo-5:10001":     {IP: net.ParseIP("127.0.0.5"), Port: 10001},
-		}[address], map[string]error{
-			"127.0.0.4:10001": errors.New("bad lookup"),
-			"127.0.0.5:10001": errors.New("bad lookup"),
-			"foo-6:10001":     errors.New("bad lookup"),
-		}[address]
-}
-
 func TestSystem_Membership_CheckHostlist(t *testing.T) {
 	members := Members{
 		MockMember(t, 1, MemberStateJoined),
@@ -515,6 +496,11 @@ func TestSystem_Membership_CheckHostlist(t *testing.T) {
 		"no members with hostname": {
 			inHosts:         "foo-[1-3]",
 			expMissingHosts: "foo-[1-3]",
+		},
+		"ips can resolve": {
+			members:  members,
+			inHosts:  "127.0.0.[1-3]:10001",
+			expRanks: "1-3,6",
 		},
 		"ips can't resolve": {
 			members:         members,
@@ -577,6 +563,11 @@ func TestSystem_Membership_CheckHostlist(t *testing.T) {
 			inHosts:         "foo-[5-7]",
 			expRanks:        "5",
 			expMissingHosts: "foo-[6-7]",
+		},
+		"different local addresses": {
+			members:         members,
+			inHosts:         "10.0.0.[1-3]",
+			expMissingHosts: "10.0.0.[1-3]",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -739,6 +730,144 @@ func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 	}
 }
 
+func TestSystem_Membership_FindRankFromJoinRequest(t *testing.T) {
+	fd1 := MustCreateFaultDomainFromString("/dc1/rack8/pdu5/host1")
+	fd2 := MustCreateFaultDomainFromString("/dc1/rack9/pdu0/host2")
+
+	defaultCurMembers := make([]*Member, 2)
+	for i := range defaultCurMembers {
+		defaultCurMembers[i] = MockMember(t, uint32(i), MemberStateJoined).WithFaultDomain(fd1)
+	}
+	curMember := defaultCurMembers[1]
+	newUUID := uuid.New()
+	newMember := MockMember(t, 2, MemberStateJoined).WithFaultDomain(fd2)
+
+	for name, tc := range map[string]struct {
+		curMembers []*Member
+		req        *JoinRequest
+		expRank    Rank
+		expErr     error
+	}{
+		"non-nil rank in request": {
+			req: &JoinRequest{
+				Rank:             curMember.Rank,
+				UUID:             curMember.UUID,
+				ControlAddr:      curMember.Addr,
+				PrimaryFabricURI: curMember.Addr.String(),
+				FabricContexts:   curMember.PrimaryFabricContexts,
+			},
+			expErr: errors.New("unexpected rank"),
+		},
+		"empty membership": {
+			curMembers: []*Member{},
+			req: &JoinRequest{
+				Rank:             NilRank,
+				UUID:             curMember.UUID,
+				ControlAddr:      curMember.Addr,
+				PrimaryFabricURI: curMember.Addr.String(),
+				FabricContexts:   curMember.PrimaryFabricContexts,
+				FaultDomain:      curMember.FaultDomain,
+			},
+			expErr: errors.New("empty system membership"),
+		},
+		"no matching member": {
+			req: &JoinRequest{
+				Rank:             NilRank,
+				UUID:             newMember.UUID,
+				ControlAddr:      newMember.Addr,
+				PrimaryFabricURI: newMember.Addr.String(),
+				FabricContexts:   newMember.PrimaryFabricContexts,
+				FaultDomain:      newMember.FaultDomain,
+			},
+			expErr: FaultJoinReplaceRankNotFound(4), // Takes nr not matching fields
+		},
+		"partially matching member": {
+			req: &JoinRequest{
+				Rank:             NilRank,
+				UUID:             newMember.UUID,
+				ControlAddr:      newMember.Addr,
+				PrimaryFabricURI: curMember.Addr.String(),
+				FabricContexts:   curMember.PrimaryFabricContexts,
+				FaultDomain:      curMember.FaultDomain,
+			},
+			expErr: FaultJoinReplaceRankNotFound(1), // Diff resolution when nr == 1
+		},
+		"matching member; identical UUID": {
+			req: &JoinRequest{
+				Rank:             NilRank,
+				UUID:             curMember.UUID,
+				ControlAddr:      curMember.Addr,
+				PrimaryFabricURI: curMember.Addr.String(),
+				FabricContexts:   curMember.PrimaryFabricContexts,
+				FaultDomain:      curMember.FaultDomain,
+			},
+			expErr: ErrUuidExists(curMember.UUID),
+		},
+		"different fault domain": {
+			req: &JoinRequest{
+				Rank:             NilRank,
+				UUID:             curMember.UUID,
+				ControlAddr:      curMember.Addr,
+				PrimaryFabricURI: curMember.Addr.String(),
+				FabricContexts:   curMember.PrimaryFabricContexts,
+				FaultDomain:      fd2,
+			},
+			expErr: FaultJoinReplaceRankNotFound(1),
+		},
+		"success; matching member": {
+			req: &JoinRequest{
+				Rank:             NilRank,
+				UUID:             newUUID,
+				ControlAddr:      curMember.Addr,
+				PrimaryFabricURI: curMember.Addr.String(),
+				FabricContexts:   curMember.PrimaryFabricContexts,
+				FaultDomain:      curMember.FaultDomain,
+			},
+			expRank: curMember.Rank,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			db := raft.MockDatabase(t, log)
+			ms := MockMembership(t, log, db, MockResolveFn)
+
+			if tc.curMembers == nil {
+				tc.curMembers = defaultCurMembers
+			}
+			for _, curM := range tc.curMembers {
+				if err := db.AddMember(curM); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			gotRank, gotErr := ms.FindRankFromJoinRequest(tc.req)
+			CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				if !fault.IsFault(tc.expErr) {
+					if fault.IsFault(gotErr) {
+						t.Fatal("error comparison, one is not a fault")
+					}
+					return
+				}
+				if !fault.IsFault(gotErr) {
+					t.Fatal("error comparison, one is not a fault")
+				}
+				// Compare Fault resolution messages.
+				er := fault.ShowResolutionFor(tc.expErr)
+				gr := fault.ShowResolutionFor(gotErr)
+				if diff := cmp.Diff(er, gr); diff != "" {
+					t.Fatalf("unexpected fault resolution (-want, +got):\n%s\n", diff)
+				}
+				return
+			}
+
+			test.AssertEqual(t, tc.expRank, gotRank, "unexpected found rank value")
+		})
+	}
+}
+
 func TestSystem_Membership_Join(t *testing.T) {
 	fd1 := MustCreateFaultDomainFromString("/dc1/rack8/pdu5/host1")
 	fd2 := MustCreateFaultDomainFromString("/dc1/rack9/pdu0/host2")
@@ -752,6 +881,7 @@ func TestSystem_Membership_Join(t *testing.T) {
 	newUUID := uuid.New()
 	newMember := MockMember(t, 2, MemberStateJoined).WithFaultDomain(fd2)
 	newMemberShallowFD := MockMember(t, 3, MemberStateJoined).WithFaultDomain(shallowFD)
+	adminExcludedMember := MockMember(t, 3, MemberStateAdminExcluded)
 
 	expMapVer := uint32(len(defaultCurMembers) + 1)
 
@@ -845,18 +975,85 @@ func TestSystem_Membership_Join(t *testing.T) {
 				MapVersion: expMapVer,
 			},
 		},
-		"rejoin with existing UUID and nil rank": {
+		"replace; nil rank in request": {
 			req: &JoinRequest{
+				Replace:          true,
 				Rank:             NilRank,
+				UUID:             newMember.UUID,
+				ControlAddr:      newMember.Addr,
+				PrimaryFabricURI: newMember.Addr.String(),
+				FabricContexts:   newMember.PrimaryFabricContexts,
+				FaultDomain:      newMember.FaultDomain,
+			},
+			expErr: errors.New("unexpected nil rank"),
+		},
+		"replace; unknown rank in request": {
+			req: &JoinRequest{
+				Replace:          true,
+				Rank:             newMember.Rank,
 				UUID:             curMember.UUID,
+				ControlAddr:      curMember.Addr,
+				PrimaryFabricURI: curMember.Addr.String(),
+				FabricContexts:   curMember.PrimaryFabricContexts,
+				FaultDomain:      curMember.FaultDomain,
+			},
+			expErr: ErrMemberRankNotFound(2),
+		},
+		"replace; administrative excluded rank in request": {
+			curMembers: []*Member{
+				adminExcludedMember,
+			},
+			req: &JoinRequest{
+				Replace:          true,
+				Rank:             0, // Rank is index of manually added tc.curMembers.
+				UUID:             curMember.UUID,
+				ControlAddr:      curMember.Addr,
+				PrimaryFabricURI: curMember.Addr.String(),
+				FabricContexts:   curMember.PrimaryFabricContexts,
+				FaultDomain:      curMember.FaultDomain,
+			},
+			expErr: ErrAdminExcluded(adminExcludedMember.UUID, 0),
+		},
+		"successful replace; different UUID but otherwise identical member": {
+			req: &JoinRequest{
+				Replace:          true,
+				Rank:             curMember.Rank,
+				UUID:             newUUID,
 				ControlAddr:      curMember.Addr,
 				PrimaryFabricURI: curMember.Addr.String(),
 				FaultDomain:      curMember.FaultDomain,
 			},
 			expResp: &JoinResponse{
-				Created:    false,
-				Member:     curMember,
-				PrevState:  curMember.State,
+				Created: false,
+				Member: func() *Member {
+					cm := *defaultCurMembers[0]
+					cm.UUID = newUUID
+					return &cm
+				}(),
+				PrevState: curMember.State,
+				// Extra map increment because of remove and add operations.
+				MapVersion: expMapVer + 1,
+			},
+		},
+		// DAOS-15947 TODO: This should probably be refused as duplicate addresses/URIs
+		//                  rather than joining a new rank.
+		"rejoin identical member with new UUID and nil rank; replace not set": {
+			req: &JoinRequest{
+				Rank:             NilRank,
+				UUID:             newUUID,
+				ControlAddr:      curMember.Addr,
+				PrimaryFabricURI: curMember.Addr.String(),
+				FaultDomain:      curMember.FaultDomain,
+			},
+			expResp: &JoinResponse{
+				Created: true,
+				Member: func() *Member {
+					cm := *defaultCurMembers[0]
+					cm.UUID = newUUID
+					cm.Rank = 2
+					return &cm
+				}(),
+				PrevState:  MemberStateUnknown,
 				MapVersion: expMapVer,
 			},
 		},
@@ -905,13 +1102,13 @@ func TestSystem_Membership_Join(t *testing.T) {
 			defer ShowBufferOnFailure(t, buf)
 
 			db := raft.MockDatabase(t, log)
-			ms := MockMembership(t, log, db, mockResolveFn)
+			ms := MockMembership(t, log, db, MockResolveFn)
 
 			if tc.curMembers == nil {
 				tc.curMembers = defaultCurMembers
 			}
 			for _, curM := range tc.curMembers {
-				curM.Rank = NilRank
+				curM.Rank = NilRank // Assign ranks based on order they are added.
 				if err := db.AddMember(curM); err != nil {
 					t.Fatal(err)
 				}
@@ -1075,6 +1272,7 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 		"root only": {
 			tree: NewFaultDomainTree(),
 			expResult: []uint32{
+				0, // metadata
 				0,
 				ExpFaultDomainID(0),
 				0,
@@ -1085,6 +1283,7 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 				MustCreateFaultDomain("one", "two", "three"),
 			),
 			expResult: []uint32{
+				DomTreeMetadataHasPerfDom, // metadata
 				3,
 				ExpFaultDomainID(0),
 				1,
@@ -1108,6 +1307,7 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 				MustCreateFaultDomainFromString("/rack2/pdu4"),
 			),
 			expResult: []uint32{
+				0, // metadata
 				2, // root
 				ExpFaultDomainID(0),
 				3,
@@ -1142,6 +1342,7 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 				rankDomain("/one/two/three", 5),
 			),
 			expResult: []uint32{
+				DomTreeMetadataHasPerfDom, // metadata
 				4,
 				ExpFaultDomainID(0),
 				1,
@@ -1167,6 +1368,7 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 				rankDomain("/rack2/pdu4", 5),
 			),
 			expResult: []uint32{
+				DomTreeMetadataHasPerfDom, // metadata
 				3,
 				ExpFaultDomainID(0), // root
 				3,
@@ -1208,6 +1410,7 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 				rankDomain(fmt.Sprintf("/top/%s2/bottom", RankFaultDomainPrefix), 1),
 			),
 			expResult: []uint32{
+				DomTreeMetadataHasPerfDom, // metadata
 				4,
 				ExpFaultDomainID(0), // root
 				1,
@@ -1223,6 +1426,28 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 				1, // rank
 			},
 		},
+		"request one rank with node only": {
+			tree: NewFaultDomainTree(
+				rankDomain("/node0", 0),
+				rankDomain("/node1", 1),
+				rankDomain("/node2", 2),
+				rankDomain("/node3", 3),
+				rankDomain("/node3", 4),
+				rankDomain("/node4", 5),
+			),
+			inputRanks: []uint32{4},
+			expResult: []uint32{
+				0, // metadata
+				2,
+				ExpFaultDomainID(0), // root
+				1,
+				1,
+				ExpFaultDomainID(7), // node3
+				1,
+				// ranks
+				4,
+			},
+		},
 		"request one rank": {
 			tree: NewFaultDomainTree(
 				rankDomain("/rack0/pdu0", 0),
@@ -1234,6 +1459,7 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 			),
 			inputRanks: []uint32{4},
 			expResult: []uint32{
+				DomTreeMetadataHasPerfDom, // metadata
 				3,
 				ExpFaultDomainID(0), // root
 				1,
@@ -1258,6 +1484,7 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 			),
 			inputRanks: []uint32{4, 0, 5, 3},
 			expResult: []uint32{
+				DomTreeMetadataHasPerfDom, // metadata
 				3,
 				ExpFaultDomainID(0), // root
 				3,

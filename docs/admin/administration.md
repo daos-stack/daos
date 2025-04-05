@@ -899,6 +899,31 @@ and then restarted to rejoin the system. An failed engine might also be excluded
 from the pools it hosted, please check the pool operation section on how to
 reintegrate an excluded engine.
 
+After one or more DAOS engines being excluded, the DAOS agent cache needs to be
+refreshed.  For detailed information, please refer to the [1][System Deployment
+documentation].  Before refreshing the DAOS Agent cache, it should be checked
+that the exclusion information has been spread to the Management Service leader.
+This could be done using the `dump-attachinfo` sub-command of the `daos_agent`
+executable:
+
+```bash
+daos_agent -o /tmp/daos_agent-tmp.yml dump-attachinfo
+```
+
+This usage of the `daos_agent` command needs a minimal DAOS agent configuration
+file `/tmp/daos_agent-tmp.yml` such as:
+
+```yaml
+name: daos_server
+access_points:
+- sertver-1
+port: 10001
+transport_config:
+  allow_insecure: true
+log_file: /tmp/daos_agent-tmp.log
+```
+
+
 ### Shutdown
 
 When up and running, the entire system can be shutdown.
@@ -1043,7 +1068,7 @@ dmg as follows:
 $ dmg storage format -l ${new_storage_node}
 ```
 
-new_storage_node should be replaced with the hostname or the IP address of the
+`new_storage_node` should be replaced with the hostname or the IP address of the
 new storage node (comma separated list or range of hosts for multiple nodes)
 to be added.
 
@@ -1055,6 +1080,11 @@ the system (this can be checked with `dmg system query -v`).
     nodes (if membership is not restricted on the dmg command line). That being
     said, existing pools won't be automatically extended to use the new servers.
     Please see the pool operation section for how to extend the pool membership.
+
+After extending the system, the cache of the `daos_agent` service of the client
+nodes needs to be refreshed.  For detailed information, please refer to the
+[1][System Deployment documentation].
+
 
 ## Software Upgrade
 
@@ -1104,3 +1134,5 @@ Examples:
   * daos_server 2.4.0 is only compatible with daos_engine 2.4.0
   * daos_agent 2.6.0 is compatible with daos_server 2.4.0 (2.5 is a development version)
   * dmg 2.4.1 is compatible with daos_server 2.4.0
+
+[1]: <deployment.md#refresh-agent-cache>(Refresh DAOS Agent Cache)

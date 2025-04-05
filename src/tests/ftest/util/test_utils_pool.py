@@ -555,20 +555,22 @@ class TestPool(TestDaosApiBase):
         return self.dmg.pool_delete_acl(self.identifier, principal=principal)
 
     @fail_on(CommandFailure)
-    def drain(self, rank, tgt_idx=None):
+    def drain(self, ranks, tgt_idx=None):
         """Use dmg to drain the rank and targets from this pool.
 
         Only supported with the dmg control method.
 
         Args:
-            rank (str): daos server rank to drain
-            tgt_idx (str, optional): targets to drain on ranks, ex: "1,2". Defaults to None.
+            ranks (str): Comma separated daos_server-rank ranges to drain e.g.
+                "0,2-5".
+            tgt_idx (list, optional): targets to drain on ranks e.g. "1,2".
+                Defaults to None.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other information.
 
         """
-        return self.dmg.pool_drain(self.identifier, rank, tgt_idx)
+        return self.dmg.pool_drain(self.identifier, ranks, tgt_idx)
 
     @fail_on(CommandFailure)
     def disable_aggregation(self):
@@ -597,8 +599,10 @@ class TestPool(TestDaosApiBase):
         """Manually exclude a rank from this pool.
 
         Args:
-            ranks (list): a list daos server ranks (int) to exclude
-            tgt_idx (string, optional): targets to exclude on ranks, ex: "1,2". Defaults to None.
+            ranks (str): Comma separated daos_server-rank ranges to exclude e.g.
+                "0,2-5".
+            tgt_idx (list, optional): targets to exclude on ranks e.g. "1,2".
+                Defaults to None.
             force (bool, optional): force exclusion regardless of data loss. Defaults to true
 
         Returns:
@@ -612,7 +616,8 @@ class TestPool(TestDaosApiBase):
         """Extend the pool to additional ranks.
 
         Args:
-            ranks (str): comma separate list of daos server ranks (int) to extend
+            ranks (str): Comma separated daos_server-rank ranges to extend e.g.
+                "0,2-5".
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other information.
@@ -756,18 +761,20 @@ class TestPool(TestDaosApiBase):
         return self.dmg.pool_query_targets(self.identifier, *args, **kwargs)
 
     @fail_on(CommandFailure)
-    def reintegrate(self, rank, tgt_idx=None):
+    def reintegrate(self, ranks, tgt_idx=None):
         """Use dmg to reintegrate the rank and targets into this pool.
 
         Args:
-            rank (str): daos server rank to reintegrate
-            tgt_idx (str, optional): targets to reintegrate on ranks, ex: "1,2". Defaults to None.
+            ranks (str): Comma separated daos_server-rank ranges to reintegrate
+                e.g. "0,2-5".
+            tgt_idx (list, optional): targets to reintegrate on ranks e.g. "1,2".
+                Defaults to None.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other information.
 
         """
-        return self.dmg.pool_reintegrate(self.identifier, rank, tgt_idx)
+        return self.dmg.pool_reintegrate(self.identifier, ranks, tgt_idx)
 
     @fail_on(CommandFailure)
     def set_property(self, prop_name, prop_value):
@@ -907,14 +914,15 @@ class TestPool(TestDaosApiBase):
             for index, item in enumerate(val)]
         return self._check_info(checks)
 
-    def check_free_space(self, expected_scm=None, expected_nvme=None, timeout=30):
+    def check_free_space(self, expected_scm=None, expected_nvme=None, timeout=30, interval=1):
         """Check pool free space with expected value.
 
         Args:
             expected_scm (int, optional): pool expected SCM free space.
             expected_nvme (int, optional): pool expected NVME free space.
-            timeout(int, optional): time to fail test if it could not match
+            timeout (int, optional): time to fail test if it could not match
                 expected values.
+            interval (int, optional): time to sleep between retries
 
         Note:
             Arguments may also be provided as a string with a number preceded
@@ -922,25 +930,21 @@ class TestPool(TestDaosApiBase):
             default '=='.
 
         Raises:
-            DaosTestError: if scm or nvme free space doesn't match expected
-            values within timeout.
+            ValueError: if no space arguments are given
 
         Returns:
-            bool: True if expected value is specified and all the
-                specified values match; False if no space parameters specified.
+            bool: whether the space matched expected values
 
         """
         if not expected_scm and not expected_nvme:
-            self.log.error("at least one space parameter must be specified")
-            return False
+            raise ValueError("at least one space parameter must be specified")
 
-        done = False
         scm_fs = 0
         nvme_fs = 0
         start = time()
         scm_index, nvme_index = 0, 1
-        while time() - start < timeout and not done:
-            sleep(1)
+        while time() - start < timeout:
+            sleep(interval)
             checks = []
             self.get_info()
             scm_fs = self.info.pi_space.ps_space.s_free[scm_index]
@@ -949,14 +953,10 @@ class TestPool(TestDaosApiBase):
                 checks.append(("scm", scm_fs, expected_scm))
             if expected_nvme is not None:
                 checks.append(("nvme", nvme_fs, expected_nvme))
-            done = self._check_info(checks)
+            if self._check_info(checks):
+                return True
 
-        if not done:
-            raise DaosTestError(
-                "Pool Free space did not match: actual={},{} expected={},{}".format(
-                    scm_fs, nvme_fs, expected_scm, expected_nvme))
-
-        return done
+        return False
 
     def check_rebuild_status(self, rs_version=None, rs_seconds=None,
                              rs_errno=None, rs_state=None, rs_padding32=None,
@@ -1033,7 +1033,8 @@ class TestPool(TestDaosApiBase):
         """Get space usage per rank, per target using dmg pool query-targets.
 
         Args:
-            ranks (list): List of ranks to be queried
+            ranks (str): Comma separated daos_server-rank ranges to query e.g.
+                "0,2-5".
             target_idx (str): Comma-separated list of target idx(s) to be queried
 
         Returns:

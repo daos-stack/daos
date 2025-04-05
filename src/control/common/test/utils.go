@@ -424,11 +424,36 @@ func Context(t *testing.T) context.Context {
 	return ctx
 }
 
-// MustLogContext returns a context containing the supplied logger.
+// MustLogContext returns a context containing a buffer-backed logger.
+// The contents of the buffer will be displayed on test failure. If the
+// optional parent context is not supplied, a default context is created.
 // Canceled when the test is done.
-func MustLogContext(t *testing.T, log logging.Logger) context.Context {
+func MustLogContext(t *testing.T, parents ...context.Context) context.Context {
 	t.Helper()
-	ctx, err := logging.ToContext(Context(t), log)
+
+	var parent context.Context
+	switch len(parents) {
+	case 0:
+		parent = Context(t)
+	case 1:
+		if parents[0] == nil {
+			// Pass through a nil context for tests that expect it.
+			return nil
+		} else {
+			var cancel context.CancelFunc
+			parent, cancel = context.WithCancel(parents[0])
+			t.Cleanup(cancel)
+		}
+	default:
+		t.Fatal("too many parent contexts")
+	}
+
+	log, buf := logging.NewTestLogger(t.Name())
+	t.Cleanup(func() {
+		ShowBufferOnFailure(t, buf)
+	})
+
+	ctx, err := logging.ToContext(parent, log)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -4,15 +4,34 @@
 # 'recipe' for Docker for code scanning.
 #
 
-# Pull base image
-FROM fedora:latest
+ARG FVERSION=latest
+FROM fedora:$FVERSION
+# Needed for later use of FVERSION
+ARG FVERSION
 LABEL maintainer="daos@daos.groups.io"
 
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
 ARG CB0
 
+# Use local repo server if present
+ARG REPO_FILE_URL
+ARG DAOS_LAB_CA_FILE_URL
+# script to install OS updates basic tools and daos dependencies
+# COPY ./utils/scripts/install-fedora.sh /tmp/install.sh
+# script to setup local repo if available
+COPY ./utils/scripts/helpers/repo-helper-fedora.sh /tmp/repo-helper.sh
+
+RUN chmod +x /tmp/repo-helper.sh &&                 \
+    /tmp/repo-helper.sh &&                          \
+    rm -f /tmp/repo-helper.sh
+
 # Install Python Bandit scanner.
-RUN dnf -y upgrade && dnf -y install bandit && dnf clean all
+# The unset commands are currently needed for the combination of running
+# with a local repository, yet needing a proxy to reach outside repositories.
+# This needs to be moved to a shell script like above in the future to
+# properly only remove the proxy variables only when they need to be removed
+RUN unset HTTPS_PROXY && unset https_proxy && \
+    dnf -y upgrade && dnf -y install bandit && dnf clean all
 
 ARG CB1
-RUN dnf -y upgrade && dnf clean all
+RUN unset HTTPS_PROXY && unset https_proxy && dnf -y upgrade && dnf clean all
