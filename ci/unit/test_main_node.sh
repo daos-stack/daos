@@ -93,6 +93,6 @@ utils/run_utest.py $RUN_TEST_VALGRIND --no-fail-on-error $VDB_ARG --log_dir="$te
 pwd
 ls -al
 if [[ -n $(find build -name "*.gcda") ]]; then
-  #gcovr --html "${test_log_dir}/code_coverage_report.html" build
-  gcovr --html unit_test_logs/code_coverage_report.html build/dev/gcc
+  #gcovr build --html "${test_log_dir}/code_coverage_report.html"
+  gcovr build/dev/gcc --html unit_test_logs/code_coverage_report.html
 fi
