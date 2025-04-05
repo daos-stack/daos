@@ -3,6 +3,7 @@
 /* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral */
 /* groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName */
 /* Copyright 2019-2024 Intel Corporation
+/* Copyright 2025 Google LLC
  * Copyright 2025 Hewlett Packard Enterprise Development LP
  * All rights reserved.
  *
@@ -448,7 +449,7 @@ pipeline {
             //failFast true
             when {
                 beforeAgent true
-                expression { !skipStage() }
+                expression { !skipStage() && checkoutScm(withSubmodules: true) }
             }
             parallel {
                 stage('Build RPM on EL 8') {
@@ -609,7 +610,7 @@ pipeline {
                 stage('Build on EL 8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+			expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
