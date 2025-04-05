@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -402,7 +403,7 @@ func (p *Provider) FormatScm(force bool) error {
 }
 
 // GetBdevConfigs returns the Bdev tier configs.
-func (p *Provider) GetBdevConfigs() []*TierConfig {
+func (p *Provider) GetBdevConfigs() TierConfigs {
 	return p.engineStorage.Tiers.BdevConfigs()
 }
 
@@ -423,7 +424,8 @@ func (p *Provider) PrepareBdevs(req BdevPrepareRequest) (*BdevPrepareResponse, e
 	p.Lock()
 	defer p.Unlock()
 
-	if err == nil && resp != nil && !req.CleanHugepagesOnly {
+	// Perform sanity check before enabling VMD on storage provider.
+	if err == nil && resp != nil && !(req.CleanSpdkHugepages || req.CleanSpdkLockfiles) {
 		p.vmdEnabled = resp.VMDPrepared
 		p.log.Debugf("setting vmd=%v on storage provider", p.vmdEnabled)
 	}

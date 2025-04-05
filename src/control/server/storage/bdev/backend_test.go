@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -896,18 +897,22 @@ func TestBackend_Prepare(t *testing.T) {
 
 	defaultHpCleanCall := hugepageDir
 
+	var locksRemoved []string
+
 	for name, tc := range map[string]struct {
-		reset          bool
-		req            storage.BdevPrepareRequest
-		mbc            *MockBackendConfig
-		vmdDetectRet   *hardware.PCIAddressSet
-		vmdDetectErr   error
-		hpRemCount     uint
-		hpCleanErr     error
-		expScriptCalls []scriptCall
-		expErr         error
-		expResp        *storage.BdevPrepareResponse
-		expHpCleanCall string
+		reset           bool
+		req             storage.BdevPrepareRequest
+		mockLocksRemFn  func(string) error
+		mbc             *MockBackendConfig
+		vmdDetectRet    *hardware.PCIAddressSet
+		vmdDetectErr    error
+		hpRemCount      uint
+		hpCleanErr      error
+		expScriptCalls  []scriptCall
+		expErr          error
+		expResp         *storage.BdevPrepareResponse
+		expHpCleanCall  string
+		expLocksRemoved []string
 	}{
 		"prepare reset; defaults": {
 			reset: true,
@@ -1264,9 +1269,9 @@ func TestBackend_Prepare(t *testing.T) {
 				VMDPrepared: true,
 			},
 		},
-		"prepare setup; huge page clean only": {
+		"prepare setup; clean hugepages": {
 			req: storage.BdevPrepareRequest{
-				CleanHugepagesOnly: true,
+				CleanSpdkHugepages: true,
 			},
 			hpRemCount: 555,
 			expResp: &storage.BdevPrepareResponse{
@@ -1274,21 +1279,89 @@ func TestBackend_Prepare(t *testing.T) {
 			},
 			expHpCleanCall: defaultHpCleanCall,
 		},
-		"prepare setup; huge page clean fail": {
+		"prepare setup; clean hugepages fail": {
 			req: storage.BdevPrepareRequest{
-				CleanHugepagesOnly: true,
+				CleanSpdkHugepages: true,
 			},
 			hpCleanErr:     errors.New("clean failed"),
 			expErr:         errors.New("clean failed"),
 			expHpCleanCall: defaultHpCleanCall,
+		},
+		"prepare setup; lock file clean; empty allow list": {
+			req: storage.BdevPrepareRequest{
+				CleanSpdkLockfiles: true,
+			},
+			mockLocksRemFn: func(name string) error {
+				locksRemoved = append(locksRemoved, name)
+				return nil
+			},
+			expResp: &storage.BdevPrepareResponse{
+				LockfilesRemoved: []string{},
+			},
+		},
+		"prepare setup; clean lockfiles fail; empty allow list": {
+			req: storage.BdevPrepareRequest{
+				CleanSpdkLockfiles: true,
+			},
+			mockLocksRemFn: func(string) error {
+				return errors.New("spdk says no")
+			},
+			expResp: &storage.BdevPrepareResponse{
+				LockfilesRemoved: []string{},
+			},
+		},
+		"prepare setup; lock file clean": {
+			req: storage.BdevPrepareRequest{
+				CleanSpdkLockfiles: true,
+				PCIAllowList:       mockAddrListStr(1, 2, 3),
+				PCIBlockList:       mockAddrListStr(1),
+			},
+			mockLocksRemFn: func(name string) error {
+				locksRemoved = append(locksRemoved, name)
+				return nil
+			},
+			expResp: &storage.BdevPrepareResponse{
+				LockfilesRemoved: []string{
+					"/var/tmp/spdk_pci_lock_0000:02:00.0",
+					"/var/tmp/spdk_pci_lock_0000:03:00.0",
+				},
+			},
+			expLocksRemoved: []string{
+				"/var/tmp/spdk_pci_lock_0000:02:00.0",
+				"/var/tmp/spdk_pci_lock_0000:03:00.0",
+			},
+		},
+		"prepare setup; clean lockfiles fail": {
+			req: storage.BdevPrepareRequest{
+				CleanSpdkLockfiles: true,
+				PCIAllowList:       mockAddrListStr(1, 2, 3),
+			},
+			mockLocksRemFn: func(string) error {
+				return errors.New("spdk says no")
+			},
+			expResp: &storage.BdevPrepareResponse{
+				LockfilesRemoved: []string{},
+			},
+			expErr: errors.New("spdk says no"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer test.ShowBufferOnFailure(t, buf)
 
+			locksRemoved = nil
+
 			sss, calls := mockScriptRunner(t, log, tc.mbc)
-			b := newBackend(log, sss)
+			sb := &spdkBackend{
+				log: log,
+				binding: &spdkWrapper{
+					Nvme: &spdk.MockNvmeImpl{
+						Cfg:             spdk.MockNvmeCfg{},
+						MockLocksRemove: tc.mockLocksRemFn,
+					},
+				},
+				script: sss,
+			}
 
 			if tc.expResp == nil {
 				tc.expResp = &storage.BdevPrepareResponse{}
@@ -1305,9 +1378,9 @@ func TestBackend_Prepare(t *testing.T) {
 			var gotErr error
 			var gotResp *storage.BdevPrepareResponse
 			if tc.reset {
-				gotResp, gotErr = b.reset(tc.req, mockVmdDetect)
+				gotResp, gotErr = sb.reset(tc.req, mockVmdDetect)
 			} else {
-				gotResp, gotErr = b.prepare(tc.req, mockVmdDetect, mockHpClean)
+				gotResp, gotErr = sb.prepare(tc.req, mockVmdDetect, mockHpClean)
 			}
 			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
 				t.Fatalf("\nunexpected prepare response (-want, +got):\n%s\n", diff)
@@ -1329,6 +1402,10 @@ func TestBackend_Prepare(t *testing.T) {
 				}
 			}
 			test.AssertEqual(t, tc.expHpCleanCall, hpCleanCall, "unexpected clean hugepages call")
+
+			if diff := cmp.Diff(tc.expLocksRemoved, locksRemoved); diff != "" {
+				t.Fatalf("\nunexpected list of lockfiles remove (-want, +got):\n%s\n", diff)
+			}
 		})
 	}
 }
