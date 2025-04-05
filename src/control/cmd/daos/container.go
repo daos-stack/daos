@@ -389,7 +389,7 @@ func (cmd *containerCreateCmd) getCreateProps() (*daos.ContainerPropertyList, er
 	}
 
 	if hasType() {
-		typeProp := createPropList.MustAddEntryByType(daos.ContainerPropLayout)
+		typeProp := createPropList.MustAddEntryByType(daos.ContainerPropLayoutType)
 		typeProp.SetValue(uint64(cmd.Type.Type))
 	}
 

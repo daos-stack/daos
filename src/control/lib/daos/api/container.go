@@ -112,7 +112,7 @@ func newContainerInfo(poolUUID, contUUID uuid.UUID, cInfo *C.daos_cont_info_t, p
 	if props != nil {
 		for _, prop := range props.Properties() {
 			switch prop.Type {
-			case daos.ContainerPropLayout:
+			case daos.ContainerPropLayoutType:
 				ci.Type = daos.ContainerLayout(prop.GetValue())
 			case daos.ContainerPropLabel:
 				ci.ContainerLabel = prop.GetString()
@@ -459,7 +459,7 @@ func ContainerQuery(ctx context.Context, sysName, poolID, contID string) (*daos.
 	}
 	defer propList.Free()
 
-	propList.MustAddEntryByType(daos.ContainerPropLayout)
+	propList.MustAddEntryByType(daos.ContainerPropLayoutType)
 	propList.MustAddEntryByType(daos.ContainerPropLabel)
 	propList.MustAddEntryByType(daos.ContainerPropRedunFactor)
 	propList.MustAddEntryByType(daos.ContainerPropStatus)

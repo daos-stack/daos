@@ -344,7 +344,7 @@ func (cmd *containerSetOwnerCmd) Execute(args []string) error {
 		defer C.free(unsafe.Pointer(group))
 	}
 
-	propList, err := cmd.container.GetProperties(cmd.MustLogCtx(), daos.ContainerPropLayout.String())
+	propList, err := cmd.container.GetProperties(cmd.MustLogCtx(), daos.ContainerPropLayoutType.String())
 	if err != nil {
 		return err
 	}

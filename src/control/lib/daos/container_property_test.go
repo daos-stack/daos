@@ -324,15 +324,15 @@ func testReadOnlyContainerProperty(t *testing.T, propType ContainerPropType) {
 }
 
 func TestDaos_ContainerProperty_Layout(t *testing.T) {
-	testReadOnlyContainerProperty(t, ContainerPropLayout)
+	testReadOnlyContainerProperty(t, ContainerPropLayoutType)
 
 	t.Run("valid layout", func(t *testing.T) {
-		testProp := newTestContainerProperty(ContainerPropLayout)
+		testProp := newTestContainerProperty(ContainerPropLayoutType)
 		testProp.SetValue(uint64(ContainerLayoutPOSIX))
 		test.AssertEqual(t, testProp.StringValue(), fmt.Sprintf("%s (%d)", ContainerLayoutPOSIX, ContainerLayoutPOSIX), "unexpected string value")
 	})
 	t.Run("unknown layout", func(t *testing.T) {
-		testProp := newTestContainerProperty(ContainerPropLayout)
+		testProp := newTestContainerProperty(ContainerPropLayoutType)
 		testProp.SetValue(uint64(ContainerLayoutUnknown))
 		test.AssertEqual(t, testProp.StringValue(), "unknown (0)", "unexpected string value")
 	})
@@ -992,13 +992,13 @@ func TestDaos_ContainerPropertyList_PropertyNames(t *testing.T) {
 			propNames: []string{
 				ContainerPropLabel.String(),
 				ContainerPropChecksumEnabled.String(),
-				ContainerPropLayout.String(),
+				ContainerPropLayoutType.String(),
 				ContainerPropRedunFactor.String(),
 			},
 			expPropNames: []string{
 				ContainerPropChecksumEnabled.String(),
 				ContainerPropLabel.String(),
-				ContainerPropLayout.String(),
+				ContainerPropLayoutType.String(),
 				ContainerPropRedunFactor.String(),
 			},
 			expDeprecated: []string{"rf"},
@@ -1007,7 +1007,7 @@ func TestDaos_ContainerPropertyList_PropertyNames(t *testing.T) {
 			propNames: []string{
 				ContainerPropLabel.String(),
 				ContainerPropChecksumEnabled.String(),
-				ContainerPropLayout.String(),
+				ContainerPropLayoutType.String(),
 				ContainerPropRedunFactor.String(),
 			},
 			excReadOnly: true,

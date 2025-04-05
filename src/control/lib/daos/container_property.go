@@ -56,7 +56,7 @@ type ContainerPropType C.uint
 const (
 	containerPropMin             ContainerPropType = C.DAOS_PROP_CO_MIN
 	ContainerPropLabel           ContainerPropType = C.DAOS_PROP_CO_LABEL
-	ContainerPropLayout          ContainerPropType = C.DAOS_PROP_CO_LAYOUT_TYPE
+	ContainerPropLayoutType      ContainerPropType = C.DAOS_PROP_CO_LAYOUT_TYPE
 	ContainerPropLayoutVersion   ContainerPropType = C.DAOS_PROP_CO_LAYOUT_VER
 	ContainerPropChecksumEnabled ContainerPropType = C.DAOS_PROP_CO_CSUM
 	ContainerPropChecksumSize    ContainerPropType = C.DAOS_PROP_CO_CSUM_CHUNK_SIZE
@@ -88,7 +88,7 @@ func (cpt ContainerPropType) String() string {
 	switch cpt {
 	case ContainerPropLabel:
 		return C.DAOS_PROP_ENTRY_LABEL
-	case ContainerPropLayout:
+	case ContainerPropLayoutType:
 		return C.DAOS_PROP_ENTRY_LAYOUT_TYPE
 	case ContainerPropLayoutVersion:
 		return C.DAOS_PROP_ENTRY_LAYOUT_VER
@@ -194,13 +194,15 @@ var propHdlrs = propHdlrMap{
 			p.entry.dpe_type = C.DAOS_PROP_CO_LABEL
 			return p.SetString(v)
 		},
-		nil, nil,
+		nil,
+		nil,
 		strValStringer,
 		false,
 	},
 	C.DAOS_PROP_ENTRY_CKSUM: {
 		C.DAOS_PROP_CO_CSUM,
-		"Checksum", nil,
+		"Checksum",
+		nil,
 		valHdlrMap{
 			"off":     cksumHdlr,
 			"adler32": cksumHdlr,
@@ -210,7 +212,8 @@ var propHdlrs = propHdlrMap{
 			"sha1":    cksumHdlr,
 			"sha256":  cksumHdlr,
 			"sha512":  cksumHdlr,
-		}, nil,
+		},
+		nil,
 		func(p *ContainerProperty) string {
 			dpeVal := C.int(p.GetValue())
 			if dpeVal == C.DAOS_PROP_CO_CSUM_OFF {
@@ -237,17 +240,20 @@ var propHdlrs = propHdlrMap{
 
 			return p.SetValue(size)
 		},
-		nil, nil,
+		nil,
+		nil,
 		humanSizeStringer,
 		false,
 	},
 	C.DAOS_PROP_ENTRY_SRV_CKSUM: {
 		C.DAOS_PROP_CO_CSUM_SERVER_VERIFY,
-		"Server Checksumming", nil,
+		"Server Checksumming",
+		nil,
 		valHdlrMap{
 			"on":  genSetValHdlr(C.DAOS_PROP_CO_CSUM_SV_ON),
 			"off": genSetValHdlr(C.DAOS_PROP_CO_CSUM_SV_OFF),
-		}, nil,
+		},
+		nil,
 		func(p *ContainerProperty) string {
 			switch p.GetValue() {
 			case C.DAOS_PROP_CO_CSUM_SV_OFF:
@@ -262,12 +268,14 @@ var propHdlrs = propHdlrMap{
 	},
 	C.DAOS_PROP_ENTRY_DEDUP: {
 		C.DAOS_PROP_CO_DEDUP,
-		"Deduplication", nil,
+		"Deduplication",
+		nil,
 		valHdlrMap{
 			"off":    genSetValHdlr(C.DAOS_PROP_CO_DEDUP_OFF),
 			"memcmp": genSetValHdlr(C.DAOS_PROP_CO_DEDUP_MEMCMP),
 			"hash":   genSetValHdlr(C.DAOS_PROP_CO_DEDUP_HASH),
-		}, nil,
+		},
+		nil,
 		func(p *ContainerProperty) string {
 			switch p.GetValue() {
 			case C.DAOS_PROP_CO_DEDUP_OFF:
@@ -293,13 +301,15 @@ var propHdlrs = propHdlrMap{
 
 			return p.SetValue(size)
 		},
-		nil, nil,
+		nil,
+		nil,
 		humanSizeStringer,
 		false,
 	},
 	C.DAOS_PROP_ENTRY_COMPRESS: {
 		C.DAOS_PROP_CO_COMPRESS,
-		"Compression", nil,
+		"Compression",
+		nil,
 		valHdlrMap{
 			"off":      compressHdlr,
 			"lz4":      compressHdlr,
@@ -308,7 +318,8 @@ var propHdlrs = propHdlrMap{
 			"deflate2": compressHdlr,
 			"deflate3": compressHdlr,
 			"deflate4": compressHdlr,
-		}, nil,
+		},
+		nil,
 		func(p *ContainerProperty) string {
 			dpeVal := C.int(p.GetValue())
 			if dpeVal == C.DAOS_PROP_CO_CSUM_OFF {
@@ -327,7 +338,8 @@ var propHdlrs = propHdlrMap{
 	},
 	C.DAOS_PROP_ENTRY_ENCRYPT: {
 		C.DAOS_PROP_CO_ENCRYPT,
-		"Encryption", nil,
+		"Encryption",
+		nil,
 		valHdlrMap{
 			"off":        encryptHdlr,
 			"aes-xts128": encryptHdlr,
@@ -337,7 +349,8 @@ var propHdlrs = propHdlrMap{
 			"aes-cbc256": encryptHdlr,
 			"aes-gcm128": encryptHdlr,
 			"aes-gcm256": encryptHdlr,
-		}, nil,
+		},
+		nil,
 		func(p *ContainerProperty) string {
 			dpeVal := C.int(p.GetValue())
 			if dpeVal == C.DAOS_PROP_CO_ENCRYPT_OFF {
@@ -355,14 +368,16 @@ var propHdlrs = propHdlrMap{
 	},
 	C.DAOS_PROP_ENTRY_REDUN_FAC: {
 		C.DAOS_PROP_CO_REDUN_FAC,
-		"Redundancy Factor", nil,
+		"Redundancy Factor",
+		nil,
 		valHdlrMap{
 			"0": genSetValHdlr(C.DAOS_PROP_CO_REDUN_RF0),
 			"1": genSetValHdlr(C.DAOS_PROP_CO_REDUN_RF1),
 			"2": genSetValHdlr(C.DAOS_PROP_CO_REDUN_RF2),
 			"3": genSetValHdlr(C.DAOS_PROP_CO_REDUN_RF3),
 			"4": genSetValHdlr(C.DAOS_PROP_CO_REDUN_RF4),
-		}, []string{"rf"},
+		},
+		[]string{"rf"},
 		func(p *ContainerProperty) string {
 			switch p.GetValue() {
 			case C.DAOS_PROP_CO_REDUN_RF0:
@@ -383,10 +398,12 @@ var propHdlrs = propHdlrMap{
 	},
 	C.DAOS_PROP_ENTRY_STATUS: {
 		C.DAOS_PROP_CO_STATUS,
-		"Health", nil,
+		"Health",
+		nil,
 		valHdlrMap{
 			"healthy": genSetValHdlr(uint64(C.daos_prop_co_status_val(C.DAOS_PROP_CO_HEALTHY, 0, 0))),
-		}, nil,
+		},
+		nil,
 		func(p *ContainerProperty) string {
 			coInt := C.uint64_t(p.GetValue())
 			var coStatus C.struct_daos_co_status
@@ -418,7 +435,8 @@ var propHdlrs = propHdlrMap{
 
 			return p.SetValue(size)
 		},
-		nil, nil,
+		nil,
+		nil,
 		func(p *ContainerProperty) string {
 			size := p.GetValue()
 			if !EcCellSizeIsValid(size) {
@@ -443,7 +461,8 @@ var propHdlrs = propHdlrMap{
 
 			return p.SetValue(value)
 		},
-		nil, nil,
+		nil,
+		nil,
 		func(p *ContainerProperty) string {
 			value := p.GetValue()
 			if !EcPdaIsValid(value) {
@@ -468,7 +487,8 @@ var propHdlrs = propHdlrMap{
 
 			return p.SetValue(value)
 		},
-		nil, nil,
+		nil,
+		nil,
 		func(p *ContainerProperty) string {
 			value := p.GetValue()
 			if !RpPdaIsValid(value) {
@@ -480,13 +500,15 @@ var propHdlrs = propHdlrMap{
 	},
 	C.DAOS_PROP_ENTRY_REDUN_LVL: {
 		C.DAOS_PROP_CO_REDUN_LVL,
-		"Redundancy Level", nil,
+		"Redundancy Level",
+		nil,
 		valHdlrMap{
 			"1":    genSetValHdlr(C.DAOS_PROP_CO_REDUN_RANK),
 			"2":    genSetValHdlr(C.DAOS_PROP_CO_REDUN_NODE),
 			"rank": genSetValHdlr(C.DAOS_PROP_CO_REDUN_RANK),
 			"node": genSetValHdlr(C.DAOS_PROP_CO_REDUN_NODE),
-		}, []string{"rf_lvl"},
+		},
+		[]string{"rf_lvl"},
 		func(p *ContainerProperty) string {
 			lvl := p.GetValue()
 			switch lvl {
@@ -502,11 +524,13 @@ var propHdlrs = propHdlrMap{
 	},
 	C.DAOS_PROP_ENTRY_PERF_DOMAIN: {
 		C.DAOS_PROP_CO_PERF_DOMAIN,
-		"Performance domain level", nil,
+		"Performance domain level",
+		nil,
 		valHdlrMap{
 			"root":  genSetValHdlr(C.DAOS_PROP_PERF_DOMAIN_ROOT),
 			"group": genSetValHdlr(C.DAOS_PROP_PERF_DOMAIN_GROUP),
-		}, nil,
+		},
+		nil,
 		func(p *ContainerProperty) string {
 			lvl := p.GetValue()
 			switch lvl {
@@ -526,7 +550,9 @@ var propHdlrs = propHdlrMap{
 	C.DAOS_PROP_ENTRY_LAYOUT_TYPE: {
 		C.DAOS_PROP_CO_LAYOUT_TYPE,
 		"Layout Type",
-		nil, nil, nil,
+		nil,
+		nil,
+		nil,
 		func(p *ContainerProperty) string {
 			var loStr [10]C.char
 			loInt := C.ushort(p.GetValue())
@@ -539,63 +565,81 @@ var propHdlrs = propHdlrMap{
 	C.DAOS_PROP_ENTRY_LAYOUT_VER: {
 		C.DAOS_PROP_CO_LAYOUT_VER,
 		"Layout Version",
-		nil, nil, nil,
+		nil,
+		nil,
+		nil,
 		uintStringer,
 		true,
 	},
 	C.DAOS_PROP_ENTRY_SNAPSHOT_MAX: {
 		C.DAOS_PROP_CO_SNAPSHOT_MAX,
 		"Max Snapshot",
-		nil, nil, nil,
+		nil,
+		nil,
+		nil,
 		uintStringer,
 		true,
 	},
 	C.DAOS_PROP_ENTRY_ALLOCED_OID: {
 		C.DAOS_PROP_CO_ALLOCED_OID,
 		"Highest Allocated OID",
-		nil, nil, nil,
+		nil,
+		nil,
+		nil,
 		uintStringer,
 		true,
 	},
 	C.DAOS_PROP_ENTRY_OWNER: {
 		C.DAOS_PROP_CO_OWNER,
 		"Owner",
-		nil, nil, nil,
+		nil,
+		nil,
+		nil,
 		strValStringer,
 		true,
 	},
 	C.DAOS_PROP_ENTRY_GROUP: {
 		C.DAOS_PROP_CO_OWNER_GROUP,
 		"Group",
-		nil, nil, nil,
+		nil,
+		nil,
+		nil,
 		strValStringer,
 		true,
 	},
 	C.DAOS_PROP_ENTRY_GLOBAL_VERSION: {
 		C.DAOS_PROP_CO_GLOBAL_VERSION,
 		"Global Version",
-		nil, nil, nil,
+		nil,
+		nil,
+		nil,
 		uintStringer,
 		true,
 	},
 	C.DAOS_PROP_ENTRY_OBJ_VERSION: {
 		C.DAOS_PROP_CO_OBJ_VERSION,
 		"Object Version",
-		nil, nil, nil,
+		nil,
+		nil,
+		nil,
 		uintStringer,
 		true,
 	},
 	C.DAOS_PROP_ENTRY_ACL: {
 		C.DAOS_PROP_CO_ACL,
 		"Access Control List",
-		nil, nil, nil,
+		nil,
+		nil,
+		nil,
 		aclStringer,
 		true,
 	},
 	C.DAOS_PROP_ENTRY_ROOT_OIDS: {
 		C.DAOS_PROP_CO_ROOTS,
 		"Root OIDs",
-		nil, nil, nil,
+		nil,
+		nil,
+		nil,
 		func(p *ContainerProperty) string {
 			roots, err := getPropRootOids(p, true)
 			if err != nil {
@@ -613,10 +657,62 @@ var propHdlrs = propHdlrMap{
 	C.DAOS_PROP_ENTRY_SCRUB_DISABLED: {
 		C.DAOS_PROP_CO_SCRUBBER_DISABLED,
 		"Scrubber Disabled",
-		nil, nil, nil,
+		nil,
+		nil,
+		nil,
 		boolStringer,
 		true,
 	},
+}
+
+func (p *ContainerProperty) MarshalJSON() ([]byte, error) {
+	if p == nil || p.entry == nil || p.hdlr == nil {
+		return nil, errors.New("nil property")
+	}
+
+	// Normal case, just use the stringer.
+	jsonValue := func(p *ContainerProperty) any {
+		return p.hdlr.toString(p)
+	}
+	// Special-case situations for when the string representation
+	// of a value would be wrong for JSON consumers (e.g. human-readable
+	// numeric values that would have to be converted back to a number).
+	switch p.Type {
+	case ContainerPropHighestOid,
+		ContainerPropEcCellSize,
+		ContainerPropLayoutVersion,
+		ContainerPropMaxSnapshots,
+		ContainerPropChecksumSize,
+		ContainerPropDedupThreshold:
+		jsonValue = func(p *ContainerProperty) any {
+			return p.GetValue()
+		}
+	case ContainerPropACL:
+		jsonValue = func(p *ContainerProperty) any {
+			return getAclStrings(p)
+		}
+	case ContainerPropRootObjects:
+		oids, err := getPropRootOids(p, true)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to get root OIDs for %s", p.Name)
+		}
+		jsonValue = func(_ *ContainerProperty) any {
+			oidStrs := make([]string, len(oids))
+			for i, oid := range oids {
+				oidStrs[i] = oid.String()
+			}
+			return oidStrs
+		}
+	}
+
+	type toJSON ContainerProperty
+	return json.Marshal(&struct {
+		Value any `json:"value"`
+		*toJSON
+	}{
+		Value:  jsonValue(p),
+		toJSON: (*toJSON)(p),
+	})
 }
 
 func cksumHdlr(p *ContainerProperty, v string) error {
@@ -962,56 +1058,6 @@ func (p *ContainerProperty) SettableValues() []string {
 	}
 
 	return p.hdlr.valHdlrs.keys()
-}
-
-func (p *ContainerProperty) MarshalJSON() ([]byte, error) {
-	if p == nil || p.entry == nil || p.hdlr == nil {
-		return nil, errors.New("nil property")
-	}
-
-	// Normal case, just use the stringer.
-	jsonValue := func(p *ContainerProperty) any {
-		return p.hdlr.toString(p)
-	}
-	// Special-case situations for when the string representation
-	// of a value would be wrong for JSON consumers (e.g. human-readable
-	// numeric values that would have to be converted back to a number).
-	switch p.Type {
-	case ContainerPropHighestOid,
-		ContainerPropEcCellSize,
-		ContainerPropLayoutVersion,
-		ContainerPropMaxSnapshots,
-		ContainerPropChecksumSize,
-		ContainerPropDedupThreshold:
-		jsonValue = func(p *ContainerProperty) any {
-			return p.GetValue()
-		}
-	case ContainerPropACL:
-		jsonValue = func(p *ContainerProperty) any {
-			return getAclStrings(p)
-		}
-	case ContainerPropRootObjects:
-		oids, err := getPropRootOids(p, true)
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to get root OIDs for %s", p.Name)
-		}
-		jsonValue = func(_ *ContainerProperty) any {
-			oidStrs := make([]string, len(oids))
-			for i, oid := range oids {
-				oidStrs[i] = oid.String()
-			}
-			return oidStrs
-		}
-	}
-
-	type toJSON ContainerProperty
-	return json.Marshal(&struct {
-		Value any `json:"value"`
-		*toJSON
-	}{
-		Value:  jsonValue(p),
-		toJSON: (*toJSON)(p),
-	})
 }
 
 type propHdlr struct {
