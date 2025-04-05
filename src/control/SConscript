@@ -108,8 +108,9 @@ def install_go_bin(env, name, libs=None, install_man=False):
         build_path = join('$BUILD_DIR/src/control', f'{name}.8')
         menv = env.Clone()
         # This runs code from the build area so needs LD_LIBRARY_PATH set.
+        menv["ENV"]["NA_PLUGIN_PATH"] = menv.subst("$SANDBOX_PREFIX$MERCURY_PREFIX/lib64/mercury")
         menv.d_enable_ld_path(["cart", "gurt", "client/api", "common", "client/dfs", "utils",
-                               "utils/self_test"])
+                               "utils/self_test", "$SANDBOX_PREFIX$MERCURY_PREFIX/lib64"])
         menv.Command(build_path, target, f'{gen_bin} manpage -o {build_path}')
         menv.Install('$PREFIX/share/man/man8', build_path)
 
@@ -142,7 +143,7 @@ def scons():
 
     # Sets CGO_LDFLAGS for rpath options
     denv.d_add_rpaths("..", True, True)
-    denv.require('protobufc')
+    denv.require('protobufc', 'isal_crypto')
     denv.AppendENVPath("CGO_CFLAGS", denv.subst("$_CPPINCFLAGS"), sep=" ")
     if prereqs.client_requested():
         install_go_bin(denv, "daos_agent")
@@ -158,7 +159,9 @@ def scons():
                              "-L$BUILD_DIR/src/client/dfs "
                              "-L$BUILD_DIR/src/utils "
                              "-L$BUILD_DIR/src/utils/self_test "
+                             "-Wl,-rpath-link=$SANDBOX_PREFIX$ISAL_CRYPTO_PREFIX/lib64 "
                              "$_RPATH")
+        print(f"dblibs={dblibs}")
         dbenv.AppendENVPath("CGO_LDFLAGS", dblibs, sep=" ")
         install_go_bin(dbenv, 'daos', libs=['daos_cmd_hdlrs', 'dfs', 'duns', 'daos',
                                             'daos_self_test'],
@@ -181,7 +184,7 @@ def scons():
     install_go_bin(senv, "daos_server")
 
     aenv = denv.Clone()
-    aenv.require('spdk', 'pmdk', 'ofi', 'argobots')
+    aenv.require('spdk', 'pmdk', 'ofi', 'argobots', 'isal_crypto')
 
     aenv.AppendUnique(LINKFLAGS=["-Wl,--no-as-needed"])
     aenv.Replace(RPATH=[])
@@ -191,15 +194,16 @@ def scons():
                             "-L$BUILD_DIR/src/common/dav_v2 "
                             "-L$BUILD_DIR/src/common "
                             "-L$BUILD_DIR/src/utils/ddb "
-                            "-L$SPDK_PREFIX/lib "
-                            "-L$OFI_PREFIX/lib $_RPATH")
+                            "-L$SANDBOX_PREFIX$SPDK_PREFIX/lib "
+                            "-L$SANDBOX_PREFIX$OFI_PREFIX/lib $_RPATH")
     # Explicitly link RTE & SPDK libs for CGO access
     ldopts = cgolibdirs + " -lspdk_env_dpdk -lspdk_nvme -lspdk_vmd -lrte_mempool" + \
         " -lrte_mempool_ring -lrte_bus_pci -lnvme_control -lnuma -ldl"
     aenv.AppendENVPath("CGO_LDFLAGS", ldopts, sep=" ")
 
     aenv.AppendENVPath("CGO_CFLAGS",
-                       senv.subst("-I$SPDK_PREFIX/include -I$OFI_PREFIX/include"),
+                       senv.subst("-I$SANDBOX_PREFIX$SPDK_PREFIX/include "
+                                  "-I$SANDBOX_PREFIX$OFI_PREFIX/include"),
                        sep=" ")
 
     # Sets CGO_LDFLAGS for rpath

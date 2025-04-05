@@ -9,7 +9,7 @@ def scons():
     libraries = ['smd', 'pmemobj', 'cmocka', 'daos_common_pmem', 'uuid', 'abt', 'gurt']
     tenv = denv.Clone()
 
-    tenv.require('argobots')
+    tenv.require('argobots', 'isal', 'pmdk')
 
     tenv.AppendUnique(LIBPATH=[Dir('..')])
     smd_ut = tenv.d_test_program('smd_ut.c', LIBS=libraries)

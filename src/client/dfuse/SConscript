@@ -224,6 +224,7 @@ def scons():
 
     cenv.require('hwloc')
     cenv.require('fused')
+    cenv.require('isal_crypto')
     extra_libs = ['dl']
 
     configure_fuse(cenv)

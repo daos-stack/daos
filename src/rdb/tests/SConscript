@@ -6,7 +6,7 @@ def scons():
     Import('denv', 'libdaos_tgts')
 
     tenv = denv.Clone()
-    tenv.require('isal')
+    tenv.require('isal', 'pmdk')
 
     # rdbt server
     librdbt = tenv.d_library('rdbt', ['rdb_test.c', 'rpc.c'], install_off='../..')

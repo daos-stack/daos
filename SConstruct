@@ -481,7 +481,7 @@ def scons():
 
     conf_dir = ARGUMENTS.get('CONF_DIR', '$PREFIX/etc')
 
-    env.Alias('install', '$PREFIX')
+    env.Alias('install', '$SANDBOX_PREFIX$PREFIX')
 
     base_env = env.Clone()
 
