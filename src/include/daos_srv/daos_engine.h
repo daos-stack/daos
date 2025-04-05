@@ -408,7 +408,18 @@ struct dss_module {
 /**
  * Stack size used for ULTs with deep stack
  */
-#define DSS_DEEP_STACK_SZ	65536
+#if defined(__clang__)
+#if defined(__has_feature) && __has_feature(address_sanitizer)
+#define DSS_DEEP_STACK_SZ 98304
+#endif
+#elif defined(__GNUC__)
+#ifdef __SANITIZE_ADDRESS__
+#define DSS_DEEP_STACK_SZ 98304
+#endif
+#endif
+#ifndef DSS_DEEP_STACK_SZ
+#define DSS_DEEP_STACK_SZ 65536
+#endif
 
 enum dss_xs_type {
 	/** current xstream */
