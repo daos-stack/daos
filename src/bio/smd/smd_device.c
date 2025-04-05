@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -274,6 +275,34 @@ smd_dev_list(d_list_t *dev_list, int *devs)
 	return rc;
 }
 
+static int
+tgt_need_replace(uuid_t old_id, uint32_t tgt_id, unsigned int old_roles, enum smd_dev_type st)
+{
+	struct d_uuid assigned;
+	int           rc;
+
+	if (old_roles)
+		return (old_roles & smd_dev_type2role(st));
+
+	rc = smd_db_fetch(TABLE_TGTS[st], &tgt_id, sizeof(tgt_id), &assigned, sizeof(assigned));
+	if (rc == -DER_NONEXIST) {
+		return 0;
+	} else if (rc) {
+		DL_ERROR(rc, "Failed to fetch target table");
+		return rc;
+	}
+
+	return uuid_compare(old_id, assigned.uuid) == 0 ? 1 : 0;
+}
+
+/*
+ * When the 'old_roles' isn't specified, it must be called from ddb device replacing.
+ *
+ * The purpose of 'ddb dev_replace' is to replace an old device which can't be discovered
+ * by SPDK anymore (that will fail engine start), in such case, the replaced device
+ * should be marked as FAULTY, when engine started later, user will be able to use the
+ * 'dmg storage replace' command with same old and new device ID to revive the device.
+ */
 int
 smd_dev_replace(uuid_t old_id, uuid_t new_id, unsigned int old_roles)
 {
@@ -307,8 +336,11 @@ smd_dev_replace(uuid_t old_id, uuid_t new_id, unsigned int old_roles)
 		goto out;
 	}
 
-	/* Sanity check to old device */
-	if (dev.sd_state != SMD_DEV_FAULTY) {
+	/*
+	 * Sanity check to old device, don't have to check the old dev state when it's
+	 * from 'ddb dev_replace'
+	 */
+	if (old_roles && dev.sd_state != SMD_DEV_FAULTY) {
 		D_ERROR("Dev "DF_UUID" isn't in faulty\n", DP_UUID(&id.uuid));
 		rc = -DER_INVAL;
 		goto out;
@@ -336,7 +368,8 @@ smd_dev_replace(uuid_t old_id, uuid_t new_id, unsigned int old_roles)
 
 	/* Insert new device in device table */
 	uuid_copy(id.uuid, new_id);
-	dev.sd_state = SMD_DEV_NORMAL;
+	/* The replaced device from 'ddb dev_replace' should start with FAULTY state */
+	dev.sd_state = old_roles ? SMD_DEV_NORMAL : SMD_DEV_FAULTY;
 	rc = smd_db_upsert(TABLE_DEV, &id, sizeof(id), &dev, sizeof(dev));
 	if (rc) {
 		D_ERROR("Failed to insert new dev "DF_UUID". "DF_RC"\n",
@@ -349,7 +382,10 @@ smd_dev_replace(uuid_t old_id, uuid_t new_id, unsigned int old_roles)
 		uint32_t tgt_id = dev.sd_tgts[i];
 
 		for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
-			if (!(old_roles & smd_dev_type2role(st)))
+			rc = tgt_need_replace(old_id, tgt_id, old_roles, st);
+			if (rc < 0)
+				goto tx_end;
+			else if (rc == 0)
 				continue;
 
 			rc = smd_db_upsert(TABLE_TGTS[st], &tgt_id, sizeof(tgt_id),
