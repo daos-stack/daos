@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,6 +15,10 @@
 
 #include <daos/common.h>
 #include <gurt/debug.h>
+
+/* special file to control logging */
+#define DFUSE_LOG_CTRL     ".dfuse_log_ctrl"
+#define DFUSE_LOG_CTRL_INO (0xf399beeff9933fffULL)
 
 /* Allow changing the default so these macros can be
  * used by files that don't log to the default facility

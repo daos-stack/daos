@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -111,6 +112,11 @@ df_ll_create(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode,
 	struct dfuse_inode_entry *parent_inode;
 	int                       rc;
 
+	if (strncmp(name, DFUSE_LOG_CTRL, sizeof(DFUSE_LOG_CTRL)) == 0) {
+		fuse_reply_err(req, EPERM);
+		return;
+	}
+
 	parent_inode = dfuse_inode_lookup_nf(dfuse_info, parent);
 
 	if (!parent_inode->ie_dfs->dfs_ops->create)
@@ -132,6 +138,11 @@ df_ll_mknod(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode, de
 	struct dfuse_inode_entry *parent_inode;
 	int                       rc;
 
+	if (strncmp(name, DFUSE_LOG_CTRL, sizeof(DFUSE_LOG_CTRL)) == 0) {
+		fuse_reply_err(req, EPERM);
+		return;
+	}
+
 	parent_inode = dfuse_inode_lookup_nf(dfuse_info, parent);
 
 	if (!parent_inode->ie_dfs->dfs_ops->mknod)
@@ -152,6 +163,15 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
 	struct dfuse_obj_hdl     *handle     = NULL;
 	struct dfuse_inode_entry *inode;
+
+	if (ino == DFUSE_LOG_CTRL_INO) {
+		struct stat stat = {0};
+
+		stat.st_ino  = ino;
+		stat.st_mode = DFUSE_LOG_CTRL_MODE;
+		fuse_reply_attr(req, &stat, 0);
+		return;
+	}
 
 	if (fi)
 		handle = (void *)fi->fh;
@@ -192,6 +212,11 @@ df_ll_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, int to_set,
 	struct dfuse_inode_entry *inode;
 	int                       rc;
 
+	if (ino == DFUSE_LOG_CTRL_INO) {
+		fuse_reply_err(req, EPERM);
+		return;
+	}
+
 	if (fi)
 		handle = (void *)fi->fh;
 
@@ -223,6 +248,18 @@ df_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
 	struct dfuse_inode_entry *parent_inode;
 
+	if (strncmp(name, DFUSE_LOG_CTRL, sizeof(DFUSE_LOG_CTRL)) == 0) {
+		struct fuse_entry_param entry = {0};
+
+		/** Unlikely to conflict */
+		entry.attr.st_ino = entry.ino = DFUSE_LOG_CTRL_INO;
+		entry.attr.st_mode            = DFUSE_LOG_CTRL_MODE;
+		entry.attr_timeout            = 0;
+		entry.entry_timeout           = 0;
+		fuse_reply_entry(req, &entry);
+		return;
+	}
+
 	parent_inode = dfuse_inode_lookup_nf(dfuse_info, parent);
 
 	DFUSE_IE_STAT_ADD(parent_inode, DS_LOOKUP);
@@ -236,6 +273,11 @@ df_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 	struct dfuse_info        *dfuse_info   = fuse_req_userdata(req);
 	struct dfuse_inode_entry *parent_inode = NULL;
 	int                       rc;
+
+	if (strncmp(name, DFUSE_LOG_CTRL, sizeof(DFUSE_LOG_CTRL)) == 0) {
+		fuse_reply_err(req, EPERM);
+		return;
+	}
 
 	parent_inode = dfuse_inode_lookup_nf(dfuse_info, parent);
 
@@ -298,6 +340,11 @@ df_ll_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
 	struct dfuse_inode_entry *parent_inode;
 	int                       rc;
+
+	if (strncmp(name, DFUSE_LOG_CTRL, sizeof(DFUSE_LOG_CTRL)) == 0) {
+		fuse_reply_err(req, EPERM);
+		return;
+	}
 
 	parent_inode = dfuse_inode_lookup_nf(dfuse_info, parent);
 
@@ -422,6 +469,10 @@ df_ll_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name, const char *val
 	if (strncmp(name, XATTR_P_ACL, sizeof(XATTR_P_ACL) - 1) == 0)
 		D_GOTO(err, rc = ENOTSUP);
 
+	if (ino == DFUSE_LOG_CTRL_INO) {
+		D_GOTO(err, rc = EPERM);
+	}
+
 	inode = dfuse_inode_lookup_nf(dfuse_info, ino);
 
 	if (!inode->ie_dfs->dfs_ops->setxattr)
@@ -448,6 +499,10 @@ df_ll_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name, size_t size)
 
 	if (strncmp(name, XATTR_P_ACL, sizeof(XATTR_P_ACL) - 1) == 0)
 		D_GOTO(err, rc = ENODATA);
+
+	if (ino == DFUSE_LOG_CTRL_INO) {
+		D_GOTO(err, rc = ENODATA);
+	}
 
 	inode = dfuse_inode_lookup_nf(dfuse_info, ino);
 
@@ -478,6 +533,10 @@ df_ll_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name)
 		D_GOTO(err, rc = EPERM);
 	}
 
+	if (ino == DFUSE_LOG_CTRL_INO) {
+		D_GOTO(err, rc = ENODATA);
+	}
+
 	inode = dfuse_inode_lookup_nf(dfuse_info, ino);
 
 	if (!inode->ie_dfs->dfs_ops->removexattr)
@@ -498,6 +557,10 @@ df_ll_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
 	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
 	struct dfuse_inode_entry *inode;
 	int                       rc;
+
+	if (ino == DFUSE_LOG_CTRL_INO) {
+		D_GOTO(err, rc = ENODATA);
+	}
 
 	inode = dfuse_inode_lookup_nf(dfuse_info, ino);
 
@@ -521,6 +584,12 @@ df_ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name, fuse_ino_t new
 	struct dfuse_inode_entry *parent_inode;
 	struct dfuse_inode_entry *newparent_inode = NULL;
 	int                       rc;
+
+	if (strncmp(name, DFUSE_LOG_CTRL, sizeof(DFUSE_LOG_CTRL)) == 0 ||
+	    strncmp(newname, DFUSE_LOG_CTRL, sizeof(DFUSE_LOG_CTRL)) == 0) {
+		fuse_reply_err(req, EPERM);
+		return;
+	}
 
 	parent_inode = dfuse_inode_lookup_nf(dfuse_info, parent);
 
@@ -550,6 +619,10 @@ df_ll_statfs(fuse_req_t req, fuse_ino_t ino)
 	struct dfuse_inode_entry *inode;
 	int                       rc;
 
+	if (ino == DFUSE_LOG_CTRL_INO) {
+		D_GOTO(err, rc = ENOTSUP);
+	}
+
 	inode = dfuse_inode_lookup_nf(dfuse_info, ino);
 
 	if (!inode->ie_dfs->dfs_ops->statfs)
@@ -569,6 +642,11 @@ dfuse_cb_flush(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
 	struct dfuse_obj_hdl     *oh;
 	struct dfuse_inode_entry *inode;
+
+	if (ino == DFUSE_LOG_CTRL_INO) {
+		fuse_reply_err(req, 0);
+		return;
+	}
 
 	D_ASSERT(fi != NULL);
 	oh    = (struct dfuse_obj_hdl *)fi->fh;
