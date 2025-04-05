@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -354,31 +355,35 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 	}
 
 	if bdevCfgs.HaveBdevs() {
-		// The NrHugepages config value is a total for all engines. Distribute allocation
-		// of hugepages across each engine's numa node (as validation ensures that
-		// TargetsCount is equal for each engine). Assumes an equal number of engine's per
-		// numa node.
-		numaNodes, err := getEngineNUMANodes(srv.log, srv.cfg.Engines)
-		if err != nil {
-			return err
+		if srv.cfg.NrHugepagesNeedsUpdate {
+			// The NrHugepages config value is a total for all engines. Distribute allocation
+			// of hugepages across each engine's numa node (as validation ensures that
+			// TargetsCount is equal for each engine). Assumes an equal number of engine's per
+			// numa node.
+			numaNodes, err := getEngineNUMANodes(srv.log, srv.cfg.Engines)
+			if err != nil {
+				return err
+			}
+
+			if len(numaNodes) == 0 {
+				return errors.New("invalid number of numa nodes detected (0)")
+			}
+
+			// Request a few more hugepages than actually required for each NUMA node
+			// allocation as some overhead may result in one or two being unavailable.
+			prepReq.HugepageCount = srv.cfg.NrHugepages / len(numaNodes)
+
+			// Extra pages to be allocated per engine but take into account the page count
+			// will be issued on each NUMA node.
+			extraPages := (extraHugepages * len(srv.cfg.Engines)) / len(numaNodes)
+			prepReq.HugepageCount += extraPages
+			prepReq.HugeNodes = strings.Join(numaNodes, ",")
+
+			srv.log.Debugf("allocating %d hugepages on each of these numa nodes: %v",
+				prepReq.HugepageCount, numaNodes)
+
+			srv.cfg.NrHugepagesNeedsUpdate = false
 		}
-
-		if len(numaNodes) == 0 {
-			return errors.New("invalid number of numa nodes detected (0)")
-		}
-
-		// Request a few more hugepages than actually required for each NUMA node
-		// allocation as some overhead may result in one or two being unavailable.
-		prepReq.HugepageCount = srv.cfg.NrHugepages / len(numaNodes)
-
-		// Extra pages to be allocated per engine but take into account the page count
-		// will be issued on each NUMA node.
-		extraPages := (extraHugepages * len(srv.cfg.Engines)) / len(numaNodes)
-		prepReq.HugepageCount += extraPages
-		prepReq.HugeNodes = strings.Join(numaNodes, ",")
-
-		srv.log.Debugf("allocating %d hugepages on each of these numa nodes: %v",
-			prepReq.HugepageCount, numaNodes)
 	} else {
 		if srv.cfg.NrHugepages == 0 {
 			// If nr_hugepages is unset then set minimum needed for scanning in prepare
