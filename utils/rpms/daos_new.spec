@@ -90,6 +90,8 @@ Requires: openssl
 %if %{with server}
 %package server-deps-common
 Summary: Prebuilt server dependencies
+Version:       %{daos_version}
+Release:       %{daos_release}
 
 %description server-deps-common
 Prebuilt server dependencies needed for server components.  Includes
@@ -97,8 +99,9 @@ SPDK and PMDK libraries
 
 %package server
 Summary: The DAOS server
+Version:       %{daos_version}
+Release:       %{daos_release}
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: %{name}-deps-common%{?_isa} = %{version}-%{release}
 Requires: %{name}-server-deps-common%{?_isa} = %{version}-%{release}
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
@@ -119,6 +122,8 @@ This is the package needed to run a DAOS server
 
 %package admin
 Summary: DAOS admin tools
+Version:       %{daos_version}
+Release:       %{daos_release}
 Requires: %{name}%{?_isa} = %{version}-%{release}
 
 %description admin
@@ -132,6 +137,8 @@ This package contains DAOS administrative tools (e.g. dmg).
 
 %package client
 Summary: The DAOS client
+Version:       %{daos_version}
+Release:       %{daos_release}
 Requires: %{name}%{?_isa} = %{version}-%{release}
 Requires: /usr/bin/fusermount3
 %{?systemd_requires}
@@ -141,6 +148,8 @@ This is the package needed to run a DAOS client
 
 %package tests
 Summary: The entire DAOS test suite
+Version:       %{daos_version}
+Release:       %{daos_release}
 Requires: %{name}-client-tests%{?_isa} = %{version}-%{release}
 BuildArch: noarch
 
@@ -149,6 +158,8 @@ This is the package is a metapackage to install all of the test packages
 
 %package tests-internal
 Summary: The entire internal DAOS test suite
+Version:       %{daos_version}
+Release:       %{daos_release}
 Requires: %{name}-tests = %{version}-%{release}
 Requires: %{name}-client-tests-openmpi%{?_isa} = %{version}-%{release}
 Requires: %{name}-client-tests-mpich = %{version}-%{release}
@@ -159,18 +170,13 @@ BuildArch: noarch
 This is the package is a metapackage to install all of the internal test
 packages
 
-%package deps-common
-Summary: Common prebuilt dependencies
-
-%description deps-common
-Builds Argobots for tests and server components
-
 %package client-tests
 Summary: The DAOS test suite
+Version:       %{daos_version}
+Release:       %{daos_release}
 Requires: %{name}-client%{?_isa} = %{version}-%{release}
 Requires: %{name}-admin%{?_isa} = %{version}-%{release}
 Requires: %{name}-devel%{?_isa} = %{version}-%{release}
-Requires: %{name}-deps-common%{?_isa} = %{version}-%{release}
 %if (0%{?suse_version} >= 1500)
 Requires: libprotobuf-c-devel
 %else
@@ -204,6 +210,8 @@ This is the package needed to run the DAOS test suite (client tests)
 
 %package client-tests-openmpi
 Summary: The DAOS client test suite - tools which need openmpi
+Version:       %{daos_version}
+Release:       %{daos_release}
 Requires: %{name}-client-tests%{?_isa} = %{version}-%{release}
 Requires: hdf5-%{openmpi}-tests
 Requires: hdf5-vol-daos-%{openmpi}-tests
@@ -215,6 +223,8 @@ This is the package needed to run the DAOS client test suite openmpi tools
 
 %package client-tests-mpich
 Summary: The DAOS client test suite - tools which need mpich
+Version:       %{daos_version}
+Release:       %{daos_release}
 BuildArch: noarch
 Requires: %{name}-client-tests%{?_isa} = %{version}-%{release}
 Requires: mpifileutils-mpich
@@ -234,6 +244,8 @@ This is the package needed to run the DAOS client test suite mpich tools
 %if %{with server}
 %package server-tests
 Summary: The DAOS server test suite (server tests)
+Version:       %{daos_version}
+Release:       %{daos_release}
 Requires: %{name}-server%{?_isa} = %{version}-%{release}
 Requires: %{name}-admin%{?_isa} = %{version}-%{release}
 
@@ -243,6 +255,8 @@ This is the package needed to run the DAOS server test suite (server tests)
 
 %package devel
 Summary: The DAOS development libraries and headers
+Version:       %{daos_version}
+Release:       %{daos_release}
 Requires: %{name}-client%{?_isa} = %{version}-%{release}
 Requires: libuuid-devel
 
@@ -252,6 +266,8 @@ This is the package needed to build software with the DAOS library.
 %if %{with server}
 %package firmware
 Summary: The DAOS firmware management helper
+Version:       %{daos_version}
+Release:       %{daos_release}
 Requires: %{name}-server%{?_isa} = %{version}-%{release}
 
 %description firmware
@@ -260,6 +276,8 @@ This is the package needed to manage server storage firmware on DAOS servers.
 
 %package serialize
 Summary: DAOS serialization library that uses HDF5
+Version:       %{daos_version}
+Release:       %{daos_release}
 BuildRequires: hdf5-devel
 Requires: hdf5
 
@@ -269,6 +287,8 @@ tools, as well as the preserve option for the filesystem copy tool.
 
 %package mofed-shim
 Summary: A shim to bridge MOFED's openmpi to distribution dependency tags
+Version:       %{daos_version}
+Release:       %{daos_release}
 Provides: libmpi.so.40()(64bit)(openmpi-x86_64)
 Requires: libmpi.so.40()(64bit)
 Provides: libmpi_cxx.so.40()(64bit)(openmpi-x86_64)
@@ -317,7 +337,29 @@ utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}%{daos_root}/bin" "%{buildr
                          "cart_ctl" \
                          "self_test" \
                          "dfuse" \
-                         "dmg"
+                         "dmg" \
+                         "hello_drpc" \
+                         "acl_dump_test" \
+                         "agent_tests" \
+                         "drpc_engine_test" \
+                         "drpc_test" \
+                         "dfuse_test" \
+                         "eq_tests" \
+                         "job_tests" \
+                         "jump_pl_map" \
+                         "ring_pl_map" \
+                         "pl_bench" \
+                         "security_test" \
+                         "fault_status" \
+                         "crt_launch" \
+                         "daos_perf" \
+                         "daos_racer" \
+                         "daos_test" \
+                         "daos_debug_set_params" \
+                         "dfs_test" \
+                         "jobtest" \
+                         "daos_gen_io_conf" \
+                         "daos_run_io_conf"
 utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}%{daos_root}/lib64" "%{buildroot}%{_libdir}" \
                          "%{buildroot}%{daos_root}" "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
                          "daos" \
@@ -333,17 +375,22 @@ utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}%{daos_root}/lib64" "%{buil
                          $(basename -a "%{buildroot}%{daos_root}/lib64/libdfuse"*) \
                          $(basename -a "%{buildroot}%{daos_root}/lib64/libioil"*) \
                          $(basename -a "%{buildroot}%{daos_root}/lib64/libpil4dfs"*) \
+                         $(basename -a "%{buildroot}%{daos_root}/lib64/libdaos_tests.so"*) \
+                         $(basename -a "%{buildroot}%{daos_root}/lib64/libdpar.so"*) \
+                         $(basename -a "%{buildroot}%{daos_root}/lib64/libdpar_mpi.so"*) \
                          $(basename -a "%{buildroot}%{daos_root}/lib64/libdaos_common."*)
 utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}%{daos_root}/include" \
                          "%{buildroot}%{_includedir}" \
                          "%{buildroot}%{daos_root}" \
                          "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
                          $(basename -a "%{buildroot}%{daos_root}/include/"*)
-utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}%{daos_root}/lib/daos/python" \
-                         "%{buildroot}%{_prefix}/lib/daos/python" \
+# shouldn't have source files in a non-devel RPM
+rm -f %{buildroot}%{daos_root}/lib/daos/TESTING/ftest/cart/{test_linkage.cpp,utest_{hlc,portnumber,protocol,swim}.c,wrap_cmocka.h}
+utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}%{daos_root}/lib" \
+                         "%{buildroot}%{_prefix}/lib" \
                          "%{buildroot}%{daos_root}" \
                          "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
-                         $(basename -a "%{buildroot}%{daos_root}/lib/daos/python/"*)
+                         $(basename -a "%{buildroot}%{daos_root}/lib/"*)
 mkdir -p "%{buildroot}%{python3_sitearch}/pydaos"
 utils/rpms/move_files.sh "%{buildroot}" \
                 "%{buildroot}"$(sed "s!%{_prefix}!%{daos_root}!" <<< "%{python3_sitearch}/pydaos") \
@@ -387,13 +434,10 @@ mkdir -p %{buildroot}/%{conf_dir}/certs/clients
 mkdir -p  %{buildroot}%{_sysconfdir}/bash_completion.d
 mv %{buildroot}%{daos_root}/etc/bash_completion.d/* %{buildroot}/%{_sysconfdir}/bash_completion.d
 # fixup env-script-interpreters
-sed -i -e '1s/env //' %{buildroot}%{daos_root}/lib/daos/TESTING/ftest/{cart/cart_logtest,cart/daos_sys_logscan,config_file_gen,launch,slurm_setup,tags,verify_perms}.py
+sed -i -e '1s/env //' %{buildroot}%{_prefix}/lib/daos/TESTING/ftest/{cart/cart_logtest,cart/daos_sys_logscan,config_file_gen,launch,slurm_setup,tags,verify_perms}.py
 %if %{with server}
 sed -i -e '1s/env //' %{buildroot}%{daos_root}/bin/daos_storage_estimator.py
 %endif
-
-# shouldn't have source files in a non-devel RPM
-rm -f %{buildroot}%{daos_root}/lib/daos/TESTING/ftest/cart/{test_linkage.cpp,utest_{hlc,portnumber,protocol,swim}.c,wrap_cmocka.h}
 
 %if %{with server}
 %pre server
@@ -545,38 +589,38 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 %files client-tests
 %doc README.md
-%dir %{daos_root}/lib/%{name}
-%{daos_root}/lib/%{name}/TESTING
-%exclude %{daos_root}/lib/%{name}/TESTING/ftest/avocado_tests.yaml
-%{daos_root}/bin/hello_drpc
-%{daos_root}/lib64/libdaos_tests.so
-%{daos_root}/bin/acl_dump_test
-%{daos_root}/bin/agent_tests
-%{daos_root}/bin/drpc_engine_test
-%{daos_root}/bin/drpc_test
-%{daos_root}/bin/dfuse_test
-%{daos_root}/bin/eq_tests
-%{daos_root}/bin/job_tests
-%{daos_root}/bin/jump_pl_map
-%{daos_root}/bin/pl_bench
-%{daos_root}/bin/ring_pl_map
-%{daos_root}/bin/security_test
+%dir %{_prefix}/lib/%{name}
+%{_prefix}/lib/%{name}/TESTING
+%exclude %{_prefix}/lib/%{name}/TESTING/ftest/avocado_tests.yaml
+%{_bindir}/hello_drpc
+%{_libdir}/libdaos_tests.so
+%{_bindir}/acl_dump_test
+%{_bindir}/agent_tests
+%{_bindir}/drpc_engine_test
+%{_bindir}/drpc_test
+%{_bindir}/dfuse_test
+%{_bindir}/eq_tests
+%{_bindir}/job_tests
+%{_bindir}/jump_pl_map
+%{_bindir}/pl_bench
+%{_bindir}/ring_pl_map
+%{_bindir}/security_test
 %config(noreplace) %{conf_dir}/fault-inject-cart.yaml
-%{daos_root}/bin/fault_status
-%{daos_root}/bin/crt_launch
-%{daos_root}/bin/daos_perf
-%{daos_root}/bin/daos_racer
-%{daos_root}/bin/daos_test
-%{daos_root}/bin/daos_debug_set_params
-%{daos_root}/bin/dfs_test
-%{daos_root}/bin/jobtest
-%{daos_root}/bin/daos_gen_io_conf
-%{daos_root}/bin/daos_run_io_conf
-%{daos_root}/lib64/libdpar.so
+%{_bindir}/fault_status
+%{_bindir}/crt_launch
+%{_bindir}/daos_perf
+%{_bindir}/daos_racer
+%{_bindir}/daos_test
+%{_bindir}/daos_debug_set_params
+%{_bindir}/dfs_test
+%{_bindir}/jobtest
+%{_bindir}/daos_gen_io_conf
+%{_bindir}/daos_run_io_conf
+%{_libdir}/libdpar.so
 
 %files client-tests-openmpi
 %doc README.md
-%{daos_root}/lib64/libdpar_mpi.so
+%{_libdir}/libdpar_mpi.so
 
 %files client-tests-mpich
 %doc README.md

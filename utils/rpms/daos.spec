@@ -38,9 +38,12 @@
 %define buildspec daos_new.spec
 %endif
 
+%global daos_version 2.7.101
+%global daos_release 8%{?relval}%{?dist}
+
 Name:          daos
-Version:       2.7.101
-Release:       8%{?relval}%{?dist}
+Version:       %{daos_version}
+Release:       %{daos_release}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
