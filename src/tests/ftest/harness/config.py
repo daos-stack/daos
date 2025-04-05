@@ -1,5 +1,6 @@
 """
 (C) Copyright 2021-2024 Intel Corporation.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -79,3 +80,7 @@ class HarnessConfigTest(TestWithServers):
         with open(self.agent_managers[0].manager.job.temporary_file, 'r') as yaml_file:
             daos_agent_yaml = yaml.safe_load(yaml_file.read())
         self.assertEqual(daos_agent_yaml['exclude_fabric_ifaces'], expected)
+
+        self.log.info('Verify rand_seed set from yaml')
+        rand_seed = self.params.get("rand_seed", "/run/setup/*")
+        self.assertEqual(self.rand_seed, rand_seed)
