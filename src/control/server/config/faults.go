@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -86,10 +87,15 @@ var (
 		"the fault domain path may have a maximum of 2 levels below the root",
 		"update either the fault domain ('fault_path' parameter) or callback script ('fault_cb' parameter) and restart the control server",
 	)
-	FaultConfigHugepagesDisabledWithBdevs = serverConfigFault(
-		code.ServerConfigHugepagesDisabledWithBdevs,
-		"hugepages cannot be disabled if bdevs have been specified in config",
+	FaultConfigHugepagesDisabledWithNvmeBdevs = serverConfigFault(
+		code.ServerConfigHugepagesDisabledWithNvmeBdevs,
+		"hugepages cannot be disabled if nvme-bdevs have been specified in config",
 		"either set false (or remove) disable_hugepages parameter or remove nvme storage assignment in config and restart the control server",
+	)
+	FaultConfigHugepagesDisabledWithNrSet = serverConfigFault(
+		code.ServerConfigHugepagesDisabledWithNrSet,
+		"hugepages cannot be disabled if non-zero number has been specified in config",
+		"either set false (or remove) disable_hugepages parameter or remove nr_hugepages assignment in config and restart the control server",
 	)
 	FaultConfigControlMetadataNoPath = serverConfigFault(
 		code.ServerConfigControlMetadataNoPath,

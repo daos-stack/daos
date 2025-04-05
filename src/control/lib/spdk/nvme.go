@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -32,6 +33,8 @@ type Nvme interface {
 	Format(logging.Logger) ([]*FormatResult, error)
 	// Update updates the firmware on a specific PCI address and slot
 	Update(log logging.Logger, ctrlrPciAddr string, path string, slot int32) error
+	// Clean removes lockfiles associated with NVMe controllers
+	Clean(ctrlrPciAddrs ...string) ([]string, error)
 }
 
 // NvmeImpl is an implementation of the Nvme interface.
@@ -42,24 +45,26 @@ const lockfilePathPrefix = "/var/tmp/spdk_pci_lock_"
 type remFunc func(name string) error
 
 // cleanLockfiles removes SPDK lockfiles after binding operations.
-func cleanLockfiles(log logging.Logger, remove remFunc, pciAddrs ...string) error {
+func cleanLockfiles(remove remFunc, pciAddrs ...string) ([]string, error) {
 	pciAddrs = common.DedupeStringSlice(pciAddrs)
 	removed := make([]string, 0, len(pciAddrs))
 
 	for _, pciAddr := range pciAddrs {
+		if pciAddr == "" {
+			continue
+		}
 		fName := lockfilePathPrefix + pciAddr
 
 		if err := remove(fName); err != nil {
 			if os.IsNotExist(err) {
 				continue
 			}
-			return errors.Wrapf(err, "remove %s", fName)
+			return removed, errors.Wrapf(err, "remove %s", fName)
 		}
 		removed = append(removed, fName)
 	}
-	log.Debugf("removed lockfiles: %v", removed)
 
-	return nil
+	return removed, nil
 }
 
 // wrapCleanError encapsulates inErr inside any cleanErr.

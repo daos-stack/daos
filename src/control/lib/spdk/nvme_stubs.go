@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -26,4 +27,9 @@ func (n *NvmeImpl) Format(log logging.Logger) ([]*FormatResult, error) {
 // Update updates the firmware image via SPDK in a given slot on the device.
 func (n *NvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path string, slot int32) error {
 	return nil
+}
+
+// Clean removes SPDK lockfiles.
+func (n *NvmeImpl) Clean(pciAddrs ...string) ([]string, error) {
+	return []string{}, nil
 }

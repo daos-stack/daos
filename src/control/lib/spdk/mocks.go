@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -55,11 +56,13 @@ type MockNvmeCfg struct {
 	FormatRes      []*FormatResult
 	FormatErr      error
 	UpdateErr      error
+	CleanErr       error
 }
 
 // MockNvmeImpl is an implementation of the Nvme interface.
 type MockNvmeImpl struct {
-	Cfg MockNvmeCfg
+	Cfg             MockNvmeCfg
+	MockLocksRemove func(string) error
 }
 
 // Discover NVMe devices, including NVMe devices behind VMDs if enabled,
@@ -97,4 +100,15 @@ func (n *MockNvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path stri
 		ctrlrPciAddr, path, slot)
 
 	return nil
+}
+
+// Clean removes SPDK lockfiles associated with NVMe SSDs/controllers at given PCI addresses.
+func (n *MockNvmeImpl) Clean(pciAddrs ...string) ([]string, error) {
+	if n.MockLocksRemove == nil {
+		n.MockLocksRemove = func(string) error {
+			return n.Cfg.CleanErr
+		}
+	}
+
+	return cleanLockfiles(n.MockLocksRemove, pciAddrs...)
 }
