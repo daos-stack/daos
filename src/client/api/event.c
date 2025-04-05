@@ -1,5 +1,7 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -117,7 +119,7 @@ daos_eq_lib_reset_after_fork(void)
 	eq_ref            = 0;
 	ev_thpriv_is_init = false;
 	crt_info          = daos_crt_init_opt_get(false, 1);
-	rc                = dc_mgmt_net_cfg(NULL, crt_info);
+	rc                = dc_mgmt_net_cfg_init(NULL, crt_info);
 	if (rc == 0)
 		rc = daos_eq_lib_init(crt_info);
 	D_FREE(crt_info->cio_provider);

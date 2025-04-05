@@ -1,3 +1,9 @@
+daos (2.6.3-4) unstable; urgency=medium
+  [ Saurabh Tandan ]
+  * Fourth release candidate for 2.6.3
+
+ -- Saurabh Tandan <saurabh.tandan@hpe.com>  Wed, 19 Mar 2025 12:18:00 -0700
+
 daos (2.6.3-3) unstable; urgency=medium
   [ Phillip Henderson ]
   * Third release candidate for 2.6.3
