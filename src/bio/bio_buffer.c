@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1041,10 +1042,7 @@ rw_completion(void *cb_arg, int err)
 		if (biod->bd_result != 0)
 			goto done;
 
-		if (biod->bd_type == BIO_IOD_TYPE_FETCH || glb_criteria.fc_enabled)
-			biod->bd_result = -DER_NVME_IO;
-		else
-			biod->bd_result = -DER_IO;
+		biod->bd_result = -DER_NVME_IO;
 
 		D_ALLOC_PTR(mem);
 		if (mem == NULL) {
@@ -1144,17 +1142,19 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 	/* No locking for BS state query here is tolerable */
 	if (bxb->bxb_blobstore->bb_state == BIO_BS_STATE_FAULTY) {
 		D_ERROR("Blobstore is marked as FAULTY.\n");
-		if (biod->bd_type == BIO_IOD_TYPE_FETCH || glb_criteria.fc_enabled)
-			biod->bd_result = -DER_NVME_IO;
-		else
-			biod->bd_result = -DER_IO;
+		biod->bd_result = -DER_NVME_IO;
 		return;
 	}
 
+	/*
+	 * When a normal device is unplugged, blob could be closed on teardown before the
+	 * device is marked as faulty, so we need to return retry-able DER_NVME_IO to avoid
+	 * a premature application error.
+	 */
 	if (!is_blob_valid(biod->bd_ctxt)) {
 		D_ERROR("Blobstore is invalid. blob:%p, closing:%d\n",
 			blob, biod->bd_ctxt->bic_closing);
-		biod->bd_result = -DER_NO_HDL;
+		biod->bd_result = -DER_NVME_IO;
 		return;
 	}
 
