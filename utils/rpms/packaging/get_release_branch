@@ -14,16 +14,31 @@ all_bases=()
 while IFS= read -r base; do
     all_bases+=("$base")
 done < <(echo "master"
-         git branch -r | sed -ne "/^  $origin\\/release\\/\(2.[4-9]\|[3-9]\)/s/^  $origin\\///p")
-TARGET="master"
+         git branch -r | sed -ne "/^  $origin\\/release\\/\(2.[6-9]\|[3-9]\)/s/^  $origin\\///p")
+all_bases+=("${add_bases[@]}")
+
+tmpfile=$(mktemp)
+trap 'rm -f "$tmpfile"; exit 1' HUP INT QUIT TERM
+echo "999999 master" > $tmpfile
+
+function commits_ahead()
+{
+    local branch="$1"
+
+    git rev-parse --verify "$origin/$base" &> /dev/null || continue
+    commits_ahead=$(git log --oneline "$origin/$base..HEAD" | wc -l)
+    echo "$commits_ahead $branch" >> $tmpfile
+}
+
 min_diff=-1
 for base in "${all_bases[@]}"; do
     git rev-parse --verify "$origin/$base" &> /dev/null || continue
-    commits_ahead=$(git log --oneline "$origin/$base..HEAD" | wc -l)
-    if [ "$min_diff" -eq -1 ] || [ "$min_diff" -gt "$commits_ahead" ]; then
-        TARGET="$base"
-        min_diff=$commits_ahead
-    fi
+    commits_ahead $base &
 done
-echo "$TARGET"
+
+wait
+first_branch=($(cat $tmpfile | sort -g | head -n 1))
+echo "${first_branch[1]}"
+rm -f "$tmpfile"
+
 exit 0
