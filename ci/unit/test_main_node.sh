@@ -95,7 +95,7 @@ ls -al
 if [[ -n $(find build -name "*.gcda") ]]; then
   #gcovr build --html "${test_log_dir}/code_coverage_report.html"
   ls -al "build/dev/gcc"
-  gcovr --html "${test_log_dir}/code_coverage_report.html" --root "build/dev/gcc"
+  gcovr "build/dev/gcc/src" -o "${test_log_dir}/code_coverage_report.html" --html
   pwd
   ls -al "build/dev/gcc"
   ls -al "$test_log_dir"
