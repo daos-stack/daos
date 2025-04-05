@@ -786,9 +786,28 @@ static void
 cont_child_wait(struct daos_llink *llink)
 {
 	struct ds_cont_child *cont = cont_child_obj(llink);
+	struct timespec       ts;
+	int                   seconds = 10;
+	int                   rc;
 
 	ABT_mutex_lock(cont->sc_mutex);
-	ABT_cond_wait(cont->sc_fini_cond, cont->sc_mutex);
+	clock_gettime(CLOCK_REALTIME, &ts);
+	ts.tv_sec += 10; // timeout = current time + 10 seconds.
+	rc = ABT_cond_timedwait(cont->sc_fini_cond, cont->sc_mutex, &ts);
+	while (ABT_SUCCESS != rc) {
+		ts.tv_sec += 10; // timeout = current time + 10 seconds.
+		D_ASSERT(rc == ABT_ERR_COND_TIMEDOUT);
+		D_ERROR("cont_child_wait timeout: %d, cont ref is: %u "
+			"dtx_resyncing: %d, dtx_reindex: %d, props_fetched: %d, sc_stopping:%d,"
+			"sc_destroying: %d, vos_agg_active: %d, ec_agg_active:%d, scrubbing: %d"
+			"rebuilding: %d, open_initing: %d\n",
+			seconds, llink->ll_ref, cont->sc_dtx_resyncing, cont->sc_dtx_reindex,
+			cont->sc_props_fetched, cont->sc_stopping, cont->sc_destroying,
+			cont->sc_vos_agg_active, cont->sc_ec_agg_active, cont->sc_scrubbing,
+			cont->sc_rebuilding, cont->sc_open_initializing);
+		rc = ABT_cond_timedwait(cont->sc_fini_cond, cont->sc_mutex, &ts);
+		seconds += 10;
+	}
 	ABT_mutex_unlock(cont->sc_mutex);
 }
 
@@ -1251,8 +1270,11 @@ cont_child_destroy_one(void *vin)
 	if (rc == -DER_NONEXIST)
 		D_GOTO(out_pool, rc = 0);
 
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR(DF_CONT ": Container is still in destroying\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
 		D_GOTO(out_pool, rc);
+	}
 
 	if (cont->sc_open > 0) {
 		D_ERROR(DF_CONT": Container is still in open(%d)\n",
@@ -1264,6 +1286,14 @@ cont_child_destroy_one(void *vin)
 	if (cont->sc_destroying) {
 		D_ERROR(DF_CONT ": Container is already being destroyed\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
+		D_ERROR("xxxxxx"
+			"dtx_resyncing: %d, dtx_reindex: %d, props_fetched: %d, sc_stopping:%d,"
+			"sc_destroying: %d, vos_agg_active: %d, ec_agg_active:%d, scrubbing: %d"
+			"rebuilding: %d, open_initing: %d\n",
+			cont->sc_dtx_resyncing, cont->sc_dtx_reindex, cont->sc_props_fetched,
+			cont->sc_stopping, cont->sc_destroying, cont->sc_vos_agg_active,
+			cont->sc_ec_agg_active, cont->sc_scrubbing, cont->sc_rebuilding,
+			cont->sc_open_initializing);
 		cont_child_put(tls->dt_cont_cache, cont);
 		D_GOTO(out_pool, rc = -DER_BUSY);
 	}
@@ -1272,22 +1302,36 @@ cont_child_destroy_one(void *vin)
 	cont_child_stop(cont);
 
 	ABT_mutex_lock(cont->sc_mutex);
-	if (cont->sc_dtx_resyncing)
+	if (cont->sc_dtx_resyncing) {
+		D_ERROR(DF_CONT ": Container is in dtx resyncing\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
 		ABT_cond_wait(cont->sc_dtx_resync_cond, cont->sc_mutex);
+			D_ERROR(DF_CONT ": Container dtx resyncing finished\n",
+				DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
+	}
 	ABT_mutex_unlock(cont->sc_mutex);
 
 	/* Make sure checksum scrubbing has stopped */
 	ABT_mutex_lock(cont->sc_mutex);
 	if (cont->sc_scrubbing) {
 		sched_req_wakeup(cont->sc_pool->spc_scrubbing_req);
+		D_ERROR(DF_CONT ": Container is in scrubing\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
 		ABT_cond_wait(cont->sc_scrub_cond, cont->sc_mutex);
+		D_ERROR(DF_CONT ": Container scrubbing finished\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
 	}
 	ABT_mutex_unlock(cont->sc_mutex);
 
 	/* Make sure rebuild has stopped */
 	ABT_mutex_lock(cont->sc_mutex);
-	if (cont->sc_rebuilding)
+	if (cont->sc_rebuilding) {
+		D_ERROR(DF_CONT ": Container is in rebuilding\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
 		ABT_cond_wait(cont->sc_rebuild_cond, cont->sc_mutex);
+		D_ERROR(DF_CONT ": Container is in rebuilding\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
+	}
 	ABT_mutex_unlock(cont->sc_mutex);
 
 	/* nobody should see it again after eviction */
@@ -1305,8 +1349,12 @@ cont_child_destroy_one(void *vin)
 	 * This design ensures consistency by preventing concurrent access
 	 * to containers marked for destruction.
 	 */
+		D_ERROR(DF_CONT ": Container is in rebuilding\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
 	daos_lru_ref_noevict_wait(tls->dt_cont_cache, &cont->sc_list);
 	daos_lru_ref_evict(tls->dt_cont_cache, &cont->sc_list);
+		D_ERROR(DF_CONT ": Container is in rebuilding\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
 	cont_child_put(tls->dt_cont_cache, cont);
 
 	D_DEBUG(DB_MD, DF_CONT": destroying vos container\n",
