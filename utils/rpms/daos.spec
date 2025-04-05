@@ -3,10 +3,12 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
+%global daos_version 2.7.101
+%global daos_release 8%{?relval}%{?dist}
+
 %bcond_without server
+%bcond_without build_deps
 %bcond_without olddaos
-%bcond_without buildofi
-%bcond_without builducx
 %bcond_without ucx
 
 %if %{with server}
@@ -37,9 +39,6 @@
 %else
 %define buildspec daos_new.spec
 %endif
-
-%global daos_version 2.7.101
-%global daos_release 8%{?relval}%{?dist}
 
 Name:          daos
 Version:       %{daos_version}

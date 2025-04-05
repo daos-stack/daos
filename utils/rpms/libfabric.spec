@@ -4,6 +4,7 @@
 %define libfabric_name libfabric
 %endif
 
+%if %{with build_deps}
 %package -n     %{libfabric_name}
 Summary:        Shared library for libfabric
 Version:        %{libfabric_version}
@@ -56,4 +57,7 @@ developing applications that use %{libfabric_name}.
 %{_mandir}/man3/fi_*.3*
 %{_mandir}/man7/fi_*.7*
 %{_mandir}/man7/fabric.7*
+%else
+BuildRequires: %{libfabric_name}-devel >= %{libfabric_version}
+%endif
 

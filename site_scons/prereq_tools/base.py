@@ -1443,9 +1443,13 @@ class _Component():
         lib_paths = []
 
         # Make sure CheckProg() looks in the component's bin/ dir
-        if not self.use_installed:
+        sandbox = self.prereqs.sandbox_prefix
+        if self.use_installed:
+            # check the install path of the component
+            sandbox = ""
+        if not self.component_prefix != "/usr":
             env.AppendENVPath('PATH',
-                              os.path.join(self.prereqs.sandbox_prefix + self.component_prefix,
+                              os.path.join(sandbox + self.component_prefix,
                                            'bin'))
 
             for path in self.include_path:
@@ -1455,7 +1459,7 @@ class _Component():
             # uses a component, that build needs the RPATH of the dependencies.
             for path in self.lib_path:
                 full_path = os.path.join(self.component_prefix, path)
-                if not os.path.exists(self.prereqs.sandbox_prefix + full_path):
+                if not os.path.exists(sandbox + full_path):
                     continue
                 lib_paths.append(full_path)
                 # will adjust this to be a relative rpath later

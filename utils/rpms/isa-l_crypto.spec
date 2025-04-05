@@ -6,6 +6,8 @@
 %define isal_crypto_devname libisa-l_crypto-devel
 %endif
 
+%if %{with build_deps}
+
 %package -n %{isal_crypto_libname}
 Summary: Dynamic library for isa-l_crypto functions
 Version:        %{isal_crypto_version}
@@ -43,4 +45,8 @@ Development files for the %{isal_crypto_libname} library.
 %{_includedir}/isa-l_crypto.h
 %{_libdir}/libisal_crypto.so
 %{_libdir}/pkgconfig/libisal_crypto.pc
+
+%else
+BuildRequires: %{isal_crypto_name}-devel = %{isal_crypto_version}
+%endif
 

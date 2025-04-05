@@ -6,6 +6,7 @@
 %define isal_devname libisa-l-devel
 %endif
 
+%if %{with build_deps}
 %package -n isa-l
 Summary:	Intelligent Storage Acceleration Library
 Version: %{isal_version}
@@ -63,4 +64,8 @@ Development files for the %{isal_libname} library.
 %{_includedir}/isa-l.h
 %{_libdir}/libisal.so
 %{_libdir}/pkgconfig/libisal.pc
+
+%else
+BuildRequires: %{isal_devname} = %{isal_version}
+%endif
 

@@ -87,22 +87,21 @@ BuildRequires: libasan8
 
 Requires: openssl
 
+%include libfabric.spec
+%include mercury.spec
+%include isa-l.spec
+%include isa-l_crypto.spec
+%include argobots.spec
+%include server-deps.spec
+
 %if %{with server}
-%package server-deps-common
-Summary: Prebuilt server dependencies
-Version:       %{daos_version}
-Release:       %{daos_release}
-
-%description server-deps-common
-Prebuilt server dependencies needed for server components.  Includes
-SPDK and PMDK libraries
-
 %package server
 Summary: The DAOS server
 Version:       %{daos_version}
 Release:       %{daos_release}
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: %{name}-server-deps-common%{?_isa} = %{version}-%{release}
+Requires: %{name}-pmdk%{?_isa} = %{version}-%{release}
+Requires: %{name}-spdk%{?_isa} = %{version}-%{release}
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
@@ -128,12 +127,6 @@ Requires: %{name}%{?_isa} = %{version}-%{release}
 
 %description admin
 This package contains DAOS administrative tools (e.g. dmg).
-
-%include libfabric.spec
-%include mercury.spec
-%include isa-l.spec
-%include isa-l_crypto.spec
-%include argobots.spec
 
 %package client
 Summary: The DAOS client
@@ -626,12 +619,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %doc README.md
 
 %if %{with server}
-%files server-deps-common
-%dir %{daos_root}/prereq/release/spdk
-%{daos_root}/prereq/release/spdk/*
-%dir %{daos_root}/prereq/release/pmdk
-%{daos_root}/prereq/release/pmdk/*
-
 %files server-tests
 %doc README.md
 %{daos_root}/bin/dtx_tests

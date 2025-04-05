@@ -1,3 +1,4 @@
+%if %{with build_deps}
 %package -n mercury
 Summary:  Mercury package
 Version: %{mercury_version}
@@ -60,3 +61,7 @@ Mercury plugin to support the UCX transport.
 %{_libdir}/pkgconfig/mercury*.pc
 %{_libdir}/pkgconfig/na*.pc
 %{_libdir}/cmake/*
+%else
+BuildRequires: merucry-devel = %{mercury_version}
+%endif
+

@@ -6,6 +6,7 @@
 %define argobots_dev  argobots-devel
 %endif
 
+%if %{with build_deps}
 %package -n %{argobots_lib}
 Summary: Development files for the argobots library
 Version: %{argobots_version}
@@ -40,3 +41,7 @@ Development files for the argobots library.
 %{_libdir}/pkgconfig/argobots.pc
 %{_includedir}/abt.h
 %doc deps/argobots/README.md
+%else
+BuildRequires: %{argobots_dev} = %{argobots_version}
+%endif
+
