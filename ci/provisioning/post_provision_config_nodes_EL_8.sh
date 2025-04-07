@@ -60,7 +60,7 @@ install_mofed() {
     : "${ARTIFACTORY_URL:=https://artifactory.dc.hpdd.intel.com/artifactory/}"
     # Temporary fix
     if  [[ ${ARTIFACTORY_URL} != *"/artifactory" ]]; then
-        ARTIFACTORY_URL="${ARTIFACTORY}artifactory"
+        ARTIFACTORY_URL="${ARTIFACTORY_URL}artifactory"
     fi
     mellanox_proxy="${ARTIFACTORY_URL}/mellanox-proxy/mlnx_ofed/"
     mellanox_key_url="${ARTIFACTORY_URL}/mlnx_ofed/RPM-GPG-KEY-Mellanox"
