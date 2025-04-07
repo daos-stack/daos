@@ -92,19 +92,19 @@ pip install --requirement requirements-utest.txt
 
 pip install /opt/daos/lib/daos/python/
 
-echo "(2) before run_utest..."
-pwd
-ls -al
-ls -R
+# echo "(2) before run_utest..."
+# pwd
+# ls -al
+# ls -R
 
 utils/run_utest.py $RUN_TEST_VALGRIND --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" \
                    $SUDO_ARG
 
 # Generate code coverage report
-echo "(3) after run_utest..."
-pwd
-ls -al
-ls -R
+# echo "(3) after run_utest..."
+# pwd
+# ls -al
+# ls -R
 
 if [[ -n $(find build -name "*.gcda") ]]; then
   #gcovr build --html "${test_log_dir}/code_coverage_report.html"

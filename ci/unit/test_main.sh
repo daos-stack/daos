@@ -36,6 +36,9 @@ fi
 
 NODE=${NODELIST%%,*}
 
+echo "test_main.sh"
+find . -name "*.gcno"
+
 # Copy over the install tree and some of the build tree.
 rsync -rlpt -z -e "ssh $SSH_KEY_ARGS" . jenkins@"$NODE":build/
 
