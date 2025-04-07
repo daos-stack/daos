@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -904,43 +905,83 @@ d_rank_range_list_create_from_ranks(d_rank_list_t *rank_list)
 	return range_list;
 }
 
+static inline int
+ranks2str(char *buf, size_t buf_size, uint32_t rank_lo, uint32_t rank_hi, size_t *buf_len)
+{
+	int len;
+
+	if (rank_lo == rank_hi)
+		len = snprintf(buf, buf_size, "%u", rank_lo);
+	else
+		len = snprintf(buf, buf_size, "%u-%u", rank_lo, rank_hi);
+
+	if (len < 0)
+		return -DER_INVAL;
+	if (len >= buf_size)
+		return -DER_TRUNC;
+
+	*buf_len = (size_t)len;
+	return -DER_SUCCESS;
+}
+
 int
 d_rank_range_list_str(d_rank_range_list_t *list, char **ranks_str)
 {
-	const size_t MAXBYTES  = 512u;
-	size_t       remaining = MAXBYTES - 2u;
+	const size_t MINBYTES = 256u;
 	char        *line;
-	char        *linepos;
+	size_t       line_size;
+	char        *buf;
+	size_t       buf_size;
 	int          i;
-	int          len;
 	int          rc;
 
 	D_ASSERT(list != NULL);
 
-	D_ALLOC(line, MAXBYTES);
+	D_ALLOC_ARRAY(line, MINBYTES);
 	if (line == NULL)
 		D_GOTO(error, rc = -DER_NOMEM);
+	line_size = MINBYTES;
+	buf       = line;
+	buf_size  = line_size;
 
-	*line = '[';
-	linepos = line + 1;
+	buf[0] = '[';
+	buf++;
+	buf_size--;
 	for (i = 0; i < list->rrl_nr; i++) {
-		uint32_t lo        = list->rrl_ranges[i].lo;
-		uint32_t hi        = list->rrl_ranges[i].hi;
-		bool     lastrange = (i == (list->rrl_nr - 1));
+		size_t   len          = 0;
+		uint32_t rank_lo      = list->rrl_ranges[i].lo;
+		uint32_t rank_hi      = list->rrl_ranges[i].hi;
+		bool     is_last_iter = (i == (list->rrl_nr - 1));
 
-		if (lo == hi)
-			len = snprintf(linepos, remaining, "%u%s", lo, lastrange ? "" : ",");
-		else
-			len = snprintf(linepos, remaining, "%u-%u%s", lo, hi, lastrange ? "" : ",");
-		if (len < 0)
-			D_GOTO(error, rc = -DER_INVAL);
-		if (len >= remaining)
-			D_GOTO(error, rc = -DER_TRUNC);
+		rc = ranks2str(buf, buf_size, rank_lo, rank_hi, &len);
+		if (rc == -DER_INVAL)
+			D_GOTO(error, rc);
+		if (rc == -DER_TRUNC ||
+		    (rc == -DER_SUCCESS && buf_size < len + sizeof("]") + (is_last_iter ? 0 : 1))) {
+			int buf_idx = buf - line;
 
-		remaining -= len;
-		linepos += len;
+			D_REALLOC_ARRAY(buf, line, line_size, line_size + MINBYTES);
+			if (buf == NULL)
+				D_GOTO(error, rc = -DER_NOMEM);
+			line = buf;
+			line_size += MINBYTES;
+			buf = line + buf_idx;
+			buf_size += MINBYTES;
+
+			rc = ranks2str(buf, buf_size, rank_lo, rank_hi, &len);
+		}
+		D_ASSERT(rc == -DER_SUCCESS &&
+			 buf_size >= len + sizeof("]") + (is_last_iter ? 0 : 1));
+
+		if (!is_last_iter) {
+			buf[len] = ',';
+			len++;
+		}
+
+		buf += len;
+		buf_size -= len;
 	}
-	memcpy(linepos, "]", 2u);
+	memcpy(buf, "]", sizeof("]"));
 
 	*ranks_str = line;
 	D_GOTO(out, rc = -DER_SUCCESS);
