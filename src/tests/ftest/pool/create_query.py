@@ -38,7 +38,7 @@ class PoolCreateQueryTests(TestWithServers):
         """
         # Create pool
         pool = add_pool(self)
-        epsilon_bytes = (1 << 20)  # 1 MiB
+        epsilon_bytes = 1 << 20  # 1 MiB
         epsilon_scm_bytes = (
             ((1 << 24) * 8)  # 16 MiB * 8 tgts
             if self.server_managers[0].manager.job.using_control_metadata
