@@ -35,62 +35,6 @@ ARM_PLATFORM = False
 if PROCESSOR.lower() in [x.lower() for x in ARM_LIST]:
     ARM_PLATFORM = True
 
-
-class InstalledComps():
-    """Checks for installed components and keeps track of prior checks"""
-
-    installed = []
-    not_installed = []
-
-    def __init__(self, reqs):
-        """Class for checking installed components"""
-        self.reqs = reqs
-
-    def inst(self, name):
-        """Return True if name is in list of possible installed packages"""
-        return set([name, 'all']).intersection(set(self.reqs.installed))
-
-    def check(self, name):
-        """Returns True if installed"""
-        if name in self.installed:
-            return True
-        if name in self.not_installed:
-            return False
-        if self.inst(name) and self.reqs.is_installed(name):
-            print(f'Using installed version of {name}')
-            self.installed.append(name)
-            return True
-
-        if not GetOption('help') and not GetOption('silent'):
-            print(f'Using build version of {name}')
-        self.not_installed.append(name)
-        return False
-
-
-def include(reqs, name, use_value, exclude_value):
-    """Return True if in include list"""
-    if reqs.included(name):
-        print(f'Including {name} optional component from build')
-        return use_value
-    if not GetOption('help'):
-        print(f'Excluding {name} optional component from build')
-    return exclude_value
-
-
-def inst(reqs, name):
-    """Return True if name is in list of installed packages"""
-    installed = InstalledComps(reqs)
-    return installed.check(name)
-
-
-def check(reqs, name, built_str, installed_str=""):
-    """Return a different string based on whether a component is installed or not"""
-    installed = InstalledComps(reqs)
-    if installed.check(name):
-        return installed_str
-    return built_str
-
-
 def ofi_config(config):
     """Check ofi version"""
     if not GetOption('silent'):
@@ -139,7 +83,6 @@ def define_mercury(reqs):
                 config_cb=ofi_config,
                 headers=['rdma/fabric.h'],
                 pkgconfig='libfabric',
-                package='libfabric-devel' if inst(reqs, 'ofi') else None,
                 patch_rpath=['lib64'],
                 build_env={'CFLAGS': "-fstack-usage",
                            'DESTDIR': '$SANDBOX_PREFIX'})
@@ -168,8 +111,7 @@ def define_mercury(reqs):
                           ['mkdir', '-p', '$UCX_PREFIX/lib64/pkgconfig'],
                           ['cp', 'ucx.pc', '$UCX_PREFIX/lib64/pkgconfig']],
                 build_env={'CFLAGS': '-Wno-error',
-                           'DESTDIR': '$SANDBOX_PREFIX'},
-                package='ucx-devel' if inst(reqs, 'ucx') else None)
+                           'DESTDIR': '$SANDBOX_PREFIX'})
 
     mercury_build = ['cmake',
                      '-DBUILD_SHARED_LIBS:BOOL=ON',
@@ -208,7 +150,6 @@ def define_mercury(reqs):
                 pkgconfig='mercury',
                 requires=['boost', 'ofi', 'ucx'] + libs,
                 out_of_src_build=True,
-                package='mercury-devel' if inst(reqs, 'mercury') else None,
                 build_env={'CFLAGS': '-fstack-usage -I$SANDBOX_PREFIX$OFI_PREFIX/include '
                                      '-I$SANDBOX_PREFIX$UCX_PREFIX/include',
                            'LDFLAGS': '-L$SANDBOX_PREFIX$OFI_PREFIX/lib64 '
@@ -313,8 +254,7 @@ def define_components(reqs):
     else:
         abt_build.append('--disable-debug')
 
-    if inst(reqs, 'valgrind_devel'):
-        abt_build.append('--enable-valgrind')
+    abt_build.append('--enable-valgrind')
 
     reqs.define('argobots',
                 retriever=CopyRetriever(),
@@ -415,7 +355,6 @@ def define_components(reqs):
                           ['make', 'install']],
                 libs=['protobuf-c'],
                 headers=['protobuf-c/protobuf-c.h'],
-                package='protobuf-c-devel',
                 build_env={'DESTDIR': "$SANDBOX_PREFIX"})
 
     os_name = dist[0].split()[0]
