@@ -114,8 +114,6 @@ func defaultBackend(log logging.Logger) *spdkBackend {
 	return newBackend(log, defaultScriptRunner(log))
 }
 
-// Returns true if PID file matching input string is found in /proc/ directory indicating related
-// active process exists.
 func isPIDActive(pidStr string, stat statFn) (bool, error) {
 	filename := fmt.Sprintf("/proc/%s", pidStr)
 
@@ -129,142 +127,11 @@ func isPIDActive(pidStr string, stat statFn) (bool, error) {
 	return true, nil
 }
 
-//// createHugepageWalkFunc returns a filepath.WalkFunc that will remove any file whose
-//// name begins with prefix and encoded pid is inactive.
-//func createHugepageWalkFunc(log logging.Logger, topDir string, stat statFn, remove removeFn, count *uint) filepath.WalkFunc {
-//	re := regexp.MustCompile(spdkHugepagePattern)
-//
-//	return func(path string, info os.FileInfo, err error) error {
-//		switch {
-//		case err != nil:
-//			return err
-//		case info == nil:
-//			return errors.New("nil fileinfo")
-//		case info.IsDir():
-//			log.Debugf("walk func: dir %s", path)
-//			if path == topDir {
-//				return nil
-//			}
-//			return filepath.SkipDir // skip subdirectories
-//		}
-//
-//		matches := re.FindStringSubmatch(info.Name())
-//		if len(matches) != 2 {
-//			log.Debugf("walk func: unexpected name, skipping %s", path)
-//			return nil // skip files not matching expected pattern
-//		}
-//		// PID string will be the first submatch at index 1 of the match results.
-//
-//		if isActive, err := isPIDActive(matches[1], stat); err != nil || isActive {
-//			log.Debugf("walk func: active owner proc, skipping %s", path)
-//			return err // skip files created by an existing process (isActive == true)
-//		}
-//
-//		log.Debugf("walk func: removing %s", path)
-//		if err := remove(path); err != nil {
-//			return err
-//		}
-//		*count++
-//
-//		return nil
-//	}
-//}
-
-// Return function that can be used in createFileWalkFunc as filenameChecker. Returned function
-// returns true only if filename matches expected pattern and the PID encoded in the filename is not
-// active.
-func createHugepageCleanFileCheckFunc(log logging.Logger, stat statFn) func(string) (bool, error) {
+// createHugepageWalkFunc returns a filepath.WalkFunc that will remove any file whose
+// name begins with prefix and encoded pid is inactive.
+func createHugepageWalkFunc(log logging.Logger, topDir string, stat statFn, remove removeFn, count *uint) filepath.WalkFunc {
 	re := regexp.MustCompile(spdkHugepagePattern)
 
-	return func(name string) (bool, error) {
-		matches := re.FindStringSubmatch(name)
-		if len(matches) != 2 {
-			log.Tracef("spdk hugepage-clean walk: unexpected name, skipping %s", path)
-			return false, nil // skip files not matching expected pattern
-		}
-		// PID string will be the first submatch at index 1 of the match results.
-
-		if isActive, err := isPIDActive(matches[1], stat); err != nil {
-			log.Tracef("spdk hugepage-clean walk: active owner proc, skipping %s", path)
-			return false, err
-		}
-
-		// Only return true (indicating that the file should be removed) if they have been
-		// created by a no longer existing process (isActive == false).
-		return !isActive, nil
-	}
-}
-
-//// Static base-dir and prefix for SPDK generated lockfiles.
-//const (
-//	lockflleDir    = "/var/tmp/"
-//	lockfilePrefix = "spdk_pci_lock_"
-//)
-//
-//type remFunc func(name string) error
-//
-//// cleanLockfiles removes SPDK lockfiles after binding operations. Takes function which decides
-//// which of the found lock files to remove based on the address appended to the filename.
-//func cleanLockfiles(remove remFunc, shouldRemove LockfileAddrCheckFn) ([]string, error) {
-//	entries, err := os.ReadDir(lockflleDir)
-//	if err != nil {
-//		return nil, errors.Wrapf(err, "reading spdk lockfile directory %q", lockflleDir)
-//	}
-//
-//	var removed []string
-//	var outErr error
-//	for _, v := range entries {
-//		if v.IsDir() {
-//			continue
-//		}
-//		if !strings.HasPrefix(v.Name(), lockfilePrefix) {
-//			continue
-//		}
-//
-//		lfAddr := strings.Replace(v.Name(), lockfilePrefix, "", 1)
-//		lfName := filepath.Join(lockfilePrefix, v.Name())
-//
-//		if ok, err := shouldRemove(lfAddr); err != nil {
-//			outErr = wrapCleanError(outErr, errors.Wrap(err, lfName))
-//			continue
-//		} else if !ok {
-//			continue
-//		}
-//
-//		if err := remove(lfName); err != nil {
-//			if !os.IsNotExist(err) {
-//				outErr = wrapCleanError(outErr, errors.Wrap(err, lfName))
-//			}
-//			continue
-//		}
-//		removed = append(removed, lfName)
-//	}
-//
-//	return removed, nil
-//}
-//
-//// wrapCleanError encapsulates inErr inside any cleanErr.
-//func wrapCleanError(inErr error, cleanErr error) (outErr error) {
-//	outErr = inErr
-//
-//	if cleanErr != nil {
-//		if outErr == nil {
-//			outErr = cleanErr
-//		}
-//		outErr = errors.Wrap(inErr, cleanErr.Error())
-//	}
-//
-//	return
-//}
-//// LockfileAddrCheckFn is a function supplied to the Clean API call which can be used to decide
-//// whether to remove a lockfile for device or not based on its PCI address. This is necessary so
-//// that logic outside of this package can be used to determine which addresses to process.
-//type LockfileAddrCheckFn func(ctrlrPciAddr string) (bool, error)
-
-// createFileWalkFunc returns a filepath.WalkFunc that will remove any file whose name begins with
-// supplied prefix recursively from the supplied top-level directory if the supplied check function
-// returns true for each filename.
-func createFileWalkFunc(log logging.Logger, topDir string, filenameChecker checkFilenameFn, remove removeFn, count *uint) filepath.WalkFunc {
 	return func(path string, info os.FileInfo, err error) error {
 		switch {
 		case err != nil:
@@ -279,12 +146,16 @@ func createFileWalkFunc(log logging.Logger, topDir string, filenameChecker check
 			return filepath.SkipDir // skip subdirectories
 		}
 
-		shouldRemove, err := filenameChecker(info.Name())
-		if err != nil {
-			return errors.Wrap(err, "walk func: checking file name")
+		matches := re.FindStringSubmatch(info.Name())
+		if len(matches) != 2 {
+			log.Debugf("walk func: unexpected name, skipping %s", path)
+			return nil // skip files not matching expected pattern
 		}
-		if !shouldRemove {
-			return nil
+		// PID string will be the first submatch at index 1 of the match results.
+
+		if isActive, err := isPIDActive(matches[1], stat); err != nil || isActive {
+			log.Debugf("walk func: active owner proc, skipping %s", path)
+			return err // skip files created by an existing process (isActive == true)
 		}
 
 		log.Debugf("walk func: removing %s", path)
@@ -300,9 +171,8 @@ func createFileWalkFunc(log logging.Logger, topDir string, filenameChecker check
 // cleanHugepages removes hugepage files with pathPrefix that are owned by the user with username
 // tgtUsr by processing directory tree with filepath.WalkFunc returned from hugepageWalkFunc.
 func cleanHugepages(log logging.Logger, topDir string) (count uint, _ error) {
-	filenameCheckerFn := createHugepageCleanFileCheckFunc(log, os.Stat)
 	return count, filepath.Walk(topDir,
-		createFileWalkFunc(log, topDir, filenameCheckerFn, os.Remove, &count))
+		createHugepageWalkFunc(log, topDir, os.Stat, os.Remove, &count))
 }
 
 func logNUMAStats(log logging.Logger) {
@@ -335,11 +205,9 @@ func (sb *spdkBackend) removeSpdkLockfiles(req storage.BdevPrepareRequest, resp 
 	if err != nil {
 		return
 	}
-	// Remove blocked addresses from allow list.
+	// Remove blocked VMD addresses from allow list.
 	addrs := inAllowList.Difference(inBlockList).Strings()
 
-	// Fetch list of existing lockfiles.
-	lfNames, err := sb.binding.GetLockfileNames()
 	resp.LockfilesRemoved, err = sb.binding.Clean(addrs...)
 	if err != nil {
 		return err
