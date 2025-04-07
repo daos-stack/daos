@@ -939,7 +939,7 @@ class PreReqComponent():
                 if comp_def.build(env, needed_libs):
                     self.__required[comp] = False
                     changes = True
-                
+
                 # If we get here, just set the environment again, new directories may be present
                 comp_def.set_environment(env, needed_libs)
             except Exception as error:

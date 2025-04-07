@@ -35,6 +35,7 @@ ARM_PLATFORM = False
 if PROCESSOR.lower() in [x.lower() for x in ARM_LIST]:
     ARM_PLATFORM = True
 
+
 def ofi_config(config):
     """Check ofi version"""
     if not GetOption('silent'):

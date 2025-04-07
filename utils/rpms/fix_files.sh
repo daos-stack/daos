@@ -17,7 +17,8 @@ run_patchelf()
   rpath=$(patchelf --print-rpath "$1")
   if [[ ${rpath} =~ ${buildbase} ]]; then
     if [ -n "${rpath}" ]; then
-      patched_rpath=$(echo "${rpath}" | sed "s!${buildbase}!!g")
+      # shellcheck disable=SC2001
+      patched_rpath=$(sed "s!${buildbase}!!g" <<< "${rpath}")
       patchelf --set-rpath "${patched_rpath}" "$1"
       strip "$1"
     fi
