@@ -19,6 +19,12 @@ source build/.build_vars.sh
 sudo mkdir -p "${SL_SRC_DIR}"
 sudo mount --bind build "${SL_SRC_DIR}"
 
+# DH debug
+echo "(1) before unit-test..."
+pwd
+ls -al
+ls -al "build/dev/gcc/src/cart"
+
 log_prefix="unit_test"
 
 if [ -n "$BULLSEYE" ]; then
@@ -90,6 +96,7 @@ utils/run_utest.py $RUN_TEST_VALGRIND --no-fail-on-error $VDB_ARG --log_dir="$te
                    $SUDO_ARG
 
 # Generate code coverage report
+echo "(2)..."
 pwd
 ls -al
 if [[ -n $(find build -name "*.gcda") ]]; then
