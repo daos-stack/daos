@@ -939,7 +939,7 @@ class PreReqComponent():
                 if comp_def.build(env, needed_libs):
                     self.__required[comp] = False
                     changes = True
-                
+
                 # If we get here, just set the environment again, new directories may be present
                 comp_def.set_environment(env, needed_libs)
             except Exception as error:
@@ -1006,9 +1006,8 @@ class PreReqComponent():
             self.save_component_prefix(name, target_prefix)
             return target_prefix
 
-        if name in ["ofi", "ucx", "mercury", "isal", "isal_crypto", "argobots",
-                    "protobufc"] and self.sandbox_prefix:
-            target_prefix = '/usr'
+        if self.sandbox_prefix:
+            target_prefix = self.__env["PREFIX"]
         else:
             target_prefix = os.path.join(self.prereq_prefix, name)
 
@@ -1548,23 +1547,24 @@ class _Component():
                 break
 
         rpath += norigin
-        for folder in self.key_words.get("patch_rpath", []):
-            path = os.path.join(comp_path, folder)
-            files = os.listdir(self.prereqs.sandbox_prefix + path)
-            for lib in files:
-                if folder != 'bin' and not lib.endswith(".so"):
-                    # Assume every file in bin can be patched
-                    continue
-                if lib.endswith(".py"):
-                    continue
-                full_lib = os.path.join(self.prereqs.sandbox_prefix + path, lib)
-                cmd = ['patchelf', '--set-rpath', ':'.join(rpath), full_lib]
-                res = RUNNER.run_commands([cmd])
-                if not res:
-                    if lib in ('libspdk.so', 'spdk_cli', 'spdk_rpc'):
-                        print(f'Skipped patching {full_lib}')
-                    else:
-                        raise BuildFailure(f'Error running patchelf on {full_lib}')
+        if not self.prereqs.sandbox_prefix:
+            for folder in self.key_words.get("patch_rpath", []):
+                path = os.path.join(comp_path, folder)
+                files = os.listdir(path)
+                for lib in files:
+                    if folder != 'bin' and not lib.endswith(".so"):
+                        # Assume every file in bin can be patched
+                        continue
+                    if lib.endswith(".py"):
+                        continue
+                    full_lib = os.path.join(path, lib)
+                    cmd = ['patchelf', '--set-rpath', ':'.join(rpath), full_lib]
+                    res = RUNNER.run_commands([cmd])
+                    if not res:
+                        if lib in ('libspdk.so', 'spdk_cli', 'spdk_rpc'):
+                            print(f'Skipped patching {full_lib}')
+                        else:
+                            raise BuildFailure(f'Error running patchelf on {full_lib}')
 
     def build(self, env, needed_libs):
         """Build the component, if necessary

@@ -1,0 +1,196 @@
+diff --git a/src/Makefile b/src/Makefile
+index 154ebe246..2e80bb4b4 100644
+--- a/src/Makefile
++++ b/src/Makefile
+@@ -47,7 +47,7 @@ PMEM2_HEADERS_INSTALL = include/libpmem2/*.h
+ 
+ PKG_CONFIG_DESTDIR = $(DESTDIR)$(pkgconfigdir)
+ PKG_CONFIG_COMMON = common.pc
+-PKG_CONFIG_FILES = libpmem.pc libpmemobj.pc libpmempool.pc libpmem2.pc
++PKG_CONFIG_FILES = libdaospmem.pc libdaospmemobj.pc libpmempool.pc libpmem2.pc
+ PMREORDER_BIN = $(DESTDIR)$(bindir)
+ PMREORDER_SRC = tools/pmreorder
+ PMREORDER_FILES = $(PMREORDER_SRC)/*.py
+diff --git a/src/benchmarks/Makefile b/src/benchmarks/Makefile
+index 81691ccc7..490e50089 100644
+--- a/src/benchmarks/Makefile
++++ b/src/benchmarks/Makefile
+@@ -188,7 +188,7 @@ sparse:
+ 
+ PMEMOBJ_SYMBOLS=pmalloc pfree lane_hold lane_release
+ 
+-pmemobj.o: $(LIBS_PATH)/libpmemobj/libpmemobj_unscoped.o
++pmemobj.o: $(LIBS_PATH)/libpmemobj/libdaospmemobj_unscoped.o
+ 	$(OBJCOPY) --localize-hidden $(addprefix -G, $(PMEMOBJ_SYMBOLS)) $< $@
+ 
+ -include .deps/*.P
+diff --git a/src/libpmem/Makefile b/src/libpmem/Makefile
+index 1e0a56712..963c2b71c 100644
+--- a/src/libpmem/Makefile
++++ b/src/libpmem/Makefile
+@@ -7,7 +7,7 @@
+ 
+ include ../common.inc
+ 
+-LIBRARY_NAME = pmem
++LIBRARY_NAME = daospmem
+ LIBRARY_SO_VERSION = 1
+ LIBRARY_VERSION = 0.0
+ SOURCE =\
+diff --git a/src/libpmem/libdaospmem.link.in b/src/libpmem/libdaospmem.link.in
+index 7dea4b1a6..db7ed5bd1 100644
+--- a/src/libpmem/libdaospmem.link.in
++++ b/src/libpmem/libdaospmem.link.in
+@@ -4,7 +4,7 @@
+ #
+ # src/libpmem.link -- linker link file for libpmem
+ #
+-LIBPMEM_1.0 {
++LIBDAOSPMEM_1.0 {
+ 	global:
+ 		pmem_map_file;
+ 		pmem_unmap;
+diff --git a/src/libpmemobj/Makefile b/src/libpmemobj/Makefile
+index 62c242b4c..7066bdaa1 100644
+--- a/src/libpmemobj/Makefile
++++ b/src/libpmemobj/Makefile
+@@ -5,7 +5,7 @@
+ # src/libpmemobj/Makefile -- Makefile for libpmemobj
+ #
+ 
+-LIBRARY_NAME = pmemobj
++LIBRARY_NAME = daospmemobj
+ LIBRARY_SO_VERSION = 1
+ LIBRARY_VERSION = 0.0
+ 
+@@ -61,4 +61,4 @@ endif
+ 
+ CFLAGS += -DUSE_LIBDL -D_PMEMOBJ_INTRNL $(LIBNDCTL_CFLAGS)
+ 
+-LIBS += -pthread -lpmem $(LIBDL) $(LIBNDCTL_LIBS)
++LIBS += -pthread -ldaospmem $(LIBDL) $(LIBNDCTL_LIBS)
+diff --git a/src/libpmemobj/libdaospmemobj.link.in b/src/libpmemobj/libdaospmemobj.link.in
+index da9db4b9d..b023e9b26 100644
+--- a/src/libpmemobj/libdaospmemobj.link.in
++++ b/src/libpmemobj/libdaospmemobj.link.in
+@@ -4,7 +4,7 @@
+ #
+ # src/libpmemobj.link -- linker link file for libpmemobj
+ #
+-LIBPMEMOBJ_1.0 {
++LIBDAOSPMEMOBJ_1.0 {
+ 	global:
+ 		pmemobj_check_version;
+ 		pmemobj_set_funcs;
+diff --git a/src/libpmempool/Makefile b/src/libpmempool/Makefile
+index a5caae881..67c7c531d 100644
+--- a/src/libpmempool/Makefile
++++ b/src/libpmempool/Makefile
+@@ -33,5 +33,5 @@ SOURCE +=\
+ include ../Makefile.inc
+ 
+ CFLAGS += $(LIBNDCTL_CFLAGS)
+-LIBS += -pthread -lpmem $(LIBDL) $(LIBNDCTL_LIBS)
++LIBS += -pthread -ldaospmem $(LIBDL) $(LIBNDCTL_LIBS)
+ CFLAGS += -DUSE_LIBDL
+diff --git a/src/test/Makefile.inc b/src/test/Makefile.inc
+index 103a89ca7..0c13b42e8 100644
+--- a/src/test/Makefile.inc
++++ b/src/test/Makefile.inc
+@@ -48,9 +48,9 @@ endif
+ ifeq ($(LIBPMEMOBJ), y)
+ LIBPMEM=y
+ USE_LOG_PMEMOBJ=y
+-DYNAMIC_LIBS += -lpmemobj
+-STATIC_DEBUG_LIBS += $(LIBS_DIR)/debug/libpmemobj.a
+-STATIC_NONDEBUG_LIBS += $(LIBS_DIR)/nondebug/libpmemobj.a
++DYNAMIC_LIBS += -ldaospmemobj
++STATIC_DEBUG_LIBS += $(LIBS_DIR)/debug/libdaospmemobj.a
++STATIC_NONDEBUG_LIBS += $(LIBS_DIR)/nondebug/libdaospmemobj.a
+ endif
+ 
+ ifeq ($(LIBPMEMOBJ), internal-debug)
+@@ -426,9 +426,9 @@ INCS += -I$(TOP)/src/core
+ endif
+ 
+ ifeq ($(LIBPMEM),y)
+-DYNAMIC_LIBS += -lpmem
+-STATIC_DEBUG_LIBS += $(LIBS_DIR)/debug/libpmem.a
+-STATIC_NONDEBUG_LIBS += $(LIBS_DIR)/nondebug/libpmem.a
++DYNAMIC_LIBS += -ldaospmem
++STATIC_DEBUG_LIBS += $(LIBS_DIR)/debug/libdaospmem.a
++STATIC_NONDEBUG_LIBS += $(LIBS_DIR)/nondebug/libdaospmem.a
+ endif
+ 
+ ifneq ($(LIBPMEMCOMMON)$(LIBPMEM)$(LIBPMEM2)$(LIBPMEMPOOL)$(LIBPMEMOBJ),)
+diff --git a/src/tools/Makefile.inc b/src/tools/Makefile.inc
+index 958ec6fe1..9994664ee 100644
+--- a/src/tools/Makefile.inc
++++ b/src/tools/Makefile.inc
+@@ -107,7 +107,7 @@ else
+ LIBSDIR_PRIV=$(LIBSDIR_NONDEBUG)
+ endif
+ 
+-PMEMOBJ_PRIV_OBJ=$(LIBSDIR_PRIV)/libpmemobj/libpmemobj_unscoped.o
++PMEMOBJ_PRIV_OBJ=$(LIBSDIR_PRIV)/libpmemobj/libdaospmemobj_unscoped.o
+ 
+ LIBS += $(LIBUUID)
+ 
+@@ -145,15 +145,15 @@ endif
+ 
+ ifeq ($(LIBPMEMOBJ), y)
+ LIBPMEM=y
+-DYNAMIC_LIBS += -lpmemobj
+-STATIC_DEBUG_LIBS += $(LIBSDIR_DEBUG)/libpmemobj.a
+-STATIC_NONDEBUG_LIBS += $(LIBSDIR_NONDEBUG)/libpmemobj.a
++DYNAMIC_LIBS += -ldaospmemobj
++STATIC_DEBUG_LIBS += $(LIBSDIR_DEBUG)/libdaospmemobj.a
++STATIC_NONDEBUG_LIBS += $(LIBSDIR_NONDEBUG)/libdaospmemobj.a
+ endif
+ 
+ ifeq ($(LIBPMEM),y)
+-DYNAMIC_LIBS += -lpmem
+-STATIC_DEBUG_LIBS += $(LIBSDIR_DEBUG)/libpmem.a
+-STATIC_NONDEBUG_LIBS += $(LIBSDIR_NONDEBUG)/libpmem.a
++DYNAMIC_LIBS += -ldaospmem
++STATIC_DEBUG_LIBS += $(LIBSDIR_DEBUG)/libdaospmem.a
++STATIC_NONDEBUG_LIBS += $(LIBSDIR_NONDEBUG)/libdaospmem.a
+ endif
+ 
+ ifeq ($(LIBPMEM2),y)
+diff --git a/utils/libdaospmem.pc.in b/utils/libdaospmem.pc.in
+index a491b8b30..a78128555 100644
+--- a/utils/libdaospmem.pc.in
++++ b/utils/libdaospmem.pc.in
+@@ -1,9 +1,9 @@
+ includedir=${prefix}/include
+ 
+-Name: libpmem
+-Description: libpmem library from PMDK project
++Name: libdaospmem
++Description: libdaospmem library from PMDK project
+ Version: ${version}
+ URL: https://github.com/pmem/pmdk
+ Requires:
+-Libs: -L${libdir} -lpmem
++Libs: -L${libdir} -ldaospmem
+ Cflags: -I${includedir}
+diff --git a/utils/libdaospmemobj.pc.in b/utils/libdaospmemobj.pc.in
+index 62fe3feaa..2a0426ebe 100644
+--- a/utils/libdaospmemobj.pc.in
++++ b/utils/libdaospmemobj.pc.in
+@@ -1,10 +1,10 @@
+ includedir=${prefix}/include
+ 
+-Name: libpmemobj
+-Description: libpmemobj library from PMDK project
++Name: libdaospmemobj
++Description: libdaospmemobj library from PMDK project
+ Version: ${version}
+ URL: https://github.com/pmem/pmdk
+-Requires.private: libpmem${rasdeps}
+-Libs: -L${libdir} -lpmemobj
++Requires.private: libdaospmem${rasdeps}
++Libs: -L${libdir} -ldaospmemobj
+ Libs.private: -ldl
+ Cflags: -I${includedir}

@@ -35,6 +35,7 @@ ARM_PLATFORM = False
 if PROCESSOR.lower() in [x.lower() for x in ARM_LIST]:
     ARM_PLATFORM = True
 
+
 def ofi_config(config):
     """Check ofi version"""
     if not GetOption('silent'):
@@ -196,6 +197,12 @@ def define_ompi(reqs):
     reqs.define('mpich', pkgconfig='mpich', package='mpich-devel')
 
 
+def add_pmdk_fixup(cmds, file):
+    """Simple helper function for creating commands to replace paths in pmdk"""
+    cmds.append(['sed', '-i', 's!<libpmemobj/!<daos_srv/libpmemobj/!',
+                 f"$SANDBOX_PREFIX$PMDK_PREFIX/include/{file}"])
+
+
 def define_components(reqs):
     """Define all of the components"""
     define_common(reqs)
@@ -225,6 +232,26 @@ def define_components(reqs):
                 pkgconfig='libisal_crypto',
                 build_env={'DESTDIR': '$SANDBOX_PREFIX'})
 
+    if GetOption('old_pmdk'):
+        pmemobj = 'pmemobj'
+        pmemdefines = ["DAOS_PMDK_OLD=1"]
+    else:
+        pmemobj = 'daospmemobj'
+        pmemdefines = ["DAOS_PMDK_OLD=0"]
+    cmds = [['mkdir', '-p', '$SANDBOX_PREFIX$PMDK_PREFIX/include/daos_srv'],
+            ['rm', '-rf', '$SANDBOX_PREFIX$PMDK_PREFIX/include/daos_srv/libpmemobj']]
+    files = ['action', 'atomic', 'iterator', 'lists_atomic', 'pool', 'tx']
+    for file in files:
+        add_pmdk_fixup(cmds, f"libpmemobj/{file}.h")
+        add_pmdk_fixup(cmds, f"libpmemobj/{file}_base.h")
+    for file in ['types.h', 'thread.h', 'ctl.h']:
+        add_pmdk_fixup(cmds, f"libpmemobj/{file}")
+    add_pmdk_fixup(cmds, "libpmemobj.h")
+    cmds.append(['mkdir', '-p', '$SANDBOX_PREFIX$PMDK_PREFIX/include/daos_srv'])
+    cmds.append(['mv', '$SANDBOX_PREFIX$PMDK_PREFIX/include/libpmemobj.h',
+                 '$SANDBOX_PREFIX$PMDK_PREFIX/include/libpmemobj',
+                 '$SANDBOX_PREFIX$PMDK_PREFIX/include/daos_srv'])
+
     reqs.define('pmdk',
                 retriever=CopyRetriever(),
                 commands=[['make',
@@ -234,9 +261,10 @@ def define_components(reqs):
                            'DOC=n',
                            'EXTRA_CFLAGS="-Wno-error"',
                            'install',
-                           'prefix=$PMDK_PREFIX']],
-                libs=['pmemobj'],
-                pkgconfig='libpmemobj',
+                           'prefix=$PMDK_PREFIX']] + cmds,
+                libs=[pmemobj],
+                pkgconfig=f'lib{pmemobj}',
+                defines=pmemdefines,
                 build_env={'DESTDIR': '$SANDBOX_PREFIX', 'LIBS': "-lpthread"})
     abt_build = ['./configure',
                  '--prefix=$ARGOBOTS_PREFIX',

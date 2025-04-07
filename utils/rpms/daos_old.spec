@@ -301,7 +301,6 @@ This is the package that bridges the difference between the MOFED openmpi
 %endif
 %{scons_exe} %{?_smp_mflags} \
       --config=force         \
-      --no-rpath             \
       USE_INSTALLED=all      \
       CONF_DIR=%{conf_dir}   \
      %{?daos_build_args}   \
@@ -315,7 +314,6 @@ mv test.cov{,-build}
 %install
 %{scons_exe} %{?_smp_mflags}          \
       --config=force                  \
-      --no-rpath                      \
       --install-sandbox=%{buildroot}  \
       %{buildroot}%{_prefix}          \
       %{buildroot}%{conf_dir}         \

@@ -6,7 +6,7 @@ def scons():
     Import('denv')
 
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
-    libraries = ['smd', 'pmemobj', 'cmocka', 'daos_common_pmem', 'uuid', 'abt', 'gurt']
+    libraries = ['smd', 'daospmemobj', 'cmocka', 'daos_common_pmem', 'uuid', 'abt', 'gurt']
     tenv = denv.Clone()
 
     tenv.require('argobots', 'isal', 'pmdk')

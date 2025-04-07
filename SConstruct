@@ -22,16 +22,16 @@ SCons.Warnings.warningAsException()
 def add_command_line_options():
     """Add command line options"""
 
+    AddOption('--old-pmdk',
+              dest='old_pmdk',
+              action='store_true',
+              default=False,
+              help='Assume old PMDK location')
     AddOption('--preprocess',
               dest='preprocess',
               action='store_true',
               default=False,
               help='Preprocess selected files for profiling')
-    AddOption('--no-rpath',
-              dest='no_rpath',
-              action='store_true',
-              default=False,
-              help='Disable rpath')
     AddOption('--analyze-stack',
               dest='analyze_stack',
               metavar='ARGSTRING',
@@ -481,6 +481,7 @@ def scons():
 
     conf_dir = ARGUMENTS.get('CONF_DIR', '$PREFIX/etc')
 
+    print(f"install alias points to {env.subst('$SANDBOX_PREFIX$PREFIX')}")
     env.Alias('install', '$SANDBOX_PREFIX$PREFIX')
 
     base_env = env.Clone()
@@ -520,9 +521,6 @@ def scons():
     build_misc(build_prefix)
 
     Default(build_prefix)
-
-    # an "rpms" target
-    env.Command('rpms', '', 'make -C utils/rpms rpms')
 
     Help(opts.GenerateHelpText(env), append=True)
 

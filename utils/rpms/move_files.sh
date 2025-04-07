@@ -17,6 +17,7 @@ while [ $# -gt 0 ]; do
     dest="${dest_root}/$1"
     mkdir -p "${dest}"
     set -x
+    # shellcheck disable=SC2046
     utils/rpms/move_files.sh "${buildroot}" "${src}" "${dest}" "${oldprefix}" "${newprefix}" \
                              "${lib}" "${libdir}" $(basename -a "${src}/"*)
     rmdir "${src}"
@@ -31,8 +32,11 @@ while [ $# -gt 0 ]; do
   grep -Il '' "$src" | xargs -I % sed -i "s!-L${oldprefix}\S*!!" '%'
   grep -IL '' "${src}" | xargs -I % patchelf --remove-rpath '%'
   grep -IL '' "${src}" | xargs -I % strip '%'
+  # shellcheck disable=SC2001
   dbg_src=$(sed "s!${oldprefix}!/usr/lib/debug/${oldprefix}!" <<< "${src}")
+  # shellcheck disable=SC2001
   dbg_dest=$(sed "s!${newprefix}/bin!${newprefix}/lib/debug/${newprefix}/bin!" <<< "${dest_root}")
+  # shellcheck disable=SC2001
   dbg_dest=$(sed "s!${newprefix}/lib!${newprefix}/lib/debug/${newprefix}/lib!" <<< "${dest_root}")
   fname=$(grep -IL '' "${dbg_src}-"*".debug")
   if [ -f "${fname}" ]; then
