@@ -20,7 +20,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	bool                      preread  = false;
 	int                       flags;
 
-	if (ino == DFUSE_LOG_CTRL_INO) {
+	if (ino == DFUSE_CTRL_INO) {
 		fi_out.fh          = ino;
 		fi_out.direct_io   = 1;
 		fi_out.nonseekable = 1;
@@ -154,7 +154,7 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	int                       rc;
 	uint32_t                  il_calls;
 
-	if (ino == DFUSE_LOG_CTRL_INO) {
+	if (ino == DFUSE_CTRL_INO) {
 		fuse_reply_err(req, 0);
 		return;
 	}

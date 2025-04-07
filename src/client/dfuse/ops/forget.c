@@ -36,7 +36,7 @@ dfuse_cb_forget(fuse_req_t req, fuse_ino_t ino, uintptr_t nlookup)
 {
 	struct dfuse_info *dfuse_info = fuse_req_userdata(req);
 
-	if (ino == DFUSE_LOG_CTRL_INO) {
+	if (ino == DFUSE_CTRL_INO) {
 		fuse_reply_none(req);
 		return;
 	}

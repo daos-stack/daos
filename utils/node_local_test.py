@@ -2225,7 +2225,7 @@ class PosixTests():
         container.destroy()
 
     def test_dfuse_logctrl(self):
-        """Test .dfuse_log_ctrl feature"""
+        """Test .dfuse_ctrl feature"""
         container = create_cont(self.conf, self.pool, ctype="POSIX")
         run_daos_cmd(self.conf,
                      ['container', 'query', self.pool.id(), container.id()],
@@ -2262,10 +2262,10 @@ streams=all
         warn = """log_mask=warn
 """
         tests["warn"] = {"payload": warn, "expect_pass": True}
-        log_ctrl = os.path.join(dfuse.dir, ".dfuse_log_ctrl")
+        ctrl = os.path.join(dfuse.dir, ".dfuse_ctrl")
         for name, test in tests.items():
             try:
-                with open(log_ctrl, "w") as log:
+                with open(ctrl, "w") as log:
                     log.write(test["payload"])
                 if not test["expect_pass"]:
                     print(f"Test {name} should have failed but passed")
@@ -2281,25 +2281,25 @@ streams=all
 
             print(f"Test {name} passed")
         try:
-            os.mkdir(log_ctrl)
-            print("Should not be able to create a directory named .dfuse_log_ctrl")
+            os.mkdir(ctrl)
+            print("Should not be able to create a directory named .dfuse_ctrl")
             self.fail()
         except OSError:
-            print("mkdir correctly prevented for .dfuse_log_ctrl")
+            print("mkdir correctly prevented for .dfuse_ctrl")
 
         try:
-            os.unlink(log_ctrl)
-            print("Should not be able to remove .dfuse_log_ctrl")
+            os.unlink(ctrl)
+            print("Should not be able to remove .dfuse_ctrl")
             self.fail()
         except OSError:
-            print("mkdir correctly prevented for .dfuse_log_ctrl")
+            print("mkdir correctly prevented for .dfuse_ctrl")
 
         if dfuse.stop():
             self.fatal_errors = True
 
         container.destroy(valgrind=False, log_check=False)
 
-        print("Done with dfuse_log_ctrl test")
+        print("Done with dfuse_ctrl test")
 
     def test_cache(self):
         """Test with caching enabled"""

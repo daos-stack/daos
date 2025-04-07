@@ -17,8 +17,8 @@
 #include <gurt/debug.h>
 
 /* special file to control logging */
-#define DFUSE_LOG_CTRL     ".dfuse_log_ctrl"
-#define DFUSE_LOG_CTRL_INO (0xf399beeff9933fffULL)
+#define DFUSE_CTRL     ".dfuse_ctrl"
+#define DFUSE_CTRL_INO (0xffffffffffffda05ULL)
 
 /* Allow changing the default so these macros can be
  * used by files that don't log to the default facility
