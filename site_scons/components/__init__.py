@@ -65,6 +65,7 @@ def define_mercury(reqs):
                  '--disable-efa',
                  '--disable-psm2',
                  '--disable-psm3',
+                 '--enable-static=no',
                  '--disable-opx',
                  '--without-gdrcopy']
 
@@ -204,7 +205,8 @@ def define_components(reqs):
     reqs.define('isal',
                 retriever=CopyRetriever(),
                 commands=[['./autogen.sh'],
-                          ['./configure', '--prefix=$ISAL_PREFIX', '--libdir=$ISAL_PREFIX/lib64'],
+                          ['./configure', '--prefix=$ISAL_PREFIX', '--libdir=$ISAL_PREFIX/lib64',
+                           '--enable-static=no'],
                           ['make'],
                           ['make', 'install']],
                 libs=['isal'],
@@ -215,7 +217,8 @@ def define_components(reqs):
                 commands=[['./autogen.sh'],
                           ['./configure',
                            '--prefix=$ISAL_CRYPTO_PREFIX',
-                           '--libdir=$ISAL_CRYPTO_PREFIX/lib64'],
+                           '--libdir=$ISAL_CRYPTO_PREFIX/lib64',
+                           '--enable-static=no'],
                           ['make'],
                           ['make', 'install']],
                 libs=['isal_crypto'],

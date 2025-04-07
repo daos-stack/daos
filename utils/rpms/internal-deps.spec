@@ -1,5 +1,17 @@
-%if %{with server}
 %if %{with build_deps}
+%package fused
+Summary: DAOS build of fused
+Version:       %{daos_version}
+Release:       %{daos_release}
+
+%description fused
+DAOS specific fuse library
+
+%files fused
+%dir %{daos_root}/prereq/release/fused
+%{daos_root}/prereq/release/fused/*
+
+%if %{with server}
 
 %package pmdk
 Summary: DAOS build of PMDK
@@ -25,7 +37,11 @@ Prebuilt DAOS SPDK dependency
 %dir %{daos_root}/prereq/release/spdk
 %{daos_root}/prereq/release/spdk/*
 
+%endif
+
 %else
+BuildRequires: %{name}-fused = %{daos_version}
+%if %{with server}
 BuildRequires: %{name}-pmdk = %{daos_version}
 BuildRequires: %{name}-spdk = %{daos_version}
 %endif

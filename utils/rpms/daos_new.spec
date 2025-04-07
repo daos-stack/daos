@@ -1,5 +1,17 @@
 %global daos_root /opt/daos
 
+%if %{with build_daos}
+%if %{with build_deps}
+%define deps yes
+%else
+%define deps no
+%endif
+%else
+%if %{with build_deps}
+%define deps only
+%endif
+%endif
+
 # disable check-buildroot (normally /usr/lib/rpm/check-buildroot) with:
 %define __arch_install_post %{nil}
 
@@ -92,7 +104,7 @@ Requires: openssl
 %include isa-l.spec
 %include isa-l_crypto.spec
 %include argobots.spec
-%include server-deps.spec
+%include internal-deps.spec
 
 %if %{with build_daos}
 %if %{with server}
@@ -319,12 +331,11 @@ This is the package that bridges the difference between the MOFED openmpi
       install                         \
       TARGET_TYPE=release               \
       USE_INSTALLED=all               \
-      --build-deps=yes            \
+      --build-deps=%{deps}            \
       PREFIX=%{daos_root}              \
      %{?daos_build_args}            \
       %{?scons_args}                  \
       %{?compiler_args}
-
 utils/rpms/fix_files.sh "%{buildroot}" "%{buildroot}%{_prefix}" "remove-rpath"
 %if %{with build_daos}
 utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}%{daos_root}/bin" "%{buildroot}%{_bindir}" \
@@ -673,5 +684,3 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %doc README.md
 # No files in a shim package
 %endif
-
-%exclude %{daos_root}/prereq/release/fused/*
