@@ -906,7 +906,7 @@ class DmgCommand(DmgCommandBase):
 
         """
         return self._get_result(
-            ("pool", "exclude"), pool=pool, rank=ranks, tgt_idx=tgt_idx, force=force)
+            ("pool", "exclude"), pool=pool, ranks=ranks, tgt_idx=tgt_idx, force=force)
 
     def pool_extend(self, pool, ranks):
         """Extend the daos_server pool.
