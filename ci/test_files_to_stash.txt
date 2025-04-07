@@ -48,3 +48,4 @@ src/rdb/raft_tests/raft_tests.py,
 src/vos/tests/evt_ctl.sh
 src/control/lib/netdetect/netdetect.go
 src/include/**
+build/*/*/**/*.gcno
