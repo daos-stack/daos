@@ -26,7 +26,9 @@ container:
 dfuse:
   cores: '0-17'
   thread_count: 36
+  enable_local_flock: true
 dfuse_vm:
   cores: '0-3'
   eq_count: 2
   thread_count: 8
+  enable_local_flock: true
