@@ -61,6 +61,7 @@ Development files for the %{isal_libname} library.
 %files -n %{isal_devname}
 %license deps/isal/LICENSE
 %dir %{_includedir}/isa-l
+%{_includedir}/isa-l/*
 %{_includedir}/isa-l.h
 %{_libdir}/libisal.so
 %{_libdir}/pkgconfig/libisal.pc

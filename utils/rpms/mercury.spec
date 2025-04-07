@@ -54,7 +54,7 @@ Mercury plugin to support the UCX transport.
 %license deps/mercury/LICENSE.txt
 %doc deps/mercury/README.md
 %{_includedir}/mercury*
-%{_includedir}/na_*
+%{_includedir}/na*
 %{_libdir}/libmercury.so
 %{_libdir}/libmercury_util.so
 %{_libdir}/libna.so

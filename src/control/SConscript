@@ -195,7 +195,9 @@ def scons():
                             "-L$BUILD_DIR/src/common "
                             "-L$BUILD_DIR/src/utils/ddb "
                             "-L$SANDBOX_PREFIX$SPDK_PREFIX/lib "
-                            "-L$SANDBOX_PREFIX$OFI_PREFIX/lib $_RPATH")
+                            "-L$SANDBOX_PREFIX$OFI_PREFIX/lib "
+                            "-L$SPDK_PREFIX/lib "
+                            "-L$OFI_PREFIX/lib $_RPATH")
     # Explicitly link RTE & SPDK libs for CGO access
     ldopts = cgolibdirs + " -lspdk_env_dpdk -lspdk_nvme -lspdk_vmd -lrte_mempool" + \
         " -lrte_mempool_ring -lrte_bus_pci -lnvme_control -lnuma -ldl"
@@ -203,6 +205,14 @@ def scons():
 
     aenv.AppendENVPath("CGO_CFLAGS",
                        senv.subst("-I$SANDBOX_PREFIX$SPDK_PREFIX/include "
+                                  "-I$SANDBOX_PREFIX$OFI_PREFIX/include "
+                                  "-ISPDK_PREFIX/include "
+                                  "-I$OFI_PREFIX/include"),
+                       sep=" ")
+    aenv.AppendENVPath("CGO_CFLAGS",
+                       senv.subst("-I$SPDK_PREFIX/include "
+                                  "-I$OFI_PREFIX/include "
+                                  "-I$SANDBOX_PREFIX$SPDK_PREFIX/include "
                                   "-I$SANDBOX_PREFIX$OFI_PREFIX/include"),
                        sep=" ")
 

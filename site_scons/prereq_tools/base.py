@@ -1345,10 +1345,10 @@ class _Component():
         resolved = new_env.subst(path)
         if resolved in checked and checked[resolved] == use_sandbox:
             return False
-        self.component_prefix = resolved
         if not use_sandbox:
             # Sandbox should not be necessary if the component is installed
             new_env["ENV"]["PKG_CONFIG_PATH"] = os.environ.get("PKG_CONFIG_PATH", "")
+        self.component_prefix = resolved
         self.set_environment(new_env, needed_libs, use_sandbox=use_sandbox)
         if self.has_missing_targets(new_env):
             checked[resolved] = use_sandbox
@@ -1359,10 +1359,12 @@ class _Component():
 
     def is_installed(self, needed_libs):
         """Check if the component is already installed"""
+        if self.real_prefix is not None:
+            return
         checked = {}
         if self.use_installed:
             if self.is_installed_helper(needed_libs, checked, '/usr', use_sandbox=False):
-                self.real_prefix = '/usr'
+                self.real_prefix = self.component_prefix
                 return True
 
         self.use_installed = False
@@ -1371,12 +1373,12 @@ class _Component():
         prebuilts = self.prereqs.get_prebuilt_paths()
         for path in prebuilts:
             if self.is_installed_helper(needed_libs, checked, path, use_sandbox=False):
-                self.real_prefix = '/usr'
+                self.real_prefix = self.component_prefix
                 return True
 
         prefix = self.prereqs.get_default_component_prefix(self.name, self.static_libs)
         if self.is_installed_helper(needed_libs, checked, prefix, use_sandbox=False):
-            self.real_prefix = '/usr'
+            self.real_prefix = self.component_prefix
             return True
 
         self.real_prefix = self.prereqs.sandbox_prefix + prefix

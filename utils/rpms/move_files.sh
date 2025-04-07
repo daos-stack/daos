@@ -9,6 +9,8 @@ newprefix="$1"; shift
 lib="$1"; shift
 libdir="$1"; shift
 
+mkdir -p "${dest_root}"
+
 while [ $# -gt 0 ]; do
   src="${src_root}/$1"
   if [ -d "${src}" ]; then

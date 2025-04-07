@@ -8,6 +8,7 @@
 
 %bcond_without server
 %bcond_without build_deps
+%bcond_without build_daos
 %bcond_without olddaos
 %bcond_without ucx
 

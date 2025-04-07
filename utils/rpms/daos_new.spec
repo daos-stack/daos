@@ -94,6 +94,7 @@ Requires: openssl
 %include argobots.spec
 %include server-deps.spec
 
+%if %{with build_daos}
 %if %{with server}
 %package server
 Summary: The DAOS server
@@ -292,6 +293,8 @@ BuildArch: noarch
 This is the package that bridges the difference between the MOFED openmpi
 "Provides" and distribution-openmpi consumers "Requires".
 
+%endif
+
 %if (0%{?suse_version} > 0)
 %global __debug_package 1
 %global _debuginfo_subpackages 1
@@ -316,13 +319,14 @@ This is the package that bridges the difference between the MOFED openmpi
       install                         \
       TARGET_TYPE=release               \
       USE_INSTALLED=all               \
-      --build-deps=yes                \
+      --build-deps=yes            \
       PREFIX=%{daos_root}              \
      %{?daos_build_args}            \
       %{?scons_args}                  \
       %{?compiler_args}
 
 utils/rpms/fix_files.sh "%{buildroot}" "%{buildroot}%{_prefix}" "remove-rpath"
+%if %{with build_daos}
 utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}%{daos_root}/bin" "%{buildroot}%{_bindir}" \
                          "%{buildroot}%{daos_root}" "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
                          "daos" \
@@ -384,7 +388,6 @@ utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}%{daos_root}/lib" \
                          "%{buildroot}%{daos_root}" \
                          "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
                          $(basename -a "%{buildroot}%{daos_root}/lib/"*)
-mkdir -p "%{buildroot}%{python3_sitearch}/pydaos"
 utils/rpms/move_files.sh "%{buildroot}" \
                 "%{buildroot}"$(sed "s!%{_prefix}!%{daos_root}!" <<< "%{python3_sitearch}/pydaos") \
                 "%{buildroot}%{python3_sitearch}/pydaos" "%{buildroot}%{daos_root}" \
@@ -395,7 +398,6 @@ utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}%{daos_root}/share/man" \
                          "%{buildroot}%{daos_root}" \
                          "%{buildroot}%{_prefix}" "lib64" "%{_libdir}" \
                          $(basename -a "%{buildroot}%{daos_root}/share/man/"*)
-mkdir -p %{buildroot}/%{conf_dir}
 utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}%{daos_root}/etc" \
                          "%{buildroot}%{conf_dir}" \
                          "%{buildroot}%{daos_root}" \
@@ -403,7 +405,9 @@ utils/rpms/move_files.sh "%{buildroot}" "%{buildroot}%{daos_root}/etc" \
                          $(basename -a "%{buildroot}%{daos_root}/etc/"*.yml) \
                          $(basename -a "%{buildroot}%{daos_root}/etc/"*.yaml) \
                          $(basename -a "%{buildroot}%{daos_root}/etc/"*.supp)
+%endif
 utils/rpms/fix_files.sh "%{buildroot}" "%{buildroot}%{daos_root}" "keep-rpath"
+%if %{with build_daos}
 ln -s /opt/daos/daos_server %{buildroot}%{_bindir}/daos_server
 ln -s /opt/daos/daos_server_helper %{buildroot}%{_bindir}/daos_server_helper
 ln -s /opt/daos/daos_firmware_helper %{buildroot}%{_bindir}/daos_firmware_helper
@@ -543,7 +547,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 %files client
 %doc README.md
-%exclude %{daos_root}/prereq/release/fused/*
 %{_libdir}/libdaos.so.*
 %{_bindir}/cart_ctl
 %{_bindir}/self_test
@@ -669,3 +672,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files mofed-shim
 %doc README.md
 # No files in a shim package
+%endif
+
+%exclude %{daos_root}/prereq/release/fused/*

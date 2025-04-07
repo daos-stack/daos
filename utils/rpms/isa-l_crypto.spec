@@ -42,6 +42,7 @@ Development files for the %{isal_crypto_libname} library.
 
 %files -n %{isal_crypto_devname}
 %dir %{_includedir}/isa-l_crypto
+%{_includedir}/isa-l_crypto/*
 %{_includedir}/isa-l_crypto.h
 %{_libdir}/libisal_crypto.so
 %{_libdir}/pkgconfig/libisal_crypto.pc
