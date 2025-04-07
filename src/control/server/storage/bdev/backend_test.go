@@ -1344,6 +1344,36 @@ func TestBackend_Prepare(t *testing.T) {
 			},
 			expErr: errors.New("spdk says no"),
 		},
+		"prepare setup; lock file clean; vmd enabled": {
+			req: storage.BdevPrepareRequest{
+				CleanSpdkLockfiles: true,
+				PCIAllowList:       mockAddrListStr(1, 2, 3),
+				PCIBlockList:       mockAddrListStr(4, 3),
+				EnableVMD:          true,
+			},
+			vmdDetectRet: mockAddrList(3, 2),
+			expScriptCalls: []scriptCall{
+				{
+					Env: []string{
+						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%s", driverOverrideEnv, noDriver),
+						fmt.Sprintf("%s=%s", pciBlockListEnv, mockAddrList(4)),
+					},
+				},
+				{
+					Env: []string{
+						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugepages),
+						fmt.Sprintf("%s=%s", targetUserEnv, username),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, mockAddrList(2)),
+						fmt.Sprintf("%s=%s", pciBlockListEnv, mockAddrList(4)),
+					},
+				},
+			},
+			expResp: &storage.BdevPrepareResponse{
+				VMDPrepared: true,
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)

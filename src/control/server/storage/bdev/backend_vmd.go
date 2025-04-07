@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -50,14 +51,8 @@ func mapVMDToBackingDevs(foundCtrlrs storage.NvmeControllers) (map[string]storag
 	return vmds, nil
 }
 
-// mapVMDToBackingAddrs stores found vmd backing device addresses under vmd address key.
-func mapVMDToBackingAddrs(foundCtrlrs storage.NvmeControllers) (map[string]*hardware.PCIAddressSet, error) {
+func backingToVMDAddrs(ctrlrAddrs *hardware.PCIAddressSet) (map[string]*hardware.PCIAddressSet, error) {
 	vmds := make(map[string]*hardware.PCIAddressSet)
-
-	ctrlrAddrs, err := foundCtrlrs.Addresses()
-	if err != nil {
-		return nil, err
-	}
 
 	for _, addr := range ctrlrAddrs.Addresses() {
 		vmdAddr, err := addr.BackingToVMDAddress()
@@ -79,6 +74,16 @@ func mapVMDToBackingAddrs(foundCtrlrs storage.NvmeControllers) (map[string]*hard
 	}
 
 	return vmds, nil
+}
+
+// mapVMDToBackingAddrs stores found vmd backing device addresses under vmd address key.
+func mapVMDToBackingAddrs(foundCtrlrs storage.NvmeControllers) (map[string]*hardware.PCIAddressSet, error) {
+	ctrlrAddrs, err := foundCtrlrs.Addresses()
+	if err != nil {
+		return nil, err
+	}
+
+	return backingToVMDAddrs(ctrlrAddrs)
 }
 
 // substVMDAddrs replaces VMD endpoint PCI addresses in input device list with the PCI

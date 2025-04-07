@@ -45,12 +45,12 @@ func realRemove(name string) error {
 }
 
 // Clean removes SPDK lockfiles associated with NVMe SSDs/controllers at given PCI addresses.
-func (n *NvmeImpl) Clean(pciAddrs ...string) ([]string, error) {
+func (n *NvmeImpl) Clean(pciAddrChecker LockfileAddrCheckFn) ([]string, error) {
 	if n == nil {
 		return nil, errors.New("nil NvmeImpl")
 	}
 
-	return cleanLockfiles(realRemove, pciAddrs...)
+	return cleanLockfiles(realRemove, pciAddrChecker)
 }
 
 // Discover NVMe devices, including NVMe devices behind VMDs if enabled,

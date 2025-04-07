@@ -193,6 +193,9 @@ func logNUMAStats(log logging.Logger) {
 
 // Skip addresses in block list if present then expand to include both VMD and VMD backing device
 // addresses in search filter.
+// FIXME DAOS-17341: We need to remove lockfiles with backing device addresses by parsing file names
+//                   to evaluate whether they refer to a given VMD address supplied in resultant
+//                   allowed list.
 func (sb *spdkBackend) removeSpdkLockfiles(req storage.BdevPrepareRequest, resp *storage.BdevPrepareResponse) (err error) {
 	inAllowList, err := hardware.NewPCIAddressSetFromString(req.PCIAllowList)
 	if err != nil {
