@@ -1175,7 +1175,14 @@ iv_op(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
 	if (ns->iv_stop)
 		return -DER_SHUTDOWN;
 
-	if (sync && sync->ivs_mode == CRT_IV_SYNC_LAZY)
+	/* Cart IV's CRT_IV_SYNC_LAZY update/invalidate, its completion means update/invalidate
+	 * complete and need not wait the SYNC (bcst)'s completion. Here changes it to create ULT
+	 * so won't wait anything.
+	 * For CRT_IV_SHORTCUT_TO_ROOT + CRT_IV_SYNC_LAZY mode, we keep the same semantic as cart
+	 * IV. One use case is ds_pool_iv_srv_hdl_update() to make the pool_iv_ent_update()->
+	 * ds_pool_iv_refresh_hdl() be executed synchronously.
+	 */
+	if (sync && sync->ivs_mode == CRT_IV_SYNC_LAZY && shortcut != CRT_IV_SHORTCUT_TO_ROOT)
 		return iv_op_async(ns, key, value, sync, shortcut, retry, opc);
 
 	return _iv_op(ns, key, value, sync, shortcut, retry, opc);
