@@ -1,0 +1,72 @@
+From ad27f80001eb4430ad18eeb62b0b4eab23130822 Mon Sep 17 00:00:00 2001
+From: Jinshan Xiong <jinshanx@google.com>
+Date: Thu, 3 Apr 2025 05:16:16 +0000
+Subject: [PATCH] backport tag rpc for ofi 1.22
+
+Signed-off-by: Jinshan Xiong <jinshanx@google.com>
+---
+ src/na/CMakeLists.txt | 13 ++++++++++++-
+ src/na/na_config.h.in |  1 +
+ src/na/na_ofi.c       |  5 ++---
+ 3 files changed, 15 insertions(+), 4 deletions(-)
+
+diff --git a/src/na/CMakeLists.txt b/src/na/CMakeLists.txt
+index 5c4ec2f..bc8666d 100644
+--- a/src/na/CMakeLists.txt
++++ b/src/na/CMakeLists.txt
+@@ -149,6 +149,17 @@ if(NA_USE_OFI)
+   set(CMAKE_REQUIRED_INCLUDES ${OFI_INCLUDE_DIR})
+   check_include_files("rdma/fi_ext_gni.h" NA_OFI_HAS_EXT_GNI_H)
+   check_include_files("stdbool.h;rdma/fabric.h;rdma/fi_cxi_ext.h" NA_OFI_HAS_EXT_CXI_H)
++  # check_symbol_exists(FI_TAG_RPC rdma/fabric.h NA_OFI_HAS_TAG_RPC)
++  check_c_source_compiles(
++    "
++    #include <rdma/fabric.h>
++    int main(void) {
++    (void) FI_TAG_RPC;
++      return 0;
++    }
++    "
++    NA_OFI_HAS_TAG_RPC
++  )
+   if(NA_OFI_HAS_EXT_GNI_H)
+     option(NA_OFI_GNI_USE_UDREG "Force gni provider to use udreg instead of internal MR cache." OFF)
+     if(NA_OFI_GNI_USE_UDREG)
+@@ -546,4 +557,4 @@ if(NOT WIN32)
+       ${NA_INSTALL_LIB_DIR}/pkgconfig
+   )
+ 
+-endif()
+\ No newline at end of file
++endif()
+diff --git a/src/na/na_config.h.in b/src/na/na_config.h.in
+index 30d0e08..9a12275 100644
+--- a/src/na/na_config.h.in
++++ b/src/na/na_config.h.in
+@@ -101,6 +101,7 @@
+ #cmakedefine NA_OFI_HAS_EXT_GNI_H
+ #cmakedefine NA_OFI_HAS_EXT_CXI_H
+ #cmakedefine NA_OFI_GNI_HAS_UDREG
++#cmakedefine NA_OFI_HAS_TAG_RPC
+ 
+ /* NA SM */
+ #cmakedefine NA_HAS_SM
+diff --git a/src/na/na_ofi.c b/src/na/na_ofi.c
+index 32bb488..135ee3e 100644
+--- a/src/na/na_ofi.c
++++ b/src/na/na_ofi.c
+@@ -3512,9 +3512,8 @@ na_ofi_getinfo(enum na_ofi_prov_type prov_type, const struct na_ofi_info *info,
+             hints->ep_attr->protocol =
+                 (uint32_t) na_ofi_prov_ep_proto[prov_type];
+ 
+-#if FI_VERSION_GE(FI_COMPILE_VERSION, FI_VERSION(2, 0))
+-        if (FI_VERSION_GE(fi_version(), FI_VERSION(2, 0)) &&
+-            (prov_type == NA_OFI_PROV_TCP)) {
++#if defined(NA_OFI_HAS_TAG_RPC)
++        if (prov_type == NA_OFI_PROV_TCP) {
+             char *env = getenv("NA_OFI_TCP_TAG_RPC");
+             if (env == NULL || atoi(env) != 0) /* Enabled by default */
+                 hints->ep_attr->mem_tag_format = FI_TAG_RPC;
+-- 
+2.49.0.504.g3bcea36a83-goog
+
