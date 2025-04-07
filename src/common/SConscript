@@ -85,11 +85,13 @@ def scons():
 
     tlibenv.Install('$PREFIX/lib64/', tests_lib)
     tenv = denv.Clone()
-    tenv.require('pmdk')
 
-    tenv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
-    utest_utils = tenv.SharedObject('tests/utest_common.c')
-    Export('utest_utils')
+    if prereqs.server_requested():
+        tenv.require('pmdk')
+
+        tenv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
+        utest_utils = tenv.SharedObject('tests/utest_common.c')
+        Export('utest_utils')
 
     SConscript('tests/SConscript', exports='tenv')
 
