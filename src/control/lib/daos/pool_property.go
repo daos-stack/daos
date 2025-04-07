@@ -374,7 +374,7 @@ func PoolProperties() PoolPropertyMap {
 			},
 			values: map[string]uint64{
 				"root":  PoolPerfDomainRoot,
-				"group": PoolPerfDomainGrp,
+				"group": PoolPerfDomainUserDefined,
 			},
 		},
 		"svc_rf": {

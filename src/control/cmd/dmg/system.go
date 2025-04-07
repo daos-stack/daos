@@ -178,6 +178,7 @@ func (cmd *systemEraseCmd) Execute(_ []string) error {
 type systemStopCmd struct {
 	baseRankListCmd
 	Force bool `long:"force" description:"Force stop DAOS system members"`
+	Full  bool `long:"full" hidden:"true" description:"Attempt a graceful shutdown of DAOS system. Experimental and not for use in production environments"`
 }
 
 // Execute is run when systemStopCmd activates.
@@ -187,11 +188,20 @@ func (cmd *systemStopCmd) Execute(_ []string) (errOut error) {
 	defer func() {
 		errOut = errors.Wrap(errOut, "system stop failed")
 	}()
+	if cmd.Force && cmd.Full {
+		return errIncompatFlags("force", "full")
+	}
+	if cmd.Full && !cmd.Hosts.Empty() {
+		return errIncompatFlags("full", "rank-hosts")
+	}
+	if cmd.Full && !cmd.Ranks.Empty() {
+		return errIncompatFlags("full", "ranks")
+	}
 
 	if err := cmd.validateHostsRanks(); err != nil {
 		return err
 	}
-	req := &control.SystemStopReq{Force: cmd.Force}
+	req := &control.SystemStopReq{Force: cmd.Force, Full: cmd.Full}
 	req.Hosts.Replace(&cmd.Hosts.HostSet)
 	req.Ranks.Replace(&cmd.Ranks.RankSet)
 
