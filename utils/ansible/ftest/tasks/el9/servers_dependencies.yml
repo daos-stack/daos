@@ -1,0 +1,18 @@
+# Install dependencies of a server node
+
+- name: Install rpms DAOS server dependencies
+  become: true
+  dnf:
+    state: latest
+    update_cache: true
+    disablerepo:
+      - appstream
+    name: "{{ daos_server_deps.rpms }}"
+
+- name: Install MOFED rpms
+  become: true
+  dnf:
+    state: latest
+    update_cache: true
+    name: "{{ mlnx_deps.rpms }}"
+  when: daos_ofi_provider | default(daos_ofi_provider_default) == "ofi+verbs;ofi_rxm"
