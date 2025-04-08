@@ -33,7 +33,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir)
 
     def run_offline_drain_test(self, num_pool, data=False, oclass=None, pool_fillup=0,
-                               multiple_ranks=False):
+                               multiple_ranks=None):
         """Run the offline drain without data.
 
         Args:
@@ -41,7 +41,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
             data (bool) : whether pool has no data or to create some data in pool.
                 Defaults to False.
             oclass (str): DAOS object class (eg: RP_2G1,etc)
-            multiple_ranks (bool) : Perform multiple ranks testing (Default: False)
+            multiple_ranks (list) : List multiple ranks for drain testing (Default: None)
         """
         # Create a pool
         pool = {}
@@ -278,4 +278,4 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         """
         self.log.info("Offline Drain : Test with multiple ranks")
         self.multiple_ranks = self.params.get("rank_list", '/run/multiple_ranks/*')
-        self.run_offline_drain_test(1, data=True, multiple_ranks=True)
+        self.run_offline_drain_test(1, data=True, multiple_ranks=self.multiple_ranks)

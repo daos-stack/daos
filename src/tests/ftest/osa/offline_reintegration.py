@@ -336,4 +336,4 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         :avocado: tags=OSAOfflineReintegration,test_osa_offline_reintegrate_with_multiple_ranks
         """
         self.log.info("Offline Reintegration : Test with multiple ranks")
-        self.run_offline_drain_test(1, data=True, multiple_ranks=True)
+        self.run_offline_reintegration_test(1, data=True, multiple_ranks=True)

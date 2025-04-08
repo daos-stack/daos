@@ -64,7 +64,7 @@ class OSAOnlineReintegration(OSAUtils):
         exclude_servers = (len(self.hostlist_servers) * 2) - 1
 
         if multiple_ranks is True:
-            rank = random.sample(range(1, exclude_servers), 2)
+            rank = "0,3"
         else:
             # Exclude one rank : other than rank 0.
             rank = random.randint(1, exclude_servers)  # nosec
