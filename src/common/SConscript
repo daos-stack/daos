@@ -48,7 +48,6 @@ def scons():
     """Execute build"""
     Import('env', 'base_env', 'prereqs')
 
-    SConscript('dav_v2/SConscript')
     env.AppendUnique(LIBPATH=[Dir('.')])
     base_env.AppendUnique(LIBPATH=[Dir('.')])
     base_env.d_add_build_rpath()
@@ -70,6 +69,7 @@ def scons():
     Export('dc_credit')
 
     if prereqs.server_requested():
+        SConscript('dav_v2/SConscript', exports=['denv'])
         build_daos_common(denv, False)
 
     if not prereqs.test_requested():
@@ -83,11 +83,13 @@ def scons():
 
     tlibenv.Install('$PREFIX/lib64/', tests_lib)
     tenv = denv.Clone()
-    tenv.require('pmdk')
 
-    tenv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
-    utest_utils = tenv.SharedObject('tests/utest_common.c')
-    Export('utest_utils')
+    if prereqs.server_requested():
+        tenv.require('pmdk')
+
+        tenv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
+        utest_utils = tenv.SharedObject('tests/utest_common.c')
+        Export('utest_utils')
 
     SConscript('tests/SConscript', exports='tenv')
 

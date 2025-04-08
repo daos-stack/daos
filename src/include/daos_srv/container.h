@@ -73,7 +73,6 @@ struct ds_cont_child {
 	    sc_destroying : 1, sc_vos_agg_active : 1, sc_ec_agg_active : 1,
 	    /* flag of CONT_CAPA_READ_DATA/_WRITE_DATA disabled */
 	    sc_rw_disabled : 1, sc_scrubbing : 1, sc_rebuilding : 1, sc_open_initializing : 1;
-	uint32_t		 sc_dtx_batched_gen;
 	/* Tracks the schedule request for aggregation ULT */
 	struct sched_request	*sc_agg_req;
 
@@ -182,8 +181,7 @@ struct ds_cont_hdl {
 	uint64_t		sch_flags;	/* user-supplied flags */
 	uint64_t		sch_sec_capas;	/* access control capas */
 	struct ds_cont_child	*sch_cont;
-	int32_t			sch_ref;
-	uint32_t		sch_closed:1;
+	int32_t                  sch_ref;
 };
 
 struct ds_cont_hdl *ds_cont_hdl_lookup(const uuid_t uuid);

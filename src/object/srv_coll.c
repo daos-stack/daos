@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -183,7 +184,7 @@ obj_coll_punch_bulk(crt_rpc_t *rpc, d_iov_t *iov, crt_proc_t *p_proc,
 	sgl.sg_iovs = iov;
 
 	rc = obj_bulk_transfer(rpc, CRT_BULK_GET, false, &ocpi->ocpi_tgt_bulk, NULL, NULL,
-			       DAOS_HDL_INVAL, &sgls, 1, 1, NULL, NULL);
+			       DAOS_HDL_INVAL, &sgls, 1, 1, NULL);
 	if (rc != 0) {
 		D_ERROR("Failed to prepare bulk transfer for coll_punch, size %u: "DF_RC"\n",
 			ocpi->ocpi_bulk_tgt_sz, DP_RC(rc));
@@ -233,7 +234,9 @@ obj_coll_punch_prep(struct obj_coll_punch_in *ocpi, struct daos_coll_target *dct
 	struct dtx_daos_target	*ddt = mbs->dm_tgts;
 	struct dtx_coll_entry	*dce = NULL;
 	struct dtx_coll_target	*target;
-	d_rank_t		 max_rank = 0;
+	uint32_t                *ranks;
+	uint32_t                 min_rank = dcts[0].dct_rank;
+	uint32_t                 max_rank = dcts[0].dct_rank;
 	uint32_t		 size;
 	int			 rc = 0;
 	int			 i;
@@ -254,38 +257,64 @@ obj_coll_punch_prep(struct obj_coll_punch_in *ocpi, struct daos_coll_target *dct
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	/* Already allocated enough space in MBS when decode to hold the targets and bitmap. */
-	target = (struct dtx_coll_target *)(ddt + mbs->dm_tgt_cnt);
+	/* For non-leader, the rank range should has already been appended after the bitmap. */
+	if (!(ocpi->ocpi_flags & ORF_LEADER)) {
+		if (unlikely(!(mbs->dm_flags & DMF_RANK_RANGE))) {
+			D_ERROR("Missed rank range information\n");
+			D_GOTO(out, rc = -DER_INVAL);
+		}
 
-	size = sizeof(*ddt) * mbs->dm_tgt_cnt + sizeof(*target) +
-	       sizeof(dcts[0].dct_tgt_ids[0]) * dcts[0].dct_tgt_nr + dcts[0].dct_bitmap_sz;
-	if (unlikely(ocpi->ocpi_odm.odm_mbs_max_sz < sizeof(*mbs) + size)) {
-		D_ERROR("Pre-allocated MBS buffer is too small: %u vs %ld + %u\n",
-			ocpi->ocpi_odm.odm_mbs_max_sz, sizeof(*mbs), size);
-		D_GOTO(out, rc = -DER_INVAL);
+		ranks    = dtx_coll_mbs_rankrange(mbs);
+		min_rank = ranks[0];
+		max_rank = ranks[1];
+	} else if (dct_nr > 1) {
+		min_rank = dcts[1].dct_rank;
+		max_rank = dcts[1].dct_rank;
+
+		for (i = 2; i < dct_nr; i++) {
+			if (min_rank > dcts[i].dct_rank)
+				min_rank = dcts[i].dct_rank;
+			if (max_rank < dcts[i].dct_rank)
+				max_rank = dcts[i].dct_rank;
+		}
 	}
 
+	/*
+	 * Already allocated enough space in MBS when decode to hold the targets, bitmap,
+	 * and rank range information. Please check crt_proc_struct_dtx_mbs() for detail.
+	 *
+	 * For different DTX participants, the dct_tgt_nr and bitmap size maybe different.
+	 * So each target needs to build each own MBS data: dct + bitmap + rank range.
+	 */
+
+	target             = (struct dtx_coll_target *)(ddt + mbs->dm_tgt_cnt);
 	target->dct_tgt_nr = dcts[0].dct_tgt_nr;
 	memcpy(target->dct_tgts, dcts[0].dct_tgt_ids,
 	       sizeof(dcts[0].dct_tgt_ids[0]) * dcts[0].dct_tgt_nr);
 	target->dct_bitmap_sz = dcts[0].dct_bitmap_sz;
 	memcpy(target->dct_tgts + target->dct_tgt_nr, dcts[0].dct_bitmap, dcts[0].dct_bitmap_sz);
-	mbs->dm_data_size = size;
 
 	D_ALLOC_PTR(dce);
 	if (dce == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	dce->dce_xid = ocpi->ocpi_xid;
-	dce->dce_ver = ocpi->ocpi_map_ver;
-	dce->dce_refs = 1;
-
 	D_ALLOC(dce->dce_bitmap, dcts[0].dct_bitmap_sz);
 	if (dce->dce_bitmap == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
+	dce->dce_xid       = ocpi->ocpi_xid;
+	dce->dce_ver       = ocpi->ocpi_map_ver;
+	dce->dce_min_rank  = min_rank;
+	dce->dce_max_rank  = max_rank;
+	dce->dce_refs      = 1;
 	dce->dce_bitmap_sz = dcts[0].dct_bitmap_sz;
 	memcpy(dce->dce_bitmap, dcts[0].dct_bitmap, dcts[0].dct_bitmap_sz);
+
+	mbs->dm_flags |= DMF_RANK_RANGE;
+	ranks             = dtx_coll_mbs_rankrange(mbs);
+	ranks[0]          = dce->dce_min_rank;
+	ranks[1]          = dce->dce_max_rank;
+	mbs->dm_data_size = (void *)(ranks + 2) - (void *)ddt;
 
 	if (!(ocpi->ocpi_flags & ORF_LEADER) || unlikely(dct_nr <= 1))
 		D_GOTO(out, rc = 0);
@@ -297,8 +326,8 @@ obj_coll_punch_prep(struct obj_coll_punch_in *ocpi, struct daos_coll_target *dct
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	size = pool_map_rank_nr(map->pl_poolmap);
-	D_ALLOC_ARRAY(dce->dce_hints, size);
+	/* The dce_hints maybe sparse array. */
+	D_ALLOC_ARRAY(dce->dce_hints, dce->dce_max_rank - dce->dce_min_rank + 1);
 	if (dce->dce_hints == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -309,8 +338,6 @@ obj_coll_punch_prep(struct obj_coll_punch_in *ocpi, struct daos_coll_target *dct
 	/* Set i = 1 to skip leader_rank. */
 	for (i = 1; i < dct_nr; i++) {
 		dce->dce_ranks->rl_ranks[i - 1] = dcts[i].dct_rank;
-		if (max_rank < dcts[i].dct_rank)
-			max_rank = dcts[i].dct_rank;
 
 		size = dcts[i].dct_bitmap_sz << 3;
 		if (size > dss_tgt_nr)
@@ -318,13 +345,13 @@ obj_coll_punch_prep(struct obj_coll_punch_in *ocpi, struct daos_coll_target *dct
 
 		for (j = 0; j < size; j++) {
 			if (isset(dcts[i].dct_bitmap, j)) {
-				dce->dce_hints[dcts[i].dct_rank] = j;
+				dce->dce_hints[dcts[i].dct_rank - dce->dce_min_rank] = j;
 				break;
 			}
 		}
 	}
 
-	dce->dce_hint_sz = max_rank + 1;
+	dce->dce_hint_sz = dce->dce_max_rank - dce->dce_min_rank + 1;
 
 out:
 	if (map != NULL)

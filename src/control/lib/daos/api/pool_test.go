@@ -193,6 +193,7 @@ func TestAPI_getPoolConn(t *testing.T) {
 	for name, tc := range map[string]struct {
 		setup       func(t *testing.T)
 		ctx         context.Context
+		sysName     string
 		poolID      string
 		flags       daos.PoolConnectFlag
 		checkParams func(t *testing.T)
@@ -220,12 +221,24 @@ func TestAPI_getPoolConn(t *testing.T) {
 			poolID: testPoolName,
 			expErr: errors.Wrap(daos.IOError, "failed to connect to pool"),
 		},
+		"pool handle from Connect() with non-default sys name": {
+			ctx:     test.Context(t),
+			poolID:  daos_default_PoolInfo.Label,
+			sysName: "non-default",
+			checkParams: func(t *testing.T) {
+				test.CmpAny(t, "poolID", daos_default_PoolInfo.Label, daos_pool_connect_SetPoolID)
+				test.CmpAny(t, "sysName", "non-default", daos_pool_connect_SetSys)
+				test.CmpAny(t, "flags", daos.PoolConnectFlagReadOnly, daos_pool_connect_SetFlags)
+				test.CmpAny(t, "query", daos.PoolQueryMask(0), daos_pool_connect_QueryMask)
+			},
+			expHdl: defaultPoolHandle(),
+		},
 		"pool handle from Connect()": {
 			ctx:    test.Context(t),
 			poolID: daos_default_PoolInfo.Label,
 			checkParams: func(t *testing.T) {
 				test.CmpAny(t, "poolID", daos_default_PoolInfo.Label, daos_pool_connect_SetPoolID)
-				test.CmpAny(t, "sysName", build.DefaultSystemName, daos_pool_connect_SetSys)
+				test.CmpAny(t, "sysName", "", daos_pool_connect_SetSys)
 				test.CmpAny(t, "flags", daos.PoolConnectFlagReadOnly, daos_pool_connect_SetFlags)
 				test.CmpAny(t, "query", daos.PoolQueryMask(0), daos_pool_connect_QueryMask)
 			},
@@ -247,7 +260,7 @@ func TestAPI_getPoolConn(t *testing.T) {
 				defer tc.checkParams(t)
 			}
 
-			ph, cleanup, gotErr := getPoolConn(test.MustLogContext(t, ctx), "", tc.poolID, tc.flags)
+			ph, cleanup, gotErr := getPoolConn(test.MustLogContext(t, ctx), tc.sysName, tc.poolID, tc.flags)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

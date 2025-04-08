@@ -305,14 +305,17 @@ jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
 	int		ntargets;
 	int		rc, i;
 	d_rank_list_t	rank_list;
-	uint32_t	domains[] = {255, 0, 5, /* root */
-				     1, 101, 1,
+	/* clang-format off */
+	uint32_t	domains[] = {2, 1, 5, /* root */
+				     1, 101, 1, /* nodes */
 				     1, 102, 1,
 				     1, 103, 1,
 				     1, 104, 1,
 				     1, 105, 1};
+	/* clang-format on */
 	const size_t	tuple_size = 3;
 	const size_t	max_domains = 5;
+	const size_t     md_len      = 1;
 	uint32_t	domain_tree_len;
 	uint32_t	domains_only_len;
 	uint32_t	ranks_per_domain;
@@ -337,19 +340,19 @@ jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
 	}
 
 	domains_only_len = (domain_count + 1) * tuple_size;
-	domain_tree_len = domains_only_len + node_count;
+	domain_tree_len  = md_len + domains_only_len + node_count;
 	D_ALLOC_ARRAY(domain_tree, domain_tree_len);
 	assert_non_null(domain_tree);
 
-	memcpy(domain_tree, domains,
-	       sizeof(uint32_t) * domains_only_len);
+	memcpy(&domain_tree[md_len], domains, sizeof(uint32_t) * domains_only_len);
 
 	rank_list.rl_nr = node_count;
 	D_ALLOC_ARRAY(rank_list.rl_ranks, node_count);
 	assert_non_null(rank_list.rl_ranks);
 	for (i = 0; i < node_count; i++) {
-		uint32_t idx = domains_only_len + i;
+		uint32_t idx = md_len + domains_only_len + i;
 
+		assert_in_range(idx, md_len + domains_only_len, domain_tree_len - 1);
 		domain_tree[idx] = ctx->domain_nr + i;
 		rank_list.rl_ranks[i] = ctx->domain_nr + i;
 	}
@@ -361,8 +364,8 @@ jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
 
 	map_version = pool_map_get_version(ctx->po_map) + 1;
 
-	rc = gen_pool_buf(ctx->po_map, &map_buf, map_version, domain_tree_len, node_count,
-			  ntargets, domain_tree, target_count);
+	rc = gen_pool_buf(ctx->po_map, &map_buf, map_version, domain_tree_len, node_count, ntargets,
+			  domain_tree, target_count);
 	D_FREE(domain_tree);
 	assert_success(rc);
 
