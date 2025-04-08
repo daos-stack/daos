@@ -338,7 +338,7 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 	unsigned int		local_off;
 	unsigned int		iov_idx = 0;
 	size_t			remote_size;
-	int			rc, bulk_iovs = 0;
+	int                     rc, bulk_iovs = 0, total_iovs = 0;
 
 	if (remote_bulk == NULL) {
 		D_ERROR("Remote bulk is NULL\n");
@@ -483,6 +483,8 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 
 		/* Give cart progress a chance to complete some in-flight bulk transfers */
 		if (bulk_iovs >= MAX_BULK_IOVS) {
+			D_WARN("Bulk transfer for %d/%d IOVs\n", bulk_iovs, total_iovs);
+			total_iovs += bulk_iovs;
 			bulk_iovs = 0;
 			ABT_thread_yield();
 		}
@@ -522,7 +524,8 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bul
 		return dss_abterr2der(rc);
 
 	p_arg->inited = true;
-	D_DEBUG(DB_IO, "bulk_op %d, sgl_nr %d, bulk_nr %d\n", bulk_op, sgl_nr, bulk_nr);
+	D_CDEBUG(bulk_nr > 1024, DLOG_WARN, DB_IO, "bulk_op:%d, sgl_nr:%d, bulk_nr:%d\n", bulk_op,
+		 sgl_nr, bulk_nr);
 
 	p_arg->bulks_inflight++;
 
