@@ -277,5 +277,5 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         :avocado: tags=OSAOfflineDrain,test_osa_offline_drain_with_multiple_ranks
         """
         self.log.info("Offline Drain : Test with multiple ranks")
-        self.multiple_ranks = self.params.get("rank_list", '/run/multiple_ranks/*')
-        self.run_offline_drain_test(1, data=True, multiple_ranks=self.multiple_ranks)
+        multiple_ranks = self.params.get("rank_list", '/run/multiple_ranks/*')
+        self.run_offline_drain_test(1, data=True, multiple_ranks=multiple_ranks)
