@@ -535,6 +535,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{python3_sitearch}/pydaos/raw/*.py
 %dir %{python3_sitearch}/pydaos/torch
 %{python3_sitearch}/pydaos/torch/*.py
+%dir %{_var}/log/daos
 %if (0%{?rhel} >= 8)
 %dir %{python3_sitearch}/pydaos/__pycache__
 %{python3_sitearch}/pydaos/__pycache__/*.pyc
