@@ -6945,8 +6945,10 @@ pool_map_crit_prompt(struct pool_svc *svc, struct pool_map *map)
  * \param[in]	svc		pool service
  * \param[in]	opc		update operation (e.g., POOL_EXCLUDE)
  * \param[in]	exclude_rank	for excluding ranks (rather than targets)
- * \param[in]	extend_rank_list ranks list to be extended.
- * \param[in]	extend_domains_nr number of extend domains.
+ * \param[in]	extend_rank_list
+ *				ranks list to be extended.
+ * \param[in]	extend_domains_nr
+ *				number of extend domains.
  * \param[in]	extend_domains	domains to be extended.
  * \param[in,out]
  *		tgts		target IDs (if empty, must specify tgt_addrs)
@@ -6962,6 +6964,8 @@ pool_map_crit_prompt(struct pool_svc *svc, struct pool_map *map)
  * \param[out]	inval_tgt_addrs	optional invalid target addresses (ignored if
  *				\a tgts is nonempty; if specified, must be
  *				initialized to empty and freed by the caller)
+ * \param[in]	src		source of the map update
+ * \param[in]	skip_rf_check	skip the RF check
  */
 static int
 pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclude_rank,
@@ -6998,9 +7002,9 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclud
 	if (opc == MAP_EXTEND) {
 		D_ASSERT(extend_rank_list != NULL);
 		map_version = pool_map_get_version(map) + 1;
-		rc = gen_pool_buf(map, &map_buf, map_version, extend_domains_nr,
-				  extend_rank_list->rl_nr, extend_rank_list->rl_nr * dss_tgt_nr,
-				  extend_domains, dss_tgt_nr);
+		rc          = gen_pool_buf(map, &map_buf, map_version, extend_domains_nr,
+					   extend_rank_list->rl_nr, extend_rank_list->rl_nr * dss_tgt_nr,
+					   extend_domains, dss_tgt_nr);
 		if (rc != 0)
 			D_GOTO(out_map, rc);
 
@@ -7110,6 +7114,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclud
 			goto out_map;
 		}
 
+		/* TODO DAOS-6353: Update to FAULT when supported */
 		failed_cnt = pool_map_get_failed_cnt(map, PO_COMP_TP_NODE);
 		D_INFO(DF_UUID ": Exclude %d ranks, failed NODE %d\n", DP_UUID(svc->ps_uuid),
 		       tgt_addrs->pta_number, failed_cnt);
@@ -7606,6 +7611,10 @@ pool_svc_exclude_ranks(struct pool_svc *svc, struct pool_svc_event_set *event_se
 
 	D_DEBUG(DB_MD, DF_UUID ": exclude %u ranks: map_version=%u: " DF_RC "\n",
 		DP_UUID(svc->ps_uuid), n, rc == 0 ? map_version : 0, DP_RC(rc));
+	for (i = 0; i < inval_list_out.pta_number; i++)
+		D_DEBUG(DB_MD, DF_UUID ": skipped: rank=%u target=%u\n", DP_UUID(svc->ps_uuid),
+			inval_list_out.pta_addrs[i].pta_rank,
+			inval_list_out.pta_addrs[i].pta_target);
 
 	pool_target_addr_list_free(&inval_list_out);
 out:

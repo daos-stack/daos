@@ -437,9 +437,7 @@ struct crt_context {
 	pthread_mutex_t		 cc_mutex;
 
 	/** timeout per-context */
-	uint32_t		 cc_timeout_sec;
-	/** HLC time of last received RPC */
-	uint64_t		 cc_last_unpack_hlc;
+	uint32_t                 cc_timeout_sec;
 
 	/** Per-context statistics (server-side only) */
 	/** Total number of timed out requests, of type counter */

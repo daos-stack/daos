@@ -1,6 +1,7 @@
 #!/bin/bash
 #
-#  (C) Copyright 2021-2024 Intel Corporation.
+#  Copyright 2021-2024 Intel Corporation.
+#  Copyright 2025 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -30,7 +31,7 @@ install_mofed() {
         exit 1
     fi
 
-    # Remove omnipath software
+    # Remove Omni-Path software
     # shellcheck disable=SC2046
     time dnf -y remove $(rpm -q opa-address-resolution \
                                 opa-basic-tools \
@@ -55,10 +56,14 @@ install_mofed() {
         gversion="${gversion%.*}"
     fi
 
-    # Add a repo to install MOFED RPMS
-    artifactory_base_url="https://artifactory.dc.hpdd.intel.com/artifactory/"
-    mellanox_proxy="${artifactory_base_url}mellanox-proxy/mlnx_ofed/"
-    mellanox_key_url="${artifactory_base_url}mlnx_ofed/RPM-GPG-KEY-Mellanox"
+    # Add a repo to install Mellanox_OFED RPMS
+    : "${ARTIFACTORY_URL:=https://artifactory.dc.hpdd.intel.com/artifactory/}"
+    # Temporary fix
+    if  [[ ${ARTIFACTORY_URL} != *"/artifactory" ]]; then
+        ARTIFACTORY_URL="${ARTIFACTORY_URL}artifactory"
+    fi
+    mellanox_proxy="${ARTIFACTORY_URL}/mellanox-proxy/mlnx_ofed/"
+    mellanox_key_url="${ARTIFACTORY_URL}/mlnx_ofed/RPM-GPG-KEY-Mellanox"
     rpm --import "$mellanox_key_url"
     repo_url="$mellanox_proxy$MLNX_VER_NUM/rhel$gversion/x86_64/"
     dnf -y config-manager --add-repo="$repo_url"

@@ -191,6 +191,15 @@ func FaultBadFaultDomainLabels(faultPath, addr string, reqLabels, systemLabels [
 	)
 }
 
+func FaultJoinReplaceEnabledPoolRank(rank ranklist.Rank, poolIDs ...string) *fault.Fault {
+	return serverFault(
+		code.ServerJoinReplaceEnabledPoolRank,
+		fmt.Sprintf("rank %d is enabled on %s %s and cannot be replaced until excluded on all pools",
+			rank, english.PluralWord(len(poolIDs), "pool", "pools"), strings.Join(poolIDs, ",")),
+		"run dmg system exclude --rank=<rank> to manually exclude rank from all system pools then attempt dmg storage format --replace again",
+	)
+}
+
 func serverFault(code code.Code, desc, res string) *fault.Fault {
 	return &fault.Fault{
 		Domain:      "server",
