@@ -14,7 +14,7 @@ $ git switch --recurse-submodules <git branch>
 $ docker build . -f <base dockerfile> --build-arg BASE_DISTRO=<base distro> --build-arg DAOS_JAVA_BUILD=no --build-arg COMPILER=gcc --build-arg DAOS_KEEP_SRC=no --build-arg DAOS_DEPS_BUILD=no --build-arg DAOS_BUILD=no --tag <base tag>
 $ cd $DAOS_SRC/utils/debug/docker/daos-rpms
 $ docker build . -f <builder dockerfile> --build-arg GIT_TAG=<git branch> --tag=<builder tag>
-$ dcoker run --rm --volume $PWD/rpms:/mnt/rpms <builder tag> -o /mnt/rpms -t release -b <git branch> |& tee build.log
+$ docker run --rm --volume $PWD/rpms:/mnt/rpms <builder tag> -o /mnt/rpms -t release -b <git branch> |& tee build.log
 ```
 
 Example of configuration values:

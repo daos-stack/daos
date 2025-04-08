@@ -1,0 +1,41 @@
+# Install dependencies of a development node
+
+- name: Install rpms development dependencies
+  become: true
+  dnf:
+    state: latest
+    update_cache: true
+    # disablerepo:
+    #  - appstream
+    name: "{{ daos_dev_deps.rpms }}"
+
+- name: Install DAOS install-el9.sh
+  become: true
+  copy:
+    src: "{{ daos_source_dir }}/utils/scripts/install-el9.sh"
+    dest: /root/install-el9.sh
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Install DAOS spec file
+  become: true
+  copy:
+    src: "{{ daos_source_dir }}/utils/rpms/daos.spec"
+    dest: /root/daos.spec
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Install DAOS devs installer
+  become: true
+  copy:
+    src: file/install_dev-el9.sh
+    dest: /root/install_dev-el9.sh
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Install packages required for building DAOS
+  become: true
+  command: /bin/bash /root/install_dev-el9.sh
