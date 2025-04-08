@@ -693,7 +693,7 @@ def dump_engines_stacks(hosts, verbose=True, timeout=60, added_filter=None):
     else:
         ps_cmd = "/usr/bin/pgrep --list-full daos_engine"
 
-    command = ":" .join([
+    command = "; ".join([
         "rc=0",
         "if " + ps_cmd,
         "then rc=1",
