@@ -19,12 +19,6 @@ source build/.build_vars.sh
 sudo mkdir -p "${SL_SRC_DIR}"
 sudo mount --bind build "${SL_SRC_DIR}"
 
-# DH debug
-echo "(1) before unit-test..."
-pwd
-ls -al
-ls -R "build"
-
 log_prefix="unit_test"
 
 if [ -n "$BULLSEYE" ]; then
@@ -92,9 +86,6 @@ pip install --requirement requirements-utest.txt
 
 pip install /opt/daos/lib/daos/python/
 
-# echo "(2) before run_utest..."
-# pwd
-# ls -al
 # ls -R
 
 utils/run_utest.py $RUN_TEST_VALGRIND --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" \
@@ -102,14 +93,12 @@ utils/run_utest.py $RUN_TEST_VALGRIND --no-fail-on-error $VDB_ARG --log_dir="$te
 
 # Generate code coverage report
 # echo "(3) after run_utest..."
-# pwd
-# ls -al
 # ls -R
 
 if [[ -n $(find build -name "*.gcda") ]]; then
   #gcovr build --html "${test_log_dir}/code_coverage_report.html"
   ls -al "build/dev/gcc/src/cart"
-  gcovr -j -k -r . -o unit_test_logs/code_coverage_report.html --html --gcov-ignore-parse-errors
+  gcovr -j -k -r . -o unit_test_logs/code_coverage_report.html --html-details --gcov-ignore-parse-errors
   pwd
   ls -al "unit_test_logs"
 fi
