@@ -99,12 +99,13 @@ BuildRequires: libasan8
 
 Requires: openssl
 
+%include pmdk.spec
+%include internal-deps.spec
 %include libfabric.spec
 %include mercury.spec
 %include isa-l.spec
 %include isa-l_crypto.spec
 %include argobots.spec
-%include internal-deps.spec
 
 %if %{with build_daos}
 %if %{with server}

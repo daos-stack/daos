@@ -1,3 +1,5 @@
+%if %{with server}
+%if %{with build_deps}
 %package pmdk
 Summary: Low-level persistent memory support library
 Group: System Environment/Libraries
@@ -35,3 +37,7 @@ Package providing libraries needed by DAOS
 %{_includedir}/daos_srv/libpmemobj/*.h
 %license deps/pmdk/LICENSE
 %doc deps/pmdk/ChangeLog deps/pmdk/CONTRIBUTING.md deps/pmdk/README.md
+%else
+BuildRequires: daos-pmdk = %{daos_version}
+%endif
+%endif
