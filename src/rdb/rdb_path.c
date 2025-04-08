@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,6 +13,9 @@
 #include <daos_srv/rdb.h>
 
 #include "rdb_internal.h"
+
+/* Special path for RDB_LC_ATTRS (available only for internal use within rdb) */
+rdb_path_t rdb_path_attrs;
 
 /* Key for the root KVS */
 d_iov_t rdb_path_root_key;

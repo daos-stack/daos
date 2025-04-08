@@ -18,50 +18,49 @@
 #include "rdb_internal.h"
 #include "rdb_layout.h"
 
-static int rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid,
-			     uint64_t caller_term, struct rdb_cbs *cbs, void *arg,
-			     struct rdb **dbp);
+static int
+rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid, uint32_t layout_version,
+		  uint64_t caller_term, struct rdb_cbs *cbs, void *arg, struct rdb **dbp);
 
 /**
- * Create an RDB replica at \a path with \a uuid, \a caller_term, \a size,
- * \a vos_df_version, and \a replicas, and open it with \a cbs and \a arg.
+ * Create an RDB replica at \a path with \a uuid, \a caller_term, and \a params,
+ * and open it with \a cbs and \a arg.
  *
  * \param[in]	path		replica path
  * \param[in]	uuid		database UUID
  * \param[in]	caller_term	caller term if not RDB_NIL_TERM (see rdb_open)
- * \param[in]	size		replica size in bytes
- * \param[in]	vos_df_version	version of VOS durable format
- * \param[in]	replicas	list of replica ranks
+ * \param[in]	params		parameters for creating the replica
  * \param[in]	cbs		callbacks (not copied)
  * \param[in]	arg		argument for cbs
  * \param[out]	storagep	database storage
  */
 int
-rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t size,
-	   uint32_t vos_df_version, const d_rank_list_t *replicas, struct rdb_cbs *cbs, void *arg,
+rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term,
+	   struct rdb_create_params *params, struct rdb_cbs *cbs, void *arg,
 	   struct rdb_storage **storagep)
 {
 	daos_handle_t	pool;
 	daos_handle_t	mc;
 	d_iov_t		value;
-	uint32_t	version = RDB_LAYOUT_VERSION;
+	uint32_t        version;
 	struct rdb     *db;
 	int		rc;
 
 	D_DEBUG(DB_MD,
-		DF_UUID ": creating db %s with %u replicas: caller_term=" DF_X64 " size=" DF_U64
-			" vos_df_version=%u\n",
-		DP_UUID(uuid), path, replicas == NULL ? 0 : replicas->rl_nr, caller_term, size,
-		vos_df_version);
+		DF_UUID ": creating db %s with %d replicas: caller_term=" DF_X64 " size=" DF_U64
+			" vos_df_version=%u layout_version=%u self=" RDB_F_RID "\n",
+		DP_UUID(uuid), path, params->rcp_replicas_len, caller_term, params->rcp_size,
+		params->rcp_vos_df_version, params->rcp_layout_version, RDB_P_RID(params->rcp_id));
 
 	/*
 	 * Create and open a VOS pool. RDB pools specify VOS_POF_SMALL for
 	 * basic system memory reservation and VOS_POF_EXCL for concurrent
 	 * access protection.
 	 */
-	rc = vos_pool_create(path, (unsigned char *)uuid, size, 0 /* data_sz */, 0 /* meta_sz */,
+	rc = vos_pool_create(path, (unsigned char *)uuid, params->rcp_size, 0 /* data_sz */,
+			     0 /* meta_sz */,
 			     VOS_POF_SMALL | VOS_POF_EXCL | VOS_POF_RDB | VOS_POF_EXTERNAL_CHKPT,
-			     vos_df_version, &pool);
+			     params->rcp_vos_df_version, &pool);
 	if (rc != 0)
 		goto out;
 	ABT_thread_yield();
@@ -75,15 +74,32 @@ rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t siz
 		goto out_pool_hdl;
 
 	/* Initialize the layout version. */
+	version = params->rcp_layout_version;
+	if (version == 0)
+		version = RDB_LAYOUT_VERSION;
 	d_iov_set(&value, &version, sizeof(version));
 	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_version, &value, NULL /* vtx */);
 	if (rc != 0)
 		goto out_mc_hdl;
 
+	/* Initialize the replica ID. */
+	if (version >= RDB_LAYOUT_VERSION_REPLICA_ID) {
+		d_iov_set(&value, &params->rcp_id, sizeof(params->rcp_id));
+		rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_replica_id, &value,
+				   NULL /* vtx */);
+		if (rc != 0) {
+			DL_ERROR(rc, DF_UUID ": failed to initialize replica ID", DP_UUID(uuid));
+			goto out_mc_hdl;
+		}
+	}
+
 	/* Initialize Raft. */
-	rc = rdb_raft_init(pool, mc, replicas);
-	if (rc != 0)
+	rc = rdb_raft_init((unsigned char *)uuid, pool, mc, params->rcp_replicas,
+			   params->rcp_replicas_len, version);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": failed to initialize Raft", DP_UUID(uuid));
 		goto out_mc_hdl;
+	}
 
 	/*
 	 * Mark this replica as fully initialized by storing its UUID.
@@ -94,7 +110,7 @@ rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t siz
 	if (rc != 0)
 		goto out_mc_hdl;
 
-	rc = rdb_open_internal(pool, mc, uuid, caller_term, cbs, arg, &db);
+	rc = rdb_open_internal(pool, mc, uuid, version, caller_term, cbs, arg, &db);
 	if (rc != 0)
 		goto out_mc_hdl;
 
@@ -237,11 +253,12 @@ static void rdb_chkptd_stop(struct rdb *db);
  * the caller shall not close in this case.
  */
 static int
-rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid, uint64_t caller_term,
-		  struct rdb_cbs *cbs, void *arg, struct rdb **dbp)
+rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid, uint32_t layout_version,
+		  uint64_t caller_term, struct rdb_cbs *cbs, void *arg, struct rdb **dbp)
 {
 	struct rdb	       *db;
 	int			rc;
+	d_iov_t                 value;
 	struct vos_pool_space	vps;
 	uint64_t		rdb_extra_sys[DAOS_MEDIA_MAX];
 
@@ -260,6 +277,7 @@ rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid, uint6
 	db->d_cbs = cbs;
 	db->d_arg = arg;
 	db->d_pool = pool;
+	db->d_version = layout_version;
 	db->d_mc = mc;
 
 	rc = ABT_mutex_create(&db->d_mutex);
@@ -284,9 +302,28 @@ rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid, uint6
 		goto err_raft_mutex;
 	}
 
+	rc = ABT_rwlock_create(&db->d_gen_lock);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR(DF_DB ": failed to create gen rwlock: %d\n", DP_DB(db), rc);
+		rc = dss_abterr2der(rc);
+		goto err_ref_cv;
+	}
+
+	if (db->d_version >= RDB_LAYOUT_VERSION_REPLICA_ID) {
+		d_iov_set(&value, &db->d_replica_id, sizeof(db->d_replica_id));
+		rc = rdb_mc_lookup(mc, RDB_MC_ATTRS, &rdb_mc_replica_id, &value);
+		if (rc != 0) {
+			DL_ERROR(rc, DF_DB ": failed to look up replica ID", DP_DB(db));
+			goto err_gen_lock;
+		}
+	} else {
+		db->d_replica_id.rri_rank = dss_self_rank();
+		db->d_replica_id.rri_gen  = 0;
+	}
+
 	rc = rdb_chkptd_start(db);
 	if (rc != 0)
-		goto err_ref_cv;
+		goto err_gen_lock;
 
 	rc = rdb_kvs_cache_create(&db->d_kvss);
 	if (rc != 0)
@@ -339,6 +376,8 @@ err_kvss:
 	rdb_kvs_cache_destroy(db->d_kvss);
 err_chkptd:
 	rdb_chkptd_stop(db);
+err_gen_lock:
+	ABT_rwlock_free(&db->d_gen_lock);
 err_ref_cv:
 	ABT_cond_free(&db->d_ref_cv);
 err_raft_mutex:
@@ -453,7 +492,7 @@ rdb_open(const char *path, const uuid_t uuid, uint64_t caller_term, struct rdb_c
 		goto err_mc;
 	}
 
-	rc = rdb_open_internal(pool, mc, uuid, caller_term, cbs, arg, &db);
+	rc = rdb_open_internal(pool, mc, uuid, version, caller_term, cbs, arg, &db);
 	if (rc != 0)
 		goto err_mc;
 
@@ -485,6 +524,7 @@ rdb_close(struct rdb_storage *storage)
 	vos_cont_close(db->d_mc);
 	vos_pool_close(db->d_pool);
 	rdb_kvs_cache_destroy(db->d_kvss);
+	ABT_rwlock_free(&db->d_gen_lock);
 	ABT_cond_free(&db->d_ref_cv);
 	ABT_mutex_free(&db->d_raft_mutex);
 	ABT_mutex_free(&db->d_mutex);
@@ -512,15 +552,18 @@ rdb_get_use_leases(void)
 int
 rdb_glance(struct rdb_storage *storage, struct rdb_clue *clue)
 {
-	struct rdb	       *db = rdb_from_storage(storage);
-	d_iov_t			value;
-	uint64_t		term;
-	int			vote;
-	uint64_t		last_index = db->d_lc_record.dlr_tail - 1;
-	uint64_t		last_term;
-	d_rank_list_t	       *replicas;
-	uint64_t		oid_next;
-	int			rc;
+	struct rdb                *db = rdb_from_storage(storage);
+	d_iov_t                    value;
+	uint64_t                   term;
+	rdb_replica_id_t           vote;
+	uint64_t                   last_index = db->d_lc_record.dlr_tail - 1;
+	uint64_t                   last_term;
+	struct rdb_replica_record *replicas;
+	int                        replicas_len;
+	d_rank_list_t             *ranks;
+	int                        i;
+	uint64_t                   oid_next;
+	int                        rc;
 
 	d_iov_set(&value, &term, sizeof(term));
 	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_term, &value);
@@ -531,10 +574,11 @@ rdb_glance(struct rdb_storage *storage, struct rdb_clue *clue)
 		goto err;
 	}
 
-	d_iov_set(&value, &vote, sizeof(vote));
+	rdb_set_mc_vote_lookup_buf(db->d_version, &vote, &value);
 	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_vote, &value);
 	if (rc == -DER_NONEXIST) {
-		vote = -1;
+		vote.rri_rank = -1;
+		vote.rri_gen  = -1;
 	} else if (rc != 0) {
 		D_ERROR(DF_DB": failed to look up vote: "DF_RC"\n", DP_DB(db), DP_RC(rc));
 		goto err;
@@ -556,12 +600,23 @@ rdb_glance(struct rdb_storage *storage, struct rdb_clue *clue)
 		last_term = header.dre_term;
 	}
 
-	rc = rdb_raft_load_replicas(db->d_lc, last_index, &replicas);
+	rc = rdb_raft_load_replicas(db->d_uuid, db->d_lc, last_index, db->d_version, &replicas,
+				    &replicas_len);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to load replicas at "DF_U64": "DF_RC"\n", DP_DB(db),
 			last_index, DP_RC(rc));
 		goto err;
 	}
+	ranks = d_rank_list_alloc(replicas_len);
+	if (ranks == NULL) {
+		D_ERROR(DF_DB ": failed to convert replicas to ranks\n", DP_DB(db));
+		rc = -DER_NOMEM;
+		D_FREE(replicas);
+		goto err;
+	}
+	for (i = 0; i < replicas_len; i++)
+		ranks->rl_ranks[i] = replicas[i].drr_id.rri_rank;
+	D_FREE(replicas);
 
 	d_iov_set(&value, &oid_next, sizeof(oid_next));
 	rc = rdb_lc_lookup(db->d_lc, last_index, RDB_LC_ATTRS, &rdb_lc_oid_next, &value);
@@ -569,26 +624,22 @@ rdb_glance(struct rdb_storage *storage, struct rdb_clue *clue)
 		oid_next = RDB_LC_OID_NEXT_INIT;
 	} else if (rc != 0) {
 		D_ERROR(DF_DB": failed to look up next object number: %d\n", DP_DB(db), rc);
-		goto err_replicas;
+		goto err_ranks;
 	}
 
-	clue->bcl_term = term;
-	clue->bcl_vote = vote;
-	/*
-	 * In the future, the self node ID might differ from the rank and need
-	 * to be stored persistently.
-	 */
-	clue->bcl_self = dss_self_rank();
+	clue->bcl_term       = term;
+	clue->bcl_vote       = vote.rri_rank;
+	clue->bcl_self       = db->d_replica_id.rri_rank;
 	clue->bcl_last_index = last_index;
-	clue->bcl_last_term = last_term;
+	clue->bcl_last_term  = last_term;
 	clue->bcl_base_index = db->d_lc_record.dlr_base;
-	clue->bcl_base_term = db->d_lc_record.dlr_base_term;
-	clue->bcl_replicas = replicas;
-	clue->bcl_oid_next = oid_next;
+	clue->bcl_base_term  = db->d_lc_record.dlr_base_term;
+	clue->bcl_replicas   = ranks;
+	clue->bcl_oid_next   = oid_next;
 	return 0;
 
-err_replicas:
-	d_rank_list_free(replicas);
+err_ranks:
+	d_rank_list_free(ranks);
 err:
 	return rc;
 }
@@ -624,7 +675,13 @@ rdb_start(struct rdb_storage *storage, struct rdb **dbp)
 
 	db->d_use_leases = rdb_get_use_leases();
 
-	D_DEBUG(DB_MD, DF_DB": started db %p: use_leases=%d\n", DP_DB(db), db, db->d_use_leases);
+	D_INFO(DF_DB ": started: db=%p version=%u use_leases=%d election_timeout=%d "
+		     "request_timeout=%d lease_maintenance_grace=%d compact_thres=" DF_U64
+		     " ae_max_entries=%u ae_max_size=" DF_U64 "\n",
+	       DP_DB(db), db, db->d_version, db->d_use_leases,
+	       raft_get_election_timeout(db->d_raft), raft_get_request_timeout(db->d_raft),
+	       raft_get_lease_maintenance_grace(db->d_raft), db->d_compact_thres,
+	       db->d_ae_max_entries, db->d_ae_max_size);
 	*dbp = db;
 	return 0;
 }
@@ -641,7 +698,7 @@ rdb_stop(struct rdb *db, struct rdb_storage **storagep)
 {
 	bool deleted;
 
-	D_DEBUG(DB_MD, DF_DB": stopping db %p\n", DP_DB(db), db);
+	D_INFO(DF_DB ": stopping: db=%p\n", DP_DB(db), db);
 
 	ABT_mutex_lock(rdb_hash_lock);
 	deleted = d_hash_rec_delete(&rdb_hash, db->d_uuid, sizeof(uuid_t));
@@ -650,7 +707,7 @@ rdb_stop(struct rdb *db, struct rdb_storage **storagep)
 
 	rdb_raft_stop(db);
 
-	D_DEBUG(DB_MD, DF_DB": stopped db %p\n", DP_DB(db), db);
+	D_INFO(DF_DB ": stopped: db=%p\n", DP_DB(db), db);
 	*storagep = rdb_to_storage(db);
 }
 
@@ -691,66 +748,75 @@ rdb_dictate(struct rdb_storage *storage)
 }
 
 /**
- * Add \a replicas.
+ * Allocate a replica generation.
  *
  * \param[in]	db		database
- * \param[in,out]
- *		replicas	[in] list of replica ranks;
- *				[out] list of replica ranks that could not be added
+ * \param[in]	term		if not RDB_NIL_TERM, term to allocate in
+ * \param[out]	gen_out		replica generation
  */
 int
-rdb_add_replicas(struct rdb *db, d_rank_list_t *replicas)
+rdb_alloc_replica_gen(struct rdb *db, uint64_t term, uint32_t *gen_out)
 {
-	int	i;
-	int	rc;
+	struct rdb_tx tx;
+	d_iov_t       value;
+	uint32_t      next;
+	int           rc;
 
-	D_DEBUG(DB_MD, DF_DB": Adding %d replicas\n",
-		DP_DB(db), replicas->rl_nr);
-
-	ABT_mutex_lock(db->d_raft_mutex);
-
-	rc = rdb_raft_wait_applied(db, db->d_debut, raft_get_current_term(db->d_raft));
-	if (rc != 0) {
-		ABT_mutex_unlock(db->d_raft_mutex);
-		return rc;
+	if (db->d_version < RDB_LAYOUT_VERSION_REPLICA_ID) {
+		D_DEBUG(DB_MD, DF_DB ": zero for old layout\n", DP_DB(db));
+		*gen_out = 0;
+		rc       = 0;
+		goto out;
 	}
 
-	rc = -DER_INVAL;
-	for (i = 0; i < replicas->rl_nr; ++i) {
-		rc = rdb_raft_add_replica(db, replicas->rl_ranks[i]);
-		if (rc != 0) {
-			D_ERROR(DF_DB": failed to add rank %u: "DF_RC"\n", DP_DB(db),
-				replicas->rl_ranks[i], DP_RC(rc));
-			break;
-		}
-	}
+	rc = rdb_tx_begin(db, term, &tx);
+	if (rc != 0)
+		goto out;
+	ABT_rwlock_wrlock(db->d_gen_lock);
 
-	ABT_mutex_unlock(db->d_raft_mutex);
+	d_iov_set(&value, &next, sizeof(next));
+	rc = rdb_tx_lookup(&tx, &rdb_path_attrs, &rdb_lc_replica_gen_next, &value);
+	if (rc != 0)
+		goto out_lock;
 
-	/* Update list to only contain ranks which could not be added. */
-	replicas->rl_nr -= i;
-	if (replicas->rl_nr > 0 && i > 0)
-		memmove(&replicas->rl_ranks[0], &replicas->rl_ranks[i],
-			replicas->rl_nr * sizeof(d_rank_t));
+	next++;
+
+	rc = rdb_tx_update_critical(&tx, &rdb_path_attrs, &rdb_lc_replica_gen_next, &value);
+	if (rc != 0)
+		goto out_lock;
+
+	rc = rdb_tx_commit(&tx);
+
+out_lock:
+	ABT_rwlock_unlock(db->d_gen_lock);
+	rdb_tx_end(&tx);
+	if (rc != 0)
+		goto out;
+
+	D_INFO(DF_DB ": updated next replica generation to %u\n", DP_DB(db), next);
+	*gen_out = next - 1;
+out:
 	return rc;
 }
 
 /**
- * Remove \a replicas.
+ * Modify \a replicas.
  *
- * \param[in]	db		database
- * \param[in,out]
- *		replicas	[in] list of replica ranks;
- *				[out] list of replica ranks that could not be removed
+ * \param[in]		db		database
+ * \param[in]		op		operation to perform
+ * \param[in,out]	replicas	[in] list of replica ranks;
+ *					[out] list of replica ranks that could not be modified
+ * \param[in,out]	replicas_len	length of \a replicas;
  */
 int
-rdb_remove_replicas(struct rdb *db, d_rank_list_t *replicas)
+rdb_modify_replicas(struct rdb *db, enum rdb_replica_op op, rdb_replica_id_t *replicas,
+		    int *replicas_len)
 {
-	int	i;
-	int	rc;
+	raft_logtype_e type;
+	int            i;
+	int            rc;
 
-	D_DEBUG(DB_MD, DF_DB": Removing %d replicas\n",
-		DP_DB(db), replicas->rl_nr);
+	D_DEBUG(DB_MD, DF_DB ": op=%d replicas=%d\n", DP_DB(db), op, *replicas_len);
 
 	ABT_mutex_lock(db->d_raft_mutex);
 
@@ -761,22 +827,33 @@ rdb_remove_replicas(struct rdb *db, d_rank_list_t *replicas)
 	}
 
 	rc = -DER_INVAL;
-	for (i = 0; i < replicas->rl_nr; ++i) {
-		rc = rdb_raft_remove_replica(db, replicas->rl_ranks[i]);
+	switch (op) {
+	case RDB_REPLICA_ADD:
+		type = RAFT_LOGTYPE_ADD_NODE;
+		break;
+	case RDB_REPLICA_REMOVE:
+		type = RAFT_LOGTYPE_REMOVE_NODE;
+		break;
+	default:
+		D_ASSERTF(0, "invalid op %d\n", op);
+	}
+	for (i = 0; i < *replicas_len; ++i) {
+		rc = rdb_raft_append_apply_cfg(db, type, replicas[i]);
 		if (rc != 0) {
-			D_ERROR(DF_DB": failed to remove rank %u: "DF_RC"\n", DP_DB(db),
-				replicas->rl_ranks[i], DP_RC(rc));
+			DL_ERROR(rc, DF_DB ": failed to do op %d on replica " RDB_F_RID, DP_DB(db),
+				 op, RDB_P_RID(replicas[i]));
 			break;
 		}
 	}
 
 	ABT_mutex_unlock(db->d_raft_mutex);
 
-	/* Update list to only contain ranks which could not be removed. */
-	replicas->rl_nr -= i;
-	if (replicas->rl_nr > 0 && i > 0)
-		memmove(&replicas->rl_ranks[0], &replicas->rl_ranks[i],
-			replicas->rl_nr * sizeof(d_rank_t));
+	/* Update list to only contain replicas which could not be modified. */
+	if (i > 0) {
+		*replicas_len -= i;
+		if (*replicas_len > 0)
+			memmove(&replicas[0], &replicas[i], *replicas_len * sizeof(replicas[0]));
+	}
 	return rc;
 }
 
@@ -856,8 +933,7 @@ rdb_is_leader(struct rdb *db, uint64_t *term)
 int
 rdb_get_leader(struct rdb *db, uint64_t *term, d_rank_t *rank)
 {
-	raft_node_t	       *node;
-	struct rdb_raft_node   *dnode;
+	raft_node_t *node;
 
 	ABT_mutex_lock(db->d_raft_mutex);
 	node = raft_get_current_leader_node(db->d_raft);
@@ -865,13 +941,39 @@ rdb_get_leader(struct rdb *db, uint64_t *term, d_rank_t *rank)
 		ABT_mutex_unlock(db->d_raft_mutex);
 		return -DER_NONEXIST;
 	}
-	dnode = raft_node_get_udata(node);
-	D_ASSERT(dnode != NULL);
 	*term = raft_get_current_term(db->d_raft);
-	*rank = dnode->dn_rank;
+	*rank = rdb_replica_id_decode(raft_node_get_id(node)).rri_rank;
 	ABT_mutex_unlock(db->d_raft_mutex);
 
 	return 0;
+}
+
+rdb_replica_id_t
+rdb_get_replica_id(struct rdb *db)
+{
+	return db->d_replica_id;
+}
+
+int
+rdb_get_replicas(struct rdb *db, rdb_replica_id_t **replicas, int *replicas_len)
+{
+	return rdb_raft_get_replicas(db, replicas, replicas_len);
+}
+
+static d_rank_list_t *
+rdb_replica_id_to_rank_list(rdb_replica_id_t *replicas, int replicas_len)
+{
+	d_rank_list_t *ranks;
+	int            i;
+
+	ranks = d_rank_list_alloc(replicas_len);
+	if (ranks == NULL)
+		return NULL;
+
+	for (i = 0; i < replicas_len; i++)
+		ranks->rl_ranks[i] = replicas[i].rri_rank;
+
+	return ranks;
 }
 
 /**
@@ -884,7 +986,22 @@ rdb_get_leader(struct rdb *db, uint64_t *term, d_rank_t *rank)
 int
 rdb_get_ranks(struct rdb *db, d_rank_list_t **ranksp)
 {
-	return rdb_raft_get_ranks(db, ranksp);
+	rdb_replica_id_t *replicas;
+	int               replicas_len;
+	d_rank_list_t    *ranks;
+	int               rc;
+
+	rc = rdb_get_replicas(db, &replicas, &replicas_len);
+	if (rc != 0)
+		return rc;
+
+	ranks = rdb_replica_id_to_rank_list(replicas, replicas_len);
+	D_FREE(replicas);
+	if (ranks == NULL)
+		return -DER_NOMEM;
+
+	*ranksp = ranks;
+	return 0;
 }
 
 int
@@ -903,6 +1020,12 @@ rdb_get_size(struct rdb *db, uint64_t *sizep)
 	*sizep = SCM_TOTAL(&vps);
 
 	return rc;
+}
+
+uint32_t
+rdb_get_version(struct rdb *db)
+{
+	return db->d_version;
 }
 
 /** Implementation of the RDB pool checkpoint ULT. The ULT

@@ -1017,23 +1017,26 @@ ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
 			d_rank_list_t *target_addrs, int ndomains, uint32_t *domains,
 			daos_prop_t *prop, d_rank_list_t **svc_addrs)
 {
-	struct daos_prop_entry *svc_rf_entry;
-	struct pool_buf	       *map_buf;
-	uint32_t		map_version = 1;
-	d_rank_list_t	       *ranks;
-	d_iov_t			psid;
-	struct rsvc_client	client;
-	struct dss_module_info *info = dss_get_module_info();
-	crt_endpoint_t		ep;
-	crt_rpc_t	       *rpc;
-	struct daos_prop_entry *lbl_ent;
-	struct daos_prop_entry *def_lbl_ent;
-	struct pool_create_out *out;
-	struct d_backoff_seq	backoff_seq;
-	uuid_t                  pi_hdl_uuid;
-	uint64_t                req_time   = 0;
-	int			n_attempts = 0;
-	int			rc;
+	struct daos_prop_entry      *svc_rf_entry;
+	struct pool_buf             *map_buf;
+	uint32_t                     map_version = 1;
+	d_rank_list_t               *ranks;
+	rdb_replica_id_t            *replicas;
+	int                          i;
+	struct ds_rsvc_create_params create_params;
+	d_iov_t                      psid;
+	struct rsvc_client           client;
+	struct dss_module_info      *info = dss_get_module_info();
+	crt_endpoint_t               ep;
+	crt_rpc_t                   *rpc;
+	struct daos_prop_entry      *lbl_ent;
+	struct daos_prop_entry      *def_lbl_ent;
+	struct pool_create_out      *out;
+	struct d_backoff_seq         backoff_seq;
+	uuid_t                       pi_hdl_uuid;
+	uint64_t                     req_time   = 0;
+	int                          n_attempts = 0;
+	int                          rc;
 
 	/* Check for default label supplied via property. */
 	def_lbl_ent = daos_prop_entry_get(&pool_prop_default, DAOS_PROP_PO_LABEL);
@@ -1063,20 +1066,37 @@ ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
 	D_DEBUG(DB_MD, DF_UUID": creating PS: ntargets=%d ndomains=%d svc_rf="DF_U64"\n",
 		DP_UUID(pool_uuid), ntargets, ndomains, svc_rf_entry->dpe_val);
 
+	/* Determine the ranks and IDs of the PS replicas. */
 	rc = select_svc_ranks(svc_rf_entry->dpe_val, map_buf, map_version, &ranks);
 	if (rc != 0)
 		goto out_map_buf;
+	D_ALLOC_ARRAY(replicas, ranks->rl_nr);
+	if (replicas == NULL) {
+		rc = -DER_NOMEM;
+		goto out_ranks;
+	}
+	for (i = 0; i < ranks->rl_nr; i++) {
+		replicas[i].rri_rank = ranks->rl_ranks[i];
+		/* Allocate replica generations from 1. See rdb_raft_init. */
+		replicas[i].rri_gen = i + 1;
+	}
+
+	create_params.scp_bootstrap      = true;
+	create_params.scp_size           = ds_rsvc_get_md_cap();
+	create_params.scp_vos_df_version = ds_pool_get_vos_df_version_default();
+	create_params.scp_layout_version = 0 /* default */;
+	create_params.scp_replicas       = replicas;
+	create_params.scp_replicas_len   = ranks->rl_nr;
 
 	d_iov_set(&psid, (void *)pool_uuid, sizeof(uuid_t));
 	rc = ds_rsvc_dist_start(DS_RSVC_CLASS_POOL, &psid, pool_uuid, ranks, RDB_NIL_TERM,
-				DS_RSVC_CREATE, true /* bootstrap */, ds_rsvc_get_md_cap(),
-				ds_pool_get_vos_df_version_default());
+				DS_RSVC_CREATE, &create_params);
 	if (rc != 0)
-		D_GOTO(out_ranks, rc);
+		goto out_replicas;
 
 	rc = rsvc_client_init(&client, ranks);
 	if (rc != 0)
-		D_GOTO(out_ranks, rc);
+		goto out_replicas;
 
 	rc = d_backoff_seq_init(&backoff_seq, 0 /* nzeros */, 16 /* factor */,
 				8 /* next (ms) */, 1 << 10 /* max (ms) */);
@@ -1141,6 +1161,8 @@ out_backoff_seq:
 	 * Intentionally skip cleaning up the PS replicas. See the function
 	 * documentation above.
 	 */
+out_replicas:
+	D_FREE(replicas);
 out_ranks:
 	d_rank_list_free(ranks);
 out_map_buf:
@@ -1180,8 +1202,8 @@ ds_pool_svc_start(uuid_t uuid)
 	}
 
 	d_iov_set(&id, uuid, sizeof(uuid_t));
-	rc = ds_rsvc_start(DS_RSVC_CLASS_POOL, &id, uuid, RDB_NIL_TERM, DS_RSVC_START, 0 /* size */,
-			   0 /* vos_df_version */, NULL /* replicas */, NULL /* arg */);
+	rc = ds_rsvc_start(DS_RSVC_CLASS_POOL, &id, uuid, RDB_NIL_TERM, DS_RSVC_START,
+			   NULL /* create_params */, NULL /* arg */);
 	if (rc == -DER_ALREADY) {
 		D_DEBUG(DB_MD, DF_UUID": pool service already started\n", DP_UUID(uuid));
 		return 0;
@@ -6966,7 +6988,7 @@ pool_svc_reconf_ult(void *varg)
 				DP_UUID(svc->ps_uuid), DP_RC(rc));
 			goto out_to_add_remove;
 		}
-		rc = rdb_remove_replicas(svc->ps_rsvc.s_db, tmp);
+		rc = ds_rsvc_remove_replicas_s(&svc->ps_rsvc, to_remove, false /* destroy */);
 		if (rc != 0)
 			D_ERROR(DF_UUID": failed to remove replicas: "DF_RC"\n",
 				DP_UUID(svc->ps_uuid), DP_RC(rc));

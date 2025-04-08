@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -265,10 +266,12 @@ rdbt_test_path(void)
 static void
 rdbt_test_rsvc(void)
 {
-	char	       *svc_name = "tmp";
-	d_iov_t		svc_id;
-	uuid_t		uuid;
-	int		rc;
+	char                    *svc_name = "tmp";
+	d_iov_t                  svc_id;
+	uuid_t                   uuid;
+	struct rdb_create_params create_params;
+	rdb_replica_id_t         dummy_replicas[1] = {0};
+	int                      rc;
 
 	d_iov_set(&svc_id, svc_name, strlen(svc_name) + 1);
 	uuid_generate(uuid);
@@ -277,8 +280,15 @@ rdbt_test_rsvc(void)
 	 * A leader of an older term can't destroy a replica created by a
 	 * leader with a newer term.
 	 */
-	MUST(ds_rsvc_start(DS_RSVC_CLASS_TEST, &svc_id, uuid, 2 /* term */, true /* create */,
-			   DB_CAP, 0 /* vos_df_version */, NULL /* replicas */, NULL /* arg */));
+	create_params.rcp_size           = DB_CAP;
+	create_params.rcp_vos_df_version = 0;
+	create_params.rcp_layout_version = 0;
+	create_params.rcp_id.rri_rank    = dss_self_rank();
+	create_params.rcp_id.rri_gen     = 1;
+	create_params.rcp_replicas       = NULL;
+	create_params.rcp_replicas_len   = 0;
+	MUST(ds_rsvc_start(DS_RSVC_CLASS_TEST, &svc_id, uuid, 2 /* term */, DS_RSVC_CREATE,
+			   &create_params, NULL /* arg */));
 	rc = ds_rsvc_stop(DS_RSVC_CLASS_TEST, &svc_id, 1 /* term */, true /* destroy */);
 	D_ASSERTF(rc == -DER_STALE, DF_RC"\n", DP_RC(rc));
 
@@ -286,13 +296,43 @@ rdbt_test_rsvc(void)
 	 * A leader of an older term can't destroy a replica touched by a
 	 * leader with a newer term.
 	 */
-	rc = ds_rsvc_start(DS_RSVC_CLASS_TEST, &svc_id, uuid, 3 /* term */, true /* create */,
-			   DB_CAP, 0 /* vos_df_version */, NULL /* replicas */, NULL /* arg */);
+	rc = ds_rsvc_start(DS_RSVC_CLASS_TEST, &svc_id, uuid, 3 /* term */, DS_RSVC_CREATE,
+			   &create_params, NULL /* arg */);
 	D_ASSERTF(rc == -DER_ALREADY, DF_RC"\n", DP_RC(rc));
 	rc = ds_rsvc_stop(DS_RSVC_CLASS_TEST, &svc_id, 2 /* term */, true /* destroy */);
 	D_ASSERTF(rc == -DER_STALE, DF_RC"\n", DP_RC(rc));
 
-	MUST(ds_rsvc_stop(DS_RSVC_CLASS_TEST, &svc_id, 3 /* term */, true /* destroy */));
+	/*
+	 * When creating and bootstrapping a replica, abort if there's an
+	 * existing replica.
+	 */
+	create_params.rcp_replicas     = dummy_replicas;
+	create_params.rcp_replicas_len = 1;
+	rc = ds_rsvc_start(DS_RSVC_CLASS_TEST, &svc_id, uuid, 4 /* term */, DS_RSVC_CREATE,
+			   &create_params, NULL /* arg */);
+	D_ASSERTF(rc == -DER_EXIST, DF_RC "\n", DP_RC(rc));
+	create_params.rcp_replicas     = NULL;
+	create_params.rcp_replicas_len = 0;
+
+	/*
+	 * When creating a replica, destroy any existing replica with a lower
+	 * generation.
+	 */
+	create_params.rcp_id.rri_gen = 2;
+	rc = ds_rsvc_start(DS_RSVC_CLASS_TEST, &svc_id, uuid, 5 /* term */, DS_RSVC_CREATE,
+			   &create_params, NULL /* arg */);
+	D_ASSERTF(rc == 0, DF_RC "\n", DP_RC(rc));
+
+	/*
+	 * When creating a replica, abort if there's an existing replica with a
+	 * higher generation.
+	 */
+	create_params.rcp_id.rri_gen = 0;
+	rc = ds_rsvc_start(DS_RSVC_CLASS_TEST, &svc_id, uuid, 6 /* term */, DS_RSVC_CREATE,
+			   &create_params, NULL /* arg */);
+	D_ASSERTF(rc == -DER_EXIST, DF_RC "\n", DP_RC(rc));
+
+	MUST(ds_rsvc_stop(DS_RSVC_CLASS_TEST, &svc_id, 7 /* term */, true /* destroy */));
 }
 
 struct iterate_cb_arg {
@@ -646,10 +686,12 @@ get_all_ranks(d_rank_list_t **list)
 static void
 rdbt_init_handler(crt_rpc_t *rpc)
 {
-	struct rdbt_init_in	*in = crt_req_get(rpc);
-	d_rank_t		 rank;
-	d_rank_t		 ri;
-	d_rank_list_t		*ranks;
+	struct rdbt_init_in         *in = crt_req_get(rpc);
+	d_rank_t                     rank;
+	int                          i;
+	d_rank_list_t               *ranks;
+	rdb_replica_id_t            *replicas;
+	struct ds_rsvc_create_params create_params;
 
 	MUST(crt_group_rank(NULL /* grp */, &rank));
 	get_all_ranks(&ranks);
@@ -657,13 +699,24 @@ rdbt_init_handler(crt_rpc_t *rpc)
 	if (in->tii_nreplicas < ranks->rl_nr)
 		ranks->rl_nr = in->tii_nreplicas;
 
-	D_WARN("initializing rank %u: nreplicas=%u\n", rank, ranks->rl_nr);
-	for (ri = 0; ri < ranks->rl_nr; ri++)
-		D_WARN("ranks[%u]=%u\n", ri, ranks->rl_ranks[ri]);
+	D_ALLOC_ARRAY(replicas, ranks->rl_nr);
+	D_ASSERT(replicas != NULL);
 
+	D_WARN("initializing rank %u: nreplicas=%u\n", rank, ranks->rl_nr);
+	for (i = 0; i < ranks->rl_nr; i++) {
+		replicas[i].rri_rank = ranks->rl_ranks[i];
+		replicas[i].rri_gen  = i + 1;
+		D_WARN(" replicas[%u]=" RDB_F_RID "\n", i, RDB_P_RID(replicas[i]));
+	}
+
+	create_params.scp_bootstrap      = true;
+	create_params.scp_size           = DB_CAP;
+	create_params.scp_vos_df_version = 0;
+	create_params.scp_layout_version = 0;
+	create_params.scp_replicas       = replicas;
+	create_params.scp_replicas_len   = ranks->rl_nr;
 	MUST(ds_rsvc_dist_start(DS_RSVC_CLASS_TEST, &test_svc_id, in->tii_uuid, ranks, RDB_NIL_TERM,
-				DS_RSVC_CREATE, true /* bootstrap */, DB_CAP,
-				0 /* vos_df_version*/));
+				DS_RSVC_CREATE, &create_params));
 	crt_reply_send(rpc);
 }
 
@@ -872,8 +925,7 @@ rdbt_dictate_handler(crt_rpc_t *rpc)
 	ranks->rl_ranks[0] = in->rti_rank;
 	ranks->rl_nr = 1;
 	MUST(ds_rsvc_dist_start(DS_RSVC_CLASS_TEST, &test_svc_id, db_uuid, ranks, RDB_NIL_TERM,
-				DS_RSVC_DICTATE, false /* bootstrap */, 0 /* size */,
-				0 /* vos_df_version */));
+				DS_RSVC_DICTATE, NULL));
 
 	d_rank_list_free(ranks);
 	out->rto_rc = 0;
