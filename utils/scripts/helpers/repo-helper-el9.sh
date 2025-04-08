@@ -10,13 +10,15 @@ set -uex
 : "${BASE_DISTRO:=rockylinux/rockylinux:$MAJOR_VER}"
 : "${JENKINS_URL:=}"
 : "${REPOS:=}"
+: "${DAOS_LAB_CA_FILE_URL:=}"
+: "${REPOSITORY_NAME:=artifactory}"
 
 # shellcheck disable=SC2120
 disable_repos () {
     local repos_dir="$1"
     shift
     local save_repos
-    IFS=" " read -r -a save_repos <<< "${*:-} daos_ci-el$MAJOR_VER-artifactory"
+    IFS=" " read -r -a save_repos <<< "${*:-} daos_ci-el$MAJOR_VER-${REPOSITORY_NAME}"
     if [ -n "$REPO_FILE_URL" ]; then
         pushd "$repos_dir"
         local repo
@@ -38,6 +40,16 @@ install_curl() {
     :
 }
 
+# Use local repo server if present
+install_optional_ca() {
+    ca_storage="/etc/pki/ca-trust/source/anchors/"
+    if [ -n "$DAOS_LAB_CA_FILE_URL" ]; then
+        curl -k --noproxy '*' -sSf -o "${ca_storage}lab_ca_file.crt" \
+            "$DAOS_LAB_CA_FILE_URL"
+        update-ca-trust
+    fi
+}
+
 # installs/upgrades of epel-release add repos
 # Disable mirrorlist check when using local repos.
 DISTRO="rocky"
@@ -53,10 +65,11 @@ MAJOR_VER="${BASE_DISTRO##*:}"
 MAJOR_VER="${MAJOR_VER%%.*}"
 if [ -n "$REPO_FILE_URL" ]; then
     install_curl
+    install_optional_ca
     mkdir -p /etc/yum.repos.d
     pushd /etc/yum.repos.d/
-    curl -k -f -o daos_ci-el"$MAJOR_VER"-artifactory.repo        \
-         "$REPO_FILE_URL"daos_ci-el"$MAJOR_VER"-artifactory.repo
+    curl -k --noproxy '*' -sSf -o "daos_ci-el${MAJOR_VER}-${REPOSITORY_NAME}.repo"  \
+         "${REPO_FILE_URL}daos_ci-el${MAJOR_VER}-${REPOSITORY_NAME}.repo"
     disable_repos /etc/yum.repos.d/
     popd
 fi
@@ -66,7 +79,7 @@ dnf config-manager --save --setopt=install_weak_deps=False
 if [ ! -f /etc/fedora-release ]; then
     dnf --disablerepo \*epel\* install epel-release
     if [ -n "$REPO_FILE_URL" ]; then
-        PT_REPO="daos_ci-${DISTRO}${MAJOR_VER}-crb-artifactory"
+        PT_REPO="daos_ci-${DISTRO}${MAJOR_VER}-crb-${REPOSITORY_NAME}"
         true > /etc/yum.repos.d/epel.repo
         true > /etc/yum.repos.d/epel-modular.repo
         sed "s/^mirrorlist_expire=0*/mirrorlist_expire=99999999/" \

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -331,7 +332,7 @@ daos_obj_anchor_split(daos_handle_t oh, uint32_t *nr, daos_anchor_t *anchors)
 		for (uint32_t i = 0; i < layout->ol_nr; i++) {
 			daos_anchor_set_zero(&anchors[i]);
 			dc_obj_shard2anchor(&anchors[i], i * grp_size);
-			daos_anchor_set_flags(&anchors[i], DIOF_TO_SPEC_SHARD);
+			daos_anchor_set_flags(&anchors[i], DIOF_TO_SPEC_GROUP);
 		}
 	}
 out:
@@ -352,7 +353,7 @@ daos_obj_anchor_set(daos_handle_t oh, uint32_t index, daos_anchor_t *anchor)
 	/** TBD - support more than per shard iteration */
 	daos_anchor_set_zero(anchor);
 	dc_obj_shard2anchor(anchor, index * grp_size);
-	daos_anchor_set_flags(anchor, DIOF_TO_SPEC_SHARD);
+	daos_anchor_set_flags(anchor, DIOF_TO_SPEC_GROUP);
 
 	return 0;
 }

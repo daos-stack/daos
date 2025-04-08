@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,11 +8,9 @@
 package system
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
-	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
 
 	"github.com/daos-stack/daos/src/control/lib/daos"
@@ -24,8 +23,6 @@ type (
 		sync.Mutex
 		CreationRankStr    string            // string rankset set at creation
 		creationRanks      *ranklist.RankSet // used to reconstitute the rankset
-		CurrentRankStr     string            // string rankset representing current ranks
-		currentRanks       *ranklist.RankSet // used to reconstitute the rankset
 		PerRankTierStorage []uint64          // storage allocated to each tier on a rank
 		MemRatio           float32           // ratio md-blob-on-ssd:ramdisk-memfile sz
 	}
@@ -67,7 +64,6 @@ func NewPoolService(uuid uuid.UUID, tierStorage []uint64, memRatio float32, rank
 			PerRankTierStorage: tierStorage,
 			MemRatio:           memRatio,
 			CreationRankStr:    rs.RangedString(),
-			CurrentRankStr:     rs.RangedString(),
 		},
 	}
 }
@@ -88,51 +84,35 @@ func (pss *PoolServiceStorage) CreationRanks() []ranklist.Rank {
 	return pss.creationRanks.Ranks()
 }
 
-// CurrentRanks returns the set of target ranks associated
-// with the pool's current.
-func (pss *PoolServiceStorage) CurrentRanks() []ranklist.Rank {
-	pss.Lock()
-	defer pss.Unlock()
-
-	if pss.currentRanks == nil {
-		var err error
-		pss.currentRanks, err = ranklist.CreateRankSet(pss.CurrentRankStr)
-		if err != nil {
-			return nil
-		}
-	}
-	return pss.currentRanks.Ranks()
-}
-
-// TotalSCM returns the total amount of SCM storage allocated to
-// the pool, calculated from the current set of ranks multiplied
-// by the per-rank SCM allocation made at creation time.
-func (pss *PoolServiceStorage) TotalSCM() uint64 {
-	if len(pss.PerRankTierStorage) >= 1 {
-		return uint64(len(pss.CurrentRanks())) * pss.PerRankTierStorage[0]
-	}
-	return 0
-}
-
-// TotalNVMe returns the total amount of NVMe storage allocated to
-// the pool, calculated from the current set of ranks multiplied
-// by the per-rank NVMe allocation made at creation time.
-func (pss *PoolServiceStorage) TotalNVMe() uint64 {
-	if len(pss.PerRankTierStorage) >= 2 {
-		sum := uint64(0)
-		for _, tierStorage := range pss.PerRankTierStorage[1:] {
-			sum += uint64(len(pss.CurrentRanks())) * tierStorage
-		}
-		return sum
-	}
-	return 0
-}
-
-func (pss *PoolServiceStorage) String() string {
-	if pss == nil {
-		return "no pool storage info available"
-	}
-	return fmt.Sprintf("total SCM: %s, total NVMe: %s",
-		humanize.Bytes(pss.TotalSCM()),
-		humanize.Bytes(pss.TotalNVMe()))
-}
+//// TotalSCM returns the total amount of SCM storage allocated to
+//// the pool, calculated from the current set of ranks multiplied
+//// by the per-rank SCM allocation made at creation time.
+//func (pss *PoolServiceStorage) TotalSCM() uint64 {
+//	if len(pss.PerRankTierStorage) >= 1 {
+//		return uint64(len(pss.CreationRanks())) * pss.PerRankTierStorage[0]
+//	}
+//	return 0
+//}
+//
+//// TotalNVMe returns the total amount of NVMe storage allocated to
+//// the pool, calculated from the current set of ranks multiplied
+//// by the per-rank NVMe allocation made at creation time.
+//func (pss *PoolServiceStorage) TotalNVMe() uint64 {
+//	if len(pss.PerRankTierStorage) >= 2 {
+//		sum := uint64(0)
+//		for _, tierStorage := range pss.PerRankTierStorage[1:] {
+//			sum += uint64(len(pss.CreationRanks())) * tierStorage
+//		}
+//		return sum
+//	}
+//	return 0
+//}
+//
+//func (pss *PoolServiceStorage) String() string {
+//	if pss == nil {
+//		return "no pool storage info available"
+//	}
+//	return fmt.Sprintf("total SCM: %s, total NVMe: %s",
+//		humanize.Bytes(pss.TotalSCM()),
+//		humanize.Bytes(pss.TotalNVMe()))
+//}

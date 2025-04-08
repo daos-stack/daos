@@ -1,8 +1,10 @@
 /**
  * (C) Copyright 2021-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+#define D_LOGFAC DD_FAC(common)
 
 #include "fault_domain.h"
 
@@ -16,26 +18,40 @@
 #define FD_TREE_TUPLE_LEN	3
 
 /**
+ * A compressed domain tree starts with values that encode metadata about the tree.
+ */
+#define FD_TREE_MD_LEN          1
+
+/**
+ * The compressed tree must contain metadata and at least a root node.
+ */
+#define FD_TREE_MIN_LEN         (FD_TREE_TUPLE_LEN + FD_TREE_MD_LEN)
+
+/**
  * The fault domain tree level numbering begins at 0 (rank level) and increases
  * as you approach the root. The level above the ranks will always have the same
  * number.
  *
  * This assumes the tree has a uniform depth throughout.
  */
-#define LAST_DOMAIN_LEVEL	1
+#define NODE_DOMAIN_LEVEL       1
+
+/**
+ * The root node always has a static ID number.
+ */
+#define ROOT_ID                 1
 
 int
-d_fd_tree_init(struct d_fd_tree *tree, const uint32_t *compressed,
-	       const uint32_t compressed_len)
+d_fd_tree_init(struct d_fd_tree *tree, const uint32_t *compressed, const uint32_t compressed_len)
 {
 	if (compressed == NULL) {
 		D_ERROR("null compressed fd tree\n");
 		return -DER_INVAL;
 	}
 
-	if (compressed_len < FD_TREE_TUPLE_LEN) {
-		D_ERROR("compressed len=%u, less than minimum %u\n",
-			compressed_len, FD_TREE_TUPLE_LEN);
+	if (compressed_len < FD_TREE_MIN_LEN) {
+		D_ERROR("compressed len=%u, less than minimum %u\n", compressed_len,
+			FD_TREE_MIN_LEN);
 		return -DER_INVAL;
 	}
 
@@ -50,6 +66,58 @@ d_fd_tree_init(struct d_fd_tree *tree, const uint32_t *compressed,
 	return d_fd_tree_reset(tree);
 }
 
+static bool
+tree_has_fault_domain(struct d_fd_tree *tree)
+{
+	return (tree->fdt_compressed[0] & D_FD_TREE_HAS_FAULT_DOMAIN) != 0;
+}
+
+static bool
+tree_has_perf_domain(struct d_fd_tree *tree)
+{
+	return (tree->fdt_compressed[0] & D_FD_TREE_HAS_PERF_DOMAIN) != 0;
+}
+
+static bool
+need_perf_dom(struct d_fd_tree *tree)
+{
+	return tree_has_perf_domain(tree) && tree->fdt_perf_dom_level < 0;
+}
+
+static bool
+need_fault_dom(struct d_fd_tree *tree)
+{
+	return tree_has_fault_domain(tree) && tree->fdt_fault_dom_level < 0;
+}
+
+static bool
+domain_is_root(struct d_fault_domain *dom)
+{
+	return dom->fd_id == ROOT_ID;
+}
+
+static bool
+domain_is_node(struct d_fault_domain *dom)
+{
+	return dom->fd_level == NODE_DOMAIN_LEVEL;
+}
+
+static bool
+domain_is_fault(struct d_fd_tree *tree, struct d_fault_domain *dom)
+{
+	/* Performance domain must be higher in tree than fault domain */
+	if (need_perf_dom(tree))
+		return false;
+
+	return need_fault_dom(tree) || tree->fdt_fault_dom_level == dom->fd_level;
+}
+
+static bool
+domain_is_perf(struct d_fd_tree *tree, struct d_fault_domain *dom)
+{
+	return need_perf_dom(tree) || tree->fdt_perf_dom_level == dom->fd_level;
+}
+
 static int
 get_next_domain(struct d_fd_tree *tree, struct d_fd_node *next)
 {
@@ -61,16 +129,32 @@ get_next_domain(struct d_fd_tree *tree, struct d_fd_node *next)
 	}
 
 	fd = (struct d_fault_domain *)&tree->fdt_compressed[tree->fdt_idx];
-	next->fdn_type = D_FD_NODE_TYPE_DOMAIN;
+	if (domain_is_root(fd)) {
+		next->fdn_type = D_FD_NODE_TYPE_ROOT;
+	} else if (domain_is_node(fd)) {
+		next->fdn_type = D_FD_NODE_TYPE_NODE;
+	} else if (domain_is_fault(tree, fd)) {
+		next->fdn_type = D_FD_NODE_TYPE_FAULT_DOM;
+		if (need_fault_dom(tree))
+			tree->fdt_fault_dom_level = fd->fd_level;
+	} else if (domain_is_perf(tree, fd)) {
+		next->fdn_type = D_FD_NODE_TYPE_PERF_DOM;
+		if (need_perf_dom(tree))
+			tree->fdt_perf_dom_level = fd->fd_level;
+	} else {
+		D_ERROR("fault domain tree has a node of unknown type (level=%d, id=%d, "
+			"children=%d)",
+			fd->fd_level, fd->fd_id, fd->fd_children_nr);
+		return -DER_INVAL;
+	}
 	next->fdn_val.dom = fd;
-
 	tree->fdt_domains_found++;
 
 	/*
-	 * At the final level, we expect the children to be ranks,
+	 * At the node level, we expect the children to be ranks,
 	 * not domains.
 	 */
-	if (fd->fd_level == LAST_DOMAIN_LEVEL)
+	if (domain_is_node(fd))
 		tree->fdt_ranks_expected += fd->fd_children_nr;
 	else
 		tree->fdt_domains_expected += fd->fd_children_nr;
@@ -148,11 +232,13 @@ d_fd_tree_reset(struct d_fd_tree *tree)
 		return -DER_UNINIT;
 	}
 
-	tree->fdt_idx = 0;
+	tree->fdt_idx              = FD_TREE_MD_LEN; /* skip the metadata values */
 	tree->fdt_domains_expected = 1; /* at least the root */
 	tree->fdt_domains_found = 0;
 	tree->fdt_ranks_expected = 0;
 	tree->fdt_ranks_found = 0;
+	tree->fdt_perf_dom_level   = -1;
+	tree->fdt_fault_dom_level  = -1;
 
 	return 0;
 }
@@ -165,7 +251,7 @@ d_fd_get_exp_num_domains(uint32_t compressed_len, uint32_t exp_num_ranks,
 	uint32_t domain_len;
 
 	/* Minimal tree must contain at least the root domain */
-	min_len = FD_TREE_TUPLE_LEN + exp_num_ranks;
+	min_len = FD_TREE_MD_LEN + FD_TREE_TUPLE_LEN + exp_num_ranks;
 
 	if (compressed_len < min_len) {
 		D_ERROR("len = %u, needed minimum = %u)\n", compressed_len,
@@ -173,7 +259,7 @@ d_fd_get_exp_num_domains(uint32_t compressed_len, uint32_t exp_num_ranks,
 		return -DER_INVAL;
 	}
 
-	domain_len = compressed_len - exp_num_ranks;
+	domain_len = compressed_len - exp_num_ranks - FD_TREE_MD_LEN;
 	if (domain_len % FD_TREE_TUPLE_LEN != 0) {
 		D_ERROR("domain_len = %u is not a multiple of %u\n",
 			domain_len, FD_TREE_TUPLE_LEN);
@@ -184,15 +270,21 @@ d_fd_get_exp_num_domains(uint32_t compressed_len, uint32_t exp_num_ranks,
 	return 0;
 }
 
-bool
-d_fd_node_is_group(struct d_fd_node *node)
+const char *
+d_fd_get_node_type_str(enum d_fd_node_type node_type)
 {
-	if (node == NULL)
-		return false;
-
-	if (node->fdn_type == D_FD_NODE_TYPE_DOMAIN &&
-	    node->fdn_val.dom->fd_level == D_FD_GROUP_DOMAIN_LEVEL)
-		return true;
-
-	return false;
+	switch (node_type) {
+	case D_FD_NODE_TYPE_RANK:
+		return "rank";
+	case D_FD_NODE_TYPE_NODE:
+		return "node";
+	case D_FD_NODE_TYPE_FAULT_DOM:
+		return "fault domain";
+	case D_FD_NODE_TYPE_PERF_DOM:
+		return "perf domain";
+	case D_FD_NODE_TYPE_ROOT:
+		return "root";
+	default:
+		return "unknown";
+	}
 }
