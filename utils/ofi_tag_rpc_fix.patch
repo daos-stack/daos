@@ -1,0 +1,53 @@
+From df6604934941e90beeb58d294777aa5960f84916 Mon Sep 17 00:00:00 2001
+From: Jinshan Xiong <jinshanx@google.com>
+Date: Thu, 27 Mar 2025 18:22:42 +0000
+Subject: [PATCH] enhance unexp tag handling on all kinds of endpoints
+
+Change-Id: I66f8ff2a219bccd3e8505e11870db14a028f3115
+Signed-off-by: Jinshan Xiong <jinshanx@google.com>
+---
+ prov/tcp/src/xnet_ep.c       | 3 ++-
+ prov/tcp/src/xnet_progress.c | 6 ++++++
+ 2 files changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/prov/tcp/src/xnet_ep.c b/prov/tcp/src/xnet_ep.c
+index 7dc8ad0e7..3fc566b7d 100644
+--- a/prov/tcp/src/xnet_ep.c
++++ b/prov/tcp/src/xnet_ep.c
+@@ -283,7 +283,6 @@ xnet_ep_accept(struct fid_ep *ep_fid, const void *param, size_t paramlen)
+ 	    (paramlen > XNET_MAX_CM_DATA_SIZE))
+ 		return -FI_EINVAL;
+ 
+-	ep->tagged_rpc = conn->pep->info->ep_attr->mem_tag_format == FI_TAG_RPC;
+ 	ep->conn = NULL;
+ 
+ 	assert(ep->cm_msg);
+@@ -826,6 +825,8 @@ int xnet_endpoint(struct fid_domain *domain, struct fi_info *info,
+ 	ep->cur_rx.hdr_len = sizeof(ep->cur_rx.hdr.base_hdr);
+ 	xnet_config_bsock(&ep->bsock);
+ 
++	ep->tagged_rpc = info->ep_attr->mem_tag_format == FI_TAG_RPC;
++
+ 	*ep_fid = &ep->util_ep.ep_fid;
+ 	(*ep_fid)->fid.ops = &xnet_ep_fi_ops;
+ 	(*ep_fid)->ops = &xnet_ep_ops;
+diff --git a/prov/tcp/src/xnet_progress.c b/prov/tcp/src/xnet_progress.c
+index d7add7f9b..090356e0a 100644
+--- a/prov/tcp/src/xnet_progress.c
++++ b/prov/tcp/src/xnet_progress.c
+@@ -873,6 +873,12 @@ static int xnet_handle_tag(struct xnet_ep *ep)
+ 	}
+ 
+ 	if (dlist_empty(&ep->unexp_entry)) {
++		char buf[OFI_ADDRSTRLEN];
++		size_t len = sizeof(buf);
++
++		FI_WARN(&xnet_prov, FI_LOG_EP_DATA, "unexpected tag from peer: %s\n",
++			ofi_straddr(buf, &len, FI_SOCKADDR, &ep->peer->addr));
++
+ 		dlist_insert_tail(&ep->unexp_entry,
+ 				  &xnet_ep2_progress(ep)->unexp_tag_list);
+ 		ret = xnet_update_pollflag(ep, POLLIN, false);
+-- 
+2.49.0.504.g3bcea36a83-goog
+
