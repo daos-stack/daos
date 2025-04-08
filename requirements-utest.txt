@@ -6,4 +6,3 @@ PyYAML
 # pytest
 # for pydaos.torch module
 torch
-gcovr
