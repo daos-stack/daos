@@ -19,7 +19,7 @@ pool:
   label: pool
   set_logmasks: False
 container:
-  control_method: API
+  register_cleanup: False
   akey_size: 5
   dkey_size: 5
   data_size: 256

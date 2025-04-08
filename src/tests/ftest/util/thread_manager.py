@@ -1,5 +1,6 @@
 """
 (C) Copyright 2021-2023 Intel Corporation.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -77,18 +78,21 @@ class ThreadManager():
     # pylint: disable=too-many-ancestors,too-few-public-methods
     """Class to manage running any method as multiple threads."""
 
-    def __init__(self, method, timeout=None):
+    def __init__(self, method, timeout=None, max_workers=None):
         """Initialize a ThreadManager object with the the method to run as a thread.
 
         Args:
             method (callable): python method to execute in each thread
             timeout (int, optional): timeout for all thread execution. Defaults to None.
+            max_workers (int, optional): max number of threads to execute in parallel.
+                Refer to ThreadPoolExecutor for the default.
         """
         self.log = getLogger()
         self.method = method
         self.timeout = timeout
         self.job_kwargs = []
         self.futures = {}
+        self._max_workers = max_workers
 
     @property
     def qty(self):
@@ -112,7 +116,7 @@ class ThreadManager():
 
         """
         results = []
-        with ThreadPoolExecutor() as thread_executor:
+        with ThreadPoolExecutor(max_workers=self._max_workers) as thread_executor:
             self.log.info("Submitting %d threads ...", len(self.job_kwargs))
             # Keep track of thread ids by assigning an index to each Future object
             futures = {
