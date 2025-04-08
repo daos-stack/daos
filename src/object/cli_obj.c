@@ -1462,35 +1462,34 @@ struct ping_task_arg {
 	daos_handle_t     pool_hdl;
 	struct dc_object *obj;
 	uint64_t          dkey_hash;
+	d_list_t          tgt_list;
 };
 
 static int
 ping_task(tse_task_t *task)
 {
-	daos_handle_t         pool_hdl;
-	struct dc_object     *obj;
-	int                   first_target;
-	int                   grp_idx;
-	int                   i;
-	int                   target;
-	int                   tgt_id;
+	daos_handle_t          pool_hdl;
 	int                   rc = 0;
 	d_list_t              ping_task_list;
+	d_list_t              *tgt_list;
+	struct tgt_list_entry *entry;
 	tse_sched_t          *sched = tse_task2sched(task);
 
 	struct ping_task_arg *arg = tse_task_buf_embedded(task, sizeof(*arg));
 	pool_hdl                  = arg->pool_hdl;
-	obj                       = arg->obj;
+	tgt_list                   = &arg->tgt_list;
 
 	D_INIT_LIST_HEAD(&ping_task_list);
 
-	grp_idx      = obj_dkey2grpidx(obj, arg->dkey_hash, obj->cob_version);
-	first_target = grp_idx * obj->cob_grp_size;
+	D_INFO("before iterating over each entry");
 
-	for (i = 0, target = first_target; i < obj->cob_grp_size; i++, target++) {
+	D_INFO("tgt_list address %p", tgt_list);
+
+	d_list_for_each_entry(entry, tgt_list, link) {
+		D_INFO("for each entry %d", entry->tgt_id);
+
 		struct ping_tgt_task_arg *a;
 		tse_task_t               *ping_task = NULL;
-		tgt_id = obj->cob_shards->do_shards[target].do_pl_shard.po_target;
 
 		rc = tse_task_create(ping_tgt_task, sched, NULL, &ping_task);
 		if (rc != 0) {
@@ -1502,7 +1501,8 @@ ping_task(tse_task_t *task)
 		}
 		a           = tse_task_buf_embedded(ping_task, sizeof(*a));
 		a->pool_hdl = pool_hdl;
-		a->tgt_id   = tgt_id;
+		a->tgt_id   = entry->tgt_id;
+		D_INFO("after setting args for ping task");
 
 		rc = dc_task_depend(task, 1, &ping_task);
 		if (rc != 0) {
@@ -1513,10 +1513,22 @@ ping_task(tse_task_t *task)
 			return rc;
 		}
 
+		D_INFO("after depending on task");
+
 		tse_task_list_add(ping_task, &ping_task_list);
+
+		D_INFO("after adding ping task list");
 	}
 
+	D_INFO("before scheduling ping task list");
+
 	tse_task_list_sched(&ping_task_list, false);
+
+	D_INFO("about to pop");
+
+	while ((entry = d_list_pop_entry(tgt_list, struct tgt_list_entry, link))) {
+		D_FREE(entry);
+	}
 
 	return 0;
 }
@@ -1533,12 +1545,18 @@ abandon_ping_task(tse_task_t *task)
 
 int
 create_ping_task(tse_sched_t *sched, daos_handle_t pool_hdl, struct dc_object *obj,
-		 uint64_t dkey_hash, tse_task_t **task)
+		 uint64_t dkey_hash, d_list_t *tgt_list, tse_task_t **task)
 {
 	struct dc_pool       *pool;
 	tse_task_t           *t;
 	int                   rc;
 	struct ping_task_arg *a;
+	struct tgt_list_entry *entry;
+
+	// this works.
+	d_list_for_each_entry(entry, tgt_list, link) {
+		D_INFO("for each entry %d", entry->tgt_id);
+	}
 
 	pool = dc_hdl2pool(pool_hdl);
 	if (pool == NULL) {
@@ -1546,6 +1564,7 @@ create_ping_task(tse_sched_t *sched, daos_handle_t pool_hdl, struct dc_object *o
 		return -DER_NO_HDL;
 	}
 
+	D_INFO("creating ping task");
 	rc = tse_task_create(ping_task, sched, NULL, &t);
 	if (rc != 0) {
 		DL_ERROR(rc,
@@ -1561,13 +1580,27 @@ create_ping_task(tse_sched_t *sched, daos_handle_t pool_hdl, struct dc_object *o
 	a->obj       = obj;
 	a->dkey_hash = dkey_hash;
 
+	D_INIT_LIST_HEAD(&a->tgt_list);
+
+	d_list_splice(tgt_list, &a->tgt_list);
+
+	// a->tgt_list  = *tgt_list;
+
+	// D_INFO("tgt_list address %p", tgt_list);
+
+	// this works.
+	// d_list_for_each_entry(entry, a->tgt_list, link) {
+	// 	D_INFO("for each entry after embedding %d", entry->tgt_id);
+	// }
+
 	*task = t;
 	dc_pool_put(pool);
 	return 0;
 }
 
 int
-obj_tgt_ping_task(tse_sched_t *sched, struct dc_object *obj, uint64_t dkey_hash, tse_task_t **taskp)
+obj_tgt_ping_task(tse_sched_t *sched, struct dc_object *obj, uint64_t dkey_hash, d_list_t *tgt_list,
+		  tse_task_t **taskp)
 {
 	struct dc_pool *pool;
 	daos_handle_t   ph;
@@ -1578,7 +1611,9 @@ obj_tgt_ping_task(tse_sched_t *sched, struct dc_object *obj, uint64_t dkey_hash,
 
 	dc_pool2hdl_noref(pool, &ph);
 
-	rc = create_ping_task(sched, ph, obj, dkey_hash, taskp);
+	D_INFO("calling ping task");
+
+	rc = create_ping_task(sched, ph, obj, dkey_hash, tgt_list, taskp);
 	if (rc != 0)
 		return rc;
 
@@ -1928,6 +1963,55 @@ dc_obj_retry_delay(tse_task_t *task, int err, uint16_t *retry_cnt, uint16_t *inp
 	return delay;
 }
 
+// TODO: Enter a uint8_t *bitmap to keep track of tgts already seen.
+int
+obj_gather_tgt_ids(d_list_t *head, struct dc_object *obj, uint64_t dkey_hash)
+{
+	// TODO: allocate dummy entry at beginning of list to avoid logic of if list is empty, set
+	// the head. most of the code in DAOS uses this method
+	int                    first_target;
+	int                    grp_idx;
+	int                    i;
+	int                    target;
+	int                    tgt_id;
+	struct tgt_list_entry *entry;
+	int                    rc;
+
+	// Get list of targets
+	grp_idx      = obj_dkey2grpidx(obj, dkey_hash, obj->cob_version);
+	first_target = grp_idx * obj->cob_grp_size;
+
+	// uint8_t *bitmap;
+	// // (nr_ranks * nr_targets_per_rank + sizeof(*bmap) - 1) / sizeof(*bmap)
+	// // need to somehow get global target index
+	// D_ALLOC_ARRAY(bitmap, )
+
+	for (i = 0, target = first_target; i < obj->cob_grp_size; i++, target++) {
+		// D_INFO("allocating entry");
+
+		D_ALLOC_PTR(entry);
+		if (entry == NULL)
+			D_GOTO(err, rc = -1);
+
+		tgt_id        = obj->cob_shards->do_shards[target].do_pl_shard.po_target;
+		entry->tgt_id = tgt_id;
+
+		// D_INFO("entry->tgt_id: %d", entry->tgt_id);
+
+		d_list_add(&entry->link, head);
+	}
+
+	return 0;
+err:
+	while ((entry = d_list_pop_entry(head, struct tgt_list_entry, link))) {
+		D_FREE(entry);
+	}
+
+	DL_ERROR(rc, "failed to gather target IDs before pinging targets");
+
+	return rc;
+}
+
 static int
 obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	     struct obj_auxi_args *obj_auxi, bool pmap_stale,
@@ -1945,7 +2029,19 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 		if (rc != 0)
 			D_GOTO(err, rc);
 	} else if (result == -DER_RECONNECT) {
-		rc = obj_tgt_ping_task(sched, obj, obj_auxi->dkey_hash, &required_task);
+		d_list_t      tgt_list_head;
+		daos_handle_t ph;
+
+		dc_pool2hdl_noref(obj->cob_pool, &ph);
+
+		D_INIT_LIST_HEAD(&tgt_list_head);
+
+		rc = obj_gather_tgt_ids(&tgt_list_head, obj, obj_auxi->dkey_hash);
+		if (rc != 0)
+			D_GOTO(err, rc);
+
+		rc = obj_tgt_ping_task(sched, obj, obj_auxi->dkey_hash, &tgt_list_head,
+				       &required_task);
 		if (rc != 0)
 			D_GOTO(err, rc);
 	}

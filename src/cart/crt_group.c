@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -1364,6 +1365,7 @@ crt_group_rank_s2p(crt_group_t *subgrp, d_rank_t rank_in, d_rank_t *rank_out)
 	return rc;
 }
 
+// TODO: gives us the total number of ranks. crt tracks ranks at the lowest level
 int
 crt_group_size(crt_group_t *grp, uint32_t *size)
 {
