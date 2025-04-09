@@ -9,6 +9,7 @@
 #
 # Will only check if Jenkinsfile is modified
 #
+# shellcheck disable=SC2317
 
 set -ue
 
