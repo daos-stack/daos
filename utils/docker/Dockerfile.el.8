@@ -21,10 +21,6 @@ ARG REPO_FILE_URL
 ARG JENKINS_URL
 ARG REPOS
 ARG DAOS_LAB_CA_FILE_URL
-
-# Python executable
-ARG PYTHON_EXE=python3
-
 # script to install OS updates basic tools and daos dependencies
 COPY ./utils/scripts/install-el8.sh /tmp/install.sh
 # script to setup local repo if available
@@ -67,14 +63,14 @@ ARG JENKINS_URL
 USER daos_server:daos_server
 
 # Setup a python venv so that python packages can be installed locally.
-RUN $PYTHON_EXE -m venv /home/daos/venv
+RUN python3 -m venv /home/daos/venv
 ENV PATH=/home/daos/venv/bin:$PATH
 ENV VIRTUAL_ENV=/home/daos/venv/
 
 # Install latest versions of python tools.
 COPY requirements-build.txt requirements-utest.txt ./
-RUN $PYTHON_EXE -m pip --no-cache-dir install --upgrade pip && \
-    $PYTHON_EXE -m pip --no-cache-dir install -r requirements-build.txt -r requirements-utest.txt
+RUN python3 -m pip --no-cache-dir install --upgrade pip && \
+    python3 -m pip --no-cache-dir install -r requirements-build.txt -r requirements-utest.txt
 
 WORKDIR /home/daos/pre
 RUN mkdir -p /home/daos/pre/site_scons/prereq_tools /home/daos/pre/site_scons/components
