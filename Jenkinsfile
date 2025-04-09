@@ -618,7 +618,8 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: true,
-                                                                parallel_build: true) +
+                                                                parallel_build: true,
+                                                                python_exe: 'python3.11') +
                                                 " -t ${sanitized_JOB_NAME()}-el8 " +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
                         }
