@@ -1,11 +1,11 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
 
-from general_utils import DaosTestError
 from ior_test_base import IorTestBase
 
 
@@ -60,11 +60,8 @@ class MultipleContainerDelete(IorTestBase):
         self.log.info("SCM = %d, NVMe = %d", final_scm_fs, final_ssd_fs)
 
         self.log.info("Verifying NVMe space is recovered")
-        try:
-            self.pool.check_free_space(expected_nvme=initial_ssd_fs)
-        except DaosTestError as error:
-            self.fail("NVMe space is not recovered after 50 "
-                      "create-write-destroy iterations {}".format(error))
+        if not self.pool.check_free_space(expected_nvme=initial_ssd_fs):
+            self.fail("NVMe space is not recovered after 50 create-write-destroy iterations")
 
         # Verify SCM space recovery. About 198KB of the SCM free space isn't recovered
         # even after waiting for 180 sec, so apply the threshold. Considered not a bug.
