@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2025 Intel Corporation.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
  *
@@ -7338,10 +7338,8 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		    struct pool_target_addr_list *inval_list_out, uint32_t *map_version,
 		    struct rsvc_hint *hint, enum map_update_source src, bool skip_rf_check)
 {
-	struct pool_target_id_list	target_list = { 0 };
-	daos_prop_t			prop = { 0 };
-	uint32_t			tgt_map_ver = 0;
-	struct daos_prop_entry		*entry;
+	struct pool_target_id_list       target_list = {0};
+	uint32_t                         tgt_map_ver = 0;
 	bool				updated;
 	int				rc;
 	char				*env;
@@ -7368,13 +7366,9 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	}
 	d_freeenv_str(&env);
 
-	rc = ds_pool_iv_prop_fetch(svc->ps_pool, &prop);
-	if (rc)
-		D_GOTO(out, rc);
-
-	entry = daos_prop_entry_get(&prop, DAOS_PROP_PO_SELF_HEAL);
-	D_ASSERT(entry != NULL);
-	if (!(entry->dpe_val & (DAOS_SELF_HEAL_AUTO_REBUILD | DAOS_SELF_HEAL_DELAY_REBUILD))) {
+	if (!(svc->ps_pool->sp_self_heal &
+	      (DAOS_SELF_HEAL_AUTO_REBUILD | DAOS_SELF_HEAL_DELAY_REBUILD)) ||
+	    svc->ps_pool->sp_disable_rebuild) {
 		D_DEBUG(DB_MD, "self healing is disabled\n");
 		D_GOTO(out, rc);
 	}
@@ -7391,7 +7385,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		D_GOTO(out, rc);
 	}
 
-	if ((entry->dpe_val & DAOS_SELF_HEAL_DELAY_REBUILD) && (opc == MAP_EXCLUDE))
+	if ((svc->ps_pool->sp_self_heal & DAOS_SELF_HEAL_DELAY_REBUILD) && (opc == MAP_EXCLUDE))
 		delay = -1;
 	else if (daos_fail_check(DAOS_REBUILD_DELAY))
 		delay = 5;
@@ -7409,7 +7403,6 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	}
 
 out:
-	daos_prop_fini(&prop);
 	pool_target_id_list_free(&target_list);
 	return rc;
 }

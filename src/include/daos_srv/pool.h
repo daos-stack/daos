@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2025 Intel Corporation.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -73,6 +73,7 @@ struct ds_pool {
 	crt_group_t	       *sp_group;
 	/* Size threshold to store data on backend bdev */
 	uint32_t		sp_data_thresh;
+	uint64_t                 sp_self_heal;
 	ABT_mutex		sp_mutex;
 	ABT_cond		sp_fetch_hdls_cond;
 	ABT_cond		sp_fetch_hdls_done_cond;
@@ -542,5 +543,16 @@ int ds_pool_check_svc_clues(struct ds_pool_clues *clues, int *advice_out);
 int ds_pool_svc_lookup_leader(uuid_t uuid, struct ds_pool_svc **ds_svcp, struct rsvc_hint *hint);
 
 void ds_pool_svc_put_leader(struct ds_pool_svc *ds_svc);
+
+static inline bool
+ds_pool_rebuild_needed(struct ds_pool *pool)
+{
+	if (pool->sp_disable_rebuild)
+		return false;
+	if (!(pool->sp_self_heal & (DAOS_SELF_HEAL_AUTO_REBUILD | DAOS_SELF_HEAL_DELAY_REBUILD)))
+		return false;
+
+	return true;
+}
 
 #endif /* __DAOS_SRV_POOL_H__ */
