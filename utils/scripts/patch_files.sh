@@ -6,11 +6,36 @@ bindir="$1"; shift
 libdir="$1"; shift
 
 mkdir -p "${libdir}/daos_internal"
+#create links first
+readarray -d '' links < <(find "${libdir}" -type l -print0)
+for file in "${links[@]}"; do
+  target="$(readlink "${file}")"
+  echo "Checking to see if link ${file} -> ${target} needs fixing"
+  lib="$(basename "${file}")"
+  for prefix in "$@"; do
+      newtarget="${target//lib${prefix}/libdaos${prefix}}"
+      echo "Checking ${newtarget}"
+      if [ "${newtarget}" != "${target}" ]; then
+        # create a link from original filename in daos_internal to the
+        # target.  This way link time name is unchanged for DAOS build.
+        echo "Creating link ${libdir}/daos_internal/${lib} -> ${newtarget}"
+        ln -s ../"${newtarget}" "${libdir}/daos_internal/${lib}"
+        newlib="${lib//lib${prefix}/libdaos${prefix}}"
+        # Now replace the link
+        ln -s "${newtarget}" "$(dirname "${file}")/${newlib}"
+        rm "${file}"
+        break
+      fi
+  done
+done
 
 for dir in "${bindir}" "${libdir}"; do
-  readarray -d '' all_files < <(find "${dir}" -type l,f -print0)
+  readarray -d '' all_files < <(find "${dir}" -type f -print0)
   files=()
   for file in "${all_files[@]}"; do
+    if [[ "${file}" =~ daos_internal ]]; then
+      continue
+    fi
     echo "Checking ${file} if .a"
     lib="$(basename "${file}")"
     removed=0
@@ -39,14 +64,7 @@ for dir in "${bindir}" "${libdir}"; do
       fi
       if [ "$newlib" != "$lib" ]; then
         if [ -L "${file}" ]; then
-          target="$(readlink "${file}")"
-          newtarget="${target//lib${prefix}/libdaos${prefix}}"
-          if [ "${newtarget}" != "${target}" ]; then
-            ln -s "${newtarget}" "${dirname}/${newlib}"
-            #create an extra link for internal use
-            ln -s "../${newtarget}" "${dirname}/daos_internal/${lib}"
-            rm -f "${file}"
-          fi
+          rm -f "${file}"
         else
           newfile="${dirname}/${newlib}"
           mv "${file}" "${newfile}"
@@ -58,12 +76,12 @@ for dir in "${bindir}" "${libdir}"; do
       for prefix in "$@"; do
         if [[ ${lib} =~ .*${prefix}.*\.pc$ ]]; then
           sed -i "s/${prefix}/daos${prefix}/g" "${newfile}"
+          continue
         elif ! grep -qI '' "$newfile"; then
           readarray libs < <(patchelf --print-needed "${newfile}" 2>/dev/null)
           for old in "${libs[@]}"; do
             old="$(echo "${old}" | xargs echo -n)"
             replace="${old//lib${prefix}/libdaos${prefix}}"
-            echo "Checking ${newfile} for ${prefix}: ${old} -> ${replace}"
             if [ "${replace}" != "${old}" ]; then
               echo "patchelf --replace-needed ${old} ${replace} ${newfile}"
               patchelf --replace-needed "${old}" "${replace}" "${newfile}"

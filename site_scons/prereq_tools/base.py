@@ -1502,19 +1502,13 @@ class _Component():
             path = os.path.join(comp_path, folder)
             files = os.listdir(path)
             for lib in files:
-                if folder != 'bin' and not lib.endswith(".so"):
-                    # Assume every file in bin can be patched
-                    continue
                 if lib.endswith(".py"):
                     continue
                 full_lib = os.path.join(path, lib)
                 cmd = ['patchelf', '--set-rpath', ':'.join(rpath), full_lib]
                 res = RUNNER.run_commands([cmd])
                 if not res:
-                    if lib in ('libdaosspdk.so', 'daosspdk_cli', 'daosspdk_rpc'):
-                        print(f'Skipped patching {full_lib}')
-                    else:
-                        raise BuildFailure(f'Error running patchelf on {full_lib}')
+                    print(f'Skipped patching {full_lib}')
 
     def build(self, env, needed_libs):
         """Build the component, if necessary
