@@ -69,18 +69,6 @@ cleanup() {
     return 0
 }
 
-ls ~/.ssh
-touch ~/.ssh/known_hosts
-chmod 600 ~/.ssh/known_hosts
-for host in $(IFS=','; echo "${nodes[@]}"); do
-# shellcheck disable=SC2086
-    echo "Removing all keys from known_hosts file for $host"
-    ssh-keygen -R "$host"
-# shellcheck disable=SC2086
-    echo "Add new key for $host to known_hosts"
-    ssh-keyscan "$host" >> ~/.ssh/known_hosts
-done
-
 # shellcheck disable=SC1091
 if ${TEST_RPMS:-false}; then
     PREFIX=/usr
