@@ -22,10 +22,10 @@
 # -*- coding: utf-8 -*-
 """Defines common components used by HPDD projects"""
 
+import os
 import platform
 
 import distro
-import os
 from prereq_tools import GitRepoRetriever
 from SCons.Script import Dir, GetOption
 
