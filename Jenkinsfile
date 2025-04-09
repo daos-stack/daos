@@ -15,7 +15,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@hendersp/DAOS-17259') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -69,11 +69,6 @@ String vm9_label(String distro) {
 
 pipeline {
     agent { label 'lightweight' }
-
-    triggers {
-        /* groovylint-disable-next-line AddEmptyString */
-        cron(env.BRANCH_NAME == 'weekly-testing' ? 'TZ=UTC\n0 0 * * 6' : '')
-    }
 
     environment {
         BULLSEYE = credentials('bullseye_license_key')
