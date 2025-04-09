@@ -1217,6 +1217,11 @@ pipeline {
             valgrindReportPublish valgrind_stashes: ['el8-gcc-nlt-memcheck',
                                                      'el8-gcc-unit-memcheck',
                                                      'fault-inject-valgrind']
+            codeCoverageReport stashes: ['code_coverage_Unit_Test_on_EL_8.8',
+                                         'code_coverage_Unit_Test_bdev_on_EL_8.8',
+                                         'code_coverage_NLT_on_EL_8.8',
+                                         'code_coverage_Unit_Test_with_memcheck_on_EL_8.8',
+                                         'code_coverage_Unit_Test_bdev_with_memcheck_on_EL_8.8']
             job_status_update('final_status')
             jobStatusWrite(job_status_internal)
         }
