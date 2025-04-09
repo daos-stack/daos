@@ -1083,8 +1083,8 @@ class _Component():
         self.name = name
         self.build_commands = kw.get("commands", [])
         self.retriever = kw.get("retriever", None)
-        self.lib_path = ['lib', 'lib64']
-        self.include_path = ['include']
+        self.lib_path = ['lib', 'lib64', 'lib64/daos_internal']
+        self.include_path = ['include', 'include/daos_internal']
         self.lib_path.extend(default_libpath())
         self.lib_path.extend(kw.get("extra_lib_path", []))
         self.include_path.extend(kw.get("extra_include_path", []))
@@ -1418,7 +1418,11 @@ class _Component():
 
     def _set_build_env(self, env):
         """Add any environment variables to build environment"""
-        env["ENV"].update(self.key_words.get("build_env", {}))
+        build_env = self.key_words.get("build_env", {})
+        newenv = {}
+        for key, value in build_env.items():
+            newenv[key] = env.subst(value)
+        env["ENV"].update(newenv)
 
     def _check_installed_package(self, env):
         """Check installed targets"""
@@ -1507,7 +1511,7 @@ class _Component():
                 cmd = ['patchelf', '--set-rpath', ':'.join(rpath), full_lib]
                 res = RUNNER.run_commands([cmd])
                 if not res:
-                    if lib in ('libspdk.so', 'spdk_cli', 'spdk_rpc'):
+                    if lib in ('libdaosspdk.so', 'daosspdk_cli', 'daosspdk_rpc'):
                         print(f'Skipped patching {full_lib}')
                     else:
                         raise BuildFailure(f'Error running patchelf on {full_lib}')

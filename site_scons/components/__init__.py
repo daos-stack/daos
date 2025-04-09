@@ -25,8 +25,9 @@
 import platform
 
 import distro
+import os
 from prereq_tools import GitRepoRetriever
-from SCons.Script import GetOption
+from SCons.Script import Dir, GetOption
 
 # Check if this is an ARM platform
 PROCESSOR = platform.machine()
@@ -338,6 +339,8 @@ def define_components(reqs):
     # Ubuntu systems seem to fail more often, there may be something different going on here,
     # it has also failed with sandybridge.
     # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
+    patch_files = os.path.join(Dir('#').abspath, 'utils/scripts/patch_files.sh')
+    move_files = os.path.join(Dir('#').abspath, 'utils/scripts/move_files.sh')
     dist = distro.linux_distribution()
     if ARM_PLATFORM:
         spdk_arch = 'native'
@@ -365,17 +368,21 @@ def define_components(reqs):
                            '--with-shared',
                            f'--target-arch={spdk_arch}'],
                           ['make', f'CONFIG_ARCH={spdk_arch}'],
-                          ['make', 'install'],
-                          ['cp', '-r', '-P', 'dpdk/build/lib/', '$SPDK_PREFIX'],
-                          ['cp', '-r', '-P', 'dpdk/build/include/', '$SPDK_PREFIX/include/dpdk'],
-                          ['mkdir', '-p', '$SPDK_PREFIX/share/spdk'],
-                          ['cp', '-r', 'include', 'scripts', '$SPDK_PREFIX/share/spdk'],
+                          ['make', 'libdir=$SPDK_PREFIX/lib64',
+                           'includedir=$SPDK_PREFIX/include/daos_internal', 'install'],
+                          [move_files, 'dpdk/build/lib', '$SPDK_PREFIX/lib64'],
+                          [move_files, 'dpdk/build/include',
+                           '$SPDK_PREFIX/include/daos_internal/dpdk'],
+                          [move_files, 'include', '$SPDK_PREFIX/share/daosspdk/include'],
+                          [move_files, 'scripts', '$SPDK_PREFIX/share/daosspdk/scripts'],
                           ['cp', 'build/examples/lsvmd', '$SPDK_PREFIX/bin/spdk_nvme_lsvmd'],
                           ['cp', 'build/examples/nvme_manage', '$SPDK_PREFIX/bin/spdk_nvme_manage'],
                           ['cp', 'build/examples/identify', '$SPDK_PREFIX/bin/spdk_nvme_identify'],
-                          ['cp', 'build/examples/perf', '$SPDK_PREFIX/bin/spdk_nvme_perf']],
+                          ['cp', 'build/examples/perf', '$SPDK_PREFIX/bin/spdk_nvme_perf'],
+                          [patch_files, '$SPDK_PREFIX/bin', '$SPDK_PREFIX/lib64', 'spdk', 'rte',
+                           'dpdk']],
                 headers=['spdk/nvme.h'],
-                patch_rpath=['lib', 'bin'])
+                patch_rpath=['lib64', 'bin'])
 
     reqs.define('protobufc',
                 retriever=GitRepoRetriever(),

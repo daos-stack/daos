@@ -183,6 +183,7 @@ def scons():
     aenv = denv.Clone()
     aenv.require('spdk', 'pmdk', 'ofi', 'argobots')
 
+    aenv.AppendENVPath("CGO_CFLAGS", aenv.subst("$_CPPINCFLAGS"), sep=" ")
     aenv.AppendUnique(LINKFLAGS=["-Wl,--no-as-needed"])
     aenv.Replace(RPATH=[])
     cgolibdirs = aenv.subst("-L$BUILD_DIR/src/control/lib/spdk "
