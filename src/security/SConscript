@@ -22,7 +22,6 @@ def scons():
     senv.require("argobots")
     senv.AppendUnique(LIBS=['gurt'])
     srv_acl_obj = senv.SharedObject('srv_acl.c')
-
     if prereqs.server_requested():
         ds_sec = senv.d_library('security', ['srv.c', srv_acl_obj, acl_obj], install_off="../..")
         senv.Install('$PREFIX/lib64/daos_srv', ds_sec)

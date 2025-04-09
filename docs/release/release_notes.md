@@ -2,15 +2,59 @@
 
 We are pleased to announce the release of DAOS version 2.6.
 
-## DAOS Version 2.6.2 (2024-12-10) 
+## DAOS Version 2.6.3 (2025-03-26)
 
-The DAOS 2.6.2 release contains the following updates on top of DAOS 2.6.1:
+The DAOS 2.6.3 release includes the daos-2.6.3-4 RPM packages and its prerequisites.
+It contains the following updates on top of DAOS 2.6.2:
+
+* Operating system support: Added SLES/Leap 15 SP6 support
+
+* libfabric has been updated from 1.22.0-1 to 1.22.0-2
+
+* PMDK (libpmem\*) has been updated from 2.1.0-2 to 2.1.0-3
+
+* Mercury has been updated from 2.4.0-1 to 2.4.0-3
+
+### Bug fixes and improvements
+
+The DAOS 2.6.3 release includes fixes for several defects:
+
+* Refresh DAOS agent URI cache after DAOS engine(s) have been excluded.
+* Clear io contexts for unplugged faulty device, otherwise it can cause engine coredump.
+* Fix a bug in collective punch for sparse ranks, which may cause illegal memory access and engine coredump.
+* Increase stack size for more IV ULTs and avoid stack overflow.
+* Populate stat::f\_fsid for intercepted statfs().
+* Add credits and flow control for server-side RPC forwarding and avoid RPC congestion.
+* Several fixes for DTX to avoid inconsistency between VOS data structure and persistent DTX status,
+  the inconsistency can cause assertion failure on DTX resync.
+* Fix a bug for tearing down faulty NVMe device, which can cause engine coredump.
+* Limit the number of extents being passed to DAOS to 16k, if the extent sizes are under 16 bytes.
+* Always use SIGKILL to shutdown DAOS engine, instead of running through finalizing processes of modules.
+  The latter may cause false eviction and trigger unnecessary rebuild. This is a temporary solution.
+* Include EP flush patch to Mercury.
+* Cache pool map bulk descriptor on service leader instead of recreating it for each query.
+  Otherwise service leader may run out of low-level network stack resources while handling intensive pool query.
+* Fix a bug in aggregation which may cause integer overflow and assertion failure on the server.
+* Add 3-fault-tolerant EC object classes (like EC\_16P3).
+* Add a few new functionalities to the DDB tool.
+* Several fixes for usability improvements for the control plane.
+* Automatically retrigger rebuild when number of unreachable engines decreased to less than or equal to RF of pool.
+* Fix a double free of collective RPC.
+
+For details, please refer to the Github
+[release/2.6 commit history](https://github.com/daos-stack/daos/commits/release/2.6)
+and the associated [Jira tickets](https://jira.daos.io/) as stated in the commit messages.
+
+## DAOS Version 2.6.2 (2024-12-10)
+
+The DAOS 2.6.2 release includes the daos-2.6.2-2 RPM packages and its prerequisites.
+It contains the following updates on top of DAOS 2.6.1:
 
 * Bump hadoop-common from 3.3.6 to 3.4.0
 
 ### Bug fixes and improvements
 
-The DAOS 2.6.2 release includes fixes for several defects
+The DAOS 2.6.2 release includes fixes for several defects:
 
 * Add function to cycle OIDs non-sequentially and gain better object distribution
 
@@ -55,7 +99,8 @@ and the associated [Jira tickets](https://jira.daos.io/) as stated in the commit
 
 ## DAOS Version 2.6.1 (2024-10-05)
 
-The DAOS 2.6.1 release contains the following updates on top of DAOS 2.6.0:
+The DAOS 2.6.1 release includes the daos-2.6.1-3 RPM packages and its prerequisites.
+It contains the following updates on top of DAOS 2.6.0:
 
 * Mercury update for slingshot 11.0 host stack and other UCX provider fixes.
 
@@ -85,7 +130,7 @@ of administrator interface that can improve usability of DAOS system.
 * DAOS Version 2.6.0 always excludes unreachable engines reported by SWIM and schedule rebuild for
   excluded engines, this is an overreaction if massive engines are impacted by power failure or
   switch reboot because data recovery is impossible in these cases. DAOS 2.6.1 introduces a new
-  environment variable to set in the server yaml file for each engine (DAOS_POOL_RF) to indicate the
+  environment variable to set in the server yaml file for each engine (DAOS\_POOL\_RF) to indicate the
   number of engine failures seen before stopping the changing of pool membership and completing in
   progress rebuild. It will just let all I/O and on-going rebuild block. DAOS system can finish in
   progress rebuild and be available again after bringing back impacted engines. The recommendation
@@ -108,6 +153,7 @@ and the associated [Jira tickets](https://jira.daos.io/) as stated in the commit
 
 ### General Support
 
+The DAOS 2.6.0 release includes the daos-2.6.0-3 RPM packages and its prerequisites.
 DAOS Version 2.6.0 supports the following environments:
 
 Architecture Support:
@@ -273,7 +319,7 @@ For a complete list of supported hardware and software, refer to the
 
 ### Bug fixes
 
-The DAOS 2.6 release includes fixes for numerous defects.
+The DAOS 2.6.0 release includes fixes for numerous defects.
 For details, please refer to the Github
 [release/2.6 commit history](https://github.com/daos-stack/daos/commits/release/2.6)
 and the associated
