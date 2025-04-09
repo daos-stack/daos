@@ -266,16 +266,20 @@ def define_components(reqs):
                           ['make', 'install']],
                 libs=['isal_crypto'])
 
+    patch_files = os.path.join(Dir('#').abspath, 'utils/scripts/patch_files.sh')
     reqs.define('pmdk',
                 retriever=GitRepoRetriever(),
                 commands=[['make',
                            'all',
+                           'libdir=$PMDK_PREFIX/lib64',
+                           'includedir=$PMDK_PREFIX/include/daos_internal',
                            'BUILD_EXAMPLES=n',
                            'BUILD_BENCHMARKS=n',
                            'DOC=n',
                            'EXTRA_CFLAGS="-Wno-error"',
                            'install',
-                           'prefix=$PMDK_PREFIX']],
+                           'prefix=$PMDK_PREFIX'],
+                          [patch_files, '$PMDK_PREFIX/bin', '$PMDK_PREFIX/lib64', 'pmem', 'pmdk']],
                 libs=['pmemobj'])
     abt_build = ['./configure',
                  '--prefix=$ARGOBOTS_PREFIX',
@@ -339,7 +343,6 @@ def define_components(reqs):
     # Ubuntu systems seem to fail more often, there may be something different going on here,
     # it has also failed with sandybridge.
     # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
-    patch_files = os.path.join(Dir('#').abspath, 'utils/scripts/patch_files.sh')
     move_files = os.path.join(Dir('#').abspath, 'utils/scripts/move_files.sh')
     dist = distro.linux_distribution()
     if ARM_PLATFORM:

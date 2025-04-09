@@ -1502,6 +1502,8 @@ class _Component():
             path = os.path.join(comp_path, folder)
             files = os.listdir(path)
             for lib in files:
+                if not lib.endswith(".so"):
+                    continue
                 if lib.endswith(".py"):
                     continue
                 full_lib = os.path.join(path, lib)
