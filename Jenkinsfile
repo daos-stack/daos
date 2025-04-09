@@ -1215,6 +1215,10 @@ pipeline {
             }
         } // stage('Test Hardware')
         stage('Test Summary') {
+            when {
+                beforeAgent true
+                expression { true }
+            }
             parallel {
                 stage('Code Coverage Report') {
                     when {
@@ -1246,8 +1250,8 @@ pipeline {
                             job_status_update()
                         }
                     }
-                }
-            } // stage('Code Coverage Report')
+                } // stage('Code Coverage Report')
+            }
         } // stage('Test Summary')
     } // stages
     post {
