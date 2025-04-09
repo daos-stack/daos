@@ -1215,7 +1215,8 @@ pipeline {
             }
         } // stage('Test Hardware')
         stage('Test Summary') {
-            stage('Code Coverage Report') {
+            parallel {
+                stage('Code Coverage Report') {
                     when {
                         beforeAgent true
                         expression { params.CI_CODE_COVERAGE }
@@ -1246,7 +1247,8 @@ pipeline {
                         }
                     }
                 }
-        }
+            } // stage('Code Coverage Report')
+        } // stage('Test Summary')
     } // stages
     post {
         always {
