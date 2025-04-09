@@ -157,7 +157,7 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context) error {
 				if err != nil {
 					return err
 				}
-				return ei.storage.ValidateBdevConfig(ctx, ctrlrs)
+				return ei.storage.UpgradeBdevConfig(ctx, ctrlrs)
 			}
 			return nil
 		}

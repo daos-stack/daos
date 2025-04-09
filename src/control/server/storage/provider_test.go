@@ -269,7 +269,7 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 	}
 }
 
-func TestStorage_ProviderValidateBdevConfig(t *testing.T) {
+func TestStorage_ProviderUpgradeBdevConfig(t *testing.T) {
 	for name, tc := range map[string]struct {
 		cfg      *Config
 		ctrlrs   NvmeControllers
@@ -342,7 +342,7 @@ func TestStorage_ProviderValidateBdevConfig(t *testing.T) {
 			ctx := test.MustLogContext(t, test.Context(t))
 
 			p := NewProvider(logging.FromContext(ctx), 0, tc.cfg, nil, nil, tc.bdevProv, nil)
-			gotErr := p.ValidateBdevConfig(ctx, tc.ctrlrs)
+			gotErr := p.UpgradeBdevConfig(ctx, tc.ctrlrs)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

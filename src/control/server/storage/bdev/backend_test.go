@@ -8,6 +8,7 @@
 package bdev
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -1364,6 +1365,45 @@ func TestBdev_spdkBackend_ReadConfig(t *testing.T) {
 			},
 			req:    storage.BdevReadConfigRequest{},
 			expErr: storage.FaultInvalidSPDKConfig(errors.New("invalid character 'b' looking for beginning of value")),
+		},
+		"good config path; outdated config": {
+			setup: func(t *testing.T, req *storage.BdevReadConfigRequest) {
+				t.Helper()
+
+				oldCfg := SpdkConfig{
+					DaosData: &DaosData{
+						Configs: []*DaosConfig{},
+					},
+					Subsystems: []*SpdkSubsystem{
+						{
+							Name: "bdev",
+							Configs: []*SpdkSubsystemConfig{
+								{
+									Method: storage.ConfBdevNvmeSetOptions,
+									Params: &NvmeSetOptionsParams{
+										TransportRetryCount: 42,
+										ActionOnTimeout:     "scream-and-shout",
+									},
+								},
+							},
+						},
+					},
+				}
+				cfgBytes, err := json.Marshal(oldCfg)
+				if err != nil {
+					t.Fatal(err)
+				}
+				cfgBytes = bytes.Replace(cfgBytes, []byte("transport_retry_count"), []byte("retry_count"), 1)
+
+				tmpDir := t.TempDir()
+				testCfg := filepath.Join(tmpDir, "spdk.conf")
+				if err := os.WriteFile(testCfg, cfgBytes, 0600); err != nil {
+					t.Fatal(err)
+				}
+				req.ConfigPath = testCfg
+			},
+			req:    storage.BdevReadConfigRequest{},
+			expErr: storage.FaultInvalidSPDKConfig(errors.New("json: unknown field \"retry_count\"")),
 		},
 		"good config path; good config": {
 			setup: func(t *testing.T, req *storage.BdevReadConfigRequest) {

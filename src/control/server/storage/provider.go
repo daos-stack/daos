@@ -678,8 +678,8 @@ func (p *Provider) UpdateBdevFirmware(req NVMeFirmwareUpdateRequest) (*NVMeFirmw
 	return p.bdev.UpdateFirmware(req)
 }
 
-// ValidateBdevConfig updates an existing SPDK bdev config, if necessary.
-func (p *Provider) ValidateBdevConfig(ctx context.Context, ctrlrs NvmeControllers) error {
+// UpgradeBdevConfig updates an existing SPDK bdev config, if necessary.
+func (p *Provider) UpgradeBdevConfig(ctx context.Context, ctrlrs NvmeControllers) error {
 	if !p.HasBlockDevices() {
 		return nil
 	}

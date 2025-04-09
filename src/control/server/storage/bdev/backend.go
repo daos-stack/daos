@@ -542,10 +542,15 @@ func (sb *spdkBackend) writeNvmeConfig(req storage.BdevWriteConfigRequest, confW
 	return errors.Wrap(confWriter(sb.log, &req), "write spdk nvme config")
 }
 
+// WriteConfig writes the SPDK configuration file.
 func (sb *spdkBackend) WriteConfig(req storage.BdevWriteConfigRequest) (*storage.BdevWriteConfigResponse, error) {
 	return &storage.BdevWriteConfigResponse{}, sb.writeNvmeConfig(req, writeJsonConfig)
 }
 
+// ReadConfig reads the SPDK configuration file.
+// NB: Currently returns an empty response struct if the file is read
+// and parsed successfully, but may be extended to return the
+// parsed configuration.
 func (sb *spdkBackend) ReadConfig(req storage.BdevReadConfigRequest) (*storage.BdevReadConfigResponse, error) {
 	if req.ConfigPath == "" {
 		return nil, errors.New("empty SPDK config path")
