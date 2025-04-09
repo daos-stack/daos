@@ -1,5 +1,8 @@
 #!/bin/bash
 
+ls -al
+find . --name "*.json"
+
 # Use default python as that's where storage_estimator is installed.
 python3.11 -m venv venv
 # shellcheck disable=SC1091
