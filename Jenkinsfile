@@ -1237,7 +1237,7 @@ pipeline {
                                           'code_coverage_Unit_Test_with_memcheck_on_EL_8.8',
                                           'code_coverage_Unit_Test_bdev_with_memcheck_on_EL_8.8'],
                                 script: 'ci/code_coverage_report.sh',
-                                label: 'Code Coverage Report')
+                                label: 'Code Coverage Report'))
                     }
                     post {
                         always {
