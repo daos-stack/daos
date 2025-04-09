@@ -308,6 +308,9 @@ pipeline {
         booleanParam(name: 'CI_large_md_on_ssd_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Large MD on SSD test stage')
+        booleanParam(name: 'CI_CODE_COVERAGE',
+                     defaultValue: true,
+                     description: 'Run with code coverage analysis')
         string(name: 'CI_UNIT_VM1_LABEL',
                defaultValue: 'ci_vm1',
                description: 'Label to use for 1 VM node unit and RPM tests')
@@ -631,7 +634,7 @@ pipeline {
                                        stash_opt: true,
                                        scons_args: sconsArgs() +
                                                   ' PREFIX=/opt/daos TARGET_TYPE=release',
-                                       test_coverage: true))
+                                       test_coverage: params.CI_CODE_COVERAGE))
                     }
                     post {
                         unsuccessful {
@@ -1211,17 +1214,45 @@ pipeline {
                 }
             }
         } // stage('Test Hardware')
+        stage('Test Summary') {
+            stage('Code Coverage Report') {
+                    when {
+                        beforeAgent true
+                        expression { params.CI_CODE_COVERAGE }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.test_summary'
+                            label 'docker_code_coverage'
+                            additionalBuildArgs dockerBuildArgs(add_repos: false)
+                        }
+                    }
+                    steps {
+                        job_step_update(
+                            codeCoverageReport(
+                                stashes: ['code_coverage_Unit_Test_on_EL_8.8',
+                                          'code_coverage_Unit_Test_bdev_on_EL_8.8',
+                                          'code_coverage_NLT_on_EL_8.8',
+                                          'code_coverage_Unit_Test_with_memcheck_on_EL_8.8',
+                                          'code_coverage_Unit_Test_bdev_with_memcheck_on_EL_8.8'],
+                                script: 'ci/code_coverage_report.sh',
+                                label: 'Code Coverage Report')
+                    }
+                    post {
+                        always {
+                            archiveArtifacts artifacts: 'code_coverage_report/*',
+                                             allowEmptyArchive: false
+                            job_status_update()
+                        }
+                    }
+                }
+        }
     } // stages
     post {
         always {
             valgrindReportPublish valgrind_stashes: ['el8-gcc-nlt-memcheck',
                                                      'el8-gcc-unit-memcheck',
                                                      'fault-inject-valgrind']
-            codeCoverageReport stashes: ['code_coverage_Unit_Test_on_EL_8.8',
-                                         'code_coverage_Unit_Test_bdev_on_EL_8.8',
-                                         'code_coverage_NLT_on_EL_8.8',
-                                         'code_coverage_Unit_Test_with_memcheck_on_EL_8.8',
-                                         'code_coverage_Unit_Test_bdev_with_memcheck_on_EL_8.8']
             job_status_update('final_status')
             jobStatusWrite(job_status_internal)
         }

@@ -84,7 +84,7 @@ source venv/bin/activate
 
 pip install --upgrade pip
 pip install --requirement requirements-utest.txt
-pip install --requirement requirements-coverage.txt
+pip install --requirement requirements-code-coverage.txt
 
 pip install /opt/daos/lib/daos/python/
 
