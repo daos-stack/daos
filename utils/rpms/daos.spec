@@ -23,7 +23,7 @@
 
 Name:          daos
 Version:       2.7.101
-Release:       8%{?relval}%{?dist}
+Release:       9%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -390,6 +390,8 @@ install -m 644 utils/systemd/%{server_svc_name} %{buildroot}/%{_unitdir}
 %endif
 install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
 mkdir -p %{buildroot}/%{conf_dir}/certs/clients
+mkdir -p %{buildroot}/%{_var}/log/daos-server
+mkdir -p %{buildroot}/%{_var}/log/daos-client
 mv %{buildroot}/%{conf_dir}/bash_completion.d %{buildroot}/%{_sysconfdir}
 # fixup env-script-interpreters
 sed -i -e '1s/env //' %{buildroot}%{daoshome}/TESTING/ftest/{cart/cart_logtest,cart/daos_sys_logscan,config_file_gen,launch,slurm_setup,tags,verify_perms}.py
@@ -460,6 +462,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %doc README.md
 %config(noreplace) %attr(0644,root,root) %{conf_dir}/daos_server.yml
 %dir %attr(0700,daos_server,daos_server) %{conf_dir}/certs/clients
+%dir %attr(0755,daos_server,daos_server) %{_var}/log/daos-server
 # set daos_server_helper to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_server) %{_bindir}/daos_server_helper
 # set daos_server to be setgid daos_server in order to invoke daos_server_helper
@@ -533,6 +536,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{python3_sitearch}/pydaos/raw/*.py
 %dir %{python3_sitearch}/pydaos/torch
 %{python3_sitearch}/pydaos/torch/*.py
+%dir %{_var}/log/daos-client
 %if (0%{?rhel} >= 8)
 %dir %{python3_sitearch}/pydaos/__pycache__
 %{python3_sitearch}/pydaos/__pycache__/*.pyc
@@ -637,6 +641,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Apr 3 2025 Samirkumar Raval <samirkumar.raval@hpe.com> 2.7.101-9
+- Changing the default log location to /var/log/daos from /tmp
+
 * Fri Mar 21 2025  Cedric Koch-Hofer <cedric.koch-hofer@intel.com> 2.7.101-8
 - Add support of the libasan
 
