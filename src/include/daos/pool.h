@@ -83,7 +83,7 @@
  * Version 1 corresponds to 2.2 (aggregation optimizations)
  * Version 2 corresponds to 2.4 (dynamic evtree, checksum scrubbing)
  * Version 3 corresponds to 2.6 (root embedded values, pool service operations tracking KVS)
- * Version 4 corresponds to 2.8 (SV gang allocation)
+ * Version 4 corresponds to 2.8 (SV gang allocation, server pool/cont hdls)
  */
 #define DAOS_POOL_GLOBAL_VERSION 4
 
