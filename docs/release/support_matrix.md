@@ -11,17 +11,17 @@ can be searched for known issues and possible solutions.
 Community support is provided on a best effort basis
 without any guaranteed SLAs.
 
-The Intel DAOS engineering team
+The DAOS engineering team
 can also be contracted to provide Commercial Level-3 Support for DAOS.
-Under such a support agreement, Intel partners that offer DAOS
+Under such a support agreement, DAOS Foundation partners that offer DAOS
 Commercial Support to their end customers will provide the DAOS
 Level-1 and Level-2 support. They can then escalate Level-2 support
-tickets to the Intel Level-3 support team
+tickets to the DAOS Level-3 support team
 through a dedicated JIRA path with well-defined SLAs.
 Please refer to the [DAOS Foundation landing page](https://daos.io/)
 for information on the DAOS partner ecosystem.
 
-This document describes the supported environments for Intel Level-3 support
+This document describes the supported environments for Level-3 support
 at the DAOS Version 2.6 level.
 Information for future releases is indicative only and may change.
 Partner support offerings may impose further constraints, for example if they
@@ -73,9 +73,9 @@ when using Optane Persistent Memory.
 DAOS Version 2.6 supports the _Metadata-on-SSD_ (phase 1) feature
 for production environments.  This code path uses DRAM memory to hold the
 DAOS metadata, and persists the DAOS metadata on NVMe SSDs through
-a write-ahead log (WAL) and asynchronous metadata checkpointing. 
+a write-ahead log (WAL) and asynchronous metadata checkpointing.
 
-More details on the Metadata-on-SSD functionality can be found in the 
+More details on the Metadata-on-SSD functionality can be found in the
 article [DAOS beyond Persistent Memory](https://doi.org/10.1007/978-3-031-40843-4_26)
 in the _ISC High Performance 2023 International Workshops proceedings_
 and in the DAOS Administration Guide.
@@ -132,10 +132,11 @@ distribute the load by allocating different network ports to different tasks.
 The DAOS software stack is built and supported on
 Linux for the x86\_64 architecture.
 
-DAOS Version 2.6.0 has been primarily validated on
+DAOS Version 2.6 has been primarily validated on
 [Rocky Linux 8.8](https://docs.rockylinux.org/release_notes/8_8/),
 [Rocky Linux 9.2](https://docs.rockylinux.org/release_notes/9.2/),
-and [openSUSE Leap 15.5](https://en.opensuse.org/openSUSE:Roadmap).
+[openSUSE Leap 15.5](https://en.opensuse.org/openSUSE:Roadmap),
+and [openSUSE Leap 15.6](https://en.opensuse.org/openSUSE:Roadmap).
 The following subsections provide details on the Linux distributions
 which DAOS Version 2.6 supports on DAOS servers.
 
@@ -147,19 +148,23 @@ cluster can run the same or different Linux distributions.
 ### SUSE Linux Enterprise Server 15 and openSUSE Leap 15
 
 DAOS Version 2.6.0 is supported on SLES 15 SP5 and openSUSE Leap 15.5.
+Support for SLES 15 SP6 and openSUSE Leap 15.6 was added with DAOS Version 2.6.3.
 
-General support for SLES 15 SP4 has ended on 31-Dec-2023.
+General support for SLES 15 SP4 has ended on 31-Dec-2023,
+and general support for SLES 15 SP5 has ended on 31-Dec-2024.
 DAOS nodes running unsupported SLES 15 or openSUSE Leap 15 levels
-have to be updated to a supported SLES 15 or openSUSE Leap 15 level
+should be updated to a supported SLES 15 or openSUSE Leap 15 level
 before updating DAOS to version 2.6.
 
 Links to SLES 15 Release Notes:
 
 * [SLES 15 SP5](https://www.suse.com/releasenotes/x86_64/SUSE-SLES/15-SP5/)
+* [SLES 15 SP6](https://www.suse.com/releasenotes/x86_64/SUSE-SLES/15-SP6/)
 
 Links to openSUSE Leap 15 Release Notes:
 
 * [openSUSE Leap 15.5](https://doc.opensuse.org/release-notes/x86_64/openSUSE/Leap/15.5/)
+* [openSUSE Leap 15.6](https://doc.opensuse.org/release-notes/x86_64/openSUSE/Leap/15.6/)
 
 Refer to the [SLES Life Cycle](https://www.suse.com/lifecycle/)
 description on the SUSE support website for information on SLES support phases.
@@ -167,7 +172,7 @@ description on the SUSE support website for information on SLES support phases.
 
 ### Enterprise Linux 8 (EL8): RHEL 8, Rocky Linux 8, AlmaLinux 8
 
-DAOS Version 2.6.0 is supported on EL 8.8 with Extended Update Support (EUS) and on EL 8.10.
+DAOS Version 2.6 is supported on EL 8.8 with Extended Update Support (EUS) and on EL 8.10.
 EL 8.9 (which is no longer supported by RedHat) has not been validated with DAOS 2.6.
 
 Links to RHEL 8 Release Notes:
@@ -196,7 +201,7 @@ for information on RHEL support phases.
 
 ### Enterprise Linux 9 (EL9): RHEL 9, Rocky Linux 9, AlmaLinux 9
 
-DAOS Version 2.6.0 is supported on EL 9.2 with Extended Update Support (EUS) and on EL 9.4.
+DAOS Version 2.6 is supported on EL 9.2 with Extended Update Support (EUS) and on EL 9.4.
 EL 9.3 (which is no longer supported by RedHat) has not been validated with DAOS 2.6.
 
 Links to RHEL 9 Release Notes:
@@ -258,7 +263,8 @@ to vendor-specific information for the supported networking hardware.
 
 With the exception of UCX for InfiniBand networks,
 OFI libfabric is the recommended networking stack for DAOS.
-DAOS Version 2.6.0 ships with libfabric version 1.19.1
+DAOS Version 2.6.0 and 2.6.1 ship with libfabric version 1.19.1;
+DAOS Version 2.6.2 and 2.6.3 ship with libfabric version 1.22.0
 (but see below for DAOS on HPE Slingshot).
 It is strongly recommended to use exactly the provided libfabric version
 on all DAOS servers and all DAOS clients.
@@ -267,6 +273,7 @@ Links to libfabric releases on github (the RPM distribution of DAOS
 includes libfabric RPM packages with the correct version):
 
 * [libfabric 1.19.1](https://github.com/ofiwg/libfabric/releases/tag/v1.19.1)
+* [libfabric 1.22.0](https://github.com/ofiwg/libfabric/releases/tag/v1.22.0)
 
 Not all libfabric core providers listed in
 [fi\_provider(7)](https://ofiwg.github.io/libfabric/main/man/fi_provider.7.html)
@@ -288,13 +295,13 @@ are supported by DAOS. The following providers are supported:
 
 !!! note
     The `ofi+opx` provider for Omni-Path Express on Omni-Path fabrics
-    is not yet supported with DAOS Version 2.6. It may be enabled in a
-    future DAOS release when validation of the OPX provides has been
-    successfully completed.
+    has known gaps and is not yet supported with DAOS Version 2.6.
+    It may be enabled in a future DAOS release when validation of the
+    OPX provider has been successfully completed.
 
 !!! note
     The `ofi+psm2` provider for Omni-Path fabrics has known issues
-    when used with DAOS, and it has been removed from DAOS Version 2.6.
+    when used with DAOS, and is not supported by DAOS Version 2.6.
 
 !!! note
     The `ofi+psm3` provider for Ethernet fabrics has not been validated with
@@ -307,16 +314,16 @@ For InfiniBand fabrics, DAOS 2.6 also supports [UCX](https://openucx.org/),
 which is maintained by the Unified Communication Framework (UCF) consortium.
 
 DAOS Version 2.6 has been validated with UCX Version 1.17.0-1
-which is included in MLNX\_OFED 24.04-0.6.6.0.
-Older versions of MLNX\_OFED are not supported.
+which is included in MLNX\_OFED 24.04-0.6.6.0,
+and with UCX Version 1.18.0 which is included in the MLNX\_OFED 24.10 LTS branch.
+MLNX\_OFED versions older than 24.04 are not supported.
 
-* The `ucx+ud_x` provider has been validated and is supported with
-  DAOS Version 2.6.0.
+* The `ucx+dc_mlx5` provider has been validated and is supported with
+  DAOS Version 2.6.2 and higher.
   It is the recommended fabric provider on large InfiniBand fabrics.
 
-* The `ucx+dc_x` provider has been validated and is supported with
-  DAOS Version 2.6.0. It does not scale as high as `ucx+ud_x`
-  but may provide better performance in smaller-scale InfiniBand fabrics.
+* The `ucx+ud_x` and `ucx+dc_x` providers have been validated in small scale
+  InfiniBand environments only. The recommended provider on UCX is `ucx+dc_mlx5`.
 
 * The `ucx+tcp` provider can be used for evaluation and testing
   purposes, but it has not been fully validated with DAOS Version 2.6.
@@ -330,11 +337,13 @@ fabrics, DAOS requires that the
 software stack is installed on the DAOS servers and DAOS clients.
 
 DAOS Version 2.6 has been validated with MLNX\_OFED 24.04-0.6.6.0.
-Older versions of MLNX\_OFED are not supported.
+Validation with the MLNX\_OFED 24.10 LTS branch is in progress.
+MLNX\_OFED versions older than 24.04 are not supported.
 
 Links to MLNX\_OFED Release Notes:
 
-* [MLNX\_OFED 23.10-0.5.5.0](https://docs.nvidia.com/networking/display/mlnxofedv23100550/release+notes) (November 7, 2023)
+* [MLNX\_OFED 24.04-0.6.6.0](https://docs.nvidia.com/networking/display/mlnxofedv24040660/release+notes) (May 4, 2024)
+* [MLNX\_OFED 24.10-2.1.8.0](https://docs.nvidia.com/networking/display/mlnxofedv24102180lts/release+notes) (February 28, 2025)
 
 It is strongly recommended that all DAOS servers and all DAOS clients
 run the same version of MLNX\_OFED, and that the InfiniBand adapters are
@@ -393,7 +402,7 @@ is encoded in 16 of the 32 "DAOS internal bits" within the
 DAOS Version 2.6 has been validated at the following scales:
 
 * DAOS client nodes in a DAOS system:   300
-* DAOS servers in a DAOS system:        642
+* DAOS servers in a DAOS system:        800
 * DAOS engines per DAOS server:         1, 2 and 4
 * DAOS engines per CPU socket:          1 and 2
 * DAOS targets per DAOS engine:         4-32

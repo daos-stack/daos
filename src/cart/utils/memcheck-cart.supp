@@ -713,3 +713,51 @@
    fun:_cgo_b590e4e2531a_Cfunc_daos_init
    fun:runtime.asmcgocall.abi0
 }
+{
+   tsan::MemoryAccessRange
+   Memcheck:Value8
+   fun:_ZN6__tsan18MemoryAccessRangeTILb1EEEvPNS_11ThreadStateEmmm
+   fun:racecall
+}
+{
+   bytealg.cmpbody 32-bit
+   Memcheck:Addr32
+   fun:cmpbody
+}
+{
+   bytealg.cmpbody 16-bit
+   Memcheck:Addr16
+   fun:cmpbody
+}
+{
+   bytealg.cmpbody 8-bit
+   Memcheck:Addr8
+   fun:cmpbody
+}
+{
+   bytealg.cmpbody 1-bit
+   Memcheck:Addr1
+   fun:cmpbody
+}
+{
+   bytealg.indexbytebody
+   Memcheck:Addr16
+   fun:indexbytebody
+}
+{
+   bytealg.countbody
+   Memcheck:Addr16
+   fun:countbody
+}
+{
+   __tsan_go_atomic32_fetch_add
+   Memcheck:Addr4
+   fun:__tsan_go_atomic32_fetch_add
+   fun:racecall
+}
+{
+   __tsan_go_atomic64_fetch_add
+   Memcheck:Addr8
+   fun:__tsan_go_atomic64_fetch_add
+   fun:racecall
+}

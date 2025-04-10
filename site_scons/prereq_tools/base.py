@@ -1,5 +1,6 @@
 # Copyright 2016-2024 Intel Corporation
 # Copyright 2025 Google LLC
+# Copyright 2025 Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -568,7 +569,7 @@ class PreReqComponent:
         self._build_targets = []
 
         build_dir = self.__env['BUILD_DIR']
-        main_targets = ['client', 'server']
+        main_targets = ['server', 'client']
         targets = ['test'] + main_targets
         self.__env.Alias('client', build_dir)
         self.__env.Alias('server', build_dir)
@@ -587,6 +588,7 @@ class PreReqComponent:
                     print("test target requires client or server")
                     sys.exit(1)
                 self._build_targets.append('test')
+
         BUILD_TARGETS.append(build_dir)
 
         env.AddMethod(self.require, "require")
