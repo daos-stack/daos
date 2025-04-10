@@ -10,18 +10,16 @@ Package providing libraries needed by DAOS
 %files pmdk
 %{_libdir}/libdaospmem.so.*
 %{_libdir}/libdaospmemobj.so.*
+%{_libdir}/libdaospmem2.so.*
+%{_libdir}/libdaospmempool.so.*
 %{_bindir}/daospmem*
 %{_sysconfdir}/bash_completion.d/daospmempool
-%{_bindir}/daospmre*
-%{_bindir}/daosdaxio
 %license deps/pmdk/LICENSE
 %doc deps/pmdk/ChangeLog deps/pmdk/CONTRIBUTING.md deps/pmdk/README.md
+%exclude %{_bindir}/daospmre*
+%exclude %{_bindir}/daosdaxio
 %exclude %{_datadir}/pmreorder
-%exclude %{_includedir}/daos_internal/libpmem2*
-%exclude %{_includedir}/daos_internal/libpmempool*
 %exclude %{_libdir}/pmdk_debug/*
-%exclude %{_libdir}/libdaospmem2*
-%exclude %{_libdir}/libdaospmempool*
 %exclude %{_libdir}/daos_internal/libpmem2*
 %exclude %{_libdir}/daos_internal/libpmempool*
 
@@ -36,14 +34,15 @@ Package providing libraries needed by DAOS
 %defattr(-,root,root,-)
 %{_libdir}/libdaospmem.so
 %{_libdir}/libdaospmemobj.so
-%{_libdir}/daos_internal/libpmem.so*
-%{_libdir}/daos_internal/libpmemobj.so*
+%{_libdir}/libdaospmem2.so
+%{_libdir}/libdaospmempool.so
+%{_libdir}/daos_internal/*.so*
 %{_includedir}/daos_internal/libpmemobj.h
 %{_includedir}/daos_internal/libpmemobj/*.h
 %{_libdir}/pkgconfig/libdaospmemobj.pc
 %{_libdir}/pkgconfig/libdaospmem.pc
-%exclude %{_libdir}/pkgconfig/libdaospmempool.pc
-%exclude %{_libdir}/pkgconfig/libdaospmem2.pc
+%{_libdir}/pkgconfig/libdaospmempool.pc
+%{_libdir}/pkgconfig/libdaospmem2.pc
 %license deps/pmdk/LICENSE
 %doc deps/pmdk/ChangeLog deps/pmdk/CONTRIBUTING.md deps/pmdk/README.md
 %else
