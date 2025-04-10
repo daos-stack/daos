@@ -130,9 +130,16 @@ jobs:
                             --build-arg DAOS_KEEP_SRC=yes
                             --tag build-image
       - name: Build and Test
-        run: docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
-              --env COMPILER --env DEPS_JOBS --user root:root build-image
-              ./daos/utils/ci/run_in_gha.sh
+        run: docker run
+                            --name build-post
+                            --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
+                            --env COMPILER
+                            --env DEPS_JOBS
+                            --cap-add SYS_ADMIN
+                            --device /dev/fuse
+                            --security-opt apparmor:unconfined
+                            --user root:root
+                            build-image ./daos/utils/ci/run_in_gha.sh
       - name: Fetch results
         if: always()
         run: docker cp build-post:/home/daos/daos/nlt-junit.xml ./

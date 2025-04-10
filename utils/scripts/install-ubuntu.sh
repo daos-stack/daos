@@ -12,7 +12,7 @@
 
 set -e
 
-arch=$(uname -i)
+arch=$(uname -m)
 
 apt-get install \
     autoconf \
@@ -21,6 +21,7 @@ apt-get install \
     clang-format \
     cmake \
     curl \
+    fuse3 \
     git \
     golang-go \
     kmod \
