@@ -16,7 +16,7 @@
 #include <pthread.h>
 
 #include "shm_internal.h"
-#include <gurt/shm_alloc.h>
+#include <gurt/shm_utils.h>
 
 /* the name of shared memory used for mmap which will be found under /dev/shm/ */
 #define daos_shm_name "daos_shm_cache"
@@ -44,6 +44,8 @@ struct shm_pool_local shm_pool_list[N_SHM_FIXED_POOL];
 static int            pid_shm_creator;
 
 static uint64_t       page_size;
+
+extern __thread pid_t d_tid;
 
 static int
 create_shm_region(uint64_t shm_size, uint64_t shm_pool_size)
@@ -115,6 +117,9 @@ create_shm_region(uint64_t shm_size, uint64_t shm_pool_size)
 	d_shm_head->magic = DSM_MAGIC;
 	/* initialization is finished now. */
 	close(shm_ht_fd);
+
+	shm_thread_data_init();
+
 	return 0;
 
 err_unmap:
@@ -214,6 +219,8 @@ open_rw:
 		shm_pool_list[i].freeable = false;
 	}
 
+	shm_thread_data_init();
+
 	return 0;
 
 err_unmap:
@@ -230,13 +237,14 @@ shm_alloc_comm(size_t align, size_t size)
 {
 	int      idx_allocator;
 	void    *buf;
-	int      tid;
 	uint32_t hash;
 	uint64_t oldref;
 
 	if (idx_small < 0) {
-		tid  = syscall(SYS_gettid);
-		hash = d_hash_string_u32((const char *)&tid, sizeof(int));
+		if (d_tid == 0)
+			d_tid = syscall(SYS_gettid);
+
+		hash = d_hash_string_u32((const char *)&d_tid, sizeof(int));
 		/* choose a memory allocator based on tid */
 		idx_small = hash % N_SHM_FIXED_POOL;
 	}
