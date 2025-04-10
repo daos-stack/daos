@@ -1,4 +1,4 @@
-# Set of variables for Rocky 8
+# Set of variables for Rocky 9
 # yamllint disable rule:line-length
 
 daos_openmpi_module_path: /usr/share/modulefiles/mpi/openmpi-x86_64
@@ -21,8 +21,8 @@ daos_common_deps:
     - numatop
     - platform-python
     - psmisc
-    - python36
-    - python3.11-devel
+    - python3
+    - python3-devel
     - python3-pexpect
     - python3-wheel
     - systemd
@@ -42,14 +42,13 @@ daos_dev_deps:
     - python3.11-devel
     - python3-clustershell
     - python3-pip
-    - python3-wheel
     - rpmdevtools
     - rpm-build
     - spdk-devel
 
 daos_client_deps:
   rpms:
-    - compat-hwloc1
+    - hwloc
     - fuse3
     - fuse3-libs
     - libaec
@@ -61,8 +60,7 @@ daos_client_deps:
 
 daos_server_deps:
   rpms:
-    - compat-hwloc1
-    - dpdk
+    - hwloc
     - ipmctl
     - libipmctl
     - libpmemobj

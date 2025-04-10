@@ -9,11 +9,11 @@
     #  - appstream
     name: "{{ daos_dev_deps.rpms }}"
 
-- name: Install DAOS install-el8.sh
+- name: Install DAOS install-el9.sh
   become: true
   copy:
-    src: "{{ daos_source_dir }}/utils/scripts/install-el8.sh"
-    dest: /root/install-el8.sh
+    src: "{{ daos_source_dir }}/utils/scripts/install-el9.sh"
+    dest: /root/install-el9.sh
     owner: root
     group: root
     mode: '0644'
@@ -30,12 +30,12 @@
 - name: Install DAOS devs installer
   become: true
   copy:
-    src: file/install_dev-el8.sh
-    dest: /root/install_dev-el8.sh
+    src: file/install_dev-el9.sh
+    dest: /root/install_dev-el9.sh
     owner: root
     group: root
     mode: '0644'
 
 - name: Install packages required for building DAOS
   become: true
-  command: /bin/bash /root/install_dev-el8.sh
+  command: /bin/bash /root/install_dev-el9.sh
