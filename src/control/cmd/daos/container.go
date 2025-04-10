@@ -163,6 +163,8 @@ type containerCreateCmd struct {
 }
 
 func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
+	defer cmd.Properties.Cleanup()
+
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
@@ -179,10 +181,6 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 			return err
 		}
 		cmd.contLabel = cmd.Args.Label
-	}
-
-	if cmd.Properties.props != nil {
-		ap.props = cmd.Properties.props
 	}
 
 	if cmd.PoolID().Empty() {
@@ -246,11 +244,15 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 }
 
 func (cmd *containerCreateCmd) contCreate() (string, error) {
-	props, cleanupProps, err := cmd.getCreateProps()
+	createProps, err := cmd.getCreateProps()
 	if err != nil {
 		return "", err
 	}
-	defer cleanupProps()
+	var cProps *C.daos_prop_t
+	if createProps != nil {
+		defer createProps.Free()
+		cProps = (*C.daos_prop_t)(createProps.ToPtr()) // TODO: Remove with ContainerCreate API
+	}
 
 	var rc C.int
 	var contUUID C.uuid_t
@@ -278,12 +280,12 @@ func (cmd *containerCreateCmd) contCreate() (string, error) {
 			defer freeString(hint)
 			C.strncpy(&attr.da_hints[0], hint, C.DAOS_CONT_HINT_MAX_LEN-1)
 		}
-		attr.da_props = props
+		attr.da_props = cProps
 
 		dfsErrno := C.dfs_cont_create(cmd.cPoolHandle, &contUUID, &attr, nil, nil)
 		rc = C.daos_errno2der(dfsErrno)
 	} else {
-		rc = C.daos_cont_create(cmd.cPoolHandle, &contUUID, props, nil)
+		rc = C.daos_cont_create(cmd.cPoolHandle, &contUUID, cProps, nil)
 	}
 	if err := daosError(rc); err != nil {
 		return "", errors.Wrap(err, "failed to create container")
@@ -333,10 +335,10 @@ func (cmd *containerCreateCmd) contCreate() (string, error) {
 	return contID, nil
 }
 
-func (cmd *containerCreateCmd) getCreateProps() (*C.daos_prop_t, func(), error) {
+func (cmd *containerCreateCmd) getCreateProps() (*daos.ContainerPropertyList, error) {
 	var numEntries int
-	if cmd.Properties.props != nil {
-		numEntries = int(cmd.Properties.props.dpp_nr)
+	if cmd.Properties.propList != nil {
+		numEntries = cmd.Properties.propList.Count()
 	}
 
 	if cmd.ACLFile != "" {
@@ -356,52 +358,42 @@ func (cmd *containerCreateCmd) getCreateProps() (*C.daos_prop_t, func(), error) 
 	}
 
 	if numEntries == 0 {
-		return nil, func() {}, nil
+		return nil, nil
 	}
 
-	props, entries, err := allocProps(numEntries)
+	createPropList, err := daos.AllocateContainerPropertyList(numEntries)
 	if err != nil {
-		return nil, nil, err
+		return nil, errors.Wrap(err, "failed to allocate container create property list")
 	}
 
-	var propIdx int
-	if cmd.Properties.props != nil {
-		for _, oldEntry := range unsafe.Slice(cmd.Properties.props.dpp_entries, cmd.Properties.props.dpp_nr) {
-			rc := C.daos_prop_entry_copy(&oldEntry, &entries[propIdx])
-			if err := daosError(rc); err != nil {
-				C.daos_prop_free(props)
-				return nil, nil, errors.Wrap(err, "failed to copy container properties")
-			}
-			propIdx++
-		}
+	if err := createPropList.CopyFrom(cmd.Properties.propList); err != nil {
+		createPropList.Free()
+		return nil, errors.Wrap(err, "failed to clone container create property list")
 	}
 
 	if cmd.ACLFile != "" {
 		// The ACL becomes part of the daos_prop_t and will be freed with that structure
 		cACL, _, err := aclFileToC(cmd.ACLFile)
 		if err != nil {
-			C.daos_prop_free(props)
-			return nil, nil, err
+			createPropList.Free()
+			return nil, err
 		}
-		entries[propIdx].dpe_type = C.DAOS_PROP_CO_ACL
-		C.set_dpe_val_ptr(&entries[propIdx], unsafe.Pointer(cACL))
-		propIdx++
+		aclProp := createPropList.MustAddEntryByType(daos.ContainerPropACL)
+		aclProp.SetValuePtr(unsafe.Pointer(cACL))
 	}
 
 	if cmd.Group != "" {
 		// The group string becomes part of the daos_prop_t and will be freed with that structure
-		entries[propIdx].dpe_type = C.DAOS_PROP_CO_OWNER_GROUP
-		C.set_dpe_str(&entries[propIdx], C.CString(cmd.Group.String()))
-		propIdx++
+		grpProp := createPropList.MustAddEntryByType(daos.ContainerPropGroup)
+		grpProp.SetString(cmd.Group.String())
 	}
 
 	if hasType() {
-		entries[propIdx].dpe_type = C.DAOS_PROP_CO_LAYOUT_TYPE
-		C.set_dpe_val(&entries[propIdx], C.ulong(cmd.Type.Type))
-		propIdx++
+		typeProp := createPropList.MustAddEntryByType(daos.ContainerPropLayoutType)
+		typeProp.SetValue(uint64(cmd.Type.Type))
 	}
-	props.dpp_nr = C.uint32_t(numEntries)
-	return props, func() { C.daos_prop_free(props) }, nil
+
+	return createPropList, nil
 }
 
 type existingContainerCmd struct {
@@ -1001,6 +993,8 @@ func (cmd *containerGetPropCmd) Execute(args []string) error {
 		}
 		cmd.Args.Props = cmd.PropsFlag
 	}
+	defer cmd.Args.Props.Cleanup()
+
 	if len(cmd.Args.Props.names) == 0 {
 		// Ensure that things are set up correctly for the default case.
 		if err := cmd.Args.Props.UnmarshalFlag(""); err != nil {
@@ -1020,39 +1014,19 @@ func (cmd *containerGetPropCmd) Execute(args []string) error {
 	}
 	defer cleanup()
 
-	props, freeProps, err := getContainerProperties(cmd.cContHandle, cmd.Args.Props.names...)
-	defer freeProps()
+	propList, err := cmd.container.GetProperties(cmd.MustLogCtx(), cmd.Args.Props.names...)
 	if err != nil {
-		return errors.Wrapf(err,
-			"failed to fetch properties for container %s",
-			cmd.ContainerID())
+		return errors.Wrapf(err, "failed to fetch properties for container %s", cmd.ContainerID())
 	}
-
-	if len(cmd.Args.Props.names) == len(propHdlrs) {
-		aclProps, cleanupAcl, err := getContAcl(cmd.cContHandle)
-		if err != nil && err != daos.NoPermission {
-			return errors.Wrapf(err,
-				"failed to query ACL for container %s",
-				cmd.ContainerID())
-		}
-		if cleanupAcl != nil {
-			defer cleanupAcl()
-		}
-		for _, prop := range aclProps {
-			if prop.entry.dpe_type == C.DAOS_PROP_CO_ACL {
-				props = append(props, prop)
-				break
-			}
-		}
-	}
+	defer propList.Free()
 
 	if cmd.JSONOutputEnabled() {
-		return cmd.OutputJSON(props, nil)
+		return cmd.OutputJSON(propList.Properties(), nil)
 	}
 
 	title := fmt.Sprintf("Properties for container %s", cmd.ContainerID())
 	var bld strings.Builder
-	printProperties(&bld, title, props...)
+	pretty.PrintContainerProperties(&bld, title, propList.Properties()...)
 
 	cmd.Info(bld.String())
 
@@ -1073,7 +1047,6 @@ func (cmd *containerSetPropCmd) Execute(args []string) error {
 		if err := cmd.Args.Props.UnmarshalFlag(args[len(args)-1]); err != nil {
 			return err
 		}
-		defer cmd.Args.Props.Cleanup()
 	}
 	if len(cmd.PropsFlag.ParsedProps) > 0 {
 		if len(cmd.Args.Props.ParsedProps) > 0 {
@@ -1081,6 +1054,8 @@ func (cmd *containerSetPropCmd) Execute(args []string) error {
 		}
 		cmd.Args.Props = cmd.PropsFlag
 	}
+	defer cmd.Args.Props.Cleanup()
+
 	if len(cmd.Args.Props.ParsedProps) == 0 {
 		return errors.New("property name and value are required")
 	}
@@ -1097,14 +1072,11 @@ func (cmd *containerSetPropCmd) Execute(args []string) error {
 	}
 	defer cleanup()
 
-	rc := C.daos_cont_set_prop(ap.cont, cmd.Args.Props.props, nil)
-	if err := daosError(rc); err != nil {
-		return errors.Wrapf(err, "failed to set properties on container %s",
-			cmd.ContainerID())
+	if err := cmd.container.SetProperties(cmd.MustLogCtx(), cmd.Args.Props.propList); err != nil {
+		return errors.Wrapf(err, "failed to set properties on container %s", cmd.ContainerID())
 	}
 
 	cmd.Info("Properties were successfully set")
-
 	return nil
 }
 

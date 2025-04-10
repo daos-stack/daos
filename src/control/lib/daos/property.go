@@ -14,6 +14,8 @@ import (
 )
 
 /*
+#include <daos_errno.h>
+#include <gurt/common.h>
 #include <daos_prop.h>
 
 static inline char *
@@ -29,7 +31,7 @@ static inline uint64_t
 get_dpe_val(struct daos_prop_entry *dpe)
 {
 	if (dpe == NULL)
-		return 0;
+		return -1;
 
 	return dpe->dpe_val;
 }
@@ -44,7 +46,7 @@ get_dpe_val_ptr(struct daos_prop_entry *dpe)
 }
 
 static inline bool
-dpe_is_negative(struct daos_prop_entry *dpe)
+dpe_is_unset(struct daos_prop_entry *dpe)
 {
 	if (dpe == NULL)
 		return 0;
@@ -52,34 +54,48 @@ dpe_is_negative(struct daos_prop_entry *dpe)
 	return dpe->dpe_flags & DAOS_PROP_ENTRY_NOT_SET;
 }
 
-static inline void
+static inline int
 set_dpe_str(struct daos_prop_entry *dpe, d_string_t str)
 {
-	if (dpe == NULL)
-		return;
+	if (dpe == NULL || str == NULL)
+		return -DER_INVAL;
 
-	dpe->dpe_str = str;
+	// Duplicate the string with the DAOS allocator to avoid
+	// false positives in NLT testing.
+	// NB: Caller must free the source string.
+	D_ASPRINTF(dpe->dpe_str, "%s", str);
+	if (dpe->dpe_str == NULL)
+		return -DER_NOMEM;
+
+	return 0;
 }
 
-static inline void
+static inline int
 set_dpe_val(struct daos_prop_entry *dpe, uint64_t val)
 {
 	if (dpe == NULL)
-		return;
+		return -DER_INVAL;
 
 	dpe->dpe_val = val;
+	return 0;
 }
 
-static inline void
+static inline int
 set_dpe_val_ptr(struct daos_prop_entry *dpe, void *val_ptr)
 {
 	if (dpe == NULL)
-		return;
+		return -DER_INVAL;
 
 	dpe->dpe_val_ptr = val_ptr;
+	return 0;
 }
 */
 import "C"
+
+var (
+	// ErrPropertyListImmutable indicates that the property list should not be modified or reused.
+	ErrPropertyListImmutable = errors.New("property list is immutable")
+)
 
 type (
 	property struct {
@@ -88,98 +104,99 @@ type (
 	}
 
 	propertyList struct {
-		cProps  *C.daos_prop_t
-		entries []C.struct_daos_prop_entry
-	}
-
-	ContainerProperty struct {
-		property
-	}
-
-	ContainerPropertyList struct {
-		propertyList
+		cProps    *C.daos_prop_t
+		entries   []C.struct_daos_prop_entry
+		immutable bool
 	}
 )
 
-func (p *property) GetString() string {
-	return C.GoString(C.get_dpe_str(p.entry))
+// IsUnset returns true if the property value is unset.
+func (p *property) IsUnset() bool {
+	return bool(C.dpe_is_unset(p.entry))
 }
 
+// GetString returns the property value as a string.
+func (p *property) GetString() string {
+	dpeStr := C.get_dpe_str(p.entry)
+	if dpeStr == nil {
+		return ""
+	}
+
+	return C.GoString(dpeStr)
+}
+
+// GetValue returns the property value as a uint64.
 func (p *property) GetValue() uint64 {
 	return uint64(C.get_dpe_val(p.entry))
 }
 
+// GetValuePtr returns an unsafe.Pointer wrapping the
+// C pointer stored in the property.
 func (p *property) GetValuePtr() unsafe.Pointer {
 	return unsafe.Pointer(C.get_dpe_val_ptr(p.entry))
 }
 
-func (p *property) SetString(str string) {
-	C.set_dpe_str(p.entry, C.d_string_t(C.CString(str)))
+// SetString sets the property value to the supplied string.
+func (p *property) SetString(str string) error {
+	// The string will be copied in set_dpe_str() and then
+	// freed via daos_prop_free().
+	cStr, free := toCString(str)
+	defer free()
+	return ErrorFromRC(int(C.set_dpe_str(p.entry, cStr)))
 }
 
-func (p *property) SetValue(val uint64) {
-	C.set_dpe_val(p.entry, C.uint64_t(val))
+// SetValue sets the property value to the supplied value.
+func (p *property) SetValue(val uint64) error {
+	return ErrorFromRC(int(C.set_dpe_val(p.entry, C.uint64_t(val))))
 }
 
-func (p *property) SetValuePtr(val unsafe.Pointer) {
-	C.set_dpe_val_ptr(p.entry, val)
+// SetValuePtr sets the property value to the supplied pointer.
+// NB: The pointer must be in C-allocated memory!
+func (p *property) SetValuePtr(val unsafe.Pointer) error {
+	return ErrorFromRC(int(C.set_dpe_val_ptr(p.entry, val)))
 }
 
 func (p *property) String() string {
-	propStr := p.GetString()
-	if propStr == "" {
-		ptr := p.GetValuePtr()
-		if ptr == nil {
-			propStr = fmt.Sprintf("%d", p.GetValue())
-		} else {
-			propStr = fmt.Sprintf("%p", ptr)
-		}
-	}
-
-	return propStr
+	return fmt.Sprintf("%+v", p.entry)
 }
 
-func newPropertyList(count uint) (*propertyList, error) {
-	props := C.daos_prop_alloc(C.uint(count))
-	if props == nil {
-		return nil, errors.Wrap(NoMemory, "failed to allocate property list")
+func newPropertyList(count int) (*propertyList, error) {
+	if count < 0 {
+		return nil, errors.Wrap(InvalidInput, "negative count")
+	}
+
+	cProps := C.daos_prop_alloc(C.uint(count))
+	if cProps == nil {
+		return nil, errors.Wrap(NoMemory, "failed to allocate DAOS property list")
 	}
 
 	// Set to zero initially, will be incremented as properties are added.
-	props.dpp_nr = 0
+	cProps.dpp_nr = 0
 
 	return &propertyList{
-		cProps:  props,
-		entries: unsafe.Slice(props.dpp_entries, count),
+		cProps:  cProps,
+		entries: unsafe.Slice(cProps.dpp_entries, count),
 	}, nil
 }
 
-func propertyListFromPtr(ptr unsafe.Pointer) (*propertyList, error) {
-	if ptr == nil {
-		return nil, errors.Wrap(InvalidInput, "nil pointer")
-	}
-
-	props := (*C.daos_prop_t)(ptr)
-	return &propertyList{
-		cProps:  props,
-		entries: unsafe.Slice(props.dpp_entries, props.dpp_nr),
-	}, nil
-}
-
+// Free releases the underlying C property list.
 func (pl *propertyList) Free() {
+	if pl == nil {
+		return
+	}
 	C.daos_prop_free(pl.cProps)
 }
 
-func (pl *propertyList) Properties() (props []*property) {
-	for i := range pl.entries {
-		props = append(props, &property{
-			idx:   C.int(i),
-			entry: &pl.entries[i],
-		})
-	}
-	return
+// Count returns the number of properties in the property list.
+func (pl *propertyList) Count() int {
+	return int(pl.cProps.dpp_nr)
 }
 
+// ToPtr returns an unsafe.Pointer to the underlying C property list.
+// Callers must cast it to a *C.daos_prop_t when passing it to libdaos
+// API functions. The property list may not be modified after this
+// call, in order to avoid undefined behavior.
 func (pl *propertyList) ToPtr() unsafe.Pointer {
+	pl.immutable = true
 	return unsafe.Pointer(pl.cProps)
 }

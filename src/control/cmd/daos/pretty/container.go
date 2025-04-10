@@ -92,3 +92,35 @@ func PrintContainers(out io.Writer, poolID string, containers []*daos.ContainerI
 	tf.InitWriter(txtfmt.NewIndentWriter(out))
 	tf.Format(table)
 }
+
+// PrintContainerProperties generates a human-readable representation of the
+// supplied slice of container properties and writes it to the supplied io.Writer.
+func PrintContainerProperties(out io.Writer, header string, props ...*daos.ContainerProperty) {
+	fmt.Fprintf(out, "%s\n", header)
+
+	if len(props) == 0 {
+		fmt.Fprintln(out, "  No properties found.")
+		return
+	}
+
+	nameTitle := "Name"
+	valueTitle := "Value"
+	titles := []string{nameTitle}
+
+	table := []txtfmt.TableRow{}
+	for _, prop := range props {
+		row := txtfmt.TableRow{}
+		row[nameTitle] = fmt.Sprintf("%s (%s)", prop.Description, prop.Name)
+		if prop.StringValue() != "" {
+			row[valueTitle] = prop.StringValue()
+			if len(titles) == 1 {
+				titles = append(titles, valueTitle)
+			}
+		}
+		table = append(table, row)
+	}
+
+	tf := txtfmt.NewTableFormatter(titles...)
+	tf.InitWriter(out)
+	tf.Format(table)
+}
