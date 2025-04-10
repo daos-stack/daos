@@ -20,7 +20,7 @@
 /* the tid mask we actually use instead of 0x3FFFFFFF (FUTEX_TID_MASK) since NON_ROBUST takes one
  * bit.
  */
-#define TID_MASK         (0x1FFFFFFF)
+#define TID_MASK   (0x1FFFFFFF)
 
 /* the address of head of robust mutex list maintained by pthread */
 static __thread struct robust_list_head *thread_robust_head;
@@ -95,7 +95,7 @@ shm_rwlock_fi_here(void)
 
 /* only triggered one time */
 static inline void
-shm_rwlock_fi_here_uniqe(const char *file,  int line)
+shm_rwlock_fi_here_uniqe(const char *file, int line)
 {
 #if FAULT_INJECTION
 	uint64_t                fi_counter;
@@ -130,11 +130,11 @@ shm_rwlock_fi_here_uniqe(const char *file,  int line)
 int
 thread_monitor_init(void)
 {
-	int                     rc;
-	int                     err;
-	int                     tid_masked;
-	d_shm_mutex_t          *mutex;
-	bool                    created;
+	int            rc;
+	int            err;
+	int            tid_masked;
+	d_shm_mutex_t *mutex;
+	bool           created;
 
 	D_ASSERT(d_tid != 0);
 	D_ASSERT(ht_tid.ht_head != NULL);
@@ -216,7 +216,7 @@ static void insert_robust_futex_to_list(d_shm_mutex_t *mutex)
 {
 	d_shm_mutex_t *next_mutex;
 
-	__asm ("" ::: "memory");
+	__asm("" ::: "memory");
 	next_mutex = (d_shm_mutex_t *)((char *)((struct robust_list *)thread_robust_head)->next -
 				       NEXT_OFFSET_IN_MUTEX);
 	next_mutex->prev = (struct robust_list *)&mutex->next;
@@ -226,13 +226,14 @@ static void insert_robust_futex_to_list(d_shm_mutex_t *mutex)
 	((struct robust_list *)thread_robust_head)->next = (struct robust_list *)&mutex->next;
 }
 
-static void remove_robust_futex_from_list(d_shm_mutex_t *mutex)
+static void
+remove_robust_futex_from_list(d_shm_mutex_t *mutex)
 {
 	d_shm_mutex_t *target_mutex;
 	d_shm_mutex_t *prev_mutex;
 	d_shm_mutex_t *next_mutex;
 
-	__asm ("" ::: "memory");
+	__asm("" ::: "memory");
 	target_mutex = (d_shm_mutex_t *)((char *)((struct robust_list *)thread_robust_head)->next -
 					 NEXT_OFFSET_IN_MUTEX);
 	do {
@@ -245,7 +246,7 @@ static void remove_robust_futex_from_list(d_shm_mutex_t *mutex)
 	next_mutex->prev = mutex->prev;
 	prev_mutex       = (d_shm_mutex_t *)((char *)mutex->prev - NEXT_OFFSET_IN_MUTEX);
 	prev_mutex->next = mutex->next;
-	__asm ("" ::: "memory");
+	__asm("" ::: "memory");
 	mutex->next = NULL;
 	mutex->prev = NULL;
 }
@@ -310,28 +311,29 @@ static int
 shm_mutex_lock_ex(d_shm_mutex_t *mutex, const struct timespec *timeout, bool *pre_owner_dead,
 		  bool robust)
 {
-	int oldval;
-	int newval;
-	int ncall_futex_wait             = 0;
+	int          oldval;
+	int          newval;
+	int          ncall_futex_wait    = 0;
 	unsigned int other_futex_waiters = 0;
 
 	if (pre_owner_dead)
 		*pre_owner_dead = false;
-	__asm ("" ::: "memory");
+	__asm("" ::: "memory");
 	thread_robust_head->list_op_pending = (struct robust_list *)&mutex->next;
-	__asm ("" ::: "memory");
+	__asm("" ::: "memory");
 	oldval = mutex->lock;
 
 	while (1) {
 		/* Try to acquire the lock through a CAS */
-		newval = robust ? (d_tid & (~NOT_ROBUST)):(d_tid | NOT_ROBUST);
-		oldval = __sync_val_compare_and_swap((int *)&mutex->lock, 0, newval | other_futex_waiters);
+		newval = robust ? (d_tid & (~NOT_ROBUST)) : (d_tid | NOT_ROBUST);
+		oldval = __sync_val_compare_and_swap((int *)&mutex->lock, 0,
+						     newval | other_futex_waiters);
 		if (oldval == 0)
 			break;
 
 		if ((oldval & FUTEX_OWNER_DIED) != 0) {
 			/* The previous owner died.  Try locking the mutex.  */
-			newval = robust ? (d_tid & (~NOT_ROBUST)):(d_tid | NOT_ROBUST);
+			newval = robust ? (d_tid & (~NOT_ROBUST)) : (d_tid | NOT_ROBUST);
 			newval |= (oldval & FUTEX_WAITERS) | other_futex_waiters;
 			newval = __sync_val_compare_and_swap((int *)&mutex->lock, oldval, newval);
 			if (newval != oldval) {
@@ -373,8 +375,8 @@ shm_mutex_lock_ex(d_shm_mutex_t *mutex, const struct timespec *timeout, bool *pr
 		oldval = mutex->lock;
 	}
 
-	D_ASSERT((mutex->lock & TID_MASK)== (d_tid & TID_MASK));
-	__asm ("" ::: "memory");
+	D_ASSERT((mutex->lock & TID_MASK) == (d_tid & TID_MASK));
+	__asm("" ::: "memory");
 	if (robust)
 		insert_robust_futex_to_list(mutex);
 	/* clear op_pending after we enqueue the mutex. */
@@ -400,16 +402,16 @@ shm_mutex_unlock_ex(d_shm_mutex_t *mutex, bool ignore_owner_tid)
 	if (((oldvalue & TID_MASK) != (d_tid & TID_MASK)) && (!ignore_owner_tid))
 		return EPERM;
 
-	__asm ("" ::: "memory");
+	__asm("" ::: "memory");
 	thread_robust_head->list_op_pending = (struct robust_list *)&mutex->next;
-	__asm ("" ::: "memory");
+	__asm("" ::: "memory");
 	if ((oldvalue & TID_MASK) == (d_tid & TID_MASK) && (ignore_owner_tid == false))
 		remove_robust_futex_from_list(mutex);
 
 	oldvalue = atomic_exchange(&mutex->lock, 0);
 	if ((oldvalue & FUTEX_WAITERS) != 0)
 		futex_wake((unsigned int *)&mutex->lock);
-	__asm ("" ::: "memory");
+	__asm("" ::: "memory");
 	/* clear op_pending after we enqueue the mutex. */
 	thread_robust_head->list_op_pending = NULL;
 
@@ -445,7 +447,7 @@ int
 shm_rwlock_destroy(d_shm_rwlock_t *rwlock)
 {
 	if (rwlock->max_num_reader > DEFAULT_MAX_NUM_READERS)
-		shm_free((char*)d_shm_head + rwlock->off_tid_readers);
+		shm_free((char *)d_shm_head + rwlock->off_tid_readers);
 
 	memset(rwlock, 0, sizeof(d_shm_rwlock_t));
 
@@ -474,7 +476,8 @@ does_rwlock_list_need_shrinking(d_shm_rwlock_t *rwlock)
 		return true;
 
 	slot_saved = (int)(rwlock->max_num_reader * (1.0f - SHRINK_FACTOR));
-	if (slot_saved >= SLOT_SAVED_CUTOFF && (((int)(rwlock->max_num_reader * SHRINK_FACTOR) - num_reader) > 4))
+	if (slot_saved >= SLOT_SAVED_CUTOFF &&
+	    (((int)(rwlock->max_num_reader * SHRINK_FACTOR) - num_reader) > 4))
 		return true;
 	return false;
 }
@@ -488,17 +491,17 @@ expand_rwlock_reader_list(d_shm_rwlock_t *rwlock)
 	long int off_tid_readers_save;
 
 	new_max_num_reader = (int)(rwlock->max_num_reader * EXPANSION_FACTOR + SMALL);
-	new_reader_list = shm_alloc(sizeof(int) * new_max_num_reader);
+	new_reader_list    = shm_alloc(sizeof(int) * new_max_num_reader);
 	if (new_reader_list == NULL)
 		return ENOMEM;
 	/* copy existing tid list of readers */
 	memcpy(new_reader_list, rwlock->off_tid_readers + (char *)d_shm_head,
 	       sizeof(int) * atomic_load(&rwlock->num_reader));
-	off_tid_readers_save = rwlock->off_tid_readers;
+	off_tid_readers_save    = rwlock->off_tid_readers;
 	rwlock->off_tid_readers = (long int)new_reader_list - (long int)d_shm_head;
 	/* free existing reader list */
 	if (rwlock->max_num_reader > DEFAULT_MAX_NUM_READERS)
-		shm_free((char*)d_shm_head + off_tid_readers_save);
+		shm_free((char *)d_shm_head + off_tid_readers_save);
 	rwlock->max_num_reader = new_max_num_reader;
 	return 0;
 }
@@ -511,8 +514,8 @@ shrink_rwlock_reader_list(d_shm_rwlock_t *rwlock)
 	int     *new_reader_list;
 	long int off_tid_readers_save;
 
-	new_max_num_reader = max((int)(rwlock->max_num_reader * SHRINK_FACTOR + SMALL),
-				 DEFAULT_MAX_NUM_READERS);
+	new_max_num_reader =
+	    max((int)(rwlock->max_num_reader * SHRINK_FACTOR + SMALL), DEFAULT_MAX_NUM_READERS);
 	num_reader = atomic_load(&rwlock->num_reader);
 	D_ASSERT(new_max_num_reader > num_reader);
 	if (new_max_num_reader > DEFAULT_MAX_NUM_READERS) {
@@ -525,10 +528,10 @@ shrink_rwlock_reader_list(d_shm_rwlock_t *rwlock)
 	/* copy existing tid list of readers */
 	memcpy(new_reader_list, rwlock->off_tid_readers + (char *)d_shm_head,
 	       sizeof(int) * num_reader);
-	off_tid_readers_save = rwlock->off_tid_readers;
+	off_tid_readers_save    = rwlock->off_tid_readers;
 	rwlock->off_tid_readers = (long int)new_reader_list - (long int)d_shm_head;
 	/* free existing reader list */
-	shm_free((char*)d_shm_head + off_tid_readers_save);
+	shm_free((char *)d_shm_head + off_tid_readers_save);
 	rwlock->max_num_reader = new_max_num_reader;
 
 	return 0;
@@ -567,7 +570,7 @@ shm_rwlock_refresh_reader_list(d_shm_rwlock_t *rwlock)
 	/* go through tid list to check whether processes still exist or not. Read lock is needed
 	 * to avoid race condition.
 	 */
-	tid_list = (int *)((char *)d_shm_head + rwlock->off_tid_readers);
+	tid_list   = (int *)((char *)d_shm_head + rwlock->off_tid_readers);
 	num_reader = atomic_load(&rwlock->num_reader);
 
 	for (i = 0; i < num_reader; i++) {
@@ -648,7 +651,7 @@ shm_rwlock_rd_lock(d_shm_rwlock_t *rwlock)
 			return rc;
 		}
 		/* append the new tid */
-		reader_list = (int *)(rwlock->off_tid_readers + (char *)d_shm_head);
+		reader_list             = (int *)(rwlock->off_tid_readers + (char *)d_shm_head);
 		reader_list[num_reader] = d_tid;
 		atomic_fetch_add(&rwlock->num_reader, 1);
 	}
@@ -714,9 +717,9 @@ shm_rwlock_rd_unlock(d_shm_rwlock_t *rwlock)
 		}
 	}
 	shm_rwlock_fi_here();
-	num_reader = atomic_load(&rwlock->num_reader);
+	num_reader     = atomic_load(&rwlock->num_reader);
 	dec_num_reader = false;
-	reader_list = (int *)(rwlock->off_tid_readers + (char *)d_shm_head);
+	reader_list    = (int *)(rwlock->off_tid_readers + (char *)d_shm_head);
 	/* remove the record in tid list of readers */
 	for (i = 0; i < num_reader; i++) {
 		if (reader_list[i] == d_tid) {
@@ -730,7 +733,7 @@ shm_rwlock_rd_unlock(d_shm_rwlock_t *rwlock)
 	}
 	shm_rwlock_fi_here();
 	D_ASSERT(dec_num_reader);
-        if (does_rwlock_list_need_shrinking(rwlock))
+	if (does_rwlock_list_need_shrinking(rwlock))
 		shrink_rwlock_reader_list(rwlock);
 
 	if (num_reader == 0)

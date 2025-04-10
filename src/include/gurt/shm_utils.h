@@ -11,13 +11,13 @@
 #include <stdatomic.h>
 
 /* default value for invalid offset pointer */
-#define INVALID_OFFSET (-1L)
+#define INVALID_OFFSET          (-1L)
 
-#define INVALID_FI_POINT 0x7FFFFFFF
-#define HT_NAME_FI "shm_rwlock_fi"
+#define INVALID_FI_POINT        0x7FFFFFFF
+#define HT_NAME_FI              "shm_rwlock_fi"
 
 /* memory block alignment in shared memory */
-#define SHM_MEM_ALIGN 4UL
+#define SHM_MEM_ALIGN           4UL
 
 /* default size of the pre-allocate buffer for tid list of readers in rwlock */
 #define DEFAULT_MAX_NUM_READERS (8)
@@ -25,13 +25,13 @@
 /* the offset of field "next" in struct pthread_mutex_t. Need to be consistent with the robust mutex
  * in pthread library.
  */
-#define NEXT_OFFSET_IN_MUTEX (32)
+#define NEXT_OFFSET_IN_MUTEX    (32)
 
 /* the struct of robust mutex based on shared memory */
 struct d_shm_mutex {
 	_Atomic int         lock;
 	/* this field is not used. It is used to be compatible with robust mutex in pthread */
-	char                padding[NEXT_OFFSET_IN_MUTEX - sizeof(void *)*1 - sizeof(int) * 1];
+	char                padding[NEXT_OFFSET_IN_MUTEX - sizeof(void *) * 1 - sizeof(int) * 1];
 	/* pointer to previous record of robust mutex */
 	struct robust_list *prev;
 	/* pointer to next record of robust mutex */
@@ -43,36 +43,35 @@ typedef struct d_shm_mutex d_shm_mutex_t;
 /* the struct of rwlock based on shared memory */
 struct d_shm_rwlock {
 	/* mutex to get the access to read */
-	d_shm_mutex_t           rlock;
+	d_shm_mutex_t rlock;
 	/* mutex to get the access to write */
-	d_shm_mutex_t           wlock;
+	d_shm_mutex_t wlock;
 
 	/* the maximum number of reader tid can be stored */
-	int                     max_num_reader;
+	int           max_num_reader;
 	/* current number of reader accessing rwlock */
-	_Atomic int             num_reader;
+	_Atomic int   num_reader;
 	/* offset of the array of readers' tid */
-	long int                off_tid_readers;
+	long int      off_tid_readers;
 	/**
 	 * pre-allocated space for tid list of readers. If the list is long, need to dynamically
 	 * allocate a larger memory block then.
 	 */
-	int                     tid_readers[DEFAULT_MAX_NUM_READERS];
+	int           tid_readers[DEFAULT_MAX_NUM_READERS];
 };
 
 typedef struct d_shm_rwlock d_shm_rwlock_t;
 
-
 /* the max length allowed for a hash table name */
-#define MAX_HT_NAME_LEN      16
+#define MAX_HT_NAME_LEN         16
 
 /* reserved string for d_shm_mutex_t as ht record value */
-#define INIT_KEY_VALUE_MUTEX "INIT_MUTEX"
+#define INIT_KEY_VALUE_MUTEX    "INIT_MUTEX"
 
 /* reserved string for d_shm_rwlock_t as ht record value */
-#define INIT_KEY_VALUE_RWLOCK "INIT_RWLOCK"
+#define INIT_KEY_VALUE_RWLOCK   "INIT_RWLOCK"
 
-#define HT_NAME_TID_MUTEX "TID_MUTEX"
+#define HT_NAME_TID_MUTEX       "TID_MUTEX"
 
 /* error code for hash table related functions */
 enum SHM_HT_ERROR {
@@ -165,7 +164,6 @@ struct d_shm_ht_rec_loc {
 };
 
 typedef struct d_shm_ht_rec_loc *d_shm_ht_rec_loc_t;
-
 
 /**
  * Initialize shared memory region in current process
@@ -372,8 +370,6 @@ shm_fi_set_p1(int fi_p);
 void
 shm_fi_set_p2(int fi_p);
 #endif
-
-
 
 /**
  * create a hash table with given name, size (2^bits), number of locks if it does not exist.
