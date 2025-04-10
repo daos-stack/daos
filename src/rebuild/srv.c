@@ -998,7 +998,7 @@ static void
 rebuild_global_pool_tracker_destroy(struct rebuild_global_pool_tracker *rgt)
 {
 	D_ASSERT(rgt->rgt_refcount == 0);
-	d_list_del(&rgt->rgt_list);
+	d_list_del_init(&rgt->rgt_list);
 	if (rgt->rgt_servers)
 		D_FREE(rgt->rgt_servers);
 	if (rgt->rgt_servers_sorted)
@@ -2086,7 +2086,7 @@ rgt_leader_stop(struct rebuild_global_pool_tracker *rgt)
 	rgt->rgt_abort = 1;
 
 	/* Remove it from the rgt list to avoid stopping rgt duplicately */
-	d_list_del(&rgt->rgt_list);
+	d_list_del_init(&rgt->rgt_list);
 
 	ABT_mutex_lock(rgt->rgt_lock);
 	ABT_cond_wait(rgt->rgt_done_cond, rgt->rgt_lock);
