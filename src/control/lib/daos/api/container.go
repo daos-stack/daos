@@ -111,8 +111,8 @@ func newContainerInfo(poolUUID, contUUID uuid.UUID, cInfo *C.daos_cont_info_t, p
 
 	if props != nil {
 		for _, prop := range props.Properties() {
-			switch prop.Type() {
-			case daos.ContainerPropLayout:
+			switch prop.Type {
+			case daos.ContainerPropLayoutType:
 				ci.Type = daos.ContainerLayout(prop.GetValue())
 			case daos.ContainerPropLabel:
 				ci.ContainerLabel = prop.GetString()
@@ -139,7 +139,7 @@ func newContainerInfo(poolUUID, contUUID uuid.UUID, cInfo *C.daos_cont_info_t, p
 }
 
 func (ch *ContainerHandle) String() string {
-	return ch.PoolHandle.String() + fmt.Sprintf(":%s:%t", ch.connHandle.String(), ch.IsValid())
+	return ch.PoolHandle.String() + fmt.Sprintf(":%s", ch.connHandle.String())
 }
 
 // Close performs a container close operation to release resources associated
@@ -410,28 +410,12 @@ func (ch *ContainerHandle) Query(ctx context.Context) (*daos.ContainerInfo, erro
 	return ContainerQuery(ch.toCtx(ctx), "", "", "")
 }
 
-// ContainerQuery queries the specified container and returns its information.
-func ContainerQuery(ctx context.Context, sysName, poolID, contID string) (*daos.ContainerInfo, error) {
-	queryOpenFlags := daos.ContainerOpenFlagReadOnly | daos.ContainerOpenFlagForce | daos.ContainerOpenFlagReadOnlyMetadata
-	contConn, cleanup, err := getContConn(ctx, sysName, poolID, contID, queryOpenFlags)
-	if err != nil {
-		return nil, err
+func contQuery(contConn *ContainerHandle, propList *daos.ContainerPropertyList) (*daos.ContainerInfo, error) {
+	var cProps *C.daos_prop_t
+	if propList != nil {
+		cProps = (*C.daos_prop_t)(propList.ToPtr())
 	}
-	defer cleanup()
-	logging.FromContext(ctx).Debugf("ContainerQuery(%s)", contConn)
 
-	props, err := daos.NewContainerPropertyList(4)
-	if err != nil {
-		return nil, err
-	}
-	defer props.Free()
-
-	props.MustAddEntryType(daos.ContainerPropLayout)
-	props.MustAddEntryType(daos.ContainerPropLabel)
-	props.MustAddEntryType(daos.ContainerPropRedunFactor)
-	props.MustAddEntryType(daos.ContainerPropStatus)
-
-	cProps := (*C.daos_prop_t)(props.ToPtr())
 	var dci C.daos_cont_info_t
 	if err := daosError(daos_cont_query(contConn.daosHandle, &dci, cProps, nil)); err != nil {
 		return nil, errors.Wrap(err, "failed to query container")
@@ -447,7 +431,7 @@ func ContainerQuery(ctx context.Context, sysName, poolID, contID string) (*daos.
 		return nil, errors.Errorf("queried container UUID != handle UUID: %s != %s", ciUUID, contConn.connHandle.UUID)
 	}
 
-	info := newContainerInfo(contConn.PoolHandle.UUID(), contConn.UUID(), &dci, props)
+	info := newContainerInfo(contConn.PoolHandle.UUID(), contConn.UUID(), &dci, propList)
 	if info.Type == daos.ContainerLayoutPOSIX {
 		posixAttrs, err := containerQueryDFSAttrs(contConn)
 		if err != nil {
@@ -457,6 +441,30 @@ func ContainerQuery(ctx context.Context, sysName, poolID, contID string) (*daos.
 	}
 
 	return info, nil
+}
+
+// ContainerQuery queries the specified container and returns its information.
+func ContainerQuery(ctx context.Context, sysName, poolID, contID string) (*daos.ContainerInfo, error) {
+	queryOpenFlags := daos.ContainerOpenFlagReadOnly | daos.ContainerOpenFlagForce | daos.ContainerOpenFlagReadOnlyMetadata
+	contConn, cleanup, err := getContConn(ctx, sysName, poolID, contID, queryOpenFlags)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+	logging.FromContext(ctx).Debugf("ContainerQuery(%s)", contConn)
+
+	propList, err := daos.AllocateContainerPropertyList(4)
+	if err != nil {
+		return nil, err
+	}
+	defer propList.Free()
+
+	propList.MustAddEntryByType(daos.ContainerPropLayoutType)
+	propList.MustAddEntryByType(daos.ContainerPropLabel)
+	propList.MustAddEntryByType(daos.ContainerPropRedunFactor)
+	propList.MustAddEntryByType(daos.ContainerPropStatus)
+
+	return contQuery(contConn, propList)
 }
 
 // ListAttributes calls ContainerListAttributes() for the container in the handle.
@@ -554,4 +562,94 @@ func ContainerDeleteAttributes(ctx context.Context, sysName, poolID, contID stri
 	}
 
 	return delDaosAttributes(contConn.daosHandle, contAttr, attrNames)
+}
+
+// GetProperties calls ContainerGetProperties() for the container in the handle.
+func (ch *ContainerHandle) GetProperties(ctx context.Context, propNames ...string) (*daos.ContainerPropertyList, error) {
+	if !ch.IsValid() {
+		return nil, ErrInvalidContainerHandle
+	}
+	return ContainerGetProperties(ch.toCtx(ctx), "", "", "", propNames...)
+}
+
+// ContainerGetProperties fetches the specified container properties. If no
+// property names are provided, all properties are fetched.
+func ContainerGetProperties(ctx context.Context, sysName, poolID, contID string, propNames ...string) (*daos.ContainerPropertyList, error) {
+	contConn, cleanup, err := getContConn(ctx, sysName, poolID, contID, daos.ContainerOpenFlagReadOnlyMetadata)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+
+	logging.FromContext(ctx).Debugf("ContainerGetProperties(%s:%+v)", contConn, propNames)
+	if err := ctx.Err(); err != nil {
+		return nil, ctxErr(err)
+	}
+
+	propList, err := daos.NewContainerPropertyList(propNames...)
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err = contQuery(contConn, propList); err != nil {
+		if !(len(propNames) == 0 && errors.Is(err, daos.NoPermission)) {
+			propList.Free()
+			return nil, err
+		}
+
+		// Special-case: If the request is for all properties, and it fails with -DER_NO_PERM,
+		// retry the request without the acl property. Maintains backward-compatible behavior with
+		// the previous daos tool implementation.
+		newPropList, err := daos.NewContainerPropertyList()
+		if err != nil {
+			propList.Free()
+			return nil, err
+		}
+		if err := newPropList.DelEntryByType(daos.ContainerPropACL); err != nil {
+			propList.Free()
+			newPropList.Free()
+			return nil, err
+		}
+		propList.Free()
+		propList = newPropList
+
+		if _, err = contQuery(contConn, propList); err != nil {
+			propList.Free()
+			return nil, err
+		}
+	}
+
+	return propList, nil
+}
+
+// SetProperties calls ContainerSetProperties() for the container in the handle.
+func (ch *ContainerHandle) SetProperties(ctx context.Context, propList *daos.ContainerPropertyList) error {
+	if !ch.IsValid() {
+		return ErrInvalidContainerHandle
+	}
+	return ContainerSetProperties(ch.toCtx(ctx), "", "", "", propList)
+}
+
+// ContainerSetProperties sets the specified container properties.
+func ContainerSetProperties(ctx context.Context, sysName, poolID, contID string, propList *daos.ContainerPropertyList) error {
+	if propList == nil {
+		return errors.New("nil property list")
+	}
+
+	contConn, cleanup, err := getContConn(ctx, sysName, poolID, contID, daos.ContainerOpenFlagReadOnlyMetadata)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	logging.FromContext(ctx).Debugf("ContainerSetProperties(%s:%+v)", contConn, propList)
+	if err := ctx.Err(); err != nil {
+		return ctxErr(err)
+	}
+
+	if err := daosError(daos_cont_set_prop(contConn.daosHandle, (*C.daos_prop_t)(propList.ToPtr()), nil)); err != nil {
+		return errors.Wrap(err, "failed to set container properties")
+	}
+
+	return nil
 }
