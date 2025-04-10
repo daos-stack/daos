@@ -1228,7 +1228,7 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.test_summary'
-                            label 'docker_code_coverage'
+                            label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(add_repos: false)
                         }
                     }

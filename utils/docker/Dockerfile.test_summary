@@ -1,7 +1,7 @@
 #
 # Copyright 2018-2022, Intel Corporation
 #
-# 'recipe' for Docker for code scanning.
+# 'recipe' for Docker for test summary.
 #
 
 ARG FVERSION=latest
