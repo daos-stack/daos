@@ -334,7 +334,7 @@ dcsc_prop_free(tse_task_t *task, void *data)
 }
 
 int
-daos_cont_status_clear(daos_handle_t coh, daos_event_t *ev)
+daos_cont_set_healthy(daos_handle_t coh, daos_event_t *ev)
 {
 	daos_cont_set_prop_t	*args;
 	daos_prop_t		*prop;
@@ -348,8 +348,7 @@ daos_cont_status_clear(daos_handle_t coh, daos_event_t *ev)
 
 	entry = &prop->dpp_entries[0];
 	entry->dpe_type = DAOS_PROP_CO_STATUS;
-	entry->dpe_val = DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_HEALTHY,
-						 DAOS_PROP_CO_CLEAR, 0);
+	entry->dpe_val = DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_HEALTHY, DAOS_PROP_CSF_HEALTHY, 0);
 
 	DAOS_API_ARG_ASSERT(*args, CONT_SET_PROP);
 	rc = dc_task_create(dc_cont_set_prop, NULL, ev, &task);
@@ -371,6 +370,19 @@ daos_cont_status_clear(daos_handle_t coh, daos_event_t *ev)
 	}
 
 	return dc_task_schedule(task, true);
+}
+
+/* alias for back-compatibility */
+#undef daos_cont_status_clear
+int
+daos_cont_status_clear(daos_handle_t coh, daos_event_t *ev)
+		       __attribute__ ((weak, alias("daos_cont_set_healthy")));
+
+int
+daos_cont_set_ro(daos_handle_t coh, daos_event_t *ev)
+{
+	D_ERROR("Unsupported API\n");
+	return -DER_NOSYS;
 }
 
 int
