@@ -57,7 +57,7 @@ type Config struct {
 	ExcludeFabricIfaces common.StringSet           `yaml:"exclude_fabric_ifaces,omitempty"`
 	IncludeFabricIfaces common.StringSet           `yaml:"include_fabric_ifaces,omitempty"`
 	FabricInterfaces    []*NUMAFabricConfig        `yaml:"fabric_ifaces,omitempty"`
-	ProviderIdx         uint                       // TODO SRS-31: Enable with multiprovider functionality
+	ProviderIdx         uint                       `yaml:"provider_idx"`
 	TelemetryPort       int                        `yaml:"telemetry_port,omitempty"`
 	TelemetryEnabled    bool                       `yaml:"telemetry_enabled,omitempty"`
 	TelemetryRetain     time.Duration              `yaml:"telemetry_retain,omitempty"`
