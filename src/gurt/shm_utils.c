@@ -325,7 +325,7 @@ shm_mutex_lock_ex(d_shm_mutex_t *mutex, const struct timespec *timeout, bool *pr
 	while (1) {
 		/* Try to acquire the lock through a CAS */
 		newval = robust ? (d_tid & (~NOT_ROBUST)):(d_tid | NOT_ROBUST);
-		oldval = __sync_val_compare_and_swap(&mutex->lock, 0, newval | other_futex_waiters);
+		oldval = __sync_val_compare_and_swap((int *)&mutex->lock, 0, newval | other_futex_waiters);
 		if (oldval == 0)
 			break;
 
@@ -333,7 +333,7 @@ shm_mutex_lock_ex(d_shm_mutex_t *mutex, const struct timespec *timeout, bool *pr
 			/* The previous owner died.  Try locking the mutex.  */
 			newval = robust ? (d_tid & (~NOT_ROBUST)):(d_tid | NOT_ROBUST);
 			newval |= (oldval & FUTEX_WAITERS) | other_futex_waiters;
-			newval = __sync_val_compare_and_swap (&mutex->lock, oldval, newval);
+			newval = __sync_val_compare_and_swap((int *)&mutex->lock, oldval, newval);
 			if (newval != oldval) {
 				oldval = newval;
 				continue;
@@ -351,7 +351,8 @@ shm_mutex_lock_ex(d_shm_mutex_t *mutex, const struct timespec *timeout, bool *pr
 		 * the meantime.
 		 */
 		if ((oldval & FUTEX_WAITERS) == 0) {
-			if (!__sync_bool_compare_and_swap (&mutex->lock, oldval, oldval | FUTEX_WAITERS)) {
+			if (!__sync_bool_compare_and_swap((int *)&mutex->lock, oldval,
+			    oldval | FUTEX_WAITERS)) {
 				oldval = mutex->lock;
 				continue;
 			}
@@ -672,7 +673,7 @@ shm_rwlock_rd_lock(d_shm_rwlock_t *rwlock)
 					/* The mutex owner does not exist any more. This is a
 					 * non-robust mutex
 					 */
-					if (__sync_bool_compare_and_swap(&(rwlock->wlock.lock),
+					if (__sync_bool_compare_and_swap((int *)&rwlock->wlock.lock,
 									 oldvalue, 0)) {
 						/* mutex is unlocked by force */
 						break;
@@ -780,7 +781,7 @@ trylock:
 	if (is_thread_ended(oldvalue & TID_MASK) && (oldvalue & NOT_ROBUST) &&
 	    atomic_load(&rwlock->num_reader) == 0)
 		/* no reader and mutex is still in locked state by a reader, then unlock by force */
-		__sync_bool_compare_and_swap(&(rwlock->wlock.lock), oldvalue, 0);
+		__sync_bool_compare_and_swap((int *)&rwlock->wlock.lock, oldvalue, 0);
 	shm_mutex_unlock_ex(&rwlock->rlock, false);
 
 	goto trylock;
