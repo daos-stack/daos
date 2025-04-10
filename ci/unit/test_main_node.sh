@@ -94,7 +94,7 @@ if [[ -n $(find build -name "*.gcda") ]]; then
     # Run gcovr in a python 3.11 environment
     deactivate
     python3.11 -m venv venv-code-coverage
-    # shellcheck disable=SC1091
+    # Shellcheck disable=SC1091
     source venv/bin/activate
     touch venv/pip.conf
     pip config set global.progress_bar off
