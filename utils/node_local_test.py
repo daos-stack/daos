@@ -1055,6 +1055,8 @@ class DaosServer():
                                          delete=False) as log_file:
             log_name = log_file.name
             cmd_env['D_LOG_FILE'] = log_name
+            with open(log_name, 'w', encoding='utf-8') as lf:
+                lf.write(f'cmd: {" ".join(cmd)}\n')
 
         cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
 
@@ -1741,6 +1743,8 @@ def run_daos_cmd(conf,
                                      delete=False) as log_file:
         log_name = log_file.name
         cmd_env['D_LOG_FILE'] = log_name
+        with open(log_file.name, 'w', encoding='utf-8') as lf:
+            lf.write(f'cmd: {" ".join(cmd)}\n')
 
     cmd_env['DAOS_AGENT_DRPC_DIR'] = conf.agent_dir
 
