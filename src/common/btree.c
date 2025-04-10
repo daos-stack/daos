@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -171,9 +172,8 @@ static int btr_class_init(umem_off_t root_off,
 			  uint64_t *tree_feats, struct umem_attr *uma,
 			  daos_handle_t coh, void *priv,
 			  struct btr_instance *tins);
-static struct btr_record *btr_node_rec_at(struct btr_context *tcx,
-					  umem_off_t nd_off,
-					  unsigned int at);
+static struct btr_record             *
+btr_node_rec_at(struct btr_context *tcx, umem_off_t nd_off, int at);
 static int btr_node_insert_rec(struct btr_context *tcx,
 			       struct btr_trace *trace,
 			       struct btr_record *rec);
@@ -696,11 +696,11 @@ btr_rec_size(struct btr_context *tcx)
 }
 
 static struct btr_record *
-btr_rec_at(struct btr_context *tcx, struct btr_record *rec, int at)
+btr_rec_next(struct btr_context *tcx, struct btr_record *rec)
 {
 	char	*buf = (char *)rec;
 
-	buf += at * btr_rec_size(tcx); /* NB: at can be negative */
+	buf += btr_rec_size(tcx);
 	return (struct btr_record *)buf;
 }
 
@@ -776,12 +776,12 @@ btr_node_tx_add(struct btr_context *tcx, umem_off_t nd_off)
 /* helper functions */
 
 static struct btr_record *
-btr_node_rec_at(struct btr_context *tcx, umem_off_t nd_off,
-		unsigned int at)
+btr_node_rec_at(struct btr_context *tcx, umem_off_t nd_off, int at)
 {
 	struct btr_node *nd = btr_off2ptr(tcx, nd_off);
 	char		*addr = (char *)&nd[1];
 
+	D_ASSERTF(at >= 0, "Invalid position %d in node " DF_X64 "\n", at, nd_off);
 	return (struct btr_record *)&addr[btr_rec_size(tcx) * at];
 }
 
@@ -997,7 +997,7 @@ btr_embedded_create_hash(struct btr_context *tcx, bool force)
 /**
  * Create btr_node for the empty root, insert the first \a rec into it.
  */
-int
+static int
 btr_root_start(struct btr_context *tcx, struct btr_record *rec, d_iov_t *key, bool embed)
 {
 	struct btr_root		*root;
@@ -1414,10 +1414,9 @@ btr_node_split_and_insert(struct btr_context *tcx, struct btr_trace *trace,
 	trace->tr_at -= right;
 
 	/* Copy from @rec_src[1] because @rec_src[0] will bubble up.
-	 * NB: call btr_rec_at instead of using array index, see btr_record.
+	 * NB: call btr_rec_next instead of using array index, see btr_record.
 	 */
-	btr_rec_copy(tcx, rec_dst, btr_rec_at(tcx, rec_src, 1),
-		     nd_right->tn_keyn);
+	btr_rec_copy(tcx, rec_dst, btr_rec_next(tcx, rec_src), nd_right->tn_keyn);
 
 	/* backup it because the below btr_node_insert_rec_only may
 	 * overwrite it.
@@ -2341,7 +2340,6 @@ btr_insert(struct btr_context *tcx, d_iov_t *key, d_iov_t *val, d_iov_t *val_out
 					DP_RC(rc));
 			return rc;
 		}
-
 	} else {
 		/* Tree is either empty or only has an embedded value */
 		D_DEBUG(DB_TRACE, "Add record %s to %s\n", rec_str,
@@ -2610,16 +2608,13 @@ btr_node_del_leaf_only(struct btr_context *tcx, struct btr_trace *trace,
 		/* shift left records which are on the right side of the
 		 * deleted record.
 		 */
-		btr_rec_move(tcx, rec, btr_rec_at(tcx, rec, 1),
-			     nd->tn_keyn - trace->tr_at);
-
+		btr_rec_move(tcx, rec, btr_rec_next(tcx, rec), nd->tn_keyn - trace->tr_at);
 	} else if (!shift_left && trace->tr_at != 0) {
 		/* shift right records which are on the left side of the
 		 * deleted record.
 		 */
 		rec = btr_node_rec_at(tcx, trace->tr_node, 0);
-		btr_rec_move(tcx, btr_rec_at(tcx, rec, 1), rec,
-			     trace->tr_at);
+		btr_rec_move(tcx, btr_rec_next(tcx, rec), rec, trace->tr_at);
 	}
 
 	return 0;
@@ -2658,8 +2653,12 @@ btr_node_del_leaf_rebal(struct btr_context *tcx,
 	int			 rc;
 
 	cur_nd = btr_off2ptr(tcx, cur_tr->tr_node);
+	D_ASSERT(cur_nd->tn_keyn == 1);
+	D_ASSERT(cur_nd->tn_flags & BTR_NODE_LEAF);
+
 	sib_nd = btr_off2ptr(tcx, sib_off);
 	D_ASSERT(sib_nd->tn_keyn > 1);
+	D_ASSERT(sib_nd->tn_flags & BTR_NODE_LEAF);
 
 	rc = btr_node_del_leaf_only(tcx, cur_tr, sib_on_right, args);
 	if (rc != 0)
@@ -2676,8 +2675,7 @@ btr_node_del_leaf_rebal(struct btr_context *tcx,
 					  cur_nd->tn_keyn);
 		btr_rec_copy(tcx, dst_rec, src_rec, 1);
 		/* shift left remainded record on the sibling */
-		btr_rec_move(tcx, src_rec, btr_rec_at(tcx, src_rec, 1),
-			     sib_nd->tn_keyn - 1);
+		btr_rec_move(tcx, src_rec, btr_rec_next(tcx, src_rec), sib_nd->tn_keyn - 1);
 
 		/* copy the first hkey of the right sibling node to the
 		 * parent node.
@@ -2750,9 +2748,7 @@ btr_node_del_leaf_merge(struct btr_context *tcx,
 			"cur:sib=%d:%d\n", dst_nd->tn_keyn, src_nd->tn_keyn);
 
 		src_rec = btr_node_rec_at(tcx, sib_off, 0);
-		dst_rec = btr_node_rec_at(tcx, cur_tr->tr_node,
-					  dst_nd->tn_keyn);
-
+		dst_rec = btr_node_rec_at(tcx, cur_tr->tr_node, dst_nd->tn_keyn);
 	} else {
 		/* move all records from the current node to the left
 		 * sibling node.
@@ -2893,20 +2889,16 @@ btr_node_del_child_only(struct btr_context *tcx, struct btr_trace *trace,
 		if (trace->tr_at != nd->tn_keyn) {
 			rec = btr_node_rec_at(tcx, trace->tr_node,
 					      trace->tr_at);
-			btr_rec_move(tcx, rec, btr_rec_at(tcx, rec, 1),
-				     nd->tn_keyn - trace->tr_at);
+			btr_rec_move(tcx, rec, btr_rec_next(tcx, rec), nd->tn_keyn - trace->tr_at);
 		}
-
 	} else {
 		/* shift right those records that are on the left side of the
 		 * deleted record.
 		 */
 		if (trace->tr_at != 0) {
 			rec = btr_node_rec_at(tcx, trace->tr_node, 0);
-			if (trace->tr_at > 1) {
-				btr_rec_move(tcx, btr_rec_at(tcx, rec, 1), rec,
-					     trace->tr_at - 1);
-			}
+			if (trace->tr_at > 1)
+				btr_rec_move(tcx, btr_rec_next(tcx, rec), rec, trace->tr_at - 1);
 			rec->rec_off = nd->tn_child;
 		}
 	}
@@ -2938,8 +2930,12 @@ btr_node_del_child_rebal(struct btr_context *tcx,
 	int			 rc;
 
 	cur_nd = btr_off2ptr(tcx, cur_tr->tr_node);
+	D_ASSERT(cur_nd->tn_keyn == 1);
+	D_ASSERT(!(cur_nd->tn_flags & BTR_NODE_LEAF));
+
 	sib_nd = btr_off2ptr(tcx, sib_off);
 	D_ASSERT(sib_nd->tn_keyn > 1);
+	D_ASSERT(!(sib_nd->tn_flags & BTR_NODE_LEAF));
 
 	rc = btr_node_del_child_only(tcx, cur_tr, sib_on_right);
 	if (rc != 0)
@@ -2962,9 +2958,7 @@ btr_node_del_child_rebal(struct btr_context *tcx,
 		btr_rec_copy_hkey(tcx, par_rec, src_rec);
 
 		sib_nd->tn_child = src_rec->rec_off;
-		btr_rec_move(tcx, src_rec, btr_rec_at(tcx, src_rec, 1),
-			     sib_nd->tn_keyn - 1);
-
+		btr_rec_move(tcx, src_rec, btr_rec_next(tcx, src_rec), sib_nd->tn_keyn - 1);
 	} else {
 		/* grab the last child from the left sibling */
 		src_rec = btr_node_rec_at(tcx, sib_off, sib_nd->tn_keyn - 1);
@@ -3026,7 +3020,6 @@ btr_node_del_child_merge(struct btr_context *tcx,
 		par_rec = btr_node_rec_at(tcx, par_tr->tr_node, par_tr->tr_at);
 
 		dst_rec->rec_off = src_nd->tn_child;
-
 	} else {
 		/* move children of the current node to the left sibling. */
 		src_nd = btr_off2ptr(tcx, cur_tr->tr_node);
@@ -3047,7 +3040,7 @@ btr_node_del_child_merge(struct btr_context *tcx,
 	btr_rec_copy_hkey(tcx, dst_rec, par_rec);
 
 	if (src_rec != NULL) {
-		dst_rec = btr_rec_at(tcx, dst_rec, 1); /* the next record */
+		dst_rec = btr_rec_next(tcx, dst_rec); /* the next record */
 		btr_rec_copy(tcx, dst_rec, src_rec, src_nd->tn_keyn);
 	}
 
@@ -3156,7 +3149,6 @@ btr_node_del_rec(struct btr_context *tcx, struct btr_trace *par_tr,
 			/* only has sibling on the right side */
 			sib_off = btr_node_child_at(tcx, par_tr->tr_node, 1);
 			sib_on_right = true;
-
 		} else if (par_tr->tr_at == par_nd->tn_keyn) {
 			/* only has sibling on the left side */
 			sib_off = btr_node_child_at(tcx, par_tr->tr_node,
