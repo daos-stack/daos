@@ -4,6 +4,7 @@ hosts:
 timeout: 60
 setup:
   mgmt_svc_replicas_suffix: .wolf.hpdd.intel.com
+  rand_seed: 7
 server_config:
   name: daos_server
   engines_per_host: 1
