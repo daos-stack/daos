@@ -4,7 +4,7 @@ hosts:
 
 timeout: 2000
 daos_server:
-  pattern_timeout: 60
+  pattern_timeout: 90
 
 server_config:
   name: daos_server
