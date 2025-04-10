@@ -34,7 +34,7 @@ class DaosServerCommand(YamlCommand):
 
     DEFAULT_CONFIG_FILE = os.path.join(os.sep, "etc", "daos", "daos_server.yml")
 
-    def __init__(self, path="", yaml_cfg=None, timeout=45):
+    def __init__(self, path="", yaml_cfg=None, timeout=45, run_user=None):
         """Create a daos_server command object.
 
         Args:
@@ -43,9 +43,11 @@ class DaosServerCommand(YamlCommand):
                 Defaults to None.
             timeout (int, optional): number of seconds to wait for patterns to
                 appear in the subprocess output. Defaults to 45 seconds.
+            run_user (str, optional): user to run as. Defaults to None, which will run commands as
+                the current user.
         """
         super().__init__(
-            "/run/daos_server/*", "daos_server", path, yaml_cfg, timeout)
+            "/run/daos_server/*", "daos_server", path, yaml_cfg, timeout, run_user)
         self.pattern = self.NORMAL_PATTERN
 
         # Command line parameters:
