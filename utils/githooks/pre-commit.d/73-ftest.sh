@@ -20,4 +20,4 @@ fi
 
 echo "Linting modified files"
 
-_git_diff_cached_files '*/ftest/*.py' | xargs -r python3 src/tests/ftest/tags.py lint
+_git_diff_cached_files '*/ftest/*.py' | xargs -r python3 src/tests/ftest/tags.py lint --paths
