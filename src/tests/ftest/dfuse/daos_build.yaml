@@ -19,7 +19,7 @@ server_config:
   system_ram_reserved: 3
 
 pool:
-  size: 100%
+  size: 95%
 
 container:
   type: POSIX

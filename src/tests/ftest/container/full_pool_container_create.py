@@ -86,7 +86,7 @@ class FullPoolContainerCreate(TestWithServers):
                     else:
                         self.log.info("pool is too full for %s byte objects", obj_size)
                         break
-            obj_size /= 2
+            obj_size //= 2
 
         # query the pool
         self.log.info("Pool Query after filling")
