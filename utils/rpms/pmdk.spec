@@ -11,6 +11,7 @@ Package providing libraries needed by DAOS
 %{_libdir}/libdaospmem.so.*
 %{_libdir}/libdaospmemobj.so.*
 %{_bindir}/daospmem*
+%{_sysconfdir}/bash_completion.d/daospmempool
 %{_bindir}/daospmre*
 %{_bindir}/daosdaxio
 %license deps/pmdk/LICENSE
