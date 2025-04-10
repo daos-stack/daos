@@ -46,6 +46,44 @@ rebuild_pool_map_put(struct pool_map *map)
 	pool_map_decref(map);
 }
 
+/**
+ * Check whether the RPT is stale (new rebuild started).
+ * Only used in rebuild_tgt_status_check_ult(), the ULT only can exit when rebuild abort
+ * or globally done. When rebuild done, the leader notifies each target server by IV LAZY SYNC
+ * (see rebuild_leader_status_notify), so possibly the rebuild globally done but the async IV
+ * notification lost due to some network issue and lead to dangling rebuild_tgt_status_check_ult().
+ */
+bool
+rpt_stale(struct rebuild_tgt_pool_tracker *rpt)
+{
+	struct rebuild_tls      *tls = rebuild_tls_get();
+	struct rebuild_pool_tls *pool_tls;
+	bool                     found = false;
+
+	D_ASSERT(tls != NULL);
+	/* Only 1 thread will access the list, no need lock */
+	d_list_for_each_entry(pool_tls, &tls->rebuild_pool_list, rebuild_pool_list) {
+		if (uuid_compare(pool_tls->rebuild_pool_uuid, rpt->rt_pool_uuid) != 0)
+			continue;
+
+		if (rpt->rt_rebuild_ver == pool_tls->rebuild_pool_ver &&
+		    rpt->rt_rebuild_gen == pool_tls->rebuild_pool_gen)
+			found = true;
+
+		if ((rpt->rt_rebuild_ver < pool_tls->rebuild_pool_ver) ||
+		    (rpt->rt_rebuild_ver == pool_tls->rebuild_pool_ver &&
+		     rpt->rt_rebuild_gen < pool_tls->rebuild_pool_gen)) {
+			D_ERROR(DF_RB ": found new rebuild ver %d, gen %d\n", DP_RB_RPT(rpt),
+				pool_tls->rebuild_pool_ver, pool_tls->rebuild_pool_gen);
+			return true;
+		}
+	}
+
+	if (!found)
+		D_ERROR(DF_RB ": rebuild_tls not found\n", DP_RB_RPT(rpt));
+	return !found;
+}
+
 struct rebuild_pool_tls *
 rebuild_pool_tls_lookup(uuid_t pool_uuid, unsigned int ver, uint32_t gen)
 {
@@ -2430,6 +2468,10 @@ rebuild_tgt_status_check_ult(void *arg)
 			break;
 
 		sched_req_sleep(rpt->rt_ult, RBLD_CHECK_INTV);
+		if (iv.riv_pull_done && rpt_stale(rpt)) {
+			D_ERROR(DF_RB " is stale, exit the ULT.\n", DP_RB_RPT(rpt));
+			break;
+		}
 	}
 
 	sched_req_put(rpt->rt_ult);
