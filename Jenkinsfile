@@ -1251,7 +1251,7 @@ pipeline {
                         }
                     }
                 } // stage('Code Coverage Report')
-            }
+            } // parallel
         } // stage('Test Summary')
     } // stages
     post {
