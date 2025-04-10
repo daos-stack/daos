@@ -1,0 +1,7 @@
+#!/bin/bash
+set -eEuo pipefail
+git branch -r | grep " ${ORIGIN:-origin}/[0-9]\+\.[0-9]\+-ps-[0-9]\+" | sed 's/.*\///'
+echo upstream/google/2.6
+echo upstream/release/2.6
+echo main-2.6
+echo upstream/master
