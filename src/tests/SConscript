@@ -24,7 +24,7 @@ def build_tests(env, prereqs):
 
     denv.AppendUnique(CPPPATH=[Dir('suite').srcnode()])
     denv.AppendUnique(LIBPATH=[Dir('.')])
-    denv.require('isal', 'protobufc')
+    denv.require('isal', 'protobufc', 'mercury')
 
     daos_racer = denv.d_program('daos_racer', ['daos_racer.c'], LIBS=libs_client)
     denv.Install('$PREFIX/bin/', daos_racer)
@@ -36,7 +36,7 @@ def build_tests(env, prereqs):
 
     if prereqs.server_requested():
         tenv = denv.Clone()
-        tenv.require('argobots', 'pmdk')
+        tenv.require('argobots', 'pmdk', 'spdk')
 
         libs_server += ['vos', 'bio', 'abt', 'numa']
         vos_engine = tenv.StaticObject(['vos_engine.c'])
@@ -71,7 +71,7 @@ def build_tests(env, prereqs):
     # daos middleware consistency corruption tool for testing
     libs_client += ['dfs']
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64'])
-    daos_mw = denv.d_program('daos_mw_fi', 'daos_mw_fi.c', LIBS=libs_client, RPATH='$PREFIX/lib64')
+    daos_mw = denv.d_program('daos_mw_fi', 'daos_mw_fi.c', LIBS=libs_client)
     denv.Install('$PREFIX/lib/daos/TESTING/tests', daos_mw)
 
 
@@ -100,6 +100,7 @@ def scons():
     if not base_env_mpi:
         return
     denv = base_env_mpi.Clone()
+    denv.require('mercury')
 
     denv.AppendUnique(LIBPATH=[Dir('../gurt')])
     denv.AppendUnique(LIBPATH=[Dir('../common')])

@@ -28,6 +28,7 @@ import errno
 import json
 # pylint: disable=too-many-lines
 import os
+import re
 import shutil
 import subprocess  # nosec
 import sys
@@ -491,7 +492,7 @@ class PreReqComponent():
         self._configs.read(config_file)
 
         self.__top_dir = Dir('#').abspath
-        install_dir = os.path.join(self.__top_dir, 'install')
+        install_dir = 'install'
         internal_prefix = os.path.join(self.__top_dir, 'external')
 
         self.deps_as_gitmodules_subdir = GetOption("deps_as_gitmodules_subdir")
@@ -533,6 +534,14 @@ class PreReqComponent():
 
         # Build prerequisites in sub-dir based on selected build type
         build_dir_name = self.__env.subst('$BUILD_ROOT/external/$TTYPE_REAL')
+        self.pkgconfig_tmp = os.path.join(self.__top_dir, build_dir_name, 'pkgconfig')
+        os.makedirs(self.pkgconfig_tmp, exist_ok=True)
+        self.pkgconfigs = {}
+        path = os.environ.get("PKG_CONFIG_PATH", None)
+        if path and "PKG_CONFIG_PATH" not in env["ENV"]:
+            env["ENV"]["PKG_CONFIG_PATH"] = path
+
+        self.__env.PrependENVPath("PKG_CONFIG_PATH", self.pkgconfig_tmp)
 
         self.system_env = env.Clone()
 
@@ -545,15 +554,29 @@ class PreReqComponent():
 
         ensure_dir_exists(self.__build_dir, self.__dry_run)
 
-        self.__prebuilt_path = {}
+        prebuilt_paths = self.__env.get("ALT_PREFIX")
+        if prebuilt_paths is None:
+            self.__prebuilt_paths = []
+        else:
+            self.__prebuilt_paths = prebuilt_paths.split(os.pathsep)
         self.__src_path = {}
 
-        self._setup_path_var('PREFIX')
+        if GetOption('install_sandbox'):
+            sandbox = os.path.join(self.__top_dir, GetOption('install_sandbox'))
+            sandbox = os.path.realpath(sandbox)
+            self.__env['SANDBOX_PREFIX'] = sandbox + '/'
+            self._setup_path_var('SANDBOX_PREFIX')
+            # turn prefix into "absolute path"
+            self.__env['PREFIX'] = os.path.join('/', self.__env.subst('$PREFIX'))
+        else:
+            # prefix needs to be relative to install_sandbox otherwise so don't
+            # resolve it.
+            self.__env["SANDBOX_PREFIX"] = ''
+            self._setup_path_var('PREFIX')
         self._setup_path_var('GOPATH')
         self.__build_info.update("PREFIX", self.__env.subst("$PREFIX"))
+        self.sandbox_prefix = self.__env.subst('$SANDBOX_PREFIX')
         self.prereq_prefix = self.__env.subst("$PREFIX/prereq/$TTYPE_REAL")
-        if GetOption('install_sandbox'):
-            self.prereq_prefix = f"{GetOption('install_sandbox')}/{self.prereq_prefix}"
 
         if config_file is not None:
             self._configs = configparser.ConfigParser()
@@ -588,6 +611,42 @@ class PreReqComponent():
         BUILD_TARGETS.append(build_dir)
 
         env.AddMethod(self.require, 'require')
+
+    def find_pkgconfig(self, env, name, comp_path, libpath, pkgconfig_built=False):
+        """Find the pkgconfig file and move it to the common area"""
+        for path in libpath:
+            config = os.path.join(comp_path, path, "pkgconfig")
+            if os.path.exists(config):
+                env.AppendENVPath("PKG_CONFIG_PATH", config)
+            if not pkgconfig_built:
+                return
+            config = os.path.join(self.sandbox_prefix + comp_path, path, "pkgconfig")
+            if not os.path.exists(config):
+                continue
+            for f in os.listdir(config):
+                srccfg = os.path.join(config, f)
+                destcfg = os.path.join(self.pkgconfig_tmp, f)
+                base, _ = os.path.splitext(f)
+                if os.path.exists(destcfg):
+                    continue
+                with open(srccfg, "r") as src:
+                    with open(destcfg, "w") as dest:
+                        for line in src.readlines():
+                            if not self.sandbox_prefix:
+                                dest.write(line)
+                                continue
+                            line = line.strip()
+                            new_line = line.replace(comp_path, self.sandbox_prefix + comp_path)
+                            reconstructed = ""
+                            while True:
+                                match = re.search(r'^(.*\-L)(\S+)(.*)$', new_line)
+                                if not match:
+                                    reconstructed += new_line
+                                    break
+                                new_line = match.group(3)
+                                reconstructed += ' ' + match.group(1) + match.group(2)
+                                reconstructed += ' -Wl,-rpath-link=' + match.group(2)
+                            dest.write(f"{reconstructed.strip()}\n")
 
     def run_build(self, opts):
         """Build and dependencies"""
@@ -803,6 +862,8 @@ class PreReqComponent():
         if not kw.get('static_libs', False):
             if 'all' in self.installed or name in self.installed:
                 use_installed = True
+        if not kw.get("retriever", None):
+            use_installed = True
         comp = _Component(self, name, use_installed, **kw)
         self.__defined[name] = comp
 
@@ -817,17 +878,6 @@ class PreReqComponent():
     def test_requested(self):
         """Return True if test build is requested"""
         return "test" in self._build_targets
-
-    def _modify_prefix(self, comp_def):
-        """Overwrite the prefix in cases where we may be using the default"""
-        if comp_def.package:
-            return
-
-        if comp_def.src_path and \
-           not os.path.exists(comp_def.src_path) and \
-           not os.path.exists(os.path.join(self.prereq_prefix, comp_def.name)) and \
-           not os.path.exists(self.__env.get(f'{comp_def.name.upper()}_PREFIX')):
-            self._save_component_prefix(f'{comp_def.name.upper()}_PREFIX', '/usr')
 
     def download(self, *comps):
         """Ensure all components are downloaded"""
@@ -880,14 +930,16 @@ class PreReqComponent():
                 continue
             self.__required[comp] = False
             if comp_def.is_installed(needed_libs):
+                print(f"{comp} is already present at {comp_def.real_prefix}")
+                comp_def.set_environment(env, needed_libs)
                 continue
             try:
+                print(f"{comp} needs to be built {comp_def.real_prefix}")
                 comp_def.configure()
                 if comp_def.build(env, needed_libs):
                     self.__required[comp] = False
                     changes = True
-                else:
-                    self._modify_prefix(comp_def)
+
                 # If we get here, just set the environment again, new directories may be present
                 comp_def.set_environment(env, needed_libs)
             except Exception as error:
@@ -915,12 +967,6 @@ class PreReqComponent():
             return False
         return True
 
-    def is_installed(self, name):
-        """Returns True if a component is available"""
-        if self.check_component(name):
-            return self.__defined[name].use_installed
-        return False
-
     def get_env(self, var):
         """Get a variable from the construction environment"""
         return self.__env[var]
@@ -937,68 +983,36 @@ class PreReqComponent():
         """Get the build directory for external components"""
         return self.__build_dir
 
-    def get_prebuilt_path(self, comp, name):
+    def get_prebuilt_paths(self):
         """Get the path for a prebuilt component"""
-        if name in self.__prebuilt_path:
-            return self.__prebuilt_path[name]
 
-        prebuilt_paths = self.__env.get("ALT_PREFIX")
-        if prebuilt_paths is None:
-            paths = []
-        else:
-            paths = prebuilt_paths.split(os.pathsep)
-
-        for path in paths:
-            ipath = os.path.join(path, "include")
-            if not os.path.exists(ipath):
-                ipath = None
-            lpath = None
-            for lib in comp.lib_path:
-                lpath = os.path.join(path, lib)
-                if os.path.exists(lpath):
-                    break
-                lpath = None
-            if ipath is None and lpath is None:
-                continue
-            env = self.__env.Clone()
-            if ipath:
-                env.AppendUnique(CPPPATH=[ipath])
-            if lpath:
-                env.AppendUnique(LIBPATH=[lpath])
-            realpath = os.path.realpath(path)
-            if not comp.has_missing_targets(env, realpath):
-                self.__prebuilt_path[name] = realpath
-                return self.__prebuilt_path[name]
-
-        self.__prebuilt_path[name] = None
-
-        return None
+        return self.__prebuilt_paths
 
     def get_component(self, name):
         """Get a component definition"""
         return self.__defined[name]
 
-    def _save_component_prefix(self, var, value):
-        """Save the component prefix in the environment and in build info"""
-        self._replace_env(**{var: value})
-        self.__build_info.update(var, value)
+    def save_component_prefix(self, name, prefix):
+        """Save the component prefix"""
+        comp_prefix = f'{name.upper()}_PREFIX'
+        self._replace_env(**{comp_prefix: prefix})
+        self.__build_info.update(comp_prefix, prefix)
 
-    def get_prefixes(self, name, prebuilt_path, static_libs):
+    def get_default_component_prefix(self, name, static_libs):
         """Get the location of the scons prefix as well as the external component prefix."""
-        prefix = self.__env.get('PREFIX')
         comp_prefix = f'{name.upper()}_PREFIX'
         if static_libs:
             target_prefix = os.path.join(self.__env.get('INTERNAL_PREFIX'), name)
-            self._save_component_prefix(comp_prefix, target_prefix)
-            return (target_prefix, prefix)
-        if prebuilt_path:
-            self._save_component_prefix(comp_prefix, prebuilt_path)
-            return (prebuilt_path, prefix)
+            self.save_component_prefix(name, target_prefix)
+            return target_prefix
 
-        target_prefix = os.path.join(self.prereq_prefix, name)
-        self._save_component_prefix(comp_prefix, target_prefix)
+        if self.sandbox_prefix:
+            target_prefix = self.__env["PREFIX"]
+        else:
+            target_prefix = os.path.join(self.prereq_prefix, name)
 
-        return (target_prefix, prefix)
+        self.save_component_prefix(name, target_prefix)
+        return target_prefix
 
     def get_src_build_dir(self):
         """Get the location of a temporary directory for hosting intermediate build files"""
@@ -1062,11 +1076,10 @@ class _Component():
         self.targets_found = False
         self.use_installed = use_installed
         self.build_path = None
-        self.prebuilt_path = None
         self.key_words = deepcopy(kw)
         self.src_path = None
-        self.prefix = None
         self.component_prefix = None
+        self.real_prefix = None
         self.package = kw.get("package", None)
         self.libs = kw.get("libs", [])
         self.libs_cc = kw.get("libs_cc", None)
@@ -1083,8 +1096,8 @@ class _Component():
         self.name = name
         self.build_commands = kw.get("commands", [])
         self.retriever = kw.get("retriever", None)
-        self.lib_path = ['lib', 'lib64']
-        self.include_path = ['include']
+        self.lib_path = ['lib', 'lib64', 'lib64/daos_internal']
+        self.include_path = ['include', 'include/daos_internal']
         self.lib_path.extend(default_libpath())
         self.lib_path.extend(kw.get("extra_lib_path", []))
         self.include_path.extend(kw.get("extra_include_path", []))
@@ -1143,9 +1156,6 @@ class _Component():
 
     def get(self):
         """Download the component sources, if necessary"""
-        if self.prebuilt_path:
-            print(f'Using prebuilt binaries for {self.name}')
-            return
         branch = self.prereqs.get_config("branches", self.name)
         commit_sha = self.prereqs.get_config("commit_versions", self.name)
         repo = self.prereqs.get_config("repos", self.name)
@@ -1211,7 +1221,7 @@ class _Component():
             env.SetOption('no_exec', True)
         return False
 
-    def _parse_config(self, env, opts, comp_path=None):
+    def _parse_config(self, env, opts, comp_path=None, pkgconfig_built=False):
         """Parse a pkg-config file"""
         if self.pkgconfig is None:
             return
@@ -1220,24 +1230,14 @@ class _Component():
         if comp_path:
             real_comp_path = comp_path
 
-        path = os.environ.get("PKG_CONFIG_PATH", None)
-        if path and "PKG_CONFIG_PATH" not in env["ENV"]:
-            env["ENV"]["PKG_CONFIG_PATH"] = path
-        if (not self.use_installed and real_comp_path is not None
-           and not real_comp_path == "/usr"):
-            path_found = False
-            for path in self.lib_path:
-                config = os.path.join(real_comp_path, path, "pkgconfig")
-                if not os.path.exists(config):
-                    continue
-                path_found = True
-                env.AppendENVPath("PKG_CONFIG_PATH", config)
-            if not path_found:
-                return
+        if not self.use_installed:
+            self.prereqs.find_pkgconfig(env, self.pkgconfig, real_comp_path, self.lib_path,
+                                        pkgconfig_built=pkgconfig_built)
 
         try:
             env.ParseConfig(f'pkg-config {opts} {self.pkgconfig}')
         except OSError:
+            # Nothing to do
             return
 
         return
@@ -1271,6 +1271,8 @@ class _Component():
 
         for define in self.defines:
             env.AppendUnique(CPPDEFINES=[define])
+
+        self._add_sandbox_paths(env)
 
         if GetOption('help'):
             print('help set')
@@ -1335,32 +1337,61 @@ class _Component():
             env.SetOption('no_exec', True)
         return False
 
+    def is_installed_helper(self, needed_libs, checked, path, use_sandbox=True):
+        """Check if the component is installed at the configured path"""
+        new_env = self.prereqs.system_env.Clone()
+        new_env["ENV"] = deepcopy(new_env["ENV"])
+        resolved = new_env.subst(path)
+        if resolved in checked and checked[resolved] == use_sandbox:
+            return False
+        if not use_sandbox:
+            # Sandbox should not be necessary if the component is installed
+            new_env["ENV"]["PKG_CONFIG_PATH"] = os.environ.get("PKG_CONFIG_PATH", "")
+        self.component_prefix = resolved
+        self.set_environment(new_env, needed_libs, use_sandbox=use_sandbox)
+        if self.has_missing_targets(new_env):
+            checked[resolved] = use_sandbox
+            return False
+        self.prereqs.save_component_prefix(self.name, resolved)
+        checked[resolved] = use_sandbox
+        return True
+
     def is_installed(self, needed_libs):
         """Check if the component is already installed"""
-        if not self.use_installed:
-            return False
-        new_env = self.prereqs.system_env.Clone()
-        self.set_environment(new_env, needed_libs)
-        if self.has_missing_targets(new_env):
-            self.use_installed = False
-            print(f"{self.name} failed install check")
-            return False
-        print(f"{self.name} passed install check")
-        return True
+        if self.real_prefix is not None:
+            return
+        checked = {}
+        if self.use_installed:
+            if self.is_installed_helper(needed_libs, checked, '/usr', use_sandbox=False):
+                self.real_prefix = self.component_prefix
+                return True
+
+        self.use_installed = False
+
+        # check the prebuilt paths
+        prebuilts = self.prereqs.get_prebuilt_paths()
+        for path in prebuilts:
+            if self.is_installed_helper(needed_libs, checked, path, use_sandbox=False):
+                self.real_prefix = self.component_prefix
+                return True
+
+        prefix = self.prereqs.get_default_component_prefix(self.name, self.static_libs)
+        if self.is_installed_helper(needed_libs, checked, prefix, use_sandbox=False):
+            self.real_prefix = self.component_prefix
+            return True
+
+        self.real_prefix = self.prereqs.sandbox_prefix + prefix
+        # Check again but with sandbox path
+        if self.is_installed_helper(needed_libs, checked, prefix):
+            return True
+
+        return False
 
     def configure(self):
         """Setup paths for a required component"""
         if self.skip_arch:
             return
 
-        if not self.retriever:
-            self.prebuilt_path = "/usr"
-        else:
-            self.prebuilt_path = self.prereqs.get_prebuilt_path(self, self.name)
-
-        (self.component_prefix, self.prefix) = self.prereqs.get_prefixes(self.name,
-                                                                         self.prebuilt_path,
-                                                                         self.static_libs)
         self.src_path = None
         if self.retriever:
             self.src_path = self.prereqs.get_src_path(self.name)
@@ -1370,7 +1401,19 @@ class _Component():
 
             ensure_dir_exists(self.build_path, self.__dry_run)
 
-    def set_environment(self, env, needed_libs):
+    def _add_sandbox_paths(self, env):
+        """Modify lib to add sandbox path if applicable"""
+        if self.prereqs.sandbox_prefix:
+            paths = env.subst("$LIBPATH").split()
+            for path in env.subst("$LIBPATH").split():
+                if not path.startswith(self.prereqs.sandbox_prefix):
+                    env.AppendUnique(LIBPATH=[self.prereqs.sandbox_prefix + path])
+            paths = env.subst("$CPPPATH").split()
+            for path in env.subst("$CPPPATH").split():
+                if not path.startswith(self.prereqs.sandbox_prefix):
+                    env.AppendUnique(CPPPATH=[self.prereqs.sandbox_prefix + path])
+
+    def set_environment(self, env, needed_libs, use_sandbox=True, pkgconfig_built=False):
         """Modify the specified construction environment to build with the external component"""
         if self.skip_arch:
             return
@@ -1378,9 +1421,14 @@ class _Component():
         lib_paths = []
 
         # Make sure CheckProg() looks in the component's bin/ dir
-        if not self.use_installed and not self.component_prefix == "/usr":
-            env.AppendENVPath('PATH', os.path.join(self.component_prefix, 'bin'))
-
+        sandbox = ""
+        if use_sandbox:
+            sandbox = self.prereqs.sandbox_prefix
+        if self.component_prefix != "/usr" or use_sandbox:
+            binpath = os.path.join(self.component_prefix, 'bin')
+            env.AppendENVPath('PATH', self.component_prefix)
+            if sandbox:
+                env.AppendENVPath('PATH', sandbox + self.component_prefix)
             for path in self.include_path:
                 env.AppendUnique(CPPPATH=[os.path.join(self.component_prefix, path)])
 
@@ -1388,11 +1436,16 @@ class _Component():
             # uses a component, that build needs the RPATH of the dependencies.
             for path in self.lib_path:
                 full_path = os.path.join(self.component_prefix, path)
-                if not os.path.exists(full_path):
+                if not os.path.exists(sandbox + full_path) and \
+                   not os.path.exists(full_path):
                     continue
                 lib_paths.append(full_path)
                 # will adjust this to be a relative rpath later
                 env.AppendUnique(RPATH_FULL=[full_path])
+                if self.pkgconfig:
+                    pkg_config_path = os.path.join(full_path, "pkgconfig")
+                    if os.path.exists(pkg_config_path):
+                        env.PrependENVPath("PKG_CONFIG_PATH", pkg_config_path)
 
             # Ensure RUNPATH is used rather than RPATH.  RPATH is deprecated
             # and this allows LD_LIBRARY_PATH to override RPATH
@@ -1405,34 +1458,35 @@ class _Component():
         for define in self.defines:
             env.AppendUnique(CPPDEFINES=[define])
 
-        self._parse_config(env, "--cflags")
+        self._parse_config(env, "--cflags", pkgconfig_built=pkgconfig_built)
 
         if needed_libs is None:
+            if use_sandbox:
+                self._add_sandbox_paths(env)
             return
 
         self._parse_config(env, "--libs")
         for path in lib_paths:
             env.AppendUnique(LIBPATH=[path])
+            env.AppendUnique(LINKFLAGS=[f"-Wl,-rpath-link={path}"])
+            env.AppendUnique(LINKFLAGS=[f"-Wl,-rpath-link={self.prereqs.sandbox_prefix}{path}"])
         for lib in needed_libs:
             env.AppendUnique(LIBS=[lib])
 
-    def _set_build_env(self, env):
+        if use_sandbox:
+            self._add_sandbox_paths(env)
+
+    def _set_build_env(self, base_env, env):
         """Add any environment variables to build environment"""
-        env["ENV"].update(self.key_words.get("build_env", {}))
-
-    def _check_installed_package(self, env):
-        """Check installed targets"""
-        if self.has_missing_targets(env):
-            if self.__dry_run:
-                if self.package is None:
-                    print(f'Missing {self.name}')
-                else:
-                    print(f'Missing package {self.package} {self.name}')
-                return
-            if self.package is None:
-                raise MissingTargets(self.name, self.name)
-
-            raise MissingTargets(self.name, self.package)
+        new_build_env = {}
+        for key, value in self.key_words.get("build_env", {}).items():
+            new_key = base_env.subst(key)
+            new_value = base_env.subst(value)
+            new_build_env[new_key] = new_value
+        if self.prereqs.sandbox_prefix:
+            env.AppendENVPath('CPATH', self.prereqs.sandbox_prefix + '/usr/include')
+            env.AppendENVPath('LIBRARY_PATH', self.prereqs.sandbox_prefix + '/usr/lib64')
+        env["ENV"].update(new_build_env)
 
     def _check_user_options(self, env, needed_libs):
         """Check help and clean options"""
@@ -1461,56 +1515,55 @@ class _Component():
         comp_path = self.component_prefix
         if not comp_path:
             return
-        if comp_path.startswith('/usr') and '/prereq/' not in comp_path:
+        if comp_path.startswith('/usr') and '/prereq/' not in comp_path and \
+                not self.prereqs.sandbox_prefix:
             return
-        if not os.path.exists(comp_path):
+        if not os.path.exists(self.prereqs.sandbox_prefix + comp_path):
             return
 
         for libdir in self.lib_path:
             path = os.path.join(comp_path, libdir)
-            if os.path.exists(path):
+            if os.path.exists(self.prereqs.sandbox_prefix + path):
                 norigin.append(os.path.normpath(path))
                 break
 
         for prereq in self.requires:
             rootpath = os.path.join(comp_path, '..', prereq)
-            if not os.path.exists(rootpath):
+            if not os.path.exists(self.prereqs.sandbox_prefix + rootpath):
                 comp = self.prereqs.get_component(prereq)
                 subpath = comp.component_prefix
                 if subpath and not subpath.startswith("/usr"):
                     for libdir in self.lib_path:
                         lpath = os.path.join(subpath, libdir)
-                        if not os.path.exists(lpath):
+                        if not os.path.exists(self.prereqs.sandbox_prefix + lpath):
                             continue
                         rpath.append(lpath)
                 continue
 
             for libdir in self.lib_path:
                 path = os.path.join(rootpath, libdir)
-                if not os.path.exists(path):
+                if not os.path.exists(self.prereqs.sandbox_prefix + path):
                     continue
                 rpath.append(f'$$ORIGIN/../../{prereq}/{libdir}')
                 norigin.append(os.path.normpath(path))
                 break
 
         rpath += norigin
-        for folder in self.key_words.get("patch_rpath", []):
-            path = os.path.join(comp_path, folder)
-            files = os.listdir(path)
-            for lib in files:
-                if folder != 'bin' and not lib.endswith(".so"):
-                    # Assume every file in bin can be patched
-                    continue
-                if lib.endswith(".py"):
-                    continue
-                full_lib = os.path.join(path, lib)
-                cmd = ['patchelf', '--set-rpath', ':'.join(rpath), full_lib]
-                res = RUNNER.run_commands([cmd])
-                if not res:
-                    if lib in ('libspdk.so', 'spdk_cli', 'spdk_rpc'):
+        if not self.prereqs.sandbox_prefix:
+            for folder in self.key_words.get("patch_rpath", []):
+                path = os.path.join(comp_path, folder)
+                files = os.listdir(path)
+                for lib in files:
+                    if folder != 'bin' and not lib.endswith(".so"):
+                        # Assume every file in bin can be patched
+                        continue
+                    if lib.endswith(".py"):
+                        continue
+                    full_lib = os.path.join(path, lib)
+                    cmd = ['patchelf', '--set-rpath', ':'.join(rpath), full_lib]
+                    res = RUNNER.run_commands([cmd])
+                    if not res:
                         print(f'Skipped patching {full_lib}')
-                    else:
-                        raise BuildFailure(f'Error running patchelf on {full_lib}')
 
     def build(self, env, needed_libs):
         """Build the component, if necessary
@@ -1523,36 +1576,11 @@ class _Component():
         # Ensure requirements are met
         changes = False
         envcopy = self.prereqs.system_env.Clone()
-
         if self._check_user_options(env, needed_libs):
             return True
         self.set_environment(envcopy, self.libs)
-        if self.prebuilt_path:
-            self._check_installed_package(envcopy)
-            return False
 
-        build_dep = self.prereqs.build_deps
-        if self.use_installed:
-            print(f"{self.name} should be installed")
-            build_dep = False
-        if self.component_prefix and os.path.exists(self.component_prefix):
-            print(f"{self.name} already has a build directory")
-            build_dep = False
-
-        # If a component has both a package name and builder then check if the package can be used
-        # before building.  This allows a rpm to be built if available but source to be used
-        # if not.
-        if build_dep:
-            if self.package:
-                missing_targets = self.has_missing_targets(envcopy)
-                if not missing_targets:
-                    print(f"{self.name} is not actually installed, building...")
-                    build_dep = False
-        else:
-            missing_targets = self.has_missing_targets(envcopy)
-
-        if build_dep:
-
+        if self.prereqs.build_deps:
             if self._has_missing_system_deps(self.prereqs.system_env):
                 raise MissingSystemLibs(self.name, self.required_progs)
 
@@ -1562,15 +1590,15 @@ class _Component():
                 changes = self.prereqs.require(envcopy, *self.requires, needed_libs=None)
                 self.set_environment(envcopy, self.libs)
 
-            ensure_dir_exists(self.prereqs.prereq_prefix, self.__dry_run)
+            ensure_dir_exists(self.prereqs.sandbox_prefix + self.prereqs.prereq_prefix,
+                              self.__dry_run)
             changes = True
             if self.out_of_src_build:
                 self._rm_old_dir(self.build_path)
-            self._set_build_env(envcopy)
+            self._set_build_env(env, envcopy)
             if not RUNNER.run_commands(self.build_commands, subdir=self.build_path, env=envcopy):
                 raise BuildFailure(self.name)
-
-        elif missing_targets:
+        else:
             if self.__dry_run:
                 print(f'Would do required build of {self.name}')
             else:
@@ -1579,7 +1607,7 @@ class _Component():
         # set environment one more time as new directories may be present
         if self.requires:
             self.prereqs.require(envcopy, *self.requires, needed_libs=None)
-        self.set_environment(envcopy, self.libs)
+        self.set_environment(envcopy, self.libs, pkgconfig_built=True)
         if changes:
             self._patch_rpaths()
         if self.has_missing_targets(envcopy) and not self.__dry_run:
