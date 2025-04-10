@@ -226,6 +226,7 @@ verify_rwlock(char *cmd, double dt_exp, d_shm_rwlock_t *rwlock, bool fi_enabled)
 
 void verify_rwlock_fi(char *cmd, double dt_exp, d_shm_rwlock_t *rwlock)
 {
+#if FAULT_INJECTION
 	int i;
 	int j;
 	int num_fi_target;
@@ -249,6 +250,7 @@ void verify_rwlock_fi(char *cmd, double dt_exp, d_shm_rwlock_t *rwlock)
 			verify_rwlock(cmd, dt_exp, rwlock, false);
 		}
 	}
+#endif
 }
 
 void verify_counter(d_shm_rwlock_t *rwlock)
