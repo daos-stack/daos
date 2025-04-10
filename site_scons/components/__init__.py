@@ -22,11 +22,12 @@
 # -*- coding: utf-8 -*-
 """Defines common components used by HPDD projects"""
 
+import os
 import platform
 
 import distro
 from prereq_tools import CopyRetriever, GitRepoRetriever
-from SCons.Script import GetOption
+from SCons.Script import Dir, GetOption
 
 # Check if this is an ARM platform
 PROCESSOR = platform.machine()
@@ -197,12 +198,6 @@ def define_ompi(reqs):
     reqs.define('mpich', pkgconfig='mpich', package='mpich-devel')
 
 
-def add_pmdk_fixup(cmds, file):
-    """Simple helper function for creating commands to replace paths in pmdk"""
-    cmds.append(['sed', '-i', 's!<libpmemobj/!<daos_srv/libpmemobj/!',
-                 f"$SANDBOX_PREFIX$PMDK_PREFIX/include/{file}"])
-
-
 def define_components(reqs):
     """Define all of the components"""
     define_common(reqs)
@@ -231,41 +226,23 @@ def define_components(reqs):
                 libs=['isal_crypto'],
                 pkgconfig='libisal_crypto',
                 build_env={'DESTDIR': '$SANDBOX_PREFIX'})
-
-    if GetOption('old_pmdk'):
-        pmemobj = 'pmemobj'
-        pmemdefines = ["DAOS_PMDK_OLD=1"]
-    else:
-        pmemobj = 'daospmemobj'
-        pmemdefines = ["DAOS_PMDK_OLD=0"]
-    cmds = [['mkdir', '-p', '$SANDBOX_PREFIX$PMDK_PREFIX/include/daos_srv'],
-            ['rm', '-rf', '$SANDBOX_PREFIX$PMDK_PREFIX/include/daos_srv/libpmemobj']]
-    files = ['action', 'atomic', 'iterator', 'lists_atomic', 'pool', 'tx']
-    for file in files:
-        add_pmdk_fixup(cmds, f"libpmemobj/{file}.h")
-        add_pmdk_fixup(cmds, f"libpmemobj/{file}_base.h")
-    for file in ['types.h', 'thread.h', 'ctl.h']:
-        add_pmdk_fixup(cmds, f"libpmemobj/{file}")
-    add_pmdk_fixup(cmds, "libpmemobj.h")
-    cmds.append(['mkdir', '-p', '$SANDBOX_PREFIX$PMDK_PREFIX/include/daos_srv'])
-    cmds.append(['mv', '$SANDBOX_PREFIX$PMDK_PREFIX/include/libpmemobj.h',
-                 '$SANDBOX_PREFIX$PMDK_PREFIX/include/libpmemobj',
-                 '$SANDBOX_PREFIX$PMDK_PREFIX/include/daos_srv'])
-
+    patch_files = os.path.join(Dir('#').abspath, 'utils/scripts/patch_files.sh')
     reqs.define('pmdk',
                 retriever=CopyRetriever(),
                 commands=[['make',
                            'all',
+                           'libdir=$PMDK_PREFIX/lib64',
+                           'includedir=$PMDK_PREFIX/include/daos_internal',
                            'BUILD_EXAMPLES=n',
                            'BUILD_BENCHMARKS=n',
                            'DOC=n',
                            'EXTRA_CFLAGS="-Wno-error"',
                            'install',
-                           'prefix=$PMDK_PREFIX']] + cmds,
-                libs=[pmemobj],
-                pkgconfig=f'lib{pmemobj}',
-                defines=pmemdefines,
-                build_env={'DESTDIR': '$SANDBOX_PREFIX', 'LIBS': "-lpthread"})
+                           'prefix=$PMDK_PREFIX'],
+                          [patch_files, '$SANDBOX_PREFIX$PMDK_PREFIX/bin',
+                           '$SANDBOX_PREFIX$PMDK_PREFIX/lib64', 'pmem', 'pmdk']],
+                build_env={'DESTDIR': '$SANDBOX_PREFIX', 'LIBS': "-lpthread"},
+                libs=['pmemobj'])
     abt_build = ['./configure',
                  '--prefix=$ARGOBOTS_PREFIX',
                  '--libdir=$ARGOBOTS_PREFIX/lib64',
@@ -332,6 +309,7 @@ def define_components(reqs):
     # Ubuntu systems seem to fail more often, there may be something different going on here,
     # it has also failed with sandybridge.
     # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
+    move_files = os.path.join(Dir('#').abspath, 'utils/scripts/move_files.sh')
     dist = distro.linux_distribution()
     if ARM_PLATFORM:
         spdk_arch = 'native'
@@ -359,26 +337,27 @@ def define_components(reqs):
                            '--with-shared',
                            f'--target-arch={spdk_arch}'],
                           ['make', f'CONFIG_ARCH={spdk_arch}'],
-                          ['make', 'libdir=$SPDK_PREFIX/lib64/daos_srv', 'DESTDIR=$SANDBOX_PREFIX',
-                           'install'],
-                          ['rsync', '-avz', 'dpdk/build/lib/',
-                           '$SANDBOX_PREFIX$SPDK_PREFIX/lib64/daos_srv/'],
-                          ['cp', '-r', '-P', 'dpdk/build/include/',
-                           '$SANDBOX_PREFIX$SPDK_PREFIX/include/dpdk'],
-                          ['mkdir', '-p', '$SANDBOX_PREFIX$SPDK_PREFIX/share/daos/spdk'],
-                          ['cp', '-r', 'include', 'scripts',
-                           '$SANDBOX_PREFIX$SPDK_PREFIX/staging/share/daos/spdk'],
+                          ['make', 'DESTDIR=$SANDBOX_PREFIX', 'libdir=$SPDK_PREFIX/lib64',
+                           'includedir=$SPDK_PREFIX/include/daos_internal', 'install'],
+                          [move_files, 'dpdk/build/lib', '$SANDBOX_PREFIX$SPDK_PREFIX/lib64'],
+                          [move_files, 'dpdk/build/include',
+                           '$SANDBOX_PREFIX$SPDK_PREFIX/include/daos_internal/dpdk'],
+                          [move_files, 'include',
+                           '$SANDBOX_PREFIX$SPDK_PREFIX/share/daosspdk/include'],
+                          [move_files, 'scripts',
+                           '$SANDBOX_PREFIX$SPDK_PREFIX/share/daosspdk/scripts'],
                           ['cp', 'build/examples/lsvmd',
-                           '$SANDBOX_PREFIX$SPDK_PREFIX/staging/bin/daos_spdk_nvme_lsvmd'],
+                           '$SANDBOX_PREFIX$SPDK_PREFIX/bin/spdk_nvme_lsvmd'],
                           ['cp', 'build/examples/nvme_manage',
-                           '$SANDBOX_PREFIX$SPDK_PREFIX/staging/bin/daos_spdk_nvme_manage'],
+                           '$SANDBOX_PREFIX$SPDK_PREFIX/bin/spdk_nvme_manage'],
                           ['cp', 'build/examples/identify',
-                           '$SANDBOX_PREFIX$SPDK_PREFIX/staging/bin/daos_spdk_nvme_identify'],
+                           '$SANDBOX_PREFIX$SPDK_PREFIX/bin/spdk_nvme_identify'],
                           ['cp', 'build/examples/perf',
-                           '$SANDBOX_PREFIX$SPDK_PREFIX/staging/bin/daos_spdk_nvme_perf']],
+                           '$SANDBOX_PREFIX$SPDK_PREFIX/bin/spdk_nvme_perf'],
+                          [patch_files, '$SANDBOX_PREFIX$SPDK_PREFIX/bin',
+                           '$SANDBOX_PREFIX$SPDK_PREFIX/lib64', 'spdk', 'rte', 'dpdk']],
                 headers=['spdk/nvme.h'],
-                extra_lib_path=['daos_srv'],
-                patch_rpath=['lib64/daos_srv', 'bin'])
+                patch_rpath=['lib64', 'bin'])
 
     reqs.define('protobufc',
                 retriever=CopyRetriever(),

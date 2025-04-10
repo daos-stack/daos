@@ -1096,8 +1096,8 @@ class _Component():
         self.name = name
         self.build_commands = kw.get("commands", [])
         self.retriever = kw.get("retriever", None)
-        self.lib_path = ['lib', 'lib64']
-        self.include_path = ['include']
+        self.lib_path = ['lib', 'lib64', 'lib64/daos_internal']
+        self.include_path = ['include', 'include/daos_internal']
         self.lib_path.extend(default_libpath())
         self.lib_path.extend(kw.get("extra_lib_path", []))
         self.include_path.extend(kw.get("extra_include_path", []))
@@ -1561,10 +1561,7 @@ class _Component():
                     cmd = ['patchelf', '--set-rpath', ':'.join(rpath), full_lib]
                     res = RUNNER.run_commands([cmd])
                     if not res:
-                        if lib in ('libspdk.so', 'spdk_cli', 'spdk_rpc'):
-                            print(f'Skipped patching {full_lib}')
-                        else:
-                            raise BuildFailure(f'Error running patchelf on {full_lib}')
+                        print(f'Skipped patching {full_lib}')
 
     def build(self, env, needed_libs):
         """Build the component, if necessary

@@ -16,11 +16,7 @@
 #include <daos/common.h>
 #include <daos/mem.h>
 #ifdef DAOS_PMEM_BUILD
-#if DAOS_PMDK_OLD
 #include <libpmemobj.h>
-#else
-#include <daos_srv/libpmemobj.h>
-#endif
 #include <daos_srv/ad_mem.h>
 #define DAV_V2_BUILD
 #include "dav/dav.h"
