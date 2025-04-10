@@ -1468,6 +1468,8 @@ class _Component():
         self._parse_config(env, "--libs")
         for path in lib_paths:
             env.AppendUnique(LIBPATH=[path])
+            env.AppendUnique(LINKFLAGS=[f"-Wl,-rpath-link={path}"])
+            env.AppendUnique(LINKFLAGS=[f"-Wl,-rpath-link={self.prereqs.sandbox_prefix}{path}"])
         for lib in needed_libs:
             env.AppendUnique(LIBS=[lib])
 

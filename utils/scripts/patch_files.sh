@@ -12,6 +12,9 @@ for file in "${links[@]}"; do
   target="$(readlink "${file}")"
   echo "Checking to see if link ${file} -> ${target} needs fixing"
   lib="$(basename "${file}")"
+  if [[ "${lib}" =~ daos ]]; then
+    continue
+  fi
   for prefix in "$@"; do
       newtarget="${target//lib${prefix}/libdaos${prefix}}"
       echo "Checking ${newtarget}"
@@ -38,6 +41,9 @@ for dir in "${bindir}" "${libdir}"; do
     fi
     echo "Checking ${file} if .a"
     lib="$(basename "${file}")"
+    if [[ "${lib}" =~ daos ]]; then
+      continue
+    fi
     removed=0
     for prefix in "$@"; do
       if [[ ${lib} =~ lib${prefix}.*\.a$ ]]; then
@@ -55,6 +61,9 @@ for dir in "${bindir}" "${libdir}"; do
   for file in "${files[@]}"; do
     echo "Checking ${file} for name changes"
     lib="$(basename "${file}")"
+    if [[ "${lib}" =~ daos ]]; then
+      continue
+    fi
     dirname="$(dirname "${file}")"
     newfile=""
     for prefix in "$@"; do

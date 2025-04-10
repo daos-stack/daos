@@ -240,7 +240,11 @@ def define_components(reqs):
                            'install',
                            'prefix=$PMDK_PREFIX'],
                           [patch_files, '$SANDBOX_PREFIX$PMDK_PREFIX/bin',
-                           '$SANDBOX_PREFIX$PMDK_PREFIX/lib64', 'pmem', 'pmdk']],
+                           '$SANDBOX_PREFIX$PMDK_PREFIX/lib64', 'pmem', 'pmdk', 'pmre', 'daxio'],
+                          ['sed', '-i', 's/pmempool/daospmempool/g',
+                          '$SANDBOX_PREFIX$PMDK_PREFIX/etc/bash_completion.d/pmempool'],
+                          ['mv', '$SANDBOX_PREFIX$PMDK_PREFIX/etc/bash_completion.d/pmempool',
+                           '$SANDBOX_PREFIX$PMDK_PREFIX/etc/bash_completion.d/daospmempool']],
                 build_env={'DESTDIR': '$SANDBOX_PREFIX', 'LIBS': "-lpthread"},
                 libs=['pmemobj'])
     abt_build = ['./configure',
