@@ -48,20 +48,17 @@ type Nvme interface {
 // NvmeImpl is an implementation of the Nvme interface.
 type NvmeImpl struct{}
 
-// Static base-dir and prefix for SPDK generated lockfiles.
-const (
-	lockflleDir    = "/var/tmp/"
-	lockfilePrefix = "spdk_pci_lock_"
-)
+// Static prefix for SPDK generated lockfiles.
+const LockfilePrefix = "spdk_pci_lock_"
 
-type remFunc func(name string) error
+type removeFn func(name string) error
 
 // cleanLockfiles removes SPDK lockfiles after binding operations. Takes function which decides
 // which of the found lock files to remove based on the address appended to the filename.
-func cleanLockfiles(remove remFunc, shouldRemove LockfileAddrCheckFn) ([]string, error) {
-	entries, err := os.ReadDir(lockflleDir)
+func cleanLockfiles(dir string, pciAddrChecker LockfileAddrCheckFn, remove removeFn) ([]string, error) {
+	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return nil, errors.Wrapf(err, "reading spdk lockfile directory %q", lockflleDir)
+		return nil, errors.Wrapf(err, "reading spdk lockfile directory %q", dir)
 	}
 
 	var removed []string
@@ -70,30 +67,31 @@ func cleanLockfiles(remove remFunc, shouldRemove LockfileAddrCheckFn) ([]string,
 		if v.IsDir() {
 			continue
 		}
-		if !strings.HasPrefix(v.Name(), lockfilePrefix) {
+		if !strings.HasPrefix(v.Name(), LockfilePrefix) {
 			continue
 		}
 
-		lfAddr := strings.Replace(v.Name(), lockfilePrefix, "", 1)
-		lfName := filepath.Join(lockfilePrefix, v.Name())
+		lfAddr := strings.Replace(v.Name(), LockfilePrefix, "", 1)
+		lfName := filepath.Join(dir, v.Name())
 
-		if ok, err := shouldRemove(lfAddr); err != nil {
+		if shouldRemove, err := pciAddrChecker(lfAddr); err != nil {
 			outErr = wrapCleanError(outErr, errors.Wrap(err, lfName))
 			continue
-		} else if !ok {
+		} else if !shouldRemove {
 			continue
 		}
 
 		if err := remove(lfName); err != nil {
-			if !os.IsNotExist(err) {
-				outErr = wrapCleanError(outErr, errors.Wrap(err, lfName))
+			// In case lockfile is removed between time of read-dir and remove.
+			if os.IsNotExist(err) {
+				continue
 			}
-			continue
+			outErr = wrapCleanError(outErr, errors.Wrap(err, lfName))
 		}
 		removed = append(removed, lfName)
 	}
 
-	return removed, nil
+	return removed, outErr
 }
 
 // wrapCleanError encapsulates inErr inside any cleanErr.
@@ -101,10 +99,10 @@ func wrapCleanError(inErr error, cleanErr error) (outErr error) {
 	outErr = inErr
 
 	if cleanErr != nil {
+		outErr = errors.Wrap(inErr, cleanErr.Error())
 		if outErr == nil {
 			outErr = cleanErr
 		}
-		outErr = errors.Wrap(inErr, cleanErr.Error())
 	}
 
 	return

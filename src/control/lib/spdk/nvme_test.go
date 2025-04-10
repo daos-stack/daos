@@ -8,7 +8,8 @@
 package spdk
 
 import (
-	"sort"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -17,69 +18,120 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 )
 
-type ext struct {
-	removeCalls []string
-	removeErr   error
-}
-
 var (
-	mockExt    = ext{}
 	sampleErr1 = errors.New("example error #1")
 	sampleErr2 = errors.New("example error #2")
 )
 
-func mockRemove(name string) error {
-	mockExt.removeCalls = append(mockExt.removeCalls, name)
-	return mockExt.removeErr
-}
-
 func TestSpdk_cleanLockfiles(t *testing.T) {
+	testDir, clean := test.CreateTestDir(t)
+	defer clean()
+
 	for name, tc := range map[string]struct {
-		pciAddrs  []string
-		removeErr error
-		expCalls  []string
-		expErr    error
+		pciAddrs          []string
+		addrCheckMap      map[string]bool
+		addrCheckErr      error
+		removeErr         error
+		expRemoveCalls    []string
+		expNoFilesRemoved bool
+		expErr            error
 	}{
-		"no pciAddrs": {},
+		"no pciAddrs": {
+			addrCheckMap: make(map[string]bool),
+		},
 		"single pciAddr": {
 			pciAddrs: []string{"0000:81:00.0"},
+			addrCheckMap: map[string]bool{
+				"0000:81:00.0": true,
+			},
+			expRemoveCalls: []string{
+				filepath.Join(testDir, lockfilePrefix+"0000:81:00.0"),
+			},
 		},
-		"multiple pciAddrs": {
-			pciAddrs: []string{"0000:81:00.0", "0000:82:00.0"},
+		"multiple pciAddrs; partial selection": {
+			pciAddrs: []string{"0000:81:00.0", "0000:82:00.0", "0000:83:00.0"},
+			addrCheckMap: map[string]bool{
+				"0000:81:00.0": false,
+				"0000:82:00.0": true,
+				"0000:83:00.0": true,
+			},
+			expRemoveCalls: []string{
+				filepath.Join(testDir, lockfilePrefix+"0000:82:00.0"),
+				filepath.Join(testDir, lockfilePrefix+"0000:83:00.0"),
+			},
 		},
 		"error on remove": {
-			pciAddrs:  []string{"0000:81:00.0", "0000:82:00.0"},
+			pciAddrs: []string{"0000:81:00.0", "0000:82:00.0"},
+			addrCheckMap: map[string]bool{
+				"0000:81:00.0": true,
+				"0000:82:00.0": true,
+			},
 			removeErr: sampleErr1,
-			expCalls:  []string{lockfilePathPrefix + "0000:81:00.0"},
-			expErr:    sampleErr1,
+			expRemoveCalls: []string{
+				filepath.Join(testDir, lockfilePrefix+"0000:81:00.0"),
+				filepath.Join(testDir, lockfilePrefix+"0000:82:00.0"),
+			},
+			expErr: errors.Errorf("%s: %s: %s: %s",
+				filepath.Join(testDir, lockfilePrefix+"0000:82:00.0"),
+				sampleErr1.Error(),
+				filepath.Join(testDir, lockfilePrefix+"0000:81:00.0"),
+				sampleErr1.Error()),
+		},
+		"not-exist error on remove": {
+			pciAddrs: []string{"0000:81:00.0", "0000:82:00.0"},
+			addrCheckMap: map[string]bool{
+				"0000:81:00.0": true,
+				"0000:82:00.0": true,
+			},
+			removeErr: os.ErrNotExist,
+			expRemoveCalls: []string{
+				filepath.Join(testDir, lockfilePrefix+"0000:81:00.0"),
+				filepath.Join(testDir, lockfilePrefix+"0000:82:00.0"),
+			},
+			expNoFilesRemoved: true,
+		},
+		"error on check": {
+			pciAddrs:     []string{"0000:81:00.0", "0000:82:00.0"},
+			addrCheckErr: sampleErr2,
+			expErr: errors.Errorf("%s: %s: %s: %s",
+				filepath.Join(testDir, lockfilePrefix+"0000:82:00.0"),
+				sampleErr2.Error(),
+				filepath.Join(testDir, lockfilePrefix+"0000:81:00.0"),
+				sampleErr2.Error()),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if tc.expCalls == nil {
-				tc.expCalls = make([]string, 0, len(tc.pciAddrs))
-				for _, p := range tc.pciAddrs {
-					tc.expCalls = append(tc.expCalls,
-						lockfilePathPrefix+p)
+			var removeCalls []string
+
+			mockAddrCheck := func(addr string) (bool, error) {
+				return tc.addrCheckMap[addr], tc.addrCheckErr
+			}
+
+			mockRemove := func(name string) error {
+				removeCalls = append(removeCalls, name)
+				return tc.removeErr
+			}
+
+			// Create lockfiles in test directory.
+			for _, addrStr := range tc.pciAddrs {
+				fName := filepath.Join(testDir, lockfilePrefix+addrStr)
+				if _, err := os.Create(fName); err != nil {
+					t.Fatalf("error creating %s", fName)
 				}
 			}
 
-			mockExt.removeCalls = make([]string, 0, len(tc.pciAddrs))
-			mockExt.removeErr = tc.removeErr
-
-			removedLocks, gotErr := cleanLockfiles(mockRemove, tc.pciAddrs...)
+			removedLocks, gotErr := cleanLockfiles(testDir, mockAddrCheck, mockRemove)
 			test.CmpErr(t, tc.expErr, gotErr)
-			if tc.expErr != nil {
-				return
-			}
 
-			sort.Strings(tc.expCalls)
-			sort.Strings(mockExt.removeCalls)
-
-			if diff := cmp.Diff(tc.expCalls, mockExt.removeCalls); diff != "" {
-				t.Fatalf("(-want, +got): %s", diff)
+			if diff := cmp.Diff(tc.expRemoveCalls, removeCalls); diff != "" {
+				t.Fatalf("unexpected list of remove calls (-want, +got): %s", diff)
 			}
-			if diff := cmp.Diff(tc.expCalls, removedLocks); diff != "" {
-				t.Fatalf("(-want, +got): %s", diff)
+			expRemoved := tc.expRemoveCalls
+			if tc.expNoFilesRemoved {
+				expRemoved = nil
+			}
+			if diff := cmp.Diff(expRemoved, removedLocks); diff != "" {
+				t.Fatalf("unexpected list of files removed (-want, +got): %s", diff)
 			}
 		})
 	}

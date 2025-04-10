@@ -40,6 +40,9 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
+// Static base-dir for SPDK generated lockfiles.
+const lockflleDir = "/var/tmp/"
+
 func realRemove(name string) error {
 	return os.Remove(name)
 }
@@ -50,7 +53,7 @@ func (n *NvmeImpl) Clean(pciAddrChecker LockfileAddrCheckFn) ([]string, error) {
 		return nil, errors.New("nil NvmeImpl")
 	}
 
-	return cleanLockfiles(realRemove, pciAddrChecker)
+	return cleanLockfiles(lockflleDir, realRemove, pciAddrChecker)
 }
 
 // Discover NVMe devices, including NVMe devices behind VMDs if enabled,

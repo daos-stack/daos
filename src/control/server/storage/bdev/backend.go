@@ -114,6 +114,8 @@ func defaultBackend(log logging.Logger) *spdkBackend {
 	return newBackend(log, defaultScriptRunner(log))
 }
 
+// Returns true if PID file matching input string is found in /proc/ directory indicating related
+// active process exists.
 func isPIDActive(pidStr string, stat statFn) (bool, error) {
 	filename := fmt.Sprintf("/proc/%s", pidStr)
 
@@ -154,8 +156,8 @@ func createHugepageWalkFunc(log logging.Logger, topDir string, stat statFn, remo
 		// PID string will be the first submatch at index 1 of the match results.
 
 		if isActive, err := isPIDActive(matches[1], stat); err != nil || isActive {
-			log.Debugf("walk func: active owner proc, skipping %s", path)
-			return err // skip files created by an existing process (isActive == true)
+			log.Tracef("spdk hugepage-clean walk: active owner proc, skipping %s", path)
+			return err
 		}
 
 		log.Debugf("walk func: removing %s", path)
@@ -191,11 +193,30 @@ func logNUMAStats(log logging.Logger) {
 	log.Debugf("run cmd numastat -m: %s", toLog)
 }
 
+// For nontrivial VM case; remove lockfiles with backing device addresses by parsing file names to
+// evaluate whether they refer to a given VMD address supplied in resultant allowed list. Do this by
+// creating a address check function which will verify if a given backing device PCI address matches
+// any VMD address contained in the input allowed list set.
+func createSpdkLockfileAddrCheckFunc(allowed *hardware.PCIAddressSet) spdk.LockfileAddrCheckFn {
+	return func(pciAddr string) (bool, error) {
+		addrOrig, err := hardware.NewPCIAddress(pciAddr)
+		if err != nil {
+			return false, errors.Wrap(err, "controller pci address invalid")
+		}
+		addr, err := addrOrig.BackingToVMDAddress()
+		if err != nil {
+			if err == hardware.ErrNotVMDBackingAddress {
+				addr = addrOrig
+			}
+			return false, err
+		}
+
+		return allowed.Contains(addr), nil
+	}
+}
+
 // Skip addresses in block list if present then expand to include both VMD and VMD backing device
 // addresses in search filter.
-// FIXME DAOS-17341: We need to remove lockfiles with backing device addresses by parsing file names
-//                   to evaluate whether they refer to a given VMD address supplied in resultant
-//                   allowed list.
 func (sb *spdkBackend) removeSpdkLockfiles(req storage.BdevPrepareRequest, resp *storage.BdevPrepareResponse) (err error) {
 	inAllowList, err := hardware.NewPCIAddressSetFromString(req.PCIAllowList)
 	if err != nil {
@@ -206,9 +227,11 @@ func (sb *spdkBackend) removeSpdkLockfiles(req storage.BdevPrepareRequest, resp 
 		return
 	}
 	// Remove blocked VMD addresses from allow list.
-	addrs := inAllowList.Difference(inBlockList).Strings()
+	allowedAddresses := inAllowList.Difference(inBlockList)
 
-	resp.LockfilesRemoved, err = sb.binding.Clean(addrs...)
+	lfAddrCheckFn := createSpdkLockfileAddrCheckFunc(allowedAddresses)
+
+	resp.LockfilesRemoved, err = sb.binding.Clean(lfAddrCheckFn)
 	if err != nil {
 		return err
 	}
