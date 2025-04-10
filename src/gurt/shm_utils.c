@@ -456,7 +456,7 @@ shm_rwlock_destroy(d_shm_rwlock_t *rwlock)
 #define SHRINK_FACTOR     (0.625)
 #define SLOT_SAVED_CUTOFF (8)
 
-inline bool
+static inline bool
 does_rwlock_list_need_shrinking(d_shm_rwlock_t *rwlock)
 {
 	int slot_saved;
