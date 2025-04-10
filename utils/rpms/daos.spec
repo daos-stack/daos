@@ -22,7 +22,7 @@
 
 Name:          daos
 Version:       2.6.3
-Release:       5%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -84,9 +84,6 @@ BuildRequires: libisa-l_crypto-devel
 %else
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
-%endif
-%if %{with server}
-BuildRequires: daos-raft-devel = 0.11.0-1.416.g12dbc15%{?dist}
 %endif
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
@@ -632,6 +629,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Mon Apr 07 2025 Jeff Olivier  <jeffolivier@google.com> 2.6.3-6
+- Remove raft as external dependency
+
 * Wed Mar 19 2025 Jeff Olivier <jeffolivie@google.com> 2.6.3-5
 - Remove server from Ubuntu packaging and fix client only build
 
