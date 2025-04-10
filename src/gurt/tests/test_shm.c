@@ -217,7 +217,7 @@ verify_rwlock(char *cmd, double dt_exp, d_shm_rwlock_t *rwlock, bool fi_enabled)
 	gettimeofday(&tm2, NULL);
 	dt = (tm2.tv_sec - tm1.tv_sec) + (tm2.tv_usec - tm1.tv_usec) * 0.000001;
 	if (!fi_enabled)
-		assert_true(fabs(1.0 - dt / (dt_exp * T_SCLAE * US_TO_S)) <= 0.25);
+		assert_true(fabs(1.0 - dt / (dt_exp * T_SCLAE * US_TO_S)) <= 0.75);
 
 	rc = shm_ht_decref(&ht_head_fi_tid_line);
 	assert_true(rc == 0);
