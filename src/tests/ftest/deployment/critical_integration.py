@@ -139,7 +139,7 @@ class CriticalIntegrationWithServers(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=deployment,critical_integration
+        :avocado: tags=deployment,critical_integration,control
         :avocado: tags=CriticalIntegrationWithServers,test_ras
         """
         dmg = self.get_dmg_command()
