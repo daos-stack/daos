@@ -30,7 +30,7 @@ for origin in $(git remote); do
     done < <(echo "master"
              git branch -r | sed -ne "/^  $origin\\/release\\/\(2.[4-9]\|[3-9]\)/s/^  $origin\\///p")
     export ORIGIN="${origin}"
-    readarray -t branches <<< "$(eval find_branches)"
+    readarray -t branches <<< find_branches
     all_bases=("${builtin_bases[@]}" "${branches[@]}")
   fi
   for base in "${all_bases[@]}"; do
