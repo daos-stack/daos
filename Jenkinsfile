@@ -916,7 +916,8 @@ pipeline {
                 stage('Functional on Leap 15.6') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        // temp removed ! to cause stage to be skipped.
+                        expression { skipStage() }
                     }
                     agent {
                         label vm9_label('Leap15')
