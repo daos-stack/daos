@@ -11,33 +11,39 @@ def scons():
     common_mock_ld_script = f"{Dir('.').srcnode()}/../../common/tests/common-mock-ld-opts"
     unit_env.AppendUnique(LINKFLAGS=[f'-Wl,@{common_mock_ld_script}'])
 
+    libraries = ['daos_common', 'protobuf-c', 'gurt', 'cmocka']
+    if GetOption("test_coverage"):
+        libraries += ['gcov']
+
     Depends('drpc_progress_tests', common_mock_ld_script)
     unit_env.d_test_program('drpc_progress_tests',
                             ['drpc_progress_tests.c', drpc_test_utils, '../drpc_progress.c'],
-                            LIBS=['daos_common', 'protobuf-c', 'gurt', 'cmocka'])
+                            LIBS=libraries)
 
     Depends('drpc_handler_tests', common_mock_ld_script)
     unit_env.d_test_program('drpc_handler_tests',
                             ['drpc_handler_tests.c', drpc_test_utils, '../drpc_handler.c'],
-                            LIBS=['daos_common', 'protobuf-c', 'gurt', 'cmocka'])
+                            LIBS=libraries)
 
     Depends('drpc_listener_tests', common_mock_ld_script)
     unit_env.d_test_program('drpc_listener_tests',
                             ['drpc_listener_tests.c', drpc_test_utils, '../drpc_listener.c'],
-                            LIBS=['daos_common', 'protobuf-c', 'gurt', 'cmocka'])
+                            LIBS=libraries)
 
     Depends('drpc_client_tests', common_mock_ld_script)
     unit_env.d_test_program('drpc_client_tests',
                             ['drpc_client_tests.c', drpc_test_utils, '../drpc_client.c',
                              '../drpc_ras.c', '../srv.pb-c.c', '../event.pb-c.c',
                              '../../chk/chk.pb-c.c'],
-                            LIBS=['daos_common', 'protobuf-c', 'gurt', 'cmocka',
-                                  'uuid', 'pthread', 'abt', 'cart'])
+                            LIBS=libraries + ['uuid', 'pthread', 'abt', 'cart'])
 
     abt_tenv = denv.Clone()
     abt_tenv.AppendUnique(OBJPREFIX='utest_')
     abt_tenv.AppendUnique(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     libraries = ['abt', 'daos_common_pmem', 'gurt']
+    if GetOption("test_coverage"):
+        libraries += ['gcov']
+
     abt_tenv.require('argobots')
 
     abt_tenv.d_test_program('abt_perf', 'abt_perf.c', LIBS=libraries)

@@ -6,6 +6,8 @@ def scons():
     Import('denv')
 
     libraries = ['vea', 'gurt', 'cart', 'pmemobj', 'cmocka', 'daos_common_pmem']
+    if GetOption("test_coverage"):
+        libraries += ['gcov']
 
     env = denv.Clone()
 

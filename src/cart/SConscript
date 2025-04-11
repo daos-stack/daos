@@ -71,6 +71,10 @@ def scons():
     denv = env.Clone(LIBS=[])
 
     denv.AppendUnique(LIBS=['gurt'])
+
+    if GetOption("test_coverage"):
+        denv.AppendUnique(LIBS=['gcov'])
+
     denv.require('mercury')
 
     cart_targets = denv.SharedObject(SRC)
