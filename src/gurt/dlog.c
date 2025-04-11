@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1286,8 +1287,9 @@ int d_log_setmasks(const char *mstr, int mlen0)
 			log_flags = d_log_check(DLOG_ERR);
 
 			if (log_flags)
-				d_log(log_flags, "d_log_setmasks: %.*s: "
-				      "unknown priority %.*s",
+				d_log(log_flags,
+				      "d_log_setmasks: '%.*s': "
+				      "unknown priority '%.*s'",
 				      faclen, fac, prilen, pri);
 			continue;
 		}

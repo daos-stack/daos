@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -1997,6 +1998,58 @@ test_hash_perf(void **state)
 		hash_perf(HASH_JCH, 1 << i, el << i);
 }
 
+static int
+config_copy_good(char *buf, int len, void *src)
+{
+	memcpy(buf, src, len);
+	return 0;
+}
+
+#define CUSTOM_ERROR -50000
+static int
+config_copy_bad(char *buf, int len, void *src)
+{
+	return CUSTOM_ERROR;
+}
+
+#define good_config1 "log_mask=debug"
+#define good_config2 " log_mask=debug\nstreams=all"
+#define good_config3 ""
+#define good_config4 "   log_mask    =       info     \nstreams =   vos=debug "
+#define bad_config1  "bad_var=debug"
+#define bad_config2  "log_mask=info\nlog_mask=debug"
+#define bad_config3  "=log_mask"
+
+static void
+test_log_parse_config(void **state)
+{
+	char old_mask[128]    = {"warn"};
+	char old_streams[128] = {"group_default"};
+	int  rc;
+
+	d_getenv_str(old_mask, sizeof(old_mask), "D_LOG_MASK");
+	d_getenv_str(old_streams, sizeof(old_streams), "DD_MASK");
+
+	rc = d_log_parse_config(good_config1, sizeof(good_config1) - 1, config_copy_good);
+	assert_rc_equal(rc, 0);
+	rc = d_log_parse_config(good_config2, sizeof(good_config2) - 1, config_copy_good);
+	assert_rc_equal(rc, 0);
+	rc = d_log_parse_config(good_config3, sizeof(good_config3) - 1, config_copy_good);
+	assert_rc_equal(rc, 0);
+	rc = d_log_parse_config(good_config4, sizeof(good_config4) - 1, config_copy_good);
+	assert_rc_equal(rc, 0);
+	rc = d_log_parse_config(good_config3, sizeof(good_config3) - 1, config_copy_bad);
+	assert_rc_equal(rc, CUSTOM_ERROR);
+	rc = d_log_parse_config(bad_config1, sizeof(bad_config1) - 1, config_copy_good);
+	assert_rc_equal(rc, -DER_INVAL);
+	rc = d_log_parse_config(bad_config2, sizeof(bad_config2) - 1, config_copy_good);
+	assert_rc_equal(rc, -DER_INVAL);
+	rc = d_log_parse_config(bad_config3, sizeof(bad_config3) - 1, config_copy_good);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	d_log_sync_mask_ex(old_mask, old_streams);
+}
+
 static void
 verify_rank_list_dup_uniq(int *src_ranks, int num_src_ranks,
 			  int *exp_ranks, int num_exp_ranks)
@@ -2699,6 +2752,7 @@ int
 main(int argc, char **argv)
 {
 	const struct CMUnitTest tests[] = {
+	    cmocka_unit_test(test_log_parse_config),
 	    cmocka_unit_test(test_time),
 	    cmocka_unit_test(test_d_errstr),
 	    cmocka_unit_test(test_d_errdesc),
