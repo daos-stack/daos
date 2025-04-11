@@ -12,6 +12,7 @@
 %endif
 %global mercury_version   2.4
 %global libfabric_version 1.15.1-1
+%global argobots_version 1.2
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -22,7 +23,7 @@
 
 Name:          daos
 Version:       2.6.3
-Release:       6%{?relval}%{?dist}
+Release:       7%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -48,11 +49,11 @@ BuildRequires: hwloc-devel
 BuildRequires: bullseye
 %endif
 %if (0%{?rhel} >= 8)
-BuildRequires: argobots-devel >= 1.1
+BuildRequires: argobots-devel >= %{argobots_version}
 BuildRequires: json-c-devel
 BuildRequires: boost-python3-devel
 %else
-BuildRequires: libabt-devel >= 1.0rc1
+BuildRequires: libabt-devel >= %{argobots_version}
 BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
@@ -629,8 +630,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Mon Apr 07 2025 Jeff Olivier  <jeffolivier@google.com> 2.6.3-6
+* Fri Apr 11 2025 Jeff Olivier  <jeffolivier@google.com> 2.6.3-7
 - Remove raft as external dependency
+
+* Tue Apr 08 2025 Cedric Koch-Hofer <cedric.koch-hofer@intel.com> 2.6.3-6
+- Update BR: argobots to 1.2
 
 * Wed Mar 19 2025 Jeff Olivier <jeffolivie@google.com> 2.6.3-5
 - Remove server from Ubuntu packaging and fix client only build

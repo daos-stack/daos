@@ -1,8 +1,14 @@
-daos (2.6.3-6) unstable; urgency=medium
+daos (2.6.3-7) unstable; urgency=medium
   [ Jeff Olivier ]
   * Remove raft as an external dependence
 
- -- Jeff Olivier <jeffolivier@google.com>  Mon, 07 Apr 2025 13:28:00 +0000
+ -- Jeff Olivier <jeffolivier@google.com>  Fri, 11 Apr 2025 14:28:00 +0000
+
+daos (2.6.3-6) unstable; urgency=medium
+  [ Cedric Koch-Hofer]
+  * Update BR: argobots to 1.2
+
+ -- Cedric Koch-Hofer <cedric.koch-hofer@intel.com>  Tue, 08 Apr 2025 11:06:00 -0700
 
 daos (2.6.3-5) unstable; urgency=medium
   [ Jeff Olivier ]
