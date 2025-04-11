@@ -441,6 +441,10 @@ again:
 
 		rc = dtx_status_handle_one(cont, &dre->dre_dte, dre->dre_oid, dre->dre_dkey_hash,
 					   dre->dre_epoch, tgt_array, &err);
+
+		if (unlikely(cont->sc_stopping))
+			D_GOTO(out, err = -DER_CANCELED);
+
 		switch (rc) {
 		case DSHR_NEED_COMMIT:
 			goto commit;
