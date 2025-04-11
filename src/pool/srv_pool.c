@@ -2012,8 +2012,8 @@ add_conn_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 }
 
 /*
- * Read the DB for map_buf, map_version, prop and pool hdls. If the return value is 0,
- * the caller is responsible for freeing *map_buf_out and *prop_out eventually.
+ * Read the DB for map_buf, map_version, prop and pool iv hdls. If the return value is 0,
+ * the caller is responsible for freeing *map_buf_out, *prop_out and pool iv_hdls eventually.
  */
 static int
 read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf_out,
@@ -2104,17 +2104,15 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf_out,
 			DP_UUID(svc->ps_uuid));
 	}
 
-	prop_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_GLOBAL_VERSION);
-	D_ASSERT(prop_entry != NULL);
-	arg.global_ver = prop_entry->dpe_val;
-	prop_entry     = daos_prop_entry_get(prop, DAOS_PROP_PO_OBJ_VERSION);
+	prop_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OBJ_VERSION);
 	D_ASSERT(prop_entry != NULL);
 	arg.obj_ver = prop_entry->dpe_val;
+	arg.global_ver = svc->ps_global_version;
 	arg.iv_hdls = NULL;
 	rc = rdb_tx_iterate(&tx, &svc->ps_handles, false /* backward */, add_conn_cb, &arg);
 	if (rc != 0) {
-		D_ERROR("Failed to find hdls for evict pool " DF_UUIDF " connections: " DF_RC "\n",
-			DP_UUID(svc->ps_uuid), DP_RC(rc));
+		DL_ERROR(rc, "Failed to find hdls for evict pool " DF_UUIDF " connections.\n",
+			 DP_UUID(svc->ps_uuid));
 		D_GOTO(out_free, rc);
 	}
 
