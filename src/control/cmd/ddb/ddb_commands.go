@@ -349,4 +349,36 @@ the path must include the extent, otherwise, it must not.`,
 		},
 		Completer: nil,
 	})
+	// Command: dev_list
+	app.AddCommand(&grumble.Command{
+		Name:      "dev_list",
+		Aliases:   nil,
+		Help:      "List all devices",
+		LongHelp:  "",
+		HelpGroup: "vos",
+		Args: func(a *grumble.Args) {
+			a.String("db_path", "Path to the vos db.")
+		},
+		Run: func(c *grumble.Context) error {
+			return ddbDevList(ctx, c.Args.String("db_path"))
+		},
+		Completer: nil,
+	})
+	// Command dev_replace
+	app.AddCommand(&grumble.Command{
+		Name:      "dev_replace",
+		Aliases:   nil,
+		Help:      "Replace an old device with a new unused device",
+		LongHelp:  "",
+		HelpGroup: "vos",
+		Args: func(a *grumble.Args) {
+			a.String("db_path", "Path to the vos db.")
+			a.String("old_dev", "Old device UUID.")
+			a.String("new_dev", "New device UUID.")
+		},
+		Run: func(c *grumble.Context) error {
+			return ddbDevReplace(ctx, c.Args.String("db_path"), c.Args.String("old_dev"), c.Args.String("new_dev"))
+		},
+		Completer: nil,
+	})
 }

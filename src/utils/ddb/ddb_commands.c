@@ -727,12 +727,15 @@ sync_smd_cb(void *cb_args, uuid_t pool_id, uint32_t vos_id, uint64_t blob_id,
 	return 0;
 }
 
+#define DEFAULT_NVME_CONF "/mnt/daos/daos_nvme.conf"
+#define DEFAULT_DB_PATH   "/mnt/daos"
+#define DDB_PATH_MAX      256
+
 int
 ddb_run_smd_sync(struct ddb_ctx *ctx, struct smd_sync_options *opt)
 {
-	/* Some defaults */
-	char	nvme_conf[256] = "/mnt/daos/daos_nvme.conf";
-	char	db_path[256] = "/mnt/daos";
+	char    nvme_conf[DDB_PATH_MAX] = DEFAULT_NVME_CONF;
+	char    db_path[DDB_PATH_MAX]   = DEFAULT_DB_PATH;
 	int	rc;
 
 	if (daos_handle_is_valid(ctx->dc_poh)) {
@@ -740,10 +743,20 @@ ddb_run_smd_sync(struct ddb_ctx *ctx, struct smd_sync_options *opt)
 		return -DER_INVAL;
 	}
 
-	if (opt->nvme_conf != NULL && strlen(opt->nvme_conf) > 0)
+	if (opt->nvme_conf != NULL) {
+		if (strlen(opt->nvme_conf) == 0 || strlen(opt->nvme_conf) >= DDB_PATH_MAX) {
+			ddb_errorf(ctx, "Invalid nvme_conf '%s'\n", opt->nvme_conf);
+			return -DER_INVAL;
+		}
 		strncpy(nvme_conf, opt->nvme_conf, ARRAY_SIZE(nvme_conf) - 1);
-	if (opt->db_path != NULL && strlen(opt->db_path) > 0)
+	}
+	if (opt->db_path != NULL) {
+		if (strlen(opt->db_path) == 0 || strlen(opt->db_path) >= DDB_PATH_MAX) {
+			ddb_errorf(ctx, "Invalid db_path '%s'\n", opt->db_path);
+			return -DER_INVAL;
+		}
 		strncpy(db_path, opt->db_path, ARRAY_SIZE(db_path) - 1);
+	}
 
 	ddb_printf(ctx, "Using nvme config file: '%s' and smd db path: '%s'\n", nvme_conf, db_path);
 	rc = dv_sync_smd(nvme_conf, db_path, sync_smd_cb, ctx);
@@ -1144,5 +1157,104 @@ ddb_run_dtx_act_discard_invalid(struct ddb_ctx *ctx, struct dtx_act_options *opt
 	}
 
 	dtx_modify_fini(&args);
+	return rc;
+}
+
+int
+ddb_run_dev_list(struct ddb_ctx *ctx, struct dev_list_options *opt)
+{
+	char                 db_path[DDB_PATH_MAX] = DEFAULT_DB_PATH;
+	struct bio_dev_info *dev_info              = NULL, *tmp;
+	d_list_t             dev_list;
+	int                  rc, dev_cnt = 0;
+
+	if (daos_handle_is_valid(ctx->dc_poh)) {
+		ddb_print(ctx, "Close pool connection before attempting to list devices\n");
+		return -DER_INVAL;
+	}
+
+	if (opt->db_path != NULL) {
+		if (strlen(opt->db_path) == 0 || strlen(opt->db_path) >= DDB_PATH_MAX) {
+			ddb_errorf(ctx, "Invalid db_path '%s'\n", opt->db_path);
+			return -DER_INVAL;
+		}
+		strncpy(db_path, opt->db_path, ARRAY_SIZE(db_path) - 1);
+	}
+
+	ddb_printf(ctx, "List devices, db_path='%s'\n", db_path);
+	D_INIT_LIST_HEAD(&dev_list);
+	rc = dv_dev_list(db_path, &dev_list, &dev_cnt);
+	if (rc) {
+		ddb_errorf(ctx, "List device failed. " DF_RC "\n", DP_RC(rc));
+		return rc;
+	}
+
+	ddb_printf(ctx, "%d SSD devices in total\n", dev_cnt);
+	d_list_for_each_entry_safe(dev_info, tmp, &dev_list, bdi_link) {
+		ddb_printf(ctx, "Device:" DF_UUIDF " [inuse:%s, faulty:%s, plugged:%s]\n",
+			   DP_UUID(dev_info->bdi_dev_id),
+			   dev_info->bdi_flags & NVME_DEV_FL_INUSE ? "yes" : "no ",
+			   dev_info->bdi_flags & NVME_DEV_FL_FAULTY ? "yes" : "no ",
+			   dev_info->bdi_flags & NVME_DEV_FL_PLUGGED ? "yes" : "no ");
+
+		d_list_del_init(&dev_info->bdi_link);
+		bio_free_dev_info(dev_info);
+	}
+
+	return 0;
+}
+
+int
+ddb_run_dev_replace(struct ddb_ctx *ctx, struct dev_replace_options *opt)
+{
+	char   db_path[DDB_PATH_MAX] = DEFAULT_DB_PATH;
+	uuid_t old_devid, new_devid;
+	int    rc;
+
+	if (daos_handle_is_valid(ctx->dc_poh)) {
+		ddb_print(ctx, "Close pool connection before attempting to replace device\n");
+		return -DER_INVAL;
+	}
+
+	if (opt->db_path != NULL) {
+		if (strlen(opt->db_path) == 0 || strlen(opt->db_path) >= DDB_PATH_MAX) {
+			ddb_errorf(ctx, "Invalid db_path '%s'\n", opt->db_path);
+			return -DER_INVAL;
+		}
+		strncpy(db_path, opt->db_path, ARRAY_SIZE(db_path) - 1);
+	}
+
+	if (opt->old_devid == NULL || opt->new_devid == NULL) {
+		ddb_error(ctx, "Must specify both old and new device ID\n");
+		return -DER_INVAL;
+	}
+
+	rc = uuid_parse(opt->old_devid, old_devid);
+	if (rc) {
+		ddb_errorf(ctx, "Invalid UUID string '%s' for old device\n", opt->old_devid);
+		return -DER_INVAL;
+	}
+
+	rc = uuid_parse(opt->new_devid, new_devid);
+	if (rc) {
+		ddb_errorf(ctx, "Invalid UUID string '%s' for new device\n", opt->new_devid);
+		return -DER_INVAL;
+	}
+
+	if (uuid_compare(old_devid, new_devid) == 0) {
+		ddb_error(ctx, "Doesn't support replacing device by itself\n");
+		return -DER_INVAL;
+	}
+
+	ddb_printf(ctx,
+		   "Replace old device " DF_UUID " with new device " DF_UUID ", db_path='%s'\n",
+		   DP_UUID(old_devid), DP_UUID(new_devid), db_path);
+
+	rc = dv_dev_replace(db_path, old_devid, new_devid);
+	if (rc)
+		ddb_errorf(ctx, "Device replacing failed. " DF_RC "\n", DP_RC(rc));
+	else
+		ddb_print(ctx, "Device replacing succeeded\n");
+
 	return rc;
 }

@@ -268,3 +268,25 @@ func ddbDtxActDiscardInvalid(ctx *DdbContext, path string, dtx_id string) error 
 	/* Run the c code command */
 	return daosError(C.ddb_run_dtx_act_discard_invalid(&ctx.ctx, &options))
 }
+
+func ddbDevList(ctx *DdbContext, db_path string) error {
+	/* Set up the options */
+	options := C.struct_dev_list_options{}
+	options.db_path = C.CString(db_path)
+	defer freeString(options.db_path)
+	/* Run the c code command */
+	return daosError(C.ddb_run_dev_list(&ctx.ctx, &options))
+}
+
+func ddbDevReplace(ctx *DdbContext, db_path string, old_devid string, new_devid string) error {
+	/* Set up the options */
+	options := C.struct_dev_replace_options{}
+	options.db_path = C.CString(db_path)
+	defer freeString(options.db_path)
+	options.old_devid = C.CString(old_devid)
+	defer freeString(options.old_devid)
+	options.new_devid = C.CString(new_devid)
+	defer freeString(options.new_devid)
+	/* Run the c code command */
+	return daosError(C.ddb_run_dev_replace(&ctx.ctx, &options))
+}
