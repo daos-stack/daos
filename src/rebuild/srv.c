@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2025 Intel Corporation.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -2363,7 +2363,6 @@ regenerate_task_of_type(struct ds_pool *pool, pool_comp_state_t match_states, ui
 int
 ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop)
 {
-	struct daos_prop_entry *entry;
 	char                   *env;
 	int                     rc = 0;
 
@@ -2384,11 +2383,11 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop)
 		return DER_SUCCESS;
 	}
 
-	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SELF_HEAL);
-	D_ASSERT(entry != NULL);
-	if (entry->dpe_val & (DAOS_SELF_HEAL_AUTO_REBUILD | DAOS_SELF_HEAL_DELAY_REBUILD)) {
+	if (pool->sp_self_heal & (DAOS_SELF_HEAL_AUTO_REBUILD | DAOS_SELF_HEAL_DELAY_REBUILD) &&
+	    !pool->sp_disable_rebuild) {
 		rc = regenerate_task_of_type(pool, PO_COMP_ST_DOWN,
-					    entry->dpe_val & DAOS_SELF_HEAL_DELAY_REBUILD ? -1 : 0);
+					     pool->sp_self_heal & DAOS_SELF_HEAL_DELAY_REBUILD ? -1
+											       : 0);
 		if (rc != 0)
 			return rc;
 
