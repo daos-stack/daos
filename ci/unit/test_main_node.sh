@@ -86,5 +86,5 @@ pip install --requirement requirements-utest.txt
 
 pip install /opt/daos/lib/daos/python/
 
-utils/run_utest.py $RUN_TEST_VALGRIND --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" \
-                   $SUDO_ARG
+HTTPS_PROXY="${HTTPS_PROXY:-}" utils/run_utest.py $RUN_TEST_VALGRIND \
+    --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" $SUDO_ARG
