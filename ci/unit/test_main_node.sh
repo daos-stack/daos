@@ -89,10 +89,14 @@ pip install /opt/daos/lib/daos/python/
 utils/run_utest.py $RUN_TEST_VALGRIND --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" \
                    $SUDO_ARG
 
-# Generate code coverage report
-if [[ -n $(find build -name "*.gcda") ]]; then
-    # Run gcovr in a python 3.11 environment
+# Generate code coverage report if at least one gcda file was generated
+if [[ -n $(find build -name "*.gcda" -quit) ]]; then
+    # python3.6 does not like deactivate with -u set, later versions are OK with it however.
+    set +u
     deactivate
+    set -u
+
+    # Run gcovr in a python 3.11 environment
     python3.11 -m venv venv-code-coverage
     # shellcheck disable=SC1091
     source venv-code-coverage/bin/activate
