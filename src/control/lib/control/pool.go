@@ -744,7 +744,7 @@ type PoolRanksReq struct {
 	poolRequest
 	ID        string          `json:"id"`
 	Ranks     []ranklist.Rank `json:"ranks"`
-	Targetidx []uint32        `json:"target_idx"`
+	Targetidx []uint32        `json:"targetidx"`
 	Force     bool            `json:"force"`
 }
 
