@@ -29,20 +29,11 @@ if ${USE_GH:-true} && command -v gh > /dev/null 2>&1; then
     fi
 fi
 
-find_branches()
-{
-      for script in "utils/githooks/branches."*; do
-        "${script}"
-      done
-}
-
 if [ -z "$TARGET_BRANCH" ]; then
     # With no 'gh' command installed, or no PR open yet, use the "closest" branch
     # as the target, calculated as the sum of the commits this branch is ahead and
-    # behind.
-    # check master, then current release branches, then current feature branches.
-    readarray -t branches <<< "$(eval find_branches)"
-    TARGET="$(utils/githooks/get_branch "${branches[@]}")"
+    # behind. This will check any branches configured by a branches.* script
+    TARGET="$(utils/githooks/get_branch)"
 else
     # We don't know the remote for sure so let's run the checks anyway which
     # should come to the same answer but uses gh to get a better one
