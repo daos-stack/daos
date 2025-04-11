@@ -142,8 +142,9 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
             self.log, self.hostlist_clients, command, verbose=True, timeout=timeout)
         elapsed = time.time() - start
         (minutes, seconds) = divmod(elapsed, 60)
-        self.log.info('Command %s completed in %d:%02d (%d%% of timeout)',
-                        command, minutes, seconds, elapsed / timeout * 100)
+        self.log.info(
+            'Command %s completed in %d:%02d (%d%% of timeout)',
+            command, minutes, seconds, elapsed / timeout * 100)
         if result.passed:
             continue
 
@@ -156,14 +157,15 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
 
         self.log.error('BuildDaos Test Failed')
         if cmd.startswith('scons'):
-            run_remote(self.log, self.hostlist_clients, 'cat {}/config.log'.format(build_dir),
-                        timeout=30)
+            run_remote(
+                self.log, self.hostlist_clients, 'cat {}/config.log'.format(build_dir), timeout=30)
         if il_lib is not None:
             self.fail(f'{fail_type} over dfuse with il in mode {cache_mode}')
         else:
             self.fail(f'{fail_type} over dfuse in mode {cache_mode}')
 
     self.log.info('Test passed')
+
 
 def __get_daos_build_checkout(self):
     """Try to get the SHA or branch to checkout for the version of daos being tested.
@@ -290,4 +292,3 @@ class DaosBuild(TestWithServers):
         :avocado: tags=DaosBuild,test_dfuse_daos_build_nocache
         """
         run_build_test(self, "nocache")
-
