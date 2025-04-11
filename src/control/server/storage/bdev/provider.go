@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -24,6 +25,7 @@ type (
 		Format(storage.BdevFormatRequest) (*storage.BdevFormatResponse, error)
 		UpdateFirmware(pciAddr string, path string, slot int32) error
 		WriteConfig(storage.BdevWriteConfigRequest) (*storage.BdevWriteConfigResponse, error)
+		ReadConfig(storage.BdevReadConfigRequest) (*storage.BdevReadConfigResponse, error)
 	}
 
 	// Provider encapsulates configuration and logic for interacting with a Block
@@ -81,4 +83,9 @@ func (p *Provider) Format(req storage.BdevFormatRequest) (*storage.BdevFormatRes
 // WriteConfig calls into the bdev backend to create an nvme config file.
 func (p *Provider) WriteConfig(req storage.BdevWriteConfigRequest) (*storage.BdevWriteConfigResponse, error) {
 	return p.backend.WriteConfig(req)
+}
+
+// ReadConfig calls into the bdev backend to read an nvme config file.
+func (p *Provider) ReadConfig(req storage.BdevReadConfigRequest) (*storage.BdevReadConfigResponse, error) {
+	return p.backend.ReadConfig(req)
 }

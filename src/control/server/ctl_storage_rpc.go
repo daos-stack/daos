@@ -1,6 +1,7 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
 // (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -927,6 +928,22 @@ type formatNvmeReq struct {
 	mdFormatted bool
 }
 
+func getEngineBdevCtrlrs(ctx context.Context, engine Engine) (storage.NvmeControllers, error) {
+	respBdevs, err := scanEngineBdevs(ctx, engine, new(ctlpb.ScanNvmeReq))
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert proto ctrlr scan results to native when calling into storage provider.
+	pbCtrlrs := proto.NvmeControllers(respBdevs.Ctrlrs)
+	ctrlrs, err := pbCtrlrs.ToNative()
+	if err != nil {
+		return nil, errors.Wrapf(err, "convert %T to %T", pbCtrlrs, ctrlrs)
+	}
+
+	return ctrlrs, nil
+}
+
 func formatNvme(ctx context.Context, req formatNvmeReq, resp *ctlpb.StorageFormatResp) error {
 	// Allow format to complete on one instance even if another fails
 	for idx, engine := range req.instances {
@@ -947,7 +964,7 @@ func formatNvme(ctx context.Context, req formatNvmeReq, resp *ctlpb.StorageForma
 			continue
 		}
 
-		respBdevs, err := scanEngineBdevs(ctx, engine, new(ctlpb.ScanNvmeReq))
+		ctrlrs, err := getEngineBdevCtrlrs(ctx, engine)
 		if err != nil {
 			if errors.Is(err, errEngineBdevScanEmptyDevList) {
 				// No controllers assigned in config, continue.
@@ -956,13 +973,6 @@ func formatNvme(ctx context.Context, req formatNvmeReq, resp *ctlpb.StorageForma
 			req.errored[idx] = err.Error()
 			resp.Crets = append(resp.Crets, engine.newCret("", err))
 			continue
-		}
-
-		// Convert proto ctrlr scan results to native when calling into storage provider.
-		pbCtrlrs := proto.NvmeControllers(respBdevs.Ctrlrs)
-		ctrlrs, err := pbCtrlrs.ToNative()
-		if err != nil {
-			return errors.Wrapf(err, "convert %T to %T", pbCtrlrs, ctrlrs)
 		}
 
 		ei, ok := engine.(*EngineInstance)

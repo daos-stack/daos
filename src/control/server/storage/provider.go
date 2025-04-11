@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,6 +16,8 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwloc"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -618,6 +621,15 @@ func (p *Provider) WriteNvmeConfig(ctx context.Context, log logging.Logger, ctrl
 	return err
 }
 
+// ReadNvmeConfig calls into the bdev storage provider to read an NVMe config file.
+func (p *Provider) ReadNvmeConfig(ctx context.Context) (*BdevReadConfigResponse, error) {
+	req := BdevReadConfigRequest{
+		ConfigPath: p.engineStorage.ConfigOutputPath,
+	}
+
+	return p.bdev.ReadConfig(req)
+}
+
 // BdevTierScanResult contains details of a scan operation result.
 type BdevTierScanResult struct {
 	Tier   int
@@ -664,6 +676,33 @@ func (p *Provider) QueryBdevFirmware(req NVMeFirmwareQueryRequest) (*NVMeFirmwar
 // UpdateBdevFirmware queries NVMe SSD firmware.
 func (p *Provider) UpdateBdevFirmware(req NVMeFirmwareUpdateRequest) (*NVMeFirmwareUpdateResponse, error) {
 	return p.bdev.UpdateFirmware(req)
+}
+
+// UpgradeBdevConfig updates an existing SPDK bdev config, if necessary.
+func (p *Provider) UpgradeBdevConfig(ctx context.Context, ctrlrs NvmeControllers) error {
+	if !p.HasBlockDevices() {
+		return nil
+	}
+
+	_, err := p.ReadNvmeConfig(ctx)
+	if err == nil {
+		// For now, we'll just assume that if we can read the config file, then
+		// we don't need to do anything else.
+		return nil
+	}
+
+	// Take the conservative approach that if we expect there to have been a config
+	// file and it's not there, then we need the admin to investigate.
+	if !fault.IsFaultCode(err, code.SpdkInvalidConfiguration) {
+		p.log.Errorf("Failed to read bdev config file: %s", p.engineStorage.ConfigOutputPath)
+		return err
+	}
+
+	// Otherwise, if the config file is there but we can't understand it, then
+	// it's probably from a different version of DAOS and we should just regenerate
+	// it based on our version of the configuration.
+	p.log.Notice("The bdev config file was unparsable; regenerating it.")
+	return p.WriteNvmeConfig(ctx, p.log, ctrlrs)
 }
 
 // NewProvider returns an initialized storage provider.

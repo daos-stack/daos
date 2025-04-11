@@ -1,6 +1,7 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
 // (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -148,6 +149,16 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context) error {
 		}
 		if !needsSuperblock {
 			ei.log.Debugf("%s: superblock not needed", msgIdx)
+
+			if ei.storage.HasBlockDevices() {
+				ei.log.Debugf("%s: checking bdev config", msgIdx)
+
+				ctrlrs, err := getEngineBdevCtrlrs(ctx, ei)
+				if err != nil {
+					return err
+				}
+				return ei.storage.UpgradeBdevConfig(ctx, ctrlrs)
+			}
 			return nil
 		}
 		ei.log.Debugf("%s: superblock needed", msgIdx)
