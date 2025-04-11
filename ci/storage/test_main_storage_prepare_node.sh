@@ -29,8 +29,8 @@ dnf -y config-manager \
 
 dnf -y install ipmctl daos-server"$DAOS_PKG_VERSION"
 
-lspci | grep Mellanox
-lscpu | grep Virtualization
+lspci | grep Mellanox || true
+lscpu | grep Virtualization || true
 lscpu | grep -E -e Socket -e NUMA
 
 if command -v opainfo; then opainfo || true; fi
