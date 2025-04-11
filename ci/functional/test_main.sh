@@ -1,6 +1,7 @@
 #!/bin/bash
 #
 #  Copyright 2020-2023 Intel Corporation.
+#  Copyright 2025 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -99,6 +100,7 @@ if "$hardware_ok"; then
            FTEST_ARG=\"${FTEST_ARG:-}\"            \
            WITH_VALGRIND=\"${WITH_VALGRIND:-}\"    \
            STAGE_NAME=\"$STAGE_NAME\"              \
+           HTTPS_PROXY=\"${HTTPS_PROXY:-}\"        \
            $(cat ci/functional/test_main_node.sh)"
     else
         ./ftest.sh "$test_tag" "$tnodes" "$FTEST_ARG"
