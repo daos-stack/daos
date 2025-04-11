@@ -1,6 +1,7 @@
 #!/bin/bash
 #
 #  Copyright 2020-2023 Intel Corporation.
+#  Copyright 2025 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -68,6 +69,7 @@ if [ "$opa_count" -gt 0 ]; then
 fi
 
 while IFS= read -r line; do
+    # This may need to check if ConnectX is InfiniBand.
     mlnx_type="${line##*ConnectX-}"
     mlnx_type="${mlnx_type%]*}"
     if [ "$mlnx_type" -ge 6 ]; then
@@ -107,10 +109,17 @@ function do_wait_for_ib {
 }
 
 # First check for infinband devices
-for i in $(seq 0 $((ib_count-1))); do
+working_ib=0
+ib_prefix="ib"
+ib_count=0
+if [ -e /sys/class/net/ib_cpu0_0 || -e /sys/class/net/ib_cpu1_1 ]; then
+    ib_prefix="ib_cpu"
+fi
+for ib_dev in /sys/class/net/"ib_prefix"*; do
+    ((ib_count++))
+    iface="$(basename $ib_dev)"
     ((testruns++)) || true
-    testcases+="  <testcase name=\"Infiniband $i Working Node $mynodenum\">${nl}"
-    iface="ib$i"
+    testcases+="  <testcase name=\"Infiniband $iface Working Node $mynodenum\">${nl}"
     if do_wait_for_ib "$iface"; then
         set +x
         if ! ip addr show "$iface" | grep "inet "; then
@@ -129,6 +138,7 @@ for i in $(seq 0 $((ib_count-1))); do
     </error>$nl"
             result=1
         else
+            ((working_ib++))
             echo "OK: Interface $iface is up."
         fi
         if [ -e "/sys/class/net/$iface/device/numa_node" ]; then
@@ -151,8 +161,8 @@ done
 
 # having -x just makes the console log harder to read.
 set +x
-if [ -e /sys/class/net/ib1 ]; then
-    # now check for pmem & NVMe drives when ib1 is present.
+if [ "$ib_count" -ge 2 ]; then
+    # now check for pmem & NVMe drives when multiple ib are present.
     # ipmctl show -dimm should show an even number of drives, all healthy
     dimm_count=0
     while IFS= read -r line; do

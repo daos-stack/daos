@@ -274,8 +274,13 @@ set_local_repo() {
             # Disable the daos repo so that the Jenkins job repo or a PR-repos*: repo is
             # used for daos packages
             dnf -y config-manager \
-                --disable daos-stack-daos-"${DISTRO_GENERIC}"-"${VERSION_ID%%.*}"-x86_64-stable-local-artifactory
+                --disable daos-stack-daos-"${DISTRO_GENERIC}"-"${VERSION_ID%%.*}"*-stable-local-artifactory
+        else
+            dnf -y config-manager \
+                --enable daos-stack-daos-"${DISTRO_GENERIC}"-"${VERSION_ID%%.*}"*-stable-local-artifactory
         fi
+        dnf -y config-manager \
+            --enable daos-stack-deps-"${DISTRO_GENERIC}"-"${VERSION_ID%%.*}"*-stable-local-artifactory
     fi
 
     dnf repolist

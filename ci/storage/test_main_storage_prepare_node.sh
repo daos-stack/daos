@@ -21,8 +21,12 @@ else
             ;;
     esac
     dnf -y config-manager \
-        --disable daos-stack-daos-"${DISTRO_GENERIC}"-"${VERSION_ID%%.*}"-x86_64-stable-local-artifactory
+        --disable daos-stack-daos-"${DISTRO_GENERIC}"-"${VERSION_ID%%.*}"*-stable-local-artifactory
 fi
+# this needs to be made more generic in the future.
+dnf -y config-manager \
+        --enable daos-stack-deps-"${DISTRO_GENERIC}"-"${VERSION_ID%%.*}"*-stable-local-artifactory
+
 dnf -y install ipmctl daos-server"$DAOS_PKG_VERSION"
 
 lspci | grep Mellanox
@@ -51,7 +55,12 @@ if ipmctl show -dimm; then
       fi
     fi
 else
-    if ip addr show ib1; then
+    counter=0
+    for ib in /sys/class/net/ib*; do
+        ((counter++))
+        ip addr show "$(basename $ib)"
+    done
+    if if "$counter" -ge 2; then
         # All of our CI nodes with two ib adapters should have PMEM DIMMs
         echo 'No PMEM DIMM devices found on CI node!'
         exit 1
