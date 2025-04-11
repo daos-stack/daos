@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -101,6 +102,21 @@ func (nl *NumericList) Replace(other *NumericList) {
 	nl.hl.ReplaceList(other.hl)
 }
 
+// Contains returns true if value is present in NumericList.
+func (nl *NumericList) Contains(i uint) bool {
+	if nl == nil || nl.hl == nil {
+		return false
+	}
+
+	for _, n := range nl.Slice() {
+		if n == i {
+			return true
+		}
+	}
+
+	return false
+}
+
 // NewNumericList creates an initialized NumericList with
 // optional starting values.
 func NewNumericList(values ...uint) *NumericList {
@@ -121,6 +137,9 @@ func CreateNumericList(stringRanges string) (*NumericList, error) {
 		if unicode.IsLetter(r) {
 			return nil, errors.New("unexpected alphabetic character(s)")
 		}
+	}
+	if stringRanges[0] != '[' && stringRanges[len(stringRanges)-1] != ']' {
+		return nil, errors.New("missing brackets around numeric ranges")
 	}
 
 	hl, err := parseBracketedHostList(stringRanges, outerRangeSeparators,
@@ -160,6 +179,15 @@ func (ns *NumericSet) Merge(other *NumericSet) {
 func (ns *NumericSet) Replace(other *NumericSet) {
 	ns.hl.ReplaceList(other.hl)
 	ns.Uniq()
+}
+
+// Contains returns true if value is present in NumericSet.
+func (ns *NumericSet) Contains(i uint) bool {
+	if ns == nil {
+		return false
+	}
+
+	return ns.NumericList.Contains(i)
 }
 
 // NewNumericSet creates an initialized NumericSet with optional
