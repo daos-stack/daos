@@ -2,8 +2,7 @@
 
 set -eux
 
-ls -al
-
+# ls -al
 # Generate code coverage report
 if [[ -n $(find . -name "code_coverage.json") ]]; then
     mkdir -p code_coverage_report
