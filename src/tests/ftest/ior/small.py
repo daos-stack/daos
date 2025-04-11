@@ -1,5 +1,6 @@
 """
 (C) Copyright 2018-2024 Intel Corporation.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -26,7 +27,7 @@ class IorSmall(IorTestBase):
             Run ior with Read, Write, CheckWrite, CheckRead in FPP mode.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,md_on_ssd
+        :avocado: tags=hw,medium
         :avocado: tags=daosio,mpiio,checksum,mpich,dfuse,ior,dfs,hdf5
         :avocado: tags=IorSmall,test_ior_small
         """
