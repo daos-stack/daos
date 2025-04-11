@@ -30,7 +30,7 @@ tmp=$(mktemp -d)
 
 file_extless="${name}-${version}"
 file="${file_extless}.${ext}"
-sm_file_prefix="${file_extless}-submodule"
+sm_file_prefix="${file_extless//\//_}-submodule"
 
 # Create an archive, which doesn't include any submodule.
 git archive --prefix "${name}-${version}/" -o "${tmp}/${file}" HEAD
