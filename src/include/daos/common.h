@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -699,6 +700,8 @@ daos_quiet_error(int err)
 
 void
 daos_fail_loc_set(uint64_t id);
+void
+daos_fail_loc_set_private(uint64_t id);
 void
 daos_fail_loc_reset(void);
 void
