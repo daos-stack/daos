@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -78,7 +79,7 @@ dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct
 		return NULL;
 	}
 
-	if ((hzl.nzones_cache < 2) && (hzl.nzones_heap > hzl.nzones_cache)) {
+	if ((hzl.nzones_cache <= UMEM_CACHE_MIN_PAGES) && (hzl.nzones_heap > hzl.nzones_cache)) {
 		ERR("Insufficient scm size.");
 		errno = EINVAL;
 		return NULL;
@@ -185,6 +186,7 @@ dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct
 	if (rc) {
 		lw_tx_end(hdl, NULL);
 		D_ERROR("Failed to initialize zone0, rc = %d", daos_errno2der(rc));
+		err = rc;
 		goto out5;
 	}
 	lw_tx_end(hdl, NULL);

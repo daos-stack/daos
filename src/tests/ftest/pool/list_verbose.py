@@ -158,8 +158,10 @@ class ListVerboseTest(IorTestBase):
     def verify_scm_size(self, actual, created, rank_count):
         """Verify SCM size using the threshold.
 
-        SCM size in pool list is slightly higher than the created value. Verify
-        that it's smaller than the threshold (target_count * (4K - 1)).
+        SCM size in pool list is higher than the created value. Verify
+        that it's smaller than the threshold
+        for pmem : ((target_count * (4K - 1)).
+        for md_on_ssd : ((target_count * (16MiB - 1)).
 
         Args:
             actual (int): SCM size from pool list verbose.
@@ -170,7 +172,10 @@ class ListVerboseTest(IorTestBase):
         self.log.info("rank_count = %d; targets = %d", rank_count, targets)
 
         total_targets = rank_count * targets
-        threshold = total_targets * 3999
+        if self.server_managers[0].manager.job.using_control_metadata:
+            threshold = total_targets * (16 * 1024 * 1024 - 1)
+        else:
+            threshold = total_targets * 4095
         diff = actual - created
         self.log.info("actual = %d; created = %d; diff = %d", actual, created, diff)
 
