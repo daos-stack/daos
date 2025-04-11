@@ -94,9 +94,9 @@ if [[ -n $(find build -name "*.gcda") ]]; then
     # Run gcovr in a python 3.11 environment
     deactivate
     python3.11 -m venv venv-code-coverage
-    # Shellcheck disable=SC1091
-    source venv/bin/activate
-    touch venv/pip.conf
+    # shellcheck disable=SC1091
+    source venv-code-coverage/bin/activate
+    touch venv-code-coverage/pip.conf
     pip config set global.progress_bar off
     pip config set global.no_color true
     pip install --upgrade pip
