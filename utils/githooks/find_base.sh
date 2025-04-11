@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # /*
 #  * (C) Copyright 2024 Intel Corporation.
+#  * (C) Copyright 2025 Google LLC
 #  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -33,13 +34,21 @@ if ${USE_GH:-true} && command -v gh > /dev/null 2>&1; then
     fi
 fi
 
+find_branches()
+{
+      for script in "utils/githooks/branches."*; do
+        "${script}"
+      done
+}
+
 if [ -z "$TARGET" ]; then
     # With no 'gh' command installed, or no PR open yet, use the "closest" branch
     # as the target, calculated as the sum of the commits this branch is ahead and
     # behind.
     # check master, then current release branches, then current feature branches.
     export ORIGIN
-    TARGET="$ORIGIN/$(utils/rpms/packaging/get_release_branch "feature/cat_recovery feature/multiprovider")"
+    readarray -t branches <<< "$(eval find_branches)"
+    TARGET="$ORIGIN/$(utils/rpms/packaging/get_release_branch "${branches[@]}")"
     echo "  Install gh command to auto-detect target branch, assuming $TARGET."
 fi
 
