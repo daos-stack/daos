@@ -505,10 +505,10 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bul
 	if (bulk_op == CRT_BULK_GET && dth != NULL && !(dth->dth_flags & DTE_LEADER) &&
 	    DAOS_FAIL_CHECK(DAOS_CLIENT_UNREACHABLE)) {
 		/** Fault injection - client unreachable. */
-		firewall_blocking_flag = true;
+		daos_fail_loc_set_private(DAOS_FIREWALL_ERROR | DAOS_FAIL_ALWAYS);
 	}
 
-	if (firewall_blocking_flag) {
+	if (bulk_op == CRT_BULK_GET && DAOS_FAIL_CHECK(DAOS_FIREWALL_ERROR)) {
 		return -DER_RECONNECT;
 	}
 
