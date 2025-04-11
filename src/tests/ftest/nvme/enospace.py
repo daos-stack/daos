@@ -340,7 +340,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             return pydaos.DaosErrorCode(err_no).name
 
         logfile_glob = log_file + r".*[0-9]"
-        errors_count = get_errors_count(self.hostlist_clients, logfile_glob)
+        errors_count = get_errors_count(self.log, self.hostlist_clients, logfile_glob)
         for error in self.expected_errors:
             if error not in errors_count:
                 errors_count[error] = 0
