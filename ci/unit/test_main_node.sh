@@ -21,6 +21,7 @@ sudo mount --bind build "${SL_SRC_DIR}"
 
 log_prefix="unit_test"
 
+: "${BULLSEYE:=}"
 if [ -n "$BULLSEYE" ]; then
     pushd "${SL_SRC_DIR}/bullseye"
     set +x
@@ -47,6 +48,7 @@ sudo ln -sf "$SL_PREFIX/share/spdk/scripts/common.sh" /usr/share/spdk/scripts/
 sudo ln -s "$SL_PREFIX/include"  /usr/share/spdk/include
 
 # set CMOCKA envs here
+: "${WITH_VALGRIND:=}"
 export CMOCKA_MESSAGE_OUTPUT=xml
 if [[ -z ${WITH_VALGRIND} ]]; then
     export CMOCKA_XML_FILE="${SL_SRC_DIR}/test_results/%g.xml"
