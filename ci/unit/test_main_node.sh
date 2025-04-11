@@ -90,7 +90,7 @@ utils/run_utest.py $RUN_TEST_VALGRIND --no-fail-on-error $VDB_ARG --log_dir="$te
                    $SUDO_ARG
 
 # Generate code coverage report if at least one gcda file was generated
-if [[ -n $(find build -name "*.gcda" -quit) ]]; then
+if [[ -n $(find build -name "*.gcda") ]]; then
     # python3.6 does not like deactivate with -u set, later versions are OK with it however.
     set +u
     deactivate
