@@ -236,6 +236,15 @@ void
 vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat, uint32_t flags);
 
 /**
+ * Notify lower layer that DTX resync has been done.
+ *
+ * \param coh	[IN]	Container open handle.
+ * \param ver	[IN]	The version that DTX resync has been done.
+ */
+void
+vos_set_dtx_resync_version(daos_handle_t coh, uint32_t ver);
+
+/**
  * Set the DTX committable as committable.
  *
  * \param dth	[IN]	Pointer to the DTX handle.
