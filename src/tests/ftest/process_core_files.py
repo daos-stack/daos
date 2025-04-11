@@ -1,5 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -131,6 +132,8 @@ class CoreFileProcessing():
         else:
             self.log.debug(
                 "No core.*[0-9] files found in %s", os.path.join(directory, "stacktraces*"))
+
+        self.log.info("Install debuginfo packages DONE")
 
         # Create a stacktrace from each core file and then remove the core file
         for core_dir, core_name_list in core_files.items():
@@ -325,6 +328,7 @@ class CoreFileProcessing():
 
         retry = False
         for cmd in cmds:
+            self.log.info("Run Command: %s", " ".join(cmd))
             if not run_local(self.log, " ".join(cmd)).passed:
                 # got an error, so abort this list of commands and re-run
                 # it with a dnf clean, makecache first
@@ -338,6 +342,7 @@ class CoreFileProcessing():
             cmds.insert(0, cmd_prefix + ["clean", "all"])
             cmds.insert(1, cmd_prefix + ["makecache"])
             for cmd in cmds:
+                self.log.info("Retry Command: %s", " ".join(cmd))
                 if not run_local(self.log, " ".join(cmd)).passed:
                     break
 
