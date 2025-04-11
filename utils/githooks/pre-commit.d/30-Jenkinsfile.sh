@@ -10,6 +10,7 @@
 #
 # Will only check if Jenkinsfile is modified
 #
+# shellcheck disable=SC2317
 
 set -ue
 
@@ -26,6 +27,9 @@ exit 0
 
 echo "Checking syntax"
 : "${JENKINS_HOST:=build.hpdd.intel.com}"
+echo "Temporary no access to $JENKINS_HOST. Skipping"
+exit 0
+# shellcheck disable=SC2317
 if ! ping -c 1 "$JENKINS_HOST" &> /dev/null; then
     echo "Failed to access $JENKINS_HOST. Skipping"
     exit 0
