@@ -57,7 +57,7 @@ if ipmctl show -dimm; then
 else
     counter=0
     for ib in /sys/class/net/ib*; do
-        ((counter++))
+        ((counter++)) || true
         ip addr show "$(basename "$ib")"
     done
     if "$counter" -ge 2; then
